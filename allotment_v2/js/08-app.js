@@ -63003,6 +63003,29 @@ function paPaySave(){
   paKeep(function(){ renderPierAtt(); });
 }
 
+/* §paSum · รหัสที่ใช้จริงในรอบนี้ · เรียงเส้นทางก่อน แล้วค่อยรหัสของทะเบียน
+   แยกออกมาให้ตารางบนจอกับไฟล์ Excel ได้คอลัมน์ชุดเดียวกันเสมอ (§paXlsx) */
+function paSumCodes(P, CY, IDX, groups){
+  var used={};
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
+  /* §paWsTier · คอลัมน์ WS-LT (หางยาว) โชว์ตลอด แม้รอบนี้ยังไม่มีใครลง · ให้เห็นว่าแยกจาก WS */
+  used['WS-LT']=1;   // §paLtSplit · คอลัมน์ค่าหางยาว · นับเท่าวัน WS ของแต่ละคน
+  var SUMC=Object.keys(used).sort(function(a,b){
+    var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
+    var ra=ma.route?0:1, rb=mb.route?0:1;
+    if(ra!==rb) return ra-rb;
+    if(ra===0) return String(a).localeCompare(String(b));
+    return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
+  });
+  /* §paLtSplit · WS-LT ต่อท้าย WS ทันที · อ่านคู่กัน */
+  var i=SUMC.indexOf('WS-LT'), j=SUMC.indexOf(PA_WS_CODE);
+  if(i>=0 && j>=0){ SUMC.splice(i,1); j=SUMC.indexOf(PA_WS_CODE); SUMC.splice(j+1,0,'WS-LT'); }
+  return SUMC;
+}
+/* §paTotOff · TOTAL = วันทำงาน + วัน OFF · ตัวเดียวกันทั้งจอและ Excel */
+function paRowTotal(w, cnt){ return w + ((cnt||{}).OFF||0); }
+
 var _paTab='roster';
 function renderPierAtt(pier){
   paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureLtSplit(); paSkinApply();
@@ -63028,22 +63051,7 @@ function renderPierAtt(pier){
   var hasJob={}, nJob=0;
   CY.days.forEach(function(d){ hasJob[d.s]=paHasJob(d.s,P.k,IDX[d.s]); if(hasJob[d.s]) nJob++; });
 
-  /* §paSum · รหัสที่ใช้จริงในรอบนี้ · เรียงเส้นทางก่อน แล้วค่อยรหัสของทะเบียน */
-  var used={};
-  groups.forEach(function(G){ G.rows.forEach(function(st){
-    CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
-  /* §paWsTier · คอลัมน์ WS-LT (หางยาว) โชว์ตลอด แม้รอบนี้ยังไม่มีใครลง · ให้เห็นว่าแยกจาก WS */
-  used['WS-LT']=1;   // §paLtSplit · คอลัมน์ค่าหางยาว · นับเท่าวัน WS ของแต่ละคน
-  var SUMC=Object.keys(used).sort(function(a,b){
-    var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
-    var ra=ma.route?0:1, rb=mb.route?0:1;
-    if(ra!==rb) return ra-rb;
-    if(ra===0) return String(a).localeCompare(String(b));
-    return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
-  });
-  /* §paLtSplit · WS-LT ต่อท้าย WS ทันที · อ่านคู่กัน */
-  (function(){ var i=SUMC.indexOf('WS-LT'), j=SUMC.indexOf(PA_WS_CODE);
-    if(i>=0 && j>=0){ SUMC.splice(i,1); j=SUMC.indexOf(PA_WS_CODE); SUMC.splice(j+1,0,'WS-LT'); } })();
+  var SUMC=paSumCodes(P, CY, IDX, groups);
 
   /* §paNight · รอบนี้มีเวรกลางคืนหรือเปล่า · มีแม้ช่องเดียวก็เปิดแถบล่างทั้งตาราง
      ไม่งั้นบางช่องสูงไม่เท่ากันแล้วอ่านเป็นตารางคนละอัน · นับจำนวนคืนของแต่ละคนไปเลยในรอบเดียว */
@@ -63102,7 +63110,7 @@ function renderPierAtt(pier){
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + (nOn?('<td class="pa-sc ngt'+(_nc?'':' z')+'">'+(_nc||'·')+'</td>'):'')
-        + '<td class="pa-sc tot">'+w+'</td>';
+        + '<td class="pa-sc tot" title="วันทำงาน '+w+' + OFF '+(cnt.OFF||0)+'">'+paRowTotal(w,cnt)+'</td>';
       if(pay){   // §paPay · ยอดเงินของคนนี้ · ชี้ที่ตัวเลขเพื่อดูว่ามาจากรหัสไหนเท่าไหร่
         var PY=paPayOf(st.id, cnt, _nc, wsT);
         var tip=PY.parts.map(function(p){ return p.code+' '+p.days+' วัน'+(p.note?(' ('+p.note+')'):'')+' = '+paMoney(p.amt); }).join('\n');
@@ -63141,7 +63149,7 @@ function renderPierAtt(pier){
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
     + (nOn?('<td class="pa-sc ngt">'+nTot+'</td>'):'')
-    + '<td class="pa-sc tot">'+totW+'</td>'
+    + '<td class="pa-sc tot">'+paRowTotal(totW,gTot)+'</td>'
     + (pay?('<td class="pa-sc pay"></td><td class="pa-sc pay tot" title="'
         +(payMiss?(payMiss+' คนยังไม่ได้ใส่เบี้ยเที่ยว · ยังไม่รวมในยอดนี้'):'รวมทุกคนในตาราง')+'">'
         +paMoney(payTot)+(payMiss?'<sup style="color:#B4560A"> +'+payMiss+'?</sup>':'')+'</td>'):'')
@@ -63204,6 +63212,7 @@ function renderPierAtt(pier){
       +'<button onclick="plTypesOpen()" title="ประเภทใบอนุญาตของพนักงาน">ทะเบียนประเภทใบ</button>'
       +'<span class="sep"></span>'
       +'<button onclick="paExport()">Export CSV</button>'
+      +'<button onclick="paExportXlsx()" title="ตารางการทำงาน + ยอดสรุป'+(paPayCan()?' + เบี้ยเที่ยวรายคน (ชีตแยก)':'')+'">Export Excel</button>'
       +'<button class="pri" onclick="paPrint()">พิมพ์</button>'
     +'</div>'
     +(groups.length
@@ -63722,6 +63731,74 @@ function paExport(){
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='attendance_'+(P.n||P.k)+'_'+CY.from+'_'+CY.to+'.csv';
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
+/* ══ §paXlsx (2026-09-26) · Export Excel ของตารางการทำงาน ══
+   ชีต Roster = หน้าตาเดียวกับจอ (รหัสรายวัน + MONTHLY SUMMARY + TOTAL)
+   ชีต Trip Allowance = เบี้ยเที่ยวรายคน แยกรหัส · ใส่เฉพาะคนที่ดูเงินได้ (paPayCan) เหมือนบนจอ
+   นับวันด้วยตัวเดียวกับจอทุกตัว (paSumCodes · paCell · paWsTier · paPayOf · paRowTotal) ไม่คิดใหม่ */
+function paExportXlsx(){
+  if(typeof XLSX==='undefined'){ alert('Excel library not loaded - check the network and reload'); return; }
+  var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var CY=paCycle(_paDate), IDX=paIndex(CY.days), groups=paGroups(P.k), SUMC=paSumCodes(P, CY, IDX, groups);
+  var nc=paNightCode(), canPay=paPayCan(), R=paPayRules(), payCodes=Object.keys(R);
+  var nOn=false;
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){ if(paNight(d.s, st.id)) nOn=true; }); }); });
+  var title='CREW DUTY ROSTER · '+CY.from+' – '+CY.to+' · '+String(P.n||P.t);
+  var hd=['No.','Full name','Nickname','Position'].concat(CY.days.map(function(d){ return d.s.slice(8)+'/'+d.s.slice(5,7); }))
+    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL','Notes']);
+  var rows=[[title],hd], pay=[[title+' · TRIP ALLOWANCE']];
+  var ph=['No.','Full name','Nickname','Position','Rate'];
+  payCodes.forEach(function(c){ ph.push(c+' days', c+' ฿'); });
+  ph.push('WS split','Amount','Note'); pay.push(ph);
+  var gTot={}, totW=0, nTot=0, n=0, payTot=0, pn=0;
+  groups.forEach(function(G){
+    rows.push(['',G.t]);
+    G.rows.forEach(function(st){
+      var w=0, cnt={}, wsT={cap:0,crew:0,staff:0}, nights=0;
+      var cells=CY.days.map(function(d){
+        var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+        if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1; if(k==='work') w++; }
+        if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;
+        if(paNight(d.s, st.id)) nights++;
+        return (v.c||'')+((v.atPier && v.atPier!==P.k)?('@'+pjPierShort(v.atPier)):'');
+      });
+      var wsd=cnt[PA_WS_CODE]||0;   // §paLtSplit · เหมือนบนจอ
+      if(wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+wsd; }
+      totW+=w; nTot+=nights; n++;
+      rows.push([n, st.name||'', st.nick||'', st.role||''].concat(cells)
+        .concat(SUMC.map(function(c){ return cnt[c]||0; })).concat(nOn?[nights]:[])
+        .concat([paRowTotal(w,cnt), st.note||'']));
+      if(canPay){
+        var PY=paPayOf(st.id, cnt, nights, wsT), by={};
+        PY.parts.forEach(function(p){ by[p.code]=p; });
+        var r=[++pn, st.name||'', st.nick||'', st.role||'', PY.rate==null?'':PY.rate];
+        payCodes.forEach(function(c){ var p=by[c]; var d=(c===nc)?nights:(cnt[c]||0);
+          r.push(d||'', p?p.amt:''); });
+        var ws=by[PA_WS_CODE];
+        r.push(ws&&ws.note?ws.note:'', PY.missing?'':PY.total, PY.missing?'ยังไม่ได้ใส่เบี้ยเที่ยว':'');
+        if(!PY.missing) payTot+=PY.total;
+        pay.push(r);
+      }
+    });
+  });
+  rows.push(['','TOTAL · ALL STAFF','',''].concat(CY.days.map(function(){ return ''; }))
+    .concat(SUMC.map(function(c){ return gTot[c]||0; })).concat(nOn?[nTot]:[]).concat([paRowTotal(totW,gTot),'']));
+  var wb=XLSX.utils.book_new();
+  var ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14}].concat(CY.days.map(function(){ return {wch:6}; }))
+    .concat(SUMC.map(function(){ return {wch:7}; })).concat(nOn?[{wch:9}]:[]).concat([{wch:7},{wch:24}]);
+  ws1['!views']=[{state:'frozen', xSplit:4, ySplit:2}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Roster');
+  if(canPay){
+    pay.push(['','TOTAL · ALL STAFF'].concat(new Array(ph.length-4).fill('')).concat([payTot,'']));   // payTot ตรงคอลัมน์ Amount
+    var ws2=XLSX.utils.aoa_to_sheet(pay);
+    ws2['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14},{wch:8}].concat(payCodes.map(function(){ return [{wch:8},{wch:10}]; }).flat())
+      .concat([{wch:22},{wch:12},{wch:22}]);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Trip Allowance');
+  }
+  XLSX.writeFile(wb, 'roster_'+String(P.n||P.k).replace(/[^\w฀-๿-]+/g,'_')+'_'+CY.from+'_'+CY.to+'.xlsx');
 }
 
 /* ── พิมพ์ ── */
