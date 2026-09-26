@@ -63074,8 +63074,8 @@ function paSumCodes(P, CY, IDX, groups){
   if(i>=0 && j>=0){ SUMC.splice(i,1); j=SUMC.indexOf(PA_WS_CODE); SUMC.splice(j+1,0,'WS-LT'); }
   return SUMC;
 }
-/* §paTotOff · TOTAL = วันทำงาน + วัน OFF · ตัวเดียวกันทั้งจอและ Excel */
-function paRowTotal(w, cnt){ return w + ((cnt||{}).OFF||0); }
+/* §paTotOff · TOTAL = วันทำงาน + OFF + PH · ตัวเดียวกันทั้งจอและ Excel */
+function paRowTotal(w, cnt){ cnt=cnt||{}; return w + (cnt.OFF||0) + (cnt.PH||0); }
 
 var _paTab='roster';
 function renderPierAtt(pier){
@@ -63161,7 +63161,7 @@ function renderPierAtt(pier){
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + (nOn?('<td class="pa-sc ngt'+(_nc?'':' z')+'">'+(_nc||'·')+'</td>'):'')
-        + '<td class="pa-sc tot" title="วันทำงาน '+w+' + OFF '+(cnt.OFF||0)+'">'+paRowTotal(w,cnt)+'</td>';
+        + '<td class="pa-sc tot" title="วันทำงาน '+w+' + OFF '+(cnt.OFF||0)+' + PH '+(cnt.PH||0)+'">'+paRowTotal(w,cnt)+'</td>';
       if(pay){   // §paPay · ยอดเงินของคนนี้ · ชี้ที่ตัวเลขเพื่อดูว่ามาจากรหัสไหนเท่าไหร่
         var PY=paPayOf(st.id, cnt, _nc, wsT);
         var tip=PY.parts.map(function(p){ return p.code+' '+p.days+' วัน'+(p.note?(' ('+p.note+')'):'')+' = '+paMoney(p.amt); }).join('\n');
