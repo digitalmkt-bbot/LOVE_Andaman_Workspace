@@ -62584,9 +62584,29 @@ var PA_PAY_DEF={
   KB:{x:1, d:0,   f:100},
   PP:{x:1, d:0,   f:0},
   WS:{x:1, d:50,  f:0},
+  'WS-LT':{x:1, d:50, f:0},   // §paWsLt · WS ที่ไปเรือหางยาว · คิดเหมือน WS · แยกรหัสไว้นับวัน
   OV:{x:2, d:0,   f:0},
   N: {x:0, d:200, f:0}
 };
+/* §paWsLt (2026-09-26) · รหัส WS-LT = Whale Shark ที่ไปเรือหางยาว
+   ใบงานเรือไม่รู้ว่าวันไหนไปหางยาว · คนวางตารางเลือกรหัสนี้ลงช่องวันเอง
+   เติมครั้งเดียวต่อข้อมูลชุดหนึ่ง (PIER_CFG.wsLtSeed) · ทั้งในทะเบียนรหัสและในสูตรเบี้ยเที่ยวที่เซฟไว้แล้ว
+   ต่างจาก paEnsureNightCode ตรงที่ลบทิ้งแล้วไม่เด้งกลับ · คนลบตั้งใจลบ */
+function paEnsureWsLt(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length || PIER_CFG.wsLtSeed) return;
+    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()==='WS-LT'; });
+    if(!has){
+      var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
+      PIER_CODES.push({id:'c_wslt', code:'WS-LT', label:'Whale Shark · เรือหางยาว',
+                       color:'#0E6E86', bg:'#DDF1F5', kind:'work', ord:mx+1, active:true, userColor:1});
+    }
+    var R=PIER_CFG.payRules;
+    if(R && typeof R==='object' && Object.keys(R).length && !R['WS-LT']) R['WS-LT']={x:1, d:50, f:0};
+    PIER_CFG.wsLtSeed=1;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 var _paPay=false;   /* แสดงคอลัมน์เงินไหม · ไม่เก็บลงข้อมูล · เปิดใหม่ทุกครั้งที่ต้องดู */
 function paPayRules(){
   var r=PIER_CFG && PIER_CFG.payRules;
@@ -62703,7 +62723,7 @@ function paPaySave(){
 
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
