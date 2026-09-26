@@ -63079,7 +63079,7 @@ function paRowTotal(w, cnt){ return w + ((cnt||{}).OFF||0); }
 
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureLtSplit(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureLtSplit(); paEnsureNoteMig(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -63189,9 +63189,9 @@ function renderPierAtt(pier){
            บังคับให้กด "แก้ไข" ทั้งแถบก่อนถึงจะพิมพ์ได้ ทำให้ไม่มีใครใช้ · เปิดให้พิมพ์ได้เลย
            คนที่สิทธิ์ดูอย่างเดียว (ro) ยังเห็นเป็นข้อความเหมือนเดิม */
         +'<td class="pa-nt">'+(ro
-            ?(poE(st.note||'')||'<span class="pa-dash">—</span>')
-            :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="เพิ่มหมายเหตุ…" '
-              +'title="พิมพ์แล้วออกจากช่อง = บันทึกเลย" '
+            ?(poE(paCycNote(CY.from, st.id))||'<span class="pa-dash">—</span>')
+            :('<input class="pa-nti" value="'+poE(paCycNote(CY.from, st.id))+'" placeholder="เพิ่มหมายเหตุ…" '
+              +'title="หมายเหตุของรอบ '+poE(CY.from)+' – '+poE(CY.to)+' เท่านั้น · พิมพ์แล้วออกจากช่อง = บันทึกเลย" '
               +'onchange="paNote(\''+poE(st.id)+'\',this.value)">'))+'</td></tr>';
     });
   });
@@ -63396,10 +63396,35 @@ function paStaffFld(sid, key, txt){
   try{ if(typeof renderPierJob==='function' && key!=='defCode') renderPierJob(); }catch(_){}
 }
 /* §paCols · หมายเหตุรายคน · เก็บที่ทะเบียนพนักงาน ไม่ใช่รายวัน (ลาออก · กลับมาไฮซีซั่น) */
+/* §paCycNote (2026-09-26) · หมายเหตุแยกตามรอบ · เดิมเก็บที่ st.note ช่องเดียวต่อคน
+   ลบหมายเหตุของรอบตุลาแล้วของรอบกันยาหายไปด้วย เพราะเป็นช่องเดียวกัน
+   ตอนนี้เก็บที่ PIER_CFG.cycNote[วันเริ่มรอบ][staffId] · pier_cfg เป็น JSON ทั้งก้อน ไม่ต้องมี migration
+   st.note เดิมย้ายเข้ารอบปัจจุบันครั้งเดียว (PIER_CFG.noteMig) · ไม่ลบ st.note ทิ้ง เก็บไว้เป็นของเดิม */
+function paCycNote(from, sid){
+  var m=(PIER_CFG && PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+  var c=m[from]; return (c && c[sid]!=null) ? String(c[sid]) : '';
+}
+function paEnsureNoteMig(){
+  try{
+    if(PIER_CFG.noteMig) return;
+    var from=paCycle(poYMD(new Date())).from;
+    var m=(PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+    (PIER_STAFF||[]).forEach(function(st){
+      var t=String(st.note||'').trim(); if(!t) return;
+      if(!m[from]) m[from]={};
+      if(m[from][st.id]==null) m[from][st.id]=t;
+    });
+    PIER_CFG.cycNote=m; PIER_CFG.noteMig=from;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 function paNote(sid, txt){
   if(!poGuard()) return;
-  var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
-  st.note=String(txt||'').slice(0,120);
+  var from=paCycle(_paDate).from, v=String(txt||'').trim().slice(0,120);
+  var m=(PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+  if(v){ if(!m[from]) m[from]={}; m[from][sid]=v; }
+  else if(m[from]){ delete m[from][sid]; if(!Object.keys(m[from]).length) delete m[from]; }
+  PIER_CFG.cycNote=m;
   poPersist();
 }
 /* §paLayers · ปุ่มสองอันบนหัวหน้าต่างเลือกรหัส · จำไว้ระหว่างที่หน้าต่างเปิดอยู่ */
@@ -63820,7 +63845,7 @@ function paExportXlsx(){
       totW+=w; nTot+=nights; n++;
       rows.push([n, st.name||'', st.nick||'', st.role||''].concat(cells)
         .concat(SUMC.map(function(c){ return cnt[c]||0; })).concat(nOn?[nights]:[])
-        .concat([paRowTotal(w,cnt), st.note||'']));
+        .concat([paRowTotal(w,cnt), paCycNote(CY.from, st.id)]));
       if(canPay){
         var PY=paPayOf(st.id, cnt, nights, wsT), by={};
         PY.parts.forEach(function(p){ by[p.code]=p; });
