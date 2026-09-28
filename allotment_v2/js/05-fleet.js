@@ -25204,6 +25204,7 @@ var _fdPlan = { pier:[], drop:[], trip:{}, avail:{}, boats:[], ready:{} };
 var _fdPlanUp = false;
 function fdPlanLoad(){
   if(_fdPlanUp) return; _fdPlanUp=true;
+  if(typeof fdSaveCurLoad==='function') fdSaveCurLoad();   /* §flDeployCur */
   try{ var raw=localStorage.getItem(FD_PLAN_KEY);
        if(raw){ var p=JSON.parse(raw);
          if(p && typeof p==='object'){ _fdPlan={ pier:p.pier||[], drop:p.drop||[], trip:p.trip||{},
@@ -25806,6 +25807,21 @@ var _fdSaved = null;
    เพราะสองรอบอาจมีช่วงวันเดียวกันได้ */
 var _fdSaveOpen = '';
 var _fdSaveCur  = '';
+/* §flDeployCur (2026-09-28) · จำว่ากำลังแก้รอบไหนอยู่ ข้ามการรีเฟรชหน้า
+   ที่มา · ผู้ใช้เจอเอง · กดชิปรอบที่เซฟไว้แล้วเจอกล่อง "กระดานที่คุณอยู่ตอนนี้จะถูกแทนที่"
+   เดิม _fdSaveCur อยู่ในหน่วยความจำอย่างเดียว · กระดานถูกเก็บลงเครื่องแต่ตัวนี้ไม่
+   รีเฟรชทีหนึ่งระบบก็ลืมว่ากระดานนี้มาจากรอบไหน · ปุ่ม "บันทึกทับ" หายไป
+   กลายเป็นกับดัก · ทางเดียวที่จะเอาปุ่มกลับมาคือคลิกชิป ซึ่งคือการทับกระดานที่อยากเซฟพอดี
+   ต้องทำลายของที่จะเซฟก่อนถึงจะเซฟได้ */
+var FD_CUR_KEY = 'la_fd_cur';
+function fdSaveCurSet(id){
+  _fdSaveCur = id || '';
+  try{ if(_fdSaveCur) localStorage.setItem(FD_CUR_KEY, _fdSaveCur);
+       else localStorage.removeItem(FD_CUR_KEY); }catch(_){}
+}
+function fdSaveCurLoad(){
+  try{ _fdSaveCur = localStorage.getItem(FD_CUR_KEY) || ''; }catch(_){ _fdSaveCur=''; }
+}
 function fdSaved(){
   if(_fdSaved) return _fdSaved;
   _fdSaved=[];
@@ -25866,7 +25882,7 @@ function fdSaveDo(){
            at:new Date().toISOString().slice(0,16).replace('T',' '),
            plan:fdPlanCopy(_fdPlan) });
   _fdSaveOpen='';
-  _fdSaveCur=_nid;   /* รอบที่เพิ่งบันทึกคือรอบที่กำลังแก้อยู่ · กดแก้ต่อได้ทันที */
+  fdSaveCurSet(_nid);   /* รอบที่เพิ่งบันทึกคือรอบที่กำลังแก้อยู่ · กดแก้ต่อได้ทันที */
   fdSavedWrite(); flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('บันทึก Mockup "'+nm+'" แล้ว · เก็บในเครื่องนี้เท่านั้น');
 }
@@ -25882,7 +25898,7 @@ function fdSavedOpen(id){
             boats:p.boats||[], ready:p.ready||{} };
   fdPlanSave();
   _fdScope='custom'; _fdCustom={ from:r.from, to:r.to }; _fdWinIx=0; _fdSel='';
-  _fdSaveCur=id; _fdSaveOpen='';   /* §flDeployEdit · จำไว้ว่ากำลังแก้รอบไหนอยู่ */
+  fdSaveCurSet(id); _fdSaveOpen='';   /* §flDeployEdit · จำไว้ว่ากำลังแก้รอบไหนอยู่ */
   flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('เปิด "'+r.name+'" ขึ้นมาแล้ว · '+r.from+'→'+r.to+' · แก้แล้วกด "บันทึกทับรอบนี้" ได้เลย');
 }
@@ -25890,7 +25906,7 @@ function fdSavedDel(id){
   var r=fdSaved().filter(function(x){ return x && x.id===id; })[0]; if(!r) return;
   if(!confirm('Delete this saved mockup?\n\nOnly the saved copy is removed. The board you are on is untouched.')) return;
   _fdSaved=fdSaved().filter(function(x){ return x && x.id!==id; });
-  if(_fdSaveCur===id){ _fdSaveCur=''; if(_fdSaveOpen==='edit') _fdSaveOpen=''; }
+  if(_fdSaveCur===id){ fdSaveCurSet(''); if(_fdSaveOpen==='edit') _fdSaveOpen=''; }
   fdSavedWrite(); flRenderDeployment();
 }
 /* วางรอบถัดไป · เริ่มจากวันถัดจากรอบสุดท้ายที่เซฟไว้ · กระดานยังเป็นชุดเดิมให้แก้ต่อ */
@@ -25902,7 +25918,7 @@ function fdSavedNext(){
   var t=fdMonthEnd(f); if(t>S.to) t=S.to;
   _fdScope='custom'; _fdCustom={ from:f, to:t }; _fdWinIx=0; _fdSel='';
   _fdSaveOpen='';      /* จัดกระดานให้เสร็จก่อน ค่อยกดบันทึก · เปิดฟอร์มค้างไว้แต่แรกทำให้กดเซฟรอบเปล่า */
-  _fdSaveCur='';       /* §flDeployEdit · รอบถัดไปเป็นของใหม่ · กันกดบันทึกทับรอบก่อนหน้าโดยไม่ตั้งใจ */
+  fdSaveCurSet('');    /* §flDeployEdit · รอบถัดไปเป็นของใหม่ · กันกดบันทึกทับรอบก่อนหน้าโดยไม่ตั้งใจ */
   _fdTab='pier';
   flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('เริ่มรอบถัดไป '+f+'→'+t+' · จัดเสร็จแล้วกดบันทึก');
@@ -25912,13 +25928,13 @@ function fdSavedBar(){
   var L=fdSavedSorted(), S=fdSeason(), Wn=fdWin();
   var span=Math.max(fdDays(S.from,S.to),1);
   var pos=function(ds){ return Math.max(0, Math.min(100, fdDays(S.from,ds)/span*100)); };
-  var holes=[], overlap=0, cur=S.from;
+  var holes=[], overlap=0, scan=S.from;   /* ตัวไล่ช่องว่าง · เคยชื่อ cur ชนกับรอบที่เปิดอยู่ข้างล่าง */
   L.forEach(function(r){
-    if(r.from>cur) holes.push({ from:cur, to:fdAddDays(r.from,-1) });
-    if(r.from<cur) overlap++;
-    if(r.to>=cur) cur=fdAddDays(r.to,1);
+    if(r.from>scan) holes.push({ from:scan, to:fdAddDays(r.from,-1) });
+    if(r.from<scan) overlap++;
+    if(r.to>=scan) scan=fdAddDays(r.to,1);
   });
-  if(L.length && cur<=S.to) holes.push({ from:cur, to:S.to });
+  if(L.length && scan<=S.to) holes.push({ from:scan, to:S.to });
   /* §flDeployEdit · โหมดแก้ · ฟอร์มเดียวกัน แต่เติมชื่อกับช่วงวันของรอบที่เปิดอยู่มาให้
      เปลี่ยนชื่อหรือขยับวันแล้วกดบันทึกทับได้เลย ไม่ต้องลบรอบเก่าแล้วสร้างใหม่ */
   var cur = fdSaveCurRec();

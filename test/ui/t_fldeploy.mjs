@@ -1504,6 +1504,97 @@ else if (!R8.inArea) fail('fl-deployment ไม่อยู่ใน LA_VIEW_ARE
 else if (!R8.inNav)  fail('fl-deployment ไม่อยู่ใน LA_NAV · laAllowed() ปล่อยผ่านเมนูที่ไม่รู้จัก = เปิดให้ทุกคน');
 else ok('อยู่ในทะเบียนสิทธิ์ครบทั้งสองที่ (LA_VIEW_AREA + LA_NAV) · พื้นที่ fleet');
 
+/* ══ 8b · แก้ Mockup ที่บันทึกไว้ · ต้องจำได้ว่ากำลังแก้รอบไหน แม้รีเฟรชหน้า ══
+   §flDeployCur (2026-09-28) · ผู้ใช้เจอเอง · กดชิปรอบที่เซฟไว้แล้วเจอกล่อง
+   "กระดานที่คุณอยู่ตอนนี้จะถูกแทนที่" · เพราะปุ่ม "บันทึกทับ" หายไปหลังรีเฟรช
+   _fdSaveCur เก็บไว้ในหน่วยความจำอย่างเดียว · กระดานถูกเก็บลงเครื่องแต่ตัวนี้ไม่
+   กลายเป็นกับดัก · ทางเดียวที่จะเอาปุ่มกลับมาคือคลิกชิป ซึ่งคือการทับกระดานที่อยากเซฟพอดี */
+const R8b = await page.evaluate(() => {
+  if (typeof fdSaved !== 'function' || typeof fdSaveDo !== 'function') return { err: 'ไม่มีฟังก์ชันเซฟรอบ' };
+  const el = document.querySelector('.nav-item[data-view="fl-deployment"]');
+  if (el) nav(el);
+  /* เคลียร์ของเก่าก่อน เพื่อให้เริ่มจากสถานะที่รู้แน่ */
+  try { localStorage.removeItem('la_fd_plans'); localStorage.removeItem('la_fd_cur'); } catch (_) {}
+  _fdSaved = null;
+  if (typeof fdSaveCurSet === 'function') fdSaveCurSet(''); else _fdSaveCur = '';
+  /* วางอะไรสักอย่างลงกระดาน ไม่งั้นรอบที่เซฟจะว่างเปล่า */
+  _fdPlan = _fdPlan || fdPlanBlank();
+  const b = (typeof flBoats === 'function' ? flBoats() : (BOATS || []))[0];
+  if (!b) return { err: 'ไม่มีเรือให้วาง' };
+  const Wn = fdWin();
+  _fdPlan.pier = (_fdPlan.pier || []).concat([{ id: b.id, pier: 'panwa', from: Wn.from, to: Wn.to }]);
+  fdPlanSave();
+  /* กดบันทึกเป็นรอบใหม่ · ผ่านฟอร์มจริง ไม่ยัด array เอง */
+  _fdSaveOpen = 'new';
+  flRenderDeployment();
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+  set('fd-sv-name', 'รอบทดสอบ §flDeployCur'); set('fd-sv-from', Wn.from); set('fd-sv-to', Wn.to);
+  fdSaveDo();
+  const after = {
+    cur: _fdSaveCur,
+    n: fdSaved().length,
+    ls: (function () { try { return localStorage.getItem('la_fd_cur') || ''; } catch (_) { return 'ERR'; } })(),
+    btn: !!document.querySelector('.fd-saved .sh button.go.edit')
+  };
+  return { ok: true, after, savedId: _fdSaveCur };
+});
+if (R8b.err) fail('ตรวจการแก้รอบที่บันทึกไว้ไม่ได้ · ' + R8b.err);
+else if (R8b.after.n !== 1) fail('กดบันทึกแล้วรอบไม่ถูกเก็บ · มี ' + R8b.after.n + ' รอบ');
+else if (!R8b.after.cur) fail('บันทึกแล้วระบบไม่ได้จำว่ากำลังแก้รอบนี้อยู่ · ปุ่มบันทึกทับจะไม่ขึ้น');
+else if (!R8b.after.btn) fail('บันทึกแล้วปุ่ม "บันทึกทับ" ไม่ขึ้นบนแถบ');
+else if (R8b.after.ls !== R8b.after.cur)
+  fail('รอบที่กำลังแก้ไม่ถูกเก็บลงเครื่อง (ได้ "' + R8b.after.ls + '") · รีเฟรชแล้วจะลืม ปุ่มบันทึกทับจะหาย');
+else ok('บันทึกรอบใหม่แล้วระบบจำว่ากำลังแก้รอบนี้ และเก็บลงเครื่องด้วย · ปุ่ม "บันทึกทับ" ขึ้นแล้ว');
+
+/* รีเฟรชจริง ไม่ใช่เรียกฟังก์ชันโหลดเอง · ต้องพิสูจน์ว่ารอดข้ามการโหลดหน้าใหม่ */
+if (R8b.ok) {
+  /* โหลดหน้าใหม่คือการบูตอีกรอบ · ฮาร์เนสเองก็ล้าง error ตอนบูตทิ้ง (ดู _harness.mjs)
+     เครื่องทดสอบบล็อก fonts/cdn อยู่แล้ว การบูตจึงได้ 404 ของนอกติดมาเสมอ
+     ตัดออกเฉพาะ "Failed to load resource" ที่เกิดจากการบูตรอบนี้เท่านั้น
+     ถ้าโค้ดพังตอนโหลดจริงจะเป็น pageerror หรือ console อื่น ซึ่งไม่ถูกตัดและยังทำให้เทสพัง */
+  const nBefore = errors.length;
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(1200);
+  for (let i = errors.length - 1; i >= nBefore; i--) if (/Failed to load resource/.test(errors[i])) errors.splice(i, 1);
+  const R8c = await page.evaluate((wantId) => {
+    const el = document.querySelector('.nav-item[data-view="fl-deployment"]');
+    if (!el) return { err: 'หลังรีเฟรชไม่มีเมนู' };
+    nav(el);
+    const rec = (typeof fdSaveCurRec === 'function') ? fdSaveCurRec() : null;
+    const box = document.querySelector('.fd-saved');
+    const btn = box ? box.querySelector('.sh button.go.edit') : null;
+    return { cur: _fdSaveCur, want: wantId, name: rec ? rec.name : '',
+             btn: btn ? (btn.textContent || '').trim() : '',
+             chipOn: !!(box && box.querySelector('.sv-i.on')) };
+  }, R8b.savedId);
+  if (R8c.err) fail(R8c.err);
+  else if (R8c.cur !== R8c.want)
+    fail('รีเฟรชแล้วระบบลืมว่ากำลังแก้รอบไหน · ได้ "' + R8c.cur + '" ควรเป็น "' + R8c.want +
+         '" · ปุ่มบันทึกทับจะหาย แล้วทางเดียวที่จะเอากลับมาคือคลิกชิป ซึ่งทับกระดานที่อยากเซฟ');
+  else if (!R8c.btn)
+    fail('รีเฟรชแล้วปุ่ม "บันทึกทับ" ไม่ขึ้น ทั้งที่ยังจำรอบได้ · แถบไม่ได้อ่านค่าที่จำไว้');
+  else if (!/บันทึกทับ/.test(R8c.btn))
+    fail('ปุ่มที่ขึ้นไม่ใช่ปุ่มบันทึกทับ · ได้ "' + R8c.btn + '"');
+  else if (!R8c.chipOn)
+    fail('รีเฟรชแล้วชิปของรอบนั้นไม่ขึ้นป้าย "กำลังแก้" · คนใช้จะไม่รู้ว่ากระดานนี้มาจากรอบไหน');
+  else ok('รีเฟรชหน้าแล้วยังจำรอบที่กำลังแก้ได้ ("' + R8c.name + '") · ปุ่ม "บันทึกทับ" ยังอยู่ · ชิปยังขึ้น "กำลังแก้"');
+
+  /* ลบรอบที่กำลังแก้อยู่ · ค่าที่จำไว้ต้องถูกล้าง ไม่ใช่ค้างชี้ไปที่ของที่ไม่มีแล้ว */
+  const R8d = await page.evaluate((id) => {
+    fdSavedDel(id);
+    return { cur: _fdSaveCur,
+             ls: (function () { try { return localStorage.getItem('la_fd_cur') || ''; } catch (_) { return 'ERR'; } })(),
+             n: fdSaved().length,
+             btn: !!document.querySelector('.fd-saved .sh button.go.edit') };
+  }, R8b.savedId);
+  if (R8d.n !== 0) fail('ลบรอบแล้วยังเหลือ ' + R8d.n + ' รอบ');
+  else if (R8d.cur || R8d.ls)
+    fail('ลบรอบที่กำลังแก้อยู่แล้ว แต่ระบบยังจำ id เดิมไว้ (mem "' + R8d.cur + '" / เครื่อง "' + R8d.ls +
+         '") · รีเฟรชแล้วจะชี้ไปที่รอบที่ไม่มีอยู่จริง');
+  else if (R8d.btn) fail('ลบรอบแล้วปุ่มบันทึกทับยังอยู่ · กดแล้วไม่รู้จะทับอะไร');
+  else ok('ลบรอบที่กำลังแก้อยู่แล้วค่าที่จำไว้ถูกล้างทั้งในหน่วยความจำและในเครื่อง · ปุ่มบันทึกทับหายไปด้วย');
+}
+
 /* ══ 9 · ไม่มี error บนหน้า ═══════════════════════════════════════════════ */
 if (errors.length) fail('มี error ' + errors.length + ' ครั้ง · ' + errors.slice(0, 2).join(' | '));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
