@@ -67,6 +67,21 @@ function laIsLandRoute(r){ return laRouteKind(r) === KIND_LAND; }
 /* §pierOne · ลำดับท่าเรือของทั้งระบบ · ตารางเดียว
    เดิมพิมพ์ไว้ในหน้ารายการโปรแกรมที่เดียว · พอมีที่สองก็จะเริ่มเพี้ยนกัน */
 const LA_PIER_ORDER = ['tublamu','panwa','ranong', LAND_PIER];
+/* §pierName · ชื่อท่าเรือสำหรับแสดงผล · ตามภาษาที่เลือกอยู่
+   ⚠ นี่คือตารางใหม่ ยังไม่ได้เก็บของเก่า · วัดแล้วมีที่พิมพ์ชื่อท่าเองอยู่ 350 บรรทัดทั้งระบบ
+   เขียนไม่เหมือนกันด้วย (Tub Lamu / Tuplamu Pier / ทับละมุ) · กวาดทั้งหมดมาใช้ตัวนี้เป็นงานของมันเอง
+   ของใหม่ที่เขียนต่อจากนี้ ให้เรียกตัวนี้ อย่าพิมพ์เพิ่มชุดที่ 351 */
+const LA_PIER_NAME = {
+  tublamu:{ en:'Tub Lamu',    th:'ทับละมุ' },
+  panwa:  { en:'Visit Panwa', th:'พันวา' },
+  ranong: { en:'Ranong',      th:'ระนอง' },
+  other:  { en:'Land programs', th:'โปรแกรมบก' }
+};
+function laPierName(p){
+  const row = LA_PIER_NAME[p || LAND_PIER];
+  if(!row) return String(p || '—');   /* ท่าที่ยังไม่รู้จัก · โชว์ค่าดิบ ดีกว่าขีดกลาง */
+  return ((typeof laLangGet === 'function' && laLangGet() === 'en') ? row.en : row.th) || row.en;
+}
 function laPierRank(p){
   const i = LA_PIER_ORDER.indexOf(p || LAND_PIER);
   return i < 0 ? LA_PIER_ORDER.length : i;   /* ท่าที่ยังไม่รู้จัก ไปต่อท้าย ไม่หาย */
@@ -691,7 +706,7 @@ function laMonAbbr(){
     ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     : laMonAbbrTH();
 }
-window.laPierRank=laPierRank; window.laRouteOrd=laRouteOrd; window.laRouteOrdCmp=laRouteOrdCmp;
+window.laPierName=laPierName; window.laPierRank=laPierRank; window.laRouteOrd=laRouteOrd; window.laRouteOrdCmp=laRouteOrdCmp;
 window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr; window.laMonAbbrTH=laMonAbbrTH;
 window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
 window.laLangApplyNav=laLangApplyNav;

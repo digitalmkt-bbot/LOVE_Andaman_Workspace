@@ -223,7 +223,122 @@ else if (R.land.got.join() !== R.land.want.join())
        show(R, R.land.got) + '\n      ควรได้: ' + show(R, R.land.want));
 else ok('หน้าโปรแกรมบก (City Tour) เรียงด้วยกติกาเดียวกัน ' + R.land.got.length + ' เส้น');
 
-/* ══ 6 · ไม่มี error บนหน้า ════════════════════════════════════════════ */
+/* ══ 6 · หัวคั่นท่าเรือ ════════════════════════════════════════════════
+   §pierHd · ชื่อท่าแล้วขีดยาวหนึ่งขีด แทนชิป TL / VP ทุกแถว
+   สามเรื่องที่ต้องจริงพร้อมกัน ไม่ใช่แค่ "มีหัว"
+     หัวต้องตรงกับกลุ่มที่อยู่ข้างใต้จริง · พิมพ์ค้นหาแล้วหัวที่ไม่เหลือผลต้องหายไป
+     หัวต้องไม่ถูกนับเป็นตัวเลือก ไม่งั้นกดลูกศรลงแล้วไปค้างที่หัว */
+const R6 = await page.evaluate(() => {
+  const all = (ROUTES || []).filter(r => r && r.id && r.active !== false);
+  const pos = {}; all.forEach((r, i) => { pos[r.id] = i; });
+  const ag = (SB_AGENTS || []).filter(a => {
+    const ids = [...new Set((a.programPeriods || []).map(p => p && p.routeId).filter(Boolean))]
+      .filter(id => pos[id] != null);
+    const piers = new Set(ids.map(id => all.find(r => r.id === id).pier).filter(Boolean));
+    return ids.length >= 4 && piers.size >= 2;
+  }).sort((a, b) => (b.programPeriods || []).length - (a.programPeriods || []).length)[0];
+  if (!ag) return { skip: true };
+
+  bkV2NewBooking();
+  const o = (bkV2GetAgentDDOptions() || []).find(x => x.id === ag.id);
+  bkV2AgentDDPick(o.label);
+
+  /* กล่องของจริงอยู่ในฟอร์มที่ยังไม่ถูก mount · สร้างกล่องชื่อเดียวกันให้ตัววาดใช้ */
+  let host = document.getElementById('__ddprobe');
+  if (!host) { host = document.createElement('div'); host.id = '__ddprobe'; document.body.appendChild(host); }
+  host.innerHTML = '<div class="bkv2-nb-dd open" id="bkv2-route-dd-0"></div>';
+  const dd = () => document.getElementById('bkv2-route-dd-0');
+  const read = () => {
+    const kids = [].slice.call(dd().children);
+    const seq = kids.map(el => el.classList.contains('bkv2-nb-dd-hd')
+      ? { hd: (el.querySelector('.lb') || {}).textContent || '' }
+      : { it: (el.querySelector('.bkv2-nb-dd-name') || {}).textContent || '' });
+    return { seq, items: dd().querySelectorAll('.bkv2-nb-dd-item').length,
+             chips: dd().querySelectorAll('.bkv2-nb-dd-mkt').length,
+             lines: dd().querySelectorAll('.bkv2-nb-dd-hd .ln').length };
+  };
+
+  const lang0 = (typeof laLangGet === 'function') ? laLangGet() : 'th';
+  if (typeof laLangSet === 'function') laLangSet('en');
+  bkV2RouteDDRender(0, '');
+  const full = read();
+  const opts = (bkV2RouteDDOpts() || []).map(x => ({ id: x.id, label: x.label, pierId: x.pierId }));
+  const wantHd = []; let last = null;
+  opts.forEach(x => { if (x.pierId !== last) { last = x.pierId; wantHd.push(laPierName(x.pierId)); } });
+
+  /* คำค้นที่เหลือท่าเดียว · หยิบจากคำในชื่อของท่าหลัง แล้วเช็คว่ามันไม่ไปโดนท่าแรก */
+  const lastPier = opts[opts.length - 1].pierId;
+  let q = null;
+  for (const w of opts.filter(x => x.pierId === lastPier).map(x => x.label.split(/\s+/)).flat()) {
+    const k = String(w).toLowerCase();
+    if (k.length < 3) continue;
+    const hit = opts.filter(x => x.label.toLowerCase().includes(k));
+    if (hit.length && new Set(hit.map(x => x.pierId)).size === 1 && hit.length < opts.length) { q = k; break; }
+  }
+  let filt = null;
+  if (q) { bkV2RouteDDRender(0, q); filt = read(); }
+
+  if (typeof laLangSet === 'function') laLangSet('th');
+  bkV2RouteDDRender(0, '');
+  const thHd = read().seq.filter(x => x.hd != null).map(x => x.hd);
+  if (typeof laLangSet === 'function') laLangSet(lang0);
+  host.remove();
+
+  return { agent: ag.code || ag.id, full, opts, wantHd, q, filt, thHd,
+           enHd: full.seq.filter(x => x.hd != null).map(x => x.hd),
+           thWant: opts.reduce((a, x) => (a.includes(x.pierId) ? a : a.concat(x.pierId)), []) };
+});
+
+if (R6.skip) fail('ไม่มีเอเยนต์ที่ขายข้ามท่า ≥2 ท่า · ตรวจหัวคั่นไม่ได้');
+else {
+  const seq = R6.full.seq;
+  const hdOf = [], orphan = [];
+  seq.forEach((x, i) => {
+    if (x.hd == null) return;
+    hdOf.push(x.hd);
+    if (!seq[i + 1] || seq[i + 1].hd != null) orphan.push(x.hd);
+  });
+  if (R6.full.chips) fail('ยังมีชิป TL / VP เหลืออยู่ ' + R6.full.chips + ' อัน · แบบ A ให้หัวคั่นบอกท่าแทน ไม่ใช่บอกซ้ำทุกแถว');
+  else if (R6.full.items !== R6.opts.length)
+    fail('จำนวนตัวเลือกเพี้ยน · วาดออกมา ' + R6.full.items + ' แถว แต่มี ' + R6.opts.length +
+         ' เส้นทาง · หัวคั่นต้องไม่ถูกนับเป็นตัวเลือก (ไม่งั้นกดลูกศรลงแล้วไปค้างที่หัว)');
+  else if (R6.full.lines !== hdOf.length)
+    fail('หัวคั่นมี ' + hdOf.length + ' อัน แต่ขีดยาวมี ' + R6.full.lines + ' เส้น · ต้องมีขีดหนึ่งขีดต่อหนึ่งหัว');
+  else if (orphan.length) fail('มีหัวคั่นที่ไม่มีเส้นทางอยู่ข้างใต้ · ' + orphan.join(', '));
+  else if (hdOf.join('|') !== R6.wantHd.join('|'))
+    fail('หัวคั่นไม่ตรงกับกลุ่มจริง · ได้ ' + hdOf.join(', ') + ' · ควรได้ ' + R6.wantHd.join(', '));
+  else ok('หัวคั่นถูกต้อง ' + hdOf.length + ' หัว (' + hdOf.join(' / ') + ') · ' + R6.full.items +
+          ' เส้นทาง · ไม่มีชิปเหลือ · หัวไม่ถูกนับเป็นตัวเลือก · ขีดครบทุกหัว');
+}
+
+/* ══ 7 · พิมพ์ค้นหาแล้วหัวที่ไม่เหลือผลต้องหายไป ════════════════════════ */
+if (R6.skip || !R6.q) fail('หาคำค้นที่เหลือท่าเดียวไม่ได้ · ตรวจข้อนี้ไม่ได้');
+else {
+  const seq = R6.filt.seq;
+  const hd = seq.filter(x => x.hd != null).map(x => x.hd);
+  const orphan = seq.filter((x, i) => x.hd != null && (!seq[i + 1] || seq[i + 1].hd != null));
+  if (hd.length !== 1)
+    fail('พิมพ์ "' + R6.q + '" แล้วเหลือท่าเดียว แต่ยังมีหัวคั่น ' + hd.length + ' อัน (' + hd.join(', ') +
+         ') · หัวของท่าที่ไม่เหลือผลต้องหายไปด้วย');
+  else if (orphan.length) fail('พิมพ์ "' + R6.q + '" แล้วมีหัวคั่นลอยที่ไม่มีอะไรอยู่ข้างใต้');
+  else if (R6.filt.items >= R6.full.items)
+    fail('พิมพ์ "' + R6.q + '" แล้วรายการไม่ได้ถูกกรอง (' + R6.filt.items + '/' + R6.full.items + ') · ตรวจข้อนี้ไม่ได้');
+  else ok('พิมพ์ "' + R6.q + '" แล้วเหลือหัวเดียว "' + hd[0] + '" กับ ' + R6.filt.items +
+          ' เส้นทาง · ไม่มีหัวลอย');
+}
+
+/* ══ 8 · ชื่อท่าตามภาษาที่เลือก ═════════════════════════════════════════ */
+if (R6.skip) fail('ตรวจภาษาของชื่อท่าไม่ได้');
+else if (!R6.enHd.length || !R6.thHd.length) fail('อ่านชื่อท่าไม่ได้ทั้งสองภาษา');
+else if (R6.enHd.join('|') === R6.thHd.join('|'))
+  fail('สลับภาษาแล้วชื่อท่าไม่เปลี่ยน · ได้ "' + R6.enHd.join(', ') + '" ทั้งสองโหมด');
+else if (/[ก-ฮะ-ฺเ-๎]/.test(R6.enHd.join('')))
+  fail('โหมดอังกฤษยังมีชื่อท่าเป็นไทย · ' + R6.enHd.join(', '));
+else if (!/[ก-ฮะ-ฺเ-๎]/.test(R6.thHd.join('')))
+  fail('โหมดไทยยังเป็นชื่ออังกฤษ · ' + R6.thHd.join(', '));
+else ok('ชื่อท่าตามภาษาที่เลือก · EN "' + R6.enHd.join(' / ') + '" · TH "' + R6.thHd.join(' / ') + '"');
+
+/* ══ 9 · ไม่มี error บนหน้า ════════════════════════════════════════════ */
 if (errors.length) fail('มี error บนหน้า ' + errors.length + ' รายการ · ' + errors.slice(0, 2).join(' | '));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
 
