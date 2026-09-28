@@ -57462,7 +57462,8 @@ function poCSS(){
   +H+' .pk-sheet col.c-g{width:58px}'
   +H+' .pk-sheet col.c-nt{width:auto}'   /* ช่องหมายเหตุเป็นตัวยืด เหมือนแบบฟอร์มของด่าน */
   +H+' .pk-sheet col.c-cd{width:148px}'
-  +H+' .pk-sheet thead th{position:sticky;top:0;z-index:3;background:#F1F5F9;color:#334155;'
+  /* §pkTop · หัวตารางตรึงใต้แถบบน ไม่ใช่ขอบจอ · --pk-top วัดจริงหลังวาดเสร็จ */
+  +H+' .pk-sheet thead th{position:sticky;top:var(--pk-top,0px);z-index:3;background:#F1F5F9;color:#334155;'
      +'font-size:11px;font-weight:800;text-align:left;padding:9px 10px;white-space:nowrap;'
      +'border-bottom:1px solid #CBD5E1;border-right:1px solid #E2E8F0;'
      +'box-shadow:inset 0 -1px 0 #CBD5E1}'
@@ -57537,6 +57538,23 @@ function poCSS(){
   /* ══ แถบสรุปทั้งวัน · แทนการ์ด KPI 5 ใบที่กินที่ไปครึ่งจอ ════════════
      ตัวเลขพวกนี้เป็นของ "ทั้งวัน" ซึ่งดูแค่ผ่านตา ไม่ได้เอาไปกรอกอะไร
      จึงไม่คุ้มกับพื้นที่ 5 การ์ด · ยอดรายประเภทที่ต้องใช้จริงอยู่บนหัวลำแล้ว */
+  /* §pkTop · แถบบนตรึง · ชิปเส้นทาง + แถบสรุปวัน · หัวเรื่องกับปุ่มวันที่เลื่อนผ่านไป */
+  +H+' .pk-stick{position:sticky;top:0;z-index:40;background:#F7F8FA;'
+    +'padding:8px 0 4px;margin:10px 0 4px;box-shadow:0 8px 12px -11px rgba(15,23,42,.45)}'
+  +H+' .pk-rts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
+  +H+' .pk-rt{--rc:#94A3B8;display:inline-flex;align-items:center;gap:7px;background:#fff;'
+    +'border:1px solid #E2E8F0;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:700;'
+    +'color:#334155;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap}'
+  +H+' .pk-rt:hover{border-color:var(--rc)}'
+  +H+' .pk-rt.on{background:var(--rc);border-color:var(--rc);color:#fff}'
+  +H+' .pk-rt .d{width:7px;height:7px;border-radius:50%;background:var(--rc);flex-shrink:0}'
+  +H+' .pk-rt.on .d{background:rgba(255,255,255,.85)}'
+  +H+' .pk-rt b{font-family:\'DM Mono\',monospace;font-size:12px;font-weight:600}'
+  +H+' .pk-rt u{text-decoration:none;font-size:10px;font-weight:800;background:#FEF3C7;color:#92400E;'
+    +'border-radius:6px;padding:0 5px}'
+  +H+' .pk-rt.on u{background:rgba(255,255,255,.28);color:#fff}'
+  +H+' .pk-rtf{font-size:11px;color:#64748B;margin-left:2px}'
+  +H+' .pk-rtf b{color:#185FA5;cursor:pointer;text-decoration:underline;font-weight:700}'
   +H+' .pk-day{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}'
   /* §pkTk8 · ย้ายลงท้ายหน้าแล้ว · ทำให้จางลงด้วย จะได้ไม่แย่งสายตากับตารางรายชื่อ */
   +H+' .pk-tyb{margin-top:26px;opacity:.72}'
@@ -60128,6 +60146,17 @@ function pkTkData(date, pier){
    คนใช้เอาชีทนี้ไปยื่นที่ด่าน · จึงทำให้หน้าตาเหมือนสิ่งที่เขาถืออยู่จริง
    หัวตารางตรึงไว้ · แถวสลับสี · ตัวเลขชิดขวา · เลือกคลุมแล้ว copy ไปวางใน Excel ได้เลย
    แถวหัวข้อของแต่ละลำคั่นกลุ่มไว้ พร้อมยอดของลำนั้น                             */
+/* §pkTop (2026-09-28) · แถบบนตรึงไว้ + ชิปเส้นทางกดดูทีละเส้น
+   ที่มา · ผู้ใช้เอง · หน้านี้เลื่อนยาวมาก (44 แถวต่อลำ) เลื่อนไปแล้วไม่รู้ว่าอยู่ลำไหน
+   และวันที่มีหลายเส้นทาง ต้องเลื่อนผ่านทั้งเส้นอื่นกว่าจะถึงเส้นที่ต้องดู
+   ชิปเส้นทาง กดแล้วเห็นเฉพาะเส้นนั้น · กดซ้ำเอาตัวกรองออก
+   ตัวกรองเก็บไว้ในหน่วยความจำเท่านั้น · เปลี่ยนวันแล้วเส้นนั้นอาจไม่มี จึงล้างให้เองตอนวาด
+   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName เท่านั้น (ดู CLAUDE.md) */
+var _pkRoute = '';
+function pkRoutePick(rid){
+  _pkRoute = (_pkRoute===rid) ? '' : String(rid||'');
+  renderPierPark();
+}
 function renderPierPark(pier){
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
@@ -60298,7 +60327,10 @@ function renderPierPark(pier){
      ของเดิมกางทุกลำต่อกันเป็นตารางเดียว เลื่อนหาลำที่ต้องการยาก
      และแบบฟอร์มของด่านเป็น "ใบต่อลำ" อยู่แล้ว · จอเลยควรเป็นทีละลำเหมือนกัน */
   if(!window._pkTab || typeof window._pkTab!=='object') window._pkTab={};
-  var body=D.map(function(g){
+  /* §pkTop · เส้นที่กรองไว้หายไปจากวันนี้ → กลับไปดูทุกเส้น ดีกว่าโชว์หน้าเปล่า */
+  if(_pkRoute && !D.some(function(g){ return g.rid===_pkRoute; })) _pkRoute='';
+  var DV = _pkRoute ? D.filter(function(g){ return g.rid===_pkRoute; }) : D;
+  var body=DV.map(function(g){
     var rn=(g.route&&g.route.name)||g.rid;
     var rc=(g.route&&g.route.color)||'#94A3B8';
     var pick=window._pkTab[g.rid];
@@ -60389,6 +60421,23 @@ function renderPierPark(pier){
           +'style="border-color:#C9A227;color:#8A7000">? วิธีใช้</button>'
       +'</div>'
     +'</div>'
+    +'<div class="pk-stick">'
+    +'<div class="pk-rts">'
+      +'<button class="pk-rt'+(_pkRoute?'':' on')+'" onclick="pkRoutePick(\'\')">'
+        +'ทุกเส้นทาง<b>'+D.length+'</b></button>'
+      +D.map(function(g){
+          var t=0,m=0; g.boats.forEach(function(B){ t+=B.tot; m+=B.missTot; });
+          var rc=(g.route&&g.route.color)||'#94A3B8';
+          var on=(_pkRoute===g.rid);
+          return '<button class="pk-rt'+(on?' on':'')+'" style="--rc:'+rc+'" '
+            +'onclick="pkRoutePick(\''+g.rid+'\')" title="'+poE((g.route&&g.route.name)||g.rid)
+            +' · '+g.boats.length+' ลำ · '+t+' คน'+(m?(' · ยังไม่มีรายชื่อ '+m):'')+'">'
+            +'<i class="d"></i>'+poE((g.route&&g.route.name)||g.rid)
+            +'<b>'+t+'</b>'+(m?('<u>'+m+'</u>'):'')+'</button>';
+        }).join('')
+      +(_pkRoute?('<span class="pk-rtf">ดูเฉพาะเส้นนี้ · '
+        +'<b onclick="pkRoutePick(\'\')">ล้างตัวกรอง</b></span>'):'')
+    +'</div>'
     +'<div class="pk-day">'
       +'<span class="s"><b>'+nBoat+'</b> ลำ</span>'
       +'<span class="s"><b>'+gTot+'</b> ตั๋วทั้งวัน'+((gBook>gTot)?(' <i>จอง '+gBook+'</i>'):'')+'</span>'
@@ -60401,9 +60450,21 @@ function renderPierPark(pier){
       +'<span class="s" style="cursor:pointer" onclick="pkHelp()" '
         +'title="กดดูรายละเอียด">อ่านอย่างเดียว · ไม่กระทบใบจอง</span>'
     +'</div>'
+    +'</div>'   /* §pkTop · ปิด .pk-stick */
     /* §pkTk8 · กล่องประเภทตั๋วเป็นของ "ตั้งครั้งเดียวแล้วไม่แตะอีก"
        เคยอยู่บนสุดคั่นระหว่างแถบสรุปกับตารางที่ต้องใช้จริง · ย้ายลงท้ายหน้า */
     +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>');
+  /* §pkTop · หัวตารางต้องตรึงใต้แถบบนพอดี · ความสูงแถบเปลี่ยนตามจำนวนชิปที่ตกบรรทัด
+     จึงวัดหลังวาดทุกครั้ง ไม่เดาเป็นค่าคงที่ · หน้าจอแคบชิปตกสองแถวก็ยังตรง */
+  (function(){
+    var st=host.querySelector('.pk-stick'); if(!st) return;
+    var set=function(){ try{ host.style.setProperty('--pk-top', Math.round(st.getBoundingClientRect().height)+'px'); }catch(_){} };
+    set();
+    if(typeof requestAnimationFrame==='function') requestAnimationFrame(set);
+    if(typeof ResizeObserver==='function' && !st._pkRo){
+      try{ st._pkRo=new ResizeObserver(set); st._pkRo.observe(st); }catch(_){}
+    }
+  })();
     /* §pkTkHelp  · คำอธิบายที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "วิธีใช้" บนแถบบน
        §pkTkTyPop · กล่องประเภทตั๋วที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "ประเภทตั๋ว" */
 }
