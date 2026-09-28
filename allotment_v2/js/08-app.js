@@ -48169,9 +48169,32 @@ function bkV2RenderTab2(){
         + `</tr>` : '';
       return _row;
     }).join('');
+    /* §btAlign (2026-09-28) · ทุกโปรแกรมเป็นตารางของตัวเอง · คอลัมน์จึงไม่ตรงกัน
+       ที่มา · ผู้ใช้เจอเอง · "แถวนี้มันควรจะตรงกันไหม และตัวเลขจะได้เห็น"
+       table-layout เป็น auto · เบราว์เซอร์คิดความกว้างจากเนื้อหาของแต่ละตารางแยกกัน
+       ชื่อลูกค้ายาวกว่าอีกตารางเดียว คอลัมน์ AD ก็เลื่อนไปทั้งตาราง
+       วัดกับชุดข้อมูลทดสอบแล้ว · ตรงกันแค่ 3 จาก 18 คอลัมน์ เพี้ยนสูงสุด 43px
+       ของจริงชื่อยาวกว่านี้มาก จึงเพี้ยนจนตัวเลขไปอยู่ใต้หัวคนละช่อง
+       แก้ด้วย colgroup + table-layout:fixed · ความกว้างมาจากตัวเลขที่เขียนไว้ ไม่ใช่เนื้อหา
+       ทุกตารางใช้ชุดเดียวกัน จึงตรงกันทุกคอลัมน์ · ตัวเลขพิมพ์ออกเหมือนเดิมทุกตัว ไม่ได้หายไปไหน */
+    const _c = w => '<col style="width:' + w + 'px">';
+    const colGroup = '<colgroup>'
+      + _c(104) + _c(142) + _c(210)                          /* Voucher · Agency · Customer */
+      + _c(40) + _c(46) + _c(42) + _c(46)                    /* AD CHD INF FOC */
+      + _c(56)                                               /* Time */
+      + (vanMode ? _c(150) : '')                             /* กลุ่ม */
+      + _c(200) + _c(58) + _c(116) + _c(90)                  /* Pickup · Room · Zone · Send back */
+      + (vanMode ? '' : _c(74))                              /* Add-on */
+      + _c(128)                                              /* Special request */
+      + (vanMode ? '' : _c(86) + _c(78) + _c(48))            /* Pay · Total · (VC) */
+      + _c(72)                                               /* Boat */
+      + (rcMode ? _c(106) : '')
+      + (wxClosed ? _c(94) : '')
+      + '</colgroup>';
     const zoneTable = (zoneBlocks || lockBlocks || pendBlocks) ? `
         <div class="t2-tblscroll">
-          <table class="t2-mtbl${vanMode?' t2-van':''}">
+          <table class="t2-mtbl t2-fixed${vanMode?' t2-van':''}">
+            ${colGroup}
             <thead><tr>
               <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
@@ -48926,6 +48949,8 @@ function bkV2RenderTab2(){
        (หัวตารางไถหายไปทั้งที่ตั้ง sticky ไว้) · ต้องเป็น separate + border-spacing:0
        เหมือนที่ตารางเช็คอินรถ/หน้าท่าใช้อยู่ · เส้นขอบวาดที่ td/th อยู่แล้วจึงไม่ซ้อน */
     table.t2-mtbl{border-collapse:separate;border-spacing:0;width:100%;min-width:1180px;font-size:12px}
+    /* §btAlign · เฉพาะตารางที่มี colgroup · ตารางอื่นที่ใช้ .t2-mtbl ร่วมกันไม่กระทบ */
+    table.t2-mtbl.t2-fixed{table-layout:fixed}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
        ทำเป็นพื้นทึบ · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก
