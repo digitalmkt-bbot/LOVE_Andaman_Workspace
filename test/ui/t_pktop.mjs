@@ -66,7 +66,10 @@ if (!R0.err) {
     const h = document.querySelector('[id^="pk-host-"]');
     if (!h) return null;
     return {
-      chips: [].slice.call(h.querySelectorAll('.pk-rt')).map(b => ({
+      /* §pkOv2 · ปุ่ม "ภาพรวมเดือน" นั่งอยู่แถวเดียวกับชิปและใช้คลาส .pk-rt เหมือนกัน
+         แต่มันคือปุ่มสลับมุมมอง ไม่ใช่ชิปเส้นทาง · ต้องคัดออกทุกที่ในเทสนี้
+         ไม่งั้นนับชิปเกินหนึ่ง และการไล่กดชิปจะไปกดปุ่มนั้นแล้วเด้งไปหน้าภาพรวม */
+      chips: [].slice.call(h.querySelectorAll('.pk-rt:not(.pk-ovbn)')).map(b => ({
         txt: (b.textContent || '').trim(),
         n: +((b.querySelector('b') || {}).textContent || 0),
         on: b.classList.contains('on')
@@ -74,7 +77,23 @@ if (!R0.err) {
       trips: [].slice.call(h.querySelectorAll('.pk-trip .rn')).map(x => (x.textContent || '').trim()),
       stickPos: (function () { const s = h.querySelector('.pk-stick'); return s ? getComputedStyle(s).position : '-'; })(),
       stickH: (function () { const s = h.querySelector('.pk-stick'); return s ? Math.round(s.getBoundingClientRect().height) : 0; })(),
-      thTop: (function () { const t = h.querySelector('.pk-sheet thead th'); return t ? getComputedStyle(t).top : '-'; })()
+      thTop: (function () { const t = h.querySelector('.pk-sheet thead th'); return t ? getComputedStyle(t).top : '-'; })(),
+      /* กับดักที่เจอมาแล้วหลายหน · การ์ดครอบที่มี overflow ไม่ใช่ visible
+         จะกลายเป็นตัวตั้งของ sticky แทนหน้าจอ · หัวตารางจะลอยลงไปทับแถวแรกทันทีที่วาดเสร็จ
+         ทั้งที่ค่า top ยังถูกต้องทุกอย่าง · จึงต้องวัดตำแหน่งจริงด้วย ไม่ใช่วัดแค่ค่า CSS */
+      sheet: (function () {
+        const tb = h.querySelector('.pk-sheet'); if (!tb) return null;
+        const th = tb.querySelector('thead th'), r1 = tb.querySelector('tbody tr');
+        if (!th || !r1) return null;
+        const card = tb.closest('.po-card');
+        return { tblY: Math.round(tb.getBoundingClientRect().top),
+                 thY: Math.round(th.getBoundingClientRect().top),
+                 hdH: Math.round(tb.querySelector('thead').getBoundingClientRect().height),
+                 r1Y: Math.round(r1.getBoundingClientRect().top),
+                 cardOvf: card ? getComputedStyle(card).overflow : '-',
+                 boxOvf: getComputedStyle(tb).overflow,
+                 canScroll: tb.scrollHeight - tb.clientHeight > 8 };
+      })()
     };
   });
 
@@ -95,7 +114,7 @@ if (!R0.err) {
   const R2 = await page.evaluate(async () => {
     const h = document.querySelector('[id^="pk-host-"]');
     const out = [];
-    const chips = [].slice.call(h.querySelectorAll('.pk-rt')).slice(1);
+    const chips = [].slice.call(h.querySelectorAll('.pk-rt:not(.pk-ovbn)')).slice(1);
     for (let i = 0; i < chips.length; i++) {
       const want = +((chips[i].querySelector('b') || {}).textContent || 0);
       const name = (chips[i].childNodes[1] ? chips[i].childNodes[1].textContent : '').trim();
@@ -114,7 +133,7 @@ if (!R0.err) {
       }
       out.push({ name, want, rows, nBoat: tabs.length });
       /* ล้างตัวกรองก่อนไปเส้นถัดไป */
-      document.querySelector('[id^="pk-host-"] .pk-rt').click();
+      document.querySelector('[id^="pk-host-"] .pk-rt:not(.pk-ovbn)').click();
       await new Promise(r => setTimeout(r, 120));
     }
     return out;
@@ -129,16 +148,16 @@ if (!R0.err) {
 
   /* ══ 3 · กดแล้วกรอง · กดซ้ำหลุด ═══════════════════════════════════ */
   const R3 = await page.evaluate(async () => {
-    const pick = () => document.querySelectorAll('[id^="pk-host-"] .pk-rt')[1];
+    const pick = () => document.querySelectorAll('[id^="pk-host-"] .pk-rt:not(.pk-ovbn)')[1];
     pick().click(); await new Promise(r => setTimeout(r, 150));
     const h1 = document.querySelector('[id^="pk-host-"]');
     const a = { n: h1.querySelectorAll('.pk-trip').length,
-                on: [].slice.call(h1.querySelectorAll('.pk-rt.on')).length,
-                allOn: h1.querySelector('.pk-rt').classList.contains('on') };
+                on: [].slice.call(h1.querySelectorAll('.pk-rt.on:not(.pk-ovbn)')).length,
+                allOn: h1.querySelector('.pk-rt:not(.pk-ovbn)').classList.contains('on') };
     pick().click(); await new Promise(r => setTimeout(r, 150));
     const h2 = document.querySelector('[id^="pk-host-"]');
     return { a, b: { n: h2.querySelectorAll('.pk-trip').length,
-                     allOn: h2.querySelector('.pk-rt').classList.contains('on') } };
+                     allOn: h2.querySelector('.pk-rt:not(.pk-ovbn)').classList.contains('on') } };
   });
   if (R3.a.n !== 1) fail('กดชิปเส้นเดียวแล้วยังเห็น ' + R3.a.n + ' เส้นทาง · ต้องเหลือ 1');
   else if (R3.a.on !== 1) fail('กดชิปแล้วมีชิปติดไฟ ' + R3.a.on + ' อัน · ต้องมีแค่อันเดียว');
@@ -151,14 +170,14 @@ if (!R0.err) {
   if (!R0.other) ok('ชุดข้อมูลนี้ไม่มีวันอื่นที่ชุดเส้นทางต่างกัน · ข้ามการตรวจตัวกรองค้างข้ามวัน');
   else {
     const R4 = await page.evaluate(async (o) => {
-      document.querySelectorAll('[id^="pk-host-"] .pk-rt')[1].click();
+      document.querySelectorAll('[id^="pk-host-"] .pk-rt:not(.pk-ovbn)')[1].click();
       await new Promise(r => setTimeout(r, 150));
       const before = _pkRoute;
       pkSetDate(o);
       await new Promise(r => setTimeout(r, 250));
       const h = document.querySelector('[id^="pk-host-"]');
       return { before, after: _pkRoute, nTrip: h.querySelectorAll('.pk-trip').length,
-               nChip: h.querySelectorAll('.pk-rt').length };
+               nChip: h.querySelectorAll('.pk-rt:not(.pk-ovbn)').length };
     }, R0.other);
     if (R4.nChip <= 1) ok('วัน ' + R0.other + ' ไม่มีเรือที่ท่านี้ · ข้ามการตรวจ');
     else if (R4.after && R4.after === R4.before && !R4.nTrip)
@@ -176,9 +195,43 @@ if (!R0.err) {
     fail('แถบบนไม่ได้ตรึง (position: ' + H5.stickPos + ') · เลื่อนลงแล้วชิปกับวันที่หายไปจากจอ');
   else if (!H5.stickH) fail('แถบบนสูง 0 · วัดความสูงไม่ได้');
   else if (H5.thTop === '-') fail('หาหัวตารางชีทไม่เจอ · ตรวจข้อนี้ไม่ได้');
-  else if (Math.abs(parseFloat(H5.thTop) - H5.stickH) > 2)
-    fail('หัวตารางตรึงที่ ' + H5.thTop + ' แต่แถบบนสูง ' + H5.stickH + 'px · หัวตารางจะมุดหายใต้แถบ');
-  else ok('แถบบนตรึงจริง สูง ' + H5.stickH + 'px · หัวตารางตรึงพอดีใต้แถบที่ ' + H5.thTop);
+  else if (!H5.sheet) fail('วัดตำแหน่งจริงของหัวตารางชีทไม่ได้ · ตรวจข้อนี้ไม่ครบ');
+  /* ชีทรายชื่อเป็นกล่องเลื่อนของตัวเอง (overflow:auto + max-height)
+     ตัวตั้งของ sticky จึงเป็นขอบบนของกล่องนี้ ไม่ใช่ขอบจอ · ค่า top ต้องเป็น 0
+     ถ้าใส่ความสูงของแถบบนลงไป หัวจะลอยต่ำลงมาเท่านั้นแล้วไปคร่อมทับแถวแรก ๆ
+     ทั้งที่ค่าที่เขียนไว้ "ดูถูก" ทุกอย่าง · จึงต้องวัดตำแหน่งจริงเสมอ */
+  else if (parseFloat(H5.thTop) > 2)
+    fail('ชีทเป็นกล่องเลื่อนของตัวเอง (overflow: ' + H5.sheet.boxOvf + ') แต่หัวตารางตรึงที่ ' +
+         H5.thTop + ' · จะลอยต่ำจากขอบกล่องเท่านั้นแล้วทับแถวแรก ๆ · ต้องเป็น 0');
+  else if (Math.abs(H5.sheet.thY - H5.sheet.tblY) > 2)
+    fail('ยังไม่เลื่อนหน้าแต่หัวตารางชีทลอยลงมา ' + (H5.sheet.thY - H5.sheet.tblY) + 'px จากขอบกล่อง · ' +
+         'กล่องชีท overflow: ' + H5.sheet.boxOvf + ' · การ์ดครอบ overflow: ' + H5.sheet.cardOvf +
+         ' · หัวจะไปทับแถวแรกของชีท');
+  else if (H5.sheet.r1Y < H5.sheet.thY + H5.sheet.hdH - 2)
+    fail('แถวแรกของชีทอยู่ใต้หัวตาราง (แถว y=' + H5.sheet.r1Y + ' หัวจบที่ ' +
+         (H5.sheet.thY + H5.sheet.hdH) + ') · คนแรกในเรือถูกบัง');
+  else if (!H5.sheet.canScroll)
+    fail('กล่องชีทไม่ได้เลื่อนเลยในจอขนาดนี้ · พิสูจน์เรื่องหัวตรึงไม่ได้ ตรวจข้อนี้ไม่ครบ');
+  else {
+    /* เลื่อนในกล่องจริง แล้ววัดอีกที · ข้อนี้คือสิ่งที่ผู้ใช้เห็น ไม่ใช่ค่าที่เขียนไว้ */
+    const S = await page.evaluate(async () => {
+      const tb = document.querySelector('[id^="pk-host-"] .pk-sheet');
+      tb.scrollTop = 240; await new Promise(r => setTimeout(r, 150));
+      const th = tb.querySelector('thead th');
+      const thR = th.getBoundingClientRect(), boxR = tb.getBoundingClientRect();
+      /* แถวที่มุดใต้หัวตอนเลื่อนเป็นเรื่องปกติของ sticky · ไม่ใช่ตัวชี้ว่าพัง
+         ตัวชี้จริงคือหัวอยู่ห่างจากขอบบนของกล่องหรือเปล่า */
+      const r = { top: Math.round(thR.top - boxR.top), scrolled: Math.round(tb.scrollTop) };
+      tb.scrollTop = 0; return r;
+    });
+    if (Math.abs(S.top) > 2)
+      fail('เลื่อนในกล่องชีท ' + S.scrolled + 'px แล้วหัวตารางอยู่ห่างจากขอบบนของกล่อง ' + S.top +
+           'px · ' + (S.top < 0 ? 'หัวเลื่อนหนีขึ้นไปพร้อมแถว · ไม่ได้ตรึงเลย'
+                               : 'หัวลอยต่ำลงมาแล้วคร่อมแถวที่อยู่ใต้มัน'));
+    else ok('แถบบนตรึงจริง สูง ' + H5.stickH + 'px · หัวชีทตรึงที่ขอบบนของกล่องเลื่อน (top: ' +
+            H5.thTop + ') ไม่ลอยไปทับแถวแรก · เลื่อนในกล่อง ' + S.scrolled +
+            'px แล้วหัวยังอยู่ที่ขอบกล่อง');
+  }
 
   /* ══ 6 · หน้านี้อ่านอย่างเดียว · กดชิปแล้วข้อมูลห้ามขยับ ══════════ */
   const R6 = await page.evaluate(async () => {
@@ -188,7 +241,7 @@ if (!R0.err) {
       ls: (function () { try { return (localStorage.getItem('loveandaman_v2') || '').length; } catch (_) { return -1; } })()
     });
     const a = snap();
-    const cs = [].slice.call(document.querySelectorAll('[id^="pk-host-"] .pk-rt'));
+    const cs = [].slice.call(document.querySelectorAll('[id^="pk-host-"] .pk-rt:not(.pk-ovbn)'));
     for (const c of cs) { c.click(); await new Promise(r => setTimeout(r, 90)); }
     return { same: a === snap(), a, b: snap() };
   });

@@ -3,21 +3,32 @@
 // ที่มา (2026-09-28) · ผู้ใช้ขอเอง · "เพิ่มหน้า Overview เพื่อให้เห็นภาพรวมของทั้งเดือน
 // เรียงวัน แยกเรือ จำนวน ลค ที่เดินทาง / จำนวน ลค ที่ทำตั๋ว"
 // ถามกลับว่า "ทำตั๋ว" หมายถึงตัวไหน · ผู้ใช้ตอบ "เอาทั้งสองตัว"
-// จึงเป็นสามคอลัมน์ · เดินทาง (หัวที่จ่ายจริง) / ต้องออกตั๋ว / มีชื่อแล้ว
+//
+// รอบสอง (2026-09-28) · ผู้ใช้ขอเพิ่ม
+//   "ภาพรวมรายเดือน ควรอยู่แถวเดียวกันกับโปรแกรม"
+//   "ภาพรวม ควรทำเป็นตารางแบบ Sheet · จำนวน ควรระบุแบ่ง ไทย / ต่างชาติ แยก AD CHD INF FOC
+//    และคอลัมน์ของที่ออกตั๋ว ไทย / ต่างชาติ แยก AD CHD INF FOC เหมือนกัน
+//    และรวมเปรียบเทียบว่า ลำนี้ ซื้อขาดหรือซื้อเกิน"
+// ตารางจึงกลายเป็น 19 คอลัมน์ · วัน | เส้นทาง | เรือ | เดินทาง·ไทย 4 | เดินทาง·ต่างชาติ 4
+//   | รวมเดินทาง | ออกตั๋ว (ตามประเภทของด่าน) | รวมตั๋ว | ขาด/เกิน
 //
 // ⚠ หน้าตั๋วอุทยานเขียนได้แค่ PIER_CFG.parkTypes / parkFix / parkName (ดู CLAUDE.md)
-//   หน้าภาพรวมอ่านอย่างเดียวล้วน · เทสข้อ 7 วัดว่าเปิดแล้วข้อมูลไม่ขยับ
+//   หน้าภาพรวมอ่านอย่างเดียวล้วน · เทสข้อ 8 วัดว่าเปิดแล้วข้อมูลไม่ขยับ
 //
-// เทสนี้กันแปดอย่าง
-//   1 มีปุ่มเข้าหน้าภาพรวม และกดแล้วเปลี่ยนหน้าจริง
-//   2 แถววันครบทุกวันของเดือน · แถวเรือครบตามที่นับเองจาก poBoats
-//   3 ตัวเลข "ต้องออกตั๋ว" ของแต่ละลำตรงกับจำนวนแถวในชีทจริงของลำนั้น
+// เทสนี้กันสิบเอ็ดอย่าง
+//   1  ปุ่มเข้าหน้าภาพรวมอยู่แถวเดียวกับชิปโปรแกรม และกดแล้วเปลี่ยนหน้าจริง
+//   2  แถววันครบทุกวันของเดือน · แถวเรือครบตามที่นับเองจาก poBoats
+//   2b วันที่ไม่มีเรือยังต้องมีแถว ไม่ถูกข้าม
+//   3  "รวมตั๋ว" ของแต่ละลำตรงกับจำนวนแถวในชีทจริงของลำนั้น
 //     (เปิดหน้ารายวันแล้วนับแถวที่พิมพ์ออกมา ไม่เชื่อเลขที่หน้าภาพรวมคำนวณเอง)
-//   4 แถวรวมเดือน = ผลบวกของแถววันทุกวัน (บวกจากตัวเลขที่วาดออกมาจริง)
-//   5 เลื่อนเดือนแล้วเดือนเปลี่ยนจริง ไม่ใช่ปุ่มหลอก
-//   6 กดแถววันแล้วกลับไปชีทของวันนั้น
-//   7 หัวตารางตรึงใต้แถบ ไม่ทับแถววันแรก
-//   8 เปิดหน้าภาพรวมแล้วข้อมูลจริงไม่ขยับ
+//   3b ช่องตั๋วที่ "ควรออก" ตรงกับที่แมปมาจากหัวคนที่เดินทาง 8 ช่อง
+//      (FOC ต้องได้ตั๋วผู้ใหญ่ · เด็กต่ำกว่า 3 ไม่แยกสัญชาติ) และรวมเดินทาง = ผลบวก 8 ช่อง
+//   4  แถวรวมเดือน = ผลบวกของแถววันทุกวัน ครบทุกคอลัมน์
+//   4b แถววัน = ผลบวกของแถวเรือในวันนั้น ครบทุกคอลัมน์ · และช่องขาด/เกิน = รวมตั๋ว − รวมเดินทาง
+//   5  เลื่อนเดือนแล้วเดือนเปลี่ยนจริง ไม่ใช่ปุ่มหลอก
+//   6  กดแถววันแล้วกลับไปชีทของวันนั้น
+//   7  หัวตารางสองชั้นตรึงใต้แถบ ไม่ทับแถววันแรก
+//   8  เปิดหน้าภาพรวมแล้วข้อมูลจริงไม่ขยับ
 
 import { open } from './_harness.mjs';
 
@@ -25,9 +36,12 @@ let bad = 0;
 const ok   = m => console.log('  ✓ ' + m);
 const fail = m => { bad++; console.log('  ✗ ' + m); };
 
-const { page, errors, close } = await open({ blob: process.env.LAD, width: 1500, height: 1200 });
+const { page, errors, close } = await open({ blob: process.env.LAD, width: 1700, height: 1200 });
 page.on('dialog', d => d.accept());
 await page.waitForTimeout(1200);
+
+/* ลำดับช่อง "เดินทาง" ในตาราง · ต้องตรงกับ GO ใน pkOvBody */
+const GOK = ['ad_th', 'chd_th', 'inf_th', 'foc_th', 'ad_fr', 'chd_fr', 'inf_fr', 'foc_fr'];
 
 /* ══ 0 · หาท่า/เดือนที่มีข้อมูล ═══════════════════════════════════════ */
 const R0 = await page.evaluate(() => {
@@ -71,13 +85,20 @@ const R0 = await page.evaluate(() => {
     }
     if (have > 0 && have < lastD) gapMon = { mon: m, last: lastD, have };
   });
-  return { pier: best.pier, mon: best.mon, last, nBoat, nDayWith, sample, gapMon };
+  /* ชุดประเภทตั๋วของด่าน · ใช้ทั้งนับคอลัมน์และตรวจการแมป FOC/INF ในข้อ 3b */
+  const ty = pkTypes().map(T => ({ k: T.k, s: T.s || T.n, ch: (T.ch || []).slice() }));
+  return { pier: best.pier, mon: best.mon, last, nBoat, nDayWith, sample, gapMon, ty };
 });
 if (R0.err) fail(R0.err);
 else ok('ใช้ท่า ' + R0.pier + ' เดือน ' + R0.mon + ' · คิดเองได้ ' + R0.last + ' วัน · มีเรือ ' +
-        R0.nDayWith + ' วัน · รวม ' + R0.nBoat + ' ลำ');
+        R0.nDayWith + ' วัน · รวม ' + R0.nBoat + ' ลำ · ประเภทตั๋ว ' + R0.ty.length + ' ช่อง');
 
 if (!R0.err) {
+  const nTy = R0.ty.length;
+  /* ตำแหน่งคอลัมน์ · แถวเรือมีช่องเรือด้วยจึงเริ่มที่ 3 · แถววัน/แถวรวมรวบเส้นทาง+เรือเป็น colspan 2 จึงเริ่มที่ 2 */
+  const IX = off => ({ go: off, goT: off + 8, ty: off + 9, tyT: off + 9 + nTy, df: off + 10 + nTy,
+                       n: off + 11 + nTy });
+
   const openOv = () => page.evaluate(([p, m]) => {
     renderPierPark(p);
     pkSetDate(m + '-01');
@@ -85,28 +106,39 @@ if (!R0.err) {
     pkSetView('ov');
   }, [R0.pier, R0.mon]);
 
-  /* ══ 1 · ปุ่มเข้าหน้าภาพรวม ═══════════════════════════════════════ */
+  /* ══ 1 · ปุ่มเข้าหน้าภาพรวมอยู่แถวเดียวกับชิปโปรแกรม ════════════════
+     ผู้ใช้ขอเองว่า "ภาพรวมรายเดือน ควรอยู่แถวเดียวกันกับโปรแกรม"
+     เพราะมันคือการสลับมุมมองของข้อมูลชุดเดียวกัน ไม่ใช่การเปลี่ยนหน้าแบบแถบบน */
   const R1 = await page.evaluate((p) => {
     renderPierPark(p);
     _pkView = 'day'; renderPierPark();
     const h = document.querySelector('[id^="pk-host-"]');
-    const btn = [].slice.call(h.querySelectorAll('.po-bar button'))
-      .find(b => /ภาพรวมเดือน/.test(b.textContent || ''));
-    if (!btn) return { err: 'ไม่มีปุ่ม "ภาพรวมเดือน" บนแถบบน' };
+    const btn = h.querySelector('.pk-rts .pk-ovbn');
+    if (!btn) return { err: 'ไม่มีปุ่มภาพรวมเดือนบนแถวชิปโปรแกรม' };
+    const onBar = !!([].slice.call(h.querySelectorAll('.po-bar button'))
+      .find(b => /ภาพรวมเดือน/.test(b.textContent || '')));
+    const chips = [].slice.call(h.querySelectorAll('.pk-rts .pk-rt'));
     const beforeOv = !!h.querySelector('.pk-ov');
     btn.click();
     const h2 = document.querySelector('[id^="pk-host-"]');
-    return { beforeOv, afterOv: !!h2.querySelector('.pk-ov'),
+    const back = h2.querySelector('.pk-rts .pk-ovbn');
+    return { onBar, beforeOv, nChip: chips.length, last: chips[chips.length - 1] === btn,
+             afterOv: !!h2.querySelector('.pk-ov'),
              daySheet: !!h2.querySelector('.pk-sheet'),
-             onBtn: !!([].slice.call(h2.querySelectorAll('.po-bar button.pri'))
-               .find(b => /ภาพรวมเดือน/.test(b.textContent || ''))) };
+             backTxt: back ? (back.textContent || '').trim() : null,
+             backOn: !!(back && back.classList.contains('on')) };
   }, R0.pier);
   if (R1.err) fail(R1.err);
+  else if (R1.onBar) fail('ปุ่มภาพรวมเดือนยังอยู่บนแถบบน · ผู้ใช้ขอให้อยู่แถวเดียวกับชิปโปรแกรม');
+  else if (!R1.last) fail('ปุ่มภาพรวมเดือนอยู่บนแถวชิปแต่ไม่ได้อยู่ท้ายแถว · ไปแทรกกลางชิปโปรแกรม');
   else if (R1.beforeOv) fail('ยังไม่กดปุ่มแต่หน้าภาพรวมขึ้นมาแล้ว');
-  else if (!R1.afterOv) fail('กดปุ่ม "ภาพรวมเดือน" แล้วตารางภาพรวมไม่ขึ้น');
+  else if (!R1.afterOv) fail('กดปุ่มภาพรวมเดือนแล้วตารางภาพรวมไม่ขึ้น');
   else if (R1.daySheet) fail('เข้าหน้าภาพรวมแล้วชีทรายวันยังค้างอยู่ · สองหน้าซ้อนกัน');
-  else if (!R1.onBtn) fail('อยู่หน้าภาพรวมแล้วแต่ปุ่มไม่ติดไฟ · จอไม่บอกว่าอยู่หน้าไหน');
-  else ok('ปุ่ม "ภาพรวมเดือน" กดแล้วเปลี่ยนหน้าจริง · ชีทรายวันหายไป ปุ่มติดไฟถูกตัว');
+  else if (!R1.backTxt || !/ชีทรายวัน/.test(R1.backTxt))
+    fail('อยู่หน้าภาพรวมแล้วไม่มีปุ่มกลับชีทรายวันในตำแหน่งเดิม · ได้ "' + R1.backTxt + '"');
+  else if (!R1.backOn) fail('อยู่หน้าภาพรวมแล้วปุ่มไม่ติดไฟ · จอไม่บอกว่าอยู่หน้าไหน');
+  else ok('ปุ่มภาพรวมเดือนอยู่ท้ายแถวชิป (' + R1.nChip + ' ชิป) กดแล้วเปลี่ยนหน้าจริง · ' +
+          'ชีทรายวันหายไป และที่เดิมกลายเป็นปุ่ม "' + R1.backTxt + '" ที่ติดไฟ');
 
   /* ══ 2 · แถวครบ ══════════════════════════════════════════════════ */
   await openOv();
@@ -177,8 +209,8 @@ if (!R0.err) {
     await page.waitForTimeout(200);
   }
 
-  /* ══ 3 · "ต้องออกตั๋ว" ต่อลำ = แถวในชีทจริง ═══════════════════════ */
-  const R3 = await page.evaluate(async (ds) => {
+  /* ══ 3 · "รวมตั๋ว" ต่อลำ = แถวในชีทจริง ═══════════════════════════ */
+  const R3 = await page.evaluate(async ([ds, ix]) => {
     /* อ่านตัวเลขจากหน้าภาพรวมก่อน */
     const h = document.querySelector('[id^="pk-host-"]');
     const dayNo = +ds.slice(8);
@@ -186,11 +218,13 @@ if (!R0.err) {
     let i = trs.findIndex(t => t.classList.contains('pk-ovd') &&
       +((t.querySelector('td.dt b') || {}).textContent || 0) === dayNo);
     if (i < 0) return { err: 'หาแถววัน ' + ds + ' ในภาพรวมไม่เจอ' };
+    const num = t => { const v = String(t || '').replace(/[^0-9]/g, ''); return v ? +v : 0; };
     const ovBoats = [];
     for (let k = i + 1; k < trs.length && trs[k].classList.contains('pk-ovbt'); k++) {
       const td = trs[k].querySelectorAll('td');
+      if (td.length !== ix.n) return { err: 'แถวเรือมี ' + td.length + ' ช่อง · ควรมี ' + ix.n };
       ovBoats.push({ boat: (td[2].textContent || '').trim(),
-                     bk: +(td[3].textContent || 0), tk: +(td[4].textContent || 0) });
+                     go: num(td[ix.goT].textContent), tk: num(td[ix.tyT].textContent) });
     }
     /* แล้วเปิดหน้ารายวันของวันเดียวกัน นับแถวที่พิมพ์ลงชีทจริง
        ⚠ วันหนึ่งมีหลายบล็อกเส้นทาง แต่ละบล็อกกางชีทของตัวเองพร้อมกัน
@@ -213,7 +247,7 @@ if (!R0.err) {
       }
     }
     return { ovBoats, sheet };
-  }, R0.sample.ds);
+  }, [R0.sample.ds, IX(3)]);
   if (R3.err) fail(R3.err);
   else if (!R3.ovBoats.length) fail('วัน ' + R0.sample.ds + ' ไม่มีแถวเรือในภาพรวม · ตรวจข้อนี้ไม่ได้');
   else {
@@ -227,31 +261,143 @@ if (!R0.err) {
       else if (rows !== o.tk) off.push(o.boat + ' ภาพรวม ' + o.tk + ' แต่ชีท ' + rows + ' แถว');
     });
     if (off.length)
-      fail('ตัวเลข "ต้องออกตั๋ว" ไม่ตรงกับชีทจริงของวัน ' + R0.sample.ds + ' · ' + off.join(' · '));
-    else ok('วัน ' + R0.sample.ds + ' · "ต้องออกตั๋ว" ของทุกลำตรงกับแถวในชีทจริง (' +
+      fail('ตัวเลข "รวมตั๋ว" ไม่ตรงกับชีทจริงของวัน ' + R0.sample.ds + ' · ' + off.join(' · '));
+    else ok('วัน ' + R0.sample.ds + ' · "รวมตั๋ว" ของทุกลำตรงกับแถวในชีทจริง (' +
             R3.ovBoats.map(o => o.boat + ' ' + o.tk).join(' · ') + ')');
   }
 
-  /* ══ 4 · แถวรวมเดือน = ผลบวกของแถววัน ════════════════════════════ */
+  /* ══ 3b · หัวคนที่เดินทาง → ตั๋วที่ควรออก ════════════════════════
+     ผู้ใช้ขอแยก ไทย/ต่างชาติ × AD CHD INF FOC ทั้งสองฝั่ง แล้วบอกว่าซื้อขาดหรือเกิน
+     กติกาด่านคือ FOC ใช้ตั๋วผู้ใหญ่ตามสัญชาติ และเด็กต่ำกว่า 3 ใช้รหัสเดียวไม่แยกสัญชาติ
+     ข้อนี้เอาเลข 8 ช่องที่วาดออกมาจริง มาแมปเองตาม PK_BASE.ch แล้วเทียบกับ
+     "ควรออก" ที่หน้านี้ใช้เป็นตัวตั้ง (อ่านจาก title ของช่องที่ไม่ตรง หรือจากตัวเลขในช่องที่ตรง)
+     ถ้าแมปผิด ตัวเลขซื้อขาด/ซื้อเกินทั้งหน้าก็ผิดตาม */
   await openOv();
   await page.waitForTimeout(300);
-  const R4 = await page.evaluate(() => {
+  const R3b = await page.evaluate(([ix, GOK, TY]) => {
     const h = document.querySelector('[id^="pk-host-"]');
     const num = t => { const v = String(t || '').replace(/[^0-9]/g, ''); return v ? +v : 0; };
-    let bk = 0, tk = 0, nm = 0;
+    const rows = [].slice.call(h.querySelectorAll('tr.pk-ovbt'));
+    if (!rows.length) return { err: 'ไม่มีแถวเรือ' };
+    let nFoc = 0, nInf = 0, nOff = 0, nSum = 0;
+    const bad = [];
+    rows.forEach(tr => {
+      const td = tr.querySelectorAll('td');
+      const go = {}; GOK.forEach((k, i) => { go[k] = num(td[ix.go + i].textContent); });
+      if (go.foc_th || go.foc_fr) nFoc++;
+      if (go.inf_th && go.inf_fr) nInf++;
+      const name = (td[2].textContent || '').trim();
+      /* รวมเดินทาง ต้องเป็นผลบวกของ 8 ช่อง · ไม่ใช่เลขอื่นที่บังเอิญใกล้กัน */
+      const s8 = GOK.reduce((a, k) => a + go[k], 0);
+      const shown = num(td[ix.goT].textContent);
+      if (s8 !== shown) { bad.push(name + ' รวมเดินทาง ' + shown + ' แต่ 8 ช่องบวกได้ ' + s8); return; }
+      nSum++;
+      TY.forEach((T, i) => {
+        const cell = td[ix.ty + i];
+        const want = (T.ch || []).reduce((a, k) => a + (go[k] || 0), 0);
+        let need;
+        if (cell.classList.contains('off')) {
+          const m = String(cell.getAttribute('title') || '').match(/ควรออก\s*(\d+)/);
+          if (!m) { bad.push(name + ' ' + T.s + ' ช่องไม่ตรงแต่ไม่บอกว่าควรออกเท่าไร'); return; }
+          need = +m[1]; nOff++;
+        } else need = num(cell.textContent);
+        if (need !== want)
+          bad.push(name + ' ' + T.s + ' ควรออก ' + need + ' แต่แมปจากหัวคนได้ ' + want +
+                   ' (' + (T.ch || []).map(k => k + '=' + go[k]).join('+') + ')');
+      });
+    });
+    return { n: rows.length, nFoc, nInf, nOff, nSum, bad: bad.slice(0, 4), nBad: bad.length };
+  }, [IX(3), GOK, R0.ty]);
+  if (R3b.err) fail(R3b.err);
+  else if (R3b.nBad)
+    fail('ตั๋วที่ควรออกไม่ตรงกับหัวคนที่เดินทาง ' + R3b.nBad + ' จุด · ' + R3b.bad.join(' · '));
+  else if (!R3b.nFoc)
+    fail('เดือนนี้ไม่มีลำไหนมี FOC · พิสูจน์กติกา "FOC ได้ตั๋วผู้ใหญ่" ไม่ได้');
+  else if (!R3b.nOff)
+    fail('ไม่มีช่องไหนที่ชีทกับตัวตั้งต่างกันเลย · ทางที่อ่าน "ควรออก" จาก title ไม่ถูกเดิน');
+  else ok('ทุกแถวเรือ (' + R3b.n + ') ตั๋วที่ควรออกตรงกับที่แมปเองจากหัวคน 8 ช่อง · ' +
+          'มี FOC ' + R3b.nFoc + ' ลำ · ลำที่มี INF ทั้งสองสัญชาติ ' + R3b.nInf + ' ลำ · ' +
+          'ช่องที่ชีทไม่ตรงตัวตั้ง ' + R3b.nOff + ' ช่อง');
+
+  /* ══ 4 · แถวรวมเดือน = ผลบวกของแถววัน ครบทุกคอลัมน์ ══════════════ */
+  const R4 = await page.evaluate(([ixd, nTy]) => {
+    const h = document.querySelector('[id^="pk-host-"]');
+    const num = t => { const v = String(t || '').replace(/[^0-9]/g, ''); return v ? +v : 0; };
+    const NC = 8 + 1 + nTy + 1;              /* ช่องตัวเลขทั้งหมด ไม่รวมขาด/เกิน */
+    const sum = new Array(NC).fill(0);
     [].slice.call(h.querySelectorAll('tr.pk-ovd:not(.empty)')).forEach(tr => {
       const td = tr.querySelectorAll('td');
-      bk += num(td[2].textContent); tk += num(td[3].textContent); nm += num(td[4].textContent);
+      for (let i = 0; i < NC; i++) sum[i] += num(td[ixd.go + i].textContent);
     });
     const f = h.querySelectorAll('.pk-ov tfoot td');
-    return { bk, tk, nm, fBk: num(f[2].textContent), fTk: num(f[3].textContent), fNm: num(f[4].textContent) };
-  });
-  if (R4.bk !== R4.fBk || R4.tk !== R4.fTk || R4.nm !== R4.fNm)
-    fail('แถวรวมเดือนไม่เท่ากับผลบวกของแถววัน · บวกเองได้ ' + R4.bk + '/' + R4.tk + '/' + R4.nm +
-         ' แต่แถวรวมขึ้น ' + R4.fBk + '/' + R4.fTk + '/' + R4.fNm);
-  else if (!R4.tk) fail('ยอดรวมเดือนเป็นศูนย์ · ตรวจข้อนี้ไม่ได้');
-  else ok('แถวรวมเดือนเท่ากับผลบวกของแถววันทุกวัน · เดินทาง ' + R4.bk + ' · ต้องออกตั๋ว ' +
-          R4.tk + ' · มีชื่อแล้ว ' + R4.nm);
+    const foot = [];
+    for (let i = 0; i < NC; i++) foot.push(num(f[ixd.go + i].textContent));
+    return { sum, foot, nFoot: f.length, df: (f[ixd.df].textContent || '').trim() };
+  }, [IX(2), nTy]);
+  {
+    const diff = R4.sum.map((v, i) => (v === R4.foot[i]) ? null : (i + ':' + v + '≠' + R4.foot[i]))
+      .filter(Boolean);
+    if (R4.nFoot !== IX(2).n) fail('แถวรวมเดือนมี ' + R4.nFoot + ' ช่อง · ควรมี ' + IX(2).n);
+    else if (diff.length)
+      fail('แถวรวมเดือนไม่เท่ากับผลบวกของแถววัน ' + diff.length + ' คอลัมน์ · ' + diff.slice(0, 5).join(' · '));
+    else if (!R4.foot[8]) fail('ยอดรวมเดินทางทั้งเดือนเป็นศูนย์ · ตรวจข้อนี้ไม่ได้');
+    else ok('แถวรวมเดือนเท่ากับผลบวกของแถววันครบทั้ง ' + R4.sum.length + ' คอลัมน์ · ' +
+            'รวมเดินทาง ' + R4.foot[8] + ' · รวมตั๋ว ' + R4.foot[R4.foot.length - 1] +
+            ' · ขาด/เกิน ' + R4.df);
+  }
+
+  /* ══ 4b · แถววัน = ผลบวกของแถวเรือ · และช่องขาด/เกินคิดถูกทาง ════
+     ผู้ใช้ขอ "รวมเปรียบเทียบว่า ลำนี้ ซื้อขาดหรือซื้อเกิน"
+     เครื่องหมายกลับข้างเมื่อไร คนอ่านจะไปซื้อตั๋วเพิ่มทั้งที่ซื้อเกินอยู่แล้ว */
+  const R4b = await page.evaluate(([ixd, ixb, nTy]) => {
+    const h = document.querySelector('[id^="pk-host-"]');
+    const num = t => { const v = String(t || '').replace(/[^0-9]/g, ''); return v ? +v : 0; };
+    const NC = 8 + 1 + nTy + 1;
+    const dnum = t => {
+      const s = String(t || '').trim();
+      if (s === '—' || !s) return 0;
+      return (s.charAt(0) === '−' || s.charAt(0) === '-') ? -num(s) : num(s);
+    };
+    const trs = [].slice.call(h.querySelectorAll('.pk-ov tbody tr'));
+    const bad = [], badDf = [];
+    let nDay = 0, nSign = 0;
+    const chkDf = (td, ix, who) => {
+      const go = num(td[ix.goT].textContent), tk = num(td[ix.tyT].textContent);
+      const d = dnum(td[ix.df].textContent);
+      if (d !== tk - go) badDf.push(who + ' ขาด/เกินขึ้น ' + (td[ix.df].textContent || '').trim() +
+        ' · รวมตั๋ว ' + tk + ' − รวมเดินทาง ' + go + ' = ' + (tk - go));
+      else if (d) nSign++;
+    };
+    for (let i = 0; i < trs.length; i++) {
+      if (!trs[i].classList.contains('pk-ovd') || trs[i].classList.contains('empty')) continue;
+      const dtd = trs[i].querySelectorAll('td');
+      const day = ((dtd[0].querySelector('b') || {}).textContent || '?');
+      const acc = new Array(NC).fill(0);
+      let nb = 0;
+      for (let k = i + 1; k < trs.length && trs[k].classList.contains('pk-ovbt'); k++) {
+        const btd = trs[k].querySelectorAll('td');
+        for (let c = 0; c < NC; c++) acc[c] += num(btd[ixb.go + c].textContent);
+        chkDf(btd, ixb, 'วันที่ ' + day + ' ' + (btd[2].textContent || '').trim());
+        nb++;
+      }
+      if (!nb) { bad.push('วันที่ ' + day + ' มีแถววันแต่ไม่มีแถวเรือ'); continue; }
+      for (let c = 0; c < NC; c++) if (acc[c] !== num(dtd[ixd.go + c].textContent))
+        bad.push('วันที่ ' + day + ' คอลัมน์ ' + c + ' แถววัน ' + num(dtd[ixd.go + c].textContent) +
+                 ' · เรือบวกได้ ' + acc[c]);
+      chkDf(dtd, ixd, 'วันที่ ' + day + ' (แถววัน)');
+      nDay++;
+    }
+    return { nDay, nSign, bad: bad.slice(0, 4), nBad: bad.length,
+             badDf: badDf.slice(0, 4), nBadDf: badDf.length };
+  }, [IX(2), IX(3), nTy]);
+  if (R4b.nBad)
+    fail('แถววันไม่เท่ากับผลบวกของแถวเรือ ' + R4b.nBad + ' จุด · ' + R4b.bad.join(' · '));
+  else if (R4b.nBadDf)
+    fail('ช่องขาด/เกินคิดผิด ' + R4b.nBadDf + ' จุด · ' + R4b.badDf.join(' · '));
+  else if (!R4b.nSign)
+    fail('ทั้งเดือนไม่มีลำไหนขาดหรือเกินเลย · ช่องขาด/เกินไม่ถูกเดินจริง ตรวจไม่ได้');
+  else ok('แถววันทุกวัน (' + R4b.nDay + ') เท่ากับผลบวกของแถวเรือครบทุกคอลัมน์ · ' +
+          'ช่องขาด/เกิน = รวมตั๋ว − รวมเดินทาง ทุกแถว (ไม่เป็นศูนย์ ' + R4b.nSign + ' แถว)');
 
   /* ══ 5 · เลื่อนเดือนได้จริง ══════════════════════════════════════ */
   const R5 = await page.evaluate(() => {
@@ -287,30 +433,39 @@ if (!R0.err) {
   else if (R6.ov) fail('กลับมาหน้ารายวันแล้วตารางภาพรวมยังค้างอยู่');
   else ok('กดแถววันแล้วเปิดชีทของวันนั้นให้เลย · ' + R6.date);
 
-  /* ══ 7 · หัวตารางตรึงใต้แถบ ไม่ทับแถวแรก ════════════════════════ */
+  /* ══ 7 · หัวตารางสองชั้นตรึงใต้แถบ ไม่ทับแถวแรก ══════════════════
+     กับดักที่เจอมาแล้วสามหน · กล่องครอบที่มี overflow ไม่ใช่ visible
+     จะกลายเป็นตัวตั้งของ sticky แทนหน้าจอ · หัวตารางจะลอยลงไปทับแถวแรกทันทีที่วาดเสร็จ */
   await openOv();
   await page.waitForTimeout(300);
   const R7 = await page.evaluate(() => {
     const h = document.querySelector('[id^="pk-host-"]');
-    const th = h.querySelector('.pk-ov thead th');
+    const thg = h.querySelector('.pk-ov thead tr.g th');
+    const ths = h.querySelector('.pk-ov thead tr.s th');
     const tb = h.querySelector('.pk-ov');
     const r1 = h.querySelector('tr.pk-ovd');
     const st = h.querySelector('.pk-stick');
-    return { thTop: getComputedStyle(th).top,
+    if (!thg || !ths) return { err: 'หัวตารางไม่ได้มีสองชั้น · หัวกลุ่ม ไทย/ต่างชาติ/ออกตั๋ว หายไป' };
+    const hd = h.querySelector('.pk-ov thead');
+    return { thTop: getComputedStyle(thg).top, sTop: getComputedStyle(ths).top,
              stickH: Math.round(st.getBoundingClientRect().height),
-             thY: Math.round(th.getBoundingClientRect().top),
+             gH: Math.round(thg.getBoundingClientRect().height),
+             thY: Math.round(thg.getBoundingClientRect().top),
              tblY: Math.round(tb.getBoundingClientRect().top),
-             thH: Math.round(th.getBoundingClientRect().height),
+             hdH: Math.round(hd.getBoundingClientRect().height),
              r1Y: Math.round(r1.getBoundingClientRect().top) };
   });
-  if (Math.abs(parseFloat(R7.thTop) - R7.stickH) > 2)
-    fail('หัวตารางตรึงที่ ' + R7.thTop + ' แต่แถบบนสูง ' + R7.stickH + 'px · หัวจะมุดใต้แถบตอนเลื่อน');
+  if (R7.err) fail(R7.err);
+  else if (Math.abs(parseFloat(R7.thTop) - R7.stickH) > 2)
+    fail('หัวตารางชั้นบนตรึงที่ ' + R7.thTop + ' แต่แถบบนสูง ' + R7.stickH + 'px · หัวจะมุดใต้แถบตอนเลื่อน');
+  else if (parseFloat(R7.sTop) <= parseFloat(R7.thTop))
+    fail('หัวชั้นล่างตรึงที่ ' + R7.sTop + ' ซึ่งไม่ได้ต่ำกว่าชั้นบน (' + R7.thTop + ') · สองชั้นจะทับกัน');
   else if (Math.abs(R7.thY - R7.tblY) > 2)
     fail('ยังไม่เลื่อนหน้าแต่หัวตารางลอยลงมา ' + (R7.thY - R7.tblY) + 'px จากขอบตาราง · ' +
          'แปลว่ากล่องครอบมี overflow ที่ทำให้ sticky ผูกกับกล่องแทนหน้า · หัวจะไปทับแถววันแรก');
-  else if (R7.r1Y < R7.thY + R7.thH - 2)
-    fail('แถววันแรกอยู่ใต้หัวตาราง (แถว y=' + R7.r1Y + ' หัวจบที่ ' + (R7.thY + R7.thH) + ') · วันที่ 1 ถูกบัง');
-  else ok('หัวตารางตรึงพอดีใต้แถบ (' + R7.thTop + ') และไม่ทับแถววันแรก');
+  else if (R7.r1Y < R7.thY + R7.hdH - 2)
+    fail('แถววันแรกอยู่ใต้หัวตาราง (แถว y=' + R7.r1Y + ' หัวจบที่ ' + (R7.thY + R7.hdH) + ') · วันที่ 1 ถูกบัง');
+  else ok('หัวสองชั้นตรึงพอดีใต้แถบ (' + R7.thTop + ' / ' + R7.sTop + ') และไม่ทับแถววันแรก');
 
   /* ══ 8 · อ่านอย่างเดียว ══════════════════════════════════════════ */
   const R8 = await page.evaluate(async () => {
