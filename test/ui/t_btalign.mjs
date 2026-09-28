@@ -197,6 +197,38 @@ if (R.n) {
   }
 }
 
+/* ══ 6b · ข้อความยาวในช่องเวลาต้องตกบรรทัด ไม่ใช่ถูกตัดทิ้ง ══════
+   ช่องเวลามีสองแบบ · ช่วงเวลา "07:45-08:00" กับข้อความของท่า "Before 08:30 at pier"
+   ข้อสองยาวเกินช่อง · ถ้าขยายคอลัมน์ให้พอจะกินที่ทั้งตารางเพื่อแถวส่วนน้อย
+   ถ้าตัดทิ้งก็เสียใจความ · "at pier" คือส่วนที่บอกว่าไม่มีรถไปรับ → จึงให้ตกบรรทัด
+   เทสนี้ยัดข้อความนั้นลงช่องจริง แล้วดูว่ามันถูกตัดหรือไม่ · ไม่พึ่งข้อมูลที่บังเอิญมีหรือไม่มี */
+const LONGTXT = 'Before 08:30 at pier';
+if (R.n) {
+  const W = await page.evaluate((txt) => {
+    const tb = document.querySelector('table.t2-mtbl.t2-fixed');
+    const th = [].slice.call(tb.querySelectorAll('thead th'));
+    const i = th.findIndex(x => (x.textContent || '').trim() === 'Time');
+    if (i < 0) return { err: 'ไม่มีคอลัมน์ Time' };
+    const tr = [].slice.call(tb.querySelectorAll('tbody tr.t2-row'))
+      .find(r => r.querySelectorAll('td').length > 6);
+    if (!tr) return { err: 'ไม่มีแถวข้อมูล' };
+    const td = tr.querySelectorAll('td')[i];
+    const keep = td.innerHTML;
+    td.textContent = txt;
+    void td.offsetHeight;
+    const r = { w: td.scrollWidth, cw: td.clientWidth, h: td.scrollHeight, ch: td.clientHeight,
+                ws: getComputedStyle(td).whiteSpace };
+    td.innerHTML = keep;
+    return r;
+  }, LONGTXT);
+  if (W.err) fail('ตรวจข้อความยาวไม่ได้ · ' + W.err);
+  else if (W.ws === 'nowrap')
+    fail('ช่องเวลาเป็น nowrap · "' + LONGTXT + '" จะถูกตัดทิ้ง ไม่ใช่ตกบรรทัด');
+  else if (W.w > W.cw + 1 || W.h > W.ch + 1)
+    fail('"' + LONGTXT + '" ยังล้นช่อง · กว้าง ' + W.w + '/' + W.cw + 'px สูง ' + W.h + '/' + W.ch + 'px');
+  else ok('ข้อความยาวในช่องเวลาตกบรรทัดแทนถูกตัดทิ้ง · "' + LONGTXT + '" แสดงครบใน ' + W.cw + 'px');
+}
+
 /* ══ 7 · ไม่มีเนื้อหาล้นข้ามไปทับช่องข้าง ═══════════════════════════════ */
 if (R.n) {
   const O = await page.evaluate(() => {
