@@ -145,7 +145,78 @@ if (R.n) {
   else ok('table-layout = fixed · ความกว้างมาจาก <col> ไม่ใช่เนื้อหา');
 }
 
-/* ══ 6 · ไม่มี error บนหน้า ════════════════════════════════════════════ */
+/* ══ 6 · ช่องต้องกว้างพอสำหรับค่าที่ยาวที่สุดที่เป็นไปได้จริง ═══════════
+   ที่มา · รอบแรกของ §btAlign ตั้ง Time ไว้ 56px เพราะชุดข้อมูลทดสอบไม่มีเวลารับเลย
+   ช่องนั้นขึ้นแค่ "—" ทุกแถว · พอขึ้นของจริงที่มี "07:45-08:00" ตัวท้ายถูกตัดหาย
+   กลายเป็น "07:45-08:0" ติดกับชื่อโรงแรม · ผู้ใช้เจอทันทีและทุกแถวเป็นเหมือนกันหมด
+   บทเรียน · ตั้งความกว้างตายตัวแล้ววัดกับข้อมูลที่ "บังเอิญสั้น" = ไม่ได้วัดอะไรเลย
+   ข้อนี้จึงวัดจากรูปแบบค่าที่ยาวที่สุดที่คอลัมน์นั้นเป็นไปได้ ไม่ใช่จากข้อมูลที่มีอยู่
+   วัดด้วยฟอนต์จริงของช่องนั้น ไม่ใช่เดาเป็นตัวอักษรคูณความกว้าง */
+const LONGEST = {
+  'Time':  '07:45-08:00',          /* ช่วงเวลารับ · รูปแบบยาวสุดของระบบ */
+  'AD':    '88',   'CHD': '88',  'INF': '88',  'FOC': '88',
+  'Room':  '8888',                 /* เลขห้อง 4 หลัก */
+  'Total': '฿888,888'
+};
+if (R.n) {
+  const M = await page.evaluate((LONGEST) => {
+    const tb = document.querySelector('table.t2-mtbl.t2-fixed');
+    if (!tb) return { err: 'ไม่มีตาราง' };
+    const th = [].slice.call(tb.querySelectorAll('thead th'));
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    document.body.appendChild(probe);
+    const out = [];
+    Object.keys(LONGEST).forEach(name => {
+      const i = th.findIndex(x => (x.textContent || '').trim() === name);
+      if (i < 0) return;
+      const tr = [].slice.call(tb.querySelectorAll('tbody tr.t2-row'))
+        .find(r => r.querySelectorAll('td').length > 6);
+      const cell = tr ? tr.querySelectorAll('td')[i] : th[i];
+      if (!cell) return;
+      const cs = getComputedStyle(cell);
+      probe.style.font = cs.font || (cs.fontWeight + ' ' + cs.fontSize + '/' + cs.lineHeight + ' ' + cs.fontFamily);
+      probe.textContent = LONGEST[name];
+      const need = Math.ceil(probe.getBoundingClientRect().width);
+      const pad = Math.ceil(parseFloat(cs.paddingLeft) || 0) + Math.ceil(parseFloat(cs.paddingRight) || 0);
+      out.push({ name, need: need + pad, got: Math.round(cell.getBoundingClientRect().width), sample: LONGEST[name] });
+    });
+    probe.remove();
+    return { out };
+  }, LONGEST);
+  if (M.err) fail(M.err);
+  else if (!M.out.length) fail('หาคอลัมน์ที่จะวัดไม่เจอ · ตรวจข้อนี้ไม่ได้');
+  else {
+    const tight = M.out.filter(x => x.got < x.need);
+    if (tight.length)
+      fail('ช่องแคบเกินค่าที่ยาวที่สุด · ' +
+           tight.map(x => x.name + ' กว้าง ' + x.got + 'px แต่ "' + x.sample + '" ต้องการ ' + x.need + 'px').join(' · ') +
+           ' · ตัวท้ายจะถูกตัดหาย');
+    else ok('ทุกช่องกว้างพอสำหรับค่าที่ยาวที่สุด · ' +
+            M.out.map(x => x.name + ' ' + x.got + '/' + x.need).join(' · '));
+  }
+}
+
+/* ══ 7 · ไม่มีเนื้อหาล้นข้ามไปทับช่องข้าง ═══════════════════════════════ */
+if (R.n) {
+  const O = await page.evaluate(() => {
+    const tbls = [].slice.call(document.querySelectorAll('table.t2-mtbl.t2-fixed'));
+    const bad = [];
+    tbls.forEach(tb => {
+      const th = [].slice.call(tb.querySelectorAll('thead th')).map(x => (x.textContent || '').trim().slice(0, 12));
+      [].slice.call(tb.querySelectorAll('td,th')).forEach(c => {
+        if (getComputedStyle(c).overflow === 'visible') bad.push(th[c.cellIndex] || ('#' + c.cellIndex));
+      });
+    });
+    return [...new Set(bad)];
+  });
+  if (O.length)
+    fail('ช่องที่ยังปล่อยเนื้อหาล้นออกนอกตัวเอง ' + O.length + ' คอลัมน์ · ' + O.slice(0, 5).join(', ') +
+         ' · fixed ไม่ขยายช่องตามเนื้อหา ตัวหนังสือจะทะลุไปทับช่องถัดไป');
+  else ok('ทุกช่องตัดเนื้อหาไว้ในตัวเอง · ล้นแล้วหายในช่องตัวเอง ไม่ไปทับช่องข้าง');
+}
+
+/* ══ 8 · ไม่มี error บนหน้า ════════════════════════════════════════════ */
 if (errors.length) fail('มี error ' + errors.length + ' ครั้ง · ' + errors.slice(0, 2).join(' | '));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
 

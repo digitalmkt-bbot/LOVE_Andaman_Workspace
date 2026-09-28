@@ -48181,13 +48181,13 @@ function bkV2RenderTab2(){
     const colGroup = '<colgroup>'
       + _c(104) + _c(142) + _c(210)                          /* Voucher · Agency · Customer */
       + _c(40) + _c(46) + _c(42) + _c(46)                    /* AD CHD INF FOC */
-      + _c(56)                                               /* Time */
+      + _c(104)                                              /* Time · ต้องพอกับ "07:45-08:00" เต็ม · ชุดข้อมูลทดสอบไม่มีเวลารับ รอบแรกจึงตั้งแคบไป */
       + (vanMode ? _c(150) : '')                             /* กลุ่ม */
       + _c(200) + _c(58) + _c(116) + _c(90)                  /* Pickup · Room · Zone · Send back */
       + (vanMode ? '' : _c(74))                              /* Add-on */
       + _c(128)                                              /* Special request */
-      + (vanMode ? '' : _c(86) + _c(78) + _c(48))            /* Pay · Total · (VC) */
-      + _c(72)                                               /* Boat */
+      + (vanMode ? '' : _c(86) + _c(94) + _c(48))            /* Pay · Total · (VC) · Total เผื่อยอดหลักล้าน */
+      + _c(96)                                               /* Boat · ชื่อเรือพร้อมตัวย่อสองตัว */
       + (rcMode ? _c(106) : '')
       + (wxClosed ? _c(94) : '')
       + '</colgroup>';
@@ -48951,6 +48951,10 @@ function bkV2RenderTab2(){
     table.t2-mtbl{border-collapse:separate;border-spacing:0;width:100%;min-width:1180px;font-size:12px}
     /* §btAlign · เฉพาะตารางที่มี colgroup · ตารางอื่นที่ใช้ .t2-mtbl ร่วมกันไม่กระทบ */
     table.t2-mtbl.t2-fixed{table-layout:fixed}
+    /* §btAlign · กันเนื้อหาล้นข้ามไปทับช่องข้าง · fixed ไม่ขยายช่องตามเนื้อหาอีกแล้ว
+       ถ้าตั้งแคบไป ตัวหนังสือจะทะลุออกไปบนช่องถัดไป อ่านปนกันสองคอลัมน์
+       ตัดให้อยู่ในช่องตัวเอง เสียหายที่เดียวดีกว่าเสียสองที่ · เทสข้อ 5 จับช่องที่แคบไปให้เอง */
+    table.t2-mtbl.t2-fixed td,table.t2-mtbl.t2-fixed th{overflow:hidden}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
        ทำเป็นพื้นทึบ · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก
