@@ -64,6 +64,30 @@ function laRouteKind(r){
   return laIsLandPier(rt.pier) ? KIND_LAND : KIND_MARINE;   /* แถวเก่าที่ยังไม่มี kind */
 }
 function laIsLandRoute(r){ return laRouteKind(r) === KIND_LAND; }
+/* §pierOne · ลำดับท่าเรือของทั้งระบบ · ตารางเดียว
+   เดิมพิมพ์ไว้ในหน้ารายการโปรแกรมที่เดียว · พอมีที่สองก็จะเริ่มเพี้ยนกัน */
+const LA_PIER_ORDER = ['tublamu','panwa','ranong', LAND_PIER];
+function laPierRank(p){
+  const i = LA_PIER_ORDER.indexOf(p || LAND_PIER);
+  return i < 0 ? LA_PIER_ORDER.length : i;   /* ท่าที่ยังไม่รู้จัก ไปต่อท้าย ไม่หาย */
+}
+/* §routeOrd · ลำดับที่คนคาดหวังเวลาเห็นรายการโปรแกรม · ท่าก่อน แล้วตามลำดับที่ตั้งไว้ในหน้า Config
+   ของเดิมช่องเลือกทริปเรียงตามลำดับแถวใน Programs sold หรือใน Rate Type ดิบ ๆ
+   คือ "ใครเพิ่มทีหลังก็ไปท้าย" · ท่าจึงปนกัน คนคีย์ต้องกวาดตาทั้งรายการทุกครั้ง
+   sort คือเลขลำดับของหน้า Program Config · ไม่มีก็ใช้ตำแหน่งใน ROUTES แทน (ลำดับเดียวกับที่หน้านั้นแสดง) */
+function laRouteOrd(r){
+  const rt = _laRouteOf(r);
+  if(!rt) return [99, 1e9, 1e9];
+  const list = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : [];
+  const idx = list.indexOf(rt);
+  const s = (rt.sort == null || rt.sort === '') ? 1e9 : (Number(rt.sort) || 0);
+  const pier = laIsLandRoute(rt) ? LAND_PIER : (rt.pier || LAND_PIER);
+  return [ laPierRank(pier), s, idx < 0 ? 1e9 : idx ];
+}
+function laRouteOrdCmp(a, b){
+  const x = laRouteOrd(a), y = laRouteOrd(b);
+  return (x[0]-y[0]) || (x[1]-y[1]) || (x[2]-y[2]);
+}
 /* เส้นทางฝั่งเรือเท่านั้น · ใช้กรองหน้าจอที่พูดเรื่องเรือล้วน ๆ */
 function laMarineRoutes(list){
   const src = list || ((typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : []);
@@ -667,6 +691,7 @@ function laMonAbbr(){
     ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     : laMonAbbrTH();
 }
+window.laPierRank=laPierRank; window.laRouteOrd=laRouteOrd; window.laRouteOrdCmp=laRouteOrdCmp;
 window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr; window.laMonAbbrTH=laMonAbbrTH;
 window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
 window.laLangApplyNav=laLangApplyNav;
@@ -674,6 +699,8 @@ window.laLangApplyNav=laLangApplyNav;
 /* ── พจนานุกรม ไทย → อังกฤษ · เฉพาะ "เปลือกโปรแกรม" ─────────────────────────
    เรียงตามหน้าที่ไล่ทำ · หน้าไหนยังไม่ได้ทำ ข้อความจะคืนไทยเหมือนเดิม */
 var LA_T_EN={
+  'ยังไม่มี booking วันที่เลือก':'No bookings on the selected date',
+  'ยังไม่มี booking':'No bookings yet',
   /* ── เมนูซ้าย · บริบท nav ── */
   'nav|ตรวจเอกสาร':'Document Check', 'nav|ใบงานรถ (Van Jobs)':'Van Jobs',
   'nav|เช็คอินรถ':'Van Check-in', 'nav|เช็คอินหน้าท่า':'Pier Check-in',
@@ -1374,7 +1401,7 @@ function _dashLiveFeedHtml(dx,F,side){
         +'<span class="t">'+(isNew?'<b>NEW</b> ':'')+_dashAgo(o.ts)+'</span></span>'
     +'</div>';
   });
-  if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
+  if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">'+laT('ยังไม่มี booking')+'</div>';
   /* แถบสรุปหัวฟีด · จำนวนใบ / pax / ยอดเงิน ของ "วันที่เลือกอยู่" ไม่ใช่ทั้งกอง */
   var _sd=(window._dashDate||TODAY_STR), _sN=0,_sP=0,_sM=0,_sA={}, _sL=[];
   var _sX=0;   /* §internal · ใบของบริษัทเองที่ไม่เก็บเงิน · ถูกตัดออกจากยอด */
@@ -2944,7 +2971,7 @@ function renderDash(){
         </div>
         <div style="text-align:center;margin-top:9px;font-size:10px;color:#6b675f;font-weight:700;line-height:1.25;word-break:break-word">${e.label}</div>
       </div>`;
-    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">ยังไม่มี booking วันที่เลือก</div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">${laT('ยังไม่มี booking วันที่เลือก')}</div>`;
   } else {
     // MONTH (30 days) / YEAR (12 months) — stacked route bars + capacity outline
     plotCols='repeat('+bkBuckets.length+',1fr)';
@@ -9381,7 +9408,7 @@ function renderSettings(){
   /* §otherPier · เดิม if(groups[r.pier]) — ท่าที่ไม่มีในลิสต์ถูกทิ้งเงียบ ๆ
      เคยเกิดกับระนองมาแล้วรอบหนึ่ง และกับ other อีกรอบ · คราวนี้สร้าถังให้ตามค่าที่เจอจริง
      ค่าแปลกที่ไม่รู้จักก็ยังโผล่ แก้ได้ ดีกว่าหายไปโดยไม่บอก */
-  const PIER_ORDER=['tublamu','panwa','ranong',LAND_PIER];
+  const PIER_ORDER=LA_PIER_ORDER;   /* §pierOne · ตารางเดียวกับช่องเลือกทริป */
   const groups={}; PIER_ORDER.forEach(p=>{ groups[p]=[]; });
   /* §routeKind · โปรแกรมบกเข้าถัง land ตาม kind ไม่ใช่ตาม pier · pier ของมันว่างแล้ว */
   ROUTES.forEach(r=>{ const _p = laIsLandRoute(r) ? LAND_PIER : (r.pier||LAND_PIER); (groups[_p]=groups[_p]||[]).push(r); });
