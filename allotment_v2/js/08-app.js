@@ -57004,7 +57004,12 @@ function poKindSync(){
   }); }catch(_){}
 }
 /* ถัง · เรียงตามลำดับที่โชว์บนแถบสัดส่วน */
+/* §poShip · "ประจำเรือ" เป็นถังของตัวเอง ไม่ใช่ถัง "อยู่กับเรือ"
+   อยู่กับเรือ = เบิกเช้าคืนเย็น ยังไม่กลับ → ต้องตามเก็บ
+   ประจำเรือ  = ยกไปติดตั้งบนลำนั้นถาวร → ไม่ต้องตามเก็บ แต่ยังเป็นของท่า
+   สองอันนี้เคยไม่มีที่แยก คนหน้าท่าเลยใช้ "ปรับยอด" แทน แล้วร่องรอยหายไปทั้งเส้น */
 var PO_BUCKET=[{k:'ready',t:'พร้อมใช้',c:'#1C7A4E'},{k:'onboat',t:'อยู่กับเรือ',c:'#185FA5'},
+               {k:'onship',t:'ประจำเรือ',c:'#0E7490'},
                {k:'dirty',t:'รอส่งซัก',c:'#B4560A'},{k:'laundry',t:'อยู่ร้านซัก',c:'#8A6D1F'},
                {k:'repair',t:'รอซ่อม',c:'#8E5BB5'},{k:'gone',t:'ตัดทิ้ง/หาย (สะสม)',c:'#9A9A93'}];
 /* ประเภทของที่ขาดตอนปิดยอด · ต้องเลือกให้ครบทุกชิ้นก่อนปิดได้ */
@@ -57150,8 +57155,8 @@ function poMoves(f){ return (PIER_MOVES||[]).filter(f||function(){return true;})
 
 /* ── ยอดคงเหลือ · คำนวณจาก moves ทั้งหมด ไม่เคยเก็บเป็นตัวเลขนิ่ง ── */
 function poBal(itemId){
-  var it=poItem(itemId); if(!it) return {ready:0,onboat:0,dirty:0,laundry:0,repair:0,gone:0,inhand:0};
-  var b={ready:poNum(it.total),onboat:0,dirty:0,laundry:0,repair:0,gone:0};
+  var it=poItem(itemId); if(!it) return {ready:0,onboat:0,onship:0,dirty:0,laundry:0,repair:0,gone:0,inhand:0};
+  var b={ready:poNum(it.total),onboat:0,onship:0,dirty:0,laundry:0,repair:0,gone:0};
   var isTowel=(it.kind==='towel');
   (PIER_MOVES||[]).forEach(function(m){
     if(m.itemId!==itemId) return;
@@ -57166,9 +57171,13 @@ function poBal(itemId){
       case 'laundry_out': b.dirty-=q; b.laundry+=q; break;
       case 'laundry_in':  b.laundry-=q; b.ready+=q; break;
       case 'adjust':      b.ready+=q; break;
+      /* §poShip · ลงประจำเรือ = ออกจากคลังพร้อมใช้ แต่ยังเป็นของท่า
+         ไม่เข้า onboat เพราะ onboat คือของที่ต้องได้คืนวันนี้ · อันนี้ไม่ต้องคืน */
+      case 'assign':      b.ready-=q; b.onship+=q; break;
+      case 'unassign':    b.onship-=q; b.ready+=q; break;
     }
   });
-  b.inhand=b.ready+b.onboat+b.dirty+b.laundry+b.repair;
+  b.inhand=b.ready+b.onboat+b.onship+b.dirty+b.laundry+b.repair;
   return b;
 }
 /* §poCapReady · ยอดพร้อมใช้ที่เอาไปโชว์ · ไม่เกินทะเบียนของชิ้นนั้น
@@ -61190,7 +61199,7 @@ function poBoatTable(boats, items, ro){
 
 /* §poStockCards · แถบสัดส่วนย่อของหนึ่งรายการ */
 function poStockBar(b, cls){
-  var live=b.ready+b.onboat+b.dirty+b.laundry+b.repair, denom=live||1;
+  var live=b.ready+b.onboat+b.onship+b.dirty+b.laundry+b.repair, denom=live||1;
   return '<div class="'+(cls||'po-bar2')+'">'+PO_BUCKET.filter(function(k){ return k.k!=='gone'; })
     .map(function(k){ var v=Math.max(0,b[k.k]); if(!v) return '';
       return '<i style="width:'+(v/denom*100).toFixed(2)+'%;background:'+k.c+'" title="'+poE(k.t)+' '+v+'"></i>'; }).join('')+'</div>';
@@ -61256,6 +61265,8 @@ function poStockTable(items, ro){
             +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
             +'<span class="ac">'
               +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
+              /* §poShip · ปุ่มอยู่ติดกับปรับยอด เพราะเดิมคนใช้ปรับยอดแทนอันนี้ */
+              +'<button class="po-go" onclick="poShipOpen(\''+it.id+'\')" title="ลงประจำเรือ · หักจากพร้อมใช้ แต่ไม่ต้องตามคืน"'+(ro?' disabled':'')+'>ประจำเรือ'+(b.onship>0?('<b style="margin-left:4px">'+b.onship+'</b>'):'')+'</button>'
               +'<button class="po-go" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
             +'</span></span></div>'; }).join('')
       +'</div>';
@@ -62332,6 +62343,169 @@ function poAdjSave(itemId){
   poPersist(); poModalClose(); renderPierOffice();
 }
 
+/* ══ §poShip · ของที่ลงประจำเรือ ══════════════════════════════════════
+   ที่มา (2026-09-28) · ฟีดแบคจากหน้าท่า Visit Panwa
+     "หน้ากากผู้ใหญ่สต๊อกมี 88 · เรือมาเบิกลงประจำเรือ 3 ตัว
+      ก็ต้องกดปรับยอดเพื่อให้ตัดออกจากสต๊อก จะได้รู้ว่าเหลือพร้อมใช้กี่ตัว"
+   ปุ่มเบิกทำบัญชีถูกอยู่แล้ว แต่มันเป็นรอบวัน · ของที่เบิกแล้วไม่คืน
+   poBoatCarry ยกยอดไปทุกวันข้างหน้าไม่มีวันจบ แล้วไปกองใน "ยังไม่ได้คืน"
+   ของประจำลำจึงไม่มีที่ยืน คนหน้าท่าเลยหนีไปใช้ปรับยอดซึ่งไม่ผูกลำเลย
+   ตรงนี้คือที่ยืนของมัน · หักจากพร้อมใช้ ผูกลำ ไม่โดนทวง ถอดกลับเข้าคลังได้ */
+/* §poLdgNote · แก้แถวเก่าที่ไม่มีคำอธิบาย · แก้ได้แค่เหตุผลกับลำ
+   จำนวน ประเภท วันที่ ห้ามแก้ · ของพวกนั้นคือบัญชี แก้แล้วยอดย้อนหลังเปลี่ยนโดยไม่มีร่องรอย
+   ระบุลำได้เฉพาะแถวปรับยอด · แถวเบิก–คืนผูกลำไว้แล้วและใบประจำวันอ่านจากตรงนั้น
+   ใครแก้เมื่อไรติดไว้กับแถว · คนที่มาอ่านทีหลังจะได้รู้ว่าอันไหนเป็นของที่เติมทีหลัง */
+function poMoveFind(id){ return (PIER_MOVES||[]).filter(function(m){ return m && m.id===id; })[0]||null; }
+function poMoveEdit(id){
+  if(!poCanEdit()) return;
+  var m=poMoveFind(id); if(!m) return;
+  var it=poItem(m.itemId), canBoat=(m.type==='adjust');
+  var BL=poShipBoats(_poPier);
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">'
+    +'เติมเหตุผลย้อนหลังได้ · จำนวน ประเภท และวันที่แก้ไม่ได้ เพราะเป็นตัวบัญชี</div>'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:9px">'+poE(m.date)+' · '
+      +poE(it?it.label:m.itemId)+' · '+poNum(m.qty)+'</div>'
+    +(canBoat?('<div style="margin-bottom:9px"><div style="font-size:11px;font-weight:700;color:#475569;'
+      +'margin-bottom:4px">ลำที่เกี่ยวข้อง</div>'
+      +'<select id="pomvb" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;'
+        +'font:500 12.5px inherit;font-family:inherit;min-width:190px">'
+      +'<option value="">— ไม่ระบุลำ —</option>'
+      + BL.map(function(x){ return '<option value="'+poE(x.id)+'"'+((m.boatId===x.id)?' selected':'')
+          +'>'+poE(x.name||x.id)+'</option>'; }).join('')
+      +'</select></div>'):'')
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">คำอธิบาย</div>'
+    +'<input id="pomvn" value="'+poE(m.note||'')+'" placeholder="เช่น ลงประจำเรือ Hermetis 3 ตัว" '
+      +'style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;'
+      +'width:100%;box-sizing:border-box;font-family:inherit">';
+  poModal('แก้คำอธิบาย · '+poE(T_LDG(m.type)), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poMoveEditSave('"+poE(id)+"')",1), 520);
+}
+function T_LDG(t){
+  var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
+         onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
+         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
+  return M[t]||t;
+}
+function poMoveEditSave(id){
+  if(!poGuard()) return;
+  var m=poMoveFind(id); if(!m){ poModalClose(); return; }
+  var nn=poV('pomvn'), nb=(m.type==='adjust')?poV('pomvb'):m.boatId;
+  var changed=(String(m.note||'')!==String(nn||'')) || (String(m.boatId||'')!==String(nb||''));
+  if(changed){
+    m.note=nn; m.boatId=nb||'';
+    m.editBy=poWho(); m.editAt=new Date().toISOString();
+    poPersist();
+  }
+  poModalClose(); renderPierOffice(); poLedgerOpen();
+}
+
+function poShipBoats(pier){
+  var out=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))?BOATS.slice():[];
+  return out.filter(function(b){
+      if(!b||!b.id) return false;
+      var pk=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):(b.pier||'');
+      return (pk||b.pier||'')===pier;
+    }).sort(function(a,b){ return String(a.name||a.id).localeCompare(String(b.name||b.id)); });
+}
+/* ของชิ้นนี้ลงประจำอยู่ลำไหนบ้าง · คิดสดจาก moves ไม่เก็บเป็นตัวเลขนิ่ง เหมือน poBal */
+function poShipByBoat(itemId){
+  var m={};
+  (PIER_MOVES||[]).forEach(function(x){
+    if(!x || x.itemId!==itemId) return;
+    var q=poNum(x.qty), bo=x.boatId||'';
+    if(x.type==='assign') m[bo]=(m[bo]||0)+q;
+    else if(x.type==='unassign') m[bo]=(m[bo]||0)-q;
+  });
+  return Object.keys(m).filter(function(k){ return m[k]>0; })
+    .map(function(k){ return {bid:k, q:m[k]}; })
+    .sort(function(a,b){ return b.q-a.q; });
+}
+/* ทั้งท่า · ลำไหนถือของอะไรอยู่บ้าง · ใช้ทั้งในกล่องสรุปและตอนตรวจของประจำลำ */
+function poShipAll(pier){
+  var m={};
+  (PIER_MOVES||[]).forEach(function(x){
+    if(!x || x.pier!==pier) return;
+    if(x.type!=='assign' && x.type!=='unassign') return;
+    var q=poNum(x.qty)*(x.type==='assign'?1:-1), bo=x.boatId||'', id=x.itemId;
+    (m[bo]=m[bo]||{})[id]=(m[bo][id]||0)+q;
+  });
+  var out=[];
+  Object.keys(m).forEach(function(bo){
+    var its=Object.keys(m[bo]).filter(function(id){ return m[bo][id]>0; })
+      .map(function(id){ return {itemId:id, q:m[bo][id]}; })
+      .sort(function(a,b){ return b.q-a.q; });
+    var tot=its.reduce(function(s2,x){ return s2+x.q; },0);
+    if(tot>0) out.push({bid:bo, tot:tot, items:its});
+  });
+  return out.sort(function(a,b){ return b.tot-a.tot; });
+}
+function poShipErr(msg){
+  var el=document.getElementById('poship_err'); if(!el) return;
+  el.innerHTML=msg?('<div style="background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;'
+    +'border-radius:9px;padding:7px 10px;font-size:12px;margin-top:9px">'+msg+'</div>'):'';
+}
+function poShipOpen(itemId){
+  if(!poCanEdit()) return;
+  var it=poItem(itemId); if(!it) return;
+  var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;
+  var BL=poShipBoats(_poPier), cur=poShipByBoat(itemId);
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">'
+    +'ของที่ยกไปติดตั้งอยู่บนเรือถาวร · หักจากยอดพร้อมใช้ แต่ยังเป็นของท่า<br>'
+    +'ไม่ใช่การเบิกรอบวัน จึงไม่ไปขึ้นใน "ยังไม่ได้คืน" และไม่มีใครมาตามคืน</div>'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:9px">'+poE(it.label)
+      +' · พร้อมใช้ '+b.ready+' '+u+(b.onship?(' · ประจำเรืออยู่แล้ว '+b.onship+' '+u):'')+'</div>';
+  if(cur.length){
+    body+='<div style="border:1px solid #E2E8F0;border-radius:11px;padding:8px 11px;margin-bottom:11px">'
+      +'<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">ลงประจำอยู่แล้ว</div>'
+      + cur.map(function(x){
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;'
+            +'border-top:1px solid #F1F5F9;font-size:12.5px">'
+            +'<span style="flex:1;color:#334155">'+poE(poLdgBoatNm(x.bid))+'</span>'
+            +'<b style="font-variant-numeric:tabular-nums">'+x.q+'</b>'
+            +'<button class="po-go" onclick="poUnshipSave(\''+itemId+'\',\''+poE(x.bid)+'\')">ถอดออก</button>'
+            +'</div>'; }).join('')
+      +'</div>';
+  }
+  if(!BL.length){
+    body+='<div style="font-size:12.5px;color:#B45309">ท่านี้ยังไม่มีเรือในทะเบียน · เพิ่มเรือในหน้า Fleet ก่อน</div>';
+    poModal('ประจำเรือ · '+poE(it.label), body+'<div id="poship_err"></div>', poBtn('ปิด','poModalClose()'), 520);
+    return;
+  }
+  body+='<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:5px">ลงประจำเรือเพิ่ม</div>'
+    +'<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">'
+    +'<select id="poshipb" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;'
+      +'font:500 12.5px inherit;font-family:inherit;min-width:170px">'
+    + BL.map(function(x){ return '<option value="'+poE(x.id)+'">'+poE(x.name||x.id)+'</option>'; }).join('')
+    +'</select>'
+    + poIn('poshipq','','จำนวน',90)
+    +'<input id="poshipn" placeholder="หมายเหตุ เช่น ติดตั้งประจำลำ" style="border:1px solid #D8D4CA;'
+      +'border-radius:8px;padding:7px 10px;font:500 12.5px inherit;flex:1;min-width:150px;font-family:inherit"></div>'
+    +'<div id="poship_err"></div>';
+  poModal('ประจำเรือ · '+poE(it.label), body,
+    poBtn('ปิด','poModalClose()')+poBtn('ลงประจำเรือ',"poShipSave('"+itemId+"')",1), 560);
+}
+function poShipSave(itemId){
+  if(!poGuard()) return;
+  var it=poItem(itemId); if(!it) return;
+  var q=poNum(poV('poshipq')), bo=poV('poshipb'), b=poBal(itemId);
+  var u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;
+  /* ข้อความบอกความผิดพลาดอยู่ในกล่องเลย ไม่ใช่ alert · คนหน้าท่ายังเห็นช่องที่ต้องแก้ */
+  if(q<=0) return poShipErr('ใส่จำนวนที่จะลงประจำเรือ · ต้องมากกว่า 0');
+  if(!bo)  return poShipErr('เลือกลำก่อน');
+  if(q>b.ready) return poShipErr('พร้อมใช้มีแค่ '+b.ready+' '+u+' · ลงประจำ '+q
+    +' ไม่ได้ ยอดพร้อมใช้จะติดลบ<br>ถ้าของในตู้มีมากกว่านี้จริง ให้กด "ปรับยอด" เพิ่มเข้าคลังก่อน');
+  poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:bo, type:'assign', qty:q, note:poV('poshipn')});
+  poPersist(); renderPierOffice(); poShipOpen(itemId);
+}
+function poUnshipSave(itemId, boatId){
+  if(!poGuard()) return;
+  var cur=poShipByBoat(itemId).filter(function(x){ return x.bid===boatId; })[0];
+  if(!cur) return;
+  poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:boatId, type:'unassign', qty:cur.q,
+         note:'ถอดออกจาก '+poLdgBoatNm(boatId)+' กลับเข้าคลัง'});
+  poPersist(); renderPierOffice(); poShipOpen(itemId);
+}
+
 function poFixOpen(itemId){
   if(!poCanEdit()) return;
   var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;   // §laDerived · ค่าสำรอง · ปุ่มต้องกดได้เสมอ
@@ -62402,9 +62576,10 @@ function poLaundrySave(isOut){
    ไม่ต้องไล่อ่านทีละแถวเพื่อหักกันเอง */
 var _poLdgF='all';
 var PO_LDG_G={ all:null, issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
-               loss:['lost','writeoff','repair'], adj:['adjust','onboard','fixed'] };
+               loss:['lost','writeoff','repair'], ship:['assign','unassign'],
+               adj:['adjust','onboard','fixed'] };
 var PO_LDG_GN={ all:'ทั้งหมด', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
-                loss:'หาย · ตัดทิ้ง · เสีย', adj:'ปรับยอด' };
+                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'ปรับยอด' };
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
 function poLdgBoatNm(id){
   var b=(typeof getBoat==='function' && id)?getBoat(id):null;
@@ -62435,11 +62610,13 @@ function poLdgLine(nm,v,col){
 function poLedgerOpen(){
   var all=(PIER_MOVES||[]).filter(function(m){ return m.pier===_poPier; });
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
-         laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด'};
+         laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
+         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
-          laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E']};
+          laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
+          assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490']};
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -62506,6 +62683,28 @@ function poLedgerOpen(){
           }).join(''))
       +'</div>';
 
+    /* §poShip · ของประจำเรือไม่ใช่ของค้าง จึงมีกล่องของตัวเอง ไม่ไปปนกับ "ยังไม่ได้คืน"
+       กล่องนี้คือคำตอบของคำถามที่หน้าท่าถามบ่อยที่สุด · ลำนี้มีของประจำอะไรอยู่บ้าง */
+    var SH=poShipAll(_poPier);
+    if(SH.length){
+      var shTot=SH.reduce(function(s2,x){ return s2+x.tot; },0);
+      sum+='<div style="'+two+'">'
+        +poLdgBox('ของประจำเรือ · แยกตามลำ', SH.length+' ลำ · '+shTot+' ชิ้น',
+            SH.slice(0,6).map(function(x){
+              return poLdgLine(poE(poLdgBoatNm(x.bid)), x.tot, '#0E7490'); }).join('')
+            +(SH.length>6?poLdgLine('<span style="color:#94A3B8">และอีก '+(SH.length-6)+' ลำ</span>',
+                SH.slice(6).reduce(function(s2,x){ return s2+x.tot; },0),'#94A3B8'):''))
+        +poLdgBox('ของประจำเรือ · แยกรายการ', shTot+' ชิ้น', (function(){
+            var m={}; SH.forEach(function(x){ x.items.forEach(function(i){ m[i.itemId]=(m[i.itemId]||0)+i.q; }); });
+            return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; }).slice(0,6).map(function(id){
+              var it=poItem(id), c=(it&&PO_KIND[it.kind])?PO_KIND[it.kind].c:'#94A3B8';
+              return poLdgLine('<i style="display:inline-block;width:7px;height:7px;border-radius:50%;'
+                +'background:'+c+';margin-right:6px;vertical-align:1px"></i>'+poE(it?it.label:id), m[id]);
+            }).join('');
+          })())
+        +'</div>';
+    }
+
     var KL=Object.keys(S.kind).sort(function(a,b){ return S.kind[b]-S.kind[a]; });
     sum+='<div style="'+two+'">'
       +poLdgBox('ผ้าซัก', S.lout+' ส่ง / '+S.lin+' รับ',
@@ -62543,17 +62742,29 @@ function poLedgerOpen(){
       return String(b.at||'').localeCompare(String(a.at||''));
     }).slice(0,300);
 
-  var body=rows.length?('<table class="po-t" style="width:100%"><thead><tr><th>วันที่</th><th>รายการ</th><th>ประเภท</th><th style="text-align:center">จำนวน</th><th>เรือ</th><th>โดย</th></tr></thead><tbody>'
+  /* §poLdgNote · ฟีดแบคหน้าท่า · "กดดูในประวัติมันดูได้ว่าปรับยอดวันไหน แต่ไม่ขึ้นคำอธิบายว่าเบิกไปไหน"
+     ช่องเหตุผลใน dialog ปรับยอดมีมาตลอดและเก็บลง note จริง · ตารางนี้ไม่เคยพิมพ์มันออกมา
+     ที่เขาพิมพ์ไว้อยู่ในฐานข้อมูลครบ แค่ไม่มีใครเห็น */
+  var ro=!poCanEdit();
+  var body=rows.length?('<table class="po-t" style="width:100%"><thead><tr><th>วันที่</th><th>รายการ</th><th>ประเภท</th><th style="text-align:center">จำนวน</th><th>เรือ</th><th>คำอธิบาย</th><th>โดย</th><th></th></tr></thead><tbody>'
     +rows.map(function(m){
       var it=poItem(m.itemId), bo=(typeof getBoat==='function'&&m.boatId)?getBoat(m.boatId):null;
       var tc=TC[m.type]||['#F1F5F9','#475569'], q=poNum(m.qty);
+      var nt=String(m.note||'').trim();
       return '<tr><td style="white-space:nowrap">'+poE(m.date)+'</td><td>'+poE(it?it.label:m.itemId)+'</td>'
         +'<td><span style="display:inline-block;background:'+tc[0]+';color:'+tc[1]
           +';border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'
           +poE(T[m.type]||m.type)+'</span>'
           +(m.fine?(' <span style="color:#B4560A;font-weight:700;font-size:11px">ค่าปรับ '+poBaht(m.fine)+'</span>'):'')+'</td>'
         +'<td style="text-align:center;font-weight:700'+(q<0?';color:#B91C1C':'')+'">'+q+'</td>'
-        +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td><td style="color:#7C8091">'+poE(m.by||'')+'</td></tr>';
+        +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td>'
+        +'<td class="po-ldgn" style="color:'+(nt?'#334155':'#CBD5E1')+'" title="'+poE(nt)+'">'
+          +(nt?poE(nt):'ไม่ระบุเหตุผล')
+          +(m.editBy?('<i style="font-style:normal;color:#94A3B8;font-size:10.5px;display:block">'
+            +'แก้ย้อนหลังโดย '+poE(m.editBy)+(m.editAt?(' · '+poE(String(m.editAt).slice(0,10))):'')+'</i>'):'')
+        +'</td>'
+        +'<td style="color:#7C8091">'+poE(m.by||'')+'</td>'
+        +'<td style="text-align:right">'+(ro?'':('<button class="po-go" onclick="poMoveEdit(\''+poE(m.id)+'\')" title="เติมเหตุผล / ระบุลำ ย้อนหลัง">แก้</button>'))+'</td></tr>';
     }).join('')+'</tbody></table>'
     +(rows.length>=300?'<div style="font-size:11px;color:#94A3B8;margin-top:8px">แสดง 300 รายการล่าสุด · ตัวสรุปข้างบนนับครบทุกรายการ</div>':'')
     +'<div style="font-size:11px;color:#94A3B8;margin-top:6px">เรียงตามวันที่ล่าสุดก่อน · ตัวเลขติดลบคือการแก้ยอดย้อนหลังของใบเดิม</div>')
