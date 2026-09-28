@@ -57554,6 +57554,40 @@ function poCSS(){
     +'border-radius:6px;padding:0 5px}'
   +H+' .pk-rt.on u{background:rgba(255,255,255,.28);color:#fff}'
   +H+' .pk-rtf{font-size:11px;color:#64748B;margin-left:2px}'
+  +H+' .pk-mon{font-family:\'DM Mono\',monospace;font-size:14px;font-weight:600;color:#1E293B;padding:0 4px}'
+  /* §pkOv · ตารางภาพรวมทั้งเดือน */
+  /* §pkOv · ห้ามใส่ overflow:hidden ที่การ์ดนี้
+     overflow ที่ไม่ใช่ visible ทำให้การ์ดกลายเป็นกรอบอ้างของ sticky
+     หัวตารางจะถูกดันลงมา --pk-top จากขอบบนการ์ด แล้วไปทับแถววันที่ 1
+     เจอมาแล้วตอนทำ · วันที่ 1 หายไปทั้งแถวโดยไม่มีอะไรบอก */
+  +H+' .po-card.pk-ovc{padding:0;overflow:visible}'
+  +H+' .pk-ov{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px}'
+  +H+' .pk-ov col.o-dt{width:78px} .pk-ov col.o-rt{width:36%} .pk-ov col.o-bt{width:22%} .pk-ov col.o-n{width:96px}'
+  +H+' .pk-ov th{position:sticky;top:var(--pk-top,0px);z-index:3;background:#F1F5F9;color:#334155;'
+    +'font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;text-align:left;'
+    +'padding:9px 12px;border-bottom:1px solid #E2E8F0;white-space:nowrap}'
+  +H+' .pk-ov th.n,.pk-ov td.n{text-align:right;font-family:\'DM Mono\',monospace}'
+  +H+' .pk-ov td{padding:6px 12px;border-bottom:1px solid #F1F5F9;vertical-align:middle;overflow:hidden}'
+  +H+' .pk-ov tr.pk-ovd>td{background:#FBFCFE;border-top:1px solid #E2E8F0;font-weight:700;color:#0F172A;cursor:pointer}'
+  +H+' .pk-ov tr.pk-ovd:hover>td{background:#EFF6FF}'
+  +H+' .pk-ov tr.pk-ovd.sun>td{background:#FEF7F5}'
+  +H+' .pk-ov tr.pk-ovd.empty>td{background:#fff;color:#CBD5E1;font-weight:500;cursor:default}'
+  +H+' .pk-ov td.dt b{font-family:\'DM Mono\',monospace;font-size:15px}'
+  +H+' .pk-ov td.dt i{font-style:normal;font-size:10px;color:#94A3B8;margin-left:5px;font-weight:600}'
+  +H+' .pk-ov tr.pk-ovbt>td{cursor:pointer;color:#475569;font-weight:500}'
+  +H+' .pk-ov tr.pk-ovbt:hover>td{background:#F8FAFC}'
+  +H+' .pk-ov tr.pk-ovbt td.rt .d{display:inline-block;width:7px;height:7px;border-radius:50%;'
+    +'background:var(--rc,#94A3B8);margin-right:7px;vertical-align:middle}'
+  +H+' .pk-ov td.bt i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:11px;color:#94A3B8;margin-left:6px}'
+  +H+' .pk-ov td.n.w{color:#92400E}'
+  +H+' .pk-ov td.n u{text-decoration:none;font-size:10px;font-weight:800;color:#B45309;margin-left:4px}'
+  +H+' .pk-ov td.n.d{color:#94A3B8}'
+  +H+' .pk-ov tfoot td{position:sticky;bottom:0;background:#0F172A;color:#fff;font-weight:700;'
+    +'border-top:2px solid #0F172A;padding:10px 12px}'
+  +H+' .pk-ov tfoot td.n.big{font-size:14px}'
+  +H+' .pk-ov tfoot td.n.d,.pk-ov tfoot td.n.w{color:#CBD5E1}'
+  +H+' .pk-ovn{padding:10px 14px;font-size:11px;color:#64748B;background:#F8FAFC;border-top:1px solid #F1F5F9}'
+
   +H+' .pk-rtf b{color:#185FA5;cursor:pointer;text-decoration:underline;font-weight:700}'
   +H+' .pk-day{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}'
   /* §pkTk8 · ย้ายลงท้ายหน้าแล้ว · ทำให้จางลงด้วย จะได้ไม่แย่งสายตากับตารางรายชื่อ */
@@ -60153,9 +60187,99 @@ function pkTkData(date, pier){
    ตัวกรองเก็บไว้ในหน่วยความจำเท่านั้น · เปลี่ยนวันแล้วเส้นนั้นอาจไม่มี จึงล้างให้เองตอนวาด
    ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName เท่านั้น (ดู CLAUDE.md) */
 var _pkRoute = '';
+/* §pkOv (2026-09-28) · หน้าภาพรวมทั้งเดือน · เรียงวัน ในวันแยกเรือ
+   ที่มา · ผู้ใช้ขอเอง · "เพิ่มหน้า Overview เพื่อให้เห็นภาพรวมของทั้งเดือน
+   เรียงวัน แยกเรือ จำนวน ลค ที่เดินทาง / จำนวน ลค ที่ทำตั๋ว"
+   สามตัวเลข · เดินทาง (หัวที่จ่ายจริง) / ต้องออกตั๋ว / มีชื่อแล้ว
+   อ่านทั้งเดือนผ่าน pkTkData() ตัวเดียวกับหน้ารายวัน · ไม่เขียนสูตรนับซ้ำ
+   ถ้าเขียนซ้ำ วันหนึ่งสองหน้าจะตอบไม่เท่ากันโดยไม่มีใครรู้ · ช้ากว่าแต่ตรงกันเสมอ */
+var _pkView = 'day';     /* day | ov */
+var _pkMon  = '';        /* 'YYYY-MM' · ว่าง = เอาเดือนของวันที่เลือกอยู่ */
+function pkOvMon(){ return _pkMon || String(_poDate||'').slice(0,7); }
+function pkSetView(v){ _pkView=(v==='ov')?'ov':'day'; if(_pkView==='ov') _pkMon=pkOvMon(); renderPierPark(); }
+function pkMonShift(n){
+  var m=pkOvMon(), y=+m.slice(0,4), mo=+m.slice(5,7)-1+(+n||0);
+  var d=new Date(y, mo, 1);
+  _pkMon = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderPierPark();
+}
+function pkOvGoDay(ds){ _pkView='day'; _pkRoute=''; if(typeof pkSetDate==='function') pkSetDate(ds); else renderPierPark(); }
+
 function pkRoutePick(rid){
   _pkRoute = (_pkRoute===rid) ? '' : String(rid||'');
   renderPierPark();
+}
+/* §pkOv · ตารางภาพรวมทั้งเดือน · แถวใหญ่ = วัน · แถวเล็ก = เรือแต่ละลำในวันนั้น
+   สามตัวเลขต่อลำ · เดินทาง (booked · หัวที่จ่ายจริง) / ต้องออกตั๋ว (tot) / มีชื่อแล้ว (tot-missTot)
+   สองตัวแรกต่างกันได้โดยไม่ผิด · คนที่จองแต่ไม่มาไม่ต้องซื้อตั๋วให้
+   แต่ "มีชื่อแล้ว" น้อยกว่า "ต้องออกตั๋ว" เมื่อไหร่ แปลว่าวันนั้นยังค้างงาน */
+function pkOvBody(){
+  var m=pkOvMon(), y=+m.slice(0,4), mo=+m.slice(5,7);
+  var last=new Date(y, mo, 0).getDate();
+  var WD=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  var MN=(typeof laMonAbbrTH==='function')?laMonAbbrTH():['','','','','','','','','','','',''];
+  var rows='', T={bk:0,tk:0,nm:0,boat:0,day:0};
+  for(var i=1;i<=last;i++){
+    var ds=y+'-'+String(mo).padStart(2,'0')+'-'+String(i).padStart(2,'0');
+    var D=[]; try{ D=pkTkData(ds,_poPier)||[]; }catch(e){ D=[]; }
+    var flat=[];
+    D.forEach(function(g){ (g.boats||[]).forEach(function(B){ flat.push({g:g,B:B}); }); });
+    var dd=new Date(y, mo-1, i), wd=WD[dd.getDay()];
+    var isSun=(dd.getDay()===0);
+    if(!flat.length){
+      rows+='<tr class="pk-ovd empty'+(isSun?' sun':'')+'"><td class="dt">'
+        +'<b>'+i+'</b><i>'+wd+'</i></td>'
+        +'<td class="rt" colspan="2">ไม่มีเรือออก</td>'
+        +'<td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>';
+      continue;
+    }
+    var dBk=0,dTk=0,dNm=0;
+    flat.forEach(function(x){ dBk+=(+x.B.booked||0); dTk+=x.B.tot; dNm+=(x.B.tot-x.B.missTot); });
+    T.bk+=dBk; T.tk+=dTk; T.nm+=dNm; T.boat+=flat.length; T.day++;
+    var dDiff=dBk-dTk;
+    rows+='<tr class="pk-ovd'+(isSun?' sun':'')+'" onclick="pkOvGoDay(\''+ds+'\')" '
+      +'title="กดเพื่อเปิดชีทของวันนี้">'
+      +'<td class="dt"><b>'+i+'</b><i>'+wd+'</i></td>'
+      +'<td class="rt" colspan="2">'+flat.length+' ลำ · '+D.length+' เส้นทาง</td>'
+      +'<td class="n b">'+dBk+'</td>'
+      +'<td class="n b">'+dTk+'</td>'
+      +'<td class="n b'+((dNm<dTk)?' w':'')+'">'+dNm+'</td>'
+      +'<td class="n d">'+(dDiff?((dDiff>0?'+':'−')+Math.abs(dDiff)):'—')+'</td></tr>';
+    flat.forEach(function(x){
+      var B=x.B, nm=B.tot-B.missTot, df=(+B.booked||0)-B.tot;
+      var rc=(x.g.route&&x.g.route.color)||'#94A3B8';
+      rows+='<tr class="pk-ovbt" onclick="pkOvGoDay(\''+ds+'\')" style="--rc:'+rc+'">'
+        +'<td class="dt"></td>'
+        +'<td class="rt"><i class="d"></i>'+poE((x.g.route&&x.g.route.name)||x.g.rid)+'</td>'
+        +'<td class="bt">'+poE((B.boat&&B.boat.name)||B.bid)+(B.dep?('<i>'+poE(B.dep)+'</i>'):'')+'</td>'
+        +'<td class="n">'+(+B.booked||0)+'</td>'
+        +'<td class="n">'+B.tot+'</td>'
+        +'<td class="n'+(B.missTot?' w':'')+'">'+nm+(B.missTot?('<u>−'+B.missTot+'</u>'):'')+'</td>'
+        +'<td class="n d">'+(df?((df>0?'+':'−')+Math.abs(df)):'—')+'</td></tr>';
+    });
+  }
+  var mT=T.bk-T.tk;
+  return '<div class="po-card pk-ovc">'
+    +'<table class="pk-ov">'
+    +'<colgroup><col class="o-dt"><col class="o-rt"><col class="o-bt">'
+      +'<col class="o-n"><col class="o-n"><col class="o-n"><col class="o-n"></colgroup>'
+    +'<thead><tr>'
+      +'<th class="dt">วัน</th><th>เส้นทาง</th><th>เรือ</th>'
+      +'<th class="n" title="หัวที่จ่ายจริงตามใบจอง · ชุดเดียวกับหน้าเงินสดย่อย">เดินทาง</th>'
+      +'<th class="n" title="จำนวนตั๋วอุทยานที่ต้องซื้อที่ด่าน">ต้องออกตั๋ว</th>'
+      +'<th class="n" title="ในจำนวนที่ต้องออกตั๋ว · มีรายชื่อครบกี่คน · ด่านออกตั๋วตามรายชื่อ">มีชื่อแล้ว</th>'
+      +'<th class="n" title="เดินทาง − ต้องออกตั๋ว · บวกคือมีคนที่ไม่ต้องซื้อตั๋ว">ต่าง</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr>'
+      +'<td class="dt">รวม</td><td class="rt" colspan="2">'+T.day+' วันที่มีเรือออก · '+T.boat+' ลำ</td>'
+      +'<td class="n">'+T.bk+'</td><td class="n big">'+T.tk+'</td>'
+      +'<td class="n'+((T.nm<T.tk)?' w':'')+'">'+T.nm+'</td>'
+      +'<td class="n d">'+(mT?((mT>0?'+':'−')+Math.abs(mT)):'—')+'</td>'
+    +'</tr></tfoot></table>'
+    +'<div class="pk-ovn">กดที่แถวไหนก็ได้ เพื่อเปิดชีทของวันนั้น · '
+      +'ตัวเลขชุดเดียวกับหน้ารายวัน · หน้านี้อ่านอย่างเดียว ไม่เขียนอะไรกลับระบบ</div>'
+  +'</div>';
 }
 function renderPierPark(pier){
   if(pier) _poPier=pier;
@@ -60399,7 +60523,9 @@ function renderPierPark(pier){
         +'<p>รายชื่อสำหรับไปซื้อตั๋วที่ด่าน · คอลัมน์เรียงตามแบบฟอร์มของด่าน · ดูทีละลำ<br>'
         +'หัวคนชุดนี้เป็นชุดเดียวกับหน้า เงินสดย่อย · ค่าอุทยาน — เป็นคนที่ไปจริง หักคนไม่มาแล้ว</p></div></div>'
       +'<div class="po-bar">'
-        +'<button class="pri">ตั๋วอุทยาน</button>'
+        +'<button class="'+(_pkView==='day'?'pri':'')+'" onclick="pkSetView(\'day\')">ตั๋วอุทยาน</button>'
+        +'<button class="'+(_pkView==='ov'?'pri':'')+'" onclick="pkSetView(\'ov\')" '
+          +'title="ภาพรวมทั้งเดือน · เรียงวัน แยกเรือ">ภาพรวมเดือน</button>'
         +'<button onclick="poGoView(\'po\')">เบิก-คืนอุปกรณ์</button>'
         +'<button onclick="poGoView(\'pop\')">เงินสดย่อย</button>'
         +'<span class="sep"></span>'
@@ -60422,7 +60548,12 @@ function renderPierPark(pier){
       +'</div>'
     +'</div>'
     +'<div class="pk-stick">'
-    +'<div class="pk-rts">'
+    +(_pkView==='ov' ? ('<div class="pk-rts">'
+        +'<button class="pk-rt" onclick="pkMonShift(-1)" title="เดือนก่อน">&#8249;</button>'
+        +'<span class="pk-mon">'+poE(pkOvMon())+'</span>'
+        +'<button class="pk-rt" onclick="pkMonShift(1)" title="เดือนถัดไป">&#8250;</button>'
+        +'<span class="pk-rtf">ท่า '+poE(P.n||P.t)+' · กดที่แถวเพื่อเปิดชีทของวันนั้น</span>'
+      +'</div>') : ('<div class="pk-rts">'
       +'<button class="pk-rt'+(_pkRoute?'':' on')+'" onclick="pkRoutePick(\'\')">'
         +'ทุกเส้นทาง<b>'+D.length+'</b></button>'
       +D.map(function(g){
@@ -60437,8 +60568,8 @@ function renderPierPark(pier){
         }).join('')
       +(_pkRoute?('<span class="pk-rtf">ดูเฉพาะเส้นนี้ · '
         +'<b onclick="pkRoutePick(\'\')">ล้างตัวกรอง</b></span>'):'')
-    +'</div>'
-    +'<div class="pk-day">'
+    +'</div>'))
+    +(_pkView==='ov' ? '' : ('<div class="pk-day">'
       +'<span class="s"><b>'+nBoat+'</b> ลำ</span>'
       +'<span class="s"><b>'+gTot+'</b> ตั๋วทั้งวัน'+((gBook>gTot)?(' <i>จอง '+gBook+'</i>'):'')+'</span>'
       +(gMiss>0?('<span class="s warn"><b>'+gMiss+'</b> ยังไม่มีรายชื่อ</span>'):'')
@@ -60449,11 +60580,12 @@ function renderPierPark(pier){
          คนที่กำลังแก้ประเภทตั๋วอยู่ต้องเห็นตอนนั้นเลยว่าแก้แล้วไม่กระทบที่อื่น */
       +'<span class="s" style="cursor:pointer" onclick="pkHelp()" '
         +'title="กดดูรายละเอียด">อ่านอย่างเดียว · ไม่กระทบใบจอง</span>'
-    +'</div>'
+    +'</div>'))
     +'</div>'   /* §pkTop · ปิด .pk-stick */
     /* §pkTk8 · กล่องประเภทตั๋วเป็นของ "ตั้งครั้งเดียวแล้วไม่แตะอีก"
        เคยอยู่บนสุดคั่นระหว่างแถบสรุปกับตารางที่ต้องใช้จริง · ย้ายลงท้ายหน้า */
-    +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>');
+    +((_pkView==='ov') ? pkOvBody()
+       : (body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>'));
   /* §pkTop · หัวตารางต้องตรึงใต้แถบบนพอดี · ความสูงแถบเปลี่ยนตามจำนวนชิปที่ตกบรรทัด
      จึงวัดหลังวาดทุกครั้ง ไม่เดาเป็นค่าคงที่ · หน้าจอแคบชิปตกสองแถวก็ยังตรง */
   (function(){
