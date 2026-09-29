@@ -52,6 +52,11 @@ for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].colum
 //   สิ่งที่ผู้ใช้เห็นคือ กรอกได้ ไม่มี error ไม่มีเตือน แล้วรีเฟรชทีข้อมูลหายทุกครั้ง
 //   (เจอจริง 14 ส.ค. 2026 · pier_sect + pier_staff.sect/note + routes.code เข้า model แต่ไม่เข้า field_mapping)
 //   เช็คตอนบูตครั้งเดียว · warn ที่ log และรายงานที่ /api/version ให้เห็นโดยไม่ต้องเดา
+//   ⚠ เช็คนี้เทียบ "สองไฟล์ฝั่งเซิร์ฟเวอร์" กันเองเท่านั้น · ฟิลด์ใหม่ที่ไม่มีทั้งใน model และใน mapping
+//     สองไฟล์จะตรงกันเอง เช็คนี้จึงเงียบสนิท แต่ข้อมูลหายเหมือนกันทุกประการ (เจอ 4 ครั้งแล้ว:
+//     check-in 25 ก.ค. · pierPayments 2 ส.ค. · pier_sect 14 ส.ค. · seat-lock dateFrom/dateTo 29 ก.ย.)
+//     เช็คย้อนทางที่จับกรณีนั้น: node tools/check-mapping-coverage.mjs <blob.json>
+//     (ยัด blob จริงผ่าน decompose → assemble แล้วไล่ดูว่าค่าไหนไม่กลับมา)
 const MAP_DRIFT = (() => {
   const plan = osRepo._plan || {};
   const tables = [], columns = [];
@@ -2196,6 +2201,36 @@ async function initDb(){
       // INSERT column list for every save, so this DDL runs in the same boot path that adds them.
       await sq('sb_bookings.paymentsnapshot_paid col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paid" bigint`);
       await sq('sb_bookings.paymentsnapshot_paidstatus col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paidstatus" text`);
+      /* §lkBulk (2026-09-29) · ช่วงวันของล็อกที่นั่งแบบ Bulk
+         อาการที่ผู้ใช้แจ้ง — "ทำจองแบบ Bulk เลือกวันเริ่ม วันจบ แต่ระบบไม่บันทึกให้ รีเฟรชหาย"
+         §lkBulk เปลี่ยนล็อกรายเดือน (month/monthFrom/monthTo) มาเป็นช่วงวันที่ + วันในสัปดาห์
+         แต่ตาราง sb_seat_locks ยังมีแต่คอลัมน์ชุดเดือนของเดิม → dateFrom/dateTo/dow ไม่มีที่ลง
+         decompose ทิ้งทุกครั้งที่เซฟ · assemble ไม่มีอะไรจะคืน · ล็อกกลับมาแบบ scope='bulk'
+         ที่ไม่มีช่วงวัน → bkV2LockRange คืนค่าว่าง → ไม่ครอบรอบไหนเลย → ไม่ขึ้น manifest วันไหน
+         (นี่คือสาเหตุที่ล็อกของ Panorama ไม่เคยขึ้นหน้า Manifest)
+         usedBy = โควตาที่ถูกดึงไปแล้วแยกรายรอบ · หายไปด้วย → ล็อกที่ขายไปแล้วดูเหมือนยังว่างทั้งใบ
+         releasedDates = รอบที่กดปล่อยคืนแล้ว · หายไป → รอบที่ปล่อยแล้วกลับมากันที่นั่งใหม่
+         log[].tripDate = รอบที่ draw/return/release อ้างถึง · หายไป → ไล่ที่มาของที่นั่งไม่ได้
+         ครั้งที่สี่ของบั๊กชนิดเดียวกัน (check-in 25 ก.ค. · pierPayments 2 ส.ค. · pier_sect 14 ส.ค.)
+         ตัวกันไม่ให้เกิดซ้ำ: tools/check-mapping-coverage.mjs — เช็คย้อนทางจาก blob จริง */
+      for(const [_c,_t] of [['datefrom','text'],['dateto','text'],['dow','text'],
+                            ['usedby','text'],['releaseddates','text']]){
+        await sq(`sb_seat_locks.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks" ADD COLUMN IF NOT EXISTS "${_c}" ${_t}`);
+      }
+      await sq('sb_seat_locks__log.tripdate col', `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks__log" ADD COLUMN IF NOT EXISTS "tripdate" text`);
+      /* §lkBulk · กู้ช่วงวันของล็อกที่ผ่าน round-trip มาก่อนคอลัมน์จะมี
+         ใบที่แปลงมาจาก scope='month' ยังมี monthfrom/monthto ครบในฐาน (สองคอลัมน์นั้นถูก map มาตลอด)
+         → เติมช่วงวันคืนได้ตรง ๆ: วันที่ 1 ของเดือนแรก ถึงวันสุดท้ายของเดือนสุดท้าย
+         รันซ้ำได้ (WHERE datefrom IS NULL OR datefrom='') · ใบที่ไม่มีร่องรอยเดือนแตะไม่ได้
+         ฝั่งหน้าจอจะติดป้ายแดงให้กรอกช่วงวันใหม่เอง */
+      await sq('sb_seat_locks backfill range from month', `
+        UPDATE ${OS_SCHEMA}."sb_seat_locks"
+           SET "datefrom" = to_char((COALESCE(NULLIF("monthfrom",''), NULLIF("month",'')) || '-01')::date, 'YYYY-MM-DD'),
+               "dateto"   = to_char(((COALESCE(NULLIF("monthto",''), NULLIF("monthfrom",''), NULLIF("month",'')) || '-01')::date
+                                     + interval '1 month' - interval '1 day')::date, 'YYYY-MM-DD')
+         WHERE ("datefrom" IS NULL OR "datefrom" = '')
+           AND COALESCE(NULLIF("monthfrom",''), NULLIF("month",'')) ~ '^[0-9]{4}-[0-9]{2}$'
+           AND COALESCE(NULLIF("monthto",''), NULLIF("monthfrom",''), NULLIF("month",'')) ~ '^[0-9]{4}-[0-9]{2}$'`);
       await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (

@@ -3802,6 +3802,31 @@
       "source": "releaseTime",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "datefrom": {
+      "source": "dateFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "dateto": {
+      "source": "dateTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "dow": {
+      "source": "dow",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "usedby": {
+      "source": "usedBy",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "releaseddates": {
+      "source": "releasedDates",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_seat_locks__log": {
@@ -3857,6 +3882,11 @@
     },
     "note": {
       "source": "sb_seat_locks[].log[].note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "tripdate": {
+      "source": "sb_seat_locks[].log[].tripDate",
       "kind": "scalar",
       "db_type": "text"
     }

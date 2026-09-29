@@ -3510,6 +3510,26 @@
       {
         "name": "releasetime",
         "type": "text"
+      },
+      {
+        "name": "datefrom",
+        "type": "text"
+      },
+      {
+        "name": "dateto",
+        "type": "text"
+      },
+      {
+        "name": "dow",
+        "type": "text"
+      },
+      {
+        "name": "usedby",
+        "type": "text"
+      },
+      {
+        "name": "releaseddates",
+        "type": "text"
       }
     ],
     "primary_key": "id",
@@ -3560,6 +3580,10 @@
       },
       {
         "name": "note",
+        "type": "text"
+      },
+      {
+        "name": "tripdate",
         "type": "text"
       }
     ],

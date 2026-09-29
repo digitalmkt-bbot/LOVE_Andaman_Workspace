@@ -40,7 +40,9 @@
     "test:pckwb": "node test/ui/t_pckwb.mjs",
     "test:assetver": "node test/ui/t_assetver.mjs",
     "test:pjname": "node test/ui/t_pjname.mjs",
-    "test:fldeploy": "node test/ui/t_fldeploy.mjs"
+    "test:fldeploy": "node test/ui/t_fldeploy.mjs",
+    "test:maproundtrip": "node test/ui/t_maproundtrip.mjs",
+    "check:mapping": "node tools/check-mapping-coverage.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
