@@ -1935,6 +1935,12 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-cal-chip.foc{background:#fff6e5}
 #view-booking .bkv2-cal-chip.empty{background:transparent;border-left-style:dashed;border-left-width:2px}
 #view-booking .bkv2-cal-chip.empty .bkv2-cal-chip-name{font-weight:500;opacity:.7}
+/* §bkCalOrphan · ปิดวันนั้นแล้วแต่ยังมี booking ค้าง · ต้องสะดุดตากว่าชิปปกติทุกตัว */
+#view-booking .bkv2-cal-chip.orphan{background:#FDECEA;border-left-width:3px}
+#view-booking .bkv2-cal-chip.orphan .bkv2-cal-chip-name{color:#8C3A0B;font-weight:800}
+#view-booking .bkv2-cal-chip.orphan .bkv2-cal-chip-pax{color:#8C3A0B}
+#view-booking .bkv2-lg-orphan{color:#8C3A0B;font-weight:600}
+#view-booking .bkv2-lg-orphan .sw{background:#FDECEA;border:1px solid #E8B4A0}
 #view-booking .bkv2-cal-more{font-size:9px;color:var(--ink-soft);font-style:italic;margin-top:3px;letter-spacing:.02em;padding-left:5px}
 /* Matrix view (Tab 1 Matrix) */
 #view-booking .bkv2-mx{padding:12px 12px 4px;background:var(--white);overflow-x:auto}

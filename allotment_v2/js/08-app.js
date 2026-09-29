@@ -45690,17 +45690,32 @@ function bkV2RenderCalendar(){
     // Chip shows family name + total pax (sum across sub-variants) · "empty" if no bookings
     let chipsHtml = '';
     let dayHasFoc = false;
-    const openFams = activeFams
+    /* §bkCalOrphan · โปรแกรมที่ปิดวันนั้นไปแล้วแต่ยังมีคนจองค้างอยู่
+       ของเดิมกรองด้วย open อย่างเดียว · พอตารางออกเรือเปลี่ยนแล้ววันนั้นกลายเป็นวันปิด
+       เซลล์จะไม่วาดชิปเลย ทั้งที่ pax ถูกคิดไว้แล้ว (bkV2FamilyAggregate อ่านจากใบจอง
+       ไม่ได้อ่านจากตาราง) ใบจองพวกนั้นจึงหายไปจากจอทั้งที่ยังอยู่ในระบบ
+       ต้องเห็นเสมอ ไม่สนตัวกรองโปรแกรม เพราะมันคือของที่ต้องไปจัดการ ไม่ใช่ของที่เลือกดู
+       คิดสดทุกครั้งที่วาด · ย้าย/ยกเลิกเสร็จเมื่อไร ป้ายหายเอง ไม่ต้องมีใครมากดเคลียร์ */
+    const famRows = activeFams
       .map(fam => ({ fam, agg: bkV2FamilyAggregate(fam.id, dateKey, agg), open: bkV2IsFamilyOpenOn(fam.id, dateKey) }))
-      .filter(o => o.open && (!calSel || calSel.has(o.fam.id)));
-    // Day total pax across the visible (filtered) programs
-    const dayTotal = openFams.reduce((s, o) => s + (o.agg.total || 0), 0);
+      .map(o => ({ ...o, orphan: !o.open && (o.agg.total || 0) > 0 }));
+    const openFams = famRows.filter(o => o.orphan || (o.open && (!calSel || calSel.has(o.fam.id))));
+    /* ยอดรวมข้างเลขวันคือ "วันนี้มีคนออกกี่คน" · คนที่ค้างอยู่คือคนที่ตารางตอนนี้ไม่ได้พาออก
+       เอามารวมกันแล้วเลขหัวเซลล์จะอ่านผิด · ตัวเลขของคนค้างอยู่บนชิปแดงของมันเอง */
+    const dayTotal = openFams.reduce((s, o) => s + (o.orphan ? 0 : (o.agg.total || 0)), 0);
     if(openFams.length){
-      openFams.sort((a, b) => b.agg.total - a.agg.total);
+      /* §bkCalOrphan · ของค้างขึ้นบนสุดเสมอ · ถ้าวันนั้นมีหลายโปรแกรมจนชิปล้น
+         ตัวที่ต้องไปจัดการต้องไม่ใช่ตัวที่ถูกยุบไปอยู่ใน "+N more" */
+      openFams.sort((a, b) => (b.orphan?1:0) - (a.orphan?1:0) || b.agg.total - a.agg.total);
       const visible = openFams.slice(0, 5);
       const overflow = openFams.length - visible.length;
-      chipsHtml = visible.map(({ fam, agg: famAgg }) => {
+      chipsHtml = visible.map(({ fam, agg: famAgg, orphan }) => {
         const col = fam.color;
+        /* §bkCalOrphan · ชิปแดงพร้อมจำนวน · ไม่ขีดฆ่าเหมือนชิปอากาศปิด
+           เพราะคนกลุ่มนี้ยังไม่ถูกจัดการ ตัวเลขยังมีผลอยู่ ไม่ใช่ตัวเลขที่ตายแล้ว */
+        if(orphan){
+          return `<div class="bkv2-cal-chip orphan" style="border-left-color:#B4560A" title="${fam.name} · วันนี้ปิดไปแล้ว แต่ยังมี booking ค้างอยู่ ${famAgg.total} คน · ต้องย้ายวัน ย้ายโปรแกรม หรือยกเลิกก่อน"><span class="bkv2-cal-chip-name">&#9888; ${fam.name}</span><span class="bkv2-cal-chip-pax">${famAgg.total}</span></div>`;
+        }
         const pax = famAgg.total;
         const focCls = famAgg.hasFocPending ? ' foc' : '';
         const emptyCls = pax === 0 ? ' empty' : '';
@@ -46440,6 +46455,7 @@ function bkV2RenderFooterHints(viewMode){
     return `
       <div class="bkv2-foot-hints">
         <span class="bkv2-legend"><span class="sw focdot"></span>FOC pending</span>
+        <span class="bkv2-legend bkv2-lg-orphan"><span class="sw"></span>&#9888; ปิดแล้วแต่ยังมี booking ค้าง</span>
         <span class="gp" style="color:var(--ink-soft);font-style:italic">Chips show pax per route &middot; click cell for AD&middot;CHD&middot;INF&middot;FOC + PK&middot;KL&middot;NT breakdown</span>
         <span style="margin-left:auto" class="gp"><span class="bkv2-kbd">M</span>switch to matrix</span>
       </div>

@@ -266,7 +266,9 @@
    ความเป็นวันหยุดยังดูได้จากหัวคอลัมน์ SUN/SAT ที่จางกว่า */
 #view-booking .bkv2-cal-cell.weekend:not(.past){ background:var(--white) !important; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-daynum{ color:#a8a59d; }
-#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip{ opacity:.5; filter:saturate(.6); transition:opacity .15s, filter .15s; }
+#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip:not(.orphan){ opacity:.5; filter:saturate(.6); transition:opacity .15s, filter .15s; }
+/* §bkCalOrphan · วันที่ผ่านมาแล้วแต่ยังค้าง คือตัวที่ต้องรีบที่สุด ห้ามหรี่ */
+#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip.orphan{ opacity:1; filter:none; }
 #view-booking .bkv2-cal-cell.past:not(.sel):hover .bkv2-cal-chip{ opacity:.92; filter:none; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-daytot{ opacity:.55; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-lock{ opacity:.5; }
