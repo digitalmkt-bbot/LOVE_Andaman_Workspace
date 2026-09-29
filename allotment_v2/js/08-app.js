@@ -3232,6 +3232,7 @@ let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holde
 let _bkV2AddModal = null;   // { lockId, add, note }
 let _bkV2ReleaseModal = null;   // { lockId, max, value }
 let _bkV2LockModalOpen = false; // inline create-lock modal (from Calendar)
+let _bkV2LockEditId = null;     // §lkEdit · ไม่ null = ฟอร์มเดียวกันนี้กำลังแก้ล็อกใบนี้อยู่
 // Day-specific locked seats (exact date · scope==='day') · used for calendar cell badge
 function bkV2DayLockedExact(date){
   return SB_SEAT_LOCKS.filter(l => l.status==='active' && !bkV2LockSpansDays(l) && l.date===date && bkV2LockHoldsOn(l,date)).reduce((s,l)=>s+bkV2LockPoolHold(l,date), 0);
@@ -3247,47 +3248,69 @@ function bkV2DayLockedTotal(date){
 // Shared create-lock form fields (used by the Seat Locks tab + Calendar modal)
 function bkV2LockFormFields(){
   const f = _bkV2LockForm;
+  /* §lkEdit · แก้ล็อกที่ขายไปแล้ว · ช่องที่ทำให้ใบจองเคว้งต้องปิดไว้ ไม่ใช่ปล่อยให้กดแล้วค่อยเด้ง */
+  const _edL = _bkV2LockEditId ? SB_SEAT_LOCKS.find(x=>x.id===_bkV2LockEditId) : null;
+  const _ro  = !!(_edL && typeof bkV2LockEditLocked==='function' && bkV2LockEditLocked(_edL));
+  const _dis = _ro ? ' disabled' : '';
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const isBulk = f.scope==='bulk';
   if(!Array.isArray(f.dow)) f.dow=[];
   const agentDatalist = (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).map(a=>`<option value="${esc(a.name)}"></option>`).join('');
   const routeOpts = (typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>`<option value="${r.id}" ${f.routeId===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
-  const scopeBtn = (val,lbl)=>`<button onclick="bkV2LockSetField('scope','${val}')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 13px;background:${f.scope===val?'#C0392B':'#fff'};color:${f.scope===val?'#fff':'#9a3b21'};border-radius:6px">${lbl}</button>`;
+  const scopeBtn = (val,lbl)=>`<button ${_dis} onclick="bkV2LockSetField('scope','${val}')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 13px;background:${f.scope===val?'#C0392B':'#fff'};color:${f.scope===val?'#fff':'#9a3b21'};border-radius:6px">${lbl}</button>`;
   // §lkBulk · ติ๊กวันในสัปดาห์ · ไม่ติ๊ก = ทุกวัน
   const DOWL=['อา','จ','อ','พ','พฤ','ศ','ส'];
   const dowPick = DOWL.map((d,i)=>{
     const on = f.dow.indexOf(i)>=0;
-    return `<button onclick="bkV2LockToggleDow(${i})" style="width:40px;height:32px;border-radius:8px;border:1px solid ${on?'#5B3FA5':'var(--border)'};background:${on?'#5B3FA5':'#FBFAF7'};color:${on?'#fff':'var(--ink-soft)'};font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer">${d}</button>`;
+    return `<button ${_dis} onclick="bkV2LockToggleDow(${i})" style="width:40px;height:32px;border-radius:8px;border:1px solid ${on?'#5B3FA5':'var(--border)'};background:${on?'#5B3FA5':'#FBFAF7'};color:${on?'#fff':'var(--ink-soft)'};font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer">${d}</button>`;
   }).join('');
   // สรุปเป็นภาษาคน กันตีความผิดว่าเป็นโควตารวม
   const _thMon=laMonAbbrTH();
   const _dmy = ds => { if(!ds) return '—'; const p=String(ds).split('-'); return (+p[2])+' '+(_thMon[(+p[1])-1]||'')+' '+p[0]; };
   const dowTxt = f.dow.length ? f.dow.slice().sort((a,b)=>a-b).map(i=>DOWL[i]).join(' · ') : 'ทุกวัน';
+  /* §lkZero · นับรอบจริงจากช่วง+วันในสัปดาห์ ตั้งแต่ตอนกรอก
+     เคส Panorama ตั้งวันเริ่มเป็นวันเสาร์ ไม่ใส่วันจบ แล้วติ๊กอังคาร/พฤหัส
+     ช่วงยุบเหลือวันเดียวซึ่งไม่ตรงวันที่ติ๊กเลย · ล็อกจึงไม่ครอบรอบไหนทั้งนั้น
+     ของเดิมเงียบสนิท กว่าจะรู้ก็ตอนเปิด manifest แล้วไม่เจอ */
+  const _peek = isBulk ? bkV2LockRounds({ scope:'bulk', routeId:f.routeId, dateFrom:f.dateFrom,
+                           dateTo:f.dateTo||f.dateFrom, dow:(f.dow||[]) }) : {total:1,past:0};
+  /* §lkNoAuto · ที่นั่งไม่ปล่อยเองแล้ว · ข้อความเดิมบอกว่าปล่อยอัตโนมัติ ซึ่งไม่จริงอีกต่อไป */
   const summary = isBulk
-    ? `กันไว้ <b>${esc(f.qty||'—')} ที่ทุกรอบ</b> ที่ออกระหว่าง <b>${esc(_dmy(f.dateFrom))} – ${esc(_dmy(f.dateTo||f.dateFrom))}</b> เฉพาะวัน <b>${esc(dowTxt)}</b><br>
-       จองวันไหนไปก็ตัดยอดเฉพาะวันนั้น วันอื่นยังมี ${esc(f.qty||'—')} ที่เต็ม · ที่นั่งของแต่ละรอบจะปล่อยคืนเข้า pool อัตโนมัติ <b>${esc(String(f.releaseDaysBefore||0))} วันก่อนเดินทาง เวลา ${esc(f.releaseTime||'18:00')}</b>`
+    ? `กันไว้ <b>${esc(f.qty||'—')} ที่ทุกรอบ</b> ที่ออกระหว่าง <b>${esc(_dmy(f.dateFrom))} – ${esc(_dmy(f.dateTo||f.dateFrom))}</b> เฉพาะวัน <b>${esc(dowTxt)}</b>
+       ${f.dateFrom?`<b style="color:${_peek.total?'#0F6E56':'#A32D2D'}">· ${_peek.total} รอบ</b>`:''}<br>
+       จองวันไหนไปก็ตัดยอดเฉพาะวันนั้น วันอื่นยังมี ${esc(f.qty||'—')} ที่เต็ม · พอถึง <b>${esc(String(f.releaseDaysBefore||0))} วันก่อนเดินทาง เวลา ${esc(f.releaseTime||'18:00')}</b> ระบบจะ<b>เตือน</b>ว่าเลยกำหนดปล่อย แต่ที่นั่งยังกันไว้จนกว่าจะกดปล่อยเอง`
     : `กันที่นั่งไว้เฉพาะรอบของวันนั้นวันเดียว`;
-  return `
+  const zeroWarn = (isBulk && f.dateFrom && !_peek.total)
+    ? `<div style="margin-top:10px;background:#FDECEA;border:1px solid #F5C9C4;color:#A32D2D;border-radius:10px;padding:9px 12px;font-size:11.5px;line-height:1.55">
+         <b>ล็อกนี้ยังไม่ครอบรอบไหนเลย</b> — ช่วง ${esc(_dmy(f.dateFrom))} – ${esc(_dmy(f.dateTo||f.dateFrom))} ไม่มีวัน <b>${esc(dowTxt)}</b> ที่เส้นทางนี้ออก<br>
+         บันทึกไปก็จะไม่ขึ้นใน manifest วันไหนเลย · ${!f.dateTo?'ส่วนใหญ่เกิดจาก<b>ยังไม่ได้ใส่วันจบ</b> ช่วงจึงเหลือวันเดียว':'ลองตรวจวันในสัปดาห์ที่ติ๊กไว้'}
+       </div>` : '';
+  const editBanner = _ro
+    ? `<div style="margin-bottom:12px;background:#FFF7ED;border:1px solid #FED7AA;color:#9A3412;border-radius:10px;padding:9px 12px;font-size:11.5px;line-height:1.55">
+         ล็อกนี้มีใบจองดึงที่นั่งไปแล้ว · แก้ได้เฉพาะ<b>จำนวนที่นั่ง กติกาปล่อยคืน และโน้ต</b><br>
+         เส้นทาง วันที่ และผู้ถือ ย้ายไม่ได้ เพราะใบจองที่ดึงไปแล้วผูกอยู่กับของเดิม
+       </div>` : '';
+  return editBanner + `
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
         <span style="font-size:10px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em">แบบ</span>
         <span style="display:inline-flex;background:#F7E9E6;border:1px solid #EAC6BF;border-radius:8px;padding:3px;gap:2px">${scopeBtn('day','รายวัน · วันเดียว')}${scopeBtn('bulk','Bulk · ช่วงวันที่')}</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
-        <div style="flex:2 1 210px;min-width:190px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">เส้นทาง</label><select class="bkv2-nb-input" style="width:100%" onchange="bkV2LockSetField('routeId',this.value)"><option value="">— เลือกเส้นทาง —</option>${routeOpts}</select></div>
+        <div style="flex:2 1 210px;min-width:190px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">เส้นทาง</label><select class="bkv2-nb-input"${_dis} style="width:100%" onchange="bkV2LockSetField('routeId',this.value)"><option value="">— เลือกเส้นทาง —</option>${routeOpts}</select></div>
         ${isBulk
           ? `<div style="flex:1 1 300px;min-width:270px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">ช่วงวันที่</label>
                <div style="display:flex;align-items:center;gap:7px">
-                 <input class="bkv2-nb-input" type="date" value="${esc(f.dateFrom)}" onchange="bkV2LockSetField('dateFrom',this.value)" style="flex:1">
+                 <input class="bkv2-nb-input"${_dis} type="date" value="${esc(f.dateFrom)}" onchange="bkV2LockSetField('dateFrom',this.value)" style="flex:1">
                  <span style="color:var(--ink-faint)">&rarr;</span>
-                 <input class="bkv2-nb-input" type="date" value="${esc(f.dateTo)}" min="${esc(f.dateFrom)}" onchange="bkV2LockSetField('dateTo',this.value)" style="flex:1">
+                 <input class="bkv2-nb-input"${_dis} type="date" value="${esc(f.dateTo)}" min="${esc(f.dateFrom)}" onchange="bkV2LockSetField('dateTo',this.value)" style="flex:1">
                </div></div>`
-          : `<div style="flex:1 1 150px;min-width:140px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">วันที่</label><input class="bkv2-nb-input" type="date" value="${esc(f.date)}" onchange="bkV2LockSetField('date',this.value)" style="width:100%"></div>`}
-        <div style="flex:1 1 130px;min-width:120px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">ผู้ถือ</label><select class="bkv2-nb-input" style="width:100%" onchange="bkV2LockSetField('holderType',this.value)">
+          : `<div style="flex:1 1 150px;min-width:140px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">วันที่</label><input class="bkv2-nb-input"${_dis} type="date" value="${esc(f.date)}" onchange="bkV2LockSetField('date',this.value)" style="width:100%"></div>`}
+        <div style="flex:1 1 130px;min-width:120px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">ผู้ถือ</label><select class="bkv2-nb-input"${_dis} style="width:100%" onchange="bkV2LockSetField('holderType',this.value)">
           <option value="office" ${f.holderType==='office'?'selected':''}>Office hold</option>
           <option value="agent" ${f.holderType==='agent'?'selected':''}>Agent</option>
           <option value="global" ${f.holderType==='global'?'selected':''}>Global pool</option>
         </select></div>
-        ${f.holderType==='agent'?`<div style="flex:1 1 170px;min-width:150px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">Agent</label><input class="bkv2-nb-input" list="bkv2-lock-agents" value="${esc(f.holderName)}" placeholder="พิมพ์ชื่อเอเจ้น…" oninput="bkV2LockSetField('holderName',this.value)" style="width:100%"><datalist id="bkv2-lock-agents">${agentDatalist}</datalist></div>`:''}
+        ${f.holderType==='agent'?`<div style="flex:1 1 170px;min-width:150px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">Agent</label><input class="bkv2-nb-input"${_dis} list="bkv2-lock-agents" value="${esc(f.holderName)}" placeholder="พิมพ์ชื่อเอเจ้น…" oninput="bkV2LockSetField('holderName',this.value)" style="width:100%"><datalist id="bkv2-lock-agents">${agentDatalist}</datalist></div>`:''}
       </div>
       ${isBulk?`<div style="margin-top:13px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">วันในสัปดาห์ <em style="font-weight:500;color:#b4b2a9;font-style:normal">· ไม่ติ๊ก = ทุกวัน</em></label>
         <div style="display:flex;gap:5px;flex-wrap:wrap">${dowPick}</div></div>`:''}
@@ -3303,7 +3326,7 @@ function bkV2LockFormFields(){
           : `<div style="flex:1 1 140px;min-width:130px"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">หมดอายุ <em style="font-weight:500;color:#b4b2a9;font-style:normal">· ปล่อยคืนอัตโนมัติ</em></label><input class="bkv2-nb-input" type="date" value="${esc(f.expiry)}" onchange="bkV2LockSetField('expiry',this.value)" style="width:100%"></div>`}
         <div style="flex:1 1 100%"><label class="bkv2-nb-label" style="display:block;margin-bottom:4px">โน้ต</label><input class="bkv2-nb-input" value="${esc(f.reason)}" placeholder="เช่น allotment รายสัปดาห์ · กรุ๊ปสอบถาม" oninput="bkV2LockSetField('reason',this.value)" style="width:100%"></div>
       </div>
-      <div style="margin-top:13px;font-size:11.5px;color:var(--ink-soft);background:#F7F6F1;border-radius:9px;padding:9px 12px;line-height:1.55">${summary}</div>`;
+      <div style="margin-top:13px;font-size:11.5px;color:var(--ink-soft);background:#F7F6F1;border-radius:9px;padding:9px 12px;line-height:1.55">${summary}</div>${zeroWarn}`;
 }
 function bkV2LockToggleDow(i){
   const f=_bkV2LockForm; if(!Array.isArray(f.dow)) f.dow=[];
@@ -3318,28 +3341,152 @@ function bkV2RenderLockModal(){
     <div onclick="bkV2CloseLockModal()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px">
       <div onclick="event.stopPropagation()" class="bkv2-locks" style="background:#fff;border-radius:15px;width:720px;max-width:96vw;max-height:92vh;overflow:auto;box-shadow:0 16px 50px rgba(0,0,0,.3)">
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <div style="flex:1"><div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:#C0392B;text-transform:uppercase">Lock seats</div><div style="font-size:15.5px;font-weight:700;color:var(--ink);margin-top:2px">กันที่นั่งไว้ก่อน${_bkV2LockForm.date?` · ${_bkV2LockForm.date}`:''}</div></div>
+          <div style="flex:1"><div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:#C0392B;text-transform:uppercase">${_bkV2LockEditId?'Edit lock':'Lock seats'}</div><div style="font-size:15.5px;font-weight:700;color:var(--ink);margin-top:2px">${_bkV2LockEditId?'แก้รายละเอียดล็อก':'กันที่นั่งไว้ก่อน'}${_bkV2LockForm.date?` · ${_bkV2LockForm.date}`:''}</div></div>
           <button onclick="bkV2CloseLockModal()" style="border:none;background:transparent;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1">&times;</button>
         </div>
         <div style="padding:16px 18px">${bkV2LockFormFields()}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border)">
           <button onclick="bkV2CloseLockModal()" style="font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 14px;cursor:pointer;font-family:inherit">ยกเลิก</button>
-          <button onclick="bkV2LockCreateSubmit()" class="bkv2-newbtn2" style="font-size:12px">สร้างล็อก</button>
+          <button onclick="${_bkV2LockEditId?'bkV2LockEditSubmit()':'bkV2LockCreateSubmit()'}" class="bkv2-newbtn2" style="font-size:12px">${_bkV2LockEditId?'บันทึกการแก้ไข':'สร้างล็อก'}</button>
         </div>
       </div>
     </div>`;
 }
-function bkV2CloseLockModal(){ _bkV2LockModalOpen = false; bkV2Render(); }
+function bkV2CloseLockModal(){ _bkV2LockModalOpen = false; _bkV2LockEditId = null; bkV2Render(); }
 function bkV2LockSetField(field, val){
   _bkV2LockForm[field] = val;
   if(field==='holderType' || field==='routeId' || field==='scope') bkV2Render();
 }
+/* ══ §lkEdit (2026-09-29) · แก้รายละเอียดล็อกได้ ════════════════════════
+   ที่มา · ผู้ใช้ขอเอง หลังเจอเคส Panorama
+   ล็อก bulk ตั้งวันเริ่ม 31 ต.ค. 2026 ไว้ แต่ไม่ได้ใส่วันจบ (เขียน "TBA" ไว้ในโน้ต)
+   bkV2LockRange เติมให้เป็น to = dateTo || dateFrom · ช่วงจึงยุบเหลือวันเดียว
+   และวันนั้นเป็นวันเสาร์ ส่วนล็อกติ๊กไว้เฉพาะอังคาร/พฤหัส · ไม่ตรงสักวัน
+   ผลคือ "ผ่านมา 0/0 รอบ" และไม่ขึ้น manifest วันไหนเลย
+   ของเดิมไม่มีทางแก้ · ต้องลบแล้วสร้างใหม่ ซึ่งทิ้งประวัติทั้งใบ
+
+   แก้ได้เฉพาะเท่าที่ไม่ทำให้ใบจองที่ดึงไปแล้วเคว้ง
+   ขายไปแล้ว = ห้ามย้ายเส้นทาง ย้ายวัน เปลี่ยนแบบ และลดที่นั่งต่ำกว่าที่ขายไป */
+function bkV2LockEditOpen(id){
+  const l = SB_SEAT_LOCKS.find(x=>x.id===id); if(!l) return;
+  const nm = (typeof bkV2LockHolderName==='function') ? bkV2LockHolderName(l) : '';
+  _bkV2LockForm = { ..._bkV2LockForm,
+    scope: bkV2LockSpansDays(l) ? 'bulk' : 'day',
+    routeId: l.routeId||'', date: l.date||'',
+    dateFrom: l.dateFrom||'', dateTo: l.dateTo||'',
+    dow: Array.isArray(l.dow)?l.dow.slice():[],
+    holderType: l.holderType||'office',
+    holderId: l.holderId||'', holderName: (l.holderType==='agent')?nm:'',
+    qty: String(l.qty||''), reason: l.reason||'', expiry: l.expiry||'',
+    releaseDaysBefore: (l.releaseDaysBefore==null?'':String(l.releaseDaysBefore)),
+    releaseTime: l.releaseTime||'' };
+  _bkV2LockEditId = id;
+  _bkV2LockModalOpen = true;
+  bkV2Render();
+}
+/* ล็อกที่ขายไปแล้ว · ที่นั่งที่ดึงไปผูกกับเส้นทาง+วันของล็อกใบนี้อยู่
+   ย้ายทีหลัง = ใบจองชี้ไปล็อกที่ไม่ครอบวันของตัวเองแล้ว · ห้ามไว้ดีกว่า */
+function bkV2LockEditLocked(l){
+  if(!l) return false;
+  const usedAny = (Number(l.used)||0) > 0 ||
+    Object.keys(l.usedBy||{}).some(k=>(Number(l.usedBy[k])||0)>0);
+  const kidUsed = (typeof bkV2LockChildren==='function')
+    ? bkV2LockChildren(l.id).some(c=>(Number(c.used)||0)>0 ||
+        Object.keys(c.usedBy||{}).some(k=>(Number(c.usedBy[k])||0)>0)) : false;
+  return usedAny || kidUsed;
+}
+function bkV2LockEditSubmit(){
+  const id = _bkV2LockEditId;
+  const l = SB_SEAT_LOCKS.find(x=>x.id===id);
+  if(!l){ _bkV2LockEditId=null; _bkV2LockModalOpen=false; bkV2Render(); return; }
+  const f = _bkV2LockForm;
+  const isB = f.scope==='bulk';
+  if(!f.routeId){ alert('Pick a route first'); return; }
+  if(isB){
+    if(!f.dateFrom){ alert('Pick the first day of the range'); return; }
+    /* วันจบว่าง = ช่วงยุบเหลือวันเดียว ซึ่งคือกับดักที่ทำให้เคสนี้เงียบหายไป */
+    if(!f.dateTo){ alert('Pick the last day of the range'); return; }
+    if(f.dateTo < f.dateFrom){ alert('The last day cannot be before the first day'); return; }
+  } else if(!f.date){ alert('Pick a date'); return; }
+  const qty = Number(f.qty);
+  if(!(qty>0)){ alert('Enter the number of seats'); return; }
+  const peak = (typeof bkV2LockPeakUsed==='function') ? bkV2LockPeakUsed(l) : 0;
+  const alloc = (typeof bkV2LockAllocated==='function') ? bkV2LockAllocated(l) : 0;
+  const floor = Math.max(peak, alloc);
+  if(qty < floor){
+    alert('Seats cannot go below ' + floor
+      + (peak>=alloc ? ' (already drawn on one round)' : ' (already split into sub-groups)'));
+    return;
+  }
+  let holderId = l.holderId;
+  if(f.holderType==='agent'){
+    const nm=(f.holderName||'').trim();
+    if(!nm){ alert('Type the agent that holds the lock'); return; }
+    const m=(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).find(a=>a.name.toLowerCase()===nm.toLowerCase());
+    holderId = m ? m.id : nm;
+  } else holderId = null;
+
+  const moveLocked = bkV2LockEditLocked(l);
+  const before = { scope:(bkV2LockSpansDays(l)?'bulk':'day'), routeId:l.routeId, date:l.date||'',
+                   dateFrom:l.dateFrom||'', dateTo:l.dateTo||'', dow:(l.dow||[]).join(','),
+                   qty:l.qty||0, holderType:l.holderType, holderId:l.holderId||'',
+                   rdb:l.releaseDaysBefore, rt:l.releaseTime||'', expiry:l.expiry||'', reason:l.reason||'' };
+  /* ที่ขายไปแล้วห้ามย้าย · ช่องพวกนี้ถูกปิดในฟอร์มอยู่แล้ว แต่กันไว้อีกชั้นตรงนี้ */
+  if(!moveLocked){
+    l.scope = f.scope;
+    l.routeId = f.routeId;
+    l.date = isB ? '' : f.date;
+    l.dateFrom = isB ? f.dateFrom : '';
+    l.dateTo = isB ? f.dateTo : '';
+    l.dow = isB ? (f.dow||[]).slice() : [];
+    l.holderType = f.holderType;
+    l.holderId = holderId;
+  }
+  l.qty = qty;
+  l.reason = f.reason||'';
+  l.expiry = isB ? '' : (f.expiry||'');
+  l.releaseDaysBefore = isB ? ((f.releaseDaysBefore==='' || f.releaseDaysBefore==null) ? null : Math.max(0,parseInt(f.releaseDaysBefore,10)||0)) : null;
+  l.releaseTime = isB ? (f.releaseTime||'') : '';
+  /* กรุ๊ปย่อยกินที่นั่งจากล็อกแม่ · ช่วงวันกับเส้นทางต้องเดินตามแม่เสมอ
+     ไม่งั้นลูกจะค้างอยู่กับช่วงเดิมแล้วคิดที่นั่งคนละรอบกับแม่ */
+  if(!moveLocked && typeof bkV2LockChildren==='function'){
+    bkV2LockChildren(l.id).forEach(c=>{
+      c.scope=l.scope; c.routeId=l.routeId; c.date=l.date;
+      c.dateFrom=l.dateFrom; c.dateTo=l.dateTo; c.dow=(l.dow||[]).slice();
+      c.holderType=l.holderType; c.holderId=l.holderId;
+      c.releaseDaysBefore=l.releaseDaysBefore; c.releaseTime=l.releaseTime;
+    });
+  }
+  const after = { scope:l.scope, routeId:l.routeId, date:l.date||'', dateFrom:l.dateFrom||'',
+                  dateTo:l.dateTo||'', dow:(l.dow||[]).join(','), qty:l.qty, holderType:l.holderType,
+                  holderId:l.holderId||'', rdb:l.releaseDaysBefore, rt:l.releaseTime||'',
+                  expiry:l.expiry||'', reason:l.reason||'' };
+  const chg=[];
+  Object.keys(after).forEach(k=>{ if(String(before[k])!==String(after[k])) chg.push(k+': '+(before[k]===''||before[k]==null?'—':before[k])+' → '+(after[k]===''||after[k]==null?'—':after[k])); });
+  if(chg.length){
+    const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+    (l.log=l.log||[]).push({ date:today, at:new Date().toISOString(), type:'edit',
+                             by:((typeof laBy==='function')?laBy():''), note:chg.join(' · ') });
+    sbSeatLocksPersist();
+  }
+  _bkV2LockEditId=null; _bkV2LockModalOpen=false;
+  _bkV2LockForm.qty=''; _bkV2LockForm.reason=''; _bkV2LockForm.expiry='';
+  bkV2Render();
+}
+
 function bkV2LockCreateSubmit(){
   const f = _bkV2LockForm;
   if(!f.routeId){ alert('เลือกเส้นทางก่อน'); return; }
   if(f.scope==='bulk'){
-    if(!f.dateFrom){ alert('เลือกวันเริ่มของช่วง'); return; }
-    if(f.dateTo && f.dateTo < f.dateFrom){ alert('วันจบต้องไม่ก่อนวันเริ่ม'); return; }
+    if(!f.dateFrom){ alert('Pick the first day of the range'); return; }
+    /* §lkZero · ต้นทางของเคส Panorama · ของเดิมปล่อยให้เว้นวันจบได้
+       แล้ว bkV2LockRange เติมเป็น to = dateFrom · ช่วงยุบเหลือวันเดียวเงียบ ๆ */
+    if(!f.dateTo){ alert('Pick the last day of the range'); return; }
+    if(f.dateTo < f.dateFrom){ alert('The last day cannot be before the first day'); return; }
+    /* ล็อกที่ไม่ครอบรอบไหนเลย สร้างไปก็ไม่ขึ้น manifest วันไหน · กันตั้งแต่ตรงนี้ */
+    const _rd = bkV2LockRounds({ scope:'bulk', routeId:f.routeId, dateFrom:f.dateFrom,
+                                 dateTo:f.dateTo, dow:(f.dow||[]) });
+    if(!_rd.total){ alert('This lock covers no departure at all - check the date range and the weekdays you ticked'); return; }
   }
   else if(!f.date){ alert('เลือกวันที่'); return; }
   if(!(Number(f.qty) > 0)){ alert('ใส่จำนวนที่นั่งที่จะกันไว้'); return; }
@@ -3706,7 +3853,12 @@ function bkV2RenderLocks(){
   const whenCell = l => {
     if(!bkV2LockSpansDays(l)) return `<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#2A5EA8;background:#EAF1FB;padding:2px 7px;border-radius:5px">รายวัน</span> <span style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(l.date||'')}</span>`;
     const rg = bkV2LockRange(l);
-    return `<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#5B3FA5;background:#F3EEFB;padding:2px 7px;border-radius:5px">Bulk</span> <span style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(rg.from)} <span style="color:var(--ink-faint)">&rarr;</span> ${esc(rg.to)}</span>${dowChips(l)}`;
+    /* §lkZero · ล็อกที่ช่วงวันกับวันในสัปดาห์ไม่ตรงกันเลย · ไม่ขึ้น manifest วันไหนทั้งนั้น
+       เคส Panorama · ตั้งวันเริ่มวันเสาร์ ไม่ใส่วันจบ (ช่วงยุบเหลือวันเดียว) แล้วติ๊กอังคาร/พฤหัส
+       ของเดิมเงียบสนิท เห็นแค่ "ผ่านมา 0/0 รอบ" ซึ่งอ่านเหมือนยังไม่ถึงรอบแรก */
+    const _rd = bkV2LockRounds(l);
+    const _zero = !_rd.total ? `<div style="margin-top:3px"><span style="font-size:9.5px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:5px;padding:1px 7px" title="ช่วงวันที่กับวันในสัปดาห์ที่ติ๊กไว้ไม่ตรงกันเลย · ล็อกนี้จึงไม่ขึ้นใน manifest วันไหนเลย${(!l.dateTo)?' — ยังไม่ได้ใส่วันจบ ช่วงจึงเหลือวันเดียว':''} · กดแก้ไขเพื่อตั้งใหม่">&#9888; ไม่ครอบรอบไหนเลย${(!l.dateTo)?' · ยังไม่ได้ใส่วันจบ':''}</span></div>` : '';
+    return `<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#5B3FA5;background:#F3EEFB;padding:2px 7px;border-radius:5px">Bulk</span> <span style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(rg.from)} <span style="color:var(--ink-faint)">&rarr;</span> ${esc(rg.to)}</span>${dowChips(l)}${_zero}`;
   };
   const bar6 = (pct,col) => `<div style="height:5px;border-radius:3px;background:#EFEDE6;margin-top:4px;overflow:hidden"><div style="width:${Math.max(0,Math.min(100,pct))}%;height:100%;background:${col||'#0F7A5A'}"></div></div>`;
 
@@ -3734,6 +3886,8 @@ function bkV2RenderLocks(){
       + (l.status==='active'? btn(`bkV2LockAddOpen('${l.id}')`,'+ ที่นั่ง','#0F6E56','#E1F5EE','#B7E2D2') : '')
       + (l.status==='active' && bkV2LockUnalloc(l)>0 ? btn(`bkV2SubOpen('${l.id}')`,'+ ย่อย','#534AB7','#EEEDFE','#CECBF6') : '')
       + (l.status==='active'? btn(`bkV2LockReleaseConfirm('${l.id}')`,'คืน','#A32D2D','#FDECEA','#F5C9C4') : '')
+      /* §lkEdit · ปุ่มแก้ไข · เคสจริงคือตั้งช่วงวันผิดแล้วไม่มีทางแก้นอกจากลบทิ้งสร้างใหม่ */
+      + (l.status==='active'? btn(`bkV2LockEditOpen('${l.id}')`,'แก้ไข','#2A5EA8','#EAF1FB','#C3D8F2') : '')
       + btn(`bkV2LockManageOpen('${l.id}')`,'ประวัติ','var(--ink-soft)','#fff','var(--border)')
       + `</div>`;
     const open = !!U.open[l.id];
@@ -3750,7 +3904,7 @@ function bkV2RenderLocks(){
       <td style="${td};width:170px">${usedCell}</td>
       <td style="${td};width:76px">${leftCell}</td>
       <td style="${td};font-size:11px;color:var(--ink-soft);white-space:nowrap">${esc(relTxt)}</td>
-      <td style="${td};width:212px">${acts}</td>
+      <td style="${td};width:258px">${acts}</td>
     </tr>`;
     if(open) kids.forEach(c=>{
       const cPct = c.qty ? Math.round((c.used||0)/c.qty*100) : 0;
@@ -3819,7 +3973,7 @@ function bkV2RenderLocks(){
             <th style="${th};text-align:center">ที่นั่ง</th>
             <th style="${th}">ใช้ไปแล้ว</th>
             <th style="${th};text-align:center">คงเหลือ</th>
-            <th style="${th}">ปล่อยคืน</th><th style="${th};width:212px"></th>
+            <th style="${th}">ปล่อยคืน</th><th style="${th};width:258px"></th>
           </tr></thead>
           ${body}
         </table>
