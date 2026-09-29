@@ -39834,6 +39834,145 @@ function agTabContracts(a){
 
 let _agHistPage=0;
 function agHistGo(aId,p){ _agHistPage=p; const a=sbGetAgent(aId); if(!a) return; const body=document.getElementById('ag-tabbody'); if(body) body.innerHTML=agTabHist(a); }
+/* ══ §agSum · ตัวสรุปของแท็บ Recent Bookings · แยกเดือน × แยกทริป ═══════
+   ที่มา (2026-09-29) · ผู้ใช้ขอเอง "หน้า Recent booking อยากได้ตัวสรุปแยกเดือน แยกทริป"
+
+   สามเรื่องที่ตารางข้างล่างทำไม่ได้ และตัวสรุปต้องทำให้ถูก
+     1 หนึ่งใบจองมีได้หลายทริป · ตารางโชว์แค่ทริปแรกแล้วต่อท้าย +N
+       ตัวสรุปต้องกางทริปออกมานับทีละทริป ไม่งั้นทริปที่สองหายทั้งเดือนทั้งโปรแกรม
+     2 bk.total เป็นเงินของทั้งใบ ไม่ใช่ของทริป · และวัดจากข้อมูลจริงแล้ว
+       มี 5 ใบจาก 127 ที่ total ไม่เท่าผลบวก subtotal (ส่วนลด/ปรับยอดอยู่ระดับใบ)
+       ใช้กติกาเดียวกับปฏิทิน · ใบทริปเดียวใช้ total (รวมส่วนลดแล้ว) หลายทริปใช้ subtotal
+     3 เลข "126 bookings" ที่ตารางข้างล่างโชว์ รวมใบที่ยกเลิกแล้วด้วย
+       ตัวสรุปจึงแยกคอลัมน์ยกเลิกออกมา ยอดที่ขายได้จะได้ไม่ปนกับยอดที่เสียไป */
+var _agSumMode = 'travel';   /* 'travel' = เดือนที่เดินทาง · 'booked' = เดือนที่จอง */
+var AG_SUM_DEAD = ['cancelled','rejected','cancelled_weather'];
+var AG_SUM_MAXCOL = 6;       /* โปรแกรมที่โชว์เป็นคอลัมน์ · ที่เหลือยุบเป็น "อื่น ๆ" */
+
+function agSumBkDate(bk){
+  /* วันที่จอง · ของจริงบนเซิร์ฟเวอร์มีสามชื่อปนกันตามยุคของใบ
+     ชุด export บางชุดตัดฟิลด์พวกนี้ทิ้ง · ตรงนั้นโหมด "เดือนที่จอง" จะไม่มีข้อมูลให้ดู */
+  var v = bk && (bk.bookingDate || bk.createdAt || bk.bookedAt || bk.dateCreated);
+  return v ? String(v).slice(0,10) : '';
+}
+/* กางใบจองของเอเย่นต์รายนี้ออกเป็นรายทริป · เป็นตัวตั้งของทุกตัวเลขในตัวสรุป */
+function agSumRows(all){
+  var out=[];
+  (all||[]).forEach(function(bk){
+    var dead = AG_SUM_DEAD.indexOf(bk.status)>=0;
+    var bd = agSumBkDate(bk);
+    if(bk.schemaVer===2 || Array.isArray(bk.trips)){
+      var tr = bk.trips || [];
+      var one = tr.length<=1;
+      tr.forEach(function(t){
+        out.push({ rid: t.routeId||'', dead: dead,
+                   travel: t.date ? String(t.date).slice(0,7) : '',
+                   booked: bd ? bd.slice(0,7) : '',
+                   pax: (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t.pax) : 0,
+                   /* ใบทริปเดียว · total รวมส่วนลดของใบไว้แล้ว · หลายทริปต้องใช้ subtotal รายทริป */
+                   baht: one ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||0) });
+      });
+    } else {
+      var p=bk.pax||{};
+      out.push({ rid: bk.programId||'', dead: dead,
+                 travel: bk.travelDate ? String(bk.travelDate).slice(0,7) : '',
+                 booked: bd ? bd.slice(0,7) : '',
+                 pax: (p.adult||0)+(p.child||0)+(p.infant||0), baht: bk.total||0 });
+    }
+  });
+  return out;
+}
+function agSumSetMode(aId, m){
+  _agSumMode = (m==='booked') ? 'booked' : 'travel';
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(aId):null; if(!a) return;
+  var body=document.getElementById('ag-tabbody'); if(body) body.innerHTML=agTabHist(a);
+}
+function agSumCell(pax, baht, cls){
+  if(!pax && !baht) return '<td class="'+(cls||'')+'"><span class="z">—</span></td>';
+  return '<td class="'+(cls||'')+'"><b>'+pax+'</b><i>&#3647;'+sbFmtTHB(baht)+'</i></td>';
+}
+function agSumBlock(a, all){
+  var rows=agSumRows(all);
+  if(!rows.length) return '';
+  var rName = function(id){ return (ROUTES.find(function(x){return x.id===id;})||{}).name || (id||'—'); };
+  var hasBooked = rows.some(function(r){ return !!r.booked; });
+  var key = (_agSumMode==='booked' && hasBooked) ? 'booked' : 'travel';
+
+  /* โปรแกรมเรียงตามหัวคนที่ขายได้ · ตัวใหญ่อยู่ซ้าย · ที่เหลือยุบเป็นคอลัมน์เดียว
+     เอเย่นต์ที่ขายสิบกว่าโปรแกรมจะได้ไม่ทำให้ตารางกว้างจนอ่านไม่ได้ */
+  var byRt={};
+  rows.forEach(function(r){ if(r.dead) return; byRt[r.rid]=(byRt[r.rid]||0)+r.pax; });
+  var cols=Object.keys(byRt).sort(function(x,y){ return byRt[y]-byRt[x]; });
+  var shown=cols.slice(0,AG_SUM_MAXCOL), rest=cols.slice(AG_SUM_MAXCOL);
+  var restSet={}; rest.forEach(function(x){ restSet[x]=1; });
+
+  var months=[];
+  rows.forEach(function(r){ var m=r[key]; if(m && months.indexOf(m)<0) months.push(m); });
+  months.sort();
+  if(!months.length) return '';
+
+  var Z=function(){ return {pax:0, baht:0}; };
+  var G={}, T={}, TOT=Z(), DEAD=Z();
+  months.forEach(function(m){ G[m]={dead:Z(), tot:Z(), c:{}}; });
+  shown.concat(['__etc']).forEach(function(c){ T[c]=Z(); });
+  rows.forEach(function(r){
+    var m=r[key]; if(!m || !G[m]) return;
+    var g=G[m];
+    if(r.dead){ g.dead.pax+=r.pax; g.dead.baht+=r.baht; DEAD.pax+=r.pax; DEAD.baht+=r.baht; return; }
+    var c=restSet[r.rid]?'__etc':r.rid;
+    if(!g.c[c]) g.c[c]=Z();
+    g.c[c].pax+=r.pax; g.c[c].baht+=r.baht;
+    g.tot.pax+=r.pax;  g.tot.baht+=r.baht;
+    if(!T[c]) T[c]=Z();
+    T[c].pax+=r.pax; T[c].baht+=r.baht;
+    TOT.pax+=r.pax; TOT.baht+=r.baht;
+  });
+
+  var head='<tr><th class="m">เดือน</th>'
+    + shown.map(function(c){ return '<th class="n" title="'+sbEsc(rName(c))+'">'+sbEsc(rName(c))+'</th>'; }).join('')
+    + (rest.length?('<th class="n" title="'+sbEsc(rest.map(rName).join(' · '))+'">อื่น ๆ '+rest.length+'</th>'):'')
+    + '<th class="n sum">รวม</th><th class="n dead" title="ใบที่ยกเลิก/ถูกปฏิเสธ · ไม่ถูกนับในยอดที่ขายได้">ยกเลิก</th></tr>';
+
+  var body=months.map(function(m){
+    var g=G[m];
+    return '<tr><td class="m">'+sbEsc(m)+'</td>'
+      + shown.map(function(c){ var v=g.c[c]||Z(); return agSumCell(v.pax, v.baht, 'n'); }).join('')
+      + (rest.length?(function(){ var v=g.c['__etc']||Z(); return agSumCell(v.pax, v.baht, 'n'); })():'')
+      + agSumCell(g.tot.pax, g.tot.baht, 'n sum')
+      + agSumCell(g.dead.pax, g.dead.baht, 'n dead')
+      + '</tr>';
+  }).join('');
+
+  var foot='<tr><td class="m">รวม '+months.length+' เดือน</td>'
+    + shown.map(function(c){ var v=T[c]||Z(); return agSumCell(v.pax, v.baht, 'n'); }).join('')
+    + (rest.length?agSumCell(T['__etc'].pax, T['__etc'].baht, 'n'):'')
+    + agSumCell(TOT.pax, TOT.baht, 'n sum')
+    + agSumCell(DEAD.pax, DEAD.baht, 'n dead')
+    + '</tr>';
+
+  /* ปุ่มสลับ · โหมดที่ไม่มีข้อมูลต้องปิดตัวเองและบอกเหตุผล
+     ไม่ใช่ปล่อยให้กดแล้วได้ตารางว่างโดยไม่มีใครรู้ว่าทำไม */
+  var btn=function(mk,lb,dis,tip){
+    var on=(key===mk);
+    return '<button class="agsum-md'+(on?' on':'')+'"'+(dis?' disabled title="'+sbEsc(tip)+'"':'')
+      +(dis?'':(' onclick="agSumSetMode(\''+a.id+'\',\''+mk+'\')"'))+'>'+lb+'</button>';
+  };
+  return '<div class="agsum">'
+    +'<div class="agsum-hd"><b>สรุป · แยกเดือน × ทริป</b>'
+      +'<span class="agsum-sub">นับรายทริป · ใบที่มีหลายทริปถูกกางออกมาแล้ว</span>'
+      +'<span class="sp"></span>'
+      + btn('travel','วันเดินทาง',false,'')
+      + btn('booked','วันที่จอง',!hasBooked,'ใบจองชุดนี้ไม่มีวันที่จองติดมา · ดูได้เฉพาะวันเดินทาง')
+    +'</div>'
+    +'<div class="agsum-sc"><table class="agsum-t"><thead>'+head+'</thead>'
+      +'<tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table></div>'
+    +'<div class="agsum-ft">ตัวเลขบนคือหัวคน ตัวเลขล่างคือยอดเงิน · '
+      +'ใบทริปเดียวใช้ยอดรวมของใบ (รวมส่วนลดแล้ว) ใบหลายทริปใช้ยอดรายทริป · '
+      +'คอลัมน์ยกเลิกแยกไว้ ไม่ถูกนับในช่องอื่นและในแถวรวม</div>'
+  +'</div>';
+}
+function sbEsc(x){ return (typeof ckEsc==='function')?ckEsc(x):String(x==null?'':x); }
+
 function agTabHist(a){
   // Match by agentId (bookings link to agent via .agentId) · handle v2 (trips[]) + legacy v1 schema
   // Paginated: 15 per page, newest first · page tabs below
@@ -39843,7 +39982,7 @@ function agTabHist(a){
   const page=Math.min(Math.max(0,_agHistPage||0),pages-1);
   const list=all.slice(page*PER, page*PER+PER);
   const rName = id => (ROUTES.find(x=>x.id===id)||{}).name || '—';
-  let html = `<div style="overflow-x:auto"><table class="bk-recent-tbl">
+  let html = agSumBlock(a, all) + `<div style="overflow-x:auto"><table class="bk-recent-tbl">
     <thead><tr><th>BK-ID</th><th>วันเดินทาง</th><th>Customer</th><th>Program</th><th class="num">PAX</th><th class="num">Total</th><th>สถานะ</th></tr></thead>
     <tbody>`;
   list.forEach(bk=>{

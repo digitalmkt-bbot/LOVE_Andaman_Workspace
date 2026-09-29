@@ -1790,6 +1790,45 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-agents .sb-price-tbl .prog-pier{font-size:9px;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;font-family:Manrope,-apple-system,system-ui,sans-serif;margin-top:1px;font-weight:500}
 
 /* Recent bookings table */
+/* §agSum · ตัวสรุปแยกเดือน × ทริป เหนือตาราง Recent Bookings */
+#view-agents .agsum{border:1px solid var(--fd-line);border-radius:12px;margin:0 0 14px;background:#fff;overflow:hidden}
+#view-agents .agsum-hd{display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--fd-line-soft);flex-wrap:wrap}
+#view-agents .agsum-hd b{font-size:12.5px;color:var(--fd-ink)}
+#view-agents .agsum-sub{font-size:10.5px;color:var(--fd-ink-soft)}
+#view-agents .agsum-hd .sp{flex:1}
+#view-agents .agsum-md{border:1px solid var(--fd-line);background:#fff;color:var(--fd-ink);border-radius:99px;padding:4px 12px;font:600 11px inherit;font-family:inherit;cursor:pointer}
+#view-agents .agsum-md.on{background:var(--fd-ink);border-color:var(--fd-ink);color:#fff}
+#view-agents .agsum-md:disabled{opacity:.45;cursor:not-allowed}
+#view-agents .agsum-sc{overflow-x:auto}
+#view-agents .agsum-t{border-collapse:collapse;width:100%;font-size:11px}
+#view-agents .agsum-t th{font-size:9.5px;letter-spacing:.04em;font-weight:700;color:var(--fd-ink-soft);
+  background:var(--fd-bg);border-bottom:1px solid var(--fd-line);padding:7px 10px;text-align:right;white-space:nowrap}
+/* §agSum · เอเย่นต์ที่ขายหลายโปรแกรม ตารางจะกว้างจนต้องเลื่อนแนวนอน
+   ช่องเดือนต้องตรึงซ้ายไว้ ไม่งั้นเลื่อนไปแล้วไม่รู้ว่าตัวเลขที่มองอยู่เป็นของเดือนไหน */
+#view-agents .agsum-t th.m,#view-agents .agsum-t td.m{text-align:left;white-space:nowrap;
+  font-family:'DM Mono',monospace;font-size:11.5px;color:var(--fd-ink);font-weight:600;
+  position:sticky;left:0;z-index:2;background:#fff}
+#view-agents .agsum-t thead th.m{background:var(--fd-bg);z-index:3}
+#view-agents .agsum-t tbody tr:hover td.m{background:var(--fd-bg)}
+#view-agents .agsum-t tfoot td.m{background:#0F172A}
+#view-agents .agsum-t td{padding:7px 10px;border-bottom:1px solid var(--fd-line-soft);text-align:right;white-space:nowrap}
+#view-agents .agsum-t td b{display:block;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;
+  color:var(--fd-ink);line-height:1.15;letter-spacing:-.02em}
+#view-agents .agsum-t td i{display:block;font-style:normal;font-family:'DM Mono',monospace;font-size:10px;
+  color:var(--fd-ink-soft);margin-top:1px}
+#view-agents .agsum-t td .z{color:#CBD5E1}
+#view-agents .agsum-t th.sum,#view-agents .agsum-t td.sum{background:var(--fd-bg);border-left:2px solid var(--fd-line)}
+#view-agents .agsum-t th.dead,#view-agents .agsum-t td.dead{border-left:2px solid var(--fd-line)}
+#view-agents .agsum-t td.dead b{color:#A32D2D}
+#view-agents .agsum-t td.dead i{color:#C98A8A}
+#view-agents .agsum-t tbody tr:hover td{background:var(--fd-bg)}
+#view-agents .agsum-t tfoot td{background:#0F172A;color:#fff;border-bottom:0;padding:8px 10px}
+#view-agents .agsum-t tfoot td b{color:#fff}
+#view-agents .agsum-t tfoot td i{color:#94A3B8}
+#view-agents .agsum-t tfoot td.m{color:#fff}
+#view-agents .agsum-t tfoot td.sum{background:#1E293B}
+#view-agents .agsum-t tfoot td.dead b{color:#FCA5A5}
+#view-agents .agsum-ft{font-size:10.5px;color:var(--fd-ink-soft);padding:8px 13px;line-height:1.6}
 #view-agents .bk-recent-tbl{font-size:11px;border-collapse:collapse;width:100%}
 #view-agents .bk-recent-tbl th{font-size:9px;letter-spacing:.05em;font-weight:600;color:var(--fd-ink-soft);background:var(--fd-bg);border-bottom:1px solid var(--fd-line-soft);padding:8px 11px;text-transform:uppercase}
 #view-agents .bk-recent-tbl td{padding:9px 11px;border-bottom:1px solid var(--fd-line-soft);color:var(--fd-ink)}
