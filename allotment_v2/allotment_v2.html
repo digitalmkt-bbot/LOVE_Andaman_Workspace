@@ -1521,7 +1521,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=1e7c9a1c"></script>
+<script src="js/04-data-core.js?v=596765be"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -2974,10 +2974,12 @@
       <div class="modal-icon" style="background:var(--amber)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/><path d="M12 7V3"/></svg>
       </div>
-      <div><div class="modal-title">เพิ่มเรือเช่า</div><div class="modal-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
+      <div><div class="modal-title" id="ch-title">เพิ่มเรือเช่า</div><div class="modal-sub" id="ch-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
       <button class="modal-close" onclick="closeModal('charter-modal')">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="ch-edit-id" value="">
+      <div id="ch-hint" style="display:none;font-size:11px;line-height:1.6;color:#854F0B;background:#FAEEDA;border:1px solid #F0DCB4;border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
       <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="ch-name" placeholder="เช่น Charter Boat 1"></div>
       <div class="form-2">
         <div class="form-row"><label class="form-label">ประเภท</label>
@@ -2995,11 +2997,13 @@
         </div>
         <input type="hidden" id="ch-pier" value="tublamu">
       </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">วันที่เริ่ม <span style="color:var(--red)">*</span></label><input type="date" id="ch-from"></div>
-        <div class="form-row"><label class="form-label">วันที่สิ้นสุด <span style="color:var(--red)">*</span></label><input type="date" id="ch-to"></div>
+      <div id="ch-period">
+        <div class="form-2">
+          <div class="form-row"><label class="form-label">วันที่เริ่ม <span style="color:var(--red)">*</span></label><input type="date" id="ch-from"></div>
+          <div class="form-row"><label class="form-label">วันที่สิ้นสุด <span style="color:var(--red)">*</span></label><input type="date" id="ch-to"></div>
+        </div>
+        <div class="form-row"><label class="form-label">หมายเหตุ</label><input type="text" id="ch-note" placeholder="เช่น เช่าจาก XXX สำหรับช่วง Songkran"></div>
       </div>
-      <div class="form-row"><label class="form-label">หมายเหตุ</label><input type="text" id="ch-note" placeholder="เช่น เช่าจาก XXX สำหรับช่วง Songkran"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('charter-modal')">ยกเลิก</button>
@@ -3008,7 +3012,7 @@
   </div>
 </div>
 
-<script src="js/07-charter.js?v=0fe07097"></script>
+<script src="js/07-charter.js?v=4f2af328"></script>
 <!-- Doc Inline Edit Popup -->
 <div class="doc-edit-popup" id="doc-edit-popup">
   <div class="dep-title" id="dep-title">แก้ไขเอกสาร</div>

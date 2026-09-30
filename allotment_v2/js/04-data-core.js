@@ -5112,6 +5112,11 @@ function renderBoats(){
     const isDimmed = !isSel && !isCharterInactive && (cur.s === 'unavailable' || cur.s === 'fixing');
     const avatarFilter = isDimmed ? 'filter:grayscale(1);' : '';
     const contentOpacity = isDimmed ? 'opacity:.65;' : '';
+    /* §chEdit · ปุ่มแก้ไขบนแถวเรือเช่า · แก้ชื่อ ประเภท ที่นั่ง ท่า และช่วงวันเช่า
+       stopPropagation เพราะทั้งแถวเป็นปุ่มเลือกเรืออยู่แล้ว */
+    const editBtn=isCharter
+      ? `<button onclick="event.stopPropagation();openBoatEdit('${b.id}')" title="แก้ไขเรือเช่า" style="background:none;border:none;color:${isSel?SVG_PINK.text:dim.ink4};font-size:12px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">&#9998;</button>`
+      : '';
     return`<div data-bid="${b.id}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;cursor:pointer;${isSel?'background:'+SVG_PINK.soft+';border:1px solid #F0C0D0;':'border:1px solid transparent;border-top:0.5px solid '+dim.line+';margin-top:2px;'}${isCharterInactive?'opacity:.65;':''}">
       <div style="width:32px;height:32px;border-radius:50%;background:${c};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;${avatarFilter}">${init}</div>
       <div style="flex:1;min-width:0;${contentOpacity}">
@@ -5121,7 +5126,7 @@ function renderBoats(){
           ${locPill?'<span style="color:'+dim.ink5+';font-size:9px">·</span>'+locPill:''}
         </div>
       </div>
-      <span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
+      ${editBtn}<span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
     </div>`;
   };
 
@@ -5156,7 +5161,8 @@ function renderBoats(){
     listHtml=`<div style="font-size:12px;color:${dim.ink3};text-align:center;padding:30px 0">ไม่พบเรือตามตัวกรอง</div>`;
   }
 
-  const listPanel=`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
+  /* §bsKeepScroll · id คงที่ เพื่อจำตำแหน่งเลื่อนข้ามการวาดใหม่ (ดูท้ายฟังก์ชัน) */
+  const listPanel=`<div id="bs-list-panel" style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
     ${listHtml}
     ${charterHtml}
   </div>`;
@@ -5170,6 +5176,18 @@ function renderBoats(){
     bdp.parentNode.removeChild(bdp);
   }
 
+  /* ══ §bsKeepScroll · คลิกเรือแล้วรายการเด้งกลับไปบนสุด ═══════════════════════════
+     ผู้ใช้แจ้ง "พอกดแล้วเด้งบน" · เกิดกับเรือเช่าเป็นหลักเพราะอยู่ท้ายรายการ
+     selectBoat เรียก renderBoats ซึ่งเขียนทับ innerHTML ของทั้ง #bs-pink-wrap
+     แผงรายการจึงเป็น element ใหม่เอี่ยม scrollTop = 0 เสมอ
+     วัดจริง · เลื่อนลงไป 601px แล้วคลิกแถวล่างสุด แถวนั้นตกจาก y=1077 ไป y=1676
+     คือหลุดออกนอกจอ ทั้งที่เพิ่งกดมันไปหมาด ๆ
+     จำตำแหน่งไว้ก่อนวาด แล้วคืนให้ทันทีหลังวาด · คืนหลัง innerHTML ในจังหวะเดียวกัน
+     (ไม่ใช้ setTimeout · จะเห็นภาพกระพริบขึ้นบนสุดก่อนหนึ่งเฟรม) */
+  const _keepEl=document.getElementById('bs-list-panel');
+  const _keepTop=_keepEl?_keepEl.scrollTop:0;
+  const _keepWin=window.scrollY;
+
   // Wrap
   document.getElementById('bs-pink-wrap').innerHTML=`
     ${headerBar}
@@ -5180,6 +5198,11 @@ function renderBoats(){
       ${detailPanel}
     </div>`;
 
+  /* §bsKeepScroll · คืนตำแหน่งเลื่อนของรายการ · ทำก่อนวาดแผงขวา
+     แผงขวาสูงไม่เท่ากันแต่ละลำ · ถ้าคืนทีหลังเบราว์เซอร์อาจหนีบค่าไว้ตามความสูงเก่า */
+  const _newEl=document.getElementById('bs-list-panel');
+  if(_newEl&&_keepTop) _newEl.scrollTop=_keepTop;
+
   // Hide original bdp (we render custom detail instead)
   if(bdp){
     bdp.style.display='none';
@@ -5188,6 +5211,10 @@ function renderBoats(){
 
   // Render custom detail
   renderBoatDetailPink();
+  /* §bsKeepScroll · แผงขวาเพิ่งเปลี่ยนความสูง · หน้าจออาจถูกดันขึ้นตาม
+     คืนตำแหน่งหน้าต่างหลังวาดครบแล้ว และคืนของรายการซ้ำอีกครั้งเผื่อโดนหนีบ */
+  if(_newEl&&_keepTop&&_newEl.scrollTop!==_keepTop) _newEl.scrollTop=_keepTop;
+  if(_keepWin&&window.scrollY!==_keepWin) window.scrollTo(0,_keepWin);
 }
 function bsCalShift(n){
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
@@ -5543,7 +5570,7 @@ function renderBoatDetailPink(){
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="startEditName()" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
