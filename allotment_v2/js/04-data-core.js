@@ -5147,14 +5147,41 @@ function renderBoats(){
   if(rnList.length){listHtml+=sectionHd('Ranong','#BA7517','#FAEEDA',rnList.length)+rnList.map(b=>buildBoatRow(b,false)).join('');}
   if(shopList.length){listHtml+=sectionHd('🔧 In Shop','#854F0B','#FAEEDA',shopList.length)+shopList.map(b=>buildBoatRow(b,false)).join('');}
 
+  /* ══ §chByPier · เรือเช่าแยกย่อยตามท่าเหมือนเรือบริษัท ═══════════════════════════
+     ของเดิมเรือเช่ากองรวมกันเป็นก้อนเดียว · ตอนนี้มี 7 ลำ กระจายอยู่หลายท่า
+     คนหน้าท่าอยากรู้ว่า "ท่าเรามีเรือเช่าลำไหนบ้าง" ต้องไล่อ่านทีละแถว
+     ใช้ตัวตัดสินท่าตัวเดียวกับเรือบริษัท (getBoatCurrentPier) · คำตอบจะได้ไม่ขัดกันเอง
+     หัวข้อย่อยทำให้เล็กและเยื้องเข้ามา · จะได้อ่านออกว่าอยู่ในก้อนเรือเช่า ไม่ใช่ก้อนใหม่
+     ลำที่ไม่รู้ท่า ไม่ทิ้ง · กองไว้ท้ายสุดใต้หัวข้อ "ยังไม่ระบุท่า" ให้เห็นว่าต้องไปเติม */
+  const CH_PIER_GROUPS=[['tublamu','Tub Lamu','#0F6E56'],['panwa','Visit Panwa','#185FA5'],
+                        ['ranong','Ranong','#BA7517'],['shop','🔧 In Shop','#854F0B']];
+  const chSubHd=(val,label,color,count)=>`<div data-chpier="${val}" style="display:flex;align-items:center;gap:6px;margin:10px 0 4px;padding:0 4px 5px 10px;border-left:2px solid ${color};border-bottom:0.5px solid rgba(0,0,0,.05)">
+    <span style="font-size:10px;font-weight:600;color:${color}">${label}</span>
+    <span style="background:rgba(0,0,0,.04);color:${color};padding:0 6px;border-radius:8px;font-size:9px;font-weight:600">${count}</span>
+  </div>`;
+  const chGroupedRows=(list,rowFn,d)=>{
+    if(!list.length) return `<div style="font-size:11px;color:${d.ink3};text-align:center;padding:12px">ไม่ตรงกับ filter</div>`;
+    const pierOf=b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)||'';
+    let out='', seen=0;
+    CH_PIER_GROUPS.forEach(([val,label,color])=>{
+      const g=list.filter(b=>pierOf(b)===val);
+      if(!g.length) return;
+      seen+=g.length;
+      out+=chSubHd(val,label,color,g.length)+g.map(b=>rowFn(b,true)).join('');
+    });
+    const rest=list.filter(b=>!CH_PIER_GROUPS.some(([val])=>pierOf(b)===val));
+    if(rest.length) out+=chSubHd('other','ยังไม่ระบุท่า','#8A8A8A',rest.length)+rest.map(b=>rowFn(b,true)).join('');
+    return out;
+  };
+
   // Charter section
   let charterHtml='';
   if(allCharter.length){
-    charterHtml=`<div style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
+    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9F1B4F">เรือเช่า</span>
       <span style="background:#E03B7E;color:white;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">${charterBoats.length}</span>
       <button onclick="openCharterModal()" style="margin-left:auto;background:#1A1A1A;color:white;border:none;border-radius:14px;padding:4px 11px;font-size:10px;font-weight:600;cursor:pointer">+ เพิ่ม</button>
-    </div>`+(charterBoats.length?charterBoats.map(b=>buildBoatRow(b,true)).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:12px">ไม่ตรงกับ filter</div>`);
+    </div>`+chGroupedRows(charterBoats,buildBoatRow,dim);
   }
 
   if(!companyBoats.length&&!charterBoats.length){
@@ -5235,8 +5262,16 @@ function bsCellClick(ds,logId){
   // changes the color across many days at once.
   if(typeof openAddStatusModal==='function'){
     openAddStatusModal();
+    /* §bsCellTo · คลิกช่องวันที่แล้ววันจบต้องตามไปด้วย
+       ของเดิมเขียนทับแค่ช่องวันเริ่ม · วันจบค้างเป็น "วันนี้" ที่ openAddStatusModal ใส่ไว้
+       คลิกวันข้างหน้าทีไร ฟอร์มจึงเปิดมาแบบวันจบอยู่ก่อนวันเริ่ม แล้วกดบันทึกไม่ผ่าน
+       (เจอจริง · คลิก 14 พ.ย. ได้ฟอร์ม 14/11/2026 → 30/09/2026)
+       ตัวจัดให้อัตโนมัติเป็น onchange ซึ่งไม่ทำงานตอนโค้ดตั้งค่าเอง จึงต้องตั้งทั้งสองช่อง
+       วันจบ = วันที่กด · เท่ากับหนึ่งวัน แล้วค่อยลากยาวเองถ้าต้องการ */
     const fromInp=document.getElementById('fm-st-from');
+    const toInp=document.getElementById('fm-st-to');
     if(fromInp)fromInp.value=ds;
+    if(toInp)toInp.value=ds;
   }
 }
 function bsDebugLog(bid){
