@@ -27,6 +27,8 @@
 //   12 ติ๊กแล้วบันทึกจริง และกดยกเลิกได้
 //   13 จุดแวะของรถคันอื่นไม่โผล่ในใบงานของคันนี้
 //   14 ลบแล้วหายจากทุกหน้า
+//   5b ปุ่ม + จุดแวะ ขึ้นทั้งโหมดปกติและโหมดจัดรถ (ผู้ใช้แจ้งว่าหาไม่เจอ)
+//   5c กรุ๊ปที่ยังไม่มีรถขึ้นปุ่มจางบอกเหตุผล ไม่ใช่หายไปเฉย ๆ
 //   15 ไม่มี error บนหน้า
 
 import { open, goView } from './_harness.mjs';
@@ -89,6 +91,10 @@ const R0 = await page.evaluate(() => {
     o.vanGroup = G; o.vanId = van.id; o.vanSeq = 0;
     if (Array.isArray(o.vanSplits)) o.vanSplits = [];
   });
+  /* กรุ๊ปที่ "ยังไม่เลือกรถ" ไว้วัดข้อ 5c · ไม่มีกรุ๊ปแบบนี้ เทสข้อนั้นจะวัดของว่าง */
+  const spare = (byKey[pick.k] || []).filter(m => pick.mem.indexOf(m) < 0)[0];
+  if (spare) { const o = bkOpsFor(spare.b, date); o.vanGroup = G + 1; o.vanId = null;
+               if (Array.isArray(o.vanSplits)) o.vanSplits = []; }
   if (typeof acctPersistBookings === 'function') acctPersistBookings();
   /* ยอดลูกค้าของกรุ๊ปวัดจากตัวเดียวกับที่หน้าจอใช้ ไม่ใช่บวกเอง
      ถ้าบวกเอง เทสจะกลายเป็นวัดสูตรของตัวเองแทนที่จะวัดของจริง */
@@ -190,6 +196,32 @@ ok('จัดรถให้ลูกค้า ' + R0.cust + ' คนเข้�
   else if (!new RegExp('ลูกค้า\\s*' + R0.cust + '\\s*\\+\\s*ติดรถ\\s*1').test(R.grpTxt))
     fail('ยอดรวมถูกแล้วแต่หัวกรุ๊ปไม่บอกที่มา · คนอ่านจะงงว่าเลขมาจากไหน · "' + R.grpTxt.slice(0, 120) + '"');
   else ok('ยอดกรุ๊ป = ' + R0.grpPax + ' (ลูกค้า ' + R0.cust + ' + ติดรถ 1) · หัวกรุ๊ปบอกที่มาให้เห็น');
+}
+
+/* ══ 5b · 5c · ปุ่มเพิ่มต้องหาเจอ ═══════════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. "เพิ่มได้ตรงไหน หาไม่เจอ" · ของเดิมขึ้นเฉพาะตอนอยู่ในโหมดจัดรถ
+   และกรุ๊ปมีรถแล้ว — สองด่านซ้อนกัน เปิดหน้ามาปกติจึงไม่เห็นอะไรเลย */
+{
+  const R = await page.evaluate(g => {
+    const look = () => ({
+      active: document.querySelectorAll('button[onclick*="vsOpen"]').length,
+      dim: [...document.querySelectorAll('span')]
+             .filter(e => /จุดแวะ/.test(e.textContent) && /เลือกรถก่อน/.test(e.textContent)).length });
+    const was = _bkV2.vanAssignMode;
+    _bkV2.vanAssignMode = false; bkV2Render();
+    const ro = look();
+    _bkV2.vanAssignMode = true; bkV2Render();
+    const vm = look();
+    _bkV2.vanAssignMode = was; bkV2Render();
+    return { ro, vm };
+  }, R0.grp);
+  if (!R.ro.active) fail('โหมดปกติ (อ่านอย่างเดียว) ไม่มีปุ่ม + จุดแวะ เลย · คนใช้จะหาไม่เจอเหมือนเดิม');
+  else if (!R.vm.active) fail('โหมดจัดรถไม่มีปุ่ม + จุดแวะ');
+  else ok('ปุ่ม + จุดแวะ ขึ้นทั้งสองโหมด · โหมดปกติ ' + R.ro.active + ' ปุ่ม · โหมดจัดรถ ' + R.vm.active + ' ปุ่ม');
+
+  if (!R.ro.dim && !R.vm.dim)
+    fail('กรุ๊ปที่ยังไม่มีรถไม่ขึ้นอะไรเลย · ควรขึ้นปุ่มจางบอกว่า "เลือกรถก่อน" แทนที่จะหายไปเฉย ๆ');
+  else ok('กรุ๊ปที่ยังไม่มีรถขึ้นปุ่มจางพร้อมเหตุผล "เลือกรถก่อน" · ไม่ใช่ไม่มีอะไรให้เห็น');
 }
 
 /* ══ 6 · ที่นั่งเรือต้องไม่ขยับ ═════════════════════════════════════ */

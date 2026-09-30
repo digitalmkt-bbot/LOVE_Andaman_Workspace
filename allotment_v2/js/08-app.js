@@ -48460,6 +48460,17 @@ function bkV2RenderTab2(){
         const gpax=mem.reduce((s,a)=>s+a.head,0);
         const c=groupColor[g]||['#EEEDF0','#555'];
         const vid=(mem.find(a=>a.vanId)||{}).vanId||'';
+        /* ══ §vsFind · ปุ่มเพิ่มจุดแวะต้องหาเจอ ═══════════════════════════════════
+           ของเดิมขึ้นเฉพาะตอนอยู่ในโหมดจัดรถ "และ" กรุ๊ปมีรถแล้ว — สองด่านซ้อนกัน
+           คนใช้จริงเปิดหน้ามาในโหมดปกติแล้วไม่เห็นอะไรเลย จึงหาไม่เจอ (ผู้ใช้แจ้ง 30 ก.ย.)
+           ตอนนี้ขึ้นทั้งสองโหมด · และกรุ๊ปที่ยังไม่มีรถขึ้นปุ่มจาง ๆ บอกเหตุผลแทนที่จะหายไป
+           ยังต้องมีรถก่อนถึงจะเพิ่มได้จริง เพราะจุดแวะผูกกับรถ ไม่ใช่กับกรุ๊ปลอย ๆ */
+        const _vsSeat=(vid && typeof vsSeatsOfVan==='function')?vsSeatsOfVan(date,rid,vid,g):0;
+        const _vsN=(vid && typeof vsFor==='function')?vsFor(date,rid).filter(x=>x.vanId===vid&&(+x.vanGroup||0)===+g).length:0;
+        const gseat=gpax+_vsSeat;
+        const _vsBtn = vid
+          ? `<button onclick="event.stopPropagation();vsOpen('${date}','${rid}',{vanId:'${vid}',vanGroup:${g},zone:'${esc(z)}'})" title="${laT('เพิ่มจุดแวะที่ไม่ใช่ลูกค้า · ไกด์ติดรถ หรือแวะเอาของ')}" style="background:#fff;border:1px solid #B3DAE6;color:#0E7490;border-radius:7px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ ${laT('จุดแวะ')}${_vsN?(' ('+_vsN+')'):''}</button>`
+          : `<span title="${laT('จุดแวะผูกกับรถ · เลือกรถให้กรุ๊ปนี้ก่อน แล้วปุ่มนี้จะกดได้')}" style="background:#FAFAF8;border:1px dashed #D9D7D0;color:#A9A7A0;border-radius:7px;padding:3px 10px;font-size:10.5px;font-weight:600;cursor:not-allowed;white-space:nowrap">+ ${laT('จุดแวะ')} · ${laT('เลือกรถก่อน')}</span>`;
         const _gVans=[...new Set(mem.map(a=>a.vanId).filter(Boolean))];   // distinct vans in this group
         const _gConf=_gVans.length>1;   // ⚠ รถปนกัน → booking จะขึ้นใบงานผิดคัน
         const _gConfChip=_gConf?`<span title="รถปนกันในกรุ๊ป: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))} — เลือกรถใหม่ให้ทั้งกรุ๊ปเป็นคันเดียว มิฉะนั้นใบงานจะส่งคนผิดคัน" style="display:inline-flex;align-items:center;gap:5px;background:#F3E0F7;color:#7A1FA2;border:1px solid #D9A8E8;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;white-space:nowrap">&#9888; รถปนกัน: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))}</span>`:'';
@@ -48501,7 +48512,8 @@ function bkV2RenderTab2(){
             <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
               ${_legTag}${vanPill}${_rndRC}${_gConfChip}${_retChip}${_boatChips}
               ${infoHtml}
-              <span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:'DM Mono',monospace;white-space:nowrap">${mem.length} ราย · ${gpax} pax${_gtime?(' · '+esc(_gtime)):''}</span>
+              <span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:'DM Mono',monospace;white-space:nowrap">${mem.length} ราย · ${gseat} pax${_vsSeat?`<span style="color:#0E7490;font-weight:600"> (${laT('ลูกค้า')} ${gpax} + ${laT('ติดรถ')} ${_vsSeat})</span>`:''}${_gtime?(' · '+esc(_gtime)):''}</span>
+              ${_vsBtn}
             </div></td></tr>`;
         }
         /* §vgRound · เดิม "· ใช้แล้ว" + disabled · ตอนนี้บอกตรง ๆ ว่าเลือกไปคือให้วิ่งรอบถัดไป
@@ -48515,11 +48527,6 @@ function bkV2RenderTab2(){
         let opts=pool.length?'<option value="">— เลือกรถ (ทีหลังได้) —</option>':'<option value="">— ยังไม่มีรถจัดให้โปรแกรมนี้ (จัดในตารางเดือน) —</option>';
         pool.forEach(v=>{ const _uu=(v.id!==vid)?_usedG[v.id]:null; const overCap=v.id!==vid&&(v.capacity||0)>0&&gpax>(v.capacity||0); opts+=`<option value="${v.id}" ${vid===v.id?'selected':''} ${overCap?'disabled':''}>${esc(v.name||v.id)}${v.capacity?(' · '+v.capacity+' ที่นั่ง'):''}${v.plate&&v.plate!=='-'?(' · '+esc(v.plate)):''}${_uu?(' · \u21bb รอบถัดไป (อยู่กรุ๊ป '+_uu.g+(_uu.tm?(' · '+_uu.tm):'')+')'):''}${overCap?' · ที่นั่งไม่พอ':''}</option>`; });
         if(vid && !pool.some(v=>v.id===vid)){ const vo=vehGet(vid); opts+=`<option value="${vid}" selected>${esc((vo&&vo.name)||vid)}</option>`; }
-        /* §vanStop · คนติดรถกินที่นั่งจริง · ยอดที่เอาไปเทียบความจุต้องรวมเขาด้วย
-           ช่องตัวเลขยังแยกให้เห็นว่าลูกค้ากี่คน ติดรถกี่คน ไม่งั้นคนอ่านจะงงว่าเลขมาจากไหน */
-        const _vsSeat=(vid && typeof vsSeatsOfVan==='function')?vsSeatsOfVan(date,rid,vid,g):0;
-        const _vsN=(vid && typeof vsFor==='function')?vsFor(date,rid).filter(x=>x.vanId===vid&&(+x.vanGroup||0)===+g).length:0;
-        const gseat=gpax+_vsSeat;
         const cap=vid?((vehGet(vid)||{}).capacity||0):0; const over=cap&&gseat>cap;
         /* §vgRound · กรุ๊ปนี้เป็นรอบที่เท่าไหร่ของรถคันนี้ · null = คันนี้วิ่งรอบเดียว → ไม่มีอะไรเปลี่ยน
            จำเป็นต้องมีป้าย เพราะสีหัวกรุ๊ปคือสีประจำรถ · รถคันเดียวสองกรุ๊ป = สองแถบสีเดียวกันเป๊ะ */
@@ -48546,7 +48553,7 @@ function bkV2RenderTab2(){
             ${_rndChip}${_rndWarn}
             ${_gConfChip}
             <span style="font-size:11px;color:#6a6a64">${mem.length} booking · <b style="color:${over?'#A32D2D':c[1]}">${gseat}${cap?'/'+cap:''} pax</b>${_vsSeat?`<span title="ลูกค้า ${gpax} คน + คนติดรถ ${_vsSeat} คน" style="color:#0E7490;font-weight:600"> · ลูกค้า ${gpax} + ติดรถ ${_vsSeat}</span>`:''}</span>
-            ${(vanMode&&vid)?`<button onclick="event.stopPropagation();vsOpen('${date}','${rid}',{vanId:'${vid}',vanGroup:${g},zone:'${esc(z)}'})" title="เพิ่มจุดแวะที่ไม่ใช่ลูกค้า · ไกด์ติดรถ หรือแวะเอาของ" style="background:#fff;border:1px solid #B3DAE6;color:#0E7490;border-radius:7px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit">+ จุดแวะ${_vsN?(' ('+_vsN+')'):''}</button>`:''}
+            ${_vsBtn}
             <select onchange="event.stopPropagation();bkV2VanGroupSetVan('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()" style="border:1px solid ${vid?'#9FE1CB':'#E6C9C3'};border-radius:6px;padding:3px 7px;font-size:11px;font-family:inherit;background:#fff;font-weight:${vid?'700':'400'}">${opts}</select>
             <input type="text" value="${esc(ctime)}" placeholder="ตั้งเวลาทั้งกรุ๊ป" onclick="event.stopPropagation()" oninput="bkV2VanGroupSetTime('${date}','${rid}','${z}','${g}',this.value)" title="ตั้งเวลารับให้ทุกแถวในกรุ๊ป (ปรับรายโรงแรมได้ที่คอลัมน์เวลา)" style="border:1px solid #ddd;border-radius:6px;padding:3px 7px;font-size:11px;font-family:'DM Mono',monospace;width:108px">
             <select onchange="event.stopPropagation();bkV2VanGroupSetReturn('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากขาไป)" style="border:1px solid ${rvid?'#C7B8E8':'#ddd'};border-radius:6px;padding:3px 7px;font-size:11px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#888'}">${ropts}</select>
