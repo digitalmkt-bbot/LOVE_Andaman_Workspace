@@ -378,7 +378,13 @@ const B2C_OWN_BK = new Set([
 //      variants of one Phi Phi trip). Needed because transfer_services.ops_route_id is per service
 //      and cannot say that the 6-hour and the 8-hour city tour are different programmes. The
 //      per-variant key is tried first; with no such route nothing changes.
-const B2C_MAP_VER = 28;
+// v29: §b2cHotelAppend · hotelName carries "<area> · <hotel>" again instead of the bare area. The
+//      area still leads (dispatch groups on it) and findArea still matches on the area ALONE — the
+//      v4→v5 bug is exactly this and must not come back. dropoffSep compares the drop-off text
+//      against area, hotel and the combined string so a same-door return is not flagged as separate.
+//      hotelname is already in B2C_OWN_BK, so this bump re-upserts the rows on file without touching
+//      anything ops owns. Drop-off keeps §b2cNoHotel: det.dropoffHotel is still never read.
+const B2C_MAP_VER = 29;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -766,10 +772,17 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   const vehType = isTransfer ? String(det.vehicleType || '').trim().toLowerCase() : '';
   const vehDir  = isTransfer ? String(det.direction || '').trim() : '';
   const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
-  // §b2cNoHotel (2026-09-14): ops does not want the guest's hotel name synced in at all, only the
-  // area — det.pickupHotel is deliberately never read here. hotelName below is really "pickup area
-  // name", kept as that field for backward compat with every existing ops reader of bk.hotelName.
-  const pickupLoc  = pickupArea;
+  // §b2cHotelAppend (2026-09-21): reverses the pickup half of §b2cNoHotel — ops wants the guest's
+  // hotel back, but APPENDED to the area rather than replacing it: "Layan · Blu Monkey Hub". The area
+  // leads because that is what dispatch groups and sorts by (vanJobsOrderInner, the check-in Pickup
+  // column, ckPickShort's truncation all read the head of this string); the hotel follows as the
+  // actual address the driver needs. Empty either side and the separator does not appear.
+  //
+  // This string is NEVER fed to findArea — see the areaHit line below. That was the v4→v5 bug:
+  // matching 'Layan · Blu Monkey Hub' against the 37 ops areas resolves to nothing, so every booking
+  // carrying a hotel arrived with no pickupAreaId at all. Match on the area alone, always.
+  const pickupHotel = String(det.pickupHotel || '').trim();      // hotel → free text, no hotels table
+  const pickupLoc  = [pickupArea, pickupHotel].filter(Boolean).join(' · ');
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
   const areaHit = (typeof findArea === 'function') ? findArea(pickupArea, pickupZone) : null;
@@ -790,10 +803,20 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // Pier" → "Visit Panwa Pier"). Trusting those would raise 24 false "returns elsewhere, no return van
   // arranged" alerts. Require a genuinely different place before telling ops the return leg differs.
   const _dnorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  // §b2cNoHotel (2026-09-14): same as pickup — det.dropoffHotel is deliberately never read.
+  // §b2cNoHotel (2026-09-14): the DROP-OFF half stands — det.dropoffHotel is still never read.
+  // §b2cHotelAppend only reversed the pickup side; B2C's drop-off box is a place, not a hotel.
   const dropoffRaw = String(det.dropoffLocation || '').trim();
-  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw
-    && _dnorm(dropoffRaw) !== _dnorm(pickupLoc) && _dnorm(dropoffRaw) !== _dnorm(pickupArea);
+  // §b2cHotelAppend · "is this drop-off really the pickup point again?" now has THREE ways to be true,
+  // because pickupLoc is a composite. Comparing against the composite alone would mean a drop-off that
+  // repeats just the hotel ('Blu Monkey Hub' vs 'Layan · Blu Monkey Hub') no longer matches, and ops
+  // gets a false "returns elsewhere, no return van arranged" alert on a booking that returns to the
+  // same door. Test the area, the hotel and the combined string.
+  const _samePick = s => {
+    const n = _dnorm(s);
+    return n === _dnorm(pickupArea) || n === _dnorm(pickupLoc)
+        || (!!pickupHotel && n === _dnorm(pickupHotel));
+  };
+  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw && !_samePick(dropoffRaw);
   const dropoffLoc = dropoffSep ? dropoffRaw : '';
   // B2C has no dropoffArea field at all — only the one free-text dropoffLocation ("KIRI Restaurant,
   // Naithon Beach"), unlike pickup where pickupLocation is already a clean area name. findArea's
