@@ -32,10 +32,12 @@
 //   16 พื้นที่รับของจุดแวะมาจากทะเบียนพื้นที่ ไม่ใช่ข้อความพิมพ์เอง (ผู้ใช้แจ้ง)
 //   17 ใบงานเรียงตามเวลา แม้ลูกค้ามีลำดับมือแล้ว (ผู้ใช้แจ้ง)
 //   18 จุดแวะแยกขาไป/ขากลับ/ไป-กลับ ได้ และที่นั่งนับแยกขา (ผู้ใช้แจ้ง)
-//   19 เรียงกรุ๊ปตามเลขกรุ๊ป / พื้นที่รับ / เวลา · ค่าเป็นของทั้งทีม (ผู้ใช้แจ้ง)
+//   19 ลากสลับลำดับกรุ๊ปได้เอง ทั้งขึ้นและลง (ผู้ใช้แจ้ง)
+//   20 ลากแล้วเปิดแอปใหม่ทั้งตัว ลำดับต้องไม่หาย (ผู้ใช้สั่งให้ตรวจเป็นพิเศษ)
 //   15 ไม่มี error บนหน้า
 
 import { open, goView } from './_harness.mjs';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -469,48 +471,105 @@ ok('จัดรถให้ลูกค้า ' + R0.cust + ' คนเข้�
   else ok('จุดแวะแยกขาได้จริง · ขากลับไม่หลุดไปขาไป · ที่นั่งนับแยกขา (ไป ' + R.seatOut + ' · กลับ ' + R.seatRet + ')');
 }
 
-/* ══ 19 · §grpSort · เรียงกรุ๊ปตามที่ทีมเลือก ═════════════════════════
-   ผู้ใช้แจ้ง 30 ก.ย. "อยากมีการเรียงกรุ๊ปตามที่ User ถนัด บางคนอยากจับกลุ่มตาม Pickup area"
-   เปลี่ยนแค่ลำดับที่โชว์ · ห้ามมีกรุ๊ปไหนหายไประหว่างสลับโหมด */
+/* ══ 19 · §grpDrag · ลากสลับลำดับกรุ๊ปเอง ═══════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. รอบสอง · ปุ่มเลือกวิธีเรียงกินที่มากเกินไป ให้เอาออก
+   แล้วเปลี่ยนเป็นลากเรียงเอง · ย้ำว่า "ต้องตรวจดูดี ๆ ว่ารีเฟรชแล้วไม่หาย"
+   ข้อนี้วัดการลาก · ข้อ 20 วัดว่ารอดการรีเฟรชจริง (เปิดแอปใหม่ทั้งตัว)      */
+let DRAG = null;
 {
   const R = await page.evaluate(() => {
-    /* เลขกรุ๊ปเริ่มใหม่ทุกโซน · วัดรวมทั้งหน้าจะได้ 1,2,3,1,3,4 แล้วตีว่าไม่เรียง
-       จึงอ่านเป็นราย "โปรแกรม|โซน" จากป้าย data-gk บนหัวกรุ๊ป */
-    const read = () => { const m = {};
-      document.querySelectorAll('tr[data-grp]').forEach(tr => {
-        const k = tr.getAttribute('data-gk') || '?'; (m[k] = m[k] || []).push(+tr.getAttribute('data-grp')); });
-      return m; };
-    if (typeof bkV2SetGrpSort !== 'function') return { err: 'ยังไม่มี bkV2SetGrpSort' };
-    bkV2SetGrpSort('grp');  const byGrp  = read();
-    bkV2SetGrpSort('time'); const byTime = read();
-    bkV2SetGrpSort('area'); const byArea = read();
-    bkV2SetGrpSort('grp');  const back   = read();
-    const keys = Object.keys(byGrp);
-    const asc  = a => a.every((v, i) => i === 0 || a[i - 1] <= v);
-    const perm = (a, b) => !!b && a.length === b.length
-                        && [...a].sort((x,y)=>x-y).join() === [...b].sort((x,y)=>x-y).join();
-    const line = m => keys.map(k => k + ':' + (m[k] || []).join('>')).join('  ');
-    return { keys: keys.length, n: keys.reduce((s,k)=>s+byGrp[k].length, 0),
-             multi: keys.filter(k => byGrp[k].length >= 2).length,
-             grpSorted: keys.every(k => asc(byGrp[k])),
-             backSame:  keys.every(k => (back[k]||[]).join() === byGrp[k].join()),
-             keepTime:  keys.every(k => perm(byGrp[k], byTime[k])),
-             keepArea:  keys.every(k => perm(byGrp[k], byArea[k])),
-             movedTime: keys.some(k => (byTime[k]||[]).join() !== byGrp[k].join()),
-             movedArea: keys.some(k => (byArea[k]||[]).join() !== byGrp[k].join()),
-             showGrp: line(byGrp), showTime: line(byTime), showArea: line(byArea), showBack: line(back),
-             saved: (JSON.parse(localStorage.getItem('loveandaman_v2') || '{}')).bkv2_grp_sort };
+    if (typeof bkV2GrpMove !== 'function') return { err: 'ยังไม่มี bkV2GrpMove' };
+    const read = k => [...document.querySelectorAll('tr[data-grp]')]
+      .filter(t => (t.getAttribute('data-gk') || '') === k)
+      .map(t => +t.getAttribute('data-grp'));
+    const by = {};
+    document.querySelectorAll('tr[data-grp]').forEach(t => {
+      const k = t.getAttribute('data-gk') || ''; (by[k] = by[k] || []).push(+t.getAttribute('data-grp')); });
+    const key = Object.keys(by).find(k => by[k].length >= 3) || Object.keys(by).find(k => by[k].length >= 2);
+    if (!key) return { err: 'หน้านี้ไม่มีโซนที่มีกรุ๊ปเกินหนึ่ง วัดการลากไม่ได้' };
+    /* ที่จับลากต้องมีอยู่จริงทุกหัวกรุ๊ป · ถ้าไม่มี คนก็ลากไม่ได้ ต่อให้ฟังก์ชันย้ายทำงานได้ */
+    const heads = document.querySelectorAll('tr[data-grp]').length;
+    const grabs = document.querySelectorAll('tr[data-grp] .grp-grab[draggable="true"]').length;
+    const drops = [...document.querySelectorAll('tr[data-grp]')].filter(t => t.getAttribute('ondrop')).length;
+    const before = by[key].slice();
+    const last = before[before.length - 1];
+    const moved = bkV2GrpMove(key, last, before[0]);      // ลากตัวท้ายขึ้นไปไว้บนสุด
+    const after = read(key);
+    const want = [last, ...before.filter(g => g !== last)];
+    /* ลากครั้งที่สอง เอาตัวที่เคยอยู่บนสุดลงไปไว้ท้าย · กันกรณีย้ายได้ทางเดียว
+       และที่สำคัญกว่านั้น ทำให้ลำดับสุดท้ายไม่เท่ากับลำดับเลขกรุ๊ปเดิม
+       ถ้าจบด้วยลำดับเดิม ข้อ 20 จะผ่านแม้ระบบไม่ได้จำอะไรไว้เลย */
+    const moved2 = bkV2GrpMove(key, before[0], after[after.length - 1]);
+    const after2 = read(key);
+    const want2 = [last, ...before.filter(g => g !== last && g !== before[0]), before[0]];
+    /* ทริปเก่าที่ยังเปิดดูย้อนหลังได้ · ตัวตัดของเก่าต้องไม่ลบอันที่เพิ่งเขียนในคำสั่งเดียวกัน */
+    bkV2GrpOrderSet('2024-01-05', 'zz-test', 'PK', [2, 1]);
+    const oldKeep = bkV2GrpOrderGet('2024-01-05', 'zz-test', 'PK');
+    bkV2GrpOrderSet('2024-01-05', 'zz-test', 'PK', []);
+    const p = key.split('::');
+    return { key, heads, grabs, drops, before, after, want, moved, moved2, after2, want2, oldKeep,
+             date: p[0], routeId: p[1], zone: p.slice(2).join('::'),
+             saved: (typeof bkV2GrpOrderGet === 'function') ? bkV2GrpOrderGet(p[0], p[1], p.slice(2).join('::')) : null };
   });
   if (R.err) fail('ข้อ 19 · ' + R.err);
-  else if (!R.multi) fail('ข้อ 19 · ไม่มีโซนไหนมีกรุ๊ปเกินหนึ่ง วัดการเรียงไม่ได้');
-  else if (!R.grpSorted) fail('โหมด "เลขกรุ๊ป" ไม่ได้เรียงจากน้อยไปมาก · ' + R.showGrp);
-  else if (!R.keepTime || !R.keepArea)
-    fail('สลับวิธีเรียงแล้วกรุ๊ปหาย · เลขกรุ๊ป [' + R.showGrp + '] → เวลา [' + R.showTime + '] → พื้นที่ [' + R.showArea + ']');
-  else if (!R.movedTime && !R.movedArea)
-    fail('เลือกวิธีเรียงแล้วลำดับไม่ขยับเลยสักโหมด · ปุ่มกดได้แต่ไม่มีผล · ' + R.showGrp);
-  else if (!R.backSame) fail('กลับมาโหมด "เลขกรุ๊ป" แล้วลำดับไม่กลับเป็นเดิม · ได้ ' + R.showBack);
-  else if (R.saved !== 'grp') fail('ค่าที่เลือกไม่ได้ถูกเขียนลง blob · คนอื่นในทีมจะไม่เห็นค่าเดียวกัน');
-  else ok('เรียงกรุ๊ปได้ ' + R.n + ' กรุ๊ปใน ' + R.keys + ' โซน · สลับโหมดแล้วลำดับขยับจริงและไม่มีกรุ๊ปหาย · ค่าเก็บลง blob ให้ทั้งทีม');
+  else if (R.grabs !== R.heads || !R.drops)
+    fail('หัวกรุ๊ป ' + R.heads + ' แถว แต่มีที่จับลาก ' + R.grabs + ' อัน · รับ drop ' + R.drops + ' แถว · คนลากไม่ได้');
+  else if (!R.moved) fail('เรียกย้ายกรุ๊ปแล้วไม่สำเร็จ');
+  else if (R.after.join() !== R.want.join())
+    fail('ลากตัวท้ายขึ้นบนสุดแล้วลำดับผิด · ได้ ' + R.after.join('>') + ' ควรเป็น ' + R.want.join('>'));
+  else if (!R.moved2 || R.after2.join() !== R.want2.join())
+    fail('ลากกลับลงท้ายไม่ได้ · ได้ ' + R.after2.join('>') + ' ควรเป็น ' + R.want2.join('>'));
+  else if (!R.saved || !R.saved.length) fail('ลากแล้วไม่ได้บันทึกลำดับไว้เลย');
+  else if (R.after2.join() === R.before.join())
+    fail('เทสจบด้วยลำดับเดิม (' + R.before.join('>') + ') · ข้อ 20 จะวัดการรีเฟรชไม่ได้จริง');
+  else if ((R.oldKeep || []).join() !== '2,1')
+    fail('จัดลำดับให้ทริปเก่าแล้วโดนตัวตัดของเก่าลบทิ้งทันที · ได้ ' + JSON.stringify(R.oldKeep));
+  else { DRAG = R; ok('ลากสลับลำดับกรุ๊ปได้ทั้งขึ้นและลง · ' + R.before.join('>') + ' → ' + R.after2.join('>')
+          + ' · ที่จับลากครบทั้ง ' + R.heads + ' หัวกรุ๊ป'); }
+}
+
+/* ══ 20 · §grpDrag · รีเฟรชแล้วต้องไม่หาย ══════════════════════════════
+   ข้อที่ผู้ใช้สั่งให้ตรวจเป็นพิเศษ · ไม่ใช่แค่ดูว่าเขียนลง localStorage แล้ว
+   แต่เปิดแอปใหม่ทั้งตัวจากก้อนข้อมูลนั้น แล้วดูลำดับที่วาดออกมาจริง ๆ
+   และผ่าน decompose→assemble ของ SQL ด้วย · หายที่ชั้นไหนก็คือหายเหมือนกัน */
+if (DRAG) {
+  const BLOB = await page.evaluate(() => localStorage.getItem('loveandaman_v2') || '{}');
+  const raw = JSON.parse(BLOB).bkv2_grp_order;
+  let sqlOk = false, sqlWhy = '';
+  try {
+    const back = osRepo.assembleBlob(osRepo.decomposeBlob({ bkv2_grp_order: raw })).bkv2_grp_order;
+    sqlOk = JSON.stringify(back) === JSON.stringify(raw);
+    if (!sqlOk) sqlWhy = 'เขียน ' + String(raw).slice(0, 80) + ' กลับมาได้ ' + String(back).slice(0, 80);
+  } catch (e) { sqlWhy = e.message; }
+
+  if (raw === undefined || raw === null) fail('ลำดับที่ลากไม่ได้อยู่ใน blob เลย · รีเฟรชหายแน่');
+  else if (typeof raw !== 'string')
+    fail('ลำดับถูกเก็บเป็น ' + typeof raw + ' ไม่ใช่สตริง · คีย์บนสุดที่เป็น object และไม่มีตารางเป็นเจ้าของ จะหายตอน sync');
+  else if (!sqlOk) fail('ลำดับไม่รอดการเดินทางไป-กลับ SQL · ' + sqlWhy);
+  else {
+    const tmp = path.join(ROOT, 'allotment_v2/data_exports/_t_grpdrag.json');
+    fs.writeFileSync(tmp, BLOB);
+    const two = await open({ blob: tmp, width: 1800, height: 1300 });
+    await goView(two.page, 'booking', 1000);
+    const R2 = await two.page.evaluate(([key, date, routeId]) => {
+      _bkV2.tab = 'bytrip'; _bkV2.vanAssignMode = true;
+      _bkV2.filterRoute = routeId; _bkV2.filterDate = date;
+      bkV2Render();
+      return { drawn: [...document.querySelectorAll('tr[data-grp]')]
+                 .filter(t => (t.getAttribute('data-gk') || '') === key)
+                 .map(t => +t.getAttribute('data-grp')),
+               stored: (typeof bkV2GrpOrderGet === 'function') ? bkV2GrpOrderGet(date, routeId, key.split('::').slice(2).join('::')) : null };
+    }, [DRAG.key, DRAG.date, DRAG.routeId]);
+    const err2 = two.errors.slice(0, 2);
+    await two.close();
+    try { fs.unlinkSync(tmp); } catch (_) {}
+    if (!R2.stored || !R2.stored.length) fail('เปิดแอปใหม่แล้วอ่านลำดับที่บันทึกไว้ไม่เจอ · ' + JSON.stringify(R2.stored));
+    else if (!R2.drawn.length) fail('เปิดแอปใหม่แล้ววาดกรุ๊ปของโซนนี้ไม่ออกเลย วัดต่อไม่ได้');
+    else if (R2.drawn.join() !== DRAG.after2.join())
+      fail('รีเฟรชแล้วลำดับเพี้ยน · ก่อนรีเฟรช ' + DRAG.after2.join('>') + ' หลังรีเฟรช ' + R2.drawn.join('>'));
+    else if (err2.length) fail('เปิดแอปใหม่แล้วมี error · ' + err2.join(' | '));
+    else ok('เปิดแอปใหม่ทั้งตัวจากก้อนข้อมูลจริง · ลำดับที่ลากไว้ยังเป็น ' + R2.drawn.join('>') + ' เหมือนเดิม และรอด SQL ไป-กลับ');
+  }
 }
 
 /* ══ 15 ═══════════════════════════════════════════════════════════ */

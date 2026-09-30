@@ -8146,29 +8146,119 @@ function bkV2BoatPicker(el, bkId, routeId){
 function bkV2BoatPickSet(bkId, boatId, date){ const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove(); bkV2AssignBoat(bkId, boatId, date||''); }
 function bkV2ToggleBoatMode(){ _bkV2.boatAssignMode=!_bkV2.boatAssignMode; if(_bkV2.boatAssignMode) _bkV2.vanAssignMode=false; bkV2Render(); }
 function bkV2ToggleVanMode(){ _bkV2.vanAssignMode=!_bkV2.vanAssignMode; if(_bkV2.vanAssignMode){_bkV2.boatAssignMode=false;_bkV2.reconfirmMode=false;} bkV2Render(); }
-/* ══ §grpSort · ลำดับที่โชว์ของกรุ๊ปรถ ════════════════════════════════════
-   ผู้ใช้แจ้ง 30 ก.ย. "พอ User จับกรุ๊ปแล้ว อยากมีการเรียงกรุ๊ปตามที่ User ถนัด
-   บางคนอยากจับกลุ่มตาม Pickup area" · ทีมเลือกให้ค่าที่ตั้งเป็นของทั้งทีม
-   เก็บเป็นคีย์ scalar บนสุดของ blob → sync ผ่าน app_meta · ไม่ต้องมี migration
-   ย้ำ: เปลี่ยนแค่ "ลำดับที่โชว์" · เลขกรุ๊ป การจัดคน และใบงาน ไม่ถูกแตะเลย    */
-const BKV2_GRP_SORTS=[
-  {v:'grp',  t:'เลขกรุ๊ป',        d:'เรียงตามเลขกรุ๊ป 1 2 3 · แบบเดิม'},
-  {v:'area', t:'พื้นที่รับ',       d:'กรุ๊ปที่รับพื้นที่เดียวกันอยู่ติดกัน'},
-  {v:'time', t:'เวลารับแรกสุด',   d:'กรุ๊ปที่ออกเช้าสุดขึ้นก่อน'}];
-function bkV2GrpSort(){
-  try{ const v=String((laBlob()||{}).bkv2_grp_sort||'grp');
-       return BKV2_GRP_SORTS.some(x=>x.v===v)?v:'grp'; }catch(_){ return 'grp'; }
+/* ══ §grpDrag · ลำดับกรุ๊ปที่คนลากเอง ══════════════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. รอบสอง · ปุ่มเลือกวิธีเรียงกินที่มากเกินไป "เอาออก"
+   เปลี่ยนเป็นลากหัวกรุ๊ปสลับลำดับเอง · และย้ำว่า "รีเฟรชไม่หาย"
+
+   ที่เก็บ · คีย์ scalar บนสุดของ blob เก็บเป็นสตริง JSON
+     { "YYYY-MM-DD::routeId::zone": [เลขกรุ๊ปเรียงตามที่ลาก] }
+   เป็นสตริง จึงเดินทางเป็น {op:'meta'} ลง app_meta catch-all
+   ไม่ต้องมีตาราง ไม่ต้องมี migration ไม่ต้องแตะ field_mapping — ทรงเดียวกับ
+   rc_status_colors / da_template ที่ใช้มาก่อนแล้ว
+   ⚠ เขียนเป็น object ตรง ๆ ไม่ได้ · object บนสุดที่ไม่มีตารางเป็นเจ้าของจะหายตอนรีเฟรช
+
+   ลำดับเป็นของทั้งทีม (ตามที่ตกลงรอบก่อน) · เปลี่ยนแค่ลำดับที่โชว์
+   เลขกรุ๊ป การจัดคน ใบงานรถ และหน้าเช็คอิน ไม่ถูกแตะเลย
+   กรุ๊ปที่เพิ่งสร้างและยังไม่เคยถูกลาก ต่อท้ายตามเลขกรุ๊ปเสมอ                  */
+var _grpOrdCache=null, _grpOrdSrc=null;
+function bkV2GrpOrderAll(){
+  try{
+    var raw=(laBlob()||{}).bkv2_grp_order;
+    if(raw===_grpOrdSrc && _grpOrdCache) return _grpOrdCache;
+    var o=raw; if(typeof o==='string') o=JSON.parse(o||'{}');
+    _grpOrdSrc=raw; _grpOrdCache=(o&&typeof o==='object')?o:{};
+    return _grpOrdCache;
+  }catch(e){ return {}; }
 }
-function bkV2SetGrpSort(v){
-  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
-  if(!BKV2_GRP_SORTS.some(x=>x.v===v)) v='grp';
-  try{ const d=laBlob(); d.bkv2_grp_sort=v; laBlobSave(); }catch(e){ console.warn('grp-sort save failed', e); }
+function bkV2GrpOrderKey(date, routeId, zone){ return String(date||'')+'::'+String(routeId||'')+'::'+String(zone||''); }
+function bkV2GrpOrderGet(date, routeId, zone){
+  var a=bkV2GrpOrderAll()[bkV2GrpOrderKey(date, routeId, zone)];
+  return Array.isArray(a) ? a.map(Number).filter(function(n){ return n>0; }) : [];
+}
+/* เก็บเฉพาะวันที่ยังใช้งาน · ลำดับของทริปที่ผ่านไปนานแล้วไม่มีใครดู
+   แต่ถ้าไม่ตัด คีย์จะสะสมไปเรื่อย ๆ จนก้อน blob บวมโดยไม่มีใครสังเกต */
+function _grpOrdPrune(o){
+  var today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  var cut=new Date(today+'T12:00:00'); cut.setDate(cut.getDate()-45);
+  var min=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(cut):cut.toISOString().slice(0,10);
+  Object.keys(o).forEach(function(k){ var d=String(k).split('::')[0]||''; if(d && d<min) delete o[k]; });
+  return o;
+}
+function bkV2GrpOrderSet(date, routeId, zone, arr){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return false;
+  try{
+    var d=laBlob();
+    var o=d.bkv2_grp_order; if(typeof o==='string'){ try{ o=JSON.parse(o); }catch(_){ o={}; } }
+    if(!o || typeof o!=='object') o={};
+    var k=bkV2GrpOrderKey(date, routeId, zone);
+    var list=(arr||[]).map(Number).filter(function(n){ return n>0; });
+    /* ตัดของเก่าก่อน แล้วค่อยเขียนอันใหม่ · สลับลำดับกันเมื่อไหร่ การจัดลำดับ
+       ของทริปเก่า (ซึ่งยังเปิดดูย้อนหลังได้) จะโดนลบทิ้งทันทีที่กดเสร็จ */
+    _grpOrdPrune(o);
+    if(list.length) o[k]=list; else delete o[k];
+    d.bkv2_grp_order=JSON.stringify(o);     /* ต้องเป็นสตริง · ดูหมายเหตุหัวบล็อก */
+    _grpOrdCache=null; _grpOrdSrc=null;
+    laBlobSave();
+    return true;
+  }catch(e){ console.warn('grp-order save failed', e); return false; }
+}
+/* ── ลากสลับลำดับ ────────────────────────────────────────────────────
+   คีย์อ่านจาก data-gk ของแถวเอง ไม่ส่งผ่านพารามิเตอร์ใน onclick
+   ชื่อโซนเป็นข้อความอิสระ · ยัดลงสตริงลิเทอรัลใน attribute เมื่อไหร่
+   เจอเครื่องหมายคำพูดตัวเดียวก็พังทั้งแถว                                */
+var _grpDrag=null;
+function _grpRowOf(el){ return (el && el.closest) ? el.closest('tr[data-grp]') : null; }
+function bkV2GrpDragStart(ev){
+  var tr=_grpRowOf(ev.target); if(!tr) return;
+  _grpDrag={ key:tr.getAttribute('data-gk')||'', g:+tr.getAttribute('data-grp')||0 };
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', String(_grpDrag.g)); }catch(_){}
+  tr.classList.add('grp-dragging');
+}
+function bkV2GrpDragEnd(){
+  _grpDrag=null;
+  document.querySelectorAll('tr.grp-dragging,tr.grp-dropinto').forEach(function(t){
+    t.classList.remove('grp-dragging'); t.classList.remove('grp-dropinto'); });
+}
+function bkV2GrpDragOver(ev){
+  var tr=ev.currentTarget;
+  /* ข้ามโซน/ข้ามโปรแกรมไม่ได้ · เลขกรุ๊ปเริ่มใหม่ทุกโซน ลากข้ามแล้วจะทับกันมั่ว */
+  if(!_grpDrag || !tr || (tr.getAttribute('data-gk')||'')!==_grpDrag.key) return;
+  ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(_){}
+  if(!tr.classList.contains('grp-dragging')) tr.classList.add('grp-dropinto');
+}
+function bkV2GrpDragLeave(ev){ if(ev.currentTarget) ev.currentTarget.classList.remove('grp-dropinto'); }
+function bkV2GrpDrop(ev){
+  var tr=ev.currentTarget;
+  if(!_grpDrag || !tr || (tr.getAttribute('data-gk')||'')!==_grpDrag.key) return;
+  ev.preventDefault(); ev.stopPropagation();
+  var key=_grpDrag.key, from=_grpDrag.g, to=+tr.getAttribute('data-grp')||0;
+  bkV2GrpDragEnd();
+  bkV2GrpMove(key, from, to);
+}
+/* แยกตัวย้ายออกมา เพื่อให้เทสและคีย์บอร์ด (ถ้ามีวันหน้า) เรียกได้โดยไม่ต้องจำลอง event ลาก */
+function bkV2GrpMove(key, from, to){
+  from=+from||0; to=+to||0;
+  if(!key || !from || !to || from===to) return false;
+  /* ลำดับปัจจุบันอ่านจากสิ่งที่ตาเห็นจริง ไม่ใช่จากที่เก็บ
+     กรุ๊ปที่เพิ่งสร้างยังไม่อยู่ในที่เก็บ ถ้าอ่านจากที่เก็บมันจะหล่นหายตอนบันทึก */
+  var cur=[].slice.call(document.querySelectorAll('tr[data-grp]'))
+            .filter(function(t){ return (t.getAttribute('data-gk')||'')===String(key); })
+            .map(function(t){ return +t.getAttribute('data-grp')||0; })
+            .filter(function(n){ return n>0; });
+  var iF=cur.indexOf(from), iT=cur.indexOf(to);
+  if(iF<0 || iT<0) return false;
+  cur.splice(iF,1);
+  cur.splice(cur.indexOf(to) + (iF<iT ? 1 : 0), 0, from);   /* ลากลง = วางหลังเป้า · ลากขึ้น = วางก่อนเป้า */
+  var p=String(key).split('::');
+  if(!bkV2GrpOrderSet(p[0], p[1], p.slice(2).join('::'), cur)){ alert('View-only: cannot reorder groups'); return false; }
   if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else bkV2Render();
+  return true;
 }
-/* เวลา "07:30-07:45" หรือ "7:05" → นาที · ไม่มีเวลา = ท้ายสุด ไม่ใช่เที่ยงคืน */
-function bkV2TimeMin(t){
-  const m=/(\d{1,2}):(\d{2})/.exec(String(t||'')); if(!m) return 99999;
-  return (+m[1])*60 + (+m[2]);
+/* คืนลำดับเป็นเลขกรุ๊ป · ไว้ให้กดตอนลากมั่วแล้วอยากเริ่มใหม่ */
+function bkV2GrpOrderReset(date, routeId, zone){
+  if(!confirm('Reset group order to group number?')) return;
+  bkV2GrpOrderSet(date, routeId, zone, []);
+  if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else bkV2Render();
 }
 function bkV2ToggleReconfirmMode(){ _bkV2.reconfirmMode=!_bkV2.reconfirmMode; if(_bkV2.reconfirmMode){_bkV2.boatAssignMode=false;_bkV2.vanAssignMode=false;} bkV2Render(); }
 // ── Re-confirmation · confirm actual pickup time with the agent ──
@@ -48251,26 +48341,13 @@ function bkV2RenderTab2(){
     `<button class="bt-mc ${kind}${on?' on':''}${dis?' dis':''}" style="--mc:${col}" onclick="${dis?'':fn}" title="${esc(nm)}">
        <span class="tx"><span class="t">${nm}</span><span class="s">${sub}</span></span>
        <span class="n">${num}</span>${on?'<span class="x">&times;</span>':''}</button>`;
-  /* ══ §grpSort · ปุ่มเลือกวิธีเรียงกรุ๊ป ════════════════════════════════
-     วางไว้ใต้ปุ่มโหมด เพราะเป็นเรื่องของ "หน้าตาตาราง" เหมือนกัน และคนหาเจอแน่
-     ค่าเป็นของทั้งทีม (ตามที่ตกลงไว้) · เปลี่ยนแล้วทุกคนที่เปิดหน้านี้เห็นเหมือนกัน */
-  const _gsNow=(typeof bkV2GrpSort==='function')?bkV2GrpSort():'grp';
-  const _btGrpSort = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 9px 8px;border-top:1px solid rgba(0,0,0,.07);margin-top:7px">
-      <span style="font-size:9.5px;font-weight:800;color:#8A887F;letter-spacing:.05em;white-space:nowrap">${laT('เรียงกรุ๊ป')}</span>
-      ${BKV2_GRP_SORTS.map(o=>{ const on=(o.v===_gsNow);
-        return `<button data-gsort="${o.v}" onclick="bkV2SetGrpSort('${o.v}')" title="${esc(laT(o.d))}"
-          style="font-size:10.5px;font-weight:${on?'800':'600'};font-family:inherit;cursor:pointer;white-space:nowrap;
-                 border-radius:999px;padding:3px 11px;border:1px solid ${on?'#0F6E56':'#DDDCD6'};
-                 background:${on?'#0F6E56':'#fff'};color:${on?'#fff':'#6A6A64'}">${esc(laT(o.t))}</button>`; }).join('')}
-      <span style="font-size:9.5px;color:#B0AEA6;white-space:nowrap">${laT('ทั้งทีมเห็นเหมือนกัน')}</span>
-    </div>`;
   /* ปุ่มโหมดยังกดได้ทุกกรณีเหมือนเดิม · ของเดิมไม่เคยล็อกไว้ตามการเลือกโปรแกรม */
   // §cityTourView · land trips never need a boat · hide the Boat pill on the City Tour page
   const _btModes = `<div class="bt-c"><div class="bt-mrow">
       ${_btMode('Van', _unVanN>0?'not assigned':'all assigned', _unVanN>0?_unVanN:'&#10003;', _unVanN>0?'warn':'ok','#0F6E56',vanMode,'bkV2ToggleVanMode()',false)}
       ${_bkV2CityTourOnly ? '' : _btMode('Boat',_unBoatN>0?'not assigned':'all assigned', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
       ${_btMode('Re-confirm',_unRcN>0?'not confirmed':'all confirmed', _unRcN>0?_unRcN:'&#10003;', _unRcN>0?'warn':'ok','#7A4A00',rcMode,'bkV2ToggleReconfirmMode()',false)}
-    </div>${_btGrpSort}</div>`;
+    </div></div>`;
   const _btSearch = `<div class="bt-c"><div class="bt-srow">
       <span class="bt-sbox"><span class="ic">&#128269;</span>
         <input id="bt-q" value="${esc(_bkV2T2Q)}" placeholder="Search · voucher · name · phone · hotel" oninput="bkV2Tab2SetQ(this.value)">
@@ -48572,44 +48649,12 @@ function bkV2RenderTab2(){
       const _boatCluster = boatMode && !vanMode;
       const _boatId=a=>(a.boatId||bkOpsRead(a.r.bk, date).boatId||'');   // per-day boat · §boatSplit อ่านจาก alloc ก่อน
       const _boatIdx=bid=>{ if(!bid) return -1; const arr=(typeof BOATS!=='undefined'&&BOATS)||[]; const i=arr.findIndex(x=>x.id===bid); return i<0?999:i; };
-      /* ══ §grpSort · อันดับของแต่ละกรุ๊ปตามวิธีที่ทีมเลือก ════════════════
-         คิดครั้งเดียวต่อโซน แล้วเอาไปใช้เป็นคีย์แรกของตัวเปรียบเทียบ
-         โหมด area/time ยังทดด้วยเลขกรุ๊ปเสมอ · กรุ๊ปที่เสมอกันจะได้ไม่สลับไปมา
-         ทุกครั้งที่ re-render (ตัวเรียงของ JS ไม่การันตีความเสถียรข้ามรอบ)   */
-      const _gSort=(typeof bkV2GrpSort==='function')?bkV2GrpSort():'grp';
-      const _gRank={};
-      if(_grouped && _gSort!=='grp'){
-        const _gAreaOf=a=>{ try{
-            if(a.split && a.pick && !a.pick.main){
-              const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;
-              return (_pa&&_pa.name)||a.pick.zone||''; }
-            const bk=a.r&&a.r.bk||{};
-            const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
-            return (_pa&&_pa.name)||(bk.pickupArea||'').trim();
-          }catch(_){ return ''; } };
-        const gids=[...new Set(alist.map(a=>a.g).filter(g=>g>0))];
-        if(_gSort==='area'){
-          /* พื้นที่ของกรุ๊ป = พื้นที่ที่คนเยอะสุดในกรุ๊ปนั้น · กรุ๊ปคละพื้นที่จึงไม่ถูกตัดสินด้วยแถวแรกที่บังเอิญอยู่บน */
-          const lbl={};
-          gids.forEach(g=>{ const cnt={};
-            alist.filter(a=>a.g===g).forEach(a=>{ const n=_gAreaOf(a)||''; cnt[n]=(cnt[n]||0)+(a.head||1); });
-            let best='', bn=-1; Object.keys(cnt).forEach(n=>{ if(cnt[n]>bn||(cnt[n]===bn&&n<best)){best=n;bn=cnt[n];} });
-            lbl[g]=best; });
-          /* พื้นที่ว่าง (ยังไม่ผูก area) ไปท้ายเสมอ ไม่ใช่ขึ้นหัวเพราะสตริงว่างเรียงมาก่อน */
-          const names=[...new Set(gids.map(g=>lbl[g]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-          gids.forEach(g=>{ const i=lbl[g]?names.indexOf(lbl[g]):names.length; _gRank[g]=i*10000+g; });
-        } else {
-          gids.forEach(g=>{ let mn=99999;
-            alist.filter(a=>a.g===g).forEach(a=>{ const t=bkV2TimeMin(_rowTime(a.r)); if(t<mn) mn=t; });
-            if(typeof vsFor==='function'){
-              const vid=(alist.find(a=>a.g===g&&a.vanId)||{}).vanId||'';
-              if(vid) vsFor(date, rid).forEach(st=>{ if(st.vanId!==vid||(+st.vanGroup||0)!==+g) return;
-                const t=bkV2TimeMin(st.time); if(t<mn) mn=t; });
-            }
-            _gRank[g]=mn*10000+g; });
-        }
-      }
-      const _gKey=g=> g>0 ? (_gRank[g]!==undefined?_gRank[g]:g) : -1;
+      /* ══ §grpDrag · อันดับกรุ๊ปตามที่คนลากไว้ ═══════════════════════════
+         ลำดับที่บันทึกไว้มาก่อน · กรุ๊ปที่ไม่อยู่ในลำดับ (เพิ่งสร้าง หรือเพิ่งย้ายคนเข้ามา)
+         ต่อท้ายตามเลขกรุ๊ป · ไม่ใช่แทรกมั่วหรือหล่นหาย                        */
+      const _gOrd=(typeof bkV2GrpOrderGet==='function')?bkV2GrpOrderGet(date, rid, z):[];
+      const _gKey=g=>{ if(!(g>0)) return -1;
+        const i=_gOrd.indexOf(g); return i>=0 ? i : (1e6 + g); };
       if(_boatCluster){
         alist.sort((x,y)=>{ const bx=_boatId(x), by=_boatId(y); const ua=bx?0:-1, ub=by?0:-1; if(ua!==ub) return ua-ub; const ka=_boatIdx(bx), kb=_boatIdx(by); if(ka!==kb) return ka-kb; const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; });
       }
@@ -48645,6 +48690,13 @@ function bkV2RenderTab2(){
         const _vsBtn = vid
           ? `<button onclick="event.stopPropagation();vsOpen('${date}','${rid}',{vanId:'${vid}',vanGroup:${g},zone:'${esc(z)}'})" title="${laT('เพิ่มจุดแวะที่ไม่ใช่ลูกค้า · ไกด์ติดรถ หรือแวะเอาของ')}" style="background:#fff;border:1px solid #B3DAE6;color:#0E7490;border-radius:7px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ ${laT('จุดแวะ')}${_vsN?(' ('+_vsN+')'):''}</button>`
           : `<span title="${laT('จุดแวะผูกกับรถ · เลือกรถให้กรุ๊ปนี้ก่อน แล้วปุ่มนี้จะกดได้')}" style="background:#FAFAF8;border:1px dashed #D9D7D0;color:#A9A7A0;border-radius:7px;padding:3px 10px;font-size:10.5px;font-weight:600;cursor:not-allowed;white-space:nowrap">+ ${laT('จุดแวะ')} · ${laT('เลือกรถก่อน')}</span>`;
+        /* ══ §grpDrag · ที่จับลาก ═══════════════════════════════════════════
+           ทำ draggable เฉพาะที่จับ ไม่ใช่ทั้งแถว · หัวกรุ๊ปโหมดจัดรถมีช่องเลือกรถ
+           กับช่องพิมพ์เวลาอยู่ในแถวเดียวกัน ถ้าทั้งแถวลากได้ การลากคลุมข้อความ
+           ในช่องพวกนั้นจะกลายเป็นการลากกรุ๊ปทันที                              */
+        const _gk=esc((typeof bkV2GrpOrderKey==='function')?bkV2GrpOrderKey(date, rid, z):(date+'::'+rid+'::'+z));
+        const _gDrag=`ondragover="bkV2GrpDragOver(event)" ondragleave="bkV2GrpDragLeave(event)" ondrop="bkV2GrpDrop(event)"`;
+        const _gHandle=`<span class="grp-grab" draggable="true" ondragstart="bkV2GrpDragStart(event)" ondragend="bkV2GrpDragEnd()" onclick="event.stopPropagation()" title="${laT('ลากเพื่อสลับลำดับกรุ๊ป · ลำดับนี้ทั้งทีมเห็นเหมือนกันและอยู่ถาวร')}">&#8942;&#8942;</span>`;
         const _gVans=[...new Set(mem.map(a=>a.vanId).filter(Boolean))];   // distinct vans in this group
         const _gConf=_gVans.length>1;   // ⚠ รถปนกัน → booking จะขึ้นใบงานผิดคัน
         const _gConfChip=_gConf?`<span title="รถปนกันในกรุ๊ป: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))} — เลือกรถใหม่ให้ทั้งกรุ๊ปเป็นคันเดียว มิฉะนั้นใบงานจะส่งคนผิดคัน" style="display:inline-flex;align-items:center;gap:5px;background:#F3E0F7;color:#7A1FA2;border:1px solid #D9A8E8;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;white-space:nowrap">&#9888; รถปนกัน: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))}</span>`:'';
@@ -48682,9 +48734,9 @@ function bkV2RenderTab2(){
              คนที่เปิดดูเฉย ๆ คือคนที่ต้องรู้ว่าทำไมรถคันเดียวโผล่สองแถบ */
           const _rndR=vid?((typeof vjRoundOfC==='function')?vjRoundOfC(date,vid,rid,g):null):null;
           const _rndRC=_rndR?`<span title="รถคันนี้วิ่งโปรแกรมนี้ ${_rndR.tot} รอบวันนี้ · แถวนี้คือรอบที่ ${_rndR.no}${_rndR.tm?(' · ออก '+esc(_rndR.tm)):''}" style="display:inline-flex;align-items:center;gap:5px;background:#fff;color:${c[1]};border:1.5px solid ${c[1]};border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800;white-space:nowrap">&#8635; รอบ ${_rndR.no} / ${_rndR.tot}</span>`:'';
-          return `<tr data-grp="${g}" data-gk="${esc(rid)}|${esc(z)}"><td colspan="${COLN}" style="background:${_bkV2Soft(c[0],(_rndR&&_rndR.no>1)?0.965:0.92)};padding:7px 12px${(_rndR&&_rndR.no>1)?(';border-top:1px dashed '+c[1]+'66'):''}">
+          return `<tr data-grp="${g}" data-gk="${_gk}" ${_gDrag}><td colspan="${COLN}" style="background:${_bkV2Soft(c[0],(_rndR&&_rndR.no>1)?0.965:0.92)};padding:7px 12px${(_rndR&&_rndR.no>1)?(';border-top:1px dashed '+c[1]+'66'):''}">
             <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
-              ${_legTag}${vanPill}${_rndRC}${_gConfChip}${_retChip}${_boatChips}
+              ${_gHandle}${_legTag}${vanPill}${_rndRC}${_gConfChip}${_retChip}${_boatChips}
               ${infoHtml}
               <span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:'DM Mono',monospace;white-space:nowrap">${mem.length} ราย · ${gseat} pax${_vsSeat?`<span style="color:#0E7490;font-weight:600"> (${laT('ลูกค้า')} ${gpax} + ${laT('ติดรถ')} ${_vsSeat})</span>`:''}${_gtime?(' · '+esc(_gtime)):''}</span>
               ${_vsBtn}
@@ -48721,9 +48773,9 @@ function bkV2RenderTab2(){
         _retPool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>กลับ: ${esc(v.name||v.id)}</option>`; });
         if(rvid && !_retPool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>กลับ: ${esc((vo&&vo.name)||rvid)}</option>`; }
         const _drvO=(typeof VANJOB_DRIVER!=='undefined'&&vid)?(VANJOB_DRIVER[date+'::'+vid]||{}):{}; const _drvV=vid?(vehGet(vid)||{}):{};   // per-date driver/phone (shared with the Van Job Order page)
-        return `<tr data-grp="${g}" data-gk="${esc(rid)}|${esc(z)}" ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="background:${vid?(_rndBg||c[0]):'#FCEDED'};box-shadow:inset 4px 0 0 ${vid?c[1]:'#D64545'};padding:6px 12px;${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
+        return `<tr data-grp="${g}" data-gk="${_gk}" ${_gDrag} ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="background:${vid?(_rndBg||c[0]):'#FCEDED'};box-shadow:inset 4px 0 0 ${vid?c[1]:'#D64545'};padding:6px 12px;${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-weight:700;font-size:12px;color:${vid?c[1]:'#C0392B'}">&#128656; กรุ๊ป ${g}${vid?'':' · ⚠ ยังไม่เลือกรถ'}</span>
+            ${_gHandle}<span style="font-weight:700;font-size:12px;color:${vid?c[1]:'#C0392B'}">&#128656; กรุ๊ป ${g}${vid?'':' · ⚠ ยังไม่เลือกรถ'}</span>
             ${_rndChip}${_rndWarn}
             ${_gConfChip}
             <span style="font-size:11px;color:#6a6a64">${mem.length} booking · <b style="color:${over?'#A32D2D':c[1]}">${gseat}${cap?'/'+cap:''} pax</b>${_vsSeat?`<span title="ลูกค้า ${gpax} คน + คนติดรถ ${_vsSeat} คน" style="color:#0E7490;font-weight:600"> · ลูกค้า ${gpax} + ติดรถ ${_vsSeat}</span>`:''}</span>
@@ -49896,6 +49948,13 @@ function bkV2RenderTab2(){
     .t2-vsrow .vsseat{display:inline-block;font-size:10px;font-weight:800;background:#FFF3DC;
       border:1px solid #EBD3A3;color:#8A5A12;border-radius:5px;padding:1px 7px;margin-left:5px;
       vertical-align:middle;white-space:nowrap}
+    /* §grpDrag · ที่จับลากหัวกรุ๊ป · จาง ๆ จนกว่าจะเอาเมาส์เข้าไป จะได้ไม่แย่งสายตา */
+    tr[data-grp] .grp-grab{display:inline-block;cursor:grab;user-select:none;letter-spacing:-2px;
+      font-size:13px;line-height:1;color:#B6B3AA;padding:2px 3px;border-radius:4px;flex:none}
+    tr[data-grp]:hover .grp-grab{color:#6A6A64;background:rgba(0,0,0,.05)}
+    tr[data-grp] .grp-grab:active{cursor:grabbing}
+    tr.grp-dragging>td{opacity:.45}
+    tr.grp-dropinto>td{box-shadow:inset 0 3px 0 #0F6E56 !important}
     .t2-vsrow .vsleg{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;
       padding:1px 7px;margin-left:6px;white-space:nowrap;vertical-align:middle}
     .t2-vsrow .vsnote{font-size:11.5px;font-style:italic;color:#57807F;display:block;
