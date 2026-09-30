@@ -45,7 +45,8 @@
     "check:mapping": "node tools/check-mapping-coverage.mjs",
     "test:chedit": "node test/ui/t_chedit.mjs",
     "test:bsgroup": "node test/ui/t_bsgroup.mjs",
-    "test:vanstop": "node test/ui/t_vanstop.mjs"
+    "test:vanstop": "node test/ui/t_vanstop.mjs",
+    "test:splitzone": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_splitzone.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"

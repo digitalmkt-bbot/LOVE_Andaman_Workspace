@@ -1373,6 +1373,31 @@ function _psuExpandTimesToAreas(times){
 function bkV2GetArea(areaId){
   return (SB_PICKUP_AREAS||[]).find(a => a.id === areaId);
 }
+/* ══ §splitZone · พื้นที่รับของแถวที่แยกคนออกมา ═══════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. "แยกคนแล้วไม่ขึ้น Zone เช่นที่ La Green Hotel and Residence"
+
+   ของเดิม แถวที่ไม่ใช่จุดหลักอ่านพื้นที่จากตัว split อย่างเดียว
+   แต่การแยกคนส่วนใหญ่ไม่ได้เลือกพื้นที่ใหม่ — จุดรับเดิมนั่นแหละ แค่แยกคนออกมา
+   พอ split ไม่มี areaId ของตัวเอง ช่องโซนเลยว่างเป็นขีด ทั้งที่บุคกิ้งแม่รู้พื้นที่อยู่แล้ว
+   คนจัดรถเห็นขีดก็จัดกลุ่มตามพื้นที่ไม่ได้ ต้องเปิดใบจองดูทีละใบ
+
+   คืนค่ามาพร้อมธง inherited เพื่อให้หน้าจอบอกได้ว่ายืมมาจากบุคกิ้งแม่
+     inherited=false · จุดแยกไม่มีจุดรับของตัวเอง หรือชื่อจุดรับเดียวกับบุคกิ้งแม่
+                       = ที่เดียวกันจริง ไม่ใช่การเดา ขึ้นป้ายเต็มเหมือนแถวปกติ
+     inherited=true  · จุดแยกมีจุดรับคนละที่ แต่ยังไม่ได้เลือกพื้นที่ให้มัน
+                       ขึ้นแบบจาง ๆ บอกว่าเป็นของบุคกิ้งแม่ ไม่ใช่ยืนยันว่าจุดนี้อยู่พื้นที่นั้น */
+function bkV2SplitArea(bk, pick, baseArea){
+  var g=function(id){ return (id && typeof bkV2GetArea==='function') ? bkV2GetArea(id) : null; };
+  var own=g(pick && pick.areaId);
+  if(own) return { area:own, name:own.name||'', inherited:false };
+  var base=baseArea || g(bk && bk.pickupAreaId);
+  var bn=base ? (base.name||'') : String((bk && bk.pickupArea)||'').trim();
+  if(!bn) return { area:null, name:'', inherited:false };
+  var n=function(x){ return String(x||'').replace(/\s+/g,' ').trim().toLowerCase(); };
+  var ph=n(pick && pick.hotel);
+  var same = !ph || ph===n(bk && bk.hotelName) || ph===n(bk && bk.pickup);
+  return { area:base||null, name:bn, inherited:!same };
+}
 // Resolve the profile that applies for a given date (YYYY-MM-DD)
 // Tiebreaker: narrower range wins (more specific) · then newer createdAt
 function psuResolveProfile(dateStr){
@@ -11430,8 +11455,12 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       //   ทำให้ขากลับที่ส่งคนละโซน (เช่น รับ Patong · ส่ง Chalong) โชว์ Patong → คนขับงง
       //   dropoffSame / มาเอง → จุดส่ง = จุดรับ จึง fallback เป็น pickArea
       const _dropAreaObj=(b.dropoffSame===false && b.dropoffAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.dropoffAreaId):_pickArea;
-      const _area=_splitPick?_splitArea:(isRet?_dropAreaObj:_pickArea);
-      const _areaEn=_area?_area.name:'';
+      /* §splitZone · แถวแยกคนที่ไม่ได้เลือกพื้นที่ใหม่ ต้องใช้พื้นที่ของบุคกิ้งแม่
+         ไม่ใช่ปล่อยช่องโซนว่าง · คนขับใช้ช่องนี้ไล่ลำดับการวิ่ง (ผู้ใช้แจ้ง 30 ก.ย.) */
+      const _splitAreaR=_splitPick && typeof bkV2SplitArea==='function'
+        ? bkV2SplitArea(b, {areaId:x.sAreaId, hotel:x.sHotel, zone:x.sZone}, _pickArea) : null;
+      const _area=_splitPick?(_splitAreaR?_splitAreaR.area:_splitArea):(isRet?_dropAreaObj:_pickArea);
+      const _areaEn=_area?_area.name:(_splitPick&&_splitAreaR?(_splitAreaR.name||''):'');
       const _pt=k=>(typeof bkV2PaxTot==='function'?bkV2PaxTot(t.pax,k):0);
       const _ad=_pt('ad'),_chd=_pt('chd'),_inf=_pt('inf'),_foc=_pt('foc');
       // §pax breakdown · a split now carries its own ad/chd/inf/foc, so a child on a second pickup
@@ -48952,7 +48981,7 @@ function bkV2RenderTab2(){
           : a.split ? `<div class="t2-altpick" title="แยกรับหลายจุด · บุคกิ้งเดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}">&#128652; ${a.pick&&a.pick.main?'จุดหลัก':'แยกรับ'} · เดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}</div>` : '';
         const _2nd = a.split && !a.first;   // a non-first split allocation row → hide booking-level cells (Pay/Total/Voucher/Add-on) to avoid duplicating them across the split rows
         return {g:a.g, boat:_rowBid||'', html:`
-          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}"${_rowStyle}>
+          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}"${_rowStyle} data-al="${esc(a.key)}">
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
@@ -48981,15 +49010,39 @@ function bkV2RenderTab2(){
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
-            <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
+            <td>${(function(){
+              /* ══ §splitZone · โซนของแถวที่แยกคนออกมา ════════════════════════
+                 ผู้ใช้แจ้ง 30 ก.ย. "แยกคน แล้วไม่ขึ้น Zone เช่นที่ La Green Hotel"
+                 ของเดิมแถวที่ไม่ใช่จุดหลักอ่านพื้นที่จาก split อย่างเดียว
+                 การแยกคนส่วนใหญ่ไม่ได้เลือกพื้นที่ใหม่ (จุดรับเดิมนั่นแหละ แค่แยกคน)
+                 พอไม่มีพื้นที่ของตัวเอง เลยได้ขีดเปล่า ทั้งที่บุคกิ้งแม่รู้อยู่แล้ว
+                 ตอนนี้ยืมของแม่มาโชว์ · แต่ถ้าจุดแยกไปรับคนละที่ ติดป้ายจาง ๆ ไว้
+                 ว่าเป็นของแม่ ไม่ใช่การยืนยันว่าจุดนั้นอยู่พื้นที่นี้จริง              */
+              const _raw=laT('จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area');
+              const _lend=laT('พื้นที่ของบุคกิ้งแม่ · จุดแยกนี้ยังไม่ได้เลือกพื้นที่รับของตัวเอง');
+              const _zt=(t,o)=>{ o=o||{};
+                const st=(o.raw?'background:#F4F3EF;color:#8A887F;font-style:italic':'')
+                       + (o.lend?(o.raw?';opacity:.8':'opacity:.62;font-style:italic'):'');
+                const ti=[o.raw?_raw:'', o.lend?_lend:''].filter(Boolean).join(' · ');
+                return `<span class="t2-zonetag"${o.lend?' data-lend="1"':''}${st?` style="${st}"`:''}${ti?` title="${ti}"`:''}>${esc(t)}</span>`; };
+              const _dash='<span class="t2-dim">&mdash;</span>';
+              if(a.split && a.pick && !a.pick.main){
+                const _sa=(a.pick.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.pick.areaId):null;
+                if(_sa&&_sa.name) return _zt(_sa.name);
+                const _sz=String(a.pick.zone||'').trim();
+                if(_sz) return _zt(_sz);
+                const _r=(typeof bkV2SplitArea==='function')?bkV2SplitArea(bk, a.pick, null):{name:'',area:null,inherited:false};
+                if(!_r.name) return _dash;
+                return _zt(_r.name, { raw:!_r.area, lend:_r.inherited });
+              }
               // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
               // ขึ้น "—" ทั้งที่ลูกค้าเลือก area มาแล้ว. อ่าน pickupAreaId ก่อน (ops แก้เองได้ · sync ไม่ทับ)
               // แล้วค่อย fallback เป็นข้อความดิบจาก B2C (โชว์แบบจาง = ยังไม่ผูกกับ area ในระบบ)
               const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
-              if(_pa&&_pa.name) return `<span class="t2-zonetag">${esc(_pa.name)}</span>`;
-              const _raw=(bk.pickupArea||'').trim();
-              if(!_raw) return '<span class="t2-dim">—</span>';
-              return `<span class="t2-zonetag" style="background:#F4F3EF;color:#8A887F;font-style:italic" title="${laT('จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area')}">${esc(_raw)}</span>`;
+              if(_pa&&_pa.name) return _zt(_pa.name);
+              const _rw=(bk.pickupArea||'').trim();
+              if(!_rw) return _dash;
+              return _zt(_rw, { raw:true });
             })()}</td>
             <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
