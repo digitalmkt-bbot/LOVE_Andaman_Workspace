@@ -3012,6 +3012,50 @@
   </div>
 </div>
 
+<!-- §vanStop · จุดแวะของรถที่ไม่ใช่ booking (ไกด์ติดรถ · แวะเอาของ) -->
+<div class="modal-overlay" id="vanstop-modal">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-hd">
+      <div class="modal-icon" style="background:#0E7490">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z"/></svg>
+      </div>
+      <div><div class="modal-title" id="vs-title">เพิ่มจุดแวะ</div><div class="modal-sub" id="vs-sub">ไม่ใช่ลูกค้า · ไม่นับที่นั่งเรือ · ขึ้นใบงานรถและหน้าเช็คอินรถ</div></div>
+      <button class="modal-close" onclick="closeModal('vanstop-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="vs-k" value=""><input type="hidden" id="vs-date" value="">
+      <input type="hidden" id="vs-route" value=""><input type="hidden" id="vs-van" value="">
+      <input type="hidden" id="vs-grp" value="0"><input type="hidden" id="vs-kind" value="staff">
+      <div class="form-row"><label class="form-label">ชนิด</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-kind-pills">
+          <div class="loc-pill on" onclick="vsPickKind('staff',this)">&#128100; คนติดรถ</div>
+          <div class="loc-pill" onclick="vsPickKind('cargo',this)">&#128230; ของ</div>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">รายละเอียด <span style="color:var(--red)">*</span></label>
+        <input type="text" id="vs-label" placeholder="เช่น ไกด์ สมชาย / รับเสื้อชูชีพ 20 ตัว"></div>
+      <div class="form-2">
+        <div class="form-row" id="vs-pax-row"><label class="form-label">จำนวนคน <span style="color:var(--red)">*</span></label>
+          <input type="number" id="vs-pax" value="1" min="1"></div>
+        <div class="form-row"><label class="form-label">เวลาแวะ</label><input type="text" id="vs-time" placeholder="07:15"></div>
+      </div>
+      <div class="form-row"><label class="form-label">จุดแวะ <span style="color:var(--red)">*</span></label>
+        <input type="text" id="vs-place" placeholder="เช่น ออฟฟิศ ถลาง"></div>
+      <div class="form-2">
+        <div class="form-row"><label class="form-label">โซน</label><input type="text" id="vs-zone" placeholder="เช่น Patong"></div>
+        <div class="form-row"><label class="form-label">เบอร์ติดต่อ</label><input type="text" id="vs-phone" placeholder="089-xxx-xxxx"></div>
+      </div>
+      <div class="form-row"><label class="form-label">หมายเหตุให้คนขับ</label>
+        <input type="text" id="vs-note" placeholder="เช่น ไปประจำเรือที่ท่า ไม่ลงเรือ"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="vs-del" onclick="vsDelGo()" style="margin-right:auto;color:#A32D2D;display:none">ลบจุดแวะ</button>
+      <button class="btn btn-ghost" onclick="closeModal('vanstop-modal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="vsSubmit()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/07-charter.js?v=4f2af328"></script>
 <!-- Doc Inline Edit Popup -->
 <div class="doc-edit-popup" id="doc-edit-popup">
@@ -3031,7 +3075,7 @@
   </div>
 </div>
 
-<script src="js/08-app.js?v=c3f94a1c"></script>
+<script src="js/08-app.js?v=9d210356"></script>
 <script src="js/09-action-board.js?v=70374360"></script>
 </body>
 </html>

@@ -44,7 +44,8 @@
     "test:maproundtrip": "node test/ui/t_maproundtrip.mjs",
     "check:mapping": "node tools/check-mapping-coverage.mjs",
     "test:chedit": "node test/ui/t_chedit.mjs",
-    "test:bsgroup": "node test/ui/t_bsgroup.mjs"
+    "test:bsgroup": "node test/ui/t_bsgroup.mjs",
+    "test:vanstop": "node test/ui/t_vanstop.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"

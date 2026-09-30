@@ -2127,6 +2127,12 @@ async function initDb(){
       // ค่าเป็น object ซ้อน map + array → เก็บทั้งก้อนเป็น JSON text แบบ vanjob_sent
       // เพิ่มช่องในใบวางบิลภายหลังไม่ต้องแตะ DB อีก
       await sq('van_bill table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_bill" (id text PRIMARY KEY, key text, value text)`);
+      /* §vanStop · จุดแวะของรถที่ไม่ใช่ booking · VAN_STOPS['YYYY-MM-DD::routeId::id'] =
+         {kind:'staff'|'cargo', label, pax, time, place, zone, phone, note, vanId, vanGroup, vanSeq, ck}
+         ไกด์ติดรถไปท่า หรือแวะเอาของที่ออฟฟิศ · ไม่ใช่ลูกค้า ไม่ลงเรือ ไม่แตะที่นั่งเรือ
+         คนกินที่นั่งรถ ของไม่กิน · ขึ้นสามหน้า By trip · ใบงานรถ · เช็คอินรถ
+         ค่าเป็น JSON ทั้งก้อนเหมือน van_bill → เพิ่มช่องในจุดแวะทีหลังไม่ต้องแตะ DB อีก */
+      await sq('van_stops table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_stops" (id text PRIMARY KEY, key text, value text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)

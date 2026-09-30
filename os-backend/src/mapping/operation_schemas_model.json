@@ -6999,6 +6999,25 @@
     "foreign_keys": [],
     "rows": 0
   },
+  "van_stops": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
   "po_cash_rows": {
     "columns": [
       {

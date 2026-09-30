@@ -7561,6 +7561,24 @@
       "note": "ทั้งก้อนเป็น JSON text เหมือน vanjob_sent — perPax/rate/rows/extra/by/at เพิ่มช่องได้โดยไม่ต้องแตะ DB"
     }
   },
+  "van_stops": {
+    "id": {
+      "source": "van_stops map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "van_stops map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "van_stops[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "§vanStop · จุดแวะที่ไม่ใช่ booking · ทั้งก้อนเป็น JSON text เหมือน van_bill — kind/label/pax/time/place/zone/phone/note/vanId/vanGroup/vanSeq/ck เพิ่มช่องได้โดยไม่ต้องแตะ DB"
+    }
+  },
   "po_cash_rows": {
     "id": {
       "source": "po_cash_rows[].id (record id)",
