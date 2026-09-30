@@ -3025,11 +3025,18 @@
     <div class="modal-body">
       <input type="hidden" id="vs-k" value=""><input type="hidden" id="vs-date" value="">
       <input type="hidden" id="vs-route" value=""><input type="hidden" id="vs-van" value="">
-      <input type="hidden" id="vs-grp" value="0"><input type="hidden" id="vs-kind" value="staff">
+      <input type="hidden" id="vs-grp" value="0"><input type="hidden" id="vs-kind" value="staff"><input type="hidden" id="vs-leg" value="out">
       <div class="form-row"><label class="form-label">ชนิด</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-kind-pills">
           <div class="loc-pill on" onclick="vsPickKind('staff',this)">&#128100; คนติดรถ</div>
           <div class="loc-pill" onclick="vsPickKind('cargo',this)">&#128230; ของ</div>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">ขาที่รถต้องแวะ</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-leg-pills">
+          <div class="loc-pill on" onclick="vsPickLeg('out',this)">&#8594; ขาไป</div>
+          <div class="loc-pill" onclick="vsPickLeg('ret',this)">&#8617; ขากลับ</div>
+          <div class="loc-pill" onclick="vsPickLeg('both',this)">&#8646; ไป-กลับ</div>
         </div>
       </div>
       <div class="form-row"><label class="form-label">รายละเอียด <span style="color:var(--red)">*</span></label>
@@ -3042,7 +3049,9 @@
       <div class="form-row"><label class="form-label">จุดแวะ <span style="color:var(--red)">*</span></label>
         <input type="text" id="vs-place" placeholder="เช่น ออฟฟิศ ถลาง"></div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">โซน</label><input type="text" id="vs-zone" placeholder="เช่น Patong"></div>
+        <div class="form-row"><label class="form-label">พื้นที่รับ</label>
+          <select id="vs-area"><option value="">— ไม่ระบุ —</option></select>
+          <input type="hidden" id="vs-zone" value=""></div>
         <div class="form-row"><label class="form-label">เบอร์ติดต่อ</label><input type="text" id="vs-phone" placeholder="089-xxx-xxxx"></div>
       </div>
       <div class="form-row"><label class="form-label">หมายเหตุให้คนขับ</label>
@@ -3075,7 +3084,7 @@
   </div>
 </div>
 
-<script src="js/08-app.js?v=4944cde0"></script>
+<script src="js/08-app.js?v=b75671bf"></script>
 <script src="js/09-action-board.js?v=70374360"></script>
 </body>
 </html>

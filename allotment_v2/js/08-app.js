@@ -8146,6 +8146,30 @@ function bkV2BoatPicker(el, bkId, routeId){
 function bkV2BoatPickSet(bkId, boatId, date){ const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove(); bkV2AssignBoat(bkId, boatId, date||''); }
 function bkV2ToggleBoatMode(){ _bkV2.boatAssignMode=!_bkV2.boatAssignMode; if(_bkV2.boatAssignMode) _bkV2.vanAssignMode=false; bkV2Render(); }
 function bkV2ToggleVanMode(){ _bkV2.vanAssignMode=!_bkV2.vanAssignMode; if(_bkV2.vanAssignMode){_bkV2.boatAssignMode=false;_bkV2.reconfirmMode=false;} bkV2Render(); }
+/* ══ §grpSort · ลำดับที่โชว์ของกรุ๊ปรถ ════════════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. "พอ User จับกรุ๊ปแล้ว อยากมีการเรียงกรุ๊ปตามที่ User ถนัด
+   บางคนอยากจับกลุ่มตาม Pickup area" · ทีมเลือกให้ค่าที่ตั้งเป็นของทั้งทีม
+   เก็บเป็นคีย์ scalar บนสุดของ blob → sync ผ่าน app_meta · ไม่ต้องมี migration
+   ย้ำ: เปลี่ยนแค่ "ลำดับที่โชว์" · เลขกรุ๊ป การจัดคน และใบงาน ไม่ถูกแตะเลย    */
+const BKV2_GRP_SORTS=[
+  {v:'grp',  t:'เลขกรุ๊ป',        d:'เรียงตามเลขกรุ๊ป 1 2 3 · แบบเดิม'},
+  {v:'area', t:'พื้นที่รับ',       d:'กรุ๊ปที่รับพื้นที่เดียวกันอยู่ติดกัน'},
+  {v:'time', t:'เวลารับแรกสุด',   d:'กรุ๊ปที่ออกเช้าสุดขึ้นก่อน'}];
+function bkV2GrpSort(){
+  try{ const v=String((laBlob()||{}).bkv2_grp_sort||'grp');
+       return BKV2_GRP_SORTS.some(x=>x.v===v)?v:'grp'; }catch(_){ return 'grp'; }
+}
+function bkV2SetGrpSort(v){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  if(!BKV2_GRP_SORTS.some(x=>x.v===v)) v='grp';
+  try{ const d=laBlob(); d.bkv2_grp_sort=v; laBlobSave(); }catch(e){ console.warn('grp-sort save failed', e); }
+  if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else bkV2Render();
+}
+/* เวลา "07:30-07:45" หรือ "7:05" → นาที · ไม่มีเวลา = ท้ายสุด ไม่ใช่เที่ยงคืน */
+function bkV2TimeMin(t){
+  const m=/(\d{1,2}):(\d{2})/.exec(String(t||'')); if(!m) return 99999;
+  return (+m[1])*60 + (+m[2]);
+}
 function bkV2ToggleReconfirmMode(){ _bkV2.reconfirmMode=!_bkV2.reconfirmMode; if(_bkV2.reconfirmMode){_bkV2.boatAssignMode=false;_bkV2.vanAssignMode=false;} bkV2Render(); }
 // ── Re-confirmation · confirm actual pickup time with the agent ──
 function bkV2Reconfirm(bkId, via){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done', via:via||'list', at:new Date().toISOString(), by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+')','Notify'); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
@@ -9243,9 +9267,36 @@ function vsFor(date, routeId){
    ทุกที่ที่ต้องนับหัวต้องเรียกตัวนี้ตัวเดียว ห้ามอ่าน s.pax ตรง ๆ
    ไม่งั้นวันหนึ่งจะมีที่ที่ลืมเช็ค kind แล้วของกลายเป็นคน */
 function vsSeats(s){ return (s && s.kind==='staff') ? Math.max(0, parseInt(s.pax,10)||0) : 0; }
-function vsSeatsOfVan(date, routeId, vanId, grp){
+/* ══ §vsLeg · จุดแวะมีขาของมัน ════════════════════════════════════════════
+   ทีมแจ้ง 30 ก.ย. "มันจะมีทั้งติดรถไปกลับด้วย" · ของเดิมสมมุติว่าทุกจุดเป็นขาไป
+   out  · แวะตอนรับ ไปท่าเรือ        ret · แวะตอนส่งกลับ        both · ทั้งสองขา
+   ค่าเก่าที่ไม่มีช่องนี้ = ขาไป (ตรงกับเคสที่ทีมใช้อยู่ตอนนั้น) ไม่ต้องแก้ข้อมูลเดิม
+   ที่นั่ง: คนที่ติดไปแต่ขากลับ ไม่กินที่นั่งขาไป — ยอดของกรุ๊ปจึงต้องถามขาด้วย */
+function vsLegOf(s){ const v=(s&&s.leg)||'out'; return (v==='ret'||v==='both')?v:'out'; }
+function vsOnLeg(s, isRet){ const lg=vsLegOf(s); return isRet ? (lg==='ret'||lg==='both') : (lg==='out'||lg==='both'); }
+const VS_LEG={ out:{t:'ขาไป', ic:'\u2192', c:'#0E7490', bg:'#E3F2F6'},
+               ret:{t:'ขากลับ', ic:'\u21A9', c:'#8A6A1A', bg:'#FBF3E0'},
+               both:{t:'ไป-กลับ', ic:'\u21C6', c:'#534AB7', bg:'#EAE8FA'} };
+function vsSeatsOfVan(date, routeId, vanId, grp, isRet){
   return vsFor(date, routeId).filter(s=>s.vanId===vanId && (!grp || (+s.vanGroup||0)===(+grp||0)))
+                             .filter(s=>vsOnLeg(s, !!isRet))
                              .reduce((n,s)=>n+vsSeats(s), 0);
+}
+/* ══ §vsArea · พื้นที่รับของจุดแวะ ต้องมาจากรายการเดียวกับลูกค้า ═══════════
+   ผู้ใช้แจ้ง 30 ก.ย. "Zone ควรเป็น Pickup Area ที่ User ระบุ Phuket Town Patong"
+   ของเดิมเป็นช่องพิมพ์เปล่า · คนกรอก "PK" (โซนหยาบ) ในคอลัมน์ที่ลูกค้าขึ้น "Patong"
+   ตอนนี้เลือกจาก SB_PICKUP_AREAS ชุดเดียวกับที่ลูกค้าใช้ · เก็บ areaId ไว้ด้วย
+   แล้ว zone เก็บ "ชื่อพื้นที่" ไว้ให้ของเก่าที่พิมพ์มือยังอ่านออกเหมือนเดิม */
+function vsAreaName(s){
+  if(!s) return '';
+  try{ if(s.areaId && typeof SB_PICKUP_AREAS!=='undefined'){
+    const a=(SB_PICKUP_AREAS||[]).find(x=>x.id===s.areaId); if(a) return a.name||''; } }catch(_){}
+  return String(s.zone||'').trim();
+}
+function vsAreaTh(s){
+  const n=vsAreaName(s); if(!n) return '';
+  try{ if(typeof VANJOB_AREA_TH!=='undefined' && VANJOB_AREA_TH[n]) return VANJOB_AREA_TH[n]; }catch(_){}
+  return '';
 }
 function vsSave(rec){
   if(!rec || !rec.date || !rec.routeId) return null;
@@ -9255,7 +9306,9 @@ function vsSave(rec){
   VAN_STOPS[k] = { kind: (rec.kind==='cargo'?'cargo':'staff'),
     label:String(rec.label||'').trim(), pax:Math.max(0,parseInt(rec.pax,10)||0),
     time:String(rec.time||'').trim(), place:String(rec.place||'').trim(),
-    zone:String(rec.zone||'').trim(), phone:String(rec.phone||'').trim(),
+    zone:String(rec.zone||'').trim(), areaId:String(rec.areaId||'').trim(),
+    leg:((rec.leg==='ret'||rec.leg==='both')?rec.leg:'out'),
+    phone:String(rec.phone||'').trim(),
     note:String(rec.note||'').trim(),
     vanId: rec.vanId!==undefined ? (rec.vanId||null) : (old.vanId||null),
     vanGroup: rec.vanGroup!==undefined ? (+rec.vanGroup||0) : (+old.vanGroup||0),
@@ -9290,6 +9343,38 @@ function vsPickKind(kind, el){
   const row=document.getElementById('vs-pax-row');
   if(row) row.style.display = (kind==='cargo') ? 'none' : '';
 }
+function vsPickLeg(leg, el){
+  const v=(leg==='ret'||leg==='both')?leg:'out';
+  const h=document.getElementById('vs-leg'); if(h) h.value=v;
+  document.querySelectorAll('#vs-leg-pills .loc-pill').forEach(p=>p.classList.remove('on'));
+  if(el) el.classList.add('on');
+}
+function _vsLegPillEl(leg){
+  return [...document.querySelectorAll('#vs-leg-pills .loc-pill')]
+    .find(p=>new RegExp("'"+leg+"'").test(p.getAttribute('onclick')||'')) || null;
+}
+/* รายการพื้นที่รับ · จัดกลุ่มตามโซนหยาบ (PK/KL) ให้หาง่ายเหมือนที่ทีมคุ้นอยู่แล้ว */
+function _vsFillAreas(sel){
+  const el=document.getElementById('vs-area'); if(!el) return;
+  /* esc() อยู่ในสโคปของ bkV2Render ไม่ใช่ตัวกลางของทั้งไฟล์ · ตรงนี้เป็นฟังก์ชันระดับบนสุด
+     เรียก esc ตรง ๆ จะพังตอนเปิดกล่อง (เจอตอนลองเปิดจริง 30 ก.ย.) */
+  const _e=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+              .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const arr=(typeof SB_PICKUP_AREAS!=='undefined' && SB_PICKUP_AREAS)?SB_PICKUP_AREAS.slice():[];
+  const zl=z=> z==='PK'?'ภูเก็ต · Phuket' : z==='KL'?'เขาหลัก · Khao Lak' : (z||'อื่น ๆ');
+  const zones=[...new Set(arr.map(a=>a.zone||''))];
+  let h='<option value="">— ไม่ระบุ —</option>';
+  zones.forEach(z=>{
+    const inz=arr.filter(a=>(a.zone||'')===z).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    if(!inz.length) return;
+    h+='<optgroup label="'+_e(zl(z))+'">'
+      + inz.map(a=>'<option value="'+_e(a.id)+'">'+_e(a.name||a.id)+'</option>').join('')
+      + '</optgroup>';
+  });
+  el.innerHTML=h;
+  el.value=sel||'';
+  if(sel && el.value!==sel) el.value='';   /* พื้นที่ถูกลบไปแล้ว · กลับไปเป็นไม่ระบุ แทนที่จะโชว์ค่าผิด */
+}
 function _vsKindPillEl(kind){
   return [...document.querySelectorAll('#vs-kind-pills .loc-pill')]
     .find(p=>new RegExp("'"+kind+"'").test(p.getAttribute('onclick')||'')) || null;
@@ -9300,8 +9385,10 @@ function vsOpen(date, routeId, opt){
   set('vs-k',''); set('vs-date',date||''); set('vs-route',routeId||'');
   set('vs-van', opt.vanId||''); set('vs-grp', opt.vanGroup||0);
   set('vs-label',''); set('vs-pax','1'); set('vs-time',''); set('vs-place','');
-  set('vs-zone', opt.zone||''); set('vs-phone',''); set('vs-note','');
+  set('vs-zone',''); set('vs-phone',''); set('vs-note','');
+  _vsFillAreas('');
   vsPickKind('staff', _vsKindPillEl('staff'));
+  vsPickLeg('out', _vsLegPillEl('out'));
   const rn=(typeof getRoute==='function' && getRoute(routeId)) ? getRoute(routeId).name : (routeId||'');
   const t=document.getElementById('vs-title'); if(t) t.textContent='เพิ่มจุดแวะ';
   const s=document.getElementById('vs-sub'); if(s) s.textContent=(date||'')+(rn?(' · '+rn):'');
@@ -9317,7 +9404,9 @@ function vsEditOpen(k){
   set('vs-label', v.label||''); set('vs-pax', v.pax||1); set('vs-time', v.time||'');
   set('vs-place', v.place||''); set('vs-zone', v.zone||''); set('vs-phone', v.phone||'');
   set('vs-note', v.note||'');
+  _vsFillAreas(v.areaId||'');
   vsPickKind(v.kind==='cargo'?'cargo':'staff', _vsKindPillEl(v.kind==='cargo'?'cargo':'staff'));
+  { const _lg=vsLegOf(v); vsPickLeg(_lg, _vsLegPillEl(_lg)); }
   const rn=(typeof getRoute==='function' && getRoute(p.routeId)) ? getRoute(p.routeId).name : p.routeId;
   const t=document.getElementById('vs-title'); if(t) t.textContent='แก้ไขจุดแวะ';
   const s=document.getElementById('vs-sub'); if(s) s.textContent=p.date+(rn?(' · '+rn):'');
@@ -9335,8 +9424,14 @@ function vsSubmit(){
   /* คนศูนย์คนไม่ใช่จุดแวะ · ถ้าไม่มีใครขึ้นรถจริงก็ไม่ควรกินที่นั่ง แล้วคนขับจะงงว่าต้องรอใคร */
   if(kind==='staff' && !(pax>0)){ alert('How many people ride along? Enter at least 1'); return; }
   const k=val('vs-k');
+  /* พื้นที่รับ · เก็บ id ไว้ผูกกับทะเบียนพื้นที่ และเก็บชื่อไว้ให้อ่านออกถ้าพื้นที่ถูกลบทีหลัง */
+  const areaId=String(val('vs-area')||'').trim();
+  const _ar=areaId && typeof SB_PICKUP_AREAS!=='undefined'
+    ? (SB_PICKUP_AREAS||[]).find(a=>a.id===areaId) : null;
   const rec={ id: k?vsParse(k).id:'', date: val('vs-date'), routeId: val('vs-route'),
-    kind, label, pax, time:val('vs-time'), place, zone:val('vs-zone'),
+    kind, label, pax, time:val('vs-time'), place,
+    areaId, zone: _ar ? (_ar.name||'') : String(val('vs-zone')||'').trim(),
+    leg: val('vs-leg'),
     phone:val('vs-phone'), note:val('vs-note'),
     vanId: val('vs-van')||null, vanGroup: +val('vs-grp')||0 };
   if(!rec.date || !rec.routeId){ alert('Stop must belong to a programme on a date'); return; }
@@ -11153,20 +11248,36 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
        ไกด์ติดรถ · แวะเอาของ · เป็นที่ที่รถต้องขับไปจริง จึงต้องอยู่ในลำดับการวิ่ง
        ไม่ใช่หมายเหตุท้ายใบที่คนขับต้องอ่านย้อน · ใส่เข้า rows ก่อนเรียง
        เพื่อให้ใช้ตัวเรียงและตัวนับลำดับตัวเดียวกับแถวลูกค้า ไม่ต้องมีสองระบบ
-       ขากลับยังไม่รองรับ · เคสที่ทีมแจ้งเป็นขารับทั้งหมด                      */
-    if(!isRet && typeof vsFor==='function'){
+       §vsLeg · จุดแวะรู้ขาของตัวเองแล้ว · ขากลับขึ้นตารางขากลับ ไป-กลับขึ้นทั้งสอง */
+    if(typeof vsFor==='function'){
       vsFor(date, routeId).forEach(st=>{
         if(st.vanId!==vanId) return;
         if(_G && (+st.vanGroup||0)!==_G) return;
+        if(typeof vsOnLeg==='function' && !vsOnLeg(st, isRet)) return;
         rows.push({ _vs:st, seq:+st.vanSeq||0 });
       });
     }
     /* เวลาของแถว · ลูกค้าอ่านจาก ops ของวันนั้น จุดแวะอ่านจากตัวมันเอง
        ไม่ใส่เวลา = ไปท้ายแถว ไม่ใช่หัวแถว (สตริงว่างเรียงมาก่อนทุกเวลา) */
     const _rowTime=x=>{ const v=x._vs?String(x._vs.time||'').trim():String(_ptime(x.b,x.t)||'').trim(); return v||'~'; };
+    /* ══ §vsSeqTime · แถวที่ยังไม่มีลำดับมือ ต้องแทรกตามเวลา ═══════════════
+       ผู้ใช้แจ้ง 30 ก.ย. "ใบงาน เวลาควรเรียงด้วย" — จุดแวะ 05:50 ไปโผล่ท้ายใบ
+       ใต้ลูกค้า 07:30 · เพราะของเดิมให้แถวที่ vanSeq=0 เป็นลำดับ 9999 = กองท้าย
+       ลำดับที่คนตั้งเองยังต้องชนะเวลา (บางวันจงใจวนสวนทาง) จึงไม่ทิ้ง vanSeq
+       ทำเป็น "แทรก": แถวไม่มีลำดับ ไปยืนก่อนแถวมีลำดับตัวแรกที่เวลามาทีหลัง
+       ผลคือ 05:50 ขึ้นหัวใบ และลำดับมือของแถวอื่นไม่ถูกสลับแม้แต่คู่เดียว   */
+    const _seqRows=rows.filter(x=>(x.seq||0)>0).sort((a,b)=>(a.seq||0)-(b.seq||0));
+    const _rank=x=>{
+      const sq=x.seq||0;
+      if(sq>0) return _seqRows.findIndex(y=>y===x);
+      const t=_rowTime(x);
+      let i=0; while(i<_seqRows.length && _rowTime(_seqRows[i])<=t) i++;
+      return i-0.5;                         /* แทรกระหว่างคู่ที่มันตกอยู่ตรงกลาง */
+    };
     rows.sort((a,b)=>{
       if(isRet){ const ea=(a.outVid&&a.outVid!==vanId)?1:0, eb=(b.outVid&&b.outVid!==vanId)?1:0; if(ea!==eb) return ea-eb; }   // return: "came from another van" rows go LAST
-      const sa=a.seq||0, sb=b.seq||0; if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; } return _rowTime(a).localeCompare(_rowTime(b)); });
+      if(_seqRows.length){ const ra=_rank(a), rb=_rank(b); if(ra!==rb) return ra-rb; }
+      return _rowTime(a).localeCompare(_rowTime(b)); });
     return rows; };
   // Shared column widths so the OUTBOUND and RETURN tables line up exactly (table-layout:fixed)
   const _colg='<colgroup><col style="width:2.5%"><col style="width:11%"><col style="width:11%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:8.5%"><col style="width:13.5%"><col style="width:4.5%"><col style="width:6%"><col style="width:14%"><col style="width:3.8%"><col style="width:8.5%"></colgroup>';
@@ -11183,19 +11294,24 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
         const st=x._vs, K=(typeof VS_KIND!=='undefined'&&VS_KIND[st.kind])||{t:'',ic:''};
         const seats=(typeof vsSeats==='function')?vsSeats(st):0;
         vsSeatTot+=seats; vsN++;
+        /* §vsArea · ช่องพื้นที่รับใช้ชุดเดียวกับลูกค้า · §vsLeg · บอกขาเมื่อเป็นไป-กลับ */
+        const _vsAr=(typeof vsAreaName==='function')?vsAreaName(st):(st.zone||'');
+        const _vsArTh=(typeof vsAreaTh==='function')?vsAreaTh(st):'';
+        const _vsLgK=(typeof vsLegOf==='function')?vsLegOf(st):'out';
+        const _vsLg=Object.assign({both:_vsLgK==='both'},(typeof VS_LEG!=='undefined'&&VS_LEG[_vsLgK])||{t:''});
         const _n=++_seqNo;
         const _dash='<span style="color:#bbb">-</span>';
         return `<tr style="background:#F4FBFD">
         <td style="text-align:center"><b style="color:#0E7490">${_n}</b></td>
         <td style="text-align:center;font-size:11px;font-weight:800;color:#0E7490;letter-spacing:.04em">${e(laT('แวะ'))}</td>
         <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:#0A5468">${K.ic} ${e(st.label||'')}
-          <div class="ag" style="color:#0E7490;font-weight:700">${e(K.t)}${seats?(' · '+e(laTp('{0} ที่นั่ง', seats))):''}</div></td>
+          <div class="ag" style="color:#0E7490;font-weight:700">${e(K.t)}${seats?(' · '+e(laTp('{0} ที่นั่ง', seats))):''}${_vsLg.both?` · ${e(_vsLg.t)}`:''}</div></td>
         <td style="text-align:center">${_dash}</td><td style="text-align:center">${_dash}</td>
         <td style="text-align:center">${_dash}</td><td style="text-align:center">${_dash}</td>
         <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:#0E7490;white-space:nowrap">${e(st.time||'')||_dash}</td>
         <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#0A5468">${e(st.place||'')}${st.phone?`<div class="ag" style="color:#0E7490">${e(st.phone)}</div>`:''}</td>
         <td style="text-align:center">${_dash}</td>
-        <td>${e(st.zone||'')||_dash}</td>
+        <td>${_vsAr?`<div style="font-weight:600;line-height:1.25">${e(_vsAr)}</div>${_vsArTh?`<div style="font-size:11px;color:#185FA5;line-height:1.25">${e(_vsArTh)}</div>`:''}`:_dash}</td>
         <td style="font-size:var(--vjt-loc,14.5px)">${_dash}</td>
         <td style="text-align:center">${_dash}</td>
         <td style="font-size:12.5px;color:#57807F;font-style:italic">${e(st.note||'')}</td>
@@ -15657,6 +15773,7 @@ function vckSheetCSS(){
   +'#vancheckin-host .vstag2{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.04em;background:#0E7490;color:#fff;border-radius:5px;padding:2px 7px;white-space:nowrap}'
   +'#vancheckin-host .vswho2{font-weight:700;color:#0A5468}'
   +'#vancheckin-host .vskind2{font-size:10px;font-weight:700;color:#0E7490;margin-top:2px}'
+  +'#vancheckin-host .vsleg{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:1px 7px;margin-left:6px;white-space:nowrap;vertical-align:middle}'
   +'#vancheckin-host .vsnote2{font-size:11.5px;font-style:italic;color:#57807F}'
   +'#vancheckin-host .vckmono{font-family:\'DM Mono\',monospace;font-size:11.5px}'
   +'#vancheckin-host .vckn b{font-family:\'DM Mono\',monospace;font-size:14px;font-weight:800;color:#0E7490}'
@@ -15836,6 +15953,11 @@ function vckStopRow(st){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var K=(typeof VS_KIND!=='undefined'&&VS_KIND[st.kind])||{t:'',ic:''};
   var seats=(typeof vsSeats==='function')?vsSeats(st):0;
+  var _ar=(typeof vsAreaName==='function')?vsAreaName(st):(st.zone||'');
+  var _lgk=(typeof vsLegOf==='function')?vsLegOf(st):'out';
+  var _lg=(typeof VS_LEG!=='undefined'&&VS_LEG[_lgk])||{t:'',ic:'',c:'#0E7490',bg:'#E3F2F6'};
+  /* §vsLeg · ขาไปเป็นค่าปกติ ไม่ต้องป่าวประกาศ · ขากลับกับไป-กลับต้องเห็นชัด */
+  var legChip=(_lgk==='out')?'':('<span class="vsleg" style="background:'+_lg.bg+';color:'+_lg.c+'">'+_lg.ic+' '+e(_lg.t)+'</span>');
   var on=!!(st.ck&&st.ck.at);
   var d='<span class="ck-dim">&mdash;</span>';
   var ctl = seats>0
@@ -15852,12 +15974,13 @@ function vckStopRow(st){
     + '<td>'+d+'</td><td>'+d+'</td>'
     + '<td><span class="vswho2">'+e(st.label||'')+'</span>'
       + (st.phone?' <span class="ck-dim vckmono">'+e(st.phone)+'</span>':'')
+      + legChip
       + '<div class="vskind2">'+e(K.t)+(seats?(' · '+e(laTp('{0} ที่นั่ง', seats))):'')+'</div></td>'
     + '<td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td>'
     + '<td class="vckmono">'+(e(st.time||'')||d)+'</td>'
     + '<td>'+e(st.place||'')+'</td>'
     + '<td class="ck-c">'+d+'</td>'
-    + '<td>'+(e(st.zone||'')||d)+'</td>'
+    + '<td>'+(e(_ar)||d)+'</td>'
     + '<td>'+(st.note?('<span class="vsnote2">'+e(st.note)+'</span>'):d)+'</td>'
     + '<td class="ck-c ck-in">'+ctl+'</td><td class="ck-in">'+d+'</td>'
     + '<td class="ck-c ck-in">'+d+'</td><td class="ck-in">'+stat+'</td>'
@@ -48128,13 +48251,26 @@ function bkV2RenderTab2(){
     `<button class="bt-mc ${kind}${on?' on':''}${dis?' dis':''}" style="--mc:${col}" onclick="${dis?'':fn}" title="${esc(nm)}">
        <span class="tx"><span class="t">${nm}</span><span class="s">${sub}</span></span>
        <span class="n">${num}</span>${on?'<span class="x">&times;</span>':''}</button>`;
+  /* ══ §grpSort · ปุ่มเลือกวิธีเรียงกรุ๊ป ════════════════════════════════
+     วางไว้ใต้ปุ่มโหมด เพราะเป็นเรื่องของ "หน้าตาตาราง" เหมือนกัน และคนหาเจอแน่
+     ค่าเป็นของทั้งทีม (ตามที่ตกลงไว้) · เปลี่ยนแล้วทุกคนที่เปิดหน้านี้เห็นเหมือนกัน */
+  const _gsNow=(typeof bkV2GrpSort==='function')?bkV2GrpSort():'grp';
+  const _btGrpSort = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 9px 8px;border-top:1px solid rgba(0,0,0,.07);margin-top:7px">
+      <span style="font-size:9.5px;font-weight:800;color:#8A887F;letter-spacing:.05em;white-space:nowrap">${laT('เรียงกรุ๊ป')}</span>
+      ${BKV2_GRP_SORTS.map(o=>{ const on=(o.v===_gsNow);
+        return `<button data-gsort="${o.v}" onclick="bkV2SetGrpSort('${o.v}')" title="${esc(laT(o.d))}"
+          style="font-size:10.5px;font-weight:${on?'800':'600'};font-family:inherit;cursor:pointer;white-space:nowrap;
+                 border-radius:999px;padding:3px 11px;border:1px solid ${on?'#0F6E56':'#DDDCD6'};
+                 background:${on?'#0F6E56':'#fff'};color:${on?'#fff':'#6A6A64'}">${esc(laT(o.t))}</button>`; }).join('')}
+      <span style="font-size:9.5px;color:#B0AEA6;white-space:nowrap">${laT('ทั้งทีมเห็นเหมือนกัน')}</span>
+    </div>`;
   /* ปุ่มโหมดยังกดได้ทุกกรณีเหมือนเดิม · ของเดิมไม่เคยล็อกไว้ตามการเลือกโปรแกรม */
   // §cityTourView · land trips never need a boat · hide the Boat pill on the City Tour page
   const _btModes = `<div class="bt-c"><div class="bt-mrow">
       ${_btMode('Van', _unVanN>0?'not assigned':'all assigned', _unVanN>0?_unVanN:'&#10003;', _unVanN>0?'warn':'ok','#0F6E56',vanMode,'bkV2ToggleVanMode()',false)}
       ${_bkV2CityTourOnly ? '' : _btMode('Boat',_unBoatN>0?'not assigned':'all assigned', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
       ${_btMode('Re-confirm',_unRcN>0?'not confirmed':'all confirmed', _unRcN>0?_unRcN:'&#10003;', _unRcN>0?'warn':'ok','#7A4A00',rcMode,'bkV2ToggleReconfirmMode()',false)}
-    </div></div>`;
+    </div>${_btGrpSort}</div>`;
   const _btSearch = `<div class="bt-c"><div class="bt-srow">
       <span class="bt-sbox"><span class="ic">&#128269;</span>
         <input id="bt-q" value="${esc(_bkV2T2Q)}" placeholder="Search · voucher · name · phone · hotel" oninput="bkV2Tab2SetQ(this.value)">
@@ -48436,11 +48572,49 @@ function bkV2RenderTab2(){
       const _boatCluster = boatMode && !vanMode;
       const _boatId=a=>(a.boatId||bkOpsRead(a.r.bk, date).boatId||'');   // per-day boat · §boatSplit อ่านจาก alloc ก่อน
       const _boatIdx=bid=>{ if(!bid) return -1; const arr=(typeof BOATS!=='undefined'&&BOATS)||[]; const i=arr.findIndex(x=>x.id===bid); return i<0?999:i; };
+      /* ══ §grpSort · อันดับของแต่ละกรุ๊ปตามวิธีที่ทีมเลือก ════════════════
+         คิดครั้งเดียวต่อโซน แล้วเอาไปใช้เป็นคีย์แรกของตัวเปรียบเทียบ
+         โหมด area/time ยังทดด้วยเลขกรุ๊ปเสมอ · กรุ๊ปที่เสมอกันจะได้ไม่สลับไปมา
+         ทุกครั้งที่ re-render (ตัวเรียงของ JS ไม่การันตีความเสถียรข้ามรอบ)   */
+      const _gSort=(typeof bkV2GrpSort==='function')?bkV2GrpSort():'grp';
+      const _gRank={};
+      if(_grouped && _gSort!=='grp'){
+        const _gAreaOf=a=>{ try{
+            if(a.split && a.pick && !a.pick.main){
+              const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;
+              return (_pa&&_pa.name)||a.pick.zone||''; }
+            const bk=a.r&&a.r.bk||{};
+            const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
+            return (_pa&&_pa.name)||(bk.pickupArea||'').trim();
+          }catch(_){ return ''; } };
+        const gids=[...new Set(alist.map(a=>a.g).filter(g=>g>0))];
+        if(_gSort==='area'){
+          /* พื้นที่ของกรุ๊ป = พื้นที่ที่คนเยอะสุดในกรุ๊ปนั้น · กรุ๊ปคละพื้นที่จึงไม่ถูกตัดสินด้วยแถวแรกที่บังเอิญอยู่บน */
+          const lbl={};
+          gids.forEach(g=>{ const cnt={};
+            alist.filter(a=>a.g===g).forEach(a=>{ const n=_gAreaOf(a)||''; cnt[n]=(cnt[n]||0)+(a.head||1); });
+            let best='', bn=-1; Object.keys(cnt).forEach(n=>{ if(cnt[n]>bn||(cnt[n]===bn&&n<best)){best=n;bn=cnt[n];} });
+            lbl[g]=best; });
+          /* พื้นที่ว่าง (ยังไม่ผูก area) ไปท้ายเสมอ ไม่ใช่ขึ้นหัวเพราะสตริงว่างเรียงมาก่อน */
+          const names=[...new Set(gids.map(g=>lbl[g]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+          gids.forEach(g=>{ const i=lbl[g]?names.indexOf(lbl[g]):names.length; _gRank[g]=i*10000+g; });
+        } else {
+          gids.forEach(g=>{ let mn=99999;
+            alist.filter(a=>a.g===g).forEach(a=>{ const t=bkV2TimeMin(_rowTime(a.r)); if(t<mn) mn=t; });
+            if(typeof vsFor==='function'){
+              const vid=(alist.find(a=>a.g===g&&a.vanId)||{}).vanId||'';
+              if(vid) vsFor(date, rid).forEach(st=>{ if(st.vanId!==vid||(+st.vanGroup||0)!==+g) return;
+                const t=bkV2TimeMin(st.time); if(t<mn) mn=t; });
+            }
+            _gRank[g]=mn*10000+g; });
+        }
+      }
+      const _gKey=g=> g>0 ? (_gRank[g]!==undefined?_gRank[g]:g) : -1;
       if(_boatCluster){
         alist.sort((x,y)=>{ const bx=_boatId(x), by=_boatId(y); const ua=bx?0:-1, ub=by?0:-1; if(ua!==ub) return ua-ub; const ka=_boatIdx(bx), kb=_boatIdx(by); if(ka!==kb) return ka-kb; const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; });
       }
       // ungrouped (g=0) → sort key -1 so newly-added / not-yet-assigned bookings pop to the TOP (was: last)
-      else if(_grouped){ alist.sort((x,y)=>{ const ka=x.g>0?x.g:-1, kb=y.g>0?y.g:-1; if(ka!==kb) return ka-kb;
+      else if(_grouped){ alist.sort((x,y)=>{ const ka=_gKey(x.g), kb=_gKey(y.g); if(ka!==kb) return ka-kb;
         // manual pickup-seq matters ONLY within a real group (g>0) · a stale vanSeq left on an ungrouped row must NOT freeze its order
         if(ka>0){ const sa=x.seq||0, sb=y.seq||0; if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; } }
         // tiebreak: honor an active column Sort (Agency/Zone) if the user clicked one, else by pickup time
@@ -48508,7 +48682,7 @@ function bkV2RenderTab2(){
              คนที่เปิดดูเฉย ๆ คือคนที่ต้องรู้ว่าทำไมรถคันเดียวโผล่สองแถบ */
           const _rndR=vid?((typeof vjRoundOfC==='function')?vjRoundOfC(date,vid,rid,g):null):null;
           const _rndRC=_rndR?`<span title="รถคันนี้วิ่งโปรแกรมนี้ ${_rndR.tot} รอบวันนี้ · แถวนี้คือรอบที่ ${_rndR.no}${_rndR.tm?(' · ออก '+esc(_rndR.tm)):''}" style="display:inline-flex;align-items:center;gap:5px;background:#fff;color:${c[1]};border:1.5px solid ${c[1]};border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800;white-space:nowrap">&#8635; รอบ ${_rndR.no} / ${_rndR.tot}</span>`:'';
-          return `<tr><td colspan="${COLN}" style="background:${_bkV2Soft(c[0],(_rndR&&_rndR.no>1)?0.965:0.92)};padding:7px 12px${(_rndR&&_rndR.no>1)?(';border-top:1px dashed '+c[1]+'66'):''}">
+          return `<tr data-grp="${g}" data-gk="${esc(rid)}|${esc(z)}"><td colspan="${COLN}" style="background:${_bkV2Soft(c[0],(_rndR&&_rndR.no>1)?0.965:0.92)};padding:7px 12px${(_rndR&&_rndR.no>1)?(';border-top:1px dashed '+c[1]+'66'):''}">
             <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
               ${_legTag}${vanPill}${_rndRC}${_gConfChip}${_retChip}${_boatChips}
               ${infoHtml}
@@ -48547,7 +48721,7 @@ function bkV2RenderTab2(){
         _retPool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>กลับ: ${esc(v.name||v.id)}</option>`; });
         if(rvid && !_retPool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>กลับ: ${esc((vo&&vo.name)||rvid)}</option>`; }
         const _drvO=(typeof VANJOB_DRIVER!=='undefined'&&vid)?(VANJOB_DRIVER[date+'::'+vid]||{}):{}; const _drvV=vid?(vehGet(vid)||{}):{};   // per-date driver/phone (shared with the Van Job Order page)
-        return `<tr ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="background:${vid?(_rndBg||c[0]):'#FCEDED'};box-shadow:inset 4px 0 0 ${vid?c[1]:'#D64545'};padding:6px 12px;${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
+        return `<tr data-grp="${g}" data-gk="${esc(rid)}|${esc(z)}" ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="background:${vid?(_rndBg||c[0]):'#FCEDED'};box-shadow:inset 4px 0 0 ${vid?c[1]:'#D64545'};padding:6px 12px;${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-weight:700;font-size:12px;color:${vid?c[1]:'#C0392B'}">&#128656; กรุ๊ป ${g}${vid?'':' · ⚠ ยังไม่เลือกรถ'}</span>
             ${_rndChip}${_rndWarn}
@@ -48578,18 +48752,22 @@ function bkV2RenderTab2(){
         return list.map(s=>{
           const K=(typeof VS_KIND!=='undefined'&&VS_KIND[s.kind])||VS_KIND.staff;
           const seats=vsSeats(s);
+          const _ar=(typeof vsAreaName==='function')?vsAreaName(s):(s.zone||'');
+          const _lgk=(typeof vsLegOf==='function')?vsLegOf(s):'out';
+          const _lg=(typeof VS_LEG!=='undefined'&&VS_LEG[_lgk])||{t:'',ic:'',c:'#0E7490',bg:'#E3F2F6'};
           return `<tr class="t2-row t2-vsrow" data-rid="${esc(rid)}" data-vs="${esc(s._k)}">`
             + `<td class="t2-vc"><span class="vstag">${K.ic} ${laT('จุดแวะ')}</span></td>`
             + `<td>${_d}</td>`
             + `<td class="t2-cu"><span class="vswho">${esc(s.label||'')}</span><span class="vskind">${esc(K.t)}</span>`
               + (seats?`<span class="vsseat" title="${laT('คนติดรถกินที่นั่งรถ แต่ไม่ลงเรือ')}">${laTp('{0} ที่นั่ง', seats)}</span>`:'')
+              + (_lgk==='out'?'':`<span class="vsleg" style="background:${_lg.bg};color:${_lg.c}" title="${laT('ขาที่รถต้องแวะจุดนี้')}">${_lg.ic} ${esc(_lg.t)}</span>`)
               + `</td>`
             + `<td class="t2-c">${_d}</td><td class="t2-c">${_d}</td><td class="t2-c">${_d}</td><td class="t2-c">${_d}</td>`
             + `<td class="t2-mono">${esc(s.time||'')||_d}</td>`
             + (vanMode?`<td class="t2-c">${_d}</td>`:'')
             + `<td class="t2-pk"><span class="pnclip" title="${esc(s.place||'')}">${esc(s.place||'')}</span></td>`
             + `<td class="t2-c">${_d}</td>`
-            + `<td>${s.zone?`<span class="t2-zonetag">${esc(s.zone)}</span>`:_d}</td>`
+            + `<td>${_ar?`<span class="t2-zonetag">${esc(_ar)}</span>`:_d}</td>`
             + `<td>${_d}</td>`
             + (vanMode?'':`<td class="t2-req">${_d}</td>`)
             + `<td class="t2-req">${s.note?`<span class="vsnote">${esc(s.note)}</span>`:_d}</td>`
@@ -49718,6 +49896,8 @@ function bkV2RenderTab2(){
     .t2-vsrow .vsseat{display:inline-block;font-size:10px;font-weight:800;background:#FFF3DC;
       border:1px solid #EBD3A3;color:#8A5A12;border-radius:5px;padding:1px 7px;margin-left:5px;
       vertical-align:middle;white-space:nowrap}
+    .t2-vsrow .vsleg{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;
+      padding:1px 7px;margin-left:6px;white-space:nowrap;vertical-align:middle}
     .t2-vsrow .vsnote{font-size:11.5px;font-style:italic;color:#57807F;display:block;
       max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .t2-vsrow .vsbtn{font-size:10px;font-weight:700;color:#0A5468;background:#fff;

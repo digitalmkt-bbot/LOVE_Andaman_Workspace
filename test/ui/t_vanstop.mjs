@@ -29,6 +29,10 @@
 //   14 ลบแล้วหายจากทุกหน้า
 //   5b ปุ่ม + จุดแวะ ขึ้นทั้งโหมดปกติและโหมดจัดรถ (ผู้ใช้แจ้งว่าหาไม่เจอ)
 //   5c กรุ๊ปที่ยังไม่มีรถขึ้นปุ่มจางบอกเหตุผล ไม่ใช่หายไปเฉย ๆ
+//   16 พื้นที่รับของจุดแวะมาจากทะเบียนพื้นที่ ไม่ใช่ข้อความพิมพ์เอง (ผู้ใช้แจ้ง)
+//   17 ใบงานเรียงตามเวลา แม้ลูกค้ามีลำดับมือแล้ว (ผู้ใช้แจ้ง)
+//   18 จุดแวะแยกขาไป/ขากลับ/ไป-กลับ ได้ และที่นั่งนับแยกขา (ผู้ใช้แจ้ง)
+//   19 เรียงกรุ๊ปตามเลขกรุ๊ป / พื้นที่รับ / เวลา · ค่าเป็นของทั้งทีม (ผู้ใช้แจ้ง)
 //   15 ไม่มี error บนหน้า
 
 import { open, goView } from './_harness.mjs';
@@ -354,6 +358,159 @@ ok('จัดรถให้ลูกค้า ' + R0.cust + ' คนเข้�
   else if (R.onSheet) fail('ลบแล้วยังพิมพ์อยู่ในใบงานรถ');
   else if (R.seats !== 0) fail('ลบคนติดรถแล้วที่นั่งยังถูกกันไว้ ' + R.seats);
   else ok('ลบแล้วหายจากทุกหน้า และที่นั่งที่กันไว้คืนให้รถ');
+}
+
+/* ══ 16 · §vsArea · พื้นที่รับต้องมาจากทะเบียนพื้นที่ ไม่ใช่ข้อความที่พิมพ์เอง ══
+   ผู้ใช้แจ้ง 30 ก.ย. "Zone ควรเป็น Pickup Area ที่ User ระบุ Phuket Town Patong"
+   เทสจงใจเก็บ zone เป็นขยะ 'ZZZ-RAW' แล้วผูก areaId จริงไว้
+   ทุกหน้าที่โชว์ต้องขึ้นชื่อพื้นที่จริง และต้องไม่มี 'ZZZ-RAW' โผล่ที่ไหนเลย */
+{
+  const R = await page.evaluate(([date, routeId, vanId, G]) => {
+    const ar = (typeof SB_PICKUP_AREAS !== 'undefined' ? SB_PICKUP_AREAS : []).filter(a => a && a.id && a.name)[0];
+    if (!ar) return { err: 'ไม่มีพื้นที่รับในระบบ' };
+    vsSave({ date, routeId, kind:'staff', label:'T-VS พื้นที่', pax:1, time:'06:02',
+             place:'ออฟฟิศ ถลาง', areaId: ar.id, zone:'ZZZ-RAW', vanId, vanGroup:G });
+    const rec = vsFor(date, routeId).find(x => x.label === 'T-VS พื้นที่') || {};
+    bkV2Render();
+    const row = [...document.querySelectorAll('tr.t2-vsrow')].find(tr => /T-VS พื้นที่/.test(tr.textContent));
+    const tag = row ? ((row.querySelector('.t2-zonetag') || {}).textContent || '').trim() : '(ไม่เจอแถว)';
+    const sheet = (typeof vanJobsOrderInner === 'function') ? vanJobsOrderInner(date, vanId, routeId, null, 0) : '';
+    const ck = (typeof vckStopRow === 'function') ? vckStopRow(rec) : '';
+    /* เปิดกล่องจริง · ของเดิมเทสเรียก vsSave ตรง ๆ เลยไม่เคยแตะตัวเติมรายการพื้นที่
+       แล้วบั๊ก esc() หลุดไปถึงหน้าจริงได้ (เจอตอนลองเปิดเอง 30 ก.ย.) */
+    let modal = { threw:'' };
+    try {
+      vsOpen(date, routeId, { vanId, vanGroup:G, zone:'' });
+      const sel = document.getElementById('vs-area');
+      modal.opts = sel ? sel.options.length : 0;
+      modal.groups = sel ? sel.querySelectorAll('optgroup').length : 0;
+      modal.newLeg = (document.getElementById('vs-leg')||{}).value;
+      vsEditOpen(rec._k);
+      modal.editArea = (document.getElementById('vs-area')||{}).value;
+      modal.editLeg  = (document.getElementById('vs-leg')||{}).value;
+      if (typeof closeModal === 'function') closeModal('vanstop-modal');
+    } catch (e) { modal.threw = e.message; }
+    return { modal, name: ar.name, savedId: rec.areaId || '', fn: (typeof vsAreaName==='function') ? vsAreaName(rec) : '',
+             tag, sheetName: sheet.indexOf(ar.name) >= 0, sheetRaw: sheet.indexOf('ZZZ-RAW') >= 0,
+             ckName: ck.indexOf(ar.name) >= 0, ckRaw: ck.indexOf('ZZZ-RAW') >= 0 };
+  }, [R0.date, R0.routeId, R0.vanId, R0.grp]);
+  if (R.err) fail('ข้อ 16 · ' + R.err);
+  else if (!R.savedId) fail('บันทึกแล้วไม่มี areaId ติดไปด้วย · จุดแวะยังไม่ผูกกับทะเบียนพื้นที่');
+  else if (R.fn !== R.name) fail('vsAreaName คืน "' + R.fn + '" ควรเป็น "' + R.name + '"');
+  else if (R.tag !== R.name) fail('ตาราง By trip ช่องพื้นที่ขึ้น "' + R.tag + '" ควรเป็น "' + R.name + '"');
+  else if (!R.sheetName || R.sheetRaw) fail('ใบงานรถยังโชว์ข้อความดิบแทนชื่อพื้นที่');
+  else if (!R.ckName || R.ckRaw) fail('หน้าเช็คอินรถยังโชว์ข้อความดิบแทนชื่อพื้นที่');
+  else if (R.modal.threw) fail('เปิดกล่องเพิ่ม/แก้จุดแวะแล้วพัง · ' + R.modal.threw);
+  else if (!(R.modal.opts > 1) || !(R.modal.groups > 0))
+    fail('ช่องพื้นที่รับในกล่องว่างเปล่า (' + R.modal.opts + ' ตัวเลือก · ' + R.modal.groups + ' กลุ่ม) · คนใช้เลือกอะไรไม่ได้');
+  else if (R.modal.newLeg !== 'out') fail('กล่องเพิ่มจุดแวะไม่ได้ตั้งต้นเป็นขาไป · ได้ "' + R.modal.newLeg + '"');
+  else if (R.modal.editArea !== R.savedId)
+    fail('กดแก้ไขแล้วช่องพื้นที่ไม่ได้เลือกค่าเดิมไว้ · ได้ "' + R.modal.editArea + '" ควรเป็น "' + R.savedId + '"');
+  else ok('พื้นที่รับมาจากทะเบียนพื้นที่ชุดเดียวกับลูกค้า · ขึ้น "' + R.name + '" ทั้งสามหน้า · กล่องมีให้เลือก '
+          + R.modal.opts + ' พื้นที่ ' + R.modal.groups + ' กลุ่ม และกดแก้ไขแล้วค่าเดิมติดมา');
+}
+
+/* ══ 17 · §vsSeqTime · ใบงานต้องเรียงเวลา แม้ลูกค้าจะมีลำดับมือแล้ว ══════
+   ผู้ใช้แจ้ง 30 ก.ย. "ใบงาน เวลาควรเรียงด้วย" · ภาพที่ส่งมา จุดแวะ 05.50
+   ไปโผล่แถวที่ 4 ใต้ลูกค้า 07:30-07:45 เพราะลูกค้ากด "เรียงตามเวลา" ไว้
+   แล้ววิ่งเป็น vanSeq 1-2-3 ส่วนจุดแวะยังเป็น 0 = ถูกตีเป็นลำดับ 9999 */
+{
+  const R = await page.evaluate(([date, routeId, vanId, G]) => {
+    /* ให้ลูกค้าในกรุ๊ปมีลำดับมือ เหมือนหลังกดปุ่มเรียงตามเวลา */
+    let n = 0;
+    (SB_BOOKINGS || []).forEach(b => {
+      const o = bkOpsRead(b, date); if (!o) return;
+      if ((+o.vanGroup || 0) === +G && o.vanId === vanId) { bkOpsFor(b, date).vanSeq = ++n; }
+    });
+    if (typeof acctPersistBookings === 'function') acctPersistBookings();
+    if (!n) return { err: 'กรุ๊ปนี้ไม่มีลูกค้าให้ตั้งลำดับ' };
+    vsSave({ date, routeId, kind:'staff', label:'T-VS เช้าสุด', pax:1, time:'05:50',
+             place:'ออฟฟิศ ถลาง', vanId, vanGroup:G, vanSeq:0 });
+    const html = vanJobsOrderInner(date, vanId, routeId, null, 0);
+    const out = html.split('② ขากลับ')[0];
+    const d = document.createElement('div'); d.innerHTML = out;
+    const rows = [...d.querySelectorAll('tr')].filter(tr => !tr.closest('thead'))
+                     .map(tr => (tr.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const iStop = rows.findIndex(t => /T-VS เช้าสุด/.test(t));
+    return { n, iStop, total: rows.length, first: rows[0] ? rows[0].slice(0, 60) : '' };
+  }, [R0.date, R0.routeId, R0.vanId, R0.grp]);
+  if (R.err) fail('ข้อ 17 · ' + R.err);
+  else if (R.iStop < 0) fail('จุดแวะไม่ขึ้นใบงานเลย');
+  else if (R.iStop !== 0) fail('จุดแวะ 05:50 อยู่แถวที่ ' + (R.iStop + 1) + ' ของ ' + R.total
+           + ' · ควรเป็นแถวแรกเพราะออกก่อนใครเพื่อน (แถวบนสุดตอนนี้คือ "' + R.first + '")');
+  else ok('ใบงานเรียงตามเวลาจริง · จุดแวะ 05:50 ขึ้นก่อนลูกค้าที่มีลำดับมือ ' + R.n + ' ราย');
+}
+
+/* ══ 18 · §vsLeg · จุดแวะรู้ขาของตัวเอง ═══════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. "ทีนี้มันจะมีทั้งติดรถไปกลับด้วย"
+   ขากลับต้องไม่โผล่ตารางขาไป และต้องไม่ไปกินที่นั่งขาไปของกรุ๊ป */
+{
+  const R = await page.evaluate(([date, routeId, vanId, G]) => {
+    const base = vsSeatsOfVan(date, routeId, vanId, G, false);
+    vsSave({ date, routeId, kind:'staff', label:'T-VS ขากลับล้วน', pax:2, time:'15:10',
+             place:'ท่าเรือ', vanId, vanGroup:G, leg:'ret' });
+    vsSave({ date, routeId, kind:'staff', label:'T-VS ไปและกลับ', pax:1, time:'06:03',
+             place:'ออฟฟิศ ถลาง', vanId, vanGroup:G, leg:'both' });
+    const html = vanJobsOrderInner(date, vanId, routeId, null, 0);
+    const parts = html.split('② ขากลับ');
+    const out = parts[0] || '', ret = parts[1] || '';
+    return { hasRet: parts.length > 1,
+             outRet: /T-VS ขากลับล้วน/.test(out), outBoth: /T-VS ไปและกลับ/.test(out),
+             retRet: /T-VS ขากลับล้วน/.test(ret), retBoth: /T-VS ไปและกลับ/.test(ret),
+             seatOut: vsSeatsOfVan(date, routeId, vanId, G, false),
+             seatRet: vsSeatsOfVan(date, routeId, vanId, G, true), base };
+  }, [R0.date, R0.routeId, R0.vanId, R0.grp]);
+  if (!R.hasRet) fail('ข้อ 18 · ใบงานนี้ไม่มีตารางขากลับให้วัด');
+  else if (R.outRet) fail('จุดแวะขากลับโผล่ในตารางขาไป · คนขับจะไปรอผิดรอบ');
+  else if (!R.retRet) fail('จุดแวะขากลับไม่ขึ้นในตารางขากลับเลย');
+  else if (!R.outBoth || !R.retBoth) fail('จุดแวะแบบไป-กลับ ต้องขึ้นทั้งสองตาราง');
+  else if (R.seatOut !== R.base + 1) fail('ที่นั่งขาไปควรเพิ่มแค่ 1 (คนที่ไปและกลับ) · ได้ ' + R.seatOut + ' จากฐาน ' + R.base);
+  else if (R.seatRet !== 3) fail('ที่นั่งขากลับควรเป็น 3 (ขากลับล้วน 2 + ไปและกลับ 1) · จุดขาไปล้วนต้องไม่ถูกนับ · ได้ ' + R.seatRet);
+  else ok('จุดแวะแยกขาได้จริง · ขากลับไม่หลุดไปขาไป · ที่นั่งนับแยกขา (ไป ' + R.seatOut + ' · กลับ ' + R.seatRet + ')');
+}
+
+/* ══ 19 · §grpSort · เรียงกรุ๊ปตามที่ทีมเลือก ═════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. "อยากมีการเรียงกรุ๊ปตามที่ User ถนัด บางคนอยากจับกลุ่มตาม Pickup area"
+   เปลี่ยนแค่ลำดับที่โชว์ · ห้ามมีกรุ๊ปไหนหายไประหว่างสลับโหมด */
+{
+  const R = await page.evaluate(() => {
+    /* เลขกรุ๊ปเริ่มใหม่ทุกโซน · วัดรวมทั้งหน้าจะได้ 1,2,3,1,3,4 แล้วตีว่าไม่เรียง
+       จึงอ่านเป็นราย "โปรแกรม|โซน" จากป้าย data-gk บนหัวกรุ๊ป */
+    const read = () => { const m = {};
+      document.querySelectorAll('tr[data-grp]').forEach(tr => {
+        const k = tr.getAttribute('data-gk') || '?'; (m[k] = m[k] || []).push(+tr.getAttribute('data-grp')); });
+      return m; };
+    if (typeof bkV2SetGrpSort !== 'function') return { err: 'ยังไม่มี bkV2SetGrpSort' };
+    bkV2SetGrpSort('grp');  const byGrp  = read();
+    bkV2SetGrpSort('time'); const byTime = read();
+    bkV2SetGrpSort('area'); const byArea = read();
+    bkV2SetGrpSort('grp');  const back   = read();
+    const keys = Object.keys(byGrp);
+    const asc  = a => a.every((v, i) => i === 0 || a[i - 1] <= v);
+    const perm = (a, b) => !!b && a.length === b.length
+                        && [...a].sort((x,y)=>x-y).join() === [...b].sort((x,y)=>x-y).join();
+    const line = m => keys.map(k => k + ':' + (m[k] || []).join('>')).join('  ');
+    return { keys: keys.length, n: keys.reduce((s,k)=>s+byGrp[k].length, 0),
+             multi: keys.filter(k => byGrp[k].length >= 2).length,
+             grpSorted: keys.every(k => asc(byGrp[k])),
+             backSame:  keys.every(k => (back[k]||[]).join() === byGrp[k].join()),
+             keepTime:  keys.every(k => perm(byGrp[k], byTime[k])),
+             keepArea:  keys.every(k => perm(byGrp[k], byArea[k])),
+             movedTime: keys.some(k => (byTime[k]||[]).join() !== byGrp[k].join()),
+             movedArea: keys.some(k => (byArea[k]||[]).join() !== byGrp[k].join()),
+             showGrp: line(byGrp), showTime: line(byTime), showArea: line(byArea), showBack: line(back),
+             saved: (JSON.parse(localStorage.getItem('loveandaman_v2') || '{}')).bkv2_grp_sort };
+  });
+  if (R.err) fail('ข้อ 19 · ' + R.err);
+  else if (!R.multi) fail('ข้อ 19 · ไม่มีโซนไหนมีกรุ๊ปเกินหนึ่ง วัดการเรียงไม่ได้');
+  else if (!R.grpSorted) fail('โหมด "เลขกรุ๊ป" ไม่ได้เรียงจากน้อยไปมาก · ' + R.showGrp);
+  else if (!R.keepTime || !R.keepArea)
+    fail('สลับวิธีเรียงแล้วกรุ๊ปหาย · เลขกรุ๊ป [' + R.showGrp + '] → เวลา [' + R.showTime + '] → พื้นที่ [' + R.showArea + ']');
+  else if (!R.movedTime && !R.movedArea)
+    fail('เลือกวิธีเรียงแล้วลำดับไม่ขยับเลยสักโหมด · ปุ่มกดได้แต่ไม่มีผล · ' + R.showGrp);
+  else if (!R.backSame) fail('กลับมาโหมด "เลขกรุ๊ป" แล้วลำดับไม่กลับเป็นเดิม · ได้ ' + R.showBack);
+  else if (R.saved !== 'grp') fail('ค่าที่เลือกไม่ได้ถูกเขียนลง blob · คนอื่นในทีมจะไม่เห็นค่าเดียวกัน');
+  else ok('เรียงกรุ๊ปได้ ' + R.n + ' กรุ๊ปใน ' + R.keys + ' โซน · สลับโหมดแล้วลำดับขยับจริงและไม่มีกรุ๊ปหาย · ค่าเก็บลง blob ให้ทั้งทีม');
 }
 
 /* ══ 15 ═══════════════════════════════════════════════════════════ */
