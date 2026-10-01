@@ -69533,6 +69533,8 @@ function ppCSS(){ var S='#prpo-host'; return ''
    +'white-space:nowrap;letter-spacing:-.01em}'
  +S+' .pp-t .num.z{color:#CBD5E1}'
  +S+' .pp-t .tot{font-weight:800}'
+ +S+' .pp-cap{font-weight:600;font-size:.78em;color:#94A3B8;margin-left:2px;white-space:nowrap}'
+ +S+' .pp-cap.over{color:#C0271C;font-weight:800}'
  +S+' .pp-t .eat{font-weight:800;color:#0F6E56;background:#F4FBF8}'
  +S+' .pp-t .mealc{white-space:normal;line-height:1.55}'
  +S+' .pp-t tr.g-pier>td{background:#E4EAF0;border-top:2px solid #9FB0C0;border-bottom:1px solid #9FB0C0;'
@@ -69602,11 +69604,41 @@ function ppCSS(){ var S='#prpo-host'; return ''
 /* ── ชิ้นส่วนของชีต · ทุกอย่างเป็น <tr> ในตารางเดียวกัน คอลัมน์จึงตรงกันทั้งหน้า ──
    PP_COLS ต้องตรงกับจำนวน <th> เสมอ · ใช้เป็น colspan ของแถวกางรายชื่อ */
 var PP_COLS=10;
-function ppNumCells(A, cls){
+/* §ppCap · ยอดจอง / ที่นั่งเต็มลำ · เฉพาะแถวที่รู้ลำแล้ว (วัน × ลำ)
+   cap ของวันนั้นจาก boatCapFor (รวม override รายวัน · ไม่เกิน licensePax) · เกิน cap ขึ้นสีแดง
+   แถวท่าใช้ ppPierCapTag (รวมที่นั่งทุกเที่ยวเรือของท่า) · แถวโปรแกรม/รวมทั้งหมดไม่มี cap */
+function ppCapOf(bid, date){
+  if(!bid || typeof boatCapFor!=='function') return 0;
+  try{ return +boatCapFor(bid,date)||0; }catch(_){ return 0; }
+}
+function ppCapTag(bid, date, tot){
+  var c=ppCapOf(bid,date); if(!c) return '';
+  var lic=(typeof boatCapLicense==='function')?boatCapLicense(bid):0;
+  var tip='จอง '+tot+' / cap '+c+(lic&&lic!==c?(' · จดทะเบียน '+lic+' ที่นั่ง'):'');
+  return '<span class="pp-cap'+(tot>c?' over':'')+'" title="'+ckEsc(tip)+'">/'+c+'</span>';
+}
+/* รวมทั้งท่า · ที่นั่งของทุก (วัน × ลำ) ที่ออกจากท่านี้ในช่วงที่เลือก · ลำเดียวกันวันเดียวกันนับครั้งเดียว
+   ถึงจะโผล่ใต้สองโปรแกรม · ยอดจองเทียบทั้งท่า รวมคนที่ยังไม่จัดเรือด้วย
+   เพราะคำถามคือ "ที่นั่งที่ออกจากท่านี้ พอกับคนที่จองไว้ไหม" */
+function ppPierCapTag(PB){
+  var seen={}, cap=0, una=0, noCap=0;
+  (PB.gOrd||[]).forEach(function(k){ var g=PB.G[k];
+    g.ck.forEach(function(ck){ var C=g.cells[ck];
+      if(!C.boatId){ una+=C.A.tot; return; }
+      var key=C.date+'|'+C.boatId; if(seen[key]) return; seen[key]=1;
+      var c=ppCapOf(C.boatId,C.date); if(c) cap+=c; else noCap++; }); });
+  if(!cap) return '';
+  var tot=PB.A.tot, n=Object.keys(seen).length;
+  var tip='จองทั้งท่า '+tot+' / ที่นั่งรวม '+cap+' ('+n+' เที่ยวเรือ)'
+    +(una?(' · ยังไม่จัดเรือ '+una+' คน'):'')
+    +(noCap?(' · ไม่มี cap '+noCap+' ลำ'):'');
+  return '<span class="pp-cap'+(tot>cap?' over':'')+'" title="'+ckEsc(tip)+'">/'+cap+'</span>';
+}
+function ppNumCells(A, cls, cap){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
   return n(A.n)+n(A.ad)+n(A.chd)+n(A.inf)+n(A.foc)
-    +'<td class="num tot'+c+'">'+A.tot+'</td>'
+    +'<td class="num tot'+c+'">'+A.tot+(cap||'')+'</td>'
     +'<td class="num eat'+c+'">'+A.eat+'</td>';
 }
 /* แถวข้อมูลของโปรแกรมหนึ่ง · หนึ่งแถว = หนึ่ง (วัน × ลำ) */
@@ -69652,7 +69684,7 @@ function ppProgRows(g, pk){
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
         +'<b>'+e(ppBoatName(C.boatId))+'</b>'+tags+'</div></td>'
-      + ppNumCells(A)
+      + ppNumCells(A, '', ppCapTag(C.boatId, C.date, A.tot))
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
     if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppBookingList(A)+'</td></tr>';
@@ -69819,7 +69851,7 @@ function ppBodySheet(P,pOrd,GT){
      ถึงจะเป็นคนละ <table> ก็ตาม (นี่คือเหตุผลที่แยกตารางได้โดยไม่เสียการเทียบตัวเลข) */
   var COLS='<colgroup><col style="width:96px"><col style="width:232px">'
     +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
-    +'<col style="width:54px"><col style="width:52px"><col style="width:58px">'
+    +'<col style="width:54px"><col style="width:52px"><col style="width:84px">'
     +'<col style="width:74px"><col></colgroup>';
   var HEAD='<thead><tr class="lbl">'
     +'<th>วันที่</th><th>เรือ</th><th class="r">ใบจอง</th>'
@@ -69846,7 +69878,7 @@ function ppBodySheet(P,pOrd,GT){
       return;
     }
     out+=wrap('<tr class="g-pier"><td colspan="2">'+lb+'</td>'
-        +ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>'
+        +ppNumCells(PA,'',ppPierCapTag(PB))+'<td class="mealc">'+ppChips(PA)+'</td></tr>'
       + PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join(''), true);
   });
   /* ยอดรวมทั้งช่วง · ตารางของตัวเอง จะได้ไม่ดูเหมือนห้อยท้ายเป็นของท่าสุดท้าย */
@@ -69890,7 +69922,7 @@ function ppBodyFriendly(P,pOrd,GT){
             +(A.chtr?'<span class="fr-tag">เหมาลำ</span>':'')
             +(A.ovn?'<span class="fr-tag">ค้างคืน</span>':'')
           +'</div>'
-          +'<div class="fr-big"><div class="b1"><b>'+A.tot+'</b><span>คนทั้งหมด</span></div>'
+          +'<div class="fr-big"><div class="b1"><b>'+A.tot+ppCapTag(C.boatId, C.date, A.tot)+'</b><span>คนทั้งหมด</span></div>'
             +'<div class="b2"><b>'+A.eat+'</b><span>ต้องเตรียมอาหาร</span></div></div>'
           +'<div class="fr-mini">'
             +'<span>ผู้ใหญ่ <b>'+A.ad+'</b></span><span>เด็ก <b>'+A.chd+'</b></span>'
@@ -70023,6 +70055,8 @@ function ppCSSFriendly(){ var S='#prpo-host'; return ''
  +S+' .fr-big>div{flex:1;border-radius:14px;padding:11px 13px;line-height:1.1}'
  +S+' .fr-big b{display:block;font:800 27px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
  +S+' .fr-big span{font-size:11px;font-weight:600}'
+ +S+' .fr-big b .pp-cap{font-size:15px;font-weight:600;color:#94A3B8}'
+ +S+' .fr-big b .pp-cap.over{color:#C0271C;font-weight:800}'
  +S+' .fr-big .b1{background:#F1F5F9;color:#334155}'
  +S+' .fr-big .b2{background:#E7F4EF;color:#0F6E56}'
  +S+' .fr-mini{display:flex;gap:13px;flex-wrap:wrap;font-size:12px;color:#64748B;margin-bottom:11px}'
