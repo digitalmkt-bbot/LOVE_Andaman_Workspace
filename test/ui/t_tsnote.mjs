@@ -1,4 +1,4 @@
-// §tsSreq · คำขอพิเศษต้องขึ้นบน Travel Summary
+// §tsSreq · คำขอพิเศษต้องขึ้นบน Travel Summary · เป็นคอลัมน์หน้า Pay
 //
 // ที่มา (2026-10-01) · ผู้ใช้ส่งภาพสองหน้ามาเทียบกัน ใบ LOV-2766772 ของวันที่ 29 ก.ย.
 //   หน้า By trip date ช่อง SPECIAL REQUEST เขียนว่า
@@ -11,19 +11,18 @@
 //   ขณะที่ในเอกสารขึ้นว่า Paid และ COT ยังไม่ระบุยอด
 //   คนที่ถือเอกสารนี้อย่างเดียวจึงไม่มีทางรู้ว่ามีเงินต้องคืน
 //
-// ที่วางเป็นแถวเต็มความกว้าง ไม่ใช่คอลัมน์ที่ 17 เพราะข้อความจริงยาว 70-150 ตัวอักษร
-// ส่วนตารางนี้ตอนพิมพ์เป็น table-layout:fixed + overflow:hidden ทุกช่อง
-// ยัดเป็นคอลัมน์ 8% บน A4 แนวนอนแล้วข้อความจะโดนตัดหายตอนพิมพ์
+// รูปแบบที่ใช้ · ทีมเลือกเองหลังเห็นของจริงสองแบบ (แถบใต้บรรทัด vs คอลัมน์)
+//   เป็น "คอลัมน์ของตัวเอง วางหน้า Pay" เพราะเรื่องที่เขียนในช่องนี้ส่วนใหญ่ผูกกับเงิน
+//   คนปิดวันอ่านสองช่องติดกันจบ ไม่ต้องกวาดตาข้ามตาราง
 //
-// เทสนี้กันหกอย่าง
-//   1 คำขอพิเศษขึ้นเป็นแถวถัดจากบรรทัดของใบนั้น ไม่ใช่ลอยอยู่ที่อื่น
-//   2 ข้อความขึ้นครบทุกตัว ไม่ถูกตัดกลางคัน
+// เทสนี้กันเจ็ดอย่าง
+//   1 มีคอลัมน์คำขอพิเศษ และอยู่ติดกันหน้า Pay ตามที่ทีมสั่ง
+//   2 ข้อความขึ้นครบทุกตัวในช่องของใบนั้นเอง ไม่ใช่ไปโผล่แถวอื่น
 //   3 ท่อน COT ถูกตัดออก ไม่ขึ้นซ้ำกับคอลัมน์ COT ที่มีอยู่แล้ว
-//   4 ใบที่ไม่มีคำขอ ไม่มีแถบโผล่ · เอกสารไม่ยาวขึ้นเปล่า ๆ
-//   5 ตอนพิมพ์ต้องยังเห็นและไม่โดนตัด (วัดจาก computed style จริง ไม่ใช่อ่าน CSS)
-//   7 ป้ายบนแถบกำกับเลขใบไว้ · อ่านผิดบรรทัดไม่ได้ (ผู้ใช้แจ้งว่างง)
-//   8 แถวใบกับแถบเชื่อมเป็นก้อนเดียว ไม่มีเส้นคั่นกลาง
-//   6 ไม่มี error บนหน้า
+//   4 ใบที่ไม่มีคำขอขึ้นขีด ไม่ใช่ช่องว่างเปล่าที่อ่านไม่ออกว่าไม่มีหรือลืมใส่
+//   5 ตอนพิมพ์ต้องไม่โดนตัด (วัดจาก computed style จริง ทั้งแนวตั้งและแนวนอน)
+//   6 จำนวนคอลัมน์ใน thead ตรงกับ colspan ของแถวหัวเส้นทาง · ตารางไม่เบี้ยว
+//   7 ไม่มี error บนหน้า
 
 import { open, goView } from './_harness.mjs';
 
@@ -61,104 +60,85 @@ ok('ตั้งใบทดสอบในวันที่ ' + R0.date + ' ·
 
 await goView(page, 'travelsum', 900);
 
-/* ══ 1 · 2 · 3 · 4 ═══════════════════════════════════════════════════ */
+/* ══ 1 · 2 · 3 · 4 · 6 ═══════════════════════════════════════════════ */
 const R = await page.evaluate(([date, vcA, vcB]) => {
   _tsDate = date; _tsRoute = ''; _tsVatF = ''; _tsOnlyIssue = false;
   renderTravelSum();
-  const trs = [...document.querySelectorAll('#travelsum-host table.ts-man tbody tr')];
-  const rowOf = vc => trs.findIndex(t => !t.classList.contains('ts-sqrow') && (t.textContent || '').indexOf(vc) >= 0);
-  const iA = rowOf(vcA), iB = rowOf(vcB);
-  const nextA = iA >= 0 ? trs[iA + 1] : null;
-  const nextB = iB >= 0 ? trs[iB + 1] : null;
   const host = document.querySelector('#travelsum-host');
+  const ths = [...document.querySelectorAll('#travelsum-host table.ts-man thead th')];
+  const head = ths.map(t => (t.textContent || '').replace(/\s+/g, ' ').trim());
+  const iSq  = head.findIndex(t => /คำขอพิเศษ/.test(t));
+  const iPay = head.findIndex(t => /^Pay/.test(t));
+  const trs = [...document.querySelectorAll('#travelsum-host table.ts-man tbody tr')];
+  const rowOf = vc => trs.findIndex(t => (t.textContent || '').indexOf(vc) >= 0);
+  const cellOf = vc => { const i = rowOf(vc); if (i < 0 || iSq < 0) return null;
+    const td = trs[i].querySelectorAll('td')[iSq]; return td ? (td.textContent || '').trim() : null; };
+  const grow = document.querySelector('#travelsum-host table.ts-man tbody tr.ts-grow td');
   return {
-    iA, iB,
-    aHasRow: !!(nextA && nextA.classList.contains('ts-sqrow')),
-    aText: nextA && nextA.classList.contains('ts-sqrow')
-             ? ((nextA.querySelector('.ts-sqtx') || {}).textContent || '').trim() : '',
-    aLabel: nextA && nextA.classList.contains('ts-sqrow')
-             ? ((nextA.querySelector('.ts-sqlb') || {}).textContent || '').trim() : '',
-    /* แถวของใบต้องไม่มีเส้นใต้คั่นกับแถบ · ไม่งั้นแถบจะลอยอยู่ระหว่างสองใบ */
-    aWeld: iA >= 0 ? trs[iA].classList.contains('ts-hassq') : false,
-    aBorder: iA >= 0 ? getComputedStyle(trs[iA].querySelector('td')).borderBottomStyle : '',
-    bWeld: iB >= 0 ? trs[iB].classList.contains('ts-hassq') : false,
-    aSpan: nextA && nextA.querySelector('td') ? nextA.querySelector('td').getAttribute('colspan') : '',
-    bHasRow: !!(nextB && nextB.classList.contains('ts-sqrow')),
-    nSq: document.querySelectorAll('#travelsum-host tr.ts-sqrow').length,
-    cotInSq: [...document.querySelectorAll('#travelsum-host .ts-sqtx')]
-               .some(x => /COT/i.test(x.textContent || '')),
-    cols: document.querySelectorAll('#travelsum-host table.ts-man thead th').length,
+    head, iSq, iPay, nCols: ths.length,
+    growSpan: grow ? +grow.getAttribute('colspan') : 0,
+    aCell: cellOf(vcA), bCell: cellOf(vcB),
+    cotInCol: trs.some(tr => { const td = tr.querySelectorAll('td')[iSq];
+      return td && /COT/i.test(td.textContent || ''); }),
     pageHasText: (host.textContent || '').indexOf('คืนเงินหน้าท่าเรือ 3,403') >= 0
   };
 }, [R0.date, R0.A.vc, R0.B.vc]);
 
-if (R.iA < 0) fail('ข้อ 1 · หาบรรทัดของใบที่มีคำขอไม่เจอใน Manifest');
-else if (!R.pageHasText)
-  fail('คำขอพิเศษไม่ขึ้นบน Travel Summary เลย · คนปิดวันจะไม่รู้ว่ามีเงินต้องคืน 3,403');
-else if (!R.aHasRow)
-  fail('ข้อความขึ้นบนหน้า แต่ไม่ได้อยู่แถวถัดจากบรรทัดของใบนั้น · อ่านไม่ออกว่าเป็นของใบไหน');
-else if (R.aSpan !== String(R.cols))
-  fail('แถบคำขอพิเศษกว้าง ' + R.aSpan + ' ช่อง แต่ตารางมี ' + R.cols + ' คอลัมน์ · ตารางจะเบี้ยว');
-else ok('คำขอพิเศษขึ้นเป็นแถบเต็มความกว้างใต้บรรทัดของใบ ' + R0.A.vc);
+if (R.iSq < 0) fail('ไม่มีคอลัมน์คำขอพิเศษใน Manifest · คนปิดวันจะไม่รู้ว่ามีเงินต้องคืน 3,403');
+else if (R.iPay < 0) fail('หาคอลัมน์ Pay ไม่เจอ · วัดตำแหน่งไม่ได้');
+else if (R.iSq !== R.iPay - 1)
+  fail('คอลัมน์คำขอพิเศษอยู่ลำดับ ' + (R.iSq + 1) + ' แต่ Pay อยู่ลำดับ ' + (R.iPay + 1)
+       + ' · ทีมสั่งให้อยู่ติดกันหน้า Pay');
+else ok('มีคอลัมน์คำขอพิเศษ อยู่ลำดับ ' + (R.iSq + 1) + ' ติดกันหน้า Pay · ทั้งตาราง ' + R.nCols + ' คอลัมน์');
 
-if (R.iA >= 0 && R.aHasRow) {
-  if (R.aText !== R0.A.sreq)
-    fail('ข้อความไม่ตรงกับในใบจอง · ได้ "' + R.aText + '" ควรเป็น "' + R0.A.sreq + '"');
-  else if (R.aText.indexOf('3,403') < 0)
-    fail('ตัวเลขเงินหายไปจากข้อความ · ส่วนที่สำคัญที่สุดของบรรทัดนี้');
-  else ok('ข้อความขึ้นครบทุกตัว ' + R.aText.length + ' อักขระ · รวมยอดเงิน 3,403 ที่ต้องคืน');
+if (R.iSq >= 0) {
+  if (!R.pageHasText) fail('ข้อความคำขอพิเศษไม่ขึ้นบนหน้าเลย');
+  else if (R.aCell !== R0.A.sreq)
+    fail('ช่องของใบ ' + R0.A.vc + ' ได้ "' + R.aCell + '" ควรเป็น "' + R0.A.sreq + '"');
+  else if (String(R.aCell).indexOf('3,403') < 0)
+    fail('ตัวเลขเงินหายไปจากช่อง · ส่วนที่สำคัญที่สุดของบรรทัดนี้');
+  else ok('ข้อความอยู่ในช่องของใบนั้นเอง ครบ ' + R.aCell.length + ' อักขระ · รวมยอด 3,403 ที่ต้องคืน');
 
-  if (R.cotInSq)
-    fail('ท่อน COT ยังติดมาในแถบคำขอพิเศษ · เอกสารมีคอลัมน์ COT อยู่แล้ว ยอดจะขึ้นซ้ำสองที่');
-  else ok('ท่อน COT ถูกตัดออกจากแถบ · ไม่ขึ้นซ้ำกับคอลัมน์ COT ที่มีอยู่แล้ว');
-}
+  if (R.cotInCol)
+    fail('ท่อน COT ยังติดมาในช่องคำขอพิเศษ · เอกสารมีคอลัมน์ COT อยู่แล้ว ยอดจะขึ้นซ้ำสองที่');
+  else ok('ท่อน COT ถูกตัดออก · ไม่ขึ้นซ้ำกับคอลัมน์ COT ที่มีอยู่แล้ว');
 
-if (R.iB < 0) fail('ข้อ 4 · หาบรรทัดของใบที่ไม่มีคำขอไม่เจอ');
-else if (R.bHasRow)
-  fail('ใบที่ไม่มีคำขอพิเศษก็ยังมีแถบโผล่ · เอกสารจะยาวขึ้นเท่าตัวโดยไม่ได้อะไร');
-else ok('ใบที่ไม่มีคำขอไม่มีแถบโผล่ · ทั้งวันมีแถบ ' + R.nSq + ' แถบเท่าที่มีคำขอจริง');
+  /* แยก null (หาแถวไม่เจอ) ออกจาก '' (เจอแถวแต่ช่องว่าง) · ถ้ารวมกันข้อความจะโทษผิดเรื่อง */
+  if (R.bCell === null || R.bCell === undefined) fail('หาช่องของใบที่ไม่มีคำขอไม่เจอ');
+  else if (R.bCell === '')
+    fail('ใบที่ไม่มีคำขอได้ช่องว่างเปล่า · อ่านไม่ออกว่าไม่มีจริง หรือระบบลืมดึงมา');
+  else ok('ใบที่ไม่มีคำขอขึ้น "' + R.bCell + '" · บอกชัดว่าไม่มี ไม่ใช่ช่องว่างกำกวม');
 
-/* ══ 7 · 8 · §tsSreq2 · ต้องอ่านออกว่าแถบเป็นของใบไหน ═══════════════════
-   ผู้ใช้แจ้ง 1 ต.ค. รอบสอง "ขึ้นแบบนี้จะงงไหม" · ของเดิมแถบเริ่มที่ขอบซ้ายสุด
-   หน้าตาเหมือนแถวหัวเส้นทาง ซึ่งแปลว่า "ตัวคั่น" ตาจึงอ่านว่าเป็นของใบข้างล่าง */
-if (R.iA >= 0 && R.aHasRow) {
-  if (R.aLabel.indexOf(R0.A.vc) < 0)
-    fail('ป้ายบนแถบไม่ได้บอกเลขใบ ("' + R.aLabel + '") · ถ้าอ่านผิดบรรทัดจะไม่มีอะไรทักท้วง');
-  else ok('ป้ายบนแถบกำกับเลขใบไว้ · "' + R.aLabel + '" ตรงกับบรรทัดข้างบน');
-
-  if (!R.aWeld)
-    fail('แถวของใบไม่ได้ถูกเชื่อมกับแถบ · จะมีเส้นคั่นกลาง แล้วแถบลอยอยู่ระหว่างสองใบ');
-  else if (R.aBorder !== 'none')
-    fail('เชื่อมแล้วแต่ยังมีเส้นใต้คั่นอยู่ (border-bottom: ' + R.aBorder + ')');
-  else if (R.bWeld)
-    fail('ใบที่ไม่มีคำขอก็โดนตัดเส้นใต้ไปด้วย · ตารางจะขาดเส้นแบ่งมั่ว');
-  else ok('ใบกับแถบเชื่อมเป็นก้อนเดียว ไม่มีเส้นคั่นกลาง · ใบที่ไม่มีคำขอเส้นยังอยู่ครบ');
+  if (!R.growSpan) fail('หาแถวหัวเส้นทางไม่เจอ · วัดความเบี้ยวของตารางไม่ได้');
+  else if (R.growSpan !== R.nCols)
+    fail('แถวหัวเส้นทาง colspan=' + R.growSpan + ' แต่ตารางมี ' + R.nCols + ' คอลัมน์ · ตารางจะเบี้ยว');
+  else ok('colspan ของแถวหัวเส้นทางตรงกับจำนวนคอลัมน์ (' + R.nCols + ') · ตารางไม่เบี้ยว');
 }
 
 /* ══ 5 · ตอนพิมพ์ ═══════════════════════════════════════════════════
-   เอกสารนี้ถูกพิมพ์ออกมาเซ็น · ถ้าแถบนี้หายตอนพิมพ์ ก็เท่ากับไม่ได้แก้อะไร
-   ตารางตั้ง overflow:hidden ไว้ทุกช่องตอนพิมพ์ จึงต้องวัดของจริง ไม่ใช่อ่าน CSS */
-{
+   เอกสารนี้ถูกพิมพ์ออกมาเซ็น · Manifest ตอนพิมพ์เป็น table-layout:fixed และตั้ง
+   overflow:hidden ไว้ทุกช่อง · คอลัมน์ที่ข้อความยาวจึงเสี่ยงโดนตัดที่สุด
+   วัดของจริงทั้งแนวตั้งและแนวนอน · วัดทางเดียวอีกทางหลุดได้ */
+if (R.iSq >= 0) {
   await page.emulateMedia({ media: 'print' });
-  const P = await page.evaluate(() => {
-    const td = document.querySelector('#travelsum-host tr.ts-sqrow td');
-    if (!td) return { miss: true };
-    const cs = getComputedStyle(td);
+  const P = await page.evaluate(([vc, iSq]) => {
+    const trs = [...document.querySelectorAll('#travelsum-host table.ts-man tbody tr')];
+    const tr = trs.find(t => (t.textContent || '').indexOf(vc) >= 0);
+    if (!tr) return { miss: true };
+    const td = tr.querySelectorAll('td')[iSq];
     const tx = td.querySelector('.ts-sqtx');
-    const cst = tx ? getComputedStyle(tx) : null;
-    /* ล้นได้ทั้งสองทาง · nowrap ล้นแนวนอน · ช่องเตี้ยเกินล้นแนวตั้ง
-       วัดแค่ทางเดียวแล้วอีกทางหลุดไปขึ้นกระดาษแบบโดนตัดโดยไม่มีใครรู้ */
-    return { miss: false, display: cs.display, visibility: cs.visibility, overflow: cs.overflow,
+    const cs = getComputedStyle(td);
+    return { miss: false, display: cs.display, visibility: cs.visibility,
              h: td.clientHeight, scrollH: td.scrollHeight,
              w: td.clientWidth, scrollW: td.scrollWidth,
              txH: tx ? tx.clientHeight : 0, txScrollH: tx ? tx.scrollHeight : 0,
              txW: tx ? tx.clientWidth : 0, txScrollW: tx ? tx.scrollWidth : 0,
-             txDisplay: cst ? cst.display : '', txSize: cst ? cst.fontSize : '' };
-  });
+             txSize: tx ? getComputedStyle(tx).fontSize : '' };
+  }, [R0.A.vc, R.iSq]);
   await page.emulateMedia({ media: 'screen' });
-  if (P.miss) fail('ข้อ 5 · ตอนพิมพ์ไม่มีแถบคำขอพิเศษอยู่ในหน้าเลย');
-  else if (P.display === 'none' || P.visibility === 'hidden' || P.txDisplay === 'none')
-    fail('แถบคำขอพิเศษถูกซ่อนตอนพิมพ์ · บนกระดาษที่เอาไปเซ็นจะไม่มีบรรทัดนี้');
+  if (P.miss) fail('ข้อ 5 · ตอนพิมพ์หาแถวของใบไม่เจอ');
+  else if (P.display === 'none' || P.visibility === 'hidden')
+    fail('ช่องคำขอพิเศษถูกซ่อนตอนพิมพ์ · บนกระดาษที่เอาไปเซ็นจะไม่มีข้อความนี้');
   else if (P.scrollH > P.h + 1)
     fail('ตอนพิมพ์ข้อความล้นช่องแนวตั้งแล้วโดนตัด · สูงจริง ' + P.scrollH + 'px แต่ช่องสูง ' + P.h + 'px');
   else if (P.scrollW > P.w + 1)
@@ -166,11 +146,10 @@ if (R.iA >= 0 && R.aHasRow) {
   else if (P.txScrollW > P.txW + 1 || P.txScrollH > P.txH + 1)
     fail('ตอนพิมพ์ตัวข้อความเองถูกบีบจนล้นแล้วโดนตัด · จริง '
          + P.txScrollW + '×' + P.txScrollH + 'px แต่กล่อง ' + P.txW + '×' + P.txH + 'px');
-  else if (!(P.h > 0)) fail('ตอนพิมพ์แถบสูง 0px · ไม่มีอะไรให้อ่าน');
-  else ok('ตอนพิมพ์ยังเห็นครบ · สูง ' + P.h + 'px · ตัวอักษร ' + P.txSize + ' · ไม่โดนตัด');
+  else ok('ตอนพิมพ์อ่านครบ ไม่โดนตัด · ช่อง ' + P.w + '×' + P.h + 'px · ตัวอักษร ' + P.txSize);
 }
 
-/* ══ 6 ═══════════════════════════════════════════════════════════ */
+/* ══ 7 ═══════════════════════════════════════════════════════════ */
 await page.evaluate(([idA, idB, prev]) => {
   const A = (SB_BOOKINGS || []).find(x => x.id === idA);
   const B = (SB_BOOKINGS || []).find(x => x.id === idB);

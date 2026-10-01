@@ -22611,16 +22611,13 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-grow td{background:var(--zn50);font-weight:800}'
  /* §tsSreq · แถบคำขอพิเศษใต้บรรทัดของใบนั้น · สีส้มอ่อนให้สะดุดตาแต่ไม่ตะโกน
     ติดเส้นซ้ายไว้บอกว่าเป็นของบรรทัดข้างบน ไม่ใช่รายการใหม่ */
- +S+' tr.ts-hassq>td{border-bottom:none}'
- /* ย่อหน้าเข้ามาเท่าคอลัมน์แรก · เส้นสีอยู่ตรงที่ย่อหน้า ไม่ใช่ขอบกระดาษ
-    จะได้ไม่เหมือนแถวหัวเส้นทางที่เริ่มชิดซ้ายสุด
-    ย่อหน้าด้วย padding ของช่อง ไม่ใช่ margin ของป้าย — ข้อความที่ยาวจนขึ้น
-    บรรทัดใหม่ต้องย่อหน้าตามไปด้วย ไม่ใช่ตกกลับไปชิดขอบซ้าย */
- +S+' tr.ts-sqrow>td{background:#FFFAF0;border-top:none;border-bottom:1px solid var(--zn200);'
-   +'padding:3px 11px 7px 80px;box-shadow:inset 76px 0 0 #fff, inset 79px 0 0 #E8A33D}'
- +S+' .ts-sqlb{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;'
-   +'color:#8A5300;background:#FBEBCF;border-radius:5px;padding:1px 7px;margin-right:8px;vertical-align:1px;white-space:nowrap}'
- +S+' .ts-sqtx{font-size:11.5px;line-height:1.45;color:#5A4320;white-space:pre-wrap}'
+ /* §tsSreq3 · คอลัมน์คำขอพิเศษ · ตัดบรรทัดเต็ม ไม่ตัดข้อความทิ้ง
+    ลิงก์ยาว ๆ ที่ไม่มีช่องว่างต้องหักบรรทัดได้ ไม่งั้นดันคอลัมน์อื่นเบี้ยว */
+ /* บนจอตารางเป็น layout อัตโนมัติ · ไม่กำหนดกว้างขั้นต่ำไว้ ช่องนี้จะโดนบีบ
+    เหลือเป็นริ้วแคบ ๆ แล้วข้อความยาวจะตกลงมาสิบบรรทัด แถวสูงเกินจำเป็น */
+ +S+' .ts-sqcol{font-size:11px;line-height:1.4;color:#5A4320;background:#FFFCF5;'
+   +'min-width:172px;max-width:236px}'
+ +S+' .ts-sqtx{display:block;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}'
  +S+' .ts-sign{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid var(--zn200)}'
  +S+' .ts-sg{border:1px solid var(--zn200);border-radius:15px;padding:14px;text-align:center;background:var(--zn50)}'
  +S+' .ts-sg i{display:block;height:34px;border-bottom:1px dashed var(--zn400);margin-bottom:8px}'
@@ -22848,32 +22845,31 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man td{overflow:hidden}'
    +S+' .ts-man td:nth-child(2){padding-left:2px;padding-right:2px;vertical-align:middle}'
    +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom;overflow:hidden}'
-   // §tsManNoPickup · 16 คอลัมน์ · รวม 99.8% เผื่อเส้นตารางอีกเล็กน้อย
-   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'     // Voucher
-   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:7.4%}'     // Agency
-   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'     // Customer
+   // §tsSreq3 · 17 คอลัมน์ · รวม 99.8% เท่าเดิม · เบียดทุกคอลัมน์ทีละนิด
+   //   แทนที่จะตัดจากคอลัมน์เดียวจนช่องนั้นใช้ไม่ได้
+   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.4%}'     // Voucher
+   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:6.6%}'     // Agency
+   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:8.6%}'     // Customer
    +S+' .ts-man th:nth-child(4),'+S+' .ts-man td:nth-child(4),'
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
      +S+' .ts-man th:nth-child(6),'+S+' .ts-man td:nth-child(6),'
-     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'   // AD/CHD/INF/FOC
-   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.8%}'     // Actual/Booked
-   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:9.8%}'     // Pickup point
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:7.2%}'   // Drop-off
-   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:8.8%}'   // Add-on
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:6.2%}'   // Van · Boat
-   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:8.8%}'   // Pay
-   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:6.6%}'   // Total
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:7.6%}'   // Cancel · Charge
-   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:5.4%}'   // Status
+     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.6%}'   // AD/CHD/INF/FOC
+   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.6%}'     // Actual/Booked
+   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:8.6%}'     // Pickup point
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:6.4%}'   // Drop-off
+   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.8%}'   // Add-on
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:5.8%}'   // Van · Boat
+   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:8.8%}'   // คำขอพิเศษ
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:7.8%}'   // Pay
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:6.2%}'   // Total
+   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:6.8%}'   // Cancel · Charge
+   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.0%}'   // Status
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
-   +S+' .ts-man td:nth-child(15) .ts-chip,'+S+' .ts-man td:nth-child(16) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-man td:nth-child(16) .ts-chip,'+S+' .ts-man td:nth-child(17) .ts-chip{white-space:normal;line-height:1.2}'
    /* §tsSreq · ตอนพิมพ์ต้องอ่านออกและห้ามโดนตัด · แถวนี้ไม่ใช่ของประดับ
       ตารางตั้ง overflow:hidden ไว้ทุกช่องตอนพิมพ์ ต้องยกเว้นให้แถวนี้ */
-   +S+' tr.ts-hassq>td{border-bottom:none}'
-   +S+' tr.ts-sqrow>td{width:auto !important;overflow:visible !important;white-space:normal;'
-     +'padding:2px 5px 3px 50px;box-shadow:inset 46px 0 0 #fff, inset 48px 0 0 #B07A1F}'
-   +S+' .ts-sqlb{font-size:6.6px;padding:0 4px;margin-right:5px}'
-   +S+' .ts-sqtx{font-size:8.4px;line-height:1.35}'
+   +S+' .ts-sqcol{font-size:7.6px;line-height:1.3}'
+   +S+' .ts-sqtx{display:block;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}'
    +S+' .ts-pyd{font-size:8px;padding:0 3px}'
    +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pyn2,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:7.4px}'
    +S+' .ts-chip.ts-pyx{font-size:7.4px;padding:0 3px}'
@@ -26039,7 +26035,7 @@ function renderTravelSum(){
       var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow && !x.mvRow; });
       var gM=mrows.filter(function(x){ return x.routeId===r.routeId && x.mvRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="16" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="17" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
@@ -26079,12 +26075,8 @@ function renderTravelSum(){
     var noBoat = _gone || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0)
                        || (!!r.pierCk && (typeof ckEventTally==='function') && ckEventTally(r.pierCk).total>=r.booked && r.booked>0);
     var room=b.roomNo||b.room||b.roomNumber||'';
-    /* §tsSreq2 · รู้ตั้งแต่ตอนนี้ว่าใบนี้จะมีแถบคำขอพิเศษต่อท้ายไหม
-       ถ้ามี ต้องตัดเส้นใต้ของแถวใบทิ้ง ให้แถวกับแถบอ่านเป็นก้อนเดียวกัน
-       ไม่งั้นจะมีเส้นคั่นกลาง แล้วแถบลอยอยู่ระหว่างสองใบ อ่านไม่ออกว่าของใคร */
     var _sq=tsSreqOf(b);
-    var _sqCls=_sq?' ts-hassq':'';
-    body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow'+_sqCls+'"':(r.cxlRow?' class="ts-cxlrow'+_sqCls+'"':(_sq?' class="ts-hassq"':'')))+'>'
+    body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow"':(r.cxlRow?' class="ts-cxlrow"':''))+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -26106,6 +26098,15 @@ function renderTravelSum(){
               :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       /* §tsManMv · เงินย้ายไปกับวันใหม่แล้ว · โชว์ซ้ำที่นี่จะอ่านเป็นยอดของวันนี้ */
+      /* ══ §tsSreq3 · คำขอพิเศษเป็นคอลัมน์ของตัวเอง · วางหน้า Pay ═══════════
+         ทีมเลือกแบบนี้หลังเห็นของจริงสองแบบ (1 ต.ค.) · วางติดกับ Pay เพราะ
+         เรื่องที่เขียนในช่องนี้ส่วนใหญ่ผูกกับเงิน — คืนเงิน เก็บเพิ่ม เงื่อนไขมัดจำ
+         คนปิดวันอ่านสองช่องนี้ติดกันจบ ไม่ต้องกวาดตาข้ามตาราง
+         ข้อความตัดบรรทัดเต็ม ไม่ตัดทิ้ง · ใบที่ยาวแถวจะสูงขึ้น ยอมแลกกับการ
+         ไม่ทำข้อมูลหาย เพราะใบที่ยาวคือใบที่มีเงื่อนไขเงินอยู่ข้างใน       */
+      +'<td class="ts-sqcol">'+(_sq
+          ? '<span class="ts-sqtx" title="'+e(_sq)+'">'+e(_sq)+'</span>'
+          : '<span style="color:var(--zn400)">&mdash;</span>')+'</td>'
       +'<td class="ts-paycol">'+(r.mvRow
           ? '<span style="color:var(--zn400);font-size:10.5px">ยอดเงินไปอยู่กับวันใหม่แล้ว</span>'
           : tsPayCell(r, date))+'</td>'
@@ -26133,24 +26134,6 @@ function renderTravelSum(){
           : tsCxlCell(r, date, DEC, money))+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
-    /* ══ §tsSreq2 · แถบต้องอ่านออกว่าเป็นของใบไหน ═══════════════════════════
-       ผู้ใช้แจ้ง 1 ต.ค. รอบสอง "ขึ้นแบบนี้จะงงไหม" · งงจริง และเป็นความผิดของดีไซน์
-       ของเดิมแถบเริ่มที่ขอบซ้ายสุดเต็มความกว้าง หน้าตาเหมือนแถวหัวเส้นทาง (ts-grow)
-       ซึ่งในตารางนี้แปลว่า "ตัวคั่น" ไม่ใช่ "ส่วนขยายของบรรทัดบน"
-       ตาจึงอ่านว่าแถบเป็นของใบที่อยู่ "ข้างล่าง" แทนที่จะเป็นใบข้างบน
-
-       แก้สามอย่างให้มันเป็นตรงข้ามกับแถวหัวเส้นทาง
-         1 ย่อหน้าเข้ามา ไม่เริ่มที่ขอบซ้าย + มีลูกศร ↳ ชี้ว่าต่อจากข้างบน
-         2 ตัดเส้นใต้ของแถวใบทิ้ง (ts-hassq) ให้ใบกับแถบเป็นก้อนเดียว
-         3 เขียนเลขใบกำกับไว้บนป้าย — กันพลาดแบบไม่ต้องพึ่งสายตา
-
-       ยังเป็นแถบไม่ใช่คอลัมน์ที่ 17 เพราะข้อมูลจริง 607 ใบในชุด 22 ก.ย.
-       ยาวกลาง 45 ตัวอักษร p95 96 ตัว ยาวสุด 1,381 และ 60 ใบมีขึ้นบรรทัดใหม่
-       คอลัมน์ 8% บน A4 แนวนอนรับได้ ~20 ตัวต่อบรรทัด · เกินครึ่งจะโดนตัด
-       และใบที่ยาวคือใบที่สำคัญที่สุด (เงื่อนไขเงิน · ของที่ห้ามลืม)        */
-    if(_sq) body+='<tr class="ts-sqrow"><td colspan="16">'
-      +'<span class="ts-sqlb">&#8627; คำขอพิเศษ &middot; '+e(b.voucherRef||b.code||b.id)+'</span>'
-      +'<span class="ts-sqtx">'+e(_sq)+'</span></td></tr>';
   });
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
@@ -26165,10 +26148,10 @@ function renderTravelSum(){
     +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
     +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
-    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
+    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="16" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
