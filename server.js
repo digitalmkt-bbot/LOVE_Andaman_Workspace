@@ -384,7 +384,13 @@ const B2C_OWN_BK = new Set([
 //      against area, hotel and the combined string so a same-door return is not flagged as separate.
 //      hotelname is already in B2C_OWN_BK, so this bump re-upserts the rows on file without touching
 //      anything ops owns. Drop-off keeps §b2cNoHotel: det.dropoffHotel is still never read.
-const B2C_MAP_VER = 29;
+// v30: no mapper change — a forced corrective re-upsert, same as v17. The §b2cPay keep-line in
+//      bkV2CommitBooking was lost in 03cb6aa on 2026-08-12, so every ops edit of a B2C booking since
+//      then rebuilt paymentSnapshot from the a_b2c contract ({method:'prepaid', source:'contract'},
+//      paid/paidStatus null) and the Pay column read "PFM". Rows whose B2C source never moved cannot
+//      heal on their own (1 row at the time: LOV-7485231); paymentsnapshot_* is B2C-owned, so this
+//      bump restores it from B2C.
+const B2C_MAP_VER = 30;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
