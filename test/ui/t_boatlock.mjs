@@ -26,6 +26,7 @@
 //   8 สลับลำแบบ "1 ลำ ≥ X" ไปลำที่เล็กกว่าที่สัญญาไว้ ต้องไม่ผ่าน
 //   9 ไม่มี error บนหน้า
 //  10 ใบชนิดเรือโผล่แค่ในตารางของมัน · ไม่ไปปนในรายการล็อกที่นั่ง
+//  11 ฟอร์มมีแต่เส้นทางเรือ ไม่มีโปรแกรมบก · และเรือต้องอยู่ท่าเดียวกับเส้นทาง
 
 import { open, goView } from './_harness.mjs';
 
@@ -249,6 +250,45 @@ if (R10.inBoatBox && R10.hasBox && !R10.inSeatList)
   ok('10 ใบเรืออยู่ในตารางเรืออย่างเดียว · ไม่ไปโผล่ในรายการล็อกที่นั่ง');
 else
   fail(`10 หน้าแสดงผิดที่: ${JSON.stringify(R10)}`);
+
+/* ══ 11 · ฟอร์มต้องมีแต่ของฝั่งเรือ ══════════════════════════════════════════
+   เจอตอนผู้ใช้เปิดช่องเลือกเส้นทางจริง · มี City Tour / รับส่งสนามบิน / โชว์ ปนมาด้วย
+   กติกาของระบบคือโปรแกรมบกห้ามเข้าหน้าจอฝั่งเรือ · ถามผ่าน laIsLandRoute() จุดเดียว
+   และเรือต้องอยู่ท่าเดียวกับเส้นทาง · เอาเรือพันวาไปวิ่งเส้นทางทับละมุไม่ได้ */
+const R11 = await page.evaluate(() => {
+  bkV2BoatLockOpen();
+  const h = (typeof bkV2BoatLockModal === 'function') ? bkV2BoatLockModal() : '';
+  const land = ROUTES.filter(r => laIsLandRoute(r.id));
+  const sea  = ROUTES.filter(r => !laIsLandRoute(r.id));
+  const inForm = id => h.indexOf('value="' + id + '"') >= 0;
+  const out = { nLand: land.length, nSea: sea.length,
+    landLeaked: land.filter(r => inForm(r.id)).map(r => r.name).slice(0, 4),
+    seaShown: sea.filter(r => inForm(r.id)).length };
+  /* ท่าเรือ · เลือกเส้นทางที่มีท่า แล้วดูว่ารายการเรือมีแต่ลำของท่านั้น */
+  const rp = sea.find(r => r.pier);
+  if (rp) {
+    const names = bkV2BoatLockPickList('2026-11-15', rp.id).map(b => b.id);
+    const wrong = names.filter(id => {
+      const b = BOATS.find(x => x.id === id);
+      const bp = (typeof getBoatCurrentPier === 'function') ? getBoatCurrentPier(b, '2026-11-15') : (b && b.pier);
+      return bp && bp !== rp.pier;
+    });
+    out.pier = rp.pier; out.boats = names.length; out.wrongPier = wrong.length;
+  }
+  /* ชั้นบันทึกต้องกันด้วย ไม่ใช่แค่ซ่อนจากรายการ */
+  out.landSaved = land.length
+    ? !!bkV2CreateBoatLock({ routeId: land[0].id, date: '2026-11-15', boatId: (BOATS[0]||{}).id,
+        holderType: 'office', minCap: 10, expiry: '2026-11-15', reason: 'test · land' })
+    : null;
+  bkV2BoatLockClose();
+  return out;
+});
+if (!R11.nLand) fail('11 ชุดนี้ไม่มีโปรแกรมบกให้ทดสอบ · ข้อนี้พิสูจน์อะไรไม่ได้');
+else if (!R11.landLeaked.length && R11.seaShown === R11.nSea
+         && R11.wrongPier === 0 && R11.boats > 0 && R11.landSaved === false)
+  ok(`11 ฟอร์มมีแต่เส้นทางเรือ ${R11.seaShown} เส้น (ตัดโปรแกรมบก ${R11.nLand}) · เรือมีแต่ของท่า ${R11.pier} ${R11.boats} ลำ`);
+else
+  fail(`11 ฟอร์มมีของฝั่งบกปน: ${JSON.stringify(R11)}`);
 
 /* ══ 6 · รีเฟรชแล้วต้องยังอยู่ · ผ่านทางบูตจริง ═══════════════════════════════ */
 const BLOB = await page.evaluate(() => localStorage.getItem('loveandaman_v2'));

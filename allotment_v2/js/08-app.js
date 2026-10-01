@@ -3148,6 +3148,9 @@ function bkV2BoatLockCellClear(l){
 function _bkLockSaveOps(){ try{ if(typeof save==='function') save('operations'); }catch(e){ console.warn('boat lock ops save failed', e); } }
 function bkV2CreateBoatLock(o){
   o = o || {};
+  /* §bkLock · โปรแกรมบกไม่มีเรือให้ล็อก · ด่านอยู่ชั้นนี้ ไม่ใช่ชั้นฟอร์ม
+     ชั้นฟอร์มซ่อนตัวเลือกให้เฉย ๆ · ทางเรียกอื่นจะข้ามไปได้ถ้าด่านอยู่แค่ตรงนั้น */
+  if(typeof laIsLandRoute==='function' && laIsLandRoute(o.routeId)) return null;
   if(!bkV2BoatLockCanTake(o.date, o.boatId)) return null;
   const l = bkV2CreateLock({ scope:'boat', routeId:o.routeId, date:o.date, boatId:o.boatId,
     holderType:o.holderType||'office', holderId:o.holderId||null,
@@ -3276,8 +3279,16 @@ function bkV2BoatLockSubmit(){
 /* เรือที่เลือกได้ของวันนั้น · พร้อมเหตุผลว่าทำไมบางลำเลือกไม่ได้ */
 function bkV2BoatLockPickList(date, routeId){
   const out=[];
+  /* §bkLock · เรือต้องอยู่ท่าเดียวกับเส้นทาง · เอาเรือพันวาไปวิ่งเส้นทางทับละมุไม่ได้
+     ถามท่าตามวันที่ (§boatPierDate) ไม่ใช่ท่าวันนี้ · เรือเข้าอู่แล้วกลับมาคนละท่าได้ */
+  const _r=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x&&x.id===routeId);
+  const _rp=_r?(_r.pier||''):'';
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(b=>{
     if(!b||!b.id) return;
+    if(_rp){
+      const bp=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,date):(b.pier||'');
+      if(bp && bp!==_rp) return;
+    }
     const st=(typeof getCurStatus==='function')?(getCurStatus(b,date)||{}).s:'available';
     const B=bkV2BoatLockBlockers(date,b.id);
     let why='';
@@ -3294,7 +3305,9 @@ function bkV2BoatLockPickList(date, routeId){
 function bkV2BoatLockModal(){
   const f=_bkBoatForm; if(!f) return '';
   const E=_bkBE;
-  const ROU=(typeof ROUTES!=='undefined'?ROUTES:[]);
+  /* §bkLock · เฉพาะเส้นทางเรือ · โปรแกรมบก (City Tour, รับส่งสนามบิน, โชว์) ไม่มีเรือให้ล็อก
+     กติกาเดียวกับทั้งระบบ · ถามผ่าน laIsLandRoute() จุดเดียวเหมือนหน้าจอฝั่งเรืออื่น ๆ */
+  const ROU=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(r=>r && (typeof laIsLandRoute!=='function' || !laIsLandRoute(r.id)));
   const routeOpts='<option value="">— เลือกเส้นทาง —</option>'
     + ROU.map(r=>`<option value="${E(r.id)}" ${f.routeId===r.id?'selected':''}>${E(r.name)}</option>`).join('');
   const agentList=(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).map(a=>`<option value="${E(a.name)}"></option>`).join('');
