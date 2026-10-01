@@ -54656,6 +54656,12 @@ function bkV2CommitBooking(status){
       newBk.trips = JSON.parse(JSON.stringify(editing.trips || []));
       newBk.passengers = JSON.parse(JSON.stringify(editing.passengers || []));
       newBk.addOns = JSON.parse(JSON.stringify(editing.addOns || []));
+      // §b2cPay (2026-08-12, restored 2026-10-01) · paymentSnapshot is B2C-owned like the money above.
+      //   newBk.paymentSnapshot is rebuilt from the agent contract; the a_b2c house agent is not
+      //   'invoice', so any edit collapsed it to {method:'prepaid', source:'contract'} → Pay column "PFM",
+      //   paid/paidStatus dropped. 03cb6aa (voucher logo) deleted this line in a bad merge on 2026-08-12;
+      //   LOV-7485231 read as PFM after a notes edit on 2026-10-01. Not recorded in b2cOverride on purpose.
+      if(editing.paymentSnapshot) newBk.paymentSnapshot = JSON.parse(JSON.stringify(editing.paymentSnapshot));
       var _prevOv = Array.isArray(editing.b2cOverride) ? editing.b2cOverride : [];
       var _newOv  = bkV2B2CDiff(d._b2cSnap, newBk);
       newBk.b2cOverride = _prevOv.concat(_newOv).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
