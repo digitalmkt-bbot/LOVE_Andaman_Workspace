@@ -22609,6 +22609,13 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-note:focus{outline:none;border-color:var(--lm600)}'
  +S+' .ts-empty{padding:26px;text-align:center;color:var(--zn400);font-size:12px}'
  +S+' .ts-grow td{background:var(--zn50);font-weight:800}'
+ /* §tsSreq · แถบคำขอพิเศษใต้บรรทัดของใบนั้น · สีส้มอ่อนให้สะดุดตาแต่ไม่ตะโกน
+    ติดเส้นซ้ายไว้บอกว่าเป็นของบรรทัดข้างบน ไม่ใช่รายการใหม่ */
+ +S+' .ts-sqrow td{background:#FFFAF0;border-top:none;border-bottom:1px solid var(--zn200);'
+   +'box-shadow:inset 3px 0 0 #E8A33D;padding:5px 11px 7px 14px}'
+ +S+' .ts-sqlb{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.06em;'
+   +'text-transform:uppercase;color:#8A5300;background:#FBEBCF;border-radius:5px;padding:1px 7px;margin-right:8px;vertical-align:1px}'
+ +S+' .ts-sqtx{font-size:11.5px;line-height:1.45;color:#5A4320;white-space:pre-wrap}'
  +S+' .ts-sign{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid var(--zn200)}'
  +S+' .ts-sg{border:1px solid var(--zn200);border-radius:15px;padding:14px;text-align:center;background:var(--zn50)}'
  +S+' .ts-sg i{display:block;height:34px;border-bottom:1px dashed var(--zn400);margin-bottom:8px}'
@@ -22855,6 +22862,12 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:5.4%}'   // Status
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
    +S+' .ts-man td:nth-child(15) .ts-chip,'+S+' .ts-man td:nth-child(16) .ts-chip{white-space:normal;line-height:1.2}'
+   /* §tsSreq · ตอนพิมพ์ต้องอ่านออกและห้ามโดนตัด · แถวนี้ไม่ใช่ของประดับ
+      ตารางตั้ง overflow:hidden ไว้ทุกช่องตอนพิมพ์ ต้องยกเว้นให้แถวนี้ */
+   +S+' .ts-sqrow td{width:auto !important;overflow:visible !important;white-space:normal;'
+     +'padding:3px 5px 4px 7px;box-shadow:inset 2px 0 0 #B07A1F}'
+   +S+' .ts-sqlb{font-size:6.6px;padding:0 4px;margin-right:5px}'
+   +S+' .ts-sqtx{font-size:8.4px;line-height:1.35}'
    +S+' .ts-pyd{font-size:8px;padding:0 3px}'
    +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pyn2,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:7.4px}'
    +S+' .ts-chip.ts-pyx{font-size:7.4px;padding:0 3px}'
@@ -23370,6 +23383,26 @@ function tsAddonList(r, date){
       note:(mm.pierAt?('สั่งหน้าท่า'+(mm.pierBy?(' · '+mm.pierBy):'')):'มากับใบจอง') });
   }catch(_){}
   return out;
+}
+/* ══ §tsSreq · คำขอพิเศษต้องขึ้นใบปิดวันด้วย ═══════════════════════════════
+   ผู้ใช้แจ้ง 1 ต.ค. จากใบ LOV-2766772 (29 ก.ย.) · ช่อง SPECIAL REQUEST ในหน้า
+   By trip เขียนว่า "เปลี่ยนมาจากเกาะพีพี ไม่ท่อน คืนเงินหน้าท่าเรือ 3,403 // CS แจ้งเวลา"
+   แต่ Travel Summary ไม่มีที่ให้ข้อความนี้อยู่เลย
+
+   ทำไมถึงสำคัญกว่าคอลัมน์ที่หายข้ออื่น ๆ: Travel Summary คือเอกสารปิดเงินประจำวัน
+   มีช่องเซ็น Finance กับ Management อยู่ท้ายเอกสาร · บรรทัดนั้นบอกว่าต้องคืนเงิน
+   3,403 บาทที่ท่าเรือ แต่ในเอกสารขึ้นว่า Paid และ COT ยังไม่ระบุยอด
+   คนที่ถือเอกสารนี้อย่างเดียวจึงไม่มีทางรู้ว่ามีเงินต้องคืน
+
+   อ่านจากทางเดียวกับหน้า By trip เป๊ะ (bk.notes → ตัดท่อน COT ออก)
+   ถ้าอ่านดิบจาก bk.notes เอง ยอด COT จะขึ้นซ้ำสองที่ในเอกสารเดียว
+   เพราะ Travel Summary มีคอลัมน์ COT ของตัวเองอยู่แล้ว                       */
+function tsSreqOf(b){
+  if(!b) return '';
+  var raw=String(b.notes||b.note||'').trim();
+  if(!raw) return '';
+  try{ if(typeof bkV2CotChip==='function') return String(bkV2CotChip(b, raw).note||'').trim(); }catch(_){}
+  return raw;
 }
 function tsAddonCell(r, date){
   var L=tsAddonList(r, date), e=ckEsc;
@@ -26089,12 +26122,21 @@ function renderTravelSum(){
           : tsCxlCell(r, date, DEC, money))+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
+    /* §tsSreq · วางเป็นแถวเต็มความกว้างใต้ใบนั้น ไม่ใช่คอลัมน์ที่ 17
+       ข้อความจริงยาว 70-150 ตัวอักษร · คอลัมน์กว้าง 8% บนกระดาษ A4 แนวนอน
+       จะเหลือตัวหนังสือ 7px แล้วโดน overflow:hidden ตัดหายตอนพิมพ์
+       แถวเต็มความกว้างอ่านครบทุกตัว และขึ้นเฉพาะใบที่มีคำขอ ไม่กินที่ใบอื่น
+       ตารางนี้มีแถวหัวเส้นทางแบบ colspan อยู่แล้ว โครงจึงไม่ได้แปลกใหม่ */
+    var _sq=tsSreqOf(b);
+    if(_sq) body+='<tr class="ts-sqrow"><td colspan="16">'
+      +'<span class="ts-sqlb">คำขอพิเศษ</span><span class="ts-sqtx">'+e(_sq)+'</span></td></tr>';
   });
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · จุดรับและจุดส่งกลับ · '
       +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
       +'ช่อง <b>Total</b> คือยอด booking บวกของที่ขายเพิ่มหน้างานแล้ว · '
+      +'ใบที่มี <b>คำขอพิเศษ</b> จะมีแถบข้อความอยู่ใต้บรรทัดของใบนั้น · '
       +'ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
       +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
         +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
