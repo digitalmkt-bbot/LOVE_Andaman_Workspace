@@ -69465,6 +69465,8 @@ function ppChips(A){
   if(A.veg)   out.push(c('มังสวิรัติ <b>'+A.veg+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.vegan) out.push(c('วีแกน <b>'+A.vegan+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.halal) out.push(c('ฮาลาล <b>'+A.halal+'</b>','#E9F1FB','#C3D9F0','#185FA5'));
+  /* §ppInfSub · ทารกไม่เข้ายอดหัวอาหาร แต่ต้องเห็นว่ามี · เดิมอยู่ใต้ยอดรวม ย้ายมาเป็นชิปในช่องอาหารพิเศษ */
+  if(A.inf)   out.push(c('ทารก <b>'+A.inf+'</b>','#FDF4FF','#EBD5F2','#86198F'));
   var alt=ppAlHtml(A.al);
   if(alt||A.allergy||A.alUnk){
     var lead='&#9888; แพ้อาหาร';
@@ -69581,7 +69583,6 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-t .tot{font-weight:800}'
  +S+' .pp-cap{font-weight:600;font-size:.78em;color:#94A3B8;margin-left:2px;white-space:nowrap}'
  +S+' .pp-cap.over{color:#C0271C;font-weight:800}'
- +S+' .pp-inf{font-size:9.5px;font-weight:600;color:#94A3B8;line-height:1.2;margin-top:1px;white-space:nowrap}'
  +S+' .pp-t .eat{font-weight:800;color:#0F6E56;background:#F4FBF8}'
  +S+' .pp-t .mealc{white-space:normal;line-height:1.55}'
  +S+' .pp-t tr.g-pier>td{background:#E4EAF0;border-top:2px solid #9FB0C0;border-bottom:1px solid #9FB0C0;'
@@ -69685,9 +69686,7 @@ function ppNumCells(A, cls, cap){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
   return n(A.n)+n(A.ad)+n(A.chd)+n(A.inf)+n(A.foc)
-    /* §ppInfSub · ยอดรวมนับทารกด้วย · บอกไว้ใต้ตัวเลข คนเทียบกับ cap จะได้รู้ว่ามีทารกปนอยู่กี่คน */
-    +'<td class="num tot'+c+'">'+A.tot+(cap||'')
-      +(A.inf?('<div class="pp-inf">ทารก '+A.inf+'</div>'):'')+'</td>'
+    +'<td class="num tot'+c+'">'+A.tot+(cap||'')+'</td>'
     +'<td class="num eat'+c+'">'+A.eat+'</td>';
 }
 /* แถวข้อมูลของโปรแกรมหนึ่ง · หนึ่งแถว = หนึ่ง (วัน × ลำ) */
