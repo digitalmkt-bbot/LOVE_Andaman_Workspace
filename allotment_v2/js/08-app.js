@@ -3095,13 +3095,27 @@ function bkV2BoatLockOverdue(l, today){
 /* ══ ด่านกัน · อะไรขวางอยู่บ้างก่อนจะล็อกลำนี้ ═══════════════════════════════════
    คืนรายการใบจองจริง ไม่ใช่แค่ true/false — คนกดต้องตัดสินใจว่าจะย้ายใบไหนไปลำอื่น
    การตอบว่า "ล็อกไม่ได้" เฉย ๆ ทำให้ต้องไปไล่หาเองว่าติดอะไร                    */
-function bkV2BoatLockBlockers(date, boatId){
-  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'' };
+function bkV2BoatLockBlockers(date, boatId, routeId){
+  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0 };
   const op = (typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date][boatId] : null;
   if(op){
     if(op.charterBookingId) out.charterOf = op.charterBookingId;
     if(op.boatLockId) out.holdOf = op.boatLockId;
     out.cellBooked = Number(op.booked)||0;
+  }
+  /* ══ §bkLock · ที่นั่งที่ขายไปแล้วทั้งเส้นทาง ไม่ใช่แค่ที่ผูกกับลำนี้ ═══════════
+     เจอตอนดูหน้า By trip ของจริง · 20 ก.ย. r10 ขายไปแล้ว 30 ที่ มีเรือลำเดียว
+     แต่ลูกค้ายังไม่ถูก assign ลงลำ ด่านเดิมจึงเห็นว่า "ลำนี้ว่าง" แล้วปล่อยให้ล็อก
+     ผลคือทริปเหลือความจุ 0 ที่ ขณะที่ลูกค้า 30 คนถือตั๋วอยู่ · ขึ้นว่า no boat
+     เอาเรือที่ลูกค้าที่ขายไปแล้วต้องใช้ ไปกันให้เอเยนต์ไม่ได้ ไม่ว่าจะยังไม่ assign หรือไม่ */
+  const _rid = routeId || (op && op.route) || '';
+  if(_rid && typeof getAllotment==='function'){
+    const A = getAllotment(_rid, date) || {};
+    const cap = Number(A.availableCapacity)||0, sold = Number(A.seatsConsumed)||0;
+    const mine = (typeof bkV2BoatCapOn==='function') ? bkV2BoatCapOn(boatId, date) : 0;
+    out.sold = sold;
+    out.capAfter = Math.max(0, cap - mine);
+    out.short = Math.max(0, sold - out.capAfter);
   }
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
@@ -3117,9 +3131,9 @@ function bkV2BoatLockBlockers(date, boatId){
   out.rows.sort((a,b)=>b.pax-a.pax);
   return out;
 }
-function bkV2BoatLockCanTake(date, boatId){
-  const B = bkV2BoatLockBlockers(date, boatId);
-  return !(B.charterOf || B.holdOf || B.pax>0 || B.cellBooked>0);
+function bkV2BoatLockCanTake(date, boatId, routeId){
+  const B = bkV2BoatLockBlockers(date, boatId, routeId);
+  return !(B.charterOf || B.holdOf || B.pax>0 || B.cellBooked>0 || B.short>0);
 }
 /* ══ ช่องบนกระดานเรือ · ผลพลอยได้ของใบล็อก ไม่ใช่ต้นทางความจริง ═══════════════
    ใช้ทางเดียวกับใบเหมาลำ (type='charter') เพื่อให้ 10 จุดที่เช็ค "ลำนี้ไม่ขายที่นั่ง"
@@ -3297,6 +3311,7 @@ function bkV2BoatLockPickList(date, routeId){
     else if(B.holdOf) why='ถูกกันทั้งลำไว้แล้ว';
     else if(B.pax>0) why='มีใบจองแล้ว '+B.pax+' ที่';
     else if(B.cellBooked>0) why='มีที่นั่งขายแล้ว '+B.cellBooked+' ที่';
+    else if(B.short>0) why='ทริปขายไปแล้ว '+B.sold+' ที่ · เอาลำนี้ออกจะขาด '+B.short+' ที่';
     out.push({ id:b.id, name:b.name||b.id, cap:bkV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B });
   });
   out.sort((a,b)=> (a.ok===b.ok ? (b.cap-a.cap) : (a.ok?-1:1)));
@@ -8418,7 +8433,10 @@ function bkV2CharterBoatHeal(date){
 }
 function baDayBoats(date){ // all non-charter assigned boats that day → [{boatId, routeId, boat}]
   const day=TRIPS[date]||{}; const chSet=baCharterBoatIds(date); const out=[];
-  Object.entries(day).forEach(([bid,o])=>{ if(o&&o.route&&!o.charterBookingId&&!chSet.has(bid)){ const boat=(BOATS||[]).find(b=>b.id===bid); if(boat) out.push({boatId:bid, routeId:o.route, boat}); } });
+  /* §bkLock · ลำที่ถูกกันไว้ทั้งลำไม่ใช่ "เรือที่ขายที่นั่ง" อีกต่อไป
+     getAllotment ตัดความจุมันออกไปแล้ว (เซลล์เป็น charter) · ถ้าตรงนี้ยังนับมันอยู่
+     แถบโปรแกรมในหน้า By trip จะขึ้น "4 boats" คู่กับความจุของ 3 ลำ · เลขสองตัวเถียงกันเอง */
+  Object.entries(day).forEach(([bid,o])=>{ if(o&&o.route&&!(typeof opLocked==='function'?opLocked(o):o.charterBookingId)&&!chSet.has(bid)){ const boat=(BOATS||[]).find(b=>b.id===bid); if(boat) out.push({boatId:bid, routeId:o.route, boat}); } });
   return out;
 }
 function baBoatsForRoute(date, routeId){ return baDayBoats(date).filter(x=>x.routeId===routeId); }
@@ -48540,8 +48558,12 @@ function bkV2RenderTab2(){
     (groups[r.routeId] = groups[r.routeId] || []).push(r);
   });
   // Also surface routes that have a seat-lock on this date even with 0 bookings (respect pier + route filter)
+  /* §bkLock · ล็อกเรือทั้งลำก็ต้องดันทริปขึ้นกระดานเหมือนล็อกที่นั่ง
+     ทริปที่ยังไม่มีใบจองแต่มีเรือถูกกันไว้ทั้งลำ ถ้าไม่ขึ้น เรือจะหายเงียบจากใบงาน */
   const lockRouteIds = (typeof bkV2LocksFor==='function')
-    ? [...new Set((typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>r.id).filter(rid => bkV2LocksFor(rid, date).length>0))]
+    ? [...new Set((typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>r.id).filter(rid =>
+        bkV2LocksFor(rid, date).length>0
+        || (typeof bkV2BoatLocksOn==='function' && bkV2BoatLocksOn(date).some(l=>l.routeId===rid))))]
         .filter(rid => {
           // §cityTourView · marine page (flag off) excludes land locks · land page (flag on) excludes marine locks
           if((typeof laIsLandRoute==='function' && laIsLandRoute(rid)) !== _bkV2CityTourOnly) return false;
@@ -49701,6 +49723,12 @@ function bkV2RenderTab2(){
        กรองด้วยที่นั่งคงเหลือ ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้
        สถานะยังเป็น active อยู่ แต่วันนี้ไม่เหลือที่ ก็ต้องหายเหมือนกัน            */
     const lkShow = trParents;
+    /* §bkLock · ล็อกเรือทั้งลำของทริปนี้ · คนละหน่วยกับ trLockedTotal จึงไม่บวกเข้าไป
+       ของมันไม่ได้กันที่นั่งจากพูล มันเอาเรือออกจากพูล · ถ้าเอาความจุไปบวกใน
+       trLockedTotal ป้าย "ล็อกเกิน X ที่" (§btLkOne) จะเด้งทั้งที่ไม่มีอะไรเกิน */
+    const trBoatLk = (typeof bkV2BoatLocksOn==='function')
+      ? bkV2BoatLocksOn(date).filter(l=>l.routeId===rid) : [];
+    const trBoatSeats = trBoatLk.reduce((s,l)=> s + ((typeof bkV2BoatCapOn==='function')?bkV2BoatCapOn(l.boatId,l.date):0), 0);
     const _pendRows = pendGroups[rid] || [];
     const _pendPax = _pendRows.reduce((s,r)=> s + P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'), 0);
     /* ══ §btPendRow (2026-09-25) · ใบรออนุมัติย้ายเข้ามาอยู่ในตาราง ═══════════
@@ -49761,6 +49789,10 @@ function bkV2RenderTab2(){
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
+      /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
+         ถ้าไม่บอกตรงนี้ คนอ่านจะเห็นแค่ "วันนี้เรือน้อยลง" โดยไม่รู้ว่าหายไปไหน
+         นับแยกจาก 🔒 ที่นั่ง เพราะคนละหน่วย · บวกรวมเมื่อไหร่คือหักซ้ำ */
+      + (trBoatLk.length?`<span class="plk" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE" title="${laT('เรือที่กันไว้ทั้งลำให้เอเยนต์ · ไม่อยู่ในพูลขายที่นั่งแล้ว')}">&#9973; ${laTp('กันไว้ {0} ลำ', trBoatLk.length)} &middot; ${trBoatSeats} ${laT('ที่')}</span>`:'')
       + (_lkOver>0?`<span class="pover" title="${laT('ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่')}">&#9888; ${laTp('ล็อกเกิน {0} ที่', _lkOver)}</span>`:'')
       + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
@@ -49823,6 +49855,55 @@ function bkV2RenderTab2(){
         + `</tr>` : '';
       return _row;
     }).join('');
+    /* ══ §bkLockRow · ล็อกเรือทั้งลำในใบงานเดียวกัน ══════════════════════════
+       ผู้ใช้ถามเองว่า "ถ้าเป็นเรือ Charter lock ต้องขึ้นด้วยไหม ให้เหมือนกัน" — ต้อง
+       เพราะเรือหายไปจากทั้งจำนวนลำและความจุของวันนั้นแล้ว ถ้าใบงานไม่บอกว่าใครถืออยู่
+       คนอ่านเห็นแค่ "วันนี้เรือน้อยลงหนึ่งลำ" แล้วไม่มีทางรู้ว่าไปตามกับใคร
+       เหมือนกับแถวล็อกที่นั่งทุกอย่าง ยกเว้นช่อง AD ที่ปล่อยเป็นขีด
+       ความจุของเรือไม่ใช่ที่นั่งที่กันจากพูล · ใส่ตัวเลขลงคอลัมน์นั้นเมื่อไหร่
+       คนอ่านจะบวกมันเข้ากับยอดที่นั่งทันที ซึ่งคือการนับซ้ำ · ชื่อลำกับความจุ
+       ไปอยู่ช่องที่กว้างที่สุดแทน พร้อมคำว่า "ทั้งลำ" กำกับ                      */
+    const boatLockRows = trBoatLk.map(l=>{
+      const _c   = (typeof bkV2LockHolderColor==='function') ? bkV2LockHolderColor(l) : '#9C9C95';
+      const _ink = (typeof bkV2ContrastInk==='function') ? bkV2ContrastInk(_c) : '#fff';
+      const _ci  = (typeof laInk==='function') ? laInk(_c) : _c;
+      const _nm  = (typeof bkV2LockHolderName==='function') ? bkV2LockHolderName(l) : String(l.holderId||'');
+      const _bn  = (typeof bkV2BoatNameOf==='function') ? bkV2BoatNameOf(l.boatId) : String(l.boatId||'');
+      const _cap = (typeof bkV2BoatCapOn==='function') ? bkV2BoatCapOn(l.boatId, l.date) : 0;
+      const _od  = (typeof bkV2BoatLockOverdue==='function') && bkV2BoatLockOverdue(l, date);
+      const _fx  = (typeof bkV2BoatLockFixed==='function') ? bkV2BoatLockFixed(l) : true;
+      const _min = (typeof bkV2BoatLockMinCap==='function') ? bkV2BoatLockMinCap(l) : 0;
+      const _dash= '<span class="t2-dim">&mdash;</span>';
+      const _code= 'BT-' + String(_nm||'').replace(/\s+/g,'').slice(0,12).toUpperCase();
+      const _story = _bn + ' · ' + laTp('ทั้งลำ {0} ที่', _cap)
+        + ' · ' + (_fx ? laT('สัญญาลำนี้เลย')
+                           : laTp('ไม่น้อยกว่า {0} ที่', _min))
+        + (l.reason ? (' · ' + l.reason) : '');
+      const _bchip = `<span style="display:inline-block;background:#F3EBFA;color:#53207A;border:1px solid #DCC7EE;border-radius:5px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px">&#9973; ${esc(_bn)} &middot; ${_cap}</span>`;
+      return `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-bl="${esc(l.id)}" style="--lc:${_c};--lci:${_ci}">`
+        + `<td class="t2-vc"><span class="lkcode">&#9973; ${esc(_code)}</span></td>`
+        + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
+        + `<td class="t2-cu"><span class="lkwait">${laT('ล็อกเรือทั้งลำ · ยังไม่ยืนยัน')}</span>${_bchip}</td>`
+        + `<td class="t2-c">${_dash}</td>`
+        + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
+        + `<td>${_od?`<span class="lkrule lkover" title="${laT('เลยวันที่ตั้งไว้แล้ว แต่เรือยังถูกกันทั้งลำ')}">&#9888; ${laT('เลยกำหนด')}</span>`
+                   :(l.expiry?`<span class="lkrule">${laT('หมดอายุ')} ${esc(l.expiry)}</span>`:_dash)}</td>`
+        + (vanMode?`<td class="t2-c">${_dash}</td>`:'')
+        + `<td class="t2-pk"><span class="lkwait lkclip" title="${esc(_story)}">${esc(_story)}</span></td>`
+        + `<td class="t2-c">${_dash}</td>`
+        + `<td>${_dash}</td>`
+        + `<td>${_dash}</td>`
+        + (vanMode?'':`<td class="t2-req">${_dash}</td>`)
+        + `<td class="t2-req"><span class="lkwait">${laT('รอยืนยันจำนวนหัว')}</span></td>`
+        + (vanMode?'':`<td><span class="lkhold" style="background:#F3EBFA;color:#53207A">&#9973; ${laT('กันทั้งลำ')}</span></td>`
+                    + `<td class="t2-r">${_dash}</td>`
+                    + `<td class="t2-c"><button class="lkgo" onclick="event.stopPropagation();bkV2BoatLockToCharter('${l.id}')" title="${laT('เปิดฟอร์มจองเหมาลำ กรอกให้ล่วงหน้าจากใบล็อกนี้')}">${laT('เหมาลำ')}</button>`
+                    + `<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2BoatLockReleaseGo('${l.id}')" title="${laT('คืนเรือลำนี้เข้าพูลขายที่นั่งทันที')}">${laT('ปล่อยลำ')}</button></td>`)
+        + `<td class="t2-c">${_dash}</td>`
+        + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
+        + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
+        + `</tr>`;
+    }).join('');
     /* §btAlign (2026-09-28) · ทุกโปรแกรมเป็นตารางของตัวเอง · คอลัมน์จึงไม่ตรงกัน
        ที่มา · ผู้ใช้เจอเอง · "แถวนี้มันควรจะตรงกันไหม และตัวเลขจะได้เห็น"
        table-layout เป็น auto · เบราว์เซอร์คิดความกว้างจากเนื้อหาของแต่ละตารางแยกกัน
@@ -49845,7 +49926,7 @@ function bkV2RenderTab2(){
       + (rcMode ? _c(106) : '')
       + (wxClosed ? _c(94) : '')
       + '</colgroup>';
-    const zoneTable = (zoneBlocks || lockBlocks || pendBlocks) ? `
+    const zoneTable = (zoneBlocks || lockBlocks || boatLockRows || pendBlocks) ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl t2-fixed${vanMode?' t2-van':''}">
             ${colGroup}
@@ -49857,7 +49938,7 @@ function bkV2RenderTab2(){
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${_pband}${pendBlocks}${lockBlocks}${zoneBlocks}</tbody>
+            <tbody>${_pband}${pendBlocks}${boatLockRows}${lockBlocks}${zoneBlocks}</tbody>
           </table>
         </div>` : '';
 
@@ -50142,7 +50223,7 @@ function bkV2RenderTab2(){
         ${rcStrip}
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
               (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
-        ${(grp.length===0 && !pendBlocks && !lockBlocks) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
+        ${(grp.length===0 && !pendBlocks && !lockBlocks && !boatLockRows) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก

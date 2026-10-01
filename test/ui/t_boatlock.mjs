@@ -27,6 +27,8 @@
 //   9 ไม่มี error บนหน้า
 //  10 ใบชนิดเรือโผล่แค่ในตารางของมัน · ไม่ไปปนในรายการล็อกที่นั่ง
 //  11 ฟอร์มมีแต่เส้นทางเรือ ไม่มีโปรแกรมบก · และเรือต้องอยู่ท่าเดียวกับเส้นทาง
+//  12 ห้ามกันเรือที่ลูกค้าที่ขายไปแล้วต้องใช้ · ทริปจะเหลือความจุไม่พอ
+//  13 ใบงาน By trip ขึ้นแถวเรือที่กันไว้ · ป้ายบนแถบโปรแกรม · จำนวนลำลดลงจริง
 
 import { open, goView } from './_harness.mjs';
 
@@ -52,8 +54,9 @@ const R0 = await page.evaluate(() => {
       if (!op || Array.isArray(op) || !op.route) continue;
       if (opLocked(op) || op.type === 'charter') continue;
       if ((op.booked || 0) > 0) continue;
-      const B = bkV2BoatLockBlockers(ds, bid);
-      if (B.pax > 0 || B.rows.length) continue;
+      /* ใช้ด่านจริงตัวเดียวกับตอนสร้าง · ไม่งั้นเลือกลำที่ด่านอื่นปัดตกมาแล้วเทสล้มทั้งแถบ
+         ด้วยเหตุผลที่ไม่เกี่ยวกับสิ่งที่กำลังวัด (เคสนี้คือด่านทริปขายไปแล้ว ข้อ 12) */
+      if (!bkV2BoatLockCanTake(ds, bid, op.route)) continue;
       const A = getAllotment(op.route, ds);
       if (!A.hasAllotment || A.availableCapacity <= 0) continue;
       const cap = bkV2BoatCapOn(bid, ds);
@@ -289,6 +292,78 @@ else if (!R11.landLeaked.length && R11.seaShown === R11.nSea
   ok(`11 ฟอร์มมีแต่เส้นทางเรือ ${R11.seaShown} เส้น (ตัดโปรแกรมบก ${R11.nLand}) · เรือมีแต่ของท่า ${R11.pier} ${R11.boats} ลำ`);
 else
   fail(`11 ฟอร์มมีของฝั่งบกปน: ${JSON.stringify(R11)}`);
+
+/* ══ 12 · ห้ามกันเรือที่ลูกค้าที่ขายไปแล้วต้องใช้ ═══════════════════════════════
+   เจอตอนดูหน้า By trip ของจริง · 20 ก.ย. r10 ขายไปแล้ว 30 ที่ มีเรือลำเดียว
+   ลูกค้ายังไม่ถูก assign ลงลำ ด่านเดิมจึงเห็นว่า "ลำนี้ว่าง" แล้วปล่อยให้ล็อกผ่าน
+   ผลคือทริปเหลือความจุ 0 ที่ ขณะที่ลูกค้า 30 คนถือตั๋วอยู่ · หน้าจอขึ้น no boat */
+const R12 = await page.evaluate(() => {
+  for (const ds of Object.keys(TRIPS || {}).sort()) {
+    const byR = {};
+    for (const [bid, op] of Object.entries(TRIPS[ds] || {})) {
+      if (!op || Array.isArray(op) || !op.route) continue;
+      (byR[op.route] = byR[op.route] || []).push(bid);
+    }
+    for (const [rid, bids] of Object.entries(byR)) {
+      const A = getAllotment(rid, ds); if (!A.hasAllotment) continue;
+      const sold = A.seatsConsumed || 0; if (sold <= 0) continue;
+      /* ลำที่เอาออกแล้วความจุที่เหลือไม่พอกับที่ขายไปแล้ว */
+      const tight = bids.find(b => {
+        const B = bkV2BoatLockBlockers(ds, b, rid);
+        return B.short > 0 && !B.charterOf && !B.holdOf && B.pax === 0 && B.cellBooked === 0;
+      });
+      if (!tight) continue;
+      const B = bkV2BoatLockBlockers(ds, tight, rid);
+      return { ds, rid, boat: tight, sold: B.sold, capAfter: B.capAfter, short: B.short,
+        can: bkV2BoatLockCanTake(ds, tight, rid),
+        made: !!bkV2CreateBoatLock({ routeId: rid, date: ds, boatId: tight, holderType: 'office',
+          minCap: 10, expiry: ds, reason: 'test · oversold' }),
+        why: (bkV2BoatLockPickList(ds, rid).find(x => x.id === tight) || {}).why || '' };
+    }
+  }
+  return { none: true };
+});
+if (R12.none) fail('12 ไม่เจอทริปที่เรือตึงในชุดนี้ · ข้อนี้พิสูจน์อะไรไม่ได้');
+else if (!R12.can && !R12.made && R12.short > 0 && /ขาด/.test(R12.why))
+  ok(`12 ทริปขายไปแล้ว ${R12.sold} ที่ · เอาลำนี้ออกเหลือ ${R12.capAfter} ขาด ${R12.short} → ล็อกไม่ได้ และบอกเหตุผล`);
+else
+  fail(`12 กันเรือที่ลูกค้าต้องใช้ไปได้: ${JSON.stringify(R12)}`);
+
+/* ══ 13 · ใบงาน By trip ต้องขึ้นแถวเรือที่กันไว้ ════════════════════════════════
+   ผู้ใช้ถามเองว่า "ถ้าเป็นเรือ Charter lock ต้องขึ้นด้วยไหม ให้เหมือนกัน"
+   ต้องขึ้น เพราะเรือหายจากทั้งจำนวนลำและความจุของวันนั้นแล้ว
+   ถ้าใบงานไม่บอกว่าใครถืออยู่ คนอ่านเห็นแค่ "วันนี้เรือน้อยลงหนึ่งลำ" แล้วตามไม่ได้
+   สามอย่างที่ต้องครบ · แถวของมัน · ป้ายบนแถบโปรแกรม · และจำนวนลำต้องลดลงจริง */
+const R13 = await page.evaluate(p => {
+  /* A/B ตรง ๆ · ถอดป้ายล็อกออกชั่วคราวแล้วนับใหม่ · วัดผลของป้ายอย่างเดียว
+     (วัดเทียบกับตอนเริ่มเทสไม่ได้ ล็อกถูกสร้างไปตั้งแต่ข้อ 1 แล้ว) */
+  const op = TRIPS[p.date][p.boatId];
+  const nbLocked = baBoatsForRoute(p.date, p.routeId).length;
+  const inLocked = baBoatsForRoute(p.date, p.routeId).some(x => x.boatId === p.boatId);
+  const ref = op.boatLockId, ty = op.type;
+  delete op.boatLockId; op.type = 'normal';
+  const nb0 = baBoatsForRoute(p.date, p.routeId).length;
+  const in0 = baBoatsForRoute(p.date, p.routeId).some(x => x.boatId === p.boatId);
+  op.boatLockId = ref; op.type = ty;
+  _bkV2.filterDate = p.date; _bkV2.filterRoute = null;
+  _bkV2T2Q = ''; _bkV2T2Lk = '';
+  if (typeof bkV2SwitchTab === 'function') bkV2SwitchTab('bytrip');
+  return { nb0, nbLocked, in0, inLocked };
+}, PICK);
+await page.waitForTimeout(900);
+const R13b = await page.evaluate(p => {
+  const h = document.body.innerHTML;
+  return { row: h.indexOf('data-bl="' + p.id + '"') >= 0,
+           band: /กันไว้ \d+ ลำ/.test(h),
+           inBand: h.indexOf('ล็อกเรือทั้งลำ · ยังไม่ยืนยัน') >= 0,
+           nbNow: baBoatsForRoute(p.date, p.routeId).length };
+}, { id: LOCK_ID, date: PICK.date, routeId: PICK.routeId });
+if (R13b.row && R13b.band && R13b.inBand && R13.in0 && !R13.inLocked && R13.nbLocked === R13.nb0 - 1)
+  ok(`13 ใบงาน By trip ขึ้นแถวเรือที่กันไว้ + ป้ายบนแถบโปรแกรม · จำนวนลำ ${R13.nb0} → ${R13.nbLocked}`);
+else
+  fail(`13 ใบงานไม่ขึ้นหรือจำนวนลำไม่ลด: ${JSON.stringify(R13b)} ${JSON.stringify(R13)}`);
+await page.evaluate(() => { if (typeof bkV2SwitchTab === 'function') bkV2SwitchTab('locks'); });
+await page.waitForTimeout(500);
 
 /* ══ 6 · รีเฟรชแล้วต้องยังอยู่ · ผ่านทางบูตจริง ═══════════════════════════════ */
 const BLOB = await page.evaluate(() => localStorage.getItem('loveandaman_v2'));
