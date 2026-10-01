@@ -47713,7 +47713,21 @@ function bkV2LongtailCharterExtraBoats(bkId, date){
 // ── Per-agent colour · auto from id (stable) · agent.color overrides (saved) ──
 const BKV2_AGENT_PALETTE=['#9b59b6','#27ae60','#e08283','#f1c40f','#2e86de','#7B3FA0','#16a085','#e67e22','#C0563B','#2c7a45','#d35400','#8e44ad','#BA8A2C','#185FA5','#0F6E56','#7f8c8d'];
 function bkV2AgentColor(agentId){ const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(a&&a.color) return a.color; const s=String(agentId||(a&&a.name)||''); let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return BKV2_AGENT_PALETTE[h%BKV2_AGENT_PALETTE.length]; }
-function bkV2ContrastInk(hex){ const m=String(hex||'').replace('#',''); if(m.length<6) return '#fff'; const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16); return (0.299*r+0.587*g+0.114*b)>150?'#2c2c2a':'#fff'; }
+/* ══ §inkOn · เลือกสีตัวอักษรบนชิปจากคอนทราสต์จริง ไม่ใช่เส้นแบ่งความสว่าง
+   ของเดิมตัดที่ค่าความสว่าง 150 ซึ่งเป็นการเดา · วัดจากสีเอเยนต์จริง 49 เจ้า
+   มี 12 เจ้าที่ได้ ink ผิดตัว เช่น #ff7300 ได้ 2.73:1 ทั้งที่ถ้าใช้ขาวจะได้ 5.13:1
+   ตอนนี้ลองทั้งสองตัวแล้วเอาตัวที่คอนทราสต์สูงกว่า · ไม่มีทางแย่ลงกว่าเดิม
+   เพราะผลลัพธ์คือค่าที่ดีที่สุดในสองตัวเลือกเดิมเสมอ
+   (สีน้ำเงิน/ชมพูบางเจ้ายังไม่ถึง 4.5 ไม่ว่าจะเลือกตัวไหน · ต้องแก้ที่สีพื้น
+    ซึ่งเป็นสีแบรนด์ของเอเยนต์ ไม่ควรเปลี่ยนให้เอง)                        */
+function bkV2ContrastInk(hex){
+  const m=String(hex||'').replace('#',''); if(m.length<6) return '#fff';
+  const r=parseInt(m.slice(0,2),16), g=parseInt(m.slice(2,4),16), b=parseInt(m.slice(4,6),16);
+  if(typeof _calLum!=='function' || typeof _calRatio!=='function')
+    return (0.299*r+0.587*g+0.114*b)>150?'#2c2c2a':'#fff';
+  const L=_calLum(r,g,b);
+  return _calRatio(L,_calLum(255,255,255)) >= _calRatio(L,_calLum(0x2c,0x2c,0x2a)) ? '#fff' : '#2c2c2a';
+}
 // Edit an agent's colour from the By-trip-date Agency cell · popover with recently-used colours · Alt-click = reset to auto
 function bkV2AgentColorEdit(agentId, ev){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return;
@@ -49256,6 +49270,9 @@ function bkV2RenderTab2(){
     const lockBlocks = lkShow.map(l=>{
       const _c   = (typeof bkV2LockHolderColor==='function') ? bkV2LockHolderColor(l) : '#9C9C95';
       const _ink = (typeof bkV2ContrastInk==='function') ? bkV2ContrastInk(_c) : '#fff';
+      /* §inkOn · เลขที่นั่งเขียนบนพื้นขาว · สีดิบของเอเยนต์ที่เป็นสีอ่อนจะจมหาย
+         หรี่ลงจนอ่านออกก่อน โดยคงเฉดเดิมไว้ · พื้นชิปข้าง ๆ ยังใช้สีจริง */
+      const _ci  = (typeof laInk==='function') ? laInk(_c) : _c;
       const _nm  = (typeof bkV2LockHolderName==='function') ? bkV2LockHolderName(l) : String(l.holderId||'');
       const _qty = Number(l.qty)||0;
       const _used= (typeof bkV2LockUsedTotal==='function') ? bkV2LockUsedTotal(l, date) : (Number(l.used)||0);
@@ -49278,7 +49295,7 @@ function bkV2RenderTab2(){
          ที่เดียว ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้ สถานะยังเป็น active อยู่
          (bkV2DrawLock ไม่ตีตรา depleted ให้ล็อกแบบช่วง เพราะรอบอื่นยังมีที่)
          ร่องรอยว่าที่นั่งมาจากโควตาใคร ยังอยู่ที่ป้าย "จากล็อก" บนใบจอง        */
-      const _row = _held>0 ? `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c}">`
+      const _row = _held>0 ? `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c};--lci:${_ci}">`
         + `<td class="t2-vc"><span class="lkcode">&#128274; ${esc(_code)}</span></td>`
         + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
         + `<td class="t2-cu"><span class="lkwait">${laT('ล็อกที่นั่ง · ยังไม่ส่งชื่อ')}</span>`
@@ -50070,7 +50087,7 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-lrow.t2-row>td:first-child{box-shadow:inset 4px 0 0 var(--lc,#9C9C95)}
     table.t2-mtbl tr.t2-lrow.t2-row:hover td{background:#FFF8F0;cursor:default}
     .t2-lrow .lkcode{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:#A98F72}
-    .t2-lrow .lkq{font-family:'DM Mono',monospace;font-size:15px;font-weight:800;color:var(--lc,#9C9C95)}
+    .t2-lrow .lkq{font-family:'DM Mono',monospace;font-size:15px;font-weight:800;color:var(--lci,var(--lc,#9C9C95))}
     .t2-lrow .lkhold{display:inline-block;font-size:10px;font-weight:700;color:#7A5A34;background:#fff;
       border:1px solid #E7D8C6;border-radius:5px;padding:2px 7px;white-space:nowrap}
     .t2-lrow .lkwho{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;

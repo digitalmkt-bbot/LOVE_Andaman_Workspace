@@ -3443,8 +3443,15 @@ function showCalDay(ds){ window._calSel=ds; renderCal(); }
 
 // ═══ §cal2 · ตัวช่วยของปฏิทินโฉมใหม่ ═══════════════════════════════════
 // สีจากสีประจำเส้นทาง · จาง ๆ ไว้เป็นพื้น · หรี่ลงไว้เป็นตัวอักษรบนพื้นจาง
+/* §hx00 · ช่องสีที่เป็น 00 เคยกลายเป็น 136 (เจอ 1 ต.ค. ตอนไล่เรื่องสีไม่ชัด)
+   parseInt('00',16) ได้ 0 ซึ่งเป็น falsy · ตัว || เลยเด้งไปใช้ค่าสำรอง 136
+   ผลคือสีที่มีช่อง 00 ถูกอ่านผิดทั้งหมด #ffff00 กลายเป็น #ffff88
+   #9900e1 กลายเป็น #9988e1 · กระทบทุกตัวที่ต่อยอดจากนี่ (_calDk _calRgba
+   _calVivid laInk) และสีแบบนี้เป็นสีที่คนเลือกบ่อยที่สุด
+   เช็คว่าแปลงเป็นตัวเลขได้ไหมแทนการเช็คว่าจริงหรือเท็จ                     */
 function _calHx(c){ c=String(c||'#888').replace('#',''); if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-  return [parseInt(c.slice(0,2),16)||136, parseInt(c.slice(2,4),16)||136, parseInt(c.slice(4,6),16)||136]; }
+  const p=i=>{ const v=parseInt(c.slice(i,i+2),16); return Number.isFinite(v)?v:136; };
+  return [p(0),p(2),p(4)]; }
 function _calRgba(c,a){ const [r,g,b]=_calHx(c); return 'rgba('+r+','+g+','+b+','+a+')'; }
 // §calHead/§fit · ความสูงของกระดานเคยเดาด้วย calc(100vh - 168px) · แถบบนสูงเท่าไรจริง ๆ ไม่มีใครรู้
 //   เดาต่ำไปกระดานล้นจอ เดาสูงไปเหลือที่ว่างข้างล่างแล้วกลับมาต้องเลื่อนอยู่ดี
@@ -3459,6 +3466,37 @@ function _calFitPage(){
 if(!window.__calFitBound){ window.__calFitBound=1; window.addEventListener('resize', function(){ _calFitPage(); }); }
 function _calDk(c,k){ const [r,g,b]=_calHx(c); k=(k==null)?0.45:k;
   return 'rgb('+Math.round(r*(1-k))+','+Math.round(g*(1-k))+','+Math.round(b*(1-k))+')'; }
+/* ══ §inkOn · สีประจำเจ้าของ เอามาเป็น "สีตัวหนังสือ" ตรง ๆ ไม่ได้ ═══════════
+   ผู้ใช้แจ้ง 1 ต.ค. "สีเหลืองมันไม่ชัด" จากเลขที่นั่งในแถวล็อกที่นั่ง
+   ซึ่งใช้สีประจำเอเยนต์เป็นสีตัวเลขบนพื้นขาว
+
+   วัดจากข้อมูลจริง: เอเยนต์ที่ตั้งสีเอง 49 เจ้า มี 45 เจ้าที่คอนทราสต์บนพื้นขาว
+   ไม่ถึงเกณฑ์อ่านออก (4.5:1) · เจ้าที่ใช้ #ffff00 ได้ 1.07:1 คือแทบมองไม่เห็น
+   ไม่ใช่เรื่องของเอเยนต์รายเดียว แต่เป็นวิธีใช้สีที่ผิดตั้งแต่แรก
+
+   _calDk() หรี่ด้วยอัตราตายตัว · สีที่อ่อนมากหรี่เท่าไรก็ยังไม่พอ
+   ตัวนี้ไล่หาตัวคูณที่น้อยที่สุดที่ทำให้ถึงเกณฑ์จริง แล้วคูณครั้งเดียว
+   คูณทุกช่องด้วยตัวเดียวกัน เฉดสีจึงคงเดิมเป๊ะ แค่เข้มขึ้น
+   ไม่ได้แก้สีที่เก็บไว้ของเอเยนต์ · พื้นชิปยังใช้สีจริงเหมือนเดิม          */
+function _calLum(r,g,b){
+  const f=x=>{ x/=255; return x<=0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055, 2.4); };
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+}
+function _calRatio(a,b){ const x=Math.max(a,b)+0.05, y=Math.min(a,b)+0.05; return x/y; }
+var _laInkMemo={};
+function laInk(c, bg, target){
+  const key=String(c)+'|'+String(bg||'')+'|'+String(target||'');
+  if(_laInkMemo[key]) return _laInkMemo[key];
+  const [br,bgn,bb]=_calHx(bg||'#ffffff');
+  const Lb=_calLum(br,bgn,bb), need=(target==null)?4.5:target;
+  const [r0,g0,b0]=_calHx(c);
+  let out='rgb(0,0,0)';
+  for(let k=100;k>=0;k--){
+    const f=k/100, r=Math.round(r0*f), g=Math.round(g0*f), b=Math.round(b0*f);
+    if(_calRatio(_calLum(r,g,b), Lb) >= need){ out='rgb('+r+','+g+','+b+')'; break; }
+  }
+  _laInkMemo[key]=out; return out;
+}
 /* §calChip · ดันความอิ่มสีขึ้นก่อนเอาไปทาชิป · แปลงเป็น HSL ดัน S แล้วบีบ L เข้าช่วงที่อ่านออก
    ไม่ได้แก้ค่าสีที่เก็บไว้ของเส้นทาง · หน้าอื่นที่ใช้สีเดียวกันจึงไม่ขยับ */
 function _calVivid(c, amt){
