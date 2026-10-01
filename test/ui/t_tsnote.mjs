@@ -21,6 +21,8 @@
 //   3 ท่อน COT ถูกตัดออก ไม่ขึ้นซ้ำกับคอลัมน์ COT ที่มีอยู่แล้ว
 //   4 ใบที่ไม่มีคำขอ ไม่มีแถบโผล่ · เอกสารไม่ยาวขึ้นเปล่า ๆ
 //   5 ตอนพิมพ์ต้องยังเห็นและไม่โดนตัด (วัดจาก computed style จริง ไม่ใช่อ่าน CSS)
+//   7 ป้ายบนแถบกำกับเลขใบไว้ · อ่านผิดบรรทัดไม่ได้ (ผู้ใช้แจ้งว่างง)
+//   8 แถวใบกับแถบเชื่อมเป็นก้อนเดียว ไม่มีเส้นคั่นกลาง
 //   6 ไม่มี error บนหน้า
 
 import { open, goView } from './_harness.mjs';
@@ -74,6 +76,12 @@ const R = await page.evaluate(([date, vcA, vcB]) => {
     aHasRow: !!(nextA && nextA.classList.contains('ts-sqrow')),
     aText: nextA && nextA.classList.contains('ts-sqrow')
              ? ((nextA.querySelector('.ts-sqtx') || {}).textContent || '').trim() : '',
+    aLabel: nextA && nextA.classList.contains('ts-sqrow')
+             ? ((nextA.querySelector('.ts-sqlb') || {}).textContent || '').trim() : '',
+    /* แถวของใบต้องไม่มีเส้นใต้คั่นกับแถบ · ไม่งั้นแถบจะลอยอยู่ระหว่างสองใบ */
+    aWeld: iA >= 0 ? trs[iA].classList.contains('ts-hassq') : false,
+    aBorder: iA >= 0 ? getComputedStyle(trs[iA].querySelector('td')).borderBottomStyle : '',
+    bWeld: iB >= 0 ? trs[iB].classList.contains('ts-hassq') : false,
     aSpan: nextA && nextA.querySelector('td') ? nextA.querySelector('td').getAttribute('colspan') : '',
     bHasRow: !!(nextB && nextB.classList.contains('ts-sqrow')),
     nSq: document.querySelectorAll('#travelsum-host tr.ts-sqrow').length,
@@ -109,6 +117,23 @@ if (R.iB < 0) fail('ข้อ 4 · หาบรรทัดของใบที
 else if (R.bHasRow)
   fail('ใบที่ไม่มีคำขอพิเศษก็ยังมีแถบโผล่ · เอกสารจะยาวขึ้นเท่าตัวโดยไม่ได้อะไร');
 else ok('ใบที่ไม่มีคำขอไม่มีแถบโผล่ · ทั้งวันมีแถบ ' + R.nSq + ' แถบเท่าที่มีคำขอจริง');
+
+/* ══ 7 · 8 · §tsSreq2 · ต้องอ่านออกว่าแถบเป็นของใบไหน ═══════════════════
+   ผู้ใช้แจ้ง 1 ต.ค. รอบสอง "ขึ้นแบบนี้จะงงไหม" · ของเดิมแถบเริ่มที่ขอบซ้ายสุด
+   หน้าตาเหมือนแถวหัวเส้นทาง ซึ่งแปลว่า "ตัวคั่น" ตาจึงอ่านว่าเป็นของใบข้างล่าง */
+if (R.iA >= 0 && R.aHasRow) {
+  if (R.aLabel.indexOf(R0.A.vc) < 0)
+    fail('ป้ายบนแถบไม่ได้บอกเลขใบ ("' + R.aLabel + '") · ถ้าอ่านผิดบรรทัดจะไม่มีอะไรทักท้วง');
+  else ok('ป้ายบนแถบกำกับเลขใบไว้ · "' + R.aLabel + '" ตรงกับบรรทัดข้างบน');
+
+  if (!R.aWeld)
+    fail('แถวของใบไม่ได้ถูกเชื่อมกับแถบ · จะมีเส้นคั่นกลาง แล้วแถบลอยอยู่ระหว่างสองใบ');
+  else if (R.aBorder !== 'none')
+    fail('เชื่อมแล้วแต่ยังมีเส้นใต้คั่นอยู่ (border-bottom: ' + R.aBorder + ')');
+  else if (R.bWeld)
+    fail('ใบที่ไม่มีคำขอก็โดนตัดเส้นใต้ไปด้วย · ตารางจะขาดเส้นแบ่งมั่ว');
+  else ok('ใบกับแถบเชื่อมเป็นก้อนเดียว ไม่มีเส้นคั่นกลาง · ใบที่ไม่มีคำขอเส้นยังอยู่ครบ');
+}
 
 /* ══ 5 · ตอนพิมพ์ ═══════════════════════════════════════════════════
    เอกสารนี้ถูกพิมพ์ออกมาเซ็น · ถ้าแถบนี้หายตอนพิมพ์ ก็เท่ากับไม่ได้แก้อะไร

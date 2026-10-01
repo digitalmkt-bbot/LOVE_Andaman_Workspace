@@ -22611,10 +22611,15 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-grow td{background:var(--zn50);font-weight:800}'
  /* §tsSreq · แถบคำขอพิเศษใต้บรรทัดของใบนั้น · สีส้มอ่อนให้สะดุดตาแต่ไม่ตะโกน
     ติดเส้นซ้ายไว้บอกว่าเป็นของบรรทัดข้างบน ไม่ใช่รายการใหม่ */
- +S+' .ts-sqrow td{background:#FFFAF0;border-top:none;border-bottom:1px solid var(--zn200);'
-   +'box-shadow:inset 3px 0 0 #E8A33D;padding:5px 11px 7px 14px}'
- +S+' .ts-sqlb{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.06em;'
-   +'text-transform:uppercase;color:#8A5300;background:#FBEBCF;border-radius:5px;padding:1px 7px;margin-right:8px;vertical-align:1px}'
+ +S+' tr.ts-hassq>td{border-bottom:none}'
+ /* ย่อหน้าเข้ามาเท่าคอลัมน์แรก · เส้นสีอยู่ตรงที่ย่อหน้า ไม่ใช่ขอบกระดาษ
+    จะได้ไม่เหมือนแถวหัวเส้นทางที่เริ่มชิดซ้ายสุด
+    ย่อหน้าด้วย padding ของช่อง ไม่ใช่ margin ของป้าย — ข้อความที่ยาวจนขึ้น
+    บรรทัดใหม่ต้องย่อหน้าตามไปด้วย ไม่ใช่ตกกลับไปชิดขอบซ้าย */
+ +S+' tr.ts-sqrow>td{background:#FFFAF0;border-top:none;border-bottom:1px solid var(--zn200);'
+   +'padding:3px 11px 7px 80px;box-shadow:inset 76px 0 0 #fff, inset 79px 0 0 #E8A33D}'
+ +S+' .ts-sqlb{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;'
+   +'color:#8A5300;background:#FBEBCF;border-radius:5px;padding:1px 7px;margin-right:8px;vertical-align:1px;white-space:nowrap}'
  +S+' .ts-sqtx{font-size:11.5px;line-height:1.45;color:#5A4320;white-space:pre-wrap}'
  +S+' .ts-sign{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid var(--zn200)}'
  +S+' .ts-sg{border:1px solid var(--zn200);border-radius:15px;padding:14px;text-align:center;background:var(--zn50)}'
@@ -22864,8 +22869,9 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man td:nth-child(15) .ts-chip,'+S+' .ts-man td:nth-child(16) .ts-chip{white-space:normal;line-height:1.2}'
    /* §tsSreq · ตอนพิมพ์ต้องอ่านออกและห้ามโดนตัด · แถวนี้ไม่ใช่ของประดับ
       ตารางตั้ง overflow:hidden ไว้ทุกช่องตอนพิมพ์ ต้องยกเว้นให้แถวนี้ */
-   +S+' .ts-sqrow td{width:auto !important;overflow:visible !important;white-space:normal;'
-     +'padding:3px 5px 4px 7px;box-shadow:inset 2px 0 0 #B07A1F}'
+   +S+' tr.ts-hassq>td{border-bottom:none}'
+   +S+' tr.ts-sqrow>td{width:auto !important;overflow:visible !important;white-space:normal;'
+     +'padding:2px 5px 3px 50px;box-shadow:inset 46px 0 0 #fff, inset 48px 0 0 #B07A1F}'
    +S+' .ts-sqlb{font-size:6.6px;padding:0 4px;margin-right:5px}'
    +S+' .ts-sqtx{font-size:8.4px;line-height:1.35}'
    +S+' .ts-pyd{font-size:8px;padding:0 3px}'
@@ -26073,7 +26079,12 @@ function renderTravelSum(){
     var noBoat = _gone || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0)
                        || (!!r.pierCk && (typeof ckEventTally==='function') && ckEventTally(r.pierCk).total>=r.booked && r.booked>0);
     var room=b.roomNo||b.room||b.roomNumber||'';
-    body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow"':(r.cxlRow?' class="ts-cxlrow"':''))+'>'
+    /* §tsSreq2 · รู้ตั้งแต่ตอนนี้ว่าใบนี้จะมีแถบคำขอพิเศษต่อท้ายไหม
+       ถ้ามี ต้องตัดเส้นใต้ของแถวใบทิ้ง ให้แถวกับแถบอ่านเป็นก้อนเดียวกัน
+       ไม่งั้นจะมีเส้นคั่นกลาง แล้วแถบลอยอยู่ระหว่างสองใบ อ่านไม่ออกว่าของใคร */
+    var _sq=tsSreqOf(b);
+    var _sqCls=_sq?' ts-hassq':'';
+    body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow'+_sqCls+'"':(r.cxlRow?' class="ts-cxlrow'+_sqCls+'"':(_sq?' class="ts-hassq"':'')))+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -26122,14 +26133,24 @@ function renderTravelSum(){
           : tsCxlCell(r, date, DEC, money))+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
-    /* §tsSreq · วางเป็นแถวเต็มความกว้างใต้ใบนั้น ไม่ใช่คอลัมน์ที่ 17
-       ข้อความจริงยาว 70-150 ตัวอักษร · คอลัมน์กว้าง 8% บนกระดาษ A4 แนวนอน
-       จะเหลือตัวหนังสือ 7px แล้วโดน overflow:hidden ตัดหายตอนพิมพ์
-       แถวเต็มความกว้างอ่านครบทุกตัว และขึ้นเฉพาะใบที่มีคำขอ ไม่กินที่ใบอื่น
-       ตารางนี้มีแถวหัวเส้นทางแบบ colspan อยู่แล้ว โครงจึงไม่ได้แปลกใหม่ */
-    var _sq=tsSreqOf(b);
+    /* ══ §tsSreq2 · แถบต้องอ่านออกว่าเป็นของใบไหน ═══════════════════════════
+       ผู้ใช้แจ้ง 1 ต.ค. รอบสอง "ขึ้นแบบนี้จะงงไหม" · งงจริง และเป็นความผิดของดีไซน์
+       ของเดิมแถบเริ่มที่ขอบซ้ายสุดเต็มความกว้าง หน้าตาเหมือนแถวหัวเส้นทาง (ts-grow)
+       ซึ่งในตารางนี้แปลว่า "ตัวคั่น" ไม่ใช่ "ส่วนขยายของบรรทัดบน"
+       ตาจึงอ่านว่าแถบเป็นของใบที่อยู่ "ข้างล่าง" แทนที่จะเป็นใบข้างบน
+
+       แก้สามอย่างให้มันเป็นตรงข้ามกับแถวหัวเส้นทาง
+         1 ย่อหน้าเข้ามา ไม่เริ่มที่ขอบซ้าย + มีลูกศร ↳ ชี้ว่าต่อจากข้างบน
+         2 ตัดเส้นใต้ของแถวใบทิ้ง (ts-hassq) ให้ใบกับแถบเป็นก้อนเดียว
+         3 เขียนเลขใบกำกับไว้บนป้าย — กันพลาดแบบไม่ต้องพึ่งสายตา
+
+       ยังเป็นแถบไม่ใช่คอลัมน์ที่ 17 เพราะข้อมูลจริง 607 ใบในชุด 22 ก.ย.
+       ยาวกลาง 45 ตัวอักษร p95 96 ตัว ยาวสุด 1,381 และ 60 ใบมีขึ้นบรรทัดใหม่
+       คอลัมน์ 8% บน A4 แนวนอนรับได้ ~20 ตัวต่อบรรทัด · เกินครึ่งจะโดนตัด
+       และใบที่ยาวคือใบที่สำคัญที่สุด (เงื่อนไขเงิน · ของที่ห้ามลืม)        */
     if(_sq) body+='<tr class="ts-sqrow"><td colspan="16">'
-      +'<span class="ts-sqlb">คำขอพิเศษ</span><span class="ts-sqtx">'+e(_sq)+'</span></td></tr>';
+      +'<span class="ts-sqlb">&#8627; คำขอพิเศษ &middot; '+e(b.voucherRef||b.code||b.id)+'</span>'
+      +'<span class="ts-sqtx">'+e(_sq)+'</span></td></tr>';
   });
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
