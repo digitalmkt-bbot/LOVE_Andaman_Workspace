@@ -6418,6 +6418,17 @@ function getOp(ds,bid){
   if(!TRIPS[ds][bid]) TRIPS[ds][bid]={route:null,type:'normal',booked:0};
   return TRIPS[ds][bid];
 }
+/* ══ §bkLock · ช่องนี้ถูกจับทั้งลำไว้แล้ว ห้ามแตะ ════════════════════════════════
+   เดิมมีสถานะเดียวที่แปลว่า "อย่ายุ่งกับเรือลำนี้" คือ op.charterBookingId
+   (เหมาลำที่มีใบจองจริงแล้ว) · ทุกที่ที่กันไม่ให้ทับ/ลบ/สลับ จึงเช็คช่องนั้นตรง ๆ
+   ตอนนี้มีสถานะที่สอง · ล็อกเรือทั้งลำ (op.boatLockId) = เอเยนต์จองลำไว้ ยังไม่ยืนยัน
+   ยังไม่มีใบจอง จึงไม่มี charterBookingId แต่ต้องกันเท่ากัน · ถ้าไม่กัน ตัว heal
+   ของใบเหมาลำจะเห็นช่องที่ไม่มี charterBookingId แล้วยึดลำไปให้ใบอื่นเงียบ ๆ
+   และปุ่ม "Clear assignments" จะลบช่องที่กันไว้ทิ้งทั้งแถว
+   ตัวนี้เป็นด่านเดียวที่ทุกจุดเรียก · เพิ่มสถานะที่สามในอนาคตแก้ที่นี่ที่เดียว   */
+function opLocked(op){ return !!(op && (op.charterBookingId || op.boatLockId)); }
+/* เอาไว้แยกข้อความตอนเด้ง · จับไว้เฉย ๆ กับขายจริงแล้ว คนละเรื่องสำหรับคนกด */
+function opHoldOnly(op){ return !!(op && op.boatLockId && !op.charterBookingId); }
 
 // Auto-derived cell type · charterBookingId takes priority, else route name pattern
 // "Early Tratato Similan" / "Early Tiger" / "Early OTA" → 'early'
@@ -6789,7 +6800,9 @@ function bop2AssignBoat(routeId, date, boatId){
   if(bop2GuardPast(date)) return;
   if(!TRIPS[date]) TRIPS[date] = {};
   if(TRIPS[date][boatId]){
-    if(TRIPS[date][boatId].charterBookingId){ alert('Boat is chartered · cannot reassign'); return; }
+    if(opLocked(TRIPS[date][boatId])){ alert(opHoldOnly(TRIPS[date][boatId])   /* §bkLock */
+      ? 'Boat is held whole for an agent - release the hold first'
+      : 'Boat is chartered - cannot reassign'); return; }
     // ⚠ changing the boat's route while seat-bookings are assigned to it → those bookings get pulled off this route
     const oldRoute = TRIPS[date][boatId].route;
     if(oldRoute && oldRoute !== routeId){
@@ -6809,8 +6822,10 @@ function bop2AssignBoat(routeId, date, boatId){
 function bop2UnassignBoat(date, boatId){
   if(bop2GuardPast(date)) return;
   if(!TRIPS[date] || !TRIPS[date][boatId]) return;
-  if(TRIPS[date][boatId].charterBookingId){
-    alert('Cannot unassign · charter is active. Cancel the charter booking first.');
+  if(opLocked(TRIPS[date][boatId])){                                           /* §bkLock */
+    alert(opHoldOnly(TRIPS[date][boatId])
+      ? 'Cannot unassign - this boat is held whole for an agent. Release the hold on the Seat Locks page first.'
+      : 'Cannot unassign - charter is active. Cancel the charter booking first.');
     return;
   }
   // ⚠ warn when seat-bookings are still assigned to this boat on this date (non-destructive · keeps the assignment but flags it)
@@ -7466,7 +7481,7 @@ function bop2CopyWeekToNext(){
     if(bop2GuardPast(tgt, true)) return;   // §bopPastLock · ปลายทางเป็นวันเก่า (ย้อนสัปดาห์อยู่) ข้ามไป
     if(!TRIPS[tgt]) TRIPS[tgt] = {};
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
-      if(op.charterBookingId) { skipped++; return; }
+      if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[tgt][bid]) { skipped++; return; }
       TRIPS[tgt][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
@@ -7487,7 +7502,7 @@ function bop2CopyDayToWeek(){
     if(bop2GuardPast(d, true)) { skipped++; return; }   // §bopPastLock
     if(!TRIPS[d]) TRIPS[d] = {};
     Object.entries(TRIPS[src]).forEach(([bid, op]) => {
-      if(op.charterBookingId) { skipped++; return; }
+      if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[d][bid]) { skipped++; return; }
       TRIPS[d][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
@@ -7622,7 +7637,7 @@ function bop2ApplyAssignRange(){
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
     if(!TRIPS[ds]) TRIPS[ds] = {};
-    if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; continue; }
+    if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
@@ -7647,7 +7662,7 @@ function bop2SaveTemplateForm(){
     if(!TRIPS[d]) return;
     const dow = new Date(d).getDay();
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
-      if(op.charterBookingId) return;
+      if(opLocked(op)) return;                                                  /* §bkLock */
       pattern[dow][bid] = { route: op.route, type: op.type || 'normal' };
     });
   });
@@ -7767,7 +7782,7 @@ function bop2ApplyTemplate(){
     const slots = tpl.pattern[dow] || {};
     Object.entries(slots).forEach(([bid, op]) => {
       if(!TRIPS[ds]) TRIPS[ds] = {};
-      if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; return; }
+      if(opLocked(TRIPS[ds][bid])){ chartered++; return; }                      /* §bkLock */
       if(TRIPS[ds][bid] && !overwrite){ skipped++; return; }
       TRIPS[ds][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       applied++;
@@ -7832,7 +7847,7 @@ function bop2ApplySwap(){
   if(a === b){ alert('Select two different boats'); return; }
   if(bop2GuardPast(date)) return;   // §bopPastLock
   if(!TRIPS[date] || !TRIPS[date][a] || !TRIPS[date][b]){ alert('One or both boats are no longer assigned on this day'); return; }
-  if(TRIPS[date][a].charterBookingId || TRIPS[date][b].charterBookingId){ alert('Cannot swap a charter slot'); return; }
+  if(opLocked(TRIPS[date][a]) || opLocked(TRIPS[date][b])){ alert('Cannot swap a boat that is chartered or held whole'); return; }   /* §bkLock */
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
   TRIPS[date][a].route = TRIPS[date][b].route; TRIPS[date][a].type = TRIPS[date][b].type;
   TRIPS[date][b].route = tmpR; TRIPS[date][b].type = tmpT;
@@ -7922,7 +7937,7 @@ function bop2ApplyWeekdayPattern(){
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
     if(!TRIPS[ds]) TRIPS[ds] = {};
-    if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; continue; }
+    if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
@@ -8017,7 +8032,7 @@ function bop2ClearWeek(){
   dates.forEach(d => {
     if(!TRIPS[d]) return;
     Object.keys(TRIPS[d]).forEach(bid => {
-      if(TRIPS[d][bid].charterBookingId) return;
+      if(opLocked(TRIPS[d][bid])) return;                                       /* §bkLock */
       delete TRIPS[d][bid];
       cleared++;
     });
