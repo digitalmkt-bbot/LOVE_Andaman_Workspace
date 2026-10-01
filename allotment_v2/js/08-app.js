@@ -7808,6 +7808,142 @@ function pfmRecModalHTML(){
 }
 // paste-to-attach slip · active only while the Record modal is open
 document.addEventListener('paste', function(e){ try{ if(!_pfmRec||!document.getElementById('pfm-rec-modal')) return; const items=(e.clipboardData&&e.clipboardData.items)||[]; for(let i=0;i<items.length;i++){ const it=items[i]; if(it.type&&it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); pfmSlipUpload(f,'paste'); } } } }catch(_){}; });
+/* §pfmEdit · แก้รายการรับเงินที่บันทึกผิด · ยอด / วันที่ / ช่องทาง / ลบ · และยกเลิกใบ PFM ที่ออกผิด
+   แก้ได้เฉพาะ type 'payment' (ปุ่ม Record) — มัดจำ (deposit) กับเงินคืน (refund) ผูกกับ SB_DEPOSITS / การยกเลิก
+   แก้ตรงนี้แล้วยอดมัดจำคงเหลือจะเพี้ยน จึงแสดงอ่านอย่างเดียว · ทุกการเปลี่ยนลง bk.history (ใคร / จาก→เป็น / เหตุผล)
+   ลบ = ลบแถวจริง (sync ส่ง op:'del') เพราะ sb_payments ไม่มีคอลัมน์ void · ร่องรอยอยู่ใน history แทน */
+let _pfmEdit=null;   // {bkId, invId, rows:[{id,amount,method,ymd,del,orig:{amount,method,ymd}}], reason}
+function pfmEditCan(){ return (typeof window.laCanEditArea!=='function') || window.laCanEditArea('accounting'); }
+function _pfmPayEditable(p){ return !p.type || p.type==='payment'; }
+function _pfmYmd(iso){ try{ const d=new Date(iso); if(isNaN(d)) return String(iso||'').slice(0,10); return bkV2LocalYMD(d); }catch(e){ return String(iso||'').slice(0,10); } }
+function pfmEditOpen(bkId){
+  if(!pfmEditCan()){ alert('No permission to edit accounting'); return; }
+  const inv=acctBookingInvoice(bkId); if(!inv){ alert('No PFM invoice for this booking'); return; }
+  const rows=SB_PAYMENTS.filter(p=>p.invoiceId===inv.id && _pfmPayEditable(p)).map(p=>{
+    const o={amount:Math.round(+p.amount||0), method:p.method||'transfer', ymd:_pfmYmd(p.date)};
+    return {id:p.id, amount:o.amount, method:o.method, ymd:o.ymd, del:false, orig:o};
+  });
+  _pfmEdit={bkId, invId:inv.id, rows, reason:''};
+  renderDailyPFM();
+}
+function pfmEditClose(){ _pfmEdit=null; renderDailyPFM(); }
+function pfmEditSet(i,f,v){ const r=_pfmEdit&&_pfmEdit.rows[i]; if(!r) return; r[f]=v; pfmEditRefreshSum(); }   // no re-render (keep focus)
+function pfmEditToggleDel(i){ const r=_pfmEdit&&_pfmEdit.rows[i]; if(!r) return; r.del=!r.del; const el=document.getElementById('pfm-edit-body'); if(el) el.innerHTML=pfmEditRowsHTML(); pfmEditRefreshSum(); }
+function _pfmEditTotals(){
+  const e=_pfmEdit; const inv=SB_INVOICES.find(i=>i.id===e.invId)||{};
+  const fixed=SB_PAYMENTS.filter(p=>p.invoiceId===e.invId && !_pfmPayEditable(p)).reduce((s,p)=>s+(p.type==='refund'?-Math.abs(+p.amount||0):(+p.amount||0)),0);
+  const paid=fixed+e.rows.filter(r=>!r.del).reduce((s,r)=>s+Math.max(0,Math.round(Number(r.amount)||0)),0);
+  const total=+inv.total||0;
+  return {total, paid, bal:total-paid};
+}
+function pfmEditRefreshSum(){ const el=document.getElementById('pfm-edit-sum'); if(el) el.innerHTML=pfmEditSumHTML(); }
+function pfmEditSumHTML(){
+  if(!_pfmEdit) return '';
+  const t=_pfmEditTotals(); const f=n=>'฿'+Math.round(n).toLocaleString();
+  const balTxt = t.bal>0 ? `<b style="color:#A32D2D">ค้าง ${f(t.bal)}</b>` : t.bal<0 ? `<b style="color:#A32D2D">รับเกิน ${f(-t.bal)}</b>` : `<b style="color:#0F6E56">ครบ</b>`;
+  return `ยอดใบ ${f(t.total)} · รับแล้ว ${f(t.paid)} · ${balTxt}`;
+}
+function pfmEditRowsHTML(){
+  const e=_pfmEdit; if(!e) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const inp='height:34px;border:1px solid #d7dbe2;border-radius:8px;padding:0 9px;font-family:inherit;font-size:12.5px;box-sizing:border-box';
+  let h='';
+  if(!e.rows.length) h+=`<div style="font-size:11.5px;color:#8a8a82;text-align:center;padding:14px;border:1px dashed #d7dbe2;border-radius:9px">ยังไม่มีรายการรับเงิน</div>`;
+  e.rows.forEach((r,i)=>{
+    const opts=[['transfer','โอน'],['cash','เงินสด'],['card','บัตร']];
+    if(!opts.some(o=>o[0]===r.method)) opts.push([r.method,r.method]);
+    h+=`<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:0.5px solid #eef0ea;${r.del?'opacity:.45':''}">
+      <input type="date" value="${esc(r.ymd)}" ${r.del?'disabled':''} onchange="pfmEditSet(${i},'ymd',this.value)" style="${inp};width:140px">
+      <input type="number" min="0" value="${esc(r.amount)}" ${r.del?'disabled':''} oninput="pfmEditSet(${i},'amount',this.value)" style="${inp};flex:1;min-width:0;font-family:'DM Mono',monospace;font-weight:700;text-align:right;${r.del?'text-decoration:line-through':''}">
+      <select ${r.del?'disabled':''} onchange="pfmEditSet(${i},'method',this.value)" style="${inp};width:88px;background:#fff">${opts.map(o=>`<option value="${esc(o[0])}" ${r.method===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select>
+      <button onclick="pfmEditToggleDel(${i})" title="${r.del?'เอากลับ':'ลบรายการนี้'}" style="border:0.5px solid ${r.del?'#cfcabf':'#E6C9C3'};background:#fff;color:${r.del?'#5F5E5A':'#A32D2D'};border-radius:8px;height:34px;width:62px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${r.del?'↺ คืน':'ลบ'}</button>
+    </div>`;
+  });
+  const fixed=SB_PAYMENTS.filter(p=>p.invoiceId===e.invId && !_pfmPayEditable(p));
+  if(fixed.length) h+=`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px">${fixed.map(p=>esc((p.type==='refund'?'เงินคืน':'หักมัดจำ')+' ฿'+Math.round(Math.abs(+p.amount||0)).toLocaleString()+' · '+_pfmYmd(p.date))).join('<br>')}<br>(มัดจำ / เงินคืน แก้ที่หน้า Accounting)</div>`;
+  return h;
+}
+function pfmEditSubmit(){
+  const e=_pfmEdit; if(!e) return;
+  const inv=SB_INVOICES.find(i=>i.id===e.invId); if(!inv){ pfmEditClose(); return; }
+  const f=n=>'THB '+Math.round(n).toLocaleString();
+  const log=[];
+  for(const r of e.rows){
+    if(!SB_PAYMENTS.some(x=>x.id===r.id)) continue;
+    if(r.del){ log.push('deleted '+f(r.orig.amount)+' ('+r.orig.method+', '+r.orig.ymd+')'); continue; }
+    const amt=Math.round(Number(r.amount)||0);
+    if(amt<=0){ alert('Amount must be more than 0. Use the delete button to remove a payment.'); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(r.ymd||'')){ alert('Invalid date'); return; }
+    const ch=[];
+    if(amt!==r.orig.amount) ch.push(f(r.orig.amount)+' -> '+f(amt));
+    if(r.method!==r.orig.method) ch.push(r.orig.method+' -> '+r.method);
+    if(r.ymd!==r.orig.ymd) ch.push(r.orig.ymd+' -> '+r.ymd);
+    if(ch.length) log.push('edited '+ch.join(', '));
+  }
+  if(!log.length){ pfmEditClose(); return; }
+  const t=_pfmEditTotals();
+  if(t.bal<0 && !confirm('Total received '+f(t.paid)+' is more than the invoice '+f(t.total)+' by '+f(-t.bal)+'.\n\nSave anyway?')) return;
+  const delIds=new Set(e.rows.filter(r=>r.del).map(r=>r.id));
+  e.rows.forEach(r=>{ if(r.del) return; const p=SB_PAYMENTS.find(x=>x.id===r.id); if(!p) return;
+    p.amount=Math.round(Number(r.amount)||0); p.method=r.method;
+    if(r.ymd!==r.orig.ymd) p.date=new Date(r.ymd+'T12:00:00').toISOString(); });
+  for(let i=SB_PAYMENTS.length-1;i>=0;i--) if(delIds.has(SB_PAYMENTS[i].id)) SB_PAYMENTS.splice(i,1);
+  sbPaymentsPersist();
+  const st=acctInvoiceState(inv);   // void stays void · otherwise paid / partial / issued from the new sum
+  inv.status=st;
+  sbInvoicesPersist();
+  const reason=String(e.reason||'').trim();
+  const txt='Payment correction · '+log.join(' · ')+(reason?' · reason: '+reason:'');
+  (inv.bookingIds||[]).forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(!b) return;
+    b.paymentStatus = st==='paid'?'paid':st==='partial'?'partial':'invoiced';
+    if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'payment',txt,'Payment'); });
+  acctPersistBookings();
+  _pfmEdit=null; renderDailyPFM();
+}
+function pfmEditVoidInvoice(){
+  const e=_pfmEdit; if(!e) return;
+  const inv=SB_INVOICES.find(i=>i.id===e.invId); if(!inv) return;
+  if(SB_PAYMENTS.some(p=>p.invoiceId===inv.id)){ alert('This PFM still has payments. Delete them and save first.'); return; }
+  if(!confirm('Void PFM '+(inv.number||'')+'?\n\nThe booking goes back to "No invoice yet" and a new PFM can be issued.')) return;
+  const reason=String(e.reason||'').trim();
+  const ids=(inv.bookingIds||[]).slice();
+  acctVoidInvoice(inv.id);
+  ids.forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(b && typeof bkV2AddHistory==='function') bkV2AddHistory(b,'invoice','Invoice '+(inv.number||inv.id)+' voided'+(reason?' · reason: '+reason:''),'Invoice'); });
+  acctPersistBookings();
+  _pfmEdit=null; renderDailyPFM();
+}
+function pfmEditModalHTML(){
+  const e=_pfmEdit; if(!e) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const b=SB_BOOKINGS.find(x=>x.id===e.bkId)||{}; const a=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const inv=SB_INVOICES.find(i=>i.id===e.invId)||{};
+  const noPay=!SB_PAYMENTS.some(p=>p.invoiceId===e.invId);
+  return `
+  <div id="pfm-edit-modal" onclick="pfmEditClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;width:560px;max-width:96vw;max-height:92vh;overflow:auto;box-shadow:0 16px 50px rgba(0,0,0,.3)">
+      <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#185FA5;text-transform:uppercase">Edit payments · ${esc(inv.number||'')}</div>
+        <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">${esc(b.voucherRef||b.code||b.id)}</div>
+        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')}</div>
+      </div>
+      <div style="padding:12px 19px 16px">
+        <div style="display:flex;gap:7px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.04em;padding-bottom:4px"><span style="width:140px">วันที่รับ</span><span style="flex:1;text-align:right">จำนวน (THB)</span><span style="width:88px">ช่องทาง</span><span style="width:62px"></span></div>
+        <div id="pfm-edit-body">${pfmEditRowsHTML()}</div>
+        <div id="pfm-edit-sum" style="font-size:12px;color:#3F4654;margin-top:11px;padding:9px 11px;background:#fafbf9;border-radius:9px">${pfmEditSumHTML()}</div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">เหตุผลที่แก้ (ลงประวัติบุ๊กกิ้ง)</div>
+          <input value="${esc(e.reason)}" oninput="if(_pfmEdit)_pfmEdit.reason=this.value" placeholder="เช่น คีย์ยอดผิด 1,000 → 3,200" style="width:100%;box-sizing:border-box;height:36px;border:1px solid #d7dbe2;border-radius:9px;padding:0 12px;font-family:inherit;font-size:13px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:13px 19px;background:#fafbf9;border-top:1px solid #eef0ea">
+        ${noPay?`<button onclick="pfmEditVoidInvoice()" title="ออก PFM ผิด · ยกเลิกใบนี้แล้วออกใหม่ได้" style="font-size:12px;font-weight:600;color:#A32D2D;background:#fff;border:1px solid #E6C9C3;border-radius:9px;padding:9px 13px;cursor:pointer;font-family:inherit">ยกเลิกใบ PFM</button>`:''}
+        <span style="flex:1"></span>
+        <button onclick="pfmEditClose()" style="font-size:12px;font-weight:600;color:#5F5E5A;background:#fff;border:1px solid #d7dbe2;border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">ปิด</button>
+        <button onclick="pfmEditSubmit()" style="font-size:12px;font-weight:700;color:#fff;background:#185FA5;border:none;border-radius:9px;padding:9px 18px;cursor:pointer;font-family:inherit">บันทึกการแก้ไข</button>
+      </div>
+    </div>
+  </div>`;
+}
 function pfmApproveTravel(bkId){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   const def=pfmSalesName(b);   // default approver = booking's salesperson
@@ -7923,6 +8059,8 @@ function renderDailyPFM(){
       const _nSlip=((b.paymentSlips)||[]).length;
       act+=` <button onclick="pfmViewSlips('${b.id}')" title="${_nSlip?('ดู / แนบเพิ่ม / ลบสลิป ('+_nSlip+' ไฟล์)'):'ยังไม่มีสลิป · กดเพื่อแนบ'}" style="${_obtn};color:${_nSlip?'#0F6E56':'#8a8a82'}">\u{1F9FE} ${_nSlip?('สลิป '+_nSlip):'+ สลิป'}</button>`;
       act+=` <button onclick="acctOpenDoc('${inv.id}','invoice')" title="ดู/พิมพ์ใบแจ้งหนี้" style="${_obtn}">View</button>`;
+      /* §pfmEdit · บันทึกรับเงินผิด (ยอด/วันที่/ช่องทาง) หรือกด Issue PFM ผิดใบ → เดิมไม่มีทางแก้จากหน้านี้ */
+      if(pfmEditCan()) act+=` <button onclick="pfmEditOpen('${b.id}')" title="แก้ไขยอดที่บันทึกรับ / ลบรายการ / ยกเลิกใบ PFM" style="${_obtn};color:#185FA5">&#9998; แก้ไข</button>`;
     }
     const tdc='padding:11px 10px;font-size:12px;border-top:0.5px solid rgba(0,0,0,.06);vertical-align:middle';
     const _stKey = held?'hold':approved?'approved':(!unpaid&&inv)?'paid':alert?'alert':inv?'awaiting':'noinv';
@@ -8101,7 +8239,7 @@ function renderDailyPFM(){
         </div>
       </div>
       <div style="font-size:11px;color:#9a988f;margin-top:12px">PFM = agent payType "proforma" · ออกใบแจ้งหนี้ + ติดตามชำระก่อน ${clabel} · หลัง cutoff ที่ยังไม่จ่าย ต้องให้ salesperson กด Extend หรือ Hold</div>
-    </div>${pfmRecModalHTML()}`;
+    </div>${pfmRecModalHTML()}${pfmEditModalHTML()}`;
   if(_pfmSearch||_pfmFilter!=='all') pfmFilterRows();   // re-apply active search/filter to the fresh DOM
 }
 // ════════════════════════════════════════════════════════════════════
@@ -33532,6 +33670,47 @@ function bkV2PayChip(bk){
   }
   return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="${laT('จัดการการชำระเงิน')}">${txt}</span>${paidChip}`;
 }
+/* §mfPaid · ช่องยอดเงินบน Manifest บอกด้วยว่า "จ่ายแล้วเท่าไร · ค้างเท่าไร" (เดิมเห็นแต่ยอดรวม + ป้าย Awaiting)
+   แหล่งเงิน: ใบแจ้งหนี้ (SB_PAYMENTS ผ่าน acctInvoicePaid) · B2C = paymentSnapshot.paid/balance ที่ sync มา
+   (ระดับออเดอร์ ติดบรรทัดแรกบรรทัดเดียว — บรรทัดอื่นของออเดอร์เดียวกันไม่แสดง กันนับเงินซ้ำ)
+   PFM ที่ยังไม่ออกใบ = ยังไม่ได้รับ → ค้างเต็มยอด · agent เครดิตที่ยังไม่วางบิล/COT = ยังไม่ถึงรอบเก็บ → ไม่แสดง
+   ใบรวมหลาย booking ที่จ่ายบางส่วน แบ่งเงินลงรายใบไม่ได้ → แสดงยอดค้างของทั้งใบ พร้อมบอกว่าเป็นใบรวม */
+function bkV2PaidSplit(bk){
+  if(!bk) return null;
+  const inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(bk.id):null;
+  if(inv){
+    const paid=acctInvoicePaid(inv), bal=acctInvoiceBalance(inv);
+    const n=(inv.bookingIds||[]).length;
+    if(n<=1) return {paid, bal};
+    const tot=acctBookingTotal(bk);
+    if(bal<=0) return {paid:tot, bal:0};
+    if(paid<=0) return {paid:0, bal:tot};
+    return {paid, bal, multi:n, invNo:inv.number||''};
+  }
+  if(bk.agentId==='a_b2c'){
+    // ps.balance is NOT trusted: B2C does not re-stamp it after a payment (LOV-8193989 on prod: paid 1,699 but
+    // balance still 4,198 = total). Derive it as order total − paid. Lines of one order are b2c_<ref>_<n>;
+    // the order-level paid sits on the lowest <n>, so only that line shows the split.
+    const m=String(bk.id||'').match(/^(.*)_(\d+)$/); if(!m) return null;
+    const lines=(SB_BOOKINGS||[]).filter(x=>{ const k=String(x.id||'').match(/^(.*)_(\d+)$/); return k&&k[1]===m[1]; });
+    const first=lines.reduce((lo,x)=>(+x.id.match(/_(\d+)$/)[1] < +lo.id.match(/_(\d+)$/)[1] ? x : lo), lines[0]||bk);
+    if(first.id!==bk.id) return null;
+    const live=lines.filter(x=>!['cancelled','cancelled_weather','rejected'].includes(x.status));
+    const tot=live.reduce((s2,x)=>s2+acctBookingTotal(x),0); if(tot<=0) return null;
+    const paid=lines.reduce((s2,x)=>s2+(Number(x.paymentSnapshot&&x.paymentSnapshot.paid)||0),0);
+    return {paid, bal:Math.max(0,tot-paid), order:live.length>1?live.length:0};
+  }
+  const a=(typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
+  if(a && a.payType==='proforma'){ const tot=acctBookingTotal(bk); if(tot>0) return {paid:0, bal:tot}; }
+  return null;
+}
+function bkV2PaidLine(bk){
+  const x=bkV2PaidSplit(bk); if(!x) return '';
+  const f=n=>'&#3647;'+bkV2FmtTHB(Math.round(n));
+  const tip=x.multi?` title="ใบรวม ${x.invNo} · ${x.multi} booking · ยอดจ่าย/ค้างเป็นของทั้งใบ"`:'';
+  const bal = x.bal>0 ? `<span style="color:#A32D2D">ค้าง ${f(x.bal)}</span>` : `<span style="color:#0F6E56">ครบ</span>`;
+  return `<div${tip} style="font-size:10.5px;line-height:1.35;margin-top:2px;white-space:nowrap"><span style="color:${x.paid>0?'#0F6E56':'#9a988f'}">จ่าย ${f(x.paid)}</span> · ${bal}${x.multi?' <span style="color:#9a988f">(ใบรวม)</span>':''}${x.order?' <span style="color:#9a988f">(ทั้งออเดอร์ '+x.order+' รายการ)</span>':''}</div>`;
+}
 // Cash-on-Tour chip for the Pay column · from structured cashOnTour OR a "cash on tour ..." line in notes
 function bkV2CotChip(bk, noteTxt){
   let amt=null, cur='THB', found=false, cleaned=noteTxt||'';
@@ -49619,7 +49798,7 @@ function bkV2RenderTab2(){
               ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
             </td>
             ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div></td>`)}
-            ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}</td>`)}
+            ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
             <td class="t2-c"${boatMode?' style="background:#F4F9FE"':''}>${boatMode ? `<div style="display:flex;align-items:center;gap:7px;justify-content:center"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : ((_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap" title="${_pl?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':'เรือที่ขึ้น'}"><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'}">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
             ${rcMode?`<td class="t2-c" style="background:#FDFAF1">${(function(){const rc=bk.ops&&bk.ops.reconfirm;if(rc&&rc.status==='done'){let tm='';try{tm=new Date(rc.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="background:#E1F5EE;color:#0F6E56;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px" title="re-confirmed ${esc(rc.via||'')} ${esc(tm)}">&#10003; ${rc.via==='phone'?'โทร':'list'}</span><button onclick="event.stopPropagation();bkV2ReconfirmClear('${esc(bk.id)}')" title="ยกเลิก" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer">&times;</button></span>`;}return `<div style="display:flex;gap:3px;justify-content:center"><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','list')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">List</button><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','phone')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">โทร</button></div>`;})()}</td>`:''}
