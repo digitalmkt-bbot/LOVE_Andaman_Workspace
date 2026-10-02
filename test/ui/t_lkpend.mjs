@@ -19,6 +19,9 @@
 //  11 แก้ไขเฉพาะหมายเหตุของใบที่ pending อยู่ · ไม่โดนถามซ้ำ · แก้จำนวนขึ้น · ถาม
 //  12 ล็อกแบบช่วง · pending เฉพาะรอบที่เต็ม เก็บแยกรายวัน
 //  13 ลดจำนวน/ปล่อย · ตัดส่วนที่รอออกก่อน
+//  15 (§lkPendSub) ใบที่รอทั้งใบ แบ่งกรุ๊ปย่อยได้ · กรุ๊ปนั้นยังเป็น Pending ดึงไม่ได้
+//  16 ใบแม่ได้ที่มาบางส่วน · กรุ๊ปที่สร้างก่อนได้ก่อน
+//  17 (§lkTone) สีของ Lock กับ Pending ต่างกัน · Lock เด่นกว่า
 //  14 pendQty / pendBy รอดทางไป-กลับของเซิร์ฟเวอร์ และรีเฟรชแล้วยังอยู่ · ไม่มี error บนหน้า
 import { open, goView } from './_harness.mjs';
 import path from 'node:path';
@@ -267,6 +270,67 @@ const R13 = await page.evaluate(p => {
 if (R13.b0.pend === 7 && R13.b1.qty === R13.b0.qty - 4 && R13.b1.pend === 3 && R13.b1.held === R13.b0.held)
   ok('13 คืน 4 ที่จากใบที่รออยู่ 7 · ตัดส่วนที่รอออกก่อน (เหลือรอ 3) ที่นั่งที่กันไว้จริงไม่ถูกแตะ');
 else fail('13 ' + JSON.stringify(R13));
+
+/* ══ 15 · §lkPendSub · ใบที่รอทั้งใบ แบ่งกรุ๊ปย่อยได้ ══ */
+const nDlg15 = dialogs.length;
+const R15 = await page.evaluate(p => {
+  const d = SB_SEAT_LOCKS.find(l => l.reason === 't-lkpend D');
+  const lk0 = getAllotment(p.rid, p.D).lockedSeats;
+  const g1 = bkV2CreateSubLock(d.id, 'G1', 4);
+  if (!g1) return { made: false };
+  const src = bkV2DrawSources(p.rid, p.D, d.holderId).filter(x => x.lockId === g1.id || x.lockId === d.id);
+  return { made: true, id: d.id, g1: g1.id, room: bkV2LockSubRoom(d), draw: bkV2LockDrawable(g1, p.D), subPend: bkV2LockSubPend(g1, p.D),
+    drew: bkV2DrawLock(g1.id, 2, 'bk-x', p.D), parentPend: bkV2LockPendOn(d, p.D), src: src.length,
+    lk0, lk1: getAllotment(p.rid, p.D).lockedSeats };
+}, { rid: S.rid, D });
+if (R15.made && dialogs.length === nDlg15 && R15.room === 2 && R15.draw === 0 && R15.subPend === 4 && R15.drew === 0 && R15.parentPend === 6 && R15.src === 0 && R15.lk1 === R15.lk0)
+  ok('15 ใบที่ Pending ทั้ง 6 ที่ แบ่งกรุ๊ปย่อย G1 4 ที่ได้ · กรุ๊ปยังเป็น Pending 4 ดึงไปจองไม่ได้ ไม่กันที่นั่งเพิ่ม');
+else fail('15 ' + JSON.stringify({ R15, dlg: dialogs.slice(nDlg15) }));
+
+/* ══ 16 · ได้ที่มาบางส่วน · กรุ๊ปที่สร้างก่อนได้ก่อน ══ */
+const R16 = await page.evaluate(p => {
+  const d = SB_SEAT_LOCKS.find(l => l.reason === 't-lkpend D'), b = SB_SEAT_LOCKS.find(l => l.reason === 't-lkpend B');
+  bkV2ReleaseLock(b.id, 3);                                   /* ใบ B คืน 3 ที่ → ว่าง 3 */
+  const free = getAllotment(p.rid, p.D).seatsAvailable;
+  const c = bkV2LockPendConfirm(d.id, p.D);
+  const g2 = bkV2CreateSubLock(d.id, 'G2', 2);
+  const g1 = SB_SEAT_LOCKS.find(l => l.id === p.g1);
+  const a = { g1Draw: bkV2LockDrawable(g1, p.D), g1Pend: bkV2LockSubPend(g1, p.D), g2Draw: g2 ? bkV2LockDrawable(g2, p.D) : -1, g2Pend: g2 ? bkV2LockSubPend(g2, p.D) : -1 };
+  const drewG2 = g2 ? bkV2DrawLock(g2.id, 2, 'bk-y', p.D) : -1;
+  const drewG1 = bkV2DrawLock(g1.id, 4, 'bk-z', p.D);
+  const al = getAllotment(p.rid, p.D);
+  return { free, c, a, drewG2, drewG1, g1Left: bkV2LockRemaining(g1, p.D), g1PendAfter: bkV2LockSubPend(g1, p.D), dPend: bkV2LockPendOn(d, p.D),
+    dHeld: bkV2LockHeldRemaining(d, p.D), over: (al.seatsConsumed + al.lockedSeats) > al.availableCapacity, st: d.status };
+}, { rid: S.rid, D, g1: R15.g1 });
+if (R16.free === 3 && R16.c.ok && R16.c.n === 3 && R16.a.g1Draw === 3 && R16.a.g1Pend === 1 && R16.a.g2Draw === 0 && R16.a.g2Pend === 2
+    && R16.drewG2 === 0 && R16.drewG1 === 3 && R16.g1Left === 1 && R16.g1PendAfter === 1 && R16.dPend === 3 && R16.dHeld === 0 && R16.st === 'active')
+  ok('16 ใบแม่ได้ที่ 3 จาก 6 · G1 (สร้างก่อน) ดึงได้ 3 ยังรอ 1 · G2 (สร้างทีหลัง) ยังรอทั้ง 2 ดึงไม่ได้');
+else fail('16 ' + JSON.stringify(R16));
+
+/* ══ 17 · §lkTone · สีของ Lock กับ Pending ต่างกัน และ Lock เด่นกว่า ══ */
+const R17 = await page.evaluate(async p => {
+  _bkV2.filterDate = p.D; _bkV2.filterRoute = null; bkV2SwitchTab('bytrip'); await new Promise(z => setTimeout(z, 800));
+  const lum = c => { const m = String(c).match(/\d+(\.\d+)?/g) || [0, 0, 0]; return Math.round(0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]); };
+  const cs = (e, k) => e ? getComputedStyle(e)[k] : '';
+  const rows = [...document.querySelectorAll('tr.t2-lrow')];
+  const lockRow = rows.find(r => !r.classList.contains('t2-lpend')), pendRow = rows.find(r => r.classList.contains('t2-lpend'));
+  const band = lockRow ? lockRow.closest('table').querySelector('tr.t2-pband') : null;
+  const hold = lockRow && lockRow.querySelector('.lkhold'), pdh = pendRow && pendRow.querySelector('.lkhold.lkpdh');
+  const bLk = band && band.querySelector('.plk:not(.ppd)'), bPd = band && band.querySelector('.plk.ppd');
+  const kid = pendRow ? null : null;
+  const dRow = document.querySelector('tr.t2-lrow[data-lk="' + p.d + '"]');
+  return { has: !!(lockRow && pendRow && hold && pdh && bLk && bPd),
+    holdBg: cs(hold, 'backgroundColor'), pdhBg: cs(pdh, 'backgroundColor'), holdLum: lum(cs(hold, 'backgroundColor')), pdhLum: lum(cs(pdh, 'backgroundColor')),
+    pdhBorder: cs(pdh, 'borderTopStyle'), holdBorder: cs(hold, 'borderTopStyle'),
+    rowLk: cs(lockRow && lockRow.children[3], 'backgroundColor'), rowPd: cs(pendRow && pendRow.children[3], 'backgroundColor'),
+    bLkLum: lum(cs(bLk, 'backgroundColor')), bPdLum: lum(cs(bPd, 'backgroundColor')), bPdBorder: cs(bPd, 'borderTopStyle'),
+    kid: dRow ? ((dRow.querySelector('.lkkid') || {}).textContent || '').replace(/\s+/g, ' ').trim() : '',
+    kidTip: dRow ? ((dRow.querySelector('.lkkid') || {}).title || '') : '' };
+}, { D, d: R15.id });
+if (R17.has && R17.holdBg !== R17.pdhBg && R17.holdLum < 90 && R17.pdhLum > 200 && R17.pdhBorder === 'dashed' && R17.holdBorder === 'solid'
+    && R17.rowLk !== R17.rowPd && R17.bLkLum < 90 && R17.bPdLum > 200 && R17.bPdBorder === 'dashed' && /2/.test(R17.kid) && /G2 2 \(Pending 2\)/.test(R17.kidTip))
+  ok('17 ป้ายล็อกจริงเป็นสีทึบเข้ม · ป้าย Pending เป็นเทาเส้นประ · พื้นแถวคนละสี · กรุ๊ปย่อยที่รออยู่บอกในแถว (' + R17.kid + ')');
+else fail('17 ' + JSON.stringify(R17));
 
 /* ══ 14 · ทางไป-กลับของเซิร์ฟเวอร์ · รีเฟรช ══ */
 const SRV = await page.evaluate(() => {
