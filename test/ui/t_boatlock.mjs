@@ -29,6 +29,15 @@
 //  11 ฟอร์มมีแต่เส้นทางเรือ ไม่มีโปรแกรมบก · และเรือต้องอยู่ท่าเดียวกับเส้นทาง
 //  12 ห้ามกันเรือที่ลูกค้าที่ขายไปแล้วต้องใช้ · ทริปจะเหลือความจุไม่พอ
 //  13 ใบงาน By trip ขึ้นแถวเรือที่กันไว้ · ป้ายบนแถบโปรแกรม · จำนวนลำลดลงจริง
+//
+// §bkLockEdit + §bkLockMf (2026-10-02) · ผู้ใช้แจ้งว่า
+//   "สามารถแก้ไขได้ + มีรายละเอียดที่ใส่หมายเหตุได้ แต่ไม่โชว์ · ในหน้า Manifest ก็ไม่โชว์"
+//  14 แก้ใบได้ (หมายเหตุ วันหมดอายุ ที่นั่งขั้นต่ำ ผู้ถือ) · ลงที่เก็บ · ช่องบนกระดานเรือไม่ขยับ
+//     และค่าที่ผิดกติกาถูกปัดตกที่ชั้นข้อมูล
+//  15 ย้ายลำผ่านการแก้ · ลำเดิมกลับเป็นรอบปกติ ลำใหม่ถูกจับ · ย้ายไปลำที่มีคนใช้อยู่ไม่ได้
+//     และลำของตัวเองต้องเลือกกลับได้เสมอ
+//  16 หน้า Seat Locks โชว์หมายเหตุ + มีปุ่มแก้ไข · ฟอร์มแก้เปิดแล้วบันทึกได้
+//  17 ใบงาน By trip โชว์หมายเหตุเต็ม ไม่ถูกตัด · การ์ดหัวหน้าทั้งสามใบรู้จักเรือที่กันไว้
 
 import { open, goView } from './_harness.mjs';
 
@@ -329,6 +338,119 @@ else if (!R12.can && !R12.made && R12.short > 0 && /ขาด/.test(R12.why))
 else
   fail(`12 กันเรือที่ลูกค้าต้องใช้ไปได้: ${JSON.stringify(R12)}`);
 
+
+/* ══ 14 · แก้ใบได้ · ลงที่เก็บ · ช่องบนกระดานเรือไม่ขยับ ═══════════════════════
+   ของเดิมสร้างแล้วแก้ไม่ได้ ต้องปล่อยลำแล้วสร้างใหม่ ระหว่างนั้นเรือกลับเข้าพูลให้คนอื่นจอง
+   ข้อนี้คุมว่าแก้แล้ว "เรือไม่เคยหลุดมือ" และของที่แก้ลงที่เก็บจริง */
+const NOTE = 'test · NOTE-14 กรุ๊ปบริษัท รอยืนยันจำนวนหัว ผู้ประสานงานคุณเอ ขอเรือมีหลังคา';
+const R14 = await page.evaluate(p => {
+  if (typeof bkV2BoatLockEdit !== 'function') return { err: 'ยังไม่มี bkV2BoatLockEdit' };
+  const l = SB_SEAT_LOCKS.find(x => x.id === p.id);
+  const capA = getAllotment(l.routeId, l.date).availableCapacity;
+  const d = new Date(l.date + 'T00:00'); d.setDate(d.getDate() - 1);
+  const exp = bkV2LocalYMD(d);
+  const logN = (l.log || []).length;
+  /* ค่าที่ผิดกติกา · ต้องไม่ผ่าน และต้องไม่ทิ้งรอยไว้ในใบ */
+  const d2 = new Date(l.date + 'T00:00'); d2.setDate(d2.getDate() + 3);
+  const badExp = bkV2BoatLockEdit(p.id, { expiry: bkV2LocalYMD(d2) });
+  const badMin = bkV2BoatLockEdit(p.id, { minCap: 0 });
+  const untouched = l.expiry === p.date && l.qty === p.cap;
+  const r = bkV2BoatLockEdit(p.id, { reason: p.note, expiry: exp, minCap: p.cap - 1,
+    holderType: 'office' });
+  const op = TRIPS[l.date][l.boatId];
+  let stored = null;
+  try {
+    const D = JSON.parse(localStorage.getItem('loveandaman_v2') || '{}');
+    const k = (D.sb_seat_locks || []).find(x => x && x.id === p.id) || {};
+    stored = { reason: k.reason || '', expiry: k.expiry || '', qty: k.qty };
+  } catch (e) { stored = { err: String(e) }; }
+  const last = (l.log || [])[(l.log || []).length - 1] || {};
+  return { ok: r.ok, changed: (r.changed || []).length,
+    badExp: badExp.ok, badMin: badMin.ok, untouched,
+    reason: l.reason, expiry: l.expiry, exp, qty: l.qty, ht: l.holderType, hi: l.holderId,
+    cellRef: op.boatLockId, cellType: op.type,
+    capSame: getAllotment(l.routeId, l.date).availableCapacity === capA,
+    logged: (l.log || []).length === logN + 1 && last.type === 'edit' && /note/.test(last.note || ''),
+    stored };
+}, { id: LOCK_ID, date: PICK.date, cap: PICK.cap, note: NOTE });
+if (R14.err) fail('14 ' + R14.err);
+else {
+  const edited = R14.ok && R14.reason === NOTE && R14.expiry === R14.exp && R14.qty === PICK.cap - 1
+    && R14.ht === 'office' && !R14.hi;
+  const held = R14.cellRef === LOCK_ID && R14.cellType === 'charter' && R14.capSame;
+  const kept = R14.stored && R14.stored.reason === NOTE && R14.stored.expiry === R14.exp && R14.stored.qty === PICK.cap - 1;
+  const guarded = R14.badExp === false && R14.badMin === false && R14.untouched;
+  if (edited && held && kept && guarded && R14.logged)
+    ok(`14 แก้ใบได้ ${R14.changed} ช่อง · ลงที่เก็บ · มีบันทึกการแก้ · ช่องเรือไม่ขยับ · ค่าผิดกติกาถูกปัดตก`);
+  else
+    fail(`14 แก้ใบผิด: แก้=${edited} ถือลำ=${held} ลงที่เก็บ=${kept} ด่าน=${guarded} log=${R14.logged} ${JSON.stringify(R14)}`);
+}
+
+/* ══ 15 · ย้ายลำผ่านการแก้ ═══════════════════════════════════════════════════
+   ย้าย = ช่องเดิมกลับเป็นรอบปกติ ช่องใหม่ถูกจับ ในจังหวะเดียว
+   ย้ายไปลำที่มีใบจองอยู่แล้วต้องไม่ผ่าน และใบต้องยังถือลำเดิมครบ ไม่ลอย */
+const R15 = await page.evaluate(p => {
+  const l = SB_SEAT_LOCKS.find(x => x.id === p.id);
+  const was = l.boatId;
+  const out = { own: {}, move: null, taken: null };
+  /* ลำของตัวเอง · ไม่มีข้อยกเว้นจะถูกมองว่า "ถูกกันทั้งลำไว้แล้ว" */
+  out.own.plain = bkV2BoatLockCanTake(l.date, was, l.routeId);
+  out.own.except = bkV2BoatLockCanTake(l.date, was, l.routeId, l.id);
+  const mine = bkV2BoatLockPickList(l.date, l.routeId, l.id).find(b => b.id === was);
+  out.own.inList = !!(mine && mine.ok);
+  /* ลำของตัวเองต้องอยู่ในรายการแม้ท่าของเส้นทางไม่ตรง · แก้หมายเหตุไม่ควรต้องผ่านด่านเลือกเรือใหม่ */
+  const rt = ROUTES.find(r => r.id === l.routeId); const pierWas = rt.pier;
+  rt.pier = 'zz-not-a-pier';
+  const far = bkV2BoatLockPickList(l.date, l.routeId, l.id);
+  out.own.keptOffPier = far.some(b => b.id === was && b.ok);
+  out.own.othersOffPier = far.filter(b => b.id !== was).length;
+  rt.pier = pierWas;
+  /* ย้ายไปลำที่ว่าง */
+  const free = bkV2BoatLockPickList(l.date, l.routeId, l.id).filter(b => b.ok && b.id !== was && b.cap >= l.qty);
+  if (free.length) {
+    const tgt = free[0];
+    const r = bkV2BoatLockEdit(l.id, { boatId: tgt.id });
+    const oOld = TRIPS[l.date][was], oNew = TRIPS[l.date][tgt.id];
+    out.move = { ok: r.ok, boat: l.boatId === tgt.id,
+      oldType: oOld ? oOld.type : 'gone', oldRef: (oOld && oOld.boatLockId) || '',
+      newRef: (oNew && oNew.boatLockId) || '', newType: oNew && oNew.type };
+    const back = bkV2BoatLockEdit(l.id, { boatId: was });
+    out.move.back = back.ok && l.boatId === was && TRIPS[l.date][was].boatLockId === l.id
+      && !(TRIPS[l.date][tgt.id] && TRIPS[l.date][tgt.id].boatLockId);
+  }
+  /* ย้ายไปลำที่มีใบจองเกาะอยู่ (ไม่ใช่ใบเหมาลำ · อันนั้นตัวจับช่องกันให้อยู่แล้ว) */
+  outer:
+  for (const ds of Object.keys(TRIPS || {}).sort()) {
+    for (const bid of Object.keys(TRIPS[ds] || {})) {
+      const B = bkV2BoatLockBlockers(ds, bid);
+      if (B.charterOf || B.holdOf) continue;
+      if (!(B.pax > 0 || B.cellBooked > 0)) continue;
+      const exp0 = l.expiry;
+      const r = bkV2BoatLockEdit(l.id, { date: ds, boatId: bid, expiry: ds < exp0 ? ds : exp0 });
+      out.taken = { ds, bid, ok: r.ok, why: r.why || '',
+        stayed: l.boatId === was && l.date === p.date,
+        oldRef: (TRIPS[p.date][was] && TRIPS[p.date][was].boatLockId) || '',
+        stolen: (TRIPS[ds][bid] && TRIPS[ds][bid].boatLockId) || '' };
+      if (r.ok) { bkV2BoatLockEdit(l.id, { date: p.date, boatId: was, expiry: exp0 }); }
+      break outer;
+    }
+  }
+  return out;
+}, { id: LOCK_ID, date: PICK.date });
+{
+  const own = R15.own.plain === false && R15.own.except === true && R15.own.inList
+    && R15.own.keptOffPier && R15.own.othersOffPier === 0;
+  if (!R15.move) fail('15 ไม่มีลำอื่นว่างให้ย้ายในชุดนี้ · ข้อนี้พิสูจน์อะไรไม่ได้');
+  else if (!R15.taken) fail('15 ไม่เจอลำที่มีใบจองเกาะอยู่ในชุดนี้ · ข้อนี้พิสูจน์ครึ่งเดียว');
+  else {
+    const mv = R15.move.ok && R15.move.boat && R15.move.oldType === 'normal' && !R15.move.oldRef
+      && R15.move.newRef === LOCK_ID && R15.move.newType === 'charter' && R15.move.back;
+    const tk = R15.taken.ok === false && R15.taken.stayed && R15.taken.oldRef === LOCK_ID && !R15.taken.stolen;
+    if (own && mv && tk) ok('15 ย้ายลำผ่านการแก้ · ลำเดิมกลับเป็นรอบปกติ ลำใหม่ถูกจับ · ลำที่มีใบจองย้ายไปไม่ได้ · ลำตัวเองเลือกกลับได้');
+    else fail(`15 การย้ายลำผิด: ลำตัวเอง=${own} ย้าย=${mv} กันลำที่มีคนใช้=${tk} ${JSON.stringify(R15)}`);
+  }
+}
+
 /* ══ 13 · ใบงาน By trip ต้องขึ้นแถวเรือที่กันไว้ ════════════════════════════════
    ผู้ใช้ถามเองว่า "ถ้าเป็นเรือ Charter lock ต้องขึ้นด้วยไหม ให้เหมือนกัน"
    ต้องขึ้น เพราะเรือหายจากทั้งจำนวนลำและความจุของวันนั้นแล้ว
@@ -362,8 +484,63 @@ if (R13b.row && R13b.band && R13b.inBand && R13.in0 && !R13.inLocked && R13.nbLo
   ok(`13 ใบงาน By trip ขึ้นแถวเรือที่กันไว้ + ป้ายบนแถบโปรแกรม · จำนวนลำ ${R13.nb0} → ${R13.nbLocked}`);
 else
   fail(`13 ใบงานไม่ขึ้นหรือจำนวนลำไม่ลด: ${JSON.stringify(R13b)} ${JSON.stringify(R13)}`);
+
+/* ══ 17 · ใบงาน By trip · หมายเหตุต้องอ่านได้เต็ม และหัวหน้าต้องไม่ขัดกับตาราง ════
+   ของเดิมหมายเหตุต่อท้ายข้อความในช่อง Pickup กว้าง 200px แล้วถูกตัดด้วยจุดไข่ปลา
+   ชื่อลำกับแบบการตกลงกินที่ไปหมดก่อน หมายเหตุจึงไม่เคยได้ขึ้นจริง
+   และการ์ดหัวหน้าสามใบพูดว่า "ไม่มีโปรแกรม / ไม่มีล็อก / ไม่เหลือ booking" ทั้งที่แถวอยู่ข้างล่าง */
+const R17 = await page.evaluate(p => {
+  const row = document.querySelector('tr[data-bl="' + p.id + '"]');
+  const n = row && row.querySelector('.lknote');
+  const h = row ? row.innerHTML : '';
+  return { row: !!row,
+    note: n ? (n.textContent || '') : '',
+    clipped: n ? (n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1) : null,
+    ws: n ? getComputedStyle(n).whiteSpace : '',
+    edit: h.indexOf("bkV2BoatLockEditOpen('" + p.id + "')") >= 0,
+    /* ปุ่มต้องอยู่ในช่องของตัวเองทั้งปุ่ม · ของเดิมสองปุ่มรวม 107px ในช่อง 48px ปุ่มหลังหายทั้งปุ่ม */
+    btnCut: row ? [...row.querySelectorAll('button')].filter(b => {
+      const td = b.closest('td').getBoundingClientRect(), r = b.getBoundingClientRect();
+      return r.right > td.right + 1 || r.left < td.left - 1; }).map(b => b.textContent) : [],
+    /* ทั้งแถว · ถูกตัดได้ แต่ต้องมีจุดไข่ปลาและมี title ให้ตามอ่าน (กติกาเดียวกับ §btClip) */
+    silent: row ? [...row.querySelectorAll('td, td *')].filter(e => {
+      if (!(e.textContent || '').trim() || e.scrollWidth <= e.clientWidth + 1) return false;
+      let t = null, q = e; while (q && q.tagName !== 'TABLE') { if (q.getAttribute && q.getAttribute('title')) { t = 1; break; } q = q.parentElement; }
+      return !(getComputedStyle(e).textOverflow === 'ellipsis' && t); }).map(e => (e.textContent || '').trim().slice(0, 24)) : [],
+    progChip: !!document.querySelector('.bt-prog .bt-bhold'),
+    lockCard: !!document.querySelector('.bt-lockc .bt-lkboat'),
+    boatChip: !!document.querySelector('.bt-bholdc') };
+}, { id: LOCK_ID });
+if (!R17.row) fail('17 ไม่เจอแถวเรือที่กันไว้ในใบงาน · ข้อนี้พิสูจน์อะไรไม่ได้');
+else if (R17.note.indexOf('NOTE-14') >= 0 && R17.note.indexOf('ขอเรือมีหลังคา') >= 0 && R17.clipped === false
+         && R17.ws === 'normal' && R17.edit && R17.progChip && R17.lockCard && R17.boatChip
+         && !R17.btnCut.length && !R17.silent.length)
+  ok('17 ใบงาน By trip โชว์หมายเหตุเต็มไม่ถูกตัด · มีปุ่มแก้ไข · การ์ด Programmes / Seat Lock / Boats รู้จักเรือที่กันไว้');
+else
+  fail(`17 ใบงานไม่โชว์หมายเหตุหรือหัวหน้าไม่รู้จักเรือที่กันไว้: ${JSON.stringify(R17)}`);
 await page.evaluate(() => { if (typeof bkV2SwitchTab === 'function') bkV2SwitchTab('locks'); });
 await page.waitForTimeout(500);
+
+/* ══ 16 · หน้า Seat Locks โชว์หมายเหตุ + ปุ่มแก้ไข · ฟอร์มแก้ต้องบันทึกได้ ═══════ */
+const R16 = await page.evaluate(p => {
+  const h = document.body.innerHTML;
+  const notes = [...document.querySelectorAll('.bklk-note')].map(e => e.textContent || '');
+  const out = { note: notes.some(t => t.indexOf('NOTE-14') >= 0 && t.indexOf('ขอเรือมีหลังคา') >= 0),
+    edit: h.indexOf("bkV2BoatLockEditOpen('" + p.id + "')") >= 0 };
+  bkV2BoatLockEditOpen(p.id);
+  const m = (typeof bkV2BoatLockModal === 'function') ? bkV2BoatLockModal() : '';
+  out.title = m.indexOf('แก้ไขใบล็อกเรือทั้งลำ') >= 0;
+  out.own = m.indexOf('ลำที่กันไว้ตอนนี้') >= 0;
+  out.noteInForm = m.indexOf('NOTE-14') >= 0;
+  out.canSave = /<button\s+onclick="bkV2BoatLockSubmit\(\)"/.test(m);   /* ไม่มี disabled นำหน้า */
+  out.hub = m.indexOf("bkV2BoatLockFormGo('charter')") >= 0 && m.indexOf("bkV2BoatLockFormGo('release')") >= 0;
+  bkV2BoatLockClose();
+  return out;
+}, { id: LOCK_ID });
+if (R16.note && R16.edit && R16.title && R16.own && R16.noteInForm && R16.canSave && R16.hub)
+  ok('16 หน้า Seat Locks โชว์หมายเหตุ + ปุ่มแก้ไข · ฟอร์มแก้เปิดด้วยข้อมูลเดิมและกดบันทึกได้');
+else
+  fail(`16 หน้า Seat Locks ไม่โชว์หมายเหตุหรือแก้ไม่ได้: ${JSON.stringify(R16)}`);
 
 /* ══ 6 · รีเฟรชแล้วต้องยังอยู่ · ผ่านทางบูตจริง ═══════════════════════════════ */
 const BLOB = await page.evaluate(() => localStorage.getItem('loveandaman_v2'));

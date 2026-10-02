@@ -3095,12 +3095,15 @@ function bkV2BoatLockOverdue(l, today){
 /* ══ ด่านกัน · อะไรขวางอยู่บ้างก่อนจะล็อกลำนี้ ═══════════════════════════════════
    คืนรายการใบจองจริง ไม่ใช่แค่ true/false — คนกดต้องตัดสินใจว่าจะย้ายใบไหนไปลำอื่น
    การตอบว่า "ล็อกไม่ได้" เฉย ๆ ทำให้ต้องไปไล่หาเองว่าติดอะไร                    */
-function bkV2BoatLockBlockers(date, boatId, routeId){
+function bkV2BoatLockBlockers(date, boatId, routeId, exceptId){
   const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0 };
   const op = (typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date][boatId] : null;
+  /* §bkLockEdit · ตอนแก้ใบ · ช่องที่ใบนี้ถืออยู่เองไม่นับว่าขวาง
+     ไม่งั้นเปิดฟอร์มแก้แล้วลำของตัวเองขึ้นว่า "ถูกกันทั้งลำไว้แล้ว" เลือกกลับไม่ได้ */
+  const mine = !!(exceptId && op && op.boatLockId===exceptId);
   if(op){
     if(op.charterBookingId) out.charterOf = op.charterBookingId;
-    if(op.boatLockId) out.holdOf = op.boatLockId;
+    if(op.boatLockId && !mine) out.holdOf = op.boatLockId;
     out.cellBooked = Number(op.booked)||0;
   }
   /* ══ §bkLock · ที่นั่งที่ขายไปแล้วทั้งเส้นทาง ไม่ใช่แค่ที่ผูกกับลำนี้ ═══════════
@@ -3109,12 +3112,14 @@ function bkV2BoatLockBlockers(date, boatId, routeId){
      ผลคือทริปเหลือความจุ 0 ที่ ขณะที่ลูกค้า 30 คนถือตั๋วอยู่ · ขึ้นว่า no boat
      เอาเรือที่ลูกค้าที่ขายไปแล้วต้องใช้ ไปกันให้เอเยนต์ไม่ได้ ไม่ว่าจะยังไม่ assign หรือไม่ */
   const _rid = routeId || (op && op.route) || '';
-  if(_rid && typeof getAllotment==='function'){
+  /* §bkLockEdit · ลำที่ใบนี้ถืออยู่แล้ว ออกจากความจุของวันนั้นไปแล้วหนึ่งครั้ง
+     หักซ้ำอีกรอบตรงนี้จะฟ้องว่าที่นั่งขาด ทั้งที่ไม่มีอะไรเปลี่ยน */
+  if(_rid && typeof getAllotment==='function' && !mine){
     const A = getAllotment(_rid, date) || {};
     const cap = Number(A.availableCapacity)||0, sold = Number(A.seatsConsumed)||0;
-    const mine = (typeof bkV2BoatCapOn==='function') ? bkV2BoatCapOn(boatId, date) : 0;
+    const mineCap = (typeof bkV2BoatCapOn==='function') ? bkV2BoatCapOn(boatId, date) : 0;
     out.sold = sold;
-    out.capAfter = Math.max(0, cap - mine);
+    out.capAfter = Math.max(0, cap - mineCap);
     out.short = Math.max(0, sold - out.capAfter);
   }
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
@@ -3131,8 +3136,8 @@ function bkV2BoatLockBlockers(date, boatId, routeId){
   out.rows.sort((a,b)=>b.pax-a.pax);
   return out;
 }
-function bkV2BoatLockCanTake(date, boatId, routeId){
-  const B = bkV2BoatLockBlockers(date, boatId, routeId);
+function bkV2BoatLockCanTake(date, boatId, routeId, exceptId){
+  const B = bkV2BoatLockBlockers(date, boatId, routeId, exceptId);
   return !(B.charterOf || B.holdOf || B.pax>0 || B.cellBooked>0 || B.short>0);
 }
 /* ══ ช่องบนกระดานเรือ · ผลพลอยได้ของใบล็อก ไม่ใช่ต้นทางความจริง ═══════════════
@@ -3202,6 +3207,62 @@ function bkV2BoatLockSwap(id, newBoatId){
   sbSeatLocksPersist(); _bkLockSaveOps();
   return true;
 }
+/* ══ §bkLockEdit (2026-10-02) · แก้ใบล็อกเรือทั้งลำ ═══════════════════════════════
+   ที่มา · ผู้ใช้ขอเอง · "สามารถแก้ไขได้ + มีรายละเอียดที่ใส่หมายเหตุได้ แต่ไม่โชว์"
+   ของเดิมสร้างแล้วแก้ไม่ได้เลย พิมพ์ชื่อเอเยนต์ผิดหรือเลื่อนวันหมดอายุ ต้องปล่อยลำแล้วสร้างใหม่
+   ซึ่งระหว่างนั้นเรือกลับเข้าพูลขายที่นั่ง · คนอื่นจองแทรกได้ในช่องว่างนั้น
+
+   ด่านอยู่ชั้นนี้ทั้งหมด ไม่ใช่ชั้นฟอร์ม · เหตุผลเดียวกับตอนสร้าง
+   ย้ายวัน/ย้ายลำ = ช่องเดิมกลับเป็นรอบปกติ ช่องใหม่ถูกจับ ในจังหวะเดียว
+   ถ้าช่องใหม่จับไม่ได้ ต้องคืนช่องเดิมให้ครบ ห้ามจบแบบใบลอยไม่มีช่อง              */
+function bkV2BoatLockEdit(id, p){
+  const l = bkV2BoatLockById(id);
+  if(!l || l.status!=='active') return { ok:false, why:'inactive' };
+  p = p || {};
+  const nRoute = (p.routeId!=null && p.routeId!=='') ? p.routeId : l.routeId;
+  const nDate  = p.date   || l.date;
+  const nBoat  = p.boatId || l.boatId;
+  const nExp   = (p.expiry!=null) ? p.expiry : (l.expiry||'');
+  const nMin   = (p.minCap!=null) ? Math.max(0, parseInt(p.minCap,10)||0) : bkV2BoatLockMinCap(l);
+  const nFixed = (p.fixed!=null) ? (p.fixed!==false) : bkV2BoatLockFixed(l);
+  const nHT    = p.holderType || l.holderType || 'office';
+  const nHI    = (p.holderType!=null) ? (nHT==='agent' ? (p.holderId||null) : null) : (l.holderId||null);
+  const nNote  = (p.reason!=null) ? String(p.reason) : (l.reason||'');
+  if(typeof laIsLandRoute==='function' && laIsLandRoute(nRoute)) return { ok:false, why:'land' };
+  if(!nExp) return { ok:false, why:'expiry' };
+  if(nExp > nDate) return { ok:false, why:'expiry-late' };
+  if(nMin<=0) return { ok:false, why:'min' };
+  if(nHT==='agent' && !nHI) return { ok:false, why:'holder' };
+  const moved = (nDate!==l.date) || (nBoat!==l.boatId);
+  if(moved && !bkV2BoatLockCanTake(nDate, nBoat, nRoute, l.id)) return { ok:false, why:'taken' };
+  /* สัญญา "เรือ 1 ลำ ไม่น้อยกว่า X ที่" · ลำที่ถืออยู่ต้องไม่เล็กกว่าที่รับปาก */
+  if(!nFixed && bkV2BoatCapOn(nBoat, nDate) < nMin) return { ok:false, why:'small' };
+  const ch = [];
+  const note = (k,a,b)=>{ if(String(a==null?'':a)!==String(b==null?'':b)) ch.push(k+': '+(a==null||a===''?'-':a)+' → '+(b==null||b===''?'-':b)); };
+  note('route', l.routeId, nRoute); note('date', l.date, nDate);
+  note('boat', bkV2BoatNameOf(l.boatId), bkV2BoatNameOf(nBoat));
+  note('expiry', l.expiry, nExp); note('min', bkV2BoatLockMinCap(l), nMin);
+  note('deal', bkV2BoatLockFixed(l)?'fixed':'any', nFixed?'fixed':'any');
+  note('holder', (l.holderType||'')+':'+(l.holderId||''), nHT+':'+(nHI||''));
+  note('note', l.reason, nNote);
+  if(!ch.length) return { ok:true, changed:[] };
+  if(moved || nRoute!==l.routeId){
+    const was = { routeId:l.routeId, date:l.date, boatId:l.boatId };
+    bkV2BoatLockCellClear(l);
+    l.routeId = nRoute; l.date = nDate; l.boatId = nBoat;
+    if(!bkV2BoatLockCellSet(l)){
+      l.routeId = was.routeId; l.date = was.date; l.boatId = was.boatId;
+      bkV2BoatLockCellSet(l);
+      return { ok:false, why:'taken' };
+    }
+  }
+  l.expiry = nExp; l.qty = nMin; l.subName = nFixed ? 'fixed' : 'any';
+  l.holderType = nHT; l.holderId = nHI; l.reason = nNote;
+  const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  (l.log=l.log||[]).push({date:today, at:new Date().toISOString(), type:'edit', note:ch.join(' · '), by:laBy()});
+  sbSeatLocksPersist(); _bkLockSaveOps();
+  return { ok:true, changed:ch };
+}
 /* ══ ปุ่ม "เหมาลำ" · ใบล็อกส่งไม้ต่อให้ใบจองจริง ═══════════════════════════════
    เรียกจาก bkV2CommitBooking ตอนที่ใบใหม่ถูกเก็บลง SB_BOOKINGS แล้ว แต่ยังไม่ถึง
    ขั้นเขียนช่อง TRIPS · ช่องจึงเปลี่ยนมือจาก boatLockId เป็น charterBookingId
@@ -3252,6 +3313,25 @@ function bkV2BoatLockOpen(preset){
     fixed:true, minCap:0, capTouched:false, expiry:'', reason:'' }, preset||{});
   if(typeof bkV2Render==='function') bkV2Render();
 }
+/* §bkLockEdit · ฟอร์มเดียวกับตอนสร้าง · editId บอกว่ากำลังแก้ใบไหน */
+function bkV2BoatLockEditOpen(id){
+  const l = bkV2BoatLockById(id); if(!l || l.status!=='active') return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  _bkBoatForm = { editId:l.id, routeId:l.routeId, date:l.date, boatId:l.boatId,
+    holderType:(l.holderType==='agent'?'agent':'office'),
+    holderName:(l.holderType==='agent' ? bkV2AgentNm(l.holderId) : ''),
+    fixed:bkV2BoatLockFixed(l), minCap:bkV2BoatLockMinCap(l), capTouched:true,
+    expiry:l.expiry||'', reason:l.reason||'' };
+  if(typeof bkV2Render==='function') bkV2Render();
+}
+/* จากในฟอร์มแก้ · ไปเหมาลำ หรือปล่อยลำ */
+function bkV2BoatLockFormGo(act){
+  const id=_bkBoatForm && _bkBoatForm.editId; if(!id) return;
+  if(act==='charter'){ _bkBoatForm=null; bkV2BoatLockToCharter(id); return; }
+  bkV2BoatLockReleaseGo(id);                       /* ถามยืนยันเอง · กดยกเลิกแล้วฟอร์มต้องยังอยู่ */
+  const l=bkV2BoatLockById(id);
+  if(!l || l.status!=='active'){ _bkBoatForm=null; if(typeof bkV2Render==='function') bkV2Render(); }
+}
 function bkV2BoatLockClose(){ _bkBoatForm=null; if(typeof bkV2Render==='function') bkV2Render(); }
 /* ช่องพิมพ์ไม่ render ใหม่ · ไม่งั้น cursor เด้งออกทุกตัวอักษร (ของเดิมในฟอร์มที่นั่งก็ทำแบบนี้) */
 function bkV2BoatLockSetQ(f,v){ if(_bkBoatForm){ _bkBoatForm[f]=v; if(f==='minCap') _bkBoatForm.capTouched=true; } }
@@ -3261,7 +3341,8 @@ function bkV2BoatLockSet(f,v){
   /* เลือกลำแล้วเติมที่นั่งขั้นต่ำให้เท่าความจุลำนั้น · คนส่วนใหญ่สัญญาเท่าลำที่เลือก
      แต่ถ้าแก้เองแล้วห้ามทับ (capTouched) ไม่งั้นตัวเลขที่ตั้งใจพิมพ์หายตอนสลับลำ */
   if(f==='boatId' && !_bkBoatForm.capTouched) _bkBoatForm.minCap = bkV2BoatCapOn(v,_bkBoatForm.date);
-  if(f==='date') _bkBoatForm.boatId='';
+  /* ตอนแก้ใบ ไม่ล้างลำทิ้ง · ลำเดิมมักยังใช้ได้ในวันใหม่ ถ้าไม่ได้รายการข้างล่างจะบอกเอง */
+  if(f==='date' && !_bkBoatForm.editId) _bkBoatForm.boatId='';
   if(typeof bkV2Render==='function') bkV2Render();
 }
 function bkV2BoatLockSubmit(){
@@ -3282,6 +3363,28 @@ function bkV2BoatLockSubmit(){
     const m=(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).find(a=>a&&String(a.name||'').toLowerCase()===nm.toLowerCase());
     holderId = m ? m.id : nm;
   }
+  if(f.editId){
+    const cur=bkV2BoatLockById(f.editId);
+    if(!cur){ _bkBoatForm=null; if(typeof bkV2Render==='function') bkV2Render(); return; }
+    /* สัญญาลำเจาะจงไว้ · เปลี่ยนลำเงียบ ๆ ไม่ได้ เหตุผลเดียวกับปุ่มเปลี่ยนลำ */
+    if(cur.boatId!==f.boatId && bkV2BoatLockFixed(cur)){
+      if(!confirm('This hold names a specific boat for '+bkV2LockHolderName(cur)+'.\n\n'
+        +bkV2BoatNameOf(cur.boatId)+' -> '+bkV2BoatNameOf(f.boatId)+'\n\nThe agent may already be selling that boat name. Tell them first. Continue?')) return;
+    }
+    const r=bkV2BoatLockEdit(f.editId,{ routeId:f.routeId, date:f.date, boatId:f.boatId,
+      holderType:f.holderType, holderId:holderId, minCap:cap, fixed:f.fixed!==false,
+      expiry:f.expiry, reason:f.reason });
+    if(!r.ok){
+      alert(r.why==='taken' ? 'That boat is not free on this date'
+        : r.why==='small' ? 'That boat has fewer seats than the minimum promised'
+        : r.why==='land'  ? 'A land programme has no boat to hold'
+        : 'Could not save the changes ('+r.why+')');
+      return;
+    }
+    _bkBoatForm=null;
+    if(typeof bkV2Render==='function') bkV2Render();
+    return;
+  }
   if(!bkV2BoatLockCanTake(f.date,f.boatId)){ alert('That boat is no longer free on this date'); return; }
   const l=bkV2CreateBoatLock({ routeId:f.routeId, date:f.date, boatId:f.boatId,
     holderType:f.holderType, holderId:holderId, minCap:cap, fixed:f.fixed!==false,
@@ -3291,30 +3394,36 @@ function bkV2BoatLockSubmit(){
   if(typeof bkV2Render==='function') bkV2Render();
 }
 /* เรือที่เลือกได้ของวันนั้น · พร้อมเหตุผลว่าทำไมบางลำเลือกไม่ได้ */
-function bkV2BoatLockPickList(date, routeId){
+function bkV2BoatLockPickList(date, routeId, exceptId){
   const out=[];
   /* §bkLock · เรือต้องอยู่ท่าเดียวกับเส้นทาง · เอาเรือพันวาไปวิ่งเส้นทางทับละมุไม่ได้
      ถามท่าตามวันที่ (§boatPierDate) ไม่ใช่ท่าวันนี้ · เรือเข้าอู่แล้วกลับมาคนละท่าได้ */
   const _r=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x&&x.id===routeId);
   const _rp=_r?(_r.pier||''):'';
+  /* §bkLockEdit · ลำที่ใบนี้ถืออยู่แล้วในวันเดิม ต้องอยู่ในรายการเสมอ และเลือกได้เสมอ
+     เจอตอนลองเอง · เปิดฟอร์มแก้แล้วลำของตัวเองไม่อยู่ในรายการ (ถูกกรองด้วยท่า/สถานะ)
+     ปุ่มบันทึกจึงเทาตลอด แก้แค่หมายเหตุก็ไม่ได้ · การแก้หมายเหตุไม่ควรต้องผ่านด่านเลือกเรือใหม่ */
+  const _own=exceptId?bkV2BoatLockById(exceptId):null;
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(b=>{
     if(!b||!b.id) return;
-    if(_rp){
+    const isOwn=!!(_own && _own.boatId===b.id && _own.date===date);
+    if(_rp && !isOwn){
       const bp=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,date):(b.pier||'');
       if(bp && bp!==_rp) return;
     }
     const st=(typeof getCurStatus==='function')?(getCurStatus(b,date)||{}).s:'available';
-    const B=bkV2BoatLockBlockers(date,b.id);
+    const B=bkV2BoatLockBlockers(date,b.id,undefined,exceptId);
     let why='';
-    if(st && st!=='available') why='ไม่พร้อมใช้งาน · '+st;
+    if(isOwn) why='';
+    else if(st && st!=='available') why='ไม่พร้อมใช้งาน · '+st;
     else if(B.charterOf) why='เหมาลำอยู่แล้ว · '+B.charterOf;
     else if(B.holdOf) why='ถูกกันทั้งลำไว้แล้ว';
     else if(B.pax>0) why='มีใบจองแล้ว '+B.pax+' ที่';
     else if(B.cellBooked>0) why='มีที่นั่งขายแล้ว '+B.cellBooked+' ที่';
     else if(B.short>0) why='ทริปขายไปแล้ว '+B.sold+' ที่ · เอาลำนี้ออกจะขาด '+B.short+' ที่';
-    out.push({ id:b.id, name:b.name||b.id, cap:bkV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B });
+    out.push({ id:b.id, name:b.name||b.id, cap:bkV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B, own:isOwn });
   });
-  out.sort((a,b)=> (a.ok===b.ok ? (b.cap-a.cap) : (a.ok?-1:1)));
+  out.sort((a,b)=> ((a.own?0:1)-(b.own?0:1)) || (a.ok===b.ok ? (b.cap-a.cap) : (a.ok?-1:1)));
   return out;
 }
 function bkV2BoatLockModal(){
@@ -3326,7 +3435,7 @@ function bkV2BoatLockModal(){
   const routeOpts='<option value="">— เลือกเส้นทาง —</option>'
     + ROU.map(r=>`<option value="${E(r.id)}" ${f.routeId===r.id?'selected':''}>${E(r.name)}</option>`).join('');
   const agentList=(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).map(a=>`<option value="${E(a.name)}"></option>`).join('');
-  const list=bkV2BoatLockPickList(f.date,f.routeId);
+  const list=bkV2BoatLockPickList(f.date,f.routeId,f.editId||null);
   const lab='display:block;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6e675e;margin-bottom:5px';
   const inp='width:100%;border:1px solid var(--border);border-radius:8px;background:#FCFBF9;padding:8px 10px;font-family:inherit;font-size:12.5px;color:var(--ink)';
   const boatRows=list.map(b=>{
@@ -3335,7 +3444,7 @@ function bkV2BoatLockModal(){
       <span style="width:13px;height:13px;border-radius:50%;flex:none;border:2px solid ${on?'#6B289A':'#C3BCB2'};background:${on?'#6B289A':'transparent'};box-shadow:${on?'inset 0 0 0 2.5px #fff':'none'}"></span>
       <b style="font-weight:700">${E(b.name)}</b>
       <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:${b.ok?'var(--ink-soft)':'inherit'}">${b.cap} ที่</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.ok?'#0C6B47':'#8A6A1A'}">${b.ok?'ว่าง':E(b.why)}</span>
+      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.own?'#6B289A':(b.ok?'#0C6B47':'#8A6A1A')}">${b.own?'ลำที่กันไว้ตอนนี้':(b.ok?'ว่าง':E(b.why))}</span>
     </div>`;
   }).join('') || '<div style="padding:14px;text-align:center;color:var(--ink-faint);font-size:12px">วันนี้ไม่มีเรือ</div>';
   /* ด่านกัน · ลำที่เลือกมีใบจองอยู่ → โชว์รายการให้เลย คนกดต้องรู้ว่าจะย้ายใบไหน */
@@ -3370,7 +3479,7 @@ function bkV2BoatLockModal(){
       <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
         <div style="flex:1">
           <div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:#6B289A;text-transform:uppercase">Hold whole boat</div>
-          <div style="font-size:15.5px;font-weight:700;margin-top:2px">ล็อกเรือทั้งลำ · ใบใหม่</div>
+          <div style="font-size:15.5px;font-weight:700;margin-top:2px">${f.editId?'แก้ไขใบล็อกเรือทั้งลำ':'ล็อกเรือทั้งลำ · ใบใหม่'}</div>
         </div>
         <button onclick="bkV2BoatLockClose()" style="border:none;background:transparent;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1">&times;</button>
       </div>
@@ -3412,8 +3521,8 @@ function bkV2BoatLockModal(){
           </div>
         </div>
 
-        <div style="margin-top:14px"><label style="${lab}">เหตุผล</label>
-          <input style="${inp}" value="${E(f.reason)}" placeholder="เช่น กรุ๊ปบริษัท · รอยืนยันจำนวนหัว" oninput="bkV2BoatLockSetQ('reason',this.value)"></div>
+        <div style="margin-top:14px"><label style="${lab}">หมายเหตุ <span style="text-transform:none;letter-spacing:0;font-weight:500;color:#8a8378">· ขึ้นในหน้า Seat Locks และใบงาน By trip</span></label>
+          <textarea id="bkbl-note" rows="2" style="${inp};resize:vertical;line-height:1.5" placeholder="เช่น กรุ๊ปบริษัท · รอยืนยันจำนวนหัว · ผู้ประสานงาน" oninput="bkV2BoatLockSetQ('reason',this.value)">${E(f.reason)}</textarea></div>
 
         <div style="margin-top:14px;border:1px solid #DCC7EE;background:#F3EBFA;border-radius:10px;padding:11px 13px;font-size:12px;color:#53207A;line-height:1.65">
           <b>=</b> กันไว้ <b>ทั้งลำ${f.boatId?(' · '+E(bkV2BoatNameOf(f.boatId))+' · '+capNow+' ที่'):''}</b>
@@ -3421,9 +3530,12 @@ function bkV2BoatLockModal(){
           และ<b>ไม่ไปหักจากพูลที่นั่งซ้ำอีกรอบ</b>
         </div>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border)">
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border)">
+        ${f.editId?`<button onclick="bkV2BoatLockFormGo('charter')" title="เปิดฟอร์มจองเหมาลำ กรอกให้ล่วงหน้าจากใบล็อกนี้" style="font-family:inherit;font-size:12px;font-weight:700;color:#6B289A;background:#F3EBFA;border:1px solid #DCC7EE;border-radius:9px;padding:8px 14px;cursor:pointer">เหมาลำ</button>
+        <button onclick="bkV2BoatLockFormGo('release')" title="คืนเรือลำนี้เข้าพูลขายที่นั่งทันที" style="font-family:inherit;font-size:12px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:9px;padding:8px 14px;cursor:pointer">ปล่อยลำ</button>
+        <span style="flex:1"></span>`:''}
         <button onclick="bkV2BoatLockClose()" style="font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 14px;cursor:pointer">ยกเลิก</button>
-        <button ${ready?'':'disabled'} onclick="bkV2BoatLockSubmit()" style="font-family:inherit;font-size:12px;font-weight:700;color:#fff;background:${ready?'#6B289A':'#C9C4BC'};border:1px solid ${ready?'#6B289A':'#C9C4BC'};border-radius:9px;padding:8px 16px;cursor:${ready?'pointer':'not-allowed'}">ล็อกลำนี้</button>
+        <button ${ready?'':'disabled'} onclick="bkV2BoatLockSubmit()" style="font-family:inherit;font-size:12px;font-weight:700;color:#fff;background:${ready?'#6B289A':'#C9C4BC'};border:1px solid ${ready?'#6B289A':'#C9C4BC'};border-radius:9px;padding:8px 16px;cursor:${ready?'pointer':'not-allowed'}">${f.editId?'บันทึกการแก้ไข':'ล็อกลำนี้'}</button>
       </div>
     </div>
   </div>`;
@@ -4283,7 +4395,7 @@ function bkV2RenderLocks(){
   const boatRowsDay = dayBoats.map(l=>{
     const cap=bkV2BoatCapOn(l.boatId,l.date), od=bkV2BoatLockOverdue(l,_today);
     return `<tr style="background:#FAF6FD">
-      <td style="${td2};font-weight:700"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${bkV2LockHolderColor(l)};margin-right:7px;vertical-align:0"></span>${esc(bkV2LockHolderName(l))}</td>
+      <td style="${td2};font-weight:700"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${bkV2LockHolderColor(l)};margin-right:7px;vertical-align:0"></span>${esc(bkV2LockHolderName(l))}${l.reason?`<div class="bklk-note" style="font-weight:500;font-size:11px;color:#6B5A80;margin:2px 0 0 15px;white-space:normal;line-height:1.45">${esc(l.reason)}</div>`:''}</td>
       <td style="${td2}"><span style="display:inline-block;width:3px;height:14px;border-radius:2px;background:#6B289A;vertical-align:-2px;margin-right:7px"></span>${esc(routeName(l.routeId))}</td>
       <td style="${td2}"><span style="font-size:9px;font-weight:700;letter-spacing:.03em;color:#fff;background:#6B289A;padding:2px 7px;border-radius:5px">เรือทั้งลำ</span></td>
       <td style="${td2};text-align:center;font-weight:700;color:#6B289A">${esc(bkV2BoatNameOf(l.boatId))}</td>
@@ -4294,6 +4406,7 @@ function bkV2RenderLocks(){
         : `<span style="font-size:10.5px;color:var(--ink-soft)">หมดอายุ ${esc(l.expiry||'—')}</span>`}</td>
       <td style="${td2};text-align:right;padding-right:14px;white-space:nowrap">
         <button onclick="bkV2BoatLockToCharter('${l.id}')" title="เปิดฟอร์มจองเหมาลำ กรอกให้ล่วงหน้าจากใบล็อกนี้" style="font-family:inherit;font-size:11px;font-weight:700;color:#fff;background:#6B289A;border:1px solid #6B289A;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:5px">เหมาลำ</button>
+        <button onclick="bkV2BoatLockEditOpen('${l.id}')" title="แก้ผู้ถือ วันหมดอายุ หมายเหตุ หรือย้ายวัน/ลำ" style="font-family:inherit;font-size:11px;font-weight:600;color:#2A5EA8;background:#EAF1FB;border:1px solid #C3D8F2;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:5px">แก้ไข</button>
         <button onclick="bkV2BoatLockReleaseGo('${l.id}')" title="คืนเรือลำนี้เข้าพูลขายที่นั่งทันที" style="font-family:inherit;font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:7px;padding:4px 9px;cursor:pointer">ปล่อยลำ</button></td>
     </tr>`;
   }).join('');
@@ -4355,6 +4468,7 @@ function bkV2RenderLocks(){
       <table style="width:100%;border-collapse:separate;border-spacing:0"><thead><tr>
         <th style="${th3}">ลำ</th><th style="${th3};text-align:center">ที่</th><th style="${th3}">ผู้ถือ</th>
         <th style="${th3}">เส้นทาง</th><th style="${th3}">วันเดินทาง</th><th style="${th3}">แบบการตกลง</th>
+        <th style="${th3}">หมายเหตุ</th>
         <th style="${th3}">หมดอายุ</th><th style="${th3}"></th></tr></thead><tbody>
       ${rows.map(l=>{
         const cap=bkV2BoatCapOn(l.boatId,l.date), od=bkV2BoatLockOverdue(l,_today);
@@ -4366,11 +4480,13 @@ function bkV2RenderLocks(){
           <td style="${td3}">${esc(routeName(l.routeId))}</td>
           <td style="${td3};font-family:'DM Mono',monospace">${esc(l.date)}</td>
           <td style="${td3};font-size:11px;color:var(--ink-soft)">${fx?'สัญญาลำนี้เลย<br><span style="color:#A05A1A">สลับต้องแจ้งก่อน</span>':('ไม่น้อยกว่า '+min+' ที่<br><span style="color:#0C6B47">สลับลำได้เอง</span>')}</td>
+          <td class="bklk-note" style="${td3};font-size:11.5px;color:${l.reason?'var(--ink)':'var(--ink-faint)'};white-space:normal;line-height:1.5;min-width:150px;max-width:300px;overflow-wrap:anywhere">${l.reason?esc(l.reason):'—'}</td>
           <td style="${td3}">${od
             ? `<span style="font-size:10.5px;font-weight:700;color:#A32D2D;background:#FDECEA;border-radius:6px;padding:2px 8px">${esc(l.expiry)} · เลยแล้ว</span>`
             : `<span style="font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace">${esc(l.expiry||'—')}</span>`}</td>
           <td style="${td3};text-align:right;white-space:nowrap">
             <button onclick="bkV2BoatLockToCharter('${l.id}')" style="font-family:inherit;font-size:11px;font-weight:700;color:#fff;background:#6B289A;border:1px solid #6B289A;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:4px">เหมาลำ</button>
+            <button onclick="bkV2BoatLockEditOpen('${l.id}')" title="แก้ผู้ถือ วันหมดอายุ หมายเหตุ หรือย้ายวัน/ลำ" style="font-family:inherit;font-size:11px;font-weight:600;color:#2A5EA8;background:#EAF1FB;border:1px solid #C3D8F2;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:4px">แก้ไข</button>
             <button onclick="bkV2BoatLockSwapGo('${l.id}')" style="font-family:inherit;font-size:11px;font-weight:600;color:#5B3A8C;background:#F8F5FD;border:1px solid #D9CCEC;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:4px">เปลี่ยนลำ</button>
             <button onclick="bkV2BoatLockReleaseGo('${l.id}')" style="font-family:inherit;font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:7px;padding:4px 9px;cursor:pointer">ปล่อยลำ</button></td>
         </tr>`;
@@ -48654,11 +48770,20 @@ function bkV2RenderTab2(){
   const famF = _bkV2T2Family || '';
   const routeF = _bkV2.filterRoute;
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
+  /* §bkLockMf (2026-10-02) · เรือที่กันไว้ทั้งลำของวันนี้ แยกตามเส้นทาง
+     ที่มา · ผู้ใช้แจ้งว่าล็อกเรือ "ในหน้า Manifest ก็ไม่โชว์" · ลองทำตามแล้วเจอว่า
+     แถวในตารางมีอยู่จริง แต่การ์ดหัวหน้าทั้งสามใบพูดคนละเรื่องกับตาราง
+       Programmes   "0 routes · No programme on this day"
+       Seat Lock    "No seat lock on this day"
+       Boats        "ไม่เหลือ booking แล้ว"
+     คนอ่านเชื่อหัวหน้าก่อนเลื่อนลงไปดูตาราง · ทั้งสามใบต้องรู้จักใบชนิดนี้ด้วย */
+  const _btHoldsAll = (typeof bkV2BoatLocksOn==='function') ? bkV2BoatLocksOn(date) : [];
+  const _btHoldsOf = rid => _btHoldsAll.filter(l=>l.routeId===rid);
   // program-family options available on this date under the current pier (+ families that have locks)
   const _lockFamIds = (typeof SB_SEAT_LOCKS!=='undefined') ? SB_SEAT_LOCKS.filter(l=>l.status==='active' && bkV2LocksFor(l.routeId,date).includes(l)).map(l=>bkV2RouteFamily(l.routeId)?.id) : [];
   const famOpts = (typeof _BKV2_FAMILIES!=='undefined'?_BKV2_FAMILIES:[]).filter(f =>
     rowsPier.some(r=>bkV2RouteFamily(r.routeId)?.id===f.id) ||
-    (typeof ROUTES!=='undefined' && ROUTES.some(r=>bkV2RouteFamily(r.id)?.id===f.id && bkV2LocksFor(r.id,date).length>0 && (pierF==='all'||r.pier===pierF)))
+    (typeof ROUTES!=='undefined' && ROUTES.some(r=>bkV2RouteFamily(r.id)?.id===f.id && (bkV2LocksFor(r.id,date).length>0 || _btHoldsOf(r.id).length>0) && (pierF==='all'||r.pier===pierF)))
   );
   /* §btHead · คำค้นกรองตรงนี้จุดเดียว · voucher / ชื่อ / เบอร์ / โรงแรม / เอเยนต์ */
   const _btQ = String(_bkV2T2Q||'').toLowerCase().trim();
@@ -48845,7 +48970,7 @@ function bkV2RenderTab2(){
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
   rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
-  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
+  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
   const _dayLocked = (typeof bkV2DayLockedTotal==='function') ? bkV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -48997,6 +49122,12 @@ function bkV2RenderTab2(){
                     .filter(Boolean).slice(0,2).join(' · ');
       why.push({k:'lock', t:laTp('ล็อกที่นั่งค้างไว้ {0} ที่', left)+(who?(' · '+who):''), go:'bkV2SwitchTab(\'locks\')'});
     }
+    const _bh = _btHoldsOf(rid);
+    if(_bh.length){
+      const who = [...new Set(_bh.map(l=>(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):(l.holderId||'')))]
+                    .filter(Boolean).slice(0,2).join(' · ');
+      why.push({k:'lock', t:laTp('เรือกันไว้ทั้งลำ {0} ลำ', _bh.length)+(who?(' · '+who):''), go:'bkV2SwitchTab(\'locks\')'});
+    }
     if((pendGroups[rid]||[]).length)
       why.push({k:'pend', t:laTp('ใบรออนุมัติ {0} ใบ', (pendGroups[rid]||[]).length), go:'bkV2SwitchTab(\'approvals\')'});
     if(reschedFromRouteIds.indexOf(rid)>=0)
@@ -49009,6 +49140,14 @@ function bkV2RenderTab2(){
       '<span class="g'+x.k+'"'+(x.go?(' onclick="event.stopPropagation();'+x.go+'" title="'+laT('ไปจัดการ')+'"'):'')+'>'
       +esc(x.t)+(x.go?' &rarr;':'')+'</span>').join('')+'</div>';
   };
+
+  /* §bkLockMf · เรือที่กันไว้ไม่ใช่ "เรือที่วิ่ง" จึงไม่เข้า _btBoats (ตัวเลขจำนวนลำจะเพี้ยน)
+     แต่ต้องเห็นว่าลำไหนหายไปกับใคร · วาดเป็นชิปแยกสีต่อท้ายรายชื่อเรือ */
+  const _btHoldChips = (rid, cls) => _btHoldsOf(rid).map(l=>{
+    const nm=(typeof bkV2BoatNameOf==='function')?bkV2BoatNameOf(l.boatId):String(l.boatId||'');
+    const who=(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):String(l.holderId||'');
+    return `<span class="${cls} bt-bholdc" style="background:#F3EBFA;border-color:#DCC7EE;color:#53207A" title="${esc(laT('กันทั้งลำ'))} · ${esc(who)}${l.reason?(' · '+esc(l.reason)):''}">&#9973; ${esc(nm)} <span style="font-weight:600;opacity:.85">${esc(laT('กันทั้งลำ'))} · ${esc(who)}</span></span>`;
+  }).join('');
 
   /* ══ กรอบซ้าย · โปรแกรมวันนี้ ════════════════════════════════════════════ */
   const _btPierBtn = (v,l)=>`<button class="bt-seg-b${pierF===v?' on':''}" onclick="bkV2Tab2SetPier('${v}')">${l}</button>`;
@@ -49040,7 +49179,7 @@ function bkV2RenderTab2(){
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
-        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
+        <span class="sp">${_btHoldsOf(rid).length?`<span class="bt-lk bt-bhold" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE" title="${laT('เรือที่กันไว้ทั้งลำให้เอเยนต์ · ไม่อยู่ในพูลขายที่นั่งแล้ว')}">&#9973; ${_btHoldsOf(rid).length}</span>`:''}${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
@@ -49110,7 +49249,7 @@ function bkV2RenderTab2(){
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
       ${_btWhyHtml(_btSelRid)}${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
@@ -49122,7 +49261,7 @@ function bkV2RenderTab2(){
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
           <span class="sm">${bkd}/${cp}<em class="${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':'ok'))}">${cp<=0?(bkd>0?laT('ไม่มีเรือ'):laT('ไม่มีที่นั่ง')):(av<=0?'full':(av+' free'))}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):(_btHoldsOf(rid).length?'':'<span class="bt-tbc none">no boat</span>')}${_btHoldChips(rid,'bt-tbc')}</div>
         ${_btWhyHtml(rid)}${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
@@ -49168,9 +49307,18 @@ function bkV2RenderTab2(){
   const _lkList=Object.values(_lkBy).sort((a,b)=>(b.left-a.left)||(b.qty-a.qty));
   const _lkTot=_lkList.reduce((n,a)=>n+a.qty,0), _lkLeft=_lkList.reduce((n,a)=>n+a.left,0);
   const _lkN=routeIds.reduce((n,rid)=>n+((typeof bkV2LocksFor==='function')?bkV2LocksFor(rid,date):[]).length,0);
+  /* §bkLockMf · เรือที่กันไว้ทั้งลำ ขึ้นในการ์ดเดียวกัน แต่ไม่บวกเข้ายอดที่นั่ง (คนละหน่วย) */
+  const _blCard = _btHoldsAll.filter(l=>routeIds.indexOf(l.routeId)>=0);
+  const _blCardHtml = _blCard.map(l=>{
+    const nm=(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):(l.holderId||'—');
+    const bn=(typeof bkV2BoatNameOf==='function')?bkV2BoatNameOf(l.boatId):String(l.boatId||'');
+    const cp=(typeof bkV2BoatCapOn==='function')?bkV2BoatCapOn(l.boatId,l.date):0;
+    return `<span class="bt-lkr bt-lkboat" style="background:#F3EBFA;border-color:#DCC7EE" onclick="bkV2BoatLockEditOpen('${l.id}')" title="${esc(laT('กันทั้งลำ'))} · ${esc(bn)} ${cp}${l.reason?(' · '+esc(l.reason)):''}"><i style="background:#6B289A"></i><span class="nm">&#9973; ${esc(nm)}</span><span class="q"><b style="color:#6B289A">${esc(bn)}</b><s>${cp}</s></span></span>`;
+  }).join('');
   const _btLock = `<div class="bt-c bt-lockc"><div class="bt-ct">Seat Lock<span class="sp"></span>
       ${_btLkSel?`<span class="bt-lkhi">&#9679; ${_btLkHitN} highlighted</span>`:''}
-      ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:'<span class="bt-cnt">none left</span>'}
+      ${_blCard.length?`<span class="bt-lkbadge" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE">&#9973; ${_blCard.length} ${laT('ลำ')}</span>`:''}
+      ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:(_blCard.length?'':'<span class="bt-cnt">none left</span>')}
       ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="Lock seats on this trip">&#128274; Lock seats</button>`:''}
       <button class="bt-lkbtn gh" onclick="bkV2SwitchTab('locks')">All &rarr;</button></div>
     <div class="bt-lkl">${_lkList.length?_lkList.map(a=>{
@@ -49178,7 +49326,7 @@ function bkV2RenderTab2(){
       const num=(a.qty<=0)?'<s>released</s>':`<b>${a.left}</b><s>/ ${a.qty}</s>`;
       const _on=(_btLkSel===a.nm);
       return `<span class="bt-lkr ${cls}${_on?' on':''}" onclick="bkV2Tab2SetLk('${a.id}')" title="Highlight bookings drawn from ${esc(a.nm)}'s lock"><i></i><span class="nm">${esc(a.nm)}</span><span class="q">${num}</span>${a.kids?`<span class="sub">${a.kids} sub</span>`:''}<button class="mg" onclick="event.stopPropagation();bkV2LockManageOpen('${a.id}')" title="Manage lock · add sub-group / release">&#9881;</button></span>`;
-    }).join(''):'<span class="bt-none2">No seat lock on this day</span>'}</div>
+    }).join(''):(_blCard.length?'':'<span class="bt-none2">No seat lock on this day</span>')}${_blCardHtml}</div>
     ${_lkList.length?`<div class="bt-lkfoot"><b>${_lkTot}</b> held &middot; <b>${_lkTot-_lkLeft}</b> used &middot; <b>${_lkList.length}</b> holder${_lkList.length===1?'':'s'} &middot; <b>${_lkN}</b> lock${_lkN===1?'':'s'}${_lkList.length>3?`<span class="scr">&#9662; ${_lkList.length-3} more</span>`:''}<span class="hint">${_btLkSel?'Click again to clear highlight':'Click a row to highlight its bookings &middot; &#9881; to manage'}</span></div>`:''}</div>`;
 
   const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
@@ -50033,7 +50181,7 @@ function bkV2RenderTab2(){
         + `<td class="t2-req"><span class="lkwait">${laT('รอ rooming list')}</span></td>`
         + (vanMode?'':`<td><span class="lkhold">&#128274; ${laT('กันไว้')}</span></td>`
                     + `<td class="t2-r">${_dash}</td>`
-                    + `<td class="t2-c">${_od?`<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2LockReleaseRoundGo('${l.id}','${esc(date)}')" title="${laT('คืนที่นั่งของรอบนี้เข้า pool')}">${laT('ปล่อย')} ${_held}</button>`:''}<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="${laT('จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย')}${_kids.length?(' · '+laT('กรุ๊ปย่อย')+': '+esc(_kidTip)):''}">${laT('จัดการ')}</button></td>`)
+                    + `<td class="t2-c lkact">${_od?`<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2LockReleaseRoundGo('${l.id}','${esc(date)}')" title="${laT('คืนที่นั่งของรอบนี้เข้า pool')}">${laT('ปล่อย')} ${_held}</button>`:''}<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="${laT('จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย')}${_kids.length?(' · '+laT('กรุ๊ปย่อย')+': '+esc(_kidTip)):''}">${laT('จัดการ')}</button></td>`)
         + `<td class="t2-c">${_dash}</td>`
         + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
         + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
@@ -50062,19 +50210,23 @@ function bkV2RenderTab2(){
       const _code= 'BT-' + String(_nm||'').replace(/\s+/g,'').slice(0,12).toUpperCase();
       const _story = _bn + ' · ' + laTp('ทั้งลำ {0} ที่', _cap)
         + ' · ' + (_fx ? laT('สัญญาลำนี้เลย')
-                           : laTp('ไม่น้อยกว่า {0} ที่', _min))
-        + (l.reason ? (' · ' + l.reason) : '');
+                           : laTp('ไม่น้อยกว่า {0} ที่', _min));
+      /* §bkLockMf · หมายเหตุเคยต่อท้าย _story แล้วถูกตัดด้วยจุดไข่ปลา
+         ช่องกว้าง 200px · ชื่อลำกับแบบการตกลงกินไปหมดแล้ว หมายเหตุจึงไม่เคยได้ขึ้นจริง
+         แยกเป็นบรรทัดของตัวเอง ให้ตกบรรทัดได้ ไม่ตัด */
+      const _noteHtml = l.reason
+        ? `<span class="lknote" style="display:block;white-space:normal;overflow-wrap:anywhere;font-size:11px;line-height:1.45;color:#53207A;margin-top:2px">&#128221; ${esc(l.reason)}</span>` : '';
       const _bchip = `<span style="display:inline-block;background:#F3EBFA;color:#53207A;border:1px solid #DCC7EE;border-radius:5px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px">&#9973; ${esc(_bn)} &middot; ${_cap}</span>`;
       return `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-bl="${esc(l.id)}" style="--lc:${_c};--lci:${_ci}">`
-        + `<td class="t2-vc"><span class="lkcode">&#9973; ${esc(_code)}</span></td>`
+        + `<td class="t2-vc"><span class="lkcode" title="${esc(_code)}" style="display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#9973; ${esc(_code)}</span></td>`
         + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
         + `<td class="t2-cu"><span class="lkwait">${laT('ล็อกเรือทั้งลำ · ยังไม่ยืนยัน')}</span>${_bchip}</td>`
         + `<td class="t2-c">${_dash}</td>`
         + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
         + `<td>${_od?`<span class="lkrule lkover" title="${laT('เลยวันที่ตั้งไว้แล้ว แต่เรือยังถูกกันทั้งลำ')}">&#9888; ${laT('เลยกำหนด')}</span>`
-                   :(l.expiry?`<span class="lkrule">${laT('หมดอายุ')} ${esc(l.expiry)}</span>`:_dash)}</td>`
+                   :(l.expiry?`<span class="lkrule" title="${laT('หมดอายุ')} ${esc(l.expiry)}" style="display:inline-block;max-width:100%;white-space:normal;line-height:1.35">${laT('หมดอายุ')} ${esc(l.expiry)}</span>`:_dash)}</td>`
         + (vanMode?`<td class="t2-c">${_dash}</td>`:'')
-        + `<td class="t2-pk"><span class="lkwait lkclip" title="${esc(_story)}">${esc(_story)}</span></td>`
+        + `<td class="t2-pk"><span class="lkwait lkclip" title="${esc(_story)}">${esc(_story)}</span>${_noteHtml}</td>`
         + `<td class="t2-c">${_dash}</td>`
         + `<td>${_dash}</td>`
         + `<td>${_dash}</td>`
@@ -50082,8 +50234,10 @@ function bkV2RenderTab2(){
         + `<td class="t2-req"><span class="lkwait">${laT('รอยืนยันจำนวนหัว')}</span></td>`
         + (vanMode?'':`<td><span class="lkhold" style="background:#F3EBFA;color:#53207A">&#9973; ${laT('กันทั้งลำ')}</span></td>`
                     + `<td class="t2-r">${_dash}</td>`
-                    + `<td class="t2-c"><button class="lkgo" onclick="event.stopPropagation();bkV2BoatLockToCharter('${l.id}')" title="${laT('เปิดฟอร์มจองเหมาลำ กรอกให้ล่วงหน้าจากใบล็อกนี้')}">${laT('เหมาลำ')}</button>`
-                    + `<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2BoatLockReleaseGo('${l.id}')" title="${laT('คืนเรือลำนี้เข้าพูลขายที่นั่งทันที')}">${laT('ปล่อยลำ')}</button></td>`)
+                    /* §bkLockMf · ช่องนี้กว้าง 48px · ของเดิมใส่สองปุ่ม (เหมาลำ + ปล่อยลำ) รวม 107px
+                       ช่องตัดเนื้อหาไว้ในตัวเอง (§btAlign) ปุ่มปล่อยลำจึงหายไปทั้งปุ่ม กดไม่ได้
+                       เหลือปุ่มเดียวเหมือนแถวล็อกที่นั่ง · เปิดฟอร์มแล้วเหมาลำ/ปล่อยลำจากในนั้น */
+                    + `<td class="t2-c lkact"><button class="lkgo" onclick="event.stopPropagation();bkV2BoatLockEditOpen('${l.id}')" title="${laT('จัดการล็อกเรือ · แก้ไข / เหมาลำ / ปล่อยลำ')}">${laT('จัดการ')}</button></td>`)
         + `<td class="t2-c">${_dash}</td>`
         + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
         + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
@@ -50887,6 +51041,11 @@ function bkV2RenderTab2(){
     .t2-lrow .lkrule.lkover{background:#FDECEA;border-color:#F5C9C4;color:#A32D2D}
     .t2-lrow .lkgo.lkrel{color:#A32D2D;background:#FDECEA;border-color:#F5C9C4;margin-right:4px}
     .t2-lrow .lkgo.lkrel:hover{border-color:#D98A82;background:#FFF5F4}
+    /* §bkLockMf · ช่องปุ่มกว้าง 48px แต่ padding ของช่องกินไปข้างละ 9px เหลือ 30px
+       ปุ่ม "จัดการ" กว้าง 47px จึงถูกตัดขอบขวามาตลอด ทั้งแถวล็อกที่นั่งและแถวเรือ
+       ถอด padding ของช่องนี้ออก และถ้ามีสองปุ่มให้ซ้อนกันลงมา ไม่ใช่ล้นออกข้าง */
+    .t2-mtbl .t2-lrow td.lkact{padding:3px 0}
+    .t2-lrow td.lkact .lkgo{display:block;margin:2px auto;padding:3px 5px}
     /* ป้ายบนใบที่ดึงที่นั่งมาจากล็อก · สีของเจ้าของล็อก ตามรอยกลับได้ว่ามาจากโควตาใคร */
     .t2-drawn{display:inline-block;font-size:9px;font-weight:800;border-radius:5px;
       padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap}
