@@ -22,6 +22,8 @@
 //   8 รีเฟรชแล้วยังอยู่ (ผ่านทางบูตจริง) · และรอดทางไป-กลับของเซิร์ฟเวอร์ (decomposeBlob → assembleBlob)
 //     ป้าย prepay หายเมื่อไหร่ ใบจะหลุดจาก Daily PFM เงียบ ๆ ทั้งที่เงินรับมาแล้ว
 //   9 ใบงาน By trip (Manifest) · จ่ายครบขึ้น Paid + "จ่าย · ครบ" · จ่ายไม่เต็มขึ้น Partial + ยอดค้าง
+//  10 §tsInvSlip · รีพอร์ต Travel Summary พิมพ์สลิปของเงินที่รับผ่านบิลด้วย
+//     ไม่บวกเข้ายอดรับหน้าท่า · ใบที่ไม่มีสลิปไม่ถูกนับเป็นของขาด · บิลรวมหลายใบไม่พิมพ์ซ้ำทุกใบ
 
 import { open, goView } from './_harness.mjs';
 import { createRequire } from 'node:module';
@@ -49,7 +51,8 @@ const R0 = await page.evaluate(() => {
   const a = all[0], b = (past.find(x => x.b.id !== a.b.id) || all.find(x => x.b.id !== a.b.id));
   const pick = x => ({ id: x.b.id, agentId: x.b.agentId, d0: x.d0, tot: x.tot, sub: acctBookingTotal(x.b),
     vc: x.b.voucherRef || x.b.code || x.b.id, past: x.d0 < today,
-    snap: JSON.stringify({ invoiceId: x.b.invoiceId || null, paymentStatus: x.b.paymentStatus || null, nHist: (x.b.history || []).length }) });
+    snap: JSON.stringify({ invoiceId: x.b.invoiceId || null, paymentStatus: x.b.paymentStatus || null, nHist: (x.b.history || []).length,
+      nSlip: Array.isArray(x.b.paymentSlips) ? x.b.paymentSlips.length : -1 }) });
   const wrong = all.filter(x => { const ag = sbGetAgent(x.b.agentId) || {};
     return !(ag.payType === 'invoice' || ag.payType === 'credit') || acctBookingInvoice(x.b.id)
       || ['cancelled','rejected','cancelled_weather'].includes(x.b.status); }).length;
@@ -95,6 +98,7 @@ const R4 = await page.evaluate(p => {
   _pfmDate = p.d0; _pfmMode = 'daily';
   pfmPrepayStart(p.id);
   _pfmRec.ref = 'TEST-PREPAY-A';
+  _pfmRec.slips = [{ id: 'att_test_prepay_A', name: 'slip-a.jpg', mime: 'image/jpeg', size: 1234, kind: 'upload', at: new Date().toISOString() }];
   pfmRecSubmit();
   const inv = acctBookingInvoice(p.id);
   const pays = inv ? SB_PAYMENTS.filter(x => x.invoiceId === inv.id) : [];
@@ -224,6 +228,34 @@ else if (/Paid/.test(MA.pay) && /ครบ/.test(MA.total) && /Partial/.test(MB.
   ok(`9 ใบงาน By trip · จ่ายครบ "${MA.pay} · ${MA.total}" · จ่ายไม่เต็ม "${MB.pay} · ${MB.total}"`);
 else fail(`9 ใบงาน By trip แสดงผิด: ${JSON.stringify({ MA, MB })}`);
 
+/* ══ 10 · รีพอร์ต Travel Summary พิมพ์สลิปของเงินที่รับผ่านบิล ════════════════
+   ชุดสลิปเดิมดึงแต่เงินหน้าท่าสามทาง · สลิปของเงินที่รับผ่านใบแจ้งหนี้ไม่เคยถูกพิมพ์ */
+const R10 = await page.evaluate(p => {
+  if (typeof tsSlipPackList !== 'function') return { err: 'ไม่มี tsSlipPackList' };
+  try { _tsRoute = ''; _tsVatF = ''; } catch (e) {}
+  const LA = tsSlipPackList(p.A.d0), LB = tsSlipPackList(p.B.d0);
+  const a = LA.find(x => x.bk.id === p.A.id), b = LB.find(x => x.bk.id === p.B.id);
+  const out = { a: a ? { ids: a.imgs.map(x => x.f.id), cap: (a.imgs[0] || {}).cap || '', tot: a.tot, miss: a.miss, invPaid: a.invPaid,
+      dup: a.imgs.length - new Set(a.imgs.map(x => x.f.id)).size } : null,
+    bInPack: !!b };
+  if (a) { const h = _tsSlipPage(a, 0, 1, 1, p.A.d0, ''); out.page = h.indexOf('จ่ายผ่านบิล') >= 0 && h.indexOf('att_test_prepay_A') >= 0 && h.indexOf('รับเงินรวม') < 0; }
+  /* บิลรวมหลายใบ · สลิปที่อยู่กับรายการรับเงินของบิลต้องไม่ถูกพิมพ์ซ้ำทุกใบจอง
+     ถอด b.paymentSlips ออกชั่วคราว (ทางนั้นเป็นสลิปของใบจองเองจริง ๆ) แล้วทำให้บิลคุมสองใบ */
+  const bk = SB_BOOKINGS.find(x => x.id === p.A.id), iv = acctBookingInvoice(p.A.id);
+  const keep = bk.paymentSlips; bk.paymentSlips = [];
+  out.soloViaPayment = !!tsSlipPackList(p.A.d0).find(x => x.bk.id === p.A.id);   /* ยังขึ้นจากทางรายการรับเงิน */
+  iv.bookingIds.push('zz-other-booking');
+  out.multi = !!tsSlipPackList(p.A.d0).find(x => x.bk.id === p.A.id);
+  iv.bookingIds.pop(); bk.paymentSlips = keep;
+  return out;
+}, { A, B });
+if (R10.err) fail('10 ' + R10.err);
+else if (R10.a && R10.a.ids.indexOf('att_test_prepay_A') >= 0 && R10.a.dup === 0 && /จ่ายผ่านบิล/.test(R10.a.cap)
+         && R10.a.tot === 0 && R10.a.miss === 0 && R10.a.invPaid === Math.round(A.tot) && R10.page
+         && !R10.bInPack && R10.soloViaPayment && !R10.multi)
+  ok(`10 รีพอร์ต Travel Summary พิมพ์สลิปของเงินที่รับผ่านบิล (฿${R10.a.invPaid.toLocaleString()}) · ไม่บวกเข้ายอดหน้าท่า · ใบไม่มีสลิปไม่ถูกเตือน · บิลรวมไม่พิมพ์ซ้ำ`);
+else fail(`10 รีพอร์ตไม่พิมพ์สลิปของบิล หรือนับยอดผิด: ${JSON.stringify(R10)}`);
+
 /* ══ คืนสถานะ ═══════════════════════════════════════════════════════════════ */
 await page.evaluate(p => {
   const ids = [p.A.id, p.B.id];
@@ -233,7 +265,8 @@ await page.evaluate(p => {
   [p.A, p.B].forEach(x => { const b = SB_BOOKINGS.find(z => z.id === x.id); if (!b) return; const s = JSON.parse(x.snap);
     if (s.invoiceId == null) delete b.invoiceId; else b.invoiceId = s.invoiceId;
     if (s.paymentStatus == null) delete b.paymentStatus; else b.paymentStatus = s.paymentStatus;
-    if (Array.isArray(b.history)) b.history.length = s.nHist; });
+    if (Array.isArray(b.history)) b.history.length = s.nHist;
+    if (s.nSlip < 0) delete b.paymentSlips; else if (Array.isArray(b.paymentSlips)) b.paymentSlips.length = s.nSlip; });
   try { sbInvoicesPersist(); sbPaymentsPersist(); acctPersistBookings(); } catch (e) {}
 }, { A, B });
 

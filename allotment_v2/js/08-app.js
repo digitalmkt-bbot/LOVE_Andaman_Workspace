@@ -23914,8 +23914,42 @@ function tsSlipPackList(date){
         +(c.ref?(' · '+c.ref):'')+(c.by?(' · '+c.by):'');
       ss.forEach(function(f){ imgs.push({ f:f, cap:cap }); });
     })();
+    /* ══ §tsInvSlip (2026-10-02) · สลิปของเงินที่รับผ่านใบแจ้งหนี้ ═══════════════════
+       ที่มา · ผู้ใช้ถามว่า "รีพอร์ตของ Travel Summary ขึ้นตัวสลิปไหม" — ไม่ขึ้น
+       ชุดสลิปเดิมดึงแต่เงินหน้าท่าสามทาง · เงินที่รับผ่านบิล (Pro Forma ที่หน้า Daily PFM
+       และเอเยนต์ Invoice ที่จ่ายล่วงหน้า §pfmPrepay) เก็บสลิปไว้ที่รายการรับเงินของใบแจ้งหนี้
+       กับที่ b.paymentSlips คนละที่กับสามทางนั้น
+       สามข้อที่ตั้งใจ เหมือน §cotSlip ข้างบน
+         ไม่บวกเข้า tot · เป็นเงินคนละก้อนกับเงินรับหน้าท่าวันนี้ บวกแล้วยอดปิดวันเกินจริง
+         ไม่นับเป็น "ของขาด" · เงินเครดิตที่จ่ายตามบิลสิ้นเดือนไม่มีสลิปรายใบตั้งแต่ต้น
+         เอาเฉพาะใบแจ้งหนี้ที่คุมใบจองใบเดียว · สลิปของบิลรวม 30 ใบจะถูกพิมพ์ซ้ำ 30 หน้า */
+    var invPaid=0;
+    (function(){
+      var seen={}; imgs.forEach(function(x){ if(x.f && x.f.id) seen[x.f.id]=1; });
+      var iv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
+      var one=!!(iv && ((iv.bookingIds||[]).length===1));
+      var dTH=function(v){ var d=String(v||'').slice(0,10).split('-'); return d.length===3?(d[2]+'/'+d[1]+'/'+d[0]):''; };
+      if(one){
+        (typeof SB_PAYMENTS!=='undefined'?SB_PAYMENTS:[]).forEach(function(p){
+          if(p.invoiceId!==iv.id || (p.type||'payment')!=='payment') return;
+          invPaid+=(+p.amount||0);
+          (Array.isArray(p.slips)?p.slips:[]).forEach(function(f){
+            if(!f || !f.id || seen[f.id]) return; seen[f.id]=1;
+            imgs.push({ f:f, cap:'จ่ายผ่านบิล '+(iv.number||'')+' · '+(LAB[p.method]||p.method||'—')+' ฿'+num(p.amount)
+              +(dTH(p.date)?(' · '+dTH(p.date)):'') });
+          });
+        });
+      }
+      /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
+         kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าข้างบนดึงของวันนี้มาแล้ว */
+      (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
+        if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
+        imgs.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
+          +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
+      });
+    })();
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
-    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · '), invPaid:invPaid });
   });
   return out;
 }
@@ -23946,7 +23980,9 @@ function _tsSlipPage(r, i, total, seq, date, kicker){
   return '<section class="pg">'
     + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
     + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
-    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>'+((+r.invPaid||0)>0
+          ? (((+r.tot||0)>0?('รับหน้าท่า &#3647;'+num(r.tot)+' &middot; '):'')+'จ่ายผ่านบิล &#3647;'+num(r.invPaid))
+          : ('รับเงินรวม &#3647;'+num(r.tot)))+'</span></div>'
     +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
     +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
     + '<div class="body">'+body+'</div>'
