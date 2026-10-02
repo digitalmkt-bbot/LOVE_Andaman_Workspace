@@ -50248,7 +50248,10 @@ function bkV2RenderTab2(){
       const _zband = _isChtr
         ? `<tr class="t2-zband t2-zband-ch"><td colspan="${COLN}"><div class="zw">`
           + `<span class="zkind">${laT('เหมาลำ')}</span><span class="znm">&#128676; CHARTER</span>`
-          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ${laT('ทั้งลำ')}</span>`
+          /* §pbPax2 · ยอดเหมาลำแยกประเภทอยู่ตรงนี้ · แถบโปรแกรมข้างบนไม่นับเหมาลำแล้ว */
+          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax`
+            + ((_cAd||_cChd||_cInf||_cFoc)?` <span class="zpx">(${[['AD',_cAd],['CHD',_cChd],['INF',_cInf],['FOC',_cFoc]].filter(x=>x[1]).map(x=>x[0]+' '+x[1]).join(' &middot; ')})</span>`:'')
+            + ` &middot; ${laT('ทั้งลำ')}</span>`
           /* §btChBand · ชื่อเรือเคยอยู่บนแถบลอยเหนือตาราง (chtrStrip) ซึ่งเป็นซากของ
              ดีไซน์การ์ดทริปเดิม · พอทริปยุบเป็นแถบในตารางแล้ว (§btBand) มันเหลือลอยอยู่
              คนเดียวและพูดซ้ำกับแถบนี้ · ยุบมารวมเป็นแถบเดียว */
@@ -50367,14 +50370,16 @@ function bkV2RenderTab2(){
       + `<span class="pd"></span><span class="pn" title="${_pbNm}">${_pbNm}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + `</div></td>`
-      + _pbPx('ad',ad,laT('ผู้ใหญ่ · รวมทั้งทริป')) + _pbPx('chd',chd,laT('เด็ก · รวมทั้งทริป'))
-      + _pbPx('inf',inf,laT('ทารก · รวมทั้งทริป')) + _pbPx('foc',foc,laT('FOC · รวมทั้งทริป'))
+      /* §pbPax2 · ไม่รวมเหมาลำ · เหมาลำมียอดของตัวเองบนแถบ CHARTER ข้างล่าง
+         รวมกันแล้วเลขบนแถบ (72+5+1+45) ดูเหมือนขายเกินเรือ ทั้งที่ที่นั่งขายจริงคือ 59 */
+      + _pbPx('ad',_sAd,laT('ผู้ใหญ่ · ไม่รวมเหมาลำ')) + _pbPx('chd',_sChd,laT('เด็ก · ไม่รวมเหมาลำ'))
+      + _pbPx('inf',_sInf,laT('ทารก · ไม่รวมเหมาลำ')) + _pbPx('foc',_sFoc,laT('FOC · ไม่รวมเหมาลำ'))
       + `<td colspan="${COLN-7}" class="pr"><div class="pw">`
       + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       /* สี่ช่องบวกกันไม่เท่าที่นั่งที่ใช้ไป = ต้องบอกว่าทำไม · ไม่งั้นดูเหมือนเลขผิด
-         ที่นั่ง (getSeatsConsumed) นับเฉพาะลูกค้าจอย · เหมาลำเอาเรือออกจากพูลทั้งลำ
-         หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้ · สี่ช่องคือยอดของแถวที่ยืนยันแล้ว */
-      + (recv!==_pbBk?`<span class="pb ptot" title="${laTp('ผู้โดยสารที่ยืนยันแล้วทั้งทริป {0} คน', recv)}${_chtrPax?(' · '+laTp('เหมาลำ {0} คน ไม่นับในที่นั่งขาย', _chtrPax)):''} · ${laT('ที่นั่งที่ใช้ไป: ไม่นับเหมาลำ · หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${recv} pax${_chtrPax?(' &middot; '+laTp('เหมาลำ {0}', _chtrPax)):''}</span>`:'')
+         ที่นั่ง (getSeatsConsumed) หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้
+         สี่ช่องคือยอดของแถวลูกค้าจอยที่ยืนยันแล้ว (ไม่รวมเหมาลำ ทั้งสองฝั่ง) */
+      + (_seatPax!==_pbBk?`<span class="pb ptot" title="${laTp('ลูกค้าจอยที่ยืนยันแล้ว {0} คน', _seatPax)} · ${laT('ที่นั่งที่ใช้ไป: หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${_seatPax} pax</span>`:'')
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
       /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
@@ -50519,6 +50524,10 @@ function bkV2RenderTab2(){
       + (rcMode ? _c(106) : '')
       + (wxClosed ? _c(94) : '')
       + '</colgroup>';
+    /* §pbGap (2026-10-02) · เว้นบรรทัดก่อนและหลังกลุ่ม Lock
+       แถบยอดรวม · แถวล็อก · แถบ CHARTER ติดกันสามชั้น อ่านเหมือนก้อนเดียว
+       ตัวเลขใต้ AD ของแถวล็อก (ที่ยังกันไว้) จึงดูเหมือนเป็นส่วนของยอดรวมข้างบน */
+    const _lkGap = (boatLockRows || lockBlocks) ? `<tr class="t2-zgap t2-lkgap"><td colspan="${COLN}"></td></tr>` : '';
     const zoneTable = (zoneBlocks || lockBlocks || boatLockRows || pendBlocks) ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl t2-fixed${vanMode?' t2-van':''}">
@@ -50531,7 +50540,7 @@ function bkV2RenderTab2(){
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${_pband}${pendBlocks}${boatLockRows}${lockBlocks}${zoneBlocks}</tbody>
+            <tbody>${_pband}${pendBlocks}${_lkGap}${boatLockRows}${lockBlocks}${zoneBlocks?_lkGap:''}${zoneBlocks}</tbody>
           </table>
         </div>` : '';
 
