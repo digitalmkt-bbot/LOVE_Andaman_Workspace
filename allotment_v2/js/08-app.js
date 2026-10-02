@@ -50355,9 +50355,26 @@ function bkV2RenderTab2(){
        หน้าจอเดิมขึ้นแค่ "full" จึงมองไม่เห็นว่าเกิน · ป้ายอยู่บนแถบโปรแกรม
        เพราะเป็นเรื่องของทั้งทริป ไม่ใช่ของล็อกใบใดใบหนึ่ง (และล็อกยุบเหลือแถวเดียวแล้ว) */
     const _lkOver = (_pbCap>0) ? Math.max(0, (_pbBk + trLockedTotal) - _pbCap) : 0;
-    const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
-      + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
+    /* ══ §pbPax (2026-10-02) · แถบโปรแกรมแยก AD · CHD · INF · FOC ลงใต้หัวคอลัมน์ ══════════
+       ของเดิมบอกแค่ "8/65" ก้อนเดียว · จะรู้ว่าเป็นผู้ใหญ่กี่ เด็กกี่ ต้องไล่บวกทีละแถว
+       ตอนนี้แถบเป็นช่องตามคอลัมน์จริงของตาราง · ตัวเลขสี่ประเภทอยู่ใต้หัว AD CHD INF FOC พอดี
+       ผลรวมที่นั่ง/ความจุอยู่ต่อท้ายทันที แล้วจึงเป็นป้ายเรือ/ล็อก
+       ตัวเลขมาจากแถวที่ยืนยันแล้วของทริปนี้ (ชุดเดียวกับที่นับ prep) · ใบรออนุมัติกับใบยกเลิกไม่นับ
+       ช่องซ้าย (ชื่อโปรแกรม) เกาะซ้ายเหมือนสามคอลัมน์แรกของแถวปกติ */
+    const _pbPx = (k,v,tt) => `<td class="pp${v?'':' z'}" data-px="${k}" title="${tt}">${v}</td>`;
+    const _pbNm = esc(route?.name || rid);
+    const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="3" class="pl"><div class="pw">`
+      + `<span class="pd"></span><span class="pn" title="${_pbNm}">${_pbNm}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
+      + `</div></td>`
+      + _pbPx('ad',ad,laT('ผู้ใหญ่ · รวมทั้งทริป')) + _pbPx('chd',chd,laT('เด็ก · รวมทั้งทริป'))
+      + _pbPx('inf',inf,laT('ทารก · รวมทั้งทริป')) + _pbPx('foc',foc,laT('FOC · รวมทั้งทริป'))
+      + `<td colspan="${COLN-7}" class="pr"><div class="pw">`
+      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
+      /* สี่ช่องบวกกันไม่เท่าที่นั่งที่ใช้ไป = ต้องบอกว่าทำไม · ไม่งั้นดูเหมือนเลขผิด
+         ที่นั่ง (getSeatsConsumed) นับเฉพาะลูกค้าจอย · เหมาลำเอาเรือออกจากพูลทั้งลำ
+         หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้ · สี่ช่องคือยอดของแถวที่ยืนยันแล้ว */
+      + (recv!==_pbBk?`<span class="pb ptot" title="${laTp('ผู้โดยสารที่ยืนยันแล้วทั้งทริป {0} คน', recv)}${_chtrPax?(' · '+laTp('เหมาลำ {0} คน ไม่นับในที่นั่งขาย', _chtrPax)):''} · ${laT('ที่นั่งที่ใช้ไป: ไม่นับเหมาลำ · หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${recv} pax${_chtrPax?(' &middot; '+laTp('เหมาลำ {0}', _chtrPax)):''}</span>`:'')
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
       /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
@@ -50365,7 +50382,6 @@ function bkV2RenderTab2(){
          นับแยกจาก 🔒 ที่นั่ง เพราะคนละหน่วย · บวกรวมเมื่อไหร่คือหักซ้ำ */
       + (trBoatLk.length?`<span class="plk" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE" title="${laT('เรือที่กันไว้ทั้งลำให้เอเยนต์ · ไม่อยู่ในพูลขายที่นั่งแล้ว')}">&#9973; ${laTp('กันไว้ {0} ลำ', trBoatLk.length)} &middot; ${trBoatSeats} ${laT('ที่')}</span>`:'')
       + (_lkOver>0?`<span class="pover" title="${laT('ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่')}">&#9888; ${laTp('ล็อกเกิน {0} ที่', _lkOver)}</span>`:'')
-      + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
     /* ══ §btLkOne (2026-09-25) · ล็อกหนึ่งใบ = หนึ่งบรรทัด ═══════════════════
        ของเดิมใบละสองแถว · แถบคาดบอกตัวเลข แล้วตามด้วยแถวที่นั่ง
@@ -51163,6 +51179,18 @@ function bkV2RenderTab2(){
     .t2-pband .ps em.ok{background:#DCF4E8;color:#0C6B47}
     .t2-pband .ps em.low{background:#FAEEDA;color:#854F0B}
     .t2-pband .ps em.full{background:#FCEBEB;color:#A32D2D}
+    /* §pbPax · แถบเป็นช่องตามคอลัมน์ · ตัวเลขใหญ่กว่าแถวข้างล่าง (12.5px) ให้เห็นว่าเป็นยอดรวม */
+    .t2-mtbl tr.t2-pband>td.pl{position:sticky;left:0;z-index:12;border-right:2px solid #C3CCD8;
+      box-shadow:3px 0 6px -3px rgba(15,23,42,.18)}
+    .t2-pband td.pl .pw{flex-wrap:nowrap;max-width:100%;width:auto}
+    .t2-pband td.pl .pn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+    .t2-pband td.pl .pt{flex:none}
+    .t2-mtbl tr.t2-pband>td.pp{padding:8px 0;text-align:center;font-family:'DM Mono',ui-monospace,monospace;
+      font-size:16px;font-weight:800;color:#2B2622}
+    .t2-mtbl tr.t2-pband>td.pp.z{color:#C9C2BA;font-weight:600}
+    .t2-mtbl tr.t2-pband>td.pr>div{position:static}
+    .t2-pband td.pr .ps{margin-left:0;font-size:13px}
+    .t2-pband td.pr .ps b{font-size:16px;font-weight:800;color:#2B2622}
     /* §btBand · ตัวกางไกด์/อาหาร ย้ายมาท้ายตาราง · ทำให้เบาลงให้รู้ว่าเป็นของเสริม */
     .t2-listcard > .t2-boatbox{border-top:1px solid var(--border-2);background:#FCFBF9}
     /* §btTable · หัวโซนในตาราง · แถบเข้มกว่าแถบคันรถหนึ่งระดับ ให้ลำดับชั้นอ่านออก */

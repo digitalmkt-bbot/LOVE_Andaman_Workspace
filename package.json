@@ -53,7 +53,8 @@
     "test:btclip": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_btclip.mjs",
     "test:pfmprepay": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_pfmprepay.mjs",
     "test:vbfocus": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_vbfocus.mjs",
-    "test:vbrevert": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_vbrevert.mjs"
+    "test:vbrevert": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_vbrevert.mjs",
+    "test:pbpax": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_pbpax.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
