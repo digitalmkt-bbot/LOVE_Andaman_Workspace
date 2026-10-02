@@ -9374,7 +9374,7 @@ function bkV2VanGroupSetVan(date, routeId, zone, gid, vanId){
   _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s) s.vanId=vanId||null; else o.vanId=vanId||null; }); acctPersistBookings(); bkV2RenderKeep();
 }
 function bkV2VanGroupDisband(date, routeId, zone, gid){ _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s){ s.vanGroup=0; s.vanId=null; s.vanReturnId=null; delete s.vanSeq; } else { delete o.vanGroup; delete o.vanSeq; o.vanId=null; o.vanReturnId=null; } }); acctPersistBookings(); bkV2RenderKeep(); }   // disband must ALSO clear vanId + vanReturnId (was leaving them set in the non-split branch) — else the booking keeps its old van → re-grouping into another van = "รถปนกัน" + the disbanded booking still ships on the old van's job order. clear vanSeq too · else a stale pickup-order freezes the row after re-grouping/sorting
-function bkV2VanGroupSetTime(date, routeId, zone, gid, val){ const t=(val||'').trim(); _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ o.pickupTimeFinal=t; }); acctPersistBookings(); }   // no re-render · keep input focus
+function bkV2VanGroupSetTime(date, routeId, zone, gid, val){ const t=(val||'').trim(); _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(bkSplitOwnPick(s)) s.pickTime=t; else o.pickupTimeFinal=t; }); acctPersistBookings(); }   // no re-render · keep input focus
 function bkV2VanGroupClearSeq(date, routeId, zone, gid){ _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s){ delete s.vanSeq; } else { delete o.vanSeq; } }); acctPersistBookings(); bkV2RenderKeep(); }   // clear manual pickup order → back to time sort
 /* §per-trip ops · เดิมไม่รับ date เลย → ลำดับรับ (vanSeq) ของวันที่ 2 ไปเขียนทับวันที่ 1 · ตัวเรียกส่ง date มาแล้ว */
 function bkV2VanGroupSave(date){
@@ -9865,7 +9865,9 @@ function bkV2SyncAltPickupSplits(b){
     const _d = bkAltHasDrop(a)
       ? { dropAreaId:a.dropAreaId||'', dropHotel:(a.dropPlace||'').trim(), dropZone:a.dropZone||'' }
       : {};
-    splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p)); });
+    splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p,
+      /* §splitPickTime · เก็บเวลารับของแถวนี้ไว้ ถ้าจุดรับยังเป็นที่เดิม */
+      (_ownPick && o.pickTime && (o.pickAreaId||'')===(a.areaId||'') && String(o.pickHotel||'').trim()===(a.place||'').trim()) ? {pickTime:o.pickTime} : {})); });
   b.ops.vanSplits = splits; b.ops.altSplitAuto = true;
   delete b.ops.vanGroup; delete b.ops.vanId;   // main now lives in split[0]
   return true;
@@ -9987,6 +9989,13 @@ function bkV2BoatAvatarColor(boatId){ if(typeof getBoatColor==='function'){ cons
 // Mix a (light) group color 50% toward white → softer row/header shading on the By-trip-date page
 function _bkV2Soft(hex, amt){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); if(hex.length!==6) return '#'+hex; const a=(amt==null?0.5:amt); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); const m=x=>Math.round(x+(255-x)*a); return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; }
 function bkV2SetPickupFinal(bkId, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); _o.pickupTimeFinal=(val||'').trim(); acctPersistBookings(); }   // no re-render · keep input focus
+/* §splitPickTime · แยกรับคนละโรงแรม ต้องมีเวลารับของตัวเอง
+   เดิมเวลารับมีช่องเดียวต่อใบ (ops.pickupTimeFinal) → ตั้งเวลาให้โรงแรมที่แยกรับ จุดหลักเปลี่ยนตาม (และกลับกัน)
+   ตอนนี้แถวแยกรับที่มีจุดรับของตัวเองเก็บเวลาไว้ที่ vanSplits[i].pickTime · ยังไม่ตั้ง = ใช้เวลาของใบเหมือนเดิม
+   จุดหลัก / แยกส่งอย่างเดียว ยังใช้ ops.pickupTimeFinal ตามเดิม */
+function bkSplitOwnPick(s){ return !!(s && !s.main && (String(s.pickHotel||'').trim() || s.pickAreaId)); }
+function bkSplitPickTime(s){ return bkSplitOwnPick(s) ? String(s.pickTime||'').trim() : ''; }
+function bkV2SetSplitPickTime(bkId, idx, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); const sp=Array.isArray(_o.vanSplits)?_o.vanSplits[+idx]:null; if(!bkSplitOwnPick(sp)) return bkV2SetPickupFinal(bkId, val, date); sp.pickTime=(val||'').trim(); acctPersistBookings(); }   // no re-render · keep input focus
 // Click a van card in the VANS strip → scroll to that van's group rows below + brief highlight
 function bkV2ScrollToVan(rid, vid){
   if(!rid || !vid) return;
@@ -12306,7 +12315,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
     }
     /* เวลาของแถว · ลูกค้าอ่านจาก ops ของวันนั้น จุดแวะอ่านจากตัวมันเอง
        ไม่ใส่เวลา = ไปท้ายแถว ไม่ใช่หัวแถว (สตริงว่างเรียงมาก่อนทุกเวลา) */
-    const _rowTime=x=>{ const v=x._vs?String(x._vs.time||'').trim():String(_ptime(x.b,x.t)||'').trim(); return v||'~'; };
+    const _rowTime=x=>{ const v=x._vs?String(x._vs.time||'').trim():String((!isRet&&bkSplitPickTime(x.sp))||_ptime(x.b,x.t)||'').trim(); return v||'~'; };
     /* ══ §vsSeqTime · แถวที่ยังไม่มีลำดับมือ ต้องแทรกตามเวลา ═══════════════
        ผู้ใช้แจ้ง 30 ก.ย. "ใบงาน เวลาควรเรียงด้วย" — จุดแวะ 05:50 ไปโผล่ท้ายใบ
        ใต้ลูกค้า 07:30 · เพราะของเดิมให้แถวที่ vanSeq=0 เป็นลำดับ 9999 = กองท้าย
@@ -12492,7 +12501,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
         <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
         ${paxCells}
-        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(bkSplitPickTime(x.sp)||_ptime(b,t))||'-')}</td>
         <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag pkth" style="color:var(--vjt-think,#185FA5);font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
         <td style="text-align:center">${e(b.roomNumber||'')||'-'}</td>
         <td>${zoneCell}</td>
@@ -12920,7 +12929,7 @@ function ckRowSeq(r){
 }
 function ckRowTime(r){
   var O=r&&r.O, t=r&&r.t;
-  return String((O&&O.pickupTimeFinal)||(t&&(t.pickupTime||t.pickupFinal))||'~~');
+  return String(bkSplitPickTime(r&&r.sp)||(O&&O.pickupTimeFinal)||(t&&(t.pickupTime||t.pickupFinal))||'~~');
 }
 function ckRowCmp(a,b){
   var sa=ckRowSeq(a), sb=ckRowSeq(b); if(sa!==sb) return sa-sb;
@@ -13848,7 +13857,7 @@ function ckTimeChip(st, timeStr, kind){
 function ckGroupTime(rows, date){
   var best=null, worst='off', rank={off:0,wait:1,miss:1,soon:2,due:3,late:4}, nLate=0;
   rows.forEach(function(r){
-    var tm=(r.O&&r.O.pickupTimeFinal)||(r.t&&(r.t.pickupTime||r.t.pickupFinal))||'';
+    var tm=bkSplitPickTime(r.sp)||(r.O&&r.O.pickupTimeFinal)||(r.t&&(r.t.pickupTime||r.t.pickupFinal))||'';
     var t=ckParseTime(tm); if(t && (best===null || t.start<best.start)){ best={start:t.start, label:tm}; }
     var on=!!(r.ck&&r.ck.at);
     var st=ckTimeState(tm, date, on);
@@ -14561,7 +14570,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     var _sagN=_sag?(_sag.name||_sag.code||'—'):(b.channel||'walk-in');
     var _sp0=r.sp||null, _spb=ckPaxBreak(t.pax);
     if(_sp0) _spb={ad:+_sp0.ad||0, chd:+_sp0.chd||0, inf:+_sp0.inf||0, foc:+_sp0.foc||0};
-    var _stm=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
+    var _stm=bkSplitPickTime(r.sp)||r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
     var _spk=ckPickShort(b.hotelName||b.pickup||'')||'—';
     var _sar=ckPickShort(b.pickupArea||'')||'';
     return '<tr class="ck-row ck-strand'+(r.strand==='mv'?' mv':'')+'">'
@@ -14596,7 +14605,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     ? '<td style="padding:0"><div class="ck-agblk" title="'+e(agName)+'" style="background:'+agColor+';color:'+agInk+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">'+e(agName)+'</div></td>'
     : '<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>';
   var pb=ckPaxBreak(t.pax);
-  var time=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
+  var time=bkSplitPickTime(r.sp)||r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'—';
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
   if(_sp){
@@ -49867,7 +49876,9 @@ function bkV2RenderTab2(){
         const _gVans=[...new Set(mem.map(a=>a.vanId).filter(Boolean))];   // distinct vans in this group
         const _gConf=_gVans.length>1;   // ⚠ รถปนกัน → booking จะขึ้นใบงานผิดคัน
         const _gConfChip=_gConf?`<span title="รถปนกันในกรุ๊ป: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))} — เลือกรถใหม่ให้ทั้งกรุ๊ปเป็นคันเดียว มิฉะนั้นใบงานจะส่งคนผิดคัน" style="display:inline-flex;align-items:center;gap:5px;background:#F3E0F7;color:#7A1FA2;border:1px solid #D9A8E8;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;white-space:nowrap">&#9888; รถปนกัน: ${esc(_gVans.map(v=>((vehGet(v)||{}).name||v)).join(' / '))}</span>`:'';
-        const _gtime=(function(){ const m=mem.find(a=>bkOpsRead(a.r.bk,date).pickupTimeFinal); return m?bkOpsRead(m.r.bk,date).pickupTimeFinal:''; })();
+        /* §splitPickTime · กรุ๊ปที่มีแต่แถวแยกรับ ต้องโชว์เวลาของแถวนั้น ไม่ใช่ของจุดหลัก */
+        const _aTime=a=>{ const o=bkOpsRead(a.r.bk,date); return (a.split?bkSplitPickTime((o.vanSplits||[])[a.idx]):'')||o.pickupTimeFinal||''; };
+        const _gtime=(function(){ const m=mem.find(a=>_aTime(a)); return m?_aTime(m):''; })();
         if(!vanMode){
           // read-only · Option 2 · solid van pill (group# + name) + ทะเบียน / คนขับ / เบอร์โทร
           const v=vid?vehGet(vid):null;
@@ -49933,7 +49944,7 @@ function bkV2RenderTab2(){
         const _rndBg=(_rnd&&_rnd.no>1)?_bkV2Soft(c[1],0.955):null;
         /* §per-trip ops · หัวกรุ๊ปเคยอ่าน bk.ops ตรงๆ → เวลารับ/รถกลับของ OVN วันที่ 2 โชว์ค่าของวันที่ 1 */
         const _mOps=a=>(typeof bkOpsRead==='function')?bkOpsRead(a.r.bk,date):((a.r.bk.ops)||{});
-        const ctime=((mem.map(_mOps).find(o=>o&&o.pickupTimeFinal))||{}).pickupTimeFinal||'';
+        const ctime=(mem.map(_aTime).find(Boolean))||'';
         const rvid=((mem.filter(a=>a.vanId).map(_mOps).find(o=>o&&o.vanReturnId))||{}).vanReturnId||'';
         const _retPool=[...pool, ...((typeof vanVehiclesForZone==='function'?vanVehiclesForZone(z,date):[]).filter(v=>!pool.some(p=>p.id===v.id)))];   // ขากลับ = รถ zone เดียวกันคันไหนก็ได้ในวันนั้น (กว้างกว่า ขาไป)
         let ropts='<option value="">รถกลับ: เหมือนเดิม</option>';
@@ -50088,6 +50099,13 @@ function bkV2RenderTab2(){
         const _rowBid = a.boatId || (typeof bkOpsRead==='function' ? bkOpsRead(r.bk, date) : (r.bk.ops||{})).boatId;   // per-day boat · §boatSplit
         const _boatRowStyle = ((boatMode || _multiBoat || vanMode) && !_rgc && _rowBid) ? (function(){ const c=bkV2BoatAvatarColor(_rowBid); return ` style="background:${_bkV2Soft(c,0.95)};box-shadow:inset 5px 0 0 ${c}"`; })() : '';
         const _bSelRow = boatMode && (window._bkV2BoatSel||{})[bk.id];   // ticked for bulk boat-assign
+        /* §splitPickTime · แถวแยกรับที่มีโรงแรมของตัวเอง อ่าน/เขียนเวลาที่ vanSplits[i].pickTime ไม่ใช่ช่องของทั้งใบ */
+        const _spObj = a.split ? ((bkOpsRead(bk,date).vanSplits||[])[a.idx]||null) : null;
+        const _spOwn = bkSplitOwnPick(_spObj);
+        const _bkFin = (typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||'';
+        const _tmVal = _spOwn ? bkSplitPickTime(_spObj) : _bkFin;
+        const _tmFallback = (_spOwn ? _bkFin : '') || r.pickupTime || bk.pickupTime || '';
+        const _tmSet = _spOwn ? `bkV2SetSplitPickTime('${esc(bk.id)}',${+a.idx},this.value,'${esc(date)}')` : `bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')`;
         // Van indicator · shown in Boat Assign mode (under TIME) so you can see which van each booking is on while assigning boats · color per van
         let _vanChipHtml='';
         if(boatMode && bk.ops){
@@ -50142,7 +50160,7 @@ function bkV2RenderTab2(){
                     return `<td class="t2-c t2-mono" title="จองมา ${bkd} · เดินทางจริง ${left}"><span style="color:${left?'#A32D2D':'#c8c6be'};font-weight:700">${left}</span><div style="font-size:9px;color:#c2c0b7;line-height:1.1;margin-top:1px;text-decoration:line-through">${bkd}</div></td>`; };
                   return _cell('ad')+_cell('chd')+_cell('inf')+_cell('foc');
                 })()}
-            <td class="t2-mono t2-tm">${r.ovnHoldRow?`<span class="t2-ovnh">&#127765; \u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e27\u0e31\u0e19\u0e17\u0e35\u0e48 ${r.ovnHoldRow.day}/${r.ovnHoldRow.days}</span><span class="t2-ovnh2">${r.ovnHoldRow.pax} \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e1a\u0e19\u0e40\u0e01\u0e32\u0e30</span>`:(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
+            <td class="t2-mono t2-tm">${r.ovnHoldRow?`<span class="t2-ovnh">&#127765; \u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e27\u0e31\u0e19\u0e17\u0e35\u0e48 ${r.ovnHoldRow.day}/${r.ovnHoldRow.days}</span><span class="t2-ovnh2">${r.ovnHoldRow.pax} \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e1a\u0e19\u0e40\u0e01\u0e32\u0e30</span>`:(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc(_spOwn?_tmVal:(_tmVal||_tmFallback))}" placeholder="${esc(_tmFallback||'เวลา')}" onclick="event.stopPropagation()" oninput="${_tmSet}" title="${_spOwn?'เวลารับของจุดแยกรับนี้ · ไม่กระทบจุดหลัก':'เวลารับของโรงแรมนี้'}" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=_spOwn?(_tmVal||_bkFin):_bkFin; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
