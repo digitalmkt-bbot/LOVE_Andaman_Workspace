@@ -19,8 +19,16 @@
 //   5 ใบนั้นไม่ถูกเสนอให้ออกบิลสิ้นเดือนซ้ำ และวงเงินเครดิตคืน
 //   6 รับไม่เต็ม · ขึ้นว่าจ่ายล่วงหน้าบางส่วน · นับเฉพาะก้อนที่รับแล้ว ไม่เป็นยอดค้าง ไม่เตือน cutoff ไม่เข้าคิวทวง
 //   7 ไม่มี error บนหน้า
+//   8 รีเฟรชแล้วยังอยู่ (ผ่านทางบูตจริง) · และรอดทางไป-กลับของเซิร์ฟเวอร์ (decomposeBlob → assembleBlob)
+//     ป้าย prepay หายเมื่อไหร่ ใบจะหลุดจาก Daily PFM เงียบ ๆ ทั้งที่เงินรับมาแล้ว
+//   9 ใบงาน By trip (Manifest) · จ่ายครบขึ้น Paid + "จ่าย · ครบ" · จ่ายไม่เต็มขึ้น Partial + ยอดค้าง
 
 import { open, goView } from './_harness.mjs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const _require = createRequire(import.meta.url);
+const osRepo = _require(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../os-backend/src/mapping/os_repo.js'));
 
 let bad = 0;
 const ok   = m => console.log('  ✓ ' + m);
@@ -167,6 +175,54 @@ const B1 = await bucket(B.d0);
     ok(`6 รับไม่เต็ม ฿${HALF.toLocaleString()} จาก ฿${Math.round(B.tot).toLocaleString()} · ขึ้นว่าจ่ายล่วงหน้าบางส่วน · นับเฉพาะก้อนที่รับ (+${got.toLocaleString()}) ยอดค้างไม่ขยับ · ไม่เตือน cutoff${B.past ? ' (วันเดินทางเลยไปแล้ว)' : ''} · ไม่เข้าคิวทวง`);
   else fail(`6 รับไม่เต็มผิด: บางส่วน=${part} แถว=${row} ยอด=${sum} คิวทวง=${R6.inQueue} ${JSON.stringify(R6)} ${JSON.stringify({ B0, B1, got, tot })}`);
 }
+
+/* ══ 8 · รีเฟรชแล้วยังอยู่ · และรอดทางไป-กลับของเซิร์ฟเวอร์ ═══════════════════ */
+const SRV = await page.evaluate(p => {
+  const D = JSON.parse(localStorage.getItem('loveandaman_v2') || '{}');
+  const invs = (D.sb_invoices || []).filter(i => (i.bookingIds || []).some(x => p.ids.includes(x)));
+  const iid = invs.map(i => i.id);
+  return { sb_invoices: invs, sb_payments: (D.sb_payments || []).filter(x => iid.includes(x.invoiceId)) };
+}, { ids: [A.id, B.id] });
+const BACK = osRepo.assembleBlob(osRepo.decomposeBlob(SRV));
+await page.reload({ waitUntil: 'load' });
+await page.waitForFunction(() => typeof window.nav === 'function', null, { timeout: 20000 });
+await page.waitForTimeout(900);
+await goView(page, 'dailypfm', 800);
+const R8 = await page.evaluate(p => {
+  const a = SB_BOOKINGS.find(b => b.id === p.A.id), b = SB_BOOKINGS.find(x => x.id === p.B.id);
+  const ia = acctBookingInvoice(p.A.id), ib = acctBookingInvoice(p.B.id);
+  return { a: pfmIsCreditPrepaid(a), b: pfmIsCreditPrepaid(b),
+    balA: ia ? acctInvoiceBalance(ia) : null, balB: ib ? acctInvoiceBalance(ib) : null,
+    inA: pfmBookingsForPeriod(p.A.d0, 'daily').some(x => x.id === p.A.id),
+    inB: pfmBookingsForPeriod(p.B.d0, 'daily').some(x => x.id === p.B.id) };
+}, { A, B });
+{
+  const bi = BACK.sb_invoices || [], bp = BACK.sb_payments || [];
+  const srv = bi.length === 2 && bi.every(i => i.note === 'prepay' && (i.bookingIds || []).length === 1)
+    && bp.length === 2 && bp.reduce((n, x) => n + Number(x.amount || 0), 0) === Math.round(A.tot) + HALF
+    && bp.every(x => x.invoiceId && x.type === 'payment' && x.method === 'transfer' && x.date);
+  const boot = R8.a && R8.b && R8.balA === 0 && R8.balB > 0 && R8.inA && R8.inB;
+  if (srv && boot) ok('8 รีเฟรชแล้วใบแจ้งหนี้กับรายการรับเงินยังอยู่ · ป้าย prepay ยอด ช่องทาง วันที่ รอดทางไป-กลับของเซิร์ฟเวอร์');
+  else fail(`8 รีเฟรชแล้วหายหรือไม่รอดเซิร์ฟเวอร์: boot=${boot} server=${srv} ${JSON.stringify(R8)} ${JSON.stringify({ bi: bi.map(i => i.note), bp: bp.length })}`);
+}
+
+/* ══ 9 · ใบงาน By trip (Manifest) ═════════════════════════════════════════════ */
+await goView(page, 'booking', 800);
+const mfRow = async (d, vc) => {
+  await page.evaluate(p => { _bkV2.filterDate = p.d; _bkV2.filterRoute = null; _bkV2T2Q = ''; bkV2SwitchTab('bytrip'); }, { d });
+  await page.waitForTimeout(1100);
+  return page.evaluate(v => {
+    const tr = [...document.querySelectorAll('.t2-mtbl tr.t2-row')].find(r => r.textContent.indexOf(v) >= 0); if (!tr) return null;
+    const tds = [...tr.querySelectorAll('td')], hs = [...tr.closest('table').querySelectorAll('thead th')].map(h => h.textContent.trim());
+    const t = i => i >= 0 && tds[i] ? tds[i].innerText.replace(/\s+/g, ' ').trim() : '';
+    return { pay: t(hs.indexOf('Pay')), total: t(hs.indexOf('Total')) };
+  }, vc);
+};
+const MA = await mfRow(A.d0, A.vc), MB = await mfRow(B.d0, B.vc);
+if (!MA || !MB) fail(`9 ไม่เจอแถวในใบงาน By trip: ${JSON.stringify({ MA, MB })}`);
+else if (/Paid/.test(MA.pay) && /ครบ/.test(MA.total) && /Partial/.test(MB.pay) && /ค้าง/.test(MB.total))
+  ok(`9 ใบงาน By trip · จ่ายครบ "${MA.pay} · ${MA.total}" · จ่ายไม่เต็ม "${MB.pay} · ${MB.total}"`);
+else fail(`9 ใบงาน By trip แสดงผิด: ${JSON.stringify({ MA, MB })}`);
 
 /* ══ คืนสถานะ ═══════════════════════════════════════════════════════════════ */
 await page.evaluate(p => {
