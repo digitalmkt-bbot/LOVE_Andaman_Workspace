@@ -3530,6 +3530,14 @@
       {
         "name": "releaseddates",
         "type": "text"
+      },
+      {
+        "name": "pendqty",
+        "type": "bigint"
+      },
+      {
+        "name": "pendby",
+        "type": "text"
       }
     ],
     "primary_key": "id",

@@ -3827,6 +3827,18 @@
       "source": "releasedDates",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "pendqty": {
+      "source": "pendQty",
+      "kind": "scalar",
+      "db_type": "bigint",
+      "note": "§lkPend · ล็อกรายวัน · ส่วนของ qty ที่ยังรอที่ว่าง (ไม่กันที่นั่ง) · SQL ฝั่งเซิร์ฟเวอร์หักออกตรง ๆ"
+    },
+    "pendby": {
+      "source": "pendBy",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "§lkPend · ล็อกแบบช่วง · {วันเดินทาง: จำนวนที่ยังรอที่ว่าง}"
     }
   },
   "sb_seat_locks__log": {

@@ -1701,7 +1701,8 @@ async function relSyncB2C(singleExtId = null) {
         for (const r of (await client.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} = ANY($1)`, [affDates])).rows) tripByDate[r.key] = r;
         const lockByKey = {};
         for (const r of (await client.query(
-          `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS n
+          /* §lkPend · pendqty = ส่วนของ qty ที่ยังรอที่ว่าง ไม่ได้กันที่นั่ง · ไม่หักออกแล้วตาข่ายกันขายเกินจะเห็นที่นั่งถูกกันมากกว่าจริง */
+          `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used - COALESCE(pendqty,0), 0)), 0)::int AS n
            FROM ${fqt('sb_seat_locks')} WHERE date = ANY($1) AND status='active' GROUP BY routeid, date`, [affDates])).rows)
           lockByKey[r.routeid + NUL + r.date] = r.n;
         const bkByKey = {};
@@ -2248,8 +2249,11 @@ async function initDb(){
          log[].tripDate = รอบที่ draw/return/release อ้างถึง · หายไป → ไล่ที่มาของที่นั่งไม่ได้
          ครั้งที่สี่ของบั๊กชนิดเดียวกัน (check-in 25 ก.ค. · pierPayments 2 ส.ค. · pier_sect 14 ส.ค.)
          ตัวกันไม่ให้เกิดซ้ำ: tools/check-mapping-coverage.mjs — เช็คย้อนทางจาก blob จริง */
+      /* §lkPend (2026-10-02) · ล็อกที่นั่งแบบรอที่ว่าง · pendqty (รายวัน) / pendby (แบบช่วง รายรอบ)
+         model มีสองคอลัมน์นี้แล้ว · ตารางต้องมีด้วย ไม่งั้น INSERT ของ sb_seat_locks พังทั้งชุด (ดู §dbDrift) */
       for(const [_c,_t] of [['datefrom','text'],['dateto','text'],['dow','text'],
-                            ['usedby','text'],['releaseddates','text']]){
+                            ['usedby','text'],['releaseddates','text'],
+                            ['pendqty','bigint'],['pendby','text']]){
         await sq(`sb_seat_locks.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks" ADD COLUMN IF NOT EXISTS "${_c}" ${_t}`);
       }
       await sq('sb_seat_locks__log.tripdate col', `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks__log" ADD COLUMN IF NOT EXISTS "tripdate" text`);
@@ -3395,7 +3399,7 @@ const server = http.createServer((req, res) => {
       // arithmetic NULL and SUM() skips it, silently under-reporting the hold.
       pool.query(
         `SELECT sl.date,
-                COALESCE(SUM(GREATEST(sl.qty - COALESCE(sl.used,0) - COALESCE(ch.child_used,0), 0)), 0)::int AS locked
+                COALESCE(SUM(GREATEST(sl.qty - COALESCE(sl.used,0) - COALESCE(ch.child_used,0) - COALESCE(sl.pendqty,0), 0)), 0)::int AS locked
          FROM ${fqt('sb_seat_locks')} sl
          LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(COALESCE(c.used,0)),0) AS child_used

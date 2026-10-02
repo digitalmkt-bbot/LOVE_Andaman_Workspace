@@ -2860,7 +2860,8 @@ function bkV2LockPeakUsed(l){
   Object.keys(m).forEach(k=>{ const v=Number(m[k])||0; if(v>mx) mx=v; });
   return mx;
 }
-function bkV2LockRemaining(l, date){ return Math.max(0, (l.qty||0) - bkV2LockUsedOn(l, date)); }
+/* §lkPend · ที่นั่งที่ยัง "รอที่ว่าง" ไม่ถูกนับว่าเหลือให้ดึง (ใบลูกไม่มี pend ของตัวเอง → 0) */
+function bkV2LockRemaining(l, date){ return Math.max(0, (l.qty||0) - bkV2LockUsedOn(l, date) - bkV2LockPendOn(l, date)); }
 // ── Rolling per-trip release (HH:MM · N days before travel) ──
 // A month lock holds seats across a range; its seats for a SPECIFIC trip date auto-release
 // when now passes (tripDate − releaseDaysBefore days) at releaseTime — the seats free up for
@@ -2913,6 +2914,7 @@ function bkV2LockReleaseRound(lockId, tripDate, by){
   if(!l || !tripDate || bkV2LockRoundReleased(l, tripDate)) return 0;
   const seats = (typeof bkV2LockPoolHold==='function') ? bkV2LockPoolHold(l, tripDate) : 0;
   if(!Array.isArray(l.releasedDates)) l.releasedDates = [];
+  if(bkV2LockPendOn(l, tripDate) > 0) bkV2LockPendSet(l, tripDate, 0);   /* §lkPend · ปล่อยรอบนี้แล้ว คำขอที่รออยู่ของรอบนี้จบไปด้วย */
   l.releasedDates.push(tripDate);
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   (l.log = l.log||[]).push({ date:today, at:new Date().toISOString(), type:'release-round',
@@ -2977,7 +2979,7 @@ function bkV2DrawSources(routeId, date, agentId){
   bkV2LocksForAgent(routeId,date,agentId).forEach(l=>{
     const kids=bkV2LockChildren(l.id);
     if(kids.length){
-      kids.forEach(c=>{ const r=bkV2LockRemaining(c,date); if(r>0) out.push({lockId:c.id, label:bkV2LockHolderName(l)+' · '+(c.subName||'ย่อย'), remaining:r}); });
+      kids.forEach(c=>{ const r=bkV2LockDrawable(c,date); if(r>0) out.push({lockId:c.id, label:bkV2LockHolderName(l)+' · '+(c.subName||'ย่อย'), remaining:r}); });
       const ur=bkV2LockUnallocDrawable(l,date); if(ur>0) out.push({lockId:l.id, label:bkV2LockHolderName(l)+' · ยังไม่จัด', remaining:ur});
     } else {
       const r=bkV2LockRemaining(l,date); if(r>0) out.push({lockId:l.id, label:bkV2LockHolderName(l), remaining:r});
@@ -2994,10 +2996,174 @@ function bkV2LockUsedTotal(l, date){ return bkV2LockUsedOn(l,date) + bkV2LockChi
 function bkV2LockHeldRemaining(l, date){
   // §lkBulkFix · ล็อกแบบช่วงที่ไม่ได้ระบุรอบ → ตอบเป็นที่นั่งต่อรอบ ไม่ใช่ qty ลบยอดสะสม
   if(!date && bkV2LockSpansDays(l)) return Math.max(0, l.qty||0);
-  return Math.max(0, (l.qty||0) - bkV2LockUsedTotal(l, date));
+  return Math.max(0, (l.qty||0) - bkV2LockUsedTotal(l, date) - bkV2LockPendOn(l, date));   /* §lkPend */
 }
-function bkV2LockUnallocDrawable(parent, date){ return Math.max(0, bkV2LockUnalloc(parent) - bkV2LockUsedOn(parent, date)); }
-function bkV2LockDrawable(l, date){ return l.parentId ? bkV2LockRemaining(l, date) : bkV2LockUnallocDrawable(l, date); }
+/* §lkPend · ดึงได้ไม่เกินที่นั่งที่กันไว้จริงของรอบนั้น · ส่วนที่รอที่ว่างยังไม่ใช่ที่นั่ง */
+function bkV2LockUnallocDrawable(parent, date){
+  return Math.max(0, Math.min(bkV2LockUnalloc(parent) - bkV2LockUsedOn(parent, date), bkV2LockHeldRemaining(parent, date)));
+}
+function bkV2LockDrawable(l, date){
+  if(!l.parentId) return bkV2LockUnallocDrawable(l, date);
+  const p = SB_SEAT_LOCKS.find(x=>x.id===l.parentId);
+  return p ? Math.min(bkV2LockRemaining(l, date), bkV2LockHeldRemaining(p, date)) : bkV2LockRemaining(l, date);
+}
+/* ══ §lkPend (2026-10-02) · ล็อกที่นั่งแบบรอที่ว่าง (Pending) ══════════════════════════
+   ที่มา · ผู้ใช้ตรวจแล้วพบว่า "ที่นั่งไม่ว่างแล้ว แต่ล็อกเพิ่มได้" — จริง ไม่มีด่านไหนเช็คเลย
+     ทั้งตอนสร้าง ตอนแก้จำนวน และตอนกด "+ ที่นั่ง" · ผลคือล็อกเกินความจุเรือเงียบ ๆ
+   สิ่งที่ผู้ใช้ขอ · ที่ไม่ว่าง ยังรับคำขอล็อกได้ แต่เป็นสถานะ Pending = ยังไม่คอนเฟิร์ม
+     ไม่กันที่นั่ง ไม่ให้ดึงไปขาย · พอมีที่ว่าง คนกดยืนยันเองจึงกลายเป็นล็อกจริง
+   รูปข้อมูล · qty = จำนวนที่ขอทั้งหมด (เหมือนเดิม) · pend = ส่วนของ qty ที่ยังรออยู่ของรอบนั้น
+     ล็อกรายวัน  → l.pendQty (ตัวเลข)   · คอลัมน์ตัวเลขธรรมดา เซิร์ฟเวอร์หักออกจาก SQL ได้ตรง ๆ
+     ล็อกแบบช่วง → l.pendBy {วันที่: จำนวน} · บางวันเต็มบางวันว่าง จึงต้องแยกรายวัน
+     ที่กันไว้จริงของรอบ = qty − ขายไปแล้ว − pend · ทุกหน้าคิดผ่าน bkV2LockHeldRemaining ตัวเดียว
+   pend อยู่ที่ใบแม่/ใบเดี่ยวเท่านั้น · กรุ๊ปย่อยแบ่งจากที่นั่งของแม่ ไม่ได้ขอที่จากพูลเอง */
+function bkV2LockPendOn(l, date){
+  if(!l || l.parentId || (l.scope==='boat')) return 0;
+  let n = 0;
+  if(bkV2LockSpansDays(l)) n = date ? (Number((l.pendBy||{})[date])||0) : 0;
+  else n = (!date || date===l.date) ? (Number(l.pendQty)||0) : 0;
+  if(n<=0) return 0;
+  return Math.max(0, Math.min(n, (l.qty||0) - bkV2LockUsedTotal(l, date)));
+}
+function bkV2LockPendSet(l, date, n){
+  n = Math.max(0, parseInt(n,10)||0);
+  if(bkV2LockSpansDays(l)){
+    if(!l.pendBy || typeof l.pendBy!=='object' || Array.isArray(l.pendBy)) l.pendBy = {};
+    if(n) l.pendBy[date] = n; else delete l.pendBy[date];
+  } else l.pendQty = n;
+}
+function bkV2LockPendClear(l){ l.pendQty = 0; l.pendBy = {}; }
+/* วันที่ยังรออยู่ของล็อกใบนี้ · เฉพาะวันนี้เป็นต้นไป (รอบที่ผ่านแล้วไม่มีอะไรให้ยืนยัน) */
+function bkV2LockPendDates(l){
+  if(!l || l.parentId) return [];
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  const ds = bkV2LockSpansDays(l) ? Object.keys(l.pendBy||{}) : (l.date ? [l.date] : []);
+  return ds.filter(d => d >= today && !bkV2LockRoundReleased(l, d))
+           .map(d => ({ date:d, n:bkV2LockPendOn(l, d) })).filter(x => x.n > 0)
+           .sort((a,b) => a.date < b.date ? -1 : 1);
+}
+function bkV2LockPendTotal(routeId, date){ return bkV2LocksFor(routeId, date).reduce((s,l)=>s+bkV2LockPendOn(l, date), 0); }
+/* ที่ว่างจริงของรอบ · null = ยังไม่มีเรือ/โควตาให้เทียบ (ปล่อยผ่านเหมือนเดิม ไม่งั้นล็อกล่วงหน้าไม่ได้เลย)
+   self = ล็อกใบที่กำลังแก้ · ที่นั่งที่มันกันอยู่แล้วนับเป็นของมันเอง ไม่ใช่ของคนอื่น */
+function bkV2LockFreeOn(routeId, date, self){
+  const al = (typeof getAllotment==='function') ? getAllotment(routeId, date) : null;
+  if(!al || !al.hasAllotment) return null;
+  const own = (self && bkV2LocksFor(routeId, date).indexOf(self)>=0) ? bkV2LockPoolHold(self, date) : 0;
+  return Math.max(0, (al.availableCapacity||0) - (al.seatsConsumed||0) - (al.lockedSeats||0) + own);
+}
+/* รอบที่ล็อก (ตามที่กรอก) จะครอบ · วันนี้เป็นต้นไป */
+function bkV2LockSpecDates(sp){
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  if(sp.scope!=='bulk') return (sp.date && sp.date>=today) ? [sp.date] : [];
+  const out=[]; if(!sp.dateFrom || !sp.dateTo) return out;
+  const d=new Date(sp.dateFrom+'T00:00:00'), end=new Date(sp.dateTo+'T00:00:00'); let guard=0;
+  const dowL={dow:Array.isArray(sp.dow)?sp.dow:[]};
+  while(d<=end && guard++<800){
+    const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(ds>=today && bkV2LockDowOk(dowL, ds) && ((typeof bkV2IsRouteOpenOn!=='function') || bkV2IsRouteOpenOn(sp.routeId, ds))) out.push(ds);
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+/* รอบที่ที่ว่างไม่พอกับจำนวนที่ขอ · want = ส่วนที่ยังต้องกัน (ขอ − ขายไปแล้ว) · short = ส่วนที่ขาด */
+function bkV2LockShort(sp, self){
+  const out=[];
+  bkV2LockSpecDates(sp).forEach(d=>{
+    const free = bkV2LockFreeOn(sp.routeId, d, self||null);
+    if(free==null) return;
+    const used = self ? bkV2LockUsedTotal(self, d) : 0;
+    const want = Math.max(0, (Number(sp.qty)||0) - used);
+    if(want > free) out.push({ date:d, free:free, want:want, short:want-free });
+  });
+  return out;
+}
+/* ตั้ง pend ตามผลที่ผู้ใช้เลือก · split = กันเท่าที่ว่าง ที่ขาดรอ · all = รอบที่ไม่พอ รอทั้งจำนวน */
+function bkV2LockPendApply(l, short, mode){
+  if(!l || !short || !short.length) return 0;
+  let tot=0;
+  short.forEach(x=>{ const n = (mode==='all') ? x.want : x.short; bkV2LockPendSet(l, x.date, n); tot+=n; });
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  const mx = short.reduce((m,x)=>Math.max(m, (mode==='all')?x.want:x.short), 0);
+  (l.log=l.log||[]).push({ date:today, at:new Date().toISOString(), type:'pend', qty:mx,
+    tripDate:(short.length===1?short[0].date:''), by:laBy(),
+    note:(short.length===1 ? ('free '+short[0].free+' of '+short[0].want)
+                           : (short.length+' rounds short: '+short.slice(0,6).map(x=>x.date.slice(5)+' ('+((mode==='all')?x.want:x.short)+')').join(', ')+(short.length>6?' ...':''))) });
+  sbSeatLocksPersist();
+  return tot;
+}
+/* ลดจำนวนที่ขอ = ตัดส่วนที่รออยู่ออกก่อน · ของที่ยังไม่ได้ที่ ไม่มีอะไรให้คืนเข้าพูล */
+function bkV2LockPendShrink(l, n){
+  n = Math.max(0, n|0); if(!l || n<=0) return;
+  if(bkV2LockSpansDays(l)){ Object.keys(l.pendBy||{}).forEach(d=>bkV2LockPendSet(l, d, (Number(l.pendBy[d])||0) - n)); }
+  else if(Number(l.pendQty)>0) l.pendQty = Math.max(0, Number(l.pendQty) - n);
+}
+/* กดยืนยัน · ดันส่วนที่รออยู่เข้าเป็นล็อกจริงเท่าที่ที่ว่างมี · ไม่มีการดันเองโดยไม่มีคนกด */
+function bkV2LockPendConfirm(lockId, date, want){
+  const l = SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return {ok:false, why:'gone'};
+  const p = bkV2LockPendOn(l, date); if(p<=0) return {ok:false, why:'none'};
+  const free = bkV2LockFreeOn(l.routeId, date, null);
+  const can = (free==null) ? p : Math.min(p, free);
+  const n = Math.min(can, (Number(want)>0) ? Number(want) : can);
+  if(n<=0) return {ok:false, why:'full', free:0, pend:p};
+  bkV2LockPendSet(l, date, p-n);
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  (l.log=l.log||[]).push({ date:today, at:new Date().toISOString(), type:'pend-confirm', qty:n, tripDate:date, by:laBy() });
+  sbSeatLocksPersist();
+  return {ok:true, n:n, left:p-n};
+}
+function bkV2LockPendConfirmGo(lockId, date){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('booking')) return;
+  const r = bkV2LockPendConfirm(lockId, date);
+  if(!r.ok && r.why==='full') alert('No free seats on this trip yet - the lock stays pending');
+  bkV2Render();
+}
+/* ── กล่องถาม · ที่นั่งไม่พอ จะเอาแบบไหน ── */
+let _bkV2LkPendAsk = null;
+function bkV2LkPendAskGo(mode){
+  const a = _bkV2LkPendAsk; _bkV2LkPendAsk = null;
+  if(a && mode && mode!=='cancel' && typeof a.run==='function') a.run(mode);
+  else bkV2Render();
+}
+function bkV2LkPendAskModal(){
+  const a = _bkV2LkPendAsk; if(!a) return '';
+  const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const sh = a.short, one = sh.length===1 ? sh[0] : null;
+  const rn = (typeof ROUTES!=='undefined' ? ((ROUTES.find(r=>r.id===a.routeId)||{}).name||a.routeId) : a.routeId);
+  const btn='font-family:inherit;font-size:12.5px;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;text-align:left;width:100%;line-height:1.45';
+  const rows = one ? '' : `<div style="max-height:170px;overflow:auto;border:1px solid var(--border-2);border-radius:9px;margin-top:10px">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr style="background:#FAF9F5;color:var(--ink-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em">
+        <th style="text-align:left;padding:5px 10px">วันเดินทาง</th><th style="padding:5px 10px">ว่าง</th><th style="padding:5px 10px">ขาด</th></tr></thead><tbody>
+      ${sh.map(x=>`<tr><td style="padding:4px 10px;font-family:'DM Mono',monospace;border-top:1px solid var(--border-2)">${esc(x.date)}</td>
+        <td style="padding:4px 10px;text-align:center;border-top:1px solid var(--border-2);font-family:'DM Mono',monospace">${x.free}</td>
+        <td style="padding:4px 10px;text-align:center;border-top:1px solid var(--border-2);font-family:'DM Mono',monospace;font-weight:700;color:#A05A1A">${x.short}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  const head = one
+    ? `ขอล็อก <b style="font-family:'DM Mono',monospace">${one.want}</b> ที่ · ทริปนี้ว่างอยู่ <b style="font-family:'DM Mono',monospace;color:${one.free?'#0F6E56':'#A32D2D'}">${one.free}</b> ที่`
+    : `มี <b>${sh.length}</b> รอบในช่วงที่ที่ว่างไม่พอ · รอบอื่นล็อกได้ตามปกติ`;
+  const splitLbl = one
+    ? (one.free>0 ? `ล็อก ${one.free} ที่ทันที · อีก ${one.short} ที่เป็น Pending` : `Pending ทั้ง ${one.want} ที่ · รอที่ว่าง`)
+    : 'ล็อกเท่าที่ว่างของแต่ละรอบ · ส่วนที่ขาดเป็น Pending';
+  const allLbl = one ? `Pending ทั้ง ${one.want} ที่ · ไม่แบ่ง` : 'รอบที่ไม่พอ Pending ทั้งจำนวน · ไม่แบ่ง';
+  const showAll = a.kind==='create' && !(one && one.free<=0);
+  return `<div class="la-modal lkpend-ask" style="position:fixed;inset:0;background:rgba(20,20,16,.46);z-index:10000;display:flex;align-items:center;justify-content:center;padding:22px">
+    <div style="background:#fff;border-radius:15px;width:440px;max-width:96vw;box-shadow:0 18px 54px rgba(0,0,0,.3);overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;color:#A05A1A;text-transform:uppercase">Seats not available</div>
+        <div style="font-size:15.5px;font-weight:700;margin-top:2px">ที่นั่งว่างไม่พอ</div></div>
+      <div style="padding:16px 18px">
+        <div style="font-size:12px;color:var(--ink-soft)">${esc(rn)}${one?(' · <span style="font-family:\'DM Mono\',monospace">'+esc(one.date)+'</span>'):''}</div>
+        <div style="font-size:13px;margin-top:6px;line-height:1.55">${head}</div>
+        ${rows}
+        <div style="font-size:11px;color:var(--ink-soft);background:#FBF6EC;border-radius:9px;padding:9px 11px;margin-top:12px;line-height:1.55">
+          Pending = ยังไม่คอนเฟิร์ม · ไม่กันที่นั่ง และดึงไปจองไม่ได้ · พอมีที่ว่าง กดยืนยันเองที่หน้า Seat Locks หรือ Manifest</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+          <button data-lkpend="split" onclick="bkV2LkPendAskGo('split')" style="${btn};color:#fff;background:#0F6E56;border:1px solid #0F6E56">${splitLbl}</button>
+          ${showAll?`<button data-lkpend="all" onclick="bkV2LkPendAskGo('all')" style="${btn};color:#7A4A00;background:#FBEFD9;border:1px solid #EBCF9A">${allLbl}</button>`:''}
+          <button data-lkpend="cancel" onclick="bkV2LkPendAskGo('cancel')" style="${btn};color:var(--ink-soft);background:#fff;border:1px solid var(--border);font-weight:600;text-align:center">ยกเลิก · ไม่ล็อก</button>
+        </div>
+      </div>
+    </div></div>`;
+}
 // Contribution to the sellable-pool reduction · counted at the parent/standalone level ONLY (children live inside the parent → 0)
 function bkV2LockPoolHold(l, date){ return l.parentId ? 0 : bkV2LockHeldRemaining(l, date); }
 function bkV2LockedTotal(routeId, date){ return bkV2LocksFor(routeId,date).reduce((s,l)=>s+bkV2LockPoolHold(l,date),0); }
@@ -3589,7 +3755,8 @@ function bkV2DrawLock(lockId, qty, bookingId, tripDate){
   }
   (l.log=l.log||[]).push({date:today,at:new Date().toISOString(),type:'draw',qty:n,bookingId:bookingId||'',tripDate:tripDate||'',by:laBy()});
   // ล็อกแบบช่วงไม่ปิดตัวเองเพราะเต็มรอบเดียว · รอบอื่นยังมีที่อยู่
-  if(!bkV2LockSpansDays(l) && bkV2LockDrawable(l) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status='depleted';
+  /* §lkPend · ยังมีส่วนที่รอที่ว่างอยู่ = ใบยังไม่จบ ห้ามปิด ไม่งั้นคำขอที่รออยู่หายไปจากทุกหน้า */
+  if(!bkV2LockSpansDays(l) && bkV2LockDrawable(l) <= 0 && bkV2LockPendOn(l, l.date) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status='depleted';
   sbSeatLocksPersist(); return n;
 }
 /* ══ §lkReturn · คืนที่นั่งเข้าล็อก ═══════════════════════════════════════════════
@@ -3754,8 +3921,9 @@ function bkV2ReleaseLock(lockId, qty){
   if(n <= 0) return;
   const floor = l.parentId ? peak : Math.max(peak, bkV2LockAllocated(l));   // never drop below used, and (parent) never below what's allocated to children
   l.qty = Math.max(floor, (l.qty||0) - n);
+  bkV2LockPendShrink(l, n);   /* §lkPend · ลดจำนวน = ตัดส่วนที่รออยู่ออกก่อน */
   (l.log=l.log||[]).push({date:today, type:'release', qty:n});
-  if(bkV2LockDrawable(l) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
+  if(bkV2LockDrawable(l) <= 0 && bkV2LockPendOn(l, l.date) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
   sbSeatLocksPersist();
 }
 // KPI · per agent · locked vs converted (drawn)
@@ -4037,6 +4205,23 @@ function bkV2LockEditSubmit(){
   } else holderId = null;
 
   const moveLocked = bkV2LockEditLocked(l);
+  /* §lkPend · จำนวนที่เพิ่ม หรือวัน/เส้นทางที่ย้ายไป ที่ว่างพอไหม
+     ไม่ได้ย้าย = ถามเฉพาะเมื่อส่วนที่ขาดมากกว่าที่รออยู่เดิม (แก้หมายเหตุเฉย ๆ ไม่ต้องโดนถามทุกครั้ง)
+     ย้าย = คิดใหม่ทั้งใบ · pend ของวันเดิมไม่มีความหมายกับวันใหม่ */
+  const _spec = moveLocked
+    ? { scope:(bkV2LockSpansDays(l)?'bulk':'day'), routeId:l.routeId, date:l.date||'', dateFrom:l.dateFrom||'', dateTo:l.dateTo||'', dow:(l.dow||[]), qty:qty }
+    : { scope:f.scope, routeId:f.routeId, date:isB?'':f.date, dateFrom:isB?f.dateFrom:'', dateTo:isB?f.dateTo:'', dow:isB?(f.dow||[]):[], qty:qty };
+  const _moved = !moveLocked && (_spec.scope!==(bkV2LockSpansDays(l)?'bulk':'day') || _spec.routeId!==l.routeId
+    || String(_spec.date||'')!==String(l.date||'') || String(_spec.dateFrom||'')!==String(l.dateFrom||'')
+    || String(_spec.dateTo||'')!==String(l.dateTo||'') || (_spec.dow||[]).join(',')!==(l.dow||[]).join(','));
+  const _shortAll = l.parentId ? [] : bkV2LockShort(_spec, _moved ? null : l);
+  const _shortNew = _moved ? _shortAll : _shortAll.filter(x => x.short > bkV2LockPendOn(l, x.date));
+  if(_shortNew.length && !bkV2LockEditSubmit._ok){
+    _bkV2LkPendAsk = { kind:'edit', routeId:_spec.routeId, short:_shortNew,
+      run:()=>{ bkV2LockEditSubmit._ok = true; try{ bkV2LockEditSubmit(); } finally { bkV2LockEditSubmit._ok = false; } } };
+    bkV2Render(); return;
+  }
+  const _qtyWas = l.qty||0;
   const before = { scope:(bkV2LockSpansDays(l)?'bulk':'day'), routeId:l.routeId, date:l.date||'',
                    dateFrom:l.dateFrom||'', dateTo:l.dateTo||'', dow:(l.dow||[]).join(','),
                    qty:l.qty||0, holderType:l.holderType, holderId:l.holderId||'',
@@ -4053,6 +4238,11 @@ function bkV2LockEditSubmit(){
     l.holderId = holderId;
   }
   l.qty = qty;
+  if(!l.parentId){
+    if(_moved) bkV2LockPendClear(l);
+    else if(qty < _qtyWas) bkV2LockPendShrink(l, _qtyWas - qty);
+    if(_shortNew.length) bkV2LockPendApply(l, _shortNew, 'split');
+  }
   l.reason = f.reason||'';
   l.expiry = isB ? '' : (f.expiry||'');
   l.releaseDaysBefore = isB ? ((f.releaseDaysBefore==='' || f.releaseDaysBefore==null) ? null : Math.max(0,parseInt(f.releaseDaysBefore,10)||0)) : null;
@@ -4108,14 +4298,22 @@ function bkV2LockCreateSubmit(){
     holderId = match ? match.id : nm;   // free-text holder allowed
   }
   const isB = f.scope==='bulk';
-  bkV2CreateLock({ scope:f.scope, routeId:f.routeId, date:isB?'':f.date,
-    dateFrom:isB?f.dateFrom:'', dateTo:isB?(f.dateTo||f.dateFrom):'', dow:isB?(f.dow||[]):[],
+  const _o = { scope:f.scope, routeId:f.routeId, date:isB?'':f.date,
+    dateFrom:isB?f.dateFrom:'', dateTo:isB?(f.dateTo||f.dateFrom):'', dow:isB?(f.dow||[]).slice():[],
     holderType:f.holderType, holderId:holderId, qty:Number(f.qty), reason:f.reason,
     expiry:isB?'':f.expiry,                                                   // bulk locks use the rolling cutoff, not a hard expiry
-    releaseDaysBefore:isB?f.releaseDaysBefore:null, releaseTime:isB?f.releaseTime:'' });
-  _bkV2LockForm.qty=''; _bkV2LockForm.reason=''; _bkV2LockForm.expiry='';     // reset (fixes stale-expiry carrying to the next lock)
-  _bkV2LockModalOpen = false;   // close if opened from Calendar
-  bkV2Render();
+    releaseDaysBefore:isB?f.releaseDaysBefore:null, releaseTime:isB?f.releaseTime:'' };
+  const _mk = (short, mode) => {
+    const l = bkV2CreateLock(_o);
+    if(short && short.length) bkV2LockPendApply(l, short, mode);
+    _bkV2LockForm.qty=''; _bkV2LockForm.reason=''; _bkV2LockForm.expiry='';   // reset (fixes stale-expiry carrying to the next lock)
+    _bkV2LockModalOpen = false;   // close if opened from Calendar
+    bkV2Render();
+  };
+  /* §lkPend · ที่ว่างไม่พอ = ถามก่อน ไม่ล็อกเกินเงียบ ๆ อีกแล้ว */
+  const _short = bkV2LockShort(_o, null);
+  if(_short.length){ _bkV2LkPendAsk = { kind:'create', routeId:_o.routeId, short:_short, run:(mode)=>_mk(_short, mode) }; bkV2Render(); return; }
+  _mk(null);
 }
 // Prefill the lock form from Calendar (selected day · optional route) and open inline modal
 function bkV2LockFromCalendar(routeId, date){
@@ -4353,7 +4551,8 @@ function bkV2RenderLocks(){
   const _dTag=(_dayStr===_today)?'วันนี้':((_bkV2LockUI.dayOff===1)?'พรุ่งนี้':'');
   const dayLocks=bkV2LocksOnDate(_dayStr).filter(l=>_lkOk(l.routeId)).sort((a,b)=>
     bkV2LockHolderName(a).localeCompare(bkV2LockHolderName(b)) || routeName(a.routeId).localeCompare(routeName(b.routeId)));
-  const dQty=dayLocks.reduce((a,l)=>a+(l.qty||0),0);
+  const dQty=dayLocks.reduce((a,l)=>a+(l.qty||0)-bkV2LockPendOn(l,_dayStr),0);   /* §lkPend · ที่รออยู่ไม่ใช่ที่กันไว้ */
+  const dPend=dayLocks.reduce((a,l)=>a+bkV2LockPendOn(l,_dayStr),0);
   const dUsed=dayLocks.reduce((a,l)=>a+bkV2LockUsedTotal(l,_dayStr),0);
   const dHeld=dayLocks.reduce((a,l)=>a+(bkV2LockHoldsOn(l,_dayStr)?bkV2LockPoolHold(l,_dayStr):0),0);
   const navBtn='width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--ink-soft);font-size:12px;line-height:1;font-family:inherit';
@@ -4361,6 +4560,9 @@ function bkV2RenderLocks(){
   const td2='border-bottom:1px solid var(--border-2);padding:6px 12px;font-size:12px;vertical-align:middle';
   const dayRows = dayLocks.length ? dayLocks.map(l=>{
     const u=bkV2LockUsedTotal(l,_dayStr), rm=bkV2LockPoolHold(l,_dayStr);
+    /* §lkPend · ส่วนที่รอที่ว่างของวันนี้ · ว่างเท่าไหร่ = กดยืนยันได้เท่านั้น */
+    const pd=bkV2LockPendOn(l,_dayStr), pdFree=pd?bkV2LockFreeOn(l.routeId,_dayStr,null):0;
+    const pdCan=pd?((pdFree==null)?pd:Math.min(pd,pdFree)):0;
     const cut=bkV2LockReleaseCutoff(l,_dayStr);
     let relHtml;
     if(cut){
@@ -4378,13 +4580,16 @@ function bkV2RenderLocks(){
       <td style="${td2}">${bkV2LockSpansDays(l)
         ?'<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#5B3FA5;background:#F3EEFB;padding:2px 7px;border-radius:5px">Bulk</span>'
         :'<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#2A5EA8;background:#EAF1FB;padding:2px 7px;border-radius:5px">รายวัน</span>'}</td>
-      <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:#C0392B">${l.qty||0}</td>
+      <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:#C0392B">${(l.qty||0)-pd}${pd?`<div class="lkpend-tag" data-lkpend-tag="${l.id}" title="ขอไว้ ${l.qty||0} ที่ · ยังไม่ได้ที่ ${pd} · ไม่กันที่นั่ง ดึงไปจองไม่ได้" style="font-family:inherit;font-size:10px;font-weight:700;color:#7A4A00;background:#FBEFD9;border:1px dashed #D9B36A;border-radius:6px;padding:1px 6px;margin-top:3px;white-space:nowrap">&#9203; Pending ${pd}</div>`:''}</td>
       <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700">${u}</td>
       <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:${released?'var(--ink-faint)':(rm?'#0F6E56':'var(--ink-faint)')}">${released?'—':rm}</td>
       <td style="${td2}">${relHtml}</td>
       <td style="${td2};text-align:right;padding-right:14px;white-space:nowrap">${
         (!released && rm>0)
           ? `<button onclick="bkV2LockReleaseRoundGo('${l.id}','${_dayStr}')" title="คืน ${rm} ที่ของรอบนี้เข้า pool · รอบอื่นของล็อกนี้ไม่กระทบ" style="font-family:inherit;font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:5px">ปล่อย ${rm} ที่</button>` : ''
+      }${pd?(pdCan>0
+          ? `<button data-lkpend-go="${l.id}" onclick="bkV2LockPendConfirmGo('${l.id}','${_dayStr}')" title="มีที่ว่างแล้ว ${pdCan} ที่ · กดเพื่อดันเข้าเป็นล็อกจริง" style="font-family:inherit;font-size:11px;font-weight:700;color:#fff;background:#B7791F;border:1px solid #B7791F;border-radius:7px;padding:4px 9px;cursor:pointer;margin-right:5px">ยืนยัน ${pdCan} ที่</button>`
+          : `<span title="ยังไม่มีที่ว่าง · รออยู่ ${pd} ที่" style="font-size:10.5px;font-weight:700;color:#9A8B73;background:#F6F1E7;border-radius:7px;padding:4px 9px;margin-right:5px;white-space:nowrap">ยังไม่ว่าง</span>`):''
       }<button onclick="bkV2LockAddOpen('${l.id}')" style="font-family:inherit;font-size:11px;font-weight:600;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:7px;padding:4px 9px;cursor:pointer">+ ที่นั่ง</button></td>
     </tr>`;
   }).join('') : '';
@@ -4424,7 +4629,7 @@ function bkV2RenderLocks(){
         <button onclick="bkV2LockDayShift(1)" style="${navBtn}" title="วันถัดไป">&rsaquo;</button>
         <button onclick="bkV2LockDaySet(0)" style="border:1px solid var(--border);background:${_bkV2LockUI.dayOff===0?'#F1EFE8':'#fff'};border-radius:7px;padding:4px 11px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer">วันนี้</button>
         <button onclick="bkV2LockDaySet(1)" style="border:1px solid var(--border);background:${_bkV2LockUI.dayOff===1?'#F1EFE8':'#fff'};border-radius:7px;padding:4px 11px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer">พรุ่งนี้</button>
-        <span style="margin-left:auto;font-size:12px;color:var(--ink-soft)">${dayLocks.length?`${dayLocks.length} ล็อก · กันไว้ ${dQty} ที่ · ใช้ไป ${dUsed} · เหลือ <b style="color:var(--ink)">${dHeld}</b>`:''}${dayBoats.length?`${dayLocks.length?' · ':''}<b style="color:#6B289A">เรือ ${dayBoats.length} ลำ</b>`:''}</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--ink-soft)">${dayLocks.length?`${dayLocks.length} ล็อก · กันไว้ ${dQty} ที่ · ใช้ไป ${dUsed} · เหลือ <b style="color:var(--ink)">${dHeld}</b>${dPend?` · <b style="color:#7A4A00">Pending ${dPend}</b>`:''}`:''}${dayBoats.length?`${dayLocks.length?' · ':''}<b style="color:#6B289A">เรือ ${dayBoats.length} ลำ</b>`:''}</span>
         ${(function(){ /* §lkNoAuto · ของค้างเป็นร้อยที่ ต้องกดทีเดียวจบได้ ไม่ใช่ไล่กดทีละใบ */
           const _od=bkV2LockOverdueOn(_dayStr).filter(l=>_lkOk(l.routeId));
           if(!_od.length) return '';
@@ -4581,12 +4786,19 @@ function bkV2RenderLocks(){
     const leftCell = isBulk
       ? `<div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center;line-height:1.1">${leftNow}</div><div style="font-size:9px;color:var(--ink-faint);text-align:center">/รอบ</div>`
       : `<div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center;color:${leftNow?'var(--ink)':'var(--ink-faint)'}">${leftNow}</div>`;
+    const _pds = (l.status==='active' && !l.parentId) ? bkV2LockPendDates(l) : [];
     const qtyCell = `<div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center;color:#C0392B;line-height:1.1">${l.qty||0}</div>`
-      + (isBulk?`<div style="font-size:9px;color:var(--ink-faint);text-align:center">/รอบ</div>`:'');
+      + (isBulk?`<div style="font-size:9px;color:var(--ink-faint);text-align:center">/รอบ</div>`:'')
+      /* §lkPend · ป้ายบอกว่าใบนี้ยังมีส่วนที่รอที่ว่าง · ล็อกแบบช่วงบอกเป็นจำนวนรอบ รายวันดูได้ที่ "ล็อกของวัน" */
+      + (_pds.length?`<div class="lkpend-tag" data-lkpend-list="${l.id}" title="${esc(_pds.slice(0,12).map(x=>x.date+' · '+x.n).join('\n'))}${_pds.length>12?'\n...':''}" style="font-size:10px;font-weight:700;color:#7A4A00;background:#FBEFD9;border:1px dashed #D9B36A;border-radius:6px;padding:1px 6px;margin-top:3px;text-align:center;white-space:nowrap">&#9203; Pending ${isBulk?(_pds.length+' รอบ'):_pds[0].n}</div>`:'');
+    const _pd1 = (!isBulk && _pds.length) ? _pds[0] : null;
+    const _pd1Free = _pd1 ? bkV2LockFreeOn(l.routeId, _pd1.date, null) : 0;
+    const _pd1Can = _pd1 ? ((_pd1Free==null) ? _pd1.n : Math.min(_pd1.n, _pd1Free)) : 0;
     const relTxt = bkV2LockCutoffLabel(l) || (l.expiry ? ('หมดอายุ '+l.expiry) : '—');
     const subChip = hasKids ? `<span style="font-size:9px;font-weight:700;color:#534AB7;background:#EEEDFE;padding:1px 6px;border-radius:5px">${kids.length} ย่อย</span>` : '';
     const btn = (fn,lbl,col,bg,bd)=>`<button onclick="${fn}" style="font-family:inherit;font-size:11px;font-weight:600;color:${col};background:${bg};border:1px solid ${bd};border-radius:7px;padding:4px 9px;cursor:pointer">${lbl}</button>`;
     const acts = `<div style="display:flex;gap:5px;justify-content:flex-end;white-space:nowrap">`
+      + (_pd1Can>0 ? btn(`bkV2LockPendConfirmGo('${l.id}','${_pd1.date}')`,'ยืนยัน '+_pd1Can+' ที่','#fff','#B7791F','#B7791F') : '')
       + (l.status==='active'? btn(`bkV2LockAddOpen('${l.id}')`,'+ ที่นั่ง','#0F6E56','#E1F5EE','#B7E2D2') : '')
       + (l.status==='active' && bkV2LockUnalloc(l)>0 ? btn(`bkV2SubOpen('${l.id}')`,'+ ย่อย','#534AB7','#EEEDFE','#CECBF6') : '')
       + (l.status==='active'? btn(`bkV2LockReleaseConfirm('${l.id}')`,'คืน','#A32D2D','#FDECEA','#F5C9C4') : '')
@@ -4812,6 +5024,17 @@ function bkV2LockAddSubmit(){
   const m=_bkV2AddModal; if(!m) return;
   const n=parseInt(m.add,10)||0;
   if(n<=0){ alert('ใส่จำนวนที่จะเพิ่ม'); return; }
+  /* §lkPend · เพิ่มที่นั่งก็คือขอที่จากพูลเพิ่ม · ที่ว่างไม่พอ = ถามก่อน (ใบลูกแบ่งจากแม่ ไม่เกี่ยวกับพูล) */
+  const _l = SB_SEAT_LOCKS.find(x=>x.id===m.lockId);
+  if(_l && !_l.parentId && !bkV2IsBoatLock(_l)){
+    const _sp = { scope:(bkV2LockSpansDays(_l)?'bulk':'day'), routeId:_l.routeId, date:_l.date||'', dateFrom:_l.dateFrom||'', dateTo:_l.dateTo||'', dow:(_l.dow||[]), qty:(_l.qty||0)+n };
+    const _sh = bkV2LockShort(_sp, _l).filter(x => x.short > bkV2LockPendOn(_l, x.date));
+    if(_sh.length){
+      _bkV2LkPendAsk = { kind:'add', routeId:_l.routeId, short:_sh,
+        run:()=>{ if(bkV2LockAddSeats(m.lockId, n, m.note)){ bkV2LockPendApply(_l, _sh, 'split'); _bkV2AddModal=null; } bkV2Render(); } };
+      bkV2Render(); return;
+    }
+  }
   if(bkV2LockAddSeats(m.lockId, n, m.note)){ _bkV2AddModal=null; bkV2Render(); }
 }
 function bkV2LockAddModal(){
@@ -5047,7 +5270,7 @@ function bkV2LockOverlays(){
       </div>
     </div>`;
   }
-  return releaseModal + subModal + manageModal + ((typeof bkV2LockAddModal==='function')?bkV2LockAddModal():'')
+  return releaseModal + subModal + manageModal + bkV2LkPendAskModal() + ((typeof bkV2LockAddModal==='function')?bkV2LockAddModal():'')
     + ((typeof bkV2BoatLockModal==='function')?bkV2BoatLockModal():'');   /* §bkLock */
 }
 
@@ -50290,6 +50513,7 @@ function bkV2RenderTab2(){
        ตัวเลขทั้งหมดอ่านจากตัวเดิมของระบบ ไม่เขียนกติกาใหม่ซ้อน                    */
     const trLocks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid, date) : [];
     const trParents = trLocks.filter(l=>!l.parentId);   // parents/standalone only (children live inside)
+    const trPendTotal = trParents.reduce((s,l)=> s + ((typeof bkV2LockPendOn==='function')?bkV2LockPendOn(l,date):0), 0);   /* §lkPend */
     const trLockedTotal = trParents.reduce((s,l)=> s + ((typeof bkV2LockPoolHold==='function')?bkV2LockPoolHold(l,date):bkV2LockRemaining(l,date)), 0);
     /* §btLkGone · ล็อกที่ใช้หมดแล้วหายไปจากใบงาน · ไม่เหลือที่นั่งให้ใครแล้ว
        แถบที่บอกว่า "เหลือ 0" กินพื้นที่เต็มแถวเพื่อบอกว่าไม่มีอะไร · ร่องรอยว่า
@@ -50382,6 +50606,7 @@ function bkV2RenderTab2(){
       + (_seatPax!==_pbBk?`<span class="pb ptot" title="${laTp('ลูกค้าจอยที่ยืนยันแล้ว {0} คน', _seatPax)} · ${laT('ที่นั่งที่ใช้ไป: หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${_seatPax} pax</span>`:'')
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
+      + (trPendTotal>0?`<span class="plk ppd" title="${laT('ล็อกที่รอที่ว่าง · ยังไม่คอนเฟิร์ม ไม่กันที่นั่ง')}">&#9203; Pending ${trPendTotal}</span>`:'')
       /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
          ถ้าไม่บอกตรงนี้ คนอ่านจะเห็นแค่ "วันนี้เรือน้อยลง" โดยไม่รู้ว่าหายไปไหน
          นับแยกจาก 🔒 ที่นั่ง เพราะคนละหน่วย · บวกรวมเมื่อไหร่คือหักซ้ำ */
@@ -50404,6 +50629,10 @@ function bkV2RenderTab2(){
       const _qty = Number(l.qty)||0;
       const _used= (typeof bkV2LockUsedTotal==='function') ? bkV2LockUsedTotal(l, date) : (Number(l.used)||0);
       const _held= (typeof bkV2LockHeldRemaining==='function') ? bkV2LockHeldRemaining(l, date) : bkV2LockRemaining(l, date);
+      /* §lkPend · ส่วนที่รอที่ว่างของรอบนี้ · ใบที่รอทั้งใบก็ต้องขึ้นแถว ไม่งั้นคำขอหายจากใบงาน */
+      const _pd  = (typeof bkV2LockPendOn==='function') ? bkV2LockPendOn(l, date) : 0;
+      const _pdFree = _pd ? bkV2LockFreeOn(rid, date, null) : 0;
+      const _pdCan  = _pd ? ((_pdFree==null) ? _pd : Math.min(_pd, _pdFree)) : 0;
       const _kids= (typeof bkV2LockChildren==='function') ? bkV2LockChildren(l.id) : [];
       const _cut = (typeof bkV2LockCutoffLabel==='function') ? bkV2LockCutoffLabel(l) : '';
       /* §lkNoAuto · เลยกำหนดปล่อยแล้วแต่ยังไม่มีใครกด · ที่นั่งยังกันอยู่
@@ -50416,19 +50645,21 @@ function bkV2RenderTab2(){
          รายชื่อเต็มอยู่ใน title · กดปุ่มจัดการเพื่อดูและแก้ */
       const _kidTip = _kids.map(k=>(k.subName||laT('ย่อย'))+' '+bkV2LockRemaining(k,date)).join(' · ');
       const _story = laTp('{0} ที่ · ขายไปแล้ว {1}', _qty, _used)
+        + (_pd ? ' · '+laTp('รอที่ว่าง {0}', _pd) : '')
         + (bkV2LockSpansDays(l) ? ' · '+laT('ล็อกแบบช่วง') : '')
         + (l.reason ? (' · ' + l.reason) : '');
       /* §btLkGone · ใช้หมดแล้วไม่ต้องขึ้นแถว · ตัดสินที่ "ที่นั่งคงเหลือของวันนั้น"
          ที่เดียว ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้ สถานะยังเป็น active อยู่
          (bkV2DrawLock ไม่ตีตรา depleted ให้ล็อกแบบช่วง เพราะรอบอื่นยังมีที่)
          ร่องรอยว่าที่นั่งมาจากโควตาใคร ยังอยู่ที่ป้าย "จากล็อก" บนใบจอง        */
-      const _row = _held>0 ? `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c};--lci:${_ci}">`
+      const _row = (_held>0 || _pd>0) ? `<tr class="t2-row t2-lrow${_held>0?'':' t2-lpend'}" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c};--lci:${_ci}">`
         + `<td class="t2-vc"><span class="lkcode">&#128274; ${esc(_code)}</span></td>`
         + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
-        + `<td class="t2-cu"><span class="lkwait">${laT('ล็อกที่นั่ง · ยังไม่ส่งชื่อ')}</span>`
+        + `<td class="t2-cu"><span class="lkwait">${_held>0?laT('ล็อกที่นั่ง · ยังไม่ส่งชื่อ'):laT('รอที่ว่าง · ยังไม่คอนเฟิร์ม')}</span>`
+          + (_pd?`<span class="lkpd" data-lkpd="${esc(l.id)}" title="${laTp('ขอไว้ {0} ที่ · ยังไม่ได้ที่ {1}', _qty, _pd)} · ${laT('ไม่กันที่นั่ง ดึงไปจองไม่ได้')}">&#9203; Pending ${_pd}</span>`:'')
           + (_kids.length?`<span class="lkkid" title="${laT('กรุ๊ปย่อย')} · ${esc(_kidTip)}">&#8627; ${laTp('{0} กรุ๊ป', _kids.length)}</span>`:'')
           + `</td>`
-        + `<td class="t2-c"><b class="lkq">${_held}</b></td>`
+        + `<td class="t2-c"><b class="lkq${_held>0?'':' z'}">${_held}</b></td>`
         + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
         + `<td>${_od?`<span class="lkrule lkover" title="${laT('เลยเวลาที่ตั้งไว้แล้ว แต่ที่นั่งยังถูกกันอยู่')} · ${esc(_cut)}">&#9888; ${laT('เลยกำหนด')}</span>`:(_cut?`<span class="lkrule">${esc(_cut)}</span>`:_dash)}</td>`
         + (vanMode?`<td class="t2-c">${_dash}</td>`:'')
@@ -50438,9 +50669,9 @@ function bkV2RenderTab2(){
         + `<td>${_dash}</td>`
         + (vanMode?'':`<td class="t2-req">${_dash}</td>`)
         + `<td class="t2-req"><span class="lkwait">${laT('รอ rooming list')}</span></td>`
-        + (vanMode?'':`<td><span class="lkhold">&#128274; ${laT('กันไว้')}</span></td>`
+        + (vanMode?'':`<td>${_held>0?`<span class="lkhold">&#128274; ${laT('กันไว้')}</span>`:`<span class="lkhold lkpdh">&#9203; ${laT('รอที่ว่าง')}</span>`}</td>`
                     + `<td class="t2-r">${_dash}</td>`
-                    + `<td class="t2-c lkact">${_od?`<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2LockReleaseRoundGo('${l.id}','${esc(date)}')" title="${laT('คืนที่นั่งของรอบนี้เข้า pool')}">${laT('ปล่อย')} ${_held}</button>`:''}<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="${laT('จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย')}${_kids.length?(' · '+laT('กรุ๊ปย่อย')+': '+esc(_kidTip)):''}">${laT('จัดการ')}</button></td>`)
+                    + `<td class="t2-c lkact">${_pdCan>0?`<button class="lkgo lkpdgo" data-lkpdgo="${esc(l.id)}" onclick="event.stopPropagation();bkV2LockPendConfirmGo('${l.id}','${esc(date)}')" title="${laTp('มีที่ว่างแล้ว {0} ที่ · กดเพื่อดันเข้าเป็นล็อกจริง', _pdCan)}">${laT('ยืนยัน')} ${_pdCan}</button>`:''}${_od?`<button class="lkgo lkrel" onclick="event.stopPropagation();bkV2LockReleaseRoundGo('${l.id}','${esc(date)}')" title="${laT('คืนที่นั่งของรอบนี้เข้า pool')}">${laT('ปล่อย')} ${_held}</button>`:''}<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="${laT('จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย')}${_kids.length?(' · '+laT('กรุ๊ปย่อย')+': '+esc(_kidTip)):''}">${laT('จัดการ')}</button></td>`)
         + `<td class="t2-c">${_dash}</td>`
         + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
         + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
@@ -51320,6 +51551,14 @@ function bkV2RenderTab2(){
        ปุ่ม "จัดการ" กว้าง 47px จึงถูกตัดขอบขวามาตลอด ทั้งแถวล็อกที่นั่งและแถวเรือ
        ถอด padding ของช่องนี้ออก และถ้ามีสองปุ่มให้ซ้อนกันลงมา ไม่ใช่ล้นออกข้าง */
     .t2-mtbl .t2-lrow td.lkact{padding:3px 0}
+    /* §lkPend · ล็อกที่รอที่ว่าง · เส้นประ สีเหลืองอำพัน = ยังไม่ใช่ของจริง */
+    .t2-lrow .lkpd{display:inline-block;margin-left:6px;font-size:10px;font-weight:800;color:#7A4A00;background:#FBEFD9;
+      border:1px dashed #D9B36A;border-radius:6px;padding:1px 6px;white-space:nowrap}
+    .t2-lrow .lkq.z{color:#C9C2BA}
+    .t2-lrow .lkhold.lkpdh{color:#7A4A00;background:#FBEFD9;border-color:#EBCF9A}
+    .t2-lrow .lkgo.lkpdgo{background:#B7791F;border-color:#B7791F;color:#fff}
+    .t2-mtbl tr.t2-lpend.t2-row>td:first-child{box-shadow:inset 4px 0 0 #D9B36A}
+    .t2-pband .plk.ppd{color:#7A4A00;background:#FBEFD9;border:1px dashed #D9B36A}
     .t2-lrow td.lkact .lkgo{display:block;margin:2px auto;padding:3px 5px}
     /* ป้ายบนใบที่ดึงที่นั่งมาจากล็อก · สีของเจ้าของล็อก ตามรอยกลับได้ว่ามาจากโควตาใคร */
     .t2-drawn{display:inline-block;font-size:9px;font-weight:800;border-radius:5px;
