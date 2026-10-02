@@ -49767,11 +49767,19 @@ function bkV2RenderTab2(){
     const cp=(typeof bkV2BoatCapOn==='function')?bkV2BoatCapOn(l.boatId,l.date):0;
     return `<span class="bt-lkr bt-lkboat" style="background:#F3EBFA;border-color:#DCC7EE" onclick="bkV2BoatLockEditOpen('${l.id}')" title="${esc(laT('กันทั้งลำ'))} · ${esc(bn)} ${cp}${l.reason?(' · '+esc(l.reason)):''}"><i style="background:#6B289A"></i><span class="nm">&#9973; ${esc(nm)}</span><span class="q"><b style="color:#6B289A">${esc(bn)}</b><s>${cp}</s></span></span>`;
   }).join('');
+  /* §btLockBtn · โปรแกรมที่ "มีอยู่จริง" ของวันนี้ · routeIds รวมโปรแกรมที่เหลือแต่ใบยกเลิก/ใบที่ย้ายวันออกไปแล้วด้วย
+     หน้าจอวาดแค่โปรแกรมเดียว แต่นับได้สอง ฟอร์มจึงไม่ใส่เส้นทางให้ทั้งที่มีให้เลือกอยู่อันเดียว */
+  const _btLiveRids = routeIds.filter(rid => (groups[rid]||[]).some(r=>r && !r.cxl) || (pendGroups[rid]||[]).length
+    || (typeof bkV2LocksFor==='function' && bkV2LocksFor(rid, date).length));
   const _btLock = `<div class="bt-c bt-lockc"><div class="bt-ct">Seat Lock<span class="sp"></span>
       ${_btLkSel?`<span class="bt-lkhi">&#9679; ${_btLkHitN} highlighted</span>`:''}
       ${_blCard.length?`<span class="bt-lkbadge" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE">&#9973; ${_blCard.length} ${laT('ลำ')}</span>`:''}
       ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:(_blCard.length?'':'<span class="bt-cnt">none left</span>')}
-      ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="Lock seats on this trip">&#128274; Lock seats</button>`:''}
+      ${/* §btLockBtn (2026-10-02) · ปุ่มล็อกที่นั่งต้องอยู่ตรงนี้เสมอ
+           ของเดิมขึ้นเฉพาะตอนเลือกโปรแกรมทางซ้ายไว้ก่อน · หน้าเปิดมาแบบ "ทุกโปรแกรม" จึงไม่มีปุ่มเลย
+           คนจัดงานต้องสลับไปแท็บ Seat Locks ทั้งที่กำลังดูใบงานของวันนั้นอยู่
+           เลือกโปรแกรมไว้ = ใส่ให้ · วันนั้นมีโปรแกรมเดียว = ใส่ให้ · หลายโปรแกรม = เปิดฟอร์มให้เลือกเอง วันที่ใส่ให้เสมอ */''}
+      <button class="bt-lkbtn" data-btlock="1" onclick="bkV2LockFromCalendar('${esc(_btSelRid||(_btLiveRids.length===1?_btLiveRids[0]:''))}','${date}')" title="${laT('ล็อกที่นั่งของวันนี้')}">&#128274; + Lock seats</button>
       <button class="bt-lkbtn gh" onclick="bkV2SwitchTab('locks')">All &rarr;</button></div>
     <div class="bt-lkl">${_lkList.length?_lkList.map(a=>{
       const cls=(a.qty<=0)?'gone':(a.left<=0?'done':'');
