@@ -396,6 +396,10 @@
   function _laBusy(skipIdle){
     if(_dirty) return true;                                                             // local changes not yet synced → never overwrite
     if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
+    /* §vbFocus · โหมดแก้ไขของใบวางบิลรถร่วม · ที่แก้ไว้อยู่ในหน่วยความจำอย่างเดียวจนกว่าจะกดบันทึก
+       (vbPersist ตั้งใจไม่เขียนระหว่างแก้ ปุ่มยกเลิกจะได้มีความหมาย) _dirty จึงเป็น false ตลอด
+       พอโฟกัสไม่ได้อยู่ในช่องพิมพ์ ตัวดึงข้อมูลใหม่จะเอาของเซิร์ฟเวอร์มาทับ ที่แก้ไว้หายทั้งชุด */
+    try{ if(window._vb && window._vb.edit) return true; }catch(e){}
     var _live=_laLiveView();
     var ae=document.activeElement;
     if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)){

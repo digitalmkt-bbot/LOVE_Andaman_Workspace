@@ -10522,9 +10522,42 @@ function vbCanSet(cur, k){
   return true;
 }
 /* กรอกนอกโหมดแก้ไข = บันทึกทันที · ไม่มีปุ่มบันทึกให้กดในเส้นทางนี้ */
+/* ══ §vbFocus (2026-10-02) · กรอกแล้วเคอร์เซอร์เด้งกลับ ตัวเลขถัดไปไปทับช่องเดิม ═══════
+   ที่มา · ผู้ใช้แจ้ง "คีย์ ๆ อยู่แล้วเด้ง ยังไม่ได้บันทึก เด้งรีเฟรช แล้วหาย"
+   ทำซ้ำได้ตรงตัว · พิมพ์ 1500 ในช่องเรต กด Tab พิมพ์ 200 ตั้งใจลงช่อง EXTRA
+     ของเดิม · พอออกจากช่อง หน้าถูกวาดใหม่ทั้งหน้าทันที แล้วคืนโฟกัสให้ "ช่องที่เพิ่งกรอก"
+     ช่องที่ผู้ใช้กำลังจะไปถูกทำลายพร้อมหน้าเดิม · เคอร์เซอร์เด้งกลับไปช่องเรต
+     200 จึงพิมพ์ทับ 1500 · เรตกลายเป็น 200 ช่อง EXTRA ว่าง · ไม่มีอะไรเตือน
+   แก้ · วาดใหม่ทีหลังหนึ่งจังหวะ (หลังโฟกัสย้ายเสร็จ) แล้วคืนโฟกัสให้ "ช่องที่ผู้ใช้อยู่ตอนนั้น"
+     ไม่ใช่ช่องที่เพิ่งกรอก · ตัวอักษรที่พิมพ์ค้างในช่องใหม่กับตำแหน่งเคอร์เซอร์ก็คืนให้ด้วย
+     กด Enter (โฟกัสไม่ย้าย) ยังอยู่ช่องเดิมเหมือนเก่า */
+var _vbRT=0, _vbPD=false, _vbWait=false;
+/* นิ้ว/เมาส์ยังกดค้างอยู่ = ยังไม่วาดใหม่ · วาดตอนนั้นปุ่มที่กำลังกด (บันทึก · พิมพ์ · ช่องถัดไป)
+   ถูกทำลายคานิ้ว การคลิกนั้นหายเงียบ · รอให้ปล่อยก่อนแล้วค่อยวาด */
+(function(){ try{
+  document.addEventListener('pointerdown', function(){ _vbPD=true; }, true);
+  var up=function(){ _vbPD=false; if(_vbWait){ _vbWait=false; vbRenderSoon(); } };
+  document.addEventListener('pointerup', up, true);
+  document.addEventListener('pointercancel', up, true);
+}catch(_){} })();
+function vbRenderSoon(){
+  if(_vbRT) return;
+  _vbRT=setTimeout(function(){
+    _vbRT=0;
+    if(_vbPD){ _vbWait=true; return; }
+    var host=document.getElementById('vanbill-host'), ae=document.activeElement;
+    _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
+    if(host && ae && ae!==document.body && host.contains(ae) && ae.getAttribute){
+      var k=ae.getAttribute('data-vbk')||'';
+      if(k){ _vb.foc=k; _vb.focVal=ae.value;
+        try{ _vb.focSel=[ae.selectionStart, ae.selectionEnd]; }catch(_){ _vb.focSel=null; } }
+    }
+    renderVanBill();
+  }, 0);
+}
 function vbStamp(k){
   if(_vb.edit) return;
-  if(k){ _vb.open[k]=1; _vb.foc=k; }
+  if(k){ _vb.open[k]=1; }
   var st=vbState();
   st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
   vbPersist();
@@ -10773,14 +10806,14 @@ function vbSet(field,val){
   var st=vbState(), k='@'+field;
   if(!vbCanSet(st[field], k)) return;
   st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbSetRateC(code, val){
   var st=vbState(), k='@rate:'+code;
   if(!st.rateC) st.rateC={};
   if(!vbCanSet(st.rateC[code], k)) return;
   st.rateC[code]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 /* §vbRateCode · เติมเรตจากที่ตั้งไว้ในหน้า Transfer Fleet (van_rates)
    ไม่ผูกกันอัตโนมัติ · กดเองเมื่ออยากใช้ แล้วแก้ทับได้
@@ -10828,7 +10861,7 @@ function vbSetRow(rk, field, val){
   /* §vbMinus · ช่องหักแสดงเป็นลบ · ตัดเครื่องหมายทิ้งแล้วเก็บเป็นบวก
      พิมพ์ "-100" หรือ "100" ได้ค่าเดียวกัน ไม่ต้องมาลุ้นว่าต้องใส่ลบไหม */
   st.rows[rk][field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbAddExtra(){
   if(!_vb.edit && typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
@@ -10844,7 +10877,7 @@ function vbSetExtra(id, field, val){
   var k='x'+id+'|'+field;
   if(!vbCanSet(r[field], k)) return;
   r[field]=(field==='date'||field==='note')?String(val):Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbDelExtra(id){
   if(!_vb.edit) return;
@@ -11300,9 +11333,15 @@ function renderVanBill(){
          +'  −  หัก '+B(T.cut)+'  =  '+B(T.bill)+'</div></div>'
    +'</div></div>';
   /* §vbFill · วาดใหม่ทั้งหน้าทุกครั้งที่กรอก · ไม่คืนโฟกัสให้ ผู้ใช้จะต้องคลิกใหม่ทุกช่อง */
-  if(_vb.foc){ var _k=_vb.foc; _vb.foc='';
+  if(_vb.foc){ var _k=_vb.foc, _fv=_vb.focVal, _fs=_vb.focSel; _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
     try{ var _el=host.querySelector('[data-vbk="'+_k+'"]');
-      if(_el){ _el.focus(); if(_el.select) _el.select(); } }catch(_){}
+      if(_el){ _el.focus();
+        /* §vbFocus · ผู้ใช้เริ่มพิมพ์ในช่องนี้ไปแล้วก่อนหน้าจะวาดใหม่ · คืนตัวอักษรกับตำแหน่งเคอร์เซอร์
+           ยังไม่ได้พิมพ์อะไร = เลือกทั้งช่องให้พิมพ์ทับได้เลยเหมือนเดิม */
+        if(_fv!=null && String(_fv)!==String(_el.value)){ _el.value=_fv;
+          if(_fs && _el.setSelectionRange){ try{ _el.setSelectionRange(_fs[0], _fs[1]); }catch(_){} } }
+        else if(_el.select) _el.select();
+      } }catch(_){}
   }
 }
 function vbPrint(){
