@@ -23866,6 +23866,38 @@ function tsRefPackList(date){
    ทั้งสามเก็บสลิปไว้ในตัวเอง (slips[]) คนละที่กับ bk.attachments · ชุดเอกสารเดิมจึงไม่เห็น
    บัตรเครดิตต้องมีสลิปคู่กับยอดถึงจะกระทบยอดกับ statement ของ EDC ได้ · ใบปิดวันเลยต้องพิมพ์ติดไปด้วย
    เดินตามชิปกรองเส้นทาง/VAT ชุดเดียวกับ tsRefPackList ไม่งั้นเอกสารของอีกชุดจะหลุดมา */
+/* §tsInvSlip · สลิปของเงินที่รับผ่านใบแจ้งหนี้ ของใบจองหนึ่งใบ · ตัวเดียวใช้ทั้งรีพอร์ตและหน้าจอ
+   คืน { list:[{f,cap}], paid, no } · กติกาเขียนไว้ที่ tsSlipPackList */
+function tsInvSlips(b){
+  var out={ list:[], paid:0, no:'' };
+  if(!b) return out;
+  var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var dTH=function(v){ var d=String(v||'').slice(0,10).split('-'); return d.length===3?(d[2]+'/'+d[1]+'/'+d[0]):''; };
+  var seen={};
+  var iv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
+  var one=!!(iv && ((iv.bookingIds||[]).length===1));
+  out.no=(iv&&iv.number)||'';
+  if(one){
+    (typeof SB_PAYMENTS!=='undefined'?SB_PAYMENTS:[]).forEach(function(p){
+      if(p.invoiceId!==iv.id || (p.type||'payment')!=='payment') return;
+      out.paid+=(+p.amount||0);
+      (Array.isArray(p.slips)?p.slips:[]).forEach(function(f){
+        if(!f || !f.id || seen[f.id]) return; seen[f.id]=1;
+        out.list.push({ f:f, cap:'จ่ายผ่านบิล '+(iv.number||'')+' · '+(LAB[p.method]||p.method||'—')+' ฿'+num(p.amount)
+          +(dTH(p.date)?(' · '+dTH(p.date)):'') });
+      });
+    });
+  }
+  /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
+     kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าดึงของวันนั้นเองอยู่แล้ว */
+  (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
+    if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
+    out.list.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
+      +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
+  });
+  return out;
+}
 function tsSlipPackList(date){
   var rows=tsRows(date);
   if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
@@ -23926,27 +23958,8 @@ function tsSlipPackList(date){
     var invPaid=0;
     (function(){
       var seen={}; imgs.forEach(function(x){ if(x.f && x.f.id) seen[x.f.id]=1; });
-      var iv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
-      var one=!!(iv && ((iv.bookingIds||[]).length===1));
-      var dTH=function(v){ var d=String(v||'').slice(0,10).split('-'); return d.length===3?(d[2]+'/'+d[1]+'/'+d[0]):''; };
-      if(one){
-        (typeof SB_PAYMENTS!=='undefined'?SB_PAYMENTS:[]).forEach(function(p){
-          if(p.invoiceId!==iv.id || (p.type||'payment')!=='payment') return;
-          invPaid+=(+p.amount||0);
-          (Array.isArray(p.slips)?p.slips:[]).forEach(function(f){
-            if(!f || !f.id || seen[f.id]) return; seen[f.id]=1;
-            imgs.push({ f:f, cap:'จ่ายผ่านบิล '+(iv.number||'')+' · '+(LAB[p.method]||p.method||'—')+' ฿'+num(p.amount)
-              +(dTH(p.date)?(' · '+dTH(p.date)):'') });
-          });
-        });
-      }
-      /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
-         kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าข้างบนดึงของวันนี้มาแล้ว */
-      (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
-        if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
-        imgs.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
-          +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
-      });
+      var IS=tsInvSlips(b); invPaid=IS.paid;
+      IS.list.forEach(function(x){ if(seen[x.f.id]) return; seen[x.f.id]=1; imgs.push(x); });
     })();
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
     out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · '), invPaid:invPaid });
@@ -24407,6 +24420,16 @@ function tsPayCell(r, date){
     else if(IV.paid>0)
       L.push('<span class="ts-chip b" title="'+e('ใบแจ้งหนี้ '+IV.no+' รับแล้ว '+m(IV.paid)+' · ค้าง '+m(IV.bal)
         +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking ปันส่วนรายใบไม่ได้'):''))+'">บิลชำระบางส่วน</span>');
+  }
+  /* §tsInvSlip · ผู้ใช้ขอ "ให้ดูได้ด้วย" · สลิปของเงินที่รับผ่านบิลเปิดดูจากหน้านี้ได้เลย
+     ของเดิมต้องย้อนไปหน้า Daily PFM ถึงจะเห็น ทั้งที่ป้าย "จ่ายผ่านบิลแล้ว" อยู่ตรงนี้ */
+  var _IS=(typeof tsInvSlips==='function')?tsInvSlips(b):{list:[]};
+  if(_IS.list.length && typeof laSlipClickAttr==='function'){
+    var _isT='สลิปจ่ายผ่านบิล'+(_IS.no?(' '+_IS.no):'');
+    L.push('<span class="ts-slipok ts-invslip" style="cursor:pointer" '
+      +laSlipClickAttr(_IS.list.map(function(x){ return x.f; }), _isT)
+      +' title="'+e(_isT+' · '+_IS.list.length+' ไฟล์ · กดเพื่อเปิดดู')+'">&#128206; สลิปบิล'
+      +(_IS.list.length>1?(' '+_IS.list.length):'')+'</span>');
   }
   if(r.cxlRow){
     var cc=b.cancellation||null;

@@ -238,6 +238,11 @@ const R10 = await page.evaluate(p => {
   const out = { a: a ? { ids: a.imgs.map(x => x.f.id), cap: (a.imgs[0] || {}).cap || '', tot: a.tot, miss: a.miss, invPaid: a.invPaid,
       dup: a.imgs.length - new Set(a.imgs.map(x => x.f.id)).size } : null,
     bInPack: !!b };
+  /* หน้าจอ Travel Summary · ป้ายกดดูสลิปได้ ไม่ต้องย้อนไป Daily PFM */
+  const cell = (id, d) => { const r = tsRows(d).find(x => x.b.id === id); return r ? tsPayCell(r, d) : ''; };
+  const ca = cell(p.A.id, p.A.d0), cb = cell(p.B.id, p.B.d0);
+  out.view = ca.indexOf('ts-invslip') >= 0 && ca.indexOf('laSlipView') >= 0 && ca.indexOf('att_test_prepay_A') >= 0;
+  out.viewB = cb.indexOf('ts-invslip') >= 0; out.cellB = cb.length > 0;
   if (a) { const h = _tsSlipPage(a, 0, 1, 1, p.A.d0, ''); out.page = h.indexOf('จ่ายผ่านบิล') >= 0 && h.indexOf('att_test_prepay_A') >= 0 && h.indexOf('รับเงินรวม') < 0; }
   /* บิลรวมหลายใบ · สลิปที่อยู่กับรายการรับเงินของบิลต้องไม่ถูกพิมพ์ซ้ำทุกใบจอง
      ถอด b.paymentSlips ออกชั่วคราว (ทางนั้นเป็นสลิปของใบจองเองจริง ๆ) แล้วทำให้บิลคุมสองใบ */
@@ -252,8 +257,9 @@ const R10 = await page.evaluate(p => {
 if (R10.err) fail('10 ' + R10.err);
 else if (R10.a && R10.a.ids.indexOf('att_test_prepay_A') >= 0 && R10.a.dup === 0 && /จ่ายผ่านบิล/.test(R10.a.cap)
          && R10.a.tot === 0 && R10.a.miss === 0 && R10.a.invPaid === Math.round(A.tot) && R10.page
-         && !R10.bInPack && R10.soloViaPayment && !R10.multi)
-  ok(`10 รีพอร์ต Travel Summary พิมพ์สลิปของเงินที่รับผ่านบิล (฿${R10.a.invPaid.toLocaleString()}) · ไม่บวกเข้ายอดหน้าท่า · ใบไม่มีสลิปไม่ถูกเตือน · บิลรวมไม่พิมพ์ซ้ำ`);
+         && !R10.bInPack && R10.soloViaPayment && !R10.multi
+         && R10.view && R10.cellB && !R10.viewB)
+  ok(`10 รีพอร์ต Travel Summary พิมพ์สลิปของเงินที่รับผ่านบิล (฿${R10.a.invPaid.toLocaleString()}) · ไม่บวกเข้ายอดหน้าท่า · ใบไม่มีสลิปไม่ถูกเตือน · บิลรวมไม่พิมพ์ซ้ำ · หน้าจอกดดูสลิปได้`);
 else fail(`10 รีพอร์ตไม่พิมพ์สลิปของบิล หรือนับยอดผิด: ${JSON.stringify(R10)}`);
 
 /* ══ คืนสถานะ ═══════════════════════════════════════════════════════════════ */
