@@ -7759,6 +7759,106 @@ function pfmFilterRows(){
 }
 function pfmSetDate(delta){ const d=new Date(_pfmDate+'T12:00:00'); const m=_pfmMode||'daily'; if(m==='week') d.setDate(d.getDate()+delta*7); else if(m==='month') d.setMonth(d.getMonth()+delta); else if(m==='year') d.setFullYear(d.getFullYear()+delta); else d.setDate(d.getDate()+delta); _pfmDate=bkV2LocalYMD(d); renderDailyPFM(); }
 function pfmIsProforma(bk){ const a=sbGetAgent(bk.agentId); return !!(a && a.payType==='proforma'); }
+/* ══ §pfmPrepay (2026-10-02) · เอเยนต์ Invoice (เครดิต) ที่โอนเงินเข้ามาก่อน ══════════
+   ที่มา · ผู้ใช้ถามเอง · "Agent เป็น Invoice และมีบางทีเอเยนต์ชอบชำระเงินเข้ามา
+   เราจะบันทึกแบบไหน และจะไปอยู่สรุปรายการชำระเงินได้อย่างไร ในหน้า Daily PFM"
+   ของเดิม Daily PFM เห็นแต่เอเยนต์ Pro Forma · ใบของเอเยนต์เครดิตไม่ขึ้นเลยไม่ว่าจ่ายแล้วหรือยัง
+   รับเงินได้ทางเดียวคือหน้า Accounting ซึ่งไม่ผูกกับใบงานเก็บเงินประจำวัน
+
+   ที่ตกลงกัน · รับเงินผูกกับใบจอง
+     ออกใบแจ้งหนี้เฉพาะใบจองนั้น (ครบกำหนดทันที) แล้วบันทึกรับเงิน + สลิป ด้วยฟอร์มเดิมของ PFM
+     ใบนั้นจึงไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ (acctNewInvoiceRender ข้ามใบที่มีใบแจ้งหนี้แล้ว)
+     และวงเงินเครดิตคืนเมื่อจ่ายครบ (agCreditState ข้ามใบที่ acctBookingPaid)
+
+   ตัวบอกว่าเป็นใบชนิดนี้ = inv.note==='prepay' · ใช้คอลัมน์ note ที่ sb_invoices มีอยู่แล้ว
+   ไม่เพิ่มฟิลด์ใหม่ เพราะฟิลด์ที่ไม่อยู่ใน field_mapping จะหายตอนซิงก์
+
+   ⚠ ใบเครดิตที่ "ยังไม่จ่าย" ห้ามเข้าหน้านี้ · ยังไม่ถึงกำหนด ถ้าดึงมา
+     ยอดค้างกับป้ายเลย cutoff จะพองด้วยของที่ไม่ได้ค้างจริง
+   ⚠ ใบเครดิตที่จ่ายล่วงหน้าไม่เต็ม · นับเข้ายอดรวมเฉพาะก้อนที่รับมาแล้ว ไม่นับส่วนที่เหลือเป็น "ค้าง"
+     ของ PFM · ส่วนที่เหลือยังอยู่บนใบแจ้งหนี้ใบเดี่ยวนั้น ไปตามต่อที่หน้า Accounting        */
+function pfmIsCreditAgent(a){ return !!(a && (a.payType==='invoice' || a.payType==='credit')); }
+function pfmIsPrepayInv(inv){ return !!(inv && inv.status!=='void' && inv.note==='prepay'); }
+function pfmIsCreditPrepaid(bk){
+  if(!bk || !pfmIsCreditAgent(sbGetAgent(bk.agentId))) return false;
+  return pfmIsPrepayInv(acctBookingInvoice(bk.id));
+}
+function pfmInScope(bk){ return pfmIsProforma(bk) || pfmIsCreditPrepaid(bk); }
+/* ยอดที่ใบแจ้งหนี้จะออก · สูตรเดียวกับ acctCreateInvoice (เอเยนต์ที่ราคายังไม่รวม VAT ต้องบวก 7%) */
+function pfmPrepayTotal(bk){
+  const sub=acctBookingTotal(bk); const a=sbGetAgent(bk&&bk.agentId);
+  return (a && a.vatMode==='exclude') ? sub+Math.round(sub*0.07) : sub;
+}
+/* ใบที่รับเงินล่วงหน้าได้ · เอเยนต์เครดิต ยังไม่มีใบแจ้งหนี้ ไม่ถูกยกเลิก · ใกล้วันเดินทางขึ้นก่อน */
+function pfmPrepayCands(q){
+  const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  q=String(q||'').trim().toLowerCase();
+  const out=[];
+  (SB_BOOKINGS||[]).forEach(b=>{
+    if(ACCT_PAID_STATES.includes(b.status)) return;
+    if(b.status==='quote' || b.status==='draft') return;
+    const a=sbGetAgent(b.agentId); if(!pfmIsCreditAgent(a)) return;
+    if(acctBookingInvoice(b.id)) return;
+    const tot=pfmPrepayTotal(b); if(!(tot>0)) return;
+    const ds=(b.trips||[]).map(t=>t.date||'').filter(Boolean).sort(); const d0=ds[0]||'';
+    const trip=(b.trips||[])[0]||{}; const rt=(typeof getRoute==='function')?getRoute(trip.routeId):null;
+    const route=(rt&&rt.name)||trip.routeId||'';
+    if(q){ const hay=[b.voucherRef,b.code,b.id,a.name,a.code,b.leadPax,b.customerName,route,d0].join(' ').toLowerCase();
+      if(hay.indexOf(q)<0) return; }
+    out.push({ b, a, d0, tot, route });
+  });
+  out.sort((x,y)=>{ const xu=x.d0>=today, yu=y.d0>=today; if(xu!==yu) return xu?-1:1;
+    return xu ? x.d0.localeCompare(y.d0) : y.d0.localeCompare(x.d0); });
+  return out;
+}
+let _pfmPre=null;   // {q} · ตัวเลือกใบจองของเอเยนต์เครดิต
+function pfmPrepayOpen(){ _pfmPre={q:''}; renderDailyPFM(); const el=document.getElementById('pfm-pre-q'); if(el) el.focus(); }
+function pfmPrepayClose(){ _pfmPre=null; renderDailyPFM(); }
+/* พิมพ์ค้นหา · เปลี่ยนเฉพาะรายการ ไม่วาดทั้งหน้าใหม่ (cursor จะเด้งออกจากช่อง) */
+function pfmPrepaySearch(v){ if(!_pfmPre) return; _pfmPre.q=v; const el=document.getElementById('pfm-pre-list'); if(el) el.innerHTML=pfmPrepayListHTML(); }
+function pfmPrepayStart(bkId){
+  const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
+  if(acctBookingInvoice(bkId)){ alert('This booking already has an invoice'); return; }
+  _pfmPre=null;
+  _pfmRec={ bkId, invId:null, prepay:true, amount:Math.round(pfmPrepayTotal(b)), method:'transfer', ref:'', slips:[] };
+  renderDailyPFM();
+}
+function pfmPrepayListHTML(){
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const all=pfmPrepayCands(_pfmPre?_pfmPre.q:''); const CAP=40; const show=all.slice(0,CAP);
+  if(!all.length) return `<div style="padding:26px;text-align:center;color:#8a8a82;font-size:12.5px">ไม่พบใบจองของเอเยนต์ Invoice ที่ยังไม่ออกใบแจ้งหนี้</div>`;
+  return show.map(x=>{ const b=x.b;
+    let dl=x.d0; try{ dl=new Date(x.d0+'T12:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }catch(e){}
+    return `<div data-pfmpre="${esc(b.id)}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:0.5px solid rgba(0,0,0,.06)">
+      <span style="font-family:'DM Mono',monospace;font-size:11px;color:#5F5E5A;min-width:84px;white-space:nowrap">${esc(dl)}</span>
+      <span style="flex:1.1;min-width:0"><span style="display:block;font-family:'DM Mono',monospace;font-size:11.5px;color:#15201a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.voucherRef||b.code||b.id)}">${esc(b.voucherRef||b.code||b.id)}</span>
+        <span style="display:block;font-size:11px;color:#8a8a82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.leadPax||b.customerName||'')}">${esc(b.leadPax||b.customerName||'')}</span></span>
+      <span style="flex:1.2;min-width:0"><span style="display:block;font-size:12px;font-weight:500;color:#1B2A55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.a.name)}">${esc(x.a.name)}</span>
+        <span style="display:block;font-size:11px;color:#8a8a82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.route)}">${esc(x.route)}</span></span>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#15201a;white-space:nowrap;min-width:76px;text-align:right">&#3647;${sbFmtTHB(x.tot)}</span>
+      <button onclick="pfmPrepayStart('${b.id}')" style="background:#163d2b;color:#eafbe0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">รับเงิน</button>
+    </div>`; }).join('')
+    + (all.length>CAP?`<div style="padding:9px 16px;font-size:11px;color:#9a988f;background:#fcfbf9;border-top:0.5px solid rgba(0,0,0,.06)">+${all.length-CAP} ใบ · พิมพ์ค้นหาให้แคบลง</div>`:'');
+}
+function pfmPrepayModalHTML(){
+  if(!_pfmPre) return '';
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return `
+  <div id="pfm-pre-modal" onclick="pfmPrepayClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;width:720px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.3)">
+      <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#185FA5;text-transform:uppercase">Invoice agent · prepayment</div>
+        <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">รับเงินล่วงหน้าจากเอเยนต์ Invoice</div>
+        <div style="font-size:11.5px;color:#8a8a82;margin-top:3px;line-height:1.55">เลือกใบจองที่เอเยนต์โอนเงินเข้ามา · ระบบจะออกใบแจ้งหนี้เฉพาะใบนั้นแล้วบันทึกรับเงิน ใบนั้นจะไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ</div>
+        <input id="pfm-pre-q" value="${esc(_pfmPre.q)}" oninput="pfmPrepaySearch(this.value)" placeholder="ค้นหา voucher · เอเยนต์ · ชื่อลูกค้า · เส้นทาง · วันที่ (2026-11-08)" style="margin-top:11px;width:100%;box-sizing:border-box;height:38px;border:1px solid #d7dbe2;border-radius:9px;padding:0 12px;font-family:inherit;font-size:13px">
+      </div>
+      <div id="pfm-pre-list" style="overflow:auto;flex:1;min-height:120px">${pfmPrepayListHTML()}</div>
+      <div style="display:flex;justify-content:flex-end;padding:12px 19px;background:#fafbf9;border-top:1px solid #eef0ea;border-radius:0 0 16px 16px">
+        <button onclick="pfmPrepayClose()" style="font-size:12px;font-weight:600;color:#5F5E5A;background:#fff;border:1px solid #d7dbe2;border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">ปิด</button>
+      </div>
+    </div>
+  </div>`;
+}
 function pfmSalesName(bk){ const sid = bk.soldBy || (sbGetAgent(bk.agentId)||{}).sales; const s=sid?sbGetSales(sid):null; return s?(s.name||sid):'—'; }
 /* §pfmCotWarn (2026-09-15) · Daily PFM กับคำตัดสิน COT ยังไม่รู้จักกัน
    PFM คิดยอดจาก acctBookingTotal() ตรง ๆ · ไม่เคยเรียก tsCotGet/bkV2CotOf เลย
@@ -7787,7 +7887,7 @@ function pfmCutoff(date){ const c=new Date(date+'T18:00:00'); c.setDate(c.getDat
 function pfmBookingsFor(date){
   return (SB_BOOKINGS||[]).filter(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
-    if(!pfmIsProforma(b)) return false;
+    if(!pfmInScope(b)) return false;
     return (b.trips||[]).some(t=>(t.date||'')===date);
   });
 }
@@ -7805,7 +7905,7 @@ function pfmBookingsForPeriod(date, mode){
   const repDate=b=>{ const ds=(b.trips||[]).map(t=>t.date||'').filter(x=>x>=r.from&&x<=r.to).sort(); return ds.length?ds[ds.length-1]:''; };
   const out=(SB_BOOKINGS||[]).filter(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
-    if(!pfmIsProforma(b)) return false;
+    if(!pfmInScope(b)) return false;
     return (b.trips||[]).some(t=>{ const td=t.date||''; return td>=r.from && td<=r.to; });
   });
   out.sort((a,b)=>{ const ad=repDate(a), bd=repDate(b); if(ad!==bd) return ad<bd?1:-1; const ab=(a.bookingDate||a.createdAt||''), bb=(b.bookingDate||b.createdAt||''); return ab<bb?1:(ab>bb?-1:0); });
@@ -7821,10 +7921,12 @@ function pfmChartBuckets(date, mode){
     else if(mode==='year'){ const yr=d0.getFullYear()-i; from=yr+'-01-01'; to=yr+'-12-31'; lab=String(yr); }
     else { const dd=new Date(d0); dd.setDate(d0.getDate()-i); from=to=bkV2LocalYMD(dd); lab=from.slice(8); }
     out.push({from,to,lab,cur:i===0,tot:0,paid:0,unpaid:0}); }
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!pfmIsProforma(b))return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!pfmInScope(b))return;
     const ds=(b.trips||[]).map(t=>t.date||'').filter(Boolean).sort(); if(!ds.length)return; const rep=ds[0];
     const bk=out.find(o=>rep>=o.from&&rep<=o.to); if(!bk)return;
     const inv=acctBookingInvoice(b.id); const total=acctBookingTotal(b); const bal=inv?acctInvoiceBalance(inv):total;
+    /* §pfmPrepay · ใบเครดิตนับเฉพาะก้อนที่รับแล้ว · ส่วนที่เหลือไม่ใช่ยอดค้างของ PFM */
+    if(!pfmIsProforma(b)){ const got=Math.max(0,total-bal); bk.tot+=got; bk.paid+=got; return; }
     bk.tot+=total; bk.paid+=(total-bal); bk.unpaid+=bal; });
   return out;
 }
@@ -7883,6 +7985,16 @@ function pfmSlipRemove(id){ if(!_pfmRec) return; fetch('/api/attach/'+encodeURIC
 function pfmRecSubmit(){
   const r=_pfmRec; if(!r) return;
   const amt=Math.max(0,Number(r.amount)||0); if(amt<=0){ alert('ใส่จำนวนเงินก่อน'); return; }
+  /* §pfmPrepay · ใบแจ้งหนี้ออกตอนกดบันทึก ไม่ใช่ตอนเปิดฟอร์ม
+     ออกตอนเปิดแล้วคนกดยกเลิก จะเหลือใบแจ้งหนี้ค้างที่ไม่มีใครตั้งใจออก และใบจองนั้นหลุดจากบิลสิ้นเดือน */
+  if(r.prepay && !r.invId){
+    const pb=SB_BOOKINGS.find(x=>x.id===r.bkId); if(!pb){ _pfmRec=null; renderDailyPFM(); return; }
+    if(acctBookingInvoice(r.bkId)){ alert('This booking already has an invoice - open it from the list instead'); return; }
+    const pinv=acctCreateInvoice(pb.agentId,[r.bkId],0);
+    if(!pinv){ alert('Could not issue the invoice for this booking'); return; }
+    pinv.note='prepay';                    /* ลงที่เก็บพร้อมกับตอนบันทึกรับเงินข้างล่าง (acctRecordPayment เซฟใบแจ้งหนี้เอง) */
+    r.invId=pinv.id;
+  }
   acctRecordPayment(r.invId, amt, r.method||'transfer', {ref:r.ref, slips:r.slips});
   // keep slip refs on the booking too (for later viewing)
   const b=SB_BOOKINGS.find(x=>x.id===r.bkId);
@@ -7893,7 +8005,7 @@ function pfmRecModalHTML(){
   const r=_pfmRec; if(!r) return '';
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const b=SB_BOOKINGS.find(x=>x.id===r.bkId)||{}; const a=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
-  const inv=SB_INVOICES.find(i=>i.id===r.invId); const bal=inv?Math.round(acctInvoiceBalance(inv)):0;
+  const inv=SB_INVOICES.find(i=>i.id===r.invId); const bal=inv?Math.round(acctInvoiceBalance(inv)):((r.prepay&&b.id)?Math.round(pfmPrepayTotal(b)):0);
   const _mac=(typeof _bkV2IsMac==='function')?_bkV2IsMac():true; const _shot=_mac?'Cmd+Shift+4':'Win+Shift+S'; const _paste=_mac?'Cmd+V':'Ctrl+V';
   const mBtn=(v,l)=>`<button onclick="pfmRecSet('method','${v}');document.querySelectorAll('[data-pfmm]').forEach(x=>{x.style.background='#fff';x.style.color='#5F5E5A'});this.style.background='#163d2b';this.style.color='#eafbe0'" data-pfmm="${v}" style="flex:1;background:${r.method===v?'#163d2b':'#fff'};color:${r.method===v?'#eafbe0':'#5F5E5A'};border:0.5px solid #cfcabf;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`;
   return `
@@ -7902,7 +8014,8 @@ function pfmRecModalHTML(){
       <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
         <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#0F6E56;text-transform:uppercase">Record payment</div>
         <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">${esc(b.voucherRef||b.code||b.id)}</div>
-        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')} · ค้าง <b style="color:#A32D2D">฿${bal.toLocaleString()}</b></div>
+        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')} · ${r.prepay?'ยอดใบจอง':'ค้าง'} <b style="color:#A32D2D">฿${bal.toLocaleString()}</b></div>
+        ${r.prepay?`<div id="pfm-rec-prenote" style="margin-top:8px;font-size:11px;line-height:1.55;color:#12518F;background:#E9F1FB;border:0.5px solid #C3D8F2;border-radius:8px;padding:7px 10px"><b>เอเยนต์ Invoice · รับเงินล่วงหน้า</b> — กดบันทึกแล้วระบบออกใบแจ้งหนี้เฉพาะใบจองนี้ ใบนี้จะไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ · ถ้ารับไม่เต็ม ส่วนที่เหลือค้างอยู่บนใบแจ้งหนี้ใบนี้</div>`:''}
       </div>
       <div style="padding:16px 19px;display:flex;flex-direction:column;gap:13px">
         <div>
@@ -8112,6 +8225,7 @@ function pfmIssueAll(){
 function pfmRemindAll(){
   const list=pfmBookingsForPeriod(_pfmDate,_pfmMode); let n=0;
   list.forEach(b=>{ const inv=acctBookingInvoice(b.id); const total=acctBookingTotal(b); const bal=inv?acctInvoiceBalance(inv):total; if(bal<=0) return;
+    if(!pfmIsProforma(b)) return;   /* §pfmPrepay · ส่วนที่เหลือของใบเครดิตยังไม่ถึงกำหนด ไม่ใช่ของที่ต้องทวงก่อนเดินทาง */
     b.ops=b.ops||{}; b.ops.pfm=b.ops.pfm||{}; b.ops.pfm.remindedAt=new Date().toISOString();
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','PFM payment reminder sent','Notify'); n++; });
   if(!n){ alert('No unpaid bookings to remind.'); return; }
@@ -8151,8 +8265,13 @@ function renderDailyPFM(){
     const held=pfm&&pfm.decision==='hold';
     const _bt=(b.trips||[]).map(t=>t.date||'').filter(x=>x>=range.from&&x<=range.to).sort();
     const _btDate=_bt.length?_bt[0]:date;
-    const alert = now>pfmCutoff(_btDate) && unpaid && !approved && !held;
-    totAmt+=total; paidAmt+=paid; if(unpaid){unpaidAmt+=bal; nUnpaid++;} if(alert) nAlert++; if(approved) nApproved++;
+    /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · ไม่มี cutoff ไม่มีเตือน · นับเฉพาะก้อนที่รับแล้ว */
+    const _pre = !pfmIsProforma(b);
+    const alert = !_pre && now>pfmCutoff(_btDate) && unpaid && !approved && !held;
+    const _got = Math.max(0, paid);   /* เอเยนต์ที่ราคายังไม่รวม VAT · ใบแจ้งหนี้สูงกว่ายอดใบจอง รับมานิดเดียว paid ติดลบได้ */
+    if(_pre){ totAmt+=_got; paidAmt+=_got; }
+    else { totAmt+=total; paidAmt+=paid; if(unpaid){unpaidAmt+=bal; nUnpaid++;} }
+    if(alert) nAlert++; if(approved) nApproved++;
     const trip=(b.trips||[]).find(t=>(t.date||'')===_btDate)||(b.trips||[])[0]||{};
     const route=(typeof getRoute==='function'?getRoute(trip.routeId):null);
     const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(trip.pax||{}):0;
@@ -8162,6 +8281,7 @@ function renderDailyPFM(){
     if(held) chip=_dot('#E24B4A')+`<span style="font-size:11px;color:#A32D2D">On hold</span>`;
     else if(approved) chip=_dot('#1D9E75')+`<span style="font-size:11px;color:#0F6E56" title="Extended by ${esc((pfm&&(pfm.extendedBy||pfm.by))||'—')}">Extended${(pfm&&(pfm.extendedBy||pfm.by))?' · '+esc(pfm.extendedBy||pfm.by):''}</span>`;
     else if(!unpaid && inv) chip=_dot('#1D9E75')+`<span style="font-size:11px;color:#0F6E56">Paid</span>`;
+    else if(_pre) chip=_dot('#EF9F27')+`<span style="font-size:11px;color:#7A4A00" title="รับล่วงหน้าแล้ว ฿${sbFmtTHB(paid)} · ส่วนที่เหลือค้างบนใบแจ้งหนี้ใบนี้ ไม่นับเป็นยอดค้างของ PFM">จ่ายล่วงหน้าบางส่วน</span>`;
     else if(alert) chip=_dot('#E24B4A')+`<span style="font-size:11px;color:#A32D2D;font-weight:500">Unpaid · เลย cutoff</span>`;
     else if(inv) chip=_dot('#EF9F27')+`<span style="font-size:11px;color:#7A4A00">Awaiting payment</span>`;
     else chip=_dot('#B4B2A9')+`<span style="font-size:11px;color:#5F5E5A">No invoice yet</span>`;
@@ -8196,10 +8316,10 @@ function renderDailyPFM(){
     const tdc='padding:11px 10px;font-size:12px;border-top:0.5px solid rgba(0,0,0,.06);vertical-align:middle';
     const _stKey = held?'hold':approved?'approved':(!unpaid&&inv)?'paid':alert?'alert':inv?'awaiting':'noinv';
     const _srch = String((b.voucherRef||b.code||b.id)+' '+(a?a.name:b.agentId)+' '+(route?route.name:trip.routeId)+' '+pfmSalesName(b)).toLowerCase();
-    const _trHtml = `<tr data-pfmrow="${esc(_srch)}" data-pfmst="${_stKey}" style="${alert?'background:#FEF6F5':''}">
+    const _trHtml = `<tr data-pfmrow="${esc(_srch)}" data-pfmst="${_stKey}"${_pre?' data-pfmpre="1"':''} style="${alert?'background:#FEF6F5':''}">
       <td style="${tdc};text-align:center;width:30px"><span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #cfcabf;display:inline-block;vertical-align:middle"></span></td>
       <td style="${tdc};font-family:'DM Mono',monospace;color:#5F5E5A">${esc(b.voucherRef||b.code||b.id)}</td>
-      <td style="${tdc};color:#1B2A55;font-weight:500">${esc(a?a.name:b.agentId)}</td>
+      <td style="${tdc};color:#1B2A55;font-weight:500">${esc(a?a.name:b.agentId)}${_pre?`<div style="margin-top:3px"><span class="pfm-pretag" title="เอเยนต์ Invoice (เครดิต) ที่โอนเงินเข้ามาก่อน · ใบนี้มีใบแจ้งหนี้ของตัวเอง ไม่รวมในบิลสิ้นเดือน" style="font-size:10px;font-weight:600;color:#12518F;background:#E9F1FB;border:0.5px solid #C3D8F2;border-radius:7px;padding:2px 7px;white-space:nowrap">Invoice · จ่ายล่วงหน้า</span></div>`:''}</td>
       <td style="${tdc};color:#5F5E5A">${esc(pfmSalesName(b))}</td>
       <td style="${tdc};color:#5F5E5A">${esc(route?route.name:trip.routeId)}</td>
       <td style="${tdc};text-align:center;font-family:'DM Mono',monospace">${pax}</td>
@@ -8209,8 +8329,8 @@ function renderDailyPFM(){
       <td style="${tdc};text-align:right;white-space:nowrap">${act||'<span style="color:#c7c5bb">—</span>'}</td>
     </tr>`;
     if(!_byDate[_btDate]){ _byDate[_btDate]=[]; _dateOrder.push(_btDate); }
-    _byDate[_btDate].push({tr:_trHtml, total, paid, bal, alert});
-    if(unpaid && !approved && !held){   // outstanding → surface at top, ordered by nearest travel date
+    _byDate[_btDate].push({tr:_trHtml, total:(_pre?_got:total), paid:(_pre?_got:paid), bal:(_pre?0:bal), alert});
+    if(unpaid && !approved && !held && !_pre){   // outstanding → surface at top, ordered by nearest travel date
       _prio.push({ btDate:_btDate, bal, alert, act, cotDed:(_cw?_cw.deduct:0),
         voucher:esc(b.voucherRef||b.code||b.id), agentName:esc(a?a.name:b.agentId),
         routeName:esc(route?route.name:trip.routeId), pax });
@@ -8278,8 +8398,8 @@ function renderDailyPFM(){
   const kc=(lab,val,sub,icon,col,subcol)=>`<div style="background:#fff;border-radius:18px;box-shadow:0 1px 3px rgba(20,45,28,.06);padding:14px 16px;display:flex;flex-direction:column;gap:5px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:#7d7d74">${lab}</span><span style="width:26px;height:26px;border-radius:50%;border:1px solid #e6e9e3;display:flex;align-items:center;justify-content:center">${_ic(_P[icon]||'',col&&col!=='#1b1b18'?col:'#8a978c',14)}</span></div><div style="font-size:24px;font-weight:700;letter-spacing:-.5px;color:${col||'#1b1b18'}">${val}</div><div style="font-size:11px;color:${subcol||'#8a8a82'}">${sub||''}</div></div>`;
   const th='padding:11px 12px;text-align:left;font-size:11px;color:#9a988f;font-weight:500;background:#fbfcfa';
   // status breakdown counts (left-column card)
-  let nPaid=0,nAwait=0,nNoInv=0,nHold=0;
-  list.forEach(b=>{ const inv2=acctBookingInvoice(b.id); const tt2=acctBookingTotal(b); const bal2=inv2?acctInvoiceBalance(inv2):tt2; const up2=bal2>0; const pf2=(b.ops&&b.ops.pfm)||null; const hd2=pf2&&pf2.decision==='hold'; if(hd2)nHold++; else if(!up2&&inv2)nPaid++; else if(!inv2)nNoInv++; else nAwait++; });
+  let nPaid=0,nAwait=0,nNoInv=0,nHold=0,nPrePart=0;
+  list.forEach(b=>{ const inv2=acctBookingInvoice(b.id); const tt2=acctBookingTotal(b); const bal2=inv2?acctInvoiceBalance(inv2):tt2; const up2=bal2>0; const pf2=(b.ops&&b.ops.pfm)||null; const hd2=pf2&&pf2.decision==='hold'; if(hd2)nHold++; else if(!up2&&inv2)nPaid++; else if(!inv2)nNoInv++; else if(pfmIsProforma(b))nAwait++; else nPrePart++; });
   const brow=(c,lab,n)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:0.5px solid #f0f1ed"><span style="font-size:12px;color:#5f5e5a"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:8px;vertical-align:middle"></span>${lab}</span><span style="font-size:13px;font-weight:700;color:#1b1b18;font-family:'DM Mono',monospace">${n}</span></div>`;
   // period segmented toggle (scopes chart + bookings list)
   const _seg=(m,lab)=>`<button onclick="pfmSetMode('${m}')" style="border:none;background:${mode===m?'#163d2b':'transparent'};color:${mode===m?'#eafbe0':'#5f5e5a'};border-radius:14px;padding:6px 13px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit">${lab}</button>`;
@@ -8292,6 +8412,7 @@ function renderDailyPFM(){
           <div style="font-size:13px;color:#8a8a82">Stay on top of pro-forma payments before each operation day.</div>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button onclick="pfmPrepayOpen()" title="เอเยนต์ Invoice (เครดิต) โอนเงินเข้ามาก่อน · บันทึกรับเงินผูกกับใบจอง" style="background:#fff;color:#12518F;border:1px solid #C3D8F2;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ รับเงินล่วงหน้า · เอเยนต์ Invoice</button>
           <button onclick="pfmPrintReport()" title="พิมพ์รายงาน PFM + สลิปที่แนบ" style="background:#163d2b;color:#eafbe0;border:none;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🖨 พิมพ์รายงาน</button>
           ${segBar}
           <div style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e7eae5;border-radius:22px;padding:6px 9px">
@@ -8353,6 +8474,7 @@ function renderDailyPFM(){
             ${brow('#E24B4A','Unpaid · past cutoff',nAlert)}
             ${brow('#B4B2A9','No invoice yet',nNoInv)}
             ${brow('#0F6E56','Approved · extended',nApproved)}
+            ${nPrePart?brow('#2A78D6','Invoice · จ่ายล่วงหน้าบางส่วน',nPrePart):''}
             ${nHold?brow('#A32D2D','On hold',nHold):''}
           </div>
         </div>
@@ -8369,8 +8491,8 @@ function renderDailyPFM(){
           ${dayCardsHtml||`<div style="background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(20,45,28,.06);padding:40px;text-align:center;color:#8a8a82;font-size:13px">ไม่มี booking แบบ Pro-forma ใน ${esc(mode==='daily'?date:dlabel)}</div>`}
         </div>
       </div>
-      <div style="font-size:11px;color:#9a988f;margin-top:12px">PFM = agent payType "proforma" · ออกใบแจ้งหนี้ + ติดตามชำระก่อน ${clabel} · หลัง cutoff ที่ยังไม่จ่าย ต้องให้ salesperson กด Extend หรือ Hold</div>
-    </div>${pfmRecModalHTML()}${pfmEditModalHTML()}`;
+      <div style="font-size:11px;color:#9a988f;margin-top:12px">เอเยนต์ Invoice ที่จ่ายล่วงหน้าขึ้นด้วย (ป้ายฟ้า) นับเฉพาะยอดที่รับแล้ว · PFM = agent payType "proforma" · ออกใบแจ้งหนี้ + ติดตามชำระก่อน ${clabel} · หลัง cutoff ที่ยังไม่จ่าย ต้องให้ salesperson กด Extend หรือ Hold</div>
+    </div>${pfmPrepayModalHTML()}${pfmRecModalHTML()}${pfmEditModalHTML()}`;
   if(_pfmSearch||_pfmFilter!=='all') pfmFilterRows();   // re-apply active search/filter to the fresh DOM
 }
 // ════════════════════════════════════════════════════════════════════
@@ -54339,16 +54461,20 @@ function pfmPrintReport(){
     const ss   = (b.paymentSlips||[]);
     const pays = inv ? (SB_PAYMENTS||[]).filter(p => p.invoiceId===inv.id && p.type!=='refund') : [];
 
-    if(inv){ billed += tot; collected += paid; if(bal<=0) nPaid++; else nUnpaid++; } else { billed += tot; nNoInv++; }
+    /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · นับเฉพาะก้อนที่รับแล้ว ไม่นับส่วนที่เหลือเป็นค้างชำระ */
+    const pre = (typeof pfmIsCreditPrepaid==='function') && pfmIsCreditPrepaid(b);
+    if(pre){ billed += paid; collected += paid; if(bal<=0) nPaid++; }
+    else if(inv){ billed += tot; collected += paid; if(bal<=0) nPaid++; else nUnpaid++; } else { billed += tot; nNoInv++; }
 
     const st = !inv ? {t:'ยังไม่ออกใบ', c:'#5F5E5A', bg:'#F1EFE8'}
+             : (pre && bal>0) ? {t:'จ่ายล่วงหน้าบางส่วน', c:'#854F0B', bg:'#FAEEDA'}
              : bal<=0 ? {t:'จ่ายครบ',   c:'#0F6E56', bg:'#E1F5EE'}
              : paid>0 ? {t:'จ่ายบางส่วน', c:'#854F0B', bg:'#FAEEDA'}
              :          {t:'ค้างชำระ',  c:'#A32D2D', bg:'#FCEBEB'};
 
     rows.push({
       vc: b.voucherRef || b.code || b.id,
-      agent: ag.name || b.agentId || '',
+      agent: (ag.name || b.agentId || '') + (pre ? ' · Invoice จ่ายล่วงหน้า' : ''), pre,
       sales: (typeof pfmSalesName==='function') ? (pfmSalesName(b)||'—') : '—',
       route: R.name || t.routeId || '',
       pax, tot, bal, paid, pct, st,
@@ -54364,7 +54490,7 @@ function pfmPrintReport(){
 
   const outstanding = Math.max(0, billed - collected);
   const collPct = billed>0 ? Math.round(collected/billed*100) : 0;
-  const overdue = rows.filter(r => r.bal>0 && r.st.t!=='ยังไม่ออกใบ').sort((a,b)=>b.bal-a.bal).slice(0,4);
+  const overdue = rows.filter(r => r.bal>0 && !r.pre && r.st.t!=='ยังไม่ออกใบ').sort((a,b)=>b.bal-a.bal).slice(0,4);
 
   // ── page 1 · summary cards + full table ──
   let html = '<section class="pg">'
