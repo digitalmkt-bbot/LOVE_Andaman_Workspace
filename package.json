@@ -55,7 +55,8 @@
     "test:vbfocus": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_vbfocus.mjs",
     "test:vbrevert": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_vbrevert.mjs",
     "test:pbpax": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_pbpax.mjs",
-    "test:lkpend": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_lkpend.mjs"
+    "test:lkpend": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_lkpend.mjs",
+    "test:splitpicktime": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_splitpicktime.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
