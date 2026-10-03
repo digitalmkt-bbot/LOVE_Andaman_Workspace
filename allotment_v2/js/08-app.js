@@ -17763,8 +17763,19 @@ function pckMoney(b, date){
            exGot:exGot, exDue:exDue, upgrades:ups, upDue:upDue, upGot:upGot,
            balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
-           due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'' };
+           due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'',
+           /* §b2cPayOne (2026-10-03) · ป้ายการชำระต้องอ่านกติกาเดียวกับหน้า By trip (bkV2PayChip)
+              ที่มา · ใบ B2C LOV-0484295 (4 ต.ค.) · By trip ขึ้น "Paid · จ่าย 13,039 · ครบ"
+              แต่ Travel Summary กับ Pier Check-in ขึ้น "COT · ยังไม่ระบุยอด" ในใบเดียวกัน
+              ใบ B2C ทุกใบแขวนอยู่กับเอเยนต์กลาง a_b2c ซึ่งตั้ง payType เป็น cot · สองหน้านี้อ่านค่าของเอเยนต์
+              จึงบอกให้ไปเก็บเงินจากคนที่จ่ายออนไลน์มาครบแล้ว · ของจริงอยู่ที่ paymentSnapshot ของใบ
+              term = เงื่อนไขการชำระของใบนี้จริง ๆ · paidState = paid/deposit/unpaid (เฉพาะ B2C)
+              payType ยังเป็นค่าของเอเยนต์เหมือนเดิม · Daily Report ใช้ตัวนั้นแบ่งสัดส่วน ไม่ได้แตะ */
+           term:((b.agentId==='a_b2c' && b.paymentSnapshot && b.paymentSnapshot.method) || (ag&&ag.payType) || ''),
+           paidState:((b.agentId==='a_b2c' && b.paymentSnapshot && b.paymentSnapshot.paidStatus) ? String(b.paymentSnapshot.paidStatus) : '') };
 }
+/* §b2cPayOne · "COT แต่ยังไม่มียอด" ขึ้นได้เฉพาะใบที่เงื่อนไขเป็น COT จริงและยังไม่ได้จ่ายครบ */
+function pckCotUnset(M){ return !!M && M.term==='cot' && M.paidState!=='paid'; }
 function pckMoneyCell(b, date, sheet){
   var e=ckEsc, M=pckMoney(b,date);
   var m=function(n){ return '฿'+pckNum(n); };
@@ -17792,7 +17803,7 @@ function pckMoneyCell(b, date, sheet){
     var _v;
     if(M.due>0) _v='<span class="pcs-pay due" title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'">เก็บที่ท่า <b>'+m(M.due)+'</b></span>';
     else if(M.pierPaid>0) _v='<span class="pcs-pay ok">&#10003; เก็บครบ <b>'+m(M.pierPaid)+'</b></span>';
-    else if(M.payType==='cot') _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
+    else if(pckCotUnset(M)) _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
     else if(M.ovnSettled) _v='<span class="pcs-pay ok">&#10003; ชำระแล้ววันขาไป</span>';
     /* §pckTrim · ช่องว่าง = ไม่มีอะไรต้องเก็บ · ป้าย "ไม่ต้องเก็บ" อยู่แทบทุกแถว
        ของที่ขึ้นทุกแถวเท่ากันหมดไม่ได้บอกอะไร มีแต่ทำให้ป้ายที่ต้องรีบเห็นจมหาย */
@@ -17804,7 +17815,7 @@ function pckMoneyCell(b, date, sheet){
        +'<div style="font-size:9px;color:#a08a5f;margin-top:2px;white-space:nowrap">'+e(parts.join(' · '))+'</div>';
   } else if(M.pierPaid>0){
     out+='<span style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>';
-  } else if(M.payType==='cot'){
+  } else if(pckCotUnset(M)){
     out+='<span style="font-size:10px;color:#a5a49d">COT · ยังไม่ระบุยอด</span>';
   } else if(M.ovnSettled){
     // §ovnSettled · ช่องว่างเปล่าอ่านได้สองแบบ "ไม่มีอะไรต้องเก็บ" กับ "ลืมใส่" · บอกไปเลยว่าอันไหน
@@ -24787,13 +24798,20 @@ function tsPayCell(r, date){
   // เงื่อนไขการชำระของใบนี้ · Invoice = เครดิต ไม่ต้องเก็บหน้างาน
   var PT={ invoice:['Invoice','n'], credit:['Invoice','n'], proforma:['Proforma','e'], prepaid:['Proforma','e'],
            cot:['COT','a'], bt:['โอนล่วงหน้า','e'] };
-  var pt=PT[M.payType||'']||null;
-  if(pt){
-    var _pfDate=(M.payType==='proforma'||M.payType==='prepaid')?tsProformaPaidDate(b):'';
+  var pt=PT[M.term||'']||null;
+  /* §b2cPayOne · B2C จ่ายครบแล้ว = ป้าย Paid อย่างเดียว เหมือนหน้า By trip · ป้ายเงื่อนไข (COT ฯลฯ) ไม่ขึ้น
+     เพราะเอกสารนี้คือใบปิดเงิน ป้าย COT บนใบที่จ่ายครบคือสั่งให้เก็บเงินซ้ำ · ยังไม่ครบ ขึ้นทั้งเงื่อนไขและสถานะ */
+  var _b2cSt={ paid:['Paid','g','B2C · ลูกค้าจ่ายครบแล้ว'], deposit:['Deposit','b','B2C · ลูกค้าจ่ายมัดจำแล้ว ยังมียอดค้าง'], unpaid:['Unpaid','r','B2C · ลูกค้ายังไม่ได้จ่าย'] }[M.paidState||'']||null;
+  if(_b2cSt && M.paidState==='paid'){
+    L.push('<span class="ts-chip g" data-tspay="paid" title="'+e(_b2cSt[2]+(pt?(' · เงื่อนไข '+pt[0]):''))+'">&#10003; Paid</span>');
+  }
+  else if(pt){
+    var _pfDate=(M.term==='proforma'||M.term==='prepaid')?tsProformaPaidDate(b):'';
     L.push('<span class="ts-chip '+pt[1]+'" title="'+e('เงื่อนไขการชำระของ agent'+(_pfDate?' · ชำระวันที่ '+_pfDate:''))+'">'
       +pt[0]+(_pfDate?(' · '+e(_pfDate)):'')+'</span>');
   }
   else if(!b.agentId) L.push('<span class="ts-chip n">Walk-in</span>');
+  if(_b2cSt && M.paidState!=='paid') L.push('<span class="ts-chip '+_b2cSt[1]+'" data-tspay="'+e(M.paidState)+'" title="'+e(_b2cSt[2])+'">'+_b2cSt[0]+'</span>');
   // §tsInvPaid · เงินที่รับผ่านใบแจ้งหนี้ (หน้า By-trip-date / หน้าบัญชี) · คนละก้อนกับเงินหน้าท่า
   var IV=X.inv||{};
   if(IV.inv){
@@ -24837,7 +24855,7 @@ function tsPayCell(r, date){
     if(parts.length) L.push('<span class="ts-pyn">'+e(parts.join(' · '))+'</span>');
   } else if(M.pierPaid>0){
     L.push('<span class="ts-pyg">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>');
-  } else if(M.payType==='cot' && !(X.inv&&X.inv.settled)){
+  } else if(pckCotUnset(M) && !(X.inv&&X.inv.settled)){
     L.push('<span class="ts-pyn">COT · ยังไม่ระบุยอด</span>');
   }
   // §tsPayDetail · COT ตกลงกันไว้ยังไง · ก้อนนี้หักจากบิล agent หรือเก็บแยก

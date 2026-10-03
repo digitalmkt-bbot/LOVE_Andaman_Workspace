@@ -67,7 +67,8 @@
     "test:pboff": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_pboff.mjs",
     "test:bacell": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_bacell.mjs",
     "test:bacapgate": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_bacapgate.mjs",
-    "test:actperm": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_actperm.mjs"
+    "test:actperm": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_actperm.mjs",
+    "test:b2cpay": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_b2cpay.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
