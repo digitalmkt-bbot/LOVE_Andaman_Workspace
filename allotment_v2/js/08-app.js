@@ -46129,6 +46129,10 @@ function bkV2RenderNewBooking(){
       <div class="bkv2-nb-rt-preview">
         <div><strong>${escapeHTML(rt.code)} &middot; ${escapeHTML(rt.name)}</strong></div>
         <div class="meta">${_n} route${_n===1?'':'s'} bookable${_rtN&&_rtN!==_n?(' &middot; '+_rtN+' in rate type'):''} &middot; valid ${validFrom} &rarr; ${validTo}</div>
+        ${(function(){ /* §aoRT · ใบนี้จำชุดเก่าไว้ แต่ราคากับ add-on คิดจากชุดปัจจุบันของเอเยนต์ · ต้องบอก ไม่งั้นป้ายนี้ชี้ผิดชุด */
+          const _now = (typeof bkV2AddOnRT==='function') ? bkV2AddOnRT() : null;
+          return (_now && _now.id !== rt.id)
+            ? `<div class="meta bkv2-rtnow" style="color:#0E5E80;margin-top:3px">&#8594; ${laT('ราคาและ add-on ของใบนี้คิดจากชุดปัจจุบันของเอเยนต์')} &middot; <b>${escapeHTML(_now.code)} &middot; ${escapeHTML(_now.name)}</b></div>` : ''; })()}
         ${_short?`<div class="meta" style="color:#8A5A0B;margin-top:3px">&#9888; \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49\u0e22\u0e36\u0e14\u0e15\u0e32\u0e21\u0e42\u0e1b\u0e23\u0e41\u0e01\u0e23\u0e21\u0e43\u0e19\u0e2a\u0e31\u0e0d\u0e0d\u0e32\u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e40\u0e22\u0e19\u0e15\u0e4c &middot; \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e43\u0e19 Rate Type \u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e22\u0e31\u0e07\u0e08\u0e2d\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 Agent \u0e14\u0e49\u0e27\u0e22</div>`:''}
       </div>
     `;
@@ -46959,7 +46963,7 @@ function bkV2RenderTripsSection(){
 function bkV2RenderAddOnsSection(){
   const d = _bkV2.newBooking;
   if(!Array.isArray(d.addOns)) d.addOns = [];   // ponytail: legacy bookings have no addOns array → edit crashed on .find/.some
-  const rt = bkV2GetRT();
+  const rt = bkV2AddOnRT();   /* §aoRT */
   if(!rt){
     // §b2cEdit · add-on ของใบ B2C ถูกลบแล้วใส่ใหม่ทุกรอบ sync · โชว์ของที่มีจริงแบบอ่านอย่างเดียว
     if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)){
@@ -47136,7 +47140,7 @@ function bkV2RenderCharterConfirmModal(){
 // True if the current rate type offers any add-ons applicable to the trips
 function bkV2HasAvailableAddOns(){
   const d = _bkV2.newBooking;
-  const rt = bkV2GetRT();
+  const rt = bkV2AddOnRT();   /* §aoRT */
   if(!rt) return false;
   const tripRoutes = d.trips.map(t => t.routeId).filter(Boolean);
   if(tripRoutes.length === 0) return false;
@@ -56870,6 +56874,24 @@ function _bkV2ResolveRateTypeOld(agentId, routeId, travelDate){
 }
 // The rate type to price a given trip with: promo (if any active) else the booking's base rate.
 // Defensive: only adopt the promo rate if it actually prices this route (seat or charter) — else keep base.
+/* ══ §aoRT (2026-10-03) · add-on ต้องอ่านชุดราคาเดียวกับที่ใช้คิดราคาทริป ═══════════════
+   ที่มา · ผู้ใช้เปิดแก้ใบเหมาลำของ PEGAS แล้วถามว่าทำไม Longtail Charter ไม่ขึ้นให้เลือก
+     ทั้งที่ตั้งราคาไว้ใน Rate Type ของ PEGAS แล้ว (MISHA-SPECIA-3)
+   เหตุ · ใบจองจำชุดราคาตอนสร้างไว้ที่ rateTypeRef (ใบนี้คือ MISHA-SPECIA ตัวเก่า ก่อนแยกชุดของ PEGAS ออกมา)
+     ราคาทริปไม่ได้ใช้ตัวนั้นมานานแล้ว · bkV2GetRTForTrip อ่านชุดปัจจุบันของเอเยนต์ตามวันเดินทาง
+     แต่ส่วน add-on ยังอ่าน rateTypeRef ตัวเก่า · ใบเดียวกันจึงคิดราคาทริปจากชุดหนึ่ง แล้วหา add-on จากอีกชุด
+   แก้ · add-on อ่านชุดหลักของเอเยนต์ ณ วันเดินทางของทริปแรก (ตารางฤดูกาล → ชุดปัจจุบันของเอเยนต์)
+     ไม่ใช้ใบโปร · ใบโปรเป็นแผ่นราคาที่นั่ง ไม่มีตาราง add-on ของตัวเอง ใช้แล้ว add-on จะหายทั้งชุด
+     หาไม่ได้ (ใบของบริษัท · B2C · ยังไม่เลือกทริป) = ถอยไปใช้ rateTypeRef เหมือนเดิม */
+function bkV2AddOnRT(){
+  const base = bkV2GetRT();
+  const d = _bkV2 && _bkV2.newBooking;
+  if(!d || !d.agentId) return base;
+  if(typeof laIsCompanyBk==='function' && laIsCompanyBk(d)) return base;
+  const t = (d.trips||[]).find(x => x && x.routeId && x.date);
+  if(!t || typeof laMainRtFor!=='function') return base;
+  try{ return laMainRtFor(d.agentId, t.date) || base; }catch(_){ return base; }
+}
 function bkV2GetRTForTrip(trip){
   const base = bkV2GetRT();
   if(!trip || !trip.routeId || !trip.date) return base;
@@ -56964,7 +56986,7 @@ function bkV2TripSubtotal(trip){
    ⚠ ต้องไปถึงฝั่งปฏิบัติการด้วย · ไม่งั้นหน้าจอบอก 2 แต่ใบสั่งงานกับต้นทุนยังคิด 9
      (bkV2AddOnFlags → bkLtState → pxLongtail) */
 function bkV2LtJoinMax(){
-  var rt = bkV2GetRT(), d = _bkV2.newBooking, A = 0, C = 0;
+  var rt = bkV2AddOnRT(), d = _bkV2.newBooking, A = 0, C = 0;   /* §aoRT */
   var ltn = (typeof _rtNormalizeLongtail === 'function')
     ? _rtNormalizeLongtail(rt && rt.addOns && rt.addOns.longtail) : null;
   if(ltn && d) (d.trips || []).forEach(function(t){
@@ -56983,7 +57005,7 @@ function bkV2SetAddOnJoin(which, n){
   bkV2Render();
 }
 function bkV2AddOnInfo(type){
-  const rt = bkV2GetRT();
+  const rt = bkV2AddOnRT();   /* §aoRT */
   const d = _bkV2.newBooking;
   if(!rt || !d) return { label: type, total: 0 };
   // Aggregate pax across all trips · sum Fr + Th
@@ -57052,7 +57074,7 @@ function bkV2CalcQuote(){
   });
   let totalAddOn = 0;
   // Skip longtail-join add-on when any trip route is bundled (auto-applied via bundle)
-  const rtCalc = bkV2GetRT();
+  const rtCalc = bkV2AddOnRT();   /* §aoRT */
   const anyBundled = rtCalc && d.trips.some(t => t.routeId && _rtBundleAppliesTo(rtCalc.routeBundles?.[t.routeId]?.longtail, t.bookingMode==='charter'));
   (d.addOns||[]).forEach(a => {
     if(a.type === 'longtail-join' && anyBundled) return;

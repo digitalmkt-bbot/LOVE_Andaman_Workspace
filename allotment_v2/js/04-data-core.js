@@ -833,6 +833,7 @@ var LA_T_EN={
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
   /* §lkPend / §pbPax2 (2026-10-02) */
+  'ราคาและ add-on ของใบนี้คิดจากชุดปัจจุบันของเอเยนต์':'Prices and add-ons on this booking use the agent\'s current rate type',
   'ล็อกที่นั่งของวันนี้':'Lock seats on this day',
   'รอที่ว่าง · ยังไม่คอนเฟิร์ม':'Waiting for seats · not confirmed',
   'รอที่ว่าง {0}':'{0} pending',
