@@ -9781,7 +9781,13 @@ function renderSettings(){
       </div>`;
     });
   });
-  const listPanel=`<div style="background:transparent;border-radius:14px;overflow:hidden">
+  /* §progScroll (2026-10-03) · หน้า Programs เลื่อนติด ๆ ขัด ๆ
+     ผู้ใช้แจ้ง "ดูการ Scroll ในหน้านี้หน่อย ติด ๆ ขัด ๆ" · วัดแล้ว: รายการซ้าย 57 โปรแกรมสูง ~4,700px
+     ส่วนแผงรายละเอียดขวา (ปฏิทิน 12 เดือน) สูง ~1,350px ถูกตรึงไว้ (sticky) ทั้งที่สูงกว่าจอ
+     ครึ่งล่างของปฏิทินจึงค้างอยู่นอกจอ เลื่อนเท่าไหร่ก็ไม่ขึ้น จนกว่าจะเลื่อนสุดรายการ 5,000px
+     สลับกัน · รายการซ้ายเป็นกล่องเลื่อนของตัวเอง สูงเท่าจอ ตรึงไว้ · แผงขวาไหลตามหน้าปกติ
+     เลื่อนบนรายการ = เลื่อนรายการ (ไม่ลากหน้าไปด้วย) · เลื่อนบนปฏิทิน = เลื่อนหน้า เห็นครบทั้งปี */
+  const listPanel=`<div id="prog-list-box" style="background:transparent;border-radius:14px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;padding-right:4px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-size:13px;font-weight:600">โปรแกรมทั้งหมด</span>
       <span style="font-size:10px;color:${dim.ink3}">${totalProg} routes</span>
@@ -9790,10 +9796,30 @@ function renderSettings(){
   </div>`;
 
   // Detail panel placeholder
-  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px;position:sticky;top:14px"></div>`;
+  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
 
+  /* §progScroll · กดเลือกโปรแกรม = วาดใหม่ทั้งหน้า · กล่องรายการเป็นตัวใหม่ ตำแหน่งเลื่อนกลับเป็น 0
+     จำไว้ก่อนแล้วคืนให้ ไม่งั้นเลือกโปรแกรมท้าย ๆ ทีไร รายการเด้งกลับบนสุดทุกครั้ง */
+  const _keepList=(document.getElementById('prog-list-box')||{}).scrollTop||0;
   wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
 
+  /* §progScroll · กล่องรายการต้องจบในจอเสมอ · ตอนหน้ายังไม่เลื่อน กล่องเริ่มใต้หัวหน้า+แถบ KPI (~250px)
+     ถ้าสูงเท่าจอเต็ม ๆ ท้ายกล่องจะหลุดใต้จอ โปรแกรมสุดท้ายมองไม่เห็น · วัดจากตำแหน่งจริงทุกครั้งที่หน้าเลื่อน */
+  window._progListFit=function(){ const lb=document.getElementById('prog-list-box'); if(!lb||!lb.offsetParent) return;
+    /* ท้ายหน้า · แผงขวาจบก่อนขอบจอ กล่องรายการต้องจบพร้อมกัน ไม่งั้น sticky ดันหัวกล่องขึ้นไปนอกจอ */
+    const gp=lb.parentElement.getBoundingClientRect(), dm=document.getElementById('prog-detail-mount');
+    /* จอแคบ (แท็บเล็ตแนวตั้ง / มือถือ) · สองแผงเรียงบน-ล่าง · กล่องรายการสูงแค่ ~45% ของจอ ไม่ตรึง
+       และปล่อยให้เลื่อนต่อไปที่หน้าได้ ไม่งั้นนิ้วที่ปัดบนรายการจะลงไปหาปฏิทินข้างล่างไม่ได้ */
+    const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
+    lb.style.position=stack?'static':'sticky'; lb.style.overscrollBehavior=stack?'auto':'contain';
+    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs; return; }
+    let bot=window.innerHeight-14; if(dm&&dm.offsetHeight>lb.offsetHeight) bot=Math.min(bot, dm.getBoundingClientRect().bottom);
+    const h=Math.max(320, Math.round(bot-Math.max(14, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
+  if(!window._progListFitOn){ window._progListFitOn=1; let _q=0;
+    const _f=()=>{ if(_q) return; _q=requestAnimationFrame(()=>{ _q=0; window._progListFit&&window._progListFit(); }); };
+    window.addEventListener('scroll',_f,{passive:true}); window.addEventListener('resize',_f,{passive:true}); }
+  window._progListFit();
+  if(_keepList){ const _lb=document.getElementById('prog-list-box'); if(_lb) _lb.scrollTop=_keepList; }
   // Drag-to-reorder programs (constrained to the same pier)
   laMakeSortable(wrap, '.route-row-item', stApplyRouteOrder);
 
@@ -9971,8 +9997,10 @@ function renderProgDetailPink(){
         <span>${MONTH_NAMES[monthIdx]}</span>
         ${isCurrentMonth?`<span style="background:${dim.ink};color:white;padding:0 5px;border-radius:5px;font-size:7px;letter-spacing:.04em">NOW</span>`:''}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:7px;color:${dim.ink4};text-align:center;margin-bottom:2px;font-weight:600">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · เดิม S M T W T F S ตัวเดียว
+           เสาร์กับอาทิตย์เป็น S ทั้งคู่ อังคารกับพฤหัสเป็น T ทั้งคู่ และตัวอักษร 7px สีจาง · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
+      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:8px;color:${dim.ink2};text-align:center;margin-bottom:3px;font-weight:700;letter-spacing:.01em">
+        <span style="color:#B4533F">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#B4533F">Sa</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px">${cells}</div>
     </div>`;

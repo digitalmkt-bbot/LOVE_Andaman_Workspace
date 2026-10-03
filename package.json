@@ -72,7 +72,8 @@
     "test:upgroute": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_upgroute.mjs",
     "test:bklkplaced": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bklkplaced.mjs",
     "test:bopfree": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bopfree.mjs",
-    "test:bopoutpier": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bopoutpier.mjs"
+    "test:bopoutpier": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bopoutpier.mjs",
+    "test:progscroll": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_progscroll.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
