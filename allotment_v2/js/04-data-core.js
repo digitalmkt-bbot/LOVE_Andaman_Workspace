@@ -833,6 +833,10 @@ var LA_T_EN={
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
   'ไม่ออกวันนี้':'Not running today',
+  'เรือว่าง · ยังไม่จัด':'Free boats · not deployed',
+  'เรือที่พร้อมใช้แต่ยังไม่ได้วางบนเส้นทางไหนของวันนั้น':'Boats that are available but not placed on any programme that day',
+  'ไม่มีเรือว่างที่ท่านี้':'No free boat at this pier',
+  'อู่':'shop',
   'วางไว้ที่':'Placed on',
   'ยังไม่ได้วางเส้นทาง':'not placed on any programme yet',
   'แล้ว · ใช้กับโปรแกรมอื่นไม่ได้':'· cannot be used for another programme',
@@ -5580,6 +5584,18 @@ function renderBoatDetailPink(){
     calRows.push(calCells.slice(r,r+7));
   }
 
+  /* §bsCalPier (2026-10-03) · ปฏิทินสถานะของเรือ บอกด้วยว่าวันนั้นเรืออยู่ท่าไหน
+     ผู้ใช้ขอ "ปฏิทินของเรือ ระบุด้วยว่าอยู่ที่ท่าเรือไหน วันนั้น ๆ" · ของเดิมสีบอกแค่พร้อม/ซ่อม/หยุดใช้
+     เรือที่ย้ายท่ากลางเดือน (เช่น 13–14 พันวา · 15–23 ทับละมุ) ต้องไล่อ่านประวัติข้างล่างเอง
+     อ่านจากกติกาเดียวกับทั้งระบบ getBoatCurrentPier(เรือ, วัน) · อยู่อู่ = ป้ายประแจ */
+  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'\u{1F527}'};
+  const _bsPierFull=p=>p==='shop'?'In shop':((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[p])||((typeof laPierName==='function')?laPierName(p):p)||p);
+  const _bsPierTag=(c,onColor)=>{
+    let p=''; try{ p=getBoatCurrentPier(b,c.ds)||''; }catch(_){}
+    if(!p) return '';
+    const sh=_bsPierShort[p]||String(p).slice(0,2).toUpperCase();
+    return `<span data-bspier="${p}" title="${c.ds} · ${_bsPierFull(p)}" style="position:absolute;top:3px;right:3px;font-size:8.5px;font-weight:800;line-height:1;padding:2px 3px;border-radius:4px;font-family:'DM Sans',sans-serif;${onColor?'background:rgba(255,255,255,.26);color:#fff':'background:#F1EFE8;color:#6B6860'}">${sh}</span>`;
+  };
   const calHtml=calRows.map(row=>row.map(c=>{
     if(c.empty)return`<div style="aspect-ratio:1"></div>`;
     // Charter boats: only render colored cells when there's a log entry covering that day
@@ -5590,7 +5606,7 @@ function renderBoatDetailPink(){
     }
     // Future days WITHOUT log entry → empty white cell
     if(c.isFuture&&!c.logId){
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}</div>`;
+      return`<div onclick="bsCellClick('${c.ds}',null)" style="position:relative;aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}${_bsPierTag(c,false)}</div>`;
     }
     // Past or future WITH log entry → status color
     const bg=STATUS_CAL_COLOR[c.status]||'#1D9E75';
@@ -5598,7 +5614,7 @@ function renderBoatDetailPink(){
     // Slightly fade future days with log to differentiate from past
     const futureOpacity=c.isFuture&&!c.isToday?'opacity:.85;':'';
     const handler=c.logId?`bsCellClick('${c.ds}','${c.logId}')`:`bsCellClick('${c.ds}',null)`;
-    return`<div onclick="${handler}" style="aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}</div>`;
+    return`<div onclick="${handler}" style="position:relative;aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}${_bsPierTag(c,true)}</div>`;
   }).join('')).join('');
 
   // Recent status changes — show ALL log entries (sorted by from desc)
@@ -5745,6 +5761,7 @@ function renderBoatDetailPink(){
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#1D9E75;border-radius:3px"></span>Available</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#BA7517;border-radius:3px"></span>Fixing</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#A32D2D;border-radius:3px"></span>Unavailable</span>
+        <span data-bspier-legend="1" style="display:flex;align-items:center;gap:5px;color:${dim.ink3}">TL Tub Lamu &middot; VP Visit Panwa &middot; RN Ranong &middot; &#128295; ${laT('อู่')}</span>
         <span style="margin-left:auto;font-family:'DM Mono',monospace">Today: ${MONTHS_EN[today.getMonth()]} ${today.getDate()}</span>
       </div>
     </div>
@@ -8421,6 +8438,7 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:#FBE1C6"></span>ขายได้น้อย</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE9E9"></span>ว่างเยอะ</span>
         <span class="bo-legend-chip"><span class="box" style="background:#EFE9FA"></span>⚓ เหมาลำ</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#E4F2EB;border:1px dashed #8FCFB4"></span>${laT('เรือว่าง · ยังไม่จัด')}</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
@@ -8438,12 +8456,16 @@ function bop2RenderShell(){
           const cls = isToday ? 'today' : (isSel ? 'sel' : (needs ? 'alert' : ''));
           return `<div class="bo-day-h ${cls}" onclick="bop2SelectDate('${d}')" style="cursor:pointer" title="เลือกวันที่ ${d}"><div class="wd">${wkLbl}</div><div class="num">${dt.getDate()}</div></div>`;
         }).join('')}
+        ${(() => { window._bop2FreeMemo = {}; return ''; })()}
         ${tublamuRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>TUB LAMU · ${tublamuRoutes.length} route${tublamuRoutes.length===1?'':'s'}</span></div>` : ''}
         ${tublamuRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${tublamuRoutes.length ? bop2RenderFreeRow('tublamu', dates) : ''}
         ${panwaRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>VISIT PANWA · ${panwaRoutes.length} route${panwaRoutes.length===1?'':'s'}</span></div>` : ''}
         ${panwaRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${panwaRoutes.length ? bop2RenderFreeRow('panwa', dates) : ''}
         ${ranongRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>RANONG · ${ranongRoutes.length} route${ranongRoutes.length===1?'':'s'}</span></div>` : ''}
         ${ranongRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${ranongRoutes.length ? bop2RenderFreeRow('ranong', dates) : ''}
         ${(() => {
           /* §bopColMark · กรอบครอบทั้งคอลัมน์ ตั้งแต่หัววันที่ถึงแถวสุดท้าย
              ของเดิมทำเครื่องหมายไว้ที่หัวคอลัมน์อย่างเดียว · ไล่สายตาลงมาสองสามแถว
@@ -8589,6 +8611,41 @@ function bop2RenderShell(){
   `;
 }
 
+/* ══ §bopFree (2026-10-03) · แถว "เรือว่าง · ยังไม่จัด" ท้ายกลุ่มของแต่ละท่า ═══════════════════
+   ผู้ใช้ถามจากหน้า Boat Operation · "ในตัว Matrix จะทำยังไงให้เห็นว่าเรือว่างที่ยังไม่ Deploy มีอะไรบ้าง"
+   ของเดิมรู้ได้ทีละวัน ต้องกดเลือกวันแล้วไปอ่านรายการ AVAILABLE ทางขวา · วางแผนทั้งเดือนต้องกดสามสิบครั้ง
+   แถวนี้ใช้กติกาเดียวกับรายการทางขวาเป๊ะ (bop2FleetStatus().available): พร้อมใช้วันนั้น · ไม่ได้วางบนเส้นทางไหน
+   · ไม่ได้ค้างเกาะ · เรือเช่านอกช่วงไม่นับ · แยกตามท่าที่เรืออยู่ "ในวันนั้น" (getBoatCurrentPier)
+   ตัวเลขในช่อง = จำนวนลำ · ชี้ค้างดูชื่อเรือกับความจุ · กดแล้วเลือกวันนั้น (รายการทางขวาตามไป) */
+function bop2FreeByPier(dateStr){
+  const memo = (window._bop2FreeMemo = window._bop2FreeMemo || {});
+  if(memo[dateStr]) return memo[dateStr];
+  const keep = _bop2.pier; let av = [];
+  try{ _bop2.pier = 'all'; av = bop2FleetStatus(dateStr).available || []; } finally{ _bop2.pier = keep; }
+  const out = {};
+  av.forEach(x => { const p = getBoatCurrentPier(x.boat, dateStr); (out[p] = out[p] || []).push(x.boat); });
+  Object.keys(out).forEach(p => out[p].sort((a,b) => (+b.cap||0) - (+a.cap||0)));
+  return (memo[dateStr] = out);
+}
+function bop2RenderFreeRow(pier, dates){
+  const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const isMonth = _bop2.viewMode === 'month';
+  const capOf = (b, d) => (typeof boatCapFor === 'function') ? (boatCapFor(b.id, d) || (+b.cap||0)) : (+b.cap||0);
+  let row = `<div class="bop2-cell bop2-cell-route" data-bopfree-label="${pier}" title="${esc(laT('เรือที่พร้อมใช้แต่ยังไม่ได้วางบนเส้นทางไหนของวันนั้น'))}" style="padding:2px 8px 2px 0;background:transparent">
+    <div style="border-left:3px dashed #1D9E75;border-radius:2px;padding:2px 0 2px 9px;width:100%;display:flex;align-items:center;min-height:26px;line-height:1.25">
+      <span style="font-size:${isMonth?'10.5':'11'}px;font-weight:700;color:#0F6E56">${esc(laT('เรือว่าง · ยังไม่จัด'))}</span>
+    </div></div>`;
+  dates.forEach(d => {
+    const list = bop2FreeByPier(d)[pier] || [], n = list.length;
+    const names = list.map(b => (b.name||b.id) + ' (' + capOf(b, d) + ')');
+    const tip = n ? (laT('เรือว่าง · ยังไม่จัด') + ' ' + n + ' · ' + names.join(', ')) : laT('ไม่มีเรือว่างที่ท่านี้');
+    const inner = !n ? '<span style="color:#C9C2BA;font-weight:600">&middot;</span>'
+      : (isMonth ? `<span>${n}</span>`
+                 : `<span style="display:flex;flex-direction:column;gap:1px;align-items:center;font-size:10px;font-weight:700;line-height:1.25;font-family:'DM Sans',sans-serif">${list.map(b => `<span style="white-space:nowrap">${esc(b.name||b.id)} <b style="font-weight:600;opacity:.7">${capOf(b, d)}</b></span>`).join('')}</span>`);
+    row += `<div class="bop2-cell bop2-cell-day${d===TODAY_STR?' today':''}" data-bopfree="${pier}" data-date="${d}" data-n="${n}" data-names="${esc(list.map(b => b.name||b.id).join('|'))}" onclick="bop2SelectDate('${d}')" title="${esc(tip)}" style="background:${n?'#E4F2EB':'transparent'};color:#0F6E56;border:1px dashed ${n?'#8FCFB4':'#E5E0D8'};border-radius:10px;min-height:${isMonth?'30px':'34px'};padding:3px">${inner}</div>`;
+  });
+  return row;
+}
 function bop2RenderHeatmapRow(route, dates){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const isMonth = _bop2.viewMode === 'month';
