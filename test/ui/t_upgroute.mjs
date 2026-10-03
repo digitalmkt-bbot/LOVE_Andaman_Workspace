@@ -16,6 +16,8 @@
 //   8 ปลายทางที่ว่างไม่พอ · เลือกไม่ได้ และย้ายไม่ได้
 //   9 กด ⤴ ซ้ำ = ย้อนกลับ · กลับเส้นทางเดิม · รายการเก็บเพิ่มที่ยังไม่เก็บถูกลบ · ที่นั่งกลับเหมือนก่อนย้าย
 //  10 ย้ายแบบไม่เก็บเพิ่ม · ไม่มีรายการอัปเกรด · ไม่มี error
+//  12 ที่มา + เหตุผล + ยอดเก็บเพิ่ม ขึ้นในช่องหมายเหตุของ By trip · Travel Summary · Pier Check-in · หน้ารายละเอียดใบ (ผู้ใช้เขียน "Free upgrade" แล้วไม่เห็นที่ไหนเลย)
+//     และหน้าต่าง Upgrade แยกโปรแกรมตามท่าเรือ ท่าเดียวกับโปรแกรมเดิมขึ้นก่อน (ข้อ 1)
 //  11 trip.upg รอดการเดินทางไป-กลับฐานข้อมูล (decomposeBlob → assembleBlob ของเซิร์ฟเวอร์จริง)
 import { open, goView, ROOT } from './_harness.mjs';
 import { createRequire } from 'node:module';
@@ -68,15 +70,23 @@ const row = () => page.evaluate(s => { const tr = [...document.querySelectorAll(
   let band = tr.previousElementSibling; while (band && !band.classList.contains('t2-pband')) band = band.previousElementSibling;
   if (!band) { const tb = tr.closest('table'); band = tb && tb.querySelector('tr.t2-pband'); }
   const tag = tr.querySelector('[data-upgfrom]'), up = tr.querySelector('[data-babtn="up"]');
-  return { band: band ? band.querySelector('.pn').textContent : '', tag: tag ? tag.textContent.trim() : '', upTitle: up ? up.title : '', pick: (tr.querySelector('[data-babtn="pick"]') || {}).textContent || '' }; }, S);
+  const un = tr.querySelector('[data-upgnote]'), lead = tr.querySelector('.t2-lead');
+  const stack = (tag && lead) ? (lead.getBoundingClientRect().top >= tag.getBoundingClientRect().bottom - 1 && tag.getBoundingClientRect().right <= tr.querySelector('td.t2-cu').getBoundingClientRect().right + 1) : null;
+  return { stack, note: un ? un.textContent.trim() : '', noteVis: un ? un.getBoundingClientRect().height > 6 : false, leadVis: lead ? (lead.getBoundingClientRect().width > 30 && lead.getBoundingClientRect().right <= tr.querySelector('td.t2-cu').getBoundingClientRect().right + 1) : false, band: band ? band.querySelector('.pn').textContent : '', tag: tag ? tag.textContent.trim() : '', upTitle: up ? up.title : '', pick: (tr.querySelector('[data-babtn="pick"]') || {}).textContent || '' }; }, S);
 const clickUp = () => page.evaluate(s => { const tr = [...document.querySelectorAll('#bkv2-host tr.t2-row[data-al]')].find(r => r.dataset.al.indexOf(s.id) === 0); tr.querySelector('[data-babtn="up"]').click(); }, S);
 
 /* ══ 1 ══ */
 const r0 = await row();
 await clickUp(); await page.waitForTimeout(250);
-const m1 = await page.evaluate(() => ({ open: !!document.getElementById('bkv2-upg-ov'), isModal: !!document.querySelector('#bkv2-upg-ov.la-modal'), to: [...document.querySelectorAll('#bkv2-upg-ov [data-upg-to]')].map(l => ({ rid: l.dataset.upgTo, txt: l.textContent.trim(), dis: l.querySelector('input').disabled })) }));
-if (r0 && r0.band === S.fromNm && m1.open && m1.isModal && m1.to.some(x => x.rid === S.to && !x.dis && /free/.test(x.txt)) && !m1.to.some(x => x.rid === S.from))
-  ok(`1 กด ⤴ ที่ใบของ "${S.fromNm}" · หน้าต่างเปิด · ปลายทาง ${m1.to.length} โปรแกรม เช่น "${m1.to.find(x => x.rid === S.to).txt}"`);
+const m1 = await page.evaluate(s => ({ piers: [...document.querySelectorAll('#bkv2-upg-ov [data-upg-pier]')].map(g => ({ p: g.dataset.upgPier, tag: g.querySelector('[data-upg-piertag]').dataset.upgPiertag, n: g.querySelectorAll('[data-upg-to]').length, ok: [...g.querySelectorAll('[data-upg-to]')].every(l => bkUpgPierOf(l.dataset.upgTo) === g.dataset.upgPier) })), fromPier: bkUpgPierOf(s.from), open: !!document.getElementById('bkv2-upg-ov'), isModal: !!document.querySelector('#bkv2-upg-ov.la-modal'), to: [...document.querySelectorAll('#bkv2-upg-ov [data-upg-to]')].map(l => ({ rid: l.dataset.upgTo, txt: l.textContent.trim(), dis: l.querySelector('input').disabled })) }), S);
+/* ชุดข้อมูลมีท่าเดียว · ย้ายโปรแกรมปลายทางไปอีกท่าชั่วคราว เพื่อดูป้าย "ต่างท่า" */
+const m1b = await page.evaluate(s => { const r = getRoute(s.to), keep = r.pier; r.pier = (bkUpgPierOf(s.from) === 'tublamu') ? 'panwa' : 'tublamu'; bkV2UpgModal();
+  const g = [...document.querySelectorAll('#bkv2-upg-ov [data-upg-pier]')].map(x => ({ p: x.dataset.upgPier, tag: x.querySelector('[data-upg-piertag]').dataset.upgPiertag, txt: x.querySelector('[data-upg-piertag]').textContent, has: !!x.querySelector('[data-upg-to="' + s.to + '"]') }));
+  r.pier = keep; bkV2UpgModal(); return g.find(x => x.has) || null; }, S);
+if (process.env.SHOT) { await page.evaluate(s => { const r = getRoute(s.to); window.__kp = r.pier; r.pier = (bkUpgPierOf(s.from) === 'tublamu') ? 'panwa' : 'tublamu'; _bkUpg.to = ''; bkV2UpgModal(); }, S); const el = await page.$('#bkv2-upg-ov > div'); if (el) await el.screenshot({ path: process.env.SHOT }); await page.evaluate(s => { getRoute(s.to).pier = window.__kp; bkV2UpgModal(); }, S); }
+const pierOk = m1b && m1b.tag === 'other' && m1b.p !== m1.fromPier && m1.piers.length >= 1 && m1.piers.every(g => g.ok && g.n >= 1 && g.tag === (g.p === m1.fromPier ? 'same' : 'other')) && m1.piers.reduce((n, g) => n + g.n, 0) === m1.to.length && (m1.piers[0].p === m1.fromPier || !m1.piers.some(g => g.p === m1.fromPier));
+if (r0 && r0.band === S.fromNm && pierOk && m1.open && m1.isModal && m1.to.some(x => x.rid === S.to && !x.dis && /free/.test(x.txt)) && !m1.to.some(x => x.rid === S.from))
+  ok(`1 กด ⤴ ที่ใบของ "${S.fromNm}" · หน้าต่างเปิด · ปลายทาง ${m1.to.length} โปรแกรม แยก ${m1.piers.length} ท่า (${m1.piers.map(g => g.p + ':' + g.tag).join(' ')}) เช่น "${m1.to.find(x => x.rid === S.to).txt}"`);
 else fail('1 ' + JSON.stringify({ r0, m1 }));
 
 /* ══ 2 ══ */
@@ -103,6 +113,25 @@ if (r5 && r5.band === S.toNm && r5.tag.includes(S.fromNm) && /Upgraded from/.tes
 else fail('5 ' + JSON.stringify(r5));
 if (a3.ups.length === 1 && a3.ups[0].p === 500 && !a3.ups[0].c && a3.ups[0].id === a3.upg.upgId && a3.ups[0].l.includes(S.toNm) && a3.upDue === 500) ok(`6 ยอดเก็บเพิ่ม ฿500 เป็นรายการอัปเกรด "${a3.ups[0].l}" · ขึ้นในยอดต้องเก็บหน้าท่า`);
 else fail('6 ' + JSON.stringify({ ups: a3.ups, upDue: a3.upDue }));
+
+/* ══ 12 · เหตุผลและที่มาขึ้นในช่องหมายเหตุทุกหน้า (§upgNote) ══ */
+{
+  const want = [S.fromNm, 'origin trip cancelled', '500'];
+  const has = t => want.every(w => String(t || '').includes(w));
+  const X = await page.evaluate(async s => { const b = SB_BOOKINGS.find(x => x.id === s.id);
+    const ts = tsSreqOf(b);
+    _pckDate = s.date; nav(document.querySelector('.nav-item[data-view="piercheckin"]')); await new Promise(z => setTimeout(z, 900));
+    const pc = [...document.querySelectorAll('#view-piercheckin .ck-sreq')].map(x => x.textContent).filter(t => t.indexOf('Upgrade') >= 0);
+    nav(document.querySelector('.nav-item[data-view="booking"]')); await new Promise(z => setTimeout(z, 400));
+    bkV2OpenDetail(s.id); await new Promise(z => setTimeout(z, 500));
+    const dt = (document.querySelector('#bkv2-host [data-upgdetail]') || {}).textContent || '';
+    _bkV2.detailId = null; _bkV2.filterDate = s.date; _bkV2.filterRoute = null; _bkV2.boatAssignMode = true; bkV2SwitchTab('bytrip'); await new Promise(z => setTimeout(z, 600));
+    return { ts, pc, dt }; }, S);
+  const r12 = await row();
+  if (r12 && has(r12.note) && r12.noteVis && r12.leadVis && r12.stack === true && has(X.ts) && X.pc.length >= 1 && has(X.pc[0]) && has(X.dt))
+    ok(`12 หมายเหตุ "${r12.note}" ขึ้นในช่อง Special request ของ By trip · Travel Summary · Pier Check-in · หน้ารายละเอียดใบ · ชื่อลูกค้ายังเห็นครบ`);
+  else fail('12 ' + JSON.stringify({ r12, X }));
+}
 
 /* ══ 11 · รอดการเดินทางไป-กลับฐานข้อมูล (ของเดิมไม่มีคอลัมน์ โหลดหน้าใหม่แล้วหาย) ══ */
 {

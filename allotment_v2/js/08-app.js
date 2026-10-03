@@ -14957,6 +14957,7 @@ function ckRowHtml(r, date, kind, extraHtml){
   var phone=b.leadPhone||b.phone||b.customerPhone||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
+  if(typeof bkUpgNote==='function'){ var _un=bkUpgNote(b, (typeof date!=='undefined')?date:''); if(_un) sreq=[_un,sreq].filter(Boolean).join(' \u00b7 '); }   /* §upgNote */
   var ck=r.ck||{};
   var booked=(r.expect!=null?r.expect:r.booked);
   var actual=(ck.actualPax!=null?ck.actualPax:booked), noShow=Math.max(0,booked-actual), on=!!ck.at;
@@ -18875,6 +18876,7 @@ function pckDetailOpen(bkId){
   var m=function(n){ return '฿'+pckNum(n); };
   var pArea=(b.pickupAreaId&&typeof bkV2GetArea==='function')?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
+  if(typeof bkUpgNote==='function'){ var _un=bkUpgNote(b, (typeof date!=='undefined')?date:''); if(_un) sreq=[_un,sreq].filter(Boolean).join(' \u00b7 '); }   /* §upgNote */
   var row=function(k,v){ return v?('<div class="pd-r"><span class="pd-k">'+e(k)+'</span><span class="pd-v">'+v+'</span></div>'):''; };
   var sec=function(title,inner){ return inner?('<div class="pd-sec"><div class="pd-h">'+e(title)+'</div>'+inner+'</div>'):''; };
   var natLine=function(k,lbl){
@@ -19786,6 +19788,7 @@ function pckRowHtml(r, date, sheet){
   var room=b.roomNo||b.room||b.roomNumber||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
+  if(typeof bkUpgNote==='function'){ var _un=bkUpgNote(b, (typeof date!=='undefined')?date:''); if(_un) sreq=[_un,sreq].filter(Boolean).join(' \u00b7 '); }   /* §upgNote */
   var ck=r.ck||{};
   /* §pckSplit · แถวจุดรับย่อยมีสถานะของตัวเอง · ปุ่มทุกตัวต้องส่ง kind ของแถวไป
      ไม่งั้นกดแล้วไปเขียนทับ ops.pierCheckin ของทั้งใบ แถวนี้จึงไม่ขึ้นสักที */
@@ -24738,10 +24741,12 @@ function tsAddonList(r, date){
    เพราะ Travel Summary มีคอลัมน์ COT ของตัวเองอยู่แล้ว                       */
 function tsSreqOf(b){
   if(!b) return '';
+  var _un=(typeof bkUpgNote==='function')?bkUpgNote(b):'';   /* §upgNote · ใบปิดวันต้องบอกด้วยว่าใบนี้ย้ายมาจากเส้นทางไหน */
   var raw=String(b.notes||b.note||'').trim();
-  if(!raw) return '';
-  try{ if(typeof bkV2CotChip==='function') return String(bkV2CotChip(b, raw).note||'').trim(); }catch(_){}
-  return raw;
+  if(!raw) return _un;
+  var out=raw;
+  try{ if(typeof bkV2CotChip==='function') out=String(bkV2CotChip(b, raw).note||'').trim(); }catch(_){}
+  return [_un,out].filter(Boolean).join(' \u00b7 ');
 }
 function tsAddonCell(r, date){
   var L=tsAddonList(r, date), e=ckEsc;
@@ -27719,6 +27724,23 @@ function bkV2WithSold(trips, fn){
   (trips||[]).forEach(function(t){ if(bkUpgActive(t)){ sw.push([t, t.routeId]); t.routeId=t.upg.fromRouteId; } });
   try{ return fn(); } finally{ sw.forEach(function(x){ x[0].routeId=x[1]; }); }
 }
+/* §upgNote (2026-10-03) · ผู้ใช้ลองย้ายใบ B2C แล้วบอกว่า "ไม่มีรายละเอียดบอกเลยว่าย้ายมาจากเส้นทางอะไร
+   และใน Note ก็ไม่ขึ้น เพราะเราเขียนว่า Free upgrade" · เหตุผลที่พิมพ์ไว้เคยอยู่แต่ใน tooltip กับประวัติ
+   ย้ายแบบไม่เก็บเงินจึงไม่มีอะไรบอกเลยบนหน้าจอ · ข้อความเดียวใช้ทุกที่ที่แสดงหมายเหตุของใบ
+   (By trip · Van/Pier Check-in · Travel Summary · หน้ารายละเอียดใบจอง) · ไม่เขียนทับ notes ของใบ */
+function bkUpgNote(b, date){
+  var t=((b&&b.trips)||[]).find(function(x){ return bkUpgActive(x) && (!date || (x.date||'')===date); });
+  if(!t) return '';
+  var u=t.upg;
+  return '\u2934 Upgrade '+laT('จาก')+' '+bkUpgRouteName(u.fromRouteId)
+    +(u.reason?(' \u00b7 '+u.reason):'')
+    +((+u.charge>0)?(' \u00b7 +\u0e3f'+Number(u.charge).toLocaleString()):'');
+}
+function bkUpgPierOf(rid){
+  var r=(typeof getRoute==='function')?getRoute(rid):null; if(!r) return '';
+  if(typeof laIsLandRoute==='function' && laIsLandRoute(r)) return (typeof LAND_PIER!=='undefined')?LAND_PIER:'other';
+  return r.pier || ((typeof LAND_PIER!=='undefined')?LAND_PIER:'other');
+}
 function bkUpgRouteName(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r&&r.name)||rid||''; }
 var _bkUpg=null;
 function bkV2BoatUpgrade(bkId, routeId, date){
@@ -27741,7 +27763,7 @@ function bkV2UpgTargets(date, fromRid, bkId){
     var rid=x.routeId; if(!rid || rid===fromRid || seen[rid]) return; seen[rid]=1;
     if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(rid, date)) return;
     var al=(typeof getAllotment==='function')?getAllotment(rid, date, null):null;
-    out.push({ rid:rid, name:bkUpgRouteName(rid), free:(al&&al.hasAllotment)?al.seatsAvailable:null });
+    out.push({ rid:rid, name:bkUpgRouteName(rid), pier:bkUpgPierOf(rid), free:(al&&al.hasAllotment)?al.seatsAvailable:null });
   });
   if(typeof laRouteOrdCmp==='function') out.sort(function(a,c){ return laRouteOrdCmp(a.rid,c.rid); });
   return out;
@@ -27756,15 +27778,25 @@ function bkV2UpgModal(){
   var old=document.getElementById('bkv2-upg-ov'); if(old) old.remove();
   var ov=document.createElement('div'); ov.id='bkv2-upg-ov'; ov.className='la-modal';
   ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
-  var opts=T.length?T.map(function(x){ var full=(x.free!=null && x.free<pax);
+  /* §upgPier · ผู้ใช้ขอ "ควรจะแยกท่าเรือให้หน่อย กลัวสับสน" · จัดกลุ่มตามท่า ท่าเดียวกับโปรแกรมเดิมขึ้นก่อน
+     ต่างท่า = ลูกค้าต้องไปขึ้นเรืออีกท่าหนึ่ง (รถรับ/เวลารับเปลี่ยน) จึงติดป้ายเตือนที่หัวกลุ่ม */
+  var fromPier=bkUpgPierOf(U.from), pnm=function(p){ return (typeof laPierName==='function')?laPierName(p):p; };
+  var piers=[]; T.forEach(function(x){ if(piers.indexOf(x.pier)<0) piers.push(x.pier); });
+  piers.sort(function(a,c){ return (a===fromPier?0:1)-(c===fromPier?0:1); });
+  var one=function(x){ var full=(x.free!=null && x.free<pax);
       return '<label data-upg-to="'+e(x.rid)+'" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid '+(U.to===x.rid?'#6B289A':'#E4E1D9')+';background:'+(U.to===x.rid?'#F7F1FC':(full?'#FAFAF8':'#fff'))+';border-radius:10px;cursor:'+(full?'not-allowed':'pointer')+';opacity:'+(full?'.6':'1')+'">'
         +'<input type="radio" name="bkupg-to" value="'+e(x.rid)+'" '+(U.to===x.rid?'checked':'')+(full?' disabled':'')+' onchange="_bkUpg.to=this.value;bkV2UpgModal()" style="accent-color:#6B289A">'
         +'<span style="flex:1;font-weight:700;font-size:13px">'+e(x.name)+'</span>'
-        +'<span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+(full?'#A32D2D':'#0F6E56')+'">'+(x.free==null?'-':(x.free+' free'))+'</span></label>'; }).join('')
+        +'<span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+(full?'#A32D2D':'#0F6E56')+'">'+(x.free==null?'-':(x.free+' free'))+'</span></label>'; };
+  var opts=T.length?piers.map(function(p){ var same=(p===fromPier);
+      return '<div data-upg-pier="'+e(p)+'" style="display:flex;flex-direction:column;gap:6px">'
+        +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span style="font-size:11.5px;font-weight:800;color:'+(same?'#0F6E56':'#8A5B00')+'">&#9875; '+e(pnm(p))+'</span>'
+        +'<span data-upg-piertag="'+(same?'same':'other')+'" style="font-size:9.5px;font-weight:800;border-radius:6px;padding:1px 7px;background:'+(same?'#DCF4E8':'#FBF0DD')+';color:'+(same?'#0C6B47':'#7A4A00')+'">'+(same?laT('ท่าเดียวกับโปรแกรมเดิม'):laT('ต่างท่า · ต้องเปลี่ยนจุดขึ้นเรือ'))+'</span></div>'
+        +T.filter(function(x){ return x.pier===p; }).map(one).join('')+'</div>'; }).join('')
     : '<div style="padding:14px;text-align:center;color:#A32D2D;font-size:12.5px">'+laT('วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง')+'</div>';
   ov.innerHTML='<div style="background:#fff;border-radius:16px;width:min(480px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif">'
     +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4"><div style="font-size:15px;font-weight:800;color:#4A1D6E">&#10548; Upgrade &middot; '+laT('ย้ายไปเส้นทางอื่น')+'</div>'
-    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e((b&&(b.leadPax||b.customerName))||U.bkId)+' &middot; '+pax+' pax &middot; '+e(U.date)+' &middot; '+laT('จาก')+' <b>'+e(bkUpgRouteName(U.from))+'</b></div></div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e((b&&(b.leadPax||b.customerName))||U.bkId)+' &middot; '+pax+' pax &middot; '+e(U.date)+' &middot; '+laT('จาก')+' <b>'+e(bkUpgRouteName(U.from))+'</b> &middot; &#9875; '+e((typeof laPierName==='function')?laPierName(bkUpgPierOf(U.from)):bkUpgPierOf(U.from))+'</div></div>'
     +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
     +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('ไปโปรแกรม')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+opts+'</div></div>'
     +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เหตุผล')+'</div>'
@@ -50693,8 +50725,9 @@ function bkV2RenderTab2(){
               ${_altPickBadge}
               ${reqBadges.length?`<div class="t2-rbwrap">${reqBadges.join('')}</div>`:''}
               ${allergTxt?`<div class="t2-allerg" title="Allergy: ${esc(allergTxt)}">Allergy: ${esc(allergTxt)}</div>`:''}
+              ${(function(){ var _un=bkUpgNote(bk, date); return _un?`<div class="t2-note t2-upgnote" data-upgnote="1" title="${esc(_un)}">${esc(_un)}</div>`:''; })()}
               ${_note?`<div class="t2-note" title="${esc(_note)}">${esc(_note)}</div>`:''}
-              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
+              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge && !bkUpgNote(bk, date))?'<span class="t2-dim">—</span>':''}
             </td>
             ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div></td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
@@ -51969,7 +52002,8 @@ function bkV2RenderTab2(){
     .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:142px;width:142px;overflow:hidden}
     .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
     .t2-mtbl th.t2-vc{width:104px}
-    .t2-upgfrom{display:inline-block;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin-right:5px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+    .t2-upgfrom{display:block;width:max-content;max-width:100%;box-sizing:border-box;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .t2-note.t2-upgnote{color:#4A1D6E;font-weight:700}
     .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-vch{display:inline-block;max-width:min(96px,100%);overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     /* ══ §btClip (2026-10-01) · กติกาการตัดข้อความในตารางนี้ ═════════════
@@ -58659,6 +58693,7 @@ function bkV2RenderBookingDetail(){
                       <div style="width:6px;height:24px;border-radius:3px;background:#1F2A44"></div>
                       <div style="flex:1;min-width:0">
                         <div style="font-size:13px;font-weight:800;color:#1F2A44">${escapeHTML(route?.name || t.routeId)}</div>
+                        ${bkUpgActive(t)?`<div data-upgdetail="1" style="display:inline-block;font-size:11px;font-weight:700;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:2px 8px;margin-top:3px">${escapeHTML(bkUpgNote(bk, t.date))}${t.upg.by?(' &middot; '+escapeHTML(t.upg.by)):''}</div>`:''}
                         <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${bkV2FmtFullDate(t.date)}</div>
                       </div>
                       ${t.charter?`<span style="background:#3A6FF7;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">CHARTER</span>`:''}
