@@ -46129,10 +46129,7 @@ function bkV2RenderNewBooking(){
       <div class="bkv2-nb-rt-preview">
         <div><strong>${escapeHTML(rt.code)} &middot; ${escapeHTML(rt.name)}</strong></div>
         <div class="meta">${_n} route${_n===1?'':'s'} bookable${_rtN&&_rtN!==_n?(' &middot; '+_rtN+' in rate type'):''} &middot; valid ${validFrom} &rarr; ${validTo}</div>
-        ${(function(){ /* §aoRT · ใบนี้จำชุดเก่าไว้ แต่ราคากับ add-on คิดจากชุดปัจจุบันของเอเยนต์ · ต้องบอก ไม่งั้นป้ายนี้ชี้ผิดชุด */
-          const _now = (typeof bkV2AddOnRT==='function') ? bkV2AddOnRT() : null;
-          return (_now && _now.id !== rt.id)
-            ? `<div class="meta bkv2-rtnow" style="color:#0E5E80;margin-top:3px">&#8594; ${laT('ราคาและ add-on ของใบนี้คิดจากชุดปัจจุบันของเอเยนต์')} &middot; <b>${escapeHTML(_now.code)} &middot; ${escapeHTML(_now.name)}</b></div>` : ''; })()}
+        ${bkV2RtKeepNote()}
         ${_short?`<div class="meta" style="color:#8A5A0B;margin-top:3px">&#9888; \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49\u0e22\u0e36\u0e14\u0e15\u0e32\u0e21\u0e42\u0e1b\u0e23\u0e41\u0e01\u0e23\u0e21\u0e43\u0e19\u0e2a\u0e31\u0e0d\u0e0d\u0e32\u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e40\u0e22\u0e19\u0e15\u0e4c &middot; \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e43\u0e19 Rate Type \u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e22\u0e31\u0e07\u0e08\u0e2d\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 Agent \u0e14\u0e49\u0e27\u0e22</div>`:''}
       </div>
     `;
@@ -55462,6 +55459,7 @@ function bkV2HotelDDPick(label, isNew){
    — จอบอกอย่าง ระบบคิดอีกอย่าง แล้วโซนกับปุ่มบันทึกก็ถูกล็อกตามกัน */
 function bkV2ApplyAgentRules(a){
   const d = _bkV2 && _bkV2.newBooking; if(!d) return;
+  if(d._rtKeep && ((a && a.id) || null) !== ((_bkV2.editingId && (SB_BOOKINGS.find(b=>b.id===_bkV2.editingId)||{}).agentId) || null)) delete d._rtKeep;   /* §rtKeep · เปลี่ยนเอเยนต์ = ไม่มีเรทเดิมให้ยึด */
   d.rateTypeRef = a?.rateTypeId || null;
   // House accounts: walk-in keeps manual option · staff → free/manual; real agent → lock Rate type
   const isWk = a && (a.code==='WALKIN' || a.id==='a_walkin');
@@ -55524,6 +55522,13 @@ function bkV2SubmitBooking(){
   const quote = bkV2CalcQuote();
   const hasFoc = quote.totalFoc > 0;
   if(hasFoc && !(d.focReason||'').trim()){ alert('Please enter FOC reason'); return; }
+  /* §rtKeep · ราคาในชุดถูกแก้หลังใบนี้บันทึก · ถามก่อนเขียนยอดใหม่ทับ (ข้อความเตือนอยู่บนฟอร์มแล้ว นี่คือด่านสุดท้าย) */
+  const _K = d._rtKeep;
+  if(_bkV2.editingId && _K && _K.drift && _K.mode==='keep' && d.priceMode!=='manual'){
+    const _was = Math.round(_K.total), _now = Math.round(quote.grandTotal);
+    if(_was !== _now && !confirm('Saved total: THB '+_was.toLocaleString()+'\nTotal at current rates: THB '+_now.toLocaleString()
+        +'\n\nPrices in this rate type changed after the booking was saved.\nSave with the new total?')) return;
+  }
   bkV2CommitBooking(hasFoc ? 'pending_foc' : 'confirmed');
 }
 // Cancel a booking · marks status='cancelled' · releases charter locks in TRIPS
@@ -56890,7 +56895,82 @@ function bkV2AddOnRT(){
   if(typeof laIsCompanyBk==='function' && laIsCompanyBk(d)) return base;
   const t = (d.trips||[]).find(x => x && x.routeId && x.date);
   if(!t || typeof laMainRtFor!=='function') return base;
+  const kept = bkV2RtKeptFor(t);            /* §rtKeep · ใบที่ยึดเรทเดิม add-on ก็ต้องมาจากชุดเดิมด้วย */
+  if(kept) return kept;
   try{ return laMainRtFor(d.agentId, t.date) || base; }catch(_){ return base; }
+}
+/* ══ §rtKeep (2026-10-03) · แก้ไขใบเก่า ยึดเรทเดิมตอนจอง · จะใช้เรทใหม่ต้องเลือกเอง ════════
+   ที่มา · ผู้ใช้เข้าใจมาตลอดว่า "จองไปแล้วก็ยึดเรทเดิม เปลี่ยนราคาทีหลังไม่กระทบใบเก่า"
+     ความจริงคือใบที่ไม่มีใครแตะไม่เปลี่ยน แต่พอมีคนเปิดแก้ไขแล้วกดบันทึก (แก้แค่ชื่อหรือเวลารับ)
+     ระบบคิดราคาใหม่จากชุดปัจจุบันของเอเยนต์เงียบ ๆ ทุกครั้ง · ไม่มีอะไรเตือน
+   กติกาใหม่ตอนแก้ไขใบที่มีอยู่แล้ว
+     1 ทริปที่ยังเป็นเส้นทาง+วันเดิม คิดจากชุดราคาที่ประทับไว้ตอนบันทึกครั้งก่อน (trip.rtRef · ไม่มีก็ใช้ของใบ)
+       ทริปที่เพิ่มใหม่ หรือย้ายเส้นทาง/วัน ไม่มีเรทเดิมให้ยึด จึงคิดจากชุดปัจจุบันเหมือนใบใหม่
+     2 ชุดเดิมกับชุดปัจจุบันของเอเยนต์เป็นคนละชุด → ป้ายบอกทั้งสองชุด มีปุ่มสลับ · ค่าเริ่มต้นคือชุดเดิม
+     3 ชุดเดียวกันแต่ตัวเลขในชุดถูกแก้ (ราคาเก่าไม่มีเก็บไว้ให้คิดย้อน) → วัดตอนเปิดใบว่า
+       "ยังไม่ได้แก้อะไรเลย ยอดก็ไม่เท่าที่บันทึกไว้แล้ว" → ป้ายเตือน และถามยืนยันอีกครั้งตอนกดบันทึก
+   ใบใหม่ · ใบของบริษัท · ใบ B2C · ใบที่ตั้งราคาเอง ไม่เกี่ยว ทำงานเหมือนเดิมทุกอย่าง
+   _rtKeep อยู่บนร่างในฟอร์มเท่านั้น · ตัวบันทึกสร้างใบจากรายชื่อช่องที่รู้จัก จึงไม่หลุดลงที่เก็บ */
+function bkV2RtKeepInit(clone, bk){
+  if(!clone || !bk) return;
+  if(clone.priceMode==='manual') return;
+  if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(clone)) return;
+  if(typeof laIsCompanyBk==='function' && laIsCompanyBk(clone)) return;
+  clone._rtKeep = { mode:'keep', ref:bk.rateTypeRef||null, total:Number(bk.total)||0, drift:null,
+    trips:(bk.trips||[]).map(function(t){ return { routeId:t.routeId, date:t.date, rtRef:t.rtRef||null }; }) };
+}
+function bkV2RtKeptFor(trip, any){
+  const d = _bkV2 && _bkV2.newBooking, K = d && d._rtKeep;
+  if(!K || !_bkV2.editingId || !trip) return null;
+  if(!any && K.mode!=='keep') return null;
+  const s = (K.trips||[]).find(function(x){ return x.routeId===trip.routeId && x.date===trip.date; });
+  if(!s) return null;
+  const get = function(id){ return id ? ((SB_RATE_TYPES||[]).find(function(r){ return r.id===id; })||null) : null; };
+  return get(s.rtRef) || get(K.ref);
+}
+/* ชุดเดิมของใบ กับชุดปัจจุบันของเอเยนต์ ณ วันเดินทางของทริปแรก · คนละชุดเมื่อไหร่ต้องบอก */
+function bkV2RtKeepPair(){
+  const d = _bkV2 && _bkV2.newBooking, K = d && d._rtKeep;
+  if(!K || !d.agentId) return null;
+  const t = (d.trips||[]).find(function(x){ return x && x.routeId && x.date; });
+  if(!t) return null;
+  const kept = bkV2RtKeptFor(t, true);
+  let cur = null; try{ cur = (typeof laMainRtFor==='function') ? laMainRtFor(d.agentId, t.date) : null; }catch(_){}
+  return { kept:kept, cur:cur, differ:!!(kept && cur && kept.id!==cur.id) };
+}
+function bkV2RtKeepUse(mode){
+  const d = _bkV2 && _bkV2.newBooking, K = d && d._rtKeep; if(!K) return;
+  const P = bkV2RtKeepPair();
+  K.mode = (mode==='now') ? 'now' : 'keep';
+  /* ชุดที่ใบจำไว้เดินตามที่เลือก · บันทึกแล้วครั้งหน้าที่เปิด "เรทเดิม" ของใบจะเป็นชุดนี้ */
+  if(K.mode==='now'){ if(P && P.cur) d.rateTypeRef = P.cur.id; }
+  else d.rateTypeRef = K.ref;
+  bkV2Render();
+}
+function bkV2RtKeepNote(){
+  const d = _bkV2 && _bkV2.newBooking, K = d && d._rtKeep; if(!K) return '';
+  const E = function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  const B = function(n){ return '&#3647;'+Math.round(Number(n)||0).toLocaleString(); };
+  const nm = function(r){ return '<b>'+E(r.code)+' &middot; '+E(r.name)+'</b>'; };
+  const btn = 'font-family:inherit;font-size:10.5px;font-weight:700;border-radius:7px;padding:3px 9px;cursor:pointer;margin-left:6px';
+  let out = '';
+  const P = bkV2RtKeepPair();
+  if(P && P.differ){
+    let now = 0; try{ now = bkV2CalcQuote().grandTotal; }catch(_){}
+    out += (K.mode==='keep')
+      ? '<div class="meta bkv2-rtkeep" data-rtkeep="keep" style="color:#0E5E80;margin-top:5px;line-height:1.6">&#128274; '+laT('ใบนี้ยึดเรทเดิมตอนจอง')+' &middot; '+nm(P.kept)
+        +'<br>'+laT('ตอนนี้เอเยนต์ใช้ชุด')+' '+nm(P.cur)
+        +'<button data-rtuse="now" onclick="bkV2RtKeepUse(\'now\')" style="'+btn+';color:#fff;background:#0E5E80;border:1px solid #0E5E80">'+laT('เปลี่ยนไปใช้เรทใหม่')+'</button></div>'
+      : '<div class="meta bkv2-rtkeep" data-rtkeep="now" style="color:#8A5A0B;margin-top:5px;line-height:1.6">&#8594; '+laT('ใบนี้เปลี่ยนมาคิดจากเรทใหม่')+' &middot; '+nm(P.cur)
+        +'<br>'+laT('ยอดที่บันทึกไว้')+' '+B(K.total)+' &rarr; '+laT('ยอดตามเรทใหม่')+' <b>'+B(now)+'</b> &middot; '+laT('เรทเดิม')+' '+E(P.kept.code)
+        +'<button data-rtuse="keep" onclick="bkV2RtKeepUse(\'keep\')" style="'+btn+';color:#8A5A0B;background:#fff;border:1px solid #E2C99A">'+laT('กลับไปใช้เรทเดิม')+'</button></div>';
+  }
+  if(K.drift && K.mode==='keep'){
+    out += '<div class="meta bkv2-rtdrift" data-rtdrift="1" style="color:#A32D2D;background:#FDECEA;border-radius:7px;padding:6px 9px;margin-top:6px;line-height:1.55">&#9888; '
+      +laT('ยอดที่บันทึกไว้')+' <b>'+B(K.drift.was)+'</b> '+laT('ไม่ตรงกับยอดที่คิดจากเรทตอนนี้')+' <b>'+B(K.drift.now)+'</b>'
+      +'<br>'+laT('ราคาในชุดนี้ถูกแก้หลังจากใบนี้บันทึก · ถ้ากดบันทึก ใบนี้จะเปลี่ยนเป็นยอดใหม่')+'</div>';
+  }
+  return out;
 }
 function bkV2GetRTForTrip(trip){
   const base = bkV2GetRT();
@@ -56899,8 +56979,10 @@ function bkV2GetRTForTrip(trip){
   /* §rtSeason · ฐานราคาของทริปนี้ ตามฤดูของ "วันเดินทาง" ไม่ใช่ฤดูของทั้งใบ
      ใบเดียวข้ามฤดูได้จริง — ใบเหมาค้างเกาะที่ออก 14 กลับ 15 ต.ค. คือเคสนั้นเป๊ะ
      ไม่ได้ตั้งตารางฤดูกาล = ได้ base ตัวเดิมกลับมา ไม่มีอะไรเปลี่ยน */
-  const seas = (typeof laMainRtFor === 'function') ? laMainRtFor(d.agentId, trip.date) : null;
-  const B = seas || base;
+  /* §rtKeep · ใบที่กำลังแก้ และทริปนี้ยังเป็นเส้นทาง+วันเดิม = ยึดชุดราคาเดิมของทริป */
+  const kept = bkV2RtKeptFor(trip);
+  const seas = kept ? null : ((typeof laMainRtFor === 'function') ? laMainRtFor(d.agentId, trip.date) : null);
+  const B = kept || seas || base;
   /* §b2bPromo · ทางเข้าเดียว · รองรับทั้งใบโปรที่ดึงจาก Rate Type และใบที่กรอกราคาเอง
      วันจองส่งเข้าไปด้วย · ใบที่ไม่ได้ตั้งช่วงวันจองไว้จะไม่สนใจค่านี้ (laPromoCovers) */
   const hit = laPromoRateFor(d.agentId, trip.routeId, trip.date,
@@ -57737,9 +57819,15 @@ function bkV2EditBooking(bookingId){
     clone.manualTotal = Number(clone.total || (clone.priceBreakdown && clone.priceBreakdown.total) || 0);
     clone._b2cSnap = bkV2B2CSnap(clone);
   }
+  bkV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
   _bkV2.detailId = null;
+  /* §rtKeep · ยังไม่ได้แก้อะไรเลย ยอดก็ไม่เท่าที่บันทึกไว้แล้ว = ราคาในชุดถูกแก้หลังใบนี้บันทึก */
+  if(clone._rtKeep){ try{
+    const _q0 = bkV2CalcQuote().grandTotal;
+    if(Math.round(_q0) !== Math.round(clone._rtKeep.total)) clone._rtKeep.drift = { was:clone._rtKeep.total, now:_q0 };
+  }catch(_){} }
   bkV2SetEditLock(bk.id);   // stamp + sync so others see "being edited"
   bkV2Render();
   try { document.querySelector('main')?.scrollTo({top:0,behavior:'instant'}); } catch(e){}

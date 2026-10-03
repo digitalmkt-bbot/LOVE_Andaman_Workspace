@@ -5,10 +5,11 @@
 //   ราคาทริปอ่านชุดปัจจุบันของเอเยนต์ แต่ส่วน add-on ยังอ่านชุดเก่า
 //
 // กันหกอย่าง
-//   1 ใบที่จำชุดเก่าไว้ · เอเยนต์ย้ายไปชุดใหม่ที่ตั้งราคา Longtail Charter · ตัวเลือกต้องขึ้น ราคาตามชุดใหม่
+//   (ใบใหม่ทั้งหมด · ใบที่กำลังแก้ยึดเรทเดิมก่อนเสมอ ดู §rtKeep / t_rtkeep)
+//   1 ร่างที่จำชุดเก่าไว้ · เอเยนต์ย้ายไปชุดใหม่ที่ตั้งราคา Longtail Charter · ตัวเลือกต้องขึ้น ราคาตามชุดใหม่
 //   2 ติ๊กแล้วยอด add-on ในใบเสนอราคาเท่าราคาของชุดใหม่
 //   3 เหมารถ (Private Van) ก็ใช้ราคาของชุดใหม่
-//   4 ป้ายชุดราคาบนฟอร์มบอกว่าใบนี้คิดจากชุดปัจจุบันของเอเยนต์ (ไม่ชี้ชุดเก่าเฉย ๆ)
+//   4 ใบใหม่ไม่มีบรรทัดเรื่องเรทเดิม/เรทใหม่บนป้ายชุดราคา (เป็นของใบที่กำลังแก้ · ดู t_rtkeep)
 //   5 เอเยนต์ยังอยู่ชุดเดิม · ทุกอย่างเหมือนเดิม ไม่มีบรรทัดบอกเพิ่ม
 //   6 ใบที่ไม่มีเอเยนต์/ยังไม่มีทริป · ไม่พัง ถอยไปใช้ชุดของใบ · ไม่มี error บนหน้า
 import { open, goView } from './_harness.mjs';
@@ -59,12 +60,13 @@ const R = await page.evaluate(async () => {
   moved.quote = bkV2CalcQuote().totalAddOn;
 
   /* ── ป้ายบนฟอร์มจริง ── */
-  let banner = '', bannerSame = '';
+  let banner = '', bannerSame = '', noteNew = '';
   try {
     _bkV2.tab = 'new'; bkV2Render(); await new Promise(z => setTimeout(z, 400));
     const el = document.querySelector('.bkv2-nb-rt-preview'); banner = el ? el.textContent.replace(/\s+/g, ' ').trim() : 'NO-BANNER';
+    noteNew = el ? ((el.querySelector('[data-rtkeep]') || el.querySelector('[data-rtdrift]')) ? 'HAS-NOTE' : 'no-note') : 'NO-BANNER';
     ag.rateTypeId = rtOld.id; bkV2Render(); await new Promise(z => setTimeout(z, 300));
-    const el2 = document.querySelector('.bkv2-nb-rt-preview'); bannerSame = el2 ? (el2.querySelector('.bkv2-rtnow') ? 'HAS-NOTE' : 'no-note') : 'NO-BANNER';
+    const el2 = document.querySelector('.bkv2-nb-rt-preview'); bannerSame = el2 ? (el2.querySelector('[data-rtkeep]') ? 'HAS-NOTE' : 'no-note') : 'NO-BANNER';
     ag.rateTypeId = rtNew.id;
   } catch (e) { banner = 'ERR ' + (e && e.message); }
 
@@ -78,7 +80,7 @@ const R = await page.evaluate(async () => {
     edge = a1 + '|' + a2;
   } catch (e) { edge = 'ERR ' + (e && e.message); }
   _bkV2.newBooking = null; _bkV2.tab = 'bytrip';
-  return { ag: ag.name, rid, oldId: rtOld.id, oldVan: rtOld.addOns.privateTransfer[rid].PK.van, same, moved, banner, bannerSame, edge };
+  return { ag: ag.name, rid, oldId: rtOld.id, oldVan: rtOld.addOns.privateTransfer[rid].PK.van, same, moved, banner, bannerSame, noteNew, edge };
 });
 if (R.err) { fail(R.err); await close(); process.exit(1); }
 
@@ -89,8 +91,9 @@ if (R.moved.quote === 1400) ok('2 ติ๊ก Longtail Charter แล้วย�
 else fail('2 quote ' + R.moved.quote);
 if (R.moved.van === R.oldVan + 111) ok('3 เหมารถ Phuket ใช้ราคาของชุดใหม่ (฿' + R.moved.van + ' · ชุดเก่า ฿' + R.oldVan + ')');
 else fail('3 ' + JSON.stringify({ van: R.moved.van, old: R.oldVan }));
-if (/T-AORT/.test(R.banner)) ok('4 ป้ายชุดราคาบนฟอร์มบอกชุดที่ใช้คิดจริง (T-AORT)');
-else fail('4 banner: ' + R.banner.slice(0, 200));
+/* §rtKeep · ป้ายเรื่องเรทเดิม/เรทใหม่เป็นของ "ใบที่กำลังแก้" เท่านั้น · ใบใหม่ไม่มีเรทเดิมให้พูดถึง (ดู t_rtkeep) */
+if (R.banner !== 'NO-BANNER' && !/^ERR/.test(R.banner) && R.bannerSame === 'no-note' && R.noteNew === 'no-note') ok('4 ใบใหม่ · ป้ายชุดราคาไม่มีบรรทัดเรื่องเรทเดิม/เรทใหม่');
+else fail('4 banner: ' + R.banner.slice(0, 160) + ' · ' + R.noteNew);
 if (!/Longtail/.test(R.same.sec) && R.same.rt === R.oldId && R.same.van === R.oldVan && R.bannerSame === 'no-note')
   ok('5 เอเยนต์ยังอยู่ชุดเดิม · ตัวเลือกและราคาเหมือนเดิม ไม่มีบรรทัดบอกเพิ่ม');
 else fail('5 ' + JSON.stringify({ same: R.same, bannerSame: R.bannerSame }));

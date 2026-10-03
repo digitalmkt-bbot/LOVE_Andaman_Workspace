@@ -833,7 +833,17 @@ var LA_T_EN={
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
   /* §lkPend / §pbPax2 (2026-10-02) */
-  'ราคาและ add-on ของใบนี้คิดจากชุดปัจจุบันของเอเยนต์':'Prices and add-ons on this booking use the agent\'s current rate type',
+  /* §rtKeep (2026-10-03) */
+  'ใบนี้ยึดเรทเดิมตอนจอง':'This booking keeps the rate it was booked at',
+  'ตอนนี้เอเยนต์ใช้ชุด':'The agent is now on',
+  'เปลี่ยนไปใช้เรทใหม่':'Switch to the new rate',
+  'ใบนี้เปลี่ยนมาคิดจากเรทใหม่':'This booking now uses the new rate',
+  'ยอดที่บันทึกไว้':'Saved total',
+  'ยอดตามเรทใหม่':'total at the new rate',
+  'เรทเดิม':'previous rate',
+  'กลับไปใช้เรทเดิม':'Back to the previous rate',
+  'ไม่ตรงกับยอดที่คิดจากเรทตอนนี้':'does not match the total at current rates',
+  'ราคาในชุดนี้ถูกแก้หลังจากใบนี้บันทึก · ถ้ากดบันทึก ใบนี้จะเปลี่ยนเป็นยอดใหม่':'Prices in this rate type changed after the booking was saved · saving will apply the new total',
   'ล็อกที่นั่งของวันนี้':'Lock seats on this day',
   'รอที่ว่าง · ยังไม่คอนเฟิร์ม':'Waiting for seats · not confirmed',
   'รอที่ว่าง {0}':'{0} pending',
