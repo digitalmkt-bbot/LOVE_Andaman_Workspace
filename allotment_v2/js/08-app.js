@@ -68266,6 +68266,18 @@ function pjCSS(){
   +H+' .pj-lg{display:inline-block;font-size:9px;font-weight:800;border-radius:4px;padding:1px 5px;'
     +'background:#E6F1FB;color:#185FA5;vertical-align:middle}'
   +H+' .pj-lgs{display:flex;gap:3px;flex:none}'
+  /* §pjGdTight (2026-10-03) · แถวไกด์ตอนแก้ไข ให้กระชับเท่าตอนปิดใบ
+     การ์ดกว้าง ~300px · ของเดิมกล่องชื่อจองที่เท่าความยาวชื่อเต็ม ป้าย "หัวหน้า" กับป้ายภาษา
+     จึงตกไปอยู่บรรทัดของตัวเองแทบทุกแถว · การ์ดที่กำลังแก้สูงกว่าการ์ดที่ปิดแล้วทั้งที่คนเท่ากัน
+     ตอนนี้ป้ายอยู่บรรทัดเดียวกับชื่อเสมอ · กล่องชื่อใช้ที่ที่เหลือ ชื่อยาวตัดบรรทัดในกล่องเอง (ไม่ตัดด้วย …)
+     คืนที่ให้ชื่อด้วยการ · ลดช่องไฟ · ซ่อนลูกศรเมื่อมีชื่อแล้ว (ทั้งกล่องยังกดเลือกได้เหมือนเดิม)
+     · ป้าย "หัวหน้า" ย่อเป็นดาว (ชี้เมาส์ดูคำอธิบายได้เหมือนเดิม)
+     เหลือให้ชื่อไม่ถึง 70px ป้ายค่อยตกบรรทัด (ชื่อสำคัญกว่าป้าย) */
+  +H+' .pj-rw.pj-gdr{column-gap:4px}'
+  +H+' .pj-rw.pj-gdr .pj-sel{flex:1 1 70px;max-width:none;padding:2px 4px;gap:3px}'
+  +H+' .pj-rw.pj-gdr .pj-nm:not(.e) ~ .pj-cv{display:none}'
+  +H+' .pj-rw.pj-gdr .pj-tag{padding:1px 4px}'
+  +H+' .pj-rw.pj-gdr .pj-lgs{gap:2px}'
   +H+' .pj-away{font-size:9px;font-weight:800;border-radius:5px;padding:1px 6px;background:#E9EFF7;color:#20477E;flex:none;margin-right:3px}'
   +H+' .pj-was{font-size:10px;color:#B4560A;font-weight:600;flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .pj-wbrow{display:flex;align-items:center;gap:9px;padding:0 15px;height:36px;border-bottom:1px solid #F4F5F8}'
@@ -68552,7 +68564,18 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var badge='';
   var hp=val?pjHomePier(val):'';
   if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
-  var freeCaptain=slot==='cap' && boat && boat.ownership==='charter';
+  /* ══ §pjFreeAll (2026-10-03) · เรือเช่า · ทุกช่องของ Captain & Crew พิมพ์ชื่อเองได้ ════════
+     ของเดิมพิมพ์เองได้เฉพาะช่องกัปตัน · ช่องที่กดเพิ่มเข้ามา (ผู้ช่วยกัปตัน เด็กเรือ คนเกาะ)
+     ยังเป็นเมนูเลือกจากทะเบียนพนักงาน ซึ่งคนของเจ้าของเรือไม่มีชื่ออยู่ในนั้น เลือกใครไม่ได้เลย
+     ตอนนี้พิมพ์ได้ทุกช่อง · และยังเลือกคนของเราได้เหมือนเดิมจากรายชื่อที่ขึ้นให้ตอนพิมพ์
+     พิมพ์ตรงกับคนในทะเบียน = เก็บเป็นรหัสคนนั้น (ใบอนุญาต/ท่าประจำยังตามได้) · ไม่ตรง = เก็บเป็นข้อความ
+     เฉพาะใบที่ออกเรือ (kind 'go') · ทีมช่างของวันที่ไม่ได้ออกยังเป็นคนของเราเสมอ */
+  var freeCaptain=(kind==='go') && boat && boat.ownership==='charter';
+  var dlId='pjdl_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+  var dlHtml=(freeCaptain && !ro && slot==='cap')
+    ? ('<datalist id="'+dlId+'">'+(PIER_STAFF||[]).filter(function(s){ return s && s.active!==false; })
+        .map(function(s){ return '<option value="'+poE(pjStaffName(s.id))+'">'+(s.role?poE(s.role):'')+'</option>'; }).join('')+'</datalist>')
+    : '';
   /* ══ §pjName (2026-09-23) · ชื่อในช่องเลือกคนขึ้นไม่เต็ม ═══════════════════
      วัดจริงที่จอ 1600 การ์ด 4 ใบ · การ์ดกว้าง 302px ช่อง select เหลือ 141px
      แต่ชื่อพนักงานจริงยาว 202px (กลาง) ถึง 329px (ยาวสุด) · ไม่มีใครพอสักคน
@@ -68568,7 +68591,7 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var nmTxt=val?pjStaffName(val):'';
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
     +(freeCaptain
-      ? '<input class="pj-free" value="'+poE(val)+'" placeholder="พิมพ์ชื่อกัปตัน" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>'
+      ? (dlHtml+'<input class="pj-free" data-pjfree="'+slot+'" list="'+dlId+'" value="'+poE(nmTxt)+'" placeholder="'+(slot==='cap'?'พิมพ์ชื่อกัปตัน':'พิมพ์ชื่อ')+'" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>')
       : pjPickBox(nmTxt, pjOpts(pier,val,roles),
                   'pjPick(&#39;'+bid+'&#39;,&#39;'+slot+'&#39;,this.value)', ro))
     +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
@@ -68715,7 +68738,7 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
   var gNm='';
   try{ var _g=(typeof goGuide==='function')?goGuide(val):null;
        if(_g) gNm=(_g.name||_g.id)+(_g.nick?(' ('+_g.nick+')'):''); }catch(_){}
-  return '<div class="pj-rw"><div class="k">'+kHtml+'</div>'
+  return '<div class="pj-rw pj-gdr"><div class="k">'+kHtml+'</div>'
     +pjPickBox(gNm, pjGdOpts(val, kind==='gd', taken, busy),
                call('this.value').replace(/'/g,'&#39;'), false)
     +((val||extra)
@@ -68725,7 +68748,7 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
     +((lead&&val&&val===lead)
        ? ('<span class="pj-tag" title="'+poE('ชื่อและเลขใบอนุญาตของคนนี้ขึ้นช่อง "มัคคุเทศก์" '
            +'บนหัวใบสั่งงานมัคคุเทศก์ · ที่เหลือนับเป็นผู้ติดตาม '
-           +'· ต้องการเปลี่ยนหัวหน้า เลือกคนนั้นลงช่องแรก แล้วสองคนจะสลับที่กัน')+'">หัวหน้า</span>')
+           +'· ต้องการเปลี่ยนหัวหน้า เลือกคนนั้นลงช่องแรก แล้วสองคนจะสลับที่กัน')+'" data-pjlead="1" aria-label="หัวหน้า">&#9733;</span>')
        : '')
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
   +'</div>';
@@ -68766,7 +68789,11 @@ function pjGdPick(bid, kind, idx, val){
 }
 function pjFreePick(bid, slot, el){
   if(!poGuard()) return;
-  pjPick(bid, slot, String(el&&el.value||'').trim());
+  var txt=String(el&&el.value||'').replace(/\s+/g,' ').trim();
+  /* §pjFreeAll · ตรงกับคนในทะเบียนพอดี = เก็บรหัสของคนนั้น ไม่ใช่ข้อความ
+     คนเดียวกันจะได้ไม่กลายเป็นสองคน (รหัสในใบหนึ่ง ข้อความในอีกใบ) */
+  var hit=txt ? (PIER_STAFF||[]).filter(function(s){ return s && s.active!==false && pjStaffName(s.id)===txt; }) : [];
+  pjPick(bid, slot, hit.length===1 ? hit[0].id : txt);
 }
 function pjPick(bid, slot, val){
   var J=pjOf(_poDate,bid);
