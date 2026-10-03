@@ -4820,6 +4820,10 @@
         "type": "text"
       },
       {
+        "name": "ops_upgrade",
+        "type": "text"
+      },
+      {
         "name": "ops_reconfirm",
         "type": "text"
       },

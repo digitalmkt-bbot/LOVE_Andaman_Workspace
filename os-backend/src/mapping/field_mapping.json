@@ -5338,6 +5338,11 @@
       "kind": "json_text",
       "db_type": "text"
     },
+    "ops_upgrade": {
+      "source": "trips[].upg",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "ops_reconfirm": {
       "source": "trips[].ops.reconfirm",
       "kind": "json_text",

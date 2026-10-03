@@ -1000,6 +1000,27 @@ async function relSyncB2C(singleExtId = null) {
           );
         }
       }
+      /* §upgRoute (2026-10-03) · an upgraded trip keeps running on its destination route.
+         B2C re-sends the trip with the route the customer bought; the ops team moved it to another
+         programme for the day (trip.upg, column ops_upgrade, restored just above with the other ops_*).
+         Without this the next sync silently moves the guest back and the seat count follows.
+         Applied only while B2C still says "same route, same date as when it was upgraded" - if the
+         customer changed the product or the date on their side, B2C wins and the upgrade is stale.
+         JSON is parsed here, not cast in SQL: a bad value must not abort the whole sync transaction. */
+      if (TRIP_OPS.includes('ops_upgrade')) {
+        _phase = 'restore upgraded routes';
+        for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
+          for (const [idx, ops] of Object.entries(byIdx)) {
+            if (!ops.ops_upgrade) continue;
+            let u = null; try { u = JSON.parse(ops.ops_upgrade); } catch (_) { u = null; }
+            if (!u || !u.toRouteId || !u.fromRouteId || !u.date) continue;
+            await client.query(
+              `UPDATE ${fqt('sb_bookings__trips')} SET routeid=$1
+               WHERE sb_bookings_id=$2 AND idx=$3 AND routeid=$4 AND date=$5`,
+              [String(u.toRouteId), bkId, Number(idx), String(u.fromRouteId), String(u.date)]);
+          }
+        }
+      }
       // §b2cNat · the mapper's own count wins when it derived one (a full passenger list is better
       // evidence than a hand count); a trip it left blank gets the previous value back.
       _phase = 'restore trip nat';
@@ -1456,7 +1477,8 @@ async function initDb(){
       await sq('sb_agents.companyinfo_taxid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
       const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
                         ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
-                        ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
+                        ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text'],
+                        ['ops_upgrade','text']];   // §upgRoute (2026-10-03) · trip.upg · ย้ายไปวิ่งอีกเส้นทาง · migration 035 เป็นตัวจริง ตรงนี้กันไว้อีกชั้น
       for(const [c,t] of _tripOps){
         await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }

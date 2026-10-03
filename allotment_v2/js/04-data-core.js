@@ -833,6 +833,14 @@ var LA_T_EN={
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
   'ไม่ออกวันนี้':'Not running today',
+  'ย้ายไปเส้นทางอื่น':'Move to another programme',
+  'จาก':'from',
+  'ไปโปรแกรม':'Destination programme',
+  'เหตุผล':'Reason',
+  'วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง':'No other programme has a boat running today',
+  'เช่น ทริปเดิมไม่ออก · ลูกค้าขอเปลี่ยน':'e.g. original trip not running · guest asked to change',
+  'เก็บเพิ่ม (บาท) · 0 = ไม่เก็บ':'Extra charge (THB) · 0 = none',
+  'ราคาใบจองไม่เปลี่ยน ยึดราคาที่จองไว้ · ยอดเก็บเพิ่มจะขึ้นเป็นรายการอัปเกรดที่ต้องเก็บหน้าท่า · เรือที่จัดไว้เดิมจะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง':'The booking price does not change (booked price is kept) · the extra charge becomes an upgrade item to collect at the pier · the current boat is cleared, assign a boat on the destination programme',
   /* §lkPend / §pbPax2 (2026-10-02) */
   /* §rtKeep (2026-10-03) */
   'ใบนี้ยึดเรทเดิมตอนจอง':'This booking keeps the rate it was booked at',

@@ -9283,7 +9283,8 @@ function baBoatCellHTML(bk, routeId, date, alloc){
   const _chT=(bk.trips||[]).find(t=>(!date||(t.date||'')===date)&&t.bookingMode==='charter'&&t.charterBoatId)||(bk.trips||[]).find(t=>t.bookingMode==='charter'&&t.charterBoatId);
   if(_chT){ return baBoatSplitCellHTML(bk, date, _chT); }
   const _O=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):(bk.ops||{});   // per-day boat
-  const cur=_O.boatId||''; const up=!!_O.upgrade;
+  const _upT=bkUpgTripOn(bk, date, routeId);
+  const cur=_O.boatId||''; const up=bkUpgActive(_upT);
   const bo=cur?((BOATS||[]).find(b=>b.id===cur)):null;
   const label=cur?e((bo&&bo.name)||cur):'+ assign';
   const pulled = cur && date && (typeof bkV2BoatPulled==='function') && bkV2BoatPulled(bk, date);   // flag whenever the boat is pulled/mismatched (any date)
@@ -9295,7 +9296,7 @@ function baBoatCellHTML(bk, routeId, date, alloc){
   return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;flex:1 1 auto">
     <button data-babtn="pick" onclick="event.stopPropagation();bkV2BoatPicker(this,'${bk.id}','${routeId}')" title="${pulled?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':(cur?(label+' · Choose boat'):'Choose boat')}" style="min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;border:1px solid ${pulled?'#E89A92':(cur?'#9FE1CB':'#E6C9C3')};background:${pulled?'#FCEBEB':(cur?'#fff':'#FEF9F2')};border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:${pulled?'#A32D2D':(cur?'#1B2A55':'#A05A1A')};white-space:nowrap">${pulled?'&#9888; ':''}${label}${up?' ⤴':''}</button>
     <div data-babtn="sub" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
-    <button data-babtn="up" onclick="event.stopPropagation();bkV2BoatUpgrade('${bk.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="flex:none;background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">⤴</button>
+    <button data-babtn="up" onclick="event.stopPropagation();bkV2BoatUpgrade('${bk.id}','${routeId}','${e(date)}')" title="${up?('Upgraded from '+e(bkUpgRouteName(_upT.upg.fromRouteId))+' · click to undo'):'Upgrade · move to another programme'}" style="flex:none;background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">⤴</button>
     ${(function(){ const _n=(typeof bkBoatPoolOn==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):0; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null; if(!_sp && _n<2) return ''; return `<button data-babtn="split" onclick="event.stopPropagation();bkV2BoatSplit('${bk.id}','${e(date)}')" title="แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)" style="flex:none;background:${_sp?'#F6F2FE':'#fff'};border:1px solid ${_sp?'#C7B8E8':'var(--border)'};color:${_sp?'#5B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">&#8646;</button>`; })()}
     </div>
   </div>`;
@@ -9346,7 +9347,7 @@ function bkV2BoatPicker(el, bkId, routeId){
   const old=document.getElementById('bkv2-boatpick'); if(old){ old.remove(); }
   const date=(typeof bkV2Tab2ActiveDate==='function')?bkV2Tab2ActiveDate():'';
   const _O=bkOpsRead(bk,date);   // per-day boat
-  const up=!!_O.upgrade;
+  const up=false;   /* §upgRoute · upgrade ย้ายเส้นทางจริงแล้ว · เรือที่เลือกได้คือเรือของเส้นทางที่ใบอยู่ตอนนี้ */
   /* §OVN · ขากลับค้างคืน — รอบก่อนกางเป็น "เรือทุกลำที่วิ่งวันนั้น" ทันที ซึ่งกว้างเกินไป:
      บุ๊กกิ้ง PP Bamboo เห็นเรือ Phi Maiton / Whale Shark โผล่มาให้เลือกด้วย
      เหตุผลที่กางตอนนั้นคือกันเคส "โปรแกรมขาไปไม่เปิดรันวันที่กลับ" → baBoatsForRoute คืน [] แล้วขึ้น
@@ -27692,17 +27693,137 @@ function baAutoAssign(date, routeId){
   });
   acctPersistBookings(); if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
 }
-function bkV2BoatUpgrade(bkId){
-  const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
-  const _rerender=()=>{ if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign(); };
-  if(b.ops&&b.ops.upgrade){ if(confirm('Remove the upgrade flag from this booking?')){ b.ops.upgrade=null; acctPersistBookings(); _rerender(); } return; }
-  const reason=prompt('Upgrade / move this guest to another boat or route (emergency).\nReason:', '');
-  if(reason===null) return;
-  const chargeStr=prompt('Upgrade charge (THB) · 0 = goodwill/free', '0'); if(chargeStr===null) return;
-  const charge=Math.max(0,Number(chargeStr)||0);
-  b.ops=b.ops||{}; b.ops.upgrade={reason:(reason||'').trim(), charge, by:laBy(), at:new Date().toISOString()};
-  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade · '+(reason||'')+(charge>0?(' · ฿'+charge.toLocaleString()):' · free'),'Edit');
-  acctPersistBookings(); _rerender();   // now the boat dropdown lists ALL day boats
+/* ══ §upgRoute (2026-10-03) · Upgrade = ย้ายลูกค้าไปวิ่งอีกเส้นทางหนึ่ง ═══════════════════════
+   ผู้ใช้อธิบาย · "การ upgrade คือการย้ายไปเส้นทางอื่น ราคายึดราคาที่จอง แต่อาจเก็บเพิ่มได้หรือไม่ได้ แล้วแต่ตกลง"
+   แล้วเลือก · ยอดเก็บเพิ่มเข้ารายการอัปเกรดเดิม (bk.upgrades) · ใบย้ายไปอยู่ใต้โปรแกรมปลายทาง ที่นั่งนับที่ปลายทาง
+
+   ของเดิม (ops.upgrade) เป็นแค่ธงที่กางตัวเลือกเรือให้เห็นทุกลำ · ยอดเก็บเพิ่มถูกจดไว้เฉย ๆ ไม่มีหน้าไหนอ่าน
+   และธงนั้นไม่มีคอลัมน์ในฐานข้อมูล โหลดหน้าใหม่ก็หาย
+
+   ของใหม่ · ทริปย้ายเส้นทางจริง (trip.routeId = ปลายทาง) ทุกหน้าที่อ่าน routeId จึงตามไปเอง:
+   ตาราง By trip · ที่นั่ง · ใบงานเรือ · เช็คอินหน้าท่า · ตัวกันขายเกินฝั่งเซิร์ฟเวอร์
+   trip.upg จำว่ามาจากไหน { fromRouteId, toRouteId, date, reason, charge, upgId, by, at }
+   ราคา · ไม่คิดใหม่ตอนย้าย · ตอนเปิดแก้ใบ ตัวคิดราคาอ่านเส้นทางที่ขาย (bkV2WithSold) ยอดจึงเท่าที่จองไว้
+   แก้เส้นทางหรือวันในฟอร์มเอง = การ upgrade สิ้นสุด (upg ไม่ active) คิดราคาตามที่เลือกใหม่ */
+function bkUpgActive(t){
+  return !!(t && t.upg && t.upg.toRouteId && t.upg.fromRouteId && t.routeId===t.upg.toRouteId && (t.date||'')===(t.upg.date||''));
+}
+function bkUpgTripOn(b, date, routeId){
+  return ((b&&b.trips)||[]).find(function(t){ return t && (t.date||'')===(date||'') && (!routeId || t.routeId===routeId) && t.bookingMode!=='charter'; }) || null;
+}
+/* เส้นทางที่ใช้คิดราคา · ใบที่ upgrade อยู่ = เส้นทางที่ขาย ไม่ใช่เส้นทางที่วิ่งจริง */
+function bkV2PrRoute(t){ return bkUpgActive(t) ? t.upg.fromRouteId : ((t&&t.routeId)||''); }
+/* ระหว่างคิดราคา ให้ทริปที่ upgrade ถือเส้นทางที่ขายชั่วคราว · จบแล้วคืนค่าเสมอ (ทำงานแบบ synchronous ทั้งหมด) */
+function bkV2WithSold(trips, fn){
+  var sw=[];
+  (trips||[]).forEach(function(t){ if(bkUpgActive(t)){ sw.push([t, t.routeId]); t.routeId=t.upg.fromRouteId; } });
+  try{ return fn(); } finally{ sw.forEach(function(x){ x[0].routeId=x[1]; }); }
+}
+function bkUpgRouteName(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r&&r.name)||rid||''; }
+var _bkUpg=null;
+function bkV2BoatUpgrade(bkId, routeId, date){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var b=SB_BOOKINGS.find(function(x){ return x.id===bkId; }); if(!b) return;
+  date=date||((typeof bkV2Tab2ActiveDate==='function')?bkV2Tab2ActiveDate():'')||(typeof _baDate!=='undefined'?_baDate:'');
+  var t=bkUpgTripOn(b, date, routeId) || bkUpgTripOn(b, date, '');
+  if(!t){ alert('No seat trip on '+date+' for this booking.'); return; }
+  if(bkUpgActive(t)){ bkV2UpgUndo(bkId, t.routeId, date); return; }
+  if(t.ovnLeg || t.ovn){ alert('Overnight trips cannot be upgraded here. Edit the booking instead.'); return; }
+  if((Number(t.lockUse)||0)>0 || (t.seatSource && Number(t.seatSource.locked)>0)){
+    alert('This booking draws seats from a seat lock on '+bkUpgRouteName(t.routeId)+'.\nRelease the lock draw first (edit the booking), then upgrade.'); return; }
+  _bkUpg={ bkId:bkId, date:date, from:t.routeId, to:'', reason:'', charge:'' };
+  bkV2UpgModal();
+}
+/* โปรแกรมปลายทางที่เลือกได้ · มีเรือวิ่งวันนั้น · เปิดขายวันนั้น · ไม่ใช่โปรแกรมเดิม */
+function bkV2UpgTargets(date, fromRid, bkId){
+  var seen={}, out=[];
+  ((typeof baDayBoats==='function')?baDayBoats(date):[]).forEach(function(x){
+    var rid=x.routeId; if(!rid || rid===fromRid || seen[rid]) return; seen[rid]=1;
+    if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(rid, date)) return;
+    var al=(typeof getAllotment==='function')?getAllotment(rid, date, null):null;
+    out.push({ rid:rid, name:bkUpgRouteName(rid), free:(al&&al.hasAllotment)?al.seatsAvailable:null });
+  });
+  if(typeof laRouteOrdCmp==='function') out.sort(function(a,c){ return laRouteOrdCmp(a.rid,c.rid); });
+  return out;
+}
+function bkV2UpgModalClose(){ var h=document.getElementById('bkv2-upg-ov'); if(h) h.remove(); _bkUpg=null; }
+function bkV2UpgModal(){
+  var U=_bkUpg; if(!U) return;
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }), t=bkUpgTripOn(b, U.date, U.from);
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0;
+  var T=bkV2UpgTargets(U.date, U.from, U.bkId);
+  var old=document.getElementById('bkv2-upg-ov'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='bkv2-upg-ov'; ov.className='la-modal';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+  var opts=T.length?T.map(function(x){ var full=(x.free!=null && x.free<pax);
+      return '<label data-upg-to="'+e(x.rid)+'" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid '+(U.to===x.rid?'#6B289A':'#E4E1D9')+';background:'+(U.to===x.rid?'#F7F1FC':(full?'#FAFAF8':'#fff'))+';border-radius:10px;cursor:'+(full?'not-allowed':'pointer')+';opacity:'+(full?'.6':'1')+'">'
+        +'<input type="radio" name="bkupg-to" value="'+e(x.rid)+'" '+(U.to===x.rid?'checked':'')+(full?' disabled':'')+' onchange="_bkUpg.to=this.value;bkV2UpgModal()" style="accent-color:#6B289A">'
+        +'<span style="flex:1;font-weight:700;font-size:13px">'+e(x.name)+'</span>'
+        +'<span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+(full?'#A32D2D':'#0F6E56')+'">'+(x.free==null?'-':(x.free+' free'))+'</span></label>'; }).join('')
+    : '<div style="padding:14px;text-align:center;color:#A32D2D;font-size:12.5px">'+laT('วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง')+'</div>';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;width:min(480px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4"><div style="font-size:15px;font-weight:800;color:#4A1D6E">&#10548; Upgrade &middot; '+laT('ย้ายไปเส้นทางอื่น')+'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e((b&&(b.leadPax||b.customerName))||U.bkId)+' &middot; '+pax+' pax &middot; '+e(U.date)+' &middot; '+laT('จาก')+' <b>'+e(bkUpgRouteName(U.from))+'</b></div></div>'
+    +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
+    +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('ไปโปรแกรม')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+opts+'</div></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เหตุผล')+'</div>'
+    +'<input id="bkupg-reason" type="text" value="'+e(U.reason)+'" oninput="_bkUpg.reason=this.value" placeholder="'+laT('เช่น ทริปเดิมไม่ออก · ลูกค้าขอเปลี่ยน')+'" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;box-sizing:border-box;font-family:inherit"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เก็บเพิ่ม (บาท) · 0 = ไม่เก็บ')+'</div>'
+    +'<input id="bkupg-charge" type="number" min="0" value="'+e(U.charge)+'" oninput="_bkUpg.charge=this.value" placeholder="0" style="width:140px;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:15px;font-weight:700;font-family:\'DM Mono\',monospace;box-sizing:border-box"></div>'
+    +'<div style="font-size:11px;color:#8a8a82;line-height:1.5">'+laT('ราคาใบจองไม่เปลี่ยน ยึดราคาที่จองไว้ · ยอดเก็บเพิ่มจะขึ้นเป็นรายการอัปเกรดที่ต้องเก็บหน้าท่า · เรือที่จัดไว้เดิมจะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง')+'</div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
+    +'<button onclick="bkV2UpgModalClose()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'+laT('ยกเลิก')+'</button>'
+    +'<button data-upg-go="1" onclick="bkV2UpgApply()" style="border:none;background:#6B289A;color:#fff;border-radius:9px;padding:9px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">Upgrade</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+function bkV2UpgApply(){
+  var U=_bkUpg; if(!U) return;
+  var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }); if(!b) return;
+  var t=bkUpgTripOn(b, U.date, U.from); if(!t){ alert('Trip not found.'); return; }
+  if(!U.to){ alert('Pick the destination programme.'); return; }
+  var reason=String(U.reason||'').trim(); if(!reason){ alert('Enter a reason.'); var r0=document.getElementById('bkupg-reason'); if(r0) r0.focus(); return; }
+  var charge=Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g,''))||0)*100)/100);
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  var al=(typeof getAllotment==='function')?getAllotment(U.to, U.date, null):null;
+  if(al && al.hasAllotment && pax>al.seatsAvailable){
+    alert('Not enough free seats on '+bkUpgRouteName(U.to)+' ('+U.date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
+  var O=bkOpsFor(b, U.date), fromNm=bkUpgRouteName(U.from), toNm=bkUpgRouteName(U.to), upgId='';
+  if(charge>0){
+    if(!Array.isArray(b.upgrades)) b.upgrades=[];
+    upgId='up_'+Date.now();
+    b.upgrades.push({ id:upgId, label:'Upgrade > '+toNm, sellPrice:charge, toCompany:charge, commission:0, collected:false,
+      note:reason, seller:'', settle:'pending', at:new Date().toISOString(), method:'cash', feePct:0, fee:0, customerPaid:charge, slips:[] });
+  }
+  t.upg={ fromRouteId:U.from, toRouteId:U.to, date:U.date, reason:reason, charge:charge, upgId:upgId, by:laBy(), at:new Date().toISOString() };
+  t.routeId=U.to;
+  O.boatId=null; if(O.boatSplits) delete O.boatSplits;       /* เรือของเส้นทางเดิมใช้ต่อไม่ได้ · จัดใหม่ในโปรแกรมปลายทาง */
+  if(b.ops && b.ops.upgrade) b.ops.upgrade=null;              /* ธงแบบเก่า · เลิกใช้ */
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade route · '+fromNm+' > '+toNm+' · '+reason+(charge>0?(' · +THB '+charge.toLocaleString()):' · no charge'),'Edit');
+  acctPersistBookings();
+  bkV2UpgModalClose();
+  if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else if(typeof bkV2Render==='function' && document.getElementById('bkv2-host')) bkV2Render(); else renderBoatAssign();
+}
+function bkV2UpgUndo(bkId, routeId, date){
+  var b=SB_BOOKINGS.find(function(x){ return x.id===bkId; }); if(!b) return;
+  var t=bkUpgTripOn(b, date, routeId); if(!t || !bkUpgActive(t)) return;
+  var u=t.upg, fromNm=bkUpgRouteName(u.fromRouteId), toNm=bkUpgRouteName(u.toRouteId);
+  var item=(u.upgId && Array.isArray(b.upgrades))?b.upgrades.find(function(x){ return x.id===u.upgId; }):null;
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(u.fromRouteId, date)){
+    alert('Cannot undo: '+fromNm+' is not running on '+date+'.'); return; }
+  var al=(typeof getAllotment==='function')?getAllotment(u.fromRouteId, date, null):null;
+  if(al && al.hasAllotment && pax>al.seatsAvailable){
+    alert('Cannot undo: not enough free seats on '+fromNm+' ('+date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
+  if(!confirm('Undo the upgrade?\n'+toNm+' > back to '+fromNm+'\n'+(item?(item.collected?'The extra charge was already collected - it stays on the booking.':'The uncollected extra charge (THB '+(+item.sellPrice||0).toLocaleString()+') will be removed.'):'')+'\nThe boat must be assigned again.')) return;
+  if(item && !item.collected) b.upgrades=b.upgrades.filter(function(x){ return x.id!==u.upgId; });
+  t.routeId=u.fromRouteId; delete t.upg;
+  var O=bkOpsFor(b, date); O.boatId=null; if(O.boatSplits) delete O.boatSplits;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade undone · back to '+fromNm,'Edit');
+  acctPersistBookings();
+  if(typeof bkV2Render==='function' && document.getElementById('bkv2-host')) bkV2Render(); else renderBoatAssign();
 }
 function renderBoatAssign(){
   const host=document.getElementById('boatassign-host'); if(!host) return;
@@ -27715,7 +27836,7 @@ function renderBoatAssign(){
   // option list builder for a booking's boat <select>
   const boatOpts=(bk, routeId)=>{
     const cur=bkOpsRead(bk,date).boatId||'';
-    const upgraded=!!(bk.ops&&bk.ops.upgrade);
+    const upgraded=false;   /* §upgRoute */
     const pool = upgraded ? dayBoats : baBoatsForRoute(date,routeId);
     let opts=`<option value="">— unassigned —</option>`;
     pool.forEach(x=>{ const r=(typeof getRoute==='function'?getRoute(x.routeId):null); const lbl=(x.boat.name||x.boatId)+(upgraded&&x.routeId!==routeId?(' · '+(r?r.name:x.routeId)):'')+' ('+(x.boat.cap||0)+')'; opts+=`<option value="${x.boatId}" ${cur===x.boatId?'selected':''}>${esc(lbl)}</option>`; });
@@ -27737,13 +27858,13 @@ function renderBoatAssign(){
     const tdc='padding:6px 10px;font-size:12px;border-bottom:0.5px solid rgba(0,0,0,.05);vertical-align:middle';
     const bkRows=rows.sort((a,c)=>String(a.b.voucherRef||a.b.id).localeCompare(String(c.b.voucherRef||c.b.id))).map(({b,t})=>{
       const a=sbGetAgent(b.agentId); const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
-      const _O=bkOpsRead(b,date); const up=!!_O.upgrade; const assigned=!!_O.boatId;
+      const _O=bkOpsRead(b,date); const up=bkUpgActive(t); const assigned=!!_O.boatId;
       return `<tr style="${assigned?'':'background:#FEF9F2'}">
         <td style="${tdc};font-family:'DM Mono',monospace;color:#444">${esc(b.voucherRef||b.code||b.id)}</td>
         <td style="${tdc}">${esc(b.leadPax||'—')} <span style="color:#8a8a82;font-size:11px">· ${esc(a?a.name:'')}</span></td>
         <td style="${tdc};text-align:center;font-family:'DM Mono',monospace">${pax}</td>
         <td style="${tdc}"><select onchange="bkV2AssignBoat('${b.id}',this.value,'${date}')" style="border:1px solid ${assigned?'#9FE1CB':'#E6C9C3'};border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;background:#fff">${boatOpts(b,rid)}</select>${up?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:#6B289A;background:#F4E8FB;padding:1px 7px;border-radius:6px" title="${esc(b.ops.upgrade.reason||'')}${b.ops.upgrade.charge?(' · ฿'+b.ops.upgrade.charge):''}">⤴ UPGRADE</span>`:''}</td>
-        <td style="${tdc};text-align:center"><button onclick="bkV2BoatUpgrade('${b.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border,#e5e5e5)'};color:${up?'#6B289A':'#666'};border-radius:6px;padding:4px 9px;font-size:10px;cursor:pointer;font-family:inherit">⤴ ${up?'undo':'Upgrade'}</button></td>
+        <td style="${tdc};text-align:center"><button onclick="bkV2BoatUpgrade('${b.id}','${rid}','${date}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border,#e5e5e5)'};color:${up?'#6B289A':'#666'};border-radius:6px;padding:4px 9px;font-size:10px;cursor:pointer;font-family:inherit">⤴ ${up?'undo':'Upgrade'}</button></td>
       </tr>`;
     }).join('');
     return `<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;margin-bottom:16px">
@@ -50503,6 +50624,8 @@ function bkV2RenderTab2(){
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
+              ${(function(){ var _ut=bkUpgTripOn(bk, date, rid); if(!bkUpgActive(_ut)) return ''; var _u=_ut.upg;
+                return `<span class="t2-upgfrom" data-upgfrom="${esc(_u.fromRouteId)}" title="${esc('Upgrade · '+bkUpgRouteName(_u.fromRouteId)+' > '+bkUpgRouteName(_u.toRouteId)+' · '+(_u.reason||'')+(_u.charge>0?(' · +THB '+Number(_u.charge).toLocaleString()):' · no charge')+(_u.by?(' · '+_u.by):''))}">&#10548; ${laT('จาก')} ${esc(bkUpgRouteName(_u.fromRouteId))}</span>`; })()}
               ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="${esc(lead)} · Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead" title="${esc(lead)}">${esc(lead)}</span>`;   /* §btClip */ })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}${r.cxl?'':_btDrawTag(bk.id)}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
             </td>
@@ -51846,6 +51969,7 @@ function bkV2RenderTab2(){
     .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:142px;width:142px;overflow:hidden}
     .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
     .t2-mtbl th.t2-vc{width:104px}
+    .t2-upgfrom{display:inline-block;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin-right:5px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-vch{display:inline-block;max-width:min(96px,100%);overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     /* ══ §btClip (2026-10-01) · กติกาการตัดข้อความในตารางนี้ ═════════════
@@ -56150,6 +56274,7 @@ function bkV2CommitBooking(status){
     trips: d.trips.filter(t => t.routeId && t.date).map(t => ({
       routeId: t.routeId,
       date: t.date,
+      upg: bkUpgActive(t) ? { ...t.upg } : undefined,   /* §upgRoute · เปลี่ยนเส้นทาง/วันในฟอร์มแล้ว = การ upgrade สิ้นสุด */
       // §OVN return leg — the customer boards at the island pier, so there is NO pickup zone. Left on the
       // outbound zone, the van sheet sent a driver to their (already checked-out) hotel to collect someone
       // who was at that moment on a boat.
@@ -57040,13 +57165,13 @@ function bkV2RtKeepInit(clone, bk){
   if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(clone)) return;
   if(typeof laIsCompanyBk==='function' && laIsCompanyBk(clone)) return;
   clone._rtKeep = { mode:'keep', ref:bk.rateTypeRef||null, total:Number(bk.total)||0, drift:null,
-    trips:(bk.trips||[]).map(function(t){ return { routeId:t.routeId, date:t.date, rtRef:t.rtRef||null }; }) };
+    trips:(bk.trips||[]).map(function(t){ return { routeId:bkV2PrRoute(t), date:t.date, rtRef:t.rtRef||null }; }) };   /* §upgRoute · ชุดราคาผูกกับเส้นทางที่ขาย */
 }
 function bkV2RtKeptFor(trip, any){
   const d = _bkV2 && _bkV2.newBooking, K = d && d._rtKeep;
   if(!K || !_bkV2.editingId || !trip) return null;
   if(!any && K.mode!=='keep') return null;
-  const s = (K.trips||[]).find(function(x){ return x.routeId===trip.routeId && x.date===trip.date; });
+  const s = (K.trips||[]).find(function(x){ return x.routeId===bkV2PrRoute(trip) && x.date===trip.date; });
   if(!s) return null;
   const get = function(id){ return id ? ((SB_RATE_TYPES||[]).find(function(r){ return r.id===id; })||null) : null; };
   return get(s.rtRef) || get(K.ref);
@@ -57108,13 +57233,14 @@ function bkV2GetRTForTrip(trip){
   const B = kept || seas || base;
   /* §b2bPromo · ทางเข้าเดียว · รองรับทั้งใบโปรที่ดึงจาก Rate Type และใบที่กรอกราคาเอง
      วันจองส่งเข้าไปด้วย · ใบที่ไม่ได้ตั้งช่วงวันจองไว้จะไม่สนใจค่านี้ (laPromoCovers) */
-  const hit = laPromoRateFor(d.agentId, trip.routeId, trip.date,
+  const hit = laPromoRateFor(d.agentId, bkV2PrRoute(trip), trip.date,
                              d.bookingDate || (typeof TODAY_STR!=='undefined'?TODAY_STR:''), B);
   if(!hit) return B;
   if(hit.rt && hit.rt.id === (B && B.id)) return B;         /* โปรชี้กลับไปชุดเดิม = ไม่ต้องสลับ */
   return hit.rt || B;
 }
-function bkV2TripSubtotal(trip){
+function bkV2TripSubtotal(trip){ return bkV2WithSold([trip], ()=>_bkV2TripSubtotalRun(trip)); }
+function _bkV2TripSubtotalRun(trip){
   const rt = bkV2GetRTForTrip(trip);
   if(!rt || !trip.routeId) return { total:0, seatFr:0, seatTh:0, bundle:0 };
   if(trip.ovnLeg) return { total:0, seatFr:0, seatTh:0, bundle:0, ovnLeg:true };   // ขากลับค้างคืน · ที่นั่งกันไว้แต่ไม่คิดเงินซ้ำ (ค่าใช้จ่ายอยู่ที่ ovnCharge ของขาไป)
@@ -57248,7 +57374,9 @@ function bkV2AddOnInfo(type){
   }
   return { label: type, total: 0 };
 }
-function bkV2CalcQuote(){
+/* §upgRoute · ตัวคิดราคาอ่านเส้นทางที่ขาย ไม่ใช่เส้นทางที่ upgrade ไปวิ่ง · ราคายึดที่จองไว้ */
+function bkV2CalcQuote(){ const d=_bkV2&&_bkV2.newBooking; return bkV2WithSold(d&&d.trips, ()=>_bkV2CalcQuoteRun.apply(this, arguments)); }
+function _bkV2CalcQuoteRun(){
   const d = _bkV2.newBooking;
   if(!d) return { totalSeat:0, totalAddOn:0, focDiscount:0, totalFoc:0, grandTotal:0, perTrip:[] };
   // Manual / free-style price (walk-in) · typed total overrides the rate engine
