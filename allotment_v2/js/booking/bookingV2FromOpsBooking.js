@@ -7,6 +7,9 @@ function bookingV2FromOpsBooking(ob){
   return {
     id: g('externalId','external_id') || ob.id,
     opsId: ob.id,
+    // bookingV2EditBooking refuses anything that isn't schemaVer 2 as "legacy" — every booking that
+    // operation-backend accepted was written by this v2 form, so it is v2.
+    schemaVer: 2,
     agentId: g('agentId','agent_id') || null,
     leadPax: g('leadPax','lead_pax') || '',
     leadNationality: g('leadNationality','lead_nationality') || '',
@@ -19,7 +22,9 @@ function bookingV2FromOpsBooking(ob){
     voucherRef: g('voucherRef','voucher_ref') || '',
     trips: (ob.trips||[]).map(function(t){
       var tg=function(camel,snake){ return t[camel]!==undefined ? t[camel] : t[snake]; };
-      return { routeId: tg('routeId','route_id'), date: t.date, bookingMode: tg('bookingMode','booking_mode')||'seat', pax: t.pax||{}, charterBoatId: tg('charterBoatId','charter_boat_id')||null };
+      // The backend answers service_date, not date; reading t.date left every loaded trip dateless.
+      // opsTripId is what lets an edit PATCH this trip instead of recreating it.
+      return { opsTripId: t.id, routeId: tg('routeId','route_id'), date: tg('date','service_date'), bookingMode: tg('bookingMode','booking_mode')||'seat', pax: t.pax||{}, charterBoatId: tg('charterBoatId','charter_boat_id')||null };
     }),
     passengers: ob.passengers||[], addOns: [], adjustments: [], history: [], ops: {}, priceBreakdown: {}, total: 0,
     _fromOpsBackend: true

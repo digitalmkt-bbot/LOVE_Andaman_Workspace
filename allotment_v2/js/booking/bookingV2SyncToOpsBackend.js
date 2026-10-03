@@ -9,10 +9,14 @@ function bookingV2SyncToOpsBackend(bk){
   var payload = {
     trips: (bk.trips||[]).map(function(t){
       var o = { routeId:t.routeId, date:t.date, pax:t.pax||{} };
+      // Without its id the backend treats a trip as new and recreates it on every PATCH.
+      if(t.opsTripId) o.id = t.opsTripId;
       if(t.bookingMode==='charter'){ o.bookingMode='charter'; if(t.charterBoatId) o.charterBoatId=t.charterBoatId; }
       return o;
     }),
-    externalId: bk.id, status: bk.status
+    // The backend reads external_id (or id) — never externalId — so the camelCase key was dropped
+    // and a reloaded booking came back under the backend's own id instead of bk.id.
+    external_id: bk.id, status: bk.status
   };
   ['agentId','leadPax','leadNationality','leadPhone','leadEmail','hotelName','pickupAreaId','voucherRef','bookingDate'].forEach(function(k){
     if(bk[k]!=null && bk[k]!=='') payload[k]=bk[k];
@@ -22,7 +26,20 @@ function bookingV2SyncToOpsBackend(bk){
   window.laOpsFetch(path, { method:method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
     .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error((j&&j.message)||('HTTP '+r.status)); return j; }); })
     .then(function(j){
-      if(!bk.opsId && j && j.id){ bk.opsId=j.id; try{ bookingV2PersistBookings(); }catch(e){} }
+      var changed=false;
+      if(!bk.opsId && j && j.id){ bk.opsId=j.id; changed=true; }
+      // Adopt the trip ids the backend assigned so the next edit PATCHes them. Match on route+date
+      // first (the server orders by seq, which need not be the form's order), then by position.
+      if(j && Array.isArray(j.trips)){
+        var used={};
+        (bk.trips||[]).forEach(function(t,i){
+          var hit=null;
+          j.trips.forEach(function(st){ if(!hit && !used[st.id] && st.route_id===t.routeId && st.service_date===t.date) hit=st; });
+          if(!hit && j.trips[i] && !used[j.trips[i].id]) hit=j.trips[i];
+          if(hit){ used[hit.id]=1; if(t.opsTripId!==hit.id){ t.opsTripId=hit.id; changed=true; } }
+        });
+      }
+      if(changed){ try{ bookingV2PersistBookings(); }catch(e){} }
       try{ console.log('[opsSync] booking '+bk.id+' synced to operation-backend as '+(bk.opsId||'?')); }catch(e){}
     })
     .catch(function(e){ try{ console.warn('[opsSync] booking '+bk.id+' failed to sync to operation-backend: '+((e&&e.message)||e)); }catch(_){} });

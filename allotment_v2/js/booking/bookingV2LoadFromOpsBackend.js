@@ -25,12 +25,25 @@ function bookingV2LoadFromOpsBackend(options){
   var defaults=_opsBookingDefaultRange();
   var from=options.from||defaults.from, to=options.to||defaults.to;
   var params=[];
-  [['route_id',options.routeId],['from',from],['to',to],['limit',options.limit]].forEach(function(pair){
+  // The backend pages at 50 by default (max 100) and hands back next_cursor; a single request
+  // silently loaded only the first page of the window. Ask for full pages and follow the cursor.
+  [['route_id',options.routeId],['from',from],['to',to],['limit',options.limit||100]].forEach(function(pair){
     if(pair[1]!==undefined && pair[1]!==null && pair[1]!=='') params.push(encodeURIComponent(pair[0])+'='+encodeURIComponent(pair[1]));
   });
-  var path='/v1/bookings?'+params.join('&');
+  var base='/v1/bookings?'+params.join('&');
   var seq=++_opsBookingLoadSeq;
-  return window.laOpsFetch(path).then(function(r){ return r.ok ? r.json() : null; })
+  var all=[], pages=0, MAX_PAGES=200;
+  function page(cursor){
+    var path=base+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    return window.laOpsFetch(path).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+      if(!j || !Array.isArray(j.bookings)) return null;
+      Array.prototype.push.apply(all, j.bookings);
+      if(j.next_cursor && ++pages<MAX_PAGES && seq===_opsBookingLoadSeq) return page(j.next_cursor);
+      if(j.next_cursor) try{ console.warn('[opsSync] stopped after '+pages+' pages; window '+from+' -> '+to+' is incomplete'); }catch(e){}
+      return { bookings: all };
+    });
+  }
+  return page(null)
     .then(function(j){
       if(!j || !Array.isArray(j.bookings) || seq!==_opsBookingLoadSeq) return j;
       var mapped = j.bookings.map(bookingV2FromOpsBooking);

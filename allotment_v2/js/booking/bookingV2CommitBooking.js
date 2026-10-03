@@ -347,6 +347,7 @@ function bookingV2CommitBooking(status){
     largeLuggage: d.largeLuggage || 0,
     cashOnTour: d.cashOnTour ? { amount: d.cashOnTour.amount||0, currency: d.cashOnTour.currency||'THB', handling: d.cashOnTour.handling||'deduct', note: (d.cashOnTour.note||'').trim() } : null,
     trips: d.trips.filter(t => t.routeId && t.date).map(t => ({
+      opsTripId: t.opsTripId || undefined,   // §opsSync · operation-backend trip id, so an edit PATCHes the trip instead of recreating it
       routeId: t.routeId,
       date: t.date,
       // §OVN return leg — the customer boards at the island pier, so there is NO pickup zone. Left on the
