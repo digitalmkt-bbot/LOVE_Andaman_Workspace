@@ -27823,6 +27823,16 @@ function bkV2UpgApply(){
   if(al && al.hasAllotment && pax>al.seatsAvailable){
     alert('Not enough free seats on '+bkUpgRouteName(U.to)+' ('+U.date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
   var O=bkOpsFor(b, U.date), fromNm=bkUpgRouteName(U.from), toNm=bkUpgRouteName(U.to), upgId='';
+  /* §upgConfirm (2026-10-03) · ผู้ใช้ขอ "กด Upgrade แล้วให้ขึ้นเตือนอีกรอบว่ายืนยันจะ Upgrade จากเส้นทางนี้เป็นเส้นทางนี้"
+     ย้ายแล้วที่นั่งสองโปรแกรมเปลี่ยนทันทีและเรือเดิมถูกล้าง · ถามหลังตรวจทุกอย่างผ่านแล้ว จะได้ไม่ถามแล้วค่อยบอกว่าย้ายไม่ได้ */
+  var _pEn=function(rid){ var p=bkUpgPierOf(rid); return ((typeof LA_PIER_NAME!=='undefined' && LA_PIER_NAME[p] && LA_PIER_NAME[p].en) || p || '-'); };
+  var _pf=_pEn(U.from), _pt=_pEn(U.to);
+  if(!confirm('Confirm upgrade?\n\nFROM: '+fromNm+'  ['+_pf+']\nTO:   '+toNm+'  ['+_pt+']'
+      +(_pf!==_pt?'\n\n*** DIFFERENT PIER - the boarding point changes ***':'')
+      +'\n\nGuest: '+String(b.leadPax||b.customerName||b.voucherRef||b.id)+' - '+pax+' pax - '+U.date
+      +'\nExtra charge: '+(charge>0?('THB '+charge.toLocaleString()):'none')
+      +'\nReason: '+reason
+      +'\n\nOK = upgrade now   Cancel = go back')) return;
   if(charge>0){
     if(!Array.isArray(b.upgrades)) b.upgrades=[];
     upgId='up_'+Date.now();

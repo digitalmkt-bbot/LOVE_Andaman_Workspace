@@ -18,6 +18,7 @@
 //  10 ย้ายแบบไม่เก็บเพิ่ม · ไม่มีรายการอัปเกรด · ไม่มี error
 //  12 ที่มา + เหตุผล + ยอดเก็บเพิ่ม ขึ้นในช่องหมายเหตุของ By trip · Travel Summary · Pier Check-in · หน้ารายละเอียดใบ (ผู้ใช้เขียน "Free upgrade" แล้วไม่เห็นที่ไหนเลย)
 //     และหน้าต่าง Upgrade แยกโปรแกรมตามท่าเรือ ท่าเดียวกับโปรแกรมเดิมขึ้นก่อน (ข้อ 1)
+//  13 กด Upgrade แล้วถามยืนยันอีกรอบ (จาก → ไป · ยอด · เหตุผล) · Cancel แล้วไม่ย้าย
 //  11 trip.upg รอดการเดินทางไป-กลับฐานข้อมูล (decomposeBlob → assembleBlob ของเซิร์ฟเวอร์จริง)
 import { open, goView, ROOT } from './_harness.mjs';
 import { createRequire } from 'node:module';
@@ -31,7 +32,8 @@ const fail = m => { bad++; console.log('  ✗ ' + m); };
 
 const { page, errors, close } = await open({ blob: process.env.LAD, width: 1700, height: 1000 });
 const dlg = [];
-page.on('dialog', async d => { dlg.push({ type: d.type(), msg: d.message() }); try { await d.accept(); } catch (_) {} });
+let answer = true;
+page.on('dialog', async d => { dlg.push({ type: d.type(), msg: d.message() }); try { if (d.type() === 'confirm' && !answer) await d.dismiss(); else await d.accept(); } catch (_) {} });
 await goView(page, 'booking', 900);
 
 /* หาใบที่: ไม่ใช่ B2C/เหมาลำ/ค้างคืน/ดึงล็อก · ราคาคิดจากเรทแล้วเท่ายอดที่บันทึกไว้ · วันนั้นมีโปรแกรมอื่นที่มีเรือวิ่งและที่ว่างพอ */
@@ -98,12 +100,24 @@ const b2 = await st();
 if (dlg.length === 2 && a2.route === S.from && b2.route === S.from && b2.modal && !b2.upg) ok('2 ไม่เลือกปลายทาง / ไม่ใส่เหตุผล · ยังไม่ย้าย');
 else fail('2 ' + JSON.stringify({ dlg, a2, b2 }));
 
-/* ══ 3–6 ══ */
-dlg.length = 0;
+/* ══ 13 · ถามยืนยันอีกรอบ (§upgConfirm) · Cancel แล้วไม่ย้าย ══ */
+dlg.length = 0; answer = false;
+await page.evaluate(s => { const r = getRoute(s.to); window.__kp2 = r.pier; r.pier = (bkUpgPierOf(s.from) === 'tublamu') ? 'panwa' : 'tublamu'; }, S);   /* ต่างท่าชั่วคราว · ข้อความต้องเตือน */
 await page.evaluate(() => { const r = document.getElementById('bkupg-reason'); r.value = 'origin trip cancelled'; r.dispatchEvent(new Event('input')); const c = document.getElementById('bkupg-charge'); c.value = '500'; c.dispatchEvent(new Event('input')); document.querySelector('#bkv2-upg-ov [data-upg-go]').click(); });
+await page.waitForTimeout(400);
+await page.evaluate(s => { getRoute(s.to).pier = window.__kp2; }, S);
+const a13 = await st(), c13 = dlg[0] || { msg: '' };
+if (dlg.length === 1 && c13.type === 'confirm' && c13.msg.includes('FROM: ' + S.fromNm) && c13.msg.includes('TO:   ' + S.toNm) && /THB 500/.test(c13.msg) && /origin trip cancelled/.test(c13.msg) && /DIFFERENT PIER/.test(c13.msg) && !/[^\x00-\x7F]/.test(c13.msg.replace(S.fromNm, '').replace(S.toNm, '')) && c13.msg.indexOf('FROM') < c13.msg.indexOf('TO:')
+    && a13.route === S.from && !a13.upg && !a13.ups.length && a13.modal && a13.freeA === S.usedA && a13.freeB === S.usedB)
+  ok('13 กด Upgrade แล้วถามยืนยัน บอกจากโปรแกรมไหนไปโปรแกรมไหน ยอดเก็บเพิ่ม และเหตุผล · กด Cancel แล้วไม่ย้าย หน้าต่างยังอยู่');
+else fail('13 ' + JSON.stringify({ dlg, a13 }));
+
+/* ══ 3–6 ══ */
+dlg.length = 0; answer = true;
+await page.evaluate(() => document.querySelector('#bkv2-upg-ov [data-upg-go]').click());
 await page.waitForTimeout(700);
 const a3 = await st();
-if (!dlg.length && !a3.modal && a3.route === S.to && a3.total === S.total && !a3.boat && a3.upg && a3.upg.fromRouteId === S.from && a3.upg.toRouteId === S.to && a3.upg.date === S.date && a3.upg.reason === 'origin trip cancelled' && a3.upg.charge === 500 && a3.upg.by)
+if (dlg.length === 1 && dlg[0].type === 'confirm' && !/DIFFERENT PIER/.test(dlg[0].msg) && !a3.modal && a3.route === S.to && a3.total === S.total && !a3.boat && a3.upg && a3.upg.fromRouteId === S.from && a3.upg.toRouteId === S.to && a3.upg.date === S.date && a3.upg.reason === 'origin trip cancelled' && a3.upg.charge === 500 && a3.upg.by)
   ok(`3 ย้ายไป "${S.toNm}" · ยอดใบจองยัง ฿${a3.total.toLocaleString()} · เรือเดิม${S.boat ? 'ถูกล้าง' : 'ไม่มี'} · จำที่มา/เหตุผล/ยอด/คนทำ`);
 else fail('3 ' + JSON.stringify({ dlg, a3, S }));
 if (a3.freeA === S.usedA + S.pax && a3.freeB === S.usedB - S.pax) ok(`4 ที่นั่ง · "${S.fromNm}" ว่างเพิ่ม ${S.pax} (${S.usedA} → ${a3.freeA}) · "${S.toNm}" ถูกใช้เพิ่ม ${S.pax} (${S.usedB} → ${a3.freeB})`);
