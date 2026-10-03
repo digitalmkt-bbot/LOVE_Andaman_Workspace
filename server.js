@@ -1887,6 +1887,9 @@ const LA_PERM_EXPLICIT   = '*explicit';   // ตรงกับ js/01-auth-sync.
    (วัดจริง · ส่งไปมีหมุด true · เก็บจริงมีหมุด false · เปิดใหม่ท่าเรือกลับมาเป็น ดู)
    นี่คือกับดักเดียวกับ §permSync รอบที่ห้า · ต่างแค่คราวนี้คีย์ที่หายไม่ใช่ชื่อหน้า แต่เป็นหมุด */
 PERM_KEYS.add(LA_PERM_EXPLICIT);
+/* §actPerm (2026-10-03) · สิทธิ์พิเศษรายการกระทำ (ไม่ใช่หน้าเมนู จึงไม่ได้มากับ laSyncPermKeys)
+   ตรงกับ LA_ACTS ใน js/01-auth-sync.js · ไม่เพิ่มตรงนี้ cleanPerms จะตัดทิ้งตอน admin กดบันทึก ติ๊กแล้วหายเงียบ */
+PERM_KEYS.add('act-capunlock');
 function embedTokenOk(t){
   if(!EMBED_SECRET || !t) return false;
   try{

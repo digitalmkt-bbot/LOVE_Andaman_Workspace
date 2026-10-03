@@ -9196,6 +9196,10 @@ function bkV2AssignBoat(bkId, boatId, date){
              ต้องใส่เหตุผล บันทึกชื่อคนปรับ และไม่เกินที่นั่งจดทะเบียน · ปรับแล้วใส่เรือให้ต่อเอง
              เกินทะเบียนแล้วไม่มีทางปลด ต้องเพิ่มเรือ */
           const nm=((bo&&bo.name)||boatId), lic=(typeof boatCapLicense==='function')?boatCapLicense(boatId):0;
+          if(typeof boatCapModalOpen==='function' && !(lic>0 && next-BA_CAP_TOL>lic) && !boatCapMayRaise()){
+            alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\n\nRaising the capacity for this day is an emergency step that needs the special permission "unlock boat capacity". Ask an admin or a user who has it, or assign another boat.');
+            return;
+          }
           if(typeof boatCapModalOpen!=='function' || (lic>0 && next-BA_CAP_TOL>lic)){
             alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+(lic>0?(', licensed seats '+lic):'')+').\nThe licensed seats cannot be exceeded. Assign another boat, or add a boat in Boat Operation.');
             return;
@@ -12953,12 +12957,16 @@ function boatCapBadge(boatId, date, size){
   return '<span title="'+e(tip)+'" style="display:inline-block;font-size:'+(size==='sm'?'8.5':'9.5')+'px;font-weight:800;letter-spacing:.02em;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle;'
     +(up?'background:#E6F1FB;color:#0C447C':'background:#FBEAE6;color:#A32D2D')+'">'+(up?'+':'')+i.delta+'</span>';
 }
+function boatCapMayRaise(){ return (typeof window.laCanAct!=='function') || window.laCanAct('act-capunlock'); }
 function boatCapSet(boatId, date, cap, reason){
   const k=_boatCapKey(boatId,date);
   if(cap==null || cap===''){ delete BOAT_CAP_OVR[k]; }
   else {
     const lic=boatCapLicense(boatId); let c=Math.max(0,Math.round(+cap||0));
     if(lic>0 && c>lic) c=lic;
+    /* §actPerm · เพิ่มที่นั่งเกิน cap ปกติ = ปลดด่านฉุกเฉิน · ทำได้เฉพาะคนที่ได้สิทธิ์ act-capunlock
+       ลด cap (เรือมีปัญหา รับได้น้อยลง) หรือคงค่าที่คนอื่นปลดไว้แล้ว ยังทำได้ตามสิทธิ์ Operations เดิม */
+    if(!boatCapMayRaise() && c>boatCapBase(boatId) && c>boatCapFor(boatId,date)) return false;
     BOAT_CAP_OVR[k]={cap:c, reason:String(reason||''), by:((typeof ME!=='undefined'&&ME&&(ME.name||ME.username))||'—'), at:new Date().toISOString()};
   }
   boatCapPersist();
@@ -13018,6 +13026,7 @@ function _bcapSave(boatId,date){
   if(v==null||isNaN(v)){ alert('ใส่จำนวนที่นั่งก่อน'); return; }
   const base=boatCapBase(boatId);
   if(v!==base && !(r&&r.value.trim())){ alert('ใส่เหตุผลด้วยครับ · จะได้รู้ทีหลังว่าทำไมวันนั้น cap ไม่เท่าปกติ'); if(r) r.focus(); return; }
+  if(!boatCapMayRaise() && v>base && v>boatCapFor(boatId,date)){ alert('Not allowed: raising a boat above its normal capacity needs the special permission "unlock boat capacity". Ask an admin or a user who has it.'); return; }
   if(v===base) boatCapSet(boatId,date,null); else boatCapSet(boatId,date,v,r?r.value.trim():'');
   boatCapModalClose();
   const f=window._bcapAfter; window._bcapAfter=null; if(typeof f==='function'){ try{ f(); }catch(_){} }
