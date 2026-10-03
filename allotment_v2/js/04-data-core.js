@@ -6880,7 +6880,14 @@ const FC_CSS=`<style>
   #view-fleetcal{padding:18px;background:#16265C;font-family:'DM Sans',Manrope,sans-serif;
     color:#1A2A33;min-height:100%}
   #view-fleetcal *{box-sizing:border-box}
-  .fc-top{display:flex;align-items:center;gap:9px;margin:-4px 0 12px;flex-wrap:wrap}
+  /* §fcMid (2026-10-03) · ชื่อหน้าต้องอยู่กลางแถบจริง ๆ
+     ของเดิมเป็น flex แล้วให้ชื่อ margin:auto · มันอยู่กลาง "ที่ว่างที่เหลือ" ไม่ใช่กลางแถบ
+     กลุ่มขวา (ชิปสามตัว + ปุ่มช่วงวัน) กว้างกว่ากลุ่มซ้าย ชื่อจึงเอียงไปทางซ้าย ~150px
+     ตอนนี้เป็นสามคอลัมน์ 1fr auto 1fr · สองข้างกว้างเท่ากัน ชื่ออยู่กลางพอดี
+     จอแคบจนกลุ่มขวาเกินครึ่ง คอลัมน์ขวาขยายเอง ชื่อค่อยขยับ ไม่ทับกัน */
+  .fc-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px;margin:-4px 0 12px}
+  .fc-tl,.fc-tr{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}
+  .fc-tr{justify-content:flex-end}
   .fc-top .d{font-size:24px;font-weight:800;letter-spacing:-.02em;color:#fff;font-variant-numeric:tabular-nums}
   .fc-top .w{font-size:9.5px;font-weight:800;color:#8E97C4;text-transform:uppercase;letter-spacing:.08em;display:block}
   .fc-top .wk{font-size:13px;font-weight:800;color:#fff;display:block;line-height:1.05}
@@ -6890,7 +6897,7 @@ const FC_CSS=`<style>
   .fc-arw:hover{background:rgba(255,255,255,.18)}
   .fc-tb{background:#0F6E56;color:#fff;border:0;border-radius:999px;padding:6px 14px;font-size:11px;
     font-weight:700;cursor:pointer;font-family:inherit}
-  .fc-brand{margin:0 auto;text-align:center;line-height:1.1}
+  .fc-brand{margin:0;text-align:center;line-height:1.1;white-space:nowrap}
   .fc-brand i{font-style:normal;font-size:9.5px;letter-spacing:.24em;color:#8E97C4}
   .fc-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff}
   .fc-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;align-items:center;
@@ -6968,6 +6975,12 @@ const FC_CSS=`<style>
   .fc-mt th.fc-rn .in i.dot{background:transparent;box-shadow:inset 0 0 0 1px #C9D3CB}
   .fc-mt th.fc-rn .in i.x{background:#DAD5CC}
   .fc-mt th.fc-rn .in .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* §fcFull (2026-10-03) · ชื่อโปรแกรมเต็ม ไม่ใช่ตัวย่อ
+     ของเดิมมุมมอง 14 วัน/เดือนย่อเป็น PPB · WSP · ETS · S ทั้งที่คอลัมน์ซ้ายกว้าง 196px เท่ากันทุกมุมมอง
+     ตัวย่อชนกันด้วย (สิมิลันสองแบบได้ S ทั้งคู่) · ตอนนี้ชื่อเต็มเสมอ ยาวเกินก็ตกบรรทัด ไม่ตัดด้วย …
+     จอแคบ (คอลัมน์ซ้าย 126px) มุมมองหลายวันยังใช้ตัวย่อ ไม่งั้นชื่อกินสามบรรทัดทุกแถว */
+  .fc-mt tr.fc-pr th.fc-rn .in .nm{overflow:visible;text-overflow:clip;white-space:normal;line-height:1.3}
+  .fc-mt tr.fc-pr th.fc-rn .in .nm .ab{display:none}
   /* สกินของแอปตั้ง text-transform บน th ไว้ · ชื่อโปรแกรมกับชื่อท่าเลยขึ้นตัวพิมพ์ใหญ่หมด
      "PHI PHI BAMBOO BY SPEEDBOAT" อ่านยากกว่าและไม่ตรงกับชื่อจริงในทะเบียน */
   .fc-mt th.fc-rn,.fc-mt tr.fc-mg th,.fc-mt .fc-mh{text-transform:none}
@@ -7039,7 +7052,11 @@ const FC_CSS=`<style>
   @media (max-width:820px){
     #view-fleetcal{padding:10px}
     .fc-brand{display:none}
-    .fc-top{gap:7px}
+    .fc-top{display:flex;flex-wrap:wrap;gap:7px}
+    .fc-tl,.fc-tr{display:contents}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh{white-space:nowrap}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh .fl{display:none}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh .ab{display:inline}
     .fc-top .d{font-size:20px}
     .fc-card{padding:10px 8px 11px}
     .fc-ch2 .lg{margin-left:0;flex-basis:100%;gap:8px}
@@ -7244,7 +7261,9 @@ function fcMatrixHtml(){
     keys.forEach(function(rid){ var pr=progs[rid];
       body+='<tr class="fc-pr"><th class="sticky fc-rn"><span class="in">'
         +'<i style="background:'+pr.color+'"></i>'
-        +'<span class="nm">'+(pr.chr?'&#9875; Charter':e(wide?pr.name:fcAbbr(pr.name)))+'</span></span></th>'
+        +(pr.chr ? '<span class="nm">&#9875; Charter</span>'
+            : ('<span class="nm'+(wide?'':' sh')+'" title="'+e(pr.name)+'"><span class="fl">'+e(pr.name)+'</span>'
+               +(wide?'':('<span class="ab">'+e(fcAbbr(pr.name))+'</span>'))+'</span>'))+'</span></th>'
         +days.map(function(ds){ var out=[];
           boats.forEach(function(b){ var c=C[ds][b.id];
             if(c.k!=='run' || (c.rpier||c.pier)!==pk) return;
@@ -7333,21 +7352,21 @@ function renderFleetCal(){
   var rangeLbl=isMo?(MO[adt.getMonth()]+' '+adt.getFullYear()):(_fc.from+' → +'+(fcNDays()-1));
   var tdt=new Date(TODAY+'T00:00:00');
   host.innerHTML=''+FC_CSS
-  +'<div class="fc-top">'
+  +'<div class="fc-top"><div class="fc-tl">'
     +'<button class="fc-arw" onclick="fcShift(-1)" title="Previous period">&lsaquo;</button>'
     +'<span class="d">'+tdt.getDate()+'</span>'
     +'<span><b class="wk">'+WDL[tdt.getDay()]+'</b><span class="w">'+MO[tdt.getMonth()].slice(0,3)+' '+tdt.getFullYear()+'</span></span>'
     +'<button class="fc-arw" onclick="fcShift(1)" title="Next period">&rsaquo;</button>'
-    +'<button class="fc-tb" onclick="fcToday()">Today</button>'
+    +'<button class="fc-tb" onclick="fcToday()">Today</button></div>'
     +'<span class="fc-brand"><i>LOVE ANDAMAN</i><b>FLEET CALENDAR</b></span>'
-    +'<span class="fc-chip">Deployed <b>'+nRun+'</b></span>'
+    +'<div class="fc-tr"><span class="fc-chip">Deployed <b>'+nRun+'</b></span>'
     +'<span class="fc-chip g">Available <b>'+nFree+'</b></span>'
     +'<span class="fc-chip r">Unavailable <b>'+nOff+'</b></span>'
     +'<span class="fc-seg">'
       +'<button class="'+(_fc.mode==='m7'?'on':'')+'" onclick="fcSetMode(\'m7\')">7 days</button>'
       +'<button class="'+(_fc.mode==='m14'?'on':'')+'" onclick="fcSetMode(\'m14\')">14 days</button>'
       +'<button class="'+(isMo?'on':'')+'" onclick="fcSetMode(\'mo\')">Month</button>'
-    +'</span>'
+    +'</span></div>'
   +'</div>'
   +'<div class="fc-piers">'
     +'<span class="fc-pp'+(_fc.pier==='all'?' on':'')+'" onclick="fcSetPier(\'all\')">All piers</span>'
