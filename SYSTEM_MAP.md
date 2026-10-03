@@ -67,6 +67,7 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 ### 2.6 B2C Channels  `(direct sales source)`
 - **Store:** `sb_b2c`.
 - **Role:** non-agent direct sales (OTA/own website). A booking can reference a `b2cChannel` instead of an `agentId`. Behaves like an agent for sourcing but typically prepaid.
+- **B2C website import (`b2c-map.js`, 2026-10-03):** website orders arrive through `relSyncB2C` in `server.js` (all the DB I/O) → `mapB2COrders` in **`b2c-map.js`** (pure: B2C rows → ops booking shape). Every sync then runs `b2cCheckOrders` (wrong / half-known imports: no route, 0 pax, Thai-priced party with a foreigner, unreadable nationality, money that does not add up) → `/api/b2c/health` `issues[]` → the amber "ใบ B2C ที่ต้องเช็ค" panel bottom-left. Change the mapper ⇒ `npm run test:b2c` (fixtures = real scrubbed orders in `test/fixtures/b2c/`, one per past bug) and bump `B2C_MAP_VER`. New bug ⇒ `node tools/b2c-fixture-capture.mjs LOV-…` + a pinned test. See what the checks flag on live data: `node tools/b2c-check-live.mjs`. A booking field ops starts reading must be filled here too, or every B2C booking silently falls back.
 
 ### 2.7 Agent List  `(who sells · terms)`
 - **Store:** `SB_AGENTS` · key `sb_agents`.

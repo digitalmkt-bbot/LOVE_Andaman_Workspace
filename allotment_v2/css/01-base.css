@@ -736,7 +736,15 @@ body.ts-printing .view{padding-bottom:0}
 @keyframes laRfPulse{0%{box-shadow:0 0 0 0 rgba(29,158,117,.55)}
   70%{box-shadow:0 0 0 7px rgba(29,158,117,0)}100%{box-shadow:0 0 0 0 rgba(29,158,117,0)}}
 body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
-@media print{#la-userbadge,#la-viewonly,#la-refresh{display:none!important}}
+@media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues{display:none!important}}
+/* §b2cCheck (2026-10-03) · ใบ B2C ที่ต้องเช็ค · อยู่เลนเดียวกับ #la-refresh (คอลัมน์ sidebar ก้นซ้าย = "เรื่องของระบบ")
+   ปิดอยู่กว้างเท่า sidebar ไม่ล้ำเนื้อหา · กดดูแล้วถึงจะขยายออก (คนกดเองแล้ว ทับเนื้อหาได้)
+   ถ้า la-refresh ขึ้นพร้อมกัน ดัน la-refresh ขึ้นไปเหนือป้ายนี้ · ไม่งั้นซ้อนกันที่ 84px พอดี */
+#la-b2c-issues{position:fixed;left:14px;bottom:84px;z-index:99990;width:250px;box-sizing:border-box;
+  background:#FFF8EC;color:#7A4A00;border:1px solid #EAD9B0;border-radius:12px;
+  font:12.5px/1.45 'DM Sans',sans-serif;box-shadow:0 12px 32px rgba(2,10,30,.16)}
+#la-b2c-issues.open{width:min(560px,calc(100vw - 28px))}
+body:has(#la-b2c-issues) #la-refresh{bottom:132px}
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
 .page-hd h1{font-size:20px;font-weight:600;color:var(--ink)}
 .page-hd p{font-size:12px;color:var(--ink-soft);margin-top:2px}

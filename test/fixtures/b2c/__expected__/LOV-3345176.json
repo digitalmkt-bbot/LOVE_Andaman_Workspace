@@ -1,0 +1,108 @@
+[
+ {
+  "id": "b2c_LOV-3345176_1",
+  "schemaVer": 2,
+  "createdAt": "2026-09-30T06:42:47.654Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-3345176",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-30",
+  "hotelName": "Phuket Town · The base uptown Phuket",
+  "pickupZone": "PK",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-town",
+  "pickupArea": "Phuket Town",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "",
+  "note": "B2C · Line OA · LOV-3345176 · Day Trip - Phi Phi Island",
+  "trips": [
+   {
+    "id": "b2c_LOV-3345176_1_t0",
+    "routeId": "r10",
+    "date": "2026-10-03",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 2,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 3598,
+    "nat": {
+     "ad": 1,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    }
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 5",
+    "nationality": "TR",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "b2c-ad-001",
+    "label": "Join Transfer ( Phuket )",
+    "amount": 400,
+    "qty": 2,
+    "note": ""
+   },
+   {
+    "type": "international-park-fee",
+    "label": "International Park Fee",
+    "amount": 500,
+    "qty": 1,
+    "note": ""
+   },
+   {
+    "type": "longtail-join",
+    "label": "เรือหางยาว (2A + 0C)",
+    "amount": 1000,
+    "qty": 2,
+    "note": ""
+   }
+  ],
+  "adjustments": [],
+  "total": 5498,
+  "priceBreakdown": {
+   "seat": 3598,
+   "addOn": 1900,
+   "focDiscount": 0,
+   "discount": 0,
+   "extra": 0,
+   "total": 5498
+  },
+  "paymentSnapshot": {
+   "deposit": 5498,
+   "balance": 0,
+   "method": "bt",
+   "paid": 5498,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

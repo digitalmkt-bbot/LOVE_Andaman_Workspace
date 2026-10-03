@@ -1,0 +1,121 @@
+[
+ {
+  "id": "b2c_LOV-6682744_1",
+  "schemaVer": 2,
+  "createdAt": "2026-08-04T09:27:18.242Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-6682744",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-08-04",
+  "hotelName": "Patong · ไอบิส ป่าตอง",
+  "pickupZone": "PK",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-patong",
+  "pickupArea": "Patong",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "",
+  "note": "B2C · Line OA · LOV-6682744 · Day Trip - Phi Phi Island",
+  "trips": [
+   {
+    "id": "b2c_LOV-6682744_1_t0",
+    "routeId": "r10",
+    "date": "2026-08-13",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 4,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 6796,
+    "nat": {
+     "ad": 1,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    }
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 8",
+    "nationality": "TR",
+    "type": "AD",
+    "foc": false
+   },
+   {
+    "name": "Guest 6",
+    "nationality": "TR",
+    "type": "AD",
+    "foc": false
+   },
+   {
+    "name": "Guest 7",
+    "nationality": "TR",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "b2c-ad-001",
+    "label": "Join Transfer ( Phuket )",
+    "amount": 0,
+    "qty": 4,
+    "note": ""
+   },
+   {
+    "type": "international-park-fee",
+    "label": "International Park Fee",
+    "amount": 0,
+    "qty": 3,
+    "note": ""
+   }
+  ],
+  "adjustments": [
+   {
+    "kind": "extra",
+    "mode": "amount",
+    "value": 700,
+    "label": "ราคาขาย",
+    "note": ""
+   }
+  ],
+  "total": 9496,
+  "priceBreakdown": {
+   "seat": 6796,
+   "addOn": 2000,
+   "focDiscount": 0,
+   "discount": 0,
+   "extra": 700,
+   "total": 9496
+  },
+  "paymentSnapshot": {
+   "deposit": 9496,
+   "balance": 0,
+   "method": "bt",
+   "paid": 9496,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

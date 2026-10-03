@@ -633,6 +633,7 @@
       var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
       if((j.version||0)>VER){ _laSetPending(j); _laTryRefresh(); }
       if(health){ try{ _laB2CHealth(j.b2c); }catch(e){} }
+      if(health){ try{ _laB2CIssues(j.b2c); }catch(e){} }
     };
     try{ x.send(); }catch(e){ done(); }
   }
@@ -713,6 +714,54 @@
       +(msg?('<span title="'+esc(msg)+'" style="opacity:.75;cursor:help"> &#9432;</span>'):'');
   }
   window._laB2CHealth=_laB2CHealth;
+  /* §b2cCheck (2026-10-03) · ใบ B2C ที่นำเข้ามาแล้วแต่ข้อมูลไม่ครบ/ไม่ถูก
+     ทุกบั๊กนำเข้าที่ผ่านมาเงียบหมด · ระบบเดาค่าแทนแล้วไปต่อ จนคนหน้าท่าเจอเลขผิด
+     ตอนนี้เซิร์ฟเวอร์ตรวจทุกรอบ sync (b2c-map.js b2cCheckOrders) · ที่นี่แค่แสดง
+     คนละเรื่องกับแถบแดง "ดึง B2C ไม่ได้" ข้างบน · อันนั้น sync ล่ม อันนี้ sync ปกติแต่ใบมีปัญหา
+     สีส้ม มุมซ้ายล่าง ปิดได้ · ปิดแล้วจะขึ้นใหม่เฉพาะเมื่อชุดใบที่มีปัญหาเปลี่ยน (issueSig)
+     /api/version ส่งมาแค่จำนวน · รายการดึงจาก /api/b2c/health ตอนกดเปิดเท่านั้น */
+  var _LA_B2CI_KEY='la_b2c_issue_hide';
+  function _laB2CIssues(h){
+    var el=document.getElementById('la-b2c-issues');
+    var n=(h&&h.issueCount)||0, sig=(h&&h.issueSig)||'';
+    var hidden=''; try{ hidden=localStorage.getItem(_LA_B2CI_KEY)||''; }catch(e){}
+    if(!n || hidden===sig){ if(el) el.remove(); return; }
+    if(!el){
+      el=document.createElement('div'); el.id='la-b2c-issues';   /* หน้าตา/ตำแหน่งอยู่ css/01-base.css §b2cCheck */
+      document.body.appendChild(el);
+    }
+    if(el.getAttribute('data-sig')===sig && el.getAttribute('data-n')===String(n)) return;   /* ไม่ต้องวาดใหม่ทุก 10 วิ */
+    el.setAttribute('data-sig',sig); el.setAttribute('data-n',String(n));
+    el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
+      +'<span>&#9888;</span><b style="cursor:pointer;flex:1" onclick="_laB2CIssuesOpen()">ใบ B2C ที่ต้องเช็ค '+n+' รายการ</b>'
+      +'<span title="ซ่อนจนกว่าจะมีใบใหม่ที่มีปัญหา" style="cursor:pointer;opacity:.6;padding:0 4px" '
+      +'onclick="_laB2CIssuesHide(\''+esc(sig)+'\')">&times;</span></div>'
+      +'<div id="la-b2c-issues-list" style="display:none;max-height:46vh;overflow:auto;border-top:1px solid #EAD9B0"></div>';
+  }
+  window._laB2CIssues=_laB2CIssues;
+  window._laB2CIssuesHide=function(sig){
+    try{ localStorage.setItem(_LA_B2CI_KEY, sig); }catch(e){}
+    var el=document.getElementById('la-b2c-issues'); if(el) el.remove();
+  };
+  window._laB2CIssuesOpen=function(){
+    var box=document.getElementById('la-b2c-issues-list'), wrap=document.getElementById('la-b2c-issues'); if(!box) return;
+    if(box.style.display!=='none'){ box.style.display='none'; wrap.classList.remove('open'); return; }
+    box.style.display='block'; wrap.classList.add('open'); box.innerHTML='<div style="padding:10px 12px;opacity:.7">กำลังโหลด…</div>';
+    var x=new XMLHttpRequest(); x.open('GET',bust('/api/b2c/health'),true); x.timeout=8000;
+    x.onload=function(){
+      var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+      var L=(j&&j.issues)||[];
+      if(!L.length){ box.innerHTML='<div style="padding:10px 12px">ไม่มีรายการแล้ว</div>'; return; }
+      box.innerHTML=L.map(function(i){
+        return '<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #F3E7CC;align-items:baseline">'
+          +'<a href="javascript:void 0" onclick="window.dashOpenBooking&&dashOpenBooking(\''+esc(i.id)+'\')" '
+          +'style="font-family:\'DM Mono\',monospace;font-weight:700;color:#185FA5;white-space:nowrap;text-decoration:none">'+esc(i.ref)+'</a>'
+          +'<span>'+esc(i.msg)+'</span></div>';
+      }).join('');
+    };
+    x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
+    try{ x.send(); }catch(e){}
+  };
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   function _laStartSSE(){ if(typeof EventSource==='undefined') return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events');
     _laSSEAt=Date.now();

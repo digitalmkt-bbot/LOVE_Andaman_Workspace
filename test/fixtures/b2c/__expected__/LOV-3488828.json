@@ -1,0 +1,96 @@
+[
+ {
+  "id": "b2c_LOV-3488828_2",
+  "schemaVer": 2,
+  "createdAt": "2026-09-07T06:37:03.982Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-3488828",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-07",
+  "hotelName": "Visit Panwa Pier",
+  "pickupZone": "NoTransfer",
+  "pickupSelf": true,
+  "pickupAreaId": "nt-panwa-pier",
+  "pickupArea": "Visit Panwa Pier (self-arrive)",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "[scrubbed note]",
+  "note": "B2C · Line OA · LOV-3488828 · Day Trip - Phi Phi Island",
+  "trips": [
+   {
+    "id": "b2c_LOV-3488828_2_t0",
+    "routeId": "r10",
+    "date": "2026-09-19",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 2,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 3598
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 5",
+    "nationality": "",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "longtail-charter-3",
+    "label": "Longtail Charter จองล่วงหน้า 3 วันก่อนการเดินทาง",
+    "amount": 1800,
+    "qty": 1,
+    "note": ""
+   }
+  ],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 51,
+    "label": "ทริปพร้อมที่พัก · เฉพาะส่วนของรายการนี้ (ทั้งบิล 200)",
+    "note": ""
+   }
+  ],
+  "total": 5347,
+  "priceBreakdown": {
+   "seat": 3598,
+   "addOn": 1800,
+   "focDiscount": 0,
+   "discount": -51,
+   "extra": 0,
+   "total": 5347
+  },
+  "paymentSnapshot": {
+   "deposit": 20998,
+   "balance": 0,
+   "method": "bt",
+   "paid": 20998,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]
