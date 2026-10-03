@@ -7,6 +7,7 @@
 //
 // กันเจ็ดอย่าง
 //   1 ทุกแถว · ช่องติ๊ก + ปุ่มเลือกเรือ + ⤴ + ⇆ อยู่ในช่อง Boat ทั้งตัว · ชื่อเรือปกติไม่ถูกตัด
+//     §baCellStack · ⤴ Upgrade กับ ⇆ แยกลำ อยู่ใต้ปุ่มเลือกเรือ มีคำกำกับ (ผู้ใช้ถามว่าสัญลักษณ์คืออะไร แล้วขอย้ายลงล่าง)
 //   2 ช่องติ๊กกับปุ่ม ⇆ กดได้จริง (ไม่มีอะไรบัง) · ช่องติ๊กของทุกแถวอยู่แนวเดียวกัน
 //   3 แถวที่ยังไม่จัดเรือ (+ assign) ก็อยู่ในช่องเหมือนกัน
 //   4 ชื่อเรือยาวมาก · ปุ่มเลือกเรือตัดด้วย … ปุ่มเล็กยังอยู่ในช่อง
@@ -30,23 +31,26 @@ const S = await page.evaluate(async () => {
   const day = Object.keys(per).sort((a, b) => per[b] - per[a])[0];
   window.__show = async on => { _bkV2.filterDate = day; _bkV2.filterRoute = null; _bkV2.boatAssignMode = !!on; bkV2SwitchTab('bytrip'); await new Promise(z => setTimeout(z, 700)); };
   window.__cells = () => [...document.querySelectorAll('#bkv2-host tr.t2-row[data-al]')].map(tr => { const td = tr.lastElementChild, R = td.getBoundingClientRect();
-    const box = (sel) => { const e = td.querySelector(sel); if (!e) return null; const q = e.getBoundingClientRect(); return { l: Math.round(q.left - R.left), r: Math.round(R.right - q.right), w: Math.round(q.width), e }; };
+    const box = (sel) => { const e = td.querySelector(sel); if (!e) return null; const q = e.getBoundingClientRect(); return { l: Math.round(q.left - R.left), r: Math.round(R.right - q.right), w: Math.round(q.width), t: Math.round(q.top - R.top), b: Math.round(R.bottom - q.bottom), bot: Math.round(q.bottom - R.top), lab: e.textContent.trim(), e }; };
     const cb = box('input[type=checkbox]'), pick = box('[data-babtn="pick"]'), up = box('[data-babtn="up"]'), sp = box('[data-babtn="split"]');
     const hit = b => { if (!b) return null; tr.scrollIntoView({ block: 'center' }); const q = b.e.getBoundingClientRect(); if (q.top < 0 || q.bottom > innerHeight) return null; const h = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return h === b.e; };
-    const strip = b => b ? { l: b.l, r: b.r, w: b.w } : null;
+    const strip = b => b ? { l: b.l, r: b.r, w: b.w, t: b.t, b: b.b, bot: b.bot, lab: b.lab } : null;
     return { id: tr.dataset.al, tdW: Math.round(R.width), right: Math.round(R.right), sticky: td.classList.contains('t2-bst'), cb: strip(cb), pick: strip(pick), up: strip(up), sp: strip(sp),
       cbHit: hit(cb), spHit: hit(sp), txt: pick ? pick.e.textContent.trim() : '', clip: pick ? pick.e.scrollWidth > pick.e.clientWidth : false }; });
   await __show(true);
   return { day, n: __cells().length };
 });
-const inside = c => ['cb', 'pick', 'up', 'sp'].every(k => !c[k] || (c[k].l >= 0 && c[k].r >= 0));
+const inside = c => ['cb', 'pick', 'up', 'sp'].every(k => !c[k] || (c[k].l >= 0 && c[k].r >= 0 && c[k].t >= 0 && c[k].b >= 0));
+/* §baCellStack · ปุ่มเล็กอยู่ใต้ปุ่มเลือกเรือ ชิดซ้ายแนวเดียวกัน และมีคำกำกับ */
+const stacked = c => c.up.t >= c.pick.bot && c.up.l === c.pick.l && /Upgrade/.test(c.up.lab) && (!c.sp || (c.sp.t >= c.pick.bot && c.sp.l > c.up.l && /แยกลำ|Split boats/.test(c.sp.lab)));
 
 /* ══ 1–2 ══ */
 const C1 = (await page.evaluate(() => __cells())).filter(c => c.pick);
 const out1 = C1.filter(c => !c.cb || !inside(c)), withSp = C1.filter(c => c.sp);
 const clip1 = C1.filter(c => c.clip);
-if (C1.length >= 10 && withSp.length >= 3 && !out1.length && !clip1.length) ok(`1 ${C1.length} แถว (${withSp.length} แถวมีปุ่ม ⇆) · ช่องติ๊กและปุ่มทุกปุ่มอยู่ในช่อง Boat (กว้าง ${C1[0].tdW}px)`);
-else fail('1 ' + JSON.stringify({ n: C1.length, sp: withSp.length, out: out1.slice(0, 2), clipped: clip1.slice(0, 2) }));
+const flat1 = C1.filter(c => !stacked(c));
+if (C1.length >= 10 && withSp.length >= 3 && !out1.length && !clip1.length && !flat1.length) ok(`1 ${C1.length} แถว (${withSp.length} แถวมีปุ่มแยกลำ) · ทุกปุ่มอยู่ในช่อง Boat (กว้าง ${C1[0].tdW}px) · "${C1[0].up.lab}"${withSp[0] ? ' "' + withSp[0].sp.lab + '"' : ''} อยู่ใต้ปุ่มเลือกเรือ`);
+else fail('1 ' + JSON.stringify({ n: C1.length, sp: withSp.length, out: out1.slice(0, 2), clipped: clip1.slice(0, 2), flat: flat1.slice(0, 2) }));
 const hitRows = C1.filter(c => c.cbHit !== null), badHit = hitRows.filter(c => c.cbHit !== true || (c.sp && c.spHit !== true));
 const cbL = new Set(C1.map(c => c.cb && c.cb.l));
 if (hitRows.length >= 5 && !badHit.length && cbL.size === 1) ok(`2 ช่องติ๊กและปุ่ม ⇆ กดได้จริง (${hitRows.length} แถวที่อยู่ในจอ) · ช่องติ๊กอยู่แนวเดียวกันทุกแถว (x=${[...cbL][0]})`);
@@ -56,7 +60,7 @@ else fail('2 ' + JSON.stringify({ hit: hitRows.length, bad: badHit.slice(0, 2), 
 const C3 = await page.evaluate(async day => { let n = 0;
   SB_BOOKINGS.forEach(b => { if (n >= 6 || !(b.trips || []).some(t => t.date === day && t.bookingMode !== 'charter')) return; const o = bkOpsRead(b, day); if (o && o.boatId && !o.boatSplits) { bkOpsFor(b, day).boatId = null; n++; } });
   await __show(true); return __cells().filter(c => /\+ assign/.test(c.txt)); }, S.day);
-const out3 = C3.filter(c => !c.cb || !inside(c));
+const out3 = C3.filter(c => !c.cb || !inside(c) || !stacked(c));
 if (C3.length >= 3 && C3.some(c => c.sp) && !out3.length) ok(`3 แถวที่ยังไม่จัดเรือ ${C3.length} แถว · "+ assign" กับปุ่มข้าง ๆ อยู่ในช่อง`);
 else fail('3 ' + JSON.stringify({ n: C3.length, out: out3.slice(0, 2) }));
 
