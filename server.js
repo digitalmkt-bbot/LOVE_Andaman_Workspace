@@ -390,7 +390,10 @@ const B2C_OWN_BK = new Set([
 //      paid/paidStatus null) and the Pay column read "PFM". Rows whose B2C source never moved cannot
 //      heal on their own (1 row at the time: LOV-7485231); paymentsnapshot_* is B2C-owned, so this
 //      bump restores it from B2C.
-const B2C_MAP_VER = 30;
+// v31: §b2cNat · trip.nat (real Thai heads, for the park fee) derived from customer + passengers
+//      nationality when that list covers every head on the line. Pax price fields are unchanged.
+//      LOV-7485231 (TH+TH+US sold as 3 Thai) and LOV-3345176 (TH+TR sold as 2 Thai) re-count here.
+const B2C_MAP_VER = 31;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -858,6 +861,27 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     lockDrawSel: {},
     subtotal: seat,
   };
+  // §b2cNat · real Thai head-count for the park fee, kept apart from the PRICE fields above.
+  // pax.ad_th/_fr picks the seat rate (B2C sells the whole party at the Thai price when the lead
+  // is Thai — paxAllThai), but the park counter charges by passport. trip.nat is the ops field
+  // for exactly that (§pkNat, js/08-app.js bkNatTH). B2C knows every traveller's nationality —
+  // customer = lead, bookings.passengers = everyone else — so when that list accounts for every
+  // head on the line, count it. LOV-7485231: lead TH + TH + US, priced 3 ad_th, park page read 3
+  // Thai instead of 2 Thai 1 foreign. Anything short of a full, fully-labelled list → no nat at
+  // all, and the park page falls back to the price fields as before. Kids in a MIXED party are
+  // also left alone: passengers carry no age type, so which head is the child is unknowable.
+  {
+    const P = trip.pax;
+    const heads = P.ad_fr + P.ad_th + P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
+    const nats = [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+      .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''));
+    if (heads > 0 && nats.length === heads && nats.every(Boolean)) {
+      const th = nats.filter(n => n === 'TH').length;
+      const kids = P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
+      if (th === heads) trip.nat = { ad: P.ad_fr + P.ad_th, chd: P.chd_fr + P.chd_th, inf: P.inf_fr + P.inf_th, foc: P.foc };
+      else if (th === 0 || !kids) trip.nat = { ad: th, chd: 0, inf: 0, foc: 0 };
+    }
+  }
   // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
   // rate card once ops assigns a boat. charterBoatId stays null — ops picks the boat in-app.
   if (isCharter) {
@@ -1628,6 +1652,17 @@ async function relSyncB2C(singleExtId = null) {
       for (const r of existingTrips) {
         (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
       }
+      // §b2cNat · trip.nat is neither ops_* nor B2C-owned: a count ops typed by hand has to
+      // survive the delete+re-insert below, same as the ops columns do.
+      const NAT_COLS = ['nat_ad', 'nat_chd', 'nat_inf', 'nat_foc'].filter(c => TRIP_COLS.includes(c));
+      const savedTripNat = {};
+      if (NAT_COLS.length) {
+        for (const r of (await client.query(
+          `SELECT sb_bookings_id, idx, ${NAT_COLS.map(qic).join(', ')} FROM ${fqt('sb_bookings__trips')}
+           WHERE sb_bookings_id = ANY($1)`, [b2cIds])).rows) {
+          (savedTripNat[r.sb_bookings_id] = savedTripNat[r.sb_bookings_id] || {})[r.idx] = r;
+        }
+      }
       _phase = 'delete+re-insert trips';
       await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
       for (const row of tables['sb_bookings__trips'] || []) {
@@ -1645,6 +1680,20 @@ async function relSyncB2C(singleExtId = null) {
             `UPDATE ${fqt('sb_bookings__trips')} SET ${TRIP_OPS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
              WHERE sb_bookings_id=$${TRIP_OPS.length + 1} AND idx=$${TRIP_OPS.length + 2}`,
             [...TRIP_OPS.map(c => ops[c]), bkId, Number(idx)]
+          );
+        }
+      }
+      // §b2cNat · the mapper's own count wins when it derived one (a full passenger list is better
+      // evidence than a hand count); a trip it left blank gets the previous value back.
+      _phase = 'restore trip nat';
+      for (const [bkId, byIdx] of Object.entries(savedTripNat)) {
+        for (const [idx, old] of Object.entries(byIdx)) {
+          if (NAT_COLS.every(c => old[c] == null)) continue;
+          await client.query(
+            `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
+             WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}
+               AND ${NAT_COLS.map(c => `${qic(c)} IS NULL`).join(' AND ')}`,
+            [...NAT_COLS.map(c => old[c]), bkId, Number(idx)]
           );
         }
       }
