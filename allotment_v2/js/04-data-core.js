@@ -8394,15 +8394,29 @@ function bop2RenderShell(){
           <span style="flex:1"></span>
           <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">${_fleet.assigned.length} ลำ</span>
         </div>
-        ${_fleet.assigned.length ? _fleet.assigned.map(a => `
-        <div style="display:flex;align-items:center;gap:9px;padding:7px 13px;border-top:1px solid rgba(0,0,0,.05)">
+        ${_fleet.assigned.length ? (() => {
+          /* §bopOutPier (2026-10-03) · ผู้ใช้ขอ "แยกท่าเรือ แล้วแบ่งเรือออกมา แต่ไม่ต้องใหญ่มาก"
+             ของเดิมเรือทุกท่าเรียงปนกันเป็นรายการเดียว · จัดกลุ่มตามท่าที่เรือออก (ท่าของเส้นทางที่วางไว้
+             ไม่มีเส้นทางจึงถอยไปใช้ท่าที่เรืออยู่วันนั้น) · หัวกลุ่มเป็นแถบบาง ๆ บรรทัดเดียว: ชื่อท่า · จำนวนลำ · pax รวม
+             ลำดับท่าตาม laPierRank (ทับละมุ → พันวา → ระนอง) · ลำดับเรือในท่าเท่าเดิม */
+          const _pOf = a => (a.route && a.route.pier) || getBoatCurrentPier(a.boat, _selDate) || 'other';
+          const _g = {}, _ord = [];
+          _fleet.assigned.forEach(a => { const p = _pOf(a); if(!_g[p]){ _g[p] = []; _ord.push(p); } _g[p].push(a); });
+          _ord.sort((x, y) => ((typeof laPierRank==='function') ? laPierRank(x) - laPierRank(y) : 0));
+          return _ord.map(p => `
+        <div data-bopout-pier="${p}" data-n="${_g[p].length}" style="display:flex;align-items:center;gap:6px;padding:4px 13px;background:#F6F8FB;border-top:1px solid rgba(0,0,0,.05);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#12518F">
+          <span>${escapeHTML((typeof PIER_LABELS!=='undefined' && PIER_LABELS[p]) || ((typeof laPierName==='function') ? laPierName(p) : p))}</span>
+          <span style="flex:1"></span>
+          <span style="font-weight:700;letter-spacing:0;text-transform:none;color:#6B7785">${_g[p].length} ลำ · ${_g[p].reduce((t, a) => t + (+a.seats||0), 0)} pax</span>
+        </div>` + _g[p].map(a => `
+        <div data-bopout-boat="${a.boat.id}" data-pier="${p}" style="display:flex;align-items:center;gap:9px;padding:7px 13px;border-top:1px solid rgba(0,0,0,.05)">
           <span style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 9px/1 'DM Sans';color:#fff;flex-shrink:0;background:${a.isCharter?'#6B289A':bop2BoatColor(a.boat.id)}">${escapeHTML(String(a.boat.name||'').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'--')}</span>
           <span style="flex:1;min-width:0">
             <span style="font-size:12px;font-weight:800;color:#2C2C2A;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.isCharter?'⚓ ':''}${escapeHTML(a.boat.name||'')}</span>
             <span style="font-size:9.5px;font-weight:600;color:#9B9088;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML((a.route&&a.route.name)||'—')}</span>
           </span>
           <span style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:${a.seats>0?'#0C6B47':'#B6B1A8'};flex-shrink:0;text-align:right">${a.seats}<small style="font-size:8.5px;font-weight:600;color:#B6B1A8;display:block">/${a.capacity}</small></span>
-        </div>`).join('') : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
+        </div>`).join('')).join(''); })() : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
       </div>
     </div>
 
