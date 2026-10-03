@@ -7248,7 +7248,12 @@ function fcMatrixHtml(){
   var body='';
   FC_PIER.forEach(function(p){
     var pk=p[0], progs=prog[pk]||{}, dorm=dormBy[pk]||[];
-    var keys=Object.keys(progs).sort(function(a,b){ return a==='__chr'?1:(b==='__chr'?-1:0); });
+    /* §fcOrd · แถวโปรแกรมเรียงตามลำดับของหน้า Program Config (กติกาเดียวกับ §routeOrd)
+       ของเดิมเรียงตาม "เรือลำไหนถูกวนเจอก่อน" · ลำดับจึงสลับไปมาตามช่วงวันที่เปิดดู
+       Charter ไม่ใช่โปรแกรมในทะเบียน อยู่ท้ายท่าเหมือนเดิม */
+    var keys=Object.keys(progs).sort(function(a,b){
+      if(a==='__chr'||b==='__chr') return a===b?0:(a==='__chr'?1:-1);
+      return (typeof laRouteOrdCmp==='function') ? laRouteOrdCmp(a,b) : 0; });
     if(!fcPierOn(pk)) return;
     if(!keys.length && !liveBy[pk] && !dorm.length) return;
     body+='<tr class="fc-mg"><th class="sticky" style="--pc:'+p[3]+';--pbg:'+p[4]+'">'

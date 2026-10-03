@@ -366,9 +366,12 @@
   /* §ckLive · 'wheel' = เลื่อนจออ่าน ไม่ใช่การแก้ข้อมูล · ในหน้าเช็คอินที่รายการยาว
      มันรีเซ็ตนาฬิกา "ยุ่งอยู่" ต่อเนื่องจนไม่เคยว่างพอจะ refresh
      หน้าอื่นยังนับเหมือนเดิม (เลื่อนอ่านรายงานยาว ๆ แล้วโดนวาดใหม่กลางคันก็กวนเหมือนกัน) */
-  ['mousedown','keydown','input','touchstart','wheel'].forEach(function(ev){
+  /* §btStay · 'scroll' กับ 'touchmove' ก็คือ "กำลังเลื่อนอ่านอยู่" · ของเดิมนับแค่ล้อเมาส์
+     คนที่ลากแถบเลื่อน หรือปัดจอค้างนานกว่า 300ms (mousedown/touchstart มีครั้งเดียวตอนเริ่ม)
+     โดนวาดหน้าใหม่กลางคัน · 'scroll' ไม่ bubble จึงต้องฟังแบบ capture ซึ่งที่นี่เป็นอยู่แล้ว */
+  ['mousedown','keydown','input','touchstart','wheel','scroll','touchmove'].forEach(function(ev){
     try{ document.addEventListener(ev, function(){
-      if(ev==='wheel' && _laLiveView()) return;
+      if((ev==='wheel'||ev==='scroll'||ev==='touchmove') && _laLiveView()) return;
       _laLastInput=Date.now();
     }, true); }catch(e){} });
   /* §ckLive (2026-09-12) · "Pier Check-in สองคนใช้พร้อมกัน · คนนึงเช็คอิน

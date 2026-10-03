@@ -2767,10 +2767,55 @@ function _laScrollBack(list){
     }
   }catch(_){}
 }
+/* §btStay · ยึด "แถวที่กำลังดูอยู่" ไม่ใช่เลข scroll
+   ของเดิมคืนค่า scrollY เท่าเดิมหลังวาดใหม่ · แต่พอมีคนเพิ่มใบจองเข้ามา แถวใหม่แทรกอยู่ข้างบน
+   เลขเท่าเดิมจึงชี้ไปคนละแถว หน้าจอกระโดดเท่ากับความสูงของแถวที่เพิ่ม ต้องเลื่อนหาใหม่
+   และการคืนค่ารอบ 60ms ยังดึงกลับไปตำแหน่งเก่า ทั้งที่ผู้ใช้เลื่อนต่อไปแล้ว
+   จำแถวใบจองแถวแรกที่เห็นในจอ (data-al = เลขใบจอง) กับระยะจากขอบบน แล้วหลังวาดใหม่
+   เลื่อนชดเชยให้แถวเดิมกลับมาอยู่ที่เดิม · แถวนั้นหายไป (ถูกยกเลิก/ย้ายวัน) ก็ใช้แถวถัดไปที่จำไว้ */
+function _laAnchorSnap(){
+  try{
+    var rows=document.querySelectorAll('.view.active tr[data-al]'); if(!rows.length) return null;
+    var vh=window.innerHeight||0, seen={}, out=[];
+    for(var i=0;i<rows.length && out.length<6;i++){
+      var id=rows[i].getAttribute('data-al'); var n=(seen[id]=(seen[id]||0)+1);
+      var t=rows[i].getBoundingClientRect().top;
+      if(t>=0 && t<vh) out.push({id:id, n:n, top:t});
+      else if(t>=vh) break;
+    }
+    return out.length?out:null;
+  }catch(_){ return null; }
+}
+function _laAnchorFind(a){
+  try{
+    var rows=document.querySelectorAll('.view.active tr[data-al]'), n=0;
+    for(var i=0;i<rows.length;i++){ if(rows[i].getAttribute('data-al')===a.id && ++n===a.n) return rows[i]; }
+  }catch(_){}
+  return null;
+}
+/* คืน true เมื่อยึดแถวได้ · st.y/st.top จำไว้ให้รอบถัดไปรู้ว่าผู้ใช้เลื่อนเองไปเท่าไหร่ */
+function _laAnchorBack(st){
+  try{
+    if(!st || !st.list) return false;
+    for(var i=0;i<st.list.length;i++){
+      var a=st.list[i], r=_laAnchorFind(a); if(!r) continue;
+      var mn=document.querySelector('main'), useMain=!!(mn && mn.scrollHeight>mn.clientHeight+1 && !(window.scrollY>0) && mn.scrollTop>0);
+      var cur=useMain?mn.scrollTop:(window.scrollY||0);
+      /* ผู้ใช้เลื่อนเองระหว่างรอ = ตำแหน่งที่แถวควรอยู่ขยับตามไปด้วย · ไม่ดึงกลับ */
+      var want=(st.y==null)?a.top:(st.top-(cur-st.y));
+      var d=r.getBoundingClientRect().top-want;
+      if(Math.abs(d)>=1){ if(useMain) mn.scrollTop=cur+d; else window.scrollTo(window.scrollX||0, cur+d); }
+      st.list=[a]; st.y=useMain?mn.scrollTop:(window.scrollY||0); st.top=r.getBoundingClientRect().top;
+      return true;
+    }
+  }catch(_){}
+  return false;
+}
 window._laRerender=function(){
   try{
     var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
     var inner=_laScrollSnap();
+    var _anc={list:_laAnchorSnap(), y:null, top:0};
     /* §ckLive (2026-09-12) · คืนโฟกัส + ตำแหน่ง cursor ของช่องที่กำลังพิมพ์อยู่
        หน้าเช็คอินต้องวาดใหม่ได้แม้โฟกัสอยู่ในช่องค้นหา (คนอื่นเช็คอินเข้ามาแล้วต้องเห็นทันที)
        ถ้าไม่คืนโฟกัส คนที่กำลังพิมพ์ชื่อลูกค้าจะโดนเด้งออกจากช่องกลางคัน */
@@ -2786,7 +2831,10 @@ window._laRerender=function(){
     if(_fid){ try{ var _fe=document.getElementById(_fid);
       if(_fe && _fe.focus){ _fe.focus(); if(_fsel && _fe.setSelectionRange) _fe.setSelectionRange(_fsel[0], _fsel[1]); } }catch(e){} }
     _laScrollBack(inner);
-    setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
+    var _held=_laAnchorBack(_anc);
+    setTimeout(function(){ try{
+      if(_held && _laAnchorBack(_anc)){ _laScrollBack(inner); return; }
+      var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
       _laScrollBack(inner); }catch(e){} }, 60);
   }catch(e){}
 };

@@ -62,7 +62,8 @@
     "test:pjfree": "LAD=allotment_v2/data_exports/subset_ovnmeal.json node test/ui/t_pjfree.mjs",
     "test:aort": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_aort.mjs",
     "test:rtkeep": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_rtkeep.mjs",
-    "test:fcmid": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_fcmid.mjs"
+    "test:fcmid": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_fcmid.mjs",
+    "test:btstay": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_btstay.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
