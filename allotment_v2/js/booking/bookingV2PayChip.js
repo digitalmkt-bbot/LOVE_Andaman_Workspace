@@ -27,10 +27,10 @@ function bookingV2PayChip(bk){
     if(_held) pm=['On hold','#FCEBEB','#A32D2D','#E6C9C3'];
     else if(_appr) pm=['Extended','#E1F5EE','#0F6E56','#9FE1CB'];
     else if(!_unpaid && inv) pm=['Paid','#E1F5EE','#0F6E56','#9FE1CB'];
-    else if(_unpaid && _past) pm=['&#9888; เลย cutoff','#FCEBEB','#A32D2D','#E6C9C3'];
+    else if(_unpaid && _past) pm=['&#9888; '+laT('เลย cutoff'),'#FCEBEB','#A32D2D','#E6C9C3'];
     else if(inv) pm=['Awaiting','#FBF0DD','#7A4A00','#EAD7A8'];
     else pm=['Pro Forma','#FBF0DD','#7A4A00','#EAD7A8'];
-    return `<span class="t2-pay" style="background:${pm[1]};color:${pm[2]};border:1px solid ${pm[3]};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bookingV2RowPayAction('${bk.id}')" title="สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน">${pm[0]}</span>`;
+    return `<span class="t2-pay" style="background:${pm[1]};color:${pm[2]};border:1px solid ${pm[3]};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bookingV2RowPayAction('${bk.id}')" title="${laT('สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน')}">${pm[0]}</span>`;
   }
   if(inv){ const st=acctInvoiceState(inv); const m=({issued:['Awaiting','#FBF0DD','#7A4A00'],partial:['Partial','#E6F1FB','#185FA5'],paid:['Paid','#E1F5EE','#0F6E56'],void:['Void','#F1EFE8','#5F5E5A']})[st]||['—','#F1EFE8','#5F5E5A']; txt=m[0];bg=m[1];fg=m[2]; }
   else {
@@ -63,5 +63,5 @@ function bookingV2PayChip(bk){
       }
     }
   }
-  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bookingV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>${paidChip}`;
+  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bookingV2RowPayAction('${bk.id}')" title="${laT('จัดการการชำระเงิน')}">${txt}</span>${paidChip}`;
 }

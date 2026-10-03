@@ -19,7 +19,22 @@ function bookingV2AssignBoat(bkId, boatId, date){
         const already=(bkOpsRead(b,d).boatId===boatId)?myPax:0;                       // subtract self if already on this boat
         const next=cur-already+myPax;
         if(next>cap+BA_CAP_TOL){
-          alert('Cannot assign to '+((bo&&bo.name)||boatId)+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\nAssign another boat, or add a boat in Boat Operation.');
+          /* §baCapGate (2026-10-03) · เรือเต็มแล้วแต่ยังมีคนที่รับจองไปแล้วค้างอยู่ (เคสจริง 4 ต.ค. Hermetis 65 ที่ · จอย 69 คน
+             จากล็อกเกินของเดิม) · ของเดิมบอกแค่ "ใส่ไม่ได้" แล้วจบ ผู้ใช้ไม่รู้ว่าต้องไปปลดที่ไหน
+             ยังบล็อกเหมือนเดิม · แต่พาไปหน้าปรับ cap เฉพาะวันนั้นได้เลย ซึ่งเป็นด่านปลดที่มีอยู่แล้ว:
+             ต้องใส่เหตุผล บันทึกชื่อคนปรับ และไม่เกินที่นั่งจดทะเบียน · ปรับแล้วใส่เรือให้ต่อเอง
+             เกินทะเบียนแล้วไม่มีทางปลด ต้องเพิ่มเรือ */
+          const nm=((bo&&bo.name)||boatId), lic=(typeof boatCapLicense==='function')?boatCapLicense(boatId):0;
+          if(typeof boatCapModalOpen!=='function' || (lic>0 && next-BA_CAP_TOL>lic)){
+            alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+(lic>0?(', licensed seats '+lic):'')+').\nThe licensed seats cannot be exceeded. Assign another boat, or add a boat in Boat Operation.');
+            return;
+          }
+          if(!confirm('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\n\nEMERGENCY ONLY: raise the capacity of '+nm+' for this day?\nA reason is required and your name is recorded. Licensed seats: '+(lic||'-')+'.\n\nOK = open the day-capacity setting   Cancel = leave unassigned')) return;
+          boatCapModalOpen(boatId, d, function(){
+            const c2=boatCapFor(boatId,d);
+            if(c2+BA_CAP_TOL>=next) bookingV2AssignBoat(bkId, boatId, date);
+            else if(_bkV2 && _bkV2.boatAssignMode && typeof bookingV2Render==='function') bookingV2Render();
+          }, Math.min(lic>0?lic:next, next));
           return;
         }
       }

@@ -5,7 +5,7 @@ function bookingV2CreateSubLock(parentId, subName, qty, opt){
   const q = Number(qty)||0; if(q<=0){ alert('Enter the number of seats for this sub-group'); return null; }
   /* §lkOver · ต้องหักที่นั่งที่ล็อคแม่ขายไปเองแล้วออกก่อน
      ไม่หัก = แบ่งที่นั่งที่ขายไปแล้วลงกรุ๊ปย่อยได้ ล็อคจ่ายที่นั่งเกินจำนวนที่มีจริง */
-  const room = (typeof bookingV2LockUnallocDrawable==='function') ? bookingV2LockUnallocDrawable(p) : bookingV2LockUnalloc(p);
+  const room = bookingV2LockSubRoom(p);   /* §lkPendSub · แบ่งได้ถึงจำนวนที่ขอ รวมส่วนที่ยังรอที่ว่าง */
   if(q > room){
     const _raw=bookingV2LockUnalloc(p), _pu=Number(p.used)||0;
     alert('เกินจำนวนที่เหลือแบ่งได้ (เหลือ '+room+' ที่)'

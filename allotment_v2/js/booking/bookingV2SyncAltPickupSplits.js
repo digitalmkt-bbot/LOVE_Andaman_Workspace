@@ -45,7 +45,9 @@ function bookingV2SyncAltPickupSplits(b){
     const _d = bkAltHasDrop(a)
       ? { dropAreaId:a.dropAreaId||'', dropHotel:(a.dropPlace||'').trim(), dropZone:a.dropZone||'' }
       : {};
-    splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p)); });
+    splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p,
+      /* §splitPickTime · เก็บเวลารับของแถวนี้ไว้ ถ้าจุดรับยังเป็นที่เดิม */
+      (_ownPick && o.pickTime && (o.pickAreaId||'')===(a.areaId||'') && String(o.pickHotel||'').trim()===(a.place||'').trim()) ? {pickTime:o.pickTime} : {})); });
   b.ops.vanSplits = splits; b.ops.altSplitAuto = true;
   delete b.ops.vanGroup; delete b.ops.vanId;   // main now lives in split[0]
   return true;

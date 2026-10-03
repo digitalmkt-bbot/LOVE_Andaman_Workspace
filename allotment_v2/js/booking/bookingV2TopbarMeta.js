@@ -15,13 +15,17 @@ function bookingV2TopbarMeta(){
     }
     return 'no filter';
   } else if(_bkV2.tab === 'locks'){
-    const active = SB_SEAT_LOCKS.filter(l=>l.status==='active' && !l.parentId);
+    /* §bkLock · ใบชนิดเรือไม่เข้ายอด seats held · มันไม่ได้กันที่นั่ง มันเอาเรือออกไปทั้งลำ
+       บวกรวมแล้วตัวเลขจะเล่าเรื่องผิด · ต่อท้ายเป็นจำนวนลำแทน */
+    const active = SB_SEAT_LOCKS.filter(l=>l.status==='active' && !l.parentId && !bookingV2IsBoatLock(l));
     const dRem = active.filter(l=>!bookingV2LockSpansDays(l)).reduce((s,l)=>s+bookingV2LockHeldRemaining(l),0);
     const bRem = active.filter(l=>bookingV2LockSpansDays(l)).reduce((s,l)=>s+(l.qty||0),0);
-    return `${active.length} active &middot; ${dRem} seats held &middot; ${bRem}/รอบ`;
+    const nBoat = bookingV2BoatLocks().filter(l=>l.status==='active').length;
+    return `${active.length} active &middot; ${dRem} seats held &middot; ${bRem}/${laT('รอบ')}`
+      + (nBoat?` &middot; <b style="color:#6B289A">${nBoat} ${laT('ลำ')}</b>`:'');
   } else if(_bkV2.tab === 'approvals'){
     const n = (SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length;
-    return `${n} รออนุมัติ`;
+    return `${n} ${laT('รออนุมัติ')}`;
   } else if(_bkV2.tab === 'cancel'){
     const c = (SB_BOOKINGS||[]).filter(b=>b.status==='cancelled'||b.status==='cancelled_weather').length;
     return `${c} cancellation${c===1?'':'s'}`;

@@ -1,7 +1,7 @@
 // True if the current rate type offers any add-ons applicable to the trips
 function bookingV2HasAvailableAddOns(){
   const d = _bkV2.newBooking;
-  const rt = bookingV2GetRT();
+  const rt = bookingV2AddOnRT();   /* §aoRT */
   if(!rt) return false;
   const tripRoutes = d.trips.map(t => t.routeId).filter(Boolean);
   if(tripRoutes.length === 0) return false;

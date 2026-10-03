@@ -1,0 +1,81 @@
+[
+ {
+  "id": "b2c_LOV-9930593_1",
+  "schemaVer": 2,
+  "createdAt": "2026-07-31T05:25:26.413Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-9930593",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-07-31",
+  "hotelName": "Visit Panwa Pier",
+  "pickupZone": "NoTransfer",
+  "pickupSelf": true,
+  "pickupAreaId": "nt-panwa-pier",
+  "pickupArea": "Visit Panwa Pier (self-arrive)",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "[scrubbed note]",
+  "note": "B2C · Facebook · LOV-9930593 · Day Trip - Phi Phi - Maiton",
+  "trips": [
+   {
+    "id": "b2c_LOV-9930593_1_t0",
+    "routeId": "r12",
+    "date": "2026-08-15",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 16,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 55984
+   }
+  ],
+  "passengers": [],
+  "addOns": [],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 1584,
+    "label": "ส่วนลดพิเศษ",
+    "note": ""
+   }
+  ],
+  "total": 54400,
+  "priceBreakdown": {
+   "seat": 55984,
+   "addOn": 0,
+   "focDiscount": 0,
+   "discount": -1584,
+   "extra": 0,
+   "total": 54400
+  },
+  "paymentSnapshot": {
+   "deposit": 54400,
+   "balance": 0,
+   "method": "bt",
+   "paid": 54400,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

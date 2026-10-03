@@ -10,6 +10,7 @@ function bookingV2DrawLock(lockId, qty, bookingId, tripDate){
   }
   (l.log=l.log||[]).push({date:today,at:new Date().toISOString(),type:'draw',qty:n,bookingId:bookingId||'',tripDate:tripDate||'',by:laBy()});
   // ล็อกแบบช่วงไม่ปิดตัวเองเพราะเต็มรอบเดียว · รอบอื่นยังมีที่อยู่
-  if(!bookingV2LockSpansDays(l) && bookingV2LockDrawable(l) <= 0 && (l.parentId || !bookingV2LockChildren(l.id).length)) l.status='depleted';
+  /* §lkPend · ยังมีส่วนที่รอที่ว่างอยู่ = ใบยังไม่จบ ห้ามปิด ไม่งั้นคำขอที่รออยู่หายไปจากทุกหน้า */
+  if(!bookingV2LockSpansDays(l) && bookingV2LockDrawable(l) <= 0 && bookingV2LockPendOn(l, l.date) <= 0 && (l.parentId || !bookingV2LockChildren(l.id).length)) l.status='depleted';
   sbSeatLocksPersist(); return n;
 }

@@ -16,6 +16,6 @@ function bookingV2SplitApply(){
     delete o.vanGroup; delete o.vanId;
   }
   bookingV2SplitClose();
-  acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render();
+  acctPersistBookings(); bookingV2RenderKeep();
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'แยกคนแล้ว', msg:n+' คนไปอีกคัน · เหลือ '+bkPaxSum(keep)+' คนคันเดิม'});
 }

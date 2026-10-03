@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script src="js/01-auth-sync.js?v=207944ab"></script>
+<!-- §embed · ต้องมาก่อน 01-auth-sync.js · ตั้ง window.__laEmbed ให้ทันก่อนที่ตัวนั้น
+     จะตั้งนาฬิกาคืนหน้าเดิม และทา class ให้ทันก่อนวาดจอครั้งแรก
+     ไม่มี ?embed=1 ใน URL = ไฟล์นี้ออกทันที ไม่แตะอะไรเลย -->
+<script src="js/10-embed.js"></script>
+<script src="js/01-auth-sync.js?v=6e9e6ad4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LOVE Andaman · Allotment</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/allotment_v2/assets/favicon-32.png">
@@ -10,13 +14,13 @@
 <link rel="icon" href="/allotment_v2/assets/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/allotment_v2/assets/favicon-180.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Quicksand:wght@500;600;700&family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/01-base.css?v=b0f26b3a">
-<link rel="stylesheet" href="css/02-skins.css?v=04a182dc">
+<link rel="stylesheet" href="css/01-base.css?v=0e799a48">
+<link rel="stylesheet" href="css/02-skins.css?v=ede1f709">
 <!-- §dashV3 · สกิน liquid-glass ของ Dashboard เดิมถูกลบทั้งบล็อก
      มันทาทับดีไซน์เก่าที่ไม่มีอยู่แล้ว (พื้นครีมไล่สี · การ์ดขาวฝ้า ·
      แผ่นเขียว Bookings overview · แผ่นน้ำตาล Bookings/day)
      ทุกกฎในนั้นเป็น !important จึงไปทับของใหม่จนอ่านไม่ออก -->
-<script src="js/02-sidebar.js?v=838f53b7"></script>
+<script src="js/02-sidebar.js?v=2012203f"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -241,6 +245,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7L9.5 17.5 4 12"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h10"/></svg>
       Rate Types
     </div>
+    <div class="nav-item" data-view="rate-admin" onclick="nav(this)" style="border-left:2px solid rgba(255,170,200,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+      Rate Expiry
+    </div>
     <div class="nav-item" data-view="contract-tmpl" onclick="nav(this)" style="border-left:2px solid rgba(255,170,200,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
       Contract Templates
@@ -308,6 +316,11 @@
     <div class="nav-item" data-view="fl-dashboard" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       FL Dashboard
+    </div>
+    <!-- §flDeploy · วางกำลังเรือก่อนเปิดฤดู · ท่า → ปฏิทิน → คิวซ่อม -->
+    <div class="nav-item" data-view="fl-deployment" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l3-9h12l3 9"/><path d="M2 20h20"/><path d="M12 8V4"/><path d="M9 4h6"/></svg>
+      Fleet Deployment
     </div>
 
     <!-- ─── Today ─── -->
@@ -630,32 +643,10 @@
 
     <!-- ══════════ AGENT LIST ══════════ -->
     <div id="view-agents" class="view">
-      <div class="page-hd">
-        <div>
-          <h1>Agent List <span style="font-size:11px;font-weight:400;color:var(--ink-soft);margin-left:6px">B2B</span></h1>
-          <p>จัดการ Agent · ราคา · ประเภทการชำระเงิน · Sales Person ผู้ดูแล</p>
-        </div>
-        <div class="page-actions">
-          <div style="display:inline-flex;gap:3px;background:#f1efe9;border-radius:9px;padding:3px;margin-right:6px">
-            <button id="agv-card" class="btn btn-sm" onclick="agSetView('card')" style="border:0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.09);border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600">การ์ด</button>
-            <button id="agv-table" class="btn btn-sm" onclick="agSetView('table')" style="border:0;background:transparent;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:500;color:#8b9a94">ตาราง</button>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="agImportTemplate()" title="ดาวน์โหลดฟอร์ม Excel เปล่า (หัวคอลัมน์ตรงกับที่ระบบนำเข้า) · กรอกแล้วเอากลับมา นำเข้า Excel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            ฟอร์ม Excel
-          </button>
-          <button class="btn btn-ghost btn-sm" onclick="agImportPick()" title="นำเข้า Agent จากไฟล์ Excel · จับคู่ของเดิมให้อัตโนมัติ (อัปเดต ไม่สร้างซ้ำ)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
-            นำเข้า Excel
-          </button>
-          <button class="btn btn-pink btn-sm" onclick="agNew()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-            เพิ่ม Agent
-          </button>
-        </div>
-      </div>
-
-      <div class="sb-kpi-row" id="ag-kpi"></div>
+      <!-- §agHd · แถบหัวหน้านี้ใช้ดีไซน์เดียวกับหน้า Dashboard (.dv-hd)
+           ที่ของ "กล่องวันที่" คือจำนวนเอเย่นต์ · ปุ่มงานทั้งหมดย้ายมาอยู่ในแถบนี้
+           วาดจาก renderAgKPI() ที่ไฟล์ 08-app.js — HTML เหลือแค่ที่ว่างให้วาด -->
+      <div id="ag-kpi" class="ag-hd"></div>
 
       <div class="sb-wrap">
         <aside class="sb-side">
@@ -667,6 +658,9 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
                 <span id="ag-filter-active-cnt"></span>
               </button>
+              <!-- §agPhone · บนจอโทรศัพท์ ลิสต์ยุบไว้ก่อน เปิดมาจึงเห็นข้อมูลเอเย่นต์ทันที
+                   ไม่ต้องเลื่อนผ่านรายชื่อ 800 รายก่อน · ปุ่มนี้ซ่อนเองบนจอใหญ่ -->
+              <button id="ag-side-tgl" class="ag-side-tgl" type="button" onclick="agSideToggle()">Browse</button>
               <!-- Filter popover -->
               <div id="ag-filter-pop" class="ag-filter-pop" style="display:none">
                 <div class="ag-filter-pop-hd">
@@ -777,6 +771,20 @@
 
     <!-- ══════════ RATE TYPES ══════════ -->
     <!-- §Contract Templates (2026-07-14) · ข้อความสัญญาเคย hardcode ใน CT_DOC_I18N — แก้คำเดียวต้อง deploy -->
+    <!-- §rtAdmin · งานดูแลเรท (หมดอายุ · ตารางฤดูกาล) แยกจากหน้าทำเรท เพื่อไม่ให้แผงเตือนดันรายการเรทตกจอ -->
+    <div id="view-rate-admin" class="view">
+      <div class="page-hd">
+        <div>
+          <h1>Rate Expiry <span style="font-size:11px;font-weight:400;color:var(--ink-soft);margin-left:6px">ภาพรวมทุกเอเย่นต์</span></h1>
+          <p>เรทที่กำลังจะหมดอายุ ทั้งระบบ · ตั้งตารางฤดูกาลทีเดียวหลายเจ้า · รายเจ้าไปจัดการที่แท็บ Rate Type ของเอเย่นต์</p>
+        </div>
+      </div>
+      <div id="rta-how"></div>
+      <!-- §agProgBulk · เติมโปรแกรมในสัญญาให้ตรงกับเรทที่ผูกอยู่ · เติมอย่างเดียว ไม่ตัด -->
+      <div id="rta-fill"></div>
+      <div id="rta-exp"></div>
+    </div>
+
     <div id="view-contract-tmpl" class="view">
       <div id="cttv-wrap"></div>
     </div>
@@ -806,6 +814,11 @@
           </button>
         </div>
       </div>
+
+      <!-- §rtDupCode · เตือนโค้ดเรทซ้ำ · ว่างไว้เมื่อไม่มีโค้ดไหนซ้ำ -->
+      <div id="rt-dupcode"></div>
+      <!-- §rtExpiry · แผงเตือนเรทที่กำลังจะหมด · rtExpRender() เติมให้ ไม่มีอะไรเตือนก็ว่างไว้ -->
+      <div id="rt-expiry"></div>
 
       <div class="sb-wrap" id="rt-wrap">
         <aside class="sb-side">
@@ -1225,6 +1238,11 @@
       <div id="fl-insights-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>
     </div>
 
+    <div id="view-fl-deployment" class="view">
+      <div class="page-hd"><div><h1>Fleet Deployment</h1><p>วางเรือเข้าท่า · ปฏิทินเดินเรือรายเดือน · คิวซ่อมกับเส้นตายก่อนเปิดฤดู</p></div></div>
+      <div id="fl-deploy-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>
+    </div>
+
     <div id="view-fl-fuel" class="view">
       <div class="page-hd"><div><h1>Fuel intelligence</h1><p>ต้นทุนน้ำมัน · ประสิทธิภาพ · ผิดปกติ · แยกเรือ/โปรแกรม</p></div></div>
       <div id="fl-fuel-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>
@@ -1503,7 +1521,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=f734095f"></script>
+<script src="js/04-data-core.js?v=de7f844e"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -1926,7 +1944,7 @@
 .outcome-pill:hover{border-color:#bbb}
 </style>
 
-<script src="js/05-fleet.js?v=61531ce7"></script>
+<script src="js/05-fleet.js?v=9ce06f90"></script>
 <!-- Assign Engine Modal -->
 <div class="modal-overlay" id="fl-modal-assign-eng">
   <div class="modal" style="max-width:420px">
@@ -1962,7 +1980,7 @@
   </div>
 </div>
 
-<script src="js/06-engine-assign.js?v=bd426d5d"></script>
+<script src="js/06-engine-assign.js?v=f6f418b1"></script>
 
 <!-- Approve Memo Modal -->
 <div class="modal-overlay" id="fl-modal-approve">
@@ -2956,10 +2974,12 @@
       <div class="modal-icon" style="background:var(--amber)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/><path d="M12 7V3"/></svg>
       </div>
-      <div><div class="modal-title">เพิ่มเรือเช่า</div><div class="modal-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
+      <div><div class="modal-title" id="ch-title">เพิ่มเรือเช่า</div><div class="modal-sub" id="ch-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
       <button class="modal-close" onclick="closeModal('charter-modal')">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="ch-edit-id" value="">
+      <div id="ch-hint" style="display:none;font-size:11px;line-height:1.6;color:#854F0B;background:#FAEEDA;border:1px solid #F0DCB4;border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
       <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="ch-name" placeholder="เช่น Charter Boat 1"></div>
       <div class="form-2">
         <div class="form-row"><label class="form-label">ประเภท</label>
@@ -2977,11 +2997,13 @@
         </div>
         <input type="hidden" id="ch-pier" value="tublamu">
       </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">วันที่เริ่ม <span style="color:var(--red)">*</span></label><input type="date" id="ch-from"></div>
-        <div class="form-row"><label class="form-label">วันที่สิ้นสุด <span style="color:var(--red)">*</span></label><input type="date" id="ch-to"></div>
+      <div id="ch-period">
+        <div class="form-2">
+          <div class="form-row"><label class="form-label">วันที่เริ่ม <span style="color:var(--red)">*</span></label><input type="date" id="ch-from"></div>
+          <div class="form-row"><label class="form-label">วันที่สิ้นสุด <span style="color:var(--red)">*</span></label><input type="date" id="ch-to"></div>
+        </div>
+        <div class="form-row"><label class="form-label">หมายเหตุ</label><input type="text" id="ch-note" placeholder="เช่น เช่าจาก XXX สำหรับช่วง Songkran"></div>
       </div>
-      <div class="form-row"><label class="form-label">หมายเหตุ</label><input type="text" id="ch-note" placeholder="เช่น เช่าจาก XXX สำหรับช่วง Songkran"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('charter-modal')">ยกเลิก</button>
@@ -2990,7 +3012,60 @@
   </div>
 </div>
 
-<script src="js/07-charter.js?v=0fe07097"></script>
+<!-- §vanStop · จุดแวะของรถที่ไม่ใช่ booking (ไกด์ติดรถ · แวะเอาของ) -->
+<div class="modal-overlay" id="vanstop-modal">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-hd">
+      <div class="modal-icon" style="background:#0E7490">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 00-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 00-8-8z"/></svg>
+      </div>
+      <div><div class="modal-title" id="vs-title">เพิ่มจุดแวะ</div><div class="modal-sub" id="vs-sub">ไม่ใช่ลูกค้า · ไม่นับที่นั่งเรือ · ขึ้นใบงานรถและหน้าเช็คอินรถ</div></div>
+      <button class="modal-close" onclick="closeModal('vanstop-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="vs-k" value=""><input type="hidden" id="vs-date" value="">
+      <input type="hidden" id="vs-route" value=""><input type="hidden" id="vs-van" value="">
+      <input type="hidden" id="vs-grp" value="0"><input type="hidden" id="vs-kind" value="staff"><input type="hidden" id="vs-leg" value="out">
+      <div class="form-row"><label class="form-label">ชนิด</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-kind-pills">
+          <div class="loc-pill on" onclick="vsPickKind('staff',this)">&#128100; คนติดรถ</div>
+          <div class="loc-pill" onclick="vsPickKind('cargo',this)">&#128230; ของ</div>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">ขาที่รถต้องแวะ</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-leg-pills">
+          <div class="loc-pill on" onclick="vsPickLeg('out',this)">&#8594; ขาไป</div>
+          <div class="loc-pill" onclick="vsPickLeg('ret',this)">&#8617; ขากลับ</div>
+          <div class="loc-pill" onclick="vsPickLeg('both',this)">&#8646; ไป-กลับ</div>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">รายละเอียด <span style="color:var(--red)">*</span></label>
+        <input type="text" id="vs-label" placeholder="เช่น ไกด์ สมชาย / รับเสื้อชูชีพ 20 ตัว"></div>
+      <div class="form-2">
+        <div class="form-row" id="vs-pax-row"><label class="form-label">จำนวนคน <span style="color:var(--red)">*</span></label>
+          <input type="number" id="vs-pax" value="1" min="1"></div>
+        <div class="form-row"><label class="form-label">เวลาแวะ</label><input type="text" id="vs-time" placeholder="07:15"></div>
+      </div>
+      <div class="form-row"><label class="form-label">จุดแวะ <span style="color:var(--red)">*</span></label>
+        <input type="text" id="vs-place" placeholder="เช่น ออฟฟิศ ถลาง"></div>
+      <div class="form-2">
+        <div class="form-row"><label class="form-label">พื้นที่รับ</label>
+          <select id="vs-area"><option value="">— ไม่ระบุ —</option></select>
+          <input type="hidden" id="vs-zone" value=""></div>
+        <div class="form-row"><label class="form-label">เบอร์ติดต่อ</label><input type="text" id="vs-phone" placeholder="089-xxx-xxxx"></div>
+      </div>
+      <div class="form-row"><label class="form-label">หมายเหตุให้คนขับ</label>
+        <input type="text" id="vs-note" placeholder="เช่น ไปประจำเรือที่ท่า ไม่ลงเรือ"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="vs-del" onclick="vsDelGo()" style="margin-right:auto;color:#A32D2D;display:none">ลบจุดแวะ</button>
+      <button class="btn btn-ghost" onclick="closeModal('vanstop-modal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="vsSubmit()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/07-charter.js?v=4f2af328"></script>
 <!-- Doc Inline Edit Popup -->
 <div class="doc-edit-popup" id="doc-edit-popup">
   <div class="dep-title" id="dep-title">แก้ไขเอกสาร</div>
@@ -3009,8 +3084,9 @@
   </div>
 </div>
 
-<script src="js/08-app.js?v=booking-state-global"></script>
+<script src="js/08-app.js?v=51266139"></script>
 <script src="js/booking/bookingV2GetArea.js"></script>
+<script src="js/booking/bookingV2SplitArea.js"></script>
 <script src="js/booking/bookingV2GetPickupTime.js"></script>
 <script src="js/booking/bookingV2LockSpansDays.js"></script>
 <script src="js/booking/bookingV2LockRange.js"></script>
@@ -3019,7 +3095,12 @@
 <script src="js/booking/bookingV2LockPeakUsed.js"></script>
 <script src="js/booking/bookingV2LockRemaining.js"></script>
 <script src="js/booking/bookingV2LockReleaseCutoff.js"></script>
+<script src="js/booking/bookingV2LockCutoffPassed.js"></script>
+<script src="js/booking/bookingV2LockRoundReleased.js"></script>
 <script src="js/booking/bookingV2LockReleasedForDate.js"></script>
+<script src="js/booking/bookingV2LockHoldsOn.js"></script>
+<script src="js/booking/bookingV2LockOverdue.js"></script>
+<script src="js/booking/bookingV2LockReleaseRound.js"></script>
 <script src="js/booking/bookingV2LockCutoffLabel.js"></script>
 <script src="js/booking/bookingV2LockExpireSweep.js"></script>
 <script src="js/booking/bookingV2LocksFor.js"></script>
@@ -3032,10 +3113,60 @@
 <script src="js/booking/bookingV2LockHeldRemaining.js"></script>
 <script src="js/booking/bookingV2LockUnallocDrawable.js"></script>
 <script src="js/booking/bookingV2LockDrawable.js"></script>
+<script src="js/booking/bookingV2LockSubShares.js"></script>
+<script src="js/booking/bookingV2LockSubRoom.js"></script>
+<script src="js/booking/bookingV2LockSubPend.js"></script>
+<script src="js/booking/bookingV2LockPendOn.js"></script>
+<script src="js/booking/bookingV2LockPendSet.js"></script>
+<script src="js/booking/bookingV2LockPendClear.js"></script>
+<script src="js/booking/bookingV2LockPendDates.js"></script>
+<script src="js/booking/bookingV2LockPendTotal.js"></script>
+<script src="js/booking/bookingV2LockFreeOn.js"></script>
+<script src="js/booking/bookingV2LockSpecDates.js"></script>
+<script src="js/booking/bookingV2LockShort.js"></script>
+<script src="js/booking/bookingV2LockPendApply.js"></script>
+<script src="js/booking/bookingV2LockPendShrink.js"></script>
+<script src="js/booking/bookingV2LockPendConfirm.js"></script>
+<script src="js/booking/bookingV2LockPendConfirmGo.js"></script>
+<script src="js/booking/bookingV2LkPendAskGo.js"></script>
+<script src="js/booking/bookingV2LkPendAskModal.js"></script>
 <script src="js/booking/bookingV2LockPoolHold.js"></script>
 <script src="js/booking/bookingV2LockedTotal.js"></script>
 <script src="js/booking/bookingV2LockRounds.js"></script>
 <script src="js/booking/bookingV2CreateLock.js"></script>
+<script src="js/booking/bookingV2IsBoatLock.js"></script>
+<script src="js/booking/bookingV2BoatLockFixed.js"></script>
+<script src="js/booking/bookingV2BoatLockMinCap.js"></script>
+<script src="js/booking/bookingV2BoatOf.js"></script>
+<script src="js/booking/bookingV2BoatNameOf.js"></script>
+<script src="js/booking/bookingV2BoatCapOn.js"></script>
+<script src="js/booking/bookingV2BoatLocks.js"></script>
+<script src="js/booking/bookingV2BoatLocksOn.js"></script>
+<script src="js/booking/bookingV2BoatLockById.js"></script>
+<script src="js/booking/bookingV2BoatLockOn.js"></script>
+<script src="js/booking/bookingV2BoatLockOverdue.js"></script>
+<script src="js/booking/bookingV2BoatLockBlockers.js"></script>
+<script src="js/booking/bookingV2BoatLockCanTake.js"></script>
+<script src="js/booking/bookingV2BoatLockCellSet.js"></script>
+<script src="js/booking/bookingV2BoatLockCellClear.js"></script>
+<script src="js/booking/bookingV2CreateBoatLock.js"></script>
+<script src="js/booking/bookingV2BoatLockRelease.js"></script>
+<script src="js/booking/bookingV2BoatLockSwap.js"></script>
+<script src="js/booking/bookingV2BoatLockEdit.js"></script>
+<script src="js/booking/bookingV2BoatLockOnConvert.js"></script>
+<script src="js/booking/bookingV2BoatLockToCharter.js"></script>
+<script src="js/booking/bookingV2BoatLockOpen.js"></script>
+<script src="js/booking/bookingV2BoatLockEditOpen.js"></script>
+<script src="js/booking/bookingV2BoatLockFormGo.js"></script>
+<script src="js/booking/bookingV2BoatLockClose.js"></script>
+<script src="js/booking/bookingV2BoatLockSetQ.js"></script>
+<script src="js/booking/bookingV2BoatLockSet.js"></script>
+<script src="js/booking/bookingV2BoatLockSubmit.js"></script>
+<script src="js/booking/bookingV2BoatLockPickList.js"></script>
+<script src="js/booking/bookingV2BoatLockModal.js"></script>
+<script src="js/booking/bookingV2AgentNm.js"></script>
+<script src="js/booking/bookingV2BoatLockReleaseGo.js"></script>
+<script src="js/booking/bookingV2BoatLockSwapGo.js"></script>
 <script src="js/booking/bookingV2DrawLock.js"></script>
 <script src="js/booking/bookingV2ReturnLock.js"></script>
 <script src="js/booking/bookingV2ReturnBookingDraws.js"></script>
@@ -3049,6 +3180,7 @@
 <script src="js/booking/bookingV2LockAddSeats.js"></script>
 <script src="js/booking/bookingV2ReleaseLock.js"></script>
 <script src="js/booking/bookingV2LockKpiByAgent.js"></script>
+<script src="js/booking/bookingV2LockHealRange.js"></script>
 <script src="js/booking/bookingV2DayLockedExact.js"></script>
 <script src="js/booking/bookingV2DayLockedTotal.js"></script>
 <script src="js/booking/bookingV2LockFormFields.js"></script>
@@ -3056,8 +3188,14 @@
 <script src="js/booking/bookingV2RenderLockModal.js"></script>
 <script src="js/booking/bookingV2CloseLockModal.js"></script>
 <script src="js/booking/bookingV2LockSetField.js"></script>
+<script src="js/booking/bookingV2LockEditOpen.js"></script>
+<script src="js/booking/bookingV2LockEditLocked.js"></script>
+<script src="js/booking/bookingV2LockEditSubmit.js"></script>
 <script src="js/booking/bookingV2LockCreateSubmit.js"></script>
 <script src="js/booking/bookingV2LockFromCalendar.js"></script>
+<script src="js/booking/bookingV2LockReleaseRoundGo.js"></script>
+<script src="js/booking/bookingV2LockOverdueOn.js"></script>
+<script src="js/booking/bookingV2LockReleaseOverdueGo.js"></script>
 <script src="js/booking/bookingV2LockReleaseConfirm.js"></script>
 <script src="js/booking/bookingV2CreateSubLock.js"></script>
 <script src="js/booking/bookingV2LockSweep.js"></script>
@@ -3102,6 +3240,17 @@
 <script src="js/booking/bookingV2BoatPickSet.js"></script>
 <script src="js/booking/bookingV2ToggleBoatMode.js"></script>
 <script src="js/booking/bookingV2ToggleVanMode.js"></script>
+<script src="js/booking/bookingV2GrpOrderAll.js"></script>
+<script src="js/booking/bookingV2GrpOrderKey.js"></script>
+<script src="js/booking/bookingV2GrpOrderGet.js"></script>
+<script src="js/booking/bookingV2GrpOrderSet.js"></script>
+<script src="js/booking/bookingV2GrpDragStart.js"></script>
+<script src="js/booking/bookingV2GrpDragEnd.js"></script>
+<script src="js/booking/bookingV2GrpDragOver.js"></script>
+<script src="js/booking/bookingV2GrpDragLeave.js"></script>
+<script src="js/booking/bookingV2GrpDrop.js"></script>
+<script src="js/booking/bookingV2GrpMove.js"></script>
+<script src="js/booking/bookingV2GrpOrderReset.js"></script>
 <script src="js/booking/bookingV2ToggleReconfirmMode.js"></script>
 <script src="js/booking/bookingV2Reconfirm.js"></script>
 <script src="js/booking/bookingV2ReconfirmClear.js"></script>
@@ -3118,6 +3267,7 @@
 <script src="js/booking/bookingV2VanGroupSelected.js"></script>
 <script src="js/booking/bookingV2VanGroupHeal.js"></script>
 <script src="js/booking/bookingV2VanGroupConflicts.js"></script>
+<script src="js/booking/bookingV2VanGroupVan.js"></script>
 <script src="js/booking/bookingV2VanGroupPax.js"></script>
 <script src="js/booking/bookingV2VanGroupSetVan.js"></script>
 <script src="js/booking/bookingV2VanGroupDisband.js"></script>
@@ -3151,12 +3301,15 @@
 <script src="js/booking/bookingV2BoatInitials.js"></script>
 <script src="js/booking/bookingV2BoatAvatarColor.js"></script>
 <script src="js/booking/bookingV2SetPickupFinal.js"></script>
+<script src="js/booking/bookingV2SetSplitPickTime.js"></script>
 <script src="js/booking/bookingV2ScrollToVan.js"></script>
 <script src="js/booking/bookingV2VanJobOrder.js"></script>
 <script src="js/booking/bookingV2AssignVanReturnSplit.js"></script>
 <script src="js/booking/bookingV2VanCellHTML.js"></script>
 <script src="js/booking/bookingV2BoatUpgrade.js"></script>
 <script src="js/booking/bookingV2PayChip.js"></script>
+<script src="js/booking/bookingV2PaidSplit.js"></script>
+<script src="js/booking/bookingV2PaidLine.js"></script>
 <script src="js/booking/bookingV2CotChip.js"></script>
 <script src="js/booking/bookingV2RowPayAction.js"></script>
 <script src="js/booking/bookingV2PayDoCreate.js"></script>
@@ -3305,6 +3458,7 @@
 <script src="js/booking/bookingV2B2CMark.js"></script>
 <script src="js/booking/bookingV2B2CLogo.js"></script>
 <script src="js/booking/bookingV2IsB2CFeeAddOn.js"></script>
+<script src="js/booking/bookingV2LtAddOnKind.js"></script>
 <script src="js/booking/bookingV2AddOnFlags.js"></script>
 <script src="js/booking/bookingV2LongtailExtraPax.js"></script>
 <script src="js/booking/bookingV2LongtailCharterExtraBoats.js"></script>
@@ -3478,6 +3632,7 @@
 <script src="js/booking/bookingV2HotelDDFilter.js"></script>
 <script src="js/booking/bookingV2HotelDDKey.js"></script>
 <script src="js/booking/bookingV2HotelDDPick.js"></script>
+<script src="js/booking/bookingV2ApplyAgentRules.js"></script>
 <script src="js/booking/bookingV2SetBookingField.js"></script>
 <script src="js/booking/bookingV2SaveDraft.js"></script>
 <script src="js/booking/bookingV2SubmitBooking.js"></script>
@@ -3489,8 +3644,16 @@
 <script src="js/booking/bookingV2CommitBooking.js"></script>
 <script src="js/booking/bookingV2GetRT.js"></script>
 <script src="js/booking/bookingV2ResolveRateType.js"></script>
+<script src="js/booking/bookingV2AddOnRT.js"></script>
+<script src="js/booking/bookingV2RtKeepInit.js"></script>
+<script src="js/booking/bookingV2RtKeptFor.js"></script>
+<script src="js/booking/bookingV2RtKeepPair.js"></script>
+<script src="js/booking/bookingV2RtKeepUse.js"></script>
+<script src="js/booking/bookingV2RtKeepNote.js"></script>
 <script src="js/booking/bookingV2GetRTForTrip.js"></script>
 <script src="js/booking/bookingV2TripSubtotal.js"></script>
+<script src="js/booking/bookingV2LtJoinMax.js"></script>
+<script src="js/booking/bookingV2SetAddOnJoin.js"></script>
 <script src="js/booking/bookingV2AddOnInfo.js"></script>
 <script src="js/booking/bookingV2CalcQuote.js"></script>
 <script src="js/booking/bookingV2SetFocReason.js"></script>
@@ -3542,6 +3705,6 @@
 <script src="js/booking/bookingV2DisplayCode.js"></script>
 <script src="js/booking/bookingV2RenderBookingDetail.js"></script>
 <script src="js/booking/bookingV2WeatherCountsFor.js"></script>
-<script src="js/09-action-board.js?v=70374360"></script>
+<script src="js/09-action-board.js?v=7a8214eb"></script>
 </body>
 </html>

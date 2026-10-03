@@ -9,6 +9,7 @@ function bookingV2LockSweep(){
   const rows=[], over=[];
   let seatsMoved=0, seatsDead=0, seatsOver=0;
   L.forEach(l=>{
+    if(bookingV2IsBoatLock(l)) return;   /* §bkLock · ไม่มีที่นั่งให้ตามหา · qty เป็นขนาดที่สัญญาไว้ ไม่ใช่โควตา */
     const A=bookingV2LockAudit(l);
     if(A.diff>0){
       const mv=A.claims.filter(c=>c.moved).reduce((n,c)=>n+c.qty,0);

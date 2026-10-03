@@ -1,0 +1,254 @@
+[
+ {
+  "id": "b2c_LOV-1592241_1",
+  "schemaVer": 2,
+  "createdAt": "2026-09-09T05:48:37.917Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-1592241",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-09",
+  "hotelName": "Bangtao · Blu Monkey Hub & Hotel Bangtao",
+  "pickupZone": "PK",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-bangtao",
+  "pickupArea": "Bangtao",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "[scrubbed note]",
+  "note": "B2C · Line OA · LOV-1592241 · Day Trip - Phi Phi - Maiton",
+  "trips": [
+   {
+    "id": "b2c_LOV-1592241_1_t0",
+    "routeId": "r12",
+    "date": "2026-12-06",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 2,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 6998
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 5",
+    "nationality": "",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "b2c-ad-001",
+    "label": "Join Transfer ( Phuket )",
+    "amount": 400,
+    "qty": 2,
+    "note": ""
+   }
+  ],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 115,
+    "label": "ลดค่าทริป · เฉพาะส่วนของรายการนี้ (ทั้งบิล 200)",
+    "note": ""
+   }
+  ],
+  "total": 7283,
+  "priceBreakdown": {
+   "seat": 6998,
+   "addOn": 400,
+   "focDiscount": 0,
+   "discount": -115,
+   "extra": 0,
+   "total": 7283
+  },
+  "paymentSnapshot": {
+   "deposit": 12698,
+   "balance": 0,
+   "method": "bt",
+   "paid": 12698,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ },
+ {
+  "id": "b2c_LOV-1592241_3",
+  "schemaVer": 2,
+  "createdAt": "2026-09-09T05:48:37.917Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-1592241",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-09",
+  "hotelName": "Blu Monkey Hub & Hotel Bangtao · Blu Monkey Hub & Hotel Bangtao",
+  "pickupZone": "",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-bangtao",
+  "pickupArea": "Bangtao",
+  "dropoffSame": false,
+  "dropoffHotelName": "Airport (HKT)",
+  "dropoffAreaId": "pk-airport",
+  "dropoffArea": "Airport",
+  "notes": "Sedan × 1 · (to airport) · Blu Monkey Hub & Hotel Bangtao → Airport (HKT)\n[scrubbed note]",
+  "note": "B2C · Line OA · LOV-1592241 · TR-001",
+  "trips": [
+   {
+    "id": "b2c_LOV-1592241_3_t0",
+    "routeId": "r1789031868147",
+    "date": "2026-12-07",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 2,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 850
+   }
+  ],
+  "passengers": [],
+  "addOns": [],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 13,
+    "label": "ลดค่าทริป · เฉพาะส่วนของรายการนี้ (ทั้งบิล 200)",
+    "note": ""
+   }
+  ],
+  "total": 837,
+  "priceBreakdown": {
+   "seat": 850,
+   "addOn": 0,
+   "focDiscount": 0,
+   "discount": -13,
+   "extra": 0,
+   "total": 837
+  },
+  "paymentSnapshot": {
+   "deposit": 0,
+   "balance": 0,
+   "method": "bt",
+   "paid": 0,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ },
+ {
+  "id": "b2c_LOV-1592241_4",
+  "schemaVer": 2,
+  "createdAt": "2026-09-09T05:48:37.917Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-1592241",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-09",
+  "hotelName": "ป่าตอง ซันเซ็ท วิลล่า",
+  "pickupZone": "",
+  "pickupSelf": false,
+  "pickupAreaId": null,
+  "pickupArea": "ป่าตอง ซันเซ็ท วิลล่า",
+  "dropoffSame": false,
+  "dropoffHotelName": "Blu Monkey Hub & Hotel Bangtao",
+  "dropoffAreaId": "pk-bangtao",
+  "dropoffArea": "Bangtao",
+  "notes": "Sedan × 1 · ป่าตอง ซันเซ็ท วิลล่า → Blu Monkey Hub & Hotel Bangtao\n[scrubbed note]",
+  "note": "B2C · Line OA · LOV-1592241 · TR-OTHER · Pickup: ป่าตอง ซันเซ็ท วิลล่า — area unassigned",
+  "trips": [
+   {
+    "id": "b2c_LOV-1592241_4_t0",
+    "routeId": "r1789036422820",
+    "date": "2026-12-05",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 2,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 850
+   }
+  ],
+  "passengers": [],
+  "addOns": [],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 13,
+    "label": "ลดค่าทริป · เฉพาะส่วนของรายการนี้ (ทั้งบิล 200)",
+    "note": ""
+   }
+  ],
+  "total": 837,
+  "priceBreakdown": {
+   "seat": 850,
+   "addOn": 0,
+   "focDiscount": 0,
+   "discount": -13,
+   "extra": 0,
+   "total": 837
+  },
+  "paymentSnapshot": {
+   "deposit": 0,
+   "balance": 0,
+   "method": "bt",
+   "paid": 0,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

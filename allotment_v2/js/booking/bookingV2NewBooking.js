@@ -10,6 +10,7 @@ function bookingV2NewBooking(){
     soldBy: '',                 // salesperson credited (override · for walk-in/direct sales · blank = derive from agent.sales)
     priceMode: 'rate',          // 'rate' (from Rate Type) | 'manual' (free-style · type total · walk-in)
     manualTotal: 0,             // used when priceMode==='manual'
+    companyPurpose: '',         // §internal · เหตุผลของใบบริษัท (when agent = Love Andaman · Company) · ว่าง = บันทึกไม่ผ่าน
     staffId: '',                // staff member (when agent = Staff/Welfare house account)
     staffPurpose: 'welfare',    // 'welfare' (uses yearly quota) | 'inspection' (no quota · counts seat)
     agentId: null,

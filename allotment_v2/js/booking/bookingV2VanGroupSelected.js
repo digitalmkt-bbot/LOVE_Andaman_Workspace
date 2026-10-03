@@ -20,5 +20,5 @@ function bookingV2VanGroupSelected(date, routeId, zone, groupId){
   }
   // a group = ONE van by design → adding a booking to a group with a van OVERWRITES any van it carried in (else "รถปนกันในกรุ๊ป": booking keeps its old van → job order routes it to the wrong van while the group header shows the group's van). Return van stays per-booking (only fills if empty · §73).
   ordered.forEach((key,i)=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; const o=bkOpsFor(b, bkOpsDate(b,date)); if(p.length>1 && Array.isArray(o.vanSplits) && o.vanSplits[+p[1]]){ const s=o.vanSplits[+p[1]]; s.vanGroup=gid; s.vanSeq=_maxSeq+i+1; if(_gVan)s.vanId=_gVan; if(_gRet&&!s.vanReturnId)s.vanReturnId=_gRet; } else { o.vanGroup=gid; o.vanSeq=_maxSeq+i+1; if(_gVan)o.vanId=_gVan; if(_gRet&&!o.vanReturnId)o.vanReturnId=_gRet; } delete window._bkV2VanSel[key]; });
-  acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render();
+  acctPersistBookings(); bookingV2RenderKeep();
 }

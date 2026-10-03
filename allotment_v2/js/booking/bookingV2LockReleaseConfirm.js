@@ -1,4 +1,3 @@
-// Release · custom modal (replaces native prompt)
 function bookingV2LockReleaseConfirm(id){
   const l = SB_SEAT_LOCKS.find(x=>x.id===id); if(!l) return;
   const peak = bookingV2LockPeakUsed(l);

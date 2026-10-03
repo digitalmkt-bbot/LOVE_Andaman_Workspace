@@ -1,0 +1,122 @@
+[
+ {
+  "id": "b2c_LOV-7485231_1",
+  "schemaVer": 2,
+  "createdAt": "2026-09-25T01:07:20.752Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-7485231",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "TH",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-09-25",
+  "hotelName": "Phuket Town · Phuket Emerald Beach Resort",
+  "pickupZone": "PK",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-town",
+  "pickupArea": "Phuket Town",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "[scrubbed note]",
+  "note": "B2C · Facebook · LOV-7485231 · Day Trip - Phi Phi - Maiton",
+  "trips": [
+   {
+    "id": "b2c_LOV-7485231_1_t0",
+    "routeId": "r12",
+    "date": "2026-10-03",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 0,
+     "ad_th": 3,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 10497,
+    "nat": {
+     "ad": 2,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    }
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 7",
+    "nationality": "US",
+    "type": "AD",
+    "foc": false
+   },
+   {
+    "name": "Guest 6",
+    "nationality": "TH",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "b2c-ad-001",
+    "label": "Join Transfer ( Phuket )",
+    "amount": 600,
+    "qty": 3,
+    "note": ""
+   },
+   {
+    "type": "international-park-fee",
+    "label": "International Park Fee",
+    "amount": 500,
+    "qty": 1,
+    "note": ""
+   },
+   {
+    "type": "longtail-charter",
+    "label": "Longtail Charter จองล่วงหน้า 3 วันก่อนการเดินทาง",
+    "amount": 1800,
+    "qty": 1,
+    "note": ""
+   }
+  ],
+  "adjustments": [
+   {
+    "kind": "discount",
+    "mode": "amount",
+    "value": 597,
+    "label": "ลดพิเศษ",
+    "note": ""
+   }
+  ],
+  "total": 12800,
+  "priceBreakdown": {
+   "seat": 10497,
+   "addOn": 2900,
+   "focDiscount": 0,
+   "discount": -597,
+   "extra": 0,
+   "total": 12800
+  },
+  "paymentSnapshot": {
+   "deposit": 12800,
+   "balance": 0,
+   "method": "bt",
+   "paid": 12800,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

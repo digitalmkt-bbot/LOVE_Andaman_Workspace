@@ -1,4 +1,3 @@
-/* §per-trip ops · รถกลับของ split ตามวัน */
 function bookingV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, isSplit, isFirst){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   if(zone==='NoTransfer'||zone==='NT') return '<span style="font-size:10px;color:#8a8a82;font-style:italic">self-arrive</span>';

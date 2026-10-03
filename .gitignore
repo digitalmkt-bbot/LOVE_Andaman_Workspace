@@ -56,3 +56,9 @@ os-backend/data_snapshots/
 # git ในสภาพแวดล้อมนี้ลบไฟล์เองไม่ได้ ต้อง mv มาพักไว้ที่นี่แทน
 # ของในนี้ไม่ใช่โค้ดของโปรเจกต์ · ลบทิ้งได้ตลอด ไม่ต้องเข้า repo
 _to_delete/
+
+# ── Screenshots / rendered images ──
+# Session screenshots ("Claude outputs/*.png") are scratch evidence, not project code.
+# EXCEPTION: allotment_v2/assets/ ships to prod (favicons, logo) — those must stay committable.
+*.png
+!allotment_v2/assets/**/*.png

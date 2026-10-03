@@ -1,0 +1,109 @@
+[
+ {
+  "id": "b2c_LOV-9260122_1",
+  "schemaVer": 2,
+  "createdAt": "2026-08-12T06:53:37.652Z",
+  "createdBy": "Guest 1",
+  "voucherRef": "LOV-9260122",
+  "agentId": "a_b2c",
+  "leadPax": "Guest 2",
+  "leadNationality": "CZ",
+  "leadPhone": "+66000000000",
+  "leadEmail": "guest4@example.test",
+  "status": "confirmed",
+  "bookingDate": "2026-08-12",
+  "hotelName": "Karon · woraburi Phuket resort - karon beach",
+  "pickupZone": "PK",
+  "pickupSelf": false,
+  "pickupAreaId": "pk-karon",
+  "pickupArea": "Karon",
+  "dropoffSame": true,
+  "dropoffHotelName": "",
+  "dropoffAreaId": null,
+  "dropoffArea": "",
+  "notes": "",
+  "note": "B2C · WhatsApp · LOV-9260122 · Day Trip - Phi Phi Island",
+  "trips": [
+   {
+    "id": "b2c_LOV-9260122_1_t0",
+    "routeId": "r10",
+    "date": "2026-08-13",
+    "bookingMode": "seat",
+    "pax": {
+     "ad_fr": 2,
+     "ad_th": 0,
+     "chd_fr": 0,
+     "chd_th": 0,
+     "inf_fr": 0,
+     "inf_th": 0,
+     "foc": 0,
+     "foc_fr": 0,
+     "foc_th": 0
+    },
+    "seatSource": {
+     "locked": 0,
+     "general": 0
+    },
+    "lockDrawSel": {},
+    "subtotal": 3598,
+    "nat": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    }
+   }
+  ],
+  "passengers": [
+   {
+    "name": "Guest 5",
+    "nationality": "SK",
+    "type": "AD",
+    "foc": false
+   }
+  ],
+  "addOns": [
+   {
+    "type": "b2c-ad-001",
+    "label": "Join Transfer ( Phuket )",
+    "amount": 400,
+    "qty": 2,
+    "note": ""
+   },
+   {
+    "type": "international-park-fee",
+    "label": "International Park Fee",
+    "amount": 1000,
+    "qty": 2,
+    "note": ""
+   }
+  ],
+  "adjustments": [
+   {
+    "kind": "extra",
+    "mode": "amount",
+    "value": 1180,
+    "label": "3% + ราคาต่างชาติ",
+    "note": ""
+   }
+  ],
+  "total": 6178,
+  "priceBreakdown": {
+   "seat": 3598,
+   "addOn": 1400,
+   "focDiscount": 0,
+   "discount": 0,
+   "extra": 1180,
+   "total": 6178
+  },
+  "paymentSnapshot": {
+   "deposit": 6178,
+   "balance": 0,
+   "method": "",
+   "paid": 6178,
+   "paidStatus": "paid"
+  },
+  "ops": {},
+  "history": []
+ }
+]

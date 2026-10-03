@@ -8,5 +8,5 @@ function bookingV2VanGroupSave(date){
     ordered.forEach(key=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; const o=bkOpsRead(b,date); if(!o)return; let tgt,g; if(p.length>1 && Array.isArray(o.vanSplits) && o.vanSplits[+p[1]]){ tgt=o.vanSplits[+p[1]]; g=+tgt.vanGroup||0; } else { tgt=o; g=+o.vanGroup||0; } perG[g]=(perG[g]||0)+1; tgt.vanSeq=perG[g]; });
     window._bkV2VanSel={};
   }
-  acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render();
+  acctPersistBookings(); bookingV2RenderKeep();
 }

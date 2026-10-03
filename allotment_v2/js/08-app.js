@@ -108,6 +108,10 @@ function sbMarketsPersist(){ if(typeof window.laCanEditArea==='function' && !win
 // One-time seed: Staff / Internal market (welfare + inspection trips · excluded from sales revenue)
 (function(){ try{ if(Array.isArray(SB_MARKETS) && !SB_MARKETS.some(m=>m.id==='staff')){ SB_MARKETS.push({id:'staff', name:'Staff / Internal', color:'#6c5ce7', subs:['Welfare','Inspection']}); if(typeof sbMarketsPersist==='function') sbMarketsPersist(); console.log('[seed] added Staff / Internal market'); } }catch(e){ console.warn('staff market seed failed',e); } })();
 
+// One-time seed: House / Company market · ใบของบริษัทเอง (แขกบริษัท · PR · ราคาพิเศษ)
+// แยกถังจาก Staff / Internal ตามที่ผู้ใช้เลือก · พนักงานกินโควตาสวัสดิการ แต่แขกบริษัท/PR เป็นค่าการตลาด
+(function(){ try{ if(Array.isArray(SB_MARKETS) && !SB_MARKETS.some(m=>m.id==='house')){ SB_MARKETS.push({id:'house', name:'House / Company', color:'#B8860B', subs:['Company guest','PR / Influencer','Special price']}); if(typeof sbMarketsPersist==='function') sbMarketsPersist(); console.log('[seed] added House / Company market'); } }catch(e){ console.warn('house market seed failed',e); } })();
+
 const SB_PAYMENT_TYPES = [
   {id:'proforma', name:'Pro forma Invoice (Pre-paid)', short:'PF',  needCredit:false, cot:false},
   {id:'invoice',  name:'Invoice (Credit)',             short:'INV', needCredit:true,  cot:false},
@@ -281,7 +285,7 @@ function staffWelfareUsed(staffId, year){
 }
 function staffRemaining(id, year){ return staffQuota(id,year) - staffWelfareUsed(id,year); }
 let _staffYear = new Date().getFullYear();
-let _staffTab = 'roster';   // 'roster' | 'trips'
+let _staffTab = 'roster';   // 'roster' | 'trips' | 'internal'
 function staffSetTab(t){ _staffTab = t; renderStaff(); }
 function staffSetYear(delta){ _staffYear += delta; renderStaff(); }
 // Collect this-year staff trips (welfare + inspection) as flat rows: {bk, staff, t, route, purpose, foc, paid, head}
@@ -300,6 +304,169 @@ function staffTripsFor(year){
   });
   out.sort((a,b)=>(a.t.date||'').localeCompare(b.t.date||''));
   return out;
+}
+/* ══ §internal · รายงานใบของบริษัทเอง ══════════════════════════════════════
+   หนึ่งแถว = หนึ่งทริปของหนึ่งใบ · แยกเดือน/เส้นทางได้จากตรงนี้
+   ⚠ เงินเป็นของ "ใบ" ไม่ใช่ของ "ทริป" · ใบที่มีสองทริปถ้าใส่เงินทั้งสองแถว
+     ยอดจะถูกนับสองรอบ · จึงติดธง money ไว้แค่แถวของทริปแรกสุดของใบนั้น
+     (pax นับทุกแถวได้ เพราะคนไปจริงทุกทริป)                                  */
+function laInternalRows(year){
+  var CXL=['cancelled','rejected','cancelled_weather'];
+  var out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(!b || CXL.indexOf(b.status)>=0) return;
+    if(typeof laIsInternalBk!=='function' || !laIsInternalBk(b)) return;
+    var trs=(b.trips||[]).filter(function(t){ return t && t.date && String(t.date).slice(0,4)===String(year); });
+    if(!trs.length) return;
+    trs.sort(function(x,y){ return String(x.date).localeCompare(String(y.date)); });
+    var money=(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0);
+    var free=(typeof laIsInternalFree==='function')?laIsInternalFree(b):(money<=0);
+    trs.forEach(function(t,i){
+      var pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0;
+      var foc=(typeof bookingV2PaxTot==='function')?bookingV2PaxTot(t.pax||{},'foc'):0;
+      out.push({ bk:b, t:t, date:t.date,
+        route:(typeof getRoute==='function')?(getRoute(t.routeId)||null):null,
+        purpose:b.purpose||'', lbl:(typeof laInternalLabel==='function')?laInternalLabel(b):'',
+        unset:!(typeof LA_INTERNAL_PURPOSE!=='undefined' && LA_INTERNAL_PURPOSE[b.purpose]),
+        pax:pax, foc:foc, free:free,
+        money:(i===0?money:0), moneyHere:(i===0) });
+    });
+  });
+  out.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  return out;
+}
+function laInternalReport(yr){
+  var esc=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var rows=laInternalRows(yr);
+  if(!rows.length) return '<div style="background:#fff;border:1px dashed rgba(0,0,0,.15);border-radius:12px;'
+    +'padding:40px;text-align:center;color:#8a8a82;font-size:13px">ยังไม่มีใบของบริษัทเองในปี '+yr
+    +'<br><span style="font-size:11px">คีย์ใบใหม่แล้วเลือก Agent = Love Andaman · Company</span></div>';
+  var bkIds={}; rows.forEach(function(r){ bkIds[r.bk.id]=r; });
+  var nBk=Object.keys(bkIds).length;
+  var pax=0, focN=0, freeBk=0, paidBk=0, money=0;
+  rows.forEach(function(r){ pax+=r.pax; focN+=r.foc; if(r.moneyHere){ if(r.free) freeBk++; else { paidBk++; money+=r.money; } } });
+  var unsetRows=rows.filter(function(r){ return r.unset && r.moneyHere; });
+
+  /* ── กล่องเตือนใบที่ยังไม่ระบุเหตุผล · นี่คือของที่ต้องไปเติม ──
+     วัดจากข้อมูลจริงตอนออกแบบ · มี 6 ใบบน a_staff ที่ purpose ว่างทั้งหมด
+     ระบบเห็นว่าเป็นใบของบริษัท (จาก market) แต่บอกไม่ได้ว่าเพราะอะไร        */
+  var warn = unsetRows.length ? '<div class="laint-warn" style="background:#FBF0DD;border:1px solid #EAD9B0;border-radius:10px;'
+      +'padding:11px 14px;margin-bottom:14px;font-size:12px;color:#7A4A00">'
+      +'<b>&#9888; '+unsetRows.length+' ใบยังไม่ระบุเหตุผล</b> &middot; ระบบรู้ว่าเป็นใบของบริษัท (จาก market ของ agent) '
+      +'แต่ไม่รู้ว่าเพราะอะไร จึงแยกรายงานให้ไม่ได้'
+      +'<div style="margin-top:6px;font-family:\'DM Mono\',monospace;font-size:10.5px;color:#8a8a82">'
+      +unsetRows.slice(0,12).map(function(r){ return esc(r.bk.voucherRef||r.bk.code||r.bk.id); }).join(' &middot; ')
+      +(unsetRows.length>12?(' &middot; +'+(unsetRows.length-12)):'')+'</div></div>' : '';
+
+  var kpi=function(lab,val,col,sub){ return '<div style="background:#fff;border:1px solid rgba(0,0,0,.08);'
+    +'border-radius:10px;padding:12px 15px;min-width:118px"><div style="font-size:10px;font-weight:700;'
+    +'letter-spacing:.06em;text-transform:uppercase;color:#8a8a82">'+lab+'</div>'
+    +'<div style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;color:'+(col||'#1B2A55')+'">'+val+'</div>'
+    +(sub?('<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">'+sub+'</div>'):'')+'</div>'; };
+
+  /* ── ตารางเหตุผล × เก็บเงิน/ไม่เก็บเงิน · สองมิติที่ตั้งใจแยกกันตั้งแต่ออกแบบ ── */
+  var ORDER=['company_guest','pr_foc','company_special','staff_welfare','staff_inspection'];
+  var agg={};
+  rows.forEach(function(r){
+    var k=r.purpose||'(ไม่ระบุ)';
+    var o=(agg[k]=agg[k]||{free:{bk:0,pax:0},paid:{bk:0,pax:0,money:0}});
+    var side=r.free?o.free:o.paid;
+    side.pax+=r.pax;
+    if(r.moneyHere){ side.bk++; if(!r.free) side.money+=r.money; }
+  });
+  var keys=ORDER.filter(function(k){ return agg[k]; })
+    .concat(Object.keys(agg).filter(function(k){ return ORDER.indexOf(k)<0; }));
+  var th='padding:7px 10px;text-align:left;font-size:9.5px;color:#8a8a82;font-weight:700;letter-spacing:.06em;'
+    +'text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.08)';
+  var td='padding:6px 10px;font-size:12px;border-bottom:0.5px solid rgba(0,0,0,.05)';
+  var tdn=td+';text-align:right;font-family:\'DM Mono\',monospace';
+  var purposeRows=keys.map(function(k){
+    var o=agg[k];
+    var nm=(typeof LA_INTERNAL_PURPOSE!=='undefined' && LA_INTERNAL_PURPOSE[k]) ? LA_INTERNAL_PURPOSE[k] : k;
+    return '<tr><td style="'+td+'"><b>'+esc(nm)+'</b>'
+      +'<div style="font-size:9.5px;color:#b4b2a9;font-family:\'DM Mono\',monospace">'+esc(k)+'</div></td>'
+      +'<td style="'+tdn+'">'+(o.free.bk||'—')+'</td><td style="'+tdn+'">'+(o.free.pax||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.paid.bk||'—')+'</td><td style="'+tdn+'">'+(o.paid.pax||'—')+'</td>'
+      +'<td style="'+tdn+';font-weight:700;color:#0F6E56">'+(o.paid.money?('&#3647;'+Math.round(o.paid.money).toLocaleString()):'—')+'</td></tr>';
+  }).join('');
+
+  /* ── แยกตามเดือน · เงินนับแถวที่ติดธงไว้เท่านั้น ── */
+  var MN=(typeof laMonAbbrTH==='function')?laMonAbbrTH():['1','2','3','4','5','6','7','8','9','10','11','12'];
+  var mo={};
+  rows.forEach(function(r){ var m=+String(r.date).slice(5,7);
+    var o=(mo[m]=mo[m]||{pax:0,freeBk:0,paidBk:0,money:0});
+    o.pax+=r.pax; if(r.moneyHere){ if(r.free) o.freeBk++; else { o.paidBk++; o.money+=r.money; } } });
+  var moRows=Object.keys(mo).sort(function(a,b){return a-b;}).map(function(m){ var o=mo[m];
+    return '<tr><td style="'+td+'">'+esc(MN[m-1]||m)+'</td>'
+      +'<td style="'+tdn+'">'+o.pax+'</td><td style="'+tdn+'">'+(o.freeBk||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.paidBk||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.money?('&#3647;'+Math.round(o.money).toLocaleString()):'—')+'</td></tr>'; }).join('');
+
+  /* ── แยกตามเส้นทาง · เรียงตามที่นั่ง เพราะต้นทุนเดินตามที่นั่ง ── */
+  var rt={};
+  rows.forEach(function(r){ var k=(r.route&&r.route.name)||r.t.routeId||'—';
+    var o=(rt[k]=rt[k]||{pax:0,bk:0,money:0}); o.pax+=r.pax; o.bk++; o.money+=r.money; });
+  var rtRows=Object.keys(rt).sort(function(a,b){ return rt[b].pax-rt[a].pax; }).slice(0,12).map(function(k){
+    var o=rt[k];
+    return '<tr><td style="'+td+'">'+esc(k)+'</td><td style="'+tdn+'">'+o.pax+'</td>'
+      +'<td style="'+tdn+'">'+o.bk+'</td>'
+      +'<td style="'+tdn+'">'+(o.money?('&#3647;'+Math.round(o.money).toLocaleString()):'—')+'</td></tr>'; }).join('');
+
+  /* ── รายการใบ · เรียงตามวันเดินทาง ── */
+  var listRows=rows.map(function(r){
+    var nm=r.lbl||'(ไม่ระบุ)';
+    return '<tr><td style="'+td+';font-family:\'DM Mono\',monospace;font-size:10.5px">'
+        +esc(r.bk.voucherRef||r.bk.code||r.bk.id)+'</td>'
+      +'<td style="'+td+';font-family:\'DM Mono\',monospace;font-size:11px">'+esc(r.date)+'</td>'
+      +'<td style="'+td+'">'+esc((r.route&&r.route.name)||r.t.routeId||'—')+'</td>'
+      +'<td style="'+td+'">'+esc(r.bk.leadPax||r.bk.customerName||'—')+'</td>'
+      +'<td style="'+td+'"><span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;'
+        +(r.unset?'background:#FBF0DD;color:#7A4A00':'background:#EDE7FB;color:#5B289A')+'">'+esc(nm)+'</span></td>'
+      +'<td style="'+tdn+'">'+r.pax+(r.foc?('<span style="font-size:9.5px;color:#8a8a82"> · FOC '+r.foc+'</span>'):'')+'</td>'
+      +'<td style="'+tdn+'">'+(r.moneyHere
+          ? (r.free?'<span style="color:#8a8a82">ฟรี</span>':('&#3647;'+Math.round(r.money).toLocaleString()))
+          : '<span style="color:#c7c5bb">↑ ใบเดียวกัน</span>')+'</td></tr>';
+  }).join('');
+
+  var card=function(title,head,body){ return '<div style="background:#fff;border:1px solid rgba(0,0,0,.08);'
+    +'border-radius:12px;overflow:hidden;margin-bottom:14px">'
+    +'<div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,.06);background:#fafafa;'
+    +'font-size:13px;font-weight:700;color:#1B2A55">'+title+'</div>'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>'; };
+
+  return warn
+    +'<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+      +kpi('ใบทั้งหมด', nBk, '#1B2A55', pax+' ที่นั่ง'+(focN?(' · FOC '+focN):''))
+      +kpi('ไม่เก็บเงิน', freeBk, '#8A5B00', 'ไม่นับเป็นยอดขาย')
+      +kpi('เก็บเงิน', paidBk, '#0F6E56', 'นับเป็นยอดขายเต็ม')
+      +kpi('ยอดที่เก็บได้', '&#3647;'+Math.round(money).toLocaleString(), '#0F6E56',
+           paidBk?('เฉลี่ย &#3647;'+Math.round(money/paidBk).toLocaleString()+'/ใบ'):'—')
+    +'</div>'
+    +card('เหตุผล &times; เก็บเงิน / ไม่เก็บเงิน',
+      '<th style="'+th+'">เหตุผล</th><th style="'+th+';text-align:right">ฟรี · ใบ</th>'
+      +'<th style="'+th+';text-align:right">ฟรี · ที่นั่ง</th><th style="'+th+';text-align:right">เก็บเงิน · ใบ</th>'
+      +'<th style="'+th+';text-align:right">เก็บเงิน · ที่นั่ง</th><th style="'+th+';text-align:right">ยอด</th>',
+      purposeRows)
+    +'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px">'
+      +card('แยกตามเดือน',
+        '<th style="'+th+'">เดือน</th><th style="'+th+';text-align:right">ที่นั่ง</th>'
+        +'<th style="'+th+';text-align:right">ฟรี</th><th style="'+th+';text-align:right">เก็บเงิน</th>'
+        +'<th style="'+th+';text-align:right">ยอด</th>', moRows)
+      +card('แยกตามเส้นทาง',
+        '<th style="'+th+'">เส้นทาง</th><th style="'+th+';text-align:right">ที่นั่ง</th>'
+        +'<th style="'+th+';text-align:right">ทริป</th><th style="'+th+';text-align:right">ยอด</th>', rtRows)
+    +'</div>'
+    +card('รายการใบ &middot; '+yr,
+      '<th style="'+th+'">Voucher</th><th style="'+th+'">วันเดินทาง</th><th style="'+th+'">เส้นทาง</th>'
+      +'<th style="'+th+'">ชื่อ</th><th style="'+th+'">เหตุผล</th>'
+      +'<th style="'+th+';text-align:right">ที่นั่ง</th><th style="'+th+';text-align:right">ยอด</th>', listRows)
+    +'<div style="font-size:11px;color:#8a8a82;margin-top:4px;line-height:1.6">'
+      +'ใบที่ไม่เก็บเงินไม่ถูกนับในยอดขาย จำนวนใบ และค่าเฉลี่ยต่อใบ &middot; '
+      +'แต่ยังนับใน <b>ที่นั่ง · fill% · ความจุเรือ · ต้นทุน</b> และขึ้นใบงานเรือ/รถ ตามปกติ'
+      +'<br>ใบที่เก็บเงิน (ราคาพิเศษ) นับเป็นยอดขายเต็มจำนวนตามเงินที่เก็บจริง'
+      +'<br>เงินเป็นของ "ใบ" ไม่ใช่ของ "ทริป" &middot; ใบที่มีหลายทริปจึงลงยอดไว้ที่ทริปแรกเท่านั้น (ไม่นับซ้ำ)'
+    +'</div>';
 }
 function staffTripsReport(yr){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -380,12 +547,13 @@ function renderStaff(){
           <button onclick="staffSetYear(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&rsaquo;</button>
         </div>
       </div>
-      <div style="font-size:12px;color:#8a8a82;margin-bottom:18px">ทะเบียนพนักงาน + โควต้าเที่ยวฟรี (สวัสดิการ) · นับเป็น <b>ที่นั่งต่อปี</b> · ปรับโควต้าได้ตามนโยบายแต่ละปี · พาครอบครัวได้ (หักตามจำนวนหัว)</div>
+      <div style="font-size:12px;color:#8a8a82;margin-bottom:18px">ทะเบียนพนักงาน + โควต้าเที่ยวฟรี (สวัสดิการ) · นับเป็น <b>ที่นั่งต่อปี</b> · ปรับโควต้าได้ตามนโยบายแต่ละปี · พาครอบครัวได้ (หักตามจำนวนหัว)<br>แท็บ <b>ของบริษัท</b> รวมใบที่ไม่ใช่เอเยนต์และไม่ใช่ B2C ทั้งหมด · แขกบริษัท · PR / Influencer · ราคาพิเศษ · ทริปพนักงาน</div>
       <div style="display:inline-flex;gap:3px;background:#eef0f3;border-radius:10px;padding:3px;margin-bottom:16px">
-        <button onclick="staffSetTab('roster')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab!=='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทะเบียน · Roster</button>
-        <button onclick="staffSetTab('trips')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทริป · Trips report</button>
+        <button onclick="staffSetTab('roster')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='roster'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทะเบียน · Roster</button>
+        <button onclick="staffSetTab('trips')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทริปพนักงาน · Staff trips</button>
+        <button onclick="staffSetTab('internal')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='internal'?'background:#B8860B;color:#fff':'background:transparent;color:#666'}">ของบริษัท · Internal / Company</button>
       </div>
-      ${_staffTab==='trips' ? staffTripsReport(yr) : `
+      ${_staffTab==='internal' ? laInternalReport(yr) : _staffTab==='trips' ? staffTripsReport(yr) : `
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         ${kpi('Active staff', totStaff+'<span style="font-size:13px;color:#8a8a82">/'+totAll+'</span>')}
         ${kpi('Quota seats · '+yr, totQuota, '#185FA5')}
@@ -493,7 +661,29 @@ let SB_AGENTS = [
 
 // Load persisted agents (full list overrides seed once the user has added/edited any) · read-modify-write key
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_agents)) SB_AGENTS = d.sb_agents; /* accept empty array · cleared list stays cleared */ }catch(e){ console.warn('load sb_agents failed', e); } })();
-function sbAgentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_agents=SB_AGENTS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_agents failed', e); } }
+/* §rateBind · การผูก Agent→Rate Type ถูกเก็บสองที่
+     sb_agents[].rateTypeId  กับ  sb_agents_rate_bindings (sidecar)
+   ตอนโหลด _rtRestore เอา sidecar เขียนทับเสมอ แต่คนเขียนมีสองคน
+     rtPersist   (หน้า Rate Types) เขียนแต่ sidecar
+     sbAgentsPersist (หน้า Agents)   เขียนแต่ sb_agents
+   ผลคือ แก้เรทจากหน้า Agents แล้วกดเซฟ → โหลดใหม่ sidecar ทับกลับเป็นค่าเก่า
+     เงียบ ๆ ไม่มีอะไรบอก · วัดแล้วเพี้ยนกันอยู่ 32 เอเย่นต์
+   แก้ด้วยการเขียนทั้งสองที่ทุกครั้ง ไม่ใช่การย้ายที่เก็บ
+     กติกาตอนโหลดคงเดิมเป๊ะ (sidecar ชนะ) เอเย่นต์ที่เพี้ยนอยู่แล้วจึงไม่มีราคาขยับ
+     เพียงแต่ผลิตความต่างใหม่ไม่ได้อีก และ export กลับมาอ่านได้ตรง */
+/* ⚠ ลำดับสำคัญ · บล็อก seed ด้านบนเรียก sbAgentsPersist() ตอนโหลดได้
+     และมันอยู่ก่อน _rtRestore ในไฟล์ ถ้าเขียน sidecar ตอนนั้น จะเอาค่าเก่า
+     ใน sb_agents ไปทับ sidecar ที่ใหม่กว่า → ราคาของเอเย่นต์เด้ง ๆ กระโดดกลับไปฤดูก่อน
+     จึงเขียน sidecar ได้ก็ต่อเมื่อ restore ทำงานเสร็จแล้วเท่านั้น · ก่อนหน้านั้นปล่อยคีย์นั้นไว้เฉย ๆ */
+var _LA_RATE_BIND_READY = false;
+function laRateBindings(){ return (SB_AGENTS||[]).map(function(a){
+  /* §rtSeason · ตารางฤดูกาลเดินทางมากับการผูก เพราะมันคือข้อเท็จจริงเดียวกัน
+     แยกไปเก็บที่อื่น = กลับไปมีสองที่ที่เพี้ยนกันได้อีก ซึ่งคือเรื่องที่ §rateBind เพิ่งแก้ไป */
+  var o = {id:a.id, rateTypeId:a.rateTypeId||null};
+  if(Array.isArray(a.rateSeasons)) o.rateSeasons = a.rateSeasons;
+  return o;
+}); }
+function sbAgentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_agents=SB_AGENTS; if(_LA_RATE_BIND_READY) d.sb_agents_rate_bindings=laRateBindings(); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_agents failed', e); } }
 // ── Agent activity log (audit trail) · push {at,by,kind,text} to a.activity ──
 // kind: 'created' | 'rate' | 'credit' | 'profile' | 'programs' | 'company' | 'sales' | 'contract' | 'note' | 'edit'
 function agLog(agentId, kind, text){
@@ -524,6 +714,23 @@ function agLog(agentId, kind, text){
     // migrate existing staff house agent → Staff Welfare rate type
     const _sa = SB_AGENTS.find(x=>x.id==='a_staff'||x.code==='STAFF');
     if(_sa && _sa.rateTypeId!=='rt_staff'){ _sa.rateTypeId='rt_staff'; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); console.log('[migrate] a_staff rateTypeId -> rt_staff'); }
+  }
+  // House agent for company-own bookings · pick this + choose a reason (guest / PR / special price)
+  if(!SB_AGENTS.some(x=>x.id==='a_company'||x.code==='COMPANY')){
+    SB_AGENTS.push({id:'a_company',code:'COMPANY',name:'Love Andaman \u00b7 Company',market:'house',sub:'Company guest',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account \u00b7 company-own bookings \u00b7 a reason is required on every booking (guest / PR / special price) \u00b7 free or charged \u00b7 no programs on purpose: contract program periods would cap which routes can be booked',programs:[],rateTypeId:'',vatMode:'include'});
+    if(typeof sbAgentsPersist==='function') sbAgentsPersist();
+    console.log('[seed] added House / Company house agent (a_company)');
+  } else {
+    /* §internal · seed รอบแรกใส่ programs:['r5','r6','r10','r12'] ไว้ (ก็อปมาจาก a_b2c)
+       ระบบแปลงเป็น programPeriods แล้วรายการนั้นมาก่อน rate type → คีย์ได้แค่ 4 โปรแกรม
+       ผู้ใช้เจอเอง · ล้างให้เฉพาะเครื่องที่ยังเป็นชุด seed เดิม ไม่แตะที่แก้เองไว้ */
+    const _co = SB_AGENTS.find(x=>x.id==='a_company'||x.code==='COMPANY');
+    const _seeded = ['r5','r6','r10','r12'].join(',');
+    if(_co && (_co.programs||[]).slice().sort().join(',') === _seeded.split(',').sort().join(',')){
+      _co.programs=[]; _co.programPeriods=[];
+      if(typeof sbAgentsPersist==='function') sbAgentsPersist();
+      console.log('[migrate] a_company programs cleared (were capping bookable routes to 4)');
+    }
   }
   // House agent for B2C online bookings (auto-synced from the B2C site; sync sets agentId='a_b2c')
   if(!SB_AGENTS.some(x=>x.id==='a_b2c'||x.code==='B2C')){
@@ -2366,6 +2573,31 @@ function psuPrintExport(){
 let SB_BOOKINGS = [];   // demo/dummy seed removed 2026-06-03 (real bookings live in localStorage sb_bookings)
 // Load persisted bookings (overrides seed once any booking is saved/edited) · read-modify-write key
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_bookings)) SB_BOOKINGS = d.sb_bookings; }catch(e){ console.warn('load sb_bookings failed', e); } })();
+/* §laDerived (2026-09-17) · "ช่วยตรวจสอบ และป้องกันอย่าให้เกิดอีก"
+
+   บางตารางไม่ใช่ข้อมูลดิบ แต่ "ประกอบไว้ล่วงหน้า" จากข้อมูลดิบอีกที
+     PO_KIND / PO_KORDER  ← PIER_KINDS + PIER_ITEMS   (ชื่อ · หน่วย · สี ของประเภทของท่าเรือ)
+     RT_ADDON_DEFS        ← SB_ADDON_TYPES            (ชนิด add-on ที่ผู้ใช้สร้างเอง)
+
+   ข้อมูลดิบถูกเขียนทับสองทาง · ทางเปิดหน้าใหม่ (ตัวโหลดของแต่ละส่วนอ่าน localStorage เอง)
+   และทาง _laReloadData (ข้อมูลไหลเข้ามาจากเครื่องอื่น) · ทั้งสองทางเคย "ลืมประกอบใหม่"
+     · เปิดหน้าใหม่  · ตัวโหลด PIER_KINDS อยู่ท้ายไฟล์ แต่ poKindSync() ถูกเรียกไปก่อนหน้านั้นแล้ว
+                       → PO_KIND มีแค่สามตัวตั้งต้น · ประเภทที่ผู้ใช้สร้างเองไม่มีในตาราง
+                       วัดจริง 17 ก.ย. · ประเภท 6 ตัว ขาดไป 3 · หัวการ์ดขึ้นเป็น pk_bo15o / pk_73f85 / pk_0z9bq
+                       และปุ่มปรับยอด/ซ่อมเสร็จ พัง 7 จาก 21 ชิ้น (อ่าน PO_KIND[kind].u จาก undefined)
+     · ทางซิงก์      · RT_ADDON_DEFS ไม่ถูกประกอบใหม่ → ชนิด add-on ที่เครื่องอื่นสร้าง ไม่โผล่ใน Rate Type
+                       และไม่ติดไปในข้อความสัญญา ทั้งที่ข้อมูลดิบมาถึงแล้ว
+
+   จึงรวมไว้ที่เดียว · เพิ่มตารางที่ประกอบไว้ล่วงหน้าเมื่อไหร่ ให้เติมบรรทัดลงในนี้
+   ห้ามเรียกจากตอนกำลังวาดหน้า · ตัวนี้ประกอบใหม่ทั้งตาราง ไม่ใช่ของถูกที่จะทำทุกเฟรม */
+window.laRebuildDerived=function(why){
+  var bad=[];
+  /* ลำดับสำคัญ · poKindSync สแกน PIER_ITEMS หาประเภทที่ถูกลบไปแล้ว ต้องเรียกหลังของทั้งสองก้อนมาถึง */
+  try{ if(typeof poKindSync==='function') poKindSync(); }catch(e){ bad.push('poKindSync'); }
+  try{ if(typeof rtRebuildAddonDefs==='function') rtRebuildAddonDefs(); }catch(e){ bad.push('rtRebuildAddonDefs'); }
+  if(bad.length){ try{ console.warn('[laRebuildDerived] '+(why||'')+' · ประกอบไม่สำเร็จ:', bad.join(', ')); }catch(_){} }
+  return !bad.length;
+};
 // ── Seamless refresh: reload all in-memory data from localStorage (NO page reload · NO side-effect loaders) ──
 window._laReloadData=function(){
   var d; try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; }
@@ -2425,6 +2657,10 @@ window._laReloadData=function(){
     if(typeof TRIP_ACT!=='undefined' && d.trip_actuals) TRIP_ACT=d.trip_actuals;                       // §mealTrip
     if(typeof PIER_KINDS!=='undefined' && Array.isArray(d.pier_kinds)) PIER_KINDS=d.pier_kinds;     // §poKinds
     if(typeof PIER_ITEMS!=='undefined' && Array.isArray(d.pier_items)) PIER_ITEMS=d.pier_items;   // §pierOffice
+    /* §poKindStale (2026-09-17) · หัวการ์ดขึ้นเป็น pk_bo15o แทนชื่อประเภท
+       PIER_KINDS คือข้อมูลดิบ · PO_KIND คือตารางแปลง id เป็นชื่อ/หน่วย/สี ที่ประกอบไว้ล่วงหน้า
+       เขียนข้อมูลดิบทับตรงนี้แล้วต้องประกอบตารางใหม่ด้วย ไม่งั้นตารางค้างชุดเก่า
+       การประกอบย้ายไปอยู่ท้ายฟังก์ชันนี้แล้ว · ดู §laDerived ข้างบน */
     if(typeof PIER_MOVES!=='undefined' && Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
     if(typeof PIER_STAFF!=='undefined' && Array.isArray(d.pier_staff)) PIER_STAFF=d.pier_staff;
     if(typeof PIER_DUTY!=='undefined' && d.pier_duty) PIER_DUTY=d.pier_duty;
@@ -2440,10 +2676,13 @@ window._laReloadData=function(){
     if(typeof PIER_SECT!=='undefined' && Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
     if(typeof VAN_BILL!=='undefined' && d.van_bill) VAN_BILL=d.van_bill;           // §vanBill
+    if(typeof VAN_STOPS!=='undefined' && d.van_stops) VAN_STOPS=d.van_stops;       // §vanStop · จุดแวะที่ไม่ใช่ booking
     if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
       try{ CAL_ROUTE_NAMES=(typeof d.cal_route_names==='string')?(JSON.parse(d.cal_route_names)||{}):d.cal_route_names; }catch(_){}
     }
+    /* §laDerived · ข้อมูลดิบเข้าครบแล้ว ค่อยประกอบตารางที่ derive มาจากมันใหม่ทั้งชุด */
+    try{ window.laRebuildDerived('sync'); }catch(_){}
     return true;
   }catch(e){ console.warn('_laReloadData', e); return false; }
 };
@@ -2484,10 +2723,55 @@ function _laScrollBack(list){
     }
   }catch(_){}
 }
+/* §btStay · ยึด "แถวที่กำลังดูอยู่" ไม่ใช่เลข scroll
+   ของเดิมคืนค่า scrollY เท่าเดิมหลังวาดใหม่ · แต่พอมีคนเพิ่มใบจองเข้ามา แถวใหม่แทรกอยู่ข้างบน
+   เลขเท่าเดิมจึงชี้ไปคนละแถว หน้าจอกระโดดเท่ากับความสูงของแถวที่เพิ่ม ต้องเลื่อนหาใหม่
+   และการคืนค่ารอบ 60ms ยังดึงกลับไปตำแหน่งเก่า ทั้งที่ผู้ใช้เลื่อนต่อไปแล้ว
+   จำแถวใบจองแถวแรกที่เห็นในจอ (data-al = เลขใบจอง) กับระยะจากขอบบน แล้วหลังวาดใหม่
+   เลื่อนชดเชยให้แถวเดิมกลับมาอยู่ที่เดิม · แถวนั้นหายไป (ถูกยกเลิก/ย้ายวัน) ก็ใช้แถวถัดไปที่จำไว้ */
+function _laAnchorSnap(){
+  try{
+    var rows=document.querySelectorAll('.view.active tr[data-al]'); if(!rows.length) return null;
+    var vh=window.innerHeight||0, seen={}, out=[];
+    for(var i=0;i<rows.length && out.length<6;i++){
+      var id=rows[i].getAttribute('data-al'); var n=(seen[id]=(seen[id]||0)+1);
+      var t=rows[i].getBoundingClientRect().top;
+      if(t>=0 && t<vh) out.push({id:id, n:n, top:t});
+      else if(t>=vh) break;
+    }
+    return out.length?out:null;
+  }catch(_){ return null; }
+}
+function _laAnchorFind(a){
+  try{
+    var rows=document.querySelectorAll('.view.active tr[data-al]'), n=0;
+    for(var i=0;i<rows.length;i++){ if(rows[i].getAttribute('data-al')===a.id && ++n===a.n) return rows[i]; }
+  }catch(_){}
+  return null;
+}
+/* คืน true เมื่อยึดแถวได้ · st.y/st.top จำไว้ให้รอบถัดไปรู้ว่าผู้ใช้เลื่อนเองไปเท่าไหร่ */
+function _laAnchorBack(st){
+  try{
+    if(!st || !st.list) return false;
+    for(var i=0;i<st.list.length;i++){
+      var a=st.list[i], r=_laAnchorFind(a); if(!r) continue;
+      var mn=document.querySelector('main'), useMain=!!(mn && mn.scrollHeight>mn.clientHeight+1 && !(window.scrollY>0) && mn.scrollTop>0);
+      var cur=useMain?mn.scrollTop:(window.scrollY||0);
+      /* ผู้ใช้เลื่อนเองระหว่างรอ = ตำแหน่งที่แถวควรอยู่ขยับตามไปด้วย · ไม่ดึงกลับ */
+      var want=(st.y==null)?a.top:(st.top-(cur-st.y));
+      var d=r.getBoundingClientRect().top-want;
+      if(Math.abs(d)>=1){ if(useMain) mn.scrollTop=cur+d; else window.scrollTo(window.scrollX||0, cur+d); }
+      st.list=[a]; st.y=useMain?mn.scrollTop:(window.scrollY||0); st.top=r.getBoundingClientRect().top;
+      return true;
+    }
+  }catch(_){}
+  return false;
+}
 window._laRerender=function(){
   try{
     var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
     var inner=_laScrollSnap();
+    var _anc={list:_laAnchorSnap(), y:null, top:0};
     /* §ckLive (2026-09-12) · คืนโฟกัส + ตำแหน่ง cursor ของช่องที่กำลังพิมพ์อยู่
        หน้าเช็คอินต้องวาดใหม่ได้แม้โฟกัสอยู่ในช่องค้นหา (คนอื่นเช็คอินเข้ามาแล้วต้องเห็นทันที)
        ถ้าไม่คืนโฟกัส คนที่กำลังพิมพ์ชื่อลูกค้าจะโดนเด้งออกจากช่องกลางคัน */
@@ -2503,7 +2787,10 @@ window._laRerender=function(){
     if(_fid){ try{ var _fe=document.getElementById(_fid);
       if(_fe && _fe.focus){ _fe.focus(); if(_fsel && _fe.setSelectionRange) _fe.setSelectionRange(_fsel[0], _fsel[1]); } }catch(e){} }
     _laScrollBack(inner);
-    setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
+    var _held=_laAnchorBack(_anc);
+    setTimeout(function(){ try{
+      if(_held && _laAnchorBack(_anc)){ _laScrollBack(inner); return; }
+      var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
       _laScrollBack(inner); }catch(e){} }, 60);
   }catch(e){}
 };
@@ -2540,7 +2827,11 @@ let SB_SEAT_LOCKS = (function(){
 function sbSeatLocksPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */ 
   try { const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_seat_locks = SB_SEAT_LOCKS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }
   catch(e){ console.warn('seat-locks persist failed', e); }
-}            // seats carved into sub-groups              // parent qty not yet in a sub-group
+}
+            // seats carved into sub-groups
+              // parent qty not yet in a sub-group
+/* ── กล่องถาม · ที่นั่งไม่พอ จะเอาแบบไหน ── */
+let _bkV2LkPendAsk = null;
 // Current logged-in user for audit stamps (username preferred · falls back to name, then RM for offline/localhost)
 function laBy(){ return (window.LA_ME && (window.LA_ME.username||window.LA_ME.name)) || 'RM'; }
 /* ══ §user→sales · สิทธิ์รายแถว ═══════════════════════════════════════════════════════════════════
@@ -2557,6 +2848,36 @@ function laScopeAgents(list){
 }
 /* เอเยนต์รายนี้อยู่ในขอบเขตของ user ปัจจุบันไหม · ใช้ตอนเปิด detail รายตัว (กันเปิดผ่าน id ตรงๆ) */
 function laAgentInScope(a){ return !laSalesScoped() || (a && a.sales === laMySalesId()); }
+/* ══ §bkLock (2026-10-01) · ล็อกเรือทั้งลำ ═════════════════════════════════════
+   เอเยนต์ขอจอง "ทั้งลำ" ไว้ก่อน ยังไม่ยืนยันจำนวนหัว จึงยังออกใบเหมาลำไม่ได้
+   ของเดิมมีสองสถานะ — ล็อกที่นั่ง (กันเป็นจำนวนที่นั่งจากพูล) กับใบเหมาลำ (มีใบจองจริงแล้ว)
+   อันนี้อยู่ตรงกลาง
+
+   ทำไมไม่ใช้ล็อกที่นั่งแล้วใส่ qty = ความจุเรือ:
+     1. ระบบจะรู้แค่ว่า "หาย 65 ที่" ไม่รู้ว่าลำไหน · เรือลำนั้นยังถูกจ่ายไปทริปอื่นได้
+     2. สลับลำแล้วตัวเลขไม่ตาม · ล็อกบอก 65 แต่วันจริงส่งเรือ 40 ที่ไป
+     3. ตอนแปลงเป็นใบเหมาลำจริง ที่นั่งถูกหักสองรอบ
+
+   โครงที่ใช้ · ไม่ต้อง migration ไม่ต้องแก้ field_mapping เพราะใช้คอลัมน์ที่มีอยู่แล้ว:
+     scope   = 'boat'            ชนิดที่สี่ ต่อจาก day / bulk / month
+     boatId  = ลำที่จอดล็อกไว้    (คอลัมน์ boatid มีมาตั้งแต่ต้น ทุกใบเป็น null ไม่มีโค้ดไหนอ่าน)
+     qty     = ที่นั่งขั้นต่ำที่รับปากไว้  ** ไม่ใช่ที่นั่งที่กันจากพูล **
+     subName = 'fixed' | 'any'    แบบการตกลง (ดู bookingV2BoatLockFixed)
+
+   qty ของใบชนิดนี้ไม่เคยถูกคณิตศาสตร์ของพูลอ่าน เพราะ bookingV2LocksFor / bookingV2LocksOnDate
+   ตัดมันออกตั้งแต่ต้นทาง · ที่นั่งหายไปทางเดียวคือ "เรือออกจากพูล" (ช่อง TRIPS เป็น charter)
+   ถ้าวันไหนมีใครเอา qty ไปบวกรวมกับที่นั่งที่กันไว้ ตัวเลขจะหักสองรอบทันที
+   เทส t_boatlock ข้อ nodouble คุมจุดนี้ไว้
+   ═════════════════════════════════════════════════════════════════════════════ */
+function _bkLkToday(){ return (typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); }
+function _bkLockSaveOps(){ try{ if(typeof save==='function') save('operations'); }catch(e){ console.warn('boat lock ops save failed', e); } }
+
+/* ══ §bkLockUI · ฟอร์มกับปุ่มของล็อกเรือทั้งลำ ═══════════════════════════════════
+   แยกฟอร์มจากล็อกที่นั่งคนละใบ เพราะช่องที่ต้องกรอกต่างกันเกินครึ่ง
+   (ไม่มีจำนวนที่นั่ง · มีลำเรือ · มีแบบการตกลง · วันหมดอายุบังคับ)
+   ยัดรวมฟอร์มเดียวแล้วต้องซ่อน/โชว์ช่องสลับไปมา ซึ่งเป็นที่มาของบั๊กที่เคยเจอมาแล้ว  */
+var _bkBoatForm = null;
+function _bkBE(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 // §lkBulk · ล็อกรายเดือนของเก่า → Bulk ช่วงวันที่ (1 ของเดือนแรก → สิ้นเดือนสุดท้าย)
 //   ทำครั้งเดียว · เก็บฟิลด์เดิมไว้เผื่อย้อนดู · ความหมายเปลี่ยนเป็นที่นั่งต่อรอบตามที่ทีมใช้จริง
 (function(){ try{
@@ -2570,6 +2891,21 @@ function laAgentInScope(a){ return !laSalesScoped() || (a && a.sales === laMySal
   });
   if(n>0){ sbSeatLocksPersist(); console.log('[seat-locks] migrated '+n+' month lock(s) → bulk'); }
 }catch(e){ console.warn('lock migrate failed', e); } })();
+(function(){ try{
+  let n=0, dead=0;
+  (SB_SEAT_LOCKS||[]).forEach(l=>{
+    if(!l || l.scope!=='bulk' || l.dateFrom) return;
+    const r = bookingV2LockHealRange(l);
+    if(!r){ dead++; return; }
+    l.dateFrom=r.from; l.dateTo=r.to; if(!Array.isArray(l.dow)) l.dow=[];
+    const today=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):'';
+    (l.log=l.log||[]).push({ date:today, at:new Date().toISOString(), type:'heal',
+                             note:'range rebuilt from '+r.src+': '+r.from+' → '+r.to });
+    n++;
+  });
+  if(n>0){ sbSeatLocksPersist(); console.log('[seat-locks] rebuilt the date range of '+n+' bulk lock(s)'); }
+  if(dead>0) console.warn('[seat-locks] '+dead+' bulk lock(s) lost their date range with no trail to rebuild it from - staff must re-enter the range');
+}catch(e){ console.warn('lock heal failed', e); } })();
 try { bookingV2LockExpireSweep(); } catch(e){}
 
 // ── Seat Locks · management tab (Step 3b) ──
@@ -2580,6 +2916,7 @@ let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holde
 let _bkV2AddModal = null;   // { lockId, add, note }
 let _bkV2ReleaseModal = null;   // { lockId, max, value }
 let _bkV2LockModalOpen = false; // inline create-lock modal (from Calendar)
+let _bkV2LockEditId = null;     // §lkEdit · ไม่ null = ฟอร์มเดียวกันนี้กำลังแก้ล็อกใบนี้อยู่
 let _bkV2SweepOpen=false;
 // Sub-group create modal (inline · in the Seat Locks tab)
 let _bkV2SubModal = null;   // { parentId, name, qty, expiry, reason }
@@ -2661,6 +2998,78 @@ function laBlob(){
   _laBlobRaw=raw;
   return _laBlob;
 }
+/* ══ §ckDay (2026-09-22) · รับของวันเดียวจาก /api/ck มาแปะ ═══════════════════
+   ชั้น sync เป็นคนดึงและเป็นคนอัปเดต BASE · ตรงนี้รับหน้าที่แปะลงข้อมูลที่หน้าจอใช้
+   อยู่ไฟล์นี้เพราะที่นี่คือที่ที่รู้ว่า SB_BOOKINGS กับก้อนใน localStorage ผูกกันยังไง
+
+   คืน false เมื่อไม่มั่นใจ · ผู้เรียกจะถอยไปดึงก้อนเต็มแทน
+   เงื่อนไขที่ทำให้ไม่มั่นใจคือ "ชุดใบของวันนั้นสองฝั่งไม่ตรงกัน"
+   แปลว่ามีใบเกิดใหม่ ย้ายวัน หรือถูกยกเลิก ซึ่งเดาเองไม่ได้ว่าต้องทำอะไรกับใบที่หายไป */
+window._laCkApply=function(date, recs){
+  try{
+    if(!date || !Array.isArray(recs)) return false;
+    if(typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return false;
+    /* ══ §ckVan (2026-09-22) · วาดหน้าที่เปิดอยู่จริง ไม่ใช่หน้าท่าเสมอ ════
+       ของเดิมเรียก renderPierCheckin() ท่าเดียว แต่ทางแคบเปิดให้สองหน้า
+       คนที่นั่งหน้าเช็คอินรถจึงเจออย่างนี้ · ข้อมูลเข้าเครื่องแล้วจริง
+       แต่หน้าที่ถูกวาดใหม่คือหน้าท่าซึ่งซ่อนอยู่ · ตารางรถบนจอเลยไม่ขยับ
+       แล้วตัวนี้คืน true · ชั้น sync ปักธงว่าตามทันแล้ว ไม่ดึงซ้ำอีก
+       ที่เหลือคือตัววาดทุก 60 วิของ ckStartTick → หน้ารถช้าได้ถึงนาที */
+    var _ckv=(function(){ try{ var a=document.querySelector('.nav-item.active');
+      return (a&&a.dataset)?a.dataset.view:''; }catch(_){ return ''; } })();
+    var _ckfn=(_ckv==='vancheckin')?window.renderVanCheckin
+             :(_ckv==='piercheckin')?window.renderPierCheckin:null;
+    if(typeof _ckfn!=='function') return false;
+    /* วันที่ขอไป กับ วันที่หน้ากำลังแสดงอยู่ตอนนี้ ต้องเป็นวันเดียวกัน
+       คนกดเปลี่ยนวันระหว่างรอคำตอบ = คำตอบนี้เป็นของคนละวันกับจอ · ห้ามแปะ */
+    var _ckShown=(_ckv==='vancheckin')?window._vanCkDate:window._pckDate;
+    if(_ckShown!==date) return false;
+    var onDay=function(b){
+      return !!(b && Array.isArray(b.trips) && b.trips.some(function(t){ return t && t.date===date; }));
+    };
+    var srv={}, sn=0;
+    recs.forEach(function(b){ if(b && b.id){ srv[b.id]=b; sn++; } });
+    var loc={}, ln=0;
+    SB_BOOKINGS.forEach(function(b){ if(b && b.id && onDay(b)){ loc[b.id]=1; ln++; } });
+    if(sn!==ln) return false;
+    for(var k in srv){ if(!loc[k]) return false; }
+    /* แปะทั้งสองที่ · SB_BOOKINGS คือของที่หน้าจออ่าน · ก้อนคือของที่รีเฟรชแล้วยังอยู่
+       สองตัวนี้อาจเป็นคนละ array กัน (คนละรอบ parse) จึงต้องแปะแยก ไม่ใช่แปะที่เดียวแล้วหวัง */
+    var at={}; SB_BOOKINGS.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
+    var n=0;
+    for(var id in srv){ if(at[id]!=null){ SB_BOOKINGS[at[id]]=srv[id]; n++; } }
+    if(!n) return false;
+    try{
+      var blob=laBlob();
+      if(blob && Array.isArray(blob.sb_bookings) && blob.sb_bookings!==SB_BOOKINGS){
+        var bat={}; blob.sb_bookings.forEach(function(b,i){ if(b&&b.id) bat[b.id]=i; });
+        for(var id2 in srv){ if(bat[id2]!=null) blob.sb_bookings[bat[id2]]=srv[id2]; }
+      }
+      /* BASE ถูกอัปเดตไปแล้วก่อนถึงตรงนี้ · การเซฟที่ตามมาจึงเห็น diff เป็นศูนย์
+         ไม่ดันค่าของคนอื่นกลับขึ้นไปทับ */
+      laBlobSave();
+    }catch(e){}
+    try{ if(typeof baChMemoClear==='function') baChMemoClear(); }catch(_){}
+    /* §ckVan · วาดใหม่ทั้งหน้า · ต้องคืนที่เลื่อนค้างไว้และช่องที่พิมพ์ค้างไว้ด้วย
+       ตารางหน้าท่า/หน้ารถยาวกว่าจอ และกล่องตารางมี scroll ของตัวเอง
+       ถ้าไม่คืน ทุกครั้งที่คนอื่นเช็คอิน หน้าจะเด้งกลับขึ้นหัวตาราง ช่วงเร่งคือทุกไม่กี่วิ */
+    try{
+      var _snap=(typeof _laScrollSnap==='function')?_laScrollSnap():null;
+      var _fid='', _fsel=null;
+      try{ var _ae=document.activeElement;
+        if(_ae && _ae.id && (_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA')){
+          _fid=_ae.id;
+          if(_ae.setSelectionRange) _fsel=[_ae.selectionStart, _ae.selectionEnd];
+        } }catch(_){}
+      _ckfn();
+      if(_fid){ try{ var _fe=document.getElementById(_fid);
+        if(_fe && _fe.focus){ _fe.focus();
+          if(_fsel && _fe.setSelectionRange) _fe.setSelectionRange(_fsel[0], _fsel[1]); } }catch(_){} }
+      if(_snap && typeof _laScrollBack==='function') _laScrollBack(_snap);
+    }catch(_){ return false; }
+    return true;
+  }catch(e){ try{ console.warn('[ckDay] apply failed', e && e.message); }catch(_){} return false; }
+};
 function laBlobSave(){
   try{
     var str=JSON.stringify(_laBlob||{});
@@ -3188,7 +3597,10 @@ function mdTabSales(days){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ออกจากรายงานนี้ทั้งใบ
+     ไม่ตัด = เซลล์จะมีใบ 0 บาทมาถ่วงทั้งยอด ทั้ง Pax sold และค่าเฉลี่ย */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const ownerOf=b=>{ if(b.soldBy) return b.soldBy; const a=sbGetAgent(b.agentId); return a?(a.sales||''):''; };
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const bkDate=b=> b.bookingDate || ((b.trips||[]).map(t=>t.date).filter(Boolean).sort()[0])||'';
@@ -3202,7 +3614,7 @@ function mdTabSales(days){
   // per-sales
   const P={}; SALES.forEach(s=>P[s.id]={s,val:0,pax:0,bk:0,tot:0,cancel:0,noShow:0,paid:0,ar:0,cur:0,prev:0});
   let tVal=0,tPax=0,tBk=0,tTot=0,tCancel=0,tNoShow=0,tPaid=0,tAr=0;
-  BK.forEach(b=>{ if(b.status==='rejected')return; const sid=ownerOf(b); const p=P[sid]; tTot++; if(p)p.tot++;
+  BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const sid=ownerOf(b); const p=P[sid]; tTot++; if(p)p.tot++;
     if(isCancel(b)){ tCancel++; if(p)p.cancel++; if(b.cancelCategory==='no_show'){tNoShow++; if(p)p.noShow++;} return; }
     const v=valOf(b), px=paxOf(b); tVal+=v; tPax+=px; tBk++;
     if(p){ p.val+=v; p.pax+=px; p.bk++; const ym=ymOf(bkDate(b)); if(ym===curYM)p.cur+=v; else if(ym===prevYM)p.prev+=v; }
@@ -3243,7 +3655,7 @@ function mdTabSales(days){
   // ── top agents ──
   const famShort=id=>({similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale Shark'}[id]||id);
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
-  const A={}; BK.forEach(b=>{ if(b.status==='rejected')return; const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b); (b.trips||[]).forEach(t=>{ const f=bookingV2RouteFamily(t.routeId); if(f){ o.fam[f.id]=o.fam[f.id]||{id:f.id,color:f.color,pax:0}; o.fam[f.id].pax+=bookingV2PaxAllTot(t.pax||{}); } }); const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
+  const A={}; BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b); (b.trips||[]).forEach(t=>{ const f=bookingV2RouteFamily(t.routeId); if(f){ o.fam[f.id]=o.fam[f.id]||{id:f.id,color:f.color,pax:0}; o.fam[f.id].pax+=bookingV2PaxAllTot(t.pax||{}); } }); const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
   const topA=Object.values(A).sort((x,y)=>y.val-x.val).slice(0,8);
   const aRows=topA.map(o=>{ const own=SALES.find(s=>s.id===o.a.sales); const coll=pf(o.paid,o.paid+o.ar), cr=pf(o.cancel,o.tot);
     const fams=Object.values(o.fam||{}).sort((x,y)=>y.pax-x.pax); const tf=fams[0];
@@ -3337,14 +3749,18 @@ function mdTabSales(days){
       return `<tr>${dateCell}${famR}${reasonCell}</tr>`;
     }).join('');
   };
-  const isStaffRec=r=>{ const a=sbGetAgent(r.agentId); return !!(a&&(a.code==='STAFF'||a.id==='a_staff')); };
+  const isStaffRec=r=>{ /* §internal · เดิมเช็คแค่ a_staff · ตอนนี้รวมใบของบริษัทเอง (PR/แขก) ด้วย
+      ไม่งั้น FOC ของ PR จะไปโผล่ในอันดับ "เอเยนต์ส่ง FOC เยอะสุด" ซึ่งไม่ใช่เอเยนต์ */
+    const a=sbGetAgent(r.agentId); if(!a) return false;
+    const m=String(a.market||'').toLowerCase();
+    return m==='staff' || m==='house' || a.code==='STAFF' || a.id==='a_staff'; };
   const grpAgent=focRecs.filter(r=>!isStaffRec(r));
   const grpStaff=focRecs.filter(r=>isStaffRec(r));
   let _focAi=0;
   const focSecHdr=(label,recs)=>{ const fc=recs.reduce((s,x)=>s+x.fc,0); return `<tr><td colspan="13" style="padding:9px 12px 7px;background:#F1EFE8;border-top:2px solid #DAD5C6;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#6B6456">${esc(label)} <span style="font-weight:600;color:#9a9486;letter-spacing:.02em;text-transform:none">· ${recs.length} agent${recs.length===1?'':'s'} · ${fc} FOC</span></td></tr>`; };
   const focBody=[
     grpAgent.length?focSecHdr('Agent',grpAgent)+grpAgent.map(r=>renderRec(r,_focAi++)).join(''):'',
-    grpStaff.length?focSecHdr('Staff',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
+    grpStaff.length?focSecHdr('Internal / Company',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
   ].join('');
   const thF=`${th};padding-bottom:9px;border-bottom:1.5px solid #E5E2D8`;
   const focDetail=focRecs.length?`<div class="md-card" style="margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E0A23C"></span>FOC detail <span style="font-weight:400;color:var(--fd-ink-soft)">· ${focRecs.length} agent${focRecs.length===1?'':'s'} · ${gFoc} FOC pax</span></div>
@@ -3402,7 +3818,7 @@ function renderBookingFlow(){
   const slOf=b=>{ const sid=b.soldBy||((typeof sbGetAgent==='function'&&sbGetAgent(b.agentId))||{}).sales; const s=sid&&typeof sbGetSales==='function'?sbGetSales(sid):null; return {id:sid||'__none', name:s?(s.name||sid):'(ไม่ระบุเซลล์)', color:s?(s.color||'#185FA5'):'#B8B3C8'}; };
   const famOf=rid=>{ const f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(rid):null; const r=(typeof getRoute==='function')?getRoute(rid):null; return {id:f?f.id:(rid||'-'), name:f?(f.name||rid):(r?r.name:rid), color:(r&&r.color)||(f&&f.color)||'#1683C7'}; };
   const FALL=['#E0457F','#185FA5','#0F6E56','#A05A1A','#8B5CF6','#19A7C9'];
-  const thMon=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const thMon=laMonAbbrTH();
 
   if(!B.length){ host.innerHTML='<div style="padding:40px;text-align:center;color:#9aa49c;font-size:13px;font-family:DM Sans,sans-serif">ยังไม่มีบุคกิ้ง · หน้านี้จะสรุปจากบุคกิ้งที่บันทึกแล้ว</div>'; return; }
 
@@ -3760,7 +4176,10 @@ function renderFocDetail(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ตัดออกก่อนจัดอันดับ
+     ไม่ตัด = เซลล์/เอเยนต์บ้านจะมีใบ 0 บาทมาถ่วงค่าเฉลี่ยและอันดับ */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
@@ -3795,7 +4214,11 @@ function renderFocDetail(){
     if(!focRecs.length) return '';
     const gFoc=focRecs.reduce((s,r)=>s+r.fc,0);
     const fmtFocD=ds=>{ if(!ds)return'—'; const dt=new Date(ds+'T00:00:00'); if(isNaN(dt))return ds; return dt.getDate()+'/'+(dt.getMonth()+1); };
-    const isStaffRec=r=>{ const a=sbGetAgent(r.agentId); return !!(a&&(a.code==='STAFF'||a.id==='a_staff')); };
+    const isStaffRec=r=>{ /* §internal · เดิมเช็คแค่ a_staff · ตอนนี้รวมใบของบริษัทเอง (PR/แขก) ด้วย
+      ไม่งั้น FOC ของ PR จะไปโผล่ในอันดับ "เอเยนต์ส่ง FOC เยอะสุด" ซึ่งไม่ใช่เอเยนต์ */
+    const a=sbGetAgent(r.agentId); if(!a) return false;
+    const m=String(a.market||'').toLowerCase();
+    return m==='staff' || m==='house' || a.code==='STAFF' || a.id==='a_staff'; };
     const grpAgent=focRecs.filter(r=>!isStaffRec(r)), grpStaff=focRecs.filter(r=>isStaffRec(r));
     let pendingFoc=0,nPend=0; focRecs.forEach(r=>{ let rp=false; Object.values(r.byDate).forEach(D=>{ if(D.anyPending){pendingFoc+=D.total;rp=true;} }); if(rp)nPend++; });
     const agentFoc=grpAgent.reduce((s,r)=>s+r.fc,0), staffFoc=grpStaff.reduce((s,r)=>s+r.fc,0);
@@ -3810,14 +4233,14 @@ function renderFocDetail(){
     const _FB={similan:'#5B9BD5',surin:'#9CCC65',phiphi:'#EF6C6C',krabi:'#4DB6AC',whaleshark:'#E0A93C',other:'#B0BEC5'};
     const _famChips=FAM_ORDER.concat(['other']).filter(fid=>famFoc[fid]).map(fid=>{ const bc=_FB[fid]||'#9BB89B'; const pct=famPax[fid]>0?Math.round(famFoc[fid]/famPax[fid]*100):0; const pay=famPax[fid]-famFoc[fid]; const focVal=pay>0?Math.round(famFoc[fid]*(famVal[fid]/pay)):0; return `<div style="background:rgba(255,255,255,.06);border-radius:10px;border-left:3px solid ${bc};padding:5px 10px 6px;min-width:66px"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#a8c1ad;white-space:nowrap">${fid==='other'?'อื่นๆ':(famHdr[fid]||fid)}</div><div style="display:flex;align-items:baseline;gap:5px;margin-top:1px"><span style="font-size:16px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${famFoc[fid]}</span><span style="font-size:9px;font-weight:700;color:${bc};font-variant-numeric:tabular-nums" title="FOC ${famFoc[fid]} จาก ${famPax[fid]} pax">${pct}%</span></div><div style="font-size:9px;font-weight:700;color:${bc};font-variant-numeric:tabular-nums;margin-top:2px" title="มูลค่า FOC ที่แจกฟรี ≈ FOC × ราคาเฉลี่ย/หัวที่จ่ายจริง">≈${fK(focVal)}</div></div>`; }).join('');
     const _totFocVal=FAM_ORDER.concat(['other']).reduce((s,fid)=>{ if(!famFoc[fid])return s; const pay=famPax[fid]-famFoc[fid]; return s+(pay>0?famFoc[fid]*(famVal[fid]/pay):0); },0);
-    const hero=`<div style="flex:1.5;min-width:160px;padding:14px 16px;background:#1F4D2C;border-radius:16px;display:flex;flex-direction:column;justify-content:flex-start;font-family:'DM Sans',sans-serif;${_glHero}"><div style="font-size:10px;color:#9BB89B;text-transform:uppercase;letter-spacing:.04em">FOC pax</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span style="font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px;color:#fff">${gFoc}</span><span style="font-size:13px;color:#9BB89B">pax · ${focRecs.length} agents</span></div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="background:#C8F47C;color:#1F4D2C;padding:2px 9px;border-radius:14px;font-size:10px;font-weight:600">Agent ${agentFoc} · Staff ${staffFoc}</span><span style="background:rgba(212,83,126,.14);border:1.5px solid #E07A9E;color:#F6C2D4;padding:2px 10px;border-radius:14px;font-size:10px;font-weight:700" title="มูลค่ารวมของ FOC ที่แจกฟรี (ประมาณ)">มูลค่า FOC ≈ ${fK(_totFocVal)}</span></div>${_famChips?`<div style="font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#7c9a82;margin:14px 0 6px">FOC ตามเส้นทาง</div><div style="display:flex;gap:6px;flex-wrap:wrap">${_famChips}</div>`:''}</div>`;
+    const hero=`<div style="flex:1.5;min-width:160px;padding:14px 16px;background:#1F4D2C;border-radius:16px;display:flex;flex-direction:column;justify-content:flex-start;font-family:'DM Sans',sans-serif;${_glHero}"><div style="font-size:10px;color:#9BB89B;text-transform:uppercase;letter-spacing:.04em">FOC pax</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span style="font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px;color:#fff">${gFoc}</span><span style="font-size:13px;color:#9BB89B">pax · ${focRecs.length} agents</span></div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="background:#C8F47C;color:#1F4D2C;padding:2px 9px;border-radius:14px;font-size:10px;font-weight:600">Agent ${agentFoc} · Staff ${staffFoc}</span><span style="background:rgba(212,83,126,.14);border:1.5px solid #E07A9E;color:#F6C2D4;padding:2px 10px;border-radius:14px;font-size:10px;font-weight:700" title="มูลค่ารวมของ FOC ที่แจกฟรี (ประมาณ)">มูลค่า FOC ≈ ${fK(_totFocVal)}</span></div>${_famChips?`<div style="font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#7c9a82;margin:14px 0 6px">${laT('FOC ตามเส้นทาง')}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${_famChips}</div>`:''}</div>`;
     const wtile=(big,lab,sub,numc,bg)=>`<div style="flex:1;min-width:128px;padding:14px 17px;background:${bg};border:1px solid rgba(0,0,0,.06);border-radius:16px;display:flex;flex-direction:column;justify-content:center"><div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6a7a70;margin-bottom:5px">${lab}</div><div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;color:${numc};line-height:1">${big}</div><div style="font-size:10.5px;color:#9aa49c;margin-top:5px">${sub}</div></div>`;
     const _agNG={}; BK.forEach(b=>{ if(b.status==='rejected'||isCancel(b))return; const a=sbGetAgent(b.agentId); if(a&&(a.code==='STAFF'||a.id==='a_staff'))return; const reason=((b.focApproval&&b.focApproval.reason)||b.focReason||'').trim(); if(/guide|ไกด์/i.test(reason))return; (b.trips||[]).forEach(t=>{ const f=(typeof bookingV2PaxTot==='function')?bookingV2PaxTot(t.pax,'foc'):0; if(f<=0)return; const key=b.agentId||('b2c:'+(b.b2cChannel||'walk-in')); const g=_agNG[key]=_agNG[key]||{name:a?(a.name||a.code||a.id):(b.b2cChannel||'B2C / Walk-in'), agentId:b.agentId, fc:0, reasons:{}}; g.fc+=f; if(reason)g.reasons[reason]=1; }); });
     const _agTotFoc={}; focRecs.forEach(r=>{ if(r.agentId)_agTotFoc[r.agentId]=r.fc; });
     const top5=Object.values(_agNG).filter(x=>x.fc>0).sort((a,b)=>b.fc-a.fc).slice(0,5).map(x=>({name:x.name, fc:x.fc, reason:Object.keys(x.reasons).join(', '), agentId:x.agentId}));
     const _VC='background:linear-gradient(#fff,#fff) padding-box,linear-gradient(150deg,rgba(255,255,255,.98),rgba(176,190,205,.55)) border-box;border:1.5px solid transparent;border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 12px rgba(30,50,42,.06);padding:9px 7px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:102px';
     const agentCards=top5.map((t,i)=>{ const o=A[t.agentId]; const tf=(_agTotFoc[t.agentId]!=null)?_agTotFoc[t.agentId]:t.fc; const px=o?(o.pax||0):tf; const kp=px>0?Math.round(tf/px*100):100; const kc=kp<=8?'#1D9E75':kp<=20?'#BA7517':'#E24B4A'; return `<div style="${_VC}"><span style="font-size:9px;font-weight:800;color:#3B6D11;background:rgba(99,153,34,.15);border-radius:6px;padding:1px 7px;align-self:flex-start">#${i+1}</span><div style="font-size:10.5px;font-weight:700;color:#26352e;margin-top:6px;line-height:1.2;min-height:24px;display:flex;align-items:center;justify-content:center;overflow:hidden">${esc(t.name)}</div><div style="font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;color:#3B6D11;line-height:1;margin-top:2px">${t.fc}</div><div style="font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa49c;margin-top:1px">FOC</div><div style="margin-top:5px"><span style="font-size:8.5px;font-weight:800;font-variant-numeric:tabular-nums;color:${kc};background:${kc}1f;border-radius:6px;padding:1px 7px" title="KPI = FOC ÷ ลูกค้าทั้งหมด (${tf}/${px})">KPI ${kp}%</span></div><div style="font-size:8.5px;color:#9aa49c;margin-top:5px;line-height:1.28;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="${esc(t.reason||'')}">${t.reason?esc(t.reason):'—'}</div></div>`; }).join('');
-    const agentDetail=`<div style="flex:2.5;min-width:330px;padding:13px 15px;${_glL('#EAF3DE')};border-radius:16px"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#1F4D2C;line-height:1">${agentFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#3B6D11">Agent FOC</span><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7e8a6f;margin-left:6px">Top 5 ส่งเยอะสุด · ไม่รวม Guide</span><span style="font-size:10px;color:#8a9a80;margin-left:auto">${grpAgent.length} agents</span></div><div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px">${agentCards}</div></div>`;
+    const agentDetail=`<div style="flex:2.5;min-width:330px;padding:13px 15px;${_glL('#EAF3DE')};border-radius:16px"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#1F4D2C;line-height:1">${agentFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#3B6D11">Agent FOC</span><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7e8a6f;margin-left:6px">${laT('Top 5 ส่งเยอะสุด · ไม่รวม Guide')}</span><span style="font-size:10px;color:#8a9a80;margin-left:auto">${grpAgent.length} agents</span></div><div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px">${agentCards}</div></div>`;
     const _staffInsp=[],_staffWel=[];
     BK.forEach(b=>{ if(b.status==='rejected'||isCancel(b))return; const a=sbGetAgent(b.agentId); if(!(a&&(a.code==='STAFF'||a.id==='a_staff')))return; const reason=((b.focApproval&&b.focApproval.reason)||b.focReason||'').trim(); const isInsp=/inspect|ตรวจ/i.test(reason); (b.trips||[]).forEach(t=>{ const f=(typeof bookingV2PaxTot==='function')?bookingV2PaxTot(t.pax,'foc'):0; if(f<=0)return; const fam=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(t.routeId):null; (isInsp?_staffInsp:_staffWel).push({date:t.date||'',fam:fam?fam.id:'other',fc:f,reason:reason||''}); }); });
     const _byDate=arr=>{ const m={}; arr.forEach(e=>{ const d=m[e.date]=m[e.date]||{date:e.date,fc:0,fams:{},reasons:{}}; d.fc+=e.fc; if(e.fam)d.fams[e.fam]=(d.fams[e.fam]||0)+e.fc; if(e.reason)d.reasons[e.reason]=1; }); return Object.values(m).sort((x,y)=>(x.date||'').localeCompare(y.date||'')); };
@@ -3829,7 +4252,7 @@ function renderFocDetail(){
     const staffDetail=`<div style="flex:1.6;min-width:215px;padding:13px 15px;${_glL('#fff')};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#185FA5;line-height:1">${staffFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#185FA5">Staff FOC</span><span style="font-size:10px;color:#9aa49c;margin-left:auto">${grpStaff.length} staff</span></div><div style="flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">${_staffMC('Welfare',welFc,welCards.length,'#3B6D11','#F2F7EA')}${_staffMC('Inspection',inspFc,inspCards.length,'#854F0B','#FAF3E6')}</div></div>`;
     const kpiAgents=grpAgent.map(r=>{ const o=A[r.agentId]; const paid=o?Math.max(0,(o.pax||0)-r.fc):0; const tot=paid+r.fc; const focPct=tot>0?(r.fc/tot*100):100; const a=sbGetAgent(r.agentId); const sp=SALES.find(s=>s.id===(a&&a.sales)); return {name:r.agentName, fc:r.fc, paid, focPct, sale:sp?sName(sp):'', saleColor:sp?(sp.color||'#888'):'#caa9a7'}; }).sort((a,b)=> b.focPct-a.focPct || a.paid-b.paid).slice(0,5);
     const lowKpiRows=kpiAgents.map((t,i)=>`<div style="display:flex;align-items:center;gap:7px;padding:6px 0;${i?'border-top:1px solid rgba(163,45,45,.14)':''}"><div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:7px;white-space:nowrap;overflow:hidden"><span style="font-size:11px;font-weight:700;color:#6e1717;overflow:hidden;text-overflow:ellipsis;flex-shrink:1">${esc(t.name)}</span><span style="font-size:8.5px;color:#b58886;flex:none"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${t.saleColor};margin-right:3px;vertical-align:0"></span>${t.sale||'ไม่มีเซลล์'}</span></div><span style="font-size:9px;color:#bb8684;white-space:nowrap">FOC ${t.fc} · ลค ${t.paid}</span><span style="font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;background:#E24B4A;border-radius:6px;padding:1px 7px">${Math.round(t.focPct)}%</span></div>`).join('');
-    const lowKpiCard=`<div style="flex:1.7;min-width:225px;padding:13px 15px;${_glRed};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#A32D2D"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-right:5px;vertical-align:1px"></span>KPI ต่ำ</span><span style="font-size:9px;color:#c08a88">FOC สูง · ลูกค้าน้อย</span><span style="font-size:10px;color:#c08a88;margin-left:auto">${kpiAgents.length} agent</span></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center">${lowKpiRows||'<div style="font-size:10px;color:#c79a98;font-style:italic">—</div>'}</div></div>`;
+    const lowKpiCard=`<div style="flex:1.7;min-width:225px;padding:13px 15px;${_glRed};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#A32D2D"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-right:5px;vertical-align:1px"></span>${laT('KPI ต่ำ')}</span><span style="font-size:9px;color:#c08a88">${laT('FOC สูง · ลูกค้าน้อย')}</span><span style="font-size:10px;color:#c08a88;margin-left:auto">${kpiAgents.length} agent</span></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center">${lowKpiRows||'<div style="font-size:10px;color:#c79a98;font-style:italic">—</div>'}</div></div>`;
     const kpis=`<div style="display:flex;gap:11px;flex-wrap:wrap;align-items:stretch;margin-bottom:13px">${hero}${agentDetail}${staffDetail}${lowKpiCard}</div>`;
     const thF=`font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--fd-ink-soft);font-weight:600;padding:0 6px 9px;border-bottom:1.5px solid #E5E2D8`;
     const kpiCol=p=> p<=8?['#0F6E56','#E1F5EE']:p<=20?['#854F0B','#FAEEDA']:['#A32D2D','#FCEBEB'];
@@ -3865,7 +4288,7 @@ function renderFocDetail(){
     const focSecHdr=(label,recs)=>{ const fc=recs.reduce((s,x)=>s+x.fc,0); return `<tr><td colspan="4" style="padding:9px 12px 7px;background:#F1EFE8;border-top:2px solid #DAD5C6;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#6B6456">${esc(label)} <span style="font-weight:600;color:#9a9486;letter-spacing:.02em;text-transform:none">· ${recs.length} agent${recs.length===1?'':'s'} · ${fc} FOC</span></td></tr>`; };
     const focBody=[
       grpAgent.length?focSecHdr('Agent',grpAgent)+grpAgent.map(r=>renderRec(r,_focAi++)).join(''):'',
-      grpStaff.length?focSecHdr('Staff',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
+      grpStaff.length?focSecHdr('Internal / Company',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
     ].join('');
     return `<div style="margin-top:14px;font-family:Manrope,-apple-system,system-ui,sans-serif;background:#fafbfb;border-radius:20px;padding:20px;border:1px solid rgba(0,0,0,.04)">
       <div style="font-size:15px;font-weight:800;margin-bottom:3px;display:flex;align-items:center;gap:8px;color:#26352e"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E0A23C"></span>FOC detail <span style="font-weight:500;color:#7d8c84;font-size:12px">· ที่นั่งฟรี แยกตามเอเจ้น · วันเดินทาง · โปรแกรม</span></div>
@@ -3887,7 +4310,10 @@ function mdTabAgents(days){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ตัดออกก่อนจัดอันดับ
+     ไม่ตัด = เซลล์/เอเยนต์บ้านจะมีใบ 0 บาทมาถ่วงค่าเฉลี่ยและอันดับ */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
@@ -3895,7 +4321,7 @@ function mdTabAgents(days){
   if(!BK.length) return mdNote('No bookings yet — agent stats populate from bookings.');
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
   const A={};
-  BK.forEach(b=>{ if(b.status==='rejected')return; const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{},area:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b);
+  BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{},area:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b);
     const aid=b.pickupAreaId||'';   // configured pickup area (Phuket Town, Patong, …) · booking-level
     (b.trips||[]).forEach(t=>{ const px=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; const f=bookingV2RouteFamily(t.routeId); if(f) o.fam[f.id]=(o.fam[f.id]||0)+px; const k=aid||('_z'+String(t.zone||b.pickupZone||'NT').toUpperCase()); o.area[k]=(o.area[k]||0)+px; });
     const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
@@ -3960,7 +4386,7 @@ function pmapAgName(){
   return (typeof pmChannelName==='function')?pmChannelName(String(_pmapAgFilter).replace(/^_/,'')):String(_pmapAgFilter);
 }
 const PHUKET_LL={'Panwa Pier':[7.8295,98.4045],'Patong':[7.896,98.296],'Karon':[7.846,98.294],'Kata':[7.820,98.298],'Kalim':[7.910,98.298],'Kamala':[7.955,98.281],'Panwa':[7.818,98.402],'Tritrang':[7.879,98.2845],'Phuket Town':[7.884,98.388],'Naithon':[8.085,98.293],'Bangtao':[8.000,98.296],'Laguna':[8.012,98.302],'Rawai':[7.778,98.325],'Maikhao':[8.150,98.300],'Kathu':[7.907,98.337],'Chalong':[7.846,98.337],'Cherngtalay':[7.990,98.305],'Nai Harn':[7.775,98.305],'Aopor':[7.990,98.390],'Aoyon':[7.830,98.420],'Surin':[7.975,98.279],'Layan':[8.040,98.298],'Naiyang':[8.105,98.300],'Ko Kaeo':[7.922,98.392],'Siray':[7.884,98.416],'Naiharn':[7.775,98.305]};
-const _PMTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const _PMTH=laMonAbbrTH();
 const _PM={map:null,canvas:null,hits:null,areas:[],mkTot:{},total:0,other:0,otherAreas:{}};
 const _PMCEN=[98.3406,7.9862];   // Phuket centroid [lng,lat] · pull coastal scatter inland
 const PM_LBLUP={'Kalim':1,'Panwa Pier':1};   // draw these labels ABOVE the cluster (avoid clashing with Patong / Panwa)
@@ -5205,12 +5631,135 @@ function pfmFilterRows(){
 }
 function pfmSetDate(delta){ const d=new Date(_pfmDate+'T12:00:00'); const m=_pfmMode||'daily'; if(m==='week') d.setDate(d.getDate()+delta*7); else if(m==='month') d.setMonth(d.getMonth()+delta); else if(m==='year') d.setFullYear(d.getFullYear()+delta); else d.setDate(d.getDate()+delta); _pfmDate=bookingV2LocalYMD(d); renderDailyPFM(); }
 function pfmIsProforma(bk){ const a=sbGetAgent(bk.agentId); return !!(a && a.payType==='proforma'); }
+/* ══ §pfmPrepay (2026-10-02) · เอเยนต์ Invoice (เครดิต) ที่โอนเงินเข้ามาก่อน ══════════
+   ที่มา · ผู้ใช้ถามเอง · "Agent เป็น Invoice และมีบางทีเอเยนต์ชอบชำระเงินเข้ามา
+   เราจะบันทึกแบบไหน และจะไปอยู่สรุปรายการชำระเงินได้อย่างไร ในหน้า Daily PFM"
+   ของเดิม Daily PFM เห็นแต่เอเยนต์ Pro Forma · ใบของเอเยนต์เครดิตไม่ขึ้นเลยไม่ว่าจ่ายแล้วหรือยัง
+   รับเงินได้ทางเดียวคือหน้า Accounting ซึ่งไม่ผูกกับใบงานเก็บเงินประจำวัน
+
+   ที่ตกลงกัน · รับเงินผูกกับใบจอง
+     ออกใบแจ้งหนี้เฉพาะใบจองนั้น (ครบกำหนดทันที) แล้วบันทึกรับเงิน + สลิป ด้วยฟอร์มเดิมของ PFM
+     ใบนั้นจึงไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ (acctNewInvoiceRender ข้ามใบที่มีใบแจ้งหนี้แล้ว)
+     และวงเงินเครดิตคืนเมื่อจ่ายครบ (agCreditState ข้ามใบที่ acctBookingPaid)
+
+   ตัวบอกว่าเป็นใบชนิดนี้ = inv.note==='prepay' · ใช้คอลัมน์ note ที่ sb_invoices มีอยู่แล้ว
+   ไม่เพิ่มฟิลด์ใหม่ เพราะฟิลด์ที่ไม่อยู่ใน field_mapping จะหายตอนซิงก์
+
+   ⚠ ใบเครดิตที่ "ยังไม่จ่าย" ห้ามเข้าหน้านี้ · ยังไม่ถึงกำหนด ถ้าดึงมา
+     ยอดค้างกับป้ายเลย cutoff จะพองด้วยของที่ไม่ได้ค้างจริง
+   ⚠ ใบเครดิตที่จ่ายล่วงหน้าไม่เต็ม · นับเข้ายอดรวมเฉพาะก้อนที่รับมาแล้ว ไม่นับส่วนที่เหลือเป็น "ค้าง"
+     ของ PFM · ส่วนที่เหลือยังอยู่บนใบแจ้งหนี้ใบเดี่ยวนั้น ไปตามต่อที่หน้า Accounting        */
+function pfmIsCreditAgent(a){ return !!(a && (a.payType==='invoice' || a.payType==='credit')); }
+function pfmIsPrepayInv(inv){ return !!(inv && inv.status!=='void' && inv.note==='prepay'); }
+function pfmIsCreditPrepaid(bk){
+  if(!bk || !pfmIsCreditAgent(sbGetAgent(bk.agentId))) return false;
+  return pfmIsPrepayInv(acctBookingInvoice(bk.id));
+}
+function pfmInScope(bk){ return pfmIsProforma(bk) || pfmIsCreditPrepaid(bk); }
+/* ยอดที่ใบแจ้งหนี้จะออก · สูตรเดียวกับ acctCreateInvoice (เอเยนต์ที่ราคายังไม่รวม VAT ต้องบวก 7%) */
+function pfmPrepayTotal(bk){
+  const sub=acctBookingTotal(bk); const a=sbGetAgent(bk&&bk.agentId);
+  return (a && a.vatMode==='exclude') ? sub+Math.round(sub*0.07) : sub;
+}
+/* ใบที่รับเงินล่วงหน้าได้ · เอเยนต์เครดิต ยังไม่มีใบแจ้งหนี้ ไม่ถูกยกเลิก · ใกล้วันเดินทางขึ้นก่อน */
+function pfmPrepayCands(q){
+  const today=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  q=String(q||'').trim().toLowerCase();
+  const out=[];
+  (SB_BOOKINGS||[]).forEach(b=>{
+    if(ACCT_PAID_STATES.includes(b.status)) return;
+    if(b.status==='quote' || b.status==='draft') return;
+    const a=sbGetAgent(b.agentId); if(!pfmIsCreditAgent(a)) return;
+    if(acctBookingInvoice(b.id)) return;
+    const tot=pfmPrepayTotal(b); if(!(tot>0)) return;
+    const ds=(b.trips||[]).map(t=>t.date||'').filter(Boolean).sort(); const d0=ds[0]||'';
+    const trip=(b.trips||[])[0]||{}; const rt=(typeof getRoute==='function')?getRoute(trip.routeId):null;
+    const route=(rt&&rt.name)||trip.routeId||'';
+    if(q){ const hay=[b.voucherRef,b.code,b.id,a.name,a.code,b.leadPax,b.customerName,route,d0].join(' ').toLowerCase();
+      if(hay.indexOf(q)<0) return; }
+    out.push({ b, a, d0, tot, route });
+  });
+  out.sort((x,y)=>{ const xu=x.d0>=today, yu=y.d0>=today; if(xu!==yu) return xu?-1:1;
+    return xu ? x.d0.localeCompare(y.d0) : y.d0.localeCompare(x.d0); });
+  return out;
+}
+let _pfmPre=null;   // {q} · ตัวเลือกใบจองของเอเยนต์เครดิต
+function pfmPrepayOpen(){ _pfmPre={q:''}; renderDailyPFM(); const el=document.getElementById('pfm-pre-q'); if(el) el.focus(); }
+function pfmPrepayClose(){ _pfmPre=null; renderDailyPFM(); }
+/* พิมพ์ค้นหา · เปลี่ยนเฉพาะรายการ ไม่วาดทั้งหน้าใหม่ (cursor จะเด้งออกจากช่อง) */
+function pfmPrepaySearch(v){ if(!_pfmPre) return; _pfmPre.q=v; const el=document.getElementById('pfm-pre-list'); if(el) el.innerHTML=pfmPrepayListHTML(); }
+function pfmPrepayStart(bkId){
+  const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
+  if(acctBookingInvoice(bkId)){ alert('This booking already has an invoice'); return; }
+  _pfmPre=null;
+  _pfmRec={ bkId, invId:null, prepay:true, amount:Math.round(pfmPrepayTotal(b)), method:'transfer', ref:'', slips:[] };
+  renderDailyPFM();
+}
+function pfmPrepayListHTML(){
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const all=pfmPrepayCands(_pfmPre?_pfmPre.q:''); const CAP=40; const show=all.slice(0,CAP);
+  if(!all.length) return `<div style="padding:26px;text-align:center;color:#8a8a82;font-size:12.5px">ไม่พบใบจองของเอเยนต์ Invoice ที่ยังไม่ออกใบแจ้งหนี้</div>`;
+  return show.map(x=>{ const b=x.b;
+    let dl=x.d0; try{ dl=new Date(x.d0+'T12:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }catch(e){}
+    return `<div data-pfmpre="${esc(b.id)}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:0.5px solid rgba(0,0,0,.06)">
+      <span style="font-family:'DM Mono',monospace;font-size:11px;color:#5F5E5A;min-width:84px;white-space:nowrap">${esc(dl)}</span>
+      <span style="flex:1.1;min-width:0"><span style="display:block;font-family:'DM Mono',monospace;font-size:11.5px;color:#15201a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.voucherRef||b.code||b.id)}">${esc(b.voucherRef||b.code||b.id)}</span>
+        <span style="display:block;font-size:11px;color:#8a8a82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.leadPax||b.customerName||'')}">${esc(b.leadPax||b.customerName||'')}</span></span>
+      <span style="flex:1.2;min-width:0"><span style="display:block;font-size:12px;font-weight:500;color:#1B2A55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.a.name)}">${esc(x.a.name)}</span>
+        <span style="display:block;font-size:11px;color:#8a8a82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.route)}">${esc(x.route)}</span></span>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#15201a;white-space:nowrap;min-width:76px;text-align:right">&#3647;${sbFmtTHB(x.tot)}</span>
+      <button onclick="pfmPrepayStart('${b.id}')" style="background:#163d2b;color:#eafbe0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">รับเงิน</button>
+    </div>`; }).join('')
+    + (all.length>CAP?`<div style="padding:9px 16px;font-size:11px;color:#9a988f;background:#fcfbf9;border-top:0.5px solid rgba(0,0,0,.06)">+${all.length-CAP} ใบ · พิมพ์ค้นหาให้แคบลง</div>`:'');
+}
+function pfmPrepayModalHTML(){
+  if(!_pfmPre) return '';
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return `
+  <div id="pfm-pre-modal" onclick="pfmPrepayClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;width:720px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.3)">
+      <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#185FA5;text-transform:uppercase">Invoice agent · prepayment</div>
+        <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">รับเงินล่วงหน้าจากเอเยนต์ Invoice</div>
+        <div style="font-size:11.5px;color:#8a8a82;margin-top:3px;line-height:1.55">เลือกใบจองที่เอเยนต์โอนเงินเข้ามา · ระบบจะออกใบแจ้งหนี้เฉพาะใบนั้นแล้วบันทึกรับเงิน ใบนั้นจะไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ</div>
+        <input id="pfm-pre-q" value="${esc(_pfmPre.q)}" oninput="pfmPrepaySearch(this.value)" placeholder="ค้นหา voucher · เอเยนต์ · ชื่อลูกค้า · เส้นทาง · วันที่ (2026-11-08)" style="margin-top:11px;width:100%;box-sizing:border-box;height:38px;border:1px solid #d7dbe2;border-radius:9px;padding:0 12px;font-family:inherit;font-size:13px">
+      </div>
+      <div id="pfm-pre-list" style="overflow:auto;flex:1;min-height:120px">${pfmPrepayListHTML()}</div>
+      <div style="display:flex;justify-content:flex-end;padding:12px 19px;background:#fafbf9;border-top:1px solid #eef0ea;border-radius:0 0 16px 16px">
+        <button onclick="pfmPrepayClose()" style="font-size:12px;font-weight:600;color:#5F5E5A;background:#fff;border:1px solid #d7dbe2;border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">ปิด</button>
+      </div>
+    </div>
+  </div>`;
+}
 function pfmSalesName(bk){ const sid = bk.soldBy || (sbGetAgent(bk.agentId)||{}).sales; const s=sid?sbGetSales(sid):null; return s?(s.name||sid):'—'; }
+/* §pfmCotWarn (2026-09-15) · Daily PFM กับคำตัดสิน COT ยังไม่รู้จักกัน
+   PFM คิดยอดจาก acctBookingTotal() ตรง ๆ · ไม่เคยเรียก tsCotGet/bookingV2CotOf เลย
+   ส่วน acctCreateInvoice() ก็ใช้ acctBookingTotal() เหมือนกัน
+   ผลคือ ใบที่เก็บเงินสดหน้าท่าแล้วกด "หักทั้งก้อน" ที่ Travel Summary
+   ยังขึ้นค้างเต็มจำนวนที่นี่ · กด Issue PFM ต่อ = ออกบิลเต็ม = เก็บซ้ำ
+
+   ⚠ ก้อนนี้เตือนอย่างเดียว ไม่แตะยอดเงินสักบาท (ตัวเลือก ก ที่ตกลงกันไว้)
+     ยอดรวม ยอดค้าง และยอดในใบแจ้งหนี้ ยังคิดเหมือนเดิมทุกประการ
+     ถ้าจะให้หักจริงต้องเปลี่ยน bal/unpaidAmt ไปใช้ bookingV2PayOf().billable
+     ซึ่งคิดเผื่อไว้แล้วว่า billable = bkTot - cot.use
+
+   ⚠ เกณฑ์คือ deduct > 0 ไม่ใช่ "มี COT" · COT ที่เป็นค่าอุทยาน (handling 'separate')
+     จะถูกกด "ไม่หัก" ซึ่งถูกต้องแล้ว ห้ามไปลดบิล agent · เตือนเคสนั้นคือเตือนผิด */
+function pfmCotWarn(bk){
+  try{
+    if(typeof bookingV2CotOf!=='function') return null;
+    var c=bookingV2CotOf(bk);
+    if(!c || !c.settled) return null;              // ยังไม่มีใครตัดสิน = ยังไม่มีอะไรให้เตือน
+    var d=+c.deduct||0;
+    if(!(d>0)) return null;                        // ไม่หัก / โอนออก / เก็บไม่ได้ = บิล agent ไม่เกี่ยว
+    return { deduct:d, amt:+c.amt||0, mode:c.mode||'' };
+  }catch(_){ return null; }
+}
 function pfmCutoff(date){ const c=new Date(date+'T18:00:00'); c.setDate(c.getDate()-1); return c; }   // 18:00 day before
 function pfmBookingsFor(date){
   return (SB_BOOKINGS||[]).filter(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
-    if(!pfmIsProforma(b)) return false;
+    if(!pfmInScope(b)) return false;
     return (b.trips||[]).some(t=>(t.date||'')===date);
   });
 }
@@ -5228,7 +5777,7 @@ function pfmBookingsForPeriod(date, mode){
   const repDate=b=>{ const ds=(b.trips||[]).map(t=>t.date||'').filter(x=>x>=r.from&&x<=r.to).sort(); return ds.length?ds[ds.length-1]:''; };
   const out=(SB_BOOKINGS||[]).filter(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
-    if(!pfmIsProforma(b)) return false;
+    if(!pfmInScope(b)) return false;
     return (b.trips||[]).some(t=>{ const td=t.date||''; return td>=r.from && td<=r.to; });
   });
   out.sort((a,b)=>{ const ad=repDate(a), bd=repDate(b); if(ad!==bd) return ad<bd?1:-1; const ab=(a.bookingDate||a.createdAt||''), bb=(b.bookingDate||b.createdAt||''); return ab<bb?1:(ab>bb?-1:0); });
@@ -5244,16 +5793,30 @@ function pfmChartBuckets(date, mode){
     else if(mode==='year'){ const yr=d0.getFullYear()-i; from=yr+'-01-01'; to=yr+'-12-31'; lab=String(yr); }
     else { const dd=new Date(d0); dd.setDate(d0.getDate()-i); from=to=bookingV2LocalYMD(dd); lab=from.slice(8); }
     out.push({from,to,lab,cur:i===0,tot:0,paid:0,unpaid:0}); }
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!pfmIsProforma(b))return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!pfmInScope(b))return;
     const ds=(b.trips||[]).map(t=>t.date||'').filter(Boolean).sort(); if(!ds.length)return; const rep=ds[0];
     const bk=out.find(o=>rep>=o.from&&rep<=o.to); if(!bk)return;
     const inv=acctBookingInvoice(b.id); const total=acctBookingTotal(b); const bal=inv?acctInvoiceBalance(inv):total;
+    /* §pfmPrepay · ใบเครดิตนับเฉพาะก้อนที่รับแล้ว · ส่วนที่เหลือไม่ใช่ยอดค้างของ PFM */
+    if(!pfmIsProforma(b)){ const got=Math.max(0,total-bal); bk.tot+=got; bk.paid+=got; return; }
     bk.tot+=total; bk.paid+=(total-bal); bk.unpaid+=bal; });
   return out;
 }
 function pfmIssueInvoice(bkId){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   if(acctBookingInvoice(bkId)){ alert('Invoice already exists for this booking'); return; }
+  /* §pfmCotWarn · ใบนี้เก็บเงินสดหน้าท่าแล้วและตัดสินว่าหักจากบิล · ออกบิลเต็มจำนวน
+     = เก็บซ้ำ · ยังไม่หักให้อัตโนมัติ (ตัวเลือก ก) แต่ต้องให้คนเห็นก่อนกดผ่าน */
+  const _cw=pfmCotWarn(b);
+  if(_cw){
+    const _t=(typeof acctBookingTotal==='function')?acctBookingTotal(b):0;
+    if(!confirm('ใบนี้เก็บเงินสดหน้าท่าไปแล้ว '+Math.round(_cw.deduct).toLocaleString()+' บาท'
+      +' และตัดสินไว้ว่าหักจากบิล agent\n\n'
+      +'ใบแจ้งหนี้ที่กำลังจะออกเป็นยอดเต็ม '+Math.round(_t).toLocaleString()+' บาท'
+      +' ยังไม่ได้หักก้อนนั้นออกให้\n'
+      +'ถ้าออกแบบนี้แล้วเก็บเงินตามบิล = เก็บซ้ำ\n\n'
+      +'ยืนยันออกใบแจ้งหนี้ยอดเต็ม?')) return;
+  }
   acctCreateInvoice(b.agentId,[bkId],0);   // proforma · due now
   renderDailyPFM();
 }
@@ -5294,6 +5857,16 @@ function pfmSlipRemove(id){ if(!_pfmRec) return; fetch('/api/attach/'+encodeURIC
 function pfmRecSubmit(){
   const r=_pfmRec; if(!r) return;
   const amt=Math.max(0,Number(r.amount)||0); if(amt<=0){ alert('ใส่จำนวนเงินก่อน'); return; }
+  /* §pfmPrepay · ใบแจ้งหนี้ออกตอนกดบันทึก ไม่ใช่ตอนเปิดฟอร์ม
+     ออกตอนเปิดแล้วคนกดยกเลิก จะเหลือใบแจ้งหนี้ค้างที่ไม่มีใครตั้งใจออก และใบจองนั้นหลุดจากบิลสิ้นเดือน */
+  if(r.prepay && !r.invId){
+    const pb=SB_BOOKINGS.find(x=>x.id===r.bkId); if(!pb){ _pfmRec=null; renderDailyPFM(); return; }
+    if(acctBookingInvoice(r.bkId)){ alert('This booking already has an invoice - open it from the list instead'); return; }
+    const pinv=acctCreateInvoice(pb.agentId,[r.bkId],0);
+    if(!pinv){ alert('Could not issue the invoice for this booking'); return; }
+    pinv.note='prepay';                    /* ลงที่เก็บพร้อมกับตอนบันทึกรับเงินข้างล่าง (acctRecordPayment เซฟใบแจ้งหนี้เอง) */
+    r.invId=pinv.id;
+  }
   acctRecordPayment(r.invId, amt, r.method||'transfer', {ref:r.ref, slips:r.slips});
   // keep slip refs on the booking too (for later viewing)
   const b=SB_BOOKINGS.find(x=>x.id===r.bkId);
@@ -5304,7 +5877,7 @@ function pfmRecModalHTML(){
   const r=_pfmRec; if(!r) return '';
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const b=SB_BOOKINGS.find(x=>x.id===r.bkId)||{}; const a=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
-  const inv=SB_INVOICES.find(i=>i.id===r.invId); const bal=inv?Math.round(acctInvoiceBalance(inv)):0;
+  const inv=SB_INVOICES.find(i=>i.id===r.invId); const bal=inv?Math.round(acctInvoiceBalance(inv)):((r.prepay&&b.id)?Math.round(pfmPrepayTotal(b)):0);
   const _mac=(typeof _bkV2IsMac==='function')?_bkV2IsMac():true; const _shot=_mac?'Cmd+Shift+4':'Win+Shift+S'; const _paste=_mac?'Cmd+V':'Ctrl+V';
   const mBtn=(v,l)=>`<button onclick="pfmRecSet('method','${v}');document.querySelectorAll('[data-pfmm]').forEach(x=>{x.style.background='#fff';x.style.color='#5F5E5A'});this.style.background='#163d2b';this.style.color='#eafbe0'" data-pfmm="${v}" style="flex:1;background:${r.method===v?'#163d2b':'#fff'};color:${r.method===v?'#eafbe0':'#5F5E5A'};border:0.5px solid #cfcabf;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`;
   return `
@@ -5313,7 +5886,8 @@ function pfmRecModalHTML(){
       <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
         <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#0F6E56;text-transform:uppercase">Record payment</div>
         <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">${esc(b.voucherRef||b.code||b.id)}</div>
-        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')} · ค้าง <b style="color:#A32D2D">฿${bal.toLocaleString()}</b></div>
+        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')} · ${r.prepay?'ยอดใบจอง':'ค้าง'} <b style="color:#A32D2D">฿${bal.toLocaleString()}</b></div>
+        ${r.prepay?`<div id="pfm-rec-prenote" style="margin-top:8px;font-size:11px;line-height:1.55;color:#12518F;background:#E9F1FB;border:0.5px solid #C3D8F2;border-radius:8px;padding:7px 10px"><b>เอเยนต์ Invoice · รับเงินล่วงหน้า</b> — กดบันทึกแล้วระบบออกใบแจ้งหนี้เฉพาะใบจองนี้ ใบนี้จะไม่ถูกดึงไปออกบิลสิ้นเดือนซ้ำ · ถ้ารับไม่เต็ม ส่วนที่เหลือค้างอยู่บนใบแจ้งหนี้ใบนี้</div>`:''}
       </div>
       <div style="padding:16px 19px;display:flex;flex-direction:column;gap:13px">
         <div>
@@ -5350,6 +5924,142 @@ function pfmRecModalHTML(){
 }
 // paste-to-attach slip · active only while the Record modal is open
 document.addEventListener('paste', function(e){ try{ if(!_pfmRec||!document.getElementById('pfm-rec-modal')) return; const items=(e.clipboardData&&e.clipboardData.items)||[]; for(let i=0;i<items.length;i++){ const it=items[i]; if(it.type&&it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); pfmSlipUpload(f,'paste'); } } } }catch(_){}; });
+/* §pfmEdit · แก้รายการรับเงินที่บันทึกผิด · ยอด / วันที่ / ช่องทาง / ลบ · และยกเลิกใบ PFM ที่ออกผิด
+   แก้ได้เฉพาะ type 'payment' (ปุ่ม Record) — มัดจำ (deposit) กับเงินคืน (refund) ผูกกับ SB_DEPOSITS / การยกเลิก
+   แก้ตรงนี้แล้วยอดมัดจำคงเหลือจะเพี้ยน จึงแสดงอ่านอย่างเดียว · ทุกการเปลี่ยนลง bk.history (ใคร / จาก→เป็น / เหตุผล)
+   ลบ = ลบแถวจริง (sync ส่ง op:'del') เพราะ sb_payments ไม่มีคอลัมน์ void · ร่องรอยอยู่ใน history แทน */
+let _pfmEdit=null;   // {bkId, invId, rows:[{id,amount,method,ymd,del,orig:{amount,method,ymd}}], reason}
+function pfmEditCan(){ return (typeof window.laCanEditArea!=='function') || window.laCanEditArea('accounting'); }
+function _pfmPayEditable(p){ return !p.type || p.type==='payment'; }
+function _pfmYmd(iso){ try{ const d=new Date(iso); if(isNaN(d)) return String(iso||'').slice(0,10); return bookingV2LocalYMD(d); }catch(e){ return String(iso||'').slice(0,10); } }
+function pfmEditOpen(bkId){
+  if(!pfmEditCan()){ alert('No permission to edit accounting'); return; }
+  const inv=acctBookingInvoice(bkId); if(!inv){ alert('No PFM invoice for this booking'); return; }
+  const rows=SB_PAYMENTS.filter(p=>p.invoiceId===inv.id && _pfmPayEditable(p)).map(p=>{
+    const o={amount:Math.round(+p.amount||0), method:p.method||'transfer', ymd:_pfmYmd(p.date)};
+    return {id:p.id, amount:o.amount, method:o.method, ymd:o.ymd, del:false, orig:o};
+  });
+  _pfmEdit={bkId, invId:inv.id, rows, reason:''};
+  renderDailyPFM();
+}
+function pfmEditClose(){ _pfmEdit=null; renderDailyPFM(); }
+function pfmEditSet(i,f,v){ const r=_pfmEdit&&_pfmEdit.rows[i]; if(!r) return; r[f]=v; pfmEditRefreshSum(); }   // no re-render (keep focus)
+function pfmEditToggleDel(i){ const r=_pfmEdit&&_pfmEdit.rows[i]; if(!r) return; r.del=!r.del; const el=document.getElementById('pfm-edit-body'); if(el) el.innerHTML=pfmEditRowsHTML(); pfmEditRefreshSum(); }
+function _pfmEditTotals(){
+  const e=_pfmEdit; const inv=SB_INVOICES.find(i=>i.id===e.invId)||{};
+  const fixed=SB_PAYMENTS.filter(p=>p.invoiceId===e.invId && !_pfmPayEditable(p)).reduce((s,p)=>s+(p.type==='refund'?-Math.abs(+p.amount||0):(+p.amount||0)),0);
+  const paid=fixed+e.rows.filter(r=>!r.del).reduce((s,r)=>s+Math.max(0,Math.round(Number(r.amount)||0)),0);
+  const total=+inv.total||0;
+  return {total, paid, bal:total-paid};
+}
+function pfmEditRefreshSum(){ const el=document.getElementById('pfm-edit-sum'); if(el) el.innerHTML=pfmEditSumHTML(); }
+function pfmEditSumHTML(){
+  if(!_pfmEdit) return '';
+  const t=_pfmEditTotals(); const f=n=>'฿'+Math.round(n).toLocaleString();
+  const balTxt = t.bal>0 ? `<b style="color:#A32D2D">ค้าง ${f(t.bal)}</b>` : t.bal<0 ? `<b style="color:#A32D2D">รับเกิน ${f(-t.bal)}</b>` : `<b style="color:#0F6E56">ครบ</b>`;
+  return `ยอดใบ ${f(t.total)} · รับแล้ว ${f(t.paid)} · ${balTxt}`;
+}
+function pfmEditRowsHTML(){
+  const e=_pfmEdit; if(!e) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const inp='height:34px;border:1px solid #d7dbe2;border-radius:8px;padding:0 9px;font-family:inherit;font-size:12.5px;box-sizing:border-box';
+  let h='';
+  if(!e.rows.length) h+=`<div style="font-size:11.5px;color:#8a8a82;text-align:center;padding:14px;border:1px dashed #d7dbe2;border-radius:9px">ยังไม่มีรายการรับเงิน</div>`;
+  e.rows.forEach((r,i)=>{
+    const opts=[['transfer','โอน'],['cash','เงินสด'],['card','บัตร']];
+    if(!opts.some(o=>o[0]===r.method)) opts.push([r.method,r.method]);
+    h+=`<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:0.5px solid #eef0ea;${r.del?'opacity:.45':''}">
+      <input type="date" value="${esc(r.ymd)}" ${r.del?'disabled':''} onchange="pfmEditSet(${i},'ymd',this.value)" style="${inp};width:140px">
+      <input type="number" min="0" value="${esc(r.amount)}" ${r.del?'disabled':''} oninput="pfmEditSet(${i},'amount',this.value)" style="${inp};flex:1;min-width:0;font-family:'DM Mono',monospace;font-weight:700;text-align:right;${r.del?'text-decoration:line-through':''}">
+      <select ${r.del?'disabled':''} onchange="pfmEditSet(${i},'method',this.value)" style="${inp};width:88px;background:#fff">${opts.map(o=>`<option value="${esc(o[0])}" ${r.method===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select>
+      <button onclick="pfmEditToggleDel(${i})" title="${r.del?'เอากลับ':'ลบรายการนี้'}" style="border:0.5px solid ${r.del?'#cfcabf':'#E6C9C3'};background:#fff;color:${r.del?'#5F5E5A':'#A32D2D'};border-radius:8px;height:34px;width:62px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${r.del?'↺ คืน':'ลบ'}</button>
+    </div>`;
+  });
+  const fixed=SB_PAYMENTS.filter(p=>p.invoiceId===e.invId && !_pfmPayEditable(p));
+  if(fixed.length) h+=`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px">${fixed.map(p=>esc((p.type==='refund'?'เงินคืน':'หักมัดจำ')+' ฿'+Math.round(Math.abs(+p.amount||0)).toLocaleString()+' · '+_pfmYmd(p.date))).join('<br>')}<br>(มัดจำ / เงินคืน แก้ที่หน้า Accounting)</div>`;
+  return h;
+}
+function pfmEditSubmit(){
+  const e=_pfmEdit; if(!e) return;
+  const inv=SB_INVOICES.find(i=>i.id===e.invId); if(!inv){ pfmEditClose(); return; }
+  const f=n=>'THB '+Math.round(n).toLocaleString();
+  const log=[];
+  for(const r of e.rows){
+    if(!SB_PAYMENTS.some(x=>x.id===r.id)) continue;
+    if(r.del){ log.push('deleted '+f(r.orig.amount)+' ('+r.orig.method+', '+r.orig.ymd+')'); continue; }
+    const amt=Math.round(Number(r.amount)||0);
+    if(amt<=0){ alert('Amount must be more than 0. Use the delete button to remove a payment.'); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(r.ymd||'')){ alert('Invalid date'); return; }
+    const ch=[];
+    if(amt!==r.orig.amount) ch.push(f(r.orig.amount)+' -> '+f(amt));
+    if(r.method!==r.orig.method) ch.push(r.orig.method+' -> '+r.method);
+    if(r.ymd!==r.orig.ymd) ch.push(r.orig.ymd+' -> '+r.ymd);
+    if(ch.length) log.push('edited '+ch.join(', '));
+  }
+  if(!log.length){ pfmEditClose(); return; }
+  const t=_pfmEditTotals();
+  if(t.bal<0 && !confirm('Total received '+f(t.paid)+' is more than the invoice '+f(t.total)+' by '+f(-t.bal)+'.\n\nSave anyway?')) return;
+  const delIds=new Set(e.rows.filter(r=>r.del).map(r=>r.id));
+  e.rows.forEach(r=>{ if(r.del) return; const p=SB_PAYMENTS.find(x=>x.id===r.id); if(!p) return;
+    p.amount=Math.round(Number(r.amount)||0); p.method=r.method;
+    if(r.ymd!==r.orig.ymd) p.date=new Date(r.ymd+'T12:00:00').toISOString(); });
+  for(let i=SB_PAYMENTS.length-1;i>=0;i--) if(delIds.has(SB_PAYMENTS[i].id)) SB_PAYMENTS.splice(i,1);
+  sbPaymentsPersist();
+  const st=acctInvoiceState(inv);   // void stays void · otherwise paid / partial / issued from the new sum
+  inv.status=st;
+  sbInvoicesPersist();
+  const reason=String(e.reason||'').trim();
+  const txt='Payment correction · '+log.join(' · ')+(reason?' · reason: '+reason:'');
+  (inv.bookingIds||[]).forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(!b) return;
+    b.paymentStatus = st==='paid'?'paid':st==='partial'?'partial':'invoiced';
+    if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'payment',txt,'Payment'); });
+  acctPersistBookings();
+  _pfmEdit=null; renderDailyPFM();
+}
+function pfmEditVoidInvoice(){
+  const e=_pfmEdit; if(!e) return;
+  const inv=SB_INVOICES.find(i=>i.id===e.invId); if(!inv) return;
+  if(SB_PAYMENTS.some(p=>p.invoiceId===inv.id)){ alert('This PFM still has payments. Delete them and save first.'); return; }
+  if(!confirm('Void PFM '+(inv.number||'')+'?\n\nThe booking goes back to "No invoice yet" and a new PFM can be issued.')) return;
+  const reason=String(e.reason||'').trim();
+  const ids=(inv.bookingIds||[]).slice();
+  acctVoidInvoice(inv.id);
+  ids.forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(b && typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'invoice','Invoice '+(inv.number||inv.id)+' voided'+(reason?' · reason: '+reason:''),'Invoice'); });
+  acctPersistBookings();
+  _pfmEdit=null; renderDailyPFM();
+}
+function pfmEditModalHTML(){
+  const e=_pfmEdit; if(!e) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const b=SB_BOOKINGS.find(x=>x.id===e.bkId)||{}; const a=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const inv=SB_INVOICES.find(i=>i.id===e.invId)||{};
+  const noPay=!SB_PAYMENTS.some(p=>p.invoiceId===e.invId);
+  return `
+  <div id="pfm-edit-modal" onclick="pfmEditClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;width:560px;max-width:96vw;max-height:92vh;overflow:auto;box-shadow:0 16px 50px rgba(0,0,0,.3)">
+      <div style="padding:15px 19px;border-bottom:1px solid #eef0ea">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#185FA5;text-transform:uppercase">Edit payments · ${esc(inv.number||'')}</div>
+        <div style="font-size:16px;font-weight:700;color:#15201a;margin-top:2px">${esc(b.voucherRef||b.code||b.id)}</div>
+        <div style="font-size:11px;color:#8a8a82;margin-top:2px">${esc(a?a.name:b.agentId||'')}</div>
+      </div>
+      <div style="padding:12px 19px 16px">
+        <div style="display:flex;gap:7px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.04em;padding-bottom:4px"><span style="width:140px">วันที่รับ</span><span style="flex:1;text-align:right">จำนวน (THB)</span><span style="width:88px">ช่องทาง</span><span style="width:62px"></span></div>
+        <div id="pfm-edit-body">${pfmEditRowsHTML()}</div>
+        <div id="pfm-edit-sum" style="font-size:12px;color:#3F4654;margin-top:11px;padding:9px 11px;background:#fafbf9;border-radius:9px">${pfmEditSumHTML()}</div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">เหตุผลที่แก้ (ลงประวัติบุ๊กกิ้ง)</div>
+          <input value="${esc(e.reason)}" oninput="if(_pfmEdit)_pfmEdit.reason=this.value" placeholder="เช่น คีย์ยอดผิด 1,000 → 3,200" style="width:100%;box-sizing:border-box;height:36px;border:1px solid #d7dbe2;border-radius:9px;padding:0 12px;font-family:inherit;font-size:13px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:13px 19px;background:#fafbf9;border-top:1px solid #eef0ea">
+        ${noPay?`<button onclick="pfmEditVoidInvoice()" title="ออก PFM ผิด · ยกเลิกใบนี้แล้วออกใหม่ได้" style="font-size:12px;font-weight:600;color:#A32D2D;background:#fff;border:1px solid #E6C9C3;border-radius:9px;padding:9px 13px;cursor:pointer;font-family:inherit">ยกเลิกใบ PFM</button>`:''}
+        <span style="flex:1"></span>
+        <button onclick="pfmEditClose()" style="font-size:12px;font-weight:600;color:#5F5E5A;background:#fff;border:1px solid #d7dbe2;border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">ปิด</button>
+        <button onclick="pfmEditSubmit()" style="font-size:12px;font-weight:700;color:#fff;background:#185FA5;border:none;border-radius:9px;padding:9px 18px;cursor:pointer;font-family:inherit">บันทึกการแก้ไข</button>
+      </div>
+    </div>
+  </div>`;
+}
 function pfmApproveTravel(bkId){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   const def=pfmSalesName(b);   // default approver = booking's salesperson
@@ -5371,7 +6081,14 @@ function pfmHold(bkId){
 function pfmIssueAll(){
   const list=pfmBookingsForPeriod(_pfmDate,_pfmMode); const todo=list.filter(b=>!acctBookingInvoice(b.id));
   if(!todo.length){ alert('All bookings already have a PFM invoice.'); return; }
-  if(!confirm('Issue PFM invoices for '+todo.length+' booking(s) on '+_pfmDate+'?')) return;
+  /* §pfmCotWarn · ออกทีเดียวทั้งชุด · ถ้ามีใบที่หักหน้าท่าไปแล้วปนอยู่ ต้องบอกก่อน
+     ไม่งั้นเก็บซ้ำทีละหลายใบโดยไม่มีใครทันเห็น */
+  const _cwN=todo.map(pfmCotWarn).filter(Boolean);
+  const _cwSum=_cwN.reduce((s,x)=>s+x.deduct,0);
+  if(!confirm('Issue PFM invoices for '+todo.length+' booking(s) on '+_pfmDate+'?'
+    +(_cwN.length ? ('\n\n\u26a0 ในนั้นมี '+_cwN.length+' ใบที่เก็บเงินสดหน้าท่าไปแล้ว รวม '
+       +Math.round(_cwSum).toLocaleString()+' บาท และตัดสินว่าหักจากบิล agent\n'
+       +'ใบแจ้งหนี้จะออกยอดเต็ม ยังไม่ได้หักก้อนนั้นออกให้') : ''))) return;
   let n=0; todo.forEach(b=>{ try{ acctCreateInvoice(b.agentId,[b.id],0); n++; }catch(e){} });
   alert('Issued '+n+' PFM invoice(s).');
   renderDailyPFM();
@@ -5380,6 +6097,7 @@ function pfmIssueAll(){
 function pfmRemindAll(){
   const list=pfmBookingsForPeriod(_pfmDate,_pfmMode); let n=0;
   list.forEach(b=>{ const inv=acctBookingInvoice(b.id); const total=acctBookingTotal(b); const bal=inv?acctInvoiceBalance(inv):total; if(bal<=0) return;
+    if(!pfmIsProforma(b)) return;   /* §pfmPrepay · ส่วนที่เหลือของใบเครดิตยังไม่ถึงกำหนด ไม่ใช่ของที่ต้องทวงก่อนเดินทาง */
     b.ops=b.ops||{}; b.ops.pfm=b.ops.pfm||{}; b.ops.pfm.remindedAt=new Date().toISOString();
     if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','PFM payment reminder sent','Notify'); n++; });
   if(!n){ alert('No unpaid bookings to remind.'); return; }
@@ -5419,8 +6137,13 @@ function renderDailyPFM(){
     const held=pfm&&pfm.decision==='hold';
     const _bt=(b.trips||[]).map(t=>t.date||'').filter(x=>x>=range.from&&x<=range.to).sort();
     const _btDate=_bt.length?_bt[0]:date;
-    const alert = now>pfmCutoff(_btDate) && unpaid && !approved && !held;
-    totAmt+=total; paidAmt+=paid; if(unpaid){unpaidAmt+=bal; nUnpaid++;} if(alert) nAlert++; if(approved) nApproved++;
+    /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · ไม่มี cutoff ไม่มีเตือน · นับเฉพาะก้อนที่รับแล้ว */
+    const _pre = !pfmIsProforma(b);
+    const alert = !_pre && now>pfmCutoff(_btDate) && unpaid && !approved && !held;
+    const _got = Math.max(0, paid);   /* เอเยนต์ที่ราคายังไม่รวม VAT · ใบแจ้งหนี้สูงกว่ายอดใบจอง รับมานิดเดียว paid ติดลบได้ */
+    if(_pre){ totAmt+=_got; paidAmt+=_got; }
+    else { totAmt+=total; paidAmt+=paid; if(unpaid){unpaidAmt+=bal; nUnpaid++;} }
+    if(alert) nAlert++; if(approved) nApproved++;
     const trip=(b.trips||[]).find(t=>(t.date||'')===_btDate)||(b.trips||[])[0]||{};
     const route=(typeof getRoute==='function'?getRoute(trip.routeId):null);
     const pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(trip.pax||{}):0;
@@ -5430,9 +6153,20 @@ function renderDailyPFM(){
     if(held) chip=_dot('#E24B4A')+`<span style="font-size:11px;color:#A32D2D">On hold</span>`;
     else if(approved) chip=_dot('#1D9E75')+`<span style="font-size:11px;color:#0F6E56" title="Extended by ${esc((pfm&&(pfm.extendedBy||pfm.by))||'—')}">Extended${(pfm&&(pfm.extendedBy||pfm.by))?' · '+esc(pfm.extendedBy||pfm.by):''}</span>`;
     else if(!unpaid && inv) chip=_dot('#1D9E75')+`<span style="font-size:11px;color:#0F6E56">Paid</span>`;
+    else if(_pre) chip=_dot('#EF9F27')+`<span style="font-size:11px;color:#7A4A00" title="รับล่วงหน้าแล้ว ฿${sbFmtTHB(paid)} · ส่วนที่เหลือค้างบนใบแจ้งหนี้ใบนี้ ไม่นับเป็นยอดค้างของ PFM">จ่ายล่วงหน้าบางส่วน</span>`;
     else if(alert) chip=_dot('#E24B4A')+`<span style="font-size:11px;color:#A32D2D;font-weight:500">Unpaid · เลย cutoff</span>`;
     else if(inv) chip=_dot('#EF9F27')+`<span style="font-size:11px;color:#7A4A00">Awaiting payment</span>`;
     else chip=_dot('#B4B2A9')+`<span style="font-size:11px;color:#5F5E5A">No invoice yet</span>`;
+    /* §pfmCotWarn · หักที่ท่าไปแล้วเท่าไร · แดงเมื่อยังมียอดค้างอยู่ = จุดที่เก็บซ้ำได้ */
+    const _cw=pfmCotWarn(b);
+    if(_cw){
+      const _risk=bal>0;
+      chip+=`<div style="margin-top:3px"><span title="${esc('เก็บเงินสดหน้าท่าแล้ว '+Math.round(_cw.deduct).toLocaleString()+' บาท และตัดสินว่าหักจากบิล agent'
+        +(_risk?' · ยอดค้างที่แสดงยังไม่ได้หักก้อนนี้ออก ตรวจก่อนออกบิลหรือรับเงิน':' · บิลนี้ไม่มียอดค้างแล้ว'))}"
+        style="font-size:10px;font-weight:600;border-radius:7px;padding:2px 7px;white-space:nowrap;`
+        +(_risk?'color:#A32D2D;background:#FCEBEB;border:0.5px solid #E6C9C3"':'color:#5F5E5A;background:#F1EFE8;border:0.5px solid #E1DED5"')
+        +`>&#9888; หักที่ท่าแล้ว &#3647;${sbFmtTHB(_cw.deduct)}</span></div>`;
+    }
     // actions — Finexy green
     const _gbtn='background:#163d2b;color:#eafbe0;border:none;border-radius:7px;padding:5px 11px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit';
     const _obtn='background:#fff;border:0.5px solid #cfcabf;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit';
@@ -5448,14 +6182,16 @@ function renderDailyPFM(){
       const _nSlip=((b.paymentSlips)||[]).length;
       act+=` <button onclick="pfmViewSlips('${b.id}')" title="${_nSlip?('ดู / แนบเพิ่ม / ลบสลิป ('+_nSlip+' ไฟล์)'):'ยังไม่มีสลิป · กดเพื่อแนบ'}" style="${_obtn};color:${_nSlip?'#0F6E56':'#8a8a82'}">\u{1F9FE} ${_nSlip?('สลิป '+_nSlip):'+ สลิป'}</button>`;
       act+=` <button onclick="acctOpenDoc('${inv.id}','invoice')" title="ดู/พิมพ์ใบแจ้งหนี้" style="${_obtn}">View</button>`;
+      /* §pfmEdit · บันทึกรับเงินผิด (ยอด/วันที่/ช่องทาง) หรือกด Issue PFM ผิดใบ → เดิมไม่มีทางแก้จากหน้านี้ */
+      if(pfmEditCan()) act+=` <button onclick="pfmEditOpen('${b.id}')" title="แก้ไขยอดที่บันทึกรับ / ลบรายการ / ยกเลิกใบ PFM" style="${_obtn};color:#185FA5">&#9998; แก้ไข</button>`;
     }
     const tdc='padding:11px 10px;font-size:12px;border-top:0.5px solid rgba(0,0,0,.06);vertical-align:middle';
     const _stKey = held?'hold':approved?'approved':(!unpaid&&inv)?'paid':alert?'alert':inv?'awaiting':'noinv';
     const _srch = String((b.voucherRef||b.code||b.id)+' '+(a?a.name:b.agentId)+' '+(route?route.name:trip.routeId)+' '+pfmSalesName(b)).toLowerCase();
-    const _trHtml = `<tr data-pfmrow="${esc(_srch)}" data-pfmst="${_stKey}" style="${alert?'background:#FEF6F5':''}">
+    const _trHtml = `<tr data-pfmrow="${esc(_srch)}" data-pfmst="${_stKey}"${_pre?' data-pfmpre="1"':''} style="${alert?'background:#FEF6F5':''}">
       <td style="${tdc};text-align:center;width:30px"><span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #cfcabf;display:inline-block;vertical-align:middle"></span></td>
       <td style="${tdc};font-family:'DM Mono',monospace;color:#5F5E5A">${esc(b.voucherRef||b.code||b.id)}</td>
-      <td style="${tdc};color:#1B2A55;font-weight:500">${esc(a?a.name:b.agentId)}</td>
+      <td style="${tdc};color:#1B2A55;font-weight:500">${esc(a?a.name:b.agentId)}${_pre?`<div style="margin-top:3px"><span class="pfm-pretag" title="เอเยนต์ Invoice (เครดิต) ที่โอนเงินเข้ามาก่อน · ใบนี้มีใบแจ้งหนี้ของตัวเอง ไม่รวมในบิลสิ้นเดือน" style="font-size:10px;font-weight:600;color:#12518F;background:#E9F1FB;border:0.5px solid #C3D8F2;border-radius:7px;padding:2px 7px;white-space:nowrap">Invoice · จ่ายล่วงหน้า</span></div>`:''}</td>
       <td style="${tdc};color:#5F5E5A">${esc(pfmSalesName(b))}</td>
       <td style="${tdc};color:#5F5E5A">${esc(route?route.name:trip.routeId)}</td>
       <td style="${tdc};text-align:center;font-family:'DM Mono',monospace">${pax}</td>
@@ -5465,9 +6201,9 @@ function renderDailyPFM(){
       <td style="${tdc};text-align:right;white-space:nowrap">${act||'<span style="color:#c7c5bb">—</span>'}</td>
     </tr>`;
     if(!_byDate[_btDate]){ _byDate[_btDate]=[]; _dateOrder.push(_btDate); }
-    _byDate[_btDate].push({tr:_trHtml, total, paid, bal, alert});
-    if(unpaid && !approved && !held){   // outstanding → surface at top, ordered by nearest travel date
-      _prio.push({ btDate:_btDate, bal, alert, act,
+    _byDate[_btDate].push({tr:_trHtml, total:(_pre?_got:total), paid:(_pre?_got:paid), bal:(_pre?0:bal), alert});
+    if(unpaid && !approved && !held && !_pre){   // outstanding → surface at top, ordered by nearest travel date
+      _prio.push({ btDate:_btDate, bal, alert, act, cotDed:(_cw?_cw.deduct:0),
         voucher:esc(b.voucherRef||b.code||b.id), agentName:esc(a?a.name:b.agentId),
         routeName:esc(route?route.name:trip.routeId), pax });
     }
@@ -5503,12 +6239,13 @@ function renderDailyPFM(){
       <span style="font-size:12px;color:#1B2A55;font-weight:500;flex:1;min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.agentName}</span>
       <span style="font-size:11px;color:#8a8a82;flex:1;min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.routeName}</span>
       <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#A32D2D;text-align:right;min-width:80px">&#3647;${sbFmtTHB(x.bal)}</span>
+      ${x.cotDed>0?`<span title="เก็บเงินสดหน้าท่าแล้ว ${Math.round(x.cotDed).toLocaleString()} บาท และตัดสินว่าหักจากบิล agent · ยอดค้างข้างซ้ายยังไม่ได้หักก้อนนี้ออก" style="font-size:10px;font-weight:600;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E6C9C3;border-radius:7px;padding:2px 7px;white-space:nowrap">&#9888; หักที่ท่า &#3647;${sbFmtTHB(x.cotDed)}</span>`:''}
       <span style="white-space:nowrap">${x.act}</span>
     </div>`; };
   const prioCard = (mode!=='daily' && _prio.length) ? `
     <div style="background:#fff;border:1px solid #F0D7BE;border-radius:14px;box-shadow:0 1px 3px rgba(20,45,28,.06);overflow:hidden;margin-bottom:13px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;background:#FBF1E4;border-bottom:0.5px solid #F0D7BE;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:9px"><span style="font-size:13px;font-weight:700;color:#7A4A00">&#9888; ต้องเก็บก่อนเดินทาง · ค้างชำระ</span><span style="font-size:11px;color:#9a7b4a">${_prio.length} รายการ · เรียงตามใกล้วันเดินทาง</span></div>
+        <div style="display:flex;align-items:center;gap:9px"><span style="font-size:13px;font-weight:700;color:#7A4A00">&#9888; ต้องเก็บก่อนเดินทาง · ค้างชำระ</span><span style="font-size:11px;color:#9a7b4a">${_prio.length} รายการ · เรียงตามใกล้วันเดินทาง</span>${(function(){var n=_prio.filter(x=>x.cotDed>0),t=n.reduce((s,x)=>s+x.cotDed,0);return n.length?`<span title="ตรวจก่อนออกบิลหรือรับเงิน · ยอดค้างที่แสดงยังไม่ได้หักเงินที่เก็บหน้าท่าออก" style="font-size:10px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E6C9C3;border-radius:8px;padding:2px 8px">&#9888; ${n.length} ใบหักที่ท่าแล้ว &#3647;${sbFmtTHB(t)}</span>`:'';})()}</div>
         <div style="font-size:12px;color:#A32D2D;font-weight:700;font-family:'DM Mono',monospace">ค้าง &#3647;${sbFmtTHB(_prioDue)}</div>
       </div>
       ${_prioShown.map(prioRow).join('')}
@@ -5533,8 +6270,8 @@ function renderDailyPFM(){
   const kc=(lab,val,sub,icon,col,subcol)=>`<div style="background:#fff;border-radius:18px;box-shadow:0 1px 3px rgba(20,45,28,.06);padding:14px 16px;display:flex;flex-direction:column;gap:5px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:#7d7d74">${lab}</span><span style="width:26px;height:26px;border-radius:50%;border:1px solid #e6e9e3;display:flex;align-items:center;justify-content:center">${_ic(_P[icon]||'',col&&col!=='#1b1b18'?col:'#8a978c',14)}</span></div><div style="font-size:24px;font-weight:700;letter-spacing:-.5px;color:${col||'#1b1b18'}">${val}</div><div style="font-size:11px;color:${subcol||'#8a8a82'}">${sub||''}</div></div>`;
   const th='padding:11px 12px;text-align:left;font-size:11px;color:#9a988f;font-weight:500;background:#fbfcfa';
   // status breakdown counts (left-column card)
-  let nPaid=0,nAwait=0,nNoInv=0,nHold=0;
-  list.forEach(b=>{ const inv2=acctBookingInvoice(b.id); const tt2=acctBookingTotal(b); const bal2=inv2?acctInvoiceBalance(inv2):tt2; const up2=bal2>0; const pf2=(b.ops&&b.ops.pfm)||null; const hd2=pf2&&pf2.decision==='hold'; if(hd2)nHold++; else if(!up2&&inv2)nPaid++; else if(!inv2)nNoInv++; else nAwait++; });
+  let nPaid=0,nAwait=0,nNoInv=0,nHold=0,nPrePart=0;
+  list.forEach(b=>{ const inv2=acctBookingInvoice(b.id); const tt2=acctBookingTotal(b); const bal2=inv2?acctInvoiceBalance(inv2):tt2; const up2=bal2>0; const pf2=(b.ops&&b.ops.pfm)||null; const hd2=pf2&&pf2.decision==='hold'; if(hd2)nHold++; else if(!up2&&inv2)nPaid++; else if(!inv2)nNoInv++; else if(pfmIsProforma(b))nAwait++; else nPrePart++; });
   const brow=(c,lab,n)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:0.5px solid #f0f1ed"><span style="font-size:12px;color:#5f5e5a"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:8px;vertical-align:middle"></span>${lab}</span><span style="font-size:13px;font-weight:700;color:#1b1b18;font-family:'DM Mono',monospace">${n}</span></div>`;
   // period segmented toggle (scopes chart + bookings list)
   const _seg=(m,lab)=>`<button onclick="pfmSetMode('${m}')" style="border:none;background:${mode===m?'#163d2b':'transparent'};color:${mode===m?'#eafbe0':'#5f5e5a'};border-radius:14px;padding:6px 13px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit">${lab}</button>`;
@@ -5547,6 +6284,7 @@ function renderDailyPFM(){
           <div style="font-size:13px;color:#8a8a82">Stay on top of pro-forma payments before each operation day.</div>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button onclick="pfmPrepayOpen()" title="เอเยนต์ Invoice (เครดิต) โอนเงินเข้ามาก่อน · บันทึกรับเงินผูกกับใบจอง" style="background:#fff;color:#12518F;border:1px solid #C3D8F2;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ รับเงินล่วงหน้า · เอเยนต์ Invoice</button>
           <button onclick="pfmPrintReport()" title="พิมพ์รายงาน PFM + สลิปที่แนบ" style="background:#163d2b;color:#eafbe0;border:none;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🖨 พิมพ์รายงาน</button>
           ${segBar}
           <div style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e7eae5;border-radius:22px;padding:6px 9px">
@@ -5608,6 +6346,7 @@ function renderDailyPFM(){
             ${brow('#E24B4A','Unpaid · past cutoff',nAlert)}
             ${brow('#B4B2A9','No invoice yet',nNoInv)}
             ${brow('#0F6E56','Approved · extended',nApproved)}
+            ${nPrePart?brow('#2A78D6','Invoice · จ่ายล่วงหน้าบางส่วน',nPrePart):''}
             ${nHold?brow('#A32D2D','On hold',nHold):''}
           </div>
         </div>
@@ -5624,8 +6363,8 @@ function renderDailyPFM(){
           ${dayCardsHtml||`<div style="background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(20,45,28,.06);padding:40px;text-align:center;color:#8a8a82;font-size:13px">ไม่มี booking แบบ Pro-forma ใน ${esc(mode==='daily'?date:dlabel)}</div>`}
         </div>
       </div>
-      <div style="font-size:11px;color:#9a988f;margin-top:12px">PFM = agent payType "proforma" · ออกใบแจ้งหนี้ + ติดตามชำระก่อน ${clabel} · หลัง cutoff ที่ยังไม่จ่าย ต้องให้ salesperson กด Extend หรือ Hold</div>
-    </div>${pfmRecModalHTML()}`;
+      <div style="font-size:11px;color:#9a988f;margin-top:12px">เอเยนต์ Invoice ที่จ่ายล่วงหน้าขึ้นด้วย (ป้ายฟ้า) นับเฉพาะยอดที่รับแล้ว · PFM = agent payType "proforma" · ออกใบแจ้งหนี้ + ติดตามชำระก่อน ${clabel} · หลัง cutoff ที่ยังไม่จ่าย ต้องให้ salesperson กด Extend หรือ Hold</div>
+    </div>${pfmPrepayModalHTML()}${pfmRecModalHTML()}${pfmEditModalHTML()}`;
   if(_pfmSearch||_pfmFilter!=='all') pfmFilterRows();   // re-apply active search/filter to the fresh DOM
 }
 // ════════════════════════════════════════════════════════════════════
@@ -5814,7 +6553,10 @@ function bkOvnHealSpans(){
         TRIPS[ds]=TRIPS[ds]||{};
         var op=TRIPS[ds][t.charterBoatId];
         if(op && op.charterBookingId===b.id) return;  /* ถูกต้องอยู่แล้ว */
-        if(op && op.charterBookingId){ blocked.push({date:ds,boat:t.charterBoatId,mine:b.id,theirs:op.charterBookingId}); return; }
+        /* §bkLock · ช่องที่ถูกล็อกทั้งลำไว้ให้เอเยนต์ (ยังไม่มีใบจอง) ต้องกันเท่าเหมาลำจริง
+           ไม่งั้นใบเหมาอื่นจะยึดลำที่กันไว้ไปเงียบ ๆ ตอน heal ทำงานรอบถัดไป */
+        if(op && (typeof opLocked==='function' ? opLocked(op) : op.charterBookingId)){
+          blocked.push({date:ds,boat:t.charterBoatId,mine:b.id,theirs:op.charterBookingId||('hold:'+op.boatLockId)}); return; }
         var was=op?(op.route||'')+'/'+(op.type||''):'ว่าง';
         if(!op) TRIPS[ds][t.charterBoatId]={route:t.routeId,type:'charter',booked:0};
         TRIPS[ds][t.charterBoatId].type='charter';
@@ -5897,7 +6639,10 @@ function ovnDayTh(d){
 function bkIsOvnOutbound(t){ return !!(t && t.ovn==='return' && t.ovnReturnDate); }
 function baDayBoats(date){ // all non-charter assigned boats that day → [{boatId, routeId, boat}]
   const day=TRIPS[date]||{}; const chSet=baCharterBoatIds(date); const out=[];
-  Object.entries(day).forEach(([bid,o])=>{ if(o&&o.route&&!o.charterBookingId&&!chSet.has(bid)){ const boat=(BOATS||[]).find(b=>b.id===bid); if(boat) out.push({boatId:bid, routeId:o.route, boat}); } });
+  /* §bkLock · ลำที่ถูกกันไว้ทั้งลำไม่ใช่ "เรือที่ขายที่นั่ง" อีกต่อไป
+     getAllotment ตัดความจุมันออกไปแล้ว (เซลล์เป็น charter) · ถ้าตรงนี้ยังนับมันอยู่
+     แถบโปรแกรมในหน้า By trip จะขึ้น "4 boats" คู่กับความจุของ 3 ลำ · เลขสองตัวเถียงกันเอง */
+  Object.entries(day).forEach(([bid,o])=>{ if(o&&o.route&&!(typeof opLocked==='function'?opLocked(o):o.charterBookingId)&&!chSet.has(bid)){ const boat=(BOATS||[]).find(b=>b.id===bid); if(boat) out.push({boatId:bid, routeId:o.route, boat}); } });
   return out;
 }
 function baBoatsForRoute(date, routeId){ return baDayBoats(date).filter(x=>x.routeId===routeId); }
@@ -5959,10 +6704,17 @@ function baBoatCellHTML(bk, routeId, date, alloc){
   const bo=cur?((BOATS||[]).find(b=>b.id===cur)):null;
   const label=cur?e((bo&&bo.name)||cur):'+ assign';
   const pulled = cur && date && (typeof bookingV2BoatPulled==='function') && bookingV2BoatPulled(bk, date);   // flag whenever the boat is pulled/mismatched (any date)
-  return `<div style="display:flex;align-items:center;gap:4px;justify-content:center">
-    <button onclick="event.stopPropagation();bookingV2BoatPicker(this,'${bk.id}','${routeId}')" title="${pulled?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':'Choose boat'}" style="border:1px solid ${pulled?'#E89A92':(cur?'#9FE1CB':'#E6C9C3')};background:${pulled?'#FCEBEB':(cur?'#fff':'#FEF9F2')};border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:${pulled?'#A32D2D':(cur?'#1B2A55':'#A05A1A')};white-space:nowrap">${pulled?'&#9888; ':''}${label}${up?' ⤴':''}</button>
-    <button onclick="event.stopPropagation();bookingV2BoatUpgrade('${bk.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;font-family:inherit">⤴</button>
-    ${(function(){ const _n=(typeof bkBoatPoolOn==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):0; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null; if(!_sp && _n<2) return ''; return `<button onclick="event.stopPropagation();bookingV2BoatSplit('${bk.id}','${e(date)}')" title="แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)" style="background:${_sp?'#F6F2FE':'#fff'};border:1px solid ${_sp?'#C7B8E8':'var(--border)'};color:${_sp?'#5B289A':'#999'};border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;font-family:inherit">&#8646;</button>`; })()}
+  /* §baCellFit · ปุ่มเลือกเรือหดได้ (ชื่อเรือยาวตัดด้วย …) · ปุ่มเล็กสองปุ่มไม่หด จึงไม่มีวันถูกดันตกขอบ */
+  /* §baCellStack (2026-10-03) · ปุ่มเล็กลงมาอยู่ใต้ปุ่มเลือกเรือ พร้อมคำกำกับ
+     ที่มา · ผู้ใช้ถามว่า "แต่ละสัญลักษณ์คืออะไร" แล้วเสนอ "เอาสัญลักษณ์ไปอยู่ใต้ Assign"
+     รอบแรกใส่คำกำกับ (Upgrade / แยกลำ) ไปด้วย · ผู้ใช้เห็นแล้วบอกว่า "ให้ช่องไม่ต้องกว้างเกินไป ตัดคำอธิบายออก"
+     จึงเหลือแต่สัญลักษณ์อยู่ใต้ปุ่มเลือกเรือ · คำอธิบายยังอยู่ใน title (ชี้ค้าง) · คอลัมน์แคบลงเหลือ 138px */
+  return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;flex:1 1 auto">
+    <button data-babtn="pick" onclick="event.stopPropagation();bookingV2BoatPicker(this,'${bk.id}','${routeId}')" title="${pulled?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':(cur?(label+' · Choose boat'):'Choose boat')}" style="min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;border:1px solid ${pulled?'#E89A92':(cur?'#9FE1CB':'#E6C9C3')};background:${pulled?'#FCEBEB':(cur?'#fff':'#FEF9F2')};border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:${pulled?'#A32D2D':(cur?'#1B2A55':'#A05A1A')};white-space:nowrap">${pulled?'&#9888; ':''}${label}${up?' ⤴':''}</button>
+    <div data-babtn="sub" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+    <button data-babtn="up" onclick="event.stopPropagation();bookingV2BoatUpgrade('${bk.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="flex:none;background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">⤴</button>
+    ${(function(){ const _n=(typeof bkBoatPoolOn==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):0; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null; if(!_sp && _n<2) return ''; return `<button data-babtn="split" onclick="event.stopPropagation();bookingV2BoatSplit('${bk.id}','${e(date)}')" title="แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)" style="flex:none;background:${_sp?'#F6F2FE':'#fff'};border:1px solid ${_sp?'#C7B8E8':'var(--border)'};color:${_sp?'#5B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">&#8646;</button>`; })()}
+    </div>
   </div>`;
 }
 // §boatSplit · ช่องเรือของ "แถวหนึ่งลำ" ในหน้า By-trip · โชว์เฉพาะลำของแถวนั้น
@@ -6003,7 +6755,38 @@ function baBoatSplitCellHTML(bk, date, chT){
   const btn='<button onclick="event.stopPropagation();bookingV2BoatSplit(\''+bid+'\',\''+dt+'\')" title="'+(sp?'แก้การแยกลำ':'กรุ๊ปใหญ่ที่ลำเดียวไม่พอ · แยกคนลงหลายลำ')+'" style="border:1px solid #D9CFF2;background:#F6F2FE;color:#5B289A;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit;margin:1px">'+(sp?'แก้การแยก':'แยกลงหลายลำ')+'</button>'
    +(sp?('<button onclick="event.stopPropagation();bookingV2BoatUnsplit(\''+bid+'\',\''+dt+'\')" title="รวมคนกลับเป็นลำเดียว" style="border:1px solid #E4E1D9;background:#fff;color:#6b6b64;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit;margin:1px">รวมกลับ</button>'):'');
   return '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1px">'+chips+btn+'</div>';
-}   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
+}
+/* ══ §grpDrag · ลำดับกรุ๊ปที่คนลากเอง ══════════════════════════════════════
+   ผู้ใช้แจ้ง 30 ก.ย. รอบสอง · ปุ่มเลือกวิธีเรียงกินที่มากเกินไป "เอาออก"
+   เปลี่ยนเป็นลากหัวกรุ๊ปสลับลำดับเอง · และย้ำว่า "รีเฟรชไม่หาย"
+
+   ที่เก็บ · คีย์ scalar บนสุดของ blob เก็บเป็นสตริง JSON
+     { "YYYY-MM-DD::routeId::zone": [เลขกรุ๊ปเรียงตามที่ลาก] }
+   เป็นสตริง จึงเดินทางเป็น {op:'meta'} ลง app_meta catch-all
+   ไม่ต้องมีตาราง ไม่ต้องมี migration ไม่ต้องแตะ field_mapping — ทรงเดียวกับ
+   rc_status_colors / da_template ที่ใช้มาก่อนแล้ว
+   ⚠ เขียนเป็น object ตรง ๆ ไม่ได้ · object บนสุดที่ไม่มีตารางเป็นเจ้าของจะหายตอนรีเฟรช
+
+   ลำดับเป็นของทั้งทีม (ตามที่ตกลงรอบก่อน) · เปลี่ยนแค่ลำดับที่โชว์
+   เลขกรุ๊ป การจัดคน ใบงานรถ และหน้าเช็คอิน ไม่ถูกแตะเลย
+   กรุ๊ปที่เพิ่งสร้างและยังไม่เคยถูกลาก ต่อท้ายตามเลขกรุ๊ปเสมอ                  */
+var _grpOrdCache=null, _grpOrdSrc=null;
+/* เก็บเฉพาะวันที่ยังใช้งาน · ลำดับของทริปที่ผ่านไปนานแล้วไม่มีใครดู
+   แต่ถ้าไม่ตัด คีย์จะสะสมไปเรื่อย ๆ จนก้อน blob บวมโดยไม่มีใครสังเกต */
+function _grpOrdPrune(o){
+  var today=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  var cut=new Date(today+'T12:00:00'); cut.setDate(cut.getDate()-45);
+  var min=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(cut):cut.toISOString().slice(0,10);
+  Object.keys(o).forEach(function(k){ var d=String(k).split('::')[0]||''; if(d && d<min) delete o[k]; });
+  return o;
+}
+/* ── ลากสลับลำดับ ────────────────────────────────────────────────────
+   คีย์อ่านจาก data-gk ของแถวเอง ไม่ส่งผ่านพารามิเตอร์ใน onclick
+   ชื่อโซนเป็นข้อความอิสระ · ยัดลงสตริงลิเทอรัลใน attribute เมื่อไหร่
+   เจอเครื่องหมายคำพูดตัวเดียวก็พังทั้งแถว                                */
+var _grpDrag=null;
+function _grpRowOf(el){ return (el && el.closest) ? el.closest('tr[data-grp]') : null; }
+   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
 // Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
 // van groups don't collide with seat groups in the same pickup zone (charter is shown in its own card).
@@ -6031,7 +6814,10 @@ function _bkV2VanNextGroup(date, routeId, zone){
    หมายเหตุ: bkOpsRead คืน object จริง (b.ops หรือ trip.ops) → เขียนผ่าน o ได้ · จะเข้า fn ก็ต่อเมื่อ
    o.vanGroup===gid อยู่แล้ว แปลว่า block นั้นมีของจริง ไม่ใช่ {} เปล่าที่ bkOpsRead คืนตอนไม่เจอ
    บุ๊กกิ้งวันเดียว (1,058/1,059): bkIsFirstDay → คืน b.ops ตัวเดิมเป๊ะ พฤติกรรมไม่เปลี่ยน */
-function _bkV2GrpApply(date,routeId,zone,gid,fn){ (SB_BOOKINGS||[]).forEach(b=>{ if(!b)return; if(!_bkV2InZone(b,date,routeId,zone))return; const o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}); if(!o)return; if(Array.isArray(o.vanSplits)){ o.vanSplits.forEach(s=>{ if(+s.vanGroup===+gid) fn(b,s,o); }); } else if(+o.vanGroup===+gid){ fn(b,null,o); } }); }   // disband must ALSO clear vanId + vanReturnId (was leaving them set in the non-split branch) — else the booking keeps its old van → re-grouping into another van = "รถปนกัน" + the disbanded booking still ships on the old van's job order. clear vanSeq too · else a stale pickup-order freezes the row after re-grouping/sorting   // no re-render · keep input focus   // clear manual pickup order → back to time sort
+function _bkV2GrpApply(date,routeId,zone,gid,fn){ (SB_BOOKINGS||[]).forEach(b=>{ if(!b)return; if(!_bkV2InZone(b,date,routeId,zone))return; const o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}); if(!o)return; if(Array.isArray(o.vanSplits)){ o.vanSplits.forEach(s=>{ if(+s.vanGroup===+gid) fn(b,s,o); }); } else if(+o.vanGroup===+gid){ fn(b,null,o); } }); }
+   // disband must ALSO clear vanId + vanReturnId (was leaving them set in the non-split branch) — else the booking keeps its old van → re-grouping into another van = "รถปนกัน" + the disbanded booking still ships on the old van's job order. clear vanSeq too · else a stale pickup-order freezes the row after re-grouping/sorting
+   // no re-render · keep input focus
+   // clear manual pickup order → back to time sort
 // Split a booking's pax across vans (e.g. 16 → 12 + 4 on another van)
 // §แยกคน · โมดัลของแอปเอง แทน prompt() ของเบราว์เซอร์ · ระบุ AD/CHD/INF/FOC ได้ตรงๆ
 // เดิมถามแค่ "กี่คน" แล้วให้ระบบเดาว่าใครเป็นเด็ก — เดาผิดเมื่อไหร่ เด็กก็กลายเป็นผู้ใหญ่ในใบงาน
@@ -6189,7 +6975,15 @@ function _bkV2IsAltAutoSplit(b){
   return b.ops.vanSplits.some(s => s && (s.fromAlt || s.pickHotel || s.pickAreaId || s.altWho));
 }
 // Mix a (light) group color 50% toward white → softer row/header shading on the By-trip-date page
-function _bkV2Soft(hex, amt){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); if(hex.length!==6) return '#'+hex; const a=(amt==null?0.5:amt); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); const m=x=>Math.round(x+(255-x)*a); return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; }   // no re-render · keep input focus
+function _bkV2Soft(hex, amt){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); if(hex.length!==6) return '#'+hex; const a=(amt==null?0.5:amt); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); const m=x=>Math.round(x+(255-x)*a); return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; }
+   // no re-render · keep input focus
+/* §splitPickTime · แยกรับคนละโรงแรม ต้องมีเวลารับของตัวเอง
+   เดิมเวลารับมีช่องเดียวต่อใบ (ops.pickupTimeFinal) → ตั้งเวลาให้โรงแรมที่แยกรับ จุดหลักเปลี่ยนตาม (และกลับกัน)
+   ตอนนี้แถวแยกรับที่มีจุดรับของตัวเองเก็บเวลาไว้ที่ vanSplits[i].pickTime · ยังไม่ตั้ง = ใช้เวลาของใบเหมือนเดิม
+   จุดหลัก / แยกส่งอย่างเดียว ยังใช้ ops.pickupTimeFinal ตามเดิม */
+function bkSplitOwnPick(s){ return !!(s && !s.main && (String(s.pickHotel||'').trim() || s.pickAreaId)); }
+function bkSplitPickTime(s){ return bkSplitOwnPick(s) ? String(s.pickTime||'').trim() : ''; }
+   // no re-render · keep input focus
 // §altPickups · stable per-booking color · split rows of the SAME booking share one VC-number color (visual "same booking" link)
 function _bkV2SplitColor(id){ id=String(id||''); let h=0; for(let i=0;i<id.length;i++){ h=(h*31+id.charCodeAt(i))>>>0; } const pal=['#5B289A','#185FA5','#0F6E56','#BA7517','#A32D2D','#7F77DD','#993556','#0E7C86','#C0392B','#1D9E75']; return pal[h%pal.length]; }
 // Effective zone of a vehicle on a date · honors temporary zone overrides ({zone,from,to})
@@ -6228,7 +7022,7 @@ let VANJOB_SENT={};
 function vanJobsSentPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); d.vanjob_sent=VANJOB_SENT; localStorage.setItem(lsKey,JSON.stringify(d)); }catch(_){} }
 function vanJobsSentAt(date,key){ return VANJOB_SENT[date+'::'+key]||null; }
 function vanJobsToggleSent(date,key){ const k=date+'::'+key; if(VANJOB_SENT[k]) delete VANJOB_SENT[k]; else VANJOB_SENT[k]=new Date().toISOString(); vanJobsSentPersist(); const sy=window.scrollY; renderVanJobs(); window.scrollTo(0,sy); }
-function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
+function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=laMonAbbrTH(); return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
 function vanJobsSentCellInner(date,key){ var s=vanJobsSentAt(date,key); return '<label onclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer"><input type="checkbox" '+(s?'checked':'')+' onchange="event.stopPropagation();vanJobsToggleSent(\''+date+'\',\''+key+'\')" style="width:17px;height:17px;cursor:pointer;accent-color:#0F6E56"><span style="font-size:8.5px;'+(s?'color:#0F6E56;font-weight:700':'color:#c2c0b7')+';white-space:nowrap;margin-top:1px">'+(s?vanJobsSentLbl(s):'ยังไม่ส่ง')+'</span></label>'; }
 /* ══ §vjRound · รถคันเดียววิ่งโปรแกรมเดิมได้หลายรอบใน 1 วัน ═══════════════════
    ของจริง: Love2 รับป่าตอง 07:30 · ส่งถึงท่า ~08:15 · แล้ววิ่งอีกรอบรับพันวา 08:20
@@ -6421,6 +7215,265 @@ function vanJobsOwnerTag(vid){ const ow=((typeof vehGet==='function'?vehGet(vid)
 function vanJobsDateShift(delta){ const d=new Date(_vanJobsDate+'T12:00:00'); d.setDate(d.getDate()+delta); _vanJobsDate=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(d):d.toISOString().slice(0,10); renderVanJobs(); }
 function vanJobsToday(){ _vanJobsDate=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderVanJobs(); }
 function vanJobsSetDate(ds){ if(!ds) return; _vanJobsDate=ds; renderVanJobs(); }   /* §laDatePick */
+/* ══ §vanStop · จุดแวะของรถที่ไม่ใช่ booking ═══════════════════════════════════
+   เคสจริงที่ทีมแจ้ง · ไกด์ติดรถไปท่าเรือ · ให้รถแวะเอาของที่ออฟฟิศ
+   ไม่ใช่ลูกค้า ไม่มีใบจอง ไม่ลงเรือ · ที่นั่งเรือกับทะเบียนอุทยานต้องไม่ขยับแม้แต่นิดเดียว
+   แต่รถต้องขับไปจริง คนขับต้องเห็นในใบงาน และหน้าเช็คอินรถต้องติ๊กได้
+
+   สองชนิดเท่านั้น · เส้นแบ่งคือ "กินที่นั่งรถไหม"
+     staff · คนติดรถ  → กินที่นั่ง  → ต้องเข้า bookingV2VanGroupPax ไม่งั้นรถ 10 ที่โดนจัด 11 คน
+     cargo · ของ      → ไม่กินที่นั่ง → กินแค่เวลาและท้ายรถ
+
+   ที่เก็บ · ตาราง van_stops ทรงเดียวกับ van_bill (id · key · value เป็น JSON ทั้งก้อน)
+     คีย์ = 'YYYY-MM-DD::routeId::id' · หนึ่งจุดแวะหนึ่งแถว
+     แยกแถวเพราะ diff ฝั่ง sync เป็นราย record · สองคนเพิ่มพร้อมกันจะไม่ทับกัน
+     ⚠ ลง field_mapping.json + operation_schemas_model.json + CREATE TABLE ใน initDb ครบแล้ว
+       ขาดที่ใดที่หนึ่ง = เซฟได้ รีเฟรชหาย เงียบสนิท (โปรเจกต์นี้เจอมาสี่ครั้ง)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+let VAN_STOPS={};
+(function(){ try{ const k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
+  const d=JSON.parse(localStorage.getItem(k)||'{}');
+  if(d && d.van_stops && typeof d.van_stops==='object') VAN_STOPS=d.van_stops; }catch(_){} })();
+function vsPersist(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  try{ laBlob().van_stops=VAN_STOPS; laBlobSave(); }catch(e){ console.warn('van-stops persist failed', e); }
+}
+const VS_KIND={ staff:{t:'คนติดรถ', ic:'\u{1F464}', seat:true}, cargo:{t:'ของ', ic:'\u{1F4E6}', seat:false} };
+function vsKey(date, routeId, id){ return String(date||'')+'::'+String(routeId||'')+'::'+String(id||''); }
+function vsParse(k){ const p=String(k||'').split('::'); return {date:p[0]||'', routeId:p[1]||'', id:p[2]||''}; }
+/* จุดแวะของวัน+โปรแกรมนั้น · เรียงตามเวลาแล้วค่อยลำดับที่ตั้งเอง (เหมือนแถวลูกค้า) */
+function vsFor(date, routeId){
+  const out=[];
+  Object.keys(VAN_STOPS||{}).forEach(k=>{
+    const p=vsParse(k); if(p.date!==date) return; if(routeId && p.routeId!==routeId) return;
+    const v=VAN_STOPS[k]; if(!v || typeof v!=='object') return;
+    out.push({ ...v, _k:k, id:p.id, date:p.date, routeId:p.routeId });
+  });
+  /* เรียงเหมือนแถวลูกค้า · ลำดับที่ตั้งเองมาก่อน แล้วค่อยเวลา
+     จุดที่ไม่ได้ใส่เวลาไปอยู่ท้าย ไม่ใช่หัวแถว — สตริงว่างเรียงมาก่อนทุกเวลา
+     ถ้าปล่อยไว้ จุดที่ยังไม่รู้เวลาจะไปยืนเป็นคิวแรกของคนขับ */
+  const _t=x=>{ const v=String((x&&x.time)||'').trim(); return v||'~'; };
+  out.sort((a,b)=>{ const sa=+a.vanSeq||0, sb=+b.vanSeq||0;
+    if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; }
+    return _t(a).localeCompare(_t(b)); });
+  return out;
+}
+/* ที่นั่งที่จุดแวะกินจริง · ของไม่กิน คนกินตามจำนวนที่กรอก
+   ทุกที่ที่ต้องนับหัวต้องเรียกตัวนี้ตัวเดียว ห้ามอ่าน s.pax ตรง ๆ
+   ไม่งั้นวันหนึ่งจะมีที่ที่ลืมเช็ค kind แล้วของกลายเป็นคน */
+function vsSeats(s){ return (s && s.kind==='staff') ? Math.max(0, parseInt(s.pax,10)||0) : 0; }
+/* ══ §vsLeg · จุดแวะมีขาของมัน ════════════════════════════════════════════
+   ทีมแจ้ง 30 ก.ย. "มันจะมีทั้งติดรถไปกลับด้วย" · ของเดิมสมมุติว่าทุกจุดเป็นขาไป
+   out  · แวะตอนรับ ไปท่าเรือ        ret · แวะตอนส่งกลับ        both · ทั้งสองขา
+   ค่าเก่าที่ไม่มีช่องนี้ = ขาไป (ตรงกับเคสที่ทีมใช้อยู่ตอนนั้น) ไม่ต้องแก้ข้อมูลเดิม
+   ที่นั่ง: คนที่ติดไปแต่ขากลับ ไม่กินที่นั่งขาไป — ยอดของกรุ๊ปจึงต้องถามขาด้วย */
+function vsLegOf(s){ const v=(s&&s.leg)||'out'; return (v==='ret'||v==='both')?v:'out'; }
+function vsOnLeg(s, isRet){ const lg=vsLegOf(s); return isRet ? (lg==='ret'||lg==='both') : (lg==='out'||lg==='both'); }
+const VS_LEG={ out:{t:'ขาไป', ic:'\u2192', c:'#0E7490', bg:'#E3F2F6'},
+               ret:{t:'ขากลับ', ic:'\u21A9', c:'#8A6A1A', bg:'#FBF3E0'},
+               both:{t:'ไป-กลับ', ic:'\u21C6', c:'#534AB7', bg:'#EAE8FA'} };
+function vsSeatsOfVan(date, routeId, vanId, grp, isRet){
+  return vsFor(date, routeId).filter(s=>s.vanId===vanId && (!grp || (+s.vanGroup||0)===(+grp||0)))
+                             .filter(s=>vsOnLeg(s, !!isRet))
+                             .reduce((n,s)=>n+vsSeats(s), 0);
+}
+/* ══ §vsArea · พื้นที่รับของจุดแวะ ต้องมาจากรายการเดียวกับลูกค้า ═══════════
+   ผู้ใช้แจ้ง 30 ก.ย. "Zone ควรเป็น Pickup Area ที่ User ระบุ Phuket Town Patong"
+   ของเดิมเป็นช่องพิมพ์เปล่า · คนกรอก "PK" (โซนหยาบ) ในคอลัมน์ที่ลูกค้าขึ้น "Patong"
+   ตอนนี้เลือกจาก SB_PICKUP_AREAS ชุดเดียวกับที่ลูกค้าใช้ · เก็บ areaId ไว้ด้วย
+   แล้ว zone เก็บ "ชื่อพื้นที่" ไว้ให้ของเก่าที่พิมพ์มือยังอ่านออกเหมือนเดิม */
+function vsAreaName(s){
+  if(!s) return '';
+  try{ if(s.areaId && typeof SB_PICKUP_AREAS!=='undefined'){
+    const a=(SB_PICKUP_AREAS||[]).find(x=>x.id===s.areaId); if(a) return a.name||''; } }catch(_){}
+  return String(s.zone||'').trim();
+}
+function vsAreaTh(s){
+  const n=vsAreaName(s); if(!n) return '';
+  try{ if(typeof VANJOB_AREA_TH!=='undefined' && VANJOB_AREA_TH[n]) return VANJOB_AREA_TH[n]; }catch(_){}
+  return '';
+}
+function vsSave(rec){
+  if(!rec || !rec.date || !rec.routeId) return null;
+  const id = rec.id || (typeof LA_UID==='function' ? LA_UID('vs') : 'vs'+Date.now());
+  const k = vsKey(rec.date, rec.routeId, id);
+  const old = VAN_STOPS[k] || {};
+  VAN_STOPS[k] = { kind: (rec.kind==='cargo'?'cargo':'staff'),
+    label:String(rec.label||'').trim(), pax:Math.max(0,parseInt(rec.pax,10)||0),
+    time:String(rec.time||'').trim(), place:String(rec.place||'').trim(),
+    zone:String(rec.zone||'').trim(), areaId:String(rec.areaId||'').trim(),
+    leg:((rec.leg==='ret'||rec.leg==='both')?rec.leg:'out'),
+    phone:String(rec.phone||'').trim(),
+    note:String(rec.note||'').trim(),
+    vanId: rec.vanId!==undefined ? (rec.vanId||null) : (old.vanId||null),
+    vanGroup: rec.vanGroup!==undefined ? (+rec.vanGroup||0) : (+old.vanGroup||0),
+    vanSeq: rec.vanSeq!==undefined ? (+rec.vanSeq||0) : (+old.vanSeq||0),
+    ck: old.ck || null,
+    by: old.by || ((typeof laBy==='function')?laBy():''), at: old.at || new Date().toISOString(),
+    editBy: old.at ? ((typeof laBy==='function')?laBy():'') : '', editAt: old.at ? new Date().toISOString() : '' };
+  vsPersist(); return VAN_STOPS[k];
+}
+function vsDel(k){ if(!VAN_STOPS[k]) return; delete VAN_STOPS[k]; vsPersist(); }
+function vsSetVan(k, vanId, grp){
+  const v=VAN_STOPS[k]; if(!v) return;
+  v.vanId=vanId||null; if(grp!==undefined) v.vanGroup=+grp||0;
+  vsPersist();
+}
+/* เช็คอิน · คนนับหัว ของติ๊กครั้งเดียว · ค่าอยู่ในก้อน JSON ของจุดแวะเอง
+   ไม่ไปยุ่งกับ ops.vanCheckin ของ booking · คนละเรื่องกันและคนละอายุข้อมูล */
+function vsCheck(k, on){
+  const v=VAN_STOPS[k]; if(!v) return;
+  if(on===false){ v.ck=null; }
+  else v.ck={ at:new Date().toISOString(), by:((typeof laBy==='function')?laBy():''), n:vsSeats(v) };
+  vsPersist();
+  if(typeof renderVanCheckin==='function'){ try{ renderVanCheckin(); }catch(_){} }
+}
+
+/* ── กล่องเพิ่ม/แก้จุดแวะ ─────────────────────────────────────────── */
+function vsPickKind(kind, el){
+  document.getElementById('vs-kind').value = (kind==='cargo')?'cargo':'staff';
+  document.querySelectorAll('#vs-kind-pills .loc-pill').forEach(p=>p.classList.remove('on'));
+  if(el) el.classList.add('on');
+  /* ช่องจำนวนคนมีความหมายเฉพาะกับคน · ของโชว์ไว้ก็มีแต่จะทำให้กรอกผิด */
+  const row=document.getElementById('vs-pax-row');
+  if(row) row.style.display = (kind==='cargo') ? 'none' : '';
+}
+function vsPickLeg(leg, el){
+  const v=(leg==='ret'||leg==='both')?leg:'out';
+  const h=document.getElementById('vs-leg'); if(h) h.value=v;
+  document.querySelectorAll('#vs-leg-pills .loc-pill').forEach(p=>p.classList.remove('on'));
+  if(el) el.classList.add('on');
+}
+function _vsLegPillEl(leg){
+  return [...document.querySelectorAll('#vs-leg-pills .loc-pill')]
+    .find(p=>new RegExp("'"+leg+"'").test(p.getAttribute('onclick')||'')) || null;
+}
+/* รายการพื้นที่รับ · จัดกลุ่มตามโซนหยาบ (PK/KL) ให้หาง่ายเหมือนที่ทีมคุ้นอยู่แล้ว */
+function _vsFillAreas(sel){
+  const el=document.getElementById('vs-area'); if(!el) return;
+  /* esc() อยู่ในสโคปของ bookingV2Render ไม่ใช่ตัวกลางของทั้งไฟล์ · ตรงนี้เป็นฟังก์ชันระดับบนสุด
+     เรียก esc ตรง ๆ จะพังตอนเปิดกล่อง (เจอตอนลองเปิดจริง 30 ก.ย.) */
+  const _e=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+              .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const arr=(typeof SB_PICKUP_AREAS!=='undefined' && SB_PICKUP_AREAS)?SB_PICKUP_AREAS.slice():[];
+  const zl=z=> z==='PK'?'ภูเก็ต · Phuket' : z==='KL'?'เขาหลัก · Khao Lak' : (z||'อื่น ๆ');
+  const zones=[...new Set(arr.map(a=>a.zone||''))];
+  let h='<option value="">— ไม่ระบุ —</option>';
+  zones.forEach(z=>{
+    const inz=arr.filter(a=>(a.zone||'')===z).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    if(!inz.length) return;
+    h+='<optgroup label="'+_e(zl(z))+'">'
+      + inz.map(a=>'<option value="'+_e(a.id)+'">'+_e(a.name||a.id)+'</option>').join('')
+      + '</optgroup>';
+  });
+  el.innerHTML=h;
+  el.value=sel||'';
+  if(sel && el.value!==sel) el.value='';   /* พื้นที่ถูกลบไปแล้ว · กลับไปเป็นไม่ระบุ แทนที่จะโชว์ค่าผิด */
+}
+function _vsKindPillEl(kind){
+  return [...document.querySelectorAll('#vs-kind-pills .loc-pill')]
+    .find(p=>new RegExp("'"+kind+"'").test(p.getAttribute('onclick')||'')) || null;
+}
+function vsOpen(date, routeId, opt){
+  opt = opt || {};
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  set('vs-k',''); set('vs-date',date||''); set('vs-route',routeId||'');
+  set('vs-van', opt.vanId||''); set('vs-grp', opt.vanGroup||0);
+  set('vs-label',''); set('vs-pax','1'); set('vs-time',''); set('vs-place','');
+  set('vs-zone',''); set('vs-phone',''); set('vs-note','');
+  _vsFillAreas('');
+  vsPickKind('staff', _vsKindPillEl('staff'));
+  vsPickLeg('out', _vsLegPillEl('out'));
+  const rn=(typeof getRoute==='function' && getRoute(routeId)) ? getRoute(routeId).name : (routeId||'');
+  const t=document.getElementById('vs-title'); if(t) t.textContent='เพิ่มจุดแวะ';
+  const s=document.getElementById('vs-sub'); if(s) s.textContent=(date||'')+(rn?(' · '+rn):'');
+  const d=document.getElementById('vs-del'); if(d) d.style.display='none';
+  openModal('vanstop-modal');
+}
+function vsEditOpen(k){
+  const v=VAN_STOPS[k]; if(!v){ alert('Stop not found'); return; }
+  const p=vsParse(k);
+  const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val; };
+  set('vs-k',k); set('vs-date',p.date); set('vs-route',p.routeId);
+  set('vs-van', v.vanId||''); set('vs-grp', +v.vanGroup||0);
+  set('vs-label', v.label||''); set('vs-pax', v.pax||1); set('vs-time', v.time||'');
+  set('vs-place', v.place||''); set('vs-zone', v.zone||''); set('vs-phone', v.phone||'');
+  set('vs-note', v.note||'');
+  _vsFillAreas(v.areaId||'');
+  vsPickKind(v.kind==='cargo'?'cargo':'staff', _vsKindPillEl(v.kind==='cargo'?'cargo':'staff'));
+  { const _lg=vsLegOf(v); vsPickLeg(_lg, _vsLegPillEl(_lg)); }
+  const rn=(typeof getRoute==='function' && getRoute(p.routeId)) ? getRoute(p.routeId).name : p.routeId;
+  const t=document.getElementById('vs-title'); if(t) t.textContent='แก้ไขจุดแวะ';
+  const s=document.getElementById('vs-sub'); if(s) s.textContent=p.date+(rn?(' · '+rn):'');
+  const d=document.getElementById('vs-del'); if(d) d.style.display='';
+  openModal('vanstop-modal');
+}
+function vsSubmit(){
+  const val=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const kind=val('vs-kind')==='cargo'?'cargo':'staff';
+  const label=String(val('vs-label')).trim();
+  if(!label){ alert('Type what this stop is for'); return; }
+  const place=String(val('vs-place')).trim();
+  if(!place){ alert('Type where the van stops'); return; }
+  const pax=(kind==='staff')?(parseInt(val('vs-pax'),10)||0):0;
+  /* คนศูนย์คนไม่ใช่จุดแวะ · ถ้าไม่มีใครขึ้นรถจริงก็ไม่ควรกินที่นั่ง แล้วคนขับจะงงว่าต้องรอใคร */
+  if(kind==='staff' && !(pax>0)){ alert('How many people ride along? Enter at least 1'); return; }
+  const k=val('vs-k');
+  /* พื้นที่รับ · เก็บ id ไว้ผูกกับทะเบียนพื้นที่ และเก็บชื่อไว้ให้อ่านออกถ้าพื้นที่ถูกลบทีหลัง */
+  const areaId=String(val('vs-area')||'').trim();
+  const _ar=areaId && typeof SB_PICKUP_AREAS!=='undefined'
+    ? (SB_PICKUP_AREAS||[]).find(a=>a.id===areaId) : null;
+  const rec={ id: k?vsParse(k).id:'', date: val('vs-date'), routeId: val('vs-route'),
+    kind, label, pax, time:val('vs-time'), place,
+    areaId, zone: _ar ? (_ar.name||'') : String(val('vs-zone')||'').trim(),
+    leg: val('vs-leg'),
+    phone:val('vs-phone'), note:val('vs-note'),
+    vanId: val('vs-van')||null, vanGroup: +val('vs-grp')||0 };
+  if(!rec.date || !rec.routeId){ alert('Stop must belong to a programme on a date'); return; }
+  /* §vanStop · กติกา "ที่นั่งไม่พอ" ถูกเช็คตอนเลือกรถ ซึ่งเกิดก่อนจุดแวะจะมีอยู่
+     ถ้าไม่เช็คซ้ำตรงนี้ การเพิ่มคนติดรถทีหลังจะดันรถเกินความจุแบบเงียบ ๆ
+     เตือนแล้วให้คนตัดสิน · บางทีไกด์นั่งหน้าคู่คนขับได้จริง ไม่ควรห้ามตาย */
+  if(kind==='staff' && rec.vanId && typeof vehGet==='function'){
+    const v=vehGet(rec.vanId)||{}; const cap=+v.capacity||0;
+    if(cap>0){
+      let used=0;
+      /* ยอดที่ใช้ไปแล้วของรถคันนั้น = ลูกค้าทุกกรุ๊ปที่ถือรถคันนี้ + จุดแวะอื่นของคันนี้
+         นับจากที่นั่งจริงทั้งคัน ไม่ใช่แค่กรุ๊ปเดียว · รถคันเดียวรับได้หลายกรุ๊ป */
+      try{
+        (SB_BOOKINGS||[]).forEach(b=>{ if(!b) return;
+          if(typeof ckIsCxl==='function' && ckIsCxl(b)) return;
+          (b.trips||[]).forEach(t=>{ if((t.date||'')!==rec.date || (t.routeId||'')!==rec.routeId) return;
+            const o=(typeof bkOpsRead==='function')?bkOpsRead(b,rec.date):(b.ops||{});
+            if(Array.isArray(o.vanSplits)&&o.vanSplits.length){
+              o.vanSplits.forEach(sp=>{ if(sp.vanId===rec.vanId) used+=(+sp.pax||0); });
+            } else if(o.vanId===rec.vanId){
+              used+=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0;
+            }
+          });
+        });
+      }catch(_){}
+      const others=(typeof vsFor==='function')
+        ? vsFor(rec.date, rec.routeId).filter(x=>x.vanId===rec.vanId && x._k!==k).reduce((n,x)=>n+vsSeats(x),0) : 0;
+      const total=used+others+pax;
+      if(total>cap && !confirm('Van '+((v.name||rec.vanId))+' seats '+cap+', this would make '+total
+        +' (customers '+used+' + ride-along '+(others+pax)+').\n\nAdd anyway?')) return;
+    }
+  }
+  vsSave(rec);
+  closeModal('vanstop-modal');
+  if(typeof bookingV2RenderKeep==='function') bookingV2RenderKeep(); else if(typeof bookingV2Render==='function') bookingV2Render();
+  if(typeof renderVanCheckin==='function'){ try{ renderVanCheckin(); }catch(_){} }
+}
+function vsDelGo(){
+  const k=document.getElementById('vs-k').value; if(!k) return;
+  const v=VAN_STOPS[k]||{};
+  if(!confirm('Delete this stop?\n\n'+(v.label||'')+' · '+(v.place||''))) return;
+  vsDel(k);
+  closeModal('vanstop-modal');
+  if(typeof bookingV2RenderKeep==='function') bookingV2RenderKeep(); else if(typeof bookingV2Render==='function') bookingV2Render();
+  if(typeof renderVanCheckin==='function'){ try{ renderVanCheckin(); }catch(_){} }
+}
+
 /* ══ §vanBill · วางบิลรถร่วม ═════════════════════════════════════════ */
 let VAN_BILL={};
 (function(){ try{ const k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
@@ -6456,9 +7509,42 @@ function vbCanSet(cur, k){
   return true;
 }
 /* กรอกนอกโหมดแก้ไข = บันทึกทันที · ไม่มีปุ่มบันทึกให้กดในเส้นทางนี้ */
+/* ══ §vbFocus (2026-10-02) · กรอกแล้วเคอร์เซอร์เด้งกลับ ตัวเลขถัดไปไปทับช่องเดิม ═══════
+   ที่มา · ผู้ใช้แจ้ง "คีย์ ๆ อยู่แล้วเด้ง ยังไม่ได้บันทึก เด้งรีเฟรช แล้วหาย"
+   ทำซ้ำได้ตรงตัว · พิมพ์ 1500 ในช่องเรต กด Tab พิมพ์ 200 ตั้งใจลงช่อง EXTRA
+     ของเดิม · พอออกจากช่อง หน้าถูกวาดใหม่ทั้งหน้าทันที แล้วคืนโฟกัสให้ "ช่องที่เพิ่งกรอก"
+     ช่องที่ผู้ใช้กำลังจะไปถูกทำลายพร้อมหน้าเดิม · เคอร์เซอร์เด้งกลับไปช่องเรต
+     200 จึงพิมพ์ทับ 1500 · เรตกลายเป็น 200 ช่อง EXTRA ว่าง · ไม่มีอะไรเตือน
+   แก้ · วาดใหม่ทีหลังหนึ่งจังหวะ (หลังโฟกัสย้ายเสร็จ) แล้วคืนโฟกัสให้ "ช่องที่ผู้ใช้อยู่ตอนนั้น"
+     ไม่ใช่ช่องที่เพิ่งกรอก · ตัวอักษรที่พิมพ์ค้างในช่องใหม่กับตำแหน่งเคอร์เซอร์ก็คืนให้ด้วย
+     กด Enter (โฟกัสไม่ย้าย) ยังอยู่ช่องเดิมเหมือนเก่า */
+var _vbRT=0, _vbPD=false, _vbWait=false;
+/* นิ้ว/เมาส์ยังกดค้างอยู่ = ยังไม่วาดใหม่ · วาดตอนนั้นปุ่มที่กำลังกด (บันทึก · พิมพ์ · ช่องถัดไป)
+   ถูกทำลายคานิ้ว การคลิกนั้นหายเงียบ · รอให้ปล่อยก่อนแล้วค่อยวาด */
+(function(){ try{
+  document.addEventListener('pointerdown', function(){ _vbPD=true; }, true);
+  var up=function(){ _vbPD=false; if(_vbWait){ _vbWait=false; vbRenderSoon(); } };
+  document.addEventListener('pointerup', up, true);
+  document.addEventListener('pointercancel', up, true);
+}catch(_){} })();
+function vbRenderSoon(){
+  if(_vbRT) return;
+  _vbRT=setTimeout(function(){
+    _vbRT=0;
+    if(_vbPD){ _vbWait=true; return; }
+    var host=document.getElementById('vanbill-host'), ae=document.activeElement;
+    _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
+    if(host && ae && ae!==document.body && host.contains(ae) && ae.getAttribute){
+      var k=ae.getAttribute('data-vbk')||'';
+      if(k){ _vb.foc=k; _vb.focVal=ae.value;
+        try{ _vb.focSel=[ae.selectionStart, ae.selectionEnd]; }catch(_){ _vb.focSel=null; } }
+    }
+    renderVanBill();
+  }, 0);
+}
 function vbStamp(k){
   if(_vb.edit) return;
-  if(k){ _vb.open[k]=1; _vb.foc=k; }
+  if(k){ _vb.open[k]=1; }
   var st=vbState();
   st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
   vbPersist();
@@ -6474,6 +7560,10 @@ function vbEdit(){
 function vbSave(){
   _vb.edit=0; _vb.snap=null; _vb.open={}; _vb.foc='';
   var st=vbState();
+  /* §vbSeen · กดบันทึก = ได้เห็นแถวชุดนี้แล้ว · เก็บไว้เทียบว่าคราวหน้ามีอะไรโผล่เพิ่ม
+     เก็บเฉพาะตอนกดบันทึกจริง ไม่เก็บตอนพิมพ์ทีละช่อง (vbStamp)
+     ไม่งั้นพิมพ์ช่องเดียวก็ปิดคำเตือนของแถวอื่นที่ยังไม่ได้ดูไปด้วย */
+  try{ st.seen=vbRows().map(function(r){ return vbRowKey(r); }); }catch(_){}
   st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
   vbPersist(); renderVanBill();
   if(typeof flShowToast==='function') flShowToast('บันทึกใบวางบิลแล้ว');
@@ -6513,6 +7603,7 @@ function vbArea(a){
   try{ if(typeof VANJOB_AREA_TH!=='undefined' && VANJOB_AREA_TH[k]) return VANJOB_AREA_TH[k]; }catch(_){}
   return k;
 }
+function vbShort(a, n){ a=String(a||''); n=n||20; return a.length>n ? (a.slice(0,n-1)+'…') : a; }
 function vbIsFar(a){ return !!VB_FAR[String(a||'').trim().toLowerCase()] || !!VB_FAR[String(a||'').trim()]; }
 function vbVans(){
   var V=(typeof SB_VEHICLES!=='undefined'&&Array.isArray(SB_VEHICLES))?SB_VEHICLES:
@@ -6535,7 +7626,11 @@ function vbPeriod(){
    ของเดิมเลือกคันไหนก็ได้ใบคนละใบ · ตัวเลือกคันคือ "ตัวกรองสำหรับดู" ไม่ใช่คนละบิล
    (บิลออกให้เจ้าของรถ ไม่ได้ออกรายคัน · แต่ละแถวบอกคันอยู่แล้ว)
    ถ้ายังผูกกับคัน หน้าภาพรวมจะรวมเลขไม่ได้ เพราะเงินกระจายอยู่หลายคีย์
-   เปลี่ยนตอนนี้ไม่มีข้อมูลเสียหาย · หน้านี้เพิ่งเปิดใช้ ยังไม่มีใครกรอก */
+   ⚠ บรรทัดเดิมตรงนี้เขียนว่า "หน้านี้เพิ่งเปิดใช้ ยังไม่มีใครกรอก" — ไม่จริงแล้ว
+     ตรวจ backup_2026-09-14_1355: van_bill มี 14 ใบ · กรอกตัวเลขจริง 8 ใบ
+     โดย AP.Petch กับ admin · ใบล่าสุด 2026-09-14 03:17
+     เปลี่ยนรูปคีย์ตอนนี้ = ของที่กรอกไว้หลุดหายทั้งหมด เพราะอ่านด้วยคีย์ใหม่ไม่เจอ
+     จะเปลี่ยนต้องเขียน migration ย้ายคีย์เก่ามาคีย์ใหม่ก่อน ไม่ใช่เปลี่ยนเฉย ๆ */
 function vbKey(){ return _vb.sup+'|'+_vb.ym+'|'+_vb.per; }
 function vbState(){
   var k=vbKey();
@@ -6560,6 +7655,35 @@ function vbCodesIn(rows){
   out.sort(function(a,b){ return b.n-a.n; });
   return out;
 }
+/* ── §vbDrop · จุดส่ง (2026-09-22) ───────────────────────────────────────
+   เรตต่อคันขึ้นกับ "รถวิ่งไปไหน" ไม่ใช่แค่ "รับที่ไหน" · ขากลับที่ส่งสนามบิน/เขาหลัก
+   เป็นคนละระยะทางกับส่งกลับโรงแรมเดิม แต่บนใบวางบิลเดิมมองไม่เห็นเลย
+   จุดส่งของ split เองมาก่อน (แยกส่งรายคน §altDrop) แล้วถอยไปใช้ของทั้งใบ
+   ส่งที่เดิม = ไม่มีอะไรเก็บไว้ จึงถอยไปใช้จุดรับของแถวนั้นเป็นคำตอบ */
+function vbAreaNm(id){
+  if(!id || typeof bookingV2GetArea!=='function') return '';
+  return String((bookingV2GetArea(id)||{}).name||'').trim();
+}
+function vbPickName(b, sp){ return (sp?vbAreaNm(sp.pickAreaId):'') || String((b&&b.pickupArea)||'').trim(); }
+/* §vbDropWhy · คืนทั้งชื่อ และ "ใบนี้ตั้งจุดส่งใหม่จริงหรือเปล่า" มาด้วยกัน
+   ที่มา (2026-09-22) · ของเดิมตัดสินสีตอนวาดด้วยการเทียบสตริงกับจุดรับของ "แถว"
+   แต่แถวหนึ่งรวมหลายใบ · รถไปส่งกรุ๊ปหนึ่งแล้วรับอีกกรุ๊ปกลับ จุดส่งจึงเป็นของกรุ๊ปที่
+   ไม่ได้อยู่ในแถวนั้นตั้งแต่แรก และแทบทุกครั้งก็คือ "ส่งที่เดิม" ของกรุ๊ปนั้นเอง
+   วัดจาก backup_2026-09-17 เดือน ก.ย. · ชิป 24 ตัว ขึ้นม่วง 22 ตัว
+   แต่ที่ลูกค้าตั้งจุดส่งใหม่จริงมีใบเดียว → ป้ายเตือนดังผิด 21 ครั้ง
+   ตัวชี้ขาดต้องเป็นเจตนาบนใบ (bkDropOf บอกเองว่ามีจุดส่งของตัวเองไหม)
+   ไม่ใช่ผลเทียบสตริงข้ามใบ · ชื่อยังขึ้นเหมือนเดิมทุกกรณี เพราะรถวิ่งไปที่นั่นจริง */
+function vbDropInfo(b, sp){
+  var d=(typeof bkDropOf==='function')?bkDropOf(b,sp):null;
+  var nm=d ? (String(d.area||'').trim()||String(d.place||'').trim()) : '';
+  var pk=vbPickName(b, sp);
+  /* ตั้งจุดส่งใหม่ = ใบนี้ (หรือ split นี้) มีจุดส่งเก็บไว้ และไม่ใช่ที่เดียวกับที่รับของใบนั้นเอง
+     ส่งที่เดิม → bkDropOf คืนค่าว่าง → ถอยไปใช้จุดรับของใบนั้น และไม่นับว่าเปลี่ยน */
+  return { nm:(nm||pk), chg:(!!nm && nm!==pk) };
+}
+function vbDropName(b, sp){ return vbDropInfo(b, sp).nm; }
+/* §vbRetLeg · แถวขากลับเก็บเรตคนละช่องกับขาไป · เรตไป-กลับไม่จำเป็นต้องเท่ากัน */
+function vbRowKey(r){ return r.date+'~'+r.routeId+'~'+r.vanId+(r.ret?'~R':''); }
 /* อ่านอย่างเดียว · ห้ามสร้างระเบียนเปล่า ไม่งั้นแค่เปิดดูภาพรวมก็เกิดใบเปล่าทุกเจ้าทุกงวด */
 function vbStateOf(k){
   var st=VAN_BILL[k];
@@ -6570,7 +7694,7 @@ function vbRows(){
   var P=vbPeriod(), vans=vbVans().filter(function(v){
     return vbSupOf(v)===_vb.sup && (!_vb.van || v.id===_vb.van); });
   var ok={}; vans.forEach(function(v){ ok[v.id]=v; });
-  var map={};
+  var map={}, pendRet=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){
@@ -6588,8 +7712,8 @@ function vbRows(){
       var rlN=real.ad+real.chd+real.inf+real.foc;
       /* รถหลายคันในใบเดียว · แยกตามที่จัดไว้ */
       var legs=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
-        ? O.vanSplits.map(function(x){ return {vid:x.vanId, pax:+x.pax||0}; })
-        : [{vid:O.vanId, pax:null}];
+        ? O.vanSplits.map(function(x){ return {vid:x.vanId, pax:+x.pax||0, sp:x}; })
+        : [{vid:O.vanId, pax:null, sp:null}];
       /* คนที่ไม่ได้ไปเป็นของทั้งใบ ระบุไม่ได้ว่าหายจากคันไหน · เกลี่ยตามสัดส่วนที่จัดไว้
          แล้วโยนเศษให้คันสุดท้าย ผลรวมของทุกคันจะได้เท่ากับยอดจริงของใบเป๊ะ */
       if(legs.length && legs[0].pax!=null){
@@ -6605,7 +7729,7 @@ function vbRows(){
         if(!L.vid || !ok[L.vid]) return;
         var k=ds+'~'+(t.routeId||'')+'~'+L.vid;
         if(!map[k]) map[k]={date:ds, routeId:t.routeId||'', vanId:L.vid,
-                            ad:0,chd:0,inf:0,foc:0, pax:0, bkPax:0, bk:0, areas:{}};
+                            ad:0,chd:0,inf:0,foc:0, pax:0, bkPax:0, bk:0, retSame:0, areas:{}, drops:{}};
         var r=map[k];
         if(L.pax!=null){ r.pax+=(+L.real||0); r.ad+=(+L.real||0); r.bkPax+=L.pax; }
         else {
@@ -6613,9 +7737,55 @@ function vbRows(){
           r.pax+=rlN; r.bkPax+=bkN;
         }
         r.bk++;
-        var a=String(b.pickupArea||'').trim(); if(a) r.areas[a]=1;
+        var a=vbPickName(b, L.sp); if(a) r.areas[a]=1;
+        /* §vbSameVan · "กลับคันเดิม" คือทางกลับทางที่สอง · bookingV2SetReturnSameVan เคลียร์
+           vanReturnId ทิ้งตอนติ๊ก (บรรทัด ~7599) ของเดิมจึงอ่านไม่เจอเลยสักใบ
+           ทั้งที่คอมเมนต์ที่ bookingV2VanAlert เขียนไว้เองว่ากรณีนี้คือ "รถขาไปพากลับ · ส่งจุดใหม่"
+           วัดจาก backup_2026-09-17 ทั้งไฟล์ · ติ๊กกลับคันเดิม 10 leg · เป็นส่งจุดใหม่จริง 9
+           ทั้งสิบขึ้น "—" มาตลอด = เงียบตรงเคสที่คอลัมน์นี้ถูกสร้างมาจับพอดี
+           ⚠ ไม่แตะ pax / retPax / จำนวนคัน · รถคันเดิม รอบเดิม ใบเดิม ยอดเรียกเก็บต้องไม่ขยับ
+             นับแยกที่ retSame ไว้ติดป้ายอย่างเดียว ไม่ใช่ retBk ซึ่งแปลว่ารับกลับให้ใบอื่น */
+        var rsv=(L.sp && L.sp.returnSameVan!=null) ? !!L.sp.returnSameVan : !!O.returnSameVan;
+        if(rsv){
+          var ds2=vbDropInfo(b, L.sp);
+          r.retSame=(r.retSame||0)+1;
+          if(ds2.nm) r.drops[ds2.nm]=(r.drops[ds2.nm]||0)|(ds2.chg?1:0);
+        }
+      });
+      /* §vbRetLeg · ขากลับคือรถอีกเที่ยวหนึ่ง · ของเดิมอ่านแต่ ops.vanId
+         เจ้าของรถที่รับเฉพาะขากลับจึงไม่เคยขึ้นบิลเลยสักแถว
+         (วัดจาก backup_2026-09-14: ตกไป 22 เที่ยว · งวด 11-20 ก.ย. ภูเก็ตล่ำซำ ตก 4)
+         ⚠ pax=0 โดยตั้งใจ · เป็นลูกค้ากลุ่มเดิมที่ขายไปแล้วตอนขาไป
+           ใส่ pax เมื่อไหร่ ราคาขาย/กำไรเด้งเป็นสองเท่าทันที · คนจริงเก็บไว้ที่ retPax ไว้โชว์เฉย ๆ
+         returnSameVan (กลับคันเดิม) ไม่มี vanReturnId อยู่แล้ว จึงไม่เกิดแถวซ้ำที่นี่
+         · ทางนั้นไปจบที่ §vbSameVan ข้างบน ซึ่งแปะจุดส่งลงแถวขาไปของคันเดิมโดยไม่เพิ่มแถว */
+      var rlegs=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
+        ? O.vanSplits.map(function(x){ return {vid:x.vanReturnId, sp:x}; })
+        : [{vid:O.vanReturnId, sp:null}];
+      rlegs.forEach(function(R){
+        if(!R.vid || !ok[R.vid]) return;
+        /* พักไว้ก่อน · ตอนนี้ยังไม่รู้ว่าคันนี้มีขาไปในวันเดียวกันหรือเปล่า
+           (ใบที่จัดขาไปอาจมาทีหลังในลูป) */
+        var di=vbDropInfo(b, R.sp);
+        pendRet.push({ds:ds, rid:t.routeId||'', vid:R.vid, pax:rlN, drop:di.nm, chg:di.chg});
       });
     });
+  });
+  /* §vbRetMerge · รถคันเดียววิ่งไปส่งแล้ววิ่งกลับ = เที่ยวเดียว ไม่ใช่สองเที่ยว
+     ของเดิม (§vbRetLeg รอบแรก) แยกแถวขากลับเสมอ · คันที่ไปส่งกรุ๊ปหนึ่งแล้วรับอีกกรุ๊ปกลับ
+     จึงถูกนับเป็น 2 คัน ทั้งที่รถวิ่งรอบเดียว = เรียกเก็บซ้ำ
+     วัด 2026-09-14: คีย์ขากลับ 13 · ซ้ำกับขาไป 9 · เป็นคันที่ไม่มีขาไปเลยจริง ๆ แค่ 4
+     → มีขาไปอยู่แล้ว = เอาคนกลับไปแปะแถวเดิม ไม่เพิ่มคัน
+       ไม่มีขาไป = คันนั้นมารับกลับอย่างเดียว ต้องมีแถวของตัวเอง (เช่น VAN3 14/9) */
+  pendRet.forEach(function(x){
+    var base=x.ds+'~'+x.rid+'~'+x.vid;
+    if(map[base]){ map[base].retPax=(map[base].retPax||0)+x.pax; map[base].retBk=(map[base].retBk||0)+1;
+                   if(x.drop) map[base].drops[x.drop]=(map[base].drops[x.drop]||0)|(x.chg?1:0); return; }
+    var k=base+'~R';
+    if(!map[k]) map[k]={date:x.ds, routeId:x.rid, vanId:x.vid, ret:1,
+                        ad:0,chd:0,inf:0,foc:0, pax:0, bkPax:0, retPax:0, bk:0, areas:{}, drops:{}};
+    map[k].retPax+=x.pax; map[k].bk++;
+    if(x.drop) map[k].drops[x.drop]=(map[k].drops[x.drop]||0)|(x.chg?1:0);
   });
   return Object.keys(map).sort().map(function(k){ return map[k]; });
 }
@@ -6623,14 +7793,14 @@ function vbSet(field,val){
   var st=vbState(), k='@'+field;
   if(!vbCanSet(st[field], k)) return;
   st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbSetRateC(code, val){
   var st=vbState(), k='@rate:'+code;
   if(!st.rateC) st.rateC={};
   if(!vbCanSet(st.rateC[code], k)) return;
   st.rateC[code]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 /* §vbRateCode · เติมเรตจากที่ตั้งไว้ในหน้า Transfer Fleet (van_rates)
    ไม่ผูกกันอัตโนมัติ · กดเองเมื่ออยากใช้ แล้วแก้ทับได้
@@ -6678,7 +7848,7 @@ function vbSetRow(rk, field, val){
   /* §vbMinus · ช่องหักแสดงเป็นลบ · ตัดเครื่องหมายทิ้งแล้วเก็บเป็นบวก
      พิมพ์ "-100" หรือ "100" ได้ค่าเดียวกัน ไม่ต้องมาลุ้นว่าต้องใส่ลบไหม */
   st.rows[rk][field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbAddExtra(){
   if(!_vb.edit && typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
@@ -6694,7 +7864,7 @@ function vbSetExtra(id, field, val){
   var k='x'+id+'|'+field;
   if(!vbCanSet(r[field], k)) return;
   r[field]=(field==='date'||field==='note')?String(val):Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbStamp(k); renderVanBill();
+  vbStamp(k); vbRenderSoon();
 }
 function vbDelExtra(id){
   if(!_vb.edit) return;
@@ -6783,7 +7953,7 @@ function vbAgg(){
             C.mix[mk].n+=n; } }
       };
       rows.forEach(function(r){
-        var m=(st.rows||{})[r.date+'~'+r.routeId+'~'+r.vanId]||{};
+        var m=(st.rows||{})[vbRowKey(r)]||{};
         g.bkPax+=(+r.bkPax||0);
         take((m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, +m.ex||0, +m.cut||0,
              (m.per!=null?m.per:st.perPax)||0, r.pax, r.routeId, 1);
@@ -6918,15 +8088,32 @@ function renderVanBill(){
   var P=vbPeriod(), st=vbState(), rows=vbRows(), codes=vbCodesIn(rows);
   var vg=function(id){ return myVans.filter(function(v){ return v.id===id; })[0]||{}; };
 
+  /* §vbNewRow · บิลที่มีคนกรอกและประทับเวลาไว้แล้ว ถ้าอยู่ ๆ มีแถวงานโผล่เพิ่ม
+     (เช่น จัดรถขากลับย้อนหลัง หรือโค้ดเริ่มมองเห็นงานที่เคยตกหล่นอย่าง §vbRetLeg)
+     ยอดเรียกเก็บจะขยับเองโดยไม่มีใครแตะ · เจ้าของรถทักมาแล้วไม่มีใครอธิบายได้
+     → ไม่แก้ยอดให้เอง แค่บอกว่ามีแถวไหนใหม่ · คนตัดสินใจเองว่าจะเก็บเพิ่มหรือไม่
+     เกณฑ์ "ใหม่" ต้องแคบ ไม่งั้นเตือนผิด: แถวที่คนตั้งใจปล่อยว่าง (ใช้เรตกลางจาก rateC)
+     ก็ไม่มีค่าใน st.rows เหมือนกัน แต่ไม่ใช่ของใหม่ — วัดจริงเจอเคสนี้ที่ใบ โกอู๊ด|2026-09|1
+     → ใบที่กด "บันทึก" ตั้งแต่มี §vbSeen แล้ว จะมี st.seen เก็บคีย์แถวที่เห็นตอนนั้นไว้
+       เทียบกับ st.seen ได้ตรง ๆ
+     → ใบเก่าที่บันทึกไว้ก่อนหน้านั้นไม่มี st.seen เทียบไม่ได้ จึงเตือนเฉพาะแถวขากลับ
+       ซึ่งเป็นงานกลุ่มเดียวที่โค้ดเพิ่งเริ่มมองเห็น (§vbRetLeg) · กลุ่มอื่นเงียบไว้ดีกว่าเตือนผิด */
+  var _vbNewRows=[];
+  if(st.at){
+    var _seen=Array.isArray(st.seen)?st.seen:null;
+    rows.forEach(function(r){ var k=vbRowKey(r);
+      if((st.rows||{})[k]) return;
+      if(_seen ? (_seen.indexOf(k)<0) : !!r.ret) _vbNewRows.push(r); });
+  }
   /* ── คิดเงินทีละแถว ── */
-  var T={pax:0,bkPax:0,ad:0,chd:0,inf:0,foc:0,van:0,ex:0,cut:0,bill:0,sale:0}, byCode={};
+  var T={pax:0,bkPax:0,ad:0,chd:0,inf:0,foc:0,van:0,vanOut:0,ex:0,cut:0,bill:0,sale:0}, byCode={};
   var calc=rows.map(function(r){
-    var rk=r.date+'~'+r.routeId+'~'+r.vanId, m=st.rows[rk]||{};
+    var rk=vbRowKey(r), m=st.rows[rk]||{};
     var rate=(m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, ex=+m.ex||0, cut=+m.cut||0;
     var per=(m.per!=null?m.per:st.perPax)||0;
     var bill=1*rate+ex-cut, sale=r.pax*per;
     T.pax+=r.pax; T.bkPax+=(+r.bkPax||0); T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc;
-    T.van+=1; T.ex+=ex; T.cut+=cut; T.bill+=bill; T.sale+=sale;
+    T.van+=1; T.vanOut+=(r.ret?0:1); T.ex+=ex; T.cut+=cut; T.bill+=bill; T.sale+=sale;
     var c=vbCode(r.routeId).c;
     if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,ex:0,cut:0,mix:{},col:vbCode(r.routeId).col};
     byCode[c].van+=1; byCode[c].pax+=r.pax; byCode[c].bill+=bill;
@@ -6938,10 +8125,12 @@ function renderVanBill(){
   });
   st.extra.forEach(function(x){
     var bill=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0), sale=(+x.pax||0)*(+x.per||0);
-    T.van+=(+x.van||0); T.pax+=(+x.pax||0); T.ex+=(+x.ex||0); T.cut+=(+x.cut||0);
+    T.van+=(+x.van||0); T.vanOut+=(+x.van||0); T.pax+=(+x.pax||0); T.ex+=(+x.ex||0); T.cut+=(+x.cut||0);
     T.bill+=bill; T.sale+=sale;
   });
-  var pl=T.sale-T.bill, avg=T.van?(T.pax/T.van):0;
+  /* §vbRetLeg · เฉลี่ยคน/คัน หารด้วยเที่ยวขาไปเท่านั้น · แถวขากลับ pax=0 ตามตั้งใจ
+     ถ้าเอาไปหารด้วย จะดูเหมือนรถวิ่งเที่ยวเปล่าทั้งที่ไม่ใช่ */
+  var pl=T.sale-T.bill, avg=T.vanOut?(T.pax/T.vanOut):0;
   /* §vbMinus · ยอดติดลบต้องอ่านออกว่าเป็นลบ · '฿-150' อ่านยากกว่า '−฿150' */
   var B=function(n){ n=Math.round(n||0);
     return (n<0?'−฿':'฿')+Math.abs(n).toLocaleString(); };
@@ -6980,28 +8169,48 @@ function renderVanBill(){
     var aHtml=areas.length?areas.map(function(a){
         return '<span class="vb-area'+(vbIsFar(a)?' far':'')+'">'+e(vbArea(a))+'</span>'; }).join('')
       :'<span class="vb-area">—</span>';
+    /* §vbDrop · จุดส่งมีค่าเฉพาะแถวที่มีขากลับ · ขาไปทุกคันไปจบที่ท่าเรืออยู่แล้ว
+       §vbDropWhy · ม่วง = ใบนั้นตั้งจุดส่งใหม่จริง (ธงมาจาก vbDropInfo ตอนอ่านข้อมูล)
+       ไม่ใช่ "ชื่อนี้ไม่อยู่ในจุดรับของแถว" ซึ่งดังผิด 21 จาก 22 ครั้งในเดือน ก.ย. */
+    var drops=Object.keys(r.drops||{});
+    var dHtml=drops.length?drops.map(function(a){
+        var chg=!!(r.drops[a]), nm=vbArea(a);
+        var cls=chg?' alt':(vbIsFar(a)?' far':'');
+        return '<span class="vb-area'+cls+'" title="'+e(nm)
+            +(chg?' · ใบนี้ตั้งจุดส่งใหม่ ไม่ใช่ส่งกลับที่รับ':' · ส่งกลับที่เดิมของกรุ๊ปนั้น')+'">'
+          +e(vbShort(nm))+'</span>'; }).join('')
+      :'<span class="vb-area"'+((!r.ret&&!r.retBk&&!r.retSame)?' title="ไม่ได้รับขากลับ · จบที่ท่าเรือ"':'')+'>—</span>';
     return '<tr>'
      +'<td class="l vb-mono">'+e(r.date.slice(8,10)+'/'+(+r.date.slice(5,7))+'/'+r.date.slice(2,4))+'</td>'
      /* §vbRateCode · ติดป้ายท่าเรือไว้ · เหตุผลที่เรตต่างคือรถวิ่งคนละที่ ไม่ใช่ชื่อโปรแกรมคนละชื่อ */
      +'<td class="l"><span class="vb-code" style="background:'+C.col+'">'+C.c+'</span><span class="vb-rn">'+e(rn)+'</span>'
        +(function(){ var pr=vbPierOf(r.routeId), pc=VB_PIER_COL[pr];
           return pc?('<span class="vb-pier" style="background:'+pc.bg+';color:'+pc.c+'">'+e(VB_PIER_TH[pr]||pr)+'</span>'):''; })()
+       +(r.ret?'<span class="vb-pier" style="background:#FFF1E0;color:#9A5B00">&#8629; ขากลับ</span>':'')
+       +((!r.ret&&r.retBk)?('<span class="vb-pier" style="background:#EEF4F9;color:#4A6274" title="คันนี้รับขากลับให้อีก '+r.retBk+' ใบด้วย · เป็นรอบเดียวกัน ไม่คิดเพิ่ม">&#8629; รับกลับด้วย '+(r.retPax||0)+' คน</span>'):'')
+       /* §vbSameVan · ป้ายคนละตัวกับ "รับกลับด้วย" · อันนั้นคือรับกลับให้ใบอื่น
+          อันนี้คือพาคนของตัวเองกลับ · ไม่มีคนเพิ่ม ไม่มีเงินเพิ่ม มีแต่จุดส่ง */
+       +((!r.ret&&r.retSame)?('<span class="vb-pier" style="background:#F1F4F7;color:#5B6570" title="ใบนี้ติ๊ก \'กลับคันเดิม\' '+r.retSame+' ใบ · รถคันเดิมพาคนของตัวเองกลับ ไม่คิดเพิ่ม">&#8629; พากลับเอง</span>'):'')
        +(_vb.van?'':('<div style="font-size:10px;color:#98A2AD;margin-top:2px">'+e((vg(r.vanId).name)||r.vanId)+'</div>'))+'</td>'
      +'<td class="l">'+aHtml+'</td>'
+     +'<td class="l">'+dHtml+'</td>'
      +'<td><b>'+r.ad+'</b></td><td>'+(r.chd||'<span class="vb-mut">·</span>')+'</td>'
      +'<td>'+(r.inf||'<span class="vb-mut">·</span>')+'</td><td>'+(r.foc||'<span class="vb-mut">·</span>')+'</td>'
      +'<td><b>1</b></td>'
      /* §vbPaxReal · เลขหลักคือคนที่ขึ้นรถจริง · ต่างจากยอดจองเมื่อไหร่ค่อยบอกใต้เลข
         แถวที่ตรงกันไม่ต้องรก · แถวที่ต่างต้องเห็นทันที ไม่ใช่ไปรู้ตอนลูกค้าทัก */
-     +'<td><b>'+r.pax+'</b>'+(((+r.bkPax||0)>r.pax)
+     +(r.ret
+        ? ('<td><span class="vb-mut">—</span><div class="vb-sub" title="ลูกค้ากลุ่มเดิมจากขาไป · คิดเฉพาะค่ารถ ไม่คิดฝั่งขายซ้ำ">'+(r.retPax||0)+' คนกลับ</div></td>')
+        : ('<td><b>'+r.pax+'</b>'+(((+r.bkPax||0)>r.pax)
         ? ('<div class="vb-cxl" title="ใบจอง '+r.bkPax+' คน · ไม่ได้ขึ้นรถ '+(r.bkPax-r.pax)+' คน">จอง '+r.bkPax+' · −'+(r.bkPax-r.pax)+'</div>')
-        : '')+'</td>'
+        : '')+'</td>'))
      +'<td>'+IN("vbSetRow('"+x.rk+"','rate',this.value)", x.rate||'', 58, 0, x.rk+'|rate')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', 50, 0, x.rk+'|ex')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 52, 1, x.rk+'|cut')+'</td>'
      +'<td class="r"><b>'+B(x.bill)+'</b></td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','per',this.value)", x.per||'', 50, 0, x.rk+'|per')+'</td>'
-     +'<td class="r"><b>'+B(x.sale)+'</b><div class="vb-sub">'+r.pax+' × '+(x.per||0)+'</div></td>'
+     +'<td class="r">'+(r.ret ? '<span class="vb-mut">—</span><div class="vb-sub">ค่ารถอย่างเดียว</div>'
+        : ('<b>'+B(x.sale)+'</b><div class="vb-sub">'+r.pax+' × '+(x.per||0)+'</div>'))+'</td>'
      +'<td class="r" style="font-weight:800;color:'+((x.sale-x.bill)<0?'#A32D2D':'#0F6E56')+'">'
        +((x.sale-x.bill)<0?'−':'')+B(Math.abs(x.sale-x.bill))+'</td></tr>';
   }).join('');
@@ -7011,7 +8220,7 @@ function renderVanBill(){
     return '<tr class="vb-ex">'
      +'<td class="l">'+((ED||_vb.open['x'+x.id+'|date'])?('<input type="date" value="'+e(x.date||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'date\',this.value)" class="vb-din">')
         :('<span class="vb-mono">'+e(x.date?(x.date.slice(8,10)+'/'+(+x.date.slice(5,7))+'/'+x.date.slice(2,4)):'—')+'</span>'))+'</td>'
-     +'<td class="l" colspan="2">'+((ED||_vb.open['x'+x.id+'|note'])?('<input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน">')
+     +'<td class="l" colspan="3">'+((ED||_vb.open['x'+x.id+'|note'])?('<input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน">')
         :('<span class="vb-rn">'+e(x.note||'รถนอก')+'</span>'))+'</td>'
      +'<td colspan="4" class="vb-mut">กรอกเอง</td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','van',this.value)", x.van||'', 40, 0, 'x'+x.id+'|van')+'</td>'
@@ -7048,6 +8257,13 @@ function renderVanBill(){
        +'<button class="vb-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
       :('<button class="vb-btn" onclick="vbEdit()">&#9998; แก้ไข</button>'
        +'<button class="vb-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล</button>'))+'</div>'
+   +(_vbNewRows.length
+      ? ('<div class="vb-newrow">&#9888;&#65039; <b>มี '+_vbNewRows.length+' แถวที่เพิ่งโผล่หลังจากกรอกบิลใบนี้ไปแล้ว</b>'
+         +'<span>('+e(_vbNewRows.slice(0,4).map(function(r){
+              return r.date.slice(8,10)+'/'+(+r.date.slice(5,7))+' '+((vg(r.vanId).name)||r.vanId)+(r.ret?' ขากลับ':'');
+            }).join(' · '))+(_vbNewRows.length>4?(' และอีก '+(_vbNewRows.length-4)):'')+')</span>'
+         +'<span class="m">ยอดเรียกเก็บจึงต่างจากตอนที่บันทึกไว้ · ตรวจก่อนส่งให้เจ้าของรถ</span></div>')
+      : '')
    +'<div class="vb-who"><div class="av">'+e((head&&head.name)||_vb.sup).slice(0,7)+'</div>'
      +'<div style="flex:1"><div class="n">'+e(whoName)+' <span style="font-weight:600;color:#6B7280">('+e(_vb.sup)+')</span></div>'
      +'<div class="m">'+e(whoMeta)+'</div></div>'
@@ -7078,14 +8294,15 @@ function renderVanBill(){
    +'<div class="vb-card"><table class="vb-t"><thead><tr>'
      +'<th class="l" style="width:78px">วันที่</th><th class="l" style="min-width:200px">เส้นทาง</th>'
      +'<th class="l" style="min-width:120px">จุดรับ</th>'
+     +'<th class="l" style="min-width:110px">จุดส่ง</th>'
      +'<th>AD</th><th>CHD</th><th>INF</th><th>FOC</th><th>คัน</th><th>คน</th>'
      +'<th class="man">เรต/คัน</th><th class="man">EXTRA</th><th class="man">หัก</th>'
      +'<th style="width:92px">ราคาเรียกเก็บ</th><th class="man">ขาย/คน</th>'
      +'<th style="width:86px">ราคาขาย</th><th style="width:92px">กำไร/ขาดทุน</th></tr></thead>'
-   +'<tbody>'+(body||'<tr><td colspan="16" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ในรอบบิลนี้</td></tr>')+exBody
-   +'<tr><td colspan="16" class="l" style="padding:9px 8px;background:#F7F8FB">'
+   +'<tbody>'+(body||'<tr><td colspan="17" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ในรอบบิลนี้</td></tr>')+exBody
+   +'<tr><td colspan="17" class="l" style="padding:9px 8px;background:#F7F8FB">'
      +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr></tbody>'
-   +'<tfoot><tr><td class="l" colspan="3">รวม '+T.van+' เที่ยว</td>'
+   +'<tfoot><tr><td class="l" colspan="4">รวม '+T.van+' เที่ยว</td>'
      +'<td>'+T.ad+'</td><td>'+T.chd+'</td><td>'+T.inf+'</td><td>'+T.foc+'</td>'
      +'<td>'+T.van+'</td>'
      +'<td>'+T.pax+(T.bkPax>T.pax?('<div class="vb-cxl" style="color:#FFD79A">จอง '+T.bkPax+' · −'+(T.bkPax-T.pax)+'</div>'):'')+'</td>'
@@ -7103,9 +8320,15 @@ function renderVanBill(){
          +'  −  หัก '+B(T.cut)+'  =  '+B(T.bill)+'</div></div>'
    +'</div></div>';
   /* §vbFill · วาดใหม่ทั้งหน้าทุกครั้งที่กรอก · ไม่คืนโฟกัสให้ ผู้ใช้จะต้องคลิกใหม่ทุกช่อง */
-  if(_vb.foc){ var _k=_vb.foc; _vb.foc='';
+  if(_vb.foc){ var _k=_vb.foc, _fv=_vb.focVal, _fs=_vb.focSel; _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
     try{ var _el=host.querySelector('[data-vbk="'+_k+'"]');
-      if(_el){ _el.focus(); if(_el.select) _el.select(); } }catch(_){}
+      if(_el){ _el.focus();
+        /* §vbFocus · ผู้ใช้เริ่มพิมพ์ในช่องนี้ไปแล้วก่อนหน้าจะวาดใหม่ · คืนตัวอักษรกับตำแหน่งเคอร์เซอร์
+           ยังไม่ได้พิมพ์อะไร = เลือกทั้งช่องให้พิมพ์ทับได้เลยเหมือนเดิม */
+        if(_fv!=null && String(_fv)!==String(_el.value)){ _el.value=_fv;
+          if(_fs && _el.setSelectionRange){ try{ _el.setSelectionRange(_fs[0], _fs[1]); }catch(_){} } }
+        else if(_el.select) _el.select();
+      } }catch(_){}
   }
 }
 function vbPrint(){
@@ -7140,7 +8363,7 @@ function vbCss(){
   +'.vb-mo button{border:none;background:#EFF1F6;border-radius:8px;width:24px;height:26px;cursor:pointer;color:#6b7280;font-size:14px;font-family:inherit}'
   +'.vb-btn{border:1px solid #DDE1E9;background:#fff;border-radius:11px;padding:8px 14px;font:600 12.5px inherit;color:#3F4654;cursor:pointer;font-family:inherit}'
   +'.vb-btn.pri{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
-  +'.vb-who{display:flex;align-items:center;gap:12px;background:#FFFFFF;border:1px solid #E4E7EE;border-radius:13px;padding:11px 15px;margin-bottom:12px}'
+  +'.vb-newrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;padding:9px 12px;border:1px solid #F0C98A;background:#FFF8EC;border-radius:10px;font-size:12px;color:#7A4E00;line-height:1.5}.vb-newrow span{font-size:11px;color:#946515}.vb-newrow span.m{flex-basis:100%;color:#8A6A2F}.vb-who{display:flex;align-items:center;gap:12px;background:#FFFFFF;border:1px solid #E4E7EE;border-radius:13px;padding:11px 15px;margin-bottom:12px}'
   +'.vb-who .av{min-width:44px;height:38px;padding:0 8px;border-radius:11px;background:#16265C;color:#fff;display:flex;align-items:center;justify-content:center;font:800 11px "DM Mono",monospace;flex:none}'
   +'.vb-who .n{font-size:14px;font-weight:800}.vb-who .m{font-size:11.5px;color:#6B7280;margin-top:2px;font-family:"DM Mono",monospace}'
   +'.vb-lab{font-size:10px;font-weight:800;letter-spacing:.06em;color:#A9AFB6;text-transform:uppercase}'
@@ -7165,6 +8388,7 @@ function vbCss(){
   +'.vb-rn{font-size:11.5px;color:#4A5058}'
   +'.vb-area{display:inline-block;font-size:10.5px;font-weight:700;background:#F1F4F7;color:#6B7280;border:1px solid #E1E5EA;border-radius:7px;padding:2px 8px;margin:1px 3px 1px 0;white-space:nowrap}'
   +'.vb-area.far{background:#FBF3E6;color:#8A5B00;border-color:#EEDCBE}'
+  +'.vb-area.alt{background:#F3EDFB;color:#5B289A;border-color:#E0D3F2}'
   +'.vb-sub{font-size:9.5px;color:#9AA0A6;font-weight:500}'
   +'.vb-mut{color:#B6BCC3}'
   +'.vb-t tr.vb-ex td{background:#F8FAFD}'
@@ -7971,6 +9195,10 @@ function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
     /* §vjTpl · ชื่อไทยใต้จุดรับ · ปิดได้จาก Template */
     +p+'.pkth{font-size:var(--vjt-locth,18px)}'
     +(vjTpl().showTh?'':(p+'.pkth{display:none}'))
+    /* §strandVjClear · ปุ่มล้างมีไว้ให้กดบนจอ · ใบที่ส่งคนขับต้องไม่มีปุ่ม
+       ใบนี้ใช้ HTML ชุดเดียวกันทั้งบนจอและในหน้าต่างพิมพ์ จึงซ่อนตอนพิมพ์แทนการแยกธง */
+    +p+'.vj-sxclr{vertical-align:middle}'
+    +'@media print{'+p+'.vj-sxclr{display:none !important}}'
     +(scoped?'':'@media print{@page{size:A4 landscape;margin:10mm}body{padding:0}}')
     +'</style>';
 }
@@ -8050,9 +9278,40 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       rows.push({b:r.b, t:r.t, strand:'mv', strandWhy:r.strandWhy, splitPax:null,
                  retId:r.O.vanReturnId||null, outVid:r.O.vanId||null, seq:+r.O.vanSeq||0});
     });
+    /* ══ §vanStop · จุดแวะที่ไม่ใช่ booking ═══════════════════════════════
+       ไกด์ติดรถ · แวะเอาของ · เป็นที่ที่รถต้องขับไปจริง จึงต้องอยู่ในลำดับการวิ่ง
+       ไม่ใช่หมายเหตุท้ายใบที่คนขับต้องอ่านย้อน · ใส่เข้า rows ก่อนเรียง
+       เพื่อให้ใช้ตัวเรียงและตัวนับลำดับตัวเดียวกับแถวลูกค้า ไม่ต้องมีสองระบบ
+       §vsLeg · จุดแวะรู้ขาของตัวเองแล้ว · ขากลับขึ้นตารางขากลับ ไป-กลับขึ้นทั้งสอง */
+    if(typeof vsFor==='function'){
+      vsFor(date, routeId).forEach(st=>{
+        if(st.vanId!==vanId) return;
+        if(_G && (+st.vanGroup||0)!==_G) return;
+        if(typeof vsOnLeg==='function' && !vsOnLeg(st, isRet)) return;
+        rows.push({ _vs:st, seq:+st.vanSeq||0 });
+      });
+    }
+    /* เวลาของแถว · ลูกค้าอ่านจาก ops ของวันนั้น จุดแวะอ่านจากตัวมันเอง
+       ไม่ใส่เวลา = ไปท้ายแถว ไม่ใช่หัวแถว (สตริงว่างเรียงมาก่อนทุกเวลา) */
+    const _rowTime=x=>{ const v=x._vs?String(x._vs.time||'').trim():String((!isRet&&bkSplitPickTime(x.sp))||_ptime(x.b,x.t)||'').trim(); return v||'~'; };
+    /* ══ §vsSeqTime · แถวที่ยังไม่มีลำดับมือ ต้องแทรกตามเวลา ═══════════════
+       ผู้ใช้แจ้ง 30 ก.ย. "ใบงาน เวลาควรเรียงด้วย" — จุดแวะ 05:50 ไปโผล่ท้ายใบ
+       ใต้ลูกค้า 07:30 · เพราะของเดิมให้แถวที่ vanSeq=0 เป็นลำดับ 9999 = กองท้าย
+       ลำดับที่คนตั้งเองยังต้องชนะเวลา (บางวันจงใจวนสวนทาง) จึงไม่ทิ้ง vanSeq
+       ทำเป็น "แทรก": แถวไม่มีลำดับ ไปยืนก่อนแถวมีลำดับตัวแรกที่เวลามาทีหลัง
+       ผลคือ 05:50 ขึ้นหัวใบ และลำดับมือของแถวอื่นไม่ถูกสลับแม้แต่คู่เดียว   */
+    const _seqRows=rows.filter(x=>(x.seq||0)>0).sort((a,b)=>(a.seq||0)-(b.seq||0));
+    const _rank=x=>{
+      const sq=x.seq||0;
+      if(sq>0) return _seqRows.findIndex(y=>y===x);
+      const t=_rowTime(x);
+      let i=0; while(i<_seqRows.length && _rowTime(_seqRows[i])<=t) i++;
+      return i-0.5;                         /* แทรกระหว่างคู่ที่มันตกอยู่ตรงกลาง */
+    };
     rows.sort((a,b)=>{
       if(isRet){ const ea=(a.outVid&&a.outVid!==vanId)?1:0, eb=(b.outVid&&b.outVid!==vanId)?1:0; if(ea!==eb) return ea-eb; }   // return: "came from another van" rows go LAST
-      const sa=a.seq||0, sb=b.seq||0; if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; } return String(_ptime(a.b,a.t)).localeCompare(String(_ptime(b.b,b.t))); });
+      if(_seqRows.length){ const ra=_rank(a), rb=_rank(b); if(ra!==rb) return ra-rb; }
+      return _rowTime(a).localeCompare(_rowTime(b)); });
     return rows; };
   // Shared column widths so the OUTBOUND and RETURN tables line up exactly (table-layout:fixed)
   const _colg='<colgroup><col style="width:2.5%"><col style="width:11%"><col style="width:11%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:3.3%"><col style="width:8.5%"><col style="width:13.5%"><col style="width:4.5%"><col style="width:6%"><col style="width:14%"><col style="width:3.8%"><col style="width:8.5%"></colgroup>';
@@ -8060,7 +9319,39 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
   const _section=isRet=>{
     const rows=_collect(isRet); if(!rows.length) return {rows:[], totPax:0, html:''};
     let totPax=0, totAd=0, totChd=0, totInf=0, totFoc=0, _nSx=0, _seqNo=0;
-    const tr=rows.map((x,i)=>{ const b=x.b,t=x.t; const pax=(x.splitPax!=null)?x.splitPax:((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0);
+    let vsSeatTot=0, vsN=0;
+    const tr=rows.map((x,i)=>{
+      /* §vanStop · แยกออกตั้งแต่บรรทัดแรก · ข้างล่างอ่าน x.b / x.t ตลอด จุดแวะไม่มีสองอันนั้น
+         ที่นั่งของจุดแวะไม่เข้า totAd/totChd/totInf/totFoc เด็ดขาด
+         สี่ช่องนั้นคือลูกค้าที่ต้องตรงกับที่นั่งเรือและใบอุทยาน · ยอดคนติดรถไปอยู่บรรทัดสรุปแยก */
+      if(x._vs){
+        const st=x._vs, K=(typeof VS_KIND!=='undefined'&&VS_KIND[st.kind])||{t:'',ic:''};
+        const seats=(typeof vsSeats==='function')?vsSeats(st):0;
+        vsSeatTot+=seats; vsN++;
+        /* §vsArea · ช่องพื้นที่รับใช้ชุดเดียวกับลูกค้า · §vsLeg · บอกขาเมื่อเป็นไป-กลับ */
+        const _vsAr=(typeof vsAreaName==='function')?vsAreaName(st):(st.zone||'');
+        const _vsArTh=(typeof vsAreaTh==='function')?vsAreaTh(st):'';
+        const _vsLgK=(typeof vsLegOf==='function')?vsLegOf(st):'out';
+        const _vsLg=Object.assign({both:_vsLgK==='both'},(typeof VS_LEG!=='undefined'&&VS_LEG[_vsLgK])||{t:''});
+        const _n=++_seqNo;
+        const _dash='<span style="color:#bbb">-</span>';
+        return `<tr style="background:#F4FBFD">
+        <td style="text-align:center"><b style="color:#0E7490">${_n}</b></td>
+        <td style="text-align:center;font-size:11px;font-weight:800;color:#0E7490;letter-spacing:.04em">${e(laT('แวะ'))}</td>
+        <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:#0A5468">${K.ic} ${e(st.label||'')}
+          <div class="ag" style="color:#0E7490;font-weight:700">${e(K.t)}${seats?(' · '+e(laTp('{0} ที่นั่ง', seats))):''}${_vsLg.both?` · ${e(_vsLg.t)}`:''}</div></td>
+        <td style="text-align:center">${_dash}</td><td style="text-align:center">${_dash}</td>
+        <td style="text-align:center">${_dash}</td><td style="text-align:center">${_dash}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:#0E7490;white-space:nowrap">${e(st.time||'')||_dash}</td>
+        <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#0A5468">${e(st.place||'')}${st.phone?`<div class="ag" style="color:#0E7490">${e(st.phone)}</div>`:''}</td>
+        <td style="text-align:center">${_dash}</td>
+        <td>${_vsAr?`<div style="font-weight:600;line-height:1.25">${e(_vsAr)}</div>${_vsArTh?`<div style="font-size:11px;color:#185FA5;line-height:1.25">${e(_vsArTh)}</div>`:''}`:_dash}</td>
+        <td style="font-size:var(--vjt-loc,14.5px)">${_dash}</td>
+        <td style="text-align:center">${_dash}</td>
+        <td style="font-size:12.5px;color:#57807F;font-style:italic">${e(st.note||'')}</td>
+      </tr>`;
+      }
+      const b=x.b,t=x.t; const pax=(x.splitPax!=null)?x.splitPax:((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0);
       /* §strandVj · ของค้างไม่เข้ายอดและไม่กินเลขลำดับ · เลขต้องตรงกับใบเก่าที่คนขับถืออยู่ */
       const _sxR=!!x.strand; if(_sxR) _nSx++; else totPax+=pax;
       const _no=_sxR?'&#10007;':(++_seqNo);
@@ -8083,8 +9374,12 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       //   ทำให้ขากลับที่ส่งคนละโซน (เช่น รับ Patong · ส่ง Chalong) โชว์ Patong → คนขับงง
       //   dropoffSame / มาเอง → จุดส่ง = จุดรับ จึง fallback เป็น pickArea
       const _dropAreaObj=(b.dropoffSame===false && b.dropoffAreaId && typeof bookingV2GetArea==='function')?bookingV2GetArea(b.dropoffAreaId):_pickArea;
-      const _area=_splitPick?_splitArea:(isRet?_dropAreaObj:_pickArea);
-      const _areaEn=_area?_area.name:'';
+      /* §splitZone · แถวแยกคนที่ไม่ได้เลือกพื้นที่ใหม่ ต้องใช้พื้นที่ของบุคกิ้งแม่
+         ไม่ใช่ปล่อยช่องโซนว่าง · คนขับใช้ช่องนี้ไล่ลำดับการวิ่ง (ผู้ใช้แจ้ง 30 ก.ย.) */
+      const _splitAreaR=_splitPick && typeof bookingV2SplitArea==='function'
+        ? bookingV2SplitArea(b, {areaId:x.sAreaId, hotel:x.sHotel, zone:x.sZone}, _pickArea) : null;
+      const _area=_splitPick?(_splitAreaR?_splitAreaR.area:_splitArea):(isRet?_dropAreaObj:_pickArea);
+      const _areaEn=_area?_area.name:(_splitPick&&_splitAreaR?(_splitAreaR.name||''):'');
       const _pt=k=>(typeof bookingV2PaxTot==='function'?bookingV2PaxTot(t.pax,k):0);
       const _ad=_pt('ad'),_chd=_pt('chd'),_inf=_pt('inf'),_foc=_pt('foc');
       // §pax breakdown · a split now carries its own ad/chd/inf/foc, so a child on a second pickup
@@ -8164,15 +9459,27 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       /* กดได้เฉพาะตอนเปิดโหมด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ จึงต้องไม่ติดไปด้วย */
       const _hlClick = _VJ_HL_ON ? ` onclick="vjHlClick('${_hlKey}')"` : '';
       const _sxMv = x.strand==='mv';
+      /* ══ §strandVjClear · ปุ่มล้างต้องอยู่ตรงที่คนเห็นปัญหา ══════════════════════════════
+         แถวค้างขึ้นเด่นที่สุดในใบงานรถ · แต่ปุ่มล้างมีแค่ที่เช็คอินรถ / เช็คอินหน้าท่า /
+         Travel Summary · ป้ายบอกเองด้วยซ้ำว่า "กดล้างการจัดรถที่หน้าเช็คอินรถ"
+         คือระบบรู้ว่าต้องไปกดที่อื่น แล้วให้คนเดินไปเอง
+
+         ⚠ เคสเลื่อนวันยิ่งหนัก · แถวนั้นมาจากภาพที่ถ่ายไว้ (ops_stranded) ไม่ได้มาจาก ops.vanId
+           ปลดรถที่หน้าจัดรถจึงไม่มีผลอะไรเลย เพราะวันเดิมไม่เหลือ ops ให้ปลดอยู่แล้ว
+           ckStrandMvDrop ถูกเรียกจากที่เดียวคือปุ่มนี้ · ไม่มีทางอื่นให้มันหาย
+         ⚠ ซ่อนตอนพิมพ์ · ใบที่ส่งคนขับไม่ควรมีปุ่ม และหน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ */
+      const _sxClr = (_sxR && b && b.id)
+        ? `<button class="vj-sxclr" onclick="event.stopPropagation();ckStrandClear('${b.id}','${date}')" title="ล้างแถวค้างนี้ออกจากใบงานของวันนี้ · ใบจองไม่ถูกแตะ" style="margin-left:6px;background:#fff;border:1px solid #E4C0C0;color:#A32D2D;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">ล้างออก</button>`
+        : '';
       const _sxTag = _sxR
-        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'var(--vjt-hlcxl-bg,#FBE3E1)'};color:${_sxMv?'#5B289A':'var(--vjt-hlcxl,#B5271F)'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
+        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'var(--vjt-hlcxl-bg,#FBE3E1)'};color:${_sxMv?'#5B289A':'var(--vjt-hlcxl,#B5271F)'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span>${_sxClr}</div>`
         : '';
       return `<tr${_rowBg}${_hlClick}>
         <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
         <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
         ${paxCells}
-        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(bkSplitPickTime(x.sp)||_ptime(b,t))||'-')}</td>
         <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag pkth" style="color:var(--vjt-think,#185FA5);font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
         <td style="text-align:center">${e(b.roomNumber||'')||'-'}</td>
         <td>${zoneCell}</td>
@@ -8201,10 +9508,11 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
         <td colspan="7">${totPax} pax · ${(function(){
             /* §altDrop · แยกส่งทำให้แถวเพิ่ม แต่จำนวน "ใบ" เท่าเดิม · ต้องนับใบไม่ใช่แถว */
             const _ids={}; let n=0, nd=0;
-            rows.forEach(function(z){ if(z.strand) return; const k=z.b&&z.b.id; if(k&&!_ids[k]){_ids[k]=1;n++;}
+            rows.forEach(function(z){ if(z.strand||z._vs) return; const k=z.b&&z.b.id; if(k&&!_ids[k]){_ids[k]=1;n++;}
               if(z.sp && ((z.sp.dropHotel||'').trim()||z.sp.dropAreaId)) nd++; });
             return n+' booking'+(nd>0?(' · แยกส่ง '+nd+' จุด'):'');
-          })()}${_nSx>0?` <span style="color:#B5271F">· ค้างจัดการ ${_nSx} (ยกเลิก/เลื่อนวัน · ไม่นับ)</span>`:''}</td>
+          })()}${_nSx>0?` <span style="color:#B5271F">· ค้างจัดการ ${_nSx} (ยกเลิก/เลื่อนวัน · ไม่นับ)</span>`:''}${vsN>0?`
+          <span style="color:#0A5468">&middot; ${laT('จุดแวะ')} ${vsN}${vsSeatTot>0?(' &middot; '+laTp('ลูกค้า {0} + ติดรถ {1} = {2} ที่นั่ง', totPax, vsSeatTot, totPax+vsSeatTot)):''}</span>`:''}</td>
       </tr></tfoot>
     </table>`;
     return {rows, totPax, html:secHd+table};
@@ -8309,7 +9617,7 @@ function boatCapSet(boatId, date, cap, reason){
 }
 // ── modal ตั้ง cap รายวัน · เรียกได้จากทั้ง Boat Operation และ By-trip ──
 function boatCapModalClose(){ const h=document.getElementById('bcap-host'); if(h) h.innerHTML=''; }
-function boatCapModalOpen(boatId, date, afterFn){
+function boatCapModalOpen(boatId, date, afterFn, suggest){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ต้องมีสิทธิ์แก้ไข Operations จึงจะปรับ cap ได้'); return; }
   const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return;
   const e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]));
@@ -8330,7 +9638,7 @@ function boatCapModalOpen(boatId, date, afterFn){
    +'  </div>'
    +'  <div style="padding:18px 20px">'
    +'    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
-   +'      <input id="bcap-val" type="number" min="0" max="'+i.license+'" value="'+i.cap+'" oninput="_bcapPreview()" style="width:110px;border:1.5px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:22px;font-weight:800;font-family:\'DM Mono\',monospace;text-align:center;box-sizing:border-box">'
+   +'      <input id="bcap-val" type="number" min="0" max="'+i.license+'" value="'+((suggest>0)?suggest:i.cap)+'" oninput="_bcapPreview()" style="width:110px;border:1.5px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:22px;font-weight:800;font-family:\'DM Mono\',monospace;text-align:center;box-sizing:border-box">'
    +'      <div style="display:flex;gap:6px;flex-wrap:wrap">'+quick+'</div>'
    +'    </div>'
    +'    <div id="bcap-hint" style="font-size:11.5px;margin-top:9px;min-height:17px"></div>'
@@ -8599,7 +9907,7 @@ function ckRowSeq(r){
 }
 function ckRowTime(r){
   var O=r&&r.O, t=r&&r.t;
-  return String((O&&O.pickupTimeFinal)||(t&&(t.pickupTime||t.pickupFinal))||'~~');
+  return String(bkSplitPickTime(r&&r.sp)||(O&&O.pickupTimeFinal)||(t&&(t.pickupTime||t.pickupFinal))||'~~');
 }
 function ckRowCmp(a,b){
   var sa=ckRowSeq(a), sb=ckRowSeq(b); if(sa!==sb) return sa-sb;
@@ -8688,7 +9996,7 @@ function ckStrandSnap(b, date, O, t, to, why){
 function ckDayShortTh(ymd){
   var v=String(ymd||'');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var M=laMonAbbrTH();
   var p=v.split('-');
   return (+p[2])+' '+M[(+p[1])-1];
 }
@@ -8731,7 +10039,7 @@ function ckStrandMvDrop(key){
 function ckShortDay(iso){
   if(!iso) return '';
   var d=new Date(iso); if(isNaN(d)) return String(iso).slice(0,10);
-  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var M=laMonAbbrTH();
   return d.getDate()+' '+M[d.getMonth()]
     +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
@@ -8746,8 +10054,16 @@ function ckStrandWhy(b){
 /* ล้างการจัดการของ "วันนั้นวันเดียว" · ตัวใบจองไม่ถูกแตะ
    นี่คือทางเดียวที่แถวค้างจะหายไป */
 function ckStrandClear(bkId, date){
+  /* §strandSay · ทางที่ "ไม่ทำอะไรแล้วเงียบ" ต้องไม่มี
+     ผู้ใช้รายงานว่ากดล้างแล้วแถวยังอยู่ · จำลองเคสเดียวกันในเครื่องแล้วล้างได้ทุกครั้ง
+     แปลว่าของจริงหลุดออกทางใดทางหนึ่งที่ return เงียบ ๆ แล้วไม่มีใครรู้ว่าทางไหน
+     ให้มันพูดออกมา · ครั้งหน้าที่เจอจะได้รู้ทันทีว่าติดตรงไหน ไม่ต้องมาเดาอีกรอบ */
   var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(x){ return x.id===bkId; })[0];
-  if(!b) return;
+  if(!b){
+    alert('ล้างไม่ได้ · หาใบจองรหัส '+bkId+' ไม่เจอในเครื่องนี้\n\n'
+      +'อาจเป็นเพราะข้อมูลในเครื่องยังไม่ตรงกับระบบ · ลองรีเฟรชหน้าแล้วกดใหม่');
+    return;
+  }
   var nm=b.leadPax||b.voucherRef||b.code||bkId;
   /* §strandMove · เคสเลื่อนวัน ของจริงถูกล้างไปตั้งแต่ตอนเลื่อนแล้ว
      ที่ต้องลบคือ "ภาพที่ถ่ายไว้" · ไม่ต้องไปแตะ ops ของวันใหม่เด็ดขาด */
@@ -8765,6 +10081,15 @@ function ckStrandClear(bkId, date){
       if(h==='landcheckin-host' && typeof renderLandCheckin==='function') renderLandCheckin();   // §landCk
       if(h==='vanjobs-host'    && typeof renderVanJobs==='function')    renderVanJobs();
     });
+    return;
+  }
+  /* §strandSay · มาถึงตรงนี้แปลว่าไม่ใช่เคสเลื่อนวัน · ต้องเป็นเคส "ยกเลิกแล้วยังจัดรถไว้"
+     ถ้าไม่มีการจัดรถเหลือให้ล้างเลย แสดงว่าแถวที่เห็นมาจากที่อื่น · บอกให้รู้ ไม่ใช่ทำเป็นล้างแล้วเงียบ */
+  var _hasArr=(typeof ckHasArrange==='function') ? ckHasArrange(b, date) : true;
+  if(!_hasArr){
+    alert('ไม่มีการจัดรถ/เรือของ '+nm+' ค้างอยู่ในวันที่ '+date+' แล้ว\n\n'
+      +'แถวที่เห็นอาจมาจากข้อมูลเก่าในเครื่อง · ลองรีเฟรชหน้า (Ctrl/Cmd + Shift + R)\n'
+      +'ถ้ายังอยู่หลังรีเฟรช แจ้งทีมพัฒนาพร้อมรหัสใบจอง '+bkId+' และวันที่ '+date);
     return;
   }
   if(!confirm('ล้างการจัดรถ/เรือของ '+nm+' ออกจากวันที่ '+date+' ?\n\n'
@@ -9510,7 +10835,7 @@ function ckTimeChip(st, timeStr, kind){
 function ckGroupTime(rows, date){
   var best=null, worst='off', rank={off:0,wait:1,miss:1,soon:2,due:3,late:4}, nLate=0;
   rows.forEach(function(r){
-    var tm=(r.O&&r.O.pickupTimeFinal)||(r.t&&(r.t.pickupTime||r.t.pickupFinal))||'';
+    var tm=bkSplitPickTime(r.sp)||(r.O&&r.O.pickupTimeFinal)||(r.t&&(r.t.pickupTime||r.t.pickupFinal))||'';
     var t=ckParseTime(tm); if(t && (best===null || t.start<best.start)){ best={start:t.start, label:tm}; }
     var on=!!(r.ck&&r.ck.at);
     var st=ckTimeState(tm, date, on);
@@ -10223,7 +11548,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     var _sagN=_sag?(_sag.name||_sag.code||'—'):(b.channel||'walk-in');
     var _sp0=r.sp||null, _spb=ckPaxBreak(t.pax);
     if(_sp0) _spb={ad:+_sp0.ad||0, chd:+_sp0.chd||0, inf:+_sp0.inf||0, foc:+_sp0.foc||0};
-    var _stm=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
+    var _stm=bkSplitPickTime(r.sp)||r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
     var _spk=ckPickShort(b.hotelName||b.pickup||'')||'—';
     var _sar=ckPickShort(b.pickupArea||'')||'';
     return '<tr class="ck-row ck-strand'+(r.strand==='mv'?' mv':'')+'">'
@@ -10258,7 +11583,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     ? '<td style="padding:0"><div class="ck-agblk" title="'+e(agName)+'" style="background:'+agColor+';color:'+agInk+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">'+e(agName)+'</div></td>'
     : '<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>';
   var pb=ckPaxBreak(t.pax);
-  var time=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
+  var time=bkSplitPickTime(r.sp)||r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'—';
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bookingV2GetArea==='function'?((bookingV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
   if(_sp){
@@ -10382,18 +11707,77 @@ function pcKey(pier){ return 'po_cash_'+(pier||'panwa'); }
    ถ้าเอา object ไปวางไว้ใน blob ด้วย พอ feature อื่นสั่ง laBlobSave() ตอนที่เรายังไม่ได้เซฟ
    diff จะเห็นว่า key หายไป แล้วสั่งลบขึ้นเซิร์ฟเวอร์ · ข้อมูลหายทั้งที่ไม่มีใครลบ */
 var _PC_MEM={}, _PC_SRC={};
+/* ══ §pcRows ก2 · ตารางเป็นของจริงแล้ว · สตริงเหลือไว้เทียบอย่างเดียว ═══════════════════════════
+   หน้าจอกับจุดที่แก้ข้อมูลทั้ง 7 จุดไม่ได้แตะเลยสักบรรทัด · ทุกจุดเรียก pcDay() แล้วจบที่ pcSave()
+   เปลี่ยนแค่ข้างใต้สองฟังก์ชันนี้ · ข้างบนยังเห็นเป็นก้อนซ้อนเหมือนเดิม {วัน:{in,out,lt,pk}}
+
+   ⚠ หัวใจอยู่ที่ pcSave ต้องเขียนเป็น "ส่วนต่าง" ไม่ใช่ "สร้างใหม่ทั้งชุด"
+     ถ้าสร้างใหม่ทั้งชุดจากหน่วยความจำ แล้วหน่วยความจำเก่ากว่าตาราง (อีกคนเพิ่งเพิ่มแถว
+     แต่รีเฟรชยังมาไม่ถึงเรา) แถวของเขาจะถูกลบทิ้ง = บั๊กเดิมย้ายมาอยู่ระดับแถวแทน
+     จึงเทียบ view ปัจจุบันกับ "ภาพตอนที่สร้าง view" แล้วแตะเฉพาะแถวที่เราเปลี่ยนจริง
+     แถวที่เราไม่รู้จักเลยไม่ถูกแตะ ต่อให้มันโผล่มาระหว่างทาง
+
+   ⚠ สร้าง view ใหม่เมื่อ "ตัวอาเรย์เปลี่ยนตัว" · รีเฟรชจากเซิร์ฟเวอร์เขียน localStorage ใหม่
+     laBlob() จึง parse ใหม่ได้อาเรย์คนละตัว · เช็คด้วยตัวตนของอาเรย์จึงแม่นและถูกมาก
+     การเซฟของเราเองแก้อาเรย์ตัวเดิมในที่ · เราอัปเดตภาพตอนสร้างเองหลังเซฟ ไม่ต้องเช็ค     */
+var _PC_V0 = {}, _PC_ARR = null;
+function pcClone(o){ return JSON.parse(JSON.stringify(o || {})); }
+function pcArrSame(){
+  return _PC_ARR && _PC_ARR.r === pcRowsArr() && _PC_ARR.l === pcLtArr() && _PC_ARR.k === pcPkArr();
+}
+function pcArrMark(){ _PC_ARR = { r:pcRowsArr(), l:pcLtArr(), k:pcPkArr() }; }
+/* แถว → ก้อนซ้อน · ทิ้งค่าว่าง/null เพื่อให้หน้าตาเหมือนที่โค้ดเดิมเคยเห็น */
+function pcPut(o, k, v){ if(v !== null && v !== undefined && v !== '' && !(typeof v === 'number' && !v)) o[k] = v; }
+function pcBuildViews(){
+  var V = {};
+  PC_PIERS.forEach(function(p){ V[p] = {}; });
+  var day = function(p, ds){
+    if(!V[p]) V[p] = {};
+    if(!V[p][ds]) V[p][ds] = { 'in':[], out:[], lt:{}, pk:{} };
+    return V[p][ds];
+  };
+  pcRowsArr().forEach(function(x){
+    if(!x || !x.id || !x.pier || !x.date) return;
+    var D = day(x.pier, x.date), r = { id:x.id, amt:Math.round(+x.amt || 0) };
+    pcPut(r, 'txt', x.txt); pcPut(r, 'at', x.at); pcPut(r, 'by', x.by);
+    pcPut(r, 'ts', x.ts);   pcPut(r, 'src', x.src);
+    D[x.kind === 'in' ? 'in' : 'out'].push(r);
+  });
+  pcLtArr().forEach(function(x){
+    if(!x || !x.pier || !x.date || !x.bid) return;
+    var C = {};
+    PC_LT_F.forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    pcPut(C, 'note', x.note); pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts);
+    day(x.pier, x.date).lt[x.bid] = C;
+  });
+  pcPkArr().forEach(function(x){
+    if(!x || !x.pier || !x.date || !x.bid) return;
+    var C = {};
+    PC_PK.concat(['amt','dock']).forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts); pcPut(C, 'src', x.src);
+    day(x.pier, x.date).pk[x.bid] = C;
+  });
+  return V;
+}
+function pcSync(){
+  if(pcArrSame() && _PC_MEM && Object.keys(_PC_MEM).length) return;
+  var V = pcBuildViews();
+  _PC_MEM = V; _PC_V0 = pcClone(V);
+  pcArrMark();
+}
 function pcPier(pier){
+  try{ pcSync(); }catch(e){ try{ console.warn('[poCash] sync failed', e && e.message); }catch(_){} }
+  return _PC_MEM[pier] || (_PC_MEM[pier] = {});
+}
+/* อ่านจากสตริงเก่าโดยตรง · ใช้ตอนย้ายข้อมูลกับตอนตรวจยอดเท่านั้น
+   ⚠ ห้ามเอาไปใช้แสดงผล · ของจริงอยู่ในตารางแล้ว */
+function pcPierLegacy(pier){
   var b, k=pcKey(pier);
-  try{ b=laBlob(); }catch(_){ return _PC_MEM[pier]||(_PC_MEM[pier]={}); }
-  var raw=(typeof b[k]==='string')?b[k]:'';
-  /* สตริงเปลี่ยน = มีคนอื่นเซฟมา หรือเพิ่งโหลดใหม่ → อ่านใหม่ */
-  if(_PC_MEM[pier]===undefined || _PC_SRC[pier]!==raw){
-    var o={};
-    if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
-    else { try{ if(b.po_cash && typeof b.po_cash==='object' && b.po_cash[pier]) o=b.po_cash[pier]; }catch(_){} }
-    _PC_MEM[pier]=o; _PC_SRC[pier]=raw;
-  }
-  return _PC_MEM[pier];
+  try{ b=laBlob(); }catch(_){ return {}; }
+  var raw=(typeof b[k]==='string')?b[k]:'', o={};
+  if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+  else { try{ if(b.po_cash && typeof b.po_cash==='object' && b.po_cash[pier]) o=b.po_cash[pier]; }catch(_){} }
+  return o;
 }
 /* รูปเดิม {panwa:{...},tublamu:{...}} · โค้ดที่เหลืออ่านผ่านตัวนี้เหมือนเดิม */
 function pcAll(){ var o={}; PC_PIERS.forEach(function(p){ o[p]=pcPier(p); }); return o; }
@@ -10405,18 +11789,169 @@ function pcDay(pier,ds,make){
   return D;
 }
 /* เขียนกลับเป็นสตริง · ท่าที่ยังไม่มีข้อมูลไม่ต้องเขียน key เปล่าให้รก */
+/* แตกก้อนซ้อนเป็น map ของแถว · ใช้ทั้งฝั่ง view ปัจจุบันและฝั่งภาพตอนสร้าง */
+function pcFlatten(V){
+  var R = {}, L = {}, K = {};
+  Object.keys(V || {}).forEach(function(p){
+    var P = V[p] || {};
+    Object.keys(P).forEach(function(ds){
+      var D = P[ds] || {};
+      ['in','out'].forEach(function(kind){
+        (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
+          if(!r || !r.id) return;
+          R[r.id] = { id:String(r.id), pier:p, date:ds, kind:kind, txt:String(r.txt || ''),
+                      amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                      ts:String(r.ts || ''), src:String(r.src || '') };
+        });
+      });
+      Object.keys(D.lt || {}).forEach(function(bid){
+        var C = D.lt[bid] || {}, id = pcCellId(p, ds, bid);
+        var o = { id:id, pier:p, date:ds, bid:String(bid), note:String(C.note || ''),
+                  by:String(C.by || ''), ts:String(C.ts || '') };
+        PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        L[id] = o;
+      });
+      Object.keys(D.pk || {}).forEach(function(bid){
+        var C = D.pk[bid] || {}, id = pcCellId(p, ds, bid);
+        var o = { id:id, pier:p, date:ds, bid:String(bid), by:String(C.by || ''),
+                  ts:String(C.ts || ''), src:String(C.src || '') };
+        PC_PK.concat(['amt','dock']).forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        K[id] = o;
+      });
+    });
+  });
+  return { rows:R, lt:L, pk:K };
+}
+/* เขียนส่วนต่างลงอาเรย์ · แตะเฉพาะ id ที่เราเพิ่ม แก้ หรือลบจริง
+   id ที่ไม่ได้อยู่ในภาพทั้งสองฝั่ง = ของคนอื่นที่โผล่มาระหว่างทาง · ปล่อยไว้ ห้ามแตะ */
+function pcApplyDelta(arr, now, was){
+  var byId = {}, i;
+  for(i = 0; i < arr.length; i++) if(arr[i] && arr[i].id != null) byId[arr[i].id] = i;
+  var n = 0;
+  Object.keys(now).forEach(function(id){
+    var rec = now[id], at = byId[id];
+    if(at === undefined){ arr.push(rec); byId[id] = arr.length - 1; n++; return; }
+    if(JSON.stringify(arr[at]) !== JSON.stringify(rec)){ arr[at] = rec; n++; }
+  });
+  var del = Object.keys(was).filter(function(id){ return !now[id] && byId[id] !== undefined; });
+  if(del.length){
+    var drop = {}; del.forEach(function(id){ drop[id] = 1; n++; });
+    var keep = arr.filter(function(x){ return !(x && drop[x.id]); });
+    arr.length = 0; keep.forEach(function(x){ arr.push(x); });
+  }
+  return n;
+}
 function pcSave(){
   try{
-    var b=laBlob();
-    PC_PIERS.forEach(function(p){
-      pcPier(p);                       /* บังคับให้ย้ายของเก่าก่อน แล้วค่อยลบ po_cash ทิ้ง */
-      var v=_PC_MEM[p];
-      if(v && Object.keys(v).length){ var str=JSON.stringify(v); b[pcKey(p)]=str; _PC_SRC[p]=str; }
-      else if(b[pcKey(p)]!==undefined){ delete b[pcKey(p)]; _PC_SRC[p]=''; }
-    });
-    if(b.po_cash) delete b.po_cash;   /* ของเก่ารูป object · ย้ายมาแล้ว ไม่ต้องเก็บซ้ำ */
-    laBlobSave();
+    pcSync();
+    var A = pcFlatten(_PC_MEM), B = pcFlatten(_PC_V0);
+    var n = pcApplyDelta(pcRowsArr(), A.rows, B.rows)
+          + pcApplyDelta(pcLtArr(),   A.lt,   B.lt)
+          + pcApplyDelta(pcPkArr(),   A.pk,   B.pk);
+    if(n){
+      /* ภาพตอนสร้างต้องตามให้ทัน ไม่งั้นการเซฟรอบหน้าจะคิดว่าของที่เพิ่งเขียนคือของใหม่อีก */
+      _PC_V0 = pcClone(_PC_MEM);
+      pcArrMark();
+      laBlobSave();
+    }
   }catch(e){ try{ console.warn('[poCash] save failed', e && e.message); }catch(_){} }
+}
+/* ══ §pcRows · ย้ายเงินสดย่อยจาก "สตริงก้อนเดียว" มาเป็น "แถว" ═══════════════════════════════════
+   ก้อน 1 · สร้างแถวขึ้นมาคู่ขนาน · ตัวอ่านของหน้าจอยังใช้สตริงเหมือนเดิมทุกอย่าง
+   deploy แค่ก้อนนี้แล้วไม่มีอะไรเปลี่ยนในสายตาคนใช้ · ก้อน 2 ค่อยสลับตัวอ่าน
+
+   ทำไมต้องย้าย · ทั้งท่า ทั้งเดือน ทุกแถว อยู่ใน key เดียว (po_cash_<ท่า>)
+   ค่าที่เป็นสตริงเดินทางเป็น {op:'meta'} ซึ่งฝั่งเซิร์ฟเวอร์ DELETE แล้ว INSERT ทับทั้ง key
+   batch คำนวณ behind ไว้แล้วก็จริง แต่ "บอก" เฉย ๆ ไม่ได้ปฏิเสธการเขียน
+   สองคนที่ท่าเดียวกันเปิดหน้าอยู่ คนที่เซฟทีหลังจึงลบแถวของคนแรกทิ้งโดยไม่มีอะไรฟ้อง
+   (ไคลเอนต์อ่านใหม่เมื่อสตริงเปลี่ยนอยู่แล้ว แต่รีเฟรชที่จะพาของคนอื่นมาถูกกั้นไว้
+    ตอนโฟกัสอยู่ในช่องกรอก ซึ่งคือสภาพปกติของคนที่กำลังนั่งคีย์)
+   พอเป็นแถวที่มี id ตัวคำนวณ diff จะส่งเป็น op รายเรคคอร์ด = กลไกเดียวกับใบจอง/สัญญา
+   ที่มีคอมเมนต์กำกับไว้เองว่า "server merges onto its CURRENT record"
+
+   ⚠ ย้ายแล้วไม่ลบ key เก่า · เก็บไว้เป็นตัวเทียบจนกว่าก้อน 3 จะยืนยันว่าครบ
+   ⚠ ทำซ้ำได้ · id ของแถวสมุดใช้ของเดิมที่ไคลเอนต์สร้างไว้แล้ว (ไม่ซ้ำกันอยู่แล้ว)
+     ส่วนสองชีทใช้ ท่า|วัน|เรือ ซึ่งคงที่ · รันกี่รอบก็ไม่เกิดแถวซ้ำ
+   ⚠ ไม่ทับของที่มีอยู่ในตารางแล้ว · ถ้าก้อน 2 ลงไปแล้วมีคนคีย์ของใหม่เข้าตาราง
+     แล้วสตริงเก่ายังค้างอยู่ การย้ายรอบถัดไปต้องไม่ย้อนเอาของเก่ามาทับ            */
+var PC_LT_F = ['n','nj','nc','amt'];
+function pcArr(k){
+  var b; try{ b = laBlob(); }catch(_){ return []; }
+  if(!Array.isArray(b[k])) b[k] = [];
+  return b[k];
+}
+function pcRowsArr(){ return pcArr('po_cash_rows'); }
+function pcLtArr(){   return pcArr('po_cash_lt'); }
+function pcPkArr(){   return pcArr('po_cash_pk'); }
+function pcCellId(pier, ds, bid){ return pier + '|' + ds + '|' + bid; }
+/* แปลงก้อนของท่าหนึ่งเป็นแถว · คืนจำนวนที่เพิ่มจริง */
+function pcRowsFromPier(pier, P){
+  var R = pcRowsArr(), L = pcLtArr(), K = pcPkArr();
+  var have = {}; R.forEach(function(x){ if(x && x.id) have[x.id] = 1; });
+  var haveL = {}; L.forEach(function(x){ if(x && x.id) haveL[x.id] = 1; });
+  var haveK = {}; K.forEach(function(x){ if(x && x.id) haveK[x.id] = 1; });
+  var n = 0;
+  Object.keys(P || {}).forEach(function(ds){
+    var D = P[ds]; if(!D || typeof D !== 'object') return;
+    ['in','out'].forEach(function(kind){
+      (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
+        if(!r || !r.id || have[r.id]) return;
+        R.push({ id:String(r.id), pier:pier, date:ds, kind:kind, txt:String(r.txt || ''),
+                 amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                 ts:String(r.ts || ''), src:String(r.src || '') });
+        have[r.id] = 1; n++;
+      });
+    });
+    Object.keys(D.lt || {}).forEach(function(bid){
+      var id = pcCellId(pier, ds, bid); if(haveL[id]) return;
+      var C = D.lt[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
+        note:String(C.note || ''), by:String(C.by || ''), ts:String(C.ts || '') };
+      PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+      L.push(o); haveL[id] = 1; n++;
+    });
+    Object.keys(D.pk || {}).forEach(function(bid){
+      var id = pcCellId(pier, ds, bid); if(haveK[id]) return;
+      var C = D.pk[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
+        by:String(C.by || ''), ts:String(C.ts || ''), src:String(C.src || '') };
+      PC_PK.concat(['amt','dock']).forEach(function(f){
+        o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+      K.push(o); haveK[id] = 1; n++;
+    });
+  });
+  return n;
+}
+/* เรียกครั้งเดียวต่อการโหลดหน้า · เรียกตอนเปิดหน้าเงินสดย่อย ไม่ใช่ตอนบูต
+   ตอนบูต blob อาจยังไม่พร้อม และหน้าอื่นไม่ต้องแบกงานนี้ */
+var _pcMigDone = false;
+function pcRowsMigrate(force){
+  if(_pcMigDone && !force) return 0;
+  _pcMigDone = true;
+  var n = 0;
+  try{
+    PC_PIERS.forEach(function(p){ n += pcRowsFromPier(p, pcPierLegacy(p)); });
+    if(n > 0){ _PC_ARR = null; pcSync(); }          /* มีของเพิ่ม · สร้าง view ใหม่ให้เห็นทันที */
+    if(n > 0){ laBlobSave(); try{ console.log('[poCash] ย้ายเข้าตารางแล้ว ' + n + ' แถว'); }catch(_){} }
+  }catch(e){ try{ console.warn('[poCash] ย้ายไม่สำเร็จ', e && e.message); }catch(_){} }
+  return n;
+}
+/* ตรวจว่าสตริงกับตารางตรงกันไหม · ก้อน 3 จะใช้ตัวนี้ตัดสินว่าลบ key เก่าได้หรือยัง
+   เรียกจากคอนโซลได้: pcRowsAudit() */
+function pcRowsAudit(){
+  var out = { ok:true, pier:{} };
+  PC_PIERS.forEach(function(p){
+    var P = pcPierLegacy(p), nS = 0;
+    Object.keys(P || {}).forEach(function(ds){
+      var D = P[ds] || {};
+      nS += (D['in'] || []).length + (D.out || []).length
+          + Object.keys(D.lt || {}).length + Object.keys(D.pk || {}).length;
+    });
+    var nR = pcRowsArr().filter(function(x){ return x.pier === p; }).length
+           + pcLtArr().filter(function(x){ return x.pier === p; }).length
+           + pcPkArr().filter(function(x){ return x.pier === p; }).length;
+    out.pier[p] = { สตริง:nS, ตาราง:nR, ตรงกัน:(nS === nR) };
+    if(nS !== nR) out.ok = false;
+  });
+  return out;
 }
 function pcNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0)); }
 function pcMoney(n){ return '฿'+Math.round(+n||0).toLocaleString('en-US'); }
@@ -11527,6 +13062,7 @@ function pcJumpToday(){
   }catch(_){}
 }
 function renderPierCash(pier){
+  pcRowsMigrate();   /* §pcRows ก1 · ย้ายเข้าตารางคู่ขนาน · ตัวอ่านยังใช้สตริงเหมือนเดิม */
   _PC_RATE={};   /* §pcCalc · ราคาอาจถูกแก้ที่หน้าต้นทุนระหว่างนี้ */
   _pcPier=pier||_pcPier;
   var host=document.getElementById('pc-host-'+_pcPier); if(!host) return;
@@ -12269,6 +13805,20 @@ function vckSheetCSS(){
   return ''
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง
      ถ้าปล่อยให้ทั้งหน้าเว็บเลื่อนแนวนอนเหมือนเดิม คอลัมน์ที่ตรึงจะไปมุดใต้เมนูซ้าย */
+  /* §vanStop · แถวจุดแวะ · สีเดียวกับที่ใช้ในตาราง By trip จะได้จำได้ว่าเป็นของชนิดเดียวกัน */
+  +'#vancheckin-host tr.vck-strow>td{background:#F4FBFD;border-bottom:1px dashed #B3DAE6}'
+  +'#vancheckin-host tr.vck-strow>td.ck-in{background:#EAF7FA}'
+  +'#vancheckin-host .vstag2{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.04em;background:#0E7490;color:#fff;border-radius:5px;padding:2px 7px;white-space:nowrap}'
+  +'#vancheckin-host .vswho2{font-weight:700;color:#0A5468}'
+  +'#vancheckin-host .vskind2{font-size:10px;font-weight:700;color:#0E7490;margin-top:2px}'
+  +'#vancheckin-host .vsleg{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:1px 7px;margin-left:6px;white-space:nowrap;vertical-align:middle}'
+  +'#vancheckin-host .vsnote2{font-size:11.5px;font-style:italic;color:#57807F}'
+  +'#vancheckin-host .vckmono{font-family:\'DM Mono\',monospace;font-size:11.5px}'
+  +'#vancheckin-host .vckn b{font-family:\'DM Mono\',monospace;font-size:14px;font-weight:800;color:#0E7490}'
+  +'#vancheckin-host .vsckb{font-size:11px;font-weight:700;border-radius:6px;padding:3px 9px;border:1px solid #B3DAE6;background:#fff;color:#0E7490;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +'#vancheckin-host .vsckb:hover{border-color:#0E7490;background:#F4FBFD}'
+  +'#vancheckin-host .vsdone{font-size:10.5px;font-weight:800;background:#DCF4E8;color:#0C6B47;border-radius:5px;padding:2px 8px;white-space:nowrap}'
+  +'#vancheckin-host .vswait{font-size:10.5px;font-weight:700;background:#F2F0EA;color:#8a8a82;border-radius:5px;padding:2px 8px;white-space:nowrap}'
   +'#vancheckin-host .vck-tw{overflow:auto;max-height:calc(100vh - 232px);min-height:340px;'
     +'border-radius:13px;-webkit-overflow-scrolling:touch;contain:paint;overscroll-behavior:contain}'
   +'#vancheckin-host .ck-card.vck-card{overflow:hidden;padding:0}'
@@ -12433,6 +13983,46 @@ if(!window._vckFitBound){
   window._vckFitBound=1;
   window.addEventListener('resize', vckFitPane);
   window.addEventListener('scroll', vckFitPane, {passive:true});   /* เหตุผลเดียวกับ pckFitPane */
+}
+/* ══ §vanStop · แถวจุดแวะในหน้าเช็คอินรถ ═══════════════════════════════════
+   17 ช่องเท่าแถวลูกค้า · AD/CHD/INF/FOC ขึ้นขีดทั้งแถว จุดแวะไม่ใช่ลูกค้า
+   คน → นับหัว (มา n จาก n) · ของ → ปุ่มติ๊กครั้งเดียว ไม่มีตัวเลข             */
+function vckStopRow(st){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var K=(typeof VS_KIND!=='undefined'&&VS_KIND[st.kind])||{t:'',ic:''};
+  var seats=(typeof vsSeats==='function')?vsSeats(st):0;
+  var _ar=(typeof vsAreaName==='function')?vsAreaName(st):(st.zone||'');
+  var _lgk=(typeof vsLegOf==='function')?vsLegOf(st):'out';
+  var _lg=(typeof VS_LEG!=='undefined'&&VS_LEG[_lgk])||{t:'',ic:'',c:'#0E7490',bg:'#E3F2F6'};
+  /* §vsLeg · ขาไปเป็นค่าปกติ ไม่ต้องป่าวประกาศ · ขากลับกับไป-กลับต้องเห็นชัด */
+  var legChip=(_lgk==='out')?'':('<span class="vsleg" style="background:'+_lg.bg+';color:'+_lg.c+'">'+_lg.ic+' '+e(_lg.t)+'</span>');
+  var on=!!(st.ck&&st.ck.at);
+  var d='<span class="ck-dim">&mdash;</span>';
+  var ctl = seats>0
+    ? (on ? '<span class="vckn"><b>'+seats+'</b><span class="ck-dim">/'+seats+'</span></span>'
+          : '<button class="vsckb" onclick="vsCheck(\''+e(st._k)+'\')">'+e(laT('ขึ้นรถแล้ว'))+'</button>')
+    : (on ? '<span class="vsdone">&#10003; '+e(laT('รับของแล้ว'))+'</span>'
+          : '<button class="vsckb" onclick="vsCheck(\''+e(st._k)+'\')">&#10003; '+e(laT('รับของแล้ว'))+'</button>');
+  var stat = on
+    ? '<span class="vsdone">&#10003; '+e(seats>0?laT('ขึ้นรถแล้ว'):laT('รับของแล้ว'))+'</span>'
+      + '<button class="vsckb" style="margin-left:7px" onclick="vsCheck(\''+e(st._k)+'\',false)">'+e(laT('ยกเลิก'))+'</button>'
+    : '<span class="vswait">'+e(seats>0?laT('ยังไม่ขึ้นรถ'):laT('ยังไม่รับ'))+'</span>';
+  return '<tr class="ck-row vck-strow">'
+    + '<td><span class="vstag2">'+K.ic+' '+e(laT('จุดแวะ'))+'</span></td>'
+    + '<td>'+d+'</td><td>'+d+'</td>'
+    + '<td><span class="vswho2">'+e(st.label||'')+'</span>'
+      + (st.phone?' <span class="ck-dim vckmono">'+e(st.phone)+'</span>':'')
+      + legChip
+      + '<div class="vskind2">'+e(K.t)+(seats?(' · '+e(laTp('{0} ที่นั่ง', seats))):'')+'</div></td>'
+    + '<td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td><td class="ck-c">'+d+'</td>'
+    + '<td class="vckmono">'+(e(st.time||'')||d)+'</td>'
+    + '<td>'+e(st.place||'')+'</td>'
+    + '<td class="ck-c">'+d+'</td>'
+    + '<td>'+(e(_ar)||d)+'</td>'
+    + '<td>'+(st.note?('<span class="vsnote2">'+e(st.note)+'</span>'):d)+'</td>'
+    + '<td class="ck-c ck-in">'+ctl+'</td><td class="ck-in">'+d+'</td>'
+    + '<td class="ck-c ck-in">'+d+'</td><td class="ck-in">'+stat+'</td>'
+    + '</tr>';
 }
 function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
@@ -12609,6 +14199,13 @@ function renderVanCheckin(){
     /* §ckRowOrder · แถวค้างวาดคาไว้ "ตรงตำแหน่งเดิม" ไม่ใช่ต่อท้ายกลุ่ม
        เพราะใบงานที่พิมพ์ก็ขีดฆ่าคาไว้ตรงบรรทัดเดิม · สองอย่างต้องตรงกันบรรทัดต่อบรรทัด
        ยอดยังนับจาก g.rows อย่างเดียวเหมือนเดิม กองค้างมาเฉพาะตอนวาด */
+    /* §vanStop · จุดแวะของคันนี้ · วางก่อนแถวลูกค้าเหมือนใบงาน
+       คนนับหัวเหมือนลูกค้า · ของติ๊กครั้งเดียว ไม่มีตัวเลขให้นับ
+       ยอดสรุปด้านบน (tBooked/tChecked) ไม่นับจุดแวะ · นั่นคือยอดลูกค้าล้วน */
+    if(typeof vsFor==='function' && g.vid){
+      vsFor(date, g.routeId).filter(function(st){ return st.vanId===g.vid; })
+        .forEach(function(st){ bodyHtml+=vckStopRow(st); });
+    }
     var _draw=(g.sx&&g.sx.length)?g.rows.concat(g.sx).sort(ckRowCmp):g.rows;
     _draw.forEach(function(r){ r._gk=k; r._date=date; if(r.strand) r.strandTail=4;
       bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
@@ -12703,6 +14300,61 @@ function ckVanIds(O){
   if(O && Array.isArray(O.vanSplits)) O.vanSplits.forEach(function(sp){
     if(sp && sp.vanId && out.indexOf(sp.vanId)<0) out.push(sp.vanId); });
   return out;
+}
+/* §gvanSplit (2026-09-17) · "ทำไมถึงเป็นเดินทางเอง ทั้งๆที่มีการจัดรถ"
+
+   ต่อจากที่ §vckSplit เตือนไว้ข้างบน · ใบที่แยกจุดรับ รถย้ายไปอยู่ใน vanSplits
+   แล้ว ops.vanId ถูกลบทิ้ง · pckArrivalOf แก้ให้อ่าน ckVanIds แล้ว จึงรู้ว่า "มีรถ"
+   และจัดโซนเป็น PK/KL ถูกต้อง · แต่ตอน "จัดกลุ่มตามคัน" ทุกที่ยังเขียน r.vanId||'__own'
+   ใบพวกนี้เลยตกไปอยู่ถังเดียวกับคนที่มาเอง · ไกด์อ่านได้ว่า
+   "ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง" ทั้งที่รถกำลังไปรับอยู่
+
+   วัดจากข้อมูลจริง · ใบที่มี vanSplits 6 ใบ · ops.vanId ว่างทั้ง 6 ใบ
+   และทั้ง 6 ใบแยกข้ามรถมากกว่าหนึ่งคัน · จึงต้องมีป้ายบอกด้วย ไม่ใช่แค่ย้ายถัง */
+function ckGroupVanId(r){
+  if(r && r.vanId) return r.vanId;
+  try{ var ids=ckVanIds(r&&r.O); return ids.length?ids[0]:''; }catch(_){ return ''; }
+}
+/* ใบเดียวแยกขึ้นหลายคัน · ใบงานไกด์เป็นใบต่อ "ลำเรือ" รถทุกคันอยู่ในใบเดียวกัน
+   จับไว้ใต้คันแรกแล้วบอกให้ครบว่าอีกคันไหนบ้าง ไกด์จึงยังเห็นครบ
+   (ฝั่งคนขับใช้ใบงานรถ ซึ่งแตกแถวตาม vanSplits ถูกอยู่แล้ว) */
+function ckVanSplitNote(O){
+  try{
+    var ids=ckVanIds(O); if(ids.length<2) return '';
+    return 'แยกขึ้นรถ '+ids.length+' คัน · '+ids.map(function(v){
+      return (typeof pckVanName==='function')?pckVanName(v):v; }).join(' · ');
+  }catch(_){ return ''; }
+}
+/* §gvanHead (2026-09-17) · "ที่ว่ารถสองคัน เพิ่มในหัวด้วยเลยได้ไหม"
+   ป้ายในช่อง Note บอกเป็นรายใบ · แต่คนอ่านหัวกลุ่มรถก่อนเสมอ
+   ยืนอยู่ที่ Love6 สิ่งที่อยากรู้คือ "กลุ่มนี้มีใครไปคันอื่นด้วยไหม · คันไหน"
+   จึงสรุปที่หัวกลุ่ม · นับใบ แล้วบอกชื่อ "คันอื่น" ไม่ต้องพูดชื่อคันที่ยืนอยู่ซ้ำ */
+function ckVanGroupSplit(rows, vanId){
+  var out={n:0, others:[]};
+  try{
+    var seen={};
+    (rows||[]).forEach(function(r){
+      var ids=(typeof ckVanIds==='function')?ckVanIds(r&&r.O):[];
+      if(ids.length<2) return;
+      out.n++;
+      ids.forEach(function(v){ if(v && v!==vanId && !seen[v]){ seen[v]=1; out.others.push(v); } });
+    });
+  }catch(_){}
+  return out;
+}
+/* §gvanHead3 (2026-09-17) · "อยากให้ขึ้น Love6 ทะเบียน ... / Love9 ทะเบียน 36-0024 · ต่อ · 098-448-4983"
+   ของเดิมบอกแค่ชื่อคันที่สอง · ไกด์ที่ถือกระดาษอยู่ที่ท่า ถ้าคนอีกครึ่งยังไม่มา
+   สิ่งที่ต้องใช้คือ "เบอร์คนขับคันนั้น" ไม่ใช่ชื่อรถ · พิมพ์ให้ครบชุดเดียวกับคันหลัก
+   หนึ่งฟังก์ชันสำหรับทุกคัน คันหลักกับคันร่วมจะได้หน้าตาเหมือนกันเป๊ะ ไม่หลุดกันทีหลัง */
+function pckVanHeadHtml(vid, date){
+  var e=ckEsc;
+  var veh=(typeof vehGet==='function'?vehGet(vid):null)||{};
+  var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vid,date)
+        :{driver:'',phone:'',plate:veh.plate||''};
+  return '<span class="gvan">'+e(veh.name||pckVanName(vid)||vid)+'</span> <span class="gmeta">'
+    +(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
+    +(rd.driver?(' &middot; '+e(rd.driver)):'')
+    +(rd.phone?(' &middot; <b>'+e(rd.phone)+'</b>'):'')+'</span>';
 }
 // ลูกค้ามาถึงท่าได้ยังไง · PK/KL = รถเรารับ · OWN = มาเอง/รถเอเย่นต์ · NOVAN = อยู่ในโซนรับแต่ยังไม่จัดรถ
 function pckArrivalOf(r){
@@ -14993,6 +16645,7 @@ function bkLtState(b, routeId, date){
   if(boats>0) return {mode:'charter', boats:boats, joinBooked:false, joinExtra:0,
                       up:U.n, upDue:U.due, fromUp:(U.n>0 && booked+xBoat===0)};
   if(af.join || xPax>0) return {mode:'join', boats:0, joinBooked:!!af.join, joinExtra:xPax,
+                                joinPax:(af.joinPax!=null?af.joinPax:null),   /* §ltJoinQty */
                                 up:0, upDue:0, fromUp:false};
   return {mode:'none', boats:0, joinBooked:false, joinExtra:0, up:0, upDue:0, fromUp:false};
 }
@@ -15120,6 +16773,11 @@ function pckGuideJobCss(){ return '<style>'
   +'.gtot{float:right;font-size:12px;font-weight:700}'
   +'.gjoin{display:inline-block;border:1.5px solid;border-radius:4px;padding:0 8px;font-size:10.5px;font-weight:700;margin-left:7px;white-space:nowrap}'
   +'.gjoin.alt{border-style:dashed}'
+  /* §gvanHead · ป้ายบอกว่ากลุ่มรถนี้มีใบที่แยกขึ้นหลายคัน */
+  +'.gsplit{display:inline-block;border:1.5px solid #6B289A;background:#F4E8FB;color:#4A2E86;'
+  +'border-radius:4px;padding:0 8px;font-size:10.5px;font-weight:700;margin-left:7px;white-space:nowrap}'
+  /* §gvanHead3 · ขีดคั่นระหว่างคันหลักกับคันร่วม */
+  +'.gvsep{color:#9CA3AF;font-weight:700;margin:0 7px}'
   +'.ck{width:14px;height:14px;border:1.5px solid #111827;border-radius:2px;display:block;margin:1px auto 0}'
   +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all;line-height:1.15;display:inline-block}'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
@@ -15305,8 +16963,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var zr=rows.filter(function(r){ return r.arr===zk && !r._ovnBack; }); if(!zr.length) return;
     var vgs={}, vord=[];
     zr.forEach(function(r){
-      var vk=r.vanId||'__own';
-      if(!vgs[vk]){ vgs[vk]={vid:r.vanId||'', rows:[], gno:0}; vord.push(vk); }
+      var vk=ckGroupVanId(r)||'__own';   /* §gvanSplit */
+      if(!vgs[vk]){ vgs[vk]={vid:ckGroupVanId(r)||'', rows:[], gno:0}; vord.push(vk); }
       vgs[vk].rows.push(r);
       var gn=+((r.O&&r.O.vanGroup)||0); if(gn>0 && (!vgs[vk].gno||gn<vgs[vk].gno)) vgs[vk].gno=gn;
     });
@@ -15318,13 +16976,17 @@ function pckGuideJobSheet(bid, date, rows, vd){
     vord.forEach(function(vk){
       var vg=vgs[vk], st=pckTripStats(vg.rows, date), head;
       if(vg.vid){
-        var veh=(typeof vehGet==='function'?vehGet(vg.vid):null)||{};
-        var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vg.vid,date):{driver:'',phone:'',plate:veh.plate||''};
-        head='<span class="gvan">'+e(veh.name||vg.vid)+'</span> <span class="gmeta">'
-          +(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
-          +(rd.driver?(' &middot; '+e(rd.driver)):'')+(rd.phone?(' &middot; <b>'+e(rd.phone)+'</b>'):'')+'</span>';
+        head=pckVanHeadHtml(vg.vid, date);   /* §gvanHead3 */
         // §vanJoin · ไกด์ที่ถือใบนี้จะได้ไม่ยืนรอคนที่รถคันเดียวกันพาไปลงอีกลำ
         head+=pckVanJoinHtml(vg.vid, date, bid, 'gjoin');
+        /* §gvanHead3 · กลุ่มนี้มีใบที่แยกขึ้นหลายคัน · พิมพ์คันร่วมให้ครบชุด
+           คั่นด้วย / ตามที่ขอ · ป้ายนับใบอยู่ข้างหน้า บอกว่ามีกี่ใบที่แยก */
+        var _gs=ckVanGroupSplit(vg.rows, vg.vid);
+        if(_gs.n){
+          head+='<span class="gsplit">&#8646; แยกขึ้นหลายคัน '+_gs.n+' ใบ</span>';
+          _gs.others.forEach(function(v){
+            head+='<span class="gvsep">/</span>'+pckVanHeadHtml(v, date); });
+        }
       } else {
         head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
@@ -15724,6 +17386,11 @@ function pckJobNote(b, date){
   var al=(typeof bookingV2AllergyText==='function')?bookingV2AllergyText(mm):String(mm.allergies||'').trim();
   al=String(al||'').trim();
   if(al) out.push({w:1, t:'แพ้อาหาร: '+al});
+  /* §gvanSplit · ใบนี้แยกขึ้นรถหลายคัน · ตัวหนา เพราะไกด์ต้องรู้ว่าคนกลุ่มนี้
+     ไม่ได้มาคันเดียวกันทั้งหมด แม้จะพิมพ์รวมอยู่ใต้หัวคันแรก */
+  var _vs=(typeof ckVanSplitNote==='function')
+    ? ckVanSplitNote((typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{})) : '';
+  if(_vs) out.push({w:1, t:_vs});
   var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
   if(sq) out.push({w:0, t:sq});
   // §pierNote · เรื่องที่แจ้งที่ท่า · ตัวหนา (w:1) เพราะเป็นของที่เพิ่งเกิด ไกด์ยังไม่รู้
@@ -16711,12 +18378,16 @@ function pckKitchenHtml(border, boats, date, bare){
   var e=ckEsc, cards='';
   border.forEach(function(bid){
     var B=boats[bid]; if(!B) return;
-    var rid=(B.torder||[])[0]||'';
+    /* §mealOvnRt · เรือที่วันนี้มีแต่งานรับกลับ ไม่มีแถวเช็คอิน torder จึงว่าง (§ovnCard เก็บแถวไว้ที่ B.ovn)
+       เดิมตกไปเป็นเส้นทาง '' → หาร้านไม่เจอ → ไม่มียอด ไม่มีปุ่มส่งร้าน
+       ทั้งที่เส้นทางนั้นตั้งร้านไว้แล้ว · ใบรับกลับถือเส้นทางของตัวเองอยู่ อ่านจากที่เดียวกับที่การ์ดโชว์
+       ไม่ไปอ่าน TRIPS ซ้ำอีกทาง — ข้อเท็จจริงเดียวต่อหนึ่งที่ */
+    var OV=pckMealOvnRows(date,bid);
+    var rid=(B.torder||[])[0] || (OV[0] && OV[0].t && OV[0].t.routeId) || '';
     var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
     var raw=(typeof mvTripRaw==='function')?mvTripRaw(date,bid):'';
     /* §mealOvn · ขากลับค้างคืนของลำนี้ · ต่อเข้ากับแถวปกติ แล้วให้ตัวนับตัดสินจากธง __inc
        การ์ดกับยอดที่บันทึกจะได้มาจากชุดเดียวกัน ไม่ใช่คนละชุดเหมือนเดิม */
-    var OV=pckMealOvnRows(date,bid);
     var MR=(B.rows||[]).concat(OV.map(function(x){
       var y={}; Object.keys(x).forEach(function(k){ y[k]=x[k]; }); y.__inc=x.inc; return y; }));
     var C=pckMealCount(MR);
@@ -17183,16 +18854,27 @@ function pckSetGrp(v){ _pckGrp=v; try{ localStorage.setItem('pck_grp',v); }catch
 
 /* สายรัดข้อมือของลำนั้นในวันนั้น · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อลำ */
 function pckWb(date, bid){
-  try{ var J=(typeof pjOf==='function')?pjOf(date,bid):null;
-       if(J && J.wbc) return {c:J.wbc, t:J.wb||''}; }catch(_){}
+  /* §pjWbCarry · ใบที่ยังไม่ได้ตั้งสีเองใช้สีล่าสุดของลำนั้น · หน้าท่าต้องเห็นสีเดียวกับใบงาน */
+  try{ var W=(typeof pjWbOf==='function')?pjWbOf(date,bid):null;
+       if(W && W.c) return {c:W.c, t:W.t||''}; }catch(_){}
   return null;
 }
-/* สายรัดสีอ่อนมาก (ขาว/เหลือง) เอามาทำพื้นจะกลายเป็นขาว แยกไม่ออกจากแถวที่ยังไม่ได้ทำ */
+/* ══ §wbHue (2026-09-23) · สายรัดสีอ่อนมากต้องยังเป็นสีของมันอยู่ ═══════════
+   ของเดิม สีที่สว่างเกิน 0.88 ถูกเปลี่ยนเป็นเทา #B9BFC9 ทั้งดุ้น
+   เหตุผลถูก — เอาสีเกือบขาวมาทำพื้นแล้วแยกไม่ออกจากแถวที่ยังไม่ได้เช็คอิน
+   แต่วิธีผิด — เปลี่ยนเป็นเทาคือทิ้งเนื้อสีไปเลย ทั้งที่สีคือทั้งหมดของเรื่องนี้
+   คนที่ท่าเอาแถวบนจอไปเทียบกับข้อมือแขก · เทาบอกอะไรไม่ได้ แถมบอกผิดด้วย
+   (เจอจริง 22 ก.ย. · ล็อตที่ใช้เป็นเหลืองนีออน #FDFF71 สว่าง 0.934
+    ทั้งหน้าเลยขึ้นพื้นเทา #F5F6F7 ทั้งที่เช็คอินครบแล้วทุกแถว)
+
+   หน้านี้มีของที่แก้เรื่องเดียวกันอยู่แล้วคือ pckBandBase (§pckHead7b)
+   ซึ่ง "หรี่ลงจนพอ" แทนที่จะทิ้งสี · ใช้ตัวเดียวกันไปเลย จะได้ไม่มีสองกติกา
+   ได้ของแถมคือพื้นหลังปุ่มเช็คอินมีตัวหนังสือสีขาว · สีอ่อน ๆ อย่างครีม
+   เคยอ่านไม่ออกมาตลอด เพราะ 0.88 ปล่อยผ่าน แต่ 0.60 ไม่ปล่อย */
 function pckWbBase(c){
   var h=String(c||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   if(!/^[0-9a-f]{6}$/i.test(h)) return '#12A46F';
-  var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
-  return ((0.299*r+0.587*g+0.114*b)/255 > 0.88) ? '#B9BFC9' : ('#'+h);
+  return (typeof pckBandBase==='function') ? pckBandBase('#'+h) : ('#'+h);
 }
 /* คู่กับ pckTint · ใช้ทำสีตัวหนังสือของสายรัดบนพื้นขาว */
 function pckShade(c,k){
@@ -17242,7 +18924,7 @@ function pckSheetGroups(boats, border){
   if(_pckGrp==='van'){
     var vg={}, vord=[], vrows={};
     border.forEach(function(bid){ (boats[bid].rows||[]).forEach(function(r){
-      var vk=r.vanId||'__own';
+      var vk=ckGroupVanId(r)||'__own';   /* §gvanSplit */
       if(!vg[vk]){ vg[vk]={subs:{}, sord:[]}; vord.push(vk); vrows[vk]=[]; }
       vrows[vk].push(r);
       var G=vg[vk]; if(!G.subs[r.bid]){ G.subs[r.bid]=[]; G.sord.push(r.bid); }
@@ -17254,7 +18936,7 @@ function pckSheetGroups(boats, border){
     border.forEach(function(bid){
       var G={subs:{}, sord:[]};
       (boats[bid].rows||[]).forEach(function(r){
-        var vk=r.vanId||'__own';
+        var vk=ckGroupVanId(r)||'__own';   /* §gvanSplit */
         if(!G.subs[vk]){ G.subs[vk]=[]; G.sord.push(vk); }
         G.subs[vk].push(r);
       });
@@ -17297,12 +18979,23 @@ function pckSheetBand(kind, key, rows, date, lvl){
       col=cp[1]||'#6B289A';
       var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(key,date):null;
       var bits=[];
-      if(rd&&rd.plate) bits.push('<b>ทะเบียน</b> '+e(rd.plate));
-      if(rd&&rd.driver) bits.push('<b>คนขับ</b> '+e(rd.driver));
-      if(rd&&rd.phone) bits.push('<b>เบอร์</b> '+e(rd.phone));
-      if(bits.length) extra='<span class="pcs-inf">'+bits.join('<s></s>')+'</span>';
+      /* §gvanHead2 · "ควรเป็น Love6 ทะเบียน 31-6678 · พี่คิง · 095-061-0687 ประมาณนี้"
+         ใช้รูปแบบเดียวกับหัวกลุ่มรถบนใบงานไกด์ · ตัดคำว่า "คนขับ"/"เบอร์" ออก
+         คั่นด้วยจุด · คนอ่านสองใบสลับไปมาทั้งวัน อ่านแบบเดียวกันย่อมเร็วกว่า */
+      if(rd&&rd.plate) bits.push('ทะเบียน <b>'+e(rd.plate)+'</b>');
+      if(rd&&rd.driver) bits.push(e(rd.driver));
+      if(rd&&rd.phone) bits.push('<b>'+e(rd.phone)+'</b>');
+      if(bits.length) extra='<span class="pcs-inf">'+bits.join(' &middot; ')+'</span>';
     }
     extra+='<span class="pcs-ckv'+((a.ckv===a.n&&a.n)?' full':'')+'">เช็คอินรถ '+a.ckv+'/'+a.n+'</span>';
+    /* §gvanHead · กลุ่มนี้มีใบที่แยกขึ้นหลายคัน · กติกาเดียวกับใบที่พิมพ์ */
+    if(key!=='__own'){
+      var _gs=ckVanGroupSplit(rows, key);
+      if(_gs.n) extra+='<span class="pcs-vsp" title="ใบที่แยกคนขึ้นรถหลายคัน · แถวพิมพ์รวมอยู่ใต้คันแรก">'
+        +'&#8646; แยกขึ้นหลายคัน '+_gs.n+' ใบ'
+        +(_gs.others.length?(' &middot; '+_gs.others.map(function(v){ return e(pckVanName(v)); }).join(' &middot; ')):'')
+        +'</span>';
+    }
   }
   var cold=(a.arr===0);
   var bg=cold?'#F7F8FA':pckTint(col,0.90);
@@ -17311,7 +19004,11 @@ function pckSheetBand(kind, key, rows, date, lvl){
   ink=cold?'#98A0AC':col;
   var edge=cold?'#DFE3E9':col;
   return '<tr class="pcs-g'+lvl+(cold?' cold':'')+'" style="--c:'+e(col)+';--bg:'+e(bg)+';--ink:'+e(ink)+';--edge:'+e(edge)+'">'
-    +'<td colspan="16"><div class="pcs-w">'
+    /* §gvanJob2 · กล่องเดิมเป็น width:fit-content เพราะต้องเกาะซ้ายตอนเลื่อนตารางแนวนอน
+       margin-left:auto จึงดันปุ่มไม่ได้ · ครอบกล่องนอกที่กว้างเต็มแถวไว้อีกชั้น
+       ของเดิมยังเกาะซ้ายเหมือนเดิม · ปุ่มเกาะขวาของ "ช่วงที่มองเห็น" ไม่ใช่ขวาสุดของตาราง
+       (ตารางกว้างกว่าจอ ถ้าอิงขวาสุดของตาราง ปุ่มจะหลุดออกนอกจอจนต้องเลื่อนไปกด) */
+    +'<td colspan="16"><div class="pcs-row"><div class="pcs-w">'
     +'<span class="pcs-kind">'+(isBoat?'เรือ':'รถ')+'</span>'
     +'<span class="pcs-pill" style="background:'+e(col)+';color:'
       +((typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(col):'#fff')+'">'+e(nm)+'</span>'
@@ -17321,6 +19018,12 @@ function pckSheetBand(kind, key, rows, date, lvl){
     +(a.on===a.n&&a.n?'<span class="pcs-ok">&#10003; ขึ้นเรือครบ</span>':'')
     /* §strandPck · จัดไว้แล้วแต่ถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก */
     +(a.sx?('<span class="ck-scount" title="จัดเรือ/จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก · ไม่นับเข้ายอด pax และเงิน">ค้าง '+a.sx+'</span>'):'')
+    /* §gvanJob (2026-09-17) · "เพิ่มปุ่มกดใบงานไกด์ไว้ตรงกรอบสีแดง"
+       มุมมองการ์ดมีปุ่มนี้อยู่แล้ว · มุมมองตารางไม่มี ต้องเลื่อนไปกดที่แถบบนซึ่งพิมพ์ทุกลำ
+       วางชิดขวาสุดของแถบหัวลำ ตรงคอลัมน์ "การจัดการ" ซึ่งเป็นเลนของปุ่มสั่งการอยู่แล้ว */
+    +'</div>'
+    +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();pckGuideJobOrder(\''+e(key)+'\')"'
+        +' title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'):'')
     +'</div></td></tr>';
 }
 
@@ -17940,8 +19643,10 @@ function pckSheetCSS(){
   +S+' tr.pcs-g1.cold>td>div,'+S+' tr.pcs-g2.cold>td>div{filter:grayscale(1);opacity:.7}'
   +S+' tr.pcs-g1:hover>td>div,'+S+' tr.pcs-g2:hover>td>div{filter:none;opacity:1}'
   /* ช่องหัวกลุ่มกว้างเท่าตารางทั้งใบ ตรึงตัว td เองไม่ได้ ต้องตรึงกล่องข้างใน */
-  +S+' tr.pcs-g1>td>div,'+S+' tr.pcs-g2>td>div{display:flex;align-items:center;gap:10px;'
+  +S+' tr.pcs-g1>td .pcs-w,'+S+' tr.pcs-g2>td .pcs-w{display:flex;align-items:center;gap:10px;'
     +'position:sticky;left:0;width:-moz-fit-content;width:fit-content;max-width:100%}'
+  /* §gvanJob2 · กล่องนอกเต็มแถว · มีไว้ให้ปุ่มขวามีที่ยืน */
+  +S+' tr.pcs-g1>td>.pcs-row{display:flex;align-items:center;width:100%;gap:10px}'
   +'.pck-host .pcs-kind{font-size:9px;font-weight:800;letter-spacing:.06em;'
     +'text-transform:uppercase;opacity:.6}'
   +'.pck-host .pcs-pill{border-radius:99px;padding:3px 14px;font-size:12.5px;font-weight:800;white-space:nowrap}'
@@ -17965,7 +19670,17 @@ function pckSheetCSS(){
     +'text-decoration:none}'
   +'.pck-host .pcs-ckv{font-size:9.5px;font-weight:700;color:#a5a49d;background:#F1EFE8;'
     +'border-radius:6px;padding:1px 7px;white-space:nowrap}'
-  +'.pck-host .pcs-ckv.full{color:#0F6E56;background:#E1F5EE}';
+  +'.pck-host .pcs-ckv.full{color:#0F6E56;background:#E1F5EE}'
+  /* §gvanHead · ป้ายบอกว่ากลุ่มรถนี้มีใบที่แยกขึ้นหลายคัน */
+  +'.pck-host .pcs-vsp{font-size:9.5px;font-weight:700;color:#4A2E86;background:#F4E8FB;'
+    +'border:1px solid #D9CFF2;border-radius:6px;padding:1px 7px;white-space:nowrap}'
+  /* §gvanJob · ปุ่มใบงานไกด์ท้ายแถบหัวลำ · ชิดขวาสุดตรงเลนคอลัมน์ "การจัดการ" */
+  +'.pck-host .pcs-job{margin-left:auto;flex:none;position:sticky;right:6px;'
+    +'display:inline-flex;align-items:center;gap:5px;'
+    +'border:1.5px solid #C9C6BE;background:#fff;color:#4a4a44;border-radius:8px;'
+    +'padding:3px 10px;font:700 10.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +'.pck-host .pcs-job:hover{border-color:#1A1A1A;background:#1A1A1A;color:#fff}'
+  +'@media print{.pck-host .pcs-job{display:none}}';
 }
 /* ══ §pckNoStage · บั๊ก "กดแล้วเด้ง" ═════════════════════════════════════════
    ทุกการกดในหน้านี้ (กางชื่อ · ปลดล็อก · เช็คอิน) เรียก renderPierCheckin ใหม่ทั้งหน้า
@@ -18210,8 +19925,8 @@ function renderPierCheckin(){
         var zc=pckZoneColor(zk), az=pckAgg(zr);
         var vgs={}, vord=[];
         zr.forEach(function(r){
-          var vk=r.vanId||'__own';
-          if(!vgs[vk]){ vgs[vk]={vid:r.vanId||'', rows:[], gno:0, seq:1e9, zcol:zc, novan:(zk==='NOVAN')}; vord.push(vk); }
+          var vk=ckGroupVanId(r)||'__own';   /* §gvanSplit */
+          if(!vgs[vk]){ vgs[vk]={vid:ckGroupVanId(r)||'', rows:[], gno:0, seq:1e9, zcol:zc, novan:(zk==='NOVAN')}; vord.push(vk); }
           var vg=vgs[vk]; vg.rows.push(r);
           var gn=+((r.O&&r.O.vanGroup)||0); if(gn>0 && (!vg.gno||gn<vg.gno)) vg.gno=gn;
           var sq=+((r.O&&r.O.vanSeq)||0);   if(sq>0 && sq<vg.seq) vg.seq=sq;
@@ -18813,6 +20528,15 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-note:focus{outline:none;border-color:var(--lm600)}'
  +S+' .ts-empty{padding:26px;text-align:center;color:var(--zn400);font-size:12px}'
  +S+' .ts-grow td{background:var(--zn50);font-weight:800}'
+ /* §tsSreq · แถบคำขอพิเศษใต้บรรทัดของใบนั้น · สีส้มอ่อนให้สะดุดตาแต่ไม่ตะโกน
+    ติดเส้นซ้ายไว้บอกว่าเป็นของบรรทัดข้างบน ไม่ใช่รายการใหม่ */
+ /* §tsSreq3 · คอลัมน์คำขอพิเศษ · ตัดบรรทัดเต็ม ไม่ตัดข้อความทิ้ง
+    ลิงก์ยาว ๆ ที่ไม่มีช่องว่างต้องหักบรรทัดได้ ไม่งั้นดันคอลัมน์อื่นเบี้ยว */
+ /* บนจอตารางเป็น layout อัตโนมัติ · ไม่กำหนดกว้างขั้นต่ำไว้ ช่องนี้จะโดนบีบ
+    เหลือเป็นริ้วแคบ ๆ แล้วข้อความยาวจะตกลงมาสิบบรรทัด แถวสูงเกินจำเป็น */
+ +S+' .ts-sqcol{font-size:11px;line-height:1.4;color:#5A4320;background:#FFFCF5;'
+   +'min-width:172px;max-width:236px}'
+ +S+' .ts-sqtx{display:block;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}'
  +S+' .ts-sign{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid var(--zn200)}'
  +S+' .ts-sg{border:1px solid var(--zn200);border-radius:15px;padding:14px;text-align:center;background:var(--zn50)}'
  +S+' .ts-sg i{display:block;height:34px;border-bottom:1px dashed var(--zn400);margin-bottom:8px}'
@@ -19040,25 +20764,31 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man td{overflow:hidden}'
    +S+' .ts-man td:nth-child(2){padding-left:2px;padding-right:2px;vertical-align:middle}'
    +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom;overflow:hidden}'
-   // §tsManNoPickup · 16 คอลัมน์ · รวม 99.8% เผื่อเส้นตารางอีกเล็กน้อย
-   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'     // Voucher
-   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:7.4%}'     // Agency
-   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'     // Customer
+   // §tsSreq3 · 17 คอลัมน์ · รวม 99.8% เท่าเดิม · เบียดทุกคอลัมน์ทีละนิด
+   //   แทนที่จะตัดจากคอลัมน์เดียวจนช่องนั้นใช้ไม่ได้
+   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.4%}'     // Voucher
+   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:6.6%}'     // Agency
+   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:8.6%}'     // Customer
    +S+' .ts-man th:nth-child(4),'+S+' .ts-man td:nth-child(4),'
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
      +S+' .ts-man th:nth-child(6),'+S+' .ts-man td:nth-child(6),'
-     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'   // AD/CHD/INF/FOC
-   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.8%}'     // Actual/Booked
-   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:9.8%}'     // Pickup point
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:7.2%}'   // Drop-off
-   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:8.8%}'   // Add-on
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:6.2%}'   // Van · Boat
-   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:8.8%}'   // Pay
-   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:6.6%}'   // Total
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:7.6%}'   // Cancel · Charge
-   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:5.4%}'   // Status
+     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.6%}'   // AD/CHD/INF/FOC
+   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.6%}'     // Actual/Booked
+   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:8.6%}'     // Pickup point
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:6.4%}'   // Drop-off
+   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.8%}'   // Add-on
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:5.8%}'   // Van · Boat
+   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:8.8%}'   // คำขอพิเศษ
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:7.8%}'   // Pay
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:6.2%}'   // Total
+   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:6.8%}'   // Cancel · Charge
+   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.0%}'   // Status
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
-   +S+' .ts-man td:nth-child(15) .ts-chip,'+S+' .ts-man td:nth-child(16) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-man td:nth-child(16) .ts-chip,'+S+' .ts-man td:nth-child(17) .ts-chip{white-space:normal;line-height:1.2}'
+   /* §tsSreq · ตอนพิมพ์ต้องอ่านออกและห้ามโดนตัด · แถวนี้ไม่ใช่ของประดับ
+      ตารางตั้ง overflow:hidden ไว้ทุกช่องตอนพิมพ์ ต้องยกเว้นให้แถวนี้ */
+   +S+' .ts-sqcol{font-size:7.6px;line-height:1.3}'
+   +S+' .ts-sqtx{display:block;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}'
    +S+' .ts-pyd{font-size:8px;padding:0 3px}'
    +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pyn2,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:7.4px}'
    +S+' .ts-chip.ts-pyx{font-size:7.4px;padding:0 3px}'
@@ -19162,6 +20892,38 @@ function tsRefPackList(date){
    ทั้งสามเก็บสลิปไว้ในตัวเอง (slips[]) คนละที่กับ bk.attachments · ชุดเอกสารเดิมจึงไม่เห็น
    บัตรเครดิตต้องมีสลิปคู่กับยอดถึงจะกระทบยอดกับ statement ของ EDC ได้ · ใบปิดวันเลยต้องพิมพ์ติดไปด้วย
    เดินตามชิปกรองเส้นทาง/VAT ชุดเดียวกับ tsRefPackList ไม่งั้นเอกสารของอีกชุดจะหลุดมา */
+/* §tsInvSlip · สลิปของเงินที่รับผ่านใบแจ้งหนี้ ของใบจองหนึ่งใบ · ตัวเดียวใช้ทั้งรีพอร์ตและหน้าจอ
+   คืน { list:[{f,cap}], paid, no } · กติกาเขียนไว้ที่ tsSlipPackList */
+function tsInvSlips(b){
+  var out={ list:[], paid:0, no:'' };
+  if(!b) return out;
+  var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var dTH=function(v){ var d=String(v||'').slice(0,10).split('-'); return d.length===3?(d[2]+'/'+d[1]+'/'+d[0]):''; };
+  var seen={};
+  var iv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
+  var one=!!(iv && ((iv.bookingIds||[]).length===1));
+  out.no=(iv&&iv.number)||'';
+  if(one){
+    (typeof SB_PAYMENTS!=='undefined'?SB_PAYMENTS:[]).forEach(function(p){
+      if(p.invoiceId!==iv.id || (p.type||'payment')!=='payment') return;
+      out.paid+=(+p.amount||0);
+      (Array.isArray(p.slips)?p.slips:[]).forEach(function(f){
+        if(!f || !f.id || seen[f.id]) return; seen[f.id]=1;
+        out.list.push({ f:f, cap:'จ่ายผ่านบิล '+(iv.number||'')+' · '+(LAB[p.method]||p.method||'—')+' ฿'+num(p.amount)
+          +(dTH(p.date)?(' · '+dTH(p.date)):'') });
+      });
+    });
+  }
+  /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
+     kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าดึงของวันนั้นเองอยู่แล้ว */
+  (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
+    if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
+    out.list.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
+      +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
+  });
+  return out;
+}
 function tsSlipPackList(date){
   var rows=tsRows(date);
   if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
@@ -19210,8 +20972,23 @@ function tsSlipPackList(date){
         +(c.ref?(' · '+c.ref):'')+(c.by?(' · '+c.by):'');
       ss.forEach(function(f){ imgs.push({ f:f, cap:cap }); });
     })();
+    /* ══ §tsInvSlip (2026-10-02) · สลิปของเงินที่รับผ่านใบแจ้งหนี้ ═══════════════════
+       ที่มา · ผู้ใช้ถามว่า "รีพอร์ตของ Travel Summary ขึ้นตัวสลิปไหม" — ไม่ขึ้น
+       ชุดสลิปเดิมดึงแต่เงินหน้าท่าสามทาง · เงินที่รับผ่านบิล (Pro Forma ที่หน้า Daily PFM
+       และเอเยนต์ Invoice ที่จ่ายล่วงหน้า §pfmPrepay) เก็บสลิปไว้ที่รายการรับเงินของใบแจ้งหนี้
+       กับที่ b.paymentSlips คนละที่กับสามทางนั้น
+       สามข้อที่ตั้งใจ เหมือน §cotSlip ข้างบน
+         ไม่บวกเข้า tot · เป็นเงินคนละก้อนกับเงินรับหน้าท่าวันนี้ บวกแล้วยอดปิดวันเกินจริง
+         ไม่นับเป็น "ของขาด" · เงินเครดิตที่จ่ายตามบิลสิ้นเดือนไม่มีสลิปรายใบตั้งแต่ต้น
+         เอาเฉพาะใบแจ้งหนี้ที่คุมใบจองใบเดียว · สลิปของบิลรวม 30 ใบจะถูกพิมพ์ซ้ำ 30 หน้า */
+    var invPaid=0;
+    (function(){
+      var seen={}; imgs.forEach(function(x){ if(x.f && x.f.id) seen[x.f.id]=1; });
+      var IS=tsInvSlips(b); invPaid=IS.paid;
+      IS.list.forEach(function(x){ if(seen[x.f.id]) return; seen[x.f.id]=1; imgs.push(x); });
+    })();
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
-    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · '), invPaid:invPaid });
   });
   return out;
 }
@@ -19242,7 +21019,9 @@ function _tsSlipPage(r, i, total, seq, date, kicker){
   return '<section class="pg">'
     + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
     + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
-    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>'+((+r.invPaid||0)>0
+          ? (((+r.tot||0)>0?('รับหน้าท่า &#3647;'+num(r.tot)+' &middot; '):'')+'จ่ายผ่านบิล &#3647;'+num(r.invPaid))
+          : ('รับเงินรวม &#3647;'+num(r.tot)))+'</span></div>'
     +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
     +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
     + '<div class="body">'+body+'</div>'
@@ -19359,11 +21138,15 @@ function tsNetOf(r){
   var b=r.b, t=r.t;
   if(t.ovnLeg) return null;                      // ขากลับค้างคืน · ไม่คิดเงินซ้ำ
   var rtId=b.rateTypeRef || (b.agentId && typeof sbGetAgent==='function' ? ((sbGetAgent(b.agentId)||{}).rateTypeId) : null);
-  try{ if(typeof bookingV2ResolveRateType==='function' && b.agentId && t.routeId && t.date){
-    var promo=bookingV2ResolveRateType(b.agentId, t.routeId, t.date); if(promo) rtId=promo; } }catch(_){}
   if(!rtId || typeof SB_RATE_TYPES==='undefined') return null;
   var rt=null; for(var i=0;i<SB_RATE_TYPES.length;i++) if(SB_RATE_TYPES[i].id===rtId){ rt=SB_RATE_TYPES[i]; break; }
   if(!rt) return null;
+  /* §b2bPromo · เลขในวงเล็บของหน้านี้คือ "ตามเรทแล้วควรเป็นเท่าไหร่" ไว้ทานกับยอดจริงในใบจอง
+     ⚠ ต้องยึดใบโปร "ที่ล็อกไว้ตอนขาย" ไม่ใช่ใบที่แอคทีฟวันนี้
+       ไม่งั้นพอมีคนไปแก้โปรทีหลัง เลขทานของใบเก่าจะขยับตาม แล้วขึ้นเหมือนคีย์ราคาผิด
+       ทั้งที่ตอนขายถูกต้องทุกบาท (ก้อน 4 · ข้อ 4 ในเอกสาร) */
+  var _pSold=null;
+  try{ _pSold=laPromoRateSold(b, t, rt); if(_pSold && _pSold.rt) rt=_pSold.rt; }catch(_){}
   var p=t.pax||{};
   if(t.bookingMode==='charter'){
     var boat=(typeof BOATS!=='undefined')?BOATS.filter(function(x){ return x.id===t.charterBoatId; })[0]:null;
@@ -19373,7 +21156,8 @@ function tsNetOf(r){
     var all=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(p):0;
     var ex=Math.max(0, all-(+cr.starterIncludes||0));
     var ct=Math.round((+cr.starterPrice||0) + ex*(+cr.extraPerPax||0));
-    return { tot:ct, txt:'เหมาลำ '+_tsNum(cr.starterPrice)+(ex?(' + '+ex+'\u00d7'+_tsNum(cr.extraPerPax)):''),
+    return { tot:ct, promo:(_pSold?laPromoLabel(_pSold.promo):''), promoSold:!!(_pSold&&_pSold.sold),
+             txt:'เหมาลำ '+_tsNum(cr.starterPrice)+(ex?(' + '+ex+'\u00d7'+_tsNum(cr.extraPerPax)):''),
              zone:'charter', rt:(rt.name||rt.code||'') };
   }
   var RR=rt.seatRates && rt.seatRates[t.routeId];
@@ -19405,7 +21189,9 @@ function tsNetOf(r){
   });
   if(!parts.length) return null;
   /* §agFair · โซนกับชื่อสัญญาที่ใช้ตั้งราคาใบนี้ · หน้าวิเคราะห์ต้องบอกได้ว่ากำลังเทียบกับอะไร */
-  return { tot:Math.round(n), txt:parts.join(' + '), zone:zone, rt:(rt.name||rt.code||'') };
+  return { tot:Math.round(n), txt:parts.join(' + '), zone:zone, rt:(rt.name||rt.code||''),
+           /* §b2bPromo · ขายด้วยโปรใบไหน · sold=true คือใบที่ล็อกไว้ตอนขาย ไม่ใช่เดาจากวันนี้ */
+           promo:(_pSold?laPromoLabel(_pSold.promo):''), promoSold:!!(_pSold&&_pSold.sold) };
 }
 function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.color||'#8b909c'; }
 // §tsDocRef · อ้างอิงเอกสารจากหน้าตรวจเอกสาร · ป้ายเดียวกับที่หน้า By-trip ใช้
@@ -19568,6 +21354,26 @@ function tsAddonList(r, date){
   }catch(_){}
   return out;
 }
+/* ══ §tsSreq · คำขอพิเศษต้องขึ้นใบปิดวันด้วย ═══════════════════════════════
+   ผู้ใช้แจ้ง 1 ต.ค. จากใบ LOV-2766772 (29 ก.ย.) · ช่อง SPECIAL REQUEST ในหน้า
+   By trip เขียนว่า "เปลี่ยนมาจากเกาะพีพี ไม่ท่อน คืนเงินหน้าท่าเรือ 3,403 // CS แจ้งเวลา"
+   แต่ Travel Summary ไม่มีที่ให้ข้อความนี้อยู่เลย
+
+   ทำไมถึงสำคัญกว่าคอลัมน์ที่หายข้ออื่น ๆ: Travel Summary คือเอกสารปิดเงินประจำวัน
+   มีช่องเซ็น Finance กับ Management อยู่ท้ายเอกสาร · บรรทัดนั้นบอกว่าต้องคืนเงิน
+   3,403 บาทที่ท่าเรือ แต่ในเอกสารขึ้นว่า Paid และ COT ยังไม่ระบุยอด
+   คนที่ถือเอกสารนี้อย่างเดียวจึงไม่มีทางรู้ว่ามีเงินต้องคืน
+
+   อ่านจากทางเดียวกับหน้า By trip เป๊ะ (bk.notes → ตัดท่อน COT ออก)
+   ถ้าอ่านดิบจาก bk.notes เอง ยอด COT จะขึ้นซ้ำสองที่ในเอกสารเดียว
+   เพราะ Travel Summary มีคอลัมน์ COT ของตัวเองอยู่แล้ว                       */
+function tsSreqOf(b){
+  if(!b) return '';
+  var raw=String(b.notes||b.note||'').trim();
+  if(!raw) return '';
+  try{ if(typeof bookingV2CotChip==='function') return String(bookingV2CotChip(b, raw).note||'').trim(); }catch(_){}
+  return raw;
+}
 function tsAddonCell(r, date){
   var L=tsAddonList(r, date), e=ckEsc;
   if(!L.length) return '<span style="color:var(--zn400)">—</span>';
@@ -19606,6 +21412,17 @@ function tsSlipsForMethod(booking, date, method, saleList){
   });
   return slips;
 }
+function tsProformaPaidDate(b){
+  try{
+    var iv=tsInvSettle(b).inv;
+    if(!iv || typeof SB_PAYMENTS==='undefined') return '';
+    var pays=SB_PAYMENTS.filter(function(p){ return p.invoiceId===iv.id && p.type==='payment' && (+p.amount||0)>0 && p.date; });
+    if(!pays.length) return '';
+    pays.sort(function(a,z){ return String(a.date).localeCompare(String(z.date)); });
+    var d=String(pays[pays.length-1].date).slice(0,10).split('-');
+    return d.length===3 ? d[2]+'/'+d[1]+'/'+d[0] : '';
+  }catch(_){ return ''; }
+}
 function tsPayCell(r, date){
   var b=r.b, e=ckEsc, L=[];
   var m=function(n){ return '฿'+pckNum(n); };   // §pierDecimal · ยอดหน้าท่ามีสตางค์ได้ ต้องโชว์ให้ตรงกับกล่องเก็บเงิน
@@ -19614,7 +21431,11 @@ function tsPayCell(r, date){
   var PT={ invoice:['Invoice','n'], credit:['Invoice','n'], proforma:['Proforma','e'], prepaid:['Proforma','e'],
            cot:['COT','a'], bt:['โอนล่วงหน้า','e'] };
   var pt=PT[M.payType||'']||null;
-  if(pt) L.push('<span class="ts-chip '+pt[1]+'" title="เงื่อนไขการชำระของ agent">'+pt[0]+'</span>');
+  if(pt){
+    var _pfDate=(M.payType==='proforma'||M.payType==='prepaid')?tsProformaPaidDate(b):'';
+    L.push('<span class="ts-chip '+pt[1]+'" title="'+e('เงื่อนไขการชำระของ agent'+(_pfDate?' · ชำระวันที่ '+_pfDate:''))+'">'
+      +pt[0]+(_pfDate?(' · '+e(_pfDate)):'')+'</span>');
+  }
   else if(!b.agentId) L.push('<span class="ts-chip n">Walk-in</span>');
   // §tsInvPaid · เงินที่รับผ่านใบแจ้งหนี้ (หน้า By-trip-date / หน้าบัญชี) · คนละก้อนกับเงินหน้าท่า
   var IV=X.inv||{};
@@ -19625,6 +21446,16 @@ function tsPayCell(r, date){
     else if(IV.paid>0)
       L.push('<span class="ts-chip b" title="'+e('ใบแจ้งหนี้ '+IV.no+' รับแล้ว '+m(IV.paid)+' · ค้าง '+m(IV.bal)
         +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking ปันส่วนรายใบไม่ได้'):''))+'">บิลชำระบางส่วน</span>');
+  }
+  /* §tsInvSlip · ผู้ใช้ขอ "ให้ดูได้ด้วย" · สลิปของเงินที่รับผ่านบิลเปิดดูจากหน้านี้ได้เลย
+     ของเดิมต้องย้อนไปหน้า Daily PFM ถึงจะเห็น ทั้งที่ป้าย "จ่ายผ่านบิลแล้ว" อยู่ตรงนี้ */
+  var _IS=(typeof tsInvSlips==='function')?tsInvSlips(b):{list:[]};
+  if(_IS.list.length && typeof laSlipClickAttr==='function'){
+    var _isT='สลิปจ่ายผ่านบิล'+(_IS.no?(' '+_IS.no):'');
+    L.push('<span class="ts-slipok ts-invslip" style="cursor:pointer" '
+      +laSlipClickAttr(_IS.list.map(function(x){ return x.f; }), _isT)
+      +' title="'+e(_isT+' · '+_IS.list.length+' ไฟล์ · กดเพื่อเปิดดู')+'">&#128206; สลิปบิล'
+      +(_IS.list.length>1?(' '+_IS.list.length):'')+'</span>');
   }
   if(r.cxlRow){
     var cc=b.cancellation||null;
@@ -20137,7 +21968,7 @@ function drTrend(date, nDays, back){
       mkt[m.id].tot+=px; by[m.id]=(by[m.id]||0)+px; tot+=px;
     });
     out.push({ date:ds, by:by, tot:tot, today:(ds===date),
-               lb:(d.getDate()+(i===0||d.getDate()===1?(' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]):'')) });
+               lb:(d.getDate()+(i===0||d.getDate()===1?(' '+laMonAbbrTH()[d.getMonth()]):'')) });
   }
   order.sort(function(a,b){ return mkt[b].tot-mkt[a].tot; });
   drPaint(order, mkt);
@@ -20155,7 +21986,7 @@ function drTrend(date, nDays, back){
 function drTrendBooked(date, nDays){
   nDays=nDays||14;
   var end=new Date(date+'T12:00:00'), map={}, days=[], i;
-  var TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var TH=laMonAbbrTH();
   for(i=nDays-1;i>=0;i--){
     var d=new Date(end.getTime()); d.setDate(d.getDate()-i);
     var ds=d.toISOString().slice(0,10);
@@ -22182,7 +24013,7 @@ function renderTravelSum(){
       var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow && !x.mvRow; });
       var gM=mrows.filter(function(x){ return x.routeId===r.routeId && x.mvRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="16" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="17" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
@@ -22222,6 +24053,7 @@ function renderTravelSum(){
     var noBoat = _gone || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0)
                        || (!!r.pierCk && (typeof ckEventTally==='function') && ckEventTally(r.pierCk).total>=r.booked && r.booked>0);
     var room=b.roomNo||b.room||b.roomNumber||'';
+    var _sq=tsSreqOf(b);
     body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow"':(r.cxlRow?' class="ts-cxlrow"':''))+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
@@ -22244,6 +24076,15 @@ function renderTravelSum(){
               :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       /* §tsManMv · เงินย้ายไปกับวันใหม่แล้ว · โชว์ซ้ำที่นี่จะอ่านเป็นยอดของวันนี้ */
+      /* ══ §tsSreq3 · คำขอพิเศษเป็นคอลัมน์ของตัวเอง · วางหน้า Pay ═══════════
+         ทีมเลือกแบบนี้หลังเห็นของจริงสองแบบ (1 ต.ค.) · วางติดกับ Pay เพราะ
+         เรื่องที่เขียนในช่องนี้ส่วนใหญ่ผูกกับเงิน — คืนเงิน เก็บเพิ่ม เงื่อนไขมัดจำ
+         คนปิดวันอ่านสองช่องนี้ติดกันจบ ไม่ต้องกวาดตาข้ามตาราง
+         ข้อความตัดบรรทัดเต็ม ไม่ตัดทิ้ง · ใบที่ยาวแถวจะสูงขึ้น ยอมแลกกับการ
+         ไม่ทำข้อมูลหาย เพราะใบที่ยาวคือใบที่มีเงื่อนไขเงินอยู่ข้างใน       */
+      +'<td class="ts-sqcol">'+(_sq
+          ? '<span class="ts-sqtx" title="'+e(_sq)+'">'+e(_sq)+'</span>'
+          : '<span style="color:var(--zn400)">&mdash;</span>')+'</td>'
       +'<td class="ts-paycol">'+(r.mvRow
           ? '<span style="color:var(--zn400);font-size:10.5px">ยอดเงินไปอยู่กับวันใหม่แล้ว</span>'
           : tsPayCell(r, date))+'</td>'
@@ -22251,11 +24092,16 @@ function renderTravelSum(){
           if(r.mvRow) return '<td class="r ts-mono" style="font-weight:800;color:var(--zn400)">&mdash;</td>';
           var T=tsTotalOf(r, date), N=tsNetOf(r);
           // §tsNetRate · ที่มาของยอด Net ในรูป "จำนวน × เรตต่อคน" · หาเรตไม่เจอใส่ขีด ไม่เดา
-          var nr='<span class="ts-net" title="'+(N?('ยอด Net '+money(N.tot)+' ตาม Rate Type'):'ไม่มีเรตใน Rate Type')+'">('
-                 +(N?e(N.txt):'&mdash;')+')</span>';
+          /* §b2bPromo · บอกให้เห็นว่าบรรทัดนี้ขายด้วยโปรตัวไหน · เอกสารข้อ 6 */
+          var pl=(N&&N.promo)?N.promo:'';
+          var nr='<span class="ts-net" title="'
+                 +(N?('ยอด Net '+money(N.tot)+(pl?(' · โปร: '+e(pl)+(N.promoSold?' (ล็อกไว้ตอนขาย)':'')):' ตาม Rate Type')):'ไม่มีเรตใน Rate Type')
+                 +'">('+(N?e(N.txt):'&mdash;')+')</span>'
+                 +(pl?('<span class="ts-net" style="color:#9A5410" title="'+e(pl)+'"> PROMO</span>'):'');
           var tip='booking '+money(T.base)
             +(T.site?(' · '+T.parts.map(function(p){ return p[0]+' '+money(p[1]); }).join(' · ')):'')
-            +(N?(' · Net '+money(N.tot)+' = '+N.txt):' · ไม่มีเรตใน Rate Type');
+            +(N?(' · Net '+money(N.tot)+' = '+N.txt):' · ไม่มีเรตใน Rate Type')
+            +(pl?(' · โปร: '+pl):'');
           return '<td class="r ts-mono ts-totc" style="font-weight:800" title="'+e(tip)+'">'+money(T.all)
             +(T.site?('<span class="ts-totb">'+money(T.base)+'<em>+'+money(T.site)+'</em></span>'):'')
             +nr+'</td>';
@@ -22272,6 +24118,7 @@ function renderTravelSum(){
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · จุดรับและจุดส่งกลับ · '
       +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
       +'ช่อง <b>Total</b> คือยอด booking บวกของที่ขายเพิ่มหน้างานแล้ว · '
+      +'ใบที่มี <b>คำขอพิเศษ</b> จะมีแถบข้อความอยู่ใต้บรรทัดของใบนั้น · '
       +'ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
       +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
         +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
@@ -22279,10 +24126,10 @@ function renderTravelSum(){
     +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
     +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
-    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
+    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="16" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
@@ -22398,6 +24245,7 @@ function vanJobsSaveImage(date, vanId, routeId, leg, grp){
     }).catch(function(e){ host.remove(); alert('สร้างรูปไม่สำเร็จ: '+((e&&e.message)||e)); });
   });
 }
+   /* §per-trip ops · รถกลับของ split ตามวัน */
 function baAutoAssign(date, routeId){
   const boats=baBoatsForRoute(date,routeId); if(!boats.length){ alert('No boat assigned to this route yet · assign boats in Boat Operation first'); return; }
   const rows=baSeatBookingsForRoute(date,routeId);
@@ -22932,7 +24780,7 @@ function vehDetailPanel(id, jobsT, today, initials, TYLBL){
     ${(function(){
       const cm=_vehCalMonth||today.slice(0,7); const [cy,cmo]=cm.split('-').map(Number);
       const first=new Date(cy,cmo-1,1); const startWd=(first.getDay()+6)%7; const dimN=new Date(cy,cmo,0).getDate();
-      const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      const MONTHS=laMonAbbrTH();
       const SC={available:'#1D9E75',maintenance:'#BA7517',off:'#A32D2D'};
       const DOW=['จ','อ','พ','พฤ','ศ','ส','อา'];
       let cells=''; for(let i=0;i<startWd;i++) cells+='<div></div>';
@@ -23298,6 +25146,192 @@ function ctPlans(){
   return out;
 }
 function ctPlansSave(p){ ctWrite('cost_plans', p); }
+
+/* ══ §boatRent · เรือเช่ารายเดือน ═══════════════════════════════════════════════════════════════
+   สัญญาเช่าเป็นของ "ลำ" ไม่ใช่ของ "โปรแกรม" — ลำเดียวกันวันนี้วิ่ง Whale Shark พรุ่งนี้ Phi Phi
+   ถ้าผูกไว้ที่แผน ต้องโคลนทุกแผนที่ลำนี้วิ่ง และต่อสัญญาทีต้องไล่แก้ทุกที่
+   เก็บแยกใน blob ของหน้าต้นทุน ไม่เขียนลง BOATS เพราะคนละเส้นทางการเซฟ —
+   save() ของ data-core อ่าน-เขียน localStorage ดิบ ส่วน ctWrite ไปทาง laBlob แคชกลาง ทับกันได้
+
+   ค่าเช่าเป็นต้นทุนของ "งวด" ไม่ใช่ของ "ทริป" · จะเอาเข้าสูตรรายทริปได้ต้องหารก่อน
+     ค่าเช่า/วันวิ่ง = ค่าเช่า ÷ (วันในงวด − วันหยุดตามตกลง)
+     ค่าเช่า/ทริป   = ค่าเช่า/วันวิ่ง ÷ รอบต่อวัน
+   ⚠ ผลข้างเคียงที่ต้องรู้: P&L รายทริปลงค่าเช่า = ค่าเช่า/ทริป × ทริปที่วิ่งจริง
+     วิ่งน้อยกว่าที่ตั้งไว้ = ลงไม่ครบ กำไรดูสวยเกินจริง · ส่วนที่ขาดคือ ctRentIdle()
+     ซึ่งเป็นตัวชี้ว่าการเช่าคุ้มหรือไม่คุ้ม ไม่ใช่กำไรรายทริป */
+var CT_RENT_EX = [
+  { id:'dep',  l:'ค่าเสื่อมเรือ', why:'เรือไม่ใช่ของเรา ไม่มีอะไรให้เสื่อม · ค่าซ่อมบำรุงก็อยู่ฝั่งเจ้าของ' },
+  { id:'cap',  l:'กัปตัน',        why:'เจ้าของเรือจัดให้ตามสัญญา' },
+  { id:'crew', l:'เด็กเรือ',      why:'เจ้าของเรือจัดให้ตามสัญญา' }
+];
+function ctRentBlank(){
+  return { on:1, mode:'lump', amt:0, seat:0, days:30, off:2, trips:1, vat:0, note:'',
+           from:'', to:'',                    /* §rentSpan · ช่วงสัญญา · ว่าง = ไม่จำกัด */
+           fuelMul:100,                       /* §boatFuel · % เทียบสูตรกลาง · 100 = เท่ากัน */
+           ex:{ dep:1, cap:1, crew:1 } };
+}
+/* ══ §ctRentCache · ทำไมต้องมีแคชตรงนี้ ═══════════════════════════════════════════════════════
+   วัดจริงที่หน้าแผนคำนวณ · 8 แผน · ปักเรือเช่าไว้ · วาดหนึ่งรอบ = 113ms
+     ctRead ถูกเรียก 618 ครั้งต่อรอบ · 615 ครั้งในนั้นมาจาก ctRentAll
+     ctRead → laBlob() ซึ่งวัดได้ 156us ต่อครั้ง = 96ms จาก 113ms ทั้งรอบ
+   ทำไม laBlob ถึงแพงทั้งที่มีแคชอยู่แล้ว
+     มันอ่าน localStorage.getItem(LS_KEY) ทุกครั้งแล้วเทียบสตริงกับที่แคชไว้
+     blob จริง 234KB · getItem คืนสตริงตัวใหม่ทุกครั้ง การเทียบจึงไล่ทีละตัวอักษรจริง ๆ
+     (getItem เองวัดได้ ~0us · เวลาหมดไปกับการเทียบ)
+   ctCalc ถูกเรียก 431 ครั้งต่อรอบ (จุดคุ้มทุน 8 แผน + กราฟกำไร 44 แท่ง) และทุกครั้ง
+   เรียก ctRentOf + ctBoatFuelMul ซึ่งเข้า ctRentAll = ของที่ผมใส่ไปอยู่ในลูปชั้นในสุดพอดี
+   ทางแก้จึงไม่ใช่ไปแก้ laBlob (ของกลางทั้งแอป) แต่คือไม่เรียกมัน 615 ครั้ง
+
+   ⚠ ไม่แคชที่ ctRead เพราะมันคืน "ออบเจกต์ที่ parse ใหม่ทุกครั้ง" และโค้ดหลายที่
+     อาศัยสมบัติข้อนั้น (ctPlans → ctPlanSet แก้ในมือแล้วค่อยเซฟ) แคชตรงนั้นจะได้
+     ออบเจกต์ร่วมกันทั้งแอป ของที่แก้ค้างไว้จะรั่วไปหาคนอื่นก่อนกดเซฟ
+     boat_rent ไม่มีใครถืออ้างอิงค้างข้ามการเซฟ จึงแคชได้ปลอดภัย
+   ⚠ ล้างแคชสามทาง · เราเขียนเอง (_ctRentWr) · เซิร์ฟเวอร์ตอบกลับ (__savedAt) · วาดหน้าใหม่
+     ไม่มีโมดูลอื่นเขียนคีย์ boat_rent · ถ้าวันหนึ่งมี ต้องมาเรียก ctRentBust() ด้วย */
+var _ctRentWr = 0, _ctRentC = null, _ctRentCK = '', _ctRentOfC = {};
+function _ctRentKey(){ return _ctRentWr + '|' + (window.__savedAt || 0); }
+function ctRentBust(){ _ctRentC = null; _ctRentOfC = {}; }
+function ctRentAll(){
+  var k = _ctRentKey();
+  if(_ctRentC && _ctRentCK === k) return _ctRentC;
+  var r = ctRead('boat_rent');
+  _ctRentC = (r && typeof r === 'object' && !Array.isArray(r)) ? r : {};
+  _ctRentCK = k; _ctRentOfC = {};
+  return _ctRentC;
+}
+function ctRentAllSave(all){ _ctRentWr++; ctRentBust(); ctWrite('boat_rent', all); }
+function ctRentRaw(boatId){ return (boatId ? ctRentAll()[boatId] : null) || null; }
+/* คืน null ถ้าลำนี้ไม่ใช่เรือเช่า · ที่เหลือคือตัวเลขที่หารเสร็จแล้ว ไม่ต้องให้ใครมาหารเอง */
+function ctRentOf(boatId){
+  if(!boatId) return null;
+  ctRentAll();                       /* §ctRentCache · ให้แคชอัปเดต/ล้างก่อนอ่านตัวที่จำไว้ */
+  if(boatId in _ctRentOfC) return _ctRentOfC[boatId];
+  return (_ctRentOfC[boatId] = _ctRentOfCalc(boatId));
+}
+function _ctRentOfCalc(boatId){
+  var R = ctRentRaw(boatId);
+  if(!R || !R.on) return null;
+  var b = (typeof getBoat === 'function') ? (getBoat(boatId) || {}) : {};
+  var seats = Math.max(0, +b.cap || 0);          /* §boatRent · ที่นั่งมาจากทะเบียนเรือลำนั้น ไม่ใช่พิมพ์เอง */
+  var amt   = (R.mode === 'seat') ? (+R.seat || 0) * seats : (+R.amt || 0);
+  var days  = Math.max(1, +R.days || 30);
+  var off   = Math.min(days - 1, Math.max(0, +R.off || 0));
+  var runD  = days - off;
+  var trips = Math.max(1, +R.trips || 1);
+  var perDay = amt / runD;
+  return { boatId:boatId, name:b.name || boatId, seats:seats, mode:R.mode || 'lump',
+           amt:amt, seat:+R.seat || 0, days:days, off:off, runDays:runD, trips:trips,
+           perDay:perDay, perTrip:perDay / trips, perCalDay:amt / days, vat:!!R.vat,
+           from:R.from || '', to:R.to || '',              /* §rentSpan */
+           ex:R.ex || { dep:1, cap:1, crew:1 }, note:R.note || '' };
+}
+/* ══ §boatFuel · ลำไหนกินน้ำมันเท่าไหร่ ═══════════════════════════════════════════════════════
+   สูตรกลางตั้งลิตร/ทริปไว้ชุดเดียว (3EN 360 · 4EN 520) ซึ่งจูนมาจากเรือของบริษัท
+   เรือเช่าคนละตัวถัง คนละเครื่อง — กินไม่เท่ากันแน่นอน และเรือเราเองแต่ละลำก็ไม่เท่ากัน
+   เก็บเป็น "%" ไม่ใช่ "ลิตร" เพราะตัวคูณนี้ผูกกับ "ลำ" แต่ลิตรต่อทริปขึ้นกับ "เส้นทาง"
+     (สิมิลันไกลกว่าพีพีเยอะ) ลำเดียวกันวิ่งสองเส้นทางจะได้ลิตรคนละเลข แต่ % เท่าเดิม
+   รู้ลิตรจริงของเส้นทางไหนแน่ ๆ → ไปตั้งที่แท็บ "ปรับ / ปิด รายแผน" ซึ่งเป็นรายเส้นทางอยู่แล้ว
+     สองอันนี้คูณกันได้: ลิตรจากแผน (หรือสูตรกลาง) x % ของลำ
+   ⚠ ใช้ได้แม้ลำนั้นไม่ใช่เรือเช่า · ความกินน้ำมันไม่ได้ขึ้นกับว่าใครเป็นเจ้าของ
+     จึงไม่อ่านผ่าน ctRentOf() ที่คืน null เมื่อปิดสวิตช์เช่า
+   ⚠ มีผลกับ "ค่าประมาณ" เท่านั้น · P&L ที่ลงลิตรจริงจากใบงานเรือแล้วจะทับทั้งบรรทัดอยู่ดี */
+function ctBoatFuelMul(boatId){
+  var R = ctRentRaw(boatId);
+  var m = R ? +R.fuelMul : NaN;
+  if(!(m > 0)) return 1;
+  return m / 100;
+}
+function ctRentSet(boatId, k, v){
+  if(!boatId) return;
+  var all = ctRentAll(), R = all[boatId] || ctRentBlank();
+  if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
+  else if(k === 'mode' || k === 'note' || k === 'from' || k === 'to') R[k] = v;   /* §rentSpan */
+  else if(k === 'on' || k === 'vat') R[k] = v ? 1 : 0;
+  else R[k] = (v === '') ? 0 : (+v || 0);
+  all[boatId] = R; ctRentAllSave(all); ctRender();
+}
+/* ══ §rentSpan · ช่วงสัญญา ══════════════════════════════════════════════════
+   สัญญาเช่ามีวันเริ่มวันจบ · เรือลำเดิมก่อนเริ่มสัญญาหรือหลังจบสัญญา
+   ต้องกลับไปเป็นเรือปกติทันที (มีกัปตัน มีค่าเสื่อม ไม่มีค่าเช่า)
+   ไม่งั้นย้อนดู P&L เดือนก่อนหน้าจะเห็นค่าเช่าที่ยังไม่ได้เริ่มจ่าย
+   ว่างทั้งคู่ = ไม่จำกัด · ใช้กับสัญญาที่ยังไม่รู้วันจบ */
+function ctRentActiveOn(RN, ymd){
+  if(!RN) return false;
+  if(!ymd) return true;                       /* หน้าแผนคำนวณไม่มีวันที่ · เป็นเครื่องมือออกแบบ */
+  if(RN.from && ymd < RN.from) return false;
+  if(RN.to   && ymd > RN.to)   return false;
+  return true;
+}
+function ctYmdAdd(ymd, n){
+  var d = new Date(String(ymd) + 'T12:00:00'); d.setDate(d.getDate() + n);
+  return (typeof bookingV2LocalYMD === 'function') ? bookingV2LocalYMD(d) : d.toISOString().slice(0, 10);
+}
+function ctYmdDiff(a, b){                     /* จำนวนวันแบบนับหัวนับหาง */
+  return Math.round((Date.parse(b + 'T12:00:00') - Date.parse(a + 'T12:00:00')) / 86400000) + 1;
+}
+/* สัญญาทับกับหน้าต่างรายงาน (d0..d1) กี่วัน และคิดเป็นค่าเช่าเท่าไหร่
+   ค่าเช่าต่อวันตามปฏิทิน = ค่าเช่า ÷ วันในงวด · ต่างจากค่าเช่าต่อ "วันวิ่ง" ที่หารด้วยวันที่วิ่งจริง
+   ตัวแรกใช้ตอบว่า "งวดนี้ต้องจ่ายเท่าไหร่" · ตัวหลังใช้ตอบว่า "ทริปนึงแบกเท่าไหร่" */
+function ctRentSpan(RN, d0, d1){
+  if(!RN || !(RN.amt > 0) || !d0 || !d1) return null;
+  var s = (RN.from && RN.from > d0) ? RN.from : d0;
+  var e = (RN.to   && RN.to   < d1) ? RN.to   : d1;
+  if(s > e) return null;
+  var n = ctYmdDiff(s, e);
+  return { from:s, to:e, calDays:n, perCalDay:RN.perCalDay,
+           due:RN.perCalDay * n, opDays:n * (RN.runDays / RN.days) };
+}
+/* §ctFactLong · ไล่เดือนปฏิทินที่สัญญาพาดผ่าน · ['2026-10','2026-11',...]
+   คิดเป็นเดือนปฏิทินไม่ใช่ "ทุก 30 วัน" เพราะคนวางแผนคิดเป็นเดือน
+   และเดือนแรก/เดือนสุดท้ายมักไม่เต็มเดือน ต้องคิดตามวันที่ครอบคลุมจริง */
+function ctMonthsIn(a, b){
+  var out = [], y = +String(a).slice(0, 4), m = +String(a).slice(5, 7);
+  var ey = +String(b).slice(0, 4), em = +String(b).slice(5, 7);
+  if(!y || !m || !ey || !em) return out;
+  var guard = 0;
+  while((y < ey || (y === ey && m <= em)) && guard++ < 120){
+    out.push(y + '-' + String(m).padStart(2, '0'));
+    m++; if(m > 12){ m = 1; y++; }
+  }
+  return out;
+}
+function ctMonthEdges(ym){
+  var y = +String(ym).slice(0, 4), m = +String(ym).slice(5, 7);
+  var last = new Date(y, m, 0).getDate();
+  return { a:ym + '-01', b:ym + '-' + String(last).padStart(2, '0'), days:last };
+}
+var CT_MON_TH = laMonAbbrTH();
+/* ══ §ctSeason · ไฮ/โลว์ซีซั่น ═══════════════════════════════════════════════════════════════════
+   ฝั่งอันดามันตะวันตก · ไฮ ต.ค.–พ.ค. · โลว์ มิ.ย.–ก.ย. (มรสุม)
+   ฉากเดียวคุมทั้งปีไม่มีความหมาย เพราะค่าเช่าจ่ายเท่ากันทุกเดือน แต่คนไม่ได้มาเท่ากัน
+   โลว์ซีซั่นคือเดือนที่ค่าเช่ากินกำไรที่หาได้ตอนไฮ · ทีมต้องเห็นว่าต้องกินไปเท่าไหร่
+   ⚠ ตายตัวไว้ก่อน เพราะใบนี้เป็นกระดาษ ไม่มีที่ให้ตั้งค่า · เส้นทางฝั่งระนอง/พม่าฤดูไม่ตรงกัน
+     ถ้าวันหนึ่งต้องแยกรายเส้นทาง ให้ย้ายชุดนี้ไปเป็นค่าตั้งของแผน                            */
+var CT_SEASON_HI = [10, 11, 12, 1, 2, 3, 4, 5];
+function ctSeasonOf(ym){
+  var m = +String(ym).slice(5, 7);
+  return (CT_SEASON_HI.indexOf(m) >= 0) ? 'hi' : 'lo';
+}
+var CT_SEASON_TXT = { hi:'ไฮซีซั่น', lo:'โลว์ซีซั่น' };
+function ctMonLabel(ym){
+  var y = +String(ym).slice(0, 4), m = +String(ym).slice(5, 7);
+  return (CT_MON_TH[m - 1] || ym) + ' ' + String(y + 543).slice(2);
+}
+/* ค่าเช่าที่ "ลงไปแล้ว" เทียบกับที่ "ต้องจ่ายจริง" · ส่วนต่าง = ค่าเช่าวันที่เรือไม่ได้วิ่ง
+   due ว่าง = คิดเต็มหนึ่งงวด · ส่งมาเมื่อรายงานครอบคลุมไม่เต็มงวด (ต้นเดือน · สัญญาเริ่มกลางเดือน) */
+function ctRentIdle(RN, tripsRan, due){
+  if(!RN) return null;
+  var t = Math.max(0, +tripsRan || 0), booked = RN.perTrip * t;
+  var full = (due != null) ? +due : RN.amt;
+  return { trips:t, booked:booked, full:full, gap:Math.max(0, full - booked),
+           daysRan:t / RN.trips, daysPlan:RN.runDays };
+}
+/* §boatRent · ความจุ/ลำ · ปักเรือไว้แล้วต้องอิงที่นั่งของลำนั้น จะได้ไม่หลุดจากทะเบียนจริง */
+function ctPlanSeats(pl){
+  var b = (pl && pl.boatId && typeof getBoat === 'function') ? getBoat(pl.boatId) : null;
+  if(b && +b.cap > 0) return +b.cap;
+  return Math.max(1, +((pl && pl.cap)) || 65);
+}
 function ctPlan(id){ var P = ctPlans(); return P.filter(function(x){ return x.id === id; })[0] || P[0]; }
 function ctPlanPut(pl){
   var P = ctPlans(), i = -1;
@@ -23416,9 +25450,17 @@ function ctOdRev(pl, tpl, ctx){
 }
 function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
-  var out = { gross:0, vin:0, net:0, fixNet:0, varNet:0, rows:[] };
+  /* §boatRent · ดูจาก "ลำที่วิ่ง" ไม่ใช่จากแผน · หน้าแผนส่งลำที่ปักไว้ · P&L ส่งลำที่ออกวันนั้น
+     ลำบริษัทวิ่งเส้นทางเดียวกัน = ไม่มีค่าเช่า แต่มีกัปตัน/เด็กเรือ/ค่าเสื่อม ตามปกติ */
+  var RN = ctRentOf(ctx && ctx.boatId);
+  /* §rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก */
+  if(RN && !ctRentActiveOn(RN, ctx && ctx.date)) RN = null;
+  /* §boatFuel · ไม่ผ่าน RN · ตัวคูณนี้ติดกับลำ ไม่เกี่ยวว่าเช่าหรือไม่เช่า */
+  var FM = ctBoatFuelMul(ctx && ctx.boatId);
+  var out = { gross:0, vin:0, net:0, fixNet:0, varNet:0, rows:[], rent:RN };
   ctLinesByGroup(T).forEach(function(x){
     var ln = x.ln, g = ln.g || 'อื่นๆ';
+    if(RN && RN.ex[ln.id]) return;                        // §boatRent · เจ้าของเรือรับผิดชอบ ไม่ใช่เรา
     if(ctGrpCfg(pl, g).off) return;                       // §category · ปิดทั้งหมวด
     var L = ctEffLine(ln, pl); if(L.off) return;
     var amt = 0, fx = 0, vr = 0;
@@ -23427,7 +25469,13 @@ function ctCalc(pl, ctx, tpl){
       var _q = ctOdQty(pl, ln, ctx);
       L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; });
     } else {
-      L.parts.forEach(function(p){ var a = ctPartAmt(p, ctx); amt += a; if(p.k === 'var') vr += a; else fx += a; });
+      L.parts.forEach(function(p){
+        var a = ctPartAmt(p, ctx);
+        /* §boatFuel · จับที่ p.fuel ไม่ใช่ที่ ln.id==='fuel' · ทีมเพิ่มบรรทัดน้ำมันใหม่เมื่อไหร่
+           ก็ติ๊ก fuel ที่ส่วนประกอบเหมือนกัน จะได้ไม่ต้องกลับมาแก้ชื่อ id ที่นี่อีก */
+        if(p.fuel && FM !== 1) a *= FM;
+        amt += a; if(p.k === 'var') vr += a; else fx += a;
+      });
     }
     var m = ctGrpMul(pl, g);                              // §category · ปรับ ±% ทั้งหมวด
     if(m !== 1){ amt *= m; fx *= m; vr *= m; }
@@ -23437,6 +25485,15 @@ function ctCalc(pl, ctx, tpl){
     out.varNet += vr - (L.vat ? vr * R : 0);
     out.rows.push({ id:L.id, g:L.g, l:L.l, vat:L.vat, amt:amt, vatAmt:v, net:amt - v, fix:fx, varr:vr });
   });
+  /* §boatRent · แถวสังเคราะห์ · ตั้งใจไม่ใส่ไว้ในสูตรกลาง
+     ค่าเช่าเป็นตัวเลขตามสัญญาของเรือลำหนึ่ง ไม่ใช่ค่าที่แต่ละเส้นทางจะมาประมาณเอง
+     และเท่ากันทุกเส้นทางที่ลำนี้วิ่ง · เอาไปให้ override รายแผนได้จะกลายเป็นคนละเลขกับสัญญา */
+  if(RN && RN.perTrip > 0){
+    var ra = RN.perTrip, rv = RN.vat ? ra * R : 0;
+    out.gross += ra; out.vin += rv; out.fixNet += ra - rv;
+    out.rows.push({ id:'rent', g:'ค่าเช่าเรือ', l:'ค่าเช่าเรือ · ' + RN.name,
+                    vat:RN.vat, amt:ra, vatAmt:rv, net:ra - rv, fix:ra, varr:0 });
+  }
   out.net = out.gross - out.vin;
   return out;
 }
@@ -23450,6 +25507,8 @@ function ctChdAt(pl, n){
 function ctCtxAt(pl, n){
   var th = Math.min(Math.max(0, +pl.paxTH || 0), n), ch = ctChdAt(pl, n);
   return { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0,
+           boatId:(pl.boatId || ''),                      /* §boatRent · ลำที่ปักไว้กับแผนนี้ */
+           date:(pl._asOf || ''),                          /* §rentSpan · ว่าง = ไม่เช็คช่วงสัญญา */
            pax:n, paxTH:th, paxFR:Math.max(0, n - th), paxCh:ch };
 }
 function ctProfitAt(pl, n, tpl){
@@ -23624,7 +25683,10 @@ function pxLongtail(date, bid){
          ฝั่งเหมาไม่หัก · สั่งเป็นลำไปแล้วตั้งแต่ก่อนออก ต่อให้ขาดคนก็ยังต้องจ่ายทั้งลำ */
       var _bk=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0;
       var pax=(typeof pckOnBoard==='function')?pckOnBoard(b,date,_bk):_bk;
-      join += (LT.joinBooked?pax:0) + (+LT.joinExtra||0);
+      /* §ltJoinQty · ระบุจำนวนไว้ = ใช้เลขนั้น · แต่ยังครอบด้วยคนที่อยู่บนเรือจริง
+         คนที่ไม่มาก็ลงหางยาวไม่ได้ ต่อให้จองจอยไว้ */
+      var _jb=(LT.joinPax!=null)?Math.min(+LT.joinPax||0,pax):pax;
+      join += (LT.joinBooked?_jb:0) + (+LT.joinExtra||0);
     }
   });
   return { chtr:chtr, join:join, upg:upg, upgDue:upgDue };
@@ -23755,6 +25817,7 @@ function pxTrip(date, bid){
   /* §pxOd · จำนวนที่ลูกค้าสั่งจริงของลำนี้ · ป้อนเข้าสูตรแทนจำนวนที่คาดไว้ในแผน */
   var LT=(typeof pxLongtail==='function')?pxLongtail(date,bid):{chtr:0,join:0};
   var ctx={ eng:((+boat.engineCount||3)>=4?'4EN':'3EN'), boats:1, fuel:fuelPr,
+            boatId:bid, date:date,            /* §boatRent · ลำที่ออกจริง · §rentSpan · วันที่เทียบช่วงสัญญา */
             odQty:{ ltj:LT.join, ltc:LT.chtr },
             pax:PX.tot, paxTH:PX.th, paxFR:PX.fr,
             /* §ctChd · ทารกนับรวมกับเด็ก · ไม่มีทางที่ทารกจะกินเท่าผู้ใหญ่ */
@@ -23816,6 +25879,12 @@ function pxTrip(date, bid){
       if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
       else if(FP.src==='sib' || FP.src==='back' || FP.src==='plan') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
     }
+    /* §boatRent · ค่าเช่าเป็นเลขตามสัญญา ไม่ใช่ค่าประมาณจากสูตร ป้ายจึงเป็น "ของจริง" */
+    if(r.id==='rent' && real==null && C.rent){
+      src='r';
+      why=ctB(C.rent.amt)+'/'+C.rent.days+' วัน · หยุด '+C.rent.off+' → วิ่ง '+C.rent.runDays+' วัน'
+         +' = '+ctB(C.rent.perDay)+'/วัน'+(C.rent.trips>1?(' ÷ '+C.rent.trips+' รอบ'):'');
+    }
     if(r.id==='ltj' && real==null){ src='r'; why='จอยจริง '+LT.join+' คน (ไม่ใช่ '+PX.tot+' หัวทั้งลำ)'; }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
@@ -23871,8 +25940,9 @@ function pxTrip(date, bid){
   var be=null;
   try{ if(typeof ctBreakEven==='function'){
     var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0);
+    /* §boatRent · จุดคุ้มทุนของทริปนี้ต้องรู้ว่าลำที่ออกเป็นเรือเช่าไหม ไม่งั้นคิดต้นทุนผิดชุด */
     be=ctBreakEven(Object.assign({}, plan||{}, {eng:ctx.eng, boats:1, fuel:fuelPr, paxTH:PX.th,
-        price:(PX.tot?revGross/PX.tot:0), comm:0}), Math.max(1,cap||60), T);
+        boatId:bid, _asOf:date, price:(PX.tot?revGross/PX.tot:0), comm:0}), Math.max(1,cap||60), T);
   } }catch(_){}
   return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
            px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost), up:UP, lt:LT, fp:FP,
@@ -24096,6 +26166,8 @@ function pxCSS(){ return ''
  +'#trippl-host table.sum tr.tot td.l{color:#312E81;font-size:13.5px;font-weight:800}'
  +'#trippl-host table.sum tr.tot .num{font-size:14.5px}'
  +'#trippl-host table.sum tr.tot td.netc{background:#E3F6EE}'
+ /* §totNeg · แถวรวมที่ติดลบเคยได้พื้นเขียวเหมือนกำไร · ตัวเลขแดงบนพื้นเขียวอ่านผิดได้ทันที */
+ +'#trippl-host table.sum tr.tot td.netc.neg{background:#FDE8ED}'
  +'#trippl-host table.sum tr.tot .net{font-size:17px}'
  +'#trippl-host table.sum tr.loss td{background:#FFF7F8}'
  +'#trippl-host table.sum tr.loss:hover td{background:#FFEFF2}'
@@ -24888,6 +26960,93 @@ function pxDW(ymd){
   return { w:w, d:+p[2], txt:(w>=0?PX_DOW[w]+' ':'')+(+p[2])+' '+(PX_MON[(+p[1])-1]||''), we:(w===0||w===6) };
 }
 
+/* ══ §rentIdle · ค่าเช่าวันที่เรือไม่ได้วิ่ง ═══════════════════════════════════
+   P&L รายทริปลงค่าเช่า = ค่าเช่า/ทริป x ทริปที่วิ่งจริง
+   แต่ค่าเช่าจ่ายเต็มก้อนทุกงวดไม่ว่าเรือจะออกหรือไม่ · วิ่งน้อยกว่าที่ตั้งไว้เมื่อไหร่
+   ค่าเช่าจะลงไม่ครบ และกำไรของเดือนจะดูสวยเกินจริงโดยไม่มีใครเห็น
+   ก้อนนี้คือส่วนที่หายไป · เป็นตัวชี้ว่าการเช่าลำนี้คุ้มหรือไม่คุ้ม
+   ไม่ใช่กำไรรายทริป ซึ่งคุ้มอยู่แล้วเพราะแบกค่าเช่าแค่ส่วนของตัวเอง
+
+   ไม่ผูกกับตัวกรองท่า · ค่าเช่าจ่ายทั้งลำ ไม่ได้จ่ายเป็นท่า
+   กรองท่าไว้แล้วซ่อนก้อนนี้ = ซ่อนเงินที่จ่ายจริง */
+function pxRentIdle(days){
+  if(typeof ctRentAll !== 'function' || !days || !days.length) return [];
+  var d0 = days[0], d1 = days[days.length - 1], out = [];
+  var ALL = ctRentAll();
+  Object.keys(ALL).forEach(function(bid){
+    var RN = ctRentOf(bid); if(!RN) return;
+    var SP = ctRentSpan(RN, d0, d1); if(!SP) return;
+    var slots = 0, sail = 0;
+    days.forEach(function(d){
+      if(d < SP.from || d > SP.to) return;
+      var op = (typeof TRIPS !== 'undefined' && TRIPS[d]) ? TRIPS[d][bid] : null;
+      if(!op || !op.route) return;
+      slots++;
+      var t = pxTrip(d, bid);
+      if(!t.noSail) sail++;                   /* ลำที่อยู่บนกระดานแต่ไม่ได้ออก ไม่ได้ดูดซับค่าเช่า */
+    });
+    var I = ctRentIdle(RN, sail, SP.due);
+    out.push({ bid:bid, name:RN.name, RN:RN, SP:SP, slots:slots, sail:sail,
+               daysRan:sail / RN.trips, opPlan:SP.opDays,
+               booked:I.booked, due:SP.due, gap:I.gap });
+  });
+  return out.sort(function(a, b){ return b.gap - a.gap; });
+}
+/* แถบสรุปในงบรายเดือน · ไม่ไปแตะยอด Net MTD ด้านบน
+   เพราะนั่นคือผลรวมของทริป · ก้อนนี้เป็นต้นทุนของงวดที่ไม่มีทริปไหนรับไป
+   แสดงคู่กันแล้วบอกยอดหลังหักให้ชัด ดีกว่าแอบเอาไปบวกลบข้างบนเงียบ ๆ */
+function pxRentIdleHtml(e, rows, netMTD){
+  if(!rows.length) return '';
+  var gap = rows.reduce(function(a, r){ return a + r.gap; }, 0);
+  var due = rows.reduce(function(a, r){ return a + r.due; }, 0);
+  var bkd = rows.reduce(function(a, r){ return a + r.booked; }, 0);
+  var adj = netMTD - gap;
+  var tr = rows.map(function(r){
+    var bad = r.gap > 0, run = Math.round(r.daysRan), plan = Math.round(r.opPlan);
+    return '<tr class="br' + (bad ? ' loss' : '') + '">'
+      + '<td class="l"><b style="font-size:12.5px">' + e(r.name) + '</b>'
+        + '<div class="per">' + e(r.SP.from) + ' → ' + e(r.SP.to)
+        + (r.RN.to ? '' : ' · ไม่ระบุวันจบ') + '</div></td>'
+      + '<td class="c"><span class="num n">' + run + ' / ' + plan + '</span></td>'
+      + '<td><span class="num n">' + pxN(r.due) + '</span></td>'
+      + '<td><span class="num n">' + pxN(r.booked) + '</span></td>'
+      + '<td class="netc' + (bad ? ' neg' : '') + '"><span class="net' + (bad ? ' neg' : '') + ' n">'
+        + (bad ? ('−' + pxN(r.gap)) : '0') + '</span></td>'
+      + '<td class="c"><span class="pill ' + (bad ? (r.gap / Math.max(1, r.due) > .25 ? 'ro' : 'am') : 'em') + '">'
+        + Math.round(r.booked / Math.max(1, r.due) * 100) + '%</span></td></tr>';
+  }).join('');
+  return '<div class="eg mb"><div class="phd"><div><h2>Unabsorbed boat rent '
+      + '<span class="pill ' + (gap > 0 ? 'ro' : 'em') + '">' + pxN(gap) + ' ฿</span></h2>'
+      + '<p>ค่าเช่าเรือที่จ่ายจริงทั้งงวด เทียบกับส่วนที่ทริปรับไปแล้ว · '
+      + 'ส่วนต่างคือ<b>ค่าเช่าวันที่เรือไม่ได้วิ่ง</b> ซึ่งไม่มีทริปไหนแบกให้</p></div></div>'
+    + '<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:620px">'
+    + '<thead><tr><th class="l">Boat · contract</th><th class="c">Days run / plan</th>'
+    + '<th>Rent due</th><th>Absorbed by trips</th><th>Unabsorbed</th><th class="c">Coverage</th></tr></thead>'
+    + '<tbody>' + tr
+    + '<tr class="tot"><td class="l">Σ ' + rows.length + ' rented boat' + (rows.length === 1 ? '' : 's') + '</td>'
+    + '<td class="c"></td><td><span class="num n">' + pxN(due) + '</span></td>'
+    + '<td><span class="num n">' + pxN(bkd) + '</span></td>'
+    + '<td class="netc' + (gap > 0 ? ' neg' : '') + '"><span class="net' + (gap > 0 ? ' neg' : '') + ' n">'
+    + (gap > 0 ? ('−' + pxN(gap)) : '0') + '</span></td>'
+    + '<td class="c"><span class="pill ' + (gap > 0 ? 'ro' : 'em') + '">'
+    + Math.round(bkd / Math.max(1, due) * 100) + '%</span></td></tr></tbody></table></div></div>'
+    + '<div class="mst"><div class="b"><small>Net profit MTD (จากทริป)</small>'
+      + '<b class="n" style="color:' + (netMTD < 0 ? '#BE123C' : '#0F172A') + '">'
+      + (netMTD < 0 ? '−' : '+') + pxN(Math.abs(netMTD)) + ' ฿</b>'
+      + '<u class="n">ผลรวมของทุกทริปในเดือนนี้</u></div>'
+    + '<div class="b"><small>ค่าเช่าที่ยังไม่ถูกดูดซับ</small>'
+      + '<b class="n" style="color:#BE123C">−' + pxN(gap) + ' ฿</b>'
+      + '<u class="n">จ่ายจริงแต่ไม่มีทริปไหนรับไป</u></div>'
+    + '<div class="b"><small>Net หลังหักค่าเช่าเต็มก้อน</small>'
+      + '<b class="n" style="color:' + (adj < 0 ? '#BE123C' : '#047857') + '">'
+      + (adj < 0 ? '−' : '+') + pxN(Math.abs(adj)) + ' ฿</b>'
+      + '<u class="n">ตัวเลขนี้คือคำตอบว่าการเช่าคุ้มหรือไม่</u></div>'
+    + '<div class="b"><small>ต้องวิ่งเพิ่มอีก</small>'
+      + '<b class="n">' + rows.reduce(function(a, r){
+          return a + Math.max(0, Math.ceil(r.gap / Math.max(1, r.RN.perTrip * r.RN.trips))); }, 0) + ' วัน</b>'
+      + '<u class="n">ถึงจะดูดซับค่าเช่าที่เหลือหมด</u></div></div></div>';
+}
+
 /* ══ MONTHLY ════════════════════════════════════════════════════════════════ */
 function pxMonth(e){
   var ym=_px.mon||String(_px.date||'').slice(0,7);
@@ -25000,7 +27159,9 @@ function pxMonth(e){
       +'<td class="c"><span class="pill '+(mg<0?'ro':(mg<12?'am':'em'))+'">'+mg+'%</span></td></tr>';
   }).join('');
 
-  return hero+kpi
+  var rentIdle=pxRentIdleHtml(e, pxRentIdle(days), T.profit);   /* §rentIdle */
+
+  return hero+kpi+rentIdle
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
       +'<span class="pill bl">'+e(mLbl)+'</span></h2>'
       +'<p>Light blue = revenue · green/red = the net result of that day · click a bar to open that day</p></div>'
@@ -25944,7 +28105,8 @@ var CT_ICON = {
   trash:'<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
   link:'<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
-  undo:'<path d="M3 10h11a5 5 0 0 1 0 10H8"/><path d="M7 6l-4 4 4 4"/>'
+  undo:'<path d="M3 10h11a5 5 0 0 1 0 10H8"/><path d="M7 6l-4 4 4 4"/>',
+  printer:'<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'
 };
 function ctIcon(k, sz, sw){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2)
   + '" stroke-linecap="round" stroke-linejoin="round" style="width:' + (sz || 16) + 'px;height:' + (sz || 16) + 'px;flex:none">' + (CT_ICON[k] || '') + '</svg>'; }
@@ -25957,21 +28119,576 @@ function ctPaintTabs(){
     b.className = 'ct-tab' + ((b.getAttribute('data-t') === _ct.tab) ? ' on' : '');
   });
 }
+/* §ctKeepScroll · กดกางหมวด/รายการแล้วหน้าเด้งกลับไปข้างบน
+   ต้นเหตุคือ host.innerHTML = ... ที่บรรทัดล่าง · ระหว่างที่เนื้อหาถูกล้าง ความสูงเหลือ ~0
+   เบราว์เซอร์จึงหนีบ scrollTop ของตัวเลื่อนลงเป็น 0 แล้วค่าเดิมก็หายไปเลย
+   (CLAUDE.md §6 "Scroll-jump on re-render" เตือนเรื่องนี้ไว้แล้ว เคยโดนที่หน้าอื่นมาก่อน)
+   §ctSheet ทำให้มีตัวเลื่อนสองชั้นต้องเก็บ: ตัวหน้า (.main) กับกล่องตาราง (.ct-sheet)
+   ⚠ el.focus() เฉย ๆ จะเลื่อนช่องนั้นเข้ามาในจอเอง กลายเป็นเด้งซ้ำรอบสอง
+     ต้องใช้ preventScroll แล้วคืนตำแหน่งเองทั้งสองชั้น */
 function ctRender(){
   var host = document.getElementById('ct-body'); if(!host) return;
+  ctRentBust();                      /* §ctRentCache · วาดใหม่ = เริ่มนับรอบใหม่ */
   var a = document.activeElement, fk = (a && a.getAttribute) ? a.getAttribute('data-fk') : null;
   var ss = (a && a.selectionStart != null) ? a.selectionStart : null;
+  var sheet = host.querySelector('.ct-sheet');
+  var sT = sheet ? sheet.scrollTop : 0, sL = sheet ? sheet.scrollLeft : 0;
+  var main = document.querySelector('.main');
+  var mT = main ? main.scrollTop : (window.pageYOffset || 0);
   ctPaintTabs();
   host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml()
                  : (_ct.tab === 'ovr') ? ctOvrHtml()
                  : (_ct.tab === 'real') ? ctRealHtml()      /* §plCost */
                  : (_ct.tab === 'match') ? ctMatchHtml()    /* §ctMatch */
                  : ctPlanHtml();
-  if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]'); if(el){ el.focus(); try{ el.setSelectionRange(ss, ss); }catch(_){ } } }
+  var restore = function(){
+    var s2 = host.querySelector('.ct-sheet');
+    if(s2){ if(sT) s2.scrollTop = sT; if(sL) s2.scrollLeft = sL; }
+    if(main){ if(mT) main.scrollTop = mT; } else if(mT) window.scrollTo(0, mT);
+  };
+  restore();
+  if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]');
+    if(el){ try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
+      try{ el.setSelectionRange(ss, ss); }catch(_){ }
+      restore();   /* เผื่อ focus ยังขยับ · คืนอีกรอบหลังโฟกัสเสร็จ */
+    } }
 }
 function ctNum(v, fk, oninput, w){
   return '<input class="ct-in" data-fk="' + fk + '" value="' + (v == null ? '' : v) + '" oninput="' + oninput
     + '" style="width:' + (w || 68) + 'px">';
+}
+
+
+/* ══ §ctFact · Fact Sheet · สรุปแผนหนึ่งแผนลงกระดาษ A4 ══════════════════════════════════════════
+   หน้าจอออกแบบให้ "ปรับแล้วเห็นผลทันที" · กระดาษออกแบบให้ "เอาไปคุยกับคนอื่น"
+   คนละงานกัน จึงไม่ยกเลย์เอาต์เดียวกันมาทั้งดุ้น — ตัดของที่กดไม่ได้บนกระดาษทิ้งหมด
+   (ช่องกรอก ปุ่ม แถบสี กราฟ 38 แท่งที่อ่านค่าไม่ได้) แล้วแทนด้วยตัวเลขที่อ่านแล้วตัดสินใจได้
+   ⚠ ตัวเลขคิดสดจากสูตรกลาง ณ วินาทีที่กดพิมพ์ · จึงต้องมีวันเวลากำกับหัวกระดาษเสมอ
+     สูตรกลางแก้เมื่อไหร่ ใบที่พิมพ์ไปแล้วจะไม่ตรงกับหน้าจออีก และไม่มีใครรู้ว่าใบไหนเก่า
+   ⚠ ใช้ document.write ลงหน้าต่างใหม่เหมือนใบสั่งงาน/ทะเบียนรายชื่อ (goPrint)
+     ไม่ใช่ @media print ทับหน้าเดิม เพราะหน้านี้มี sticky/overflow เต็มไปหมด
+     สั่งพิมพ์ทับจะได้กระดาษที่ตัดกลางตารางทุกครั้ง                                        */
+function ctFactCss(){ return '<style>'
+  + '@page{size:A4 portrait;margin:11mm}'
+  + 'body{margin:0;padding:22px 18px 60px;background:#E9EBEF;'
+    + "font-family:'Noto Sans Thai','DM Sans',system-ui,sans-serif;color:#14100C}"
+  + '.fs{max-width:820px;margin:0 auto 18px;background:#fff;padding:26px 30px 34px;'
+    + 'box-shadow:0 10px 40px -18px rgba(20,16,12,.5);border-radius:6px}'
+  + '.fs-tool{max-width:820px;margin:0 auto 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
+    + 'background:#fff;border-radius:10px;padding:10px 14px;font-size:12.5px}'
+  + '.fs-tool b{font-size:13.5px}.fs-tool .h{color:#6b665f;flex:1;min-width:180px}'
+  + '.fs-tool button{border:none;background:#C2410C;color:#fff;border-radius:8px;padding:7px 15px;'
+    + "font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}"
+  + '.fs-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;'
+    + 'border-bottom:2px solid #14100C;padding-bottom:11px;margin-bottom:16px}'
+  + '.fs-hd h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.3px}'
+  + '.fs-hd .sub{font-size:11.5px;color:#6b665f;margin-top:4px}'
+  + '.fs-hd .co{text-align:right;font-size:10px;letter-spacing:.16em;font-weight:800;color:#6b665f}'
+  + '.fs-hd .co u{display:block;text-decoration:none;font-size:9.5px;letter-spacing:0;'
+    + 'font-weight:400;color:#8b857d;margin-top:5px;line-height:1.5}'
+  + '.fs-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:16px}'
+  + '.fs-k{border:1px solid #DED8CE;border-radius:9px;padding:9px 11px}'
+  + '.fs-k.hi{background:#F6F1E8;border-color:#C9BFAE}'
+  + '.fs-k s{display:block;text-decoration:none;font-size:8.5px;font-weight:800;letter-spacing:.09em;'
+    + 'color:#8b857d;text-transform:uppercase}'
+  + '.fs-k b{display:block;font-size:21px;font-weight:800;margin-top:3px;line-height:1.1;'
+    + 'font-variant-numeric:tabular-nums}'
+  + '.fs-k b.neg{color:#9f1239}.fs-k b.pos{color:#0F6E56}'
+  + '.fs-k i{display:block;font-style:normal;font-size:10px;color:#6b665f;margin-top:3px}'
+  + '.fs-h2{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;'
+    + 'color:#8b857d;border-bottom:1px solid #DED8CE;padding-bottom:4px;margin:17px 0 8px}'
+  + '.fs-h2 em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;color:#a39c93}'
+  + '.fs-g{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 16px;font-size:11.5px}'
+  + '.fs-g div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted #E4DED4;padding:3px 0}'
+  + '.fs-g span{color:#6b665f}.fs-g b{font-weight:700;font-variant-numeric:tabular-nums}'
+  + 'table.fs-t{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}'
+  + 'table.fs-t th{text-align:right;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#8b857d;'
+    + 'text-transform:uppercase;padding:4px 7px;border-bottom:1px solid #14100C}'
+  + 'table.fs-t th.l,table.fs-t td.l{text-align:left}'
+  + 'table.fs-t td{text-align:right;padding:4px 7px;border-bottom:1px solid #EFEAE1}'
+  + 'table.fs-t tr.g td{background:#F6F1E8;font-weight:700}'
+  + 'table.fs-t tr.ln td.l{padding-left:20px;color:#4a4238}'
+  + 'table.fs-t tr.sum td{border-top:1.5px solid #14100C;border-bottom:none;font-weight:800;padding-top:6px}'
+  + 'table.fs-t tr.dim td{color:#a39c93}'
+  + 'table.fs-t tr.be td{background:#E7F1EE;font-weight:800}'
+  + '.fs-tag{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 5px;'
+    + 'background:#EFEAE1;color:#6b665f;margin-left:5px}'
+  /* §ctSeason · ไฮ/โลว์ต้องแยกออกตั้งแต่ชายตามอง · ทั้งใบมีแต่ตัวเลข ถ้าไม่ติดสีจะไล่ไม่ทัน */
+  + '.fs-tag.hi{background:#E7F1EE;color:#0F6E56}'
+  + '.fs-tag.lo{background:#F6EFE2;color:#8A5B00}'
+  + '.fs-note{font-size:10.5px;color:#6b665f;line-height:1.65;margin-top:7px}'
+  /* §ctFactPrio · แถบคั่นสามชั้น · ทำให้ลำดับความสำคัญเห็นได้ตั้งแต่ชายตามอง
+     ไม่ใช่ให้คนอ่านต้องเดาเองว่าตารางไหนเอาไว้ตัดสินใจ ตารางไหนเอาไว้ตรวจย้อน */
+  + '.fs-band{display:flex;align-items:baseline;gap:10px;margin:22px 0 2px;'
+    + 'border-top:2px solid #14100C;padding-top:8px}'
+  + '.fs-band i{font-style:normal;font-size:15px;font-weight:800;color:#C2410C;'
+    + 'font-variant-numeric:tabular-nums}'
+  + '.fs-band b{font-size:13px;font-weight:800;letter-spacing:-.2px}'
+  + '.fs-band s{text-decoration:none;font-size:10.5px;color:#8b857d;flex:1}'
+  + '.fs-band.ref{border-top-color:#DED8CE}.fs-band.ref i,.fs-band.ref b{color:#8b857d}'
+  + '.fs-band + .fs-h2{margin-top:10px;border-bottom-color:#EFEAE1}'
+  + '.fs-foot{margin-top:22px;padding-top:9px;border-top:1px solid #DED8CE;font-size:9.5px;'
+    + 'color:#8b857d;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}'
+  + '@media print{body{background:#fff;padding:0}.fs-tool{display:none}'
+    + '.fs{box-shadow:none;border-radius:0;margin:0;max-width:none;padding:0}'
+    + '.fs-h2,table.fs-t{break-inside:auto}tr{break-inside:avoid}}'
+  + '</style>'; }
+
+/* หนึ่งแผน = หนึ่งใบ · แยกฟังก์ชันไว้เพื่อให้พิมพ์หลายแผนต่อกันได้ในอนาคต */
+function ctFactSheet(pl){
+  var e = ctE, B = ctB, T = ctTpl(), R = ctVatR(T);
+  var pax   = Math.max(1, +pl.pax || 1);
+  var seats = ctPlanSeats(pl), boats = Math.max(1, +pl.boats || 1);
+  var cap   = Math.max(1, seats * boats);
+  var cur   = ctProfitAt(pl, pax, T);
+  var be    = ctBreakEven(pl, cap, T);
+  var RN    = ctRentOf(pl.boatId);
+  var pAd   = +pl.price || 0;
+  var pCh   = (pl.priceCh != null && pl.priceCh !== '') ? (+pl.priceCh || 0) : pAd;
+  var nCh   = ctChdAt(pl, pax);
+  var vout  = ((pax - nCh) * pAd + nCh * pCh) * R;
+  var rtNm  = '';
+  try{ var _r = (typeof getRoute === 'function') ? getRoute(pl.famId) : null; rtNm = (_r && _r.name) || ''; }catch(_){ }
+
+  /* ── 4 ตัวเลขที่ต้องเห็นก่อนอย่างอื่น ──
+     §ctFactPrio · ช่องที่ 4 เดิมเป็น "ราคาขาย" ซึ่งอ่านได้จากตารางราคาอยู่แล้ว
+     ตอนเช่าเรือ เลขที่ต้องเห็นก่อนอย่างอื่นคือ "ทั้งสัญญาแล้วเหลือเท่าไหร่"
+     ตัวนั้นคำนวณอยู่ท้ายใบ · ยกขึ้นมาไว้หัวกระดาษ ไม่ต้องเลื่อนหาสามหน้า */
+  var _factBase = null, _factBaseTxt = '';
+  var bePct = be ? Math.round(be / cap * 100) : 100;
+  var kpi4 = function(){
+    if(_factBase == null)
+      return '<div class="fs-k"><s>ราคาขาย</s><b>' + ctN(pAd) + '</b><i>เด็ก ' + ctN(pCh)
+        + (+pl.comm > 0 ? (' · คอม ' + (+pl.comm) + '%') : ' · ไม่มีคอม') + '</i></div>';
+    return '<div class="fs-k hi"><s>ทั้งสัญญา · BASE CASE</s><b class="'
+      + (_factBase < 0 ? 'neg' : 'pos') + '">' + (_factBase < 0 ? '−' : '+')
+      + ctN(Math.abs(_factBase)) + '</b><i>' + e(_factBaseTxt) + ' · หักค่าเช่าเต็มก้อนแล้ว</i></div>';
+  };
+  /* ⚠ ต้องเป็นฟังก์ชัน ไม่ใช่สตริง · _factBase ถูกเติมค่าในบล็อกฉากซึ่งอยู่ท้ายกว่านี้
+     ประกอบเป็นสตริงตรงนี้เลย = อ่าน _factBase ตอนยังเป็น null ช่องที่ 4 จะไม่มีวันเปลี่ยน */
+  var kpiHtml = function(){ return '<div class="fs-kpi">'
+    + '<div class="fs-k hi"><s>จุดคุ้มทุน</s><b>' + (be ? (be + ' คน') : 'ไม่ถึง')
+      + '</b><i>' + (be ? (bePct + '% ของ ' + cap + ' ที่นั่ง') : ('เต็มลำ ' + cap + ' ที่นั่งก็ยังขาดทุน')) + '</i></div>'
+    + '<div class="fs-k"><s>กำไรที่คาด · ' + pax + ' คน</s><b class="' + (cur.p < 0 ? 'neg' : 'pos') + '">'
+      + (cur.p < 0 ? '−' : '+') + ctN(Math.abs(cur.p)) + '</b><i>Margin '
+      + (cur.rev ? Math.round(cur.p / cur.rev * 100) : 0) + '% ของรายได้สุทธิ</i></div>'
+    + '<div class="fs-k"><s>ต้นทุนต่อทริป</s><b>' + ctN(cur.c.net) + '</b><i>คงที่ ' + ctN(cur.c.fixNet)
+      + ' + ผันแปร ' + ctN(cur.c.varNet) + '</i></div>'
+    + kpi4() + '</div>'; };
+
+  /* ── พารามิเตอร์ที่ใช้คำนวณ · ใครถือใบนี้ต้องทำซ้ำได้ ── */
+  var P = [['เครื่องยนต์', e(pl.eng || '')], ['จำนวนลำ', boats + ' ลำ'],
+    ['ความจุ/ลำ', seats + ' ที่นั่ง' + (pl.boatId ? '' : ' (พิมพ์เอง)')],
+    ['จำนวนคนที่คาด', pax + ' คน'], ['คนไทย', (Math.min(+pl.paxTH || 0, pax)) + ' คน'],
+    ['เด็ก', (+pl.chPct || 0) + '% = ' + nCh + ' คน'],
+    ['ราคาผู้ใหญ่', B(pAd) + ' <span class="fs-tag">รวม VAT</span>'],
+    ['ราคาเด็ก', B(pCh)], ['คอมมิชชั่น', (+pl.comm || 0) + '%'],
+    ['ราคาน้ำมัน', B(pl.fuel) + '/ลิตร'], ['VAT', (+T.vatRate || 0) + '%'],
+    ['ความจุรวม', cap + ' ที่นั่ง']];
+  var params = '<div class="fs-g">' + P.map(function(x){
+      return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('') + '</div>';
+
+  /* ── เรือ & ค่าเช่า · ขึ้นเฉพาะตอนปักลำไว้ ── */
+  var rent = '';
+  if(pl.boatId){
+    var bN = ((typeof getBoat === 'function' ? getBoat(pl.boatId) : null) || {}).name || pl.boatId;
+    if(!RN){
+      rent = '<div class="fs-h2">เรือที่ใช้</div><div class="fs-g">'
+        + '<div><span>เรือ</span><b>' + e(bN) + '</b></div>'
+        + '<div><span>ที่นั่ง</span><b>' + seats + '</b></div>'
+        + '<div><span>สถานะ</span><b>เรือของบริษัท</b></div>'
+        + '<div><span>กินน้ำมันเทียบสูตรกลาง</span><b>'
+          + Math.round(ctBoatFuelMul(pl.boatId) * 100) + '%</b></div></div>';
+    } else {
+      var rNetTrip = RN.perTrip * (1 - (RN.vat ? R : 0));
+      var rNetAll  = RN.amt * (1 - (RN.vat ? R : 0));
+      var pEx = cur.p + rNetTrip;
+      var dNd = (pEx > 0) ? Math.ceil(rNetAll / (pEx * RN.trips)) : null;
+      var okD = (dNd != null && dNd <= RN.runDays);
+      rent = '<div class="fs-h2">เรือเช่า · เงื่อนไขสัญญา <em>ผูกกับลำ ใช้ร่วมทุกเส้นทางที่ลำนี้วิ่ง</em></div>'
+        + '<div class="fs-g">'
+        + '<div><span>เรือ</span><b>' + e(RN.name) + '</b></div>'
+        + '<div><span>ที่นั่ง</span><b>' + RN.seats + '</b></div>'
+        + '<div><span>ค่าเช่า/งวด</span><b>' + B(RN.amt)
+          + (RN.mode === 'seat' ? (' <span class="fs-tag">' + B(RN.seat) + '/ที่นั่ง</span>') : '') + '</b></div>'
+        + '<div><span>วันในงวด</span><b>' + RN.days + ' วัน</b></div>'
+        + '<div><span>วันหยุดตามตกลง</span><b>' + RN.off + ' วัน</b></div>'
+        + '<div><span>วันที่วิ่งได้</span><b>' + RN.runDays + ' วัน</b></div>'
+        + '<div><span>ค่าเช่า/วันวิ่ง</span><b>' + B(RN.perDay) + '</b></div>'
+        + '<div><span>ค่าเช่า/ทริป</span><b>' + B(RN.perTrip)
+          + (RN.trips > 1 ? (' <span class="fs-tag">' + RN.trips + ' รอบ/วัน</span>') : '') + '</b></div>'
+        + '<div><span>ช่วงสัญญา</span><b>' + (RN.from ? e(RN.from) : '—') + ' → ' + (RN.to ? e(RN.to) : 'ไม่ระบุ') + '</b></div>'
+        + '<div><span>เจ้าของเรือรับผิดชอบ</span><b>' + (CT_RENT_EX.filter(function(x){ return RN.ex[x.id]; })
+            .map(function(x){ return x.l; }).join(' · ') || '—') + '</b></div>'
+        + '<div><span>ผู้เช่าจ่ายเอง</span><b>น้ำมันเรือ</b></div>'
+        + '<div><span>ค่าเช่ามี VAT</span><b>' + (RN.vat ? 'ขอคืนได้' : 'ไม่มี') + '</b></div>'
+        + '<div><span>กินน้ำมันเทียบสูตรกลาง</span><b>' + Math.round(ctBoatFuelMul(pl.boatId) * 100) + '%</b></div></div>'
+        + '<div class="fs-note"><b>จุดคุ้มทุนของค่าเช่า</b> · '
+        + (dNd == null
+            ? ('ที่ ' + pax + ' คน/ทริป วิ่งกี่วันก็ไม่คุ้ม (กำไรก่อนค่าเช่าติดลบ ' + B(Math.abs(pEx)) + '/ทริป)')
+            : ('ต้องวิ่ง <b>' + dNd + ' วัน/งวด</b> ที่ ' + pax + ' คน/ทริป · มีให้วิ่ง ' + RN.runDays + ' วัน'
+               + (okD ? (' · เหลือหายใจ ' + (RN.runDays - dNd) + ' วัน · ลูกค้ารวม '
+                         + (dNd * RN.trips * pax).toLocaleString() + ' หัว/งวด')
+                      : ' · <b>เกินจำนวนวันที่มี</b>')))
+        + '<br>P&amp;L รายทริปลงค่าเช่าตามทริปที่วิ่งจริง ไม่ใช่เต็มก้อน · '
+        + 'ส่วนที่ขาดดูได้ที่ P&amp;L รายทริป → รายเดือน → Unabsorbed boat rent</div>';
+    }
+  }
+
+  /* ── ตารางต้นทุน · หมวดแล้วแตกรายบรรทัด ── */
+  var gA = {}, gO = [], gL = {};
+  cur.c.rows.forEach(function(r){
+    if(!gA[r.g]){ gA[r.g] = { amt:0, vat:0, net:0, fix:0, varr:0 }; gO.push(r.g); gL[r.g] = []; }
+    var a = gA[r.g]; a.amt += r.amt; a.vat += r.vatAmt; a.net += r.net; a.fix += r.fix; a.varr += r.varr;
+    gL[r.g].push(r);
+  });
+  var kindOf = function(f, v){ return (f > 0 && v > 0) ? 'ผสม' : (v > 0 ? 'ผันแปร' : 'คงที่'); };
+  var ctr = '';
+  gO.forEach(function(g){
+    var A = gA[g];
+    ctr += '<tr class="g"><td class="l">' + e(g) + '</td><td>' + kindOf(A.fix, A.varr) + '</td><td>'
+        +  ctN(A.amt) + '</td><td>' + (A.vat ? ctN(A.vat) : '—') + '</td><td>' + ctN(A.net) + '</td>'
+        +  '<td>' + Math.round(A.net / (cur.c.net || 1) * 100) + '%</td></tr>';
+    gL[g].forEach(function(r){
+      ctr += '<tr class="ln' + (r.amt ? '' : ' dim') + '"><td class="l">' + e(r.l) + '</td>'
+          +  '<td>' + kindOf(r.fix, r.varr) + '</td><td>' + (r.amt ? ctN(r.amt) : '—') + '</td>'
+          +  '<td>' + (r.vatAmt ? ctN(r.vatAmt) : '—') + '</td><td>' + (r.net ? ctN(r.net) : '—') + '</td><td></td></tr>';
+    });
+  });
+  var costTbl = '<table class="fs-t"><thead><tr><th class="l">รายการ</th><th>ชนิด</th><th>จำนวนเงิน</th>'
+    + '<th>VAT ซื้อ</th><th>สุทธิ</th><th>สัดส่วน</th></tr></thead><tbody>' + ctr
+    + '<tr class="sum"><td class="l">รวมต้นทุน · ที่ ' + pax + ' คน</td><td></td><td>' + ctN(cur.c.gross)
+    + '</td><td>' + ctN(cur.c.vin) + '</td><td>' + ctN(cur.c.net) + '</td><td>100%</td></tr></tbody></table>';
+
+  /* ── เศรษฐศาสตร์ต่อหัว · ที่มาของจุดคุ้มทุน ── */
+  var revPer = cur.rev / pax, varPer = cur.c.varNet / pax, cm = revPer - varPer;
+  /* ราคาต่ำสุดที่ยังไม่ขาดทุน ณ จำนวนคนที่ตั้งไว้ · ขยับราคาทั้งผู้ใหญ่และเด็กตามสัดส่วนเดิม
+     ของที่ลูกค้าสั่งเพิ่มมีรายได้ของมันเอง ต้องหักออกจากยอดที่ทัวร์หลักต้องแบกก่อน */
+  var needTour = cur.c.net - cur.revOd;
+  var kMin = (cur.revTour > 0) ? (needTour / cur.revTour) : null;
+  var minAd = (kMin != null && kMin > 0) ? pAd * kMin : null;
+  var econ = '<div class="fs-g" style="grid-template-columns:repeat(3,1fr)">'
+    + '<div><span>รายได้สุทธิ/หัว</span><b>' + ctN(revPer) + '</b></div>'
+    + '<div><span>ต้นทุนผันแปร/หัว</span><b>−' + ctN(varPer) + '</b></div>'
+    + '<div><span>ส่วนเกิน/หัว</span><b>' + ctN(cm) + '</b></div>'
+    + '<div><span>ต้นทุนคงที่/ทริป</span><b>' + ctN(cur.c.fixNet) + '</b></div>'
+    + '<div><span>คงที่ ÷ ส่วนเกิน</span><b>' + (cm > 0 ? (Math.ceil(cur.c.fixNet / cm) + ' คน') : 'ไม่คุ้ม') + '</b></div>'
+    + '<div><span>จุดคุ้มทุนที่ระบบไล่จริง</span><b>' + (be ? (be + ' คน') : 'ไม่ถึง') + '</b></div>'
+    + '<div><span>ห่างจุดคุ้มทุน</span><b>' + (be == null ? 'เต็มลำยังไม่คุ้ม'
+        : (pax >= be ? ('เกินมา ' + (pax - be) + ' คน') : ('ขาดอีก ' + (be - pax) + ' คน'))) + '</b></div>'
+    + '<div><span>ราคาต่ำสุดที่ไม่ขาดทุน · ที่ ' + pax + ' คน</span><b>'
+        + (minAd == null ? '—' : ctN(minAd)) + '</b></div>'
+    + '<div><span>ต้นทุนต่อหัว · ที่ ' + pax + ' คน</span><b>' + ctN(cur.c.net / pax) + '</b></div></div>'
+    + '<div class="fs-note">สองช่องล่างขวาต่างกันได้ เพราะบางบรรทัดเป็น<b>ขั้นบันได</b> '
+    + '(ไกด์ทุก 25 คน · เด็กเรือเพิ่มเมื่อเกิน 40) ต้นทุนจึงกระโดดเป็นช่วง ไม่ใช่เส้นตรง '
+    + 'สูตรหารตรง ๆ ใช้ไม่ได้ · ระบบจึงไล่ทีละคนจาก 1 จนกำไรเป็นบวกครั้งแรก</div>';
+
+  /* ── กำไรตามจำนวนคน · เลือกเฉพาะระดับที่ใช้ตัดสินใจ ไม่ใช่ทั้ง 38 แถว ── */
+  var lv = {};
+  [0.25, 0.5, 0.75, 1].forEach(function(f){ lv[Math.max(1, Math.round(cap * f))] = 1; });
+  lv[pax] = 1; if(be) lv[be] = 1;
+  var lvs = Object.keys(lv).map(Number).sort(function(a, b){ return a - b; });
+  var curveRows = lvs.map(function(n){
+    var X = ctProfitAt(pl, n, T);
+    var isBe = (be && n === be), isNow = (n === pax);
+    return '<tr class="' + (isBe ? 'be' : '') + '"><td class="l">' + n + ' คน'
+      + (isBe ? ' <span class="fs-tag">จุดคุ้มทุน</span>' : '')
+      + (isNow ? ' <span class="fs-tag">ที่ตั้งไว้</span>' : '')
+      + (n === cap ? ' <span class="fs-tag">เต็มลำ</span>' : '') + '</td>'
+      + '<td>' + Math.round(n / cap * 100) + '%</td>'
+      + '<td>' + ctN(X.rev) + '</td><td>' + ctN(X.c.net) + '</td>'
+      + '<td>' + (X.p < 0 ? '−' : '+') + ctN(Math.abs(X.p)) + '</td>'
+      + '<td>' + (X.p < 0 ? '−' : '+') + ctN(Math.abs(X.p / n)) + '</td></tr>';
+  }).join('');
+  var curve = '<table class="fs-t"><thead><tr><th class="l">จำนวนคน</th><th>อัตราบรรทุก</th>'
+    + '<th>รายได้สุทธิ</th><th>ต้นทุนสุทธิ</th><th>กำไร/ขาดทุน</th><th>ต่อหัว</th></tr></thead>'
+    + '<tbody>' + curveRows + '</tbody></table>';
+
+  /* ── VAT ── */
+  var vat = '<div class="fs-g" style="grid-template-columns:repeat(3,1fr)">'
+    + '<div><span>ภาษีขาย</span><b>' + ctN(vout) + '</b></div>'
+    + '<div><span>ภาษีซื้อที่ขอคืนได้</span><b>−' + ctN(cur.c.vin) + '</b></div>'
+    + '<div><span>ต้องนำส่ง</span><b>' + ctN(Math.max(0, vout - cur.c.vin)) + '</b></div></div>';
+
+  /* ── รายละเอียดเส้นทาง · มีค่อยขึ้น ── */
+  var IA = ctItin(pl), km = ctItinKm(IA), itin = '';
+  if(IA.length){
+    itin = '<div class="fs-h2">รายละเอียดเส้นทาง</div><table class="fs-t">'
+      + '<thead><tr><th class="l">เวลา</th><th class="l">กิจกรรม</th><th>กม.</th></tr></thead><tbody>'
+      + IA.map(function(r){ return '<tr><td class="l">' + e(r.t || '') + '</td><td class="l">'
+          + e(r.a || '') + '</td><td>' + e(r.k || '—') + '</td></tr>'; }).join('')
+      + '<tr class="sum"><td class="l">รวมระยะทาง</td><td></td><td>'
+      + (km == null ? '—' : (km.toLocaleString() + ' กม.')) + '</td></tr></tbody></table>';
+  }
+
+  /* ── ของที่ลูกค้าสั่งเพิ่ม · มีค่อยขึ้น ── */
+  var odL = (T.lines || []).filter(function(ln){ return ln.od; }), od = '';
+  if(odL.length){
+    var odRows = odL.map(function(ln){
+      var C = ctOdCfg(pl, ln), L = ctEffLine(ln, pl);
+      var unit = +((L.parts || [])[0] || {}).u || 0, pct = ctOdPct(ln), u1 = pct ? 'คน' : 'ลำ';
+      var q = ctOdQty(pl, ln, { pax:pax });
+      var off = L.off || ctGrpCfg(pl, ln.g || 'อื่นๆ').off;
+      return '<tr class="' + (off ? 'dim' : '') + '"><td class="l">' + e(ln.l)
+        + (off ? ' <span class="fs-tag">ปิดอยู่</span>' : '') + '</td>'
+        + '<td>' + ctN(unit) + '/' + u1 + '</td><td>' + q + ' ' + u1 + '</td>'
+        + '<td>' + ctN(C.aR) + '</td><td>' + ctN(C.uR) + '</td></tr>';
+    }).join('');
+    var odRev = ctOdRev(pl, T, { pax:pax });
+    od = '<div class="fs-h2">ของที่ลูกค้าสั่งเพิ่ม <em>คิดตามที่สั่งจริง ไม่ใช่ทุกหัวบนเรือ</em></div>'
+      + '<table class="fs-t"><thead><tr><th class="l">รายการ</th><th>ทุน/หน่วย</th><th>คาดว่าสั่ง</th>'
+      + '<th>บริษัทได้ · เอเจนต์</th><th>บริษัทได้ · ขายเพิ่ม</th></tr></thead><tbody>' + odRows
+      + '<tr class="sum"><td class="l">รายได้ส่วนนี้ที่รวมอยู่ในกำไรข้างบนแล้ว</td><td></td><td></td>'
+      + '<td colspan="2">' + ctN(odRev * (1 - R)) + '</td></tr></tbody></table>';
+  }
+
+  /* ══ §ctTier · ราคา 5 ระดับ ══════════════════════════════════════════════
+     คำถามตอนตั้งราคาไม่ใช่ "ราคานี้กำไรเท่าไหร่" แต่คือ "ขยับราคาแล้วอะไรเปลี่ยนบ้าง"
+     ระดับล่างสุดยึดจากราคาเท่าทุน ไม่ใช่ลดจากราคาปัจจุบันลอย ๆ
+     เพราะตัวที่ต้องรู้ก่อนต่อราคาคือ "ต่ำกว่านี้ไม่ได้แล้ว" ไม่ใช่ "ลด 10% เป็นเท่าไหร่"
+     ราคาเด็กขยับตามสัดส่วนเดิมเสมอ · ไม่งั้นเทียบข้ามระดับไม่ได้ */
+  var r50 = function(v){ return Math.round(v / 50) * 50; };
+  var chRatio = (pAd > 0) ? (pCh / pAd) : 1;
+  var tierAt = function(price){
+    var q = {}; for(var k in pl) q[k] = pl[k];
+    q.price = price; q.priceCh = Math.round(price * chRatio);
+    return q;
+  };
+  var TL = [];
+  (function(){
+    var floorP = (minAd == null) ? null : Math.ceil(minAd / 50) * 50;
+    var cand = [
+      { l:'ราคาเท่าทุน',   p:floorP, why:'ที่ ' + pax + ' คน · ต่ำกว่านี้ขาดทุนทันที' },
+      { l:'เจาะตลาด',      p:r50(pAd * 0.9),  why:'ลด 10% จากราคาปัจจุบัน' },
+      { l:'ราคาปัจจุบัน',  p:pAd,             why:'ที่ตั้งไว้ในแผนนี้' },
+      { l:'ตั้งเป้า',      p:r50(pAd * 1.1),  why:'ขึ้น 10%' },
+      { l:'พรีเมียม',      p:r50(pAd * 1.2),  why:'ขึ้น 20%' }
+    ];
+    var seen = {};
+    cand.forEach(function(c){
+      if(c.p == null || !(c.p > 0) || seen[c.p]) return;
+      seen[c.p] = 1; TL.push(c);
+    });
+    TL.sort(function(a, b){ return a.p - b.p; });
+  })();
+  var tierRows = TL.map(function(c){
+    var q = tierAt(c.p);
+    var X = ctProfitAt(q, pax, T), bq = ctBreakEven(q, cap, T);
+    var below = (minAd != null && c.p < minAd);
+    var dNd = null;
+    if(RN && RN.amt > 0){
+      var pe = X.p + RN.perTrip * (1 - (RN.vat ? R : 0));
+      dNd = (pe > 0) ? Math.ceil((RN.amt * (1 - (RN.vat ? R : 0))) / (pe * RN.trips)) : null;
+    }
+    return '<tr class="' + (below ? 'dim' : (c.p === pAd ? 'be' : '')) + '">'
+      + '<td class="l">' + e(c.l) + (c.p === pAd ? ' <span class="fs-tag">ตอนนี้</span>' : '')
+        + '<div style="font-size:9.5px;color:#a39c93">' + e(c.why) + '</div></td>'
+      + '<td>' + ctN(c.p) + '</td><td>' + ctN(Math.round(c.p * chRatio)) + '</td>'
+      + '<td>' + (bq ? (bq + ' คน') : 'ไม่ถึง') + '</td>'
+      + '<td>' + (X.p < 0 ? '−' : '+') + ctN(Math.abs(X.p)) + '</td>'
+      + '<td>' + (X.rev ? Math.round(X.p / X.rev * 100) : 0) + '%</td>'
+      + '<td>' + (RN && RN.amt > 0 ? (dNd == null ? 'ไม่คุ้ม' : (dNd + ' วัน')) : '—') + '</td></tr>';
+  }).join('');
+  var tier = '<div class="fs-h2">ราคา 5 ระดับ <em>ที่ ' + pax + ' คน/ทริป · ราคาเด็กขยับตามสัดส่วนเดิม</em></div>'
+    + '<table class="fs-t"><thead><tr><th class="l">ระดับ</th><th>ผู้ใหญ่</th><th>เด็ก</th>'
+    + '<th>จุดคุ้มทุน</th><th>กำไร/ทริป</th><th>Margin</th>'
+    + '<th>' + (RN && RN.amt > 0 ? 'ต้องวิ่ง/งวด' : '—') + '</th></tr></thead><tbody>' + tierRows
+    + '</tbody></table>'
+    + '<div class="fs-note">แถวที่<b>ซีด</b>คือราคาที่ต่ำกว่าจุดเท่าทุนที่ ' + pax + ' คน · '
+    + 'รับได้เฉพาะตอนที่มั่นใจว่าจะได้คนมากกว่านี้'
+    + (RN && RN.amt > 0 ? ' · ช่องขวาสุดคือจำนวนวันที่ต้องวิ่งในหนึ่งงวดเพื่อคืนค่าเช่าทั้งก้อน' : '')
+    + '</div>';
+
+  /* ══ §ctFactLong · ทั้งสัญญา · รายเดือน + best/base/worst ════════════════
+     ขึ้นเฉพาะตอนเป็นเรือเช่าและระบุช่วงสัญญาไว้ — เพราะ "ต้องหาลูกค้ากี่คนต่อเดือน"
+     จะมีความหมายก็ต่อเมื่อมีต้นทุนก้อนที่จ่ายรายงวดไม่ว่าจะวิ่งหรือไม่
+     เรือของบริษัทไม่มีก้อนนั้น ทุกทริปที่เกินจุดคุ้มทุนคือกำไรล้วน ไม่ต้องมีโควตารายเดือน */
+  var longMon = '', longSc = '';
+  if(RN && RN.amt > 0 && RN.from && RN.to && RN.to >= RN.from){
+    var rNetTripL = RN.perTrip * (1 - (RN.vat ? R : 0));
+    var MS = ctMonthsIn(RN.from, RN.to);
+    var totCal = 0, totOp = 0, totDue = 0;
+    var monRows = MS.map(function(ym){
+      var E = ctMonthEdges(ym), SP = ctRentSpan(RN, E.a, E.b);
+      if(!SP) return '';
+      var opD = Math.round(SP.opDays);
+      totCal += SP.calDays; totOp += opD; totDue += SP.due;
+      var pEx = cur.p + rNetTripL;
+      var need = (pEx > 0) ? Math.ceil((SP.due * (1 - (RN.vat ? R : 0))) / (pEx * RN.trips)) : null;
+      var ok = (need != null && need <= opD);
+      var part = (SP.calDays < E.days);
+      var sea = ctSeasonOf(ym);
+      return '<tr class="' + (ok ? '' : 'dim') + '"><td class="l">' + e(ctMonLabel(ym))
+        + ' <span class="fs-tag' + (sea === 'lo' ? ' lo' : ' hi') + '">' + CT_SEASON_TXT[sea] + '</span>'
+        + (part ? ' <span class="fs-tag">' + SP.calDays + '/' + E.days + ' วัน</span>' : '') + '</td>'
+        + '<td>' + opD + '</td><td>' + ctN(SP.due) + '</td>'
+        + '<td>' + (need == null ? 'ไม่คุ้ม' : (need + ' วัน')) + '</td>'
+        + '<td>' + (need == null ? '—' : ctN(need * RN.trips * pax)) + '</td>'
+        + '<td>' + (need == null ? '—' : (ok ? ('เหลือ ' + (opD - need) + ' วัน') : ('เกิน ' + (need - opD) + ' วัน'))) + '</td></tr>';
+    }).join('');
+    var pExAll = cur.p + rNetTripL;
+    var needAll = (pExAll > 0) ? Math.ceil((totDue * (1 - (RN.vat ? R : 0))) / (pExAll * RN.trips)) : null;
+    var monTbl = '<table class="fs-t"><thead><tr><th class="l">เดือน</th><th>วันที่วิ่งได้</th>'
+      + '<th>ค่าเช่าที่ต้องจ่าย</th><th>ต้องวิ่ง</th><th>ต้องหาลูกค้า</th><th>เหลือ/เกิน</th></tr></thead>'
+      + '<tbody>' + monRows
+      + '<tr class="sum"><td class="l">รวมทั้งสัญญา · ' + MS.length + ' เดือน (' + totCal + ' วัน)</td>'
+      + '<td>' + totOp + '</td><td>' + ctN(totDue) + '</td>'
+      + '<td>' + (needAll == null ? 'ไม่คุ้ม' : (needAll + ' วัน')) + '</td>'
+      + '<td>' + (needAll == null ? '—' : ctN(needAll * RN.trips * pax)) + '</td>'
+      + '<td>' + (needAll == null ? '—' : (needAll <= totOp ? ('เหลือ ' + (totOp - needAll) + ' วัน') : ('เกิน ' + (needAll - totOp) + ' วัน'))) + '</td></tr>'
+      + '</tbody></table>';
+
+    /* สามฉาก · สมมติฐานเขียนติดไว้ในตาราง ไม่ใช่ซ่อนในโค้ด
+       ใครไม่เห็นด้วยกับตัวเลขจะได้เถียงถูกจุดว่าเถียงสมมติฐานไหน */
+    /* §ctSeason · สมมติฐานแยกไฮ/โลว์ · เขียนกำกับไว้ในตาราง ไม่ซ่อนในโค้ด
+       lf = สัดส่วนความจุ (null = ใช้จำนวนคนที่ตั้งไว้ในแผน) · du = วิ่งกี่ % ของวันที่มี
+       โลว์ซีซั่นไม่ได้แค่คนน้อยลง วันวิ่งก็น้อยลงด้วย · เรือหยุดตามคลื่นและตามทัวร์ที่ไม่ออก */
+    var SC = [
+      { l:'Worst case', c:'#9f1239',
+        hi:{ lf:0.45, du:0.70 }, lo:{ lf:0.25, du:0.35 } },
+      { l:'Base case',  c:'#14100C',
+        hi:{ lf:null, du:0.90 }, lo:{ lf:null, du:0.55, paxMul:0.55 } },
+      { l:'Best case',  c:'#0F6E56',
+        hi:{ lf:0.85, du:1.00 }, lo:{ lf:0.55, du:0.70 } }
+    ];
+    var rNetAllL = totDue * (1 - (RN.vat ? R : 0));
+    /* เดือนแยกฤดู · ใช้ยอดที่ไล่ไว้แล้วตอนทำตารางรายเดือน ไม่คิดซ้ำ */
+    var SEA = { hi:{ op:0, due:0, n:0 }, lo:{ op:0, due:0, n:0 } };
+    MS.forEach(function(ym){
+      var E2 = ctMonthEdges(ym), S2 = ctRentSpan(RN, E2.a, E2.b); if(!S2) return;
+      var k = ctSeasonOf(ym);
+      SEA[k].op += Math.round(S2.opDays); SEA[k].due += S2.due; SEA[k].n++;
+    });
+    var paxAt = function(cfg){
+      if(cfg.lf != null) return Math.max(1, Math.round(cap * cfg.lf));
+      return Math.max(1, Math.round(pax * (cfg.paxMul != null ? cfg.paxMul : 1)));
+    };
+    var cfgTxt = function(cfg){
+      return (cfg.lf != null ? (Math.round(cfg.lf * 100) + '% ของความจุ')
+            : (cfg.paxMul != null ? (Math.round(cfg.paxMul * 100) + '% ของคนตามแผน') : 'คนตามแผน'))
+        + ' · วิ่ง ' + Math.round(cfg.du * 100) + '%';
+    };
+    var scRows = SC.map(function(x){
+      var tot = { d:0, heads:0, gross:0 }, sub = '';
+      ['hi','lo'].forEach(function(k){
+        var cfg = x[k], S2 = SEA[k];
+        var n = paxAt(cfg), d = Math.round(S2.op * cfg.du), tp = d * RN.trips;
+        var pe = ctProfitAt(pl, n, T).p + rNetTripL;
+        var g = pe * tp;
+        tot.d += d; tot.heads += tp * n; tot.gross += g;
+        sub += '<tr class="' + (k === 'lo' ? 'dim' : '') + '">'
+          + (k === 'hi' ? ('<td class="l" rowspan="3"><b style="color:' + x.c + '">' + x.l + '</b></td>') : '')
+          + '<td class="l">' + CT_SEASON_TXT[k] + ' <span class="fs-tag">' + S2.n + ' เดือน</span>'
+          + '<div style="font-size:9.5px;color:#a39c93">' + cfgTxt(cfg) + '</div></td>'
+          + '<td>' + n + ' คน</td><td>' + d + ' วัน</td><td>' + ctN(tp * n) + '</td>'
+          + '<td>' + (g < 0 ? '−' : '+') + ctN(Math.abs(g)) + '</td>'
+          + '<td>−' + ctN(S2.due * (1 - (RN.vat ? R : 0))) + '</td>'
+          + '<td>' + (function(){ var nt = g - S2.due * (1 - (RN.vat ? R : 0));
+              return '<b style="color:' + (nt < 0 ? '#9f1239' : '#0F6E56') + '">'
+                + (nt < 0 ? '−' : '+') + ctN(Math.abs(nt)) + '</b>'; })() + '</td></tr>';
+      });
+      var net = tot.gross - rNetAllL;
+      sub += '<tr class="be"><td class="l">ทั้งปี</td><td></td><td>' + tot.d + ' วัน</td>'
+        + '<td>' + ctN(tot.heads) + '</td>'
+        + '<td>' + (tot.gross < 0 ? '−' : '+') + ctN(Math.abs(tot.gross)) + '</td>'
+        + '<td>−' + ctN(rNetAllL) + '</td>'
+        + '<td><b style="color:' + (net < 0 ? '#9f1239' : '#0F6E56') + '">'
+        + (net < 0 ? '−' : '+') + ctN(Math.abs(net)) + '</b></td></tr>';
+      return sub;
+    }).join('');
+    var scTbl = '<table class="fs-t"><thead><tr><th class="l">ฉาก</th><th class="l">ฤดู · สมมติฐาน</th>'
+      + '<th>คน/ทริป</th><th>วันวิ่ง</th><th>ลูกค้า</th><th>กำไรก่อนค่าเช่า</th><th>ค่าเช่า</th>'
+      + '<th>สุทธิ</th></tr></thead><tbody>' + scRows + '</tbody></table>'
+      + '<div class="fs-note"><b>โลว์ซีซั่นคือเดือนที่ต้องเมเนจ</b> · ค่าเช่าเดินเท่ากันทุกเดือน '
+      + 'แต่คนไม่ได้มาเท่ากัน · ' + SEA.lo.n + ' เดือนโลว์กินค่าเช่าไป ' + ctB(SEA.lo.due)
+      + ' ซึ่งต้องเอากำไรจาก ' + SEA.hi.n + ' เดือนไฮมาโปะ<br>'
+      + 'ทางลดแรงกระแทก · ต่อสัญญาให้จบก่อนเข้าโลว์ · ขอหยุดเพิ่มช่วงโลว์ · '
+      + 'หาเช่าเฉพาะไฮซีซั่น · หรือย้ายลำไปเส้นทางที่ยังวิ่งได้ช่วงมรสุม</div>';
+
+    longMon = '<div class="fs-h2">ต้องหาลูกค้าเดือนละเท่าไหร่ <em>ที่ ' + pax
+      + ' คน/ทริป · ' + e(RN.from) + ' → ' + e(RN.to) + '</em></div>' + monTbl
+      + '<div class="fs-note"><b>ค่าเช่าคิดเป็นรายวัน</b> · ' + B(RN.amt) + ' ÷ ' + RN.days + ' วัน = '
+      + B(RN.perCalDay) + '/วันตามปฏิทิน · เดือน 31 วันจึงเป็น ' + B(RN.perCalDay * 31)
+      + ' และเดือน 28 วันเป็น ' + B(RN.perCalDay * 28)
+      + ' — ถ้าสัญญาเขียนว่า "เดือนละ ' + B(RN.amt) + '" เท่ากันทุกเดือนไม่ว่าเดือนสั้นเดือนยาว '
+      + 'ยอดรวมทั้งสัญญาจะเป็น ' + B(RN.amt * MS.length) + ' ไม่ใช่ ' + ctB(totDue) + '<br>'
+      + 'เดือนที่<b>ซีด</b>คือเดือนที่ต้องวิ่งเกินจำนวนวันที่มี = ที่ราคาและจำนวนคนชุดนี้ '
+      + 'เดือนนั้นไม่มีทางคืนค่าเช่าได้ ต้องขึ้นราคา เพิ่มคนต่อรอบ หรือเพิ่มรอบต่อวัน<br>'
+      + 'เดือนที่มีป้าย <b>x/y วัน</b> คือเดือนที่สัญญาไม่ได้กินทั้งเดือน ค่าเช่าคิดตามวันที่ครอบคลุมจริง</div>';
+    longSc = '<div class="fs-h2">Best / Base / Worst case <em>ทั้งสัญญา ' + MS.length
+      + ' เดือน · ' + e(RN.from) + ' → ' + e(RN.to) + '</em></div>' + scTbl
+      + '<div class="fs-note">สามฉากนี้เป็น<b>สมมติฐาน</b>ที่เขียนกำกับไว้ในตาราง ไม่ใช่ตัวเลขที่ระบบรู้ '
+      + 'ระบบไม่รู้ว่าเดือนไหนไฮซีซั่น · ถ้าไม่เห็นด้วยกับฉากไหน ให้เถียงที่สมมติฐานในช่องซ้าย<br>'
+      + 'ค่าเช่าหักเต็มก้อนทุกฉาก เพราะจ่ายเท่ากันไม่ว่าเรือจะวิ่งหรือไม่ — นั่นคือประเด็นทั้งหมดของการเช่า</div>';
+    /* §ctFactPrio · เก็บกำไรสุทธิฉาก Base ไว้ขึ้นหัวกระดาษ · เป็นเลขที่ตอบว่า "ควรเช่าไหม" */
+    (function(){
+      var n = pax, d = Math.round(totOp * 0.85), tp = d * RN.trips;
+      _factBase = (ctProfitAt(pl, n, T).p + rNetTripL) * tp - rNetAllL;
+      _factBaseTxt = d + ' วัน · ' + ctN(tp * n) + ' หัว';
+    })();
+  } else if(RN && RN.amt > 0){
+    longSc = '<div class="fs-h2">ทั้งสัญญา</div><div class="fs-note">'
+      + 'ยังไม่ได้ใส่<b>ช่วงสัญญา</b> (วันเริ่ม–วันจบ) ในหน้าแผนคำนวณ · '
+      + 'ใส่แล้วใบนี้จะมีตารางรายเดือนว่าต้องหาลูกค้าเดือนละกี่หัว และฉาก Best/Base/Worst ทั้งสัญญาให้</div>';
+  }
+
+  var now = new Date();
+  var stamp = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-'
+            + String(now.getDate()).padStart(2, '0') + ' '
+            + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  var who = ''; try{ who = (typeof ckMe === 'function') ? String(ckMe() || '') : ''; }catch(_){ }
+  if(who === '-' || who === '\u2014') who = '';        /* ckMe คืนขีดกลางตอนยังไม่รู้ว่าใคร */
+
+  return '<div class="fs">'
+    + '<div class="fs-hd"><div><h1>' + e(pl.name || 'แผนคำนวณ') + '</h1>'
+      + '<div class="sub">' + (rtNm ? ('เส้นทาง ' + e(rtNm) + ' · ') : 'ยังไม่ผูกเส้นทาง · ')
+      + e(pl.eng || '') + ' · ' + boats + ' ลำ · ' + seats + ' ที่นั่ง/ลำ'
+      + (RN ? ' · เรือเช่า ' + e(RN.name) : (pl.boatId ? ' · ' + e(((typeof getBoat === 'function' ? getBoat(pl.boatId) : null) || {}).name || '') : ''))
+      + '</div></div>'
+      + '<div class="co">LOVE ANDAMAN<u>ต้นทุน &amp; จุดคุ้มทุน · Fact Sheet<br>ออกเมื่อ ' + e(stamp)
+      + (who ? (' · ' + e(who)) : '') + '</u></div></div>'
+    + kpiHtml()
+    /* ══ §ctFactPrio · เรียงตามลำดับที่คนอ่านต้องใช้ ไม่ใช่ตามลำดับที่เขียนโค้ด ══
+       ของเดิมเอา "พารามิเตอร์" กับ "ตารางต้นทุน 20 บรรทัด" ไว้หน้าแรก
+       ทั้งสองอันเป็นของไว้ตรวจย้อน ไม่มีใครตัดสินใจอะไรจากมัน
+       คนถือใบนี้ไปประชุมต้องการสามอย่างตามลำดับ
+         1 ตัดสินใจ   เช่าคุ้มไหม · ตั้งราคาเท่าไหร่
+         2 วางแผน     เดือนหนึ่งต้องหาลูกค้ากี่หัว · ได้กี่คนถึงเริ่มกำไร
+         3 ตรวจย้อน   ตัวเลขพวกนั้นมาจากไหน
+       ถ้าเถียงกันจบที่ชั้น 1 ก็ไม่ต้องพลิกไปชั้น 3 เลย */
+    + '<div class="fs-band"><i>1</i><b>ตัดสินใจ</b><s>'
+      + (longSc ? 'เช่าคุ้มไหม · ตั้งราคาเท่าไหร่' : 'ตั้งราคาเท่าไหร่') + '</s></div>'
+    + longSc + tier
+    + '<div class="fs-band"><i>2</i><b>วางแผน</b><s>'
+      + (longMon ? 'ต้องหาลูกค้าเท่าไหร่ · ได้กี่คนถึงเริ่มกำไร' : 'ได้กี่คนถึงเริ่มกำไร') + '</s></div>'
+    + longMon
+    + '<div class="fs-h2">กำไรตามจำนวนคน</div>' + curve
+    + '<div class="fs-h2">ต่อหัว &amp; ที่มาของจุดคุ้มทุน</div>' + econ
+    + '<div class="fs-band ref"><i>3</i><b>ที่มาของตัวเลข</b><s>ไว้ตรวจย้อน · คำนวณซ้ำเองได้ทุกช่อง</s></div>'
+    + rent
+    + '<div class="fs-h2">ต้นทุนต่อทริป <em>ที่ ' + pax + ' คน · สุทธิคือหลังหัก VAT ซื้อที่ขอคืนได้แล้ว</em></div>' + costTbl
+    + od
+    + '<div class="fs-h2">VAT ต่อทริป</div>' + vat
+    + '<div class="fs-h2">พารามิเตอร์ที่ใช้คำนวณ</div>' + params
+    + itin
+    + '<div class="fs-foot"><span>ตัวเลขคิดสดจากสูตรกลาง ณ เวลาที่พิมพ์ · '
+      + 'สูตรกลางแก้เมื่อไหร่ ใบนี้จะไม่ตรงกับหน้าจออีก</span>'
+      + '<span>' + e(stamp) + '</span></div></div>';
+}
+function ctFactPrint(){
+  var pl = ctPlan(_ct.pid);
+  if(!pl){ alert('ยังไม่ได้เลือกแผน'); return; }
+  var title = 'Fact Sheet · ' + (pl.name || 'แผนคำนวณ');
+  var html = '<!doctype html><html lang="th"><head><meta charset="utf-8"><title>' + ctE(title) + '</title>'
+    + '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&family=DM+Mono:wght@400;700&display=swap" rel="stylesheet">'
+    + ctFactCss() + '</head><body>'
+    + '<div class="fs-tool"><b>Fact Sheet</b><span class="h">' + ctE(pl.name || '')
+      + ' · A4 แนวตั้ง · ตัวเลขคิดสด ณ เวลาที่เปิดหน้านี้</span>'
+    + '<button onclick="window.print()">&#128424; พิมพ์ / บันทึก PDF</button></div>'
+    + ctFactSheet(pl) + '</body></html>';
+  var w = window.open('', '_blank');
+  if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ของเว็บนี้ก่อน'); return; }
+  w.document.write(html); w.document.close(); w.focus();
 }
 
 // ── แท็บ 1 · แผนคำนวณ ───────────────────────────────────────────────────────────────────────────
@@ -25980,7 +28697,8 @@ function ctPlanHtml(){
   if(!_ct.pid || !P.filter(function(x){ return x.id === _ct.pid; }).length) _ct.pid = P[0].id;
   var pl = ctPlan(_ct.pid), T = ctTpl(), R = ctVatR(T);
   var pax = Math.max(1, +pl.pax || 1);
-  var cap = Math.max(1, (+pl.cap || 65) * Math.max(1, +pl.boats || 1));
+  var capPer = ctPlanSeats(pl);                          /* §boatRent · ปักเรือไว้ = อิงที่นั่งของลำนั้น */
+  var cap = Math.max(1, capPer * Math.max(1, +pl.boats || 1));
   var cur = ctProfitAt(pl, pax, T);
   /* §ctChd · ภาษีขายคิดจากยอดขายจริง ซึ่งมีทั้งราคาผู้ใหญ่และราคาเด็ก */
   var _pCh = (pl.priceCh != null && pl.priceCh !== '') ? (+pl.priceCh || 0) : (+pl.price || 0);
@@ -25992,12 +28710,13 @@ function ctPlanHtml(){
   // ── แถบซ้าย · รายการแผน ──
   var items = P.map(function(x){
     var on = (x.id === _ct.pid);
-    var xcap = Math.max(1, (+x.cap || 65) * Math.max(1, +x.boats || 1));
+    var xcap = Math.max(1, ctPlanSeats(x) * Math.max(1, +x.boats || 1));   /* §boatRent */
     var b = ctBreakEven(x, xcap, T);
     return '<button class="ct-rt' + (on ? ' on' : '') + '" onclick="ctPickPlan(\'' + x.id + '\')">'
       + '<span class="ct-rt-ic">' + ctIcon(on ? 'compass' : 'anchor', 17) + '</span>'
       + '<span class="ct-rt-body"><span class="ct-rt-nm">' + ctE(x.name) + (on ? '<i class="ct-dot"></i>' : '') + '</span>'
-      + '<span class="ct-rt-sub">' + ctE(x.eng) + ' · จุ ' + (+x.cap || 0) + (+x.boats > 1 ? (' × ' + x.boats + ' ลำ') : '') + ' · ' + ctB(x.price) + '/หัว</span>'
+      + '<span class="ct-rt-sub">' + ctE(x.eng) + ' · จุ ' + ctPlanSeats(x) + (+x.boats > 1 ? (' × ' + x.boats + ' ลำ') : '') + ' · ' + ctB(x.price) + '/หัว'
+      + (ctRentOf(x.boatId) ? ' · <b style="color:#B45309">เรือเช่า</b>' : '') + '</span>'
       + '<span class="ct-rt-badge' + (b ? '' : ' warn') + '">' + (b ? ('คุ้มทุน ' + b + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</span></span></button>';
   }).join('');
   var side = '<aside class="ct-side"><div class="ct-side-h">แผนคำนวณ · ' + P.length + '</div>' + items
@@ -26017,6 +28736,8 @@ function ctPlanHtml(){
                 + ctE(r.name || r.id) + '</option>'; }).join('')
           + '</optgroup>'; }).join('')
     + '</select></div>'
+    + '<button class="ct-ib" title="Fact Sheet · สรุปแผนนี้ลงกระดาษ A4 / บันทึก PDF" onclick="ctFactPrint()">'
+      + ctIcon('printer', 15) + '</button>'                                   /* §ctFact */
     + '<button class="ct-ib" title="คัดลอกแผน" onclick="ctDupPlan()">' + ctIcon('copy', 15) + '</button>'
     + '<button class="ct-ib danger" title="ลบแผน" onclick="ctDelPlan()">' + ctIcon('trash', 15) + '</button></div>';
 
@@ -26028,7 +28749,15 @@ function ctPlanHtml(){
     + '<div class="ct-grid8">'
     + fld('เครื่องยนต์', '<select class="ct-in wide" onchange="ctPlanSet(\'eng\',this.value)">'
         + ['3EN','4EN'].map(function(e){ return '<option' + (pl.eng === e ? ' selected' : '') + '>' + e + '</option>'; }).join('') + '</select>')
-    + fld('จำนวนลำ', inp('boats')) + fld('ความจุ/ลำ (คน)', inp('cap'))
+    + fld('จำนวนลำ', inp('boats'))
+    /* §boatRent · ปักเรือไว้แล้ว ที่นั่งมาจากทะเบียนเรือ · ปล่อยให้พิมพ์ทับได้เมื่อไหร่
+       จุดคุ้มทุนจะคิดบนความจุที่ไม่มีอยู่จริงทันที */
+    + fld(pl.boatId ? 'ความจุ/ลำ (จากทะเบียนเรือ)' : 'ความจุ/ลำ (คน)',
+        pl.boatId
+          ? ('<input class="ct-in wide" value="' + capPer + '" readonly'
+             + ' title="มาจากทะเบียนเรือ ' + ctE((getBoat(pl.boatId) || {}).name || '') + ' · แก้ที่หน้าเรือ"'
+             + ' style="background:var(--sd50);color:rgba(74,62,54,.55);cursor:not-allowed">')
+          : inp('cap'))
     + fld('จำนวนคนที่คาด', inp('pax', 1), 1) + fld('คนไทยกี่คน', inp('paxTH'))
     /* §ctChd · ราคาเด็กแยกจากผู้ใหญ่ · ว่าง = คิดเท่าผู้ใหญ่ ไม่ใช่ฟรี */
     + fld('ราคาผู้ใหญ่', inp('price'))
@@ -26048,6 +28777,213 @@ function ctPlanHtml(){
         : '\u0e15\u0e31\u0e49\u0e07 <b>\u0e40\u0e14\u0e47\u0e01\u0e01\u0e35\u0e48 %</b> \u0e41\u0e25\u0e49\u0e27\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19\u0e08\u0e30\u0e04\u0e34\u0e14\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49\u0e41\u0e22\u0e01\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48/\u0e40\u0e14\u0e47\u0e01\u0e43\u0e2b\u0e49 \u00b7 '
           + '\u0e40\u0e14\u0e47\u0e01 0% = \u0e17\u0e38\u0e01\u0e2b\u0e31\u0e27\u0e08\u0e48\u0e32\u0e22\u0e23\u0e32\u0e04\u0e32\u0e40\u0e14\u0e35\u0e22\u0e27\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e40\u0e14\u0e34\u0e21')
     + '</div></div>';
+
+  /* ══ §boatRent · การ์ดเรือ & ค่าเช่า ═══════════════════════════════════════
+     ค่าเช่าเป็นตัวเลขที่ผู้ใช้ระบุเอง · เลือกได้ว่าเหมาทั้งลำ หรือคิดต่อที่นั่ง
+     (ต่อที่นั่งอิงที่นั่งของลำที่ปักไว้ ไม่ใช่เลขที่พิมพ์เอง) */
+  var RN = ctRentOf(pl.boatId);
+  var rentHtml = (function(){
+    var BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){ return !b.retired; });
+    var bid = pl.boatId || '';
+    var pick = '<select class="ct-in wide" onchange="ctPlanSet(\'boatId\',this.value)">'
+      + '<option value="">— ไม่ปักลำ · ใช้ความจุที่พิมพ์เอง —</option>'
+      + BL.map(function(b){
+          var rr = ctRentRaw(b.id);
+          return '<option value="' + ctE(b.id) + '"' + (bid === b.id ? ' selected' : '') + '>'
+            + ctE(b.name) + ' · ' + (+b.cap || 0) + ' ที่นั่ง' + ((rr && rr.on) ? ' · เรือเช่า' : '') + '</option>';
+        }).join('') + '</select>';
+
+    var head = '<div class="ct-cath"><span>' + ctIcon('anchor', 15) + '<b>เรือที่ใช้ &amp; ค่าเช่า</b>'
+      + '<span class="ct-u" style="margin-left:8px">' + (RN ? ('เรือเช่า · ' + ctB(RN.perTrip) + '/ทริป') : 'เรือของบริษัท') + '</span></span></div>';
+
+    if(!bid) return '<div class="ct-card ct-catcard ct-rent">' + head
+      + '<div class="ct-rentbody"><div class="ct-rrow"><label class="ct-f grow"><span>ปักเรือลำที่ใช้</span>' + pick + '</label></div>'
+      + '<div class="ct-hint" style="padding:0">ปักลำไว้แล้วความจุจะอิงที่นั่งของลำนั้นเอง · '
+      + 'และถ้าลำนั้นเป็น<b>เรือเช่า</b> ค่าเช่าจะเข้าสูตรให้อัตโนมัติ พร้อมตัดบรรทัดที่เจ้าของเรือรับผิดชอบออก</div></div></div>';
+
+    var rr = ctRentRaw(bid) || ctRentBlank();
+    var on = !!(rr.on && ctRentRaw(bid));
+    var bN = (getBoat(bid) || {}).name || bid;
+    var RS = function(k, v, w, ph){
+      return '<input class="ct-in" data-fk="rn.' + bid + '.' + k + '" value="' + ((rr[k] == null || rr[k] === 0) && ph != null ? '' : ctE(rr[k]))
+        + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)"'
+        + ' style="width:' + (w || 84) + 'px">'; };
+    var body = '<div class="ct-rentbody">'
+      + '<div class="ct-rrow"><label class="ct-f grow"><span>ปักเรือลำที่ใช้</span>' + pick + '</label>'
+      + '<label class="ct-rchk big"><input type="checkbox"' + (on ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'on\',this.checked?1:0)"> <b>' + ctE(bN) + ' เป็นเรือเช่า</b></label></div>';
+
+    /* §boatFuel · ขึ้นทั้งเรือเช่าและเรือบริษัท · ความกินน้ำมันไม่ได้ขึ้นกับว่าใครเป็นเจ้าของ */
+    var fuelBox = (function(){
+      var fl = (T.lines || []).filter(function(x){
+        return (x.parts || []).some(function(p){ return p.fuel; }); })[0];
+      var baseQ = 0, perPax = 0;
+      if(fl){
+        var L = ctEffLine(fl, pl);
+        (L.parts || []).forEach(function(p){
+          if(!p.fuel) return;
+          if(p.k === 'fix') baseQ += (pl.eng === '4EN' && p.q4 != null) ? (+p.q4 || 0) : (+p.q || 0);
+          else if(p.k === 'var') perPax += (+p.q || 0);
+        });
+      }
+      var mul = (rr.fuelMul == null || rr.fuelMul === '') ? 100 : +rr.fuelMul;
+      var m = (mul > 0) ? mul / 100 : 1;
+      var totBase = baseQ + perPax * pax, totNow = totBase * m;
+      return '<div class="ct-rsec"><div class="ct-rsech">น้ำมัน · ลำนี้กินเท่าไหร่เทียบกับสูตรกลาง</div>'
+        + '<div class="ct-rrow">'
+        + '<label class="ct-f"><span>เทียบสูตรกลาง</span>'
+        + '<input class="ct-in" data-fk="rn.' + bid + '.fuelMul" value="' + ctE(mul) + '"'
+        + ' onchange="ctRentSet(\'' + bid + '\',\'fuelMul\',this.value)"'
+        + ' oninput="ctRentSet(\'' + bid + '\',\'fuelMul\',this.value)" style="width:78px"></label>'
+        + '<span class="ct-u" style="align-self:end;padding-bottom:9px">% · 100 = เท่าสูตรกลาง</span>'
+        + '<div class="ct-rcalc" style="flex:1;min-width:220px">สูตรกลาง <b>' + ctN(totBase)
+        + ' ลิตร</b>/ทริป ที่ ' + pax + ' คน → ลำนี้ <b>' + ctN(totNow) + ' ลิตร</b>'
+        + (m !== 1 ? (' (' + (m > 1 ? '+' : '−') + ctN(Math.abs(totNow - totBase)) + ' ลิตร · '
+                      + ctB(Math.abs(totNow - totBase) * (+pl.fuel || 0)) + '/ทริป)') : '')
+        + '</div></div>'
+        + '<div class="ct-hint" style="padding:0">ตัวคูณนี้ผูกกับ<b>ลำ</b> · ลิตรต่อทริปขึ้นกับ<b>เส้นทาง</b> '
+        + '(สิมิลันไกลกว่าพีพีเยอะ) ลำเดียวกันวิ่งสองเส้นทางได้ลิตรคนละเลข แต่ % เท่าเดิม<br>'
+        + 'รู้ลิตรจริงของเส้นทางนี้แน่ ๆ → ตั้งที่แท็บ <b>ปรับ / ปิด รายแผน</b> ซึ่งเป็นรายเส้นทาง · สองอันคูณกัน<br>'
+        + 'มีผลกับ<b>ค่าประมาณ</b>เท่านั้น · ทริปที่ลงลิตรจริงจากใบงานเรือแล้ว P&amp;L จะใช้ของจริงทับอยู่ดี</div></div>';
+    })();
+
+    if(!on){
+      body += '<div class="ct-hint" style="padding:0">เรือของบริษัท · คิดค่าเสื่อม กัปตัน เด็กเรือ ตามสูตรกลางเหมือนเดิม</div>'
+        + fuelBox + '</div>';
+      return '<div class="ct-card ct-catcard ct-rent">' + head + body + '</div>';
+    }
+
+    var seats = RN ? RN.seats : (+(getBoat(bid) || {}).cap || 0);
+    var md = rr.mode || 'lump';
+    body += '<div class="ct-rsec"><div class="ct-rsech">เงื่อนไขสัญญา · เป็นของเรือลำนี้ ใช้ร่วมทุกเส้นทางที่ลำนี้วิ่ง</div>'
+      + '<div class="ct-rrow">'
+      + '<label class="ct-rchk"><input type="radio" name="rmode"' + (md === 'lump' ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'lump\')"> เหมาทั้งลำ</label>'
+      + '<label class="ct-rchk"><input type="radio" name="rmode"' + (md === 'seat' ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'seat\')"> คิดต่อที่นั่ง × ' + seats + ' ที่นั่ง</label>'
+      + '</div><div class="ct-rrow">'
+      + (md === 'seat'
+          ? ('<label class="ct-f"><span>ค่าเช่า/ที่นั่ง/งวด</span>' + RS('seat', rr.seat, 96) + '</label>')
+          : ('<label class="ct-f"><span>ค่าเช่า/งวด (บาท)</span>' + RS('amt', rr.amt, 110) + '</label>'))
+      + '<label class="ct-f"><span>วันในงวด</span>' + RS('days', rr.days, 70, 30) + '</label>'
+      + '<label class="ct-f"><span>วันหยุดตามตกลง</span>' + RS('off', rr.off, 70, 0) + '</label>'
+      + '<label class="ct-f"><span>รอบต่อวัน</span>' + RS('trips', rr.trips, 70, 1) + '</label>'
+      + '<label class="ct-rchk" style="align-self:end;padding-bottom:8px"><input type="checkbox"' + (rr.vat ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'vat\',this.checked?1:0)"> ค่าเช่ามี VAT ขอคืนได้</label>'
+      + '</div>'
+      /* §rentSpan · ช่วงสัญญา · ก่อนเริ่ม/หลังจบ เรือกลับไปเป็นเรือปกติเองทั้งชุด */
+      + '<div class="ct-rrow">'
+      + '<label class="ct-f"><span>สัญญาเริ่ม</span><input type="date" class="ct-in" style="width:150px"'
+        + ' data-fk="rn.' + bid + '.from" value="' + ctE(rr.from || '') + '"'
+        + ' onchange="ctRentSet(\'' + bid + '\',\'from\',this.value)"></label>'
+      + '<label class="ct-f"><span>สัญญาจบ</span><input type="date" class="ct-in" style="width:150px"'
+        + ' data-fk="rn.' + bid + '.to" value="' + ctE(rr.to || '') + '"'
+        + ' onchange="ctRentSet(\'' + bid + '\',\'to\',this.value)"></label>'
+      + '<span class="ct-u" style="align-self:end;padding-bottom:9px">ว่าง = ไม่จำกัด · '
+        + 'นอกช่วงนี้ลำนี้คิดแบบเรือบริษัทตามปกติ</span>'
+      + '</div>';
+
+    if(RN && RN.amt > 0){
+      body += '<div class="ct-rcalc">' + ctB(RN.amt) + ' ÷ (' + RN.days + ' − ' + RN.off + ' วันหยุด) = <b>'
+        + ctB(RN.perDay) + '/วันวิ่ง</b>'
+        + (RN.trips > 1 ? (' ÷ ' + RN.trips + ' รอบ = <b>' + ctB(RN.perTrip) + '/ทริป</b>') : '')
+        + ' · มีให้วิ่ง ' + RN.runDays + ' วัน/งวด</div>';
+    } else {
+      body += '<div class="ct-rcalc warn">ยังไม่ได้ใส่ค่าเช่า · บรรทัดค่าเช่าจึงยังไม่เข้าสูตร</div>';
+    }
+    body += '</div>';
+
+    body += fuelBox;                                    /* §boatFuel */
+
+    /* เจ้าของเรือรับผิดชอบอะไรบ้าง · ตั้งต้นตามดีลที่คุยกันไว้ แต่ดีลอื่นเปลี่ยนได้ */
+    body += '<div class="ct-rsec"><div class="ct-rsech">เจ้าของเรือรับผิดชอบ · ติ๊กไว้ = ตัดออกจากต้นทุนของเรา</div>'
+      + '<div class="ct-rrow">' + CT_RENT_EX.map(function(e){
+          return '<label class="ct-rchk" title="' + ctE(e.why) + '"><input type="checkbox"'
+            + ((RN && RN.ex[e.id]) ? ' checked' : '')
+            + ' onchange="ctRentSet(\'' + bid + '\',\'ex.' + e.id + '\',this.checked?1:0)"> ' + ctE(e.l) + '</label>';
+        }).join('') + '</div>'
+      + '<div class="ct-hint" style="padding:0">น้ำมันเรือ<b>ไม่อยู่ในลิสต์นี้</b> เพราะผู้เช่าเป็นคนจ่ายเอง · ยังคิดตามสูตรเดิมทุกบาท</div></div>';
+
+    /* จุดคุ้มทุนชั้นที่สอง · กี่วัน/งวด ถึงจะคุ้มค่าเช่าทั้งก้อน
+       ชั้นแรก (กี่คนต่อทริป) มีอยู่แล้วในการ์ด KPI · ชั้นนี้คือตัวที่บอกว่า "ควรเช่าไหม" */
+    if(RN && RN.amt > 0){
+      var rentNetTrip = RN.perTrip * (1 - (RN.vat ? R : 0));
+      var rentNetAll  = RN.amt * (1 - (RN.vat ? R : 0));
+      var pEx  = cur.p + rentNetTrip;                    /* กำไรต่อทริปก่อนหักค่าเช่า */
+      var dNd  = (pEx > 0) ? Math.ceil(rentNetAll / (pEx * RN.trips)) : null;
+      var okD  = (dNd != null && dNd <= RN.runDays);
+      body += '<div class="ct-rbe' + (okD ? ' ok' : ' bad') + '">'
+        + '<span class="ct-rbe-lb">จุดคุ้มทุนของค่าเช่า</span>'
+        + (dNd == null
+            ? ('<b>ที่ ' + pax + ' คน วิ่งกี่วันก็ไม่คุ้ม</b> · กำไรก่อนค่าเช่าติดลบ ' + ctB(Math.abs(pEx)) + '/ทริป')
+            : ('<b>ต้องวิ่ง ' + dNd + ' วัน/งวด</b> ที่ ' + pax + ' คน/ทริป จึงจะคุ้มค่าเช่า '
+               + ctB(RN.amt) + ' · มีให้วิ่ง ' + RN.runDays + ' วัน'
+               + (okD ? (' · เหลือหายใจ ' + (RN.runDays - dNd) + ' วัน') : ' · <b>เกินจำนวนวันที่มี</b>')))
+        + '</div>';
+      body += '<div class="ct-hint" style="padding:6px 0 0">'
+        + '⚠ <b>P&amp;L รายทริปลงค่าเช่าตามทริปที่วิ่งจริง</b> ไม่ใช่เต็มก้อน · วิ่งน้อยกว่า ' + RN.runDays
+        + ' วัน ค่าเช่าจะลงไม่ครบและกำไรจะดูสวยเกินจริง '
+        + 'ส่วนที่ขาดคือ<b>ค่าเช่าวันที่เรือไม่ได้วิ่ง</b> ซึ่งไปโผล่ที่ '
+        + '<b>P&amp;L รายทริป → รายเดือน → Unabsorbed boat rent</b></div>';
+
+      /* ══ §rentPlan · ตารางวางแผน · "ต้องหาลูกค้ากี่คนต่อเดือน" ══════════════
+         คำถามจริงตอนตัดสินใจเช่าไม่ใช่ "ทริปนี้กำไรเท่าไหร่" แต่คือ
+         "ทั้งเดือนต้องขายให้ได้กี่หัว ค่าเช่าถึงจะไม่กิน"
+         ยิ่งคนต่อทริปเยอะ ยิ่งใช้วันน้อยลง แต่หัวรวมทั้งเดือนอาจไม่ได้ลดตาม
+         ตารางนี้จึงโชว์ทั้งสองตัว ให้เลือกได้ว่าจะไล่วันหรือไล่หัว */
+      var lv = {}, capAll = cap;
+      [0.2, 0.35, 0.5, 0.65, 0.8, 1].forEach(function(f){ lv[Math.max(1, Math.round(capAll * f))] = 1; });
+      lv[pax] = 1;
+      var levels = Object.keys(lv).map(Number).sort(function(a, b){ return a - b; });
+      var prows = levels.map(function(n){
+        var pN  = ctProfitAt(pl, n, T).p;
+        var pEx = pN + rentNetTrip;                       /* กำไรก่อนแบกค่าเช่า */
+        var dN  = (pEx > 0) ? Math.ceil(rentNetAll / (pEx * RN.trips)) : null;
+        var ok  = (dN != null && dN <= RN.runDays);
+        var heads = ok ? (dN * RN.trips * n) : null;
+        var hi = (n === pax);
+        return '<tr class="' + (ok ? '' : 'ct-rbad') + (hi ? ' ct-rnow' : '') + '">'
+          + '<td><b>' + n + '</b> คน' + (hi ? ' <span class="ct-u">← ที่ตั้งไว้</span>' : '')
+            + (n === capAll ? ' <span class="ct-u">เต็มลำ</span>' : '') + '</td>'
+          + '<td class="ct-r">' + (pEx >= 0 ? '' : '−') + ctB(Math.abs(pEx)) + '</td>'
+          + '<td class="ct-r">' + (dN == null ? '<span class="ct-u">ไม่คุ้ม</span>'
+              : (dN + ' วัน' + (ok ? '' : ' <span class="ct-u">เกิน ' + RN.runDays + '</span>'))) + '</td>'
+          + '<td class="ct-r"><b>' + (heads == null ? '—' : heads.toLocaleString()) + '</b></td>'
+          + '<td class="ct-r">' + (pN >= 0 ? '+' : '−') + ctB(Math.abs(pN)) + '</td></tr>';
+      }).join('');
+      /* สรุปทั้งสัญญา · ใช้วางแผนทั้งปี ไม่ใช่แค่เดือนเดียว */
+      var spanTxt = '';
+      if(RN.from && RN.to && RN.to >= RN.from){
+        var nd = ctYmdDiff(RN.from, RN.to), tot = RN.perCalDay * nd;
+        spanTxt = '<div class="ct-rcalc">ทั้งสัญญา ' + RN.from + ' → ' + RN.to + ' · ' + nd + ' วัน ('
+          + (Math.round(nd / 30 * 10) / 10) + ' งวด) · ค่าเช่ารวม <b>' + ctB(tot) + '</b>'
+          /* ที่จำนวนคนซึ่งวิ่งกี่วันก็ไม่พอในหนึ่งงวด อย่าไปคูณยาวเป็นทั้งสัญญา
+             จะได้เลขวันที่ดูเหมือนทำได้ ทั้งที่งวดหนึ่งยังไม่ผ่านเลย */
+          + ' · ที่ ' + pax + ' คน/ทริป '
+          + (!okD ? '<b style="color:#9f1239">ไม่คุ้มตั้งแต่งวดแรก</b>'
+                  : ('ต้องวิ่งรวม <b>' + Math.ceil(dNd * nd / RN.days) + ' วัน</b> จาก '
+                     + Math.round(nd * RN.runDays / RN.days) + ' วันที่มี')) + '</div>';
+      } else {
+        spanTxt = '<div class="ct-rcalc warn">ยังไม่ได้ใส่ช่วงสัญญา · ใส่แล้วจะคำนวณยอดรวมทั้งสัญญาให้ '
+          + 'และเรือจะกลับไปคิดแบบเรือบริษัทเองเมื่อพ้นสัญญา</div>';
+      }
+      body += '<div class="ct-rsec"><div class="ct-rsech">วางแผน · ต้องหาลูกค้าเท่าไหร่ถึงจะคุ้มค่าเช่า '
+        + ctB(RN.amt) + '/งวด</div>'
+        + '<div class="ct-rscroll"><table class="ct-rtbl">'
+        + '<thead><tr><th>คน/ทริป</th><th class="ct-r">กำไร/ทริป<br><span class="ct-u">ก่อนค่าเช่า</span></th>'
+        + '<th class="ct-r">ต้องวิ่ง<br><span class="ct-u">วัน/งวด</span></th>'
+        + '<th class="ct-r">ลูกค้าทั้งงวด<br><span class="ct-u">รวมกี่หัว</span></th>'
+        + '<th class="ct-r">กำไร/ทริป<br><span class="ct-u">หลังค่าเช่า</span></th></tr></thead>'
+        + '<tbody>' + prows + '</tbody></table></div>'
+        + spanTxt + '</div>';
+    }
+    if(+pl.boats > 1){
+      body += '<div class="ct-rcalc warn">แผนนี้ตั้งไว้ ' + (+pl.boats) + ' ลำ แต่ค่าเช่าคิดจากสัญญาของลำเดียว · '
+        + 'ลำอื่นที่วิ่งด้วยจะไม่มีค่าเช่าในสูตรนี้</div>';
+    }
+    body += '</div>';
+    return '<div class="ct-card ct-catcard ct-rent on">' + head + body + '</div>';
+  })();
 
   /* §ctOd · ของที่ลูกค้าสั่งเพิ่ม · แยกสองช่องทาง แยกรายเส้นทาง (แผน 1 แผน = 1 เส้นทาง)
      ต้นทุนยังมาจากสูตรกลาง · ที่กรอกตรงนี้คือจำนวนที่คาดกับเงินที่บริษัทได้จริงต่อหน่วย */
@@ -26288,7 +29224,7 @@ function ctPlanHtml(){
     + '<div class="ct-ifoot"><span>รวมระยะทาง</span><b>' + (km == null ? '—' : km.toLocaleString()) + ' กม.</b></div>'
     + '</div></div>';
 
-  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi
+  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + rentHtml + kpi
     + '<div class="ct-trio">' + itin + chart + pnl + '</div>'
     + odHtml
     + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
@@ -26762,7 +29698,8 @@ function ctGrpOpenAll(){
 }
 function ctPlanSet(k, v){
   var pl = ctPlan(_ct.pid); if(!pl) return;
-  pl[k] = (k === 'name' || k === 'eng' || k === 'famId' || k === 'note') ? v : ((v === '') ? 0 : (+v || 0));
+  pl[k] = (k === 'name' || k === 'eng' || k === 'famId' || k === 'note' || k === 'boatId')   /* §boatRent */
+        ? v : ((v === '') ? 0 : (+v || 0));
   ctPlanPut(pl); ctRender();
 }
 // §ctAllKeys · ตั้งค่าของแผนที่ระบุ pid ตรงๆ ใช้จากหัวคอลัมน์ในแท็บปรับ/ปิด
@@ -26893,9 +29830,201 @@ function ctLineKeys(ln){
   return out;
 }
 function ctToggleExp(lineId){ _ct.exp = _ct.exp || {}; if(_ct.exp[lineId]) delete _ct.exp[lineId]; else _ct.exp[lineId] = 1; ctRender(); }
+/* ══ §ctCellNav · เดินตารางด้วยลูกศรแบบสเปรดชีต ═══════════════════════════
+   ตารางนี้กว้าง 8 คอลัมน์ ทุกคอลัมน์หน้าตาเหมือนกันหมด ต่างกันแค่ตัวเลข
+   ปัญหาจริงจึงไม่ใช่แค่ "มองไม่เห็นหัว" แต่คือ "กรอกผิดช่องแล้วไม่รู้ตัว"
+   → ช่องที่โฟกัสอยู่มีกรอบ · แถวกับคอลัมน์ของมันสว่างเป็นกากบาท
+     และแถบบนบอกเป็นตัวหนังสือว่ากำลังอยู่ที่ทริปไหน รายการอะไร
+
+   ผูกที่ document ด้วย event delegation ครั้งเดียว ไม่ต้องผูกใหม่ทุกครั้งที่วาดตาราง
+   (ctOvrHtml ถูกเรียกใหม่ทุกครั้งที่แก้ค่าสักช่อง ถ้าไปผูกที่ตัวตารางจะหลุดทุกรอบ)
+
+   ⚠ ลูกศรซ้าย/ขวาใน input ต้องเลื่อนเคอร์เซอร์ตามปกติ ห้ามยึดไปใช้หมด
+     ไม่งั้นแก้เลขกลางช่องไม่ได้เลย · จึงข้ามคอลัมน์เฉพาะตอนเคอร์เซอร์อยู่สุดขอบแล้ว
+     (ซ้ายสุดแล้วกดซ้ายอีก = ข้ามไปทริปก่อนหน้า) เหมือนที่สเปรดชีตทำ */
+var _ctNavFk = null;      /* จำช่องล่าสุดไว้ด้วย data-fk · หลังวาดใหม่จะกลับไปโฟกัสช่องเดิมได้ */
+
+function ctNavCells(col){
+  /* ช่องที่คีย์ได้จริงในคอลัมน์นั้น เรียงตามลำดับบนลงล่าง */
+  var sel = '.ct-sheet .ct-otbl td[data-col="' + col + '"] input.ct-in';
+  return [].slice.call(document.querySelectorAll(sel)).filter(function(n){
+    return !n.disabled && n.offsetParent !== null;
+  });
+}
+function ctNavMark(inp){
+  var td = inp && inp.closest ? inp.closest('td[data-col]') : null;
+  document.querySelectorAll('.ct-sheet .ct-cellon,.ct-sheet .ct-colon,.ct-sheet .ct-rowon')
+    .forEach(function(n){ n.classList.remove('ct-cellon','ct-colon','ct-rowon'); });
+  var ref = document.getElementById('ct-navref'), val = document.getElementById('ct-navval');
+  if(!td){ if(ref) ref.textContent = 'คลิกช่องไหนก็ได้ แล้วใช้ลูกศรเดินต่อ'; if(val) val.textContent = ''; return; }
+  _ctNavFk = inp.getAttribute('data-fk') || null;
+  td.classList.add('ct-cellon');
+  var col = td.getAttribute('data-col');
+  document.querySelectorAll('.ct-sheet .ct-otbl [data-col="' + col + '"]')
+    .forEach(function(n){ if(n !== td) n.classList.add('ct-colon'); });
+  var tr = td.parentElement;
+  if(tr){ var h = tr.querySelector('td.ct-stick'); if(h) h.classList.add('ct-rowon'); }
+  if(ref) ref.textContent = (td.getAttribute('data-trip') || '') + '  ·  ' + (td.getAttribute('data-line') || '');
+  if(val) val.textContent = inp.value === '' ? (inp.placeholder ? ('ใช้สูตรกลาง · ' + inp.placeholder) : '') : inp.value;
+}
+document.addEventListener('focusin', function(e){
+  var inp = e.target;
+  if(!inp || inp.tagName !== 'INPUT' || !inp.classList.contains('ct-in')) return;
+  if(!inp.closest('.ct-sheet')) return;
+  ctNavMark(inp);
+});
+document.addEventListener('input', function(e){
+  var inp = e.target, val = document.getElementById('ct-navval');
+  if(val && inp && inp.classList && inp.classList.contains('ct-in') && inp.closest('.ct-sheet')) val.textContent = inp.value;
+});
+document.addEventListener('keydown', function(e){
+  var inp = e.target;
+  if(!inp || inp.tagName !== 'INPUT' || !inp.classList.contains('ct-in')) return;
+  var td = inp.closest ? inp.closest('td[data-col]') : null;
+  if(!td || !inp.closest('.ct-sheet')) return;
+  var K = e.key, down = (K === 'ArrowDown' || K === 'Enter'), up = (K === 'ArrowUp');
+  var left = (K === 'ArrowLeft'), right = (K === 'ArrowRight');
+  if(!down && !up && !left && !right) return;
+  if(e.altKey || e.ctrlKey || e.metaKey) return;
+
+  if(left || right){
+    /* ยังเลื่อนเคอร์เซอร์ในช่องได้อยู่ · ข้ามคอลัมน์เฉพาะตอนสุดขอบแล้วเท่านั้น */
+    var st = inp.selectionStart, en = inp.selectionEnd;
+    if(st !== en) return;
+    if(left  && st !== 0) return;
+    if(right && st !== String(inp.value).length) return;
+    var col = +td.getAttribute('data-col') + (left ? -1 : 1);
+    var sib = td.parentElement ? td.parentElement.querySelector('td[data-col="' + col + '"] input.ct-in') : null;
+    if(!sib || sib.disabled) return;
+    e.preventDefault(); sib.focus(); sib.select(); ctNavMark(sib);
+    return;
+  }
+  var list = ctNavCells(td.getAttribute('data-col'));
+  var i = list.indexOf(inp);
+  if(i < 0) return;
+  var next = list[i + (down ? 1 : -1)];
+  if(!next) return;
+  e.preventDefault(); next.focus(); next.select(); ctNavMark(next);
+});
+
+/* ══ §btPinFit · ตรึงก็ต่อเมื่อยังเหลือที่ให้อ่านพอ ═══════════════════════
+   §btPin รอบแรกกั้นด้วย min-width:821px อย่างเดียว ซึ่งผิด — ความกว้างไม่ได้บอกว่า
+   ก้อนหัวจะสูงแค่ไหน · การ์ดในก้อนหัวตัดบรรทัดเอง จอยิ่งแคบยิ่งสูง
+   วัดจริง 2026-09-15 (ข้อมูลจริง · แท็บ By trip):
+     834x1112  ตรึงกิน 826px  เหลือ 26%
+     1024x768  ตรึงกิน 782px  เหลือ -14px  ← สูงกว่าจอ ไม่เหลืออะไรเลย
+     1440x900  ตรึงกิน 540px  เหลือ 40%
+     1920x1080 ตรึงกิน 363px  เหลือ 66%
+   แปลว่าแท็บเล็ตกับโน้ตบุ๊กเล็กเดือดร้อนที่สุด ส่วนมือถือไม่โดนอยู่แล้ว
+   → เลิกเดาจากความกว้าง · วัดความสูงจริงตอนวาด แล้วตรึงเฉพาะตอนที่ยังเหลือ
+     พื้นที่อ่านอย่างน้อย 340px ไม่งั้นปล่อยให้เลื่อนตามปกติ
+   ใช้ค่าเป็น px ไม่ใช่ % เพราะสิ่งที่คนอ่านคือ "แถวในตาราง" ซึ่งสูงคงที่ ~34px
+   340px = ราว 10 แถว ยังพอไล่ดูได้ · คิดเป็น % จะเพี้ยนตามความสูงจอ
+   จอเตี้ยจะผ่านเกณฑ์ % ทั้งที่เหลือพื้นที่จริงน้อยกว่าจอสูงมาก
+   ผลที่ได้: MacBook ขึ้นไปตรึง · แท็บเล็ตกับโน้ตบุ๊กเล็กไม่ตรึง · มือถือไม่ตรึง */
+function _ctBtPinFitMeasure(){
+  var v = document.getElementById('view-booking'); if(!v) return;
+  var tc = v.querySelector('.bkv2-topcard'), pk = v.querySelector('.bt-pkh');
+  if(!tc || !pk){ v.classList.remove('bt-pinok'); return; }
+  var tb = v.querySelector('.bkv2-topbar2');
+  v.style.setProperty('--t2-pkh-top', (tb ? tb.offsetHeight : 46) + 'px');
+  /* วัดตอนยังไม่ตรึง เพื่อให้ได้ความสูงตามธรรมชาติ · ถอดคลาสก่อนวัดทุกครั้ง */
+  v.classList.remove('bt-pinok');
+  var used = tc.offsetHeight + pk.offsetHeight;
+  if(window.innerHeight - used >= 340) v.classList.add('bt-pinok');
+  /* §btColHd · ความสูงที่เหลือให้กล่องตาราง · หัวคอลัมน์จะตรึงได้ก็ต่อเมื่อ
+     กล่องนี้เป็นตัวเลื่อนเอง (sticky เกาะกับตัวเลื่อนที่ใกล้ที่สุดเสมอ)
+     §btOneScroll · วัดจาก "ตำแหน่งจริงของกล่องในเอกสาร" ไม่ใช่ผลบวกความสูงของที่ตรึง
+       ระหว่างก้อนหัวกับกล่องตารางยังมีของคั่นอยู่ (แถบ CANCELLED ฯลฯ) ที่ไม่ได้ถูกตรึง
+       เอาผลบวกมาลบจึงได้กล่องสูงเกินจริง เหลือหน้าให้เลื่อนอีกนิด = รู้สึกเป็นสกรอลล์สองที่
+       วัดจริงก่อนแก้: กล่องสูง 357px แต่หน้ายังเลื่อนได้อีก 96px
+     ทุกอย่างเหนือกล่องถูกตรึงหรืออยู่นิ่ง ตำแหน่งนี้จึงคงที่ ใช้คำนวณได้ */
+  var wrapEl = v.querySelector('.t2-wrap');
+  if(wrapEl){
+    var topDoc = wrapEl.getBoundingClientRect().top + (window.pageYOffset || 0);
+    var maxH = Math.max(240, window.innerHeight - topDoc - 8);   /* §btFill · เผื่อ 14 → 8 */
+    v.style.setProperty('--t2-wrap-max', maxH + 'px');
+    /* ใต้กล่องตารางยังมีบล็อกท้ายหน้าอยู่อีก (bookingV2RenderL...) ที่สูงไม่คงที่
+       ถ้าไม่หักออก หน้าจะยังเหลือที่ให้เลื่อนนิดหน่อย = ผู้ใช้รู้สึกว่ามีสกรอลล์สองที่
+       อ่าน scrollHeight กลับมาหลังตั้งค่า (การอ่านบังคับให้จัดวางใหม่อยู่แล้ว)
+       แล้วหักส่วนที่เกินออกรอบเดียว · ลดกล่องเท่าไหร่ หน้าก็สั้นลงเท่านั้น จึงลงตัวในรอบเดียว */
+    var de = document.documentElement;
+    var over = de.scrollHeight - de.clientHeight;
+    if(over > 0){ maxH = Math.max(240, maxH - over);
+      v.style.setProperty('--t2-wrap-max', maxH + 'px'); }
+    /* §btFitReal · ด่านคัดกรองข้างบนเดาพื้นที่อ่านจาก innerHeight - (แถบแท็บ + ก้อนหัว)
+       แต่พื้นที่จริงน้อยกว่านั้น เพราะยังมีแถบ CANCELLED คั่น และบล็อกท้ายหน้าอีก
+       วัดจริงที่ 1440x900: ด่านคิดว่าเหลือ 359px แต่กล่องจริงได้ 261px
+       ตัดสินใจจากตัวเลขที่ผิดจึงตรึงในจอที่ไม่ควรตรึง · เช็คซ้ำด้วยความสูงจริง
+       ต่ำกว่าเกณฑ์ = ถอยกลับไปเลื่อนทั้งหน้าเหมือนเดิม ปลอดภัยกว่าตรึงแล้วเหลือ 7 แถว */
+    if(maxH < 340){
+      v.classList.remove('bt-pinok');
+      v.style.removeProperty('--t2-wrap-max');
+    }
+  } else {
+    v.style.setProperty('--t2-wrap-max', Math.max(240, window.innerHeight - used - 14) + 'px');
+  }
+}
+/* ══ §btPinScroll (2026-09-19) · จัดรถแล้วตารางเด้งกลับหัว — รอบสอง ══════
+   §vanAssignScroll แก้ด้วย bookingV2RenderKeep() คือเก็บตำแหน่งเลื่อนไว้ก่อนวาด แล้วคืนให้ใน rAF
+   สองชั้น · ตรงนั้นถูกแล้ว แต่ยังเด้งอยู่ เพราะยังมีคนมารีเซ็ตทีหลังจากนั้นอีกที
+   ctBtPinFit วัดความสูง "ตอนยังไม่ตรึง" จึงถอดคลาส bt-pinok ออกก่อนวัดทุกครั้ง
+   พอถอด · .t2-wrap หมด max-height + overflow:auto ทันที = เลิกเป็นกล่องเลื่อน
+   เบราว์เซอร์จึงทิ้ง scrollTop ทันที · ใส่คลาสกลับก็ได้กล่องที่ scrollTop = 0
+   ตัวก่อเหตุคือ ctBtPinFitLater() ที่ยิงหลังวาด 300ms — หลัง rAF ของ
+   bookingV2KeepScroll ไปนานแล้ว คืนไปเท่าไหร่ก็โดนล้างอยู่ดี (resize ก็เจอเหมือนกัน)
+   แก้ที่ต้นเหตุ: ห่อตัววัด เก็บ scrollTop/scrollLeft ของ .t2-wrap ไว้ก่อน
+   แล้วคืนหลังวัดเสร็จ · ครอบทุกทางที่เรียกวัด (วาดใหม่ / 300ms / resize)
+   คืนเฉพาะตอนมีค่าจริง · จอที่ไม่ตรึง scrollTop เป็น 0 อยู่แล้ว คืนก็ไม่มีผล */
+function ctBtPinFit(){
+  var v = document.getElementById('view-booking');
+  var w = v ? v.querySelector('.t2-wrap') : null;
+  var st = w ? w.scrollTop : 0, sl = w ? w.scrollLeft : 0;
+  try{ _ctBtPinFitMeasure(); }
+  finally{
+    if(st || sl){ try{
+      var w2 = v ? v.querySelector('.t2-wrap') : null;
+      if(w2){ if(st && w2.scrollTop !== st) w2.scrollTop = st;
+              if(sl && w2.scrollLeft !== sl) w2.scrollLeft = sl; }
+    }catch(_){} }
+  }
+}
+/* ⚠ ตอน rAF หลังวาดเสร็จใหม่ ๆ ความสูงยังไม่นิ่ง (วัดได้ topcard 45px
+   แต่พอจัดวางจริงเป็น 57px) ตัดสินใจตอนนั้นจึงพลาดได้
+   วัดซ้ำอีกรอบหลังผ่านไปครู่หนึ่ง · ราคาถูกมากเพราะเป็นแค่การอ่านความสูงสองค่า */
+var _ctPinT = 0;
+function ctBtPinFitLater(){ clearTimeout(_ctPinT);
+  _ctPinT = setTimeout(function(){ try{ ctBtPinFit(); }catch(_){ } }, 300); }
+/* เรียกหลัง bookingV2Render ทุกครั้ง โดยห่อตัวฟังก์ชันไว้ ไม่ไปแทรกข้างใน
+   ของเดิมแทรกไว้กลาง rAF ซึ่งพึ่งตัวแปร vb และบรรทัดก่อนหน้า
+   ถ้าเส้นทางไหนไม่ผ่านตรงนั้น การตรึงก็ไม่ถูกคิดเลย (เจอจริง: สลับแท็บแล้วไม่ตรึง)
+   ห่อแบบนี้ครอบทุกเส้นทางที่วาดใหม่ และไม่ต้องรู้ภายในของ bookingV2Render */
+(function(){
+  if(typeof window === 'undefined' || typeof window.bookingV2Render !== 'function') return;
+  var _orig = window.bookingV2Render;
+  window.bookingV2Render = function(){
+    var out = _orig.apply(this, arguments);
+    try{ ctBtPinFit(); ctBtPinFitLater(); }catch(_){ }
+    return out;
+  };
+})();
+/* หมุนแท็บเล็ต / ย่อขยายหน้าต่าง = เงื่อนไขเปลี่ยน ต้องคิดใหม่
+   หน่วงไว้ ไม่ต้องคิดทุกพิกเซลระหว่างลาก */
+(function(){ var t=0;
+  window.addEventListener('resize', function(){ clearTimeout(t);
+    t = setTimeout(function(){ try{ ctBtPinFit(); }catch(_){ } }, 160); });
+})();
+
 function ctCell(a, b, c){
   return '<div class="ct-cell"><div class="c1">' + (a || '') + '</div><div class="c2">' + (b || '') + '</div><div class="c3">' + (c || '') + '</div></div>';
 }
+/* §ctSheet · สีประจำคอลัมน์ · 8 สีวนซ้ำ · คุมโทนให้เข้ากับพื้นครีมของหน้านี้
+   แผนคำนวณไม่ได้ผูก routeId (ผูกผ่าน famId) จึงยืมสีเส้นทางมาตรง ๆ ไม่ได้
+   คิดจากลำดับคอลัมน์แทน · เสถียรตราบใดที่ลำดับแผนไม่เปลี่ยน และไม่ต้องแตะข้อมูล */
+var CT_PCOL = ['#C2410C','#0F6E56','#185FA5','#8A5B00','#7E22CE','#0E7490','#9F1239','#4D7C0F'];
+/* §ctTripBg · พื้นอ่อนคู่กับสีเข้มด้านบน · ผสมกับพื้นครีมของหน้านี้ไว้แล้ว
+   ใส่เป็นค่าตายตัวไม่ใช้ color-mix เพราะ Safari รุ่นที่สตาฟใช้ยังมีบางเครื่องไม่รองรับ */
+var CT_PBG  = ['#FBEDE6','#E7F1EE','#E8EFF6','#F6EFE2','#F1E9F8','#E6F0F3','#F8E9ED','#EDF2E4'];
 function ctOvrHtml(){
   var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
   var pxf = function(pl, k, lb){
@@ -26904,20 +30033,38 @@ function ctOvrHtml(){
       + ' oninput="ctPlanSetOn(\'' + pl.id + '\',\'' + k + '\',this.value)"></label>';
   };
   var head = '<tr><th class="ct-stick">รายการต้นทุน / หมวดหมู่</th>'
-    + P.map(function(p){
+    + P.map(function(p, _i){
         var cap = Math.max(1, (+p.cap || 65) * Math.max(1, +p.boats || 1));
         var be = ctBreakEven(p, cap, T);
         var on = (p.id === _ct.pid);
-        return '<th class="ct-pcol' + (on ? ' on' : '') + '"><div class="ct-pnm">' + ctE(p.name) + '</div>'
+        var pc = CT_PCOL[_i % CT_PCOL.length];   /* §ctSheet */
+        var pb = CT_PBG[_i % CT_PBG.length];     /* §ctTripBg */
+        /* §ctHdAlign · ห่อเนื้อในหัวคอลัมน์เป็นกล่องเดียว เพื่อจัดให้ชิดล่าง
+           ชื่อทริปยาวไม่เท่ากัน (วัดจริง 20px ถึง 98px = 1 ถึง 5 บรรทัด)
+           ของเดิมไล่จากบนลงมา บรรทัดสเปค/คุ้มทุน/ช่องกรอกคนจึงเลื่อนตามชื่อ
+           คลาดเคลื่อนกันสูงสุด 78px อ่านเทียบข้ามคอลัมน์ไม่ได้
+           แก้โดยให้ชื่อยืดขึ้นข้างบน ส่วนที่เหลือเกาะพื้นล่างเสมอ — ไม่ต้องตัดชื่อทิ้ง */
+        return '<th class="ct-pcol' + (on ? ' on' : '') + '" style="--pc:' + pc + ';--pcbg:' + pb + '" data-col="' + _i + '">'
+          + '<div class="ct-phd">'
+          + '<div class="ct-pnm" title="' + ctE(p.name) + '"><i class="ct-pdot"></i>' + ctE(p.name) + '</div>'
+          + '<div class="ct-pfoot">'
           + '<div class="ct-psub">' + ctE(p.eng) + ' · จุ ' + (+p.cap || 0) + ' · ' + ctB(p.price) + '/หัว</div>'
           + '<div class="ct-pbe' + (be ? '' : ' warn') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</div>'
-          + '<div class="ct-paxbar">' + pxf(p, 'pax', 'คนทั้งหมด') + pxf(p, 'paxTH', 'คนไทย') + '</div></th>';
+          + '<div class="ct-paxbar">' + pxf(p, 'pax', 'คนทั้งหมด') + pxf(p, 'paxTH', 'คนไทย') + '</div>'
+          + '</div></div></th>';
       }).join('') + '</tr>';
 
   var body = '';
   G.forEach(function(g){
-    var cells = '<td class="ct-stick ct-gtd">' + ctE(g) + '</td>';
-    P.forEach(function(pl){
+    /* §ctGrpFold · ตั้งต้นหุบทุกหมวด · ตารางเปิดมาเห็นแค่ 5 หัวข้อใหญ่ ไม่ใช่ 22 แถวรวด
+       คลิกที่ชื่อหมวดค่อยกาง · ใส่ onclick ไว้ที่เซลล์ชื่อหมวดเท่านั้น ไม่ใช่ทั้งแถว
+       เพราะเซลล์อื่นในแถวมีติ๊กถูกกับช่อง % ของตัวเอง ถ้าใส่ที่แถวจะกดโดนกันเอง */
+    var gOpen = !!((_ct.gop || {})[g]);
+    var cells = '<td class="ct-stick ct-gtd' + (gOpen ? ' open' : '') + '"'
+              + ' title="คลิกเพื่อกาง / หุบหมวดนี้"'
+              + ' onclick="ctGrpOpen(\'' + ctE(g) + '\')"><span class="ct-gnm2">'
+              + '<i class="ct-chev">▶</i>' + ctE(g) + '</span></td>';
+    P.forEach(function(pl, _pi){
       var c = ctGrpCfg(pl, g), pct = +c.pct || 0, sub = 0;
       if(!c.off){
         var pax = Math.max(1, +pl.pax || 1), th2 = Math.min(Math.max(0, +pl.paxTH || 0), pax);
@@ -26929,17 +30076,26 @@ function ctOvrHtml(){
       var mid = c.off ? '<span class="ct-off">ปิดทั้งหมวด</span>'
         : '<span class="ct-pctwrap' + (pct ? ' on' : '') + '"><input class="ct-in pct" data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0"'
           + ' title="คูณทุกบรรทัดในหมวดนี้ · แพงกว่า 20% ใส่ 20" oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"><i>%</i></span>';
-      cells += '<td class="ct-gtd">' + ctCell(tick, mid, c.off ? '' : '<b class="ct-gsum">' + ctB(sub) + '</b>') + '</td>';
+      cells += '<td class="ct-gtd" data-col="' + _pi + '" data-trip="' + ctE(pl.name) + '" data-line="ทั้งหมวด · ' + ctE(g) + '">'
+        + ctCell(tick, mid, c.off ? '' : '<b class="ct-gsum">' + ctB(sub) + '</b>') + '</td>';
     });
     body += '<tr class="ct-grow">' + cells + '</tr>';
 
+    if(!gOpen) return;                                  /* §ctGrpFold · หุบอยู่ ไม่ต้องวาดแถวย่อย */
     (T.lines || []).forEach(function(ln){
       if((ln.g || 'อื่นๆ') !== g) return;
       var exp = !!((_ct.exp || {})[ln.id]), KEYS = ctLineKeys(ln);
+      /* §ctRowUnit · ป้ายหน่วย ("ผู้ใหญ่ · ต่างชาติ") มาจาก template ของบรรทัด ไม่ใช่ของแต่ละแผน
+         จึงเป็นข้อความเดียวกันเป๊ะทั้ง 8 คอลัมน์ · ของเดิมพิมพ์ซ้ำในทุกเซลล์
+         ย้ายมาไว้ใต้ชื่อแถวครั้งเดียว เซลล์เหลือแต่ตัวเลข อ่านเป็นคอลัมน์ตัวเลขได้จริง
+         ตอนกางไม่ต้องขึ้น เพราะกริดข้างในมีหัวแถว/หัวคอลัมน์บอกชนิดอยู่แล้ว
+         และตอนกางมีหลายหน่วย ป้ายเดียวที่หัวแถวจะกลายเป็นข้อมูลผิด */
+      var _u0 = (!exp && KEYS.length) ? String(KEYS[0].lb).replace(/^ส่วน \d+ · /, '') : '';
       var rc = '<td class="ct-stick ct-ltd"><div class="ct-lname' + (exp ? ' open' : '') + '"'
              + ' title="คลิกเพื่อกางค่าทั้งหมดของบรรทัดนี้ · กางพร้อมกันทุกแผน"'
-             + ' onclick="ctToggleExp(\'' + ctE(ln.id) + '\')"><i class="ct-chev">▶</i><span>' + ctE(ln.l) + '</span></div></td>';
-      P.forEach(function(pl){
+             + ' onclick="ctToggleExp(\'' + ctE(ln.id) + '\')"><i class="ct-chev">▶</i><span>' + ctE(ln.l) + '</span></div>'
+             + (_u0 ? ('<div class="ct-lunit">' + ctE(_u0) + '</div>') : '') + '</td>';
+      P.forEach(function(pl, _pi){
         var grpOff = !!ctGrpCfg(pl, g).off, o = (pl.ovr || {})[ln.id] || {};
         var noTH = !(+pl.paxTH > 0);
         var val = function(kv){ var v = ((o.p || [])[kv.i] || {})[kv.k]; return (v == null || v === '') ? null : v; };
@@ -26949,34 +30105,85 @@ function ctOvrHtml(){
         if(o.off){ bd = '<span class="ct-off">ปิด</span>'; }
         else if(!KEYS.length){ bd = ''; }
         else if(exp){
-          bd = '<div class="ct-flds">' + KEYS.map(function(kv){
+          /* §ctFldGrid · ของเดิมวางช่องกรอกเรียงลงมาทีละแถว แถวละหนึ่งค่า
+             พร้อมป้ายยาว ("ส่วน 1 · ผู้ใหญ่ · ต่างชาติ") และคำอธิบายใต้ช่องอีกบรรทัด
+             บรรทัดเดียวที่กางออกจึงสูงเกิน 8 แถวย่อย x 8 คอลัมน์ = อ่านไม่ไหว
+             ค่าพวกนี้จริง ๆ เป็นตารางอยู่แล้ว: ผู้ใหญ่/เด็ก คูณ ต่างชาติ/ไทย
+             วางเป็นตาราง 2x2 จึงสั้นลงครึ่งหนึ่งและหาช่องที่จะกรอกได้เร็วกว่ามาก
+             ป้ายบอกชนิดย้ายไปเป็นหัวแถว/หัวคอลัมน์ ไม่ต้องเขียนซ้ำทุกช่อง */
+          var byPart = {}, pOrder = [];
+          KEYS.forEach(function(kv){
+            if(!byPart[kv.i]){ byPart[kv.i] = {}; pOrder.push(kv.i); }
+            byPart[kv.i][kv.k] = kv;
+          });
+          var fld = function(kv){
+            if(!kv) return '<span class="ct-fnone">—</span>';
             var cv = val(kv), has = (cv != null);
-            var hint = '';
-            if(has){
-              hint = '<s>' + (kv.unset ? '—' : kv.base) + '</s>'
-                   + '<button class="ct-undo" title="คืนค่าสูตรกลาง" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',\'\')">' + ctIcon('undo', 11) + '</button>';
-              if(kv.k === 'uTH' && noTH) hint += '<span class="ct-warn">แผนนี้ตั้งคนไทย 0 คน · ยังไม่มีผลกับยอด</span>';
-            } else if(kv.unset){
-              hint = '<span class="ct-newk">สูตรกลางยังไม่ตั้ง · ใส่เฉพาะเส้นทางนี้ได้</span>';
-            }
-            return '<div class="ct-f"><span class="ct-flb">' + ctE(kv.lb) + '</span>'
+            return '<span class="ct-fw">'
               + '<input class="ct-in fin' + (has ? ' on' : (kv.unset ? ' unset' : '')) + '"'
               + ' data-fk="o.' + pl.id + '.' + ln.id + '.' + kv.i + '.' + kv.k + '"'
               + ' value="' + (has ? cv : '') + '" placeholder="' + (kv.unset ? '—' : kv.base) + '"' + (grpOff ? ' disabled' : '')
-              + ' title="' + (kv.unset ? 'สูตรกลางยังไม่ได้ตั้งค่านี้' : ('ว่าง = ใช้ค่าจากสูตรกลาง (' + kv.base + ')')) + '"'
+              + ' title="' + ctE(kv.lb) + (kv.unset ? ' · สูตรกลางยังไม่ได้ตั้งค่านี้' : (' · ว่าง = ใช้ค่าจากสูตรกลาง (' + kv.base + ')')) + '"'
               + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',this.value)">'
-              + (hint ? ('<span class="ct-fhint">' + hint + '</span>') : '') + '</div>';
-          }).join('') + '</div>';
+              + (has ? ('<button class="ct-undo" title="คืนค่าสูตรกลาง (' + (kv.unset ? '—' : kv.base) + ')" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',\'\')">' + ctIcon('undo', 10) + '</button>') : '')
+              + '</span>';
+          };
+          var grid2 = function(B, colLb, rowLb, keys){
+            /* keys = [[แถว1คอล1, แถว1คอล2], [แถว2คอล1, แถว2คอล2]] */
+            var h = '<div class="ct-fg"><span></span>'
+                  + colLb.map(function(c){ return '<span class="ct-fgh">' + ctE(c) + '</span>'; }).join('');
+            rowLb.forEach(function(r, ri){
+              h += '<span class="ct-fgr"' + (/⚠/.test(r) ? ' title="แผนนี้ตั้งคนไทย 0 คน · ค่าคนไทยยังไม่มีผลกับยอด"' : '') + '>' + ctE(r) + '</span>'
+                 + keys[ri].map(function(k){ return fld(B[k]); }).join('');
+            });
+            return h + '</div>';
+          };
+          var parts = pOrder.map(function(pi){
+            var B = byPart[pi], ks = Object.keys(B), inner;
+            if(B.u && B.uTH && B.uCh && B.uChTH){
+              var thLb = 'ไทย' + ((noTH && val(B.uTH) != null) ? '\u2009⚠' : '');   /* §ctEvenCell */
+              inner = grid2(B, ['ผู้ใหญ่','เด็ก'], ['ต่างชาติ', thLb], [['u','uCh'], ['uTH','uChTH']]);
+            } else if(B.u && B.q && B.u4 && B.q4){
+              inner = grid2(B, ['ปกติ','4EN'], ['ราคา/หน่วย','จำนวน'], [['u','u4'], ['q','q4']]);
+            } else if(B.q && B.q4 && ks.length === 2){
+              inner = grid2(B, ['ปกติ','4EN'], ['ลิตร/ลำ'], [['q','q4']]);
+            } else {
+              /* ชุดที่ไม่ใช่ตาราง (ขั้นบันได ฯลฯ) · เรียงแนวนอนแถวเดียว */
+              inner = '<div class="ct-fline">' + ks.map(function(k){
+                var kv = B[k];
+                return '<span class="ct-fi"><span class="ct-fgr">'
+                  + ctE(kv.lb.replace(/^ส่วน \d+ · /, '')) + '</span>' + fld(kv) + '</span>';
+              }).join('') + '</div>';
+            }
+            /* §ctEvenCell · ของเดิมมีกล่องคำอธิบายสองแบบโผล่เฉพาะบางเซลล์
+               ("คนไทย 0 คน" กับ "สูตรกลางยังไม่ตั้ง") เซลล์ในแถวเดียวกันจึงสูงไม่เท่ากัน
+               แถวยืดตามเซลล์ที่สูงสุด เหลือที่ว่างเป็นหลุมในเซลล์อื่น อ่านยาก
+               → "สูตรกลางยังไม่ตั้ง" ตัดทิ้ง · ช่องที่ขึ้น — กับ tooltip บอกอยู่แล้ว
+                 และมันเป็นข้อความเดียวกันทุกเซลล์ที่มี ไม่ได้บอกอะไรเฉพาะเจาะจง
+               → "คนไทย 0 คน" ย่อเป็นเครื่องหมายเล็กท้ายหัวแถว "ไทย" พร้อม tooltip
+                 ยังเตือนอยู่ แต่ไม่กินความสูง ทุกเซลล์จึงโครงเดียวกันหมด */
+            /* §fpartFix · ใช้ ct-fpart ไม่ใช่ ct-part · ct-part เป็นของแท็บ "สูตรกลาง" อยู่ก่อนแล้ว
+               (เรียงแนวนอน flex-wrap) · ตอนทำ §ctFldGrid ผมตั้งชื่อซ้ำแล้วเขียนกฎ
+               flex-direction:column ทับ ทำให้แท็บสูตรกลางกลายเป็นคอลัมน์ผอมยาว
+               ชื่อคลาสในไฟล์นี้ใช้ร่วมกันทั้งสี่แท็บ ตั้งชื่อใหม่ต้องเช็คก่อนเสมอ */
+            return '<div class="ct-fpart">'
+              + (pOrder.length > 1 ? ('<div class="ct-pttl">ส่วน ' + (pi + 1) + '</div>') : '')
+              + inner + '</div>';
+          }).join('');
+          bd = '<div class="ct-flds">' + parts + '</div>';
         } else {
           var m0 = KEYS[0], c0 = val(m0), nOvr = 0;
           KEYS.forEach(function(kv){ if(val(kv) != null) nOvr++; });
           var main = (c0 != null) ? ('<b class="ov">' + c0 + '</b>')
                    : (m0.unset ? '<b class="mut">—</b>' : ('<b>' + m0.base + '</b>'));
+          /* §ctRowUnit · ป้ายหน่วยย้ายไปหัวแถวแล้ว · เซลล์เหลือตัวเลขกับจำนวนค่าที่ตั้งเอง
+             (ตัวหลังต่างกันไปตามแผน จึงยังต้องอยู่ในเซลล์) */
           bd = '<div class="ct-peek" onclick="ctToggleExp(\'' + ctE(ln.id) + '\')">' + main
-             + '<span class="ct-unit">' + ctE(m0.lb.replace(/^ส่วน \d+ · /, '')) + '</span>'
              + (nOvr ? ('<i class="ct-dot"></i><span class="n">ตั้งเอง ' + nOvr + ' ค่า</span>') : '') + '</div>';
         }
-        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '"><div class="ct-lcell">' + tick + '<div class="ct-lbody">' + bd + '</div></div></td>';
+        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '" data-col="' + _pi + '"'
+           + ' data-trip="' + ctE(pl.name) + '" data-line="' + ctE(ln.l) + '">'
+           + '<div class="ct-lcell">' + tick + '<div class="ct-lbody">' + bd + '</div></div></td>';
       });
       body += '<tr>' + rc + '</tr>';
     });
@@ -26986,7 +30193,19 @@ function ctOvrHtml(){
     + '<span class="ct-sub">' + ctIcon('info', 12) + ' <em class="fix">แถวหัวหมวด</em> ปิดทั้งหมวด หรือใส่ ±% คูณทุกบรรทัดในหมวด · '
     + '<em class="var">คลิกชื่อรายการ</em> เพื่อกางค่าทั้งหมดของบรรทัดนั้น · ทุกค่าทับได้ แม้สูตรกลางยังไม่ได้ตั้ง · ว่าง = ใช้ค่าจากสูตรกลาง</span></div>'
     + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ</span></div></div>'
-    + '<div class="ct-card ct-tblcard"><div class="ct-scroll"><table class="ct-otbl"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    + '<div class="ct-navbar" id="ct-navbar"><span class="ct-navref" id="ct-navref">คลิกช่องไหนก็ได้ แล้วใช้ลูกศรเดินต่อ</span>'
+    + '<span class="ct-navval" id="ct-navval"></span><span class="ct-navsp"></span>'
+    + '<span class="ct-navkeys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> ข้ามแถว <kbd>&larr;</kbd><kbd>&rarr;</kbd> ข้ามทริป <kbd>Enter</kbd> ลงแถวถัดไป</span></div>'
+    /* §ctColMin · ตารางนี้เป็น table-layout:fixed + width:100% · ยิ่งมีแผนเยอะ คอลัมน์ยิ่งถูกหารให้แคบลง
+       วัดจริง · 1 แผน ช่องกรอกกว้าง 130px · 4 แผน 130px · 10 แผน เหลือ 29px
+       ที่ 29px ช่องกรอกยุบจนเห็นแต่ไอคอนคืนค่า คนใช้อ่านว่า "หน้าพัง" ซึ่งก็ถูกแล้ว
+       ⚠ ไม่ใช่ของที่เพิ่งเปลี่ยน · เป็นเพดานที่ §ctFldGrid ไม่เคยถูกออกแบบเผื่อไว้
+         โผล่ตอนทีมเพิ่มแผนจาก 8 เป็น 10 เมื่อคืนก่อนจึงยังดีอยู่
+       → ตั้งความกว้างขั้นต่ำต่อคอลัมน์ แล้วให้ตารางล้นกล่องไปเลย
+         .ct-sheet มี overflow:auto อยู่แล้ว (ตั้งแต่ §ctSheet) จึงปัดซ้าย-ขวาดูได้
+         เลื่อนแล้วคอลัมน์ชื่อรายการกับหัวตารางยังตรึงอยู่เหมือนเดิม */
+    + '<div class="ct-card ct-tblcard"><div class="ct-scroll ct-sheet"><table class="ct-otbl" style="min-width:'
+      + (250 + Math.max(1, P.length) * 260) + 'px"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
 // ── mutators ────────────────────────────────────────────────────────────────────────────────────
@@ -27799,10 +31018,29 @@ function _agImpSales(v){
   const hit=(SB_SALES||[]).find(x=>(x.name||'').toLowerCase()===s.toLowerCase() || (x.code||'').toLowerCase()===s.toLowerCase());
   return hit ? hit.id : '';
 }
-function _agImpRate(v){
+/* §rtImpCode · จับคู่เรทตอนนำเข้า Agent · ห้ามเดา
+   ของเดิมใช้ find() ตัวแรกที่เจอ ไม่ว่าจะเจอกี่ตัว · และยอมชนกันได้ทั้ง code และ name
+   ของจริงมีเรท 5 ชุดใช้โค้ด RT-NANA เหมือนกัน ราคาต่างกันถึง 900 บาท/คน
+   ลำดับใน SB_RATE_TYPES มาจากลำดับแถวใน Postgres ซึ่งไม่การันตี — ไฟล์เดิมนำเข้าคนละวันจึงได้คนละเรท
+   กติกาใหม่ · id ก่อน → ชื่อ (ต้องตรงตัวเดียว) → โค้ด (ต้องตรงตัวเดียว)
+   ถ้ากำกวม คืนค่าว่างพร้อมเหตุผล ให้หน้าพรีวิวขึ้นเตือน แล้วคนเลือกเองทีหลัง ดีกว่าผูกผิดเงียบ ๆ */
+function _agImpRate(v, note){
   const s=_agImpClean(v); if(!s) return '';
-  const hit=(SB_RATE_TYPES||[]).find(x=>(x.code||'').toLowerCase()===s.toLowerCase() || (x.name||'').toLowerCase()===s.toLowerCase() || x.id===s);
-  return hit ? hit.id : '';
+  const L=(SB_RATE_TYPES||[]);
+  const byId = L.filter(x=>x.id===s);
+  if(byId.length===1) return byId[0].id;
+  const low = s.toLowerCase();
+  const byName = L.filter(x=>String(x.name||'').trim().toLowerCase()===low);
+  if(byName.length===1) return byName[0].id;
+  const byCode = L.filter(x=>String(x.code||'').trim().toLowerCase()===low);
+  if(byCode.length===1) return byCode[0].id;
+  const amb = byName.length>1 ? byName : (byCode.length>1 ? byCode : null);
+  if(note){
+    note.rateAmb = amb
+      ? { txt:s, names:amb.map(x=>x.name||x.id) }          // ตรงหลายตัว · ต้องเลือกเอง
+      : { txt:s, names:[] };                                // ไม่ตรงสักตัว · สะกดผิดหรือยังไม่มีเรทนี้
+  }
+  return '';
 }
 function _agImpPrograms(v){
   const s=_agImpClean(v); if(!s) return null;
@@ -27814,7 +31052,7 @@ function _agImpPrograms(v){
 }
 
 // Map ONE spreadsheet row → a clean agent-shaped object (only fields the file actually filled)
-function _agImpRow(o){
+function _agImpRow(o, note){
   const g=k=>o[k]!==undefined?o[k]:o[k+'*'];
   const src={};
   const name=_agImpClean(g('name')); if(name) src.name=name;
@@ -27827,7 +31065,7 @@ function _agImpRow(o){
   const cl=g('creditLimit'); if(cl!==''&&cl!=null&&!isNaN(+cl)) src.creditLimit=+cl;
   const vm=_agImpClean(g('vatMode')).toLowerCase(); if(vm) src.vatMode=vm;
   const pg=_agImpPrograms(g('programs')); if(pg) src.programs=pg;
-  const rt=_agImpRate(g('rateType')); if(rt) src.rateTypeId=rt;
+  const rt=_agImpRate(g('rateType'), note); if(rt) src.rateTypeId=rt;
   ['contact','note'].forEach(f=>{ const v=_agImpClean(g(f)); if(v) src[f]=v; });
   const em=_agImpEmail(g('email')); if(em) src.email=em;
   const ph=_agImpClean(g('phone')); if(ph) src.phone=ph;
@@ -27922,10 +31160,12 @@ function agImportFile(file){
 
     const rows=[];
     raw.forEach((o,i)=>{
-      const src=_agImpRow(o);
+      const note={};
+      const src=_agImpRow(o, note);
       if(!src.name) return;                                  // skip blank lines
       const match=_agImpFind(src);
-      rows.push({ n:i+2, src, match, action: match?'update':'create', checked:true });
+      /* §rtImpCode · แถวที่ระบุเรทไว้แต่จับคู่ไม่ได้แน่ชัด · ไม่ผูกให้ แต่ต้องขึ้นให้เห็นในพรีวิว */
+      rows.push({ n:i+2, src, match, action: match?'update':'create', checked:true, rateAmb: note.rateAmb||null });
     });
     if(!rows.length){ alert('ไม่พบแถวที่มีชื่อเอเจ้น (คอลัมน์ name)'); return; }
     _agImp={ rows, overwrite:false, fileName:file.name };
@@ -27973,6 +31213,7 @@ function agImportRender(){
   const nNew=R.filter(r=>r.action==='create').length;
   const nUpd=R.filter(r=>r.action==='update').length;
   const nConf=R.filter(r=>r.ownerConflict).length;
+  const nRateAmb=R.filter(r=>r.rateAmb).length;   /* §rtImpCode */
   const nSel=R.filter(r=>r.checked && (r.action==='create' || r.writes.length)).length;
   const nSkip=R.filter(r=>r.action==='update' && !r.writes.length).length;
 
@@ -27993,7 +31234,9 @@ function agImportRender(){
       +'<td style="padding:7px 6px;font-size:11px;color:#98a29c">'+r.n+'</td>'
       +'<td style="padding:7px 6px"><div style="font-size:12px;font-weight:600;color:#2b3a34">'+e(r.src.name)+'</div>'
         +(r.match?'<div style="font-size:10.5px;color:#98a29c">→ ตรงกับ <b>'+e(r.match.name)+'</b> ['+e(r.match.market||'')+']</div>':'')
-        +(r.ownerConflict?'<div style="font-size:10px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:2px 8px;margin-top:3px;display:inline-block">⚠ เป็นของเซลล์ '+e(_snm(r.ownerSalesId))+' อยู่แล้ว · ไม่ย้ายเจ้าของ</div>':'')+'</td>'
+        +(r.ownerConflict?'<div style="font-size:10px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:2px 8px;margin-top:3px;display:inline-block">⚠ เป็นของเซลล์ '+e(_snm(r.ownerSalesId))+' อยู่แล้ว · ไม่ย้ายเจ้าของ</div>':'')
+        /* §rtImpCode · จับคู่เรทไม่ได้แน่ชัด · ไม่ผูกให้ · ต้องเห็นก่อนกดนำเข้า ไม่ใช่รู้ทีหลังตอนราคาออกมาผิด */
+        +(r.rateAmb?'<div style="font-size:10px;font-weight:700;color:#8A5410;background:#FDF3E4;border-radius:6px;padding:2px 8px;margin-top:3px;display:inline-block">⚠ Rate "'+e(r.rateAmb.txt)+'" '+(r.rateAmb.names.length?('ตรงกับ '+r.rateAmb.names.length+' ชุด ('+e(r.rateAmb.names.slice(0,3).join(' · '))+') · ไม่ผูกให้'):'ไม่ตรงกับเรทไหนเลย')+'</div>':'')+'</td>'
       +'<td style="padding:7px 6px">'+badge+'</td>'
       +'<td style="padding:7px 6px">'+chips+'</td></tr>';
   }).join('');
@@ -28006,7 +31249,7 @@ function agImportRender(){
    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
      +'<div><div style="font-size:16px;font-weight:800;color:#15396B">นำเข้า Agent จาก Excel</div>'
      +'<div style="font-size:11.5px;color:#8b9a94;margin-top:2px">'+e(_agImp.fileName)+' · '+R.length+' แถว &nbsp;·&nbsp; '
-       +'<b style="color:#0F6E56">ใหม่ '+nNew+'</b> &nbsp; <b style="color:#854F0B">มีอยู่แล้ว '+nUpd+'</b>'+(nConf?' &nbsp; <b style="color:#A32D2D">⚠ เป็นของเซลล์อื่น '+nConf+'</b>':'')
+       +'<b style="color:#0F6E56">ใหม่ '+nNew+'</b> &nbsp; <b style="color:#854F0B">มีอยู่แล้ว '+nUpd+'</b>'+(nConf?' &nbsp; <b style="color:#A32D2D">⚠ เป็นของเซลล์อื่น '+nConf+'</b>':'')+(nRateAmb?' &nbsp; <b style="color:#8A5410">⚠ จับคู่เรทไม่ได้ '+nRateAmb+'</b>':'')
        +(nSkip?' &nbsp; <span style="color:#98a29c">ไม่มีอะไรเปลี่ยน '+nSkip+'</span>':'')+'</div></div>'
      +'<button onclick="agImportClose()" style="border:0;background:#eee;color:#444;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">ปิด</button></div>'
 
@@ -28196,11 +31439,11 @@ function agSetView(v){
   const tbl  = document.getElementById('ag-table-wrap');
   if(wrap) wrap.style.display = (v==='table') ? 'none' : '';
   if(tbl)  tbl.style.display  = (v==='table') ? 'block' : 'none';
-  const on='background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.09);border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;border:0';
-  const off='background:transparent;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:500;color:#8b9a94;border:0';
+  /* §agHd · ปุ่มสลับมุมมองอยู่บนแถบกรมท่าแล้ว · สถานะมาจากคลาส .on ที่ renderAgKPI วาดให้
+     เดิมยัด cssText สีอ่อนทับตรงนี้ ซึ่งจะกลายเป็นปุ่มขาวบนพื้นกรมท่า อ่านไม่ออก */
   const bc=document.getElementById('agv-card'), bt=document.getElementById('agv-table');
-  if(bc) bc.style.cssText = (v==='card') ? on : off;
-  if(bt) bt.style.cssText = (v==='table') ? on : off;
+  if(bc) bc.classList.toggle('on', v!=='table');
+  if(bt) bt.classList.toggle('on', v==='table');
   renderAgents();
 }
 function agTblSetGap(g){ _agGap=g; _agSel.clear(); _agCell=null; agRenderTable(); }
@@ -28562,7 +31805,7 @@ function renderAgents(){
   if(_agSelected){
     agRenderDetail(_agSelected);
   } else {
-    document.getElementById('ag-main').innerHTML = '<div class="sb-empty">เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา</div>';
+    document.getElementById('ag-main').innerHTML = '<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   }
 }
 
@@ -28571,12 +31814,655 @@ let _rtSelected = null;
 let _rtViewMode = 'detail';      // 'detail' (2-col) | 'agents' (3-col)
 let _rtAgentMktFilter = 'all';   // filter pills in 3rd column
 
+/* ══ §rtDupCode · โค้ดเรทซ้ำกัน ═══════════════════════════════════════════════
+   ที่มา (2026-09-18) · ตรวจตามที่ถูกขอให้ดูว่า "สร้างเรทแล้วทับกันไหม"
+   ตัวสร้างไม่ทับกัน (id มาจาก LA_UID + มีเกราะกันชนอีกชั้นใน rtSaveDraft)
+   แต่เจอของจริงคาอยู่ · เรท 5 ชุดใช้โค้ด RT-NANA เหมือนกันหมด
+   ทั้งห้าสร้างวันเดียวกัน (22 ก.ค. 2026) ตอนที่โค้ดยังพิมพ์เอง ก่อนจะเปลี่ยนเป็นสร้างอัตโนมัติ
+
+   ทำไมต้องแก้ ทั้งที่ระบบคิดราคาด้วย id ไม่ใช่โค้ด
+     1 นำเข้า Agent จาก Excel จับคู่เรท "ด้วยโค้ด" — โค้ดซ้ำ = ผูกผิดชุดแบบเงียบ ๆ
+       และลำดับใน SB_RATE_TYPES มาจากลำดับแถวใน Postgres ซึ่งไม่การันตี
+       ไฟล์เดิมนำเข้าคนละวันจึงได้คนละเรทได้ · ห้าชุดนั้นราคาต่างกันถึง 900 บาท/คน
+     2 คนเลือกเรทจากลิสต์ที่โชว์โค้ด · เห็นโค้ดเดียวกันห้าแถวก็เลือกผิดเป็นธรรมดา
+   ═══════════════════════════════════════════════════════════════════════════ */
+function rtDupCodeScan(){
+  var by = {};
+  (typeof SB_RATE_TYPES!=='undefined'?SB_RATE_TYPES:[]).forEach(function(r){
+    var c = String((r&&r.code)||'').trim().toUpperCase();
+    if(!c) return;
+    (by[c] = by[c] || []).push(r);
+  });
+  var out = [];
+  Object.keys(by).forEach(function(c){ if(by[c].length > 1) out.push({code:c, list:by[c]}); });
+  out.sort(function(a,b){ return b.list.length - a.list.length; });
+  return out;
+}
+function _rtDupUsers(rtId){
+  var A = (typeof SB_AGENTS!=='undefined')?SB_AGENTS:[];
+  return A.filter(function(a){ return a && a.rateTypeId===rtId; }).length;
+}
+/* ตัวที่ "ได้เก็บโค้ดเดิมไว้" · เจ้าที่มีเอเย่นต์ผูกมากที่สุด แล้วค่อยดูว่าใครสร้างก่อน
+   เหตุผล: โค้ดนั้นถูกพิมพ์ลงไฟล์นำเข้าและเอกสารไปแล้ว ตัวที่คนใช้กันมากที่สุดควรเป็นตัวที่ความหมายไม่เปลี่ยน */
+function _rtDupKeeper(list){
+  var best = list[0], bestN = _rtDupUsers(best.id);
+  list.forEach(function(r){
+    var n = _rtDupUsers(r.id);
+    if(n > bestN || (n === bestN && String(r.createdDate||'') < String(best.createdDate||''))){ best = r; bestN = n; }
+  });
+  return best;
+}
+function rtDupCodeBanner(){
+  var host = document.getElementById('rt-dupcode'); if(!host) return;
+  var G = rtDupCodeScan();
+  if(!G.length){ host.innerHTML=''; return; }
+  var e = _rtExpE;
+  var nRt = 0, nAg = 0;
+  G.forEach(function(g){ nRt += g.list.length; g.list.forEach(function(r){ nAg += _rtDupUsers(r.id); }); });
+  var rows = G.slice(0,6).map(function(g){
+    var keep = _rtDupKeeper(g.list);
+    return '<div style="border-top:1px solid #EEF0F3;padding:7px 0;font-size:11.5px;line-height:1.6">'
+      +'<span class="mono" style="font-weight:800;color:#A32D2D">'+e(g.code)+'</span> '
+      +'<span style="color:#6B7280">'+g.list.length+' ชุด · '
+      + g.list.map(function(r){
+          var n=_rtDupUsers(r.id);
+          return '<b style="color:'+(r.id===keep.id?'#0F6E56':'#2C3440')+'">'+e(r.name||r.id)+'</b>'
+            + (n?('<span style="color:#93A0AE"> ('+n+')</span>'):'');
+        }).join(' · ')
+      +'</span></div>';
+  }).join('');
+  host.innerHTML = '<div style="background:#fff;border:1px solid #E8A9A2;border-left:3px solid #A32D2D;'
+    +'border-radius:11px;padding:12px 15px;margin:0 0 14px">'
+    +'<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
+      +'<b style="font-size:13px;color:#A32D2D">&#9888; โค้ดเรทซ้ำกัน</b>'
+      +'<span style="font-size:11.5px;color:#5A6270">'+G.length+' โค้ด · '+nRt+' ชุด · '+nAg+' เอเย่นต์ผูกอยู่</span>'
+      +'<button onclick="rtDupCodeFix()" style="margin-left:auto;border:0;background:#0F172A;color:#fff;'
+        +'border-radius:999px;padding:5px 14px;font:700 11px inherit;cursor:pointer;font-family:inherit;'
+        +'white-space:nowrap">'+laT('แก้โค้ดให้ไม่ซ้ำ')+'</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#6B7280;line-height:1.6;margin-top:3px">'
+      +'ระบบคิดราคาด้วย id ราคาจึงไม่ได้ผิดอยู่ตอนนี้ · แต่<b>การนำเข้า Agent จาก Excel จับคู่เรทด้วยโค้ด</b> '
+      +'โค้ดซ้ำ = ผูกผิดชุดแบบเงียบ ๆ และคนที่เลือกเรทจากลิสต์ก็แยกไม่ออก<br>'
+      +'ปุ่มนี้แก้เฉพาะช่องโค้ด · ไม่แตะราคา ไม่แตะ id และไม่ย้ายเอเย่นต์ไปไหน '
+      +'(ตัวที่มีเอเย่นต์ผูกมากที่สุดเก็บโค้ดเดิมไว้ · ชื่อสีเขียว)</div>'
+    + rows
+    + (G.length>6 ? ('<div style="font-size:11px;color:#8A929E;padding-top:6px">· และอีก '+(G.length-6)+' โค้ด</div>') : '')
+    +'</div>';
+}
+function rtDupCodeFix(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return;
+  var G = rtDupCodeScan(); if(!G.length) return;
+  var plan = [];
+  G.forEach(function(g){
+    var keep = _rtDupKeeper(g.list);
+    g.list.forEach(function(r){
+      if(r.id === keep.id) return;
+      /* ตั้งโค้ดใหม่ด้วยตัวสร้างเดิม · มันกันซ้ำกับทุกโค้ดที่มีอยู่ให้แล้ว
+         ต้องเซ็ตลงตัวจริงทีละตัวก่อนคำนวณตัวถัดไป ไม่งั้นสองตัวในกลุ่มเดียวกันจะได้โค้ดใหม่ชนกันเอง */
+      var old = r.code;
+      r.code = _rtAutoCode(r.name || r.id, r.owner || '');
+      plan.push({name:(r.name||r.id), from:old, to:r.code});
+    });
+  });
+  if(!plan.length) return;
+  if(typeof rtPersist==='function') rtPersist();
+  if(typeof rtRenderList==='function') rtRenderList();
+  if(typeof rtDupCodeBanner==='function') rtDupCodeBanner();
+  if(_rtSelected && typeof rtRenderDetail==='function') rtRenderDetail(_rtSelected);
+  try{ console.log('[rtDupCode] renamed ' + plan.length + ' code(s): '
+    + plan.map(function(x){ return x.from + ' -> ' + x.to; }).join(', ')); }catch(_){}
+  if(typeof flShowToast==='function') flShowToast('แก้โค้ดซ้ำแล้ว ' + plan.length + ' ชุด');
+  else alert('Renamed ' + plan.length + ' duplicate rate-type code(s).');
+}
+
+/* ══ §rtExpiry · เรทที่กำลังจะหมดอายุ ═══════════════════════════════════════════
+   ACTIVE PERIOD / validTo ไม่ได้กั้นการคิดเงิน (ดู §promoMx) — จงใจให้เป็นแบบนั้น
+   ราคามาตรฐานต้องมีเสมอ ไม่งั้นวันหนึ่งจะจองไม่ได้เพราะไม่มีราคา
+   แต่ผลข้างเคียงคือ พอถึงวันหมดอายุ ระบบไม่ได้บอกอะไรเลย ยังคิดราคาฤดูเก่าต่อไปเงียบ ๆ
+   บล็อกนี้ทำหน้าที่ "บอก" อย่างเดียว ไม่แตะการคิดเงินสักบรรทัด
+
+   อ่านที่เดียว ใช้สองที่ · แผงบนหน้า Rate Types (ภาพรวม) และบรรทัดใน Pricing Matrix
+   ของเอเย่นต์รายนั้น (ตรงที่คนกำลังดูราคาอยู่พอดี) · สองที่จึงพูดเลขเดียวกันเสมอ
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _RT_EXP_WINDOW = 60;                 /* เตือนล่วงหน้ากี่วัน · ฤดูกาลเปลี่ยนปีละสองครั้ง 60 วันพอให้ทัน */
+function rtExpDaysTo(ymd){
+  var T=(typeof TODAY_STR!=='undefined')?TODAY_STR:'';
+  if(!ymd || !T) return null;
+  var a=ymd.split('-'), b=T.split('-');
+  if(a.length!==3 || b.length!==3) return null;
+  var A=Date.UTC(+a[0],+a[1]-1,+a[2]), B=Date.UTC(+b[0],+b[1]-1,+b[2]);
+  return Math.round((A-B)/86400000);
+}
+/* ตัวถัดไปที่ "มีคนเขียนไว้แล้ว" · สัญญาหลักของเอเย่นต์ระบุ Rate Type ไว้คนละตัวกับที่ผูกอยู่
+   ระบบไม่เดาตัวถัดไปให้เอง · แค่หยิบสิ่งที่กรอกไว้แล้วมาวางตรงหน้า ให้คนตัดสิน */
+function rtExpNextOf(agentId){
+  if(!agentId || typeof SB_CONTRACTS==='undefined' || !Array.isArray(SB_CONTRACTS)) return '';
+  for(var i=0;i<SB_CONTRACTS.length;i++){
+    var c=SB_CONTRACTS[i];
+    if(c && c.agentId===agentId && c.kind==='main'
+       && c.status!=='void' && c.status!=='cancelled' && c.rateTypeId) return c.rateTypeId;
+  }
+  return '';
+}
+/* เอเย่นต์ที่ผูกอยู่กับเรทชุดนี้ · ผ่านขอบเขตของผู้ใช้เหมือนหน้า Agents (เซลล์เห็นเฉพาะของตัว) */
+function rtExpAgentsOn(rtId){
+  var A=(typeof SB_AGENTS!=='undefined')?SB_AGENTS:[];
+  if(typeof laScopeAgents==='function') A=laScopeAgents(A.slice());
+  return A.filter(function(a){ return a && a.rateTypeId===rtId; });
+}
+/* แถวเดียวของเรทหนึ่งชุด · null = ชุดนี้ไม่ต้องเตือน */
+function rtExpRowFor(rt, within){
+  if(!rt || rt.active===false) return null;
+  var to=String(rt.validTo||''); if(!to) return null;      /* ไม่มีวันหมด = ไม่มีอะไรให้เตือน */
+  var d=rtExpDaysTo(to); if(d===null || d>(within==null?_RT_EXP_WINDOW:within)) return null;
+  var _after=laDayAfter(to);
+  var ags=rtExpAgentsOn(rt.id).filter(function(a){
+    /* §rtSeason · เจ้าที่ตั้งฤดูถัดไปไว้แล้ว ไม่ต้องอยู่ในแผงรวม · กติกาเดียวกับ rtExpForAgent
+       ตัวนับบนแผงกับบรรทัดในหน้า Agent จึงพูดตรงกันเสมอ */
+    return !laSeasonAt(a, _after);
+  });
+  if(!ags.length) return null;                             /* ไม่มีใครใช้ = ไม่ใช่เรื่องของใคร */
+  var have=rt.seatRates||{}, blocked={}, next={};
+  ags.forEach(function(a){
+    /* โปรแกรมที่เอเย่นต์ขาย แต่เรทชุดนี้ไม่มีราคาให้ · พอถึงฤดู ปุ่มบันทึกจะถูกล็อก (noRate)
+       เคสจริงคือสิมิลัน/สุรินทร์ — เรทฤดูต่ำไม่มีราคาเพราะอุทยานปิด พอเปิดฤดูจึงจองไม่ได้ */
+    (a.programs||[]).forEach(function(p){ if(p && !have[p]) blocked[p]=(blocked[p]||0)+1; });
+    var nx=rtExpNextOf(a.id);
+    if(nx && nx!==rt.id) next[nx]=(next[nx]||0)+1;
+  });
+  return { rt:rt, to:to, days:d, agents:ags, blocked:blocked, next:next };
+}
+function rtExpScan(within){
+  var out=[];
+  (typeof SB_RATE_TYPES!=='undefined'?SB_RATE_TYPES:[]).forEach(function(rt){
+    var r=rtExpRowFor(rt, within); if(r) out.push(r);
+  });
+  out.sort(function(a,b){ return a.days-b.days || String(a.rt.name||'').localeCompare(String(b.rt.name||'')); });
+  return out;
+}
+/* ของเอเย่นต์รายเดียว · ใช้ในแถบ Source ของ Pricing Matrix */
+function rtExpForAgent(a){
+  if(!a || !a.rateTypeId) return null;
+  var rt=(typeof getRateType==='function')?getRateType(a.rateTypeId):null; if(!rt) return null;
+  var to=String(rt.validTo||''); if(!to) return null;
+  /* §rtSeason · คำถามของแผงคือ "พ้นวันหมดแล้วใช้เรทไหน" · ตอบแล้วก็ไม่ต้องเตือน
+     เกณฑ์ที่ถูกคือ "มีช่วงไหนคลุมวันถัดจากวันหมดหรือเปล่า" ไม่ใช่ "มีช่วงที่เริ่มหลังวันหมด"
+     เพราะของจริงมีเคสที่ช่วงใหม่เริ่มวันเดียวกับวันหมดพอดี (เรทเก่าหมด 15 ต.ค. ใหม่เริ่ม 15 ต.ค.)
+     ใช้เกณฑ์เดิมแบบ > จะตกหล่นทั้งกลุ่มนั้น แล้วแผงจะยังเตือนทั้งที่ตั้งให้ไปแล้ว */
+  if(laSeasonAt(a, laDayAfter(to))) return null;
+  var d=rtExpDaysTo(to); if(d===null || d>_RT_EXP_WINDOW) return null;
+  var have=rt.seatRates||{}, blocked=[];
+  (a.programs||[]).forEach(function(p){ if(p && !have[p]) blocked.push(p); });
+  var nx=rtExpNextOf(a.id);
+  return { rt:rt, to:to, days:d, blocked:blocked, next:(nx&&nx!==rt.id)?nx:'' };
+}
+function _rtExpE(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _rtExpDate(y){ return (typeof _rtFmtDate==='function') ? (_rtFmtDate(y)||y) : y; }
+/* ป้ายบอกเวลา · "หมดแล้ว" กับ "อีก 27 วัน" ต้องอ่านออกจากระยะไกล สีจึงไล่ตามความใกล้ */
+function rtExpTone(d){
+  if(d<0)  return {bg:'#FCEBEB', bd:'#E8A9A2', fg:'#A32D2D', t:'หมดแล้ว '+Math.abs(d)+' วัน'};
+  if(d<=30) return {bg:'#FDEEDD', bd:'#E9B583', fg:'#9A5410', t:'อีก '+d+' วัน'};
+  return      {bg:'#FEF6E7', bd:'#EFD9AE', fg:'#8A5A00', t:'อีก '+d+' วัน'};
+}
+function rtExpRouteName(rid){
+  var r=(typeof getRoute==='function')?getRoute(rid):null;
+  return (r&&r.name)||rid;
+}
+/* ══ §rtExpBulk · ตั้งตารางฤดูกาลทีเดียวหลายเจ้า ══════════════════════════════
+   ที่มา · เรทฤดูต่ำหมดพร้อมกันเป็นร้อยเจ้า และ 76 เจ้าในนั้นระบุ "ตัวถัดไป" ไว้ในสัญญาแล้ว
+   ข้อมูลครบทั้งสามอย่าง — เรทเก่า เรทใหม่ วันแบ่ง — เหลือแค่งานกรอกซ้ำ ๆ 76 รอบ
+
+   ทำไมตั้งตารางแทนที่จะเปลี่ยนเรทให้เลย
+     เปลี่ยนเรทตรง ๆ = ราคาของ "วันนี้" เปลี่ยนทันที ทั้งที่ยังอยู่ในฤดูเก่า
+     ตั้งตาราง = ก่อนวันแบ่งยังเป็นเรทเดิมทุกบาท เปลี่ยนเฉพาะวันเดินทางตั้งแต่วันแบ่งไป
+     กดตอนไหนก็ได้ ไม่ต้องรอไปกดวันที่ 15
+
+   วันแบ่ง · ใช้ validFrom ของเรทตัวถัดไป ไม่ใช่ validTo+1 ของตัวเก่า
+     เพราะของจริงมีทั้งแบบต่อกันพอดี (14 → 15) และแบบคาบกันหนึ่งวัน (15 → 15)
+     ยึดวันที่เรทตัวใหม่ประกาศว่าตัวเองเริ่ม แล้วปิดตัวเก่าที่วันก่อนหน้า · ต่อกันเสมอ ไม่มีวันโหว่
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _rtExpBulkRt = '';
+/* ผู้เข้าข่ายของเรทชุดหนึ่ง · จัดกลุ่มตามเรทตัวถัดไป เพราะวันแบ่งของแต่ละกลุ่มไม่เท่ากัน */
+function rtExpBulkPlan(rtId){
+  var rt = (typeof getRateType === 'function') ? getRateType(rtId) : null;
+  if(!rt) return null;
+  var groups = {}, order = [], skipHas = 0, skipNo = 0, skipOff = 0, skipPast = 0;
+  rtExpAgentsOn(rtId).forEach(function(a){
+    if(laSeasonsOf(a).length){ skipHas++; return; }      /* ตั้งเองไว้แล้ว ไม่ไปทับของใคร */
+    var nx = rtExpNextOf(a.id);
+    if(!nx || nx === rtId){ skipNo++; return; }           /* สัญญาไม่ได้ระบุตัวถัดไป · ไม่เดาให้ */
+    var nrt = (typeof getRateType === 'function') ? getRateType(nx) : null;
+    if(!nrt){ skipNo++; return; }
+    if(nrt.active === false){ skipOff++; return; }          /* เรทที่ปิดไปแล้ว ไม่เอามาเป็นตัวถัดไป */
+    /* §rtExpSplit · วันแบ่งต้องมาจากข้อมูลที่สมเหตุสมผล ไม่ใช่หยิบ validFrom มาดื้อ ๆ
+       ของจริงมีเรทที่ validFrom ย้อนหลังไปก่อนวันที่เรทเก่าหมด (เจอ 16 พ.ค. ทั้งที่เรทเก่าหมด 14 ต.ค.)
+       หยิบมาตรง ๆ = ตารางจะสั่งให้เรทใหม่มีผลตั้งแต่พฤษภา คือ "ราคาวันนี้ขยับทันที"
+       ซึ่งขัดกับสิ่งที่กล่องนี้สัญญาไว้ว่าก่อนวันแบ่งไม่ขยับสักบาท
+       กติกา · ใช้ validFrom ของตัวใหม่ก็ต่อเมื่อมันไม่ย้อนไปก่อนวันที่ตัวเก่าหมด
+              ไม่งั้นถอยไปใช้ "วันถัดจากวันที่ตัวเก่าหมด" ซึ่งต่อกันพอดีเสมอ */
+    var vf = String(nrt.validFrom || ''), vt = String(rt.validTo || '');
+    var split = (vf && (!vt || vf >= vt)) ? vf : _rtExpDayAfter(vt);
+    if(!split){ skipNo++; return; }                        /* ไม่รู้ว่าจะแบ่งวันไหน ก็ไม่ตั้ง */
+    /* วันแบ่งที่อยู่ในอดีต = กดแล้วราคาวันนี้เปลี่ยนทันที · ตัวนี้ไม่ได้มีไว้ทำแบบนั้น */
+    if(TODAY_STR && split <= TODAY_STR){ skipPast++; return; }
+    var k = nx + '|' + split;
+    if(!groups[k]){ groups[k] = { next:nx, nextRt:nrt, split:split, ags:[] }; order.push(k); }
+    groups[k].ags.push(a);
+  });
+  order.sort(function(x,y){ return groups[y].ags.length - groups[x].ags.length; });
+  return { rt:rt, groups:order.map(function(k){ return groups[k]; }),
+           skipHas:skipHas, skipNo:skipNo, skipOff:skipOff, skipPast:skipPast,
+           total:order.reduce(function(n,k){ return n + groups[k].ags.length; }, 0) };
+}
+/* เหตุผลที่ข้าม · บอกให้ครบ ไม่งั้นคนเห็นตัวเลขไม่ตรงแล้วไม่รู้ว่าหายไปไหน */
+function _rtExpSkipTxt(P, sep){
+  return [ P.skipHas  ? ('<b>'+P.skipHas+'</b> เจ้าตั้งตารางเองไว้แล้ว · ระบบไม่ไปทับ') : '',
+           P.skipNo   ? ('<b>'+P.skipNo+'</b> เจ้าไม่ได้ระบุเรทตัวถัดไปในสัญญา') : '',
+           P.skipOff  ? ('<b>'+P.skipOff+'</b> เจ้าชี้ไปเรทที่ปิดใช้งานแล้ว') : '',
+           P.skipPast ? ('<b>'+P.skipPast+'</b> เจ้าได้วันแบ่งที่เป็นอดีต · ตั้งให้จะทำให้ราคาวันนี้ขยับ') : ''
+         ].filter(Boolean).join(sep);
+}
+function _rtExpDayAfter(ymd){
+  return (typeof laDayAfter === 'function') ? laDayAfter(ymd) : '';
+}
+function _rtExpDayBefore(ymd){
+  var p = String(ymd||'').split('-'); if(p.length !== 3) return '';
+  var d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0,10);
+}
+function rtExpBulkOpen(rtId){
+  if(typeof laGuardEdit === 'function' && !laGuardEdit('sales')) return;
+  _rtExpBulkRt = rtId;
+  var P = rtExpBulkPlan(rtId); if(!P) return;
+  var e = _rtExpE, rt = P.rt;
+  var h = '<div style="padding:16px 18px;border-bottom:1px solid #EEF0F3">'
+    +'<div style="font-size:15px;font-weight:800;color:#1F2937">ตั้งตารางฤดูกาลให้ทั้งกลุ่ม</div>'
+    +'<div style="font-size:11.5px;color:#6B7280;margin-top:3px">'
+      + e(rt.name || rt.id) + ' · หมด ' + e(_rtExpDate(rt.validTo || '')) + '</div></div>'
+    +'<div style="padding:14px 18px">';
+  if(!P.total){
+    h += '<div style="font-size:12px;color:#6B7280;line-height:1.7">ไม่มีเจ้าไหนตั้งให้อัตโนมัติได้<br>'
+      + _rtExpSkipTxt(P, '<br>')
+      + '</div>';
+  } else {
+    h += '<div style="background:#F1F8F5;border:1px solid #BEE0D2;border-radius:9px;padding:9px 12px;'
+      +'font-size:11.5px;color:#0F6E56;line-height:1.65;margin-bottom:12px">'
+      +'<b>ราคาก่อนวันแบ่งไม่ขยับสักบาท</b> — ตารางฤดูกาลเปลี่ยนเฉพาะทริปที่<b>เดินทาง</b>ตั้งแต่วันแบ่งเป็นต้นไป<br>'
+      +'<span style="color:#4E7F6C">กดวันนี้ได้เลย ไม่ต้องรอไปกดวันที่เรทหมด</span></div>';
+    P.groups.forEach(function(g){
+      var names = g.ags.slice(0, 14).map(function(a){ return e(a.code || a.name || a.id); }).join(' · ');
+      h += '<div style="border:1px solid #E7EAEF;border-radius:9px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">'
+          +'<b style="color:#2C3440">' + g.ags.length + ' เอเย่นต์</b>'
+          +'<span style="color:#9AA3AE">→</span>'
+          +'<b style="color:#0F6E56">' + e(g.nextRt.name || g.next) + '</b>'
+          +'<span style="margin-left:auto;font-size:11px;color:#6B7280;font-variant-numeric:tabular-nums">'
+            +'แบ่งวันที่ <b>' + e(_rtExpDate(g.split)) + '</b></span></div>'
+        +'<div style="font-size:10.5px;color:#8A929E;margin-top:5px;line-height:1.6">'
+          + e(rt.name || '') + ' ถึง ' + e(_rtExpDate(_rtExpDayBefore(g.split)))
+          + ' · แล้วเปลี่ยนเป็น ' + e(g.nextRt.name || '') + ' ตั้งแต่ ' + e(_rtExpDate(g.split)) + ' ไม่มีวันสิ้นสุด</div>'
+        +'<div style="font-size:10.5px;color:#6B7280;margin-top:5px;line-height:1.6">' + names
+          + (g.ags.length > 14 ? (' · และอีก ' + (g.ags.length - 14)) : '') + '</div>'
+      +'</div>';
+    });
+    var _sk = _rtExpSkipTxt(P, ' · ');
+    if(_sk){
+      h += '<div style="font-size:11px;color:#8A5A00;background:#FEF6E7;border:1px solid #EFD9AE;'
+        +'border-radius:8px;padding:7px 11px;line-height:1.6">ข้ามไป — ' + _sk + '</div>';
+    }
+  }
+  h += '</div><div style="padding:12px 18px;border-top:1px solid #EEF0F3;display:flex;gap:8px;justify-content:flex-end">'
+    +'<button onclick="acctModalClose()" style="border:1px solid #D6DCE5;background:#fff;color:#5A6270;'
+      +'border-radius:8px;padding:7px 15px;font:600 11.5px inherit;cursor:pointer;font-family:inherit">ปิด</button>'
+    + (P.total ? ('<button onclick="rtExpBulkApply()" style="border:0;background:#0F172A;color:#fff;'
+      +'border-radius:8px;padding:7px 17px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">'
+      +'ตั้งให้ ' + P.total + ' เอเย่นต์</button>') : '')
+    +'</div>';
+  acctModal(h);
+}
+function rtExpBulkApply(){
+  if(typeof laGuardEdit === 'function' && !laGuardEdit('sales')) return;
+  var P = rtExpBulkPlan(_rtExpBulkRt); if(!P || !P.total) return;
+  var rt = P.rt, n = 0;
+  var who = (typeof window !== 'undefined' && window._rmUser) ? window._rmUser : '';
+  var at = new Date().toISOString();
+  P.groups.forEach(function(g){
+    var endOld = _rtExpDayBefore(g.split);
+    g.ags.forEach(function(a){
+      if(laSeasonsOf(a).length) return;                  /* เผื่อมีคนตั้งไประหว่างเปิดกล่องค้างไว้ */
+      var seasons = [];
+      /* ช่วงแรกใส่ก็ต่อเมื่อรู้วันเริ่มของเรทเดิม · ไม่รู้ก็ไม่ต้องใส่
+         เพราะวันก่อนช่วงแรกถอยไปใช้ a.rateTypeId ซึ่งคือเรทเดิมอยู่แล้ว ผลเท่ากันเป๊ะ */
+      if(rt.validFrom && endOld && rt.validFrom <= endOld)
+        seasons.push({ rt: rt.id, from: String(rt.validFrom), to: endOld });
+      seasons.push({ rt: g.next, from: g.split, to: '' });
+      a.rateSeasons = seasons;
+      /* เขียน activity เองแล้วค่อยเซฟทีเดียวตอนจบ · agLog เซฟทุกครั้งที่เรียก
+         76 เจ้า = เขียน blob ทั้งก้อน 76 รอบ ซึ่งช้าจนหน้าค้าง */
+      if(!Array.isArray(a.activity)) a.activity = [];
+      a.activity.push({ at:at, by:who, kind:'rate',
+        text:'ตั้งตารางฤดูกาลแบบกลุ่ม · ' + (rt.name || rt.id) + ' ถึง ' + endOld
+           + ' → ' + ((g.nextRt && g.nextRt.name) || g.next) + ' ตั้งแต่ ' + g.split });
+      if(a.activity.length > 200) a.activity = a.activity.slice(-200);
+      n++;
+    });
+  });
+  if(typeof sbAgentsPersist === 'function') sbAgentsPersist();
+  acctModalClose();
+  if(typeof rtExpRender === 'function') rtExpRender();
+  if(typeof flShowToast === 'function') flShowToast('ตั้งตารางฤดูกาลให้ ' + n + ' เอเย่นต์แล้ว');
+  else console.log('[rtExpBulk] set seasons for ' + n + ' agents');
+}
+
+/* ══ §agProgBulk · เติมโปรแกรมให้ตรงกับเรท ทีเดียวหลายเจ้า ════════════════════
+   §agProgFill แก้ของ "ตั้งแต่วันนี้ไป" · ก้อนนี้คือของที่ค้างอยู่แล้ว
+   เติมอย่างเดียว ไม่ตัดอะไรทั้งนั้น — การตัดคือการลบของที่คนตั้งใจใส่ ต้องดูทีละเจ้า
+   เจ้าที่มีเส้นซึ่งเรทไม่มีราคา จึงแค่ "ขึ้นให้เห็น" ในกล่อง ไม่ได้ถูกแตะ
+   ═══════════════════════════════════════════════════════════════════════════ */
+function agProgBulkPlan(){
+  var A = (typeof SB_AGENTS!=='undefined') ? SB_AGENTS : [];
+  if(typeof laScopeAgents==='function') A = laScopeAgents(A.slice());
+  /* แยกสองกอง เพราะผลของการเติมไม่เหมือนกันเลย
+       empty   · ยังไม่ได้กรอกโปรแกรมสักเส้น → วันนี้ "ไม่มีขอบเขต" อะไรทั้งนั้น
+                 เติมแล้วได้ขอบเขตขึ้นมา = แคบลง ปลอดภัยเสมอ
+       partial · Sales กรอกไว้แล้วบางส่วน → เติมคือการ "เปิดสิทธิ์ขายเพิ่ม"
+                 อาจเป็นเส้นที่เขาตั้งใจไม่ให้ขาย · ต้องเป็นปุ่มแยก ไม่รวมกับกองแรก */
+  var empty = [], partial = [], mismatch = [], nEmpty = 0, nPartial = 0;
+  A.forEach(function(a){
+    if(!a || !a.rateTypeId) return;
+    var P = agProgPlan(a, a.rateTypeId);
+    if(!P.rt) return;
+    if(P.add.length){
+      if((a.programs||[]).length){ partial.push({a:a, add:P.add}); nPartial += P.add.length; }
+      else { empty.push({a:a, add:P.add}); nEmpty += P.add.length; }
+    }
+    if(P.drop.length) mismatch.push({a:a, drop:P.drop});
+  });
+  var by = function(x,y){ return y.add.length - x.add.length; };
+  empty.sort(by); partial.sort(by);
+  return {empty:empty, partial:partial, mismatch:mismatch, nEmpty:nEmpty, nPartial:nPartial};
+}
+function agProgBulkPanel(hostId){
+  var host = document.getElementById(hostId); if(!host) return;
+  var P;
+  try{ P = agProgBulkPlan(); }catch(e){ console.warn('agProgBulkPlan failed', e); host.innerHTML=''; return; }
+  if(!P.empty.length && !P.partial.length && !P.mismatch.length){ host.innerHTML=''; return; }
+  var line = function(txt, btn){ return '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;'
+    +'border-top:1px solid #F1F3F6;padding:7px 0;font-size:11.5px;color:#4A5360;line-height:1.55">'
+    + txt + (btn||'') + '</div>'; };
+  var b = function(scope, label, dark){ return '<button onclick="agProgBulkOpen(\''+scope+'\')" '
+    +'style="margin-left:auto;border:'+(dark?'0':'1px solid #D6DCE5')+';background:'+(dark?'#0F172A':'#fff')
+    +';color:'+(dark?'#fff':'#5A6270')+';border-radius:999px;padding:5px 14px;font:700 11px inherit;'
+    +'cursor:pointer;font-family:inherit;white-space:nowrap">'+label+'</button>'; };
+  host.innerHTML = '<div style="background:#fff;border:1px solid #E7EAEF;border-radius:11px;'
+    +'padding:12px 15px;margin:0 0 14px">'
+    +'<div style="font-size:12.5px;font-weight:800;color:#2C3440">โปรแกรมในสัญญา กับ เรทที่ผูกอยู่</div>'
+    +'<div style="font-size:11px;color:#6B7280;line-height:1.6;margin-bottom:4px">'
+      +'เรทบอกว่ามีราคาของเส้นทางไหนบ้าง · สัญญาบอกว่าเอเย่นต์ขายเส้นทางไหนบ้าง '
+      +'และรายการในสัญญายังเป็น<b>ขอบเขตที่ขายได้</b>ตอนเปิดบุกกิ้งด้วย</div>'
+    + (P.empty.length ? line('<b style="color:#2C3440">'+P.empty.length+' เจ้ายังไม่ได้กรอกโปรแกรมเลย</b>'
+        +'<span>· วันนี้จึงจองเส้นไหนก็ได้ ไม่มีอะไรกั้น · เติมตามเรทแล้วจะมีขอบเขตขึ้นมา (+'+P.nEmpty+' เส้นทาง)</span>',
+        b('empty','เติมให้ '+P.empty.length+' เจ้า', true)) : '')
+    + (P.partial.length ? line('<b style="color:#8A5410">'+P.partial.length+' เจ้ากรอกไว้แล้วบางส่วน</b>'
+        +'<span>· เติมคือการเปิดสิทธิ์ขายเพิ่ม (+'+P.nPartial+' เส้นทาง) ซึ่งอาจเป็นเส้นที่ Sales ตั้งใจไม่ให้ขาย · ดูก่อนค่อยตัดสิน</span>',
+        b('partial','ดู '+P.partial.length+' เจ้า', false)) : '')
+    + (P.mismatch.length ? line('<b style="color:#A32D2D">'+P.mismatch.length+' เจ้ามีเส้นที่เรทไม่มีราคาให้</b>'
+        +'<span>· กล่องนี้ไม่ตัดให้ · ขึ้นเป็นเตือนในบล็อก Needs action ของเจ้านั้นอยู่แล้ว ต้องยืนยันทีละเจ้า</span>','') : '')
+    +'</div>';
+}
+var _agProgBulkScope = 'empty';
+function agProgBulkOpen(scope){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return;
+  _agProgBulkScope = (scope==='partial') ? 'partial' : 'empty';
+  var P = agProgBulkPlan();
+  var list = (_agProgBulkScope==='partial') ? P.partial : P.empty;
+  var nAdd = (_agProgBulkScope==='partial') ? P.nPartial : P.nEmpty;
+  if(!list.length) return;
+  var e = _rtExpE, isP = (_agProgBulkScope==='partial');
+  var h = '<div style="padding:16px 18px;border-bottom:1px solid #EEF0F3">'
+    +'<div style="font-size:15px;font-weight:800;color:#1F2937">เติมโปรแกรมให้ตรงกับเรท</div>'
+    +'<div style="font-size:11.5px;color:#6B7280;margin-top:3px">'
+      + (isP ? 'กลุ่มที่กรอกไว้แล้วบางส่วน · ' : 'กลุ่มที่ยังไม่ได้กรอกเลย · ')
+      + list.length + ' เอเย่นต์ · เติมรวม ' + nAdd + ' เส้นทาง</div></div>'
+    +'<div style="padding:14px 18px">';
+  h += isP
+    ? '<div style="background:#FEF6E7;border:1px solid #EFD9AE;border-radius:9px;padding:9px 12px;'
+      +'font-size:11.5px;color:#8A5410;line-height:1.65;margin-bottom:12px">'
+      +'<b>กลุ่มนี้มีคนกรอกไว้แล้ว</b> — การเติมคือการเปิดให้ขายเส้นที่วันนี้ขายไม่ได้<br>'
+      +'<span style="color:#9A6A2A">ถ้า Sales ตั้งใจให้ขายแค่บางเส้น อย่ากดทั้งกลุ่ม · เข้าไปเติมทีละเจ้าที่หน้า Agent</span></div>'
+    : '<div style="background:#F1F8F5;border:1px solid #BEE0D2;border-radius:9px;padding:9px 12px;'
+      +'font-size:11.5px;color:#0F6E56;line-height:1.65;margin-bottom:12px">'
+      +'<b>เติมอย่างเดียว ไม่ตัดอะไรเลย</b> — กลุ่มนี้ยังไม่มีโปรแกรมสักเส้น จึงไม่มีของเดิมให้ทับ<br>'
+      +'<span style="color:#4E7F6C">ช่วงจองของแถวที่เติม = ช่วงสัญญาของเจ้านั้น · ช่วงเดินทาง = ตามที่เรทกำหนดไว้</span></div>';
+  list.slice(0, 40).forEach(function(f){
+    h += '<div style="border-top:1px solid #EEF0F3;padding:7px 0;font-size:11.5px;line-height:1.55">'
+      +'<b style="color:#2C3440">' + e(f.a.code || f.a.name || f.a.id) + '</b> '
+      + (isP ? ('<span style="color:#9AA3AE">มีอยู่ '+(f.a.programs||[]).length+'</span> ') : '')
+      +'<span style="color:#0F6E56;font-weight:700">+' + f.add.length + '</span> '
+      +'<span style="color:#6B7280">' + f.add.slice(0,5).map(function(r){ return e(agProgRouteName(r)); }).join(' · ')
+      + (f.add.length>5 ? (' · และอีก '+(f.add.length-5)) : '') + '</span></div>';
+  });
+  if(list.length > 40)
+    h += '<div style="font-size:11px;color:#8A929E;padding-top:7px">· และอีก ' + (list.length-40) + ' เจ้า</div>';
+  h += '</div><div style="padding:12px 18px;border-top:1px solid #EEF0F3;display:flex;gap:8px;justify-content:flex-end">'
+    +'<button onclick="acctModalClose()" style="border:1px solid #D6DCE5;background:#fff;color:#5A6270;'
+      +'border-radius:8px;padding:7px 15px;font:600 11.5px inherit;cursor:pointer;font-family:inherit">ปิด</button>'
+    +'<button onclick="agProgBulkApply()" style="border:0;background:'+(isP?'#8A5410':'#0F172A')+';color:#fff;'
+      +'border-radius:8px;padding:7px 17px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">'
+      +'เติมให้ ' + list.length + ' เอเย่นต์</button></div>';
+  acctModal(h);
+}
+function agProgBulkApply(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return;
+  var P = agProgBulkPlan();
+  var list = (_agProgBulkScope==='partial') ? P.partial : P.empty;
+  if(!list.length) return;
+  var who = (typeof window!=='undefined' && window._rmUser) ? window._rmUser : '';
+  var at = new Date().toISOString(), n = 0, routes = 0;
+  list.forEach(function(f){
+    var R = agProgFill(f.a, f.a.rateTypeId, {});      /* เติมอย่างเดียว · removeExtra ไม่ถูกส่ง */
+    if(!R || !R.add.length) return;
+    /* เขียน activity เองแล้วเซฟทีเดียวตอนจบ · agLog เซฟทุกครั้งที่เรียก (ดู §rtExpBulk) */
+    if(!Array.isArray(f.a.activity)) f.a.activity = [];
+    f.a.activity.push({ at:at, by:who, kind:'programs',
+      text:'เติมโปรแกรมตามเรทแบบกลุ่ม · +' + R.add.length + ' · ' + R.add.map(agProgRouteName).join(' · ') });
+    if(f.a.activity.length > 200) f.a.activity = f.a.activity.slice(-200);
+    n++; routes += R.add.length;
+  });
+  if(typeof sbAgentsPersist==='function') sbAgentsPersist();
+  acctModalClose();
+  if(typeof renderRateAdmin==='function') renderRateAdmin();
+  var av = document.getElementById('view-agents');
+  if(av && av.classList.contains('active') && typeof renderAgents==='function') renderAgents();
+  if(typeof flShowToast==='function') flShowToast('เติมโปรแกรมให้ ' + n + ' เอเย่นต์ · ' + routes + ' เส้นทาง');
+  else console.log('[agProgBulk] filled ' + n + ' agents / ' + routes + ' routes');
+}
+
+/* แผงบนหน้า Rate Types · ไม่มีอะไรจะเตือน = ไม่วาดเลย ไม่ใช่วาดกล่องว่าง */
+/* §rtAdmin · หน้า Rate Types มีหน้าที่ทำเรท · แผงเตือน 11 ชุด 202 เอเย่นต์ ดันรายการเรทตกจอไปเลย
+   ย้ายแผงเต็มไปหน้า Rate Type Management แล้วเหลือบรรทัดเดียวไว้ตรงนี้ · เห็นว่ามีเรื่อง แล้วกดไปดู */
+function rtExpBanner(){
+  var host=document.getElementById('rt-expiry'); if(!host) return;
+  var rows=rtExpScan();
+  if(!rows.length){ host.innerHTML=''; return; }
+  var nAg=0; rows.forEach(function(r){ nAg+=r.agents.length; });
+  var tn=rtExpTone(rows[0].days);
+  var nBulk=0;
+  rows.forEach(function(r){ try{ var p=rtExpBulkPlan(r.rt.id); if(p) nBulk+=p.total; }catch(_){} });
+  host.innerHTML='<div onclick="rtAdminGo()" style="background:'+tn.bg+';border:1px solid '+tn.bd
+    +';border-left:3px solid '+tn.fg+';border-radius:10px;padding:8px 13px;margin:0 0 12px;cursor:pointer;'
+    +'display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;color:#4A5360">'
+    +'<b style="color:'+tn.fg+'">&#9888; เรทกำลังจะหมดอายุ</b>'
+    +'<span>'+rows.length+' ชุด · '+nAg+' เอเย่นต์ · ชุดที่ใกล้ที่สุด'+_rtExpE(tn.t)+'</span>'
+    +(nBulk?('<span style="background:#E3F3EC;border:1px solid #BEE0D2;color:#0F6E56;border-radius:999px;'
+      +'padding:2px 9px;font-size:10px;font-weight:800">ตั้งตารางให้ได้ทันที '+nBulk+' เจ้า</span>'):'')
+    +'<span style="margin-left:auto;color:#5A6270;font-weight:600;text-decoration:underline">'
+    +laT('เปิดภาพรวม Rate Expiry')+'</span></div>';
+}
+function rtAdminGo(){
+  var el=document.querySelector('.nav-item[data-view="rate-admin"]');
+  if(el && typeof nav==='function') nav(el);
+}
+/* ── หน้า Rate Type Management ─────────────────────────────────────────────
+   งานดูแลเรทที่ไม่ใช่การแก้ตัวเรทเอง · ตอนนี้มีเรื่องเดียวคือ "เรทหมดอายุแล้วยังไงต่อ"
+   วิธีใช้เขียนไว้บนหน้าเลย เพราะเป็นของใหม่ที่ไม่มีใครเคยทำ และทำปีละสองครั้ง จำไม่ได้แน่ */
+function renderRateAdmin(){
+  var head=document.getElementById('rta-how');
+  if(head){
+    var step=function(n,t,d){ return '<div style="display:flex;gap:10px;align-items:flex-start;'
+      +'padding:7px 0;border-top:1px solid #F1F3F6">'
+      +'<span style="flex:none;width:19px;height:19px;border-radius:50%;background:#0F172A;color:#fff;'
+      +'font:700 10.5px inherit;display:flex;align-items:center;justify-content:center">'+n+'</span>'
+      +'<div style="font-size:11.5px;line-height:1.6;color:#4A5360"><b style="color:#2C3440">'+t+'</b>'
+      +'<div style="color:#6B7280">'+d+'</div></div></div>'; };
+    head.innerHTML='<div style="background:#fff;border:1px solid #E7EAEF;border-radius:11px;'
+      +'padding:12px 15px;margin:0 0 14px">'
+      +'<div style="font-size:12.5px;font-weight:800;color:#2C3440;margin-bottom:2px">ขั้นตอนการใช้</div>'
+      +'<div style="font-size:11px;color:#6B7280;line-height:1.6;margin-bottom:4px">'
+        +'ทำตอนใกล้เปลี่ยนฤดู · ปีละสองครั้ง (ราว 15 ต.ค. และ 15 พ.ค.)</div>'
+      + step(1,'ดูรายการข้างล่าง',
+          'เรียงตามชุดที่ใกล้หมดที่สุด · ตัวเลขขวาสุดคือจำนวนเอเย่นต์ที่ผูกอยู่กับชุดนั้น')
+      + step(2,'แถวที่มีปุ่มเขียว กดได้เลย',
+          'ปุ่มจะขึ้นเมื่อสัญญาของเอเย่นต์ระบุเรทตัวถัดไปไว้แล้ว · กดแล้วเปิดกล่องให้ตรวจก่อน '
+          +'เห็นว่าใครบ้าง เปลี่ยนเป็นเรทอะไร แบ่งวันไหน แล้วค่อยยืนยัน')
+      + step(3,'แถวที่ไม่มีปุ่ม ต้องตั้งเอง',
+          'เปิดหน้า Agent รายนั้น → แท็บ <b>Rate Type</b> → หัวข้อ 2 ตารางฤดูกาล · ถ้าสัญญาระบุตัวถัดไปไว้ จะมีปุ่ม "เติมจากสัญญา" กดทีเดียวจบ')
+      + step(4,'ตั้งแล้วแถวนั้นจะหายไปเอง',
+          'ระบบถือว่าคำถาม "หมดแล้วใช้อะไร" ถูกตอบแล้ว · เหลือแต่ชุดที่ยังไม่มีคนจัดการ')
+      +'<div style="margin-top:10px;background:#F1F8F5;border:1px solid #BEE0D2;border-radius:9px;'
+        +'padding:8px 12px;font-size:11px;color:#0F6E56;line-height:1.65">'
+        +'<b>ตั้งตาราง ≠ เปลี่ยนเรท</b> — ตารางฤดูกาลไม่แตะราคาก่อนวันแบ่งเลยสักบาท '
+        +'เปลี่ยนเฉพาะทริปที่<b>เดินทาง</b>ตั้งแต่วันแบ่งไป<br>'
+        +'<span style="color:#4E7F6C">กดวันนี้ได้เลย ไม่ต้องรอไปกดวันที่เรทหมดจริง</span></div>'
+      +'</div>';
+  }
+  if(typeof agProgBulkPanel==='function') agProgBulkPanel('rta-fill');   /* §agProgBulk */
+  rtExpRender('rta-exp');
+}
+function rtExpRender(hostId){
+  var host=document.getElementById(hostId||'rt-expiry'); if(!host) return;
+  var rows=rtExpScan();
+  if(!rows.length){
+    host.innerHTML='<div style="background:#F1F8F5;border:1px solid #BEE0D2;border-radius:11px;'
+      +'padding:12px 15px;font-size:12px;color:#0F6E56">&#10003; ไม่มีเรทชุดไหนกำลังจะหมดอายุในช่วง 60 วันข้างหน้า</div>';
+    return;
+  }
+  var nAg=0; rows.forEach(function(r){ nAg+=r.agents.length; });
+  var soon=rows[0].days;
+  var head=rtExpTone(soon);
+  var h='<div style="background:#fff;border:1px solid '+head.bd+';border-left:3px solid '+head.fg
+    +';border-radius:11px;padding:12px 15px;margin:0 0 14px">'
+    +'<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:3px">'
+      +'<span style="font-size:13px;font-weight:800;color:'+head.fg+'">&#9888; เรทที่กำลังจะหมดอายุ</span>'
+      +'<span style="font-size:11.5px;color:#5A6270">'+rows.length+' ชุด · '+nAg+' เอเย่นต์</span>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#6B7280;line-height:1.6;margin-bottom:10px">'
+      +'วันหมดอายุ<b>ไม่ได้กั้นการคิดเงิน</b> — พ้นวันนี้ไปแล้วระบบยังคิดราคาชุดเดิมต่อ ไม่มีอะไรเตือนตอนจอง<br>'
+      +'ชุดที่มีโปรแกรมขึ้น <b style="color:#A32D2D">จองไม่ได้</b> คือชุดที่ไม่มีราคาของโปรแกรมนั้นเลย · ปุ่มบันทึกจะถูกล็อกตั้งแต่วันแรกของฤดู'
+    +'</div>';
+  rows.forEach(function(r){
+    var tn=rtExpTone(r.days);
+    var bk=Object.keys(r.blocked);
+    var nx=Object.keys(r.next).sort(function(a,b){ return r.next[b]-r.next[a]; });
+    h+='<div onclick="rtSelectCard(\''+_rtExpE(r.rt.id)+'\')" style="border-top:1px solid #EEF0F3;padding:9px 0;cursor:pointer">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<span style="background:'+tn.bg+';border:1px solid '+tn.bd+';color:'+tn.fg
+          +';font-size:10px;font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap">'+tn.t+'</span>'
+        +'<b style="font-size:12.5px;color:#2C3440">'+_rtExpE(r.rt.name||r.rt.code||r.rt.id)+'</b>'
+        +'<span style="font-size:10px;color:#93A0AE;font-variant-numeric:tabular-nums">'+_rtExpE(r.rt.code||'')
+          +' · หมด '+_rtExpE(_rtExpDate(r.to))+'</span>'
+        +'<span style="margin-left:auto;font-size:11px;font-weight:700;color:#3C4553;white-space:nowrap">'
+          +r.agents.length+' เอเย่นต์</span>'
+      +'</div>';
+    if(bk.length){
+      h+='<div style="font-size:11px;color:#A32D2D;margin-top:4px;line-height:1.55">จองไม่ได้ — '
+        + bk.slice(0,4).map(function(p){ return '<b>'+_rtExpE(rtExpRouteName(p))+'</b> ('+r.blocked[p]+' เจ้า)'; }).join(' · ')
+        + (bk.length>4?(' · และอีก '+(bk.length-4)):'')
+        +'</div>';
+    }
+    if(nx.length){
+      /* §rtExpBulk · รู้ครบทั้งเรทเก่า เรทใหม่ และวันแบ่ง → ตั้งให้ทั้งกลุ่มได้เลย
+         ปุ่มอยู่ตรงนี้เพราะมันคือการกระทำต่อจากข้อมูลบรรทัดนี้พอดี ไม่ต้องไปหาที่อื่น */
+      var _nBulk=0;
+      try{ var _p=rtExpBulkPlan(r.rt.id); _nBulk=_p?_p.total:0; }catch(_){}
+      h+='<div style="font-size:11px;color:#0F6E56;margin-top:3px;line-height:1.55;'
+        +'display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>สัญญาระบุตัวถัดไปไว้แล้ว — '
+        + nx.slice(0,2).map(function(id){
+            var t=(typeof getRateType==='function')?getRateType(id):null;
+            return '<b>'+_rtExpE((t&&(t.name||t.code))||id)+'</b> ('+r.next[id]+' เจ้า)'; }).join(' · ')
+        + '</span>'
+        + (_nBulk
+            ? ('<button onclick="event.stopPropagation();rtExpBulkOpen(\''+_rtExpE(r.rt.id)+'\')" '
+              +'style="border:1px solid #BEE0D2;background:#F1F8F5;color:#0F6E56;border-radius:7px;'
+              +'padding:3px 11px;font:700 10.5px inherit;cursor:pointer;font-family:inherit;white-space:nowrap">'
+              +'ตั้งตารางฤดูกาลให้ '+_nBulk+' เจ้า</button>')
+            : '<span style="color:#8A929E">· ยังไม่ได้ผูกให้ ต้องเปลี่ยนเอง</span>')
+        +'</div>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  host.innerHTML=h;
+}
+
+/* ══ §rtSeasonUI · ตัวตั้งตารางฤดูกาล ════════════════════════════════════════
+   อยู่ใต้แถบ Source ของ Pricing Matrix · ที่เดียวกับที่คนกำลังดูราคาของเอเย่นต์รายนั้นอยู่
+   ไม่ได้ทำเป็นหน้าแยก เพราะคำถาม "หลังหมดฤดูใช้เรทไหน" เกิดขึ้นตอนมองตารางราคาอยู่พอดี
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* §rtTab · ตัวแก้ตารางฤดูกาลย้ายไปอยู่ในแท็บ Rate Type ของเอเย่นต์ (ดู agTabRate)
+   ตัวแก้แบบป๊อปอัปที่เคยอยู่ตรงนี้ถูกถอดออก · มีตัวแก้สองตัวสำหรับของชิ้นเดียว
+   คือทางที่ทั้งสองตัวจะค่อย ๆ ต่างกันจนพูดคนละเรื่อง
+   เหลือไว้เฉพาะตัวช่วยที่ของอื่นยังเรียกใช้ */
+function _rsE(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _rsDate(y){ return (typeof _rtFmtDate==='function') ? (_rtFmtDate(y)||y||'—') : (y||'—'); }
+function rtSeasonName(id){
+  var t=(typeof getRateType==='function')?getRateType(id):null;
+  return t ? (t.name||t.code||id) : '(ไม่พบชุดราคานี้)';
+}
+/* วันก่อนหน้าหนึ่งวัน · ใช้ตอนปิดช่วงให้ชนกับวันเริ่มของช่วงถัดไป */
+function _rtSeasonPrev(ymd){
+  var p=String(ymd||'').split('-'); if(p.length!==3) return '';
+  var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); d.setUTCDate(d.getUTCDate()-1);
+  return d.toISOString().slice(0,10);
+}
+
+/* §rtTab · บรรทัดชี้ทางในหน้า Pricing Matrix · บอกแค่พอให้รู้ว่ามีเรื่อง แล้วกดไปจัดการที่แท็บ
+   ตั้งใจให้เป็นบรรทัดเดียวเสมอ ไม่ว่าจะมีเรื่องหรือไม่ · ตารางราคาคือพระเอกของหน้านี้ */
+function rtMatrixHint(a){
+  if(!a) return '';
+  var e = _rsE, T = (typeof TODAY_STR !== 'undefined') ? TODAY_STR : '';
+  var X = (typeof rtExpForAgent === 'function') ? rtExpForAgent(a) : null;
+  var S = laSeasonsOf(a), cur = laSeasonAt(a, T);
+  var go = 'onclick="agSwitchTab(\'ratemgmt\',\''+e(a.id)+'\')"';
+  var bg = '#F7F8FA', bd = '#E7EAEF', mid;
+  if(X){
+    var tn = rtExpTone(X.days); bg = tn.bg; bd = tn.bd;
+    mid = '<b style="color:'+tn.fg+'">&#9888; เรทที่ใช้อยู่หมด '+e(_rsDate(X.to))+'</b>'
+        + '<span style="color:#8A929E">· '+e(tn.t)+' · ยังไม่ได้ตั้งตารางฤดูกาลรับ</span>';
+  } else if(S.length){
+    mid = '<b style="color:#2C3440">ตารางฤดูกาล '+S.length+' ช่วง</b>'
+        + '<span style="color:#6B7280">· ตอนนี้ใช้ <b>'+e(cur?rtSeasonName(cur.rt):rtSeasonName(a.rateTypeId))+'</b></span>';
+  } else {
+    mid = '<span style="color:#6B7280">ใช้ชุดราคาเดียวตลอดทั้งปี · ยังไม่ได้ตั้งตารางฤดูกาล</span>';
+  }
+  return '<div '+go+' style="background:'+bg+';border:1px solid '+bd+';border-radius:9px;padding:7px 12px;'
+    +'margin:0 0 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;'
+    +'color:#4A5360;cursor:pointer">'+mid
+    +'<span style="margin-left:auto;color:#5A6270;font-weight:600;text-decoration:underline;white-space:nowrap">'
+    +'จัดการที่แท็บ Rate Type</span></div>';
+}
+
 function renderRateTypes(){
   _rtBackfillOwners();   // §one-time seed เจ้าของ rate type เดิม (idempotent · เฉพาะอันที่ owner ยังว่าง)
   // Auto-select first rate type if nothing selected (after refresh / first visit)
   if(!_rtSelected && (SB_RATE_TYPES||[]).length){
     _rtSelected = SB_RATE_TYPES[0].id;
   }
+  rtDupCodeBanner();             /* §rtDupCode · โค้ดซ้ำทำให้การนำเข้า Agent ผูกเรทผิดชุด */
+  rtExpBanner();                 /* §rtAdmin · หน้านี้เอาไว้ทำเรท · แผงเตือนย้ายไปหน้ารวม เหลือบรรทัดเดียวชี้ทาง */
   rtApplyViewMode();
   rtRenderList();
   if(_rtSelected){
@@ -28816,7 +32702,7 @@ function rtForSales(salesId, keepId){
   });
   return {own:own, shared:shared, other:other, all:own.concat(shared,other), noSales:false};
 }
-function _rtOwnerLabel(rt){ const id=_rtOwnerId(rt); if(!id) return 'Shared · กลาง'; const s=(typeof sbGetSales==='function')?sbGetSales(id):null; return s?(s.name||id):id; }
+function _rtOwnerLabel(rt){ const id=_rtOwnerId(rt); if(!id) return laT('Shared · กลาง'); const s=(typeof sbGetSales==='function')?sbGetSales(id):null; return s?(s.name||id):id; }
 function _rtInScope(rt){ if(typeof laSalesScoped!=='function' || !laSalesScoped()) return true; const my=(typeof laMySalesId==='function')?laMySalesId():''; const o=_rtOwnerId(rt); return !o || o===my; }   // scoped sales เห็น: ของตัวเอง + Shared
 function rtSetOwner(rtId, salesId){
   if(typeof window.laIsAdmin==='function' && !window.laIsAdmin()){ alert('เฉพาะ admin กำหนดเจ้าของ Rate Type ได้'); return; }
@@ -28892,7 +32778,7 @@ function rtRenderList(){
     filtered.forEach(rt => { const o=_rtOwnerId(rt); (byOwner[o]=byOwner[o]||[]).push(rt); });   // filtered ถูก sort active-first + name มาแล้ว → ลำดับในกลุ่มคงเดิม
     const ownerIds = Object.keys(byOwner).filter(o=>o).sort((a,b)=>_rtOwnerLabel({owner:a}).localeCompare(_rtOwnerLabel({owner:b}),'en',{sensitivity:'base'}));
     const ordered = [...ownerIds]; if(byOwner['']) ordered.push('');   // Shared/กลาง ท้ายสุด
-    ordered.forEach(o => { const list=byOwner[o]; const s=o&&(typeof sbGetSales==='function')?sbGetSales(o):null; html += hd(o?('เซลล์: '+(s?(s.name||o):o)):'Shared · กลาง', list.length, s?(s.color||'#7a8fa3'):(o?'#7a8fa3':'#B0AEA6')); list.forEach(rt => { html += renderRow(rt); }); });
+    ordered.forEach(o => { const list=byOwner[o]; const s=o&&(typeof sbGetSales==='function')?sbGetSales(o):null; html += hd(o?(laT('เซลล์: ')+(s?(s.name||o):o)):laT('Shared · กลาง'), list.length, s?(s.color||'#7a8fa3'):(o?'#7a8fa3':'#B0AEA6')); list.forEach(rt => { html += renderRow(rt); }); });
   }
 
   host.innerHTML = html || '<div class="sb-empty" style="padding:30px 16px;color:var(--fd-ink-soft);font-size:12px">ยังไม่มี Rate Type — กดปุ่ม "+ New Rate Type" เพื่อสร้าง</div>';
@@ -28933,7 +32819,7 @@ function _rtAddonDetail_longtail(rt, subNo){
         <div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid #C8C6BF">
           <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:20px;padding:0 8px;background:#5F5E5A;color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em;border-radius:3px;font-variant-numeric:tabular-nums">3.${subNo}</span>
-            <span style="font-size:13.5px;font-weight:700;color:#0F1419;letter-spacing:-0.005em">Longtail (เรือหางยาว)</span>
+            <span style="font-size:13.5px;font-weight:700;color:#0F1419;letter-spacing:-0.005em">${laT('Longtail (เรือหางยาว)')}</span>
             <span style="font-size:10.5px;color:#7a7770">per route · Join + Charter · THB</span>
           </div>
         </div>
@@ -29417,7 +33303,7 @@ function rtAddonTypesOpen(){
   ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(15,20,25,.45);display:flex;align-items:center;justify-content:center;padding:24px';
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:15px;font-weight:700;color:var(--fd-ink)">จัดการชนิด Add-on</div>
+      <div><div style="font-size:15px;font-weight:700;color:var(--fd-ink)">${laT('จัดการชนิด Add-on')}</div>
       <div style="font-size:11px;color:var(--fd-ink-soft);margin-top:2px">เพิ่มชนิดใหม่ → โผล่ในทุก Rate Type อัตโนมัติ</div></div>
       <button onclick="rtAddonTypesClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer;padding:4px 8px;line-height:1">✕</button>
     </div>
@@ -29495,6 +33381,7 @@ function rtBuildDetailBody(rt){
   // Also collect Bundle footnotes (¹ ² ³ ...) for routes with bundled longtail
   const ZONES = ['PK','KL','NoTransfer'];
   const PAX = (typeof rtNatPax==='function') ? rtNatPax(rtNatScopeOf(rt)) : ['adult-thai','child-thai','adult-fr','child-fr'];   // §nationality scope · hide TH or FR columns
+  const NC = rtNatCols(PAX);   // §rtNatCols · หัวตารางงอกจากชุดเดียวกับตัวตาราง
   const TH_FG = '#143F73';   // header text · Thai
   const FR_FG = '#854F0B';   // header text · Foreigner
   const _rv = rt.routeValidity || {};
@@ -29532,8 +33419,8 @@ function rtBuildDetailBody(rt){
           : ''}
         <td style="padding:6px 12px;font-size:10px;color:${(isNotOffered||isMissing)?'#C44A36':'#5F5E5A'};text-transform:uppercase;letter-spacing:.06em;font-weight:600">${z==='NoTransfer'?'No transfer':z}</td>
         ${isOffered
-          ? PAX.map((p,pi) => `<td style="padding:6px 12px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===1?'padding-right:24px;':''}">${fmt(cell[p])}</td>`).join('')
-          : `<td colspan="4" style="padding:6px 12px;text-align:center;font-size:10px;color:#C44A36;font-weight:700;letter-spacing:.06em;text-transform:uppercase"><span style="background:#FBE4E0;color:#C44A36;padding:2px 9px;border-radius:3px;font-size:9px;letter-spacing:.05em">${isNotOffered?'No Offer':'Not Set'}</span></td>`}
+          ? PAX.map((p,pi) => `<td style="padding:6px 12px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===NC.lastTh?'padding-right:24px;':''}${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${fmt(cell[p])}</td>`).join('')
+          : `<td colspan="${PAX.length}" style="padding:6px 12px;text-align:center;font-size:10px;color:#C44A36;font-weight:700;letter-spacing:.06em;text-transform:uppercase"><span style="background:#FBE4E0;color:#C44A36;padding:2px 9px;border-radius:3px;font-size:9px;letter-spacing:.05em">${isNotOffered?'No Offer':'Not Set'}</span></td>`}
         ${zi===0
           ? `<td rowspan="3" style="padding:10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A;border-left:1px solid #F2F0EA">${vFrom}</td>
              <td rowspan="3" style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A">${vTo}</td>`
@@ -29590,22 +33477,19 @@ function rtBuildDetailBody(rt){
       ${seatRows ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
         <colgroup>
           <col style="width:22%"><col style="width:10%">
-          <col><col><col><col>
+          ${PAX.map(()=>'<col>').join('')}
           <col style="width:10%"><col style="width:10%">
         </colgroup>
         <thead>
           <tr>
             <th rowspan="2" style="padding:8px 0;text-align:left;font-size:9.5px;font-weight:700;color:#5F5E5A;letter-spacing:.06em;text-transform:uppercase;vertical-align:bottom">Route</th>
             <th rowspan="2" style="padding:8px 12px;text-align:left;font-size:9.5px;font-weight:700;color:#5F5E5A;letter-spacing:.06em;text-transform:uppercase;vertical-align:bottom">Zone</th>
-            <th colspan="2" style="padding:6px 12px;text-align:center;font-size:10px;font-weight:700;color:${TH_FG};letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid ${TH_FG}">Thai</th>
-            <th colspan="2" style="padding:6px 12px;text-align:center;font-size:10px;font-weight:700;color:${FR_FG};letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid ${FR_FG};border-left:1px solid #F2F0EA">Foreigner</th>
+            ${NC.th.length?`<th colspan="${NC.th.length}" style="padding:6px 12px;text-align:center;font-size:10px;font-weight:700;color:${TH_FG};letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid ${TH_FG}">Thai</th>`:''}
+            ${NC.fr.length?`<th colspan="${NC.fr.length}" style="padding:6px 12px;text-align:center;font-size:10px;font-weight:700;color:${FR_FG};letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid ${FR_FG};${NC.th.length?'border-left:1px solid #F2F0EA;':''}">Foreigner</th>`:''}
             <th colspan="2" style="padding:6px 12px;text-align:center;font-size:10px;font-weight:700;color:#5F5E5A;letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid #C8C6BF;border-left:1px solid #F2F0EA">Active period</th>
           </tr>
           <tr>
-            <th style="padding:5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em">Adult</th>
-            <th style="padding:5px 24px 5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em">Child</th>
-            <th style="padding:5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em;border-left:1px solid #F2F0EA">Adult</th>
-            <th style="padding:5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em">Child</th>
+            ${PAX.map((p,pi)=>`<th style="padding:5px ${pi===NC.lastTh?'24px':'12px'} 5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em;${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${NC.lbl(p)}</th>`).join('')}
             <th style="padding:5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em;border-left:1px solid #F2F0EA">Start</th>
             <th style="padding:5px 0 5px 12px;text-align:right;font-size:9px;font-weight:600;color:#5F5E5A;letter-spacing:.04em">End</th>
           </tr>
@@ -30336,6 +34220,23 @@ function rtModalUpdateSummary(){
 }
 
 // §per-rate-type nationality scope · which pax-type columns/fields this rate covers
+/* ══ §rtNatCols · คอลัมน์สัญชาติ · ตัวช่วยร่วมของทุกตารางที่วาดราคาที่นั่ง ══════════════════════
+   บั๊กที่แก้: Rate Type ที่ตั้ง nationalityScope = 'fr' (เอเย่นต์ที่ขายเฉพาะต่างชาติ)
+   ตัวตารางวาดตาม PAX ซึ่งเหลือ 2 ช่อง แต่หัวตารางฝังไว้ตายตัวเป็น ไทย(2) + ต่างชาติ(2)
+   ผลคือราคาต่างชาติไปนั่งใต้คอลัมน์ "ไทย" และ Start/End เลื่อนไปอยู่ใต้ "ต่างชาติ"
+   วัดจริงที่ Russian Standard scope=fr: หัว 6 ช่อง ตัวตาราง 4 ช่อง · 3,900 (ผู้ใหญ่ ตช.)
+   ไปโผล่ใต้ THAI · ADULT — คนอ่านเข้าใจว่าเป็นราคาคนไทยทันที
+   อยู่ทั้งหน้าจอ Pricing Matrix และใบสัญญาที่ปริ้นส่งเอเย่นต์ (คนละฟังก์ชัน โครงเดียวกัน)
+   → ให้หัวตารางกับ colgroup งอกจาก PAX ชุดเดียวกับที่ตัวตารางใช้ จะได้ไม่มีวันหลุดจากกันอีก */
+function rtNatCols(PAX){
+  var th = PAX.filter(function(p){ return /-thai$/.test(p); });
+  var fr = PAX.filter(function(p){ return /-fr$/.test(p); });
+  return { pax:PAX, th:th, fr:fr,
+           lastTh: th.length ? PAX.indexOf(th[th.length - 1]) : -1,
+           firstFr: fr.length ? PAX.indexOf(fr[0]) : -1,
+           lbl: function(p){ return /^adult/.test(p) ? 'Adult' : /^child/.test(p) ? 'Child'
+                                  : /^infant/.test(p) ? 'Infant' : p; } };
+}
 function rtNatPax(scope){ return scope==='thai' ? ['adult-thai','child-thai'] : scope==='fr' ? ['adult-fr','child-fr'] : ['adult-thai','child-thai','adult-fr','child-fr']; }
 function rtNatScopeOf(rt){ return (rt && rt.nationalityScope) || 'both'; }
 function rtNatLabel(scope){ return scope==='thai' ? 'ไทยเท่านั้น' : scope==='fr' ? 'ต่างชาติเท่านั้น' : 'ไทย + ต่างชาติ'; }
@@ -30715,8 +34616,10 @@ function rtPersist(){
     const raw = localStorage.getItem('loveandaman_v2');
     const obj = raw ? JSON.parse(raw) : {};
     obj.sb_rate_types = SB_RATE_TYPES;
-    // Persist agent.rateTypeId changes too (in case deletes detached agents)
-    obj.sb_agents_rate_bindings = (SB_AGENTS||[]).map(a => ({id:a.id, rateTypeId:a.rateTypeId||null}));
+    /* §rateBind · เขียนทั้งสองที่พร้อมกันเสมอ · ตัวเดิมเขียนแต่ sidecar
+       ทำให้ sb_agents ใน export ค้างเป็นค่าเก่า (ตอนพบครั้งแรก เพี้ยนอยู่ 32 เอเย่นต์) */
+    obj.sb_agents_rate_bindings = laRateBindings();
+    obj.sb_agents = SB_AGENTS;
     localStorage.setItem('loveandaman_v2', JSON.stringify(obj));
   } catch(e){ console.warn('[rtPersist] failed:', e); }
 }
@@ -30769,9 +34672,20 @@ function rtPersist(){
     }
     if(Array.isArray(obj.sb_agents_rate_bindings)){
       const map = {};
-      obj.sb_agents_rate_bindings.forEach(b => { map[b.id] = b.rateTypeId; });
-      (SB_AGENTS||[]).forEach(a => { if(map.hasOwnProperty(a.id)) a.rateTypeId = map[a.id]; });
+      const seas = {};
+      obj.sb_agents_rate_bindings.forEach(b => {
+        map[b.id] = b.rateTypeId;
+        /* §rtSeason · รายการเก่าไม่มีคีย์นี้ · hasOwnProperty จึงสำคัญ
+           ไม่งั้น sidecar รุ่นก่อนจะลบตารางฤดูกาลที่เพิ่งตั้งทิ้งไปเงียบ ๆ */
+        if(Object.prototype.hasOwnProperty.call(b, 'rateSeasons')) seas[b.id] = b.rateSeasons;
+      });
+      (SB_AGENTS||[]).forEach(a => {
+        if(map.hasOwnProperty(a.id)) a.rateTypeId = map[a.id];
+        if(seas.hasOwnProperty(a.id)) a.rateSeasons = Array.isArray(seas[a.id]) ? seas[a.id] : [];
+      });
     }
+    /* §rateBind · ตั้งแต่บรรทัดนี้ไป SB_AGENTS ถือค่าที่ระบบใช้จริงแล้ว · เขียน sidecar ได้ */
+    _LA_RATE_BIND_READY = true;
   } catch(e){ console.warn('[rtRestore] failed:', e); }
 })();
 
@@ -30863,28 +34777,110 @@ function agRenderFilters(){
   }
 }
 
+/* ══ §agHd · แถบหัวหน้า Agent List ════════════════════════════════════════════
+   ยกแถบของหน้า Dashboard (.dv-hd) มาทั้งชุด · ที่ของ "กล่องวันที่" = จำนวนเอเย่นต์
+   ของเดิมเป็นการ์ดขาวสี่ใบ บอก Top Market กับ Credit Limit — ตัวเลขที่ไม่มีใครต้องทำอะไรต่อ
+   ชุดใหม่บอกเฉพาะสิ่งที่พาไปทำงานได้: มีกี่เจ้า ขายจริงกี่เจ้า และมีกี่เจ้าที่ราคาเพี้ยนอยู่
+
+   อ่านที่เดียว ใช้สองที่ · agHdScan() เป็นตัวนับเดียวของทั้งหน้า
+   ป๊อป "Needs action" กับจุดเตือนในแผงของเอเย่นต์แต่ละรายจึงพูดเลขชุดเดียวกันเสมอ
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* เรทที่ใช้จริงของเอเย่นต์รายหนึ่ง · a.rateTypeId ถูก sidecar sb_agents_rate_bindings เขียนทับตอนโหลดแล้ว
+   ฟังก์ชันนี้จึงอ่านตัวเดียวพอ — เขียนเป็นฟังก์ชันไว้เพื่อให้ที่อื่นเรียกใช้คำนิยามเดียวกัน */
+function agHdRateOf(a){
+  if(!a || !a.rateTypeId) return null;
+  return (typeof getRateType==='function') ? getRateType(a.rateTypeId) : null;
+}
+/* เรื่องที่กระทบ "ราคา" ของเอเย่นต์รายหนึ่ง · คืนเป็น key เพื่อให้นับรวมและวาดแถวได้จากที่เดียว
+   นับเฉพาะเจ้าที่ขายโปรแกรมอยู่จริง — เจ้าที่ยังไม่มีโปรแกรมเลยไม่มีราคาให้ผิด */
+function agHdIssues(a){
+  const out = {};
+  if(!a || !(a.programs||[]).length) return out;
+  const rt = agHdRateOf(a);
+  if(!rt){ out.norate = 1; return out; }
+  const to = String(rt.validTo||'');
+  if(to && typeof rtExpDaysTo==='function'){
+    const d = rtExpDaysTo(to);
+    /* ตั้งฤดูถัดไปรับไว้แล้ว = ตอบคำถามแล้ว ไม่ต้องนับ · กติกาเดียวกับ rtExpForAgent */
+    const answered = (typeof laSeasonAt==='function' && typeof laDayAfter==='function')
+      ? !!laSeasonAt(a, laDayAfter(to)) : false;
+    if(d!==null && d<=60 && !answered) out.exp = 1;
+  }
+  const have = rt.seatRates||{};
+  if((a.programs||[]).some(p=>p && !have[p])) out.orph = 1;
+  const nx = (typeof rtExpNextOf==='function') ? rtExpNextOf(a.id) : '';
+  if(nx && nx!==a.rateTypeId) out.drift = 1;
+  return out;
+}
+function agHdScan(){
+  const ags = (typeof laScopeAgents==='function') ? laScopeAgents(SB_AGENTS) : SB_AGENTS;
+  const s = {total:ags.length, selling:0, credit:0, limit:0, ctSoon:0,
+             exp:0, drift:0, orph:0, norate:0, need:0};
+  ags.forEach(a=>{
+    if(a.payType==='invoice'){ s.credit++; s.limit += (a.creditLimit||0); }
+    const ce = (typeof ctDaysUntilExpiry==='function') ? ctDaysUntilExpiry(a) : null;
+    if(ce!==null && ce!==undefined && ce<=30) s.ctSoon++;
+    if(!(a.programs||[]).length) return;
+    s.selling++;
+    const iss = agHdIssues(a);
+    const keys = Object.keys(iss);
+    keys.forEach(k=>{ s[k]++; });
+    if(keys.length) s.need++;
+  });
+  return s;
+}
 function renderAgKPI(){
-  const _ags = (typeof laScopeAgents==='function') ? laScopeAgents(SB_AGENTS) : SB_AGENTS;   /* §user→sales · KPI ตามขอบเขต */
-  const total = _ags.length;
-  const byMkt = {};
-  _ags.forEach(a=>{ byMkt[a.market]=(byMkt[a.market]||0)+1; });
-  const topMktEntry = Object.entries(byMkt).sort((a,b)=>b[1]-a[1])[0];
-  const topMktName = topMktEntry ? (sbGetMarket(topMktEntry[0])?.name.split(' ')[0]||'—') : '—';
-  const topMktCount = topMktEntry ? topMktEntry[1] : 0;
-  const credit = _ags.filter(a=>a.payType==='invoice').length;
-  const totalCreditLimit = _ags.reduce((s,a)=>s+(a.creditLimit||0),0);
-  // Daily report subline
-  const today = new Date();
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  const dailySub = `${dayNames[today.getDay()]} · ${today.getDate()} ${thMonths[today.getMonth()]} ${today.getFullYear()+543} · ${SB_MARKETS.length} markets · ${SB_SALES.length} sales people`;
-  const html = `
-    <div class="sb-kpi"><div class="sb-kpi-lbl">Agent Directory</div><div class="sb-kpi-val">${total}</div><div class="sb-kpi-sub">${dailySub}</div></div>
-    <div class="sb-kpi k-blue"><div class="sb-kpi-lbl">Top Market</div><div class="sb-kpi-val">${topMktName}</div><div class="sb-kpi-sub">${topMktCount} of ${total} agents</div></div>
-    <div class="sb-kpi k-green"><div class="sb-kpi-lbl">Credit Agents</div><div class="sb-kpi-val">${credit}</div><div class="sb-kpi-sub">${total-credit} pre-paid</div></div>
-    <div class="sb-kpi k-amber"><div class="sb-kpi-lbl">Credit Limit</div><div class="sb-kpi-val">฿${sbFmtTHB(totalCreditLimit/1000)}K</div><div class="sb-kpi-sub">THB exposure</div></div>
-  `;
-  document.getElementById('ag-kpi').innerHTML = html;
+  const host = document.getElementById('ag-kpi'); if(!host) return;
+  const s = agHdScan();
+  const e = t => String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const money = n => n>=1000000 ? '฿'+(n/1000000).toFixed(2)+'M' : '฿'+sbFmtTHB(n/1000)+'K';
+  const row = (t, sub, n) => `<div class="ag-hd-pr"><span class="t"><b>${e(t)}</b><i>${e(sub)}</i></span><span class="n">${n}</span></div>`;
+  /* ป๊อปแจงรายการ · สัญญาที่หมดตามรอบปีอยู่ท้ายสุดแบบสีจาง
+     ถ้าเอามารวมในเลขแดง เลขจะขึ้นเกือบเท่าจำนวนเอเย่นต์ทั้งหมด แล้วจะไม่มีความหมาย */
+  const pop = `<div class="ag-hd-pop" id="ag-hd-pop">
+      <div class="ph">Pricing issues · among the ${s.selling} agents selling</div>
+      ${row('Rate expiring','within 60 days · no next season set', s.exp)}
+      ${row('Contract ≠ bound rate','document and charged price are different sets', s.drift)}
+      ${row('Route with no price','sold route the rate cannot price → Save blocked', s.orph)}
+      ${row('No rate bound','selling programs with no Rate Type at all', s.norate)}
+      <div class="ag-hd-pr dim"><span class="t"><b>${s.ctSoon} contracts end within 30 days</b><i>annual cycle — kept out of the red count</i></span></div>
+    </div>`;
+  host.innerHTML = `
+    <div class="ag-hd-top">
+      <span class="ag-hd-n">${s.total}</span>
+      <span class="ag-hd-g"><b>Agents</b><i>${s.selling} selling now</i></span>
+      <span class="ag-hd-brand">AGENT DIRECTORY</span>
+      <span class="ag-hd-kpi">
+        <span class="ag-chip" title="เอเย่นต์ที่จ่ายแบบเครดิต · วงเงินรวมทั้งหมด">Credit <b>${s.credit}</b> · <b>${money(s.limit)}</b></span>
+        <span class="ag-chip warn" onclick="agHdPopToggle(event)" title="เรื่องที่ทำให้ราคาเพี้ยน · กดเพื่อดูรายการ">&#9888; Needs action <b>${s.need}</b> &rsaquo;</span>
+        <span class="ag-seg">
+          <b id="agv-card"  class="${_agView==='table'?'':'on'}" onclick="agSetView('card')">Card</b>
+          <b id="agv-table" class="${_agView==='table'?'on':''}" onclick="agSetView('table')">Table</b>
+        </span>
+        <button class="ag-hd-btn" onclick="agImportTemplate()" title="ดาวน์โหลดฟอร์ม Excel เปล่า · กรอกแล้วเอากลับมานำเข้า">Excel form</button>
+        <button class="ag-hd-btn" onclick="agImportPick()" title="นำเข้า Agent จากไฟล์ Excel · จับคู่ของเดิมให้อัตโนมัติ (อัปเดต ไม่สร้างซ้ำ)">Import</button>
+        <button class="ag-hd-add" onclick="agNew()">+ New Agent</button>
+      </span>
+      ${pop}
+    </div>`;
+}
+/* ป๊อปปิดเมื่อกดที่อื่น · ผูกครั้งเดียวพอ ไม่ผูกซ้ำทุกครั้งที่วาดแถบใหม่ */
+function agHdPopToggle(ev){
+  if(ev) ev.stopPropagation();
+  const p = document.getElementById('ag-hd-pop'); if(!p) return;
+  p.classList.toggle('on');
+  if(p.classList.contains('on') && !window._agHdPopBound){
+    window._agHdPopBound = true;
+    document.addEventListener('click', function(){
+      const q = document.getElementById('ag-hd-pop'); if(q) q.classList.remove('on');
+    });
+  }
+}
+/* §agPhone · ลิสต์เอเย่นต์บนจอโทรศัพท์ · ยุบ/กาง · จอใหญ่ไม่เคยเห็นปุ่มนี้ */
+function agSideToggle(){
+  const side = document.querySelector('#view-agents .sb-side'); if(!side) return;
+  const on = side.classList.toggle('open');
+  const b = document.getElementById('ag-side-tgl'); if(b) b.textContent = on ? 'Hide' : 'Browse';
 }
 
 // Required fields for a "complete" agent · used for the incomplete-data warning
@@ -31043,6 +35039,15 @@ function agSelect(aId){
   _agSelected = aId;
   agRenderList();
   agRenderDetail(aId);
+  /* §agPhone · เลือกเจ้าแล้วยุบลิสต์เอง แล้วเลื่อนไปที่ชื่อ · ไม่งั้นต้องปัดผ่านรายชื่อลงไปหาเอง */
+  try{
+    if(window.innerWidth<=900){
+      const side=document.querySelector('#view-agents .sb-side');
+      if(side && side.classList.contains('open')) agSideToggle();
+      const main=document.getElementById('ag-main');
+      if(main) main.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  }catch(e){ console.warn('agSelect phone collapse failed', e); }
 }
 
 // ══════════ AGENT EDIT MODAL ══════════
@@ -31795,6 +35800,10 @@ function agEditSave(){
     /* §ctRateSync · การ์ดสัญญาด้านบนอ่านจาก SB_CONTRACTS ไม่ใช่ a.rateTypeId
        ถ้าไม่ตามไปด้วย จะเปลี่ยนแล้วข้างบนไม่เปลี่ยน · และเอกสารสัญญาจะออกด้วยชุดเก่า */
     if(_b.rateTypeId!==a.rateTypeId) _ctSyncMainRate(a.id, a.rateTypeId, 'เปลี่ยน Rate Type');
+    /* §agProgFill · เลือกเรทแล้วโปรแกรมในสัญญาตามไปเอง · เติมเงียบ ๆ ตัดต้องยืนยัน
+       ทำหลัง _ctSyncMainRate เพราะตัวนั้นแตะใบสัญญา ส่วนตัวนี้แตะรายการโปรแกรมของเอเย่นต์ */
+    if(_b.rateTypeId!==a.rateTypeId && a.rateTypeId && typeof agProgSyncOnRate==='function')
+      agProgSyncOnRate(a, a.rateTypeId);
     if(typeof rtPersist === 'function') rtPersist();
     // Re-render rate type cards too (in case usage count changed)
     if(typeof rtRenderCards === 'function') rtRenderCards();
@@ -31805,6 +35814,217 @@ function agEditSave(){
   agEditClose();
   agRenderList();
   agRenderDetail(a.id);
+}
+
+/* ══ §agAlert · เรื่องที่ต้องจัดการของเอเย่นต์รายนี้ ══════════════════════════
+   ของเดิมกระจายอยู่สี่ที่ · แบนเนอร์สัญญาบนสุด · กล่องเครดิต · กล่องข้อมูลไม่ครบ
+   และจุดแดงเล็ก ๆ บนแท็บ Rate Type ที่ต้องกดเข้าไปจึงจะรู้ว่าเรื่องอะไร
+   สี่ที่นั้นไม่เคยเรียงตามความด่วน · เครดิตเกินวงเงินอยู่ล่างกว่าสัญญาที่ยังเหลืออีกเดือน
+
+   รวมมาที่เดียว เรียงตามความด่วน และทุกแถวมีปุ่มพาไปแก้
+   คืนเป็น array เพื่อให้ "จำนวนเรื่อง" กับ "ตัวแถว" มาจากการนับครั้งเดียวกัน
+   ═══════════════════════════════════════════════════════════════════════════ */
+function agAlerts(a){
+  const out = [];
+  if(!a) return out;
+  const E = s => String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const money = n => '฿'+sbFmtTHB(n||0);
+  /* 1 · เครดิตเกินวงเงิน — เรื่องเงินสด ด่วนที่สุด ใบจองใหม่ไม่ควรออกจนกว่าจะเคลียร์ */
+  const cs = (typeof agCreditState==='function') ? agCreditState(a.id) : null;
+  if(cs && cs.mode==='invoice' && cs.limit>0){
+    if(cs.available<0){
+      out.push({tone:'red', t:'Credit over limit',
+        d:'<b>'+money(cs.used)+'</b> / '+money(cs.limit)+' · over by <b>'+money(-cs.available)+'</b> ('+cs.pct+'%)',
+        tip:'ใบจองใหม่ควรรอเคลียร์ยอดก่อน',
+        go:'View statement', on:"acctStatementOpen('"+a.id+"')"});
+    } else if(cs.pct>=80){
+      out.push({tone:'amber', t:'Credit near limit', day:cs.pct+'%',
+        d:'<b>'+money(cs.used)+'</b> / '+money(cs.limit)+' · <b>'+money(cs.available)+'</b> left',
+        go:'View statement', on:"acctStatementOpen('"+a.id+"')"});
+    }
+  }
+  /* 2 · สัญญา — หมดแล้วหรือใกล้หมด · ใช้เกณฑ์เดียวกับที่หน้าอื่นใช้ (ctIsExpired / ctIsExpiringSoon) */
+  const dl = (typeof ctDaysUntilExpiry==='function') ? ctDaysUntilExpiry(a) : null;
+  const _fd = s => (typeof ctFmtDate==='function') ? ctFmtDate(s) : s;
+  if(typeof ctIsExpired==='function' && ctIsExpired(a)){
+    out.push({tone:'red', t:'Contract expired', day:Math.abs(dl)+' days ago',
+      d:E(a.contractVersion||'')+' ended <b>'+E(_fd(a.contractEnd))+'</b>',
+      tip:'booking ใหม่ควรหยุดจนกว่าจะต่อสัญญา',
+      go:'Renew now', on:"ctOpenRenewal('"+a.id+"')"});
+  } else if(typeof ctIsExpiringSoon==='function' && ctIsExpiringSoon(a)){
+    out.push({tone:'red', t:'Contract expiring', day:dl+' days',
+      d:E(a.contractVersion||'')+' ends <b>'+E(_fd(a.contractEnd))+'</b>',
+      tip:'ต่อก่อนหมดเพื่อให้ราคาต่อเนื่อง',
+      go:'Renew', on:"ctOpenRenewal('"+a.id+"')"});
+  }
+  /* 3 · โปรแกรมที่เรทไม่มีราคาให้ — ของจริงคือหน้าจองกด Save ไม่ได้ (noRate) จึงต้องอยู่เหนือเรื่องเรทหมดอายุ */
+  const rt = (typeof agHdRateOf==='function') ? agHdRateOf(a) : null;
+  if(!rt && (a.programs||[]).length){
+    out.push({tone:'red', t:'No rate bound', sev:'Blocked',
+      d:'sells <b>'+(a.programs||[]).length+' routes</b> · no Rate Type at all',
+      tip:'ไม่มีเรท = ไม่มีราคาให้คิด จองไม่ได้ทุกเส้น',
+      go:'Pick a rate', on:"agEditOpen('ratetype','"+a.id+"')"});
+  }
+  if(rt){
+    const have = rt.seatRates||{};
+    const orph = (a.programs||[]).filter(p=>p && !have[p]);
+    if(orph.length){
+      const names = orph.map(p=>{ const r=(typeof getRoute==='function')?getRoute(p):null; return E((r&&r.name)||p); });
+      out.push({tone:'amber', t:'Route with no price', sev:'Blocked',
+        d:'<b>'+orph.length+' route'+(orph.length===1?'':'s')+'</b> · '+names.join(' · '),
+        tip:'เรทที่ผูกอยู่ไม่มีราคาของเส้นเหล่านี้ · ปุ่มบันทึกในหน้าจองถูกล็อก (noRate)',
+        go:'Open Pricing Matrix', on:"agSwitchTab('prices','"+a.id+"')"});
+    }
+    /* 4 · เรทใกล้หมด/หมดแล้ว และยังไม่ได้ตั้งฤดูรับ · rtExpForAgent ตอบว่า "ยังไม่ได้ตอบคำถามนี้" */
+    const X = (typeof rtExpForAgent==='function') ? rtExpForAgent(a) : null;
+    if(X){
+      out.push({tone:'amber', t:X.days<0?'Rate expired':'Rate expiring',
+        day:(X.days<0?Math.abs(X.days)+' days ago':'in '+X.days+' days'),
+        d:'<b>'+E(rt.code||rt.name||'')+'</b> ends '+E(_rtFmtDate(X.to)||X.to)+' · no season set to take over',
+        tip:'วันหมดอายุไม่ได้กั้นการคิดเงิน · พ้นวันนั้นไประบบยังคิดราคาชุดเดิมต่อเงียบ ๆ',
+        go:'Set season schedule', on:"agSwitchTab('ratemgmt','"+a.id+"')"});
+    }
+    /* 5 · เรทยังไม่เริ่ม · validFrom ไม่ใช่ประตูคิดเงิน (ดู §promoMx) ระบบจึงคิดราคาชุดนี้ให้อยู่เงียบ ๆ */
+    const vf = String(rt.validFrom||'');
+    if(vf && typeof rtExpDaysTo==='function'){
+      const dvf = rtExpDaysTo(vf);
+      if(dvf!==null && dvf>0){
+        out.push({tone:'blue', t:'Rate not started', day:'in '+dvf+' days',
+          d:'<b>'+E(rt.code||rt.name||'')+'</b> starts '+E(_rtFmtDate(vf)||vf),
+          tip:'วันเดินทางก่อนหน้านั้นไม่มีฤดูคุม · ระบบคิดราคาชุดนี้ให้อยู่ดี',
+          go:'Set season schedule', on:"agSwitchTab('ratemgmt','"+a.id+"')"});
+      }
+    }
+  }
+  /* 6 · สัญญาระบุเรทคนละตัวกับที่ผูกจริง · เอกสารที่พิมพ์ออกไปจะอ้างราคาคนละชุดกับที่ระบบคิด (ดู §ctRateSync) */
+  const nx = (typeof rtExpNextOf==='function') ? rtExpNextOf(a.id) : '';
+  if(nx && a.rateTypeId && nx!==a.rateTypeId){
+    const nrt = (typeof getRateType==='function') ? getRateType(nx) : null;
+    out.push({tone:'blue', t:'Contract ≠ bound rate',
+      d:'contract <b>'+E((nrt&&(nrt.code||nrt.name))||nx)+'</b> · bound <b>'+E((rt&&(rt.code||rt.name))||a.rateTypeId)+'</b>',
+      tip:'เอกสารสัญญาจะพิมพ์ราคาชุดที่ระบุในสัญญา ไม่ใช่ชุดที่ระบบคิดจริง',
+      go:'Sync to bound rate', on:"agAlertSyncRate('"+a.id+"')"});
+  }
+  /* 7 · ข้อมูลโปรไฟล์ไม่ครบ · ท้ายสุด ไม่ได้ทำให้จองไม่ได้ แต่ทำให้ติดต่อกลับไม่ได้ */
+  const miss = (typeof agIncompleteFields==='function') ? agIncompleteFields(a) : [];
+  if(miss.length){
+    out.push({tone:'amber', t:'Incomplete profile', sev:'Attention', day:miss.length+' items',
+      d:'missing <b>'+E(miss.join(' · '))+'</b>',
+      go:'Edit profile', on:"agEditOpen('profile','"+a.id+"')"});
+  }
+  return out;
+}
+/* ปุ่ม Sync · เขียนเรทที่ผูกจริงลงใบสัญญา MAIN ที่ยังไม่หมดอายุ (ใบเก่าเก็บของเดิมไว้ · ดู _ctSyncMainRate) */
+function agAlertSyncRate(agentId){
+  const a = (typeof sbGetAgent==='function') ? sbGetAgent(agentId) : null; if(!a) return;
+  const n = (typeof _ctSyncMainRate==='function') ? _ctSyncMainRate(agentId, a.rateTypeId, 'sync from agent page') : 0;
+  alert(n>0 ? ('Synced '+n+' main contract(s) to the bound rate.') : 'Nothing to sync.');
+  agRenderDetail(agentId);
+}
+/* §agStd · ชื่อคลาสของโทน · ใช้ระบายเฉพาะคอลัมน์ความด่วนซ้ายสุด ไม่ระบายทั้งแถว
+   ย้อมทั้งแถวทำให้ห้าเรื่องดูด่วนเท่ากันหมด แล้วคนอ่านต้องกลับไปไล่เองว่าอันไหนก่อน
+   คำบอกความด่วน: ใช้จำนวนวันถ้ามี (11 DAYS) ไม่มีก็ใช้คำตามโทน */
+var AG_AL_TONE = { red:'red', amber:'amb', blue:'blu' };
+var AG_AL_SEV  = { red:'Critical', amber:'Attention', blue:'Review' };
+function agAlertsHTML(a){
+  const A = agAlerts(a);
+  if(!A.length) return '<div class="ag-ok">&#10003; Nothing needs action for this agent</div>';
+  return '<div class="ag-als">' + A.map(function(x){
+    const cls = AG_AL_TONE[x.tone] || 'blu';
+    const sev = x.sev || x.day || AG_AL_SEV[x.tone] || 'Review';
+    return '<div class="ag-al '+cls+'"'+(x.tip?(' title="'+String(x.tip).replace(/"/g,'&quot;')+'"'):'')+'>'
+      + '<span class="sev"><i></i>'+sev+'</span>'
+      + '<span class="t">'+x.t+'</span>'
+      + '<span class="d">'+x.d+'</span>'
+      + (x.go?'<button class="go" onclick="'+x.on+'">'+x.go+'</button>':'')
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+/* ══ §agHist · ชิปประวัติสัญญา · เคยเป็นแถบคั่นระหว่างชื่อเอเย่นต์กับแถวแท็บ
+   ตอนนี้อยู่ในกล่อง Contract ของบล็อก Commercial · วาดด้วยชิปของตัวเอง (_ctVerChips ใน agTabInfo)
+   ไม่ใช้คอมโพเนนต์ .ct-history เดิม เพราะมันออกแบบมาสำหรับแถบเต็มความกว้าง
+   ยัดลงกล่องกว้าง 280px แล้วตัวอักษรถูกบีบจนอ่านเป็นแนวตั้ง
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ══ §agProgFill · เลือก Rate Type แล้ว "Programs in Contract" ตามไปเอง ══════
+   ที่มา (2026-09-18) · สองอย่างนี้ต้องตรงกันอยู่แล้วโดยธรรมชาติ
+   เรทคือ "ราคาของเส้นทางไหนบ้าง" · โปรแกรมในสัญญาคือ "เอเย่นต์ขายเส้นทางไหนบ้าง"
+   แต่ก่อนหน้านี้คนต้องกรอกสองรอบ และรอบที่สองมักถูกลืม
+   ผลคือ 44 เจ้าขายเส้นที่เรทของตัวเองไม่มีราคา — หน้าจองกด Save ไม่ได้ตั้งแต่วันแรกของฤดู
+
+   กติกา · เติมเงียบ ๆ ตัดต้องยืนยัน
+     เติม  = เส้นที่เรทมีราคาให้ แต่ยังไม่อยู่ในสัญญา → ใส่ให้เลย ไม่ต้องถาม (ไม่มีอะไรเสียหาย)
+     ตัด   = เส้นที่อยู่ในสัญญา แต่เรทใหม่ไม่มีราคาให้ → ถามก่อนทุกครั้ง
+             เพราะการตัดคือการลบของที่ Sales ตั้งใจใส่ไว้ · ไม่ตัดก็ยังเห็นเป็นเตือนในบล็อก Needs action
+
+   "เรทมีราคาให้" อ่านจาก seatRates ไม่ใช่ rt.routes
+   rt.routes คือรายการที่ประกาศไว้ · seatRates คือราคาที่มีจริง · ตัวที่ทำให้จองได้คือตัวหลัง
+   ═══════════════════════════════════════════════════════════════════════════ */
+function agRtRoutes(rt){
+  if(!rt) return [];
+  var sr = rt.seatRates || {};
+  var declared = (rt.routes||[]).filter(function(r){ return r && sr[r]; });
+  return declared.length ? declared : Object.keys(sr);
+}
+/* แผนของเอเย่นต์รายเดียว · ไม่แตะข้อมูล แค่บอกว่าจะเติมอะไร ตัดอะไร */
+function agProgPlan(a, rtId){
+  var rt = (typeof getRateType==='function' && rtId) ? getRateType(rtId) : null;
+  var cover = agRtRoutes(rt);
+  var have  = (a && Array.isArray(a.programs)) ? a.programs.filter(Boolean) : [];
+  return {
+    rt: rt, cover: cover,
+    add:  cover.filter(function(r){ return have.indexOf(r) < 0; }),
+    drop: have.filter(function(r){ return cover.indexOf(r) < 0; })
+  };
+}
+function agProgRouteName(id){
+  var r = (typeof getRoute==='function') ? getRoute(id) : null;
+  return (r && r.name) || id;
+}
+/* ลงมือจริง · คืนแผนที่ใช้ไป เพื่อให้คนเรียกเอาไปเขียน log ได้โดยไม่ต้องคำนวณซ้ำ
+   ช่วงวันของแถวที่เติม · จอง = ช่วงสัญญาของเอเย่นต์ · เดินทาง = routeValidity ของเรท
+   (หน้า Information เอา routeValidity มาทับตอนวาดอยู่แล้ว เก็บลงข้อมูลด้วยให้ตรงกันตั้งแต่ต้น) */
+function agProgFill(a, rtId, opt){
+  opt = opt || {};
+  var P = agProgPlan(a, rtId);
+  if(!P.rt) return P;
+  var rv = P.rt.routeValidity || {};
+  var bf = a.contractStart || '', bt = a.contractEnd || '';
+  if(!Array.isArray(a.programPeriods)) a.programPeriods = [];
+  P.add.forEach(function(r){
+    var v = rv[r] || {};
+    a.programPeriods.push({ routeId:r, bookFrom:bf, bookTo:bt,
+      travelFrom: v.from || '', travelTo: v.to || '', note:'' });
+  });
+  if(opt.removeExtra && P.drop.length){
+    a.programPeriods = a.programPeriods.filter(function(x){ return x && P.drop.indexOf(x.routeId) < 0; });
+  }
+  /* programs ต้องเป็นรายการไม่ซ้ำเสมอ · programPeriods ของจริงมีแถวซ้ำเส้นเดียวกันอยู่ (คนละช่วงวัน) */
+  a.programs = a.programPeriods.map(function(x){ return x.routeId; })
+    .filter(function(r, i, arr){ return r && arr.indexOf(r) === i; });
+  return P;
+}
+/* เรียกตอนเปลี่ยนเรทจากหน้า Agent · ตัวที่ถามคำถามเรื่อง "ตัด" อยู่ตรงนี้ที่เดียว */
+function agProgSyncOnRate(a, rtId){
+  var P = agProgPlan(a, rtId);
+  if(!P.rt || (!P.add.length && !P.drop.length)) return 0;
+  var rm = false;
+  if(P.drop.length){
+    var names = P.drop.map(agProgRouteName).join('\n  · ');
+    rm = confirm('This rate has no price for ' + P.drop.length + ' program(s) already in the contract:\n\n  · '
+      + names + '\n\nOK = remove them from Programs in Contract\n'
+      + 'Cancel = keep them (they will be flagged as "Route with no price" and booking Save stays blocked)');
+  }
+  if(!P.add.length && !rm) return 0;
+  agProgFill(a, rtId, { removeExtra: rm });
+  var parts = [];
+  if(P.add.length)   parts.push('+' + P.add.length + ' ' + P.add.map(agProgRouteName).join(' · '));
+  if(rm)             parts.push('-' + P.drop.length + ' ' + P.drop.map(agProgRouteName).join(' · '));
+  if(typeof agLog==='function')
+    agLog(a.id, 'programs', 'Programs ตามเรทอัตโนมัติ · ' + parts.join(' · '));
+  return P.add.length + (rm ? P.drop.length : 0);
 }
 
 function agRenderDetail(aId){
@@ -31818,91 +36038,10 @@ function agRenderDetail(aId){
   const mkt = sbGetMarket(a.market);
   const pay = sbGetPayment(a.payType);
   const host = document.getElementById('ag-main');
-  const daysLeft = ctDaysUntilExpiry(a);
-  const isExpired = ctIsExpired(a);
-  const isExpiring = ctIsExpiringSoon(a);
-  let bannerHtml = '';
-  if(isExpired){
-    bannerHtml = `
-      <div class="ct-banner warn">
-        <div class="ct-banner-l">
-          <div class="ct-banner-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          </div>
-          <div class="ct-banner-text">
-            <div class="ct-banner-ttl">สัญญาหมดอายุแล้ว — เกินกำหนด ${Math.abs(daysLeft)} วัน</div>
-            <div class="ct-banner-sub">Contract ${a.contractVersion} หมดวันที่ ${ctFmtDate(a.contractEnd)} · booking ใหม่ควรหยุดจนกว่าจะต่อสัญญา</div>
-          </div>
-        </div>
-        <button class="ct-btn-renew warn" onclick="ctOpenRenewal('${a.id}')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-          ต่อสัญญาด่วน
-        </button>
-      </div>
-    `;
-  } else if(isExpiring){
-    bannerHtml = `
-      <div class="ct-banner">
-        <div class="ct-banner-l">
-          <div class="ct-banner-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-          <div class="ct-banner-text">
-            <div class="ct-banner-ttl">สัญญาใกล้หมด — เหลือ ${daysLeft} วัน</div>
-            <div class="ct-banner-sub">Contract ${a.contractVersion} หมดวันที่ ${ctFmtDate(a.contractEnd)} · ควรต่อก่อนหมดเพื่อราคาต่อเนื่อง</div>
-          </div>
-        </div>
-        <button class="ct-btn-renew" onclick="ctOpenRenewal('${a.id}')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-          ต่อสัญญา
-        </button>
-      </div>
-    `;
-  }
-
-  // Incomplete-data notice (per agent) · appended to the banner area
-  const _incMiss = (typeof agIncompleteFields==='function') ? agIncompleteFields(a) : [];
-  if(_incMiss.length){
-    bannerHtml += `<div style="display:flex;align-items:center;gap:11px;background:#FBF0DD;border:1px solid #EAD9B0;border-radius:10px;padding:10px 14px;margin-bottom:10px">
-      <span style="color:#A05A1A;font-size:17px;line-height:1">⚠</span>
-      <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:#7A4A00">ข้อมูล Agent ยังไม่ครบ · ${_incMiss.length} รายการ</div>
-      <div style="font-size:11px;color:#A05A1A;margin-top:1px">ขาด: ${_incMiss.join(' · ')}</div></div>
-    </div>`;
-  }
-
-  // Credit summary (credit-mode agents) · used drawn at confirm, restored at payment
-  const _cs = (typeof agCreditState==='function') ? agCreditState(a.id) : null;
-  if(_cs && _cs.mode==='invoice' && _cs.limit>0){
-    const over=_cs.available<0, warn=_cs.pct>=80;
-    const barCol = over?'#A32D2D':(warn?'#A05A1A':'#185FA5');
-    bannerHtml += `<div style="background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:10px;padding:11px 14px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
-        <span style="font-size:11px;font-weight:600;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em">Credit used</span>
-        <span style="font-size:11.5px;font-variant-numeric:tabular-nums;color:${barCol};font-weight:600">${acctFmt(_cs.used)} / ${acctFmt(_cs.limit)}${over?' · OVER':(warn?' · near limit':'')}</span>
-      </div>
-      <div style="height:6px;border-radius:3px;background:#eef0f1;overflow:hidden"><div style="width:${Math.min(100,Math.max(0,_cs.pct))}%;height:100%;background:${barCol}"></div></div>
-      <div style="font-size:10px;color:var(--fd-ink-soft);margin-top:5px">เหลือใช้ได้ <strong style="color:${over?'#A32D2D':'#0F6E56'}">${acctFmt(_cs.available)}</strong> · <span onclick="acctStatementOpen('${a.id}')" style="cursor:pointer;color:#185FA5;text-decoration:underline">ดู statement</span></div>
-    </div>`;
-  }
-
-  const totalContracts = 1 + (a.contractHistory||[]).length;
-  const historyHtml = `
-    <div class="ct-history">
-      <span class="ct-history-lbl">Contracts:</span>
-      <span class="ct-history-pill active" onclick="ctViewContract('${a.id}','active')">
-        <span class="v">${a.contractVersion}</span>
-        <span class="period">${ctFmtDate(a.contractStart)} → ${ctFmtDate(a.contractEnd)}</span>
-      </span>
-      ${(a.contractHistory||[]).map(h=>`
-        <span class="ct-history-pill expired" onclick="ctViewContract('${a.id}','${h.version}')">
-          <span class="v">${h.version}</span>
-          <span class="period">${ctFmtDate(h.contractStart)} → ${ctFmtDate(h.contractEnd)}</span>
-          <span class="ct-archived-icon">📦</span>
-        </span>
-      `).join('')}
-      <span class="ct-history-total">${totalContracts} contract${totalContracts===1?'':'s'} · all kept</span>
-    </div>
-  `;
+  /* §agAlert · แบนเนอร์สี่ชุดที่เคยกองอยู่ตรงนี้ (สัญญา · เครดิต · ข้อมูลไม่ครบ · จุดแดงบนแท็บ)
+     ย้ายไปรวมเป็นแถบเดียวในบล็อก 1 ของแท็บ Information · เรียงตามความด่วนแล้วที่นั่น
+     ตรงนี้จึงไม่เหลือแบนเนอร์ · ชื่อเอเย่นต์ได้ขึ้นเป็นบรรทัดแรกจริง ๆ */
+  const bannerHtml = '';
 
   host.innerHTML = `
     ${bannerHtml}
@@ -31942,7 +36081,6 @@ function agRenderDetail(aId){
           style="background:#FCEBEB;color:#A32D2D;border:1px solid #E4A0A0;font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 15px;border-radius:18px;cursor:pointer;display:inline-flex;align-items:center;gap:5px">🗑 ลบ Agent</button>`:''}
       </div>
     </div>
-    ${historyHtml}
     <div class="sb-tabs">
       <div class="sb-tab on" data-tab="info" onclick="agSwitchTab('info','${a.id}')">Information</div>
       <div class="sb-tab" data-tab="prices" onclick="agSwitchTab('prices','${a.id}')">Pricing Matrix</div>
@@ -31954,6 +36092,17 @@ function agRenderDetail(aId){
       <div class="sb-tab" data-tab="activity" onclick="agSwitchTab('activity','${a.id}')">Activity${(function(){
         const n = Array.isArray(a.activity)?a.activity.length:0;
         return n ? ` <span style="background:#EEE9FB;color:#6c5ce7;font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:4px;font-variant-numeric:tabular-nums">${n}</span>` : '';
+      })()}</div>
+      <!-- §rtTab · งานจัดการเรทของเอเย่นต์รายนี้ · ย้ายออกจาก Pricing Matrix มาอยู่แท็บของตัวเอง -->
+      <div class="sb-tab" data-tab="ratemgmt" onclick="agSwitchTab('ratemgmt','${a.id}')">Rate Type${(function(){
+        /* จุดสีขึ้นเมื่อมีเรื่องต้องจัดการ · เรทใกล้หมดและยังไม่ได้ตั้งตารางรับ
+           ไม่มีเรื่อง = ไม่มีจุด · แท็บจะได้ไม่ส่งเสียงตลอดเวลา */
+        try{
+          const X = (typeof rtExpForAgent==='function') ? rtExpForAgent(a) : null;
+          if(!X) return '';
+          const T = rtExpTone(X.days);
+          return ` <span title="${X.days<0?'เรทหมดอายุแล้ว':'เรทใกล้หมดอายุ'} · ยังไม่ได้ตั้งตารางฤดูกาลรับ" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${T.fg};margin-left:5px;vertical-align:middle"></span>`;
+        }catch(_){ return ''; }
       })()}</div>
     </div>
     <div class="sb-main-body" id="ag-tabbody">${agTabInfo(a)}</div>
@@ -32013,22 +36162,62 @@ function ctContractsPanelHTML(agentId){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return '';
   const cons=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[]).filter(c=>c&&c.agentId===agentId);
   cons.sort((x,y)=> (x.kind==='main'?0:1)-(y.kind==='main'?0:1) || String(x.activeFrom||'').localeCompare(String(y.activeFrom||'')));
+  /* §b2bPromo · ต้องรู้สิทธิ์แก้ก่อนวาดแถว · ปุ่มแก้/ยกเลิกไม่ควรขึ้นให้คนที่แก้ไม่ได้ */
+  const canEdit=(typeof laCanEditArea!=='function')||laCanEditArea('sales');
   const row=c=>{
     const st=_ctContractStatus(c);
     const isPromo=c.kind==='promo';
     const routes=(c.programPeriods||[]).map(p=>_ctRouteName(p.routeId));
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border,#eee);border-radius:10px;background:#fff;${st.key==='void'?'opacity:.6;':''}">
+    /* §b2bPromo · ป้ายบอกที่มาของราคา · ใบเก่าไม่มี priceMode = ตาม Rate Type เหมือนเดิม */
+    const pm=isPromo?((c.priceMode||'rate')):'';
+    const pmTag=isPromo?`<span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;white-space:nowrap">${_ctEsc(LA_PROMO_MODE_TXT[pm]||pm)}${pm==='discount'?(' · '+_ctEsc(laPromoDiscTxt(c))):''}</span>`:'';
+    /* §b2bPromo · ซื้อ N แถม 1 · แถบความคืบหน้า
+       ผู้ใช้ถามว่า "จะโชว์ตัวเลขยังไงว่า Performance ถึงไหนแล้ว" — ก้อนนี้คือคำตอบ
+       ระบบไม่เติมหัว FOC ให้ · บอกแค่ว่าขายไปเท่าไหร่ ได้สิทธิ์กี่ที่ ใช้ไปแล้วกี่ที่ */
+    let bonusBar='';
+    if(isPromo && st.key!=='void'){
+      const S=laPromoStat(c);
+      if(S){
+        const warn=S.over>0;
+        bonusBar=`<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #EFECE6">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:10.5px;color:#4A5464">
+            <b style="font-size:11px;color:#3C4553">ซื้อ ${S.buy} แถม 1</b>
+            <span style="color:#8A929E">นับ${_ctEsc(S.basisTxt)}</span>
+            <span style="flex:1"></span>
+            <span>ขายแล้ว <b>${S.sold.toLocaleString()}</b> หัว · ${S.bookings} ใบ</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:5px">
+            <div style="flex:1;height:7px;background:#EFECE6;border-radius:99px;overflow:hidden">
+              <i style="display:block;height:100%;width:${S.earned>0&&S.pct===0?100:S.pct}%;background:${warn?'#C0392B':'#C2410C'}"></i></div>
+            <span style="font-size:10.5px;color:#8A929E;white-space:nowrap">${S.toNext===0?'ครบรอบพอดี':('อีก '+S.toNext+' หัวถึงสิทธิ์ถัดไป')}</span>
+          </div>
+          <div style="display:flex;gap:14px;margin-top:6px;font-size:10.5px;flex-wrap:wrap">
+            <span>ได้สิทธิ์ <b>${S.earned}</b> ที่</span>
+            <span>ใช้ไปแล้ว <b>${S.used}</b> ที่</span>
+            <span style="color:${S.left>0?'#0F6E56':'#8A929E'}">คงเหลือ <b>${S.left}</b> ที่</span>
+            ${warn?`<span style="color:#C0392B">⚠ แถมเกินสิทธิ์ ${S.over} ที่</span>`:''}
+          </div>
+          <div style="font-size:9.5px;color:#A9A39A;margin-top:5px">
+            "ใช้ไปแล้ว" นับจากหัว FOC ในใบจองช่วงนี้ · ถ้ามี FOC จากเหตุอื่นจะรวมมาด้วย · ระบบไม่บล็อกการขาย</div>
+        </div>`;
+      }
+    }
+    return `<div style="display:${bonusBar?'block':'flex'};align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border,#eee);border-radius:10px;background:#fff;${st.key==='void'?'opacity:.6;':''}">
+      ${bonusBar?'<div style="display:flex;align-items:center;gap:10px">':''}
       <span style="background:${isPromo?'#FCE9D6':'#E6EEF6'};color:${isPromo?'#9A5410':'#1F5C8F'};font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;letter-spacing:.04em">${isPromo?'PROMO':'MAIN'}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600">${_ctEsc(_ctRateName(c.rateTypeId))}${c.version?` <span style="color:#aaa;font-weight:400;font-size:10px">· ${_ctEsc(c.version)}</span>`:''}</div>
+        <div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          <span>${_ctEsc(isPromo&&pm!=='rate'?(c.note||'Promotion'):_ctRateName(c.rateTypeId))}</span>${pmTag}${c.version?`<span style="color:#aaa;font-weight:400;font-size:10px">· ${_ctEsc(c.version)}</span>`:''}</div>
         <div style="font-size:10.5px;color:#888;margin-top:1px">${_ctFmt(c.activeFrom)} – ${_ctFmt(c.activeTo)}${routes.length?` · ${routes.length} route: ${_ctEsc(routes.slice(0,4).join(', '))}${routes.length>4?'…':''}`:''}</div>
       </div>
       <span style="background:${st.bg};color:${st.color};font-size:9px;font-weight:600;padding:2px 8px;border-radius:8px;white-space:nowrap">${st.label}</span>
+      <button onclick="ctPromoView('${c.id}','${agentId}')" title="ดูราคาและเงื่อนไขทั้งใบ" style="background:none;border:1px solid #DED8CE;color:#5F5E5A;border-radius:8px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">ดู</button>
+      ${isPromo&&st.key!=='void'&&canEdit?`<button onclick="ctOpenAddPromo('${agentId}','${c.id}')" title="แก้ไขใบโปรนี้" style="background:none;border:1px solid #CFE0EE;color:#1F5C8F;border-radius:8px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">แก้ไข</button>`:''}
       <button onclick="ctDocForContract('${c.id}','${agentId}')" style="background:none;border:1px solid #CFE0EE;color:#1F5C8F;border-radius:8px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">${c.docId?'สัญญา ✓':'ออกสัญญา'}</button>
-      ${isPromo&&st.key!=='void'?`<button onclick="ctVoidContract('${c.id}','${agentId}')" style="background:none;border:1px solid #E4C0C0;color:#A32D2D;border-radius:8px;padding:3px 9px;font-size:10px;cursor:pointer">ยกเลิก</button>`:''}
+      ${isPromo&&st.key!=='void'&&canEdit?`<button onclick="ctVoidContract('${c.id}','${agentId}')" title="ยกเลิกใบโปรนี้ · ราคากลับไปใช้ Main" style="background:none;border:1px solid #E4C0C0;color:#A32D2D;border-radius:8px;padding:3px 9px;font-size:10px;cursor:pointer">ยกเลิก</button>`:''}
+      ${bonusBar?'</div>':''}${bonusBar}
     </div>`;
   };
-  const canEdit=(typeof laCanEditArea!=='function')||laCanEditArea('sales');
   return `<div style="margin-bottom:14px;background:var(--sand,#faf9f6);border:1px solid var(--border,#eee);border-radius:14px;padding:14px 16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700">สัญญา (Contracts) <span style="color:#aaa;font-weight:400">${cons.length}</span></div>
@@ -32042,13 +36231,13 @@ function ctContractsPanelHTML(agentId){
       <div style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A929E;margin-bottom:7px">\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e23\u0e32\u0e04\u0e32 \u00b7 \u0e23\u0e30\u0e1a\u0e1a\u0e44\u0e25\u0e48\u0e08\u0e32\u0e01\u0e1a\u0e19\u0e25\u0e07\u0e25\u0e48\u0e32\u0e07</div>
       <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464">
         <span style="background:#FCE9D6;color:#9A5410;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">1 PROMO</span>
-        <div style="flex:1">\u0e17\u0e31\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e21\u0e2d \u0e40\u0e09\u0e1e\u0e32\u0e30 route \u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e44\u0e27\u0e49 + \u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07<b>\u0e27\u0e31\u0e19\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07</b>\u0e17\u0e35\u0e48\u0e23\u0e30\u0e1a\u0e38 (\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e27\u0e31\u0e19\u0e08\u0e2d\u0e07)
+        <div style="flex:1">\u0e17\u0e31\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e21\u0e2d \u0e40\u0e09\u0e1e\u0e32\u0e30 route \u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e44\u0e27\u0e49 + \u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07<b>\u0e27\u0e31\u0e19\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07</b>\u0e17\u0e35\u0e48\u0e23\u0e30\u0e1a\u0e38 \u00b7 \u0e43\u0e1a\u0e17\u0e35\u0e48\u0e15\u0e31\u0e49\u0e07\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e08\u0e2d\u0e07\u0e44\u0e27\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e02\u0e49\u0e32\u0e17\u0e31\u0e49\u0e07\u0e2a\u0e2d\u0e07\u0e0a\u0e48\u0e27\u0e07
           <div style="color:#8A929E;font-size:10.5px">\u0e0b\u0e49\u0e2d\u0e19\u0e01\u0e31\u0e19\u0e2b\u0e25\u0e32\u0e22\u0e43\u0e1a \u2192 priority \u0e2a\u0e39\u0e07\u0e01\u0e27\u0e48\u0e32\u0e0a\u0e19\u0e30 \u00b7 \u0e40\u0e17\u0e48\u0e32\u0e01\u0e31\u0e19 \u2192 \u0e43\u0e1a\u0e17\u0e35\u0e48\u0e40\u0e23\u0e34\u0e48\u0e21\u0e17\u0e35\u0e2b\u0e25\u0e31\u0e07\u0e0a\u0e19\u0e30</div>
         </div>
       </div>
       <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464;margin-top:5px">
         <span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">2 \u0e02\u0e49\u0e32\u0e21</span>
-        <div style="flex:1">\u0e16\u0e49\u0e32 PROMO \u0e19\u0e31\u0e49\u0e19\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e02\u0e2d\u0e07 route \u0e19\u0e31\u0e49\u0e19 \u0e2b\u0e23\u0e37\u0e2d\u0e16\u0e39\u0e01\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27 \u2192 \u0e02\u0e49\u0e32\u0e21 \u0e44\u0e21\u0e48\u0e04\u0e34\u0e14\u0e40\u0e1b\u0e47\u0e19 0</div>
+        <div style="flex:1">\u0e16\u0e49\u0e32 PROMO \u0e19\u0e31\u0e49\u0e19\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e02\u0e2d\u0e07 route \u0e19\u0e31\u0e49\u0e19 (\u0e44\u0e21\u0e48\u0e27\u0e48\u0e32\u0e08\u0e30\u0e15\u0e31\u0e49\u0e07\u0e23\u0e32\u0e04\u0e32\u0e41\u0e1a\u0e1a\u0e44\u0e2b\u0e19) \u0e2b\u0e23\u0e37\u0e2d\u0e16\u0e39\u0e01\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27 \u2192 \u0e02\u0e49\u0e32\u0e21 \u0e44\u0e21\u0e48\u0e04\u0e34\u0e14\u0e40\u0e1b\u0e47\u0e19 0</div>
       </div>
       <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464;margin-top:5px">
         <span style="background:#E6EEF6;color:#1F5C8F;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">3 MAIN</span>
@@ -32073,74 +36262,435 @@ function ctVoidContract(contractId, agentId){
   if(typeof agSwitchTab==='function') agSwitchTab('prices', agentId);   /* §promoMx */
   else if(typeof agRenderDetail==='function') agRenderDetail(agentId);
 }
-function ctOpenAddPromo(agentId){
+/* ══ §b2bPromo ก้อน 2 · โมดัลเพิ่ม Promotion ════════════════════════════════════════════════════
+   สองโหมดในใบเดียว · Rate Type (ของเดิม) หรือ กรอกราคาเอง (ของใหม่)
+   ตารางกรอกใช้โครงเดียวกับ Seat rates ที่อยู่ล่างหน้านั้น คนกรอกจะได้ไม่ต้องเรียนรู้ใหม่
+   ⚠ ตารางเกิดจาก route ที่ติ๊กไว้ · ติ๊กเพิ่ม/เอาออกต้องวาดใหม่ทันที
+     ไม่งั้นจะมีช่องของ route ที่ไม่ได้เลือกค้างอยู่ แล้วถูกเก็บลงใบโปรไปด้วย
+   ⚠ เติมราคาจาก Main มาให้ล่วงหน้า (ไม่ใช่ placeholder) เพราะคนกรอกแก้แค่ไม่กี่ช่อง
+     ถ้าปล่อยว่างแล้วเก็บ 0 = โปรที่ตั้งใจลดแค่เส้นทางเดียว จะทำเส้นทางอื่นกลายเป็นฟรี
+   ⚠ โซนที่ปล่อยว่างทั้งแถว = ไม่ขายโซนนั้นในโปรนี้ → ไม่เก็บลงใบ
+     ตัวคิดราคาจะถอยไปใช้เรทมาตรฐานของโซนนั้นเอง (กติกา "ข้าม")            */
+var _ctPromoCtx = null;
+
+function ctPromoSwitch(mode){
+  _ctPromoCtx && (_ctPromoCtx.mode = mode);
+  [['rate','ct-promo-box-rate'], ['own','ct-promo-box-own'], ['discount','ct-promo-box-disc']]
+    .forEach(function(x){
+      var el = document.getElementById(x[1]);
+      if(el) el.style.display = (mode === x[0]) ? '' : 'none';
+    });
+  if(mode === 'own') ctPromoTbl();
+}
+/* ตัวอย่างผลของส่วนลด · คนตั้งราคาต้องเห็นเลขจริงก่อนกดบันทึก ไม่ใช่เดาเอาจาก % */
+function ctPromoDiscPrev(){
+  var host = document.getElementById('ct-promo-disc-prev'); if(!host || !_ctPromoCtx) return;
+  var md = ((document.querySelector('input[name="ct-promo-dmode"]:checked') || {}).value) || 'pct';
+  var dv = +((document.getElementById('ct-promo-dval') || {}).value) || 0;
+  var RS = ctPromoRoutesPicked();
+  if(!dv || !RS.length){ host.innerHTML = '<span style="color:#8A929E">ใส่ตัวเลขส่วนลดแล้วจะเห็นตัวอย่างราคาที่นี่</span>'; return; }
+  var mr = laPromoMainRt(_ctPromoCtx.agentId);
+  var rows = RS.slice(0, 3).map(function(rid){
+    var z = mr && mr.seatRates && mr.seatRates[rid] && mr.seatRates[rid].PK;
+    if(!z) return '<div>' + _ctEsc(_ctRouteName(rid)) + ' · <span style="color:#A32D2D">Main ไม่มีราคาของ route นี้ → โปรจะถูกข้าม</span></div>';
+    var f = function(k){
+      var v = +z[k] || 0; if(v <= 0) return '—';
+      var n = Math.max(0, md === 'amt' ? Math.round(v - dv) : Math.round(v * (1 - dv / 100)));
+      return v.toLocaleString() + ' → <b>' + n.toLocaleString() + '</b>';
+    };
+    return '<div>' + _ctEsc(_ctRouteName(rid)) + ' · PK · ผู้ใหญ่ไทย ' + f('adult-thai')
+         + ' · ผู้ใหญ่ต่างชาติ ' + f('adult-fr') + '</div>';
+  }).join('');
+  host.innerHTML = rows + (RS.length > 3 ? ('<div style="color:#8A929E">…และอีก ' + (RS.length - 3) + ' route</div>') : '');
+}
+/* ราคาตั้งต้นของช่องหนึ่ง · มาจาก Rate Type ตัวหลักของเอเย่นต์ */
+function _ctPromoBase(routeId, zone, k){
+  var C = _ctPromoCtx; if(!C) return 0;
+  var rt = ((typeof SB_RATE_TYPES !== 'undefined') ? SB_RATE_TYPES : [])
+    .filter(function(x){ return x.id === C.mainRate; })[0];
+  var z = rt && rt.seatRates && rt.seatRates[routeId] && rt.seatRates[routeId][zone];
+  return z ? (+z[k] || 0) : 0;
+}
+function ctPromoRoutesPicked(){
+  return [].slice.call(document.querySelectorAll('.ct-promo-route:checked')).map(function(el){ return el.value; });
+}
+/* วาดตารางใหม่ · เก็บค่าที่คนกรอกไว้แล้วก่อน จะได้ไม่หายตอนติ๊ก route เพิ่ม */
+function ctPromoTbl(){
+  var host = document.getElementById('ct-promo-rates'); if(!host) return;
+  var keep = {};
+  [].slice.call(host.querySelectorAll('.ct-pr-in')).forEach(function(el){
+    keep[el.getAttribute('data-r') + '|' + el.getAttribute('data-z') + '|' + el.getAttribute('data-k')] = el.value;
+  });
+  var RS = ctPromoRoutesPicked();
+  if(!RS.length){
+    host.innerHTML = '<div style="font-size:11px;color:#A32D2D;padding:8px 0">ติ๊กเลือก route ด้านบนก่อน แล้วตารางราคาจะขึ้นตรงนี้</div>';
+    return;
+  }
+  var ZL = [['PK','PK'], ['KL','KL'], ['NoTransfer','NO TRANSFER']];
+  var KL = [['adult-thai','THAI · ADULT'], ['child-thai','THAI · CHILD'],
+            ['adult-fr','FRN · ADULT'], ['child-fr','FRN · CHILD']];
+  var th = '<th style="text-align:left;padding:5px 7px;font-size:9.5px;font-weight:700;color:#8A929E;letter-spacing:.04em">ROUTE</th>'
+         + '<th style="text-align:left;padding:5px 7px;font-size:9.5px;font-weight:700;color:#8A929E">ZONE</th>'
+         + KL.map(function(k){ return '<th style="text-align:right;padding:5px 7px;font-size:9.5px;font-weight:700;color:#8A929E;white-space:nowrap">' + k[1] + '</th>'; }).join('');
+  var body = '';
+  RS.forEach(function(rid){
+    ZL.forEach(function(z, zi){
+      body += '<tr>'
+        + (zi === 0 ? ('<td rowspan="3" style="padding:6px 7px;font-size:11px;font-weight:600;color:#3C4553;border-top:1px solid #EFECE6;vertical-align:top">'
+            + _ctEsc(_ctRouteName(rid)) + '</td>') : '')
+        + '<td style="padding:4px 7px;font-size:10.5px;color:#8A929E' + (zi === 0 ? ';border-top:1px solid #EFECE6' : '') + '">' + z[1] + '</td>'
+        + KL.map(function(k){
+            var key = rid + '|' + z[0] + '|' + k[0];
+            /* §b2bPromo · ลำดับค่าตั้งต้น · ที่พิมพ์ค้างไว้ > ราคาในใบที่กำลังแก้ > ราคา Main
+         โหมดแก้ไขต้องเห็นของเดิมก่อน ไม่ใช่โดนราคา Main ทับจนแก้ที่ทำไว้หาย */
+      var _ed = _ctPromoCtx && _ctPromoCtx.edit;
+      var _edv = (_ed && _ed.rates && _ed.rates[rid] && _ed.rates[rid][z[0]]
+                  && _ed.rates[rid][z[0]][k[0]] != null) ? _ed.rates[rid][z[0]][k[0]] : null;
+      var v = (keep[key] != null) ? keep[key] : ((_edv != null) ? _edv : _ctPromoBase(rid, z[0], k[0]));
+            return '<td style="padding:3px 4px' + (zi === 0 ? ';border-top:1px solid #EFECE6' : '') + '">'
+              + '<input class="ct-pr-in" data-r="' + _ctEsc(rid) + '" data-z="' + z[0] + '" data-k="' + k[0] + '"'
+              + ' value="' + _ctEsc(v) + '" inputmode="numeric"'
+              + ' style="width:100%;min-width:64px;padding:5px 7px;border:1px solid #ddd;border-radius:7px;'
+              + 'font-size:11.5px;font-family:inherit;text-align:right;font-variant-numeric:tabular-nums"></td>';
+          }).join('')
+        + '</tr>';
+    });
+  });
+  host.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody></table>'
+    + '<div style="font-size:10px;color:#8A929E;margin-top:6px;line-height:1.6">'
+    + 'เติมราคาจาก Main มาให้แล้ว · แก้เฉพาะช่องที่เปลี่ยน<br>'
+    + 'โซนไหนไม่ขายในโปรนี้ ให้ลบให้ว่างทั้งแถว → ระบบจะถอยไปใช้เรทมาตรฐานของโซนนั้น</div>';
+}
+/* ══ §b2bPromo · ดูรายละเอียดสัญญา/โปรโมชั่น · อ่านอย่างเดียว ══════════════════════════════════
+   แถวในการ์ดบอกได้แค่ชื่อกับช่วงวัน · ราคาจริงที่ใบนี้ใช้ไม่เคยเห็นจากหน้าจอเลย
+   ต้องไปเปิด Rate Type อีกหน้าหนึ่งแล้วเทียบเอง หรือเดาจากชื่อ
+   หน้านี้เอามาวางให้ครบในที่เดียว · ใช้กับ MAIN ได้ด้วย (ราคามาจาก Rate Type ที่ผูกไว้) */
+function ctPromoView(id, agentId){
+  var c = laPromoById(id); if(!c) return;
+  var a = (typeof sbGetAgent === 'function') ? sbGetAgent(agentId || c.agentId) : null;
+  var st = _ctContractStatus(c);
+  var isPromo = (c.kind === 'promo');
+  var pm = isPromo ? (c.priceMode || 'rate') : 'rate';
+  var e = _ctEsc, fd = function(x){ return x ? ((typeof _rtFmtDate === 'function') ? (_rtFmtDate(x) || x) : x) : '—'; };
+  var PP = c.programPeriods || [];
+  /* ชุดราคาที่ใบนี้ใช้จริง · ประกอบด้วยตัวเดียวกับที่เครื่องคิดราคาใช้ ไม่ได้เขียนสูตรซ้ำ */
+  var mainRt = laPromoMainRt(c.agentId);
+  var rtOf = function(rid){
+    if(!isPromo || pm === 'rate'){
+      var rt = ((typeof SB_RATE_TYPES !== 'undefined') ? SB_RATE_TYPES : [])
+        .filter(function(x){ return x.id === c.rateTypeId; })[0];
+      return (rt && rt.seatRates && rt.seatRates[rid]) || null;
+    }
+    var r = laPromoRate(c, rid, mainRt);
+    return (r && r.seatRates && r.seatRates[rid]) || null;
+  };
+  var KL = [['adult-thai','ไทย · ผู้ใหญ่'], ['child-thai','ไทย · เด็ก'],
+            ['adult-fr','ต่างชาติ · ผู้ใหญ่'], ['child-fr','ต่างชาติ · เด็ก']];
+  var rows = PP.map(function(p){
+    var Z = rtOf(p.routeId);
+    var sub = LA_PROMO_ZONES.filter(function(z){ return Z && Z[z]; }).map(function(z){
+      var ov = (pm === 'own' && c.rates && c.rates[p.routeId] && c.rates[p.routeId][z]);
+      return '<tr><td style="padding:3px 8px;font-size:10.5px;color:#8A929E">' + z + '</td>'
+        + KL.map(function(k){
+            var v = +Z[z][k[0]] || 0;
+            var base = mainRt && mainRt.seatRates && mainRt.seatRates[p.routeId]
+                    && mainRt.seatRates[p.routeId][z] ? (+mainRt.seatRates[p.routeId][z][k[0]] || 0) : 0;
+            var diff = (isPromo && pm !== 'rate' && base > 0 && v !== base);
+            return '<td style="padding:3px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11px'
+              + (ov ? ';font-weight:700' : '') + '">' + (v ? v.toLocaleString() : '—')
+              + (diff ? ('<span style="color:#9A5410;font-size:9.5px"> (' + base.toLocaleString() + ')</span>') : '') + '</td>';
+          }).join('') + '</tr>';
+    }).join('');
+    return '<div style="margin-bottom:9px">'
+      + '<div style="font-size:11.5px;font-weight:700;color:#3C4553">' + e(_ctRouteName(p.routeId)) + '</div>'
+      + '<div style="font-size:10px;color:#8A929E;margin:2px 0 4px">'
+        + 'เดินทาง ' + fd(p.travelFrom) + ' → ' + fd(p.travelTo)
+        + (c.bookWin ? (' · จอง ' + fd(p.bookFrom) + ' → ' + fd(p.bookTo)) : ' · ไม่จำกัดวันจอง') + '</div>'
+      + (sub ? ('<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #EFECE6;border-radius:8px">'
+          + '<thead><tr><th style="padding:3px 8px;text-align:left;font-size:9px;color:#8A929E">โซน</th>'
+          + KL.map(function(k){ return '<th style="padding:3px 8px;text-align:right;font-size:9px;color:#8A929E;white-space:nowrap">' + k[1] + '</th>'; }).join('')
+          + '</tr></thead><tbody>' + sub + '</tbody></table>')
+        : '<div style="font-size:10.5px;color:#A32D2D">ไม่มีราคาของเส้นทางนี้ → ระบบข้าม ใช้เรทมาตรฐานแทน</div>')
+      + '</div>';
+  }).join('');
+  var S = isPromo ? laPromoStat(c) : null;
+  var wrap = document.createElement('div');
+  wrap.id = 'ct-promo-view';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:100050;display:flex;align-items:center;justify-content:center;padding:20px';
+  wrap.innerHTML = '<div style="background:#faf9f6;border-radius:16px;max-width:760px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    + '<div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid #eee;background:#fff;border-radius:16px 16px 0 0">'
+      + '<span style="background:' + (isPromo ? '#FCE9D6' : '#E6EEF6') + ';color:' + (isPromo ? '#9A5410' : '#1F5C8F')
+      + ';font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px">' + (isPromo ? 'PROMO' : 'MAIN') + '</span>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'
+      + e(isPromo && pm !== 'rate' ? (c.note || 'Promotion') : _ctRateName(c.rateTypeId)) + '</div>'
+      + '<div style="font-size:10.5px;color:#8A929E">' + e((a && a.name) || '') + ' · ' + fd(c.activeFrom) + ' – ' + fd(c.activeTo) + '</div></div>'
+      + '<span style="background:' + st.bg + ';color:' + st.color + ';font-size:9px;font-weight:600;padding:2px 8px;border-radius:8px">' + st.label + '</span>'
+      + '<button onclick="ctPromoViewClose()" style="background:none;border:none;font-size:20px;color:#999;cursor:pointer;line-height:1">&times;</button></div>'
+    + '<div style="padding:14px 18px">'
+      + '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#4A5464;margin-bottom:12px">'
+        + '<span>ที่มาของราคา <b>' + e(LA_PROMO_MODE_TXT[pm] || pm) + '</b>'
+          + (pm === 'discount' ? (' · ' + e(laPromoDiscTxt(c))) : '')
+          + (pm === 'rate' ? (' · ' + e(_ctRateName(c.rateTypeId))) : '') + '</span>'
+        + '<span>Priority <b>' + (c.priority || 0) + '</b></span>'
+        + '<span>' + PP.length + ' เส้นทาง</span>'
+        + (c.note ? ('<span>หมายเหตุ <b>' + e(c.note) + '</b></span>') : '') + '</div>'
+      + (S ? ('<div style="background:#fff;border:1px solid #EFECE6;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:11px">'
+          + '<b>ซื้อ ' + S.buy + ' แถม 1</b> · นับ' + e(S.basisTxt)
+          + ' · ขายแล้ว <b>' + S.sold.toLocaleString() + '</b> หัว · ได้สิทธิ์ <b>' + S.earned + '</b> ที่'
+          + ' · ใช้ไป <b>' + S.used + '</b> · เหลือ <b>' + S.left + '</b>'
+          + (S.toNext ? (' · อีก ' + S.toNext + ' หัวถึงสิทธิ์ถัดไป') : '') + '</div>') : '')
+      + (pm !== 'rate' ? '<div style="font-size:10px;color:#8A929E;margin-bottom:7px">เลขในวงเล็บคือราคา Main เดิม · ช่องที่ไม่ต่างจาก Main แปลว่าโปรไม่ได้แตะ</div>' : '')
+      + (rows || '<div style="font-size:11px;color:#8A929E">ไม่มีเส้นทางในใบนี้</div>')
+    + '</div></div>';
+  document.body.appendChild(wrap);
+}
+function ctPromoViewClose(){ var m = document.getElementById('ct-promo-view'); if(m) m.remove(); }
+function ctOpenAddPromo(agentId, editId){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return;
   const main=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[]).find(c=>c&&c.agentId===agentId&&c.kind==='main');
   const mainRate=(main&&main.rateTypeId)||a.rateTypeId||'';
-  const routeIds=[...new Set([...(a.programPeriods||[]).map(p=>p.routeId), ...((main&&main.programPeriods)||[]).map(p=>p.routeId)].filter(Boolean))];
-  const rtOpts=((typeof SB_RATE_TYPES!=='undefined')?SB_RATE_TYPES:[]).map(r=>`<option value="${r.id}"${r.id===mainRate?' selected':''}>${_ctEsc(r.name||r.code||r.id)}</option>`).join('');
-  const routeChecks=routeIds.length?routeIds.map(rid=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:4px 9px;cursor:pointer"><input type="checkbox" class="ct-promo-route" value="${rid}" checked> ${_ctEsc(_ctRouteName(rid))}</label>`).join(''):'<div style="font-size:11px;color:#c0392b">agent นี้ยังไม่มี route ในสัญญา — เพิ่ม route ในโปรแกรมก่อน</div>';
+  /* §b2bPromo · โหมดแก้ไข · ใบเดิมอาจมี route ที่ไม่ได้อยู่ในสัญญาหลักแล้ว
+     ถ้าไม่รวมเข้ามาด้วย พอกดแก้แล้วเซฟ route นั้นจะหายไปเงียบ ๆ */
+  const ed=editId?((typeof SB_CONTRACTS!=='undefined'?SB_CONTRACTS:[]).find(c=>c&&c.id===editId)):null;
+  const edRoutes=ed?(ed.programPeriods||[]).map(p=>p.routeId):[];
+  const routeIds=[...new Set([...(a.programPeriods||[]).map(p=>p.routeId), ...((main&&main.programPeriods)||[]).map(p=>p.routeId), ...edRoutes].filter(Boolean))];
+  const edP0=ed?((ed.programPeriods||[])[0]||{}):{};
+  const edMode=ed?(ed.priceMode||'rate'):'rate';
+  const edOn=r=>ed?(edRoutes.indexOf(r)>=0):true;
+  const rtSel=(ed&&ed.rateTypeId)||mainRate;
+  const rtOpts=((typeof SB_RATE_TYPES!=='undefined')?SB_RATE_TYPES:[]).map(r=>`<option value="${r.id}"${r.id===rtSel?' selected':''}>${_ctEsc(r.name||r.code||r.id)}</option>`).join('');
+  const routeChecks=routeIds.length?routeIds.map(rid=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:4px 9px;cursor:pointer"><input type="checkbox" class="ct-promo-route" value="${rid}" onchange="ctPromoTbl();ctPromoDiscPrev()"${edOn(rid)?' checked':''}> ${_ctEsc(_ctRouteName(rid))}</label>`).join(''):'<div style="font-size:11px;color:#c0392b">agent นี้ยังไม่มี route ในสัญญา — เพิ่ม route ในโปรแกรมก่อน</div>';
   const today=(typeof TODAY_STR!=='undefined'&&TODAY_STR)?TODAY_STR:new Date().toISOString().slice(0,10);
+  _ctPromoCtx={ agentId:agentId, mainRate:mainRate, mode:edMode, edit:ed||null };
+  const lb='font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px';
+  const inp='width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit';
   const wrap=document.createElement('div');
   wrap.id='ct-promo-modal';
   wrap.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:100050;display:flex;align-items:center;justify-content:center;padding:20px';
-  wrap.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  wrap.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:820px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid #eee">
-      <div style="font-size:14px;font-weight:700;flex:1">เพิ่ม Promotion · ${_ctEsc(a.name||'')}</div>
+      <div style="font-size:14px;font-weight:700;flex:1">${ed?'แก้ไข':'เพิ่ม'} Promotion · ${_ctEsc(a.name||'')}</div>
       <button onclick="ctCloseAddPromo()" style="background:none;border:none;font-size:20px;color:#999;cursor:pointer;line-height:1">×</button>
     </div>
     <div style="padding:16px 18px;display:flex;flex-direction:column;gap:13px">
+
       <div>
-        <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px">Rate Type ของ Promo</label>
-        <select id="ct-promo-rate" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit">${rtOpts}</select>
+        <label style="${lb}">ราคาโปรมาจาก</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;background:#F7F6F3;border:1px solid #e5e5e5;border-radius:9px;padding:7px 12px;cursor:pointer">
+            <input type="radio" name="ct-promo-mode" value="rate"${edMode==='rate'?' checked':''} onchange="ctPromoSwitch('rate')"> Rate Type ที่มีอยู่</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;background:#F7F6F3;border:1px solid #e5e5e5;border-radius:9px;padding:7px 12px;cursor:pointer">
+            <input type="radio" name="ct-promo-mode" value="own"${edMode==='own'?' checked':''} onchange="ctPromoSwitch('own')"> กรอกราคาเองในใบนี้</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;background:#F7F6F3;border:1px solid #e5e5e5;border-radius:9px;padding:7px 12px;cursor:pointer">
+            <input type="radio" name="ct-promo-mode" value="discount"${edMode==='discount'?' checked':''} onchange="ctPromoSwitch('discount')"> ลดจาก Main</label>
+        </div>
+      </div>
+
+      <div id="ct-promo-box-disc" style="display:none">
+        <label style="${lb}">ส่วนลดจากราคา Main</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
+            <input type="radio" name="ct-promo-dmode" value="pct"${((ed&&ed.discount&&ed.discount.mode)||'pct')==='pct'?' checked':''} onchange="ctPromoDiscPrev()"> เปอร์เซ็นต์</label>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
+            <input type="radio" name="ct-promo-dmode" value="amt"${((ed&&ed.discount&&ed.discount.mode)||'')==='amt'?' checked':''} onchange="ctPromoDiscPrev()"> จำนวนเงินต่อหัว</label>
+          <input type="number" id="ct-promo-dval" min="0" step="1" value="${(ed&&ed.discount&&ed.discount.value)||10}" oninput="ctPromoDiscPrev()"
+            style="width:110px;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit;text-align:right">
+        </div>
+        <div id="ct-promo-disc-prev" style="margin-top:7px;font-size:10.5px;color:#4A5464;line-height:1.7;background:#FBFAF8;border:1px solid #EFECE6;border-radius:8px;padding:7px 10px"></div>
+        <div style="font-size:10px;color:#8A929E;margin-top:5px">ลดจาก<b>ราคาสัญญาหลัก</b>เสมอ · ช่องที่เป็น 0 อยู่แล้ว (ไม่ขาย) ลดแล้วยังเป็น 0</div>
+      </div>
+
+      <div id="ct-promo-box-rate">
+        <label style="${lb}">Rate Type ของ Promo</label>
+        <select id="ct-promo-rate" style="${inp}">${rtOpts}</select>
         <div style="font-size:10px;color:#888;margin-top:4px">ต้องการราคาโปรใหม่? <button onclick="ctCloseAddPromo(); if(typeof rtClone==='function') rtClone('${mainRate}');" style="background:none;border:none;color:#1683C7;font-size:10px;cursor:pointer;padding:0;text-decoration:underline">clone จาก Main แล้วแก้ราคา</button> (เซฟแล้วกลับมาเลือกที่นี่)</div>
       </div>
-      <div style="display:flex;gap:10px">
-        <div style="flex:1"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px">Active ตั้งแต่</label><input type="date" id="ct-promo-from" value="${today}" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit"></div>
-        <div style="flex:1"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px">ถึง (หมดโปร)</label><input type="date" id="ct-promo-to" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit"></div>
+
+      <div style="background:#FBFAF8;border:1px solid #EFECE6;border-radius:10px;padding:11px 13px">
+        <div style="font-size:11px;font-weight:700;color:#3C4553;margin-bottom:8px">ช่วงเวลา · ต้องเข้าทั้งสองช่วงถึงจะได้ราคาโปร</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:150px"><label style="${lb}">ต้องจองระหว่าง</label>
+            <div style="display:flex;gap:6px">
+              <input type="date" id="ct-promo-bfrom" value="${ed&&ed.bookWin?_ctEsc(edP0.bookFrom||''):''}" style="${inp}">
+              <input type="date" id="ct-promo-bto" value="${ed&&ed.bookWin?_ctEsc(edP0.bookTo||''):''}" style="${inp}">
+            </div></div>
+          <div style="flex:1;min-width:150px"><label style="${lb}">ต้องเดินทางระหว่าง</label>
+            <div style="display:flex;gap:6px">
+              <input type="date" id="ct-promo-from" value="${ed?_ctEsc(ed.activeFrom||''):today}" style="${inp}">
+              <input type="date" id="ct-promo-to" value="${ed?_ctEsc(ed.activeTo||''):''}" style="${inp}">
+            </div></div>
+        </div>
+        <div style="font-size:10px;color:#8A929E;margin-top:6px">ช่องวันจองปล่อยว่าง = ไม่จำกัดว่าจองเมื่อไหร่ · ดูแค่วันเดินทาง (เหมือนโปรใบเก่า)</div>
       </div>
+
       <div>
-        <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:5px">Routes ที่ใช้ Promo (ตามวันเดินทาง)</label>
+        <label style="${lb}">Routes ที่ใช้ Promo</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px">${routeChecks}</div>
       </div>
+
+      <div id="ct-promo-box-own" style="display:none">
+        <label style="${lb}">ราคาโปร · เฉพาะ route ที่ติ๊กไว้</label>
+        <div id="ct-promo-rates" style="border:1px solid #EFECE6;border-radius:10px;padding:9px 11px;background:#fff;overflow-x:auto"></div>
+      </div>
+
+      <div style="background:#FBFAF8;border:1px solid #EFECE6;border-radius:10px;padding:11px 13px">
+        <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:#3C4553;cursor:pointer">
+          <input type="checkbox" id="ct-promo-bon"${(ed&&ed.bonus&&ed.bonus.on)?' checked':''} onchange="var b=document.getElementById('ct-promo-bon-box'); if(b) b.style.display=this.checked?'':'none'"> ซื้อ N แถม 1</label>
+        <div id="ct-promo-bon-box" style="display:${(ed&&ed.bonus&&ed.bonus.on)?'':'none'};margin-top:9px">
+          <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;font-size:11.5px">
+            <span>ซื้อครบ</span>
+            <input type="number" id="ct-promo-bon-n" min="1" step="1" value="${(ed&&ed.bonus&&ed.bonus.buy)||10}"
+              style="width:78px;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit;text-align:right">
+            <span>หัว แถม 1 ที่ · นับจาก</span>
+            <select id="ct-promo-bon-basis" style="padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit">
+              <option value="adchd"${((ed&&ed.bonus&&ed.bonus.basis)||'adchd')==='adchd'?' selected':''}>ผู้ใหญ่ + เด็ก</option>
+              <option value="ad"${((ed&&ed.bonus&&ed.bonus.basis)||'')==='ad'?' selected':''}>เฉพาะผู้ใหญ่</option>
+            </select>
+          </div>
+          <div style="font-size:10px;color:#8A929E;margin-top:7px;line-height:1.6">
+            นับสะสมตลอดช่วงโปร ไม่ใช่ต่อใบจอง · ระบบ<b>นับกับเตือน</b>ให้เท่านั้น ไม่เติมหัว FOC เอง<br>
+            ความคืบหน้าดูได้ที่แถบใบโปรในการ์ดสัญญา</div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:10px;align-items:end">
-        <div style="width:110px"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px">Priority</label><input type="number" id="ct-promo-prio" value="10" min="1" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit"></div>
-        <div style="flex:1"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px">หมายเหตุ</label><input type="text" id="ct-promo-note" placeholder="เช่น Xmas Promo" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:9px;font-size:12px;font-family:inherit"></div>
+        <div style="width:110px"><label style="${lb}">Priority</label><input type="number" id="ct-promo-prio" value="${(ed&&ed.priority)||10}" min="1" style="${inp}"></div>
+        <div style="flex:1"><label style="${lb}">หมายเหตุ</label><input type="text" id="ct-promo-note" value="${ed?_ctEsc(ed.note||''):''}" placeholder="เช่น Xmas Promo" style="${inp}"></div>
       </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid #eee;background:#faf9f6">
       <button onclick="ctCloseAddPromo()" style="background:#fff;border:1px solid #ddd;color:#555;border-radius:10px;padding:8px 15px;font-size:12px;cursor:pointer">ยกเลิก</button>
-      <button onclick="ctSaveAddPromo('${agentId}')" style="background:#1683C7;color:#fff;border:none;border-radius:10px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">สร้าง Promotion</button>
+      <button onclick="ctSaveAddPromo('${agentId}'${ed?(",'"+ed.id+"'"):''})" style="background:#1683C7;color:#fff;border:none;border-radius:10px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">${ed?'บันทึกการแก้ไข':'สร้าง Promotion'}</button>
     </div>
   </div>`;
   document.body.appendChild(wrap);
+  ctPromoSwitch(edMode);                 /* §b2bPromo · โชว์กล่องให้ตรงโหมด + วาดตารางถ้าเป็นโหมดกรอกเอง */
+  if(edMode==='discount') ctPromoDiscPrev();
 }
-function ctCloseAddPromo(){ const m=document.getElementById('ct-promo-modal'); if(m) m.remove(); }
-function ctSaveAddPromo(agentId){
+function ctCloseAddPromo(){ _ctPromoCtx=null; const m=document.getElementById('ct-promo-modal'); if(m) m.remove(); }
+function ctSaveAddPromo(agentId, editId){
+  const mode=((document.querySelector('input[name="ct-promo-mode"]:checked')||{}).value)||'rate';
   const rateTypeId=(document.getElementById('ct-promo-rate')||{}).value||'';
   const from=(document.getElementById('ct-promo-from')||{}).value||'';
   const to=(document.getElementById('ct-promo-to')||{}).value||'';
+  const bfrom=(document.getElementById('ct-promo-bfrom')||{}).value||'';
+  const bto=(document.getElementById('ct-promo-bto')||{}).value||'';
   const prio=parseInt((document.getElementById('ct-promo-prio')||{}).value,10)||10;
   const note=((document.getElementById('ct-promo-note')||{}).value||'').trim();
-  const routes=[...document.querySelectorAll('.ct-promo-route:checked')].map(el=>el.value);
-  if(!rateTypeId){ alert('เลือก Rate Type ของ Promo ก่อน'); return; }
-  if(!from||!to){ alert('ระบุช่วงวัน Active–หมดโปร'); return; }
-  if(to<from){ alert('วันหมดโปรต้องไม่ก่อนวันเริ่ม'); return; }
+  const routes=ctPromoRoutesPicked();
+  if(!from||!to){ alert('ระบุช่วงวันเดินทาง'); return; }
+  if(to<from){ alert('วันเดินทางสุดท้ายต้องไม่ก่อนวันแรก'); return; }
+  if((bfrom&&bto)&&bto<bfrom){ alert('วันจองสุดท้ายต้องไม่ก่อนวันแรก'); return; }
   if(!routes.length){ alert('เลือกอย่างน้อย 1 route'); return; }
+
+  /* §b2bPromo · โหมดกรอกเอง · เก็บเฉพาะโซนที่มีตัวเลขจริง
+     โซนที่ถูกลบจนว่างทั้งแถว = ไม่ขายโซนนั้นในโปรนี้ → ไม่เก็บ ตัวคิดราคาจะถอยไปเรทมาตรฐานเอง */
+  let rates=null;
+  if(mode==='own'){
+    rates={};
+    [].slice.call(document.querySelectorAll('#ct-promo-rates .ct-pr-in')).forEach(el=>{
+      const r=el.getAttribute('data-r'), z=el.getAttribute('data-z'), k=el.getAttribute('data-k');
+      const v=String(el.value||'').trim(); if(v==='') return;
+      const n=+v; if(!isFinite(n)||n<0) return;
+      (rates[r]=rates[r]||{}); (rates[r][z]=rates[r][z]||{}); rates[r][z][k]=n;
+    });
+    /* โซนที่ผู้ใหญ่ทั้งสองสัญชาติเป็น 0 = ไม่มีราคาจริง · ตัดทิ้ง ไม่งั้นจะกลายเป็นขายฟรี */
+    Object.keys(rates).forEach(r=>{
+      Object.keys(rates[r]).forEach(z=>{
+        const Z=rates[r][z];
+        if(!(+Z['adult-thai']||0) && !(+Z['adult-fr']||0)) delete rates[r][z];
+      });
+      if(!Object.keys(rates[r]).length) delete rates[r];
+    });
+    const covered=routes.filter(r=>rates[r]);
+    if(!covered.length){ alert('ยังไม่มีราคาในตารางเลย · กรอกราคาผู้ใหญ่อย่างน้อยหนึ่งโซน'); return; }
+    if(covered.length<routes.length){
+      const miss=routes.filter(r=>!rates[r]).map(r=>_ctRouteName(r)).join(', ');
+      if(!confirm(routes.length-covered.length+' route ไม่มีราคาในโปรนี้ ('+miss+')\n\n'
+        +'route พวกนั้นจะใช้เรทมาตรฐานตามเดิม · สร้างต่อเลยไหม')) return;
+    }
+  } else if(mode==='discount'){
+    const dv=+((document.getElementById('ct-promo-dval')||{}).value)||0;
+    if(!(dv>0)){ alert('ใส่ตัวเลขส่วนลดก่อน'); return; }
+    const dmode=((document.querySelector('input[name="ct-promo-dmode"]:checked')||{}).value)||'pct';
+    if(dmode==='pct' && dv>=100){ alert('ส่วนลดเป็นเปอร์เซ็นต์ต้องน้อยกว่า 100'); return; }
+    /* ⚠ ลดเป็นจำนวนเงินมากกว่าราคาจริง = ทุกช่องกลายเป็น 0
+       ตัวคิดราคาจะอ่านว่า "ไม่ได้เปิดขาย" แล้วคืนยอด 0 ไม่ใช่ถอยไปเรทมาตรฐาน
+       เป็นความผิดตอนพิมพ์ ไม่ใช่เจตนา · ดักที่นี่ดีกว่าไปเงียบตอนขาย */
+    const mr0=laPromoMainRt(agentId);
+    if(dmode==='amt'){
+      let lo=Infinity;
+      routes.forEach(r=>{ const zz=(mr0&&mr0.seatRates&&mr0.seatRates[r])||{};
+        Object.keys(zz).forEach(z=>{ ['adult-thai','adult-fr'].forEach(k=>{
+          const v=+zz[z][k]||0; if(v>0 && v<lo) lo=v; }); }); });
+      if(lo!==Infinity && dv>=lo){
+        alert('ส่วนลด '+dv.toLocaleString()+' บาท มากกว่าหรือเท่ากับราคาผู้ใหญ่ที่ถูกที่สุดใน Main ('
+          +lo.toLocaleString()+' บาท)\n\nราคาจะกลายเป็น 0 แล้วระบบจะอ่านว่าไม่ได้เปิดขาย · ลดจำนวนลงก่อน');
+        return;
+      }
+    }
+    /* Main ไม่มีราคาของ route ไหน = ไม่มีอะไรให้ลด · เตือนก่อน ไม่ปล่อยให้เงียบ */
+    const mr=laPromoMainRt(agentId);
+    const miss=routes.filter(r=>!(mr&&mr.seatRates&&mr.seatRates[r]));
+    if(miss.length){
+      if(!confirm(miss.length+' route ไม่มีราคาใน Main ('+miss.map(r=>_ctRouteName(r)).join(', ')+')\n\n'
+        +'ไม่มีอะไรให้ลด · route พวกนั้นจะใช้เรทมาตรฐานตามเดิม · สร้างต่อเลยไหม')) return;
+    }
+  } else {
+    if(!rateTypeId){ alert('เลือก Rate Type ของ Promo ก่อน'); return; }
+  }
+  /* §b2bPromo · ของแถม · แยกจากราคา ใช้ร่วมกับโหมดไหนก็ได้
+     ดีลจริงมีทั้ง "ลด 10% และซื้อ 10 แถม 1" พร้อมกัน จึงไม่ทำเป็นตัวเลือกเดียวกับราคา */
+  let bonus=null;
+  if((document.getElementById('ct-promo-bon')||{}).checked){
+    const bn=parseInt((document.getElementById('ct-promo-bon-n')||{}).value,10)||0;
+    if(bn<1){ alert('จำนวนที่ต้องซื้อต้องมากกว่า 0'); return; }
+    bonus={ on:1, buy:bn, free:1,
+            basis:((document.getElementById('ct-promo-bon-basis')||{}).value)||'adchd' };
+  }
+
+  /* §b2bPromo · bookWin บอกว่าใบนี้ตั้งใจใช้ช่วงวันจองจริง ๆ
+     ใบเก่าไม่มีธงนี้ ตัวคิดราคาจึงไม่ไปแตะช่วงวันจองของมัน (ดูหมายเหตุที่ laPromoCovers) */
+  const bookWin=(bfrom||bto)?1:0;
   const c={
     id:(typeof LA_UID==='function'?LA_UID('ct'):'ct'+Date.now().toString(36)),
-    agentId, kind:'promo', rateTypeId,
+    agentId, kind:'promo',
+    priceMode:mode,
+    rateTypeId:(mode==='rate'?rateTypeId:null),
+    rates:(mode==='own'?rates:null),
+    discount:(mode==='discount'?{
+      mode:((document.querySelector('input[name="ct-promo-dmode"]:checked')||{}).value)||'pct',
+      value:+((document.getElementById('ct-promo-dval')||{}).value)||0 }:null),
+    bonus,
+    bookWin,
     activeFrom:from, activeTo:to, priority:prio,
     version:'promo-'+from, status:'active',
     createdDate:(typeof TODAY_STR!=='undefined'&&TODAY_STR)?TODAY_STR:new Date().toISOString().slice(0,10),
     createdBy:(typeof laBy==='function'?laBy():'user'), note, docId:null,
-    programPeriods:routes.map(rid=>({routeId:rid, bookFrom:from, bookTo:to, travelFrom:from, travelTo:to, note:''}))
+    programPeriods:routes.map(rid=>({routeId:rid,
+      bookFrom:bfrom||from, bookTo:bto||to, travelFrom:from, travelTo:to, note:''}))
   };
   if(typeof SB_CONTRACTS==='undefined'){ alert('SB_CONTRACTS not ready'); return; }
-  SB_CONTRACTS.push(c);
+  if(editId){
+    const i=SB_CONTRACTS.findIndex(x=>x&&x.id===editId);
+    if(i<0){ alert('ไม่พบใบโปรที่จะแก้'); return; }
+    const old=SB_CONTRACTS[i];
+    /* §b2bPromo · ใบจองที่ขายไปแล้วผูกกับใบนี้ด้วย id · แก้ราคาที่นี่ = เลขทานของใบเก่าขยับตาม
+       (ยอดเงินในใบจองไม่ขยับ · ตัวนั้นล็อกไว้แล้ว) บอกให้รู้ก่อน ไม่ใช่รู้ทีหลังตอนงง */
+    let used=0;
+    try{ (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+      (b.trips||[]).forEach(t=>{ if(t.promoId===editId) used++; }); }); }catch(_){}
+    if(used>0 && !confirm('ใบโปรนี้ถูกใช้ขายไปแล้ว '+used+' ทริป\n\n'
+      +'ยอดเงินในใบจองเก่าจะไม่เปลี่ยน (ล็อกไว้ตั้งแต่วันขาย)\n'
+      +'แต่เลขเทียบในรายงานจะอ่านเงื่อนไขใหม่นี้แทน\n\nแก้ต่อเลยไหม')) return;
+    c.id=old.id; c.createdDate=old.createdDate; c.createdBy=old.createdBy;
+    c.docId=old.docId; c.version=old.version; c.status=old.status;
+    SB_CONTRACTS[i]=c;
+  } else SB_CONTRACTS.push(c);
   if(typeof sbContractsPersist==='function') sbContractsPersist();
   ctCloseAddPromo();
-  if(typeof flShowToast==='function') flShowToast('เพิ่ม Promotion แล้ว');
+  if(typeof flShowToast==='function') flShowToast((editId?'แก้ไข Promotion แล้ว · ':'เพิ่ม Promotion แล้ว · ')+(LA_PROMO_MODE_TXT[mode]||mode)
+    +(bonus?(' · ซื้อ '+bonus.buy+' แถม 1'):''));
   /* §promoMx · กล่องสัญญาอยู่หน้าราคาแล้ว · เด้งกลับไปที่เดิมที่กดมา */
   if(typeof agSwitchTab==='function') agSwitchTab('prices', agentId);
   else if(typeof agRenderDetail==='function') agRenderDetail(agentId);
@@ -32187,87 +36737,194 @@ function agTabInfo(a){
   const creditUsed = (a.creditLimit||0) - (a.creditBalance||0);
   const utilPct = a.creditLimit ? Math.round(creditUsed/a.creditLimit*100) : 0;
 
+  /* ── เครื่องมือวาดของบล็อกนี้ ─────────────────────────────────────────────
+     §agStd · กติกาเดียวของชุดนี้: โครงสร้างเป็นเทา-ขาว · สีใช้บอกสถานะอย่างเดียว
+       sec()  หัวข้อ = ป้าย + เส้นคั่น (ไม่มีแถบสี ไม่มีเลขในวงกลม)
+       box()  การ์ดขาวขอบเส้นเดียว · สถานะไปอยู่บนป้ายที่หัวการ์ด ไม่ย้อมกรอบ
+       cls ของ box คือความกว้างในกริด 12 คอลัมน์ (c3/c5/c6/c8/wide · ไม่ใส่ = 4)
+     esc/escapeHTML ไม่ใช่ตัวแปร global จึงประกาศเองตรงนี้ (§escLocal) */
+  const E = t => String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const tag = (txt, tone) => `<span class="ag-tag ${tone||''}">${E(txt)}</span>`;
+  const sec = (ttl, note, act, cls) => {
+    const acts = !act ? [] : (Array.isArray(act) ? act : [act]);
+    return `<div class="ag-band ${cls||''}"><span class="ttl">${E(ttl)}</span><span class="rule"></span>`
+      + (note ? `<span class="note">${note}</span>` : '')
+      + acts.map(x=>`<button class="act" onclick="${x.on}">${E(x.txt)}</button>`).join('')
+      + `</div>`;
+  };
+  const rowS = (k, v, cls) =>
+    `<div class="r"><span class="k">${E(k)}</span><span class="v ${cls||''}">${v||'<span style="color:var(--ag-ink4)">—</span>'}</span></div>`;
+  const box = (ttl, rows, meta, cls) =>
+    `<div class="ag-box ${cls||''}"><div class="bh">${E(ttl)}${meta?`<em>${meta}</em>`:''}</div>`
+    + `<div class="ag-sh one">${rows}</div></div>`;
+
+  /* ── บล็อก 1 · เรื่องที่ต้องจัดการ ── */
+  const _AL = (typeof agAlerts==='function') ? agAlerts(a) : [];
+  const sect1 = sec('Needs action',
+      _AL.length ? (_AL.length + ' item' + (_AL.length===1?'':'s') + ' · most urgent first') : 'nothing outstanding',
+      null, _AL.length ? 'alert' : 'clear')
+    + ((typeof agAlertsHTML==='function') ? agAlertsHTML(a) : '');
+
+  /* ── บล็อก 2 · เงื่อนไขการค้า · สัญญา เครดิต ช่องทางจอง ── */
+  const _cs = (typeof agCreditState==='function') ? agCreditState(a.id) : null;
+  let creditRows = '';
+  if(_cs && _cs.mode==='invoice' && _cs.limit>0){
+    const over=_cs.available<0, near=_cs.pct>=80;
+    const col = over?'#A32D2D':(near?'#8A5410':'#0F6E56');
+    creditRows = rowS('Limit', `<span class="mono">${acctFmt(_cs.limit)}</span> · ${a.creditDays||0} days`)
+      + rowS('Used', `<span class="mono" style="color:${col}">${acctFmt(_cs.used)} · ${_cs.pct}%</span>`
+        + `<span class="ag-bar"><i style="width:${Math.min(100,Math.max(0,_cs.pct))}%;background:${col}"></i></span>`
+        + `<span class="sub">${over ? ('<strong style="color:var(--ag-red)" title="ใบจองใหม่ควรรอเคลียร์ยอดก่อน">over '+acctFmt(-_cs.available)+'</strong>')
+                                    : (acctFmt(_cs.available)+' left')}`
+        + ` · <span onclick="acctStatementOpen('${a.id}')" style="cursor:pointer;color:var(--ag-blu)">statement</span></span>`);
+  } else {
+    creditRows = rowS('Limit', `<span style="color:var(--ag-ink3);font-weight:400">none · paid before travel</span>`);
+  }
+  const _ctDays = (typeof ctDaysUntilExpiry==='function') ? ctDaysUntilExpiry(a) : null;
+  /* ชิปเวอร์ชันสัญญา · ใบที่ใช้อยู่เป็นสีเขียว ใบเก่าเป็นสีเทา · กดดูใบไหนก็ได้ */
+  const _ctHist = Array.isArray(a.contractHistory) ? a.contractHistory : [];
+  const _nCt = 1 + _ctHist.length;
+  const _ctChip = (v, from, to, on, cur) =>
+    `<span onclick="ctViewContract('${a.id}','${on}')" title="${E(fmtD(from))} → ${E(fmtD(to))}" style="display:inline-block;`
+    + `font-size:10px;font-weight:700;border-radius:7px;padding:2px 8px;margin:0 4px 4px 0;cursor:pointer;white-space:nowrap;`
+    + (cur ? 'background:#E7F5EE;color:#0F6E56;border:1px solid #BFE3D4' : 'background:#F1EFE8;color:#6E6A63;border:1px solid #E2DED5')
+    + `">${E(v||'—')}</span>`;
+  const _ctVerChips = _ctChip(a.contractVersion, a.contractStart, a.contractEnd, 'active', true)
+    + _ctHist.map(h => _ctChip(h.version, h.contractStart, h.contractEnd, h.version, false)).join('');
+  const _credOver = !!(_cs && _cs.mode==='invoice' && _cs.limit>0 && _cs.available<0);
+  const _credNear  = !!(_cs && _cs.mode==='invoice' && _cs.limit>0 && !_credOver && _cs.pct>=80);
+  /* §agStd · สถานะของกล่องไปอยู่บนป้ายที่หัวกล่อง ไม่ใช่การย้อมกรอบ
+     กรอบสีทำให้ทั้งใบดูเป็นเรื่องด่วน ทั้งที่ด่วนอยู่ค่าเดียวในนั้น */
+  const _ctTag = (_ctDays===null||_ctDays===undefined) ? (_nCt + ' version' + (_nCt===1?'':'s'))
+    : (_ctDays<0 ? tag('Expired '+Math.abs(_ctDays)+'d', 'red')
+                 : (_ctDays<=30 ? tag(_ctDays+' days left', 'red')
+                                : (_ctDays<=60 ? tag(_ctDays+' days left', 'amb') : tag(_ctDays+' days left'))));
+  const sect2 = sec('Commercial', null,
+      [{txt:'Edit payment', on:`agEditOpen('profile','${a.id}')`},
+       {txt:'Edit booking channel', on:`agEditOpen('booking','${a.id}')`}])
+    + `<div class="ag-grp">`
+      /* ประวัติสัญญาเป็นชิปของตัวเอง ไม่ใช้ .ct-history เดิม
+         คอมโพเนนต์นั้นถูกออกแบบมาสำหรับแถบเต็มความกว้าง · ยัดลงกล่อง 280px แล้วตัวอักษรบีบเป็นแนวตั้ง */
+      + box('Contract',
+          rowS('Current', `${E(a.contractVersion||'—')}`
+            + `<span class="sub mono">${fmtD(a.contractStart)} → ${fmtD(a.contractEnd)}</span>`)
+          + rowS('Versions', _ctVerChips + `<span class="sub">${_nCt} kept</span>`),
+          _ctTag)
+      + box('Credit & payment',
+          rowS('Payment', `${E(pay?.name||'—')}${a.payType==='invoice'?` · ${a.creditDays} days`:''}${a.vatMode&&a.vatMode!=='none'?` · VAT ${a.vatMode==='include'?'incl':'excl'}`:''}`)
+          + creditRows,
+          _credOver ? tag(_cs.pct+'%','red') : (_credNear ? tag(_cs.pct+'%','amb') : ''))
+      + box('Booking channel',
+          rowS('Method', `${E(bc.method||'—')}${bc.cutoff?` · ${E(bc.cutoff)}`:''}`)
+          + rowS('Cancellation', E(bc.cancelPolicy||''))
+          + rowS('Send to', `${E(bc.email||'')}${bc.phone?(`<span class="sub mono">${E(bc.phone)}</span>`):''}`))
+    + `</div>`;
+
+  /* ── บล็อก 3 · เรทที่ใช้คิดราคา ─────────────────────────────────────────
+     สี่บรรทัดนี้ตอบคำถามที่คนถามจริงเวลาเปิดหน้านี้:
+     ผูกเรทไหนอยู่ · วันนี้เรทนั้นอยู่ในช่วงของตัวเองหรือเปล่า ·
+     ใบสัญญาระบุตัวเดียวกันไหม · แล้วพ้นวันหมดไปใช้อะไรต่อ */
+  const _rtNow = (typeof agHdRateOf==='function') ? agHdRateOf(a) : null;
+  const _conRtId = (typeof rtExpNextOf==='function') ? rtExpNextOf(a.id) : '';
+  const _conRt = (_conRtId && typeof getRateType==='function') ? getRateType(_conRtId) : null;
+  const _seasons = (typeof laSeasonsOf==='function') ? laSeasonsOf(a) : [];
+  /* เส้นทางที่เรทมีราคาให้ · ใช้ทั้งในกล่อง Coverage และปุ่มเติมที่ขาดของบล็อก 4 · อ่านที่เดียว */
+  const _rtCover = _rtNow ? (typeof agRtRoutes==='function' ? agRtRoutes(_rtNow) : (_rtNow.routes||[])) : [];
+  const _missing = _rtCover.filter(r => !periods.some(p => p.routeId === r));
+  let boxBound = '', boxToday = '', boxSeason = '';
+  if(!_rtNow){
+    boxBound = box('Bound rate',
+      rowS('Rate', `<span style="color:var(--ag-red)">No rate type assigned</span>`
+        + `<span class="sub">every price on this agent comes from a rate type · without one, booking Save is blocked</span>`),
+      tag('Blocked','red'), 'c8');
+  } else {
+    const vf = String(_rtNow.validFrom||''), vt = String(_rtNow.validTo||'');
+    const dvf = (vf && typeof rtExpDaysTo==='function') ? rtExpDaysTo(vf) : null;
+    const dvt = (vt && typeof rtExpDaysTo==='function') ? rtExpDaysTo(vt) : null;
+    /* "วันนี้เรทอยู่ในช่วงของตัวเองไหม" เคยเป็นกล่องของตัวเอง · เป็นค่าเดียวบรรทัดเดียว
+       ยุบลงมาเป็นแถวในกล่อง Bound rate · สถานะอยู่บนป้าย ไม่ต้องใช้กรอบทั้งใบมาบอก */
+    let today = tag('Within its normal window','grn');
+    if(dvf!==null && dvf>0){
+      today = tag('Starts in '+dvf+' days','amb')
+        + `<span class="sub" title="validFrom ไม่ใช่ประตูคิดเงิน (ดู §promoMx) · ระบบยังคิดราคาชุดนี้ให้อยู่">prices still charged from this set</span>`;
+    } else if(dvt!==null && dvt<0){
+      today = tag('Expired '+Math.abs(dvt)+' days ago','red')
+        + `<span class="sub">prices still charged from this set</span>`;
+    } else if(dvt!==null && dvt<=60){
+      today = tag('In window · ends in '+dvt+' days','amb');
+    }
+    boxBound = box('Bound rate',
+      rowS('Rate', `${E(_rtNow.name||'')}<span class="sub mono">${E(_rtNow.code||'')}</span>`)
+      + rowS('Active', `<span class="mono">${E(_rtFmtDate(vf)||vf||'—')} → ${E(_rtFmtDate(vt)||vt||'no end date')}</span>`)
+      + rowS('In effect today', today),
+      tag(_rtCover.length + ' route' + (_rtCover.length===1?'':'s')), 'c5');
+    boxSeason = box('Contract & season',
+      rowS('Named in contract', _conRt
+        ? (_conRtId===a.rateTypeId
+            ? `${E(_conRt.name||_conRt.code||'')}<span class="sub">matches the bound rate</span>`
+            : `${E(_conRt.name||_conRt.code||'')}<span class="sub" title="เอกสารสัญญาจะพิมพ์ราคาชุดนี้ ไม่ใช่ชุดที่ผูกอยู่">documents print this set · <span onclick="agAlertSyncRate('${a.id}')" style="cursor:pointer;color:var(--ag-blu)">sync</span></span>`)
+        : `<span style="color:var(--ag-ink3);font-weight:400">Not named on any contract</span>`)
+      + rowS('Season schedule', _seasons.length
+        ? `${_seasons.length} period${_seasons.length===1?'':'s'} set`
+          + `<span class="sub">${_seasons.map(x=>E((_rtFmtDate(x.from)||x.from)+' → '+(x.to?(_rtFmtDate(x.to)||x.to):'open'))).join(' · ')}</span>`
+        : `<span style="color:var(--ag-ink3);font-weight:400" title="ตั้งล่วงหน้าได้ · ราคาก่อนวันแบ่งไม่ขยับ">Not set</span>`
+          + `<span class="sub">set it in the Rate Type tab</span>`),
+      (_conRt && _conRtId!==a.rateTypeId) ? tag('Mismatch','blu') : '', 'c4');
+    const _nCharter = Object.keys(_rtNow.charterRates||{}).length;
+    const _nAdd = Object.keys(_rtNow.addOns||{}).length;
+    boxToday = box('Coverage',
+      rowS('Routes priced', `<span class="mono">${_rtCover.filter(r=>periods.some(p=>p.routeId===r)).length}</span>`
+        + `<span style="color:var(--ag-ink4);font-weight:400"> / ${periods.length} sold</span>`)
+      + rowS('Extras', [_nCharter?'Charter':'', _nAdd?(_nAdd+' add-on'+(_nAdd>1?'s':'')):''].filter(Boolean).join(' · ')),
+      '', 'c3');
+  }
+  const sect3 = sec('Rate used for pricing', 'read from the bound rate, not the contract',
+      {txt:_rtNow?'Change rate':'Pick a rate', on:`agEditOpen('ratetype','${a.id}')`})
+    + `<div class="ag-grp">` + boxBound + boxSeason + boxToday + `</div>`;
+
+  /* ── บล็อก 4 · โปรแกรมที่ขาย ── */
+  /* §agTight · สามค่าสรุป (จำนวนเส้น · ช่วงสัญญา · เส้นที่ปิดก่อนเพื่อน) เคยเป็นแถบของตัวเองสูงราว 60px
+     ทั้งสามเป็นค่าสั้น ๆ ที่อ่านครั้งเดียว · ย้ายขึ้นไปอยู่บนหัวข้อ ได้ความสูงคืนโดยไม่เสียข้อมูล */
+  const sect4 = sec('Programs sold',
+      `${periods.length} route${periods.length===1?'':'s'} · contract <span class="mono">${fmtD(validityStart)} → ${fmtD(validityEnd)}</span>`
+      + (earliestCutoff ? ` · first to close <span class="mono">${fmtD(earliestCutoff)}</span>${earliestCutoffName?(' '+E(earliestCutoffName.split(' ').slice(0,2).join(' '))):''}` : ''),
+      [].concat(_missing.length ? [{txt:'Fill missing · '+_missing.length, on:`agEditOpen('programs','${a.id}')`}] : [],
+                [{txt:'Edit programs', on:`agEditOpen('programs','${a.id}')`}]));
+
+  /* ── บล็อก 5 · บริษัทและผู้ติดต่อ · ของที่ไปโผล่บนเอกสารสัญญา ── */
+  const sect5 = sec('Company & Contact', 'printed onto contract documents',
+      [{txt:'Company', on:`agEditOpen('company','${a.id}')`},
+       {txt:'Signatory', on:`agEditOpen('signatory','${a.id}')`},
+       {txt:'Notes', on:`agEditOpen('notes','${a.id}')`}]);
+
   return `
-    <!-- Section: Sales Person card (highlighted) -->
-    <div class="agi-sect">
-      <div class="agi-sales-card">
-        <div class="agi-sales-av" style="background:${sales?.color||'#999'}">${sales?.code||'—'}</div>
-        <div class="agi-sales-info">
-          <div class="agi-sales-lbl">Sales Person (ผู้ดูแล · Signatory)</div>
-          <div class="agi-sales-name">${sales?.name||'— ยังไม่กำหนด —'}${sales?.fullName?` <span style="font-size:11px;font-weight:500;color:var(--ink-mid);margin-left:6px">· ${sales.fullName}</span>`:''}</div>
-          <div class="agi-sales-meta">${sales?.designation||''}${sales?.email?` · ${sales.email}`:''}${sales?.tel?` · ${sales.tel}`:''}</div>
-        </div>
-        <button class="agi-icon-btn" onclick="agEditOpen('sales','${a.id}')" title="เปลี่ยน Sales Person"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
-      </div>
-    </div>
-
-    <!-- Section: Programs in Contract -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Programs in Contract <span class="agi-sect-cnt">${periods.length} programs</span></div>
-          <div class="agi-sect-desc">โปรแกรมในสัญญา · ระบุ Booking Period และ Travel Period แต่ละเส้นทาง</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('programs','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>แก้ไขทั้งหมด</button>
-      </div>
-
-      ${(function(){
-        // ─── Rate Type coverage banner (Info tab) ───
-        const rtInfo = (a.rateTypeId && typeof getRateType==='function') ? getRateType(a.rateTypeId) : null;
-        if(!rtInfo) return '';
-        const contractedIds = periods.map(p => p.routeId);
-        const rtIds = rtInfo.routes || [];
-        const missing = rtIds.filter(rId => !contractedIds.includes(rId));
-        const orphans = contractedIds.filter(rId => rId && !rtIds.includes(rId));
-        const ok = missing.length === 0 && orphans.length === 0;
-        const tint = rtInfo.color + '14';
-        const headerChip = `<span style="display:inline-flex;align-items:center;gap:5px;background:${tint};color:${rtInfo.color};padding:3px 10px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">↳ ${rtInfo.code}</span>`;
-        if(ok){
-          return `<div style="background:#E1F5EE;border:1px solid #9FE1CB;border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;font-size:11.5px;flex-wrap:wrap">
-            ${headerChip}
-            <span style="color:#0F6E56;font-weight:600">✓ Programs ครอบคลุมทุก route ใน Rate Type</span>
-            <span style="color:var(--fd-ink-soft);font-size:10.5px">${contractedIds.length} / ${rtIds.length} routes</span>
-          </div>`;
-        }
-        const missingChips = missing.map(rId => {
-          const r = ROUTES.find(x => x.id === rId);
-          return `<span style="background:#fff;border:1px dashed #C8C6BF;color:var(--fd-ink-mid);padding:3px 9px;border-radius:10px;font-size:10.5px;font-weight:500">${r ? r.name : rId}</span>`;
-        }).join(' ');
-        const orphanChips = orphans.map(rId => {
-          const r = ROUTES.find(x => x.id === rId);
-          return `<span style="background:#FDECEA;color:#A32D2D;padding:3px 9px;border-radius:10px;font-size:10.5px;font-weight:600">${r ? r.name : rId}</span>`;
-        }).join(' ');
-        return `<div style="background:#FFF5EB;border:1px solid #F5C896;border-radius:12px;padding:11px 14px;margin-bottom:10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:${(missingChips||orphanChips)?'9px':'0'}">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              ${headerChip}
-              <span style="color:#854F0B;font-weight:600;font-size:11.5px">⚠ Programs ไม่ตรงกับ Rate Type</span>
-              <span style="color:var(--fd-ink-soft);font-size:10.5px">${contractedIds.length} / ${rtIds.length} routes covered</span>
-            </div>
-            ${missing.length ? `<button onclick="agEditOpen('programs','${a.id}')" style="background:#854F0B;color:#fff;border:none;font-family:inherit;font-size:11px;font-weight:600;padding:6px 13px;border-radius:8px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:5px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:11px;height:11px"><path d="M12 5v14M5 12h14"/></svg>
-              Add missing · ${missing.length}
-            </button>` : ''}
-          </div>
-          ${missingChips ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:4px"><span style="font-size:9.5px;color:var(--fd-ink-soft);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Missing</span>${missingChips}</div>` : ''}
-          ${orphanChips ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px"><span style="font-size:9.5px;color:#A32D2D;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Orphan</span>${orphanChips}<span style="font-size:10px;color:#A32D2D;margin-left:6px;font-style:italic">route นี้ไม่อยู่ใน Rate Type · Travel period จะว่าง</span></div>` : ''}
-        </div>`;
-      })()}
-
-      <div class="agi-prog-summary">
-        <div class="agi-prog-sum-item"><div class="agi-prog-sum-lbl">Programs</div><div class="agi-prog-sum-val">${periods.length} routes</div></div>
-        <div class="agi-prog-sum-divider"></div>
-        <div class="agi-prog-sum-item"><div class="agi-prog-sum-lbl">Contract Validity</div><div class="agi-prog-sum-val mono">${fmtD(validityStart)} → ${fmtD(validityEnd)}</div></div>
-        <div class="agi-prog-sum-divider"></div>
-        <div class="agi-prog-sum-item"><div class="agi-prog-sum-lbl">Earliest Travel Cutoff</div><div class="agi-prog-sum-val mono" style="color:var(--fd-coral-deep)">${fmtD(earliestCutoff)}${earliestCutoffName?` · ${earliestCutoffName.split(' ').slice(0,2).join(' ')}`:''}</div></div>
-      </div>
-
+    ${sect1}
+    ${sect2}
+    ${sect3}
+    ${(function(){
+      /* §agStd · บล็อก Sample prices ถูกถอดออก
+         สามตัวเลขนั้นเป็นตัวอย่างของเส้นทางแรกที่เจอเท่านั้น ไม่ใช่ราคาที่ใช้ตัดสินใจอะไรได้
+         ใครอยากดูราคาจริงต้องไปแท็บ Pricing Matrix อยู่แล้ว ซึ่งมีครบทุกเส้นทุกโซน
+         เหลือไว้แค่เรื่องที่ต้องลงมือ: เรทที่ผูกอยู่ถูกปิดใช้งาน */
+      const rt = a.rateTypeId ? (typeof getRateType==='function' ? getRateType(a.rateTypeId) : null) : null;
+      if(!rt || rt.active!==false) return '';
+      return `<div class="ag-al red" style="border:1px solid var(--ag-line);border-radius:8px;background:#fff;margin-top:9px">`
+        + `<span class="sev"><i></i>Inactive</span><span class="t">Rate type deactivated</span>`
+        + `<span class="d">prices still resolve from it · activate it or bind another set</span>`
+        + `<button class="go" onclick="nav(document.querySelector('.nav-item[data-view=&quot;rate-types&quot;]'))">Open rate types</button></div>`;
+    })()}
+    ${sect4}
+      <!-- §agTight · แถบ coverage กับแถบสรุปถูกถอดออก
+           เส้นที่เรทไม่มีราคาถูกพูดไปแล้วในบล็อก 1 (Needs action) พร้อมปุ่มพาไปแก้
+           พูดสองที่แล้ววันหนึ่งจะไม่ตรงกัน · ปุ่ม "เติมที่ขาด" ย้ายขึ้นไปอยู่บนหัวข้อ -->
+      <div class="agi-prog-wrap">
       <div class="agi-prog-header">
+        <div>Route</div>
+        <div class="agi-prog-pier-col">Pier</div>
+        <div class="agi-col-bk">Booking period</div>
+        <div>Travel period</div>
+        <div>Status</div>
         <div></div>
-        <div>Program · Pier</div>
-        <div>Booking Period</div>
-        <div>Travel Period</div>
-        <div>Action</div>
       </div>
 
       <div class="agi-prog-list">
@@ -32279,234 +36936,99 @@ function agTabInfo(a){
           const rv = rtForPeriods && _rvMap[p.routeId];
           const inheritedTravel = !!rv;
           const orphanRow = rtForPeriods && !rv;   // route not in RT
-          const travelInheritChip = inheritedTravel
-            ? `<span style="background:${rtForPeriods.color}1A;color:${rtForPeriods.color};font-size:8.5px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:6px;margin-left:5px;text-transform:uppercase;font-family:'DM Mono',monospace" title="Inherited from Rate Type ${rtForPeriods.code}">↳ RT</span>`
-            : (orphanRow
-                ? `<span style="background:#FDECEA;color:#A32D2D;font-size:8.5px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:6px;margin-left:5px;text-transform:uppercase" title="Route not in Rate Type · travel period blank">⚠ orphan</span>`
-                : '');
+          /* §agStd · ชิป "↳ RT" ถูกถอด · ช่วงเดินทางทุกแถวมาจากเรทอยู่แล้ว (หัวข้อบอกไว้แล้วว่าอ่านจากเรท)
+             แถวที่เรทไม่ได้บอกวัน ขึ้น "No dates" ในคอลัมน์สถานะแทน · ชิปที่ติดทุกแถวไม่ได้แยกอะไรออก
+             และมันดันคอลัมน์วันให้กว้างขึ้นราว 35px จนชื่อเส้นทางโดนตัด */
+          const travelInheritChip = '';
+          /* §agStd · คอลัมน์สถานะ · "ขายได้วันนี้ไหม" เคยต้องอ่านช่วงวันสองช่องแล้วคิดเอง
+             เส้นที่เรทไม่มีราคา อ่านจาก seatRates ที่เดียวกับที่ §agAlert ใช้
+             (แยกกันเมื่อไหร่ ตารางกับแถบเตือนจะบอกคนละเรื่องในหน้าจอเดียวกัน) */
+          let st = '<span style="color:var(--ag-ink4)">—</span>';
+          if(_rtNow && !((_rtNow.seatRates||{})[p.routeId])) st = tag('No price','red');
+          /* มีราคาแต่เรทไม่ได้บอกช่วงเดินทาง · ขายไม่ได้เหมือนกัน แต่คนละสาเหตุกับไม่มีราคา
+             เดิมช่องนี้ขึ้น "—" ซึ่งไม่ได้บอกอะไรเลยทั้งที่เป็นเรื่องต้องแก้ */
+          else if(orphanRow) st = tag('No dates','amb');
+          else if(p.travelTo && p.travelTo < TODAY_STR) st = tag('Ended');
+          else if(p.travelFrom && p.travelFrom > TODAY_STR) st = tag('Future');
+          else if(p.travelFrom || p.travelTo) st = tag('Selling','grn');
           return `
             <div class="agi-prog-row">
-              <div class="agi-prog-dot-wrap"><span class="agi-prog-dot" style="background:${r.color||'#999'}"></span></div>
               <div class="agi-prog-name-wrap">
-                <div class="agi-prog-name">${r.name}</div>
-                <div class="agi-prog-pier">${pierTag}${noteSuffix}</div>
+                <div class="agi-prog-name" title="${E(r.name)}${pierTag?(' · '+E(pierTag)):''}${E(noteSuffix)}">${r.name}</div>
               </div>
-              <div class="agi-period-col">
+              <!-- §agStd · ท่าเรือเป็นคอลัมน์ของตัวเอง · โผล่เฉพาะจอที่กว้างพอจริง (ดูกฎใน 01-base.css)
+                   จอแคบกว่านั้นมันซ่อนตัวเอง แล้วไปอยู่ใน title ของชื่อเส้นทางแทน
+                   เหตุผลเป็นเรื่องที่วัดได้: แผงนี้กว้างเท่าจอลบ 718px เสมอ (ลิสต์เอเย่นต์ + ขอบ)
+                   คอลัมน์ครบหกช่องต้องการราว 800px · จอ 1440 เหลือแค่ 696px -->
+              <div class="agi-prog-pier-col">${pierTag}</div>
+              <div class="agi-period-col agi-col-bk">
                 <div class="agi-period-lbl book">Booking</div>
                 <div class="agi-period-val">${fmtD(p.bookFrom)} <span class="arrow">→</span> ${fmtD(p.bookTo)}</div>
               </div>
               <div class="agi-period-col">
                 <div class="agi-period-lbl travel">Travel${travelInheritChip}</div>
-                <div class="agi-period-val" ${orphanRow?'style="color:var(--fd-ink-faint);font-style:italic"':''}>${p.travelFrom||p.travelTo ? `${fmtD(p.travelFrom)} <span class="arrow">→</span> ${fmtD(p.travelTo)}` : '<span style="color:#A32D2D">not set in RT</span>'}</div>
+                <div class="agi-period-val" ${orphanRow?'style="color:var(--ag-ink4)"':''}>${p.travelFrom||p.travelTo ? `${fmtD(p.travelFrom)} <span class="arrow">→</span> ${fmtD(p.travelTo)}` : '<span style="color:var(--ag-red)">not set in rate</span>'}</div>
               </div>
+              <div class="agi-prog-st">${st}</div>
               <div class="agi-prog-actions">
-                <button class="agi-prog-act-btn" title="ดู Pricing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3zM3 9h18M9 21V9"/></svg></button>
-                <button class="agi-prog-act-btn" title="แก้ไข" onclick="agEditOpen('programs','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <!-- §agStd · เหลือปุ่มเดียว · ปุ่ม "ดู Pricing" ที่เคยอยู่คู่กันเป็นทางเข้าที่ซ้ำกับ
+                     แท็บ Pricing Matrix และปุ่มในแถบ Needs action อยู่แล้ว · คืนที่ให้ชื่อเส้นทางไม่ต้องโดนตัด -->
+                <button class="agi-prog-act-btn" title="Edit programs" onclick="agEditOpen('programs','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
               </div>
             </div>
           `;
         }).join('')}
-        <div class="agi-prog-add" onclick="agEditOpen('programs','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>เพิ่มโปรแกรมในสัญญา</div>
+        <div class="agi-prog-add" onclick="agEditOpen('programs','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add a program to this contract</div>
+      </div>
       </div>
 
       <div class="agi-note">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span><strong>Booking Period</strong> = ช่วงรับจอง (จองเข้ามาในช่วงนี้) · <strong>Travel Period</strong> = ช่วงเดินทางจริง</span>
+        <span><b>Booking period</b> = when the booking may be taken · <b>Travel period</b> = when the trip may run, read from the rate type</span>
       </div>
-    </div>
 
-    <!-- Section: Company Information (now includes Market/Sub) -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Company Information</div>
-          <div class="agi-sect-desc">ข้อมูลบริษัทคู่สัญญา · Market · Address · ใช้ใน Contract Export</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('company','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>แก้ไข</button>
-      </div>
-      <div class="agi-grid agi-grid-3">
-        <div class="agi-info-card"><div class="agi-info-lbl">Company Name (ชื่อในระบบ)</div><div class="agi-info-val">${a.name}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Company Legal Name (ในสัญญา)</div><div class="agi-info-val">${ci.legalName||a.name}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">TAT License No.</div><div class="agi-info-val mono ${!ci.tatLicense?'muted':''}">${ci.tatLicense||'— ไม่ระบุ'}</div></div>
-        <div class="agi-info-card span2"><div class="agi-info-lbl">Market</div><div class="agi-info-val">${mkt?.name||''}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Sub-market</div><div class="agi-info-val">${a.sub||'—'}</div></div>
-        <div class="agi-info-card span3"><div class="agi-info-lbl">Address</div><div class="agi-info-val multi">${ci.address||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Telephone</div><div class="agi-info-val mono">${ci.tel||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Hotline</div><div class="agi-info-val mono">${ci.hotline||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Fax</div><div class="agi-info-val mono ${!ci.fax?'muted':''}">${ci.fax||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Website</div><div class="agi-info-val mono" style="font-size:12px">${ci.website?`<a href="https://${ci.website}" target="_blank" style="color:var(--fd-coral-deep);text-decoration:none">${ci.website}</a>`:'—'}</div></div>
-        <div class="agi-info-card span2"><div class="agi-info-lbl">Email</div><div class="agi-info-val mono" style="font-size:12px">${a.email||'—'}</div></div>
-      </div>
-    </div>
-
-    <!-- Section: Payment Details (renamed from Agent Profile) -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Payment Details</div>
-          <div class="agi-sect-desc">ประเภทการชำระเงิน · เครดิต · วงเงิน</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('profile','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>แก้ไข</button>
-      </div>
-      <div class="agi-grid agi-grid-3">
-        <div class="agi-info-card coral"><div class="agi-info-lbl">Payment Type</div><div class="agi-info-val">${pay?.name||'—'}${a.payType==='invoice'?` · ${a.creditDays}d`:''}${a.vatMode&&a.vatMode!=='none'?` · VAT ${a.vatMode==='include'?'incl':'excl'}`:''}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Credit Limit</div><div class="agi-info-val mono big">฿${sbFmtTHB((a.creditLimit||0)/1000)}K</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Credit Balance</div><div class="agi-info-val mono big" style="color:#0F6E56">฿${sbFmtTHB((a.creditBalance||0)/1000)}K</div><div class="agi-info-sub">used ฿${sbFmtTHB(creditUsed/1000)}K · ${utilPct}% utilization</div></div>
-      </div>
-    </div>
-
-    <!-- Section: Rate Type (Pricing Package) -->
-    ${(function(){
-      const rt = a.rateTypeId ? (typeof getRateType==='function' ? getRateType(a.rateTypeId) : null) : null;
-      const isInactive = rt && rt.active===false;
-      const tint = rt ? (rt.color + '14') : '#fafaf8';
-      const fmt = n => (n||0).toLocaleString();
-      const ROUTES_ARR = (typeof ROUTES!=='undefined' && ROUTES) || [];
-      const rName = id => (ROUTES_ARR.find(r=>r.id===id)||{}).name || id;
-      let bodyHtml = '';
-      if(!rt){
-        bodyHtml = `<div style="background:#FCEBEB;border:1px solid rgba(163,45,45,.2);border-radius:10px;padding:14px 16px">
-          <div style="display:flex;align-items:center;gap:8px;color:#A32D2D;font-size:12px;font-weight:600">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-            No rate type assigned
-          </div>
-          <div style="font-size:11px;color:#A32D2D;margin-top:4px;opacity:.85">Agent นี้ยังไม่มีราคา default — กดแก้ไขเพื่อเลือก rate type</div>
-        </div>`;
-      } else {
-        const nRoutes = (rt.routes||[]).length;
-        const hasCharter = Object.keys(rt.charterRates||{}).length > 0;
-        const nAddOns = Object.keys(rt.addOns||{}).length;
-        const validHint = (rt.validFrom||rt.validTo) ? `valid until ${_rtFmtDate(rt.validTo)||'—'}` : 'always valid';
-        // Build 3 preview cards (same logic as agEditBuildRTPreview)
-        const firstRoute = (rt.routes||[])[0];
-        let seatPreview='—', seatLbl='No seat rate';
-        if(firstRoute && rt.seatRates && rt.seatRates[firstRoute]){
-          const z = rt.seatRates[firstRoute].PK || rt.seatRates[firstRoute].NoTransfer || {};
-          if(z['adult-thai'] || z['adult-fr']){
-            seatPreview = `${fmt(z['adult-thai'])} / ${fmt(z['adult-fr'])}`;
-            seatLbl = `${rName(firstRoute)} · PK · Adult TH/FR`;
-          }
-        }
-        const charterEntries = [];
-        Object.keys(rt.charterRates||{}).forEach(rId => Object.keys(rt.charterRates[rId]).forEach(bt => charterEntries.push({rId, bt, ch:rt.charterRates[rId][bt]})));
-        let charterPreview='—', charterLbl='No charter';
-        if(charterEntries.length){
-          const c = charterEntries[0];
-          charterPreview = fmt(c.ch.starterPrice);
-          charterLbl = `${rName(c.rId)} · ${c.bt} · starter / ${c.ch.starterIncludes||4} pax · +${fmt(c.ch.extraPerPax)} ea`;
-        }
-        const _ap = (typeof _rtAddonPreview==='function')?_rtAddonPreview(rt):{preview:'—',lbl:'No add-on'};
-        let addOnPreview = _ap.preview, addOnLbl = _ap.lbl;
-        bodyHtml = `
-          <div style="background:${isInactive?'#FFF5EB':tint};border:1px solid ${isInactive?'#F0997B':rt.color+'33'};border-radius:10px;padding:12px 14px;margin-bottom:10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="background:#fff;color:${rt.color};font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code||''}</span>
-                <span style="font-size:13px;font-weight:600;color:${isInactive?'#854F0B':rt.color}">${rt.name||''}</span>
-                <span style="background:${isInactive?'#F1EFE8':'#E1F5EE'};color:${isInactive?'#5F5E5A':'#0F6E56'};font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.04em">${isInactive?'Inactive':'Active'}</span>
-              </div>
-              <div style="font-size:10.5px;color:${isInactive?'#854F0B':rt.color};font-weight:500">${nRoutes} routes${hasCharter?' · charter':''}${nAddOns>0?' · '+nAddOns+' add-on'+(nAddOns>1?'s':''):''} · ${validHint}</div>
-            </div>
-            ${isInactive?'<div style="font-size:10.5px;color:#854F0B;margin-top:6px;font-weight:600">⚠ Rate Type นี้ถูก Deactivate — แนะนำให้เปลี่ยน หรือ activate ในหน้า Rate Types</div>':''}
-          </div>
-          <div class="agi-grid agi-grid-3">
-            <div class="agi-info-card"><div class="agi-info-lbl">Seat (sample)</div><div class="agi-info-val mono big" style="color:${rt.color}">${seatPreview}</div><div class="agi-info-sub">${seatLbl}</div></div>
-            <div class="agi-info-card"><div class="agi-info-lbl">Charter (sample)</div><div class="agi-info-val mono big" style="color:${rt.color}">${charterPreview}</div><div class="agi-info-sub">${charterLbl}</div></div>
-            <div class="agi-info-card"><div class="agi-info-lbl">Add-on (sample)</div><div class="agi-info-val mono big" style="color:${rt.color}">${addOnPreview}</div><div class="agi-info-sub">${addOnLbl}</div></div>
-          </div>
-        `;
-      }
-      return `<div class="agi-sect">
-        <div class="agi-sect-hd">
-          <div>
-            <div class="agi-sect-ttl">Rate Type · Pricing Package</div>
-            <div class="agi-sect-desc">ราคาทั้งหมดดึงจาก rate type นี้ · seat / charter / add-ons</div>
-          </div>
-          <button class="agi-sect-act" onclick="agEditOpen('ratetype','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>${rt?'เปลี่ยน':'เลือก'}</button>
-        </div>
-        ${bodyHtml}
-      </div>`;
-    })()}
-
-    <!-- Section: Contract Template · §template (2026-07-14) -->
-    ${(()=>{
-      const _t  = (typeof ctTmplForAgent==='function') ? ctTmplForAgent(a) : null;
-      const _bound = !!a.contractTemplateId;
-      const _e = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-      const _nSec = _t && _t.sections ? Object.keys(_t.sections).filter(k=>_t.sections[k]).length : 0;
-      return `<div class="agi-sect">
-        <div class="agi-sect-hd">
-          <div>
-            <div class="agi-sect-ttl">Contract Template</div>
-            <div class="agi-sect-desc">ข้อความในสัญญา (ข้อยกเลิก · ข้อจำกัดสุขภาพ · ข้อกฎหมาย) ดึงจาก template นี้ · ราคายังมาจาก Rate Type</div>
-          </div>
-          <button class="agi-sect-act" onclick="agEditOpen('contracttmpl','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>เปลี่ยน</button>
-        </div>
-        ${_t ? `<div style="display:flex;align-items:center;gap:11px;background:#F7FAF8;border:1px solid #DCE8E2;border-radius:9px;padding:11px 14px">
-            <span style="font-size:9.5px;font-weight:700;background:#fff;border:1px solid #cfd8d3;color:#0F6E56;border-radius:6px;padding:3px 9px;font-variant-numeric:tabular-nums;flex:none">${_e(_t.code||_t.id)}</span>
-            <span style="flex:1;min-width:0">
-              <span style="font-size:13px;font-weight:700;color:#15201a">${_e(_t.name)}</span>
-              ${_bound ? '' : '<span style="margin-left:8px;font-size:9px;font-weight:700;background:#E1F5EE;color:#0F6E56;border-radius:5px;padding:1px 7px">ค่าตั้งต้น</span>'}
-              <div style="font-size:10.5px;color:#7a8a83;margin-top:2px">${_nSec} section เปิดอยู่${_bound?' · ผูกกับเอเยนต์รายนี้โดยตรง':' · เปลี่ยน default ส่วนกลาง เอเยนต์นี้เปลี่ยนตาม'}</div>
-            </span>
-          </div>`
-        : `<div style="padding:14px;text-align:center;color:#A32D2D;font-size:11.5px;background:#FCEBEB;border:1px dashed #E6C9C3;border-radius:9px">ยังไม่มี Contract Template ในระบบ · สร้างที่หน้า Contract Templates</div>`}
-      </div>`;
-    })()}
-
-    <!-- Section: Agent Signatory -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Agent Signatory</div>
-          <div class="agi-sect-desc">ผู้เซ็นสัญญาฝั่ง Agent · ใช้ใน Signature Page ตอน Export (ฝั่ง Love Andaman ดึงจาก Sales Person)</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('signatory','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>แก้ไข</button>
-      </div>
-      <div class="agi-sig-card ${sig.signedDate?'signed':'pending'}">
-        <div class="agi-sig-role">Signed for ${ci.legalName||a.name}</div>
-        <div class="agi-sig-name">${sig.name||'— ยังไม่ระบุ —'}</div>
-        <div class="agi-sig-pos">${sig.designation||'Authorized Signatory'}</div>
-        <div class="agi-sig-meta">${sig.signedDate?`📅 ${fmtD(sig.signedDate)}`:'📅 ยังไม่เซ็น'} ${sig.tel?` · 📞 ${sig.tel}`:''}</div>
-      </div>
-    </div>
-
-    <!-- Section: Booking Channel -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Booking Channel</div>
-          <div class="agi-sect-desc">วิธีจองเข้ามา · cutoff time · cancellation policy</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('booking','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>แก้ไข</button>
-      </div>
-      <div class="agi-grid agi-grid-3">
-        <div class="agi-info-card"><div class="agi-info-lbl">Booking Method</div><div class="agi-info-val">${bc.method||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Cutoff Time</div><div class="agi-info-val mono">${bc.cutoff||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Cancellation Policy</div><div class="agi-info-val" style="font-size:12px">${bc.cancelPolicy||'—'}</div></div>
-        <div class="agi-info-card span2"><div class="agi-info-lbl">Booking Email</div><div class="agi-info-val mono" style="font-size:12px">${bc.email||'—'}</div></div>
-        <div class="agi-info-card"><div class="agi-info-lbl">Booking Phone</div><div class="agi-info-val mono">${bc.phone||'—'}</div></div>
-      </div>
-    </div>
-
-    <!-- Section: Internal Notes -->
-    <div class="agi-sect">
-      <div class="agi-sect-hd">
-        <div>
-          <div class="agi-sect-ttl">Internal Notes</div>
-          <div class="agi-sect-desc">โน้ตภายในของทีม · ไม่แสดงในสัญญา</div>
-        </div>
-        <button class="agi-sect-act" onclick="agEditOpen('notes','${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>${a.note?'แก้ไข':'เพิ่มโน้ต'}</button>
-      </div>
-      ${a.note ? `
-        <div class="agi-info-card">
-          <div class="agi-info-val multi" style="font-weight:400;color:var(--fd-ink-mid);font-size:12px;line-height:1.6">${a.note.replace(/\\n/g,'<br>').replace(/(•|·)/g,'•')}</div>
-        </div>
-      ` : `
-        <div class="agi-info-card" style="text-align:center;padding:20px;color:var(--fd-ink-soft);font-size:11px;font-style:italic">
-          ยังไม่มีโน้ต · กดปุ่ม "เพิ่มโน้ต" เพื่อบันทึก
-        </div>
-      `}
+    ${sect5}
+    <div class="ag-grp">
+      ${/* §agStd · "Name in system" กับ "Market" ถูกถอดออกจากกล่องนี้
+            ทั้งคู่อยู่บนหัวแผงไปแล้ว (ชื่อเอเย่นต์ + บรรทัดตลาดใต้ชื่อ)
+            ซ้ำสองที่แล้ววันหนึ่งจะไม่ตรงกัน และกินความสูงไปสองแถวเปล่า ๆ */''}
+      ${box('Company',
+          rowS('Legal name', E(ci.legalName||a.name))
+        + rowS('TAT license', ci.tatLicense?`<span class="mono">${E(ci.tatLicense)}</span>`:'')
+        + rowS('Address', E(ci.address||'')))}
+      ${box('Contact',
+          rowS('Person', E(a.contact||''))
+        + rowS('Telephone', ci.tel?`<span class="mono">${E(ci.tel)}</span>`:'')
+        + rowS('Hotline', ci.hotline?`<span class="mono">${E(ci.hotline)}</span>`:'')
+        + rowS('Email', E(a.email||''))
+        + rowS('Website', ci.website?`<a href="https://${E(ci.website)}" target="_blank" style="color:var(--ag-blu);text-decoration:none">${E(ci.website)}</a>`:''))}
+      ${box('Sales owner',
+          rowS('Owner', sales
+            ? `${E(sales.name||'')}${sales.fullName?`<span class="sub">${E(sales.fullName)}</span>`:''}`
+            : '')
+        + rowS('Role', E(sales?.designation||''))
+        + rowS('Reach at', `${E(sales?.email||'')}${sales?.tel?(`<span class="sub mono">${E(sales.tel)}</span>`):''}`),
+        `<span onclick="agEditOpen('sales','${a.id}')" style="cursor:pointer;color:var(--ag-navy);font-weight:500">Change</span>`)}
+      ${box('Agent signatory',
+          rowS('Signs for', E(ci.legalName||a.name))
+        + rowS('Name', E(sig.name||''))
+        + rowS('Designation', E(sig.designation||'Authorized Signatory'))
+        + rowS('Signed', sig.signedDate ? E(fmtD(sig.signedDate)) : tag('Not signed','amb')))}
+      ${(()=>{
+        const _t  = (typeof ctTmplForAgent==='function') ? ctTmplForAgent(a) : null;
+        const _bound = !!a.contractTemplateId;
+        const _nSec = _t && _t.sections ? Object.keys(_t.sections).filter(k=>_t.sections[k]).length : 0;
+        return box('Contract template',
+            rowS('Template', _t
+              ? `${E(_t.name||'')}<span class="sub mono">${E(_t.code||_t.id)}</span>`
+              : `<span style="color:var(--ag-red)">No contract template in the system</span>`)
+          + rowS('Sections', _t ? `${_nSec} enabled<span class="sub" title="${_bound?'ผูกกับเอเยนต์รายนี้โดยตรง':'เปลี่ยน default ส่วนกลางแล้วเอเยนต์นี้เปลี่ยนตาม'}">${_bound?'bound to this agent':'workspace default'}</span>` : ''),
+          `<span onclick="agEditOpen('contracttmpl','${a.id}')" style="cursor:pointer;color:var(--ag-navy);font-weight:500">Change</span>`);
+      })()}
+      ${box('Internal notes',
+          a.note
+            ? `<div class="r" style="border-bottom:none"><span class="v" style="font-weight:400">${a.note.replace(/\n/g,'<br>').replace(/(•|·)/g,'•')}</span></div>`
+            : `<div class="r" style="border-bottom:none"><span class="v" style="font-weight:400;color:var(--ag-ink4)">No notes yet.</span></div>`,
+          `<span onclick="agEditOpen('notes','${a.id}')" style="cursor:pointer;color:var(--ag-navy);font-weight:500">${a.note?'Edit':'Add'}</span>`)}
     </div>
   `;
 }
@@ -32564,6 +37086,10 @@ function agTabPrices(a){
     </div>
     <button onclick="agEditOpen('ratetype','${a.id}')" style="background:#fff;color:${rt.color};border:1px solid ${rt.color}55;font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer">เปลี่ยน Rate Type</button>
   </div>`;
+  /* §rtTab · งานจัดการเรท (วันหมด · ตารางฤดูกาล) ย้ายไปแท็บ Rate Type แล้ว
+     หน้านี้ชื่อ Pricing Matrix · หน้าที่เดียวคือโชว์ตารางราคา ไม่ต้องมีของให้ตั้ง
+     เหลือบรรทัดชี้ทางไว้บรรทัดเดียว เพราะคนที่สงสัยเรื่องเรทมักสงสัยตอนมองราคาอยู่ */
+  html += (typeof rtMatrixHint==='function') ? rtMatrixHint(a) : '';
 
   /* §promoMx · ACTIVE PERIOD ในตารางดูเหมือนประตูกั้นราคา แต่วัดแล้วไม่ใช่
      จองนอกช่วงก็ยังคิดราคาเดิม · และตามที่ตกลงกันไว้ก็ควรเป็นแบบนั้น
@@ -32608,10 +37134,14 @@ function agTabPrices(a){
       _PR.forEach(function(c){
         (c.programPeriods||[]).forEach(function(p){
           if(p.routeId!==R.id) return;
-          var prt=(SB_RATE_TYPES||[]).find(function(x){ return x.id===c.rateTypeId; });
-          /* กติกาข้อ 2 · โปรที่ไม่มีราคาของ route นี้ = ข้าม ไม่ใช่คิดเป็น 0 */
-          var has=!!(prt && ((prt.seatRates&&prt.seatRates[R.id]) || (prt.charterRates&&prt.charterRates[R.id])));
-          hits.push({ ver:c.version||c.id||'promo', rtCode:prt?(prt.code||''):'(ไม่พบ Rate Type)',
+          /* §b2bPromo · เช็คผ่าน laPromoHasRate · รู้จักทั้งใบที่ดึงจาก Rate Type และใบที่กรอกราคาเอง
+             เขียนกติกาซ้ำตรงนี้เมื่อไหร่ หน้าจอกับตัวคิดราคาจะแยกร่างกันทันที */
+          var own=(c.priceMode||'rate')==='own';
+          var prt=own?null:(SB_RATE_TYPES||[]).find(function(x){ return x.id===c.rateTypeId; });
+          var has=laPromoHasRate(c, R.id);
+          hits.push({ ver:c.version||c.id||'promo',
+                      rtCode:own?'ราคาในใบโปร':(prt?(prt.code||''):'(ไม่พบ Rate Type)'),
+                      own:own, bf:(c.bookWin?(p.bookFrom||''):''), bt:(c.bookWin?(p.bookTo||''):''),
                       from:p.travelFrom||c.activeFrom||'', to:p.travelTo||c.activeTo||'', has:has });
         });
       });
@@ -32619,10 +37149,17 @@ function agTabPrices(a){
       var dead=hits.filter(function(h){ return !h.has; });
       if(live.length) nCov++; if(dead.length) nSkip++;
       var tag = live.length
-        ? live.map(function(h){ return '<span style="background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap">PROMO '+_ctEsc(h.ver)+' &middot; '+fd(h.from)+' &rarr; '+fd(h.to)+'</span>'; }).join(' ')
+        ? live.map(function(h){ return '<span style="background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap" title="'
+            +_ctEsc(h.own?'ราคากรอกไว้ในใบโปรเอง':('ราคามาจาก Rate Type '+h.rtCode))
+            +_ctEsc(h.bf||h.bt?(' · ต้องจองระหว่าง '+fd(h.bf)+' – '+fd(h.bt)):' · ไม่จำกัดวันจอง')
+            +'">PROMO '+_ctEsc(h.ver)+' &middot; '+fd(h.from)+' &rarr; '+fd(h.to)
+            +(h.own?' &middot; \u0e23\u0e32\u0e04\u0e32\u0e43\u0e19\u0e43\u0e1a':'')
+            +((h.bf||h.bt)?' &middot; &#128197;':'')+'</span>'; }).join(' ')
         : '<span style="color:#8A929E;font-size:10.5px">ไม่มีโปรโมชั่น &middot; ใช้เรทมาตรฐาน</span>';
       var warn = dead.length
-        ? '<div style="margin-top:3px;font-size:10px;color:#A32D2D">&#9888; '+dead.length+' ใบคลุม route นี้ไว้ แต่ Rate Type ของใบนั้น ('+_ctEsc(dead[0].rtCode)+') ไม่มีราคาของ route นี้ &rarr; ระบบข้าม ใช้เรทมาตรฐานแทน</div>'
+        ? '<div style="margin-top:3px;font-size:10px;color:#A32D2D">&#9888; '+dead.length+' ใบคลุม route นี้ไว้ แต่'
+          +(dead[0].own?'ไม่ได้กรอกราคาของ route นี้ไว้ในใบ':('Rate Type ของใบนั้น ('+_ctEsc(dead[0].rtCode)+') ไม่มีราคาของ route นี้'))
+          +' &rarr; ระบบข้าม ใช้เรทมาตรฐานแทน</div>'
         : '';
       rows += '<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid #EFECE6">'
         + '<div style="flex:1;min-width:0;font-size:11.5px;font-weight:600;color:#3C4553">'+_ctEsc(R.name||R.id)+warn+'</div>'
@@ -32637,7 +37174,10 @@ function agTabPrices(a){
       + nCov+' จาก '+routes.length+' route มีโปรทับบางช่วง &middot; ที่เหลือใช้เรทมาตรฐานทั้งปี'
       + (nSkip?(' &middot; <b style="color:#A32D2D">'+nSkip+' route โปรไม่มีราคา &rarr; ถูกข้าม</b>'):'')
       + '</span></div>'
-      + rows + '</div>';
+      /* §prList · ไม่มีใบโปรสักใบ = ไม่ต้องไล่ route ทีละบรรทัดมาบอกว่า "ไม่มีโปรโมชั่น"
+         12 route ก็ 12 บรรทัดที่พูดเรื่องเดียวกัน ดันตารางราคาตกจอไปฟรี ๆ
+         มีโปรเมื่อไหร่ค่อยกาง · ตอนนั้นแต่ละบรรทัดมีเนื้อหาต่างกันจริง */
+      + (_PR.length ? rows : '') + '</div>';
   })();
 
   // Full Rate Type detail form — seat rates (with Active period + Not-Offered),
@@ -33481,6 +38021,145 @@ function agTabContracts(a){
 
 let _agHistPage=0;
 function agHistGo(aId,p){ _agHistPage=p; const a=sbGetAgent(aId); if(!a) return; const body=document.getElementById('ag-tabbody'); if(body) body.innerHTML=agTabHist(a); }
+/* ══ §agSum · ตัวสรุปของแท็บ Recent Bookings · แยกเดือน × แยกทริป ═══════
+   ที่มา (2026-09-29) · ผู้ใช้ขอเอง "หน้า Recent booking อยากได้ตัวสรุปแยกเดือน แยกทริป"
+
+   สามเรื่องที่ตารางข้างล่างทำไม่ได้ และตัวสรุปต้องทำให้ถูก
+     1 หนึ่งใบจองมีได้หลายทริป · ตารางโชว์แค่ทริปแรกแล้วต่อท้าย +N
+       ตัวสรุปต้องกางทริปออกมานับทีละทริป ไม่งั้นทริปที่สองหายทั้งเดือนทั้งโปรแกรม
+     2 bk.total เป็นเงินของทั้งใบ ไม่ใช่ของทริป · และวัดจากข้อมูลจริงแล้ว
+       มี 5 ใบจาก 127 ที่ total ไม่เท่าผลบวก subtotal (ส่วนลด/ปรับยอดอยู่ระดับใบ)
+       ใช้กติกาเดียวกับปฏิทิน · ใบทริปเดียวใช้ total (รวมส่วนลดแล้ว) หลายทริปใช้ subtotal
+     3 เลข "126 bookings" ที่ตารางข้างล่างโชว์ รวมใบที่ยกเลิกแล้วด้วย
+       ตัวสรุปจึงแยกคอลัมน์ยกเลิกออกมา ยอดที่ขายได้จะได้ไม่ปนกับยอดที่เสียไป */
+var _agSumMode = 'travel';   /* 'travel' = เดือนที่เดินทาง · 'booked' = เดือนที่จอง */
+var AG_SUM_DEAD = ['cancelled','rejected','cancelled_weather'];
+var AG_SUM_MAXCOL = 6;       /* โปรแกรมที่โชว์เป็นคอลัมน์ · ที่เหลือยุบเป็น "อื่น ๆ" */
+
+function agSumBkDate(bk){
+  /* วันที่จอง · ของจริงบนเซิร์ฟเวอร์มีสามชื่อปนกันตามยุคของใบ
+     ชุด export บางชุดตัดฟิลด์พวกนี้ทิ้ง · ตรงนั้นโหมด "เดือนที่จอง" จะไม่มีข้อมูลให้ดู */
+  var v = bk && (bk.bookingDate || bk.createdAt || bk.bookedAt || bk.dateCreated);
+  return v ? String(v).slice(0,10) : '';
+}
+/* กางใบจองของเอเย่นต์รายนี้ออกเป็นรายทริป · เป็นตัวตั้งของทุกตัวเลขในตัวสรุป */
+function agSumRows(all){
+  var out=[];
+  (all||[]).forEach(function(bk){
+    var dead = AG_SUM_DEAD.indexOf(bk.status)>=0;
+    var bd = agSumBkDate(bk);
+    if(bk.schemaVer===2 || Array.isArray(bk.trips)){
+      var tr = bk.trips || [];
+      var one = tr.length<=1;
+      tr.forEach(function(t){
+        out.push({ rid: t.routeId||'', dead: dead,
+                   travel: t.date ? String(t.date).slice(0,7) : '',
+                   booked: bd ? bd.slice(0,7) : '',
+                   pax: (typeof bookingV2PaxAllTot==='function') ? bookingV2PaxAllTot(t.pax) : 0,
+                   /* ใบทริปเดียว · total รวมส่วนลดของใบไว้แล้ว · หลายทริปต้องใช้ subtotal รายทริป */
+                   baht: one ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||0) });
+      });
+    } else {
+      var p=bk.pax||{};
+      out.push({ rid: bk.programId||'', dead: dead,
+                 travel: bk.travelDate ? String(bk.travelDate).slice(0,7) : '',
+                 booked: bd ? bd.slice(0,7) : '',
+                 pax: (p.adult||0)+(p.child||0)+(p.infant||0), baht: bk.total||0 });
+    }
+  });
+  return out;
+}
+function agSumSetMode(aId, m){
+  _agSumMode = (m==='booked') ? 'booked' : 'travel';
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(aId):null; if(!a) return;
+  var body=document.getElementById('ag-tabbody'); if(body) body.innerHTML=agTabHist(a);
+}
+function agSumCell(pax, baht, cls){
+  if(!pax && !baht) return '<td class="'+(cls||'')+'"><span class="z">—</span></td>';
+  return '<td class="'+(cls||'')+'"><b>'+pax+'</b><i>&#3647;'+sbFmtTHB(baht)+'</i></td>';
+}
+function agSumBlock(a, all){
+  var rows=agSumRows(all);
+  if(!rows.length) return '';
+  var rName = function(id){ return (ROUTES.find(function(x){return x.id===id;})||{}).name || (id||'—'); };
+  var hasBooked = rows.some(function(r){ return !!r.booked; });
+  var key = (_agSumMode==='booked' && hasBooked) ? 'booked' : 'travel';
+
+  /* โปรแกรมเรียงตามหัวคนที่ขายได้ · ตัวใหญ่อยู่ซ้าย · ที่เหลือยุบเป็นคอลัมน์เดียว
+     เอเย่นต์ที่ขายสิบกว่าโปรแกรมจะได้ไม่ทำให้ตารางกว้างจนอ่านไม่ได้ */
+  var byRt={};
+  rows.forEach(function(r){ if(r.dead) return; byRt[r.rid]=(byRt[r.rid]||0)+r.pax; });
+  var cols=Object.keys(byRt).sort(function(x,y){ return byRt[y]-byRt[x]; });
+  var shown=cols.slice(0,AG_SUM_MAXCOL), rest=cols.slice(AG_SUM_MAXCOL);
+  var restSet={}; rest.forEach(function(x){ restSet[x]=1; });
+
+  var months=[];
+  rows.forEach(function(r){ var m=r[key]; if(m && months.indexOf(m)<0) months.push(m); });
+  months.sort();
+  if(!months.length) return '';
+
+  var Z=function(){ return {pax:0, baht:0}; };
+  var G={}, T={}, TOT=Z(), DEAD=Z();
+  months.forEach(function(m){ G[m]={dead:Z(), tot:Z(), c:{}}; });
+  shown.concat(['__etc']).forEach(function(c){ T[c]=Z(); });
+  rows.forEach(function(r){
+    var m=r[key]; if(!m || !G[m]) return;
+    var g=G[m];
+    if(r.dead){ g.dead.pax+=r.pax; g.dead.baht+=r.baht; DEAD.pax+=r.pax; DEAD.baht+=r.baht; return; }
+    var c=restSet[r.rid]?'__etc':r.rid;
+    if(!g.c[c]) g.c[c]=Z();
+    g.c[c].pax+=r.pax; g.c[c].baht+=r.baht;
+    g.tot.pax+=r.pax;  g.tot.baht+=r.baht;
+    if(!T[c]) T[c]=Z();
+    T[c].pax+=r.pax; T[c].baht+=r.baht;
+    TOT.pax+=r.pax; TOT.baht+=r.baht;
+  });
+
+  var head='<tr><th class="m">เดือน</th>'
+    + shown.map(function(c){ return '<th class="n" title="'+sbEsc(rName(c))+'">'+sbEsc(rName(c))+'</th>'; }).join('')
+    + (rest.length?('<th class="n" title="'+sbEsc(rest.map(rName).join(' · '))+'">อื่น ๆ '+rest.length+'</th>'):'')
+    + '<th class="n sum">รวม</th><th class="n dead" title="ใบที่ยกเลิก/ถูกปฏิเสธ · ไม่ถูกนับในยอดที่ขายได้">ยกเลิก</th></tr>';
+
+  var body=months.map(function(m){
+    var g=G[m];
+    return '<tr><td class="m">'+sbEsc(m)+'</td>'
+      + shown.map(function(c){ var v=g.c[c]||Z(); return agSumCell(v.pax, v.baht, 'n'); }).join('')
+      + (rest.length?(function(){ var v=g.c['__etc']||Z(); return agSumCell(v.pax, v.baht, 'n'); })():'')
+      + agSumCell(g.tot.pax, g.tot.baht, 'n sum')
+      + agSumCell(g.dead.pax, g.dead.baht, 'n dead')
+      + '</tr>';
+  }).join('');
+
+  var foot='<tr><td class="m">รวม '+months.length+' เดือน</td>'
+    + shown.map(function(c){ var v=T[c]||Z(); return agSumCell(v.pax, v.baht, 'n'); }).join('')
+    + (rest.length?agSumCell(T['__etc'].pax, T['__etc'].baht, 'n'):'')
+    + agSumCell(TOT.pax, TOT.baht, 'n sum')
+    + agSumCell(DEAD.pax, DEAD.baht, 'n dead')
+    + '</tr>';
+
+  /* ปุ่มสลับ · โหมดที่ไม่มีข้อมูลต้องปิดตัวเองและบอกเหตุผล
+     ไม่ใช่ปล่อยให้กดแล้วได้ตารางว่างโดยไม่มีใครรู้ว่าทำไม */
+  var btn=function(mk,lb,dis,tip){
+    var on=(key===mk);
+    return '<button class="agsum-md'+(on?' on':'')+'"'+(dis?' disabled title="'+sbEsc(tip)+'"':'')
+      +(dis?'':(' onclick="agSumSetMode(\''+a.id+'\',\''+mk+'\')"'))+'>'+lb+'</button>';
+  };
+  return '<div class="agsum">'
+    +'<div class="agsum-hd"><b>สรุป · แยกเดือน × ทริป</b>'
+      +'<span class="agsum-sub">นับรายทริป · ใบที่มีหลายทริปถูกกางออกมาแล้ว</span>'
+      +'<span class="sp"></span>'
+      + btn('travel','วันเดินทาง',false,'')
+      + btn('booked','วันที่จอง',!hasBooked,'ใบจองชุดนี้ไม่มีวันที่จองติดมา · ดูได้เฉพาะวันเดินทาง')
+    +'</div>'
+    +'<div class="agsum-sc"><table class="agsum-t"><thead>'+head+'</thead>'
+      +'<tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table></div>'
+    +'<div class="agsum-ft">ตัวเลขบนคือหัวคน ตัวเลขล่างคือยอดเงิน · '
+      +'ใบทริปเดียวใช้ยอดรวมของใบ (รวมส่วนลดแล้ว) ใบหลายทริปใช้ยอดรายทริป · '
+      +'คอลัมน์ยกเลิกแยกไว้ ไม่ถูกนับในช่องอื่นและในแถวรวม</div>'
+  +'</div>';
+}
+function sbEsc(x){ return (typeof ckEsc==='function')?ckEsc(x):String(x==null?'':x); }
+
 function agTabHist(a){
   // Match by agentId (bookings link to agent via .agentId) · handle v2 (trips[]) + legacy v1 schema
   // Paginated: 15 per page, newest first · page tabs below
@@ -33490,7 +38169,7 @@ function agTabHist(a){
   const page=Math.min(Math.max(0,_agHistPage||0),pages-1);
   const list=all.slice(page*PER, page*PER+PER);
   const rName = id => (ROUTES.find(x=>x.id===id)||{}).name || '—';
-  let html = `<div style="overflow-x:auto"><table class="bk-recent-tbl">
+  let html = agSumBlock(a, all) + `<div style="overflow-x:auto"><table class="bk-recent-tbl">
     <thead><tr><th>BK-ID</th><th>วันเดินทาง</th><th>Customer</th><th>Program</th><th class="num">PAX</th><th class="num">Total</th><th>สถานะ</th></tr></thead>
     <tbody>`;
   list.forEach(bk=>{
@@ -33529,6 +38208,243 @@ function agTabHist(a){
   return html;
 }
 
+/* ══ §rtTab · แท็บ Rate Type ของเอเย่นต์ ═════════════════════════════════════
+   งานจัดการเรททั้งหมดของเอเย่นต์รายนี้อยู่ที่นี่ที่เดียว
+   หน้า Pricing Matrix กลับไปทำหน้าที่เดิมของมัน คือ "โชว์ตารางราคา" ไม่ต้องมีของให้ตั้ง
+
+   ตัวแก้ตารางฤดูกาลอยู่ในหน้าเลย ไม่ใช่ป๊อปอัป · แก้แล้วเห็นผลข้างล่างทันที
+   ป๊อปอัปบังของที่กำลังตัดสินใจอยู่ ซึ่งคือ "ตกลงวันไหนใช้ชุดไหน"
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _rtmDraft = null, _rtmAgent = '';
+function _rtmE(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _rtmD(y){ return (typeof _rtFmtDate==='function') ? (_rtFmtDate(y)||y||'—') : (y||'—'); }
+function _rtmSame(a){
+  var cur=JSON.stringify(laSeasonsOf(a).map(function(x){ return [x.rt,x.from,x.to||'']; }));
+  var dr =JSON.stringify((_rtmDraft||[]).filter(function(x){ return x.rt&&x.from; })
+            .slice().sort(function(x,y){ return String(x.from).localeCompare(String(y.from)); })
+            .map(function(x){ return [x.rt,x.from,x.to||'']; }));
+  return cur===dr;
+}
+function rtmInit(aId){
+  _rtmAgent=aId;
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(aId):null;
+  _rtmDraft=laSeasonsOf(a).map(function(x){ return {rt:x.rt, from:x.from, to:x.to||''}; });
+}
+function rtmRedraw(){
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(_rtmAgent):null; if(!a) return;
+  var body=document.getElementById('ag-tabbody'); if(!body) return;
+  body.innerHTML=agTabRate(a);
+}
+function rtmSet(i,k,v){ if(_rtmDraft[i]) _rtmDraft[i][k]=String(v||''); rtmRedraw(); }
+function rtmDel(i){ _rtmDraft.splice(i,1); rtmRedraw(); }
+function rtmAdd(){
+  var last=_rtmDraft[_rtmDraft.length-1];
+  _rtmDraft.push({ rt:(last&&last.rt)||'', from:(last&&last.to)?laDayAfter(last.to):'', to:'' });
+  rtmRedraw();
+}
+function rtmSnap(){
+  for(var i=0;i<_rtmDraft.length-1;i++){
+    var n=_rtmDraft[i+1];
+    if(n && n.from) _rtmDraft[i].to=_rtSeasonPrev(n.from);
+  }
+  if(_rtmDraft.length) _rtmDraft[_rtmDraft.length-1].to='';
+  rtmRedraw();
+}
+function rtmReset(){ rtmInit(_rtmAgent); rtmRedraw(); }
+/* เติมให้จากสิ่งที่สัญญาระบุไว้ · เอเย่นต์คนเดียว · กติกาวันแบ่งเดียวกับปุ่มตั้งทั้งกลุ่ม */
+function rtmFillFromContract(){
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(_rtmAgent):null; if(!a) return;
+  var P=rtmSuggest(a); if(!P) return;
+  _rtmDraft=P.seasons.slice();
+  rtmRedraw();
+}
+function rtmSuggest(a){
+  if(!a || !a.rateTypeId) return null;
+  var rt=(typeof getRateType==='function')?getRateType(a.rateTypeId):null; if(!rt) return null;
+  var nx=rtExpNextOf(a.id); if(!nx || nx===a.rateTypeId) return null;
+  var nrt=(typeof getRateType==='function')?getRateType(nx):null;
+  if(!nrt || nrt.active===false) return null;
+  var vf=String(nrt.validFrom||''), vt=String(rt.validTo||'');
+  var split=(vf && (!vt || vf>=vt)) ? vf : (typeof laDayAfter==='function'?laDayAfter(vt):'');
+  if(!split) return null;
+  if(typeof TODAY_STR!=='undefined' && split<=TODAY_STR) return null;
+  var endOld=_rtSeasonPrev(split), out=[];
+  if(rt.validFrom && endOld && rt.validFrom<=endOld) out.push({rt:rt.id, from:String(rt.validFrom), to:endOld});
+  out.push({rt:nx, from:split, to:''});
+  return { seasons:out, next:nrt, split:split };
+}
+function rtmSave(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return;
+  var a=(typeof sbGetAgent==='function')?sbGetAgent(_rtmAgent):null; if(!a) return;
+  var clean=(_rtmDraft||[]).filter(function(x){ return x && x.rt && x.from; })
+    .map(function(x){ return {rt:x.rt, from:x.from, to:x.to||''}; })
+    .sort(function(x,y){ return String(x.from).localeCompare(String(y.from)); });
+  if(clean.length) a.rateSeasons=clean; else delete a.rateSeasons;
+  if(typeof sbAgentsPersist==='function') sbAgentsPersist();     /* §rateBind · ลงทั้งสองที่ */
+  if(typeof agLog==='function') agLog(a.id,'rate', clean.length
+    ? ('ตั้งตารางฤดูกาล '+clean.length+' ช่วง · '+clean.map(function(x){
+        return rtSeasonName(x.rt)+' '+x.from+'→'+(x.to||'ไม่มีวันสิ้นสุด'); }).join(' · '))
+    : 'เอาตารางฤดูกาลออก · กลับไปใช้ชุดราคาเดียวทั้งปี');
+  rtmInit(a.id); rtmRedraw();
+  if(typeof flShowToast==='function') flShowToast('บันทึกตารางฤดูกาลแล้ว');
+}
+/* ── ตัวแท็บ ────────────────────────────────────────────────────────────── */
+function agTabRate(a){
+  if(!a) return '';
+  if(_rtmAgent!==a.id || _rtmDraft===null) rtmInit(a.id);
+  var e=_rtmE, T=(typeof TODAY_STR!=='undefined')?TODAY_STR:'';
+  var rt=(typeof getRateType==='function')?getRateType(a.rateTypeId):null;
+  var ro=(typeof laCanEditArea==='function') && !laCanEditArea('sales');
+  var card='background:#fff;border:1px solid #E7EAEF;border-radius:12px;padding:14px 16px;margin:0 0 12px';
+  var h='<div style="padding:18px 22px 26px">';
+
+  /* ① เรทที่ใช้อยู่ */
+  var X=(typeof rtExpForAgent==='function')?rtExpForAgent(a):null;
+  h+='<div style="'+card+'">'
+    +'<div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;'
+      +'color:#9AA3AE;margin-bottom:9px">1 · เรทที่ผูกไว้</div>';
+  if(!rt){
+    h+='<div style="font-size:12.5px;color:#A32D2D;font-weight:600">ยังไม่ได้ผูก Rate Type — '
+      +'ราคายังไม่ถูก resolve จองให้เอเย่นต์นี้ต้องใส่ราคาเองทุกใบ</div>';
+  }else{
+    var tn=X?rtExpTone(X.days):null;
+    h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<span style="width:10px;height:10px;border-radius:3px;background:'+(rt.color||'#5F5E5A')+';flex:none"></span>'
+      +'<b style="font-size:14.5px;color:#1F2937">'+e(rt.name||rt.id)+'</b>'
+      +'<span style="background:#F1F3F6;color:#5A6270;font-size:9.5px;font-weight:700;padding:2px 8px;'
+        +'border-radius:6px;font-variant-numeric:tabular-nums">'+e(rt.code||'')+'</span>'
+      +'<span style="font-size:11.5px;color:#8A929E;font-variant-numeric:tabular-nums">'
+        +e(_rtmD(rt.validFrom))+' → '+e(_rtmD(rt.validTo))+'</span>'
+      +(tn?('<span style="background:'+tn.bg+';border:1px solid '+tn.bd+';color:'+tn.fg
+        +';font-size:10px;font-weight:800;border-radius:999px;padding:2px 10px">'+e(tn.t)+'</span>'):'')
+      +'<button onclick="agEditOpen(\'ratetype\',\''+e(a.id)+'\')"'+(ro?' disabled':'')
+        +' style="margin-left:auto;border:1px solid #D6DCE5;background:#fff;color:#33506F;border-radius:7px;'
+        +'padding:5px 13px;font:600 11px inherit;cursor:pointer;font-family:inherit">เปลี่ยน Rate Type</button>'
+    +'</div>';
+    if(X && X.blocked.length){
+      h+='<div style="margin-top:8px;background:#FCEBEB;border:1px solid #E8C4C0;border-radius:8px;'
+        +'padding:7px 11px;font-size:11.5px;color:#A32D2D;line-height:1.6">'
+        +'<b>จองไม่ได้ '+X.blocked.length+' โปรแกรม</b> — '
+        + X.blocked.slice(0,5).map(function(p){ return e(rtExpRouteName(p)); }).join(' · ')
+        + (X.blocked.length>5?(' · และอีก '+(X.blocked.length-5)):'')
+        +'<div style="color:#8A5A00;font-weight:500;margin-top:2px">เรทชุดนี้ไม่มีราคาของโปรแกรมพวกนี้ '
+        +'· ปุ่มบันทึกใบจองจะถูกล็อก · ตั้งตารางฤดูกาลให้ไปใช้ชุดที่มีราคา แล้วจะจองได้</div></div>';
+    }
+  }
+  h+='</div>';
+
+  /* ② ตารางฤดูกาล · ตัวแก้อยู่ในหน้า */
+  var D=_rtmDraft||[], probe={rateSeasons:D}, iss=laSeasonIssues(probe);
+  var dirty=!_rtmSame(a);
+  var opts=((typeof SB_RATE_TYPES!=='undefined')?SB_RATE_TYPES:[]).filter(function(r){ return r && r.active!==false; });
+  var inp='border:1px solid #D6DCE5;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;'
+    +'font-family:inherit;box-sizing:border-box;background:#fff';
+  var sug=rtmSuggest(a);
+  h+='<div style="'+card+'">'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">'
+      +'<span style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9AA3AE">'
+      +'2 · ตารางฤดูกาล</span>'
+      +(D.length?('<span style="background:#EDF2F8;border:1px solid #D6DEE8;color:#33506F;font-size:10px;'
+        +'font-weight:800;border-radius:999px;padding:2px 9px">'+D.length+' ช่วง</span>'):'')
+      +(dirty?('<span style="background:#FEF6E7;border:1px solid #EFD9AE;color:#8A5A00;font-size:10px;'
+        +'font-weight:800;border-radius:999px;padding:2px 9px">ยังไม่ได้บันทึก</span>'):'')
+    +'</div>'
+    +'<div style="font-size:11.5px;color:#6B7280;line-height:1.65;margin-bottom:11px">'
+      +'ราคาสลับตาม<b>วันเดินทาง</b>ของแต่ละทริป · ใบจองใบเดียวที่ข้ามฤดูจะได้คนละราคาต่อทริป<br>'
+      +'ช่วงสุดท้าย<b>เว้นวันจบไว้ว่าง</b> จะได้ไม่มีวันไหนไม่มีราคา'
+    +'</div>';
+  if(!D.length){
+    h+='<div style="background:#F7F8FA;border:1px dashed #D6DCE5;border-radius:9px;padding:14px;'
+      +'text-align:center;font-size:12px;color:#8A929E">ยังไม่ได้ตั้ง · เอเย่นต์นี้ใช้ชุดราคาเดียวตลอดทั้งปี</div>';
+  }
+  D.forEach(function(x,i){
+    var live=x.from && T>=x.from && (!x.to||T<=x.to);
+    h+='<div style="border:1px solid '+(live?'#BEE0D2':'#E7EAEF')+';background:'+(live?'#F6FBF9':'#FCFCFD')+';'
+      +'border-radius:9px;padding:9px 11px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:7px">'
+        +'<span style="flex:none;width:18px;font-size:11px;font-weight:700;color:#9AA3AE">'+(i+1)+'</span>'
+        +'<select onchange="rtmSet('+i+',\'rt\',this.value)"'+(ro?' disabled':'')+' style="'+inp+';flex:1;min-width:0">'
+          +'<option value="">— เลือกชุดราคา —</option>'
+          + opts.map(function(r){ return '<option value="'+e(r.id)+'"'+(r.id===x.rt?' selected':'')+'>'
+              +e(r.name||r.id)+'</option>'; }).join('')
+        +'</select>'
+        +(live?'<span style="flex:none;font-size:9.5px;font-weight:800;color:#0F6E56;background:#E3F3EC;'
+          +'border-radius:999px;padding:3px 9px;white-space:nowrap">ใช้อยู่วันนี้</span>':'')
+        +'<button onclick="rtmDel('+i+')"'+(ro?' disabled':'')+' title="เอาช่วงนี้ออก" '
+          +'style="flex:none;border:1px solid #EAD6D6;background:#fff;color:#A32D2D;border-radius:7px;'
+          +'padding:5px 10px;font:700 12px inherit;cursor:pointer;font-family:inherit">&#10005;</button>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;padding-left:26px;flex-wrap:wrap">'
+        +'<label style="font-size:10.5px;color:#8A929E;flex:none">ตั้งแต่</label>'
+        +'<input type="date" value="'+e(x.from)+'"'+(ro?' disabled':'')
+          +' onchange="rtmSet('+i+',\'from\',this.value)" style="'+inp+';width:150px">'
+        +'<label style="font-size:10.5px;color:#8A929E;flex:none">ถึง</label>'
+        +'<input type="date" value="'+e(x.to)+'"'+(ro?' disabled':'')
+          +' onchange="rtmSet('+i+',\'to\',this.value)" style="'+inp+';width:150px">'
+        +'<span style="font-size:10.5px;color:'+(x.to?'#9AA3AE':'#0F6E56')+';font-weight:'+(x.to?'500':'700')+'">'
+          +(x.to?'':'← เว้นว่าง = ใช้ยาวไม่มีวันจบ')+'</span>'
+      +'</div>'
+    +'</div>';
+  });
+  if(!ro){
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +'<button onclick="rtmAdd()" style="border:1px dashed #C9D2DE;background:#fff;color:#33506F;'
+        +'border-radius:8px;padding:7px 15px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">+ เพิ่มช่วง</button>'
+      +(D.length>1?('<button onclick="rtmSnap()" title="ปิดวันจบของแต่ละช่วงให้ชนวันเริ่มของช่วงถัดไปพอดี" '
+        +'style="border:1px solid #C9D2DE;background:#fff;color:#33506F;border-radius:8px;padding:7px 15px;'
+        +'font:600 11.5px inherit;cursor:pointer;font-family:inherit">จัดวันให้ต่อกันพอดี</button>'):'')
+      +(sug?('<button onclick="rtmFillFromContract()" title="สร้างตารางจากเรทตัวถัดไปที่สัญญาระบุไว้" '
+        +'style="border:1px solid #BEE0D2;background:#F1F8F5;color:#0F6E56;border-radius:8px;padding:7px 15px;'
+        +'font:700 11.5px inherit;cursor:pointer;font-family:inherit">'
+        +'เติมจากสัญญา · '+e(sug.next.name||sug.next.id)+' ตั้งแต่ '+e(_rtmD(sug.split))+'</button>'):'')
+      +'<span style="margin-left:auto;display:flex;gap:8px">'
+        +(dirty?('<button onclick="rtmReset()" style="border:1px solid #D6DCE5;background:#fff;color:#5A6270;'
+          +'border-radius:8px;padding:7px 15px;font:600 11.5px inherit;cursor:pointer;font-family:inherit">'
+          +'ยกเลิกการแก้</button>'):'')
+        +'<button onclick="rtmSave()"'+(dirty?'':' disabled')+' style="border:0;background:'+(dirty?'#0F172A':'#E7EAEF')
+          +';color:'+(dirty?'#fff':'#9AA3AE')+';border-radius:8px;padding:7px 19px;font:700 11.5px inherit;'
+          +'cursor:'+(dirty?'pointer':'default')+';font-family:inherit">บันทึก</button>'
+      +'</span></div>';
+  }
+  if(iss.length){
+    h+='<div style="margin-top:10px;background:#FEF6E7;border:1px solid #EFD9AE;border-radius:9px;'
+      +'padding:8px 12px;font-size:11.5px;color:#8A5A00;line-height:1.65">'
+      + iss.map(function(t){ return '&#9888; '+e(t); }).join('<br>')
+      +'<div style="color:#A08558;margin-top:3px">บันทึกได้อยู่ · ข้อทักพวกนี้ไม่ปิดกั้น แต่ควรแก้ก่อนใช้จริง</div></div>';
+  }
+  h+='</div>';
+
+  /* ③ ผลลัพธ์ · วันไหนใช้ชุดไหน · อ่านจากร่างที่กำลังแก้อยู่ จะได้เห็นผลก่อนกดบันทึก */
+  h+='<div style="'+card+';margin-bottom:0">'
+    +'<div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;'
+      +'color:#9AA3AE;margin-bottom:3px">3 · สรุป · วันไหนใช้ชุดไหน</div>'
+    +'<div style="font-size:11px;color:#8A929E;margin-bottom:9px">'
+      +(dirty?'ดูจากที่กำลังแก้อยู่ (ยังไม่บันทึก)':'ดูจากที่บันทึกไว้')+'</div>';
+  var probeA={ id:a.id, rateTypeId:a.rateTypeId, rateSeasons:D };
+  var dates=[{d:T, lbl:'วันนี้'}];
+  D.forEach(function(x){ if(x.from && x.from>T) dates.push({d:x.from, lbl:'เริ่มช่วงที่ '+(D.indexOf(x)+1)}); });
+  if(dates.length===1 && rt && rt.validTo && laDayAfter(rt.validTo)>T)
+    dates.push({d:laDayAfter(rt.validTo), lbl:'วันถัดจากเรทหมด'});
+  dates.forEach(function(p){
+    var hit=laSeasonAt(probeA, p.d);
+    var id=(hit&&hit.rt)||a.rateTypeId||'';
+    var nm=id?rtSeasonName(id):'—';
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #F1F3F6;font-size:12px">'
+      +'<span style="flex:none;width:150px;color:#6B7280;font-variant-numeric:tabular-nums">'
+        +e(_rtmD(p.d))+' <span style="color:#B6BDC6;font-size:10.5px">'+e(p.lbl)+'</span></span>'
+      +'<b style="color:#2C3440">'+e(nm)+'</b>'
+      +(hit?'':'<span style="font-size:10.5px;color:#8A929E">(ไม่มีช่วงไหนคลุม → ใช้เรทที่ผูกไว้)</span>')
+    +'</div>';
+  });
+  h+='<div style="margin-top:10px;background:#F1F8F5;border:1px solid #BEE0D2;border-radius:9px;'
+    +'padding:8px 12px;font-size:11.5px;color:#0F6E56;line-height:1.65">'
+    +'<b>ตั้งตาราง ≠ เปลี่ยนเรท</b> — ตารางไม่แตะราคาก่อนวันแบ่งเลยสักบาท '
+    +'เปลี่ยนเฉพาะทริปที่<b>เดินทาง</b>ตั้งแต่วันแบ่งไป · ใบที่ขายไปแล้วล็อกราคาเดิมไว้ ไม่คิดใหม่ย้อนหลัง</div>'
+    +'</div>';
+  return h+'</div>';
+}
+
 function agSwitchTab(tab, aId){
   const a = sbGetAgent(aId); if(!a) return;
   document.querySelectorAll('#ag-main .sb-tab').forEach(t=>t.classList.remove('on'));
@@ -33539,6 +38455,7 @@ function agSwitchTab(tab, aId){
   if(tab==='hist')    { _agHistPage=0; body.innerHTML = agTabHist(a); }
   if(tab==='contracts') body.innerHTML = agTabContracts(a);
   if(tab==='activity')  body.innerHTML = agTabActivity(a);
+  if(tab==='ratemgmt'){ rtmInit(aId); body.innerHTML = agTabRate(a); }   /* §rtTab */
 }
 
 // ── Agent Activity timeline (audit trail) ──
@@ -33662,7 +38579,7 @@ function agClearExecute(){
   const n=ids.length;
   agClearClose();
   if(typeof renderAgents==='function') renderAgents();
-  const main=document.getElementById('ag-main'); if(main) main.innerHTML='<div class="sb-empty">เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา</div>';
+  const main=document.getElementById('ag-main'); if(main) main.innerHTML='<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   try{ alert('Cleared '+n+' agent(s) and linked data.'); }catch(e){}
 }
 
@@ -33929,8 +38846,17 @@ function agCreateSubmit(){
     };
   }
   if(typeof _seedAgentContractDefaults==='function'){ const prev=SB_AGENTS; SB_AGENTS=[a]; try{_seedAgentContractDefaults();}catch(e){} SB_AGENTS=prev; }
+  /* §agProgFill · เอเยนต์ใหม่ที่เลือกเรทมาแล้ว ได้โปรแกรมครบตั้งแต่วินาทีแรก
+     ต้องอยู่หลัง _seedAgentContractDefaults() เพราะตัวนั้นเป็นคนใส่ contractStart/End
+     ซึ่งเป็นช่วง "จอง" ของแถวที่เติมให้ · ตัวใหม่ไม่มีอะไรให้ตัด จึงไม่มีคำถาม */
+  if(a.rateTypeId && typeof agProgFill==='function'){
+    const _pf = agProgFill(a, a.rateTypeId, {});
+    if(_pf && _pf.add && _pf.add.length) a._progAutoN = _pf.add.length;
+  }
   SB_AGENTS.unshift(a);
-  if(typeof agLog==='function') agLog(a.id,'created','Agent created'+(a.rateTypeId?(' · rate type '+((getRateType(a.rateTypeId)||{}).name||a.rateTypeId)):''));
+  if(typeof agLog==='function') agLog(a.id,'created','Agent created'+(a.rateTypeId?(' · rate type '+((getRateType(a.rateTypeId)||{}).name||a.rateTypeId)):'')
+    +(a._progAutoN?(' · programs ตามเรทอัตโนมัติ '+a._progAutoN+' เส้นทาง'):''));
+  delete a._progAutoN;
   if(typeof sbAgentsPersist==='function') sbAgentsPersist();
   agEditClose();
   agRenderList();
@@ -34655,7 +39581,7 @@ function ctDocFmtDate(iso, lang){
   if(!iso) return '—';
   const d = new Date(iso); if(isNaN(d)) return iso;
   if(lang === 'th'){
-    const mTh=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const mTh=laMonAbbrTH();
     return `${String(d.getDate()).padStart(2,'0')} ${mTh[d.getMonth()]} ${String(d.getFullYear()+543).slice(2)}`;
   }
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -35987,6 +40913,7 @@ function ctDocRenderPricing(a, rt, lang, fmt){
   const ZONES=['PK','KL','NoTransfer'];
   const _rtScope=(typeof rtNatScopeOf==='function')?rtNatScopeOf(rt):'both';   // §nationality scope on the contract
   const PAX=(typeof rtNatPax==='function')?rtNatPax(_rtScope):['adult-thai','child-thai','adult-fr','child-fr'];
+  const NC=rtNatCols(PAX);   // §rtNatCols · บั๊กเดียวกับหน้าจอ · ใบนี้ส่งถึงมือเอเย่นต์ด้วย
   let seatRows = '';
   (rt.routes||[]).filter(rId => agentRouteIds.includes(rId)).forEach(rId => {
     const rr = rt.seatRates && rt.seatRates[rId];
@@ -36011,7 +40938,7 @@ function ctDocRenderPricing(a, rt, lang, fmt){
       seatRows += `<tr style="${rowTop}">
         ${isFirst ? `<td rowspan="${totalRows}" style="padding:8px 12px 8px 0;vertical-align:top;font-size:11px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}</td>` : ''}
         <td style="padding:5px 10px ${has?'0':'5px'};font-size:9.5px;color:#5F5E5A;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${z==='NoTransfer'?'No tr.':z}</td>
-        ${PAX.map((p,pi) => `<td style="padding:5px 10px ${has?'0':'5px'};text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===1?'padding-right:18px;':''}"><div style="font-weight:600">${fmtN(cell[p])}</div></td>`).join('')}
+        ${PAX.map((p,pi) => `<td style="padding:5px 10px ${has?'0':'5px'};text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===NC.lastTh?'padding-right:18px;':''}${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}"><div style="font-weight:600">${fmtN(cell[p])}</div></td>`).join('')}
       </tr>`;
       /* บรรทัดชั้นสัญญา · ป้ายอยู่ในคอลัมน์ Zone ครั้งเดียวต่อแถว ไม่ต้องซ้ำทุกเซลล์ */
       if(has){
@@ -36021,7 +40948,7 @@ function ctDocRenderPricing(a, rt, lang, fmt){
             const _t = tiers[pi] || {};
             const _s = (_t.sell===0||_t.sell) ? fmtN(_t.sell) : '—';
             const _m = (_t.minSell===0||_t.minSell) ? fmtN(_t.minSell) : '—';
-            return `<td style="padding:1px 10px 6px;text-align:right;font-size:8.5px;color:#9b9590;font-variant-numeric:tabular-nums;white-space:nowrap;${pi===1?'padding-right:18px;':''}">${_s} <span style="color:#c9c5bd">/</span> ${_m}</td>`;
+            return `<td style="padding:1px 10px 6px;text-align:right;font-size:8.5px;color:#9b9590;font-variant-numeric:tabular-nums;white-space:nowrap;${pi===NC.lastTh?'padding-right:18px;':''}${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${_s} <span style="color:#c9c5bd">/</span> ${_m}</td>`;
           }).join('')}
         </tr>`;
       }
@@ -36040,14 +40967,11 @@ function ctDocRenderPricing(a, rt, lang, fmt){
         <tr>
           <th rowspan="2" style="padding:6px 0;text-align:left;font-size:9px;font-weight:700;color:#5F5E5A;letter-spacing:.06em;text-transform:uppercase;vertical-align:bottom">${T('route')}</th>
           <th rowspan="2" style="padding:6px 10px;text-align:left;font-size:9px;font-weight:700;color:#5F5E5A;letter-spacing:.06em;text-transform:uppercase;vertical-align:bottom">${T('zone')}</th>
-          <th colspan="2" style="padding:5px 10px;text-align:center;font-size:9.5px;font-weight:700;color:${TH_FG};letter-spacing:.05em;text-transform:uppercase;border-bottom:1.5px solid ${TH_FG}">${T('thai')}</th>
-          <th colspan="2" style="padding:5px 10px;text-align:center;font-size:9.5px;font-weight:700;color:${FR_FG};letter-spacing:.05em;text-transform:uppercase;border-bottom:1.5px solid ${FR_FG};border-left:1px solid #F2F0EA">${T('foreigner')}</th>
+          ${NC.th.length?`<th colspan="${NC.th.length}" style="padding:5px 10px;text-align:center;font-size:9.5px;font-weight:700;color:${TH_FG};letter-spacing:.05em;text-transform:uppercase;border-bottom:1.5px solid ${TH_FG}">${T('thai')}</th>`:''}
+          ${NC.fr.length?`<th colspan="${NC.fr.length}" style="padding:5px 10px;text-align:center;font-size:9.5px;font-weight:700;color:${FR_FG};letter-spacing:.05em;text-transform:uppercase;border-bottom:1.5px solid ${FR_FG};${NC.th.length?'border-left:1px solid #F2F0EA;':''}">${T('foreigner')}</th>`:''}
         </tr>
         <tr>
-          <th style="padding:4px 10px;text-align:right;font-size:8.5px;font-weight:600;color:#5F5E5A">${T('adult')}</th>
-          <th style="padding:4px 18px 4px 10px;text-align:right;font-size:8.5px;font-weight:600;color:#5F5E5A">${T('child')}</th>
-          <th style="padding:4px 10px;text-align:right;font-size:8.5px;font-weight:600;color:#5F5E5A;border-left:1px solid #F2F0EA">${T('adult')}</th>
-          <th style="padding:4px 10px;text-align:right;font-size:8.5px;font-weight:600;color:#5F5E5A">${T('child')}</th>
+          ${PAX.map((p,pi)=>`<th style="padding:4px ${pi===NC.lastTh?'18px':'10px'} 4px 10px;text-align:right;font-size:8.5px;font-weight:600;color:#5F5E5A;${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${T(/^adult/.test(p)?'adult':'child')}</th>`).join('')}
         </tr>
       </thead>
       <tbody>${seatRows}</tbody>
@@ -36313,10 +41237,10 @@ function renderB2C(){
     return new Date(c.validFrom)<=today && new Date(c.validTo)>=today;
   }).length;
   document.getElementById('b2c-kpi').innerHTML = `
-    <div class="sb-kpi"><div class="sb-kpi-lbl">Direct Channels</div><div class="sb-kpi-val">${channels.length}</div><div class="sb-kpi-sub">เปิดทุกช่องทาง</div></div>
+    <div class="sb-kpi"><div class="sb-kpi-lbl">Direct Channels</div><div class="sb-kpi-val">${channels.length}</div><div class="sb-kpi-sub">${laT('เปิดทุกช่องทาง')}</div></div>
     <div class="sb-kpi k-amber"><div class="sb-kpi-lbl">Active Campaigns</div><div class="sb-kpi-val">${activeCampaigns}</div><div class="sb-kpi-sub">/ ${campaigns.length} ทั้งหมด</div></div>
-    <div class="sb-kpi k-green"><div class="sb-kpi-lbl">B2C Bookings (7d)</div><div class="sb-kpi-val">${b2cBookings.length}</div><div class="sb-kpi-sub">รายการล่าสุด</div></div>
-    <div class="sb-kpi k-blue"><div class="sb-kpi-lbl">B2C Revenue (7d)</div><div class="sb-kpi-val">฿${sbFmtTHB(b2cRev/1000)}K</div><div class="sb-kpi-sub">รวมทุกช่องทาง</div></div>
+    <div class="sb-kpi k-green"><div class="sb-kpi-lbl">B2C Bookings (7d)</div><div class="sb-kpi-val">${b2cBookings.length}</div><div class="sb-kpi-sub">${laT('รายการล่าสุด')}</div></div>
+    <div class="sb-kpi k-blue"><div class="sb-kpi-lbl">B2C Revenue (7d)</div><div class="sb-kpi-val">฿${sbFmtTHB(b2cRev/1000)}K</div><div class="sb-kpi-sub">${laT('รวมทุกช่องทาง')}</div></div>
   `;
 
   // Channel cards
@@ -36737,7 +41661,7 @@ function laAgencyMark(bk, h, opt){
   opt = opt || {};
   var pad = opt.pad || '8px 10px', rad = opt.radius || '8px';
   // §markFit · inline = หดตามโลโก้ (ใช้ตอนอยู่ปนกับป้ายเล็ก ๆ) · ไม่ใส่ = ยืดเต็มช่องตาราง
-  return '<div title="Love Andaman \u00b7 \u0e02\u0e32\u0e22\u0e40\u0e2d\u0e07 (B2C)" style="background:#fff;border:1px solid #E3E6EC;'
+  return '<div title="Love Andaman \u00b7 '+laT('ขายเอง (B2C)')+'" style="background:#fff;border:1px solid #E3E6EC;'
     + (opt.margin===false?'':'margin:2px 3px;') + 'padding:'+pad+';border-radius:'+rad+';'
     + 'box-shadow:0 1px 2px rgba(0,0,0,.08);'
     + (opt.inline ? 'display:inline-flex;vertical-align:middle;' : 'max-width:180px;display:flex;')
@@ -36805,7 +41729,7 @@ function _btOtherSection(date, rows, rids){
     const _card = 'margin:2px 3px;padding:8px 10px;border-radius:8px;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     const _clk  = b.agentId ? ` onclick="event.stopPropagation();bookingV2AgentColorEdit('${esc(b.agentId)}',event)" style="cursor:pointer;` : ' style="';
     const agCell = b2c
-      ? `<div${_clk}background:#fff;border:1px solid #E3E6EC;${_card};display:flex;align-items:center;justify-content:center" title="Love Andaman &middot; ขายเอง (B2C)">${(typeof bookingV2B2CLogo==='function')?bookingV2B2CLogo(20):'Love Andaman'}</div>`
+      ? `<div${_clk}background:#fff;border:1px solid #E3E6EC;${_card};display:flex;align-items:center;justify-content:center" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}">${(typeof bookingV2B2CLogo==='function')?bookingV2B2CLogo(20):'Love Andaman'}</div>`
       : b.agentId
         ? `<div${_clk}background:${_acol};color:${_ink};${_card};font-weight:600" title="${esc(agName)}">${esc(agName)}</div>`
         : `<span class="t2-agency">${esc(agName)}</span>`;
@@ -37682,16 +42606,20 @@ function pfmPrintReport(){
     const ss   = (b.paymentSlips||[]);
     const pays = inv ? (SB_PAYMENTS||[]).filter(p => p.invoiceId===inv.id && p.type!=='refund') : [];
 
-    if(inv){ billed += tot; collected += paid; if(bal<=0) nPaid++; else nUnpaid++; } else { billed += tot; nNoInv++; }
+    /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · นับเฉพาะก้อนที่รับแล้ว ไม่นับส่วนที่เหลือเป็นค้างชำระ */
+    const pre = (typeof pfmIsCreditPrepaid==='function') && pfmIsCreditPrepaid(b);
+    if(pre){ billed += paid; collected += paid; if(bal<=0) nPaid++; }
+    else if(inv){ billed += tot; collected += paid; if(bal<=0) nPaid++; else nUnpaid++; } else { billed += tot; nNoInv++; }
 
     const st = !inv ? {t:'ยังไม่ออกใบ', c:'#5F5E5A', bg:'#F1EFE8'}
+             : (pre && bal>0) ? {t:'จ่ายล่วงหน้าบางส่วน', c:'#854F0B', bg:'#FAEEDA'}
              : bal<=0 ? {t:'จ่ายครบ',   c:'#0F6E56', bg:'#E1F5EE'}
              : paid>0 ? {t:'จ่ายบางส่วน', c:'#854F0B', bg:'#FAEEDA'}
              :          {t:'ค้างชำระ',  c:'#A32D2D', bg:'#FCEBEB'};
 
     rows.push({
       vc: b.voucherRef || b.code || b.id,
-      agent: ag.name || b.agentId || '',
+      agent: (ag.name || b.agentId || '') + (pre ? ' · Invoice จ่ายล่วงหน้า' : ''), pre,
       sales: (typeof pfmSalesName==='function') ? (pfmSalesName(b)||'—') : '—',
       route: R.name || t.routeId || '',
       pax, tot, bal, paid, pct, st,
@@ -37707,7 +42635,7 @@ function pfmPrintReport(){
 
   const outstanding = Math.max(0, billed - collected);
   const collPct = billed>0 ? Math.round(collected/billed*100) : 0;
-  const overdue = rows.filter(r => r.bal>0 && r.st.t!=='ยังไม่ออกใบ').sort((a,b)=>b.bal-a.bal).slice(0,4);
+  const overdue = rows.filter(r => r.bal>0 && !r.pre && r.st.t!=='ยังไม่ออกใบ').sort((a,b)=>b.bal-a.bal).slice(0,4);
 
   // ── page 1 · summary cards + full table ──
   let html = '<section class="pg">'
@@ -38088,6 +43016,388 @@ function laSaveToast(o){
     el.addEventListener('mouseenter',()=>clearTimeout(h));
     el.addEventListener('mouseleave',()=>{ h=setTimeout(kill,1400); });
   }catch(e){ try{ if(o&&o.title) console.log('[toast]',o.title,o.id||'',o.status||''); }catch(_){} }
+}
+
+// ── Quote calculation helpers ──
+/* §internal · ใบของบริษัทเองตั้งราคาเองทุกใบ จึงไม่มี rate type ให้อ้าง
+   แต่ตัวเลือกทริปอ่านรายการเส้นทางจาก rt.routes เท่านั้น · ไม่มี rt = ไม่มีทริปให้เลือกเลย
+   (ผู้ใช้เจอเอง · เลือก agent บริษัทแล้วช่องทริปว่างเปล่า)
+   คืนชุดสังเคราะห์ที่ครอบ "ทุกเส้นทางที่ยังเปิดใช้" · ไม่ได้เอาไปคิดเงิน
+   bookingV2CalcQuote คืนค่าออกก่อนถึงตารางราคาเมื่อ priceMode เป็น manual (ยอดมาจากช่อง Total)
+   ⚠ ต้องครอบทุกเส้นทาง ไม่ใช่ยืม routes ของเรทใดเรทหนึ่ง · วัดข้อมูลจริงแล้วมี 57 เส้นทาง
+     แต่เรทที่มีอยู่ครอบกันแค่ 6 เส้นทาง · แขกบริษัท/PR ไปโปรแกรมไหนก็ได้ ห้ามถูกจำกัด */
+function laManualRT(){
+  var routes=(typeof ROUTES!=='undefined'?ROUTES:[])
+    .filter(function(r){ return r && r.id && r.active!==false; })
+    .map(function(r){ return r.id; });
+  return { id:'__manual__', code:'MANUAL', name:'ราคาใส่มือ · ใบของบริษัท',
+           note:'ชุดสังเคราะห์ ไม่มีตารางราคา · ยอดมาจากช่อง Total ของใบ',
+           color:'#B8860B', active:true, validFrom:'', validTo:'',
+           routes:routes, seatRates:{}, routeBundles:{}, addOns:{} };
+}
+// ── Rate/Contract model · Phase 2: resolve the rate type PER TRIP (promo overlay) ──
+// A time-boxed 'promo' contract (per-route, by TRAVEL date) overrides the agent's base rate for that trip.
+// Returns a PROMO rateTypeId only when an active promo contract covers (route, travelDate); else null → base.
+// No promo contracts exist yet (Phase 3 creates them), so today this always returns null → identical pricing.
+
+/* ══ §b2bPromo · โปรโมชั่นที่ตั้งราคาได้เอง · ก้อน 1 (ทางเดินราคา) ═══════════════════════════════
+   ที่มา: เอกสาร "ข้อเสนอปรับระบบ B2B · ให้ Promotion ตั้งราคาได้เองในหน้า Agent"
+   ปัญหาเดิม · ทุกโปรโมชั่นต้องมี Rate Type รองรับ → Rate Types บวมขึ้นเรื่อย ๆ
+     ราคาสัญญาจริงปนกับราคาโปรชั่วคราว และโปรของเอเย่นต์รายเดียวไปโผล่ให้รายอื่นเห็น
+
+   ใบโปรมีสองโหมด · เลือกได้ต่อใบ
+     priceMode 'rate'  ดึงจาก Rate Type (ของเดิม · ไม่แตะ)
+     priceMode 'own'   กรอกราคาไว้ในใบโปรเอง → c.rates[routeId][zone][paxType]
+
+   ⚠ หัวใจของก้อนนี้อยู่ที่ laPromoRate() · โหมด own ต้องคืน "ออบเจกต์รูปร่างเดียวกับ Rate Type"
+     ไม่ใช่คืนตัวเลขดิบ · เพราะฝั่งที่กินราคาต่อ (bookingV2TripSubtotal · tsNetOf · ใบเสนอราคา ·
+     ใบแจ้งหนี้) อ่าน rt.seatRates[route][zone][paxType] กันหมดทั้งไฟล์
+     คืนรูปเดิมไป = ไม่ต้องไปไล่แก้ที่ไหนอีกเลย
+
+   ⚠ โหมด own ต้องสืบทอด routeBundles / charterRates / addOns จาก Rate Type ตัวหลัก
+     ไม่งั้นโปรที่ตั้งใจแค่ลดราคาที่นั่ง จะทำหางยาวที่พ่วงในราคาหายไปเงียบ ๆ ด้วย
+     ทับเฉพาะ seatRates ของ route ที่โปรกรอกไว้เท่านั้น
+
+   ⚠ ช่วงวันจอง · ของเดิมตอนสร้างใบโปรยัดวันเดียวกันลงทั้งสี่ช่อง
+     (bookFrom=bookTo=travelFrom=travelTo) ถ้าอยู่ ๆ ไปบังคับใช้ช่วงวันจองกับใบเก่า
+     ใบจองที่จองก่อนโปรเริ่มจะหลุดโปรทันที = ราคาของที่ขายไปแล้วเปลี่ยน
+     จึงบังคับเฉพาะใบที่ติดธง bookWin ไว้ (ใบใหม่จากโมดัลใหม่เท่านั้น)
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var LA_PROMO_ZONES = ['PK', 'KL', 'NoTransfer'];
+var LA_PROMO_PAX   = ['adult-thai', 'child-thai', 'adult-fr', 'child-fr'];
+/* §b2bPromo · ซื้อ N แถม 1 · ก้อน 1 เก็บโครงไว้ก่อน ตัวนับอยู่ก้อน 3
+   นับสะสมตลอดช่วงโปร (ไม่ใช่ต่อใบจอง) · ฐานการนับเลือกได้ เพราะดีลจริงมีทั้งสองแบบ */
+var LA_PROMO_BASIS = { adchd:'ผู้ใหญ่ + เด็ก', ad:'เฉพาะผู้ใหญ่' };
+
+/* Rate Type ตัวหลักของเอเย่นต์ · โหมด "ลดจาก Main" ต้องมีของตั้งต้นให้ลด */
+/* ══ §rtSeason · ตารางฤดูกาลของราคามาตรฐาน ═══════════════════════════════════
+   ที่มา · เอเย่นต์ผูกกับ Rate Type ได้ชุดเดียว และ validTo ของชุดนั้นไม่ได้กั้นการคิดเงิน
+   พอถึงวันหมดฤดู ระบบยังคิดราคาฤดูเก่าต่อไปเงียบ ๆ (ดู §rtExpiry ที่เตือนเรื่องนี้)
+
+   ทำไมเป็น "ช่วงวัน" ไม่ใช่ "priority 1/2/3"
+     priority มีไว้แก้ปัญหาการทับกัน · แต่ฤดูกาลไม่ทับกันอยู่แล้ว
+     ช่องที่ไม่จำเป็น คือช่องที่วันหนึ่งจะมีสองใบอ้างว่าตัวเองชนะ
+     ส่วนที่ทับกันจริง ๆ คือ Promotion ซึ่งมี priority ของตัวเองอยู่แล้ว และยังทับข้างบนเหมือนเดิม
+
+   รูปร่าง · a.rateSeasons = [{rt:'<rateTypeId>', from:'YYYY-MM-DD', to:''}]
+     to ว่าง = ไม่มีวันสิ้นสุด · ใบสุดท้ายควรเป็นแบบนี้เสมอ จะได้ไม่มีวันไหนไม่มีราคา
+
+   ⚠ กติกาที่ห้ามเสีย · ไม่ได้ตั้งตาราง = พฤติกรรมเดิมเป๊ะทุกบรรทัด
+     และต่อให้ตั้งแล้วแต่ไม่มีใบไหนคลุมวันนั้น ก็ถอยไปใช้ตัวที่ผูกไว้ ไม่ใช่คืนค่าว่าง
+     ราคามาตรฐานคือตัวสำรองที่ต้องมีเสมอ — นี่คือเหตุผลเดียวกับที่ validTo ไม่ถูกทำเป็นประตู
+   ═══════════════════════════════════════════════════════════════════════════ */
+function laSeasonsOf(a){
+  var s = (a && Array.isArray(a.rateSeasons)) ? a.rateSeasons : [];
+  return s.filter(function(x){ return x && x.rt && x.from; })
+          .slice()
+          .sort(function(x,y){ return String(x.from).localeCompare(String(y.from)); });
+}
+/* ฤดูที่คลุมวันเดินทางนี้ · ไล่จากใบท้ายสุดขึ้นมา ใบที่เริ่มทีหลังและยังคลุมอยู่จึงชนะ
+   (ตารางที่ตั้งถูกจะไม่ทับกันอยู่แล้ว · ข้อนี้ไว้กันกรณีตั้งทับโดยไม่ตั้งใจ ให้ผลเดาได้) */
+function laSeasonAt(a, travelDate){
+  var S = laSeasonsOf(a), d = String(travelDate || '');
+  if(!S.length || !d) return null;
+  for(var i=S.length-1; i>=0; i--){
+    if(d >= S[i].from && (!S[i].to || d <= S[i].to)) return S[i];
+  }
+  return null;
+}
+function laMainRtIdFor(agentId, travelDate){
+  var a = (typeof sbGetAgent === 'function') ? sbGetAgent(agentId) : null;
+  if(!a) return '';
+  var hit = laSeasonAt(a, travelDate);
+  return (hit && hit.rt) || a.rateTypeId || '';
+}
+function laMainRtFor(agentId, travelDate){
+  var id = laMainRtIdFor(agentId, travelDate);
+  if(!id) return null;
+  return ((typeof getRateType === 'function') ? getRateType(id) : null) || null;
+}
+/* ตรวจตารางให้คนที่กำลังตั้ง · คืนรายการปัญหาเป็นข้อความ ไม่ได้ห้ามบันทึก
+   ห้ามบันทึกไม่ได้ เพราะระหว่างพิมพ์ตารางมันจะผิดชั่วคราวเสมอ */
+function laSeasonIssues(a){
+  var S = laSeasonsOf(a), out = [];
+  if(!S.length) return out;
+  for(var i=0;i<S.length;i++){
+    var x = S[i];
+    if(x.to && x.to < x.from) out.push('ช่วงที่ ' + (i+1) + ' · วันจบมาก่อนวันเริ่ม');
+    if(!((typeof getRateType==='function') ? getRateType(x.rt) : null))
+      out.push('ช่วงที่ ' + (i+1) + ' · ไม่พบ Rate Type ที่เลือกไว้');
+    if(i){
+      var p = S[i-1];
+      if(!p.to) out.push('ช่วงที่ ' + i + ' ไม่มีวันสิ้นสุด แต่ยังมีช่วงถัดไป · ช่วงถัดไปจะไม่มีวันได้ใช้');
+      else if(p.to >= x.from) out.push('ช่วงที่ ' + i + ' กับ ' + (i+1) + ' ทับกัน');
+      else if((typeof laDayAfter==='function') && laDayAfter(p.to) !== x.from)
+        out.push('ระหว่างช่วงที่ ' + i + ' กับ ' + (i+1) + ' มีวันที่ไม่มีใบไหนคลุม · วันพวกนั้นจะถอยไปใช้เรทหลัก');
+    }
+  }
+  if(S.length && S[S.length-1].to)
+    out.push('ช่วงสุดท้ายมีวันสิ้นสุด · หลังวันนั้นจะถอยไปใช้เรทหลัก — ปล่อยวันจบว่างไว้ถ้าอยากให้ใช้ยาว');
+  return out;
+}
+function laDayAfter(ymd){
+  var p = String(ymd||'').split('-');
+  if(p.length !== 3) return '';
+  var d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0,10);
+}
+
+function laPromoMainRt(agentId, travelDate){
+  /* §rtSeason · ตั้งตารางฤดูกาลไว้ = ฤดูของวันนั้นเป็นตัวตัดสินของ "ราคาหลัก"
+     ส่วนลดตามสัญญาต้องลดจากราคาหลักของฤดูนั้น ไม่งั้นหน้าหนาวจะลดจากราคาหน้าร้อน
+     ไม่ได้ตั้งตาราง หรือไม่มีวันส่งมา = กติกาเดิมเป๊ะ (สัญญาหลักมาก่อน แล้วค่อยตัวที่ผูกไว้) */
+  if(travelDate){
+    var _a = (typeof sbGetAgent === 'function') ? sbGetAgent(agentId) : null;
+    if(_a && laSeasonsOf(_a).length){
+      var _s = laMainRtFor(agentId, travelDate);
+      if(_s) return _s;
+    }
+  }
+  var main = (typeof SB_CONTRACTS !== 'undefined' && Array.isArray(SB_CONTRACTS))
+    ? SB_CONTRACTS.filter(function(c){ return c && c.agentId === agentId && c.kind === 'main'; })[0] : null;
+  var a = (typeof sbGetAgent === 'function') ? sbGetAgent(agentId) : null;
+  var id = (main && main.rateTypeId) || (a && a.rateTypeId) || '';
+  return ((typeof SB_RATE_TYPES !== 'undefined') ? SB_RATE_TYPES : [])
+    .filter(function(x){ return x.id === id; })[0] || null;
+}
+function laPromoActive(c){
+  return !!(c && c.kind === 'promo'
+    && c.status !== 'void' && c.status !== 'cancelled' && c.status !== 'expired');
+}
+/* ใบโปรทั้งหมดของเอเย่นต์รายนี้ที่ยังไม่ถูกยกเลิก */
+function laPromoList(agentId){
+  if(!agentId || typeof SB_CONTRACTS === 'undefined' || !Array.isArray(SB_CONTRACTS)) return [];
+  return SB_CONTRACTS.filter(function(c){ return c && c.agentId === agentId && laPromoActive(c); });
+}
+/* ใบนี้คลุม route + วันเดินทาง (+ วันจอง ถ้าใบนั้นตั้งช่วงวันจองไว้) หรือเปล่า */
+function laPromoCovers(c, routeId, travelDate, bookDate){
+  if(!c || !routeId || !travelDate) return false;
+  if(c.activeFrom && travelDate < c.activeFrom) return false;
+  if(c.activeTo   && travelDate > c.activeTo)   return false;
+  return (c.programPeriods || []).some(function(p){
+    if(p.routeId !== routeId) return false;
+    if(p.travelFrom && travelDate < p.travelFrom) return false;
+    if(p.travelTo   && travelDate > p.travelTo)   return false;
+    /* §b2bPromo · บังคับช่วงวันจองเฉพาะใบที่ตั้งใจใช้มัน · ใบเก่าไม่มีธงนี้ = ข้าม */
+    if(c.bookWin){
+      if(!bookDate) return false;                 /* ใบโปรขอดูวันจอง แต่ไม่รู้วันจอง = ไม่ให้ผ่าน */
+      if(p.bookFrom && bookDate < p.bookFrom) return false;
+      if(p.bookTo   && bookDate > p.bookTo)   return false;
+    }
+    return true;
+  });
+}
+/* ใบนี้มีราคาของ route นี้จริงไหม · ไม่มี = "ข้าม" ตามกติกาข้อ 2 ไม่ใช่คิดเป็น 0 */
+function laPromoHasRate(c, routeId){
+  if(!c || !routeId) return false;
+  /* §b2bPromo · โหมดลดจาก Main · "มีราคา" = Main มีราคาของ route นี้ให้ลด
+     Main ไม่มี = ไม่มีอะไรให้ลด → ข้าม เหมือนกติกาเดิมทุกประการ */
+  if((c.priceMode || 'rate') === 'discount'){
+    var mr = laPromoMainRt(c.agentId);
+    return !!(mr && mr.seatRates && mr.seatRates[routeId]);
+  }
+  if((c.priceMode || 'rate') === 'own'){
+    var R = (c.rates || {})[routeId];
+    if(!R) return false;
+    return LA_PROMO_ZONES.some(function(z){
+      var Z = R[z]; if(!Z) return false;
+      return LA_PROMO_PAX.some(function(k){ return (+Z[k] || 0) > 0; });
+    });
+  }
+  var rt = (typeof SB_RATE_TYPES !== 'undefined' ? SB_RATE_TYPES : [])
+    .filter(function(x){ return x.id === c.rateTypeId; })[0];
+  return !!(rt && ((rt.seatRates && rt.seatRates[routeId]) || (rt.charterRates && rt.charterRates[routeId])));
+}
+/* ใบที่ชนะ · priority สูงชนะ · เท่ากันเอาใบที่เริ่มทีหลัง · ใบที่ไม่มีราคาของ route นี้ถูกคัดออกก่อน */
+function laPromoFor(agentId, routeId, travelDate, bookDate){
+  var hit = laPromoList(agentId).filter(function(c){
+    return laPromoCovers(c, routeId, travelDate, bookDate) && laPromoHasRate(c, routeId);
+  });
+  if(!hit.length) return null;
+  hit.sort(function(a, b){
+    return (Number(b.priority || 0) - Number(a.priority || 0))
+        || String(b.activeFrom || '').localeCompare(String(a.activeFrom || ''));
+  });
+  return hit[0];
+}
+/* ชุดราคาของใบโปร · คืนรูปร่างเดียวกับ Rate Type เสมอ (ดูหมายเหตุหัวบล็อก) */
+/* ป้ายชื่อโหมด · ใช้ทั้งในหน้าจอและใน Fact sheet ทีหลัง */
+var LA_PROMO_MODE_TXT = { rate:'ตาม Rate Type', own:'ราคาในใบโปร', discount:'ลดจาก Main' };
+function laPromoDiscTxt(c){
+  var D = (c && c.discount) || {};
+  if((c && c.priceMode) !== 'discount') return '';
+  return (D.mode === 'amt') ? ('ลด ' + Math.round(+D.value || 0).toLocaleString() + ' บาท/หัว')
+                            : ('ลด ' + (+D.value || 0) + '%');
+}
+function laPromoRate(c, routeId, baseRt, travelDate){
+  if(!c || !routeId) return null;
+  /* ══ โหมดลดจาก Main ══════════════════════════════════════════════════════
+     คิดจากราคาของ Rate Type ตัวหลักของเอเย่นต์ ไม่ใช่ baseRt ที่คนเรียกส่งมา
+     เพราะ baseRt คือ "ชุดที่ใบจองใบนั้นอ้างอยู่" ซึ่งอาจถูกเปลี่ยนไปแล้ว
+     ส่วนลดตามสัญญาต้องลดจากราคาสัญญาหลักเสมอ ไม่งั้นลดซ้อนลดได้
+     ⚠ ช่องที่เป็น 0 อยู่แล้วแปลว่า "ไม่ขาย" · ลดแล้วต้องยังเป็น 0 ไม่ใช่ติดลบหรือกลายเป็นราคา */
+  if((c.priceMode || 'rate') === 'discount'){
+    var mr = laPromoMainRt(c.agentId, travelDate) || baseRt;   /* §rtSeason */
+    var mz = mr && mr.seatRates && mr.seatRates[routeId];
+    if(!mz) return null;
+    var D = c.discount || {}, isAmt = (D.mode === 'amt'), dv = +D.value || 0;
+    if(!(dv > 0)) return null;
+    var dzn = {};
+    Object.keys(mz).forEach(function(z){
+      var Z = {};
+      Object.keys(mz[z]).forEach(function(k){
+        var v = +mz[z][k] || 0;
+        Z[k] = (v <= 0) ? v
+             : Math.max(0, isAmt ? Math.round(v - dv) : Math.round(v * (1 - dv / 100)));
+      });
+      dzn[z] = Z;
+    });
+    var dout = {};
+    if(baseRt) Object.keys(baseRt).forEach(function(k){ dout[k] = baseRt[k]; });
+    var dsr = {};
+    if(baseRt && baseRt.seatRates) Object.keys(baseRt.seatRates).forEach(function(k){ dsr[k] = baseRt.seatRates[k]; });
+    dsr[routeId] = dzn;
+    dout.seatRates = dsr;
+    dout.id = 'promo:' + (c.id || '');
+    dout.code = c.code || 'PROMO';
+    dout.name = c.note || 'Promotion';
+    dout.__promoId = c.id || '';
+    return dout;
+  }
+  if((c.priceMode || 'rate') !== 'own'){
+    var rt = (typeof SB_RATE_TYPES !== 'undefined' ? SB_RATE_TYPES : [])
+      .filter(function(x){ return x.id === c.rateTypeId; })[0];
+    return rt || null;
+  }
+  var R = (c.rates || {})[routeId]; if(!R) return null;
+  var out = {};
+  if(baseRt) Object.keys(baseRt).forEach(function(k){ out[k] = baseRt[k]; });
+  var sr = {};
+  if(baseRt && baseRt.seatRates) Object.keys(baseRt.seatRates).forEach(function(k){ sr[k] = baseRt.seatRates[k]; });
+  var zn = {}, bz = (baseRt && baseRt.seatRates && baseRt.seatRates[routeId]) || {};
+  /* §b2bPromo · เริ่มจากโซนของเรทมาตรฐานก่อน แล้วค่อยทับเฉพาะโซนที่โปรกรอกไว้
+     ⚠ เคยเขียนผิดเป็น "เอาเฉพาะโซนที่โปรมี" · ผลคือโปรที่ลดเฉพาะโซน PK
+       ทำให้ KL กับ NO TRANSFER กลายเป็นราคา 0 เพราะ bookingV2TripSubtotal
+       เจอ route แต่ไม่เจอโซน แล้วคืน noRate:true total 0
+       วัดเจอตอนเทสจริง: KL ควรได้ 10,200 ตามเรทมาตรฐาน แต่ได้ 0
+     นี่คือกติกา "ข้าม" ข้อเดียวกับที่ใช้ตอนโปรไม่มีราคาของ route — แค่ลงลึกถึงระดับโซน */
+  Object.keys(bz).forEach(function(z){ zn[z] = bz[z]; });
+  LA_PROMO_ZONES.forEach(function(z){
+    if(!R[z]) return;
+    var Z = {};
+    LA_PROMO_PAX.forEach(function(k){ Z[k] = +R[z][k] || 0; });
+    /* §b2bPromo · คีย์ทารกไม่ได้ให้กรอก (ไม่มีใครคิดเงินจากมัน · เป็น 0 มาตลอด)
+       แต่ต้องมีอยู่ในโครง เพราะฟอร์มแก้เรตวาดคอลัมน์นี้ · ตกไปจะเพี้ยนตอนเอาไปโชว์ */
+    ['infant-thai', 'infant-fr'].forEach(function(k){
+      Z[k] = +(((R[z] || {})[k] != null) ? R[z][k] : ((bz[z] || {})[k] || 0)) || 0;
+    });
+    zn[z] = Z;
+  });
+  sr[routeId] = zn;
+  out.seatRates = sr;
+  out.id   = 'promo:' + (c.id || '');
+  out.code = c.code || 'PROMO';
+  out.name = c.note || 'Promotion';
+  out.__promoId = c.id || '';                     /* ใช้ตอนบันทึกลงใบจองในก้อน 4 */
+  return out;
+}
+/* ══ §b2bPromo · ซื้อ N แถม 1 · ตัวนับสะสม ═══════════════════════════════════════════════════
+   ตกลงกับผู้ใช้ไว้ว่า staff เป็นคนเติมหัว FOC เอง · ระบบมีหน้าที่ "นับกับเตือน" เท่านั้น
+   ไม่เติมให้อัตโนมัติ เพราะบางดีลลูกค้าขอเป็นส่วนลดแทนที่นั่ง หรือยกไปรอบหน้า
+   ⚠ นับสะสมตลอดช่วงโปร ไม่ใช่ต่อใบจอง (ผู้ใช้เลือกแบบนี้)
+   ⚠ ฐานการนับเลือกได้ · บางดีลนับผู้ใหญ่+เด็ก บางดีลนับเฉพาะผู้ใหญ่
+   ⚠ "ใช้ไปแล้ว" อนุมานจากหัว FOC ในใบจองที่อยู่ในขอบเขตเดียวกัน
+     ไม่ต้องให้ใครมาติ๊กว่า FOC ใบนี้มาจากโปรตัวไหน — ของแบบนั้นไม่มีใครทำจริง
+     แลกมาด้วยความคลาดเคลื่อนถ้าเอเย่นต์มี FOC จากเหตุอื่นในช่วงเดียวกัน
+     จึงแสดงเป็น "ใช้ไปแล้ว" ไม่ใช่ "หักสิทธิ์" และไม่เอาไปบล็อกอะไรทั้งนั้น */
+function laPromoBonus(c){
+  var B = c && c.bonus;
+  return (B && B.on && (+B.buy || 0) > 0) ? B : null;
+}
+function laPromoStat(c){
+  var B = laPromoBonus(c); if(!B) return null;
+  var buy = +B.buy || 0, basis = B.basis || 'adchd';
+  var PR = {}; (c.programPeriods || []).forEach(function(p){ PR[p.routeId] = p; });
+  var sold = 0, foc = 0, nbk = 0, seen = {};
+  ((typeof SB_BOOKINGS !== 'undefined') ? SB_BOOKINGS : []).forEach(function(b){
+    if(!b || b.agentId !== c.agentId) return;
+    if(['cancelled', 'rejected', 'cancelled_weather'].indexOf(b.status) >= 0) return;
+    (b.trips || []).forEach(function(t){
+      var p = PR[t.routeId]; if(!p) return;
+      if(p.travelFrom && t.date < p.travelFrom) return;
+      if(p.travelTo   && t.date > p.travelTo)   return;
+      if(c.bookWin){
+        var bd = b.bookingDate || ''; if(!bd) return;
+        if(p.bookFrom && bd < p.bookFrom) return;
+        if(p.bookTo   && bd > p.bookTo)   return;
+      }
+      var px = t.pax || {};
+      var n = (+px.ad || 0) + (+px.ad_fr || 0) + (+px.ad_th || 0);
+      if(basis === 'adchd') n += (+px.chd || 0) + (+px.chd_fr || 0) + (+px.chd_th || 0);
+      sold += n;
+      foc  += (+px.foc || 0) + (+px.foc_fr || 0) + (+px.foc_th || 0);
+      if(!seen[b.id]){ seen[b.id] = 1; nbk++; }
+    });
+  });
+  var earned = buy ? Math.floor(sold / buy) : 0;
+  return { buy:buy, basis:basis, basisTxt:(LA_PROMO_BASIS[basis] || basis),
+           sold:sold, bookings:nbk, earned:earned, used:foc,
+           left:Math.max(0, earned - foc), over:Math.max(0, foc - earned),
+           toNext: (!buy || (sold % buy === 0 && sold > 0)) ? 0 : (buy - (sold % buy)),
+           pct: buy ? Math.round((sold % buy) / buy * 100) : 0 };
+}
+/* ══ §b2bPromo ก้อน 4 · ล็อกใบโปรที่ใช้จริงไว้กับทริป ═══════════════════════════════════════════
+   เอกสารข้อ 4: "บุ๊กกิ้งที่ขายไปแล้ว ต้องล็อกราคา ณ วันที่ขาย"
+   ยอดเงินล็อกอยู่แล้ว (priceBreakdown เก็บตัวเลขไว้ตอนกดบันทึก) แต่ยังไม่มีใครรู้ว่า
+   "ใบนี้ขายด้วยโปรตัวไหน" · พอไปแก้หรือลบใบโปรทีหลัง จะไล่กลับไม่ได้ว่าตอนนั้นใช้อะไร
+   และเลขทานในหน้า Travel Summary จะไปหยิบโปรที่แอคทีฟ "วันนี้" มาเทียบ ซึ่งคนละใบกัน
+   → เก็บ t.promoId ไว้ตอน commit · ทุกคนที่อยากย้อนดูอ่านจากตรงนี้ ไม่ต้อง resolve ใหม่
+   ⚠ อ่านใบโปรตรง ๆ ไม่กรองสถานะ · ใบที่ถูกยกเลิกหรือหมดอายุไปแล้วก็ยังต้องอ่านเจอ
+     ไม่งั้นย้อนดูใบจองเก่าจะกลายเป็น "ไม่มีโปร" ทั้งที่ตอนขายมี */
+function laPromoById(id){
+  if(!id || typeof SB_CONTRACTS === 'undefined' || !Array.isArray(SB_CONTRACTS)) return null;
+  return SB_CONTRACTS.filter(function(c){ return c && c.id === id; })[0] || null;
+}
+/* ชื่อที่เอาไปโชว์ในบิล/รายงาน · ย่อพอให้รู้ว่าใบไหน */
+function laPromoLabel(c){
+  if(!c) return '';
+  var t = c.note || c.version || c.id || 'Promotion';
+  var pm = c.priceMode || 'rate';
+  if(pm === 'discount') t += ' · ' + laPromoDiscTxt(c);
+  return t;
+}
+/* ชุดราคาของทริปที่ "ขายไปแล้ว" · ยึดใบโปรที่ล็อกไว้ ไม่ resolve ใหม่
+   ไม่มี promoId (ใบเก่าก่อนก้อนนี้) = ถอยไป resolve ตามวันที่ เหมือนพฤติกรรมเดิมเป๊ะ */
+function laPromoRateSold(bk, trip, baseRt){
+  if(trip && trip.promoId){
+    var c = laPromoById(trip.promoId);
+    if(c){ var rt = laPromoRate(c, trip.routeId, baseRt, trip.date); if(rt) return { rt:rt, promo:c, sold:true }; }
+    return null;                                  /* ล็อกไว้แต่ใบหายไป = ไม่เดาใหม่ */
+  }
+  if(!bk || !bk.agentId || !trip || !trip.routeId || !trip.date) return null;
+  var h = laPromoRateFor(bk.agentId, trip.routeId, trip.date, bk.bookingDate || '', baseRt);
+  return h ? { rt:h.rt, promo:h.promo, sold:false } : null;
+}
+/* ทางเข้าเดียวสำหรับทุกคนที่อยากรู้ว่า "ทริปนี้ใช้ราคาชุดไหน"
+   คืน null = ไม่มีโปรทับ ให้ใช้ราคาฐานตามเดิม */
+function laPromoRateFor(agentId, routeId, travelDate, bookDate, baseRt){
+  var c = laPromoFor(agentId, routeId, travelDate, bookDate);
+  if(!c) return null;
+  var rt = laPromoRate(c, routeId, baseRt, travelDate);
+  if(!rt) return null;
+  return { rt:rt, promo:c };
+}
+function _bkV2ResolveRateTypeOld(agentId, routeId, travelDate){
+  if(!agentId || !routeId || !travelDate || typeof SB_CONTRACTS==='undefined' || !Array.isArray(SB_CONTRACTS)) return null;
+  const promos = SB_CONTRACTS.filter(c => c && c.agentId===agentId && c.kind==='promo'
+    && c.status!=='void' && c.status!=='cancelled' && c.status!=='expired'
+    && (!c.activeFrom || travelDate>=c.activeFrom) && (!c.activeTo || travelDate<=c.activeTo)
+    && (c.programPeriods||[]).some(p => p.routeId===routeId
+         && (!p.travelFrom || travelDate>=p.travelFrom) && (!p.travelTo || travelDate<=p.travelTo)));
+  if(!promos.length) return null;
+  promos.sort((a,b) => (Number(b.priority||0)-Number(a.priority||0)) || String(b.activeFrom||'').localeCompare(String(a.activeFrom||'')));
+  return promos[0].rateTypeId || null;
 }
 try{ bookingV2LoadFromOpsBackend(); }catch(e){}
 // Cancellation modal · charge decision (none / full / partial) + required reason
@@ -39297,7 +44607,12 @@ function poKindSync(){
   }); }catch(_){}
 }
 /* ถัง · เรียงตามลำดับที่โชว์บนแถบสัดส่วน */
+/* §poShip · "ประจำเรือ" เป็นถังของตัวเอง ไม่ใช่ถัง "อยู่กับเรือ"
+   อยู่กับเรือ = เบิกเช้าคืนเย็น ยังไม่กลับ → ต้องตามเก็บ
+   ประจำเรือ  = ยกไปติดตั้งบนลำนั้นถาวร → ไม่ต้องตามเก็บ แต่ยังเป็นของท่า
+   สองอันนี้เคยไม่มีที่แยก คนหน้าท่าเลยใช้ "ปรับยอด" แทน แล้วร่องรอยหายไปทั้งเส้น */
 var PO_BUCKET=[{k:'ready',t:'พร้อมใช้',c:'#1C7A4E'},{k:'onboat',t:'อยู่กับเรือ',c:'#185FA5'},
+               {k:'onship',t:'ประจำเรือ',c:'#0E7490'},
                {k:'dirty',t:'รอส่งซัก',c:'#B4560A'},{k:'laundry',t:'อยู่ร้านซัก',c:'#8A6D1F'},
                {k:'repair',t:'รอซ่อม',c:'#8E5BB5'},{k:'gone',t:'ตัดทิ้ง/หาย (สะสม)',c:'#9A9A93'}];
 /* ประเภทของที่ขาดตอนปิดยอด · ต้องเลือกให้ครบทุกชิ้นก่อนปิดได้ */
@@ -39443,8 +44758,8 @@ function poMoves(f){ return (PIER_MOVES||[]).filter(f||function(){return true;})
 
 /* ── ยอดคงเหลือ · คำนวณจาก moves ทั้งหมด ไม่เคยเก็บเป็นตัวเลขนิ่ง ── */
 function poBal(itemId){
-  var it=poItem(itemId); if(!it) return {ready:0,onboat:0,dirty:0,laundry:0,repair:0,gone:0,inhand:0};
-  var b={ready:poNum(it.total),onboat:0,dirty:0,laundry:0,repair:0,gone:0};
+  var it=poItem(itemId); if(!it) return {ready:0,onboat:0,onship:0,dirty:0,laundry:0,repair:0,gone:0,inhand:0};
+  var b={ready:poNum(it.total),onboat:0,onship:0,dirty:0,laundry:0,repair:0,gone:0};
   var isTowel=(it.kind==='towel');
   (PIER_MOVES||[]).forEach(function(m){
     if(m.itemId!==itemId) return;
@@ -39459,9 +44774,13 @@ function poBal(itemId){
       case 'laundry_out': b.dirty-=q; b.laundry+=q; break;
       case 'laundry_in':  b.laundry-=q; b.ready+=q; break;
       case 'adjust':      b.ready+=q; break;
+      /* §poShip · ลงประจำเรือ = ออกจากคลังพร้อมใช้ แต่ยังเป็นของท่า
+         ไม่เข้า onboat เพราะ onboat คือของที่ต้องได้คืนวันนี้ · อันนี้ไม่ต้องคืน */
+      case 'assign':      b.ready-=q; b.onship+=q; break;
+      case 'unassign':    b.onship-=q; b.ready+=q; break;
     }
   });
-  b.inhand=b.ready+b.onboat+b.dirty+b.laundry+b.repair;
+  b.inhand=b.ready+b.onboat+b.onship+b.dirty+b.laundry+b.repair;
   return b;
 }
 /* §poCapReady · ยอดพร้อมใช้ที่เอาไปโชว์ · ไม่เกินทะเบียนของชิ้นนั้น
@@ -39741,7 +45060,9 @@ function poCSS(){
      บัตร/พาส · ผู้ใหญ่ · เด็ก · เด็กเล็ก · หมายเหตุ · Code)
      เส้นตารางครบ หัวตรึง แถบคั่นรายลำตรึงชั้นสอง · เลขที่เริ่มใหม่ทุกลำ
      เพราะแบบฟอร์มของด่านเป็นใบต่อลำ                                      */
-  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - 260px)}'
+  /* §pkTop · กล่องชีทมี overflow ของตัวเอง · หัวตารางจึงตรึงกับขอบบนของกล่องนี้ ไม่ใช่ขอบจอ
+     ความสูงจึงต้องหักความสูงแถบบนที่วัดจริง ไม่ใช่เลขตายตัว 260 */
+  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - var(--pk-top,0px) - 150px)}'
   +H+' .pk-sheet::-webkit-scrollbar{width:10px;height:10px}'
   +H+' .pk-sheet::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:6px}'
   /* ล็อกความกว้างทุกคอลัมน์ · ของเดิมปล่อยให้ auto ช่องชื่อเลยกินที่ไปเกือบครึ่งจอ
@@ -39755,6 +45076,7 @@ function poCSS(){
   +H+' .pk-sheet col.c-g{width:58px}'
   +H+' .pk-sheet col.c-nt{width:auto}'   /* ช่องหมายเหตุเป็นตัวยืด เหมือนแบบฟอร์มของด่าน */
   +H+' .pk-sheet col.c-cd{width:148px}'
+  /* §pkTop · ตรึงที่ขอบบนของกล่องชีท · กล่องนี้เลื่อนของมันเอง ถ้าใส่ --pk-top หัวจะลอยลงมาทับสามแถวแรก */
   +H+' .pk-sheet thead th{position:sticky;top:0;z-index:3;background:#F1F5F9;color:#334155;'
      +'font-size:11px;font-weight:800;text-align:left;padding:9px 10px;white-space:nowrap;'
      +'border-bottom:1px solid #CBD5E1;border-right:1px solid #E2E8F0;'
@@ -39830,6 +45152,83 @@ function poCSS(){
   /* ══ แถบสรุปทั้งวัน · แทนการ์ด KPI 5 ใบที่กินที่ไปครึ่งจอ ════════════
      ตัวเลขพวกนี้เป็นของ "ทั้งวัน" ซึ่งดูแค่ผ่านตา ไม่ได้เอาไปกรอกอะไร
      จึงไม่คุ้มกับพื้นที่ 5 การ์ด · ยอดรายประเภทที่ต้องใช้จริงอยู่บนหัวลำแล้ว */
+  /* §pkTop · แถบบนตรึง · ชิปเส้นทาง + แถบสรุปวัน · หัวเรื่องกับปุ่มวันที่เลื่อนผ่านไป */
+  +H+' .pk-stick{position:sticky;top:0;z-index:40;background:#F7F8FA;'
+    +'padding:8px 0 4px;margin:10px 0 4px;box-shadow:0 8px 12px -11px rgba(15,23,42,.45)}'
+  +H+' .pk-rts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
+  +H+' .pk-rt{--rc:#94A3B8;display:inline-flex;align-items:center;gap:7px;background:#fff;'
+    +'border:1px solid #E2E8F0;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:700;'
+    +'color:#334155;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap}'
+  +H+' .pk-rt:hover{border-color:var(--rc)}'
+  +H+' .pk-rt.on{background:var(--rc);border-color:var(--rc);color:#fff}'
+  +H+' .pk-rt .d{width:7px;height:7px;border-radius:50%;background:var(--rc);flex-shrink:0}'
+  +H+' .pk-rt.on .d{background:rgba(255,255,255,.85)}'
+  +H+' .pk-rt b{font-family:\'DM Mono\',monospace;font-size:12px;font-weight:600}'
+  +H+' .pk-rt u{text-decoration:none;font-size:10px;font-weight:800;background:#FEF3C7;color:#92400E;'
+    +'border-radius:6px;padding:0 5px}'
+  +H+' .pk-rt.on u{background:rgba(255,255,255,.28);color:#fff}'
+  +H+' .pk-rtf{font-size:11px;color:#64748B;margin-left:2px}'
+  +H+' .pk-mon{font-family:\'DM Mono\',monospace;font-size:14px;font-weight:600;color:#1E293B;padding:0 4px}'
+  /* §pkOv · ตารางภาพรวมทั้งเดือน */
+  /* §pkOv · ห้ามใส่ overflow:hidden ที่การ์ดนี้
+     overflow ที่ไม่ใช่ visible ทำให้การ์ดกลายเป็นกรอบอ้างของ sticky
+     หัวตารางจะถูกดันลงมา --pk-top จากขอบบนการ์ด แล้วไปทับแถววันที่ 1
+     เจอมาแล้วตอนทำ · วันที่ 1 หายไปทั้งแถวโดยไม่มีอะไรบอก */
+  +H+' .po-card.pk-ovc{padding:0;overflow:visible}'
+  /* §pkTop · การ์ดชีทรายวันก็ติด overflow:hidden ของ .po-card เหมือนกัน
+     หัวตารางลอยลงมาเท่า --pk-top จากขอบบนการ์ด แล้วไปทับแถวที่ 3
+     ผู้ใช้ส่งรูปมา · เห็นแถว 1,2 แล้วข้ามไป 4 โดยไม่มีอะไรบอกว่าแถว 3 หายไปไหน */
+  /* \u00a7pkOv2 \u00b7 \u0e15\u0e32\u0e23\u0e32\u0e07\u0e41\u0e1a\u0e1a\u0e0a\u0e35\u0e17 \u00b7 \u0e01\u0e27\u0e49\u0e32\u0e07\u0e40\u0e01\u0e34\u0e19\u0e08\u0e2d \u0e40\u0e25\u0e37\u0e48\u0e2d\u0e19\u0e41\u0e19\u0e27\u0e19\u0e2d\u0e19\u0e43\u0e19\u0e01\u0e25\u0e48\u0e2d\u0e07\u0e02\u0e2d\u0e07\u0e21\u0e31\u0e19\u0e40\u0e2d\u0e07
+     \u0e2a\u0e32\u0e21\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c\u0e0b\u0e49\u0e32\u0e22 (\u0e27\u0e31\u0e19/\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07/\u0e40\u0e23\u0e37\u0e2d) \u0e15\u0e23\u0e36\u0e07\u0e44\u0e27\u0e49 \u0e08\u0e30\u0e44\u0e14\u0e49\u0e23\u0e39\u0e49\u0e27\u0e48\u0e32\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e48\u0e2d\u0e19\u0e44\u0e1b\u0e40\u0e1b\u0e47\u0e19\u0e02\u0e2d\u0e07\u0e25\u0e33\u0e44\u0e2b\u0e19 */
+  /* §pkOv2 · ห้ามครอบตารางด้วยกล่องที่มี overflow เพื่อเลื่อนแนวนอน
+     overflow-x:auto ทำให้ overflow-y กลายเป็น auto ตาม · sticky แนวตั้งผูกกับกล่องแทนหน้า
+     หัวตารางจึงไปทับแถววันที่ 1 แบบเดียวกับที่เกิดกับ .po-card · พลาดซ้ำที่สามในงานเดียวกัน
+     ตารางกว้างเกินจอก็ให้หน้าเลื่อนแทน เหมือนตารางหน้า By trip */
+  +H+' .pk-ov{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px;min-width:1180px;width:100%}'
+  +H+' .pk-ov col.o-dt{width:66px} .pk-ov col.o-rt{width:212px} .pk-ov col.o-bt{width:128px}'
+  +H+' .pk-ov col.o-n{width:52px} .pk-ov col.o-s{width:64px} .pk-ov col.o-d{width:70px}'
+  +H+' .pk-ov th{position:sticky;background:#F1F5F9;color:#334155;font-size:9.5px;font-weight:800;'
+    +'letter-spacing:.04em;text-align:left;padding:6px 8px;border-bottom:1px solid #E2E8F0;white-space:nowrap;overflow:hidden}'
+  +H+' .pk-ov thead tr.g th{top:var(--pk-top,0px);z-index:6}'
+  +H+' .pk-ov thead tr.s th{top:calc(var(--pk-top,0px) + 26px);z-index:6}'
+  +H+' .pk-ov th.gh{text-align:center;font-size:10px;letter-spacing:.06em}'
+  +H+' .pk-ov th.gh.th{background:#E6F5EE;color:#0F6E56} .pk-ov th.gh.fr{background:#E7EFFA;color:#12518F}'
+  +H+' .pk-ov th.gh.tk{background:#FBF1E0;color:#8A5B00}'
+  +H+' .pk-ov th.n,.pk-ov td.n{text-align:right;font-family:\'DM Mono\',monospace}'
+  +H+' .pk-ov th.sum,.pk-ov td.sum{background:#F8FAFC;font-weight:700}'
+  +H+' .pk-ov th.sep,.pk-ov td.sep{border-left:2px solid #E2E8F0}'
+  +H+' .pk-ov td{padding:5px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle;overflow:hidden;white-space:nowrap}'
+  +H+' .pk-ov td.n .z{color:#CBD5E1}'
+  +H+' .pk-ov tr.pk-ovd>td{background:#FBFCFE;border-top:1px solid #E2E8F0;font-weight:700;color:#0F172A;cursor:pointer}'
+  +H+' .pk-ov tr.pk-ovd>td.sum{background:#EEF2F7}'
+  +H+' .pk-ov tr.pk-ovd:hover>td{background:#EFF6FF}'
+  +H+' .pk-ov tr.pk-ovd.sun>td{background:#FEF7F5}'
+  +H+' .pk-ov tr.pk-ovd.empty>td{background:#fff;color:#CBD5E1;font-weight:500;cursor:default}'
+  +H+' .pk-ov td.dt b{font-family:\'DM Mono\',monospace;font-size:14px}'
+  +H+' .pk-ov td.dt i{font-style:normal;font-size:10px;color:#94A3B8;margin-left:4px;font-weight:600}'
+  +H+' .pk-ov tr.pk-ovbt>td{cursor:pointer;color:#475569;font-weight:500}'
+  +H+' .pk-ov tr.pk-ovbt:hover>td{background:#F8FAFC}'
+  +H+' .pk-ov tr.pk-ovbt td.rt .d{display:inline-block;width:7px;height:7px;border-radius:50%;'
+    +'background:var(--rc,#94A3B8);margin-right:6px;vertical-align:middle}'
+  +H+' .pk-ov td.rt,.pk-ov td.bt{text-overflow:ellipsis}'
+  +H+' .pk-ov td.bt i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:10px;color:#94A3B8;margin-left:5px}'
+  +H+' .pk-ov td.n.off{background:#FFF7E6;color:#8A5B00;font-weight:700}'
+  +H+' .pk-ov td.n.d{font-weight:700}'
+  +H+' .pk-ov td.n.d.short{color:#A32D2D;background:#FDECEA}'
+  +H+' .pk-ov td.n.d.over{color:#0F6E56;background:#E9F6F0}'
+  +H+' .pk-ov tfoot td{position:sticky;bottom:0;background:#0F172A;color:#fff;font-weight:700;'
+    +'border-top:2px solid #0F172A;padding:8px;z-index:5}'
+  +H+' .pk-ov tfoot td.sum{background:#1E293B}'
+  +H+' .pk-ov tfoot td.n .z{color:#64748B}'
+  +H+' .pk-ov tfoot td.n.off{background:#3F2E12;color:#FBBF24}'
+  +H+' .pk-ov tfoot td.n.d.short{background:#3A1A18;color:#FCA5A5}'
+  +H+' .pk-ov tfoot td.n.d.over{background:#12301F;color:#86EFAC}'
+  +H+' .pk-ovn{padding:10px 14px;font-size:11px;color:#64748B;background:#F8FAFC;border-top:1px solid #F1F5F9;line-height:1.7}'
+
+  +H+' .pk-rtf b{color:#185FA5;cursor:pointer;text-decoration:underline;font-weight:700}'
+  +H+' .pk-rts .sp{flex:1}'
+  +H+' .pk-ovbn{--rc:#0F172A;border-color:#CBD5E1}'
+  +H+' .pk-ovbn:hover{background:#0F172A;border-color:#0F172A;color:#fff}'
   +H+' .pk-day{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}'
   /* §pkTk8 · ย้ายลงท้ายหน้าแล้ว · ทำให้จางลงด้วย จะได้ไม่แย่งสายตากับตารางรายชื่อ */
   +H+' .pk-tyb{margin-top:26px;opacity:.72}'
@@ -40086,6 +45485,9 @@ function poCSS(){
      สิ่งที่ต้องทำได้โดยไม่ปัดจอ: อ่านว่าต้องซื้อรหัสไหนกี่ใบ · กรอกชื่อที่ขาด
      ของเดิมทั้งสองอย่างซ่อนอยู่หลังการเลื่อนแนวนอน */
   +'@media(max-width:820px){'
+    /* §mobUnstick · แถบชิป+สรุปวันสูงเกือบ 270px · บนจอมือถือ 664px คือกินจอไปครึ่ง
+       ตรึงไว้ก็ไม่เหลือที่ให้อ่านชื่อ · บนจอแคบจึงปลดตรึง ให้เลื่อนผ่านไปตามปกติ */
+    +H+' .pk-stick{position:static;max-height:none}'
     /* ── แถบหัว ── ของเดิมพันกันจนปุ่มย้อนวันกับปุ่มถัดไปอยู่คนละแถว */
     +H+' .po-h{margin-bottom:14px;gap:10px}'
     +H+' .po-h h1{font-size:19px;line-height:1.3}'
@@ -42409,6 +47811,9 @@ function pkTkData(date, pier){
     });
     g.boats.push({ bid:B.bid, boat:B.boat, dep:B.dep, cnt:cnt, tot:tot,
                    cntPc:cntPc, totPc:totPc, pcDiff:(totPc!==tot),
+                   /* §pkOv2 · หัวคนที่ไปจริง แยกสัญชาติ×ประเภท · ชุดเดียวกับที่ cntPc ใช้
+                      เอามาจาก pcPax ตัวเดียวกับหน้าเงินสดย่อย · ไม่นับซ้ำ */
+                   pax8:((P&&P.hasNat)?P.n:(P||{})),
                    booked:(+B.pax||0),
                    people:people, miss:miss, missTot:missTot,
                    orphan:orphan,          /* §pkTk9 · ชื่อที่เกินหัวหลังยกเลิก */
@@ -42421,6 +47826,146 @@ function pkTkData(date, pier){
    คนใช้เอาชีทนี้ไปยื่นที่ด่าน · จึงทำให้หน้าตาเหมือนสิ่งที่เขาถืออยู่จริง
    หัวตารางตรึงไว้ · แถวสลับสี · ตัวเลขชิดขวา · เลือกคลุมแล้ว copy ไปวางใน Excel ได้เลย
    แถวหัวข้อของแต่ละลำคั่นกลุ่มไว้ พร้อมยอดของลำนั้น                             */
+/* §pkTop (2026-09-28) · แถบบนตรึงไว้ + ชิปเส้นทางกดดูทีละเส้น
+   ที่มา · ผู้ใช้เอง · หน้านี้เลื่อนยาวมาก (44 แถวต่อลำ) เลื่อนไปแล้วไม่รู้ว่าอยู่ลำไหน
+   และวันที่มีหลายเส้นทาง ต้องเลื่อนผ่านทั้งเส้นอื่นกว่าจะถึงเส้นที่ต้องดู
+   ชิปเส้นทาง กดแล้วเห็นเฉพาะเส้นนั้น · กดซ้ำเอาตัวกรองออก
+   ตัวกรองเก็บไว้ในหน่วยความจำเท่านั้น · เปลี่ยนวันแล้วเส้นนั้นอาจไม่มี จึงล้างให้เองตอนวาด
+   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName เท่านั้น (ดู CLAUDE.md) */
+var _pkRoute = '';
+/* §pkOv (2026-09-28) · หน้าภาพรวมทั้งเดือน · เรียงวัน ในวันแยกเรือ
+   ที่มา · ผู้ใช้ขอเอง · "เพิ่มหน้า Overview เพื่อให้เห็นภาพรวมของทั้งเดือน
+   เรียงวัน แยกเรือ จำนวน ลค ที่เดินทาง / จำนวน ลค ที่ทำตั๋ว"
+   สามตัวเลข · เดินทาง (หัวที่จ่ายจริง) / ต้องออกตั๋ว / มีชื่อแล้ว
+   อ่านทั้งเดือนผ่าน pkTkData() ตัวเดียวกับหน้ารายวัน · ไม่เขียนสูตรนับซ้ำ
+   ถ้าเขียนซ้ำ วันหนึ่งสองหน้าจะตอบไม่เท่ากันโดยไม่มีใครรู้ · ช้ากว่าแต่ตรงกันเสมอ */
+var _pkView = 'day';     /* day | ov */
+var _pkMon  = '';        /* 'YYYY-MM' · ว่าง = เอาเดือนของวันที่เลือกอยู่ */
+function pkOvMon(){ return _pkMon || String(_poDate||'').slice(0,7); }
+function pkSetView(v){ _pkView=(v==='ov')?'ov':'day'; if(_pkView==='ov') _pkMon=pkOvMon(); renderPierPark(); }
+function pkMonShift(n){
+  var m=pkOvMon(), y=+m.slice(0,4), mo=+m.slice(5,7)-1+(+n||0);
+  var d=new Date(y, mo, 1);
+  _pkMon = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderPierPark();
+}
+function pkOvGoDay(ds){ _pkView='day'; _pkRoute=''; if(typeof pkSetDate==='function') pkSetDate(ds); else renderPierPark(); }
+
+function pkRoutePick(rid){
+  _pkRoute = (_pkRoute===rid) ? '' : String(rid||'');
+  renderPierPark();
+}
+/* §pkOv · ตารางภาพรวมทั้งเดือน · แถวใหญ่ = วัน · แถวเล็ก = เรือแต่ละลำในวันนั้น
+   สามตัวเลขต่อลำ · เดินทาง (booked · หัวที่จ่ายจริง) / ต้องออกตั๋ว (tot) / มีชื่อแล้ว (tot-missTot)
+   สองตัวแรกต่างกันได้โดยไม่ผิด · คนที่จองแต่ไม่มาไม่ต้องซื้อตั๋วให้
+   แต่ "มีชื่อแล้ว" น้อยกว่า "ต้องออกตั๋ว" เมื่อไหร่ แปลว่าวันนั้นยังค้างงาน */
+function pkOvBody(){
+  var m=pkOvMon(), y=+m.slice(0,4), mo=+m.slice(5,7);
+  var last=new Date(y, mo, 0).getDate();
+  var WD=['\u0e2d\u0e32','\u0e08','\u0e2d','\u0e1e','\u0e1e\u0e24','\u0e28','\u0e2a'];
+  var TY=pkTypes();
+  /* \u0e0a\u0e48\u0e2d\u0e07\u0e2b\u0e31\u0e27\u0e04\u0e19\u0e17\u0e35\u0e48\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07 \u00b7 \u0e2a\u0e31\u0e0d\u0e0a\u0e32\u0e15\u0e34 \u00d7 \u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17 \u00b7 \u0e40\u0e23\u0e35\u0e22\u0e07\u0e15\u0e32\u0e21\u0e17\u0e35\u0e48\u0e14\u0e48\u0e32\u0e19\u0e2d\u0e48\u0e32\u0e19 */
+  var GO=[['ad_th','AD'],['chd_th','CHD'],['inf_th','INF'],['foc_th','FOC'],
+          ['ad_fr','AD'],['chd_fr','CHD'],['inf_fr','INF'],['foc_fr','FOC']];
+  var zGo=function(){ var o={}; GO.forEach(function(g){ o[g[0]]=0; }); return o; };
+  var zTy=function(){ var o={}; TY.forEach(function(T){ o[T.k]=0; }); return o; };
+  var n0=function(v){ return v?String(v):'<span class="z">0</span>'; };
+  var dcell=function(d){
+    if(!d) return '<td class="n d">\u2014</td>';
+    return '<td class="n d '+(d<0?'short':'over')+'" title="'+(d<0?'\u0e0b\u0e37\u0e49\u0e2d\u0e02\u0e32\u0e14 ':'\u0e0b\u0e37\u0e49\u0e2d\u0e40\u0e01\u0e34\u0e19 ')+Math.abs(d)+' \u0e43\u0e1a">'
+      +(d<0?'\u2212':'+')+Math.abs(d)+'</td>';
+  };
+  var cells=function(go,ty,goT,tyT){
+    var h='';
+    GO.forEach(function(g,i){ h+='<td class="n'+(i===3?' sep':'')+'">'+n0(go[g[0]])+'</td>'; });
+    h+='<td class="n sum">'+goT+'</td>';
+    /* \u0e0a\u0e48\u0e2d\u0e07\u0e15\u0e31\u0e4b\u0e27 \u00b7 \u0e40\u0e17\u0e35\u0e22\u0e1a\u0e01\u0e31\u0e1a\u0e2b\u0e31\u0e27\u0e17\u0e35\u0e48\u0e04\u0e27\u0e23\u0e2d\u0e2d\u0e01\u0e02\u0e2d\u0e07\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e19\u0e31\u0e49\u0e19 \u0e15\u0e48\u0e32\u0e07\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e44\u0e2b\u0e23\u0e04\u0e37\u0e2d\u0e21\u0e35\u0e04\u0e19\u0e22\u0e49\u0e32\u0e22\u0e01\u0e2d\u0e07 */
+    TY.forEach(function(T,i){
+      var v=ty[T.k]||0, w=(ty.__pc&&ty.__pc[T.k])||0, off=(w!==v);
+      h+='<td class="n'+(i===0?' sep':'')+(off?' off':'')+'"'
+        +(off?(' title="\u0e04\u0e27\u0e23\u0e2d\u0e2d\u0e01 '+w+' \u00b7 \u0e43\u0e19\u0e0a\u0e35\u0e17 '+v+' \u00b7 \u0e21\u0e35\u0e04\u0e19\u0e22\u0e49\u0e32\u0e22\u0e01\u0e2d\u0e07\u0e40\u0e2d\u0e07"'):'')
+        +'>'+n0(v)+'</td>';
+    });
+    h+='<td class="n sum">'+tyT+'</td>';
+    h+=dcell(tyT-goT);
+    return h;
+  };
+
+  var rows='', T={go:zGo(), ty:zTy(), pc:zTy(), goT:0, tyT:0, boat:0, day:0};
+  for(var i=1;i<=last;i++){
+    var ds=y+'-'+String(mo).padStart(2,'0')+'-'+String(i).padStart(2,'0');
+    var D=[]; try{ D=pkTkData(ds,_poPier)||[]; }catch(e){ D=[]; }
+    var flat=[]; D.forEach(function(g){ (g.boats||[]).forEach(function(B){ flat.push({g:g,B:B}); }); });
+    var dd=new Date(y, mo-1, i), wd=WD[dd.getDay()], isSun=(dd.getDay()===0);
+    var NC=3+GO.length+1+TY.length+1+1;
+    if(!flat.length){
+      rows+='<tr class="pk-ovd empty'+(isSun?' sun':'')+'"><td class="dt"><b>'+i+'</b><i>'+wd+'</i></td>'
+        +'<td class="rt" colspan="'+(NC-1)+'">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e23\u0e37\u0e2d\u0e2d\u0e2d\u0e01</td></tr>';
+      continue;
+    }
+    var dGo=zGo(), dTy=zTy(), dPc=zTy(), dGoT=0, dTyT=0;
+    flat.forEach(function(x){
+      var B=x.B, p8=B.pax8||{};
+      GO.forEach(function(g){ dGo[g[0]]+=(+p8[g[0]]||0); });
+      TY.forEach(function(Ty){ dTy[Ty.k]+=(+(B.cnt||{})[Ty.k]||0); dPc[Ty.k]+=(+(B.cntPc||{})[Ty.k]||0); });
+      dGoT+=(+B.totPc||0); dTyT+=B.tot;
+    });
+    GO.forEach(function(g){ T.go[g[0]]+=dGo[g[0]]; });
+    TY.forEach(function(Ty){ T.ty[Ty.k]+=dTy[Ty.k]; T.pc[Ty.k]+=dPc[Ty.k]; });
+    T.goT+=dGoT; T.tyT+=dTyT; T.boat+=flat.length; T.day++;
+    dTy.__pc=dPc;
+    rows+='<tr class="pk-ovd'+(isSun?' sun':'')+'" onclick="pkOvGoDay(\''+ds+'\')" '
+      +'title="\u0e01\u0e14\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e40\u0e1b\u0e34\u0e14\u0e0a\u0e35\u0e17\u0e02\u0e2d\u0e07\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49">'
+      +'<td class="dt"><b>'+i+'</b><i>'+wd+'</i></td>'
+      +'<td class="rt" colspan="2">'+flat.length+' \u0e25\u0e33 \u00b7 '+D.length+' \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07</td>'
+      +cells(dGo,dTy,dGoT,dTyT)+'</tr>';
+    flat.forEach(function(x){
+      var B=x.B, p8=B.pax8||{}, go=zGo(), ty=zTy();
+      GO.forEach(function(g){ go[g[0]]=(+p8[g[0]]||0); });
+      TY.forEach(function(Ty){ ty[Ty.k]=(+(B.cnt||{})[Ty.k]||0); });
+      ty.__pc=B.cntPc||{};
+      var rc=(x.g.route&&x.g.route.color)||'#94A3B8';
+      rows+='<tr class="pk-ovbt" onclick="pkOvGoDay(\''+ds+'\')" style="--rc:'+rc+'">'
+        +'<td class="dt"></td>'
+        +'<td class="rt"><i class="d"></i>'+poE((x.g.route&&x.g.route.name)||x.g.rid)+'</td>'
+        +'<td class="bt">'+poE((B.boat&&B.boat.name)||B.bid)+(B.dep?('<i>'+poE(B.dep)+'</i>'):'')+'</td>'
+        +cells(go,ty,(+B.totPc||0),B.tot)+'</tr>';
+    });
+  }
+  T.ty.__pc=T.pc;
+  var hd2='';
+  GO.forEach(function(g,i){ hd2+='<th class="n'+(i===3?' sep':'')+'">'+g[1]+'</th>'; });
+  hd2+='<th class="n sum">\u0e23\u0e27\u0e21</th>';
+  TY.forEach(function(Ty,i){ hd2+='<th class="n'+(i===0?' sep':'')+'" title="'+poE(Ty.n)+' \u00b7 '+poE(Ty.code||'\u2014')+'">'+poE(Ty.s||Ty.n)+'</th>'; });
+  hd2+='<th class="n sum">\u0e23\u0e27\u0e21</th><th class="n">\u0e02\u0e32\u0e14/\u0e40\u0e01\u0e34\u0e19</th>';
+  var cg='<colgroup><col class="o-dt"><col class="o-rt"><col class="o-bt">'
+    +GO.map(function(){ return '<col class="o-n">'; }).join('')+'<col class="o-s">'
+    +TY.map(function(){ return '<col class="o-n">'; }).join('')+'<col class="o-s"><col class="o-d"></colgroup>';
+  return '<div class="po-card pk-ovc">'
+    +'<table class="pk-ov">'+cg
+    +'<thead>'
+      +'<tr class="g"><th class="dt" rowspan="2">\u0e27\u0e31\u0e19</th>'
+        +'<th rowspan="2">\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07</th><th rowspan="2">\u0e40\u0e23\u0e37\u0e2d</th>'
+        +'<th class="gh th" colspan="4">\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07 \u00b7 \u0e44\u0e17\u0e22</th>'
+        +'<th class="gh fr" colspan="4">\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07 \u00b7 \u0e15\u0e48\u0e32\u0e07\u0e0a\u0e32\u0e15\u0e34</th>'
+        +'<th class="n sum" rowspan="2">\u0e23\u0e27\u0e21<br>\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07</th>'
+        +'<th class="gh tk" colspan="'+TY.length+'">\u0e2d\u0e2d\u0e01\u0e15\u0e31\u0e4b\u0e27</th>'
+        +'<th class="n sum" rowspan="2">\u0e23\u0e27\u0e21<br>\u0e15\u0e31\u0e4b\u0e27</th>'
+        +'<th class="n" rowspan="2" title="\u0e15\u0e31\u0e4b\u0e27\u0e17\u0e35\u0e48\u0e2d\u0e2d\u0e01 \u2212 \u0e2b\u0e31\u0e27\u0e17\u0e35\u0e48\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07 \u00b7 \u0e25\u0e1a\u0e04\u0e37\u0e2d\u0e0b\u0e37\u0e49\u0e2d\u0e02\u0e32\u0e14 \u0e1a\u0e27\u0e01\u0e04\u0e37\u0e2d\u0e0b\u0e37\u0e49\u0e2d\u0e40\u0e01\u0e34\u0e19">\u0e02\u0e32\u0e14/\u0e40\u0e01\u0e34\u0e19</th></tr>'
+      +'<tr class="s">'+hd2.replace(/<th class="n sum">\u0e23\u0e27\u0e21<\/th>/g,'').replace(/<th class="n">\u0e02\u0e32\u0e14\/\u0e40\u0e01\u0e34\u0e19<\/th>/,'')+'</tr>'
+    +'</thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td class="dt">\u0e23\u0e27\u0e21</td>'
+      +'<td class="rt" colspan="2">'+T.day+' \u0e27\u0e31\u0e19 \u00b7 '+T.boat+' \u0e25\u0e33</td>'
+      +cells(T.go,T.ty,T.goT,T.tyT)+'</tr></tfoot>'
+    +'</table>'
+    +'<div class="pk-ovn">\u0e01\u0e14\u0e17\u0e35\u0e48\u0e41\u0e16\u0e27\u0e44\u0e2b\u0e19\u0e01\u0e47\u0e44\u0e14\u0e49 \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e40\u0e1b\u0e34\u0e14\u0e0a\u0e35\u0e17\u0e02\u0e2d\u0e07\u0e27\u0e31\u0e19\u0e19\u0e31\u0e49\u0e19 \u00b7 '
+      +'\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e0a\u0e38\u0e14\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e1a\u0e2b\u0e19\u0e49\u0e32\u0e23\u0e32\u0e22\u0e27\u0e31\u0e19\u0e41\u0e25\u0e30\u0e2b\u0e19\u0e49\u0e32\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14\u0e22\u0e48\u0e2d\u0e22 \u00b7 \u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e2d\u0e48\u0e32\u0e19\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27<br>'
+      +'<b>FOC</b> \u0e43\u0e0a\u0e49\u0e15\u0e31\u0e4b\u0e27\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48\u0e15\u0e32\u0e21\u0e01\u0e15\u0e34\u0e01\u0e32\u0e02\u0e2d\u0e07\u0e14\u0e48\u0e32\u0e19 \u00b7 \u0e0a\u0e48\u0e2d\u0e07 FOC \u0e1d\u0e31\u0e48\u0e07\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07\u0e08\u0e36\u0e07\u0e44\u0e1b\u0e23\u0e27\u0e21\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19 \u0e1c\u0e0d \u0e02\u0e2d\u0e07\u0e1d\u0e31\u0e48\u0e07\u0e15\u0e31\u0e4b\u0e27 \u00b7 '
+      +'\u0e40\u0e14\u0e47\u0e01\u0e15\u0e48\u0e33\u0e01\u0e27\u0e48\u0e32 3 \u0e02\u0e27\u0e1a\u0e2a\u0e2d\u0e07\u0e2a\u0e31\u0e0d\u0e0a\u0e32\u0e15\u0e34\u0e40\u0e1b\u0e47\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27 \u0e40\u0e1e\u0e23\u0e32\u0e30\u0e14\u0e48\u0e32\u0e19\u0e43\u0e0a\u0e49\u0e23\u0e2b\u0e31\u0e2a\u0e40\u0e14\u0e35\u0e22\u0e27<br>'
+      +'\u0e0a\u0e48\u0e2d\u0e07\u0e15\u0e31\u0e4b\u0e27\u0e17\u0e35\u0e48\u0e21\u0e35\u0e01\u0e23\u0e2d\u0e1a\u0e2a\u0e49\u0e21 \u0e04\u0e37\u0e2d\u0e0a\u0e48\u0e2d\u0e07\u0e17\u0e35\u0e48\u0e21\u0e35\u0e04\u0e19\u0e22\u0e49\u0e32\u0e22\u0e01\u0e2d\u0e07\u0e14\u0e49\u0e27\u0e22\u0e21\u0e37\u0e2d \u00b7 \u0e40\u0e2d\u0e32\u0e40\u0e21\u0e32\u0e2a\u0e4c\u0e0a\u0e35\u0e49\u0e14\u0e39\u0e27\u0e48\u0e32\u0e04\u0e27\u0e23\u0e2d\u0e2d\u0e01\u0e40\u0e17\u0e48\u0e32\u0e44\u0e2b\u0e23</div>'
+  +'</div>';
+}
 function renderPierPark(pier){
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
@@ -42591,7 +48136,10 @@ function renderPierPark(pier){
      ของเดิมกางทุกลำต่อกันเป็นตารางเดียว เลื่อนหาลำที่ต้องการยาก
      และแบบฟอร์มของด่านเป็น "ใบต่อลำ" อยู่แล้ว · จอเลยควรเป็นทีละลำเหมือนกัน */
   if(!window._pkTab || typeof window._pkTab!=='object') window._pkTab={};
-  var body=D.map(function(g){
+  /* §pkTop · เส้นที่กรองไว้หายไปจากวันนี้ → กลับไปดูทุกเส้น ดีกว่าโชว์หน้าเปล่า */
+  if(_pkRoute && !D.some(function(g){ return g.rid===_pkRoute; })) _pkRoute='';
+  var DV = _pkRoute ? D.filter(function(g){ return g.rid===_pkRoute; }) : D;
+  var body=DV.map(function(g){
     var rn=(g.route&&g.route.name)||g.rid;
     var rc=(g.route&&g.route.color)||'#94A3B8';
     var pick=window._pkTab[g.rid];
@@ -42682,7 +48230,37 @@ function renderPierPark(pier){
           +'style="border-color:#C9A227;color:#8A7000">? วิธีใช้</button>'
       +'</div>'
     +'</div>'
-    +'<div class="pk-day">'
+    +'<div class="pk-stick">'
+    +(_pkView==='ov' ? ('<div class="pk-rts">'
+        +'<button class="pk-rt" onclick="pkMonShift(-1)" title="เดือนก่อน">&#8249;</button>'
+        +'<span class="pk-mon">'+poE(pkOvMon())+'</span>'
+        +'<button class="pk-rt" onclick="pkMonShift(1)" title="เดือนถัดไป">&#8250;</button>'
+        +'<span class="pk-rtf">ท่า '+poE(P.n||P.t)+' · กดที่แถวเพื่อเปิดชีทของวันนั้น</span>'
+        +'<span class="sp"></span>'
+        +'<button class="pk-rt pk-ovbn on" onclick="pkSetView(\'day\')" '
+          +'title="กลับไปชีทรายวัน">&larr; ชีทรายวัน</button>'
+      +'</div>') : ('<div class="pk-rts">'
+      +'<button class="pk-rt'+(_pkRoute?'':' on')+'" onclick="pkRoutePick(\'\')">'
+        +'ทุกเส้นทาง<b>'+D.length+'</b></button>'
+      +D.map(function(g){
+          var t=0,m=0; g.boats.forEach(function(B){ t+=B.tot; m+=B.missTot; });
+          var rc=(g.route&&g.route.color)||'#94A3B8';
+          var on=(_pkRoute===g.rid);
+          return '<button class="pk-rt'+(on?' on':'')+'" style="--rc:'+rc+'" '
+            +'onclick="pkRoutePick(\''+g.rid+'\')" title="'+poE((g.route&&g.route.name)||g.rid)
+            +' · '+g.boats.length+' ลำ · '+t+' คน'+(m?(' · ยังไม่มีรายชื่อ '+m):'')+'">'
+            +'<i class="d"></i>'+poE((g.route&&g.route.name)||g.rid)
+            +'<b>'+t+'</b>'+(m?('<u>'+m+'</u>'):'')+'</button>';
+        }).join('')
+      +(_pkRoute?('<span class="pk-rtf">ดูเฉพาะเส้นนี้ · '
+        +'<b onclick="pkRoutePick(\'\')">ล้างตัวกรอง</b></span>'):'')
+      /* §pkOv2 · ปุ่มภาพรวมเดือนอยู่แถวเดียวกับชิปโปรแกรม · เป็นการเปลี่ยนมุมมองของข้อมูลชุดเดียวกัน
+         ไม่ใช่การเปลี่ยนหน้าเหมือน เบิก-คืน / เงินสดย่อย ที่อยู่แถบบน */
+      +'<span class="sp"></span>'
+      +'<button class="pk-rt pk-ovbn" onclick="pkSetView(\'ov\')" '
+        +'title="ภาพรวมทั้งเดือน · เรียงวัน แยกเรือ">ภาพรวมเดือน &rarr;</button>'
+    +'</div>'))
+    +(_pkView==='ov' ? '' : ('<div class="pk-day">'
       +'<span class="s"><b>'+nBoat+'</b> ลำ</span>'
       +'<span class="s"><b>'+gTot+'</b> ตั๋วทั้งวัน'+((gBook>gTot)?(' <i>จอง '+gBook+'</i>'):'')+'</span>'
       +(gMiss>0?('<span class="s warn"><b>'+gMiss+'</b> ยังไม่มีรายชื่อ</span>'):'')
@@ -42693,10 +48271,23 @@ function renderPierPark(pier){
          คนที่กำลังแก้ประเภทตั๋วอยู่ต้องเห็นตอนนั้นเลยว่าแก้แล้วไม่กระทบที่อื่น */
       +'<span class="s" style="cursor:pointer" onclick="pkHelp()" '
         +'title="กดดูรายละเอียด">อ่านอย่างเดียว · ไม่กระทบใบจอง</span>'
-    +'</div>'
+    +'</div>'))
+    +'</div>'   /* §pkTop · ปิด .pk-stick */
     /* §pkTk8 · กล่องประเภทตั๋วเป็นของ "ตั้งครั้งเดียวแล้วไม่แตะอีก"
        เคยอยู่บนสุดคั่นระหว่างแถบสรุปกับตารางที่ต้องใช้จริง · ย้ายลงท้ายหน้า */
-    +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>');
+    +((_pkView==='ov') ? pkOvBody()
+       : (body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>'));
+  /* §pkTop · หัวตารางต้องตรึงใต้แถบบนพอดี · ความสูงแถบเปลี่ยนตามจำนวนชิปที่ตกบรรทัด
+     จึงวัดหลังวาดทุกครั้ง ไม่เดาเป็นค่าคงที่ · หน้าจอแคบชิปตกสองแถวก็ยังตรง */
+  (function(){
+    var st=host.querySelector('.pk-stick'); if(!st) return;
+    var set=function(){ try{ host.style.setProperty('--pk-top', Math.round(st.getBoundingClientRect().height)+'px'); }catch(_){} };
+    set();
+    if(typeof requestAnimationFrame==='function') requestAnimationFrame(set);
+    if(typeof ResizeObserver==='function' && !st._pkRo){
+      try{ st._pkRo=new ResizeObserver(set); st._pkRo.observe(st); }catch(_){}
+    }
+  })();
     /* §pkTkHelp  · คำอธิบายที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "วิธีใช้" บนแถบบน
        §pkTkTyPop · กล่องประเภทตั๋วที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "ประเภทตั๋ว" */
 }
@@ -43211,7 +48802,7 @@ function poBoatTable(boats, items, ro){
 
 /* §poStockCards · แถบสัดส่วนย่อของหนึ่งรายการ */
 function poStockBar(b, cls){
-  var live=b.ready+b.onboat+b.dirty+b.laundry+b.repair, denom=live||1;
+  var live=b.ready+b.onboat+b.onship+b.dirty+b.laundry+b.repair, denom=live||1;
   return '<div class="'+(cls||'po-bar2')+'">'+PO_BUCKET.filter(function(k){ return k.k!=='gone'; })
     .map(function(k){ var v=Math.max(0,b[k.k]); if(!v) return '';
       return '<i style="width:'+(v/denom*100).toFixed(2)+'%;background:'+k.c+'" title="'+poE(k.t)+' '+v+'"></i>'; }).join('')+'</div>';
@@ -43277,6 +48868,8 @@ function poStockTable(items, ro){
             +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
             +'<span class="ac">'
               +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
+              /* §poShip · ปุ่มอยู่ติดกับปรับยอด เพราะเดิมคนใช้ปรับยอดแทนอันนี้ */
+              +'<button class="po-go" onclick="poShipOpen(\''+it.id+'\')" title="ลงประจำเรือ · หักจากพร้อมใช้ แต่ไม่ต้องตามคืน"'+(ro?' disabled':'')+'>ประจำเรือ'+(b.onship>0?('<b style="margin-left:4px">'+b.onship+'</b>'):'')+'</button>'
               +'<button class="po-go" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
             +'</span></span></div>'; }).join('')
       +'</div>';
@@ -44087,7 +49680,9 @@ function poCloseCalc(itemId, out){
   var ret=poNum(poV('poret_'+itemId));
   var miss=out-ret;
   if(miss<=0){ box.innerHTML=(miss<0?'<div style="font-size:11.5px;color:#C0271C;font-weight:700">คืนมากกว่าที่เบิก · ตรวจตัวเลขอีกครั้ง</div>':''); return; }
-  var it=poItem(itemId), u=it?PO_KIND[it.kind].u:'ชิ้น';
+  /* §laDerived · เคยพัง 7 จาก 21 ชิ้น ตอน PO_KIND ยังไม่มีประเภทที่ผู้ใช้สร้างเอง
+     ตอนนี้ประกอบตารางครบทุกทางแล้ว · ค่าสำรองไว้กันเหนียว ปุ่มต้องกดได้เสมอ */
+  var it=poItem(itemId), u=(it&&PO_KIND[it.kind]||{u:'ชิ้น'}).u;
   box.innerHTML='<div style="background:#FFF6E8;border:1px solid #F0D8A8;border-radius:9px;padding:10px 11px">'
     +'<div style="font-size:11.5px;font-weight:800;color:#7A4A00;margin-bottom:7px">ขาด '+miss+' '+u+' — ระบุให้ครบก่อนปิดยอด</div>'
     +PO_MISS.map(function(m){
@@ -44166,6 +49761,11 @@ function poStaffOpen(){
       +'<span style="font-size:10.5px;color:#8B93A1">วันที่ไม่ได้ลงเรือ</span>'
       +'<input value="'+poE(s.defCode||'')+'" placeholder="'+poE(typeof paDefFallback==='function'?paDefFallback():'SE')+'" title="รหัสตั้งต้นในตารางการทำงาน เมื่อวันนั้นมีใบงานแล้วแต่คนนี้ไม่ได้ลงเรือ" '
         +'oninput="poStaffDef(\''+s.id+'\',this.value)" style="width:74px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:center;font-family:inherit">'
+      /* §paPayFld · เบี้ยเที่ยวรายคน · เห็นเฉพาะคนที่ดูเงินได้ */
+      +((typeof paPayCan==='function' && paPayCan())
+        ? ('<span style="font-size:10.5px;color:#8B93A1">เบี้ยเที่ยว</span>'
+          +paPayInput(s.id,'poStaffPay','width:78px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:right;font-family:inherit'))
+        : '')
       +'<button class="po-btn" onclick="poStaffToggle(\''+s.id+'\')">'+(s.active===false?'เปิดใช้':'ปิดใช้')+'</button></div>';
   }).join('');
   body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
@@ -44173,15 +49773,19 @@ function poStaffOpen(){
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +poIn('postf_nick','','ชื่อเล่น',110)+poIn('postf_name','','ชื่อ-สกุล',180)
     +poIn('postf_role','','หน้าที่ เช่น อุปกรณ์',150)+poIn('postf_phone','','เบอร์',120)
+    +((typeof paPayCan==='function' && paPayCan())?poIn('postf_pay','','เบี้ยเที่ยว (บาท)',110):'')
     +poBtn('เพิ่ม','poStaffAdd()',1)+'</div></div>';
   poModal('ทะเบียนพนักงานท่าเรือ', body, poBtn('ปิด','poModalClose()'), 640);
 }
 function poStaffAdd(){
   var nick=poV('postf_nick').trim(), name=poV('postf_name').trim();
   if(!nick && !name){ alert('ใส่ชื่ออย่างน้อยหนึ่งช่อง'); return; }
-  PIER_STAFF.push({id:poUid('ps_'), pier:_poPier, nick:nick||name, name:name||nick,
+  var nid=poUid('ps_');
+  PIER_STAFF.push({id:nid, pier:_poPier, nick:nick||name, name:name||nick,
                    role:poV('postf_role').trim(), phone:poV('postf_phone').trim(), active:true});
-  poPersist(); poStaffOpen();
+  poPersist();
+  var pay=poV('postf_pay').trim(); if(pay && typeof paPayRateSet==='function') paPayRateSet(nid, pay);   // §paPayFld
+  poStaffOpen();
 }
 function poStaffPier(id,v){
   if(!poCanEdit()) return;
@@ -44329,7 +49933,7 @@ function poItemOff(id){
 
 function poAdjOpen(itemId){
   if(!poCanEdit()) return;
-  var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=PO_KIND[it.kind].u;
+  var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;   // §laDerived · ค่าสำรอง · ปุ่มต้องกดได้เสมอ
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ใช้ตอนซื้อของเข้าใหม่ หรือนับสต็อกแล้วไม่ตรง · ใส่ตัวเลขติดลบเพื่อหักออก</div>'
     +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">'+poE(it.label)+' · พร้อมใช้ตอนนี้ '+b.ready+' '+u+'</div>'
     +'<div style="display:flex;gap:9px;align-items:center">'+poIn('poadj','','+/- จำนวน',110)
@@ -44342,9 +49946,172 @@ function poAdjSave(itemId){
   poPersist(); poModalClose(); renderPierOffice();
 }
 
+/* ══ §poShip · ของที่ลงประจำเรือ ══════════════════════════════════════
+   ที่มา (2026-09-28) · ฟีดแบคจากหน้าท่า Visit Panwa
+     "หน้ากากผู้ใหญ่สต๊อกมี 88 · เรือมาเบิกลงประจำเรือ 3 ตัว
+      ก็ต้องกดปรับยอดเพื่อให้ตัดออกจากสต๊อก จะได้รู้ว่าเหลือพร้อมใช้กี่ตัว"
+   ปุ่มเบิกทำบัญชีถูกอยู่แล้ว แต่มันเป็นรอบวัน · ของที่เบิกแล้วไม่คืน
+   poBoatCarry ยกยอดไปทุกวันข้างหน้าไม่มีวันจบ แล้วไปกองใน "ยังไม่ได้คืน"
+   ของประจำลำจึงไม่มีที่ยืน คนหน้าท่าเลยหนีไปใช้ปรับยอดซึ่งไม่ผูกลำเลย
+   ตรงนี้คือที่ยืนของมัน · หักจากพร้อมใช้ ผูกลำ ไม่โดนทวง ถอดกลับเข้าคลังได้ */
+/* §poLdgNote · แก้แถวเก่าที่ไม่มีคำอธิบาย · แก้ได้แค่เหตุผลกับลำ
+   จำนวน ประเภท วันที่ ห้ามแก้ · ของพวกนั้นคือบัญชี แก้แล้วยอดย้อนหลังเปลี่ยนโดยไม่มีร่องรอย
+   ระบุลำได้เฉพาะแถวปรับยอด · แถวเบิก–คืนผูกลำไว้แล้วและใบประจำวันอ่านจากตรงนั้น
+   ใครแก้เมื่อไรติดไว้กับแถว · คนที่มาอ่านทีหลังจะได้รู้ว่าอันไหนเป็นของที่เติมทีหลัง */
+function poMoveFind(id){ return (PIER_MOVES||[]).filter(function(m){ return m && m.id===id; })[0]||null; }
+function poMoveEdit(id){
+  if(!poCanEdit()) return;
+  var m=poMoveFind(id); if(!m) return;
+  var it=poItem(m.itemId), canBoat=(m.type==='adjust');
+  var BL=poShipBoats(_poPier);
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">'
+    +'เติมเหตุผลย้อนหลังได้ · จำนวน ประเภท และวันที่แก้ไม่ได้ เพราะเป็นตัวบัญชี</div>'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:9px">'+poE(m.date)+' · '
+      +poE(it?it.label:m.itemId)+' · '+poNum(m.qty)+'</div>'
+    +(canBoat?('<div style="margin-bottom:9px"><div style="font-size:11px;font-weight:700;color:#475569;'
+      +'margin-bottom:4px">ลำที่เกี่ยวข้อง</div>'
+      +'<select id="pomvb" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;'
+        +'font:500 12.5px inherit;font-family:inherit;min-width:190px">'
+      +'<option value="">— ไม่ระบุลำ —</option>'
+      + BL.map(function(x){ return '<option value="'+poE(x.id)+'"'+((m.boatId===x.id)?' selected':'')
+          +'>'+poE(x.name||x.id)+'</option>'; }).join('')
+      +'</select></div>'):'')
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">คำอธิบาย</div>'
+    +'<input id="pomvn" value="'+poE(m.note||'')+'" placeholder="เช่น ลงประจำเรือ Hermetis 3 ตัว" '
+      +'style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;'
+      +'width:100%;box-sizing:border-box;font-family:inherit">';
+  poModal('แก้คำอธิบาย · '+poE(T_LDG(m.type)), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poMoveEditSave('"+poE(id)+"')",1), 520);
+}
+function T_LDG(t){
+  var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
+         onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
+         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
+  return M[t]||t;
+}
+function poMoveEditSave(id){
+  if(!poGuard()) return;
+  var m=poMoveFind(id); if(!m){ poModalClose(); return; }
+  var nn=poV('pomvn'), nb=(m.type==='adjust')?poV('pomvb'):m.boatId;
+  var changed=(String(m.note||'')!==String(nn||'')) || (String(m.boatId||'')!==String(nb||''));
+  if(changed){
+    m.note=nn; m.boatId=nb||'';
+    m.editBy=poWho(); m.editAt=new Date().toISOString();
+    poPersist();
+  }
+  poModalClose(); renderPierOffice(); poLedgerOpen();
+}
+
+function poShipBoats(pier){
+  var out=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))?BOATS.slice():[];
+  return out.filter(function(b){
+      if(!b||!b.id) return false;
+      var pk=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):(b.pier||'');
+      return (pk||b.pier||'')===pier;
+    }).sort(function(a,b){ return String(a.name||a.id).localeCompare(String(b.name||b.id)); });
+}
+/* ของชิ้นนี้ลงประจำอยู่ลำไหนบ้าง · คิดสดจาก moves ไม่เก็บเป็นตัวเลขนิ่ง เหมือน poBal */
+function poShipByBoat(itemId){
+  var m={};
+  (PIER_MOVES||[]).forEach(function(x){
+    if(!x || x.itemId!==itemId) return;
+    var q=poNum(x.qty), bo=x.boatId||'';
+    if(x.type==='assign') m[bo]=(m[bo]||0)+q;
+    else if(x.type==='unassign') m[bo]=(m[bo]||0)-q;
+  });
+  return Object.keys(m).filter(function(k){ return m[k]>0; })
+    .map(function(k){ return {bid:k, q:m[k]}; })
+    .sort(function(a,b){ return b.q-a.q; });
+}
+/* ทั้งท่า · ลำไหนถือของอะไรอยู่บ้าง · ใช้ทั้งในกล่องสรุปและตอนตรวจของประจำลำ */
+function poShipAll(pier){
+  var m={};
+  (PIER_MOVES||[]).forEach(function(x){
+    if(!x || x.pier!==pier) return;
+    if(x.type!=='assign' && x.type!=='unassign') return;
+    var q=poNum(x.qty)*(x.type==='assign'?1:-1), bo=x.boatId||'', id=x.itemId;
+    (m[bo]=m[bo]||{})[id]=(m[bo][id]||0)+q;
+  });
+  var out=[];
+  Object.keys(m).forEach(function(bo){
+    var its=Object.keys(m[bo]).filter(function(id){ return m[bo][id]>0; })
+      .map(function(id){ return {itemId:id, q:m[bo][id]}; })
+      .sort(function(a,b){ return b.q-a.q; });
+    var tot=its.reduce(function(s2,x){ return s2+x.q; },0);
+    if(tot>0) out.push({bid:bo, tot:tot, items:its});
+  });
+  return out.sort(function(a,b){ return b.tot-a.tot; });
+}
+function poShipErr(msg){
+  var el=document.getElementById('poship_err'); if(!el) return;
+  el.innerHTML=msg?('<div style="background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;'
+    +'border-radius:9px;padding:7px 10px;font-size:12px;margin-top:9px">'+msg+'</div>'):'';
+}
+function poShipOpen(itemId){
+  if(!poCanEdit()) return;
+  var it=poItem(itemId); if(!it) return;
+  var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;
+  var BL=poShipBoats(_poPier), cur=poShipByBoat(itemId);
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">'
+    +'ของที่ยกไปติดตั้งอยู่บนเรือถาวร · หักจากยอดพร้อมใช้ แต่ยังเป็นของท่า<br>'
+    +'ไม่ใช่การเบิกรอบวัน จึงไม่ไปขึ้นใน "ยังไม่ได้คืน" และไม่มีใครมาตามคืน</div>'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:9px">'+poE(it.label)
+      +' · พร้อมใช้ '+b.ready+' '+u+(b.onship?(' · ประจำเรืออยู่แล้ว '+b.onship+' '+u):'')+'</div>';
+  if(cur.length){
+    body+='<div style="border:1px solid #E2E8F0;border-radius:11px;padding:8px 11px;margin-bottom:11px">'
+      +'<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">ลงประจำอยู่แล้ว</div>'
+      + cur.map(function(x){
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;'
+            +'border-top:1px solid #F1F5F9;font-size:12.5px">'
+            +'<span style="flex:1;color:#334155">'+poE(poLdgBoatNm(x.bid))+'</span>'
+            +'<b style="font-variant-numeric:tabular-nums">'+x.q+'</b>'
+            +'<button class="po-go" onclick="poUnshipSave(\''+itemId+'\',\''+poE(x.bid)+'\')">ถอดออก</button>'
+            +'</div>'; }).join('')
+      +'</div>';
+  }
+  if(!BL.length){
+    body+='<div style="font-size:12.5px;color:#B45309">ท่านี้ยังไม่มีเรือในทะเบียน · เพิ่มเรือในหน้า Fleet ก่อน</div>';
+    poModal('ประจำเรือ · '+poE(it.label), body+'<div id="poship_err"></div>', poBtn('ปิด','poModalClose()'), 520);
+    return;
+  }
+  body+='<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:5px">ลงประจำเรือเพิ่ม</div>'
+    +'<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">'
+    +'<select id="poshipb" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;'
+      +'font:500 12.5px inherit;font-family:inherit;min-width:170px">'
+    + BL.map(function(x){ return '<option value="'+poE(x.id)+'">'+poE(x.name||x.id)+'</option>'; }).join('')
+    +'</select>'
+    + poIn('poshipq','','จำนวน',90)
+    +'<input id="poshipn" placeholder="หมายเหตุ เช่น ติดตั้งประจำลำ" style="border:1px solid #D8D4CA;'
+      +'border-radius:8px;padding:7px 10px;font:500 12.5px inherit;flex:1;min-width:150px;font-family:inherit"></div>'
+    +'<div id="poship_err"></div>';
+  poModal('ประจำเรือ · '+poE(it.label), body,
+    poBtn('ปิด','poModalClose()')+poBtn('ลงประจำเรือ',"poShipSave('"+itemId+"')",1), 560);
+}
+function poShipSave(itemId){
+  if(!poGuard()) return;
+  var it=poItem(itemId); if(!it) return;
+  var q=poNum(poV('poshipq')), bo=poV('poshipb'), b=poBal(itemId);
+  var u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;
+  /* ข้อความบอกความผิดพลาดอยู่ในกล่องเลย ไม่ใช่ alert · คนหน้าท่ายังเห็นช่องที่ต้องแก้ */
+  if(q<=0) return poShipErr('ใส่จำนวนที่จะลงประจำเรือ · ต้องมากกว่า 0');
+  if(!bo)  return poShipErr('เลือกลำก่อน');
+  if(q>b.ready) return poShipErr('พร้อมใช้มีแค่ '+b.ready+' '+u+' · ลงประจำ '+q
+    +' ไม่ได้ ยอดพร้อมใช้จะติดลบ<br>ถ้าของในตู้มีมากกว่านี้จริง ให้กด "ปรับยอด" เพิ่มเข้าคลังก่อน');
+  poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:bo, type:'assign', qty:q, note:poV('poshipn')});
+  poPersist(); renderPierOffice(); poShipOpen(itemId);
+}
+function poUnshipSave(itemId, boatId){
+  if(!poGuard()) return;
+  var cur=poShipByBoat(itemId).filter(function(x){ return x.bid===boatId; })[0];
+  if(!cur) return;
+  poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:boatId, type:'unassign', qty:cur.q,
+         note:'ถอดออกจาก '+poLdgBoatNm(boatId)+' กลับเข้าคลัง'});
+  poPersist(); renderPierOffice(); poShipOpen(itemId);
+}
+
 function poFixOpen(itemId){
   if(!poCanEdit()) return;
-  var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=PO_KIND[it.kind].u;
+  var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;   // §laDerived · ค่าสำรอง · ปุ่มต้องกดได้เสมอ
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ของที่ซ่อมเสร็จแล้วกลับเข้าคลังพร้อมใช้ · ถ้าซ่อมไม่ไหวให้ตัดทิ้งแทน</div>'
     +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">'+poE(it.label)+' · รอซ่อม '+b.repair+' '+u+'</div>'
     +'<div style="display:flex;gap:9px;align-items:center">'
@@ -44412,9 +50179,10 @@ function poLaundrySave(isOut){
    ไม่ต้องไล่อ่านทีละแถวเพื่อหักกันเอง */
 var _poLdgF='all';
 var PO_LDG_G={ all:null, issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
-               loss:['lost','writeoff','repair'], adj:['adjust','onboard','fixed'] };
+               loss:['lost','writeoff','repair'], ship:['assign','unassign'],
+               adj:['adjust','onboard','fixed'] };
 var PO_LDG_GN={ all:'ทั้งหมด', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
-                loss:'หาย · ตัดทิ้ง · เสีย', adj:'ปรับยอด' };
+                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'ปรับยอด' };
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
 function poLdgBoatNm(id){
   var b=(typeof getBoat==='function' && id)?getBoat(id):null;
@@ -44445,11 +50213,13 @@ function poLdgLine(nm,v,col){
 function poLedgerOpen(){
   var all=(PIER_MOVES||[]).filter(function(m){ return m.pier===_poPier; });
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
-         laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด'};
+         laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
+         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
-          laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E']};
+          laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
+          assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490']};
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -44516,6 +50286,28 @@ function poLedgerOpen(){
           }).join(''))
       +'</div>';
 
+    /* §poShip · ของประจำเรือไม่ใช่ของค้าง จึงมีกล่องของตัวเอง ไม่ไปปนกับ "ยังไม่ได้คืน"
+       กล่องนี้คือคำตอบของคำถามที่หน้าท่าถามบ่อยที่สุด · ลำนี้มีของประจำอะไรอยู่บ้าง */
+    var SH=poShipAll(_poPier);
+    if(SH.length){
+      var shTot=SH.reduce(function(s2,x){ return s2+x.tot; },0);
+      sum+='<div style="'+two+'">'
+        +poLdgBox('ของประจำเรือ · แยกตามลำ', SH.length+' ลำ · '+shTot+' ชิ้น',
+            SH.slice(0,6).map(function(x){
+              return poLdgLine(poE(poLdgBoatNm(x.bid)), x.tot, '#0E7490'); }).join('')
+            +(SH.length>6?poLdgLine('<span style="color:#94A3B8">และอีก '+(SH.length-6)+' ลำ</span>',
+                SH.slice(6).reduce(function(s2,x){ return s2+x.tot; },0),'#94A3B8'):''))
+        +poLdgBox('ของประจำเรือ · แยกรายการ', shTot+' ชิ้น', (function(){
+            var m={}; SH.forEach(function(x){ x.items.forEach(function(i){ m[i.itemId]=(m[i.itemId]||0)+i.q; }); });
+            return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; }).slice(0,6).map(function(id){
+              var it=poItem(id), c=(it&&PO_KIND[it.kind])?PO_KIND[it.kind].c:'#94A3B8';
+              return poLdgLine('<i style="display:inline-block;width:7px;height:7px;border-radius:50%;'
+                +'background:'+c+';margin-right:6px;vertical-align:1px"></i>'+poE(it?it.label:id), m[id]);
+            }).join('');
+          })())
+        +'</div>';
+    }
+
     var KL=Object.keys(S.kind).sort(function(a,b){ return S.kind[b]-S.kind[a]; });
     sum+='<div style="'+two+'">'
       +poLdgBox('ผ้าซัก', S.lout+' ส่ง / '+S.lin+' รับ',
@@ -44553,17 +50345,29 @@ function poLedgerOpen(){
       return String(b.at||'').localeCompare(String(a.at||''));
     }).slice(0,300);
 
-  var body=rows.length?('<table class="po-t" style="width:100%"><thead><tr><th>วันที่</th><th>รายการ</th><th>ประเภท</th><th style="text-align:center">จำนวน</th><th>เรือ</th><th>โดย</th></tr></thead><tbody>'
+  /* §poLdgNote · ฟีดแบคหน้าท่า · "กดดูในประวัติมันดูได้ว่าปรับยอดวันไหน แต่ไม่ขึ้นคำอธิบายว่าเบิกไปไหน"
+     ช่องเหตุผลใน dialog ปรับยอดมีมาตลอดและเก็บลง note จริง · ตารางนี้ไม่เคยพิมพ์มันออกมา
+     ที่เขาพิมพ์ไว้อยู่ในฐานข้อมูลครบ แค่ไม่มีใครเห็น */
+  var ro=!poCanEdit();
+  var body=rows.length?('<table class="po-t" style="width:100%"><thead><tr><th>วันที่</th><th>รายการ</th><th>ประเภท</th><th style="text-align:center">จำนวน</th><th>เรือ</th><th>คำอธิบาย</th><th>โดย</th><th></th></tr></thead><tbody>'
     +rows.map(function(m){
       var it=poItem(m.itemId), bo=(typeof getBoat==='function'&&m.boatId)?getBoat(m.boatId):null;
       var tc=TC[m.type]||['#F1F5F9','#475569'], q=poNum(m.qty);
+      var nt=String(m.note||'').trim();
       return '<tr><td style="white-space:nowrap">'+poE(m.date)+'</td><td>'+poE(it?it.label:m.itemId)+'</td>'
         +'<td><span style="display:inline-block;background:'+tc[0]+';color:'+tc[1]
           +';border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'
           +poE(T[m.type]||m.type)+'</span>'
           +(m.fine?(' <span style="color:#B4560A;font-weight:700;font-size:11px">ค่าปรับ '+poBaht(m.fine)+'</span>'):'')+'</td>'
         +'<td style="text-align:center;font-weight:700'+(q<0?';color:#B91C1C':'')+'">'+q+'</td>'
-        +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td><td style="color:#7C8091">'+poE(m.by||'')+'</td></tr>';
+        +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td>'
+        +'<td class="po-ldgn" style="color:'+(nt?'#334155':'#CBD5E1')+'" title="'+poE(nt)+'">'
+          +(nt?poE(nt):'ไม่ระบุเหตุผล')
+          +(m.editBy?('<i style="font-style:normal;color:#94A3B8;font-size:10.5px;display:block">'
+            +'แก้ย้อนหลังโดย '+poE(m.editBy)+(m.editAt?(' · '+poE(String(m.editAt).slice(0,10))):'')+'</i>'):'')
+        +'</td>'
+        +'<td style="color:#7C8091">'+poE(m.by||'')+'</td>'
+        +'<td style="text-align:right">'+(ro?'':('<button class="po-go" onclick="poMoveEdit(\''+poE(m.id)+'\')" title="เติมเหตุผล / ระบุลำ ย้อนหลัง">แก้</button>'))+'</td></tr>';
     }).join('')+'</tbody></table>'
     +(rows.length>=300?'<div style="font-size:11px;color:#94A3B8;margin-top:8px">แสดง 300 รายการล่าสุด · ตัวสรุปข้างบนนับครบทุกรายการ</div>':'')
     +'<div style="font-size:11px;color:#94A3B8;margin-top:6px">เรียงตามวันที่ล่าสุดก่อน · ตัวเลขติดลบคือการแก้ยอดย้อนหลังของใบเดิม</div>')
@@ -44765,9 +50569,12 @@ function paDayIdx(date){
     var wc=String(o.wc||'');   /* §pjWorkCode · รหัสที่ใบงานระบุไว้เอง · ชนะการเดาทุกกรณี */
     // §rtCode · เก็บเส้นทางของวันนั้นไว้ด้วย · ช่องในตารางจะได้บอกว่าลงสายไหน
     var rid=''; try{ var tp=(typeof TRIPS!=='undefined'&&TRIPS[date])?TRIPS[date][bid]:null; rid=(tp&&tp.route)||''; }catch(_){}
-    [o.cap,o.asst].concat(o.crew||[], o.island||[]).forEach(function(sid){
-      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid, wc:wc};
-    });
+    /* §paWsTier · จำไว้ด้วยว่าอยู่ช่องไหนในใบงาน · เบี้ยเที่ยว WS ขั้นต่ำต่างกันตามช่อง */
+    [[o.cap,'cap'],[o.asst,'crew']]
+      .concat((o.crew||[]).map(function(x){ return [x,'crew']; }), (o.island||[]).map(function(x){ return [x,'staff']; }))
+      .forEach(function(p){ var sid=p[0];
+        if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid, wc:wc, slot:p[1]};
+      });
   });
   return E;
 }
@@ -44999,6 +50806,17 @@ function paCSS(){
      +"font:500 11px 'DM Mono',monospace;color:#7A4A00}"
   +H+' td.pa-sc.z{color:#DCD5C8}'
   +H+' td.pa-sc.tot{width:46px;min-width:46px;background:#F3E9D8;font-weight:700;color:#16233a}'
+  /* §paPay · คอลัมน์เงิน · เขียวแยกจากคอลัมน์นับวัน · ตัวเลขหลักหมื่นต้องไม่ตัดบรรทัด */
+  +H+' th.pa-sh.pay{width:62px;min-width:62px;background:#E6F2EC;color:#0F5B3F}'
+  +H+' td.pa-sc.pay{width:62px;min-width:62px;background:#F4FAF6;color:#0F5B3F;white-space:nowrap;padding:0 5px !important;text-align:right}'
+  +H+' td.pa-sc.pay.tot{width:84px;min-width:84px;background:#E3F1E9;font-weight:700;color:#0B3F2B}'
+  +H+' td.pa-sc.pay.z{color:#C9D8CF}'
+  +H+' td.pa-sc.pay.ed{padding:0 2px !important}'
+  +H+' td.pa-sc.pay.ed .pa-payi{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:5px;background:transparent;'
+     +"text-align:right;font:500 11px 'DM Mono',monospace;color:#0F5B3F;padding:3px 4px}"
+  +H+' td.pa-sc.pay.ed .pa-payi:hover,'+H+' td.pa-sc.pay.ed .pa-payi:focus{border-color:#9CC9B0;background:#fff;outline:none}'
+  +H+' td.pa-sc.pay.ed .pa-payi::placeholder{color:#C9D8CF;font-size:9px}'
+  +H+' td.pa-sc.pay.miss{font:700 10px inherit;color:#B4560A;background:#FFF4E5;cursor:pointer;text-align:center}'
   +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
   +' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
   +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
@@ -45178,9 +50996,240 @@ function paEnsureMtCode(){
   }catch(_){}
 }
 /* §plMerge · แท็บที่กำลังดูอยู่ในหน้าตารางการทำงาน · roster | lic */
+/* ══ §paPay (2026-09-26) · เบี้ยเที่ยว · คิดเงินจากยอดวันในคอลัมน์ MONTHLY SUMMARY ══
+   คิดทีละคน จากแถวของคนนั้น · ไม่ใช่จากแถว TOTAL · ALL STAFF
+   แถวรวมเป็นผลรวมของหลายคน คูณด้วยเบี้ยเที่ยวอัตราเดียวได้ก็ต่อเมื่อทุกคนได้เท่ากัน
+   กฎของแต่ละรหัส:  เงิน = เบี้ยเที่ยว × x × วัน  +  d × วัน  +  f (ครั้งเดียว ถ้ามีวันของรหัสนี้)
+   ค่าตั้งต้นมาจากตารางของ HR:
+     KB = เบี้ยเที่ยว × วัน + 100 · PP = เบี้ยเที่ยว × วัน · WS = เบี้ยเที่ยว × วัน + วัน × 50
+     OV = เบี้ยเที่ยว × 2 × วัน · N = วัน × 200
+   เก็บใน PIER_CFG (payRules · payRate{staffId}) · pier_cfg เก็บค่าเป็น JSON ทั้งก้อน
+   จึงไม่ต้องเพิ่มคอลัมน์ในฐานข้อมูล · ค่าตั้งต้นไม่ถูกเขียนลงข้อมูลจนกว่าจะมีคนกดบันทึก */
+var PA_PAY_DEF={
+  KB:{x:1, d:0,   f:100},
+  PP:{x:1, d:0,   f:0},
+  WS:{x:1, d:0,   f:0},
+  'WS-LT':{x:0, d:50, f:0},   // §paLtSplit · ค่าหางยาวของวัน WS · แยกออกจาก WS · วันนับเท่ากับวัน WS
+  OV:{x:2, d:0,   f:0},
+  N: {x:0, d:200, f:0}
+};
+/* §paLtSplit (2026-09-26) · ค่าหางยาว (+50/วัน) เดิมอยู่ใน WS · ย้ายไปเป็น WS-LT
+   สูตรที่ prod เซฟไว้แล้วเป็นชุดเก่า (WS x1 d50 · WS-LT x1 d50) · แปลงครั้งเดียว (PIER_CFG.ltSplit)
+   แปลงเฉพาะเมื่อยังเป็นค่าเดิมเป๊ะ · ถ้ามีคนแก้เองแล้ว ปล่อยไว้ ไม่ทับของที่ตั้งใจแก้ */
+function paEnsureLtSplit(){
+  try{
+    if(PIER_CFG.ltSplit) return;
+    var R=PIER_CFG.payRules;
+    if(R && typeof R==='object'){
+      var ws=R.WS||{}, lt=R['WS-LT']||{};
+      var same=function(r,x,d,f){ return (+r.x||0)===x && (+r.d||0)===d && (+r.f||0)===f; };
+      if(same(ws,1,50,0) && (!R['WS-LT'] || same(lt,1,50,0))){ R.WS={x:1,d:0,f:0}; R['WS-LT']={x:0,d:50,f:0}; }
+    }
+    PIER_CFG.ltSplit=1;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
+/* §paWsLt (2026-09-26) · รหัส WS-LT = Whale Shark ที่ไปเรือหางยาว
+   ใบงานเรือไม่รู้ว่าวันไหนไปหางยาว · คนวางตารางเลือกรหัสนี้ลงช่องวันเอง
+   เติมครั้งเดียวต่อข้อมูลชุดหนึ่ง (PIER_CFG.wsLtSeed) · ทั้งในทะเบียนรหัสและในสูตรเบี้ยเที่ยวที่เซฟไว้แล้ว
+   ต่างจาก paEnsureNightCode ตรงที่ลบทิ้งแล้วไม่เด้งกลับ · คนลบตั้งใจลบ */
+function paEnsureWsLt(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length || PIER_CFG.wsLtSeed) return;
+    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()==='WS-LT'; });
+    if(!has){
+      var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
+      PIER_CODES.push({id:'c_wslt', code:'WS-LT', label:'Whale Shark · เรือหางยาว',
+                       color:'#0E6E86', bg:'#DDF1F5', kind:'work', ord:mx+1, active:true, userColor:1});
+    }
+    var R=PIER_CFG.payRules;
+    if(R && typeof R==='object' && Object.keys(R).length && !R['WS-LT']) R['WS-LT']={x:0, d:50, f:0};
+    PIER_CFG.wsLtSeed=1;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
+var _paPay=false;   /* แสดงคอลัมน์เงินไหม · ไม่เก็บลงข้อมูล · เปิดใหม่ทุกครั้งที่ต้องดู */
+function paPayRules(){
+  var r=PIER_CFG && PIER_CFG.payRules;
+  return (r && typeof r==='object' && Object.keys(r).length) ? r : PA_PAY_DEF;
+}
+function paPayRate(sid){
+  var m=(PIER_CFG && PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  var v=m[sid];
+  return (v===''||v==null||!isFinite(+v)) ? null : +v;
+}
+/* §paPay · ดูเงินได้เฉพาะคนที่แก้ตารางของท่านี้ได้ · ข้อมูลเงินเดือนไม่ควรโผล่ให้ทุกคนที่แค่ดูตาราง */
+function paPayCan(){ return poCanEdit(); }
+/* §paWsTier (2026-09-26) · วันที่ลงเรือ WS (อยู่บนเรือจริง) เบี้ยเที่ยวมีขั้นต่ำตามช่องในใบงาน
+     กัปตัน → อย่างน้อย 650 · ผู้ช่วยกัปตัน/ลูกเรือ → อย่างน้อย 450 · Island Staff → เบี้ยปกติ ไม่มีขั้นต่ำ
+   ขั้นต่ำใช้กับส่วนเบี้ยเที่ยวเท่านั้น · บาทต่อวันของ WS (+50) ยังบวกเหมือนเดิม
+   WS-LT (หางยาว) ไม่อยู่บนเรือ WS · ไม่มีขั้นต่ำ
+   ช่องที่พิมพ์ WS เองโดยไม่มีใบงาน ไม่รู้ว่าอยู่ช่องไหน → ดูจากตำแหน่งในทะเบียนแทน */
+var PA_WS_CODE='WS';
+var PA_WS_MIN_DEF={cap:650, crew:450};
+function paWsMin(){
+  var m=PIER_CFG && PIER_CFG.payWsMin;
+  return (m && typeof m==='object') ? {cap:+m.cap||0, crew:+m.crew||0} : PA_WS_MIN_DEF;
+}
+function paWsTier(on, st){
+  if(on && on.slot) return on.slot;
+  var r=String((st&&st.role)||'');
+  if(/asst|assist|ผู้ช่วย/i.test(r)) return 'crew';
+  if(/capt|กัปตัน|นายท้าย/i.test(r)) return 'cap';
+  if(/crew|ลูกเรือ|เด็กเรือ/i.test(r)) return 'crew';
+  return 'staff';
+}
+var PA_WS_TIER_TH={cap:'กัปตัน', crew:'ลูกเรือ', staff:'staff'};
+/* cnt = {รหัส: จำนวนวัน} ของคนนี้ในรอบนี้ · nights = จำนวนคืนที่เข้าเวร (คอลัมน์ N)
+   ws = {cap,crew,staff} วัน WS แยกตามช่อง · ไม่ส่งมา = นับเป็น staff ทั้งหมด (ไม่มีขั้นต่ำ) */
+function paPayOf(sid, cnt, nights, ws){
+  var R=paPayRules(), rate=paPayRate(sid), nc=paNightCode(), parts=[], tot=0, need=false, MIN=paWsMin();
+  Object.keys(R).forEach(function(code){
+    var r=R[code]||{}, x=+r.x||0, d=+r.d||0, f=+r.f||0;
+    var days=(code===nc) ? (+nights||0) : (+(cnt||{})[code]||0);
+    if(!days) return;
+    if(x && rate==null){ need=true; return; }
+    var amt, note='';
+    if(code===PA_WS_CODE && x){
+      var W=ws||{}, nCap=+W.cap||0, nCrew=+W.crew||0, nStaff=Math.max(0, days-nCap-nCrew);
+      amt = x*Math.max(rate, MIN.cap)*nCap + x*Math.max(rate, MIN.crew)*nCrew + x*rate*nStaff + d*days + f;
+      note=[nCap?(PA_WS_TIER_TH.cap+' '+nCap):'', nCrew?(PA_WS_TIER_TH.crew+' '+nCrew):'', (nCap||nCrew)&&nStaff?(PA_WS_TIER_TH.staff+' '+nStaff):'']
+        .filter(Boolean).join(' · ');
+    } else amt=(x?rate*x*days:0) + d*days + f;
+    parts.push({code:code, days:days, amt:amt, note:note}); tot+=amt;
+  });
+  return {total:tot, parts:parts, missing:need, rate:rate};
+}
+function paMoney(n){ return (Math.round((+n||0)*100)/100).toLocaleString('en-US',{maximumFractionDigits:2}); }
+/* §paPayFld · ช่องเบี้ยเที่ยวรายคน · พิมพ์อิสระ รับ "1,200" "฿500" ได้ · ว่าง = ลบค่าออก
+   คืน true ถ้าบันทึก · ไม่ใช่ตัวเลขแล้วเตือน ไม่เซฟเงียบ ๆ เป็น 0 */
+function paPayRateSet(sid, txt){
+  if(!paPayCan() || !poGuard()) return false;
+  var v=String(txt==null?'':txt).replace(/[,\s฿]/g,'');
+  var m=(PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  if(v===''){ if(!(sid in m)) return false; delete m[sid]; }
+  else if(!isFinite(+v) || +v<0){ alert('Trip allowance must be a number (0 or more): '+txt); return false; }
+  else { if(m[sid]===+v) return false; m[sid]=+v; }
+  PIER_CFG.payRate=m; poPersist();
+  return true;
+}
+/* ช่องพิมพ์เบี้ยเที่ยว · ใช้ทั้งทะเบียนพนักงานและคอลัมน์ RATE ในตาราง */
+function paPayInput(sid, onchg, css){
+  var v=paPayRate(sid);
+  return '<input type="text" inputmode="decimal" class="pa-payi" value="'+(v==null?'':v)+'" placeholder="เบี้ยเที่ยว" '
+    +'title="เบี้ยเที่ยวต่อวัน (บาท) · ว่าง = ยังไม่ได้ใส่" style="'+(css||'')+'" '
+    +'onchange="'+onchg+'(\''+poE(sid)+'\',this.value)">';
+}
+function paPayRateRow(sid, txt){ paPayRateSet(sid, txt); paKeep(function(){ renderPierAtt(); }); }
+function poStaffPay(sid, txt){ paPayRateSet(sid, txt); poStaffOpen(); }
+function paPayToggle(){
+  if(!paPayCan()) return;
+  _paPay=!_paPay;
+  paKeep(function(){ renderPierAtt(); });
+}
+function paPayOpen(){
+  if(!paPayCan()){ alert('View only - no permission to see or edit trip allowance'); return; }
+  var R=paPayRules(), nc=paNightCode();
+  var codes=Object.keys(R);
+  var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
+    +'เงินของแต่ละรหัส = <b style="color:#16265C">เบี้ยเที่ยว × ตัวคูณ × วัน</b> + <b style="color:#16265C">บาทต่อวัน × วัน</b>'
+    +' + <b style="color:#16265C">บาทก้อนเดียว</b> (ได้ครั้งเดียวต่อรอบ ถ้ามีวันของรหัสนั้น)<br>'
+    +'จำนวนวันมาจากคอลัมน์ MONTHLY SUMMARY ของแต่ละคน · รหัส <b>'+poE(nc)+'</b> ใช้จำนวนคืนที่เข้าเวร</div>'
+    +'<table class="pl-t" id="pa-pay-rules"><thead><tr><th style="width:90px">รหัส</th><th>ตัวคูณเบี้ยเที่ยว</th>'
+    +'<th>บาทต่อวัน</th><th>บาทก้อนเดียว</th><th style="width:48px"></th></tr></thead><tbody>'
+    +codes.map(function(c){ return paPayRuleRow(c, R[c]); }).join('')
+    +'</tbody></table>'
+    +'<button class="po-btn" style="margin-top:8px" onclick="paPayRuleAdd()">+ เพิ่มรหัส</button>'
+    /* §paWsTier */
+    +(function(){ var M=paWsMin(), css='width:90px;text-align:right';
+      return '<div style="margin-top:16px;border-top:1px dashed #D9DDE4;padding-top:12px">'
+        +'<div style="font-size:12px;font-weight:800;color:#16265C;margin-bottom:6px">เบี้ยเที่ยวขั้นต่ำ วันที่ลงเรือ '+poE(PA_WS_CODE)+'</div>'
+        +'<div style="font-size:11.5px;color:#6E7684;margin-bottom:8px;line-height:1.6">ใครเบี้ยเที่ยวต่ำกว่านี้ วัน '+poE(PA_WS_CODE)+' จะได้เพิ่มจนถึงขั้นต่ำ · ดูจากช่องในใบงานเรือ<br>'
+        +'Island Staff ใช้เบี้ยปกติ · ค่าหางยาวอยู่ที่แถว WS-LT (นับวันเท่ากับวัน '+poE(PA_WS_CODE)+' ของแต่ละคน)</div>'
+        +'<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px">'
+        +'<label>กัปตัน <input class="pl-f" id="pa_wsmin_cap" type="text" inputmode="decimal" style="'+css+'" value="'+M.cap+'"></label>'
+        +'<label>ผู้ช่วยกัปตัน / ลูกเรือ <input class="pl-f" id="pa_wsmin_crew" type="text" inputmode="decimal" style="'+css+'" value="'+M.crew+'"></label>'
+        +'</div></div>'; })();
+  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; });
+  body+='<div style="margin-top:16px;border-top:1px dashed #D9DDE4;padding-top:12px">'
+    +'<div style="font-size:12px;font-weight:800;color:#16265C;margin-bottom:6px">เบี้ยเที่ยวรายคน (บาท) · ท่านี้</div>'
+    +'<div style="font-size:11.5px;color:#6E7684;margin-bottom:8px">เว้นว่าง = ยังไม่ได้ใส่ · ตารางจะขึ้น "ใส่เบี้ยเที่ยว" แทนยอดเงิน</div>'
+    +'<table class="pl-t"><thead><tr><th>ชื่อ</th><th>ตำแหน่ง</th><th style="width:130px">เบี้ยเที่ยว</th></tr></thead><tbody>'
+    +staff.map(function(s){ var v=paPayRate(s.id);
+      return '<tr><td>'+poE(s.name||s.nick||s.id)+(s.nick&&s.name?' <span style="color:#8B93A1">('+poE(s.nick)+')</span>':'')+'</td>'
+        +'<td>'+poE(s.role||'')+'</td>'
+        +'<td><input class="pl-f pa-pay-rate" type="number" min="0" step="any" data-sid="'+poE(s.id)+'" value="'+(v==null?'':v)+'"></td></tr>'; }).join('')
+    +'</tbody></table></div>';
+  poModal('เบี้ยเที่ยว · สูตรคิดเงิน', body,
+    poBtn('ใช้สูตรตั้งต้น','paPayReset()')+poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก','paPaySave()',1), 680);
+}
+function paPayRuleRow(code, r){
+  r=r||{};
+  function n(k,v){ return '<td><input class="pl-f" type="number" step="any" data-k="'+k+'" value="'+(v==null?'':v)+'"></td>'; }
+  return '<tr class="pa-pay-r"><td><input class="pl-f" data-k="code" value="'+poE(code||'')+'" placeholder="รหัส"></td>'
+    +n('x',r.x||0)+n('d',r.d||0)+n('f',r.f||0)
+    +'<td style="text-align:right"><button class="po-btn" onclick="this.closest(\'tr\').remove()">ลบ</button></td></tr>';
+}
+function paPayRuleAdd(){
+  var tb=document.querySelector('#pa-pay-rules tbody'); if(!tb) return;
+  tb.insertAdjacentHTML('beforeend', paPayRuleRow('', {}));
+}
+function paPayReset(){
+  var tb=document.querySelector('#pa-pay-rules tbody'); if(!tb) return;
+  tb.innerHTML=Object.keys(PA_PAY_DEF).map(function(c){ return paPayRuleRow(c, PA_PAY_DEF[c]); }).join('');
+  var a=document.getElementById('pa_wsmin_cap'), b=document.getElementById('pa_wsmin_crew');
+  if(a) a.value=PA_WS_MIN_DEF.cap; if(b) b.value=PA_WS_MIN_DEF.crew;
+}
+function paPaySave(){
+  if(!poGuard()) return;
+  var rules={}, dup='';
+  document.querySelectorAll('#pa-pay-rules tr.pa-pay-r').forEach(function(tr){
+    var g=function(k){ var el=tr.querySelector('[data-k="'+k+'"]'); return el?el.value:''; };
+    var code=String(g('code')).trim().toUpperCase(); if(!code) return;
+    if(rules[code]) dup=code;
+    rules[code]={x:+g('x')||0, d:+g('d')||0, f:+g('f')||0};
+  });
+  if(dup){ alert('Code '+dup+' appears twice - keep only one row per code'); return; }
+  var rate=(PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  document.querySelectorAll('.pa-pay-rate').forEach(function(el){
+    var sid=el.getAttribute('data-sid'), v=String(el.value).trim();
+    if(v===''){ delete rate[sid]; return; }
+    if(isFinite(+v) && +v>=0) rate[sid]=+v;
+  });
+  var mc=String(poV('pa_wsmin_cap')).replace(/[,\s฿]/g,''), mw=String(poV('pa_wsmin_crew')).replace(/[,\s฿]/g,'');
+  if(!isFinite(+mc) || !isFinite(+mw) || +mc<0 || +mw<0){ alert('WS minimum must be a number (0 or more)'); return; }
+  PIER_CFG.payWsMin={cap:+mc||0, crew:+mw||0};   // §paWsTier
+  PIER_CFG.payRules=rules; PIER_CFG.payRate=rate;
+  poPersist(); poModalClose();
+  paKeep(function(){ renderPierAtt(); });
+}
+
+/* §paSum · รหัสที่ใช้จริงในรอบนี้ · เรียงเส้นทางก่อน แล้วค่อยรหัสของทะเบียน
+   แยกออกมาให้ตารางบนจอกับไฟล์ Excel ได้คอลัมน์ชุดเดียวกันเสมอ (§paXlsx) */
+function paSumCodes(P, CY, IDX, groups){
+  var used={};
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
+  /* §paWsTier · คอลัมน์ WS-LT (หางยาว) โชว์ตลอด แม้รอบนี้ยังไม่มีใครลง · ให้เห็นว่าแยกจาก WS */
+  used['WS-LT']=1;   // §paLtSplit · คอลัมน์ค่าหางยาว · นับเท่าวัน WS ของแต่ละคน
+  var SUMC=Object.keys(used).sort(function(a,b){
+    var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
+    var ra=ma.route?0:1, rb=mb.route?0:1;
+    if(ra!==rb) return ra-rb;
+    if(ra===0) return String(a).localeCompare(String(b));
+    return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
+  });
+  /* §paLtSplit · WS-LT ต่อท้าย WS ทันที · อ่านคู่กัน */
+  var i=SUMC.indexOf('WS-LT'), j=SUMC.indexOf(PA_WS_CODE);
+  if(i>=0 && j>=0){ SUMC.splice(i,1); j=SUMC.indexOf(PA_WS_CODE); SUMC.splice(j+1,0,'WS-LT'); }
+  return SUMC;
+}
+/* §paTotOff · TOTAL = วันทำงาน + OFF + PH · ตัวเดียวกันทั้งจอและ Excel */
+function paRowTotal(w, cnt){ cnt=cnt||{}; return w + (cnt.OFF||0) + (cnt.PH||0); }
+
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureLtSplit(); paEnsureNoteMig(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -45196,23 +51245,14 @@ function renderPierAtt(pier){
       .forEach(function(s){ plOf(s.id).forEach(function(l){ if(plState(l)==='bad') _licBad++; }); });
   }catch(_){}
   var ro=!poCanEdit(), CY=paCycle(_paDate), groups=paGroups(P.k), today=poYMD(new Date());
+  var pay=(_paPay && paPayCan());   // §paPay
   var ed=(!ro && _paEdit);   // §paEditLock · ช่องพิมพ์ทับเปิดเฉพาะตอนกด "แก้ไข" ค้างไว้
   var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];   // §paSheet · หัวข้อเป็นอังกฤษตามที่ตกลง
   var IDX=paIndex(CY.days);
   var hasJob={}, nJob=0;
   CY.days.forEach(function(d){ hasJob[d.s]=paHasJob(d.s,P.k,IDX[d.s]); if(hasJob[d.s]) nJob++; });
 
-  /* §paSum · รหัสที่ใช้จริงในรอบนี้ · เรียงเส้นทางก่อน แล้วค่อยรหัสของทะเบียน */
-  var used={};
-  groups.forEach(function(G){ G.rows.forEach(function(st){
-    CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
-  var SUMC=Object.keys(used).sort(function(a,b){
-    var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
-    var ra=ma.route?0:1, rb=mb.route?0:1;
-    if(ra!==rb) return ra-rb;
-    if(ra===0) return String(a).localeCompare(String(b));
-    return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
-  });
+  var SUMC=paSumCodes(P, CY, IDX, groups);
 
   /* §paNight · รอบนี้มีเวรกลางคืนหรือเปล่า · มีแม้ช่องเดียวก็เปิดแถบล่างทั้งตาราง
      ไม่งั้นบางช่องสูงไม่เท่ากันแล้วอ่านเป็นตารางคนละอัน · นับจำนวนคืนของแต่ละคนไปเลยในรอบเดียว */
@@ -45233,6 +51273,7 @@ function renderPierAtt(pier){
     + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
     + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
     + '<th class="pa-mo sum" colspan="'+(SUMC.length+1+(nOn?1:0))+'">MONTHLY SUMMARY (DAYS)</th>'
+    + (pay?'<th class="pa-mo sum" colspan="2">TRIP ALLOWANCE (฿)</th>':'')
     + '<th class="pa-h0 nt">REMARKS</th></tr>'
     + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
@@ -45243,28 +51284,45 @@ function renderPierAtt(pier){
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
     + (nOn?('<th class="pa-sh ngt" title="จำนวนคืนที่เข้าเวร · นับที่วันเริ่มเวร">'
         +poE(paNightCode())+'</th>'):'')
-    + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
+    + '<th class="pa-sh tot">TOTAL</th>'
+    + (pay?'<th class="pa-sh pay" title="เบี้ยเที่ยวต่อวันของคนนี้">RATE</th><th class="pa-sh pay tot" title="ยอดเงินรวมตามสูตรเบี้ยเที่ยว">AMOUNT</th>':'')
+    + '<th class="pa-nt">Notes</th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0;
+  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0, payTot=0, payMiss=0;
   groups.forEach(function(G){
     body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
-      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0))+'"></td></tr>';
+      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0)+(pay?2:0))+'"></td></tr>';
     G.rows.forEach(function(st){
-      var w=0,o=0,l=0,aw=0,cnt={};
+      var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0};
       var tds=CY.days.map(function(d){
         var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+        if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;   // §paWsTier
         if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1;
                  if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
         else if(v.src==='todo') totTodo++;   // §paLayers · ช่องค้าง · ต้องมีตัวเลขให้เห็น ไม่งั้นช่องว่างอ่านเป็น "ไม่มีอะไรต้องทำ"
         if(v.atPier && v.atPier!==P.k) aw++;
         return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E,nOn);
       }).join('');
+      /* §paLtSplit · ทุกวันที่ลงเรือ WS มีหางยาวด้วย · WS-LT = วัน WS + ช่องที่ลง WS-LT เอง (ถ้ามี) */
+      var _wsd=cnt[PA_WS_CODE]||0;
+      if(_wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+_wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+_wsd; }
       totW+=w; totO+=o; totL+=l; totAway+=aw;
       var _nc=nCnt[st.id]||0;
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + (nOn?('<td class="pa-sc ngt'+(_nc?'':' z')+'">'+(_nc||'·')+'</td>'):'')
-        + '<td class="pa-sc tot">'+w+'</td>';
+        + '<td class="pa-sc tot" title="วันทำงาน '+w+' + OFF '+(cnt.OFF||0)+' + PH '+(cnt.PH||0)+'">'+paRowTotal(w,cnt)+'</td>';
+      if(pay){   // §paPay · ยอดเงินของคนนี้ · ชี้ที่ตัวเลขเพื่อดูว่ามาจากรหัสไหนเท่าไหร่
+        var PY=paPayOf(st.id, cnt, _nc, wsT);
+        var tip=PY.parts.map(function(p){ return p.code+' '+p.days+' วัน'+(p.note?(' ('+p.note+')'):'')+' = '+paMoney(p.amt); }).join('\n');
+        sums+=(ro ? ('<td class="pa-sc pay'+(PY.rate==null?' z':'')+'">'+(PY.rate==null?'·':paMoney(PY.rate))+'</td>')
+                  : ('<td class="pa-sc pay ed">'+paPayInput(st.id,'paPayRateRow')+'</td>'));
+        if(PY.missing){ payMiss++;
+          sums+='<td class="pa-sc pay tot miss" title="มีวันที่ต้องคิดเบี้ยเที่ยว แต่ยังไม่ได้ใส่เบี้ยเที่ยวของคนนี้" onclick="paPayOpen()">ใส่เบี้ยเที่ยว</td>';
+        } else { payTot+=PY.total;
+          sums+='<td class="pa-sc pay tot'+(PY.total?'':' z')+'" title="'+poE(tip||'ไม่มีวันที่คิดเงิน')+'">'+(PY.total?paMoney(PY.total):'·')+'</td>';
+        }
+      }
       _n++;
       // §paEdit · สี่ช่องแรกพิมพ์ทับได้ตรงนี้ · ออกจากช่องแล้วบันทึกเลย
       var _aw=(aw?('<b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'');
@@ -45281,9 +51339,9 @@ function renderPierAtt(pier){
            บังคับให้กด "แก้ไข" ทั้งแถบก่อนถึงจะพิมพ์ได้ ทำให้ไม่มีใครใช้ · เปิดให้พิมพ์ได้เลย
            คนที่สิทธิ์ดูอย่างเดียว (ro) ยังเห็นเป็นข้อความเหมือนเดิม */
         +'<td class="pa-nt">'+(ro
-            ?(poE(st.note||'')||'<span class="pa-dash">—</span>')
-            :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="เพิ่มหมายเหตุ…" '
-              +'title="พิมพ์แล้วออกจากช่อง = บันทึกเลย" '
+            ?(poE(paCycNote(CY.from, st.id))||'<span class="pa-dash">—</span>')
+            :('<input class="pa-nti" value="'+poE(paCycNote(CY.from, st.id))+'" placeholder="เพิ่มหมายเหตุ…" '
+              +'title="หมายเหตุของรอบ '+poE(CY.from)+' – '+poE(CY.to)+' เท่านั้น · พิมพ์แล้วออกจากช่อง = บันทึกเลย" '
               +'onchange="paNote(\''+poE(st.id)+'\',this.value)">'))+'</td></tr>';
     });
   });
@@ -45292,7 +51350,11 @@ function renderPierAtt(pier){
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
     + (nOn?('<td class="pa-sc ngt">'+nTot+'</td>'):'')
-    + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
+    + '<td class="pa-sc tot">'+paRowTotal(totW,gTot)+'</td>'
+    + (pay?('<td class="pa-sc pay"></td><td class="pa-sc pay tot" title="'
+        +(payMiss?(payMiss+' คนยังไม่ได้ใส่เบี้ยเที่ยว · ยังไม่รวมในยอดนี้'):'รวมทุกคนในตาราง')+'">'
+        +paMoney(payTot)+(payMiss?'<sup style="color:#B4560A"> +'+payMiss+'?</sup>':'')+'</td>'):'')
+    + '<td class="pa-nt"></td></tr>';
 
   // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
   var _lgSeen={};
@@ -45339,6 +51401,9 @@ function renderPierAtt(pier){
           +'title="เปิดให้พิมพ์แก้ ชื่อ · ชื่อเล่น · ตำแหน่ง · รหัสตั้งต้น · หมายเหตุ">'
           +(ed?'&#10003; แก้ไขอยู่ · กดเพื่อปิด':'&#9998; แก้ไข')+'</button>')
       +'<button class="gh" onclick="paRangeOpen()"'+(ro?' disabled':'')+'>วางงานเป็นช่วง</button>'
+      +(paPayCan()?('<button class="pa-edb'+(pay?' on':'')+'" onclick="paPayToggle()" title="แสดง/ซ่อนคอลัมน์เงินเบี้ยเที่ยว">'
+          +(pay?'&#10003; เบี้ยเที่ยว':'฿ เบี้ยเที่ยว')+'</button>'
+        +(pay?'<button onclick="paPayOpen()" title="สูตรของแต่ละรหัส · เบี้ยเที่ยวรายคน">ตั้งเบี้ยเที่ยว</button>':'')):'')
       /* §regHub · ทะเบียนทั้งหมดของท่าอยู่ตรงนี้ที่เดียว · ชื่อขึ้นต้น "ทะเบียน" เหมือนกันหมด */
       +'<span class="sep"></span>'
       +'<button onclick="poStaffOpen()" title="ชื่อ · ตำแหน่ง · ท่าประจำ · รหัสตั้งต้น">ทะเบียนพนักงาน</button>'
@@ -45348,6 +51413,7 @@ function renderPierAtt(pier){
       +'<button onclick="plTypesOpen()" title="ประเภทใบอนุญาตของพนักงาน">ทะเบียนประเภทใบ</button>'
       +'<span class="sep"></span>'
       +'<button onclick="paExport()">Export CSV</button>'
+      +'<button onclick="paExportXlsx()" title="ตารางการทำงาน + ยอดสรุป'+(paPayCan()?' + เบี้ยเที่ยวรายคน (ชีตแยก)':'')+'">Export Excel</button>'
       +'<button class="pri" onclick="paPrint()">พิมพ์</button>'
     +'</div>'
     +(groups.length
@@ -45480,10 +51546,35 @@ function paStaffFld(sid, key, txt){
   try{ if(typeof renderPierJob==='function' && key!=='defCode') renderPierJob(); }catch(_){}
 }
 /* §paCols · หมายเหตุรายคน · เก็บที่ทะเบียนพนักงาน ไม่ใช่รายวัน (ลาออก · กลับมาไฮซีซั่น) */
+/* §paCycNote (2026-09-26) · หมายเหตุแยกตามรอบ · เดิมเก็บที่ st.note ช่องเดียวต่อคน
+   ลบหมายเหตุของรอบตุลาแล้วของรอบกันยาหายไปด้วย เพราะเป็นช่องเดียวกัน
+   ตอนนี้เก็บที่ PIER_CFG.cycNote[วันเริ่มรอบ][staffId] · pier_cfg เป็น JSON ทั้งก้อน ไม่ต้องมี migration
+   st.note เดิมย้ายเข้ารอบปัจจุบันครั้งเดียว (PIER_CFG.noteMig) · ไม่ลบ st.note ทิ้ง เก็บไว้เป็นของเดิม */
+function paCycNote(from, sid){
+  var m=(PIER_CFG && PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+  var c=m[from]; return (c && c[sid]!=null) ? String(c[sid]) : '';
+}
+function paEnsureNoteMig(){
+  try{
+    if(PIER_CFG.noteMig) return;
+    var from=paCycle(poYMD(new Date())).from;
+    var m=(PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+    (PIER_STAFF||[]).forEach(function(st){
+      var t=String(st.note||'').trim(); if(!t) return;
+      if(!m[from]) m[from]={};
+      if(m[from][st.id]==null) m[from][st.id]=t;
+    });
+    PIER_CFG.cycNote=m; PIER_CFG.noteMig=from;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 function paNote(sid, txt){
   if(!poGuard()) return;
-  var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
-  st.note=String(txt||'').slice(0,120);
+  var from=paCycle(_paDate).from, v=String(txt||'').trim().slice(0,120);
+  var m=(PIER_CFG.cycNote && typeof PIER_CFG.cycNote==='object') ? PIER_CFG.cycNote : {};
+  if(v){ if(!m[from]) m[from]={}; m[from][sid]=v; }
+  else if(m[from]){ delete m[from][sid]; if(!Object.keys(m[from]).length) delete m[from]; }
+  PIER_CFG.cycNote=m;
   poPersist();
 }
 /* §paLayers · ปุ่มสองอันบนหัวหน้าต่างเลือกรหัส · จำไว้ระหว่างที่หน้าต่างเปิดอยู่ */
@@ -45849,16 +51940,24 @@ function paRangeApply(){
 /* ── Export CSV ── */
 function paExport(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
-  var CY=paCycle(_paDate), IDX=paIndex(CY.days), rows=[];
+  var CY=paCycle(_paDate), IDX=paIndex(CY.days), rows=[], canPay=paPayCan();   // §paXlsxPay · เงินใส่เฉพาะคนที่ดูเงินได้
   rows.push(['ท่าประจำ','ชื่อ','ชื่อเล่น','ตำแหน่ง'].concat(CY.days.map(function(d){ return d.s; }))
-    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']));
+    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']).concat(canPay?['RATE','AMOUNT']:[]));
   paGroups(P.k).forEach(function(G){ G.rows.forEach(function(st){
-    var w=0,o=0,l=0,aw=0;
-    var cells=CY.days.map(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]), k=paKindOf(v.c);
-      if(v.c){ if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+    var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0},nights=0;
+    var cells=CY.days.map(function(d){ var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+      if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+      if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;
+      if(paNight(d.s, st.id)) nights++;
       if(v.atPier && v.atPier!==P.k){ aw++; return v.c+'@'+pjPierShort(v.atPier); }
       return v.c; });
-    rows.push([P.n||P.t, st.name||'', st.nick||'', st.role||''].concat(cells).concat([w,o,l,aw]));
+    var pay=[];
+    if(canPay){
+      if(cnt[PA_WS_CODE]) cnt['WS-LT']=(cnt['WS-LT']||0)+cnt[PA_WS_CODE];   // §paLtSplit · เหมือนบนจอ
+      var PY=paPayOf(st.id, cnt, nights, wsT);
+      pay=[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total];
+    }
+    rows.push([P.n||P.t, st.name||'', st.nick||'', st.role||''].concat(cells).concat([w,o,l,aw]).concat(pay));
   }); });
   var csv=rows.map(function(r){ return r.map(function(x){
     var s=String(x==null?'':x); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }).join(','); }).join('\r\n');
@@ -45866,6 +51965,80 @@ function paExport(){
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='attendance_'+(P.n||P.k)+'_'+CY.from+'_'+CY.to+'.csv';
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
+/* ══ §paXlsx (2026-09-26) · Export Excel ของตารางการทำงาน ══
+   ชีต Roster = หน้าตาเดียวกับจอ (รหัสรายวัน + MONTHLY SUMMARY + TOTAL)
+   ชีต Trip Allowance = เบี้ยเที่ยวรายคน แยกรหัส · ใส่เฉพาะคนที่ดูเงินได้ (paPayCan) เหมือนบนจอ
+   นับวันด้วยตัวเดียวกับจอทุกตัว (paSumCodes · paCell · paWsTier · paPayOf · paRowTotal) ไม่คิดใหม่ */
+function paExportXlsx(){
+  if(typeof XLSX==='undefined'){ alert('Excel library not loaded - check the network and reload'); return; }
+  var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var CY=paCycle(_paDate), IDX=paIndex(CY.days), groups=paGroups(P.k), SUMC=paSumCodes(P, CY, IDX, groups);
+  var nc=paNightCode(), canPay=paPayCan(), R=paPayRules(), payCodes=Object.keys(R);
+  var nOn=false;
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){ if(paNight(d.s, st.id)) nOn=true; }); }); });
+  var title='CREW DUTY ROSTER · '+CY.from+' – '+CY.to+' · '+String(P.n||P.t);
+  var hd=['No.','Full name','Nickname','Position'].concat(CY.days.map(function(d){ return d.s.slice(8)+'/'+d.s.slice(5,7); }))
+    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL']).concat(canPay?['RATE','AMOUNT']:[]).concat(['Notes']);
+  var rows=[[title],hd], pay=[[title+' · TRIP ALLOWANCE']];
+  var ph=['No.','Full name','Nickname','Position','Rate'];
+  payCodes.forEach(function(c){ ph.push(c+' days', c+' ฿'); });
+  ph.push('WS split','Amount','Note'); pay.push(ph);
+  var gTot={}, totW=0, nTot=0, n=0, payTot=0, pn=0;
+  groups.forEach(function(G){
+    rows.push(['',G.t]);
+    G.rows.forEach(function(st){
+      var w=0, cnt={}, wsT={cap:0,crew:0,staff:0}, nights=0;
+      var cells=CY.days.map(function(d){
+        var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+        if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1; if(k==='work') w++; }
+        if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;
+        if(paNight(d.s, st.id)) nights++;
+        return (v.c||'')+((v.atPier && v.atPier!==P.k)?('@'+pjPierShort(v.atPier)):'');
+      });
+      var wsd=cnt[PA_WS_CODE]||0;   // §paLtSplit · เหมือนบนจอ
+      if(wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+wsd; }
+      totW+=w; nTot+=nights; n++;
+      var PY=canPay ? paPayOf(st.id, cnt, nights, wsT) : null;
+      /* §paXlsxPay · RATE + AMOUNT ในชีต Roster ด้วย เหมือนบนจอ · เดิมอยู่แค่ชีตที่สอง คนเปิดไม่เจอ */
+      rows.push([n, st.name||'', st.nick||'', st.role||''].concat(cells)
+        .concat(SUMC.map(function(c){ return cnt[c]||0; })).concat(nOn?[nights]:[])
+        .concat([paRowTotal(w,cnt)])
+        .concat(canPay?[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total]:[])
+        .concat([paCycNote(CY.from, st.id)]));
+      if(canPay){
+        var by={};
+        PY.parts.forEach(function(p){ by[p.code]=p; });
+        var r=[++pn, st.name||'', st.nick||'', st.role||'', PY.rate==null?'':PY.rate];
+        payCodes.forEach(function(c){ var p=by[c]; var d=(c===nc)?nights:(cnt[c]||0);
+          r.push(d||'', p?p.amt:''); });
+        var ws=by[PA_WS_CODE];
+        r.push(ws&&ws.note?ws.note:'', PY.missing?'':PY.total, PY.missing?'ยังไม่ได้ใส่เบี้ยเที่ยว':'');
+        if(!PY.missing) payTot+=PY.total;
+        pay.push(r);
+      }
+    });
+  });
+  rows.push(['','TOTAL · ALL STAFF','',''].concat(CY.days.map(function(){ return ''; }))
+    .concat(SUMC.map(function(c){ return gTot[c]||0; })).concat(nOn?[nTot]:[]).concat([paRowTotal(totW,gTot)])
+    .concat(canPay?['',payTot]:[]).concat(['']));
+  var wb=XLSX.utils.book_new();
+  var ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14}].concat(CY.days.map(function(){ return {wch:6}; }))
+    .concat(SUMC.map(function(){ return {wch:7}; })).concat(nOn?[{wch:9}]:[]).concat([{wch:7}])
+    .concat(canPay?[{wch:8},{wch:12}]:[]).concat([{wch:24}]);
+  ws1['!views']=[{state:'frozen', xSplit:4, ySplit:2}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Roster');
+  if(canPay){
+    pay.push(['','TOTAL · ALL STAFF'].concat(new Array(ph.length-4).fill('')).concat([payTot,'']));   // payTot ตรงคอลัมน์ Amount
+    var ws2=XLSX.utils.aoa_to_sheet(pay);
+    ws2['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14},{wch:8}].concat(payCodes.map(function(){ return [{wch:8},{wch:10}]; }).flat())
+      .concat([{wch:22},{wch:12},{wch:22}]);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Trip Allowance');
+  }
+  XLSX.writeFile(wb, 'roster_'+String(P.n||P.k).replace(/[^\w฀-๿-]+/g,'_')+'_'+CY.from+'_'+CY.to+'.xlsx');
 }
 
 /* ── พิมพ์ ── */
@@ -46235,6 +52408,67 @@ function pjSet(d,b,patch){
   delete cur._std;
   Object.keys(patch).forEach(function(x){ cur[x]=patch[x]; });
   PIER_JOB[k]=cur; poPersist();
+  _pjWbMemo={};                       /* §pjWbCarry · ของที่สืบทอดมาอาจเปลี่ยนไปแล้ว */
+}
+/* ══ §pjWbCarry (2026-09-23) · เปิดใบวันถัดไป ให้ได้สีสายรัดของลำนั้นติดมาด้วย ══
+   สายรัดซื้อมาเป็นล็อต · ล็อตหนึ่งใช้หลายวันจนหมดแล้วค่อยเปลี่ยน
+   ของเดิมใบวันใหม่ว่างเปล่าทุกวัน ต้องเลือกสีเดิมซ้ำทุกเช้า
+   ข้อมูลจริง 53 ใบ · Love2 ใช้ม่วงติดกัน 21 วันรวด · ลำอื่นสลับสองสีไปมา
+   แปลว่า "สีล่าสุดของลำนั้น" เดาถูกเกือบทุกวัน และแก้ทับได้อยู่แล้ว
+
+   ⚠ สืบทอดเฉย ๆ ไม่ได้เขียนลงใบวันใหม่ · เขียนเมื่อไหร่ใบเปล่าจะกลายเป็นใบที่ถูกแตะ
+      แล้วตัวกรอง "ซ่อนลำที่ยังไม่ได้วาง" (pjIsIdle) จะมองไม่เห็นใบเปล่าอีกเลย
+   ⚠ สีเป็นของ "ลำ" ไม่ใช่ของ "วัน" · 18 จาก 31 วันในข้อมูลจริงใช้หลายสีในวันเดียว
+      เพราะคนหน้าท่าต้องแยกออกว่าข้อมือสีนี้ลงลำไหน · จึงย้อนดูเฉพาะลำเดียวกัน */
+var _pjWbMemo={};
+var PJ_WB_BACK=14;                    /* ย้อนหลังไกลสุด · เรือไม่ได้ออกทุกวัน */
+function pjWbOf(date, bid){
+  var k=date+'::'+bid;
+  if(_pjWbMemo[k]) return _pjWbMemo[k];
+  var out={c:'', t:'', from:''};
+  try{
+    var own=(typeof pjRaw==='function')?pjRaw(date,bid):null;
+    if(own && (String(own.wbc||'').trim() || String(own.wb||'').trim())){
+      out={c:String(own.wbc||''), t:String(own.wb||''), from:''};
+    }else{
+      var d=new Date(date+'T12:00:00');
+      for(var i=0;i<PJ_WB_BACK;i++){
+        d.setDate(d.getDate()-1);
+        var ds=poYMD(d), o=(typeof pjRaw==='function')?pjRaw(ds,bid):null;
+        if(o && (String(o.wbc||'').trim() || String(o.wb||'').trim())){
+          out={c:String(o.wbc||''), t:String(o.wb||''), from:ds};
+          break;
+        }
+      }
+    }
+  }catch(_){}
+  _pjWbMemo[k]=out;
+  return out;
+}
+/* ══ §pjDone (2026-09-23) · "จัดไม่เสร็จ กดจัดเสร็จไม่ได้" ═══════════════════
+   ปุ่ม "จัดเสร็จแล้ว" คือคำสัญญาว่าใบนี้พร้อม · หน้าอื่นอ่านต่อจากตรงนี้
+   ของเดิมกดได้ตลอดแม้ใบยังว่างทั้งใบ · ปิดไปแล้วไม่มีใครกลับมาดูอีก
+   ⚠ เฉพาะลำที่ออกเรือวันนั้น · ลำที่จอด/ซ่อมไม่มีอะไรต้องครบ ปิดได้เหมือนเดิม
+   ⚠ ไม่เอาเรื่องใบอนุญาตมาปนที่นี่ · กล่องใบอนุญาตเตือนของมันเองอยู่แล้ว
+      และใบหมดอายุยังจ่ายงานได้ (ดู plCheckBoat) จึงไม่ใช่เงื่อนไขปิดใบ */
+function pjLockMiss(date, bid){
+  var out=[];
+  try{
+    var B=null;
+    try{ (pjAllBoats(date,_poPier)||[]).forEach(function(x){ if(x && x.bid===bid) B=x; }); }catch(_){}
+    if(!B || !B._st || B._st.k!=='run') return out;          /* ไม่ได้ออกเรือ · ไม่ต้องครบ */
+    var J=(typeof pjOf==='function')?pjOf(date,bid):null;
+    if(!J) return out;
+    if(!String(J.cap||'').trim()) out.push('\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19');
+    var W=pjWbOf(date,bid);
+    if(!W.c && !W.t) out.push('\u0e2a\u0e35\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d');
+    var GF=(typeof pjGuidesFull==='function')?pjGuidesFull(date,bid):null;
+    if(!GF || (!GF.length && !(+GF.other||0))) out.push('\u0e44\u0e01\u0e14\u0e4c');
+    var rid=(B.route&&B.route.id)||'';
+    var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
+    if(!V) out.push('\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23');
+  }catch(_){}
+  return out;
 }
 /* ต่างจากทีมประจำกี่คน · ใช้ติดป้าย SUB */
 function pjSubList(d,b){
@@ -46460,7 +52694,11 @@ function pjBoatSt(date, boat, op){
   var mj=pjOpenJobs(boat&&boat.id);
   /* §ovnSpan · ลำนี้ติดใบเหมาค้างเกาะอยู่ในวันนี้หรือเปล่า · และวันนี้เป็นวันออกไหม */
   var _ovnH=null; try{ _ovnH=(typeof bkOvnHoldOn==='function')?bkOvnHoldOn(boat&&boat.id,date):null; }catch(_){}
-  var _ovnAny=!!_ovnH, _ovnMid=!!(_ovnH && _ovnH.from!==date);
+  /* §ovnRet · "ระหว่างทาง" คือวันที่เรืออยู่ที่เกาะจริง ๆ คือ หลังวันออก แต่ก่อนวันกลับ
+     วันกลับเรือวิ่งจริง มีคนอยู่บนนั้นจริง และกินข้าวกลางวันกลับมาจริง
+     เดิมนับวันกลับเป็น วันระหว่างทางด้วย ใบงานเรือจึงซ่อนบล็อกครัวทั้งก้อน (ไม่มีที่ระบุร้าน)
+     และขึ้น "⚠ โปรแกรมค้าง" ทั้งที่โปรแกรมนั้นถูก · Daily log กับ Boat Status นับเป็นวันออกอยู่แล้ว */
+  var _ovnAny=!!_ovnH, _ovnMid=!!(_ovnH && _ovnH.from!==date && _ovnH.to!==date);
   var rsn=String((st&&st.reason)||'').toLowerCase();
   // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
   if(!rsn) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
@@ -46729,9 +52967,20 @@ function pjCSS(){
   +H+' .bc .foot button.edit:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
   /* §pjStWin · การ์ดที่มีแผนค้าง · ขอบเตือนแต่ไม่เปลี่ยนสีสถานะ · สถานะยังเป็นซ่อม/ไม่พร้อมตามจริง */
   +H+' .bc.stale{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
+  /* §pjStaleFit · แถบสถานะสูง 32px ตายตัว และตัดส่วนที่เกินทิ้ง
+     บนการ์ดแคบ (292px ที่จอ 1440) ชิปสถานะ + ชิปเตือน + ปุ่ม ไม่มีทางอยู่ในแถวเดียว
+     เฉพาะใบที่มีโปรแกรมค้างจึงยอมให้แถบนี้ห่อบรรทัดได้ · ใบอื่นสูงเท่าเดิมทุกใบ */
+  +H+' .bc.stale .stbar{height:auto;min-height:32px;padding-top:4px;padding-bottom:4px;flex-wrap:wrap;row-gap:4px}'
+  +H+' .bc.stale .stbar .stw{flex:1 1 100%;flex-wrap:wrap;overflow:visible;row-gap:4px}'
+  +H+' .bc.stale .stbar > .pj-lb{margin-left:auto}'
+  /* §pjStaleFit · ชิปนี้หดตัวได้ · min-width:0 กับ max-width:100% คือสองตัวที่ทำให้มันหดได้จริง
+     (ค่าตั้งต้นของ flex item คือ min-width:auto ซึ่งแปลว่า "ห้ามหดต่ำกว่าเนื้อข้างใน")
+     ตัวที่ยอมให้ตัดคือชื่อเส้นทาง (.t) · ปุ่มเอาออกต้องอยู่เสมอ flex:none */
   +H+' .pj-stale{display:inline-flex;align-items:center;gap:5px;background:#FCEFEE;color:#A0342A;'
-    +'border:1px solid #F0CFCB;border-radius:999px;padding:2px 4px 2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}'
-  +H+' .pj-stale button{border:none;background:#A0342A;color:#fff;border-radius:999px;'
+    +'border:1px solid #F0CFCB;border-radius:999px;padding:2px 4px 2px 9px;font-size:10.5px;font-weight:700;'
+    +'white-space:nowrap;min-width:0;max-width:100%;overflow:hidden}'
+  +H+' .pj-stale .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +H+' .pj-stale button{flex:none;border:none;background:#A0342A;color:#fff;border-radius:999px;'
     +'padding:2px 9px;font:700 10px inherit;font-family:inherit;cursor:pointer}'
   +H+' .pj-stale button:hover{background:#7E2820}'
   +H+' .pj-stq{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}'
@@ -46789,6 +53038,17 @@ function pjCSS(){
   +H+' .pj-cus input{width:44px;height:24px;padding:0;border:1px solid #E1E4EA;border-radius:6px;background:none;cursor:pointer}'
   +H+' .pj-sw.on{box-shadow:0 0 0 2px #16265C}'
   /* §pjWb2 · แถวเลือกสีเอง / ล้างสี ใต้ตารางสี */
+  /* §pjWbTxt (2026-09-23) · ช่องพิมพ์ชื่อสีเอง · เหตุผลเดียวกับที่ใบงานโชว์ชื่อสี
+     ล็อตที่ซื้อมาได้สีที่ไม่มีในชุดมาตรฐาน เดิมถูกบันทึกเป็นคำว่า "สีเอง" เฉย ๆ
+     ซึ่งบนใบที่ปริ้นขาวดำหรือแคปส่งไลน์ อ่านแล้วไม่รู้ว่าสีอะไร และสั่งของต่อไม่ได้ */
+  +H+' .pj-wbn{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;'
+     +'border-top:1px solid #EDEFF3}'
+  +H+' .pj-wbn>span{flex:none;font-size:11px;font-weight:700;color:#5A6270}'
+  +H+' .pj-wbni{flex:1;min-width:0;padding:5px 8px;border:1px solid #E1E4EA;border-radius:7px;'
+     +'font:600 11.5px inherit;color:#1E2430;background:#fff}'
+  +H+' .pj-wbni:focus{outline:none;border-color:#16265C;box-shadow:0 0 0 2px rgba(22,38,92,.12)}'
+  /* เส้นคั่นเส้นเดียวพอ · สองเส้นติดกันอ่านเป็นกล่องซ้อนกล่อง */
+  +H+' .pj-wbn + .pj-wbx{border-top:none;margin-top:7px;padding-top:0}'
   +H+' .pj-wbx{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;'
      +'border-top:1px solid #EDEFF3}'
   +H+' .pj-wbc{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;'
@@ -46809,14 +53069,31 @@ function pjCSS(){
      +'padding:3px 10px;font:800 10.5px inherit;cursor:pointer;white-space:nowrap;line-height:1.55}'
   +H+' .pj-lb:hover{background:#0B5744;border-color:#0B5744}'
   +H+' .pj-lb.ed{background:#FFF6E5;border-color:#EFD9AE;color:#8A5A00}'
+  /* §pjDone · ยังจัดไม่เสร็จ · ไม่ใช่ปุ่ม จึงไม่มี hover และเคอร์เซอร์ไม่เปลี่ยน */
+  +H+' .pj-lb.need{background:#FCEFEF;border-color:#EBC9C9;color:#A32D2D;cursor:default}'
+  +H+' .pj-wbfrom{margin-left:7px;font-size:9.5px;font-weight:700;color:#8A929E;'
+     +'background:#F2F4F7;border-radius:5px;padding:1px 6px;white-space:nowrap}'
+  +H+' .pj-need{display:flex;flex-wrap:wrap;align-items:center;gap:6px;'
+     +'padding:6px 15px;background:#FCEFEF;border-bottom:1px solid #F2DADA;'
+     +'font-size:10.5px;font-weight:700;color:#A32D2D;line-height:1.5}'
+  +H+' .pj-need b{background:#fff;border:1px solid #EBC9C9;border-radius:6px;padding:1px 7px;font-weight:800}'
   +H+' .pj-lb.ed:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
   +H+' .pj-move{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#E9EFF7;color:#20477E;white-space:nowrap}'
   +H+' .pj-shop{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#F2EBFA;color:#5B3B96;white-space:nowrap}'
   +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
-  +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:0 15px;height:32px;border-bottom:1px solid #F4F5F8}'
-  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:100px;flex:none}'
+  /* §pjName · แถวสูงตามเนื้อหา · ชื่อที่ยาวได้บรรทัดสองแทนที่จะโดนตัด
+     ยังตรึงขั้นต่ำ 32px ไว้ แถวที่ชื่อสั้นจะได้สูงเท่าเดิมทุกแถว */
+  /* §pjName2 · flex-wrap + ขั้นต่ำของกล่องชื่อ · ที่ไม่พอให้ชิปตกลงไปก่อน
+     แถวไกด์มีป้าย "หัวหน้า" กับชิปภาษามาแย่งที่ · ไม่กำหนดขั้นต่ำ ชื่อจะถูกบีบจนตกสองบรรทัด
+     ชื่อสำคัญกว่าชิป · ชิปลงไปบรรทัดสองได้ ชื่อลงไม่ได้ */
+  +H+' .pj-rw{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:3px 15px;min-height:32px;border-bottom:1px solid #F4F5F8}'
+  /* ป้ายช่องแคบลงจาก 100px → 56px · ที่ได้คืนมาเป็นของชื่อคน
+     วัดกับทะเบียนจริง 40 คน · 100px → ล้น 40 คน · 72px → ล้น 9 คน · 56px → ล้น 2 คน
+     แคบกว่านี้ไม่ได้ · คำว่า CAPTAIN กว้าง 50px ตัดกลางคำไม่ได้
+     ASST. CAPTAIN ตัดลงสองบรรทัดเอง · สองบรรทัดของป้าย (25px) ยังเตี้ยกว่าขั้นต่ำ 32px */
+  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:56px;flex:none;line-height:1.3;align-self:center}'
   +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
   +H+' .pj-rw.sw2{background:#FFFCF3}'
@@ -46839,14 +53116,55 @@ function pjCSS(){
      +'font:600 12px inherit;font-family:inherit;color:#242730;padding:6px 8px;border-radius:6px;cursor:pointer}'
   +H+' .pj-pop.pj-addp button:hover{background:#EEF3FB;color:#20477E}'
   /* §pjRowFit · เว้นขวาให้ลูกศรของ select · ไม่งั้นชื่อยาววิ่งไปทับ */
+  /* ══ §pjName · ชื่อวาดเอง · select โปร่งใสทับอยู่ข้างบน ═══════════════════
+     ที่ต้องทับแทนที่จะทำ dropdown เอง เพราะเมนูของเบราว์เซอร์เลื่อนหาคนได้เร็วกว่า
+     มีกลุ่ม optgroup แยกท่า/ตำแหน่งอยู่แล้ว และพิมพ์ตัวแรกเพื่อกระโดดได้
+     เขียนใหม่เองแปลว่าต้องทำของพวกนั้นใหม่หมดโดยไม่ได้อะไรเพิ่ม */
+  /* §pjName2 · max-width คือตัวที่บังคับ "ป้าย + ชื่อ อยู่บรรทัดเดียวกัน"
+     flex ตัดบรรทัดด้วยขนาดสมมติ ซึ่งถูกครอบด้วย max-width ก่อน
+     ตั้ง = กว้างแถว − (ป้าย 56 + ช่องไฟ 8 + กันเศษ 6 · กว้างการ์ดมีเศษทศนิยม พอดีเก๊ะจะตกบรรทัด) → ป้ายกับกล่องเต็มบรรทัดแรกพอดี
+     ชิปภาษา/หัวหน้าจึงตกไปบรรทัดสองเอง แทนที่จะมาบีบชื่อ
+     ถ้าใช้ auto ล้วน ชื่อยาวจะดันกล่องทั้งกล่องตกไปบรรทัดสอง ป้ายค้างอยู่บนคนเดียว */
+  +H+' .pj-sel{position:relative;flex:1 1 auto;min-width:0;max-width:calc(100% - 70px);display:flex;align-items:center;gap:5px;'
+     +'border:1px solid transparent;border-radius:7px;padding:3px 6px;min-height:24px}'
+  +H+' .pj-sel:hover{border-color:#D9DDE4;background:#fff}'
+  +H+' .pj-sel:focus-within{border-color:#16265C;background:#fff}'
+  +H+' .pj-sel.ro:hover{border-color:transparent;background:none}'
+  /* ตัดบรรทัดที่ช่องว่างเป็นหลัก · ชื่อไทยเว้นวรรคระหว่างชื่อ สกุล และชื่อเล่นอยู่แล้ว
+     break-word ไว้เป็นทางสุดท้ายเผื่อเจอคำเดียวยาวเกินช่อง จะได้ไม่ล้นออกนอกการ์ด
+     ⚠ keep-all กัน Chrome ตัดกลางคำไทย · มันตัดตามพจนานุกรมเอง
+        ชื่อเล่นอย่าง (อัฟฟาน) จึงถูกหักเป็น (อัฟ / ฟาน) คนละครึ่งบรรทัด */
+  +H+' .pj-nm{flex:1;min-width:0;font-size:12px;font-weight:600;color:#242730;'
+     +'line-height:1.35;white-space:normal;word-break:keep-all;overflow-wrap:break-word}'
+  +H+' .pj-nm.e{color:#CFD4DC;font-weight:400}'
+  +H+' .pj-w{white-space:nowrap}'
+  +H+' .pj-cv{flex:none;color:#B6BDC8;font-size:9px;line-height:1;align-self:center}'
+  +H+' .pj-ov{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;'
+     +'cursor:pointer;font:inherit;border:none;padding:0;margin:0}'
+  +H+' .pj-ov:disabled{cursor:default}'
   +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;'
      +'padding:3px 22px 3px 7px;font:600 12px inherit;color:#242730;cursor:pointer;text-overflow:ellipsis}'
   +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
   +H+' .pj-rw select:focus{border-color:#16265C;background:#fff;outline:none}'
+  +H+' .pj-rw .pj-free{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;padding:3px 7px;font:600 12px inherit;color:#242730;outline:none}'
+  +H+' .pj-rw .pj-free:hover,.pj-rw .pj-free:focus{border-color:#D9DDE4;background:#fff}'
+  +H+' .pj-rw .pj-free::placeholder{color:#CFD4DC;font-weight:400}'
   +H+' .pj-tag{font-size:9px;font-weight:800;border-radius:4px;padding:1px 6px;background:#FFF0D8;color:#B4560A;flex:none}'
   +H+' .pj-lg{display:inline-block;font-size:9px;font-weight:800;border-radius:4px;padding:1px 5px;'
     +'background:#E6F1FB;color:#185FA5;vertical-align:middle}'
   +H+' .pj-lgs{display:flex;gap:3px;flex:none}'
+  /* §pjGdTight (2026-10-03) · แถวไกด์ตอนแก้ไข ให้กระชับเท่าตอนปิดใบ
+     การ์ดกว้าง ~300px · ของเดิมกล่องชื่อจองที่เท่าความยาวชื่อเต็ม ป้าย "หัวหน้า" กับป้ายภาษา
+     จึงตกไปอยู่บรรทัดของตัวเองแทบทุกแถว · การ์ดที่กำลังแก้สูงกว่าการ์ดที่ปิดแล้วทั้งที่คนเท่ากัน
+     ตอนนี้ป้ายอยู่บรรทัดเดียวกับชื่อเสมอ · กล่องชื่อใช้ที่ที่เหลือ ชื่อยาวตัดบรรทัดในกล่องเอง (ไม่ตัดด้วย …)
+     คืนที่ให้ชื่อด้วยการ · ลดช่องไฟ · ซ่อนลูกศรเมื่อมีชื่อแล้ว (ทั้งกล่องยังกดเลือกได้เหมือนเดิม)
+     · ป้าย "หัวหน้า" ย่อเป็นดาว (ชี้เมาส์ดูคำอธิบายได้เหมือนเดิม)
+     เหลือให้ชื่อไม่ถึง 70px ป้ายค่อยตกบรรทัด (ชื่อสำคัญกว่าป้าย) */
+  +H+' .pj-rw.pj-gdr{column-gap:4px}'
+  +H+' .pj-rw.pj-gdr .pj-sel{flex:1 1 70px;max-width:none;padding:2px 4px;gap:3px}'
+  +H+' .pj-rw.pj-gdr .pj-nm:not(.e) ~ .pj-cv{display:none}'
+  +H+' .pj-rw.pj-gdr .pj-tag{padding:1px 4px}'
+  +H+' .pj-rw.pj-gdr .pj-lgs{gap:2px}'
   +H+' .pj-away{font-size:9px;font-weight:800;border-radius:5px;padding:1px 6px;background:#E9EFF7;color:#20477E;flex:none;margin-right:3px}'
   +H+' .pj-was{font-size:10px;color:#B4560A;font-weight:600;flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .pj-wbrow{display:flex;align-items:center;gap:9px;padding:0 15px;height:36px;border-bottom:1px solid #F4F5F8}'
@@ -47098,6 +53416,28 @@ function pjSlotVal(J, slot){
   return '';
 }
 /* แถวหนึ่งช่อง · เหมือน pjSelRow แต่ชื่อช่องพิมพ์ทับได้ และมีปุ่มเอาคนออก */
+/* §pjName · Chrome ตัดบรรทัดภาษาไทยด้วยพจนานุกรมของมันเอง
+   ชื่อเล่น (อัฟฟาน) จึงถูกหักเป็น (อัฟ / ฟาน) คนละบรรทัด ซึ่งอ่านแล้วสะดุด
+   word-break:keep-all ไม่ช่วย · Chrome ใช้กับ CJK เท่านั้น
+   ห่อทีละคำด้วย nowrap แทน · เบราว์เซอร์จึงตัดได้เฉพาะช่องว่างที่เราเลือกเอง
+   คำเดียวที่ยาวเกินช่องจะล้น ซึ่งเทสจับได้ (ข้อ "ชื่อล้นออกนอกการ์ด")
+   นามสกุลที่ยาวที่สุดในทะเบียนจริงกว้าง ~75px · ช่องกว้าง 145px */
+function pjWordSafe(t){
+  return String(t==null?'':t).split(/\s+/).filter(Boolean)
+    .map(function(w){ return '<span class="pj-w">'+poE(w)+'</span>'; }).join(' ');
+}
+/* §pjName2 · กล่องเลือกคนของกลาง · ช่องลูกเรือกับช่องไกด์ใช้ตัวเดียวกัน
+   ของเดิมแยกกันอยู่ ช่องไกด์จึงยังเป็น <select> เปล่า และชื่อยังโดนตัดอยู่
+   แก้ที่เดียวไม่พอ · รวมมาไว้ที่เดียวแล้วเรียกสองที่ */
+function pjPickBox(nmTxt, optsHtml, onchangeJs, ro){
+  return '<span class="pj-sel'+(ro?' ro':'')+'">'
+    +'<span class="pj-nm'+(nmTxt?'':' e')+'">'+(nmTxt?pjWordSafe(nmTxt):'— ว่าง —')+'</span>'
+    +(ro?''
+      :('<span class="pj-cv" aria-hidden="true">&#9662;</span>'
+        +'<select class="pj-ov" title="'+poE(nmTxt||'ยังไม่ได้เลือก')+'"'
+        +' onchange="'+onchangeJs+'">'+optsHtml+'</select>'))
+  +'</span>';
+}
 function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var lb=pjSlotLb(kind,slot,defLb,bid);
   var kHtml = ro ? poE(lb)
@@ -47111,8 +53451,36 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var badge='';
   var hp=val?pjHomePier(val):'';
   if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
+  /* ══ §pjFreeAll (2026-10-03) · เรือเช่า · ทุกช่องของ Captain & Crew พิมพ์ชื่อเองได้ ════════
+     ของเดิมพิมพ์เองได้เฉพาะช่องกัปตัน · ช่องที่กดเพิ่มเข้ามา (ผู้ช่วยกัปตัน เด็กเรือ คนเกาะ)
+     ยังเป็นเมนูเลือกจากทะเบียนพนักงาน ซึ่งคนของเจ้าของเรือไม่มีชื่ออยู่ในนั้น เลือกใครไม่ได้เลย
+     ตอนนี้พิมพ์ได้ทุกช่อง · และยังเลือกคนของเราได้เหมือนเดิมจากรายชื่อที่ขึ้นให้ตอนพิมพ์
+     พิมพ์ตรงกับคนในทะเบียน = เก็บเป็นรหัสคนนั้น (ใบอนุญาต/ท่าประจำยังตามได้) · ไม่ตรง = เก็บเป็นข้อความ
+     เฉพาะใบที่ออกเรือ (kind 'go') · ทีมช่างของวันที่ไม่ได้ออกยังเป็นคนของเราเสมอ */
+  var freeCaptain=(kind==='go') && boat && boat.ownership==='charter';
+  var dlId='pjdl_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+  var dlHtml=(freeCaptain && !ro && slot==='cap')
+    ? ('<datalist id="'+dlId+'">'+(PIER_STAFF||[]).filter(function(s){ return s && s.active!==false; })
+        .map(function(s){ return '<option value="'+poE(pjStaffName(s.id))+'">'+(s.role?poE(s.role):'')+'</option>'; }).join('')+'</datalist>')
+    : '';
+  /* ══ §pjName (2026-09-23) · ชื่อในช่องเลือกคนขึ้นไม่เต็ม ═══════════════════
+     วัดจริงที่จอ 1600 การ์ด 4 ใบ · การ์ดกว้าง 302px ช่อง select เหลือ 141px
+     แต่ชื่อพนักงานจริงยาว 202px (กลาง) ถึง 329px (ยาวสุด) · ไม่มีใครพอสักคน
+     <select> เป็น element ของเบราว์เซอร์ ตัดคำเองไม่ได้ ดันให้กว้างกว่านี้ก็ไม่พอ
+     จึงเอาชื่อออกมาวาดเองข้างนอก แล้ววาง select โปร่งใสทับไว้
+     กดตรงไหนก็ยังเป็นเมนูของเบราว์เซอร์เหมือนเดิม ไม่ได้เขียน dropdown ใหม่
+     ชื่อตัดบรรทัดได้ที่ช่องว่าง (ชื่อไทยมีเว้นวรรคระหว่างชื่อ-สกุล-ชื่อเล่น)
+     ตำแหน่งในทะเบียนวางเป็นตัวจาง ต่อท้าย · ยาวไปก็ไหลลงบรรทัดสองเอง
+     ⚠ ไม่ตัดด้วย ellipsis อีกแล้ว · ชื่อคนบนใบจ่ายงานต้องอ่านได้ครบ */
+  /* §pjName2 · ตำแหน่งในทะเบียนไม่ต้องขึ้นบนการ์ด · ป้ายช่องบอกอยู่แล้วว่าช่องนี้คืออะไร
+     มีให้เห็นตอนกดเลือกก็พอ (อยู่ในเมนูของ pjOpts แล้ว)
+     ที่ตัดออกเพราะมันกินที่จนชื่อคนต้องตกไปบรรทัดสอง · ชื่อสำคัญกว่า */
+  var nmTxt=val?pjStaffName(val):'';
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
-    +'<select onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)"'+(ro?' disabled':'')+'>'+pjOpts(pier,val,roles)+'</select>'
+    +(freeCaptain
+      ? (dlHtml+'<input class="pj-free" data-pjfree="'+slot+'" list="'+dlId+'" value="'+poE(nmTxt)+'" placeholder="'+(slot==='cap'?'พิมพ์ชื่อกัปตัน':'พิมพ์ชื่อ')+'" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>')
+      : pjPickBox(nmTxt, pjOpts(pier,val,roles),
+                  'pjPick(&#39;'+bid+'&#39;,&#39;'+slot+'&#39;,this.value)', ro))
     +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+kHtml+'</div>'+sel
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
@@ -47252,8 +53620,14 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
     +' data-o="'+poE(lb)+'"'
     +' onblur="pjSlotLbSet(\'gd\',\''+slot+'\',this.textContent,\''+poE(def)+'\',\''+poE(bid)+'\')">'
     +poE(lb)+'</span>';
-  return '<div class="pj-rw"><div class="k">'+kHtml+'</div>'
-    +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
+  /* §pjName2 · ช่องไกด์เคยตกหล่นไว้ · ยังเป็น <select> เปล่าและชื่อโดนตัด
+     ภาษากับป้าย "หัวหน้า" มีชิปของตัวเองท้ายแถวอยู่แล้ว ชื่อจึงเหลือแค่ชื่อ */
+  var gNm='';
+  try{ var _g=(typeof goGuide==='function')?goGuide(val):null;
+       if(_g) gNm=(_g.name||_g.id)+(_g.nick?(' ('+_g.nick+')'):''); }catch(_){}
+  return '<div class="pj-rw pj-gdr"><div class="k">'+kHtml+'</div>'
+    +pjPickBox(gNm, pjGdOpts(val, kind==='gd', taken, busy),
+               call('this.value').replace(/'/g,'&#39;'), false)
     +((val||extra)
        ? ('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+','+(val?1:0)+')"'
           +' title="'+(val?'เอาคนออกจากช่องนี้':'ปิดช่องว่างที่เปิดไว้')+'">&#10005;</button>')
@@ -47261,7 +53635,7 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
     +((lead&&val&&val===lead)
        ? ('<span class="pj-tag" title="'+poE('ชื่อและเลขใบอนุญาตของคนนี้ขึ้นช่อง "มัคคุเทศก์" '
            +'บนหัวใบสั่งงานมัคคุเทศก์ · ที่เหลือนับเป็นผู้ติดตาม '
-           +'· ต้องการเปลี่ยนหัวหน้า เลือกคนนั้นลงช่องแรก แล้วสองคนจะสลับที่กัน')+'">หัวหน้า</span>')
+           +'· ต้องการเปลี่ยนหัวหน้า เลือกคนนั้นลงช่องแรก แล้วสองคนจะสลับที่กัน')+'" data-pjlead="1" aria-label="หัวหน้า">&#9733;</span>')
        : '')
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
   +'</div>';
@@ -47299,6 +53673,14 @@ function pjGdPick(bid, kind, idx, val){
   }
   goAsnSet(_poDate,bid,{g:ids, other:(+A.other||0), sign:(+A.sign||0)});
   renderPierJob();
+}
+function pjFreePick(bid, slot, el){
+  if(!poGuard()) return;
+  var txt=String(el&&el.value||'').replace(/\s+/g,' ').trim();
+  /* §pjFreeAll · ตรงกับคนในทะเบียนพอดี = เก็บรหัสของคนนั้น ไม่ใช่ข้อความ
+     คนเดียวกันจะได้ไม่กลายเป็นสองคน (รหัสในใบหนึ่ง ข้อความในอีกใบ) */
+  var hit=txt ? (PIER_STAFF||[]).filter(function(s){ return s && s.active!==false && pjStaffName(s.id)===txt; }) : [];
+  pjPick(bid, slot, hit.length===1 ? hit[0].id : txt);
 }
 function pjPick(bid, slot, val){
   var J=pjOf(_poDate,bid);
@@ -47344,15 +53726,71 @@ function pjKeep(fn){
 }
 function pjLockSet(bid,v){
   if(!poCanEdit()) return;
+  /* §pjDone · ด่านซ้ำอีกชั้น · ปุ่มบนการ์ดกันไว้แล้ว แต่ของที่เรียกจากที่อื่นต้องไม่ทะลุ */
+  if(v && pjLockMiss(_poDate,bid).length) return;
   pjSet(_poDate,bid,{lock:v?1:0});
   pjKeep(function(){ renderPierJob(); });
 }
 function pjWbSet(bid,t,c){ if(!poGuard()) return; pjSet(_poDate,bid,{wb:t,wbc:c}); renderPierJob(); }
+/* ══ §pjWbTxt (2026-09-23) · พิมพ์ชื่อสีเองได้ ═══════════════════════════════
+   ชุดสีมาตรฐานมาพร้อมชื่ออยู่แล้ว · ที่ขาดคือล็อตที่ได้สีนอกชุด
+   ของเดิมกดเลือกสีเองแล้วชื่อถูกตั้งเป็นคำว่า "สีเอง" ตายตัว แก้ไม่ได้
+   ใบงานเรือ (§pjWbName) โชว์ชื่อสีเพราะใบถูกปริ้นขาวดำและแคปส่งไลน์
+   "สีเอง" บนใบนั้นจึงบอกอะไรไม่ได้เลย · และคนสั่งของต่อพิมพ์ชื่อสีไม่ได้
+   ⚠ ชื่อกับสีเก็บแยกกันมาแต่ไหนแต่ไร (wb / wbc) · พิมพ์ชื่อโดยไม่เลือกสีก็ได้
+      ใบงานรองรับอยู่แล้ว (มีสี = แถบสี+ชื่อ · มีแต่ชื่อ = ชื่อล้วน) */
+function pjWbName(bid,t){
+  if(!poGuard()) return;
+  var o=pjOf(_poDate,bid)||{};
+  var nm=String(t==null?'':t).trim().slice(0,24);
+  var c=String(o.wbc||'');
+  if(nm===String(o.wb||'')) return;        /* ไม่ได้เปลี่ยนอะไร · ไม่ต้องวาดใหม่ทั้งหน้า */
+  if(!nm && !c) return;                    /* ว่างทั้งคู่ = ไม่มีอะไรให้เก็บ */
+  pjSet(_poDate,bid,{wb:nm,wbc:c});
+  renderPierJob();
+}
+/* เลือกสีเอง · ถ้าพิมพ์ชื่อไว้แล้วต้องไม่โดนคำว่า "สีเอง" ทับ
+   ลำดับที่คนทำจริงคือพิมพ์ชื่อก่อนแล้วค่อยจิ้มสีให้ตรง · ทับแล้วต้องพิมพ์ใหม่ */
+function pjWbCustom(bid,c){
+  if(!poGuard()) return;
+  var o=pjOf(_poDate,bid)||{};
+  var nm=String(o.wb||'').trim();
+  pjSet(_poDate,bid,{wb:(nm||'\u0e2a\u0e35\u0e40\u0e2d\u0e07'), wbc:String(c||'')});
+  renderPierJob();
+}
 function pjPopToggle(id){
   var el=document.getElementById(id), was=el&&el.classList.contains('on');
   document.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); });
-  if(el && !was) el.classList.add('on');
+  if(el && !was){ el.classList.add('on'); pjPopFit(el); }
   if(window.event) window.event.stopPropagation();
+}
+/* ══ §pjPopFit (2026-09-23) · การ์ดมี overflow:hidden ════════════════
+   ป๊อปอัพที่ยาวเกินขอบล่างของการ์ดถูกกลืนหายไปเฉย ๆ โดยไม่มีอะไรบอก
+   ที่หายคือแถวล่างสุด (เลือกสีเอง · ล้างสี) ซึ่งเป็นปุ่มที่ต้องกดจริง
+   อาการเดียวกันกับ §pjStaleFit · เห็นของ แต่กดไม่ได้
+   เลื่อนขึ้นเท่าที่กรอบยอมให้ · ไม่พลิกขึ้นทั้งก้อนเพราะบางใบกรอบเตี้ยกว่าป๊อปอัพ
+   จำค่า top เดิมไว้ที่ตัวเอง · เปิดซ้ำต้องเริ่มนับจากที่เดิมทุกครั้ง ไม่งั้นขยับขึ้นเรื่อย ๆ */
+function pjPopFit(el){
+  try{
+    if(el._pjTop==null) el._pjTop=el.style.top||'';
+    el.style.top=el._pjTop;
+    var n=el.parentElement, box=null;
+    while(n && n!==document.body){
+      var cs=getComputedStyle(n);
+      if(/hidden|clip|auto|scroll/.test(cs.overflowY)){ box=n.getBoundingClientRect(); break; }
+      n=n.parentElement;
+    }
+    if(!box) return;
+    var r=el.getBoundingClientRect();
+    var over=r.bottom-(box.bottom-6);
+    if(over<=0) return;
+    var room=r.top-(box.top+6);                 /* ที่ว่างเหนือป๊อปอัพในกรอบเดียวกัน */
+    var up=Math.min(over, Math.max(0, room));
+    if(up<=0) return;
+    var cur=parseFloat(getComputedStyle(el).top);
+    if(!isFinite(cur)) cur=0;
+    el.style.top=(cur-up)+'px';
+  }catch(_){}
 }
 /* แต้มสีโปรแกรม · เขียนลง ROUTES เลย จึงเปลี่ยนพร้อมกันทุกหน้าที่โชว์เส้นทางนี้ */
 function pjProgColor(rid,hex){
@@ -47450,12 +53888,14 @@ function pjCard(B, pier, ro){
      ทุกช่องที่เขียนค่าลงใบงานใช้ lro · ส่วนจานสีของโปรแกรม/สถานะยังใช้ ro
      เพราะนั่นเป็นค่าของเส้นทาง ไม่ใช่ของใบงานลำนี้วันนี้ */
   var lk=!!J.lock, lro=(ro||lk);
+  var _miss=(typeof pjLockMiss==='function')?pjLockMiss(_poDate,bid):[];   /* §pjDone */
   var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var col=going?colRaw:pjMute(colRaw);
   var pcol=rt.color||'#5A6270';
   var pax=pjPax(_poDate,bid,pier), GF=pjGuidesFull(_poDate,bid), G=GF.map(function(x){ return x.name; });
   var langs=Object.keys(pax.langs);
-  var wbc=J.wbc||'', wbt=J.wb||'';
+  /* §pjWbCarry · สีที่ใบนี้ "ใช้จริง" · ของตัวเอง หรือสืบมาจากวันล่าสุดของลำนี้ */
+  var _W=pjWbOf(_poDate,bid), wbc=_W.c, wbt=_W.t, wbFrom=_W.from;
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   /* §gdIdle (2026-09-07) · ปุ่ม "จัดไกด์" อยู่ทุกใบ ลำที่ไม่ได้ออกก็จ่ายไกด์ได้
@@ -47587,7 +54027,11 @@ function pjCard(B, pier, ro){
      +(ST.stale?('<span class="pj-stale" title="'+poE('วันนี้ยังมีโปรแกรม "'+((rt&&rt.name)||B.rid||'')
           +'" วางไว้บนกระดาน Boat Operation ทั้งที่เรือไม่พร้อม '
           +'· หน้าอื่น (Trip P&L · Dashboard · Departures) ก็ยังอ่านแถวนี้อยู่')+'">'
-        +'&#9888; โปรแกรมค้าง'+((rt&&rt.name)?(' \u00b7 '+poE(rt.name)):'')
+        /* §pjStaleFit · ชื่อเส้นทางอยู่ในสแปนของตัวเอง เพื่อให้มันเป็นตัวที่ถูกตัดเมื่อที่ไม่พอ
+           ไม่ใช่ปุ่ม · ก่อนหน้านี้ทั้งชิปเป็น nowrap ก้อนเดียว ชื่อยาว ๆ จึงดันปุ่ม "เอาออก"
+           ออกไปนอกขอบการ์ด แล้วโดน overflow:hidden ของ .stw กลืนหายไปทั้งปุ่ม
+           ผลคือเห็นคำเตือนแต่กดเอาโปรแกรมออกไม่ได้เลย (วัดที่ 1920 ปุ่มเลยขอบไป 195px) */
+        +'<span class="t">&#9888; โปรแกรมค้าง</span>'   /* ชื่อเส้นทางไม่ต้องพูดซ้ำตรงนี้ · แถบชื่อโปรแกรมอยู่เหนือแถบนี้ขึ้นไปสองบรรทัดเอง */
         +(ro?'':('<button onclick="pjOpDrop(\''+poE(bid)+'\')">เอาออก</button>'))+'</span>'):'')
      /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
      +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
@@ -47604,8 +54048,17 @@ function pjCard(B, pier, ro){
      +(ro?''
         :(lk
           ? ('<button class="pj-lb ed" onclick="pjLockSet(\''+bid+'\',0)" title="เปิดใบนี้ให้แก้ไขอีกครั้ง">&#9998; แก้ไข</button>')
-          : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>')))
+          : (_miss.length
+             /* §pjDone · ไม่ใช่ปุ่ม · กดไม่ได้จริง ๆ ไม่ใช่กดแล้วเด้งเตือน
+                รายการที่ขาดอยู่ในแถบใต้แถบสถานะ เพราะแถบนี้กว้างไม่พอ
+                (§pjStaleFit · ของยาวในแถบนี้ถูก overflow ของการ์ดกลืนมาแล้วครั้งหนึ่ง) */
+             ? ('<span class="pj-lb need" title="'+poE('\u0e22\u0e31\u0e07\u0e02\u0e32\u0e14 '+_miss.join(' \u00b7 '))+'">&#9888; \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a</span>')
+             : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>'))))
    +'</div>'
+   +((!ro && !lk && _miss.length)
+      ? ('<div class="pj-need">&#9888; \u0e22\u0e31\u0e07\u0e08\u0e31\u0e14\u0e44\u0e21\u0e48\u0e40\u0e2a\u0e23\u0e47\u0e08 \u00b7 \u0e02\u0e32\u0e14'
+          + _miss.map(function(x){ return '<b>'+poE(x)+'</b>'; }).join('')+'</div>')
+      : '')
    /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
       ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
    /* §pjSame · ชื่อหัวข้อเดิมเปลี่ยนตาม SM.work · ใบสองใบที่ไม่ได้ออกเหมือนกัน
@@ -47730,6 +54183,8 @@ function pjCard(B, pier, ro){
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
      +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
+       /* §pjWbCarry · บอกด้วยว่าสีนี้ต่อมาจากวันไหน · ล็อตเปลี่ยนแล้วจะได้เห็นว่าต้องแก้ */
+       +(wbFrom?('<span class="pj-wbfrom" title="ใบนี้ยังไม่ได้ตั้งสีเอง · ใช้สีล่าสุดของลำนี้">ต่อจาก '+poE(pjDocDate(wbFrom))+'</span>'):'')
        +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:252px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
        +'<div class="pj-sws">'
        +PJ_WB.map(function(w){ return '<div class="pj-sw'+(w.c===wbc?' on':'')+'" title="'+w.t+'" style="background:'+w.c+'" onclick="pjWbSet(\''+bid+'\',\''+w.t+'\',\''+w.c+'\')"></div>'; }).join('')
@@ -47737,10 +54192,23 @@ function pjCard(B, pier, ro){
        /* §pjWb2 · สายรัดเป็นของที่ซื้อมาเป็นล็อต · ล็อตไหนได้สีแปลกมาก็คีย์เองได้
           ไม่ต้องรอเพิ่มในโค้ด · และต้องล้างกลับเป็น "ยังไม่ระบุ" ได้ด้วย
           ของเดิมพอตั้งผิดแล้วเอาออกไม่ได้เลย */
+       /* §pjWbTxt · ช่องชื่อสี · คลิกในช่องต้องไม่ปิดป๊อปอัพ
+          ป๊อปอัพถูกเปิด/ปิดด้วย onclick ที่ span แม่ · คลิกอะไรข้างในก็เด้งขึ้นไปถึง
+          ไม่หยุดไว้ = จิ้มช่องแล้วป๊อปอัพหุบทันที พิมพ์ไม่ได้เลย
+          เก็บค่าตอน change (เปลี่ยนแล้วออกจากช่อง) · Enter = ออกจากช่อง */
+       +'<div class="pj-wbn">'
+         +'<span>ชื่อสี</span>'
+         +'<input type="text" class="pj-wbni" maxlength="24" value="'+poE(wbt)+'" '
+         +'placeholder="พิมพ์เอง เช่น ส้มอ่อน" '
+         +'onclick="event.stopPropagation()" '
+         +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" '
+         +'onchange="pjWbName(\''+bid+'\',this.value)">'
+       +'</div>'
        +'<div class="pj-wbx">'
          +'<label class="pj-wbc" title="เลือกสีเอง · ใช้กับล็อตที่สีไม่มีในชุดมาตรฐาน">'
            +'<input type="color" value="'+(wbc||'#888888')+'" '
-           +'onchange="pjWbSet(\''+bid+'\',\'สีเอง\',this.value)">'
+           +'onclick="event.stopPropagation()" '
+           +'onchange="pjWbCustom(\''+bid+'\',this.value)">'
            +'<span>เลือกสีเอง</span></label>'
          +(wbt?('<button type="button" class="pj-wbclr" onclick="pjWbSet(\''+bid+'\',\'\',\'\')">ล้างสี</button>'):'')
        +'</div>'
@@ -48682,7 +55150,9 @@ function pjPrint(){
        สีล้วน ๆ แยก "ฟ้า TQ" กับ "น้ำเงิน" ไม่ออกบนจอที่ปรับสีเอง
        และคนสั่งของทางไลน์ต้องพิมพ์ชื่อสีได้ · โชว์ทั้งแถบสีและชื่อ */
     + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
-        var c=String(J[i].wbc||'').trim(), nm=String(J[i].wb||'').trim();
+        /* §pjWbCarry · ใบที่ปริ้นต้องโชว์สีเดียวกับบนจอ รวมถึงสีที่สืบมาจากวันก่อน */
+        var _w=pjWbOf(_poDate, B.bid);
+        var c=String(_w.c||'').trim(), nm=String(_w.t||'').trim();
         if(/^#[0-9a-fA-F]{3,8}$/.test(c))
           return '<span class="wbc"><i style="background:'+c+'"></i>'
                + (nm?('<b>'+e(nm)+'</b>'):'') + '</span>';
@@ -48788,7 +55258,8 @@ function pjPrint(){
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
          ของเดิมพิมพ์ "120/65" ด้วยสีเดียวกับทุกช่อง อ่านผ่านได้ง่ายมาก */
       var over=(cap>0 && pax>cap) ? (pax-cap) : 0;
-      var wbc=(J[i]&&J[i].wbc)||'', wbn=(J[i]&&J[i].wb)||'';
+      var _wb2=pjWbOf(_poDate, B.bid);                  /* §pjWbCarry */
+      var wbc=_wb2.c||'', wbn=_wb2.t||'';
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
       return { dep:(dep||'~'), html:
@@ -49454,6 +55925,8 @@ function ppChips(A){
   if(A.veg)   out.push(c('มังสวิรัติ <b>'+A.veg+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.vegan) out.push(c('วีแกน <b>'+A.vegan+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.halal) out.push(c('ฮาลาล <b>'+A.halal+'</b>','#E9F1FB','#C3D9F0','#185FA5'));
+  /* §ppInfSub · ทารกไม่เข้ายอดหัวอาหาร แต่ต้องเห็นว่ามี · เดิมอยู่ใต้ยอดรวม ย้ายมาเป็นชิปในช่องอาหารพิเศษ */
+  if(A.inf)   out.push(c('ทารก <b>'+A.inf+'</b>','#FDF4FF','#EBD5F2','#86198F'));
   var alt=ppAlHtml(A.al);
   if(alt||A.allergy||A.alUnk){
     var lead='&#9888; แพ้อาหาร';
@@ -49568,6 +56041,8 @@ function ppCSS(){ var S='#prpo-host'; return ''
    +'white-space:nowrap;letter-spacing:-.01em}'
  +S+' .pp-t .num.z{color:#CBD5E1}'
  +S+' .pp-t .tot{font-weight:800}'
+ +S+' .pp-cap{font-weight:600;font-size:.78em;color:#94A3B8;margin-left:2px;white-space:nowrap}'
+ +S+' .pp-cap.over{color:#C0271C;font-weight:800}'
  +S+' .pp-t .eat{font-weight:800;color:#0F6E56;background:#F4FBF8}'
  +S+' .pp-t .mealc{white-space:normal;line-height:1.55}'
  +S+' .pp-t tr.g-pier>td{background:#E4EAF0;border-top:2px solid #9FB0C0;border-bottom:1px solid #9FB0C0;'
@@ -49637,11 +56112,41 @@ function ppCSS(){ var S='#prpo-host'; return ''
 /* ── ชิ้นส่วนของชีต · ทุกอย่างเป็น <tr> ในตารางเดียวกัน คอลัมน์จึงตรงกันทั้งหน้า ──
    PP_COLS ต้องตรงกับจำนวน <th> เสมอ · ใช้เป็น colspan ของแถวกางรายชื่อ */
 var PP_COLS=10;
-function ppNumCells(A, cls){
+/* §ppCap · ยอดจอง / ที่นั่งเต็มลำ · เฉพาะแถวที่รู้ลำแล้ว (วัน × ลำ)
+   cap ของวันนั้นจาก boatCapFor (รวม override รายวัน · ไม่เกิน licensePax) · เกิน cap ขึ้นสีแดง
+   แถวท่าใช้ ppPierCapTag (รวมที่นั่งทุกเที่ยวเรือของท่า) · แถวโปรแกรม/รวมทั้งหมดไม่มี cap */
+function ppCapOf(bid, date){
+  if(!bid || typeof boatCapFor!=='function') return 0;
+  try{ return +boatCapFor(bid,date)||0; }catch(_){ return 0; }
+}
+function ppCapTag(bid, date, tot){
+  var c=ppCapOf(bid,date); if(!c) return '';
+  var lic=(typeof boatCapLicense==='function')?boatCapLicense(bid):0;
+  var tip='จอง '+tot+' / cap '+c+(lic&&lic!==c?(' · จดทะเบียน '+lic+' ที่นั่ง'):'');
+  return '<span class="pp-cap'+(tot>c?' over':'')+'" title="'+ckEsc(tip)+'">/'+c+'</span>';
+}
+/* รวมทั้งท่า · ที่นั่งของทุก (วัน × ลำ) ที่ออกจากท่านี้ในช่วงที่เลือก · ลำเดียวกันวันเดียวกันนับครั้งเดียว
+   ถึงจะโผล่ใต้สองโปรแกรม · ยอดจองเทียบทั้งท่า รวมคนที่ยังไม่จัดเรือด้วย
+   เพราะคำถามคือ "ที่นั่งที่ออกจากท่านี้ พอกับคนที่จองไว้ไหม" */
+function ppPierCapTag(PB){
+  var seen={}, cap=0, una=0, noCap=0;
+  (PB.gOrd||[]).forEach(function(k){ var g=PB.G[k];
+    g.ck.forEach(function(ck){ var C=g.cells[ck];
+      if(!C.boatId){ una+=C.A.tot; return; }
+      var key=C.date+'|'+C.boatId; if(seen[key]) return; seen[key]=1;
+      var c=ppCapOf(C.boatId,C.date); if(c) cap+=c; else noCap++; }); });
+  if(!cap) return '';
+  var tot=PB.A.tot, n=Object.keys(seen).length;
+  var tip='จองทั้งท่า '+tot+' / ที่นั่งรวม '+cap+' ('+n+' เที่ยวเรือ)'
+    +(una?(' · ยังไม่จัดเรือ '+una+' คน'):'')
+    +(noCap?(' · ไม่มี cap '+noCap+' ลำ'):'');
+  return '<span class="pp-cap'+(tot>cap?' over':'')+'" title="'+ckEsc(tip)+'">/'+cap+'</span>';
+}
+function ppNumCells(A, cls, cap){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
   return n(A.n)+n(A.ad)+n(A.chd)+n(A.inf)+n(A.foc)
-    +'<td class="num tot'+c+'">'+A.tot+'</td>'
+    +'<td class="num tot'+c+'">'+A.tot+(cap||'')+'</td>'
     +'<td class="num eat'+c+'">'+A.eat+'</td>';
 }
 /* แถวข้อมูลของโปรแกรมหนึ่ง · หนึ่งแถว = หนึ่ง (วัน × ลำ) */
@@ -49687,7 +56192,7 @@ function ppProgRows(g, pk){
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
         +'<b>'+e(ppBoatName(C.boatId))+'</b>'+tags+'</div></td>'
-      + ppNumCells(A)
+      + ppNumCells(A, '', ppCapTag(C.boatId, C.date, A.tot))
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
     if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppBookingList(A)+'</td></tr>';
@@ -49854,7 +56359,7 @@ function ppBodySheet(P,pOrd,GT){
      ถึงจะเป็นคนละ <table> ก็ตาม (นี่คือเหตุผลที่แยกตารางได้โดยไม่เสียการเทียบตัวเลข) */
   var COLS='<colgroup><col style="width:96px"><col style="width:232px">'
     +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
-    +'<col style="width:54px"><col style="width:52px"><col style="width:58px">'
+    +'<col style="width:54px"><col style="width:52px"><col style="width:84px">'
     +'<col style="width:74px"><col></colgroup>';
   var HEAD='<thead><tr class="lbl">'
     +'<th>วันที่</th><th>เรือ</th><th class="r">ใบจอง</th>'
@@ -49881,7 +56386,7 @@ function ppBodySheet(P,pOrd,GT){
       return;
     }
     out+=wrap('<tr class="g-pier"><td colspan="2">'+lb+'</td>'
-        +ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>'
+        +ppNumCells(PA,'',ppPierCapTag(PB))+'<td class="mealc">'+ppChips(PA)+'</td></tr>'
       + PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join(''), true);
   });
   /* ยอดรวมทั้งช่วง · ตารางของตัวเอง จะได้ไม่ดูเหมือนห้อยท้ายเป็นของท่าสุดท้าย */
@@ -49925,7 +56430,7 @@ function ppBodyFriendly(P,pOrd,GT){
             +(A.chtr?'<span class="fr-tag">เหมาลำ</span>':'')
             +(A.ovn?'<span class="fr-tag">ค้างคืน</span>':'')
           +'</div>'
-          +'<div class="fr-big"><div class="b1"><b>'+A.tot+'</b><span>คนทั้งหมด</span></div>'
+          +'<div class="fr-big"><div class="b1"><b>'+A.tot+ppCapTag(C.boatId, C.date, A.tot)+'</b><span>คนทั้งหมด</span></div>'
             +'<div class="b2"><b>'+A.eat+'</b><span>ต้องเตรียมอาหาร</span></div></div>'
           +'<div class="fr-mini">'
             +'<span>ผู้ใหญ่ <b>'+A.ad+'</b></span><span>เด็ก <b>'+A.chd+'</b></span>'
@@ -50058,6 +56563,8 @@ function ppCSSFriendly(){ var S='#prpo-host'; return ''
  +S+' .fr-big>div{flex:1;border-radius:14px;padding:11px 13px;line-height:1.1}'
  +S+' .fr-big b{display:block;font:800 27px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
  +S+' .fr-big span{font-size:11px;font-weight:600}'
+ +S+' .fr-big b .pp-cap{font-size:15px;font-weight:600;color:#94A3B8}'
+ +S+' .fr-big b .pp-cap.over{color:#C0271C;font-weight:800}'
  +S+' .fr-big .b1{background:#F1F5F9;color:#334155}'
  +S+' .fr-big .b2{background:#E7F4EF;color:#0F6E56}'
  +S+' .fr-mini{display:flex;gap:13px;flex-wrap:wrap;font-size:12px;color:#64748B;margin-bottom:11px}'
@@ -50132,6 +56639,13 @@ function ppCSSBoard(){ var S='#prpo-host'; return ''
  +'@media print{'+S+' .bd-g{grid-template-columns:repeat(4,1fr);background:#fff;padding:0;gap:6px}'
    +S+' .bd-p>header{break-after:avoid}}';
 }
+
+/* §laDerived · ทางเปิดหน้าใหม่ · ตัวโหลดข้อมูลดิบของแต่ละส่วนกระจายอยู่ทั่วไฟล์
+   บางตัวอยู่หลังจุดที่ประกอบตารางไปแล้ว (PIER_KINDS โหลดที่บรรทัด ~55000 แต่ poKindSync()
+   ถูกเรียกไปตั้งแต่ ~54970) · ประกอบอีกครั้งตรงนี้ ท้ายไฟล์ หลังทุกตัวโหลดทำงานจบ
+   ทำงานทันทีไม่รอ DOMContentLoaded · หน้าจอเริ่มวาดหลังสคริปต์จบอยู่แล้ว
+   ประกอบซ้ำไม่มีผลข้างเคียง · ทั้งสองตัวสร้างตารางใหม่จากศูนย์ */
+try{ window.laRebuildDerived('boot'); }catch(_){}
 
 // §famField · boot backfill · runs once for the localStorage-seeded ROUTES (the cloud path calls
 //   this again after /api/load overwrites them). In-memory only — no write here; the value reaches

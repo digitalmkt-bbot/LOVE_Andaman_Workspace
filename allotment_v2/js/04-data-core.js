@@ -64,6 +64,45 @@ function laRouteKind(r){
   return laIsLandPier(rt.pier) ? KIND_LAND : KIND_MARINE;   /* แถวเก่าที่ยังไม่มี kind */
 }
 function laIsLandRoute(r){ return laRouteKind(r) === KIND_LAND; }
+/* §pierOne · ลำดับท่าเรือของทั้งระบบ · ตารางเดียว
+   เดิมพิมพ์ไว้ในหน้ารายการโปรแกรมที่เดียว · พอมีที่สองก็จะเริ่มเพี้ยนกัน */
+const LA_PIER_ORDER = ['tublamu','panwa','ranong', LAND_PIER];
+/* §pierName · ชื่อท่าเรือสำหรับแสดงผล · ตามภาษาที่เลือกอยู่
+   ⚠ นี่คือตารางใหม่ ยังไม่ได้เก็บของเก่า · วัดแล้วมีที่พิมพ์ชื่อท่าเองอยู่ 350 บรรทัดทั้งระบบ
+   เขียนไม่เหมือนกันด้วย (Tub Lamu / Tuplamu Pier / ทับละมุ) · กวาดทั้งหมดมาใช้ตัวนี้เป็นงานของมันเอง
+   ของใหม่ที่เขียนต่อจากนี้ ให้เรียกตัวนี้ อย่าพิมพ์เพิ่มชุดที่ 351 */
+const LA_PIER_NAME = {
+  tublamu:{ en:'Tub Lamu',    th:'ทับละมุ' },
+  panwa:  { en:'Visit Panwa', th:'พันวา' },
+  ranong: { en:'Ranong',      th:'ระนอง' },
+  other:  { en:'Land programs', th:'โปรแกรมบก' }
+};
+function laPierName(p){
+  const row = LA_PIER_NAME[p || LAND_PIER];
+  if(!row) return String(p || '—');   /* ท่าที่ยังไม่รู้จัก · โชว์ค่าดิบ ดีกว่าขีดกลาง */
+  return ((typeof laLangGet === 'function' && laLangGet() === 'en') ? row.en : row.th) || row.en;
+}
+function laPierRank(p){
+  const i = LA_PIER_ORDER.indexOf(p || LAND_PIER);
+  return i < 0 ? LA_PIER_ORDER.length : i;   /* ท่าที่ยังไม่รู้จัก ไปต่อท้าย ไม่หาย */
+}
+/* §routeOrd · ลำดับที่คนคาดหวังเวลาเห็นรายการโปรแกรม · ท่าก่อน แล้วตามลำดับที่ตั้งไว้ในหน้า Config
+   ของเดิมช่องเลือกทริปเรียงตามลำดับแถวใน Programs sold หรือใน Rate Type ดิบ ๆ
+   คือ "ใครเพิ่มทีหลังก็ไปท้าย" · ท่าจึงปนกัน คนคีย์ต้องกวาดตาทั้งรายการทุกครั้ง
+   sort คือเลขลำดับของหน้า Program Config · ไม่มีก็ใช้ตำแหน่งใน ROUTES แทน (ลำดับเดียวกับที่หน้านั้นแสดง) */
+function laRouteOrd(r){
+  const rt = _laRouteOf(r);
+  if(!rt) return [99, 1e9, 1e9];
+  const list = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : [];
+  const idx = list.indexOf(rt);
+  const s = (rt.sort == null || rt.sort === '') ? 1e9 : (Number(rt.sort) || 0);
+  const pier = laIsLandRoute(rt) ? LAND_PIER : (rt.pier || LAND_PIER);
+  return [ laPierRank(pier), s, idx < 0 ? 1e9 : idx ];
+}
+function laRouteOrdCmp(a, b){
+  const x = laRouteOrd(a), y = laRouteOrd(b);
+  return (x[0]-y[0]) || (x[1]-y[1]) || (x[2]-y[2]);
+}
 /* เส้นทางฝั่งเรือเท่านั้น · ใช้กรองหน้าจอที่พูดเรื่องเรือล้วน ๆ */
 function laMarineRoutes(list){
   const src = list || ((typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : []);
@@ -580,29 +619,319 @@ function fillColor(pct){return pct>=85?'var(--red)':pct>=60?'var(--amber)':'var(
 // §Per-user sidebar personalization — accent colour + collapsible groups · stored in
 // localStorage keyed by username (per-device, no backend) · only the logged-in user sees theirs.
 function laSbUser(){ return (window.LA_ME && (LA_ME.username||LA_ME.name)) || 'guest'; }
-const LA_SB_COLORS=['#1683C7','#0F6E56','#D4537E','#854F0B','#534AB7','#A32D2D','#1f2937'];
-function laApplySidebarColor(){
-  let c=''; try{ c=localStorage.getItem('la_sbcolor_'+laSbUser())||''; }catch(e){}
-  let st=document.getElementById('la-sbcolor');
-  if(!c){ if(st) st.remove(); }
-  else { if(!st){ st=document.createElement('style'); st.id='la-sbcolor'; document.head.appendChild(st); }
-    st.textContent='.sidebar .nav-item.active{background:'+c+' !important;border-color:'+c+' !important}.sidebar .nav-item.active svg{color:#fff !important;opacity:1 !important}'; }
-  const box=document.getElementById('la-sbcolor-sw'); if(box) box.querySelectorAll('[data-c]').forEach(el=>el.style.boxShadow=(el.getAttribute('data-c')===c?'0 0 0 2px #888':'0 0 0 1px rgba(128,128,128,.35)'));
+/* ══ §sbColorGone (2026-09-25) · แถบเลือกสีแท็บถูกตัดออก ═══════════════════
+   ที่มา · ผู้ใช้แจ้งเอง · "ตัดแถบเลือกสีออกได้เลย เหมือนตอนนี้ไม่มีผลแล้ว" — จริง
+   ของเดิมยัด <style> ว่า .sidebar .nav-item.active{background:<สี> !important}
+   แต่สกินอัตลักษณ์องค์กร (§sbPill) ใส่กฎที่เจาะจงกว่าไว้ทับ
+     html[data-sb-pill="cyan"] .sidebar .nav-item.active{background:var(--ci-cyan)!important}
+   ความเจาะจง (0,4,1) ชนะ (0,3,0) ไม่ว่าจะมาก่อนมาหลัง · กดสีไหนก็ไม่ขยับ
+   (วัดแล้ว · กด #D4537E พื้นเมนูที่เปิดอยู่ยังเป็น rgb(0,188,223) เหมือนเดิม)
+   ตัวที่ใช้เลือกหน้าตาเมนูตอนนี้คือปุ่มทรงพิล cyan/navy ข้างปุ่มธีมบนหัวแถบ
+   คีย์ la_sbcolor_<user> ที่เคยเก็บไว้ปล่อยค้างไว้เฉย ๆ ไม่มีใครอ่านแล้ว
+   ไม่ไล่ลบ เพราะเป็นของในเครื่องผู้ใช้และลบทิ้งเงียบ ๆ ไม่ใช่เรื่องที่ควรทำเอง */
+/* ══ §i18n (2026-09-25) · ปุ่มสลับภาษา ไทย / อังกฤษ ═══════════════════════════
+   ที่มา · ผู้ใช้ขอ · คนที่ต้องใช้อังกฤษคือฝั่ง Sales
+   วัดหน้าจริงแล้ว · หน้ากลุ่ม Sales เป็นอังกฤษอยู่เกือบหมด เหลือไทยหน้าละไม่กี่คำ
+   รอบนี้จึงวางโครงให้ครบก่อน แล้วค่อยไล่ห่อข้อความทีละหน้า
+
+   กติกาที่เลือก · ห่อด้วยข้อความไทยต้นฉบับเป็นกุญแจ  laT('บันทึก') → 'Save'
+     - ไม่ต้องคิดชื่อคีย์ใหม่ให้ 12,000 ข้อความ · diff เล็ก อ่านโค้ดแล้วยังรู้เรื่อง
+     - ไม่มีคำแปล = คืนไทยเหมือนเดิม · ห่อผิดที่ก็ไม่พัง แค่ไม่แปล
+     - คำไทยคำเดียวกันแต่คนละความหมาย ใส่บริบทได้  laT('ว่าง','seat')
+   ⚠ แปลได้แค่ "เปลือกโปรแกรม" · ชื่อลูกค้า โรงแรม โซนรับ หมายเหตุที่พนักงานพิมพ์
+     เป็นข้อมูลในฐานข้อมูล ห้ามเอามาห่อ ไม่งั้นข้อมูลจริงจะเพี้ยนตามภาษาที่เลือก */
+function laLangGet(){
+  try{ return localStorage.getItem('la_lang_'+laSbUser())==='en' ? 'en' : 'th'; }
+  catch(e){ return 'th'; }
 }
-function laSetSidebarColor(c){ try{ localStorage.setItem('la_sbcolor_'+laSbUser(), c); }catch(e){} laApplySidebarColor(); }
-function laSbResetColor(){ try{ localStorage.removeItem('la_sbcolor_'+laSbUser()); }catch(e){} laApplySidebarColor(); }
-function laSbColorPickerHTML(){
-  return '<div style="padding:9px 4px 3px"><div onclick="laSbToggleColorPicker()" style="font-size:10px;color:#8a93a0;letter-spacing:.05em;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">🎨 สีแท็บ<span id="la-sbcolor-ch" style="margin-left:auto;font-size:10px;opacity:.6;transition:transform .2s">⌄</span></div><div id="la-sbcolor-sw" style="display:none;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px">'
-    + LA_SB_COLORS.map(c=>'<span data-c="'+c+'" onclick="laSetSidebarColor(\''+c+'\')" title="'+c+'" style="width:18px;height:18px;border-radius:50%;background:'+c+';cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.35)"></span>').join('')
-    + '<span onclick="laSbResetColor()" title="ค่าเริ่มต้น" style="font-size:13px;color:#9aa3af;cursor:pointer;margin-left:2px">↺</span>'
-    + '</div></div>';
+function laLangSet(l){
+  try{ localStorage.setItem('la_lang_'+laSbUser(), l==='en'?'en':'th'); }catch(e){}
 }
-function laSbToggleColorPicker(){
-  const sw=document.getElementById('la-sbcolor-sw'); if(!sw) return;
-  const open=(sw.style.display==='none'||!sw.style.display);
-  sw.style.display=open?'flex':'none';
-  const ch=document.getElementById('la-sbcolor-ch'); if(ch) ch.style.transform=open?'rotate(180deg)':'none';
+function laT(th, ctx){
+  if(laLangGet()!=='en') return th;
+  var s=String(th==null?'':th);
+  if(ctx){ var c=LA_T_EN[ctx+'|'+s]; if(c!=null) return c; }
+  var v=LA_T_EN[s];
+  return (v==null) ? th : v;
 }
+/* ชื่อเมนูซ้าย · เมนูเป็น HTML คงที่ในไฟล์ ไม่ได้วาดด้วย JS จึงสลับที่ตัว DOM
+   เก็บไทยต้นฉบับไว้ใน dataset ครั้งแรก · สลับกลับได้โดยไม่ต้องมีพจนานุกรมย้อนกลับ */
+function laLangApplyNav(){
+  var en=(laLangGet()==='en');
+  document.querySelectorAll('.sidebar .nav-item[data-view]').forEach(function(el){
+    /* ป้ายชื่อคือ text node ตัวสุดท้ายที่มีตัวอักษร · ตัวแรกเป็น <svg> ไอคอน */
+    var node=null;
+    for(var i=el.childNodes.length-1;i>=0;i--){
+      var n=el.childNodes[i];
+      if(n.nodeType===3 && String(n.nodeValue||'').trim()){ node=n; break; }
+    }
+    if(!node) return;
+    if(!el.dataset.thLabel) el.dataset.thLabel=String(node.nodeValue).trim();
+    var th=el.dataset.thLabel;
+    /* บริบท 'nav' ก่อน · คำเดียวกันในเมนูกับในหน้าอาจแปลคนละแบบ
+       ไม่มีคำแปล = คืนไทยเหมือนเดิม เมนูที่เป็นอังกฤษอยู่แล้วจึงไม่ถูกแตะ */
+    var tr=en ? laT(th,'nav') : th;
+    node.nodeValue=' '+tr+' ';
+  });
+}
+function laLangToggle(){
+  laLangSet(laLangGet()==='en'?'th':'en');
+  try{ laLangApplyNav(); }catch(e){}
+  try{ if(typeof sbLangIcon==='function') sbLangIcon(); }catch(e){}
+  /* วาดหน้าที่เปิดอยู่ใหม่ · nav() เป็นทางเดียวที่วาดหน้าใหม่ทั้งระบบ
+     ยิงผ่านเมนูที่ active อยู่ จะได้ไม่ต้องรู้ว่าแต่ละหน้าใช้ฟังก์ชันวาดตัวไหน */
+  try{
+    var a=document.querySelector('.sidebar .nav-item.active');
+    if(a && typeof nav==='function') nav(a);
+  }catch(e){}
+}
+/* ข้อความที่มีตัวเลขแทรกอยู่กลางประโยค · ห่อทีละท่อนแล้วต่อกันเองไม่ได้
+   เพราะอังกฤษเรียงคำไม่เหมือนไทย · เก็บคำแปลเป็นแบบมีช่อง {0} แล้วเสียบค่าเข้าไป
+   โหมดไทยก็เดินทางเดียวกัน · laT คืนไทยต้นฉบับซึ่งมีช่อง {0} อยู่แล้ว */
+function laTp(th){
+  var args=[].slice.call(arguments,1);
+  return String(laT(th)).replace(/\{(\d+)\}/g, function(_,i){
+    var v=args[+i]; return (v==null?'':String(v));
+  });
+}
+/* ชื่อเดือนย่อ · เขียนไว้ที่เดียวแล้วใช้ทุกที่ที่ต้องย่อเดือน
+   ก่อนหน้านี้ตารางนี้ถูกพิมพ์ซ้ำสองที่ในไฟล์เดียวกัน (TH_MON กับ TH_MON_H) */
+/* §monOne · ชื่อเดือนย่อภาษาไทย · ตารางเดียวของทั้งระบบ
+   ก่อนหน้านี้ตารางนี้ถูกพิมพ์เองซ้ำอยู่ 20 ที่ใน 4 ไฟล์ · แก้ที่หนึ่งอีก 19 ที่ไม่ตาม */
+function laMonAbbrTH(){
+  return ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+}
+function laMonAbbr(){
+  return (laLangGet()==='en')
+    ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    : laMonAbbrTH();
+}
+window.laPierName=laPierName; window.laPierRank=laPierRank; window.laRouteOrd=laRouteOrd; window.laRouteOrdCmp=laRouteOrdCmp;
+window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr; window.laMonAbbrTH=laMonAbbrTH;
+window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
+window.laLangApplyNav=laLangApplyNav;
+
+/* ── พจนานุกรม ไทย → อังกฤษ · เฉพาะ "เปลือกโปรแกรม" ─────────────────────────
+   เรียงตามหน้าที่ไล่ทำ · หน้าไหนยังไม่ได้ทำ ข้อความจะคืนไทยเหมือนเดิม */
+var LA_T_EN={
+  'ยังไม่มี booking วันที่เลือก':'No bookings on the selected date',
+  'ยังไม่มี booking':'No bookings yet',
+  /* ── เมนูซ้าย · บริบท nav ── */
+  'nav|ตรวจเอกสาร':'Document Check', 'nav|ใบงานรถ (Van Jobs)':'Van Jobs',
+  'nav|เช็คอินรถ':'Van Check-in', 'nav|เช็คอินหน้าท่า':'Pier Check-in',
+  'nav|เช็คอิน City tour':'City Tour Check-in', 'nav|แผนที่จุดรับ':'Pickup Map',
+  'nav|ต้นทุน & จุดคุ้มทุน':'Cost & Break-even', 'nav|P&L รายทริป':'Trip P&L',
+  'nav|วางบิลรถร่วม':'Partner Van Billing', 'nav|เบิกของใช้ / น้ำมัน':'Supplies / Fuel',
+  'nav|Fuel · น้ำมัน':'Fuel',
+  /* เมนูย่อยของแต่ละท่าเรือ · ป้ายเดียวกันซ้ำสามท่า แปลชุดเดียวใช้ได้ทั้งหมด */
+  'nav|ใบงานเรือ':'Boat Job Sheet', 'nav|เบิก-คืนอุปกรณ์':'Equipment In / Out',
+  'nav|ตารางการทำงาน':'Work Schedule', 'nav|เงินสดย่อย':'Petty Cash',
+  'nav|ตั๋วอุทยาน':'Park Tickets', 'nav|ใบอนุญาต':'Licences',
+  /* ── Agent List ── */
+  'เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา':
+    'Pick an agent on the left to see details and rates',
+  /* ── Rate Types ── */
+  'แก้โค้ดให้ไม่ซ้ำ':'Fix duplicate codes',
+  'เปิดภาพรวม Rate Expiry':'Open Rate Expiry overview',
+  'จัดการชนิด Add-on':'Manage add-on types',
+  'Shared · กลาง':'Shared · common', 'เซลล์: ':'Sales: ',
+  'Longtail (เรือหางยาว)':'Longtail boat',
+  /* ── FOC Detail ── */
+  'FOC ตามเส้นทาง':'FOC by route',
+  'Top 5 ส่งเยอะสุด · ไม่รวม Guide':'Top 5 senders · excluding guides',
+  'KPI ต่ำ':'Low KPI', 'FOC สูง · ลูกค้าน้อย':'High FOC · few paying pax',
+  /* ── B2C Channels ── */
+  'เปิดทุกช่องทาง':'All channels on', 'รายการล่าสุด':'Latest entries',
+  'รวมทุกช่องทาง':'All channels',
+  /* ── Dashboard · รอบสอง ── */
+  'วันนี้':'Today', 'วันก่อนหน้า':'Previous day', 'วันถัดไป':'Next day',
+  'วัน':'Day', 'เดือน':'Month', 'ปี':'Year', 'รวม':'Total',
+  'ใบ':'bookings', 'ที่นั่ง':'seats', 'ท่าเรือ':'Pier',
+  'ว่าง':'free', 'ความจุ':'capacity', 'เฉลี่ย':'Average', 'เอเย่นต์':'agents',
+  'ขายเอง':'direct', 'บาท':'baht', 'อื่น ๆ':'Other', 'เหมาลำ':'Charter',
+  /* การ์ด Boat Operating */
+  'พร้อม':'ready', 'ออกวันนี้':'Departing today', 'ออก':'Departing',
+  'จาก {0} ลำ':'of {0} boats', 'ที่นั่งว่าง':'seats free', 'ทั้งวัน':'all day',
+  'ไม่มีเรือออกวันนี้':'No boats departing today', 'ไม่มีเรือออก':'No boats departing',
+  'เรือที่ออกวันนี้':'Boats departing today', 'เรือที่ออก':'Boats departing',
+  'ลำ · เปิด Boat Operation':'boats · open Boat Operation',
+  /* ปฏิทินที่นั่งว่าง */
+  'ที่ว่าง / ความจุ':'Free / capacity', 'เต็ม':'Full', 'ขายดี':'Selling fast',
+  'กลาง ๆ':'Moderate', 'ขายได้น้อย':'Slow', 'ว่างเยอะ':'Wide open',
+  'เปิดวันนี้':'Open today',
+  /* การ์ด Live bookings */
+  'ใบวันนี้':'today', 'ยอดวันนี้':'today', 'เฉลี่ย / ใบ':'per booking',
+  'นับตามเวลาที่ใบเข้าระบบ':'Counted by the time the booking was keyed in',
+  'ยังไม่มีใบเข้ามา':'nothing keyed in yet',
+  'อัปเดตเองไม่ต้องรีเฟรช':'Updates itself · no refresh needed',
+  'รายละเอียดทั้งวัน':'Full day detail',
+  'ดูใบจองทั้งหมดของวันนี้ แยก B2C / B2B':'Every booking keyed in today, split B2C / B2B',
+  /* Bookings overview */
+  '30 วัน':'30 days', '12 เดือน':'12 months', 'เทียบเมื่อวาน':'vs yesterday',
+  'ที่นั่งวันนี้':'Seats today', 'เส้นทาง':'Routes', 'เส้นทางเด่น':'Top route',
+  'วันพีค':'Peak day', 'เดือนพีค':'Peak month',
+  'วันเงียบ':'Slowest day', 'เดือนเงียบ':'Slowest month',
+  'ยกเลิกจากอากาศ':'Weather cancellations',
+  /* การ์ด Bookings / day */
+  '7 วัน':'7 days', 'เลือกอยู่':'selected', 'pax / วัน':'pax / day',
+  'เฉลี่ย {0} วัน':'{0}-day average', '{0} วันก่อนหน้า':'previous {0} days',
+  /* ชิป KPI บนหัววันที่ */
+  'จองเข้า':'Keyed in', 'ต้องจัดการ':'Needs action',
+  'วันนี้เคลียร์':'Today is clear', 'เคลียร์แล้ว':'All clear', 'ยกเลิก':'cancelled',
+  /* ── Booking · By trip · รอบสอง ─────────────────────────────────────────── */
+  'รออนุมัติ':'Pending approval', 'รอบ':'departure',
+  /* การ์ดโปรแกรมฝั่งซ้าย */
+  'ไม่จำกัด':'unlimited',
+  'ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)':'no quota set (sells without a cap)',
+  /* แถวที่ค้างบนกระดานทั้งที่ไม่เหลือ booking */
+  'ล็อกที่นั่งค้างไว้ {0} ที่':'{0} seats still locked',
+  'ใบรออนุมัติ {0} ใบ':'{0} bookings pending approval',
+  'มีใบที่ย้ายวันออกจากวันนี้':'a booking was moved off this date',
+  'ไม่เหลือ booking แล้ว':'no bookings left', 'ไปจัดการ':'Go and clear it',
+  /* แถบเตือน "ยังจัดไม่ครบ" */
+  'ยังจัดไม่ครบ':'Not fully assigned',
+  'ยังไม่จัดเรือ {0} booking · {1} pax · คลิกเข้าโหมดจัดเรือ':
+    'No boat yet for {0} bookings · {1} pax · click for boat-assign mode',
+  'ยังไม่จัดรถ (ขาไป) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ':
+    'No outbound van yet for {0} bookings · {1} pax · click for van-assign mode',
+  'ยังไม่จัดรถกลับ (ส่งคนละที่) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ':
+    'No return van yet (dropped elsewhere) for {0} bookings · {1} pax · click for van-assign mode',
+  'รถกลับ':'Return van',
+  'รถปนกันในกรุ๊ป (booking จะขึ้นใบงานผิดคัน) — เข้าโหมด Van แล้วเลือกรถของกรุ๊ปใหม่ให้เป็นคันเดียว':
+    'Vans mixed within a group (bookings would print on the wrong job sheet) — open Van mode and set one van for the whole group',
+  'รถปนกัน':'Vans mixed',
+  'ยังไม่ได้ re-confirm {0} booking · {1} pax · คลิกเข้าโหมด Re-Confirm':
+    'Not re-confirmed: {0} bookings · {1} pax · click for Re-Confirm mode',
+  /* แถบสรุปเช็คอินหน้างาน */
+  'เช็คอินหน้างาน':'Checked in on site', 'รถ':'Van',
+  'ไปหน้าเช็คอินรถ':'Open the van check-in page',
+  'ไปหน้าเช็คอินหน้าท่า':'Open the pier check-in page',
+  'ป้าย No-show อยู่บนแถว booking · ยอดจอง/ราคาไม่ถูกแก้':
+    'No-show tags sit on the booking rows · seat counts and prices are left untouched',
+  /* แถบโซน */
+  'โซน':'Zone', 'กลุ่ม':'Group',
+  'ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม':'Tick the rows travelling together, then group them',
+  /* แถวใบรออนุมัติ */
+  'ยังไม่นับในยอดของทริป':'not counted in the trip total',
+  'ยังไม่เข้าใบงานรถ/เรือ':'not on any van or boat job sheet',
+  'เกิน cap +{0} ที่':'over cap by {0} seats', 'ส่วนลด':'Discount',
+  'รอเซลล์ยืนยัน':'waiting for sales to confirm',
+  'รอผู้จัดการอนุมัติ':'waiting for manager approval',
+  'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป':
+    'Seats are held while approval is pending · already counted in the seats this trip has used',
+  'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้':'Already over cap, so no seats are held',
+  'กันที่นั่งไว้':'Seats held', 'ไม่กันที่นั่ง':'No seats held',
+  'ดูรายละเอียด':'View detail', 'อนุมัติ':'Approve',
+  'อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest':'Approve · the row moves down into the manifest',
+  /* แถวล็อกที่นั่ง */
+  'ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking':
+    'Seats held for an agent · not counted as bookings yet',
+  'ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่':
+    'Seats sold plus seats locked exceed the capacity of the boats running',
+  'ล็อกเกิน {0} ที่':'locked over by {0}', 'ย่อย':'sub',
+  '{0} ที่ · ขายไปแล้ว {1}':'{0} seats · {1} sold',
+  'ล็อกแบบช่วง':'range lock',
+  'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
+  'ไม่ออกวันนี้':'Not running today',
+  /* §lkPend / §pbPax2 (2026-10-02) */
+  /* §rtKeep (2026-10-03) */
+  'ใบนี้ยึดเรทเดิมตอนจอง':'This booking keeps the rate it was booked at',
+  'ตอนนี้เอเยนต์ใช้ชุด':'The agent is now on',
+  'เปลี่ยนไปใช้เรทใหม่':'Switch to the new rate',
+  'ใบนี้เปลี่ยนมาคิดจากเรทใหม่':'This booking now uses the new rate',
+  'ยอดที่บันทึกไว้':'Saved total',
+  'ยอดตามเรทใหม่':'total at the new rate',
+  'เรทเดิม':'previous rate',
+  'กลับไปใช้เรทเดิม':'Back to the previous rate',
+  'ไม่ตรงกับยอดที่คิดจากเรทตอนนี้':'does not match the total at current rates',
+  'ราคาในชุดนี้ถูกแก้หลังจากใบนี้บันทึก · ถ้ากดบันทึก ใบนี้จะเปลี่ยนเป็นยอดใหม่':'Prices in this rate type changed after the booking was saved · saving will apply the new total',
+  'ล็อกที่นั่งของวันนี้':'Lock seats on this day',
+  'รอที่ว่าง · ยังไม่คอนเฟิร์ม':'Waiting for seats · not confirmed',
+  'รอที่ว่าง {0}':'{0} pending',
+  'รอที่ว่าง':'pending',
+  'ขอไว้ {0} ที่ · ยังไม่ได้ที่ {1}':'{0} requested · {1} not yet available',
+  'ไม่กันที่นั่ง ดึงไปจองไม่ได้':'holds no seats and cannot be drawn',
+  'มีที่ว่างแล้ว {0} ที่ · กดเพื่อดันเข้าเป็นล็อกจริง':'{0} seat(s) now free · click to turn them into a real lock',
+  'ยืนยัน':'Confirm',
+  'ล็อกที่รอที่ว่าง · ยังไม่คอนเฟิร์ม ไม่กันที่นั่ง':'Locks waiting for seats · not confirmed, no seats held',
+  'ผู้ใหญ่ · ไม่รวมเหมาลำ':'Adults · charter not included',
+  'เด็ก · ไม่รวมเหมาลำ':'Children · charter not included',
+  'ทารก · ไม่รวมเหมาลำ':'Infants · charter not included',
+  'FOC · ไม่รวมเหมาลำ':'FOC · charter not included',
+  'ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย':'Seats used / capacity on sale',
+  'ลูกค้าจอยที่ยืนยันแล้ว {0} คน':'{0} confirmed join passengers',
+  'ที่นั่งที่ใช้ไป: หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้':'Seats used: pier no-show/CXL deducted · held pending bookings included',
+  'กรุ๊ปย่อย':'Sub-groups', '{0} กรุ๊ป':'{0} groups',
+  'รอ rooming list':'awaiting rooming list', 'กันไว้':'held',
+  'จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย':'Manage lock · add a sub-group / release',
+  'จัดการ':'Manage',
+  'ที่นั่งใบนี้ดึงมาจากล็อกของ':'These seats were drawn from the lock held by',
+  /* ปุ่ม / ป้าย ระดับแถว */
+  'ดูรายละเอียด booking':'view booking detail',
+  'เพิ่ม extra วันเดินทาง (ขายหน้างาน)':'Add an extra on the travel day (sold on site)',
+  'อัพเกรด/ขายเพิ่มหน้างาน':'Upgrade / upsell on site',
+  'จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area':
+    'From B2C · not linked to a pickup area yet · edit the booking to pick one',
+  'ขายเอง (B2C)':'direct (B2C)', 'ลูกค้าทักมาทาง':'customer came in via',
+  'คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)':'click to change the colour for this agent (used on other pages)',
+  'คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ':'click to change colour · Alt+click = automatic',
+  /* ป้ายสถานะการจ่ายเงิน */
+  'เลย cutoff':'past cutoff',
+  'สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน':
+    'PFM status · managed on the Daily PFM page (Extend / Hold), or click to issue / take payment',
+  'จัดการการชำระเงิน':'Manage payment',
+  /* เก็บตกจากการวัดหน้าจริงในโหมดอังกฤษ */
+  'ไม่มีเรือ':'no boat', 'ไม่มีที่นั่ง':'no seats',
+  'Charter · {0} ลำ':'Charter · {0} boats', 'ลำ {0}':'boat {0}',
+  'ยังไม่ระบุเรือ':'boat not set yet', 'ทั้งลำ':'whole boat',
+  'ทริปไม่ออกวันนั้น':'trip does not run that day', 'ระบบพักไว้':'held by the system',
+  'เกิน capacity':'over capacity',
+  'ปล่อย':'Releases', 'วันเดินทาง':'on the travel day', '{0} วันก่อน':'{0} days before',
+  'กู้คืน':'Restore', 'กู้คืน booking (ยกเลิกการยกเลิก)':'Restore this booking (undo the cancellation)',
+  'ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม':'No pickup point yet · edit the booking to add one',
+  '{0} ที่':'{0} seats',
+  /* ── §internal · ใบของบริษัทเอง ── */
+  'ไม่นับยอด':'not in revenue', 'ของบริษัท':'company',
+  'ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ':
+    'Not counted as revenue · seats and cost still count',
+  'ใบของบริษัทเองที่ไม่เก็บเงิน · ยังอยู่ในรายการและยังกินที่นั่ง แต่ไม่นับเป็นยอดขาย':
+    'Company-own bookings with no charge · still listed and still take seats, but not counted as revenue',
+  /* ── ป๊อปอัป "รายละเอียดทั้งวัน" ของ Dashboard · รอบสาม ─────────────────── */
+  'รายละเอียดใบจองทั้งวัน':'Bookings keyed in today',
+  'รายละเอียดใบจอง {0} วัน':'Bookings keyed in over {0} days',
+  'ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B':'Every booking keyed in today, split B2C / B2B',
+  'ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B':'Every booking keyed in over this range, split B2C / B2B',
+  'ยอดช่วงนี้':'this range', 'เดือนนี้':'This month', 'ปิด':'Close',
+  'date|จาก':'From', 'date|ถึง':'To',
+  '{0} วัน':'{0} days', '{0} ใบ':'{0} bookings',
+  'ช่วงก่อนหน้า ({0} วัน)':'Previous range ({0} days)',
+  'ช่วงถัดไป ({0} วัน)':'Next range ({0} days)',
+  '{0}% ของยอดวันนี้':'{0}% of today', '{0}% ของยอดช่วงนี้':'{0}% of this range',
+  'ยอดขาย':'revenue', 'ไม่มีข้อมูล':'No data', 'ยังไม่มีใบจองเข้ามา':'No bookings keyed in yet',
+  '{0} เส้นทาง':'{0} routes', 'ช่องทางที่ลูกค้าทักเข้ามา':'How the customer reached us',
+  '{0} ช่องทาง':'{0} channels', '{0} เจ้า':'{0} agents',
+  'เดือนที่จะเดินทาง':'Travel month', '{0} เดือน':'{0} months',
+  'ใบที่เข้ามาแต่ละวัน':'Bookings keyed in per day', 'เวลาที่ใบเข้ามา':'Time of day keyed in',
+  'สัญชาติผู้จอง':'Booker nationality', '{0} สัญชาติ':'{0} nationalities',
+  'ใบจองทั้งหมดของวันนี้':'Every booking keyed in today',
+  'ใบจองทั้งหมดในช่วงนี้':'Every booking keyed in over this range',
+  'แสดง {0} จาก {1} ใบ · กดเพื่อดูทั้งหมด':'Showing {0} of {1} bookings · tap to see them all',
+  /* ── แท็บรออนุมัติ ────────────────────────────────────────────────────── */
+  '{0} รายการ · ต้องอนุมัติก่อนบุคกิ้งจะ confirm':
+    '{0} waiting · a booking cannot confirm until this is approved',
+  'เกิน Capacity':'Over capacity',
+  '{0} = เกินโควต้าบริษัท (ไม่เกินทะเบียนเรือ) → ผจก.อนุมัติ · {1} = มีส่วนลด → เซลล์ที่ดูแลยืนยันส่วนลดก่อน · ทั้งคู่จะยังไม่ confirm จนกว่าจะอนุมัติ':
+    '{0} = over the company quota (still within the boat licence) → a manager approves · {1} = a discount was given → the sales owner confirms it first · neither confirms until approved',
+  'ไม่มีรายการรออนุมัติ':'Nothing waiting for approval',
+  'ประวัติล่าสุด':'Recent decisions',
+  'เกิน cap +{0} ที่นั่ง':'over cap by {0} seats',
+  'ขายเข้ามาบนวันที่เส้นทางไม่ออก':'sold on a date the route does not run',
+  'ระบบพักไว้อัตโนมัติตอน B2C sync':'held automatically during the B2C sync',
+  'รอเซลล์{0}ยืนยันส่วนลด':'waiting for sales{0} to confirm the discount',
+  'ขอโดย':'requested by', 'ไม่อนุมัติ':'Reject'
+};
+
+
 // ── collapsible groups (accordion) · coexists with permission auto-hide (inline display:none wins) ──
 function laSbCollapsed(){ try{ return JSON.parse(localStorage.getItem('la_sbacc_'+laSbUser())||'[]'); }catch(e){ return []; } }
 function laSbSetCollapsed(a){ try{ localStorage.setItem('la_sbacc_'+laSbUser(), JSON.stringify(a)); }catch(e){} }
@@ -654,16 +983,17 @@ function laSbInit(){
   if(!document.getElementById('la-sb-base')){ const s=document.createElement('style'); s.id='la-sb-base';
     s.textContent='.sidebar .nav-item.acc-hidden{display:none !important}.sidebar .nav-section{display:flex;align-items:center}.sidebar .nav-section.acc-collapsed .acc-ch{transform:rotate(-90deg)}';
     document.head.appendChild(s); }
-  const foot=document.querySelector('.sidebar .sidebar-footer');
-  if(foot && !document.getElementById('la-sbcolor-sw')){ const w=document.createElement('div'); w.innerHTML=laSbColorPickerHTML(); if(w.firstElementChild) foot.parentNode.insertBefore(w.firstElementChild, foot); }
   try{ laSbInitAccordion(); }catch(e){}
   try{ poNavGroupInit(); }catch(e){}
-  try{ laApplySidebarColor(); }catch(e){}
 }
 // ══════════════════════════════════════
 function nav(el){
   try{ if(typeof laNavClose==='function') laNavClose(); }catch(e){}   // §mobile · เลือกเมนูแล้วลิ้นชักต้องปิดเอง
-  try{ if(typeof laSbInit==='function' && !document.getElementById('la-sbcolor-sw')) laSbInit(); }catch(e){}   // §re-add sidebar picker if a re-render dropped it
+  /* §sbColorGone · เดิมใช้ "แถบเลือกสียังอยู่ไหม" เป็นตัวบอกว่าเมนูซ้ายถูกวาดใหม่หรือยัง
+     แถบนั้นถูกตัดออกแล้ว ต้องเปลี่ยนไปดูเครื่องหมายอื่นที่ laSbInit เป็นคนติดไว้ในเมนู
+     ใช้ data-acc ของหัวกลุ่ม (ตัวพับ/กาง) · วาดใหม่ทีไรก็หายไปพร้อมกัน
+     ถ้าเช็คด้วยของที่อยู่ใน <head> จะไม่มีวันหาย แล้วตัวพับกลุ่มจะตายหลังวาดใหม่ */
+  try{ if(typeof laSbInit==='function' && !document.querySelector('.sidebar .nav-section[data-acc]')) laSbInit(); }catch(e){}
   const view=el.dataset.view;
   // fl-boatstatus → unified view-boats
   const actualView=view==='fl-boatstatus'?'boats':view;
@@ -675,7 +1005,8 @@ function nav(el){
   // fleet views
   if(view.startsWith('fl-')){
     const flView=view.replace('fl-','');
-    if(flView==='boatstatus') renderBoats();
+    if(flView==='deployment') flRenderDeployment();          /* §flDeploy */
+    else if(flView==='boatstatus') renderBoats();
     else if(flView==='dashboard') flRenderDashboard();
     else if(flView==='dailyreport') flRenderDR();
     else if(flView==='asset') flRenderAsset();
@@ -700,6 +1031,7 @@ function nav(el){
     else if(view==='settings') renderSettings();
     else if(view==='agents') renderAgents();
     else if(view==='rate-types') renderRateTypes();
+    else if(view==='rate-admin'){ if(typeof renderRateAdmin==='function') renderRateAdmin(); }   /* §rtAdmin */
     else if(view==='sales-board') renderSalesBoard();
     else if(view==='b2b-dash') renderB2BDash();
     else if(view==='contract-tmpl') renderContractTemplates();
@@ -812,7 +1144,7 @@ function _dashSeatCalHtml(dx,F){
         +(a.wxN>0?' &middot; &#9928;'+a.wxN:'')+'</span>'; }
     var click=closedLike?'':(' onclick="bookingV2OpenFiltered(\'\',\''+ds+'\')"');
     cells+='<div class="dv-cell"'+click+' style="'+ring+'background:'+col[0]+';'+(closedLike?'':'cursor:pointer')+'">'
-      +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; วันนี้':'')+'</span>'
+      +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; '+laT('วันนี้'):'')+'</span>'
       +'<span class="big"><span class="n" style="color:'+col[1]+'">'+num+'</span>'
       +'<span class="s" style="color:'+col[1]+'">'+sub+'</span></span>'
       +extraLine+'</div>';
@@ -829,23 +1161,23 @@ function _dashSeatCalHtml(dx,F){
         +'<span class="dv-calarw" onclick="dashCalMonthShift(1)">&#8250;</span>'
       +'</span>'
       +'<span class="sp"></span>'
-      +'<span class="dv-cnt">ที่ว่าง / ความจุ</span>'
+      +'<span class="dv-cnt">'+laT('ที่ว่าง / ความจุ')+'</span>'
     +'</div>'
     +'<div class="dv-chips">'+chips+'</div>'
     +'<div class="dv-lg">'
-      +'<span><i style="background:#CFE9AC"></i>เต็ม</span>'
-      +'<span><i style="background:#E8F5D8"></i>ขายดี</span>'
-      +'<span><i style="background:#FAF0C8"></i>กลาง ๆ</span>'
-      +'<span><i style="background:#FBE1C6"></i>ขายได้น้อย</span>'
-      +'<span><i style="background:#FBE9E9"></i>ว่างเยอะ</span>'
+      +'<span><i style="background:#CFE9AC"></i>'+laT('เต็ม')+'</span>'
+      +'<span><i style="background:#E8F5D8"></i>'+laT('ขายดี')+'</span>'
+      +'<span><i style="background:#FAF0C8"></i>'+laT('กลาง ๆ')+'</span>'
+      +'<span><i style="background:#FBE1C6"></i>'+laT('ขายได้น้อย')+'</span>'
+      +'<span><i style="background:#FBE9E9"></i>'+laT('ว่างเยอะ')+'</span>'
     +'</div>'
     /* §mobCal · กล่องเลื่อนของตารางวันโดยเฉพาะ · หัวเดือนกับปุ่มกรองอยู่กับที่
        บนจอกว้างกล่องนี้ไม่ทำอะไรเลย (ตารางพอดีอยู่แล้ว) */
     +'<div class="dv-calsc"><div class="dv-calg">'+wk+cells+'</div></div>'
     +'<div class="dv-calft">'
-      +'<span class="t">วันนี้'+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
-      +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' ที่นั่งว่าง</span>'
-      +'<button onclick="bookingV2OpenFiltered(\'\',\''+TODAY_STR+'\')">เปิดวันนี้</button>'
+      +'<span class="t">'+laT('วันนี้')+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
+      +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' '+laT('ที่นั่งว่าง')+'</span>'
+      +'<button onclick="bookingV2OpenFiltered(\'\',\''+TODAY_STR+'\')">'+laT('เปิดวันนี้')+'</button>'
     +'</div>'
   +'</div>';
 }
@@ -983,6 +1315,65 @@ function laIsB2C(b){
             || String(_a.market||'').toLowerCase()==='b2c')) return true;
   return !_a;
 }
+/* ══ §internal (2026-09-26) · ใบของบริษัทเอง · ไม่ใช่เอเยนต์ และไม่ใช่ B2C ══════
+   ที่มา · ผู้ใช้ถามเอง · "Booking ที่เป็นของบริษัทเอง ไม่มี Agent และก็ไม่ได้เป็น B2C
+   ซึ่งอาจจะมีเก็บเงินหรือไม่เก็บเงินก็ได้ ... อยากได้การ Track ข้อมูลส่วนนี้แยกกัน"
+
+   สองมิติที่ต้องแยกกัน · ห้ามผูกเข้าด้วยกัน
+     เหตุผล  อยู่ที่ purpose        แขกบริษัท / PR / ราคาพิเศษ / สวัสดิการ / ตรวจงาน
+     เก็บเงินหรือไม่ อยู่ที่ยอดเงิน
+   เพราะเหตุผลเดียวกันเก็บเงินก็ได้ ไม่เก็บก็ได้ · ถ้าเอามารวมเป็นค่าเดียวจะได้
+   purpose บานปลายเป็นสิบค่าและยังตอบ "PR ที่เก็บเงินพิเศษ" ไม่ได้อยู่ดี
+
+   ⚠ ตัวที่ถูกตัดออกจากยอดขายคือ "ใบของบริษัทเองที่ไม่เก็บเงิน" เท่านั้น
+     ใบของเอเยนต์ปกติที่เป็น 0 บาท ไม่ตัด — นั่นคือข้อผิดพลาดของข้อมูลที่ต้องมองเห็น
+     ไม่ใช่ทริปฟรี · ตัดให้ก็เท่ากับช่วยซ่อนของเสีย
+   ⚠ ที่นั่ง · fill% · ความจุ · ต้นทุน · ใบงานเรือ/รถ · ทะเบียนอุทยาน ยังนับทุกใบ
+     คนขึ้นเรือจริง กินที่นั่งจริง มีต้นทุนอาหาร/น้ำมันจริง
+   ⚠ ใบแจ้งหนี้ · การรับเงิน · PFM ห้ามแตะ · ต้องโชว์เงินที่ค้างจริงเสมอ            */
+var LA_INTERNAL_PURPOSE = {
+  company_guest:   'แขกบริษัท',
+  pr_foc:          'PR / Influencer',
+  company_special: 'ราคาพิเศษ',
+  staff_welfare:   'สวัสดิการพนักงาน',
+  staff_inspection:'ตรวจงาน'
+};
+/* ใบนี้เป็นของบริษัทเองไหม · ดูสามทาง เพราะใบเก่าในระบบมีแต่ agent ยังไม่มี purpose
+   (วัดจากข้อมูลจริง · 6 ใบบน a_staff ที่ purpose กับ staffId ว่างทั้งคู่)      */
+function laIsInternalBk(b){
+  if(!b) return false;
+  if(LA_INTERNAL_PURPOSE[b.purpose]) return true;
+  if(b.staffId) return true;
+  var a=(typeof sbGetAgent==='function') ? sbGetAgent(b.agentId) : null;
+  if(!a) return false;
+  var m=String(a.market||'').toLowerCase();
+  return m==='house' || m==='staff';
+}
+/* ยอดเงินของใบ · ของเดิมบรรทัดนี้ถูกพิมพ์ซ้ำอยู่สิบกว่าที่ · รวมมาไว้ที่เดียว */
+function laBkMoney(b){
+  if(!b) return 0;
+  return (typeof acctBookingTotal==='function') ? (+acctBookingTotal(b)||0) : (+b.total||0);
+}
+function laIsInternalFree(b){ return laIsInternalBk(b) && laBkMoney(b)<=0; }
+/* บัญชีบ้าน "ของบริษัท" ตัวเดียว · แคบกว่า laIsInternalBk ซึ่งคลุมทริปพนักงานด้วย
+   (ทริปพนักงานใช้เรท rt_staff จริง · ใบบริษัทตั้งราคาเองทุกใบ สองอย่างนี้ต่างกัน) */
+function laIsCompanyBk(b){
+  if(!b || !b.agentId) return false;
+  if(b.agentId==='a_company') return true;
+  var a=(typeof sbGetAgent==='function') ? sbGetAgent(b.agentId) : null;
+  return !!(a && (a.code==='COMPANY' || a.id==='a_company'));
+}
+function laInternalLabel(b){
+  if(!b) return '';
+  var p=LA_INTERNAL_PURPOSE[b.purpose];
+  if(p) return p;
+  return laIsInternalBk(b) ? 'ของบริษัท (ยังไม่ระบุเหตุผล)' : '';
+}
+window.LA_INTERNAL_PURPOSE=LA_INTERNAL_PURPOSE; window.laIsInternalBk=laIsInternalBk;
+window.laBkMoney=laBkMoney; window.laIsInternalFree=laIsInternalFree;
+window.laIsCompanyBk=laIsCompanyBk;
+window.laInternalLabel=laInternalLabel;
+
 function _dashLiveFeedHtml(dx,F,side){
   var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
   var _isB2C=laIsB2C;
@@ -1046,7 +1437,7 @@ function _dashLiveFeedHtml(dx,F,side){
     rows+='<div class="dv-lv'+(cx?' cx':'')+'" onclick="dashOpenBooking(\''+b.id+'\')">'
       +'<span class="dv-lvm">'+mark+'</span>'
       +'<span class="dv-lvtx">'
-        +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· ยกเลิก</em>':'')+'</span>'
+        +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· '+laT('ยกเลิก')+'</em>':'')+'</span>'
         +'<span class="dt">'+dtxt+(_trs.length>1?(' +'+(_trs.length-1)):'')+' &middot; '+pax+' pax'
           +(vc?(' &middot; <b title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</b>'):'')+'</span>'
       +'</span>'
@@ -1054,9 +1445,10 @@ function _dashLiveFeedHtml(dx,F,side){
         +'<span class="t">'+(isNew?'<b>NEW</b> ':'')+_dashAgo(o.ts)+'</span></span>'
     +'</div>';
   });
-  if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
+  if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">'+laT('ยังไม่มี booking')+'</div>';
   /* แถบสรุปหัวฟีด · จำนวนใบ / pax / ยอดเงิน ของ "วันที่เลือกอยู่" ไม่ใช่ทั้งกอง */
   var _sd=(window._dashDate||TODAY_STR), _sN=0,_sP=0,_sM=0,_sA={}, _sL=[];
+  var _sX=0;   /* §internal · ใบของบริษัทเองที่ไม่เก็บเงิน · ถูกตัดออกจากยอด */
   BK.forEach(function(b){
     if(!(b.schemaVer===2 && CXL.indexOf(b.status)<0)) return;
     if(side==='b2b' && _isB2C(b)) return;
@@ -1065,8 +1457,11 @@ function _dashLiveFeedHtml(dx,F,side){
     /* §livePax · เหมือนกับในแถว · รวมหัวคนทุกทริปของใบนั้น */
     (b.trips||[]).forEach(function(t){
       _sP+=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; });
+    /* §internal · ใบของบริษัทเองที่ไม่เก็บเงิน ไม่ใช่ยอดขาย · ไม่นับทั้งตัวตั้งและตัวหาร
+       ยังอยู่ในรายการข้างล่างและยังกินที่นั่งตามปกติ · นับไว้เพื่อบอกบนจอว่าตัดไปกี่ใบ */
+    if(typeof laIsInternalFree==='function' && laIsInternalFree(b)){ _sX++; return; }
     _sN++;
-    var _bv=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
+    var _bv=(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0);
     _sM+=_bv;
     if(b.agentId) _sA[b.agentId]=1;
     /* §liveAudit · รายการข้างล่างเป็น "12 ใบล่าสุด" ไม่ได้กรองวัน และรวมใบที่ยกเลิกด้วย
@@ -1077,28 +1472,447 @@ function _dashLiveFeedHtml(dx,F,side){
   });
   var _mShort=function(v){ v=+v||0; return v>=1000000?('฿'+(v/1000000).toFixed(1)+'M'):(v>=1000?('฿'+Math.round(v/1000)+'k'):('฿'+Math.round(v))); };
   var head=''
-    +'<div class="dv-lvhd">'
-      +'<span class="s" title="'+('\u0e19\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e40\u0e27\u0e25\u0e32\u0e17\u0e35\u0e48\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a \u00b7 '+(_sL.length
-          ? (_sL.join(' \u00b7 ')+' \u0e1a\u0e32\u0e17')
-          : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e21\u0e32')).replace(/"/g,'&quot;')
-        +'"><b>'+_sN+'</b><i>\u0e43\u0e1a\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
+    +'<div class="dv-lvhd" onclick="dashOpenDayDetail(\''+side+'\')">'
+      +'<span class="s" title="'+(laT('นับตามเวลาที่ใบเข้าระบบ')+' \u00b7 '+(_sL.length
+          ? (_sL.join(' \u00b7 ')+' '+laT('บาท'))
+          : laT('ยังไม่มีใบเข้ามา'))).replace(/"/g,'&quot;')
+        +'"><b>'+_sN+'</b><i>'+laT('ใบวันนี้')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
-      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17'
+      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' '+laT('บาท')
         +(_sL.length?(' = '+_sL.join(' + ')):'')
-        +'"><b>'+_mShort(_sM)+'</b><i>\u0e22\u0e2d\u0e14\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'เฉลี่ย / ใบ':'เอเย่นต์')+'</i></span>'
+        +'"><b>'+_mShort(_sM)+'</b><i>'+laT('ยอดวันนี้')+'</i></span><span class="sep"></span>'
+      /* §internal · ถ้าไม่บอกว่าตัดไปกี่ใบ เลขบนหัวจะไม่ตรงกับแถวที่เห็นข้างล่าง */
+      +(_sX?('<span class="s" title="'+laT('ใบของบริษัทเองที่ไม่เก็บเงิน · ยังอยู่ในรายการและยังกินที่นั่ง แต่ไม่นับเป็นยอดขาย').replace(/"/g,'&quot;')
+        +'"><b class="dim">'+_sX+'</b><i>'+laT('ไม่นับยอด')+'</i></span><span class="sep"></span>'):'')
+      +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?laT('เฉลี่ย / ใบ'):laT('เอเย่นต์'))+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
     +'<div class="dv-ct"><span class="big" style="color:'+(side==='b2c'?'#8C2D52':'#12518F')+'">Live bookings</span>'
-      +(side==='b2b'?'<span class="dv-cnt" style="background:#E6F1FB;color:#12518F">B2B &middot; เอเย่นต์</span>':'')
-      +(side==='b2c'?'<span class="dv-cnt" style="background:#FDE6EE;color:#8C2D52">B2C &middot; ขายเอง</span>':'')
+      +(side==='b2b'?'<span class="dv-cnt" style="background:#E6F1FB;color:#12518F">B2B &middot; '+laT('เอเย่นต์')+'</span>':'')
+      +(side==='b2c'?'<span class="dv-cnt" style="background:#FDE6EE;color:#8C2D52">B2C &middot; '+laT('ขายเอง')+'</span>':'')
       +'<span class="sp"></span>'
       +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#0F6E56;letter-spacing:0;text-transform:none"><span style="width:7px;height:7px;border-radius:50%;background:#2F9E5B;animation:dashlvpulse 1.4s infinite"></span>live</span>'
     +'</div>'
     +head
     +'<div class="dv-lvlist">'+rows+'</div>'
-    +'<div class="dv-sync">'+DASH_ICO.sync+'อัปเดตเองไม่ต้องรีเฟรช</div></div>';
+    /* §dayDetail · ทางเข้าป๊อปอัป · ท้ายการ์ดเป็นที่ของ "ข้อมูลเกี่ยวกับฟีดนี้" อยู่แล้ว
+       ปุ่มอยู่ตรงนั้นถูกที่กว่าหัวการ์ด และไม่ไปเบียดป้าย B2B/B2C ให้ตกบรรทัด */
+    +'<div class="dv-sync"><span class="sy">'+DASH_ICO.sync+laT('อัปเดตเองไม่ต้องรีเฟรช')+'</span>'
+      +'<span class="dv-ddbt" onclick="dashOpenDayDetail(\''+side+'\')" '
+      +'title="'+laT('ดูใบจองทั้งหมดของวันนี้ แยก B2C / B2B')+'">'+laT('รายละเอียดทั้งวัน')+' &rsaquo;</span></div></div>';
 }
+
+/* ══ §dayDetail · "รายละเอียดทั้งวัน" ที่ห้อยจากการ์ด Live bookings ═══════
+   การ์ดฟีดตอบได้แค่ "ล่าสุดมีอะไรเข้ามา" — โชว์ 12 ใบท้ายสุด ไม่กรองวัน และ
+   รวมใบที่ยกเลิกด้วย · ส่วนแถบสรุปหัวฟีดนับเฉพาะใบของวันที่เลือกและไม่เอาใบยกเลิก
+   (§liveAudit อธิบายไว้ว่าสองชุดนี้บวกไม่ตรงกันโดยตั้งใจ) · ผลคือไม่มีที่ไหน
+   ในระบบตอบได้เลยว่า "ทั้งวันนี้เข้ามาอะไรบ้าง" — ต้องไปเปิดหน้า Booking แล้วกรองเอง
+   ป๊อปอัปนี้คือที่นั้น · กฎที่ยึด:
+   · แยก B2C/B2B ด้วย laIsB2C ตัวเดียวกับที่ฟีดใช้ (§b2cOne) ป๊อปอัปกับการ์ด
+     จะได้ไม่มีวันขึ้นตัวเลขคนละชุด
+   · "วันไหน" ใช้ _dashBkDay = วันที่ใบเข้าระบบ ไม่ใช่ bookingDate (§liveDay)
+     ตัวเดียวกับแถบสรุปหัวฟีด · ใบที่คีย์ย้อนหลังจึงไม่โผล่มาปนในยอดวันนี้
+   · ยอดเงินใช้ acctBookingTotal (รวม feeItems) เหมือนทุกหน้าที่พูดเรื่องเงิน */
+
+/* §b2cOne · ช่องทางที่ลูกค้าทักเข้ามาของใบ B2C · ตัวอ่านตัวเดียวเหมือน laIsB2C
+   ของจริงเก็บไว้สองที่: b2cChannel (ใบใหม่) กับบรรทัด note ที่เว็บเขียนมาให้
+   รูปแบบ "B2C · Line OA · LOV-xxxxx · ..." · ใครจะอ่านช่องทางต้องเรียกตัวนี้ */
+function laB2CChannel(b){
+  if(!b) return '';
+  if(b.b2cChannel) return String(b.b2cChannel).trim();
+  /* §b2cChan · บรรทัด note ที่เว็บเขียนมามีสองแบบ · ต่างกันแค่มีช่องทางหรือไม่มี
+       มีช่องทาง : "B2C · Line OA · LOV-2892592 · Day Trip - Phi Phi - Maiton"
+       ไม่มี     : "B2C · LOV-2766863 · Day Trip - Phi Phi Island"
+     ช่องที่สองจึงเป็นช่องทาง "เฉพาะตอนที่มันไม่ใช่เลขที่ใบ"
+     ของเดิมหยิบช่องที่สองมาดื้อ ๆ · ใบ 84 ใบที่ไม่ได้ติดช่องทางไว้เลยกลายเป็น
+     ช่องทางชื่อ LOV-xxxxxxx ใบละช่อง ไปกองอยู่ในการ์ด "ช่องทางที่ลูกค้าทักเข้ามา"
+     84 แถว ทั้งที่ช่องทางจริงมีแค่ 6 แบบ
+     ⚠ ใบพวกนี้มาจากทั้ง b2c_sync และคนคีย์เอง (BD 52 · Love* 9 · sync 23)
+       ไม่ได้มาจากทางเดียว จึงเดาแทนไม่ได้ว่าเป็น Website — ต้องขึ้นว่าไม่ได้ระบุ
+       ตัวเลขนี้เป็นของที่ต้องเห็น ไม่ใช่ของที่ต้องซ่อน */
+  var segs=String(b.note||'').split('·').map(function(x){ return x.trim(); });
+  if(segs[0]==='B2C' && segs[1]){
+    var s1=segs[1];
+    var isRef=(s1===String(b.voucherRef||'')) || /^[A-Za-z]{0,5}-?\d{4,}$/.test(s1);
+    return isRef ? 'ไม่ได้ระบุช่องทาง' : s1;
+  }
+  if(/^b2c_/.test(String(b.id||''))) return 'ไม่ได้ระบุช่องทาง';
+  return 'คีย์เอง';
+}
+
+/* ใบทั้งหมดที่ "เข้าระบบ" ในวันที่เลือกอยู่ · ใหม่สุดอยู่บน · รวมใบที่ยกเลิก
+   (ทำเครื่องหมายไว้ ไม่ตัดทิ้ง — คนดูต้องรู้ว่าวันนี้มีใบหลุดไปกี่ใบด้วย) */
+/* ══ §ddRange · ช่วงวันที่ที่ป๊อปอัปกำลังดู ═════════════════════════════════
+   เก็บแยกจาก _dashDate ของหน้า Dashboard · หน้าหลังเป็นมุมมอง "วันเดียว" เสมอ
+   (ปฏิทินที่นั่ง · Boat Operating · Bookings/day ล้วนผูกกับวันเดียว) ถ้าเอาช่วง
+   ไปยัดใส่ _dashDate หน้าหลังจะแปลไม่ออกทั้งหน้า
+   ช่วงที่ยาววันเดียวยังผูกกันอยู่เหมือนเดิม — เลื่อนวันในป๊อปอัปแล้วหน้าหลังตามด้วย
+   พอเป็นช่วงจริง ๆ ถึงปล่อยมือ เพราะไม่มีวันเดียวให้หน้าหลังไปอยู่ */
+function _ddYMD(d){
+  /* ห้ามใช้ toISOString().slice(0,10) — UTC ถอยกลับไปวันก่อนหน้าที่ +07:00 */
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function _ddAddDays(ymd,n){ var d=new Date(ymd+'T00:00:00'); d.setDate(d.getDate()+(+n||0)); return _ddYMD(d); }
+function _ddSpan(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000)+1; }
+function _ddRg(){
+  var ds=(window._dashDate||TODAY_STR);
+  if(!window._ddFrom||!window._ddTo){ window._ddFrom=ds; window._ddTo=ds; }
+  if(window._ddFrom>window._ddTo){ var t=window._ddFrom; window._ddFrom=window._ddTo; window._ddTo=t; }
+  return {from:window._ddFrom, to:window._ddTo, days:_ddSpan(window._ddFrom,window._ddTo)};
+}
+/* ป้ายวันบนหัว · วันเดียวอ่านแบบเดิมทุกอย่าง · เป็นช่วงแล้วเลขวันเดี่ยวไม่มีความหมาย
+   จึงกลายเป็นช่วง และบรรทัดชื่อวันกลายเป็นจำนวนวัน ซึ่งเป็นสิ่งที่ต้องรู้แทน */
+function _ddRgLabel(rg){
+  var WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var MO=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER',
+          'OCTOBER','NOVEMBER','DECEMBER'];
+  var MS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var a=new Date(rg.from+'T00:00:00'), b=new Date(rg.to+'T00:00:00');
+  if(rg.days<=1) return {num:String(a.getDate()), wk:WD[a.getDay()],
+    mo:MO[a.getMonth()]+' '+a.getFullYear(), wide:false};
+  if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth())
+    return {num:a.getDate()+'–'+b.getDate(), wk:laTp('{0} วัน', rg.days),
+      mo:MO[a.getMonth()]+' '+a.getFullYear(), wide:true};
+  if(a.getFullYear()===b.getFullYear())
+    return {num:a.getDate()+' '+MS[a.getMonth()]+' – '+b.getDate()+' '+MS[b.getMonth()],
+      wk:laTp('{0} วัน', rg.days), mo:String(a.getFullYear()), wide:true};
+  return {num:a.getDate()+' '+MS[a.getMonth()]+' '+String(a.getFullYear()).slice(2)
+      +' – '+b.getDate()+' '+MS[b.getMonth()]+' '+String(b.getFullYear()).slice(2),
+    wk:laTp('{0} วัน', rg.days), mo:'', wide:true};
+}
+/* ปุ่มลัด · ยึดกับ "วันนี้จริง" ไม่ใช่วันที่กำลังดูอยู่ — "7 วัน" ที่คนพูดถึง
+   หมายถึงเจ็ดวันล่าสุดเสมอ · อยากย้อนไปช่วงก่อนหน้าใช้ปุ่ม ‹ เลื่อนทีละช่วง */
+function _ddPresets(){
+  var t=TODAY_STR;
+  return [ {k:'d1',  n:laT('วันนี้'),   from:t,                to:t},
+           {k:'d7',  n:laT('7 วัน'),    from:_ddAddDays(t,-6), to:t},
+           {k:'d30', n:laT('30 วัน'),   from:_ddAddDays(t,-29),to:t},
+           {k:'mtd', n:laT('เดือนนี้'), from:t.slice(0,8)+'01',to:t} ];
+}
+window.dashDayDetailPreset=function(k){
+  var p=_ddPresets().filter(function(x){return x.k===k;})[0]; if(!p) return;
+  window._ddFrom=p.from; window._ddTo=p.to; window._ddShowAll=false;
+  if(p.from===p.to && typeof setDashDate==='function') setDashDate(p.from);
+  window._ddPaint();
+};
+window.dashDayDetailSetRange=function(which,v){
+  if(!v) return;
+  if(which==='from') window._ddFrom=v; else window._ddTo=v;
+  window._ddShowAll=false;
+  var rg=_ddRg();
+  if(rg.days===1 && typeof setDashDate==='function') setDashDate(rg.from);
+  window._ddPaint();
+};
+window.dashDayDetailShowAll=function(){ window._ddShowAll=true; window._ddPaint(); };
+
+function _ddRows(){
+  var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]);
+  var CXL=['cancelled','rejected','cancelled_weather'];
+  var rg=_ddRg();
+  var out=[];
+  BK.forEach(function(b){
+    if(b.schemaVer!==2) return;
+    var d=_dashBkDay(b);
+    if(d<rg.from||d>rg.to) return;
+    var trs=(b.trips||[]).map(function(t){
+      var r=(typeof getRoute==='function'&&t.routeId)?getRoute(t.routeId):null;
+      return {route:(r&&r.name)||t.routeId||'—', color:(r&&r.color)||'#7d7a74',
+        date:t.date, mode:t.bookingMode||'seat',
+        pax:(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0};
+    });
+    var b2c=laIsB2C(b);
+    var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    out.push({id:b.id, vc:String(b.voucherRef||b.code||b.id||''),
+      side:b2c?'b2c':'b2b', agentId:b.agentId||'',
+      agent:b2c?'Love Andaman':((a&&(a.name||a.code))||b.agentId||'—'),
+      agentColor:(a&&a.color)||'', channel:b2c?laB2CChannel(b):'',
+      lead:b.leadPax||'', nat:b.leadNationality||'',
+      hotel:b.hotelName||b.pickupArea||'',
+      cxl:CXL.indexOf(b.status)>=0, ts:_dashBkTs(b),
+      pax:trs.reduce(function(s,t){return s+t.pax;},0),
+      val:(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0),
+      /* §internal · ติดธงไว้ที่แถว · ตัวสรุปข้างบนข้ามแถวพวกนี้ แต่ตารางยังโชว์
+         (เห็นใบได้ แต่ไม่ถูกนับเป็นยอดขาย) · ป้ายบอกเหตุผลอยู่บนแถวด้วย */
+      intFree:(typeof laIsInternalFree==='function')?laIsInternalFree(b):false,
+      intLbl:(typeof laInternalLabel==='function')?laInternalLabel(b):'',
+      trips:trs});
+  });
+  out.sort(function(x,y){return y.ts-x.ts;});
+  return out;
+}
+function _ddAgg(rows,keyFn,colFn){
+  var m={};
+  rows.forEach(function(r){ var k=keyFn(r); if(k==null||k==='') return;
+    if(!m[k]) m[k]={k:k,n:0,pax:0,val:0,col:colFn?colFn(r):''};
+    m[k].n++; m[k].pax+=r.pax; m[k].val+=r.val; });
+  return Object.keys(m).map(function(k){return m[k];})
+    .sort(function(a,b){ return (b.val-a.val)||(b.n-a.n); });
+}
+/* แท่งเรียงอันดับ · ความยาว = ยอดขาย (วัดอย่างเดียว) · สีคือ "ตัวมันเอง"
+   เส้นทางใช้สีเส้นทางจริง เอเย่นต์ใช้สีที่ User ตั้งไว้ในหน้า By trip
+   ทั้งคู่ต้องผ่าน _dvInk ก่อน — สีชิปหลายสีจางเกินกว่าจะเป็นแท่งบนพื้นขาว */
+function _ddBars(list,opt){
+  opt=opt||{};
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  if(!list.length) return '<div class="dv-ddnone">'+laT('ไม่มีข้อมูล')+'</div>';
+  var max=1; list.forEach(function(x){ if(x.val>max) max=x.val; });
+  return list.slice(0,opt.top||8).map(function(x){
+    var w=Math.max(2,Math.round(x.val/max*100));
+    var c=x.col||opt.color||'#2E9B72';
+    var lb=opt.label?opt.label(x.k):x.k;
+    return '<div class="dv-ddbr" title="'+esc(x.k)+' · '+laTp('{0} ใบ', x.n)+' · '+x.pax+' pax · '
+        +'฿'+Math.round(x.val).toLocaleString()+'">'
+      +'<span class="l">'+esc(lb)+'</span>'
+      +'<span class="tr"><i style="width:'+w+'%;background:'+c+'"></i></span>'
+      +'<span class="v">'+_dashMoneyShort(x.val)+'<em>'+laTp('{0} ใบ', x.n)+' · '+x.pax+' pax</em></span></div>';
+  }).join('');
+}
+/* เวลาที่ใบเข้ามา · 06:00–23:00 พอ · ก่อนหกโมงแทบไม่มีและกินที่ฟรี */
+/* ช่วงหลายวัน · แท่งละวัน · ป้ายวันโผล่ห่าง ๆ พอให้รู้ว่าอยู่ตรงไหนของช่วง
+   ไม่จับกลุ่มเป็นสัปดาห์ แม้ช่วงยาว — flex บีบแท่งให้เองและยังเห็นรูปทรงอยู่ */
+function _ddDaily(rows,rg){
+  var m={}, i, d=rg.from, ks=[];
+  while(d<=rg.to && ks.length<400){ m[d]=0; ks.push(d); d=_ddAddDays(d,1); }
+  rows.forEach(function(r){ if(r.ts){ var k=_ddYMD(new Date(r.ts)); if(k in m) m[k]++; } });
+  var mx=1; ks.forEach(function(k){ if(m[k]>mx) mx=m[k]; });
+  var every=Math.max(1,Math.ceil(ks.length/8)), out='';
+  for(i=0;i<ks.length;i++){ var v=m[ks[i]];
+    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+ks[i]+' · '+laTp('{0} ใบ', v)+'">'
+      +'<i style="height:'+(v?Math.max(8,Math.round(v/mx*100)):2)+'%"></i>'
+      +'<u>'+((i%every===0)?ks[i].slice(8):'')+'</u></span>'; }
+  return '<div class="dv-ddhr">'+out+'</div>';
+}
+function _ddHours(rows){
+  var h=[],i; for(i=0;i<24;i++) h.push(0);
+  rows.forEach(function(r){ if(r.ts) h[new Date(r.ts).getHours()]++; });
+  var mx=1; for(i=6;i<=23;i++) if(h[i]>mx) mx=h[i];
+  var out='';
+  for(i=6;i<=23;i++){ var v=h[i];
+    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+('0'+i).slice(-2)+':00 · '+laTp('{0} ใบ', v)+'">'
+      +'<i style="height:'+(v?Math.max(8,Math.round(v/mx*100)):2)+'%"></i>'
+      +'<u>'+(i%3===0?('0'+i).slice(-2):'')+'</u></span>'; }
+  return '<div class="dv-ddhr">'+out+'</div>';
+}
+function _ddList(rows){
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  if(!rows.length) return '<div class="dv-ddnone" style="padding:22px 0">'+laT('ยังไม่มีใบจองเข้ามา')+'</div>';
+  return rows.map(function(r){
+    var t0=r.trips[0]||{}; var more=r.trips.length>1?(' +'+(r.trips.length-1)):'';
+    var ink=(r.agentColor&&typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(r.agentColor):'#5f5c56';
+    var chip=(r.side==='b2c')
+      ? '<span class="dv-ddmk" style="background:#FDE6EE;color:#8C2D52">'+esc(r.channel||'B2C')+'</span>'
+      : '<span class="dv-ddmk" style="background:'+(r.agentColor||'#F2EFEA')+';color:'+ink
+        +'" title="'+esc(r.agent)+'">'+esc(r.agent)+'</span>';
+    var tm=r.ts?(function(){var d=new Date(r.ts);
+      return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);})():'—';
+    var vc=r.vc.length>16?(r.vc.slice(0,15)+'…'):r.vc;
+    return '<div class="dv-ddrow'+(r.cxl?' cx':'')+'" onclick="dashDayDetailGo(\''+r.id+'\')">'
+      +'<span class="tm">'+tm+'</span><span class="mk">'+chip+'</span>'
+      +'<span class="tx"><b style="color:'+_dvInk(t0.color)+'">'+esc(t0.route||'—')
+        +(r.cxl?' <em>· '+laT('ยกเลิก')+'</em>':'')+(t0.mode==='charter'?' <s>'+laT('เหมาลำ')+'</s>':'')
+        /* §internal · ป้ายบอกว่าใบนี้เป็นของบริษัทเองและไม่ถูกนับเป็นยอดขาย
+           ถ้าไม่บอก คนจะเห็นแถว ฿0 แล้วคิดว่าระบบคิดเงินพลาด */
+        +(r.intFree?' <s class="ddint" title="'+laT('ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ').replace(/"/g,'&quot;')+'">'+esc(r.intLbl||laT('ของบริษัท'))+'</s>':'')+'</b>'
+        +'<i>'+esc(r.lead||'—')+(r.nat?(' · '+esc(r.nat)):'')
+        +(r.hotel?(' · '+esc(r.hotel)):'')+'</i></span>'
+      +'<span class="dt">'+_dashDateShort(t0.date)+more+'</span>'
+      +'<span class="px">'+r.pax+'</span>'
+      +'<span class="vc" title="'+esc(r.vc)+'">'+esc(vc)+'</span>'
+      +'<span class="mn">฿'+Math.round(r.val).toLocaleString()+'</span></div>';
+  }).join('');
+}
+function _ddSum(rows,side){
+  /* §internal · ยอดขาย/จำนวนใบ/เฉลี่ย ไม่นับใบของบริษัทเองที่ไม่เก็บเงิน
+     ตัวหารต้องลดตามด้วย ไม่งั้นเฉลี่ยต่อใบจะเพี้ยนไปอีกทาง */
+  var free=rows.filter(function(r){return r.side===side && !r.cxl && r.intFree;}).length;
+  var ok=rows.filter(function(r){return r.side===side && !r.cxl && !r.intFree;});
+  var ag={}; ok.forEach(function(r){ if(r.agentId) ag[r.agentId]=1; });
+  var val=0,pax=0; ok.forEach(function(r){ val+=r.val; pax+=r.pax; });
+  return {n:ok.length, pax:pax, val:val, avg:ok.length?val/ok.length:0, free:free,
+    ag:Object.keys(ag).length,
+    cxl:rows.filter(function(r){return r.side===side && r.cxl;}).length};
+}
+/* การ์ดสรุปสองใบอยู่คู่กันตลอด · นั่นคือทั้งหมดของคำว่า "แยก B2C / B2B"
+   ถ้าให้สลับดูทีละฝั่ง คนจะเทียบสัดส่วนไม่ได้ ซึ่งเป็นสิ่งเดียวที่อยากรู้จากหน้านี้
+   กดการ์ดใบไหน = ส่วนซอยข้างล่างสลับไปฝั่งนั้น */
+function _ddSumCard(side,S,totVal,on){
+  var c=(side==='b2c')?{ink:'#8C2D52',bg:'#FDE6EE',bar:'#C2557C'}
+                      :{ink:'#12518F',bg:'#E6F1FB',bar:'#3E7FBF'};
+  var sh=totVal?Math.round(S.val/totVal*100):0;
+  var last=(side==='b2c')
+    ? {v:S.cxl, k:laT('ยกเลิก'), dim:!S.cxl}
+    : {v:S.ag,  k:laT('เอเย่นต์'), dim:false};
+  return '<div class="dv-c dv-ddsum'+(on?' on':'')+'" data-side="'+side+'" '
+      +'onclick="dashDayDetailPick(\''+side+'\')">'
+    +'<div class="dv-ddsh"><span class="big" style="color:'+c.ink+'">'
+      +(side==='b2c'?('B2C · '+laT('ขายเอง')):('B2B · '+laT('เอเย่นต์')))+'</span>'
+      +'<span class="dv-cnt" style="background:'+c.bg+';color:'+c.ink+'">'
+        +(_ddRg().days>1?laTp('{0}% ของยอดช่วงนี้', sh):laTp('{0}% ของยอดวันนี้', sh))+'</span></div>'
+    +'<div class="dv-ddsv">'
+      +'<span class="s"><b>'+S.n+'</b><i>'+laT('ใบ')+'</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+S.pax+'</b><i>pax</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+_dashMoneyShort(S.val)+'</b><i>'+laT('ยอดขาย')+'</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+_dashMoneyShort(S.avg)+'</b><i>'+laT('เฉลี่ย / ใบ')+'</i></span><span class="sep"></span>'
+      +'<span class="s"><b'+(last.dim?' class="dim"':'')+'>'+last.v+'</b><i>'+last.k+'</i></span>'
+      /* §internal · ตัวเลขบนการ์ดไม่นับใบพวกนี้ · ต้องบอกว่าตัดไปกี่ใบ ไม่งั้นจะขัดกับตารางข้างล่าง */
+      +(S.free?('<span class="sep"></span><span class="s" title="'+laT('ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ').replace(/"/g,'&quot;')
+        +'"><b class="dim">'+S.free+'</b><i>'+laT('ไม่นับยอด')+'</i></span>'):'')
+    +'</div>'
+    +'<div class="dv-ddshb"><i style="width:'+sh+'%;background:'+c.bar+'"></i></div></div>';
+}
+function _ddSideBlock(rows,side){
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var rg=_ddRg();
+  var all=rows.filter(function(r){return r.side===side;});
+  var ok=all.filter(function(r){return !r.cxl;});
+  var byRoute=_ddAgg(ok,function(r){return (r.trips[0]||{}).route;},
+                        function(r){return _dvInk((r.trips[0]||{}).color);});
+  var byMonth=_ddAgg(ok,function(r){return String((r.trips[0]||{}).date||'').slice(0,7);});
+  byMonth.sort(function(a,b){ return a.k<b.k?-1:1; });
+  var byWho=(side==='b2c')
+    ? _ddAgg(ok,function(r){return r.channel;})
+    : _ddAgg(ok,function(r){return r.agent;},function(r){return r.agentColor?_dvInk(r.agentColor):'';});
+  var byNat=_ddAgg(ok,function(r){return r.nat||'—';});
+  var shown=window._ddShowAll?all:all.slice(0,_DD_CAP);
+  var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var moLbl=function(ym){ var p=String(ym).split('-');
+    return (MO[(+p[1]||1)-1]||p[1])+' '+(p[0]||''); };
+  /* ทุกใบในแถวนี้วัดด้วยไม้บรรทัดเดียวกัน = ยอดขาย · ความยาวแท่งจึงเทียบข้ามการ์ดได้
+     สีเป็นของ "การ์ด" ไม่ใช่ของอันดับ — เส้นทางใช้สีเส้นทางจริง ที่เหลือใบละสี */
+  return '<div class="dv-ddg4">'
+    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'+laT('เส้นทาง')+'<span>'+laTp('{0} เส้นทาง', byRoute.length)+'</span></div>'
+      +_ddBars(byRoute,{top:9})+'</div>'
+    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'
+      +(side==='b2c'?laT('ช่องทางที่ลูกค้าทักเข้ามา'):laT('เอเย่นต์'))+'<span>'
+      +(side==='b2c'?laTp('{0} ช่องทาง', byWho.length):laTp('{0} เจ้า', byWho.length))+'</span></div>'
+      +_ddBars(byWho,{top:9,color:(side==='b2c'?'#C2557C':'#3E7FBF')})+'</div>'
+    +'<div class="dv-c dv-ddcard">'
+      +'<div class="dv-ddh">'+laT('เดือนที่จะเดินทาง')+'<span>'+laTp('{0} เดือน', byMonth.length)+'</span></div>'
+      +_ddBars(byMonth,{top:9,color:'#2E9B72',label:moLbl})
+      +'<div class="dv-ddh2">'+(rg.days>1?laT('ใบที่เข้ามาแต่ละวัน'):laT('เวลาที่ใบเข้ามา'))+'</div>'
+      +(rg.days>1?_ddDaily(ok,rg):_ddHours(ok))
+    +'</div>'
+    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'+laT('สัญชาติผู้จอง')+'<span>'
+      +laTp('{0} สัญชาติ', byNat.length)+'</span></div>'
+      +_ddBars(byNat,{top:9,color:'#7C6BA8'})+'</div>'
+    +'</div>'
+    /* §ddRange · ช่วง 30 วันของจริงมีราวพันกว่าใบ · วาดทุกแถวทำให้กดสลับฝั่งหน่วง
+       ตัดที่ _DD_CAP แล้วบอกตรง ๆ ว่าตัด พร้อมปุ่มให้กดดูทั้งหมดถ้าอยากได้จริง
+       ตัวเลขสรุปข้างบนนับจากทุกใบเสมอ ไม่ได้นับแค่แถวที่วาด */
+    +'<div class="dv-c dv-ddlist"><div class="dv-ddh">'
+      +(rg.days>1?laT('ใบจองทั้งหมดในช่วงนี้'):laT('ใบจองทั้งหมดของวันนี้'))
+      +'<span>'+laTp('{0} ใบ', all.length)
+      +((all.length-ok.length)?(' · '+laT('ยกเลิก')+' '+(all.length-ok.length)):'')+'</span></div>'
+      +(shown.length<all.length
+        ? '<div class="dv-more" onclick="dashDayDetailShowAll()">'
+          +laTp('แสดง {0} จาก {1} ใบ · กดเพื่อดูทั้งหมด',
+                '<b>'+shown.length+'</b>', '<b>'+all.length+'</b>')+'</div>' : '')
+      +'<div class="dv-ddrows">'+_ddList(shown)+'</div></div>';
+}
+function _ddBodyHtml(){
+  var rows=_ddRows();
+  var S={b2c:_ddSum(rows,'b2c'), b2b:_ddSum(rows,'b2b')};
+  var tot=S.b2c.val+S.b2b.val;
+  var side=window._ddSide||'b2b';
+  return '<div class="dv-ddsums">'+_ddSumCard('b2c',S.b2c,tot,side==='b2c')
+      +_ddSumCard('b2b',S.b2b,tot,side==='b2b')+'</div>'
+    +_ddSideBlock(rows,side);
+}
+function _ddHeadHtml(){
+  var rg=_ddRg(), L=_ddRgLabel(rg);
+  var rows=_ddRows();
+  var ok=rows.filter(function(r){return !r.cxl;});
+  var pax=0,val=0; ok.forEach(function(r){ pax+=r.pax; val+=r.val; });
+  var cxl=rows.length-ok.length;
+  var pres=_ddPresets().map(function(p){
+    return '<span class="dv-ddpv'+((p.from===rg.from&&p.to===rg.to)?' on':'')+'" '
+      +'onclick="dashDayDetailPreset(\''+p.k+'\')">'+p.n+'</span>'; }).join('');
+  var arw=rg.days>1?laTp('ช่วงก่อนหน้า ({0} วัน)', rg.days):laT('วันก่อนหน้า');
+  var arwN=rg.days>1?laTp('ช่วงถัดไป ({0} วัน)', rg.days):laT('วันถัดไป');
+  return '<div class="dv-ddhr1">'
+    +'<button class="dv-arw" onclick="dashDayDetailShift(-1)" title="'+arw+'">&lsaquo;</button>'
+    +'<span class="dv-ddnum'+(L.wide?' w':'')+'">'+L.num+'</span>'
+    +'<span class="dv-dddgrp"><b class="dv-dddwk">'+L.wk+'</b>'
+      +'<span class="dv-dddmo">'+L.mo+'</span></span>'
+    +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button>'
+    +'<span class="dv-ddttl">'+(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))
+      +'<i>'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
+                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'</i></span>'
+    +'<span class="dv-ddkpi">'
+      +'<span class="dv-chip"><b>'+ok.length+'</b> '+laT('ใบ')+'</span>'
+      +'<span class="dv-chip"><b>'+pax+'</b> pax</span>'
+      +'<span class="dv-chip"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
+      +(cxl?('<span class="dv-chip warn"><b>'+cxl+'</b> '+laT('ยกเลิก')+'</span>'):'')
+      +'<button class="dv-ddx" onclick="dashDayDetailClose()" title="'+laT('ปิด')+'">&times;</button>'
+    +'</span></div>'
+    /* §ddRange · แถวสอง · ปุ่มลัดซ้าย ช่องวันที่ขวา · ปุ่มลัดครอบสิ่งที่ถูกถามบ่อย
+       ช่องวันที่ไว้สำหรับช่วงที่ปุ่มลัดไม่ครอบ (ปิดงบเดือนก่อน · เทียบไฮซีซัน) */
+    +'<div class="dv-ddhr2">'
+      +'<span class="dv-ddpre">'+pres+'</span>'
+      +'<span class="dv-ddinp">'
+        +'<i>'+laT('จาก','date')+'</i><input type="date" value="'+rg.from+'" max="'+rg.to+'" '
+          +'onchange="dashDayDetailSetRange(\'from\',this.value)">'
+        +'<i>'+laT('ถึง','date')+'</i><input type="date" value="'+rg.to+'" min="'+rg.from+'" '
+          +'onchange="dashDayDetailSetRange(\'to\',this.value)">'
+      +'</span>'
+    +'</div>';
+}
+/* §dayDetail · แขวนไว้ที่ body ไม่ใช่ใน #dash-wrap · renderDash() เขียนทับ
+   innerHTML ของ wrap ทั้งก้อน ป๊อปอัปที่อยู่ข้างในจะหายไปทุกครั้งที่เลื่อนวัน */
+var _DD_CAP=300;   /* §ddRange · เพดานจำนวนแถวที่วาดครั้งแรก · กดดูทั้งหมดได้ */
+window.dashOpenDayDetail=function(side){
+  window._ddSide=(side==='b2c'||side==='b2b')?side:'b2b';
+  /* ปุ่มที่กดเข้ามาเขียนว่า "รายละเอียดทั้งวัน" · เปิดมาต้องได้วันนั้นเสมอ
+     ไม่ใช่ช่วงที่ตั้งค้างไว้เมื่อรอบก่อน */
+  window._ddFrom=window._ddTo=(window._dashDate||TODAY_STR);
+  window._ddShowAll=false;
+  var ov=document.getElementById('dv-ddov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='dv-ddov'; ov.className='dv-ddov';
+    ov.onclick=function(e){ if(e.target===ov) window.dashDayDetailClose(); };
+    ov.innerHTML='<div class="dv-ddsheet"><div class="dv-ddhd" id="dv-ddhd"></div>'
+      +'<div class="dv-ddbd" id="dv-ddbd"></div></div>';
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', window._ddKey);
+  }
+  window._ddPaint();
+  ov.style.display='block';
+};
+window._ddKey=function(e){ if(e.key==='Escape') window.dashDayDetailClose(); };
+window._ddPaint=function(){
+  var hd=document.getElementById('dv-ddhd'), bd=document.getElementById('dv-ddbd');
+  if(hd) hd.innerHTML=_ddHeadHtml();
+  if(bd) bd.innerHTML=_ddBodyHtml();
+};
+window.dashDayDetailPick=function(side){
+  window._ddSide=side;
+  var bd=document.getElementById('dv-ddbd'); if(bd) bd.innerHTML=_ddBodyHtml();
+};
+/* เลื่อนวันในป๊อปอัป · ขยับ _dashDate ตัวเดียวกับแถบหัวหน้า Dashboard แล้ววาดทั้งสองที่
+   ปิดป๊อปอัปแล้วหน้าข้างหลังต้องอยู่วันเดียวกัน ไม่ใช่เด้งกลับวันเดิม */
+window.dashDayDetailShift=function(delta){
+  var rg=_ddRg(); var step=(+delta||0)*rg.days;
+  window._ddFrom=_ddAddDays(rg.from,step); window._ddTo=_ddAddDays(rg.to,step);
+  window._ddShowAll=false;
+  /* ช่วงวันเดียว หน้าหลังยังตามมาด้วยเหมือนเดิม · เป็นช่วงแล้วไม่มีวันเดียวให้ไปอยู่ */
+  if(rg.days===1 && typeof setDashDate==='function') setDashDate(window._ddFrom);
+  window._ddPaint();
+};
+/* §ddRange · กดแถวแล้วเด้งไปหน้า Booking · ต้องปิดแผ่นก่อน ไม่งั้นแผ่นเต็มจอ
+   ยังบังอยู่ข้างบน คนกดแล้วเหมือนไม่มีอะไรเกิดขึ้น */
+window.dashDayDetailGo=function(id){
+  window.dashDayDetailClose();
+  if(typeof dashOpenBooking==='function') dashOpenBooking(id);
+};
+window.dashDayDetailClose=function(){
+  var ov=document.getElementById('dv-ddov'); if(!ov) return;
+  document.removeEventListener('keydown', window._ddKey);
+  ov.remove();
+};
+
 window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bookingV2SwitchTab==='function')bookingV2SwitchTab('approvals'); };
 window.dashGoBytrip=function(ds){ if(typeof bookingV2OpenFiltered==='function')bookingV2OpenFiltered('',ds||TODAY_STR); };
 window.dashGoAccounting=function(){ var el=document.querySelector('[data-view=accounting]'); if(el&&typeof nav==='function')nav(el); };
@@ -1361,11 +2175,27 @@ const DV_CSS=`<style>
   .dv-pr2 .rt b{display:block;font-family:'DM Mono',ui-monospace,monospace;font-size:15px;
     font-weight:800;line-height:1.1;color:#0C6B47}
   .dv-pr2 .rt i{display:block;font-style:normal;font-size:9px;color:#b6b1a8;font-weight:600}
+  /* §dashBoatFrame · กรอบของรายการท่า+เรือ · การ์ดจะได้ไม่สูงตามจำนวนเรือ
+     ⚠ max-height เป็นเพดาน ไม่ใช่ความสูงตายตัว · วันที่เรือออกน้อยการ์ดยังเตี้ยตามเดิม
+       ไม่มีช่องว่างเปล่าค้างไว้
+     ⚠ แถบเลื่อนตัวนี้ "ต้องเห็น" ต่างจากของ sidebar ที่ซ่อนทิ้ง
+       เพราะกรอบเล็กและไม่มีอะไรอื่นบอกว่ายังมีเรืออีกข้างล่าง
+     ⚠ overscroll-behavior:contain กันไม่ให้เลื่อนสุดกรอบแล้วไปลากคอลัมน์ทั้งอันต่อ */
+  .dv-blist{max-height:248px;overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
+  .dv-blist::-webkit-scrollbar{width:7px}
+  .dv-blist::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:4px}
+  .dv-blist::-webkit-scrollbar-track{background:transparent}
+  /* หัวข้อในกรอบเกาะบนไว้ · เลื่อนแล้วยังรู้ว่ากำลังดูบล็อกไหนอยู่ */
+  .dv-blist .dv-sec{position:sticky;top:0;z-index:1;background:#fff;margin-top:0}
   .dv-more{margin:4px 12px 2px;text-align:center;font-size:10px;color:#7d7a74;cursor:pointer;
     padding:5px;border-radius:8px;background:#F7F5F2;font-weight:600}
   .dv-more b{font-family:'DM Mono',ui-monospace,monospace;color:#0C6B47}
-  .dv-sync{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;
-    font-size:10px;color:#b0aaa0}
+  /* §dayDetail · แถวนี้เดิมมีแค่ข้อความสถานะจึงจัดกลาง · ตอนนี้มีปุ่มด้วย แยกไปคนละข้าง */
+  .dv-sync{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:10px;
+    padding:0 2px;font-size:10px;color:#b0aaa0}
+  .dv-sync .sy{display:inline-flex;align-items:center;gap:6px;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* ── ปฏิทิน Seats available ── */
   .dv-cal{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
@@ -1527,6 +2357,197 @@ const DV_CSS=`<style>
     .dv-bd,.dv-c{padding-left:12px;padding-right:12px}
     /* นิ้วต้องกดโดน */
     .dv-bdseg b,.dv-ovseg button{min-height:34px;display:inline-flex;align-items:center}
+  }
+
+  /* ══ §dayDetail · ป๊อปอัป "รายละเอียดทั้งวัน" ═════════════════════════════
+     เปลือกใช้แก้วชุดเดียวกับ .dv-pop (ฐานเข้มก่อนแล้วค่อยโปร่ง) แค่ขยายเป็นแผ่นเต็ม
+     ข้างในเป็นการ์ดขาว .dv-c ตามภาษาเดิมของหน้า — คนที่ใช้ Dashboard อยู่แล้ว
+     ไม่ต้องเรียนรู้อะไรใหม่ตอนเปิดป๊อปอัปนี้ */
+  .dv-ddbt{font-size:10px;font-weight:800;letter-spacing:0;text-transform:none;
+    color:#12518F;background:#EDF3FA;border:1px solid #D8E4F2;border-radius:999px;
+    padding:3px 9px;cursor:pointer;white-space:nowrap}
+  .dv-ddbt:hover{background:#DEEAF7}
+  .dv-lvhd{cursor:pointer}
+  .dv-lvhd:hover .s b{color:#12518F}
+  .dv-ddrow .ddint{font-size:9.5px;font-weight:700;color:#8A5B00;background:#FBF0DD;
+    border:1px solid #EAD9B0;border-radius:5px;padding:0 5px;margin-left:5px;text-decoration:none;white-space:nowrap}
+  .dv-ddov{display:none;position:fixed;inset:0;z-index:9000;overflow:hidden;
+    background:rgba(8,16,44,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .dv-ddov *{box-sizing:border-box}
+  .dv-ddsheet{width:100%;height:100dvh;max-height:100dvh;border-radius:0;overflow:hidden;
+    display:flex;flex-direction:column;
+    font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif;
+    background:linear-gradient(160deg, rgba(20,36,88,.96), rgba(12,24,62,.93));
+    -webkit-backdrop-filter:blur(26px) saturate(190%);backdrop-filter:blur(26px) saturate(190%);
+    border:none;box-shadow:none}
+  .dv-ddhd{display:flex;flex-direction:column;align-items:stretch;gap:9px;
+    padding:11px 14px 12px;flex:none}
+  .dv-ddhr1{display:flex;align-items:center;gap:13px}
+  /* §ddRange · แถวเลือกช่วง · ปุ่มลัดซ้าย ช่องวันที่ขวา */
+  .dv-ddhr2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dv-ddpre{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .dv-ddpv{font-size:10.5px;font-weight:700;color:#C9D6EC;background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 12px;cursor:pointer;
+    white-space:nowrap;line-height:1.25}
+  .dv-ddpv:hover{background:rgba(255,255,255,.20);color:#fff}
+  .dv-ddpv.on{background:#fff;color:#16265C;border-color:#fff;font-weight:800}
+  .dv-ddinp{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .dv-ddinp i{font-style:normal;font-size:10px;font-weight:700;color:#A8BAD8}
+  /* color-scheme:dark ทำให้ไอคอนปฏิทินกับตัวอักษรในช่องเป็นสีอ่อน · ไม่งั้นดำบนกรมท่า
+     มองไม่เห็นเลยว่ามีช่องอยู่ตรงนั้น */
+  .dv-ddinp input{color-scheme:dark;font-family:'DM Mono',ui-monospace,monospace;font-size:11px;
+    font-weight:700;color:#EAF0FB;background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.22);border-radius:8px;padding:4px 8px;cursor:pointer;
+    min-height:28px}
+  .dv-ddinp input:hover{background:rgba(255,255,255,.18)}
+  .dv-ddnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;color:#fff;
+    font-family:'DM Mono',ui-monospace,monospace;display:inline-block;min-width:34px;text-align:center}
+  /* ช่วงวัน · ตัวเลขเดียวใช้ 30px ได้ ช่วงยาว ๆ ใช้ไม่ได้ · เล็กลงและไม่ตรึงความกว้าง */
+  .dv-ddnum.w{font-size:19px;letter-spacing:-.3px;min-width:0;white-space:nowrap;text-align:left}
+  .dv-dddgrp{display:inline-block;min-width:118px}
+  .dv-dddwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}
+  .dv-dddmo{display:block;font-size:9px;font-weight:800;letter-spacing:.13em;color:#A8BAD8;
+    text-transform:uppercase}
+  .dv-ddttl{font-size:12.5px;font-weight:800;color:#EAF0FB;letter-spacing:.02em;min-width:0}
+  .dv-ddttl i{display:block;font-style:normal;font-size:10px;font-weight:600;color:#A8BAD8;margin-top:2px}
+  /* ชุดชิปของป๊อปอัป · รูปเดียวกับ .dv-kpi แต่ต้องเป็นคลาสของตัวเอง — ดูบันทึกที่ _ddHeadHtml */
+  .dv-ddkpi{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+    justify-content:flex-end;min-width:0}
+  .dv-ddx{width:29px;height:29px;flex:none;border:1px solid rgba(255,255,255,.26);
+    background:rgba(255,255,255,.10);border-radius:9px;color:#C9D6EC;font-size:16px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-family:inherit;line-height:1}
+  .dv-ddx:hover{background:rgba(255,255,255,.22);color:#fff}
+  .dv-ddbd{padding:0 14px 14px;display:flex;flex-direction:column;gap:9px;flex:1 1 auto;
+    overflow-y:auto;min-height:0;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.34) transparent}
+  .dv-ddbd::-webkit-scrollbar{width:6px}
+  .dv-ddbd::-webkit-scrollbar-thumb{background:rgba(255,255,255,.30);border-radius:4px}
+  /* ── การ์ดสรุปสองใบ · อยู่คู่กันเสมอ ── */
+  .dv-ddsums{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:none}
+  .dv-ddsum{padding:11px 13px 10px;cursor:pointer;position:relative;opacity:.62}
+  .dv-ddsum.on{opacity:1}
+  .dv-ddsum::after{content:'';position:absolute;inset:-1px;border-radius:12px;pointer-events:none;
+    border:2px solid transparent}
+  .dv-ddsum[data-side="b2c"].on::after{border-color:#C2557C}
+  .dv-ddsum[data-side="b2b"].on::after{border-color:#3E7FBF}
+  .dv-ddsh{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .dv-ddsh .big{font-size:13.5px;font-weight:800}
+  .dv-ddsh .dv-cnt{margin-left:auto}
+  .dv-ddsv{display:flex;align-items:stretch;padding:1px 0 8px}
+  .dv-ddsv .s{flex:1;text-align:center;min-width:0}
+  .dv-ddsv .s b{display:block;font-family:'DM Mono',ui-monospace,monospace;font-size:21px;
+    font-weight:800;line-height:1.1;color:#3a3a36}
+  .dv-ddsv .s b.dim{color:#b6b1a8}
+  .dv-ddsv .s i{display:block;font-style:normal;font-size:9.5px;font-weight:600;color:#9b9088;margin-top:1px}
+  .dv-ddsv .sep{width:1px;margin:2px 0;background:#EFEBE5}
+  .dv-ddshb{height:6px;border-radius:999px;background:#F4F2EE;overflow:hidden}
+  .dv-ddshb i{display:block;height:100%;border-radius:999px}
+  /* ── การ์ดซอย 3 ใบ · สูงเท่ากันให้อ่านเป็นแถบเดียว ── */
+  .dv-ddg4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+    align-items:stretch;flex:none}
+  .dv-ddcard{padding:11px 13px 12px;display:flex;flex-direction:column}
+  .dv-ddcard>.dv-ddh2:last-of-type{margin-top:auto}
+  .dv-ddh{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#1F2124;
+    display:flex;align-items:center;gap:7px;margin-bottom:9px}
+  .dv-ddh span{margin-left:auto;background:#EFEBE7;color:#7a736c;border-radius:999px;padding:2px 8px;
+    font-size:9.5px;font-weight:800;letter-spacing:0;text-transform:none}
+  .dv-ddh2{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#b0aaa0;
+    padding:11px 0 6px;margin-top:6px;border-top:1px solid #F1EEE9}
+  /* แท่งเรียงอันดับ · ป้ายบน · แท่งล่าง · ตัวเลขขวา · ปลายแท่งมน 4px บนรางที่เห็นเพดาน */
+  .dv-ddbr{display:grid;grid-template-columns:minmax(0,1fr) 62px;
+    grid-template-areas:'l v' 'tr v';gap:0 9px;align-items:center;padding:4px 0}
+  .dv-ddbr .l{grid-area:l;font-size:11px;font-weight:700;color:#2c2c2a;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+  .dv-ddbr .tr{grid-area:tr;height:8px;border-radius:4px;background:#F4F6F4;
+    box-shadow:inset 0 0 0 1px #ECEFEC;overflow:hidden;display:block}
+  .dv-ddbr .tr i{display:block;height:100%;border-radius:4px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
+  .dv-ddbr .v{grid-area:v;text-align:right;font-family:'DM Mono',ui-monospace,monospace;
+    font-size:12px;font-weight:800;color:#2c2c2a;line-height:1.2}
+  .dv-ddbr .v em{display:block;font-style:normal;font-family:'DM Sans',sans-serif;font-size:9px;
+    font-weight:600;color:#a8a29a;white-space:nowrap}
+  .dv-ddbr:hover .l{color:#12518F}
+  .dv-ddnone{font-size:11px;color:#b0aaa0;text-align:center;padding:10px 0;font-style:normal}
+  .dv-ddhr{display:flex;align-items:flex-end;gap:2px;height:54px}
+  .dv-ddhb{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+    height:100%;min-width:0}
+  .dv-ddhb i{display:block;width:100%;border-radius:3px;
+    background:linear-gradient(180deg,#A9E5C9,#2E9B72)}
+  .dv-ddhb.z i{background:#EDEBE6}
+  .dv-ddhb u{display:block;text-decoration:none;font-family:'DM Mono',ui-monospace,monospace;
+    font-size:8px;color:#b6b1a8;font-weight:600;margin-top:3px;height:10px}
+  .dv-ddnats{display:flex;flex-wrap:wrap;gap:4px}
+  .dv-ddnats span{font-size:10px;font-weight:700;color:#5f5c56;background:#F4F2EE;border-radius:6px;
+    padding:3px 7px;display:inline-flex;align-items:center;gap:5px}
+  .dv-ddnats b{font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;color:#2c2c2a}
+  /* ── รายการใบจองทั้งวัน · ทุกใบ ไม่ใช่ 12 ใบล่าสุดเหมือนฟีดข้างนอก ── */
+  .dv-ddlist{padding:11px 13px 10px;flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  .dv-ddrows{display:flex;flex-direction:column;gap:3px;flex:1 1 auto;min-height:190px;overflow-y:auto;
+    overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
+  .dv-ddrows::-webkit-scrollbar{width:7px}
+  .dv-ddrows::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:4px}
+  .dv-ddrow{display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:8px;
+    border:1px solid #F1EEE9;background:#fff;cursor:pointer}
+  .dv-ddrow:hover{background:#FAFAF8;border-color:#E2DED6}
+  .dv-ddrow.cx{opacity:.5}
+  .dv-ddrow .tm{flex:none;width:38px;font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;
+    font-weight:700;color:#b0aaa0}
+  .dv-ddrow .mk{flex:none;width:112px;display:flex}
+  .dv-ddmk{display:block;max-width:112px;height:21px;line-height:21px;padding:0 7px;border-radius:6px;
+    font-size:9px;font-weight:800;text-align:center;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+  .dv-ddrow .tx{flex:1;min-width:0;display:flex;flex-direction:column}
+  .dv-ddrow .tx b{font-size:11.5px;font-weight:800;line-height:1.35;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .dv-ddrow .tx b em{font-style:normal;color:#A32D2D;font-weight:700}
+  .dv-ddrow .tx b s{text-decoration:none;font-size:9px;background:#EDE7FA;color:#534AB7;
+    border-radius:4px;padding:1px 5px;font-weight:800}
+  .dv-ddrow .tx i{font-style:normal;font-size:10px;font-weight:600;color:#8a857d;line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddrow .dt{flex:none;width:76px;font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;
+    font-weight:700;color:#5f5c56;text-align:right}
+  .dv-ddrow .px{flex:none;width:34px;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;
+    font-weight:800;color:#2c2c2a;text-align:right}
+  .dv-ddrow .vc{flex:none;width:126px;font-family:'DM Mono',ui-monospace,monospace;font-size:10px;
+    font-weight:600;color:#b0aaa0;text-align:right;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .dv-ddrow .mn{flex:none;width:80px;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;
+    font-weight:800;color:#2c2c2a;text-align:right}
+  /* จอแคบ · กริดยุบเป็นคอลัมน์เดียว แล้วตัดคอลัมน์ที่อ่านจากที่อื่นได้ออกจากแถว */
+  @media (max-width:1400px){ .dv-ddg4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media (max-width:1180px){
+    .dv-ddsums{grid-template-columns:1fr}
+    .dv-ddrow .vc,.dv-ddrow .tm{display:none}
+    .dv-ddrows{min-height:120px}
+  }
+  /* §dayDetail · จอมือถือ · วัดที่ 390x812 ได้ล้นแนวนอน 78px และเลข 5 ตัวบนการ์ดสรุป
+     ทับกันจนอ่านไม่ออก (฿23K กับ ฿7,699 ชนกัน) · สามอย่างที่ต้องทำ:
+     · แถบหัวตัดชิปตัวเลขทิ้ง — เลขชุดเดียวกันอยู่บนการ์ดสรุปที่อยู่ใต้ลงมาแค่บรรทัดเดียว
+       แต่ปุ่มปิดต้องอยู่ ไม่งั้นออกจากหน้าไม่ได้เลยบนมือถือ
+     · การ์ดสรุปเปลี่ยนจากแถวเดียว 5 ช่องเป็นกริด 3 คอลัมน์ · เส้นคั่นไม่มีความหมายในกริด
+     · แถวรายการ ย่อคอลัมน์ที่กว้างตายตัวลงให้พอดีจอ */
+  @media (max-width:760px){
+    .dv-ddg4{grid-template-columns:1fr}
+    .dv-ddbd{padding:0 8px 10px;gap:7px}
+    .dv-ddhd{gap:8px;padding:9px 10px 10px}
+    .dv-ddhr1{flex-wrap:wrap;gap:9px}
+    .dv-ddinp{margin-left:0;width:100%}
+    .dv-ddinp input{flex:1;min-width:0}
+    .dv-ddnum.w{font-size:16px}
+    .dv-ddhd .dv-chip{display:none}
+    .dv-ddkpi{margin-left:auto}
+    .dv-ddttl{flex:1 1 100%;order:9;font-size:11.5px}
+    .dv-ddttl i{display:inline;margin:0 0 0 6px}
+    .dv-ddsv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px 4px;padding:1px 0 9px}
+    .dv-ddsv .sep{display:none}
+    .dv-ddsv .s b{font-size:17px}
+    .dv-ddcard,.dv-ddlist,.dv-ddsum{padding-left:10px;padding-right:10px}
+    .dv-ddrow{gap:6px;padding:5px 5px}
+    .dv-ddrow .mk{width:74px}
+    .dv-ddmk{max-width:74px}
+    .dv-ddrow .dt{width:54px;font-size:10px}
+    .dv-ddrow .px{width:22px}
+    .dv-ddrow .mn{width:62px;font-size:11px}
   }
 </style>`;
 function renderDash(){
@@ -1865,19 +2886,25 @@ function renderDash(){
   const EN_MON_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WD_EN_LONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  const TH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const TH_MON=laMonAbbr();          /* §i18n · อ่านที่เดียว ใช้สองที่ */
   /* §dashTdy2 · ทั้งหน้าเดินตามวันที่ที่เลือก · คำเรียกจึงต้องเดินตามด้วย
      "วันนี้" ใช้ได้เฉพาะตอนที่วันที่เลือกเป็นวันนี้จริง ๆ · ที่เหลือเขียนวันไปตรง ๆ
      ตัวเลขถูกมาตลอด ผิดแค่คำเรียก ซึ่งอ่านแล้วเข้าใจผิดว่าเป็นของวันนี้ */
   const _dsTdy=(_ds===TODAY_STR);
   const _dsDay=(new Date(_ds).getDate()+' '+TH_MON[new Date(_ds).getMonth()]);
-  const _dsLbl=_dsTdy?'วันนี้':_dsDay;
+  const _dsLbl=_dsTdy?laT('วันนี้'):_dsDay;
   const fmtTodoDate=(ds)=>{const d=new Date(ds);return `${d.getDate()} ${TH_MON[d.getMonth()]}`;};
 
   // Boat Operating stats card (replaces To do list)
   // Per-pier breakdown
+  /* §dashPierAll · เดิมมีแค่ tublamu กับ panwa · ranong เปิดใช้จริงตั้งแต่ ส.ค. 2026
+     และ other มีมาตั้งแต่ §otherPier · เรือสองท่านี้ถูกนับใน opBoatsAll (ตัวเลขบนสุด)
+     แต่ตกจากบล็อก "ท่าเรือ" เพราะ if(pierStats[p]) ไม่ผ่าน · เลขบนกับเลขล่างเลยไม่ตรงกัน
+     สีกับตัวย่อใช้ชุดเดียวกับ PIER_COL/PIER_LBL ที่หน้าปฏิทินใช้ ไม่ตั้งใหม่ */
   const pierStats={tublamu:{name:'Tub Lamu',short:'TL',color:'#185FA5',op:0,allot:0,booked:0},
-                   panwa:{name:'Visit Panwa',short:'VP',color:'#0F6E56',op:0,allot:0,booked:0}};
+                   panwa:{name:'Visit Panwa',short:'VP',color:'#0F6E56',op:0,allot:0,booked:0},
+                   ranong:{name:'Ranong',short:'RN',color:'#BA7517',op:0,allot:0,booked:0},
+                   other:{name:'อื่น ๆ',short:'OT',color:'#5B289A',op:0,allot:0,booked:0}};
   opBoatsAll.forEach(ob=>{
     const p=ob.r.pier;
     if(pierStats[p]){
@@ -1902,37 +2929,45 @@ function renderDash(){
   const todoCard=`<div class="dv-c">
     <div class="dv-ct"><span class="big">Boat Operating</span>
       <span class="sp"></span>
-      <span class="dv-cnt ${operatingCount>0?'go':''}">${operatingCount} / ${availTotal} พร้อม</span></div>
+      <span class="dv-cnt ${operatingCount>0?'go':''}">${operatingCount} / ${availTotal} ${laT('พร้อม')}</span></div>
     <div class="dv-avrow">
-      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">${_dsTdy?'ออกวันนี้':'ออก '+_dsDay}</span><span class="u">จาก ${availTotal} ลำ</span></div>
+      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">${_dsTdy?laT('ออกวันนี้'):laT('ออก')+' '+_dsDay}</span><span class="u">${laTp('จาก {0} ลำ', availTotal)}</span></div>
       <div class="dv-avs"></div>
       <div class="dv-av"><span class="v" style="color:#0C6B47">${fillPct}<span style="font-size:12px">%</span></span><span class="k">fill</span><span class="u">${totBooked}/${totAllot}</span></div>
       <div class="dv-avs"></div>
-      <div class="dv-av"><span class="v" style="color:${totFree>0?'#B4560A':'#3a3a36'}">${totFree}</span><span class="k">ที่นั่งว่าง</span><span class="u">ทั้งวัน</span></div>
+      <div class="dv-av"><span class="v" style="color:${totFree>0?'#B4560A':'#3a3a36'}">${totFree}</span><span class="k">${laT('ที่นั่งว่าง')}</span><span class="u">${laT('ทั้งวัน')}</span></div>
     </div>
-    ${pierRows?`<div class="dv-sec">ท่าเรือ</div>${pierRows}`:`<div class="dv-empty">ไม่มีเรือออก${_dsTdy?'วันนี้':_dsDay}</div>`}
-    <!--§dashLeft:boatlist-->
+    ${pierRows?`<div class="dv-blist"><div class="dv-sec">${laT('ท่าเรือ')}</div>${pierRows}<!--§dashLeft:boatlist--></div>`:`<div class="dv-empty">${_dsTdy?laT('ไม่มีเรือออกวันนี้'):laT('ไม่มีเรือออก')+' '+_dsDay}</div>`}
+    <!--§dashLeft:boatmore-->
   </div>`;
 
   // Boats operating today card (replaces Notifications)
   const opBoatColor=(idx)=>['#9FB89E','#C4A874','#A8C8D8','#D4B89F','#B4D4A0','#C8A8D8'][idx%6];
-  const opBoatRows=opBoatsAll.slice(0,5).map((ob,i)=>{
+  /* §dashBoatFrame · เดิมตัดที่ 5 ลำแล้วต่อท้ายว่า "+N ลำที่เหลือ"
+     เพราะการ์ดไม่มีกรอบ ยิ่งเรือเยอะยิ่งดันใบข้างล่างตกจอ
+     วัดจริงที่จอสูง 1000 คอลัมน์ซ้าย 926px · การ์ดสูงตามจำนวนเรือแบบไม่มีเพดาน
+       0 ลำ 152px · 5 ลำ 407px · 12 ลำ 724px · 20 ลำ 1086px = กินคอลัมน์หมด
+     พอมีกรอบ (.dv-blist) แล้ว ไม่ต้องตัดอีก · เลื่อนดูในกรอบได้ครบทุกลำ */
+  const opBoatRows=opBoatsAll.map((ob,i)=>{
     const fillColor=ob.pct>=95?'#A32D2D':ob.pct>=70?'#B4560A':'#0C6B47';
     return `<div class="dv-pr2 bt" onclick="nav(document.querySelector('[data-view=op]'))">
       <span class="pm" style="background:${ob.r.color||'#7d7a74'}">${ob.b.name.slice(0,2).toUpperCase()}</span>
       <span class="tx"><span class="n">${ob.b.name}</span>
         <span class="s">${({panwa:'VP',tublamu:'TL',ranong:'RN',other:'OT'})[ob.r.pier]||''} · ${ob.r.name}</span></span>
-      <span class="rt"><b style="color:${fillColor}">${ob.free}</b><i>ว่าง / ${ob.cap}</i></span>
+      <span class="rt"><b style="color:${fillColor}">${ob.free}</b><i>${laT('ว่าง')} / ${ob.cap}</i></span>
     </div>`;
   }).join('');
-  const moreOps=Math.max(0,opBoatsAll.length-5);
   /* §dashLeft · เดิมเป็นการ์ด "Boats operating" ของตัวเอง วางอยู่ใต้ Boat Operating พอดี
      ซึ่งบอกเรื่องเดียวกัน — วันที่ออกลำเดียวจะเห็นเลขชุดเดิมซ้ำสามรอบติดกัน
      (การ์ดบน + การ์ดนี้ + Today's headline) ยุบมาเป็นท้ายการ์ดเดิมแทน
      หัวเรือ/ท่า/ที่ว่าง ยังอยู่ครบ แค่ไม่ต้องมีกรอบของตัวเอง */
   const boatListSlot = opBoatRows
-    ? `<div class="dv-sec">${_dsTdy?'เรือที่ออกวันนี้':'เรือที่ออก '+_dsDay}</div>`+opBoatRows
-      +(moreOps>0?`<div class="dv-more" onclick="nav(document.querySelector('[data-view=op]'))"><b>+${moreOps}</b> ลำที่เหลือ · เปิด Boat Operation &rsaquo;</div>`:'')
+    ? `<div class="dv-sec">${_dsTdy?laT('เรือที่ออกวันนี้'):laT('เรือที่ออก')+' '+_dsDay}</div>`+opBoatRows
+    : '';
+  /* ปุ่มเปิดหน้าเต็มอยู่ "นอก" กรอบที่เลื่อน · ไม่งั้นต้องเลื่อนลงไปสุดก่อนถึงจะเห็น */
+  const boatMoreSlot = opBoatsAll.length
+    ? `<div class="dv-more" onclick="nav(document.querySelector('[data-view=op]'))">`
+      +`<b>${opBoatsAll.length}</b> ${laT('ลำ · เปิด Boat Operation')} &rsaquo;</div>`
     : '';
 
   // leftCol assembled below (after sched + filesCard are defined)
@@ -1980,7 +3015,7 @@ function renderDash(){
         </div>
         <div style="text-align:center;margin-top:9px;font-size:10px;color:#6b675f;font-weight:700;line-height:1.25;word-break:break-word">${e.label}</div>
       </div>`;
-    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">ยังไม่มี booking วันที่เลือก</div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">${laT('ยังไม่มี booking วันที่เลือก')}</div>`;
   } else {
     // MONTH (30 days) / YEAR (12 months) — stacked route bars + capacity outline
     plotCols='repeat('+bkBuckets.length+',1fr)';
@@ -2024,18 +3059,18 @@ function renderDash(){
   // Legend (month/year only — day mode labels each bar directly)
   const _lgi=(col,lbl,val)=>`<span><i style="background:${col}"></i>${lbl}${val!=null?` <b>${val}</b>`:''}</span>`;
   const legendItems=(_bkMode==='day')?'':topRoutes.map(tr=>_lgi(tr.color,_shortName(tr.r.name),tr.total)).join('');
-  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?_lgi(segPalette[3],'อื่น ๆ',otherWeekTotal):'';
-  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?_lgi(CHARTER_COLOR,'เหมาลำ',charterWeekTotal):'';
-  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span>&#9928; ยกเลิกจากอากาศ <b>${wxWeekTotal}</b></span>`:'';
-  const capLegend=(_bkMode==='day')?'':`<span><span style="display:inline-block;width:14px;height:8px;border:1.2px dashed #DAD5CC;border-radius:2px;margin-right:4px;vertical-align:-1px"></span>ความจุ</span>`;
+  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?_lgi(segPalette[3],laT('อื่น ๆ'),otherWeekTotal):'';
+  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?_lgi(CHARTER_COLOR,laT('เหมาลำ'),charterWeekTotal):'';
+  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span>&#9928; ${laT('ยกเลิกจากอากาศ')} <b>${wxWeekTotal}</b></span>`:'';
+  const capLegend=(_bkMode==='day')?'':`<span><span style="display:inline-block;width:14px;height:8px;border:1.2px dashed #DAD5CC;border-radius:2px;margin-right:4px;vertical-align:-1px"></span>${laT('ความจุ')}</span>`;
   // ── period toggle (วัน / เดือน / ปี) ──
   const _bkSeg=(m,lbl)=>`<button class="${_bkMode===m?'on':''}" onclick="dashBkSetMode('${m}')">${lbl}</button>`;
-  const bkToggle=`<span class="dv-ovseg">${_bkSeg('day','วัน')}${_bkSeg('month','เดือน')}${_bkSeg('year','ปี')}</span>`;
+  const bkToggle=`<span class="dv-ovseg">${_bkSeg('day',laT('วัน'))}${_bkSeg('month',laT('เดือน'))}${_bkSeg('year',laT('ปี'))}</span>`;
   /* §dashTdy · โหมด "วัน" แสดงวันที่เลือกอยู่ · ใช้คำเรียกชุดเดียวกับทั้งหน้า */
   const _dsIsTdy=_dsTdy, _dayLbl=_dsLbl;
-  const bkTitle=_bkMode==='day'?('Bookings overview · '+_dayLbl):_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
-  const _periodLbl=_bkMode==='day'?_dayLbl:_bkMode==='month'?'30 วัน':'12 เดือน';
-  const bkSub=`รวม <b>${fmtN(totalBookedWeek)}</b> ที่นั่ง${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> ความจุ · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · ${deltaSign?'+':''}${deltaSeats} เทียบเมื่อวาน`;
+  const bkTitle='Bookings overview · '+(_bkMode==='day'?_dayLbl:_bkMode==='month'?laT('30 วัน'):laT('12 เดือน'));
+  const _periodLbl=_bkMode==='day'?_dayLbl:_bkMode==='month'?laT('30 วัน'):laT('12 เดือน');
+  const bkSub=`${laT('รวม')} <b>${fmtN(totalBookedWeek)}</b> ${laT('ที่นั่ง')}${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> '+laT('ความจุ')+' · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · ${deltaSign?'+':''}${deltaSeats} ${laT('เทียบเมื่อวาน')}`;
   // ── stats footer (mode-aware) ──
   const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
   // liquid-glass surfaces (inner cards + plot) — gradient sheen + inset highlight + depth shadow
@@ -2043,27 +3078,27 @@ function renderDash(){
   let statsHtml;
   if(_bkMode==='day'){
     statsHtml =
-      _statCard(_dsTdy?'ที่นั่งวันนี้':('ที่นั่ง '+_dsDay), fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
+      _statCard(_dsTdy?laT('ที่นั่งวันนี้'):(laT('ที่นั่ง')+' '+_dsDay), fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
     + '<div class="dv-avs"></div>'
     + _statCard('fill', fillWeekPct+'%', '#0C6B47', totalBookedWeek+' / '+(totalCapWeek||'-'))
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทางเด่น', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' ที่นั่ง':'')
+    + _statCard(laT('เส้นทางเด่น'), topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' '+laT('ที่นั่ง'):'')
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทาง', dayRows.length, '#3a3a36', 'routes today');
+    + _statCard(laT('เส้นทาง'), dayRows.length, '#3a3a36', 'routes today');
   } else {
-    const perLbl=_bkMode==='year'?'เดือน':'วัน';
+    const perLbl=_bkMode==='year'?laT('เดือน'):laT('วัน');
     statsHtml =
-      _statCard(_bkMode==='year'?'เดือนพีค':'วันพีค', bestDay?_fmtDt(bestDay.dt):'—', '#0C6B47', bestDay?bestDay.pct+'% fill':'—')
+      _statCard(_bkMode==='year'?laT('เดือนพีค'):laT('วันพีค'), bestDay?_fmtDt(bestDay.dt):'—', '#0C6B47', bestDay?bestDay.pct+'% fill':'—')
     + '<div class="dv-avs"></div>'
-    + _statCard(_bkMode==='year'?'เดือนเงียบ':'วันเงียบ', slowDay?_fmtDt(slowDay.dt):'—', '#B4560A', slowDay?slowDay.pct+'% fill':'—')
+    + _statCard(_bkMode==='year'?laT('เดือนเงียบ'):laT('วันเงียบ'), slowDay?_fmtDt(slowDay.dt):'—', '#B4560A', slowDay?slowDay.pct+'% fill':'—')
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทางเด่น', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' ที่นั่ง':'')
+    + _statCard(laT('เส้นทางเด่น'), topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' '+laT('ที่นั่ง'):'')
     + '<div class="dv-avs"></div>'
-    + _statCard('เฉลี่ย / '+perLbl, fmtN(avgPerDay), '#3a3a36', 'ที่นั่ง');
+    + _statCard(laT('เฉลี่ย')+' / '+perLbl, fmtN(avgPerDay), '#3a3a36', laT('ที่นั่ง'));
   }
   const legendRow=(legendItems||otherLegend||charterLegend||wxLegend||capLegend)?`<div class="dv-ovlg">${legendItems}${otherLegend}${charterLegend}${wxLegend}${capLegend}</div>`:'';
   // day-mode weather note (chip next to title)
-  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span class="dv-cnt" style="background:#FCEBEB;color:#A32D2D">&#9928; ยกเลิกจากอากาศ ${dayWx}</span>`:'';
+  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span class="dv-cnt" style="background:#FCEBEB;color:#A32D2D">&#9928; ${laT('ยกเลิกจากอากาศ')} ${dayWx}</span>`:'';
   const proj=`<div class="dv-ov">
     <div class="dv-ct"><span class="big">${bkTitle}</span>${dayWxChip}<span class="sp"></span>${bkToggle}</div>
     <div class="dv-ovsub">${bkSub}</div>
@@ -2144,13 +3179,13 @@ function renderDash(){
       +`<span class="dv-bddd">${lbl?d.dt.getDate():'&nbsp;'}</span>`
       +`<span class="dv-bdbk">${_dvSlim?'&nbsp;':(d.bk+' bk')}</span>`
       +(tdy?'<span class="dv-bdtd">TODAY</span>'
-           :(sel?'<span class="dv-bdtd sel">เลือกอยู่</span>':''))
+           :(sel?'<span class="dv-bdtd sel">'+laT('เลือกอยู่')+'</span>':''))
       +`</div>`;
   }).join('');
   const _dvSeg=(n,lbl)=>`<b class="${_dvRange===n?'on':''}" onclick="dashBkDaySetRange(${n})">${lbl}</b>`;
   const ai=`<div class="dv-bd">
     <div class="dv-bdhd"><span class="dv-bdt">Bookings / day</span>
-      <span class="dv-bdseg">${_dvSeg(7,'7 วัน')}${_dvSeg(30,'30 วัน')}</span>
+      <span class="dv-bdseg">${_dvSeg(7,laT('7 วัน'))}${_dvSeg(30,laT('30 วัน'))}</span>
       <span class="dv-bdup ${_dvDelta>=0?'up':'dn'}">${_dvDelta>=0?'&#8599;':'&#8600;'} ${_dvDelta===0?'flat':(_dvDelta>0?'+':'−')+_dvPct+'%'}</span></div>
     <div class="dv-bdchart">
       <svg viewBox="0 0 ${_dvW} ${_dvH}" preserveAspectRatio="none">
@@ -2160,9 +3195,9 @@ function renderDash(){
       <div class="dv-bdcols">${_dvCols}</div>
     </div>
     <div class="dv-bdfoot">
-      <div class="s"><b>${_dvAvg}</b><i>เฉลี่ย ${_dvRange} วัน</i><u>pax / วัน</u></div><div class="sep"></div>
+      <div class="s"><b>${_dvAvg}</b><i>${laTp('เฉลี่ย {0} วัน', _dvRange)}</i><u>${laT('pax / วัน')}</u></div><div class="sep"></div>
       <div class="s"><b>${_dvTdy.pax}</b><i>${_dsLbl}</i><u>${_dvTdy.bk} bk</u></div><div class="sep"></div>
-      <div class="s"><b class="dim">${_dvPrevAvg}</b><i>${_dvRange} วันก่อนหน้า</i><u>vs prev</u></div>
+      <div class="s"><b class="dim">${_dvPrevAvg}</b><i>${laTp('{0} วันก่อนหน้า', _dvRange)}</i><u>vs prev</u></div>
     </div>
   </div>`;
 
@@ -2181,6 +3216,7 @@ function renderDash(){
   const _bkTdy=_bkForDay(_ds);
   const leftCol=`<div class="dv-col">`
     +todoCard.replace('<!--\u00a7dashLeft:boatlist-->', boatListSlot)
+              .replace('<!--\u00a7dashLeft:boatmore-->', boatMoreSlot)
     +_dashLiveB2CHtml(dx,F)
     +`</div>`;
   const rightCol=`<div class="dv-col">${ai}${_dashLiveB2BHtml(dx,F)}</div>`;
@@ -2199,7 +3235,7 @@ function renderDash(){
    "ออกวันนี้" = ที่นั่งที่เดินทางวันนี้ · "จองเข้า" = ใบที่เปิดวันนี้ */
 function _dvHead(ds, dt, k){
   /* §dashTdy2 · ฟังก์ชันนี้อยู่นอก renderDash · ใช้ตัวช่วยข้างในไม่ได้ ประกาศเอง */
-  const TH_MON_H=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const TH_MON_H=laMonAbbr();        /* §i18n · ตารางเดียวกับข้างบน */
   const WD_L=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MO_L=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   const isTdy = ds===TODAY_STR;
@@ -2218,21 +3254,21 @@ function _dvHead(ds, dt, k){
       ${_row('เอเย่นต์เครดิตเกิน',(d.crL||[]).slice(0,2).map(x=>x.n).join(' · ')||'ไม่มี',d.crN,'dashGoAgents()',_dashMoneyShort(d.crB))}
     </div>`;
   return `<div class="dv-hd"><div class="dv-hdtop">
-    <button class="dv-arw" onclick="dashDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>
+    <button class="dv-arw" onclick="dashDateShift(-1)" title="${laT('วันก่อนหน้า')}">&lsaquo;</button>
     <span class="dv-dnum">${dt.getDate()}</span>
     <span class="dv-dgrp"><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
       <span class="dv-dmo">${MO_L[dt.getMonth()]} ${dt.getFullYear()}
         <input type="date" value="${ds}" onchange="setDashDate(this.value)"></span></span>
-    <button class="dv-arw" onclick="dashDateShift(1)" title="วันถัดไป">&rsaquo;</button>
+    <button class="dv-arw" onclick="dashDateShift(1)" title="${laT('วันถัดไป')}">&rsaquo;</button>
     ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <span class="dv-brand">LOVE ANDAMAN</span>
     <span class="dv-kpi">
-      <span class="dv-chip">${isTdy?'ออกวันนี้':'ออก '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
+      <span class="dv-chip">${isTdy?laT('ออกวันนี้'):laT('ออก')+' '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
       <span class="dv-chip ok">fill <b>${k.fill}%</b></span>
-      <span class="dv-chip">ว่าง <b>${k.free}</b></span>
-      <span class="dv-chip">จองเข้า <b>${k.bk}</b> ใบ</span>
-      ${todo>0?`<span class="dv-chip warn" onclick="dashTodoToggle()">&#9888; ต้องจัดการ <b>${todo}</b> &rsaquo;</span>`
-              :`<span class="dv-chip ok">&#10003; ${isTdy?'วันนี้เคลียร์':'เคลียร์แล้ว'}</span>`}
+      <span class="dv-chip">${laT('ว่าง')} <b>${k.free}</b></span>
+      <span class="dv-chip">${laT('จองเข้า')} <b>${k.bk}</b> ${laT('ใบ')}</span>
+      ${todo>0?`<span class="dv-chip warn" onclick="dashTodoToggle()">&#9888; ${laT('ต้องจัดการ')} <b>${todo}</b> &rsaquo;</span>`
+              :`<span class="dv-chip ok">&#10003; ${isTdy?laT('วันนี้เคลียร์'):laT('เคลียร์แล้ว')}</span>`}
     </span>
     ${todo>0?pop:''}
   </div></div>`;
@@ -2245,7 +3281,7 @@ let calYear=TODAY.getFullYear(),calMonth=TODAY.getMonth(),calPier='all';
 const WDS=['SUN','MON','TUE','WED','THU','FRI','SAT'];
 const MONTHS_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const MONTHS_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const MONTHS_TH_SHORT=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const MONTHS_TH_SHORT=laMonAbbrTH();
 
 function setCalPier(v){ calPier=v; renderCal(); }
 function setCalAvgMode(m){ window._calAvgMode=m; renderCal(); }
@@ -2423,8 +3459,15 @@ function showCalDay(ds){ window._calSel=ds; renderCal(); }
 
 // ═══ §cal2 · ตัวช่วยของปฏิทินโฉมใหม่ ═══════════════════════════════════
 // สีจากสีประจำเส้นทาง · จาง ๆ ไว้เป็นพื้น · หรี่ลงไว้เป็นตัวอักษรบนพื้นจาง
+/* §hx00 · ช่องสีที่เป็น 00 เคยกลายเป็น 136 (เจอ 1 ต.ค. ตอนไล่เรื่องสีไม่ชัด)
+   parseInt('00',16) ได้ 0 ซึ่งเป็น falsy · ตัว || เลยเด้งไปใช้ค่าสำรอง 136
+   ผลคือสีที่มีช่อง 00 ถูกอ่านผิดทั้งหมด #ffff00 กลายเป็น #ffff88
+   #9900e1 กลายเป็น #9988e1 · กระทบทุกตัวที่ต่อยอดจากนี่ (_calDk _calRgba
+   _calVivid laInk) และสีแบบนี้เป็นสีที่คนเลือกบ่อยที่สุด
+   เช็คว่าแปลงเป็นตัวเลขได้ไหมแทนการเช็คว่าจริงหรือเท็จ                     */
 function _calHx(c){ c=String(c||'#888').replace('#',''); if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-  return [parseInt(c.slice(0,2),16)||136, parseInt(c.slice(2,4),16)||136, parseInt(c.slice(4,6),16)||136]; }
+  const p=i=>{ const v=parseInt(c.slice(i,i+2),16); return Number.isFinite(v)?v:136; };
+  return [p(0),p(2),p(4)]; }
 function _calRgba(c,a){ const [r,g,b]=_calHx(c); return 'rgba('+r+','+g+','+b+','+a+')'; }
 // §calHead/§fit · ความสูงของกระดานเคยเดาด้วย calc(100vh - 168px) · แถบบนสูงเท่าไรจริง ๆ ไม่มีใครรู้
 //   เดาต่ำไปกระดานล้นจอ เดาสูงไปเหลือที่ว่างข้างล่างแล้วกลับมาต้องเลื่อนอยู่ดี
@@ -2439,6 +3482,37 @@ function _calFitPage(){
 if(!window.__calFitBound){ window.__calFitBound=1; window.addEventListener('resize', function(){ _calFitPage(); }); }
 function _calDk(c,k){ const [r,g,b]=_calHx(c); k=(k==null)?0.45:k;
   return 'rgb('+Math.round(r*(1-k))+','+Math.round(g*(1-k))+','+Math.round(b*(1-k))+')'; }
+/* ══ §inkOn · สีประจำเจ้าของ เอามาเป็น "สีตัวหนังสือ" ตรง ๆ ไม่ได้ ═══════════
+   ผู้ใช้แจ้ง 1 ต.ค. "สีเหลืองมันไม่ชัด" จากเลขที่นั่งในแถวล็อกที่นั่ง
+   ซึ่งใช้สีประจำเอเยนต์เป็นสีตัวเลขบนพื้นขาว
+
+   วัดจากข้อมูลจริง: เอเยนต์ที่ตั้งสีเอง 49 เจ้า มี 45 เจ้าที่คอนทราสต์บนพื้นขาว
+   ไม่ถึงเกณฑ์อ่านออก (4.5:1) · เจ้าที่ใช้ #ffff00 ได้ 1.07:1 คือแทบมองไม่เห็น
+   ไม่ใช่เรื่องของเอเยนต์รายเดียว แต่เป็นวิธีใช้สีที่ผิดตั้งแต่แรก
+
+   _calDk() หรี่ด้วยอัตราตายตัว · สีที่อ่อนมากหรี่เท่าไรก็ยังไม่พอ
+   ตัวนี้ไล่หาตัวคูณที่น้อยที่สุดที่ทำให้ถึงเกณฑ์จริง แล้วคูณครั้งเดียว
+   คูณทุกช่องด้วยตัวเดียวกัน เฉดสีจึงคงเดิมเป๊ะ แค่เข้มขึ้น
+   ไม่ได้แก้สีที่เก็บไว้ของเอเยนต์ · พื้นชิปยังใช้สีจริงเหมือนเดิม          */
+function _calLum(r,g,b){
+  const f=x=>{ x/=255; return x<=0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055, 2.4); };
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+}
+function _calRatio(a,b){ const x=Math.max(a,b)+0.05, y=Math.min(a,b)+0.05; return x/y; }
+var _laInkMemo={};
+function laInk(c, bg, target){
+  const key=String(c)+'|'+String(bg||'')+'|'+String(target||'');
+  if(_laInkMemo[key]) return _laInkMemo[key];
+  const [br,bgn,bb]=_calHx(bg||'#ffffff');
+  const Lb=_calLum(br,bgn,bb), need=(target==null)?4.5:target;
+  const [r0,g0,b0]=_calHx(c);
+  let out='rgb(0,0,0)';
+  for(let k=100;k>=0;k--){
+    const f=k/100, r=Math.round(r0*f), g=Math.round(g0*f), b=Math.round(b0*f);
+    if(_calRatio(_calLum(r,g,b), Lb) >= need){ out='rgb('+r+','+g+','+b+')'; break; }
+  }
+  _laInkMemo[key]=out; return out;
+}
 /* §calChip · ดันความอิ่มสีขึ้นก่อนเอาไปทาชิป · แปลงเป็น HSL ดัน S แล้วบีบ L เข้าช่วงที่อ่านออก
    ไม่ได้แก้ค่าสีที่เก็บไว้ของเส้นทาง · หน้าอื่นที่ใช้สีเดียวกันจึงไม่ขยับ */
 function _calVivid(c, amt){
@@ -2678,6 +3752,129 @@ function renderCal(){
   .cal2-dwb{flex:1;overflow:auto;padding:14px 16px 24px}
   .cal2-x{position:absolute;top:13px;right:14px;width:27px;height:27px;border-radius:50%;border:1px solid ${ink.line};background:#fff;cursor:pointer;color:${ink[2]};font-size:15px;line-height:1;z-index:2}
   .cal2-lg{flex:none;display:flex;align-items:center;gap:13px;font-size:10px;color:${ink[2]};padding:0 2px;flex-wrap:wrap}
+  /* ══════════ §calDash · ยกภาษาดีไซน์ของหน้า Dashboard มาใช้ ══════════════════════════
+     Dashboard (§dashV3) วางการ์ดขาวไว้บนพื้น navy #16265C ที่มีไอสีของเส้นทางจริง
+     เบลอใหญ่อยู่ข้างหลัง · แถบหัวเป็นแก้ว · ตัวเลขเป็น DM Mono · ชิปเป็นพิลโปร่ง
+     หน้า Calendar เดิมใช้จานสีเทาอมฟ้า (slate) บนพื้นครีม — คนละภาษากันคนละเรื่อง
+     ทั้งที่เป็นหน้าที่เปิดค้างไว้ทั้งวันเหมือนกัน
+
+     ⚠ ก้อนนี้เป็น "ชั้นทับ" ทั้งหมด · ไม่ได้แก้กฎเดิมสักบรรทัด
+       ลบตั้งแต่ §calDash ถึงท้ายบล็อกนี้ = กลับไปหน้าตาเดิมทันที
+       (แพตเทิร์นเดียวกับสกินใน 02-skins.css ที่ลบทีละชั้นได้)
+     ⚠ ข้างในการ์ดขาวไม่แตะ · ตัวเลขที่นั่ง สีประจำเส้นทาง กากบาทวันนี้ ยังเหมือนเดิมหมด
+       เปลี่ยนเฉพาะเปลือกนอก = พื้น แถบเครื่องมือ แถบเส้นทาง และขอบการ์ด            */
+  /* ⚠ ห้ามใส่ isolation/transform/filter/contain ที่ #cal-wrap
+       ลิ้นชักรายละเอียดวัน (.cal2-dw) เป็นลูกตรงของ #cal-wrap และเป็น position:fixed
+       ถ้า #cal-wrap กลายเป็น stacking context เมื่อไหร่ z-index:321 ของลิ้นชัก
+       จะไปแข่งแค่ข้างใน #cal-wrap ไม่ได้แข่งกับ .topbar (300) อีกต่อไป */
+  #cal-wrap{background:#16265C !important;margin:0 -20px -22px !important;
+    padding:14px 18px 18px !important;position:relative;
+    min-height:calc(100dvh - var(--topbar, 44px) - 78px)}
+  #cal-wrap::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(58% 44% at 12% 8%,  rgba(255,153,153,.42), transparent 62%),
+      radial-gradient(46% 40% at 88% 4%,  rgba(186,117,23,.34),  transparent 62%),
+      radial-gradient(52% 46% at 78% 92%, rgba(15,110,86,.38),   transparent 64%),
+      radial-gradient(50% 42% at 24% 96%, rgba(24,95,165,.42),   transparent 62%);
+    filter:blur(20px) saturate(120%)}
+  /* ⚠ ยกเฉพาะ .cal2-page ขึ้นเหนือไอสี · ห้ามเขียนเป็น #cal-wrap>*
+       ลูกอีกสองตัวคือ .cal2-scrim กับ .cal2-dw ที่เป็น position:fixed
+       selector แบบ id (1,0,0) ชนะ class (0,1,0) → fixed จะโดนทับเป็น relative
+       ลิ้นชักจะหลุดมากองท้ายหน้าเป็นแผ่นขาวสูง 500px แทนที่จะเลื่อนมาจากขวา */
+  #cal-wrap>.cal2-page{position:relative;z-index:1}
+  .cal2-page{gap:9px}
+
+  /* แถบเครื่องมือ · ชั้นที่ลอยอยู่จริง จึงเป็นแก้วได้แบบเดียวกับ .dv-hd */
+  .cal2-tbar{border-radius:14px;padding:7px 11px !important;margin-bottom:0 !important;
+    background:linear-gradient(160deg, rgba(22,38,92,.82), rgba(12,24,62,.74));
+    -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+    box-shadow:0 8px 26px rgba(2,10,30,.34), inset 0 1px 0 rgba(255,255,255,.18)}
+  /* ปุ่มกับป้ายข้างในถูกกำหนดสีมาแบบ inline · ทับด้วย !important เฉพาะสี ไม่แตะโครง */
+  .cal2-tbar button,.cal2-tbar span,.cal2-tbar div,.cal2-tbar input,.cal2-tbar select{color:#D6E2F5 !important}
+  .cal2-tbar button{background:rgba(255,255,255,.10) !important;border-color:rgba(255,255,255,.22) !important}
+  .cal2-tbar button:hover{background:rgba(255,255,255,.20) !important}
+  /* ตัวที่ถูกเลือกอยู่ต้องเด่นกว่าเพื่อน · ขาวทึบแบบปุ่ม Today ของ Dashboard
+     ⚠ ตัวจับคือ FOREST (#1F4D2C) ที่เขียนเป็น inline style ของปุ่มที่ active อยู่
+       (ดูตัวแปร FOREST/LIME ต้นฟังก์ชัน) · ถ้าย้ายไปใช้ class เมื่อไหร่ ให้แก้ตัวจับนี้ด้วย
+       ไม่งั้นปุ่มที่เลือกอยู่จะหน้าตาเหมือนปุ่มที่ไม่ได้เลือก = มองไม่ออกว่ากรองอะไรค้างไว้ */
+  .cal2-tbar button[style*="1F4D2C"]{background:#fff !important;color:#16265C !important;
+    border-color:transparent !important;box-shadow:0 2px 10px rgba(2,10,30,.30)}
+  .cal2-tbar button[style*="1F4D2C"]:hover{background:#fff !important}
+  /* กล่องย่อยในแถบ (กลุ่มช่วงวันที่) เขียน background:white มาแบบ inline
+     ถ้าไม่ทับ จะกลายเป็นพิลขาวทึบที่มีตัวหนังสือสีฟ้าจางอยู่ข้างใน = อ่านไม่ออก */
+  .cal2-tbar div[style*="background:white"],.cal2-tbar div[style*="background:#fff"]{
+    background:rgba(255,255,255,.10) !important;border-color:rgba(255,255,255,.22) !important;
+    border-radius:11px}
+  .cal2-tbar input[type="date"]{background:rgba(255,255,255,.10) !important;
+    border:1px solid rgba(255,255,255,.22) !important;border-radius:8px}
+  .cal2-tbar input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1) opacity(.7)}
+
+  /* ══ แถบเส้นทาง · พิลแก้วแบบ .dv-chip · เป็นตัวกรองด้วย ไม่ใช่แค่คำอธิบายสี ══
+     ชิปมีสองแกนที่ไม่เกี่ยวกัน ต้องแยกให้ออกจากกันด้วยตา
+       .off   = คนกดปิดเอง (_hidRt) — ซ่อนเส้นทางนี้ออกจากปฏิทิน
+       .dead  = เดือนนี้ไม่มีทริป — ระบบบอก ไม่ใช่คนเลือก
+     ⚠ รอบแรกให้ทั้งสองแกนเป็น opacity เฉย ๆ (.5 กับ .42) ซึ่งตาแยกไม่ออก
+       กดปิดไปแล้วยังดูเหมือนเดิม · คนละเรื่องกันแต่หน้าตาเดียวกัน
+     ตอนนี้ .off เปลี่ยน "ชนิด" ของชิปเลย ไม่ใช่แค่จาง — ทิ้งสี ขอบประ ชื่อขีดฆ่า */
+  .cal2-routes .cal2-rc{background:rgba(255,255,255,.10) !important;
+    border:1px solid rgba(255,255,255,.20) !important;border-radius:14px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10);transition:opacity .15s,filter .15s}
+  .cal2-routes .cal2-rc *{color:#D6E2F5 !important}
+  .cal2-routes .cal2-rc b,.cal2-routes .cal2-rc .n{color:#fff !important}
+  .cal2-routes .cal2-rc:hover{border-color:rgba(255,255,255,.46) !important}
+
+  /* ① ติ๊กอยู่ + มีทริป · ทั้งใบเป็นสีของเกาะตัวเอง ไม่ใช่แก้วขาวเหมือนกันหมด
+        --rc-* มาจากตัวสร้างชิป (§calRcCol) · ผ่าน _calVivid มาแล้วเหมือนชิปในตาราง
+        ⚠ ถ้าตัวแปรหาย (โค้ดเก่าค้าง cache) จะ fallback เป็นแก้วขาวแบบเดิม ไม่ใช่โปร่งใส */
+  .cal2-routes .cal2-rc:not(.dead):not(.off){
+    background:var(--rc-bg, rgba(255,255,255,.18)) !important;
+    border-color:var(--rc-bd, rgba(255,255,255,.34)) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.20), 0 2px 14px var(--rc-gl, rgba(2,10,30,.28))}
+  .cal2-routes .cal2-rc:not(.dead):not(.off) *{color:#EDF3FF !important}
+  /* ตัวเลข free/day เป็นของหลักในชิป · ขาวล้วนบนพื้นสีถึงจะอ่านขาด */
+  .cal2-routes .cal2-rc:not(.dead):not(.off)>div:last-of-type>div:first-child{color:#fff !important}
+  .cal2-routes .cal2-rc:not(.dead):not(.off) i{width:5px !important;
+    background:var(--rc-v, currentColor) !important;
+    box-shadow:0 0 0 1px rgba(255,255,255,.30)}
+  .cal2-routes .cal2-rc:not(.dead):not(.off):hover{
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.26), 0 3px 18px var(--rc-gl, rgba(2,10,30,.30))}
+
+  /* ② ติ๊กอยู่ + เดือนนี้ไม่มีทริป · จางลงแต่ยังมีสี = ยังนับอยู่ในปฏิทิน */
+  .cal2-routes .cal2-rc.dead:not(.off){opacity:.5;background:rgba(255,255,255,.06) !important;
+    border-color:rgba(255,255,255,.14) !important;box-shadow:none}
+
+  /* ③ ถูกกดปิด · ทิ้งสีทั้งใบ + ขอบประ + ชื่อขีดฆ่า · แยกจาก ② ได้ในแวบเดียว
+        (ใช้กับ .dead.off ด้วย · ตัวนี้ทับ ② เพราะเขียนทีหลัง น้ำหนักเท่ากัน) */
+  .cal2-routes .cal2-rc.off{opacity:.34 !important;filter:grayscale(1);
+    background:transparent !important;border-style:dashed !important;
+    border-color:rgba(255,255,255,.34) !important;box-shadow:none !important}
+  .cal2-routes .cal2-rc.off>div:first-of-type>div:first-child{text-decoration:line-through}
+  .cal2-routes .cal2-rc.off span{text-decoration:none !important}
+  .cal2-routes .cal2-rc.off:hover{opacity:.6 !important;filter:none}
+
+  /* สกรอลล์บาร์ของแถบ · ของเดิมเป็นแถบขาวสว่างพาดอยู่บนพื้น navy */
+  .cal2-routes{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.26) transparent}
+  .cal2-routes::-webkit-scrollbar{height:6px}
+  .cal2-routes::-webkit-scrollbar-track{background:transparent}
+  .cal2-routes::-webkit-scrollbar-thumb{background:rgba(255,255,255,.26);border-radius:3px}
+  .cal2-routes::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.44)}
+
+  /* การ์ดขาว · มุม 12 ขอบบาง แบบการ์ด Dashboard · เงาเข้มขึ้นเพราะอยู่บนพื้น navy */
+  .cal2-box{border-radius:12px !important;border:1px solid rgba(255,255,255,.14) !important;
+    box-shadow:0 14px 40px rgba(2,10,30,.34) !important}
+
+  /* หัวหน้าเพจอยู่นอก cal-wrap · ดึงลงมาอยู่บนพื้นเดียวกันจะได้ไม่ลอยคนละโลก */
+  #view-calendar .page-hd{background:#16265C;margin:-22px -22px 0;padding:18px 22px 4px;
+    border-radius:0;position:relative;z-index:2}
+  #view-calendar .page-hd h1{color:#fff}
+  #view-calendar .page-hd p{color:#A8BAD8}
+
+  /* จอแคบ · พื้น navy ยังกินเต็มขอบเหมือนเดิม แต่ดันของข้างในเข้ามา
+     ไม่งั้นการ์ดจะชิดขอบจอเหลือ 6px เพราะ margin ติดลบไปหักกับ padding ของหน้า */
+  @media (max-width:700px){
+    #cal-wrap{padding-left:26px !important;padding-right:26px !important}
+    #view-calendar .page-hd{margin-left:-14px;margin-right:-14px;padding-left:14px;padding-right:14px}
+  }
   </style>`;
 
   // ── State ──
@@ -2774,7 +3971,7 @@ function renderCal(){
     const on=calPier===v;
     return `<button onclick="setCalPier('${v}')" style="background:${on?FOREST:'transparent'};color:${on?LIME:ink[2]};border:none;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:${on?600:500};cursor:pointer">${l}</button>`;
   }).join('');
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;gap:8px;flex-wrap:wrap">
+  const headerBar=`<div class="cal2-tbar" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;gap:8px;flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <button onclick="changeMonth(-1)" style="background:white;border:1px solid ${ink.line};border-radius:50%;width:28px;height:28px;cursor:pointer;color:${ink[2]};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
       <button onclick="changeMonth(1)" style="background:white;border:1px solid ${ink.line};border-radius:50%;width:28px;height:28px;cursor:pointer;color:${ink[2]};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
@@ -2844,7 +4041,14 @@ function renderCal(){
     low:     {bg:'#E8F5D8', border:'#C8E29A', color:FOREST,     subColor:LIME_DARK, label:'Almost full · selling'},
     closed:  {bg:'#F1EFE8', border:'#D8D5CC', color:'#888',     subColor:'#888',    label:'Closed / no trips'}
   };
-  const routeCards=ROUTES.filter(rt=>calPier==='all' || rt.pier===calPier).map(rt=>{
+  /* §calMarine · Calendar พูดเรื่องที่นั่งเรือกับท่าเรือล้วน ๆ · รับเฉพาะโปรแกรมฝั่งเรือ
+     ของเดิม calPier==='all' ปล่อยผ่านทุกอย่าง · ทัวร์บกกับรถรับส่ง (ไม่มีท่า) จึงไหลเข้ามาด้วย
+     ขึ้นเป็นการ์ด "undefined · No trips" เต็มหน้า และดันเส้นทางที่วิ่งจริงหลุดออกนอกจอ
+     วัด backup_2026-09-14: routes 57 = บก 43 + เรือ 14 (tublamu 6 · panwa 6 · ranong 2)
+     ไม่มีเส้นทางเรือสักเส้นที่ pier อยู่นอก 3 ท่า → กรองด้วย laIsLandRoute ได้ผลเท่ากับ
+     "เอาเฉพาะ 3 ท่า" เป๊ะ แต่ถามผ่านจุดเดียวตามที่ §routeKind กำหนดไว้
+     (เลือกท่าเจาะจงอยู่แล้วทัวร์บกก็ไม่เข้าอยู่ดี เพราะไม่มี pier · ที่พังคือโหมด all) */
+  const routeCards=ROUTES.filter(rt=>!laIsLandRoute(rt) && (calPier==='all' || rt.pier===calPier)).map(rt=>{
     // Check all-closed-this-month
     let allClosed=true;
     for(let d=1;d<=daysInMonth;d++){
@@ -2911,7 +4115,8 @@ function renderCal(){
   const _hidRt=_calGetHiddenRoutes();
   //   เส้นทางที่มีเที่ยวออกขึ้นก่อน เรียงตามเวลาเรือออก · ที่ไม่ออกเลยไปต่อท้าย
   //   (ไม่งั้นเส้นทางนอกฤดูดันเส้นทางที่ใช้จริงหลุดออกนอกจอ)
-  const _rtSorted=ROUTES.filter(rt=>calPier==='all'||rt.pier===calPier).slice().sort((a,b)=>{
+  /* §calMarine · เช่นเดียวกับการ์ดด้านบน */
+  const _rtSorted=ROUTES.filter(rt=>!laIsLandRoute(rt) && (calPier==='all'||rt.pier===calPier)).slice().sort((a,b)=>{
     const da=(routeStat[a.id]&&routeStat[a.id].days.size)?0:1;
     const db=(routeStat[b.id]&&routeStat[b.id].days.size)?0:1;
     if(da!==db) return da-db;
@@ -2925,9 +4130,14 @@ function renderCal(){
     const per=dd?Math.round(st.free/dd):0;
     const col=dead?'#8a8a82':_calDk(rt.color,.45);
     const dep=((rt.times||[])[0]||'').trim();
+    /* §calRcCol · ส่งสีของเส้นทางออกมาเป็นตัวแปร ให้ชั้นสกินหยิบไปใช้ได้
+       ใช้ _calVivid ตัวเดียวกับที่ชิปในตารางใช้ สีในแถบกับในตารางจะได้เป็นสีเดียวกัน
+       บนพื้นสว่างไม่มีใครอ่านตัวแปรพวกนี้ · ทาสีเดิมยังไงก็ยังเป็นอย่างนั้น */
+    const _v=_calVivid(rt.color);
+    const _rcv=`--rc:${rt.color};--rc-v:${_v};--rc-bg:${_calRgba(_v,.34)};--rc-bd:${_calRgba(_v,.70)};--rc-gl:${_calRgba(_v,.34)};`;
     return `<div class="cal2-rc${dead?' dead':''}${_hidRt.has(rt.id)?' off':''}" title="${rt.name}"
       onclick="${_hidRt.has(rt.id)?`calUnhideRoute('${rt.id}')`:`calHideRoute('${rt.id}')`}"
-      style="${dead?'':`background:${_calRgba(rt.color,.07)};border-color:${_calRgba(rt.color,.30)}`}">
+      style="${_rcv}${dead?'':`background:${_calRgba(rt.color,.07)};border-color:${_calRgba(rt.color,.30)}`}">
       <i style="background:${rt.color};${dead?'opacity:.4':''}"></i>
       <div><div style="font-size:11.5px;font-weight:${dead?500:600};color:${dead?ink[3]:ink[1]};line-height:1.25">${_calName(rt)}
         <span onclick="event.stopPropagation();calEditRouteName('${rt.id}')" title="Rename for the calendar" style="opacity:.34;font-size:11px;cursor:pointer;padding:0 2px">&#9998;</span></div>
@@ -3406,7 +4616,8 @@ function renderCal(){
   let matrixGrid = '';
   {
     const hiddenRoutes = _calGetHiddenRoutes();
-    const matrixRoutesAll = ROUTES.filter(rt => calPier==='all' || rt.pier===calPier);
+    /* §calMarine · เช่นเดียวกับการ์ดด้านบน · ตัวเลข "N / M routes" จึงนับเฉพาะฝั่งเรือ */
+    const matrixRoutesAll = ROUTES.filter(rt => !laIsLandRoute(rt) && (calPier==='all' || rt.pier===calPier));
     const matrixRoutes = matrixRoutesAll.filter(rt => !hiddenRoutes.has(rt.id));
     const hiddenInScope = matrixRoutesAll.filter(rt => hiddenRoutes.has(rt.id));
     // Build day-of-week labels for header
@@ -3955,6 +5166,11 @@ function renderBoats(){
     const isDimmed = !isSel && !isCharterInactive && (cur.s === 'unavailable' || cur.s === 'fixing');
     const avatarFilter = isDimmed ? 'filter:grayscale(1);' : '';
     const contentOpacity = isDimmed ? 'opacity:.65;' : '';
+    /* §chEdit · ปุ่มแก้ไขบนแถวเรือเช่า · แก้ชื่อ ประเภท ที่นั่ง ท่า และช่วงวันเช่า
+       stopPropagation เพราะทั้งแถวเป็นปุ่มเลือกเรืออยู่แล้ว */
+    const editBtn=isCharter
+      ? `<button onclick="event.stopPropagation();openBoatEdit('${b.id}')" title="แก้ไขเรือเช่า" style="background:none;border:none;color:${isSel?SVG_PINK.text:dim.ink4};font-size:12px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">&#9998;</button>`
+      : '';
     return`<div data-bid="${b.id}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;cursor:pointer;${isSel?'background:'+SVG_PINK.soft+';border:1px solid #F0C0D0;':'border:1px solid transparent;border-top:0.5px solid '+dim.line+';margin-top:2px;'}${isCharterInactive?'opacity:.65;':''}">
       <div style="width:32px;height:32px;border-radius:50%;background:${c};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;${avatarFilter}">${init}</div>
       <div style="flex:1;min-width:0;${contentOpacity}">
@@ -3964,7 +5180,7 @@ function renderBoats(){
           ${locPill?'<span style="color:'+dim.ink5+';font-size:9px">·</span>'+locPill:''}
         </div>
       </div>
-      <span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
+      ${editBtn}<span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
     </div>`;
   };
 
@@ -3985,21 +5201,49 @@ function renderBoats(){
   if(rnList.length){listHtml+=sectionHd('Ranong','#BA7517','#FAEEDA',rnList.length)+rnList.map(b=>buildBoatRow(b,false)).join('');}
   if(shopList.length){listHtml+=sectionHd('🔧 In Shop','#854F0B','#FAEEDA',shopList.length)+shopList.map(b=>buildBoatRow(b,false)).join('');}
 
+  /* ══ §chByPier · เรือเช่าแยกย่อยตามท่าเหมือนเรือบริษัท ═══════════════════════════
+     ของเดิมเรือเช่ากองรวมกันเป็นก้อนเดียว · ตอนนี้มี 7 ลำ กระจายอยู่หลายท่า
+     คนหน้าท่าอยากรู้ว่า "ท่าเรามีเรือเช่าลำไหนบ้าง" ต้องไล่อ่านทีละแถว
+     ใช้ตัวตัดสินท่าตัวเดียวกับเรือบริษัท (getBoatCurrentPier) · คำตอบจะได้ไม่ขัดกันเอง
+     หัวข้อย่อยทำให้เล็กและเยื้องเข้ามา · จะได้อ่านออกว่าอยู่ในก้อนเรือเช่า ไม่ใช่ก้อนใหม่
+     ลำที่ไม่รู้ท่า ไม่ทิ้ง · กองไว้ท้ายสุดใต้หัวข้อ "ยังไม่ระบุท่า" ให้เห็นว่าต้องไปเติม */
+  const CH_PIER_GROUPS=[['tublamu','Tub Lamu','#0F6E56'],['panwa','Visit Panwa','#185FA5'],
+                        ['ranong','Ranong','#BA7517'],['shop','🔧 In Shop','#854F0B']];
+  const chSubHd=(val,label,color,count)=>`<div data-chpier="${val}" style="display:flex;align-items:center;gap:6px;margin:10px 0 4px;padding:0 4px 5px 10px;border-left:2px solid ${color};border-bottom:0.5px solid rgba(0,0,0,.05)">
+    <span style="font-size:10px;font-weight:600;color:${color}">${label}</span>
+    <span style="background:rgba(0,0,0,.04);color:${color};padding:0 6px;border-radius:8px;font-size:9px;font-weight:600">${count}</span>
+  </div>`;
+  const chGroupedRows=(list,rowFn,d)=>{
+    if(!list.length) return `<div style="font-size:11px;color:${d.ink3};text-align:center;padding:12px">ไม่ตรงกับ filter</div>`;
+    const pierOf=b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)||'';
+    let out='', seen=0;
+    CH_PIER_GROUPS.forEach(([val,label,color])=>{
+      const g=list.filter(b=>pierOf(b)===val);
+      if(!g.length) return;
+      seen+=g.length;
+      out+=chSubHd(val,label,color,g.length)+g.map(b=>rowFn(b,true)).join('');
+    });
+    const rest=list.filter(b=>!CH_PIER_GROUPS.some(([val])=>pierOf(b)===val));
+    if(rest.length) out+=chSubHd('other','ยังไม่ระบุท่า','#8A8A8A',rest.length)+rest.map(b=>rowFn(b,true)).join('');
+    return out;
+  };
+
   // Charter section
   let charterHtml='';
   if(allCharter.length){
-    charterHtml=`<div style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
+    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9F1B4F">เรือเช่า</span>
       <span style="background:#E03B7E;color:white;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">${charterBoats.length}</span>
       <button onclick="openCharterModal()" style="margin-left:auto;background:#1A1A1A;color:white;border:none;border-radius:14px;padding:4px 11px;font-size:10px;font-weight:600;cursor:pointer">+ เพิ่ม</button>
-    </div>`+(charterBoats.length?charterBoats.map(b=>buildBoatRow(b,true)).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:12px">ไม่ตรงกับ filter</div>`);
+    </div>`+chGroupedRows(charterBoats,buildBoatRow,dim);
   }
 
   if(!companyBoats.length&&!charterBoats.length){
     listHtml=`<div style="font-size:12px;color:${dim.ink3};text-align:center;padding:30px 0">ไม่พบเรือตามตัวกรอง</div>`;
   }
 
-  const listPanel=`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
+  /* §bsKeepScroll · id คงที่ เพื่อจำตำแหน่งเลื่อนข้ามการวาดใหม่ (ดูท้ายฟังก์ชัน) */
+  const listPanel=`<div id="bs-list-panel" style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
     ${listHtml}
     ${charterHtml}
   </div>`;
@@ -4013,6 +5257,18 @@ function renderBoats(){
     bdp.parentNode.removeChild(bdp);
   }
 
+  /* ══ §bsKeepScroll · คลิกเรือแล้วรายการเด้งกลับไปบนสุด ═══════════════════════════
+     ผู้ใช้แจ้ง "พอกดแล้วเด้งบน" · เกิดกับเรือเช่าเป็นหลักเพราะอยู่ท้ายรายการ
+     selectBoat เรียก renderBoats ซึ่งเขียนทับ innerHTML ของทั้ง #bs-pink-wrap
+     แผงรายการจึงเป็น element ใหม่เอี่ยม scrollTop = 0 เสมอ
+     วัดจริง · เลื่อนลงไป 601px แล้วคลิกแถวล่างสุด แถวนั้นตกจาก y=1077 ไป y=1676
+     คือหลุดออกนอกจอ ทั้งที่เพิ่งกดมันไปหมาด ๆ
+     จำตำแหน่งไว้ก่อนวาด แล้วคืนให้ทันทีหลังวาด · คืนหลัง innerHTML ในจังหวะเดียวกัน
+     (ไม่ใช้ setTimeout · จะเห็นภาพกระพริบขึ้นบนสุดก่อนหนึ่งเฟรม) */
+  const _keepEl=document.getElementById('bs-list-panel');
+  const _keepTop=_keepEl?_keepEl.scrollTop:0;
+  const _keepWin=window.scrollY;
+
   // Wrap
   document.getElementById('bs-pink-wrap').innerHTML=`
     ${headerBar}
@@ -4023,6 +5279,11 @@ function renderBoats(){
       ${detailPanel}
     </div>`;
 
+  /* §bsKeepScroll · คืนตำแหน่งเลื่อนของรายการ · ทำก่อนวาดแผงขวา
+     แผงขวาสูงไม่เท่ากันแต่ละลำ · ถ้าคืนทีหลังเบราว์เซอร์อาจหนีบค่าไว้ตามความสูงเก่า */
+  const _newEl=document.getElementById('bs-list-panel');
+  if(_newEl&&_keepTop) _newEl.scrollTop=_keepTop;
+
   // Hide original bdp (we render custom detail instead)
   if(bdp){
     bdp.style.display='none';
@@ -4031,6 +5292,10 @@ function renderBoats(){
 
   // Render custom detail
   renderBoatDetailPink();
+  /* §bsKeepScroll · แผงขวาเพิ่งเปลี่ยนความสูง · หน้าจออาจถูกดันขึ้นตาม
+     คืนตำแหน่งหน้าต่างหลังวาดครบแล้ว และคืนของรายการซ้ำอีกครั้งเผื่อโดนหนีบ */
+  if(_newEl&&_keepTop&&_newEl.scrollTop!==_keepTop) _newEl.scrollTop=_keepTop;
+  if(_keepWin&&window.scrollY!==_keepWin) window.scrollTo(0,_keepWin);
 }
 function bsCalShift(n){
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
@@ -4051,8 +5316,16 @@ function bsCellClick(ds,logId){
   // changes the color across many days at once.
   if(typeof openAddStatusModal==='function'){
     openAddStatusModal();
+    /* §bsCellTo · คลิกช่องวันที่แล้ววันจบต้องตามไปด้วย
+       ของเดิมเขียนทับแค่ช่องวันเริ่ม · วันจบค้างเป็น "วันนี้" ที่ openAddStatusModal ใส่ไว้
+       คลิกวันข้างหน้าทีไร ฟอร์มจึงเปิดมาแบบวันจบอยู่ก่อนวันเริ่ม แล้วกดบันทึกไม่ผ่าน
+       (เจอจริง · คลิก 14 พ.ย. ได้ฟอร์ม 14/11/2026 → 30/09/2026)
+       ตัวจัดให้อัตโนมัติเป็น onchange ซึ่งไม่ทำงานตอนโค้ดตั้งค่าเอง จึงต้องตั้งทั้งสองช่อง
+       วันจบ = วันที่กด · เท่ากับหนึ่งวัน แล้วค่อยลากยาวเองถ้าต้องการ */
     const fromInp=document.getElementById('fm-st-from');
+    const toInp=document.getElementById('fm-st-to');
     if(fromInp)fromInp.value=ds;
+    if(toInp)toInp.value=ds;
   }
 }
 function bsDebugLog(bid){
@@ -4386,7 +5659,7 @@ function renderBoatDetailPink(){
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="startEditName()" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
@@ -4609,7 +5882,7 @@ function renderFleetTab(b){
   const engs=FL_ENGINES.filter(e=>e.boatId===b.id);
   const maints=FL_MAINT.filter(m=>m.boatId===b.id);
   const incs=FL_INCIDENTS.filter(i=>i.boatId===b.id);
-  const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]} ${d.getFullYear()+543}`;};
+  const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${laMonAbbrTH()[d.getMonth()]} ${d.getFullYear()+543}`;};
 
   const engsHtml=engs.length?engs.map(eng=>{
     const curH=flEngHours(eng.id);
@@ -5087,7 +6360,7 @@ function fmAddDoc(){
 }
 function fmRemoveDoc(i){fmBoatDocs.splice(i,1);fmRenderDocs();}
 function fmRenderDocs(){
-  const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const MONTHS=laMonAbbrTH();
   const fmtD=s=>{if(!s)return'ไม่กำหนด';const d=new Date(s);return`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()+543}`;};
   document.getElementById('fm-boat-docs').innerHTML=fmBoatDocs.map((doc,i)=>
     `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--sand);border-radius:5px">
@@ -5161,6 +6434,17 @@ function getOp(ds,bid){
   if(!TRIPS[ds][bid]) TRIPS[ds][bid]={route:null,type:'normal',booked:0};
   return TRIPS[ds][bid];
 }
+/* ══ §bkLock · ช่องนี้ถูกจับทั้งลำไว้แล้ว ห้ามแตะ ════════════════════════════════
+   เดิมมีสถานะเดียวที่แปลว่า "อย่ายุ่งกับเรือลำนี้" คือ op.charterBookingId
+   (เหมาลำที่มีใบจองจริงแล้ว) · ทุกที่ที่กันไม่ให้ทับ/ลบ/สลับ จึงเช็คช่องนั้นตรง ๆ
+   ตอนนี้มีสถานะที่สอง · ล็อกเรือทั้งลำ (op.boatLockId) = เอเยนต์จองลำไว้ ยังไม่ยืนยัน
+   ยังไม่มีใบจอง จึงไม่มี charterBookingId แต่ต้องกันเท่ากัน · ถ้าไม่กัน ตัว heal
+   ของใบเหมาลำจะเห็นช่องที่ไม่มี charterBookingId แล้วยึดลำไปให้ใบอื่นเงียบ ๆ
+   และปุ่ม "Clear assignments" จะลบช่องที่กันไว้ทิ้งทั้งแถว
+   ตัวนี้เป็นด่านเดียวที่ทุกจุดเรียก · เพิ่มสถานะที่สามในอนาคตแก้ที่นี่ที่เดียว   */
+function opLocked(op){ return !!(op && (op.charterBookingId || op.boatLockId)); }
+/* เอาไว้แยกข้อความตอนเด้ง · จับไว้เฉย ๆ กับขายจริงแล้ว คนละเรื่องสำหรับคนกด */
+function opHoldOnly(op){ return !!(op && op.boatLockId && !op.charterBookingId); }
 
 // Auto-derived cell type · charterBookingId takes priority, else route name pattern
 // "Early Tratato Similan" / "Early Tiger" / "Early OTA" → 'early'
@@ -5532,7 +6816,9 @@ function bop2AssignBoat(routeId, date, boatId){
   if(bop2GuardPast(date)) return;
   if(!TRIPS[date]) TRIPS[date] = {};
   if(TRIPS[date][boatId]){
-    if(TRIPS[date][boatId].charterBookingId){ alert('Boat is chartered · cannot reassign'); return; }
+    if(opLocked(TRIPS[date][boatId])){ alert(opHoldOnly(TRIPS[date][boatId])   /* §bkLock */
+      ? 'Boat is held whole for an agent - release the hold first'
+      : 'Boat is chartered - cannot reassign'); return; }
     // ⚠ changing the boat's route while seat-bookings are assigned to it → those bookings get pulled off this route
     const oldRoute = TRIPS[date][boatId].route;
     if(oldRoute && oldRoute !== routeId){
@@ -5552,8 +6838,10 @@ function bop2AssignBoat(routeId, date, boatId){
 function bop2UnassignBoat(date, boatId){
   if(bop2GuardPast(date)) return;
   if(!TRIPS[date] || !TRIPS[date][boatId]) return;
-  if(TRIPS[date][boatId].charterBookingId){
-    alert('Cannot unassign · charter is active. Cancel the charter booking first.');
+  if(opLocked(TRIPS[date][boatId])){                                           /* §bkLock */
+    alert(opHoldOnly(TRIPS[date][boatId])
+      ? 'Cannot unassign - this boat is held whole for an agent. Release the hold on the Seat Locks page first.'
+      : 'Cannot unassign - charter is active. Cancel the charter booking first.');
     return;
   }
   // ⚠ warn when seat-bookings are still assigned to this boat on this date (non-destructive · keeps the assignment but flags it)
@@ -5573,22 +6861,269 @@ function bop2RouteDayPax(routeId, dateStr){
   return getSeatsConsumed(routeId, dateStr);
 }
 
+/* §fcSkin · โทนเดียวกับหน้า Boat Operation ทั้งชุด · พื้นกรมท่า #16265C
+   การ์ดขาวมุม 12 เงา 0 6px 22px · เขียวหลัก #0F6E56 · ตัวเลข Manrope
+   ขอบเขตอยู่ใน #view-fleetcal ทั้งหมด ไม่รั่วไปหน้าอื่น */
+const FC_CSS=`<style>
+  #view-fleetcal{padding:18px;background:#16265C;font-family:'DM Sans',Manrope,sans-serif;
+    color:#1A2A33;min-height:100%}
+  #view-fleetcal *{box-sizing:border-box}
+  /* §fcMid (2026-10-03) · ชื่อหน้าต้องอยู่กลางแถบจริง ๆ
+     ของเดิมเป็น flex แล้วให้ชื่อ margin:auto · มันอยู่กลาง "ที่ว่างที่เหลือ" ไม่ใช่กลางแถบ
+     กลุ่มขวา (ชิปสามตัว + ปุ่มช่วงวัน) กว้างกว่ากลุ่มซ้าย ชื่อจึงเอียงไปทางซ้าย ~150px
+     ตอนนี้เป็นสามคอลัมน์ 1fr auto 1fr · สองข้างกว้างเท่ากัน ชื่ออยู่กลางพอดี
+     จอแคบจนกลุ่มขวาเกินครึ่ง คอลัมน์ขวาขยายเอง ชื่อค่อยขยับ ไม่ทับกัน */
+  .fc-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px;margin:-4px 0 12px}
+  .fc-tl,.fc-tr{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}
+  .fc-tr{justify-content:flex-end}
+  .fc-top .d{font-size:24px;font-weight:800;letter-spacing:-.02em;color:#fff;font-variant-numeric:tabular-nums}
+  .fc-top .w{font-size:9.5px;font-weight:800;color:#8E97C4;text-transform:uppercase;letter-spacing:.08em;display:block}
+  .fc-top .wk{font-size:13px;font-weight:800;color:#fff;display:block;line-height:1.05}
+  .fc-arw{width:28px;height:28px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
+    border-radius:9px;color:#C9D6EC;font-size:14px;cursor:pointer;display:inline-flex;
+    align-items:center;justify-content:center;font-family:inherit}
+  .fc-arw:hover{background:rgba(255,255,255,.18)}
+  .fc-tb{background:#0F6E56;color:#fff;border:0;border-radius:999px;padding:6px 14px;font-size:11px;
+    font-weight:700;cursor:pointer;font-family:inherit}
+  .fc-brand{margin:0;text-align:center;line-height:1.1;white-space:nowrap}
+  .fc-brand i{font-style:normal;font-size:9.5px;letter-spacing:.24em;color:#8E97C4}
+  .fc-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff}
+  .fc-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;align-items:center;
+    font-size:11px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}
+  .fc-chip b{font-weight:800;margin-left:5px}
+  .fc-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}
+  .fc-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}
+  /* §fcHdr · ตัดบล็อกหัวเรื่องออก · แถบบนเขียน FLEET CALENDAR อยู่แล้ว
+     ชื่อหน้าเดิมกับคำอธิบายใต้ชื่อเป็นของซ้ำที่กินสองบรรทัดเต็ม
+     ปุ่มเลือกโหมดย้ายมาอยู่ท้ายแถบบนแทน */
+  .fc-seg{display:inline-flex;background:rgba(255,255,255,.10);border-radius:18px;padding:3px;
+    border:1px solid rgba(255,255,255,.10);margin-left:4px}
+  .fc-seg button{background:transparent;border:0;padding:6px 15px;border-radius:14px;font-size:11px;
+    font-weight:700;color:#C9D6EC;cursor:pointer;font-family:inherit}
+  .fc-seg button.on{background:#fff;color:#16265C}
+  /* §fcPier · ชิปเลือกท่า · ทรงเดียวกับ .bo-pier-pill ของหน้า Boat Operation
+     ต่างกันแค่ตัวนี้ลอยบนพื้นกรมท่า ตัวที่ไม่ได้เลือกจึงเป็นแก้วโปร่งแทนสีขาวทึบ */
+  .fc-piers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 11px}
+  .fc-pp{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:11px;font-weight:700;
+    color:#C9D6EC;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    border-radius:16px;cursor:pointer;white-space:nowrap;line-height:1.25}
+  .fc-pp:hover{background:rgba(255,255,255,.20);color:#fff}
+  .fc-pp.on{background:#fff;color:#16265C;border-color:#fff}
+  .fc-pp i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .fc-card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
+    box-shadow:0 6px 22px rgba(2,10,30,.10);padding:13px 15px;min-width:0;overflow:hidden}
+  .fc-ch2{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#b0aaa0;
+    display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .fc-ch2 .pill{background:#F1EEE9;color:#403833;border-radius:999px;padding:2px 9px;font-size:10px;
+    letter-spacing:0;text-transform:none;font-weight:800;font-family:Manrope,monospace}
+  .fc-ch2 .lg{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;font-size:9.5px;font-weight:600;
+    color:#9b9088;letter-spacing:0;text-transform:none}
+  .fc-ch2 .lg span{display:inline-flex;align-items:center;gap:4px}
+  .fc-ch2 .lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .fc-ch2 .lg .ro b{color:#1A2A33}
+  .fc-pb{width:19px;height:16px;border-radius:5px;color:#fff;display:inline-flex;align-items:center;
+    justify-content:center;font-size:7.5px;font-weight:800;flex:none}
+  /* ══ MATRIX ══
+     §fcMob · ตารางกว้างคงที่เสมอ · จอแคบคือ "เลื่อนแนวนอน" ไม่ใช่ "บีบให้พอดี"
+     บีบแล้วช่องเหลือ 35px ชื่อเรือกับเลขทับกันจนอ่านไม่ออกสักช่อง
+     คอลัมน์ซ้ายตรึงไว้ ไม่งั้นเลื่อนไปสองวันก็ไม่รู้ว่าแถวนั้นของโปรแกรมไหน
+     (กฎเดียวกับ §bopMob ของหน้า Boat Operation) */
+  .fc-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;
+    scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
+  .fc-wrap::-webkit-scrollbar{height:8px}
+  .fc-wrap::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:4px}
+  .fc-mt{border-collapse:separate;border-spacing:0;font-size:11px;table-layout:fixed;
+    width:100%;min-width:calc(var(--lcw) + var(--dayw) * var(--nd));--lcw:196px}
+  .fc-mt col.lc{width:var(--lcw)}
+  .fc-mt col.dc{width:var(--dayw)}
+  .fc-mt th,.fc-mt td{border-bottom:1px solid #EFECE6;padding:0}
+  .fc-mt .fc-mh{background:#fff;font-weight:700;color:#6B7785;font-size:10px;padding:4px 6px 7px;
+    text-align:center;border-bottom:2px solid #E5E1D9;position:sticky;top:0;z-index:3;cursor:pointer}
+  .fc-mt .fc-mh.sticky{text-align:left;left:0;z-index:4;cursor:default}
+  .fc-mt .fc-mh .wd{display:block;font-size:9px;color:#9b9088;font-weight:600}
+  .fc-mt .fc-mh .dn{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;
+    border-radius:50%;font-family:Manrope,monospace;font-size:11.5px;font-weight:800;color:#3a3a36;margin-top:2px}
+  .fc-mt .fc-mh.today .dn{background:#0F6E56;color:#fff}
+  .fc-mt .fc-mh.today .wd{color:#0F6E56;font-weight:800}
+  .fc-mt th.sticky{position:sticky;left:0;background:#fff;z-index:2}
+  .fc-mt th.sticky::after{content:'';position:absolute;top:0;right:0;bottom:-1px;width:6px;
+    background:linear-gradient(90deg,rgba(26,42,51,.07),transparent);pointer-events:none}
+  /* §fcSafari · ห้ามใส่ display:flex บน th ที่ตรึงไว้ · Safari จะถอดเซลล์ออกจาก
+     table layout แล้ว position:sticky ใช้ไม่ได้ · ใส่ที่ span ข้างในแทน */
+  .fc-mt tr.fc-mg th{background:var(--pbg);color:var(--pc);font-size:10.5px;font-weight:800;
+    padding:5px 8px;border-bottom:1px solid #E5E1D9;vertical-align:middle}
+  .fc-mt tr.fc-mg th .in{display:flex;align-items:center;gap:7px}
+  .fc-mt tr.fc-mg td{background:#FBFAF7;text-align:center;font-family:Manrope,monospace;font-size:10px;
+    color:#9b9088;font-weight:700;border-bottom:1px solid #E5E1D9}
+  .fc-mt tr.fc-mg td b{color:#12518F;font-weight:800}
+  .fc-mt th.fc-rn{padding:6px 8px 6px 18px;font-weight:700;font-size:10.5px;color:#2c2c2a;
+    vertical-align:middle}
+  .fc-mt th.fc-rn .in{display:flex;align-items:center;gap:6px}
+  .fc-mt th.fc-rn .in i{width:7px;height:7px;border-radius:50%;flex:none}
+  .fc-mt th.fc-rn .in i.dot{background:transparent;box-shadow:inset 0 0 0 1px #C9D3CB}
+  .fc-mt th.fc-rn .in i.x{background:#DAD5CC}
+  .fc-mt th.fc-rn .in .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* §fcFull (2026-10-03) · ชื่อโปรแกรมเต็ม ไม่ใช่ตัวย่อ
+     ของเดิมมุมมอง 14 วัน/เดือนย่อเป็น PPB · WSP · ETS · S ทั้งที่คอลัมน์ซ้ายกว้าง 196px เท่ากันทุกมุมมอง
+     ตัวย่อชนกันด้วย (สิมิลันสองแบบได้ S ทั้งคู่) · ตอนนี้ชื่อเต็มเสมอ ยาวเกินก็ตกบรรทัด ไม่ตัดด้วย …
+     จอแคบ (คอลัมน์ซ้าย 126px) มุมมองหลายวันยังใช้ตัวย่อ ไม่งั้นชื่อกินสามบรรทัดทุกแถว */
+  .fc-mt tr.fc-pr th.fc-rn .in .nm{overflow:visible;text-overflow:clip;white-space:normal;line-height:1.3}
+  .fc-mt tr.fc-pr th.fc-rn .in .nm .ab{display:none}
+  /* สกินของแอปตั้ง text-transform บน th ไว้ · ชื่อโปรแกรมกับชื่อท่าเลยขึ้นตัวพิมพ์ใหญ่หมด
+     "PHI PHI BAMBOO BY SPEEDBOAT" อ่านยากกว่าและไม่ตรงกับชื่อจริงในทะเบียน */
+  .fc-mt th.fc-rn,.fc-mt tr.fc-mg th,.fc-mt .fc-mh{text-transform:none}
+  .fc-mt th.fc-rn .in em{font-style:normal;font-family:Manrope,monospace;font-size:9.5px;font-weight:800;color:#C4BEB4}
+  .fc-mt tr.fr th.fc-rn{color:#9AA39C;font-weight:600}
+  .fc-mt tr.fc-dorm th.fc-rn{color:#A9A399;font-weight:600}
+  .fc-mx{vertical-align:top;padding:4px;text-align:center}
+  .fc-mx.has,.fc-mx.hasf{background:#fff}
+  .fc-mx.no{background:#FCFCFA}
+  .fc-mx.nof{background:#FCFDFC}
+  .fc-mx .zero{font-size:9.5px;color:#D4CDC4;font-weight:600}
+  .fc-mt td.dormc{background:repeating-linear-gradient(135deg,#F7F5F1,#F7F5F1 4px,#F1EEE8 4px,#F1EEE8 8px);
+    padding:5px 8px;text-align:left}
+  .fc-mt td.dormc span{display:inline-block;background:#fff;border:1px solid #E5E1D9;border-radius:6px;
+    padding:1px 7px;margin:2px 3px 2px 0;font-size:9.5px;font-weight:600;color:#8A847B}
+  /* ชิปเรือ · ชื่อบรรทัดบน คนบนลำ/ที่รับได้ บรรทัดล่าง แถบ fill ใต้สุด
+     ⚠ line-height ต้องอยู่ที่ชิป · เคยตั้ง line-height:0 ที่ช่องเพื่อกันช่องว่าง inline
+       แล้วสองบรรทัดในชิปทับกันจนอ่านไม่ออกสักลำ */
+  .fc-bc{display:inline-flex;flex-direction:column;align-items:center;border-radius:7px;padding:3px 6px 4px;
+    font-size:9.5px;font-weight:800;line-height:1.25;border:1px solid transparent;max-width:100%;
+    overflow:hidden;width:auto;margin:1px;vertical-align:top}
+  .fc-bc b{font-family:Manrope,monospace;font-size:10.5px;font-weight:800;opacity:.85;line-height:1.15}
+  .fc-bc u{display:block;text-decoration:none;width:100%;height:2px;border-radius:1px;
+    background:rgba(0,0,0,.09);margin-top:2px;overflow:hidden}
+  .fc-bc u s{display:block;height:100%;text-decoration:none}
+  .fc-bc.out{background:#fff;border-color:currentColor;font-weight:700;flex-direction:row;gap:5px;
+    align-items:baseline;padding:3px 7px}
+  .fc-bc.out b{opacity:.5;font-size:9px}
+  /* ══ ปฏิทินเดือน ══ */
+  .fc-calw{min-width:0}
+  .fc-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid #E9E5DE;
+    border-radius:10px;overflow:hidden}
+  .fc-wh{background:#FBFAF7;font-weight:700;font-size:10px;color:#6B7785;text-align:center;padding:6px 0;
+    border-bottom:1px solid #E9E5DE;border-right:1px solid #F2EFE9}
+  .fc-c{min-height:132px;min-width:0;overflow:hidden;padding:6px 7px 7px;border-right:1px solid #F2EFE9;
+    border-bottom:1px solid #F2EFE9;background:#fff;cursor:pointer}
+  .fc-c:hover{background:#FCFDFC}
+  .fc-c.out{background:#FBFAF7;cursor:default}
+  .fc-c.past{background:#FCFCFA}
+  .fc-c.past .fc-bc{opacity:.62}
+  .fc-c.today{background:#F4FBF7;box-shadow:inset 0 0 0 2px #0F6E56}
+  .fc-ch{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+  .fc-ch .dn{font-family:Manrope,monospace;font-size:12.5px;font-weight:800;width:23px;height:23px;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#1A2A33}
+  .fc-c.today .fc-ch .dn{background:#0F6E56;color:#fff}
+  .fc-c.past .fc-ch .dn{color:#AEB6B0}
+  .fc-ch .k{font-family:Manrope,monospace;font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 7px}
+  .fc-ch .k.run{background:#E7EEF7;color:#12518F;margin-left:auto}
+  .fc-ch .k.free{background:#DDF0E5;color:#0F6E56}
+  .fc-ch .k.free.z{background:#FFE2DC;color:#C44A36}
+  .fc-pg{margin-top:4px}
+  .fc-pg+.fc-pg{padding-top:4px;border-top:1px dashed #EDEAE4}
+  .fc-pgh{display:flex;align-items:center;gap:5px;margin-bottom:1px}
+  .fc-pgn{font-size:8.5px;font-weight:700;color:#A9B2AB;font-family:Manrope,monospace}
+  .fc-rl{margin-top:2px;font-size:10px;line-height:1.3;min-width:0}
+  .fc-rl .rn{display:flex;align-items:center;gap:5px;color:#5A6670;font-weight:700;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .fc-rl .rn i{width:6px;height:6px;border-radius:50%;flex:none}
+  .fc-rl .rn i.dot{background:transparent;box-shadow:inset 0 0 0 1px #C9D3CB}
+  .fc-rl .rn em{font-style:normal;color:#6B289A;font-weight:800}
+  .fc-rl.fr{margin-top:4px}
+  .fc-rl.fr .rn{color:#9AA39C;font-weight:600}
+  .fc-rl .bs{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;padding-left:11px;min-width:0}
+  .fc-rl .none{font-size:9.5px;color:#C6CFC8;font-weight:600}
+  .fc-wx{margin:2px 0 3px;font-size:9.5px;font-weight:700;color:#C44A36;background:#FFE2DC;
+    border-radius:8px;padding:2px 8px;display:inline-block}
+  .fc-quiet{margin-top:5px;font-size:9px;color:#BFC7C0;font-weight:600}
+  /* ── จอแคบ ── */
+  @media (max-width:820px){
+    #view-fleetcal{padding:10px}
+    .fc-brand{display:none}
+    .fc-top{display:flex;flex-wrap:wrap;gap:7px}
+    .fc-tl,.fc-tr{display:contents}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh{white-space:nowrap}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh .fl{display:none}
+    .fc-mt tr.fc-pr th.fc-rn .in .nm.sh .ab{display:inline}
+    .fc-top .d{font-size:20px}
+    .fc-card{padding:10px 8px 11px}
+    .fc-ch2 .lg{margin-left:0;flex-basis:100%;gap:8px}
+    .fc-mt{--lcw:126px}
+    .fc-mt.w{--dayw:104px !important}
+    .fc-mt th.fc-rn{padding:6px 6px 6px 8px;font-size:10px}
+    .fc-mt tr.fc-mg th{padding:5px 6px;font-size:10px}
+    .fc-mt .fc-mh.sticky{font-size:9.5px}
+    .fc-c{min-height:104px;padding:4px 4px 5px}
+    .fc-wh{font-size:9px;padding:4px 0}
+    .fc-ch .dn{width:20px;height:20px;font-size:11px}
+    .fc-ch .k{font-size:8.5px;padding:1px 5px}
+    .fc-rl .rn{font-size:9px}
+    .fc-rl .bs{padding-left:8px}
+  }
+  /* 7 คอลัมน์ในจอ 390 ไม่เหลือที่ให้ชื่อเรือเลย · เลื่อนแนวนอนเหมือน matrix */
+  @media (max-width:560px){
+    .fc-calw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .fc-cal{min-width:720px}
+  }
+</style>`;
 // ═══════════════════════════════════════════════════════════════════════
 // §fleetCal · ปฏิทินกองเรือ · อ่านอย่างเดียว · แก้เรือยังทำที่ Boat Operation
+//
+// §fcMatrix · หน้านี้ตอบคำถามเดียว: "วันนั้น ท่านี้ โปรแกรมนี้ มีเรือลำไหนวิ่ง
+// และเหลือลำไหนว่าง" · แถวจึงเป็น ท่า → โปรแกรม ไม่ใช่รายลำ
+// (ตั้งแถวเป็นลำจะตอบไม่ได้ ต้องไล่อ่านทั้งคอลัมน์เองว่าใครอยู่โปรแกรมเดียวกัน)
+//
+// ที่มาของข้อมูล — ไม่มีกฎใหม่สักข้อ ทุกตัวยืมของเดิม:
+//   · ลำอยู่ท่าไหน   → getBoatCurrentPier(b, ds) ตัวเดียวกับหน้า Boat Status
+//   · ลำพร้อมไหม     → getCurStatus(b, ds)
+//   · วันนั้นวิ่งอะไร → TRIPS[ds][boatId] ตัวเดียวกับ Boat Operation
+//   · โปรแกรมอยู่ท่าไหน → route.pier
+//   · คนบนลำ         → bkBoatPaxOnBoat / bkBoatIdsOn (ตัวที่ Boat Operation ใช้)
+//
+// ⚠ §fcPax · "คนบนลำ" ไม่เท่ากับ "ที่นั่งที่ถูกใช้จากพูลขาย" ที่ Dashboard โชว์
+//   17 ก.ย. Artemis = คนบนลำ 49 · getAllotment('r10') = ที่นั่งถูกใช้ 47
+//   ต่างกันเพราะคนละคำถามคนละชั้น — ตัวหลังเป็นระดับ "เส้นทาง" ไม่ใช่ระดับ "ลำ"
+//   และไม่นับใบเหมาลำเข้าพูล · หน้านี้ถามระดับลำ จึงต้องใช้คนบนลำ
+//   ป้ายบนหน้าจอเลยเขียนว่า "คนบนลำ / ที่รับได้" ให้ชัด ไม่ใช่ "ที่นั่งที่ขายได้"
 // ═══════════════════════════════════════════════════════════════════════
-var _fc = { ym:null, pier:'all' };
+var _fc = { mode:'m14', from:null, ym:null, pier:'all' };
+var FC_PIER=[['tublamu','TL','Tub Lamu','#0F6E56','#E1F5EE'],
+             ['panwa','VP','Visit Panwa','#185FA5','#E6F1FB'],
+             ['ranong','RN','Ranong','#BA7517','#FAEEDA'],
+             ['shop','SHOP','In Shop','#854F0B','#F6EFE3'],
+             ['other','—','Other','#5F5E5A','#F1EFE8']];
+function fcToday_(){ return (typeof TODAY_STR!=='undefined')?TODAY_STR:fcYMD(new Date()); }
+/* ห้ามใช้ toISOString().slice(0,10) — UTC ถอยกลับไปวันก่อนหน้าที่ +07:00 */
+function fcYMD(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function fcAddDays(ymd,n){ var d=new Date(ymd+'T00:00:00'); d.setDate(d.getDate()+(+n||0)); return fcYMD(d); }
 function fcInit(){
-  if(!_fc.ym) _fc.ym = (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)).slice(0,7);
+  var t=fcToday_();
+  if(!_fc.ym) _fc.ym=t.slice(0,7);
+  if(!_fc.from) _fc.from=t;
 }
-function fcShiftMonth(delta){
-  var y=+_fc.ym.slice(0,4), m=+_fc.ym.slice(5,7)-1;
-  var d=new Date(y, m+delta, 1);
-  _fc.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+function fcNDays(){ return _fc.mode==='m7'?7:14; }
+window.fcSetMode=function(m){
+  var t=fcToday_();
+  _fc.mode=m;
+  if(m!=='mo') _fc.from=t;
+  else _fc.ym=t.slice(0,7);
   renderFleetCal();
-}
-function fcToday(){ _fc.ym=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)).slice(0,7); renderFleetCal(); }
-function fcSetPier(p){ _fc.pier=p; renderFleetCal(); }
-/* คลิกวัน → ไปจัดเรือที่ Boat Operation ของวันนั้น · หน้านี้ไม่แก้อะไรเอง */
+};
+/* ‹ › เลื่อนทีละ "ช่วงที่กำลังดู" · โหมดเดือนเลื่อนทีละเดือน */
+window.fcShift=function(delta){
+  if(_fc.mode==='mo'){
+    var y=+_fc.ym.slice(0,4), m=+_fc.ym.slice(5,7)-1, d=new Date(y,m+(+delta||0),1);
+    _fc.ym=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
+  } else _fc.from=fcAddDays(_fc.from, (+delta||0)*fcNDays());
+  renderFleetCal();
+};
+window.fcToday=function(){ fcSetMode(_fc.mode); };
+/* §fcPier · กรองท่า · 'all' = ทุกท่า · เลือกท่าไหนก็เหลือเฉพาะกลุ่มนั้น
+   รวมถึงตัวเลขบนแถบหัวด้วย ไม่งั้นหัวบอกเลขทั้งฝูงแต่ตารางโชว์ท่าเดียว อ่านขัดกัน
+   In Shop ไม่ผูกกับท่าไหน จึงโผล่เฉพาะตอนดู 'All piers' */
+window.fcSetPier=function(p){ _fc.pier=p||'all'; renderFleetCal(); };
+function fcPierOn(pk){ return _fc.pier==='all' || _fc.pier===pk; }
+/* คลิกวัน → open in Boat Operation ของวันนั้น · หน้านี้ไม่แก้อะไรเอง */
 function fcOpenDay(ds){
   if(typeof _bop2!=='undefined'){
     _bop2.selDate=ds;
@@ -5599,217 +7134,251 @@ function fcOpenDay(ds){
   var el=document.querySelector('[data-view="operation"]');
   if(el && typeof nav==='function') nav(el);
 }
-/* ท่าของลำนี้ ณ วันที่ ds · ลำที่เข้าอู่ (pier='shop') นับเป็นไม่พร้อม ไม่ผูกกับท่าไหน
-   §boatPierDate · ต้องส่ง ds เข้าไป ไม่งั้นเรือที่กลับมาพร้อมใช้เดือนหน้าจะตกลงถัง 'shop'
-   ซึ่ง FC_PIER ไม่มีช่องให้แสดง → นับใน nReady แต่ไม่โผล่ใต้ท่าไหนเลย */
-function fcPierOf(b, ds){ return (typeof getBoatCurrentPier==='function') ? getBoatCurrentPier(b, ds) : (b.pier||''); }
-var FC_PIER=[['tublamu','TL','Tub Lamu'],['panwa','VP','Visit Panwa'],['ranong','RN','Ranong']];
-/* รวมทุกอย่างของหนึ่งวัน · ไม่คิดเลขซ้ำกับที่อื่น อ่านจาก TRIPS ตัวเดียวกับ Boat Operation */
-function fcDay(ds){
-  var out={ routes:[], charters:[], ready:{}, fixing:[], nReady:0, nOut:0, wx:[] };
-  FC_PIER.forEach(function(p){ out.ready[p[0]]=[]; });
-  var boats=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; });
-  if(_fc.pier!=='all') boats=boats.filter(function(b){ return fcPierOf(b, ds)===_fc.pier; });
-  var byRoute={};
-  boats.forEach(function(b){
-    var st=(typeof getCurStatus==='function') ? getCurStatus(b, ds).s : 'available';
-    var op=(typeof TRIPS!=='undefined' && TRIPS[ds]) ? TRIPS[ds][b.id] : null;
-    if(st!=='available'){ out.fixing.push(b); return; }
-    if(op && op.route){
-      out.nOut++;
-      if(op.charterBookingId || op.type==='charter'){ out.charters.push({b:b, op:op}); return; }
-      (byRoute[op.route]=byRoute[op.route]||[]).push(b);
-      return;
-    }
-    var pk=fcPierOf(b, ds);
-    if(!out.ready[pk]) out.ready[pk]=[];
-    out.ready[pk].push(b); out.nReady++;
-  });
-  var RTS=(typeof ROUTES!=='undefined'?ROUTES:[]);
-  Object.keys(byRoute).forEach(function(rid){
-    var r=RTS.find(function(x){ return x.id===rid; })||{id:rid,name:rid};
-    out.routes.push({ r:r, boats:byRoute[rid], t:((r.times&&r.times[0])||'99:99') });
-  });
-  out.routes.sort(function(a,b){ return String(a.t).localeCompare(String(b.t)); });   // เรียงตามเวลาออกเรือ
-  // เส้นทางที่ยกเลิกเพราะอากาศ · เรือของเส้นทางนั้นเด้งกลับเป็นลำพร้อมเอง (ไม่มีใน TRIPS แล้ว)
-  if(typeof bookingV2IsWeatherClosed==='function'){
-    RTS.forEach(function(r){
-      if(r.active===false) return;
-      if(_fc.pier!=='all' && r.pier!==_fc.pier) return;
-      try{ if(bookingV2IsWeatherClosed(r.id, ds)) out.wx.push(r); }catch(_){}
+/* §fcPax · คนบนลำ ต่อวัน ต่อลำ · กวาดใบจองรอบเดียวแล้วเก็บเป็นตาราง
+   ถ้าเรียก bkBoatLoadOther ทีละช่อง = 14 วัน × 20 ลำ × ใบจองทั้งระบบ
+   ราวล้านรอบต่อการวาดหนึ่งครั้ง · ตัวนี้กวาดใบจองรอบเดียว ได้ผลชุดเดียวกัน */
+function fcLoadMap(dates){
+  var want={}, out={};
+  dates.forEach(function(d){ want[d]=1; out[d]={}; });
+  var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]);
+  var CXL=['cancelled','rejected','cancelled_weather'];
+  if(typeof bkBoatIdsOn!=='function' || typeof bkBoatPaxOnBoat!=='function') return out;
+  BK.forEach(function(b){
+    if(!b || CXL.indexOf(b.status)>=0) return;
+    var seen={};
+    (b.trips||[]).forEach(function(t){
+      var d=t&&t.date;
+      /* ใบเดียวมีได้หลายทริปในวันเดียว · bkBoatPaxOnBoat รวมทุกทริปของวันนั้นให้แล้ว
+         ถ้าวนซ้ำจะนับซ้ำ */
+      if(!d||!want[d]||seen[d]) return; seen[d]=1;
+      bkBoatIdsOn(b,d).forEach(function(id){
+        var n=bkBoatPaxOnBoat(b,d,id)||0;
+        if(n) out[d][id]=(out[d][id]||0)+n;
+      });
     });
-  }
+  });
   return out;
 }
-function fcBoatChip(b, mode){
-  var c=(typeof getBoatColor==='function')?getBoatColor(b.id):{bg:'#F1F5F1',text:'#6B7785'};
-  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return x;};
-  return (mode==='out')
-    ? '<span class="fc-b out" style="border-color:'+c.text+';color:'+c.text+'">'+e(b.name||b.id)+'</span>'
-    : '<span class="fc-b'+(mode==='chr'?' chr':'')+'" style="background:'+c.bg+';color:'+c.text+'">'+e(b.name||b.id)+'</span>';
+/* สภาพของลำหนึ่งในวันหนึ่ง · จำผลไว้ต่อการวาดหนึ่งครั้ง */
+function fcCell(b, ds, load, memo){
+  var key=b.id+'|'+ds;
+  if(memo[key]) return memo[key];
+  var pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b, ds):(b.pier||'other');
+  var st=(typeof getCurStatus==='function')?getCurStatus(b, ds):{s:'available'};
+  var c={pier:pier, s:st.s};
+  if(st.s!=='available'){ c.k='off'; return memo[key]=c; }
+  var op=(typeof TRIPS!=='undefined' && TRIPS[ds]) ? TRIPS[ds][b.id] : null;
+  if(op && op.route){
+    var r=(typeof ROUTES!=='undefined'?ROUTES:[]).find(function(x){return x.id===op.route;})||{id:op.route,name:op.route};
+    c.k='run'; c.rid=r.id; c.rpier=r.pier||pier; c.color=r.color||'#94a3b8';
+    c.routeFull=r.name||r.id;
+    c.route=(typeof _calName==='function')?_calName(r):c.routeFull;
+    c.chr=!!(op.charterBookingId || op.type==='charter');
+    c.pax=(load[ds]&&load[ds][b.id])||0;
+    if(c.chr){
+      try{ var bk=(SB_BOOKINGS||[]).find(function(z){ return z.id===op.charterBookingId; });
+           var a=bk&&bk.agentId&&typeof sbGetAgent==='function'?sbGetAgent(bk.agentId):null;
+           c.ag=a?(a.code||a.name||''):((bk&&(bk.voucherRef||bk.code))||''); }catch(_){ c.ag=''; }
+    }
+    return memo[key]=c;
+  }
+  c.k='free'; return memo[key]=c;
+}
+function fcBoats(){ return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; }); }
+/* ตัวย่อโปรแกรมสำหรับช่องแคบ · อักษรแรกของคำที่มีความหมาย สูงสุด 3 ตัว */
+var FC_SKIP={by:1,the:1,and:1,island:1,islands:1,speedboat:1,catamaran:1,trip:1,day:1};
+var _fcAb={};
+function fcAbbr(name){
+  if(_fcAb[name]) return _fcAb[name];
+  var w=String(name||'').replace(/[+\-·]/g,' ').split(/\s+/).filter(function(x){ return x && !FC_SKIP[x.toLowerCase()]; });
+  var a=w.map(function(x){ return x[0]; }).join('').toUpperCase().slice(0,3);
+  if(!a) a=String(name||'?').slice(0,3).toUpperCase();
+  return _fcAb[name]=a;
+}
+function fcFill(p){ return p>=95?'#C44A36':p>=80?'#B4690E':p>=50?'#0F6E56':'#6FAE92'; }
+function fcChip(b,c,mode){
+  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var col=(typeof getBoatColor==='function')?getBoatColor(b.id):{bg:'#F1F5F1',text:'#6B7785'};
+  var cap=b.cap||0;
+  if(mode==='free') return '<span class="fc-bc out" style="border-color:'+col.text+';color:'+col.text
+    +'" title="'+e(b.name)+' · available at pier · capacity '+cap+'">'+e(b.name)+'<b>'+cap+'</b></span>';
+  var pax=c.pax||0, pct=cap?Math.min(100,Math.round(pax/cap*100)):0, held=c.chr&&!pax;
+  return '<span class="fc-bc" style="background:'+col.bg+';color:'+col.text+'" title="'+e(b.name)+' · '
+    +(c.chr?('Charter'+(c.ag?(' · '+e(c.ag)):'')):e(c.routeFull))
+    +(held?' · boat held (outbound / return on different days)':(' · '+pax+' pax on board of '+cap))+'">'
+    +e(b.name)+'<b>'+(held?'Held':(pax+'/'+cap))+'</b>'
+    +'<u><s style="width:'+pct+'%;background:'+fcFill(pct)+'"></s></u></span>';
+}
+/* ── MATRIX · ท่า → โปรแกรม × วัน ─────────────────────────────────────── */
+function fcMatrixHtml(){
+  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var n=fcNDays(), wide=(n<=7), TODAY=fcToday_();
+  var days=[], i; for(i=0;i<n;i++) days.push(fcAddDays(_fc.from,i));
+  var boats=fcBoats(), load=fcLoadMap(days), memo={};
+  var C={}; days.forEach(function(ds){ C[ds]={}; boats.forEach(function(b){ C[ds][b.id]=fcCell(b,ds,load,memo); }); });
+  /* โปรแกรมที่ "วิ่งจริงในช่วงนี้" เท่านั้น · ทะเบียนมี 57 เส้นทาง ขึ้นหมดคือ 57 แถวเปล่า */
+  var prog={}, liveBy={}, dormBy={};
+  days.forEach(function(ds){ boats.forEach(function(b){ var c=C[ds][b.id];
+    if(c.k==='run'){ var pk=c.rpier||c.pier; prog[pk]=prog[pk]||{};
+      prog[pk][c.chr?'__chr':c.rid]=c.chr?{name:'Charter',color:'#6B289A',chr:true}
+                                         :{name:c.routeFull,short:c.route,color:c.color}; }
+    else if(c.k==='free') liveBy[c.pier]=1; }); });
+  boats.forEach(function(b){
+    var off=days.every(function(ds){ return C[ds][b.id].k==='off'; });
+    if(off){ var pk=C[days[0]][b.id].pier||b.pier||'other'; (dormBy[pk]=dormBy[pk]||[]).push(b); }
+  });
+  var cols='<colgroup><col class="lc">'+days.map(function(){return '<col class="dc">';}).join('')+'</colgroup>';
+  var head='<tr><th class="fc-mh sticky">Pier · Program</th>'
+    +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), t=(ds===TODAY);
+      return '<th class="fc-mh'+(t?' today':'')+'" onclick="fcOpenDay(\''+ds+'\')" title="'+ds+' · open in Boat Operation">'
+        +'<span class="wd">'+WD[dt.getDay()]+'</span><span class="dn">'+dt.getDate()+'</span></th>'; }).join('')+'</tr>';
+  var body='';
+  FC_PIER.forEach(function(p){
+    var pk=p[0], progs=prog[pk]||{}, dorm=dormBy[pk]||[];
+    /* §fcOrd · แถวโปรแกรมเรียงตามลำดับของหน้า Program Config (กติกาเดียวกับ §routeOrd)
+       ของเดิมเรียงตาม "เรือลำไหนถูกวนเจอก่อน" · ลำดับจึงสลับไปมาตามช่วงวันที่เปิดดู
+       Charter ไม่ใช่โปรแกรมในทะเบียน อยู่ท้ายท่าเหมือนเดิม */
+    var keys=Object.keys(progs).sort(function(a,b){
+      if(a==='__chr'||b==='__chr') return a===b?0:(a==='__chr'?1:-1);
+      return (typeof laRouteOrdCmp==='function') ? laRouteOrdCmp(a,b) : 0; });
+    if(!fcPierOn(pk)) return;
+    if(!keys.length && !liveBy[pk] && !dorm.length) return;
+    body+='<tr class="fc-mg"><th class="sticky" style="--pc:'+p[3]+';--pbg:'+p[4]+'">'
+      +'<span class="in"><span class="fc-pb" style="background:'+p[3]+'">'+p[1]+'</span>'+p[2]+'</span></th>'
+      +days.map(function(ds){ var run=0,free=0;
+        boats.forEach(function(b){ var c=C[ds][b.id];
+          if(c.k==='run' && (c.rpier||c.pier)===pk) run++;
+          else if(c.k==='free' && c.pier===pk) free++; });
+        return '<td class="fc-mgc">'+((run||free)?('<b>'+run+'</b><span>/'+free+'</span>'):'')+'</td>'; }).join('')+'</tr>';
+    keys.forEach(function(rid){ var pr=progs[rid];
+      body+='<tr class="fc-pr"><th class="sticky fc-rn"><span class="in">'
+        +'<i style="background:'+pr.color+'"></i>'
+        +(pr.chr ? '<span class="nm">&#9875; Charter</span>'
+            : ('<span class="nm'+(wide?'':' sh')+'" title="'+e(pr.name)+'"><span class="fl">'+e(pr.name)+'</span>'
+               +(wide?'':('<span class="ab">'+e(fcAbbr(pr.name))+'</span>'))+'</span>'))+'</span></th>'
+        +days.map(function(ds){ var out=[];
+          boats.forEach(function(b){ var c=C[ds][b.id];
+            if(c.k!=='run' || (c.rpier||c.pier)!==pk) return;
+            if(rid==='__chr' ? !c.chr : (c.chr||c.rid!==rid)) return;
+            out.push(fcChip(b,c)); });
+          return '<td class="fc-mx '+(out.length?'has':'no')+'">'+out.join('')+'</td>'; }).join('')+'</tr>';
+    });
+    if(liveBy[pk]) body+='<tr class="fc-pr fr"><th class="sticky fc-rn"><span class="in">'
+      +'<i class="dot"></i><span class="nm">Available at pier</span></span></th>'
+      +days.map(function(ds){ var out=[];
+        boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free'&&c.pier===pk) out.push(fcChip(b,c,'free')); });
+        return '<td class="fc-mx '+(out.length?'hasf':'nof')+'">'
+          +(out.length?out.join(''):'<span class="zero">none</span>')+'</td>'; }).join('')+'</tr>';
+    /* ลำที่ไม่พร้อมทั้งช่วง ยุบเป็นแถวเดียว · แยกแถวละลำได้ลายทางเปล่า 13 แถวกินครึ่งจอ */
+    if(dorm.length) body+='<tr class="fc-dorm"><th class="sticky fc-rn"><span class="in">'
+      +'<i class="x"></i><span class="nm">Out of service</span><em>'+dorm.length+'</em></span></th>'
+      +'<td class="fc-mx dormc" colspan="'+days.length+'">'
+      +dorm.map(function(b){ return '<span title="capacity '+(b.cap||0)+'">'+e(b.name)+'</span>'; }).join('')+'</td></tr>';
+  });
+  return '<div class="fc-wrap"><table class="fc-mt'+(wide?' w':'')+'" style="--dayw:'+(wide?132:92)+'px;--nd:'+n+'">'
+    +cols+'<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+/* ── ปฏิทินเดือน · ในช่องเรียง ท่า → โปรแกรม → ลำ ───────────────────── */
+function fcMonthHtml(){
+  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var TODAY=fcToday_();
+  var y=+_fc.ym.slice(0,4), m=+_fc.ym.slice(5,7)-1;
+  var last=new Date(y,m+1,0).getDate(), lead=(new Date(y,m,1).getDay()+6)%7;
+  var days=[], i; for(i=1;i<=last;i++) days.push(_fc.ym+'-'+('0'+i).slice(-2));
+  var boats=fcBoats(), load=fcLoadMap(days), memo={};
+  var cells=''; for(i=0;i<lead;i++) cells+='<div class="fc-c out"></div>';
+  days.forEach(function(ds){
+    var dn=+ds.slice(8), isT=(ds===TODAY), isP=(ds<TODAY);
+    var g={}; FC_PIER.forEach(function(p){ g[p[0]]={run:[],free:[],off:[]}; });
+    var nRun=0,nFree=0;
+    boats.forEach(function(b){ var c=fcCell(b,ds,load,memo);
+      (g[c.pier]||g.other)[c.k].push({b:b,c:c});
+      if(!fcPierOn(c.pier)) return;
+      if(c.k==='run')nRun++; else if(c.k==='free')nFree++; });
+    var h='<div class="fc-c'+(isT?' today':'')+(isP?' past':'')+'" onclick="fcOpenDay(\''+ds+'\')" '
+      +'title="'+ds+' · open in Boat Operation">'
+      +'<div class="fc-ch"><span class="dn">'+dn+'</span>'
+      +'<span class="k run">'+nRun+'</span><span class="k free'+(nFree?'':' z')+'">'+nFree+'</span></div>';
+    if(typeof bookingV2IsWeatherClosed==='function'){
+      (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(r){ if(r.active===false) return;
+        try{ if(bookingV2IsWeatherClosed(r.id, ds))
+          h+='<div class="fc-wx">&#9928; Closed · '+e((typeof _calName==='function')?_calName(r):(r.name||r.id))+'</div>'; }catch(_){} });
+    }
+    var quiet=[];
+    FC_PIER.forEach(function(p){
+      if(p[0]==='shop'||p[0]==='other') return;
+      if(!fcPierOn(p[0])) return;
+      var x=g[p[0]];
+      if(!x.run.length && !x.free.length){ if(x.off.length) quiet.push(p[1]); return; }
+      h+='<div class="fc-pg"><div class="fc-pgh"><span class="fc-pb" style="background:'+p[3]+'">'+p[1]+'</span>'
+        +'<span class="fc-pgn">out '+x.run.length+' · free '+x.free.length+'</span></div>';
+      var byR={}; x.run.forEach(function(o){ var k=o.c.chr?'__chr':o.c.rid; (byR[k]=byR[k]||[]).push(o); });
+      Object.keys(byR).forEach(function(k){ var arr=byR[k], c0=arr[0].c;
+        h+='<div class="fc-rl"><span class="rn"><i style="background:'+(k==='__chr'?'#6B289A':c0.color)+'"></i>'
+          +(k==='__chr'?('&#9875; Charter'+(c0.ag?(' · <em>'+e(c0.ag)+'</em>'):'')):e(c0.routeFull))+'</span>'
+          +'<span class="bs">'+arr.map(function(o){ return fcChip(o.b,o.c); }).join('')+'</span></div>'; });
+      h+='<div class="fc-rl fr"><span class="rn"><i class="dot"></i>Available</span><span class="bs">'
+        +(x.free.length?x.free.map(function(o){ return fcChip(o.b,o.c,'free'); }).join('')
+                       :'<span class="none">&mdash; none</span>')+'</span></div></div>';
+    });
+    if(quiet.length) h+='<div class="fc-quiet">'+quiet.join(' · ')+' &mdash; no boats ready</div>';
+    cells+=h+'</div>';
+  });
+  return '<div class="fc-calw"><div class="fc-cal">'
+    +['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(w){ return '<div class="fc-wh">'+w+'</div>'; }).join('')
+    +cells+'</div></div>';
 }
 function renderFleetCal(){
   fcInit();
   var host=document.getElementById('fc-host'); if(!host) return;
-  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
-  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var y=+_fc.ym.slice(0,4), m=+_fc.ym.slice(5,7)-1;
-  var first=new Date(y,m,1), last=new Date(y,m+1,0).getDate();
-  var lead=(first.getDay()+6)%7;   // ปฏิทินเริ่มวันจันทร์
-  var TODAY=(typeof TODAY_STR!=='undefined')?TODAY_STR:new Date().toISOString().slice(0,10);
-  var days=[]; for(var d=1;d<=last;d++) days.push(_fc.ym+'-'+String(d).padStart(2,'0'));
-
-  var allBoats=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; });
-  var perPier=FC_PIER.map(function(p){ return p[1]+' '+allBoats.filter(function(b){ return fcPierOf(b)===p[0]; }).length; }).join(' · ');
-  var tDay=fcDay(TODAY);
-  var tRdy=FC_PIER.map(function(p){ return p[1]+' '+((tDay.ready[p[0]]||[]).length); }).join(' · ');
-  var fullDays=days.filter(function(ds){ return ds>=TODAY && fcDay(ds).nReady===0; });
-  var fixNow=tDay.fixing;
-
-  var cells='';
-  for(var i=0;i<lead;i++) cells+='<div class="fc-day out"></div>';
-  days.forEach(function(ds){
-    var D=fcDay(ds), dn=+ds.slice(8,10);
-    var isToday=(ds===TODAY), isPast=(ds<TODAY);
-    var cls='fc-day'+(isToday?' today':'')+(isPast?' past':'')+(D.wx.length?' closed':'');
-    var rdyCls=isPast?'dim':(D.nReady===0?'zero':'');
-    var h='<div class="'+cls+'" onclick="fcOpenDay(\''+ds+'\')" title="'+ds+' · ไปจัดเรือที่ Boat Operation">'
-      +'<div class="fc-hd"><span class="fc-dn">'+dn+'</span><span class="fc-rdy '+rdyCls+'">พร้อม '+D.nReady+'</span></div>';
-    D.wx.forEach(function(r){ h+='<div class="fc-wx">&#9928; ยกเลิก · '+e((typeof _calName==='function')?_calName(r):(r.name||r.id))+'</div>'; });
-    D.routes.forEach(function(x){
-      var _rn=(typeof _calName==='function')?_calName(x.r):((x.r.name)||x.r.id);   // §fcName · ชื่อย่อชุดเดียวกับหน้า Calendar
-      h+='<div class="fc-rl"><i style="background:'+(x.r.color||'#94a3b8')+'"></i>'
-        +'<span class="rn" title="'+e(x.r.name||x.r.id)+'">'+e(_rn)+'</span>'
-        +'<span class="fc-bs">'+x.boats.map(function(b){ return fcBoatChip(b,'fill'); }).join('')+'</span></div>';
-    });
-    D.charters.forEach(function(x){
-      var ag='';
-      try{ var bk=(SB_BOOKINGS||[]).find(function(z){ return z.id===x.op.charterBookingId; });
-           var a=bk&&bk.agentId&&typeof sbGetAgent==='function'?sbGetAgent(bk.agentId):null;
-           ag=a?(a.code||a.name||''):((bk&&(bk.voucherRef||bk.code))||''); }catch(_){}
-      h+='<div class="fc-rl chr"><i style="background:#6B289A"></i><span class="rn">&#9875; Charter</span>'
-        +'<span class="fc-bs">'+fcBoatChip(x.b,'chr')+(ag?('<span class="fc-ag">'+e(ag)+'</span>'):'')+'</span></div>';
-    });
-    h+='<div class="fc-pier"><div class="fc-pt">Ready at pier</div>';
-    FC_PIER.forEach(function(p){
-      if(_fc.pier!=='all' && _fc.pier!==p[0]) return;
-      var arr=D.ready[p[0]]||[];
-      if(!arr.length && _fc.pier==='all' && !allBoats.some(function(b){ return fcPierOf(b)===p[0]; })) return;   // ท่าที่ไม่มีเรือเลย ไม่ต้องขึ้นบรรทัด
-      h+='<div class="fc-fl'+(arr.length?'':' none')+'"><span class="pn">'+p[1]+'</span>'
-        +(arr.length?('<span class="fc-bs">'+arr.map(function(b){ return fcBoatChip(b,'out'); }).join('')+'</span>')
-                    :'<b>&mdash; ไม่เหลือ</b>')+'</div>';
-    });
-    if(D.fixing.length) h+='<div class="fc-fix"><span class="pn">&#128295;</span><span>'+D.fixing.map(function(b){ return e(b.name||b.id); }).join(' · ')+'</span></div>';
-    h+='</div></div>';
-    cells+=h;
-  });
-
-  host.innerHTML=''
-  +'<style>'
-  +'#view-fleetcal{padding:20px;background:#fff;font-family:\'DM Sans\',sans-serif;color:#1A2A33;min-height:100%}'
-  +'#view-fleetcal .fc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;grid-auto-rows:auto}'
-  +'#view-fleetcal .fc-wh{font-weight:600;font-size:10px;color:#6B7785;letter-spacing:.04em;text-align:center;padding:0 0 2px}'
-  +'#view-fleetcal .fc-day{background:#FAFCFA;border:1px solid rgba(0,0,0,.055);border-radius:12px;padding:8px 9px 9px;display:flex;flex-direction:column;min-height:132px;cursor:pointer;transition:transform .12s,box-shadow .12s}'
-  +'#view-fleetcal .fc-day:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(26,42,51,.08);z-index:1}'
-  +'#view-fleetcal .fc-day.out{background:transparent;border-color:transparent;cursor:default;min-height:0}'
-  +'#view-fleetcal .fc-day.out:hover{transform:none;box-shadow:none}'
-  +'#view-fleetcal .fc-day.past{background:#FBFBF9;border-color:rgba(0,0,0,.04)}'
-  +'#view-fleetcal .fc-day.past .fc-b{opacity:.55}'
-  +'#view-fleetcal .fc-day.today{border-color:#0F6E56;box-shadow:0 0 0 1px #0F6E56}'
-  +'#view-fleetcal .fc-day.closed{background:#FFF6F4;border-color:rgba(196,74,54,.25)}'
-  +'#view-fleetcal .fc-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}'
-  +'#view-fleetcal .fc-dn{font-family:\'Manrope\',\'DM Mono\',monospace;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:#1A2A33;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%}'
-  +'#view-fleetcal .fc-day.today .fc-dn{background:#0F6E56;color:#fff}'
-  +'#view-fleetcal .fc-day.past .fc-dn{color:#AEB6B0}'
-  +'#view-fleetcal .fc-rdy{margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:#DDF0E5;color:#0F6E56;border-radius:11px;padding:2px 9px;font-size:10px;font-weight:700;white-space:nowrap;font-family:\'Manrope\',sans-serif}'
-  +'#view-fleetcal .fc-rdy.zero{background:#FFE2DC;color:#C44A36}'
-  +'#view-fleetcal .fc-rdy.dim{background:#F1F5F1;color:#9AA39C}'
-  +'#view-fleetcal .fc-rl{display:flex;gap:6px;align-items:flex-start;margin-top:3px;font-size:10px;line-height:1.4}'
-  +'#view-fleetcal .fc-rl i{width:6px;height:6px;border-radius:50%;flex:none;margin-top:4px;font-style:normal}'
-  +'#view-fleetcal .fc-rl .rn{flex:none;width:78px;color:#6B7785;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-  +'#view-fleetcal .fc-rl.chr .rn{color:#6B289A}'
-  +'#view-fleetcal .fc-bs{display:flex;flex-wrap:wrap;gap:3px;min-width:0}'
-  +'#view-fleetcal .fc-b{display:inline-flex;align-items:center;border-radius:7px;padding:1px 6px;font-size:9.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}'
-  +'#view-fleetcal .fc-b.out{background:#fff;font-weight:600;border-color:currentColor;opacity:.9}'
-  +'#view-fleetcal .fc-b.chr{box-shadow:inset 0 0 0 1.5px #6B289A}'
-  +'#view-fleetcal .fc-ag{font-size:9px;color:#6B289A;font-weight:600;align-self:center}'
-  +'#view-fleetcal .fc-wx{margin:2px 0 3px;font-size:9.5px;font-weight:600;color:#C44A36;background:#FFE2DC;border-radius:8px;padding:2px 8px;display:inline-block}'
-  +'#view-fleetcal .fc-pier{margin-top:auto;padding-top:7px;border-top:1px solid #E5EDE7}'
-  +'#view-fleetcal .fc-pt{font-size:9px;color:#6B7785;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}'
-  +'#view-fleetcal .fc-fl{display:flex;gap:6px;align-items:flex-start;font-size:9.5px;line-height:1.45;margin-top:2px}'
-  +'#view-fleetcal .fc-fl .pn{flex:none;width:20px;font-family:\'Manrope\',sans-serif;font-weight:700;color:#6B7785;letter-spacing:.04em;font-size:9px;padding-top:2px}'
-  +'#view-fleetcal .fc-fl.none b{color:#BFC7C0;font-weight:500}'
-  +'#view-fleetcal .fc-fix{display:flex;gap:6px;font-size:9.5px;margin-top:4px;color:#C44A36;line-height:1.45}'
-  +'#view-fleetcal .fc-fix .pn{flex:none;width:20px;font-size:9px}'
-  /* token ชุดเดียวกับ Boat Operation · คัดลอกมาให้ scope นี้ใช้ได้ตรง ๆ */
-  +'#view-fleetcal .bop2-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}'
-  +'#view-fleetcal .bop2-hd h1{font-size:24px;font-weight:700;color:#1A2A33;margin:0 0 2px;letter-spacing:-.01em}'
-  +'#view-fleetcal .bop2-hd p{font-size:12px;color:#6B7785;margin:0}'
-  +'#view-fleetcal .bo-tile{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:14px 16px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between}'
-  +'#view-fleetcal .bo-tile-lbl{font-size:10px;color:#6B7785;font-weight:600;letter-spacing:.02em}'
-  +'#view-fleetcal .bo-tile-num{font-family:\'Manrope\',\'DM Mono\',monospace;font-size:28px;font-weight:700;line-height:1;color:#1A2A33;letter-spacing:-.01em}'
-  +'#view-fleetcal .bo-btn{padding:7px 14px;font-size:11px;font-weight:600;background:#fff;border:1px solid rgba(15,110,86,.18);border-radius:22px;cursor:pointer;font-family:inherit;color:#0F6E56;transition:all .15s}'
-  +'#view-fleetcal .bo-btn:hover{background:#DDF0E5;border-color:#0F6E56}'
-  +'#view-fleetcal .bo-btn.primary{background:#0F6E56;color:#fff;border-color:#0F6E56}'
-  +'#view-fleetcal .bo-btn.icon{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:13px}'
-  +'#view-fleetcal .bo-pier-pill{padding:6px 14px;font-size:11px;font-weight:600;background:#fff;border:1px solid rgba(0,0,0,.07);border-radius:16px;cursor:pointer;color:#6B7785;font-family:inherit;transition:all .12s}'
-  +'#view-fleetcal .bo-pier-pill:hover{border-color:#0F6E56;color:#0F6E56}'
-  +'#view-fleetcal .bo-pier-pill.on{background:#0F6E56;color:#fff;border-color:#0F6E56}'
-  +'#view-fleetcal .bo-card{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:14px 16px}'
-  +'#view-fleetcal .bo-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:10px;color:#6B7785}'
-  +'#view-fleetcal .bo-legend-chip{display:inline-flex;align-items:center;gap:5px;color:#1A2A33;font-weight:500}'
-  +'#view-fleetcal .bo-legend-chip span.box{width:11px;height:11px;border-radius:3px}'
-  +'</style>'
-  +'<div class="bop2-hd"><div><h1>Fleet Calendar</h1>'
-    +'<p>เรือลำไหนไปเส้นทางไหน · ท่าไหนยังเหลือลำพร้อม · คลิกวันเพื่อไปจัดเรือที่ Boat Operation</p></div>'
-    +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
-      +'<button class="bo-btn icon" onclick="fcShiftMonth(-1)" title="เดือนก่อน">&lsaquo;</button>'
-      +'<button class="bo-btn primary" onclick="fcToday()">Today</button>'
-      +'<button class="bo-btn icon" onclick="fcShiftMonth(1)" title="เดือนถัดไป">&rsaquo;</button>'
-      +'<span style="font-size:13px;font-weight:700;color:#1A2A33;margin:0 4px;min-width:130px;text-align:center;font-family:Manrope,sans-serif">'+MON[m]+' '+y+'</span>'
-    +'</div></div>'
-  +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr;gap:10px;margin-bottom:14px">'
-    +'<div class="bo-tile"><div><div class="bo-tile-lbl">Fleet</div><div class="bo-tile-num" style="margin-top:6px">'+allBoats.length+'</div></div>'
-      +'<div style="font-size:9px;color:#6B7785;font-weight:500">'+e(perPier)+' · ยังไม่ปลดระวาง</div></div>'
-    +'<div class="bo-tile" style="background:#FFD93D"><div><div class="bo-tile-lbl" style="color:#6B5414">Boats Deployed</div>'
-      +'<div class="bo-tile-num" style="color:#2F2410;margin-top:6px">'+tDay.nOut+'</div></div>'
-      +'<div style="font-size:9px;color:#6B5414;font-weight:500">วันนี้ · '+(tDay.routes.length+tDay.charters.length)+' เส้นทาง</div></div>'
-    +'<div class="bo-tile" style="background:#0F6E56;color:#fff"><div><div class="bo-tile-lbl" style="color:#B5DDCB">Ready at Pier</div>'
-      +'<div class="bo-tile-num" style="color:#fff;margin-top:6px">'+tDay.nReady+'</div></div>'
-      +'<div style="font-size:9px;color:#B5DDCB;font-weight:500">'+e(tRdy)+' — ขายเหมาได้</div></div>'
-    +((fullDays.length||fixNow.length)
-      ? ('<div class="bo-tile" style="background:linear-gradient(115deg,#FF7560 0%,#FF9276 100%);color:#fff;position:relative;overflow:hidden">'
-        +'<div><div style="font-size:10px;color:rgba(255,255,255,.92);font-weight:700;letter-spacing:.02em">&#9888; NEEDS ATTENTION</div>'
-        +'<div style="font-size:15px;font-weight:700;margin-top:5px;line-height:1.25;position:relative;z-index:1">'
-        +(fullDays.length?(fullDays.length+' วันที่กองเรือเต็ม'):'')+(fullDays.length&&fixNow.length?' · ':'')
-        +(fixNow.length?(fixNow.length+' ลำติดซ่อม'):'')+'</div></div>'
-        +'<div style="font-size:10px;opacity:.95;position:relative;z-index:1">'
-        +(fullDays.length?(e(fullDays.slice(0,3).map(function(x){return x.slice(8)+' '+MON[m];}).join(' · '))+' ไม่เหลือลำ'):'')
-        +(fullDays.length&&fixNow.length?' · ':'')+(fixNow.length?e(fixNow.map(function(b){return b.name;}).join(' · ')):'')+'</div>'
-        +'<div style="position:absolute;bottom:-14px;right:-14px;width:60px;height:60px;background:rgba(255,255,255,.16);border-radius:50%"></div></div>')
-      : ('<div class="bo-tile" style="background:#DDF0E5"><div><div class="bo-tile-lbl" style="color:#0F6E56">&#10003; ALL CLEAR</div>'
-        +'<div style="font-size:14px;font-weight:700;margin-top:5px;line-height:1.3;color:#0F6E56">มีลำว่างทุกวัน</div></div>'
-        +'<div style="font-size:9px;color:#0F6E56;opacity:.75;font-weight:500">ทั้งเดือนนี้ยังรับเหมาเพิ่มได้</div></div>'))
+  var TODAY=fcToday_(), boats=fcBoats();
+  var load=fcLoadMap([TODAY]), memo={};
+  var nRun=0,nFree=0,nOff=0;
+  boats.forEach(function(b){ var c=fcCell(b,TODAY,load,memo);
+    if(!fcPierOn(c.pier)) return;
+    if(c.k==='run')nRun++; else if(c.k==='free')nFree++; else nOff++; });
+  var MO=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+  var WDL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var isMo=(_fc.mode==='mo');
+  var adt=new Date((isMo?(_fc.ym+'-01'):_fc.from)+'T00:00:00');
+  var rangeLbl=isMo?(MO[adt.getMonth()]+' '+adt.getFullYear()):(_fc.from+' → +'+(fcNDays()-1));
+  var tdt=new Date(TODAY+'T00:00:00');
+  host.innerHTML=''+FC_CSS
+  +'<div class="fc-top"><div class="fc-tl">'
+    +'<button class="fc-arw" onclick="fcShift(-1)" title="Previous period">&lsaquo;</button>'
+    +'<span class="d">'+tdt.getDate()+'</span>'
+    +'<span><b class="wk">'+WDL[tdt.getDay()]+'</b><span class="w">'+MO[tdt.getMonth()].slice(0,3)+' '+tdt.getFullYear()+'</span></span>'
+    +'<button class="fc-arw" onclick="fcShift(1)" title="Next period">&rsaquo;</button>'
+    +'<button class="fc-tb" onclick="fcToday()">Today</button></div>'
+    +'<span class="fc-brand"><i>LOVE ANDAMAN</i><b>FLEET CALENDAR</b></span>'
+    +'<div class="fc-tr"><span class="fc-chip">Deployed <b>'+nRun+'</b></span>'
+    +'<span class="fc-chip g">Available <b>'+nFree+'</b></span>'
+    +'<span class="fc-chip r">Unavailable <b>'+nOff+'</b></span>'
+    +'<span class="fc-seg">'
+      +'<button class="'+(_fc.mode==='m7'?'on':'')+'" onclick="fcSetMode(\'m7\')">7 days</button>'
+      +'<button class="'+(_fc.mode==='m14'?'on':'')+'" onclick="fcSetMode(\'m14\')">14 days</button>'
+      +'<button class="'+(isMo?'on':'')+'" onclick="fcSetMode(\'mo\')">Month</button>'
+    +'</span></div>'
   +'</div>'
-  +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">'
-    +'<span class="bo-pier-pill '+(_fc.pier==='all'?'on':'')+'" onclick="fcSetPier(\'all\')">All piers</span>'
-    +FC_PIER.map(function(p){ return '<span class="bo-pier-pill '+(_fc.pier===p[0]?'on':'')+'" onclick="fcSetPier(\''+p[0]+'\')">'+p[2]+'</span>'; }).join('')
-    +'<span style="margin-left:auto;font-size:10px;color:#6B7785">อ่านอย่างเดียว · แก้เรือที่ <b style="color:#1A2A33">Boat Operation</b></span>'
+  +'<div class="fc-piers">'
+    +'<span class="fc-pp'+(_fc.pier==='all'?' on':'')+'" onclick="fcSetPier(\'all\')">All piers</span>'
+    +FC_PIER.filter(function(p){ return p[0]!=='other'; }).map(function(p){
+        return '<span class="fc-pp'+(_fc.pier===p[0]?' on':'')+'" onclick="fcSetPier(\''+p[0]+'\')">'
+          +'<i style="background:'+p[3]+'"></i>'+p[2]+'</span>'; }).join('')
   +'</div>'
-  +'<div class="bo-card" style="padding:14px 14px 10px">'
-    +'<div class="fc-grid" style="margin-bottom:10px">'
-    +['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(w){ return '<div class="fc-wh">'+w+'</div>'; }).join('')
-    +cells
-    +'</div>'
-    +'<div class="bo-legend" style="margin-top:12px;padding-top:10px;border-top:1px solid #E5EDE7">'
-      +'<span class="bo-legend-chip"><span class="box" style="background:#185FA5;border-radius:50%;width:9px;height:9px"></span>จุดสี = เส้นทาง</span>'
-      +'<span class="bo-legend-chip"><span class="fc-b" style="background:#E6F4ED;color:#0F6E56;font-size:9px">ชิปทึบ</span>เรือที่ออกงาน · สีประจำลำ</span>'
-      +'<span class="bo-legend-chip"><span class="fc-b out" style="border-color:#0F6E56;color:#0F6E56;font-size:9px">ชิปโปร่ง</span>เรือที่พร้อมที่ท่า</span>'
-      +'<span class="bo-legend-chip"><span class="box" style="background:#FFE2DC"></span>พร้อม 0 · กองเรือเต็ม</span>'
-      +'<span class="bo-legend-chip"><span class="box" style="background:#F0E8FB"></span>&#9875; Charter</span>'
-      +'<span class="bo-legend-chip">&#128295; ซ่อม · ไม่นับเป็นลำพร้อม</span>'
-      +'<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">'+allBoats.length+' boats in fleet</span>'
-    +'</div>'
+  +'<div class="fc-card">'
+    +'<div class="fc-ch2">'+(isMo?'Month view':('Matrix · '+fcNDays()+' days'))
+      +'<span class="pill">'+rangeLbl+'</span>'
+      +'<span class="lg">'
+        +(isMo?'<span>each cell: pier → program → boat</span>'
+              :'<span><i style="background:#fff;box-shadow:inset 0 0 0 1px #E0DDD6"></i>available</span>'
+               +'<span><i style="background:repeating-linear-gradient(135deg,#F4F2EE,#F4F2EE 3px,#EDEAE4 3px,#EDEAE4 6px)"></i>unavailable</span>'
+               +'<span><i style="background:#6B289A"></i>charter</span>')
+        +'<span>numbers = pax on board / capacity</span>'
+        +'<span class="ro">read-only · assign boats in <b>Boat Operation</b></span>'
+      +'</span></div>'
+    +(isMo?fcMonthHtml():fcMatrixHtml())
   +'</div>';
 }
 
@@ -5952,7 +7521,7 @@ function bop2CopyWeekToNext(){
     if(bop2GuardPast(tgt, true)) return;   // §bopPastLock · ปลายทางเป็นวันเก่า (ย้อนสัปดาห์อยู่) ข้ามไป
     if(!TRIPS[tgt]) TRIPS[tgt] = {};
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
-      if(op.charterBookingId) { skipped++; return; }
+      if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[tgt][bid]) { skipped++; return; }
       TRIPS[tgt][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
@@ -5973,7 +7542,7 @@ function bop2CopyDayToWeek(){
     if(bop2GuardPast(d, true)) { skipped++; return; }   // §bopPastLock
     if(!TRIPS[d]) TRIPS[d] = {};
     Object.entries(TRIPS[src]).forEach(([bid, op]) => {
-      if(op.charterBookingId) { skipped++; return; }
+      if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[d][bid]) { skipped++; return; }
       TRIPS[d][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
@@ -6053,7 +7622,9 @@ function bop2AssignRangeForm(){
   //   เปิดหน้าอยู่เดือน ต.ค. แต่กล่องเด้งมาเป็นวันนี้ ต้องแก้มือทุกครั้ง
   //   และรายชื่อเรือด้านล่างก็จะโหลดผิดวันตามไปด้วย
   const today = (typeof _bop2 !== 'undefined' && _bop2.selDate) || TODAY_STR;
-  const activeRoutes = ROUTES.filter(r => r.active !== false);
+  /* §calMarine · Boat Operation เป็นหน้าฝั่งเรือ · §routeKind ระบุชื่อหน้านี้ไว้ตรง ๆ
+     ว่าทัวร์บกห้ามเข้า แต่ฟอร์มนี้ไม่เคยกรอง · วัด 2026-09-14 ได้ 57 เส้นทาง (บก 43) */
+  const activeRoutes = ROUTES.filter(r => r.active !== false && !laIsLandRoute(r));
   const initialRoute = activeRoutes[0];
   const initialPier = initialRoute?.pier || 'tublamu';
   const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+bop2PierAbbr(r.pier)+'</option>').join('');   // §bopBulkDate
@@ -6106,7 +7677,7 @@ function bop2ApplyAssignRange(){
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
     if(!TRIPS[ds]) TRIPS[ds] = {};
-    if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; continue; }
+    if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
@@ -6131,7 +7702,7 @@ function bop2SaveTemplateForm(){
     if(!TRIPS[d]) return;
     const dow = new Date(d).getDay();
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
-      if(op.charterBookingId) return;
+      if(opLocked(op)) return;                                                  /* §bkLock */
       pattern[dow][bid] = { route: op.route, type: op.type || 'normal' };
     });
   });
@@ -6251,7 +7822,7 @@ function bop2ApplyTemplate(){
     const slots = tpl.pattern[dow] || {};
     Object.entries(slots).forEach(([bid, op]) => {
       if(!TRIPS[ds]) TRIPS[ds] = {};
-      if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; return; }
+      if(opLocked(TRIPS[ds][bid])){ chartered++; return; }                      /* §bkLock */
       if(TRIPS[ds][bid] && !overwrite){ skipped++; return; }
       TRIPS[ds][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       applied++;
@@ -6316,7 +7887,7 @@ function bop2ApplySwap(){
   if(a === b){ alert('Select two different boats'); return; }
   if(bop2GuardPast(date)) return;   // §bopPastLock
   if(!TRIPS[date] || !TRIPS[date][a] || !TRIPS[date][b]){ alert('One or both boats are no longer assigned on this day'); return; }
-  if(TRIPS[date][a].charterBookingId || TRIPS[date][b].charterBookingId){ alert('Cannot swap a charter slot'); return; }
+  if(opLocked(TRIPS[date][a]) || opLocked(TRIPS[date][b])){ alert('Cannot swap a boat that is chartered or held whole'); return; }   /* §bkLock */
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
   TRIPS[date][a].route = TRIPS[date][b].route; TRIPS[date][a].type = TRIPS[date][b].type;
   TRIPS[date][b].route = tmpR; TRIPS[date][b].type = tmpT;
@@ -6340,7 +7911,9 @@ function bop2UpdateWeekdayBoatOpts(){
 function bop2WeekdayPatternForm(){
   const today = (typeof _bop2 !== 'undefined' && _bop2.selDate) || TODAY_STR;   // §bopBulkDate
   const next = fmt(addDays(new Date(today), 30));
-  const activeRoutes = ROUTES.filter(r => r.active !== false);
+  /* §calMarine · Boat Operation เป็นหน้าฝั่งเรือ · §routeKind ระบุชื่อหน้านี้ไว้ตรง ๆ
+     ว่าทัวร์บกห้ามเข้า แต่ฟอร์มนี้ไม่เคยกรอง · วัด 2026-09-14 ได้ 57 เส้นทาง (บก 43) */
+  const activeRoutes = ROUTES.filter(r => r.active !== false && !laIsLandRoute(r));
   const initialPier = activeRoutes[0]?.pier || 'tublamu';
   const boatOpts = bop2AssignBoatOptsFor(initialPier, today);
   const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+bop2PierAbbr(r.pier)+'</option>').join('');   // §bopBulkDate
@@ -6404,7 +7977,7 @@ function bop2ApplyWeekdayPattern(){
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
     if(!TRIPS[ds]) TRIPS[ds] = {};
-    if(TRIPS[ds][bid] && TRIPS[ds][bid].charterBookingId){ chartered++; continue; }
+    if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
@@ -6499,7 +8072,7 @@ function bop2ClearWeek(){
   dates.forEach(d => {
     if(!TRIPS[d]) return;
     Object.keys(TRIPS[d]).forEach(bid => {
-      if(TRIPS[d][bid].charterBookingId) return;
+      if(opLocked(TRIPS[d][bid])) return;                                       /* §bkLock */
       delete TRIPS[d][bid];
       cleared++;
     });
@@ -7785,15 +9358,40 @@ function toggleDayOverride(rid,dateStr){
   }
   save('config');renderSettings();
 }
+/* §closeNoWarn · สถานะของวันนั้น "หลังกดหนึ่งครั้ง" จะเป็นอะไร (2026-09-24)
+   จำลองโดยไม่แตะข้อมูลจริง · ล้าง override ชั่วคราวแล้วคืนทันที
+   ไม่มีฤดูกาลคร่อมเลย = เปิด · ตามกติกาเดิมของ getDayStatus ที่คืน null แล้วให้ผู้เรียกถือว่าเปิด */
+function _dayStatusAfterToggle(r, dateStr){
+  const had = r.overrides && Object.prototype.hasOwnProperty.call(r.overrides, dateStr);
+  if(had){
+    /* ล้าง override → กลับไปดูฤดูกาลข้างใต้ · ส่ง "สำเนาที่ตัดวันนั้นออก" ให้ getDayStatus คิด
+       จะได้ไม่ต้องเขียนกติกาหาฤดูกาลซ้ำอีกชุด (อ่านที่เดียว ใช้สองที่)
+       ⚠ ห้ามลบแล้วใส่คืนของจริง · ลำดับคีย์ในออบเจกต์จะสลับ แล้ว JSON ที่เซฟลงเซิร์ฟเวอร์
+         จะเปลี่ยนทุกครั้งที่แค่กดดู ทั้งที่เนื้อหาเท่าเดิม */
+    const c = {}; for(const k in r) c[k] = r[k];
+    c.overrides = {};
+    for(const k in (r.overrides || {})) if(k !== dateStr) c.overrides[k] = r.overrides[k];
+    const after = getDayStatus(c, dateStr);
+    return after ? after.type : 'open';
+  }
+  const cur = getDayStatus(r, dateStr);
+  return cur ? (cur.type === 'open' ? 'closed' : 'open') : 'open';
+}
 // Guarded · checks booking impact when toggling a day to CLOSED
 function toggleDayOverrideGuarded(rid, dateStr){
   if(!progEditMode) return; // must be in edit mode
   const r = ROUTES.find(x => x.id === rid); if(!r) return;
-  // Determine what the new status would be
+  /* §closeNoWarn · เคยข้ามคำเตือนทั้งดุ้นเมื่อวันนั้นมี override อยู่แล้ว
+     เหตุผลเดิมคือ "ล้าง override = ย้อนกลับ ย้อนกลับไม่เซอร์ไพรส์ใคร" ซึ่งไม่จริง
+     วันที่อยู่นอกทุกฤดูกาล (ช่องว่างระหว่างฤดู) ถูกเปิดขายด้วย override
+     การล้าง override จึงเท่ากับ "ปิดวันนั้น" เต็ม ๆ และเงียบสนิท
+     ของจริงที่เจอ · Whale Shark Phi Phi Maiton Sunset ช่วง 1–14 ต.ค. 2026
+     อยู่ในช่องว่างระหว่างฤดู 30 ก.ย. กับ 15 ต.ค. · เปิดไว้ด้วย override ทั้ง 14 วัน
+     มี booking ยืนยันแล้ว 8 ใบ 23 คน · กดปิดได้โดยไม่มีอะไรเตือนสักคำ
+     ตอนนี้จึงเทียบสถานะ "ก่อน → หลัง" ของการกด ไม่ได้ดูว่าการเปลี่ยนมาจากทางไหน */
   const status = getDayStatus(r, dateStr);
-  const willBeClosed = r.overrides && r.overrides[dateStr]
-    ? false // clearing override · will revert · skip warning (revert can't surprise)
-    : (status ? (status.type === 'open') : false); // toggling from open → closed
+  const before = status ? status.type : 'open';
+  const willBeClosed = (before === 'open') && (_dayStatusAfterToggle(r, dateStr) === 'closed');
   if(!willBeClosed){
     toggleDayOverride(rid, dateStr);
     return;
@@ -7980,7 +9578,7 @@ function renderSettings(){
   /* §otherPier · เดิม if(groups[r.pier]) — ท่าที่ไม่มีในลิสต์ถูกทิ้งเงียบ ๆ
      เคยเกิดกับระนองมาแล้วรอบหนึ่ง และกับ other อีกรอบ · คราวนี้สร้าถังให้ตามค่าที่เจอจริง
      ค่าแปลกที่ไม่รู้จักก็ยังโผล่ แก้ได้ ดีกว่าหายไปโดยไม่บอก */
-  const PIER_ORDER=['tublamu','panwa','ranong',LAND_PIER];
+  const PIER_ORDER=LA_PIER_ORDER;   /* §pierOne · ตารางเดียวกับช่องเลือกทริป */
   const groups={}; PIER_ORDER.forEach(p=>{ groups[p]=[]; });
   /* §routeKind · โปรแกรมบกเข้าถัง land ตาม kind ไม่ใช่ตาม pier · pier ของมันว่างแล้ว */
   ROUTES.forEach(r=>{ const _p = laIsLandRoute(r) ? LAND_PIER : (r.pier||LAND_PIER); (groups[_p]=groups[_p]||[]).push(r); });

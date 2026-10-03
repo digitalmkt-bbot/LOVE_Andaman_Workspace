@@ -2,15 +2,12 @@ function bookingV2SetBookingField(key, val){
   if(!_bkV2.newBooking) return;
   _bkV2.newBooking[key] = val;
   // When agent changes · auto-fill rate type ref from agent
-  if(key === 'agentId'){
-    const a = val ? sbGetAgent(val) : null;
-    _bkV2.newBooking.rateTypeRef = a?.rateTypeId || null;
-    // House accounts: walk-in keeps manual option · staff → free/manual; real agent → lock Rate type
-    const isWk = a && (a.code==='WALKIN' || a.id==='a_walkin');
-    const isSt = a && (a.code==='STAFF'  || a.id==='a_staff');
-    if(isSt){ _bkV2.newBooking.soldBy=''; const insp=_bkV2.newBooking.staffPurpose==='inspection'; _bkV2.newBooking.priceMode = insp?'manual':'rate'; if(insp) _bkV2.newBooking.manualTotal=0; }   // welfare → Staff Welfare rate (FOC free, over-quota priced) · inspection → ฿0
-    else if(isWk){ _bkV2.newBooking.staffId=''; }
-    else { _bkV2.newBooking.priceMode='rate'; _bkV2.newBooking.soldBy=''; _bkV2.newBooking.staffId=''; }
+  if(key === 'agentId'){ bookingV2ApplyAgentRules(val ? sbGetAgent(val) : null); }
+  /* §internal · ใบของบริษัทเองเป็น Manual อย่างเดียว · ไม่มีเรทให้อ้าง
+     ถ้าหลุดไปเป็น rate ยอดจะกลายเป็น ฿0 แบบเงียบ ๆ (ชุดราคาสังเคราะห์ไม่มีตารางราคา) */
+  if(key === 'priceMode' && val !== 'manual'){
+    var _ca = _bkV2.newBooking.agentId ? sbGetAgent(_bkV2.newBooking.agentId) : null;
+    if(_ca && (_ca.code==='COMPANY' || _ca.id==='a_company')) _bkV2.newBooking.priceMode='manual';
   }
   // Staff trip purpose toggle · inspection = always ฿0 (manual 0) · welfare = Staff Welfare rate
   if(key === 'staffPurpose'){

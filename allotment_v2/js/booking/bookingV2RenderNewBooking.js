@@ -36,7 +36,8 @@ function bookingV2RenderNewBooking(){
   const agent = d.agentId ? sbGetAgent(d.agentId) : null;
   const isWalkin = !!(agent && (agent.code==='WALKIN' || agent.id==='a_walkin'));   // direct/walk-in house account
   const isStaff  = !!(agent && (agent.code==='STAFF'  || agent.id==='a_staff'));    // staff welfare/inspection house account
-  const isHouse  = isWalkin || isStaff;   // house accounts → Sold-by/Staff picker + manual price option
+  const isCompany= !!(agent && (agent.code==='COMPANY'|| agent.id==='a_company')); // company-own house account
+  const isHouse  = isWalkin || isStaff || isCompany;   // house accounts → Sold-by/Staff picker + manual price option
   let rtPreview = '';
   if(rt){
     /* §bkRouteSrc · เลขตรงนี้เคยนับจาก Rate Type อย่างเดียว ทั้งที่ตัวที่คุม
@@ -51,6 +52,7 @@ function bookingV2RenderNewBooking(){
       <div class="bkv2-nb-rt-preview">
         <div><strong>${escapeHTML(rt.code)} &middot; ${escapeHTML(rt.name)}</strong></div>
         <div class="meta">${_n} route${_n===1?'':'s'} bookable${_rtN&&_rtN!==_n?(' &middot; '+_rtN+' in rate type'):''} &middot; valid ${validFrom} &rarr; ${validTo}</div>
+        ${bookingV2RtKeepNote()}
         ${_short?`<div class="meta" style="color:#8A5A0B;margin-top:3px">&#9888; \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49\u0e22\u0e36\u0e14\u0e15\u0e32\u0e21\u0e42\u0e1b\u0e23\u0e41\u0e01\u0e23\u0e21\u0e43\u0e19\u0e2a\u0e31\u0e0d\u0e0d\u0e32\u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e40\u0e22\u0e19\u0e15\u0e4c &middot; \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e43\u0e19 Rate Type \u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e22\u0e31\u0e07\u0e08\u0e2d\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 Agent \u0e14\u0e49\u0e27\u0e22</div>`:''}
       </div>
     `;
@@ -58,6 +60,10 @@ function bookingV2RenderNewBooking(){
     // §b2cEdit · ใบ B2C ไม่ต้องมี Rate Type · ราคามาจากต้นทางโดยตรง · การไปผูกเรทให้เอเจนต์ B2C
     //   จะทำให้ระบบคิดราคาใหม่ทับยอดที่ลูกค้าจ่ายจริง ซึ่งผิดกว่าเดิม
     rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#EEF5FF;border-color:#C3D8F2;color:#185FA5"><strong>ราคามาจาก B2C โดยตรง</strong><div class="meta">&#3647;${Number(d.manualTotal||0).toLocaleString()} &middot; ไม่ต้องผูก Rate Type &middot; ยอดเงิน ทริป และจำนวนคน แก้ที่ B2C เท่านั้น &middot; ที่แก้ได้ในหน้านี้คือจุดรับ-ส่ง ผู้ติดต่อ และข้อมูลปฏิบัติการ</div></div>`;
+  } else if(isCompany){
+    /* §internal · ใบของบริษัทไม่ต้องมี Rate Type · กล่องเตือนสีส้มเดิมสั่งให้ไปผูกเรท
+       ซึ่งเป็นทางที่ผิด · ผูกแล้วกลับจำกัดเส้นทางแทนที่จะช่วย */
+    rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#FDF6E6;border-color:#E3D2A8;color:#7A5A12"><strong>ใบของบริษัท · ตั้งราคาเอง</strong><div class="meta">ไม่ต้องผูก Rate Type · คีย์ได้ทุกเส้นทางและทุกโซนรับ · ยอดมาจากช่อง Total ของใบ · ถ้ามีเรทผูกไว้ในหน้า Agent List ก็ไม่มีผล</div></div>`;
   } else if(d.agentId){
     rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#FFF6E5;border-color:#EAD9B0;color:#633806"><strong>&#9888; No Rate Type bound</strong><div class="meta">This agent has no Rate Type assigned · go to Agent List to bind one before proceeding</div></div>`;
   }
@@ -67,7 +73,13 @@ function bookingV2RenderNewBooking(){
   const createdStr = createdAt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
   // §b2cEdit · ใบ B2C ผ่านได้โดยไม่ต้องมีเรทและไม่ต้องมียอด (ใบ ฿0 ก็ยังต้องแก้จุดรับได้)
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินมียอดเป็น 0 โดยตั้งใจ · เงื่อนไข manualTotal>0
+     จะกันมันออก จึงใส่ข้อยกเว้นแบบเดียวกับที่ B2C มีอยู่แล้ว
+     ⚠ ตัวแปรนี้ถูกคำนวณแล้วไม่มีใครเรียกใช้ (ค้างอยู่ในไฟล์) · ใส่ไว้เพื่อให้ถูกตั้งแต่ตอนนี้
+       ถ้าวันหนึ่งมีคนเอาไปต่อกับปุ่ม ใบ ฿0 จะได้ไม่ถูกบล็อก · ไม่ใช่การแก้อาการที่เกิดจริง
+       (เทสข้อ 12 พิสูจน์แล้วว่าใบ ฿0 บันทึกได้จริง ไม่เคยมีอาการนี้) */
   const canContinue = d.agentId && d.leadPax && (d.rateTypeRef || (d.priceMode==='manual' && Number(d.manualTotal)>0)
+    || (typeof laIsInternalBk==='function' && laIsInternalBk(d) && d.priceMode==='manual')
     || (typeof bookingV2IsB2CBk==='function' && bookingV2IsB2CBk(d)));
 
   return `
@@ -119,6 +131,20 @@ function bookingV2RenderNewBooking(){
             ${sp==='welfare'?`<div style="font-size:10px;margin-top:3px;color:#8a8a82;line-height:1.4">ใช้สิทธิ์ฟรี → ใส่เป็น <b>FOC</b> (หักโควต้า) · เกินโควต้า/จ่ายเงิน → ใส่เป็น <b>ผู้ใหญ่/เด็ก</b> คิดตามเรท <b>Staff Welfare</b></div>`:''}
             ${sp==='inspection'?`<div style="font-size:10.5px;margin-top:3px;color:#6c5ce7">ตรวจงาน · นับที่นั่งใน manifest · ไม่หักโควต้า</div>`:''}
           </div>`; })() : ''}
+          ${isCompany ? (function(){ const cp=d.companyPurpose||'';
+            /* §internal · ต้องเลือกเหตุผลทุกครั้ง · ค่าเริ่มต้นเป็นว่าง ไม่ใช่ค่าใดค่าหนึ่ง
+               เพราะถ้าตั้งค่าเริ่มต้นไว้ คนจะกดผ่านแล้วได้เหตุผลผิดทั้งระบบ
+               (บทเรียนจากทริปพนักงาน 6 ใบในระบบที่ purpose ว่างทั้งหมด) */
+            return `<div class="bkv2-nb-field">
+            <label class="bkv2-nb-label">เหตุผล <em style="font-weight:500;color:#A32D2D;font-style:normal">\u00b7 ต้องเลือก</em></label>
+            <select class="bkv2-nb-input" onchange="bookingV2SetBookingField('companyPurpose', this.value)">
+              <option value="" ${cp?'':'selected'}>\u2014 เลือกเหตุผล \u2014</option>
+              <option value="company_guest" ${cp==='company_guest'?'selected':''}>แขกบริษัท \u00b7 Company guest</option>
+              <option value="pr_foc" ${cp==='pr_foc'?'selected':''}>PR / Influencer</option>
+              <option value="company_special" ${cp==='company_special'?'selected':''}>ราคาพิเศษ \u00b7 Special price</option>
+            </select>
+            <div style="font-size:10px;margin-top:3px;color:#8a8a82;line-height:1.4">ฟรี = ใส่ Total 0 \u00b7 เก็บเงิน = ใส่ยอดจริง<br>ยอด 0 จะไม่ถูกนับเป็นยอดขาย แต่ที่นั่งกับต้นทุนยังนับ</div>
+          </div>`; })() : ''}
           <div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Submitted by</label>
             <input class="bkv2-nb-input" type="text" placeholder="name / initials" value="${escapeHTML(d.createdBy||'')}" oninput="bookingV2SetBookingField('createdBy', this.value)">
@@ -131,10 +157,11 @@ function bookingV2RenderNewBooking(){
         ${rtPreview}
         ${isHouse ? `<div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="bkv2-nb-label" style="margin:0">Pricing</span>
+          ${isCompany ? `<span style="display:inline-flex;align-items:center;gap:7px;background:#FDF6E6;border:1px solid #E8D8A8;border-radius:9px;padding:5px 12px;font-size:11px;font-weight:600;color:#8A5B00" title="ใบของบริษัทเองตั้งราคาเองทุกใบ · ฟรีใส่ 0 · เก็บเงินใส่ยอดจริง">Manual \u00b7 \u0e15\u0e31\u0e49\u0e07\u0e23\u0e32\u0e04\u0e32\u0e40\u0e2d\u0e07</span>` : `
           <div style="display:inline-flex;gap:3px;background:var(--sand-mid);border-radius:9px;padding:3px">
             <button type="button" onclick="bookingV2SetBookingField('priceMode','rate')" style="border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;${d.priceMode!=='manual'?'background:var(--bk-navy);color:#fff':'background:transparent;color:var(--ink-soft)'}">Rate type</button>
             <button type="button" onclick="bookingV2SetBookingField('priceMode','manual')" style="border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;${d.priceMode==='manual'?'background:var(--bk-navy);color:#fff':'background:transparent;color:var(--ink-soft)'}">Manual · walk-in</button>
-          </div>
+          </div>`}
           ${d.priceMode==='manual' ? `<div style="display:flex;align-items:center;gap:6px"><span class="bkv2-nb-label" style="margin:0">Total &#3647;</span><input class="bkv2-nb-input" type="number" min="0" style="width:130px" value="${escapeHTML(String(d.manualTotal||0))}" onchange="bookingV2SetBookingField('manualTotal', this.value)"></div>` : ''}
         </div>` : ''}
       </div>

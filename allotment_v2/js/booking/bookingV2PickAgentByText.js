@@ -5,7 +5,7 @@ function bookingV2PickAgentByText(txt){
   const trimmed = String(txt||'').trim();
   if(!trimmed){
     d.agentId = null;
-    d.rateTypeRef = null;
+    bookingV2ApplyAgentRules(null);   /* §agentOne */
     if(prevAgentId) bookingV2ResetAgentScopedData();
     bookingV2Render(); return;
   }
@@ -22,7 +22,7 @@ function bookingV2PickAgentByText(txt){
   if(a){
     const isNewAgent = prevAgentId !== a.id;
     d.agentId = a.id;
-    d.rateTypeRef = a.rateTypeId || null;
+    bookingV2ApplyAgentRules(a);      /* §agentOne · เดิมที่นี่ตั้งแค่ rateTypeRef · priceMode จึงค้าง */
     if(isNewAgent) bookingV2ResetAgentScopedData();
     bookingV2Render();
   }

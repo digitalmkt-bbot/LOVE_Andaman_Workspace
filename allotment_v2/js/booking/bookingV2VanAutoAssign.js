@@ -15,5 +15,5 @@ function bookingV2VanAutoAssign(date, routeId){
     if(pick){ bkOpsFor(b, bkOpsDate(b,date)).vanId=pick.id; load[pick.id]+=pax; assigned++; }   /* §per-trip ops · อ่าน per-day อยู่แล้ว แต่เขียนลง b.ops (วันแรก) → auto-assign วันที่ 2 ไม่เคยติด */
   });
   acctPersistBookings();
-  if(_bkV2&&_bkV2.vanAssignMode&&typeof bookingV2Render==='function') bookingV2Render();
+  if(_bkV2&&_bkV2.vanAssignMode) bookingV2RenderKeep();
 }

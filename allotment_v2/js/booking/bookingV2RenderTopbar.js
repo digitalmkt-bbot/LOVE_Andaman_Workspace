@@ -10,7 +10,7 @@ function bookingV2RenderTopbar(){
         <button class="bkv2-utab ${tab==='bytrip'?'on':''}" onclick="bookingV2SwitchTab('bytrip')">By trip &middot; date</button>
         <button class="bkv2-utab ${tab==='all'?'on':''}" onclick="bookingV2SwitchTab('all')">All bookings</button>
         <button class="bkv2-utab ${tab==='locks'?'on':''}" onclick="bookingV2SwitchTab('locks')">Seat Locks</button>
-        ${(function(){ const n=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length; return `<button class="bkv2-utab ${tab==='approvals'?'on':''}" onclick="bookingV2SwitchTab('approvals')" style="${n>0?'color:#A32D2D':''}">รออนุมัติ${n>0?` <span style="background:#A32D2D;color:#fff;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${n}</span>`:''}</button>`; })()}
+        ${(function(){ const n=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length; return `<button class="bkv2-utab ${tab==='approvals'?'on':''}" onclick="bookingV2SwitchTab('approvals')" style="${n>0?'color:#A32D2D':''}">${laT('รออนุมัติ')}${n>0?` <span style="background:#A32D2D;color:#fff;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${n}</span>`:''}</button>`; })()}
         <button class="bkv2-utab ${tab==='cancel'?'on':''}" onclick="bookingV2SwitchTab('cancel')">Cancellations</button>
       </div>
       ${tab==='cal' ? `

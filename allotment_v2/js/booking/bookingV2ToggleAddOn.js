@@ -4,7 +4,10 @@ function bookingV2ToggleAddOn(type){
   const idx = d.addOns.findIndex(a => a.type === type);
   if(idx >= 0){ d.addOns.splice(idx, 1); }
   else {
-    d.addOns.push({ type, qty: 1 });
+    const _ent = { type, qty: 1 };
+    /* §ltJoinQty · ตั้งต้นเท่าที่จองไว้ · ติ๊กแล้วได้ยอดเดิมเป๊ะ ไม่มีใครต้องมากรอกซ้ำ */
+    if(type === 'longtail-join'){ const _m = bookingV2LtJoinMax(); _ent.jAd = _m.A; _ent.jChd = _m.C; }
+    d.addOns.push(_ent);
     // Private Van replaces any bundled shared transfer → put the matching trip's seat on No-Transfer
     // (a PK/KL seat price already includes a transfer = double charge otherwise).
     if(type.indexOf('transfer-') === 0){

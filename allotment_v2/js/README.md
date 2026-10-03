@@ -33,6 +33,7 @@ longer boots on this branch).
 
 | # | file | what's in it | pre-split html lines |
 |---|---|---|---|
+| 0 | `10-embed.js` | `?embed=1` iframe mode — **must stay first**, see below | — (added 2026-09-19) |
 | 1 | `01-auth-sync.js` | login gate, cloud sync, `LA_NAV` permission table | 5–719 |
 | 2 | `02-sidebar.js` | glass sidebar init | 3729–3747 |
 | 3 | — | `xlsx.full.min.js` from cdnjs (still inline in the HTML) | 4129 |
@@ -42,8 +43,14 @@ longer boots on this branch).
 | 7 | `06-engine-assign.js` | engine assign / unassign / swap | 36291–38157 |
 | 8 | `07-charter.js` | charter modal | 39185–39227 |
 | 9 | `08-app.js` | everything else — sales, accounting, vans, ops (booking v2 moved out, see below) | 39246–86154 |
-| 10 | `booking/*.js` (532 files) | every `bookingV2*` function (renamed from `bkV2*` 2026-09-16), one file each — see below | n/a, added 2026-09-16 |
+| 10 | `booking/*.js` (620 files) | every `bookingV2*` function (renamed from `bkV2*` 2026-09-16), one file each — see below | n/a, added 2026-09-16 |
 | — | `09-action-board.js` | action board | (after `08-app.js`) |
+
+The numeric prefixes are the split order, **not** the load order — `10-embed.js` is deliberately the
+first tag in `<head>`, ahead of `01-auth-sync.js`. It has to be: it sets `window.__laEmbed` before
+`01-auth-sync.js` schedules `_laRestoreView` (which would otherwise click the last-used view over the
+one the embed URL asked for), and it paints the chrome-hiding CSS before the first frame. Without
+`?embed=1` in the URL the file returns on its first line and changes nothing.
 
 **On `integration/operation-backend` only (2026-09-16):** `08-app.js`'s ~531 `bkV2*` functions plus
 one in `04-data-core.js` were renamed to `bookingV2*` and extracted verbatim (AST-based split, not

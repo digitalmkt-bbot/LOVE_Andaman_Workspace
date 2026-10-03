@@ -22,6 +22,6 @@ function bookingV2BoatAssignSelected(date, routeId, boatId){
     else skipped.push(b.leadPax||b.customerName||id);
   });
   acctPersistBookings();
-  if(skipped.length) alert('Assigned '+done+' booking(s) to '+((bo&&bo.name)||boatId)+'.\nSkipped '+skipped.length+' — would exceed cap '+cap+' (+'+TOL+'): '+skipped.join(', '));
+  if(skipped.length) alert('Assigned '+done+' booking(s) to '+((bo&&bo.name)||boatId)+'.\nSkipped '+skipped.length+' - would exceed cap '+cap+' (+'+TOL+'): '+skipped.join(', ')+'\n\nEmergency only: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).');
   if(typeof bookingV2Render==='function') bookingV2Render();
 }

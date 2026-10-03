@@ -4,6 +4,7 @@ function bookingV2RenderFooterHints(viewMode){
     return `
       <div class="bkv2-foot-hints">
         <span class="bkv2-legend"><span class="sw focdot"></span>FOC pending</span>
+        <span class="bkv2-legend bkv2-lg-orphan"><span class="sw"></span>&#9888; ปิดแล้วแต่ยังมี booking ค้าง</span>
         <span class="gp" style="color:var(--ink-soft);font-style:italic">Chips show pax per route &middot; click cell for AD&middot;CHD&middot;INF&middot;FOC + PK&middot;KL&middot;NT breakdown</span>
         <span style="margin-left:auto" class="gp"><span class="bkv2-kbd">M</span>switch to matrix</span>
       </div>

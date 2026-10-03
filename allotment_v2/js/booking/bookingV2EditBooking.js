@@ -21,9 +21,15 @@ function bookingV2EditBooking(bookingId){
     clone.manualTotal = Number(clone.total || (clone.priceBreakdown && clone.priceBreakdown.total) || 0);
     clone._b2cSnap = bookingV2B2CSnap(clone);
   }
+  bookingV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
   _bkV2.detailId = null;
+  /* §rtKeep · ยังไม่ได้แก้อะไรเลย ยอดก็ไม่เท่าที่บันทึกไว้แล้ว = ราคาในชุดถูกแก้หลังใบนี้บันทึก */
+  if(clone._rtKeep){ try{
+    const _q0 = bookingV2CalcQuote().grandTotal;
+    if(Math.round(_q0) !== Math.round(clone._rtKeep.total)) clone._rtKeep.drift = { was:clone._rtKeep.total, now:_q0 };
+  }catch(_){} }
   bookingV2SetEditLock(bk.id);   // stamp + sync so others see "being edited"
   bookingV2Render();
   try { document.querySelector('main')?.scrollTo({top:0,behavior:'instant'}); } catch(e){}

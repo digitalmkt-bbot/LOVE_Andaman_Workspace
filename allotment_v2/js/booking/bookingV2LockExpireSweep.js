@@ -4,6 +4,10 @@ function bookingV2LockExpireSweep(){
   const ymNow = today.slice(0,7);
   let changed = false;
   SB_SEAT_LOCKS.forEach(l => {
+    /* §bkLock · ห้ามปิดใบชนิดเรือเอง · ปิดแล้วใบหายจากรายการ แต่ช่องบนกระดานเรือยัง
+       เป็น charter ค้างอยู่ = เรือหายไปทั้งลำโดยไม่มีเจ้าของให้ไปตาม
+       เลยกำหนดแล้วจึงยังเป็น active ต่อ แล้วไปโผล่ที่การ์ด "เรือค้างเลยกำหนด" แทน */
+    if(bookingV2IsBoatLock(l)) return;
     if(bookingV2LockSpansDays(l)){
       const to = bookingV2LockRange(l).to;
       // heal: a month lock wrongly expired by the OLD expiry-based sweep while still in range → reactivate (recovers long-term holds)

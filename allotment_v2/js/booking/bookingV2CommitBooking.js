@@ -65,6 +65,10 @@ function bookingV2CommitBooking(status){
     if(_isStaff){
       if(!d.staffId){ alert('Please choose a Staff member for this booking'); return; }
     }
+    /* §internal · ไม่เลือกเหตุผล = บันทึกไม่ได้ · นี่คือสิ่งเดียวที่ทำให้รายงานไม่ว่างเปล่า */
+    if(_ag && (_ag.code==='COMPANY' || _ag.id==='a_company') && !d.companyPurpose){
+      alert('Please choose a reason for this company booking (guest / PR / special price)'); return;
+    }
     if(_isStaff && (d.staffPurpose||'welfare')==='welfare'){
       const exclId = _bkV2.editingId || null;
       const usedExcl = (year)=>{ let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(b.id===exclId||b.staffId!==d.staffId) return; if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ if((t.date||'').slice(0,4)===String(year)) n += bookingV2PaxTot(t.pax||{},'foc'); }); }); return n; };
@@ -373,12 +377,22 @@ function bookingV2CommitBooking(status){
       lockDrawSel: (t.bookingMode==='charter') ? {} : { ...(t.lockDrawSel||{}) },   // staff-picked draw sources {lockId:qty} (Option A sub-groups)
       ops: t.ops || undefined,   // §b2cEdit/§ops · การจัดเรือ-รถ + ผลเช็คอินของ "วันนั้น" · เดิมสร้างทริปใหม่โดยไม่คัดมา = แก้ booking ทีเดียวหายทุกวัน
       lockDraws: [],   // filled after save · [{lockId, qty}]
+      /* §b2bPromo · ประทับใบโปรที่ใช้จริง ณ วินาทีที่กดบันทึก
+         อ่านจากชุดราคาที่เพิ่งใช้คิดเงินบรรทัดล่าง จึงตรงกันแน่นอน ไม่ได้ resolve ซ้ำ */
+      promoId: (function(){ try{ var _r = bookingV2GetRTForTrip(t); return (_r && _r.__promoId) || null; }catch(_){ return null; } })(),
+      /* §rtSeason · ประทับชุดราคาที่ใช้คิดเงินจริงของทริปนี้ · แบบเดียวกับ promoId ข้างบน
+         ใบเดียวข้ามฤดูได้ ชุดราคาจึงเป็นของรายทริป ไม่ใช่ของทั้งใบ (bk.rateTypeRef เก็บได้ตัวเดียว)
+         ใครอยากย้อนดูว่าทริปนี้คิดจากชุดไหน อ่านตรงนี้ ไม่ต้อง resolve ใหม่ */
+      rtRef: (function(){ try{ var _r = bookingV2GetRTForTrip(t); return (_r && _r.id) || null; }catch(_){ return null; } })(),
       subtotal: bookingV2TripSubtotal(t).total
     })),
     addOns: d.addOns.map(a => {
       const info = bookingV2AddOnInfo(a.type);
       const q = a.qty||1;
-      return { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: info.total*q, qty: q, note: (a.note||'').trim() };
+      const _o = { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: info.total*q, qty: q, note: (a.note||'').trim() };
+      /* §ltJoinQty · เก็บจำนวนคนที่ลงจอยจริง · ฝั่งปฏิบัติการอ่านตัวนี้ ไม่ใช่เดาจากหัวทั้งลำ */
+      if(a.type==='longtail-join'){ _o.jAd = (info.joinAd!=null)?info.joinAd:null; _o.jChd = (info.joinChd!=null)?info.joinChd:null; }
+      return _o;
     }),
     adjustments: Array.isArray(d.adjustments)
       ? d.adjustments.filter(a => (Number(a.value)||0) > 0)
@@ -410,7 +424,12 @@ function bookingV2CommitBooking(status){
     soldBy: d.soldBy || null,   // salesperson credit override (walk-in/direct sale)
     priceMode: d.priceMode || 'rate',
     manualTotal: d.priceMode==='manual' ? (Math.max(0,Number(d.manualTotal)||0)) : null,
-    purpose: (function(){ const _a=d.agentId?sbGetAgent(d.agentId):null; if(_a&&(_a.code==='STAFF'||_a.id==='a_staff')) return (d.staffPurpose==='inspection')?'staff_inspection':'staff_welfare'; return 'sale'; })(),
+    purpose: (function(){ const _a=d.agentId?sbGetAgent(d.agentId):null;
+      if(_a&&(_a.code==='STAFF'||_a.id==='a_staff')) return (d.staffPurpose==='inspection')?'staff_inspection':'staff_welfare';
+      /* §internal · เหตุผลของใบบริษัท · ฟอร์มบังคับเลือกไว้แล้ว ตกมาถึงนี่ต้องมีค่า */
+      if(_a&&(_a.code==='COMPANY'||_a.id==='a_company')) return d.companyPurpose || 'company_guest';
+      return 'sale'; })(),
+    companyPurpose: d.companyPurpose || null,
     staffId: d.staffId || null,   // staff member for welfare/inspection bookings
     staffPurpose: d.staffPurpose || null,
     note: d.note || ''
@@ -502,6 +521,12 @@ function bookingV2CommitBooking(status){
       newBk.trips = JSON.parse(JSON.stringify(editing.trips || []));
       newBk.passengers = JSON.parse(JSON.stringify(editing.passengers || []));
       newBk.addOns = JSON.parse(JSON.stringify(editing.addOns || []));
+      // §b2cPay (2026-08-12, restored 2026-10-01) · paymentSnapshot is B2C-owned like the money above.
+      //   newBk.paymentSnapshot is rebuilt from the agent contract; the a_b2c house agent is not
+      //   'invoice', so any edit collapsed it to {method:'prepaid', source:'contract'} → Pay column "PFM",
+      //   paid/paidStatus dropped. 03cb6aa (voucher logo) deleted this line in a bad merge on 2026-08-12;
+      //   LOV-7485231 read as PFM after a notes edit on 2026-10-01. Not recorded in b2cOverride on purpose.
+      if(editing.paymentSnapshot) newBk.paymentSnapshot = JSON.parse(JSON.stringify(editing.paymentSnapshot));
       var _prevOv = Array.isArray(editing.b2cOverride) ? editing.b2cOverride : [];
       var _newOv  = bookingV2B2CDiff(d._b2cSnap, newBk);
       newBk.b2cOverride = _prevOv.concat(_newOv).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
@@ -666,6 +691,12 @@ function bookingV2CommitBooking(status){
      เลือกเรือ + ช่วงวัน = เรือถูกหยิบไปใช้ทั้งช่วง · จองให้ครบทุกวัน
      วันไหนมีใบเหมาอื่นจองไว้แล้ว ไม่แย่ง · นับไว้เตือนตอนบันทึก */
   let tripsModified = false, spanBlocked = [];
+  /* §bkLock · ใบนี้มาจากการกดปุ่ม "เหมาลำ" บนล็อกเรือทั้งลำ · ปิดล็อกก่อนเขียนช่อง
+     ช่องจะได้เปลี่ยนมือจาก boatLockId → charterBookingId ในจังหวะเดียว
+     ที่นั่งไม่เคยกลับเข้าพูลระหว่างทาง จึงไม่มีช่องให้ใครแทรกเข้ามา */
+  if(d._boatLockId && typeof bookingV2BoatLockOnConvert==='function'){
+    try{ bookingV2BoatLockOnConvert(d._boatLockId, newBk); }catch(e){ console.warn('boat lock convert failed', e); }
+  }
   if(typeof TRIPS !== 'undefined' && status !== 'quote'){
     newBk.trips.forEach(t => {
       if(t.bookingMode !== 'charter' || !t.charterBoatId) return;
@@ -673,6 +704,9 @@ function bookingV2CommitBooking(status){
         if(!TRIPS[ds]) TRIPS[ds] = {};
         const cur = TRIPS[ds][t.charterBoatId];
         if(cur && cur.charterBookingId && cur.charterBookingId !== newBk.id){ spanBlocked.push(ds); return; }
+        /* §bkLock · ลำนี้ถูกเอเยนต์อื่นกันไว้ทั้งลำอยู่ · ใบเหมาของเจ้านี้ห้ามแย่ง
+           (ถ้าเป็นล็อกของใบนี้เอง bookingV2BoatLockOnConvert ถอด boatLockId ออกไปแล้ว) */
+        if(cur && cur.boatLockId){ spanBlocked.push(ds); return; }
         if(!cur) TRIPS[ds][t.charterBoatId] = { route: t.routeId, type: 'charter', booked: 0 };
         TRIPS[ds][t.charterBoatId].type = 'charter';
         TRIPS[ds][t.charterBoatId].charterBookingId = newBk.id;

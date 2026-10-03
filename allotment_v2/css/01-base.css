@@ -86,6 +86,45 @@
 #view-costing .ct-in.hot{color:var(--b600);font-weight:700;background:rgba(255,245,240,.6);border-color:var(--b300)}
 #view-costing select.ct-in.wide{text-align:left}
 
+/* §boatRent · การ์ดเรือ & ค่าเช่า · อยู่ระหว่างพารามิเตอร์กับการ์ดตัวเลข
+   เพราะมันเปลี่ยนทั้งความจุและต้นทุนคงที่ ต้องเห็นก่อนจะไปอ่านจุดคุ้มทุน */
+#view-costing .ct-rent{margin:14px 0}
+#view-costing .ct-rent.on{border-color:#f4d7b0}
+#view-costing .ct-rentbody{display:flex;flex-direction:column;gap:12px;padding:14px 18px}
+#view-costing .ct-rrow{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px}
+/* §boatRent · ช่องในแถวต้องไม่ถูกบีบ · ปล่อยให้หดเมื่อไหร่ ป้ายกับช่องกรอกจะทับกันทันที
+   (เจอตอนถ่ายหน้าจอรอบแรก: "ค่าเช่า/งวด" ทับ "วันในงวด") */
+#view-costing .ct-rrow>.ct-f{flex:0 0 auto;display:block}
+#view-costing .ct-rrow>.ct-f>span{white-space:nowrap}
+#view-costing .ct-rrow>.ct-f.grow{flex:1 1 220px;min-width:190px;max-width:340px}
+#view-costing .ct-rsec{display:flex;flex-direction:column;gap:9px;padding:11px 13px;
+  background:rgba(247,242,234,.55);border:1px solid var(--sd200);border-radius:14px}
+#view-costing .ct-rsech{font-size:10px;font-weight:700;letter-spacing:.04em;color:rgba(74,62,54,.5)}
+#view-costing .ct-rchk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--es700);cursor:pointer;white-space:nowrap}
+#view-costing .ct-rchk.big{font-size:12.5px}
+#view-costing .ct-rchk input{accent-color:var(--b500);cursor:pointer;margin:0}
+#view-costing .ct-rcalc{font-size:11.5px;color:var(--es700);background:#fff;border:1px dashed var(--sd400);
+  border-radius:10px;padding:7px 11px;font-variant-numeric:tabular-nums}
+#view-costing .ct-rcalc.warn{color:#8a5b00;background:#fef6e7;border-color:#f0d5a0}
+#view-costing .ct-rbe{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 10px;font-size:12px;
+  border-radius:14px;padding:10px 13px;border:1px solid}
+#view-costing .ct-rbe.ok{background:rgba(230,247,240,.75);border-color:var(--mt100);color:var(--es900)}
+#view-costing .ct-rbe.bad{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
+#view-costing .ct-rbe-lb{font-size:10px;font-weight:700;letter-spacing:.04em;color:rgba(74,62,54,.55);
+  text-transform:uppercase}
+/* §rentPlan · ตารางวางแผนรายเดือน · แถวที่ทำไม่ได้จริงต้องซีดทันที
+   ไม่งั้นคนอ่านจะไปหยุดที่ "ต้องวิ่ง 42 วัน" โดยไม่ทันเห็นว่างวดมีแค่ 28 วัน */
+#view-costing .ct-rscroll{overflow-x:auto;border-radius:10px;border:1px solid var(--sd200);background:#fff}
+#view-costing .ct-rtbl{width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px;
+  font-variant-numeric:tabular-nums}
+#view-costing .ct-rtbl th{padding:6px 10px;text-align:left;font-size:10px;font-weight:700;
+  color:rgba(74,62,54,.5);background:rgba(247,242,234,.7);border-bottom:1px solid var(--sd200);line-height:1.35}
+#view-costing .ct-rtbl td{padding:6px 10px;border-bottom:1px solid rgba(247,242,234,.9);color:var(--es900)}
+#view-costing .ct-rtbl .ct-r{text-align:right}
+#view-costing .ct-rtbl tr:last-child td{border-bottom:none}
+#view-costing .ct-rtbl tr.ct-rbad td{color:rgba(74,62,54,.38)}
+#view-costing .ct-rtbl tr.ct-rnow td{background:var(--b50);font-weight:600}
+
 /* การ์ดตัวเลข */
 #view-costing .ct-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
 #view-costing .ct-k{border-radius:22px;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
@@ -403,6 +442,85 @@
 #view-costing .ct-del{text-align:center;padding-top:12px!important}
 
 /* แท็บ 3 · เมทริกซ์ */
+/* ══ §ctCellNav · เดินตารางด้วยลูกศร · กากบาทบอกว่ากำลังอยู่ช่องไหน ══════════
+   สีที่ใช้คือส้มแบรนด์ชุดเดิมของหน้านี้ (--b*) ไม่ได้เพิ่มสีใหม่เข้าระบบ
+   ความเข้มไล่ลงมาสามชั้น: ช่องที่โฟกัส > แถว/คอลัมน์เดียวกัน > ที่เหลือ */
+#view-costing .ct-navbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 8px;padding:7px 13px;border:1px solid var(--sd200);border-radius:10px;
+  background:var(--sd50);font-size:12px;color:var(--es700);min-height:38px}
+#view-costing .ct-navref{font-weight:700;color:var(--es900)}
+#view-costing .ct-navval{font-family:'DM Mono',ui-monospace,monospace;font-size:12.5px;
+  font-weight:500;color:var(--b600);background:var(--b50);border-radius:6px;padding:2px 9px}
+#view-costing .ct-navsp{flex:1}
+#view-costing .ct-navkeys{display:flex;align-items:center;gap:5px;font-size:11px;color:#8a7a6d}
+#view-costing .ct-navkeys kbd{font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;
+  border:1px solid var(--sd300);border-bottom-width:2px;border-radius:5px;padding:0 5px;
+  background:#fff;color:var(--es700)}
+/* เห็นชัดเป็นอันดับแรกคือ "แถบส้มด้านซ้ายของเซลล์" · เซลล์ตอนกางสูงได้ถึง 476px
+   กรอบรอบเซลล์ทั้งใบจึงอยู่นอกสายตา แต่แถบซ้ายวิ่งยาวตลอดความสูง มองเห็นแน่นอน
+   ของเดิม .ct-in:focus เป็นเงาส้มจาง 12% ซึ่งจมหายไปกลางช่องกรอกหลายสิบช่อง */
+#view-costing .ct-otbl td.ct-cellon{box-shadow:inset 4px 0 0 var(--b500), inset 0 0 0 1px var(--b300);
+  background:var(--b50) !important;position:relative;z-index:1}
+#view-costing .ct-sheet .ct-otbl td.ct-cellon input.ct-in:focus{border-color:var(--b500);
+  box-shadow:0 0 0 3px rgba(255,76,0,.35);background:#fff}
+#view-costing .ct-otbl td.ct-colon,
+#view-costing .ct-otbl td.ct-rowon{background:#fff6f1 !important}
+#view-costing .ct-otbl th.ct-colon{background:var(--b50) !important}
+#view-costing .ct-otbl td.ct-rowon{color:var(--b600);font-weight:700}
+/* คอลัมน์แรกที่ตรึงไว้ต้องทึบเสมอ ไม่งั้นไฮไลต์ทำให้เนื้อหาข้างหลังทะลุ */
+#view-costing .ct-sheet .ct-otbl td.ct-stick.ct-rowon{background:#fff5ef !important}
+
+/* ══ §ctSheet · ตารางเทียบต้นทุนหลายทริป · ใช้งานแบบชีต ═══════════════════════
+   ปัญหาเดิม: ตารางสูง 2,524px บนจอ 900px (เลื่อนเกือบ 3 จอ) และกว้างเกินจอด้วย
+   แต่ไม่มี position:sticky สักบรรทัดในหน้านี้ — คลาสชื่อ .ct-stick มีแต่ชื่อ ตั้งแค่ความกว้าง
+   พอเลื่อนลง หัวคอลัมน์ (ชื่อทริป) หายไปทันที เหลือแต่ตัวเลขที่ไม่รู้ว่าของทริปไหน
+   เลื่อนข้างก็เสียคอลัมน์ชื่อรายการต้นทุนไปอีก
+   แก้: ให้กล่องตารางเป็นตัวเลื่อนเอง (สูงเท่าที่เหลือบนจอ) แล้วตรึงหัวกับคอลัมน์แรก
+        เหมือน freeze panes ในสเปรดชีต
+   ⚠ เฉพาะจอกว้าง · บนมือถือคอลัมน์แรกกว้าง 250px จะกินเกือบทั้งจอ และหัวสูง ~230px
+     จะบังข้อมูลจนไม่เหลืออะไรให้อ่าน (บทเรียนเดียวกับ §mobUnstick) จอแคบจึงเลื่อนปกติ
+   ⚠ ช่องที่ตรึงต้องมีพื้นทึบ ไม่งั้นเนื้อหาที่เลื่อนอยู่ข้างหลังทะลุขึ้นมา
+     ค่าที่ใช้คือสีเดิมผสมกับพื้นขาวแล้ว (rgba(247,242,234,.85) -> #F8F4ED
+     และ rgba(235,227,213,.6) -> #F3EEE6) หน้าตาจึงเหมือนเดิมทุกประการ */
+@media (min-width:821px){
+  #view-costing .ct-sheet{max-height:calc(100dvh - 200px);overflow:auto}
+  #view-costing .ct-sheet .ct-otbl thead th{position:sticky;top:0;z-index:3;background:#F8F4ED}
+  #view-costing .ct-sheet .ct-otbl th.ct-stick{left:0;z-index:5}
+  #view-costing .ct-sheet .ct-otbl td.ct-stick{position:sticky;left:0;z-index:2;background:#fff}
+  #view-costing .ct-sheet .ct-otbl .ct-grow td.ct-stick{background:#F3EEE6}
+  /* เส้นแบ่งของคอลัมน์ที่ตรึง · ใช้เงาแทน border เพราะ border ของ cell ที่ sticky
+     จะเลื่อนหลุดไปกับตาราง ไม่ติดอยู่กับที่ */
+  #view-costing .ct-sheet .ct-otbl th.ct-stick,
+  #view-costing .ct-sheet .ct-otbl td.ct-stick{box-shadow:1px 0 0 var(--sd200)}
+  /* หัวคอลัมน์เตี้ยลงหน่อย · ของเดิม 233px จาก 700px = กินจอไปเกือบหนึ่งในสาม
+     พอตรึงไว้ ความสูงของหัวคือพื้นที่ที่หายไปตลอดเวลา ไม่ใช่แค่ตอนเปิดหน้า
+     ที่บีบได้โดยไม่เสียข้อมูล: ช่องคนทั้งหมด/คนไทย เดิมตกบรรทัดเป็นสองแถว (69px)
+     บังคับให้อยู่แถวเดียว + ลดระยะห่างบรรทัดของบรรทัดรอง */
+  #view-costing .ct-sheet .ct-otbl th{padding:9px 12px}
+  #view-costing .ct-sheet .ct-paxbar{flex-wrap:nowrap;gap:4px;margin-top:6px}
+  #view-costing .ct-sheet .ct-paxf{padding:2px 3px 2px 6px;gap:3px}
+  #view-costing .ct-sheet .ct-paxf span{font-size:9px}
+  #view-costing .ct-sheet .ct-in.px{width:38px;height:20px}
+  #view-costing .ct-sheet .ct-psub{line-height:1.25;margin-top:1px}
+  #view-costing .ct-sheet .ct-pbe{margin-top:2px}
+}
+/* แถบสีประจำคอลัมน์ · ไล่สายตาจากหัวลงมาได้ว่ากำลังอ่านทริปไหน
+   ใช้ inset shadow ไม่ใช่ border-top เพราะ border-collapse ทำให้เส้นบนหาย */
+/* §ctTripBg · หัวคอลัมน์มีพื้นสีของตัวเอง · แยกทริปได้ตั้งแต่ชายตามอง
+   ไม่ลงสีไปถึงตัวตาราง เพราะกากบาทบอกตำแหน่ง (§ctCellNav) ต้องเด่นกว่าเสมอ */
+#view-costing .ct-pcol{box-shadow:inset 0 3px 0 var(--pc,transparent);
+  background:var(--pcbg,rgba(247,242,234,.85)) !important}
+#view-costing .ct-sheet .ct-otbl thead th.ct-pcol{background:var(--pcbg,#F8F4ED) !important}
+#view-costing .ct-sheet .ct-otbl thead th.ct-pcol.ct-colon{background:var(--b50) !important}
+#view-costing .ct-pdot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--pc,#999);margin-right:6px;vertical-align:middle;flex:none}
+/* §ctHdAlign · หัวคอลัมน์จัดชิดล่าง · ทุกคอลัมน์บรรทัดตรงกันหมดไม่ว่าชื่อยาวแค่ไหน
+   ชื่อกินพื้นที่ที่เหลือด้านบน · สเปค/คุ้มทุน/ช่องกรอกคน เกาะพื้นล่างเสมอ */
+#view-costing .ct-otbl thead th.ct-pcol{vertical-align:bottom}
+#view-costing .ct-phd{display:flex;flex-direction:column;height:100%;min-height:74px}
+#view-costing .ct-pnm{display:flex;align-items:flex-end;justify-content:center;gap:0;
+  flex:1 1 auto;text-align:center}
+#view-costing .ct-pfoot{flex:none}
 #view-costing .ct-otbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:640px}
 #view-costing .ct-otbl th{background:rgba(247,242,234,.85);padding:13px 14px;text-align:left;border-bottom:1px solid var(--sd200);vertical-align:top}
 #view-costing .ct-otbl th.ct-stick{width:250px;font-size:10.5px;font-weight:600;color:var(--es800);text-transform:uppercase;letter-spacing:.04em}
@@ -417,6 +535,12 @@
 #view-costing .ct-otbl td.ct-stick{border-left:none;font-weight:500}
 #view-costing .ct-grow td{background:rgba(235,227,213,.6)}
 #view-costing .ct-gtd{font-weight:700;color:var(--es900)}
+/* §ctGrpFold · ชื่อหมวดกดได้ · ลูกศรหมุนบอกสถานะ */
+#view-costing td.ct-gtd.ct-stick{cursor:pointer;user-select:none}
+#view-costing .ct-gnm2{display:flex;align-items:center;gap:7px}
+#view-costing td.ct-gtd .ct-chev{font-size:9px;color:rgba(74,62,54,.45);transition:transform .15s ease;display:inline-block;flex:none}
+#view-costing td.ct-gtd.open .ct-chev{transform:rotate(90deg);color:var(--b500)}
+#view-costing td.ct-gtd.ct-stick:hover{color:var(--b600)}
 #view-costing .ct-ltd.dis{opacity:.35}
 #view-costing .ct-otbl tbody tr:not(.ct-grow):hover td{background:rgba(253,251,247,.8)}
 #view-costing .ct-cell{display:grid;grid-template-columns:22px 92px 1fr;align-items:center;gap:8px;max-width:272px;margin:0 auto}
@@ -445,16 +569,52 @@
 #view-costing .ct-lcell{display:flex;align-items:flex-start;gap:9px;max-width:330px;margin:0 auto}
 #view-costing .ct-lbody{flex:1;min-width:0}
 #view-costing .ct-peek{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:rgba(74,62,54,.5);cursor:pointer;min-height:22px;font-variant-numeric:tabular-nums}
-#view-costing .ct-peek b{font-size:12.5px;font-weight:600;color:var(--es900)}
-#view-costing .ct-peek b.ov{color:var(--mt700);font-weight:700}
+/* §ctDim · ค่าที่ยังไม่ได้แก้ = มาจากสูตรกลาง ไม่ต้องดึงสายตา ทำให้ซีด
+   ค่าที่ตั้งเองแล้ว = ของที่คนตัดสินใจใส่ไว้ ต้องเด่น เพราะเป็นสิ่งที่ต้องตรวจก่อนปิดยอด
+   ของเดิมกลับกัน: ค่าสูตรกลางเป็นสีเข้มสุด ค่าที่ตั้งเองเป็นเขียวธรรมดา */
+#view-costing .ct-peek b{font-size:12.5px;font-weight:500;color:rgba(74,62,54,.42)}
+#view-costing .ct-peek b.ov{color:var(--mt700);font-weight:700;background:var(--mt50);
+  border-radius:6px;padding:1px 7px;font-size:13px}
 #view-costing .ct-peek b.mut{color:var(--sd400);font-weight:400}
 #view-costing .ct-peek .n{font-size:9.5px;color:var(--mt700);font-weight:700}
 #view-costing .ct-dot{width:5px;height:5px;border-radius:50%;background:var(--mt500);display:inline-block;flex:0 0 5px}
-#view-costing .ct-flds{display:flex;flex-direction:column;gap:5px;padding:1px 0 3px}
+/* §ctFldGrid · ช่องกรอกตอนกาง · เป็นตาราง ไม่ใช่รายการเรียงลงมา
+   4 ค่าของแต่ละส่วนคือ ผู้ใหญ่/เด็ก คูณ ต่างชาติ/ไทย อยู่แล้ว
+   ชื่อชนิดอยู่ที่หัวแถว/หัวคอลัมน์ครั้งเดียว ไม่ต้องเขียนซ้ำทุกช่อง */
+#view-costing .ct-flds{display:flex;flex-direction:column;gap:7px;padding:1px 0 3px}
+#view-costing .ct-lunit{font-size:10px;color:rgba(74,62,54,.5);margin-top:1px;padding-left:17px;line-height:1.3}
+#view-costing .ct-fpart{display:flex;flex-direction:column;gap:3px}
+#view-costing .ct-pttl{font-size:9.5px;font-weight:700;letter-spacing:.05em;
+  color:rgba(74,62,54,.45);text-transform:uppercase}
+/* §ctEvenCell · ล็อกความสูงแถวในกริดให้เท่ากันทุกเซลล์ ไม่ให้ยืดตามเนื้อหา */
+#view-costing .ct-fg{display:grid;grid-template-columns:auto 1fr 1fr;gap:3px 6px;
+  align-items:center;grid-auto-rows:26px}
+#view-costing .ct-fg .ct-fgh{align-self:end}
+#view-costing .ct-fg:has(.ct-fgr:only-of-type){grid-template-columns:auto 1fr 1fr}
+#view-costing .ct-fgh{font-size:9.5px;font-weight:600;color:rgba(74,62,54,.5);text-align:center}
+#view-costing .ct-fgr{font-size:10px;color:rgba(74,62,54,.6);white-space:nowrap;text-align:right}
+#view-costing .ct-fw{position:relative;display:flex;align-items:center}
+/* §ctColMin · กันชั้นที่สอง · ช่องกรอกห้ามยุบจนเหลือแต่ไอคอน ไม่ว่าคอลัมน์จะแคบแค่ไหน
+   min-width:0 เดิมแปลว่า "ยอมให้หดเท่าไหร่ก็ได้" ซึ่งกริดก็หดให้จริง ๆ จนเหลือ 29px */
+#view-costing .ct-fw .ct-in.fin{width:100%;min-width:54px;text-align:right;padding-right:20px}
+#view-costing .ct-fw .ct-undo{position:absolute;right:4px;opacity:.55}
+#view-costing .ct-fw .ct-undo:hover{opacity:1}
+#view-costing .ct-fnone{font-size:11px;color:rgba(74,62,54,.25);text-align:center}
+#view-costing .ct-fline{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+#view-costing .ct-fi{display:flex;align-items:center;gap:4px}
+#view-costing .ct-fi .ct-fgr{text-align:left}
+#view-costing .ct-fi .ct-fw{width:64px}
+#view-costing .ct-pwarn{font-size:9px;color:#b45309;background:#fef6e7;border-radius:5px;padding:1px 6px}
+#view-costing .ct-pnew{font-size:9px;color:rgba(74,62,54,.5);background:var(--sd100);
+  border:1px dashed var(--sd400);border-radius:5px;padding:1px 6px}
+
 #view-costing .ct-f{display:grid;grid-template-columns:1fr 76px;align-items:center;gap:9px}
 #view-costing .ct-flb{font-size:10.5px;color:rgba(74,62,54,.6);line-height:1.3}
-#view-costing .ct-in.fin{width:76px;font-size:11.5px;padding:2px 7px;text-align:right}
-#view-costing .ct-in.fin.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;color:var(--mt700)}
+#view-costing .ct-in.fin{width:76px;font-size:11.5px;padding:2px 7px;text-align:right;
+  color:rgba(74,62,54,.42);border-color:var(--cr200)}          /* §ctDim · ยังไม่แก้ = ซีด */
+#view-costing .ct-in.fin::placeholder{color:rgba(74,62,54,.32)}
+#view-costing .ct-in.fin.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;
+  color:var(--mt700);opacity:1}                                 /* ตั้งเองแล้ว = เด่น */
 #view-costing .ct-in.fin.unset{border-style:dashed;border-color:var(--sd300)}
 #view-costing .ct-fhint{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:9.5px;color:rgba(74,62,54,.4);margin-top:-3px}
 #view-costing .ct-fhint s{color:var(--sd400);font-variant-numeric:tabular-nums}
@@ -576,7 +736,15 @@ body.ts-printing .view{padding-bottom:0}
 @keyframes laRfPulse{0%{box-shadow:0 0 0 0 rgba(29,158,117,.55)}
   70%{box-shadow:0 0 0 7px rgba(29,158,117,0)}100%{box-shadow:0 0 0 0 rgba(29,158,117,0)}}
 body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
-@media print{#la-userbadge,#la-viewonly,#la-refresh{display:none!important}}
+@media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues{display:none!important}}
+/* §b2cCheck (2026-10-03) · ใบ B2C ที่ต้องเช็ค · อยู่เลนเดียวกับ #la-refresh (คอลัมน์ sidebar ก้นซ้าย = "เรื่องของระบบ")
+   ปิดอยู่กว้างเท่า sidebar ไม่ล้ำเนื้อหา · กดดูแล้วถึงจะขยายออก (คนกดเองแล้ว ทับเนื้อหาได้)
+   ถ้า la-refresh ขึ้นพร้อมกัน ดัน la-refresh ขึ้นไปเหนือป้ายนี้ · ไม่งั้นซ้อนกันที่ 84px พอดี */
+#la-b2c-issues{position:fixed;left:14px;bottom:84px;z-index:99990;width:250px;box-sizing:border-box;
+  background:#FFF8EC;color:#7A4A00;border:1px solid #EAD9B0;border-radius:12px;
+  font:12.5px/1.45 'DM Sans',sans-serif;box-shadow:0 12px 32px rgba(2,10,30,.16)}
+#la-b2c-issues.open{width:min(560px,calc(100vw - 28px))}
+body:has(#la-b2c-issues) #la-refresh{bottom:132px}
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
 .page-hd h1{font-size:20px;font-weight:600;color:var(--ink)}
 .page-hd p{font-size:12px;color:var(--ink-soft);margin-top:2px}
@@ -1630,6 +1798,45 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-agents .sb-price-tbl .prog-pier{font-size:9px;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;font-family:Manrope,-apple-system,system-ui,sans-serif;margin-top:1px;font-weight:500}
 
 /* Recent bookings table */
+/* §agSum · ตัวสรุปแยกเดือน × ทริป เหนือตาราง Recent Bookings */
+#view-agents .agsum{border:1px solid var(--fd-line);border-radius:12px;margin:0 0 14px;background:#fff;overflow:hidden}
+#view-agents .agsum-hd{display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--fd-line-soft);flex-wrap:wrap}
+#view-agents .agsum-hd b{font-size:12.5px;color:var(--fd-ink)}
+#view-agents .agsum-sub{font-size:10.5px;color:var(--fd-ink-soft)}
+#view-agents .agsum-hd .sp{flex:1}
+#view-agents .agsum-md{border:1px solid var(--fd-line);background:#fff;color:var(--fd-ink);border-radius:99px;padding:4px 12px;font:600 11px inherit;font-family:inherit;cursor:pointer}
+#view-agents .agsum-md.on{background:var(--fd-ink);border-color:var(--fd-ink);color:#fff}
+#view-agents .agsum-md:disabled{opacity:.45;cursor:not-allowed}
+#view-agents .agsum-sc{overflow-x:auto}
+#view-agents .agsum-t{border-collapse:collapse;width:100%;font-size:11px}
+#view-agents .agsum-t th{font-size:9.5px;letter-spacing:.04em;font-weight:700;color:var(--fd-ink-soft);
+  background:var(--fd-bg);border-bottom:1px solid var(--fd-line);padding:7px 10px;text-align:right;white-space:nowrap}
+/* §agSum · เอเย่นต์ที่ขายหลายโปรแกรม ตารางจะกว้างจนต้องเลื่อนแนวนอน
+   ช่องเดือนต้องตรึงซ้ายไว้ ไม่งั้นเลื่อนไปแล้วไม่รู้ว่าตัวเลขที่มองอยู่เป็นของเดือนไหน */
+#view-agents .agsum-t th.m,#view-agents .agsum-t td.m{text-align:left;white-space:nowrap;
+  font-family:'DM Mono',monospace;font-size:11.5px;color:var(--fd-ink);font-weight:600;
+  position:sticky;left:0;z-index:2;background:#fff}
+#view-agents .agsum-t thead th.m{background:var(--fd-bg);z-index:3}
+#view-agents .agsum-t tbody tr:hover td.m{background:var(--fd-bg)}
+#view-agents .agsum-t tfoot td.m{background:#0F172A}
+#view-agents .agsum-t td{padding:7px 10px;border-bottom:1px solid var(--fd-line-soft);text-align:right;white-space:nowrap}
+#view-agents .agsum-t td b{display:block;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;
+  color:var(--fd-ink);line-height:1.15;letter-spacing:-.02em}
+#view-agents .agsum-t td i{display:block;font-style:normal;font-family:'DM Mono',monospace;font-size:10px;
+  color:var(--fd-ink-soft);margin-top:1px}
+#view-agents .agsum-t td .z{color:#CBD5E1}
+#view-agents .agsum-t th.sum,#view-agents .agsum-t td.sum{background:var(--fd-bg);border-left:2px solid var(--fd-line)}
+#view-agents .agsum-t th.dead,#view-agents .agsum-t td.dead{border-left:2px solid var(--fd-line)}
+#view-agents .agsum-t td.dead b{color:#A32D2D}
+#view-agents .agsum-t td.dead i{color:#C98A8A}
+#view-agents .agsum-t tbody tr:hover td{background:var(--fd-bg)}
+#view-agents .agsum-t tfoot td{background:#0F172A;color:#fff;border-bottom:0;padding:8px 10px}
+#view-agents .agsum-t tfoot td b{color:#fff}
+#view-agents .agsum-t tfoot td i{color:#94A3B8}
+#view-agents .agsum-t tfoot td.m{color:#fff}
+#view-agents .agsum-t tfoot td.sum{background:#1E293B}
+#view-agents .agsum-t tfoot td.dead b{color:#FCA5A5}
+#view-agents .agsum-ft{font-size:10.5px;color:var(--fd-ink-soft);padding:8px 13px;line-height:1.6}
 #view-agents .bk-recent-tbl{font-size:11px;border-collapse:collapse;width:100%}
 #view-agents .bk-recent-tbl th{font-size:9px;letter-spacing:.05em;font-weight:600;color:var(--fd-ink-soft);background:var(--fd-bg);border-bottom:1px solid var(--fd-line-soft);padding:8px 11px;text-transform:uppercase}
 #view-agents .bk-recent-tbl td{padding:9px 11px;border-bottom:1px solid var(--fd-line-soft);color:var(--fd-ink)}
@@ -1652,6 +1859,22 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking *{box-sizing:border-box}
 /* Shell */
 #view-booking .bkv2{background:var(--white);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-top:0;box-shadow:var(--shadow)}
+/* §btTop3 (2026-09-15) · แท็บที่เหลือของ Booking · ขอบบนให้ตรงกับ sidebar เหมือน By trip
+   By trip ดันขึ้นมาตั้งแต่ §btTop/§btTop2 แต่สไตล์ก้อนนั้นอยู่ในผลลัพธ์ของ By trip เท่านั้น
+   อีก 5 แท็บ (Calendar · All bookings · Seat Locks · รออนุมัติ · Cancellations)
+   จึงยังเริ่มที่ 22 ตาม padding ของ .main = ต่ำกว่า sidebar 16px และกระโดดเวลาสลับแท็บ
+   วัดจริงที่ 1512x950: sidebar 6 · By trip 6 · อีก 5 แท็บ 22
+   ⚠ ต้องอยู่ "หลัง" #view-booking .bkv2{margin-top:0} บรรทัดบนนี้
+     specificity เท่ากัน (1,1,0) ตัวที่มาทีหลังชนะ · วางไว้ต้นไฟล์แล้ว margin-top ไม่ติด
+     (วัดเจอ: padding-top ติดที่ 6 แต่ margin ไม่ติด แถบแท็บเลยกลายเป็น 28 แทนที่จะเป็น 6)
+     -22 ดันกล่องขึ้นไปที่ 0 · +6 คือ padding ที่ทำให้แถบแท็บที่ตาเห็นลงที่ 6 พอดี
+     (กล่องพื้นโปร่งจาก 02-skins.css:46 · ที่ตาเทียบคือแถบแท็บข้างใน ไม่ใช่ตัวกล่อง)
+   ไม่แตะ margin-bottom · By trip บีบเหลือ 4px เพราะมีของตรึงต่อท้าย แท็บอื่นยังใช้ 12 ตามเดิม
+   ⚠ จอกว้างเท่านั้น · มือถือ .main มี padding-top:calc(30px + safe-area) เผื่อแถบบนที่ลอยอยู่
+     ดันขึ้นตรงนี้จะมุดเข้าไปใต้แถบนั้น (02-skins.css:672) */
+@media (min-width:821px){
+  #view-booking .bkv2-topcard{margin-top:-22px;padding-top:6px}
+}
 /* Topbar (tabs + view toggle + nav + actions) */
 #view-booking .bkv2-topbar{padding:11px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);background:var(--white);flex-wrap:wrap}
 #view-booking .bkv2-tabs{display:inline-flex;background:var(--sand-mid);border-radius:var(--r-sm);padding:2px;gap:1px}
@@ -1759,6 +1982,12 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-cal-chip.foc{background:#fff6e5}
 #view-booking .bkv2-cal-chip.empty{background:transparent;border-left-style:dashed;border-left-width:2px}
 #view-booking .bkv2-cal-chip.empty .bkv2-cal-chip-name{font-weight:500;opacity:.7}
+/* §bkCalOrphan · ปิดวันนั้นแล้วแต่ยังมี booking ค้าง · ต้องสะดุดตากว่าชิปปกติทุกตัว */
+#view-booking .bkv2-cal-chip.orphan{background:#FDECEA;border-left-width:3px}
+#view-booking .bkv2-cal-chip.orphan .bkv2-cal-chip-name{color:#8C3A0B;font-weight:800}
+#view-booking .bkv2-cal-chip.orphan .bkv2-cal-chip-pax{color:#8C3A0B}
+#view-booking .bkv2-lg-orphan{color:#8C3A0B;font-weight:600}
+#view-booking .bkv2-lg-orphan .sw{background:#FDECEA;border:1px solid #E8B4A0}
 #view-booking .bkv2-cal-more{font-size:9px;color:var(--ink-soft);font-style:italic;margin-top:3px;letter-spacing:.02em;padding-left:5px}
 /* Matrix view (Tab 1 Matrix) */
 #view-booking .bkv2-mx{padding:12px 12px 4px;background:var(--white);overflow-x:auto}
@@ -1947,6 +2176,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-nb-dd-mkt{font-size:9px;font-weight:700;color:var(--bk-navy);background:var(--bk-navy-50);padding:1px 7px;border-radius:8px;letter-spacing:.04em;text-transform:uppercase;flex-shrink:0}
 #view-booking .bkv2-nb-dd-code{font-family:'DM Mono',monospace;font-size:11px;color:var(--ink-soft);flex-shrink:0}
 #view-booking .bkv2-nb-dd-name{flex:1;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* §pierHd · หัวคั่นท่าเรือในช่องเลือกทริป · ชื่อท่า แล้วขีดยาวหนึ่งขีด */
+#view-booking .bkv2-nb-dd-hd{display:flex;align-items:center;gap:9px;padding:9px 10px 5px;pointer-events:none;user-select:none}
+#view-booking .bkv2-nb-dd-hd:first-child{padding-top:4px}
+#view-booking .bkv2-nb-dd-hd .lb{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);white-space:nowrap}
+#view-booking .bkv2-nb-dd-hd .ln{flex:1;height:1px;background:var(--border)}
 #view-booking .bkv2-nb-dd-empty{padding:14px 10px;font-size:11px;color:var(--ink-soft);text-align:center;font-style:italic}
 /* Custom calendar widget · click input → popup grid · closed dates grayed out */
 #view-booking .bkv2-cal-wrap{position:relative;width:100%}
@@ -2703,3 +2937,413 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bto-veh{display:inline-block;background:#F3EAFB;color:#5B289A;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600}
 #view-booking .bto-sreq{font-size:10px;color:#6b7280;margin-top:2px;line-height:1.3}
 #view-booking .bto-hid{padding:5px 13px;font-size:10px;color:#8a8f98;font-style:italic;background:#FCFCFD;border-top:1px dashed #EFEAF5}
+
+/* ══ §agSheet · แท็บ Information ของ Agent · โหมดตาราง ════════════════════════
+   ของเดิมเป็นการ์ดมุมมนซ้อนกันเป็นชั้น ๆ ทุกอย่างมีพื้นหลังและขอบของตัวเอง
+   อ่านทีละใบได้ แต่ไล่สายตาข้ามบรรทัดไม่ได้ · และกินความสูงมาก
+
+   ข้อมูลหน้านี้เป็นตารางโดยธรรมชาติอยู่แล้ว — โปรแกรม × ช่วงจอง × ช่วงเดินทาง
+   จึงทำให้เป็นตารางจริง ๆ · แถวเตี้ย เส้นคั่นบาง คอลัมน์ตรงกัน ตัวเลขเรียงหลัก
+
+   แก้ที่ CSS ชั้นเดียว ไม่แตะ HTML และไม่แตะตรรกะเลย
+   กฎมือถือใน 02-skins.css ใช้ !important อยู่แล้ว จึงยังชนะบล็อกนี้ตามเดิม
+   ไม่ชอบเมื่อไหร่ลบทั้งบล็อกนี้ทิ้ง หน้าก็กลับไปเป็นการ์ดเหมือนเดิมเป๊ะ
+   ═══════════════════════════════════════════════════════════════════════════ */
+#view-agents .agi-sect{margin-bottom:18px}
+#view-agents .agi-sect-hd{margin-bottom:7px;padding-bottom:6px}
+#view-agents .agi-sect-ttl{font-size:12px}
+#view-agents .agi-sect-ttl::before{height:12px;width:3px}
+#view-agents .agi-sect-desc{font-size:10.5px;margin-top:1px}
+
+/* ── คนดูแล · บรรทัดเดียว ไม่ใช่การ์ด ── */
+#view-agents .agi-sales-card{background:transparent;border:1px solid var(--fd-line);
+  border-radius:8px;padding:7px 11px;gap:10px}
+#view-agents .agi-sales-av{width:26px;height:26px;font-size:9.5px;border-radius:6px}
+#view-agents .agi-sales-info{flex-direction:row;align-items:baseline;gap:9px;flex-wrap:wrap}
+#view-agents .agi-sales-lbl{font-size:9px;flex:none}
+#view-agents .agi-sales-name{font-size:12.5px}
+#view-agents .agi-sales-meta{font-size:10.5px}
+#view-agents .agi-icon-btn{width:26px;height:26px;border-radius:6px}
+
+/* ── แถบสรุป · แบนราบ ไม่ใช่กล่อง ── */
+#view-agents .agi-prog-summary{background:transparent;border-top:1px solid var(--fd-line-soft);
+  border-bottom:1px solid var(--fd-line-soft);border-radius:0;padding:7px 2px;margin-bottom:0;gap:14px}
+#view-agents .agi-prog-sum-item{flex-direction:row;align-items:baseline;gap:7px}
+#view-agents .agi-prog-sum-lbl{font-size:8.5px;flex:none}
+#view-agents .agi-prog-sum-val{font-size:11.5px;font-weight:600}
+#view-agents .agi-prog-sum-val.mono{font-size:11.5px}
+
+/* ── หัวตาราง · แบบชีต ── */
+#view-agents .agi-prog-header{background:var(--fd-bg);border-bottom:1px solid var(--fd-line);
+  padding:5px 12px;font-size:8.5px;gap:12px;margin-top:8px}
+
+/* ── แถว · เตี้ย ติดกัน คั่นด้วยเส้นบาง ── */
+#view-agents .agi-prog-list{gap:0}
+#view-agents .agi-prog-row{border:none;border-bottom:1px solid var(--fd-line-soft);border-radius:0;
+  padding:6px 12px;gap:12px;transition:background .1s}
+#view-agents .agi-prog-row:hover{background:var(--fd-coral-veryfaint);border-color:var(--fd-line-soft)}
+#view-agents .agi-prog-dot{width:8px;height:8px;border-radius:2px}
+/* ชื่อโปรแกรมกับท่าเรืออยู่บรรทัดเดียวกัน · สองบรรทัดทำให้แถวสูงเป็นเท่าตัวโดยไม่ได้ข้อมูลเพิ่ม */
+#view-agents .agi-prog-name-wrap{flex-direction:row;align-items:baseline;gap:8px}
+#view-agents .agi-prog-name{font-size:12px;font-weight:600}
+#view-agents .agi-prog-pier{font-size:8.5px;flex:none;white-space:nowrap}
+/* คำว่า Booking / Travel ซ้ำทุกแถว ทั้งที่หัวคอลัมน์บอกไปแล้ว · ซ่อนคำ เก็บชิป ↳RT / orphan ไว้
+   (ชิปมี font-size ของตัวเองแบบ inline จึงไม่โดน font-size:0 ของแม่) */
+#view-agents .agi-period-col{flex-direction:row-reverse;justify-content:flex-end;
+  align-items:baseline;gap:6px}
+#view-agents .agi-period-lbl{font-size:0;gap:0}
+#view-agents .agi-period-lbl::before{display:none}
+#view-agents .agi-period-val{font-size:11.5px;font-weight:500;font-family:'DM Mono',ui-monospace,monospace}
+#view-agents .agi-prog-actions{gap:3px}
+#view-agents .agi-prog-act-btn{width:22px;height:22px;border-radius:5px}
+#view-agents .agi-prog-act-btn svg{width:10px;height:10px}
+#view-agents .agi-prog-add{border:none;border-bottom:1px dashed var(--fd-line);border-radius:0;
+  padding:7px 12px;font-size:11px;justify-content:flex-start;margin-top:0}
+#view-agents .agi-prog-add:hover{background:var(--fd-coral-veryfaint)}
+
+/* ── หมายเหตุ · บรรทัดเดียว ไม่ต้องมีกรอบ ── */
+#view-agents .agi-note{background:transparent;border:none;border-radius:0;padding:6px 2px 0;
+  font-size:10.5px;margin-top:4px;color:var(--fd-ink-soft)}
+#view-agents .agi-note svg{width:11px;height:11px}
+
+/* ── ช่องข้อมูล · ป้ายบน ค่าล่าง คั่นด้วยเส้น ไม่ใช่กล่องสีมุมมน ── */
+#view-agents .agi-grid{gap:0 18px}
+#view-agents .agi-info-card{background:transparent;border-radius:0;
+  border-bottom:1px solid var(--fd-line-soft);padding:6px 2px;gap:1px}
+#view-agents .agi-info-card.coral{background:transparent}
+#view-agents .agi-info-lbl{font-size:8.5px;margin-bottom:0}
+#view-agents .agi-info-val{font-size:12.5px;font-weight:600;line-height:1.3}
+/* §agSheet · แถบสรุปเป็น flex แถวเดียวที่ไม่เคยยุบ · กฎมือถือใน 02-skins.css คุมแต่ grid ไม่ถึงตัวนี้
+   พอจับป้ายกับค่ามาอยู่บรรทัดเดียวกัน แต่ละช่องกว้างขึ้น แถบเลยดันจอแคบจนล้น (วัดได้ 390px ล้น 88px)
+   ให้มันขึ้นบรรทัดใหม่ได้ · จอแคบตัดเส้นคั่นทิ้งแล้วเรียงลงเป็นแถว ๆ */
+#view-agents .agi-prog-summary{flex-wrap:wrap}
+@media (max-width:820px){
+  #view-agents .agi-prog-summary{gap:3px 12px;padding:7px 2px}
+  #view-agents .agi-prog-sum-divider{display:none}
+  #view-agents .agi-prog-sum-item{flex:1 1 100%}
+}
+
+/* ══ §agHd · แถบหัวหน้า Agent List + แผงของเอเย่นต์รายคน ═══════════════════════
+   แถบหัวยกมาจากหน้า Dashboard (.dv-hd) ทั้งชุด — สีเดียวกัน ทรงเดียวกัน ที่เดียวกัน
+   ต่างกันแค่ของที่อยู่ซ้ายสุด: Dashboard เป็นวันที่ หน้านี้เป็นจำนวนเอเย่นต์
+
+   ทำไมต้องเป็นแถบเดียวกัน · คนทำงานสลับสองหน้านี้ทั้งวัน ถ้าหัวคนละแบบ
+   ต้องมองหาปุ่มใหม่ทุกครั้งที่สลับ · เหมือนกันแล้วมือจำที่ได้เอง
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* ตรึงไว้บนสุดเหมือน .dv-hd ของ Dashboard · เลื่อนอ่านข้อมูลยาว ๆ แล้วแถบยังอยู่
+   sidebar เป็น fixed อยู่แล้ว · แถบนี้ sticky จึงอยู่คู่กันตลอด ไม่หายไปทีละอัน
+   top:-1px กันเส้นขาวบาง ๆ ที่โผล่ระหว่างขอบบนกับแถบตอนเลื่อน (sub-pixel) */
+#view-agents .ag-hd{position:sticky;top:-1px;z-index:30;padding:6px 96px 9px 8px;border-radius:14px;margin-bottom:11px;
+  background:linear-gradient(160deg, rgba(22,38,92,.96), rgba(12,24,62,.94));
+  box-shadow:0 8px 26px rgba(2,10,30,.34), inset 0 1px 0 rgba(255,255,255,.18)}
+#view-agents .ag-hd-top{position:relative;display:flex;align-items:center;gap:13px}
+/* เลขใหญ่ mono · ตรึงความกว้างขั้นต่ำเหมือน .dv-dnum เพื่อไม่ให้ของข้าง ๆ ขยับตามจำนวนหลัก */
+#view-agents .ag-hd-n{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;color:#fff;
+  font-family:'DM Mono',ui-monospace,monospace;display:inline-block;min-width:52px;text-align:center}
+#view-agents .ag-hd-g{display:inline-block;min-width:108px}
+#view-agents .ag-hd-g b{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}
+#view-agents .ag-hd-g i{display:block;font-style:normal;font-size:9px;font-weight:800;letter-spacing:.13em;
+  color:#A8BAD8;text-transform:uppercase}
+/* ชื่อหน้ากลางแถบ · หน้าตาเหมือน .dv-brand ของ Dashboard แต่ "ไม่" ใช้ absolute
+   ของ Dashboard วางแบบ absolute แล้วต้องมีกฎซ่อนที่ 1600 กันทับชิป — วัดเอาไว้ตายตัว
+   หน้านี้มีปุ่มงานมากกว่านั้น (Card · Table · Excel form · Import · New Agent)
+   ความกว้างฝั่งขวาจึงเปลี่ยนตามสิทธิ์ผู้ใช้ด้วย · ตัวเลขตายตัวเชื่อไม่ได้
+   ให้มันอยู่ในแถวจริง ๆ แล้วดันด้วย margin auto สองข้าง · ชนไม่ได้โดยโครงสร้าง */
+#view-agents .ag-hd-brand{flex:0 0 auto;margin:0 auto;font-size:16px;
+  font-weight:800;letter-spacing:.30em;padding-left:.30em;color:#fff;white-space:nowrap;
+  pointer-events:none}
+/* จอแคบ ตัวเลขสำคัญกว่าของประดับ · ซ่อนชื่อหน้าไปเลย ไม่ต้องแย่งที่กัน
+   (ตัวเลข 1700 มาจากการวัด: ต่ำกว่านี้ปุ่ม + New Agent จะถูกดันลงบรรทัดสอง) */
+@media (max-width:1699px){ #view-agents .ag-hd-brand{display:none} }
+#view-agents .ag-hd-kpi{display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  justify-content:flex-end}
+#view-agents .ag-chip{font-size:11px;font-weight:600;color:#D6E2F5;background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 11px;white-space:nowrap}
+#view-agents .ag-chip b{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;color:#fff;font-size:12.5px}
+#view-agents .ag-chip.warn{background:rgba(232,74,63,.24);border-color:rgba(255,150,140,.42);
+  color:#FFC9C3;cursor:pointer}
+#view-agents .ag-chip.warn b{color:#FFD9D4}
+#view-agents .ag-seg{display:inline-flex;gap:5px}
+#view-agents .ag-seg b{font-size:10.5px;font-weight:700;color:#C9D6EC;background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.26);border-radius:999px;padding:5px 12px;cursor:pointer;white-space:nowrap}
+#view-agents .ag-seg b.on{background:#fff;color:#16265C;border-color:#fff;box-shadow:0 2px 10px rgba(2,10,30,.30)}
+#view-agents .ag-hd-btn{font-family:inherit;font-size:10.5px;font-weight:700;color:#D6E2F5;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:999px;
+  padding:5px 12px;cursor:pointer;white-space:nowrap}
+#view-agents .ag-hd-btn:hover{background:rgba(255,255,255,.18)}
+#view-agents .ag-hd-add{background:#fff;color:#16265C;border:none;border-radius:999px;padding:5px 13px;
+  font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;
+  box-shadow:0 2px 10px rgba(2,10,30,.30)}
+/* ป๊อปแจงรายการ · ทรงเดียวกับ .dv-pop ของ Dashboard · ต้องอ่านออกแม้ลอยทับการ์ดขาว */
+#view-agents .ag-hd-pop{display:none;position:absolute;top:44px;right:0;width:344px;z-index:80;
+  border-radius:15px;padding:11px 13px 12px;text-align:left;
+  background:linear-gradient(160deg, rgba(20,36,88,.98), rgba(12,24,62,.96));
+  border:1px solid rgba(255,255,255,.26);box-shadow:0 16px 40px rgba(2,10,30,.46)}
+#view-agents .ag-hd-pop.on{display:block}
+#view-agents .ag-hd-pop .ph{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  color:#8FA6CC;margin-bottom:7px}
+#view-agents .ag-hd-pr{display:flex;align-items:center;gap:9px;padding:6px 2px;
+  border-top:1px solid rgba(255,255,255,.10)}
+#view-agents .ag-hd-pr .t{flex:1;min-width:0}
+#view-agents .ag-hd-pr .t b{display:block;font-size:11.5px;font-weight:700;color:#EAF0FA}
+#view-agents .ag-hd-pr .t i{display:block;font-style:normal;font-size:9.5px;color:#93A6C8;margin-top:1px}
+#view-agents .ag-hd-pr .n{font-family:'DM Mono',ui-monospace,monospace;font-size:14px;font-weight:800;color:#FFD9D4}
+#view-agents .ag-hd-pr.dim{border-top:1px solid rgba(255,255,255,.22);margin-top:5px;padding-top:8px}
+#view-agents .ag-hd-pr.dim .t b{color:#9FB2D4;font-weight:700}
+
+/* ══ §agStd · แผงของเอเย่นต์ · ชุดมาตรฐาน ════════════════════════════════════
+   ของเดิมใช้สีหกชุดทำงานสามหน้าที่พร้อมกัน — แบ่งกลุ่ม · บอกสถานะ · ตกแต่ง
+   พอสีทำสามอย่าง ตาก็แยกไม่ออกว่าสีไหนกำลังเตือน สีไหนแค่คั่นกลุ่ม
+   ชุดนี้เหลือกติกาเดียว: โครงสร้างทั้งหมดเป็นเทา-ขาว · สีใช้บอกสถานะอย่างเดียว
+
+   อีกสองเรื่องที่ทำให้ของเดิมดูไม่เป็นมาตรฐาน
+     · กล่องเรียงแบบ auto-fit · ความกว้างจึงไม่ลงตัว ขอบกล่องแต่ละแถวไม่ตรงกัน → กริด 12 คอลัมน์
+     · ป้ายกำกับแถวกว้างไม่เท่ากันในแต่ละกล่อง ค่าเลยไม่เรียงเป็นคอลัมน์ → ตรึง 104px ทั้งหน้า
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* โทเคนทั้งชุดผูกไว้กับ #view-agents · ไม่รั่วไปหน้าอื่นที่ยังใช้ชุด --fd-* เดิม */
+#view-agents{--ag-ink:#101828;--ag-ink2:#475467;--ag-ink3:#667085;--ag-ink4:#98A2B3;
+  --ag-line:#E4E7EC;--ag-line2:#F2F4F7;--ag-soft:#F9FAFB;--ag-navy:#16265C;
+  --ag-red:#B42318;--ag-red-bg:#FEF3F2;--ag-red-bd:#FECDCA;
+  --ag-amb:#B54708;--ag-amb-bg:#FFFAEB;--ag-amb-bd:#FEDF89;
+  --ag-blu:#175CD3;--ag-blu-bg:#EFF8FF;--ag-blu-bd:#B2DDFF;
+  --ag-grn:#067647;--ag-grn-bg:#ECFDF3;--ag-grn-bd:#ABEFC6}
+
+/* ── หัวข้อ · ป้ายเรียบ + เส้นคั่น · ไม่มีแถบสี ไม่มีเลขในวงกลม ──
+   หัวข้อไม่ใช่ "ของ" ในหน้า · หน้าที่มันคือคั่นกลุ่มแล้วหลบไป
+   ของเดิมเป็นแถบไล่สีมีเลขกำกับ เด่นกว่าเนื้อที่มันคั่นเสียเอง */
+#view-agents .ag-band{display:flex;align-items:center;gap:12px;margin:18px 0 8px;
+  background:none;border:0;border-radius:0;padding:0}
+#view-agents .ag-band .ttl{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ag-ink2);white-space:nowrap}
+#view-agents .ag-band .rule{flex:1;min-width:10px;height:1px;background:var(--ag-line)}
+#view-agents .ag-band .note{font-size:11.5px;color:var(--ag-ink4);white-space:nowrap}
+#view-agents .ag-band .act{font-family:inherit;font-size:12px;font-weight:600;color:var(--ag-navy);
+  background:none;border:0;border-radius:0;padding:2px 0;cursor:pointer;white-space:nowrap}
+#view-agents .ag-band .act:hover{background:none;text-decoration:underline}
+#view-agents .ag-band.alert .ttl{color:var(--ag-red)}
+
+/* ── รายการที่ต้องจัดการ · ตารางเดียว แถวไม่ย้อมสี ──
+   ย้อมพื้นทั้งแถวทำให้ห้าเรื่องดูด่วนเท่ากันหมด · ความด่วนอยู่ที่คอลัมน์ซ้ายคอลัมน์เดียว
+   เรียงจากด่วนสุดลงมา อ่านเป็นลิสต์งานได้ตั้งแต่บรรทัดแรก */
+#view-agents .ag-als{background:#fff;border:1px solid var(--ag-line);border-radius:8px;overflow:hidden}
+#view-agents .ag-al{display:flex;align-items:center;gap:12px;padding:9px 13px;font-size:13px;
+  border:0;border-top:1px solid var(--ag-line2);color:var(--ag-ink)}
+#view-agents .ag-al:first-child{border-top:0}
+#view-agents .ag-al:hover{background:var(--ag-soft)}
+#view-agents .ag-al .sev{flex:0 0 96px;display:flex;align-items:center;gap:7px;
+  font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+#view-agents .ag-al .sev i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+#view-agents .ag-al.red .sev{color:var(--ag-red)}
+#view-agents .ag-al.amb .sev{color:var(--ag-amb)}
+#view-agents .ag-al.blu .sev{color:var(--ag-blu)}
+#view-agents .ag-al .t{flex:0 0 168px;min-width:0;font-size:13px;font-weight:600;color:var(--ag-ink)}
+#view-agents .ag-al .d{flex:1;min-width:0;font-size:12.5px;color:var(--ag-ink2)}
+#view-agents .ag-al .d b{font-weight:600;color:var(--ag-ink)}
+#view-agents .ag-al .go{flex:none;font-family:inherit;font-size:12px;font-weight:600;color:var(--ag-navy);
+  background:none;border:0;border-radius:0;padding:4px 2px;cursor:pointer;white-space:nowrap}
+#view-agents .ag-al .go:hover{background:none;text-decoration:underline}
+#view-agents .ag-ok{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--ag-line);
+  border-radius:8px;padding:10px 13px;font-size:12.5px;color:var(--ag-ink3);font-weight:500}
+
+/* ── กริด 12 คอลัมน์ · ทุกการ์ดเกาะเส้นเดียวกัน ──
+   ที่ต้องระวัง: แผงนี้ไม่ได้กว้างเท่าจอ · ลิสต์เอเย่นต์ฝั่งซ้ายกินไปราว 390px
+   จอ 1440 จึงเหลือเนื้อที่ราว 740px — สามใบต่อแถวได้ใบละ 233px ซึ่งแคบเกินกว่าที่ค่าจะไม่ห่อ
+   ค่าเริ่มต้นจึงเป็นสองใบต่อแถว แล้วค่อยขยับเป็นสามใบเมื่อจอกว้างจริง (วัดที่ 1500) */
+/* ไม่ใส่ align-items:start · ปล่อยให้เป็น stretch ตามค่าเริ่มต้นของกริด
+   การ์ดในแถวเดียวกันจึงสูงเท่ากัน ขอบล่างตรงกันทั้งแถว — แบบที่วางไว้เป็นแบบนั้น
+   ใส่ start เมื่อไหร่ ขอบล่างจะหยักตามเนื้อในแต่ละใบทันที */
+#view-agents .ag-grp{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px}
+/* ── การ์ด · ขาว ขอบเส้นเดียว ไม่มีเงา ไม่มีไล่สี · สถานะบอกด้วยป้ายบนหัว ไม่ใช่ย้อมกรอบ ── */
+#view-agents .ag-box{grid-column:span 6;min-width:0;background:#fff;display:flex;flex-direction:column;
+  border:1px solid var(--ag-line);border-radius:8px;box-shadow:none;padding:0 0 4px}
+#view-agents .ag-box.c3,#view-agents .ag-box.c4,#view-agents .ag-box.c5{grid-column:span 6}
+#view-agents .ag-box.c8,#view-agents .ag-box.wide{grid-column:1/-1}
+@media (min-width:1500px){
+  #view-agents .ag-box{grid-column:span 4}
+  #view-agents .ag-box.c3{grid-column:span 3}
+  #view-agents .ag-box.c4{grid-column:span 4}
+  #view-agents .ag-box.c5{grid-column:span 5}
+  #view-agents .ag-box.c8{grid-column:span 8}
+}
+#view-agents .ag-box .bh{display:flex;align-items:center;gap:8px;margin:0;padding:9px 13px;
+  background:none;border-bottom:1px solid var(--ag-line2);border-radius:0;
+  font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ag-ink3)}
+#view-agents .ag-box .bh em{font-style:normal;margin-left:auto;font-size:11.5px;font-weight:400;
+  letter-spacing:0;text-transform:none;color:var(--ag-ink4)}
+#view-agents .ag-box .ag-sh{padding:2px 13px 0}
+#view-agents .ag-box .ag-sh .r:last-child{border-bottom:none}
+
+/* ── ป้ายสถานะ · ที่เดียวในหน้าที่มีสีพื้น ── */
+#view-agents .ag-tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;
+  border-radius:6px;padding:2px 8px;white-space:nowrap;letter-spacing:0;text-transform:none;
+  border:1px solid var(--ag-line);background:var(--ag-soft);color:var(--ag-ink2)}
+#view-agents .ag-tag.red{background:var(--ag-red-bg);border-color:var(--ag-red-bd);color:var(--ag-red)}
+#view-agents .ag-tag.amb{background:var(--ag-amb-bg);border-color:var(--ag-amb-bd);color:var(--ag-amb)}
+#view-agents .ag-tag.blu{background:var(--ag-blu-bg);border-color:var(--ag-blu-bd);color:var(--ag-blu)}
+#view-agents .ag-tag.grn{background:var(--ag-grn-bg);border-color:var(--ag-grn-bd);color:var(--ag-grn)}
+
+/* ── แถว label/value · ป้ายกว้าง 104px เท่ากันทุกการ์ด ค่าจึงเรียงเป็นคอลัมน์เดียวทั้งหน้า ── */
+#view-agents .ag-sh{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+#view-agents .ag-sh .r{display:flex;gap:12px;align-items:baseline;padding:6px 0;min-width:0;
+  border-bottom:1px solid var(--ag-line2)}
+#view-agents .ag-sh .r .k{flex:0 0 104px;font-size:11.5px;font-weight:400;letter-spacing:0;
+  text-transform:none;color:var(--ag-ink3);line-height:1.45}
+/* break-word ไม่ใช่ anywhere · anywhere ทำให้เบราว์เซอร์คิดความกว้างขั้นต่ำเป็นตัวอักษรเดียว
+   แล้วตัดกลางคำทั้งที่ยังมีที่เหลือ ("2 add-ons" กลายเป็น "2 add - ons") */
+#view-agents .ag-sh .r .v{flex:1;min-width:0;font-size:13px;font-weight:500;line-height:1.45;
+  color:var(--ag-ink);overflow-wrap:break-word}
+#view-agents .ag-sh .r .v .sub{display:block;font-size:11.5px;color:var(--ag-ink3);font-weight:400;
+  line-height:1.45;margin-top:2px}
+#view-agents .ag-bar{display:block;height:6px;border-radius:3px;background:var(--ag-line2);overflow:hidden;
+  margin-top:6px;max-width:220px}
+#view-agents .ag-bar i{display:block;height:100%}
+
+/* ── ตัวเลขตัวอย่าง · สามช่องคั่นด้วยเส้น ไม่ใช่สามการ์ดซ้อนในการ์ด ── */
+#view-agents .ag-stats{display:flex}
+#view-agents .ag-stat{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding:10px 13px;
+  border-right:1px solid var(--ag-line2)}
+#view-agents .ag-stat:last-child{border-right:none}
+#view-agents .ag-stat .k{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ag-ink3)}
+#view-agents .ag-stat .v{font-family:'DM Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:19px;font-weight:500;color:var(--ag-ink);letter-spacing:-.01em}
+#view-agents .ag-stat .s{font-size:11.5px;color:var(--ag-ink3);overflow-wrap:anywhere}
+
+/* จอกลาง · สามการ์ดต่อแถวเริ่มบีบจนค่าห่อบรรทัด · ลดเหลือสองแถวละสองใบ
+   (ยังเป็นกริด 12 อยู่ · ขอบจึงยังตรงกันเหมือนเดิม) */
+
+/* ── ตารางโปรแกรม · อยู่ในกรอบการ์ดเดียวกับที่เหลือ ──
+   §agStd · ของเดิมลอยอยู่กลางหน้าไม่มีกรอบ · ชนกับการ์ดข้างบนที่มีกรอบ เลยดูคนละชุดกัน
+   สีที่เคยใช้ hover (coral) ถูกถอด — สีในหน้านี้สงวนไว้บอกสถานะอย่างเดียว */
+#view-agents .agi-prog-wrap{background:#fff;border:1px solid var(--ag-line);border-radius:8px;overflow:hidden}
+/* คอลัมน์วันเป็นตัวเลข mono ความกว้างคงที่ · ตรึงเท่ากันสองคอลัมน์ ระยะห่างจึงเท่ากันทั้งแถว
+   max-content ทำให้คอลัมน์หดชิดกันไปกองขวา ระยะไม่เท่ากันอย่างที่วางไว้
+   เลขพวกนี้มาจากการวัด: เนื้อที่จริงในกรอบ 696px (แผง 722 หักขอบใน 26)
+   ช่องวันต้องการ 155px พอดีข้อความ · สถานะ 88 · ปุ่ม 40 · ช่องไฟ 4×8
+   เหลือให้ชื่อเส้นทาง 310px ซึ่งกว้างกว่าชื่อที่ยาวที่สุดที่ใช้จริง (216px) */
+#view-agents .agi-prog-header,#view-agents .agi-prog-row{
+  grid-template-columns:minmax(0,1fr) 155px 88px 40px;gap:8px}
+/* ── จอต่ำกว่า 1440 · ช่วงรับจองซ่อนตัวเอง ────────────────────────────────
+   ที่ต่ำกว่านั้นแผงเหลือไม่ถึง 700px · ห้าคอลัมน์เบียดกันจนชื่อเส้นทางเหลือศูนย์
+   ตัดคอลัมน์ที่ให้ข้อมูลน้อยที่สุดออกก่อน · ช่วงรับจองเป็นช่วงของสัญญา
+   ทุกแถวมักเป็นค่าเดียวกัน และหัวข้อด้านบนบอกไว้แล้ว ("contract 01 Oct 25 → 15 May 27")
+   ส่วนช่วงเดินทางกับสถานะต่างกันรายเส้นทาง จึงต้องอยู่เสมอ */
+@media (max-width:1439px){ #view-agents .agi-col-bk{display:none} }
+/* ── จอต่ำกว่า 1200 · แถวพับเป็นสองบรรทัด ─────────────────────────────────
+   แผงเหลือไม่ถึง 500px · ต่อให้ตัดคอลัมน์ช่วงรับจองไปแล้ว ชื่อเส้นทางก็ยังไม่เหลือที่
+   วัดแล้วชื่อจะเริ่มพอที่ตอนจอ ~1241 ขึ้นไป (แผง 523 หักคอลัมน์ที่เหลือ 307 = 216 พอดีชื่อยาวสุด)
+   ต่ำกว่านั้นชื่อหดจนหายไปทั้งแถบโดยที่หน้าไม่ล้มให้เห็น · ปัดเป็น 1280
+   พับชื่อขึ้นบรรทัดของตัวเอง แล้วให้ช่วงเดินทาง/สถานะ/ปุ่ม อยู่บรรทัดล่าง
+   (กติกาเดียวกับจอโทรศัพท์ · ที่นั่นกฎใน 02-skins.css คุมอยู่แล้วด้วย !important) */
+@media (max-width:1279px){
+  #view-agents .agi-prog-header{display:none}
+  #view-agents .agi-prog-row{grid-template-columns:minmax(0,1fr) auto auto;gap:3px 10px;align-items:center}
+  #view-agents .agi-prog-name-wrap{grid-column:1/-1}
+  #view-agents .agi-prog-name{white-space:normal;overflow:visible;text-overflow:clip}
+}
+/* จอกว้าง · ตรึงความกว้างตายตัวแล้วคอลัมน์จะไปกองชิดขวา ที่ว่างทั้งหมดตกเป็นของชื่อเส้นทางคนเดียว
+   ให้ช่องวันโตตามไปด้วยเป็นสัดส่วน · ระยะห่างจึงยังเท่ากันเหมือนตอนจอแคบ
+   ขั้นต่ำที่ใส่ไว้คือตัวเลขที่วัดมา (ชื่อยาวสุด 226 · ช่วงวัน 155) รวมทั้งแถวได้ 696px
+   แผงกว้างเท่าจอลบ 718 เสมอ · 696 จึงต้องการจออย่างน้อย 1414 · ตั้งไว้ที่ 1440
+   ต่ำกว่านั้นกลับไปใช้กฎข้างบน ซึ่งยอมให้ชื่อหดได้
+   (ตั้งไว้ต่ำกว่านี้ไม่ได้ · ขั้นต่ำรวมกันเกินกรอบเมื่อไหร่ overflow:hidden ของกรอบจะกินคอลัมน์
+    Status กับปุ่มหายไปเงียบ ๆ โดยหน้าไม่ล้น — ตรวจด้วยตาไม่เจอ) */
+@media (min-width:1440px){
+  #view-agents .agi-prog-header,#view-agents .agi-prog-row{
+    grid-template-columns:minmax(226px,2fr) minmax(155px,1.1fr) minmax(155px,1.1fr) 88px 40px}
+}
+/* ── ท่าเรือ · คอลัมน์ของตัวเอง ───────────────────────────────────────────
+   ซ่อนไว้ก่อน · display:none ทำให้มันหลุดจากกริดไปเลย ไม่ใช่แค่มองไม่เห็น
+   จำนวนคอลัมน์จึงยังเป็นห้าช่องเท่าเดิมโดยไม่ต้องมีกฎอะไรเพิ่ม
+   กางออกเมื่อจอกว้างพอจริง · แผงนี้กว้างเท่าจอลบ 718px เสมอ (ลิสต์เอเย่นต์ + ขอบ)
+   หกคอลัมน์ต้องการราว 806px จึงต้องมีจออย่างน้อย ~1524 · ตั้งไว้ที่ 1540 เผื่อไว้
+   ต่ำกว่านั้นท่าเรือไปอยู่ใน title ของชื่อเส้นทาง (ชี้แล้วเห็น "ชื่อเส้นทาง · ท่าเรือ") */
+#view-agents .agi-prog-pier-col{display:none}
+@media (min-width:1540px){
+  #view-agents .agi-prog-pier-col{display:flex;align-items:center;min-width:0;
+    font-size:11px;font-weight:400;letter-spacing:.04em;color:var(--ag-ink4);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #view-agents .agi-prog-header .agi-prog-pier-col{color:var(--ag-ink3);font-size:10.5px;
+    font-weight:700;letter-spacing:.06em}
+  #view-agents .agi-prog-header,#view-agents .agi-prog-row{
+    grid-template-columns:minmax(200px,2fr) 88px minmax(155px,1.1fr) minmax(155px,1.1fr) 88px 40px}
+}
+#view-agents .agi-prog-header{margin-top:0;padding:8px 13px;background:var(--ag-soft);
+  border-bottom:1px solid var(--ag-line);font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--ag-ink3)}
+#view-agents .agi-prog-row{padding:9px 13px;border-bottom:1px solid var(--ag-line2)}
+#view-agents .agi-prog-row:hover{background:var(--ag-soft);border-color:var(--ag-line2)}
+#view-agents .agi-prog-name{font-size:12.5px;font-weight:500;color:var(--ag-ink)}
+#view-agents .agi-prog-pier{font-size:11px;font-weight:400;color:var(--ag-ink4)}
+#view-agents .agi-period-val{font-size:12px;font-weight:400;color:var(--ag-ink2)}
+#view-agents .agi-prog-st{display:flex;align-items:center;min-width:0}
+/* แถวแท็บ · ห้ามหักคำกลางป้าย ("Pricing Matrix" เคยตกบรรทัดสองตอนแท็บมีตัวเลขกำกับ)
+   แคบเมื่อไหร่ให้เลื่อนแนวนอนแทน · กติกาเดียวกับจอโทรศัพท์ */
+#view-agents .sb-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
+#view-agents .sb-tabs::-webkit-scrollbar{display:none}
+#view-agents .sb-tab{flex:none;white-space:nowrap}
+/* ชิป "↳ RT" · เคยระบายสีตามเรท · สีในหน้านี้สงวนไว้บอกสถานะ ชิปนี้บอกที่มาของวัน ไม่ใช่สถานะ */
+#view-agents .agi-rtchip{margin-left:5px;font-size:10px;font-weight:600;letter-spacing:.04em;
+  color:var(--ag-ink4);text-transform:uppercase;white-space:nowrap}
+#view-agents .agi-prog-act-btn{border-color:var(--ag-line);color:var(--ag-ink4)}
+#view-agents .agi-prog-act-btn:hover{background:var(--ag-soft);color:var(--ag-navy)}
+#view-agents .agi-prog-add{padding:9px 13px;border:0;border-top:1px solid var(--ag-line2);
+  font-size:12px;color:var(--ag-ink3)}
+#view-agents .agi-prog-add:hover{background:var(--ag-soft);border-color:var(--ag-line2);color:var(--ag-navy)}
+#view-agents .agi-note{padding:8px 2px 0;font-size:11.5px;color:var(--ag-ink4)}
+
+/* ── ปุ่มยุบ/กางลิสต์ · มีเฉพาะจอโทรศัพท์ ── */
+#view-agents .ag-side-tgl{display:none;font-family:inherit;font-size:10.5px;font-weight:700;color:#16265C;
+  background:#EEF2F9;border:1px solid #D7DEEB;border-radius:999px;padding:4px 11px;cursor:pointer;white-space:nowrap}
+
+/* ══ §agPhone · จอโทรศัพท์ ══════════════════════════════════════════════════
+   สามอย่างที่พังบนจอแคบถ้าไม่ทำอะไร · ลิสต์ 800 รายชื่อดันเนื้อหาหลุดจอ ·
+   แถวแท็บห่อสามบรรทัด · แถว Sheet สองคอลัมน์บีบจนค่าห่อมั่ว
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width:900px){
+  /* บนจอโทรศัพท์แถบหัวห่อเป็นสามแถว · ตรึงไว้จะกินจอไปครึ่งหนึ่งตอนเลื่อนอ่าน
+     จอสั้นให้เนื้อหาสำคัญกว่า · เลิกตรึงเฉพาะจอนี้ */
+  #view-agents .ag-hd{position:static;padding:8px 10px 10px}
+  #view-agents .ag-hd-top{flex-wrap:wrap;gap:9px}
+  #view-agents .ag-hd-kpi{margin-left:0;flex:1 1 100%;justify-content:flex-start}
+  #view-agents .ag-hd-g{min-width:0}
+  #view-agents .ag-hd-pop{right:auto;left:0;width:auto;max-width:100%}
+  #view-agents .ag-side-tgl{display:block}
+  #view-agents .sb-side-hd-ttl{white-space:nowrap}
+  #view-agents #ag-search{width:82px}
+  /* ลิสต์ยุบไว้ก่อน · กด Browse จึงกาง · เลือกแล้วยุบเอง (ดู agSelect) */
+  #view-agents .sb-side .sb-side-body{display:none;max-height:56vh;overflow:auto}
+  #view-agents .sb-side.open .sb-side-body{display:block}
+  /* แถวแท็บ · เลื่อนแนวนอนแถวเดียว ไม่ห่อสองสามบรรทัดจนดันเนื้อหาลงไป */
+  #view-agents .sb-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
+  #view-agents .sb-tabs::-webkit-scrollbar{display:none}
+  #view-agents .sb-tab{flex:none}
+  /* หัวข้อ · เส้นคั่นไม่มีที่พอบนจอแคบ · ตัดเส้นทิ้ง ให้ข้อความประกอบลงบรรทัดใหม่แทน */
+  /* ชื่อหัวข้อขึ้นบรรทัดของตัวเอง · ปุ่มงานจึงอยู่ด้วยกันบรรทัดเดียว ไม่กระจายคนละบรรทัด */
+  #view-agents .ag-band{flex-wrap:wrap;gap:6px 14px;margin:18px 0 8px}
+  #view-agents .ag-band .rule{display:none}
+  #view-agents .ag-band .ttl{flex:1 1 100%}
+  #view-agents .ag-band .note{flex:1 1 100%;order:5;white-space:normal;text-align:left}
+  /* แถวเตือน · บรรทัดแรก ความด่วน + เรื่อง + ปุ่ม · บรรทัดสอง รายละเอียด
+     ถ้าปล่อยตามลำดับ DOM ปุ่มจะตกไปอยู่บรรทัดสามเดี่ยว ๆ แถวสูงขึ้นเปล่า ๆ */
+  #view-agents .ag-al{flex-wrap:wrap;align-items:flex-start;gap:4px 12px}
+  #view-agents .ag-al .sev{flex:0 0 auto}
+  #view-agents .ag-al .t{flex:1 1 auto}
+  #view-agents .ag-al .go{order:3;margin-left:auto;padding:0 2px}
+  #view-agents .ag-al .d{order:5;flex:1 1 100%}
+  #view-agents .ag-grp{grid-template-columns:minmax(0,1fr);gap:10px}
+  #view-agents .ag-box,#view-agents .ag-box.c3,#view-agents .ag-box.c5,
+  #view-agents .ag-box.c6,#view-agents .ag-box.c8{grid-column:1/-1}
+  #view-agents .ag-sh{grid-template-columns:minmax(0,1fr)}
+  #view-agents .ag-sh .r{flex-direction:column;gap:1px;padding:7px 0}
+  #view-agents .ag-sh .r .k{flex:none}
+  #view-agents .ag-stats{flex-direction:column}
+  #view-agents .ag-stat{border-right:none;border-bottom:1px solid var(--ag-line2)}
+  #view-agents .ag-stat:last-child{border-bottom:none}
+  /* แถวโปรแกรม · จากตารางห้าคอลัมน์ เป็นการ์ดต่อแถว ชื่อ+ช่วงวันอยู่คนละบรรทัด */
+  #view-agents .agi-prog-header{display:none}
+  #view-agents .agi-prog-row{flex-wrap:wrap;gap:2px 10px;padding:8px 6px}
+  #view-agents .agi-prog-name-wrap{flex:1 1 100%}
+  #view-agents .agi-period-col{flex:0 0 auto}
+  #view-agents .agi-prog-actions{margin-left:auto}
+}

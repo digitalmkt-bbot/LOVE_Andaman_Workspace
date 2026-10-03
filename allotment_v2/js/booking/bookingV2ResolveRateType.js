@@ -1,15 +1,10 @@
-// ── Rate/Contract model · Phase 2: resolve the rate type PER TRIP (promo overlay) ──
-// A time-boxed 'promo' contract (per-route, by TRAVEL date) overrides the agent's base rate for that trip.
-// Returns a PROMO rateTypeId only when an active promo contract covers (route, travelDate); else null → base.
-// No promo contracts exist yet (Phase 3 creates them), so today this always returns null → identical pricing.
-function bookingV2ResolveRateType(agentId, routeId, travelDate){
-  if(!agentId || !routeId || !travelDate || typeof SB_CONTRACTS==='undefined' || !Array.isArray(SB_CONTRACTS)) return null;
-  const promos = SB_CONTRACTS.filter(c => c && c.agentId===agentId && c.kind==='promo'
-    && c.status!=='void' && c.status!=='cancelled' && c.status!=='expired'
-    && (!c.activeFrom || travelDate>=c.activeFrom) && (!c.activeTo || travelDate<=c.activeTo)
-    && (c.programPeriods||[]).some(p => p.routeId===routeId
-         && (!p.travelFrom || travelDate>=p.travelFrom) && (!p.travelTo || travelDate<=p.travelTo)));
-  if(!promos.length) return null;
-  promos.sort((a,b) => (Number(b.priority||0)-Number(a.priority||0)) || String(b.activeFrom||'').localeCompare(String(a.activeFrom||'')));
-  return promos[0].rateTypeId || null;
+/* §b2bPromo · ตัวเดิม · ตอนนี้ไม่มีใครในโค้ดเรียกแล้ว (bookingV2GetRTForTrip กับ tsNetOf
+   ย้ายไปใช้ laPromoRateFor หมด) แต่คงชื่อไว้เผื่อสคริปต์ตรวจ/คอนโซลที่เคยเรียก
+   ให้เดินผ่านตัวใหม่ จะได้ไม่มีสองกติกาให้เพี้ยนกันทีหลัง
+   ⚠ คืนได้แต่ rateTypeId · ใบโปรที่กรอกราคาเองไม่มี id ให้คืน จึงคืน null
+     ห้ามเอาตัวนี้ไปใช้ตัดสินราคาอีก · ใช้ laPromoRateFor แทน */
+function bookingV2ResolveRateType(agentId, routeId, travelDate, bookDate){
+  var c = laPromoFor(agentId, routeId, travelDate, bookDate || '');
+  if(!c || (c.priceMode || 'rate') === 'own') return null;
+  return c.rateTypeId || null;
 }

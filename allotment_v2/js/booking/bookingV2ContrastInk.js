@@ -1,1 +1,15 @@
-function bookingV2ContrastInk(hex){ const m=String(hex||'').replace('#',''); if(m.length<6) return '#fff'; const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16); return (0.299*r+0.587*g+0.114*b)>150?'#2c2c2a':'#fff'; }
+/* ══ §inkOn · เลือกสีตัวอักษรบนชิปจากคอนทราสต์จริง ไม่ใช่เส้นแบ่งความสว่าง
+   ของเดิมตัดที่ค่าความสว่าง 150 ซึ่งเป็นการเดา · วัดจากสีเอเยนต์จริง 49 เจ้า
+   มี 12 เจ้าที่ได้ ink ผิดตัว เช่น #ff7300 ได้ 2.73:1 ทั้งที่ถ้าใช้ขาวจะได้ 5.13:1
+   ตอนนี้ลองทั้งสองตัวแล้วเอาตัวที่คอนทราสต์สูงกว่า · ไม่มีทางแย่ลงกว่าเดิม
+   เพราะผลลัพธ์คือค่าที่ดีที่สุดในสองตัวเลือกเดิมเสมอ
+   (สีน้ำเงิน/ชมพูบางเจ้ายังไม่ถึง 4.5 ไม่ว่าจะเลือกตัวไหน · ต้องแก้ที่สีพื้น
+    ซึ่งเป็นสีแบรนด์ของเอเยนต์ ไม่ควรเปลี่ยนให้เอง)                        */
+function bookingV2ContrastInk(hex){
+  const m=String(hex||'').replace('#',''); if(m.length<6) return '#fff';
+  const r=parseInt(m.slice(0,2),16), g=parseInt(m.slice(2,4),16), b=parseInt(m.slice(4,6),16);
+  if(typeof _calLum!=='function' || typeof _calRatio!=='function')
+    return (0.299*r+0.587*g+0.114*b)>150?'#2c2c2a':'#fff';
+  const L=_calLum(r,g,b);
+  return _calRatio(L,_calLum(255,255,255)) >= _calRatio(L,_calLum(0x2c,0x2c,0x2a)) ? '#fff' : '#2c2c2a';
+}

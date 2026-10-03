@@ -10,7 +10,8 @@ function bookingV2ReleaseLock(lockId, qty){
   if(n <= 0) return;
   const floor = l.parentId ? peak : Math.max(peak, bookingV2LockAllocated(l));   // never drop below used, and (parent) never below what's allocated to children
   l.qty = Math.max(floor, (l.qty||0) - n);
+  bookingV2LockPendShrink(l, n);   /* §lkPend · ลดจำนวน = ตัดส่วนที่รออยู่ออกก่อน */
   (l.log=l.log||[]).push({date:today, type:'release', qty:n});
-  if(bookingV2LockDrawable(l) <= 0 && (l.parentId || !bookingV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
+  if(bookingV2LockDrawable(l) <= 0 && bookingV2LockPendOn(l, l.date) <= 0 && (l.parentId || !bookingV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
   sbSeatLocksPersist();
 }

@@ -70,6 +70,11 @@ for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].colum
 //   สิ่งที่ผู้ใช้เห็นคือ กรอกได้ ไม่มี error ไม่มีเตือน แล้วรีเฟรชทีข้อมูลหายทุกครั้ง
 //   (เจอจริง 14 ส.ค. 2026 · pier_sect + pier_staff.sect/note + routes.code เข้า model แต่ไม่เข้า field_mapping)
 //   เช็คตอนบูตครั้งเดียว · warn ที่ log และรายงานที่ /api/version ให้เห็นโดยไม่ต้องเดา
+//   ⚠ เช็คนี้เทียบ "สองไฟล์ฝั่งเซิร์ฟเวอร์" กันเองเท่านั้น · ฟิลด์ใหม่ที่ไม่มีทั้งใน model และใน mapping
+//     สองไฟล์จะตรงกันเอง เช็คนี้จึงเงียบสนิท แต่ข้อมูลหายเหมือนกันทุกประการ (เจอ 4 ครั้งแล้ว:
+//     check-in 25 ก.ค. · pierPayments 2 ส.ค. · pier_sect 14 ส.ค. · seat-lock dateFrom/dateTo 29 ก.ย.)
+//     เช็คย้อนทางที่จับกรณีนั้น: node tools/check-mapping-coverage.mjs <blob.json>
+//     (ยัด blob จริงผ่าน decompose → assemble แล้วไล่ดูว่าค่าไหนไม่กลับมา)
 const MAP_DRIFT = (() => {
   const plan = osRepo._plan || {};
   const tables = [], columns = [];
@@ -226,41 +231,11 @@ async function relLoad() {                                           // operatio
 const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g, '');
 const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 //
-// ── Program → ops route (2026-08-31) ───────────────────────────────────────────────────────────
-// DAY TRIPS no longer live here. B2C owns the answer already — programs_own.ops_route_id, filled
-// for every program — and this table was a second copy of it that could only ever fall behind.
-// It did: B2C added POW-006 (Nyaung Oo Phee) and POW-007 (Phang-nga bay + Hong Krabi Early bird),
-// both correctly mapped on the B2C side, while this constant still stopped at POW-005. Four
-// bookings imported with routeId null and rendered a bare "—" where the route name goes.
-// Day trips now resolve through b2cProgramRouteCatalog() — see there for the fallback order.
-//
-// PRIVATE ROUTES stay, because there is nothing to read: private_routes has (id, name, duration,
-// description) and no ops_route_id column, and private_own items carry no details.opsRouteId
-// either — verified on prod, all 8 rows null. PR-* → route is only known here. Retiring these four
-// means adding ops_route_id to private_routes on the B2C side first; until then, this is the map.
-const B2C_ROUTE_MAP = {
-  // Private routes (matched via route_id on private_own items)
-  'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
-  'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
-  'PR-003':  'r10',  // Private Phi Phi + Bamboo → Phi Phi Bamboo by Speedboat
-  'PR-004':  'r12',  // Private Phi Phi + Maiton → Whale Shark Phi Phi Maiton Sunset
-};
-const B2C_PRODUCT_NAME = {
-  'POW-001': 'Day Trip - Similan Island',
-  'POW-002': 'Day Trip - Surin Island',
-  'POW-003': 'Day Trip - Phi Phi Island',
-  'POW-004': 'Day Trip - Phi Phi - Maiton',
-  'POW-005': 'Day Trip - Se La Va',
-  'PR-001':  'Private - Similan Island',
-  'PR-002':  'Private - Surin Islands',
-  'PR-003':  'Private - Phi Phi + Bamboo Islands',
-  'PR-004':  'Private - Phi Phi + Maiton (Sunset)',
-};
+const {
+  mapB2COrders, b2cFindArea, b2cCheckOrders, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
+} = require('./b2c-map.js');   // §b2cMapMod · the pure mapper; relSyncB2C below does the I/O
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
 // then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
-// B2C bookings.payment_type — mirrors SB_PAYMENT_TYPES ids in the app. Whitelisted so an unexpected
-// value can't leak into the Pay column (bookingV2PayLabel falls through to the raw string).
-const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 // ── B2C re-sync · ฟิลด์ไหน B2C ทับได้ (2026-08-02) ──────────────────────────────────────────────
 // เดิมเป็น "บัญชีดำ": ทับทุกคอลัมน์ ยกเว้นชุด ops ที่ระบุไว้ — ซึ่งกลับด้านผิด เพราะทุกครั้งที่มี
 // ฟิลด์ใหม่ฝั่ง ops ("ค่าเริ่มต้นคือโดนทับ") มันจะถูกล้างเงียบๆ ตอน B2C sync โดยไม่มีใครรู้
@@ -393,7 +368,24 @@ const B2C_OWN_BK = new Set([
 //      variants of one Phi Phi trip). Needed because transfer_services.ops_route_id is per service
 //      and cannot say that the 6-hour and the 8-hour city tour are different programmes. The
 //      per-variant key is tried first; with no such route nothing changes.
-const B2C_MAP_VER = 28;
+// v29: §b2cHotelAppend · hotelName carries "<area> · <hotel>" again instead of the bare area. The
+//      area still leads (dispatch groups on it) and findArea still matches on the area ALONE — the
+//      v4→v5 bug is exactly this and must not come back. dropoffSep compares the drop-off text
+//      against area, hotel and the combined string so a same-door return is not flagged as separate.
+//      hotelname is already in B2C_OWN_BK, so this bump re-upserts the rows on file without touching
+//      anything ops owns. Drop-off keeps §b2cNoHotel: det.dropoffHotel is still never read.
+// v30: no mapper change — a forced corrective re-upsert, same as v17. The §b2cPay keep-line in
+//      bookingV2CommitBooking was lost in 03cb6aa on 2026-08-12, so every ops edit of a B2C booking since
+//      then rebuilt paymentSnapshot from the a_b2c contract ({method:'prepaid', source:'contract'},
+//      paid/paidStatus null) and the Pay column read "PFM". Rows whose B2C source never moved cannot
+//      heal on their own (1 row at the time: LOV-7485231); paymentsnapshot_* is B2C-owned, so this
+//      bump restores it from B2C.
+// v31: §b2cNat · trip.nat (real Thai heads, for the park fee) derived from customer + passengers
+//      nationality when that list covers every head on the line. Pax price fields are unchanged.
+//      LOV-7485231 (TH+TH+US sold as 3 Thai) and LOV-3345176 (TH+TR sold as 2 Thai) re-count here.
+// v32: §b2cCheck · 'Laotian' resolves to LA (found by the new post-import check on LOV-5681391).
+//      Also §b2cMapMod: the mapper moved to b2c-map.js verbatim; that part changes no output.
+const B2C_MAP_VER = 32;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -403,7 +395,8 @@ const B2C_MAP_VER = 28;
 // consecutive counts FAILED RUNS, not failed fetches — a run that fetches fine but dies during the
 // upsert is just as broken from ops' point of view. A run with nothing to do (no rows, or the hash
 // says B2C is unchanged) is a SUCCESS: the connection worked and there was nothing to import.
-const B2C_HEALTH = { lastOk: null, lastFail: null, consecutive: 0, message: '', phase: '' };
+const B2C_HEALTH = { lastOk: null, lastFail: null, consecutive: 0, message: '', phase: '',
+  issues: null, issuesAt: null };   // §b2cCheck · null = not checked since boot (≠ [] = checked, all clean)
 function _b2cHealthOk() {
   B2C_HEALTH.lastOk = Date.now();
   B2C_HEALTH.consecutive = 0;
@@ -443,516 +436,43 @@ function b2cHealthReport() {
     neverOk: B2C_HEALTH.lastOk === null,
     message: B2C_HEALTH.message,
     phase: B2C_HEALTH.phase,
+    // §b2cCheck · data problems in what DID import. Separate from ok on purpose: the sync is healthy,
+    // a booking it brought in is not — /api/b2c/health must not 503 an uptime monitor over one order.
+    issues: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').slice(0, 50),
+    issueCount: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length,
+    issuesAt: B2C_HEALTH.issuesAt,
+    // Changes whenever the SET of flagged bookings changes — lets the client re-show a panel the
+    // user dismissed only when there is something new, not on every poll.
+    issueSig: crypto.createHash('sha1').update((B2C_HEALTH.issues || []).filter(i => i.sev === 'warn')
+      .map(i => i.id + ':' + i.code).sort().join('|')).digest('hex').slice(0, 12),
   };
 }
-
-function mapB2CStatus(s) {
-  if (s === 'cancelled') return 'cancelled';
-  if (s === 'pending')   return 'pending_approval';
-  return 'confirmed';
-}
-
-function b2cPayCode(h) {
-  const vals = [h && h.bk_payment_type, h && h.payment_method_id, h && h.bk_payment_method, h && h.bk_payment_method_name]
-    .map(v => String(v || '').trim()).filter(Boolean);
-  for (const raw of vals) {
-    const s = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (B2C_PAY_TYPES.has(s)) return s;
-    if (/^(pm )?(bank|transfer|bank transfer|banktransfer)$/.test(s) || s === 'pm bank' || s === 'pm transfer') return 'bt';
-    if (s.includes('bank') || s.includes('transfer')) return 'bt';
-    if (s.includes('cash') || s === 'cot') return 'cot';
-    if (s.includes('proforma') || s.includes('pro forma')) return 'proforma';
-    if (s.includes('invoice') || s === 'credit') return 'invoice';
-  }
-  return '';
-}
-
-// Line-item money, split into seat + add-on.
-//   seat   = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc — unitPrices is
-//            SEAT ONLY, verified on prod (LOV-4190737: 2 × 3500 = the 7,000 seat total).
-//   addOn  = subtotal − seat. B2C folds the add-on into the line subtotal and prices it nowhere
-//            else: addonsSelected carries no unitPrice/amount on ANY entry in the B2C database
-//            (census 2026-08-06, 0 of 25). Verified on all 16 add-on-carrying lines — 15 positive,
-//            1 zero, 0 negative — and it matches the paid-vs-total gap on every order checked.
-// We must NOT re-price from our own rate card: B2C charged 500/rider on LOV-4190737 where rt003
-// says 400 adult / 300 child. Whatever B2C charged is what ops and accounting show.
-// When unitPrices is missing there is nothing to subtract from — subtotal is all we have and it
-// cannot be split, so it stays wholly seat. That keeps the line TOTAL right (it always was) and
-// merely leaves the add-on unattributed, which is what the old subtotal fallback did anyway.
-function b2cLineMoney(item) {
-  let det = item.details;
-  if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
-  const up = (det && det.unitPrices) || {};
-  const sub = Math.round(Number(item.subtotal) || 0);
-  const rated = (Number(item.pax_adult)  || 0) * (Number(up.adult)  || 0)
-              + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
-              + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
-              + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
-  if (!(rated > 0)) return { seat: sub, addOn: 0 };
-  const seat = Math.round(rated);
-  return { seat, addOn: Math.max(0, sub - seat) };
-}
-// Seat alone — same value the old b2cLineSeat returned, kept for any caller that wants just the seat.
-function b2cLineSeat(item) { return b2cLineMoney(item).seat; }
-
-// §b2cDiscShare (2026-09-07) · The order-level discount / surcharge belongs to the WHOLE order, so it
-// has to be split across the order's lines by value — not handed whole to the first line.
-//
-// The old rule (all of it on line 0) survived only because every order carrying a discount so far was
-// single-line or all-tour. LOV-3488828 broke it: a 21,198 order = a 15,800 HOTEL line + a 5,398 boat
-// line, with a 17,796 discount (credit carried over from voucher VC.22903). This sync imports tour
-// lines only (B2C_ITEM_JOIN's `type IN ('day_trip','private_own')`), so the hotel line never arrives —
-// and the whole 17,796 landed on the 5,398 boat line: 3,598 + 1,800 − 17,796 = −12,398, which
-// Math.max(0, …) then flattened into a ฿0 booking that looked deliberate.
-//
-// Denominator = the ORDER subtotal (bk_subtotal — every line, INCLUDING the ones filtered out), which
-// is what the discount was actually given against. Numerator = each synced line's own subtotal. When a
-// non-tour line was filtered out, Σ(imported lines) is deliberately LESS than the order total: the rest
-// of the discount belongs to the line that isn't in ops. When every line came through, the rounding
-// remainder goes to the last line so Σ lines still equals the order total exactly.
-//
-// seat + addOn === round(item.subtotal) for every line (see b2cLineMoney), so pro-rating on subtotal is
-// the same basis the ops-side money is built from.
-function _shareLabel(label, share, orderAmt) {
-  const full = Math.max(0, Math.round(Number(orderAmt) || 0));
-  return (full && share !== full)
-    ? String(label) + ' · เฉพาะส่วนของรายการนี้ (ทั้งบิล ' + full.toLocaleString('en-US') + ')'
-    : String(label);
-}
-
-function b2cAllocAdjust(items) {
-  const h0 = items[0] || {};
-  const lineSum  = items.reduce((s, it) => s + Math.round(Number(it.subtotal) || 0), 0);
-  const orderSum = Math.round(Number(h0.bk_subtotal) || 0);
-  // Trust whichever basis is larger: a missing/stale bk_subtotal must never let the shares add up to
-  // more than 100% of the discount.
-  const denom = Math.max(orderSum, lineSum);
-  const whole = denom > 0 && denom === lineSum;   // nothing was filtered out → the shares must sum exactly
-  const split = (amt) => {
-    if (!amt) return items.map(() => 0);
-    if (denom <= 0) return items.map((_, i) => (i === 0 ? amt : 0));   // no basis to split on → old behaviour
-    const out = items.map(it => Math.round(amt * (Math.round(Number(it.subtotal) || 0) / denom)));
-    if (whole) out[out.length - 1] += amt - out.reduce((s, x) => s + x, 0);
-    return out;
-  };
-  const disc  = split(Math.max(0, Math.round(Number(h0.bk_discount)  || 0)));
-  const extra = split(Math.max(0, Math.round(Number(h0.bk_surcharge) || 0)));
-  return items.map((_, i) => ({ disc: disc[i], extra: extra[i] }));
-}
-
-// details.addonsSelected → ops addOns[{type,label,amount,qty,note}].
-// Ops identifies an add-on by the literal `type` string — bookingV2AddOnFlags matches 'longtail-join',
-// 'longtail-charter' and a 'transfer-' prefix, and ops has no id registry of its own to look
-// anything up in (sb_addon_types is empty). B2C's `code` uses the same slugs, so it maps 1:1.
-// NB 'join-transfer-phuket' is the shared van to the pier, NOT a private transfer — it does not
-// carry the 'transfer-' prefix on purpose, or ops would advertise a private car nobody bought.
-// B2C started sending code/qtyAdult/qtyChild on 2026-08-06; older entries carry only {qty, addonId}.
-// For those the name and the slug are recovered from the program's add-on catalog, keyed on the
-// (program, addon_id) PAIR — see b2cAddonCatalog for why the id alone is not an identity. An entry
-// the catalog cannot answer for still gets a namespaced type ('b2c-ad-001') that deliberately
-// matches none of the ops patterns above: importing it as a generic line is honest, whereas
-// guessing "longtail" from an unknown code would put phantom boats on the pier.
-//
-// The label is the NAME ONLY. Every renderer that shows an add-on appends the quantity itself, so
-// baking "× 4" into the label printed it twice ("Join Transfer ( Phuket ) × 4 ×4").
-function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
-  const arr = (det && Array.isArray(det.addonsSelected)) ? det.addonsSelected : [];
-  if (!arr.length) return [];
-  const rows = arr.map(a => {
-    const id   = String((a && a.addonId) || '').trim();
-    const cat  = (addonCat && id) ? addonCat.get(b2cAddonKey(programId, id)) : null;
-    const code = String((a && a.code) || (cat && cat.code) || '').trim().toLowerCase();
-    const type = code || (id ? 'b2c-' + id.toLowerCase() : 'b2c-addon');
-    const qty  = Math.round(Number(a && a.qty) || 0) || 1;
-    const ad = Number(a && a.qtyAdult), ch = Number(a && a.qtyChild);
-    const name = String((a && a.name) || (cat && cat.name) || '').trim() || `B2C add-on ${id || '?'}`;
-    // Mirror the B2B label shape ("Longtail Join (2A + 0C)") when B2C sent the adult/child split.
-    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${name} (${ad}A + ${ch}C)` : name;
-    // Per-entry money, best source first. The order is correctness, not preference:
-    //   1. a.amount / a.unitPrice — what B2C actually charged, promos and overrides already applied.
-    //      Authoritative. B2C started sending these on 2026-08-06.
-    //   2. cat.price — the catalog LIST price, and only a fallback for the older entries that carry
-    //      nothing but {qty, addonId}. It is today's price, not the price this booking paid: AD-002
-    //      is 500 in the catalog and was charged at 400 on the 2026-07 orders. So it is verified
-    //      against the real total below and dropped when it disagrees.
-    // Before 2026-08-14 every entry was hardcoded to 0 and all of this was discarded.
-    const fromB2C = Math.round(Number(a && a.amount) || 0)
-                 || Math.round((Number(a && a.unitPrice) || 0) * qty);
-    const fromCat = Math.round((cat && Number(cat.price) || 0) * qty);
-    return { type, label, amount: Math.max(0, fromB2C || fromCat), qty, note: '', _listPriced: !fromB2C && fromCat > 0 };
-  });
-  const total = Math.max(0, Math.round(addOnTotal) || 0);
-  // subtotal − seat is what the customer was charged, so it is the arbiter. If the lines do not add
-  // up to it, a list price we guessed with is wrong for this booking — drop those back to 0 rather
-  // than print a confident figure against a named product. Lines B2C priced itself are kept either
-  // way: they are the charge, and any residual difference belongs to the seat/add-on split, not here.
-  if (rows.some(r => r._listPriced) && rows.reduce((n, r) => n + r.amount, 0) !== total) {
-    for (const r of rows) if (r._listPriced) r.amount = 0;
-  }
-  // With a single entry the combined figure IS that entry's amount — arithmetic, not a guess. With
-  // several it cannot be split, so they stay 0 and priceBreakdown.addOn carries the money.
-  if (rows.length === 1 && !rows[0].amount) rows[0].amount = total;
-  for (const r of rows) delete r._listPriced;
-  return rows;
-}
-
-// One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
-// id = b2c_<booking_id>_<line_no>; voucher = the B2C booking_id verbatim (no added prefix —
-// new B2C ids already carry their own LOV- prefix); each carries a single trip.
-// isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
-// so a multi-item order's payment isn't multiplied across its item-bookings.
-// adjust: this line's {disc, extra} share of the order-level discount / surcharge — see b2cAllocAdjust.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat, adjust, trfCat, extCat) {
-  const h = item;
-  // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
-  // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
-  const td = d => {
-    if (!d) return null;
-    if (d instanceof Date) {
-      const p = n => String(n).padStart(2, '0');
-      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-    }
-    const s = String(d).slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
-  };
-  // Item-level travel_date first; order-level (bookings.travel_date) as fallback — the B2C
-  // checkout sometimes stores the trip date only on the order header.
-  const date = td(h.travel_date) || td(h.bk_travel_date) || null;
-  // §b2cTransfer · a genuine open-date transfer (is_open_date true) has nothing to dispatch until
-  // Sales activates a date, so it is not a booking ops can act on yet. Note this is NOT the same as
-  // the pre-fix rows that lost their travel_date: those carry is_open_date false and still import,
-  // arriving with a null date so they surface as something to fix rather than disappearing.
-  const isOpenDate = String(h.is_open_date || '').toLowerCase() === 'true' || h.is_open_date === true;
-  const { seat, addOn } = b2cLineMoney(h);
-  // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
-  // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
-  // Pay type: bookings.paymentType/paymentMethod can be either app ids (bt/cot) or B2C labels
-  // (Bank transfer / PM-BANK). Normalize to the app pay code so B2C does not fall back to contract
-  // credit/prepaid wording in booking detail/accounting chips.
-  const payType = b2cPayCode(h);
-  // Paid state — derived, never read off payment_type. bk_paid is Σpayments + Σcredits_applied
-  // computed in B2C_ITEM_JOIN; the thresholds mirror the B2C team's reference SQL exactly:
-  // paid<=0 → unpaid · paid>=total → paid · otherwise → deposit (part-paid).
-  // Both figures are ORDER-level. The amount attaches to the first line only (same rule as
-  // deposit/balance, so a 3-item order doesn't report 3× the money), but the STATUS is a property
-  // of the whole order and rides on every line — ops reading line 2 must still see "paid".
-  const bkTotal    = Number(h.bk_total) || 0;
-  const paidAmt    = Math.round(Number(h.bk_paid) || 0);
-  const paidStatus = paidAmt <= 0 ? 'unpaid' : (paidAmt >= bkTotal ? 'paid' : 'deposit');
-  // The discount / surcharge are ORDER-level too, so they attach to line 0 like the payment does.
-  // Until this was read, the line seat price WAS the whole total: LOV-9930593 imported at 55,984
-  // (16 × 3,499) against a real total of 54,400 after a 1,584 discount — every revenue aggregate
-  // over-reported the sale, while paidStatus (which compares bk_total) still said fully paid.
-  // §b2cDiscShare · this line's PRO-RATA share, not the whole order-level figure. `adjust` is absent
-  // only if a caller was missed; fall back to the pre-2026-09-07 all-on-line-0 rule rather than dropping
-  // the discount entirely, which would over-report the sale.
-  const discAmt  = adjust ? Math.max(0, Math.round(Number(adjust.disc)  || 0))
-                          : (isFirstLine ? Math.max(0, Math.round(Number(h.bk_discount)  || 0)) : 0);
-  const extraAmt = adjust ? Math.max(0, Math.round(Number(adjust.extra) || 0))
-                          : (isFirstLine ? Math.max(0, Math.round(Number(h.bk_surcharge) || 0)) : 0);
-  // Σ lines = the order total. The add-on has to be in here: it is inside bi.subtotal and inside
-  // bookings.total, so leaving it out made an add-on line import 1,000 short of what the guest paid
-  // (LOV-4190737: total 7,000 against paid 8,000) and read as overpaid in accounting.
-  const lineTotal = Math.max(0, seat + addOn - discAmt + extraAmt);
-  // A share still bigger than the line it sits on means the split has no honest basis (a discount that
-  // exceeds the order subtotal, or a bk_subtotal that does not match its own lines). The clamp keeps the
-  // booking importable, but it is silently wrong money — say so, or it reads as a deliberate ฿0 sale.
-  if (discAmt > seat + addOn + extraAmt) {
-    console.warn('[b2c] discount share exceeds line value · ' + h.booking_id + ' line ' + h.line_no
-      + ' · seat ' + seat + ' + addOn ' + addOn + ' - disc ' + discAmt + ' -> clamped to 0');
-  }
-  const adTh = Number(h.pax_thai) || 0;
-  const adFrRaw = Number(h.pax_foreign) || 0;
-  const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
-  // Lead = the booking's own customer block, exactly as B2C's own webhook mapper reads it
-  // (erp/src/mapExternalBooking.js: leadPax = ext.customer.name). bookings.passengers is NOT the
-  // lead — it holds the OTHER travellers, so a 2-adult booking is customer + 1 passenger row.
-  // Order: the booking's own customer, then the CRM customers row (deduped by email, so it can be
-  // a stale earlier customer), then the booker, and only as a last resort the first traveller.
-  let leadFromPax = '';
+// §b2cCheck · run the post-import checks and keep the result for /api/version. Report-only and
+// fenced off: a check that throws must never fail or roll back a sync that already committed.
+async function _b2cRunChecks(itemRows, b2cBks, paxByBooking, singleRef) {
   try {
-    let ps = h.bk_passengers;
-    if (typeof ps === 'string') ps = JSON.parse(ps);
-    if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
-  } catch (_) {}
-  const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
-  // §b2cBy · คนที่คีย์ใบนี้ฝั่ง B2C. bookings.booked_by_name/_email เป็นพนักงาน LOVE Andaman
-  // (bd@ / rung@ / noon@ …) ไม่ใช่ลูกค้า — 157/157 ใบมีค่าเสมอ. ลงช่อง createdBy เพราะทุกจอฝั่ง ops
-  // ("ผู้บันทึก" ในใบเช็คอิน · "Submitted by" ในหน้ารายละเอียด · voucher) อ่านช่องนี้อยู่แล้ว
-  // ค่าเดิมคือสตริงตายตัว 'b2c_sync' ซึ่งไม่บอกอะไรกับสตาฟฟ์เลย.
-  const bookedBy = String(h.booked_by_name || '').trim()
-                || String(h.booked_by_email || '').trim().split('@')[0]
-                || '';
-  const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
-  // Nationality split: B2C carries pax_thai / pax_foreign per item, but leaves BOTH 0 when the split
-  // was never captured — and the fallback then charged the whole line to foreigners. A Thai group
-  // booked in Thai (LOV-9930593: lead "คุณชุติกาญจน์", 16 adults, split 0/0) read as 16 FR in the
-  // market mix. With no split of its own, the line follows the LEAD's nationality; children and
-  // infants follow it too, since they are the same party.
-  const splitKnown = adTh > 0 || adFrRaw > 0;
-  const paxAllThai = !splitKnown && leadNat === 'TH';
-  const chd = Number(h.pax_child) || 0;
-  const inf = Number(h.pax_infant) || 0;
-  // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
-  // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
-  // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
-  // the item type AND a PR-xxx product/route id (private items carry PR-*; day trips carry POW-*/r*),
-  // so a private booking is caught however B2C tags it.
-  const isPrivateId = id => /^PR-/i.test(String(id || ''));
-  const isPowId = id => /^POW-/i.test(String(id || ''));
-  // Pickup (details jsonb) — THREE distinct keys, do not collapse them:
-  //   pickupZone     'PK' | 'KL' | 'NoTransfer'  — the coarse transfer region. Casing is
-  //                  deliberately inconsistent (two codes, one CamelCase word); match the literal
-  //                  string, never a case-normalised one.
-  //   pickupLocation the AREA name from that zone's list — 'Phuket Town', 'Laguna', 'Patong'…
-  //                  This is what resolves to one of the 37 ops pickup areas. Now a required
-  //                  dropdown on B2C, so new rows always carry one; older rows may hold a typed
-  //                  address, which simply won't match and leaves the area unassigned.
-  //   pickupHotel    the hotel itself, free text, never linked to a hotels table. §b2cNoHotel
-  //                  (2026-09-14): ops does not want it, so it is never read below at all.
-  //
-  // Feeding the hotel into findArea cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
-  // while 'Phuket Town' matches exactly. Match on the area, store the area (never the hotel).
-  // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
-  // best-effort against sb_pickup_areas and preserved on conflict (pickupareaid is NOT in B2C_OWN_BK).
-  let det = h.details;
-  if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
-  det = det || {};
-  // §b2cTransfer · a transfer is its own kind of line and must be tested BEFORE isCharter: its
-  // product ids are TR-xxx, which isPrivateId does not claim, but the `h.type !== 'day_trip'` half
-  // of that condition would otherwise sweep it up the moment an id shape changed.
-  const isTransfer = h.type === 'transfer';
-  if (isTransfer && isOpenDate) return null;   // §b2cTransfer · no date = nothing to dispatch yet
-  const isCharter = !isTransfer && (h.type === 'private_own' || (h.type !== 'day_trip' && (isPrivateId(h.product_id) || isPrivateId(h.route_id))));
-  const detailProgramId = String(det.programId || det.productId || det.routeId || '').trim();
-  const routeLookupId = isCharter
-    ? (isPrivateId(h.product_id) ? h.product_id : (isPrivateId(h.route_id) ? h.route_id : detailProgramId))
-    : (isPowId(h.product_id) ? h.product_id : (isPowId(h.route_id) ? h.route_id : detailProgramId));
-  // routeLookupId stays the B2C PROGRAM id — b2cMapAddOns keys the add-on catalog on it, and that
-  // key must never become an ops route id. The ops route is resolved separately, below.
-  //
-  // Order matters, and it is not "newest field first":
-  //   1. programs_own.ops_route_id — B2C's catalog. Covers every row ever imported, including the
-  //      60 older day trips written before details.opsRouteId existed (added ~2026-08).
-  //   2. details.opsRouteId — what the order itself was booked against. Second, not first, so a
-  //      program later re-pointed at a different ops route re-syncs to the new one; also the only
-  //      source if the catalog read failed or the program was deleted from it.
-  //   3. B2C_ROUTE_MAP — private charters only now; day trips can no longer reach it.
-  //   4. §b2cTransfer · transfer_services.ops_route_id, for transfer lines only. Its own table and
-  //      its own id namespace (TR-003), so it is consulted first for those and never for the rest.
-  //      details.transferId is the fallback for rows written before product_id was persisted — four
-  //      exist on prod and two of them are live bookings.
-  const transferKey = isTransfer
-    ? String(h.product_id || det.transferId || det.transferld || '').trim().toUpperCase()
-    : '';
-  //   5. §b2cTransfer · routes.extid — our own record of which B2C product a route was made for.
-  //      Last of the id-based sources on purpose: B2C's catalog states current intent, this states
-  //      origin, and a product re-pointed at another route must follow the catalog.
-  /* §b2cVariant · a B2C product with variants maps to ONE OPS ROUTE PER VARIANT — that is what a
-     route already is here (r7/r8/r9/r10 are four variants of the same Phi Phi trip, each with its
-     own departure and its own seat prices). TR-003 sells a 6-hour and an 8-hour city tour at
-     different rates, and ops needs to read which one it is off the voucher and the job sheet.
-
-     transfer_services.ops_route_id is per SERVICE and cannot carry two answers, so the per-variant
-     mapping lives on OUR side instead: routes.extid = 'TR-003:v2'. Nothing changes on the B2C
-     side. Falls back to the product-level key, so a service with no per-variant routes keeps
-     resolving exactly as before. */
-  const variantId = String(h.variant_id || det.variantId || '').trim();
-  const extKeyBase = isTransfer ? transferKey : String(routeLookupId || h.product_id || '').trim().toUpperCase();
-  const extKeyVar = (extKeyBase && variantId) ? (extKeyBase + ':' + variantId.toUpperCase()) : '';
-  const extKey = extKeyBase;
-  /* §b2cVariant · the per-variant route comes FIRST, ahead of every product-level source.
-     It is strictly the more specific answer: TR-003 resolves one route for the whole city-tour
-     service, TR-003:V2 resolves the 8-hour one. If somebody has gone to the trouble of creating a
-     route for a single variant, that is the intent, and letting the service-level mapping answer
-     first would mean it could never win. Absent a per-variant route this term is simply empty and
-     the order below is unchanged. */
-  const opsRouteId = (extCat && extKeyVar && extCat.get(extKeyVar))
-    || (isTransfer ? (trfCat && trfCat.get(transferKey)) : null)
-    || (progCat && progCat.get(String(routeLookupId || '').trim().toUpperCase()))
-    || String(det.opsRouteId || '').trim()
-    || (extCat && extKey && extCat.get(extKey))
-    || B2C_ROUTE_MAP[routeLookupId]
-    || null;
-  // §b2cTransfer · what dispatch actually needs off a transfer line. qty is VEHICLES — confirmed
-  // against the B2C write path (subtotal = rate(vehicleType) × max(1, qty)), so it never means pax.
-  // NULL on the four pre-fix rows; those are one vehicle.
-  const vehQty  = isTransfer ? Math.max(1, Math.round(Number(h.qty) || 0) || 1) : 0;
-  const vehType = isTransfer ? String(det.vehicleType || '').trim().toLowerCase() : '';
-  const vehDir  = isTransfer ? String(det.direction || '').trim() : '';
-  const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
-  // §b2cNoHotel (2026-09-14): ops does not want the guest's hotel name synced in at all, only the
-  // area — det.pickupHotel is deliberately never read here. hotelName below is really "pickup area
-  // name", kept as that field for backward compat with every existing ops reader of bk.hotelName.
-  const pickupLoc  = pickupArea;
-  const noTransfer = det.noTransfer === true;
-  const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
-  const areaHit = (typeof findArea === 'function') ? findArea(pickupArea, pickupZone) : null;
-  const areaId  = areaHit ? areaHit.id : null;
-  // The ops Zone column prints the area NAME (bk.pickupArea), so a B2C row that carried an area but
-  // matched nothing showed a bare dash. Pass the name through either way: the ops area's own wording
-  // when it matched, else B2C's raw text so staff at least see what the customer picked.
-  const areaName = areaHit ? areaHit.name : pickupArea;
-  // Drop-off. Until §b2cDrop the mapper read det.dropoffSame only as a gate and returned nothing but
-  // dropoffHotelName, so sb_bookings.dropoffsame stayed NULL on all 215 B2C rows. Every ops consumer
-  // tests it strictly (bookingV2RetInfo · bkDropOf · vanJobsOrderInner · the booking card and detail row all
-  // do `dropoffSame === false`), and NULL is not false — so a separate drop-off was stored and then
-  // hidden everywhere, and the return van grouped under the PICKUP area. LOV-5003086 (pickup Panwa,
-  // drop-off KIRI Restaurant Naithon Beach) is the case that surfaced it.
-  //
-  // B2C's own flag cannot be piped through verbatim: 24 of the 28 items carrying dropoffSame:false are
-  // NoTransfer self-arrive orders whose dropoffLocation just repeats the pickup pier ("Visit Panwa
-  // Pier" → "Visit Panwa Pier"). Trusting those would raise 24 false "returns elsewhere, no return van
-  // arranged" alerts. Require a genuinely different place before telling ops the return leg differs.
-  const _dnorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  // §b2cNoHotel (2026-09-14): same as pickup — det.dropoffHotel is deliberately never read.
-  const dropoffRaw = String(det.dropoffLocation || '').trim();
-  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw
-    && _dnorm(dropoffRaw) !== _dnorm(pickupLoc) && _dnorm(dropoffRaw) !== _dnorm(pickupArea);
-  const dropoffLoc = dropoffSep ? dropoffRaw : '';
-  // B2C has no dropoffArea field at all — only the one free-text dropoffLocation ("KIRI Restaurant,
-  // Naithon Beach"), unlike pickup where pickupLocation is already a clean area name. findArea's
-  // substring pass handles it (L.includes(N) → 'naithon'), and it returns null unless the hit is
-  // unique, so an ambiguous string leaves the area unassigned rather than guessing. Try the pickup
-  // zone first, then zone-free: a drop-off can legitimately be in another zone, and B2C sends none.
-  const dropAreaHit = (dropoffSep && typeof findArea === 'function')
-    ? (findArea(dropoffLoc, pickupZone) || findArea(dropoffLoc, '')) : null;
-  const dropAreaId = dropAreaHit ? dropAreaHit.id : null;
-  // Unlike pickupArea this does NOT fall back to the raw text: dropoffLoc is free-text place text, not
-  // a matched area, and it would print raw customer text in the ops Zone column. dropoffHotelName
-  // already carries it (§b2cNoHotel: that raw text is never the guest's hotel now, just the location).
-  const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
-  const trip = {
-    id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
-    routeId: opsRouteId,
-    date: date,
-    bookingMode: isCharter ? 'charter' : 'seat',
-    pax: {
-      ad_fr: paxAllThai ? 0 : adFr,
-      ad_th: paxAllThai ? (Number(h.pax_adult) || 0) : adTh,
-      chd_fr: paxAllThai ? 0 : chd,
-      chd_th: paxAllThai ? chd : 0,
-      inf_fr: paxAllThai ? 0 : inf,
-      inf_th: paxAllThai ? inf : 0,
-      foc: Number(h.pax_foc) || 0,
-      // B2C has no nationality split for FOC, but these columns must not be NULL: the seat-count
-      // queries add the pax columns together, and one NULL makes the whole booking count as zero.
-      foc_fr: 0,
-      foc_th: 0,
-    },
-    seatSource: { locked: 0, general: 0 },
-    lockDrawSel: {},
-    subtotal: seat,
-  };
-  // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
-  // rate card once ops assigns a boat. charterBoatId stays null — ops picks the boat in-app.
-  if (isCharter) {
-    trip.charterBoatId = null;
-    trip.charterPriceMode = 'manual';
-    trip.charterPriceManual = seat;
+    let opsNat = new Set();
+    try {   // a nat typed by hand in ops survives the re-insert, so that party counts as answered
+      const { rows } = await pool.query(
+        `SELECT sb_bookings_id FROM ${fqt('sb_bookings__trips')}
+         WHERE sb_bookings_id = ANY($1) AND COALESCE(nat_ad, nat_chd, nat_inf, nat_foc) IS NOT NULL`,
+        [b2cBks.map(b => b.id)]);
+      opsNat = new Set(rows.map(r => r.sb_bookings_id));
+    } catch (_) { /* no nat columns on this DB — check without it */ }
+    const found = b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat);
+    const prev = (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length;
+    B2C_HEALTH.issues = singleRef
+      ? (B2C_HEALTH.issues || []).filter(i => i.ref !== String(singleRef)).concat(found)
+      : found;
+    B2C_HEALTH.issuesAt = Date.now();
+    const now = B2C_HEALTH.issues.filter(i => i.sev === 'warn').length;
+    if (now !== prev) console.log(`[b2c-check] ${now} booking issue(s) need a look` + (now ? ': '
+      + [...new Set(B2C_HEALTH.issues.filter(i => i.sev === 'warn').map(i => i.ref + ' ' + i.code))].slice(0, 10).join(', ') : ''));
+  } catch (e) {
+    console.warn('[b2c-check] skipped:', e.message);
   }
-  return {
-    id: 'b2c_' + h.booking_id + '_' + h.line_no,
-    schemaVer: 2,
-    createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
-    createdBy: bookedBy || 'b2c_sync',   // §b2cBy
-    voucherRef: String(h.booking_id),
-    agentId: 'a_b2c',
-    leadPax: leadName,
-    leadNationality: leadNat,
-    leadPhone: h.customer_phone || '',
-    leadEmail: h.customer_email || h.booked_by_email || '',
-    status: mapB2CStatus(h.bk_status),
-    bookingDate: td(h.bk_created_at) || date,
-    hotelName: pickupLoc,
-    pickupZone: pickupZone,
-    pickupSelf: noTransfer,
-    pickupAreaId: areaId,
-    pickupArea: areaName,
-    // §b2cDrop · dropoffSame is the gate every ops consumer reads; true = same as pickup, matching the
-    // in-app default (bookingV2 seeds dropoffSame:true). dropoffAreaId/dropoffArea are best-effort and stay
-    // OUT of B2C_OWN_BK, exactly like pickupAreaId — ops fixes the match by hand and B2C must not
-    // stomp it (that hand-assigned 'Naithon' on LOV-5003086 is the reason the rule exists).
-    dropoffSame: !dropoffSep,
-    dropoffHotelName: dropoffLoc,
-    dropoffAreaId: dropAreaId,
-    dropoffArea: dropAreaName,
-    // §b2cSreq (2026-09-02): the two free-text boxes B2C sales fills in on the item — "Special request
-    // (sent to ops team)" and "Internal remark". Neither used to cross over at all, so a private
-    // charter booked with the boat name typed into the special request arrived here blank.
-    //
-    // They land in `notes`, NOT in `note` below: `notes` is the field ops actually reads — it prints as
-    // the Special request on van job orders (vanJobsSreqAuto), as Request on the boat job sheet, and as
-    // "Notes / special request" on the booking detail. `note` is the B2C breadcrumb line and shows only
-    // inside the booking card. One field for both, because ops has nowhere else to put the remark; the
-    // "Remark:" prefix keeps the two readable apart.
-    //
-    // B2C sales very often paste the same text into both boxes (14 of the 14 remarks on file at the
-    // time of writing repeat their special request verbatim). Appending blindly printed it twice on
-    // the boat job sheet, so an identical remark is dropped rather than echoed.
-    notes: (() => {
-      const sreq = String(h.special_request || '').trim();
-      const rem  = String(h.remark || '').trim();
-      // §b2cTransfer · a transfer's dispatch facts have no column of their own on a trip, and the one
-      // thing ops must not have to guess is how many cars and what size. `notes` is where that belongs:
-      // it is what vanJobsSreqAuto prints as the Special request on the van job order, so the driver
-      // sheet carries it with no schema change. Leading line, before the customer's own text, because
-      // it is the instruction rather than the request.
-      const veh = isTransfer ? (() => {
-        const size = vehType === 'sedan' ? 'Sedan' : vehType === 'van' ? 'Van' : (vehType || 'Vehicle');
-        const route = [String(det.pickupLocation || '').trim(), String(det.dropoffLocation || '').trim()]
-          .filter(Boolean).join(' → ');
-        return [size + ' × ' + vehQty, vehDir ? '(' + vehDir.replace(/_/g, ' ') + ')' : '', route]
-          .filter(Boolean).join(' · ');
-      })() : '';
-      return [veh, sreq, (rem && rem !== sreq) ? 'Remark: ' + rem : ''].filter(Boolean).join('\n');
-    })(),
-    note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
-           // Show ops the AREA that failed to match, not the hotel — the area is what they need to
-           // pick by hand, and naming it makes a missing sb_pickup_areas entry obvious.
-           (!areaId && !noTransfer && (pickupArea || pickupLoc))
-             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null,
-           // Same flag for the return leg: a separate drop-off whose free text matched no area needs a
-           // hand-assigned dropoffAreaId or vanJobsOrderInner groups the return van under the pickup area.
-           (dropoffSep && !dropAreaId)
-             ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
-    trips: [trip],
-    passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
-    addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
-    // Display rows for the Total panel. bookingV2 stores adjustments as positive values with a kind, and
-    // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
-    // presentational only and cannot double-count.
-    // §b2cDiscShare · when this line carries only PART of an order-level discount, say so on the row.
-    // The B2C label is written about the whole bill ("ยกยอดทั้งหมดมาจาก VC.22903 จำนวน 17,596 บาท"), so
-    // printing it beside a smaller pro-rata number reads as an error unless the split is spelled out.
-    adjustments: [
-      ...(discAmt  ? [{ kind: 'discount', mode: 'amount', value: discAmt,  label: _shareLabel(h.bk_discount_label  || 'Discount',  discAmt,  h.bk_discount),  note: '' }] : []),
-      ...(extraAmt ? [{ kind: 'extra',    mode: 'amount', value: extraAmt, label: _shareLabel(h.bk_surcharge_label || 'Surcharge', extraAmt, h.bk_surcharge), note: '' }] : []),
-    ],
-    total: lineTotal,
-    priceBreakdown: {
-      seat: seat,
-      addOn: addOn,
-      focDiscount: 0,
-      discount: -discAmt,      // negative, matching bookingV2CommitBooking's own priceBreakdown
-      extra: extraAmt,
-      total: lineTotal,
-    },
-    paymentSnapshot: {
-      // Math.round for the same reason paidAmt has it (~441): these columns are bigint, and B2C
-      // stores money as numeric WITH satang — a deposit of 5831.78 went in raw and Postgres rejected
-      // the whole statement, which failed the entire sync rather than just this field. Every other
-      // money column here is already whole baht, so rounding keeps them consistent.
-      deposit: isFirstLine ? Math.round(Number(h.bk_deposit) || 0) : 0,
-      balance: isFirstLine ? Math.round(Number(h.bk_balance) || 0) : 0,
-      method: payType,
-      paid: isFirstLine ? paidAmt : 0,
-      paidStatus: paidStatus,
-    },
-    ops: {},
-    history: [],
-  };
 }
+
 
 // booking_items JOIN query — drives everything from items, bookings table is optional enrichment only.
 // Some B2C writes keep the line items only in bookings.items[] (JSON) and never fan them out to the
@@ -1101,85 +621,6 @@ const B2C_PAX_VIEW = 'v_booking_passengers';
 let _b2cPaxViewMissingAt = 0;
 const B2C_PAX_VIEW_RETRY_MS = 10 * 60 * 1000;   // re-probe, so creating the view needs no restart
 
-// B2C nationality is free text off a datalist — 'Thailand', 'Thai' and 'TH' all occur. Ops stores an
-// alpha-2 CODE (the client's mdValidNat accepts /^[A-Z]{2}$/ or a custom code). Map what we can and
-// drop the rest: an unmatched value would land in the column as a code nothing can read, and the
-// client already falls back to guessing the nationality from the name when the field is empty.
-const B2C_NAT_ALIAS = {
-  thai:'TH', thailand:'TH', british:'GB', english:'GB', uk:'GB', 'united kingdom':'GB',
-  'great britain':'GB', american:'US', usa:'US', us:'US', 'united states':'US',
-  chinese:'CN', china:'CN', korean:'KR', 'south korea':'KR', korea:'KR', japanese:'JP', japan:'JP',
-  russian:'RU', russia:'RU', german:'DE', germany:'DE', french:'FR', france:'FR',
-  italian:'IT', italy:'IT', spanish:'ES', spain:'ES', dutch:'NL', netherlands:'NL', holland:'NL',
-  australian:'AU', australia:'AU', 'new zealand':'NZ', indian:'IN', india:'IN',
-  malaysian:'MY', malaysia:'MY', singaporean:'SG', singapore:'SG', taiwanese:'TW', taiwan:'TW',
-  'hong kong':'HK', israeli:'IL', israel:'IL', swedish:'SE', sweden:'SE', swiss:'CH',
-  switzerland:'CH', canadian:'CA', canada:'CA', kazakh:'KZ', kazakhstan:'KZ',
-  burmese:'MM', myanmar:'MM', vietnamese:'VN', vietnam:'VN', indonesian:'ID', indonesia:'ID',
-  filipino:'PH', philippines:'PH', polish:'PL', poland:'PL', czech:'CZ', danish:'DK', denmark:'DK',
-  norwegian:'NO', norway:'NO', finnish:'FI', finland:'FI', belgian:'BE', belgium:'BE',
-  austrian:'AT', austria:'AT', portuguese:'PT', portugal:'PT', turkish:'TR', turkey:'TR',
-  ukrainian:'UA', ukraine:'UA', emirati:'AE', uae:'AE', 'united arab emirates':'AE',
-  saudi:'SA', 'saudi arabia':'SA', irish:'IE', ireland:'IE', greek:'GR', greece:'GR',
-  brazilian:'BR', brazil:'BR', mexican:'MX', mexico:'MX', 'south african':'ZA', 'south africa':'ZA',
-  lao:'LA', laos:'LA', cambodian:'KH', cambodia:'KH',
-};
-// ICU answers for withdrawn ISO-3166-3 codes too, and 15 country names therefore resolve to TWO
-// codes. Whichever the scan hit last used to win, which is how 'Serbia' became YU (Yugoslavia),
-// 'Russia' SU (Soviet Union), 'France' FX and 'Timor-Leste' TP. Skipping the withdrawn codes leaves
-// exactly one live code per name — verified against the full A–Z sweep, all 15 collisions resolved.
-// The tail is ICU's non-country aggregates: ZZ in particular is 'Unknown Region', so a guest whose
-// nationality reads "Unknown" was about to be stamped with a country code.
-const B2C_NAT_SKIP = new Set([
-  'AN','BU','CS','DD','DY','FX','HV','NH','RH','SU','TP','UK','VD','YD','YU','ZR',   // withdrawn
-  'EU','EZ','QO','UN','XA','XB','ZZ',                                                // not countries
-]);
-let _b2cNatByName = null;
-function b2cNatCode(txt) {
-  const s = String(txt || '').trim();
-  if (!s) return '';
-  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
-  const k = s.toLowerCase();
-  if (B2C_NAT_ALIAS[k]) return B2C_NAT_ALIAS[k];
-  if (!_b2cNatByName) {
-    // Formal country names ('United Kingdom', 'Viet Nam') straight from ICU; the alias table above
-    // covers the demonyms and short forms ICU does not know. No full-icu build → aliases only.
-    _b2cNatByName = {};
-    try {
-      const dn = new Intl.DisplayNames(['en'], { type: 'region' });
-      for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
-        const cc = String.fromCharCode(a, b);
-        if (B2C_NAT_SKIP.has(cc)) continue;
-        let nm = ''; try { nm = dn.of(cc) || ''; } catch (_) {}
-        if (nm && nm !== cc) _b2cNatByName[nm.toLowerCase()] = cc;
-      }
-    } catch (_) {}
-  }
-  if (_b2cNatByName[k]) return _b2cNatByName[k];
-  return b2cNatFromDemonym(k);
-}
-
-// Last resort for a demonym the alias table happens not to carry. The table is hand-maintained, so
-// every market nobody thought of lands in ops with a BLANK nationality and no warning — 'Slovak'
-// (LOV-9260122) and 'Qatari' were both sitting like that, while ICU knows 'Slovakia' and 'Qatar'
-// perfectly well. This bridges the two.
-//
-// It only ever answers when a transform lands on a REAL ICU country name, and the prefix rule only
-// when exactly ONE country matches — so 'Congo' (two) and 'Ind' (India + Indonesia) are refused
-// rather than guessed. Anything it cannot place returns '' exactly as before, which the client
-// already handles by guessing from the name.
-//   'Qatari' → Qatar · 'Indian' → India · 'Egyptian' → Egypt · 'Romanian' → Romania
-//   'Slovak' → Slovakia (prefix)
-function b2cNatFromDemonym(k) {
-  if (!_b2cNatByName || k.length < 4) return '';
-  for (const c of [k.replace(/i$/, ''), k.replace(/n$/, ''), k.replace(/ian$/, ''),
-                   k.replace(/ese$/, ''), k.replace(/ish$/, '')]) {
-    if (c.length >= 4 && c !== k && _b2cNatByName[c]) return _b2cNatByName[c];
-  }
-  const hits = [...new Set(Object.keys(_b2cNatByName)
-    .filter(n => n.startsWith(k)).map(n => _b2cNatByName[n]))];
-  return hits.length === 1 ? hits[0] : '';
-}
 
 // booking_id → [{paxNo, name, nationality}] for a batch of B2C orders. A missing view or a failed
 // read must never kill the sync: bookings then import exactly as before, with counts and no names.
@@ -1230,8 +671,6 @@ const B2C_ADDON_TABLE = 'program_own_addons';
 let _b2cAddonTblMissingAt = 0;
 const B2C_ADDON_TBL_RETRY_MS = 10 * 60 * 1000;   // re-probe, so adding the table needs no restart
 
-const b2cAddonKey = (programId, addonId) =>
-  String(programId || '').trim().toUpperCase() + '::' + String(addonId || '').trim().toUpperCase();
 
 async function b2cAddonCatalog() {
   const map = new Map();
@@ -1370,46 +809,6 @@ async function opsRouteExtIdCatalog() {
   return map;
 }
 
-// Fallback for bookings the view did not supply — because it does not exist yet, or because the
-// read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
-// travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
-// to empty, ordinal from array position). The view stays the primary path: it is the contract, and
-// it keeps working if B2C ever moves the list off the column.
-function b2cPassengersFromJson(itemRows) {
-  const map = new Map();
-  for (const r of itemRows) {
-    const k = String(r.booking_id);
-    if (map.has(k)) continue;                    // booking-level — the first line of an order has it
-    let ps = r.bk_passengers;
-    if (typeof ps === 'string') { try { ps = JSON.parse(ps); } catch (_) { ps = null; } }
-    if (!Array.isArray(ps)) continue;            // absent / not an array → nothing to import
-    map.set(k, ps.map((p, i) => ({
-      paxNo: i + 1,
-      name: String((p && p.name) || '').trim(),
-      nationality: b2cNatCode(p && p.nationality),
-    })));
-  }
-  return map;
-}
-
-// The list is booking-level with no link back to a booking_item, so it cannot be split per trip.
-// Attach it to line 0 only — the same rule the order-level payment follows — instead of repeating
-// every traveller on each line of a multi-item order.
-//
-// Maps 1:1, no row dropped as "the lead": B2C's passengers[] already EXCLUDES the lead (that is
-// bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
-// webhook mapper — erp/src/mapExternalBooking.js maps ext.passengers straight through as AD — and
-// matches ops semantics, where passengers[] is the guests after the lead (rendered from #2).
-function b2cPassengerList(rows) {
-  if (!Array.isArray(rows) || !rows.length) return [];
-  const out = [];
-  for (const r of rows) {
-    if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
-    out.push({ name: r.name, nationality: r.nationality, type: 'AD', foc: false });
-  }
-  return out;
-}
-
 async function relSyncB2C(singleExtId = null) {
   if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
   try {
@@ -1489,7 +888,7 @@ async function relSyncB2C(singleExtId = null) {
     const trfCat  = await b2cTransferRouteCatalog();   // §b2cTransfer
     const extCat  = await opsRouteExtIdCatalog();      // §b2cTransfer · routes.extid → route id
 
-    let srcHash = null;
+    let srcHash = null, unchanged = false;
     if (!singleExtId) {
       srcHash = crypto.createHash('sha1')
         .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking])
@@ -1499,44 +898,20 @@ async function relSyncB2C(singleExtId = null) {
         .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
-        if (hr.rows[0] && hr.rows[0].data === srcHash) { _b2cHealthOk(); return; }   // B2C unchanged since last sync
+        unchanged = !!(hr.rows[0] && hr.rows[0].data === srcHash);
       } catch (_) {}
+      // B2C unchanged since last sync. §b2cCheck · the one exception is the first run after a boot:
+      // the hash lives in the DB and survives a deploy, so without this the checks would never run
+      // until B2C next changed. Map and check once, write nothing.
+      if (unchanged && B2C_HEALTH.issuesAt) { _b2cHealthOk(); return; }
     }
 
-    // Pickup-area matcher: B2C sends a free-text pickupLocation; resolve it to an ops pickup area
-    // only when the match is unambiguous (exact name, else a single substring hit, zone-compatible).
-    // No match → area stays unassigned for ops staff (flagged in the booking note).
     let areaRows = [];
     try { ({ rows: areaRows } = await pool.query(`SELECT id, name, zone FROM ${fqt('sb_pickup_areas')}`)); }
     catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
-    const _norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    // Returns the matched area ROW (id + name), not just the id — the mapper needs the name for the
-    // ops Zone column as well.
-    const findArea = (loc, zone) => {
-      const L = _norm(loc);
-      if (!L) return null;
-      const cand = areaRows.filter(a => !zone || !a.zone || a.zone === zone);
-      let hit = cand.filter(a => _norm(a.name) === L);
-      if (!hit.length) hit = cand.filter(a => { const N = _norm(a.name); return N.includes(L) || L.includes(N); });
-      return hit.length === 1 ? hit[0] : null;
-    };
-
-    // Flatten: one allotment booking per line item. Group to flag the first line of each B2C order
-    // (order-level payment attaches to that line) and to split the order-level discount / surcharge
-    // across the lines by value — see mapB2CItemBooking and b2cAllocAdjust.
-    const byId = {};
-    for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
-    const b2cBks = [];
-    for (const items of Object.values(byId)) {
-      items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      const adj = b2cAllocAdjust(items);   // §b2cDiscShare · order-level discount/surcharge split by line value
-      // §b2cTransfer · the mapper returns null for a line ops cannot act on (an open-date transfer).
-      // Filtered here rather than before mapping so adj[i] keeps its index alignment with items.
-      items.forEach((it, i) => {
-        const rec = mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat, adj[i], trfCat, extCat);
-        if (rec) b2cBks.push(rec);
-      });
-    }
+    const findArea = b2cFindArea(areaRows);   // §b2cMapMod · matcher + per-order loop live in b2c-map.js
+    const b2cBks = mapB2COrders(itemRows, { findArea, paxByBooking, addonCat, progCat, trfCat, extCat });
+    if (unchanged) { await _b2cRunChecks(itemRows, b2cBks, paxByBooking, null); _b2cHealthOk(); return; }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
 
@@ -1614,6 +989,17 @@ async function relSyncB2C(singleExtId = null) {
       for (const r of existingTrips) {
         (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
       }
+      // §b2cNat · trip.nat is neither ops_* nor B2C-owned: a count ops typed by hand has to
+      // survive the delete+re-insert below, same as the ops columns do.
+      const NAT_COLS = ['nat_ad', 'nat_chd', 'nat_inf', 'nat_foc'].filter(c => TRIP_COLS.includes(c));
+      const savedTripNat = {};
+      if (NAT_COLS.length) {
+        for (const r of (await client.query(
+          `SELECT sb_bookings_id, idx, ${NAT_COLS.map(qic).join(', ')} FROM ${fqt('sb_bookings__trips')}
+           WHERE sb_bookings_id = ANY($1)`, [b2cIds])).rows) {
+          (savedTripNat[r.sb_bookings_id] = savedTripNat[r.sb_bookings_id] || {})[r.idx] = r;
+        }
+      }
       _phase = 'delete+re-insert trips';
       await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
       for (const row of tables['sb_bookings__trips'] || []) {
@@ -1631,6 +1017,20 @@ async function relSyncB2C(singleExtId = null) {
             `UPDATE ${fqt('sb_bookings__trips')} SET ${TRIP_OPS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
              WHERE sb_bookings_id=$${TRIP_OPS.length + 1} AND idx=$${TRIP_OPS.length + 2}`,
             [...TRIP_OPS.map(c => ops[c]), bkId, Number(idx)]
+          );
+        }
+      }
+      // §b2cNat · the mapper's own count wins when it derived one (a full passenger list is better
+      // evidence than a hand count); a trip it left blank gets the previous value back.
+      _phase = 'restore trip nat';
+      for (const [bkId, byIdx] of Object.entries(savedTripNat)) {
+        for (const [idx, old] of Object.entries(byIdx)) {
+          if (NAT_COLS.every(c => old[c] == null)) continue;
+          await client.query(
+            `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
+             WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}
+               AND ${NAT_COLS.map(c => `${qic(c)} IS NULL`).join(' AND ')}`,
+            [...NAT_COLS.map(c => old[c]), bkId, Number(idx)]
           );
         }
       }
@@ -1674,7 +1074,7 @@ async function relSyncB2C(singleExtId = null) {
       //    Idempotent: re-applied every sync until capacity covers demand; dates with no deployment
       //    (capacity 0 — e.g. far-future advance bookings) are skipped so normal bookings aren't flagged.
       _phase = 'oversell flag';
-      const NUL = ' ';
+      const NUL = '\0';
       const affPairs = [...new Set((tables['sb_bookings__trips'] || [])
         .filter(t => t.bookingmode === 'seat' && t.routeid && t.date)
         .map(t => t.routeid + NUL + t.date))];
@@ -1687,7 +1087,8 @@ async function relSyncB2C(singleExtId = null) {
         for (const r of (await client.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} = ANY($1)`, [affDates])).rows) tripByDate[r.key] = r;
         const lockByKey = {};
         for (const r of (await client.query(
-          `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS n
+          /* §lkPend · pendqty = ส่วนของ qty ที่ยังรอที่ว่าง ไม่ได้กันที่นั่ง · ไม่หักออกแล้วตาข่ายกันขายเกินจะเห็นที่นั่งถูกกันมากกว่าจริง */
+          `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used - COALESCE(pendqty,0), 0)), 0)::int AS n
            FROM ${fqt('sb_seat_locks')} WHERE date = ANY($1) AND status='active' GROUP BY routeid, date`, [affDates])).rows)
           lockByKey[r.routeid + NUL + r.date] = r.n;
         const bkByKey = {};
@@ -1787,6 +1188,7 @@ async function relSyncB2C(singleExtId = null) {
 
       await client.query('COMMIT');
       _b2cHealthOk();
+      await _b2cRunChecks(itemRows, b2cBks, paxByBooking, singleExtId);   // §b2cCheck · after COMMIT: report-only
       const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
       console.log(`[b2c-sync] synced ${label}`);
       if (srcHash) {
@@ -2119,6 +1521,12 @@ async function initDb(){
       // ค่าเป็น object ซ้อน map + array → เก็บทั้งก้อนเป็น JSON text แบบ vanjob_sent
       // เพิ่มช่องในใบวางบิลภายหลังไม่ต้องแตะ DB อีก
       await sq('van_bill table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_bill" (id text PRIMARY KEY, key text, value text)`);
+      /* §vanStop · จุดแวะของรถที่ไม่ใช่ booking · VAN_STOPS['YYYY-MM-DD::routeId::id'] =
+         {kind:'staff'|'cargo', label, pax, time, place, zone, phone, note, vanId, vanGroup, vanSeq, ck}
+         ไกด์ติดรถไปท่า หรือแวะเอาของที่ออฟฟิศ · ไม่ใช่ลูกค้า ไม่ลงเรือ ไม่แตะที่นั่งเรือ
+         คนกินที่นั่งรถ ของไม่กิน · ขึ้นสามหน้า By trip · ใบงานรถ · เช็คอินรถ
+         ค่าเป็น JSON ทั้งก้อนเหมือน van_bill → เพิ่มช่องในจุดแวะทีหลังไม่ต้องแตะ DB อีก */
+      await sq('van_stops table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_stops" (id text PRIMARY KEY, key text, value text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)
@@ -2216,6 +1624,39 @@ async function initDb(){
       // INSERT column list for every save, so this DDL runs in the same boot path that adds them.
       await sq('sb_bookings.paymentsnapshot_paid col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paid" bigint`);
       await sq('sb_bookings.paymentsnapshot_paidstatus col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paidstatus" text`);
+      /* §lkBulk (2026-09-29) · ช่วงวันของล็อกที่นั่งแบบ Bulk
+         อาการที่ผู้ใช้แจ้ง — "ทำจองแบบ Bulk เลือกวันเริ่ม วันจบ แต่ระบบไม่บันทึกให้ รีเฟรชหาย"
+         §lkBulk เปลี่ยนล็อกรายเดือน (month/monthFrom/monthTo) มาเป็นช่วงวันที่ + วันในสัปดาห์
+         แต่ตาราง sb_seat_locks ยังมีแต่คอลัมน์ชุดเดือนของเดิม → dateFrom/dateTo/dow ไม่มีที่ลง
+         decompose ทิ้งทุกครั้งที่เซฟ · assemble ไม่มีอะไรจะคืน · ล็อกกลับมาแบบ scope='bulk'
+         ที่ไม่มีช่วงวัน → bookingV2LockRange คืนค่าว่าง → ไม่ครอบรอบไหนเลย → ไม่ขึ้น manifest วันไหน
+         (นี่คือสาเหตุที่ล็อกของ Panorama ไม่เคยขึ้นหน้า Manifest)
+         usedBy = โควตาที่ถูกดึงไปแล้วแยกรายรอบ · หายไปด้วย → ล็อกที่ขายไปแล้วดูเหมือนยังว่างทั้งใบ
+         releasedDates = รอบที่กดปล่อยคืนแล้ว · หายไป → รอบที่ปล่อยแล้วกลับมากันที่นั่งใหม่
+         log[].tripDate = รอบที่ draw/return/release อ้างถึง · หายไป → ไล่ที่มาของที่นั่งไม่ได้
+         ครั้งที่สี่ของบั๊กชนิดเดียวกัน (check-in 25 ก.ค. · pierPayments 2 ส.ค. · pier_sect 14 ส.ค.)
+         ตัวกันไม่ให้เกิดซ้ำ: tools/check-mapping-coverage.mjs — เช็คย้อนทางจาก blob จริง */
+      /* §lkPend (2026-10-02) · ล็อกที่นั่งแบบรอที่ว่าง · pendqty (รายวัน) / pendby (แบบช่วง รายรอบ)
+         model มีสองคอลัมน์นี้แล้ว · ตารางต้องมีด้วย ไม่งั้น INSERT ของ sb_seat_locks พังทั้งชุด (ดู §dbDrift) */
+      for(const [_c,_t] of [['datefrom','text'],['dateto','text'],['dow','text'],
+                            ['usedby','text'],['releaseddates','text'],
+                            ['pendqty','bigint'],['pendby','text']]){
+        await sq(`sb_seat_locks.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks" ADD COLUMN IF NOT EXISTS "${_c}" ${_t}`);
+      }
+      await sq('sb_seat_locks__log.tripdate col', `ALTER TABLE ${OS_SCHEMA}."sb_seat_locks__log" ADD COLUMN IF NOT EXISTS "tripdate" text`);
+      /* §lkBulk · กู้ช่วงวันของล็อกที่ผ่าน round-trip มาก่อนคอลัมน์จะมี
+         ใบที่แปลงมาจาก scope='month' ยังมี monthfrom/monthto ครบในฐาน (สองคอลัมน์นั้นถูก map มาตลอด)
+         → เติมช่วงวันคืนได้ตรง ๆ: วันที่ 1 ของเดือนแรก ถึงวันสุดท้ายของเดือนสุดท้าย
+         รันซ้ำได้ (WHERE datefrom IS NULL OR datefrom='') · ใบที่ไม่มีร่องรอยเดือนแตะไม่ได้
+         ฝั่งหน้าจอจะติดป้ายแดงให้กรอกช่วงวันใหม่เอง */
+      await sq('sb_seat_locks backfill range from month', `
+        UPDATE ${OS_SCHEMA}."sb_seat_locks"
+           SET "datefrom" = to_char((COALESCE(NULLIF("monthfrom",''), NULLIF("month",'')) || '-01')::date, 'YYYY-MM-DD'),
+               "dateto"   = to_char(((COALESCE(NULLIF("monthto",''), NULLIF("monthfrom",''), NULLIF("month",'')) || '-01')::date
+                                     + interval '1 month' - interval '1 day')::date, 'YYYY-MM-DD')
+         WHERE ("datefrom" IS NULL OR "datefrom" = '')
+           AND COALESCE(NULLIF("monthfrom",''), NULLIF("month",'')) ~ '^[0-9]{4}-[0-9]{2}$'
+           AND COALESCE(NULLIF("monthto",''), NULLIF("monthfrom",''), NULLIF("month",'')) ~ '^[0-9]{4}-[0-9]{2}$'`);
       await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (
@@ -2425,6 +1866,73 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 // raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
 // not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
+/* §embedFrame (2026-09-19) · ใครมีสิทธิ์เอาแอปนี้ไปใส่ <iframe>
+   ก่อนหน้านี้ไม่มี X-Frame-Options และไม่มี CSP อยู่เลยสักบรรทัด = เว็บไหนในโลก
+   ก็ฝังได้ ซึ่งคือช่อง clickjacking (ลากปุ่มของเราไปซ้อนใต้ปุ่มของเขา)
+   ค่าเริ่มต้น 'self' = ฝังได้เฉพาะจากโดเมนตัวเอง · ที่อื่นบล็อกหมด
+   เปิดให้บริการอื่นด้วยการตั้ง EMBED_ORIGINS เป็นรายชื่อ origin คั่นด้วย comma
+   ต้องเป็น origin เต็ม ๆ เท่านั้น เช่น  https://www.loveandaman.com,https://ops.example.com
+   (ห้ามใส่ path · ห้ามใส่ * · ถ้าใส่ * มาจะถูกทิ้ง เพราะเท่ากับไม่กันอะไรเลย)
+   ⚠ นี่กันแค่ "ใครฝังได้" ไม่ได้กัน "ฝังแล้วทำอะไรได้" — คนในกรอบยังเป็นแอปเต็มตัว
+     ที่รันด้วยสิทธิ์ของ session ตัวเอง (ดู allotment_v2/js/10-embed.js) */
+const EMBED_ORIGINS = String(process.env.EMBED_ORIGINS||'').split(',')
+  .map(s=>s.trim()).filter(s=>s && s!=='*' && /^https?:\/\/[^/\s]+$/.test(s));
+const FRAME_ANCESTORS = "frame-ancestors 'self'" + (EMBED_ORIGINS.length ? ' '+EMBED_ORIGINS.join(' ') : '');
+
+/* §embedToken (2026-09-19) · ทางเข้าสำหรับคนที่ไม่มีบัญชีในระบบนี้เลย
+   พนักงาน CS ล็อกอินที่ cs.loveandaman.com ด้วยบัญชีของฝั่งนั้น · ไม่มีบัญชี rsvn
+   และไม่ควรต้องมี · ฝั่งนั้นจึงเซ็นตั๋วอายุสั้นแนบมากับ src ของ iframe
+   แล้วที่นี่แลกตั๋วเป็น session แบบดูอย่างเดียว
+
+   ⚠ กุญแจคนละดอกกับ SESSION_SECRET โดยเจตนา · ถ้าฝั่ง CS ถือ SESSION_SECRET
+     มันจะเซ็น session เป็น admin ได้เอง · แยกดอกแล้วต่อให้กุญแจนี้หลุด
+     สิ่งที่ได้คือหน้า Booking แบบอ่านอย่างเดียวเท่านั้น
+
+   ⚠ ตั๋วไม่ได้บอกว่า "ผู้ใช้คือใคร" และเราไม่เชื่อถ้ามันบอก · มันพิสูจน์แค่ว่า
+     "ฝั่ง CS รับรองคนดูคนนี้" · ตัวตนที่ได้เป็นของตายที่ฝั่งนี้กำหนดเอง
+     (ดูอย่างเดียว · เห็นแค่หน้า Booking) ยกระดับสิทธิ์ผ่านตั๋วไม่ได้
+
+   ไม่ตั้ง EMBED_TOKEN_SECRET = ปิดทางนี้ทั้งหมด ตั๋วทุกใบถูกเมิน
+   ตั๋วซ้ำภายในอายุของมันใช้ได้อีก (ไม่ได้เก็บ nonce) · กันด้วยอายุสั้นแทน
+   และผลลัพธ์ที่เลวร้ายที่สุดคืออ่านอย่างเดียวอยู่ดี */
+const EMBED_SECRET       = String(process.env.EMBED_TOKEN_SECRET||'');
+const EMBED_TOKEN_AHEAD  = 10*60e3;    // ตั๋วที่อ้างอายุยาวกว่านี้ = ฝั่งโน้นตั้งผิด ไม่รับ
+const EMBED_SESS_MS      = Math.min(24, Math.max(1, Number(process.env.EMBED_SESS_HOURS||12))) * 3600e3;
+const LA_PERM_EXPLICIT   = '*explicit';   // ตรงกับ js/01-auth-sync.js · "เอาตามรายการนี้ ห้ามยกให้เพิ่ม"
+/* §permSeal (2026-09-22) · หมุดต้องรอด cleanPerms ไม่งั้นทั้งกลไกไม่มีผลเลย
+   อาการที่ผู้ใช้เจอ · admin ตั้ง "ท่าเรือ = ไม่มี" ให้คนที่ถือ piercheckin อยู่ แล้วกดบันทึก
+   เซิร์ฟเวอร์เก็บถูกทุกอย่าง (ศูนย์หน้าท่าเรือ) แต่ cleanPerms ตัดหมุดทิ้งเพราะไม่อยู่ใน PERM_KEYS
+   พอไม่มีหมุด laExpandPerms ฝั่งหน้าเว็บถือว่าเป็นข้อมูลแบบเก่า แล้ว laBackfillPier ยกหน้าท่าเรือ
+   คืนให้ทั้งชุด · เปิดกล่องดูอีกทีขึ้นเป็น "ดู" เหมือนไม่เคยกดบันทึก
+   (วัดจริง · ส่งไปมีหมุด true · เก็บจริงมีหมุด false · เปิดใหม่ท่าเรือกลับมาเป็น ดู)
+   นี่คือกับดักเดียวกับ §permSync รอบที่ห้า · ต่างแค่คราวนี้คีย์ที่หายไม่ใช่ชื่อหน้า แต่เป็นหมุด */
+PERM_KEYS.add(LA_PERM_EXPLICIT);
+function embedTokenOk(t){
+  if(!EMBED_SECRET || !t) return false;
+  try{
+    const [p, sig] = String(t).split('.');
+    if(!p || !sig) return false;
+    const want = crypto.createHmac('sha256', EMBED_SECRET).update(p).digest('base64url');
+    const a = Buffer.from(sig), b = Buffer.from(want);
+    if(a.length !== b.length) return false;              // timingSafeEqual โยนถ้าความยาวต่างกัน
+    if(!crypto.timingSafeEqual(a, b)) return false;
+    const o = JSON.parse(Buffer.from(p,'base64url').toString());
+    const now = Date.now();
+    if(!o || typeof o.exp !== 'number') return false;    // ไม่มีวันหมดอายุ = ไม่รับ
+    return now <= o.exp && (o.exp - now) <= EMBED_TOKEN_AHEAD;
+  }catch(_){ return false; }
+}
+// ตัวตนของกรอบ · ไม่มีแถวนี้ในตาราง users และไม่ต้องมี — ทางอ่านทุกเส้น
+// (/api/load · /api/v1 GET · /api/me) อ่านจาก token ที่เซ็นแล้วอย่างเดียว
+// ไม่เคยไปถามฐานข้อมูลว่าผู้ใช้นี้มีจริงไหม · ตาราง users ถูกอ่านแค่ตอนล็อกอิน
+function embedSessionCookie(){
+  const EXP = Date.now() + EMBED_SESS_MS;
+  const tok = sign({ username:'embed:cs', name:'CS · view only', role:'staff',
+                     perms:['booking', LA_PERM_EXPLICIT],   // เห็นแค่ Booking · ห้าม back-fill หน้าอื่น
+                     edit:false, editAreas:[],               // → /api/save และ /api/v1/_batch ตอบ 403
+                     embed:true, iat:Date.now(), exp:EXP });
+  return `sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.floor(EMBED_SESS_MS/1000)}`;
+}
 /* §assetVer · Cloudflare เขียนทับ Cache-Control ของเราเป็น max-age=14400
    เบราว์เซอร์จึงถือ js ตัวเก่าไว้สี่ชั่วโมง · deploy แล้วมองไม่เห็นผล
    วัดจริงแล้ว script tag โหลดด้วย transferSize 0 คือไม่ยิงเน็ตเลย
@@ -2617,6 +2125,27 @@ async function restLoad(table, id, db){
   const pl = REST_PLAN[table], pkc = pl.pkCol || pl.keyCol, data = {};
   const pr = id == null ? await db.query(`SELECT * FROM ${fqt(table)}`)
                         : await db.query(`SELECT * FROM ${fqt(table)} WHERE ${qic(pkc)}=$1`, [id]);
+  data[table] = pr.rows;
+  async function kids(t, pkvals){
+    if (!pkvals.length) return;
+    for (const c of (REST_KIDS[t]||[])){
+      const cp = REST_PLAN[c];
+      const r = await db.query(`SELECT * FROM ${fqt(c)} WHERE ${qic(cp.fkCol)} = ANY($1)`, [pkvals]);
+      data[c] = (data[c]||[]).concat(r.rows);
+      await kids(c, r.rows.map(x => x[cp.rowPkCol != null ? cp.rowPkCol : cp.pkCol]).filter(v => v != null));
+    }
+  }
+  await kids(table, data[table].map(r => r[pkc]).filter(v => v != null));
+  return data;
+}
+/* ══ §ckDay (2026-09-22) · โหลดเฉพาะใบของวันเดียว ═══════════════════════════
+   restLoad รับได้ทีละใบ · หน้าเช็คอินต้องการทั้งวัน (ราว 30-60 ใบ)
+   ยิงทีละใบ 60 คำขอไม่ไหว · ตัวนี้คือ restLoad ที่รับเป็นชุด id
+   โครงเหมือนกันทุกบรรทัด ต่างแค่ WHERE pk = ANY($1) */
+async function restLoadMany(table, ids, db){
+  db = db || pool;
+  const pl = REST_PLAN[table], pkc = pl.pkCol || pl.keyCol, data = {};
+  const pr = await db.query(`SELECT * FROM ${fqt(table)} WHERE ${qic(pkc)} = ANY($1)`, [ids]);
   data[table] = pr.rows;
   async function kids(t, pkvals){
     if (!pkvals.length) return;
@@ -2933,7 +2462,8 @@ const server = http.createServer((req, res) => {
         //   ความเงียบนั้นคืออาการ · ต้องมีที่ให้มองแล้วรู้ทันที ไม่ใช่ไล่หาทีละไฟล์
         //   §dbDrift · อีกทางที่ข้อมูลหายเงียบ · model มีคอลัมน์ แต่ตารางจริงไม่มี
         //   INSERT พังทั้งชุด transaction rollback เซฟไม่ติดสักฟิลด์ · เห็นเป็นอาการเดียวกันเป๊ะ
-        { b2c: b2cHealthReport(), mig: migSummary(), map: mapDriftSummary(), db: dbDriftSummary() })))
+        // §b2cCheck · polled every 10s by every tab — count + signature only; the list is /api/b2c/health
+        { b2c: (h => { delete h.issues; return h; })(b2cHealthReport()), mig: migSummary(), map: mapDriftSummary(), db: dbDriftSummary() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
@@ -2943,7 +2473,7 @@ const server = http.createServer((req, res) => {
   // message can name internal hosts ("getaddrinfo ENOTFOUND ...railway.internal").
   if(u === '/api/b2c/health'){
     const h = b2cHealthReport();
-    if(!session(req)){ delete h.message; delete h.phase; }
+    if(!session(req)){ delete h.message; delete h.phase; delete h.issues; }
     return J(res, h.ok ? 200 : 503, h);
   }
   if(u === '/api/events'){   // SSE stream · server pushes version-bump events → clients refresh instantly
@@ -2951,8 +2481,49 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
     res.write('retry: 5000\n\n');
     sseClients.add(res);
-    const hb=setInterval(()=>{ try{ res.write(':hb\n\n'); }catch(e){} }, 25000);
+    // §sseCatchup · named event, not a ':' comment — comments never reach EventSource, so the client
+    // could not tell a live-but-quiet stream from one that silently died (measured: ~8 min on prod).
+    // The client's onmessage only sees unnamed events, so older tabs ignore 'hb'.
+    const hb=setInterval(()=>{ try{ res.write('event: hb\ndata: 1\n\n'); }catch(e){} }, 25000);
     req.on('close', ()=>{ clearInterval(hb); sseClients.delete(res); });
+    return;
+  }
+  /* ══ §ckDay · สถานะเช็คอินของวันเดียว ════════════════════════════════════
+     ที่มา · หน้าเช็คอินหน้าท่าสองเครื่องทำพร้อมกัน · ทุกครั้งที่อีกเครื่องกดเช็คอิน
+     เครื่องนี้ต้องดึง /api/load ซึ่งเป็นก้อนทั้งระบบ ~20MB เพื่อดูสถานะไม่กี่แถว
+     เช้าหนึ่งเช็คอินร้อยคน = สองกิกะไบต์ต่อเครื่อง บนเน็ตหน้าท่า
+     ตัวนี้คืนเฉพาะใบที่มีทริปวันนั้น (ราว 30-60 ใบ · หลักแสนไบต์)
+
+     ⚠ คืน "ใบเต็ม" ไม่ใช่เฉพาะช่องเช็คอิน · ใบที่เพิ่งเกิดใหม่ต้องมีข้อมูลพอจะวาดแถวได้
+       และไคลเอนต์ต้องเทียบชุด id ได้ว่าวันนั้นมีใบอะไรบ้าง ตรงกับของตัวเองไหม
+       ไม่ตรงเมื่อไหร่ (ใบเกิด/ย้ายวัน/ยกเลิก) ไคลเอนต์จะถอยไปดึงก้อนเต็มเอง
+     ⚠ โหมด blob ตอบ 501 · ไคลเอนต์ถือเป็น "ทางนี้ใช้ไม่ได้" แล้วถอยไปทางเดิม
+       ปล่อยให้ deploy ไคลเอนต์ก่อนเซิร์ฟเวอร์ได้โดยไม่พัง */
+  if(u === '/api/ck'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    if(DATA_BACKEND!=='relational') return J(res,501,{error:'ck needs DATA_BACKEND=relational'});
+    const date=String(new URLSearchParams(q).get('date')||'');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return J(res,400,{error:'date=YYYY-MM-DD required'});
+    const T='sb_bookings', TRIPS='sb_bookings__trips';
+    if(!REST_PLAN[T] || !REST_PLAN[TRIPS]) return J(res,501,{error:'schema has no bookings/trips'});
+    const fk=REST_PLAN[TRIPS].fkCol;
+    /* §ckVan · อ่านเวอร์ชัน "ก่อน" อ่านข้อมูลเสมอ
+       ไคลเอนต์เอาเลขนี้ไปปักธงว่า "ตามทันถึงเวอร์ชันนี้แล้ว"
+       อ่านทีหลัง → เลขที่คืนไปใหม่กว่าข้อมูลที่คืนไปจริง
+       ใบที่เกิดระหว่างสองคำสั่งจะหายเงียบ ๆ จนกว่าจะมีคนแก้อะไรอีก
+       อ่านก่อน → เลขเก่ากว่าข้อมูล · อย่างมากคือดึงซ้ำอีกรอบ ซึ่งไม่หาย */
+    pool.query('SELECT version FROM app_state WHERE id=$1',[STATE_KEY])
+      .then(async vr=>{
+        const version=(vr.rows[0]&&vr.rows[0].version)||0;
+        const r=await pool.query(`SELECT DISTINCT ${qic(fk)} AS id FROM ${fqt(TRIPS)} WHERE "date"=$1`, [date]);
+        const ids=r.rows.map(x=>x.id).filter(v=>v!=null);
+        if(!ids.length) return J(res,200,{date, version, bookings:[]});
+        const blob=osRepo.assembleBlob(await restLoadMany(T, ids));
+        const arr=Array.isArray(blob[REST_PLAN[T].appKey])?blob[REST_PLAN[T].appKey]:[];
+        J(res,200,{date, version, bookings:arr});
+      })
+      .catch(e=>J(res,500,{error:e.message}));
     return;
   }
   if(u === '/api/save' && req.method === 'POST'){
@@ -3216,7 +2787,7 @@ const server = http.createServer((req, res) => {
       // arithmetic NULL and SUM() skips it, silently under-reporting the hold.
       pool.query(
         `SELECT sl.date,
-                COALESCE(SUM(GREATEST(sl.qty - COALESCE(sl.used,0) - COALESCE(ch.child_used,0), 0)), 0)::int AS locked
+                COALESCE(SUM(GREATEST(sl.qty - COALESCE(sl.used,0) - COALESCE(ch.child_used,0) - COALESCE(sl.pendqty,0), 0)), 0)::int AS locked
          FROM ${fqt('sb_seat_locks')} sl
          LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(COALESCE(c.used,0)),0) AS child_used
@@ -3359,6 +2930,56 @@ const server = http.createServer((req, res) => {
   // allotment_v2/ itself). 302, not 301: a permanent redirect is cached hard and painful to undo.
   if(u==='/'||u===''){ res.writeHead(302,{Location:'/allotment_v2/allotment_v2.html'+(q?('?'+q):''),'Cache-Control':'no-store'}); return res.end(); }
 
+  /* §embedRoute (2026-09-19) · ที่อยู่สั้น ๆ ให้บริการอื่นเอาไปใส่ <iframe>
+       /embed/calendar                  → ปฏิทินของหน้า Booking
+       /embed/bytrip?date=2026-09-20    → By trip · date ของวันนั้น
+     บริการอื่นจะได้ไม่ต้องรู้จัก ?embed=1&view=...&tab=... และเราย้ายของข้างใน
+     ได้ทีหลังโดยไม่ต้องไปขอให้เขาแก้ลิงก์
+
+     เป็น 302 ไม่ใช่การ rewrite ด้วยเหตุผลเดียวกับ '/' ข้างบน — allotment_v2.html
+     อ้าง js/ กับ css/ แบบ path สัมพัทธ์ · เสิร์ฟเนื้อหาที่ /embed/bytrip ตรง ๆ
+     จะทำให้ js/08-app.js กลายเป็น /embed/js/08-app.js แล้ว 404 ทั้งหน้า
+
+     ส่งต่อเฉพาะพารามิเตอร์ที่รู้จักและตรวจรูปแบบแล้วเท่านั้น · ค่าที่หลุดเข้าไป
+     ใน Location โดยไม่ตรวจคือช่อง header injection / open redirect */
+  if(u === '/embed' || u.startsWith('/embed/')){
+    const EMBED_PAGES = {
+      'calendar': 'view=booking&tab=cal',
+      'bytrip':   'view=booking&tab=bytrip',
+    };
+    const page = u.slice('/embed/'.length).replace(/\/+$/,'');
+    const base = EMBED_PAGES[page];
+    if(!base){
+      res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+      return res.end('unknown embed page · try /embed/'+Object.keys(EMBED_PAGES).join(' or /embed/'));
+    }
+    const qp = new URLSearchParams(q), out = ['embed=1', base];
+    const date = qp.get('date');   if(date  && /^\d{4}-\d{2}-\d{2}$/.test(date))   out.push('date='+date);
+    const rid  = qp.get('route');  if(rid   && /^[A-Za-z0-9_-]{1,40}$/.test(rid))  out.push('route='+rid);
+    if(qp.get('chrome') === '1') out.push('chrome=1');   // ดีบั๊ก · คงแถบเครื่องมือ+เมนูไว้
+    /* §embedRO · ไม่ใส่อะไร = ดูอย่างเดียว · edit=1 คือการขอปุ่มลงมือกลับมา
+       default อยู่ฝั่งปลอดภัย · ลืมใส่แล้วได้หน้าที่แก้ไม่ได้ ดีกว่าลืมใส่แล้วได้หน้าที่จัดรถได้ */
+    if(qp.get('edit') === '1') out.push('edit=1');
+
+    /* §embedToken · แลกตั๋วเป็น session · ทำเฉพาะตอน "ยังไม่มี session"
+       ที่ต้องเป็นแบบนี้เพราะ cs. กับ rsvn. ใช้คุกกี้ก้อนเดียวกัน (โฮสต์เดียวกัน)
+       ถ้าตั๋วชนะเสมอ พนักงานที่ล็อกอิน rsvn ด้วยบัญชีตัวเองอยู่ในแท็บอื่น
+       จะโดนเขียนทับคุกกี้ = เตะออกจากระบบกลางคัน · ยอมไม่ได้
+       มี session อยู่แล้ว = คนนั้นคือคนนั้นจริง ๆ ใช้ของเขาไป
+       ไม่มี session (พนักงาน CS ที่ไม่มีบัญชีที่นี่) = ตั๋วทำงาน ซึ่งคือเคสที่ต้องการ
+
+       ตั๋วไม่ถูกใส่ลงใน out จึงหลุดออกจาก URL ปลายทาง ไม่ค้างใน history/referrer */
+    const head = {Location:'/allotment_v2/allotment_v2.html?'+out.join('&'),'Cache-Control':'no-store'};
+    const t = qp.get('t');
+    if(t && !session(req)){
+      if(embedTokenOk(t)) head['Set-Cookie'] = embedSessionCookie();
+      else console.warn('[embed] rejected token from '+(req.headers.origin||req.headers.referer||'?'));
+      // ตั๋วเสีย = ไม่ตั้งคุกกี้ แล้วปล่อยให้หน้าเว็บขึ้นการ์ด "ยังไม่ได้เข้าสู่ระบบ" เอง
+    }
+    res.writeHead(302, head);
+    return res.end();
+  }
+
   // §ssoGate (2026-08-27): with Authentik configured, IT is the login page. Without this the app
   // still loads its own username/password modal (js/01-auth-sync.js showLogin(), reached when
   // /api/me answers 401) and the Authentik routes just sit there unused. Redirecting server-side
@@ -3366,8 +2987,12 @@ const server = http.createServer((req, res) => {
   //   · only a top-level browser navigation for the app page — never a fetch/XHR, never an asset
   //   · never when a session already exists
   //   · ?login=password always wins, so a broken Authentik cannot lock everyone out (PASSWORD_ESCAPE)
+  /* §embedFrame · ?embed=1 ไม่เด้งไป Authentik · หน้าล็อกอินของ Authentik ส่ง
+     X-Frame-Options: DENY มาตามมาตรฐาน กรอบจะขาวโพลนโดยไม่มีอะไรบอกสาเหตุ
+     ปล่อยให้หน้าโหลดไปก่อน แล้ว js/10-embed.js ขึ้นการ์ด "เปิดแท็บใหม่เพื่อเข้าสู่ระบบ" แทน */
   if(u === '/allotment_v2/allotment_v2.html' && req.method === 'GET' && oidc.enabled() && !session(req)
      && String(req.headers.accept||'').includes('text/html')
+     && new URLSearchParams(q).get('embed') !== '1'
      && new URLSearchParams(q).get(oidc.PASSWORD_ESCAPE) !== 'password'){
     const next = u + (q ? ('?' + q) : '');
     res.writeHead(302, {Location:'/auth/login?next=' + encodeURIComponent(next), 'Cache-Control':'no-store'});
@@ -3384,10 +3009,15 @@ const server = http.createServer((req, res) => {
       try{ data = _laStampAssets(data); }catch(_){}
     }
     const etag = '"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
-    if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
     const ext = path.extname(fp).toLowerCase();
+    /* §embedFrame · ติดเฉพาะเอกสาร HTML · frame-ancestors มีผลกับหน้าที่ถูกฝัง
+       ไม่ใช่กับ .js/.css ที่หน้านั้นโหลดตาม · ต้องติดกับ 304 ด้วย เพราะเบราว์เซอร์
+       ใช้หัวของรอบที่ 304 ตอบมา ไม่ได้ใช้ของที่แคชไว้ทั้งชุด */
+    const sec = ext==='.html' ? {'Content-Security-Policy':FRAME_ANCESTORS} : null;
+    if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,Object.assign({'ETag':etag,'Cache-Control':'no-cache'},sec)); return res.end(); }
     const ctype = MIME[ext]||'application/octet-stream';
     const head=(enc)=>{ const h={'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'};
+      if(sec) Object.assign(h,sec);
       if(enc) h['Content-Encoding']=enc; return h; };
     const enc = (GZIP_EXT.has(ext) && data.length > 1024) ? pickEncoding(req) : null;
     if(enc){

@@ -62,26 +62,13 @@ function bookingV2Render(){
          ขอบบนของกล่องนั้น ไม่ใช่จากขอบจอ · ไม่งั้นแถบ VANS ไปลอยกลางตาราง */
       vb.style.setProperty('--t2-vangroup-top', '0px');
       vb.style.setProperty('--t2-head-top', VANGROUP+'px');
-      /* §btScroll · ความสูงกล่องรายวัน = จอ ลบแถบแท็บ ลบหัวที่ตรึง ลบขอบล่างไว้หายใจ
-         ต้องอยู่หลัง TOP ถูกประกาศ ไม่งั้นชนกฎ let/const แล้วโยน ReferenceError เงียบ ๆ */
-      try{ const _wp=host.querySelector('.t2-wrap');
-        if(_wp){ const _vh=window.innerHeight||900;
-          /* วัดจากตำแหน่งจริงของกล่อง · บวกลบความสูงทีละชิ้นพลาดไป ~34px
-             (ขอบ/มาร์จินของการ์ดครอบที่ไม่ได้นับ) แล้วหน้าเลื่อนได้อีกนิดหน่อย
-             กลายเป็นสองตัวเลื่อนซ้อนกัน */
-          const _top=_wp.getBoundingClientRect().top + (window.scrollY||0);
-          let _hh=Math.max(280, _vh-_top-12);
-          vb.style.setProperty('--bt-wraph', _hh+'px');
-          /* ยังมีขอบล่างของ #view (64px) กับ main (22px) ที่ไม่ได้อยู่ในสายที่วัด
-             ดันให้หน้ายังเลื่อนได้อีกนิด กลายเป็นสองตัวเลื่อนซ้อนกัน
-             หดความสูงกล่องไม่ได้ เพราะจะเสียพื้นที่ตารางไป 86px เปล่า ๆ
-             ดึงขอบล่างนั้นกลับด้วย margin ติดลบแทน · กล่องได้ความสูงเต็ม หน้าไม่เลื่อน */
-          _wp.style.marginBottom='0px';
-          requestAnimationFrame(()=>{ try{
-            const _ov=document.documentElement.scrollHeight-(window.innerHeight||900);
-            if(_ov>1) _wp.style.marginBottom=(-_ov)+'px';
-          }catch(_){} });
-        } }catch(_){}
+      /* §btPin · ก้อนหัว By-trip ตรึงใต้แถบแท็บ · ต้องรู้ความสูงแถบแท็บจริง
+         วัดทุกครั้งที่วาด ไม่ฝังตัวเลข · แถบนี้ห่อปุ่มกับตัวกรองที่ตัดบรรทัดได้
+         ความสูงจึงเปลี่ยนตามความกว้างจอ (CLAUDE.md §6 · ห้าม hardcode 52) */
+      try{ ctBtPinFit(); ctBtPinFitLater(); }catch(_){}
+      /* §btUnclamp (was §btScroll) · .t2-wrap เคยถูกจำกัดความสูงพอดีจอ + ดึงขอบล่างด้วย margin
+         ติดลบ เพื่อกันไม่ให้หน้าเลื่อนเกินกล่องที่ตรึงไว้ · ตอนนี้หัวไม่ตรึงแล้ว (§btHead) ทั้งหน้า
+         เลื่อนเป็นชิ้นเดียวตามปกติ ไม่ต้องคำนวณ/ดึงอะไรอีก ทิ้งไว้จะดึงเนื้อหาส่วนล่างของตารางหาย */
     }catch(_){} });
   }catch(e){
     console.error('[bookingV2Render] render failed:', e);

@@ -280,6 +280,10 @@ function bookingV2RenderTripsSection(){
               const rt = bookingV2GetRT();
               const zoneAvailable = (z) => {
                 if(t.ovnLeg) return true;   // OVN return leg · ราคา 0 · เลือกได้ทุกโซน (โดยเฉพาะ No Transfer · ขึ้นเรือที่ท่าเกาะ)
+                /* §internal · ตั้งราคาเอง = ตารางราคาไม่เกี่ยว · ทุกโซนกดได้
+                   bookingV2NoRateTrips กับแถบ NO RATE ยกเว้น manual ไว้อยู่แล้ว
+                   ตรงนี้เคยตก · ปุ่มจึงขีดฆ่าทั้งที่ใบนั้นไม่ได้ใช้ตารางราคาเลย */
+                if(d.priceMode === 'manual') return true;
                 if(!t.routeId || !rt) return true;
                 const sr = rt.seatRates?.[t.routeId]?.[z];
                 if(!sr) return false;

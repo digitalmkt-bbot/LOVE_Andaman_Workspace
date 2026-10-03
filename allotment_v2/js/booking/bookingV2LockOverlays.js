@@ -58,7 +58,8 @@ function bookingV2LockOverlays(){
     const _mBulk = (typeof bookingV2LockSpansDays==='function') && bookingV2LockSpansDays(mL);
     const held = bookingV2LockHeldRemaining(mL), usedTot = bookingV2LockUsedTotal(mL), unalloc = bookingV2LockUnalloc(mL), alloc = bookingV2LockAllocated(mL);
     /* §lkOver · ที่นั่งที่ยังแบ่งลงกรุ๊ปย่อยได้จริง = ยังไม่ได้แบ่ง − ที่ล็อคแม่ขายไปเอง */
-    const _unallocDraw = (typeof bookingV2LockUnallocDrawable==='function') ? bookingV2LockUnallocDrawable(mL) : unalloc;
+    const _unallocDraw = bookingV2LockSubRoom(mL);   /* §lkPendSub */
+    const _mShr = (!_mBulk && bookingV2LockPendOn(mL, mL.date) > 0) ? bookingV2LockSubShares(mL, mL.date) : null;
     const _overSold = Math.max(0, (Number(mL.used)||0) - unalloc);
     const cut = bookingV2LockCutoffLabel(mL);
     const rN = rid => (typeof ROUTES!=='undefined' ? (ROUTES.find(r=>r.id===rid)?.name||rid) : rid);
@@ -88,7 +89,7 @@ function bookingV2LockOverlays(){
     const kidRow = (c, tint) => `
         <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-top:1px solid var(--border-2);border-left:3px solid ${tint}">
           <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')}</div><div style="font-size:10px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div>${vcLine(c)}</div>
-          <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:1px"><b>${c.used}</b>/${c.qty} · <b style="color:${bookingV2LockRemaining(c)>0?'#0F6E56':'#C0392B'}">${bookingV2LockRemaining(c)}</b> เหลือ</div>
+          <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:1px"><b>${c.used}</b>/${c.qty} · <b style="color:${bookingV2LockRemaining(c)>0?'#0F6E56':'#C0392B'}">${bookingV2LockRemaining(c)}</b> เหลือ${(_mShr && _mShr.by[c.id] && _mShr.by[c.id].pend>0)?` <span class="lkpd-sub" data-lkpd-sub="${c.id}" title="กรุ๊ปนี้ยังไม่ได้ที่ ${_mShr.by[c.id].pend} ที่ · ดึงไปจองได้ ${_mShr.by[c.id].held} ที่" style="font-family:inherit;font-size:10px;font-weight:700;color:#64748B;background:#F4F5F7;border:1px dashed #C3CAD5;border-radius:6px;padding:1px 6px;margin-left:4px">&#9203; Pending ${_mShr.by[c.id].pend}</span>`:''}</div>
           <div style="display:flex;gap:6px;padding-top:1px">${c.status==='active'?`<button onclick="bookingV2LockManageClose();bookingV2LockAddOpen('${c.id}')" style="font-size:11px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ ที่นั่ง</button><button onclick="bookingV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}</div>
         </div>`;
     const kidHead = (label, sub, ink, bg, list, seats) => `
@@ -191,5 +192,6 @@ function bookingV2LockOverlays(){
       </div>
     </div>`;
   }
-  return releaseModal + subModal + manageModal + ((typeof bookingV2LockAddModal==='function')?bookingV2LockAddModal():'');
+  return releaseModal + subModal + manageModal + bookingV2LkPendAskModal() + ((typeof bookingV2LockAddModal==='function')?bookingV2LockAddModal():'')
+    + ((typeof bookingV2BoatLockModal==='function')?bookingV2BoatLockModal():'');   /* §bkLock */
 }

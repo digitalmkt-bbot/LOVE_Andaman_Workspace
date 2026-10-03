@@ -84,10 +84,13 @@
   var _opsPayload = opsPayload(_opsTok);
   ME = { username: _opsPayload.sub||'', role: ((_opsPayload.groups||[]).indexOf('admin')>=0?'admin':'user'), groups: _opsPayload.groups||[] };
   window.LA_ME=ME;                                                // expose current user (edit-lock / audit)
-  // §per-user sidebar (accent colour + collapsible groups) · retry until the footer is mounted
-  //  (laSbInit ran once but the sidebar footer wasn't stable yet → picker dropped)
+  /* §per-user sidebar (พับ/กางกลุ่มเมนู) · ลองซ้ำจนกว่าเมนูซ้ายจะวาดเสร็จจริง
+     (laSbInit ทำงานรอบแรกได้ แต่ตอนนั้นเมนูยังไม่นิ่ง ตัวพับกลุ่มเลยไม่ติด)
+     §sbColorGone · เดิมเช็คว่าแถบเลือกสี (#la-sbcolor-sw) โผล่หรือยัง · แถบนั้นถูกตัดออกแล้ว
+     เปลี่ยนมาเช็คเครื่องหมาย data-acc ที่ laSbInit ติดไว้บนหัวกลุ่มแทน
+     ไม่งั้นลูปนี้จะวนครบ 25 รอบทุกครั้งที่เปิดหน้า เพราะรอของที่ไม่มีวันมา */
   onReady(function(){ var _t=0; (function _go(){ try{ if(typeof laSbInit==='function') laSbInit(); }catch(e){}
-    if(!(document.getElementById&&document.getElementById('la-sbcolor-sw')) && _t++<25) setTimeout(_go,180); })(); });
+    if(!(document.querySelector&&document.querySelector('.sidebar .nav-section[data-acc]')) && _t++<25) setTimeout(_go,180); })(); });
 
   // ── STATE STORE: in-memory, persisted to SQL (no localStorage blob mirror) ──
   //    The full app state (~6 MB) exceeds the browser localStorage quota (~5 MB); SQL (operation_schemas)
@@ -111,7 +114,7 @@
   //   (เจอจริง 30 ก.ค. 2026 · เซิร์ฟเวอร์ตีกลับ trips 94→0 — ถ้าไม่มีตัวกันฝั่งนั้น ข้อมูลหายเกลี้ยง)
   _SP.removeItem=function(k){ if(_isLS(this)&&k===LS){ _mem=null; _dirty=false; try{ clearTimeout(_t); }catch(e){} return; } _oDel.call(this,k); };
   _SP.setItem=function(k,v){ if(!_isLS(this)||k!==LS){ return _oSet.call(this,k,v); } _mem=v;   // state blob → memory only (no quota)
-    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
+    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; _laEditSeq++; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
   // Reclaim quota on devices poisoned by the broken shim: the pre-mem-store ~6MB blob still sitting
   // in real localStorage, the junk 'setItem'/'getItem'/'removeItem' items WebKit created from the old
   // instance assignments, and any oversized _snap_ full copies. All dead weight — SQL is the store.
@@ -344,7 +347,7 @@
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
@@ -395,13 +398,36 @@
     return {sets:sets,cols:cols,objs:objs,_changed:ch}; }
   // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
   // ── AUTO-REFRESH when others save · seamless when idle · never interrupts typing/editing ──
+  /* ══ §ckStale (2026-09-22) · "กดขึ้นเช็คอิน แล้วก็หาย แล้วก็กลับมา" ═══════
+     ไม่ใช่เรื่องจังหวะรีเฟรช แต่เป็นคำตอบที่ "ออกเดินทางก่อนการกดของเรา"
+     ลำดับที่เกิดจริงบนเน็ตหน้าท่าซึ่งช้าเป็นวินาที
+       t0    เริ่มดึงข้อมูล (ตอนนั้นยังไม่มีใครกดอะไร ด่านจึงปล่อยผ่าน)
+       t0+.1 คนหน้าท่ากดเช็คอิน · เขียนลงเครื่อง · ตั้งคิวเซฟอีก 1 วิ
+       t0+1.3 เซฟขึ้นเซิร์ฟเวอร์เสร็จ · _dirty กลับเป็น false
+       t0+1.4 คำตอบจาก t0 เพิ่งมาถึง · ด่านเช็ค _dirty ตอนนี้ได้ false → เอามาทับ
+              ข้อมูลชุดนั้นถ่ายไว้ตั้งแต่ก่อนกด · ติ๊กเลยหาย
+       แล้วพอมีเวอร์ชันใหม่เข้ามาอีกรอบ จึงค่อยดึงของที่มีติ๊กมา · ติ๊กกลับมาเอง
+     ด่าน _dirty ถามว่า "ตอนนี้มีอะไรค้างไหม" ซึ่งตอบไม่ได้ว่า "ระหว่างที่รออยู่มีใครแก้หรือเปล่า"
+     ตัวนับนี้ตอบข้อนั้น · ถ่ายเลขไว้ก่อนยิง เทียบตอนคำตอบมาถึง ต่างเมื่อไหร่ = ทิ้งคำตอบนั้น
+     ⚠ ทิ้งแล้วไม่ต้องไปดึงก้อนเต็มแทน · ของก้อนนั้นเก่าพอกัน · ปล่อยให้รอบถัดไปดึงใหม่ */
+  var _laEditSeq=0;
   var _laPending=null, _laLastInput=Date.now();
+  /* §ckLive2 · จำว่าของใหม่มารอตั้งแต่เมื่อไหร่ · หน้าเช็คอินใช้ตั้งเพดานเวลารอ
+     ตัวกัน "เพิ่งแตะจอ" เป็นความสุภาพ ไม่ใช่กุญแจล็อก · ถ้าไม่มีเพดาน
+     คนที่ขยับเมาส์/แตะจอถี่กว่าคาบกัน จะกดให้มันเลื่อนออกไปได้ไม่มีที่สิ้นสุด
+     ซึ่งคืออาการ "จับเม้าอยู่ยิ่งไม่อัพเดท" ที่หน้าท่าเจอ */
+  var _laPendAt=0;
+  function _laSetPending(j){ if(!_laPending) _laPendAt=Date.now(); _laPending=j; }
+  function _laClearPending(){ _laPending=null; _laPendAt=0; }
   /* §ckLive · 'wheel' = เลื่อนจออ่าน ไม่ใช่การแก้ข้อมูล · ในหน้าเช็คอินที่รายการยาว
      มันรีเซ็ตนาฬิกา "ยุ่งอยู่" ต่อเนื่องจนไม่เคยว่างพอจะ refresh
      หน้าอื่นยังนับเหมือนเดิม (เลื่อนอ่านรายงานยาว ๆ แล้วโดนวาดใหม่กลางคันก็กวนเหมือนกัน) */
-  ['mousedown','keydown','input','touchstart','wheel'].forEach(function(ev){
+  /* §btStay · 'scroll' กับ 'touchmove' ก็คือ "กำลังเลื่อนอ่านอยู่" · ของเดิมนับแค่ล้อเมาส์
+     คนที่ลากแถบเลื่อน หรือปัดจอค้างนานกว่า 300ms (mousedown/touchstart มีครั้งเดียวตอนเริ่ม)
+     โดนวาดหน้าใหม่กลางคัน · 'scroll' ไม่ bubble จึงต้องฟังแบบ capture ซึ่งที่นี่เป็นอยู่แล้ว */
+  ['mousedown','keydown','input','touchstart','wheel','scroll','touchmove'].forEach(function(ev){
     try{ document.addEventListener(ev, function(){
-      if(ev==='wheel' && _laLiveView()) return;
+      if((ev==='wheel'||ev==='scroll'||ev==='touchmove') && _laLiveView()) return;
       _laLastInput=Date.now();
     }, true); }catch(e){} });
   /* §ckLive (2026-09-12) · "Pier Check-in สองคนใช้พร้อมกัน · คนนึงเช็คอิน
@@ -426,9 +452,13 @@
       return v==='piercheckin' || v==='vancheckin';
     }catch(e){ return false; }
   }
-  function _laBusy(){
+  function _laBusy(skipIdle){
     if(_dirty) return true;                                                             // local changes not yet synced → never overwrite
     if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
+    /* §vbFocus · โหมดแก้ไขของใบวางบิลรถร่วม · ที่แก้ไว้อยู่ในหน่วยความจำอย่างเดียวจนกว่าจะกดบันทึก
+       (vbPersist ตั้งใจไม่เขียนระหว่างแก้ ปุ่มยกเลิกจะได้มีความหมาย) _dirty จึงเป็น false ตลอด
+       พอโฟกัสไม่ได้อยู่ในช่องพิมพ์ ตัวดึงข้อมูลใหม่จะเอาของเซิร์ฟเวอร์มาทับ ที่แก้ไว้หายทั้งชุด */
+    try{ if(window._vb && window._vb.edit) return true; }catch(e){}
     var _live=_laLiveView();
     var ae=document.activeElement;
     if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)){
@@ -436,41 +466,94 @@
          และ _laRerender คืนโฟกัส+ตำแหน่ง cursor ให้หลังวาดใหม่ */
       if(!(_live && (ae.id==='pck-q' || ae.id==='vck-q'))) return true;
     }
-    if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
+    /* §permWin (2026-09-22) · ชื่อ id ที่ด่านนี้เฝ้าอยู่ ไม่มีอยู่จริงในโค้ดแล้ว
+       หน้าต่างจัดการผู้ใช้ถูกออกแบบใหม่เป็น la-uwin / la-pmask นานแล้ว แต่ด่านยังเฝ้า
+       la-umodal / la-pmodal ซึ่งไม่มีที่ไหนสร้างเลยสักที่ · แปลว่าทั้งกล่องไม่เคยถูกกันเลย
+       ผลคือ admin เปิดกล่องสิทธิ์ค้างไว้ แล้วมีคนอื่นเซฟอะไรเข้ามา
+       ถ้ารอบนั้น _laReloadData คืน false ระบบจะ location.reload() ทับทันที
+       สิทธิ์ที่ติ๊กค้างไว้หายทั้งชุดโดยไม่มีอะไรเตือน
+       เก็บชื่อเก่าไว้ด้วยเผื่อมีของเก่าหลงเหลือ · ไม่มีต้นทุนอะไร */
+    if(document.querySelector('.la-modal')
+       || document.getElementById('la-uwin') || document.getElementById('la-pmask')
+       || document.getElementById('la-umodal') || document.getElementById('la-pmodal')) return true;  // a dialog is open
+    /* §ckLive2 · ลิ้นชัก/กล่องของหน้าเช็คอินก็คือ "กำลังทำอะไรค้างอยู่" เหมือนกัน
+       ของเดิมไม่ได้นับ · คนอื่นเช็คอินเข้ามาตอนกำลังพิมพ์โน้ตหรือรายการอาหาร
+       หน้าถูกวาดใหม่ทั้งหน้า ลิ้นชักหายพร้อมข้อความที่พิมพ์ค้าง */
+    /* §ckVan · ck-reason-ov คือกล่องเหตุผลที่ใช้ร่วมกันทั้งสองหน้า
+       ตัววาดทุก 60 วิ กันกล่องนี้มาตั้งนานแล้ว แต่ด่านนี้ไม่เคยกัน
+       คนกำลังเลือกเหตุผล No-show แล้วมีคนเช็คอินเข้ามา กล่องหายทั้งที่ยังไม่ได้เลือก */
+    if(_live && (document.getElementById('pck-drawer')||document.getElementById('pck-meal-ov')
+                 ||document.getElementById('ck-reason-ov'))) return true;
     if(document.getElementById('dc-panel-docs')) return true;                           // Document-Check drawer open (reading details) → don't interrupt
     try{ if(typeof _agSelected!=='undefined' && _agSelected) return true; }catch(e){}   // Agent detail open (reading/editing) → don't yank back to the list
-    /* หน้าเช็คอิน · 700ms พอให้ไม่วาดทับจังหวะที่นิ้วยังอยู่บนปุ่ม แต่ไม่ค้างทั้งกะ
-       หน้าอื่นคงไว้ 2 วิเหมือนเดิม */
-    if(Date.now()-_laLastInput < (_live?700:2000)) return true;
+    if(skipIdle) return false;                                                          // §btLoadNowFix · คลิกเองสั่ง skip: mousedown ของคลิกนี้เองเพิ่ง stamp _laLastInput ไปหมาดๆ
+    /* หน้าเช็คอิน · 300ms พอให้ไม่วาดทับจังหวะที่นิ้วยังอยู่บนปุ่ม
+       §ckLive2 · ลดจาก 700ms · สองเครื่องกดสลับกันตลอดเวลา หน้าต่างยิ่งกว้าง
+       ยิ่งมีโอกาสที่ของใหม่มาถึงตอนไม่ว่างแล้วต้องรอรอบถัดไป
+       ลิ้นชัก/กล่อง/ช่องพิมพ์ยังกันเต็มเหมือนเดิมข้างบน หน้าอื่นคงไว้ 2 วิ
+
+       และมีเพดาน · ของใหม่รอเกิน 800ms เมื่อไหร่ ไม่ต้องรอจังหวะว่างอีกแล้ว
+       (2 วิเคยลองแล้วรวมกับคาบถาม 2 วิ กลายเป็นเกือบ 4 วิ ซึ่งยังช้าไปสำหรับหน้าท่า)
+       ตัวกันนี้คือความสุภาพ ไม่ใช่กุญแจ · คนหน้าท่าขยับมือถี่กว่า 300ms ได้ทั้งกะ
+       ถ้าไม่มีเพดาน หน้าจอนั้นจะไม่อัพเดทเลยตราบใดที่มือยังอยู่บนจอ
+       (ตัวกันของจริง — แก้ค้าง ฟอร์ม ลิ้นชัก ช่องพิมพ์ — อยู่ข้างบนและไม่มีเพดาน) */
+    if(_live && _laPendAt && (Date.now()-_laPendAt) > 800) return false;
+    /* §sseCatchup · หน้าอื่นลดจาก 2 วิ เหลือ 300ms เท่าหน้าเช็คอิน · ตัวกันของจริง
+       (แก้ค้าง ฟอร์ม modal ช่องพิมพ์) อยู่ข้างบนครบ · อันนี้แค่ไม่วาดทับตอนนิ้วยังอยู่บนปุ่ม
+       เพดาน 800ms ข้างบนยังเป็นของหน้าเช็คอินอย่างเดียว · หน้าอื่นคนขยับมืออยู่ = รอ */
+    if(Date.now()-_laLastInput < 300) return true;
     return false;
   }
   // remember the current screen (per-tab · NOT synced) so an auto-refresh returns here instead of Dashboard
-  function _laSaveView(){ try{
+  /* §embed · โหมดฝัง iframe หน้าถูกกำหนดมาจาก URL ไม่ใช่จากที่ผู้ใช้เคยเปิดค้างไว้
+     sessionStorage ยังผูกกับแท็บ ไม่ใช่กับกรอบ · ฝังสองกรอบในหน้าเดียว (ปฏิทิน+
+     By-trip) จะเขียนทับกันเองแล้วสลับหน้ากันมั่ว · โหมดฝังจึงไม่จำและไม่คืนหน้า */
+  function _laSaveView(){ if(window.__laEmbed) return; try{
     var act=document.querySelector('.nav-item.active'); var view=act&&act.dataset?act.dataset.view:''; if(!view) return;
     var st={view:view};
-    if(window._bkV2){ st.bk={tab:_bkV2.tab||'', filterDate:_bkV2.filterDate||'', filterRoute:_bkV2.filterRoute||'', detailId:_bkV2.detailId||'', boat:!!_bkV2.boatAssignMode, van:!!_bkV2.vanAssignMode}; if(window._bkV2T2Cursor) st.t2c=_bkV2T2Cursor; }
+    if(window._bkV2){ st.bk={tab:_bkV2.tab||'', filterDate:_bkV2.filterDate||'', filterRoute:_bkV2.filterRoute||'', detailId:_bkV2.detailId||'', boat:!!_bkV2.boatAssignMode, van:!!_bkV2.vanAssignMode}; if(window._bkV2T2Cursor) st.t2c=_bkV2T2Cursor;
+      var t2w=document.querySelector('#bkv2-host .t2-wrap'); if(t2w){ st.bk.t2sc=t2w.scrollTop; st.bk.t2sl=t2w.scrollLeft; } }
     try{ if(typeof _agSelected!=='undefined' && _agSelected) st.ag=_agSelected; }catch(e){}   // keep the open Agent detail across a full reload
     var mn=document.querySelector('main'); st.sc=mn?mn.scrollTop:0; st.scw=window.scrollY||0;
     sessionStorage.setItem('la_view', JSON.stringify(st));
   }catch(e){} }
   window._laReload=function(){ try{_laSaveView();}catch(e){} location.reload(); };
-  function _laRestoreView(){ try{
+  function _laRestoreView(){ if(window.__laEmbed) return;   /* §embed · ดูเหตุผลที่ _laSaveView */
+   try{
     var raw=sessionStorage.getItem('la_view'); if(!raw) return; var st=JSON.parse(raw); if(!st||!st.view) return;
     if(typeof laAllowed==='function' && !laAllowed(st.view)) return;          // respect role permissions
     var el=document.querySelector('.nav-item[data-view="'+st.view+'"]'); if(!el || el.style.display==='none') return;
     if(st.bk && window._bkV2){ if(st.bk.tab)_bkV2.tab=st.bk.tab; if(st.bk.filterDate)_bkV2.filterDate=st.bk.filterDate; if(st.bk.filterRoute)_bkV2.filterRoute=st.bk.filterRoute; if(st.bk.detailId)_bkV2.detailId=st.bk.detailId; _bkV2.boatAssignMode=st.bk.boat; _bkV2.vanAssignMode=st.bk.van; if(st.t2c) window._bkV2T2Cursor=st.t2c; }
     try{ if(st.view==='agents' && st.ag && typeof _agSelected!=='undefined') _agSelected=st.ag; }catch(e){}   // reopen the Agent detail after a full reload
     el.click();
-    setTimeout(function(){ try{ var mn=document.querySelector('main'); if(mn&&st.sc) mn.scrollTop=st.sc; if(st.scw) window.scrollTo(0,st.scw); }catch(e){} }, 220);
+    setTimeout(function(){ try{
+      var mn=document.querySelector('main'); if(mn&&st.sc) mn.scrollTop=st.sc; if(st.scw) window.scrollTo(0,st.scw);
+      /* §btReloadScroll · ตาราง By-trip ตั้งความสูงกล่อง (--bt-wraph) ใน rAF ของ bookingV2Render เอง
+         ถ้าคืนตำแหน่งเลื่อนก่อนหน้านั้น กล่องยังเตี้ยอยู่ เบราว์เซอร์จะตัดค่าทิ้ง · คืนซ้ำอีก 2 ชั้น rAF กันพลาด */
+      if(st.bk && (st.bk.t2sc||st.bk.t2sl)){
+        var put=function(){ try{ var w=document.querySelector('#bkv2-host .t2-wrap'); if(w){ if(st.bk.t2sc) w.scrollTop=st.bk.t2sc; if(st.bk.t2sl) w.scrollLeft=st.bk.t2sl; } }catch(e){} };
+        put(); requestAnimationFrame(function(){ put(); requestAnimationFrame(put); });
+      }
+    }catch(e){} }, 220);
   }catch(e){} }
   // SEAMLESS in-place refresh · pulls latest cloud data + re-renders current view · NO page reload (no Dashboard flash)
-  function _laSoftRefresh(){
-    if(_laBusy()){ if(_laPending) showRefresh(_laPending); return; }
+  var _laLoadBusy=false;                       /* §sseCatchup · /api/load ลูกเดียวพอ · ดูตัวเดิน 400ms */
+  function _laSoftRefresh(force){
+    if(_laBusy(force)){ if(_laPending) showRefresh(_laPending); return; }
+    if(_laLoadBusy) return;                    /* กำลังโหลดอยู่ · ของใหม่ที่มาระหว่างนี้ยังค้างใน _laPending รอบหน้าดึงต่อ */
+    var seq0=_laEditSeq;                       /* §ckStale · ดูคอมเมนต์ที่ _laEditSeq */
     var x=new XMLHttpRequest(); x.open('GET',bust('/api/load'),true);
-    x.onload=function(){ try{
+    _laLoadBusy=true;
+    x.timeout=60000;
+    x.onerror=x.ontimeout=x.onabort=function(){ _laLoadBusy=false; };
+    x.onload=function(){ _laLoadBusy=false; try{
       if(x.status!==200) return;                                   // keep pending · retry next idle tick
       var j=JSON.parse(x.responseText);
-      if(typeof j.data!=='string' || j.data.length<2){ _laPending=null; return; }
+      if(typeof j.data!=='string' || j.data.length<2){ _laClearPending(); return; }
+      /* §ckStale · ก้อนนี้ถ่ายไว้ก่อนที่จะมีคนแก้อะไรในเครื่อง · เอามาทับแล้วงานที่เพิ่งทำหาย
+         ไม่ล้าง _laPending · รอบถัดไปจะดึงใหม่ด้วยข้อมูลสด */
+      if(_laEditSeq!==seq0) return;
+      if((j.version||0) < VER) return;                             /* เวอร์ชันถอยหลัง · ไม่เอา */
       if(_laBusy()) return;                                        // user resumed during fetch → defer
       _orig(LS, j.data);                                           // write WITHOUT triggering a save
       VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};} _laMark(VER);
@@ -478,7 +561,10 @@
          และไม่เช็ค updated_by อีกแล้ว · ของเดิมเช็คแล้วใบจองหลุดเงียบ
          เวลามีคนอื่นกดบันทึกคั่นระหว่างที่ผู้ใช้ยุ่งอยู่ */
       var _b2cNew=[]; try{ _b2cNew=_laB2CScan(BASE); }catch(e){}
-      _laPending=null;
+      /* §sseCatchup · มีคนเซฟเพิ่มระหว่างที่ก้อนนี้โหลดอยู่ = ของที่รอใหม่กว่าที่ได้มา · อย่าล้าง
+         ไม่งั้นเวอร์ชันนั้นหายเงียบจนกว่า poll 10 วิจะเจอ */
+      if(!_laPending || (_laPending.version||0) <= VER) _laClearPending();
+      _laCkFullAt=Date.now();                         /* §ckDay · นับคิวก้อนเต็มรอบใหม่ */
       var ok = window._laReloadData ? window._laReloadData() : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
       if(window._laRerender) window._laRerender();
@@ -487,18 +573,185 @@
       try{ badgeTick(); }catch(e){}
       if(_b2cNew.length>0){ try{ _laB2CAlert(_b2cNew); }catch(e){} }
     }catch(e){ _laReload(); } };
-    try{ x.send(); }catch(e){}
+    try{ x.send(); }catch(e){ _laLoadBusy=false; }
   }
   window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
-  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
+  /* ══ §ckDay (2026-09-22) · หน้าเช็คอินดึงเฉพาะของวันที่เปิดอยู่ ════════════
+     เขียนขึ้นเซิร์ฟเวอร์ส่งเฉพาะส่วนที่เปลี่ยนมานานแล้ว (/api/v1/_batch)
+     แต่ขาอ่านยังดึง /api/load ซึ่งเป็นก้อนทั้งระบบ ~20MB ทุกครั้งที่ใครก็ตามเซฟอะไร
+     หน้าท่าสองเครื่องเช็คอินสลับกันทั้งเช้า = เครื่องละหลายสิบรอบ บนเน็ตที่ช้าที่สุดในบริษัท
+     /api/ck คืนเฉพาะใบของวันนั้น (หลักแสนไบต์) พอสำหรับสิ่งที่คนหน้าท่าต้องเห็น
+
+     ⚠ ทางนี้ทำให้หน้าจอตรง เฉพาะ "ของวันนั้น" เท่านั้น · ส่วนอื่นของก้อนยังเก่าอยู่
+       จึงไม่ขยับ VER (ไม่โกหกว่าตามครบแล้ว) แต่จำไว้ที่ _laCkSeen ว่าเวอร์ชันนี้
+       หน้าเช็คอินตามทันแล้ว จะได้ไม่วนดึงซ้ำทุกรอบ
+       แล้วบังคับดึงก้อนเต็มเมื่อออกจากหน้า ซ่อนแท็บ หรือครบ 5 นาที
+     ⚠ ชุด id ของวันนั้นต้องตรงกันสองฝั่ง · ไม่ตรง (ใบเกิด ย้ายวัน ยกเลิก) = ถอยไปดึงเต็ม
+       ไม่เดาเอาเองว่าใบไหนหายไปไหน
+     ⚠ อัปเดต BASE ด้วยเสมอ · BASE คือภาพของเซิร์ฟเวอร์ที่ใช้คิด diff ตอนเซฟ
+       ถ้าแก้แต่ข้อมูลในเครื่องโดยไม่แตะ BASE การเซฟครั้งถัดไปจะเห็นของคนอื่น
+       เป็น "การแก้ของเรา" แล้วดันค่าเก่ากลับขึ้นไปทับ */
+  var _laCkSeen=0, _laCkFullAt=Date.now(), _laCkBusy=false;
+  var LA_CK_FULL_MS=300000;               /* ก้อนเต็มอย่างช้าทุก 5 นาที ระหว่างอยู่หน้านี้ */
+  /* ══ §ckVan (2026-09-22) · "ทดสอบเช็คอิน แต่ของเรามาขึ้นช้ามาก" ═════
+     หน้าเช็คอินมีสองหน้า · เช็คอินหน้าท่า กับ เช็คอินรถ
+     ทางแคบถูกเปิดให้ทั้งสองหน้า (_laLiveView คืน true ทั้งคู่)
+     แต่ตัวอ่านวันอ่านของหน้าท่าอย่างเดียว สองหน้านี้ถือวันคนละตัวแปร
+       หน้าท่า _pckDate · หน้ารถ _vanCkDate
+     อยู่หน้ารถแล้วเปิดวันอื่น = ไปดึงวันของหน้าท่ามาแทน
+     แล้วปักธงว่า "ตามทันแล้ว" ทั้งที่วันบนจอไม่ได้ถูกดึงเลย */
+  function _laCkView(){
+    try{
+      var act=document.querySelector('.nav-item.active');
+      var v=(act&&act.dataset)?act.dataset.view:'';
+      return (v==='piercheckin'||v==='vancheckin')?v:'';
+    }catch(e){ return ''; }
+  }
+  function _laCkDate(){
+    try{
+      var v=_laCkView(); if(!v) return '';
+      var d=(v==='vancheckin')?window._vanCkDate:window._pckDate;
+      return (typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d))?d:'';
+    }catch(e){ return ''; }
+  }
+  function _laCkCanNarrow(){
+    if(!_laLiveView() || typeof window._laCkApply!=='function') return false;
+    if(Date.now()-_laCkFullAt > LA_CK_FULL_MS) return false;    /* ถึงคิวก้อนเต็มแล้ว */
+    return !!_laCkDate();
+  }
+  /* ดึงแบบแคบ · สำเร็จคืน true ผ่าน cb · ล้มเหลวคืน false แล้วให้ผู้เรียกไปทางเดิม */
+  function _laCkNarrow(cb){
+    var date=_laCkDate();
+    if(!date) return cb(false);
+    if(_laCkBusy) return cb(true);   /* มีคำขอแคบค้างอยู่ · ข้ามรอบนี้ ไม่ใช่ยกระดับไปดึงก้อนเต็ม */
+    _laCkBusy=true;
+    var fin=function(v){ _laCkBusy=false; cb(v); };
+    var seq0=_laEditSeq;                       /* §ckStale · เลขการแก้ ณ ตอนออกเดินทาง */
+    var x=new XMLHttpRequest(); x.open('GET', bust('/api/ck?date='+encodeURIComponent(date)), true);
+    x.timeout=9000;
+    x.ontimeout=function(){ fin(false); };
+    x.onerror=function(){ fin(false); };
+    x.onload=function(){
+      if(x.status!==200) return fin(false);          /* 501 โหมด blob · 404 เซิร์ฟเวอร์เก่า → ทางเดิม */
+      var j=null; try{ j=JSON.parse(x.responseText); }catch(e){}
+      if(!j || !Array.isArray(j.bookings) || j.date!==date) return fin(false);
+      /* §ckStale · มีคนแก้อะไรในเครื่องระหว่างที่คำตอบนี้เดินทางอยู่ = คำตอบนี้เก่ากว่าของในเครื่อง
+         คืน true แปลว่า "จัดการแล้ว ข้ามรอบนี้" · ไม่ยกระดับไปดึงก้อนเต็มซึ่งเก่าพอกัน
+         _laPending ยังอยู่ · ตัวลองใหม่ 400ms จะยิงใหม่ด้วยข้อมูลสด */
+      if(_laEditSeq!==seq0) return fin(true);
+      if((j.version||0) < VER) return fin(true);     /* เวอร์ชันเก่ากว่าที่เรามีแล้ว · ไม่ถอยหลัง */
+      if(_laBusy()) return fin(false);               /* คนกลับมาทำงานระหว่างรอ · ไว้รอบหน้า */
+      /* BASE ก่อนเสมอ · ถ้าขั้นนี้ไม่ผ่าน ห้ามแตะข้อมูลในเครื่องเลย */
+      /* ══ §ckOwn (2026-09-22) · BASE ต้องเป็น "สำเนา" ไม่ใช่ของชิ้นเดียวกัน ═════
+         ของเดิมยัดตัว b ตัวเดียวกันนี้ลง BASE แล้วส่งต่อให้ _laCkApply
+         ไปลง SB_BOOKINGS อีกที่ · สองที่จึงชี้ไปที่ก้อนเดียวกัน
+         พอคนหน้าท่ากดเช็คอินหลังจากนั้น การแก้ลงทั้ง SB_BOOKINGS และ BASE พร้อมกัน
+         computeDiff(BASE, cur) จึงได้ "ไม่มีอะไรเปลี่ยน" → _dirty=false โดยไม่เซฟอะไรเลย
+         ติ๊กขึ้นบนจอ แต่ไม่เคยออกจากเครื่อง · รอบดึงถัดไปจึงลบทิ้ง = "กดแล้วหาย"
+         สำเนาลึกแก้ไขเรื่องนี้จบ · ที่ตั้งใจคือ BASE ต้องไม่ขยับเมื่อมีคนแก้ของในเครื่อง
+         ซึ่งยังคงเดิมทุกอย่าง (เทสข้อ 10 ยังกันข้อนั้นอยู่) */
+      try{
+        if(BASE && Array.isArray(BASE.sb_bookings)){
+          var at={}; BASE.sb_bookings.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
+          j.bookings.forEach(function(b){ if(b&&b.id&&at[b.id]!=null)
+            BASE.sb_bookings[at[b.id]]=JSON.parse(JSON.stringify(b)); });
+        }
+      }catch(e){ return fin(false); }
+      var okApplied=false;
+      try{ okApplied=!!window._laCkApply(date, j.bookings); }catch(e){ okApplied=false; }
+      if(!okApplied) return fin(false);              /* ชุด id ไม่ตรง หรือวาดไม่ได้ → ดึงเต็ม */
+      _laCkSeen=Math.max(_laCkSeen, j.version||0);
+      if(_laPending && (_laPending.version||0)<=_laCkSeen){
+        _laPending=null; _laPendAt=0;                /* หน้านี้ตามทันแล้ว · ไม่ต้องขึ้นแถบเตือน */
+        var bn=document.getElementById('la-refresh'); if(bn){ bn.remove(); _refreshShown=false; }
+      }
+      fin(true);
+    };
+    try{ x.send(); }catch(e){ fin(false); }
+  }
+  function _laTryRefresh(){
+    if(!_laPending) return;
+    if((_laPending.version||0)<=_laCkSeen) return;   /* หน้าเช็คอินตามทันเวอร์ชันนี้แล้ว */
+    if(_laBusy()){ showRefresh(_laPending); return; }
+    if(_laCkCanNarrow()){ _laCkNarrow(function(okn){ if(!okn) _laSoftRefresh(); }); return; }
+    _laSoftRefresh();
+  }
   // poll cloud version
+  /* §ckLive2 · ถามเวอร์ชันหนึ่งครั้ง · health=1 คือรอบที่รับผิดชอบรายงานสุขภาพ B2C ด้วย
+     ตัวเร็วของหน้าเช็คอินไม่ต้องรายงาน จะได้ไม่เด้งซ้ำกับรอบ 10 วิ */
   // §opsAuth (2026-09-18) · the freshness layer (this poll + the SSE feed below) asks server.js
   //   "has the shared blob's version counter gone up", then answers by re-downloading the whole blob.
   //   With no legacy session it only ever 401s, so it is pure noise — and the SSE one is worse than
   //   noise, because EventSource auto-reconnects on every failure. operation-backend has no blob and
   //   no global version counter, so there is nothing to repoint these at; cross-tab freshness against
   //   it needs its own design. Until that exists, stay off.
-  setInterval(function(){ if(window.LA_LEGACY_UNAVAILABLE) return; var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } try{ _laB2CHealth(j.b2c); }catch(e){} } }; try{x.send();}catch(e){} }, 10000);
+  var _laVerBusy=false;
+  function _laCheckVersion(health){
+    if(window.LA_LEGACY_UNAVAILABLE) return;   // §opsAuth · no server.js session
+    if(_laVerBusy) return;                     /* เน็ตหน้าท่าช้า · อย่าให้คำขอซ้อนกันเป็นพรวน */
+    _laVerBusy=true;
+    var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true);
+    x.timeout=8000;
+    var done=function(){ _laVerBusy=false; };
+    x.ontimeout=done; x.onerror=done;
+    x.onload=function(){ done();
+      if(x.status!==200) return;
+      var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+      if((j.version||0)>VER){ _laSetPending(j); _laTryRefresh(); }
+      if(health){ try{ _laB2CHealth(j.b2c); }catch(e){} }
+      if(health){ try{ _laB2CIssues(j.b2c); }catch(e){} }
+    };
+    try{ x.send(); }catch(e){ done(); }
+  }
+  setInterval(function(){ _laCheckVersion(1); }, 10000);
+  /* ══ §ckLive2 (2026-09-22) · "สองเครื่องทำพร้อมกัน · A กดเช็คอิน จอ B อัพเดทอีก 10 วิ" ══
+     10 วิ คือคาบของ poll ข้างบน ซึ่งเป็น "ตัวสำรอง" ไม่ใช่ทางหลัก
+     ทางหลักคือ SSE ที่ควรถึงใน ~1 วิ · ได้ 10 วิพอดีแปลว่า SSE ของเครื่องนั้นตายไปแล้ว
+     EventSource ต่อเองได้เฉพาะตอนสายหลุดกลางคัน · ถ้าเซิร์ฟเวอร์ตอบไม่ใช่ 200
+     (เช่น 401 ตอน session สะดุดชั่วครู่) สเปกบอกให้เลิกต่อถาวร แล้วไม่มีใครปลุกอีกเลย
+     เน็ตหน้าท่าสะดุดครั้งเดียว = ช้า 10 วิไปทั้งกะ
+     ตรงนี้จึงทำสองชั้น · ปลุก SSE เมื่อมันตาย · และถามเวอร์ชันทุก 2 วิตอนเปิดหน้าเช็คอิน
+     ไม่เช็คก่อนว่า SSE ตายไหมแล้วค่อยถาม · "ตาย" ที่อ่านได้คือสายขาดเท่านั้น
+     สายที่ค้างเปิดแต่ไม่ส่งอะไรเลย (พร็อกซีกลางทางกลืน event) อ่านได้เป็น OPEN ทุกประการ
+     ซึ่งเป็นอาการที่เงียบที่สุด · ถามไปเลยจะได้ไม่ต้องเดา
+     ⚠ ถามถี่ได้เพราะ /api/version เป็นคิวรีแถวเดียว ไม่ใช่ /api/load ซึ่งเป็นก้อนทั้งระบบ ~20MB
+       หยุดเองเมื่อออกจากหน้า หรือแท็บถูกซ่อน · นอกหน้านี้ยังเป็น 10 วิเหมือนเดิม */
+  /* ══ §sseCatchup (2026-09-23) · "user 1 แก้ · user 2 เห็นอีก ~10 วิ" ═══════
+     วัดจริงบน prod 47 นาที (เครื่องที่ล็อกอินค้างไว้) · SSE หลุดเอง 4 ครั้ง ต่อใหม่ใน 5-11 วิ
+     และมีช่วง ~8 นาทีที่สาย "เปิดอยู่" แต่ไม่ส่งอะไรเลย (v64952-64960 ไม่มาทาง SSE สักตัว)
+     ของที่เกิดระหว่างสายหลุดไม่ถูกส่งซ้ำ · ต่อใหม่แล้วก็ไม่มีใครถาม → รอ poll 10 วิ
+     1) ต่อสำเร็จทุกครั้ง (รวมที่ EventSource ต่อเอง) ถามเวอร์ชันทันที
+     2) เซิร์ฟเวอร์ส่ง event 'hb' ทุก 25 วิ · เงียบเกิน 70 วิ = สายตายแบบเงียบ → ต่อใหม่
+        เปิดใช้เมื่อเคยได้ hb อย่างน้อยครั้งเดียว · เซิร์ฟเวอร์รุ่นเก่าที่ไม่ส่ง hb จะไม่โดนตัดทุก 70 วิ */
+  var _laSSEAt=0, _laSSEHb=false;
+  function _laSSEDead(){
+    try{
+      var es=window.__laSSE; if(!es || es.readyState===2) return true;   /* 2 = CLOSED */
+      return _laSSEHb && es.readyState===1 && (Date.now()-_laSSEAt) > 70000;
+    }catch(e){ return true; }
+  }
+  function _laSSEKick(){ if(_laSSEDead()) _laStartSSE(); }
+  setInterval(_laSSEKick, 15000);
+  try{
+    document.addEventListener('visibilitychange', function(){
+      if(document.hidden) return;
+      _laSSEKick(); _laCheckVersion(0);        /* กลับมาดูจอ · ต้องเห็นของล่าสุดทันที ไม่ใช่รออีกคาบ */
+    });
+    window.addEventListener('online', function(){ _laSSEKick(); _laCheckVersion(0); });
+  }catch(e){}
+  setInterval(function(){
+    if(!_laLiveView() || document.hidden) return;
+    _laCheckVersion(0);
+  }, 2000);
+  /* ของที่รออยู่ต้องได้ไปทันทีที่ผ่านด่าน · ตัวกลางเดินรอบละ 3 วิ
+     ซึ่งบวกเวลารอฟรี ๆ อีกถึง 3 วิให้หน้าที่ต้องการความสด · ไม่มีคำขอเน็ตถ้าไม่มีอะไรรอ */
+  /* §sseCatchup · เปิดให้ทุกหน้า ไม่ใช่แค่หน้าเช็คอิน · หน้าอื่นเคยรอตัว 3 วิ + ด่านว่าง 2 วิ
+     ⚠ ถี่ได้เพราะ _laSoftRefresh มีตัวกันยิงซ้อน (_laLoadBusy) · ไม่งั้นรอบละ 400ms
+       จะยิง /api/load ก้อน 24MB ซ้อนกันหลายลูกระหว่างที่ลูกแรกยังโหลดไม่เสร็จ */
+  setInterval(function(){
+    if(document.hidden || !_laPending) return;
+    if(!_laBusy()) _laTryRefresh();
+  }, 400);
   // §B2C sync-down alert (2026-07-31): a failed B2C sync is non-fatal on the server — it logs and moves
   // on — so without this the app looks perfectly healthy while orders silently stop arriving. Server
   // side only reports a fault after 3 consecutive failed runs (~2 min) or 10 min with no successful
@@ -527,13 +780,77 @@
       +(msg?('<span title="'+esc(msg)+'" style="opacity:.75;cursor:help"> &#9432;</span>'):'');
   }
   window._laB2CHealth=_laB2CHealth;
+  /* §b2cCheck (2026-10-03) · ใบ B2C ที่นำเข้ามาแล้วแต่ข้อมูลไม่ครบ/ไม่ถูก
+     ทุกบั๊กนำเข้าที่ผ่านมาเงียบหมด · ระบบเดาค่าแทนแล้วไปต่อ จนคนหน้าท่าเจอเลขผิด
+     ตอนนี้เซิร์ฟเวอร์ตรวจทุกรอบ sync (b2c-map.js b2cCheckOrders) · ที่นี่แค่แสดง
+     คนละเรื่องกับแถบแดง "ดึง B2C ไม่ได้" ข้างบน · อันนั้น sync ล่ม อันนี้ sync ปกติแต่ใบมีปัญหา
+     สีส้ม มุมซ้ายล่าง ปิดได้ · ปิดแล้วจะขึ้นใหม่เฉพาะเมื่อชุดใบที่มีปัญหาเปลี่ยน (issueSig)
+     /api/version ส่งมาแค่จำนวน · รายการดึงจาก /api/b2c/health ตอนกดเปิดเท่านั้น */
+  var _LA_B2CI_KEY='la_b2c_issue_hide';
+  function _laB2CIssues(h){
+    var el=document.getElementById('la-b2c-issues');
+    var n=(h&&h.issueCount)||0, sig=(h&&h.issueSig)||'';
+    var hidden=''; try{ hidden=localStorage.getItem(_LA_B2CI_KEY)||''; }catch(e){}
+    if(!n || hidden===sig){ if(el) el.remove(); return; }
+    if(!el){
+      el=document.createElement('div'); el.id='la-b2c-issues';   /* หน้าตา/ตำแหน่งอยู่ css/01-base.css §b2cCheck */
+      document.body.appendChild(el);
+    }
+    if(el.getAttribute('data-sig')===sig && el.getAttribute('data-n')===String(n)) return;   /* ไม่ต้องวาดใหม่ทุก 10 วิ */
+    el.setAttribute('data-sig',sig); el.setAttribute('data-n',String(n));
+    el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
+      +'<span>&#9888;</span><b style="cursor:pointer;flex:1" onclick="_laB2CIssuesOpen()">ใบ B2C ที่ต้องเช็ค '+n+' รายการ</b>'
+      +'<span title="ซ่อนจนกว่าจะมีใบใหม่ที่มีปัญหา" style="cursor:pointer;opacity:.6;padding:0 4px" '
+      +'onclick="_laB2CIssuesHide(\''+esc(sig)+'\')">&times;</span></div>'
+      +'<div id="la-b2c-issues-list" style="display:none;max-height:46vh;overflow:auto;border-top:1px solid #EAD9B0"></div>';
+  }
+  window._laB2CIssues=_laB2CIssues;
+  window._laB2CIssuesHide=function(sig){
+    try{ localStorage.setItem(_LA_B2CI_KEY, sig); }catch(e){}
+    var el=document.getElementById('la-b2c-issues'); if(el) el.remove();
+  };
+  window._laB2CIssuesOpen=function(){
+    var box=document.getElementById('la-b2c-issues-list'), wrap=document.getElementById('la-b2c-issues'); if(!box) return;
+    if(box.style.display!=='none'){ box.style.display='none'; wrap.classList.remove('open'); return; }
+    box.style.display='block'; wrap.classList.add('open'); box.innerHTML='<div style="padding:10px 12px;opacity:.7">กำลังโหลด…</div>';
+    var x=new XMLHttpRequest(); x.open('GET',bust('/api/b2c/health'),true); x.timeout=8000;
+    x.onload=function(){
+      var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+      var L=(j&&j.issues)||[];
+      if(!L.length){ box.innerHTML='<div style="padding:10px 12px">ไม่มีรายการแล้ว</div>'; return; }
+      box.innerHTML=L.map(function(i){
+        return '<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #F3E7CC;align-items:baseline">'
+          +'<a href="javascript:void 0" onclick="window.dashOpenBooking&&dashOpenBooking(\''+esc(i.id)+'\')" '
+          +'style="font-family:\'DM Mono\',monospace;font-weight:700;color:#185FA5;white-space:nowrap;text-decoration:none">'+esc(i.ref)+'</a>'
+          +'<span>'+esc(i.msg)+'</span></div>';
+      }).join('');
+    };
+    x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
+    try{ x.send(); }catch(e){}
+  };
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   // §opsAuth (2026-09-18) · a 401 on /api/events turns into an endless EventSource reconnect loop.
-  function _laStartSSE(){ if(typeof EventSource==='undefined') return; if(window.LA_LEGACY_UNAVAILABLE) return;
-  try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
+  function _laStartSSE(){ if(typeof EventSource==='undefined') return; if(window.LA_LEGACY_UNAVAILABLE) return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events');
+    _laSSEAt=Date.now();
+    es.onopen=function(){ _laSSEAt=Date.now(); _laCheckVersion(0); };           /* §sseCatchup · เก็บของที่หลุดไประหว่างสายขาด */
+    es.addEventListener('hb', function(){ _laSSEAt=Date.now(); _laSSEHb=true; });
+    es.onmessage=function(e){ _laSSEAt=Date.now(); try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laSetPending(j); _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
   _laStartSSE();
   // keep the saved screen fresh · once new data is pending, seamlessly refresh the moment the user goes idle
-  setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
+  setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laTryRefresh(); }, 3000);
+  /* §ckDay · ออกจากหน้าเช็คอินเมื่อไหร่ ต้องตามก้อนเต็มให้ครบ
+     ระหว่างอยู่หน้านั้นเราจงใจตามแค่ของวันนั้น · ส่วนอื่นของก้อนค้างไว้ */
+  (function(){
+    var was=false;
+    setInterval(function(){
+      var now=_laLiveView();
+      if(was && !now && _laCkSeen){ _laCkSeen=0; if(!_laBusy()) _laSoftRefresh(); }
+      was=now;
+    }, 1000);
+    try{ document.addEventListener('visibilitychange', function(){
+      if(document.hidden && _laCkSeen){ _laCkSeen=0; }   /* ซ่อนแท็บ · รอบหน้าที่กลับมาให้ดึงเต็ม */
+    }); }catch(e){}
+  })();
   function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; /* §laRefresh (2026-09-11) · หน้าตา/ตำแหน่งย้ายไปอยู่ css/01-base.css แล้ว
        ของเดิมเป็น inline style ลอยกลางก้นจอ · ที่นี่เหลือแค่เนื้อความ
        บรรทัดบน = เกิดอะไรขึ้น · บรรทัดล่าง = ใครทำ + ระบบจะทำอะไรต่อ */
@@ -541,7 +858,7 @@
     d.innerHTML='<span class="la-rf-dot"></span>'
       +'<span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b>'
       +'<i>'+_by+'จะรีเฟรชอัตโนมัติเมื่อว่าง</i></span>'
-      +'<button onclick="_laSoftRefresh()">โหลดเลย</button>'; document.body.appendChild(d); }); }
+      +'<button onclick="_laSoftRefresh(true)">โหลดเลย</button>'; document.body.appendChild(d); }); }
   // §B2C new-booking alert helpers (2026-07-24)
   var _B2C_CXL=['cancelled','rejected','cancelled_weather'];
   /* §b2cPop · จำ id ของใบ b2c ที่รู้จักแล้วไว้ในหน่วยความจำ
@@ -778,7 +1095,7 @@
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
   var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',actionboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',landcheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',
-    'rep-ops':'operations','rep-fleet':'fleet',
+    'fl-deployment':'fleet','rep-ops':'operations','rep-fleet':'fleet',
     settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
@@ -789,7 +1106,7 @@
     {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'landcheckin',t:'เช็คอิน City tour',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},{v:'vanbill',t:'วางบิลรถร่วม',a:'accounting'},{v:'prpo',t:'PR/PO Dashboard',a:'accounting'},
-    {v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
+    {v:'fl-deployment',t:'Fleet Deployment',a:'fleet'},{v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-ranong',t:'Ranong · ตารางการทำงาน',a:'pier'},{v:'pol-ranong',t:'Ranong · ใบอนุญาต',a:'pier'},{v:'pop-ranong',t:'Ranong · เงินสดย่อย',a:'pier'},{v:'pok-ranong',t:'Ranong · ตั๋วอุทยาน',a:'pier'},

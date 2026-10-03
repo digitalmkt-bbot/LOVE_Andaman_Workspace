@@ -2,7 +2,7 @@ function bookingV2VanGroupSetVan(date, routeId, zone, gid, vanId){
   if(vanId){
     const v=(typeof vehGet==='function')?vehGet(vanId):null; const cap=(v&&v.capacity)||0;
     const pax=bookingV2VanGroupPax(date,routeId,zone,gid);
-    if(cap && pax>cap){ alert('ที่นั่งไม่พอ · กรุ๊ปนี้มี '+pax+' คน แต่รถ '+((v&&v.name)||vanId)+' มี '+cap+' ที่นั่ง\n\nแยกคน (✂ แยกคน) หรือเลือกรถที่ใหญ่กว่า'); if(typeof bookingV2Render==='function') bookingV2Render(); return; }
+    if(cap && pax>cap){ alert('ที่นั่งไม่พอ · กรุ๊ปนี้มี '+pax+' คน แต่รถ '+((v&&v.name)||vanId)+' มี '+cap+' ที่นั่ง\n\nแยกคน (✂ แยกคน) หรือเลือกรถที่ใหญ่กว่า'); bookingV2RenderKeep(); return; }
     /* ══ §vgRound · รถคันเดิมลงกรุ๊ปที่สองของโปรแกรมเดียวกัน = ให้วิ่งอีกรอบ ══
        ของเดิมห้ามด้วยกฎ "1 รถ = 1 กรุ๊ป" ปิดช่องเลือกทิ้งไปเลย
        แต่มันไปปิดเคสจริงด้วย: รอบแรกรับป่าตอง 07:30 · ส่งถึงท่า ~08:15
@@ -17,9 +17,9 @@ function bookingV2VanGroupSetVan(date, routeId, zone, gid, vanId){
         +'\n\nเลือกต่อ = ให้วิ่งอีกรอบ รวมเป็น '+(_oth.length+1)+' รอบวันนี้'
         +'\nแต่ละรอบแยกใบงานคนละใบ · อย่าลืมตั้งเวลารับให้ต่างกัน'
         +'\n\nยืนยันหรือไม่?')){
-        if(typeof bookingV2Render==='function') bookingV2Render(); return;
+        bookingV2RenderKeep(); return;
       }
     }
   }
-  _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s) s.vanId=vanId||null; else o.vanId=vanId||null; }); acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render();
+  _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s) s.vanId=vanId||null; else o.vanId=vanId||null; }); acctPersistBookings(); bookingV2RenderKeep();
 }

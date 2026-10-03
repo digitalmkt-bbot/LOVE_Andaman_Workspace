@@ -266,7 +266,9 @@
    ความเป็นวันหยุดยังดูได้จากหัวคอลัมน์ SUN/SAT ที่จางกว่า */
 #view-booking .bkv2-cal-cell.weekend:not(.past){ background:var(--white) !important; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-daynum{ color:#a8a59d; }
-#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip{ opacity:.5; filter:saturate(.6); transition:opacity .15s, filter .15s; }
+#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip:not(.orphan){ opacity:.5; filter:saturate(.6); transition:opacity .15s, filter .15s; }
+/* §bkCalOrphan · วันที่ผ่านมาแล้วแต่ยังค้าง คือตัวที่ต้องรีบที่สุด ห้ามหรี่ */
+#view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip.orphan{ opacity:1; filter:none; }
 #view-booking .bkv2-cal-cell.past:not(.sel):hover .bkv2-cal-chip{ opacity:.92; filter:none; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-daytot{ opacity:.55; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-lock{ opacity:.5; }
@@ -494,7 +496,7 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
    (#cost-dw อยู่นอก .main กฎเลื่อนตารางของ la-mobile จึงไม่ครอบมาถึง) */
 @media (max-width:820px){
   #cost-dw{width:100vw}
-  #cost-dw .cdb{padding:12px 12px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  #cost-dw .cdb{padding:12px 12px 20px;overflow-x:auto;overscroll-behavior-x:contain}
   #cost-dw table{min-width:660px}
   #cost-dw .cdk > div{flex:1 1 calc(50% - 5px);min-width:0}
 }
@@ -619,6 +621,16 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
      · .topbar ตั้ง pointer-events:none) → ปุ่มเมนูไปอยู่ในกลุ่มปุ่มลอยชุดเดียวกัน */
   .la-burger{display:inline-flex}
   .topbar{padding:calc(9px + env(safe-area-inset-top)) 12px 9px !important;gap:8px}
+  /* §mobBrand · topbar-float-skin ซ่อน .topbar-brand ทิ้งไปทั้งก้อน (ชื่อแบรนด์เดิมยาว
+     ไม่พอที่ข้างปุ่มลอย) → เอากลับมาเป็นแถบบางลอยกลางบนจอ ไม่ชนปุ่มลอยมุมขวา (z-index ต่ำกว่า .topbar)
+     revert = ลบบล็อกนี้ทิ้ง แล้วลด padding-top ของ .main/.sidebar กลับ */
+  body::before{content:'LOVE ANDAMAN';position:fixed;top:0;left:0;right:0;
+    padding:calc(7px + env(safe-area-inset-top)) 90px 6px 14px;
+    font:800 11px 'DM Sans',sans-serif;letter-spacing:.22em;text-align:center;
+    color:#0f1f2e;background:rgba(250,249,245,.92);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    border-bottom:1px solid rgba(0,0,0,.06);
+    z-index:120;pointer-events:none}
   /* §mobHead · ปุ่มลอยมุมขวาบน (เมนู + เครื่องมือ) กว้างราว 98px สูง 54px
      หัวหน้าที่ขึ้นไปชิดขอบบนจะถูกมันทับ · เว้นที่ให้เท่าที่วัดมาจริง
      ทำเฉพาะหัวที่วัดแล้วโดนทับ · ไม่ไปดันหน้าที่ปกติดีอยู่แล้ว */
@@ -639,7 +651,7 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
     height:auto !important;width:min(86vw,300px) !important;max-width:300px !important;z-index:200 !important;
     border-radius:0 20px 20px 0 !important;margin:0 !important;
     transform:translateX(-102%);transition:transform .22s ease !important;will-change:transform;
-    padding:calc(12px + env(safe-area-inset-top)) 10px calc(66px + env(safe-area-inset-bottom)) !important;-webkit-overflow-scrolling:touch;
+    padding:calc(30px + env(safe-area-inset-top)) 10px calc(66px + env(safe-area-inset-bottom)) !important;
     box-shadow:8px 0 30px rgba(20,30,50,.32) !important}
   .sidebar.sb-collapsed{width:min(86vw,300px) !important}          /* โหมดรางแคบไม่ใช้บนมือถือ */
   .sidebar.sb-collapsed .nav-item{font-size:13.5px !important;justify-content:flex-start !important;padding:11px 12px !important;gap:9px !important}
@@ -655,9 +667,13 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
      ถ้าปล่อยให้ body เลื่อน ทั้งหน้าจะกว้างตามตาราง แถบบน/ลิ้นชักหลุดจอไปด้วย
      → ขังการเลื่อนไว้ใน .main แทน แถบบนกับลิ้นชักอยู่กับที่เสมอ
      ตารางกว้างก็ปัดซ้าย-ขวาดูได้ตามที่ตกลงไว้ */
+  /* §pinchZoom · -webkit-overflow-scrolling:touch เคยสร้าง UIScrollView แยกให้ iOS Safari ก่อน iOS13
+     ตัวมันเองกินท่าทีสองนิ้ว (pinch) ไปเป็นการเลื่อนภายในกล่องแทนที่จะส่งให้เบราว์เซอร์ซูมทั้งจอ
+     .main กินพื้นที่เต็มจอมือถือ ผลคือซูมด้วยสองนิ้วไม่ได้เลยทั้งแอป · iOS13+ มี momentum scroll
+     ในตัว overflow:auto อยู่แล้วโดยไม่ต้องพึ่ง property นี้ · ตัดทิ้งได้ ไม่เสียความลื่นของการเลื่อน */
   .main,body.sb-collapsed .main{margin-left:0 !important;padding:12px 10px !important;width:100% !important;max-width:100% !important;
-    height:100vh;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-    padding-top:calc(12px + env(safe-area-inset-top)) !important}
+    height:100vh;overflow:auto;overscroll-behavior:contain;
+    padding-top:calc(30px + env(safe-area-inset-top)) !important}
   .app{min-height:0 !important}
   .view{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 
@@ -667,8 +683,7 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   button,.btn,.nav-item,[onclick]{-webkit-tap-highlight-color:rgba(15,110,86,.12)}
 
   /* ── ตารางกว้าง · เลื่อนแนวนอนในกล่องตัวเอง ไม่ดันทั้งหน้า ── */
-  .la-xscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
-  .main [style*="overflow-x:auto"],.main [style*="overflow:auto"]{-webkit-overflow-scrolling:touch}
+  .la-xscroll{overflow-x:auto;max-width:100%}
 
   /* ── กริดหลายคอลัมน์ที่เขียนไว้ใน style ตรง ๆ · บีบเหลือคอลัมน์เดียว ──
      §oneCol · เดิมเหลือ 2 คอลัมน์ในช่วง 521–820px · บนมือถือ 2 คอลัมน์แปลว่า
@@ -694,7 +709,6 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
 
   /* โมดัล · เต็มจอ อ่านง่ายกว่ากล่องลอย */
   .modal-box,.tm-modal,.aos-modal{max-width:100% !important;width:100% !important;max-height:88dvh}
-  .modal-body,.tm-modal-body,.aos-modal-body{-webkit-overflow-scrolling:touch}
 
   /* ป้ายมุมจอ · ยกให้พ้น home indicator */
   #la-viewonly{bottom:calc(8px + env(safe-area-inset-bottom)) !important;font-size:10px !important}
@@ -717,11 +731,11 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
     border-radius:11px !important; font-weight:600 }
   /* ปฏิทินเดือน · เลื่อนในการ์ดของตัวเอง ไม่ดันทั้งหน้าไปทางขวา
      หัววันต้องกว้างเท่าตัวตาราง ไม่งั้นเลื่อนแล้วหัวไม่ตรงช่อง */
-  .main .cal2-box{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; max-width:100% !important }
+  .main .cal2-box{ overflow-x:auto !important; overscroll-behavior-x:contain; max-width:100% !important }
   .main .cal2-box .cal2-wd,.main .cal2-box .cal2-grid,.main .cal2-box .cal2-mb{ min-width:600px }
   .main .cal2-box .cal2-grid{ overflow:visible !important }
   /* แถบปุ่มสลับแท็บที่ยาวกว่าจอ · เลื่อนในแถบตัวเอง */
-  .main .dr-pills,.main .bkv2-utabs,.main .fl-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100% }
+  .main .dr-pills,.main .bkv2-utabs,.main .fl-tabs{ overflow-x:auto; max-width:100% }
   /* §tapSize · พื้นขั้นต่ำของทุกอย่างที่กดได้ · 40px คือขนาดที่กดโดนโดยไม่ต้องเล็ง
      ตั้งรวมทีเดียวแทนการไล่ทีละคลาส · ปุ่มที่เพิ่มมาทีหลังจะได้ตามไปเอง */
   .main .view button,
@@ -733,7 +747,7 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .main .pj-pen{ width:36px !important; height:36px !important }
   /* ปฏิทินใน Booking · 7 ช่องกว้าง 600px ในกล่อง 372px ที่ overflow:hidden
      สามวันขวาสุดถูกตัดหายไปเลย · ให้กล่องเลื่อนได้เหมือนปฏิทินหน้าอื่น */
-  .main .bkv2-cal{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; max-width:100% }
+  .main .bkv2-cal{ overflow-x:auto !important; overscroll-behavior-x:contain; max-width:100% }
   .main .bkv2-bodycard{ overflow-x:visible !important }
 
   /* การ์ดที่ถูกวางไว้คอลัมน์ที่ 5 ของกริด · พอกริดเหลือ 1–2 คอลัมน์ มันจะยื่นออกนอกจอ
@@ -785,12 +799,15 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
      :has(> table) ให้กล่องแม่เป็นตัวเลื่อนแทน · ตารางข้างในคงความกว้างไว้ครบ */
   /* !important จำเป็น · การ์ดพวกนี้ถูกตั้ง overflow ไว้ด้วย selector ที่มี id
      (#vancheckin-host .ck-card) ซึ่งชนะ selector ที่มีแต่ class เสมอ */
-  .main .view *:has(> table){max-width:100% !important;overflow-x:auto !important;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  /* §pinchZoom · -webkit-overflow-scrolling:touch ตัดทิ้ง · นี่คือกล่องที่ห่อ "ทุกตารางกว้าง" ในแอป
+     รวม .t2-tblscroll ที่ห่อ table.t2-mtbl · property นี้เคยกินท่าทีสองนิ้ว (pinch) ไปเป็นการ
+     เลื่อนในกล่องแทนที่จะส่งให้เบราว์เซอร์ซูมทั้งจอ → ตารางซูมด้วยสองนิ้วไม่ได้เลย */
+  .main .view *:has(> table){max-width:100% !important;overflow-x:auto !important;overscroll-behavior-x:contain}
   /* เบราว์เซอร์เก่าที่ยังไม่รองรับ :has() · อย่างน้อยอย่าให้ตารางที่ไม่ได้ตั้ง min-width ดันจอ */
   .main .view table:not([style*="min-width"]){max-width:100%}
   /* การ์ดที่ห่อปฏิทิน/heatmap/ตาราง · ให้เลื่อนในการ์ด ไม่ลากทั้งหน้า */
   .main .bo-card,.main .cal2-card,.main .ts-card,.main .ck-card,
-  .main .fl-card,.main .bkv2-card,.main .card{overflow-x:auto !important;-webkit-overflow-scrolling:touch;max-width:100% !important}
+  .main .fl-card,.main .bkv2-card,.main .card{overflow-x:auto !important;max-width:100% !important}
   /* ปฏิทิน 7 ช่องบนจอแคบ · 600px คือเส้นต่ำสุดที่ยังอ่านชื่อเรือออก */
   .main .fc-grid,.main .cal2-grid,.main .bkv2-cal-grid{min-width:600px}
 
@@ -850,3 +867,263 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
     .la-navdim{height:100dvh}
   }
 }
+
+/* ==== mob-unstick ==== */
+/* §mobUnstick · บนมือถือ ของที่ "ตรึงไว้" กินจอจนไม่เหลือที่ให้อ่านข้อมูล
+   วัดจริงที่ 375x812 ไล่ครบ 67 หน้า · พัง 7 หน้า อาการเดียวกันหมด:
+     piercheckin  .pkh        745px  -> เหลือพื้นที่ว่าง -32%  (ตรึงเกินความสูงจอ)
+     vancheckin   .ck-hd+.ck-unitbar 488px -> 4%
+     agents       .sb-side    752px  -> 7%
+     rate-types   .sb-side    728px  -> 10%
+     contract-tmpl  คอลัมน์ขวา 754px -> 10%
+     reconfirm    .rc-chrome+.rc-agh 367px -> 37%
+     settings     #prog-detail-mount 402px -> 50%
+   ต้นเหตุเดียวกัน: ของพวกนี้ออกแบบเป็น "คอลัมน์ข้าง/แถบหัว" ของจอกว้าง
+   พอจอแคบ layout ยุบเป็นคอลัมน์เดียว มันไปกองอยู่บนสุดแล้วยัง sticky อยู่
+   เลยตรึงเต็มจอ ส่วนรายการข้างล่างเลื่อนลอดอยู่ข้างหลัง = เลื่อนเท่าไหร่ก็ไม่เห็น
+   แก้ที่จอแคบอย่างเดียว จอกว้างไม่แตะ (ที่นั่นมันเป็นคอลัมน์ข้างจริง ๆ และทำงานถูก)
+   ⚠ หัวตาราง th / แถวกลุ่ม tr.ck-ghd (32-43px) ยัง sticky เหมือนเดิม อันนั้นมีประโยชน์จริง
+   ⚠ td.pcs-nm / td.pcs-vch เป็น sticky แนวนอน (ตรึงคอลัมน์ซ้าย) ห้ามแตะ */
+@media (max-width:820px){
+  /* คอลัมน์ข้างที่กลายเป็นบล็อกบนสุด */
+  .sb-side,
+  #view-agents .sb-side,
+  #view-rate-types .sb-side,
+  #view-settings #prog-detail-mount,
+  #cttv-wrap > div > div{
+    position:static !important;
+    max-height:none !important;
+  }
+  /* แถบหัวเรื่องสูง ๆ ที่ตรึงไว้ */
+  #piercheckin-host .pkh,
+  #vancheckin-host .ck-hd,
+  #vancheckin-host .ck-unitbar,
+  #reconfirm-host .rc-chrome,
+  #reconfirm-host .rc-agh,
+  #fl-inv-pink-wrap > div{
+    position:static !important;
+  }
+}
+
+/* ==== ios-dvh-modal ==== */
+/* §iosDvhModal · ต่อจากเลเยอร์ iOS ด้านบนที่ยิงผิดตัว
+   ของเดิมสั่ง max-height:88dvh ให้ .modal-box (ค้นทั้งหน้าไม่มีอยู่จริงสักตัว · selector ตาย)
+   กับ .tm-modal / .aos-modal ซึ่งเป็น "ฉากหลัง" ไม่ใช่ตัวที่ถูกจำกัดความสูง
+   ตัวที่คุมความสูงจริงคือการ์ดข้างใน (.tm-modal-card / .aos-modal-card) ซึ่งยังเป็น vh อยู่
+   บน iOS Safari 100vh = ความสูงตอนแถบ URL ยุบ ซึ่งสูงกว่าที่ตาเห็นจริงราว 60-90px
+   โมดัลจึงสูงเกินจอ และสิ่งที่ตกอยู่ใต้ขอบล่างคือ "แถวปุ่ม" = กดบันทึก/ยืนยันไม่ได้
+   dvh วัดจากพื้นที่ที่เห็นจริง · บนเดสก์ท็อป dvh เท่ากับ vh เป๊ะ จอใหญ่จึงไม่ขยับสักพิกเซล
+   ⚠ ตั้งใจไม่แตะ body{min-height:100vh} กับ .app{min-height:calc(100vh - var(--topbar))}
+     min-height ที่เป็น dvh จะคำนวณใหม่ตลอดตอนแถบ URL ยุบ-ขยาย ทำให้หน้ากระตุกระหว่างเลื่อน
+     สองตัวนั้นสูงเกินไปเฉย ๆ (เลื่อนเกินนิดหน่อย) ไม่ได้บังอะไร จึงไม่คุ้มแลกกับอาการกระตุก */
+@supports (height:100dvh){
+  .modal{max-height:88dvh}
+  .tm-modal-card,
+  #view-addonsvc .aos-modal-card,
+  #view-agents .ag-edit-card{max-height:90dvh}
+  #view-agents .ct-wiz-card{max-height:92dvh}
+  .ct-doc-card{height:92dvh}
+}
+/* ==== sb-theme-skin ==== */
+
+/* §sbTheme · โหมดมืดของ sidebar · ใช้ภาษาดีไซน์เดียวกับ Dashboard/Calendar
+   ⚠ ชั้นนี้เป็น "ชั้นทับ" ล้วน · ลบทั้งบล็อกนี้ = เหลือแต่โหมดสว่างเดิม (sidebar-glass-skin)
+     ไม่ได้แก้กฎของ sidebar-glass-skin สักบรรทัด
+   ⚠ ทุกกฎกำกับด้วย html[data-sb-theme="dark"] · ไม่มี attribute = สว่าง = ของเดิมเป๊ะ
+     js/02-sidebar.js เป็นคนติด attribute ให้ตั้งแต่สคริปต์เริ่มรัน
+   ⚠ sidebar-glass-skin เขียน !important ไว้แทบทุกบรรทัด · ชั้นนี้จึงต้อง !important
+     ตามไปด้วย ถึงจะทับได้ (น้ำหนักเท่ากัน อยู่ทีหลัง = ชนะ)
+   สีเน้นยังเป็น Ocean #1683C7 ทั้งสองโหมด · สลับธีมแล้วสีแบรนด์ไม่ขยับ    */
+
+/* §sbCi · พื้นและสีเน้นของ sidebar อิง --ci-navy/--ci-cyan ที่ประกาศไว้ใน :root
+   วัดด้วย ΔE2000 · navy ที่ใช้อยู่เดิม (#16265C) ห่าง ci-navy 7.0 = คนละเฉด
+   ฮิวตรงกันแทบเป๊ะ (226° vs 228°) ต่างที่ความอิ่ม/ความสว่าง · จึงเลื่อนมาใช้ตัวจริงได้เลย
+   ไล่สีสร้างจากฮิว 228° S100 ตัวเดียวกัน เปลี่ยนแค่ L ทุกขั้นจึงอยู่ในตระกูล ci-navy
+     L22 #001670  ·  L15 #000F4C = ci-navy  ·  L11 #000B38  ·  L8 #000829
+   ⚠ แตะเฉพาะ sidebar · Dashboard/Calendar ยังเป็น #16265C เหมือนเดิม */
+html[data-sb-theme="dark"] .sidebar{
+  background:
+    radial-gradient(120% 26% at 50% 0%, rgba(0,188,223,.20), transparent 62%),
+    linear-gradient(180deg, rgba(0,22,112,.94), rgba(0,15,76,.93)) !important;
+  border:1px solid rgba(255,255,255,.14) !important;
+  box-shadow:0 22px 52px -18px rgba(0,4,24,.66), inset 0 1.5px 0 rgba(255,255,255,.16) !important;
+}
+html[data-sb-theme="dark"] .sidebar .nav-section{ color:rgba(214,226,245,.66) !important; }
+html[data-sb-theme="dark"] .sidebar .nav-item{ color:#C3D2EC !important; }
+html[data-sb-theme="dark"] .sidebar .nav-item svg{ color:#8FA6CC !important; }
+html[data-sb-theme="dark"] .sidebar .nav-item:hover{ background:rgba(255,255,255,.10) !important; color:#fff !important; }
+html[data-sb-theme="dark"] .sidebar .nav-item:hover svg{ color:#fff !important; }
+/* ตัวที่เปิดอยู่ · ใช้ ci-cyan
+   ⚠ ตัวหนังสือบน ci-cyan ต้องเป็น ci-navy ห้ามเป็นขาว · ขาวได้แค่ 2.27:1
+     (:root §ciColour เขียนเตือนข้อนี้ไว้แล้ว) · navy บนฟ้าได้ 7.90:1
+   ของเดิม Ocean #1683C7 + ตัวหนังสือขาว วัดได้ 4.11:1 ไม่ผ่านเกณฑ์อยู่แล้ว
+   และตัวพิลกับพื้นแถบห่างกันแค่ 3.83:1 · เปลี่ยนแล้วขึ้นเป็น 6.95:1 */
+html[data-sb-theme="dark"] .sb-avatar{ background:var(--ci-cyan) !important; color:var(--ci-navy) !important; }
+
+/* หัวโปรไฟล์ · ค่าเดิมเป็นหมึกเข้ม (#1e2633/#5a6472) ซึ่งบนพื้น navy คืออ่านไม่ออก */
+html[data-sb-theme="dark"] .sb-greet{ color:rgba(214,226,245,.62) !important; }
+html[data-sb-theme="dark"] .sb-name{ color:#fff !important; }
+html[data-sb-theme="dark"] .sb-avatar{ border-color:rgba(255,255,255,.30) !important; }
+html[data-sb-theme="dark"] .sb-divider{ background:rgba(255,255,255,.14) !important; }
+html[data-sb-theme="dark"] .sidebar-footer{
+  color:rgba(214,226,245,.66) !important; border-top:1px solid rgba(255,255,255,.10) !important; }
+
+/* กล่องผู้ใช้/ออกจากระบบ · ปักอยู่ก้น sidebar จึงต้องเปลี่ยนตามกัน */
+html[data-sb-theme="dark"] #la-userbadge{
+  background:rgba(12,24,62,.72) !important; color:#C3D2EC !important;
+  border-top:1px solid rgba(255,255,255,.10) !important; }
+html[data-sb-theme="dark"] #la-userbadge b{ color:#fff !important; }
+html[data-sb-theme="dark"] .la-ub-btn{ background:rgba(255,255,255,.12) !important; color:#E2EAF7 !important; }
+html[data-sb-theme="dark"] .la-ub-btn:hover{ background:rgba(255,255,255,.22) !important; }
+
+/* รางแบบย่อ · เส้นคั่นที่แทนหัวข้อกลุ่มเป็นสีดำจาง มองไม่เห็นบนพื้นเข้ม */
+html[data-sb-theme="dark"] .sidebar.sb-collapsed .nav-section{ background:rgba(255,255,255,.13) !important; }
+
+/* ── ปุ่มสลับธีม · มีทั้งสองโหมด จึงอยู่นอกวงเล็บ dark ── */
+.sb-theme{ width:26px; height:26px; flex:none; border:none; border-radius:8px;
+  background:rgba(255,255,255,.72); color:#5a6472; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; }
+.sb-theme:hover{ background:rgba(255,255,255,.95); }
+html[data-sb-theme="dark"] .sb-theme{ background:rgba(255,255,255,.12); color:#D6E2F5; }
+html[data-sb-theme="dark"] .sb-theme:hover{ background:rgba(255,255,255,.24); }
+html[data-sb-theme="dark"] .sb-toggle{ background:rgba(255,255,255,.12) !important; color:#D6E2F5 !important; }
+html[data-sb-theme="dark"] .sb-toggle:hover{ background:rgba(255,255,255,.24) !important; }
+/* ย่อแล้วเหลือที่แนวนอนไม่พอทั้งสองปุ่ม · ปุ่มธีมซ่อน กดกางก่อนค่อยสลับ */
+.sidebar.sb-collapsed .sb-theme{ display:none; }
+
+/* ── §i18n · ปุ่มสลับภาษา · ทรงเดียวกับปุ่มธีมแต่เป็นตัวหนังสือ TH/EN ── */
+/* §i18n · หัวแถบมีปุ่มเพิ่มมาอีกตัว · พื้นที่ฝั่งชื่อแคบลง
+   บังคับบรรทัดทักทายไม่ให้ตกบรรทัด แล้วปล่อยให้ชื่อยาวตัดท้ายด้วยจุดสามจุดแทน */
+.sb-greet{ white-space:nowrap; }
+/* กว้างเท่าปุ่มอื่น 26px พอดี · กว้างกว่านั้นชื่อผู้ใช้บนหัวแถบถูกบีบจนตกบรรทัด */
+.sb-lang{ height:26px; width:26px; flex:none; border:none; border-radius:8px;
+  background:rgba(255,255,255,.72); color:#5a6472; cursor:pointer;
+  font-family:'DM Mono',ui-monospace,monospace; font-size:9.5px; font-weight:700; letter-spacing:0;
+  display:flex; align-items:center; justify-content:center; padding:0; }
+.sb-lang:hover{ background:rgba(255,255,255,.95); }
+html[data-sb-theme="dark"] .sb-lang{ background:rgba(255,255,255,.12); color:#D6E2F5; }
+html[data-sb-theme="dark"] .sb-lang:hover{ background:rgba(255,255,255,.24); }
+.sidebar.sb-collapsed .sb-lang{ display:none; }
+
+/* พื้นหลังรอบ sidebar · ช่องซ้าย 14px บน 6px ล่าง 10px และร่อง 10px ก่อนถึงเนื้อหา
+   เป็นพื้นของ body (ครีม #f5f2ed) · โหมดมืดจึงเห็นแผงกรมท่าลอยอยู่บนกรอบครีม
+   ⚠ ไม่แตะ body{background} · นั่นคือพื้นของทั้งแอปทุกหน้า จะกลายเป็นดาร์กโหมดทั้งระบบ
+     ทาเฉพาะแถบกว้างเท่าคอลัมน์ sidebar (274px = 14 + 250 + 10) ด้วย body::after แทน
+   ⚠ z-index ต้องเป็น -1 · ::after เป็นลูกตัวท้ายของ body ถ้าเป็น 0 จะทับ .sidebar
+     (ลำดับใน DOM ตัดสินเมื่อ z-index เท่ากัน) · -1 ลงไปอยู่หลังเนื้อหาแต่ยังอยู่หน้าพื้น body
+   ⚠ body::before ถูก la-mobile skin ใช้ไปแล้ว (แถบ LOVE ANDAMAN บนจอแคบ) · ตัวนี้จึงใช้ ::after */
+html[data-sb-theme="dark"] body::after{
+  content:'';position:fixed;left:0;top:0;bottom:0;width:274px;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg, #000B38 0%, #000829 100%);   /* ci-navy L11 → L8 */
+}
+/* ย่อรางแล้วคอลัมน์แคบลง · 14 + 84 + 10 */
+html[data-sb-theme="dark"] body.sb-collapsed::after{ width:108px; }
+/* ⚠ บนจอแคบ sidebar กลายเป็นลิ้นชักที่เลื่อนออกไปนอกจอ (la-mobile skin)
+     แถบนี้เป็น fixed จะค้างอยู่กับที่ = แถบมืดกว้าง 274px คาหน้าจอ 390px ตลอดเวลา
+     ทั้งที่ยังไม่ได้เปิดลิ้นชักด้วยซ้ำ · ปิดทิ้งใต้ 820px ให้ตรงกับจุดที่ la-mobile เริ่มทำงาน */
+@media (max-width:820px){
+  html[data-sb-theme="dark"] body::after,
+  html[data-sb-theme="dark"] body.sb-collapsed::after{ display:none }
+}
+
+/* ══════════ §sbCiLight · โหมดสว่างใช้สี CI เหมือนกัน ══════════════════════════
+   ⚠ ก้อนนี้เปลี่ยนหน้าตาโหมดสว่างจากของเดิมจริง ๆ (ไม่ใช่แค่เพิ่มโหมดมืดแล้ว)
+     ของเดิมเป็นกระจกขาวล้วน หมึกเทา (#3a4453/#7a8493) สีเน้น Ocean #1683C7
+     วัดแล้วมีสามจุดไม่ผ่านเกณฑ์ 4.5 อยู่ก่อนหน้านี้แล้ว
+       nav-section 3.60 · sidebar-footer 2.43 · ตัวหนังสือในพิล 4.11
+     ชั้นนี้ย้ายหมึกมาเป็นตระกูล ci-navy ซึ่งแก้ทั้งสามจุดไปในตัว
+   ⚠ กำกับด้วย [data-sb-theme="light"] ไม่ใช่ :not([dark]) · ถ้า js ไม่ทำงาน
+     จะไม่มี attribute เลย แล้วหน้าตาย้อนกลับไปเป็น sidebar-glass-skin เดิมทั้งดุ้น
+   ⚠ ลบตั้งแต่ §sbCiLight ถึงท้ายไฟล์ = โหมดสว่างกลับไปเป็นของเดิม        */
+html[data-sb-theme="light"] body::after{
+  content:'';position:fixed;left:0;top:0;bottom:0;width:274px;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg, var(--ci-navy-soft) 0%, var(--ci-cyan-soft) 100%); }
+html[data-sb-theme="light"] body.sb-collapsed::after{ width:108px; }
+@media (max-width:820px){ html[data-sb-theme="light"] body::after{ display:none } }
+
+html[data-sb-theme="light"] .sidebar{
+  background:
+    radial-gradient(120% 40% at 50% -4%, rgba(0,188,223,.16), transparent 62%),
+    rgba(255,255,255,.80) !important;
+  border:1px solid rgba(0,15,76,.10) !important;
+  box-shadow:0 22px 52px -18px rgba(0,15,76,.26), inset 0 1.5px 0 rgba(255,255,255,.9) !important; }
+html[data-sb-theme="light"] .sidebar .nav-section{ color:#5A6685 !important; }
+html[data-sb-theme="light"] .sidebar .nav-item{ color:#233055 !important; }
+html[data-sb-theme="light"] .sidebar .nav-item svg{ color:var(--ci-cyan-ink) !important; }
+html[data-sb-theme="light"] .sidebar .nav-item:hover{ background:rgba(0,188,223,.13) !important; color:var(--ci-navy) !important; }
+html[data-sb-theme="light"] .sidebar .nav-item:hover svg{ color:var(--ci-navy) !important; }
+html[data-sb-theme="light"] .sb-avatar{ background:var(--ci-cyan) !important; color:var(--ci-navy) !important;
+  border-color:rgba(255,255,255,.9) !important; }
+html[data-sb-theme="light"] .sb-greet{ color:#5A6685 !important; }
+html[data-sb-theme="light"] .sb-name{ color:var(--ci-navy) !important; }
+html[data-sb-theme="light"] .sb-divider{ background:rgba(0,15,76,.12) !important; }
+html[data-sb-theme="light"] .sidebar-footer{ color:#5A6685 !important;
+  border-top:1px solid rgba(0,15,76,.10) !important; }
+html[data-sb-theme="light"] .sb-theme,
+html[data-sb-theme="light"] .sb-lang,
+html[data-sb-theme="light"] .sb-pill,
+html[data-sb-theme="light"] .sb-toggle{ background:rgba(0,15,76,.07) !important; color:var(--ci-cyan-ink) !important; }
+html[data-sb-theme="light"] .sidebar.sb-collapsed .nav-section{ background:rgba(0,15,76,.09) !important; }
+
+/* ══ §sbPill · ทรงพิลเมนูที่เปิดอยู่ · เลือกแยกจากธีม เก็บใน localStorage ══
+   cyan (ตั้งต้น) · เด่นเรื่องสีแบรนด์ · ตัวหนังสือต้องเป็น ci-navy ห้ามขาว (ขาว 2.27)
+     โหมดสว่าง ตัวพิลกับพื้นห่างแค่ 2.17 — ขอบไม่ค่อยขาด แต่เลือกไว้เป็นหลักตามที่สั่ง
+     โหมดมืด พื้นเข้ม จึงได้ 7.00 ไม่มีปัญหา
+   navy · ขอบอ่านขาดกว่ามาก (สว่าง 17.3) แลกกับสีฟ้าหายไปจากจุดที่เด่นที่สุด
+     โหมดมืดพื้นเป็น ci-navy อยู่แล้ว พิล navy ล้วนจะจมหาย จึงต้องมีขอบ ci-cyan คั่น */
+html[data-sb-pill="cyan"] .sidebar .nav-item.active,
+html:not([data-sb-pill]) .sidebar .nav-item.active{
+  background:var(--ci-cyan) !important; color:var(--ci-navy) !important; font-weight:600 !important;
+  border:1px solid transparent !important; box-shadow:0 8px 20px -4px rgba(0,188,223,.50) !important; }
+html[data-sb-pill="cyan"] .sidebar .nav-item.active svg,
+html:not([data-sb-pill]) .sidebar .nav-item.active svg{ color:var(--ci-navy) !important; }
+
+html[data-sb-pill="navy"] .sidebar .nav-item.active{
+  background:var(--ci-navy) !important; color:#fff !important; font-weight:600 !important;
+  border:1px solid transparent !important; box-shadow:0 8px 20px -4px rgba(0,15,76,.45) !important; }
+html[data-sb-pill="navy"] .sidebar .nav-item.active svg{ color:var(--ci-cyan) !important; }
+/* โหมดมืด · พื้นก็เป็น ci-navy พิล navy ล้วนจะจมหายไปกับพื้น ต้องมีขอบคั่น */
+html[data-sb-pill="navy"][data-sb-theme="dark"] .sidebar .nav-item.active{
+  border:1px solid rgba(0,188,223,.70) !important;
+  box-shadow:0 8px 20px -4px rgba(0,0,0,.5) !important; }
+
+/* ปุ่มเลือกทรงพิล · วงกลมทึบบอกสีที่จะได้ถ้ากด · อยู่ข้างปุ่มธีมในหัวแถบ
+   ทั้งคู่เป็นเรื่อง "หน้าตา" เหมือนกัน อยู่ด้วยกันแล้วหาเจอพร้อมกัน
+   ⚠ เคยลองย้ายไปท้ายแถบเพื่อไม่ให้หัวแถบแน่น · วัดแล้วท้ายแถบอยู่ที่ y=3321
+     ในขณะที่จอสูง 980 = ต้องเลื่อนเมนูลงไปสุดก่อนถึงจะเห็น · หาไม่เจอ
+   ⚠ หัวแถบกว้าง 226px ใส่ปุ่มที่สามแล้วชื่อผู้ใช้เหลือ 56px = "LOVE An..."
+     จึงย่ออวตาร 44→36 ปุ่ม 26→24 gap 10→7 · วัดแล้วชื่อได้ 80px กลับมาอ่านออก */
+.sb-profile{ gap:7px !important; }
+.sb-avatar{ width:36px !important; height:36px !important; font-size:12px !important;
+  border-width:2px !important; }
+.sb-theme,.sb-toggle,.sb-pill{ width:24px !important; height:24px !important; }
+.sb-pill{ flex:none; border:none; border-radius:7px;
+  background:rgba(255,255,255,.72); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; }
+.sb-pill:hover{ background:rgba(255,255,255,.95); }
+.sb-pill-dot{ width:13px; height:13px; border-radius:50%; display:block;
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.55); }
+html[data-sb-theme="dark"] .sb-pill{ background:rgba(255,255,255,.12); }
+html[data-sb-theme="dark"] .sb-pill:hover{ background:rgba(255,255,255,.24); }
+/* ย่อรางแล้วซ่อนเหมือนปุ่มธีม · ที่แนวนอนไม่พอทั้งสามปุ่ม */
+.sidebar.sb-collapsed .sb-pill{ display:none; }
+
+/* ══ §sbScroll · ซ่อนแถบเลื่อนของ sidebar ทิ้งไปเลย แต่ยังเลื่อนได้ ══════════
+   ราก · 01-base.css:1384 ตั้งกฎรวมทั้งแอปไว้ · thumb เป็น var(--sand-dark) #E8E4DC
+     ซึ่งเป็นสีครีม · ตอน sidebar ยังเป็นกระจกขาวก็กลมกลืน พอพื้นเป็น ci-navy
+     กลายเป็นแท่งสว่างพาดข้างเมนู · วัดได้ 12.44:1 เทียบพื้น ขณะที่ตัวหนังสือเมนูเอง
+     ได้ 10.39:1 = แถบเลื่อนดังกว่าสิ่งที่คนมาอ่านจริง ๆ
+   เคยลองหรี่สีและลดความกว้างแล้ว ยังเห็นอยู่ดี · เมนูยาว 71 แถว ต้องเลื่อน 4.6 จอ
+     แถบจึงอยู่ในสายตาตลอดเวลา · ตัดทิ้งไปเลยจบกว่า
+
+   ⚠ ซ่อนแค่ "ตัวแถบ" ไม่ได้ปิดการเลื่อน · overflow-y:auto ยังอยู่เหมือนเดิม
+     ล้อเมาส์ / เทรกแพด / ปุ่มลูกศร / Page Up-Down / ลากด้วยนิ้ว ยังใช้ได้ครบ
+   ⚠ ต้องเขียนสามบรรทัด · scrollbar-width (Firefox + Chrome ใหม่)
+     -ms-overflow-style (Edge เก่า) และ ::-webkit-scrollbar (Chrome/Safari)
+     ขาดตัวใดตัวหนึ่ง = เบราว์เซอร์นั้นยังเห็นแถบครีมเหมือนเดิม
+   ⚠ ตั้งเฉพาะ .sidebar · กฎรวมของทั้งแอปไม่แตะ หน้าอื่นยังมีแถบเลื่อนปกติ
+   ⚠ แลกกับการไม่มีอะไรบอกว่า "ยังมีเมนูอยู่ข้างล่างอีก" · เมนูยาว 4.6 จอ
+     คนที่เพิ่งใช้ครั้งแรกอาจไม่รู้ว่าเลื่อนได้ · ถ้าเจอปัญหานี้จริงค่อยเติมเงาจาง
+     ที่ขอบล่างทีหลัง (ไม่ใช่เอาแถบกลับมา)                                   */
+.sidebar{ scrollbar-width:none; -ms-overflow-style:none; }
+.sidebar::-webkit-scrollbar{ width:0; height:0; display:none; }

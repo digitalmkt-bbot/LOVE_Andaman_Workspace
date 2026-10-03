@@ -1614,7 +1614,7 @@ function flRenderDocsList(){
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
   const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
 
-  const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const MONTHS=laMonAbbrTH();
   const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()+543}`;};
   const fmtShort=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()+543).slice(2)}`;};
 

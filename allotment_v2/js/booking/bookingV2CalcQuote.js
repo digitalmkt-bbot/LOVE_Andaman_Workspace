@@ -29,7 +29,7 @@ function bookingV2CalcQuote(){
   });
   let totalAddOn = 0;
   // Skip longtail-join add-on when any trip route is bundled (auto-applied via bundle)
-  const rtCalc = bookingV2GetRT();
+  const rtCalc = bookingV2AddOnRT();   /* §aoRT */
   const anyBundled = rtCalc && d.trips.some(t => t.routeId && _rtBundleAppliesTo(rtCalc.routeBundles?.[t.routeId]?.longtail, t.bookingMode==='charter'));
   (d.addOns||[]).forEach(a => {
     if(a.type === 'longtail-join' && anyBundled) return;
