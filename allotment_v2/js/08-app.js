@@ -9190,7 +9190,22 @@ function bkV2AssignBoat(bkId, boatId, date){
         const already=(bkOpsRead(b,d).boatId===boatId)?myPax:0;                       // subtract self if already on this boat
         const next=cur-already+myPax;
         if(next>cap+BA_CAP_TOL){
-          alert('Cannot assign to '+((bo&&bo.name)||boatId)+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\nAssign another boat, or add a boat in Boat Operation.');
+          /* §baCapGate (2026-10-03) · เรือเต็มแล้วแต่ยังมีคนที่รับจองไปแล้วค้างอยู่ (เคสจริง 4 ต.ค. Hermetis 65 ที่ · จอย 69 คน
+             จากล็อกเกินของเดิม) · ของเดิมบอกแค่ "ใส่ไม่ได้" แล้วจบ ผู้ใช้ไม่รู้ว่าต้องไปปลดที่ไหน
+             ยังบล็อกเหมือนเดิม · แต่พาไปหน้าปรับ cap เฉพาะวันนั้นได้เลย ซึ่งเป็นด่านปลดที่มีอยู่แล้ว:
+             ต้องใส่เหตุผล บันทึกชื่อคนปรับ และไม่เกินที่นั่งจดทะเบียน · ปรับแล้วใส่เรือให้ต่อเอง
+             เกินทะเบียนแล้วไม่มีทางปลด ต้องเพิ่มเรือ */
+          const nm=((bo&&bo.name)||boatId), lic=(typeof boatCapLicense==='function')?boatCapLicense(boatId):0;
+          if(typeof boatCapModalOpen!=='function' || (lic>0 && next-BA_CAP_TOL>lic)){
+            alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+(lic>0?(', licensed seats '+lic):'')+').\nThe licensed seats cannot be exceeded. Assign another boat, or add a boat in Boat Operation.');
+            return;
+          }
+          if(!confirm('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\n\nEMERGENCY ONLY: raise the capacity of '+nm+' for this day?\nA reason is required and your name is recorded. Licensed seats: '+(lic||'-')+'.\n\nOK = open the day-capacity setting   Cancel = leave unassigned')) return;
+          boatCapModalOpen(boatId, d, function(){
+            const c2=boatCapFor(boatId,d);
+            if(c2+BA_CAP_TOL>=next) bkV2AssignBoat(bkId, boatId, date);
+            else if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render();
+          }, Math.min(lic>0?lic:next, next));
           return;
         }
       }
@@ -9250,7 +9265,7 @@ function bkV2BoatAssignSelected(date, routeId, boatId){
     else skipped.push(b.leadPax||b.customerName||id);
   });
   acctPersistBookings();
-  if(skipped.length) alert('Assigned '+done+' booking(s) to '+((bo&&bo.name)||boatId)+'.\nSkipped '+skipped.length+' — would exceed cap '+cap+' (+'+TOL+'): '+skipped.join(', '));
+  if(skipped.length) alert('Assigned '+done+' booking(s) to '+((bo&&bo.name)||boatId)+'.\nSkipped '+skipped.length+' - would exceed cap '+cap+' (+'+TOL+'): '+skipped.join(', ')+'\n\nEmergency only: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).');
   if(typeof bkV2Render==='function') bkV2Render();
 }
 // Boat-assign cell (select + upgrade) reused by the By-trip-date manifest "Boat Assign mode"
@@ -12950,7 +12965,7 @@ function boatCapSet(boatId, date, cap, reason){
 }
 // ── modal ตั้ง cap รายวัน · เรียกได้จากทั้ง Boat Operation และ By-trip ──
 function boatCapModalClose(){ const h=document.getElementById('bcap-host'); if(h) h.innerHTML=''; }
-function boatCapModalOpen(boatId, date, afterFn){
+function boatCapModalOpen(boatId, date, afterFn, suggest){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ต้องมีสิทธิ์แก้ไข Operations จึงจะปรับ cap ได้'); return; }
   const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return;
   const e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]));
@@ -12971,7 +12986,7 @@ function boatCapModalOpen(boatId, date, afterFn){
    +'  </div>'
    +'  <div style="padding:18px 20px">'
    +'    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
-   +'      <input id="bcap-val" type="number" min="0" max="'+i.license+'" value="'+i.cap+'" oninput="_bcapPreview()" style="width:110px;border:1.5px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:22px;font-weight:800;font-family:\'DM Mono\',monospace;text-align:center;box-sizing:border-box">'
+   +'      <input id="bcap-val" type="number" min="0" max="'+i.license+'" value="'+((suggest>0)?suggest:i.cap)+'" oninput="_bcapPreview()" style="width:110px;border:1.5px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:22px;font-weight:800;font-family:\'DM Mono\',monospace;text-align:center;box-sizing:border-box">'
    +'      <div style="display:flex;gap:6px;flex-wrap:wrap">'+quick+'</div>'
    +'    </div>'
    +'    <div id="bcap-hint" style="font-size:11.5px;margin-top:9px;min-height:17px"></div>'
