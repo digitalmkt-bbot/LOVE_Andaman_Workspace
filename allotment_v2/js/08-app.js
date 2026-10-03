@@ -50680,8 +50680,14 @@ function bkV2RenderTab2(){
        ช่องซ้าย (ชื่อโปรแกรม) เกาะซ้ายเหมือนสามคอลัมน์แรกของแถวปกติ */
     const _pbPx = (k,v,tt) => `<td class="pp${v?'':' z'}" data-px="${k}" title="${tt}">${v}</td>`;
     const _pbNm = esc(route?.name || rid);
-    const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="3" class="pl"><div class="pw">`
-      + `<span class="pd"></span><span class="pn" title="${_pbNm}">${_pbNm}</span>`
+    /* §pbOff (2026-10-03) · ทริปที่ไม่ออกต้องเห็นที่ "แถบของทริปนั้นเอง"
+       ของเดิมมีแต่กล่องเตือนเหนือตาราง เขียนว่า "ทริปนี้ไม่ออกวันนี้" ไม่มีชื่อโปรแกรม
+       ส่วนแถบโปรแกรมข้างล่างยังเป็นจุดเขียว ชื่อสีปกติ เหมือนทริปที่ออก · วันที่มีหลายโปรแกรมจึงดูไม่ออกว่าหมายถึงทริปไหน
+       แถบของทริปที่ไม่ออก: พื้นแดงอ่อน ขอบแดง จุดเป็นเครื่องหมายห้าม ชื่อขีดฆ่า ป้ายทึบ "ไม่ออกวันนี้" นำหน้าตัวเลข
+       และป้ายที่นั่งไม่เขียนว่า full (ไม่ได้เต็ม · ไม่ได้เปิดขาย) */
+    const _pbOffChip = _notRun ? `<span class="poff" data-pboff="1" title="${esc(_notRunWhy)}">&#8856; ${laT('ไม่ออกวันนี้')}</span>` : '';
+    const _pband = `<tr class="t2-pband${_notRun?' off':''}" style="--pc:${_notRun?'#A32D2D':_pbCol}"><td colspan="3" class="pl"><div class="pw">`
+      + `<span class="pd"></span><span class="pn" title="${_pbNm}${_notRun?(' · '+laT('ไม่ออกวันนี้')):''}">${_pbNm}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + `</div></td>`
       /* §pbPax2 · ไม่รวมเหมาลำ · เหมาลำมียอดของตัวเองบนแถบ CHARTER ข้างล่าง
@@ -50689,7 +50695,8 @@ function bkV2RenderTab2(){
       + _pbPx('ad',_sAd,laT('ผู้ใหญ่ · ไม่รวมเหมาลำ')) + _pbPx('chd',_sChd,laT('เด็ก · ไม่รวมเหมาลำ'))
       + _pbPx('inf',_sInf,laT('ทารก · ไม่รวมเหมาลำ')) + _pbPx('foc',_sFoc,laT('FOC · ไม่รวมเหมาลำ'))
       + `<td colspan="${COLN-7}" class="pr"><div class="pw">`
-      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
+      + _pbOffChip
+      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>/${_pbCap}<em class="${_notRun?'off':_pbCls}">${_notRun?'closed':(_pbAv<=0?'full':(_pbAv+' free'))}</em></span>`
       /* สี่ช่องบวกกันไม่เท่าที่นั่งที่ใช้ไป = ต้องบอกว่าทำไม · ไม่งั้นดูเหมือนเลขผิด
          ที่นั่ง (getSeatsConsumed) หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้
          สี่ช่องคือยอดของแถวลูกค้าจอยที่ยืนยันแล้ว (ไม่รวมเหมาลำ ทั้งสองฝั่ง) */
@@ -51107,7 +51114,7 @@ function bkV2RenderTab2(){
     void _famHead;
     return `
       <div class="t2-trip t2-trip-variant${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}${_notRun?' t2-trip-closed':''}" style="--fam:${famColor}">
-        ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t">ทริปนี้ไม่ออกวันนี้ · ${esc(_notRunWhy)}</div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
+        ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t"><span class="t2-notrun-nm" data-notrun-nm="1">${esc(route?.name||rid)}</span><span class="t2-notrun-tag">${laT('ไม่ออกวันนี้')}</span><span class="t2-notrun-why">${esc(_notRunWhy)}</span></div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
         ${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?`<div style="background:#FCEBEB;border:1.5px solid #E89A92;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">&#9928;</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#A32D2D">This trip is cancelled due to weather</div><div style="font-size:11px;color:#8a3a30;margin-top:1px">${bkV2WeatherNote(rid,date)?esc(bkV2WeatherNote(rid,date)):'Cannot depart'} · resolve booking by booking</div></div><button onclick="event.stopPropagation();bkV2WeatherPanel('${rid}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>`:''}
         <div class="t2-tripcard">
         ${/* §btBand · ชื่อทริปย้ายลงไปเป็นแถบแรกของตารางแล้ว */''}
@@ -51320,11 +51327,22 @@ function bkV2RenderTab2(){
     .t2-bav{width:22px;height:22px;border-radius:6px;color:#fff;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center}
     .t2-assign{font-size:11px;color:var(--ink-soft);border:1px dashed var(--ink-faint);background:transparent;border-radius:9px;padding:5px 10px;cursor:pointer;font-family:inherit}
     .t2-assign-off{font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:1px solid #E6C9C3;border-radius:9px;padding:5px 10px;white-space:nowrap}
-    .t2-notrun{background:#FBF3E6;border:1.5px solid #E0C79A;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
-    .t2-notrun-ic{font-size:19px;color:#8A5B00;flex:none}
-    .t2-notrun-t{font-size:13px;font-weight:700;color:#8A5B00}
-    .t2-notrun-s{font-size:11px;color:#9a7433;margin-top:1px}
-    .t2-trip-closed .t2-tripcard,.t2-trip-closed .t2-listcard{background:#FDFAF3;border-color:#E7D6B4}
+    /* §pbOff · กล่องเตือนบอกชื่อโปรแกรม + ป้ายทึบ · สีแดงชุดเดียวกับแถบโปรแกรมที่ไม่ออกข้างล่าง */
+    .t2-notrun{background:#FCEBEB;border:1.5px solid #E89A92;border-left:6px solid #A32D2D;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .t2-notrun-ic{font-size:19px;color:#A32D2D;flex:none}
+    .t2-notrun-t{font-size:13px;font-weight:700;color:#7A1F1F;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .t2-notrun-nm{font-size:15px;font-weight:800;color:#7A1F1F}
+    .t2-notrun-tag{background:#A32D2D;color:#fff;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 9px;white-space:nowrap}
+    .t2-notrun-why{font-size:12px;font-weight:600;color:#8a3a30}
+    .t2-notrun-s{font-size:11px;color:#8a3a30;margin-top:2px}
+    .t2-trip-closed .t2-tripcard,.t2-trip-closed .t2-listcard{background:#FDFAF3;border-color:#E89A92}
+    .t2-mtbl tr.t2-pband.off>td{background:#FCEBEB;border-bottom:1px solid #E89A92}
+    .t2-pband.off .pd{width:16px;height:16px;background:none;border-radius:0;position:relative}
+    .t2-pband.off .pd::before{content:'⊘';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;color:#A32D2D;font-weight:800}
+    .t2-pband.off .pn{color:#A32D2D;text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:rgba(163,45,45,.55)}
+    .t2-pband .poff{background:#A32D2D;color:#fff;font-size:12px;font-weight:800;border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.01em}
+    .t2-pband .ps em.off{background:#fff;color:#A32D2D;border:1px solid #E89A92}
+    .t2-mtbl tr.t2-pband.off>td.pp{color:#B98A86}
     .t2-trip-closed .t2-tnm{color:#8A5B00}
     .t2-assign:hover{border-color:var(--coral);color:var(--coral);border-style:solid}
     .t2-boatstrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 14px 6px 18px;background:#F7FAFE;border-top:1px solid var(--border-2)}
