@@ -833,7 +833,6 @@ var LA_T_EN={
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
   'ไม่ออกวันนี้':'Not running today',
-  'แยกลำ':'Split boats',
   /* §lkPend / §pbPax2 (2026-10-02) */
   /* §rtKeep (2026-10-03) */
   'ใบนี้ยึดเรทเดิมตอนจอง':'This booking keeps the rate it was booked at',

@@ -9271,12 +9271,13 @@ function baBoatCellHTML(bk, routeId, date, alloc){
   /* §baCellFit · ปุ่มเลือกเรือหดได้ (ชื่อเรือยาวตัดด้วย …) · ปุ่มเล็กสองปุ่มไม่หด จึงไม่มีวันถูกดันตกขอบ */
   /* §baCellStack (2026-10-03) · ปุ่มเล็กลงมาอยู่ใต้ปุ่มเลือกเรือ พร้อมคำกำกับ
      ที่มา · ผู้ใช้ถามว่า "แต่ละสัญลักษณ์คืออะไร" แล้วเสนอ "เอาสัญลักษณ์ไปอยู่ใต้ Assign"
-     ⤴ กับ ⇆ เปล่า ๆ เดาความหมายไม่ได้ · เรียงลงล่างแล้วมีที่พอเขียนคำ และปุ่มเลือกเรือได้ความกว้างเต็มช่อง */
+     รอบแรกใส่คำกำกับ (Upgrade / แยกลำ) ไปด้วย · ผู้ใช้เห็นแล้วบอกว่า "ให้ช่องไม่ต้องกว้างเกินไป ตัดคำอธิบายออก"
+     จึงเหลือแต่สัญลักษณ์อยู่ใต้ปุ่มเลือกเรือ · คำอธิบายยังอยู่ใน title (ชี้ค้าง) · คอลัมน์แคบลงเหลือ 138px */
   return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;flex:1 1 auto">
     <button data-babtn="pick" onclick="event.stopPropagation();bkV2BoatPicker(this,'${bk.id}','${routeId}')" title="${pulled?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':(cur?(label+' · Choose boat'):'Choose boat')}" style="min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;border:1px solid ${pulled?'#E89A92':(cur?'#9FE1CB':'#E6C9C3')};background:${pulled?'#FCEBEB':(cur?'#fff':'#FEF9F2')};border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:${pulled?'#A32D2D':(cur?'#1B2A55':'#A05A1A')};white-space:nowrap">${pulled?'&#9888; ':''}${label}${up?' ⤴':''}</button>
     <div data-babtn="sub" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
-    <button data-babtn="up" onclick="event.stopPropagation();bkV2BoatUpgrade('${bk.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="flex:none;background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:9.5px;font-weight:700;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">⤴ Upgrade</button>
-    ${(function(){ const _n=(typeof bkBoatPoolOn==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):0; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null; if(!_sp && _n<2) return ''; return `<button data-babtn="split" onclick="event.stopPropagation();bkV2BoatSplit('${bk.id}','${e(date)}')" title="แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)" style="flex:none;background:${_sp?'#F6F2FE':'#fff'};border:1px solid ${_sp?'#C7B8E8':'var(--border)'};color:${_sp?'#5B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:9.5px;font-weight:700;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">&#8646; ${laT('แยกลำ')}</button>`; })()}
+    <button data-babtn="up" onclick="event.stopPropagation();bkV2BoatUpgrade('${bk.id}')" title="${up?'remove upgrade':'upgrade / move to another boat-route'}" style="flex:none;background:#fff;border:1px solid ${up?'#D9CFFA':'var(--border)'};color:${up?'#6B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">⤴</button>
+    ${(function(){ const _n=(typeof bkBoatPoolOn==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):0; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null; if(!_sp && _n<2) return ''; return `<button data-babtn="split" onclick="event.stopPropagation();bkV2BoatSplit('${bk.id}','${e(date)}')" title="แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)" style="flex:none;background:${_sp?'#F6F2FE':'#fff'};border:1px solid ${_sp?'#C7B8E8':'var(--border)'};color:${_sp?'#5B289A':'#999'};border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap;cursor:pointer;font-family:inherit">&#8646;</button>`; })()}
     </div>
   </div>`;
 }
@@ -50859,7 +50860,7 @@ function bkV2RenderTab2(){
          แต่คอลัมน์ถูกตรึงไว้ 96px (ตั้งไว้สำหรับป้ายชื่อเรือของโหมดปกติ) · ของในช่องจัดกึ่งกลาง
          จึงล้นออกสองข้างเท่า ๆ กัน: ช่องติ๊กหลุดไปซ่อนใต้คอลัมน์ VC ปุ่ม ⇆ โดนตัดที่ขอบขวา
          แถวที่เห็นช่องติ๊กมีแต่ใบ 1 คน (ไม่มีปุ่ม ⇆) · ขยายคอลัมน์เฉพาะโหมดจัดเรือ โหมดปกติเท่าเดิม */
-      + _c(boatMode ? 172 : 96)                              /* Boat · ชื่อเรือพร้อมตัวย่อสองตัว */
+      + _c(boatMode ? 138 : 96)                              /* Boat · ชื่อเรือพร้อมตัวย่อสองตัว */
       + (rcMode ? _c(106) : '')
       + (wxClosed ? _c(94) : '')
       + '</colgroup>';
