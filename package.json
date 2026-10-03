@@ -69,7 +69,8 @@
     "test:bacapgate": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_bacapgate.mjs",
     "test:actperm": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_actperm.mjs",
     "test:b2cpay": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_b2cpay.mjs",
-    "test:upgroute": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_upgroute.mjs"
+    "test:upgroute": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_upgroute.mjs",
+    "test:bklkplaced": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bklkplaced.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"

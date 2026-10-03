@@ -3342,7 +3342,7 @@ function bkV2BoatLockOverdue(l, today){
    คืนรายการใบจองจริง ไม่ใช่แค่ true/false — คนกดต้องตัดสินใจว่าจะย้ายใบไหนไปลำอื่น
    การตอบว่า "ล็อกไม่ได้" เฉย ๆ ทำให้ต้องไปไล่หาเองว่าติดอะไร                    */
 function bkV2BoatLockBlockers(date, boatId, routeId, exceptId){
-  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0 };
+  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0, placed:'', otherRoute:'' };
   const op = (typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date][boatId] : null;
   /* §bkLockEdit · ตอนแก้ใบ · ช่องที่ใบนี้ถืออยู่เองไม่นับว่าขวาง
      ไม่งั้นเปิดฟอร์มแก้แล้วลำของตัวเองขึ้นว่า "ถูกกันทั้งลำไว้แล้ว" เลือกกลับไม่ได้ */
@@ -3351,6 +3351,11 @@ function bkV2BoatLockBlockers(date, boatId, routeId, exceptId){
     if(op.charterBookingId) out.charterOf = op.charterBookingId;
     if(op.boatLockId && !mine) out.holdOf = op.boatLockId;
     out.cellBooked = Number(op.booked)||0;
+    /* §bkLkPlaced (2026-10-03) · เรือถูกวางไว้ที่เส้นทางไหนของวันนั้น (กระดาน Boat Operation)
+       ที่มา · ผู้ใช้ส่งภาพฟอร์มล็อกเรือ · "ต้องเตือนด้วยว่าเรือถูกวางไว้ในเส้นทางไหนแล้ว โปรแกรมนอกเหนือจะจับมาใช้ไม่ได้"
+       ของเดิม · เรือที่วางไว้เส้นทางอื่นแต่ยังไม่มีคนขาย ขึ้นว่า "ว่าง" · ล็อกแล้วช่องบนกระดานถูกเปลี่ยนเส้นทางเงียบ ๆ
+       เรือหายจากโปรแกรมที่วางไว้โดยไม่มีใครรู้ · ลำที่วางไว้แล้วล็อกได้เฉพาะให้เส้นทางเดียวกับที่วาง */
+    if(!mine && op.route){ out.placed = op.route; if(routeId && op.route!==routeId) out.otherRoute = op.route; }
   }
   /* ══ §bkLock · ที่นั่งที่ขายไปแล้วทั้งเส้นทาง ไม่ใช่แค่ที่ผูกกับลำนี้ ═══════════
      เจอตอนดูหน้า By trip ของจริง · 20 ก.ย. r10 ขายไปแล้ว 30 ที่ มีเรือลำเดียว
@@ -3384,8 +3389,9 @@ function bkV2BoatLockBlockers(date, boatId, routeId, exceptId){
 }
 function bkV2BoatLockCanTake(date, boatId, routeId, exceptId){
   const B = bkV2BoatLockBlockers(date, boatId, routeId, exceptId);
-  return !(B.charterOf || B.holdOf || B.pax>0 || B.cellBooked>0 || B.short>0);
+  return !(B.charterOf || B.holdOf || B.otherRoute || B.pax>0 || B.cellBooked>0 || B.short>0);
 }
+function bkV2BoatLockRouteNm(rid){ const r=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x&&x.id===rid); return (r&&r.name)||rid||''; }
 /* ══ ช่องบนกระดานเรือ · ผลพลอยได้ของใบล็อก ไม่ใช่ต้นทางความจริง ═══════════════
    ใช้ทางเดียวกับใบเหมาลำ (type='charter') เพื่อให้ 10 จุดที่เช็ค "ลำนี้ไม่ขายที่นั่ง"
    อยู่แล้วทำงานทันที · ต่างกันที่ไม่มี charterBookingId แต่มี boatLockId ชี้กลับมาที่ใบ  */
@@ -3416,7 +3422,7 @@ function bkV2CreateBoatLock(o){
   /* §bkLock · โปรแกรมบกไม่มีเรือให้ล็อก · ด่านอยู่ชั้นนี้ ไม่ใช่ชั้นฟอร์ม
      ชั้นฟอร์มซ่อนตัวเลือกให้เฉย ๆ · ทางเรียกอื่นจะข้ามไปได้ถ้าด่านอยู่แค่ตรงนั้น */
   if(typeof laIsLandRoute==='function' && laIsLandRoute(o.routeId)) return null;
-  if(!bkV2BoatLockCanTake(o.date, o.boatId)) return null;
+  if(!bkV2BoatLockCanTake(o.date, o.boatId, o.routeId)) return null;
   const l = bkV2CreateLock({ scope:'boat', routeId:o.routeId, date:o.date, boatId:o.boatId,
     holderType:o.holderType||'office', holderId:o.holderId||null,
     qty:Math.max(0, parseInt(o.minCap,10)||0), reason:o.reason||'', expiry:o.expiry||'' });
@@ -3438,7 +3444,7 @@ function bkV2BoatLockRelease(id, note){
 /* สลับลำ · ของเดิมไปเป็นรอบปกติ ลำใหม่รับช่องไป · ตัวตัดสินว่าสลับได้ไหมอยู่ที่ผู้เรียก */
 function bkV2BoatLockSwap(id, newBoatId){
   const l = bkV2BoatLockById(id); if(!l || l.status!=='active' || !newBoatId || newBoatId===l.boatId) return false;
-  if(!bkV2BoatLockCanTake(l.date, newBoatId)) return false;
+  if(!bkV2BoatLockCanTake(l.date, newBoatId, l.routeId)) return false;
   /* สัญญาแบบ "เรือ 1 ลำ ไม่น้อยกว่า X ที่" · ลดขนาดต่ำกว่าที่รับปากไว้ไม่ได้
      กติกาอยู่ชั้นนี้ ไม่ใช่ชั้นปุ่ม · ไม่งั้นทางอื่นที่เรียกสลับลำจะข้ามด่านนี้ไปเงียบ ๆ
      แบบ "สัญญาลำนี้เลย" ไม่ตรวจขนาด เพราะสิ่งที่สัญญาคือชื่อเรือ · ชั้นปุ่มเป็นคนถามแทน */
@@ -3631,7 +3637,9 @@ function bkV2BoatLockSubmit(){
     if(typeof bkV2Render==='function') bkV2Render();
     return;
   }
-  if(!bkV2BoatLockCanTake(f.date,f.boatId)){ alert('That boat is no longer free on this date'); return; }
+  { const _B=bkV2BoatLockBlockers(f.date,f.boatId,f.routeId);
+    if(_B.otherRoute){ alert('That boat is already placed on '+bkV2BoatLockRouteNm(_B.otherRoute)+' for '+f.date+'.\nA boat placed on another programme cannot be held here. Move it in Boat Operation first, or pick another boat.'); return; } }
+  if(!bkV2BoatLockCanTake(f.date,f.boatId,f.routeId)){ alert('That boat is no longer free on this date'); return; }
   const l=bkV2CreateBoatLock({ routeId:f.routeId, date:f.date, boatId:f.boatId,
     holderType:f.holderType, holderId:holderId, minCap:cap, fixed:f.fixed!==false,
     expiry:f.expiry, reason:f.reason });
@@ -3660,14 +3668,18 @@ function bkV2BoatLockPickList(date, routeId, exceptId){
     const st=(typeof getCurStatus==='function')?(getCurStatus(b,date)||{}).s:'available';
     const B=bkV2BoatLockBlockers(date,b.id,undefined,exceptId);
     let why='';
+    /* §bkLkPlaced · ลำที่วางไว้เส้นทางอื่นเลือกไม่ได้ · ลำที่เลือกได้ก็บอกด้วยว่าวางไว้ที่ไหนหรือยังไม่ได้วาง */
+    const _other=(routeId && B.placed && B.placed!==routeId) ? B.placed : '';
+    const place = B.placed ? (laT('วางไว้ที่')+' '+bkV2BoatLockRouteNm(B.placed)) : laT('ยังไม่ได้วางเส้นทาง');
     if(isOwn) why='';
     else if(st && st!=='available') why='ไม่พร้อมใช้งาน · '+st;
     else if(B.charterOf) why='เหมาลำอยู่แล้ว · '+B.charterOf;
     else if(B.holdOf) why='ถูกกันทั้งลำไว้แล้ว';
+    else if(_other) why=laT('วางไว้ที่')+' '+bkV2BoatLockRouteNm(_other)+' '+laT('แล้ว · ใช้กับโปรแกรมอื่นไม่ได้');
     else if(B.pax>0) why='มีใบจองแล้ว '+B.pax+' ที่';
     else if(B.cellBooked>0) why='มีที่นั่งขายแล้ว '+B.cellBooked+' ที่';
     else if(B.short>0) why='ทริปขายไปแล้ว '+B.sold+' ที่ · เอาลำนี้ออกจะขาด '+B.short+' ที่';
-    out.push({ id:b.id, name:b.name||b.id, cap:bkV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B, own:isOwn });
+    out.push({ id:b.id, name:b.name||b.id, cap:bkV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B, own:isOwn, placed:B.placed||'', other:_other, place:place });
   });
   out.sort((a,b)=> ((a.own?0:1)-(b.own?0:1)) || (a.ok===b.ok ? (b.cap-a.cap) : (a.ok?-1:1)));
   return out;
@@ -3686,11 +3698,11 @@ function bkV2BoatLockModal(){
   const inp='width:100%;border:1px solid var(--border);border-radius:8px;background:#FCFBF9;padding:8px 10px;font-family:inherit;font-size:12.5px;color:var(--ink)';
   const boatRows=list.map(b=>{
     const on=f.boatId===b.id;
-    return `<div onclick="${b.ok?`bkV2BoatLockSet('boatId','${E(b.id)}')`:''}" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid #EFECE6;font-size:12.5px;${b.ok?'cursor:pointer;':'background:#F7F5F2;color:#a8a29a;'}${on?'background:#F3EBFA;':''}">
+    return `<div data-bklk-boat="${E(b.id)}" data-bklk-ok="${b.ok?1:0}" data-bklk-other="${E(b.other||'')}" onclick="${b.ok?`bkV2BoatLockSet('boatId','${E(b.id)}')`:''}" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid #EFECE6;font-size:12.5px;${b.ok?'cursor:pointer;':'background:#F7F5F2;color:#a8a29a;'}${on?'background:#F3EBFA;':''}">
       <span style="width:13px;height:13px;border-radius:50%;flex:none;border:2px solid ${on?'#6B289A':'#C3BCB2'};background:${on?'#6B289A':'transparent'};box-shadow:${on?'inset 0 0 0 2.5px #fff':'none'}"></span>
       <b style="font-weight:700">${E(b.name)}</b>
       <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:${b.ok?'var(--ink-soft)':'inherit'}">${b.cap} ที่</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.own?'#6B289A':(b.ok?'#0C6B47':'#8A6A1A')}">${b.own?'ลำที่กันไว้ตอนนี้':(b.ok?'ว่าง':E(b.why))}</span>
+      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.own?'#6B289A':(b.ok?'#0C6B47':'#8A6A1A')}">${b.own?'ลำที่กันไว้ตอนนี้':(b.ok?('ว่าง'+' &middot; '+E(b.place)):E(b.why))}</span>
     </div>`;
   }).join('') || '<div style="padding:14px;text-align:center;color:var(--ink-faint);font-size:12px">วันนี้ไม่มีเรือ</div>';
   /* ด่านกัน · ลำที่เลือกมีใบจองอยู่ → โชว์รายการให้เลย คนกดต้องรู้ว่าจะย้ายใบไหน */
