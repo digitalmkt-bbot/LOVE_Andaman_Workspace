@@ -15377,15 +15377,35 @@ function pcPax(date,bid,pier){
     var ratio=booked?(real/booked):0;
     exact+=real;
     if(bkNatHas(t)) anyNat=true;
+    /* §pkLostType (2026-10-04) · หักคนที่ไม่ได้ไป "ตามประเภทที่หน้าท่าบันทึกไว้" ก่อน
+       ผู้ใช้แจ้ง "ยอดคนไทยผิด ไม่มี INF" · Hermetis 4 ต.ค. ใบ ผญ ไทย 2 · เด็กไทย 2 · INF ไทย 1
+       หน้าท่ายกเลิก INF 1 คน (paxBreak ระบุชัดว่าเป็น INF) ขึ้นเรือจริง 4
+       ของเดิมเอา 4/5 ไปคูณทุกช่องเท่ากัน → ผญ 1.6 · เด็ก 1.6 · INF 0.8 แล้วปัด
+       INF ที่ยกเลิกไปแล้วจึงยังโผล่ 1 คน ส่วนคนที่มาจริงหายไป 1 และยอดไทยรวมเกิน
+       ระบบรู้อยู่แล้วว่าคนที่หายเป็นประเภทไหน (ckLostByType) · ใช้ตัวนั้น
+       เฉลี่ยตามสัดส่วนเฉพาะส่วนที่ไม่รู้ประเภทจริง ๆ (ข้อมูลเก่า / หน้าท่าแก้ตัวนับเอง)
+       ภายในประเภทเดียวกันยังไม่รู้สัญชาติของคนที่หาย · แบ่งตามสัดส่วนในประเภทนั้น */
+    var allK={}, leftK={}, sumLeft=0;
+    var LT=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
+    ['ad','chd','inf','foc'].forEach(function(k){
+      allK[k]=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
+      leftK[k]=Math.max(0, allK[k]-Math.max(0,(LT&&+LT[k])||0));
+      sumLeft+=leftK[k];
+    });
+    /* ขึ้นเรือจริงมากกว่าที่เหลือหลังหักตามประเภท = หน้าท่านับได้มากกว่าที่บันทึกว่าหาย
+       บันทึกรายประเภทจึงเชื่อไม่ได้ทั้งก้อน · ถอยไปเฉลี่ยตามสัดส่วนทั้งใบแบบเดิม */
+    var typed=!!(LT && sumLeft>0 && real<=sumLeft && sumLeft<booked);
+    var r2=typed?(real/sumLeft):0;
     /* §pcFix · FOC มีแยกสัญชาติเหมือน ad/chd/inf · ช่องเปล่า ๆ ที่ไม่ระบุสัญชาติ (px.ad, px.foc)
        เททิ้งไปฝั่งต่างชาติเหมือนเดิม · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วเงินขาด */
     ['ad','chd','inf','foc'].forEach(function(k){
-      var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
-      o[k+'_th'] += (+px[k+'_th']||0) * ratio;
-      o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * ratio;
+      var all=allK[k];
+      var f=typed?(all?(leftK[k]/all)*r2:0):ratio;
+      o[k+'_th'] += (+px[k+'_th']||0) * f;
+      o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * f;
       var th=bkNatTH(t,k);
-      n[k+'_th'] += th * ratio;
-      n[k+'_fr'] += Math.max(0, all-th) * ratio;
+      n[k+'_th'] += th * f;
+      n[k+'_fr'] += Math.max(0, all-th) * f;
     });
   });
   /* ปัดทีเดียวตอนท้าย · ปัดรายใบแล้วบวกกัน ยอดรวมจะเพี้ยนจากหัวจริง
