@@ -46998,7 +46998,8 @@ function bkV2RenderTripsSection(){
         let disabled = false;
         let note = '';
         if(alreadyChartered){ note = ' · ALREADY CHARTERED'; disabled = true; }
-        else if(!hasCharterRate){ note = ' · no charter rate set'; disabled = true; }
+        /* §chManualNoRate · ไม่มีเรทเหมา ≠ เลือกไม่ได้ · ยังเหมาได้ด้วยราคาที่ตกลงกันเอง (กล่องแดงข้างล่างให้กรอก) */
+        else if(!hasCharterRate){ note = ' · no charter rate · enter agreed price'; }
         else if(hasSeats){ note = ' · has existing seat bookings (will need confirm)'; }
         return `<option value="${a.boatId}" ${t.charterBoatId===a.boatId?'selected':''} ${disabled?'disabled':''}>${escapeHTML(label+note)}</option>`;
       }).join('');
@@ -47032,7 +47033,9 @@ function bkV2RenderTripsSection(){
           <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
             <span style="font-size:11px;color:#6B289A;font-weight:600">Charter price ฿</span>
             <input type="number" min="0" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bkV2SetTripCharterManual(${idx}, this.value)" placeholder="0" style="width:110px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #D7B5F0;border-radius:5px">
-            <span style="font-size:10px;color:${subtotal.manualDelta===0?'#6B289A':(subtotal.manualDelta<0?'#0F7A5A':'#A05A1A')}">rate ฿${subtotal.rateTotal.toLocaleString()}${subtotal.manualDelta!==0?` · ${subtotal.manualDelta<0?'&minus;':'+'}฿${Math.abs(subtotal.manualDelta).toLocaleString()}`:''}</span>
+            ${subtotal.noRateCard
+              ? `<span data-chnorate="ok" style="font-size:10px;color:#A05A1A">no rate card for this boat type &middot; agreed price</span>`
+              : `<span style="font-size:10px;color:${subtotal.manualDelta===0?'#6B289A':(subtotal.manualDelta<0?'#0F7A5A':'#A05A1A')}">rate ฿${subtotal.rateTotal.toLocaleString()}${subtotal.manualDelta!==0?` · ${subtotal.manualDelta<0?'&minus;':'+'}฿${Math.abs(subtotal.manualDelta).toLocaleString()}`:''}</span>`}
           </div>
           <input value="${escapeHTML(t.charterPriceNote||'')}" oninput="bkV2SetTripCharterNote(${idx}, this.value)" placeholder="Reason / note · e.g. repeat charter discount" style="margin-top:6px;width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;border:1px solid #D7B5F0;border-radius:5px;color:#6B289A">
       ` : `
@@ -47047,7 +47050,16 @@ function bkV2RenderTripsSection(){
         </div>
       `;
     } else if(isCharter && t.charterBoatId && subtotal.error){
-      charterBreakdownHtml = `<div style="margin-top:6px;padding:6px 10px;background:#FDE7E7;color:#a32d2d;font-size:10px;border:1px solid #F5B7B7;border-radius:var(--r-sm)">⚠ ${escapeHTML(subtotal.error)} for this boat type · check Rate Type charter rates</div>`;
+      /* §chManualNoRate · เดิมมีแค่ป้ายแดง ไม่มีช่องให้กรอกราคา · ทางเดียวที่เหลือคือบันทึกยอด 0
+         ให้กรอกราคาที่ตกลงกันได้ตรงนี้เลย · กรอกแล้วสลับเป็น FLEXIBLE ให้เอง */
+      charterBreakdownHtml = `<div data-chnorate="ask" style="margin-top:6px;padding:8px 10px;background:#FDE7E7;color:#a32d2d;font-size:11px;border:1px solid #F5B7B7;border-radius:var(--r-sm);line-height:1.5">
+          <b>&#9888; ${escapeHTML(subtotal.error)} for this boat type (${escapeHTML(subtotal.boatName||'')})</b> &middot; this trip is priced <b>฿0</b>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:6px;flex-wrap:wrap">
+            <span style="font-weight:700">Agreed charter price ฿</span>
+            <input type="number" min="0" data-chnorate-in="1" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bkV2SetTripCharterManualForce(${idx}, this.value)" placeholder="0" style="width:120px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #E0A0A0;border-radius:5px">
+            <span style="font-size:10px">or pick another boat &middot; or add the rate in Rate Type</span>
+          </div>
+        </div>`;
     }
     // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
     let lockBannerHtml = '';
@@ -54129,6 +54141,14 @@ function bkV2SetTripCharterManual(idx, val){
   t.charterPriceManual = Number(val) || 0;
   bkV2Render();
 }
+/* §chManualNoRate · กรอกราคาจากกล่องแดง (เรือไม่มีเรทเหมา) = ราคาที่ตกลงกันเอง · สลับเป็น FLEXIBLE ให้ */
+function bkV2SetTripCharterManualForce(idx, val){
+  const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx];
+  if(!t) return;
+  t.charterPriceMode = 'manual';
+  t.charterPriceManual = Math.max(0, Number(val) || 0);
+  bkV2Render();
+}
 function bkV2SetTripCharterNote(idx, val){
   const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx];
   if(!t) return;
@@ -55845,6 +55865,16 @@ function bkV2SubmitBooking(){
   const quote = bkV2CalcQuote();
   const hasFoc = quote.totalFoc > 0;
   if(hasFoc && !(d.focReason||'').trim()){ alert('Please enter FOC reason'); return; }
+  /* §chManualNoRate · ใบเหมาที่เรือไม่มีเรทเหมา และยังไม่ได้กรอกราคาเอง = ทริปนั้นจะบันทึกเป็น ฿0
+     เดิมผ่านไปเงียบ ๆ · ถามก่อนทุกครั้ง (ไม่ห้าม เพราะเหมาฟรีมีจริง แต่ต้องเป็นการตัดสินใจ ไม่ใช่อุบัติเหตุ) */
+  if(!quote.manual){
+    const _nr = (d.trips||[]).map((t,i)=>({t, sub:(quote.perTrip||[])[i]}))
+      .filter(x => x.t && x.t.bookingMode==='charter' && x.sub && x.sub.error==='no charter rate');
+    if(_nr.length){
+      const _ln = _nr.map(x => '- ' + (((typeof getRoute==='function' && getRoute(x.t.routeId))||{}).name || x.t.routeId) + ' ' + x.t.date + ' / ' + (x.sub.boatName||'boat')).join('\n');
+      if(!confirm('WARNING - charter trip will be saved at 0 THB\n\n' + _ln + '\n\nThis boat type has no charter rate in the agent\'s Rate Type and no agreed price was entered.\n\nPress Cancel to go back and enter the agreed charter price in the red box.\nPress OK only if this charter is really free.')) return;
+    }
+  }
   /* §rtKeep · ราคาในชุดถูกแก้หลังใบนี้บันทึก · ถามก่อนเขียนยอดใหม่ทับ (ข้อความเตือนอยู่บนฟอร์มแล้ว นี่คือด่านสุดท้าย) */
   const _K = d._rtKeep;
   if(_bkV2.editingId && _K && _K.drift && _K.mode==='keep' && d.priceMode!=='manual'){
@@ -57327,7 +57357,18 @@ function _bkV2TripSubtotalRun(trip){
     const boat = (typeof BOATS !== 'undefined') ? BOATS.find(b => b.id === trip.charterBoatId) : null;
     const boatType = (boat?.type || '').toLowerCase();   // 'speedboat' / 'catamaran'
     const cr = rt.charterRates?.[trip.routeId]?.[boatType];
-    if(!cr) return { total:0, isCharter:true, error:'no charter rate', boatName:boat?.name||'' };
+    /* §chManualNoRate (2026-10-04) · ราคาเหมาที่ตกลงกันเอง ต้องไม่หายเมื่อเรือไม่มีเรทเหมา
+       เคสจริง BK-26091068 · สร้างใบเหมา ฿64,500 (FLEXIBLE) แล้วเปลี่ยนเรือเป็น LKC33 (Catamaran)
+       ชุดราคาของเอเจนต์มีเรทเหมาเส้นทางนี้เฉพาะ speedboat · บรรทัดนี้คืน 0 ก่อนจะไปถึงราคาที่กรอกเอง
+       ฟอร์มซ่อนช่องราคาเหลือแค่ป้ายแดงเล็ก ๆ กดบันทึกแล้วยอดใบเป็น ฿0 · ออกใบแจ้งหนี้ ฿0 · P&L รายได้ 0
+       ราคาที่กรอกเองไม่ได้พึ่งเรทการ์ดเลย · ไม่มีเรท = ใช้ราคาที่กรอก ไม่ใช่ศูนย์ */
+    if(!cr){
+      const _mp = Math.round(Number(trip.charterPriceManual) || 0);
+      if(trip.charterPriceMode === 'manual' && _mp > 0)
+        return { total:_mp, isCharter:true, priceMode:'manual', noRateCard:true, rateTotal:0, manualDelta:_mp,
+                 starterPrice:0, starterIncludes:0, extras:0, extraRate:0, extraTotal:0, boatName:boat?.name||'', boatType };
+      return { total:0, isCharter:true, error:'no charter rate', boatName:boat?.name||'', boatType };
+    }
     const totPax = bkV2PaxAllTot(trip.pax);
     const starterIncludes = cr.starterIncludes || 0;
     const extras = Math.max(0, totPax - starterIncludes);

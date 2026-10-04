@@ -74,7 +74,8 @@
     "test:bopfree": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bopfree.mjs",
     "test:bopoutpier": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_bopoutpier.mjs",
     "test:progscroll": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_progscroll.mjs",
-    "test:pklosttype": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_pklosttype.mjs"
+    "test:pklosttype": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_pklosttype.mjs",
+    "test:chmanual": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_chmanual.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
