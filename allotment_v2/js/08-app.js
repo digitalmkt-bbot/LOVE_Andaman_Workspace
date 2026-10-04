@@ -28881,7 +28881,10 @@ function ctBoatFuelMul(boatId){
 }
 function ctRentSet(boatId, k, v){
   if(!boatId) return;
-  var all = ctRentAll(), R = all[boatId] || ctRentBlank();
+  var all = ctRentAll(), R = all[boatId];
+  /* §rentZero · ระเบียนใหม่ที่เกิดจากการแก้ช่องอื่น (เช่น % น้ำมันของเรือบริษัท) ต้องไม่กลายเป็นเรือเช่าเอง
+     ctRentBlank() ตั้ง on:1 ไว้ · เป็นเรือเช่าได้ทางเดียวคือมีคนติ๊ก "เป็นเรือเช่า" */
+  if(!R){ R = ctRentBlank(); if(k !== 'on') R.on = 0; }
   if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
   else if(k === 'mode' || k === 'note' || k === 'from' || k === 'to') R[k] = v;   /* §rentSpan */
   else if(k === 'on' || k === 'vat') R[k] = v ? 1 : 0;
@@ -29093,6 +29096,12 @@ function ctCalc(pl, ctx, tpl){
   var RN = ctRentOf(ctx && ctx.boatId);
   /* §rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก */
   if(RN && !ctRentActiveOn(RN, ctx && ctx.date)) RN = null;
+  /* §rentZero (2026-10-04) · ติ๊กเป็นเรือเช่าแต่ยังไม่ได้ใส่ค่าเช่า = ยังคิดแบบเรือบริษัทไปก่อน
+     ผู้ใช้ถาม "ทำไมเรือเช่า Break even ถูกกว่าเรือของตัวเอง" · Aluminous1 (เรือบริษัท) มีระเบียน
+     on:1 · ค่าเช่า 0 · ของเดิมตัดค่าเสื่อม กัปตัน เด็กเรือ ออกทั้งที่ไม่มีค่าเช่ามาแทน
+     ต้นทุนคงที่หาย 4,900 (3EN) / 7,400 (4EN) ต่อทริป · คุ้มทุน Phi Phi + Khai จาก 53 เหลือ 36 คน
+     เรือเช่าที่ค่าเช่าเป็นศูนย์ไม่มีจริง · ตัดบรรทัดออกได้ต่อเมื่อมีค่าเช่าเข้ามาแทนแล้วเท่านั้น */
+  if(RN && !(RN.perTrip > 0)) RN = null;
   /* §boatFuel · ไม่ผ่าน RN · ตัวคูณนี้ติดกับลำ ไม่เกี่ยวว่าเช่าหรือไม่เช่า */
   var FM = ctBoatFuelMul(ctx && ctx.boatId);
   var out = { gross:0, vin:0, net:0, fixNet:0, varNet:0, rows:[], rent:RN };
@@ -32354,7 +32363,7 @@ function ctPlanHtml(){
       + '<span class="ct-rt-ic">' + ctIcon(on ? 'compass' : 'anchor', 17) + '</span>'
       + '<span class="ct-rt-body"><span class="ct-rt-nm">' + ctE(x.name) + (on ? '<i class="ct-dot"></i>' : '') + '</span>'
       + '<span class="ct-rt-sub">' + ctE(x.eng) + ' · จุ ' + ctPlanSeats(x) + (+x.boats > 1 ? (' × ' + x.boats + ' ลำ') : '') + ' · ' + ctB(x.price) + '/หัว'
-      + (ctRentOf(x.boatId) ? ' · <b style="color:#B45309">เรือเช่า</b>' : '') + '</span>'
+      + (((ctRentOf(x.boatId) || {}).perTrip > 0) ? ' · <b style="color:#B45309">เรือเช่า</b>' : '') + '</span>'
       + '<span class="ct-rt-badge' + (b ? '' : ' warn') + '">' + (b ? ('คุ้มทุน ' + b + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</span></span></button>';
   }).join('');
   var side = '<aside class="ct-side"><div class="ct-side-h">แผนคำนวณ · ' + P.length + '</div>' + items
@@ -32432,7 +32441,7 @@ function ctPlanHtml(){
         }).join('') + '</select>';
 
     var head = '<div class="ct-cath"><span>' + ctIcon('anchor', 15) + '<b>เรือที่ใช้ &amp; ค่าเช่า</b>'
-      + '<span class="ct-u" style="margin-left:8px">' + (RN ? ('เรือเช่า · ' + ctB(RN.perTrip) + '/ทริป') : 'เรือของบริษัท') + '</span></span></div>';
+      + '<span class="ct-u" style="margin-left:8px">' + (RN ? (RN.perTrip > 0 ? ('เรือเช่า · ' + ctB(RN.perTrip) + '/ทริป') : 'ติ๊กเป็นเรือเช่า · ยังไม่มีค่าเช่า') : 'เรือของบริษัท') + '</span></span></div>';
 
     if(!bid) return '<div class="ct-card ct-catcard ct-rent">' + head
       + '<div class="ct-rentbody"><div class="ct-rrow"><label class="ct-f grow"><span>ปักเรือลำที่ใช้</span>' + pick + '</label></div>'
@@ -32527,7 +32536,7 @@ function ctPlanHtml(){
         + (RN.trips > 1 ? (' ÷ ' + RN.trips + ' รอบ = <b>' + ctB(RN.perTrip) + '/ทริป</b>') : '')
         + ' · มีให้วิ่ง ' + RN.runDays + ' วัน/งวด</div>';
     } else {
-      body += '<div class="ct-rcalc warn">ยังไม่ได้ใส่ค่าเช่า · บรรทัดค่าเช่าจึงยังไม่เข้าสูตร</div>';
+      body += '<div class="ct-rcalc warn" data-rentzero="1">ยังไม่ได้ใส่ค่าเช่า · ลำนี้จึง<b>ยังคิดแบบเรือบริษัท</b> (มีค่าเสื่อม กัปตัน เด็กเรือ) จนกว่าจะใส่ค่าเช่า · ถ้าไม่ใช่เรือเช่า เอาติ๊ก "เป็นเรือเช่า" ออก</div>';
     }
     body += '</div>';
 
