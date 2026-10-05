@@ -24669,6 +24669,32 @@ var TS_HEAD_COL={
    ของใหม่ทุกชิ้นติด ts-scr → หน้าต่างพิมพ์/PDF ไม่เห็น ตารางพิมพ์เท่าเดิม
    สถานะค้นหา/กรองอยู่นอก render จะได้ไม่หายตอนกดชิปท่าเรือแล้ววาดใหม่ */
 var _tsManQ='', _tsManF='';
+/* §tsManCols · คอลัมน์ที่ซ่อน · จำไว้ในเครื่องนี้แยกตามผู้ใช้ (localStorage) · # กับ Voucher ซ่อนไม่ได้ */
+var TS_MAN_COLS=['Voucher','Agency','Customer (lead)','AD','CHD','INF','FOC','Actual / Booked','Pickup point · Room','Drop-off','Add-on · Upsell','Van · Boat','คำขอพิเศษ','Pay','Total','Cancel · Charge','Status'];
+var _tsManHC=null, _tsManColsOpen=false;
+function tsManColsKey(){ return 'lad.tsManCols.'+((typeof laBy==='function')?laBy():''); }
+function tsManHC(){
+  if(_tsManHC) return _tsManHC;
+  var v=[]; try{ v=JSON.parse(localStorage.getItem(tsManColsKey())||'[]'); }catch(_){ v=[]; }
+  _tsManHC=(Array.isArray(v)?v:[]).map(Number).filter(function(k){ return k>=2 && k<=17; });
+  return _tsManHC;
+}
+function tsManCol(k, on){
+  k=+k; if(!(k>=2 && k<=17)) return;
+  var hc=tsManHC().filter(function(x){ return x!==k; }); if(!on) hc.push(k); hc.sort(function(a,b){ return a-b; });
+  _tsManHC=hc; try{ localStorage.setItem(tsManColsKey(), JSON.stringify(hc)); }catch(_){ }
+  tsManApply();
+}
+function tsManColsReset(){ _tsManHC=[]; try{ localStorage.removeItem(tsManColsKey()); }catch(_){ } tsManApply(); }
+function tsManColsToggle(){ _tsManColsOpen=!_tsManColsOpen; var w=document.querySelector('#travelsum-host .ts-mcols'); if(w) w.classList.toggle('open',_tsManColsOpen); }
+function tsManColsHtml(){
+  var hc=tsManHC();
+  return '<div class="ts-mcols'+(_tsManColsOpen?' open':'')+'"><button type="button" class="ts-mf ts-mcolbtn" onclick="tsManColsToggle()">คอลัมน์'+(hc.length?('<i>ซ่อน '+hc.length+'</i>'):'')+'</button>'
+    +'<div class="ts-mcols-pop"><div class="ts-mcols-h">แสดง / ซ่อนคอลัมน์ · จำไว้ในเครื่องนี้<button type="button" onclick="tsManColsReset()">แสดงทั้งหมด</button></div>'
+    +TS_MAN_COLS.map(function(nm,i){ var k=i+1, lock=(k===1), on=hc.indexOf(k)<0;
+        return '<label'+(lock?' class="lock"':'')+'><input type="checkbox" data-tscol="'+k+'"'+(on?' checked':'')+(lock?' disabled':'')+' onchange="tsManCol('+k+',this.checked)"> '+nm+'</label>'; }).join('')
+    +'</div></div>';
+}
 function tsManQ(v){ _tsManQ=String(v||''); tsManApply(); }
 function tsManPick(f){ _tsManF=(f===_tsManF)?'':String(f||''); tsManApply(); }
 function tsManApply(){
@@ -24687,6 +24713,14 @@ function tsManApply(){
   });
   var none=host.querySelector('[data-tsman-none]'); if(none) none.style.display=any?'none':'block';
   [].forEach.call(host.querySelectorAll('[data-tsmanf]'), function(b){ b.classList.toggle('on', b.getAttribute('data-tsmanf')===F); });
+  /* §tsManCols · ซ่อนคอลัมน์ + ปรับ colspan ของแถวหัวกลุ่ม/แถวรวมให้ยังเท่ากับจำนวนคอลัมน์ที่เห็น */
+  var hc=tsManHC(), tbl=tb.parentNode, vis=function(a,b){ var n=0; for(var k=a;k<=b;k++) if(hc.indexOf(k)<0) n++; return n; };
+  tbl.setAttribute('data-hc', hc.join(' '));
+  [].forEach.call(tbl.querySelectorAll('[data-span]'), function(td){ var r=td.getAttribute('data-span').split('-'), n=vis(+r[0],+r[1]); td.colSpan=n||1; td.style.display=n?'':'none'; });
+  [].forEach.call(host.querySelectorAll('[data-tscol]'), function(cb){ cb.checked=hc.indexOf(+cb.getAttribute('data-tscol'))<0; });
+  var btn=host.querySelector('.ts-mcolbtn'); if(btn) btn.innerHTML='คอลัมน์'+(hc.length?('<i>ซ่อน '+hc.length+'</i>'):'');
+  /* §tsManFull · หัวคอลัมน์เกาะใต้แถบหัวที่ sticky อยู่ · วัดความสูงจริง */
+  var bar=host.querySelector('.h4-bar'); host.style.setProperty('--tsbar', (bar?bar.offsetHeight:0)+'px');
 }
 var _tsBleedOn=false;
 function tsV6Bleed(){
@@ -24701,7 +24735,7 @@ function tsV6Bleed(){
   ['top','right','bottom','left'].forEach(function(k,i){ host.style.setProperty('margin-'+k, (m[i]?'-':'')+m[i]+'px', 'important'); });
   host.style.setProperty('max-width','none','important');   /* กฎเดียวกันจำกัด max-width:100% · กล่องจะไม่ยืดถึงขอบขวา */
   host.style.minHeight='100vh';
-  if(!_tsBleedOn){ _tsBleedOn=true; window.addEventListener('resize', function(){ tsV6Bleed(); }); }
+  if(!_tsBleedOn){ _tsBleedOn=true; window.addEventListener('resize', function(){ tsV6Bleed(); tsManApply(); }); }
 }
 function tsV6Theme(p){ return TS_HEAD_COL[p||''] || TS_HEAD_COL.other; }
 function tsPierName(p){
@@ -27762,18 +27796,68 @@ function tsCSSv6(){
 & .ts-mf.on{background:#000F4C;border-color:#000F4C;color:#fff}& .ts-mf.on i{color:#C3CCEC}
 & .ts-mf[data-tsmanf="warn"]{border-color:#F3D5A8;background:#FFF8EC;color:#7A4A00}& .ts-mf[data-tsmanf="warn"].on{background:#B4690E;border-color:#B4690E;color:#fff}
 & .ts-mnone{padding:22px;text-align:center;color:#8A8FA6;font-weight:600}
-& .ts-s04 .ts-card{border:1px solid #C9CCDA;border-radius:6px;overflow:hidden;background:#fff;box-shadow:none}
-& .ts-s04 .ts-scroll{overflow:auto;max-height:calc(100vh - 150px)}
-& .ts-man{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12px}
+/* §tsManFull · ตารางยาวเต็ม ไม่มีกล่องเลื่อนซ้อน (เจ้าของ: "ให้เต็มยาวเลย ตอนนี้มี scroll 2 ที่")
+   overflow:clip ไม่สร้าง scroll container → หัวคอลัมน์/แถวรวมวันเกาะกับการเลื่อนของหน้าแทน
+   หัวคอลัมน์เกาะใต้แถบหัว (--tsbar = ความสูงแถบ วัดจริงใน tsManApply) */
+& .ts-s04 .ts-card{border:1px solid #C9CCDA;border-radius:6px;overflow:clip;background:#fff;box-shadow:none}
+& .ts-s04 .ts-scroll{overflow:visible;max-height:none}
+& .ts-man{border-collapse:separate;border-spacing:0;width:100%;min-width:0;font-size:12px;table-layout:fixed}
+/* ความกว้างคอลัมน์ (table-layout:fixed อ่านจากหัว) · ตัวเลขแคบ ข้อความยาวแบ่งส่วนที่เหลือ · คอลัมน์ที่ซ่อนคืนที่ให้คอลัมน์อื่นเอง */
+& .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){width:40px}
+& .ts-man thead th:nth-child(9){width:72px}& .ts-man thead th:nth-child(11){width:7%}& .ts-man thead th:nth-child(13){width:8%}
+& .ts-man thead th:nth-child(16){width:92px}& .ts-man thead th:nth-child(18){width:98px}
+& .ts-man td:nth-child(18) .ts-chip,& .ts-man td:nth-child(9){white-space:nowrap}
+& .ts-man thead th{white-space:normal;overflow-wrap:anywhere}
+& .ts-man thead th:nth-child(2){width:7%}& .ts-man thead th:nth-child(3){width:7%}& .ts-man thead th:nth-child(4){width:9.5%}
+& .ts-man thead th:nth-child(10){width:10%}& .ts-man thead th:nth-child(12){width:7%}& .ts-man thead th:nth-child(14){width:8%}& .ts-man thead th:nth-child(15){width:11%}& .ts-man thead th:nth-child(17){width:8%}
+/* ช่องแคบลงแล้ว ป้าย/ชิปต้องตัดบรรทัดได้ ไม่ล้นไปทับช่องข้าง */
+& .ts-man .ts-chip,& .ts-man .ts-ao,& .ts-man .ts-pyg,& .ts-man .ts-net,& .ts-man .ts-totb,& .ts-man .ts-sqtx,& .ts-man .ts-pyd{white-space:normal;max-width:none;overflow:visible;text-overflow:clip;word-break:normal;overflow-wrap:anywhere}
+& .ts-man td[style*="max-width"]{max-width:none !important}
+& .ts-man td.ts-totc{white-space:normal}
+/* จอแคบ (แท็บเล็ต/มือถือ) · 17 คอลัมน์ไม่พอดีจอ · เลื่อนซ้าย-ขวาในกล่อง · # Voucher Agency Customer ตรึงซ้ายให้รู้ว่าแถวไหน */
+@media (max-width:1080px){
+  & .ts-s04 .ts-scroll{overflow-x:auto}
+  & .ts-man{width:max-content;min-width:100%;table-layout:auto}
+  & .ts-man th:nth-child(2),& .ts-man td:nth-child(2){position:sticky;left:34px;z-index:3;width:112px;min-width:112px;max-width:112px}
+  & .ts-man th:nth-child(3),& .ts-man td:nth-child(3){position:sticky;left:146px;z-index:3;width:122px;min-width:122px;max-width:122px}
+  & .ts-man th:nth-child(4),& .ts-man td:nth-child(4){position:sticky;left:268px;z-index:3;width:160px;min-width:160px;max-width:160px}
+  & .ts-man thead th:nth-child(2),& .ts-man thead th:nth-child(3),& .ts-man thead th:nth-child(4){z-index:6}
+  & .ts-man thead th:nth-child(2){width:112px}& .ts-man thead th:nth-child(3){width:122px}& .ts-man thead th:nth-child(4){width:160px}
+  & .ts-man thead th{white-space:nowrap}
+}
+/* §tsManCols · ซ่อนคอลัมน์ · ตาราง[data-hc="5 10"] ซ่อนช่องที่ 5 และ 10 ของทุกแถวข้อมูลและหัว · แถวรวมใช้ data-col */
+& .ts-mcolbtn{margin-left:auto}
+& .ts-mcols{position:relative}
+& .ts-mcols-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;border:1px solid #C9CCDA;border-radius:10px;box-shadow:0 10px 30px rgba(20,24,70,.16);padding:10px 12px;min-width:250px;display:none}
+& .ts-mcols.open .ts-mcols-pop{display:block}
+& .ts-mcols-pop label{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer;color:#1a2332}
+& .ts-mcols-pop label.lock{color:#8A8FA6;cursor:default}
+& .ts-mcols-pop .ts-mcols-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:#000F4C;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid #EFEBE5}
+& .ts-mcols-pop .ts-mcols-h button{margin-left:auto;border:0;background:transparent;color:#007f99;font:700 11px/1 inherit;font-family:inherit;cursor:pointer}
+& .ts-man[data-hc~="1"] tr[data-tsman]>td:nth-child(2),& .ts-man[data-hc~="1"] thead th:nth-child(2),& .ts-man[data-hc~="1"] [data-col="1"]{display:none}
+& .ts-man[data-hc~="2"] tr[data-tsman]>td:nth-child(3),& .ts-man[data-hc~="2"] thead th:nth-child(3),& .ts-man[data-hc~="2"] [data-col="2"]{display:none}
+& .ts-man[data-hc~="3"] tr[data-tsman]>td:nth-child(4),& .ts-man[data-hc~="3"] thead th:nth-child(4),& .ts-man[data-hc~="3"] [data-col="3"]{display:none}
+& .ts-man[data-hc~="4"] tr[data-tsman]>td:nth-child(5),& .ts-man[data-hc~="4"] thead th:nth-child(5),& .ts-man[data-hc~="4"] [data-col="4"]{display:none}
+& .ts-man[data-hc~="5"] tr[data-tsman]>td:nth-child(6),& .ts-man[data-hc~="5"] thead th:nth-child(6),& .ts-man[data-hc~="5"] [data-col="5"]{display:none}
+& .ts-man[data-hc~="6"] tr[data-tsman]>td:nth-child(7),& .ts-man[data-hc~="6"] thead th:nth-child(7),& .ts-man[data-hc~="6"] [data-col="6"]{display:none}
+& .ts-man[data-hc~="7"] tr[data-tsman]>td:nth-child(8),& .ts-man[data-hc~="7"] thead th:nth-child(8),& .ts-man[data-hc~="7"] [data-col="7"]{display:none}
+& .ts-man[data-hc~="8"] tr[data-tsman]>td:nth-child(9),& .ts-man[data-hc~="8"] thead th:nth-child(9),& .ts-man[data-hc~="8"] [data-col="8"]{display:none}
+& .ts-man[data-hc~="9"] tr[data-tsman]>td:nth-child(10),& .ts-man[data-hc~="9"] thead th:nth-child(10),& .ts-man[data-hc~="9"] [data-col="9"]{display:none}
+& .ts-man[data-hc~="10"] tr[data-tsman]>td:nth-child(11),& .ts-man[data-hc~="10"] thead th:nth-child(11),& .ts-man[data-hc~="10"] [data-col="10"]{display:none}
+& .ts-man[data-hc~="11"] tr[data-tsman]>td:nth-child(12),& .ts-man[data-hc~="11"] thead th:nth-child(12),& .ts-man[data-hc~="11"] [data-col="11"]{display:none}
+& .ts-man[data-hc~="12"] tr[data-tsman]>td:nth-child(13),& .ts-man[data-hc~="12"] thead th:nth-child(13),& .ts-man[data-hc~="12"] [data-col="12"]{display:none}
+& .ts-man[data-hc~="13"] tr[data-tsman]>td:nth-child(14),& .ts-man[data-hc~="13"] thead th:nth-child(14),& .ts-man[data-hc~="13"] [data-col="13"]{display:none}
+& .ts-man[data-hc~="14"] tr[data-tsman]>td:nth-child(15),& .ts-man[data-hc~="14"] thead th:nth-child(15),& .ts-man[data-hc~="14"] [data-col="14"]{display:none}
+& .ts-man[data-hc~="15"] tr[data-tsman]>td:nth-child(16),& .ts-man[data-hc~="15"] thead th:nth-child(16),& .ts-man[data-hc~="15"] [data-col="15"]{display:none}
+& .ts-man[data-hc~="16"] tr[data-tsman]>td:nth-child(17),& .ts-man[data-hc~="16"] thead th:nth-child(17),& .ts-man[data-hc~="16"] [data-col="16"]{display:none}
+& .ts-man[data-hc~="17"] tr[data-tsman]>td:nth-child(18),& .ts-man[data-hc~="17"] thead th:nth-child(18),& .ts-man[data-hc~="17"] [data-col="17"]{display:none}
+
 & .ts-man th,& .ts-man td{border-right:1px solid #E3E5EE;border-bottom:1px solid #E3E5EE;padding:5px 8px;vertical-align:top;overflow-wrap:anywhere;background:#fff}
-& .ts-man thead th{position:sticky;top:0;z-index:5;background:#F3F4F9;color:#3A3F5C;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid #C9CCDA;padding:7px 8px;line-height:1.25;white-space:nowrap}
+& .ts-man thead th{position:sticky;top:var(--tsbar,0px);z-index:5;background:#F3F4F9;color:#3A3F5C;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid #C9CCDA;padding:7px 8px;line-height:1.25;white-space:nowrap}
 & .ts-man thead th .ts-thsub{display:block;font-weight:600;text-transform:none;letter-spacing:0;color:#8A8FA6}
 & .ts-man .ts-rn{position:sticky;left:0;z-index:4;width:34px;min-width:34px;max-width:34px;text-align:center;background:#F3F4F9;color:#8A8FA6;font:600 10.5px/1.4 'DM Mono',ui-monospace,monospace;border-right:2px solid #C9CCDA;padding:6px 2px}
 & .ts-man thead th.ts-rn{z-index:6}
-& .ts-man th:nth-child(2),& .ts-man td:nth-child(2){position:sticky;left:34px;z-index:3;width:112px;min-width:112px;max-width:112px}
-& .ts-man th:nth-child(3),& .ts-man td:nth-child(3){position:sticky;left:146px;z-index:3;width:122px;min-width:122px;max-width:122px}
-& .ts-man th:nth-child(4),& .ts-man td:nth-child(4){position:sticky;left:268px;z-index:3;width:160px;min-width:160px;max-width:160px;border-right:2px solid #C9CCDA}
-& .ts-man thead th:nth-child(2),& .ts-man thead th:nth-child(3),& .ts-man thead th:nth-child(4){z-index:6}
+& .ts-man th:nth-child(4),& .ts-man td:nth-child(4){border-right:2px solid #C9CCDA}
 & .ts-man .ts-vch{font:700 11.5px/1.4 'DM Mono',ui-monospace,monospace;color:#000F4C}
 & .ts-man .ts-ag{max-width:106px;font-size:10.5px;padding:2px 7px;border-radius:5px}
 & .ts-man .ts-lead{font-size:12.5px;font-weight:700;color:#000F4C}
@@ -28208,10 +28292,10 @@ function renderTravelSum(){
   var _mn=0, _gS=null, _dS={ad:0,chd:0,inf:0,foc:0,t:0,b:0,m:0,n:0}, _mc={pier:0,addon:0,sq:0,warn:0,cxl:0};
   var _pxTd=function(v){ return '<td class="c ts-px'+(v?'':' zero')+'">'+(v||'·')+'</td>'; };
   var _sumRow=function(cls,label,S){
-    return '<tr class="'+cls+' ts-scr ts-noprint"><td class="ts-rn"></td><td colspan="3">'+label+'</td>'
-      +_pxTd(S.ad)+_pxTd(S.chd)+_pxTd(S.inf)+_pxTd(S.foc)
-      +'<td class="c ts-mono" style="font-weight:800">'+S.t+' / '+S.b+'</td><td colspan="6"></td>'
-      +'<td class="r ts-mono ts-totc" style="font-weight:800">'+money(S.m)+'</td><td colspan="2"></td></tr>';
+    return '<tr class="'+cls+' ts-scr ts-noprint"><td class="ts-rn"></td><td colspan="3" data-span="1-3">'+label+'</td>'
+      +_pxTd(S.ad).replace('<td ','<td data-col="4" ')+_pxTd(S.chd).replace('<td ','<td data-col="5" ')+_pxTd(S.inf).replace('<td ','<td data-col="6" ')+_pxTd(S.foc).replace('<td ','<td data-col="7" ')
+      +'<td class="c ts-mono" data-col="8" style="font-weight:800">'+S.t+' / '+S.b+'</td><td colspan="6" data-span="9-14"></td>'
+      +'<td class="r ts-mono ts-totc" data-col="15" style="font-weight:800">'+money(S.m)+'</td><td colspan="2" data-span="16-17"></td></tr>';
   };
   var _gClose=function(){ if(_gS){ body+=_sumRow('ts-gsum','รวม '+e(_gS.name)+' · '+_gS.n+' ใบ',_gS); _gS=null; } };
   var stg=function(done,actual,total){
@@ -28232,7 +28316,7 @@ function renderTravelSum(){
       _gS={name:rt.name||r.routeId||'—',ad:0,chd:0,inf:0,foc:0,t:0,b:0,m:0,n:0};
       /* §tsManSheet · ชื่อเรือของกลุ่มขึ้นที่หัว · เนื้อหาหัวกลุ่มห่อ ts-gw ให้ตรึงซ้ายตอนเลื่อนบนจอ */
       var gBoats=[]; grp.forEach(function(x){ var bt=x.boat?((typeof getBoat==='function'?getBoat(x.boat):null)||{}):null; var nm=bt?(bt.name||x.boat):''; if(nm&&gBoats.indexOf(nm)<0) gBoats.push(nm); });
-      body+='<tr class="ts-grow" style="--rc:'+(rt.color||'#999')+'"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="17" style="padding:7px 11px"><div class="ts-gw">'
+      body+='<tr class="ts-grow" style="--rc:'+(rt.color||'#999')+'"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="17" data-span="1-17" style="padding:7px 11px"><div class="ts-gw">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +(gBoats.length?('<span class="ts-scr ts-noprint ts-gboat">'+e(gBoats.join(' · '))+'</span>'):'')
@@ -28355,6 +28439,7 @@ function renderTravelSum(){
     +'<label class="ts-msrch"><span>&#128269;</span><input type="text" value="'+e(_tsManQ)+'" placeholder="ค้นหา voucher · ชื่อลูกค้า · agent · โรงแรม" oninput="tsManQ(this.value)"></label>'
     +_chip('','ทั้งหมด',_mn)+_chip('pier','มีเงินเก็บหน้าท่า',_mc.pier)+_chip('addon','มี Add-on / อาหาร',_mc.addon)
     +_chip('sq','คำขอพิเศษ',_mc.sq)+_chip('warn','ยังไม่ตัดสินหักบิล',_mc.warn)+_chip('cxl','ยกเลิก / เลื่อนวัน',_mc.cxl)
+    +tsManColsHtml()
     +'</div>';
   var manifest='<div class="ts-sec ts-s04"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
