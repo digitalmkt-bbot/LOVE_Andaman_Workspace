@@ -148,16 +148,18 @@ else fail('9 ' + JSON.stringify(c9));
 const G11 = () => page.evaluate(() => { const h = document.getElementById('travelsum-host'), c = h.querySelector('.h4-card').getBoundingClientRect(), t = h.querySelector('.h4-h1'), pl = h.querySelector('[data-tsv6="pill"]').getBoundingClientRect();
   const rg = document.createRange(); rg.selectNodeContents(t); const tr = rg.getBoundingClientRect();
   return { off: Math.round((tr.left + tr.right) / 2 - (c.left + c.right) / 2), pillRight: Math.round(c.right - pl.right), pillTop: Math.round(pl.top - c.top), pillAboveTitle: pl.bottom <= tr.bottom, scope: h.querySelectorAll('.h4-scope').length, txt: /กำลังดูเฉพาะ/.test(h.querySelector('.h4-card').textContent),
-    bar: getComputedStyle(h.querySelector('.h4-bar')).backgroundImage, band: getComputedStyle(h.querySelector('.h4-band')).backgroundImage, onInk: getComputedStyle(h.querySelector('.h4-c.on')).color }; });
+    sub: getComputedStyle(h.querySelector('.h4-brand i')).color, topLine: getComputedStyle(h.querySelector('.h4-card')).borderTopColor, bar: getComputedStyle(h.querySelector('.h4-bar')).backgroundImage, band: getComputedStyle(h.querySelector('.h4-band')).backgroundImage, onInk: getComputedStyle(h.querySelector('.h4-c.on')).color }; });
 await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; renderTravelSum(); }); await page.waitForTimeout(300); const g0 = await G11();
 await page.click('[data-tspier="tublamu"]'); await page.waitForTimeout(300); const gT = await G11();
 await page.click('[data-tspier="panwa"]'); await page.waitForTimeout(300); const gP = await G11();
 const other = await page.evaluate(() => [tsPierOf('__no_such_route__'), tsPierName('other'), JSON.stringify(tsV6Theme('other')), JSON.stringify(tsV6Theme('ranong'))]);
 await page.evaluate(() => { _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(300);
 if (Math.abs(g0.off) <= 3 && Math.abs(gT.off) <= 3 && g0.pillRight >= 10 && g0.pillRight <= 40 && g0.pillTop >= 0 && g0.pillTop <= 40 && g0.scope === 0 && !gT.txt
-  && /rgb\(14, 74, 99\)/.test(g0.bar) && /rgb\(16, 61, 112\)/.test(gT.bar) && /rgb\(10, 79, 61\)/.test(gP.bar) && gT.band === gT.bar && gP.band === gP.bar && g0.bar !== gT.bar && gT.bar !== gP.bar
-  && gT.onInk === 'rgb(16, 61, 112)' && other[0] === 'other' && other[1] === 'Other' && other[2] !== other[3])
-  ok('11 หัวข้ออยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · แถบหัวเปลี่ยนสีตามท่า (ทุกท่า/Tub Lamu/Visit Panwa คนละสี)');
+  /* §tsV6c · CI #000f4c ทุกแถบ · ปลายขวาเป็นสีประจำท่า · ยังไม่เลือกท่า = ฟ้า CI ที่ทำให้เข้มลง */
+  && [g0, gT, gP].every(g => /rgb\(0, 15, 76\)/.test(g.bar)) && /rgb\(0, 122, 166\)/.test(g0.bar) && /rgb\(24, 95, 165\)/.test(gT.bar) && /rgb\(15, 110, 86\)/.test(gP.bar)
+  && gT.band === gT.bar && gP.band === gP.bar && g0.bar !== gT.bar && gT.bar !== gP.bar
+  && gT.onInk === 'rgb(0, 15, 76)' && g0.sub === 'rgb(0, 188, 223)' && g0.topLine === 'rgb(0, 188, 223)' && other[0] === 'other' && other[1] === 'Other' && other[2] !== other[3])
+  ok('11 หัวข้ออยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · แถบหัวเริ่มจากกรมท่า CI แล้วไล่ไปสีประจำท่า (ทุกท่า/Tub Lamu/Visit Panwa คนละสี) · ฟ้า CI ที่บรรทัดรองและเส้นบนการ์ด');
 else fail('11 ' + JSON.stringify({ g0, gT: { off: gT.off, bar: gT.bar, onInk: gT.onInk, txt: gT.txt }, gP: gP.bar, other }));
 
 /* ══ 10 ══ */
