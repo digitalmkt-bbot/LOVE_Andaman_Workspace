@@ -3084,6 +3084,10 @@
   </div>
 </div>
 
+<!-- §loadOrder · js/booking/ ที่ 08-app.js เรียกตอนโหลดไฟล์ (ระดับบนสุด เช่น let _pfmDate=…) ต้องโหลดก่อน 08-app.js
+     ไม่งั้น ReferenceError แล้ว 08-app.js หยุดกลางไฟล์ · let/const ข้างล่างจุดนั้นไม่ถูกประกาศเลย (TDZ) ทั้งแอปพังเป็นแถว
+     ใส่ได้เฉพาะฟังก์ชันใบ (ไม่เรียกอะไรของ 08-app.js) · ห้ามย้ายทั้งโฟลเดอร์มา -->
+<script src="js/booking/bookingV2LocalYMD.js"></script>
 <script src="js/08-app.js?v=51266139"></script>
 <script src="js/booking/bookingV2GetArea.js"></script>
 <script src="js/booking/bookingV2SplitArea.js"></script>
@@ -3440,7 +3444,6 @@
 <script src="js/booking/bookingV2ZoneColor.js"></script>
 <script src="js/booking/bookingV2Tab2Boats.js"></script>
 <script src="js/booking/bookingV2Tab2ActiveDate.js"></script>
-<script src="js/booking/bookingV2LocalYMD.js"></script>
 <script src="js/booking/bookingV2Tab2DateShift.js"></script>
 <script src="js/booking/bookingV2Tab2Today.js"></script>
 <script src="js/booking/bookingV2Tab2TogglePax.js"></script>
