@@ -290,6 +290,15 @@ const POP = () => page.evaluate(() => { let out = ''; const fake = { document: {
     manRows: $$('.ts-man tbody tr[data-tsman]').length, liveRows, manTot: T($('.ts-man .ts-gtot .ts-totc')), rn: $$('.ts-man tr[data-tsman] td.ts-rn').length, cases: $$('.ts-s02 table, table:not(.rt):not(.ts-man)').length,
     pageCss: /@page ts\{size:A4 landscape[^@]*@bottom-left/.test(out) && /@bottom-right\{content:"หน้า " counter\(page\) " \/ " counter\(pages\)/.test(out), css: /#travelsum-host \.dc \.dc-h\{/.test(out), tsCss: out.indexOf('<style id="ts-style">') > 0, pack: /la-docpack/.test(out), pierBg: ($('.dc-h') || {}).getAttribute ? $('.dc-h').getAttribute('style') : '' }; });
 const d0 = await POP();
+/* วางหน้าป๊อปอัปจริง (เนื้อหาที่ tsPrintSheet เขียน) ในแท็บใหม่ แล้ววัดความกว้างคอลัมน์ Manifest ตอนพิมพ์
+   · เคยพลาด: tsCSS ชุดเดิมกำหนดความกว้างตาม nth-child ของตาราง 17 คอลัมน์ พอมีช่องเลขแถวนำหน้า คอลัมน์ลูกค้าเหลือ 26px
+     ชื่อลูกค้าตัดทีละตัวอักษร แถวสูงครึ่งหน้า (เจ้าของส่งภาพจาก production มา) */
+const popHtml = await page.evaluate(() => { let out = ''; const fake = { document: { write: s => { out += s; }, close: () => {}, querySelectorAll: () => [], querySelector: () => null, readyState: 'complete', addEventListener: () => {}, images: [], fonts: null }, focus: () => {}, print: () => {}, addEventListener: () => {}, setTimeout: () => {} }; const o = window.open; window.open = () => fake; try { tsPrintSheet(); } finally { window.open = o; } return out; });
+const pp16 = await page.context().newPage(); await pp16.setViewportSize({ width: 1054, height: 800 }); await pp16.setContent(popHtml, { waitUntil: 'load' }); await pp16.emulateMedia({ media: 'print' }); await pp16.waitForTimeout(300);
+const lay16 = await pp16.evaluate(() => { const T = document.querySelector('#travelsum-host .dc .ts-man'), W = T.getBoundingClientRect().width, th = [...T.querySelectorAll('thead th')].map(x => x.getBoundingClientRect().width / W * 100);
+  const rows = [...T.querySelectorAll('tbody tr[data-tsman]')], tall = rows.map(r => r.getBoundingClientRect().height); const cs = s => getComputedStyle(document.querySelector('#travelsum-host .dc ' + s));
+  return { W: Math.round(W), cust: +th[3].toFixed(1), pick: +th[9].toFixed(1), px: th.slice(4, 8).map(x => +x.toFixed(1)), maxRow: Math.round(Math.max(...tall)), medRow: Math.round(tall.sort((a, b) => a - b)[Math.floor(tall.length / 2)]), head: cs('.dc-h').display, hbg: cs('.dc-h').backgroundColor, rtRows: document.querySelectorAll('#travelsum-host .dc table.rt tbody tr').length, hRight: getComputedStyle(document.querySelector('#travelsum-host .dc .rt th.r')).textAlign }; });
+await pp16.close();
 await page.evaluate(() => { _tsPier = 'panwa'; renderTravelSum(); }); await page.waitForTimeout(400); const d1 = await POP();
 const rid16 = await page.evaluate(() => { const b = document.querySelector('[data-tsroute]:not([data-tsroute=""])'); return b ? b.getAttribute('data-tsroute') : ''; });
 await page.evaluate((r) => { _tsRoute = r; renderTravelSum(); }, rid16); await page.waitForTimeout(400); const d2 = await POP();
@@ -297,9 +306,10 @@ const rName16 = await page.evaluate((r) => tsRouteName(r), rid16);
 await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; renderTravelSum(); }); await page.waitForTimeout(400);
 const okD = d => !d.err && d.dc === 1 && /^สรุปการเดินทางประจำวัน /.test(d.title) && d.dt && d.sign === 0 && d.sub === 0 && d.hd === 0 && d.boxes === 3 && d.boxT.join('|').includes('ผู้โดยสาร') && d.boxT.join('|').includes('เงิน') && d.secs === 'DEFG' && d.boxT.map(x => x[0]).join('') === 'ABC'
   && d.rtN === d.grows && d.rtN > 0 && d.rtTotBk === d.sumBk && num(d.rtTotM) === d.sumM && d.rtTotM === d.liveTot && d.manRows === d.liveRows && d.manTot === d.liveTot && d.rn === d.manRows && d.pageCss && d.css && d.tsCss;
-if (okD(d0) && okD(d1) && okD(d2) && !d0.rtName && d1.rtName === 'Visit Panwa' && d2.rtName === rName16 && d1.manRows < d0.manRows && /#000f4c/i.test(d1.pierBg) && d0.pack)
-  ok(`16 หน้าพิมพ์โครงใหม่ · หัว "${d0.title}" · A/B/C · D ตามเส้นทาง ${d0.rtN} แถว รวม ${d0.rtTotM} = ผลบวก = รวมใน Manifest · Manifest ${d0.manRows} แถวมีเลขแถว · ไม่มีลายเซ็น/คำอธิบาย · เลือกท่า/เส้นทางแล้วชื่อขึ้นต่อหัว (${d2.rtName}) · ท้ายกระดาษมีเลขหน้า · ชุดเอกสารแนบยังตามมา`);
-else fail('16 ' + JSON.stringify({ d0, d1: { err: d1.err, rtName: d1.rtName, manRows: d1.manRows, pierBg: d1.pierBg }, d2: { err: d2.err, rtName: d2.rtName }, rName16 }));
+const okLay = lay16.W > 900 && lay16.cust >= 7.5 && lay16.pick >= 7.5 && lay16.px.every(x => x <= 4) && lay16.maxRow < 170 && lay16.medRow < 70 && lay16.head === 'flex' && lay16.hbg === 'rgb(0, 15, 76)' && lay16.rtRows === d0.rtN + 1 && lay16.hRight === 'right';
+if (okD(d0) && okD(d1) && okD(d2) && okLay && !d0.rtName && d1.rtName === 'Visit Panwa' && d2.rtName === rName16 && d1.manRows < d0.manRows && /#000f4c/i.test(d1.pierBg) && d0.pack)
+  ok(`16 หน้าพิมพ์โครงใหม่ · หัว "${d0.title}" · A/B/C · D ตามเส้นทาง ${d0.rtN} แถว รวม ${d0.rtTotM} = ผลบวก = รวมใน Manifest · Manifest ${d0.manRows} แถวมีเลขแถว · ไม่มีลายเซ็น/คำอธิบาย · เลือกท่า/เส้นทางแล้วชื่อขึ้นต่อหัว (${d2.rtName}) · ท้ายกระดาษมีเลขหน้า · ชุดเอกสารแนบยังตามมา · วางหน้าจริงแล้วคอลัมน์ลูกค้า ${lay16.cust}% จุดรับ ${lay16.pick}% แถวสูงสุด ${lay16.maxRow}px`);
+else fail('16 ' + JSON.stringify({ lay16, d0, d1: { err: d1.err, rtName: d1.rtName, manRows: d1.manRows, pierBg: d1.pierBg }, d2: { err: d2.err, rtName: d2.rtName }, rName16 }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);

@@ -24773,7 +24773,7 @@ function tsCSSDoc(){
 & thead th{ background:var(--head); color:#3A3F5C; font-size:6.6pt; font-weight:800; letter-spacing:.05em; text-transform:uppercase; border-bottom:1.5px solid var(--grid); padding:4px 5px; line-height:1.2; overflow-wrap:normal; word-break:keep-all }
 & thead th .ts-thsub{ display:block; font-weight:600; text-transform:none; letter-spacing:0; color:var(--mut) }
 & tbody tr{ break-inside:avoid }
-& .c,& td.c,& th.c{ text-align:center } .dc .r,.dc td.r,.dc th.r{ text-align:right }
+& .c,& td.c,& th.c{ text-align:center } & .r,& td.r,& th.r{ text-align:right }
 & td.ts-empty{ text-align:center; color:var(--mut); font-style:italic; padding:7px }
 & .num{ font-family:'DM Mono',ui-monospace,monospace; font-weight:700; color:var(--ink); text-align:right; white-space:nowrap }
 & tr.tot td{ background:var(--ink) !important; color:#fff; font-weight:800; border-color:#2A3A7B }
@@ -24809,12 +24809,14 @@ function tsCSSDoc(){
 & .ts-man td.ts-rn.ts-scr,& .ts-man th.ts-rn.ts-scr{ display:table-cell !important }
 & .ts-man tr.ts-gsum.ts-scr,& .ts-man tr.ts-gtot.ts-scr{ display:table-row !important }
 & .ts-man .ts-gboat.ts-scr{ display:inline !important }
-& .ts-man .ts-rn{ width:18px; text-align:center; color:var(--mut); font:600 6.6pt/1.4 'DM Mono',ui-monospace,monospace; background:var(--head) !important; padding:3px 2px }
-& .ts-man thead th:nth-child(2){ width:7.2% } .dc .ts-man thead th:nth-child(3){ width:7% } .dc .ts-man thead th:nth-child(4){ width:9% }
-& .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){ width:3% }
-& .ts-man thead th:nth-child(9){ width:6%; font-size:6pt } .dc .ts-man thead th:nth-child(10){ width:9% } .dc .ts-man thead th:nth-child(11){ width:5% }
-& .ts-man thead th:nth-child(12){ width:7% } .dc .ts-man thead th:nth-child(13){ width:7.5% } .dc .ts-man thead th:nth-child(14){ width:7.5% }
-& .ts-man thead th:nth-child(15){ width:9.5% } .dc .ts-man thead th:nth-child(16){ width:6.5% } .dc .ts-man thead th:nth-child(17){ width:7% } .dc .ts-man thead th:nth-child(18){ width:6.2% }
+& .ts-man thead th{ width:auto }
+& .ts-man .ts-rn{ width:18px !important; text-align:center; color:var(--mut); font:600 6.6pt/1.4 'DM Mono',ui-monospace,monospace; background:var(--head) !important; padding:3px 2px }
+& .ts-man thead th:nth-child(2){ width:7.2% !important } & .ts-man thead th:nth-child(3){ width:7% !important } & .ts-man thead th:nth-child(4){ width:9% !important }
+& .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){ width:3% !important }
+& .ts-man thead th:nth-child(9){ width:6% !important; font-size:6pt } & .ts-man thead th:nth-child(10){ width:8.4% !important } & .ts-man thead th:nth-child(11){ width:5% !important }
+& .ts-man thead th:nth-child(12){ width:7% !important } & .ts-man thead th:nth-child(13){ width:7.5% !important } & .ts-man thead th:nth-child(14){ width:7.5% !important }
+& .ts-man thead th:nth-child(15){ width:9.5% !important } & .ts-man thead th:nth-child(16){ width:6.5% !important } & .ts-man thead th:nth-child(17){ width:6.4% !important } & .ts-man thead th:nth-child(18){ width:7.4% !important }
+& .ts-man td:nth-child(18) .ts-chip{ white-space:nowrap }
 & .ts-man td:nth-child(9){ white-space:nowrap; text-align:center; font-weight:800; background:#F6F7FB !important }
 & .ts-vch{ font:700 7.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink) }
 & .ts-lead{ font-weight:700; color:var(--ink); white-space:normal; max-width:none }
@@ -24824,7 +24826,7 @@ function tsCSSDoc(){
 & .ts-man td:nth-child(13) .ts-chip{ white-space:nowrap; display:block; width:max-content; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-size:6.4pt }
 & .ts-ao{ display:inline-block; font-size:6.6pt; padding:0 4px; border-radius:2px; white-space:normal; max-width:none; overflow:visible; text-overflow:clip; margin:0 2px 2px 0 }
 & .ts-px{ font:700 8pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink); text-align:center; background:#FBFBFE !important }
-& .ts-px.zero{ color:#C9CCDA; font-weight:400 } .dc .ts-px.lost{ color:var(--bad) }
+& .ts-px.zero{ color:#C9CCDA; font-weight:400 } & .ts-px.lost{ color:var(--bad) }
 & .ts-mono{ font-family:'DM Mono',ui-monospace,monospace }
 & .ts-totc{ background:#FBFBFE !important; white-space:normal }
 & .ts-net,& .ts-totb{ display:block; font:500 6.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--mut); white-space:normal }
@@ -24842,21 +24844,21 @@ function tsCSSDoc(){
 & .ts-man .ts-gw .ts-tel{ float:none !important; margin-left:auto; font-size:7pt }
 & .ts-man tr.ts-gsum td{ background:var(--head) !important; font-weight:800; color:#3A3F5C; font-size:7.3pt; border-bottom:1.5px solid var(--grid) }
 & .ts-man tr.ts-gtot td{ background:var(--ink) !important; color:#fff; font-weight:800; border-color:#2A3A7B }
-& .ts-man tr.ts-gtot td.ts-px,& .ts-man tr.ts-gtot td.ts-totc{ color:#fff; background:var(--ink) !important } .dc .ts-man tr.ts-gtot td.ts-px.zero{ color:#7D8BC9 }
+& .ts-man tr.ts-gtot td.ts-px,& .ts-man tr.ts-gtot td.ts-totc{ color:#fff; background:var(--ink) !important } & .ts-man tr.ts-gtot td.ts-px.zero{ color:#7D8BC9 }
 & .ts-man tr.ts-cxlrow td{ background:#FFF7F6 !important; color:var(--mut) }
 & .ts-man tr.ts-cxlrow .ts-vch,& .ts-man tr.ts-cxlrow .ts-lead{ text-decoration:line-through; color:var(--mut) }
 & .aokey{ display:flex; gap:4px; margin:0 0 4px; font-size:6.8pt; color:var(--mut); align-items:center }
-& .ts-ao.ao-bk{ background:#E8EEFF; color:#1F3FB0 } .dc .ts-ao.ao-ex{ background:#E3F6EC; color:#0C6B47 } .dc .ts-ao.ao-up{ background:#FFF0DC; color:#8A4B00 } .dc .ts-ao.ao-pier{ background:#F3E8FF; color:#6B21A8 }
+& .ts-ao.ao-bk{ background:#E8EEFF; color:#1F3FB0 } & .ts-ao.ao-ex{ background:#E3F6EC; color:#0C6B47 } & .ts-ao.ao-up{ background:#FFF0DC; color:#8A4B00 } & .ts-ao.ao-pier{ background:#F3E8FF; color:#6B21A8 }
 /* ตาราง 02/03 ที่ยกมา · ซ่อนของบนจอ */
 & .ts-scr:not(.ts-rn):not(.ts-gsum):not(.ts-gtot):not(.ts-gboat){ display:none !important }
 & .ts-noprint:not(.ts-rn):not(.ts-gsum):not(.ts-gtot):not(.ts-gboat){ display:none !important }
 & .ts-db,& .ts-note,& .ts-dcell button,& input,& button{ display:none !important }
-& .ts-cxc{ font-weight:800; color:var(--ink) } .dc .ts-cxr{ display:block; font-size:6.6pt; color:var(--mut) }
+& .ts-cxc{ font-weight:800; color:var(--ink) } & .ts-cxr{ display:block; font-size:6.6pt; color:var(--mut) }
 & .ts-sbk{ font-weight:700 }
 & label,& [onclick]{ display:none !important }
 & .ts-man .ts-gw,& .ts-man .ts-grow td,& .rt td,& tr.tot td{ display:revert }
 & .ts-man .ts-gw{ display:flex !important }`;
-  return css.replace(/^&/gm, P).replace(/,&/g, ','+P).replace(/\n\s*&/g, '\n'+P);
+  return css.replace(/^&/gm, P).replace(/,&/g, ','+P).replace(/\} &/g, '} '+P).replace(/\n\s*&/g, '\n'+P);
 }
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
