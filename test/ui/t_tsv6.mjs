@@ -142,13 +142,13 @@ else fail('7 ' + JSON.stringify(c7));
 
 /* ══ 8 · พิมพ์ ══ */
 const PV = () => page.evaluate(() => { const h = document.getElementById('travelsum-host'), vis = e => !!(e && e.getClientRects().length);
-  return { scr: [...h.querySelectorAll('.ts-scr')].filter(vis).length, hd: vis(h.querySelector('.ts-hd')), mbar: vis(h.querySelector('.ts-mbar')), k: vis(h.querySelector('.ts-kpis')), pay: vis(h.querySelector('.ts-pay')), read: vis(h.querySelector('.ts-s03 .ts-read')),
+  return { scr: [...h.querySelectorAll('.ts-scr')].filter(vis).length, sheet: [...h.querySelectorAll('.ts-gsum,.ts-gtot,.ts-rn,.ts-mtools,.ts-gboat')].filter(vis).length, hd: vis(h.querySelector('.ts-hd')), mbar: vis(h.querySelector('.ts-mbar')), k: vis(h.querySelector('.ts-kpis')), pay: vis(h.querySelector('.ts-pay')), read: vis(h.querySelector('.ts-s03 .ts-read')),
     tr: getComputedStyle(h.querySelector('.ts-s02 tbody tr')).display, th: getComputedStyle(h.querySelector('.ts-s02 thead')).display, bg: getComputedStyle(h).backgroundColor }; });
 await page.emulateMedia({ media: 'print' }); await page.waitForTimeout(200); const p1 = await PV(); await page.emulateMedia({ media: 'screen' });
 await page.evaluate(() => document.body.classList.add('ts-printing')); await page.waitForTimeout(200); const p2 = await PV();
 await page.evaluate(() => document.body.classList.remove('ts-printing')); await page.waitForTimeout(200); const p3 = await PV();
-const okP = p => p.scr === 0 && p.hd && p.mbar && p.k && p.pay && p.read && p.tr === 'table-row' && p.th === 'table-header-group';
-if (okP(p1) && okP(p2) && p3.scr > 5 && !p3.hd && p3.tr === 'grid') ok('8 ตอนพิมพ์และในหน้าต่างพิมพ์ · ของใหม่หายหมด หัวเอกสาร/การ์ดตัวเลข/ตารางชุดเดิมกลับมาครบ');
+const okP = p => p.scr === 0 && p.sheet === 0 && p.hd && p.mbar && p.k && p.pay && p.read && p.tr === 'table-row' && p.th === 'table-header-group';
+if (okP(p1) && okP(p2) && p3.scr > 5 && p3.sheet > 5 && !p3.hd && p3.tr === 'grid') ok('8 ตอนพิมพ์และในหน้าต่างพิมพ์ · ของใหม่หายหมด (รวมเลขแถว/แถวรวม/ชิปกรองของหมวด 04) หัวเอกสาร/การ์ดตัวเลข/ตารางชุดเดิมกลับมาครบ');
 else fail('8 ' + JSON.stringify({ p1, p2, p3 }));
 
 /* ══ 9 ══ */
@@ -196,6 +196,44 @@ const flush = b => b.l === 0 && b.r === 0 && b.t === 0 && b.rad === '0px' && b.h
 const narrow = b3.l === 0 && b3.r === 0 && b3.mpl !== b1.mpl && b3.t >= b3.mpt - 1 && b3.rad === '0px';
 if (flush(b1) && flush(b2) && narrow) ok('12 แถบหัวชิดขอบบน/ซ้าย/ขวาของพื้นที่หน้า ทั้งจอ 1700 และ 1280 · ไม่มีมุมมน · พื้นหน้าเต็มถึงล่าง');
 else fail('12 ' + JSON.stringify({ b1, b2, b3 }));
+
+/* ══ 14 · §tsManSheet · หมวด 04 เป็นชีทตาราง ══ */
+await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; _tsManQ = ''; _tsManF = ''; renderTravelSum(); }); await page.waitForTimeout(400);
+const m14 = await page.evaluate(() => { const h = document.getElementById('travelsum-host'), T = h.querySelector('.ts-s04 .ts-man'), num = s => +String(s || '').replace(/[^0-9.\-]/g, '') || 0;
+  const data = [...T.querySelectorAll('tbody tr[data-tsman]')], rn = data.map(r => +r.children[0].textContent), th = [...T.querySelectorAll('thead th')];
+  const left = i => Math.round(th[i].getBoundingClientRect().left - T.getBoundingClientRect().left), cs = e => getComputedStyle(e);
+  /* ยอดรวมกลุ่ม = ผลบวกของใบที่ยังเดินทางในกลุ่ม · คอลัมน์ # (0) Voucher(1) Agency(2) Customer(3) AD(4) CHD(5) INF(6) FOC(7) ไปจริง/จอง(8) … Total(15) */
+  const sums = []; let acc = null;
+  for (const r of T.querySelectorAll('tbody tr')) { const c = r.className;
+    if (c.includes('ts-grow')) { acc = { ad: 0, chd: 0, inf: 0, foc: 0, t: 0, b: 0, m: 0 }; continue; }
+    if (c.includes('ts-gsum')) { const d = r.children; sums.push({ got: [num(d[2].textContent), num(d[3].textContent), num(d[4].textContent), num(d[5].textContent), d[6].textContent.replace(/\s/g, ''), num(d[8].textContent)], exp: [acc.ad, acc.chd, acc.inf, acc.foc, acc.t + '/' + acc.b, acc.m] }); continue; }
+    if (!r.hasAttribute('data-tsman') || c.includes('ts-cxlrow')) continue;
+    const d = r.children, px = i => d[i].classList.contains('lost') ? num(d[i].firstChild.textContent) : num(d[i].textContent);
+    acc.ad += px(4); acc.chd += px(5); acc.inf += px(6); acc.foc += px(7); const ab = d[8].textContent.split('/'); acc.t += +ab[0]; acc.b += +ab[1]; acc.m += num(d[15].firstChild.textContent); }
+  const gt = T.querySelector('tr.ts-gtot'), gtot = num(gt.children[8].textContent), gexp = sums.reduce((a, s) => a + s.exp[5], 0);
+  const chips = [...h.querySelectorAll('[data-tsmanf]')].map(b => [b.getAttribute('data-tsmanf'), +b.querySelector('i').textContent]);
+  const tagN = k => data.filter(r => (' ' + r.getAttribute('data-tsman') + ' ').includes(' ' + k + ' ')).length;
+  return { n: data.length, seq: rn.every((v, i) => v === i + 1), rnScr: th[0].classList.contains('ts-scr') && data.every(r => r.children[0].classList.contains('ts-scr')),
+    thSticky: cs(th[1]).position === 'sticky' && cs(th[1]).top === '0px', frozen: [cs(th[0]).left, cs(th[1]).left, cs(th[2]).left, cs(th[3]).left, cs(data[0].children[3]).position, cs(data[0].children[4]).position, cs(data[0].children[9]).position], offs: [left(0), left(1), left(2), left(3)],
+    sums: sums.map(s => s.got.join('|') === s.exp.join('|')), sumsRaw: sums.slice(0, 2), nsum: sums.length, ngrow: T.querySelectorAll('tr.ts-grow').length, gtot, gexp, gtSticky: cs(gt.children[0]).position === 'sticky' && cs(gt.children[0]).bottom === '0px',
+    chips, tags: { pier: tagN('pier'), addon: tagN('addon'), sq: tagN('sq'), warn: tagN('warn'), cxl: tagN('cxl') }, gw: cs(T.querySelector('.ts-gw')).position, grid: cs(data[0].children[5]).borderRightWidth, total17: th.length }; });
+/* กดชิป · พิมพ์ค้น · วาดใหม่แล้วสถานะยังอยู่ · ล้าง */
+await page.click('[data-tsmanf="cxl"]'); await page.waitForTimeout(250);
+const f1 = await page.evaluate(() => { const T = document.querySelector('#travelsum-host .ts-man'); const vis = [...T.querySelectorAll('tbody tr[data-tsman]')].filter(r => !r.classList.contains('ts-hide')); return { n: vis.length, allCxl: vis.every(r => r.classList.contains('ts-cxlrow')), on: document.querySelector('[data-tsmanf="cxl"]').classList.contains('on') }; });
+const vch = await page.evaluate(() => document.querySelector('#travelsum-host .ts-man tbody tr[data-tsman]:not(.ts-cxlrow) .ts-vch').textContent.trim());
+await page.evaluate(() => { tsManPick('cxl'); }); await page.fill('.ts-msrch input', vch); await page.waitForTimeout(250);
+const f2 = await page.evaluate(() => { const T = document.querySelector('#travelsum-host .ts-man'); const vis = [...T.querySelectorAll('tbody tr[data-tsman]')].filter(r => !r.classList.contains('ts-hide')); return { n: vis.length, hiddenGrow: [...T.querySelectorAll('tr.ts-grow')].filter(r => r.classList.contains('ts-hide')).length, none: getComputedStyle(document.querySelector('[data-tsman-none]')).display }; });
+await page.click('[data-tspier="panwa"]'); await page.waitForTimeout(400);
+const f3 = await page.evaluate(() => { const rows = [...document.querySelectorAll('#travelsum-host .ts-man tbody tr[data-tsman]')], q = document.querySelector('#travelsum-host .ts-msrch input').value; return { q, n: rows.filter(r => !r.classList.contains('ts-hide')).length, exp: rows.filter(r => r.textContent.includes(q)).length }; });
+await page.evaluate(() => { tsManQ('__nothing__'); }); await page.waitForTimeout(200);
+const f4 = await page.evaluate(() => ({ n: [...document.querySelectorAll('#travelsum-host .ts-man tbody tr[data-tsman]')].filter(r => !r.classList.contains('ts-hide')).length, none: getComputedStyle(document.querySelector('[data-tsman-none]')).display }));
+await page.evaluate(() => { tsManQ(''); _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(400);
+const okM = m14.n >= 20 && m14.seq && m14.rnScr && m14.thSticky && m14.frozen.join() === '0px,34px,146px,268px,sticky,static,static' && m14.offs.join() === '0,34,146,268'
+  && m14.nsum === m14.ngrow && m14.sums.every(Boolean) && m14.gtot === m14.gexp && m14.gtot > 0 && m14.gtSticky && m14.total17 === 18 && m14.gw === 'sticky' && m14.grid === '1px'
+  && m14.chips.length === 6 && m14.chips[0][1] === m14.n && m14.chips.slice(1).every(([k, n]) => n === m14.tags[k]) && m14.tags.cxl > 0 && m14.tags.warn > 0 && m14.tags.addon > 0;
+const okF = f1.n === m14.tags.cxl && f1.allCxl && f1.on && f2.n === 1 && f2.hiddenGrow >= 1 && f2.none === 'none' && f3.q === vch && f3.n === f3.exp && f4.n === 0 && f4.none === 'block';
+if (okM && okF) ok(`14 หมวด 04 เป็นชีท · ${m14.n} แถวมีเลข 1..${m14.n} · หัวตรึงบน · # Voucher Agency Customer ตรึงซ้ายที่ 0/34/146/268 · แถวรวม ${m14.nsum} กลุ่ม + รวมวัน ${m14.gtot.toLocaleString()} ตรงกับผลบวก · ชิป/ค้นหากรองได้ และค่าคงอยู่หลังกดชิปท่าเรือ`);
+else fail('14 ' + JSON.stringify({ m14, f1, f2, f3, f4, vch }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
