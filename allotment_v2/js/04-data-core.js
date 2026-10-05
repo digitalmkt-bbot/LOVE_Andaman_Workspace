@@ -832,7 +832,7 @@ var LA_T_EN={
   '{0} ที่ · ขายไปแล้ว {1}':'{0} seats · {1} sold',
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
-  'ไม่ออกวันนี้':'Not running today',
+  'ไม่ออกวันนี้':'Not running today','เหมา':'Charter','ยังไม่จัดเรือ':'no boat yet',
   'เรือว่าง · ยังไม่จัด':'Free boats · not deployed',
   'เรือที่พร้อมใช้แต่ยังไม่ได้วางบนเส้นทางไหนของวันนั้น':'Boats that are available but not placed on any programme that day',
   'ไม่มีเรือว่างที่ท่านี้':'No free boat at this pier',
@@ -2691,6 +2691,12 @@ function renderDash(){
     const dOps=TRIPS[ds]||{};
     let booked=0, capacity=0, charter=0;
     const routeBooked={};
+    /* §dashChBoat (2026-10-05) · ผู้ใช้ขอ "เหมาลำ Charter ที่โชว์ แบ่งเป็นลำได้ไหม"
+       เดิมรวมทุกใบเหมาเป็นแท่งเดียว (63 = Oceanus 30 + LKC33 33) มองไม่ออกว่าลำไหนเท่าไหร่
+       เก็บหัวเหมาแยกตามลำ · '' = ใบเหมาที่ยังไม่ได้จัดเรือ · ผลรวมทุกช่องต้องเท่ากับ charter เสมอ */
+    const charterBoats={};
+    const _chAdd=(bid,n)=>{ if(n>0) charterBoats[bid||'']=(charterBoats[bid||'']||0)+n; };
+    const _chSplitSeen=new Set();
     const _seatRoutes=new Set();   // seat-mode routes operating this day (count via actual sales bookings, once per route)
     const _capBoats=new Set();     // boats already counted toward capacity (avoid double-count)
     Object.entries(dOps).forEach(([bid,op])=>{
@@ -2705,7 +2711,7 @@ function renderDash(){
       // ⚠ Boat-Op charter ops carry pax on the sales booking (op.booked is usually 0). A LINKED charter
       // (has charterBookingId) is counted from SB_BOOKINGS below (real pax) — only an UNLINKED manual
       // Boat-Op charter falls back to op.booked. Boat capacity is already counted above either way.
-      if(isCharter){ if(!op.charterBookingId) charter+=(op.booked||0); }
+      if(isCharter){ if(!op.charterBookingId){ charter+=(op.booked||0); _chAdd(bid, op.booked||0); } }
       else { _seatRoutes.add(op.route); }
     });
     // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
@@ -2726,10 +2732,20 @@ function renderDash(){
         const r=getRoute(rid); if(!r) return;
         if(t.bookingMode==='charter'){
           // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
-          charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
+          const _cpx=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
+          charter+=_cpx;
           // §boatSplit · เหมา 1 ใบอาจกินหลายลำ · เดิมนับความจุแค่ลำแรก
           let _cbids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
           if(!_cbids.length){ const _one=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(_one) _cbids=[_one]; }
+          /* §dashChBoat · ลำเดียว = ทั้งใบลงลำนั้น · แยกหลายลำ = ตามก้อนที่แยกไว้ (นับครั้งเดียวต่อใบ)
+             เศษที่ยังไม่ได้ลงลำไหน ไปกอง "ยังไม่จัดเรือ" · ไม่ให้หัวหายจากกราฟ */
+          if(_cbids.length<=1) _chAdd(_cbids[0]||'', _cpx);
+          else {
+            let _left=_cpx;
+            if(!_chSplitSeen.has(bk.id)){ _chSplitSeen.add(bk.id);
+              _cbids.forEach(cbid=>{ const n=Math.min(_left,(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(bk,ds,cbid):0); _chAdd(cbid,n); _left-=n; }); }
+            _chAdd('', _left);
+          }
           _cbids.forEach(cbid=>{ if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } } });
           return;
         }
@@ -2747,7 +2763,7 @@ function renderDash(){
         }
       });
     });
-    return {ds,booked,capacity,routeBooked,charter,wx};
+    return {ds,booked,capacity,routeBooked,charter,charterBoats,wx};
   };
   const CHARTER_COLOR='#7A5BC4';   // ม่วงของเหมาลำ · เข้มพอให้อ่านออกบนพื้นขาว
   // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
@@ -3019,12 +3035,23 @@ function renderDash(){
     // TODAY only — one bar per route (separated) + a Charter bar, tallest→shortest
     const dayPal=['#5AA86E','#D9A520','#C86A3E','#3E7FB0','#7A5BC4','#2E9B72','#C4577F','#A87F1E','#2E8C9B'];
     const dayEntries = dayRows.map(([id,v],i)=>{ const r=getRoute(id); return {label:r?_shortName(r.name):id, val:v, color:dayPal[i%dayPal.length]}; });
-    if(dayCharter>0) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter, color:CHARTER_COLOR});
+    /* §dashChBoat · แท่งเหมาแยกตามลำ · ม่วงไล่เฉด ลำที่คนเยอะสุดเข้มสุด · ยังไม่จัดเรือ = ม่วงจาง */
+    if(dayCharter>0){
+      const _cb=(bkBuckets[0]&&bkBuckets[0].charterBoats)||{};
+      const _cpal=['#7A5BC4','#9B7FD6','#5E43A6','#B49BE2','#4A3489'];
+      const _crow=Object.entries(_cb).filter(([id,v])=>v>0).sort((a,b)=>(a[0]===''?1:0)-(b[0]===''?1:0)||b[1]-a[1]);
+      let _sum=0;
+      _crow.forEach(([id,v],i)=>{ _sum+=v; const cb=id?getBoat(id):null;
+        dayEntries.push({ label: id ? (laT('เหมา')+' · '+((cb&&cb.name)||id)) : (laT('เหมา')+' · '+laT('ยังไม่จัดเรือ')),
+                          val:v, color: id?_cpal[i%_cpal.length]:'#C9BDE6', ch:1, chBoat:id }); });
+      /* กันหัวหาย · ถ้าแยกลำแล้วไม่ครบ (ไม่ควรเกิด) ให้มีแท่งรวมส่วนที่เหลือ */
+      if(_sum<dayCharter) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter-_sum, color:'#C9BDE6', ch:1, chBoat:''});
+    }
     const dayMax=Math.max(...dayEntries.map(e=>e.val),1);
     plotCols='repeat('+Math.max(dayEntries.length,1)+',1fr)'; plotGap='12px';
     plotHtml = dayEntries.length ? dayEntries.map(e=>{
       const h=Math.max((e.val/dayMax)*100,3);
-      return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
+      return `<div ${e.ch?`data-chbar="${e.chBoat||''}" data-chval="${e.val}" `:''}style="display:flex;flex-direction:column;align-items:center;min-width:0">
         <div class="dv-barbox">
           <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${e.color};border-radius:7px 7px 3px 3px;box-shadow:inset 0 1px 0 rgba(255,255,255,.42)">
             <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-family:'DM Mono',ui-monospace,monospace;font-size:13px;font-weight:800;color:#2c2c2a">${e.val}</div>
