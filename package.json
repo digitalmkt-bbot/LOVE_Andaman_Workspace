@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --env-file=.env server.js",
+    "sync:upstream": "node tools/sync-upstream.mjs",
     "build:deploy": "node tools/build-assets.mjs --in-place",
     "build:try": "node tools/build-assets.mjs --out .build",
     "safari": "node tools/safari-smoke.js",
@@ -80,6 +81,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "acorn": "^8.19.0",
     "playwright": "^1.61.1"
   }
 }

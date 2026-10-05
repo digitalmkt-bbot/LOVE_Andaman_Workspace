@@ -46,7 +46,8 @@ restored_attachments/
 
 # ── Claude Code local tooling (per-machine, not project code) ──
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
 skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
