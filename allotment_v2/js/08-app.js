@@ -27714,7 +27714,7 @@ function tsV6Money(M, money){
         +row(C.card,'บัตรเครดิต',M.card,'รูดเครื่อง EDC'+(M.fee>0?(' &middot; ค่าธรรมเนียม '+money(M.fee)+' ธนาคารหัก'):''))+'</div></div>'
     +'<div class="m5" data-m="net"><div class="s5-lb">เหลือเข้าบริษัท</div><div class="m5-led">'
       +'<div><span>รับเข้าวันนี้</span><b>'+money(M.tin)+'</b></div>'
-      +'<div class="neg"><span>คอมคนขาย</span><b>&minus; '+money(M.comm)+'</b></div>'
+      /* §tsCommOut · ไม่มีบรรทัดหักค่าคอมคนขาย */
       +'<div class="neg"><span>จ่ายออกตามคำตัดสิน COT</span><b>&minus; '+money(M.out)+'</b></div>'
       +'<div class="tot"><span>เหลือเข้าบริษัท</span><b>'+money(M.net)+'</b></div></div>'
       +(M.deduct>0?('<div class="m5-foot">อีก <b>'+money(M.deduct)+'</b> หักจากบิลเอเจนต์ ไม่ผ่านมือหน้าท่า</div>'):'')+'</div>'
@@ -28260,7 +28260,10 @@ function renderTravelSum(){
   var sumIn=sumCash+sumTf+sumCard;
   /* §tsComm · ค่าคอมคือเงินที่คนขายเก็บไว้ ไม่เคยเข้าบริษัท ต้องหักออกเหมือนเงินจ่ายออก
      ของเดิมหักแต่ sumPayout · "เหลือเข้าบริษัท" จึงสูงกว่าที่เข้าจริงเท่ากับยอดค่าคอม */
-  var sumNet=Math.max(0, sumIn-sumPayout-sumComm);
+  /* §tsCommOut (2026-10-05) · เจ้าของ: "ค่าคอมคนขายจะไม่ถูกนำมาคำนวณในนี้"
+     เหลือเข้าบริษัท = รับเข้า − จ่ายออกตาม COT เท่านั้น · ค่าคอมไม่หักในหน้านี้ (ไปคิดที่อื่น)
+     ยอดค่าคอมยังนับไว้ (sumComm) เผื่อหน้าอื่นใช้ แต่ไม่โชว์เป็นตัวหักและไม่อยู่ในสูตรนี้ */
+  var sumNet=Math.max(0, sumIn-sumPayout);
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -28513,7 +28516,7 @@ function renderTravelSum(){
       +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
       +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
       // §tsComm · ยอดค่าคอมของวัน · หน้าท่าจะได้รู้ว่าเงินในลิ้นชักก้อนไหนไม่ใช่ของบริษัท
-      +(sumComm>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px" title="ค่าคอมมิชชั่นของคนขาย · หักออกจากเงินที่รับมาแล้วในบรรทัดกระทบยอด">คอมคนขาย '+money(sumComm)+'</span>'):'')
+      +(sumComm>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px" title="ค่าคอมมิชชั่นของคนขาย · แสดงไว้ให้รู้ ไม่หักในยอดเหลือเข้าบริษัท">คอมคนขาย '+money(sumComm)+'</span>'):'')
       +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน · ตัวเลขคำนวณไว้ข้างบนแล้ว (§tsCashNet)
           if(!(sumCotAll>0)) return '';
           return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
@@ -28543,8 +28546,7 @@ function renderTravelSum(){
     +'<div class="ts-read ts-printonly" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
       +' (สด '+money(sumCash)+' &middot; โอน '+money(sumTf)+' &middot; บัตร '+money(sumCard)+')'
       +(sumPayout>0?(' &minus; จ่ายออกตาม COT <b style="color:var(--rs700)">'+money(sumPayout)+'</b>'):'')
-      // §tsComm · ค่าคอมคนขายไม่เคยเข้าบริษัท · เขียนตัวหักให้เห็น จะได้ไม่งงว่าเลขหายไปไหน
-      +(sumComm>0?(' &minus; คอมคนขาย <b style="color:var(--rs700)">'+money(sumComm)+'</b>'):'')
+      // §tsCommOut · ค่าคอมคนขายไม่อยู่ในสูตรนี้ (เจ้าของสั่ง 2026-10-05)
       +' = เหลือเข้าบริษัท <b>'+money(sumNet)+'</b>'
       +(sumDeduct>0?(' &middot; อีก <b>'+money(sumDeduct)+'</b> หักจากบิลเอเจนต์ (ไม่ผ่านมือหน้าท่า)'):'')
       +(sumFee>0?(' &middot; ค่าธรรมเนียมบัตร <b>'+money(sumFee)+'</b> ธนาคารหัก ไม่ใช่รายได้'):'')

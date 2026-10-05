@@ -137,10 +137,12 @@ else fail('6 ' + JSON.stringify({ c6, c6b, dlg }));
 const c7 = await page.evaluate(() => { const h = document.getElementById('travelsum-host'), num = s => +String(s || '').replace(/[^0-9.\-]/g, '') || 0, T = e => e ? e.textContent : '';
   const read = T(h.querySelector('.ts-s03 .ts-read')); const pv = [...h.querySelectorAll('.ts-s03 .ts-pay .ts-p .pv')].map(x => num(T(x)));
   const seg = {}; h.querySelectorAll('[data-tsv6="s03"] .s5-bar i').forEach(i => seg[i.dataset.seg] = parseFloat(i.style.flexGrow));
-  return { tin: num(T(h.querySelector('[data-m="in"] .m5-hero b'))), net: num(T(h.querySelector('[data-m="net"] .tot b'))), oldIn: num((/รับเข้าวันนี้\s*(฿[\d,]+)/.exec(read) || [])[1]), oldNet: num((/เหลือเข้าบริษัท\s*(฿[\d,]+)/.exec(read) || [])[1]), pv, seg,
+  const led = [...h.querySelectorAll('[data-m="net"] .m5-led > div')].map(d => T(d.querySelector('span'))), out = num(T(h.querySelector('[data-m="net"] .m5-led .neg b')));
+  return { led, out, comm: /คอมคนขาย/.test(read) || led.some(x => /คอม/.test(x)), tin: num(T(h.querySelector('[data-m="in"] .m5-hero b'))), net: num(T(h.querySelector('[data-m="net"] .tot b'))), oldIn: num((/รับเข้าวันนี้\s*(฿[\d,]+)/.exec(read) || [])[1]), oldNet: num((/เหลือเข้าบริษัท\s*(฿[\d,]+)/.exec(read) || [])[1]), pv, seg,
     rows: [...h.querySelectorAll('[data-m="in"] .m5-rows b')].map(b => num(T(b))) }; });
-if (c7.tin > 0 && c7.tin === c7.oldIn && c7.net === c7.oldNet && c7.rows[0] === c7.pv[0] && c7.rows[1] === c7.pv[1] && c7.rows[2] === c7.pv[2] && (c7.seg.cash || 0) === c7.pv[0] && (c7.seg.card || 0) === c7.pv[2] && (c7.seg.tf || 0) === c7.pv[1])
-  ok(`7 หมวด 03 · รับเข้า ${c7.tin.toLocaleString()} เหลือเข้าบริษัท ${c7.net.toLocaleString()} ตรงกับบรรทัดกระทบยอดเดิม · แถบสัดส่วนตรงกับยอดแต่ละวิธี`);
+/* §tsCommOut · เหลือเข้าบริษัท = รับเข้า − จ่ายออก COT · ไม่มีบรรทัด/คำว่าคอมคนขายในสูตร */
+if (c7.tin > 0 && c7.tin === c7.oldIn && c7.net === c7.oldNet && !c7.comm && c7.led.length === 3 && c7.net === c7.tin - c7.out && c7.rows[0] === c7.pv[0] && c7.rows[1] === c7.pv[1] && c7.rows[2] === c7.pv[2] && (c7.seg.cash || 0) === c7.pv[0] && (c7.seg.card || 0) === c7.pv[2] && (c7.seg.tf || 0) === c7.pv[1])
+  ok(`7 หมวด 03 · รับเข้า ${c7.tin.toLocaleString()} − จ่ายออก ${c7.out.toLocaleString()} = เหลือเข้าบริษัท ${c7.net.toLocaleString()} (ไม่หักคอมคนขาย) ตรงกับบรรทัดกระทบยอดเดิม · แถบสัดส่วนตรงกับยอดแต่ละวิธี`);
 else fail('7 ' + JSON.stringify(c7));
 
 /* ══ 8 · พิมพ์ ══ */
