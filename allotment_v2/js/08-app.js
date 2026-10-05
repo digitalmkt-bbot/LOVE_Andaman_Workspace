@@ -9417,13 +9417,24 @@ function bkV2ZonePickOpen(el, bkId, date){
   const bk=(SB_BOOKINGS||[]).find(b=>b.id===bkId); if(!bk) return;
   const old=document.getElementById('bkv2-zonepick'); if(old) old.remove();
   const cur=bk.pickupAreaId||'';
-  window._bkV2ZonePick={ bkId, date:date||'', sel:cur };
   const areas=(SB_PICKUP_AREAS||[]).filter(a=>a && a.id && a.active!==false);
   const zones=[...new Set(areas.map(a=>a.zone||''))].sort((x,y)=>bkV2ZoneOrder(x)-bkV2ZoneOrder(y));
+  /* §zonePickFilter · เปิดมาโชว์เฉพาะโซนของใบจอง (ใบ PK เห็นแต่พื้นที่ Phuket) · กดชิปเปลี่ยนโซน / All ได้
+     โซนของใบ = trip.zone ของวันนั้น (โซนที่คิดราคา) · ใบรถส่วนตัวราคาเป็น NoTransfer แต่รับจากโรงแรมจริง
+     จึงใช้โซนของพื้นที่ปัจจุบันแทน · หาไม่ได้เลย = All */
+  const _nz=z=>(z==='NT'?'NoTransfer':(z||''));
+  const _curA=cur?bkV2GetArea(cur):null;
+  const _tz=_nz(((bk.trips||[]).find(t=>t&&(t.date||'')===(date||'')&&t.zone)||(bk.trips||[]).find(t=>t&&t.zone)||{}).zone);
+  let defZone=(_tz==='NoTransfer' && _curA && _nz(_curA.zone)!=='NoTransfer') ? _nz(_curA.zone) : (_tz || (_curA?_nz(_curA.zone):''));
+  if(!zones.some(z=>_nz(z)===defZone)) defZone='';
+  window._bkV2ZonePick={ bkId, date:date||'', sel:cur, zone:defZone };
+  const _chip=(z,t)=>{ const c=z?bkV2ZoneColor(z):'#5F5E5A';
+    return `<button class="zpk-chip" data-z="${e(z)}" data-c="${c}" onclick="bkV2ZonePickZone('${e(z)}')" style="border:1px solid ${c}55;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">${e(t)}</button>`; };
+  const chipsH=[...new Set(zones.map(_nz))].map(z=>_chip(z, bkV2ZoneLabel(z))).join('') + _chip('', laT('ทั้งหมด'));
   const listH=zones.map(z=>{
     const rows=areas.filter(a=>(a.zone||'')===z).sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
     const c=bkV2ZoneColor(z);
-    return `<div class="zpk-grp" data-z="${e(z)}"><div style="position:sticky;top:0;background:#FAFAF7;padding:6px 13px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:${c};border-top:1px solid #f0eee7">${e(bkV2ZoneLabel(z))}</div>`
+    return `<div class="zpk-grp" data-z="${e(_nz(z))}"><div style="position:sticky;top:0;background:#FAFAF7;padding:6px 13px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:${c};border-top:1px solid #f0eee7">${e(bkV2ZoneLabel(z))}</div>`
       + rows.map(a=>`<div class="zpk-row" data-id="${e(a.id)}" data-n="${e(String(a.name||'').toLowerCase()+' '+String(a.region||'').toLowerCase())}" onclick="bkV2ZonePickSel('${e(a.id)}')" style="display:flex;align-items:center;gap:9px;padding:8px 13px;cursor:pointer;border-top:1px solid #f4f2ec">`
         + `<span class="zpk-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid ${c};flex:none;box-sizing:border-box"></span>`
         + `<span style="flex:1;font-size:12.5px;font-weight:600;color:#2a2a26">${e(a.name||a.id)}${a.region?` <span style="font-weight:500;color:#9a988f;font-size:11px">· ${e(a.region)}</span>`:''}</span>`
@@ -9440,7 +9451,8 @@ function bkV2ZonePickOpen(el, bkId, date){
         <div style="font-size:11px;color:#8a8a82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e(bk.leadPax||bk.customerName||'')} · ${e(bk.voucherRef||bk.id)} · ${laT('ตอนนี้')}: <b style="color:#2F4E77">${e(curName)}</b></div></div>
       <button onclick="document.getElementById('bkv2-zonepick').remove()" style="background:transparent;border:none;font-size:18px;color:#999;cursor:pointer;line-height:1">&times;</button>
     </div>
-    <div style="padding:8px 13px;border-bottom:1px solid #f0eee7"><input id="bkv2-zonepick-q" oninput="bkV2ZonePickFilter(this.value)" placeholder="${laT('ค้นหาพื้นที่…')}" style="width:100%;box-sizing:border-box;border:1px solid #e0ddd4;border-radius:8px;padding:6px 9px;font-size:12px;font-family:inherit"></div>
+    <div style="padding:8px 13px;border-bottom:1px solid #f0eee7"><input id="bkv2-zonepick-q" oninput="bkV2ZonePickFilter()" placeholder="${laT('ค้นหาพื้นที่…')}" style="width:100%;box-sizing:border-box;border:1px solid #e0ddd4;border-radius:8px;padding:6px 9px;font-size:12px;font-family:inherit">
+      <div id="bkv2-zonepick-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px">${chipsH}</div></div>
     <div id="bkv2-zonepick-list" style="flex:1;min-height:0;overflow-y:auto">${listH}</div>
     <div id="bkv2-zonepick-info" style="padding:0 13px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 13px;border-top:1px solid #eee">
@@ -9452,6 +9464,7 @@ function bkV2ZonePickOpen(el, bkId, date){
   ov.onclick=ev=>{ if(ev.target===ov && ov._d) ov.remove(); };
   document.body.appendChild(ov);
   bkV2ZonePickSel(cur);
+  bkV2ZonePickZone(defZone);
   try{
     const panel=document.getElementById('bkv2-zonepick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||320, ph=panel.offsetHeight||400;
     let left=r.left; if(left+pw>window.innerWidth-8) left=Math.max(8, window.innerWidth-pw-8);
@@ -9462,10 +9475,21 @@ function bkV2ZonePickOpen(el, bkId, date){
     const q=document.getElementById('bkv2-zonepick-q'); if(q) q.focus({preventScroll:true});
   }catch(_){}
 }
-function bkV2ZonePickFilter(v){
-  const q=String(v||'').trim().toLowerCase();
+function bkV2ZonePickZone(z){
+  const st=window._bkV2ZonePick; if(!st) return;
+  st.zone=z||'';
+  document.querySelectorAll('#bkv2-zonepick-chips .zpk-chip').forEach(b=>{
+    const on=b.dataset.z===st.zone, c=b.dataset.c;
+    b.style.background=on?c:'#fff'; b.style.color=on?'#fff':c;
+  });
+  bkV2ZonePickFilter();
+}
+function bkV2ZonePickFilter(){
+  const st=window._bkV2ZonePick||{};
+  const q=String((document.getElementById('bkv2-zonepick-q')||{}).value||'').trim().toLowerCase();
   document.querySelectorAll('#bkv2-zonepick-list .zpk-grp').forEach(g=>{
     let any=false;
+    if(st.zone && g.dataset.z!==st.zone){ g.style.display='none'; return; }
     g.querySelectorAll('.zpk-row').forEach(r=>{ const ok=!q||r.dataset.n.indexOf(q)>=0; r.style.display=ok?'flex':'none'; if(ok) any=true; });
     g.style.display=any?'':'none';
   });
