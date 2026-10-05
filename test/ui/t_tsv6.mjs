@@ -6,7 +6,7 @@
 //     "ชิปต้องมีแยกท่าเรือก่อน แล้วค่อยมีเส้นทาง" · "พอกดชิป รายละเอียดก็ขึ้นในหัว Header ด้วย"
 //     "หัวข้อ สรุปการเดินทางประจำวัน <วันที่> ให้ยาวไปทั้ง Card · ถ้ากดชิปเส้นทาง ชื่อเส้นทางนั้น ๆ ขึ้นต่อ"
 //
-// กันสิบห้าอย่าง
+// กันสิบหกอย่าง
 //   1 บนจอ · แถบ/ชิป/การ์ดสรุป/หมวด 01,03 ชุดใหม่ขึ้น · หัวเอกสารและการ์ดตัวเลขชุดเดิมซ่อน
 //   2 ชิปท่าเรือครบทุกท่าของวันนั้น ยอดรวมกันเท่ากับทั้งวัน · ยังไม่เลือกท่า ไม่มีชิปเส้นทาง
 //   3 กดชิปท่าเรือ · ชิปเส้นทางขึ้นเฉพาะของท่านั้น · หัวข้อต่อท้ายด้วยชื่อท่า · ตัวเลขและ manifest เป็นของท่านั้น
@@ -22,6 +22,7 @@
 //  13 หมวด 02 · ช่องของทุกใบตั้งตรงกัน ไม่เยื้องตามความยาวชื่อ agent (§ts02Align · "Layout ไม่ตรงกัน")
 //  14 หมวด 04 เป็นชีท (§tsManSheet · "ปรับแบบนี้" หลังดู mockup v2) · เลขแถว · หัวตรึง · 3 คอลัมน์แรกตรึงซ้าย · แถวรวมกลุ่ม/วันตรงกับผลบวก · ค้นหา/ชิปกรอง · ของใหม่ไม่ออกตอนพิมพ์
 //  15 หมวด 04 ยาวเต็มไม่มีกล่องเลื่อนซ้อน · หัวคอลัมน์เกาะใต้แถบหัว · ซ่อนคอลัมน์ได้ จำต่อผู้ใช้ต่อเครื่อง (§tsManFull · §tsManCols · "ให้เต็มยาวเลย ตอนนี้มี scroll 2 ที่ · ขอเพิ่มการซ่อนบางคอลัมน์ และจำในเครื่องของ user นั้น ๆ")
+//  16 หน้าพิมพ์โครงใหม่ §tsDoc ("ลองไม่อิงโครงสร้างเดิม แต่เก็บ Manifest ไว้" → Day Close − ลายเซ็น − คำอธิบาย · หัว = สรุปการเดินทางประจำวัน <วันที่> <เส้นทาง>)
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -274,6 +275,31 @@ const okCols = cs0.ws.join() === '18' && cs0.th === 18 && cs0.dropVis && /Drop-o
   && cs3.ws.join() === '18' && cs3.th === 18 && cs3.dropVis && cs3.stored === null && !/ซ่อน/.test(cs3.btn) && lock.dis && lock.hc.length === 0;
 if (okFull && okCols) ok(`15 ตารางยาวเต็ม ไม่มีกล่องเลื่อนซ้อน · หัวคอลัมน์เกาะใต้แถบหัว แถวรวมวันเกาะล่างจอ · ซ่อน Drop-off + Cancel แล้วทุกแถวเหลือ 16 ช่องเท่ากัน · จำใน ${cs1.key} · วาดใหม่ยังซ่อน · ผู้ใช้อื่นไม่โดน · แสดงทั้งหมดกลับครบ · Voucher ซ่อนไม่ได้`);
 else fail('15 ' + JSON.stringify({ full, cs0, cs1, cs2, cs3, other, lock, popOpen }));
+
+/* ══ 16 · §tsDoc · หน้าพิมพ์โครงใหม่ ("สรุปการเดินทางประจำวัน <วันที่> <เส้นทาง>" · A/B/C · D ตามเส้นทาง · E · F · G Manifest · ไม่มีช่องลายเซ็น ไม่มีบรรทัดคำอธิบาย) ══ */
+await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; _tsManQ = ''; _tsManF = ''; _tsManHC = []; renderTravelSum(); }); await page.waitForTimeout(400);
+const POP = () => page.evaluate(() => { let out = ''; const fake = { document: { write: s => { out += s; }, close: () => {}, querySelectorAll: () => [], querySelector: () => null, readyState: 'complete', addEventListener: () => {}, images: [], fonts: null }, focus: () => {}, print: () => {}, addEventListener: () => {}, setTimeout: () => {} };
+  const o = window.open; window.open = () => fake; let err = ''; try { tsPrintSheet(); } catch (e) { err = e.message; } finally { window.open = o; }
+  const doc = new DOMParser().parseFromString(out, 'text/html'), H = doc.getElementById('travelsum-host'), $ = s => H.querySelector(s), $$ = s => [...H.querySelectorAll(s)], T = e => e ? e.textContent.trim().replace(/\s+/g, ' ') : null, num = s => +String(s || '').replace(/[^0-9.\-]/g, '') || 0;
+  const live = document.getElementById('travelsum-host');
+  const grows = live.querySelectorAll('.ts-man tr.ts-grow').length, liveRows = live.querySelectorAll('.ts-man tbody tr[data-tsman]').length, liveTot = (live.querySelector('.ts-man .ts-gtot .ts-totc') || { textContent: '' }).textContent.trim();
+  const rt = $$('table.rt tbody tr:not(.tot)'), tot = $('table.rt tr.tot') || { children: [] };
+  const sumBk = rt.reduce((a, r) => a + num(r.children[3].textContent), 0), sumM = rt.reduce((a, r) => a + num(r.children[12].textContent), 0);
+  return { err, len: out.length, dc: $$('.dc').length, title: T($('.dc-h h1')), dt: T($('.dc-h h1 .dt')), rtName: T($('.dc-h h1 .rt')), sign: $$('.sign').length + $$('.ts-sign').length, sub: $$('.dc-h .sub').length, hd: $$('.ts-hd').length,
+    boxes: $$('.dc-row .box').length, boxT: $$('.dc-row .box .bh').map(T), secs: $$('.sec-t .n').map(T).join(''), rtN: rt.length, grows, rtTotBk: num((tot.children[1] || {}).textContent), sumBk, rtTotM: ((tot.children[10] || {}).textContent || '').trim(), sumM, liveTot,
+    manRows: $$('.ts-man tbody tr[data-tsman]').length, liveRows, manTot: T($('.ts-man .ts-gtot .ts-totc')), rn: $$('.ts-man tr[data-tsman] td.ts-rn').length, cases: $$('.ts-s02 table, table:not(.rt):not(.ts-man)').length,
+    pageCss: /@page ts\{size:A4 landscape[^@]*@bottom-left/.test(out) && /@bottom-right\{content:"หน้า " counter\(page\) " \/ " counter\(pages\)/.test(out), css: /#travelsum-host \.dc \.dc-h\{/.test(out), tsCss: out.indexOf('<style id="ts-style">') > 0, pack: /la-docpack/.test(out), pierBg: ($('.dc-h') || {}).getAttribute ? $('.dc-h').getAttribute('style') : '' }; });
+const d0 = await POP();
+await page.evaluate(() => { _tsPier = 'panwa'; renderTravelSum(); }); await page.waitForTimeout(400); const d1 = await POP();
+const rid16 = await page.evaluate(() => { const b = document.querySelector('[data-tsroute]:not([data-tsroute=""])'); return b ? b.getAttribute('data-tsroute') : ''; });
+await page.evaluate((r) => { _tsRoute = r; renderTravelSum(); }, rid16); await page.waitForTimeout(400); const d2 = await POP();
+const rName16 = await page.evaluate((r) => tsRouteName(r), rid16);
+await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; renderTravelSum(); }); await page.waitForTimeout(400);
+const okD = d => !d.err && d.dc === 1 && /^สรุปการเดินทางประจำวัน /.test(d.title) && d.dt && d.sign === 0 && d.sub === 0 && d.hd === 0 && d.boxes === 3 && d.boxT.join('|').includes('ผู้โดยสาร') && d.boxT.join('|').includes('เงิน') && d.secs === 'DEFG' && d.boxT.map(x => x[0]).join('') === 'ABC'
+  && d.rtN === d.grows && d.rtN > 0 && d.rtTotBk === d.sumBk && num(d.rtTotM) === d.sumM && d.rtTotM === d.liveTot && d.manRows === d.liveRows && d.manTot === d.liveTot && d.rn === d.manRows && d.pageCss && d.css && d.tsCss;
+if (okD(d0) && okD(d1) && okD(d2) && !d0.rtName && d1.rtName === 'Visit Panwa' && d2.rtName === rName16 && d1.manRows < d0.manRows && /#000f4c/i.test(d1.pierBg) && d0.pack)
+  ok(`16 หน้าพิมพ์โครงใหม่ · หัว "${d0.title}" · A/B/C · D ตามเส้นทาง ${d0.rtN} แถว รวม ${d0.rtTotM} = ผลบวก = รวมใน Manifest · Manifest ${d0.manRows} แถวมีเลขแถว · ไม่มีลายเซ็น/คำอธิบาย · เลือกท่า/เส้นทางแล้วชื่อขึ้นต่อหัว (${d2.rtName}) · ท้ายกระดาษมีเลขหน้า · ชุดเอกสารแนบยังตามมา`);
+else fail('16 ' + JSON.stringify({ d0, d1: { err: d1.err, rtName: d1.rtName, manRows: d1.manRows, pierBg: d1.pierBg }, d2: { err: d2.err, rtName: d2.rtName }, rName16 }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);

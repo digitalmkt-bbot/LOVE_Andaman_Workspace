@@ -24603,6 +24603,261 @@ function _tsPackPages(refList, slipList, date, kicker, slipKicker){
   });
   return html;
 }
+/* ══ §tsDoc (2026-10-05) · หน้าพิมพ์ "สรุปการเดินทางประจำวัน" โครงใหม่ ══════════════════════
+   เจ้าของดู mockup 3 รอบ (ชีท v2 · ใช้หมวดจอใหม่ v3 · 4 แบบ A–D) แล้วสั่ง "ลองไม่อิงโครงสร้างเดิม
+   แต่เก็บ Manifest ไว้" · เลือกแบบ Day Close แล้วแก้ 3 ข้อ: ตัดช่องลายเซ็น · หัวเป็น
+   "สรุปการเดินทางประจำวัน <วันที่> <เส้นทาง>" · ตัดบรรทัดคำอธิบายใต้หัว
+   โครงหน้าพิมพ์: แถบหัวสีท่าเรือ → A ผู้โดยสาร · B เงิน · C ก่อนปิดวัน → D ตามเส้นทาง (ตารางใหม่)
+   → E เคสตัดสิน → F รายการรับเงิน → G Manifest (ตารางเดิมทั้ง 17 คอลัมน์)
+   ประกอบจาก DOM ที่วาดอยู่บนจอ (ตัวเลขชุดเดียวกับที่คนเห็น ไม่คำนวณซ้ำ) · ใช้ flex ไม่ใช้ grid
+   เพราะ Chrome วาง grid ผิดตอนพิมพ์ลง PDF */
+function tsDocCompose(){
+  var h = document.getElementById('travelsum-host'), $ = function(s){ return h.querySelector(s); }, $$ = function(s){ return [].slice.call(h.querySelectorAll(s)); };
+  var e = ckEsc;
+  var T = function(el){ return el ? (el.textContent || '').trim().replace(/\s+/g, ' ') : ''; };
+  var num = function(s){ return +String(s || '').replace(/[^0-9.\-]/g, '') || 0; };
+  var TH = tsV6Theme(_tsPier), pierName = _tsPier ? tsPierName(_tsPier) : 'ทุกท่าเรือ';
+  var routeName = _tsRoute ? tsRouteName(_tsRoute) : 'ทุกเส้นทาง';
+  var dateLabel = T($('.h4-h1 .dt')), count = $('.h4-count'), countEm = count ? count.querySelector('em') : null;
+  var iss = T($('.h4-iss')), pill = $('[data-tsv6="pill"]'), pillW = pill && +pill.getAttribute('data-w');
+  /* ผู้โดยสาร */
+  var hero = $('.s5-hero'), bar = $('[data-tsv6="s01"] .s5-bar'), lg = $('[data-tsv6="s01"] .s5-lg');
+  var tiles = {}; $$('.s5-t').forEach(function(t){ tiles[t.getAttribute('data-t')] = { v: T(t.querySelector('.v')), n: T(t.querySelector('.n')), warn: t.classList.contains('warn') }; });
+  var checks = $$('.h4-checks li').map(function(li){ return { w: +li.getAttribute('data-w'), html: li.querySelector('span:last-child').innerHTML }; });
+  /* เงิน */
+  var m5in = $('.m5[data-m="in"]'), m5net = $('.m5[data-m="net"]'), m5todo = $('.m5[data-m="todo"]');
+  var inTot = T(m5in.querySelector('.m5-hero b')), mbar = m5in.querySelector('.s5-bar');
+  var rows = [].slice.call(m5in.querySelectorAll('.m5-rows > *')), pays = [];
+  for (var i = 0; i + 2 < rows.length; i += 3) pays.push({ nm: T(rows[i]), c: rows[i].querySelector('i') ? rows[i].querySelector('i').style.background : '#999', v: T(rows[i+1]), n: T(rows[i+2]) });
+  var led = [].slice.call(m5net.querySelectorAll('.m5-led > div')).map(function(d){ return { k: T(d.querySelector('span')), v: T(d.querySelector('b')), cls: d.className }; });
+  var todo = [].slice.call(m5todo.querySelectorAll('.m5-todo > div')).map(function(d){ return { w: +d.getAttribute('data-w'), html: d.querySelector('span:last-child').innerHTML }; });
+  var mfoot = T(m5todo.querySelector('.m5-foot'));
+  /* ตามเส้นทาง · อ่านจากตาราง manifest */
+  var man = $('.ts-man'), routes = [], cur = null;
+  [].forEach.call(man.querySelectorAll('tbody > tr'), function(tr){
+    var c = tr.className || '';
+    if (c.indexOf('ts-grow') >= 0){ cur = { name: T(tr.querySelector('.ts-gw > span:first-child')), col: tr.style.getPropertyValue('--rc') || '#999', boats: T(tr.querySelector('.ts-gboat')), tel: T(tr.querySelector('.ts-tel')), vans: {}, n: 0, cxl: 0, pickups: 0 }; routes.push(cur); return; }
+    if (c.indexOf('ts-gsum') >= 0){ var d = tr.children; cur.px = [T(d[2]), T(d[3]), T(d[4]), T(d[5])]; cur.ab = T(d[6]); cur.money = T(d[8]); cur.n = num((T(d[1]).match(/·\s*(\d+)\s*ใบ/) || [0, 0])[1]); return; }
+    if (!tr.hasAttribute('data-tsman') || !cur) return;
+    if (c.indexOf('ts-cxlrow') >= 0){ cur.cxl++; return; }
+    [].forEach.call(tr.children[12].querySelectorAll('.ts-chip'), function(ch){ var t = T(ch); if (/🚐/.test(t)) { t = t.replace('🚐', '').trim(); cur.vans[t] = (cur.vans[t] || 0) + 1; } });
+    if (!/No pickup/.test(T(tr.children[9]))) cur.pickups++;
+  });
+  var dayTot = man.querySelector('tr.ts-gtot');
+  var dayPx = dayTot ? [T(dayTot.children[2]), T(dayTot.children[3]), T(dayTot.children[4]), T(dayTot.children[5])] : ['','','',''];
+  var dayAb = dayTot ? T(dayTot.children[6]) : '', dayMoney = dayTot ? T(dayTot.children[8]) : '';
+  /* ตารางที่ยกมา */
+  var casesTbl = $('.ts-s02 table') ? $('.ts-s02 table').outerHTML : '';
+  var recTbl = $('.ts-s03 table') ? $('.ts-s03 table').outerHTML : '';
+  var manTbl = man.outerHTML, aokey = $('.ts-aokey') ? $('.ts-aokey').innerHTML : '';
+  var nCases = $$('.ts-s02 tbody tr').filter(function(r){ return !r.querySelector('.ts-empty'); }).length;
+  var nRec = $$('.ts-s03 tbody tr').filter(function(r){ return !r.querySelector('.ts-empty'); }).length;
+
+  var abSplit = function(s){ var m = String(s).split('/'); return [num(m[0]), num(m[1])]; };
+  var routeRows = routes.map(function(r){ var ab = abSplit(r.ab || '0/0'), pct = ab[1] ? Math.round(ab[0] * 100 / ab[1]) : 0;
+    var vans = Object.keys(r.vans).map(function(k){ return k + (r.vans[k] > 1 ? ' ×' + r.vans[k] : ''); }).join(' · ');
+    return '<tr><td><i class="dot" style="background:' + e(r.col) + '"></i>' + e(r.name) + '</td><td class="boats">' + e(r.boats || '—') + '</td><td class="vans">' + (vans ? e(vans) : '<span style="color:#C9CCDA">—</span>') + '</td>'
+      + '<td class="num">' + r.n + '</td><td class="num">' + e(r.px[0]) + '</td><td class="num">' + e(r.px[1]) + '</td><td class="num">' + e(r.px[2]) + '</td><td class="num">' + e(r.px[3]) + '</td>'
+      + '<td class="num">' + ab[1] + '</td><td class="num"' + (ab[0] < ab[1] ? ' style="color:#B3261E"' : '') + '>' + ab[0] + '</td><td class="pct">' + pct + '%<span class="mini"><i style="width:' + pct + '%"></i></span></td>'
+      + '<td class="num"' + (r.cxl ? ' style="color:#B3261E"' : ' style="color:#C9CCDA"') + '>' + (r.cxl || '·') + '</td><td class="num">' + e(r.money) + '</td></tr>'; }).join('');
+  var dAb = abSplit(dayAb || '0/0'), dPct = dAb[1] ? Math.round(dAb[0] * 100 / dAb[1]) : 0, dCxl = routes.reduce(function(a, r){ return a + r.cxl; }, 0), dN = routes.reduce(function(a, r){ return a + r.n; }, 0);
+
+  var html = '<div class="dc">'
+    + '<div class="pg">'
+    + '<div class="dc-h" style="--tsp:' + TH.bg + '"><div class="b"><div class="kick">LOVE ANDAMAN · OPERATIONS · DAILY MANIFEST</div>'
+      + '<h1>สรุปการเดินทางประจำวัน <span class="dt">' + e(dateLabel) + '</span>' + (_tsRoute ? ('<span class="rt">' + e(routeName) + '</span>') : (_tsPier ? ('<span class="rt">' + e(pierName) + '</span>') : '')) + '</h1></div>'
+      + '<div class="d"><div class="c"><div class="k">ท่าเรือ · เส้นทาง</div><div class="v">' + e(pierName) + '<br><small>' + e(routeName) + ' · ' + routes.length + ' เส้นทาง</small></div></div>'
+      + '<div class="c"><div class="k">Booking · ผู้โดยสาร</div><div class="v">' + dN + ' ใบ<br><small>ไปจริง ' + dAb[0] + ' / จอง ' + dAb[1] + '</small></div></div></div>'
+      + '<div class="st"><div class="k">สถานะปิดวัน</div><div class="v' + (pillW ? ' warn' : '') + '">' + e(T(pill)) + '</div><div class="iss">' + e(iss) + '</div></div></div>'
+    + '<div class="dc-row">'
+      + '<div class="box"><div class="bh"><span class="n">A</span>ผู้โดยสาร<span class="r">ยอดจริงหลังเช็คอิน</span></div><div class="bb">'
+        + '<div class="hero">' + (hero ? hero.innerHTML : '') + '</div><div class="bar">' + (bar ? bar.innerHTML : '') + '</div><div class="lg">' + (lg ? lg.innerHTML : '') + '</div>'
+        + '<div class="kv"><div><span>Booking ทั้งวัน</span><b>' + e(tiles.bk ? tiles.bk.v : '') + '</b></div><div><span>รอตัดสิน</span><b' + (tiles.pend && tiles.pend.warn ? ' class="warn"' : '') + '>' + e(tiles.pend ? tiles.pend.v : '') + '</b></div>'
+        + '<div><span>เก็บค่าปรับได้</span><b>' + e(tiles.fine ? tiles.fine.v : '') + '</b></div><div><span>เงินหน้างาน</span><b>' + e(tiles.money ? tiles.money.v : '') + '</b></div></div></div></div>'
+      + '<div class="box"><div class="bh"><span class="n">B</span>เงิน<span class="r">รับเข้า → เหลือเข้าบริษัท</span></div><div class="bb"><div class="led">'
+        + '<div><span>รับเข้าวันนี้</span><b>' + e(inTot) + '</b></div>'
+        + pays.map(function(p){ return '<div class="sub" style="--c:' + e(p.c) + '"><span>' + e(p.nm) + '</span><b>' + e(p.v) + '</b></div>'; }).join('')
+        + led.filter(function(x){ return /neg/.test(x.cls); }).map(function(x){ return '<div class="neg"><span>' + e(x.k) + '</span><b>' + e(x.v) + '</b></div>'; }).join('')
+        + led.filter(function(x){ return /tot/.test(x.cls); }).map(function(x){ return '<div class="tot"><span>' + e(x.k) + '</span><b>' + e(x.v) + '</b></div>'; }).join('')
+        + '<span class="note">' + e(pays.map(function(p){ return p.n; }).filter(Boolean).join(' · ')) + '</span></div></div></div>'
+      + '<div class="box"><div class="bh"><span class="n">C</span>ก่อนปิดวัน<span class="r">' + e(T(pill)) + '</span></div><div class="bb"><ul class="chk">'
+        + checks.map(function(c){ return '<li><span class="ic' + (c.w ? ' warn' : '') + '">' + (c.w ? '!' : '✓') + '</span><span>' + c.html + '</span></li>'; }).join('')
+        + todo.filter(function(t){ var tx = t.html.replace(/<[^>]+>/g, '').replace(/\s+/g, ''); return t.w && !checks.some(function(c){ return c.html.replace(/<[^>]+>/g, '').replace(/\s+/g, '') === tx; }); }).map(function(t){ return '<li><span class="ic warn">!</span><span>' + t.html + '</span></li>'; }).join('')
+        + '</ul>' + (mfoot ? '<div style="font-size:6.6pt;color:#8A8FA6;margin-top:4px;line-height:1.4">' + e(mfoot) + '</div>' : '') + '</div></div>'
+    + '</div>'
+    + '<div class="sec-t"><span class="n">D</span>ตามเส้นทาง<span class="d">เรือ · รถ · ผู้โดยสารแยกประเภท · ไปจริง/จอง · ยอดเงิน</span><span class="r">' + routes.length + ' เส้นทาง · ' + dN + ' ใบ</span></div>'
+    + '<table class="rt"><thead><tr><th style="width:21%">เส้นทาง</th><th style="width:11%">เรือ</th><th style="width:16%">รถ (ใบ)</th><th class="r" style="width:5.5%">Booking</th><th class="r" style="width:4.5%">AD</th><th class="r" style="width:4.5%">CHD</th><th class="r" style="width:4.5%">INF</th><th class="r" style="width:4.5%">FOC</th><th class="r" style="width:5.5%">จอง</th><th class="r" style="width:5.5%">ไปจริง</th><th class="r" style="width:9%">%</th><th class="r" style="width:5%">ยกเลิก</th><th class="r" style="width:8%">ยอดเงิน</th></tr></thead>'
+    + '<tbody>' + routeRows + '<tr class="tot"><td colspan="3">รวมทั้งวัน · ไม่นับใบที่ยกเลิก/เลื่อนวัน</td><td class="num">' + dN + '</td><td class="num">' + e(dayPx[0]) + '</td><td class="num">' + e(dayPx[1]) + '</td><td class="num">' + e(dayPx[2]) + '</td><td class="num">' + e(dayPx[3]) + '</td><td class="num">' + dAb[1] + '</td><td class="num">' + dAb[0] + '</td><td class="num">' + dPct + '%</td><td class="num">' + (dCxl || '·') + '</td><td class="num">' + e(dayMoney) + '</td></tr></tbody></table>'
+    + '<div class="sec-t"><span class="n">E</span>เคสที่ต้องตัดสิน · ยกเลิก / เลื่อนวัน<span class="d">คนไม่ครบ · ยกเลิกหน้างาน · เลื่อนวัน และคำตัดสินค่าปรับ</span><span class="r">' + nCases + ' เคส</span></div>' + casesTbl
+    + '<div class="sec-t"><span class="n">F</span>รายการรับเงินหน้างาน<span class="d">ทุกใบที่มียอดต้องเก็บ · วิธีรับเงิน · คนเก็บ · COT</span><span class="r">' + nRec + ' ใบ</span></div>' + recTbl
+    + '<div class="sec-t"><span class="n">G</span>Manifest ประจำวัน<span class="d">ทุกใบของวัน เรียงตามเส้นทาง · Agency A–Z</span><span class="r">' + dN + ' ใบ · ไปจริง ' + dAb[0] + ' / จอง ' + dAb[1] + '</span></div>'
+    + '<div class="aokey">Add-on: ' + aokey + '</div>' + manTbl
+    + '</div>'
+    + '</div>';
+  return html;
+}
+function tsCSSDoc(){
+  var P='#travelsum-host .dc';
+  var css=`/* ═══ Travel Summary · print "Day Close" · โครงใหม่ ไม่อิงหมวด 01–04 · เก็บตาราง Manifest ไว้ ═══ */
+&{ --ink:#000F4C; --cy:#00BCDF; --tsp:#000F4C; --grid:#C9CCDA; --grid2:#E3E5EE; --mut:#8A8FA6; --txt:#1a2332; --head:#EEF0F6; --ok:#1E5631; --warn:#8A4B0A; --bad:#B3261E }
+& .mono{ font-family:'DM Mono',ui-monospace,monospace }
+& *{ box-sizing:border-box }
+& .pg{ break-after:page }
+& .pg:last-child{ break-after:auto }
+/* ── หัวเอกสาร · แถบสีท่าเรือ ── */
+& .dc-h{ display:flex; align-items:stretch; background:var(--tsp); color:#fff; border-radius:4px; overflow:hidden; margin-bottom:8px }
+& .dc-h .b{ padding:8px 12px; display:flex; flex-direction:column; justify-content:center; flex:1 1 0 }
+& .dc-h .kick{ font:800 7pt/1 'DM Mono',ui-monospace,monospace; letter-spacing:.3em; color:rgba(255,255,255,.85) }
+& .dc-h h1{ margin:4px 0 0; font-size:16pt; font-weight:800; line-height:1.25; letter-spacing:-.01em }
+& .dc-h h1 .dt{ color:var(--cy); margin-left:6px }
+& .dc-h h1 .rt{ display:block; font-size:11pt; font-weight:700; color:rgba(255,255,255,.9); margin-top:1px }
+& .dc-h h1 small{ font-size:9pt; font-weight:600; color:var(--cy); margin-left:8px; font-family:'DM Mono',ui-monospace,monospace; letter-spacing:.14em }
+& .dc-h .sub{ margin-top:3px; font-size:7.6pt; color:rgba(255,255,255,.8) }
+& .dc-h .d{ flex:0 0 auto; display:flex; align-items:center; gap:0 }
+& .dc-h .d .c{ padding:7px 12px; border-left:1px solid rgba(255,255,255,.22); min-width:92px }
+& .dc-h .d .k{ font-size:6.4pt; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.7) }
+& .dc-h .d .v{ font:800 10pt/1.25 'DM Mono',ui-monospace,monospace; margin-top:2px; white-space:nowrap }
+& .dc-h .d .v.big{ font-size:13pt }
+& .dc-h .d .v small{ font-size:7pt; font-weight:600; color:rgba(255,255,255,.75) }
+& .dc-h .st{ background:#fff; color:var(--ink); align-self:stretch; display:flex; flex-direction:column; justify-content:center; padding:7px 14px; min-width:150px; text-align:center }
+& .dc-h .st .k{ font-size:6.4pt; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--mut) }
+& .dc-h .st .v{ font-size:10pt; font-weight:800; margin-top:2px; color:var(--ok) }
+& .dc-h .st .v.warn{ color:var(--warn) }
+& .dc-h .st .iss{ margin-top:3px; font:500 6.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--mut) }
+/* ── แถวบน · 3 กล่อง ── */
+& .dc-row{ display:flex; gap:8px; align-items:stretch; margin-bottom:8px }
+& .box{ flex:1 1 0; min-width:0; border:1px solid var(--grid); background:#fff }
+& .box.w2{ flex:1.35 1 0 }
+& .box > .bh{ display:flex; align-items:center; gap:7px; padding:4px 9px; border-bottom:1px solid var(--grid); background:var(--head); font-size:8pt; font-weight:800; color:var(--ink) }
+& .box > .bh .n{ background:var(--ink); color:#fff; border-radius:3px; padding:0 5px; font:800 7pt/1.5 'DM Mono',ui-monospace,monospace }
+& .box > .bh .r{ margin-left:auto; font-size:6.8pt; font-weight:600; color:var(--mut) }
+& .box .bb{ padding:7px 9px 8px }
+/* ผู้โดยสาร */
+& .hero{ display:flex; align-items:baseline; gap:6px; white-space:nowrap }
+& .hero b{ font:800 22pt/1.05 'DM Mono',ui-monospace,monospace; letter-spacing:-.02em; color:var(--ink) }
+& .hero span{ font-size:9pt; font-weight:700; color:#5F6477 }
+& .hero em{ font-style:normal; margin-left:auto; font:700 8pt/1 'DM Mono',ui-monospace,monospace; color:#5F6477; border:1px solid var(--grid); border-radius:3px; padding:2px 6px }
+& .bar{ display:flex; gap:1px; height:8px; margin-top:6px; background:#EEF0F5; border-radius:2px; overflow:hidden }
+& .bar i{ display:block; min-width:2px }
+& .lg{ display:flex; flex-wrap:wrap; gap:3px 12px; margin-top:5px; font-size:7.2pt; color:#3A3F5C }
+& .lg span{ display:inline-flex; align-items:center; gap:4px; white-space:nowrap }
+& .lg i{ width:7px; height:7px; border-radius:2px; flex:none }
+& .lg b{ font-family:'DM Mono',ui-monospace,monospace; color:var(--ink) }
+& .kv{ display:flex; flex-wrap:wrap; margin-top:7px; border-top:1px solid var(--grid2) }
+& .kv > div{ flex:0 0 50%; display:flex; justify-content:space-between; gap:6px; padding:3px 0; border-bottom:1px solid var(--grid2); font-size:7.6pt; color:#3A3F5C }
+& .kv > div:nth-child(odd){ padding-right:8px; border-right:1px solid var(--grid2) } .kv > div:nth-child(even){ padding-left:8px }
+& .kv b{ font-family:'DM Mono',ui-monospace,monospace; color:var(--ink); white-space:nowrap }
+& .kv b.bad{ color:var(--bad) } .kv b.warn{ color:var(--warn) }
+/* เงิน · บัญชีขั้น */
+& .led{ font-size:8pt; color:#3A3F5C }
+& .led div{ display:flex; justify-content:space-between; gap:8px; padding:2.5px 0; border-bottom:1px dotted var(--grid2) }
+& .led div.sub{ padding-left:14px; font-size:7.4pt; color:var(--mut) }
+& .led div.sub span::before{ content:""; display:inline-block; width:7px; height:7px; border-radius:2px; background:var(--c,#999); margin-right:6px; vertical-align:-1px }
+& .led b{ font-family:'DM Mono',ui-monospace,monospace; color:var(--ink); white-space:nowrap }
+& .led .neg b{ color:#A33A2B }
+& .led .tot{ border-top:1.4px solid var(--ink); border-bottom:none; margin-top:3px; padding-top:5px; font-weight:800; color:var(--ink) }
+& .led .tot b{ font-size:12.5pt }
+& .led .note{ border:none; font-size:6.8pt; color:var(--mut); padding-top:4px; display:block }
+/* รายการต้องทำ */
+& .chk{ list-style:none; margin:0; padding:0 }
+& .chk li{ display:flex; align-items:flex-start; gap:6px; padding:3px 0; border-bottom:1px solid var(--grid2); font-size:7.8pt; color:var(--ink); line-height:1.35 }
+& .chk li:last-child{ border-bottom:none }
+& .chk b{ font-family:'DM Mono',ui-monospace,monospace; font-weight:700 }
+& .ic{ flex:none; width:12px; height:12px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:7pt; font-weight:900; background:#D2F0DA; color:var(--ok); margin-top:1px }
+& .ic.warn{ background:#FBE0C6; color:var(--warn) }
+& .bx{ flex:none; width:11px; height:11px; border:1.2px solid var(--ink); border-radius:2px; margin-top:1px }
+/* ── ตารางทุกตัว ── */
+& table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:7.6pt }
+& th,& td{ border:1px solid var(--grid2); padding:3px 5px; vertical-align:top; text-align:left; overflow-wrap:anywhere; background:#fff; max-width:none !important }
+& thead{ display:table-header-group }
+& thead th{ background:var(--head); color:#3A3F5C; font-size:6.6pt; font-weight:800; letter-spacing:.05em; text-transform:uppercase; border-bottom:1.5px solid var(--grid); padding:4px 5px; line-height:1.2; overflow-wrap:normal; word-break:keep-all }
+& thead th .ts-thsub{ display:block; font-weight:600; text-transform:none; letter-spacing:0; color:var(--mut) }
+& tbody tr{ break-inside:avoid }
+& .c,& td.c,& th.c{ text-align:center } .dc .r,.dc td.r,.dc th.r{ text-align:right }
+& td.ts-empty{ text-align:center; color:var(--mut); font-style:italic; padding:7px }
+& .num{ font-family:'DM Mono',ui-monospace,monospace; font-weight:700; color:var(--ink); text-align:right; white-space:nowrap }
+& tr.tot td{ background:var(--ink) !important; color:#fff; font-weight:800; border-color:#2A3A7B }
+& tr.tot td.num{ color:#fff }
+& .rt tr.tot td:first-child{ color:#fff }
+& .rt th.r,& .rt td.num,& .rt td.pct{ text-align:right }
+& .rt thead th{ text-align:left }
+& .rt thead th.r{ text-align:right }
+/* ตารางตามเส้นทาง */
+& .rt td:first-child{ font-weight:800; color:var(--ink) }
+& .rt .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:0 }
+& .rt .boats{ font:700 7pt/1.3 'DM Mono',ui-monospace,monospace; color:#005F73 }
+& .rt .vans{ font-size:7pt; color:#3A3F5C }
+& .rt td.pct{ font-family:'DM Mono',ui-monospace,monospace; text-align:right }
+& .rt .mini{ display:inline-block; width:46px; height:6px; background:#EEF0F5; border-radius:2px; vertical-align:middle; margin-left:6px; overflow:hidden }
+& .rt .mini i{ display:block; height:100%; background:#3E9B62 }
+& .sec-t{ display:flex; align-items:flex-end; gap:8px; margin:8px 0 4px; padding-bottom:3px; border-bottom:1.5px solid var(--ink); font-size:10pt; font-weight:800; color:var(--ink); break-after:avoid }
+& .sec-t .n{ background:var(--ink); color:#fff; border-radius:3px; padding:1px 5px; font:800 7.5pt/1.4 'DM Mono',ui-monospace,monospace }
+& .sec-t .d{ font-size:7.2pt; font-weight:500; color:var(--mut); margin-bottom:1px }
+& .sec-t .r{ margin-left:auto; font-size:7.2pt; font-weight:700; color:#3A3F5C }
+/* ── ลายเซ็น (หน้าแรก) ── */
+& .sign{ display:flex; gap:0; border:1px solid var(--grid); margin-top:8px; break-inside:avoid }
+& .sign .sg{ flex:1 1 0; border-right:1px solid var(--grid); padding:7px 10px 7px; position:relative; min-height:62px }
+& .sign .sg:last-child{ border-right:none }
+& .sign .sg .t{ font-size:7.8pt; font-weight:800; color:var(--ink) }
+& .sign .sg .s{ font-size:6.8pt; color:var(--mut) }
+& .sign .sg .ln{ height:22px; border-bottom:1px solid #3A3F5C; margin:4px 0 4px }
+& .sign .sg .dt{ font:600 6.6pt 'DM Mono',ui-monospace,monospace; color:var(--mut); text-align:right }
+& .sign .sg ul{ list-style:none; margin:4px 0 0; padding:0; font-size:6.9pt; color:#3A3F5C }
+& .sign .sg li{ display:flex; gap:5px; align-items:center; padding:1px 0 }
+& .sign .sg li .bx{ width:9px; height:9px; margin:0 }
+/* ── Manifest (ยกมาทั้งตาราง) ── */
+& .ts-man td.ts-rn.ts-scr,& .ts-man th.ts-rn.ts-scr{ display:table-cell !important }
+& .ts-man tr.ts-gsum.ts-scr,& .ts-man tr.ts-gtot.ts-scr{ display:table-row !important }
+& .ts-man .ts-gboat.ts-scr{ display:inline !important }
+& .ts-man .ts-rn{ width:18px; text-align:center; color:var(--mut); font:600 6.6pt/1.4 'DM Mono',ui-monospace,monospace; background:var(--head) !important; padding:3px 2px }
+& .ts-man thead th:nth-child(2){ width:7.2% } .dc .ts-man thead th:nth-child(3){ width:7% } .dc .ts-man thead th:nth-child(4){ width:9% }
+& .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){ width:3% }
+& .ts-man thead th:nth-child(9){ width:6%; font-size:6pt } .dc .ts-man thead th:nth-child(10){ width:9% } .dc .ts-man thead th:nth-child(11){ width:5% }
+& .ts-man thead th:nth-child(12){ width:7% } .dc .ts-man thead th:nth-child(13){ width:7.5% } .dc .ts-man thead th:nth-child(14){ width:7.5% }
+& .ts-man thead th:nth-child(15){ width:9.5% } .dc .ts-man thead th:nth-child(16){ width:6.5% } .dc .ts-man thead th:nth-child(17){ width:7% } .dc .ts-man thead th:nth-child(18){ width:6.2% }
+& .ts-man td:nth-child(9){ white-space:nowrap; text-align:center; font-weight:800; background:#F6F7FB !important }
+& .ts-vch{ font:700 7.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink) }
+& .ts-lead{ font-weight:700; color:var(--ink); white-space:normal; max-width:none }
+& .ts-tel{ font:500 6.6pt/1.4 'DM Mono',ui-monospace,monospace; color:var(--mut); white-space:normal; max-width:none }
+& .ts-ag{ display:inline-block; max-width:100%; font-size:6.8pt; padding:1px 5px; border-radius:2px; font-weight:800; white-space:normal; line-height:1.25 }
+& .ts-chip{ display:inline-block; font-size:6.6pt; padding:1px 5px; border-radius:2px; border:1px solid var(--grid); background:#fff; font-weight:700; white-space:normal; line-height:1.3; margin:0 2px 2px 0 }
+& .ts-man td:nth-child(13) .ts-chip{ white-space:nowrap; display:block; width:max-content; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-size:6.4pt }
+& .ts-ao{ display:inline-block; font-size:6.6pt; padding:0 4px; border-radius:2px; white-space:normal; max-width:none; overflow:visible; text-overflow:clip; margin:0 2px 2px 0 }
+& .ts-px{ font:700 8pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink); text-align:center; background:#FBFBFE !important }
+& .ts-px.zero{ color:#C9CCDA; font-weight:400 } .dc .ts-px.lost{ color:var(--bad) }
+& .ts-mono{ font-family:'DM Mono',ui-monospace,monospace }
+& .ts-totc{ background:#FBFBFE !important; white-space:normal }
+& .ts-net,& .ts-totb{ display:block; font:500 6.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--mut); white-space:normal }
+& .ts-room{ display:inline-block; font-size:6.4pt; border:1px solid var(--grid); border-radius:2px; padding:0 4px; margin-left:3px; color:#3A3F5C }
+& .ts-sqtx{ font-size:7pt; color:var(--warn) }
+& td.ts-sqcol:has(.ts-sqtx){ background:#FFF8EC !important }
+& .ts-pyg{ font-size:7pt; white-space:normal; background:none; padding:0; color:var(--ok); font-weight:800 }
+& .ts-payc{ display:flex; flex-direction:column; align-items:flex-start; gap:1px }
+& .ts-man tr.ts-grow td{ background:color-mix(in srgb,var(--rc,#999) 12%,#fff) !important; border-left:4px solid var(--rc,#999); padding:4px 8px; break-after:avoid }
+& .ts-man tr.ts-grow td.ts-rn{ border-left:none; background:color-mix(in srgb,var(--rc,#999) 25%,#fff) !important }
+& .ts-man tr.ts-grow td:nth-child(2){ border-left:none }
+& .ts-man .ts-gw{ display:flex; align-items:center; gap:12px; flex-wrap:wrap }
+& .ts-man .ts-gw>span:first-child{ font-weight:800; font-size:8.6pt !important; color:var(--ink) !important }
+& .ts-man .ts-gw .ts-gboat{ font:700 7pt 'DM Mono',ui-monospace,monospace; color:#005F73 }
+& .ts-man .ts-gw .ts-tel{ float:none !important; margin-left:auto; font-size:7pt }
+& .ts-man tr.ts-gsum td{ background:var(--head) !important; font-weight:800; color:#3A3F5C; font-size:7.3pt; border-bottom:1.5px solid var(--grid) }
+& .ts-man tr.ts-gtot td{ background:var(--ink) !important; color:#fff; font-weight:800; border-color:#2A3A7B }
+& .ts-man tr.ts-gtot td.ts-px,& .ts-man tr.ts-gtot td.ts-totc{ color:#fff; background:var(--ink) !important } .dc .ts-man tr.ts-gtot td.ts-px.zero{ color:#7D8BC9 }
+& .ts-man tr.ts-cxlrow td{ background:#FFF7F6 !important; color:var(--mut) }
+& .ts-man tr.ts-cxlrow .ts-vch,& .ts-man tr.ts-cxlrow .ts-lead{ text-decoration:line-through; color:var(--mut) }
+& .aokey{ display:flex; gap:4px; margin:0 0 4px; font-size:6.8pt; color:var(--mut); align-items:center }
+& .ts-ao.ao-bk{ background:#E8EEFF; color:#1F3FB0 } .dc .ts-ao.ao-ex{ background:#E3F6EC; color:#0C6B47 } .dc .ts-ao.ao-up{ background:#FFF0DC; color:#8A4B00 } .dc .ts-ao.ao-pier{ background:#F3E8FF; color:#6B21A8 }
+/* ตาราง 02/03 ที่ยกมา · ซ่อนของบนจอ */
+& .ts-scr:not(.ts-rn):not(.ts-gsum):not(.ts-gtot):not(.ts-gboat){ display:none !important }
+& .ts-noprint:not(.ts-rn):not(.ts-gsum):not(.ts-gtot):not(.ts-gboat){ display:none !important }
+& .ts-db,& .ts-note,& .ts-dcell button,& input,& button{ display:none !important }
+& .ts-cxc{ font-weight:800; color:var(--ink) } .dc .ts-cxr{ display:block; font-size:6.6pt; color:var(--mut) }
+& .ts-sbk{ font-weight:700 }
+& label,& [onclick]{ display:none !important }
+& .ts-man .ts-gw,& .ts-man .ts-grow td,& .rt td,& tr.tot td{ display:revert }
+& .ts-man .ts-gw{ display:flex !important }`;
+  return css.replace(/^&/gm, P).replace(/,&/g, ','+P).replace(/\n\s*&/g, '\n'+P);
+}
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var date=_tsDate;
@@ -24628,10 +24883,19 @@ function tsPrintSheet(){
   // สองขนาดกระดาษในไฟล์เดียว · ใบสรุปเป็น A4 นอน · ชุดเอกสารเป็น A4 ตั้ง
   //   @page ต้องอยู่ "ท้ายสุด" ของเอกสาร เพราะ CSS ของ Travel Summary มี @page ของตัวเอง
   //   ฝังมากับ host.innerHTML ถ้าประกาศไว้ก่อน อันหลังจะทับ ชุดเอกสารจะออกมาเป็นแนวนอนหมด
-  var pageCSS='@page ts{size:A4 landscape;margin:9mm}@page doc{size:A4 portrait;margin:9mm}';
+  /* §tsDoc · ท้ายกระดาษทุกหน้า (ชื่อเอกสาร · เลขหน้า) ด้วย margin box ของ @page · เบราว์เซอร์ที่ไม่รองรับแค่ไม่มีท้ายกระดาษ */
+  var pageCSS='@page ts{size:A4 landscape;margin:9mm 9mm 13mm;'
+    +'@bottom-left{content:"LOVE ANDAMAN · OPERATIONS · DAILY MANIFEST";font:7pt "DM Mono",ui-monospace,monospace;color:#8A8FA6;letter-spacing:.08em}'
+    +'@bottom-center{content:"'+ckEsc(date)+(_tsRoute?(' · '+ckEsc(tsRouteName(_tsRoute))):(_tsPier?(' · '+ckEsc(tsPierName(_tsPier))):''))+'";font:7pt "DM Mono",ui-monospace,monospace;color:#8A8FA6}'
+    +'@bottom-right{content:"หน้า " counter(page) " / " counter(pages);font:7pt "DM Mono",ui-monospace,monospace;color:#3A3F5C}}'
+    +'@page doc{size:A4 portrait;margin:9mm}';
   var css='html,body{margin:0;padding:0;background:#fff}'
     +'body{font-family:\'DM Sans\',sans-serif;font-size:13px;line-height:1.5;color:#1c1917}'
     +'#travelsum-host{font-family:inherit}'
+    /* §tsDoc · สกินหน้าพิมพ์โครงใหม่ · ต่อท้าย tsCSS ให้ชนะกฎชื่อเดียวกัน */
+    +'body.ts-printing{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'#travelsum-host .dc{font:8.6pt/1.35 "IBM Plex Sans Thai","DM Sans",-apple-system,"Segoe UI",Thonburi,Tahoma,sans-serif;color:#1a2332}'
+    +tsCSSDoc()
     +'#travelsum-host{page:ts;display:block}'
     +'.la-docpack{page:doc}'
     +'.la-docpack .pg{page:doc;break-before:page}'
@@ -24641,7 +24905,7 @@ function tsPrintSheet(){
   var boot=(typeof _docPackBoot==='function')?_docPackBoot():'';
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
     +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
-    +'<div id="travelsum-host">'+host.innerHTML+'</div>'
+    +'<div id="travelsum-host"><style id="ts-style">'+tsCSS()+'</style>'+tsDocCompose()+'</div>'
     +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
