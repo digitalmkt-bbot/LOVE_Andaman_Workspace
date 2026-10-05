@@ -1275,10 +1275,12 @@
   /* §user→sales · dropdown เลือกว่า user คนนี้ "คือ" sales คนไหน · ว่าง = ไม่จำกัด (เห็นทุกเอเยนต์)
      ดึงจาก SB_SALES ที่โหลดแล้ว (global) · admin เปิดโมดัลนี้ตอนแอปโหลดเสร็จแล้ว SB_SALES จึงพร้อมเสมอ */
   function laSalesSelectHTML(id, cur){
-    var list = (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : [];
+    var all = (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : [];
+    /* §salesActive · inactive ไม่ขึ้นเป็นตัวเลือก เว้นแต่ user คนนี้ผูกอยู่แล้ว (ติดป้าย inactive) */
+    var list = all.filter(function(s){ return s && (s.active!==false || s.id===cur); });
     return '<select id="'+id+'" style="border:1px solid #d7d3ca;border-radius:7px;padding:7px;font-size:13px;font-family:inherit">'+
       '<option value="">— ไม่จำกัด (เห็นทุกเอเยนต์) —</option>'+
-      list.map(function(s){ return '<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name||s.code||s.id)+'</option>'; }).join('')+'</select>'; }
+      list.map(function(s){ return '<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name||s.code||s.id)+(s.active===false?' (inactive)':'')+'</option>'; }).join('')+'</select>'; }
 
   /* ══════════════════════════════════════════════════════════════════════════
      §laUsers2 · หน้าต่างจัดการผู้ใช้ + สิทธิ์เข้าถึง

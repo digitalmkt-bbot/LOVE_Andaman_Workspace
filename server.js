@@ -1545,6 +1545,9 @@ async function initDb(){
       await sq('sb_rate_types.owner col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "owner" text`);
       await sq('sb_sales.targets col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
       await sq('sb_sales.followup col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
+      // §salesActive (2026-10-05): sales person status · false = inactive (hidden from pickers/chips/KPI) · NULL = active
+      //   mapped in field_mapping.json + operation_schemas_model.json in the same push (otherwise the flag is dropped on sync)
+      await sq('sb_sales.active col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "active" boolean`);
       await sq('contract_templates table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
       await sq('sb_agents.contracttemplateid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
       // §Boat charter/retired flags (2026-07-24): boats table had no ownership/retired columns, so

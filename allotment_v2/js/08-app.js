@@ -577,6 +577,13 @@ function renderStaff(){
 function sbSalesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_sales=SB_SALES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_sales failed', e); } }
 
 function sbGetSales(sId){return SB_SALES.find(s=>s.id===sId);}
+/* §salesActive (2026-10-05) · เจ้าของ: "ขอเพิ่มสถานะเซลล์ Active / Inactive · กรณี inactive ไม่ต้องโชว์ในส่วนอื่น ๆ"
+   s.active===false = inactive · ไม่มีฟิลด์ (ข้อมูลเก่า) = active · ตัวเลือก/ชิป/ลีดเดอร์บอร์ดใช้ sbSalesActive()
+   การค้นหาด้วย id (sbGetSales ฯลฯ) ยังเห็นทุกคน ใบจอง/เอเยนต์เก่าที่ผูกกับคนที่ inactive แล้วจึงยังแสดงชื่อได้
+   ตัวเลือกที่มีค่าปัจจุบันเป็นคน inactive → sbSalesOpts(cur) แถมคนนั้นให้ (ติดป้าย inactive) จะได้ไม่หาย */
+function sbSalesActive(){ return (SB_SALES||[]).filter(s=>s && s.active!==false); }
+function sbSalesOpts(cur){ const L=sbSalesActive(); if(cur){ const c=(SB_SALES||[]).find(s=>s.id===cur); if(c && c.active===false) L.push(c); } return L; }
+function sbSalesLabel(s){ return (s&&s.active===false)?(' (inactive)'):''; }
 
 // ── Mock AGENTS data ──
 let SB_AGENTS = [
@@ -6035,7 +6042,7 @@ function mdTabOps(days){
 }
 // ── TAB: Sales & Agents (theme 5) ──
 function mdTabSales(days){
-  const SALES=(typeof SB_SALES!=='undefined')?SB_SALES:[];
+  const SALES=(typeof sbSalesActive==='function')?sbSalesActive():[];   /* §salesActive */
   const AG=(typeof SB_AGENTS!=='undefined')?SB_AGENTS:[];
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -6615,7 +6622,7 @@ function insPrint(rid){
 // ── FOC Detail (own sidebar view) ──
 function renderFocDetail(){
   const host=document.getElementById('foc-host'); if(!host) return;
-  const SALES=(typeof SB_SALES!=='undefined')?SB_SALES:[];
+  const SALES=(typeof sbSalesActive==='function')?sbSalesActive():[];   /* §salesActive */
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
@@ -6749,7 +6756,7 @@ function renderFocDetail(){
   host.innerHTML = `<div style="max-width:100%;margin:0 auto;padding:4px">${focDetailHtml||'<div class="md-card" style="color:#8a9088;text-align:center;padding:30px">ยังไม่มีข้อมูล FOC</div>'}</div>`;
 }
 function mdTabAgents(days){
-  const SALES=(typeof SB_SALES!=='undefined')?SB_SALES:[];
+  const SALES=(typeof sbSalesActive==='function')?sbSalesActive():[];   /* §salesActive */
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
@@ -36091,7 +36098,7 @@ function bkV2ExtraRender(){
   const _fCompany=editing?(editing.toCompany||0):0;
   const _fComm=Math.max(0,pckN((_fQty*_fPrice)-_fCompany));
   const _fSeller=editing?(editing.seller||''):'';
-  const _sellerOpts=(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${esc(s.name)}">`).join('');
+  const _sellerOpts=sbSalesActive().map(s=>`<option value="${esc(s.name)}">`).join('');   /* §salesActive */
   acctModal(`
     <datalist id="bkv2-sellers">${_sellerOpts}</datalist>
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">Extra วันเดินทาง · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">ขายหน้างาน หรือขายล่วงหน้าแล้วเก็บเงินวันเดินทาง · ไม่เกี่ยวกับเครดิต/บิล agent</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>
@@ -36233,7 +36240,7 @@ function bkV2UpgradeRender(){
   const fColl=editing?!!editing.collected:false;
   const fNote=editing?(editing.note||''):'';
   const fSeller=editing?(editing.seller||''):'';
-  const _sellerOpts=(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${esc(s.name)}">`).join('');
+  const _sellerOpts=sbSalesActive().map(s=>`<option value="${esc(s.name)}">`).join('');   /* §salesActive */
   acctModal(`
     <datalist id="bkv2-sellers">${_sellerOpts}</datalist>`+`
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">&#11014; อัพเกรดหน้างาน · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">กำหนดราคาขาย − จ่ายบริษัท = คอมมิชชั่น · สรุปที่ Travel Summary</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>
@@ -36629,11 +36636,11 @@ const AGIMP_COLS = [
 ];
 function agImportTemplate(){
   if(typeof XLSX==='undefined'){ alert('ตัวอ่าน Excel (SheetJS) ยังไม่โหลด · เช็คอินเทอร์เน็ตแล้วรีเฟรช'); return; }
-  const salesList=(SB_SALES||[]).map(s=>s.name||s.code).filter(Boolean).join(' / ')||'(ยังไม่มี Sales)';
+  const salesList=sbSalesActive().map(s=>s.name||s.code).filter(Boolean).join(' / ')||'(ยังไม่มี Sales)';
   const rateList=(SB_RATE_TYPES||[]).map(r=>r.code||r.name).filter(Boolean).slice(0,12).join(' / ')||'(ยังไม่มี Rate Type)';
   const progList=(ROUTES||[]).map(r=>r.id).filter(Boolean).join(' / ')||'(ยังไม่มีโปรแกรม)';
   const example={
-    name:'Sample Travel Co., Ltd', code:'SAMPLE', market:'ru', sub:'', sales:(SB_SALES&&SB_SALES[0]&&(SB_SALES[0].name||SB_SALES[0].code))||'', payType:'invoice',
+    name:'Sample Travel Co., Ltd', code:'SAMPLE', market:'ru', sub:'', sales:(sbSalesActive()[0]&&(sbSalesActive()[0].name||sbSalesActive()[0].code))||'', payType:'invoice',
     creditDays:30, creditLimit:200000, vatMode:'exclude', programs:((ROUTES&&ROUTES[0]&&ROUTES[0].id)||'')+((ROUTES&&ROUTES[1])?', '+ROUTES[1].id:''),
     rateType:(SB_RATE_TYPES&&SB_RATE_TYPES[0]&&(SB_RATE_TYPES[0].code||SB_RATE_TYPES[0].name))||'', contact:'Ivan Petrov', email:'sales@sample.com', phone:'+66 80 000 0000',
     legalName:'Sample Travel Company Limited', taxId:'0105500000000', tatLicense:'11/00000', address:'123 Beach Rd, Patong, Phuket 83150', tel:'076 000 000', hotline:'', fax:'', website:'www.sample.com', note:'ตัวอย่าง — ลบแถวนี้ออกก่อนนำเข้าได้'
@@ -36884,7 +36891,7 @@ const AG_COLS = [
       if(a && a.sub && subs.indexOf(a.sub)<0) list.unshift({v:a.sub,t:a.sub});   /* คงค่าเดิม/custom ไว้ให้เลือกได้ */
       return list;
     }},
-  {k:'sales',                  t:'เซลล์',       w:92,  type:'select', opts:()=>(SB_SALES||[]).map(s=>({v:s.id,t:s.name}))},
+  {k:'sales',                  t:'เซลล์',       w:92,  type:'select', opts:()=>(SB_SALES||[]).filter(s=>s.active!==false).map(s=>({v:s.id,t:s.name})).concat((SB_SALES||[]).filter(s=>s.active===false).map(s=>({v:s.id,t:s.name+' (inactive)'})))},   /* §salesActive · inactive ท้ายลิสต์ ติดป้าย เผื่อเอเยนต์เก่ายังผูกอยู่ */
   {k:'payType',                t:'การชำระ',     w:92,  type:'select', opts:()=>[{v:'invoice',t:'invoice'},{v:'proforma',t:'proforma'},{v:'cot',t:'cot'}]},
   {k:'vatMode',                t:'VAT',         w:96,  type:'select', opts:()=>[{v:'none',t:'ไม่มี VAT'},{v:'include',t:'รวม VAT'},{v:'exclude',t:'แยก VAT'}]},
   {k:'creditDays',             t:'เครดิต (วัน)', w:82, type:'num'},
@@ -37287,7 +37294,7 @@ function agRenderTable(){
       + sel('agb-rate','ตั้ง Rate Type',((typeof rtScopeList==='function')?rtScopeList((SB_RATE_TYPES||[]).filter(r=>r.active!==false)):(SB_RATE_TYPES||[]).filter(r=>r.active!==false)).map(r=>({v:r.id,t:r.name})))
       + '<div><label style="font-size:11px;color:#8b9a94;display:block;margin-bottom:3px">ตั้ง Programs</label>'
         +'<button onclick="agBulkProgramsPick()" style="width:100%;height:31px;border:1px solid '+(nPg?'#0F6E56':'#d7d3ca')+';background:'+(nPg?'#E1F5EE':'#fff')+';color:'+(nPg?'#0F6E56':'#8b9a94')+';border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">'+(nPg? nPg+' โปรแกรม' : '— ไม่เปลี่ยน —')+'</button></div>'
-      + sel('agb-sales','ตั้ง เซลล์',(SB_SALES||[]).map(s=>({v:s.id,t:s.name})))
+      + sel('agb-sales','ตั้ง เซลล์',sbSalesActive().map(s=>({v:s.id,t:s.name})))
       + sel('agb-market','ตั้ง ตลาด',(SB_MARKETS||[]).map(m=>({v:m.id,t:m.name})))
       + sel('agb-pay','ตั้ง การชำระ',[{v:'invoice',t:'invoice'},{v:'proforma',t:'proforma'},{v:'cot',t:'cot'}])
       + sel('agb-vat','ตั้ง VAT',[{v:'none',t:'ไม่มี VAT'},{v:'include',t:'รวม VAT'},{v:'exclude',t:'แยก VAT'}])
@@ -37317,7 +37324,7 @@ function agRenderTable(){
       +'</select>'
       +'<select onchange="agTblSetSales(this.value)" style="height:31px;border:1px solid '+((_agSalesFilter&&_agSalesFilter!=='all')?'#15396B':'#d7d3ca')+';border-radius:8px;font-size:12px;padding:0 6px;font-family:inherit;background:'+((_agSalesFilter&&_agSalesFilter!=='all')?'#E6F1FB':'#fff')+';color:'+((_agSalesFilter&&_agSalesFilter!=='all')?'#15396B':'#5F5E5A')+'">'
         +'<option value="all">ทุกเซลล์</option>'
-        + (SB_SALES||[]).map(x=>'<option value="'+e(x.id)+'"'+(x.id===_agSalesFilter?' selected':'')+'>'+e(x.name)+'</option>').join('')
+        + sbSalesOpts(_agSalesFilter).map(x=>'<option value="'+e(x.id)+'"'+(x.id===_agSalesFilter?' selected':'')+'>'+e(x.name)+sbSalesLabel(x)+'</option>').join('')
         +'<option value="__none">— ไม่มีเซลล์ —</option>'
       +'</select>'
       + (agTblFiltersOn() ? '<button onclick="agTblClearFilters()" title="ล้างตัวกรองทั้งหมด" style="border:1px solid #d99;background:#fff;color:#A32D2D;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">✕ ล้างตัวกรอง</button>' : '')
@@ -39159,7 +39166,7 @@ function rtRenderDetail(rtId){
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
         ${validityChip}
         ${(function(){ const oid=_rtOwnerId(rt); const olbl=_rtOwnerLabel(rt); const isAdmin=(typeof laIsAdmin==='function'&&laIsAdmin());
-          if(isAdmin){ const opts=['<option value="">Shared · กลาง</option>'].concat((typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${s.id}" ${oid===s.id?'selected':''}>${s.name||s.id}</option>`)).join('');
+          if(isAdmin){ const opts=['<option value="">Shared · กลาง</option>'].concat(sbSalesOpts(oid).map(s=>`<option value="${s.id}" ${oid===s.id?'selected':''}>${s.name||s.id}${sbSalesLabel(s)}</option>`)).join('');
             return `<span style="background:#F3F0FB;color:#5B289A;padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px">เจ้าของ <select onchange="rtSetOwner('${rt.id}',this.value)" style="border:1px solid #D8CBEF;border-radius:6px;padding:2px 6px;font-size:10.5px;font-family:inherit;background:#fff;color:#5B289A;font-weight:600">${opts}</select></span>`; }
           return `<span style="background:#F3F0FB;color:#5B289A;padding:4px 11px;border-radius:999px;font-size:10.5px;font-weight:600">เจ้าของ: ${olbl}</span>`;
         })()}
@@ -40306,7 +40313,7 @@ function agRenderFilters(){
       count: _ags.length, dataAttr:'data-sales="all"',
       onclick:"agSetSalesFilter('all')"
     });
-    SB_SALES.forEach(s=>{
+    sbSalesActive().forEach(s=>{   /* §salesActive */
       const c = counts[s.id]||0;
       html += buildChip({
         isOn: _agSalesFilter===s.id, color: s.color,
@@ -40689,7 +40696,7 @@ function agEditRender(){
         <label class="ag-fld-lbl">Sales Person <span class="req">*</span></label>
         <select onchange="agEditSetField('sales', this.value)">
           <option value="">— ไม่ระบุ —</option>
-          ${SB_SALES.map(s=>`<option value="${s.id}" ${d.sales===s.id?'selected':''}>${s.code} · ${s.name}${s.fullName?` (${s.fullName})`:''}</option>`).join('')}
+          ${sbSalesOpts(d.sales).map(s=>`<option value="${s.id}" ${d.sales===s.id?'selected':''}>${s.code} · ${s.name}${s.fullName?` (${s.fullName})`:''}${sbSalesLabel(s)}</option>`).join('')}
         </select>
         <div class="ag-fld-hint">Sales Person ที่ดูแล Agent นี้ จะเป็นคนเซ็นสัญญาฝั่ง Love Andaman ด้วย</div>
       </div>
@@ -44309,7 +44316,7 @@ function agNewRender(){
         <div class="ag-fld"><label class="ag-fld-lbl">Sub-market</label><select onchange="agNewSetField('sub',this.value)">${(mkt.subs||[]).map(s=>`<option value="${esc(s)}" ${d.sub===s?'selected':''}>${esc(s)}</option>`).join('')}<option value="" ${!d.sub?'selected':''}>— other —</option></select></div>
       </div>
       <div class="ag-fld-row" style="margin-bottom:0">
-        <div class="ag-fld"><label class="ag-fld-lbl">Sales Person</label><select onchange="agNewSetSales(this.value)"><option value="">— เลือก —</option>${SB_SALES.map(s=>`<option value="${s.id}" ${d.sales===s.id?'selected':''}>${esc(s.name)} (${esc(s.code)})</option>`).join('')}</select></div>
+        <div class="ag-fld"><label class="ag-fld-lbl">Sales Person</label><select onchange="agNewSetSales(this.value)"><option value="">— เลือก —</option>${sbSalesActive().map(s=>`<option value="${s.id}" ${d.sales===s.id?'selected':''}>${esc(s.name)} (${esc(s.code)})</option>`).join('')}</select></div>
         <div class="ag-fld${nd('rateTypeId')}"><label class="ag-fld-lbl">Rate Type · เรทราคา ${R}</label><select onchange="agNewSetField('rateTypeId',this.value);agNewNeed(this,'rateTypeId')">${_rtOptions}</select><div class="ag-fld-hint">${d.sales?('เรทของ '+esc((SB_SALES.find(s=>s.id===d.sales)||{}).name||'เซลล์นี้')+' + ส่วนกลาง'):'เรทของเซลล์ที่เลือก + ส่วนกลาง'}</div></div>
       </div>`)}
     ${card(IC.cash,'Payment','',`
@@ -45708,7 +45715,7 @@ function renderSalesBoard(){
   const myId = (typeof laMySalesId==='function') ? laMySalesId() : null;
   const agg = salesPaxAgg(ym), aggPrev = salesPaxAgg(prevYm);
   const fN = n => Math.round(n||0).toLocaleString();
-  const sales = (SB_SALES||[]).slice().map(s=>({ s, pax: agg.bySales[s.id]||0, foc: agg.focBySales[s.id]||0, tgt: salesTargetFor(s.id, ym) })).sort((a,b)=> b.pax - a.pax);
+  const sales = sbSalesActive().map(s=>({ s, pax: agg.bySales[s.id]||0, foc: agg.focBySales[s.id]||0, tgt: salesTargetFor(s.id, ym) })).sort((a,b)=> b.pax - a.pax);
   const totalPax = sales.reduce((s,x)=>s+x.pax,0);
   const _sig = JSON.stringify([_sbView,_sbWho,_sbFlatOpen,_sbLayout,ym,myId,sales.map(x=>[x.s.id,x.pax,x.foc,x.tgt]),agg.byAgent,agg.focByAgent, (SB_SALES||[]).map(s=>s.followup?Object.keys(s.followup).length:0)]);
   if(wrap.firstElementChild && _sig === _sbSig) return;
@@ -45733,7 +45740,7 @@ function renderSalesBoard(){
     const myAgents = (SB_AGENTS||[]).filter(a=>a.sales===who.id);
     const nHave = myAgents.filter(a=>(agg.byAgent[a.id]||0)>0).length;
     const nBk = (SB_BOOKINGS||[]).filter(b=>!_SB_CXL.includes(b.status)&&b.agentId&&(sbGetAgent(b.agentId)||{}).sales===who.id&&(b.trips||[]).some(t=>_ymOf(t.date)===ym)).length;
-    const prevRank = {}; (SB_SALES||[]).slice().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
+    const prevRank = {}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
     const rankMove = (prevRank[who.id]&&rank) ? (prevRank[who.id]-rank) : 0;
     const streak = salesStreak(who.id, ym);
     const rows = myAgents.map(a=>{ const p=agg.byAgent[a.id]||0, pp=aggPrev.byAgent[a.id]||0; return {a,p,pp,foc:agg.focByAgent[a.id]||0,t:agentTrend(p,pp)}; }).filter(x=>x.p>0||x.pp>0);
@@ -45951,10 +45958,10 @@ function renderSalesBoard(){
   const agCount={}; (SB_AGENTS||[]).forEach(a=>{ if(a.sales) agCount[a.sales]=(agCount[a.sales]||0)+1; });
   const bkBySales={}; (SB_BOOKINGS||[]).forEach(b=>{ if(_SB_CXL.includes(b.status)||!b.agentId)return; const sid=(sbGetAgent(b.agentId)||{}).sales; if(!sid)return; if((b.trips||[]).some(t=>_ymOf(t.date)===ym)) bkBySales[sid]=(bkBySales[sid]||0)+1; });
   const curRank={}; sales.forEach((x,i)=>{ curRank[x.s.id]=i+1; });
-  const prevRank={}; (SB_SALES||[]).slice().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
+  const prevRank={}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
   let topGrow=null; Object.keys(agg.byAgent).forEach(aid=>{ const t=agentTrend(agg.byAgent[aid]||0, aggPrev.byAgent[aid]||0); if(t.cat==='up' && (!topGrow||t.pct>topGrow.pct)) topGrow={aid,pct:t.pct}; });
   let topBk=null; Object.keys(bkBySales).forEach(sid=>{ if(!topBk||bkBySales[sid]>topBk.n) topBk={sid,n:bkBySales[sid]}; });
-  let topStreak=null; (SB_SALES||[]).forEach(s=>{ const st=salesStreak(s.id,ym); if(st>0 && (!topStreak||st>topStreak.n)) topStreak={sid:s.id,n:st}; });
+  let topStreak=null; sbSalesActive().forEach(s=>{ const st=salesStreak(s.id,ym); if(st>0 && (!topStreak||st>topStreak.n)) topStreak={sid:s.id,n:st}; });
   let topUp=null; sales.forEach(x=>{ const pr=prevRank[x.s.id],cr=curRank[x.s.id]; if(pr&&cr&&pr>cr){ const d=pr-cr; if(!topUp||d>topUp.d) topUp={sid:x.s.id,d}; } });
   const _sNm=sid=>e((sbGetSales(sid)||{}).name||sid), _aNm=aid=>e((sbGetAgent(aid)||{}).name||aid);
 
@@ -47737,7 +47744,7 @@ function bkV2RenderNewBooking(){
           </div>
           ${isWalkin ? `<div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Sold by <em style="font-weight:500;color:#b4b2a9;font-style:normal">· sales credit</em></label>
-            <select class="bkv2-nb-input" onchange="bkV2SetBookingField('soldBy', this.value)"><option value="">— select sales —</option>${(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${s.id}" ${d.soldBy===s.id?'selected':''}>${escapeHTML(s.name)}</option>`).join('')}</select>
+            <select class="bkv2-nb-input" onchange="bkV2SetBookingField('soldBy', this.value)"><option value="">— select sales —</option>${sbSalesOpts(d.soldBy).map(s=>`<option value="${s.id}" ${d.soldBy===s.id?'selected':''}>${escapeHTML(s.name)}${sbSalesLabel(s)}</option>`).join('')}</select>
           </div>` : ''}
           ${isStaff ? (function(){ const yr=(d.bookingDate||'').slice(0,4)||String(new Date().getFullYear()); const sp=d.staffPurpose||'welfare'; const rem=d.staffId?staffRemaining(d.staffId,yr):null;
             return `<div class="bkv2-nb-field">
@@ -60317,7 +60324,8 @@ let _tmModalDraft = null;
 
 function renderTeamMkt(){
   // Sales list
-  document.getElementById('tm-sales-count').textContent = `${SB_SALES.length} sales people`;
+  const _nIn = SB_SALES.filter(s=>s.active===false).length;   /* §salesActive */
+  document.getElementById('tm-sales-count').textContent = `${SB_SALES.length} sales people` + (_nIn?` · ${_nIn} inactive`:'');
   const slHost = document.getElementById('tm-sales-list');
   if(SB_SALES.length===0){
     slHost.innerHTML = '<div class="tm-empty">ยังไม่มี Sales — เพิ่มคนแรกได้เลย</div>';
@@ -60325,11 +60333,12 @@ function renderTeamMkt(){
     slHost.innerHTML = SB_SALES.map(s=>{
       const agentCount = SB_AGENTS.filter(a=>a.sales===s.id).length;
       const fullDisplay = s.fullName ? `<div class="tm-row-fullname">${s.fullName} <span class="tm-row-fullname-pos">· ${s.designation||'—'}</span></div>` : '';
+      const _ina = (s.active===false);   /* §salesActive */
       return `
-        <div class="tm-row">
+        <div class="tm-row${_ina?' tm-inactive':''}" data-sales-row="${s.id}" data-active="${_ina?0:1}">
           <div class="tm-color-chip" style="background:${s.color}">${s.code}</div>
           <div class="tm-row-info">
-            <div class="tm-row-name">${s.name}</div>
+            <div class="tm-row-name">${s.name}${_ina?' <span class="tm-status off">Inactive</span>':' <span class="tm-status on">Active</span>'}</div>
             ${fullDisplay}
             <div class="tm-row-meta">${s.email||'—'} ${s.tel?`· ${s.tel}`:''} · <span class="tm-row-meta-pill">${agentCount} agents</span></div>
           </div>
@@ -60384,7 +60393,7 @@ function tmAddSales(){
   // Auto code from name first letters; user can override
   _tmModalType = 'sales';
   _tmModalEditId = null;
-  _tmModalDraft = { id:'s'+String(Date.now()).slice(-6), code:'', name:'', color:TM_COLORS[Math.floor(Math.random()*TM_COLORS.length)], email:'', fullName:'', designation:'Sales Executive', tel:'', signature:'' };
+  _tmModalDraft = { id:'s'+String(Date.now()).slice(-6), code:'', name:'', color:TM_COLORS[Math.floor(Math.random()*TM_COLORS.length)], email:'', fullName:'', designation:'Sales Executive', tel:'', signature:'', active:true };
   tmOpenModal('เพิ่ม Sales Person');
 }
 
@@ -60481,6 +60490,12 @@ function tmRenderModalBody(){
         </div>
       </div>
 
+      <div class="tm-fld" style="margin-top:10px">
+        <label class="tm-fld-lbl">สถานะ (Status)</label>
+        <label class="tm-switch" data-tm-active><input type="checkbox" ${d.active===false?'':'checked'} onchange="tmSetField('active',this.checked);tmRenderModalBody()">
+          <span class="tm-switch-pill ${d.active===false?'off':'on'}">${d.active===false?'Inactive':'Active'}</span>
+          <span class="tm-switch-note">${d.active===false?'ไม่แสดงในตัวเลือกเซลล์ ชิปกรอง และ KPI · เอเยนต์/ใบจองเก่ายังเห็นชื่ออยู่':'แสดงในทุกส่วนตามปกติ'}</span></label>
+      </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)">
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px">For Contract Signatory · ใช้ตอน Export สัญญา</div>
         <div class="tm-fld">

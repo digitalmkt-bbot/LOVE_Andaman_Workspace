@@ -3649,7 +3649,7 @@
       {
         "name": "followup",
         "type": "text"
-      }
+      }, {"name": "active", "type": "boolean"}
     ],
     "primary_key": "id",
     "foreign_keys": [],

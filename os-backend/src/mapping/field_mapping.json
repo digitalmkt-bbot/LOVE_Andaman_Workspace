@@ -3960,7 +3960,7 @@
       "kind": "json_text",
       "db_type": "text",
       "note": "agents this salesperson marked handled · {\"YYYY-MM::agentId\": true} · Sales Board follow-up"
-    }
+    }, "active": {"source": "active", "kind": "scalar", "db_type": "boolean", "note": "§salesActive · false = inactive · ไม่ขึ้นในตัวเลือก/ชิป/KPI · ไม่มีค่า = active"}
   },
   "sb_agents": {
     "id": {
