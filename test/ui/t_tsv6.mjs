@@ -6,7 +6,7 @@
 //     "ชิปต้องมีแยกท่าเรือก่อน แล้วค่อยมีเส้นทาง" · "พอกดชิป รายละเอียดก็ขึ้นในหัว Header ด้วย"
 //     "หัวข้อ สรุปการเดินทางประจำวัน <วันที่> ให้ยาวไปทั้ง Card · ถ้ากดชิปเส้นทาง ชื่อเส้นทางนั้น ๆ ขึ้นต่อ"
 //
-// กันสิบเอ็ดอย่าง
+// กันสิบสองอย่าง
 //   1 บนจอ · แถบ/ชิป/การ์ดสรุป/หมวด 01,03 ชุดใหม่ขึ้น · หัวเอกสารและการ์ดตัวเลขชุดเดิมซ่อน
 //   2 ชิปท่าเรือครบทุกท่าของวันนั้น ยอดรวมกันเท่ากับทั้งวัน · ยังไม่เลือกท่า ไม่มีชิปเส้นทาง
 //   3 กดชิปท่าเรือ · ชิปเส้นทางขึ้นเฉพาะของท่านั้น · หัวข้อต่อท้ายด้วยชื่อท่า · ตัวเลขและ manifest เป็นของท่านั้น
@@ -18,6 +18,7 @@
 //   9 ชุดเอกสารแนบท้าย (reference pack) ตามท่าเรือที่เลือกด้วย
 //  10 ไม่ล้นแนวนอนที่ 1900 และ 1280 · ไม่มี error บนหน้า
 //  11 หัวข้อหลักอยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · สีแถบหัวตามท่าเรือ (2026-10-05 รอบสอง)
+//  12 แถบหัวชิดขอบจอ บน/ซ้าย/ขวา ไม่มีมุมมน ไม่มีขอบครีม (§tsV6e · "เห็นแถบบนสุดไหม ต่างกับที่เป็นอยู่ตรงไหน")
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -171,6 +172,19 @@ const read = Object.values(th.o).every(x => x.cr >= 4.5 && x.acc >= 3.9);
 if (lay && solid && cols && ink && read && th.pierOf === 'other' && th.nm === 'Other')
   ok(`11 หัวข้อกลางการ์ด · ป้ายมุมขวา · แถบหัวสีเต็มพื้น Tub Lamu #00bcdf (ตัวกรมท่า) · Visit Panwa #000f4c · Ranong ${th.mix} · ตัวอักษรอ่านออกทุกแบบ (ต่ำสุด ${Math.min(...Object.values(th.o).map(x => x.cr))}:1)`);
 else fail('11 ' + JSON.stringify({ lay, solid, cols, ink, read, g0: { bg: g0.bg, img: g0.img, off: g0.off, pr: g0.pillRight, pt: g0.pillTop }, gT, gP: { bg: gP.bg, brand: gP.brand, chip: gP.chip, onBg: gP.onBg, onFg: gP.onFg, priBg: gP.priBg, line: gP.line }, th }));
+
+/* ══ 12 · §tsV6e · แถบหัวชิดขอบจอเหมือน mockup ══ */
+const G12 = () => page.evaluate(() => { window.scrollTo(0, 0); const h = document.getElementById('travelsum-host'), m = h.closest('.main').getBoundingClientRect(), b = h.querySelector('.h4-bar').getBoundingClientRect(), hr = h.getBoundingClientRect(), cs = getComputedStyle(h.querySelector('.h4-bar'));
+  return { l: Math.round(b.left - m.left), r: Math.round(m.right - b.right), t: Math.round(b.top), rad: cs.borderTopLeftRadius, hrad: getComputedStyle(h).borderTopLeftRadius, fill: getComputedStyle(h).minHeight === innerHeight + 'px', mpt: parseFloat(getComputedStyle(h.closest('.main')).paddingTop), mpl: parseFloat(getComputedStyle(h.closest('.main')).paddingLeft), ov: document.documentElement.scrollWidth - innerWidth }; });
+await page.setViewportSize({ width: 1700, height: 1000 }); await page.waitForTimeout(350); const b1 = await G12();
+await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(350); const b2 = await G12();
+/* จอแคบ · padding ของ .main เปลี่ยน (14/22 -> 10) ต้องวัดใหม่เองตอนย่อจอ · ขอบบนเว้นไว้ให้ปุ่มเมนู */
+await page.setViewportSize({ width: 800, height: 900 }); await page.waitForTimeout(450); const b3 = await G12();
+await page.setViewportSize({ width: 1700, height: 1000 }); await page.waitForTimeout(350);
+const flush = b => b.l === 0 && b.r === 0 && b.t === 0 && b.rad === '0px' && b.hrad === '0px' && b.fill && b.ov <= 0;
+const narrow = b3.l === 0 && b3.r === 0 && b3.mpl !== b1.mpl && b3.t >= b3.mpt - 1 && b3.rad === '0px';
+if (flush(b1) && flush(b2) && narrow) ok('12 แถบหัวชิดขอบบน/ซ้าย/ขวาของพื้นที่หน้า ทั้งจอ 1700 และ 1280 · ไม่มีมุมมน · พื้นหน้าเต็มถึงล่าง');
+else fail('12 ' + JSON.stringify({ b1, b2, b3 }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);

@@ -24658,6 +24658,26 @@ var TS_HEAD_COL={
   ranong:  { bg:'#006595', ink:'light', acc:'#006595', line:'#00bcdf' },
   other:   { bg:'#3A4256', ink:'light', acc:'#3A4256', line:'#00bcdf' }
 };
+/* §tsV6e · แถบหัวชิดขอบจอ (full bleed) เหมือน mockup · เจ้าของชี้สามครั้ง (2026-10-05)
+   "ของเดิม เราวางสีเต็มไหม" · "ตาม Mockup คือสีเต็มพื้นนะ" · "เห็นแถบบนสุดไหม ต่างกับที่เป็นอยู่ตรงไหน"
+   เดิมหน้าเป็นกล่องมุมมนลอยอยู่ใน .main (padding 22/22/22/14) จึงมีขอบครีมรอบแถบสี
+   padding ของ .main เปลี่ยนตามขนาดจอ จึงวัดจริงแล้วดึงขอบออกเท่านั้นพอดี · วัดใหม่ทุกครั้งที่วาดและเมื่อย่อ/ขยายจอ
+   หน้าต่างพิมพ์ไม่มี .main จึงไม่โดน */
+var _tsBleedOn=false;
+function tsV6Bleed(){
+  var host=document.getElementById('travelsum-host'); if(!host) return;
+  var view=host.parentElement, main=(view&&view.closest)?view.closest('.main'):null;
+  if(!main || document.body.classList.contains('ts-printing')){ ['top','right','bottom','left'].forEach(function(k){ host.style.removeProperty('margin-'+k); }); host.style.removeProperty('max-width'); host.style.minHeight=''; return; }
+  var cm=getComputedStyle(main), cv=getComputedStyle(view), n=function(v){ return parseFloat(v)||0; };
+  var m=[n(cm.paddingTop)+n(cv.paddingTop), n(cm.paddingRight)+n(cv.paddingRight), n(cm.paddingBottom)+n(cv.paddingBottom), n(cm.paddingLeft)+n(cv.paddingLeft)];
+  /* จอมือถือ (<=820px) · padding บนของ .main เผื่อไว้ให้ปุ่มเมนูกับ safe-area · ไม่ดึงขอบบน ดึงแค่ซ้าย/ขวา/ล่าง */
+  if(window.matchMedia && window.matchMedia('(max-width:820px)').matches) m[0]=0;
+  /* 02-skins.css มีกฎมือถือ .main .view > [id$="-host"]{margin-left:0 !important} · inline !important เท่านั้นที่ชนะ */
+  ['top','right','bottom','left'].forEach(function(k,i){ host.style.setProperty('margin-'+k, (m[i]?'-':'')+m[i]+'px', 'important'); });
+  host.style.setProperty('max-width','none','important');   /* กฎเดียวกันจำกัด max-width:100% · กล่องจะไม่ยืดถึงขอบขวา */
+  host.style.minHeight='100vh';
+  if(!_tsBleedOn){ _tsBleedOn=true; window.addEventListener('resize', function(){ tsV6Bleed(); }); }
+}
 function tsV6Theme(p){ return TS_HEAD_COL[p||''] || TS_HEAD_COL.other; }
 function tsPierName(p){
   if(!p || p==='other') return 'Other';
@@ -27560,8 +27580,8 @@ function tsCSSv6(){
 }
 
 /* ── พื้นหน้า + ของเดิมที่จอไม่ใช้แล้ว ── */
-&{background:#EFF0F6;padding-bottom:36px;font-size:13px;color:#1a2332;border-radius:18px}
-& .h4-bar{border-radius:18px 18px 0 0}
+&{background:#EFF0F6;padding-bottom:36px;font-size:13px;color:#1a2332;border-radius:0}
+& .h4-bar{border-radius:0}
 & .ts-printonly{display:none !important}
 & .ts-wrap{background:transparent;border:none;border-radius:0;box-shadow:none;overflow:visible}
 & .ts-wrap .ts-sec{margin:12px 32px 0 !important}
@@ -28324,6 +28344,7 @@ function renderTravelSum(){
     nBk:all.length, booked:tBooked, trav:tTrav, ns:tNs, cxl:tCxl, pend:nPending, charge:charge,
     target:sumTarget, nCollect:nCollect, due:sumDue, cotAll:sumCotAll, cotLeft:nCotLeft, doc:dcAgg,
     stamp:_tsStamp(), by:(laBy?laBy():'') }, money);
+  tsV6Bleed();
   host.innerHTML='<style id="ts-style">'+tsCSS()+tsCSSv6()+'</style>'
     +'<div class="ts-wrap">'+headScr+head
     +'<div class="ts-sec ts-s01"><div class="ts-sech"><div>'
