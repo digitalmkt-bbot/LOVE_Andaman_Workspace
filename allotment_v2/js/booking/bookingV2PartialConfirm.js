@@ -20,7 +20,19 @@ function bookingV2PartialConfirm(bookingId, tripIdx){
   const refund=waiveAmt;
   const refundMode=refund>0?'refund':'none';
   acctModalClose();
-  bookingV2PartialCancel(bookingId, tripIdx, { removed, totalRem, category, note, refundMode, refund,
-    charged:{count:chargedCount, amount:chargeAmt}, waived:{count:waivedCount, amount:waiveAmt} });
-  if(typeof bookingV2Render==='function') bookingV2Render();
+  /* §opsAction · server first · operation-backend matches the trip by its own id */
+  const _apply=function(){
+    bookingV2PartialCancel(bookingId, tripIdx, { removed, totalRem, category, note, refundMode, refund,
+      charged:{count:chargedCount, amount:chargeAmt}, waived:{count:waivedCount, amount:waiveAmt} });
+    if(typeof bookingV2Render==='function') bookingV2Render();
+  };
+  if(typeof laOpsBookingAction==='function' && bk.opsId && !t.opsTripId){
+    if(typeof laSaveToast==='function') laSaveToast({kind:'error', title:'Reduce pax refused', id:bookingId, status:'NOT SYNCED',
+      sub:'This trip has no operation-backend id yet · save the booking once, then try again', dur:9000});
+    return;
+  }
+  if(typeof laOpsBookingAction==='function')
+    laOpsBookingAction(bookingId, 'partial-cancel', { trip_id:t.opsTripId, pax:removed, category, note,
+      charged:{count:chargedCount, amount:chargeAmt}, waived:{count:waivedCount, amount:waiveAmt} }, _apply, 'Reduce pax');
+  else _apply();
 }

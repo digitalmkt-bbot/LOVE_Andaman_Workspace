@@ -50,12 +50,10 @@ function bookingV2LoadFromOpsBackend(options){
       SB_BOOKINGS.length = 0;
       Array.prototype.push.apply(SB_BOOKINGS, mapped);
       try{ console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+from+' → '+to+' from operation-backend'); }catch(e){}
-      try{ if(typeof bookingV2Render==='function') bookingV2Render(); }catch(e){}
       return j;
     })
     .catch(function(e){ try{ console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); }catch(_){} return null; });
 }
 
-// This file is loaded after 08-app.js, so the boot call there cannot see this
-// function yet. Start the operation-backend load after this script is defined.
-try{ bookingV2LoadFromOpsBackend(); }catch(e){}
+// §opsBoot · called by js/ops/90-ops-boot.js, after the catalogue, deployments and seat locks
+// (a trip's lock draws are mapped back to client locks, so the locks must be loaded first).

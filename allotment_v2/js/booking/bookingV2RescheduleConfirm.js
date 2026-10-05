@@ -11,9 +11,15 @@ function bookingV2RescheduleConfirm(bookingId){
   if(ct==='partial' && !(Number(amt)>0)){ alert('Please enter the partial charge amount'); return; }
   const editPickup=!!(document.getElementById('bkr-editpickup')||{}).checked;
   acctModalClose();
-  bookingV2RescheduleBooking(bookingId, { fromDate:from, newDate:nd, chargeType:ct, chargeAmount:amt, collect, reason });
-  if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'เลื่อนวันเดินทางแล้ว', id:bookingId, status:'RESCHEDULED',
-    sub:from+' → '+nd+(ct==='none'?'':(' · ค่าปรับ '+(ct==='full'?'เต็มจำนวน':'บางส่วน')))});
-  if(editPickup && typeof bookingV2EditBooking==='function'){ bookingV2EditBooking(bookingId); }
-  else if(typeof bookingV2Render==='function') bookingV2Render();
+  /* §opsAction · server first · the new day is capacity-checked there before anything moves here */
+  const _apply=function(){
+    bookingV2RescheduleBooking(bookingId, { fromDate:from, newDate:nd, chargeType:ct, chargeAmount:amt, collect, reason });
+    if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'เลื่อนวันเดินทางแล้ว', id:bookingId, status:'RESCHEDULED',
+      sub:from+' → '+nd+(ct==='none'?'':(' · ค่าปรับ '+(ct==='full'?'เต็มจำนวน':'บางส่วน')))});
+    if(editPickup && typeof bookingV2EditBooking==='function'){ bookingV2EditBooking(bookingId); }
+    else if(typeof bookingV2Render==='function') bookingV2Render();
+  };
+  if(typeof laOpsBookingAction==='function')
+    laOpsBookingAction(bookingId, 'reschedule', { from_date:from, to_date:nd, reason, charge_type:ct, charge_amount:Number(amt)||0, collect }, _apply, 'Reschedule');
+  else _apply();
 }

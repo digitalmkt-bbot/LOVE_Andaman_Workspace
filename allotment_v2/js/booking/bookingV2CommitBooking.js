@@ -725,8 +725,9 @@ function bookingV2CommitBooking(status){
     if(tripsModified) obj.trips = TRIPS;
     localStorage.setItem(lsKey, JSON.stringify(obj));
   } catch(e){ console.warn('Save failed', e); }
-  // §opsSync · mirror onto operation-backend, best-effort — see bookingV2SyncToOpsBackend
-  try{ bookingV2SyncToOpsBackend(newBk); }catch(e){}
+  // §opsSync · save to operation-backend · the promise goes to the commit wrapper in js/ops/40-ops-bookings.js,
+  //   which rolls this whole save back (and reopens the form) if the server refuses it
+  try{ window._laOpsCommitSync = bookingV2SyncToOpsBackend(newBk); }catch(e){ window._laOpsCommitSync = Promise.reject(e); }
 
   // Close form · go to detail page if editing · else All bookings tab
   const wasEditing = !!_bkV2.editingId;
