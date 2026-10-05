@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --env-file=.env server.js",
+    "build:deploy": "node tools/build-assets.mjs --in-place",
+    "build:try": "node tools/build-assets.mjs --out .build",
     "safari": "node tools/safari-smoke.js",
     "ci:boot-smoke": "node tools/ci-boot-smoke.mjs",
     "dev:local": "node tools/dev-db.mjs run",
@@ -71,6 +73,7 @@
     "test:bacapgate": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_bacapgate.mjs"
   },
   "dependencies": {
+    "esbuild": "^0.24.2",
     "pg": "^8.13.1"
   },
   "engines": {

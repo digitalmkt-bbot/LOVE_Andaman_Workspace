@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const ROOT = path.resolve(HERE, '../../allotment_v2');
+// LA_APP_ROOT=<dir> · run the same tests against a built copy (node tools/build-assets.mjs --out <dir>)
+export const ROOT = process.env.LA_APP_ROOT ? path.resolve(process.env.LA_APP_ROOT) : path.resolve(HERE, '../../allotment_v2');
 
 const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8',

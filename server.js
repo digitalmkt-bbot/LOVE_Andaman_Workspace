@@ -1954,6 +1954,18 @@ function _laAssetVer(){
   _laVerCache = { v: String(Math.floor(mx/1000) || Math.floor(now/1000)), at: now };
   return _laVerCache.v;
 }
+/* §immutable · does this request's ?v= name exactly these bytes? md5 cached per etag, so a 5MB file
+   is hashed once per deploy, not per request */
+const _laMd5Cache = new Map();   // fp -> { etag, md5 }
+function _laImmutable(ext, q, fp, etag, data){
+  if(ext !== '.js' && ext !== '.css') return false;
+  const v = (/(?:^|&)v=([^&]+)/.exec(q || '') || [])[1];
+  if(!v) return false;
+  if(v === _laAssetVer()) return true;
+  let hit = _laMd5Cache.get(fp);
+  if(!hit || hit.etag !== etag){ hit = { etag, md5: crypto.createHash('md5').update(data).digest('hex').slice(0,8) }; _laMd5Cache.set(fp, hit); }
+  return v === hit.md5;
+}
 /* เติม ?v= ให้เฉพาะ js/ กับ css/ ที่เป็น path สัมพัทธ์ของเราเอง
    ไม่แตะ CDN ภายนอก และไม่แตะตัวที่มี query string อยู่แล้ว */
 function _laStampAssets(buf){
@@ -3014,9 +3026,15 @@ const server = http.createServer((req, res) => {
        ไม่ใช่กับ .js/.css ที่หน้านั้นโหลดตาม · ต้องติดกับ 304 ด้วย เพราะเบราว์เซอร์
        ใช้หัวของรอบที่ 304 ตอบมา ไม่ได้ใช้ของที่แคชไว้ทั้งชุด */
     const sec = ext==='.html' ? {'Content-Security-Policy':FRAME_ANCESTORS} : null;
-    if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,Object.assign({'ETag':etag,'Cache-Control':'no-cache'},sec)); return res.end(); }
+    /* §immutable (2026-10-05) · a js/css URL whose ?v= IS this file's content can be kept for a year ·
+       a new deploy changes the ?v= in the HTML, so the browser never asks for the old URL again.
+       Only when it matches: an old HTML asking ?v=OLD gets today's bytes, and those must not be
+       pinned under the old URL. ?v= is either the md5 prefix (tools/build-assets.mjs, hand bumps)
+       or _laAssetVer() (the stamp _laStampAssets adds to untagged scripts). */
+    const cc = _laImmutable(ext, q, fp, etag, data) ? 'public, max-age=31536000, immutable' : 'no-cache';
+    if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,Object.assign({'ETag':etag,'Cache-Control':cc},sec)); return res.end(); }
     const ctype = MIME[ext]||'application/octet-stream';
-    const head=(enc)=>{ const h={'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'};
+    const head=(enc)=>{ const h={'Content-Type':ctype,'ETag':etag,'Cache-Control':cc,'Vary':'Accept-Encoding'};
       if(sec) Object.assign(h,sec);
       if(enc) h['Content-Encoding']=enc; return h; };
     const enc = (GZIP_EXT.has(ext) && data.length > 1024) ? pickEncoding(req) : null;

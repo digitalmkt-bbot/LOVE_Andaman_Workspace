@@ -83,3 +83,21 @@ renaming it was out of scope.
   Renaming a top-level `js/` file means touching both; this doesn't apply to files already under
   `js/booking/`. **On `integration/operation-backend`, `server.js` can't boot at all** (see
   `CLAUDE.md` §0) — none of this runs there until that's resolved.
+
+## What production serves is built (2026-10-05)
+
+`railway.json` runs `npm run build:deploy` (`tools/build-assets.mjs --in-place`) before `npm start`.
+Inside the deploy container only, it:
+
+- bundles the main `js/booking/*.js` block into `js/booking.bundle.js`, which cuts ~640 script tags to 21;
+- strips whitespace and comments with esbuild (`minifyWhitespace`). It does **not** rename or rewrite
+  anything, because inline `onclick=""` handlers call top-level names;
+- rewrites every `?v=` to the md5 of the built file.
+
+`server.js` then serves any js/css whose `?v=` matches its bytes as
+`public, max-age=31536000, immutable` (§immutable). Over the wire this is 2.5MB → 1.76MB gzip, or 1.25MB brotli.
+
+- **Source stays readable.** Never commit built output.
+- **Try a build:** `npm run build:try` builds into `.build/`, and `LA_APP_ROOT=.build node test/ui/t_smoke.mjs`
+  runs any UI test against it.
+- **Locally, `build:deploy` does nothing.** It refuses to rewrite the working tree outside Railway.
