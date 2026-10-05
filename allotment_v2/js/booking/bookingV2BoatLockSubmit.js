@@ -38,7 +38,9 @@ function bookingV2BoatLockSubmit(){
     if(typeof bookingV2Render==='function') bookingV2Render();
     return;
   }
-  if(!bookingV2BoatLockCanTake(f.date,f.boatId)){ alert('That boat is no longer free on this date'); return; }
+  { const _B=bookingV2BoatLockBlockers(f.date,f.boatId,f.routeId);
+    if(_B.otherRoute){ alert('That boat is already placed on '+bookingV2BoatLockRouteNm(_B.otherRoute)+' for '+f.date+'.\nA boat placed on another programme cannot be held here. Move it in Boat Operation first, or pick another boat.'); return; } }
+  if(!bookingV2BoatLockCanTake(f.date,f.boatId,f.routeId)){ alert('That boat is no longer free on this date'); return; }
   const l=bookingV2CreateBoatLock({ routeId:f.routeId, date:f.date, boatId:f.boatId,
     holderType:f.holderType, holderId:holderId, minCap:cap, fixed:f.fixed!==false,
     expiry:f.expiry, reason:f.reason });

@@ -117,7 +117,7 @@ function bookingV2RenderNewBooking(){
           </div>
           ${isWalkin ? `<div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Sold by <em style="font-weight:500;color:#b4b2a9;font-style:normal">· sales credit</em></label>
-            <select class="bkv2-nb-input" onchange="bookingV2SetBookingField('soldBy', this.value)"><option value="">— select sales —</option>${(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${s.id}" ${d.soldBy===s.id?'selected':''}>${escapeHTML(s.name)}</option>`).join('')}</select>
+            <select class="bkv2-nb-input" onchange="bookingV2SetBookingField('soldBy', this.value)"><option value="">— select sales —</option>${sbSalesOpts(d.soldBy).map(s=>`<option value="${s.id}" ${d.soldBy===s.id?'selected':''}>${escapeHTML(s.name)}${sbSalesLabel(s)}</option>`).join('')}</select>
           </div>` : ''}
           ${isStaff ? (function(){ const yr=(d.bookingDate||'').slice(0,4)||String(new Date().getFullYear()); const sp=d.staffPurpose||'welfare'; const rem=d.staffId?staffRemaining(d.staffId,yr):null;
             return `<div class="bkv2-nb-field">

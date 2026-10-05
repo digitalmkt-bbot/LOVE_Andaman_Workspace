@@ -1,7 +1,7 @@
 /* สลับลำ · ของเดิมไปเป็นรอบปกติ ลำใหม่รับช่องไป · ตัวตัดสินว่าสลับได้ไหมอยู่ที่ผู้เรียก */
 function bookingV2BoatLockSwap(id, newBoatId){
   const l = bookingV2BoatLockById(id); if(!l || l.status!=='active' || !newBoatId || newBoatId===l.boatId) return false;
-  if(!bookingV2BoatLockCanTake(l.date, newBoatId)) return false;
+  if(!bookingV2BoatLockCanTake(l.date, newBoatId, l.routeId)) return false;
   /* สัญญาแบบ "เรือ 1 ลำ ไม่น้อยกว่า X ที่" · ลดขนาดต่ำกว่าที่รับปากไว้ไม่ได้
      กติกาอยู่ชั้นนี้ ไม่ใช่ชั้นปุ่ม · ไม่งั้นทางอื่นที่เรียกสลับลำจะข้ามด่านนี้ไปเงียบ ๆ
      แบบ "สัญญาลำนี้เลย" ไม่ตรวจขนาด เพราะสิ่งที่สัญญาคือชื่อเรือ · ชั้นปุ่มเป็นคนถามแทน */

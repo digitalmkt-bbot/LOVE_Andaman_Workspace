@@ -16,5 +16,5 @@ function bookingV2RtKeepInit(clone, bk){
   if(typeof bookingV2IsB2CBk==='function' && bookingV2IsB2CBk(clone)) return;
   if(typeof laIsCompanyBk==='function' && laIsCompanyBk(clone)) return;
   clone._rtKeep = { mode:'keep', ref:bk.rateTypeRef||null, total:Number(bk.total)||0, drift:null,
-    trips:(bk.trips||[]).map(function(t){ return { routeId:t.routeId, date:t.date, rtRef:t.rtRef||null }; }) };
+    trips:(bk.trips||[]).map(function(t){ return { routeId:bookingV2PrRoute(t), date:t.date, rtRef:t.rtRef||null }; }) };   /* §upgRoute · ชุดราคาผูกกับเส้นทางที่ขาย */
 }

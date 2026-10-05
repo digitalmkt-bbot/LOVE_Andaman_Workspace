@@ -18,7 +18,7 @@ function bookingV2UpgradeRender(){
   const fColl=editing?!!editing.collected:false;
   const fNote=editing?(editing.note||''):'';
   const fSeller=editing?(editing.seller||''):'';
-  const _sellerOpts=(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${esc(s.name)}">`).join('');
+  const _sellerOpts=sbSalesActive().map(s=>`<option value="${esc(s.name)}">`).join('');   /* §salesActive */
   acctModal(`
     <datalist id="bkv2-sellers">${_sellerOpts}</datalist>`+`
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">&#11014; อัพเกรดหน้างาน · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">กำหนดราคาขาย − จ่ายบริษัท = คอมมิชชั่น · สรุปที่ Travel Summary</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>

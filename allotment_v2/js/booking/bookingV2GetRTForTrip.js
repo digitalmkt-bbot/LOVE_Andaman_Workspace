@@ -11,7 +11,7 @@ function bookingV2GetRTForTrip(trip){
   const B = kept || seas || base;
   /* §b2bPromo · ทางเข้าเดียว · รองรับทั้งใบโปรที่ดึงจาก Rate Type และใบที่กรอกราคาเอง
      วันจองส่งเข้าไปด้วย · ใบที่ไม่ได้ตั้งช่วงวันจองไว้จะไม่สนใจค่านี้ (laPromoCovers) */
-  const hit = laPromoRateFor(d.agentId, trip.routeId, trip.date,
+  const hit = laPromoRateFor(d.agentId, bookingV2PrRoute(trip), trip.date,
                              d.bookingDate || (typeof TODAY_STR!=='undefined'?TODAY_STR:''), B);
   if(!hit) return B;
   if(hit.rt && hit.rt.id === (B && B.id)) return B;         /* โปรชี้กลับไปชุดเดิม = ไม่ต้องสลับ */

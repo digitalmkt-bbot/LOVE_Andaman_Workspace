@@ -350,6 +350,7 @@ function bookingV2CommitBooking(status){
       opsTripId: t.opsTripId || undefined,   // §opsSync · operation-backend trip id, so an edit PATCHes the trip instead of recreating it
       routeId: t.routeId,
       date: t.date,
+      upg: bkUpgActive(t) ? { ...t.upg } : undefined,   /* §upgRoute · เปลี่ยนเส้นทาง/วันในฟอร์มแล้ว = การ upgrade สิ้นสุด */
       // §OVN return leg — the customer boards at the island pier, so there is NO pickup zone. Left on the
       // outbound zone, the van sheet sent a driver to their (already checked-out) hotel to collect someone
       // who was at that moment on a boat.

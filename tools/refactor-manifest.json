@@ -630,6 +630,20 @@
     "bkV2WeatherUncancel": "allotment_v2/js/booking/bookingV2WeatherUncancel.js",
     "bkV2ZoneColor": "allotment_v2/js/booking/bookingV2ZoneColor.js",
     "bkV2ZoneLabel": "allotment_v2/js/booking/bookingV2ZoneLabel.js",
-    "bkV2ZoneOrder": "allotment_v2/js/booking/bookingV2ZoneOrder.js"
+    "bkV2ZoneOrder": "allotment_v2/js/booking/bookingV2ZoneOrder.js",
+    "bkV2BoatLockRouteNm": "allotment_v2/js/booking/bookingV2BoatLockRouteNm.js",
+    "bkV2ZonePickOpen": "allotment_v2/js/booking/bookingV2ZonePickOpen.js",
+    "bkV2ZonePickZone": "allotment_v2/js/booking/bookingV2ZonePickZone.js",
+    "bkV2ZonePickFilter": "allotment_v2/js/booking/bookingV2ZonePickFilter.js",
+    "bkV2ZonePickSel": "allotment_v2/js/booking/bookingV2ZonePickSel.js",
+    "bkV2ZonePickConfirm": "allotment_v2/js/booking/bookingV2ZonePickConfirm.js",
+    "bkV2PrRoute": "allotment_v2/js/booking/bookingV2PrRoute.js",
+    "bkV2WithSold": "allotment_v2/js/booking/bookingV2WithSold.js",
+    "bkV2UpgTargets": "allotment_v2/js/booking/bookingV2UpgTargets.js",
+    "bkV2UpgModalClose": "allotment_v2/js/booking/bookingV2UpgModalClose.js",
+    "bkV2UpgModal": "allotment_v2/js/booking/bookingV2UpgModal.js",
+    "bkV2UpgApply": "allotment_v2/js/booking/bookingV2UpgApply.js",
+    "bkV2UpgUndo": "allotment_v2/js/booking/bookingV2UpgUndo.js",
+    "bkV2SetTripCharterManualForce": "allotment_v2/js/booking/bookingV2SetTripCharterManualForce.js"
   }
 }

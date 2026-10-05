@@ -1123,6 +1123,18 @@
      ตัวยกสิทธิ์ทั้งหมดข้างล่างมีไว้กู้ข้อมูลเก่าที่เก็บเป็นชื่อกลุ่ม
      ถ้ายังวิ่งกับรายการที่ admin เพิ่งติ๊กมาเอง จะกลายเป็นเติมสิทธิ์ที่เขาตั้งใจตัดออก
      หมุดนี้ถูกเติมตอนบันทึกจากหน้าจัดการผู้ใช้เท่านั้น · ข้อมูลเก่าไม่มีหมุด = เหมือนเดิม */
+  /* §actPerm (2026-10-03) · สิทธิ์พิเศษรายการกระทำ · ไม่ใช่หน้าเมนู จึงไม่อยู่ใน LA_NAV
+     ที่มา · ผู้ใช้ขอ "ปลด cap เรือได้เฉพาะคนที่เรา Assign" (ด่านฉุกเฉินของ §baCapGate)
+     เก็บรวมในช่อง perms เดิมของผู้ใช้ (ไม่มีคอลัมน์ใหม่ ไม่มี migration) · คีย์ขึ้นต้น act- เสมอ
+     กติกาเข้มกว่าสิทธิ์เมนู: ต้องมีคีย์ตรงตัวในรายการของคนนั้น · ไม่มีการยกให้จากกลุ่ม ไม่มีค่าเริ่มต้นเป็น "ได้"
+     admin ได้เสมอ · เปิดไฟล์ตรง ๆ ไม่มีระบบ login (ME ว่าง) ได้เหมือนพฤติกรรมเดิมของสิทธิ์อื่น
+     ⚠ เพิ่มคีย์ใหม่ต้องเพิ่ม PERM_KEYS.add('<key>') ใน server.js ด้วย ไม่งั้น cleanPerms ตัดทิ้งตอนบันทึก */
+  var LA_ACTS=[
+    {v:'act-capunlock', t:'ปลด cap เรือเฉพาะวัน (ฉุกเฉิน)', d:'เพิ่มที่นั่งของเรือลำหนึ่งเฉพาะวันนั้น เมื่อเรือเต็มแล้วยังมีคนที่รับจองไปแล้วค้างอยู่ · ไม่เกินที่นั่งจดทะเบียน'}
+  ];
+  window.LA_ACTS=LA_ACTS;
+  function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }
+  window.laCanAct=function(key){ if(!ME || ME.role==='admin') return true; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };
   var LA_PERM_EXPLICIT='*explicit';
   function laPermIsExplicit(perms){ return Array.isArray(perms) && perms.indexOf(LA_PERM_EXPLICIT)>=0; }
   /* ปิดหมุดเข้ารายการที่จะบันทึก · ตัดของเดิมออกก่อนกันซ้ำ */
@@ -1314,10 +1326,12 @@
   /* §user→sales · dropdown เลือกว่า user คนนี้ "คือ" sales คนไหน · ว่าง = ไม่จำกัด (เห็นทุกเอเยนต์)
      ดึงจาก SB_SALES ที่โหลดแล้ว (global) · admin เปิดโมดัลนี้ตอนแอปโหลดเสร็จแล้ว SB_SALES จึงพร้อมเสมอ */
   function laSalesSelectHTML(id, cur){
-    var list = (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : [];
+    var all = (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : [];
+    /* §salesActive · inactive ไม่ขึ้นเป็นตัวเลือก เว้นแต่ user คนนี้ผูกอยู่แล้ว (ติดป้าย inactive) */
+    var list = all.filter(function(s){ return s && (s.active!==false || s.id===cur); });
     return '<select id="'+id+'" style="border:1px solid #d7d3ca;border-radius:7px;padding:7px;font-size:13px;font-family:inherit">'+
       '<option value="">— ไม่จำกัด (เห็นทุกเอเยนต์) —</option>'+
-      list.map(function(s){ return '<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name||s.code||s.id)+'</option>'; }).join('')+'</select>'; }
+      list.map(function(s){ return '<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name||s.code||s.id)+(s.active===false?' (inactive)':'')+'</option>'; }).join('')+'</select>'; }
 
   /* ══════════════════════════════════════════════════════════════════════════
      §laUsers2 · หน้าต่างจัดการผู้ใช้ + สิทธิ์เข้าถึง
@@ -1605,6 +1619,7 @@
               /* §permExplicit · raw = ค่าที่เก็บไว้จริง ๆ · perms = ที่คลี่เป็นรายเมนูแล้ว
                  หมุด '*explicit' ไม่ใช่ชื่อเมนู จึงหายไปตอนคลี่ ต้องเก็บต้นฉบับไว้ดูเอง */
               raw:(Array.isArray(u.perms)?u.perms.slice():null),
+              acts:laActKeys(u.perms),
               perms:lauPerms(u),edit:lauEditOf(u)}; }); }
     __laRender();
   };
@@ -1785,7 +1800,7 @@
       var u=(LAU.rows||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!u) return;
       var D=LAU.dirty[id];
       var r=sx('POST','/api/users/perms',JSON.stringify({id:u.id,role:u.role,dept:u.dept,
-        perms:laPermSeal(D.perms),editAreas:D.edit,salesId:u.salesId}),'application/json');
+        perms:laPermSeal(D.perms.concat(u.acts||[])),editAreas:D.edit,salesId:u.salesId}),'application/json');   /* §actPerm · ตารางสิทธิ์ไม่ได้แก้สิทธิ์พิเศษ ต้องส่งของเดิมกลับไปด้วย */
       if(r.status===200) ok++; else bad.push(u.username);
     });
     LAU.dirty={};
@@ -1842,8 +1857,21 @@
         +'<div class="mns">'+M.map(function(m){
             return '<span class="mn '+(D.perms.indexOf(m.v)>=0?'on':'')+'" onclick="__laTogMenu(\''+pfx+'\',\''+a.k+'\',\''+m.v+'\')">'
               +esc(m.t)+'</span>'; }).join('')+'</div></div>';
-    }).join('');
+    }).join('')
+    /* §actPerm · สิทธิ์พิเศษ · แยกจากพื้นที่ · ปุ่ม "ทุกพื้นที่"/ชุดลัด ไม่ติ๊กให้ ต้องกดเองทีละคน */
+    +'<div class="ar open '+((D.acts||[]).length?'has':'')+'" id="'+pfx+'-ar-acts" data-acts="1">'
+      +'<div class="top"><span class="dot" style="background:#A32D2D"></span>'
+        +'<div class="nm"><b>สิทธิ์พิเศษ</b><span>ไม่มากับชุดลัดหรือพื้นที่ · ให้เฉพาะคนที่ต้องตัดสินใจกรณีฉุกเฉิน</span></div>'
+        +'<span class="fr2 '+((D.acts||[]).length?'all':'')+'">'+(D.acts||[]).length+'/'+LA_ACTS.length+'</span></div>'
+      +'<div class="mns">'+LA_ACTS.map(function(a){
+          return '<span class="mn '+((D.acts||[]).indexOf(a.v)>=0?'on':'')+'" data-act="'+a.v+'" title="'+esc(a.d)+'" onclick="__laTogAct(\''+pfx+'\',\''+a.v+'\')">'
+            +esc(a.t)+'</span>'; }).join('')+'</div></div>';
   }
+  window.__laTogAct=function(pfx,v){
+    var D=lauTarget(pfx); if(!D) return; if(!Array.isArray(D.acts)) D.acts=[];
+    if(D.acts.indexOf(v)>=0) D.acts=D.acts.filter(function(x){ return x!==v; }); else D.acts.push(v);
+    lauRepaint(pfx);
+  };
   function lauTarget(pfx){ return pfx==='a'?LAU.add:LAU.draft; }
   function lauRepaint(pfx){
     var el=document.getElementById(pfx==='a'?'la-aperm':'la-pbody'); if(!el) return;
@@ -1880,6 +1908,7 @@
     var D=lauTarget(pfx), ks=lauPresetKeys(name);
     D.perms=[]; ks.forEach(function(k){ D.perms=D.perms.concat(lauMenus(k).map(function(m){return m.v;})); });
     D.edit=ks.filter(function(k){ return k!=='overview'; });
+    if(name==='NONE') D.acts=[];   /* §actPerm · "ล้าง" ต้องล้างสิทธิ์พิเศษด้วย · ชุดลัดอื่นไม่แตะ */
     lauRepaint(pfx); lauToast('ใช้ชุดลัด '+name);
   };
   function lauPsetHTML(pfx){
@@ -1891,7 +1920,7 @@
   /* ── หน้าต่างสิทธิ์ ── */
   window.__laEditPerms=function(id){
     var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
-    LAU.cur=u; LAU.draft={perms:u.perms.slice(),edit:u.edit.slice()};
+    LAU.cur=u; LAU.draft={perms:u.perms.slice(),edit:u.edit.slice(),acts:(u.acts||[]).slice()};
     var w=document.getElementById('la-uwin'); if(!w) return;
     var old=w.querySelector('#la-pmask'); if(old) old.remove();
     var d=document.createElement('div'); d.className='mask'; d.id='la-pmask';
@@ -1953,8 +1982,9 @@
     var perms, editAreas;
     if(role==='admin'){ perms=LA_NAV.map(function(n){return n.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
     else { perms=LAU.draft.perms.slice(); editAreas=LAU.draft.edit.slice(); }
+    var _acts=(role==='admin')?[]:(LAU.draft.acts||[]).slice();   /* §actPerm · admin ได้อยู่แล้ว ไม่ต้องเก็บ */
     if(role!=='admin' && !perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · ผู้ใช้คนนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return;
-    perms=laPermSeal(perms);   /* §permExplicit · ติ๊กมาเท่าไรได้เท่านั้น ไม่ให้ตัวยกสิทธิ์เก่าเติมกลับ */
+    perms=laPermSeal(perms.concat(_acts));   /* §permExplicit · ติ๊กมาเท่าไรได้เท่านั้น ไม่ให้ตัวยกสิทธิ์เก่าเติมกลับ */
     var r=sx('POST','/api/users/perms',JSON.stringify({id:id,role:role,dept:dept,perms:perms,
       editAreas:editAreas,salesId:salesId}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'บันทึกไม่สำเร็จ',1); return; }
@@ -2015,7 +2045,7 @@
     if(D.role==='admin'){ perms=LA_NAV.map(function(x){return x.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
     else { perms=D.perms.slice(); editAreas=D.edit.slice();
       if(!perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · บัญชีนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return;
-      perms=laPermSeal(perms); }   /* §permExplicit · บัญชีใหม่ระบุครบตั้งแต่ต้น */
+      perms=laPermSeal(perms.concat(D.acts||[])); }   /* §permExplicit · บัญชีใหม่ระบุครบตั้งแต่ต้น · §actPerm */
     var r=sx('POST','/api/users',JSON.stringify({username:u,name:n,password:p,role:D.role||'staff',
       dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }

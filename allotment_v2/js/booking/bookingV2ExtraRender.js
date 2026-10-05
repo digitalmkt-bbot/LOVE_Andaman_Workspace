@@ -12,7 +12,7 @@ function bookingV2ExtraRender(){
   const _fCompany=editing?(editing.toCompany||0):0;
   const _fComm=Math.max(0,pckN((_fQty*_fPrice)-_fCompany));
   const _fSeller=editing?(editing.seller||''):'';
-  const _sellerOpts=(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${esc(s.name)}">`).join('');
+  const _sellerOpts=sbSalesActive().map(s=>`<option value="${esc(s.name)}">`).join('');   /* §salesActive */
   acctModal(`
     <datalist id="bkv2-sellers">${_sellerOpts}</datalist>
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">Extra วันเดินทาง · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">ขายหน้างาน หรือขายล่วงหน้าแล้วเก็บเงินวันเดินทาง · ไม่เกี่ยวกับเครดิต/บิล agent</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>

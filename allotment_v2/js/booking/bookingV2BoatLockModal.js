@@ -12,11 +12,11 @@ function bookingV2BoatLockModal(){
   const inp='width:100%;border:1px solid var(--border);border-radius:8px;background:#FCFBF9;padding:8px 10px;font-family:inherit;font-size:12.5px;color:var(--ink)';
   const boatRows=list.map(b=>{
     const on=f.boatId===b.id;
-    return `<div onclick="${b.ok?`bookingV2BoatLockSet('boatId','${E(b.id)}')`:''}" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid #EFECE6;font-size:12.5px;${b.ok?'cursor:pointer;':'background:#F7F5F2;color:#a8a29a;'}${on?'background:#F3EBFA;':''}">
+    return `<div data-bklk-boat="${E(b.id)}" data-bklk-ok="${b.ok?1:0}" data-bklk-other="${E(b.other||'')}" onclick="${b.ok?`bookingV2BoatLockSet('boatId','${E(b.id)}')`:''}" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid #EFECE6;font-size:12.5px;${b.ok?'cursor:pointer;':'background:#F7F5F2;color:#a8a29a;'}${on?'background:#F3EBFA;':''}">
       <span style="width:13px;height:13px;border-radius:50%;flex:none;border:2px solid ${on?'#6B289A':'#C3BCB2'};background:${on?'#6B289A':'transparent'};box-shadow:${on?'inset 0 0 0 2.5px #fff':'none'}"></span>
       <b style="font-weight:700">${E(b.name)}</b>
       <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:${b.ok?'var(--ink-soft)':'inherit'}">${b.cap} ที่</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.own?'#6B289A':(b.ok?'#0C6B47':'#8A6A1A')}">${b.own?'ลำที่กันไว้ตอนนี้':(b.ok?'ว่าง':E(b.why))}</span>
+      <span style="margin-left:auto;font-size:11px;font-weight:600;color:${b.own?'#6B289A':(b.ok?'#0C6B47':'#8A6A1A')}">${b.own?'ลำที่กันไว้ตอนนี้':(b.ok?('ว่าง'+' &middot; '+E(b.place)):E(b.why))}</span>
     </div>`;
   }).join('') || '<div style="padding:14px;text-align:center;color:var(--ink-faint);font-size:12px">วันนี้ไม่มีเรือ</div>';
   /* ด่านกัน · ลำที่เลือกมีใบจองอยู่ → โชว์รายการให้เลย คนกดต้องรู้ว่าจะย้ายใบไหน */

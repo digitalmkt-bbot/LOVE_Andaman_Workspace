@@ -159,6 +159,7 @@ function bookingV2RenderBookingDetail(){
                       <div style="width:6px;height:24px;border-radius:3px;background:#1F2A44"></div>
                       <div style="flex:1;min-width:0">
                         <div style="font-size:13px;font-weight:800;color:#1F2A44">${escapeHTML(route?.name || t.routeId)}</div>
+                        ${bkUpgActive(t)?`<div data-upgdetail="1" style="display:inline-block;font-size:11px;font-weight:700;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:2px 8px;margin-top:3px">${escapeHTML(bkUpgNote(bk, t.date))}${t.upg.by?(' &middot; '+escapeHTML(t.upg.by)):''}</div>`:''}
                         <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${bookingV2FmtFullDate(t.date)}</div>
                       </div>
                       ${t.charter?`<span style="background:#3A6FF7;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">CHARTER</span>`:''}

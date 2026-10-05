@@ -118,7 +118,8 @@ function bookingV2RenderTripsSection(){
         let disabled = false;
         let note = '';
         if(alreadyChartered){ note = ' · ALREADY CHARTERED'; disabled = true; }
-        else if(!hasCharterRate){ note = ' · no charter rate set'; disabled = true; }
+        /* §chManualNoRate · ไม่มีเรทเหมา ≠ เลือกไม่ได้ · ยังเหมาได้ด้วยราคาที่ตกลงกันเอง (กล่องแดงข้างล่างให้กรอก) */
+        else if(!hasCharterRate){ note = ' · no charter rate · enter agreed price'; }
         else if(hasSeats){ note = ' · has existing seat bookings (will need confirm)'; }
         return `<option value="${a.boatId}" ${t.charterBoatId===a.boatId?'selected':''} ${disabled?'disabled':''}>${escapeHTML(label+note)}</option>`;
       }).join('');
@@ -152,7 +153,9 @@ function bookingV2RenderTripsSection(){
           <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
             <span style="font-size:11px;color:#6B289A;font-weight:600">Charter price ฿</span>
             <input type="number" min="0" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bookingV2SetTripCharterManual(${idx}, this.value)" placeholder="0" style="width:110px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #D7B5F0;border-radius:5px">
-            <span style="font-size:10px;color:${subtotal.manualDelta===0?'#6B289A':(subtotal.manualDelta<0?'#0F7A5A':'#A05A1A')}">rate ฿${subtotal.rateTotal.toLocaleString()}${subtotal.manualDelta!==0?` · ${subtotal.manualDelta<0?'&minus;':'+'}฿${Math.abs(subtotal.manualDelta).toLocaleString()}`:''}</span>
+            ${subtotal.noRateCard
+              ? `<span data-chnorate="ok" style="font-size:10px;color:#A05A1A">no rate card for this boat type &middot; agreed price</span>`
+              : `<span style="font-size:10px;color:${subtotal.manualDelta===0?'#6B289A':(subtotal.manualDelta<0?'#0F7A5A':'#A05A1A')}">rate ฿${subtotal.rateTotal.toLocaleString()}${subtotal.manualDelta!==0?` · ${subtotal.manualDelta<0?'&minus;':'+'}฿${Math.abs(subtotal.manualDelta).toLocaleString()}`:''}</span>`}
           </div>
           <input value="${escapeHTML(t.charterPriceNote||'')}" oninput="bookingV2SetTripCharterNote(${idx}, this.value)" placeholder="Reason / note · e.g. repeat charter discount" style="margin-top:6px;width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;border:1px solid #D7B5F0;border-radius:5px;color:#6B289A">
       ` : `
@@ -167,7 +170,16 @@ function bookingV2RenderTripsSection(){
         </div>
       `;
     } else if(isCharter && t.charterBoatId && subtotal.error){
-      charterBreakdownHtml = `<div style="margin-top:6px;padding:6px 10px;background:#FDE7E7;color:#a32d2d;font-size:10px;border:1px solid #F5B7B7;border-radius:var(--r-sm)">⚠ ${escapeHTML(subtotal.error)} for this boat type · check Rate Type charter rates</div>`;
+      /* §chManualNoRate · เดิมมีแค่ป้ายแดง ไม่มีช่องให้กรอกราคา · ทางเดียวที่เหลือคือบันทึกยอด 0
+         ให้กรอกราคาที่ตกลงกันได้ตรงนี้เลย · กรอกแล้วสลับเป็น FLEXIBLE ให้เอง */
+      charterBreakdownHtml = `<div data-chnorate="ask" style="margin-top:6px;padding:8px 10px;background:#FDE7E7;color:#a32d2d;font-size:11px;border:1px solid #F5B7B7;border-radius:var(--r-sm);line-height:1.5">
+          <b>&#9888; ${escapeHTML(subtotal.error)} for this boat type (${escapeHTML(subtotal.boatName||'')})</b> &middot; this trip is priced <b>฿0</b>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:6px;flex-wrap:wrap">
+            <span style="font-weight:700">Agreed charter price ฿</span>
+            <input type="number" min="0" data-chnorate-in="1" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bookingV2SetTripCharterManualForce(${idx}, this.value)" placeholder="0" style="width:120px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #E0A0A0;border-radius:5px">
+            <span style="font-size:10px">or pick another boat &middot; or add the rate in Rate Type</span>
+          </div>
+        </div>`;
     }
     // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
     let lockBannerHtml = '';

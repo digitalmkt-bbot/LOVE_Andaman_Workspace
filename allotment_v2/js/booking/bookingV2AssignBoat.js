@@ -25,6 +25,10 @@ function bookingV2AssignBoat(bkId, boatId, date){
              ต้องใส่เหตุผล บันทึกชื่อคนปรับ และไม่เกินที่นั่งจดทะเบียน · ปรับแล้วใส่เรือให้ต่อเอง
              เกินทะเบียนแล้วไม่มีทางปลด ต้องเพิ่มเรือ */
           const nm=((bo&&bo.name)||boatId), lic=(typeof boatCapLicense==='function')?boatCapLicense(boatId):0;
+          if(typeof boatCapModalOpen==='function' && !(lic>0 && next-BA_CAP_TOL>lic) && !boatCapMayRaise()){
+            alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+').\n\nRaising the capacity for this day is an emergency step that needs the special permission "unlock boat capacity". Ask an admin or a user who has it, or assign another boat.');
+            return;
+          }
           if(typeof boatCapModalOpen!=='function' || (lic>0 && next-BA_CAP_TOL>lic)){
             alert('Cannot assign to '+nm+'.\nThis boat would have '+next+' pax on '+d+' (cap '+cap+', max allowed '+(cap+BA_CAP_TOL)+(lic>0?(', licensed seats '+lic):'')+').\nThe licensed seats cannot be exceeded. Assign another boat, or add a boat in Boat Operation.');
             return;

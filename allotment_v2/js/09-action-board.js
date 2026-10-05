@@ -54,7 +54,7 @@ function _abFillCol(p){
   return              ['#FBE9E9','#A32D2D'];
 }
 
-function _abSalesList(){ return (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : []; }
+function _abSalesList(){ return ((typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES)) ? SB_SALES : []).filter(function(x){ return x && x.active!==false; }); }   /* §salesActive · inactive ไม่ขึ้นชิป */
 function _abAgentMap(){
   var m={}; ((typeof SB_AGENTS!=='undefined'&&Array.isArray(SB_AGENTS))?SB_AGENTS:[]).forEach(function(a){ m[a.id]=a; });
   return m;

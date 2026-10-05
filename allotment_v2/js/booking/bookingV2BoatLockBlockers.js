@@ -2,7 +2,7 @@
    คืนรายการใบจองจริง ไม่ใช่แค่ true/false — คนกดต้องตัดสินใจว่าจะย้ายใบไหนไปลำอื่น
    การตอบว่า "ล็อกไม่ได้" เฉย ๆ ทำให้ต้องไปไล่หาเองว่าติดอะไร                    */
 function bookingV2BoatLockBlockers(date, boatId, routeId, exceptId){
-  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0 };
+  const out = { rows:[], pax:0, cellBooked:0, charterOf:'', holdOf:'', short:0, sold:0, capAfter:0, placed:'', otherRoute:'' };
   const op = (typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date][boatId] : null;
   /* §bkLockEdit · ตอนแก้ใบ · ช่องที่ใบนี้ถืออยู่เองไม่นับว่าขวาง
      ไม่งั้นเปิดฟอร์มแก้แล้วลำของตัวเองขึ้นว่า "ถูกกันทั้งลำไว้แล้ว" เลือกกลับไม่ได้ */
@@ -11,6 +11,11 @@ function bookingV2BoatLockBlockers(date, boatId, routeId, exceptId){
     if(op.charterBookingId) out.charterOf = op.charterBookingId;
     if(op.boatLockId && !mine) out.holdOf = op.boatLockId;
     out.cellBooked = Number(op.booked)||0;
+    /* §bkLkPlaced (2026-10-03) · เรือถูกวางไว้ที่เส้นทางไหนของวันนั้น (กระดาน Boat Operation)
+       ที่มา · ผู้ใช้ส่งภาพฟอร์มล็อกเรือ · "ต้องเตือนด้วยว่าเรือถูกวางไว้ในเส้นทางไหนแล้ว โปรแกรมนอกเหนือจะจับมาใช้ไม่ได้"
+       ของเดิม · เรือที่วางไว้เส้นทางอื่นแต่ยังไม่มีคนขาย ขึ้นว่า "ว่าง" · ล็อกแล้วช่องบนกระดานถูกเปลี่ยนเส้นทางเงียบ ๆ
+       เรือหายจากโปรแกรมที่วางไว้โดยไม่มีใครรู้ · ลำที่วางไว้แล้วล็อกได้เฉพาะให้เส้นทางเดียวกับที่วาง */
+    if(!mine && op.route){ out.placed = op.route; if(routeId && op.route!==routeId) out.otherRoute = op.route; }
   }
   /* ══ §bkLock · ที่นั่งที่ขายไปแล้วทั้งเส้นทาง ไม่ใช่แค่ที่ผูกกับลำนี้ ═══════════
      เจอตอนดูหน้า By trip ของจริง · 20 ก.ย. r10 ขายไปแล้ว 30 ที่ มีเรือลำเดียว

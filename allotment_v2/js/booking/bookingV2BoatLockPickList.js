@@ -19,14 +19,18 @@ function bookingV2BoatLockPickList(date, routeId, exceptId){
     const st=(typeof getCurStatus==='function')?(getCurStatus(b,date)||{}).s:'available';
     const B=bookingV2BoatLockBlockers(date,b.id,undefined,exceptId);
     let why='';
+    /* §bkLkPlaced · ลำที่วางไว้เส้นทางอื่นเลือกไม่ได้ · ลำที่เลือกได้ก็บอกด้วยว่าวางไว้ที่ไหนหรือยังไม่ได้วาง */
+    const _other=(routeId && B.placed && B.placed!==routeId) ? B.placed : '';
+    const place = B.placed ? (laT('วางไว้ที่')+' '+bookingV2BoatLockRouteNm(B.placed)) : laT('ยังไม่ได้วางเส้นทาง');
     if(isOwn) why='';
     else if(st && st!=='available') why='ไม่พร้อมใช้งาน · '+st;
     else if(B.charterOf) why='เหมาลำอยู่แล้ว · '+B.charterOf;
     else if(B.holdOf) why='ถูกกันทั้งลำไว้แล้ว';
+    else if(_other) why=laT('วางไว้ที่')+' '+bookingV2BoatLockRouteNm(_other)+' '+laT('แล้ว · ใช้กับโปรแกรมอื่นไม่ได้');
     else if(B.pax>0) why='มีใบจองแล้ว '+B.pax+' ที่';
     else if(B.cellBooked>0) why='มีที่นั่งขายแล้ว '+B.cellBooked+' ที่';
     else if(B.short>0) why='ทริปขายไปแล้ว '+B.sold+' ที่ · เอาลำนี้ออกจะขาด '+B.short+' ที่';
-    out.push({ id:b.id, name:b.name||b.id, cap:bookingV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B, own:isOwn });
+    out.push({ id:b.id, name:b.name||b.id, cap:bookingV2BoatCapOn(b.id,date), pier:b.pier||'', ok:!why, why:why, blockers:B, own:isOwn, placed:B.placed||'', other:_other, place:place });
   });
   out.sort((a,b)=> ((a.own?0:1)-(b.own?0:1)) || (a.ok===b.ok ? (b.cap-a.cap) : (a.ok?-1:1)));
   return out;

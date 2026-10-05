@@ -832,7 +832,24 @@ var LA_T_EN={
   '{0} ที่ · ขายไปแล้ว {1}':'{0} seats · {1} sold',
   'ล็อกแบบช่วง':'range lock',
   'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
-  'ไม่ออกวันนี้':'Not running today',
+  'ไม่ออกวันนี้':'Not running today','เหมา':'Charter','ยังไม่จัดเรือ':'no boat yet',
+  'เรือว่าง · ยังไม่จัด':'Free boats · not deployed',
+  'เรือที่พร้อมใช้แต่ยังไม่ได้วางบนเส้นทางไหนของวันนั้น':'Boats that are available but not placed on any programme that day',
+  'ไม่มีเรือว่างที่ท่านี้':'No free boat at this pier',
+  'อู่':'shop',
+  'วางไว้ที่':'Placed on',
+  'ยังไม่ได้วางเส้นทาง':'not placed on any programme yet',
+  'แล้ว · ใช้กับโปรแกรมอื่นไม่ได้':'· cannot be used for another programme',
+  'ท่าเดียวกับโปรแกรมเดิม':'Same pier as the booked programme',
+  'ต่างท่า · ต้องเปลี่ยนจุดขึ้นเรือ':'Different pier · boarding point changes',
+  'ย้ายไปเส้นทางอื่น':'Move to another programme',
+  'จาก':'from',
+  'ไปโปรแกรม':'Destination programme',
+  'เหตุผล':'Reason',
+  'วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง':'No other programme has a boat running today',
+  'เช่น ทริปเดิมไม่ออก · ลูกค้าขอเปลี่ยน':'e.g. original trip not running · guest asked to change',
+  'เก็บเพิ่ม (บาท) · 0 = ไม่เก็บ':'Extra charge (THB) · 0 = none',
+  'ราคาใบจองไม่เปลี่ยน ยึดราคาที่จองไว้ · ยอดเก็บเพิ่มจะขึ้นเป็นรายการอัปเกรดที่ต้องเก็บหน้าท่า · เรือที่จัดไว้เดิมจะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง':'The booking price does not change (booked price is kept) · the extra charge becomes an upgrade item to collect at the pier · the current boat is cleared, assign a boat on the destination programme',
   /* §lkPend / §pbPax2 (2026-10-02) */
   /* §rtKeep (2026-10-03) */
   'ใบนี้ยึดเรทเดิมตอนจอง':'This booking keeps the rate it was booked at',
@@ -2674,6 +2691,12 @@ function renderDash(){
     const dOps=TRIPS[ds]||{};
     let booked=0, capacity=0, charter=0;
     const routeBooked={};
+    /* §dashChBoat (2026-10-05) · ผู้ใช้ขอ "เหมาลำ Charter ที่โชว์ แบ่งเป็นลำได้ไหม"
+       เดิมรวมทุกใบเหมาเป็นแท่งเดียว (63 = Oceanus 30 + LKC33 33) มองไม่ออกว่าลำไหนเท่าไหร่
+       เก็บหัวเหมาแยกตามลำ · '' = ใบเหมาที่ยังไม่ได้จัดเรือ · ผลรวมทุกช่องต้องเท่ากับ charter เสมอ */
+    const charterBoats={};
+    const _chAdd=(bid,n)=>{ if(n>0) charterBoats[bid||'']=(charterBoats[bid||'']||0)+n; };
+    const _chSplitSeen=new Set();
     const _seatRoutes=new Set();   // seat-mode routes operating this day (count via actual sales bookings, once per route)
     const _capBoats=new Set();     // boats already counted toward capacity (avoid double-count)
     Object.entries(dOps).forEach(([bid,op])=>{
@@ -2688,7 +2711,7 @@ function renderDash(){
       // ⚠ Boat-Op charter ops carry pax on the sales booking (op.booked is usually 0). A LINKED charter
       // (has charterBookingId) is counted from SB_BOOKINGS below (real pax) — only an UNLINKED manual
       // Boat-Op charter falls back to op.booked. Boat capacity is already counted above either way.
-      if(isCharter){ if(!op.charterBookingId) charter+=(op.booked||0); }
+      if(isCharter){ if(!op.charterBookingId){ charter+=(op.booked||0); _chAdd(bid, op.booked||0); } }
       else { _seatRoutes.add(op.route); }
     });
     // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
@@ -2709,10 +2732,20 @@ function renderDash(){
         const r=getRoute(rid); if(!r) return;
         if(t.bookingMode==='charter'){
           // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
-          charter+=(typeof bookingV2PaxAllTot==='function'?bookingV2PaxAllTot(t.pax||{}):0);
+          const _cpx=(typeof bookingV2PaxAllTot==='function'?bookingV2PaxAllTot(t.pax||{}):0);
+          charter+=_cpx;
           // §boatSplit · เหมา 1 ใบอาจกินหลายลำ · เดิมนับความจุแค่ลำแรก
           let _cbids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
           if(!_cbids.length){ const _one=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(_one) _cbids=[_one]; }
+          /* §dashChBoat · ลำเดียว = ทั้งใบลงลำนั้น · แยกหลายลำ = ตามก้อนที่แยกไว้ (นับครั้งเดียวต่อใบ)
+             เศษที่ยังไม่ได้ลงลำไหน ไปกอง "ยังไม่จัดเรือ" · ไม่ให้หัวหายจากกราฟ */
+          if(_cbids.length<=1) _chAdd(_cbids[0]||'', _cpx);
+          else {
+            let _left=_cpx;
+            if(!_chSplitSeen.has(bk.id)){ _chSplitSeen.add(bk.id);
+              _cbids.forEach(cbid=>{ const n=Math.min(_left,(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(bk,ds,cbid):0); _chAdd(cbid,n); _left-=n; }); }
+            _chAdd('', _left);
+          }
           _cbids.forEach(cbid=>{ if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } } });
           return;
         }
@@ -2730,7 +2763,7 @@ function renderDash(){
         }
       });
     });
-    return {ds,booked,capacity,routeBooked,charter,wx};
+    return {ds,booked,capacity,routeBooked,charter,charterBoats,wx};
   };
   const CHARTER_COLOR='#7A5BC4';   // ม่วงของเหมาลำ · เข้มพอให้อ่านออกบนพื้นขาว
   // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
@@ -3002,12 +3035,23 @@ function renderDash(){
     // TODAY only — one bar per route (separated) + a Charter bar, tallest→shortest
     const dayPal=['#5AA86E','#D9A520','#C86A3E','#3E7FB0','#7A5BC4','#2E9B72','#C4577F','#A87F1E','#2E8C9B'];
     const dayEntries = dayRows.map(([id,v],i)=>{ const r=getRoute(id); return {label:r?_shortName(r.name):id, val:v, color:dayPal[i%dayPal.length]}; });
-    if(dayCharter>0) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter, color:CHARTER_COLOR});
+    /* §dashChBoat · แท่งเหมาแยกตามลำ · ม่วงไล่เฉด ลำที่คนเยอะสุดเข้มสุด · ยังไม่จัดเรือ = ม่วงจาง */
+    if(dayCharter>0){
+      const _cb=(bkBuckets[0]&&bkBuckets[0].charterBoats)||{};
+      const _cpal=['#7A5BC4','#9B7FD6','#5E43A6','#B49BE2','#4A3489'];
+      const _crow=Object.entries(_cb).filter(([id,v])=>v>0).sort((a,b)=>(a[0]===''?1:0)-(b[0]===''?1:0)||b[1]-a[1]);
+      let _sum=0;
+      _crow.forEach(([id,v],i)=>{ _sum+=v; const cb=id?getBoat(id):null;
+        dayEntries.push({ label: id ? (laT('เหมา')+' · '+((cb&&cb.name)||id)) : (laT('เหมา')+' · '+laT('ยังไม่จัดเรือ')),
+                          val:v, color: id?_cpal[i%_cpal.length]:'#C9BDE6', ch:1, chBoat:id }); });
+      /* กันหัวหาย · ถ้าแยกลำแล้วไม่ครบ (ไม่ควรเกิด) ให้มีแท่งรวมส่วนที่เหลือ */
+      if(_sum<dayCharter) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter-_sum, color:'#C9BDE6', ch:1, chBoat:''});
+    }
     const dayMax=Math.max(...dayEntries.map(e=>e.val),1);
     plotCols='repeat('+Math.max(dayEntries.length,1)+',1fr)'; plotGap='12px';
     plotHtml = dayEntries.length ? dayEntries.map(e=>{
       const h=Math.max((e.val/dayMax)*100,3);
-      return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
+      return `<div ${e.ch?`data-chbar="${e.chBoat||''}" data-chval="${e.val}" `:''}style="display:flex;flex-direction:column;align-items:center;min-width:0">
         <div class="dv-barbox">
           <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${e.color};border-radius:7px 7px 3px 3px;box-shadow:inset 0 1px 0 rgba(255,255,255,.42)">
             <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-family:'DM Mono',ui-monospace,monospace;font-size:13px;font-weight:800;color:#2c2c2a">${e.val}</div>
@@ -5554,6 +5598,18 @@ function renderBoatDetailPink(){
     calRows.push(calCells.slice(r,r+7));
   }
 
+  /* §bsCalPier (2026-10-03) · ปฏิทินสถานะของเรือ บอกด้วยว่าวันนั้นเรืออยู่ท่าไหน
+     ผู้ใช้ขอ "ปฏิทินของเรือ ระบุด้วยว่าอยู่ที่ท่าเรือไหน วันนั้น ๆ" · ของเดิมสีบอกแค่พร้อม/ซ่อม/หยุดใช้
+     เรือที่ย้ายท่ากลางเดือน (เช่น 13–14 พันวา · 15–23 ทับละมุ) ต้องไล่อ่านประวัติข้างล่างเอง
+     อ่านจากกติกาเดียวกับทั้งระบบ getBoatCurrentPier(เรือ, วัน) · อยู่อู่ = ป้ายประแจ */
+  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'\u{1F527}'};
+  const _bsPierFull=p=>p==='shop'?'In shop':((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[p])||((typeof laPierName==='function')?laPierName(p):p)||p);
+  const _bsPierTag=(c,onColor)=>{
+    let p=''; try{ p=getBoatCurrentPier(b,c.ds)||''; }catch(_){}
+    if(!p) return '';
+    const sh=_bsPierShort[p]||String(p).slice(0,2).toUpperCase();
+    return `<span data-bspier="${p}" title="${c.ds} · ${_bsPierFull(p)}" style="position:absolute;top:3px;right:3px;font-size:8.5px;font-weight:800;line-height:1;padding:2px 3px;border-radius:4px;font-family:'DM Sans',sans-serif;${onColor?'background:rgba(255,255,255,.26);color:#fff':'background:#F1EFE8;color:#6B6860'}">${sh}</span>`;
+  };
   const calHtml=calRows.map(row=>row.map(c=>{
     if(c.empty)return`<div style="aspect-ratio:1"></div>`;
     // Charter boats: only render colored cells when there's a log entry covering that day
@@ -5564,7 +5620,7 @@ function renderBoatDetailPink(){
     }
     // Future days WITHOUT log entry → empty white cell
     if(c.isFuture&&!c.logId){
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}</div>`;
+      return`<div onclick="bsCellClick('${c.ds}',null)" style="position:relative;aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}${_bsPierTag(c,false)}</div>`;
     }
     // Past or future WITH log entry → status color
     const bg=STATUS_CAL_COLOR[c.status]||'#1D9E75';
@@ -5572,7 +5628,7 @@ function renderBoatDetailPink(){
     // Slightly fade future days with log to differentiate from past
     const futureOpacity=c.isFuture&&!c.isToday?'opacity:.85;':'';
     const handler=c.logId?`bsCellClick('${c.ds}','${c.logId}')`:`bsCellClick('${c.ds}',null)`;
-    return`<div onclick="${handler}" style="aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}</div>`;
+    return`<div onclick="${handler}" style="position:relative;aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}${_bsPierTag(c,true)}</div>`;
   }).join('')).join('');
 
   // Recent status changes — show ALL log entries (sorted by from desc)
@@ -5719,6 +5775,7 @@ function renderBoatDetailPink(){
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#1D9E75;border-radius:3px"></span>Available</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#BA7517;border-radius:3px"></span>Fixing</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#A32D2D;border-radius:3px"></span>Unavailable</span>
+        <span data-bspier-legend="1" style="display:flex;align-items:center;gap:5px;color:${dim.ink3}">TL Tub Lamu &middot; VP Visit Panwa &middot; RN Ranong &middot; &#128295; ${laT('อู่')}</span>
         <span style="margin-left:auto;font-family:'DM Mono',monospace">Today: ${MONTHS_EN[today.getMonth()]} ${today.getDate()}</span>
       </div>
     </div>
@@ -8351,15 +8408,29 @@ function bop2RenderShell(){
           <span style="flex:1"></span>
           <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">${_fleet.assigned.length} ลำ</span>
         </div>
-        ${_fleet.assigned.length ? _fleet.assigned.map(a => `
-        <div style="display:flex;align-items:center;gap:9px;padding:7px 13px;border-top:1px solid rgba(0,0,0,.05)">
+        ${_fleet.assigned.length ? (() => {
+          /* §bopOutPier (2026-10-03) · ผู้ใช้ขอ "แยกท่าเรือ แล้วแบ่งเรือออกมา แต่ไม่ต้องใหญ่มาก"
+             ของเดิมเรือทุกท่าเรียงปนกันเป็นรายการเดียว · จัดกลุ่มตามท่าที่เรือออก (ท่าของเส้นทางที่วางไว้
+             ไม่มีเส้นทางจึงถอยไปใช้ท่าที่เรืออยู่วันนั้น) · หัวกลุ่มเป็นแถบบาง ๆ บรรทัดเดียว: ชื่อท่า · จำนวนลำ · pax รวม
+             ลำดับท่าตาม laPierRank (ทับละมุ → พันวา → ระนอง) · ลำดับเรือในท่าเท่าเดิม */
+          const _pOf = a => (a.route && a.route.pier) || getBoatCurrentPier(a.boat, _selDate) || 'other';
+          const _g = {}, _ord = [];
+          _fleet.assigned.forEach(a => { const p = _pOf(a); if(!_g[p]){ _g[p] = []; _ord.push(p); } _g[p].push(a); });
+          _ord.sort((x, y) => ((typeof laPierRank==='function') ? laPierRank(x) - laPierRank(y) : 0));
+          return _ord.map(p => `
+        <div data-bopout-pier="${p}" data-n="${_g[p].length}" style="display:flex;align-items:center;gap:6px;padding:4px 13px;background:#F6F8FB;border-top:1px solid rgba(0,0,0,.05);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#12518F">
+          <span>${escapeHTML((typeof PIER_LABELS!=='undefined' && PIER_LABELS[p]) || ((typeof laPierName==='function') ? laPierName(p) : p))}</span>
+          <span style="flex:1"></span>
+          <span style="font-weight:700;letter-spacing:0;text-transform:none;color:#6B7785">${_g[p].length} ลำ · ${_g[p].reduce((t, a) => t + (+a.seats||0), 0)} pax</span>
+        </div>` + _g[p].map(a => `
+        <div data-bopout-boat="${a.boat.id}" data-pier="${p}" style="display:flex;align-items:center;gap:9px;padding:7px 13px;border-top:1px solid rgba(0,0,0,.05)">
           <span style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 9px/1 'DM Sans';color:#fff;flex-shrink:0;background:${a.isCharter?'#6B289A':bop2BoatColor(a.boat.id)}">${escapeHTML(String(a.boat.name||'').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'--')}</span>
           <span style="flex:1;min-width:0">
             <span style="font-size:12px;font-weight:800;color:#2C2C2A;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.isCharter?'⚓ ':''}${escapeHTML(a.boat.name||'')}</span>
             <span style="font-size:9.5px;font-weight:600;color:#9B9088;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML((a.route&&a.route.name)||'—')}</span>
           </span>
           <span style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:${a.seats>0?'#0C6B47':'#B6B1A8'};flex-shrink:0;text-align:right">${a.seats}<small style="font-size:8.5px;font-weight:600;color:#B6B1A8;display:block">/${a.capacity}</small></span>
-        </div>`).join('') : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
+        </div>`).join('')).join(''); })() : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
       </div>
     </div>
 
@@ -8395,6 +8466,7 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:#FBE1C6"></span>ขายได้น้อย</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE9E9"></span>ว่างเยอะ</span>
         <span class="bo-legend-chip"><span class="box" style="background:#EFE9FA"></span>⚓ เหมาลำ</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#E4F2EB;border:1px dashed #8FCFB4"></span>${laT('เรือว่าง · ยังไม่จัด')}</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
@@ -8412,12 +8484,16 @@ function bop2RenderShell(){
           const cls = isToday ? 'today' : (isSel ? 'sel' : (needs ? 'alert' : ''));
           return `<div class="bo-day-h ${cls}" onclick="bop2SelectDate('${d}')" style="cursor:pointer" title="เลือกวันที่ ${d}"><div class="wd">${wkLbl}</div><div class="num">${dt.getDate()}</div></div>`;
         }).join('')}
+        ${(() => { window._bop2FreeMemo = {}; return ''; })()}
         ${tublamuRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>TUB LAMU · ${tublamuRoutes.length} route${tublamuRoutes.length===1?'':'s'}</span></div>` : ''}
         ${tublamuRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${tublamuRoutes.length ? bop2RenderFreeRow('tublamu', dates) : ''}
         ${panwaRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>VISIT PANWA · ${panwaRoutes.length} route${panwaRoutes.length===1?'':'s'}</span></div>` : ''}
         ${panwaRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${panwaRoutes.length ? bop2RenderFreeRow('panwa', dates) : ''}
         ${ranongRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>RANONG · ${ranongRoutes.length} route${ranongRoutes.length===1?'':'s'}</span></div>` : ''}
         ${ranongRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${ranongRoutes.length ? bop2RenderFreeRow('ranong', dates) : ''}
         ${(() => {
           /* §bopColMark · กรอบครอบทั้งคอลัมน์ ตั้งแต่หัววันที่ถึงแถวสุดท้าย
              ของเดิมทำเครื่องหมายไว้ที่หัวคอลัมน์อย่างเดียว · ไล่สายตาลงมาสองสามแถว
@@ -8563,6 +8639,41 @@ function bop2RenderShell(){
   `;
 }
 
+/* ══ §bopFree (2026-10-03) · แถว "เรือว่าง · ยังไม่จัด" ท้ายกลุ่มของแต่ละท่า ═══════════════════
+   ผู้ใช้ถามจากหน้า Boat Operation · "ในตัว Matrix จะทำยังไงให้เห็นว่าเรือว่างที่ยังไม่ Deploy มีอะไรบ้าง"
+   ของเดิมรู้ได้ทีละวัน ต้องกดเลือกวันแล้วไปอ่านรายการ AVAILABLE ทางขวา · วางแผนทั้งเดือนต้องกดสามสิบครั้ง
+   แถวนี้ใช้กติกาเดียวกับรายการทางขวาเป๊ะ (bop2FleetStatus().available): พร้อมใช้วันนั้น · ไม่ได้วางบนเส้นทางไหน
+   · ไม่ได้ค้างเกาะ · เรือเช่านอกช่วงไม่นับ · แยกตามท่าที่เรืออยู่ "ในวันนั้น" (getBoatCurrentPier)
+   ตัวเลขในช่อง = จำนวนลำ · ชี้ค้างดูชื่อเรือกับความจุ · กดแล้วเลือกวันนั้น (รายการทางขวาตามไป) */
+function bop2FreeByPier(dateStr){
+  const memo = (window._bop2FreeMemo = window._bop2FreeMemo || {});
+  if(memo[dateStr]) return memo[dateStr];
+  const keep = _bop2.pier; let av = [];
+  try{ _bop2.pier = 'all'; av = bop2FleetStatus(dateStr).available || []; } finally{ _bop2.pier = keep; }
+  const out = {};
+  av.forEach(x => { const p = getBoatCurrentPier(x.boat, dateStr); (out[p] = out[p] || []).push(x.boat); });
+  Object.keys(out).forEach(p => out[p].sort((a,b) => (+b.cap||0) - (+a.cap||0)));
+  return (memo[dateStr] = out);
+}
+function bop2RenderFreeRow(pier, dates){
+  const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const isMonth = _bop2.viewMode === 'month';
+  const capOf = (b, d) => (typeof boatCapFor === 'function') ? (boatCapFor(b.id, d) || (+b.cap||0)) : (+b.cap||0);
+  let row = `<div class="bop2-cell bop2-cell-route" data-bopfree-label="${pier}" title="${esc(laT('เรือที่พร้อมใช้แต่ยังไม่ได้วางบนเส้นทางไหนของวันนั้น'))}" style="padding:2px 8px 2px 0;background:transparent">
+    <div style="border-left:3px dashed #1D9E75;border-radius:2px;padding:2px 0 2px 9px;width:100%;display:flex;align-items:center;min-height:26px;line-height:1.25">
+      <span style="font-size:${isMonth?'10.5':'11'}px;font-weight:700;color:#0F6E56">${esc(laT('เรือว่าง · ยังไม่จัด'))}</span>
+    </div></div>`;
+  dates.forEach(d => {
+    const list = bop2FreeByPier(d)[pier] || [], n = list.length;
+    const names = list.map(b => (b.name||b.id) + ' (' + capOf(b, d) + ')');
+    const tip = n ? (laT('เรือว่าง · ยังไม่จัด') + ' ' + n + ' · ' + names.join(', ')) : laT('ไม่มีเรือว่างที่ท่านี้');
+    const inner = !n ? '<span style="color:#C9C2BA;font-weight:600">&middot;</span>'
+      : (isMonth ? `<span>${n}</span>`
+                 : `<span style="display:flex;flex-direction:column;gap:1px;align-items:center;font-size:10px;font-weight:700;line-height:1.25;font-family:'DM Sans',sans-serif">${list.map(b => `<span style="white-space:nowrap">${esc(b.name||b.id)} <b style="font-weight:600;opacity:.7">${capOf(b, d)}</b></span>`).join('')}</span>`);
+    row += `<div class="bop2-cell bop2-cell-day${d===TODAY_STR?' today':''}" data-bopfree="${pier}" data-date="${d}" data-n="${n}" data-names="${esc(list.map(b => b.name||b.id).join('|'))}" onclick="bop2SelectDate('${d}')" title="${esc(tip)}" style="background:${n?'#E4F2EB':'transparent'};color:#0F6E56;border:1px dashed ${n?'#8FCFB4':'#E5E0D8'};border-radius:10px;min-height:${isMonth?'30px':'34px'};padding:3px">${inner}</div>`;
+  });
+  return row;
+}
 function bop2RenderHeatmapRow(route, dates){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const isMonth = _bop2.viewMode === 'month';
@@ -9684,7 +9795,13 @@ function renderSettings(){
       </div>`;
     });
   });
-  const listPanel=`<div style="background:transparent;border-radius:14px;overflow:hidden">
+  /* §progScroll (2026-10-03) · หน้า Programs เลื่อนติด ๆ ขัด ๆ
+     ผู้ใช้แจ้ง "ดูการ Scroll ในหน้านี้หน่อย ติด ๆ ขัด ๆ" · วัดแล้ว: รายการซ้าย 57 โปรแกรมสูง ~4,700px
+     ส่วนแผงรายละเอียดขวา (ปฏิทิน 12 เดือน) สูง ~1,350px ถูกตรึงไว้ (sticky) ทั้งที่สูงกว่าจอ
+     ครึ่งล่างของปฏิทินจึงค้างอยู่นอกจอ เลื่อนเท่าไหร่ก็ไม่ขึ้น จนกว่าจะเลื่อนสุดรายการ 5,000px
+     สลับกัน · รายการซ้ายเป็นกล่องเลื่อนของตัวเอง สูงเท่าจอ ตรึงไว้ · แผงขวาไหลตามหน้าปกติ
+     เลื่อนบนรายการ = เลื่อนรายการ (ไม่ลากหน้าไปด้วย) · เลื่อนบนปฏิทิน = เลื่อนหน้า เห็นครบทั้งปี */
+  const listPanel=`<div id="prog-list-box" style="background:transparent;border-radius:14px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;padding-right:4px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-size:13px;font-weight:600">โปรแกรมทั้งหมด</span>
       <span style="font-size:10px;color:${dim.ink3}">${totalProg} routes</span>
@@ -9693,10 +9810,30 @@ function renderSettings(){
   </div>`;
 
   // Detail panel placeholder
-  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px;position:sticky;top:14px"></div>`;
+  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
 
+  /* §progScroll · กดเลือกโปรแกรม = วาดใหม่ทั้งหน้า · กล่องรายการเป็นตัวใหม่ ตำแหน่งเลื่อนกลับเป็น 0
+     จำไว้ก่อนแล้วคืนให้ ไม่งั้นเลือกโปรแกรมท้าย ๆ ทีไร รายการเด้งกลับบนสุดทุกครั้ง */
+  const _keepList=(document.getElementById('prog-list-box')||{}).scrollTop||0;
   wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
 
+  /* §progScroll · กล่องรายการต้องจบในจอเสมอ · ตอนหน้ายังไม่เลื่อน กล่องเริ่มใต้หัวหน้า+แถบ KPI (~250px)
+     ถ้าสูงเท่าจอเต็ม ๆ ท้ายกล่องจะหลุดใต้จอ โปรแกรมสุดท้ายมองไม่เห็น · วัดจากตำแหน่งจริงทุกครั้งที่หน้าเลื่อน */
+  window._progListFit=function(){ const lb=document.getElementById('prog-list-box'); if(!lb||!lb.offsetParent) return;
+    /* ท้ายหน้า · แผงขวาจบก่อนขอบจอ กล่องรายการต้องจบพร้อมกัน ไม่งั้น sticky ดันหัวกล่องขึ้นไปนอกจอ */
+    const gp=lb.parentElement.getBoundingClientRect(), dm=document.getElementById('prog-detail-mount');
+    /* จอแคบ (แท็บเล็ตแนวตั้ง / มือถือ) · สองแผงเรียงบน-ล่าง · กล่องรายการสูงแค่ ~45% ของจอ ไม่ตรึง
+       และปล่อยให้เลื่อนต่อไปที่หน้าได้ ไม่งั้นนิ้วที่ปัดบนรายการจะลงไปหาปฏิทินข้างล่างไม่ได้ */
+    const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
+    lb.style.position=stack?'static':'sticky'; lb.style.overscrollBehavior=stack?'auto':'contain';
+    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs; return; }
+    let bot=window.innerHeight-14; if(dm&&dm.offsetHeight>lb.offsetHeight) bot=Math.min(bot, dm.getBoundingClientRect().bottom);
+    const h=Math.max(320, Math.round(bot-Math.max(14, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
+  if(!window._progListFitOn){ window._progListFitOn=1; let _q=0;
+    const _f=()=>{ if(_q) return; _q=requestAnimationFrame(()=>{ _q=0; window._progListFit&&window._progListFit(); }); };
+    window.addEventListener('scroll',_f,{passive:true}); window.addEventListener('resize',_f,{passive:true}); }
+  window._progListFit();
+  if(_keepList){ const _lb=document.getElementById('prog-list-box'); if(_lb) _lb.scrollTop=_keepList; }
   // Drag-to-reorder programs (constrained to the same pier)
   laMakeSortable(wrap, '.route-row-item', stApplyRouteOrder);
 
@@ -9874,8 +10011,10 @@ function renderProgDetailPink(){
         <span>${MONTH_NAMES[monthIdx]}</span>
         ${isCurrentMonth?`<span style="background:${dim.ink};color:white;padding:0 5px;border-radius:5px;font-size:7px;letter-spacing:.04em">NOW</span>`:''}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:7px;color:${dim.ink4};text-align:center;margin-bottom:2px;font-weight:600">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · เดิม S M T W T F S ตัวเดียว
+           เสาร์กับอาทิตย์เป็น S ทั้งคู่ อังคารกับพฤหัสเป็น T ทั้งคู่ และตัวอักษร 7px สีจาง · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
+      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:8px;color:${dim.ink2};text-align:center;margin-bottom:3px;font-weight:700;letter-spacing:.01em">
+        <span style="color:#B4533F">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#B4533F">Sa</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px">${cells}</div>
     </div>`;

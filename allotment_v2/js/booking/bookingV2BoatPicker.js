@@ -5,7 +5,7 @@ function bookingV2BoatPicker(el, bkId, routeId){
   const old=document.getElementById('bkv2-boatpick'); if(old){ old.remove(); }
   const date=(typeof bookingV2Tab2ActiveDate==='function')?bookingV2Tab2ActiveDate():'';
   const _O=bkOpsRead(bk,date);   // per-day boat
-  const up=!!_O.upgrade;
+  const up=false;   /* §upgRoute · upgrade ย้ายเส้นทางจริงแล้ว · เรือที่เลือกได้คือเรือของเส้นทางที่ใบอยู่ตอนนี้ */
   /* §OVN · ขากลับค้างคืน — รอบก่อนกางเป็น "เรือทุกลำที่วิ่งวันนั้น" ทันที ซึ่งกว้างเกินไป:
      บุ๊กกิ้ง PP Bamboo เห็นเรือ Phi Maiton / Whale Shark โผล่มาให้เลือกด้วย
      เหตุผลที่กางตอนนั้นคือกันเคส "โปรแกรมขาไปไม่เปิดรันวันที่กลับ" → baBoatsForRoute คืน [] แล้วขึ้น
