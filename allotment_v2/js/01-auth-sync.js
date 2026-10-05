@@ -519,11 +519,17 @@
   }catch(e){} }
   window._laReload=function(){ try{_laSaveView();}catch(e){} location.reload(); };
   function _laRestoreView(){ if(window.__laEmbed) return;   /* §embed · ดูเหตุผลที่ _laSaveView */
+   var R=window.laRouter, rt=null; try{ rt=R?R.takeInitial():null; }catch(e){}
    try{
-    var raw=sessionStorage.getItem('la_view'); if(!raw) return; var st=JSON.parse(raw); if(!st||!st.view) return;
+    var raw=sessionStorage.getItem('la_view'); var st=raw?JSON.parse(raw):null;
+    /* §router · the URL the page was opened with wins · the session snapshot only
+       fills in (scroll, open booking, assign modes) when it is for the same page */
+    if(rt && (!st || st.view!==rt.view || rt.params.citytour==='1')){ if(R.go(rt)) return; }
+    if(!st||!st.view) return;
     if(typeof laAllowed==='function' && !laAllowed(st.view)) return;          // respect role permissions
     var el=document.querySelector('.nav-item[data-view="'+st.view+'"]'); if(!el || el.style.display==='none') return;
     if(st.bk && window._bkV2){ if(st.bk.tab)_bkV2.tab=st.bk.tab; if(st.bk.filterDate)_bkV2.filterDate=st.bk.filterDate; if(st.bk.filterRoute)_bkV2.filterRoute=st.bk.filterRoute; if(st.bk.detailId)_bkV2.detailId=st.bk.detailId; _bkV2.boatAssignMode=st.bk.boat; _bkV2.vanAssignMode=st.bk.van; if(st.t2c) window._bkV2T2Cursor=st.t2c; }
+    if(rt && rt.view==='booking' && window._bkV2){ var _d=_bkV2.detailId; R.applyBookingParams(rt.params); _bkV2.detailId=_d; }   // §router · URL's tab/date over the snapshot's
     try{ if(st.view==='agents' && st.ag && typeof _agSelected!=='undefined') _agSelected=st.ag; }catch(e){}   // reopen the Agent detail after a full reload
     el.click();
     setTimeout(function(){ try{
@@ -535,7 +541,7 @@
         put(); requestAnimationFrame(function(){ put(); requestAnimationFrame(put); });
       }
     }catch(e){} }, 220);
-  }catch(e){} }
+  }catch(e){} finally{ try{ if(R) R.boot(); }catch(e){} } }   /* §router · URL goes live after the first restore, whichever way it went */
   // SEAMLESS in-place refresh · pulls latest cloud data + re-renders current view · NO page reload (no Dashboard flash)
   var _laLoadBusy=false;                       /* §sseCatchup · /api/load ลูกเดียวพอ · ดูตัวเดิน 400ms */
   function _laSoftRefresh(force){

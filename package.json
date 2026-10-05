@@ -17,6 +17,7 @@
     "test:mobile": "node test/ui/t_mobile.mjs",
     "test:ui": "node test/ui/t_smoke.mjs && node test/ui/t_mobile.mjs",
     "test:b2c": "node --test test/unit/b2c-map.test.mjs",
+    "test:router": "node test/ui/t_router.mjs",
     "test:embed": "node --test test/unit/embed-token.test.mjs && node test/ui/t_embed.mjs && node test/ui/t_embed_csp.mjs",
     "test:daydetail": "node test/ui/t_daydetail.mjs",
     "test:fleetcal": "node test/ui/t_fleetcal.mjs",
