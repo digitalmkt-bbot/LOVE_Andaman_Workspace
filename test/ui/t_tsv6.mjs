@@ -6,7 +6,7 @@
 //     "ชิปต้องมีแยกท่าเรือก่อน แล้วค่อยมีเส้นทาง" · "พอกดชิป รายละเอียดก็ขึ้นในหัว Header ด้วย"
 //     "หัวข้อ สรุปการเดินทางประจำวัน <วันที่> ให้ยาวไปทั้ง Card · ถ้ากดชิปเส้นทาง ชื่อเส้นทางนั้น ๆ ขึ้นต่อ"
 //
-// กันสิบสองอย่าง
+// กันสิบสามอย่าง
 //   1 บนจอ · แถบ/ชิป/การ์ดสรุป/หมวด 01,03 ชุดใหม่ขึ้น · หัวเอกสารและการ์ดตัวเลขชุดเดิมซ่อน
 //   2 ชิปท่าเรือครบทุกท่าของวันนั้น ยอดรวมกันเท่ากับทั้งวัน · ยังไม่เลือกท่า ไม่มีชิปเส้นทาง
 //   3 กดชิปท่าเรือ · ชิปเส้นทางขึ้นเฉพาะของท่านั้น · หัวข้อต่อท้ายด้วยชื่อท่า · ตัวเลขและ manifest เป็นของท่านั้น
@@ -19,6 +19,7 @@
 //  10 ไม่ล้นแนวนอนที่ 1900 และ 1280 · ไม่มี error บนหน้า
 //  11 หัวข้อหลักอยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · สีแถบหัวตามท่าเรือ (2026-10-05 รอบสอง)
 //  12 แถบหัวชิดขอบจอ บน/ซ้าย/ขวา ไม่มีมุมมน ไม่มีขอบครีม (§tsV6e · "เห็นแถบบนสุดไหม ต่างกับที่เป็นอยู่ตรงไหน")
+//  13 หมวด 02 · ช่องของทุกใบตั้งตรงกัน ไม่เยื้องตามความยาวชื่อ agent (§ts02Align · "Layout ไม่ตรงกัน")
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -112,6 +113,16 @@ const c6 = await page.evaluate(() => { const h = document.getElementById('travel
   return { n: rows.length, disp: rows.map(r => getComputedStyle(r).display), need: rows.map(r => r.classList.contains('need')), dupIds: ids.length - new Set(ids).size, nIds: ids.length,
     lbl: getComputedStyle(rows[0].children[6], '::before').content, thead: getComputedStyle(h.querySelector('.ts-s02 thead')).display,
     cnt: [...h.querySelectorAll('[data-ts02]')].map(x => x.textContent), btnVis: !!rows[0].querySelector('.ts-db') && rows[0].querySelector('.ts-db').offsetParent !== null }; });
+/* ══ 13 · §ts02Align · ใบหนึ่งชื่อ agent สั้น อีกใบยาว · ทุกช่องต้องเริ่มที่ตำแหน่งเดียวกัน ทั้งสามขนาดจอ ══ */
+const AL = () => page.evaluate(() => { const rows = [...document.querySelectorAll('#travelsum-host .ts-s02 tbody tr')]; const a = rows.map(r => r.querySelector('.ts-ag')); const keep = a.map(x => x.textContent);
+  a[0].textContent = 'FS'; a[1].textContent = 'Club Wyndham Asia Pacific';
+  const xs = rows.map(r => [...r.children].map(td => Math.round(td.getBoundingClientRect().left - r.getBoundingClientRect().left)));
+  a.forEach((x, i) => { x.textContent = keep[i]; }); return xs; });
+const al = [];
+for (const w of [1900, 1500, 1000]) { await page.setViewportSize({ width: w, height: 1000 }); await page.waitForTimeout(300); al.push(await AL()); }
+await page.setViewportSize({ width: 1900, height: 1100 }); await page.waitForTimeout(300);
+if (al.every(x => x.length === 2 && x[0].length === 8 && x[0].join() === x[1].join())) ok('13 หมวด 02 · ชื่อ agent สั้น/ยาว ช่องทั้ง 8 ของสองใบตั้งตรงกันที่จอ 1900 · 1500 · 1000');
+else fail('13 ' + JSON.stringify(al));
 await page.evaluate(() => { const r = document.querySelector('#travelsum-host .ts-s02 tbody tr.need'); [...r.querySelectorAll('.ts-db')].find(b => /ไม่ชาร์จ/.test(b.textContent)).click(); }); await page.waitForTimeout(500);
 const c6b = await page.evaluate((id) => { const h = document.getElementById('travelsum-host'); return { dec: (tsGet(id, _tsDate) || {}).decision, need: h.querySelectorAll('.ts-s02 tbody tr.need').length, pill: h.querySelector('[data-tsv6="pill"]').textContent, cnt: [...h.querySelectorAll('[data-ts02]')].map(x => x.textContent) }; }, prep.A);
 if (c6.n === 2 && c6.disp.every(d => d === 'grid') && c6.need[0] === true && c6.need[1] === false && c6.dupIds === 0 && c6.nIds === 2 && /ตัดสิน/.test(c6.lbl) && c6.thead === 'none' && c6.btnVis

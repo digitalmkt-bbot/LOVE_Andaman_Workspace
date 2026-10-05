@@ -27600,7 +27600,7 @@ function tsCSSv6(){
 & .ts-s02 .ts-tbl thead{display:none}
 & .ts-s02 .ts-tbl tbody{display:flex;flex-direction:column;gap:10px}
 & .ts-s02 .ts-tbl tbody tr{display:grid;position:relative;align-items:start;gap:3px 20px;
-  grid-template-columns:minmax(0,auto) minmax(110px,.9fr) minmax(170px,1.15fr) minmax(120px,.7fr) minmax(280px,1.8fr) minmax(150px,.8fr);
+  grid-template-columns:128px minmax(110px,.9fr) minmax(170px,1.15fr) minmax(120px,.7fr) minmax(280px,1.8fr) minmax(150px,.8fr);
   grid-template-areas:"ag vch ev amt dec res" "ag lead why amt dec res";grid-template-rows:auto 1fr;
   background:#fff;border:1px solid #E6E8F1;border-radius:14px;padding:13px 16px 13px 19px}
 & .ts-s02 .ts-tbl tbody tr::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 4px 4px 0;background:#3E9B62}
@@ -27623,7 +27623,8 @@ function tsCSSv6(){
 & .ts-s02 .ts-tbl td:nth-child(6)::before{content:"ราคาเต็ม"}
 & .ts-s02 .ts-tbl td:nth-child(7)::before{content:"ตัดสิน"}
 & .ts-s02 .ts-tbl td:nth-child(8)::before{content:"ผล"}
-& .ts-s02 .ts-tbl td:nth-child(2) .ts-ag{max-width:120px;font-size:11px;padding:5px 8px}
+/* §ts02Align · คอลัมน์ agent กว้างตายตัว · เดิม auto ทำให้แต่ละใบเยื้องกันตามความยาวชื่อ agent (เจ้าของ: "Layout ไม่ตรงกัน") */
+& .ts-s02 .ts-tbl td:nth-child(2) .ts-ag{max-width:124px;font-size:11px;padding:5px 8px}
 & .ts-s02 .ts-tbl td:nth-child(3) .ts-lead{font-size:13.5px}
 & .ts-s02 .ts-tbl td:nth-child(6) .ts-tel{font:500 10.5px/1.5 'DM Mono',ui-monospace,monospace;color:#8A8FA6}
 & .ts-s02 .ts-tbl td:nth-child(7)>div{max-width:none !important}
@@ -27636,12 +27637,12 @@ function tsCSSv6(){
 & .ts-s02 .ts-tbl tbody tr:has(>td.ts-empty){display:block;background:#F2FAF4;border-color:#CFE9D6;padding:12px 15px 12px 19px}
 & .ts-s02 .ts-tbl td.ts-empty{text-align:left;padding:0 !important;font-size:13px;font-weight:600;color:#1E5631 !important}
 @media (max-width:1560px){
-  & .ts-s02 .ts-tbl tbody tr{grid-template-columns:minmax(0,auto) minmax(0,1fr) minmax(0,1.2fr) minmax(0,.8fr);
+  & .ts-s02 .ts-tbl tbody tr{grid-template-columns:128px minmax(0,1fr) minmax(0,1.2fr) minmax(0,.8fr);
     grid-template-areas:"ag vch ev amt" "ag lead why amt" "dec dec dec res"}
   & .ts-s02 .ts-tbl td:nth-child(7){margin-top:8px}
 }
 @media (max-width:1080px){
-  & .ts-s02 .ts-tbl tbody tr{grid-template-columns:minmax(0,auto) minmax(0,1fr);grid-template-areas:"ag vch" "ag lead" "ev ev" "why why" "amt amt" "dec dec" "res res";gap:6px 12px}
+  & .ts-s02 .ts-tbl tbody tr{grid-template-columns:128px minmax(0,1fr);grid-template-areas:"ag vch" "ag lead" "ev ev" "why why" "amt amt" "dec dec" "res res";gap:6px 12px}
   & .ts-s02 .ts-tbl td:nth-child(8){text-align:left}
   & .ts-wrap .ts-sec{margin:10px 12px 0 !important}
 }
