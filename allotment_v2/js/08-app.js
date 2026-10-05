@@ -24522,13 +24522,23 @@ function tsPickPier(p){ p=p||''; _tsPier=(p===_tsPier)?'':p; _tsRoute=''; tsAfte
 /* เส้นทางที่ไม่ผูกท่า (รถรับส่ง · City Tour) เข้ากลุ่ม 'other' · ห้ามคืนค่าว่าง เพราะค่าว่างแปลว่า "ทุกท่าเรือ"
    ไม่งั้นกดชิป Other แล้วจะกลายเป็นกดทุกท่าเรือ */
 function tsPierOf(routeId){ var r=(typeof getRoute==='function'?getRoute(routeId):null)||{}; return r.pier||'other'; }
-/* §tsV6c · สีแถบหัว · CI ของ LOVE Andaman ที่เจ้าของส่งมา (2026-10-05): #00bcdf (ฟ้า) · #000f4c (กรมท่า)
-   ทุกแถบเริ่มจากกรมท่า CI ทางซ้าย แล้วไล่ไปหาสีประจำท่าทางขวา · แบรนด์อยู่ครบทุกหน้า และยังรู้ว่าดูท่าไหน
-   ยังไม่เลือกท่า = กรมท่า → ฟ้า CI ที่ทำให้เข้มลง (#007AA6) · ฟ้า CI ตัวเต็มสว่างเกินไปสำหรับตัวอักษรขาว (2.2:1)
-     จึงใช้ตัวเต็มกับของที่ไม่ใช่พื้นหลังตัวอักษร · บรรทัดรองใต้ชื่อแบรนด์ และเส้นบนของการ์ดสรุป
-   สีประจำท่าชุดเดียวกับ Dashboard / ปฏิทิน (PIER_COL) */
+/* §tsV6d · สีแถบหัว · สีเต็มพื้น ไม่ไล่สี · เจ้าของกำหนดเอง (2026-10-05)
+   "#00bcdf Tub lamu · #000f4c Visit Panwa · Ranong ผสมกันระหว่างสองสี · ตาม Mockup คือสีเต็มพื้น"
+   CI ของ LOVE Andaman มีสองสี · ฟ้า #00bcdf กับกรมท่า #000f4c
+   · Tub Lamu  = ฟ้า CI ตัวเต็ม · ตัวอักษรขาวบนฟ้านี้อ่านไม่ออก (2.2:1) จึงสลับเป็นตัวอักษรกรมท่า (ink:'dark' · 8.6:1)
+   · Visit Panwa = กรมท่า CI ตัวเต็ม · ตัวอักษรขาว
+   · Ranong   = กึ่งกลางของสองสีพอดี (#006595) · ตัวอักษรขาว
+   · ยังไม่เลือกท่า = กรมท่า CI เหมือน mockup · เจ้าของไม่ได้กำหนด ใช้สีหลักของแบรนด์
+   · Other (เส้นทางไม่ผูกท่า) = เทาอมน้ำเงิน ไม่ใช่สี CI จะได้ไม่ปนกับสามท่า
+   acc = สีวันที่/ชื่อท่าบนการ์ดขาว (ต้องอ่านออกบนพื้นขาว) · line = เส้นบนของการ์ดสรุป ต้องตัดกับแถบ */
 var TS_CI={ navy:'#000f4c', cyan:'#00bcdf' };
-var TS_HEAD_COL={ '':['#000f4c','#007AA6'], tublamu:['#000f4c','#185FA5'], panwa:['#000f4c','#0F6E56'], ranong:['#000f4c','#A3660E'], other:['#000f4c','#5B289A'] };
+var TS_HEAD_COL={
+  '':      { bg:'#000f4c', ink:'light', acc:'#000f4c', line:'#00bcdf' },
+  tublamu: { bg:'#00bcdf', ink:'dark',  acc:'#007f99', line:'#000f4c' },
+  panwa:   { bg:'#000f4c', ink:'light', acc:'#000f4c', line:'#00bcdf' },
+  ranong:  { bg:'#006595', ink:'light', acc:'#006595', line:'#00bcdf' },
+  other:   { bg:'#3A4256', ink:'light', acc:'#3A4256', line:'#00bcdf' }
+};
 function tsV6Theme(p){ return TS_HEAD_COL[p||''] || TS_HEAD_COL.other; }
 function tsPierName(p){
   if(!p || p==='other') return 'Other';
@@ -27149,8 +27159,8 @@ function tsV6Head(H, money){
   var vat='<span class="h4-vat"><span class="h4-fl">ภาษี</span><span class="h4-seg">'+seg('','ทั้งหมด',H.nAll)+seg('vat','มี VAT',H.nVat)+seg('novat','ไม่มี VAT',H.nNoVat)+'</span>'
     +((H.vgap&&H.vgap.length)?('<span class="h4-gap" title="'+e(H.vgap.join(' · '))+' — ยังไม่ได้ตั้งโหมด VAT ในหน้า Agents จึงถูกนับเป็นไม่มี VAT ไปก่อน">&#9888; '+H.vgap.length+' agent ยังไม่ได้ตั้งโหมด</span>'):'')
     +'</span>';
-  var TH=tsV6Theme(_tsPier), thSty='--tsh1:'+TH[0]+';--tsh2:'+TH[1];
-  var bar='<div class="ts-scr ts-noprint h4-bar" data-tsv6="bar" data-pier="'+q(_tsPier)+'" style="'+thSty+'"><div class="h4-r1">'
+  var TH=tsV6Theme(_tsPier), thSty='--tshbg:'+TH.bg+';--tsh1:'+TH.bg+';--tsh2:'+TH.acc+';--tshline:'+TH.line;
+  var bar='<div class="ts-scr ts-noprint h4-bar'+(TH.ink==='dark'?' inkd':'')+'" data-tsv6="bar" data-pier="'+q(_tsPier)+'" style="'+thSty+'"><div class="h4-r1">'
     +'<div class="h4-brand"><b>LOVE ANDAMAN</b><i>OPERATIONS &middot; DAILY MANIFEST</i></div>'
     +'<div class="h4-nav">'+vat
       +'<button class="h4-gh" onclick="tsDateShift(-1)" title="วันก่อน">&lsaquo;<span class="lg"> วันก่อน</span></button>'
@@ -27550,6 +27560,32 @@ function tsCSSv6(){
 /* ── §tsV6c · CI ── */
 & .h4-brand i{color:#00BCDF}
 & .h4-card{border-top:4px solid #00BCDF}
+
+/* ── §tsV6d · แถบหัวสีเต็มพื้น · ชุดตัวอักษรเข้มสำหรับพื้นฟ้า CI ── */
+& .h4-bar,& .h4-band{background:var(--tshbg,#000F4C)}
+& .h4-card{border-top-color:var(--tshline,#00BCDF)}
+& .h4-bar.inkd{box-shadow:0 6px 18px rgba(0,60,80,.20)}
+& .h4-bar.inkd .h4-brand b{color:#000F4C}
+& .h4-bar.inkd .h4-brand i{color:rgba(0,15,76,.78)}
+& .h4-bar.inkd .h4-fl,& .h4-bar.inkd .h4-hint{color:rgba(0,15,76,.78)}
+& .h4-bar.inkd .h4-sep{color:rgba(0,15,76,.55)}
+& .h4-bar.inkd .h4-rail{border-top-color:rgba(0,15,76,.18)}
+& .h4-bar.inkd .h4-c{background:rgba(255,255,255,.40);border-color:rgba(0,15,76,.30);color:#000F4C}
+& .h4-bar.inkd .h4-c:hover{background:rgba(255,255,255,.65)}
+& .h4-bar.inkd .h4-c i{color:rgba(0,15,76,.72)}
+& .h4-bar.inkd .h4-c .dot{box-shadow:0 0 0 1.5px rgba(0,15,76,.45)}
+& .h4-bar.inkd .h4-c.on{background:#000F4C;border-color:#000F4C;color:#fff}
+& .h4-bar.inkd .h4-c.on i{color:#C3CCEC}
+& .h4-bar.inkd .h4-c.on .dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.7)}
+& .h4-bar.inkd .h4-seg{background:rgba(0,15,76,.13)}
+& .h4-bar.inkd .h4-seg button{color:#000F4C}
+& .h4-bar.inkd .h4-seg button i{color:rgba(0,15,76,.68)}
+& .h4-bar.inkd .h4-seg button.on{background:#000F4C;color:#fff}
+& .h4-bar.inkd .h4-seg button.on i{color:#C3CCEC}
+& .h4-bar.inkd .h4-gh{border-color:rgba(0,15,76,.55);color:#000F4C}
+& .h4-bar.inkd .h4-gh:hover{background:rgba(0,15,76,.10)}
+& .h4-bar.inkd .h4-pri{background:#000F4C;color:#fff}
+& .h4-bar.inkd .h4-gap{color:#5A3200;background:rgba(255,255,255,.45);border-color:rgba(120,70,0,.35)}
 `;
   return '@media screen{'+css.replace(/&/g,P)+'}'
     +'body.ts-printing #travelsum-host .ts-scr{display:none !important}';

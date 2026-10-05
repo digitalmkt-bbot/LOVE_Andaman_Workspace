@@ -144,23 +144,33 @@ const c9 = await page.evaluate(() => { const all = tsRefPackList(_tsDate).length
 if (c9.all > 0 && c9.t + c9.p === c9.all && c9.t < c9.all && c9.p < c9.all) ok(`9 ชุดเอกสารแนบท้ายตามท่าเรือ · Tub Lamu ${c9.t} + Visit Panwa ${c9.p} = ทั้งวัน ${c9.all}`);
 else fail('9 ' + JSON.stringify(c9));
 
-/* ══ 11 · §tsV6b · หัวข้อกลาง · ป้ายมุมขวา · ไม่มีบรรทัด "กำลังดูเฉพาะ" · สีแถบตามท่าเรือ ══ */
+/* ══ 11 · §tsV6b/§tsV6d · หัวข้อกลาง · ป้ายมุมขวา · ไม่มีบรรทัด "กำลังดูเฉพาะ" · แถบหัวสีเต็มพื้นตามท่าเรือ ══
+   เจ้าของกำหนด "#00bcdf Tub lamu · #000f4c Visit Panwa · Ranong ผสมกันระหว่างสองสี · สีเต็มพื้น" */
 const G11 = () => page.evaluate(() => { const h = document.getElementById('travelsum-host'), c = h.querySelector('.h4-card').getBoundingClientRect(), t = h.querySelector('.h4-h1'), pl = h.querySelector('[data-tsv6="pill"]').getBoundingClientRect();
-  const rg = document.createRange(); rg.selectNodeContents(t); const tr = rg.getBoundingClientRect();
-  return { off: Math.round((tr.left + tr.right) / 2 - (c.left + c.right) / 2), pillRight: Math.round(c.right - pl.right), pillTop: Math.round(pl.top - c.top), pillAboveTitle: pl.bottom <= tr.bottom, scope: h.querySelectorAll('.h4-scope').length, txt: /กำลังดูเฉพาะ/.test(h.querySelector('.h4-card').textContent),
-    sub: getComputedStyle(h.querySelector('.h4-brand i')).color, topLine: getComputedStyle(h.querySelector('.h4-card')).borderTopColor, bar: getComputedStyle(h.querySelector('.h4-bar')).backgroundImage, band: getComputedStyle(h.querySelector('.h4-band')).backgroundImage, onInk: getComputedStyle(h.querySelector('.h4-c.on')).color }; });
+  const rg = document.createRange(); rg.selectNodeContents(t); const tr = rg.getBoundingClientRect(); const cs = s => getComputedStyle(h.querySelector(s));
+  return { off: Math.round((tr.left + tr.right) / 2 - (c.left + c.right) / 2), pillRight: Math.round(c.right - pl.right), pillTop: Math.round(pl.top - c.top), scope: h.querySelectorAll('.h4-scope').length, txt: /กำลังดูเฉพาะ/.test(h.querySelector('.h4-card').textContent),
+    bg: cs('.h4-bar').backgroundColor, img: cs('.h4-bar').backgroundImage, band: cs('.h4-band').backgroundColor, bandImg: cs('.h4-band').backgroundImage, brand: cs('.h4-brand b').color, sub: cs('.h4-brand i').color,
+    chip: cs('.h4-c:not(.on)').color, onBg: cs('.h4-c.on').backgroundColor, onFg: cs('.h4-c.on').color, gh: cs('.h4-gh').color, priBg: cs('.h4-pri').backgroundColor, priFg: cs('.h4-pri').color, line: cs('.h4-card').borderTopColor }; });
 await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; renderTravelSum(); }); await page.waitForTimeout(300); const g0 = await G11();
 await page.click('[data-tspier="tublamu"]'); await page.waitForTimeout(300); const gT = await G11();
 await page.click('[data-tspier="panwa"]'); await page.waitForTimeout(300); const gP = await G11();
-const other = await page.evaluate(() => [tsPierOf('__no_such_route__'), tsPierName('other'), JSON.stringify(tsV6Theme('other')), JSON.stringify(tsV6Theme('ranong'))]);
+const th = await page.evaluate(() => { const L = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const CR = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const o = {}; ['', 'tublamu', 'panwa', 'ranong', 'other'].forEach(p => { const T = tsV6Theme(p); o[p || 'all'] = { bg: T.bg.toLowerCase(), ink: T.ink, cr: +CR(T.bg, T.ink === 'dark' ? '#000f4c' : '#ffffff').toFixed(1), acc: +CR(T.acc, '#ffffff').toFixed(1) }; });
+  const mix = '#' + [1, 3, 5].map(i => Math.floor((parseInt('00bcdf'.slice(i - 1, i + 1), 16) + parseInt('000f4c'.slice(i - 1, i + 1), 16)) / 2).toString(16).padStart(2, '0')).join('');
+  return { o, mix, pierOf: tsPierOf('__no_such_route__'), nm: tsPierName('other') }; });
 await page.evaluate(() => { _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(300);
-if (Math.abs(g0.off) <= 3 && Math.abs(gT.off) <= 3 && g0.pillRight >= 10 && g0.pillRight <= 40 && g0.pillTop >= 0 && g0.pillTop <= 40 && g0.scope === 0 && !gT.txt
-  /* §tsV6c · CI #000f4c ทุกแถบ · ปลายขวาเป็นสีประจำท่า · ยังไม่เลือกท่า = ฟ้า CI ที่ทำให้เข้มลง */
-  && [g0, gT, gP].every(g => /rgb\(0, 15, 76\)/.test(g.bar)) && /rgb\(0, 122, 166\)/.test(g0.bar) && /rgb\(24, 95, 165\)/.test(gT.bar) && /rgb\(15, 110, 86\)/.test(gP.bar)
-  && gT.band === gT.bar && gP.band === gP.bar && g0.bar !== gT.bar && gT.bar !== gP.bar
-  && gT.onInk === 'rgb(0, 15, 76)' && g0.sub === 'rgb(0, 188, 223)' && g0.topLine === 'rgb(0, 188, 223)' && other[0] === 'other' && other[1] === 'Other' && other[2] !== other[3])
-  ok('11 หัวข้ออยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · แถบหัวเริ่มจากกรมท่า CI แล้วไล่ไปสีประจำท่า (ทุกท่า/Tub Lamu/Visit Panwa คนละสี) · ฟ้า CI ที่บรรทัดรองและเส้นบนการ์ด');
-else fail('11 ' + JSON.stringify({ g0, gT: { off: gT.off, bar: gT.bar, onInk: gT.onInk, txt: gT.txt }, gP: gP.bar, other }));
+const NAVY = 'rgb(0, 15, 76)', CYAN = 'rgb(0, 188, 223)', WHITE = 'rgb(255, 255, 255)';
+const lay = Math.abs(g0.off) <= 3 && Math.abs(gT.off) <= 3 && g0.pillRight >= 10 && g0.pillRight <= 40 && g0.pillTop >= 0 && g0.pillTop <= 40 && g0.scope === 0 && !gT.txt;
+const solid = [g0, gT, gP].every(g => g.img === 'none' && g.bandImg === 'none' && g.band === g.bg);
+const cols = g0.bg === NAVY && gP.bg === NAVY && gT.bg === CYAN && th.o.tublamu.bg === '#00bcdf' && th.o.panwa.bg === '#000f4c' && th.o.ranong.bg === th.mix && th.o.all.bg === '#000f4c';
+/* พื้นกรมท่า = ตัวขาว · พื้นฟ้า = ตัวกรมท่า ปุ่มที่เลือกเป็นกรมท่าตัวขาว */
+const ink = gP.brand === WHITE && gP.chip !== NAVY && gP.onBg === WHITE && gP.onFg === NAVY && gP.priBg === WHITE && gP.line === CYAN
+  && gT.brand === NAVY && gT.chip === NAVY && gT.gh === NAVY && gT.onBg === NAVY && gT.onFg === WHITE && gT.priBg === NAVY && gT.priFg === WHITE && gT.line === NAVY;
+const read = Object.values(th.o).every(x => x.cr >= 4.5 && x.acc >= 3.9);
+if (lay && solid && cols && ink && read && th.pierOf === 'other' && th.nm === 'Other')
+  ok(`11 หัวข้อกลางการ์ด · ป้ายมุมขวา · แถบหัวสีเต็มพื้น Tub Lamu #00bcdf (ตัวกรมท่า) · Visit Panwa #000f4c · Ranong ${th.mix} · ตัวอักษรอ่านออกทุกแบบ (ต่ำสุด ${Math.min(...Object.values(th.o).map(x => x.cr))}:1)`);
+else fail('11 ' + JSON.stringify({ lay, solid, cols, ink, read, g0: { bg: g0.bg, img: g0.img, off: g0.off, pr: g0.pillRight, pt: g0.pillTop }, gT, gP: { bg: gP.bg, brand: gP.brand, chip: gP.chip, onBg: gP.onBg, onFg: gP.onFg, priBg: gP.priBg, line: gP.line }, th }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
@@ -169,7 +179,7 @@ const w2 = await page.evaluate(() => [document.documentElement.scrollWidth, inne
 const e1 = errors.filter(e => !/Failed to load resource/.test(e));
 if (w1[0] <= w1[1] && w2[0] <= w2[1] && w2[2] <= 130 && !e1.length) ok(`10 ไม่ล้นแนวนอนที่ ${w1[1]} และ ${w2[1]} (แถบสูง ${w2[2]}px) · ไม่มี error`);
 else fail('10 ' + JSON.stringify({ w1, w2, e1: e1.slice(0, 3) }));
-if (process.env.SHOT) { await page.setViewportSize({ width: 1700, height: 1100 }); await page.evaluate(() => { tsPickPier(''); window.scrollTo(0, 0); }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT }); }
+if (process.env.SHOT) { await page.setViewportSize({ width: 1700, height: 1100 }); await page.evaluate(p => { tsPickPier(p); window.scrollTo(0, 0); }, process.env.SHOTPIER || ''); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT }); }
 await close();
 console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed');
 process.exit(bad ? 1 : 0);
