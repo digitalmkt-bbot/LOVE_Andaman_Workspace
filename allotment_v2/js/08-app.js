@@ -9405,6 +9405,125 @@ function bkV2BoatPicker(el, bkId, routeId){
   }catch(_){}
 }
 function bkV2BoatPickSet(bkId, boatId, date){ const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove(); bkV2AssignBoat(bkId, boatId, date||''); }
+/* ══ §zonePick (2026-10-05) · By trip · กดชื่อโซนแล้วเปลี่ยนพื้นที่รับได้เลย ═════════
+   ผู้ใช้ขอ "กดที่ชื่อโซน ขึ้นป๊อปอัปให้เลือกโซน แล้วกดยืนยัน"
+   ช่อง Zone ของ By trip คือ bk.pickupAreaId (ชื่อพื้นที่จาก Pickup Setup) · ที่นี่เปลี่ยนแค่ตัวนั้น
+   ⚠ ไม่แตะ trip.zone · ฟอร์มจองใช้ trip.zone คิดราคา (PK/KL/NoTransfer) ถ้าเปลี่ยนตรงนี้
+     ราคาจะขยับเงียบ ๆ จากหน้าที่ไม่มีราคาให้เห็น · ข้ามโซนราคาเมื่อไหร่ ป๊อปอัปเตือนให้ไปแก้ใบจอง
+   เวลารับคิดใหม่จากพื้นที่ใหม่ (ติ๊กออกได้) · ทริปที่คนพิมพ์เวลาเองไว้ (pickupTimeEdited) ไม่แตะ
+   แถวที่แยกคนไปรับคนละจุด (split) ไม่ได้เปิดป๊อปอัปนี้ · พื้นที่ของมันอยู่ใน ops.vanSplits คนละที่ */
+function bkV2ZonePickOpen(el, bkId, date){
+  const e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const bk=(SB_BOOKINGS||[]).find(b=>b.id===bkId); if(!bk) return;
+  const old=document.getElementById('bkv2-zonepick'); if(old) old.remove();
+  const cur=bk.pickupAreaId||'';
+  window._bkV2ZonePick={ bkId, date:date||'', sel:cur };
+  const areas=(SB_PICKUP_AREAS||[]).filter(a=>a && a.id && a.active!==false);
+  const zones=[...new Set(areas.map(a=>a.zone||''))].sort((x,y)=>bkV2ZoneOrder(x)-bkV2ZoneOrder(y));
+  const listH=zones.map(z=>{
+    const rows=areas.filter(a=>(a.zone||'')===z).sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+    const c=bkV2ZoneColor(z);
+    return `<div class="zpk-grp" data-z="${e(z)}"><div style="position:sticky;top:0;background:#FAFAF7;padding:6px 13px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:${c};border-top:1px solid #f0eee7">${e(bkV2ZoneLabel(z))}</div>`
+      + rows.map(a=>`<div class="zpk-row" data-id="${e(a.id)}" data-n="${e(String(a.name||'').toLowerCase()+' '+String(a.region||'').toLowerCase())}" onclick="bkV2ZonePickSel('${e(a.id)}')" style="display:flex;align-items:center;gap:9px;padding:8px 13px;cursor:pointer;border-top:1px solid #f4f2ec">`
+        + `<span class="zpk-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid ${c};flex:none;box-sizing:border-box"></span>`
+        + `<span style="flex:1;font-size:12.5px;font-weight:600;color:#2a2a26">${e(a.name||a.id)}${a.region?` <span style="font-weight:500;color:#9a988f;font-size:11px">· ${e(a.region)}</span>`:''}</span>`
+        + (a.id===cur?`<span style="font-size:10px;color:#0F6E56;font-weight:700">${laT('ปัจจุบัน')}</span>`:'')
+        + `</div>`).join('')
+      + `</div>`;
+  }).join('') || `<div style="padding:16px 13px;text-align:center;color:#8a8a82;font-size:12px">${laT('ยังไม่มีพื้นที่รับ · ไปเพิ่มที่ Pickup time setup')}</div>`;
+  const curName=(cur&&bkV2GetArea(cur)||{}).name || (bk.pickupArea||'').trim() || '—';
+  const ov=document.createElement('div'); ov.id='bkv2-zonepick';
+  ov.style.cssText='position:fixed;inset:0;z-index:600;background:transparent';
+  ov.innerHTML=`<div id="bkv2-zonepick-panel" style="position:fixed;width:320px;max-width:92vw;background:#fff;border:1px solid #e0ddd4;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;max-height:80vh">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid #eee">
+      <div style="min-width:0"><div style="font-size:12px;font-weight:800;color:#185FA5">&#128205; ${laT('เปลี่ยนโซนรับ')}</div>
+        <div style="font-size:11px;color:#8a8a82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e(bk.leadPax||bk.customerName||'')} · ${e(bk.voucherRef||bk.id)} · ${laT('ตอนนี้')}: <b style="color:#2F4E77">${e(curName)}</b></div></div>
+      <button onclick="document.getElementById('bkv2-zonepick').remove()" style="background:transparent;border:none;font-size:18px;color:#999;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div style="padding:8px 13px;border-bottom:1px solid #f0eee7"><input id="bkv2-zonepick-q" oninput="bkV2ZonePickFilter(this.value)" placeholder="${laT('ค้นหาพื้นที่…')}" style="width:100%;box-sizing:border-box;border:1px solid #e0ddd4;border-radius:8px;padding:6px 9px;font-size:12px;font-family:inherit"></div>
+    <div id="bkv2-zonepick-list" style="flex:1;min-height:0;overflow-y:auto">${listH}</div>
+    <div id="bkv2-zonepick-info" style="padding:0 13px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 13px;border-top:1px solid #eee">
+      <button onclick="document.getElementById('bkv2-zonepick').remove()" style="border:1px solid #e0ddd4;background:#fff;color:#6b6b64;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${laT('ยกเลิก')}</button>
+      <button id="bkv2-zonepick-ok" onclick="bkV2ZonePickConfirm()" style="border:none;background:#1683C7;color:#fff;border-radius:8px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${laT('ยืนยัน')}</button>
+    </div>
+  </div>`;
+  ov.addEventListener('mousedown',ev=>{ ov._d=(ev.target===ov); });
+  ov.onclick=ev=>{ if(ev.target===ov && ov._d) ov.remove(); };
+  document.body.appendChild(ov);
+  bkV2ZonePickSel(cur);
+  try{
+    const panel=document.getElementById('bkv2-zonepick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||320, ph=panel.offsetHeight||400;
+    let left=r.left; if(left+pw>window.innerWidth-8) left=Math.max(8, window.innerWidth-pw-8);
+    let top=r.bottom+6; if(top+ph>window.innerHeight-8) top=Math.max(8, r.top-ph-6);
+    if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
+    panel.style.left=left+'px'; panel.style.top=top+'px';
+    const s=panel.querySelector('.zpk-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(cur):cur)+'"]'); if(s) s.scrollIntoView({block:'center'});
+    const q=document.getElementById('bkv2-zonepick-q'); if(q) q.focus({preventScroll:true});
+  }catch(_){}
+}
+function bkV2ZonePickFilter(v){
+  const q=String(v||'').trim().toLowerCase();
+  document.querySelectorAll('#bkv2-zonepick-list .zpk-grp').forEach(g=>{
+    let any=false;
+    g.querySelectorAll('.zpk-row').forEach(r=>{ const ok=!q||r.dataset.n.indexOf(q)>=0; r.style.display=ok?'flex':'none'; if(ok) any=true; });
+    g.style.display=any?'':'none';
+  });
+}
+// คืนสิ่งที่จะเปลี่ยนถ้ายืนยัน · ใช้ทั้งตอนโชว์ในป๊อปอัปและตอนบันทึก ให้สองที่ตรงกันเสมอ
+function _bkV2ZonePickPlan(bk, areaId){
+  const area=areaId?bkV2GetArea(areaId):null;
+  const times=(bk.trips||[]).map(t=>{
+    if(!t || t.pickupTimeEdited || !t.routeId || !area) return null;
+    const nt=bkV2GetPickupTime(t.routeId, areaId, t.date)||'';
+    return (nt && nt!==(t.pickupTime||'')) ? { t, from:t.pickupTime||'', to:nt } : null;
+  }).filter(Boolean);
+  const priceZones=[...new Set((bk.trips||[]).map(t=>t&&t.zone).filter(Boolean))];
+  const zoneDiff=!!(area && priceZones.length && priceZones.some(z=>z!==area.zone));
+  return { area, times, priceZones, zoneDiff };
+}
+function bkV2ZonePickSel(id){
+  const st=window._bkV2ZonePick; if(!st) return;
+  st.sel=id||'';
+  document.querySelectorAll('#bkv2-zonepick-list .zpk-row').forEach(r=>{
+    const on=r.dataset.id===st.sel;
+    r.style.background=on?'#EAF4FB':'';
+    const d=r.querySelector('.zpk-dot'); if(d) d.style.background=on?d.style.borderColor:'transparent';
+  });
+  const bk=(SB_BOOKINGS||[]).find(b=>b.id===st.bkId);
+  const info=document.getElementById('bkv2-zonepick-info'), ok=document.getElementById('bkv2-zonepick-ok');
+  const same=!bk || st.sel===(bk.pickupAreaId||'');
+  if(ok){ ok.disabled=same||!st.sel; ok.style.opacity=ok.disabled?'.45':'1'; ok.style.cursor=ok.disabled?'default':'pointer'; }
+  if(!info) return;
+  if(same||!st.sel){ info.innerHTML=''; return; }
+  const e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const p=_bkV2ZonePickPlan(bk, st.sel);
+  let h='';
+  if(p.times.length){
+    const tx=p.times.map(x=>`${e(x.t.date||'')} <s style="color:#9a988f">${e(x.from||'—')}</s> &rarr; <b>${e(x.to)}</b>`).join('<br>');
+    h+=`<label style="display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:11.5px;color:#3a3a35;cursor:pointer"><input type="checkbox" id="bkv2-zonepick-time" checked style="margin-top:2px"><span>${laT('อัปเดตเวลารับตามพื้นที่ใหม่')}<br><span style="font-family:'DM Mono',monospace;font-size:11px">${tx}</span></span></label>`;
+  }
+  if(p.zoneDiff){
+    h+=`<div style="margin-top:9px;background:#FBF0DD;color:#7A4A00;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.45">&#9888; ${laT('พื้นที่ใหม่อยู่คนละโซนราคากับใบจอง')} (${e(p.priceZones.map(bkV2ZoneLabel).join(', '))} &rarr; ${e(bkV2ZoneLabel(p.area.zone))}) · ${laT('ราคาไม่เปลี่ยน · ถ้าต้องคิดราคาใหม่ให้แก้ไขใบจอง')}</div>`;
+  }
+  info.innerHTML=h;
+}
+function bkV2ZonePickConfirm(){
+  const st=window._bkV2ZonePick; if(!st || !st.sel) return;
+  if(typeof acctCanEditBookings==='function' && !acctCanEditBookings()){ alert('View only - you cannot edit bookings.'); return; }
+  const bk=(SB_BOOKINGS||[]).find(b=>b.id===st.bkId); if(!bk) return;
+  if(st.sel===(bk.pickupAreaId||'')){ const ov=document.getElementById('bkv2-zonepick'); if(ov) ov.remove(); return; }
+  const p=_bkV2ZonePickPlan(bk, st.sel); if(!p.area) return;
+  const fromName=((bk.pickupAreaId&&bkV2GetArea(bk.pickupAreaId))||{}).name || (bk.pickupArea||'').trim() || '—';
+  const doTime=!!(document.getElementById('bkv2-zonepick-time')||{}).checked;
+  bk.pickupAreaId=p.area.id;
+  if(doTime) p.times.forEach(x=>{ x.t.pickupTime=x.to; });
+  bkV2AddHistory(bk, 'edit', 'Pickup zone: '+fromName+' -> '+(p.area.name||p.area.id)
+    + (doTime&&p.times.length?(' · pickup time '+p.times.map(x=>(x.t.date||'')+' '+(x.from||'-')+'->'+x.to).join(', ')):''), 'Edited');
+  acctPersistBookings();
+  const ov=document.getElementById('bkv2-zonepick'); if(ov) ov.remove();
+  bkV2RenderKeep();
+}
 function bkV2ToggleBoatMode(){ _bkV2.boatAssignMode=!_bkV2.boatAssignMode; if(_bkV2.boatAssignMode) _bkV2.vanAssignMode=false; bkV2Render(); }
 function bkV2ToggleVanMode(){ _bkV2.vanAssignMode=!_bkV2.vanAssignMode; if(_bkV2.vanAssignMode){_bkV2.boatAssignMode=false;_bkV2.reconfirmMode=false;} bkV2Render(); }
 /* ══ §grpDrag · ลำดับกรุ๊ปที่คนลากเอง ══════════════════════════════════════
@@ -51333,11 +51452,14 @@ function bkV2RenderTab2(){
               // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
               // ขึ้น "—" ทั้งที่ลูกค้าเลือก area มาแล้ว. อ่าน pickupAreaId ก่อน (ops แก้เองได้ · sync ไม่ทับ)
               // แล้วค่อย fallback เป็นข้อความดิบจาก B2C (โชว์แบบจาง = ยังไม่ผูกกับ area ในระบบ)
+              /* §zonePick · กดชื่อโซนเพื่อเปลี่ยนพื้นที่รับของใบนี้ (เฉพาะคนที่แก้ใบจองได้) */
+              const _zp=h=>(typeof bkV2ZonePickOpen==='function' && typeof acctCanEditBookings==='function' && acctCanEditBookings())
+                ? `<span class="t2-zonepick" onclick="event.stopPropagation();bkV2ZonePickOpen(this,'${esc(bk.id)}','${esc(date)}')" title="${laT('กดเพื่อเปลี่ยนโซนรับ')}">${h}</span>` : h;
               const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
-              if(_pa&&_pa.name) return _zt(_pa.name);
+              if(_pa&&_pa.name) return _zp(_zt(_pa.name));
               const _rw=(bk.pickupArea||'').trim();
-              if(!_rw) return _dash;
-              return _zt(_rw, { raw:true });
+              if(!_rw) return _zp(_dash);
+              return _zp(_zt(_rw, { raw:true }));
             })()}</td>
             <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
@@ -52643,6 +52765,8 @@ function bkV2RenderTab2(){
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
+    .t2-zonepick{cursor:pointer;display:inline-block;max-width:100%;border-bottom:1px dashed transparent}
+    .t2-zonepick:hover{border-bottom-color:#2F4E77}
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:transparent;border-radius:0;padding:0;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}

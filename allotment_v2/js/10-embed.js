@@ -160,7 +160,7 @@
      และ onclick= ใน HTML ก็หาเจอผ่าน window ตอนกด · ทับทีหลังได้ ไม่ต้องทับก่อน
 
      ⚠ ย้ำอีกครั้ง · นี่คือ UX ไม่ใช่ security · ห้ามเอาไปนับเป็นการจำกัดสิทธิ์ */
-  var RO_FNS = ['bkV2ToggleVanMode','bkV2ToggleBoatMode','bkV2ToggleReconfirmMode','bkV2NewBooking'];
+  var RO_FNS = ['bkV2ToggleVanMode','bkV2ToggleBoatMode','bkV2ToggleReconfirmMode','bkV2NewBooking','bkV2ZonePickOpen'];
   function roNotice(){
     var t = document.getElementById('la-embed-ro-t');
     if(!t){ t = document.createElement('div'); t.id = 'la-embed-ro-t';
