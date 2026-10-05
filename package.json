@@ -78,7 +78,8 @@
     "test:chmanual": "LAD=allotment_v2/data_exports/subset_ratexp.json node test/ui/t_chmanual.mjs",
     "test:rentzero": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_rentzero.mjs",
     "test:rentoffplan": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_rentoffplan.mjs",
-    "test:dashchboat": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_dashchboat.mjs"
+    "test:dashchboat": "LAD=allotment_v2/data_exports/subset_fleet.json node test/ui/t_dashchboat.mjs",
+    "test:tsv6": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_tsv6.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
