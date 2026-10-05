@@ -6,7 +6,7 @@
 //     "ชิปต้องมีแยกท่าเรือก่อน แล้วค่อยมีเส้นทาง" · "พอกดชิป รายละเอียดก็ขึ้นในหัว Header ด้วย"
 //     "หัวข้อ สรุปการเดินทางประจำวัน <วันที่> ให้ยาวไปทั้ง Card · ถ้ากดชิปเส้นทาง ชื่อเส้นทางนั้น ๆ ขึ้นต่อ"
 //
-// กันสิบอย่าง
+// กันสิบเอ็ดอย่าง
 //   1 บนจอ · แถบ/ชิป/การ์ดสรุป/หมวด 01,03 ชุดใหม่ขึ้น · หัวเอกสารและการ์ดตัวเลขชุดเดิมซ่อน
 //   2 ชิปท่าเรือครบทุกท่าของวันนั้น ยอดรวมกันเท่ากับทั้งวัน · ยังไม่เลือกท่า ไม่มีชิปเส้นทาง
 //   3 กดชิปท่าเรือ · ชิปเส้นทางขึ้นเฉพาะของท่านั้น · หัวข้อต่อท้ายด้วยชื่อท่า · ตัวเลขและ manifest เป็นของท่านั้น
@@ -17,6 +17,7 @@
 //   8 ตอนพิมพ์ (media print และหน้าต่างพิมพ์ body.ts-printing) · ของใหม่หายหมด ของเดิมกลับมาครบ ตารางเป็นตาราง
 //   9 ชุดเอกสารแนบท้าย (reference pack) ตามท่าเรือที่เลือกด้วย
 //  10 ไม่ล้นแนวนอนที่ 1900 และ 1280 · ไม่มี error บนหน้า
+//  11 หัวข้อหลักอยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · สีแถบหัวตามท่าเรือ (2026-10-05 รอบสอง)
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -142,6 +143,22 @@ else fail('8 ' + JSON.stringify({ p1, p2, p3 }));
 const c9 = await page.evaluate(() => { const all = tsRefPackList(_tsDate).length; _tsPier = 'tublamu'; const t = tsRefPackList(_tsDate).length; _tsPier = 'panwa'; const p = tsRefPackList(_tsDate).length; _tsPier = ''; return { all, t, p }; });
 if (c9.all > 0 && c9.t + c9.p === c9.all && c9.t < c9.all && c9.p < c9.all) ok(`9 ชุดเอกสารแนบท้ายตามท่าเรือ · Tub Lamu ${c9.t} + Visit Panwa ${c9.p} = ทั้งวัน ${c9.all}`);
 else fail('9 ' + JSON.stringify(c9));
+
+/* ══ 11 · §tsV6b · หัวข้อกลาง · ป้ายมุมขวา · ไม่มีบรรทัด "กำลังดูเฉพาะ" · สีแถบตามท่าเรือ ══ */
+const G11 = () => page.evaluate(() => { const h = document.getElementById('travelsum-host'), c = h.querySelector('.h4-card').getBoundingClientRect(), t = h.querySelector('.h4-h1'), pl = h.querySelector('[data-tsv6="pill"]').getBoundingClientRect();
+  const rg = document.createRange(); rg.selectNodeContents(t); const tr = rg.getBoundingClientRect();
+  return { off: Math.round((tr.left + tr.right) / 2 - (c.left + c.right) / 2), pillRight: Math.round(c.right - pl.right), pillTop: Math.round(pl.top - c.top), pillAboveTitle: pl.bottom <= tr.bottom, scope: h.querySelectorAll('.h4-scope').length, txt: /กำลังดูเฉพาะ/.test(h.querySelector('.h4-card').textContent),
+    bar: getComputedStyle(h.querySelector('.h4-bar')).backgroundImage, band: getComputedStyle(h.querySelector('.h4-band')).backgroundImage, onInk: getComputedStyle(h.querySelector('.h4-c.on')).color }; });
+await page.evaluate(() => { _tsPier = ''; _tsRoute = ''; renderTravelSum(); }); await page.waitForTimeout(300); const g0 = await G11();
+await page.click('[data-tspier="tublamu"]'); await page.waitForTimeout(300); const gT = await G11();
+await page.click('[data-tspier="panwa"]'); await page.waitForTimeout(300); const gP = await G11();
+const other = await page.evaluate(() => [tsPierOf('__no_such_route__'), tsPierName('other'), JSON.stringify(tsV6Theme('other')), JSON.stringify(tsV6Theme('ranong'))]);
+await page.evaluate(() => { _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(300);
+if (Math.abs(g0.off) <= 3 && Math.abs(gT.off) <= 3 && g0.pillRight >= 10 && g0.pillRight <= 40 && g0.pillTop >= 0 && g0.pillTop <= 40 && g0.scope === 0 && !gT.txt
+  && /rgb\(14, 74, 99\)/.test(g0.bar) && /rgb\(16, 61, 112\)/.test(gT.bar) && /rgb\(10, 79, 61\)/.test(gP.bar) && gT.band === gT.bar && gP.band === gP.bar && g0.bar !== gT.bar && gT.bar !== gP.bar
+  && gT.onInk === 'rgb(16, 61, 112)' && other[0] === 'other' && other[1] === 'Other' && other[2] !== other[3])
+  ok('11 หัวข้ออยู่กลางการ์ด · ป้ายปิดวันมุมขวาบน · ไม่มีบรรทัด "กำลังดูเฉพาะ" · แถบหัวเปลี่ยนสีตามท่า (ทุกท่า/Tub Lamu/Visit Panwa คนละสี)');
+else fail('11 ' + JSON.stringify({ g0, gT: { off: gT.off, bar: gT.bar, onInk: gT.onInk, txt: gT.txt }, gP: gP.bar, other }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);

@@ -24519,9 +24519,15 @@ function tsPickRoute(id){ _tsRoute=(id===_tsRoute)?'':(id||''); tsAfter(); }
    ไม่ทำงานในหน้าต่างพิมพ์ (body.ts-printing) · ของเดิมที่จอไม่ใช้แล้วติดคลาส ts-printonly */
 var _tsPier='';
 function tsPickPier(p){ p=p||''; _tsPier=(p===_tsPier)?'':p; _tsRoute=''; tsAfter(); }
-function tsPierOf(routeId){ var r=(typeof getRoute==='function'?getRoute(routeId):null)||{}; return r.pier||''; }
+/* เส้นทางที่ไม่ผูกท่า (รถรับส่ง · City Tour) เข้ากลุ่ม 'other' · ห้ามคืนค่าว่าง เพราะค่าว่างแปลว่า "ทุกท่าเรือ"
+   ไม่งั้นกดชิป Other แล้วจะกลายเป็นกดทุกท่าเรือ */
+function tsPierOf(routeId){ var r=(typeof getRoute==='function'?getRoute(routeId):null)||{}; return r.pier||'other'; }
+/* §tsV6b · สีแถบหัวตามท่าเรือ · ใช้สีประจำท่าชุดเดียวกับ Dashboard / ปฏิทิน (PIER_COL) ทำให้เข้มลงให้ตัวขาวอ่านออก
+   ยังไม่เลือกท่า = สีน้ำทะเลของแบรนด์ (--ocean ของแอป) */
+var TS_HEAD_COL={ '':['#0E4A63','#1A6A8A'], tublamu:['#103D70','#185FA5'], panwa:['#0A4F3D','#0F6E56'], ranong:['#74460B','#A3660E'], other:['#40206F','#5B289A'] };
+function tsV6Theme(p){ return TS_HEAD_COL[p||''] || TS_HEAD_COL.other; }
 function tsPierName(p){
-  if(!p) return 'Other';
+  if(!p || p==='other') return 'Other';
   /* ชื่อท่าแบบเดียวกับที่หน้า Dashboard / Boat Operation ใช้เรียก · ไม่สลับตามภาษา จะได้ตรงกับที่ทีมพูดกัน */
   var n=({tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong'})[p];
   if(!n){ try{ n=(typeof laPierName==='function')?laPierName(p):''; }catch(_){} }
@@ -27139,7 +27145,8 @@ function tsV6Head(H, money){
   var vat='<span class="h4-vat"><span class="h4-fl">ภาษี</span><span class="h4-seg">'+seg('','ทั้งหมด',H.nAll)+seg('vat','มี VAT',H.nVat)+seg('novat','ไม่มี VAT',H.nNoVat)+'</span>'
     +((H.vgap&&H.vgap.length)?('<span class="h4-gap" title="'+e(H.vgap.join(' · '))+' — ยังไม่ได้ตั้งโหมด VAT ในหน้า Agents จึงถูกนับเป็นไม่มี VAT ไปก่อน">&#9888; '+H.vgap.length+' agent ยังไม่ได้ตั้งโหมด</span>'):'')
     +'</span>';
-  var bar='<div class="ts-scr ts-noprint h4-bar" data-tsv6="bar"><div class="h4-r1">'
+  var TH=tsV6Theme(_tsPier), thSty='--tsh1:'+TH[0]+';--tsh2:'+TH[1];
+  var bar='<div class="ts-scr ts-noprint h4-bar" data-tsv6="bar" data-pier="'+q(_tsPier)+'" style="'+thSty+'"><div class="h4-r1">'
     +'<div class="h4-brand"><b>LOVE ANDAMAN</b><i>OPERATIONS &middot; DAILY MANIFEST</i></div>'
     +'<div class="h4-nav">'+vat
       +'<button class="h4-gh" onclick="tsDateShift(-1)" title="วันก่อน">&lsaquo;<span class="lg"> วันก่อน</span></button>'
@@ -27147,7 +27154,7 @@ function tsV6Head(H, money){
       +'<button class="h4-gh" onclick="tsDateShift(1)" title="วันถัดไป"><span class="lg">วันถัดไป </span>&rsaquo;</button>'
       +'<button class="h4-pri" onclick="tsPrintSheet()">พิมพ์<span class="lg"> / บันทึก PDF</span></button></div></div>'
     +'<div class="h4-rail" data-tsv6="rail">'+rail+'</div></div>'
-    +'<div class="ts-scr ts-noprint h4-band"></div>';
+    +'<div class="ts-scr ts-noprint h4-band" style="'+thSty+'"></div>';
   /* ── การ์ดสรุป ── */
   var C=tsV6Checks(H, money);
   /* ป้ายปิดวันนับจากทั้งวัน ไม่ตามชิป · ปิดวันคือปิดทั้งวัน */
@@ -27155,22 +27162,15 @@ function tsV6Head(H, money){
   var tail='';
   if(_tsRoute) tail='<span class="h4-rt" data-tsv6="tail"><i style="background:'+e(tsRouteColor(_tsRoute))+'"></i>'+e(tsRouteName(_tsRoute))+'</span>';
   else if(_tsPier) tail='<span class="h4-rt pier" data-tsv6="tail"><i style="background:#B4B8D2"></i>'+e(tsPierName(_tsPier))+'</span>';
-  var scoped=!!(_tsPier||H.vat);
-  var scope=scoped
-    ? ('กำลังดูเฉพาะ <span class="tag">'+e(_tsPier?tsPierName(_tsPier):'ทุกท่าเรือ')+'</span>'
-        +(_tsPier?('&rsaquo; <span class="tag">'+e(_tsRoute?tsRouteName(_tsRoute):'ทุกเส้นทาง')+'</span>'):'')
-        +(H.vat?('&middot; <span class="tag">'+(H.vat==='vat'?'มี VAT':'ไม่มี VAT')+'</span>'):'')
-        +' ตัวเลขทั้งหมดข้างล่างเป็นของชุดนี้')
-    : 'เอกสารปิดวัน — ยอดผู้โดยสารจริง &middot; ตัดสินค่าปรับ &middot; เงินที่เก็บหน้างาน &middot; manifest เต็มของทุกเส้นทาง';
   var cnt=H.booked ? ((H.trav>=H.booked?'เดินทางครบ ':'เดินทางจริง ')+'<em class="'+(H.trav<H.booked?'bad':'')+'">'+H.trav+' / '+H.booked+'</em> คน') : 'ไม่มี booking ในชุดนี้';
-  var card='<div class="ts-scr ts-noprint h4-card" data-tsv6="card">'
+  /* §tsV6b · หัวข้อหลักอยู่กลางการ์ด · ป้ายปิดวันอยู่มุมขวาบน · บรรทัด "กำลังดูเฉพาะ…" ตัดออก (ชื่อท้ายหัวข้อบอกอยู่แล้ว) */
+  var card='<div class="ts-scr ts-noprint h4-card" data-tsv6="card" style="'+thSty+'">'
     +'<div class="h4-head"><span class="h4-pill'+(W?' warn':'')+'" data-tsv6="pill" data-w="'+W+'">'+(W?('เหลือ '+W+' เรื่องก่อนปิดวัน'):'ตรวจครบแล้ว &middot; ปิดวันได้')+'</span>'
       +'<h1 class="h4-h1">สรุปการเดินทางประจำวัน '
         +'<label class="dt" title="กดเพื่อเลือกวันจากปฏิทิน">'+e(tsV6DateLabel(H.date))
           +'<input type="date" value="'+e(H.date)+'" onclick="try{this.showPicker()}catch(_){}" onchange="tsPickDay(this.value)"></label>'
         +tail+'</h1></div>'
     +'<div><div class="h4-count" data-tsv6="count">'+cnt+'</div>'
-      +'<div class="h4-scope">'+scope+'</div>'
       +'<div class="h4-iss">ออกเมื่อ '+e(H.stamp)+(H.by?(' &middot; โดย '+e(H.by)):'')+'</div></div>'
     +'<ul class="h4-checks">'+C.map(function(c){ return '<li data-tschk="'+c.k+'" data-w="'+(c.w?1:0)+'"><span class="h4-ic'+(c.w?' warn':'')+'">'+(c.w?'!':'&#10003;')+'</span><span>'+c.h+'</span></li>'; }).join('')+'</ul>'
     +'</div>';
@@ -27524,6 +27524,24 @@ function tsCSSv6(){
   & .s5-g1{grid-template-columns:1fr}
   & .s5-g3{grid-template-columns:1fr}
 }
+
+/* ── §tsV6b · หัวข้อกลางการ์ด · ป้ายมุมขวา · สีแถบตามท่าเรือ ── */
+& .h4-bar{background:linear-gradient(90deg,var(--tsh1,#0E4A63),var(--tsh2,#1A6A8A))}
+& .h4-band{background:linear-gradient(90deg,var(--tsh1,#0E4A63),var(--tsh2,#1A6A8A))}
+& .h4-c.on,& .h4-seg button.on,& .h4-pri{color:var(--tsh1,#0E4A63)}
+& .h4-c.on i,& .h4-seg button.on i{color:#5E6A78}
+& .h4-fl,& .h4-hint,& .h4-brand i,& .h4-c i,& .h4-seg button i{color:rgba(255,255,255,.72)}
+& .h4-sep{color:rgba(255,255,255,.55)}
+& .h4-head{position:relative;text-align:center;padding:2px 190px 14px}
+& .h4-head .h4-pill{position:absolute;right:0;top:0}
+& .h4-head .h4-h1{margin:0;justify-content:center}
+& .h4-head .h4-h1 .dt{color:var(--tsh2,#1A6A8A);border-bottom-color:#C9D3DC}
+& .h4-rt.pier{color:var(--tsh2,#1A6A8A)}
+& .h4-rt.pier i{background:var(--tsh2,#1A6A8A) !important}
+@media (max-width:1560px){
+  & .h4-head{padding:0 0 12px}
+  & .h4-head .h4-pill{position:static;display:inline-block;margin-bottom:8px}
+}
 `;
   return '@media screen{'+css.replace(/&/g,P)+'}'
     +'body.ts-printing #travelsum-host .ts-scr{display:none !important}';
@@ -27546,7 +27564,7 @@ function renderTravelSum(){
     var _f=FL[r.b.id], _w=(_f.pend||_f.due||_f.cot)?1:0;
     rMap[k].n++; rMap[k].pax+=r.travelled; rMap[k].bk+=r.booked; rMap[k].w+=_w;
     pMap[pk].n++; pMap[pk].pax+=r.travelled; pMap[pk].rt[k]=1; pMap[pk].w+=_w; });
-  (function(){ var O=['panwa','tublamu','ranong']; var ix=function(p){ var i=O.indexOf(p); return i<0?(p?8:9):i; };
+  (function(){ var O=['panwa','tublamu','ranong']; var ix=function(p){ var i=O.indexOf(p); return i<0?(p==='other'?9:8):i; };
     pOrder.sort(function(a,b){ return ix(a)-ix(b); }); })();
   var rTotN=rOrder.reduce(function(a,k){ return a+rMap[k].n; },0);
   if(_tsRoute && !rMap[_tsRoute]) _tsRoute='';
