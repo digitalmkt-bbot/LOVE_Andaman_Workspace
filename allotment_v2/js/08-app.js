@@ -27654,6 +27654,13 @@ function tsV6Head(H, money){
       +'<button class="h4-gh" onclick="tsDateShift(-1)" title="วันก่อน">&lsaquo;<span class="lg"> วันก่อน</span></button>'
       +'<button class="h4-gh" onclick="tsToday()">วันนี้</button>'
       +'<button class="h4-gh" onclick="tsDateShift(1)" title="วันถัดไป"><span class="lg">วันถัดไป </span>&rsaquo;</button>'
+      /* §tsCalBtn (2026-10-05) · เจ้าของ: "ขอเพิ่มคลิกแบบปฏิทินให้เด้งขึ้นเลือกวันได้"
+         ปุ่มปฏิทินในแถบหัว · <input type=date> โปร่งใสทับเต็มปุ่ม → คลิกปุ่ม = คลิก input → ปฏิทินของเบราว์เซอร์เด้งขึ้น
+         (Safari ไม่มี showPicker แต่คลิก input ตรง ๆ เปิดได้) · เลือกแล้ว tsPickDay วาดใหม่ */
+      +'<label class="h4-gh h4-cal" data-tsv6="cal" title="เลือกวันจากปฏิทิน">'
+        +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
+        +'<span class="lg"> ปฏิทิน</span>'
+        +'<input type="date" value="'+e(H.date)+'" aria-label="เลือกวัน" onclick="try{this.showPicker()}catch(_){}" onchange="tsPickDay(this.value)"></label>'
       +'<button class="h4-pri" onclick="tsPrintSheet()">พิมพ์<span class="lg"> / บันทึก PDF</span></button></div></div>'
     +'<div class="h4-rail" data-tsv6="rail">'+rail+'</div></div>'
     +'<div class="ts-scr ts-noprint h4-band" style="'+thSty+'"></div>';
@@ -27789,6 +27796,9 @@ function tsCSSv6(){
 & .h4-brand b{display:block;font-size:19px;font-weight:800;letter-spacing:.32em;color:#fff;line-height:1.1}
 & .h4-brand i{display:block;font-style:normal;font-size:10px;font-weight:600;letter-spacing:.2em;color:#B9BEDF;margin-top:5px}
 & .h4-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+& .h4-cal{position:relative;display:inline-flex;align-items:center;gap:4px;overflow:hidden}
+& .h4-cal input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0;font-size:16px}
+& .h4-cal input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 & .h4-gh{background:transparent;border:1.3px solid rgba(255,255,255,.5);color:#fff;border-radius:999px;padding:7px 14px;font:700 12.5px/1.2 inherit;font-family:inherit;cursor:pointer;white-space:nowrap}
 & .h4-gh:hover{background:rgba(255,255,255,.12)}
 & .h4-pri{background:#fff;color:#000F4C;border:none;border-radius:999px;padding:9px 18px;font:800 13px/1.2 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;margin-left:6px}

@@ -6,7 +6,7 @@
 //     "ชิปต้องมีแยกท่าเรือก่อน แล้วค่อยมีเส้นทาง" · "พอกดชิป รายละเอียดก็ขึ้นในหัว Header ด้วย"
 //     "หัวข้อ สรุปการเดินทางประจำวัน <วันที่> ให้ยาวไปทั้ง Card · ถ้ากดชิปเส้นทาง ชื่อเส้นทางนั้น ๆ ขึ้นต่อ"
 //
-// กันสิบหกอย่าง
+// กันสิบเจ็ดอย่าง
 //   1 บนจอ · แถบ/ชิป/การ์ดสรุป/หมวด 01,03 ชุดใหม่ขึ้น · หัวเอกสารและการ์ดตัวเลขชุดเดิมซ่อน
 //   2 ชิปท่าเรือครบทุกท่าของวันนั้น ยอดรวมกันเท่ากับทั้งวัน · ยังไม่เลือกท่า ไม่มีชิปเส้นทาง
 //   3 กดชิปท่าเรือ · ชิปเส้นทางขึ้นเฉพาะของท่านั้น · หัวข้อต่อท้ายด้วยชื่อท่า · ตัวเลขและ manifest เป็นของท่านั้น
@@ -23,6 +23,7 @@
 //  14 หมวด 04 เป็นชีท (§tsManSheet · "ปรับแบบนี้" หลังดู mockup v2) · เลขแถว · หัวตรึง · 3 คอลัมน์แรกตรึงซ้าย · แถวรวมกลุ่ม/วันตรงกับผลบวก · ค้นหา/ชิปกรอง · ของใหม่ไม่ออกตอนพิมพ์
 //  15 หมวด 04 ยาวเต็มไม่มีกล่องเลื่อนซ้อน · หัวคอลัมน์เกาะใต้แถบหัว · ซ่อนคอลัมน์ได้ จำต่อผู้ใช้ต่อเครื่อง (§tsManFull · §tsManCols · "ให้เต็มยาวเลย ตอนนี้มี scroll 2 ที่ · ขอเพิ่มการซ่อนบางคอลัมน์ และจำในเครื่องของ user นั้น ๆ")
 //  16 หน้าพิมพ์โครงใหม่ §tsDoc ("ลองไม่อิงโครงสร้างเดิม แต่เก็บ Manifest ไว้" → Day Close − ลายเซ็น − คำอธิบาย · หัว = สรุปการเดินทางประจำวัน <วันที่> <เส้นทาง>)
+//  17 ปุ่มปฏิทินในแถบหัว (§tsCalBtn · "ขอเพิ่มคลิกแบบปฏิทินให้เด้งขึ้นเลือกวันได้") · input date ทับเต็มปุ่ม · เลือกวันแล้ววาดใหม่
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -312,6 +313,18 @@ const okLay = lay16.W > 900 && lay16.cust >= 7.5 && lay16.pick >= 7.5 && lay16.p
 if (okD(d0) && okD(d1) && okD(d2) && okLay && !d0.rtName && d1.rtName === 'Visit Panwa' && d2.rtName === rName16 && d1.manRows < d0.manRows && /#000f4c/i.test(d1.pierBg) && d0.pack)
   ok(`16 หน้าพิมพ์โครงใหม่ · หัว "${d0.title}" · A/B/C · D ตามเส้นทาง ${d0.rtN} แถว รวม ${d0.rtTotM} = ผลบวก = รวมใน Manifest · Manifest ${d0.manRows} แถวมีเลขแถว · ไม่มีลายเซ็น/คำอธิบาย · เลือกท่า/เส้นทางแล้วชื่อขึ้นต่อหัว (${d2.rtName}) · ท้ายกระดาษมีเลขหน้า · ชุดเอกสารแนบยังตามมา · วางหน้าจริงแล้วคอลัมน์ลูกค้า ${lay16.cust}% จุดรับ ${lay16.pick}% แถวสูงสุด ${lay16.maxRow}px`);
 else fail('16 ' + JSON.stringify({ lay16, d0, d1: { err: d1.err, rtName: d1.rtName, manRows: d1.manRows, pierBg: d1.pierBg }, d2: { err: d2.err, rtName: d2.rtName }, rName16 }));
+
+/* ══ 17 · §tsCalBtn · ปุ่มปฏิทินในแถบหัว ══ */
+await page.evaluate((D) => { _tsDate = D; _tsPier = ''; _tsRoute = ''; renderTravelSum(); }, DATE); await page.waitForTimeout(300);
+const cal = await page.evaluate(() => { const b = document.querySelector('#travelsum-host .h4-bar [data-tsv6="cal"]'), i = b && b.querySelector('input[type="date"]'); if (!b || !i) return { b: !!b, i: !!i };
+  const br = b.getBoundingClientRect(), ir = i.getBoundingClientRect(), cs = getComputedStyle(i), nav = [...document.querySelectorAll('#travelsum-host .h4-nav > *')].map(x => x.textContent.trim().slice(0, 10));
+  return { b: true, i: true, val: i.value, cover: Math.abs(ir.left - br.left) <= 2 && Math.abs(ir.width - br.width) <= 3 && ir.height >= br.height - 3, op: cs.opacity, vis: b.offsetParent !== null, inBar: !!b.closest('.h4-bar'), nav, el: document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2) === i }; });
+await page.evaluate(() => { const i = document.querySelector('#travelsum-host [data-tsv6="cal"] input'); i.value = '2026-09-16'; i.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(400);
+const cal2 = await page.evaluate(() => ({ d: _tsDate, v: document.querySelector('#travelsum-host [data-tsv6="cal"] input').value, lbl: document.querySelector('#travelsum-host .h4-h1 .dt').textContent.trim() }));
+await page.evaluate((D) => { _tsDate = D; renderTravelSum(); }, DATE); await page.waitForTimeout(300);
+if (cal.b && cal.i && cal.val === DATE && cal.cover && cal.op === '0' && cal.vis && cal.inBar && cal.el && cal2.d === '2026-09-16' && cal2.v === '2026-09-16' && /16 กันยายน/.test(cal2.lbl))
+  ok('17 ปุ่มปฏิทินอยู่ในแถบหัวถัดจากวันถัดไป · input date โปร่งใสทับเต็มปุ่ม (คลิกตรงกลางโดน input) · เลือก 16 ก.ย. แล้วหน้าเปลี่ยนวันและหัวข้อตาม');
+else fail('17 ' + JSON.stringify({ cal, cal2 }));
 
 /* ══ 10 ══ */
 const w1 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
