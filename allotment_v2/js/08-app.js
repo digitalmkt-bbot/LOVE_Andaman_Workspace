@@ -25086,7 +25086,8 @@ function tsRowFlags(r, date){
   try{
     var m=tsMoneyOf(r.b,date), S=tsSaleList(r.b,date);
     if(m.target>0 || m.paid>0 || S.tot>0){
-      if(!tsNoCollect(r, m.paid) && m.due>0) f.due=true;
+      var nc=tsCotNoCol(r.b,date,m);   // §cotNoWhy · COT ที่ปิดเก็บไม่ได้แล้ว ไม่ใช่ยอดค้าง
+      if(!tsNoCollect(r, m.paid) && (nc?nc.dueLeft:m.due)>0) f.due=true;
       var v=+((m.M&&m.M.cot)||0);
       if(v>0){ var c=(typeof tsCotGet==='function')?tsCotGet(r.b.id,date):null;
         if(!c) f.cot=true;
@@ -25385,6 +25386,18 @@ function tsNoCollect(r, paid){
   if(!r) return false;
   if(+paid>0) return false;                          // §paid · เก็บไปแล้วค่อยยกเลิก = เรื่องคืนเงิน ไม่ใช่ไม่นับ
   return (r.travelled<=0) && ((+r.cxl>0)||(+r.ns>0)||(+r.noShow>0));
+}
+/* §cotNoWhy (2026-10-06) · เจ้าของ: "อันที่ระบุว่ายังไม่ได้เก็บ 1000 แต่ด้านล่างระบุแล้วว่าเก็บไม่ได้เพราะอะไร
+   สรุปบนควรระบุให้หน่อยว่าเก็บไม่ได้เพราะอะไร"
+   ใบที่ยังมีคนเดินทาง (ไม่เข้า tsNoCollect) แต่ COT ถูกปิด "เก็บไม่ได้" แล้ว · เดิมยอด COT ยังนับเป็น
+   "ยังไม่ได้เก็บ" อยู่ข้างบน ทั้งที่ข้างล่างปิดพร้อมเหตุผลไปแล้ว · กติกาเดียว ใช้ทั้งกล่องสรุป ธงปิดวัน และสถานะแถว:
+   COT ที่ปิดเก็บไม่ได้ = ไม่ใช่เงินรอเก็บ · ออกจาก "ยังไม่ได้เก็บ" ไปอยู่บรรทัด "เก็บไม่ได้" พร้อมเหตุผลของใบนั้น
+   เป็นการอ่าน TS_COT ที่มีอยู่แล้ว · ไม่เขียนอะไรเพิ่ม */
+function tsCotNoCol(b, date, m){
+  var v=+((m&&m.M&&m.M.cot)||0); if(!(v>0)) return null;
+  var c=(typeof tsCotGet==='function')?tsCotGet(b.id,date):null;
+  if(!c || c.mode!=='nocol') return null;
+  return { amt:v, why:String(c.ref||'').trim(), dueLeft:Math.max(0, (+m.due||0)-v) };
 }
 /* ══ §tsPaySlip · ชิปวิธีรับเงินในตารางหลัก กดเปิดดูสลิปได้ ══════════════════
    ชิปตัวนี้เป็น "ยอดรวมต่อวิธีรับเงิน" ไม่ใช่เงินก้อนเดียว · ยอดหนึ่งชิปมาจาก
@@ -27646,7 +27659,9 @@ function tsV6Checks(H, money){
   out.push({k:'ns', w:false, h:'No-show <b>'+H.ns+'</b> คน &middot; ยกเลิกหน้างาน <b>'+H.cxl+'</b> คน'});
   out.push({k:'pend', w:H.pend>0, block:true, h:'รอตัดสิน <b>'+H.pend+'</b> เคส &middot; เก็บค่าปรับได้ <b>'+money(H.charge)+'</b>'});
   out.push({k:'due', w:H.due>0, block:true, h:H.nCollect
-    ? ('เงินที่ต้องเก็บหน้าท่า <b>'+money(H.target)+'</b> จาก <b>'+H.nCollect+'</b> ใบ &middot; '+(H.due>0?('ยังค้าง <b>'+money(H.due)+'</b>'):'เก็บครบแล้ว'))
+    ? ('เงินที่ต้องเก็บหน้าท่า <b>'+money(H.target)+'</b> จาก <b>'+H.nCollect+'</b> ใบ &middot; '+(H.due>0?('ยังค้าง <b>'+money(H.due)+'</b>'):'เก็บครบแล้ว')
+        /* §cotNoWhy · COT ที่ปิดเก็บไม่ได้ ไม่อยู่ในยอดค้าง · บอกไว้ให้รู้ว่าทำไมยอดไม่เท่ากับที่ต้องเก็บ */
+        +(H.nCotNo?(' &middot; เก็บไม่ได้ <b>'+money(H.cotNo)+'</b> '+H.nCotNo+' ใบ ปิดพร้อมเหตุผลแล้ว'):''))
     : 'ไม่มียอดต้องเก็บหน้าท่า'});
   out.push({k:'cot', w:H.cotLeft>0, block:true, h:(H.cotAll>0)
     ? ('COT <b>'+money(H.cotAll)+'</b> &middot; '+(H.cotLeft>0?('ยังไม่ตัดสิน <b>'+H.cotLeft+'</b> ใบ'):'ตัดสินครบ'))
@@ -27767,7 +27782,15 @@ function tsV6Money(M, money){
       +todo(M.due>0, M.due>0?('ยังไม่ได้เก็บ <b>'+money(M.due)+'</b>'):'เก็บเงินครบทุกใบ &middot; ไม่มียอดค้าง')
       +(M.saleDue>0?todo(true,'ขายเพิ่ม/upgrade รอเก็บอีก <b>'+money(M.saleDue)+'</b>'):'')
       +todo(M.cotLeft>0, (M.cotAll>0)?('COT <b>'+money(M.cotAll)+'</b> &middot; '+(M.cotLeft>0?('ยังไม่ตัดสิน <b>'+M.cotLeft+'</b> ใบ'):'ตัดสินครบ')):'ไม่มี COT ในชุดนี้')
-      +(M.nCotNo?todo(false,'COT เก็บไม่ได้ <b>'+money(M.cotNo)+'</b> &middot; '+M.nCotNo+' ใบ &middot; ปิดพร้อมเหตุผลแล้ว'):'')
+      /* §cotNoWhy · แยกเป็นบรรทัดต่อใบ พร้อมเหตุผลที่ปิดไว้ (เดิมเป็นยอดรวมบรรทัดเดียว คนอ่านไม่รู้ว่าเพราะอะไร)
+         ไม่มีเหตุผล = ยังค้างเรื่อง (!) · เกิน 4 ใบ ย่อที่เหลือเป็นยอดรวม */
+      +(function(){ var L=M.cotNoList||[], h='', e=ckEsc;
+          L.slice(0,4).forEach(function(x){
+            h+=todo(!x.why,'เก็บไม่ได้ <b>'+money(x.amt)+'</b> &middot; <span class="ts-mono">'+e(x.code)+'</span> &middot; '
+              +(x.why?('<span class="why">'+e(x.why)+'</span>'):'<span class="why nowhy">ยังไม่ระบุเหตุผล &middot; ใส่ได้ที่ช่องจัดการเงิน COT ข้างล่าง</span>')); });
+          if(L.length>4){ var rest=L.slice(4), amt=0; rest.forEach(function(x){ amt+=x.amt; });
+            h+=todo(rest.some(function(x){ return !x.why; }),'เก็บไม่ได้อีก <b>'+money(amt)+'</b> &middot; '+rest.length+' ใบ &middot; ดูเหตุผลในตารางข้างล่าง'); }
+          return h; })()
       +'</div>'+(M.cotLeft>0?'<div class="m5-foot">COT ที่ยังไม่ตัดสิน = ยังไม่ได้เลือกว่าหักจากบิลเอเจนต์ หรือโอนออก &middot; เลือกได้ในตารางข้างล่าง</div>':'')+'</div>'
     +'</div>'
     +(M.nRows>0?('<div class="ts-scr ts-noprint s5-sub">รายการรับเงิน <span class="s5-cnt">'+M.nRows+' ใบ</span></div>'):'');
@@ -27964,6 +27987,8 @@ function tsCSSv6(){
 & .m5-todo div{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:#000F4C;line-height:1.4}
 & .m5-todo b{font-family:'DM Mono',ui-monospace,monospace;font-weight:700}
 & .m5-todo .s5-ic{margin-top:1px}
+& .m5-todo .why{color:#4C5377;font-weight:600}
+& .m5-todo .why.nowhy{color:#B4621B;font-weight:700}
 & .m5-foot{margin-top:10px;padding-top:9px;border-top:1px dashed #DADCE8;font-size:11.5px;color:#6B7092;line-height:1.6}
 & .s5-sub{display:flex;align-items:center;gap:8px;margin:2px 0 8px;font-size:12px;font-weight:800;color:#000F4C}
 @media (max-width:1560px){
@@ -28282,11 +28307,15 @@ function renderTravelSum(){
   });
   var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
   var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0,sumComm=0;
+  var cotNoList=[];   // §cotNoWhy · ใบที่ COT ปิด "เก็บไม่ได้" · โชว์เหตุผลในกล่องสรุป
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
-    if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
+    m.noCol=tsCotNoCol(m.r.b,date,m);
+    if(m.noCol) cotNoList.push({ code:m.r.b.voucherRef||m.r.b.code||'—', amt:m.noCol.amt, why:m.noCol.why });
+    /* §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ · §cotNoWhy · COT ที่ปิดเก็บไม่ได้แล้ว ก็ไม่ใช่ยอดค้าง */
+    if(!m.cxl){ sumDue+=(m.noCol?m.noCol.dueLeft:m.due); sumTarget+=m.target; }
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
     sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due;
     sumComm+=(+m.S.comm||0); });   // §tsComm · ค่าคอมของที่เก็บเงินแล้ว
@@ -28517,7 +28546,8 @@ function renderTravelSum(){
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
     if(m.M.balance>0) parts.push('ค้าง '+money(m.M.balance));
     if(m.M.upDue>0) parts.push('upgrade '+money(m.M.upDue));
-    mbody+='<tr class="'+(m.cxl?'ts-cxl':(m.due>0?'need':''))+'">'
+    var dueLeft=m.noCol?m.noCol.dueLeft:m.due;   // §cotNoWhy · ยอดค้างหลังหัก COT ที่ปิดเก็บไม่ได้
+    mbody+='<tr class="'+(m.cxl?'ts-cxl':(dueLeft>0?'need':''))+'">'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -28541,8 +28571,13 @@ function renderTravelSum(){
       +'<td class="ts-cotcol">'+tsCotCell(b, m.M, date, money, e, m.r)+'</td>'
       +'<td class="c">'+(m.cxl
         ? ('<span class="ts-chip r">'+m.cxlKind+'</span><div class="ts-tel" style="margin-top:3px">ไม่นับเข้ายอดวันนี้</div>')
-        : m.due>0
-        ? ('<span class="ts-chip a">รอเก็บ '+money(m.due)+'</span>')
+        : dueLeft>0
+        ? ('<span class="ts-chip a">รอเก็บ '+money(dueLeft)+'</span>'
+            +(m.noCol?('<div class="ts-tel" style="margin-top:3px">COT เก็บไม่ได้ '+money(m.noCol.amt)+' ไม่นับ</div>'):''))
+        /* §cotNoWhy · COT ปิดเก็บไม่ได้แล้ว และไม่มียอดอื่นค้าง → บอกว่าเก็บไม่ได้ ไม่ใช่ "รอเก็บ" */
+        : m.noCol
+        ? ('<span class="ts-chip r">เก็บไม่ได้ '+money(m.noCol.amt)+'</span><div class="ts-tel" style="margin-top:3px">'
+            +(m.noCol.why?'ปิดพร้อมเหตุผลแล้ว':'<span style="color:var(--am700);font-weight:700">ยังไม่ระบุเหตุผล</span>')+'</div>')
         : (m.target<=0 && m.paid<=0 && m.S.got>0
             ? ('<span class="ts-chip g">ขายเพิ่ม '+money(m.S.got)+'</span>')
             : (m.target<=0 && m.paid<=0 && m.S.due>0
@@ -28579,7 +28614,7 @@ function renderTravelSum(){
         })()
     +'</div></div>'
     +tsV6Money({ cash:sumCash, tf:sumTf, card:sumCard, tin:sumIn, comm:sumComm, out:sumPayout, net:sumNet, due:sumDue, saleDue:sumSaleDue,
-                 fee:sumFee, deduct:sumDeduct, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, nRows:mRows.length }, money)
+                 fee:sumFee, deduct:sumDeduct, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, cotNoList:cotNoList, nRows:mRows.length }, money)
     +'<div class="ts-pay ts-pay5 ts-printonly">'
     + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ · รวมของขายเพิ่ม'
         +(sumPayout>0?('<br><b style="color:var(--rs700)">ในก้อนนี้มีเงินที่ต้องจ่ายออกอีก '+money(sumPayout)+'</b>'):''))
@@ -28591,7 +28626,8 @@ function renderTravelSum(){
         (sumPayout>0 ? 'โอนคืนเอเจนต์ตามคำตัดสิน COT · ต้องหักออกจากเงินที่รับมา'
                      : 'วันนี้ไม่มีรายการที่ต้องจ่ายออก'))
     + PC('pend','&#9203;','5 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
-        +(sumSaleDue>0?(' · ขายเพิ่ม/upgrade รอเก็บอีก '+money(sumSaleDue)):''))
+        +(sumSaleDue>0?(' · ขายเพิ่ม/upgrade รอเก็บอีก '+money(sumSaleDue)):'')
+        +(nCotNo?(' · เก็บไม่ได้ '+money(sumCotNo)+' ปิดพร้อมเหตุผลแล้ว ไม่นับ'):''))   // §cotNoWhy
     +'</div>'
     // §tsCashNet · บรรทัดกระทบยอด · ตัวเลขที่เอาเข้าบัญชีจริงคือ "เหลือเข้าบริษัท"
     +'<div class="ts-read ts-printonly" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
@@ -28889,7 +28925,7 @@ function renderTravelSum(){
     date:date, vat:_tsVatF, nAll:allDay.length, nVat:nVat, nNoVat:nNoVat, vgap:_vgap,
     pOrder:pOrder, pMap:pMap, rOrder:rOrder, rMap:rMap, rTotN:rTotN, dayW:dayW,
     nBk:all.length, booked:tBooked, trav:tTrav, ns:tNs, cxl:tCxl, pend:nPending, charge:charge,
-    target:sumTarget, nCollect:nCollect, due:sumDue, cotAll:sumCotAll, cotLeft:nCotLeft, doc:dcAgg,
+    target:sumTarget, nCollect:nCollect, due:sumDue, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, doc:dcAgg,
     stamp:_tsStamp(), by:(laBy?laBy():'') }, money);
   tsV6Bleed();
   host.innerHTML='<style id="ts-style">'+tsCSS()+tsCSSv6()+'</style>'

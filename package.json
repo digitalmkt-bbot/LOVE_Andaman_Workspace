@@ -82,6 +82,7 @@
     "test:tsv6": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_tsv6.mjs",
     "test:salesactive": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_salesactive.mjs",
     "test:excotpier": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_excotpier.mjs",
+    "test:cotnowhy": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_cotnowhy.mjs",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch(e){}\""
   },
   "dependencies": {
