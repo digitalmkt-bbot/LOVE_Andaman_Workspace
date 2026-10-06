@@ -7468,7 +7468,16 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
   if(af){ if(af.join)addon.push('Longtail join'); if(af.charter)addon.push('Longtail charter'+(af.charterQty>1?(' ×'+af.charterQty):'')); if(af.transfer)addon.push('Transfer'); }
   var payLabel=(typeof bkV2PayLabel==='function')?bkV2PayLabel(ag&&ag.payType):((ag&&ag.payType)||'');
   var _pxt=function(k){ if(t) return (typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax||{},k):0; return (k==='ad'?(bk.pax&&bk.pax.adult):k==='chd'?(bk.pax&&bk.pax.child):k==='inf'?(bk.pax&&bk.pax.infant):0)||0; };
-  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel,
+  /* §rcPlate (2026-10-06) · เจ้าของ: "กรณีที่จัดรถแล้ว ขอเพิ่มคอลัมน์ทะเบียนรถให้ด้วย และโชว์ในใบ Sheet ด้วย"
+     อ่านรถที่จัดไว้จาก ops ของวันนั้น (bkOpsRead · OVN วันที่ 2 ใช้ ops ของทริป) · ทะเบียนผ่าน vanJobsDriverInfo
+     จะได้ตรงกับใบงานรถ (รถพาร์ทเนอร์ที่ใส่ทะเบียนทับรายวันไว้ก็ตามมาด้วย) · รถกลับคนละคัน บอกเพิ่ม · มาเอง = ไม่มีรถ */
+  var _d=(t&&t.date)||bk.travelDate||'', _O=(typeof bkOpsRead==='function')?bkOpsRead(bk,_d):(bk.ops||{});
+  var _vid=_O.vanId||'', _rvid=_O.vanReturnId||'', van={ self:!!bk.pickupSelf, id:_vid, name:'', plate:'', retPlate:'', retName:'' };
+  if(_vid){ var _vh=(typeof vehGet==='function'?vehGet(_vid):null)||{}, _vi=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(_vid,_d):{};
+    van.name=_vh.name||_vid; van.missing=!_vh.id; van.plate=(_vi.plate||_vh.plate||''); if(van.plate==='-') van.plate=''; }
+  if(_rvid && _rvid!==_vid){ var _rh=(typeof vehGet==='function'?vehGet(_rvid):null)||{}, _ri=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(_rvid,_d):{};
+    van.retName=_rh.name||_rvid; van.retPlate=(_ri.plate||_rh.plate||''); if(van.retPlate==='-') van.retPlate=''; }
+  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel, van:van,
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     /* §rcArea · ย่านรับจริง เช่น Patong / Kalim / Karon
@@ -7587,6 +7596,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td>'+esc(d.hotel||'—')+'</td>'
         +'<td class="ctr mono">'+esc(d.room||'—')+'</td>'
         +'<td>'+esc(d.zone)+'</td>'
+        +'<td class="nowrap">'+_rcVanSheet(d.van, esc)+'</td>'   /* §rcPlate */
         +'<td>'+(d.addon?'<span class="ao">'+esc(d.addon)+'</span>':'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.special?esc(d.special):'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.cot?'<span class="cot">'+esc(d.cot)+'</span>':'<span class="mut">—</span>')+'</td>'
@@ -7596,7 +7606,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     var _T=_rcSecTint(route&&route.color);
     body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
       +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
-      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
+      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Van · plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
     +'<style>*{box-sizing:border-box}body{margin:0;font-family:\'DM Sans\',Arial,sans-serif;color:#2C2C2A;background:#EDECE7}'
@@ -7622,7 +7632,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.cust{font-size:14px;font-weight:700}.cpax{font-size:12px;color:#5F5E5A;font-weight:400}.vch{font-size:12px;font-family:\'DM Mono\',monospace;color:#5F5E5A}'
     +'.dt{width:100%;border-collapse:collapse;font-size:12.5px}.dt td{padding:3px 0;vertical-align:top}.dt .lbl{color:#9a988f;width:100px}.mut{color:#9a988f}'
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
-    +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}'
+    +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
     +'.bar{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:8px;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
     +'@media print{body{background:#fff}.bar{display:none}.pg{box-shadow:none;margin:0;max-width:100%;border-radius:0}@page{size:A4 landscape;margin:9mm}}'
     +'</style></head><body>'
@@ -7658,6 +7668,22 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
   var w=window.open('','_blank'); if(!w){ alert('Popup blocked — please allow popups to open the sheet'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
+/* §rcPlate · ช่องรถของแถว · ใช้ทั้งหน้าจอและใบ Sheet · ไม่มีรถไม่เดาคัน */
+function _rcVanCell(v, esc, MONO){
+  if(!v || (!v.id && !v.self)) return '<span style="color:#B4B2A9">—</span>';
+  if(!v.id && v.self) return '<span style="color:#8a8880;font-size:11.5px">มาเอง</span>';
+  var h='<span style="'+MONO+';font-weight:700;letter-spacing:.02em">'+esc(v.plate||'—')+'</span>'
+    +'<span style="display:block;font-size:10.5px;color:#9a988f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(v.missing?'ไม่พบรถคันนี้ในทะเบียนรถ · ':'')+esc(v.name)+'">'+esc(v.name)+(v.missing?' ?':'')+'</span>';
+  if(v.retName) h+='<span style="display:block;font-size:10.5px;color:#5B4FC4;white-space:nowrap" title="รถกลับคนละคัน">กลับ: '+esc(v.retPlate||v.retName)+'</span>';
+  return h;
+}
+function _rcVanSheet(v, esc){
+  if(!v || (!v.id && !v.self)) return '<span class="mut">—</span>';
+  if(!v.id && v.self) return '<span class="mut">Self-arrive</span>';
+  var h='<span class="plate">'+esc(v.plate||'—')+'</span><span class="vn">'+esc(v.name)+'</span>';
+  if(v.retName) h+='<span class="vn">Return: '+esc(v.retPlate||v.retName)+'</span>';
+  return h;
+}
 function _rcAgentColorOf(bk){ return (bk&&bk.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(bk.agentId):'#EDEBE4'; }
 function _rcInkOf(hex, hasAg){ if(!hasAg) return '#5F5E5A'; return (typeof bkV2ContrastInk==='function')?bkV2ContrastInk(hex):'#fff'; }
 function _rcSentRing(invoiceOrPaid){ return invoiceOrPaid?'#9A6A00':'#5B4FC4'; }   // gold = invoice/paid · purple = unpaid
@@ -7691,7 +7717,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'van',l:'Van · plate',w:132},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
@@ -7716,6 +7742,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'hotel': return esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
     case 'zone': return esc(d.zone);
+    /* §rcPlate · ทะเบียนเด่น ชื่อรถเล็กใต้ · ยังไม่จัดรถ = ขีด (ไม่เดา) · รถกลับคนละคันบอกไว้ */
+    case 'van': return _rcVanCell(d.van, esc, MONO);
     case 'addon': return d.addon?'<span style="color:#185FA5">'+esc(d.addon)+'</span>':'<span style="color:#B4B2A9">—</span>';
     case 'special': return esc(d.special||'—');
     case 'payment': return d.cot?'<span style="color:#993C1D;'+MONO+'">'+esc(d.cot)+'</span>':'<span style="color:#B4B2A9">—</span>';
