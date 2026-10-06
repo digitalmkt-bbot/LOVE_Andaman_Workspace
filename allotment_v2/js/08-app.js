@@ -17913,7 +17913,32 @@ var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก'
 /* §exCot (2026-08-17) · Extra ที่ขายก่อนวันเดินทางแล้วเก็บเงินวันเดินทาง
    วิธีรับเงิน 'cot' = ยังไม่ได้รับเงิน · settle 'done' เมื่อเก็บจริงแล้ว
    ห้ามใช้ settle เดี่ยวๆ ตัดสิน · ของเก่าทุกใบเขียน settle:'pending' ไว้ทั้งที่รับเงินไปแล้ว */
-function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done'); }
+function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bkxExCovered(x); }
+/* §exCotPier (2026-10-06) · ขายเพิ่มจากหน้า By trip แบบ "เก็บเงินวันเดินทาง" แล้วหน้าท่ากดเช็คอิน+รับเงินของใบนั้นไปแล้ว
+   เจ้าของ: "ขายผ่านหน้า By trip date แล้วเช็คอินเป็นคนกดเช็คอินแล้วรับเงินแล้ว ต้องทำอะไรอีกเหรอ" → ไม่ต้อง
+   ที่มา · Trip.com 2 ใบ (6 ต.ค.) · หน้าท่าเห็น ต้องเก็บ 1,000 (pckMoney รวม exDue) เก็บเงินสด 1,000 → ค้าง 0
+   แต่ตัวรายการขายเพิ่มยัง settle:'pending' · Travel Summary จึงขึ้น "รอเก็บ 1,000" ซ้อนกับ "เก็บครบ 1,000"
+   กติกา · เงินที่หน้าท่าเก็บของวันนั้น ≥ ยอดที่ต้องเก็บทั้งหมดของวันนั้น (COT + upgrade ค้าง + ยอดค้าง + ขายเพิ่มที่รอเก็บ)
+          = ขายเพิ่มที่รอเก็บทุกรายการของวันนั้นถือว่าเก็บแล้ว "ผ่านหน้าท่า" · เก็บไม่ครบ = ยังค้างเหมือนเดิม
+   เงินก้อนนั้นอยู่ใน bk.pierPayments แล้ว · รายการที่ครอบคลุมจึง "ไม่" ถูกบวกเข้ายอดรับซ้ำ (ดู pckMoney / tsSaleList)
+   ไม่แก้ข้อมูลรายการขายเพิ่ม (settle ยัง pending) · เป็นการอ่านให้ตรงกันของสองหน้า จึงไม่ต้อง migrate */
+function bkxExCovered(x){
+  try{
+    if(!x || x.method!=='cot' || x.settle==='done') return false;
+    var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
+    var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
+    var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0; if(!(paid>0)) return false;
+    var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
+    var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
+    var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
+    var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
+    var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+    var exDue=0; ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(k){
+      if(date && k.tripDate && k.tripDate!==date) return;
+      if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
+    return pckN(paid) >= pckN(cot+upDue+bal+exDue) - 0.005;
+  }catch(_){ return false; }
+}
 // เงินที่เกี่ยวกับหน้าท่า · อ่านจากของที่มีอยู่แล้ว ไม่ได้สร้าง field ใหม่
 //   ต้องเก็บ  = Cash on Tour ที่ระบุตอน New Booking + upgrade ที่ยังไม่ได้เก็บ + ยอดค้างของ B2C
 //   เก็บแล้ว = extra ที่รับเงินแล้ว (SB_EXTRAS · เงินสด/โอน/บัตร) + upgrade ที่ติ๊กว่าเก็บแล้ว
@@ -17932,9 +17957,10 @@ function pckMoney(b, date){
   var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).filter(function(x){
     return !(date && x.tripDate && x.tripDate!==date);
   });
-  var exGot=0, exDue=0;
-  ex.forEach(function(x){ var v=+x.total||0; if(bkxExGot(x)) exGot+=v; else exDue+=v; });
-  var exTot=exGot+exDue;
+  var exGot=0, exDue=0, exCov=0;
+  /* §exCotPier · own = รับเงินที่ตัวรายการเอง (เข้า got) · covered = เงินอยู่ใน pierPayments แล้ว (ไม่บวกซ้ำ ไม่ค้าง) */
+  ex.forEach(function(x){ var v=+x.total||0; if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else if(bkxExCovered(x)) exCov+=v; else exDue+=v; });
+  var exTot=exGot+exDue+exCov;
   var ups=(!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[];
   var upDue=0, upGot=0;
   ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected) upGot+=v; else upDue+=v; });
@@ -17947,7 +17973,7 @@ function pckMoney(b, date){
   var gross=pckN(cot+upDue+bal+exDue);
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot,
-           exGot:exGot, exDue:exDue, upgrades:ups, upDue:upDue, upGot:upGot,
+           exGot:exGot, exDue:exDue, exCov:exCov, upgrades:ups, upDue:upDue, upGot:upGot,
            balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'',
@@ -25527,16 +25553,18 @@ function tsTotalOf(r, date){
    นับค่าคอมเฉพาะรายการที่เก็บเงินแล้ว ให้เข้าชุดกับ got/fee
    ที่ยังไม่เก็บ (cot) ยังไม่มีเงินเข้ามือใคร จะหักออกจากยอดรับไม่ได้ */
 function tsSaleList(b, date){
-  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0;
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0, commCov=0;
   try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
     var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
-    var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
+    var _cov=(typeof bkxExCovered==='function')&&bkxExCovered(x);   /* §exCotPier · เงินอยู่ในแถวหน้าท่าแล้ว */
+    var _g=_cov || ((typeof bkxExGot==='function')?bkxExGot(x):true);
     var _cm=+x.commission||0;
-    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
-    var slipMissing=(_g && mth!=='cash' && !((x.slips||[]).length));
+    if(_cov){ comm+=_cm; if(_cm) commCov+=_cm; } else if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
+    if(_cov) mth='pier';
+    var slipMissing=(_g && !_cov && mth!=='cash' && !((x.slips||[]).length));   /* §exCotPier · สลิปอยู่กับแถวหน้าท่า */
     if(slipMissing) noSlip++;
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
                // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
@@ -25545,7 +25573,7 @@ function tsSaleList(b, date){
                slips:(x.slips||[]).slice(),
                // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
                comm:_cm, toCompany:(+x.toCompany||0),
-               method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
+               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
@@ -25562,12 +25590,12 @@ function tsSaleList(b, date){
                comm:(+u.commission||0), toCompany:(+u.toCompany||0),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
-  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, tot:got+due, n:out.length };
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, commCov:commCov, tot:got+due, n:out.length };
 }
 // ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
 function tsSaleCell(S, money, e){
   if(!S.n) return '<span style="color:var(--zn400)">—</span>';
-  var PM={cash:'สด', transfer:'โอน', card:'บัตร', cot:'เก็บวันเดินทาง'};
+  var PM={cash:'สด', transfer:'โอน', card:'บัตร', cot:'เก็บวันเดินทาง', pier:'เก็บแล้วที่หน้าท่า (รวมอยู่ในเงินเก็บหน้าท่า)'};
   return '<div class="ts-sls">'+S.list.map(function(x){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
     // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
@@ -25582,7 +25610,7 @@ function tsSaleCell(S, money, e){
       +' <b>'+money(x.amt)+'</b>'
       +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
-      +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
+      +(x.done?(x.covered?' <i style="font-style:normal;opacity:.75">เก็บที่ท่า</i>':''):' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
   }).join('')+'</div>';
 }
@@ -27737,7 +27765,7 @@ function tsV6Money(M, money){
       +(M.deduct>0?('<div class="m5-foot">อีก <b>'+money(M.deduct)+'</b> หักจากบิลเอเจนต์ ไม่ผ่านมือหน้าท่า</div>'):'')+'</div>'
     +'<div class="m5" data-m="todo"><div class="s5-lb">ต้องเคลียร์ก่อนปิดวัน</div><div class="m5-todo">'
       +todo(M.due>0, M.due>0?('ยังไม่ได้เก็บ <b>'+money(M.due)+'</b>'):'เก็บเงินครบทุกใบ &middot; ไม่มียอดค้าง')
-      +(M.saleDue>0?todo(true,'upgrade รอเก็บอีก <b>'+money(M.saleDue)+'</b>'):'')
+      +(M.saleDue>0?todo(true,'ขายเพิ่ม/upgrade รอเก็บอีก <b>'+money(M.saleDue)+'</b>'):'')
       +todo(M.cotLeft>0, (M.cotAll>0)?('COT <b>'+money(M.cotAll)+'</b> &middot; '+(M.cotLeft>0?('ยังไม่ตัดสิน <b>'+M.cotLeft+'</b> ใบ'):'ตัดสินครบ')):'ไม่มี COT ในชุดนี้')
       +(M.nCotNo?todo(false,'COT เก็บไม่ได้ <b>'+money(M.cotNo)+'</b> &middot; '+M.nCotNo+' ใบ &middot; ปิดพร้อมเหตุผลแล้ว'):'')
       +'</div>'+(M.cotLeft>0?'<div class="m5-foot">COT ที่ยังไม่ตัดสิน = ยังไม่ได้เลือกว่าหักจากบิลเอเจนต์ หรือโอนออก &middot; เลือกได้ในตารางข้างล่าง</div>':'')+'</div>'
@@ -28475,7 +28503,8 @@ function renderTravelSum(){
     });
     m.S.list.forEach(function(x){
       if(x.kind!=='ex' || !x.id) return;
-      if((x.method||'cash')==='cash') return;
+      /* §exCotPier · 'cot' = ยังไม่ได้รับเงิน ไม่มีสลิปให้แนบ · 'pier' = สลิปอยู่กับแถวเงินหน้าท่าข้างบนแล้ว */
+      if((x.method||'cash')==='cash' || x.method==='cot' || x.method==='pier') return;
       var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
       _slipBits.push((+x.nSlip>0)
         ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(x.slips, lb)
@@ -28516,8 +28545,10 @@ function renderTravelSum(){
         ? ('<span class="ts-chip a">รอเก็บ '+money(m.due)+'</span>')
         : (m.target<=0 && m.paid<=0 && m.S.got>0
             ? ('<span class="ts-chip g">ขายเพิ่ม '+money(m.S.got)+'</span>')
-            : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>')))
-        + (m.S.due>0?('<div style="margin-top:3px"><span class="ts-chip a">upgrade รอเก็บ '+money(m.S.due)+'</span></div>'):'')+'</td>'
+            : (m.target<=0 && m.paid<=0 && m.S.due>0
+                ? ''   /* §exCotPier · ไม่มียอดใบจอง ไม่มีเงินเข้า แต่มีขายเพิ่มรอเก็บ → ไม่พูดว่า "เก็บครบ ฿0" */
+                : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>'))))
+        + (m.S.due>0?('<div style="margin-top:3px"><span class="ts-chip a">ขายเพิ่ม รอเก็บ '+money(m.S.due)+'</span></div>'):'')+'</td>'
       +'</tr>';
   });
   var PC=function(cls,ic,lb,tag,val,note){
@@ -28560,7 +28591,7 @@ function renderTravelSum(){
         (sumPayout>0 ? 'โอนคืนเอเจนต์ตามคำตัดสิน COT · ต้องหักออกจากเงินที่รับมา'
                      : 'วันนี้ไม่มีรายการที่ต้องจ่ายออก'))
     + PC('pend','&#9203;','5 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
-        +(sumSaleDue>0?(' · upgrade รอเก็บอีก '+money(sumSaleDue)):''))
+        +(sumSaleDue>0?(' · ขายเพิ่ม/upgrade รอเก็บอีก '+money(sumSaleDue)):''))
     +'</div>'
     // §tsCashNet · บรรทัดกระทบยอด · ตัวเลขที่เอาเข้าบัญชีจริงคือ "เหลือเข้าบริษัท"
     +'<div class="ts-read ts-printonly" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
