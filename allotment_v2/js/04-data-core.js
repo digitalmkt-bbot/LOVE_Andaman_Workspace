@@ -2027,21 +2027,44 @@ function _ddExecRow2Html(X,rg,esc){
   return '<div class="dv-ddexr2">'+left+right+'</div>';
 }
 /* ข้อความล้วนสำหรับแปะกลุ่ม LINE · เนื้อเดียวกับ bullet */
-window.dashDayDetailCopy=function(){
-  var X=window._ddExecX; if(!X) return;
+/* §ddLine (2026-10-07) · เจ้าของส่งภาพจากมือถือ: ข้อความยาว ไล่ทีละเส้นทาง อ่านบนจอแคบไม่ออก
+   จัดใหม่ · ตัวเลขหลัก 3 บรรทัดบน · ส่วน 7 วันข้างหน้า "เรียงตามวัน" บรรทัดละวัน ใช้รหัสเส้นทางสั้น
+   (PP / MT / PB / SM / SR ตามใบวางบิล) · ช่องไหนขาด/ใกล้เต็ม/เต็ม อยู่บรรทัดวันนั้น · มีคำอธิบายรหัสท้ายข้อความ */
+function _ddLineCode(rid){
+  var c=(typeof vbCode==='function')?vbCode(rid):null;
+  if(c && c.c && c.c!=='—') return c.c;
+  var r=(typeof getRoute==='function')?getRoute(rid):null, nm=String((r&&r.name)||rid);
+  return nm.split(/\s+/).slice(0,2).map(function(w){ return w.charAt(0); }).join('').toUpperCase()||rid;
+}
+window.dashDayDetailLineText=function(){
+  var X=window._ddExecX; if(!X) return '';
   var rg=_ddRg(), N=function(v){ return Number(v||0).toLocaleString('en-US'); }, M=_dashMoneyShort;
-  var L=['สรุปบุคกิ้ง '+_ddDLbl(rg.to,true)+' (LOVE Andaman)',
-    '• เข้ามาวันนี้ '+N(X.n)+' ใบ · '+N(X.pax)+' คน · '+M(X.val)+' (B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n)+')'
-      +(X.topAg?(' · เอเย่นต์สูงสุด '+X.topAg.k+' '+(X.topAg.val?M(X.topAg.val):(N(X.topAg.n)+' ใบ'))):'')+(X.topRt?(' · เส้นทางสูงสุด '+X.topRt.k+' '+N(X.topRt.n)+' ใบ'):''),
-    '• ไปเดินทางใน 7 วัน '+N(X.w7.n)+' ใบ · '+N(X.w7.pax)+' คน'+(X.peak?(' · หนาแน่นสุด '+X.peak.lbl+' '+N(X.peak.pax)+' คน'):'')+(X.later.n?(' · ที่เหลือ '+N(X.later.n)+' ใบ '+X.later.months.join(' / ')):'')];
+  var L=['📋 สรุปบุคกิ้ง '+_ddDLbl(rg.to,true)+' · LOVE Andaman','━━━━━━━━━━━━━━━'];
+  L.push('เข้ามาวันนี้ '+N(X.n)+' ใบ · '+N(X.pax)+' คน · '+M(X.val));
+  L.push('  B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n)+(X.topAg?(' · สูงสุด '+X.topAg.k+' '+(X.topAg.val?M(X.topAg.val):(N(X.topAg.n)+' ใบ'))):''));
+  L.push('ไป 7 วัน '+N(X.w7.n)+' ใบ · '+N(X.w7.pax)+' คน'+(X.peak?(' · หนาแน่น '+X.peak.lbl+' '+N(X.peak.pax)+' คน'):'')
+    +(X.later.n?('\n  ที่เหลือ '+N(X.later.n)+' ใบ '+(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' / '))):''));
+  L.push('');
   if(Object.keys(X.cells).length){
-    L.push('• 7 วันข้างหน้า ว่าง '+N(X.tot.av)+' จาก '+N(X.tot.cap)+' ที่'+(X.good.length?(' · '+X.good.map(function(r){return r.name;}).join(' / ')+' เต็ม 80%+ ทุกวัน'):''));
-    if(X.tot.short.length){ L.push('• ต้องหาเพิ่ม '+N(X.tot.need)+' คน ใน '+X.tot.short.length+' เที่ยว');
-      X.tot.short.slice(0,8).forEach(function(c){ L.push('   - '+_ddCellName(c)+' '+_ddDLbl(c.d,true)+' ขาด '+N(c.need)+' (จอง '+c.bk+'/'+c.cap+')'); }); }
-    else L.push('• ทุกเที่ยวที่มีแผนต้นทุนถึงจุดคุ้มทุนแล้ว');
-    X.tot.near.concat(X.tot.full).slice(0,4).forEach(function(c){ L.push('   - '+_ddCellName(c)+' '+_ddDLbl(c.d,true)+(c.av<=0?' เต็มแล้ว':(' เหลือ '+c.av+' ที่'))); });
-  } else L.push('• 7 วันข้างหน้า ยังไม่จัดเรือในใบงานเรือ');
-  var txt=L.join('\n');
+    L.push('7 วันข้างหน้า ว่าง '+N(X.tot.av)+'/'+N(X.tot.cap)+' ที่'+(X.tot.need>0?(' · ต้องหาเพิ่ม '+N(X.tot.need)+' คน'):' · คุ้มทุนทุกเที่ยว'));
+    var used={};
+    X.days.forEach(function(d){
+      var bits=[];
+      X.routes.forEach(function(r){ var c=X.cells[d+'|'+r.rid]; if(!c) return;
+        var code=_ddLineCode(r.rid); used[code]=r.name;
+        var s='';
+        if(c.av<=0) s='เต็ม';
+        else if(c.need>0) s='ขาด '+N(c.need)+' ('+c.bk+'/'+c.cap+')';
+        else if(c.av<=5) s='เหลือ '+c.av+' ที่';
+        else return;   /* ปกติ ไม่ต้องพูด · ข้อความสั้นลงครึ่งหนึ่ง */
+        bits.push(code+' '+s); });
+      if(bits.length) L.push(_ddDLbl(d)+'  '+bits.join(' · ')); });
+    var codes=Object.keys(used); if(codes.length) L.push('  ('+codes.map(function(k){ return k+'='+used[k]; }).join(' · ')+')');
+  } else L.push('7 วันข้างหน้า ยังไม่จัดเรือในใบงานเรือ');
+  return L.join('\n');
+};
+window.dashDayDetailCopy=function(){
+  var txt=window.dashDayDetailLineText(); if(!txt) return;
   var done=function(){ if(typeof flShowToast==='function') flShowToast('คัดลอกสรุปแล้ว · วางในกลุ่ม LINE ได้เลย'); };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,function(){ window._ddCopyFallback(txt,done); }); return; } }catch(_){}
   window._ddCopyFallback(txt,done);

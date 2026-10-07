@@ -10,7 +10,7 @@
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
 //   4 จุดคุ้มทุน · ตั้งแผนต้นทุนให้เส้นทาง (ราคา 2,500) → ช่องที่เคย "ไม่รู้จุดคุ้มทุน" กลายเป็นรู้ · ขาด = max(0, Σคุ้มทุนต่อลำ − จอง) · สีตามขาด (ok/warn/bad)
 //   5 ป้าย +N ของช่อง = pax ของใบที่คีย์วันนี้ที่ไปเส้นทาง-วันนั้น (นับเอง)
-//   6 ปุ่มคัดลอกส่ง LINE · ได้ข้อความล้วนที่มีหัววัน · บรรทัดเข้ามาวันนี้ · ต้องหาเพิ่ม/คุ้มทุน · toast ขึ้น
+//   6 ปุ่มคัดลอกส่ง LINE · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
 import { open, goView } from './_harness.mjs';
 
@@ -107,14 +107,24 @@ const s6 = await page.evaluate(async () => {
   window._copied = ''; window._toast = '';
   Object.defineProperty(navigator, 'clipboard', { value: { writeText: t => { window._copied = t; return Promise.resolve(); } }, configurable: true });
   window.flShowToast = m => { window._toast = m; };
+  /* ตั้งแผนต้นทุนให้ทุกเส้นทางที่มีเรือ จะได้มีช่อง "ขาด" ให้ตรวจบรรทัดรายวัน · ถอดทิ้งตอนจบ */
+  const P = ctPlans(), ids = []; window._ddExecX.routes.forEach(r => { const pl = ctBlankPlan('t ' + r.rid); pl.famId = r.rid; pl.price = 2500; P.push(pl); ids.push(pl.id); }); ctPlansSave(P); window._ddPaint();
   document.querySelector('[data-dd="exec"] .dv-ddbtn').click();
   await new Promise(r => setTimeout(r, 100));
   const X = window._ddExecX, t = window._copied;
-  return { len: t.length, head: t.split('\n')[0], hasIn: /• เข้ามาวันนี้ \d/.test(t), hasGo: /• ไปเดินทางใน 7 วัน/.test(t),
-    hasNeed: X.tot.short.length ? /• ต้องหาเพิ่ม/.test(t) : /คุ้มทุน|ยังไม่จัดเรือ/.test(t), toast: window._toast, nLines: t.split('\n').length };
+  ctPlansSave(ctPlans().filter(p => !ids.includes(p.id)));
+  const codeOf = rid => { const c = vbCode(rid); return (c && c.c && c.c !== '—') ? c.c : null; };
+  /* §ddLine · เรียงตามวัน บรรทัดละวัน รหัสสั้น · วันที่มีช่องขาดต้องมีบรรทัดของวันนั้น พร้อมรหัสและตัวเลขขาด */
+  const shortDays = [...new Set(X.tot.short.map(c => c.d))];
+  const dayOk = shortDays.every(d => { const lbl = _ddDLbl(d); const ln = t.split('\n').find(l => l.startsWith(lbl + '  ')); if (!ln) return false;
+    return X.tot.short.filter(c => c.d === d).every(c => ln.includes((codeOf(c.rid) || _ddLineCode(c.rid)) + ' ขาด ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
+  const noRouteLines = !X.tot.short.some(c => t.includes('- ' + _ddCellName(c)));
+  const nShort = X.tot.short.length;
+  return { nShort, len: t.length, head: t.split('\n')[0], hasIn: /^เข้ามาวันนี้ \d/m.test(t), hasGo: /^ไป 7 วัน \d/m.test(t),
+    hasNeed: X.tot.short.length ? /ต้องหาเพิ่ม \d/.test(t) : /คุ้มทุนทุกเที่ยว|ยังไม่จัดเรือ/.test(t), dayOk, noRouteLines, legend: /\(PP=|\(MT=|=.+\)$/m.test(t), toast: window._toast, nLines: t.split('\n').length };
 });
-if (s6.len > 80 && /สรุปบุคกิ้ง/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && /คัดลอก/.test(s6.toast))
-  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · มีบรรทัดเข้ามาวันนี้/ไปเดินทาง/ต้องหาเพิ่ม · toast "${s6.toast}"`);
+if (s6.nShort > 0 && s6.len > 80 && /สรุปบุคกิ้ง/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.noRouteLines && s6.legend && /คัดลอก/.test(s6.toast))
+  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · เรียงตามวัน รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
 else fail('6 ' + JSON.stringify(s6));
 
 /* ══ 7 ══ */
