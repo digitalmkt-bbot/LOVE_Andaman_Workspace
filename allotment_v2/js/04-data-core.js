@@ -3752,6 +3752,10 @@ function calSetApply(id){
   calPier='all';
   renderCal();
 }
+/* §calHidePast (2026-10-07) · มุมมอง Routes · ซ่อนวันที่ผ่านมาแล้ว (ค่าเริ่มต้น = ซ่อน) · จำต่อเครื่อง
+   มีผลเฉพาะเดือนปัจจุบัน · เดือนที่ผ่านไปแล้วทั้งเดือนโชว์ตามปกติ ไม่งั้นหน้าจะว่างเปล่า */
+function _calRoutesHidePast(){ try{ return localStorage.getItem('_cal_routes_hide_past')!=='0'; }catch(e){ return true; } }
+function calRoutesTogglePast(){ try{ localStorage.setItem('_cal_routes_hide_past', _calRoutesHidePast()?'0':'1'); }catch(e){} renderCal(); }
 function calSetAll(){ calPier='all'; _calSaveHiddenRoutes(new Set()); renderCal(); }
 /* §calSetModal (2026-10-07) · กล่องบันทึก/ลบชุดเป็นของแอปเอง แทน prompt()/confirm() ของเบราว์เซอร์
    แขวนไว้ที่ document.body ไม่ใช่ใน #cal-wrap · renderCal เขียน innerHTML ของ cal-wrap ใหม่ทุกครั้ง กล่องจะหายกลางคัน
@@ -5359,6 +5363,12 @@ function renderCal(){
     const _setEsc=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     const _setCanEd=(typeof window.laCanEdit==='function') ? !!window.laCanEdit() : true;
     const _setAct=_calSetActiveId();
+    /* §calHidePast · _hpCan = เดือนที่ดูอยู่คือเดือนนี้ (มีวันที่ผ่านมาแล้วให้ซ่อน) · _hpOn = ซ่อนอยู่จริง */
+    const _hpCan=TODAY_STR.startsWith(viewMonth) && (+TODAY_STR.slice(8))>1;
+    const _hpOn=_hpCan && _calRoutesHidePast();
+    const _hpToday=+TODAY_STR.slice(8);
+    /* สัปดาห์ที่จบไปแล้วทั้งสัปดาห์ตัดออกทั้งแถว · เริ่มวาดจากวันอาทิตย์ของสัปดาห์นี้ */
+    const _hpStart=_hpOn ? Math.max(1, _hpToday-new Date(calYear,calMonth,_hpToday).getDay()) : 1;
     const _setPoolIds=new Set(_calSetPool().map(r=>r.id));
     const _setAllOn=(calPier==='all' && ![..._hidRt].some(i=>_setPoolIds.has(i)));
     const _setBtn=(on)=>`border:1px solid ${on?'#fff':'rgba(255,255,255,.24)'};background:${on?'#fff':'rgba(255,255,255,.10)'};color:${on?'#16265C':'#E3ECFA'};font:${on?700:600} 12px 'DM Sans',sans-serif;cursor:pointer;min-height:30px`;
@@ -5372,6 +5382,7 @@ function renderCal(){
         </span>`; }).join('')}
       ${_setCanEd?`<button onclick="calSetSave()" title="Save the routes showing now as a named set" style="${_setBtn(false)};border-style:dashed;border-radius:15px;padding:0 13px">+ Save current view as set</button>`:''}
       ${(!(CAL_ROUTE_SETS||[]).length)?`<span style="font:500 11.5px 'DM Sans',sans-serif;color:#A8BAD8">Hide routes with the chips above, then save what is left as a named set.</span>`:''}
+      ${_hpCan?`<button onclick="calRoutesTogglePast()" title="${_hpOn?'Past days are hidden. Click to show them.':'Past days are showing. Click to hide them.'}" style="${_setBtn(_hpOn)};border-radius:15px;padding:0 13px;margin-left:auto">Past days: ${_hpOn?'hidden':'shown'}</button>`:''}
     </div>`;
     const _setActObj=_setAct ? (CAL_ROUTE_SETS||[]).find(x=>x.id===_setAct) : null;
     const LOW=10;   // ว่างต่ำกว่านี้ = "ใกล้เต็ม"
@@ -5396,19 +5407,23 @@ function renderCal(){
     const _pOrd=(typeof LA_PIER_ORDER!=='undefined' && Array.isArray(LA_PIER_ORDER)) ? LA_PIER_ORDER : CAL_PIERS;
     const _cfgKey=(r)=>{ const pi=_pOrd.indexOf(r.pier), ri=ROUTES.findIndex(x=>x.id===r.id);
       return (pi<0?999:pi)*100000 + (ri<0?99999:ri); };
-    const live=Object.values(rd).sort((a,b)=>_cfgKey(a.r)-_cfgKey(b.r));
-    const deadRt=_rtSorted.filter(rt=>!rd[rt.id] && !_hidRt.has(rt.id)).sort((a,b)=>_cfgKey(a)-_cfgKey(b));
+    /* §calHidePast · ซ่อนวันที่ผ่านแล้ว = เส้นทางที่เหลือแต่เที่ยวในอดีตไม่ต้องมีการ์ด ไปอยู่ในรายการท้ายหน้าแทน */
+    const _hasUp=(o)=>!_hpOn || Object.keys(o.days).some(d=>+d>=_hpToday);
+    const live=Object.values(rd).filter(_hasUp).sort((a,b)=>_cfgKey(a.r)-_cfgKey(b.r));
+    const deadRt=_rtSorted.filter(rt=>(!rd[rt.id] || !_hasUp(rd[rt.id])) && !_hidRt.has(rt.id)).sort((a,b)=>_cfgKey(a)-_cfgKey(b));
     const rName=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
     const MONO="'DM Mono','IBM Plex Sans Thai',monospace";
     const dowRow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((x,i)=>`<div style="color:${(i===0||i===6)?'#A63A1C':'#5F5F58'}">${x}</div>`).join('');
     const cards=live.map(o=>{
       const r=o.r, v=_calVivid(r.color), tint=v+'26';
       let nDays=0, nFull=0, nLow=0, cells='';
-      for(let i=0;i<firstDay;i++) cells+='<div></div>';
-      for(let d=1;d<=daysInMonth;d++){
+      const _lead=(_hpStart>1) ? 0 : firstDay;   // เริ่มจากวันอาทิตย์อยู่แล้วเมื่อตัดสัปดาห์เก่าออก
+      for(let i=0;i<_lead;i++) cells+='<div></div>';
+      for(let d=_hpStart;d<=daysInMonth;d++){
         const ds=`${viewMonth}-${String(d).padStart(2,'0')}`;
-        const g=o.days[d];
-        let bg='#F4F4F0', fg='#8A8A82', dfg='#5F5F58', txt='', fw=500, fz=16, tip='';
+        const _gone=_hpOn && ds<TODAY_STR;       // วันที่ผ่านแล้วในสัปดาห์นี้ · เหลือแค่เลขวันจาง ๆ ให้ตารางยังตรงคอลัมน์
+        const g=_gone ? null : o.days[d];
+        let bg=_gone?'transparent':'#F4F4F0', fg='#8A8A82', dfg=_gone?'#B9B9B0':'#5F5F58', txt='', fw=500, fz=16, tip='';
         if(g){
           nDays++;
           if(g.wx){ txt='WX'; bg='#E6E9F0'; fg='#475569'; tip='weather cancelled'; }
@@ -5418,14 +5433,14 @@ function renderCal(){
           else { txt=String(g.free); bg=tint; fg='#000F4C'; }
           if(!tip) tip=`${g.free} of ${g.cap} seats free`;
         }
-        cells+=`<div${tip?` title="${escR(rName(r))} · ${d} · ${tip}"`:''} style="height:46px;box-sizing:border-box;padding:3px 5px;border-radius:6px;background:${bg};${ds===TODAY_STR?'box-shadow:inset 0 0 0 2px #FF6B47;':''}${ds<TODAY_STR?'opacity:.5;':''}">
+        cells+=`<div${tip?` title="${escR(rName(r))} · ${d} · ${tip}"`:''} style="height:46px;box-sizing:border-box;padding:3px 5px;border-radius:6px;background:${bg};${ds===TODAY_STR?'box-shadow:inset 0 0 0 2px #FF6B47;':''}${(!_hpOn && ds<TODAY_STR)?'opacity:.5;':''}">
           <div style="font:400 10.5px/1.2 ${MONO};color:${dfg}">${d}</div>
           <div style="text-align:center;font:${fw} ${fz}px/${fz<16?'21px':'1.3'} ${MONO};color:${fg}">${txt}</div>
         </div>`;
       }
       const dep=String(((r.times)||[])[0]||'').trim()||'—';
       const dW=(n)=>n+(n===1?' day':' days');
-      const sub=[dW(nDays)+' with trips'].concat(nFull?[dW(nFull)+' full']:[], nLow?[dW(nLow)+' almost full']:[]).join(' · ');
+      const sub=[dW(nDays)+(_hpOn?' with trips from today':' with trips')].concat(nFull?[dW(nFull)+' full']:[], nLow?[dW(nLow)+' almost full']:[]).join(' · ');
       return `<div style="background:#fff;border:1px solid #E2E2DC;border-radius:12px;overflow:hidden">
         <div style="height:8px;background:${v}"></div>
         <div style="padding:12px 14px 14px">
@@ -5458,8 +5473,8 @@ function renderCal(){
       </div>
       ${cards
         ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-top:16px">${cards}</div>`
-        : `<div style="padding:40px 0;text-align:center;font-size:14px;color:#5F5F58">No trips this month</div>`}
-      ${deadRt.length?`<div style="margin-top:14px;font-size:12.5px;color:#3D3D38"><b>No trips this month:</b> ${deadRt.map(rt=>escR(rName(rt))).join(' · ')}</div>`:''}
+        : `<div style="padding:40px 0;text-align:center;font-size:14px;color:#5F5F58">${_hpOn?'No upcoming trips this month':'No trips this month'}</div>`}
+      ${deadRt.length?`<div style="margin-top:14px;font-size:12.5px;color:#3D3D38"><b>${_hpOn?'No upcoming trips this month':'No trips this month'}:</b> ${deadRt.map(rt=>escR(rName(rt))).join(' · ')}</div>`:''}
     </div>`;
   }
 
