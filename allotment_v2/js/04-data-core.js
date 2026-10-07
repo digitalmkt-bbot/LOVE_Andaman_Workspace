@@ -2274,6 +2274,7 @@ window.dashOpenDayDetail=function(side){
   }
   window._ddPaint();
   ov.style.display='block';
+  document.body.classList.add('dd-open');   /* §ddBadge · hide the user badge while this sheet is open */
   window._ddFit();
 };
 /* §ddFit (2026-10-07) · the summary block fills exactly one screen: the travel-date list and the 7-day
@@ -2322,6 +2323,7 @@ window.dashDayDetailClose=function(){
   var ov=document.getElementById('dv-ddov'); if(!ov) return;
   document.removeEventListener('keydown', window._ddKey);
   ov.remove();
+  document.body.classList.remove('dd-open');
 };
 
 window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('approvals'); };
@@ -2954,6 +2956,8 @@ const DV_CSS=`<style>
   /* ══ §ddRe (2026-10-07) · Bookings keyed in today · same design language as Programs / Boat Status ══
      navy ground · white cards r12 with one shadow · hairlines instead of grey boxes · DM Mono numbers */
   .dv-ddov .dv-ddsheet{background:#16265C;-webkit-backdrop-filter:none;backdrop-filter:none}
+  /* §ddBadge · the fixed user badge (bottom-left) covered the travel-date card on this sheet only */
+  body.dd-open #la-userbadge{display:none !important}
   .dv-ddov .dv-c{border:0;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34)}
   .dv-ddov .dv-ddh{font-size:11px;font-weight:700;letter-spacing:.10em;color:#3E4658}
   .dv-ddov .dv-ddh span{background:#F1F0EC;color:#3E4658;border-radius:6px;font-size:11px;font-weight:600;padding:2px 8px}
