@@ -10441,6 +10441,31 @@ function tmApplyMarketOrder(ids){
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'บันทึกลำดับ Market แล้ว', status:SB_MARKETS.length+' MARKETS', dur:2600});
 }
 
+/* ══ §progRedesign (2026-10-07) · หน้า Programs โฉมใหม่ ══════════════════════════════
+   แถบบนแบบ Boat Operation (วันที่ซ้าย · wordmark กลาง · ชิปสรุปขวา) บนพื้น navy
+   รายการซ้ายกระชับ มีแท็บท่า + ค้นหา + กรองตามสถานะ · ปุ่มแก้/ลบย้ายไปอยู่ในแผงรายละเอียด
+   ตัวกรองทั้งหมดเป็นการซ่อน/โชว์แถวใน DOM เท่านั้น ไม่ได้ตัดแถวออกจากรายการ
+   ⚠ ต้องเป็นแบบนี้ · ลากเรียงลำดับ (stApplyRouteOrder) อ่าน id ของทุกแถวในท่าเดียวกันจาก DOM
+     ถ้ากรองด้วยการไม่วาดแถว ลำดับที่ส่งไปจะไม่ครบ (ตัวกันจะ bail = ลากแล้วไม่บันทึก) */
+function progApplyFilter(){
+  const box=document.getElementById('prog-list-box'); if(!box) return;
+  const q=String(window._progQ||'').trim().toLowerCase(), st=window._progStat||'', pr=window._progPier||'all';
+  let shown=0;
+  box.querySelectorAll('.prog-grp').forEach(function(g){
+    const okP=(pr==='all'||g.dataset.pier===pr); let n=0;
+    g.querySelectorAll('.route-row-item').forEach(function(el){
+      const ok=okP && (!st||el.dataset.pstat===st) && (!q||(el.dataset.q||'').indexOf(q)>=0);
+      el.style.display=ok?'flex':'none'; if(ok) n++; });
+    g.style.display=(okP && (n>0 || (!q && !st)))?'':'none'; shown+=n; });
+  const em=document.getElementById('prog-nomatch'); if(em) em.style.display=shown?'none':'block';
+  document.querySelectorAll('[data-progpier]').forEach(function(b){ const on=(b.dataset.progpier===pr);
+    b.style.background=on?'#0F1B3D':'#fff'; b.style.color=on?'#fff':'#0F1B3D'; b.style.borderColor=on?'#0F1B3D':'#CFCFC8'; });
+  document.querySelectorAll('[data-progstat]').forEach(function(b){ b.style.boxShadow=(b.dataset.progstat===st)?'0 0 0 2px #fff':'none'; });
+  if(typeof window._progListFit==='function') window._progListFit();
+}
+function progSetPier(p){ window._progPier=p||'all'; progApplyFilter(); }
+function progSetStat(v){ window._progStat=(v && window._progStat!==v)?v:''; progApplyFilter(); }
+function progSetQ(v){ window._progQ=v||''; progApplyFilter(); }
 function renderSettings(){
   const wrap=document.getElementById('prog-pink-wrap');
   if(!wrap){
@@ -10469,46 +10494,43 @@ function renderSettings(){
   const tlCount=(groups.tublamu||[]).length;
   const vpCount=(groups.panwa||[]).length;
 
-  // Header bar
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:6px">
-      <div style="width:32px;height:32px;border-radius:50%;background:${dim.ink};color:white;display:flex;align-items:center;justify-content:center">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </div>
-    </div>
-    <button onclick="openRouteModal()" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-      เพิ่มโปรแกรม
-    </button>
+  // §progRedesign · แถบบน · โครงและค่าสีชุดเดียวกับ .bop2-top ของหน้า Boat Operation
+  const escP=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const _pd=new Date(TODAY_STR+'T00:00:00');
+  const _chip='height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;font:700 11.5px inherit;font-family:inherit;border:1px solid transparent;cursor:pointer';
+  const headerBar=`<style>
+    #view-settings{padding:18px 18px 64px;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
+    #view-settings > .page-hd{display:none}
+    #view-settings #prog-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
+    #view-settings #prog-q::placeholder{color:#B4BCDD}
+    @media (max-width:1100px){ #view-settings .prog-brand{display:none} }
+    @media (max-width:820px){ #view-settings{padding:12px 10px} #view-settings .prog-2col{grid-template-columns:1fr !important} }
+  </style>
+  <div style="display:flex;align-items:center;gap:9px 12px;margin:-4px 0 13px;flex-wrap:wrap">
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:9px">
+      <span style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">${_pd.getDate()}</span>
+      <span style="line-height:1.15;display:inline-block">
+        <b style="display:block;font-size:13px;font-weight:700;color:#fff">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_pd.getDay()]}</b>
+        <i style="display:block;font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#B4BCDD;text-transform:uppercase;font-style:normal">${MONTHS_EN[_pd.getMonth()]} ${_pd.getFullYear()} · status today</i>
+      </span>
+      <input id="prog-q" type="search" aria-label="Search programs" placeholder="Search ${totalProg} programs" value="${escP(window._progQ||'')}" oninput="progSetQ(this.value)"
+        style="margin-left:8px;width:210px;max-width:100%;height:36px;box-sizing:border-box;padding:0 14px;border:1px solid rgba(255,255,255,.30);border-radius:18px;background:rgba(255,255,255,.10);font:500 12.5px inherit;font-family:inherit;color:#fff;outline-color:#fff">
+    </span>
+    <span class="prog-brand" style="flex:none;text-align:center;white-space:nowrap">
+      <i style="display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;font-style:normal;margin-bottom:2px">LOVE ANDAMAN</i>
+      <b style="display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff">PROGRAMS</b>
+    </span>
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="progSetStat('')" title="Show all programs" style="${_chip};background:rgba(255,255,255,.10);color:#E8EBF7;border-color:rgba(255,255,255,.14)">Programs<b style="font-weight:800;margin-left:6px">${totalProg}</b></button>
+      <button data-progstat="open" onclick="progSetStat('open')" title="Show only programs open today" style="${_chip};background:#D8F4E8;color:#0A5C3D">Open today<b style="font-weight:800;margin-left:6px">${openToday}</b></button>
+      <button data-progstat="closed" onclick="progSetStat('closed')" title="Show only programs closed today" style="${_chip};background:#FBE0DD;color:#8E2A20">Closed today<b style="font-weight:800;margin-left:6px">${closedToday}</b></button>
+      <button data-progstat="none" onclick="progSetStat('none')" title="Show only programs with no season set" style="${_chip};background:#FBEBD3;color:#7A4300">No season set<b style="font-weight:800;margin-left:6px">${noData}</b></button>
+      <button onclick="openRouteModal()" style="height:36px;padding:0 16px;border:none;border-radius:18px;background:#fff;color:#16265C;font:700 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่มโปรแกรม
+      </button>
+    </span>
   </div>`;
-
-  // KPI strip
-  const kpiStrip=`<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr;gap:8px;margin-bottom:14px;align-items:stretch">
-    <div style="grid-column:1;align-self:end;padding-bottom:6px">
-      <div style="font-size:13px;font-weight:500;color:${dim.ink4};margin-bottom:2px">Programs</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">${totalProg}</span>
-        <span style="font-size:18px;color:${dim.ink3};font-weight:500">routes</span>
-        <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${openToday} เปิดวันนี้</span>
-      </div>
-      <div style="font-size:11px;color:${dim.ink3}">${tlCount} Tub Lamu · ${vpCount} Visit Panwa${(groups.ranong||[]).length?` · ${(groups.ranong||[]).length} Ranong`:''}${(groups[LAND_PIER]||[]).length?` · ${(groups[LAND_PIER]||[]).length} Other`:''}</div>
-    </div>
-    <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Open Today</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#0F6E56">${openToday}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">/ ${totalProg}</span></div>
-      <div style="font-size:11px;color:#0F6E56;font-weight:600;margin-top:6px">${totalProg?Math.round(openToday/totalProg*100):0}% running</div>
-    </div>
-    <div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Closed Today</div>
-      <div style="font-size:18px;font-weight:700;line-height:1.2;color:#A32D2D;margin-top:2px">${closedToday}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">routes</div>
-    </div>
-    <div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">No Data</div>
-      <div style="font-size:18px;font-weight:700;line-height:1.2;color:${dim.ink3};margin-top:2px">${noData}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">no season set</div>
-    </div>
-  </div>`;
+  const kpiStrip='';
 
   const PIER_INFO={
     tublamu:{label:'Tub Lamu Pier',accent:'#0F6E56',bg:'#E1F5EE',color:'#0F6E56'},
@@ -10517,24 +10539,21 @@ function renderSettings(){
     other:{label:'Other · ไม่ใช้ท่าเรือ',accent:'#5B289A',bg:'#F3EAFB',color:'#5B289A'}   // §otherPier
   };
 
-  // Build list panel · §แสดง Ranong ด้วยถ้ามี route (เดิม loop hardcode แค่ tublamu/panwa → route ระนองไม่โผล่)
+  // Build list panel · §progRedesign · แถวกระชับ · หัวกลุ่มตามท่า · ครอบด้วย .prog-grp ให้ตัวกรองซ่อนทั้งกลุ่มได้
+  const fmtP=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const _pierKeys=PIER_ORDER.filter(pk => pk==='tublamu' || pk==='panwa' || (groups[pk]||[]).length)
+    .concat(Object.keys(groups).filter(pk => !PIER_ORDER.includes(pk) && (groups[pk]||[]).length));
   let listHtml='';
-  PIER_ORDER.filter(pk => pk==='tublamu' || pk==='panwa' || (groups[pk]||[]).length)
-    .concat(Object.keys(groups).filter(pk => !PIER_ORDER.includes(pk) && (groups[pk]||[]).length))
-    .forEach(pier=>{
+  _pierKeys.forEach(pier=>{
     const rows=groups[pier]||[];
     const pi=PIER_INFO[pier] || {label:pier,accent:'#5A5A52',bg:'#F1F0EC',color:'#5A5A52'};   // §otherPier · ค่าที่ไม่รู้จักก็ยังมีหัวข้อ
-    listHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:${listHtml?'10px':'0'}">
-      <div style="width:28px;height:28px;border-radius:50%;background:${pi.bg};color:${pi.color};display:flex;align-items:center;justify-content:center">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/><path d="M12 2v3"/></svg>
-      </div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${pi.label}</div>
-        <div style="font-size:10px;color:${dim.ink3}">${rows.length} programs</div>
-      </div>
-    </div>`;
+    listHtml+=`<div class="prog-grp" data-pier="${escP(pier)}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:9px 14px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658">${escP(pi.label)}</span>
+        <span style="font-size:11px;color:#5B6170">${rows.length} programs</span>
+      </div>`;
     if(!rows.length){
-      listHtml+=`<div style="padding:14px;font-size:11px;color:${dim.ink3};text-align:center;background:white;border-radius:14px;border:1px dashed ${dim.line};margin-bottom:6px">ยังไม่มีโปรแกรม</div>`;
+      listHtml+=`<div style="padding:14px;font-size:11.5px;color:#5B6170;text-align:center;border-bottom:1px solid #ECEBE6">ยังไม่มีโปรแกรม</div></div>`;
       return;
     }
     rows.forEach(r=>{
@@ -10542,53 +10561,43 @@ function renderSettings(){
       const isOpen=cur&&cur.type==='open';
       const isClosed=cur&&cur.type==='closed';
       const statusColor=isOpen?'#1D9E75':isClosed?'#A32D2D':dim.ink4;
-      const statusLabel=isOpen?'OPEN':isClosed?'CLOSED':'—';
-      const statusBg=isOpen?'#E1F5EE':isClosed?'#FCEBEB':'#F4F2EE';
-      const statusText=isOpen?'#0F6E56':isClosed?'#A32D2D':dim.ink3;
+      const pill=isOpen?['Open','#DDF1EA','#0B5A43']:isClosed?['Closed','#FBE3E0','#8E2019']:['No season','#FBEBD3','#7A4300'];
+      const subTxt=cur ? `${isOpen?'Open':'Closed'} ${fmtP(cur.from)} – ${fmtP(cur.to)}` : 'No season set';
       const isSel=selProgId===r.id;
-      listHtml+=`<div class="route-row-item" data-rid="${r.id}" draggable="true" data-sort-id="${r.id}" data-sortgroup="${pier}" style="background:white;border-radius:12px;border:1px solid ${isSel?dim.ink:dim.line};padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px;${isSel?'box-shadow:0 0 0 2px rgba(26,26,26,.04)':''}">
+      listHtml+=`<div class="route-row-item" data-rid="${r.id}" data-pstat="${isOpen?'open':isClosed?'closed':'none'}" data-q="${escP(((r.name||'')+' '+(r.islands||'')).toLowerCase())}" draggable="true" data-sort-id="${r.id}" data-sortgroup="${pier}" title="${escP(r.islands||'')}" style="display:flex;align-items:stretch;gap:9px;min-height:50px;box-sizing:border-box;padding:7px 12px 7px 6px;cursor:pointer;border-bottom:1px solid #ECEBE6;background:${isSel?'#E8F3FB':'#fff'};${isSel?'box-shadow:inset 3px 0 0 #1272B3;':''}">
         ${LA_GRIP}
-        <div style="width:6px;align-self:stretch;background:${r.color||statusColor};border-radius:3px;flex-shrink:0;${!isOpen?'opacity:.4':''}"></div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:600;${!isOpen?'color:'+dim.ink2:''}">${r.name}</span>
-            <span style="background:${statusBg};color:${statusText};padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">${statusLabel}</span>
-          </div>
-          <div style="font-size:10px;color:${dim.ink3};margin-top:2px">${r.islands||'—'}</div>
-          ${cur?`<div style="font-size:9px;color:${dim.ink3};margin-top:2px;font-family:'DM Mono',monospace">${fmtD(cur.from)} → ${fmtD(cur.to)}</div>`:''}
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="rri-edit" data-rid="${r.id}" style="background:${dim.bg};border:none;border-radius:8px;padding:5px 8px;cursor:pointer;color:${dim.ink2}" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="rri-del" data-rid="${r.id}" style="background:${dim.bg};border:none;border-radius:8px;padding:5px 8px;cursor:pointer;color:${dim.ink2}" onmouseover="this.style.background='#A32D2D';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
-        </div>
+        <span style="flex:none;width:4px;border-radius:2px;background:${r.color||statusColor}"></span>
+        <span style="flex:1;min-width:0;align-self:center">
+          <span style="display:block;font-size:13px;font-weight:600;line-height:1.3;color:#0F1B3D">${escP(r.name)}</span>
+          <span style="display:block;margin-top:1px;font-size:11px;color:#5B6170">${subTxt}</span>
+        </span>
+        <span style="flex:none;align-self:center;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;background:${pill[1]};color:${pill[2]}">${pill[0]}</span>
       </div>`;
     });
+    listHtml+=`</div>`;
   });
+  const _tab=(k,l,n)=>`<button data-progpier="${escP(k)}" onclick="progSetPier('${escP(k)}')" style="min-height:32px;padding:0 11px;border-radius:16px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12px inherit;font-family:inherit;cursor:pointer">${escP(l)} <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span></button>`;
+  const pierTabs=_tab('all','All',totalProg)+_pierKeys.map(pk=>_tab(pk, ((PIER_INFO[pk]||{}).label||pk).replace(/ Pier$/,'').replace(/ · .*$/,''), (groups[pk]||[]).length)).join('');
   /* §progScroll (2026-10-03) · หน้า Programs เลื่อนติด ๆ ขัด ๆ
      ผู้ใช้แจ้ง "ดูการ Scroll ในหน้านี้หน่อย ติด ๆ ขัด ๆ" · วัดแล้ว: รายการซ้าย 57 โปรแกรมสูง ~4,700px
      ส่วนแผงรายละเอียดขวา (ปฏิทิน 12 เดือน) สูง ~1,350px ถูกตรึงไว้ (sticky) ทั้งที่สูงกว่าจอ
      ครึ่งล่างของปฏิทินจึงค้างอยู่นอกจอ เลื่อนเท่าไหร่ก็ไม่ขึ้น จนกว่าจะเลื่อนสุดรายการ 5,000px
      สลับกัน · รายการซ้ายเป็นกล่องเลื่อนของตัวเอง สูงเท่าจอ ตรึงไว้ · แผงขวาไหลตามหน้าปกติ
      เลื่อนบนรายการ = เลื่อนรายการ (ไม่ลากหน้าไปด้วย) · เลื่อนบนปฏิทิน = เลื่อนหน้า เห็นครบทั้งปี */
-  const listPanel=`<div id="prog-list-box" style="background:transparent;border-radius:14px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;padding-right:4px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">โปรแกรมทั้งหมด</span>
-      <span style="font-size:10px;color:${dim.ink3}">${totalProg} routes</span>
-    </div>
+  const listPanel=`<div id="prog-list-box" style="background:#fff;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin">
+    <div style="position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:#fff;border-bottom:1px solid #ECEBE6">${pierTabs}</div>
     ${listHtml}
+    <div id="prog-nomatch" style="display:none;padding:22px 14px;text-align:center;font-size:12px;color:#5B6170">No programs match this filter.</div>
   </div>`;
 
   // Detail panel placeholder
-  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
+  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);overflow:hidden;min-height:400px"></div>`;
 
   /* §progScroll · กดเลือกโปรแกรม = วาดใหม่ทั้งหน้า · กล่องรายการเป็นตัวใหม่ ตำแหน่งเลื่อนกลับเป็น 0
      จำไว้ก่อนแล้วคืนให้ ไม่งั้นเลือกโปรแกรมท้าย ๆ ทีไร รายการเด้งกลับบนสุดทุกครั้ง */
   const _keepList=(document.getElementById('prog-list-box')||{}).scrollTop||0;
-  wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
+  wrap.innerHTML=`${headerBar}${kpiStrip}<div class="prog-2col" style="display:grid;grid-template-columns:380px minmax(0,1fr);gap:13px;align-items:start">${listPanel}${detailPanel}</div>`;
+  progApplyFilter();   // §progRedesign · วาดใหม่ทั้งหน้าทุกครั้งที่เลือกโปรแกรม · ตัวกรองที่ค้างไว้ต้องกลับมาเหมือนเดิม
 
   /* §progScroll · กล่องรายการต้องจบในจอเสมอ · ตอนหน้ายังไม่เลื่อน กล่องเริ่มใต้หัวหน้า+แถบ KPI (~250px)
      ถ้าสูงเท่าจอเต็ม ๆ ท้ายกล่องจะหลุดใต้จอ โปรแกรมสุดท้ายมองไม่เห็น · วัดจากตำแหน่งจริงทุกครั้งที่หน้าเลื่อน */
@@ -10659,31 +10668,47 @@ function renderProgDetailPink(){
   const statusText=isOpen?'#0F6E56':isClosed?'#A32D2D':dim.ink3;
   const statusLabel=isOpen?'OPEN':isClosed?'CLOSED':'NO DATA';
 
-  // Header strip (pink gradient like other detail pages)
-  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:50px;height:50px;border-radius:12px;background:${r.color||statusColor};color:white;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:20px;font-weight:700">${r.name}</span>
-          <span style="background:${statusBg};color:${statusText};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${statusLabel}</span>
+  // Header strip · §progRedesign · พื้นขาว · ปุ่มแยกตามหน้าที่ (แก้รายละเอียด / แก้วันเปิด-ปิด / ลบ)
+  const escP=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtP=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const pillLbl=isOpen?'Open':isClosed?'Closed':'No season set';
+  const pillBg=isOpen?'#DDF1EA':isClosed?'#FBE3E0':'#FBEBD3';
+  const pillFg=isOpen?'#0B5A43':isClosed?'#8E2019':'#7A4300';
+  const pierLbl=({tublamu:'Tub Lamu Pier',panwa:'Visit Panwa',ranong:'Ranong Pier'})[r.pier] || (laIsLandRoute(r)?'Other':(r.pier||'—'));
+  const _hdYear=(calMonthStr?new Date(calMonthStr+'-01'):new Date()).getFullYear();
+  const _hdOv=Object.keys(r.overrides||{}).filter(d=>d.startsWith(`${_hdYear}-`)).length;
+  const _btn='height:36px;padding:0 15px;border-radius:18px;font:600 12px inherit;font-family:inherit;cursor:pointer';
+  const _fact=(l,v,c)=>`<div style="flex:1 1 150px;padding:9px 14px;border-right:1px solid #ECEBE6"><div style="font-size:11px;color:#5B6170">${l}</div><div style="margin-top:2px;font-size:13.5px;font-weight:600;color:${c||'#0F1B3D'}">${v}</div></div>`;
+  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid #ECEBE6;background:#fff">
+    <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <span style="flex:none;width:8px;align-self:stretch;min-height:44px;border-radius:4px;background:${r.color||statusColor}"></span>
+      <div style="flex:1;min-width:220px">
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-size:21px;font-weight:700;letter-spacing:-.01em;color:#0F1B3D">${escP(r.name)}</span>
+          <span style="background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${pillLbl}</span>
         </div>
-        <div style="font-size:11px;color:${dim.ink2};margin-top:3px">${r.pier==='tublamu'?'Tub Lamu Pier':r.pier==='panwa'?'Visit Panwa':r.pier} · ${r.islands||'—'}</div>
+        <div style="font-size:12px;color:#5B6170;margin-top:3px">${escP(pierLbl)} · ${escP(r.islands||'—')}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="openRouteModal('${r.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button onclick="openRouteModal('${r.id}')" style="${_btn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">Edit details</button>
         ${progEditMode
-          ? `<button onclick="toggleProgEdit(false)" style="background:#0F6E56;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(15,110,86,.25)">✓ Done</button>`
-          : `<button onclick="toggleProgEdit(true)" style="background:white;color:#6B7785;border:1px solid #DDE2DE;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✎ Modify</button>`
+          ? `<button onclick="toggleProgEdit(false)" style="${_btn};background:#0B6B4F;color:#fff;border:1px solid #0B6B4F;font-weight:700">Done editing</button>`
+          : `<button onclick="toggleProgEdit(true)" style="${_btn};background:#1272B3;color:#fff;border:1px solid #1272B3">Edit open / closed days</button>`
         }
+        <button onclick="delRoute('${r.id}')" aria-label="Delete program" title="Delete program" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
       </div>
     </div>
-    ${cur?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;font-size:11px;color:${dim.ink2};border-left:3px solid ${statusColor}"><span style="font-weight:600;color:${dim.ink}">ปัจจุบัน: </span>${cur.type==='open'?'Open':'Closed'} · ${fmtD(cur.from)} → ${fmtD(cur.to)}${next?` · ถัดไป ${next.type==='open'?'Open':'Closed'} ${fmtD(next.from)}`:''}</div>`:''}
+    <div style="display:flex;flex-wrap:wrap;margin-top:14px;border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+      ${_fact('Today', pillLbl, pillFg)}
+      ${_fact('Current period', cur?`${fmtP(cur.from)} – ${fmtP(cur.to)}`:'—')}
+      ${_fact('Next change', next?`${next.type==='open'?'Opens':'Closes'} ${fmtP(next.from)}`:'—')}
+      ${_fact(`Days set by hand · ${_hdYear}`, `<span style="font-family:'DM Mono',monospace;font-weight:500">${_hdOv}</span>`)}
+    </div>
     ${progEditMode
-      ? `<div style="margin-top:10px;padding:8px 12px;background:#FFF6E5;border:1px solid #F0D9A0;border-radius:8px;font-size:11px;color:#A05A1A;display:flex;align-items:center;gap:7px;font-weight:600">✎ Edit mode · changes affect bookings &amp; boat assignments</div>`
-      : `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.7);border:1px solid #DDE2DE;border-radius:8px;font-size:11px;color:#6B7785;display:flex;align-items:center;gap:7px">🔒 Read-only · click <b style="color:#1A2A33">Modify</b> to enable edits</div>`
+      ? `<div style="margin-top:10px;padding:8px 12px;background:#FFF6E5;border:1px solid #F0D9A0;border-radius:8px;font-size:11.5px;color:#8A4B00;font-weight:600">Edit mode · changes affect bookings &amp; boat assignments</div>`
+      : ''
     }
   </div>`;
 
@@ -10758,65 +10783,65 @@ function renderProgDetailPink(){
   function buildMiniMonth(monthIdx){
     const firstDay=new Date(calYear,monthIdx,1).getDay();
     const daysInMonth=new Date(calYear,monthIdx+1,0).getDate();
-    let cells='';
+    let cells='', nClosedHand=0;
     for(let i=0;i<firstDay;i++) cells+=`<div></div>`;
     for(let d=1;d<=daysInMonth;d++){
       const ds=`${calYear}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const st=getDayStatus(r,ds);
       const isToday=ds===TODAY_STR;
-      const isOverride=r.overrides&&r.overrides[ds];
-      let bg='transparent',fg=dim.ink4,brd='transparent';
+      const isOverride=!!(r.overrides&&r.overrides[ds]);
+      /* §progRedesign · สี่สถานะแยกกันด้วยความเข้ม ไม่ใช่แค่สี
+           เปิด = เขียวอ่อน · ปิดตาม Season = เทา · ปิดเองรายวัน = แดงทึบ · เปิดเองรายวัน = เขียวอ่อนมีขอบ */
+      let bg='transparent',fg='#9A9A92',ring='none';
       if(st){
-        if(st.type==='open'){bg='#E1F5EE';fg='#0F6E56';}
-        else {bg='#FCEBEB';fg='#A32D2D';}
+        if(st.type==='open'){ bg='#DDF1EA'; fg='#0B3D2E'; if(isOverride) ring='inset 0 0 0 1.5px #0B6B4F'; }
+        else if(isOverride){ bg='#A1271F'; fg='#FFFFFF'; nClosedHand++; }
+        else { bg='#ECEBE6'; fg='#5B6170'; }
       }
-      if(isOverride) brd=st.type==='open'?'#1D9E75':'#A32D2D';
-      if(isToday) brd=dim.ink;
-      const dot=isOverride?`<span style="position:absolute;top:1px;right:1px;width:3px;height:3px;border-radius:50%;background:${st.type==='open'?'#1D9E75':'#A32D2D'}"></span>`:'';
+      if(isToday) ring='inset 0 0 0 2px #0F1B3D'+((st&&st.type!=='open'&&isOverride)?', inset 0 0 0 3px #fff':'');
       const dayClickHandler = progEditMode ? `onclick="toggleDayOverrideGuarded('${r.id}','${ds}')"` : '';
       const dayCursor = progEditMode ? 'pointer' : 'default';
       const dayHover = progEditMode ? "onmouseover=\"this.style.transform='scale(1.15)';this.style.zIndex='5'\" onmouseout=\"this.style.transform='';this.style.zIndex=''\"" : '';
-      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · override':''}${progEditMode?'':' · read-only · click Modify to edit'}" style="position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:${isToday?700:500};color:${fg};background:${bg};border:1px solid ${brd};border-radius:3px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${dot}${d}</div>`;
+      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · set by hand':''}${progEditMode?'':' · read-only · click Edit open / closed days'}" style="position:relative;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:${isToday||(isOverride&&st&&st.type!=='open')?600:400};color:${fg};background:${bg};box-shadow:${ring};border-radius:4px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${d}</div>`;
     }
     const isCurrentMonth=(new Date().getFullYear()===calYear)&&(new Date().getMonth()===monthIdx);
-    return `<div style="background:white;border-radius:9px;padding:8px;border:${isCurrentMonth?'1.5px solid '+dim.ink:'1px solid '+dim.line}">
-      <div style="font-size:9.5px;font-weight:700;color:${isCurrentMonth?dim.ink:dim.ink2};text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between">
-        <span>${MONTH_NAMES[monthIdx]}</span>
-        ${isCurrentMonth?`<span style="background:${dim.ink};color:white;padding:0 5px;border-radius:5px;font-size:7px;letter-spacing:.04em">NOW</span>`:''}
+    return `<div>
+      <div style="font-size:11px;font-weight:700;color:#0F1B3D;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:baseline;justify-content:space-between;gap:6px">
+        <span>${MONTH_NAMES[monthIdx]}${isCurrentMonth?` <span style="background:#0F1B3D;color:#fff;padding:1px 5px;border-radius:4px;font-size:8.5px;letter-spacing:.04em;vertical-align:1px">NOW</span>`:''}</span>
+        ${nClosedHand?`<span style="font-size:10.5px;font-weight:600;color:#8E2019;text-transform:none;letter-spacing:0">${nClosedHand} closed</span>`:''}
       </div>
-      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · เดิม S M T W T F S ตัวเดียว
-           เสาร์กับอาทิตย์เป็น S ทั้งคู่ อังคารกับพฤหัสเป็น T ทั้งคู่ และตัวอักษร 7px สีจาง · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
-      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:8px;color:${dim.ink2};text-align:center;margin-bottom:3px;font-weight:700;letter-spacing:.01em">
-        <span style="color:#B4533F">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#B4533F">Sa</span>
+      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
+      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:9.5px;color:#5B6170;text-align:center;margin-bottom:3px;font-weight:600">
+        <span style="color:#A63A1C">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#A63A1C">Sa</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px">${cells}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
     </div>`;
   }
 
   let monthsHtml='';
   for(let m=0;m<12;m++) monthsHtml+=buildMiniMonth(m);
 
-  const calendarHtml=`<div style="padding:14px 16px;background:white">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  const _lg=(sw,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;${sw}"></span>${l}</span>`;
+  const _nav='width:32px;height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;cursor:pointer;color:#0F1B3D;display:inline-flex;align-items:center;justify-content:center';
+  const calendarHtml=`<div style="padding:14px 20px 18px;background:white">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;font-weight:600;color:${dim.ink2};text-transform:uppercase;letter-spacing:.05em">Calendar</span>
-        ${overrideCount?`<span style="background:${SVG_PINK.soft};color:${SVG_PINK.text};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
+        <button onclick="calNavYear(-1)" aria-label="Previous year" style="${_nav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span style="font-size:16px;font-weight:500;min-width:52px;text-align:center;font-family:'DM Mono',monospace;color:#0F1B3D">${calYear}</span>
+        <button onclick="calNavYear(1)" aria-label="Next year" style="${_nav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${calMonthStr&&new Date().getFullYear()!==calYear?`<button onclick="calResetToday()" style="height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;padding:0 10px;cursor:pointer;color:#0F1B3D;font:600 11.5px inherit;font-family:inherit">This year</button>`:''}
+        ${overrideCount?`<span style="background:#F1F0EC;color:#3E4658;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600">${overrideCount} day${overrideCount>1?'s':''} set by hand</span>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:5px">
-        <button onclick="calNavYear(-1)" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 6px;cursor:pointer;color:${dim.ink2};display:inline-flex" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='${dim.ink2}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
-        <span style="font-size:13px;font-weight:700;min-width:60px;text-align:center;font-family:'DM Mono',monospace">${calYear}</span>
-        <button onclick="calNavYear(1)" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 6px;cursor:pointer;color:${dim.ink2};display:inline-flex" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='${dim.ink2}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>
-        ${calMonthStr&&new Date().getFullYear()!==calYear?`<button onclick="calResetToday()" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 9px;cursor:pointer;color:${dim.ink2};font-size:10px;font-weight:600;margin-left:3px">This year</button>`:''}
+      <div style="display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11.5px;color:#3E4658">
+        ${_lg('background:#DDF1EA','Open')}
+        ${_lg('background:#ECEBE6','Closed (season)')}
+        ${_lg('background:#A1271F','Closed by hand')}
+        ${_lg('background:#DDF1EA;border:1.5px solid #0B6B4F','Opened by hand')}
+        ${_lg('border:2px solid #0F1B3D','Today')}
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">${monthsHtml}</div>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:9px;border-top:0.5px solid rgba(0,0,0,.06);font-size:9.5px;color:${dim.ink3};flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#E1F5EE"></span>Open</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#FCEBEB"></span>Closed</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#E1F5EE;border:1.5px solid #1D9E75;position:relative;box-sizing:border-box"><span style="position:absolute;top:-1px;right:-1px;width:4px;height:4px;border-radius:50%;background:#1D9E75"></span></span>Override</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-left:auto"><span style="width:10px;height:10px;border-radius:3px;border:1.5px solid ${dim.ink};box-sizing:border-box"></span>Today</span>
-    </div>
-    <div style="margin-top:7px;font-size:9.5px;color:${dim.ink3};font-style:italic">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'🔒 อยู่ในโหมด Read-only · กดปุ่ม Modify ทางขวาบนเพื่อเริ่มแก้'}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${monthsHtml}</div>
+    <div style="margin-top:12px;font-size:11.5px;color:#5B6170">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'Read-only · กดปุ่ม Edit open / closed days ด้านบนเพื่อเริ่มแก้'}</div>
   </div>`;
 
   mount.innerHTML=`${headerStrip}
