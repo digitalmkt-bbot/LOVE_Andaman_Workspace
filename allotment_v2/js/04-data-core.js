@@ -5806,6 +5806,34 @@ function setBoatPier(v,el){boatPier=v;document.querySelectorAll('#boats-pier-fil
 function setBoatSt(v,el){boatSt=v;document.querySelectorAll('#boats-st-filter .fp').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');renderBoats();}
 function setBoatLocType(v,el){boatLocType=v;renderBoats();}
 
+/* ══ §bsRedesign (2026-10-07) · หน้า Boat Status โฉมใหม่ · ชุดเดียวกับหน้า Programs (§progRedesign) ══
+   แถบบนแบบ Boat Operation · รายการซ้ายกระชับ ตัวกรองย้ายเข้าไปอยู่ในการ์ดรายการ
+   แผงขวา: แถวข้อมูลสรุป + ปฏิทินสถานะทั้งปี (12 เดือน) แทนปฏิทินรายเดือนช่องใหญ่
+   ตัวกรองท่า/สถานะ/ประเภทที่อยู่ยังใช้ตัวแปรและฟังก์ชันเดิม (boatPier · boatSt · boatLocType) ไม่ได้เปลี่ยนตรรกะ
+   ช่องค้นหาเป็นการซ่อน/โชว์แถวใน DOM เท่านั้น */
+function bsApplyQ(){
+  const q=String(window._bsQ||'').trim().toLowerCase();
+  document.querySelectorAll('#bs-list-panel [data-bid]').forEach(function(el){
+    el.style.display=(!q||(el.dataset.q||'').indexOf(q)>=0)?'flex':'none'; });
+}
+function bsSetQ(v){ window._bsQ=v||''; bsApplyQ(); }
+function bsChipSt(v){ setBoatSt(boatSt===v?'all':v,null); }
+/* §bsFit · หน้าไม่เลื่อน · การ์ดสองใบสูงพอดีจอและเลื่อนในตัวเองเมื่อล้น (กติกาเดียวกับ §progFit) */
+function bsFit(){
+  const lb=document.getElementById('bs-list-panel'), dm=document.getElementById('bs-detail-mount');
+  if(!lb||!lb.offsetParent||!lb.parentElement) return;
+  const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
+  if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; lb.style.maxHeight=hs;
+    if(dm){ dm.style.maxHeight='none'; dm.style.overflowY='visible'; } return; }
+  const absTop=lb.parentElement.getBoundingClientRect().top+(window.scrollY||0);
+  const mn=document.querySelector('main.main');
+  const tail=Math.max(14, mn ? (parseFloat(getComputedStyle(mn).paddingBottom)||0) : 0)+2;
+  const h=Math.max(320, Math.round(window.innerHeight-absTop-tail))+'px';
+  if(lb.style.maxHeight!==h) lb.style.maxHeight=h;
+  if(dm){ if(dm.style.maxHeight!==h) dm.style.maxHeight=h; dm.style.overflowY='auto'; dm.style.overflowX='hidden';
+    dm.style.overscrollBehavior='contain'; dm.style.scrollbarWidth='thin'; }
+}
+if(!window._bsFitOn){ window._bsFitOn=1; window.addEventListener('resize', function(){ try{ bsFit(); }catch(_){} }, {passive:true}); }
 function renderBoats(){
   let boats=BOATS;
   if(boatPier!=='all') boats=boats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)===boatPier);
@@ -5853,84 +5881,72 @@ function renderBoats(){
   };
 
   const STATUS_STYLE={
-    available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
-    fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
-    unavailable:{bg:'#FCEBEB',color:'#A32D2D',label:'UNAVAIL'}
+    available:{bg:'#DDF1EA',color:'#0B5A43',label:'Available'},
+    fixing:{bg:'#FBEBD3',color:'#7A4300',label:'Fixing'},
+    unavailable:{bg:'#FBE3E0',color:'#8E2019',label:'Unavailable'}
   };
   const PIER_LBL={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'};
 
-  // Header bar
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:6px">
-      <button style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,.08);background:white;font-size:16px;cursor:pointer;color:${dim.ink2}">+</button>
-      <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#185FA5;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">TL</div><span style="font-size:12px;font-weight:500">Tub Lamu · ${tlCount}</span></div>
-      <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#0F6E56;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">VP</div><span style="font-size:12px;font-weight:500">Visit Panwa · ${vpCount}</span></div>
-      ${rnCount?`<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#BA7517;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">RN</div><span style="font-size:12px;font-weight:500">Ranong · ${rnCount}</span></div>`:''}
-      <div style="width:32px;height:32px;border-radius:50%;background:${dim.ink};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">B</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button onclick="openCharterModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ เรือเช่า</button>
-    </div>
+  // §bsRedesign · แถบบน · โครงและค่าสีชุดเดียวกับ .bop2-top ของหน้า Boat Operation
+  const escB=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const _bd=new Date(TODAY_STR+'T00:00:00');
+  const _chip='height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;font:700 11.5px inherit;font-family:inherit;border:1px solid transparent;cursor:pointer';
+  const _ring=(v)=>boatSt===v?'box-shadow:0 0 0 2px #fff;':'';
+  const _partners=new Set(allCharter.map(c=>c.charter_co||c.owner||'')).size||0;
+  const _retired=BOATS.filter(b=>b.retired).length;
+  const headerBar=`<style>
+    #view-boats{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
+    #view-boats > .page-hd{display:none}
+    #view-boats #bs-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
+    #view-boats #bs-q::placeholder{color:#B4BCDD}
+    #view-boats #bs-top{position:sticky;top:0;z-index:6;margin:-18px -18px 11px;padding:13px 18px 11px;background:#16265C;box-shadow:0 6px 14px -8px rgba(2,10,30,.55)}
+    @media (max-width:1100px){ #view-boats .bs-brand{display:none} }
+    @media (max-width:820px){ #view-boats{padding:12px 10px 64px} #view-boats .bs-2col{grid-template-columns:1fr !important}
+      #view-boats #bs-top{position:static;margin:-12px -10px 10px;padding:12px 10px 10px} }
+  </style>
+  <div id="bs-top" style="display:flex;align-items:center;gap:9px 12px;flex-wrap:wrap">
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:9px">
+      <span style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">${_bd.getDate()}</span>
+      <span style="line-height:1.15;display:inline-block">
+        <b style="display:block;font-size:13px;font-weight:700;color:#fff">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_bd.getDay()]}</b>
+        <i style="display:block;font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#B4BCDD;text-transform:uppercase;font-style:normal">${MONTHS_EN[_bd.getMonth()]} ${_bd.getFullYear()} · status today</i>
+      </span>
+      <input id="bs-q" type="search" aria-label="Search boats" placeholder="Search ${allCompany.length+allCharter.length} boats" value="${escB(window._bsQ||'')}" oninput="bsSetQ(this.value)"
+        style="margin-left:8px;width:200px;max-width:100%;height:36px;box-sizing:border-box;padding:0 14px;border:1px solid rgba(255,255,255,.30);border-radius:18px;background:rgba(255,255,255,.10);font:500 12.5px inherit;font-family:inherit;color:#fff;outline-color:#fff">
+    </span>
+    <span class="bs-brand" style="flex:none;text-align:center;white-space:nowrap">
+      <i style="display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;font-style:normal;margin-bottom:2px">LOVE ANDAMAN</i>
+      <b style="display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff">BOAT STATUS</b>
+    </span>
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="bsChipSt('available')" title="Show only available boats" style="${_chip};background:#D8F4E8;color:#0A5C3D;${_ring('available')}">Available<b style="font-weight:800;margin-left:6px">${availCount}/${allCompany.length}</b></button>
+      <button onclick="bsChipSt('fixing')" title="Show only boats being fixed${inShop?' · '+inShop+' in shop':''}" style="${_chip};background:#FBEBD3;color:#7A4300;${_ring('fixing')}">Fixing<b style="font-weight:800;margin-left:6px">${fixCount}</b></button>
+      <button onclick="bsChipSt('unavailable')" title="Show only unavailable boats" style="${_chip};background:#FBE0DD;color:#8E2A20;${_ring('unavailable')}">Unavailable<b style="font-weight:800;margin-left:6px">${unavCount}</b></button>
+      <span title="${_partners} partner${_partners===1?'':'s'}${_retired?' · '+_retired+' retired':''}" style="${_chip};cursor:default;background:rgba(255,255,255,.10);color:#E8EBF7;border-color:rgba(255,255,255,.14)">Charter<b style="font-weight:800;margin-left:6px">${allCharter.length}</b></span>
+      <button onclick="openCharterModal()" style="height:36px;padding:0 16px;border:none;border-radius:18px;background:#fff;color:#16265C;font:700 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เรือเช่า
+      </button>
+    </span>
   </div>`;
+  const kpiStrip='';
 
-  // KPI strip
-  const kpiStrip=`<div style="display:grid;grid-template-columns:1.6fr 1fr 0.85fr 0.85fr 0.85fr;gap:8px;margin-bottom:14px;align-items:stretch">
-    <div style="grid-column:1;align-self:end;padding-bottom:6px">
-      <div style="font-size:13px;font-weight:500;color:${dim.ink4};margin-bottom:2px">Boat Status</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-        <span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">${availCount}</span>
-        <span style="font-size:18px;color:${dim.ink3};font-weight:500">boats</span>
-        <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ Available</span>
-      </div>
-      <div style="font-size:10px;color:${dim.ink3}">${allCompany.length} บริษัท · ${allCharter.length} charter${BOATS.filter(b=>b.retired).length?' · '+BOATS.filter(b=>b.retired).length+' retired':''}</div>
+  // §bsRedesign · ตัวกรองย้ายเข้าไปอยู่หัวการ์ดรายการ · ยังเรียก setBoatPier / setBoatSt / setBoatLocType ตัวเดิม
+  const _tabCss=(on)=>`min-height:32px;padding:0 11px;border-radius:16px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#0F1B3D':'#fff'};color:${on?'#fff':'#0F1B3D'};font:600 12px inherit;font-family:inherit;cursor:pointer`;
+  const _segCss=(on)=>`min-height:28px;padding:0 10px;border-radius:14px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#EEF1F8':'#fff'};color:#0F1B3D;font:600 11.5px inherit;font-family:inherit;cursor:pointer`;
+  const pierBtn=(val,label,n)=>`<button onclick="setBoatPier('${val}',null)" style="${_tabCss(boatPier===val)}">${label}${n==null?'':` <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span>`}</button>`;
+  const stBtn=(val,label)=>`<button onclick="setBoatSt('${val}',null)" style="${_segCss(boatSt===val)}">${label}</button>`;
+  const locBtn=(val,label)=>`<button onclick="setBoatLocType('${val}',null)" style="${_segCss(boatLocType===val)}">${label}</button>`;
+  const filterBar=`<div style="position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid #ECEBE6;padding:10px 12px 9px">
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${pierBtn('all','All',allCompany.length+allCharter.length)}${pierBtn('tublamu','Tub Lamu',tlCount)}${pierBtn('panwa','Visit Panwa',vpCount)}${rnCount?pierBtn('ranong','Ranong',rnCount):''}${shopCount?pierBtn('shop','In shop',shopCount):''}
     </div>
-
-    <div onclick="setBoatSt('available',null)" style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Available</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#0F6E56">${availCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">/ ${allCompany.length}</span></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:11px;color:#0F6E56;font-weight:600">${allCompany.length?Math.round(availCount/allCompany.length*100):0}% fleet</span></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px">
+      <span style="font-size:11px;color:#5B6170;width:46px">Status</span>
+      ${stBtn('all','Any')}${stBtn('available','Available')}${stBtn('fixing','Fixing')}${stBtn('unavailable','Unavailable')}
     </div>
-
-    <div onclick="setBoatSt('fixing',null)" style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Fixing</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#BA7517">${fixCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#854F0B;margin-top:6px;font-weight:600">${inShop?inShop+' in shop':'on dock'}</div>
-    </div>
-
-    <div onclick="setBoatSt('unavailable',null)" style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Unavailable</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#A32D2D">${unavCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#A32D2D;margin-top:6px;font-weight:600">${unavCount?'major issue':'all clear'}</div>
-    </div>
-
-    <div style="grid-column:5;background:${dim.ink};color:white;border-radius:14px;padding:11px 13px">
-      <div style="font-size:10px;color:#aaa">Charter active</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2">${allCharter.length}</span><span style="font-size:11px;color:#aaa;font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#aaa;margin-top:6px">${new Set(allCharter.map(c=>c.charter_co||c.owner||'')).size||0} partners</div>
-    </div>
-  </div>`;
-
-  // Filter bar
-  const pierBtn=(val,label)=>`<button onclick="setBoatPier('${val}',null)" style="background:${boatPier===val?dim.ink:'transparent'};color:${boatPier===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:${boatPier===val?600:500};cursor:pointer">${label}</button>`;
-  const stBtn=(val,label,activeBg)=>`<button onclick="setBoatSt('${val}',null)" style="background:${boatSt===val?(activeBg||dim.ink):'transparent'};color:${boatSt===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:${boatSt===val?600:500};cursor:pointer">${label}</button>`;
-  const locBtn=(val,label,activeBg)=>`<button onclick="setBoatLocType('${val}',null)" style="background:${boatLocType===val?(activeBg||dim.ink):'transparent'};color:${boatLocType===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:${boatLocType===val?600:500};cursor:pointer">${label}</button>`;
-
-  const filterBar=`<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-    <span style="font-size:11px;color:${dim.ink3};margin-right:6px;font-weight:500">filter</span>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex">
-      ${pierBtn('all','All')}${pierBtn('tublamu','Tub Lamu')}${pierBtn('panwa','Visit Panwa')}${rnCount?pierBtn('ranong','Ranong'):''}${shopCount?pierBtn('shop','🔧 In Shop'):''}
-    </div>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex;margin-left:6px">
-      ${stBtn('all','All')}
-      ${stBtn('available','Available','#1D9E75')}
-      ${stBtn('fixing','Fixing','#BA7517')}
-      ${stBtn('unavailable','Unavail','#A32D2D')}
-    </div>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex;margin-left:6px">
-      ${locBtn('all','All loc')}
-      ${locBtn('pier','At pier','#185FA5')}
-      ${locBtn('shop','In shop','#854F0B')}
-      ${locBtn('dock','On dock','#A32D2D')}
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px">
+      <span style="font-size:11px;color:#5B6170;width:46px">Where</span>
+      ${locBtn('all','Anywhere')}${locBtn('pier','At pier')}${locBtn('shop','In shop')}${locBtn('dock','On dock')}
     </div>
   </div>`;
 
@@ -5988,23 +6004,24 @@ function renderBoats(){
     const editBtn=isCharter
       ? `<button onclick="event.stopPropagation();openBoatEdit('${b.id}')" title="แก้ไขเรือเช่า" style="background:none;border:none;color:${isSel?SVG_PINK.text:dim.ink4};font-size:12px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">&#9998;</button>`
       : '';
-    return`<div data-bid="${b.id}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;cursor:pointer;${isSel?'background:'+SVG_PINK.soft+';border:1px solid #F0C0D0;':'border:1px solid transparent;border-top:0.5px solid '+dim.line+';margin-top:2px;'}${isCharterInactive?'opacity:.65;':''}">
+    /* §bsRedesign · แถวกระชับ · ป้ายสถานะชิดขวาตำแหน่งเดียวกันทุกแถว · เลิกหรี่ตัวหนังสือของเรือที่ซ่อม/หยุดใช้
+       (10 จาก 15 ลำกำลังซ่อม = หรี่เกือบทั้งรายการ อ่านยาก · ป้ายสถานะบอกอยู่แล้ว) เหลือแค่วงกลมชื่อเป็นขาวดำ */
+    return`<div data-bid="${b.id}" data-q="${escB(((b.name||'')+' '+(b.type||'')).toLowerCase())}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;min-height:54px;box-sizing:border-box;padding:7px 12px;cursor:pointer;border-bottom:1px solid #ECEBE6;background:${isSel?'#E8F3FB':'#fff'};${isSel?'box-shadow:inset 3px 0 0 #1272B3;':''}${isCharterInactive?'opacity:.65;':''}">
       <div style="width:32px;height:32px;border-radius:50%;background:${c};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;${avatarFilter}">${init}</div>
-      <div style="flex:1;min-width:0;${contentOpacity}">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600;color:${dim.ink}">${b.name}</span><span style="background:${ss.bg};color:${ss.color};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;letter-spacing:.04em">${ss.label}</span>${asnBadge}${projChip}</div>
-        <div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;overflow:hidden">
-          <span style="font-size:9px;color:${isSel?SVG_PINK.text:dim.ink3}">${metaLeft}</span>
-          ${locPill?'<span style="color:'+dim.ink5+';font-size:9px">·</span>'+locPill:''}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600;color:#0F1B3D">${b.name}</span>${asnBadge}${projChip}</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap;overflow:hidden">
+          <span style="font-size:11px;color:#5B6170">${metaLeft}</span>
+          ${locPill?'<span style="color:#9A9A92;font-size:10px">·</span>'+locPill:''}
         </div>
       </div>
-      ${editBtn}<span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
+      ${editBtn}<span style="flex:none;background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span>
     </div>`;
   };
 
-  const sectionHd=(label,color,bg,count)=>`<div style="display:flex;align-items:center;gap:6px;margin:14px 0 8px;padding:0 4px 8px;border-bottom:1px solid rgba(0,0,0,.06)">
-    <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
-    <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
-    <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600">${count}</span>
+  const sectionHd=(label,color,bg,count)=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:9px 14px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">
+    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658">${String(label).replace(/^[^A-Za-z฀-๿]+/,'')}</span>
+    <span style="font-size:11px;color:#5B6170">${count} boat${count===1?'':'s'}</span>
   </div>`;
 
   const tlList=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='tublamu');
@@ -6048,10 +6065,10 @@ function renderBoats(){
   // Charter section
   let charterHtml='';
   if(allCharter.length){
-    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9F1B4F">เรือเช่า</span>
-      <span style="background:#E03B7E;color:white;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">${charterBoats.length}</span>
-      <button onclick="openCharterModal()" style="margin-left:auto;background:#1A1A1A;color:white;border:none;border-radius:14px;padding:4px 11px;font-size:10px;font-weight:600;cursor:pointer">+ เพิ่ม</button>
+    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#F1EEF9;border-bottom:1px solid #ECEBE6">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#3E2A78">เรือเช่า</span>
+      <span style="font-size:11px;color:#5B6170">${charterBoats.length} boat${charterBoats.length===1?'':'s'}</span>
+      <button onclick="openCharterModal()" style="margin-left:auto;height:28px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;border-radius:14px;padding:0 11px;font:600 11.5px inherit;font-family:inherit;cursor:pointer">+ เพิ่ม</button>
     </div>`+chGroupedRows(charterBoats,buildBoatRow,dim);
   }
 
@@ -6060,13 +6077,14 @@ function renderBoats(){
   }
 
   /* §bsKeepScroll · id คงที่ เพื่อจำตำแหน่งเลื่อนข้ามการวาดใหม่ (ดูท้ายฟังก์ชัน) */
-  const listPanel=`<div id="bs-list-panel" style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
+  const listPanel=`<div id="bs-list-panel" style="background:#fff;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);max-height:calc(100vh - 110px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin">
+    ${filterBar}
     ${listHtml}
     ${charterHtml}
   </div>`;
 
   // Detail panel placeholder — actual content handled by selectBoat() in the original `bdp` element
-  const detailPanel=`<div id="bs-detail-mount" style="background:white;border-radius:14px;padding:0;border:1px solid ${dim.line};min-height:400px;overflow:hidden"></div>`;
+  const detailPanel=`<div id="bs-detail-mount" style="background:white;border-radius:12px;padding:0;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);min-height:400px;overflow:hidden"></div>`;
 
   // Detach bdp before resetting innerHTML to avoid losing it
   const bdp=document.getElementById('bdp');
@@ -6085,13 +6103,14 @@ function renderBoats(){
   const _keepEl=document.getElementById('bs-list-panel');
   const _keepTop=_keepEl?_keepEl.scrollTop:0;
   const _keepWin=window.scrollY;
+  /* §bsFit · แผงขวาเลื่อนในตัวเองแล้ว · บันทึกสถานะจากช่องวันท้ายปี = วาดใหม่ทั้งหน้า ต้องคืนตำแหน่งเลื่อนของแผงขวาด้วย */
+  const _keepDet=(window._bsDetFor===selBoatId) ? ((document.getElementById('bs-detail-mount')||{}).scrollTop||0) : 0;
 
   // Wrap
   document.getElementById('bs-pink-wrap').innerHTML=`
     ${headerBar}
     ${kpiStrip}
-    ${filterBar}
-    <div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">
+    <div class="bs-2col" style="display:grid;grid-template-columns:380px minmax(0,1fr);gap:13px;align-items:start">
       ${listPanel}
       ${detailPanel}
     </div>`;
@@ -6113,6 +6132,9 @@ function renderBoats(){
      คืนตำแหน่งหน้าต่างหลังวาดครบแล้ว และคืนของรายการซ้ำอีกครั้งเผื่อโดนหนีบ */
   if(_newEl&&_keepTop&&_newEl.scrollTop!==_keepTop) _newEl.scrollTop=_keepTop;
   if(_keepWin&&window.scrollY!==_keepWin) window.scrollTo(0,_keepWin);
+  window._bsDetFor=selBoatId;
+  bsFit(); bsApplyQ();
+  if(_keepDet){ const _dm=document.getElementById('bs-detail-mount'); if(_dm) _dm.scrollTop=_keepDet; }
 }
 function bsCalShift(n){
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
@@ -6295,9 +6317,9 @@ function renderBoatDetailPink(){
   const pierDisplay=cur.loc||PIER_LBL[curPier]||curPier;
 
   const STATUS_STYLE={
-    available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
-    fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
-    unavailable:{bg:'#FCEBEB',color:'#A32D2D',label:'UNAVAILABLE'}
+    available:{bg:'#DDF1EA',color:'#0B5A43',label:'Available'},
+    fixing:{bg:'#FBEBD3',color:'#7A4300',label:'Fixing'},
+    unavailable:{bg:'#FBE3E0',color:'#8E2019',label:'Unavailable'}
   };
   // Charter: check if today is covered by log entry
   const hasLogToday=(b.log||[]).some(e=>e.from<=TODAY_STR&&(!e.to||e.to>=TODAY_STR));
@@ -6331,78 +6353,65 @@ function renderBoatDetailPink(){
     return diffDays>=0?`${diffDays} days ago`:'';
   })():'no service';
 
-  // Status timeline calendar (use bsCalDate state, default to today)
+  /* §bsYearCal (2026-10-07) · ปฏิทินสถานะทั้งปี 12 เดือน แบบเดียวกับปฏิทินของหน้า Programs
+     ผู้ใช้เลือกแบบนี้เพราะเห็นภาพรวมทั้งปี · และขอให้ยังเห็นว่าวันนั้นเรืออยู่ท่าไหน ด้วยตัวอักษรคนละสีกับสีสถานะ
+     ตรรกะต่อช่องเหมือนของเดิมทุกข้อ:
+       · สถานะอ่านจาก getStoredStatus (ช่องนี้คลิกแล้วแก้แถวนั้น ต้องตรงกับตาราง · §boatEff3)
+       · ท่าอ่านจาก getBoatCurrentPier(เรือ, วัน) กติกาเดียวกับทั้งระบบ (§bsCalPier)
+       · เรือเช่าวันที่ไม่มี log = ช่องว่าง · วันข้างหน้าที่ยังไม่มี log = ช่องว่าง (ยังโชว์ท่า)
+       · คลิกช่อง = bsCellClick เปิดฟอร์มเพิ่มสถานะของวันนั้น
+     ปีที่ดู = ปีของ window.bsCalDate (ตัวแปรเดิม) · ปุ่มเลื่อนปีเรียก bsCalShift(±12) */
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
   const calRef=window.bsCalDate;
   const today=new Date(TODAY_STR);
-  const yr=calRef.getFullYear(), mo=calRef.getMonth();
-  const firstDay=new Date(yr,mo,1);
-  const lastDay=new Date(yr,mo+1,0);
-  const startWd=(firstDay.getDay()+6)%7; // Mon=0
-  const daysInMonth=lastDay.getDate();
-  const totalCells=Math.ceil((startWd+daysInMonth)/7)*7;
+  const yr=calRef.getFullYear();
   const MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthLabel=`${MONTHS_EN[mo]} ${yr}`;
-
-  const STATUS_CAL_COLOR={available:'#1D9E75',fixing:'#BA7517',unavailable:'#A32D2D'};
-
-  // Get status for each day + capture log entry
-  // Debug: log b.log state
   if(window.bsDebug)console.log('[BoatStatus]',b.name,'log:',JSON.parse(JSON.stringify(b.log||[])));
-  const calCells=[];
-  for(let i=0;i<totalCells;i++){
-    if(i<startWd||i>=startWd+daysInMonth){
-      calCells.push({empty:true});
-      continue;
-    }
-    const dayN=i-startWd+1;
-    const d=new Date(yr,mo,dayN);
-    const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(dayN).padStart(2,'0')}`;
-    const st=getStoredStatus(b,ds);   /* §boatEff3 · ช่องนี้คลิกแล้วแก้แถวนั้น ต้องตรงกับตาราง */
-    const isToday=ds===TODAY_STR;
-    const isFuture=ds>TODAY_STR;
-    // Find log entry covering this day (for edit on click)
-    const logEntry=(b.log||[]).find(e=>e.from<=ds&&(!e.to||e.to>=ds));
-    calCells.push({day:dayN,ds,status:st.s||'available',isToday,isFuture,logId:logEntry?logEntry.id:null});
-  }
-
-  const calRows=[];
-  for(let r=0;r<calCells.length;r+=7){
-    calRows.push(calCells.slice(r,r+7));
-  }
-
-  /* §bsCalPier (2026-10-03) · ปฏิทินสถานะของเรือ บอกด้วยว่าวันนั้นเรืออยู่ท่าไหน
-     ผู้ใช้ขอ "ปฏิทินของเรือ ระบุด้วยว่าอยู่ที่ท่าเรือไหน วันนั้น ๆ" · ของเดิมสีบอกแค่พร้อม/ซ่อม/หยุดใช้
-     เรือที่ย้ายท่ากลางเดือน (เช่น 13–14 พันวา · 15–23 ทับละมุ) ต้องไล่อ่านประวัติข้างล่างเอง
-     อ่านจากกติกาเดียวกับทั้งระบบ getBoatCurrentPier(เรือ, วัน) · อยู่อู่ = ป้ายประแจ */
-  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'\u{1F527}'};
+  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'SH'};
+  /* สีตัวอักษรของท่า · เลี่ยงเขียว/ส้ม/แดงที่เป็นสีพื้นของสถานะ · วางบนป้ายขาวจึงอ่านออกบนพื้นทุกสี */
+  const _bsPierInk={tublamu:'#0B4FA8',panwa:'#6B21A8',ranong:'#00646E',shop:'#1F1F1F'};
   const _bsPierFull=p=>p==='shop'?'In shop':((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[p])||((typeof laPierName==='function')?laPierName(p):p)||p);
-  const _bsPierTag=(c,onColor)=>{
-    let p=''; try{ p=getBoatCurrentPier(b,c.ds)||''; }catch(_){}
-    if(!p) return '';
-    const sh=_bsPierShort[p]||String(p).slice(0,2).toUpperCase();
-    return `<span data-bspier="${p}" title="${c.ds} · ${_bsPierFull(p)}" style="position:absolute;top:3px;right:3px;font-size:8.5px;font-weight:800;line-height:1;padding:2px 3px;border-radius:4px;font-family:'DM Sans',sans-serif;${onColor?'background:rgba(255,255,255,.26);color:#fff':'background:#F1EFE8;color:#6B6860'}">${sh}</span>`;
+  /* [พื้นวันที่ผ่านมา/วันนี้, ตัวหนังสือ, พื้นวันข้างหน้าที่มี log, ตัวหนังสือวันข้างหน้า] */
+  const _bsFill={available:['#DDF1EA','#0B3D2E','#EEF8F4','#0B3D2E'],fixing:['#E0A040','#3D2A05','#F5DDB2','#5C4310'],unavailable:['#A1271F','#FFFFFF','#EDB5AF','#5A120D']};
+  const _bsStLbl={available:'Available',fixing:'Fixing',unavailable:'Unavailable'};
+  const _bsNoTag='<span style="height:11px"></span>';
+  const bsMonth=(mo)=>{
+    const first=new Date(yr,mo,1).getDay(), n=new Date(yr,mo+1,0).getDate();
+    let cells='', nFix=0, nUn=0;
+    for(let i=0;i<first;i++) cells+='<div></div>';
+    for(let d=1;d<=n;d++){
+      const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday=ds===TODAY_STR, isFuture=ds>TODAY_STR;
+      const logEntry=(b.log||[]).find(e=>e.from<=ds&&(!e.to||e.to>=ds));
+      const logId=logEntry?logEntry.id:null;
+      const charterOff=isCharter&&!logId;
+      const blank=charterOff||(isFuture&&!logId);
+      let pr=''; if(!charterOff){ try{ pr=getBoatCurrentPier(b,ds)||''; }catch(_){} }
+      const tag=pr?`<span data-bspier="${pr}" style="font:700 9px/1 'DM Sans',sans-serif;letter-spacing:.02em;padding:1px 2px;border-radius:2px;background:#fff;color:${_bsPierInk[pr]||'#1F1F1F'}">${_bsPierShort[pr]||String(pr).slice(0,2).toUpperCase()}</span>`:_bsNoTag;
+      let bg='#fff', fg='#8A8A82', ring='inset 0 0 0 1px #ECEBE6', stTxt='no status set', dark=false;
+      if(!blank){
+        const stv=getStoredStatus(b,ds).s||'available';
+        const f=_bsFill[stv]||_bsFill.available;
+        bg=isFuture?f[2]:f[0]; fg=isFuture?f[3]:f[1]; ring='none'; stTxt=_bsStLbl[stv]||stv; dark=(stv==='unavailable'&&!isFuture);
+        if(stv==='fixing') nFix++; else if(stv==='unavailable') nUn++;
+      }
+      if(isToday) ring='inset 0 0 0 2px #0F1B3D'+(dark?', inset 0 0 0 3px #fff':'');
+      cells+=`<div onclick="bsCellClick('${ds}',${logId?`'${logId}'`:'null'})" title="${ds} · ${stTxt}${pr?' · '+_bsPierFull(pr):''}" style="height:34px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;background:${bg};color:${fg};box-shadow:${ring}"><span style="font:${isToday?700:400} 11px/1 'DM Mono',monospace">${d}</span>${tag}</div>`;
+    }
+    const isNow=(today.getFullYear()===yr)&&(today.getMonth()===mo);
+    const note=[nFix?nFix+' fixing':'', nUn?nUn+' unavail':''].filter(x=>x).join(' · ');
+    return `<div>
+      <div style="font-size:11px;font-weight:700;color:#0F1B3D;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:baseline;justify-content:space-between;gap:6px">
+        <span>${MONTHS_EN[mo]}${isNow?` <span style="background:#0F1B3D;color:#fff;padding:1px 5px;border-radius:4px;font-size:8.5px;letter-spacing:.04em;vertical-align:1px">NOW</span>`:''}</span>
+        ${note?`<span style="font-size:10.5px;font-weight:600;color:#7A4300;text-transform:none;letter-spacing:0">${note}</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:9.5px;color:#5B6170;text-align:center;margin-bottom:3px;font-weight:600">
+        <span style="color:#A63A1C">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#A63A1C">Sa</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
+    </div>`;
   };
-  const calHtml=calRows.map(row=>row.map(c=>{
-    if(c.empty)return`<div style="aspect-ratio:1"></div>`;
-    // Charter boats: only render colored cells when there's a log entry covering that day
-    // Otherwise render as empty white (charter is "off" by default)
-    if(isCharter&&!c.logId){
-      const todayBorder=c.isToday?`box-shadow:0 0 0 2px white,0 0 0 4px ${SVG_PINK.accent};`:'';
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${todayBorder}">${c.day}</div>`;
-    }
-    // Future days WITHOUT log entry → empty white cell
-    if(c.isFuture&&!c.logId){
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="position:relative;aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}${_bsPierTag(c,false)}</div>`;
-    }
-    // Past or future WITH log entry → status color
-    const bg=STATUS_CAL_COLOR[c.status]||'#1D9E75';
-    const ringStyle=c.isToday?`box-shadow:0 0 0 2px white,0 0 0 4px ${SVG_PINK.accent};background:${SVG_PINK.accent};font-weight:700`:'';
-    // Slightly fade future days with log to differentiate from past
-    const futureOpacity=c.isFuture&&!c.isToday?'opacity:.85;':'';
-    const handler=c.logId?`bsCellClick('${c.ds}','${c.logId}')`:`bsCellClick('${c.ds}',null)`;
-    return`<div onclick="${handler}" style="position:relative;aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}${_bsPierTag(c,true)}</div>`;
-  }).join('')).join('');
+  let yearHtml=''; for(let m=0;m<12;m++) yearHtml+=bsMonth(m);
 
   // Recent status changes — show ALL log entries (sorted by from desc)
   const events=[];
@@ -6475,7 +6484,7 @@ function renderBoatDetailPink(){
         ${dur?`<div style="font-size:9px;color:${dim.ink3};margin-top:1px">${dur}</div>`:''}
       </div>
       <div style="min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="background:${evSt.bg};color:${evSt.color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600">${evSt.label}</span><span style="font-size:11px;color:${dim.ink};font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="background:${evSt.bg};color:${evSt.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${evSt.label}</span><span style="font-size:11px;color:${dim.ink};font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
         ${locHtml}
       </div>
       <div style="font-size:10px;color:${outcomeColor};text-align:right;font-weight:500">${ev.outcome}</div>
@@ -6484,11 +6493,17 @@ function renderBoatDetailPink(){
   }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:20px">ยังไม่มีประวัติสถานะ</div>`;
 
   // Render
-  mount.innerHTML=`<div style="background:white;border-radius:14px;padding:16px 18px;border:1px solid ${dim.line}">
+  const _bsBtn='height:36px;padding:0 15px;border-radius:18px;font:600 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px';
+  const _bsFact=(l,v,c)=>`<div style="flex:1 1 150px;padding:9px 14px;border-right:1px solid #ECEBE6"><div style="font-size:11px;color:#5B6170">${l}</div><div style="margin-top:2px;font-size:13.5px;font-weight:600;color:${c||'#0F1B3D'}">${v}</div></div>`;
+  const _bsLg=(sw,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;${sw}"></span>${l}</span>`;
+  const _bsLoc=(k,l)=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font:700 10px/1 'DM Sans',sans-serif;padding:2px 4px;border-radius:3px;background:#fff;border:1px solid #E4E3DD;color:${_bsPierInk[k]}">${_bsPierShort[k]}</span>${l}</span>`;
+  const _bsNav='width:32px;height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;cursor:pointer;color:#0F1B3D;display:inline-flex;align-items:center;justify-content:center';
+  const _bsTool='height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;padding:0 10px;cursor:pointer;color:#3E4658;font:600 11.5px inherit;font-family:inherit';
+  mount.innerHTML=`<div style="background:white;padding:18px 20px 20px">
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
@@ -6499,58 +6514,46 @@ function renderBoatDetailPink(){
           return `<div style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:#FDF2F8;color:#9F1B4F;padding:3px 10px;border-radius:10px;font-size:10px;font-weight:600;border:0.5px solid #F0C0D0">📍 ${fromLbl} → ${toLbl} <span style="opacity:.7;font-weight:400">· until ${active.endDate}</span></div>`;
         })()}
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="qfOpen('${b.id}')" title="Quick Fix Log · พบ + ซ่อม + จบในขั้นตอนเดียว" style="background:#E1F5EE;color:#0F6E56;border:1px solid #9FE1CB;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Quick Fix
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        <button onclick="qfOpen('${b.id}')" title="Quick Fix Log · พบ + ซ่อม + จบในขั้นตอนเดียว" style="${_bsBtn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Quick fix
         </button>
-        <button onclick="flOpenNewAssignment('${b.id}')" style="background:white;color:${dim.ink};border:1px solid rgba(0,0,0,.12);border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">+ Move</button>
-        <button onclick="openAddStatusModal()" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Status</button>
+        <button onclick="flOpenNewAssignment('${b.id}')" style="${_bsBtn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">Move boat</button>
+        <button onclick="openAddStatusModal()" style="${_bsBtn};background:#1272B3;color:#fff;border:1px solid #1272B3">Change status</button>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Engines</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px">${engs.length}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${engBrandModel||'no engines'}</div>
-      </div>
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Avg hours</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px">${avgHours.toLocaleString()}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${lastServiceLabel}</div>
-      </div>
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Spares on board</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px;color:${totalSpares?SVG_PINK.text:dim.ink}">${totalSpares}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${spareDetail}</div>
-      </div>
+    <div style="display:flex;flex-wrap:wrap;margin-bottom:16px;border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+      ${_bsFact('Today', `${ss.label}${pierDisplay?' · '+pierDisplay:''}`, ss.color)}
+      ${_bsFact('Engines', engs.length?`<span style="font-family:'DM Mono',monospace;font-weight:500">${engs.length}</span> · ${engBrandModel||'—'}`:'No engines')}
+      ${_bsFact('Avg engine hours', `<span style="font-family:'DM Mono',monospace;font-weight:500">${avgHours.toLocaleString()}</span>${lastServiceLabel?` <span style="font-size:11px;font-weight:400;color:#5B6170">· service ${lastServiceLabel==='no service'?'none yet':lastServiceLabel}</span>`:''}`)}
+      ${_bsFact('Spares on board', totalSpares?`<span style="font-family:'DM Mono',monospace;font-weight:500">${totalSpares}</span> · ${spareDetail}`:'None')}
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">Status Timeline</span>
-      <div style="display:flex;align-items:center;gap:4px;background:${dim.bg};border-radius:14px;padding:2px">
-        <button onclick="bsCalShift(-1)" style="background:none;border:none;color:${dim.ink2};font-size:13px;cursor:pointer;padding:2px 8px;border-radius:10px;font-weight:600">‹</button>
-        <span style="font-size:11px;font-weight:600;color:${dim.ink};font-family:'DM Mono',monospace;min-width:74px;text-align:center">${monthLabel}</span>
-        <button onclick="bsCalShift(1)" style="background:none;border:none;color:${dim.ink2};font-size:13px;cursor:pointer;padding:2px 8px;border-radius:10px;font-weight:600">›</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#0F1B3D;margin-right:2px">Status timeline</span>
+        <button onclick="bsCalShift(-12)" aria-label="Previous year" style="${_bsNav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span style="font-size:16px;font-weight:500;min-width:52px;text-align:center;font-family:'DM Mono',monospace;color:#0F1B3D">${yr}</span>
+        <button onclick="bsCalShift(12)" aria-label="Next year" style="${_bsNav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${today.getFullYear()!==yr?`<button onclick="bsCalToday()" style="${_bsTool}">This year</button>`:''}
+        <button onclick="bsDebugLog('${b.id}')" title="Show raw log data" style="${_bsTool}">Raw log</button>
+        <button onclick="bsCleanupLog('${b.id}')" title="Cleanup overlapping log entries" style="${_bsTool}">Clean up</button>
       </div>
-      <button onclick="bsDebugLog('${b.id}')" style="background:${dim.bg};border:none;border-radius:14px;padding:4px 9px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500" title="Show raw log data">🔍</button>
-      <button onclick="bsCleanupLog('${b.id}')" style="background:${dim.bg};border:none;border-radius:14px;padding:4px 9px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500" title="Cleanup overlapping log entries">🧹</button>
-      <button onclick="bsCalToday()" style="margin-left:auto;background:${dim.bg};border:none;border-radius:14px;padding:4px 11px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500">Today</button>
+      <div style="display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11.5px;color:#3E4658">
+        ${_bsLg('background:#DDF1EA','Available')}
+        ${_bsLg('background:#E0A040','Fixing')}
+        ${_bsLg('background:#A1271F','Unavailable')}
+        ${_bsLg('background:#F5DDB2','Lighter = after today')}
+        ${_bsLg('border:2px solid #0F1B3D','Today')}
+      </div>
     </div>
-
-    <div style="background:#FBFAF7;border-radius:10px;padding:12px 14px;margin-bottom:14px;max-width:520px">
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:9px;color:${dim.ink3};font-weight:600;text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">
-        <span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">${calHtml}</div>
-      <div style="display:flex;align-items:center;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.06);font-size:10px;color:${dim.ink2};flex-wrap:wrap">
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#1D9E75;border-radius:3px"></span>Available</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#BA7517;border-radius:3px"></span>Fixing</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#A32D2D;border-radius:3px"></span>Unavailable</span>
-        <span data-bspier-legend="1" style="display:flex;align-items:center;gap:5px;color:${dim.ink3}">TL Tub Lamu &middot; VP Visit Panwa &middot; RN Ranong &middot; &#128295; ${laT('อู่')}</span>
-        <span style="margin-left:auto;font-family:'DM Mono',monospace">Today: ${MONTHS_EN[today.getMonth()]} ${today.getDate()}</span>
-      </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${yearHtml}</div>
+    <div data-bspier-legend="1" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:12px 0 18px;font-size:11.5px;color:#3E4658">
+      <span style="color:#5B6170">Where the boat is that day:</span>
+      ${_bsLoc('tublamu','Tub Lamu')}${_bsLoc('panwa','Visit Panwa')}${_bsLoc('ranong','Ranong')}${_bsLoc('shop',laT('อู่'))}
+      <span style="color:#5B6170">· คลิกที่วันเพื่อเพิ่มสถานะของวันนั้น</span>
     </div>
 
     ${(function(){
@@ -6594,7 +6597,7 @@ function renderBoatDetailPink(){
       <span style="font-size:13px;font-weight:600">Status history</span>
       <span style="font-size:10px;color:${dim.ink3}">${events.length} entries</span>
     </div>
-    <div style="background:#FBFAF7;border-radius:10px;overflow:hidden;max-height:400px;overflow-y:auto">${eventsHtml}</div>
+    <div style="border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">${eventsHtml}</div>
   </div>`;
 }
 
