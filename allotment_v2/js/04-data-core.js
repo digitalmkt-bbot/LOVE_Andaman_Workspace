@@ -5201,11 +5201,13 @@ function renderCal(){
         });
       });
     }
-    const live=Object.values(rd).sort((a,b)=>{
-      const dm=_calDepMin(a.r)-_calDepMin(b.r); if(dm) return dm;
-      return String(a.r.name||'').localeCompare(String(b.r.name||''));
-    });
-    const deadRt=_rtSorted.filter(rt=>!rd[rt.id] && !_hidRt.has(rt.id));
+    /* §calRoutesOrder · เรียงการ์ดตามลำดับโปรแกรมในหน้า Config > Programs
+       = ลำดับท่าตาม LA_PIER_ORDER แล้วตามตำแหน่งใน ROUTES (ตัวเดียวกับที่ลากเรียงใน Config) */
+    const _pOrd=(typeof LA_PIER_ORDER!=='undefined' && Array.isArray(LA_PIER_ORDER)) ? LA_PIER_ORDER : CAL_PIERS;
+    const _cfgKey=(r)=>{ const pi=_pOrd.indexOf(r.pier), ri=ROUTES.findIndex(x=>x.id===r.id);
+      return (pi<0?999:pi)*100000 + (ri<0?99999:ri); };
+    const live=Object.values(rd).sort((a,b)=>_cfgKey(a.r)-_cfgKey(b.r));
+    const deadRt=_rtSorted.filter(rt=>!rd[rt.id] && !_hidRt.has(rt.id)).sort((a,b)=>_cfgKey(a)-_cfgKey(b));
     const rName=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
     const MONO="'DM Mono','IBM Plex Sans Thai',monospace";
     const dowRow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((x,i)=>`<div style="color:${(i===0||i===6)?'#A63A1C':'#5F5F58'}">${x}</div>`).join('');
