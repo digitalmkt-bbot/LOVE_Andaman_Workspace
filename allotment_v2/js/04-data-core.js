@@ -3753,23 +3753,99 @@ function calSetApply(id){
   renderCal();
 }
 function calSetAll(){ calPier='all'; _calSaveHiddenRoutes(new Set()); renderCal(); }
+/* §calSetModal (2026-10-07) · กล่องบันทึก/ลบชุดเป็นของแอปเอง แทน prompt()/confirm() ของเบราว์เซอร์
+   แขวนไว้ที่ document.body ไม่ใช่ใน #cal-wrap · renderCal เขียน innerHTML ของ cal-wrap ใหม่ทุกครั้ง กล่องจะหายกลางคัน
+   ปุ่มลัด Enter/Esc ผูกกับกล่องนี้เท่านั้น ไม่ได้ผูก keydown ระดับหน้า */
+function _calSetEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function calSetModalClose(){ const el=document.getElementById('calset-modal'); if(el) el.remove(); window._calSetPending=null; }
+function _calSetModalOpen(inner, onEnter){
+  calSetModalClose();
+  const el=document.createElement('div');
+  el.id='calset-modal';
+  el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  el.style.cssText='position:fixed;inset:0;z-index:4000;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(10,18,48,.56);font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+  el.innerHTML='<div style="width:460px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(2,10,30,.45);overflow:hidden;color:#000F4C">'+inner+'</div>';
+  el.addEventListener('mousedown', function(e){ if(e.target===el) calSetModalClose(); });
+  el.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ e.preventDefault(); calSetModalClose(); }
+    else if(e.key==='Enter' && typeof onEnter==='function' && e.target && e.target.tagName==='INPUT'){ e.preventDefault(); onEnter(); }
+  });
+  document.body.appendChild(el);
+  return el;
+}
+function _calSetBtnCss(kind){
+  const base='border-radius:10px;padding:0 18px;height:40px;font:600 13.5px \'DM Sans\',sans-serif;cursor:pointer;';
+  if(kind==='pri') return base+'border:1px solid #16265C;background:#16265C;color:#fff';
+  if(kind==='del') return base+'border:1px solid #B3261E;background:#B3261E;color:#fff';
+  return base+'border:1px solid #D9D9D2;background:#fff;color:#3D3D38';
+}
 function calSetSave(){
   const h=_calGetHiddenRoutes();
-  const ids=_calSetPool().filter(rt=>(calPier==='all'||rt.pier===calPier) && !h.has(rt.id)).map(rt=>rt.id);
-  if(!ids.length){ alert('No routes are showing. Turn on at least one route first.'); return; }
-  const v=prompt('Save the '+ids.length+' route(s) showing now as a set.\nSet name:', ''); if(v===null) return;
-  const name=v.trim().slice(0,40); if(!name) return;
-  let st=CAL_ROUTE_SETS.find(x=>String(x.name||'').toLowerCase()===name.toLowerCase());
-  if(st){ if(!confirm('A set with this name already exists. Replace it with the routes showing now?')) return; st.routes=ids; }
-  else { st={id:'cs'+Date.now().toString(36), name:name, routes:ids}; CAL_ROUTE_SETS.push(st); }
+  const rts=_calSetPool().filter(rt=>(calPier==='all'||rt.pier===calPier) && !h.has(rt.id));
+  if(!rts.length){ alert('No routes are showing. Turn on at least one route first.'); return; }
+  window._calSetPending=rts.map(rt=>rt.id);
+  const nm=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
+  const chips=rts.map(r=>'<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:8px;background:#F4F4F0;font-size:12.5px;font-weight:500;color:#000F4C">'
+    +'<i style="width:8px;height:8px;border-radius:2px;flex:none;background:'+_calVivid(r.color)+'"></i>'+_calSetEsc(nm(r))+'</span>').join('');
+  const el=_calSetModalOpen(
+    '<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Calendar · Saved sets</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">Save route set</div>'
+    +'<label for="calset-name" style="display:block;margin-top:16px;font-size:12.5px;font-weight:600;color:#3D3D38">Set name</label>'
+    +'<input id="calset-name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Similan" oninput="calSetNameCheck()" '
+    +'style="display:block;width:100%;box-sizing:border-box;margin-top:6px;height:44px;padding:0 13px;border:1.5px solid #C9CCD6;border-radius:10px;font:500 15px \'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#000F4C;outline-color:#16265C">'
+    +'<div id="calset-hint" style="min-height:18px;margin-top:6px;font-size:12px;color:#5F5F58">Up to 40 characters. The name shows in the screenshot header.</div>'
+    +'<div style="margin-top:12px;font-size:12.5px;font-weight:600;color:#3D3D38">'+rts.length+(rts.length===1?' route':' routes')+' in this set</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:168px;overflow:auto">'+chips+'</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<span style="font-size:11.5px;color:#5F5F58">Shared with the whole team</span>'
+    +'<span style="display:flex;gap:8px"><button type="button" onclick="calSetModalClose()" style="'+_calSetBtnCss()+'">Cancel</button>'
+    +'<button type="button" id="calset-ok" onclick="calSetSaveCommit()" style="'+_calSetBtnCss('pri')+'">Save set</button></span>'
+    +'</div>', calSetSaveCommit);
+  const inp=el.querySelector('#calset-name'); if(inp) inp.focus();
+}
+function _calSetByName(name){ const k=String(name||'').trim().toLowerCase(); return k ? (CAL_ROUTE_SETS||[]).find(x=>String(x.name||'').trim().toLowerCase()===k) : null; }
+function calSetNameCheck(){
+  const inp=document.getElementById('calset-name'), hint=document.getElementById('calset-hint'), ok=document.getElementById('calset-ok');
+  if(!inp||!hint) return;
+  const ex=_calSetByName(inp.value);
+  inp.style.borderColor='#C9CCD6';
+  if(ex){ hint.style.color='#8A4B00'; hint.textContent='A set with this name already exists. Saving will replace it.'; if(ok) ok.textContent='Replace set'; }
+  else { hint.style.color='#5F5F58'; hint.textContent='Up to 40 characters. The name shows in the screenshot header.'; if(ok) ok.textContent='Save set'; }
+}
+function calSetSaveCommit(){
+  const inp=document.getElementById('calset-name'), hint=document.getElementById('calset-hint');
+  const ids=window._calSetPending;
+  if(!inp || !Array.isArray(ids) || !ids.length){ calSetModalClose(); return; }
+  const name=String(inp.value||'').trim().slice(0,40);
+  if(!name){ inp.style.borderColor='#B3261E'; if(hint){ hint.style.color='#B3261E'; hint.textContent='Enter a name for this set.'; } inp.focus(); return; }
+  let st=_calSetByName(name);
+  if(st){ st.routes=ids.slice(); st.name=name; }
+  else { st={id:'cs'+Date.now().toString(36), name:name, routes:ids.slice()}; CAL_ROUTE_SETS.push(st); }
   _calSetsPersist();
+  calSetModalClose();
   calSetApply(st.id);
 }
 function calSetDelete(id){
   const st=(CAL_ROUTE_SETS||[]).find(x=>x.id===id); if(!st) return;
-  if(!confirm('Delete this saved set? It is removed for everyone. The routes themselves are not affected.')) return;
-  CAL_ROUTE_SETS=CAL_ROUTE_SETS.filter(x=>x.id!==id);
+  const n=(st.routes||[]).length;
+  const el=_calSetModalOpen(
+    '<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Calendar · Saved sets</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">Delete &ldquo;'+_calSetEsc(st.name)+'&rdquo;?</div>'
+    +'<div style="margin-top:10px;font-size:13.5px;line-height:1.5;color:#3D3D38">This set ('+n+(n===1?' route':' routes')+') is removed for everyone on the team. The routes and their bookings are not affected.</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<button type="button" id="calset-cancel" onclick="calSetModalClose()" style="'+_calSetBtnCss()+'">Cancel</button>'
+    +'<button type="button" onclick="calSetDeleteCommit(\''+st.id+'\')" style="'+_calSetBtnCss('del')+'">Delete set</button>'
+    +'</div>', null);
+  const c=el.querySelector('#calset-cancel'); if(c) c.focus();
+}
+function calSetDeleteCommit(id){
+  CAL_ROUTE_SETS=(CAL_ROUTE_SETS||[]).filter(x=>x.id!==id);
   _calSetsPersist();
+  calSetModalClose();
   renderCal();
 }
 
