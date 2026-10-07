@@ -85,6 +85,7 @@
     "test:cotnowhy": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_cotnowhy.mjs",
     "test:rcplate": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_rcplate.mjs",
     "test:ddexec": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_ddexec.mjs",
+    "test:pjskin": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_pjskin.mjs",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch(e){}\""
   },
   "dependencies": {

@@ -71433,8 +71433,16 @@ function plPrintLic(sid){
       return (T?T.short:'')+' '+(C?C.name:''); }).join(' · ') + ')';
   }catch(_){ return ''; }
 }
+/* §pjPierSkin (2026-10-07) · เจ้าของ: "ใบงานนี้ของทับละมุ ใช้ภาษาอังกฤษ และสีพื้นหลังใช้ #00bcdf เพื่อแยกความแตกต่างของสองท่าเรือ"
+   หัวใบเป็นอังกฤษทุกท่า (ใบถูกแคปส่งไลน์ให้ทีมหลายชาติ) · พันวาคง navy เดิม · ทับละมุเป็นฟ้า #00bcdf ตัวหนังสือเข้ม
+   สีชุดเดียวกับหัว Travel Summary (§tsV6d) คนเห็นสีก็รู้ท่าโดยไม่ต้องอ่าน */
+var PJ_SKIN={ panwa:  {name:'Visit Panwa', bg:'linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)', ink:'#fff', sub:'#9FABCE', line:'#16265C', mo:'#16265C'},
+              tublamu:{name:'Tub Lamu',    bg:'#00bcdf', ink:'#002A33', sub:'#004D5C', line:'#00bcdf', mo:'#007F99'},
+              ranong: {name:'Ranong',      bg:'linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)', ink:'#fff', sub:'#9FABCE', line:'#16265C', mo:'#16265C'} };
+function pjSkin(k){ return PJ_SKIN[k]||PJ_SKIN.panwa; }
 function pjPrint(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var SK=pjSkin(P.k);   /* §pjPierSkin */
   var e=poE;
   /* §pjSheet2 · ใช้ชุดเดียวกับที่หน้าจอโชว์ · เลือกทั้งหมดบนจอ = ปริ้นออกทุกลำ */
   var all=pjAllBoats(_poDate,_poPier);
@@ -71608,17 +71616,17 @@ function pjPrint(){
    /* §pjDate3 · หัวใบเป็นแถบ navy เต็มความกว้าง · แถบวันที่เป็นพื้นขาว
       สีทึบมีที่เดียวคือชื่อใบ · วันที่เด่นด้วยขนาด ไม่ใช่ด้วยสี */
    +'.shead{display:flex;align-items:center;justify-content:center;border-radius:8px;'
-     +'padding:9px 20px 11px;background:linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)}'
+     +'padding:9px 20px 11px;background:'+SK.bg+'}'   /* §pjPierSkin · สีตามท่า */
    /* §pjDate · วันที่เคยแชร์บรรทัดกับชื่อท่า · ตัวเลข 38px ข้าง ๆ ชื่อท่า 26px
       อ่านแล้วเป็น "หัวใบที่มีวันที่อยู่ด้วย" ไม่ใช่ "ใบของวันนี้"
       ใบเรือหน้าตาเหมือนกันทุกวัน · ส่งใบเมื่อวานเข้าไลน์แล้วไม่มีใครทักได้จริง
       วันที่จึงได้แถบของตัวเองเต็มความกว้าง ไม่ต้องแข่งกับอะไรในบรรทัดเดียวกัน */
-   +'.dstrip{background:#fff;border-bottom:2px solid #16265C;margin:2px 0 12px;'
+   +'.dstrip{background:#fff;border-bottom:2px solid '+SK.line+';margin:2px 0 12px;'
      +'padding:8px 24px 11px;display:flex;align-items:baseline;justify-content:center;gap:17px}'
    +'.dstrip b{font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.27em;'
      +'color:#8994A6;text-transform:uppercase}'
    +'.dstrip u{text-decoration:none;font-size:'+(fs+36)+'px;font-weight:800;line-height:.92;color:#111}'
-   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:#16265C}'
+   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:'+SK.mo+'}'
    /* §pjTop2 · หัวใบเป็นป้ายชื่องานก้อนเดียว · พื้น navy ตัวขาว
       ของเดิมเป็นตัวหนังสือสี navy บนพื้นขาว อ่านแล้วเป็นแค่บรรทัดหนึ่งในหัวใบ
       ไม่ใช่ "ชื่อใบ" · ใบนี้ถูกแคปส่งไลน์ ป้ายทึบทำให้รู้ทันทีว่าใบอะไร */
@@ -71628,11 +71636,11 @@ function pjPrint(){
       และแถบใหญ่ที่สุดของใบเป็นพื้นขาว ปริ้นแล้วไม่กินหมึกทั้งแถบ */
    +'.sh-c{flex:none;text-align:center;white-space:nowrap;padding:0}'
    +'.sh-c b{display:block;font-size:'+(fs-6.5)+'px;font-weight:700;letter-spacing:.30em;'
-     +'padding-left:.30em;color:#9FABCE;line-height:1.1}'
+     +'padding-left:.30em;color:'+SK.sub+';line-height:1.1}'
    /* §pjTop3 · บรรทัดใหญ่คือ "ท่าไหน" ไม่ใช่ชื่อบริษัท · ใบนี้ออกทีละท่า
       คนที่รับใบต้องรู้ก่อนอื่นว่าเป็นใบของท่าตัวเอง · ชื่อบริษัทซ้ำทุกใบอยู่แล้ว */
    +'.sh-c span{display:block;font-size:'+(fs+1.5)+'px;font-weight:800;letter-spacing:.20em;'
-     +'padding-left:.20em;color:#fff;line-height:1.2;margin-top:1px;text-transform:uppercase}'
+     +'padding-left:.20em;color:'+SK.ink+';line-height:1.2;margin-top:1px;text-transform:uppercase}'
 
    +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
    +'.pill{border:1px solid #DCE2EC;background:#F5F7FA;border-radius:999px;padding:4px 12px;'
@@ -72264,7 +72272,7 @@ function pjPrint(){
     +'<div class="shead">'
       /* §pjTop3 · t เป็น "Visit Panwa \u00b7 \u0e20\u0e39\u0e40\u0e01\u0e47\u0e15" · เอาเฉพาะชื่อท่าหน้าจุดคั่น */
       +'<div class="sh-c"><b>LOVE ANDAMAN</b><span>'
-        +e(String(P.t||P.n||'').split('\u00b7')[0].trim()||(P.n||''))+'</span></div>'
+        +e(SK.name||String(P.t||P.n||'').split('\u00b7')[0].trim()||(P.n||''))+'</span></div>'   /* §pjPierSkin · ชื่อท่าเป็นอังกฤษ */
     +'</div>'
     /* §pjDate · แถบวันที่ · ของชิ้นเดียวที่กินเต็มความกว้างของใบ */
     +'<div class="dstrip"><b>'+e(_pjWd)+'</b><u>'+_pjDay+'</u><i>'+e(_pjMo)+'</i></div>'
