@@ -1895,23 +1895,33 @@ function _ddExecData(rows,rg){
   var later={n:0,months:[]}; travel.forEach(function(t){ if(!t.soon && t.k.charAt(0)!=='<'){ later.n+=t.n; later.months.push(t.lbl); } });
   /* ── 7 วันข้างหน้า · เส้นทาง×วัน ── */
   var keyed={}; ok.forEach(function(r){ r.trips.forEach(function(t){ if(t.rid&&t.date){ var k=t.date+'|'+t.rid; keyed[k]=(keyed[k]||0)+(+t.pax||0); } }); });
+  /* §ddIdle (2026-10-07) · เจ้าของ: "เรือบางวันไม่ได้ออกนะ แต่ขึ้นมา" · กระดานเรือมีลำวางไว้ทุกวัน
+     แต่วันที่ยังไม่มีใครจองเลย เรือมักไม่ออก (และโปรแกรมที่ปิดฤดูก็ยังมีลำค้างบนกระดาน)
+     → ใช้ _calTripsFor ตัวเดียวกับปฏิทิน (ตัดโปรแกรมปิดฤดู · รู้ว่าปิดเพราะอากาศ · รู้ลำเหมา)
+     → ช่องที่จอง 0 คน = "no bookings yet" ไม่นับเป็นขาด ไม่เข้ายอดที่นั่งว่าง ไม่ขึ้น to-do
+       แต่ยังโชว์ในตารางให้เห็นว่ามีลำวางไว้ · ปิดเพราะอากาศ = ไม่นับเลย */
   var cells={}, rids={}, colTot={};
   days.forEach(function(d){
-    var day=(typeof TRIPS!=='undefined'&&TRIPS[d])?TRIPS[d]:{};
+    var trips=(typeof _calTripsFor==='function')?_calTripsFor(d,''):[];
     var byR={};
-    Object.keys(day).forEach(function(bid){ var op=day[bid]; if(!op||!op.route) return; (byR[op.route]=byR[op.route]||[]).push(bid); });
-    colTot[d]={cap:0,bk:0,av:0,need:0,n:0,unk:0};
+    trips.forEach(function(t){ if(!t||!t.r||t.isCharter) return; var o=byR[t.r.id]||(byR[t.r.id]={boats:[],wx:false}); o.boats.push(t.b.id); if(t.weatherClosed) o.wx=true; });
+    colTot[d]={cap:0,bk:0,av:0,need:0,n:0,unk:0,idle:0};
     Object.keys(byR).forEach(function(rid){
       var A=(typeof getAllotment==='function')?getAllotment(rid,d):null; if(!A||!A.hasAllotment) return;
       var be=0, unk=false;
-      byR[rid].forEach(function(bid){ var x=_ddBE(d,bid); if(x.be==null) unk=true; else be+=x.be; });
+      byR[rid].boats.forEach(function(bid){ var x=_ddBE(d,bid); if(x.be==null) unk=true; else be+=x.be; });
       var c={d:d,rid:rid,cap:A.totalCapacity||0,bk:A.seatsConsumed||0,av:A.seatsAvailable||0,
              pct:A.totalCapacity?Math.round((A.seatsConsumed||0)/A.totalCapacity*100):0,
-             be:unk?null:be, need:unk?null:Math.max(0,be-(A.seatsConsumed||0)), boats:byR[rid].length,
-             plus:keyed[d+'|'+rid]||0};
-      c.st=(c.need==null)?'unk':(c.need<=0?'ok':(c.need<=5?'warn':'bad'));
+             be:unk?null:be, need:unk?null:Math.max(0,be-(A.seatsConsumed||0)), boats:byR[rid].boats.length,
+             plus:keyed[d+'|'+rid]||0, wx:byR[rid].wx};
+      if(c.wx){ c.st='wx'; c.need=null; }
+      else if(c.bk<=0){ c.st='idle'; c.need=null; }
+      else c.st=(c.need==null)?'unk':(c.need<=0?'ok':(c.need<=5?'warn':'bad'));
       cells[d+'|'+rid]=c; rids[rid]=1;
-      var T=colTot[d]; T.cap+=c.cap; T.bk+=c.bk; T.av+=c.av; T.n++; if(c.need==null) T.unk++; else T.need+=c.need; });
+      var T=colTot[d];
+      if(c.st==='wx') return;
+      if(c.st==='idle'){ T.idle++; return; }
+      T.cap+=c.cap; T.bk+=c.bk; T.av+=c.av; T.n++; if(c.need==null) T.unk++; else T.need+=c.need; });
   });
   var routes=Object.keys(rids).map(function(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null;
     var pier=(r&&r.pier)||'', bes=[]; days.forEach(function(d){ var c=cells[d+'|'+rid]; if(c&&c.be!=null) bes.push(c.be); });
@@ -1919,13 +1929,16 @@ function _ddExecData(rows,rg){
       pierNm:(typeof VB_PIER_TH!=='undefined'&&VB_PIER_TH[pier])?VB_PIER_TH[pier]:pier,
       be:bes.length?Math.round(bes.reduce(function(a,b){return a+b;},0)/bes.length):null}; });
   routes.sort(function(a,b){ return (a.pier+a.name)<(b.pier+b.name)?-1:1; });
-  var tot={cap:0,bk:0,av:0,need:0,short:[],full:[],near:[]};
-  Object.keys(cells).forEach(function(k){ var c=cells[k]; tot.cap+=c.cap; tot.bk+=c.bk; tot.av+=c.av;
+  var tot={cap:0,bk:0,av:0,need:0,short:[],full:[],near:[],idle:[],wx:[]};
+  Object.keys(cells).forEach(function(k){ var c=cells[k];
+    if(c.st==='wx'){ tot.wx.push(c); return; }
+    if(c.st==='idle'){ tot.idle.push(c); return; }   /* §ddIdle · ลำที่ยังไม่มีใครจอง ไม่เข้ายอด */
+    tot.cap+=c.cap; tot.bk+=c.bk; tot.av+=c.av;
     if(c.need>0){ tot.need+=c.need; tot.short.push(c); }
     if(c.av<=0) tot.full.push(c); else if(c.av<=5) tot.near.push(c); });
   tot.short.sort(function(a,b){ return b.need-a.need; });
   /* เส้นทางที่เต็ม 80%+ ทุกวันที่มีเที่ยว · ของดีที่ควรพูดก่อน */
-  var good=routes.filter(function(r){ var ds=days.filter(function(d){ return !!cells[d+'|'+r.rid]; });
+  var good=routes.filter(function(r){ var ds=days.filter(function(d){ var c=cells[d+'|'+r.rid]; return !!c && c.st!=='idle' && c.st!=='wx'; });
     return ds.length>=2 && ds.every(function(d){ return cells[d+'|'+r.rid].pct>=80; }); });
   return {n:n,pax:pax,val:val,S:S,topAg:topAg,topRt:topRt,travel:travel,w7:w7,peak:peak,later:later,
           days:days,cells:cells,routes:routes,colTot:colTot,tot:tot,good:good};
@@ -1958,7 +1971,8 @@ function _ddExecHtml(rows,rg){
   var b3=nCells
     ? li((X.good.length||X.tot.full.length)?'ok':'in',X.good.length?'Next 7 days · strong':'Next 7 days · seats',
         (X.good.length?('<b>'+X.good.map(function(r){return esc(r.name);}).join(' · ')+' 80%+ full every day</b> · '):'')
-        +'<b>'+N(X.tot.av)+'</b> of '+N(X.tot.cap)+' seats open ('+fillPct+'% sold)',
+        +'<b>'+N(X.tot.av)+'</b> of '+N(X.tot.cap)+' seats open ('+fillPct+'% sold)'
+        +(X.tot.idle.length?(' · '+pl(X.tot.idle.length,'departure')+' with no bookings yet, not counted'):''),
         (X.tot.full.length?('Full: '+X.tot.full.map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d); }).join(' · ')+' → consider adding a boat'):'')
         +(X.tot.near.length?((X.tot.full.length?' · ':'')+'Nearly full: '+X.tot.near.map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' ('+c.av+' left)'; }).join(' · ')):''))
     : li('ok','Next 7 days','<b>No boats assigned yet on the Boat Operation sheet</b> · assign boats to see open seats and break-even','');
@@ -2011,6 +2025,8 @@ function _ddExecRow2Html(X,rg,esc){
       +X.days.map(function(d){ var c=X.cells[d+'|'+r.rid];
         if(!c) return '<td><div class="c off">no trip</div></td>';
         var bePct=(c.be!=null&&c.cap)?Math.min(100,Math.round(c.be/c.cap*100)):null;
+        if(c.st==='wx') return '<td><div class="c off" data-cell="'+esc(d+'|'+r.rid)+'">weather closed</div></td>';
+        if(c.st==='idle') return '<td><div class="c idle" data-cell="'+esc(d+'|'+r.rid)+'" title="A boat is on the board but nobody has booked · not counted until the first booking">'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')+'<div class="top2"><span class="bk">0<small>/'+N(c.cap)+'</small></span></div><div class="ft"><b class="mut">no bookings yet</b></div></div></td>';
         var ft=(c.st==='unk')?'<b class="mut">no break-even</b>':(c.need>0?('<b>short '+N(c.need)+'</b>'):(c.av<=0?'<b>full</b>':(c.av<=5?'<b>nearly full</b>':'<b>break-even ✓</b>')));
         return '<td><div class="c '+c.st+'" data-cell="'+esc(d+'|'+r.rid)+'">'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')
           +'<div class="top2"><span class="bk">'+N(c.bk)+'<small>/'+N(c.cap)+'</small></span><span class="pct">'+c.pct+'%</span></div>'
@@ -2021,11 +2037,12 @@ function _ddExecRow2Html(X,rg,esc){
       var pct=T.cap?Math.round(T.bk/T.cap*100):0;
       return '<td><div class="c"><div class="top2"><span class="bk">'+N(T.bk)+'<small>/'+N(T.cap)+'</small></span><span class="pct">'+pct+'%</span></div><div class="m"><i style="width:'+Math.min(100,pct)+'%"></i></div>'
         +'<div class="ft"><span>'+N(T.av)+' open</span><b>'+(T.need>0?('short '+N(T.need)):'all at break-even')+(T.unk?' *':'')+'</b></div></div></td>'; }).join('')+'</tr>';
+  /* §ddIdle · แถวรวม: วันที่มีแต่ลำว่างเปล่า (n=0) แสดงขีด · ลำที่ยังไม่มีคนจองไม่อยู่ในยอด */
   var right='<div class="dv-c dv-ddgrid" data-dd="grid"><div class="dv-ddh">Next 7 days · open seats and still to sell'
       +'<span>'+X.routes.length+' routes with boats · '+esc(_ddDLbl(X.days[0]))+' – '+esc(_ddDLbl(X.days[6],true))+'</span></div>'
     +(X.routes.length
       ? ('<div class="gw"><table><thead>'+head+'</thead><tbody>'+body+totRow+'</tbody></table></div>'
-        +'<div class="lg"><span><i style="background:#2E9B72"></i>at break-even</span><span><i style="background:#E0A21E"></i>short ≤ 5</span><span><i style="background:#D64545"></i>short &gt; 5</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from Costing &amp; break-even</span></div>')
+        +'<div class="lg"><span><i style="background:#2E9B72"></i>at break-even</span><span><i style="background:#E0A21E"></i>short ≤ 5</span><span><i style="background:#D64545"></i>short &gt; 5</span><span><i style="background:#E6E8EF;border:1px dashed #B4B8D2"></i>no bookings yet · not counted</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from Costing &amp; break-even</span></div>')
       : '<div class="dv-ddnone">No boats assigned on the Boat Operation sheet for the next 7 days</div>')
     +'</div>';
   return '<div class="dv-ddexr2">'+left+right+'</div>';
@@ -2041,30 +2058,42 @@ function _ddLineCode(rid){
   return nm.split(/\s+/).slice(0,2).map(function(w){ return w.charAt(0); }).join('').toUpperCase()||rid;
 }
 window.dashDayDetailLineText=function(){
+  /* §ddLine2 (2026-10-07) · เจ้าของ: "ต้องจัดเรียง แบ่ง Bullet ให้ชัดเจน" · แบ่งเป็น 4 หมวด หัวหมวดขึ้นบรรทัดเอง
+     หนึ่งข้อ = หนึ่งบรรทัด (บนมือถือบรรทัดยาวจะหักกลางตัวเลข) · TO DO แยกตามวัน หัววันแล้วตามด้วยข้อย่อยรายเส้นทาง */
   var X=window._ddExecX; if(!X) return '';
   var rg=_ddRg(), N=function(v){ return Number(v||0).toLocaleString('en-US'); }, M=_dashMoneyShort;
-  var L=['📋 Booking summary · '+_ddDLbl(rg.to,true)+' · LOVE Andaman','━━━━━━━━━━━━━━━'];
-  L.push('Keyed today: '+N(X.n)+' bookings · '+N(X.pax)+' pax · '+M(X.val));
-  L.push('  B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n)+(X.topAg?(' · top '+X.topAg.k+' '+(X.topAg.val?M(X.topAg.val):(N(X.topAg.n)+' bk'))):''));
-  L.push('Travel in 7 days: '+N(X.w7.n)+' bookings · '+N(X.w7.pax)+' pax'+(X.peak?(' · peak '+X.peak.lbl+' ('+N(X.peak.pax)+' pax)'):'')
-    +(X.later.n?('\n  Later: '+N(X.later.n)+' bookings '+(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' / '))):''));
+  var L=['📋 Booking summary · '+_ddDLbl(rg.to,true)+' · LOVE Andaman',''];
+  L.push('▌KEYED TODAY');
+  L.push('• '+N(X.n)+' bookings · '+N(X.pax)+' pax · '+M(X.val));
+  L.push('• B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n));
+  if(X.topAg) L.push('• Top agent: '+X.topAg.k+' '+(X.topAg.val?M(X.topAg.val):(N(X.topAg.n)+' bk')));
+  if(X.topRt) L.push('• Top route: '+X.topRt.k+' '+N(X.topRt.n)+' bk');
   L.push('');
+  L.push('▌TRAVELLING');
+  L.push('• Within 7 days: '+N(X.w7.n)+' bookings · '+N(X.w7.pax)+' pax');
+  if(X.peak) L.push('• Peak: '+X.peak.lbl+' · '+N(X.peak.pax)+' pax');
+  if(X.later.n) L.push('• Later: '+N(X.later.n)+' bookings · '+(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' / ')));
+  L.push('');
+  L.push('▌NEXT 7 DAYS');
   if(Object.keys(X.cells).length){
-    L.push('Next 7 days: '+N(X.tot.av)+'/'+N(X.tot.cap)+' seats open'+(X.tot.need>0?(' · still to sell '+N(X.tot.need)+' pax'):' · all at break-even'));
-    var used={};
+    L.push('• Open seats: '+N(X.tot.av)+' / '+N(X.tot.cap));
+    L.push(X.tot.need>0?('• Still to sell: '+N(X.tot.need)+' pax ('+X.tot.short.length+' departures)'):'• All departures at break-even');
+    if(X.tot.idle.length) L.push('• No bookings yet: '+X.tot.idle.length+' departures (not counted)');
+    var used={}, todo=[];
     X.days.forEach(function(d){
       var bits=[];
-      X.routes.forEach(function(r){ var c=X.cells[d+'|'+r.rid]; if(!c) return;
-        var code=_ddLineCode(r.rid); used[code]=r.name;
+      X.routes.forEach(function(r){ var c=X.cells[d+'|'+r.rid]; if(!c || c.st==='idle' || c.st==='wx') return;
+        var code=_ddLineCode(r.rid);
         var s='';
         if(c.av<=0) s='FULL';
         else if(c.need>0) s='short '+N(c.need)+' ('+c.bk+'/'+c.cap+')';
         else if(c.av<=5) s=c.av+' left';
-        else return;   /* fine · say nothing · keeps the message short */
-        bits.push(code+' '+s); });
-      if(bits.length) L.push(_ddDLbl(d)+'  '+bits.join(' · ')); });
-    var codes=Object.keys(used); if(codes.length) L.push('  ('+codes.map(function(k){ return k+'='+used[k]; }).join(' · ')+')');
-  } else L.push('Next 7 days: no boats assigned yet');
+        else return;
+        used[code]=r.name; bits.push('• '+code+' '+s); });
+      if(bits.length){ todo.push(_ddDLbl(d)); todo=todo.concat(bits); } });
+    if(todo.length){ L.push(''); L.push('▌TO DO'); L=L.concat(todo);
+      var codes=Object.keys(used); if(codes.length){ L.push(''); codes.forEach(function(k){ L.push(k+' = '+used[k]); }); } }
+  } else L.push('• No boats assigned yet');
   return L.join('\n');
 };
 window.dashDayDetailCopy=function(){
@@ -2755,6 +2784,8 @@ const DV_CSS=`<style>
   .dv-ddgrid .c.bad{background:#FDECEC}.dv-ddgrid .c.bad .m i{background:#D64545}.dv-ddgrid .c.bad .ft b{color:#B42318}
   .dv-ddgrid .c.warn{background:#FFF4EC}.dv-ddgrid .c.warn .m i{background:#E0A21E}.dv-ddgrid .c.warn .ft b{color:#B45309}
   .dv-ddgrid .c.unk .m i{background:#9b9088}
+  .dv-ddgrid .c.idle{background:#F3F4F8;border:1px dashed #C9CCDA;min-height:56px}
+  .dv-ddgrid .c.idle .bk{color:#9AA0B8}
   .dv-ddgrid .c.off{background:#F0F1F5;color:#9AA0B8;display:flex;align-items:center;justify-content:center;font-size:10.5px}
   .dv-ddgrid .c .tag{position:absolute;top:-6px;right:5px;background:#3E7FBF;color:#fff;font-size:8.5px;font-weight:800;border-radius:999px;padding:1px 6px;font-family:'DM Mono',ui-monospace,monospace}
   .dv-ddgrid tr.tot td .c{background:#000F4C;color:#fff;min-height:48px}

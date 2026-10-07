@@ -4,7 +4,7 @@
 //   วันนี้มีบุคกิ้งอะไรเข้าบ้าง ไปวันไหนบ้าง และอีก 7 วันล่วงหน้ายังมีที่นั่งว่างเท่าไหร่ ต้องหาลูกค้าเพิ่มอีกเท่าไหร่"
 //   เลือกแบบ bullet 4 ข้อ (ม็อกอัป v3)
 //
-// กันเจ็ดอย่าง
+// กันแปดอย่าง
 //   1 มุมมองวันเดียว · มีก้อน exec + ก้อนไปวันไหน + ตาราง 7 วัน · bullet 4 ข้อ · ตัวเลข "คีย์วันนี้" ตรงกับ _ddSum (ไม่นับใบยกเลิก/ใบบริษัท)
 //   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหน รวมใบครบ · แถว "ถึงวันนี้" ขึ้นก่อน
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
@@ -12,6 +12,7 @@
 //   5 ป้าย +N ของช่อง = pax ของใบที่คีย์วันนี้ที่ไปเส้นทาง-วันนั้น (นับเอง)
 //   6 ปุ่มคัดลอกส่ง LINE · อังกฤษล้วน (§ddEn · ก้อนในแอปก็ไม่มีตัวไทย) · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
+//   8 §ddIdle · ลำที่วางบนกระดานแต่จอง 0 คน = "no bookings yet" ไม่นับขาด ไม่ขึ้น to-do/LINE ไม่เข้ายอดที่นั่ง · โปรแกรมปิดฤดู/ปิดอากาศไม่โผล่ (ชุดเดียวกับปฏิทิน)
 import { open, goView } from './_harness.mjs';
 
 let bad = 0;
@@ -55,13 +56,13 @@ else fail('2 ' + JSON.stringify(s2));
 /* ══ 3 ══ */
 const s3 = await page.evaluate(() => {
   const X = window._ddExecX; let expect = 0, miss = [], wrong = [];
-  X.days.forEach(d => { const day = TRIPS[d] || {}; const rs = {}; Object.keys(day).forEach(b => { if (day[b] && day[b].route) rs[day[b].route] = 1; });
+  X.days.forEach(d => { const rs = {}; _calTripsFor(d, '').forEach(t => { if (t && t.r && !t.isCharter) rs[t.r.id] = 1; });   /* §ddIdle · ชุดเดียวกับปฏิทิน */
     Object.keys(rs).forEach(rid => { const A = getAllotment(rid, d); if (!A.hasAllotment) return; expect++;
       const c = X.cells[d + '|' + rid]; if (!c) { miss.push(d + '|' + rid); return; }
       if (c.bk !== A.seatsConsumed || c.cap !== A.totalCapacity || c.av !== A.seatsAvailable) wrong.push(d + '|' + rid);
       const el = document.querySelector('[data-cell="' + d + '|' + rid + '"]'); if (!el || !el.textContent.includes(String(c.bk))) wrong.push('dom ' + d + '|' + rid); }); });
   const d0 = X.days.find(d => X.colTot[d] && X.colTot[d].n), T = d0 ? X.colTot[d0] : null;
-  let cap = 0, bk = 0; if (d0) Object.keys(X.cells).forEach(k => { if (k.startsWith(d0 + '|')) { cap += X.cells[k].cap; bk += X.cells[k].bk; } });
+  let cap = 0, bk = 0; if (d0) Object.keys(X.cells).forEach(k => { const c = X.cells[k]; if (k.startsWith(d0 + '|') && c.st !== 'idle' && c.st !== 'wx') { cap += c.cap; bk += c.bk; } });
   return { expect, got: Object.keys(X.cells).length, miss, wrong, d0, T, cap, bk };
 });
 if (s3.expect > 0 && s3.got === s3.expect && !s3.miss.length && !s3.wrong.length && s3.T && s3.T.cap === s3.cap && s3.T.bk === s3.bk)
@@ -77,8 +78,8 @@ const s4 = await page.evaluate(() => {
   const P = ctPlans(); const pl = ctBlankPlan('test ' + rid); pl.famId = rid; pl.price = 2500; P.push(pl); ctPlansSave(P);
   window._ddPaint();
   const X2 = window._ddExecX; const out = [];
-  Object.keys(X2.cells).filter(k => k.endsWith('|' + rid)).forEach(k => { const c = X2.cells[k], d = k.split('|')[0];
-    let be = 0, unk = false; Object.keys(TRIPS[d] || {}).forEach(b => { if ((TRIPS[d][b] || {}).route !== rid) return; const x = _ddBE(d, b); if (x.be == null) unk = true; else be += x.be; });
+  Object.keys(X2.cells).filter(k => k.endsWith('|' + rid) && X2.cells[k].st !== 'idle' && X2.cells[k].st !== 'wx').forEach(k => { const c = X2.cells[k], d = k.split('|')[0];
+    let be = 0, unk = false; _calTripsFor(d, '').forEach(tp => { if (!tp || !tp.r || tp.r.id !== rid || tp.isCharter) return; const x = _ddBE(d, tp.b.id); if (x.be == null) unk = true; else be += x.be; });   /* ลำชุดเดียวกับปฏิทิน (§ddIdle) */
     const need = unk ? null : Math.max(0, be - c.bk), st = need == null ? 'unk' : (need <= 0 ? 'ok' : (need <= 5 ? 'warn' : 'bad'));
     const el = document.querySelector('[data-cell="' + k + '"]');
     out.push({ k, be: c.be, need: c.need, st: c.st, expNeed: need, expSt: st, domSt: el && el.classList.contains(c.st), domTxt: el && el.textContent.replace(/\s+/g, ' ') }); });
@@ -115,24 +116,52 @@ const s6 = await page.evaluate(async () => {
   ctPlansSave(ctPlans().filter(p => !ids.includes(p.id)));
   const codeOf = rid => { const c = vbCode(rid); return (c && c.c && c.c !== '—') ? c.c : null; };
   /* §ddLine · เรียงตามวัน บรรทัดละวัน รหัสสั้น · วันที่มีช่องขาดต้องมีบรรทัดของวันนั้น พร้อมรหัสและตัวเลขขาด */
-  const shortDays = [...new Set(X.tot.short.map(c => c.d))];
-  const dayOk = shortDays.every(d => { const lbl = _ddDLbl(d); const ln = t.split('\n').find(l => l.startsWith(lbl + '  ')); if (!ln) return false;
-    return X.tot.short.filter(c => c.d === d).every(c => ln.includes((codeOf(c.rid) || _ddLineCode(c.rid)) + ' short ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
+  const lines = t.split('\n'), shortDays = [...new Set(X.tot.short.map(c => c.d))];
+  /* §ddLine2 · หัววันเป็นบรรทัดของตัวเอง แล้วตามด้วย "• CODE short N (bk/cap)" บรรทัดละข้อ จนถึงหัววันถัดไป */
+  const dayOk = shortDays.every(d => { const i = lines.indexOf(_ddDLbl(d)); if (i < 0) return false;
+    let j = i + 1, blk = []; while (j < lines.length && lines[j].startsWith('• ')) blk.push(lines[j++]);
+    return X.tot.short.filter(c => c.d === d).every(c => blk.includes('• ' + (codeOf(c.rid) || _ddLineCode(c.rid)) + ' short ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
+  const sections = ['▌KEYED TODAY', '▌TRAVELLING', '▌NEXT 7 DAYS', '▌TO DO'].every(h => lines.includes(h));
+  const oneTopic = lines.filter(l => l.startsWith('• ')).every(l => l.length <= 60);
   const noRouteLines = !X.tot.short.some(c => t.includes('- ' + _ddCellName(c)));
   const TH = /[\u0E01-\u0E3E\u0E40-\u0E5B]/;   /* ตัวไทยทั้งหมด ยกเว้น ฿ (U+0E3F) */
   const english = !TH.test(t) && !TH.test(document.querySelector('[data-dd="exec"]').textContent) && !TH.test(document.querySelector('[data-dd="grid"]').textContent) && !TH.test(document.querySelector('[data-dd="travel"]').textContent);
   const nShort = X.tot.short.length;
-  return { nShort, english, len: t.length, head: t.split('\n')[0], hasIn: /^Keyed today: \d/m.test(t), hasGo: /^Travel in 7 days: \d/m.test(t),
-    hasNeed: X.tot.short.length ? /still to sell \d/.test(t) : /all at break-even|no boats assigned/.test(t), dayOk, noRouteLines, legend: /\(PP=|\(MT=|=.+\)$/m.test(t), toast: window._toast, nLines: t.split('\n').length };
+  return { nShort, english, len: t.length, head: t.split('\n')[0], hasIn: /^• \d+ bookings · \d+ pax · ฿/m.test(t), hasGo: /^• Within 7 days: \d/m.test(t), sections, oneTopic,
+    hasNeed: X.tot.short.length ? /^• Still to sell: \d+ pax/m.test(t) : /All departures at break-even|No boats assigned/.test(t), dayOk, noRouteLines, legend: X.tot.short.length ? /^[A-Z]{2,3} = .+$/m.test(t) : true, toast: window._toast, nLines: t.split('\n').length };
 });
-if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
-  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · เรียงตามวัน รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
+if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.sections && s6.oneTopic && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
+  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · 4 หมวด · TO DO หัววัน + ข้อย่อยบรรทัดละข้อ · รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
 else fail('6 ' + JSON.stringify(s6));
 
 /* ══ 7 ══ */
 const s7 = await page.evaluate(() => { dashDayDetailPreset('d7'); return { exec: !!document.querySelector('[data-dd="exec"]'), grid: !!document.querySelector('[data-dd="grid"]'), sums: !!document.querySelector('.dv-ddsums'), days: _ddRg().days }; });
 if (!s7.exec && !s7.grid && s7.sums && s7.days === 7) ok('7 มุมมอง 7 วัน · ไม่มีก้อน exec/ตาราง · การ์ด B2C/B2B ยังอยู่');
 else fail('7 ' + JSON.stringify(s7));
+
+/* ══ 8 · §ddIdle · ลำบนกระดานที่ยังไม่มีใครจอง ต้องไม่กลายเป็น "ขาด" ══ */
+const s8 = await page.evaluate((DATE) => {
+  window._ddFrom = window._ddTo = DATE; window._ddShowAll = false; window._ddPaint();
+  const X0 = window._ddExecX, d = X0.days[5];   // วันที่ยังไม่มีเรือในชุดข้อมูล
+  const rid = X0.routes[0].rid, boat = (typeof BOATS !== 'undefined' ? BOATS : (window.boats || [])).find(b => getCurStatus(b, d).s === 'available' && b.cap > 0);
+  if (!boat) return { err: 'no boat' };
+  const had = !!(TRIPS[d] && TRIPS[d][boat.id]); TRIPS[d] = TRIPS[d] || {}; TRIPS[d][boat.id] = { route: rid };
+  const P = ctPlans(); const pl = ctBlankPlan('t'); pl.famId = rid; pl.price = 2500; P.push(pl); ctPlansSave(P);
+  window._ddPaint();
+  const X = window._ddExecX, c = X.cells[d + '|' + rid];
+  const el = document.querySelector('[data-cell="' + d + '|' + rid + '"]');
+  const inShort = X.tot.short.some(x => x.d === d && x.rid === rid), inIdle = X.tot.idle.some(x => x.d === d && x.rid === rid);
+  const todoDom = [...document.querySelectorAll('[data-dd="exec"] .act')].some(a => a.textContent.includes(_ddDLbl(d, true)) && a.textContent.includes(X.routes[0].name));
+  const line = dashDayDetailLineText(), lineHas = line.split('\n').includes(_ddDLbl(d)), lineIdle = /No bookings yet: \d+ departures/.test(line);
+  const T = X.colTot[d], totCap = X.tot.cap, sumT = X.days.reduce((s, dd) => s + ((X.colTot[dd] || {}).cap || 0), 0);
+  // คืนค่า
+  if (!had) delete TRIPS[d][boat.id]; if (!Object.keys(TRIPS[d]).length) delete TRIPS[d];
+  ctPlansSave(ctPlans().filter(p => p.id !== pl.id)); window._ddPaint();
+  return { d, st: c && c.st, bk: c && c.bk, cap: c && c.cap, inShort, inIdle, domIdle: !!(el && el.classList.contains('idle') && /no bookings yet/.test(el.textContent)), todoDom, lineHas, lineIdle, Tcap: T && T.cap, Tidle: T && T.idle, totCap, sumT };
+}, DATE);
+if (!s8.err && s8.st === 'idle' && s8.bk === 0 && s8.cap > 0 && !s8.inShort && s8.inIdle && s8.domIdle && !s8.todoDom && !s8.lineHas && s8.lineIdle && s8.Tcap === 0 && s8.Tidle === 1 && s8.totCap === s8.sumT)
+  ok(`8 ลำบนกระดานที่ยังไม่มีคนจอง (${s8.d} · 0/${s8.cap}) → "no bookings yet" · ไม่เป็นขาด ไม่ขึ้น to-do ไม่อยู่ใน TO DO ของ LINE · ไม่เข้ายอดที่นั่ง`);
+else fail('8 ' + JSON.stringify(s8));
 
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (e1.length) fail('errors: ' + e1.slice(0, 3).join(' | '));
