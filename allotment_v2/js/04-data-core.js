@@ -3783,7 +3783,6 @@ function calSetSave(){
   const h=_calGetHiddenRoutes();
   const rts=_calSetPool().filter(rt=>(calPier==='all'||rt.pier===calPier) && !h.has(rt.id));
   if(!rts.length){ alert('No routes are showing. Turn on at least one route first.'); return; }
-  window._calSetPending=rts.map(rt=>rt.id);
   const nm=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
   const chips=rts.map(r=>'<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:8px;background:#F4F4F0;font-size:12.5px;font-weight:500;color:#000F4C">'
     +'<i style="width:8px;height:8px;border-radius:2px;flex:none;background:'+_calVivid(r.color)+'"></i>'+_calSetEsc(nm(r))+'</span>').join('');
@@ -3803,6 +3802,9 @@ function calSetSave(){
     +'<span style="display:flex;gap:8px"><button type="button" onclick="calSetModalClose()" style="'+_calSetBtnCss()+'">Cancel</button>'
     +'<button type="button" id="calset-ok" onclick="calSetSaveCommit()" style="'+_calSetBtnCss('pri')+'">Save set</button></span>'
     +'</div>', calSetSaveCommit);
+  /* ⚠ ต้องตั้งหลังเปิดกล่อง · _calSetModalOpen เรียก calSetModalClose ก่อนซึ่งล้าง _calSetPending
+     (รอบแรกตั้งไว้ก่อนเปิด → โดนล้าง → กด Save แล้วกล่องปิดเฉย ๆ ไม่ได้บันทึก) */
+  window._calSetPending=rts.map(rt=>rt.id);
   const inp=el.querySelector('#calset-name'); if(inp) inp.focus();
 }
 function _calSetByName(name){ const k=String(name||'').trim().toLowerCase(); return k ? (CAL_ROUTE_SETS||[]).find(x=>String(x.name||'').trim().toLowerCase()===k) : null; }
