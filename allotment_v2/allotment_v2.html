@@ -2074,23 +2074,43 @@
   </div>
 </div>
 
-<!-- New Pier Assignment Modal -->
+<!-- New Pier Assignment Modal · §asnModal (2026-10-07) restyled to match the in-app dialogs (calSetModal / progSeasonModal).
+     Scoped to #fl-modal-assignment only: ids, fields and flSaveAssignment are untouched. -->
+<style>
+  #fl-modal-assignment{background:rgba(10,18,48,.56) !important}
+  #fl-modal-assignment .modal{border-radius:16px !important;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important;overflow:hidden;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
+  #fl-modal-assignment .modal-hd{padding:20px 22px 6px !important;border-bottom:none !important;background:#fff !important;align-items:flex-start}
+  #fl-modal-assignment .modal-title{font-size:21px !important;font-weight:700 !important;letter-spacing:-.01em;color:#0F1B3D !important;line-height:1.2}
+  #fl-modal-assignment .asn-kicker{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700;margin-bottom:3px}
+  #fl-modal-assignment .modal-close{width:36px;height:36px;border-radius:18px !important;border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important;font-size:18px;line-height:1;cursor:pointer}
+  #fl-modal-assignment .modal-body{padding:8px 22px 6px !important;background:#fff !important}
+  #fl-modal-assignment .form-label{font-size:12.5px !important;font-weight:600 !important;color:#3D3D38 !important;text-transform:none !important;letter-spacing:0 !important}
+  #fl-modal-assignment select,#fl-modal-assignment input[type="date"],#fl-modal-assignment input[type="text"],#fl-modal-assignment input[type="number"]{
+    height:44px;box-sizing:border-box;padding:0 12px;border:1.5px solid #C9CCD6 !important;border-radius:10px !important;background-color:#fff !important;
+    font:500 14px 'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D;outline-color:#16265C}
+  #fl-modal-assignment input[type="date"],#fl-modal-assignment input[type="number"]{font-family:'DM Mono',monospace}
+  #fl-modal-assignment #asn-boat-name{background:#F4F4F0 !important;border-radius:10px !important;padding:12px !important;font-size:14px !important;color:#0F1B3D}
+  #fl-modal-assignment .modal-footer{padding:14px 22px !important;background:#F7F7F5 !important;border-top:1px solid #E2E2DC !important;gap:8px}
+  #fl-modal-assignment .modal-footer .btn{height:40px;padding:0 18px !important;border-radius:10px !important;font:600 13.5px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;cursor:pointer}
+  #fl-modal-assignment .modal-footer .btn-ghost{border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important}
+  #fl-modal-assignment .modal-footer .btn-primary{border:1px solid #16265C !important;background:#16265C !important;color:#fff !important}
+</style>
 <div class="modal-overlay" id="fl-modal-assignment">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><div class="modal-title">📍 New Pier Assignment</div><button class="modal-close" onclick="closeModal('fl-modal-assignment')">×</button></div>
+    <div class="modal-hd"><div class="modal-title"><span class="asn-kicker">Boat Status · Pier assignment</span>Move boat to another pier</div><button class="modal-close" aria-label="Close" onclick="closeModal('fl-modal-assignment')">×</button></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">เรือ</label>
         <div id="asn-boat-name" style="font-size:13px;font-weight:600;padding:8px 10px;background:var(--sand);border-radius:var(--r-sm)"></div>
       </div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">📤 จากท่า *</label>
+        <div class="form-row"><label class="form-label" for="asn-from">จากท่า *</label>
           <select id="asn-from" style="width:100%">
             <option value="tublamu">Tub Lamu</option>
             <option value="panwa">Visit Panwa</option>
             <option value="ranong">Ranong</option>
           </select>
         </div>
-        <div class="form-row"><label class="form-label">📥 ไปท่า *</label>
+        <div class="form-row"><label class="form-label" for="asn-to">ไปท่า *</label>
           <select id="asn-to" style="width:100%">
             <option value="tublamu">Tub Lamu</option>
             <option value="panwa">Visit Panwa</option>
@@ -2098,18 +2118,18 @@
           </select>
         </div>
       </div>
-      <div class="form-row"><label class="form-label">ประเภท *</label>
+      <div class="form-row"><label class="form-label" for="asn-type">ประเภท *</label>
         <select id="asn-type" style="width:100%">
           <option value="temporary">Temporary · ชั่วคราว (มีวันจบ)</option>
           <option value="permanent">Permanent · ถาวร (เปลี่ยน home pier)</option>
         </select>
       </div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
-        <div class="form-row"><label class="form-label">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-start">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
       </div>
-      <div class="form-row"><label class="form-label">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
-      <div class="form-row"><label class="form-label">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
+      <div class="form-row"><label class="form-label" for="asn-reason">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
+      <div class="form-row"><label class="form-label" for="asn-cost">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
       <div id="asn-warn" style="display:none;font-size:11px;color:#854F0B;padding:8px 10px;background:#FFF8E1;border:1px solid #F0D58C;border-radius:8px;margin-top:8px"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-assignment')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveAssignment()">บันทึก</button></div>

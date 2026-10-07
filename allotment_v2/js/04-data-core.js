@@ -6474,21 +6474,24 @@ function renderBoatDetailPink(){
     const locLbl=ev.detail||(lt?lt.label:'');
     let locHtml='';
     if(locLbl&&lps){
-      locHtml=`<div style="display:flex;align-items:center;gap:5px;margin-top:3px"><span style="background:${lps.bg};color:${lps.color};padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${locLbl}</span>${ev.province?'<span style="color:'+dim.ink5+';font-size:9px">·</span><span style="font-size:10px;color:'+dim.ink3+'">'+ev.province+'</span>':''}</div>`;
+      locHtml=`<div style="display:flex;align-items:center;gap:5px;margin-top:3px"><span style="background:${lps.bg};color:${lps.color};padding:1px 7px;border-radius:5px;font-size:10.5px;font-weight:600">${locLbl}</span>${ev.province?'<span style="color:'+dim.ink5+';font-size:9px">·</span><span style="font-size:10px;color:'+dim.ink3+'">'+ev.province+'</span>':''}</div>`;
     } else if(ev.legacyLoc){
-      locHtml=`<div style="font-size:10px;color:${dim.ink3};margin-top:2px">${ev.legacyLoc}</div>`;
+      /* ค่าเก่าบางแถวเก็บขีดไว้แทนค่าว่าง · ไม่ต้องโชว์ขีดเป็นบรรทัดที่สอง */
+      if(!/^[\s\-–—]*$/.test(String(ev.legacyLoc))) locHtml=`<div style="font-size:11px;color:#5B6170;margin-top:2px">${ev.legacyLoc}</div>`;
     }
-    return`<div ${clickHandler} style="display:grid;grid-template-columns:120px 1fr 70px 24px;gap:12px;padding:11px 14px;align-items:center;${isLast?'':'border-bottom:0.5px solid rgba(0,0,0,.06)'};cursor:${ev.logId?'pointer':'default'}">
+    /* §bsDetail2 · แถวประวัติกระชับลง · ผลลัพธ์ (ซ่อมอยู่/ซ่อมเสร็จ/พร้อม) เป็นป้ายเดียวกับป้ายสถานะ · แถวที่ยังไม่จบเน้นพื้น */
+    const open=!ev.endDate;
+    return`<div ${clickHandler} style="display:grid;grid-template-columns:132px minmax(0,1fr) auto 14px;gap:12px;min-height:48px;box-sizing:border-box;padding:7px 14px;align-items:center;${isLast?'':'border-bottom:1px solid #ECEBE6;'}background:${open?'#F3F8FC':'#fff'};cursor:${ev.logId?'pointer':'default'}">
       <div>
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${dim.ink};font-weight:500">${fmtEvtDate(ev.date,ev.endDate)}</div>
-        ${dur?`<div style="font-size:9px;color:${dim.ink3};margin-top:1px">${dur}</div>`:''}
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:#0F1B3D;font-weight:500">${fmtEvtDate(ev.date,ev.endDate)}</div>
+        ${dur?`<div style="font-size:11px;color:#5B6170;margin-top:1px">${dur}</div>`:''}
       </div>
       <div style="min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="background:${evSt.bg};color:${evSt.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${evSt.label}</span><span style="font-size:11px;color:${dim.ink};font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="flex:none;background:${evSt.bg};color:${evSt.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${evSt.label}</span><span style="font-size:13px;color:#0F1B3D;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
         ${locHtml}
       </div>
-      <div style="font-size:10px;color:${outcomeColor};text-align:right;font-weight:500">${ev.outcome}</div>
-      <span style="color:${dim.ink5};font-size:14px">${ev.logId?'›':''}</span>
+      <span style="font-size:11.5px;color:${open?'#0F1B3D':'#5B6170'};font-weight:${open?700:500};white-space:nowrap">${ev.outcome}</span>
+      <span style="color:#9A9A92;font-size:14px">${ev.logId?'›':''}</span>
     </div>`;
   }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:20px">ยังไม่มีประวัติสถานะ</div>`;
 
@@ -6564,38 +6567,38 @@ function renderBoatDetailPink(){
       const pastA = typeof getPastAssignments==='function'?getPastAssignments(b):[];
       const total = (activeA?1:0) + plannedA.length + pastA.length;
       if(total === 0) return '';
-      const renderAsnCard=(a,statusLabel,statusColor,statusBg)=>{
+      /* §bsDetail2 (2026-10-07) · ผู้ใช้: "ปรับให้ตรงกับดีไซน์เรา" · ส่วน Pier Assignments ยังเป็นโฉมเก่า
+         (หมุด emoji · ปุ่ม + New สีชมพู · การ์ดขอบซ้ายสี · วันที่แบบ ISO) → แถวในกรอบเดียว ป้ายสถานะชุดเดียวกับส่วนอื่น */
+      const escA=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const fmtA=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+      const renderAsnCard=(a,statusLabel,pillBg,pillFg)=>{
         const fromLbl=PIER_LABELS[a.fromPier]||a.fromPier;
         const toLbl=PIER_LABELS[a.toPier]||a.toPier;
-        return `<div style="background:#FBFAF7;border-radius:10px;padding:9px 11px;border-left:3px solid ${statusColor};margin-bottom:4px">
-          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600">${fromLbl} → ${toLbl}</div>
-              <div style="font-size:10px;color:${dim.ink2};margin-top:1px">${a.startDate} – ${a.endDate} · ${a.type==='permanent'?'Permanent':'Temporary'}</div>
-              ${a.reason?`<div style="font-size:10px;color:${dim.ink3};margin-top:2px;font-style:italic">${a.reason}</div>`:''}
-              ${a.cost?`<div style="font-size:10px;color:${dim.ink3};margin-top:1px;font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</div>`:''}
-            </div>
-            <div style="display:flex;flex-direction:column;gap:3px;align-items:end;flex-shrink:0">
-              <span style="background:${statusBg};color:${statusColor};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${statusLabel}</span>
-              ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="background:none;border:none;color:${dim.ink3};font-size:9px;cursor:pointer;padding:0">Cancel</button>`:''}
-            </div>
+        return `<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;min-height:50px;box-sizing:border-box;padding:8px 14px;border-bottom:1px solid #ECEBE6">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13px;font-weight:600;color:#0F1B3D">${escA(fromLbl)} → ${escA(toLbl)}</div>
+            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${fmtA(a.endDate)} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
           </div>
+          <span style="flex:none;background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${statusLabel}</span>
+          ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;font:600 11.5px inherit;font-family:inherit;cursor:pointer">Cancel</button>`:''}
         </div>`;
       };
-      return `<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="font-size:13px;font-weight:600">📍 Pier Assignments <span style="color:${dim.ink3};font-weight:400">${total}</span></span>
-          <button onclick="flOpenNewAssignment('${b.id}')" style="background:none;border:none;color:#9F1B4F;font-size:11px;font-weight:600;cursor:pointer">+ New</button>
+      return `<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700;color:#0F1B3D">Pier assignments <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${total}</span></span>
+          <button onclick="flOpenNewAssignment('${b.id}')" style="${_bsTool}">+ New</button>
         </div>
-        ${activeA?renderAsnCard(activeA,'Active','#0F6E56','#E0F5EC'):''}
-        ${plannedA.slice(0,2).map(a=>renderAsnCard(a,'Planned','#854F0B','#FAEEDA')).join('')}
-        ${pastA.slice(0,2).map(a=>renderAsnCard(a,'Completed','#999','#F0EEEA')).join('')}
+        <div style="border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+          ${activeA?renderAsnCard(activeA,'Active','#DDF1EA','#0B5A43'):''}
+          ${plannedA.slice(0,2).map(a=>renderAsnCard(a,'Planned','#FBEBD3','#7A4300')).join('')}
+          ${pastA.slice(0,2).map(a=>renderAsnCard(a,'Completed','#F1F0EC','#3E4658')).join('')}
+        </div>
       </div>`;
     })()}
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:13px;font-weight:600">Status history</span>
-      <span style="font-size:10px;color:${dim.ink3}">${events.length} entries</span>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:700;color:#0F1B3D">Status history <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${events.length}</span></span>
+      <span style="font-size:11.5px;color:#5B6170">คลิกแถวเพื่อแก้ไข</span>
     </div>
     <div style="border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">${eventsHtml}</div>
   </div>`;
