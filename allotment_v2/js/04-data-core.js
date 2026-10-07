@@ -10503,10 +10503,16 @@ function renderSettings(){
     #view-settings > .page-hd{display:none}
     #view-settings #prog-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
     #view-settings #prog-q::placeholder{color:#B4BCDD}
+    /* §progSticky (2026-10-07) · แถบบนตรึงไว้ตอนเลื่อน · กินเต็มขอบ (margin ติดลบเท่า padding ของหน้า) พื้นทึบ
+       ไม่งั้นแถวรายการกับปฏิทินจะเลื่อนลอดให้เห็นข้างหลังตัวหนังสือ
+       กล่องรายการซ้ายตรึงต่อจากใต้แถบนี้ · ความสูงแถบวัดจริงใน _progListFit เพราะแถบขึ้นสองบรรทัดได้บนจอแคบ */
+    #view-settings #prog-top{position:sticky;top:0;z-index:6;margin:-18px -18px 11px;padding:13px 18px 11px;
+      background:#16265C;box-shadow:0 6px 14px -8px rgba(2,10,30,.55)}
     @media (max-width:1100px){ #view-settings .prog-brand{display:none} }
-    @media (max-width:820px){ #view-settings{padding:12px 10px} #view-settings .prog-2col{grid-template-columns:1fr !important} }
+    @media (max-width:820px){ #view-settings{padding:12px 10px 64px} #view-settings .prog-2col{grid-template-columns:1fr !important}
+      #view-settings #prog-top{position:static;margin:-12px -10px 10px;padding:12px 10px 10px} }
   </style>
-  <div style="display:flex;align-items:center;gap:9px 12px;margin:-4px 0 13px;flex-wrap:wrap">
+  <div id="prog-top" style="display:flex;align-items:center;gap:9px 12px;flex-wrap:wrap">
     <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:9px">
       <span style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">${_pd.getDate()}</span>
       <span style="line-height:1.15;display:inline-block">
@@ -10609,8 +10615,12 @@ function renderSettings(){
     const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
     lb.style.position=stack?'static':'sticky'; lb.style.overscrollBehavior=stack?'auto':'contain';
     if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs; return; }
+    /* §progSticky · ตรึงต่อจากขอบล่างของแถบบน (วัดจากตำแหน่งจริง) · ไม่มีแถบ = 14px แบบเดิม */
+    const pt=document.getElementById('prog-top');
+    const pin=(pt && getComputedStyle(pt).position==='sticky') ? Math.round(pt.getBoundingClientRect().height)+11 : 14;
+    const pinPx=pin+'px'; if(lb.style.top!==pinPx) lb.style.top=pinPx;
     let bot=window.innerHeight-14; if(dm&&dm.offsetHeight>lb.offsetHeight) bot=Math.min(bot, dm.getBoundingClientRect().bottom);
-    const h=Math.max(320, Math.round(bot-Math.max(14, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
+    const h=Math.max(320, Math.round(bot-Math.max(pin, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
   if(!window._progListFitOn){ window._progListFitOn=1; let _q=0;
     const _f=()=>{ if(_q) return; _q=requestAnimationFrame(()=>{ _q=0; window._progListFit&&window._progListFit(); }); };
     window.addEventListener('scroll',_f,{passive:true}); window.addEventListener('resize',_f,{passive:true}); }
