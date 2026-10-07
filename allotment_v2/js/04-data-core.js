@@ -2175,17 +2175,18 @@ window.dashDayDetailLineText=function(){
         var code=_ddLineCode(r.rid);
         var s='';
         if(c.av<=0) s='⛔ '+code+' FULL';
-        /* §ddLineWhy · เจ้าของถาม "short 2 คืออะไร" · เขียนเป็นคำสั่งเหมือนการ์ดในแอป และโชว์ตัวเลข BE ที่ต้องไปถึง
-           "sell 1 more · 11/40 · BE 12" = ขายเพิ่ม 1 คน · จองแล้ว 11 จาก 40 ที่นั่ง · จุดคุ้มทุน 12 คน */
-        else if(c.need>5) s='🔴 '+code+' sell '+N(c.need)+' more · '+c.bk+'/'+c.cap+' · BE '+N(c.be);
-        else if(c.need>0) s='🟠 '+code+' sell '+N(c.need)+' more · '+c.bk+'/'+c.cap+' · BE '+N(c.be);
+        /* §ddLineWhy · เจ้าของถาม "short 2 คืออะไร" · เขียนเป็นคำสั่งเหมือนการ์ดในแอป
+           แล้วสั่งต่อ "ไม่ต้องบอก BE · ระบุจำนวนเต็มที่รับได้" → "sell 1 more · 29 open · 11/40"
+           = ขายเพิ่มอย่างน้อย 1 คนถึงคุ้ม · รับได้อีก 29 · จองแล้ว 11 จาก 40 */
+        else if(c.need>5) s='🔴 '+code+' sell '+N(c.need)+' more · '+N(c.av)+' open · '+c.bk+'/'+c.cap;
+        else if(c.need>0) s='🟠 '+code+' sell '+N(c.need)+' more · '+N(c.av)+' open · '+c.bk+'/'+c.cap;
         else if(c.av<=5) s='⚠️ '+code+' '+c.av+' left · '+c.bk+'/'+c.cap;
         else return;
         used[code]=r.name; bits.push('• '+s); });
       if(bits.length){ todo.push(_ddDLbl(d)); todo=todo.concat(bits); } });
     if(todo.length){ L.push(''); L.push('🎯 TO DO'); L=L.concat(todo);
       var codes=Object.keys(used); if(codes.length){ L.push(''); codes.forEach(function(k){ L.push(k+' = '+used[k]); }); }
-      L.push('sell N more = pax still needed to reach break-even'); L.push('booked/seats · BE = break-even pax'); }
+      L.push('sell N more = pax needed to break even'); L.push('open = seats still sellable · booked/seats'); }
     else { L.push(''); L.push('🎯 TO DO'); L.push('• ✅ Nothing urgent'); }
   } else L.push('• ⚪ No boats assigned yet');
   return L.join('\n');

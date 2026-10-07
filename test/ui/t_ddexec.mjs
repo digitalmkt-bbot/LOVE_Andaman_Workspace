@@ -139,8 +139,8 @@ const s6 = await page.evaluate(async () => {
   const dayOk = shortDays.every(d => { const i = lines.indexOf(_ddDLbl(d)); if (i < 0) return false;
     let j = i + 1, blk = []; while (j < lines.length && lines[j].startsWith('• ')) blk.push(lines[j++]);
     /* §ddEmoji · 🔴 ขาดเกิน 5 · 🟠 ขาดไม่เกิน 5 */
-    return X.tot.short.filter(c => c.d === d).every(c => blk.includes('• ' + (c.need > 5 ? '🔴' : '🟠') + ' ' + (codeOf(c.rid) || _ddLineCode(c.rid)) + ' sell ' + c.need + ' more · ' + c.bk + '/' + c.cap + ' · BE ' + c.be)); });
-  const keyLine = lines.includes('sell N more = pax still needed to reach break-even') && lines.includes('booked/seats · BE = break-even pax');
+    return X.tot.short.filter(c => c.d === d).every(c => blk.includes('• ' + (c.need > 5 ? '🔴' : '🟠') + ' ' + (codeOf(c.rid) || _ddLineCode(c.rid)) + ' sell ' + c.need + ' more · ' + c.av + ' open · ' + c.bk + '/' + c.cap)); });
+  const keyLine = lines.includes('sell N more = pax needed to break even') && lines.includes('open = seats still sellable · booked/seats');
   const sections = ['🧾 KEYED TODAY', '🧳 TRAVELLING', '🚤 NEXT 7 DAYS', '🎯 TO DO'].every(h => lines.includes(h));
   /* §ddTop5 · 5 เจ้า (หรือเท่าที่มี) เรียง 🥇🥈🥉 4. 5. ตรงกับ _ddAgg ของ B2B */
   const agExp = _ddAgg(_ddRows().filter(r => !r.cxl && !r.intFree && r.side === 'b2b'), r => r.agent).slice(0, 5);
@@ -155,7 +155,7 @@ const s6 = await page.evaluate(async () => {
     hasNeed: X.tot.short.length ? /^• 🔴 Still to sell: \d+ pax/m.test(t) : /All departures at break-even|No boats assigned/.test(t), top5, nAg: agExp.length, dayOk, noRouteLines, legend: X.tot.short.length ? /^[A-Z]{2,3} = .+$/m.test(t) : true, toast: window._toast, nLines: t.split('\n').length };
 });
 if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.sections && s6.top5 && s6.oneTopic && s6.keyLine && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
-  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · 4 หมวดมีอีโมจิ · Top agents ${s6.nAg} เจ้า · TO DO หัววัน + ข้อย่อย 🔴/🟠 "sell N more · bk/cap · BE n" + บรรทัดอธิบายท้าย · รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
+  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · 4 หมวดมีอีโมจิ · Top agents ${s6.nAg} เจ้า · TO DO หัววัน + ข้อย่อย 🔴/🟠 "sell N more · N open · bk/cap" + บรรทัดอธิบายท้าย · รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
 else fail('6 ' + JSON.stringify(s6));
 
 /* ══ 7 ══ */
