@@ -7606,7 +7606,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     var _T=_rcSecTint(route&&route.color);
     body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
       +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
-      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Van · plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
+      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
     +'<style>*{box-sizing:border-box}body{margin:0;font-family:\'DM Sans\',Arial,sans-serif;color:#2C2C2A;background:#EDECE7}'
@@ -7672,15 +7672,15 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
 function _rcVanCell(v, esc, MONO){
   if(!v || (!v.id && !v.self)) return '<span style="color:#B4B2A9">—</span>';
   if(!v.id && v.self) return '<span style="color:#8a8880;font-size:11.5px">มาเอง</span>';
-  var h='<span style="'+MONO+';font-weight:700;letter-spacing:.02em">'+esc(v.plate||'—')+'</span>'
-    +'<span style="display:block;font-size:10.5px;color:#9a988f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(v.missing?'ไม่พบรถคันนี้ในทะเบียนรถ · ':'')+esc(v.name)+'">'+esc(v.name)+(v.missing?' ?':'')+'</span>';
+  /* §rcPlateOnly (2026-10-07) · เจ้าของ: "ขึ้นแต่ทะเบียนรถก็พอ" · ชื่อรถเหลือเป็น tooltip · ไม่มีทะเบียน = ขีด */
+  var h='<span style="'+MONO+';font-weight:700;letter-spacing:.02em" title="'+(v.missing?'ไม่พบรถคันนี้ในทะเบียนรถ · ':'')+esc(v.name)+'">'+esc(v.plate||'—')+'</span>';
   if(v.retName) h+='<span style="display:block;font-size:10.5px;color:#5B4FC4;white-space:nowrap" title="รถกลับคนละคัน">กลับ: '+esc(v.retPlate||v.retName)+'</span>';
   return h;
 }
 function _rcVanSheet(v, esc){
   if(!v || (!v.id && !v.self)) return '<span class="mut">—</span>';
   if(!v.id && v.self) return '<span class="mut">Self-arrive</span>';
-  var h='<span class="plate">'+esc(v.plate||'—')+'</span><span class="vn">'+esc(v.name)+'</span>';
+  var h='<span class="plate">'+esc(v.plate||'—')+'</span>';   /* §rcPlateOnly · ทะเบียนอย่างเดียว */
   if(v.retName) h+='<span class="vn">Return: '+esc(v.retPlate||v.retName)+'</span>';
   return h;
 }
@@ -7717,7 +7717,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'van',l:'Van · plate',w:132},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'van',l:'Plate',w:104},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'

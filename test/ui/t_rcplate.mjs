@@ -3,11 +3,11 @@
 // ที่มา (6 ต.ค. 2026) · เจ้าของ: "Re-Confirm กรณีที่จัดรถแล้ว ขอเพิ่มคอลัมน์ทะเบียนรถให้ด้วย และโชว์ในใบ Sheet ด้วย"
 //
 // กันเจ็ดอย่าง
-//   1 ตารางมีคอลัมน์ "Van · plate" ถัดจาก Pickup area · ใบที่มี ops.vanId โชว์ทะเบียนของคันนั้น (vehGet) และชื่อรถ
+//   1 ตารางมีคอลัมน์ "Plate" ถัดจาก Pickup area · ใบที่มี ops.vanId โชว์ทะเบียนของคันนั้น (vehGet) อย่างเดียว (§rcPlateOnly · ชื่อรถเป็น tooltip)
 //   2 ใบที่ยังไม่จัดรถ = ขีด (ไม่เดาคัน) · ใบที่ติ๊กมาเอง (pickupSelf) = "มาเอง"
 //   3 ทะเบียนที่ใส่ทับรายวันในใบงานรถ (VANJOB_DRIVER[date::van].plate) มาก่อนทะเบียนในทะเบียนรถ · ลบแล้วกลับเดิม
 //   4 รถกลับคนละคัน · มีบรรทัด "กลับ: <ทะเบียน>" · รถกลับคันเดียวกันไม่ขึ้นซ้ำ
-//   5 ใบ Sheet ของเอเย่นต์นั้น · หัวตารางมี "Van · plate" · แถวมีทะเบียน · ใบที่ไม่มีรถเป็นขีด
+//   5 ใบ Sheet ของเอเย่นต์นั้น · หัวตารางมี "Plate" · แถวมีทะเบียน · ใบที่ไม่มีรถเป็นขีด
 //   6 ไม่เขียนอะไรลง booking (ops เท่าเดิม) · VANJOB_DRIVER ไม่มี key ค้าง
 //   7 OVN วันที่ 2 · รถของวันนั้นมาจาก trip.ops (bkOpsRead) ไม่ใช่รถวันแรก
 import { open, goView } from './_harness.mjs';
@@ -37,7 +37,7 @@ const cell = (code) => page.evaluate((code) => {
   const host = document.getElementById('reconfirm-host');
   const ths = [...host.querySelectorAll('table thead')].map(th => [...th.querySelectorAll('th')].map(x => x.textContent.trim()));
   const head = ths[0] || [];
-  const iVan = head.indexOf('Van · plate'), iZone = head.indexOf('Pickup area');
+  const iVan = head.indexOf('Plate'), iZone = head.indexOf('Pickup area');
   const tr = [...host.querySelectorAll('table tbody tr')].find(t => t.textContent.includes(code));
   if (!tr) return { head, iVan, iZone, txt: null };
   const td = tr.children[iVan];
@@ -46,8 +46,8 @@ const cell = (code) => page.evaluate((code) => {
 
 /* 1 */
 const c1 = await cell(prep.code);
-if (c1.iVan > 0 && c1.iVan === c1.iZone + 1 && c1.txt && c1.txt.startsWith(prep.plate) && c1.txt.includes(prep.name))
-  ok(`1 คอลัมน์ "Van · plate" ถัดจาก Pickup area · ใบ ${prep.code} โชว์ "${c1.txt}" (รถ ${prep.vid})`);
+if (c1.iVan > 0 && c1.iVan === c1.iZone + 1 && c1.txt === prep.plate)
+  ok(`1 คอลัมน์ "Plate" ถัดจาก Pickup area · ใบ ${prep.code} โชว์ "${c1.txt}" (รถ ${prep.vid})`);
 else fail('1 ' + JSON.stringify({ c1, prep }));
 
 /* 2 */
@@ -74,10 +74,10 @@ const r4 = await page.evaluate(({ id, DATE, vid }) => {
   O.vanReturnId = other.id; renderReconfirm();
   const host = document.getElementById('reconfirm-host'), head = [...host.querySelector('table thead').querySelectorAll('th')].map(x => x.textContent.trim());
   const tr = [...host.querySelectorAll('table tbody tr')].find(t => t.textContent.includes(b.voucherRef || b.code));
-  const diff = tr.children[head.indexOf('Van · plate')].textContent.replace(/\s+/g, ' ').trim();
+  const diff = tr.children[head.indexOf('Plate')].textContent.replace(/\s+/g, ' ').trim();
   O.vanReturnId = vid; renderReconfirm();
   const tr2 = [...host.querySelectorAll('table tbody tr')].find(t => t.textContent.includes(b.voucherRef || b.code));
-  const same = tr2.children[head.indexOf('Van · plate')].textContent.replace(/\s+/g, ' ').trim();
+  const same = tr2.children[head.indexOf('Plate')].textContent.replace(/\s+/g, ' ').trim();
   if (keep === undefined) delete O.vanReturnId; else O.vanReturnId = keep;
   renderReconfirm();
   return { diff, same, otherPlate: other.plate };
@@ -92,13 +92,13 @@ const s5 = await page.evaluate(({ key, code, noCode }) => {
   try { rcSheet(key); } finally { window.open = _open; }
   const d = document.createElement('div'); d.innerHTML = window._sheet.replace(/^[\s\S]*?<body>/, '').replace(/<\/body>[\s\S]*$/, '');
   const tbl = d.querySelector('table.gt'); if (!tbl) return { err: 'no table' };
-  const head = [...tbl.querySelectorAll('thead th')].map(x => x.textContent.trim()), i = head.indexOf('Van · plate');
+  const head = [...tbl.querySelectorAll('thead th')].map(x => x.textContent.trim()), i = head.indexOf('Plate');
   const row = [...d.querySelectorAll('table.gt tbody tr')].find(t => t.textContent.includes(code));
   const noRow = noCode ? [...d.querySelectorAll('table.gt tbody tr')].find(t => t.textContent.includes(noCode)) : null;
   return { head, i, iZone: head.indexOf('Zone'), txt: row ? row.children[i].textContent.replace(/\s+/g, ' ').trim() : null, plateCls: row ? !!row.children[i].querySelector('.plate') : null, noTxt: noRow ? noRow.children[i].textContent.trim() : 'n/a' };
 }, { key: prep.key, code: prep.code, noCode: prep.noCode });
-if (!s5.err && s5.i === s5.iZone + 1 && s5.txt && s5.txt.startsWith(prep.plate) && s5.plateCls && (s5.noTxt === 'n/a' || s5.noTxt === '—'))
-  ok(`5 ใบ Sheet · หัว "Van · plate" ถัดจาก Zone · แถว ${prep.code} = "${s5.txt}"` + (s5.noTxt !== 'n/a' ? ` · ใบไม่มีรถ "${s5.noTxt}"` : ''));
+if (!s5.err && s5.i === s5.iZone + 1 && s5.txt === prep.plate && s5.plateCls && (s5.noTxt === 'n/a' || s5.noTxt === '—'))
+  ok(`5 ใบ Sheet · หัว "Plate" ถัดจาก Zone · แถว ${prep.code} = "${s5.txt}"` + (s5.noTxt !== 'n/a' ? ` · ใบไม่มีรถ "${s5.noTxt}"` : ''));
 else fail('5 ' + JSON.stringify(s5));
 
 /* 6 */
@@ -116,7 +116,7 @@ const r7 = await page.evaluate(({ id, DATE, vid }) => {
   const host = document.getElementById('reconfirm-host'), thead = host.querySelector('table thead');
   const head = thead ? [...thead.querySelectorAll('th')].map(x => x.textContent.trim()) : [];
   const tr = [...host.querySelectorAll('table tbody tr')].find(t => t.textContent.includes(b.voucherRef || b.code));
-  const txt = tr ? tr.children[head.indexOf('Van · plate')].textContent.replace(/\s+/g, ' ').trim() : null;
+  const txt = tr ? tr.children[head.indexOf('Plate')].textContent.replace(/\s+/g, ' ').trim() : null;
   b.trips.pop(); _rcDate = DATE; renderReconfirm();
   return { txt, otherPlate: other.plate, nTrips: b.trips.length };
 }, { id: prep.id, DATE, vid: prep.vid });
