@@ -120,18 +120,23 @@ const s6 = await page.evaluate(async () => {
   /* §ddLine2 · หัววันเป็นบรรทัดของตัวเอง แล้วตามด้วย "• CODE short N (bk/cap)" บรรทัดละข้อ จนถึงหัววันถัดไป */
   const dayOk = shortDays.every(d => { const i = lines.indexOf(_ddDLbl(d)); if (i < 0) return false;
     let j = i + 1, blk = []; while (j < lines.length && lines[j].startsWith('• ')) blk.push(lines[j++]);
-    return X.tot.short.filter(c => c.d === d).every(c => blk.includes('• ' + (codeOf(c.rid) || _ddLineCode(c.rid)) + ' short ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
-  const sections = ['▌KEYED TODAY', '▌TRAVELLING', '▌NEXT 7 DAYS', '▌TO DO'].every(h => lines.includes(h));
+    /* §ddEmoji · 🔴 ขาดเกิน 5 · 🟠 ขาดไม่เกิน 5 */
+    return X.tot.short.filter(c => c.d === d).every(c => blk.includes('• ' + (c.need > 5 ? '🔴' : '🟠') + ' ' + (codeOf(c.rid) || _ddLineCode(c.rid)) + ' short ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
+  const sections = ['🧾 KEYED TODAY', '🧳 TRAVELLING', '🚤 NEXT 7 DAYS', '🎯 TO DO'].every(h => lines.includes(h));
+  /* §ddTop5 · 5 เจ้า (หรือเท่าที่มี) เรียง 🥇🥈🥉 4. 5. ตรงกับ _ddAgg ของ B2B */
+  const agExp = _ddAgg(_ddRows().filter(r => !r.cxl && !r.intFree && r.side === 'b2b'), r => r.agent).slice(0, 5);
+  const agLines = lines.filter(l => /^  (🥇|🥈|🥉|4\.|5\.) /.test(l));
+  const top5 = agLines.length === agExp.length && agExp.every((a, i) => agLines[i].includes(a.k));
   const oneTopic = lines.filter(l => l.startsWith('• ')).every(l => l.length <= 60);
   const noRouteLines = !X.tot.short.some(c => t.includes('- ' + _ddCellName(c)));
   const TH = /[\u0E01-\u0E3E\u0E40-\u0E5B]/;   /* ตัวไทยทั้งหมด ยกเว้น ฿ (U+0E3F) */
   const english = !TH.test(t) && !TH.test(document.querySelector('[data-dd="exec"]').textContent) && !TH.test(document.querySelector('[data-dd="grid"]').textContent) && !TH.test(document.querySelector('[data-dd="travel"]').textContent);
   const nShort = X.tot.short.length;
   return { nShort, english, len: t.length, head: t.split('\n')[0], hasIn: /^• \d+ bookings · \d+ pax · ฿/m.test(t), hasGo: /^• Within 7 days: \d/m.test(t), sections, oneTopic,
-    hasNeed: X.tot.short.length ? /^• Still to sell: \d+ pax/m.test(t) : /All departures at break-even|No boats assigned/.test(t), dayOk, noRouteLines, legend: X.tot.short.length ? /^[A-Z]{2,3} = .+$/m.test(t) : true, toast: window._toast, nLines: t.split('\n').length };
+    hasNeed: X.tot.short.length ? /^• 🔴 Still to sell: \d+ pax/m.test(t) : /All departures at break-even|No boats assigned/.test(t), top5, nAg: agExp.length, dayOk, noRouteLines, legend: X.tot.short.length ? /^[A-Z]{2,3} = .+$/m.test(t) : true, toast: window._toast, nLines: t.split('\n').length };
 });
-if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.sections && s6.oneTopic && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
-  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · 4 หมวด · TO DO หัววัน + ข้อย่อยบรรทัดละข้อ · รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
+if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.sections && s6.top5 && s6.oneTopic && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
+  ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · 4 หมวดมีอีโมจิ · Top agents ${s6.nAg} เจ้า · TO DO หัววัน + ข้อย่อย 🔴/🟠 บรรทัดละข้อ · รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
 else fail('6 ' + JSON.stringify(s6));
 
 /* ══ 7 ══ */
@@ -152,7 +157,7 @@ const s8 = await page.evaluate((DATE) => {
   const el = document.querySelector('[data-cell="' + d + '|' + rid + '"]');
   const inShort = X.tot.short.some(x => x.d === d && x.rid === rid), inIdle = X.tot.idle.some(x => x.d === d && x.rid === rid);
   const todoDom = [...document.querySelectorAll('[data-dd="exec"] .act')].some(a => a.textContent.includes(_ddDLbl(d, true)) && a.textContent.includes(X.routes[0].name));
-  const line = dashDayDetailLineText(), lineHas = line.split('\n').includes(_ddDLbl(d)), lineIdle = /No bookings yet: \d+ departures/.test(line);
+  const line = dashDayDetailLineText(), lineHas = line.split('\n').includes(_ddDLbl(d)), lineIdle = /⚪ No bookings yet: \d+ departures/.test(line);
   const T = X.colTot[d], totCap = X.tot.cap, sumT = X.days.reduce((s, dd) => s + ((X.colTot[dd] || {}).cap || 0), 0);
   // คืนค่า
   if (!had) delete TRIPS[d][boat.id]; if (!Object.keys(TRIPS[d]).length) delete TRIPS[d];

@@ -1874,7 +1874,7 @@ function _ddExecData(rows,rg){
   var ok=rows.filter(function(r){ return !r.cxl && !r.intFree; });
   var S={b2c:_ddSum(rows,'b2c'), b2b:_ddSum(rows,'b2b')};
   var n=S.b2c.n+S.b2b.n, pax=S.b2c.pax+S.b2b.pax, val=S.b2c.val+S.b2b.val;
-  var topAg=_ddAgg(ok.filter(function(r){return r.side==='b2b';}),function(r){return r.agent;})[0]||null;
+  var topAgs=_ddAgg(ok.filter(function(r){return r.side==='b2b';}),function(r){return r.agent;}).slice(0,5), topAg=topAgs[0]||null;   /* §ddTop5 · เจ้าของขอ 5 เจ้า */
   var topRt=_ddAgg(ok,function(r){return (r.trips[0]||{}).route;})[0]||null;
   /* ── ไปวันไหน · ใบละวันเดียว (OVN ใช้วันแรก) ── */
   var days=_ddExecDays(rg), dset={}; days.forEach(function(d){ dset[d]=1; });
@@ -1940,7 +1940,7 @@ function _ddExecData(rows,rg){
   /* เส้นทางที่เต็ม 80%+ ทุกวันที่มีเที่ยว · ของดีที่ควรพูดก่อน */
   var good=routes.filter(function(r){ var ds=days.filter(function(d){ var c=cells[d+'|'+r.rid]; return !!c && c.st!=='idle' && c.st!=='wx'; });
     return ds.length>=2 && ds.every(function(d){ return cells[d+'|'+r.rid].pct>=80; }); });
-  return {n:n,pax:pax,val:val,S:S,topAg:topAg,topRt:topRt,travel:travel,w7:w7,peak:peak,later:later,
+  return {n:n,pax:pax,val:val,S:S,topAg:topAg,topAgs:topAgs,topRt:topRt,travel:travel,w7:w7,peak:peak,later:later,
           days:days,cells:cells,routes:routes,colTot:colTot,tot:tot,good:good};
 }
 function _ddCellName(c){ var r=(typeof getRoute==='function')?getRoute(c.rid):null; return (r&&r.name)||c.rid; }
@@ -1957,8 +1957,8 @@ function _ddExecHtml(rows,rg){
   var b1=li('in','Keyed today',
     X.n?('<b>'+pl(X.n,'booking')+' · '+N(X.pax)+' pax · '+M(X.val)+'</b> — B2B '+N(X.S.b2b.n)+' ('+shB2B+'%) from '+pl(X.S.b2b.ag,'agent')+' · B2C '+N(X.S.b2c.n)+' ('+(100-shB2B)+'%)')
        :'<b>No bookings keyed in yet today</b>',
-    X.n?((X.topAg?('Top agent <b>'+esc(X.topAg.k)+' '+(X.topAg.val?M(X.topAg.val):pl(X.topAg.n,'booking'))+'</b>'):'')+(X.topAg&&X.topRt?' · ':'')
-        +(X.topRt?('Top route <b>'+esc(X.topRt.k)+' '+pl(X.topRt.n,'booking')+(X.topRt.val?(' '+M(X.topRt.val)):'')+'</b>'):'')):'');
+    X.n?((X.topRt?('Top route <b>'+esc(X.topRt.k)+' '+pl(X.topRt.n,'booking')+(X.topRt.val?(' '+M(X.topRt.val)):'')+'</b>'):'')
+        +(X.topAgs.length?('<br>Top agents '+X.topAgs.map(function(a,i){ return '<b>'+(i+1)+'. '+esc(a.k)+'</b> '+(a.val?M(a.val):(N(a.n)+' bk')); }).join(' · ')):'')):'');
   /* 2 travelling when */
   var p7=X.n?Math.round(X.w7.n/X.n*100):0;
   var b2=li('go','Travelling',
@@ -2059,41 +2059,47 @@ function _ddLineCode(rid){
 }
 window.dashDayDetailLineText=function(){
   /* §ddLine2 (2026-10-07) · เจ้าของ: "ต้องจัดเรียง แบ่ง Bullet ให้ชัดเจน" · แบ่งเป็น 4 หมวด หัวหมวดขึ้นบรรทัดเอง
-     หนึ่งข้อ = หนึ่งบรรทัด (บนมือถือบรรทัดยาวจะหักกลางตัวเลข) · TO DO แยกตามวัน หัววันแล้วตามด้วยข้อย่อยรายเส้นทาง */
+     หนึ่งข้อ = หนึ่งบรรทัด (บนมือถือบรรทัดยาวจะหักกลางตัวเลข) · TO DO แยกตามวัน หัววันแล้วตามด้วยข้อย่อยรายเส้นทาง
+     §ddEmoji · เจ้าของ: "เพิ่ม Emoji ให้เห็นว่าอันไหนต้องให้ความสนใจ" · อีโมจิเป็น "ระดับความเร่ง" ไม่ใช่ตกแต่ง
+       🔴 ขาดเกิน 5 · 🟠 ขาดไม่เกิน 5 · ⚠️ ใกล้เต็ม (เหลือ ≤5) · ⛔ เต็ม · ✅ ครบแล้ว · ⚪ ยังไม่มีคนจอง · 🔥 วันหนาแน่น
+     §ddTop5 · Top agents 5 เจ้า 🥇🥈🥉 4. 5. */
   var X=window._ddExecX; if(!X) return '';
   var rg=_ddRg(), N=function(v){ return Number(v||0).toLocaleString('en-US'); }, M=_dashMoneyShort;
   var L=['📋 Booking summary · '+_ddDLbl(rg.to,true)+' · LOVE Andaman',''];
-  L.push('▌KEYED TODAY');
+  L.push('🧾 KEYED TODAY');
   L.push('• '+N(X.n)+' bookings · '+N(X.pax)+' pax · '+M(X.val));
   L.push('• B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n));
-  if(X.topAg) L.push('• Top agent: '+X.topAg.k+' '+(X.topAg.val?M(X.topAg.val):(N(X.topAg.n)+' bk')));
-  if(X.topRt) L.push('• Top route: '+X.topRt.k+' '+N(X.topRt.n)+' bk');
+  if(X.topRt) L.push('• Top route: '+X.topRt.k+' · '+N(X.topRt.n)+' bk');
+  if(X.topAgs.length){ L.push('• Top agents:'); var MED=['🥇','🥈','🥉','4.','5.'];
+    X.topAgs.forEach(function(a,i){ L.push('  '+MED[i]+' '+a.k+' · '+(a.val?M(a.val):(N(a.n)+' bk'))+(a.val?(' · '+N(a.n)+' bk'):'')); }); }
   L.push('');
-  L.push('▌TRAVELLING');
+  L.push('🧳 TRAVELLING');
   L.push('• Within 7 days: '+N(X.w7.n)+' bookings · '+N(X.w7.pax)+' pax');
-  if(X.peak) L.push('• Peak: '+X.peak.lbl+' · '+N(X.peak.pax)+' pax');
+  if(X.peak) L.push('• 🔥 Peak: '+X.peak.lbl+' · '+N(X.peak.pax)+' pax');
   if(X.later.n) L.push('• Later: '+N(X.later.n)+' bookings · '+(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' / ')));
   L.push('');
-  L.push('▌NEXT 7 DAYS');
+  L.push('🚤 NEXT 7 DAYS');
   if(Object.keys(X.cells).length){
     L.push('• Open seats: '+N(X.tot.av)+' / '+N(X.tot.cap));
-    L.push(X.tot.need>0?('• Still to sell: '+N(X.tot.need)+' pax ('+X.tot.short.length+' departures)'):'• All departures at break-even');
-    if(X.tot.idle.length) L.push('• No bookings yet: '+X.tot.idle.length+' departures (not counted)');
+    L.push(X.tot.need>0?('• 🔴 Still to sell: '+N(X.tot.need)+' pax ('+X.tot.short.length+' departures)'):'• ✅ All departures at break-even');
+    if(X.tot.idle.length) L.push('• ⚪ No bookings yet: '+X.tot.idle.length+' departures (not counted)');
     var used={}, todo=[];
     X.days.forEach(function(d){
       var bits=[];
       X.routes.forEach(function(r){ var c=X.cells[d+'|'+r.rid]; if(!c || c.st==='idle' || c.st==='wx') return;
         var code=_ddLineCode(r.rid);
         var s='';
-        if(c.av<=0) s='FULL';
-        else if(c.need>0) s='short '+N(c.need)+' ('+c.bk+'/'+c.cap+')';
-        else if(c.av<=5) s=c.av+' left';
+        if(c.av<=0) s='⛔ '+code+' FULL';
+        else if(c.need>5) s='🔴 '+code+' short '+N(c.need)+' ('+c.bk+'/'+c.cap+')';
+        else if(c.need>0) s='🟠 '+code+' short '+N(c.need)+' ('+c.bk+'/'+c.cap+')';
+        else if(c.av<=5) s='⚠️ '+code+' '+c.av+' left';
         else return;
-        used[code]=r.name; bits.push('• '+code+' '+s); });
+        used[code]=r.name; bits.push('• '+s); });
       if(bits.length){ todo.push(_ddDLbl(d)); todo=todo.concat(bits); } });
-    if(todo.length){ L.push(''); L.push('▌TO DO'); L=L.concat(todo);
+    if(todo.length){ L.push(''); L.push('🎯 TO DO'); L=L.concat(todo);
       var codes=Object.keys(used); if(codes.length){ L.push(''); codes.forEach(function(k){ L.push(k+' = '+used[k]); }); } }
-  } else L.push('• No boats assigned yet');
+    else { L.push(''); L.push('🎯 TO DO'); L.push('• ✅ Nothing urgent'); }
+  } else L.push('• ⚪ No boats assigned yet');
   return L.join('\n');
 };
 window.dashDayDetailCopy=function(){
