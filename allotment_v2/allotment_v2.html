@@ -1253,12 +1253,53 @@
 
 <!-- ══════ MODALS ══════ -->
 
+<!-- §bsModals (2026-10-07) · Add-status and charter-boat dialogs restyled to match the in-app dialogs
+     (same look as #fl-modal-assignment / calSetModal / progSeasonModal). CSS is scoped to these two dialogs only;
+     ids, fields, pickSt / saveStatus / saveCharterBoat are untouched. -->
+<style>
+  :is(#status-modal,#charter-modal){background:rgba(10,18,48,.56) !important}
+  :is(#status-modal,#charter-modal) .modal{border-radius:16px !important;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important;overflow:hidden;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
+  :is(#status-modal,#charter-modal) .modal-hd{padding:20px 22px 8px !important;border-bottom:none !important;background:#fff !important;align-items:flex-start}
+  :is(#status-modal,#charter-modal) .modal-title{font-size:21px !important;font-weight:700 !important;letter-spacing:-.01em;color:#0F1B3D !important;line-height:1.2}
+  :is(#status-modal,#charter-modal) .modal-title::before{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700;margin-bottom:3px}
+  #status-modal .modal-title::before{content:'Boat Status · Status'}
+  #charter-modal .modal-title::before{content:'Boat Status · Charter boat'}
+  #charter-modal .modal-icon{display:none !important}
+  #charter-modal .modal-sub{font-size:13px !important;color:#5B6170 !important;margin-top:2px}
+  :is(#status-modal,#charter-modal) .modal-close{width:36px;height:36px;border-radius:18px !important;border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important;font-size:18px;line-height:1;cursor:pointer;margin-left:auto}
+  :is(#status-modal,#charter-modal) .modal-body{padding:8px 22px 6px !important;background:#fff !important}
+  :is(#status-modal,#charter-modal) .form-label{font-size:12.5px !important;font-weight:600 !important;color:#3D3D38 !important;text-transform:none !important;letter-spacing:0 !important}
+  :is(#status-modal,#charter-modal) :is(select,input[type="date"],input[type="text"],input[type="number"]){
+    width:100% !important;height:44px !important;box-sizing:border-box !important;padding:0 12px !important;border:1.5px solid #C9CCD6 !important;border-radius:10px !important;
+    background-color:#fff !important;font:500 14px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;color:#0F1B3D;outline-color:#16265C}
+  :is(#status-modal,#charter-modal) :is(input[type="date"],input[type="number"]){font-family:'DM Mono',monospace !important}
+  :is(#status-modal,#charter-modal) .modal-footer{padding:14px 22px !important;background:#F7F7F5 !important;border-top:1px solid #E2E2DC !important;gap:8px}
+  :is(#status-modal,#charter-modal) .modal-footer .btn{height:40px;padding:0 18px !important;border-radius:10px !important;font:600 13.5px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;cursor:pointer}
+  :is(#status-modal,#charter-modal) .modal-footer .btn-ghost{border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important}
+  :is(#status-modal,#charter-modal) .modal-footer .btn-primary{border:1px solid #16265C !important;background:#16265C !important;color:#fff !important}
+  /* status picker: same three status colours as the pills and the calendar */
+  #status-modal .st-picker{gap:8px;margin-bottom:14px}
+  #status-modal .st-opt{border-radius:10px !important;padding:9px 6px !important;border:1.5px solid #D9D9D2 !important;background:#fff;min-height:44px;box-sizing:border-box}
+  #status-modal .st-opt-name{font-size:13px !important;font-weight:600 !important}
+  #status-modal .st-opt.sel-available{background:#DDF1EA !important;border-color:#0B6B4F !important}
+  #status-modal .st-opt.sel-fixing{background:#FBEBD3 !important;border-color:#B36B00 !important}
+  #status-modal .st-opt.sel-unavailable{background:#FBE3E0 !important;border-color:#A1271F !important}
+  #status-modal #sto-available .st-opt-name{color:#0B5A43 !important}
+  #status-modal #sto-fixing .st-opt-name{color:#7A4300 !important}
+  #status-modal #sto-unavailable .st-opt-name{color:#8E2019 !important}
+  #status-modal .bsm-box{background:#F7F7F5 !important;border:1px solid #E2E2DC !important;border-radius:10px !important;padding:12px 14px !important}
+  #status-modal .bsm-box > .form-label{color:#3E4658 !important;font-size:11px !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important}
+  /* charter pier pills */
+  #charter-modal .loc-pill{min-height:36px;padding:0 13px !important;display:inline-flex;align-items:center;border-radius:18px !important;font-size:12.5px !important;font-weight:600 !important;border:1px solid #CFCFC8 !important;color:#0F1B3D !important;background:#fff !important}
+  #charter-modal .loc-pill.on{background:#0F1B3D !important;color:#fff !important;border-color:#0F1B3D !important}
+</style>
+
 <!-- Status Modal -->
 <div class="modal-overlay" id="status-modal">
   <div class="modal">
     <div class="modal-hd">
       <div class="modal-title" id="status-modal-title">เพิ่ม Status</div>
-      <button class="modal-close" onclick="closeModal('status-modal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('status-modal')">×</button>
     </div>
     <div class="modal-body">
       <div class="st-picker">
@@ -1279,8 +1320,8 @@
         <div class="form-row"><label class="form-label">วันที่เริ่ม *</label><input type="date" id="fm-st-from" required></div>
         <div class="form-row"><label class="form-label">วันที่สิ้นสุด *</label><input type="date" id="fm-st-to" required></div>
       </div>
-      <div class="form-row" style="background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:12px;margin-bottom:10px">
-        <label class="form-label" style="color:#9F1B4F;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-bottom:8px;display:block">Location</label>
+      <div class="form-row bsm-box" style="background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:12px;margin-bottom:10px">
+        <label class="form-label" style="margin-bottom:8px;display:block">Location</label>
         <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:8px;margin-bottom:8px">
           <div>
             <label class="form-label" style="font-size:10px;font-weight:500">จังหวัด *</label>
@@ -2995,7 +3036,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/><path d="M12 7V3"/></svg>
       </div>
       <div><div class="modal-title" id="ch-title">เพิ่มเรือเช่า</div><div class="modal-sub" id="ch-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
-      <button class="modal-close" onclick="closeModal('charter-modal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('charter-modal')">×</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="ch-edit-id" value="">
