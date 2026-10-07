@@ -10499,7 +10499,7 @@ function renderSettings(){
   const _pd=new Date(TODAY_STR+'T00:00:00');
   const _chip='height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;font:700 11.5px inherit;font-family:inherit;border:1px solid transparent;cursor:pointer';
   const headerBar=`<style>
-    #view-settings{padding:18px 18px 64px;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
+    #view-settings{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
     #view-settings > .page-hd{display:none}
     #view-settings #prog-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
     #view-settings #prog-q::placeholder{color:#B4BCDD}
@@ -10602,6 +10602,8 @@ function renderSettings(){
   /* §progScroll · กดเลือกโปรแกรม = วาดใหม่ทั้งหน้า · กล่องรายการเป็นตัวใหม่ ตำแหน่งเลื่อนกลับเป็น 0
      จำไว้ก่อนแล้วคืนให้ ไม่งั้นเลือกโปรแกรมท้าย ๆ ทีไร รายการเด้งกลับบนสุดทุกครั้ง */
   const _keepList=(document.getElementById('prog-list-box')||{}).scrollTop||0;
+  /* §progFit · แผงขวาเลื่อนในตัวเองแล้ว · กดสลับวันในเดือนท้าย ๆ = วาดใหม่ทั้งหน้า ต้องคืนตำแหน่งเลื่อน ไม่งั้นเด้งกลับบนสุดทุกคลิก */
+  const _keepDet=(window._progDetFor===selProgId) ? ((document.getElementById('prog-detail-mount')||{}).scrollTop||0) : 0;
   wrap.innerHTML=`${headerBar}${kpiStrip}<div class="prog-2col" style="display:grid;grid-template-columns:380px minmax(0,1fr);gap:13px;align-items:start">${listPanel}${detailPanel}</div>`;
   progApplyFilter();   // §progRedesign · วาดใหม่ทั้งหน้าทุกครั้งที่เลือกโปรแกรม · ตัวกรองที่ค้างไว้ต้องกลับมาเหมือนเดิม
 
@@ -10614,13 +10616,23 @@ function renderSettings(){
        และปล่อยให้เลื่อนต่อไปที่หน้าได้ ไม่งั้นนิ้วที่ปัดบนรายการจะลงไปหาปฏิทินข้างล่างไม่ได้ */
     const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
     lb.style.position=stack?'static':'sticky'; lb.style.overscrollBehavior=stack?'auto':'contain';
-    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs; return; }
-    /* §progSticky · ตรึงต่อจากขอบล่างของแถบบน (วัดจากตำแหน่งจริง) · ไม่มีแถบ = 14px แบบเดิม */
+    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs;
+      if(dm){ dm.style.maxHeight='none'; dm.style.overflowY='visible'; } return; }
+    /* §progFit (2026-10-07) · ผู้ใช้: "ควรตรึงขอบบนของ Header ก่อน ส่วนข้อมูลขวา ถ้าล้นค่อยมี Scroll down"
+       รอบก่อนตรึงแค่แถบบน แต่หน้ายังเลื่อนได้ → หัวการ์ดสองใบเลื่อนขึ้นไปซุกใต้แถบ โดนตัดครึ่ง
+       ตอนนี้หน้าไม่เลื่อนแล้ว · การ์ดสองใบสูงพอดีจอ (จากใต้แถบบนถึงขอบล่าง) แต่ละใบเลื่อนข้างในตัวเองเมื่อเนื้อหาล้น
+       วัดจากตำแหน่งจริงของกริดตอนหน้ายังไม่เลื่อน (gp.top + scrollY) · แถบขึ้นสองบรรทัดก็ยังพอดี */
     const pt=document.getElementById('prog-top');
     const pin=(pt && getComputedStyle(pt).position==='sticky') ? Math.round(pt.getBoundingClientRect().height)+11 : 14;
     const pinPx=pin+'px'; if(lb.style.top!==pinPx) lb.style.top=pinPx;
-    let bot=window.innerHeight-14; if(dm&&dm.offsetHeight>lb.offsetHeight) bot=Math.min(bot, dm.getBoundingClientRect().bottom);
-    const h=Math.max(320, Math.round(bot-Math.max(pin, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
+    const absTop=gp.top+(window.scrollY||0);
+    /* เผื่อ padding ล่างของ <main> ที่ครอบหน้าอยู่ · ไม่เผื่อ = หน้าจะยาวเกินจอไปเท่านั้นพอดี แล้วกลับมาเลื่อนได้อีก */
+    const _mn=document.querySelector('main.main');
+    const tail=Math.max(14, _mn ? (parseFloat(getComputedStyle(_mn).paddingBottom)||0) : 0)+2;
+    const h=Math.max(320, Math.round(window.innerHeight-absTop-tail))+'px';
+    if(lb.style.maxHeight!==h) lb.style.maxHeight=h;
+    if(dm){ if(dm.style.maxHeight!==h) dm.style.maxHeight=h; dm.style.overflowY='auto'; dm.style.overflowX='hidden';
+      dm.style.overscrollBehavior='contain'; dm.style.scrollbarWidth='thin'; } };
   if(!window._progListFitOn){ window._progListFitOn=1; let _q=0;
     const _f=()=>{ if(_q) return; _q=requestAnimationFrame(()=>{ _q=0; window._progListFit&&window._progListFit(); }); };
     window.addEventListener('scroll',_f,{passive:true}); window.addEventListener('resize',_f,{passive:true}); }
@@ -10648,6 +10660,9 @@ function renderSettings(){
   });
 
   renderProgDetailPink();
+  window._progDetFor=selProgId;
+  window._progListFit();
+  if(_keepDet){ const _dm=document.getElementById('prog-detail-mount'); if(_dm) _dm.scrollTop=_keepDet; }
 }
 
 function renderProgDetailPink(){
