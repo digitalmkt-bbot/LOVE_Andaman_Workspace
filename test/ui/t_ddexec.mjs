@@ -6,7 +6,7 @@
 //
 // กันสิบเอ็ดอย่าง
 //   1 มุมมองวันเดียว · มีก้อน exec + ก้อนไปวันไหน + ตาราง 7 วัน · bullet 4 ข้อ · ตัวเลข "คีย์วันนี้" ตรงกับ _ddSum (ไม่นับใบยกเลิก/ใบบริษัท)
-//   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหน รวมใบครบ · แถว "ถึงวันนี้" ขึ้นก่อน
+//   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหนสองชั้น (§ddTravel2) หัวเดือน=ผลรวมวันใต้ · เดือนที่มีวันใน 7 วันเปิด เดือนไกลพับ · กลุ่ม "ถึงวันนี้" ขึ้นก่อน
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
 //   4 จุดคุ้มทุน · ตั้งแผนต้นทุนให้เส้นทาง (ราคา 2,500) → ช่องที่เคย "ไม่รู้จุดคุ้มทุน" กลายเป็นรู้ · ขาด = max(0, Σคุ้มทุนต่อลำ − จอง) · สีตามขาด (ok/warn/bad)
 //   5 ป้าย +N ของช่อง = pax ของใบที่คีย์วันนี้ที่ไปเส้นทาง-วันนั้น (นับเอง)
@@ -48,12 +48,22 @@ const s2 = await page.evaluate((DATE) => {
   rows.forEach(r => { const d = (r.trips[0] || {}).date; if (days.includes(d)) { n++; pax += r.pax; } });
   const sumN = X.travel.reduce((s, t) => s + t.n, 0);
   const firstK = (X.travel[0] || {}).k, hasPast = X.travel.some(t => t.k.charAt(0) === '<');
-  const rowsDom = [...document.querySelectorAll('[data-dd="travel"] .tl .r:not(.hd)')];
-  const soonDom = rowsDom.filter(r => r.classList.contains('soon')).length;
-  return { n, pax, w7: X.w7, sumN, xn: X.n, firstK, hasPast, soonDom, soonX: X.travel.filter(t => t.soon).length, nDom: rowsDom.length, nX: X.travel.length, days0: days[0], exp0: _ddAddDays(DATE, 1) };
+  /* §ddTravel2 · สองชั้น · หัวเดือน (.mh) + วัน (.day) · ยอดหัวเดือน = ผลรวมวันใต้ · เดือนที่มีวันใน 7 วันเปิดไว้ เดือนไกลพับ */
+  const groups = [...document.querySelectorAll('[data-dd="travel"] .mg')];
+  const gOk = groups.every(g => { const m = X.travelM.find(x => x.k === g.getAttribute('data-m')); if (!m) return false;
+    const dayRows = [...g.querySelectorAll('.r.day')]; if (m.k === '<') return dayRows.length === 0;
+    const sumD = m.days.reduce((s, d) => s + d.n, 0), sumP = m.days.reduce((s, d) => s + d.pax, 0);
+    const openOk = g.classList.contains('open') === (m.soon || false);
+    const shown = dayRows.length && getComputedStyle(dayRows[0]).display !== 'none';
+    return dayRows.length === m.days.length && sumD === m.n && sumP === m.pax && openOk && (shown === g.classList.contains('open')); });
+  const sumM = X.travelM.reduce((s, m) => s + m.n, 0);
+  const soonDom = [...document.querySelectorAll('[data-dd="travel"] .r.day.soon')].length;
+  const firstM = (X.travelM[0] || {}).k, hasPastM = X.travelM.some(m => m.k === '<');
+  const soonMonthsOpen = X.travelM.filter(m => m.soon).every(m => m.open);
+  return { n, pax, w7: X.w7, sumN, xn: X.n, firstK, hasPast, soonDom, soonX: X.travel.filter(t => t.soon).length, nDom: groups.length, nX: X.travelM.length, days0: days[0], exp0: _ddAddDays(DATE, 1), gOk, sumM, firstM, hasPastM, soonMonthsOpen };
 }, DATE);
-if (s2.w7.n === s2.n && s2.w7.pax === s2.pax && s2.sumN === s2.xn && s2.days0 === s2.exp0 && (!s2.hasPast || s2.firstK.charAt(0) === '<') && s2.soonDom === s2.soonX && s2.nDom === s2.nX && s2.soonX <= 7)
-  ok(`2 ไปใน 7 วัน ${s2.n} ใบ ${s2.pax} คน นับเองตรง · รายการไปวันไหน ${s2.nX} แถว รวม ${s2.sumN} ใบครบ · ${s2.soonX} แถวใน 7 วัน (เทา)`);
+if (s2.w7.n === s2.n && s2.w7.pax === s2.pax && s2.sumN === s2.xn && s2.sumM === s2.xn && s2.days0 === s2.exp0 && (!s2.hasPast || s2.firstK.charAt(0) === '<') && (!s2.hasPastM || s2.firstM === '<') && s2.soonDom === s2.soonX && s2.nDom === s2.nX && s2.soonX <= 7 && s2.gOk && s2.soonMonthsOpen)
+  ok(`2 ไปใน 7 วัน ${s2.n} ใบ ${s2.pax} คน นับเองตรง · รายการไปวันไหน ${s2.nX} เดือน (สองชั้น หัวเดือน=ผลรวมวัน) รวม ${s2.sumM} ใบครบ · ${s2.soonX} วันใน 7 วันเปิดอยู่ · เดือนไกลพับ`);
 else fail('2 ' + JSON.stringify(s2));
 
 /* ══ 3 ══ */
@@ -186,13 +196,14 @@ const s9 = await page.evaluate((DATE) => {
     const h = el.querySelector('.h').textContent, pill = el.querySelector('.p b').textContent, s = el.querySelector('.s').textContent;
     const kind = el.getAttribute('data-todo'), em = el.querySelector('.m em');
     const okPill = kind === 'short' ? pill === 'Sell ' + c.need + ' more' : (kind === 'near' ? /seats? left/.test(pill) : pill === 'Full');
+    const lab = el.querySelector('.m u s'), okLab = c.be == null ? !lab : (!!lab && lab.textContent === 'BE ' + c.be && el.querySelector('.m u').style.left === Math.min(100, Math.round(c.be / c.cap * 100)) + '%');
     return { okH: h.includes(_ddDLbl(c.d, true)) && h.includes(_ddCellName(c)), okPill, okS: s.includes(c.bk + ' booked of ' + c.cap) && s.includes(c.av + ' open') && (c.be == null || s.includes('break-even ' + c.be)),
-      okBe: c.be == null ? !em : (!!em && em.style.left === Math.min(100, Math.round(c.be / c.cap * 100)) + '%'), kind, pill }; });
+      okBe: c.be == null ? !em : (!!em && em.style.left === Math.min(100, Math.round(c.be / c.cap * 100)) + '%'), okLab, kind, pill }; });
   ctPlansSave(ctPlans().filter(p => !ids.includes(p.id))); window._ddPaint();
   return { n: cards.length, nExp: exp.length, out };
 }, DATE);
-if (s9.n > 0 && s9.n === s9.nExp && s9.out.every(o => !o.miss && o.okH && o.okPill && o.okS && o.okBe))
-  ok(`9 การ์ด to-do ${s9.n} ใบ · หัว "วัน · เส้นทาง" · ป้ายคำสั่ง (${s9.out.map(o => o.pill).join(' / ')}) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบ`);
+if (s9.n > 0 && s9.n === s9.nExp && s9.out.every(o => !o.miss && o.okH && o.okPill && o.okS && o.okBe && o.okLab))
+  ok(`9 การ์ด to-do ${s9.n} ใบ · หัว "วัน · เส้นทาง" · ป้ายคำสั่ง (${s9.out.map(o => o.pill).join(' / ')}) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบพร้อมป้าย "BE N" ตรงตำแหน่ง`);
 else fail('9 ' + JSON.stringify(s9).slice(0, 700));
 
 /* ══ 10 · §ddBE2 · จุดคุ้มทุนคิดจากราคาขายจริงของวันนั้น ไม่ใช่ราคาในแผน · และ "ไม่คุ้มแม้เต็มลำ" แยกจาก "ไม่มีแผน" ══ */
