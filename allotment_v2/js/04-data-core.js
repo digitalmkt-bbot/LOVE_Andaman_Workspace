@@ -4362,6 +4362,10 @@ function renderCal(){
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Matrix
         </button>
+        <button onclick="setCalViewMode('routes')" title="One mini calendar per route" style="background:${viewMode==='routes'?FOREST:'transparent'};color:${viewMode==='routes'?LIME:ink[2]};border:none;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:${viewMode==='routes'?600:500};cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
+          Routes
+        </button>
       </div>
       ${viewMode==='month'?rangeCtl:''}
     </div>
@@ -5170,8 +5174,106 @@ function renderCal(){
     }
   }
 
+  // ── §calRoutes (2026-10-07) · มุมมอง "Routes" · 1 เส้นทาง = 1 ปฏิทินย่อทั้งเดือน ──
+  //   ใช้แคปหน้าจอส่งต่อ · ชื่อเส้นทางเต็ม + ที่นั่งว่างรายวันอยู่ในการ์ดเดียว
+  //   ตัวเลขมาจาก _calTripsFor ตัวเดียวกับโหมด Month (รวมทุกลำของเส้นทาง · เคารพตัวกรองท่า/ซ่อนเส้นทาง)
+  //   อ่านอย่างเดียว · ไม่เขียนข้อมูล ไม่แตะ state อื่นนอกจาก _calViewMode
+  let routesView='';
+  if(viewMode==='routes'){
+    const LOW=10;   // ว่างต่ำกว่านี้ = "ใกล้เต็ม"
+    const escR=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const rd={};    // rid -> {r, days:{d:{free,cap,wx,ch}}}
+    for(let d=1;d<=daysInMonth;d++){
+      const ds=`${viewMonth}-${String(d).padStart(2,'0')}`;
+      piers.forEach(pier=>{
+        if(_calPierClosed(pier,ds)) return;
+        _calTripsFor(ds,pier).forEach(t=>{
+          if(_hidRt.has(t.r.id)) return;
+          const o=rd[t.r.id]||(rd[t.r.id]={r:t.r,days:{}});
+          const g=o.days[d]||(o.days[d]={free:0,cap:0,wx:false,ch:false});
+          g.free+=(t.weatherClosed?0:t.free); g.cap+=t.cap;
+          if(t.weatherClosed) g.wx=true;
+          if(t.isCharter) g.ch=true;
+        });
+      });
+    }
+    const live=Object.values(rd).sort((a,b)=>{
+      const dm=_calDepMin(a.r)-_calDepMin(b.r); if(dm) return dm;
+      return String(a.r.name||'').localeCompare(String(b.r.name||''));
+    });
+    const deadRt=_rtSorted.filter(rt=>!rd[rt.id] && !_hidRt.has(rt.id));
+    const rName=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
+    const MONO="'DM Mono','IBM Plex Sans Thai',monospace";
+    const dowRow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((x,i)=>`<div style="color:${(i===0||i===6)?'#A63A1C':'#5F5F58'}">${x}</div>`).join('');
+    const cards=live.map(o=>{
+      const r=o.r, v=_calVivid(r.color), tint=v+'26';
+      let nDays=0, nFull=0, nLow=0, cells='';
+      for(let i=0;i<firstDay;i++) cells+='<div></div>';
+      for(let d=1;d<=daysInMonth;d++){
+        const ds=`${viewMonth}-${String(d).padStart(2,'0')}`;
+        const g=o.days[d];
+        let bg='#F4F4F0', fg='#8A8A82', dfg='#5F5F58', txt='', fw=500, fz=16, tip='';
+        if(g){
+          nDays++;
+          if(g.wx){ txt='WX'; bg='#E6E9F0'; fg='#475569'; tip='weather cancelled'; }
+          else if(g.ch && g.free<=0){ txt='CH'; bg='#D6F3FA'; fg='#00566B'; tip='charter'; }
+          else if(g.free<=0){ txt='FULL'; fz=12.5; bg='#000F4C'; fg='#FFFFFF'; dfg='#C9D3EE'; nFull++; tip='full'; }
+          else if(g.free<LOW){ txt=String(g.free); bg='#FFD9CC'; fg='#7A1F08'; fw=700; nLow++; }
+          else { txt=String(g.free); bg=tint; fg='#000F4C'; }
+          if(!tip) tip=`${g.free} of ${g.cap} seats free`;
+        }
+        cells+=`<div${tip?` title="${escR(rName(r))} · ${d} · ${tip}"`:''} style="height:46px;box-sizing:border-box;padding:3px 5px;border-radius:6px;background:${bg};${ds===TODAY_STR?'box-shadow:inset 0 0 0 2px #FF6B47;':''}${ds<TODAY_STR?'opacity:.5;':''}">
+          <div style="font:400 10.5px/1.2 ${MONO};color:${dfg}">${d}</div>
+          <div style="text-align:center;font:${fw} ${fz}px/${fz<16?'21px':'1.3'} ${MONO};color:${fg}">${txt}</div>
+        </div>`;
+      }
+      const dep=String(((r.times)||[])[0]||'').trim()||'—';
+      const dW=(n)=>n+(n===1?' day':' days');
+      const sub=[dW(nDays)+' with trips'].concat(nFull?[dW(nFull)+' full']:[], nLow?[dW(nLow)+' almost full']:[]).join(' · ');
+      return `<div style="background:#fff;border:1px solid #E2E2DC;border-radius:12px;overflow:hidden">
+        <div style="height:8px;background:${v}"></div>
+        <div style="padding:12px 14px 14px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+            <div style="font-size:17px;font-weight:700;line-height:1.2;color:#000F4C">${escR(rName(r))}</div>
+            <div style="flex:none;font:400 12.5px ${MONO};color:#5F5F58">${PIER_LBL[r.pier]||''} · ${escR(dep)}</div>
+          </div>
+          <div style="margin-top:2px;font-size:12px;color:#5F5F58">${sub}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:9px;font-size:10.5px;font-weight:600;text-align:center">${dowRow}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:4px">${cells}</div>
+        </div>
+      </div>`;
+    }).join('');
+    const lg=(bg,fg,t,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;min-width:32px;padding:1px 4px;border-radius:5px;background:${bg};color:${fg};font:500 12px ${MONO};text-align:center">${t}</span>${l}</span>`;
+    const stamp=new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false});
+    routesView=`<div style="background:#F7F7F5;border-radius:12px;padding:20px 22px 22px;box-shadow:0 14px 40px rgba(2,10,30,.34);font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#000F4C">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:12px;border-bottom:2px solid #000F4C">
+        <div>
+          <div style="font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:600">LOVE Andaman · Seats free by route</div>
+          <div style="margin-top:3px;font-size:30px;font-weight:700;letter-spacing:-.01em;line-height:1.15">${MONTHS_EN[calMonth]} ${calYear}${calPier!=='all'?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${PIER_NAME[calPier]||''}</span>`:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#3D3D38">
+          ${lg('#DFE9F7','#000F4C','24','Available (route colour)')}
+          ${lg('#FFD9CC','#7A1F08','6','Almost full (under '+LOW+')')}
+          ${lg('#000F4C','#FFFFFF','FULL','Sold out')}
+          ${lg('#D6F3FA','#00566B','CH','Charter')}
+          ${lg('#E6E9F0','#475569','WX','Weather cancelled')}
+          <span style="padding-left:16px;border-left:1px solid #D9D9D2">Updated <b style="font:500 12.5px ${MONO};color:#000F4C">${stamp}</b></span>
+        </div>
+      </div>
+      ${cards
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-top:16px">${cards}</div>`
+        : `<div style="padding:40px 0;text-align:center;font-size:14px;color:#5F5F58">No trips this month</div>`}
+      ${deadRt.length?`<div style="margin-top:14px;font-size:12.5px;color:#3D3D38"><b>No trips this month:</b> ${deadRt.map(rt=>escR(rName(rt))).join(' · ')}</div>`:''}
+    </div>`;
+  }
+
   // ── COMPOSE ──
-  if(viewMode==='month'){
+  if(viewMode==='routes'){
+    // §calRoutes · ไม่ใช้ .cal2-page (ตัวนั้นถูก _calFitPage ล็อกความสูงตอน resize) · หน้านี้ต้องยาวตามจำนวนการ์ด
+    window._calDrawer=false;
+    wrap.innerHTML = CAL2CSS
+      + `<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:9px">${headerBar}${routeStrip2}${routesView}</div>`;
+  } else if(viewMode==='month'){
     // §cal2 · ปฏิทินกินพื้นที่ที่เหลือทั้งหมด · รายละเอียดวันอยู่ในลิ้นชัก
     const _dwOn=!!window._calDrawer;
     wrap.innerHTML = CAL2CSS
