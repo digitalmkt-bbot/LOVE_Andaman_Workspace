@@ -4,7 +4,7 @@
 //   วันนี้มีบุคกิ้งอะไรเข้าบ้าง ไปวันไหนบ้าง และอีก 7 วันล่วงหน้ายังมีที่นั่งว่างเท่าไหร่ ต้องหาลูกค้าเพิ่มอีกเท่าไหร่"
 //   เลือกแบบ bullet 4 ข้อ (ม็อกอัป v3)
 //
-// กันสิบเอ็ดอย่าง
+// กันสิบสองอย่าง
 //   1 มุมมองวันเดียว · มีก้อน exec + ก้อนไปวันไหน + ตาราง 7 วัน · bullet 4 ข้อ · ตัวเลข "คีย์วันนี้" ตรงกับ _ddSum (ไม่นับใบยกเลิก/ใบบริษัท)
 //   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหนสองชั้น (§ddTravel2) หัวเดือน=ผลรวมวันใต้ · เดือนที่มีวันใน 7 วันเปิด เดือนไกลพับ · กลุ่ม "ถึงวันนี้" ขึ้นก่อน
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
@@ -13,6 +13,7 @@
 //   6 ปุ่มคัดลอกส่ง LINE · อังกฤษล้วน (§ddEn · ก้อนในแอปก็ไม่มีตัวไทย) · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
 //   9 §ddTodo2 · การ์ด to-do: หัว วัน·เส้นทาง · ป้ายคำสั่ง (Sell N more / N seats left / Full) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบตรงตำแหน่ง
+//  12 §ddFullOk · เที่ยวที่เต็มแล้วในข้อความ LINE ใช้ ✅ (ข่าวดี) ไม่ใช่ ⛔
 //  11 §ddBE2 · ใบยอดเงิน 0 ไม่ถ่วงราคาเฉลี่ย · สองลำบนกระดานวันเดียวกัน คิดจุดคุ้มทุนเฉพาะลำที่ต้องออกตามคนจอง (ไม่บวกสองลำ)
 //  10 §ddBE2 · จุดคุ้มทุนคิดจากราคาเฉลี่ยของใบจองจริงในวันนั้น (ไม่ใช่ราคาในแผน) · ราคาต่ำจนไม่คุ้มแม้เต็มลำ = "won't break even" แยกจาก "no cost plan" ไม่นับขาด
 //   8 §ddIdle · ลำที่วางบนกระดานแต่จอง 0 คน = "no bookings yet" ไม่นับขาด ไม่ขึ้น to-do/LINE ไม่เข้ายอดที่นั่ง · โปรแกรมปิดฤดู/ปิดอากาศไม่โผล่ (ชุดเดียวกับปฏิทิน)
@@ -264,6 +265,19 @@ const s11 = await page.evaluate((DATE) => {
 if (!s11.err && s11.C.after === s11.C.exp && s11.C.after !== s11.C.dragged && s11.D.exp != null && s11.D.be === s11.D.exp && s11.D.boats === 2 && (s11.D.b1 === s11.D.b2 || s11.D.be !== s11.D.sum))
   ok(`11 ใบราคา 0 ไม่ถ่วงเฉลี่ย (฿${s11.C.base} → ฿${s11.C.after} ไม่ใช่ ฿${s11.C.dragged}) · สองลำบนกระดาน be ${s11.D.be} = ลำที่คุ้มง่ายสุด (${s11.D.b1}/${s11.D.b2}) ไม่ใช่ผลบวก ${s11.D.sum}`);
 else fail('11 ' + JSON.stringify(s11));
+
+/* ══ 12 · §ddFullOk · เที่ยวที่เต็มแล้ว ในข้อความ LINE เป็น ✅ ไม่ใช่ ⛔ ══ */
+const s12 = await page.evaluate((DATE) => {
+  window._ddFrom = window._ddTo = DATE; window._ddPaint();
+  const X = window._ddExecX, k = Object.keys(X.cells).find(k => X.cells[k].bk > 0 && X.cells[k].st !== 'wx' && X.cells[k].st !== 'idle'); if (!k) return { err: 'no cell' };
+  const c = X.cells[k], keep = c.av; c.av = 0;   /* ข้อความอ่านจาก _ddExecX ตรง ๆ · จำลองว่าเต็มแล้ว */
+  const t = dashDayDetailLineText(), code = _ddLineCode(c.rid), lines = t.split('\n');
+  const i = lines.indexOf(_ddDLbl(c.d)); let blk = []; if (i >= 0) { let j = i + 1; while (j < lines.length && lines[j].startsWith('• ')) blk.push(lines[j++]); }
+  c.av = keep; window._ddPaint();
+  return { has: blk.includes('• ✅ ' + code + ' FULL'), noBan: !/⛔/.test(t), day: _ddDLbl(c.d), code };
+}, DATE);
+if (!s12.err && s12.has && s12.noBan) ok(`12 เที่ยวเต็ม → "• ✅ ${s12.code} FULL" ใต้หัววัน ${s12.day} · ไม่มี ⛔ ในข้อความ`);
+else fail('12 ' + JSON.stringify(s12));
 
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (e1.length) fail('errors: ' + e1.slice(0, 3).join(' | '));
