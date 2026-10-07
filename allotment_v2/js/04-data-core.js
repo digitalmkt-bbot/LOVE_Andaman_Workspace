@@ -2065,19 +2065,23 @@ function _ddExecHtml(rows,rg){
   X.tot.near.slice(0,2).forEach(function(c){ acts.push(mk(c,'near')); });
   X.tot.full.slice(0,2).forEach(function(c){ acts.push(mk(c,'full')); });
   acts=acts.slice(0,5);
-  var ah='<div class="acts"><div class="ct">To do today</div>'
+  var ah='<div class="acts"><div class="dv-ddh">To do today'+(acts.length?('<span>'+pl(acts.length,'departure')+'</span>'):'')+'</div>'
     +(acts.length?acts.map(function(a,i){
         return '<div class="act2 '+a.c+'" data-todo="'+a.kind+'"><i class="'+a.c+'">'+(i+1)+'</i>'
           +'<div class="b"><div class="h"><b>'+esc(a.d)+'</b> · '+esc(a.r)+'</div>'
-          +'<div class="m">'+(a.bePct!=null?('<u style="left:'+a.bePct+'%"><s>BE '+N(a.be)+'</s></u>'):'')+'<i style="width:'+a.pct+'%"></i>'+(a.bePct!=null?('<em style="left:'+a.bePct+'%"></em>'):'')+'</div>'
-          +'<div class="s"><span><b>'+N(a.bk)+'</b> booked of '+N(a.cap)+'</span>'+(a.be!=null?('<span>break-even <b>'+N(a.be)+'</b></span>'):'')+'<span><b>'+N(a.av)+'</b> open</span></div></div>'
+          /* §ddRe · one line: bar with break-even tick, numbers at the end of the bar */
+          +'<div class="mr"><div class="m"><i style="width:'+a.pct+'%"></i>'+(a.bePct!=null?('<em style="left:'+a.bePct+'%" title="break-even '+N(a.be)+'"></em>'):'')+'</div>'
+          +'<span class="s">'+N(a.bk)+'/'+N(a.cap)+(a.be!=null?(' · BE '+N(a.be)):'')+' · '+N(a.av)+' open</span></div></div>'
           +'<div class="p"><b>'+esc(a.pill)+'</b><small>'+esc(a.why)+'</small></div></div>'; }).join('')
       :'<div class="act"><i class="g">✓</i><span>'+(nCells?'Nothing urgent to sell in the next 7 days':'Assign boats on the Boat Operation sheet first')+'</span></div>')
     +'</div>';
-  return '<div class="dv-c dv-ddexec" data-dd="exec"><div class="dv-ddh">Executive Summary · '+esc(_ddDLbl(rg.to,true))
-      +'<span class="dv-ddexb"><button class="dv-ddbtn" onclick="dashDayDetailCopy()">Copy for LINE</button></span></div>'
-    +'<div class="ex3"><ul class="bul">'+b1+b2+b3+b4+'</ul>'+kv+ah+'</div></div>'
-    +_ddExecRow2Html(X,rg,esc);
+  /* §ddRe (2026-10-07) · KPI row on top, summary + to-do side by side, then travel dates + 7-day grid.
+     The whole block is sized to one screen by _ddFit(); Copy for LINE moved to the header row. */
+  return '<div class="dv-ddfit" id="dv-ddfit"><div class="dv-ddexec" data-dd="exec">'+kv
+      +'<div class="ex2"><div class="dv-c exc"><div class="dv-ddh">Executive Summary · '+esc(_ddDLbl(rg.to,true))+'</div>'
+        +'<ul class="bul">'+b1+b2+b3+b4+'</ul></div>'
+      +'<div class="dv-c exc">'+ah+'</div></div></div>'
+    +_ddExecRow2Html(X,rg,esc)+'</div>';
 }
 /* ── ก้อน 2+3 · travel dates + 7-day grid (English · §ddEn) ── */
 function _ddExecRow2Html(X,rg,esc){
@@ -2100,7 +2104,7 @@ function _ddExecRow2Html(X,rg,esc){
     :'<div class="dv-ddnone">No bookings keyed in today</div>';
   var left='<div class="dv-c dv-ddtrav" data-dd="travel"><div class="dv-ddh">Today\'s bookings · travel date<span>'+N(X.n)+' bookings · '+X.travelM.length+' months</span></div>'
     +'<div class="tl"><div class="r hd"><span>Travel date</span><span>pax · B2B / B2C</span><span style="text-align:right">bk · pax</span><span>Main routes</span></div>'+tl+'</div>'
-    +'<div class="lg"><span><i style="background:#3E7FBF"></i>B2B</span><span><i style="background:#C2557C"></i>B2C</span><span style="margin-left:auto">grey rows = within 7 days · click a month to fold</span></div></div>';
+    +'<div class="lg"><span><i style="background:#1272B3"></i>B2B</span><span><i style="background:#C2416B"></i>B2C</span><span style="margin-left:auto">grey rows = within 7 days · click a month to fold</span></div></div>';
   var head='<tr><th class="l">Route</th>'+X.days.map(function(d,i){ var dd=new Date(d+'T00:00:00');
     return '<th'+(i===0?' class="first"':'')+'>'+_DD_WD[dd.getDay()]+'<span class="dd">'+dd.getDate()+'</span></th>'; }).join('')+'</tr>';
   var pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong'};
@@ -2126,7 +2130,7 @@ function _ddExecRow2Html(X,rg,esc){
       +'<span>'+X.routes.length+' routes with boats · '+esc(_ddDLbl(X.days[0]))+' – '+esc(_ddDLbl(X.days[6],true))+'</span></div>'
     +(X.routes.length
       ? ('<div class="gw"><table><thead>'+head+'</thead><tbody>'+body+totRow+'</tbody></table></div>'
-        +'<div class="lg"><span><i style="background:#2E9B72"></i>at break-even</span><span><i style="background:#E0A21E"></i>short ≤ 5</span><span><i style="background:#D64545"></i>short &gt; 5</span><span><i style="background:#E6E8EF;border:1px dashed #B4B8D2"></i>no bookings yet · not counted</span><span><i style="background:#8E3A6B"></i>won\'t break even at current price</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from the cost plan at the day\'s real average price (hover a cell)</span></div>')
+        +'<div class="lg"><span><i style="background:#2E9C78"></i>at break-even</span><span><i style="background:#D9952B"></i>short ≤ 5</span><span><i style="background:#C8473C"></i>short &gt; 5</span><span><i style="background:#F7F7F5;border:1px dashed #CFCFC8"></i>no bookings yet · not counted</span><span><i style="background:#8E3A6B"></i>won\'t break even at current price</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from the cost plan at the day\'s real average price (hover a cell)</span></div>')
       : '<div class="dv-ddnone">No boats assigned on the Boat Operation sheet for the next 7 days</div>')
     +'</div>';
   return '<div class="dv-ddexr2">'+left+right+'</div>';
@@ -2220,19 +2224,20 @@ function _ddHeadHtml(){
       +'onclick="dashDayDetailPreset(\''+p.k+'\')">'+p.n+'</span>'; }).join('');
   var arw=rg.days>1?laTp('ช่วงก่อนหน้า ({0} วัน)', rg.days):laT('วันก่อนหน้า');
   var arwN=rg.days>1?laTp('ช่วงถัดไป ({0} วัน)', rg.days):laT('วันถัดไป');
-  return '<div class="dv-ddhr1">'
+  return '<div class="dv-ddhr1"><span class="dv-ddl">'
     +'<button class="dv-arw" onclick="dashDayDetailShift(-1)" title="'+arw+'">&lsaquo;</button>'
     +'<span class="dv-ddnum'+(L.wide?' w':'')+'">'+L.num+'</span>'
     +'<span class="dv-dddgrp"><b class="dv-dddwk">'+L.wk+'</b>'
       +'<span class="dv-dddmo">'+L.mo+'</span></span>'
-    +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button>'
-    +'<span class="dv-ddttl">'+(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))
-      +'<i>'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
-                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'</i></span>'
+    +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button></span>'
+    /* §ddRe · centre wordmark like Boat Operation: LOVE ANDAMAN over the page name */
+    +'<span class="dv-ddttl" title="'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
+                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'"><i class="wm">LOVE ANDAMAN</i>'
+      +(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))+'</span>'
     +'<span class="dv-ddkpi">'
       +'<span class="dv-chip"><b>'+ok.length+'</b> '+laT('ใบ')+'</span>'
       +'<span class="dv-chip"><b>'+pax+'</b> pax</span>'
-      +'<span class="dv-chip"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
+      +'<span class="dv-chip money"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
       +(cxl?('<span class="dv-chip warn"><b>'+cxl+'</b> '+laT('ยกเลิก')+'</span>'):'')
       +'<button class="dv-ddx" onclick="dashDayDetailClose()" title="'+laT('ปิด')+'">&times;</button>'
     +'</span></div>'
@@ -2245,6 +2250,7 @@ function _ddHeadHtml(){
           +'onchange="dashDayDetailSetRange(\'from\',this.value)">'
         +'<i>'+laT('ถึง','date')+'</i><input type="date" value="'+rg.to+'" min="'+rg.from+'" '
           +'onchange="dashDayDetailSetRange(\'to\',this.value)">'
+        +(rg.days===1?'<button class="dv-ddbtn" onclick="dashDayDetailCopy()">Copy for LINE</button>':'')
       +'</span>'
     +'</div>';
 }
@@ -2268,16 +2274,33 @@ window.dashOpenDayDetail=function(side){
   }
   window._ddPaint();
   ov.style.display='block';
+  window._ddFit();
 };
+/* §ddFit (2026-10-07) · the summary block fills exactly one screen: the travel-date list and the 7-day
+   grid take what is left under the summary and scroll inside their own cards. Narrow screens: no fixed height. */
+window._ddFit=function(){
+  try{
+    var bd=document.getElementById('dv-ddbd'), fit=document.getElementById('dv-ddfit');
+    if(!bd||!fit) return;
+    var r2=fit.querySelector('.dv-ddexr2'); if(!r2) return;
+    r2.style.height='';
+    if(window.innerWidth<1101 || !bd.clientHeight) return;
+    var top=r2.getBoundingClientRect().top-bd.getBoundingClientRect().top+bd.scrollTop;
+    r2.style.height=Math.max(320,Math.floor(bd.clientHeight-14-top))+'px';
+  }catch(_){}
+};
+if(!window._ddFitOn){ window._ddFitOn=1; window.addEventListener('resize', function(){ window._ddFit(); }, {passive:true}); }
 window._ddKey=function(e){ if(e.key==='Escape') window.dashDayDetailClose(); };
 window._ddPaint=function(){
   var hd=document.getElementById('dv-ddhd'), bd=document.getElementById('dv-ddbd');
   if(hd) hd.innerHTML=_ddHeadHtml();
   if(bd) bd.innerHTML=_ddBodyHtml();
+  if(window._ddFit) window._ddFit();
 };
 window.dashDayDetailPick=function(side){
   window._ddSide=side;
   var bd=document.getElementById('dv-ddbd'); if(bd) bd.innerHTML=_ddBodyHtml();
+  if(window._ddFit) window._ddFit();
 };
 /* เลื่อนวันในป๊อปอัป · ขยับ _dashDate ตัวเดียวกับแถบหัวหน้า Dashboard แล้ววาดทั้งสองที่
    ปิดป๊อปอัปแล้วหน้าข้างหลังต้องอยู่วันเดียวกัน ไม่ใช่เด้งกลับวันเดิม */
@@ -2928,6 +2951,150 @@ const DV_CSS=`<style>
   .dv-ddgrid tr.tot td .c .m{background:rgba(255,255,255,.2)}.dv-ddgrid tr.tot td .c .m i{background:#00bcdf}
   .dv-ddgrid tr.tot .rn{color:#000F4C}
   @media (max-width:1100px){ .dv-ddexec .ex3{grid-template-columns:1fr}.dv-ddexr2{grid-template-columns:1fr} }
+  /* ══ §ddRe (2026-10-07) · Bookings keyed in today · same design language as Programs / Boat Status ══
+     navy ground · white cards r12 with one shadow · hairlines instead of grey boxes · DM Mono numbers */
+  .dv-ddov .dv-ddsheet{background:#16265C;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .dv-ddov .dv-c{border:0;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34)}
+  .dv-ddov .dv-ddh{font-size:11px;font-weight:700;letter-spacing:.10em;color:#3E4658}
+  .dv-ddov .dv-ddh span{background:#F1F0EC;color:#3E4658;border-radius:6px;font-size:11px;font-weight:600;padding:2px 8px}
+  @media (min-width:761px){ .dv-ddov .dv-ddhd{padding:12px 18px 10px;gap:10px} .dv-ddov .dv-ddbd{padding:0 18px 14px;gap:10px} }
+  .dv-ddov .dv-arw,.dv-ddov .dv-ddx{width:30px;height:30px;border-radius:15px;border-color:rgba(255,255,255,.30);color:#fff}
+  .dv-ddov .dv-ddnum{font-family:'DM Sans',sans-serif;font-size:24px;letter-spacing:-.02em}
+  .dv-ddov .dv-ddnum.w{font-size:18px}
+  .dv-ddov .dv-dddwk{font-size:13px;font-weight:700}
+  .dv-ddov .dv-dddmo{font-size:9.5px;font-weight:700;letter-spacing:.16em;color:#B4BCDD}
+  .dv-ddov .dv-chip{height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#E8EBF7;border-color:rgba(255,255,255,.14)}
+  .dv-ddov .dv-chip.money{background:#D8F4E8;color:#0A5C3D;border-color:transparent}
+  .dv-ddov .dv-chip.money b{color:#0A5C3D}
+  .dv-ddov .dv-chip.warn{background:#FBE0DD;color:#8E2A20;border-color:transparent}
+  .dv-ddov .dv-chip.warn b{color:#8E2A20}
+  .dv-ddov .dv-ddpv{height:32px;padding:0 14px;display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:#fff;border-color:rgba(255,255,255,.30)}
+  .dv-ddov .dv-ddpv.on{color:#0F1B3D;font-weight:700;border-color:#fff}
+  .dv-ddov .dv-ddinp i{font-size:12px;font-weight:500;color:#B4BCDD}
+  .dv-ddov .dv-ddinp input{min-height:32px;font-size:12.5px;font-weight:500;color:#fff;border-color:rgba(255,255,255,.30);padding:4px 10px}
+  .dv-ddov .dv-ddhd .dv-ddbtn{height:32px;padding:0 14px;border-radius:16px;border:0;background:#fff;color:#0F1B3D;font-size:12.5px;font-weight:700;margin-left:6px;white-space:nowrap}
+  .dv-ddov .dv-ddhd .dv-ddbtn:hover{background:#E8EBF7}
+  .dv-ddov .dv-ddttl i.wm{display:none}
+  @media (min-width:761px){
+    .dv-ddov .dv-ddhr1{display:grid;grid-template-columns:1fr auto 1fr;gap:14px}
+    .dv-ddov .dv-ddl{display:flex;align-items:center;gap:10px;min-width:0}
+    .dv-ddov .dv-ddttl{text-align:center;font-size:16px;font-weight:800;letter-spacing:.30em;text-transform:uppercase;color:#fff;padding-left:.30em;line-height:1.25;white-space:nowrap}
+    .dv-ddov .dv-ddttl i.wm{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;margin:0}
+    .dv-ddov .dv-ddkpi{margin-left:0;justify-self:end}
+  }
+  @media (min-width:761px) and (max-width:1280px){ .dv-ddov .dv-ddttl{font-size:12.5px;letter-spacing:.16em} }
+  @media (max-width:760px){ .dv-ddov .dv-ddl{display:contents} }
+  /* summary block */
+  .dv-ddov .dv-ddfit{display:flex;flex-direction:column;gap:10px;flex:none}
+  .dv-ddov .dv-ddexec{padding:0;display:flex;flex-direction:column;gap:10px}
+  .dv-ddov .dv-ddexec .kv{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dv-ddov .dv-ddexec .k{background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34);padding:10px 14px 10px 26px;position:relative;min-width:0}
+  .dv-ddov .dv-ddexec .k::before{content:'';position:absolute;left:12px;top:10px;bottom:10px;width:4px;border-radius:2px;background:#1272B3}
+  .dv-ddov .dv-ddexec .k .l{font-size:10.5px;font-weight:700;letter-spacing:.10em;color:#5B6170}
+  .dv-ddov .dv-ddexec .k .v{font-size:24px;font-weight:500;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .k .v small{font-size:12.5px;font-weight:600;color:#3E4658}
+  .dv-ddov .dv-ddexec .k .n{font-size:11.5px;color:#5B6170;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddov .dv-ddexec .k.warn,.dv-ddov .dv-ddexec .k.bad{background:#fff}
+  .dv-ddov .dv-ddexec .k.warn::before{background:#D9952B}.dv-ddov .dv-ddexec .k.warn .v{color:#7A4300}
+  .dv-ddov .dv-ddexec .k.bad::before{background:#C8473C}.dv-ddov .dv-ddexec .k.bad .v{color:#8E2019}
+  .dv-ddov .dv-ddexec .ex2{display:grid;grid-template-columns:1fr;gap:10px}
+  .dv-ddov .dv-ddexec .exc{padding:0;overflow:hidden;min-width:0}
+  .dv-ddov .dv-ddexec .exc .dv-ddh{margin:0;padding:11px 16px 9px;border-bottom:1px solid #ECEBE6}
+  .dv-ddov .dv-ddexec .bul{gap:0}
+  .dv-ddov .dv-ddexec .bul li{background:none;border-radius:0;padding:8px 16px;border-bottom:1px solid #ECEBE6;line-height:1.4;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .bul li:last-child{border-bottom:0}
+  .dv-ddov .dv-ddexec .bul .dot{width:8px;height:8px;background:#1272B3}
+  .dv-ddov .dv-ddexec .bul .dot.go{background:#C2416B}.dv-ddov .dv-ddexec .bul .dot.ok{background:#2E9C78}.dv-ddov .dv-ddexec .bul .dot.bad{background:#C8473C}
+  .dv-ddov .dv-ddexec .bul .lb{font-weight:700;letter-spacing:.10em;color:#5B6170}
+  .dv-ddov .dv-ddexec .bul b{color:#0F1B3D}
+  .dv-ddov .dv-ddexec .bul .red,.dv-ddov .dv-ddexec .bul .red2 b{color:#8E2019}
+  .dv-ddov .dv-ddexec .bul .sub{color:#3E4658}
+  .dv-ddov .dv-ddexec .acts{gap:0}
+  .dv-ddov .dv-ddexec .act{background:none;border-radius:0;padding:12px 16px}
+  .dv-ddov .dv-ddexec .act2{background:none;border-radius:0;border-left:0;border-bottom:1px solid #ECEBE6;padding:7px 16px;grid-template-columns:20px 1fr auto;gap:10px}
+  .dv-ddov .dv-ddexec .act2:last-child{border-bottom:0}
+  .dv-ddov .dv-ddexec .act2>i{width:20px;height:20px;font-family:'DM Mono',ui-monospace,monospace;font-weight:500;font-size:11px;background:#C8473C}
+  .dv-ddov .dv-ddexec .act2>i.w,.dv-ddov .dv-ddexec .act2>i.a{background:#D9952B}.dv-ddov .dv-ddexec .act2>i.g{background:#2E9C78}
+  .dv-ddov .dv-ddexec .act2 .h{font-size:13px;color:#0F1B3D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddov .dv-ddexec .act2 .h b{font-family:'DM Mono',ui-monospace,monospace;font-weight:500;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .act2 .mr{display:flex;align-items:center;gap:8px;margin-top:4px}
+  .dv-ddov .dv-ddexec .act2 .m{flex:1 1 auto;margin:0;height:5px;background:#ECEBE6}
+  .dv-ddov .dv-ddexec .act2 .m i{background:#C8473C}
+  .dv-ddov .dv-ddexec .act2.w .m i,.dv-ddov .dv-ddexec .act2.a .m i{background:#D9952B}.dv-ddov .dv-ddexec .act2.g .m i{background:#2E9C78}
+  .dv-ddov .dv-ddexec .act2 .m em{top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:#0F1B3D;opacity:1}
+  .dv-ddov .dv-ddexec .act2 .s{display:block;flex:none;font-family:'DM Mono',ui-monospace,monospace;font-size:11px;color:#5B6170;white-space:nowrap}
+  .dv-ddov .dv-ddexec .act2 .p b{font-size:13px;font-weight:700;color:#8E2019}
+  .dv-ddov .dv-ddexec .act2.w .p b,.dv-ddov .dv-ddexec .act2.a .p b{color:#7A4300}.dv-ddov .dv-ddexec .act2.g .p b{color:#0B5A43}
+  .dv-ddov .dv-ddexec .act2 .p small{font-size:10.5px;color:#5B6170}
+  /* travel dates */
+  .dv-ddov .dv-ddtrav,.dv-ddov .dv-ddgrid{padding:0;overflow:hidden}
+  .dv-ddov .dv-ddtrav>.dv-ddh,.dv-ddov .dv-ddgrid>.dv-ddh{margin:0;padding:11px 16px 9px}
+  .dv-ddov .dv-ddtrav .tl{gap:0;border-top:1px solid #ECEBE6}
+  .dv-ddov .dv-ddtrav .r{border-radius:0;padding:6px 16px;border-bottom:1px solid #ECEBE6}
+  .dv-ddov .dv-ddtrav .r.hd{font-size:10px;font-weight:700;letter-spacing:.08em;color:#5B6170;padding:6px 16px;background:#fff}
+  .dv-ddov .dv-ddtrav .mg{border-top:0;padding:0;margin:0}
+  .dv-ddov .dv-ddtrav .r.mh{background:#EEF1F8;border-radius:0}
+  .dv-ddov .dv-ddtrav .r.mh.flat{background:#F7F7F5}
+  .dv-ddov .dv-ddtrav .r.soon{background:#F7F7F5}
+  .dv-ddov .dv-ddtrav .r.day{padding-left:30px}
+  .dv-ddov .dv-ddtrav .dt{color:#0F1B3D;font-weight:700}
+  .dv-ddov .dv-ddtrav .r.day .dt{font-weight:600}
+  .dv-ddov .dv-ddtrav .dt small,.dv-ddov .dv-ddtrav .r.mh .dt small{color:#5B6170}
+  .dv-ddov .dv-ddtrav .r.mh .chev{border-left-color:#0F1B3D}
+  .dv-ddov .dv-ddtrav .r.day.soon .dt::before{background:#1272B3}
+  .dv-ddov .dv-ddtrav .bar{height:6px;background:#ECEBE6}
+  .dv-ddov .dv-ddtrav .bar i{background:#1272B3}
+  .dv-ddov .dv-ddtrav .bar i.b2c{background:#C2416B}
+  .dv-ddov .dv-ddtrav .n{font-size:12px;color:#0F1B3D}
+  .dv-ddov .dv-ddtrav .rt{font-size:10.5px;color:#5B6170}
+  .dv-ddov .dv-ddtrav .lg,.dv-ddov .dv-ddgrid .lg{margin:0;padding:8px 16px 10px;font-size:11px;color:#3E4658}
+  .dv-ddov .dv-ddgrid .lg{border-top:1px solid #ECEBE6}
+  /* 7-day grid */
+  .dv-ddov .dv-ddgrid .gw{padding:0 14px;border-top:1px solid #ECEBE6}
+  .dv-ddov .dv-ddgrid table{border-spacing:0 5px}
+  .dv-ddov .dv-ddgrid th{font-size:10px;font-weight:700;letter-spacing:.08em;color:#5B6170;padding:5px 3px 2px;background:#fff}
+  .dv-ddov .dv-ddgrid th .dd{color:#0F1B3D;font-weight:500}
+  .dv-ddov .dv-ddgrid th.first .dd{color:#1272B3}
+  .dv-ddov .dv-ddgrid td.l{width:178px}
+  .dv-ddov .dv-ddgrid .rn{font-weight:600;font-size:12.5px;color:#0F1B3D}
+  .dv-ddov .dv-ddgrid .rn small{font-size:10.5px;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c{background:#F7F7F5;min-height:58px;padding:6px 8px 5px}
+  .dv-ddov .dv-ddgrid .c.ok{background:#EAF6F1}
+  .dv-ddov .dv-ddgrid .c .bk{font-weight:500;font-size:15px;color:#0F1B3D}
+  .dv-ddov .dv-ddgrid .c .bk small{font-size:10.5px;font-weight:400;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c .pct{font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c .m{height:4px;background:rgba(15,27,61,.10)}
+  .dv-ddov .dv-ddgrid .c .m i{background:#2E9C78}
+  .dv-ddov .dv-ddgrid .c .m em{background:#0F1B3D;opacity:.7}
+  .dv-ddov .dv-ddgrid .c .ft{font-size:10.5px;color:#3E4658}
+  .dv-ddov .dv-ddgrid .c .ft b{font-weight:700;color:#0B5A43}
+  .dv-ddov .dv-ddgrid .c .ft b.mut{color:#8A8F9C;font-weight:600}
+  .dv-ddov .dv-ddgrid .c.bad{background:#FBE9E7}.dv-ddov .dv-ddgrid .c.bad .m i{background:#C8473C}.dv-ddov .dv-ddgrid .c.bad .ft b{color:#8E2019}
+  .dv-ddov .dv-ddgrid .c.warn{background:#FBF1DF}.dv-ddov .dv-ddgrid .c.warn .m i{background:#D9952B}.dv-ddov .dv-ddgrid .c.warn .ft b{color:#7A4300}
+  .dv-ddov .dv-ddgrid .c.unk .m i{background:#CFCFC8}
+  .dv-ddov .dv-ddgrid .c.never{background:#FBE9F0}.dv-ddov .dv-ddgrid .c.never .m i{background:#8E3A6B}.dv-ddov .dv-ddgrid .c.never .ft b{color:#8E3A6B}
+  .dv-ddov .dv-ddgrid .c.idle{background:#F7F7F5;border-color:#CFCFC8}
+  .dv-ddov .dv-ddgrid .c.idle .bk{color:#8A8F9C}
+  .dv-ddov .dv-ddgrid .c.off{background:#F7F7F5;color:#8A8F9C;font-size:11px}
+  .dv-ddov .dv-ddgrid .c .tag{background:#1272B3;font-weight:500;top:-5px}
+  .dv-ddov .dv-ddgrid tr.tot td .c{background:#16265C}
+  .dv-ddov .dv-ddgrid tr.tot td .c .bk,.dv-ddov .dv-ddgrid tr.tot td .c .ft,.dv-ddov .dv-ddgrid tr.tot td .c .ft b,.dv-ddov .dv-ddgrid tr.tot td .c .pct{color:#fff}
+  .dv-ddov .dv-ddgrid tr.tot td .c .bk small{color:#C7CBE3}
+  .dv-ddov .dv-ddgrid tr.tot td .c .m{background:rgba(255,255,255,.22)}
+  .dv-ddov .dv-ddgrid tr.tot td .c .m i{background:#5CC2F2}
+  .dv-ddov .dv-ddgrid .lg i.be{background:#0F1B3D}.dv-ddov .dv-ddgrid .lg i.pl{background:#1272B3}
+  @media (min-width:761px){ .dv-ddov .dv-ddexec .kv{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  /* wide screens: summary + to-do side by side, lower cards fill the rest of the screen and scroll inside (see _ddFit) */
+  @media (min-width:1101px){
+    .dv-ddov .dv-ddexec .ex2{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+    .dv-ddov .dv-ddexr2{grid-template-columns:minmax(400px,1fr) minmax(0,2.1fr);gap:10px;min-height:0;grid-template-rows:minmax(0,1fr)}
+    .dv-ddov .dv-ddtrav,.dv-ddov .dv-ddgrid{display:flex;flex-direction:column;min-height:0}
+    .dv-ddov .dv-ddtrav>.dv-ddh,.dv-ddov .dv-ddgrid>.dv-ddh,.dv-ddov .dv-ddtrav .lg,.dv-ddov .dv-ddgrid .lg{flex:none}
+    .dv-ddov .dv-ddtrav .tl{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}
+    .dv-ddov .dv-ddtrav .r.hd{position:sticky;top:0;z-index:1}
+    .dv-ddov .dv-ddgrid .gw{flex:1 1 auto;min-height:0;overflow:auto;scrollbar-width:thin}
+    .dv-ddov .dv-ddgrid thead th{position:sticky;top:0;z-index:2}
+  }
   .dv-ddsums{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:none}
   .dv-ddsum{padding:11px 13px 10px;cursor:pointer;position:relative;opacity:.62}
   .dv-ddsum.on{opacity:1}
