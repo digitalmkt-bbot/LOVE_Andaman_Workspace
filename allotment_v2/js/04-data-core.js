@@ -10743,60 +10743,35 @@ function renderProgDetailPink(){
   const currentSeasons=seasons.filter(s=>s.from<=TODAY_STR&&s.to>=TODAY_STR);
   const futureSeasons=seasons.filter(s=>s.from>TODAY_STR);
 
+  /* §progSeasonUI (2026-10-07) · ผู้ใช้: "ตรงนี้หลุดดีไซน์ไป" · ส่วน Seasons ยังเป็นโฉมเก่า (ปุ่มชมพู ป้ายเล็ก วันที่ย่อปีสองหลัก)
+     ปรับให้ใช้ชุดเดียวกับส่วนบนของการ์ด: ป้ายสถานะ วันที่เต็ม ปุ่มลบมีไอคอนถังขยะ */
   const buildSeasonRow=(s)=>{
     const isCur=s.from<=TODAY_STR&&s.to>=TODAY_STR;
     const isPast=s.to<TODAY_STR;
     const isFuture=s.from>TODAY_STR;
-    const dotColor=s.type==='open'?'#1D9E75':'#A32D2D';
-    const labelBg=s.type==='open'?'#E1F5EE':'#FCEBEB';
-    const labelColor=s.type==='open'?'#0F6E56':'#A32D2D';
-    const op=isPast?0.5:1;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid rgba(0,0,0,.04);background:${isCur?'#FBFAF7':'transparent'};opacity:${op}">
-      <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
-      <span style="background:${labelBg};color:${labelColor};padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em;flex-shrink:0">${s.type==='open'?'OPEN':'CLOSED'}</span>
-      <span style="font-size:11px;color:${dim.ink};font-family:'DM Mono',monospace;flex:1">${fmtD(s.from)} → ${fmtD(s.to)}</span>
-      ${isCur?`<span style="background:#1A1A1A;color:white;padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">CURRENT</span>`:isFuture?`<span style="background:#FCE5EC;color:#9F1B4F;padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">UPCOMING</span>`:''}
-      ${progEditMode ? `<button onclick="delSeason('${r.id}','${s.id}')" style="background:${dim.bg};border:none;border-radius:6px;padding:4px 6px;cursor:pointer;color:${dim.ink2};flex-shrink:0" onmouseover="this.style.background='#A32D2D';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+    const isO=s.type==='open';
+    return `<div style="display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 20px;border-bottom:1px solid #ECEBE6;background:${isCur?'#F3F8FC':'#fff'};opacity:${isPast?0.6:1}">
+      <span style="flex:none;min-width:54px;text-align:center;background:${isO?'#DDF1EA':'#FBE3E0'};color:${isO?'#0B5A43':'#8E2019'};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${isO?'Open':'Closed'}</span>
+      <span style="font-size:13px;font-weight:500;color:#0F1B3D;flex:1">${fmtP(s.from)} – ${fmtP(s.to)}</span>
+      ${isCur?`<span style="background:#0F1B3D;color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">Current</span>`:isFuture?`<span style="background:#F1F0EC;color:#3E4658;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">Upcoming</span>`:''}
+      ${progEditMode ? `<button onclick="delSeason('${r.id}','${s.id}')" aria-label="Delete season" title="Delete this season" style="flex:none;width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
       </button>` : ''}
     </div>`;
   };
 
   // Build sections
+  const _secH=(t)=>`<div style="font-size:11px;font-weight:700;color:#3E4658;text-transform:uppercase;letter-spacing:.08em;padding:9px 20px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">${t}</div>`;
   let seasonsHtml='';
-  if(currentSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">ปัจจุบัน · CURRENT</div>${currentSeasons.map(buildSeasonRow).join('')}`;
-  }
-  if(futureSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">กำลังจะมาถึง · UPCOMING (${futureSeasons.length})</div>${futureSeasons.map(buildSeasonRow).join('')}`;
-  }
-  if(pastSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">ผ่านไปแล้ว · PAST (${pastSeasons.length})</div>${pastSeasons.map(buildSeasonRow).join('')}`;
-  }
+  if(currentSeasons.length) seasonsHtml+=_secH('Current')+currentSeasons.map(buildSeasonRow).join('');
+  if(futureSeasons.length)  seasonsHtml+=_secH(`Upcoming · ${futureSeasons.length}`)+futureSeasons.map(buildSeasonRow).join('');
+  if(pastSeasons.length)    seasonsHtml+=_secH(`Past · ${pastSeasons.length}`)+pastSeasons.map(buildSeasonRow).join('');
   if(!seasonsHtml){
-    seasonsHtml=`<div style="padding:24px;text-align:center;color:${dim.ink3};font-size:11px">ยังไม่มี season — กดเพิ่มด้านล่าง</div>`;
+    seasonsHtml=`<div style="padding:22px 20px;text-align:center;color:#5B6170;font-size:12.5px;border-top:1px solid #ECEBE6">ยังไม่มี Season — กด เพิ่ม Season เพื่อเริ่มตั้งค่า</div>`;
   }
 
-  // Add form
-  const addFormHtml=showSeasonForm?`<div style="padding:14px 16px;background:#FBFAF7;border-top:1px solid rgba(0,0,0,.06)">
-    <div style="font-size:11px;font-weight:600;margin-bottom:8px">เพิ่ม Season ใหม่</div>
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <div onclick="setSeasonType('open')" id="sst-open" style="flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid #1D9E75;background:#E1F5EE">
-        <div style="font-size:11px;font-weight:600;color:#0F6E56;display:flex;align-items:center;justify-content:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#1D9E75"></span>Open</div>
-      </div>
-      <div onclick="setSeasonType('closed')" id="sst-closed" style="flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid ${dim.line};background:white">
-        <div style="font-size:11px;font-weight:600;color:${dim.ink3};display:flex;align-items:center;justify-content:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:${dim.ink4}"></span>Closed</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div><label style="font-size:9px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">วันที่เริ่ม</label><input type="date" id="new-season-from" style="width:100%;margin-top:2px;font-size:11px;padding:5px 7px;border:1px solid ${dim.line};border-radius:6px;font-family:'DM Mono',monospace"></div>
-      <div><label style="font-size:9px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">วันที่สิ้นสุด</label><input type="date" id="new-season-to" style="width:100%;margin-top:2px;font-size:11px;padding:5px 7px;border:1px solid ${dim.line};border-radius:6px;font-family:'DM Mono',monospace"></div>
-    </div>
-    <div style="display:flex;gap:6px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="cancelSeasonForm()" style="font-size:11px;padding:5px 12px;border-radius:14px">ยกเลิก</button>
-      <button onclick="saveNewSeasonGuarded('${r.id}')" style="background:${dim.ink};color:white;border:none;border-radius:14px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer">บันทึก Season</button>
-    </div>
-  </div>`:'';
+  // §progSeasonModal · ฟอร์มเพิ่ม Season ย้ายไปเป็น popup (progSeasonModalOpen) · ไม่มีฟอร์มฝังท้ายการ์ดแล้ว
+  const addFormHtml='';
 
   // Calendar timeline — full year view, 12 months grid
   const calBase=calMonthStr?new Date(calMonthStr+'-01'):new Date();
@@ -10871,17 +10846,19 @@ function renderProgDetailPink(){
 
   mount.innerHTML=`${headerStrip}
     ${calendarHtml}
-    <div style="padding:14px 0 0">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px">
-        <span style="font-size:11px;font-weight:600;color:${dim.ink2};text-transform:uppercase;letter-spacing:.05em">Seasons · ${seasons.length}</span>
-        ${!showSeasonForm?`<button onclick="progAddSeason()" title="${progEditMode?'Add a season':'Turns on edit mode and opens the season form'}" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>เพิ่ม Season
-        </button>`:''}
+    <div style="border-top:1px solid #ECEBE6">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px">
+        <span style="font-size:13px;font-weight:700;color:#0F1B3D">Seasons <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${seasons.length}</span></span>
+        <button onclick="progAddSeason()" title="${progEditMode?'Add a season':'Turns on edit mode and opens the season form'}" style="height:36px;padding:0 15px;border-radius:18px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;font:600 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่ม Season
+        </button>
       </div>
       <div>${seasonsHtml}</div>
       ${addFormHtml}
     </div>`;
 
+  /* §progSeasonModal · popup เป็นลูกของ body · หน้าวาดใหม่เมื่อไหร่ก็ตามที่ฟอร์มถูกปิด (บันทึก/ยกเลิก) popup ต้องหายตาม */
+  if(!showSeasonForm){ const _sm=document.getElementById('prog-season-modal'); if(_sm) _sm.remove(); }
   if(showSeasonForm) setSeasonType(addSeasonType);
 }
 
@@ -11032,8 +11009,63 @@ function startSeasonForm(){showSeasonForm=true;renderSettings();}
 function progAddSeason(){
   progEditMode=true; showSeasonForm=true;
   renderSettings();
-  const el=document.getElementById('new-season-from');
-  if(el && el.scrollIntoView){ try{ el.scrollIntoView({block:'center'}); }catch(_){ el.scrollIntoView(); } }
+  progSeasonModalOpen();
+}
+/* §progSeasonModal (2026-10-07) · ผู้ใช้: "ขอเป็น ปุ่มแอด Season ให้เป็น Popup เด้งขึ้นแทน"
+   ใช้ id เดิมของฟอร์ม (new-season-from / new-season-to / sst-open / sst-closed) ตั้งใจ
+   saveNewSeasonGuarded · saveNewSeason · setSeasonType · หน้าต่างเตือนผลกระทบ booking อ่านจาก id พวกนี้อยู่แล้ว
+   จึงไม่ต้องแตะตรรกะบันทึกหรือการเตือนเลย · popup เป็นแค่เปลือกใหม่ของฟอร์มเดิม
+   ปิด = cancelSeasonForm() → showSeasonForm=false → renderProgDetailPink ลบ popup ให้เอง
+   หน้าต่างเตือนผลกระทบ (z-index 9999) ขึ้นทับ popup นี้ (4000) ได้ตามปกติ */
+function progSeasonModalOpen(){
+  const r=ROUTES.find(x=>x.id===selProgId); if(!r) return;
+  const old=document.getElementById('prog-season-modal'); if(old) old.remove();
+  const esc=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const el=document.createElement('div');
+  el.id='prog-season-modal';
+  el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  el.style.cssText="position:fixed;inset:0;z-index:4000;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(10,18,48,.56);font-family:'DM Sans','IBM Plex Sans Thai',sans-serif";
+  const lbl='display:block;font-size:12.5px;font-weight:600;color:#3D3D38';
+  const inp="display:block;width:100%;box-sizing:border-box;margin-top:6px;height:44px;padding:0 12px;border:1.5px solid #C9CCD6;border-radius:10px;font:500 14px 'DM Mono',monospace;color:#0F1B3D;background:#fff;outline-color:#16265C";
+  const seg='flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid rgba(0,0,0,.04);background:white';
+  el.innerHTML='<div style="width:460px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(2,10,30,.45);overflow:hidden;color:#0F1B3D">'
+    +'<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Programs · Season</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">เพิ่ม Season</div>'
+    +'<div style="margin-top:2px;font-size:13px;color:#5B6170">'+esc(r.name)+'</div>'
+    +'<div style="margin-top:16px;'+lbl.replace('display:block;','')+'">ประเภท</div>'
+    +'<div style="display:flex;gap:8px;margin-top:6px">'
+    +'<div id="sst-open" role="button" tabindex="0" onclick="setSeasonType(\'open\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();setSeasonType(\'open\')}" style="'+seg+'"><div style="font-size:13px;font-weight:600;color:#999;display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px"><span style="width:7px;height:7px;border-radius:50%;background:#1D9E75"></span>Open</div></div>'
+    +'<div id="sst-closed" role="button" tabindex="0" onclick="setSeasonType(\'closed\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();setSeasonType(\'closed\')}" style="'+seg+'"><div style="font-size:13px;font-weight:600;color:#999;display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px"><span style="width:7px;height:7px;border-radius:50%;background:#A32D2D"></span>Closed</div></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">'
+    +'<div><label for="new-season-from" style="'+lbl+'">วันที่เริ่ม</label><input type="date" id="new-season-from" style="'+inp+'"></div>'
+    +'<div><label for="new-season-to" style="'+lbl+'">วันที่สิ้นสุด</label><input type="date" id="new-season-to" style="'+inp+'"></div>'
+    +'</div>'
+    +'<div id="prog-season-hint" style="min-height:18px;margin-top:8px;font-size:12px;color:#5F5F58">ถ้าเลือก Closed แล้วช่วงนั้นมี booking หรือเรือที่จัดไว้ ระบบจะเตือนก่อนบันทึก</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<button type="button" onclick="cancelSeasonForm()" style="height:40px;padding:0 18px;border-radius:10px;border:1px solid #D9D9D2;background:#fff;color:#3D3D38;font:600 13.5px inherit;font-family:inherit;cursor:pointer">ยกเลิก</button>'
+    +'<button type="button" onclick="progSeasonModalSave()" style="height:40px;padding:0 18px;border-radius:10px;border:1px solid #16265C;background:#16265C;color:#fff;font:600 13.5px inherit;font-family:inherit;cursor:pointer">บันทึก Season</button>'
+    +'</div></div>';
+  el.addEventListener('mousedown', function(e){ if(e.target===el) cancelSeasonForm(); });
+  el.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ e.preventDefault(); cancelSeasonForm(); }
+    else if(e.key==='Enter' && e.target && e.target.tagName==='INPUT'){ e.preventDefault(); progSeasonModalSave(); }
+  });
+  document.body.appendChild(el);
+  setSeasonType(addSeasonType);
+  const f=document.getElementById('new-season-from'); if(f) f.focus();
+}
+function progSeasonModalSave(){
+  const f=document.getElementById('new-season-from'), t=document.getElementById('new-season-to'), h=document.getElementById('prog-season-hint');
+  if(!f||!t) return;
+  const bad=(el,msg)=>{ el.style.borderColor='#B3261E'; if(h){ h.style.color='#B3261E'; h.textContent=msg; } el.focus(); };
+  f.style.borderColor='#C9CCD6'; t.style.borderColor='#C9CCD6';
+  if(!f.value){ bad(f,'กรุณาระบุวันที่เริ่ม'); return; }
+  if(!t.value){ bad(t,'กรุณาระบุวันที่สิ้นสุด'); return; }
+  if(f.value>t.value){ bad(t,'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม'); return; }
+  saveNewSeasonGuarded(selProgId);   // ตรรกะเดิมทั้งหมด · บันทึกเลย หรือเปิดหน้าต่างเตือนผลกระทบก่อน
 }
 function cancelSeasonForm(){showSeasonForm=false;renderSettings();}
 function setSeasonType(t){
