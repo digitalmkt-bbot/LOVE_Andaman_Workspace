@@ -1839,27 +1839,52 @@ function _ddSideBlock(rows,side){
    ที่นั่งจาก getAllotment (เรือในใบงานเรือ) · จุดคุ้มทุนต่อลำจาก pxTrip/ctBreakEven
    (หน้าต้นทุน & จุดคุ้มทุน) · ไม่มีแผนต้นทุนของเส้นทาง = ไม่รู้จุดคุ้มทุน แสดงขีด ไม่เดา
    อ่านอย่างเดียวทั้งก้อน · ขึ้นเฉพาะมุมมองวันเดียว (ช่วงหลายวันไม่มี "วันนี้" ให้สรุป) */
-var _ddBEC={};   /* แคชจุดคุ้มทุนต่อ วัน|ลำ · ล้างทุกครั้งที่วาด (ctBreakEven ไล่ทีละคนถึงความจุ) */
-function _ddBE(date,bid){
+var _ddBEC={};   /* แคชจุดคุ้มทุนต่อ วัน|ลำ · ล้างทุกครั้งที่วาด (ไล่ทีละคนถึงความจุ) */
+/* §ddBE2 (2026-10-07) · เจ้าของ: "ตรวจ Break even ใหม่" · ตรวจกับ backup จริง (3 ต.ค.) พบสองเรื่อง
+   1 วันข้างหน้าทุกวัน pxTrip ให้ be=null · เพราะ pxPax นับเฉพาะคนที่ "จัดลงลำ" แล้ว (ops.boatId)
+     ซึ่งวันข้างหน้ายังไม่มีใครจัด → ราคาเฉลี่ย = 0 → ตัวสำรองไปใช้ "ราคาในแผน"
+   2 ราคาในแผนไม่ใช่ราคาขายจริง · แผน Phi Phi ตั้งไว้ 1,200 ทั้งลำเป็นคนไทย (ฉากทดลอง)
+     ขณะที่ใบจองจริงเฉลี่ย ~1,800–2,300/คน → เรือ 4 เครื่อง "ไม่มีวันคุ้ม" ที่ 1,200 → ช่องขึ้น "no break-even"
+   ใหม่: ราคาและสัดส่วนคนไทยมาจาก "ใบจองจริงของเส้นทาง-วันนั้น" (ยังไม่ต้องจัดลำ) · ไม่มีใบจองค่อยถอยไปใช้แผน
+   ค่าคอม 0 (เรตเอเย่นต์เป็นเน็ตอยู่แล้ว) · เด็กคิดราคาเดียวกับเฉลี่ย · แยกผล "ไม่มีแผน" กับ "ไม่คุ้มแม้เต็มลำ" */
+function _ddMix(rid,d){
+  var k='mix|'+d+'|'+rid; if(k in _ddBEC) return _ddBEC[k];
+  var pax=0, th=0, rev=0, n=0, paxP=0;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0 || b.schemaVer!==2) return;
+    (b.trips||[]).forEach(function(t){ if(t.date!==d || t.routeId!==rid || t.bookingMode==='charter') return;
+      var px=t.pax||{}, tot=0, tth=0;
+      ['ad','chd','inf','foc'].forEach(function(q){ tot+=(+px[q]||0)+(+px[q+'_fr']||0)+(+px[q+'_th']||0); tth+=(+px[q+'_th']||0); });
+      if(!tot) return;
+      var m=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):((typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0));
+      n++; pax+=tot; th+=tth;
+      /* ใบที่ยอดเงินเป็น 0 (ยังไม่ใส่ราคา / FOC / ข้อมูลไม่ครบ) ไม่ถือว่า "ขายฟรี" · ไม่เอามาถ่วงราคาเฉลี่ย */
+      if(m>0){ rev+=m; paxP+=tot; } });
+  });
+  var o={n:n,pax:pax,th:th,rev:rev,paxPriced:paxP,price:(paxP&&rev>0)?rev/paxP:0,thR:pax?th/pax:0};
+  _ddBEC[k]=o; return o;
+}
+function _ddBE(date,bid,rid){
   var k=date+'|'+bid; if(k in _ddBEC) return _ddBEC[k];
-  var out={be:null,cap:0};
+  var out={be:null,cap:0,src:'',price:0,why:'noplan'};
   try{
-    if(typeof pxTrip!=='function'){ _ddBEC[k]=out; return out; }
-    var t=pxTrip(date,bid);
-    out.cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):((t.boat&&t.boat.cap)||0);
-    out.be=(t.be!=null)?+t.be:null;
-    /* ยังไม่มีคนจอง → pxTrip ใช้ราคาเฉลี่ยของคนจริง = 0 จึงหาจุดคุ้มทุนไม่ได้
-       วันข้างหน้าต้องใช้ราคาที่ตั้งในแผนของเส้นทางแทน · ไม่มีแผน = ไม่รู้ ปล่อย null */
-    if(out.be==null && t.plan && typeof ctPlans==='function' && typeof ctBreakEven==='function'){
-      var pl=ctPlans().filter(function(p){ return p.id===t.plan.id; })[0];
-      if(pl && +pl.price>0){
-        var T=(typeof ctTpl==='function')?ctTpl():null;
-        var q=Object.assign({}, pl, {boats:1, boatId:bid, _asOf:date, eng:(t.ctx&&t.ctx.eng)||pl.eng,
-          fuel:(t.fuelPr||pl.fuel), paxTH:0, comm:0, price:+pl.price});
-        var b=ctBreakEven(q, Math.max(1,out.cap||60), T);
-        out.be=(b!=null)?+b:null;
-      }
+    out.cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):0;
+    var plan=(typeof pxPlanFor==='function'&&rid)?pxPlanFor(rid):null;
+    var pl=(plan&&typeof ctPlans==='function')?ctPlans().filter(function(p){ return p.id===plan.id; })[0]:null;
+    if(!pl || typeof ctProfitAt!=='function'){ _ddBEC[k]=out; return out; }
+    var T=(typeof ctTpl==='function')?ctTpl():null;
+    var mix=_ddMix(rid,date), price=mix.price>0?mix.price:(+pl.price||0), thR=mix.price>0?mix.thR:((+pl.paxTH||0)>0?Math.min(1,(+pl.paxTH||0)/Math.max(1,+pl.cap||1)):0);
+    out.src=mix.price>0?'bookings':'plan'; out.price=Math.round(price);
+    if(!(price>0)){ out.why='noprice'; _ddBEC[k]=out; return out; }
+    var boat=(typeof getBoat==='function')?getBoat(bid):null;
+    var FP=(typeof flFuelPriceEff==='function'&&boat)?flFuelPriceEff(date,boat):null;
+    var cap=Math.max(1,out.cap||+pl.cap||60);
+    var base=Object.assign({}, pl, {boats:1, boatId:bid, _asOf:date, price:price, priceCh:'', chPct:0, comm:0, fuel:(FP&&FP.price>0)?FP.price:(+pl.fuel||0)});
+    for(var nn=1; nn<=cap; nn++){
+      var q=Object.assign({}, base, {paxTH:Math.round(nn*thR)});
+      if(ctProfitAt(q, nn, T).p>0){ out.be=nn; break; }
     }
+    out.why=(out.be==null)?'never':'';   /* never = ไม่คุ้มแม้เต็มลำที่ราคานี้ */
   }catch(_){}
   _ddBEC[k]=out; return out;
 }
@@ -1909,30 +1934,43 @@ function _ddExecData(rows,rg){
     Object.keys(byR).forEach(function(rid){
       var A=(typeof getAllotment==='function')?getAllotment(rid,d):null; if(!A||!A.hasAllotment) return;
       var be=0, unk=false;
-      byR[rid].boats.forEach(function(bid){ var x=_ddBE(d,bid); if(x.be==null) unk=true; else be+=x.be; });
+      var never=false, price=0;
+      /* §ddBE2 · หลายลำบนกระดานวันเดียวกัน · นับจุดคุ้มทุนเฉพาะ "ลำที่ต้องออกจริง" ตามจำนวนคนที่จองแล้ว
+         (คนจองพอลำเดียว = คิดลำเดียว เลือกลำที่คุ้มง่ายสุด) · ไม่งั้น 2 ลำบนกระดานจะทำให้ "ขาด" โตเป็นสองเท่า */
+      var bx=byR[rid].boats.map(function(bid){ var x=_ddBE(d,bid,rid); price=x.price||price; return x; });
+      if(bx.some(function(x){ return x.be==null && x.why!=='never'; })) unk=true;
+      else {
+        var bk0=A.seatsConsumed||0, sorted=bx.slice().sort(function(a,b){ return (a.be==null?1e9:a.be)-(b.be==null?1e9:b.be); });
+        var useN=0, seat=0; for(var ii=0; ii<sorted.length; ii++){ useN++; seat+=sorted[ii].cap||0; if(seat>=bk0) break; }
+        var use=sorted.slice(0,Math.max(1,useN));
+        if(use.some(function(x){ return x.be==null; })) never=true; else use.forEach(function(x){ be+=x.be; });
+      }
       var c={d:d,rid:rid,cap:A.totalCapacity||0,bk:A.seatsConsumed||0,av:A.seatsAvailable||0,
              pct:A.totalCapacity?Math.round((A.seatsConsumed||0)/A.totalCapacity*100):0,
              be:unk?null:be, need:unk?null:Math.max(0,be-(A.seatsConsumed||0)), boats:byR[rid].boats.length,
-             plus:keyed[d+'|'+rid]||0, wx:byR[rid].wx};
+             plus:keyed[d+'|'+rid]||0, wx:byR[rid].wx, price:price, never:(!unk&&never)};
       if(c.wx){ c.st='wx'; c.need=null; }
       else if(c.bk<=0){ c.st='idle'; c.need=null; }
+      else if(!unk && never){ c.st='never'; c.be=null; c.need=null; }   /* §ddBE2 · มีแผน มีราคา แต่ไม่คุ้มแม้เต็มลำ */
       else c.st=(c.need==null)?'unk':(c.need<=0?'ok':(c.need<=5?'warn':'bad'));
       cells[d+'|'+rid]=c; rids[rid]=1;
       var T=colTot[d];
       if(c.st==='wx') return;
       if(c.st==='idle'){ T.idle++; return; }
-      T.cap+=c.cap; T.bk+=c.bk; T.av+=c.av; T.n++; if(c.need==null) T.unk++; else T.need+=c.need; });
+      T.cap+=c.cap; T.bk+=c.bk; T.av+=c.av; T.n++; if(c.need==null){ T.unk++; if(c.st==='never') T.never=(T.never||0)+1; } else T.need+=c.need; });
   });
   var routes=Object.keys(rids).map(function(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null;
     var pier=(r&&r.pier)||'', bes=[]; days.forEach(function(d){ var c=cells[d+'|'+rid]; if(c&&c.be!=null) bes.push(c.be); });
-    return {rid:rid,name:(r&&r.name)||rid,color:(r&&r.color)||'#7d7a74',pier:pier,
+    var nev=days.some(function(d){ var c=cells[d+'|'+rid]; return c&&c.st==='never'; });
+    return {rid:rid,name:(r&&r.name)||rid,color:(r&&r.color)||'#7d7a74',pier:pier,never:nev,
       pierNm:(typeof VB_PIER_TH!=='undefined'&&VB_PIER_TH[pier])?VB_PIER_TH[pier]:pier,
       be:bes.length?Math.round(bes.reduce(function(a,b){return a+b;},0)/bes.length):null}; });
   routes.sort(function(a,b){ return (a.pier+a.name)<(b.pier+b.name)?-1:1; });
-  var tot={cap:0,bk:0,av:0,need:0,short:[],full:[],near:[],idle:[],wx:[]};
+  var tot={cap:0,bk:0,av:0,need:0,short:[],full:[],near:[],idle:[],wx:[],never:[],unk:[]};
   Object.keys(cells).forEach(function(k){ var c=cells[k];
     if(c.st==='wx'){ tot.wx.push(c); return; }
     if(c.st==='idle'){ tot.idle.push(c); return; }   /* §ddIdle · ลำที่ยังไม่มีใครจอง ไม่เข้ายอด */
+    if(c.st==='never') tot.never.push(c); else if(c.st==='unk') tot.unk.push(c);
     tot.cap+=c.cap; tot.bk+=c.bk; tot.av+=c.av;
     if(c.need>0){ tot.need+=c.need; tot.short.push(c); }
     if(c.av<=0) tot.full.push(c); else if(c.av<=5) tot.near.push(c); });
@@ -1982,6 +2020,8 @@ function _ddExecHtml(rows,rg){
         '<span class="red2">'+X.tot.short.slice(0,6).map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' <b>short '+N(c.need)+'</b> ('+c.bk+'/'+c.cap+' booked)'; }).join(' · ')
         +(X.tot.short.length>6?(' · '+(X.tot.short.length-6)+' more in the table'):'')+'</span>')
     : li('ok','Next 7 days · break-even','<b>Every departure with a cost plan has reached break-even</b>','')) : '';
+  if(nCells && X.tot.never.length) b4+=li('bad','Check pricing','<b class="red">'+pl(X.tot.never.length,'departure')+' can\'t break even even when full</b> at the current average price',
+      '<span class="red2">'+X.tot.never.slice(0,5).map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' <b>avg ฿'+N(c.price)+'/pax</b>'; }).join(' · ')+' · check the cost plan or the agent rates</span>');
   /* KPI tiles */
   var K=function(cls,l,v,u,nn){ return '<div class="k '+cls+'"><div class="l">'+l+'</div><div class="v">'+v+'<small>'+u+'</small></div><div class="n">'+nn+'</div></div>'; };
   var kv='<div class="kv">'
@@ -2036,14 +2076,14 @@ function _ddExecRow2Html(X,rg,esc){
     return '<th'+(i===0?' class="first"':'')+'>'+_DD_WD[dd.getDay()]+'<span class="dd">'+dd.getDate()+'</span></th>'; }).join('')+'</tr>';
   var pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong'};
   var body=X.routes.map(function(r){
-    return '<tr data-rid="'+esc(r.rid)+'"><td class="l"><div class="rn"><i style="background:'+esc(r.color)+'"></i>'+esc(r.name)+'<small>'+esc(pierEn[r.pier]||r.pier||'')+(r.be!=null?(' · break-even ~'+N(r.be)+' pax'):' · no cost plan')+'</small></div></td>'
+    return '<tr data-rid="'+esc(r.rid)+'"><td class="l"><div class="rn"><i style="background:'+esc(r.color)+'"></i>'+esc(r.name)+'<small>'+esc(pierEn[r.pier]||r.pier||'')+(r.be!=null?(' · break-even ~'+N(r.be)+' pax'):(r.never?' · won\'t break even at current price':' · no cost plan'))+'</small></div></td>'
       +X.days.map(function(d){ var c=X.cells[d+'|'+r.rid];
         if(!c) return '<td><div class="c off">no trip</div></td>';
         var bePct=(c.be!=null&&c.cap)?Math.min(100,Math.round(c.be/c.cap*100)):null;
         if(c.st==='wx') return '<td><div class="c off" data-cell="'+esc(d+'|'+r.rid)+'">weather closed</div></td>';
         if(c.st==='idle') return '<td><div class="c idle" data-cell="'+esc(d+'|'+r.rid)+'" title="A boat is on the board but nobody has booked · not counted until the first booking">'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')+'<div class="top2"><span class="bk">0<small>/'+N(c.cap)+'</small></span></div><div class="ft"><b class="mut">no bookings yet</b></div></div></td>';
-        var ft=(c.st==='unk')?'<b class="mut">no break-even</b>':(c.need>0?('<b>short '+N(c.need)+'</b>'):(c.av<=0?'<b>full</b>':(c.av<=5?'<b>nearly full</b>':'<b>break-even ✓</b>')));
-        return '<td><div class="c '+c.st+'" data-cell="'+esc(d+'|'+r.rid)+'">'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')
+        var ft=(c.st==='unk')?'<b class="mut">no cost plan</b>':(c.st==='never'?'<b title="At the current average price this boat does not break even even when full · check the cost plan or the rates">won\'t break even</b>':(c.need>0?('<b>short '+N(c.need)+'</b>'):(c.av<=0?'<b>full</b>':(c.av<=5?'<b>nearly full</b>':'<b>break-even ✓</b>'))));
+        return '<td><div class="c '+c.st+'" data-cell="'+esc(d+'|'+r.rid)+'"'+(c.price?(' title="avg price ฿'+N(c.price)+'/pax from bookings'+(c.be!=null?(' · break-even '+N(c.be)+' pax'):'')+'"'):'')+'>'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')
           +'<div class="top2"><span class="bk">'+N(c.bk)+'<small>/'+N(c.cap)+'</small></span><span class="pct">'+c.pct+'%</span></div>'
           +'<div class="m"><i style="width:'+Math.min(100,c.pct)+'%"></i>'+(bePct!=null?('<em style="left:'+bePct+'%"></em>'):'')+'</div>'
           +'<div class="ft"><span>'+N(c.av)+' open</span>'+ft+'</div></div></td>'; }).join('')+'</tr>'; }).join('');
@@ -2057,7 +2097,7 @@ function _ddExecRow2Html(X,rg,esc){
       +'<span>'+X.routes.length+' routes with boats · '+esc(_ddDLbl(X.days[0]))+' – '+esc(_ddDLbl(X.days[6],true))+'</span></div>'
     +(X.routes.length
       ? ('<div class="gw"><table><thead>'+head+'</thead><tbody>'+body+totRow+'</tbody></table></div>'
-        +'<div class="lg"><span><i style="background:#2E9B72"></i>at break-even</span><span><i style="background:#E0A21E"></i>short ≤ 5</span><span><i style="background:#D64545"></i>short &gt; 5</span><span><i style="background:#E6E8EF;border:1px dashed #B4B8D2"></i>no bookings yet · not counted</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from Costing &amp; break-even</span></div>')
+        +'<div class="lg"><span><i style="background:#2E9B72"></i>at break-even</span><span><i style="background:#E0A21E"></i>short ≤ 5</span><span><i style="background:#D64545"></i>short &gt; 5</span><span><i style="background:#E6E8EF;border:1px dashed #B4B8D2"></i>no bookings yet · not counted</span><span><i style="background:#8E3A6B"></i>won\'t break even at current price</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from the cost plan at the day\'s real average price (hover a cell)</span></div>')
       : '<div class="dv-ddnone">No boats assigned on the Boat Operation sheet for the next 7 days</div>')
     +'</div>';
   return '<div class="dv-ddexr2">'+left+right+'</div>';
@@ -2098,6 +2138,7 @@ window.dashDayDetailLineText=function(){
     L.push('• Open seats: '+N(X.tot.av)+' / '+N(X.tot.cap));
     L.push(X.tot.need>0?('• 🔴 Still to sell: '+N(X.tot.need)+' pax ('+X.tot.short.length+' departures)'):'• ✅ All departures at break-even');
     if(X.tot.idle.length) L.push('• ⚪ No bookings yet: '+X.tot.idle.length+' departures (not counted)');
+    if(X.tot.never.length) L.push('• 🟣 Below cost even when full: '+X.tot.never.length+' dep. · check pricing');
     var used={}, todo=[];
     X.days.forEach(function(d){
       var bits=[];
@@ -2823,6 +2864,7 @@ const DV_CSS=`<style>
   .dv-ddgrid .c.bad{background:#FDECEC}.dv-ddgrid .c.bad .m i{background:#D64545}.dv-ddgrid .c.bad .ft b{color:#B42318}
   .dv-ddgrid .c.warn{background:#FFF4EC}.dv-ddgrid .c.warn .m i{background:#E0A21E}.dv-ddgrid .c.warn .ft b{color:#B45309}
   .dv-ddgrid .c.unk .m i{background:#9b9088}
+  .dv-ddgrid .c.never{background:#FBE9F0}.dv-ddgrid .c.never .m i{background:#8E3A6B}.dv-ddgrid .c.never .ft b{color:#8E3A6B}
   .dv-ddgrid .c.idle{background:#F3F4F8;border:1px dashed #C9CCDA;min-height:56px}
   .dv-ddgrid .c.idle .bk{color:#9AA0B8}
   .dv-ddgrid .c.off{background:#F0F1F5;color:#9AA0B8;display:flex;align-items:center;justify-content:center;font-size:10.5px}

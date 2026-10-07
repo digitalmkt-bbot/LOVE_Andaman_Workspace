@@ -4,7 +4,7 @@
 //   วันนี้มีบุคกิ้งอะไรเข้าบ้าง ไปวันไหนบ้าง และอีก 7 วันล่วงหน้ายังมีที่นั่งว่างเท่าไหร่ ต้องหาลูกค้าเพิ่มอีกเท่าไหร่"
 //   เลือกแบบ bullet 4 ข้อ (ม็อกอัป v3)
 //
-// กันเก้าอย่าง
+// กันสิบเอ็ดอย่าง
 //   1 มุมมองวันเดียว · มีก้อน exec + ก้อนไปวันไหน + ตาราง 7 วัน · bullet 4 ข้อ · ตัวเลข "คีย์วันนี้" ตรงกับ _ddSum (ไม่นับใบยกเลิก/ใบบริษัท)
 //   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหน รวมใบครบ · แถว "ถึงวันนี้" ขึ้นก่อน
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
@@ -13,6 +13,8 @@
 //   6 ปุ่มคัดลอกส่ง LINE · อังกฤษล้วน (§ddEn · ก้อนในแอปก็ไม่มีตัวไทย) · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
 //   9 §ddTodo2 · การ์ด to-do: หัว วัน·เส้นทาง · ป้ายคำสั่ง (Sell N more / N seats left / Full) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบตรงตำแหน่ง
+//  11 §ddBE2 · ใบยอดเงิน 0 ไม่ถ่วงราคาเฉลี่ย · สองลำบนกระดานวันเดียวกัน คิดจุดคุ้มทุนเฉพาะลำที่ต้องออกตามคนจอง (ไม่บวกสองลำ)
+//  10 §ddBE2 · จุดคุ้มทุนคิดจากราคาเฉลี่ยของใบจองจริงในวันนั้น (ไม่ใช่ราคาในแผน) · ราคาต่ำจนไม่คุ้มแม้เต็มลำ = "won't break even" แยกจาก "no cost plan" ไม่นับขาด
 //   8 §ddIdle · ลำที่วางบนกระดานแต่จอง 0 คน = "no bookings yet" ไม่นับขาด ไม่ขึ้น to-do/LINE ไม่เข้ายอดที่นั่ง · โปรแกรมปิดฤดู/ปิดอากาศไม่โผล่ (ชุดเดียวกับปฏิทิน)
 import { open, goView } from './_harness.mjs';
 
@@ -80,8 +82,13 @@ const s4 = await page.evaluate(() => {
   window._ddPaint();
   const X2 = window._ddExecX; const out = [];
   Object.keys(X2.cells).filter(k => k.endsWith('|' + rid) && X2.cells[k].st !== 'idle' && X2.cells[k].st !== 'wx').forEach(k => { const c = X2.cells[k], d = k.split('|')[0];
-    let be = 0, unk = false; _calTripsFor(d, '').forEach(tp => { if (!tp || !tp.r || tp.r.id !== rid || tp.isCharter) return; const x = _ddBE(d, tp.b.id); if (x.be == null) unk = true; else be += x.be; });   /* ลำชุดเดียวกับปฏิทิน (§ddIdle) */
-    const need = unk ? null : Math.max(0, be - c.bk), st = need == null ? 'unk' : (need <= 0 ? 'ok' : (need <= 5 ? 'warn' : 'bad'));
+    /* §ddBE2 · ลำชุดเดียวกับปฏิทิน · นับเฉพาะลำที่ต้องออกตามคนจอง (เรียงจากคุ้มง่ายสุด) */
+    const bx = []; _calTripsFor(d, '').forEach(tp => { if (!tp || !tp.r || tp.r.id !== rid || tp.isCharter) return; bx.push(_ddBE(d, tp.b.id, rid)); });
+    let be = 0, unk = bx.some(x => x.be == null && x.why !== 'never');
+    if (!unk) { const sorted = bx.slice().sort((p, q) => (p.be == null ? 1e9 : p.be) - (q.be == null ? 1e9 : q.be)); let useN = 0, seat = 0; for (const x of sorted) { useN++; seat += x.cap || 0; if (seat >= c.bk) break; }
+      const use = sorted.slice(0, Math.max(1, useN)); use.forEach(x => { if (x.be != null) be += x.be; }); }
+    const neverX = !unk && bx.length > 0 && (() => { const sorted = bx.slice().sort((p, q) => (p.be == null ? 1e9 : p.be) - (q.be == null ? 1e9 : q.be)); let useN = 0, seat = 0; for (const x of sorted) { useN++; seat += x.cap || 0; if (seat >= c.bk) break; } return sorted.slice(0, Math.max(1, useN)).some(x => x.be == null); })();
+    const need = (unk || neverX) ? null : Math.max(0, be - c.bk), st = unk ? 'unk' : (neverX ? 'never' : (need <= 0 ? 'ok' : (need <= 5 ? 'warn' : 'bad')));
     const el = document.querySelector('[data-cell="' + k + '"]');
     out.push({ k, be: c.be, need: c.need, st: c.st, expNeed: need, expSt: st, domSt: el && el.classList.contains(c.st), domTxt: el && el.textContent.replace(/\s+/g, ' ') }); });
   // คืนแผน
@@ -187,6 +194,64 @@ const s9 = await page.evaluate((DATE) => {
 if (s9.n > 0 && s9.n === s9.nExp && s9.out.every(o => !o.miss && o.okH && o.okPill && o.okS && o.okBe))
   ok(`9 การ์ด to-do ${s9.n} ใบ · หัว "วัน · เส้นทาง" · ป้ายคำสั่ง (${s9.out.map(o => o.pill).join(' / ')}) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบ`);
 else fail('9 ' + JSON.stringify(s9).slice(0, 700));
+
+/* ══ 10 · §ddBE2 · จุดคุ้มทุนคิดจากราคาขายจริงของวันนั้น ไม่ใช่ราคาในแผน · และ "ไม่คุ้มแม้เต็มลำ" แยกจาก "ไม่มีแผน" ══ */
+const s10 = await page.evaluate((DATE) => {
+  window._ddFrom = window._ddTo = DATE; window._ddPaint();
+  const X0 = window._ddExecX, k = Object.keys(X0.cells).find(k => X0.cells[k].bk > 0 && X0.cells[k].st !== 'wx'); if (!k) return { err: 'no cell' };
+  const [d, rid] = k.split('|');
+  const P = ctPlans(); const pl = ctBlankPlan('t'); pl.famId = rid; pl.price = 999999; P.push(pl); ctPlansSave(P);   /* ราคาในแผนตั้งสูงเกินจริง · ถ้าระบบใช้ราคาแผน be จะเป็น 1 */
+  window._ddPaint(); const X = window._ddExecX, c = X.cells[k];
+  const mix = _ddMix(rid, d); const bid = _calTripsFor(d, '').find(t => t.r.id === rid && !t.isCharter).b.id; const x = _ddBE(d, bid, rid);
+  /* คำนวณเองจากราคาเฉลี่ยใบจอง */
+  const pl2 = ctPlans().find(p => p.id === pl.id), T = ctTpl(); let exp = null;
+  const boat = getBoat(bid), FP = flFuelPriceEff(d, boat), cap = boatCapFor(bid, d);
+  for (let n = 1; n <= cap; n++) { const q = Object.assign({}, pl2, { boats: 1, boatId: bid, _asOf: d, price: mix.price, priceCh: '', chPct: 0, comm: 0, fuel: FP && FP.price > 0 ? FP.price : pl2.fuel, paxTH: Math.round(n * mix.thR) }); if (ctProfitAt(q, n, T).p > 0) { exp = n; break; } }
+  /* ไม่คุ้มแม้เต็มลำ · ทำให้ราคาขายจริงต่ำมาก */
+  const realAmt = window.tsTripAmount; window.tsTripAmount = () => 1; window._ddPaint();
+  const X2 = window._ddExecX, c2 = X2.cells[k], el = document.querySelector('[data-cell="' + k + '"]');
+  const inShort = X2.tot.short.some(z => z.d === d && z.rid === rid), inNever = X2.tot.never.some(z => z.d === d && z.rid === rid);
+  const bulNever = [...document.querySelectorAll('[data-dd="exec"] .bul li')].some(li => /Check pricing/.test(li.textContent) && /can't break even even when full/.test(li.textContent));
+  const line = dashDayDetailLineText(), lineNever = /🟣 Below cost even when full: \d+ dep\./.test(line);
+  const todoDom = [...document.querySelectorAll('[data-dd="exec"] .act2')].some(a => a.textContent.includes(_ddDLbl(d, true)) && a.textContent.includes(_ddCellName(c2)));
+  window.tsTripAmount = realAmt; ctPlansSave(ctPlans().filter(p => p.id !== pl.id)); window._ddPaint();
+  return { k, mixPrice: Math.round(mix.price), src: x.src, be: c.be, exp, st: c.st, never: { st: c2.st, be: c2.be, need: c2.need, inShort, inNever, dom: !!(el && el.classList.contains('never') && /won't break even/.test(el.textContent)), bulNever, lineNever, todoDom } };
+}, DATE);
+const N10 = s10.never || {};
+if (!s10.err && s10.mixPrice > 0 && s10.src === 'bookings' && s10.be === s10.exp && s10.be > 1 && N10.st === 'never' && N10.be == null && N10.need == null && !N10.inShort && N10.inNever && N10.dom && N10.bulNever && N10.lineNever && !N10.todoDom)
+  ok(`10 จุดคุ้มทุนจากราคาขายจริง (${s10.k} · avg ฿${s10.mixPrice} · be ${s10.be} ตรงที่คำนวณเอง · ไม่ใช่ราคาแผน 999,999) · ราคาต่ำจนไม่คุ้มแม้เต็มลำ → "won't break even" ไม่นับขาด ไม่ขึ้น to-do · มี bullet Check pricing + 🟣 ใน LINE`);
+else fail('10 ' + JSON.stringify(s10));
+
+/* ══ 11 · §ddBE2 · ใบราคา 0 ไม่ถ่วงราคาเฉลี่ย · สองลำบนกระดาน นับจุดคุ้มทุนเฉพาะลำที่ต้องออก ══ */
+const s11 = await page.evaluate((DATE) => {
+  window._ddFrom = window._ddTo = DATE; window._ddPaint();
+  const X0 = window._ddExecX, k = Object.keys(X0.cells).find(k => X0.cells[k].bk > 0 && X0.cells[k].st !== 'wx'); if (!k) return { err: 'no cell' };
+  const [d, rid] = k.split('|');
+  const P = ctPlans(); const pl = ctBlankPlan('t'); pl.famId = rid; pl.price = 2500; P.push(pl); ctPlansSave(P);
+  /* C · ใบหนึ่งใบยอดเงิน 0 · ราคาเฉลี่ยต้องไม่ลด */
+  const realAmt = window.tsTripAmount; window._ddPaint(); const base = _ddMix(rid, d);
+  const CXL = ['cancelled', 'rejected', 'cancelled_weather'];
+  const victims = SB_BOOKINGS.filter(b => !CXL.includes(b.status) && b.schemaVer === 2 && (b.trips || []).some(t => t.date === d && t.routeId === rid && t.bookingMode !== 'charter' && realAmt(b, t) > 0));
+  const victim = victims[0]; if (!victim) return { err: 'no priced booking' };
+  window.tsTripAmount = (b, t) => (b.id === victim.id ? 0 : realAmt(b, t)); window._ddPaint(); const mixC = _ddMix(rid, d);
+  const vt = victim.trips.find(t => t.date === d), vpax = bkV2PaxAllTot(vt.pax || {}), vamt = realAmt(victim, vt);
+  const expC = (base.rev - vamt) / (base.paxPriced - vpax);   /* เฉลี่ยจากใบที่เหลือ · ไม่ใช่ (rev−amt)/paxทั้งหมด */
+  const dragged = (base.rev - vamt) / base.paxPriced;
+  window.tsTripAmount = realAmt;
+  /* D · ลำที่สองบนกระดาน · คนจองยังพอลำเดียว → be ต้องเท่า be ของลำที่คุ้มง่ายสุด ไม่ใช่ผลบวกสองลำ */
+  const bid1 = _calTripsFor(d, '').find(t => t.r.id === rid && !t.isCharter).b.id;
+  const other = BOATS.find(b => b.id !== bid1 && !(TRIPS[d] || {})[b.id] && getCurStatus(b, d).s === 'available' && b.cap > 0 && b.cap >= X0.cells[k].bk);
+  if (!other) return { err: 'no spare boat' };
+  const had = !!(TRIPS[d] && TRIPS[d][other.id]); TRIPS[d][other.id] = { route: rid }; window._ddPaint();
+  const X = window._ddExecX, c = X.cells[k], b1 = _ddBE(d, bid1, rid), b2 = _ddBE(d, other.id, rid);
+  const expD = (b1.be != null && b2.be != null) ? Math.min(b1.be, b2.be) : null, sumD = (b1.be || 0) + (b2.be || 0);
+  if (!had) delete TRIPS[d][other.id];
+  ctPlansSave(ctPlans().filter(p => p.id !== pl.id)); window._ddPaint();
+  return { k, C: { base: Math.round(base.price), after: Math.round(mixC.price), exp: Math.round(expC), dragged: Math.round(dragged) }, D: { be: c.be, exp: expD, sum: sumD, b1: b1.be, b2: b2.be, boats: c.boats, bk: c.bk, cap: c.cap } };
+}, DATE);
+if (!s11.err && s11.C.after === s11.C.exp && s11.C.after !== s11.C.dragged && s11.D.exp != null && s11.D.be === s11.D.exp && s11.D.boats === 2 && (s11.D.b1 === s11.D.b2 || s11.D.be !== s11.D.sum))
+  ok(`11 ใบราคา 0 ไม่ถ่วงเฉลี่ย (฿${s11.C.base} → ฿${s11.C.after} ไม่ใช่ ฿${s11.C.dragged}) · สองลำบนกระดาน be ${s11.D.be} = ลำที่คุ้มง่ายสุด (${s11.D.b1}/${s11.D.b2}) ไม่ใช่ผลบวก ${s11.D.sum}`);
+else fail('11 ' + JSON.stringify(s11));
 
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (e1.length) fail('errors: ' + e1.slice(0, 3).join(' | '));
