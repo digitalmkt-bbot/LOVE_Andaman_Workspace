@@ -3717,6 +3717,56 @@ function calToggleHidePanel(){
   renderCal();
 }
 
+/* ══ §calSets (2026-10-07) · ชุดเส้นทางที่บันทึกไว้ · ตั้งชื่อได้ กดแล้วปฏิทินโชว์เฉพาะเส้นทางในชุด ══
+   ใช้คู่กับมุมมอง Routes เพื่อแคปส่งต่อ (เช่น ชุด "Similan" / "Phi Phi")
+   ที่เก็บ · คีย์ scalar บนสุดของ blob เป็นสตริง JSON  [{id,name,routes:[routeId]}]
+     เดินทางเป็น {op:'meta'} ลง app_meta catch-all แบบเดียวกับ cal_route_names / da_template
+     ไม่มีตาราง ไม่มี migration ไม่แตะ field_mapping · ชุดเป็นของทั้งทีม
+   การ "ใช้ชุด" แค่เขียนรายการซ่อนเส้นทางของเครื่องนั้น (_cal_hidden_routes) · ไม่แตะข้อมูลอื่น
+   ชุดไหน active ดูจากเส้นทางที่โชว์อยู่ตรงกับชุดพอดี · ไม่เก็บ state แยก จึงไม่มีวันค้างผิด */
+let CAL_ROUTE_SETS=[];
+(function(){ try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); const v=d.cal_route_sets;
+  const a=(typeof v==='string')?JSON.parse(v):v; if(Array.isArray(a)) CAL_ROUTE_SETS=a; }catch(e){} })();
+function _calSetsPersist(){
+  try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); d.cal_route_sets=JSON.stringify(CAL_ROUTE_SETS); localStorage.setItem('loveandaman_v2', JSON.stringify(d)); }
+  catch(e){ console.warn('[calSets] persist failed', e); }
+}
+function _calSetPool(){ return ROUTES.filter(rt=>!laIsLandRoute(rt)); }
+function _calSetActiveId(){
+  if(calPier!=='all') return '';
+  const h=_calGetHiddenRoutes(), pool=_calSetPool(), ok=new Set(pool.map(r=>r.id));
+  const vis=pool.filter(rt=>!h.has(rt.id)).map(rt=>rt.id).sort().join('|');
+  const m=(CAL_ROUTE_SETS||[]).find(x=>(x.routes||[]).filter(i=>ok.has(i)).sort().join('|')===vis);
+  return m?m.id:'';
+}
+function calSetApply(id){
+  const st=(CAL_ROUTE_SETS||[]).find(x=>x.id===id); if(!st) return;
+  const keep=new Set(st.routes||[]);
+  _calSaveHiddenRoutes(new Set(_calSetPool().filter(rt=>!keep.has(rt.id)).map(rt=>rt.id)));
+  calPier='all';
+  renderCal();
+}
+function calSetAll(){ calPier='all'; _calSaveHiddenRoutes(new Set()); renderCal(); }
+function calSetSave(){
+  const h=_calGetHiddenRoutes();
+  const ids=_calSetPool().filter(rt=>(calPier==='all'||rt.pier===calPier) && !h.has(rt.id)).map(rt=>rt.id);
+  if(!ids.length){ alert('No routes are showing. Turn on at least one route first.'); return; }
+  const v=prompt('Save the '+ids.length+' route(s) showing now as a set.\nSet name:', ''); if(v===null) return;
+  const name=v.trim().slice(0,40); if(!name) return;
+  let st=CAL_ROUTE_SETS.find(x=>String(x.name||'').toLowerCase()===name.toLowerCase());
+  if(st){ if(!confirm('A set with this name already exists. Replace it with the routes showing now?')) return; st.routes=ids; }
+  else { st={id:'cs'+Date.now().toString(36), name:name, routes:ids}; CAL_ROUTE_SETS.push(st); }
+  _calSetsPersist();
+  calSetApply(st.id);
+}
+function calSetDelete(id){
+  const st=(CAL_ROUTE_SETS||[]).find(x=>x.id===id); if(!st) return;
+  if(!confirm('Delete this saved set? It is removed for everyone. The routes themselves are not affected.')) return;
+  CAL_ROUTE_SETS=CAL_ROUTE_SETS.filter(x=>x.id!==id);
+  _calSetsPersist();
+  renderCal();
+}
+
 // §cal2b · ชื่อโปรแกรมที่จะโชว์ในปฏิทิน · ตั้งเองได้ต่อเส้นทาง
 //   เก็บเป็น JSON string ใน blob (cal_route_names · sync app_meta)
 //   แยกชุดจาก da_route_names เพราะช่องปฏิทินแคบกว่าข้อความ LINE คนละเงื่อนไข
@@ -5219,8 +5269,27 @@ function renderCal(){
   //   ใช้แคปหน้าจอส่งต่อ · ชื่อเส้นทางเต็ม + ที่นั่งว่างรายวันอยู่ในการ์ดเดียว
   //   ตัวเลขมาจาก _calTripsFor ตัวเดียวกับโหมด Month (รวมทุกลำของเส้นทาง · เคารพตัวกรองท่า/ซ่อนเส้นทาง)
   //   อ่านอย่างเดียว · ไม่เขียนข้อมูล ไม่แตะ state อื่นนอกจาก _calViewMode
-  let routesView='';
+  let routesView='', setsBar='';
   if(viewMode==='routes'){
+    /* §calSets · แถบชุดเส้นทาง · กดชุด = โชว์เฉพาะเส้นทางในชุด · คนที่แก้ไม่ได้ยังกดใช้ชุดได้ แต่ไม่เห็นปุ่มบันทึก/ลบ */
+    const _setEsc=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const _setCanEd=(typeof window.laCanEdit==='function') ? !!window.laCanEdit() : true;
+    const _setAct=_calSetActiveId();
+    const _setPoolIds=new Set(_calSetPool().map(r=>r.id));
+    const _setAllOn=(calPier==='all' && ![..._hidRt].some(i=>_setPoolIds.has(i)));
+    const _setBtn=(on)=>`border:1px solid ${on?'#fff':'rgba(255,255,255,.24)'};background:${on?'#fff':'rgba(255,255,255,.10)'};color:${on?'#16265C':'#E3ECFA'};font:${on?700:600} 12px 'DM Sans',sans-serif;cursor:pointer;min-height:30px`;
+    setsBar=`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16)">
+      <span style="font:700 10.5px 'DM Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#A8BAD8;margin-right:4px">Saved sets</span>
+      <button onclick="calSetAll()" style="${_setBtn(_setAllOn)};border-radius:15px;padding:0 13px">All routes</button>
+      ${(CAL_ROUTE_SETS||[]).map(st=>{ const on=(st.id===_setAct); const n=(st.routes||[]).filter(i=>_setPoolIds.has(i)).length;
+        return `<span style="display:inline-flex">
+          <button onclick="calSetApply('${st.id}')" title="Show only the ${n} route(s) in this set" style="${_setBtn(on)};border-radius:${_setCanEd?'15px 0 0 15px':'15px'};padding:0 ${_setCanEd?9:13}px 0 13px">${_setEsc(st.name)} <span style="font:500 11px 'DM Mono',monospace;opacity:.7">${n}</span></button>
+          ${_setCanEd?`<button onclick="calSetDelete('${st.id}')" aria-label="Delete set" title="Delete this set" style="${_setBtn(on)};border-left:none;border-radius:0 15px 15px 0;padding:0 9px 0 7px;font-weight:500">&times;</button>`:''}
+        </span>`; }).join('')}
+      ${_setCanEd?`<button onclick="calSetSave()" title="Save the routes showing now as a named set" style="${_setBtn(false)};border-style:dashed;border-radius:15px;padding:0 13px">+ Save current view as set</button>`:''}
+      ${(!(CAL_ROUTE_SETS||[]).length)?`<span style="font:500 11.5px 'DM Sans',sans-serif;color:#A8BAD8">Hide routes with the chips above, then save what is left as a named set.</span>`:''}
+    </div>`;
+    const _setActObj=_setAct ? (CAL_ROUTE_SETS||[]).find(x=>x.id===_setAct) : null;
     const LOW=10;   // ว่างต่ำกว่านี้ = "ใกล้เต็ม"
     const escR=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     const rd={};    // rid -> {r, days:{d:{free,cap,wx,ch}}}
@@ -5292,7 +5361,7 @@ function renderCal(){
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:12px;border-bottom:2px solid #000F4C">
         <div>
           <div style="font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:600">LOVE Andaman · Seats free by route</div>
-          <div style="margin-top:3px;font-size:30px;font-weight:700;letter-spacing:-.01em;line-height:1.15">${MONTHS_EN[calMonth]} ${calYear}${calPier!=='all'?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${PIER_NAME[calPier]||''}</span>`:''}</div>
+          <div style="margin-top:3px;font-size:30px;font-weight:700;letter-spacing:-.01em;line-height:1.15">${MONTHS_EN[calMonth]} ${calYear}${calPier!=='all'?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${PIER_NAME[calPier]||''}</span>`:''}${_setActObj?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${_setEsc(_setActObj.name)}</span>`:''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#3D3D38">
           ${lg('#DFE9F7','#000F4C','24','Available (route colour)')}
@@ -5315,7 +5384,7 @@ function renderCal(){
     // §calRoutes · ไม่ใช้ .cal2-page (ตัวนั้นถูก _calFitPage ล็อกความสูงตอน resize) · หน้านี้ต้องยาวตามจำนวนการ์ด
     window._calDrawer=false;
     wrap.innerHTML = CAL2CSS
-      + `<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:9px">${headerBar}${routeStrip2}${routesView}</div>`;
+      + `<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:9px">${headerBar}${routeStrip2}${setsBar}${routesView}</div>`;
   } else if(viewMode==='month'){
     // §cal2 · ปฏิทินกินพื้นที่ที่เหลือทั้งหมด · รายละเอียดวันอยู่ในลิ้นชัก
     const _dwOn=!!window._calDrawer;

@@ -2732,6 +2732,9 @@ window._laReloadData=function(){
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
       try{ CAL_ROUTE_NAMES=(typeof d.cal_route_names==='string')?(JSON.parse(d.cal_route_names)||{}):d.cal_route_names; }catch(_){}
     }
+    if(typeof CAL_ROUTE_SETS!=='undefined' && d.cal_route_sets){                     // §calSets · ชุดเส้นทางที่บันทึกไว้ในปฏิทิน
+      try{ const _cs=(typeof d.cal_route_sets==='string')?JSON.parse(d.cal_route_sets):d.cal_route_sets; if(Array.isArray(_cs)) CAL_ROUTE_SETS=_cs; }catch(_){}
+    }
     /* §laDerived · ข้อมูลดิบเข้าครบแล้ว ค่อยประกอบตารางที่ derive มาจากมันใหม่ทั้งชุด */
     try{ window.laRebuildDerived('sync'); }catch(_){}
     return true;
