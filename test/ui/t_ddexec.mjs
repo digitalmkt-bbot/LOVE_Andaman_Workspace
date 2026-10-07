@@ -4,7 +4,7 @@
 //   วันนี้มีบุคกิ้งอะไรเข้าบ้าง ไปวันไหนบ้าง และอีก 7 วันล่วงหน้ายังมีที่นั่งว่างเท่าไหร่ ต้องหาลูกค้าเพิ่มอีกเท่าไหร่"
 //   เลือกแบบ bullet 4 ข้อ (ม็อกอัป v3)
 //
-// กันแปดอย่าง
+// กันเก้าอย่าง
 //   1 มุมมองวันเดียว · มีก้อน exec + ก้อนไปวันไหน + ตาราง 7 วัน · bullet 4 ข้อ · ตัวเลข "คีย์วันนี้" ตรงกับ _ddSum (ไม่นับใบยกเลิก/ใบบริษัท)
 //   2 "ไปใน 7 วัน" นับเองจากใบจริง (วันเดินทางแรก อยู่ใน to+1..to+7) ตรงกับที่โชว์ · รายการไปวันไหน รวมใบครบ · แถว "ถึงวันนี้" ขึ้นก่อน
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
@@ -12,6 +12,7 @@
 //   5 ป้าย +N ของช่อง = pax ของใบที่คีย์วันนี้ที่ไปเส้นทาง-วันนั้น (นับเอง)
 //   6 ปุ่มคัดลอกส่ง LINE · อังกฤษล้วน (§ddEn · ก้อนในแอปก็ไม่มีตัวไทย) · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
+//   9 §ddTodo2 · การ์ด to-do: หัว วัน·เส้นทาง · ป้ายคำสั่ง (Sell N more / N seats left / Full) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบตรงตำแหน่ง
 //   8 §ddIdle · ลำที่วางบนกระดานแต่จอง 0 คน = "no bookings yet" ไม่นับขาด ไม่ขึ้น to-do/LINE ไม่เข้ายอดที่นั่ง · โปรแกรมปิดฤดู/ปิดอากาศไม่โผล่ (ชุดเดียวกับปฏิทิน)
 import { open, goView } from './_harness.mjs';
 
@@ -156,7 +157,7 @@ const s8 = await page.evaluate((DATE) => {
   const X = window._ddExecX, c = X.cells[d + '|' + rid];
   const el = document.querySelector('[data-cell="' + d + '|' + rid + '"]');
   const inShort = X.tot.short.some(x => x.d === d && x.rid === rid), inIdle = X.tot.idle.some(x => x.d === d && x.rid === rid);
-  const todoDom = [...document.querySelectorAll('[data-dd="exec"] .act')].some(a => a.textContent.includes(_ddDLbl(d, true)) && a.textContent.includes(X.routes[0].name));
+  const todoDom = [...document.querySelectorAll('[data-dd="exec"] .act, [data-dd="exec"] .act2')].some(a => a.textContent.includes(_ddDLbl(d, true)) && a.textContent.includes(X.routes[0].name));
   const line = dashDayDetailLineText(), lineHas = line.split('\n').includes(_ddDLbl(d)), lineIdle = /⚪ No bookings yet: \d+ departures/.test(line);
   const T = X.colTot[d], totCap = X.tot.cap, sumT = X.days.reduce((s, dd) => s + ((X.colTot[dd] || {}).cap || 0), 0);
   // คืนค่า
@@ -167,6 +168,25 @@ const s8 = await page.evaluate((DATE) => {
 if (!s8.err && s8.st === 'idle' && s8.bk === 0 && s8.cap > 0 && !s8.inShort && s8.inIdle && s8.domIdle && !s8.todoDom && !s8.lineHas && s8.lineIdle && s8.Tcap === 0 && s8.Tidle === 1 && s8.totCap === s8.sumT)
   ok(`8 ลำบนกระดานที่ยังไม่มีคนจอง (${s8.d} · 0/${s8.cap}) → "no bookings yet" · ไม่เป็นขาด ไม่ขึ้น to-do ไม่อยู่ใน TO DO ของ LINE · ไม่เข้ายอดที่นั่ง`);
 else fail('8 ' + JSON.stringify(s8));
+
+/* ══ 9 · §ddTodo2 · การ์ด to-do อ่านง่าย: วัน·เส้นทาง / แถบ+ขีดคุ้มทุน / ตัวเลข / ป้ายคำสั่ง ══ */
+const s9 = await page.evaluate((DATE) => {
+  window._ddFrom = window._ddTo = DATE; const P = ctPlans(), ids = []; window._ddPaint();
+  window._ddExecX.routes.forEach(r => { const pl = ctBlankPlan('t ' + r.rid); pl.famId = r.rid; pl.price = 2500; P.push(pl); ids.push(pl.id); }); ctPlansSave(P); window._ddPaint();
+  const X = window._ddExecX, cards = [...document.querySelectorAll('[data-dd="exec"] .act2')];
+  const exp = X.tot.short.slice(0, 4).concat(X.tot.near.slice(0, 2), X.tot.full.slice(0, 2)).slice(0, 5);
+  const out = cards.map((el, i) => { const c = exp[i]; if (!c) return { miss: true };
+    const h = el.querySelector('.h').textContent, pill = el.querySelector('.p b').textContent, s = el.querySelector('.s').textContent;
+    const kind = el.getAttribute('data-todo'), em = el.querySelector('.m em');
+    const okPill = kind === 'short' ? pill === 'Sell ' + c.need + ' more' : (kind === 'near' ? /seats? left/.test(pill) : pill === 'Full');
+    return { okH: h.includes(_ddDLbl(c.d, true)) && h.includes(_ddCellName(c)), okPill, okS: s.includes(c.bk + ' booked of ' + c.cap) && s.includes(c.av + ' open') && (c.be == null || s.includes('break-even ' + c.be)),
+      okBe: c.be == null ? !em : (!!em && em.style.left === Math.min(100, Math.round(c.be / c.cap * 100)) + '%'), kind, pill }; });
+  ctPlansSave(ctPlans().filter(p => !ids.includes(p.id))); window._ddPaint();
+  return { n: cards.length, nExp: exp.length, out };
+}, DATE);
+if (s9.n > 0 && s9.n === s9.nExp && s9.out.every(o => !o.miss && o.okH && o.okPill && o.okS && o.okBe))
+  ok(`9 การ์ด to-do ${s9.n} ใบ · หัว "วัน · เส้นทาง" · ป้ายคำสั่ง (${s9.out.map(o => o.pill).join(' / ')}) · ตัวเลข booked/break-even/open · ขีดคุ้มทุนบนแถบ`);
+else fail('9 ' + JSON.stringify(s9).slice(0, 700));
 
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (e1.length) fail('errors: ' + e1.slice(0, 3).join(' | '));

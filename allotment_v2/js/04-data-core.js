@@ -1991,13 +1991,28 @@ function _ddExecHtml(rows,rg){
     +K(X.tot.need>0?'bad':'','Still to sell',nCells?N(X.tot.need):'—','pax',nCells?(pl(X.tot.short.length,'departure')+' below break-even'):'no boats assigned')
     +'</div>';
   /* to-do · short → nearly full → full */
+  /* §ddTodo2 (2026-10-07) · เจ้าของ: "ปรับรายละเอียดนี้ให้เข้าใจง่ายขึ้น" · ของเดิมเป็นประโยคเดียวยาว ตัวเลขสามชุดปนกัน
+     ใหม่: บรรทัดแรก = วัน + เส้นทาง · ป้ายขวา = สิ่งที่ต้องทำเป็นคำสั่งสั้น ("Sell 22 more") · บรรทัดสอง = ตัวเลขประกอบ
+     + แถบสัดส่วนมีขีดจุดคุ้มทุน คนอ่านเห็นว่าห่างเส้นเท่าไหร่โดยไม่ต้องคิดเลข */
   var acts=[];
-  X.tot.short.slice(0,4).forEach(function(c){ acts.push({c:'',t:'<b>'+esc(_ddCellName(c))+' · '+_ddDLbl(c.d,true)+'</b> short '+N(c.need)+' pax · '+c.bk+'/'+c.cap+' booked · '+c.av+' open'}); });
-  X.tot.near.slice(0,2).forEach(function(c){ acts.push({c:'a',t:'<b>'+esc(_ddCellName(c))+' · '+_ddDLbl(c.d,true)+'</b> '+c.av+' seats left · close OTA sales before it overbooks'}); });
-  X.tot.full.slice(0,2).forEach(function(c){ acts.push({c:'g',t:'<b>'+esc(_ddCellName(c))+' · '+_ddDLbl(c.d,true)+'</b> full · add a boat or stop sales'}); });
+  var mk=function(c,kind){ var be=(c.be!=null)?c.be:null;
+    var o={c:kind==='short'?(c.need>5?'':'w'):(kind==='near'?'a':'g'), d:_ddDLbl(c.d,true), r:_ddCellName(c), bk:c.bk, cap:c.cap, av:c.av, be:be,
+      pct:Math.min(100,c.pct), bePct:(be!=null&&c.cap)?Math.min(100,Math.round(be/c.cap*100)):null, kind:kind};
+    if(kind==='short'){ o.pill='Sell '+N(c.need)+' more'; o.why='to reach break-even'; }
+    else if(kind==='near'){ o.pill=(c.av===1?'1 seat left':(c.av+' seats left')); o.why='close OTA sales'; }
+    else { o.pill='Full'; o.why='add a boat or stop sales'; }
+    return o; };
+  X.tot.short.slice(0,4).forEach(function(c){ acts.push(mk(c,'short')); });
+  X.tot.near.slice(0,2).forEach(function(c){ acts.push(mk(c,'near')); });
+  X.tot.full.slice(0,2).forEach(function(c){ acts.push(mk(c,'full')); });
   acts=acts.slice(0,5);
   var ah='<div class="acts"><div class="ct">To do today</div>'
-    +(acts.length?acts.map(function(a,i){ return '<div class="act"><i class="'+a.c+'">'+(i+1)+'</i><span>'+a.t+'</span></div>'; }).join('')
+    +(acts.length?acts.map(function(a,i){
+        return '<div class="act2 '+a.c+'" data-todo="'+a.kind+'"><i class="'+a.c+'">'+(i+1)+'</i>'
+          +'<div class="b"><div class="h"><b>'+esc(a.d)+'</b> · '+esc(a.r)+'</div>'
+          +'<div class="m"><i style="width:'+a.pct+'%"></i>'+(a.bePct!=null?('<em style="left:'+a.bePct+'%"></em>'):'')+'</div>'
+          +'<div class="s"><span><b>'+N(a.bk)+'</b> booked of '+N(a.cap)+'</span>'+(a.be!=null?('<span>break-even <b>'+N(a.be)+'</b></span>'):'')+'<span><b>'+N(a.av)+'</b> open</span></div></div>'
+          +'<div class="p"><b>'+esc(a.pill)+'</b><small>'+esc(a.why)+'</small></div></div>'; }).join('')
       :'<div class="act"><i class="g">✓</i><span>'+(nCells?'Nothing urgent to sell in the next 7 days':'Assign boats on the Boat Operation sheet first')+'</span></div>')
     +'</div>';
   return '<div class="dv-c dv-ddexec" data-dd="exec"><div class="dv-ddh">Executive Summary · '+esc(_ddDLbl(rg.to,true))
@@ -2749,6 +2764,24 @@ const DV_CSS=`<style>
   .dv-ddexec .act i{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:800;color:#fff;background:#D64545;margin-top:1px}
   .dv-ddexec .act i.a{background:#E0A21E}.dv-ddexec .act i.g{background:#2E9B72}
   .dv-ddexec .act b{color:#000F4C}
+  /* §ddTodo2 · การ์ด to-do · เลข | เนื้อ (หัว · แถบ · ตัวเลข) | ป้ายคำสั่ง */
+  .dv-ddexec .act2{display:grid;grid-template-columns:18px 1fr auto;gap:9px;align-items:center;background:#F6F7FB;border-radius:10px;padding:8px 10px 7px;border-left:4px solid #D64545}
+  .dv-ddexec .act2.w{border-left-color:#E0A21E}.dv-ddexec .act2.a{border-left-color:#E0A21E}.dv-ddexec .act2.g{border-left-color:#2E9B72}
+  .dv-ddexec .act2>i{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:800;color:#fff;background:#D64545}
+  .dv-ddexec .act2>i.w,.dv-ddexec .act2>i.a{background:#E0A21E}.dv-ddexec .act2>i.g{background:#2E9B72}
+  .dv-ddexec .act2 .b{min-width:0}
+  .dv-ddexec .act2 .h{font-size:12.5px;color:#1F2430;line-height:1.3}
+  .dv-ddexec .act2 .h b{color:#000F4C}
+  .dv-ddexec .act2 .m{height:5px;border-radius:3px;background:#E3E6F0;margin:5px 0 4px;position:relative;overflow:hidden}
+  .dv-ddexec .act2 .m i{position:absolute;left:0;top:0;bottom:0;background:#D64545;border-radius:3px}
+  .dv-ddexec .act2.w .m i,.dv-ddexec .act2.a .m i{background:#E0A21E}.dv-ddexec .act2.g .m i{background:#2E9B72}
+  .dv-ddexec .act2 .m em{position:absolute;top:-2px;bottom:-2px;width:2px;background:#000F4C;opacity:.6}
+  .dv-ddexec .act2 .s{display:flex;gap:10px;font-size:10.5px;color:#6B7390;white-space:nowrap}
+  .dv-ddexec .act2 .s b{color:#1F2430;font-family:'DM Mono',ui-monospace,monospace;font-weight:700}
+  .dv-ddexec .act2 .p{text-align:right;min-width:86px}
+  .dv-ddexec .act2 .p b{display:block;font-size:12.5px;font-weight:800;color:#B42318;white-space:nowrap}
+  .dv-ddexec .act2.w .p b,.dv-ddexec .act2.a .p b{color:#B45309}.dv-ddexec .act2.g .p b{color:#1A7F4B}
+  .dv-ddexec .act2 .p small{display:block;font-size:9.5px;color:#6B7390;white-space:nowrap}
   .dv-ddexr2{display:grid;grid-template-columns:1fr 2.1fr;gap:9px;flex:none}
   .dv-ddtrav,.dv-ddgrid{padding:11px 13px 12px}
   .dv-ddnone{font-size:12px;color:#9b9088;padding:14px 4px}
