@@ -10718,7 +10718,7 @@ function renderProgDetailPink(){
         <button onclick="openRouteModal('${r.id}')" style="${_btn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">Edit details</button>
         ${progEditMode
           ? `<button onclick="toggleProgEdit(false)" style="${_btn};background:#0B6B4F;color:#fff;border:1px solid #0B6B4F;font-weight:700">Done editing</button>`
-          : `<button onclick="toggleProgEdit(true)" style="${_btn};background:#1272B3;color:#fff;border:1px solid #1272B3">Edit open / closed days</button>`
+          : `<button onclick="toggleProgEdit(true)" style="${_btn};background:#1272B3;color:#fff;border:1px solid #1272B3">Edit seasons &amp; days</button>`
         }
         <button onclick="delRoute('${r.id}')" aria-label="Delete program" title="Delete program" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
@@ -10827,7 +10827,7 @@ function renderProgDetailPink(){
       const dayClickHandler = progEditMode ? `onclick="toggleDayOverrideGuarded('${r.id}','${ds}')"` : '';
       const dayCursor = progEditMode ? 'pointer' : 'default';
       const dayHover = progEditMode ? "onmouseover=\"this.style.transform='scale(1.15)';this.style.zIndex='5'\" onmouseout=\"this.style.transform='';this.style.zIndex=''\"" : '';
-      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · set by hand':''}${progEditMode?'':' · read-only · click Edit open / closed days'}" style="position:relative;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:${isToday||(isOverride&&st&&st.type!=='open')?600:400};color:${fg};background:${bg};box-shadow:${ring};border-radius:4px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${d}</div>`;
+      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · set by hand':''}${progEditMode?'':' · read-only · click Edit seasons and days'}" style="position:relative;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:${isToday||(isOverride&&st&&st.type!=='open')?600:400};color:${fg};background:${bg};box-shadow:${ring};border-radius:4px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${d}</div>`;
     }
     const isCurrentMonth=(new Date().getFullYear()===calYear)&&(new Date().getMonth()===monthIdx);
     return `<div>
@@ -10866,7 +10866,7 @@ function renderProgDetailPink(){
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${monthsHtml}</div>
-    <div style="margin-top:12px;font-size:11.5px;color:#5B6170">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'Read-only · กดปุ่ม Edit open / closed days ด้านบนเพื่อเริ่มแก้'}</div>
+    <div style="margin-top:12px;font-size:11.5px;color:#5B6170">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'Read-only · กดปุ่ม Edit seasons &amp; days ด้านบนเพื่อเริ่มแก้'}</div>
   </div>`;
 
   mount.innerHTML=`${headerStrip}
@@ -10874,7 +10874,7 @@ function renderProgDetailPink(){
     <div style="padding:14px 0 0">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px">
         <span style="font-size:11px;font-weight:600;color:${dim.ink2};text-transform:uppercase;letter-spacing:.05em">Seasons · ${seasons.length}</span>
-        ${progEditMode && !showSeasonForm?`<button onclick="startSeasonForm()" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+        ${!showSeasonForm?`<button onclick="progAddSeason()" title="${progEditMode?'Add a season':'Turns on edit mode and opens the season form'}" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>เพิ่ม Season
         </button>`:''}
       </div>
@@ -11026,6 +11026,15 @@ function toggleProgEdit(on){
 }
 
 function startSeasonForm(){showSeasonForm=true;renderSettings();}
+/* §progAddSeason (2026-10-07) · ผู้ใช้ถาม "ปุ่ม add season หายไปไหม" · ปุ่มเดิมโผล่เฉพาะตอนอยู่ในโหมดแก้ไข คนหาไม่เจอ
+   ตอนนี้โชว์ตลอด · กดแล้วเข้าโหมดแก้ไข (แถบเตือนสีเหลืองขึ้นตามปกติ) และเปิดฟอร์มให้เลย
+   ฟอร์มอยู่ท้ายแผงขวาซึ่งเลื่อนในตัวเอง · ต้องเลื่อนให้เห็น ไม่งั้นกดแล้วเหมือนไม่มีอะไรเกิดขึ้น */
+function progAddSeason(){
+  progEditMode=true; showSeasonForm=true;
+  renderSettings();
+  const el=document.getElementById('new-season-from');
+  if(el && el.scrollIntoView){ try{ el.scrollIntoView({block:'center'}); }catch(_){ el.scrollIntoView(); } }
+}
 function cancelSeasonForm(){showSeasonForm=false;renderSettings();}
 function setSeasonType(t){
   addSeasonType=t;
