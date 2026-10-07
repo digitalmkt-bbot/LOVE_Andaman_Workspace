@@ -4531,11 +4531,17 @@ function renderCal(){
   //   เส้นทางที่มีเที่ยวออกขึ้นก่อน เรียงตามเวลาเรือออก · ที่ไม่ออกเลยไปต่อท้าย
   //   (ไม่งั้นเส้นทางนอกฤดูดันเส้นทางที่ใช้จริงหลุดออกนอกจอ)
   /* §calMarine · เช่นเดียวกับการ์ดด้านบน */
+  const _calPOrd=(typeof LA_PIER_ORDER!=='undefined' && Array.isArray(LA_PIER_ORDER)) ? LA_PIER_ORDER : CAL_PIERS;
+  const _calCfgKey=(r)=>{ const pi=_calPOrd.indexOf(r.pier), ri=ROUTES.findIndex(x=>x.id===r.id);
+    return (pi<0?999:pi)*100000 + (ri<0?99999:ri); };
   const _rtSorted=ROUTES.filter(rt=>!laIsLandRoute(rt) && (calPier==='all'||rt.pier===calPier)).slice().sort((a,b)=>{
     const da=(routeStat[a.id]&&routeStat[a.id].days.size)?0:1;
     const db=(routeStat[b.id]&&routeStat[b.id].days.size)?0:1;
     if(da!==db) return da-db;
-    const dm=_calDepMin(a)-_calDepMin(b); if(dm) return dm;
+    /* §calStripOrder (2026-10-07) · เดิมเรียงตามเวลาเรือออก · เปลี่ยนเป็นลำดับโปรแกรมใน Config > Programs
+       (ท่าตาม LA_PIER_ORDER แล้วตามตำแหน่งใน ROUTES) ให้ตรงกับการ์ดในมุมมอง Routes
+       เส้นทางที่เดือนนี้ไม่มีเที่ยวยังไปต่อท้ายเหมือนเดิม */
+    const ka=_calCfgKey(a), kb=_calCfgKey(b); if(ka!==kb) return ka-kb;
     return String(a.name||'').localeCompare(String(b.name||''));
   });
   const routeStrip2=`<div class="cal2-routes">`+_rtSorted.map(rt=>{
