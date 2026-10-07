@@ -10,7 +10,7 @@
 //   3 ตาราง 7 วัน · ช่องเส้นทาง×วัน มีครบทุกคู่ที่ TRIPS มีเรือ · จอง/ความจุ/ว่าง ตรง getAllotment · แถวรวมบวกถูก
 //   4 จุดคุ้มทุน · ตั้งแผนต้นทุนให้เส้นทาง (ราคา 2,500) → ช่องที่เคย "ไม่รู้จุดคุ้มทุน" กลายเป็นรู้ · ขาด = max(0, Σคุ้มทุนต่อลำ − จอง) · สีตามขาด (ok/warn/bad)
 //   5 ป้าย +N ของช่อง = pax ของใบที่คีย์วันนี้ที่ไปเส้นทาง-วันนั้น (นับเอง)
-//   6 ปุ่มคัดลอกส่ง LINE · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
+//   6 ปุ่มคัดลอกส่ง LINE · อังกฤษล้วน (§ddEn · ก้อนในแอปก็ไม่มีตัวไทย) · ข้อความล้วน หัววัน · เข้ามาวันนี้ · ไป 7 วัน · ส่วน 7 วันข้างหน้าเรียงตามวัน บรรทัดละวัน รหัสสั้น (PP/MT…) + คำอธิบายรหัส · toast ขึ้น
 //   7 มุมมองช่วงหลายวัน (7 วัน) · ไม่มีก้อน exec · ของเดิม (การ์ด B2C/B2B) ยังอยู่ · ไม่มี error
 import { open, goView } from './_harness.mjs';
 
@@ -86,7 +86,7 @@ const s4 = await page.evaluate(() => {
   ctPlansSave(ctPlans().filter(p => p.id !== pl.id));
   return { rid, before, out, totNeed: X2.tot.need, sumNeed: Object.keys(X2.cells).reduce((s, k) => s + (X2.cells[k].need || 0), 0) };
 });
-const s4ok = s4.out.length > 0 && s4.out.every(o => o.st !== 'unk' && o.need === o.expNeed && o.st === o.expSt && o.domSt && (o.need > 0 ? o.domTxt.includes('ขาด ' + o.need) : true)) && s4.totNeed === s4.sumNeed && s4.before.includes('unk');
+const s4ok = s4.out.length > 0 && s4.out.every(o => o.st !== 'unk' && o.need === o.expNeed && o.st === o.expSt && o.domSt && (o.need > 0 ? o.domTxt.includes('short ' + o.need) : true)) && s4.totNeed === s4.sumNeed && s4.before.includes('unk');
 if (s4ok) ok(`4 ตั้งแผนต้นทุน ${s4.rid} → ${s4.out.length} ช่องรู้จุดคุ้มทุน (เดิม unk ${s4.before.filter(x => x === 'unk').length}) · ขาด = Σคุ้มทุน−จอง ตรงทุกช่อง · รวมต้องหาเพิ่ม ${s4.totNeed}`);
 else fail('4 ' + JSON.stringify(s4).slice(0, 900));
 
@@ -117,13 +117,15 @@ const s6 = await page.evaluate(async () => {
   /* §ddLine · เรียงตามวัน บรรทัดละวัน รหัสสั้น · วันที่มีช่องขาดต้องมีบรรทัดของวันนั้น พร้อมรหัสและตัวเลขขาด */
   const shortDays = [...new Set(X.tot.short.map(c => c.d))];
   const dayOk = shortDays.every(d => { const lbl = _ddDLbl(d); const ln = t.split('\n').find(l => l.startsWith(lbl + '  ')); if (!ln) return false;
-    return X.tot.short.filter(c => c.d === d).every(c => ln.includes((codeOf(c.rid) || _ddLineCode(c.rid)) + ' ขาด ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
+    return X.tot.short.filter(c => c.d === d).every(c => ln.includes((codeOf(c.rid) || _ddLineCode(c.rid)) + ' short ' + c.need + ' (' + c.bk + '/' + c.cap + ')')); });
   const noRouteLines = !X.tot.short.some(c => t.includes('- ' + _ddCellName(c)));
+  const TH = /[\u0E01-\u0E3E\u0E40-\u0E5B]/;   /* ตัวไทยทั้งหมด ยกเว้น ฿ (U+0E3F) */
+  const english = !TH.test(t) && !TH.test(document.querySelector('[data-dd="exec"]').textContent) && !TH.test(document.querySelector('[data-dd="grid"]').textContent) && !TH.test(document.querySelector('[data-dd="travel"]').textContent);
   const nShort = X.tot.short.length;
-  return { nShort, len: t.length, head: t.split('\n')[0], hasIn: /^เข้ามาวันนี้ \d/m.test(t), hasGo: /^ไป 7 วัน \d/m.test(t),
-    hasNeed: X.tot.short.length ? /ต้องหาเพิ่ม \d/.test(t) : /คุ้มทุนทุกเที่ยว|ยังไม่จัดเรือ/.test(t), dayOk, noRouteLines, legend: /\(PP=|\(MT=|=.+\)$/m.test(t), toast: window._toast, nLines: t.split('\n').length };
+  return { nShort, english, len: t.length, head: t.split('\n')[0], hasIn: /^Keyed today: \d/m.test(t), hasGo: /^Travel in 7 days: \d/m.test(t),
+    hasNeed: X.tot.short.length ? /still to sell \d/.test(t) : /all at break-even|no boats assigned/.test(t), dayOk, noRouteLines, legend: /\(PP=|\(MT=|=.+\)$/m.test(t), toast: window._toast, nLines: t.split('\n').length };
 });
-if (s6.nShort > 0 && s6.len > 80 && /สรุปบุคกิ้ง/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.noRouteLines && s6.legend && /คัดลอก/.test(s6.toast))
+if (s6.nShort > 0 && s6.len > 80 && /Booking summary/.test(s6.head) && s6.hasIn && s6.hasGo && s6.hasNeed && s6.dayOk && s6.noRouteLines && s6.legend && s6.english && /copied/i.test(s6.toast))
   ok(`6 คัดลอกส่ง LINE · ${s6.nLines} บรรทัด · หัว "${s6.head}" · เรียงตามวัน รหัสสั้น + คำอธิบาย · ไม่มีบรรทัดไล่รายเส้นทางแบบเก่า · toast "${s6.toast}"`);
 else fail('6 ' + JSON.stringify(s6));
 
