@@ -390,18 +390,35 @@
     if(typeof TRIPS !== 'undefined') O.restoreInPlace(TRIPS, s.trips);
     persist(); render();
   }
-  function tx(name, server){
+  /* §opsRestoreFee (2026-10-08) · calls `orig` makes to these global functions are recorded, not run,
+     and run only once the server said yes · for side effects putBack can't undo (an invoice voided
+     by bookingV2RestoreBooking also unlinks every booking on it) */
+  function deferCalls(names){
+    var calls = [], saved = {};
+    (names || []).forEach(function(n){
+      if(typeof window[n] !== 'function') return;
+      saved[n] = window[n];
+      window[n] = function(){ calls.push([n, [].slice.call(arguments)]); };
+    });
+    return {
+      release: function(){ Object.keys(saved).forEach(function(n){ window[n] = saved[n]; }); },
+      run: function(){ calls.forEach(function(c){ try{ window[c[0]].apply(null, c[1]); }catch(e){ try{ console.warn('[ops] ' + c[0] + ' failed', e); }catch(_){} } }); calls = []; }
+    };
+  }
+  function tx(name, server, defer){
     var orig = window[name];
     if(typeof orig !== 'function' || orig.__ops) return;
     var w = function(id){
       var bk = find(id);
       if(!bk || !O.enabled() || !bk.opsId) return orig.apply(this, arguments);
       var before = snap(bk);
-      var ret = orig.apply(this, arguments);
+      var later = deferCalls(defer), ret;
+      try{ ret = orig.apply(this, arguments); } finally { later.release(); }
       var call = server(bk, before.bk);
-      if(!call) return ret;                                       // the user backed out of the prompt · nothing changed
+      if(!call){ later.run(); return ret; }                       // the user backed out of the prompt · nothing changed
       hold(bk.id);
       O.queue(function(){ return call(); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; }).then(function(j){
+        later.run();
         if(j && j.id){ Object.assign(bk, records(j, bk.trips)); bk.updatedAt = j.updated_at; takeServer(bk, j); persist(); render(); }
         // two kinds of warning: /restore's seat-lock shortfalls, /approve's days past the registered seats
         var warn = (j && Array.isArray(j.warnings)) ? j.warnings : [];
@@ -431,10 +448,12 @@
       return function(){ return O.post(B(bk) + '/' + kind, note ? { note: note } : {}); };
     };
   }
+  // the cancellation-fee invoice is voided only once /restore went through · a refused restore
+  // (route_closed, a charter boat taken meanwhile…) leaves it as it was
   tx('bookingV2RestoreBooking', function(bk, was){
     if(bk.status === was.status || RELEASED.indexOf(was.status) < 0) return null;
     return function(){ return O.post(B(bk) + '/restore'); };
-  });
+  }, ['acctVoidInvoice']);
   tx('bookingV2ApproveBooking', command('approve'));
   tx('bookingV2RejectBooking', command('reject', function(bk){ return bk.approval && bk.approval.note; }));
   // FOC approval needs the reason on the booking; one typed at the prompt is saved there first
