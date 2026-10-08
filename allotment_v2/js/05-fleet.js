@@ -27302,8 +27302,18 @@ function flwBoats(items){
 }
 function flwAv(b,sz){
   var c='#B9BEC9', t='—';
-  try{ if(b){ c=(b.ownership==='charter')?'#534AB7':((typeof boatAvatarColor==='function')?boatAvatarColor(b):c);
-              t=(typeof boatInitials==='function')?boatInitials(b.name):String(b.name||'').slice(0,2).toUpperCase(); } }catch(_){}
+  /* same rules as boatAvatarColor / boatInitials inside renderBoats (those are local to that function) */
+  try{ if(b){
+    var nm=String(b.name||''), w=nm.split(/\s+/), pal=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
+    var gc=(typeof getBoatColor==='function')?getBoatColor(b.id):null;
+    if(b.ownership==='charter') c='#534AB7';
+    else if(gc && gc.text && gc.text!=='#666') c=gc.text;
+    else { var co=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(x){ return x && x.ownership!=='charter' && !x.retired; }), i=-1;
+      co.forEach(function(x,k){ if(x.id===b.id) i=k; }); c=pal[i>=0?(i%pal.length):0]; }
+    if(w.length>=2 && w[0] && w[1]) t=(w[0][0]+w[1][0]).toUpperCase();
+    else if(nm.length>=2 && /\d/.test(nm)) t=((nm.match(/[A-Z]/g)||[])[0]||nm[0])+nm.slice(-1);
+    else t=nm.slice(0,2).toUpperCase();
+  } }catch(_){}
   return '<span style="flex:none;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+c+';color:#fff;font-size:'+(sz>=40?13:11)+'px;font-weight:700;display:flex;align-items:center;justify-content:center">'+String(t).replace(/[&<>"]/g,'')+'</span>';
 }
 function flwPickBoat(id){ FLW.boat=id; FLW.item=''; flRenderWork(); }
