@@ -91,6 +91,10 @@
 
     Object.keys(want).forEach(function(k){
       var w = want[k], L = w.L, ids = L.opsIds || {}, id = ids[w.date], had = id && synced[id];
+      // §opsLockHolder (2026-10-08) · a holder this browser can't find in SB_AGENTS (the agent list
+      // isn't loaded, or is empty) is still the agent the server holds · not a holder cleared, which
+      // replaced the lock: a second lock beside the first → 409 on every booking save
+      if(had && !w.agent && had.agent && L.holderType === 'agent' && L.holderId === had.agent) w.agent = had.agent;
       // a route change or a holder going back to "nobody" can't be a PATCH (agent_id can't be cleared)
       var replace = had && (had.route !== w.route || (had.agent && !w.agent));
       if(had && !replace){
