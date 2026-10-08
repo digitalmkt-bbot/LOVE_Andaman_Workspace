@@ -644,6 +644,22 @@
     "bkV2UpgModal": "allotment_v2/js/booking/bookingV2UpgModal.js",
     "bkV2UpgApply": "allotment_v2/js/booking/bookingV2UpgApply.js",
     "bkV2UpgUndo": "allotment_v2/js/booking/bookingV2UpgUndo.js",
-    "bkV2SetTripCharterManualForce": "allotment_v2/js/booking/bookingV2SetTripCharterManualForce.js"
+    "bkV2SetTripCharterManualForce": "allotment_v2/js/booking/bookingV2SetTripCharterManualForce.js",
+    "bkV2B2CTripDate": "allotment_v2/js/booking/bookingV2B2CTripDate.js",
+    "bkV2B2CPending": "allotment_v2/js/booking/bookingV2B2CPending.js",
+    "bkV2B2CWhen": "allotment_v2/js/booking/bookingV2B2CWhen.js",
+    "bkV2B2CBodyHtml": "allotment_v2/js/booking/bookingV2B2CBodyHtml.js",
+    "bkV2B2CKind": "allotment_v2/js/booking/bookingV2B2CKind.js",
+    "bkV2B2CWho": "allotment_v2/js/booking/bookingV2B2CWho.js",
+    "bkV2B2CStripRow": "allotment_v2/js/booking/bookingV2B2CStripRow.js",
+    "bkV2B2CRowFlag": "allotment_v2/js/booking/bookingV2B2CRowFlag.js",
+    "bkV2B2CList": "allotment_v2/js/booking/bookingV2B2CList.js",
+    "bkV2B2CHeadChip": "allotment_v2/js/booking/bookingV2B2CHeadChip.js",
+    "bkV2B2CSeen": "allotment_v2/js/booking/bookingV2B2CSeen.js",
+    "bkV2B2CSeenAll": "allotment_v2/js/booking/bookingV2B2CSeenAll.js",
+    "bkV2B2CAfter": "allotment_v2/js/booking/bookingV2B2CAfter.js",
+    "bkV2B2CClose": "allotment_v2/js/booking/bookingV2B2CClose.js",
+    "bkV2B2COpen": "allotment_v2/js/booking/bookingV2B2COpen.js",
+    "bkV2B2CGo": "allotment_v2/js/booking/bookingV2B2CGo.js"
   }
 }

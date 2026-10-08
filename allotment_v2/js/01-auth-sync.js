@@ -1203,6 +1203,7 @@
   function laApplyPerms(){ if(laFullAccess()) return;
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });
+    try{ if(typeof flNavMergeSync==='function') flNavMergeSync(); }catch(e){}   /* §flNavMerge · pick the group head from the pages this user may see */
     document.querySelectorAll('[data-adminonly]').forEach(function(it){ it.style.display='none'; }); // admin-only nodes hidden for everyone else (laApplyPerms only runs for non-admins)
     /* §pierSub · หัวกลุ่มท่าไม่มี data-view จึงไม่โดนรอบบน · ซ่อนเองถ้าลูกไม่เหลือสักอัน */
     document.querySelectorAll('.nav-item.po-grp[data-pogrp]').forEach(function(g){

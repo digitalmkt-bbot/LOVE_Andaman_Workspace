@@ -234,6 +234,7 @@ const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 const {
   mapB2COrders, b2cFindArea, b2cCheckOrders, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
 } = require('./b2c-map.js');   // §b2cMapMod · the pure mapper; relSyncB2C below does the I/O
+const b2cChg = require('./b2c-changelog.js');   // §b2cChg · history line when a sync changes a booking
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
 // then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
 // ── B2C re-sync · ฟิลด์ไหน B2C ทับได้ (2026-08-02) ──────────────────────────────────────────────
@@ -809,7 +810,37 @@ async function opsRouteExtIdCatalog() {
   return map;
 }
 
-async function relSyncB2C(singleExtId = null) {
+/* §b2cChg (2026-10-08) · "B2C edits change bookings silently on By trip date — how do we tell?"
+   relSyncB2C now appends one sb_bookings__history row per booking it actually changed (kind 'b2c'),
+   or created (kind 'b2c_new'). The pure diff lives in b2c-changelog.js. Rules that keep it honest:
+   · Runs inside a SAVEPOINT: any failure here is logged and rolled back to the savepoint, the sync
+     itself carries on and commits exactly as before. A change log must never cost a sync.
+   · No schema change — sb_bookings__history already has at/kind/text/tag/by.
+   · A mapper version bump (B2C_MAP_VER) or a catalog rename re-maps every booking at once; those are
+     our own changes, not B2C edits, so they must not light up hundreds of rows: a full run that would
+     log more than B2C_CHG_BULK changed bookings is treated as a bulk re-map — nothing is written and
+     the console says so. Real B2C edits arrive a few at a time (webhook + 45 s poller).
+     Cancellations (a line or an order removed in B2C) are always logged. */
+const B2C_CHG_BULK = Math.max(5, Number(process.env.B2C_CHG_BULK) || 40);
+function _b2cChgOpts() {
+  return { fqt, qic, bkCols: OS_COLS['sb_bookings'] || [], tripCols: OS_COLS['sb_bookings__trips'] || [],
+    paxCols: OS_COLS['sb_bookings__passengers'] || [], adnCols: OS_COLS['sb_bookings__addons'] || [],
+    histCols: OS_COLS['sb_bookings__history'] || [] };
+}
+async function _b2cChgRouteNames(db) {
+  const m = {};
+  try { for (const r of (await db.query(`SELECT id, name FROM ${fqt('routes')}`)).rows) m[r.id] = r.name; } catch (_) {}
+  return id => m[id] || id;
+}
+// Cancellations the sync makes outside the upsert (a line removed in B2C, or a whole order gone).
+async function _b2cChgLogCancels(db, rows, why) {
+  if (!rows || !rows.length) return;
+  const st = v => ({ confirmed: 'Confirmed', pending_approval: 'Pending approval' })[v] || String(v || '—');
+  await b2cChg.writeEntries(db, rows.map(r => ({ id: r.id, kind: 'b2c', tag: 'B2C',
+    text: 'Status: ' + st(r.old) + ' → Cancelled · ' + why })), _b2cChgOpts());
+}
+
+async function relSyncB2C(singleExtId = null, opts = {}) {
   if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
   try {
     let itemRows;
@@ -818,12 +849,17 @@ async function relSyncB2C(singleExtId = null) {
         B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [singleExtId]
       ));
       if (!itemRows.length) {
+        // §b2cChg · CTE so RETURNING can say what each line was before it was cancelled
         const r = await pool.query(
-          `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
-           WHERE id ~ ('^b2c_' || $1::text || '(_[0-9]+)?$') AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          `WITH c AS (SELECT id, status FROM ${fqt('sb_bookings')}
+                      WHERE id ~ ('^b2c_' || $1::text || '(_[0-9]+)?$') AND status NOT IN ('cancelled','cancelled_weather','rejected'))
+           UPDATE ${fqt('sb_bookings')} b SET status='cancelled' FROM c WHERE b.id = c.id
+           RETURNING b.id, c.status AS old`,
           [String(singleExtId)]
         );
         console.log(`[b2c-sync] booking ${singleExtId} removed in B2C — ${r.rowCount} line(s) marked cancelled`);
+        try { await _b2cChgLogCancels(pool, r.rows, 'removed in B2C'); }
+        catch (e) { console.warn('[b2c-chg] could not log removed booking:', e.message); }
         _b2cHealthOk();
         return;
       }
@@ -968,6 +1004,18 @@ async function relSyncB2C(singleExtId = null) {
       const preExisting = new Set(
         (await client.query(`SELECT id FROM ${fqt('sb_bookings')} WHERE id = ANY($1)`, [b2cIds])).rows.map(r => r.id)
       );
+      // §b2cChg · "before" picture of the bookings this run will touch. Own savepoint: a failure here
+      //   only switches the change log off for this run.
+      let _chgBefore = null;
+      try {
+        await client.query('SAVEPOINT b2c_chg_a');
+        _chgBefore = await b2cChg.snapshot(client, [...preExisting], _b2cChgOpts());
+        await client.query('RELEASE SAVEPOINT b2c_chg_a');
+      } catch (e) {
+        _chgBefore = null;
+        await client.query('ROLLBACK TO SAVEPOINT b2c_chg_a');
+        console.warn('[b2c-chg] before-snapshot failed, change log skipped this run:', e.message);
+      }
 
       // 1. Upsert main booking rows — ops columns preserved on conflict
       _phase = 'upsert sb_bookings';
@@ -1079,14 +1127,17 @@ async function relSyncB2C(singleExtId = null) {
       //    LOV-prefixed — so this step quietly did nothing and removed lines stayed confirmed.
       _phase = 'cancel removed lines';
       const presentOrderIds = [...new Set(itemRows.map(i => String(i.booking_id)))];
-      await client.query(
-        `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
-         WHERE id LIKE 'b2c\\_%'
-           AND split_part(id, '_', 2) = ANY($1)
-           AND id <> ALL($2)
-           AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+      // §b2cChg · same WHERE as before, wrapped in a CTE so RETURNING carries the status it replaced
+      const _rmLines = (await client.query(
+        `WITH c AS (SELECT id, status FROM ${fqt('sb_bookings')}
+                    WHERE id LIKE 'b2c\\_%'
+                      AND split_part(id, '_', 2) = ANY($1)
+                      AND id <> ALL($2)
+                      AND status NOT IN ('cancelled','cancelled_weather','rejected'))
+         UPDATE ${fqt('sb_bookings')} b SET status='cancelled' FROM c WHERE b.id = c.id
+         RETURNING b.id, c.status AS old`,
         [presentOrderIds, b2cIds]
-      );
+      )).rows;
 
       // 5. Oversell safety net. B2C bypasses the ops capacity guard (relSyncB2C writes rows directly, never
       //    through bookingV2CommitBooking), so a sale past the deployed seat capacity can land here. For each
@@ -1206,6 +1257,29 @@ async function relSyncB2C(singleExtId = null) {
       }
 
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
+      //   §b2cChg is the one exception, and it only ever APPENDS a row (never edits or removes one).
+      if (_chgBefore) {
+        const _phase0 = _phase; _phase = 'change log';
+        try {
+          await client.query('SAVEPOINT b2c_chg_b');
+          const after = await b2cChg.snapshot(client, b2cIds, _b2cChgOpts());
+          const routeName = await _b2cChgRouteNames(client);
+          let list = b2cChg.entries(_chgBefore, after, { routeName, logNew: opts.logNew !== false });
+          const nChg = list.filter(e => e.kind === 'b2c').length;
+          if (!singleExtId && nChg > B2C_CHG_BULK) {
+            console.warn(`[b2c-chg] ${nChg} bookings changed in one run (> ${B2C_CHG_BULK}) — treated as a bulk re-map, not logged`);
+            list = list.filter(e => e.kind !== 'b2c');
+          }
+          const n = await b2cChg.writeEntries(client, list, _b2cChgOpts());
+          await _b2cChgLogCancels(client, _rmLines, 'line removed in B2C');
+          if (n || _rmLines.length) console.log(`[b2c-chg] logged ${n + _rmLines.length} change(s) to booking history`);
+          await client.query('RELEASE SAVEPOINT b2c_chg_b');
+        } catch (e) {
+          await client.query('ROLLBACK TO SAVEPOINT b2c_chg_b');
+          console.warn('[b2c-chg] change log failed, sync continues:', e.message);
+        }
+        _phase = _phase0;
+      }
 
       await client.query('COMMIT');
       _b2cHealthOk();
@@ -2440,7 +2514,7 @@ const server = http.createServer((req, res) => {
         await client.query('COMMIT');
       } catch(e){ await client.query('ROLLBACK').catch(()=>{}); client.release(); return J(res,500,{error:'delete failed: '+e.message}); }
       client.release();
-      try { await relSyncB2C(); } catch(e){ return J(res,500,{error:`deleted ${deleted} rows but re-sync failed: ${e.message}`}); }
+      try { await relSyncB2C(null, { logNew: false }); } catch(e){ return J(res,500,{error:`deleted ${deleted} rows but re-sync failed: ${e.message}`}); }   // §b2cChg · a reset re-imports everything; not "new from B2C"
       let nv = 0;
       try {
         const vr = await pool.query('SELECT version FROM app_state WHERE id=$1',[STATE_KEY]);

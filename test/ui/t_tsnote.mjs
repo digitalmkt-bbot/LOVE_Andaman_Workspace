@@ -73,7 +73,9 @@ const R = await page.evaluate(([date, vcA, vcB]) => {
   const rowOf = vc => trs.findIndex(t => (t.textContent || '').indexOf(vc) >= 0);
   const cellOf = vc => { const i = rowOf(vc); if (i < 0 || iSq < 0) return null;
     const td = trs[i].querySelectorAll('td')[iSq]; return td ? (td.textContent || '').trim() : null; };
-  const grow = document.querySelector('#travelsum-host table.ts-man tbody tr.ts-grow td');
+  /* §tsManSheet (2026-10-05) เพิ่มช่องเลขแถว (td.ts-rn) หน้าช่อง colspan · วัดผลรวม colspan ทั้งแถวแทนช่องแรก */
+  const growTr = document.querySelector('#travelsum-host table.ts-man tbody tr.ts-grow');
+  const grow = growTr ? { getAttribute: () => [...growTr.querySelectorAll('td')].reduce((n, td) => n + (+td.getAttribute('colspan') || 1), 0) } : null;
   return {
     head, iSq, iPay, nCols: ths.length,
     growSpan: grow ? +grow.getAttribute('colspan') : 0,

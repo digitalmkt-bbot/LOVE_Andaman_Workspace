@@ -5,7 +5,8 @@ function bookingV2HistTagColor(tag){
     'Invoice':['#FBF0DD','#7A4A00'], 'Payment':['#E1F5EE','#0F6E56'],
     'Reschedule':['#E6F1FB','#185FA5'], 'Cancel':['#FCEBEB','#A32D2D'], 'Refund':['#FCEBEB','#A32D2D'],
     'Credit':['#FAEEDA','#854F0B'], 'Notify':['#FBF0DD','#7A4A00'], 'Weather':['#FCEBEB','#A32D2D'],
-    'FOC':['#FAEEDA','#854F0B'], 'Extra':['#E1F5EE','#0F6E56']
+    'FOC':['#FAEEDA','#854F0B'], 'Extra':['#E1F5EE','#0F6E56'],
+    'B2C':['#FFEDD5','#C2410C'], 'Seen':['#F1EFE8','#5F5E5A']   /* §b2cChg */
   };
   return m[tag]||['#F1EFE8','#5F5E5A'];
 }

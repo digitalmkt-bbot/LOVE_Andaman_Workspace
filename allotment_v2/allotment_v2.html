@@ -308,11 +308,17 @@
     <div style="height:1px;background:rgba(255,255,255,.08);margin:8px 4px"></div>
     <div class="nav-section" style="color:rgba(255,190,80,.5)">Fleet Management</div>
 
-    <!-- ─── At a glance ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-      At a glance
-    </div>
+    <!-- §flNavMerge (2026-10-08) · Fleet menu 13 → 10 · sub-headings removed.
+         Stock = Inventory / Memo + Supplies / Fuel · Analytics = Cost + Insights + Fuel (tabs inside the page).
+         Merged items stay in the DOM (class fl-merged, hidden) and sit BEFORE their group head on purpose:
+         code that asks for .nav-item.active must find the real page first. See flNavMergeSync(). -->
+    <style>
+      .sidebar .nav-item.fl-merged{display:none !important}
+      .fl-gtabs{display:inline-flex;gap:4px;padding:4px;background:#ECEBE6;border-radius:12px;align-self:center;flex:none}
+      .fl-gtabs button{border:0;background:transparent;font:600 12.5px 'DM Sans','IBM Plex Sans Thai',sans-serif;color:#3E4658;padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
+      .fl-gtabs button:hover{background:#fff}
+      .fl-gtabs button.on,.fl-gtabs button.on:hover{background:#16265C;color:#fff}
+    </style>
     <div class="nav-item" data-view="fl-dashboard" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       FL Dashboard
@@ -321,12 +327,6 @@
     <div class="nav-item" data-view="fl-deployment" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l3-9h12l3 9"/><path d="M2 20h20"/><path d="M12 8V4"/><path d="M9 4h6"/></svg>
       Fleet Deployment
-    </div>
-
-    <!-- ─── Today ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>
-      Today
     </div>
     <div class="nav-item" data-view="fl-boatstatus" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/></svg>
@@ -340,12 +340,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
       Job Assignment
     </div>
-
-    <!-- ─── Work ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg>
-      Work
-    </div>
     <div class="nav-item" data-view="fl-projects" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/><path d="M9 9h6M9 13h4"/></svg>
       Projects
@@ -354,38 +348,25 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
       Maintenance
     </div>
-    <div class="nav-item" data-view="fl-inventory" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-      Inventory / Memo
-    </div>
-    <div class="nav-item" data-view="fl-consumables" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+    <div class="nav-item fl-merged" data-view="fl-consumables" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14l-1 7H6L5 3z"/><path d="M6 10v9a2 2 0 002 2h8a2 2 0 002-2v-9"/><path d="M10 14h4"/></svg>
       เบิกของใช้ / น้ำมัน
     </div>
-
-    <!-- ─── Analytics ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
-      Analytics
+    <div class="nav-item" data-view="fl-inventory" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      Stock
     </div>
-    <div class="nav-item" data-view="fl-cost" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-      Cost Analytics
-    </div>
-    <div class="nav-item" data-view="fl-insights" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      Fleet Insights
-    </div>
-
-    <div class="nav-item" data-view="fl-fuel" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+    <div class="nav-item fl-merged" data-view="fl-fuel" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h12M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18M4 11h10M18 8l2 2v7a2 2 0 0 1-4 0v-1a2 2 0 0 0-2-2"/></svg>
       Fuel · น้ำมัน
     </div>
-
-    <!-- ─── Registry ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-      Registry
+    <div class="nav-item fl-merged" data-view="fl-insights" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Fleet Insights
+    </div>
+    <div class="nav-item" data-view="fl-cost" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+      Analytics
     </div>
     <div class="nav-item" data-view="fl-asset" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
@@ -1253,12 +1234,53 @@
 
 <!-- ══════ MODALS ══════ -->
 
+<!-- §bsModals (2026-10-07) · Add-status and charter-boat dialogs restyled to match the in-app dialogs
+     (same look as #fl-modal-assignment / calSetModal / progSeasonModal). CSS is scoped to these two dialogs only;
+     ids, fields, pickSt / saveStatus / saveCharterBoat are untouched. -->
+<style>
+  :is(#status-modal,#charter-modal){background:rgba(10,18,48,.56) !important}
+  :is(#status-modal,#charter-modal) .modal{border-radius:16px !important;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important;overflow:hidden;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
+  :is(#status-modal,#charter-modal) .modal-hd{padding:20px 22px 8px !important;border-bottom:none !important;background:#fff !important;align-items:flex-start}
+  :is(#status-modal,#charter-modal) .modal-title{font-size:21px !important;font-weight:700 !important;letter-spacing:-.01em;color:#0F1B3D !important;line-height:1.2}
+  :is(#status-modal,#charter-modal) .modal-title::before{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700;margin-bottom:3px}
+  #status-modal .modal-title::before{content:'Boat Status · Status'}
+  #charter-modal .modal-title::before{content:'Boat Status · Charter boat'}
+  #charter-modal .modal-icon{display:none !important}
+  #charter-modal .modal-sub{font-size:13px !important;color:#5B6170 !important;margin-top:2px}
+  :is(#status-modal,#charter-modal) .modal-close{width:36px;height:36px;border-radius:18px !important;border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important;font-size:18px;line-height:1;cursor:pointer;margin-left:auto}
+  :is(#status-modal,#charter-modal) .modal-body{padding:8px 22px 6px !important;background:#fff !important}
+  :is(#status-modal,#charter-modal) .form-label{font-size:12.5px !important;font-weight:600 !important;color:#3D3D38 !important;text-transform:none !important;letter-spacing:0 !important}
+  :is(#status-modal,#charter-modal) :is(select,input[type="date"],input[type="text"],input[type="number"]){
+    width:100% !important;height:44px !important;box-sizing:border-box !important;padding:0 12px !important;border:1.5px solid #C9CCD6 !important;border-radius:10px !important;
+    background-color:#fff !important;font:500 14px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;color:#0F1B3D;outline-color:#16265C}
+  :is(#status-modal,#charter-modal) :is(input[type="date"],input[type="number"]){font-family:'DM Mono',monospace !important}
+  :is(#status-modal,#charter-modal) .modal-footer{padding:14px 22px !important;background:#F7F7F5 !important;border-top:1px solid #E2E2DC !important;gap:8px}
+  :is(#status-modal,#charter-modal) .modal-footer .btn{height:40px;padding:0 18px !important;border-radius:10px !important;font:600 13.5px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;cursor:pointer}
+  :is(#status-modal,#charter-modal) .modal-footer .btn-ghost{border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important}
+  :is(#status-modal,#charter-modal) .modal-footer .btn-primary{border:1px solid #16265C !important;background:#16265C !important;color:#fff !important}
+  /* status picker: same three status colours as the pills and the calendar */
+  #status-modal .st-picker{gap:8px;margin-bottom:14px}
+  #status-modal .st-opt{border-radius:10px !important;padding:9px 6px !important;border:1.5px solid #D9D9D2 !important;background:#fff;min-height:44px;box-sizing:border-box}
+  #status-modal .st-opt-name{font-size:13px !important;font-weight:600 !important}
+  #status-modal .st-opt.sel-available{background:#DDF1EA !important;border-color:#0B6B4F !important}
+  #status-modal .st-opt.sel-fixing{background:#FBEBD3 !important;border-color:#B36B00 !important}
+  #status-modal .st-opt.sel-unavailable{background:#FBE3E0 !important;border-color:#A1271F !important}
+  #status-modal #sto-available .st-opt-name{color:#0B5A43 !important}
+  #status-modal #sto-fixing .st-opt-name{color:#7A4300 !important}
+  #status-modal #sto-unavailable .st-opt-name{color:#8E2019 !important}
+  #status-modal .bsm-box{background:#F7F7F5 !important;border:1px solid #E2E2DC !important;border-radius:10px !important;padding:12px 14px !important}
+  #status-modal .bsm-box > .form-label{color:#3E4658 !important;font-size:11px !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important}
+  /* charter pier pills */
+  #charter-modal .loc-pill{min-height:36px;padding:0 13px !important;display:inline-flex;align-items:center;border-radius:18px !important;font-size:12.5px !important;font-weight:600 !important;border:1px solid #CFCFC8 !important;color:#0F1B3D !important;background:#fff !important}
+  #charter-modal .loc-pill.on{background:#0F1B3D !important;color:#fff !important;border-color:#0F1B3D !important}
+</style>
+
 <!-- Status Modal -->
 <div class="modal-overlay" id="status-modal">
   <div class="modal">
     <div class="modal-hd">
       <div class="modal-title" id="status-modal-title">เพิ่ม Status</div>
-      <button class="modal-close" onclick="closeModal('status-modal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('status-modal')">×</button>
     </div>
     <div class="modal-body">
       <div class="st-picker">
@@ -1279,8 +1301,8 @@
         <div class="form-row"><label class="form-label">วันที่เริ่ม *</label><input type="date" id="fm-st-from" required></div>
         <div class="form-row"><label class="form-label">วันที่สิ้นสุด *</label><input type="date" id="fm-st-to" required></div>
       </div>
-      <div class="form-row" style="background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:12px;margin-bottom:10px">
-        <label class="form-label" style="color:#9F1B4F;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-bottom:8px;display:block">Location</label>
+      <div class="form-row bsm-box" style="background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:12px;margin-bottom:10px">
+        <label class="form-label" style="margin-bottom:8px;display:block">Location</label>
         <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:8px;margin-bottom:8px">
           <div>
             <label class="form-label" style="font-size:10px;font-weight:500">จังหวัด *</label>
@@ -2074,23 +2096,43 @@
   </div>
 </div>
 
-<!-- New Pier Assignment Modal -->
+<!-- New Pier Assignment Modal · §asnModal (2026-10-07) restyled to match the in-app dialogs (calSetModal / progSeasonModal).
+     Scoped to #fl-modal-assignment only: ids, fields and flSaveAssignment are untouched. -->
+<style>
+  #fl-modal-assignment{background:rgba(10,18,48,.56) !important}
+  #fl-modal-assignment .modal{border-radius:16px !important;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important;overflow:hidden;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
+  #fl-modal-assignment .modal-hd{padding:20px 22px 6px !important;border-bottom:none !important;background:#fff !important;align-items:flex-start}
+  #fl-modal-assignment .modal-title{font-size:21px !important;font-weight:700 !important;letter-spacing:-.01em;color:#0F1B3D !important;line-height:1.2}
+  #fl-modal-assignment .asn-kicker{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700;margin-bottom:3px}
+  #fl-modal-assignment .modal-close{width:36px;height:36px;border-radius:18px !important;border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important;font-size:18px;line-height:1;cursor:pointer}
+  #fl-modal-assignment .modal-body{padding:8px 22px 6px !important;background:#fff !important}
+  #fl-modal-assignment .form-label{font-size:12.5px !important;font-weight:600 !important;color:#3D3D38 !important;text-transform:none !important;letter-spacing:0 !important}
+  #fl-modal-assignment select,#fl-modal-assignment input[type="date"],#fl-modal-assignment input[type="text"],#fl-modal-assignment input[type="number"]{
+    height:44px;box-sizing:border-box;padding:0 12px;border:1.5px solid #C9CCD6 !important;border-radius:10px !important;background-color:#fff !important;
+    font:500 14px 'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D;outline-color:#16265C}
+  #fl-modal-assignment input[type="date"],#fl-modal-assignment input[type="number"]{font-family:'DM Mono',monospace}
+  #fl-modal-assignment #asn-boat-name{background:#F4F4F0 !important;border-radius:10px !important;padding:12px !important;font-size:14px !important;color:#0F1B3D}
+  #fl-modal-assignment .modal-footer{padding:14px 22px !important;background:#F7F7F5 !important;border-top:1px solid #E2E2DC !important;gap:8px}
+  #fl-modal-assignment .modal-footer .btn{height:40px;padding:0 18px !important;border-radius:10px !important;font:600 13.5px 'DM Sans','IBM Plex Sans Thai',sans-serif !important;cursor:pointer}
+  #fl-modal-assignment .modal-footer .btn-ghost{border:1px solid #D9D9D2 !important;background:#fff !important;color:#3D3D38 !important}
+  #fl-modal-assignment .modal-footer .btn-primary{border:1px solid #16265C !important;background:#16265C !important;color:#fff !important}
+</style>
 <div class="modal-overlay" id="fl-modal-assignment">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><div class="modal-title">📍 New Pier Assignment</div><button class="modal-close" onclick="closeModal('fl-modal-assignment')">×</button></div>
+    <div class="modal-hd"><div class="modal-title"><span class="asn-kicker">Boat Status · Pier assignment</span>Move boat to another pier</div><button class="modal-close" aria-label="Close" onclick="closeModal('fl-modal-assignment')">×</button></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">เรือ</label>
         <div id="asn-boat-name" style="font-size:13px;font-weight:600;padding:8px 10px;background:var(--sand);border-radius:var(--r-sm)"></div>
       </div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">📤 จากท่า *</label>
+        <div class="form-row"><label class="form-label" for="asn-from">จากท่า *</label>
           <select id="asn-from" style="width:100%">
             <option value="tublamu">Tub Lamu</option>
             <option value="panwa">Visit Panwa</option>
             <option value="ranong">Ranong</option>
           </select>
         </div>
-        <div class="form-row"><label class="form-label">📥 ไปท่า *</label>
+        <div class="form-row"><label class="form-label" for="asn-to">ไปท่า *</label>
           <select id="asn-to" style="width:100%">
             <option value="tublamu">Tub Lamu</option>
             <option value="panwa">Visit Panwa</option>
@@ -2098,18 +2140,18 @@
           </select>
         </div>
       </div>
-      <div class="form-row"><label class="form-label">ประเภท *</label>
+      <div class="form-row"><label class="form-label" for="asn-type">ประเภท *</label>
         <select id="asn-type" style="width:100%">
           <option value="temporary">Temporary · ชั่วคราว (มีวันจบ)</option>
           <option value="permanent">Permanent · ถาวร (เปลี่ยน home pier)</option>
         </select>
       </div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
-        <div class="form-row"><label class="form-label">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-start">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
       </div>
-      <div class="form-row"><label class="form-label">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
-      <div class="form-row"><label class="form-label">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
+      <div class="form-row"><label class="form-label" for="asn-reason">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
+      <div class="form-row"><label class="form-label" for="asn-cost">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
       <div id="asn-warn" style="display:none;font-size:11px;color:#854F0B;padding:8px 10px;background:#FFF8E1;border:1px solid #F0D58C;border-radius:8px;margin-top:8px"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-assignment')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveAssignment()">บันทึก</button></div>
@@ -2975,7 +3017,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/><path d="M12 7V3"/></svg>
       </div>
       <div><div class="modal-title" id="ch-title">เพิ่มเรือเช่า</div><div class="modal-sub" id="ch-sub">เพิ่มเพื่อ Availability เท่านั้น — ไม่แสดงใน Company Asset</div></div>
-      <button class="modal-close" onclick="closeModal('charter-modal')">×</button>
+      <button class="modal-close" aria-label="Close" onclick="closeModal('charter-modal')">×</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="ch-edit-id" value="">
@@ -3722,6 +3764,22 @@
 <script src="js/booking/bookingV2UpgApply.js"></script>
 <script src="js/booking/bookingV2UpgUndo.js"></script>
 <script src="js/booking/bookingV2SetTripCharterManualForce.js"></script>
+<script src="js/booking/bookingV2B2CTripDate.js"></script>
+<script src="js/booking/bookingV2B2CPending.js"></script>
+<script src="js/booking/bookingV2B2CWhen.js"></script>
+<script src="js/booking/bookingV2B2CBodyHtml.js"></script>
+<script src="js/booking/bookingV2B2CKind.js"></script>
+<script src="js/booking/bookingV2B2CWho.js"></script>
+<script src="js/booking/bookingV2B2CStripRow.js"></script>
+<script src="js/booking/bookingV2B2CRowFlag.js"></script>
+<script src="js/booking/bookingV2B2CList.js"></script>
+<script src="js/booking/bookingV2B2CHeadChip.js"></script>
+<script src="js/booking/bookingV2B2CSeen.js"></script>
+<script src="js/booking/bookingV2B2CSeenAll.js"></script>
+<script src="js/booking/bookingV2B2CAfter.js"></script>
+<script src="js/booking/bookingV2B2CClose.js"></script>
+<script src="js/booking/bookingV2B2COpen.js"></script>
+<script src="js/booking/bookingV2B2CGo.js"></script>
 <script src="js/09-action-board.js?v=7a8214eb"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=6f7e5420"></script>

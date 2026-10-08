@@ -2688,6 +2688,9 @@ window._laReloadData=function(){
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
       try{ CAL_ROUTE_NAMES=(typeof d.cal_route_names==='string')?(JSON.parse(d.cal_route_names)||{}):d.cal_route_names; }catch(_){}
     }
+    if(typeof CAL_ROUTE_SETS!=='undefined' && d.cal_route_sets){                     // §calSets · ชุดเส้นทางที่บันทึกไว้ในปฏิทิน
+      try{ const _cs=(typeof d.cal_route_sets==='string')?JSON.parse(d.cal_route_sets):d.cal_route_sets; if(Array.isArray(_cs)) CAL_ROUTE_SETS=_cs; }catch(_){}
+    }
     /* §laDerived · ข้อมูลดิบเข้าครบแล้ว ค่อยประกอบตารางที่ derive มาจากมันใหม่ทั้งชุด */
     try{ window.laRebuildDerived('sync'); }catch(_){}
     return true;
@@ -5024,7 +5027,16 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
   if(af){ if(af.join)addon.push('Longtail join'); if(af.charter)addon.push('Longtail charter'+(af.charterQty>1?(' ×'+af.charterQty):'')); if(af.transfer)addon.push('Transfer'); }
   var payLabel=(typeof bookingV2PayLabel==='function')?bookingV2PayLabel(ag&&ag.payType):((ag&&ag.payType)||'');
   var _pxt=function(k){ if(t) return (typeof bookingV2PaxTot==='function')?bookingV2PaxTot(t.pax||{},k):0; return (k==='ad'?(bk.pax&&bk.pax.adult):k==='chd'?(bk.pax&&bk.pax.child):k==='inf'?(bk.pax&&bk.pax.infant):0)||0; };
-  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel,
+  /* §rcPlate (2026-10-06) · เจ้าของ: "กรณีที่จัดรถแล้ว ขอเพิ่มคอลัมน์ทะเบียนรถให้ด้วย และโชว์ในใบ Sheet ด้วย"
+     อ่านรถที่จัดไว้จาก ops ของวันนั้น (bkOpsRead · OVN วันที่ 2 ใช้ ops ของทริป) · ทะเบียนผ่าน vanJobsDriverInfo
+     จะได้ตรงกับใบงานรถ (รถพาร์ทเนอร์ที่ใส่ทะเบียนทับรายวันไว้ก็ตามมาด้วย) · รถกลับคนละคัน บอกเพิ่ม · มาเอง = ไม่มีรถ */
+  var _d=(t&&t.date)||bk.travelDate||'', _O=(typeof bkOpsRead==='function')?bkOpsRead(bk,_d):(bk.ops||{});
+  var _vid=_O.vanId||'', _rvid=_O.vanReturnId||'', van={ self:!!bk.pickupSelf, id:_vid, name:'', plate:'', retPlate:'', retName:'' };
+  if(_vid){ var _vh=(typeof vehGet==='function'?vehGet(_vid):null)||{}, _vi=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(_vid,_d):{};
+    van.name=_vh.name||_vid; van.missing=!_vh.id; van.plate=(_vi.plate||_vh.plate||''); if(van.plate==='-') van.plate=''; }
+  if(_rvid && _rvid!==_vid){ var _rh=(typeof vehGet==='function'?vehGet(_rvid):null)||{}, _ri=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(_rvid,_d):{};
+    van.retName=_rh.name||_rvid; van.retPlate=(_ri.plate||_rh.plate||''); if(van.retPlate==='-') van.retPlate=''; }
+  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel, van:van,
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     /* §rcArea · ย่านรับจริง เช่น Patong / Kalim / Karon
@@ -5143,6 +5155,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td>'+esc(d.hotel||'—')+'</td>'
         +'<td class="ctr mono">'+esc(d.room||'—')+'</td>'
         +'<td>'+esc(d.zone)+'</td>'
+        +'<td class="nowrap">'+_rcVanSheet(d.van, esc)+'</td>'   /* §rcPlate */
         +'<td>'+(d.addon?'<span class="ao">'+esc(d.addon)+'</span>':'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.special?esc(d.special):'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.cot?'<span class="cot">'+esc(d.cot)+'</span>':'<span class="mut">—</span>')+'</td>'
@@ -5152,7 +5165,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     var _T=_rcSecTint(route&&route.color);
     body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
       +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
-      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
+      +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
     +'<style>*{box-sizing:border-box}body{margin:0;font-family:\'DM Sans\',Arial,sans-serif;color:#2C2C2A;background:#EDECE7}'
@@ -5178,7 +5191,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.cust{font-size:14px;font-weight:700}.cpax{font-size:12px;color:#5F5E5A;font-weight:400}.vch{font-size:12px;font-family:\'DM Mono\',monospace;color:#5F5E5A}'
     +'.dt{width:100%;border-collapse:collapse;font-size:12.5px}.dt td{padding:3px 0;vertical-align:top}.dt .lbl{color:#9a988f;width:100px}.mut{color:#9a988f}'
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
-    +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}'
+    +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
     +'.bar{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:8px;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
     +'@media print{body{background:#fff}.bar{display:none}.pg{box-shadow:none;margin:0;max-width:100%;border-radius:0}@page{size:A4 landscape;margin:9mm}}'
     +'</style></head><body>'
@@ -5214,6 +5227,22 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
   var w=window.open('','_blank'); if(!w){ alert('Popup blocked — please allow popups to open the sheet'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
+/* §rcPlate · ช่องรถของแถว · ใช้ทั้งหน้าจอและใบ Sheet · ไม่มีรถไม่เดาคัน */
+function _rcVanCell(v, esc, MONO){
+  if(!v || (!v.id && !v.self)) return '<span style="color:#B4B2A9">—</span>';
+  if(!v.id && v.self) return '<span style="color:#8a8880;font-size:11.5px">มาเอง</span>';
+  /* §rcPlateOnly (2026-10-07) · เจ้าของ: "ขึ้นแต่ทะเบียนรถก็พอ" · ชื่อรถเหลือเป็น tooltip · ไม่มีทะเบียน = ขีด */
+  var h='<span style="'+MONO+';font-weight:700;letter-spacing:.02em" title="'+(v.missing?'ไม่พบรถคันนี้ในทะเบียนรถ · ':'')+esc(v.name)+'">'+esc(v.plate||'—')+'</span>';
+  if(v.retName) h+='<span style="display:block;font-size:10.5px;color:#5B4FC4;white-space:nowrap" title="รถกลับคนละคัน">กลับ: '+esc(v.retPlate||v.retName)+'</span>';
+  return h;
+}
+function _rcVanSheet(v, esc){
+  if(!v || (!v.id && !v.self)) return '<span class="mut">—</span>';
+  if(!v.id && v.self) return '<span class="mut">Self-arrive</span>';
+  var h='<span class="plate">'+esc(v.plate||'—')+'</span>';   /* §rcPlateOnly · ทะเบียนอย่างเดียว */
+  if(v.retName) h+='<span class="vn">Return: '+esc(v.retPlate||v.retName)+'</span>';
+  return h;
+}
 function _rcAgentColorOf(bk){ return (bk&&bk.agentId&&typeof bookingV2AgentColor==='function')?bookingV2AgentColor(bk.agentId):'#EDEBE4'; }
 function _rcInkOf(hex, hasAg){ if(!hasAg) return '#5F5E5A'; return (typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(hex):'#fff'; }
 function _rcSentRing(invoiceOrPaid){ return invoiceOrPaid?'#9A6A00':'#5B4FC4'; }   // gold = invoice/paid · purple = unpaid
@@ -5247,7 +5276,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'van',l:'Plate',w:104},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
@@ -5272,6 +5301,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'hotel': return esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
     case 'zone': return esc(d.zone);
+    /* §rcPlate · ทะเบียนเด่น ชื่อรถเล็กใต้ · ยังไม่จัดรถ = ขีด (ไม่เดา) · รถกลับคนละคันบอกไว้ */
+    case 'van': return _rcVanCell(d.van, esc, MONO);
     case 'addon': return d.addon?'<span style="color:#185FA5">'+esc(d.addon)+'</span>':'<span style="color:#B4B2A9">—</span>';
     case 'special': return esc(d.special||'—');
     case 'payment': return d.cot?'<span style="color:#993C1D;'+MONO+'">'+esc(d.cot)+'</span>':'<span style="color:#B4B2A9">—</span>';
@@ -14415,7 +14446,32 @@ var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก'
 /* §exCot (2026-08-17) · Extra ที่ขายก่อนวันเดินทางแล้วเก็บเงินวันเดินทาง
    วิธีรับเงิน 'cot' = ยังไม่ได้รับเงิน · settle 'done' เมื่อเก็บจริงแล้ว
    ห้ามใช้ settle เดี่ยวๆ ตัดสิน · ของเก่าทุกใบเขียน settle:'pending' ไว้ทั้งที่รับเงินไปแล้ว */
-function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done'); }
+function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bkxExCovered(x); }
+/* §exCotPier (2026-10-06) · ขายเพิ่มจากหน้า By trip แบบ "เก็บเงินวันเดินทาง" แล้วหน้าท่ากดเช็คอิน+รับเงินของใบนั้นไปแล้ว
+   เจ้าของ: "ขายผ่านหน้า By trip date แล้วเช็คอินเป็นคนกดเช็คอินแล้วรับเงินแล้ว ต้องทำอะไรอีกเหรอ" → ไม่ต้อง
+   ที่มา · Trip.com 2 ใบ (6 ต.ค.) · หน้าท่าเห็น ต้องเก็บ 1,000 (pckMoney รวม exDue) เก็บเงินสด 1,000 → ค้าง 0
+   แต่ตัวรายการขายเพิ่มยัง settle:'pending' · Travel Summary จึงขึ้น "รอเก็บ 1,000" ซ้อนกับ "เก็บครบ 1,000"
+   กติกา · เงินที่หน้าท่าเก็บของวันนั้น ≥ ยอดที่ต้องเก็บทั้งหมดของวันนั้น (COT + upgrade ค้าง + ยอดค้าง + ขายเพิ่มที่รอเก็บ)
+          = ขายเพิ่มที่รอเก็บทุกรายการของวันนั้นถือว่าเก็บแล้ว "ผ่านหน้าท่า" · เก็บไม่ครบ = ยังค้างเหมือนเดิม
+   เงินก้อนนั้นอยู่ใน bk.pierPayments แล้ว · รายการที่ครอบคลุมจึง "ไม่" ถูกบวกเข้ายอดรับซ้ำ (ดู pckMoney / tsSaleList)
+   ไม่แก้ข้อมูลรายการขายเพิ่ม (settle ยัง pending) · เป็นการอ่านให้ตรงกันของสองหน้า จึงไม่ต้อง migrate */
+function bkxExCovered(x){
+  try{
+    if(!x || x.method!=='cot' || x.settle==='done') return false;
+    var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
+    var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
+    var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0; if(!(paid>0)) return false;
+    var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
+    var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
+    var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
+    var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
+    var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+    var exDue=0; ((typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(b.id):[]).forEach(function(k){
+      if(date && k.tripDate && k.tripDate!==date) return;
+      if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
+    return pckN(paid) >= pckN(cot+upDue+bal+exDue) - 0.005;
+  }catch(_){ return false; }
+}
 // เงินที่เกี่ยวกับหน้าท่า · อ่านจากของที่มีอยู่แล้ว ไม่ได้สร้าง field ใหม่
 //   ต้องเก็บ  = Cash on Tour ที่ระบุตอน New Booking + upgrade ที่ยังไม่ได้เก็บ + ยอดค้างของ B2C
 //   เก็บแล้ว = extra ที่รับเงินแล้ว (SB_EXTRAS · เงินสด/โอน/บัตร) + upgrade ที่ติ๊กว่าเก็บแล้ว
@@ -14434,9 +14490,10 @@ function pckMoney(b, date){
   var ex=((typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(b.id):[]).filter(function(x){
     return !(date && x.tripDate && x.tripDate!==date);
   });
-  var exGot=0, exDue=0;
-  ex.forEach(function(x){ var v=+x.total||0; if(bkxExGot(x)) exGot+=v; else exDue+=v; });
-  var exTot=exGot+exDue;
+  var exGot=0, exDue=0, exCov=0;
+  /* §exCotPier · own = รับเงินที่ตัวรายการเอง (เข้า got) · covered = เงินอยู่ใน pierPayments แล้ว (ไม่บวกซ้ำ ไม่ค้าง) */
+  ex.forEach(function(x){ var v=+x.total||0; if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else if(bkxExCovered(x)) exCov+=v; else exDue+=v; });
+  var exTot=exGot+exDue+exCov;
   var ups=(!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[];
   var upDue=0, upGot=0;
   ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected) upGot+=v; else upDue+=v; });
@@ -14449,7 +14506,7 @@ function pckMoney(b, date){
   var gross=pckN(cot+upDue+bal+exDue);
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot,
-           exGot:exGot, exDue:exDue, upgrades:ups, upDue:upDue, upGot:upGot,
+           exGot:exGot, exDue:exDue, exCov:exCov, upgrades:ups, upDue:upDue, upGot:upGot,
            balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'',
@@ -21562,7 +21619,8 @@ function tsRowFlags(r, date){
   try{
     var m=tsMoneyOf(r.b,date), S=tsSaleList(r.b,date);
     if(m.target>0 || m.paid>0 || S.tot>0){
-      if(!tsNoCollect(r, m.paid) && m.due>0) f.due=true;
+      var nc=tsCotNoCol(r.b,date,m);   // §cotNoWhy · COT ที่ปิดเก็บไม่ได้แล้ว ไม่ใช่ยอดค้าง
+      if(!tsNoCollect(r, m.paid) && (nc?nc.dueLeft:m.due)>0) f.due=true;
       var v=+((m.M&&m.M.cot)||0);
       if(v>0){ var c=(typeof tsCotGet==='function')?tsCotGet(r.b.id,date):null;
         if(!c) f.cot=true;
@@ -21862,6 +21920,18 @@ function tsNoCollect(r, paid){
   if(+paid>0) return false;                          // §paid · เก็บไปแล้วค่อยยกเลิก = เรื่องคืนเงิน ไม่ใช่ไม่นับ
   return (r.travelled<=0) && ((+r.cxl>0)||(+r.ns>0)||(+r.noShow>0));
 }
+/* §cotNoWhy (2026-10-06) · เจ้าของ: "อันที่ระบุว่ายังไม่ได้เก็บ 1000 แต่ด้านล่างระบุแล้วว่าเก็บไม่ได้เพราะอะไร
+   สรุปบนควรระบุให้หน่อยว่าเก็บไม่ได้เพราะอะไร"
+   ใบที่ยังมีคนเดินทาง (ไม่เข้า tsNoCollect) แต่ COT ถูกปิด "เก็บไม่ได้" แล้ว · เดิมยอด COT ยังนับเป็น
+   "ยังไม่ได้เก็บ" อยู่ข้างบน ทั้งที่ข้างล่างปิดพร้อมเหตุผลไปแล้ว · กติกาเดียว ใช้ทั้งกล่องสรุป ธงปิดวัน และสถานะแถว:
+   COT ที่ปิดเก็บไม่ได้ = ไม่ใช่เงินรอเก็บ · ออกจาก "ยังไม่ได้เก็บ" ไปอยู่บรรทัด "เก็บไม่ได้" พร้อมเหตุผลของใบนั้น
+   เป็นการอ่าน TS_COT ที่มีอยู่แล้ว · ไม่เขียนอะไรเพิ่ม */
+function tsCotNoCol(b, date, m){
+  var v=+((m&&m.M&&m.M.cot)||0); if(!(v>0)) return null;
+  var c=(typeof tsCotGet==='function')?tsCotGet(b.id,date):null;
+  if(!c || c.mode!=='nocol') return null;
+  return { amt:v, why:String(c.ref||'').trim(), dueLeft:Math.max(0, (+m.due||0)-v) };
+}
 /* ══ §tsPaySlip · ชิปวิธีรับเงินในตารางหลัก กดเปิดดูสลิปได้ ══════════════════
    ชิปตัวนี้เป็น "ยอดรวมต่อวิธีรับเงิน" ไม่ใช่เงินก้อนเดียว · ยอดหนึ่งชิปมาจาก
    สองที่เก็บคนละแห่ง คือ pierPayments กับของที่ขายเพิ่ม (SB_EXTRAS + upgrades)
@@ -22029,16 +22099,18 @@ function tsTotalOf(r, date){
    นับค่าคอมเฉพาะรายการที่เก็บเงินแล้ว ให้เข้าชุดกับ got/fee
    ที่ยังไม่เก็บ (cot) ยังไม่มีเงินเข้ามือใคร จะหักออกจากยอดรับไม่ได้ */
 function tsSaleList(b, date){
-  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0;
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0, commCov=0;
   try{ ((typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
     var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
-    var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
+    var _cov=(typeof bkxExCovered==='function')&&bkxExCovered(x);   /* §exCotPier · เงินอยู่ในแถวหน้าท่าแล้ว */
+    var _g=_cov || ((typeof bkxExGot==='function')?bkxExGot(x):true);
     var _cm=+x.commission||0;
-    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
-    var slipMissing=(_g && mth!=='cash' && !((x.slips||[]).length));
+    if(_cov){ comm+=_cm; if(_cm) commCov+=_cm; } else if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
+    if(_cov) mth='pier';
+    var slipMissing=(_g && !_cov && mth!=='cash' && !((x.slips||[]).length));   /* §exCotPier · สลิปอยู่กับแถวหน้าท่า */
     if(slipMissing) noSlip++;
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
                // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
@@ -22047,7 +22119,7 @@ function tsSaleList(b, date){
                slips:(x.slips||[]).slice(),
                // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
                comm:_cm, toCompany:(+x.toCompany||0),
-               method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
+               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
@@ -22064,12 +22136,12 @@ function tsSaleList(b, date){
                comm:(+u.commission||0), toCompany:(+u.toCompany||0),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
-  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, tot:got+due, n:out.length };
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, commCov:commCov, tot:got+due, n:out.length };
 }
 // ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
 function tsSaleCell(S, money, e){
   if(!S.n) return '<span style="color:var(--zn400)">—</span>';
-  var PM={cash:'สด', transfer:'โอน', card:'บัตร', cot:'เก็บวันเดินทาง'};
+  var PM={cash:'สด', transfer:'โอน', card:'บัตร', cot:'เก็บวันเดินทาง', pier:'เก็บแล้วที่หน้าท่า (รวมอยู่ในเงินเก็บหน้าท่า)'};
   return '<div class="ts-sls">'+S.list.map(function(x){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
     // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
@@ -22084,7 +22156,7 @@ function tsSaleCell(S, money, e){
       +' <b>'+money(x.amt)+'</b>'
       +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
-      +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
+      +(x.done?(x.covered?' <i style="font-style:normal;opacity:.75">เก็บที่ท่า</i>':''):' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
   }).join('')+'</div>';
 }
@@ -24120,7 +24192,9 @@ function tsV6Checks(H, money){
   out.push({k:'ns', w:false, h:'No-show <b>'+H.ns+'</b> คน &middot; ยกเลิกหน้างาน <b>'+H.cxl+'</b> คน'});
   out.push({k:'pend', w:H.pend>0, block:true, h:'รอตัดสิน <b>'+H.pend+'</b> เคส &middot; เก็บค่าปรับได้ <b>'+money(H.charge)+'</b>'});
   out.push({k:'due', w:H.due>0, block:true, h:H.nCollect
-    ? ('เงินที่ต้องเก็บหน้าท่า <b>'+money(H.target)+'</b> จาก <b>'+H.nCollect+'</b> ใบ &middot; '+(H.due>0?('ยังค้าง <b>'+money(H.due)+'</b>'):'เก็บครบแล้ว'))
+    ? ('เงินที่ต้องเก็บหน้าท่า <b>'+money(H.target)+'</b> จาก <b>'+H.nCollect+'</b> ใบ &middot; '+(H.due>0?('ยังค้าง <b>'+money(H.due)+'</b>'):'เก็บครบแล้ว')
+        /* §cotNoWhy · COT ที่ปิดเก็บไม่ได้ ไม่อยู่ในยอดค้าง · บอกไว้ให้รู้ว่าทำไมยอดไม่เท่ากับที่ต้องเก็บ */
+        +(H.nCotNo?(' &middot; เก็บไม่ได้ <b>'+money(H.cotNo)+'</b> '+H.nCotNo+' ใบ ปิดพร้อมเหตุผลแล้ว'):''))
     : 'ไม่มียอดต้องเก็บหน้าท่า'});
   out.push({k:'cot', w:H.cotLeft>0, block:true, h:(H.cotAll>0)
     ? ('COT <b>'+money(H.cotAll)+'</b> &middot; '+(H.cotLeft>0?('ยังไม่ตัดสิน <b>'+H.cotLeft+'</b> ใบ'):'ตัดสินครบ'))
@@ -24239,9 +24313,17 @@ function tsV6Money(M, money){
       +(M.deduct>0?('<div class="m5-foot">อีก <b>'+money(M.deduct)+'</b> หักจากบิลเอเจนต์ ไม่ผ่านมือหน้าท่า</div>'):'')+'</div>'
     +'<div class="m5" data-m="todo"><div class="s5-lb">ต้องเคลียร์ก่อนปิดวัน</div><div class="m5-todo">'
       +todo(M.due>0, M.due>0?('ยังไม่ได้เก็บ <b>'+money(M.due)+'</b>'):'เก็บเงินครบทุกใบ &middot; ไม่มียอดค้าง')
-      +(M.saleDue>0?todo(true,'upgrade รอเก็บอีก <b>'+money(M.saleDue)+'</b>'):'')
+      +(M.saleDue>0?todo(true,'ขายเพิ่ม/upgrade รอเก็บอีก <b>'+money(M.saleDue)+'</b>'):'')
       +todo(M.cotLeft>0, (M.cotAll>0)?('COT <b>'+money(M.cotAll)+'</b> &middot; '+(M.cotLeft>0?('ยังไม่ตัดสิน <b>'+M.cotLeft+'</b> ใบ'):'ตัดสินครบ')):'ไม่มี COT ในชุดนี้')
-      +(M.nCotNo?todo(false,'COT เก็บไม่ได้ <b>'+money(M.cotNo)+'</b> &middot; '+M.nCotNo+' ใบ &middot; ปิดพร้อมเหตุผลแล้ว'):'')
+      /* §cotNoWhy · แยกเป็นบรรทัดต่อใบ พร้อมเหตุผลที่ปิดไว้ (เดิมเป็นยอดรวมบรรทัดเดียว คนอ่านไม่รู้ว่าเพราะอะไร)
+         ไม่มีเหตุผล = ยังค้างเรื่อง (!) · เกิน 4 ใบ ย่อที่เหลือเป็นยอดรวม */
+      +(function(){ var L=M.cotNoList||[], h='', e=ckEsc;
+          L.slice(0,4).forEach(function(x){
+            h+=todo(!x.why,'เก็บไม่ได้ <b>'+money(x.amt)+'</b> &middot; <span class="ts-mono">'+e(x.code)+'</span> &middot; '
+              +(x.why?('<span class="why">'+e(x.why)+'</span>'):'<span class="why nowhy">ยังไม่ระบุเหตุผล &middot; ใส่ได้ที่ช่องจัดการเงิน COT ข้างล่าง</span>')); });
+          if(L.length>4){ var rest=L.slice(4), amt=0; rest.forEach(function(x){ amt+=x.amt; });
+            h+=todo(rest.some(function(x){ return !x.why; }),'เก็บไม่ได้อีก <b>'+money(amt)+'</b> &middot; '+rest.length+' ใบ &middot; ดูเหตุผลในตารางข้างล่าง'); }
+          return h; })()
       +'</div>'+(M.cotLeft>0?'<div class="m5-foot">COT ที่ยังไม่ตัดสิน = ยังไม่ได้เลือกว่าหักจากบิลเอเจนต์ หรือโอนออก &middot; เลือกได้ในตารางข้างล่าง</div>':'')+'</div>'
     +'</div>'
     +(M.nRows>0?('<div class="ts-scr ts-noprint s5-sub">รายการรับเงิน <span class="s5-cnt">'+M.nRows+' ใบ</span></div>'):'');
@@ -24438,6 +24520,8 @@ function tsCSSv6(){
 & .m5-todo div{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:#000F4C;line-height:1.4}
 & .m5-todo b{font-family:'DM Mono',ui-monospace,monospace;font-weight:700}
 & .m5-todo .s5-ic{margin-top:1px}
+& .m5-todo .why{color:#4C5377;font-weight:600}
+& .m5-todo .why.nowhy{color:#B4621B;font-weight:700}
 & .m5-foot{margin-top:10px;padding-top:9px;border-top:1px dashed #DADCE8;font-size:11.5px;color:#6B7092;line-height:1.6}
 & .s5-sub{display:flex;align-items:center;gap:8px;margin:2px 0 8px;font-size:12px;font-weight:800;color:#000F4C}
 @media (max-width:1560px){
@@ -24756,11 +24840,15 @@ function renderTravelSum(){
   });
   var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
   var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0,sumComm=0;
+  var cotNoList=[];   // §cotNoWhy · ใบที่ COT ปิด "เก็บไม่ได้" · โชว์เหตุผลในกล่องสรุป
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
-    if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
+    m.noCol=tsCotNoCol(m.r.b,date,m);
+    if(m.noCol) cotNoList.push({ code:m.r.b.voucherRef||m.r.b.code||'—', amt:m.noCol.amt, why:m.noCol.why });
+    /* §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ · §cotNoWhy · COT ที่ปิดเก็บไม่ได้แล้ว ก็ไม่ใช่ยอดค้าง */
+    if(!m.cxl){ sumDue+=(m.noCol?m.noCol.dueLeft:m.due); sumTarget+=m.target; }
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
     sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due;
     sumComm+=(+m.S.comm||0); });   // §tsComm · ค่าคอมของที่เก็บเงินแล้ว
@@ -24977,7 +25065,8 @@ function renderTravelSum(){
     });
     m.S.list.forEach(function(x){
       if(x.kind!=='ex' || !x.id) return;
-      if((x.method||'cash')==='cash') return;
+      /* §exCotPier · 'cot' = ยังไม่ได้รับเงิน ไม่มีสลิปให้แนบ · 'pier' = สลิปอยู่กับแถวเงินหน้าท่าข้างบนแล้ว */
+      if((x.method||'cash')==='cash' || x.method==='cot' || x.method==='pier') return;
       var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
       _slipBits.push((+x.nSlip>0)
         ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(x.slips, lb)
@@ -24990,7 +25079,8 @@ function renderTravelSum(){
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
     if(m.M.balance>0) parts.push('ค้าง '+money(m.M.balance));
     if(m.M.upDue>0) parts.push('upgrade '+money(m.M.upDue));
-    mbody+='<tr class="'+(m.cxl?'ts-cxl':(m.due>0?'need':''))+'">'
+    var dueLeft=m.noCol?m.noCol.dueLeft:m.due;   // §cotNoWhy · ยอดค้างหลังหัก COT ที่ปิดเก็บไม่ได้
+    mbody+='<tr class="'+(m.cxl?'ts-cxl':(dueLeft>0?'need':''))+'">'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -25014,12 +25104,19 @@ function renderTravelSum(){
       +'<td class="ts-cotcol">'+tsCotCell(b, m.M, date, money, e, m.r)+'</td>'
       +'<td class="c">'+(m.cxl
         ? ('<span class="ts-chip r">'+m.cxlKind+'</span><div class="ts-tel" style="margin-top:3px">ไม่นับเข้ายอดวันนี้</div>')
-        : m.due>0
-        ? ('<span class="ts-chip a">รอเก็บ '+money(m.due)+'</span>')
+        : dueLeft>0
+        ? ('<span class="ts-chip a">รอเก็บ '+money(dueLeft)+'</span>'
+            +(m.noCol?('<div class="ts-tel" style="margin-top:3px">COT เก็บไม่ได้ '+money(m.noCol.amt)+' ไม่นับ</div>'):''))
+        /* §cotNoWhy · COT ปิดเก็บไม่ได้แล้ว และไม่มียอดอื่นค้าง → บอกว่าเก็บไม่ได้ ไม่ใช่ "รอเก็บ" */
+        : m.noCol
+        ? ('<span class="ts-chip r">เก็บไม่ได้ '+money(m.noCol.amt)+'</span><div class="ts-tel" style="margin-top:3px">'
+            +(m.noCol.why?'ปิดพร้อมเหตุผลแล้ว':'<span style="color:var(--am700);font-weight:700">ยังไม่ระบุเหตุผล</span>')+'</div>')
         : (m.target<=0 && m.paid<=0 && m.S.got>0
             ? ('<span class="ts-chip g">ขายเพิ่ม '+money(m.S.got)+'</span>')
-            : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>')))
-        + (m.S.due>0?('<div style="margin-top:3px"><span class="ts-chip a">upgrade รอเก็บ '+money(m.S.due)+'</span></div>'):'')+'</td>'
+            : (m.target<=0 && m.paid<=0 && m.S.due>0
+                ? ''   /* §exCotPier · ไม่มียอดใบจอง ไม่มีเงินเข้า แต่มีขายเพิ่มรอเก็บ → ไม่พูดว่า "เก็บครบ ฿0" */
+                : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>'))))
+        + (m.S.due>0?('<div style="margin-top:3px"><span class="ts-chip a">ขายเพิ่ม รอเก็บ '+money(m.S.due)+'</span></div>'):'')+'</td>'
       +'</tr>';
   });
   var PC=function(cls,ic,lb,tag,val,note){
@@ -25050,7 +25147,7 @@ function renderTravelSum(){
         })()
     +'</div></div>'
     +tsV6Money({ cash:sumCash, tf:sumTf, card:sumCard, tin:sumIn, comm:sumComm, out:sumPayout, net:sumNet, due:sumDue, saleDue:sumSaleDue,
-                 fee:sumFee, deduct:sumDeduct, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, nRows:mRows.length }, money)
+                 fee:sumFee, deduct:sumDeduct, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, cotNoList:cotNoList, nRows:mRows.length }, money)
     +'<div class="ts-pay ts-pay5 ts-printonly">'
     + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ · รวมของขายเพิ่ม'
         +(sumPayout>0?('<br><b style="color:var(--rs700)">ในก้อนนี้มีเงินที่ต้องจ่ายออกอีก '+money(sumPayout)+'</b>'):''))
@@ -25062,7 +25159,8 @@ function renderTravelSum(){
         (sumPayout>0 ? 'โอนคืนเอเจนต์ตามคำตัดสิน COT · ต้องหักออกจากเงินที่รับมา'
                      : 'วันนี้ไม่มีรายการที่ต้องจ่ายออก'))
     + PC('pend','&#9203;','5 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
-        +(sumSaleDue>0?(' · upgrade รอเก็บอีก '+money(sumSaleDue)):''))
+        +(sumSaleDue>0?(' · ขายเพิ่ม/upgrade รอเก็บอีก '+money(sumSaleDue)):'')
+        +(nCotNo?(' · เก็บไม่ได้ '+money(sumCotNo)+' ปิดพร้อมเหตุผลแล้ว ไม่นับ'):''))   // §cotNoWhy
     +'</div>'
     // §tsCashNet · บรรทัดกระทบยอด · ตัวเลขที่เอาเข้าบัญชีจริงคือ "เหลือเข้าบริษัท"
     +'<div class="ts-read ts-printonly" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
@@ -25360,7 +25458,7 @@ function renderTravelSum(){
     date:date, vat:_tsVatF, nAll:allDay.length, nVat:nVat, nNoVat:nNoVat, vgap:_vgap,
     pOrder:pOrder, pMap:pMap, rOrder:rOrder, rMap:rMap, rTotN:rTotN, dayW:dayW,
     nBk:all.length, booked:tBooked, trav:tTrav, ns:tNs, cxl:tCxl, pend:nPending, charge:charge,
-    target:sumTarget, nCollect:nCollect, due:sumDue, cotAll:sumCotAll, cotLeft:nCotLeft, doc:dcAgg,
+    target:sumTarget, nCollect:nCollect, due:sumDue, cotAll:sumCotAll, cotLeft:nCotLeft, cotNo:sumCotNo, nCotNo:nCotNo, doc:dcAgg,
     stamp:_tsStamp(), by:(laBy?laBy():'') }, money);
   tsV6Bleed();
   host.innerHTML='<style id="ts-style">'+tsCSS()+tsCSSv6()+'</style>'
@@ -32164,6 +32262,26 @@ function _bkUpgPayInit(u){
 let SB_WEATHER_CLOSURES = [];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_weather)) SB_WEATHER_CLOSURES=d.sb_weather; }catch(e){ console.warn('load sb_weather failed',e); } })();
 function sbWeatherPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_weather=SB_WEATHER_CLOSURES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_weather failed',e); } }
+
+
+/* ══ §b2cChg (2026-10-08) · บอกในแถวของบุคกิ้งว่า B2C แก้อะไรมา ══════════════════════════
+   เจ้าของ: "บุคกิ้ง B2C sync อัตโนมัติ ถ้ามีการแก้มาจากฝั่ง B2C มันจะเปลี่ยนแบบเงียบ ๆ
+   ทาง By trip date ทำยังไงให้รู้ว่ามีการแก้ไข" → "ให้โชว์ในบรรทัดของบุคกิ้งนั้น ๆ เลย
+   แล้ว user กดรับทราบ ก็หายไปเอง"
+
+   ฝั่งเซิร์ฟเวอร์ (b2c-changelog.js + relSyncB2C) เขียนประวัติของใบนั้นทุกครั้งที่ sync เปลี่ยนอะไรจริง
+     kind 'b2c'      text "Pax: 2 Ad → 3 Ad · Hotel: A → B"   (หนึ่งช่องต่อหนึ่งฟิลด์ คั่นด้วย ' · ')
+     kind 'b2c_new'  ใบใหม่ที่เพิ่งเข้ามา
+   ฝั่งนี้
+     bookingV2B2CPending(bk)  อ่านประวัติหลัง 'b2c_seen' ตัวล่าสุด · รวมหลายรอบเป็นบรรทัดเดียว (Pax 2 → 3 → 4)
+                         ฟิลด์ที่เปลี่ยนไปแล้วเปลี่ยนกลับ (2 → 3 → 2) ตัดทิ้ง
+     แถว By trip date    บรรทัดสรุปใต้แถวนั้น + ปุ่มรับทราบ (คนที่แก้ใบจองได้เท่านั้น)
+     รับทราบ            ต่อท้ายประวัติด้วย kind 'b2c_seen' · หายสำหรับทุกคน · รู้ว่าใครกดเมื่อไร
+     หัวหน้า By trip     ปุ่ม "B2C changes N" + แถบด้านขวารวมทุกวัน (ใบที่ B2C เลื่อนวันหายไปจากหน้าวันเดิม
+                         จึงต้องมีที่ให้เห็นรวม)
+   ใบใหม่จาก B2C ขึ้นป้ายเฉพาะที่วันเดินทางห่างจากเวลาที่เข้ามาไม่เกิน B2C_CHG_NEW_DAYS วัน
+   (ใบล่วงหน้าเป็นงานปกติ · ที่ต้องรู้คือใบที่เข้ามาหลังจัดรถ/เรือไปแล้ว) */
+var B2C_CHG_NEW_DAYS = 2;
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -55825,8 +55943,16 @@ function plPrintLic(sid){
       return (T?T.short:'')+' '+(C?C.name:''); }).join(' · ') + ')';
   }catch(_){ return ''; }
 }
+/* §pjPierSkin (2026-10-07) · เจ้าของ: "ใบงานนี้ของทับละมุ ใช้ภาษาอังกฤษ และสีพื้นหลังใช้ #00bcdf เพื่อแยกความแตกต่างของสองท่าเรือ"
+   หัวใบเป็นอังกฤษทุกท่า (ใบถูกแคปส่งไลน์ให้ทีมหลายชาติ) · พันวาคง navy เดิม · ทับละมุเป็นฟ้า #00bcdf ตัวหนังสือเข้ม
+   สีชุดเดียวกับหัว Travel Summary (§tsV6d) คนเห็นสีก็รู้ท่าโดยไม่ต้องอ่าน */
+var PJ_SKIN={ panwa:  {name:'Visit Panwa', bg:'linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)', ink:'#fff', sub:'#9FABCE', line:'#16265C', mo:'#16265C'},
+              tublamu:{name:'Tub Lamu',    bg:'#00bcdf', ink:'#002A33', sub:'#004D5C', line:'#00bcdf', mo:'#007F99'},
+              ranong: {name:'Ranong',      bg:'linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)', ink:'#fff', sub:'#9FABCE', line:'#16265C', mo:'#16265C'} };
+function pjSkin(k){ return PJ_SKIN[k]||PJ_SKIN.panwa; }
 function pjPrint(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var SK=pjSkin(P.k);   /* §pjPierSkin */
   var e=poE;
   /* §pjSheet2 · ใช้ชุดเดียวกับที่หน้าจอโชว์ · เลือกทั้งหมดบนจอ = ปริ้นออกทุกลำ */
   var all=pjAllBoats(_poDate,_poPier);
@@ -56000,17 +56126,17 @@ function pjPrint(){
    /* §pjDate3 · หัวใบเป็นแถบ navy เต็มความกว้าง · แถบวันที่เป็นพื้นขาว
       สีทึบมีที่เดียวคือชื่อใบ · วันที่เด่นด้วยขนาด ไม่ใช่ด้วยสี */
    +'.shead{display:flex;align-items:center;justify-content:center;border-radius:8px;'
-     +'padding:9px 20px 11px;background:linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)}'
+     +'padding:9px 20px 11px;background:'+SK.bg+'}'   /* §pjPierSkin · สีตามท่า */
    /* §pjDate · วันที่เคยแชร์บรรทัดกับชื่อท่า · ตัวเลข 38px ข้าง ๆ ชื่อท่า 26px
       อ่านแล้วเป็น "หัวใบที่มีวันที่อยู่ด้วย" ไม่ใช่ "ใบของวันนี้"
       ใบเรือหน้าตาเหมือนกันทุกวัน · ส่งใบเมื่อวานเข้าไลน์แล้วไม่มีใครทักได้จริง
       วันที่จึงได้แถบของตัวเองเต็มความกว้าง ไม่ต้องแข่งกับอะไรในบรรทัดเดียวกัน */
-   +'.dstrip{background:#fff;border-bottom:2px solid #16265C;margin:2px 0 12px;'
+   +'.dstrip{background:#fff;border-bottom:2px solid '+SK.line+';margin:2px 0 12px;'
      +'padding:8px 24px 11px;display:flex;align-items:baseline;justify-content:center;gap:17px}'
    +'.dstrip b{font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.27em;'
      +'color:#8994A6;text-transform:uppercase}'
    +'.dstrip u{text-decoration:none;font-size:'+(fs+36)+'px;font-weight:800;line-height:.92;color:#111}'
-   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:#16265C}'
+   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:'+SK.mo+'}'
    /* §pjTop2 · หัวใบเป็นป้ายชื่องานก้อนเดียว · พื้น navy ตัวขาว
       ของเดิมเป็นตัวหนังสือสี navy บนพื้นขาว อ่านแล้วเป็นแค่บรรทัดหนึ่งในหัวใบ
       ไม่ใช่ "ชื่อใบ" · ใบนี้ถูกแคปส่งไลน์ ป้ายทึบทำให้รู้ทันทีว่าใบอะไร */
@@ -56020,11 +56146,11 @@ function pjPrint(){
       และแถบใหญ่ที่สุดของใบเป็นพื้นขาว ปริ้นแล้วไม่กินหมึกทั้งแถบ */
    +'.sh-c{flex:none;text-align:center;white-space:nowrap;padding:0}'
    +'.sh-c b{display:block;font-size:'+(fs-6.5)+'px;font-weight:700;letter-spacing:.30em;'
-     +'padding-left:.30em;color:#9FABCE;line-height:1.1}'
+     +'padding-left:.30em;color:'+SK.sub+';line-height:1.1}'
    /* §pjTop3 · บรรทัดใหญ่คือ "ท่าไหน" ไม่ใช่ชื่อบริษัท · ใบนี้ออกทีละท่า
       คนที่รับใบต้องรู้ก่อนอื่นว่าเป็นใบของท่าตัวเอง · ชื่อบริษัทซ้ำทุกใบอยู่แล้ว */
    +'.sh-c span{display:block;font-size:'+(fs+1.5)+'px;font-weight:800;letter-spacing:.20em;'
-     +'padding-left:.20em;color:#fff;line-height:1.2;margin-top:1px;text-transform:uppercase}'
+     +'padding-left:.20em;color:'+SK.ink+';line-height:1.2;margin-top:1px;text-transform:uppercase}'
 
    +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
    +'.pill{border:1px solid #DCE2EC;background:#F5F7FA;border-radius:999px;padding:4px 12px;'
@@ -56656,7 +56782,7 @@ function pjPrint(){
     +'<div class="shead">'
       /* §pjTop3 · t เป็น "Visit Panwa \u00b7 \u0e20\u0e39\u0e40\u0e01\u0e47\u0e15" · เอาเฉพาะชื่อท่าหน้าจุดคั่น */
       +'<div class="sh-c"><b>LOVE ANDAMAN</b><span>'
-        +e(String(P.t||P.n||'').split('\u00b7')[0].trim()||(P.n||''))+'</span></div>'
+        +e(SK.name||String(P.t||P.n||'').split('\u00b7')[0].trim()||(P.n||''))+'</span></div>'   /* §pjPierSkin · ชื่อท่าเป็นอังกฤษ */
     +'</div>'
     /* §pjDate · แถบวันที่ · ของชิ้นเดียวที่กินเต็มความกว้างของใบ */
     +'<div class="dstrip"><b>'+e(_pjWd)+'</b><u>'+_pjDay+'</u><i>'+e(_pjMo)+'</i></div>'

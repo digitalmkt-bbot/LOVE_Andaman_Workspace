@@ -1002,6 +1002,43 @@ function laSbInit(){
     document.head.appendChild(s); }
   try{ laSbInitAccordion(); }catch(e){}
   try{ poNavGroupInit(); }catch(e){}
+  try{ flNavMergeSync(); }catch(e){}   /* §flNavMerge */
+}
+/* §flNavMerge (2026-10-08) · owner: "Fleet has too many menu items" → 13 down to 10.
+   Two menu entries stand for several pages; the pages themselves are unchanged and get a tab strip in their header.
+   Per-page permissions still apply: the menu entry opens the first page the user may see, tabs list only allowed pages. */
+var FL_NAV_GROUPS=[
+  {k:'stock',label:'Stock',views:['fl-inventory','fl-consumables'],tabs:['Inventory / Memo','Supplies / Fuel']},
+  {k:'analytics',label:'Analytics',views:['fl-cost','fl-insights','fl-fuel'],tabs:['Cost','Insights','Fuel']}
+];
+function flNavOk(v){ try{ return (typeof window.laAllowed!=='function') || !!window.laAllowed(v); }catch(e){ return true; } }
+function flNavItem(v){ return document.querySelector('.sidebar .nav-item[data-view="'+v+'"]') || document.querySelector('.nav-item[data-view="'+v+'"]'); }
+function flNavGo(v){ var el=flNavItem(v); if(el) nav(el); }
+function flNavTabsPaint(g,view,ok){
+  var ve=document.getElementById('view-'+view); if(!ve) return;
+  var hd=ve.querySelector('.page-hd'); if(!hd) return;
+  var t=hd.querySelector('.fl-gtabs');
+  if(!t){ t=document.createElement('div'); t.className='fl-gtabs'; hd.appendChild(t); }
+  if(ok.length<2){ t.style.display='none'; return; }
+  t.style.display='';
+  t.innerHTML=ok.map(function(v){ return '<button type="button" class="'+(v===view?'on':'')+'" onclick="flNavGo(\''+v+'\')">'+g.tabs[g.views.indexOf(v)]+'</button>'; }).join('');
+}
+function flNavMergeSync(view){
+  FL_NAV_GROUPS.forEach(function(g){
+    var ok=g.views.filter(flNavOk), head=ok[0]||null;
+    g.views.forEach(function(v){
+      var it=flNavItem(v); if(!it) return;
+      it.classList.toggle('fl-merged', v!==head);
+      if(v!==head) return;
+      var node=null;
+      for(var i=it.childNodes.length-1;i>=0;i--){ var n=it.childNodes[i]; if(n.nodeType===3 && String(n.nodeValue||'').trim()){ node=n; break; } }
+      if(node && String(node.nodeValue).trim()!==g.label) node.nodeValue=' '+g.label+' ';
+      it.dataset.thLabel=g.label;   /* laLangApplyNav re-applies this label on language switch */
+    });
+    if(!view || g.views.indexOf(view)<0) return;
+    if(head && head!==view){ var h=flNavItem(head); if(h) h.classList.add('active'); }
+    flNavTabsPaint(g,view,ok);
+  });
 }
 // ══════════════════════════════════════
 function nav(el){
@@ -1017,6 +1054,7 @@ function nav(el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   el.classList.add('active');
+  try{ flNavMergeSync(view); setTimeout(function(){ try{ flNavMergeSync(view); }catch(_){} },0); }catch(e){}   /* §flNavMerge */
   const viewEl=document.getElementById('view-'+actualView);
   if(viewEl) viewEl.classList.add('active');
   // fleet views
@@ -1634,6 +1672,7 @@ function _ddRows(){
     var trs=(b.trips||[]).map(function(t){
       var r=(typeof getRoute==='function'&&t.routeId)?getRoute(t.routeId):null;
       return {route:(r&&r.name)||t.routeId||'—', color:(r&&r.color)||'#7d7a74',
+        rid:t.routeId||'',   /* §ddExec · ใช้นับ "+N ที่คีย์วันนี้" ลงช่องเส้นทาง×วัน */
         date:t.date, mode:t.bookingMode||'seat',
         pax:(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0};
     });
@@ -1829,12 +1868,386 @@ function _ddSideBlock(rows,side){
                 '<b>'+shown.length+'</b>', '<b>'+all.length+'</b>')+'</div>' : '')
       +'<div class="dv-ddrows">'+_ddList(shown)+'</div></div>';
 }
+/* ══ §ddExec (2026-10-07) · Executive Summary ของวัน ═══════════════════════════
+   เจ้าของ: "อยากได้ Executive Summary ของวันนั้น ๆ ใช้เป็น Report รายวัน ให้ทีมเซลล์ดูว่า
+   วันนี้มีบุคกิ้งอะไรเข้าบ้าง ไปวันไหนบ้าง และอีก 7 วันล่วงหน้ายังมีที่นั่งว่างเท่าไหร่
+   ต้องหาลูกค้าเพิ่มอีกเท่าไหร่" · เลือกแบบ bullet 4 ข้อ อ่านบนลงล่าง (ม็อกอัป v3)
+   สามก้อน · 1 สรุป bullet + ตัวเลข 4 ช่อง + ต้องทำวันนี้ · 2 บุคกิ้งวันนี้ไปวันไหน
+   3 ตาราง 7 วันข้างหน้า เส้นทาง×วัน (จอง/ความจุ · ว่าง · ขาดถึงจุดคุ้มทุน)
+   ที่นั่งจาก getAllotment (เรือในใบงานเรือ) · จุดคุ้มทุนต่อลำจาก pxTrip/ctBreakEven
+   (หน้าต้นทุน & จุดคุ้มทุน) · ไม่มีแผนต้นทุนของเส้นทาง = ไม่รู้จุดคุ้มทุน แสดงขีด ไม่เดา
+   อ่านอย่างเดียวทั้งก้อน · ขึ้นเฉพาะมุมมองวันเดียว (ช่วงหลายวันไม่มี "วันนี้" ให้สรุป) */
+var _ddBEC={};   /* แคชจุดคุ้มทุนต่อ วัน|ลำ · ล้างทุกครั้งที่วาด (ไล่ทีละคนถึงความจุ) */
+/* §ddBE2 (2026-10-07) · เจ้าของ: "ตรวจ Break even ใหม่" · ตรวจกับ backup จริง (3 ต.ค.) พบสองเรื่อง
+   1 วันข้างหน้าทุกวัน pxTrip ให้ be=null · เพราะ pxPax นับเฉพาะคนที่ "จัดลงลำ" แล้ว (ops.boatId)
+     ซึ่งวันข้างหน้ายังไม่มีใครจัด → ราคาเฉลี่ย = 0 → ตัวสำรองไปใช้ "ราคาในแผน"
+   2 ราคาในแผนไม่ใช่ราคาขายจริง · แผน Phi Phi ตั้งไว้ 1,200 ทั้งลำเป็นคนไทย (ฉากทดลอง)
+     ขณะที่ใบจองจริงเฉลี่ย ~1,800–2,300/คน → เรือ 4 เครื่อง "ไม่มีวันคุ้ม" ที่ 1,200 → ช่องขึ้น "no break-even"
+   ใหม่: ราคาและสัดส่วนคนไทยมาจาก "ใบจองจริงของเส้นทาง-วันนั้น" (ยังไม่ต้องจัดลำ) · ไม่มีใบจองค่อยถอยไปใช้แผน
+   ค่าคอม 0 (เรตเอเย่นต์เป็นเน็ตอยู่แล้ว) · เด็กคิดราคาเดียวกับเฉลี่ย · แยกผล "ไม่มีแผน" กับ "ไม่คุ้มแม้เต็มลำ" */
+function _ddMix(rid,d){
+  var k='mix|'+d+'|'+rid; if(k in _ddBEC) return _ddBEC[k];
+  var pax=0, th=0, rev=0, n=0, paxP=0;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0 || b.schemaVer!==2) return;
+    (b.trips||[]).forEach(function(t){ if(t.date!==d || t.routeId!==rid || t.bookingMode==='charter') return;
+      var px=t.pax||{}, tot=0, tth=0;
+      ['ad','chd','inf','foc'].forEach(function(q){ tot+=(+px[q]||0)+(+px[q+'_fr']||0)+(+px[q+'_th']||0); tth+=(+px[q+'_th']||0); });
+      if(!tot) return;
+      var m=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):((typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0));
+      n++; pax+=tot; th+=tth;
+      /* ใบที่ยอดเงินเป็น 0 (ยังไม่ใส่ราคา / FOC / ข้อมูลไม่ครบ) ไม่ถือว่า "ขายฟรี" · ไม่เอามาถ่วงราคาเฉลี่ย */
+      if(m>0){ rev+=m; paxP+=tot; } });
+  });
+  var o={n:n,pax:pax,th:th,rev:rev,paxPriced:paxP,price:(paxP&&rev>0)?rev/paxP:0,thR:pax?th/pax:0};
+  _ddBEC[k]=o; return o;
+}
+function _ddBE(date,bid,rid){
+  var k=date+'|'+bid; if(k in _ddBEC) return _ddBEC[k];
+  var out={be:null,cap:0,src:'',price:0,why:'noplan'};
+  try{
+    out.cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):0;
+    var plan=(typeof pxPlanFor==='function'&&rid)?pxPlanFor(rid):null;
+    var pl=(plan&&typeof ctPlans==='function')?ctPlans().filter(function(p){ return p.id===plan.id; })[0]:null;
+    if(!pl || typeof ctProfitAt!=='function'){ _ddBEC[k]=out; return out; }
+    var T=(typeof ctTpl==='function')?ctTpl():null;
+    var mix=_ddMix(rid,date), price=mix.price>0?mix.price:(+pl.price||0), thR=mix.price>0?mix.thR:((+pl.paxTH||0)>0?Math.min(1,(+pl.paxTH||0)/Math.max(1,+pl.cap||1)):0);
+    out.src=mix.price>0?'bookings':'plan'; out.price=Math.round(price);
+    if(!(price>0)){ out.why='noprice'; _ddBEC[k]=out; return out; }
+    var boat=(typeof getBoat==='function')?getBoat(bid):null;
+    var FP=(typeof flFuelPriceEff==='function'&&boat)?flFuelPriceEff(date,boat):null;
+    var cap=Math.max(1,out.cap||+pl.cap||60);
+    var base=Object.assign({}, pl, {boats:1, boatId:bid, _asOf:date, price:price, priceCh:'', chPct:0, comm:0, fuel:(FP&&FP.price>0)?FP.price:(+pl.fuel||0)});
+    for(var nn=1; nn<=cap; nn++){
+      var q=Object.assign({}, base, {paxTH:Math.round(nn*thR)});
+      if(ctProfitAt(q, nn, T).p>0){ out.be=nn; break; }
+    }
+    out.why=(out.be==null)?'never':'';   /* never = ไม่คุ้มแม้เต็มลำที่ราคานี้ */
+  }catch(_){}
+  _ddBEC[k]=out; return out;
+}
+function _ddExecDays(rg){ var o=[]; for(var i=1;i<=7;i++) o.push(_ddAddDays(rg.to,i)); return o; }
+/* §ddEn (2026-10-07) · เจ้าของ: "อยากได้ที่อ่านง่าย และเป็นภาษาอังกฤษ" · ก้อนสรุปและข้อความ LINE เป็นอังกฤษทั้งหมด
+   (ทีมเซลล์อ่านร่วมกันหลายชาติ) · ไม่ผูกกับสวิตช์ภาษาของแอป · วัน/เดือนแบบสากล ปี ค.ศ. */
+var _DD_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], _DD_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _ddDLbl(ymd,withMo){ var d=new Date(ymd+'T00:00:00'); return _DD_WD[d.getDay()]+' '+d.getDate()+(withMo?(' '+_DD_MO[d.getMonth()]):''); }
+function _ddMoLbl(ym){ var p=String(ym).split('-'); return (_DD_MO[(+p[1]||1)-1]||p[1])+' '+p[0]; }
+/* ตัวเลขทั้งหมดของสรุป · คำนวณครั้งเดียวแล้วแจกให้ทั้ง bullet ตาราง และข้อความ LINE */
+function _ddExecData(rows,rg){
+  var ok=rows.filter(function(r){ return !r.cxl && !r.intFree; });
+  var S={b2c:_ddSum(rows,'b2c'), b2b:_ddSum(rows,'b2b')};
+  var n=S.b2c.n+S.b2b.n, pax=S.b2c.pax+S.b2b.pax, val=S.b2c.val+S.b2b.val;
+  var topAgs=_ddAgg(ok.filter(function(r){return r.side==='b2b';}),function(r){return r.agent;}).slice(0,5), topAg=topAgs[0]||null;   /* §ddTop5 · เจ้าของขอ 5 เจ้า */
+  var topRt=_ddAgg(ok,function(r){return (r.trips[0]||{}).route;})[0]||null;
+  /* ── ไปวันไหน · ใบละวันเดียว (OVN ใช้วันแรก) ── */
+  var days=_ddExecDays(rg), dset={}; days.forEach(function(d){ dset[d]=1; });
+  var byDay={}, order=[];
+  ok.forEach(function(r){ var t=r.trips[0]||{}, d=t.date||''; if(!d) return;
+    var k=(d<=rg.to)?('<'+rg.to):(dset[d]?d:d.slice(0,7));
+    if(!byDay[k]){ byDay[k]={k:k,n:0,pax:0,b2b:0,b2c:0,rt:{}}; order.push(k); }
+    var o=byDay[k]; o.n++; o.pax+=r.pax; o[r.side]+=r.pax; o.rt[t.route]=(o.rt[t.route]||0)+1; });
+  order.sort(function(a,b){ var x=a.charAt(0)==='<', y=b.charAt(0)==='<'; if(x!==y) return x?-1:1; return a<b?-1:1; });   /* วันนี้/ก่อนหน้า ขึ้นก่อน แล้วไล่ตามวัน */
+  var travel=order.map(function(k){ var o=byDay[k];
+    var rts=Object.keys(o.rt).sort(function(a,b){ return o.rt[b]-o.rt[a]; }).slice(0,3).map(function(x){ return x+' '+o.rt[x]; });
+    var soon=!!dset[k];
+    var lbl=(k.charAt(0)==='<')?('By '+_ddDLbl(rg.to,true)):(soon?_ddDLbl(k,true):_ddMoLbl(k));
+    var sub=(k.charAt(0)==='<')?'travels today or earlier':(soon?((k===_ddAddDays(rg.to,1))?'tomorrow':''):'');
+    return {k:k,lbl:lbl,sub:sub,soon:soon,n:o.n,pax:o.pax,b2b:o.b2b,b2c:o.b2c,rts:rts}; });
+  var w7={n:0,pax:0}, peak=null;
+  travel.forEach(function(t){ if(!t.soon) return; w7.n+=t.n; w7.pax+=t.pax; if(!peak||t.pax>peak.pax) peak=t; });
+  var later={n:0,months:[]}; travel.forEach(function(t){ if(!t.soon && t.k.charAt(0)!=='<'){ later.n+=t.n; later.months.push(t.lbl); } });
+  /* §ddTravel2 (2026-10-07) · เจ้าของ: "มีเดือนแล้วก็มีวัน ทำเป็น step อีกขั้น จะได้เห็นแยกทั้งเดือนและวัน"
+     สองชั้น · หัวเดือน (ยอดรวมเดือน) → แถววันที่อยู่ใต้ · เดือนที่มีวันใน 7 วันข้างหน้าเปิดไว้ เดือนไกลพับไว้ กดหัวเดือนเพื่อกาง
+     ใบ "วันนี้หรือก่อนหน้า" เป็นกลุ่มของตัวเอง · travel (ชั้นเดียว) ยังอยู่ให้ bullet/LINE ใช้เหมือนเดิม */
+  var byD2={}, ord2=[];
+  ok.forEach(function(r){ var t=r.trips[0]||{}, d=t.date||''; if(!d) return;
+    var k=(d<=rg.to)?('<'+rg.to):d;
+    if(!byD2[k]){ byD2[k]={k:k,n:0,pax:0,b2b:0,b2c:0,rt:{}}; ord2.push(k); }
+    var o=byD2[k]; o.n++; o.pax+=r.pax; o[r.side]+=r.pax; o.rt[t.route]=(o.rt[t.route]||0)+1; });
+  ord2.sort(function(a,b){ var x=a.charAt(0)==='<', y=b.charAt(0)==='<'; if(x!==y) return x?-1:1; return a<b?-1:1; });
+  var months={}, mord=[];
+  ord2.forEach(function(k){ var o=byD2[k], mk=(k.charAt(0)==='<')?'<':k.slice(0,7);
+    if(!months[mk]){ months[mk]={k:mk,lbl:(mk==='<')?('By '+_ddDLbl(rg.to,true)):_ddMoLbl(mk),n:0,pax:0,b2b:0,b2c:0,soon:false,days:[],rt:{}}; mord.push(mk); }
+    var M=months[mk]; M.n+=o.n; M.pax+=o.pax; M.b2b+=o.b2b; M.b2c+=o.b2c; Object.keys(o.rt).forEach(function(x){ M.rt[x]=(M.rt[x]||0)+o.rt[x]; });
+    var soon=!!dset[k]; if(soon) M.soon=true;
+    var rts=Object.keys(o.rt).sort(function(a,b){ return o.rt[b]-o.rt[a]; }).slice(0,3).map(function(x){ return x+' '+o.rt[x]; });
+    M.days.push({k:k,lbl:(k.charAt(0)==='<')?'today or earlier':_ddDLbl(k,true),sub:soon?((k===_ddAddDays(rg.to,1))?'tomorrow':''):'',soon:soon,n:o.n,pax:o.pax,b2b:o.b2b,b2c:o.b2c,rts:rts}); });
+  var travelM=mord.map(function(mk){ var M=months[mk];
+    M.rts=Object.keys(M.rt).sort(function(a,b){ return M.rt[b]-M.rt[a]; }).slice(0,3).map(function(x){ return x+' '+M.rt[x]; });
+    M.open=M.soon||mk==='<'; return M; });
+  /* ── 7 วันข้างหน้า · เส้นทาง×วัน ── */
+  var keyed={}; ok.forEach(function(r){ r.trips.forEach(function(t){ if(t.rid&&t.date){ var k=t.date+'|'+t.rid; keyed[k]=(keyed[k]||0)+(+t.pax||0); } }); });
+  /* §ddIdle (2026-10-07) · เจ้าของ: "เรือบางวันไม่ได้ออกนะ แต่ขึ้นมา" · กระดานเรือมีลำวางไว้ทุกวัน
+     แต่วันที่ยังไม่มีใครจองเลย เรือมักไม่ออก (และโปรแกรมที่ปิดฤดูก็ยังมีลำค้างบนกระดาน)
+     → ใช้ _calTripsFor ตัวเดียวกับปฏิทิน (ตัดโปรแกรมปิดฤดู · รู้ว่าปิดเพราะอากาศ · รู้ลำเหมา)
+     → ช่องที่จอง 0 คน = "no bookings yet" ไม่นับเป็นขาด ไม่เข้ายอดที่นั่งว่าง ไม่ขึ้น to-do
+       แต่ยังโชว์ในตารางให้เห็นว่ามีลำวางไว้ · ปิดเพราะอากาศ = ไม่นับเลย */
+  var cells={}, rids={}, colTot={};
+  days.forEach(function(d){
+    var trips=(typeof _calTripsFor==='function')?_calTripsFor(d,''):[];
+    var byR={};
+    trips.forEach(function(t){ if(!t||!t.r||t.isCharter) return; var o=byR[t.r.id]||(byR[t.r.id]={boats:[],wx:false}); o.boats.push(t.b.id); if(t.weatherClosed) o.wx=true; });
+    colTot[d]={cap:0,bk:0,av:0,need:0,n:0,unk:0,idle:0};
+    Object.keys(byR).forEach(function(rid){
+      var A=(typeof getAllotment==='function')?getAllotment(rid,d):null; if(!A||!A.hasAllotment) return;
+      var be=0, unk=false;
+      var never=false, price=0;
+      /* §ddBE2 · หลายลำบนกระดานวันเดียวกัน · นับจุดคุ้มทุนเฉพาะ "ลำที่ต้องออกจริง" ตามจำนวนคนที่จองแล้ว
+         (คนจองพอลำเดียว = คิดลำเดียว เลือกลำที่คุ้มง่ายสุด) · ไม่งั้น 2 ลำบนกระดานจะทำให้ "ขาด" โตเป็นสองเท่า */
+      var bx=byR[rid].boats.map(function(bid){ var x=_ddBE(d,bid,rid); price=x.price||price; return x; });
+      if(bx.some(function(x){ return x.be==null && x.why!=='never'; })) unk=true;
+      else {
+        var bk0=A.seatsConsumed||0, sorted=bx.slice().sort(function(a,b){ return (a.be==null?1e9:a.be)-(b.be==null?1e9:b.be); });
+        var useN=0, seat=0; for(var ii=0; ii<sorted.length; ii++){ useN++; seat+=sorted[ii].cap||0; if(seat>=bk0) break; }
+        var use=sorted.slice(0,Math.max(1,useN));
+        if(use.some(function(x){ return x.be==null; })) never=true; else use.forEach(function(x){ be+=x.be; });
+      }
+      var c={d:d,rid:rid,cap:A.totalCapacity||0,bk:A.seatsConsumed||0,av:A.seatsAvailable||0,
+             pct:A.totalCapacity?Math.round((A.seatsConsumed||0)/A.totalCapacity*100):0,
+             be:unk?null:be, need:unk?null:Math.max(0,be-(A.seatsConsumed||0)), boats:byR[rid].boats.length,
+             plus:keyed[d+'|'+rid]||0, wx:byR[rid].wx, price:price, never:(!unk&&never)};
+      if(c.wx){ c.st='wx'; c.need=null; }
+      else if(c.bk<=0){ c.st='idle'; c.need=null; }
+      else if(!unk && never){ c.st='never'; c.be=null; c.need=null; }   /* §ddBE2 · มีแผน มีราคา แต่ไม่คุ้มแม้เต็มลำ */
+      else c.st=(c.need==null)?'unk':(c.need<=0?'ok':(c.need<=5?'warn':'bad'));
+      cells[d+'|'+rid]=c; rids[rid]=1;
+      var T=colTot[d];
+      if(c.st==='wx') return;
+      if(c.st==='idle'){ T.idle++; return; }
+      T.cap+=c.cap; T.bk+=c.bk; T.av+=c.av; T.n++; if(c.need==null){ T.unk++; if(c.st==='never') T.never=(T.never||0)+1; } else T.need+=c.need; });
+  });
+  var routes=Object.keys(rids).map(function(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null;
+    var pier=(r&&r.pier)||'', bes=[]; days.forEach(function(d){ var c=cells[d+'|'+rid]; if(c&&c.be!=null) bes.push(c.be); });
+    var nev=days.some(function(d){ var c=cells[d+'|'+rid]; return c&&c.st==='never'; });
+    return {rid:rid,name:(r&&r.name)||rid,color:(r&&r.color)||'#7d7a74',pier:pier,never:nev,
+      pierNm:(typeof VB_PIER_TH!=='undefined'&&VB_PIER_TH[pier])?VB_PIER_TH[pier]:pier,
+      be:bes.length?Math.round(bes.reduce(function(a,b){return a+b;},0)/bes.length):null}; });
+  routes.sort(function(a,b){ return (a.pier+a.name)<(b.pier+b.name)?-1:1; });
+  var tot={cap:0,bk:0,av:0,need:0,short:[],full:[],near:[],idle:[],wx:[],never:[],unk:[]};
+  Object.keys(cells).forEach(function(k){ var c=cells[k];
+    if(c.st==='wx'){ tot.wx.push(c); return; }
+    if(c.st==='idle'){ tot.idle.push(c); return; }   /* §ddIdle · ลำที่ยังไม่มีใครจอง ไม่เข้ายอด */
+    if(c.st==='never') tot.never.push(c); else if(c.st==='unk') tot.unk.push(c);
+    tot.cap+=c.cap; tot.bk+=c.bk; tot.av+=c.av;
+    if(c.need>0){ tot.need+=c.need; tot.short.push(c); }
+    if(c.av<=0) tot.full.push(c); else if(c.av<=5) tot.near.push(c); });
+  tot.short.sort(function(a,b){ return b.need-a.need; });
+  /* เส้นทางที่เต็ม 80%+ ทุกวันที่มีเที่ยว · ของดีที่ควรพูดก่อน */
+  var good=routes.filter(function(r){ var ds=days.filter(function(d){ var c=cells[d+'|'+r.rid]; return !!c && c.st!=='idle' && c.st!=='wx'; });
+    return ds.length>=2 && ds.every(function(d){ return cells[d+'|'+r.rid].pct>=80; }); });
+  return {n:n,pax:pax,val:val,S:S,topAg:topAg,topAgs:topAgs,topRt:topRt,travel:travel,travelM:travelM,w7:w7,peak:peak,later:later,
+          days:days,cells:cells,routes:routes,colTot:colTot,tot:tot,good:good};
+}
+function _ddCellName(c){ var r=(typeof getRoute==='function')?getRoute(c.rid):null; return (r&&r.name)||c.rid; }
+/* ── ก้อน 1 · bullet + ตัวเลข + ต้องทำ (English · §ddEn) ── */
+function _ddExecHtml(rows,rg){
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  _ddBEC={};
+  var X=_ddExecData(rows,rg); window._ddExecX=X;
+  var M=_dashMoneyShort, N=function(v){ return Number(v||0).toLocaleString('en-US'); };
+  var pl=function(n,w){ return N(n)+' '+w+(n===1?'':'s'); };
+  var shB2B=X.val?Math.round(X.S.b2b.val/X.val*100):0;
+  var li=function(cls,lb,main,sub){ return '<li><i class="dot '+cls+'"></i><div><b class="lb">'+lb+'</b> '+main+(sub?('<div class="sub">'+sub+'</div>'):'')+'</div></li>'; };
+  /* 1 keyed today */
+  var b1=li('in','Keyed today',
+    X.n?('<b>'+pl(X.n,'booking')+' · '+N(X.pax)+' pax · '+M(X.val)+'</b> — B2B '+N(X.S.b2b.n)+' ('+shB2B+'%) from '+pl(X.S.b2b.ag,'agent')+' · B2C '+N(X.S.b2c.n)+' ('+(100-shB2B)+'%)')
+       :'<b>No bookings keyed in yet today</b>',
+    X.n?((X.topRt?('Top route <b>'+esc(X.topRt.k)+' '+pl(X.topRt.n,'booking')+(X.topRt.val?(' '+M(X.topRt.val)):'')+'</b>'):'')
+        +(X.topAgs.length?('<br>Top agents '+X.topAgs.map(function(a,i){ return '<b>'+(i+1)+'. '+esc(a.k)+'</b> '+(a.val?M(a.val):(N(a.n)+' bk')); }).join(' · ')):'')):'');
+  /* 2 travelling when */
+  var p7=X.n?Math.round(X.w7.n/X.n*100):0;
+  var b2=li('go','Travelling',
+    X.w7.n?('<b>'+pl(X.w7.n,'booking')+' · '+N(X.w7.pax)+' pax within 7 days</b> ('+p7+'% of today)'+(X.peak?(' — busiest <b>'+esc(X.peak.lbl)+' · '+N(X.peak.pax)+' pax</b>'):''))
+           :(X.n?'<b>None of today\'s bookings travel in the next 7 days</b>':'—'),
+    X.later.n?('Remaining '+pl(X.later.n,'booking')+' spread over '+esc(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' · '))):'');
+  /* 3 seats */
+  var nCells=Object.keys(X.cells).length;
+  var fillPct=X.tot.cap?Math.round(X.tot.bk/X.tot.cap*100):0;
+  var b3=nCells
+    ? li((X.good.length||X.tot.full.length)?'ok':'in',X.good.length?'Next 7 days · strong':'Next 7 days · seats',
+        (X.good.length?('<b>'+X.good.map(function(r){return esc(r.name);}).join(' · ')+' 80%+ full every day</b> · '):'')
+        +'<b>'+N(X.tot.av)+'</b> of '+N(X.tot.cap)+' seats open ('+fillPct+'% sold)'
+        +(X.tot.idle.length?(' · '+pl(X.tot.idle.length,'departure')+' with no bookings yet, not counted'):''),
+        (X.tot.full.length?('Full: '+X.tot.full.map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d); }).join(' · ')+' → consider adding a boat'):'')
+        +(X.tot.near.length?((X.tot.full.length?' · ':'')+'Nearly full: '+X.tot.near.map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' ('+c.av+' left)'; }).join(' · ')):''))
+    : li('ok','Next 7 days','<b>No boats assigned yet on the Boat Operation sheet</b> · assign boats to see open seats and break-even','');
+  /* 4 still to sell */
+  var b4=nCells ? (X.tot.short.length
+    ? li('bad','Next 7 days · still to sell','<b class="red">'+N(X.tot.need)+' pax across '+pl(X.tot.short.length,'departure')+'</b> to reach break-even on every boat',
+        '<span class="red2">'+X.tot.short.slice(0,6).map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' <b>short '+N(c.need)+'</b> ('+c.bk+'/'+c.cap+' booked)'; }).join(' · ')
+        +(X.tot.short.length>6?(' · '+(X.tot.short.length-6)+' more in the table'):'')+'</span>')
+    : li('ok','Next 7 days · break-even','<b>Every departure with a cost plan has reached break-even</b>','')) : '';
+  if(nCells && X.tot.never.length) b4+=li('bad','Check pricing','<b class="red">'+pl(X.tot.never.length,'departure')+' can\'t break even even when full</b> at the current average price',
+      '<span class="red2">'+X.tot.never.slice(0,5).map(function(c){ return esc(_ddCellName(c))+' '+_ddDLbl(c.d)+' <b>avg ฿'+N(c.price)+'/pax</b>'; }).join(' · ')+' · check the cost plan or the agent rates</span>');
+  /* KPI tiles */
+  var K=function(cls,l,v,u,nn){ return '<div class="k '+cls+'"><div class="l">'+l+'</div><div class="v">'+v+'<small>'+u+'</small></div><div class="n">'+nn+'</div></div>'; };
+  var kv='<div class="kv">'
+    +K('','Keyed today',N(X.n),'bookings · '+N(X.pax)+' pax',M(X.val)+(X.n?(' · avg '+M(X.val/X.n)+'/booking'):''))
+    +K('','Travel within 7 days',N(X.w7.n),'bookings · '+N(X.w7.pax)+' pax',p7+'% of today\'s bookings')
+    +K(nCells?(X.tot.cap&&X.tot.av/X.tot.cap>0.4?'warn':''):'','Open seats · 7 days',nCells?N(X.tot.av):'—','seats',nCells?('of '+N(X.tot.cap)+' · '+fillPct+'% sold'):'no boats assigned')
+    +K(X.tot.need>0?'bad':'','Still to sell',nCells?N(X.tot.need):'—','pax',nCells?(pl(X.tot.short.length,'departure')+' below break-even'):'no boats assigned')
+    +'</div>';
+  /* to-do · short → nearly full → full */
+  /* §ddTodo2 (2026-10-07) · เจ้าของ: "ปรับรายละเอียดนี้ให้เข้าใจง่ายขึ้น" · ของเดิมเป็นประโยคเดียวยาว ตัวเลขสามชุดปนกัน
+     ใหม่: บรรทัดแรก = วัน + เส้นทาง · ป้ายขวา = สิ่งที่ต้องทำเป็นคำสั่งสั้น ("Sell 22 more") · บรรทัดสอง = ตัวเลขประกอบ
+     + แถบสัดส่วนมีขีดจุดคุ้มทุน คนอ่านเห็นว่าห่างเส้นเท่าไหร่โดยไม่ต้องคิดเลข */
+  var acts=[];
+  var mk=function(c,kind){ var be=(c.be!=null)?c.be:null;
+    var o={c:kind==='short'?(c.need>5?'':'w'):(kind==='near'?'a':'g'), d:_ddDLbl(c.d,true), r:_ddCellName(c), bk:c.bk, cap:c.cap, av:c.av, be:be,
+      pct:Math.min(100,c.pct), bePct:(be!=null&&c.cap)?Math.min(100,Math.round(be/c.cap*100)):null, kind:kind};
+    if(kind==='short'){ o.pill='Sell '+N(c.need)+' more'; o.why='to reach break-even'; }
+    else if(kind==='near'){ o.pill=(c.av===1?'1 seat left':(c.av+' seats left')); o.why='close OTA sales'; }
+    else { o.pill='Full'; o.why='add a boat or stop sales'; }
+    return o; };
+  X.tot.short.slice(0,4).forEach(function(c){ acts.push(mk(c,'short')); });
+  X.tot.near.slice(0,2).forEach(function(c){ acts.push(mk(c,'near')); });
+  X.tot.full.slice(0,2).forEach(function(c){ acts.push(mk(c,'full')); });
+  acts=acts.slice(0,5);
+  var ah='<div class="acts"><div class="dv-ddh">To do today'+(acts.length?('<span>'+pl(acts.length,'departure')+'</span>'):'')+'</div>'
+    +(acts.length?acts.map(function(a,i){
+        return '<div class="act2 '+a.c+'" data-todo="'+a.kind+'"><i class="'+a.c+'">'+(i+1)+'</i>'
+          +'<div class="b"><div class="h"><b>'+esc(a.d)+'</b> · '+esc(a.r)+'</div>'
+          /* §ddRe · one line: bar with break-even tick, numbers at the end of the bar */
+          +'<div class="mr"><div class="m"><i style="width:'+a.pct+'%"></i>'+(a.bePct!=null?('<em style="left:'+a.bePct+'%" title="break-even '+N(a.be)+'"></em>'):'')+'</div>'
+          +'<span class="s">'+N(a.bk)+'/'+N(a.cap)+(a.be!=null?(' · BE '+N(a.be)):'')+' · '+N(a.av)+' open</span></div></div>'
+          +'<div class="p"><b>'+esc(a.pill)+'</b><small>'+esc(a.why)+'</small></div></div>'; }).join('')
+      :'<div class="act"><i class="g">✓</i><span>'+(nCells?'Nothing urgent to sell in the next 7 days':'Assign boats on the Boat Operation sheet first')+'</span></div>')
+    +'</div>';
+  /* §ddRe (2026-10-07) · KPI row on top, summary + to-do side by side, then travel dates + 7-day grid.
+     The whole block is sized to one screen by _ddFit(); Copy for LINE moved to the header row. */
+  return '<div class="dv-ddfit" id="dv-ddfit"><div class="dv-ddexec" data-dd="exec">'+kv
+      +'<div class="ex2"><div class="dv-c exc"><div class="dv-ddh">Executive Summary · '+esc(_ddDLbl(rg.to,true))+'</div>'
+        +'<ul class="bul">'+b1+b2+b3+b4+'</ul></div>'
+      +'<div class="dv-c exc">'+ah+'</div></div></div>'
+    +_ddExecRow2Html(X,rg,esc)+'</div>';
+}
+/* ── ก้อน 2+3 · travel dates + 7-day grid (English · §ddEn) ── */
+function _ddExecRow2Html(X,rg,esc){
+  var N=function(v){ return Number(v||0).toLocaleString('en-US'); };
+  var mx=0; X.travelM.forEach(function(m){ m.days.forEach(function(t){ if(t.pax>mx) mx=t.pax; }); });
+  var mxM=0; X.travelM.forEach(function(m){ if(m.pax>mxM) mxM=m.pax; });
+  var bar=function(t,m){ var w=m?Math.round(t.pax/m*100):0, wb=t.pax?Math.round(t.b2b/t.pax*w):0;
+    return '<span class="bar"><i style="width:'+wb+'%"></i><i class="b2c" style="left:'+wb+'%;width:'+(w-wb)+'%"></i></span>'; };
+  /* §ddTravel2 · หัวเดือน + วันใต้ · หัวเดือนกดพับ/กางได้ */
+  var tl=X.travelM.length?X.travelM.map(function(m){
+    if(m.k==='<') return '<div class="mg" data-m="<"><div class="r mh flat"><span class="dt">'+esc(m.lbl)+'<small>today or earlier</small></span>'
+        +bar(m,mxM)+'<span class="n">'+N(m.n)+' · '+N(m.pax)+'</span><span class="rt" title="'+esc(m.rts.join(' · '))+'">'+esc(m.rts.join(' · '))+'</span></div></div>';
+    return '<div class="mg'+(m.open?' open':'')+'" data-m="'+esc(m.k)+'">'
+      +'<div class="r mh" onclick="this.parentNode.classList.toggle(\'open\')"><span class="dt"><i class="chev"></i>'+esc(m.lbl)+'<small>'+m.days.length+(m.days.length===1?' day':' days')+'</small></span>'
+        +bar(m,mxM)+'<span class="n">'+N(m.n)+' · '+N(m.pax)+'</span><span class="rt" title="'+esc(m.rts.join(' · '))+'">'+esc(m.rts.join(' · '))+'</span></div>'
+      +m.days.map(function(t){
+        return '<div class="r day'+(t.soon?' soon':'')+'" data-k="'+esc(t.k)+'"><span class="dt">'+esc(t.lbl)+(t.sub?('<small>'+esc(t.sub)+'</small>'):'')+'</span>'
+          +bar(t,mx)+'<span class="n">'+N(t.n)+' · '+N(t.pax)+'</span><span class="rt" title="'+esc(t.rts.join(' · '))+'">'+esc(t.rts.join(' · '))+'</span></div>'; }).join('')
+      +'</div>'; }).join('')
+    :'<div class="dv-ddnone">No bookings keyed in today</div>';
+  var left='<div class="dv-c dv-ddtrav" data-dd="travel"><div class="dv-ddh">Today\'s bookings · travel date<span>'+N(X.n)+' bookings · '+X.travelM.length+' months</span></div>'
+    +'<div class="tl"><div class="r hd"><span>Travel date</span><span>pax · B2B / B2C</span><span style="text-align:right">bk · pax</span><span>Main routes</span></div>'+tl+'</div>'
+    +'<div class="lg"><span><i style="background:#1272B3"></i>B2B</span><span><i style="background:#C2416B"></i>B2C</span><span style="margin-left:auto">grey rows = within 7 days · click a month to fold</span></div></div>';
+  var head='<tr><th class="l">Route</th>'+X.days.map(function(d,i){ var dd=new Date(d+'T00:00:00');
+    return '<th'+(i===0?' class="first"':'')+'>'+_DD_WD[dd.getDay()]+'<span class="dd">'+dd.getDate()+'</span></th>'; }).join('')+'</tr>';
+  var pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong'};
+  var body=X.routes.map(function(r){
+    return '<tr data-rid="'+esc(r.rid)+'"><td class="l"><div class="rn"><i style="background:'+esc(r.color)+'"></i>'+esc(r.name)+'<small>'+esc(pierEn[r.pier]||r.pier||'')+(r.be!=null?(' · break-even ~'+N(r.be)+' pax'):(r.never?' · won\'t break even at current price':' · no cost plan'))+'</small></div></td>'
+      +X.days.map(function(d){ var c=X.cells[d+'|'+r.rid];
+        if(!c) return '<td><div class="c off">no trip</div></td>';
+        var bePct=(c.be!=null&&c.cap)?Math.min(100,Math.round(c.be/c.cap*100)):null;
+        if(c.st==='wx') return '<td><div class="c off" data-cell="'+esc(d+'|'+r.rid)+'">weather closed</div></td>';
+        if(c.st==='idle') return '<td><div class="c idle" data-cell="'+esc(d+'|'+r.rid)+'" title="A boat is on the board but nobody has booked · not counted until the first booking">'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')+'<div class="top2"><span class="bk">0<small>/'+N(c.cap)+'</small></span></div><div class="ft"><b class="mut">no bookings yet</b></div></div></td>';
+        var ft=(c.st==='unk')?'<b class="mut">no cost plan</b>':(c.st==='never'?'<b title="At the current average price this boat does not break even even when full · check the cost plan or the rates">won\'t break even</b>':(c.need>0?('<b>short '+N(c.need)+'</b>'):(c.av<=0?'<b>full</b>':(c.av<=5?'<b>nearly full</b>':'<b>break-even ✓</b>'))));
+        return '<td><div class="c '+c.st+'" data-cell="'+esc(d+'|'+r.rid)+'"'+(c.price?(' title="avg price ฿'+N(c.price)+'/pax from bookings'+(c.be!=null?(' · break-even '+N(c.be)+' pax'):'')+'"'):'')+'>'+(c.plus?('<span class="tag">+'+N(c.plus)+'</span>'):'')
+          +'<div class="top2"><span class="bk">'+N(c.bk)+'<small>/'+N(c.cap)+'</small></span><span class="pct">'+c.pct+'%</span></div>'
+          +'<div class="m"><i style="width:'+Math.min(100,c.pct)+'%"></i>'+(bePct!=null?('<em style="left:'+bePct+'%"></em>'):'')+'</div>'
+          +'<div class="ft"><span>'+N(c.av)+' open</span>'+ft+'</div></div></td>'; }).join('')+'</tr>'; }).join('');
+  var totRow='<tr class="tot"><td class="l"><div class="rn">All routes<small>boats assigned that day</small></div></td>'
+    +X.days.map(function(d){ var T=X.colTot[d]; if(!T||!T.n) return '<td><div class="c off">—</div></td>';
+      var pct=T.cap?Math.round(T.bk/T.cap*100):0;
+      return '<td><div class="c"><div class="top2"><span class="bk">'+N(T.bk)+'<small>/'+N(T.cap)+'</small></span><span class="pct">'+pct+'%</span></div><div class="m"><i style="width:'+Math.min(100,pct)+'%"></i></div>'
+        +'<div class="ft"><span>'+N(T.av)+' open</span><b>'+(T.need>0?('short '+N(T.need)):'all at break-even')+(T.unk?' *':'')+'</b></div></div></td>'; }).join('')+'</tr>';
+  /* §ddIdle · แถวรวม: วันที่มีแต่ลำว่างเปล่า (n=0) แสดงขีด · ลำที่ยังไม่มีคนจองไม่อยู่ในยอด */
+  var right='<div class="dv-c dv-ddgrid" data-dd="grid"><div class="dv-ddh">Next 7 days · open seats and still to sell'
+      +'<span>'+X.routes.length+' routes with boats · '+esc(_ddDLbl(X.days[0]))+' – '+esc(_ddDLbl(X.days[6],true))+'</span></div>'
+    +(X.routes.length
+      ? ('<div class="gw"><table><thead>'+head+'</thead><tbody>'+body+totRow+'</tbody></table></div>'
+        +'<div class="lg"><span><i style="background:#2E9C78"></i>at break-even</span><span><i style="background:#D9952B"></i>short ≤ 5</span><span><i style="background:#C8473C"></i>short &gt; 5</span><span><i style="background:#F7F7F5;border:1px dashed #CFCFC8"></i>no bookings yet · not counted</span><span><i style="background:#8E3A6B"></i>won\'t break even at current price</span><span><i class="be"></i>break-even line</span><span><i class="pl"></i>+N = keyed today</span><span style="margin-left:auto">seats from boats on the Boat Operation sheet · break-even from the cost plan at the day\'s real average price (hover a cell)</span></div>')
+      : '<div class="dv-ddnone">No boats assigned on the Boat Operation sheet for the next 7 days</div>')
+    +'</div>';
+  return '<div class="dv-ddexr2">'+left+right+'</div>';
+}
+/* §ddLine (2026-10-07) · เจ้าของส่งภาพจากมือถือ: ข้อความยาว ไล่ทีละเส้นทาง อ่านบนจอแคบไม่ออก
+   จัดใหม่ · ตัวเลขหลัก 3 บรรทัดบน · ส่วน 7 วันข้างหน้า "เรียงตามวัน" บรรทัดละวัน ใช้รหัสเส้นทางสั้น
+   (PP / MT / PB / SM / SR ตามใบวางบิล) · ช่องไหนขาด/ใกล้เต็ม/เต็ม อยู่บรรทัดวันนั้น · มีคำอธิบายรหัสท้ายข้อความ
+   §ddEn · เป็นอังกฤษทั้งข้อความ */
+function _ddLineCode(rid){
+  var c=(typeof vbCode==='function')?vbCode(rid):null;
+  if(c && c.c && c.c!=='—') return c.c;
+  var r=(typeof getRoute==='function')?getRoute(rid):null, nm=String((r&&r.name)||rid);
+  return nm.split(/\s+/).slice(0,2).map(function(w){ return w.charAt(0); }).join('').toUpperCase()||rid;
+}
+window.dashDayDetailLineText=function(){
+  /* §ddLine2 (2026-10-07) · เจ้าของ: "ต้องจัดเรียง แบ่ง Bullet ให้ชัดเจน" · แบ่งเป็น 4 หมวด หัวหมวดขึ้นบรรทัดเอง
+     หนึ่งข้อ = หนึ่งบรรทัด (บนมือถือบรรทัดยาวจะหักกลางตัวเลข) · TO DO แยกตามวัน หัววันแล้วตามด้วยข้อย่อยรายเส้นทาง
+     §ddEmoji · เจ้าของ: "เพิ่ม Emoji ให้เห็นว่าอันไหนต้องให้ความสนใจ" · อีโมจิเป็น "ระดับความเร่ง" ไม่ใช่ตกแต่ง
+       🔴 ขาดเกิน 5 · 🟠 ขาดไม่เกิน 5 · ⚠️ ใกล้เต็ม (เหลือ ≤5) · ✅ เต็ม (§ddFullOk) · ✅ ครบแล้ว · ⚪ ยังไม่มีคนจอง · 🔥 วันหนาแน่น
+     §ddTop5 · Top agents 5 เจ้า 🥇🥈🥉 4. 5. */
+  var X=window._ddExecX; if(!X) return '';
+  var rg=_ddRg(), N=function(v){ return Number(v||0).toLocaleString('en-US'); }, M=_dashMoneyShort;
+  var L=['📋 Booking summary · '+_ddDLbl(rg.to,true)+' · LOVE Andaman',''];
+  L.push('🧾 KEYED TODAY');
+  L.push('• '+N(X.n)+' bookings · '+N(X.pax)+' pax · '+M(X.val));
+  L.push('• B2B '+N(X.S.b2b.n)+' · B2C '+N(X.S.b2c.n));
+  if(X.topRt) L.push('• Top route: '+X.topRt.k+' · '+N(X.topRt.n)+' bk');
+  if(X.topAgs.length){ L.push('• Top agents:'); var MED=['🥇','🥈','🥉','4.','5.'];
+    X.topAgs.forEach(function(a,i){ L.push('  '+MED[i]+' '+a.k+' · '+(a.val?M(a.val):(N(a.n)+' bk'))+(a.val?(' · '+N(a.n)+' bk'):'')); }); }
+  L.push('');
+  L.push('🧳 TRAVELLING');
+  L.push('• Within 7 days: '+N(X.w7.n)+' bookings · '+N(X.w7.pax)+' pax');
+  if(X.peak) L.push('• 🔥 Peak: '+X.peak.lbl+' · '+N(X.peak.pax)+' pax');
+  if(X.later.n) L.push('• Later: '+N(X.later.n)+' bookings · '+(X.later.months.length>3?(X.later.months[0]+' – '+X.later.months[X.later.months.length-1]):X.later.months.join(' / ')));
+  L.push('');
+  L.push('🚤 NEXT 7 DAYS');
+  if(Object.keys(X.cells).length){
+    L.push('• Open seats: '+N(X.tot.av)+' / '+N(X.tot.cap));
+    L.push(X.tot.need>0?('• 🔴 Still to sell: '+N(X.tot.need)+' pax ('+X.tot.short.length+' departures)'):'• ✅ All departures at break-even');
+    if(X.tot.idle.length) L.push('• ⚪ No bookings yet: '+X.tot.idle.length+' departures (not counted)');
+    if(X.tot.never.length) L.push('• 🟣 Below cost even when full: '+X.tot.never.length+' dep. · check pricing');
+    var used={}, todo=[];
+    X.days.forEach(function(d){
+      var bits=[];
+      X.routes.forEach(function(r){ var c=X.cells[d+'|'+r.rid]; if(!c || c.st==='idle' || c.st==='wx') return;
+        var code=_ddLineCode(r.rid);
+        var s='';
+        if(c.av<=0) s='✅ '+code+' FULL';   /* §ddFullOk · เจ้าของ: "อันไหน FULL ให้เป็นเครื่องหมายถูกสีเขียว" · เต็ม = ข่าวดี ไม่ใช่ป้ายห้าม */
+        /* §ddLineWhy · เจ้าของถาม "short 2 คืออะไร" · เขียนเป็นคำสั่งเหมือนการ์ดในแอป
+           แล้วสั่งต่อ "ไม่ต้องบอก BE · ระบุจำนวนเต็มที่รับได้" → "sell 1 more · 29 open · 11/40"
+           = ขายเพิ่มอย่างน้อย 1 คนถึงคุ้ม · รับได้อีก 29 · จองแล้ว 11 จาก 40 */
+        else if(c.need>5) s='🔴 '+code+' sell '+N(c.need)+' more · '+N(c.av)+' open · '+c.bk+'/'+c.cap;
+        else if(c.need>0) s='🟠 '+code+' sell '+N(c.need)+' more · '+N(c.av)+' open · '+c.bk+'/'+c.cap;
+        else if(c.av<=5) s='⚠️ '+code+' '+c.av+' left · '+c.bk+'/'+c.cap;
+        else return;
+        used[code]=r.name; bits.push('• '+s); });
+      if(bits.length){ todo.push(_ddDLbl(d)); todo=todo.concat(bits); } });
+    if(todo.length){ L.push(''); L.push('🎯 TO DO'); L=L.concat(todo);
+      var codes=Object.keys(used); if(codes.length){ L.push(''); codes.forEach(function(k){ L.push(k+' = '+used[k]); }); }
+      L.push('sell N more = pax needed to break even'); L.push('open = seats still sellable · booked/seats'); }
+    else { L.push(''); L.push('🎯 TO DO'); L.push('• ✅ Nothing urgent'); }
+  } else L.push('• ⚪ No boats assigned yet');
+  return L.join('\n');
+};
+window.dashDayDetailCopy=function(){
+  var txt=window.dashDayDetailLineText(); if(!txt) return;
+  var done=function(){ if(typeof flShowToast==='function') flShowToast('Summary copied · paste it in the LINE group'); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,function(){ window._ddCopyFallback(txt,done); }); return; } }catch(_){}
+  window._ddCopyFallback(txt,done);
+};
+window._ddCopyFallback=function(txt,done){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }catch(_){} };
 function _ddBodyHtml(){
   var rows=_ddRows();
   var S={b2c:_ddSum(rows,'b2c'), b2b:_ddSum(rows,'b2b')};
   var tot=S.b2c.val+S.b2b.val;
   var side=window._ddSide||'b2b';
-  return '<div class="dv-ddsums">'+_ddSumCard('b2c',S.b2c,tot,side==='b2c')
+  var rg=_ddRg();
+  return (rg.days===1?_ddExecHtml(rows,rg):'')   /* §ddExec · สรุปผู้บริหารเฉพาะมุมมองวันเดียว */
+    +'<div class="dv-ddsums">'+_ddSumCard('b2c',S.b2c,tot,side==='b2c')
       +_ddSumCard('b2b',S.b2b,tot,side==='b2b')+'</div>'
     +_ddSideBlock(rows,side);
 }
@@ -1849,19 +2262,20 @@ function _ddHeadHtml(){
       +'onclick="dashDayDetailPreset(\''+p.k+'\')">'+p.n+'</span>'; }).join('');
   var arw=rg.days>1?laTp('ช่วงก่อนหน้า ({0} วัน)', rg.days):laT('วันก่อนหน้า');
   var arwN=rg.days>1?laTp('ช่วงถัดไป ({0} วัน)', rg.days):laT('วันถัดไป');
-  return '<div class="dv-ddhr1">'
+  return '<div class="dv-ddhr1"><span class="dv-ddl">'
     +'<button class="dv-arw" onclick="dashDayDetailShift(-1)" title="'+arw+'">&lsaquo;</button>'
     +'<span class="dv-ddnum'+(L.wide?' w':'')+'">'+L.num+'</span>'
     +'<span class="dv-dddgrp"><b class="dv-dddwk">'+L.wk+'</b>'
       +'<span class="dv-dddmo">'+L.mo+'</span></span>'
-    +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button>'
-    +'<span class="dv-ddttl">'+(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))
-      +'<i>'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
-                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'</i></span>'
+    +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button></span>'
+    /* §ddRe · centre wordmark like Boat Operation: LOVE ANDAMAN over the page name */
+    +'<span class="dv-ddttl" title="'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
+                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'"><i class="wm">LOVE ANDAMAN</i>'
+      +(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))+'</span>'
     +'<span class="dv-ddkpi">'
       +'<span class="dv-chip"><b>'+ok.length+'</b> '+laT('ใบ')+'</span>'
       +'<span class="dv-chip"><b>'+pax+'</b> pax</span>'
-      +'<span class="dv-chip"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
+      +'<span class="dv-chip money"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
       +(cxl?('<span class="dv-chip warn"><b>'+cxl+'</b> '+laT('ยกเลิก')+'</span>'):'')
       +'<button class="dv-ddx" onclick="dashDayDetailClose()" title="'+laT('ปิด')+'">&times;</button>'
     +'</span></div>'
@@ -1874,6 +2288,7 @@ function _ddHeadHtml(){
           +'onchange="dashDayDetailSetRange(\'from\',this.value)">'
         +'<i>'+laT('ถึง','date')+'</i><input type="date" value="'+rg.to+'" min="'+rg.from+'" '
           +'onchange="dashDayDetailSetRange(\'to\',this.value)">'
+        +(rg.days===1?'<button class="dv-ddbtn" onclick="dashDayDetailCopy()">Copy for LINE</button>':'')
       +'</span>'
     +'</div>';
 }
@@ -1897,16 +2312,34 @@ window.dashOpenDayDetail=function(side){
   }
   window._ddPaint();
   ov.style.display='block';
+  document.body.classList.add('dd-open');   /* §ddBadge · hide the user badge while this sheet is open */
+  window._ddFit();
 };
+/* §ddFit (2026-10-07) · the summary block fills exactly one screen: the travel-date list and the 7-day
+   grid take what is left under the summary and scroll inside their own cards. Narrow screens: no fixed height. */
+window._ddFit=function(){
+  try{
+    var bd=document.getElementById('dv-ddbd'), fit=document.getElementById('dv-ddfit');
+    if(!bd||!fit) return;
+    var r2=fit.querySelector('.dv-ddexr2'); if(!r2) return;
+    r2.style.height='';
+    if(window.innerWidth<1101 || !bd.clientHeight) return;
+    var top=r2.getBoundingClientRect().top-bd.getBoundingClientRect().top+bd.scrollTop;
+    r2.style.height=Math.max(320,Math.floor(bd.clientHeight-14-top))+'px';
+  }catch(_){}
+};
+if(!window._ddFitOn){ window._ddFitOn=1; window.addEventListener('resize', function(){ window._ddFit(); }, {passive:true}); }
 window._ddKey=function(e){ if(e.key==='Escape') window.dashDayDetailClose(); };
 window._ddPaint=function(){
   var hd=document.getElementById('dv-ddhd'), bd=document.getElementById('dv-ddbd');
   if(hd) hd.innerHTML=_ddHeadHtml();
   if(bd) bd.innerHTML=_ddBodyHtml();
+  if(window._ddFit) window._ddFit();
 };
 window.dashDayDetailPick=function(side){
   window._ddSide=side;
   var bd=document.getElementById('dv-ddbd'); if(bd) bd.innerHTML=_ddBodyHtml();
+  if(window._ddFit) window._ddFit();
 };
 /* เลื่อนวันในป๊อปอัป · ขยับ _dashDate ตัวเดียวกับแถบหัวหน้า Dashboard แล้ววาดทั้งสองที่
    ปิดป๊อปอัปแล้วหน้าข้างหลังต้องอยู่วันเดียวกัน ไม่ใช่เด้งกลับวันเดิม */
@@ -1928,6 +2361,7 @@ window.dashDayDetailClose=function(){
   var ov=document.getElementById('dv-ddov'); if(!ov) return;
   document.removeEventListener('keydown', window._ddKey);
   ov.remove();
+  document.body.classList.remove('dd-open');
 };
 
 window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bookingV2SwitchTab==='function')bookingV2SwitchTab('approvals'); };
@@ -2440,6 +2874,269 @@ const DV_CSS=`<style>
   .dv-ddbd::-webkit-scrollbar{width:6px}
   .dv-ddbd::-webkit-scrollbar-thumb{background:rgba(255,255,255,.30);border-radius:4px}
   /* ── การ์ดสรุปสองใบ · อยู่คู่กันเสมอ ── */
+  /* ── §ddExec · Executive Summary ── */
+  .dv-ddexec{padding:11px 13px 12px;flex:none}
+  .dv-ddexec .dv-ddexb{margin-left:auto;background:none;padding:0}
+  .dv-ddbtn{border:1px solid #D7DAE6;background:#fff;border-radius:8px;padding:4px 10px;font-size:10.5px;font-weight:800;color:#000F4C;cursor:pointer;font-family:inherit;letter-spacing:0;text-transform:none}
+  .dv-ddbtn:hover{background:#F6F7FB}
+  .dv-ddexec .ex3{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:12px}
+  .dv-ddexec .bul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .dv-ddexec .bul li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.5;color:#1F2430;padding:8px 11px;border-radius:10px;background:#F6F7FB;font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif;letter-spacing:.005em}
+  .dv-ddexec .bul .dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:6px;background:#3E7FBF}
+  .dv-ddexec .bul .dot.go{background:#C2557C}.dv-ddexec .bul .dot.ok{background:#2E9B72}.dv-ddexec .bul .dot.bad{background:#D64545}
+  .dv-ddexec .bul .lb{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7a736c;margin-right:7px;vertical-align:1px}
+  .dv-ddexec .bul b{color:#000F4C}.dv-ddexec .bul .red,.dv-ddexec .bul .red2 b{color:#B42318}
+  .dv-ddexec .bul .sub{font-size:12px;color:#4C5377;margin-top:2px;line-height:1.45}
+  .dv-ddexec .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+  .dv-ddexec .k{background:#F6F7FB;border-radius:10px;padding:9px 11px}
+  .dv-ddexec .k .l{font-size:9.5px;color:#7a736c;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+  .dv-ddexec .k .v{font-family:'DM Mono',ui-monospace,monospace;font-size:20px;font-weight:800;color:#000F4C;margin-top:2px;line-height:1.1}
+  .dv-ddexec .k .v small{font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:600;color:#7a736c;margin-left:4px}
+  .dv-ddexec .k .n{font-size:10px;color:#4C5377;margin-top:2px}
+  .dv-ddexec .k.warn{background:#FFF4EC}.dv-ddexec .k.warn .v{color:#B45309}
+  .dv-ddexec .k.bad{background:#FDECEC}.dv-ddexec .k.bad .v{color:#B42318}
+  .dv-ddexec .acts{display:flex;flex-direction:column;gap:6px}
+  .dv-ddexec .acts .ct{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7a736c}
+  .dv-ddexec .act{display:flex;gap:8px;align-items:flex-start;background:#F6F7FB;border-radius:10px;padding:7px 10px;font-size:12px;line-height:1.45}
+  .dv-ddexec .act i{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:800;color:#fff;background:#D64545;margin-top:1px}
+  .dv-ddexec .act i.a{background:#E0A21E}.dv-ddexec .act i.g{background:#2E9B72}
+  .dv-ddexec .act b{color:#000F4C}
+  /* §ddTodo2 · การ์ด to-do · เลข | เนื้อ (หัว · แถบ · ตัวเลข) | ป้ายคำสั่ง */
+  .dv-ddexec .act2{display:grid;grid-template-columns:18px 1fr auto;gap:9px;align-items:center;background:#F6F7FB;border-radius:10px;padding:8px 10px 7px;border-left:4px solid #D64545}
+  .dv-ddexec .act2.w{border-left-color:#E0A21E}.dv-ddexec .act2.a{border-left-color:#E0A21E}.dv-ddexec .act2.g{border-left-color:#2E9B72}
+  .dv-ddexec .act2>i{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:800;color:#fff;background:#D64545}
+  .dv-ddexec .act2>i.w,.dv-ddexec .act2>i.a{background:#E0A21E}.dv-ddexec .act2>i.g{background:#2E9B72}
+  .dv-ddexec .act2 .b{min-width:0}
+  .dv-ddexec .act2 .h{font-size:12.5px;color:#1F2430;line-height:1.3}
+  .dv-ddexec .act2 .h b{color:#000F4C}
+  /* §ddBEmark · ขีดจุดคุ้มทุนมีป้าย "BE 30" ลอยเหนือแถบ · เส้นหนาขึ้น ยื่นเหนือ/ใต้แถบ · เจ้าของ: "ขีดให้รู้ว่าเป็น Breakeven ให้เห็นชัดกว่านี้" */
+  .dv-ddexec .act2 .m{height:6px;border-radius:3px;background:#E3E6F0;margin:16px 0 4px;position:relative;overflow:visible}
+  .dv-ddexec .act2 .m i{border-radius:3px}
+  .dv-ddexec .act2 .m u{position:absolute;top:-15px;transform:translateX(-50%);text-decoration:none;pointer-events:none}
+  .dv-ddexec .act2 .m u s{display:block;text-decoration:none;font:800 8.5px/1 'DM Mono',ui-monospace,monospace;color:#fff;background:#000F4C;border-radius:4px;padding:2px 4px;white-space:nowrap;letter-spacing:.02em}
+  .dv-ddexec .act2 .m u s::after{content:'';position:absolute;left:50%;bottom:-3px;width:0;height:0;margin-left:-3px;border-left:3px solid transparent;border-right:3px solid transparent;border-top:3px solid #000F4C}
+  .dv-ddexec .act2 .m i{position:absolute;left:0;top:0;bottom:0;background:#D64545;border-radius:3px}
+  .dv-ddexec .act2.w .m i,.dv-ddexec .act2.a .m i{background:#E0A21E}.dv-ddexec .act2.g .m i{background:#2E9B72}
+  .dv-ddexec .act2 .m em{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1px;background:#000F4C;border-radius:2px;opacity:.95}
+  .dv-ddexec .act2 .s{display:flex;gap:10px;font-size:10.5px;color:#6B7390;white-space:nowrap}
+  .dv-ddexec .act2 .s b{color:#1F2430;font-family:'DM Mono',ui-monospace,monospace;font-weight:700}
+  .dv-ddexec .act2 .p{text-align:right;min-width:86px}
+  .dv-ddexec .act2 .p b{display:block;font-size:12.5px;font-weight:800;color:#B42318;white-space:nowrap}
+  .dv-ddexec .act2.w .p b,.dv-ddexec .act2.a .p b{color:#B45309}.dv-ddexec .act2.g .p b{color:#1A7F4B}
+  .dv-ddexec .act2 .p small{display:block;font-size:9.5px;color:#6B7390;white-space:nowrap}
+  .dv-ddexr2{display:grid;grid-template-columns:1fr 2.1fr;gap:9px;flex:none}
+  .dv-ddtrav,.dv-ddgrid{padding:11px 13px 12px}
+  .dv-ddnone{font-size:12px;color:#9b9088;padding:14px 4px}
+  .dv-ddtrav .tl{display:flex;flex-direction:column;gap:4px}
+  .dv-ddtrav .r{display:grid;grid-template-columns:92px 1fr 64px 1fr;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}
+  .dv-ddtrav .r.hd{font-size:9.5px;font-weight:800;color:#7a736c;letter-spacing:.05em;text-transform:uppercase;padding-bottom:1px}
+  .dv-ddtrav .r.soon{background:#F6F7FB}
+  /* §ddTravel2 · สองชั้น */
+  .dv-ddtrav .mg{border-top:1px solid #EEF0F5;padding-top:3px;margin-top:2px}
+  .dv-ddtrav .mg:first-child{border-top:0;margin-top:0}
+  .dv-ddtrav .r.mh{cursor:pointer;background:#EEF0F7;border-radius:8px}
+  .dv-ddtrav .r.mh .dt{font-size:12.5px}
+  .dv-ddtrav .r.mh{grid-template-columns:118px 1fr 64px 1fr}
+  .dv-ddtrav .r.mh.flat{cursor:default;background:#F6F7FB}
+  .dv-ddtrav .r.mh .dt small{display:inline;margin-left:6px;font-size:9.5px;color:#7a736c;font-weight:500}
+  .dv-ddtrav .r.mh .chev{display:inline-block;width:0;height:0;border-left:5px solid #000F4C;border-top:4px solid transparent;border-bottom:4px solid transparent;margin-right:6px;transition:transform .15s}
+  .dv-ddtrav .mg.open .r.mh .chev{transform:rotate(90deg)}
+  .dv-ddtrav .r.day{display:none;grid-template-columns:94px 1fr 64px 1fr;padding-left:24px}
+  .dv-ddtrav .r.day .dt{font-weight:600;font-size:11.5px}
+  .dv-ddtrav .r.day .dt::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#C9CCDA;margin-right:6px;vertical-align:1px}
+  .dv-ddtrav .r.day.soon .dt::before{background:#3E7FBF}
+  .dv-ddtrav .mg.open .r.day{display:grid}
+  .dv-ddtrav .dt{font-weight:800;color:#000F4C;font-size:12px}
+  .dv-ddtrav .dt small{display:block;font-weight:500;color:#7a736c;font-size:9.5px}
+  .dv-ddtrav .bar{height:7px;border-radius:4px;background:#EFEBE7;position:relative;overflow:hidden}
+  .dv-ddtrav .bar i{position:absolute;left:0;top:0;bottom:0;background:#3E7FBF;border-radius:4px}
+  .dv-ddtrav .bar i.b2c{background:#C2557C}
+  .dv-ddtrav .n{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;color:#3a3a36;text-align:right;white-space:nowrap}
+  .dv-ddtrav .rt{font-size:10px;color:#7a736c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddtrav .lg,.dv-ddgrid .lg{display:flex;gap:12px;font-size:10px;color:#7a736c;margin-top:6px;align-items:center;flex-wrap:wrap}
+  .dv-ddtrav .lg i,.dv-ddgrid .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .dv-ddgrid .lg i.be{width:2px;background:#000F4C;opacity:.55}.dv-ddgrid .lg i.pl{background:#3E7FBF;border-radius:999px}
+  .dv-ddgrid .gw{overflow-x:auto}
+  .dv-ddgrid table{width:100%;border-collapse:separate;border-spacing:0 4px;font-size:11.5px;min-width:760px}
+  .dv-ddgrid th{font-size:9.5px;font-weight:800;color:#7a736c;letter-spacing:.05em;text-transform:uppercase;text-align:center;padding:0 3px 2px}
+  .dv-ddgrid th.l,.dv-ddgrid td.l{text-align:left}
+  .dv-ddgrid th .dd{display:block;font-size:14px;color:#000F4C;letter-spacing:0;font-family:'DM Mono',ui-monospace,monospace}
+  .dv-ddgrid th.first .dd{color:#3E7FBF}
+  .dv-ddgrid td{padding:0 2px;vertical-align:top}
+  .dv-ddgrid td.l{padding-right:6px;width:150px}
+  .dv-ddgrid .rn{font-weight:800;color:#000F4C;font-size:11.5px;line-height:1.2}
+  .dv-ddgrid .rn i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .dv-ddgrid .rn small{display:block;font-weight:500;color:#7a736c;font-size:9.5px}
+  .dv-ddgrid .c{border-radius:8px;padding:6px 7px 5px;background:#F6F7FB;min-height:56px;position:relative}
+  .dv-ddgrid .c .top2{display:flex;justify-content:space-between;align-items:baseline}
+  .dv-ddgrid .c .bk{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;font-size:13px;color:#000F4C}
+  .dv-ddgrid .c .bk small{font-size:9.5px;font-weight:600;color:#7a736c}
+  .dv-ddgrid .c .pct{font-size:9.5px;font-weight:700;color:#7a736c}
+  .dv-ddgrid .c .m{height:5px;border-radius:3px;background:#E3E6F0;margin:4px 0 3px;position:relative;overflow:hidden}
+  .dv-ddgrid .c .m i{position:absolute;left:0;top:0;bottom:0;background:#2E9B72;border-radius:3px}
+  .dv-ddgrid .c .m em{position:absolute;top:-2px;bottom:-2px;width:2px;background:#000F4C;opacity:.55}
+  .dv-ddgrid .c .ft{font-size:10px;color:#4C5377;display:flex;justify-content:space-between;gap:4px}
+  .dv-ddgrid .c .ft b{font-weight:800;color:#2E9B72;white-space:nowrap}.dv-ddgrid .c .ft b.mut{color:#9b9088;font-weight:600}
+  .dv-ddgrid .c.bad{background:#FDECEC}.dv-ddgrid .c.bad .m i{background:#D64545}.dv-ddgrid .c.bad .ft b{color:#B42318}
+  .dv-ddgrid .c.warn{background:#FFF4EC}.dv-ddgrid .c.warn .m i{background:#E0A21E}.dv-ddgrid .c.warn .ft b{color:#B45309}
+  .dv-ddgrid .c.unk .m i{background:#9b9088}
+  .dv-ddgrid .c.never{background:#FBE9F0}.dv-ddgrid .c.never .m i{background:#8E3A6B}.dv-ddgrid .c.never .ft b{color:#8E3A6B}
+  .dv-ddgrid .c.idle{background:#F3F4F8;border:1px dashed #C9CCDA;min-height:56px}
+  .dv-ddgrid .c.idle .bk{color:#9AA0B8}
+  .dv-ddgrid .c.off{background:#F0F1F5;color:#9AA0B8;display:flex;align-items:center;justify-content:center;font-size:10.5px}
+  .dv-ddgrid .c .tag{position:absolute;top:-6px;right:5px;background:#3E7FBF;color:#fff;font-size:8.5px;font-weight:800;border-radius:999px;padding:1px 6px;font-family:'DM Mono',ui-monospace,monospace}
+  .dv-ddgrid tr.tot td .c{background:#000F4C;color:#fff;min-height:48px}
+  .dv-ddgrid tr.tot td .c .bk,.dv-ddgrid tr.tot td .c .ft,.dv-ddgrid tr.tot td .c .ft b,.dv-ddgrid tr.tot td .c .pct{color:#fff}
+  .dv-ddgrid tr.tot td .c .bk small{color:#C7CBE3}
+  .dv-ddgrid tr.tot td .c .m{background:rgba(255,255,255,.2)}.dv-ddgrid tr.tot td .c .m i{background:#00bcdf}
+  .dv-ddgrid tr.tot .rn{color:#000F4C}
+  @media (max-width:1100px){ .dv-ddexec .ex3{grid-template-columns:1fr}.dv-ddexr2{grid-template-columns:1fr} }
+  /* ══ §ddRe (2026-10-07) · Bookings keyed in today · same design language as Programs / Boat Status ══
+     navy ground · white cards r12 with one shadow · hairlines instead of grey boxes · DM Mono numbers */
+  .dv-ddov .dv-ddsheet{background:#16265C;-webkit-backdrop-filter:none;backdrop-filter:none}
+  /* §ddBadge · the fixed user badge (bottom-left) covered the travel-date card on this sheet only */
+  body.dd-open #la-userbadge{display:none !important}
+  .dv-ddov .dv-c{border:0;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34)}
+  .dv-ddov .dv-ddh{font-size:11px;font-weight:700;letter-spacing:.10em;color:#3E4658}
+  .dv-ddov .dv-ddh span{background:#F1F0EC;color:#3E4658;border-radius:6px;font-size:11px;font-weight:600;padding:2px 8px}
+  @media (min-width:761px){ .dv-ddov .dv-ddhd{padding:12px 18px 10px;gap:10px} .dv-ddov .dv-ddbd{padding:0 18px 14px;gap:10px} }
+  .dv-ddov .dv-arw,.dv-ddov .dv-ddx{width:30px;height:30px;border-radius:15px;border-color:rgba(255,255,255,.30);color:#fff}
+  .dv-ddov .dv-ddnum{font-family:'DM Sans',sans-serif;font-size:24px;letter-spacing:-.02em}
+  .dv-ddov .dv-ddnum.w{font-size:18px}
+  .dv-ddov .dv-dddwk{font-size:13px;font-weight:700}
+  .dv-ddov .dv-dddmo{font-size:9.5px;font-weight:700;letter-spacing:.16em;color:#B4BCDD}
+  .dv-ddov .dv-chip{height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#E8EBF7;border-color:rgba(255,255,255,.14)}
+  .dv-ddov .dv-chip.money{background:#D8F4E8;color:#0A5C3D;border-color:transparent}
+  .dv-ddov .dv-chip.money b{color:#0A5C3D}
+  .dv-ddov .dv-chip.warn{background:#FBE0DD;color:#8E2A20;border-color:transparent}
+  .dv-ddov .dv-chip.warn b{color:#8E2A20}
+  .dv-ddov .dv-ddpv{height:32px;padding:0 14px;display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:#fff;border-color:rgba(255,255,255,.30)}
+  .dv-ddov .dv-ddpv.on{color:#0F1B3D;font-weight:700;border-color:#fff}
+  .dv-ddov .dv-ddinp i{font-size:12px;font-weight:500;color:#B4BCDD}
+  .dv-ddov .dv-ddinp input{min-height:32px;font-size:12.5px;font-weight:500;color:#fff;border-color:rgba(255,255,255,.30);padding:4px 10px}
+  .dv-ddov .dv-ddhd .dv-ddbtn{height:32px;padding:0 14px;border-radius:16px;border:0;background:#fff;color:#0F1B3D;font-size:12.5px;font-weight:700;margin-left:6px;white-space:nowrap}
+  .dv-ddov .dv-ddhd .dv-ddbtn:hover{background:#E8EBF7}
+  .dv-ddov .dv-ddttl i.wm{display:none}
+  @media (min-width:761px){
+    .dv-ddov .dv-ddhr1{display:grid;grid-template-columns:1fr auto 1fr;gap:14px}
+    .dv-ddov .dv-ddl{display:flex;align-items:center;gap:10px;min-width:0}
+    .dv-ddov .dv-ddttl{text-align:center;font-size:16px;font-weight:800;letter-spacing:.30em;text-transform:uppercase;color:#fff;padding-left:.30em;line-height:1.25;white-space:nowrap}
+    .dv-ddov .dv-ddttl i.wm{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;margin:0}
+    .dv-ddov .dv-ddkpi{margin-left:0;justify-self:end}
+  }
+  @media (min-width:761px) and (max-width:1280px){ .dv-ddov .dv-ddttl{font-size:12.5px;letter-spacing:.16em} }
+  @media (max-width:760px){ .dv-ddov .dv-ddl{display:contents} }
+  /* summary block */
+  .dv-ddov .dv-ddfit{display:flex;flex-direction:column;gap:10px;flex:none}
+  .dv-ddov .dv-ddexec{padding:0;display:flex;flex-direction:column;gap:10px}
+  .dv-ddov .dv-ddexec .kv{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dv-ddov .dv-ddexec .k{background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34);padding:10px 14px 10px 26px;position:relative;min-width:0}
+  .dv-ddov .dv-ddexec .k::before{content:'';position:absolute;left:12px;top:10px;bottom:10px;width:4px;border-radius:2px;background:#1272B3}
+  .dv-ddov .dv-ddexec .k .l{font-size:10.5px;font-weight:700;letter-spacing:.10em;color:#5B6170}
+  .dv-ddov .dv-ddexec .k .v{font-size:24px;font-weight:500;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .k .v small{font-size:12.5px;font-weight:600;color:#3E4658}
+  .dv-ddov .dv-ddexec .k .n{font-size:11.5px;color:#5B6170;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddov .dv-ddexec .k.warn,.dv-ddov .dv-ddexec .k.bad{background:#fff}
+  .dv-ddov .dv-ddexec .k.warn::before{background:#D9952B}.dv-ddov .dv-ddexec .k.warn .v{color:#7A4300}
+  .dv-ddov .dv-ddexec .k.bad::before{background:#C8473C}.dv-ddov .dv-ddexec .k.bad .v{color:#8E2019}
+  .dv-ddov .dv-ddexec .ex2{display:grid;grid-template-columns:1fr;gap:10px}
+  .dv-ddov .dv-ddexec .exc{padding:0;overflow:hidden;min-width:0}
+  .dv-ddov .dv-ddexec .exc .dv-ddh{margin:0;padding:11px 16px 9px;border-bottom:1px solid #ECEBE6}
+  .dv-ddov .dv-ddexec .bul{gap:0}
+  .dv-ddov .dv-ddexec .bul li{background:none;border-radius:0;padding:8px 16px;border-bottom:1px solid #ECEBE6;line-height:1.4;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .bul li:last-child{border-bottom:0}
+  .dv-ddov .dv-ddexec .bul .dot{width:8px;height:8px;background:#1272B3}
+  .dv-ddov .dv-ddexec .bul .dot.go{background:#C2416B}.dv-ddov .dv-ddexec .bul .dot.ok{background:#2E9C78}.dv-ddov .dv-ddexec .bul .dot.bad{background:#C8473C}
+  .dv-ddov .dv-ddexec .bul .lb{font-weight:700;letter-spacing:.10em;color:#5B6170}
+  .dv-ddov .dv-ddexec .bul b{color:#0F1B3D}
+  .dv-ddov .dv-ddexec .bul .red,.dv-ddov .dv-ddexec .bul .red2 b{color:#8E2019}
+  .dv-ddov .dv-ddexec .bul .sub{color:#3E4658}
+  .dv-ddov .dv-ddexec .acts{gap:0}
+  .dv-ddov .dv-ddexec .act{background:none;border-radius:0;padding:12px 16px}
+  .dv-ddov .dv-ddexec .act2{background:none;border-radius:0;border-left:0;border-bottom:1px solid #ECEBE6;padding:7px 16px;grid-template-columns:20px 1fr auto;gap:10px}
+  .dv-ddov .dv-ddexec .act2:last-child{border-bottom:0}
+  .dv-ddov .dv-ddexec .act2>i{width:20px;height:20px;font-family:'DM Mono',ui-monospace,monospace;font-weight:500;font-size:11px;background:#C8473C}
+  .dv-ddov .dv-ddexec .act2>i.w,.dv-ddov .dv-ddexec .act2>i.a{background:#D9952B}.dv-ddov .dv-ddexec .act2>i.g{background:#2E9C78}
+  .dv-ddov .dv-ddexec .act2 .h{font-size:13px;color:#0F1B3D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-ddov .dv-ddexec .act2 .h b{font-family:'DM Mono',ui-monospace,monospace;font-weight:500;color:#0F1B3D}
+  .dv-ddov .dv-ddexec .act2 .mr{display:flex;align-items:center;gap:8px;margin-top:4px}
+  .dv-ddov .dv-ddexec .act2 .m{flex:1 1 auto;margin:0;height:5px;background:#ECEBE6}
+  .dv-ddov .dv-ddexec .act2 .m i{background:#C8473C}
+  .dv-ddov .dv-ddexec .act2.w .m i,.dv-ddov .dv-ddexec .act2.a .m i{background:#D9952B}.dv-ddov .dv-ddexec .act2.g .m i{background:#2E9C78}
+  .dv-ddov .dv-ddexec .act2 .m em{top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:#0F1B3D;opacity:1}
+  .dv-ddov .dv-ddexec .act2 .s{display:block;flex:none;font-family:'DM Mono',ui-monospace,monospace;font-size:11px;color:#5B6170;white-space:nowrap}
+  .dv-ddov .dv-ddexec .act2 .p b{font-size:13px;font-weight:700;color:#8E2019}
+  .dv-ddov .dv-ddexec .act2.w .p b,.dv-ddov .dv-ddexec .act2.a .p b{color:#7A4300}.dv-ddov .dv-ddexec .act2.g .p b{color:#0B5A43}
+  .dv-ddov .dv-ddexec .act2 .p small{font-size:10.5px;color:#5B6170}
+  /* travel dates */
+  .dv-ddov .dv-ddtrav,.dv-ddov .dv-ddgrid{padding:0;overflow:hidden}
+  .dv-ddov .dv-ddtrav>.dv-ddh,.dv-ddov .dv-ddgrid>.dv-ddh{margin:0;padding:11px 16px 9px}
+  .dv-ddov .dv-ddtrav .tl{gap:0;border-top:1px solid #ECEBE6}
+  .dv-ddov .dv-ddtrav .r{border-radius:0;padding:6px 16px;border-bottom:1px solid #ECEBE6}
+  .dv-ddov .dv-ddtrav .r.hd{font-size:10px;font-weight:700;letter-spacing:.08em;color:#5B6170;padding:6px 16px;background:#fff}
+  .dv-ddov .dv-ddtrav .mg{border-top:0;padding:0;margin:0}
+  .dv-ddov .dv-ddtrav .r.mh{background:#EEF1F8;border-radius:0}
+  .dv-ddov .dv-ddtrav .r.mh.flat{background:#F7F7F5}
+  .dv-ddov .dv-ddtrav .r.soon{background:#F7F7F5}
+  .dv-ddov .dv-ddtrav .r.day{padding-left:30px}
+  .dv-ddov .dv-ddtrav .dt{color:#0F1B3D;font-weight:700}
+  .dv-ddov .dv-ddtrav .r.day .dt{font-weight:600}
+  .dv-ddov .dv-ddtrav .dt small,.dv-ddov .dv-ddtrav .r.mh .dt small{color:#5B6170}
+  .dv-ddov .dv-ddtrav .r.mh .chev{border-left-color:#0F1B3D}
+  .dv-ddov .dv-ddtrav .r.day.soon .dt::before{background:#1272B3}
+  .dv-ddov .dv-ddtrav .bar{height:6px;background:#ECEBE6}
+  .dv-ddov .dv-ddtrav .bar i{background:#1272B3}
+  .dv-ddov .dv-ddtrav .bar i.b2c{background:#C2416B}
+  .dv-ddov .dv-ddtrav .n{font-size:12px;color:#0F1B3D}
+  .dv-ddov .dv-ddtrav .rt{font-size:10.5px;color:#5B6170}
+  .dv-ddov .dv-ddtrav .lg,.dv-ddov .dv-ddgrid .lg{margin:0;padding:8px 16px 10px;font-size:11px;color:#3E4658}
+  .dv-ddov .dv-ddgrid .lg{border-top:1px solid #ECEBE6}
+  /* 7-day grid */
+  .dv-ddov .dv-ddgrid .gw{padding:0 14px;border-top:1px solid #ECEBE6}
+  .dv-ddov .dv-ddgrid table{border-spacing:0 5px}
+  .dv-ddov .dv-ddgrid th{font-size:10px;font-weight:700;letter-spacing:.08em;color:#5B6170;padding:5px 3px 2px;background:#fff}
+  .dv-ddov .dv-ddgrid th .dd{color:#0F1B3D;font-weight:500}
+  .dv-ddov .dv-ddgrid th.first .dd{color:#1272B3}
+  .dv-ddov .dv-ddgrid td.l{width:178px}
+  .dv-ddov .dv-ddgrid .rn{font-weight:600;font-size:12.5px;color:#0F1B3D}
+  .dv-ddov .dv-ddgrid .rn small{font-size:10.5px;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c{background:#F7F7F5;min-height:58px;padding:6px 8px 5px}
+  .dv-ddov .dv-ddgrid .c.ok{background:#EAF6F1}
+  .dv-ddov .dv-ddgrid .c .bk{font-weight:500;font-size:15px;color:#0F1B3D}
+  .dv-ddov .dv-ddgrid .c .bk small{font-size:10.5px;font-weight:400;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c .pct{font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;color:#5B6170}
+  .dv-ddov .dv-ddgrid .c .m{height:4px;background:rgba(15,27,61,.10)}
+  .dv-ddov .dv-ddgrid .c .m i{background:#2E9C78}
+  .dv-ddov .dv-ddgrid .c .m em{background:#0F1B3D;opacity:.7}
+  .dv-ddov .dv-ddgrid .c .ft{font-size:10.5px;color:#3E4658}
+  .dv-ddov .dv-ddgrid .c .ft b{font-weight:700;color:#0B5A43}
+  .dv-ddov .dv-ddgrid .c .ft b.mut{color:#8A8F9C;font-weight:600}
+  .dv-ddov .dv-ddgrid .c.bad{background:#FBE9E7}.dv-ddov .dv-ddgrid .c.bad .m i{background:#C8473C}.dv-ddov .dv-ddgrid .c.bad .ft b{color:#8E2019}
+  .dv-ddov .dv-ddgrid .c.warn{background:#FBF1DF}.dv-ddov .dv-ddgrid .c.warn .m i{background:#D9952B}.dv-ddov .dv-ddgrid .c.warn .ft b{color:#7A4300}
+  .dv-ddov .dv-ddgrid .c.unk .m i{background:#CFCFC8}
+  .dv-ddov .dv-ddgrid .c.never{background:#FBE9F0}.dv-ddov .dv-ddgrid .c.never .m i{background:#8E3A6B}.dv-ddov .dv-ddgrid .c.never .ft b{color:#8E3A6B}
+  .dv-ddov .dv-ddgrid .c.idle{background:#F7F7F5;border-color:#CFCFC8}
+  .dv-ddov .dv-ddgrid .c.idle .bk{color:#8A8F9C}
+  .dv-ddov .dv-ddgrid .c.off{background:#F7F7F5;color:#8A8F9C;font-size:11px}
+  .dv-ddov .dv-ddgrid .c .tag{background:#1272B3;font-weight:500;top:-5px}
+  .dv-ddov .dv-ddgrid tr.tot td .c{background:#16265C}
+  .dv-ddov .dv-ddgrid tr.tot td .c .bk,.dv-ddov .dv-ddgrid tr.tot td .c .ft,.dv-ddov .dv-ddgrid tr.tot td .c .ft b,.dv-ddov .dv-ddgrid tr.tot td .c .pct{color:#fff}
+  .dv-ddov .dv-ddgrid tr.tot td .c .bk small{color:#C7CBE3}
+  .dv-ddov .dv-ddgrid tr.tot td .c .m{background:rgba(255,255,255,.22)}
+  .dv-ddov .dv-ddgrid tr.tot td .c .m i{background:#5CC2F2}
+  .dv-ddov .dv-ddgrid .lg i.be{background:#0F1B3D}.dv-ddov .dv-ddgrid .lg i.pl{background:#1272B3}
+  @media (min-width:761px){ .dv-ddov .dv-ddexec .kv{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  /* wide screens: summary + to-do side by side, lower cards fill the rest of the screen and scroll inside (see _ddFit) */
+  @media (min-width:1101px){
+    .dv-ddov .dv-ddexec .ex2{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+    .dv-ddov .dv-ddexr2{grid-template-columns:minmax(400px,1fr) minmax(0,2.1fr);gap:10px;min-height:0;grid-template-rows:minmax(0,1fr)}
+    .dv-ddov .dv-ddtrav,.dv-ddov .dv-ddgrid{display:flex;flex-direction:column;min-height:0}
+    .dv-ddov .dv-ddtrav>.dv-ddh,.dv-ddov .dv-ddgrid>.dv-ddh,.dv-ddov .dv-ddtrav .lg,.dv-ddov .dv-ddgrid .lg{flex:none}
+    .dv-ddov .dv-ddtrav .tl{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}
+    .dv-ddov .dv-ddtrav .r.hd{position:sticky;top:0;z-index:1}
+    .dv-ddov .dv-ddgrid .gw{flex:1 1 auto;min-height:0;overflow:auto;scrollbar-width:thin}
+    .dv-ddov .dv-ddgrid thead th{position:sticky;top:0;z-index:2}
+  }
   .dv-ddsums{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:none}
   .dv-ddsum{padding:11px 13px 10px;cursor:pointer;position:relative;opacity:.62}
   .dv-ddsum.on{opacity:1}
@@ -3363,6 +4060,138 @@ function calToggleHidePanel(){
   renderCal();
 }
 
+/* ══ §calSets (2026-10-07) · ชุดเส้นทางที่บันทึกไว้ · ตั้งชื่อได้ กดแล้วปฏิทินโชว์เฉพาะเส้นทางในชุด ══
+   ใช้คู่กับมุมมอง Routes เพื่อแคปส่งต่อ (เช่น ชุด "Similan" / "Phi Phi")
+   ที่เก็บ · คีย์ scalar บนสุดของ blob เป็นสตริง JSON  [{id,name,routes:[routeId]}]
+     เดินทางเป็น {op:'meta'} ลง app_meta catch-all แบบเดียวกับ cal_route_names / da_template
+     ไม่มีตาราง ไม่มี migration ไม่แตะ field_mapping · ชุดเป็นของทั้งทีม
+   การ "ใช้ชุด" แค่เขียนรายการซ่อนเส้นทางของเครื่องนั้น (_cal_hidden_routes) · ไม่แตะข้อมูลอื่น
+   ชุดไหน active ดูจากเส้นทางที่โชว์อยู่ตรงกับชุดพอดี · ไม่เก็บ state แยก จึงไม่มีวันค้างผิด */
+let CAL_ROUTE_SETS=[];
+(function(){ try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); const v=d.cal_route_sets;
+  const a=(typeof v==='string')?JSON.parse(v):v; if(Array.isArray(a)) CAL_ROUTE_SETS=a; }catch(e){} })();
+function _calSetsPersist(){
+  try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); d.cal_route_sets=JSON.stringify(CAL_ROUTE_SETS); localStorage.setItem('loveandaman_v2', JSON.stringify(d)); }
+  catch(e){ console.warn('[calSets] persist failed', e); }
+}
+function _calSetPool(){ return ROUTES.filter(rt=>!laIsLandRoute(rt)); }
+function _calSetActiveId(){
+  if(calPier!=='all') return '';
+  const h=_calGetHiddenRoutes(), pool=_calSetPool(), ok=new Set(pool.map(r=>r.id));
+  const vis=pool.filter(rt=>!h.has(rt.id)).map(rt=>rt.id).sort().join('|');
+  const m=(CAL_ROUTE_SETS||[]).find(x=>(x.routes||[]).filter(i=>ok.has(i)).sort().join('|')===vis);
+  return m?m.id:'';
+}
+function calSetApply(id){
+  const st=(CAL_ROUTE_SETS||[]).find(x=>x.id===id); if(!st) return;
+  const keep=new Set(st.routes||[]);
+  _calSaveHiddenRoutes(new Set(_calSetPool().filter(rt=>!keep.has(rt.id)).map(rt=>rt.id)));
+  calPier='all';
+  renderCal();
+}
+/* §calHidePast (2026-10-07) · มุมมอง Routes · ซ่อนวันที่ผ่านมาแล้ว (ค่าเริ่มต้น = ซ่อน) · จำต่อเครื่อง
+   มีผลเฉพาะเดือนปัจจุบัน · เดือนที่ผ่านไปแล้วทั้งเดือนโชว์ตามปกติ ไม่งั้นหน้าจะว่างเปล่า */
+function _calRoutesHidePast(){ try{ return localStorage.getItem('_cal_routes_hide_past')!=='0'; }catch(e){ return true; } }
+function calRoutesTogglePast(){ try{ localStorage.setItem('_cal_routes_hide_past', _calRoutesHidePast()?'0':'1'); }catch(e){} renderCal(); }
+function calSetAll(){ calPier='all'; _calSaveHiddenRoutes(new Set()); renderCal(); }
+/* §calSetModal (2026-10-07) · กล่องบันทึก/ลบชุดเป็นของแอปเอง แทน prompt()/confirm() ของเบราว์เซอร์
+   แขวนไว้ที่ document.body ไม่ใช่ใน #cal-wrap · renderCal เขียน innerHTML ของ cal-wrap ใหม่ทุกครั้ง กล่องจะหายกลางคัน
+   ปุ่มลัด Enter/Esc ผูกกับกล่องนี้เท่านั้น ไม่ได้ผูก keydown ระดับหน้า */
+function _calSetEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function calSetModalClose(){ const el=document.getElementById('calset-modal'); if(el) el.remove(); window._calSetPending=null; }
+function _calSetModalOpen(inner, onEnter){
+  calSetModalClose();
+  const el=document.createElement('div');
+  el.id='calset-modal';
+  el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  el.style.cssText='position:fixed;inset:0;z-index:4000;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(10,18,48,.56);font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+  el.innerHTML='<div style="width:460px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(2,10,30,.45);overflow:hidden;color:#000F4C">'+inner+'</div>';
+  el.addEventListener('mousedown', function(e){ if(e.target===el) calSetModalClose(); });
+  el.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ e.preventDefault(); calSetModalClose(); }
+    else if(e.key==='Enter' && typeof onEnter==='function' && e.target && e.target.tagName==='INPUT'){ e.preventDefault(); onEnter(); }
+  });
+  document.body.appendChild(el);
+  return el;
+}
+function _calSetBtnCss(kind){
+  const base='border-radius:10px;padding:0 18px;height:40px;font:600 13.5px \'DM Sans\',sans-serif;cursor:pointer;';
+  if(kind==='pri') return base+'border:1px solid #16265C;background:#16265C;color:#fff';
+  if(kind==='del') return base+'border:1px solid #B3261E;background:#B3261E;color:#fff';
+  return base+'border:1px solid #D9D9D2;background:#fff;color:#3D3D38';
+}
+function calSetSave(){
+  const h=_calGetHiddenRoutes();
+  const rts=_calSetPool().filter(rt=>(calPier==='all'||rt.pier===calPier) && !h.has(rt.id));
+  if(!rts.length){ alert('No routes are showing. Turn on at least one route first.'); return; }
+  const nm=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
+  const chips=rts.map(r=>'<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:8px;background:#F4F4F0;font-size:12.5px;font-weight:500;color:#000F4C">'
+    +'<i style="width:8px;height:8px;border-radius:2px;flex:none;background:'+_calVivid(r.color)+'"></i>'+_calSetEsc(nm(r))+'</span>').join('');
+  const el=_calSetModalOpen(
+    '<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Calendar · Saved sets</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">Save route set</div>'
+    +'<label for="calset-name" style="display:block;margin-top:16px;font-size:12.5px;font-weight:600;color:#3D3D38">Set name</label>'
+    +'<input id="calset-name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Similan" oninput="calSetNameCheck()" '
+    +'style="display:block;width:100%;box-sizing:border-box;margin-top:6px;height:44px;padding:0 13px;border:1.5px solid #C9CCD6;border-radius:10px;font:500 15px \'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#000F4C;outline-color:#16265C">'
+    +'<div id="calset-hint" style="min-height:18px;margin-top:6px;font-size:12px;color:#5F5F58">Up to 40 characters. The name shows in the screenshot header.</div>'
+    +'<div style="margin-top:12px;font-size:12.5px;font-weight:600;color:#3D3D38">'+rts.length+(rts.length===1?' route':' routes')+' in this set</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:168px;overflow:auto">'+chips+'</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<span style="font-size:11.5px;color:#5F5F58">Shared with the whole team</span>'
+    +'<span style="display:flex;gap:8px"><button type="button" onclick="calSetModalClose()" style="'+_calSetBtnCss()+'">Cancel</button>'
+    +'<button type="button" id="calset-ok" onclick="calSetSaveCommit()" style="'+_calSetBtnCss('pri')+'">Save set</button></span>'
+    +'</div>', calSetSaveCommit);
+  /* ⚠ ต้องตั้งหลังเปิดกล่อง · _calSetModalOpen เรียก calSetModalClose ก่อนซึ่งล้าง _calSetPending
+     (รอบแรกตั้งไว้ก่อนเปิด → โดนล้าง → กด Save แล้วกล่องปิดเฉย ๆ ไม่ได้บันทึก) */
+  window._calSetPending=rts.map(rt=>rt.id);
+  const inp=el.querySelector('#calset-name'); if(inp) inp.focus();
+}
+function _calSetByName(name){ const k=String(name||'').trim().toLowerCase(); return k ? (CAL_ROUTE_SETS||[]).find(x=>String(x.name||'').trim().toLowerCase()===k) : null; }
+function calSetNameCheck(){
+  const inp=document.getElementById('calset-name'), hint=document.getElementById('calset-hint'), ok=document.getElementById('calset-ok');
+  if(!inp||!hint) return;
+  const ex=_calSetByName(inp.value);
+  inp.style.borderColor='#C9CCD6';
+  if(ex){ hint.style.color='#8A4B00'; hint.textContent='A set with this name already exists. Saving will replace it.'; if(ok) ok.textContent='Replace set'; }
+  else { hint.style.color='#5F5F58'; hint.textContent='Up to 40 characters. The name shows in the screenshot header.'; if(ok) ok.textContent='Save set'; }
+}
+function calSetSaveCommit(){
+  const inp=document.getElementById('calset-name'), hint=document.getElementById('calset-hint');
+  const ids=window._calSetPending;
+  if(!inp || !Array.isArray(ids) || !ids.length){ calSetModalClose(); return; }
+  const name=String(inp.value||'').trim().slice(0,40);
+  if(!name){ inp.style.borderColor='#B3261E'; if(hint){ hint.style.color='#B3261E'; hint.textContent='Enter a name for this set.'; } inp.focus(); return; }
+  let st=_calSetByName(name);
+  if(st){ st.routes=ids.slice(); st.name=name; }
+  else { st={id:'cs'+Date.now().toString(36), name:name, routes:ids.slice()}; CAL_ROUTE_SETS.push(st); }
+  _calSetsPersist();
+  calSetModalClose();
+  calSetApply(st.id);
+}
+function calSetDelete(id){
+  const st=(CAL_ROUTE_SETS||[]).find(x=>x.id===id); if(!st) return;
+  const n=(st.routes||[]).length;
+  const el=_calSetModalOpen(
+    '<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Calendar · Saved sets</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">Delete &ldquo;'+_calSetEsc(st.name)+'&rdquo;?</div>'
+    +'<div style="margin-top:10px;font-size:13.5px;line-height:1.5;color:#3D3D38">This set ('+n+(n===1?' route':' routes')+') is removed for everyone on the team. The routes and their bookings are not affected.</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<button type="button" id="calset-cancel" onclick="calSetModalClose()" style="'+_calSetBtnCss()+'">Cancel</button>'
+    +'<button type="button" onclick="calSetDeleteCommit(\''+st.id+'\')" style="'+_calSetBtnCss('del')+'">Delete set</button>'
+    +'</div>', null);
+  const c=el.querySelector('#calset-cancel'); if(c) c.focus();
+}
+function calSetDeleteCommit(id){
+  CAL_ROUTE_SETS=(CAL_ROUTE_SETS||[]).filter(x=>x.id!==id);
+  _calSetsPersist();
+  calSetModalClose();
+  renderCal();
+}
+
 // §cal2b · ชื่อโปรแกรมที่จะโชว์ในปฏิทิน · ตั้งเองได้ต่อเส้นทาง
 //   เก็บเป็น JSON string ใน blob (cal_route_names · sync app_meta)
 //   แยกชุดจาก da_route_names เพราะช่องปฏิทินแคบกว่าข้อความ LINE คนละเงื่อนไข
@@ -4030,6 +4859,10 @@ function renderCal(){
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Matrix
         </button>
+        <button onclick="setCalViewMode('routes')" title="One mini calendar per route" style="background:${viewMode==='routes'?FOREST:'transparent'};color:${viewMode==='routes'?LIME:ink[2]};border:none;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:${viewMode==='routes'?600:500};cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
+          Routes
+        </button>
       </div>
       ${viewMode==='month'?rangeCtl:''}
     </div>
@@ -4160,11 +4993,17 @@ function renderCal(){
   //   เส้นทางที่มีเที่ยวออกขึ้นก่อน เรียงตามเวลาเรือออก · ที่ไม่ออกเลยไปต่อท้าย
   //   (ไม่งั้นเส้นทางนอกฤดูดันเส้นทางที่ใช้จริงหลุดออกนอกจอ)
   /* §calMarine · เช่นเดียวกับการ์ดด้านบน */
+  const _calPOrd=(typeof LA_PIER_ORDER!=='undefined' && Array.isArray(LA_PIER_ORDER)) ? LA_PIER_ORDER : CAL_PIERS;
+  const _calCfgKey=(r)=>{ const pi=_calPOrd.indexOf(r.pier), ri=ROUTES.findIndex(x=>x.id===r.id);
+    return (pi<0?999:pi)*100000 + (ri<0?99999:ri); };
   const _rtSorted=ROUTES.filter(rt=>!laIsLandRoute(rt) && (calPier==='all'||rt.pier===calPier)).slice().sort((a,b)=>{
     const da=(routeStat[a.id]&&routeStat[a.id].days.size)?0:1;
     const db=(routeStat[b.id]&&routeStat[b.id].days.size)?0:1;
     if(da!==db) return da-db;
-    const dm=_calDepMin(a)-_calDepMin(b); if(dm) return dm;
+    /* §calStripOrder (2026-10-07) · เดิมเรียงตามเวลาเรือออก · เปลี่ยนเป็นลำดับโปรแกรมใน Config > Programs
+       (ท่าตาม LA_PIER_ORDER แล้วตามตำแหน่งใน ROUTES) ให้ตรงกับการ์ดในมุมมอง Routes
+       เส้นทางที่เดือนนี้ไม่มีเที่ยวยังไปต่อท้ายเหมือนเดิม */
+    const ka=_calCfgKey(a), kb=_calCfgKey(b); if(ka!==kb) return ka-kb;
     return String(a.name||'').localeCompare(String(b.name||''));
   });
   const routeStrip2=`<div class="cal2-routes">`+_rtSorted.map(rt=>{
@@ -4838,8 +5677,138 @@ function renderCal(){
     }
   }
 
+  // ── §calRoutes (2026-10-07) · มุมมอง "Routes" · 1 เส้นทาง = 1 ปฏิทินย่อทั้งเดือน ──
+  //   ใช้แคปหน้าจอส่งต่อ · ชื่อเส้นทางเต็ม + ที่นั่งว่างรายวันอยู่ในการ์ดเดียว
+  //   ตัวเลขมาจาก _calTripsFor ตัวเดียวกับโหมด Month (รวมทุกลำของเส้นทาง · เคารพตัวกรองท่า/ซ่อนเส้นทาง)
+  //   อ่านอย่างเดียว · ไม่เขียนข้อมูล ไม่แตะ state อื่นนอกจาก _calViewMode
+  let routesView='', setsBar='';
+  if(viewMode==='routes'){
+    /* §calSets · แถบชุดเส้นทาง · กดชุด = โชว์เฉพาะเส้นทางในชุด · คนที่แก้ไม่ได้ยังกดใช้ชุดได้ แต่ไม่เห็นปุ่มบันทึก/ลบ */
+    const _setEsc=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const _setCanEd=(typeof window.laCanEdit==='function') ? !!window.laCanEdit() : true;
+    const _setAct=_calSetActiveId();
+    /* §calHidePast · _hpCan = เดือนที่ดูอยู่คือเดือนนี้ (มีวันที่ผ่านมาแล้วให้ซ่อน) · _hpOn = ซ่อนอยู่จริง */
+    const _hpCan=TODAY_STR.startsWith(viewMonth) && (+TODAY_STR.slice(8))>1;
+    const _hpOn=_hpCan && _calRoutesHidePast();
+    const _hpToday=+TODAY_STR.slice(8);
+    /* สัปดาห์ที่จบไปแล้วทั้งสัปดาห์ตัดออกทั้งแถว · เริ่มวาดจากวันอาทิตย์ของสัปดาห์นี้ */
+    const _hpStart=_hpOn ? Math.max(1, _hpToday-new Date(calYear,calMonth,_hpToday).getDay()) : 1;
+    const _setPoolIds=new Set(_calSetPool().map(r=>r.id));
+    const _setAllOn=(calPier==='all' && ![..._hidRt].some(i=>_setPoolIds.has(i)));
+    const _setBtn=(on)=>`border:1px solid ${on?'#fff':'rgba(255,255,255,.24)'};background:${on?'#fff':'rgba(255,255,255,.10)'};color:${on?'#16265C':'#E3ECFA'};font:${on?700:600} 12px 'DM Sans',sans-serif;cursor:pointer;min-height:30px`;
+    setsBar=`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16)">
+      <span style="font:700 10.5px 'DM Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#A8BAD8;margin-right:4px">Saved sets</span>
+      <button onclick="calSetAll()" style="${_setBtn(_setAllOn)};border-radius:15px;padding:0 13px">All routes</button>
+      ${(CAL_ROUTE_SETS||[]).map(st=>{ const on=(st.id===_setAct); const n=(st.routes||[]).filter(i=>_setPoolIds.has(i)).length;
+        return `<span style="display:inline-flex">
+          <button onclick="calSetApply('${st.id}')" title="Show only the ${n} route(s) in this set" style="${_setBtn(on)};border-radius:${_setCanEd?'15px 0 0 15px':'15px'};padding:0 ${_setCanEd?9:13}px 0 13px">${_setEsc(st.name)} <span style="font:500 11px 'DM Mono',monospace;opacity:.7">${n}</span></button>
+          ${_setCanEd?`<button onclick="calSetDelete('${st.id}')" aria-label="Delete set" title="Delete this set" style="${_setBtn(on)};border-left:none;border-radius:0 15px 15px 0;padding:0 9px 0 7px;font-weight:500">&times;</button>`:''}
+        </span>`; }).join('')}
+      ${_setCanEd?`<button onclick="calSetSave()" title="Save the routes showing now as a named set" style="${_setBtn(false)};border-style:dashed;border-radius:15px;padding:0 13px">+ Save current view as set</button>`:''}
+      ${(!(CAL_ROUTE_SETS||[]).length)?`<span style="font:500 11.5px 'DM Sans',sans-serif;color:#A8BAD8">Hide routes with the chips above, then save what is left as a named set.</span>`:''}
+      ${_hpCan?`<button onclick="calRoutesTogglePast()" title="${_hpOn?'Past days are hidden. Click to show them.':'Past days are showing. Click to hide them.'}" style="${_setBtn(_hpOn)};border-radius:15px;padding:0 13px;margin-left:auto">Past days: ${_hpOn?'hidden':'shown'}</button>`:''}
+    </div>`;
+    const _setActObj=_setAct ? (CAL_ROUTE_SETS||[]).find(x=>x.id===_setAct) : null;
+    const LOW=10;   // ว่างต่ำกว่านี้ = "ใกล้เต็ม"
+    const escR=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const rd={};    // rid -> {r, days:{d:{free,cap,wx,ch}}}
+    for(let d=1;d<=daysInMonth;d++){
+      const ds=`${viewMonth}-${String(d).padStart(2,'0')}`;
+      piers.forEach(pier=>{
+        if(_calPierClosed(pier,ds)) return;
+        _calTripsFor(ds,pier).forEach(t=>{
+          if(_hidRt.has(t.r.id)) return;
+          const o=rd[t.r.id]||(rd[t.r.id]={r:t.r,days:{}});
+          const g=o.days[d]||(o.days[d]={free:0,cap:0,wx:false,ch:false});
+          g.free+=(t.weatherClosed?0:t.free); g.cap+=t.cap;
+          if(t.weatherClosed) g.wx=true;
+          if(t.isCharter) g.ch=true;
+        });
+      });
+    }
+    /* §calRoutesOrder · เรียงการ์ดตามลำดับโปรแกรมในหน้า Config > Programs
+       = ลำดับท่าตาม LA_PIER_ORDER แล้วตามตำแหน่งใน ROUTES (ตัวเดียวกับที่ลากเรียงใน Config) */
+    const _pOrd=(typeof LA_PIER_ORDER!=='undefined' && Array.isArray(LA_PIER_ORDER)) ? LA_PIER_ORDER : CAL_PIERS;
+    const _cfgKey=(r)=>{ const pi=_pOrd.indexOf(r.pier), ri=ROUTES.findIndex(x=>x.id===r.id);
+      return (pi<0?999:pi)*100000 + (ri<0?99999:ri); };
+    /* §calHidePast · ซ่อนวันที่ผ่านแล้ว = เส้นทางที่เหลือแต่เที่ยวในอดีตไม่ต้องมีการ์ด ไปอยู่ในรายการท้ายหน้าแทน */
+    const _hasUp=(o)=>!_hpOn || Object.keys(o.days).some(d=>+d>=_hpToday);
+    const live=Object.values(rd).filter(_hasUp).sort((a,b)=>_cfgKey(a.r)-_cfgKey(b.r));
+    const deadRt=_rtSorted.filter(rt=>(!rd[rt.id] || !_hasUp(rd[rt.id])) && !_hidRt.has(rt.id)).sort((a,b)=>_cfgKey(a)-_cfgKey(b));
+    const rName=(r)=>((CAL_ROUTE_NAMES[r.id]||'').trim()) || r.name || '';
+    const MONO="'DM Mono','IBM Plex Sans Thai',monospace";
+    const dowRow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((x,i)=>`<div style="color:${(i===0||i===6)?'#A63A1C':'#5F5F58'}">${x}</div>`).join('');
+    const cards=live.map(o=>{
+      const r=o.r, v=_calVivid(r.color), tint=v+'26';
+      let nDays=0, nFull=0, nLow=0, cells='';
+      const _lead=(_hpStart>1) ? 0 : firstDay;   // เริ่มจากวันอาทิตย์อยู่แล้วเมื่อตัดสัปดาห์เก่าออก
+      for(let i=0;i<_lead;i++) cells+='<div></div>';
+      for(let d=_hpStart;d<=daysInMonth;d++){
+        const ds=`${viewMonth}-${String(d).padStart(2,'0')}`;
+        const _gone=_hpOn && ds<TODAY_STR;       // วันที่ผ่านแล้วในสัปดาห์นี้ · เหลือแค่เลขวันจาง ๆ ให้ตารางยังตรงคอลัมน์
+        const g=_gone ? null : o.days[d];
+        let bg=_gone?'transparent':'#F4F4F0', fg='#8A8A82', dfg=_gone?'#B9B9B0':'#5F5F58', txt='', fw=500, fz=16, tip='';
+        if(g){
+          nDays++;
+          if(g.wx){ txt='WX'; bg='#E6E9F0'; fg='#475569'; tip='weather cancelled'; }
+          else if(g.ch && g.free<=0){ txt='CH'; bg='#D6F3FA'; fg='#00566B'; tip='charter'; }
+          else if(g.free<=0){ txt='FULL'; fz=12.5; bg='#000F4C'; fg='#FFFFFF'; dfg='#C9D3EE'; nFull++; tip='full'; }
+          else if(g.free<LOW){ txt=String(g.free); bg='#FFD9CC'; fg='#7A1F08'; fw=700; nLow++; }
+          else { txt=String(g.free); bg=tint; fg='#000F4C'; }
+          if(!tip) tip=`${g.free} of ${g.cap} seats free`;
+        }
+        cells+=`<div${tip?` title="${escR(rName(r))} · ${d} · ${tip}"`:''} style="height:46px;box-sizing:border-box;padding:3px 5px;border-radius:6px;background:${bg};${ds===TODAY_STR?'box-shadow:inset 0 0 0 2px #FF6B47;':''}${(!_hpOn && ds<TODAY_STR)?'opacity:.5;':''}">
+          <div style="font:400 10.5px/1.2 ${MONO};color:${dfg}">${d}</div>
+          <div style="text-align:center;font:${fw} ${fz}px/${fz<16?'21px':'1.3'} ${MONO};color:${fg}">${txt}</div>
+        </div>`;
+      }
+      const dep=String(((r.times)||[])[0]||'').trim()||'—';
+      const dW=(n)=>n+(n===1?' day':' days');
+      const sub=[dW(nDays)+(_hpOn?' with trips from today':' with trips')].concat(nFull?[dW(nFull)+' full']:[], nLow?[dW(nLow)+' almost full']:[]).join(' · ');
+      return `<div style="background:#fff;border:1px solid #E2E2DC;border-radius:12px;overflow:hidden">
+        <div style="height:8px;background:${v}"></div>
+        <div style="padding:12px 14px 14px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+            <div style="font-size:17px;font-weight:700;line-height:1.2;color:#000F4C">${escR(rName(r))}</div>
+            <div style="flex:none;font:400 12.5px ${MONO};color:#5F5F58">${PIER_LBL[r.pier]||''} · ${escR(dep)}</div>
+          </div>
+          <div style="margin-top:2px;font-size:12px;color:#5F5F58">${sub}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:9px;font-size:10.5px;font-weight:600;text-align:center">${dowRow}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:4px">${cells}</div>
+        </div>
+      </div>`;
+    }).join('');
+    const lg=(bg,fg,t,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;min-width:32px;padding:1px 4px;border-radius:5px;background:${bg};color:${fg};font:500 12px ${MONO};text-align:center">${t}</span>${l}</span>`;
+    const stamp=new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false});
+    routesView=`<div style="background:#F7F7F5;border-radius:12px;padding:20px 22px 22px;box-shadow:0 14px 40px rgba(2,10,30,.34);font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#000F4C">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:12px;border-bottom:2px solid #000F4C">
+        <div>
+          <div style="font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:600">LOVE Andaman · Seats free by route</div>
+          <div style="margin-top:3px;font-size:30px;font-weight:700;letter-spacing:-.01em;line-height:1.15">${MONTHS_EN[calMonth]} ${calYear}${calPier!=='all'?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${PIER_NAME[calPier]||''}</span>`:''}${_setActObj?` <span style="font-size:15px;font-weight:600;color:#5F5F58">· ${_setEsc(_setActObj.name)}</span>`:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#3D3D38">
+          ${lg('#DFE9F7','#000F4C','24','Available (route colour)')}
+          ${lg('#FFD9CC','#7A1F08','6','Almost full (under '+LOW+')')}
+          ${lg('#000F4C','#FFFFFF','FULL','Sold out')}
+          ${lg('#D6F3FA','#00566B','CH','Charter')}
+          ${lg('#E6E9F0','#475569','WX','Weather cancelled')}
+          <span style="padding-left:16px;border-left:1px solid #D9D9D2">Updated <b style="font:500 12.5px ${MONO};color:#000F4C">${stamp}</b></span>
+        </div>
+      </div>
+      ${cards
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-top:16px">${cards}</div>`
+        : `<div style="padding:40px 0;text-align:center;font-size:14px;color:#5F5F58">${_hpOn?'No upcoming trips this month':'No trips this month'}</div>`}
+      ${deadRt.length?`<div style="margin-top:14px;font-size:12.5px;color:#3D3D38"><b>${_hpOn?'No upcoming trips this month':'No trips this month'}:</b> ${deadRt.map(rt=>escR(rName(rt))).join(' · ')}</div>`:''}
+    </div>`;
+  }
+
   // ── COMPOSE ──
-  if(viewMode==='month'){
+  if(viewMode==='routes'){
+    // §calRoutes · ไม่ใช้ .cal2-page (ตัวนั้นถูก _calFitPage ล็อกความสูงตอน resize) · หน้านี้ต้องยาวตามจำนวนการ์ด
+    window._calDrawer=false;
+    wrap.innerHTML = CAL2CSS
+      + `<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:9px">${headerBar}${routeStrip2}${setsBar}${routesView}</div>`;
+  } else if(viewMode==='month'){
     // §cal2 · ปฏิทินกินพื้นที่ที่เหลือทั้งหมด · รายละเอียดวันอยู่ในลิ้นชัก
     const _dwOn=!!window._calDrawer;
     wrap.innerHTML = CAL2CSS
@@ -5033,6 +6002,34 @@ function setBoatPier(v,el){boatPier=v;document.querySelectorAll('#boats-pier-fil
 function setBoatSt(v,el){boatSt=v;document.querySelectorAll('#boats-st-filter .fp').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');renderBoats();}
 function setBoatLocType(v,el){boatLocType=v;renderBoats();}
 
+/* ══ §bsRedesign (2026-10-07) · หน้า Boat Status โฉมใหม่ · ชุดเดียวกับหน้า Programs (§progRedesign) ══
+   แถบบนแบบ Boat Operation · รายการซ้ายกระชับ ตัวกรองย้ายเข้าไปอยู่ในการ์ดรายการ
+   แผงขวา: แถวข้อมูลสรุป + ปฏิทินสถานะทั้งปี (12 เดือน) แทนปฏิทินรายเดือนช่องใหญ่
+   ตัวกรองท่า/สถานะ/ประเภทที่อยู่ยังใช้ตัวแปรและฟังก์ชันเดิม (boatPier · boatSt · boatLocType) ไม่ได้เปลี่ยนตรรกะ
+   ช่องค้นหาเป็นการซ่อน/โชว์แถวใน DOM เท่านั้น */
+function bsApplyQ(){
+  const q=String(window._bsQ||'').trim().toLowerCase();
+  document.querySelectorAll('#bs-list-panel [data-bid]').forEach(function(el){
+    el.style.display=(!q||(el.dataset.q||'').indexOf(q)>=0)?'flex':'none'; });
+}
+function bsSetQ(v){ window._bsQ=v||''; bsApplyQ(); }
+function bsChipSt(v){ setBoatSt(boatSt===v?'all':v,null); }
+/* §bsFit · หน้าไม่เลื่อน · การ์ดสองใบสูงพอดีจอและเลื่อนในตัวเองเมื่อล้น (กติกาเดียวกับ §progFit) */
+function bsFit(){
+  const lb=document.getElementById('bs-list-panel'), dm=document.getElementById('bs-detail-mount');
+  if(!lb||!lb.offsetParent||!lb.parentElement) return;
+  const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
+  if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; lb.style.maxHeight=hs;
+    if(dm){ dm.style.maxHeight='none'; dm.style.overflowY='visible'; } return; }
+  const absTop=lb.parentElement.getBoundingClientRect().top+(window.scrollY||0);
+  const mn=document.querySelector('main.main');
+  const tail=Math.max(14, mn ? (parseFloat(getComputedStyle(mn).paddingBottom)||0) : 0)+2;
+  const h=Math.max(320, Math.round(window.innerHeight-absTop-tail))+'px';
+  if(lb.style.maxHeight!==h) lb.style.maxHeight=h;
+  if(dm){ if(dm.style.maxHeight!==h) dm.style.maxHeight=h; dm.style.overflowY='auto'; dm.style.overflowX='hidden';
+    dm.style.overscrollBehavior='contain'; dm.style.scrollbarWidth='thin'; }
+}
+if(!window._bsFitOn){ window._bsFitOn=1; window.addEventListener('resize', function(){ try{ bsFit(); }catch(_){} }, {passive:true}); }
 function renderBoats(){
   let boats=BOATS;
   if(boatPier!=='all') boats=boats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)===boatPier);
@@ -5080,84 +6077,72 @@ function renderBoats(){
   };
 
   const STATUS_STYLE={
-    available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
-    fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
-    unavailable:{bg:'#FCEBEB',color:'#A32D2D',label:'UNAVAIL'}
+    available:{bg:'#DDF1EA',color:'#0B5A43',label:'Available'},
+    fixing:{bg:'#FBEBD3',color:'#7A4300',label:'Fixing'},
+    unavailable:{bg:'#FBE3E0',color:'#8E2019',label:'Unavailable'}
   };
   const PIER_LBL={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'};
 
-  // Header bar
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:6px">
-      <button style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,.08);background:white;font-size:16px;cursor:pointer;color:${dim.ink2}">+</button>
-      <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#185FA5;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">TL</div><span style="font-size:12px;font-weight:500">Tub Lamu · ${tlCount}</span></div>
-      <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#0F6E56;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">VP</div><span style="font-size:12px;font-weight:500">Visit Panwa · ${vpCount}</span></div>
-      ${rnCount?`<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#BA7517;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">RN</div><span style="font-size:12px;font-weight:500">Ranong · ${rnCount}</span></div>`:''}
-      <div style="width:32px;height:32px;border-radius:50%;background:${dim.ink};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">B</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button onclick="openCharterModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ เรือเช่า</button>
-    </div>
+  // §bsRedesign · แถบบน · โครงและค่าสีชุดเดียวกับ .bop2-top ของหน้า Boat Operation
+  const escB=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const _bd=new Date(TODAY_STR+'T00:00:00');
+  const _chip='height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;font:700 11.5px inherit;font-family:inherit;border:1px solid transparent;cursor:pointer';
+  const _ring=(v)=>boatSt===v?'box-shadow:0 0 0 2px #fff;':'';
+  const _partners=new Set(allCharter.map(c=>c.charter_co||c.owner||'')).size||0;
+  const _retired=BOATS.filter(b=>b.retired).length;
+  const headerBar=`<style>
+    #view-boats{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
+    #view-boats > .page-hd{display:none}
+    #view-boats #bs-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
+    #view-boats #bs-q::placeholder{color:#B4BCDD}
+    #view-boats #bs-top{position:sticky;top:0;z-index:6;margin:-18px -18px 11px;padding:13px 18px 11px;background:#16265C;box-shadow:0 6px 14px -8px rgba(2,10,30,.55)}
+    @media (max-width:1100px){ #view-boats .bs-brand{display:none} }
+    @media (max-width:820px){ #view-boats{padding:12px 10px 64px} #view-boats .bs-2col{grid-template-columns:1fr !important}
+      #view-boats #bs-top{position:static;margin:-12px -10px 10px;padding:12px 10px 10px} }
+  </style>
+  <div id="bs-top" style="display:flex;align-items:center;gap:9px 12px;flex-wrap:wrap">
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:9px">
+      <span style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">${_bd.getDate()}</span>
+      <span style="line-height:1.15;display:inline-block">
+        <b style="display:block;font-size:13px;font-weight:700;color:#fff">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_bd.getDay()]}</b>
+        <i style="display:block;font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#B4BCDD;text-transform:uppercase;font-style:normal">${MONTHS_EN[_bd.getMonth()]} ${_bd.getFullYear()} · status today</i>
+      </span>
+      <input id="bs-q" type="search" aria-label="Search boats" placeholder="Search ${allCompany.length+allCharter.length} boats" value="${escB(window._bsQ||'')}" oninput="bsSetQ(this.value)"
+        style="margin-left:8px;width:200px;max-width:100%;height:36px;box-sizing:border-box;padding:0 14px;border:1px solid rgba(255,255,255,.30);border-radius:18px;background:rgba(255,255,255,.10);font:500 12.5px inherit;font-family:inherit;color:#fff;outline-color:#fff">
+    </span>
+    <span class="bs-brand" style="flex:none;text-align:center;white-space:nowrap">
+      <i style="display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;font-style:normal;margin-bottom:2px">LOVE ANDAMAN</i>
+      <b style="display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff">BOAT STATUS</b>
+    </span>
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="bsChipSt('available')" title="Show only available boats" style="${_chip};background:#D8F4E8;color:#0A5C3D;${_ring('available')}">Available<b style="font-weight:800;margin-left:6px">${availCount}/${allCompany.length}</b></button>
+      <button onclick="bsChipSt('fixing')" title="Show only boats being fixed${inShop?' · '+inShop+' in shop':''}" style="${_chip};background:#FBEBD3;color:#7A4300;${_ring('fixing')}">Fixing<b style="font-weight:800;margin-left:6px">${fixCount}</b></button>
+      <button onclick="bsChipSt('unavailable')" title="Show only unavailable boats" style="${_chip};background:#FBE0DD;color:#8E2A20;${_ring('unavailable')}">Unavailable<b style="font-weight:800;margin-left:6px">${unavCount}</b></button>
+      <span title="${_partners} partner${_partners===1?'':'s'}${_retired?' · '+_retired+' retired':''}" style="${_chip};cursor:default;background:rgba(255,255,255,.10);color:#E8EBF7;border-color:rgba(255,255,255,.14)">Charter<b style="font-weight:800;margin-left:6px">${allCharter.length}</b></span>
+      <button onclick="openCharterModal()" style="height:36px;padding:0 16px;border:none;border-radius:18px;background:#fff;color:#16265C;font:700 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เรือเช่า
+      </button>
+    </span>
   </div>`;
+  const kpiStrip='';
 
-  // KPI strip
-  const kpiStrip=`<div style="display:grid;grid-template-columns:1.6fr 1fr 0.85fr 0.85fr 0.85fr;gap:8px;margin-bottom:14px;align-items:stretch">
-    <div style="grid-column:1;align-self:end;padding-bottom:6px">
-      <div style="font-size:13px;font-weight:500;color:${dim.ink4};margin-bottom:2px">Boat Status</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-        <span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">${availCount}</span>
-        <span style="font-size:18px;color:${dim.ink3};font-weight:500">boats</span>
-        <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ Available</span>
-      </div>
-      <div style="font-size:10px;color:${dim.ink3}">${allCompany.length} บริษัท · ${allCharter.length} charter${BOATS.filter(b=>b.retired).length?' · '+BOATS.filter(b=>b.retired).length+' retired':''}</div>
+  // §bsRedesign · ตัวกรองย้ายเข้าไปอยู่หัวการ์ดรายการ · ยังเรียก setBoatPier / setBoatSt / setBoatLocType ตัวเดิม
+  const _tabCss=(on)=>`min-height:32px;padding:0 11px;border-radius:16px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#0F1B3D':'#fff'};color:${on?'#fff':'#0F1B3D'};font:600 12px inherit;font-family:inherit;cursor:pointer`;
+  const _segCss=(on)=>`min-height:28px;padding:0 10px;border-radius:14px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#EEF1F8':'#fff'};color:#0F1B3D;font:600 11.5px inherit;font-family:inherit;cursor:pointer`;
+  const pierBtn=(val,label,n)=>`<button onclick="setBoatPier('${val}',null)" style="${_tabCss(boatPier===val)}">${label}${n==null?'':` <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span>`}</button>`;
+  const stBtn=(val,label)=>`<button onclick="setBoatSt('${val}',null)" style="${_segCss(boatSt===val)}">${label}</button>`;
+  const locBtn=(val,label)=>`<button onclick="setBoatLocType('${val}',null)" style="${_segCss(boatLocType===val)}">${label}</button>`;
+  const filterBar=`<div style="position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid #ECEBE6;padding:10px 12px 9px">
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${pierBtn('all','All',allCompany.length+allCharter.length)}${pierBtn('tublamu','Tub Lamu',tlCount)}${pierBtn('panwa','Visit Panwa',vpCount)}${rnCount?pierBtn('ranong','Ranong',rnCount):''}${shopCount?pierBtn('shop','In shop',shopCount):''}
     </div>
-
-    <div onclick="setBoatSt('available',null)" style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Available</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#0F6E56">${availCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">/ ${allCompany.length}</span></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:11px;color:#0F6E56;font-weight:600">${allCompany.length?Math.round(availCount/allCompany.length*100):0}% fleet</span></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px">
+      <span style="font-size:11px;color:#5B6170;width:46px">Status</span>
+      ${stBtn('all','Any')}${stBtn('available','Available')}${stBtn('fixing','Fixing')}${stBtn('unavailable','Unavailable')}
     </div>
-
-    <div onclick="setBoatSt('fixing',null)" style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Fixing</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#BA7517">${fixCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#854F0B;margin-top:6px;font-weight:600">${inShop?inShop+' in shop':'on dock'}</div>
-    </div>
-
-    <div onclick="setBoatSt('unavailable',null)" style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};cursor:pointer">
-      <div style="font-size:10px;color:${dim.ink3}">Unavailable</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#A32D2D">${unavCount}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#A32D2D;margin-top:6px;font-weight:600">${unavCount?'major issue':'all clear'}</div>
-    </div>
-
-    <div style="grid-column:5;background:${dim.ink};color:white;border-radius:14px;padding:11px 13px">
-      <div style="font-size:10px;color:#aaa">Charter active</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2">${allCharter.length}</span><span style="font-size:11px;color:#aaa;font-weight:500">boats</span></div>
-      <div style="font-size:11px;color:#aaa;margin-top:6px">${new Set(allCharter.map(c=>c.charter_co||c.owner||'')).size||0} partners</div>
-    </div>
-  </div>`;
-
-  // Filter bar
-  const pierBtn=(val,label)=>`<button onclick="setBoatPier('${val}',null)" style="background:${boatPier===val?dim.ink:'transparent'};color:${boatPier===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:${boatPier===val?600:500};cursor:pointer">${label}</button>`;
-  const stBtn=(val,label,activeBg)=>`<button onclick="setBoatSt('${val}',null)" style="background:${boatSt===val?(activeBg||dim.ink):'transparent'};color:${boatSt===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:${boatSt===val?600:500};cursor:pointer">${label}</button>`;
-  const locBtn=(val,label,activeBg)=>`<button onclick="setBoatLocType('${val}',null)" style="background:${boatLocType===val?(activeBg||dim.ink):'transparent'};color:${boatLocType===val?'white':dim.ink2};border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:${boatLocType===val?600:500};cursor:pointer">${label}</button>`;
-
-  const filterBar=`<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-    <span style="font-size:11px;color:${dim.ink3};margin-right:6px;font-weight:500">filter</span>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex">
-      ${pierBtn('all','All')}${pierBtn('tublamu','Tub Lamu')}${pierBtn('panwa','Visit Panwa')}${rnCount?pierBtn('ranong','Ranong'):''}${shopCount?pierBtn('shop','🔧 In Shop'):''}
-    </div>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex;margin-left:6px">
-      ${stBtn('all','All')}
-      ${stBtn('available','Available','#1D9E75')}
-      ${stBtn('fixing','Fixing','#BA7517')}
-      ${stBtn('unavailable','Unavail','#A32D2D')}
-    </div>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex;margin-left:6px">
-      ${locBtn('all','All loc')}
-      ${locBtn('pier','At pier','#185FA5')}
-      ${locBtn('shop','In shop','#854F0B')}
-      ${locBtn('dock','On dock','#A32D2D')}
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px">
+      <span style="font-size:11px;color:#5B6170;width:46px">Where</span>
+      ${locBtn('all','Anywhere')}${locBtn('pier','At pier')}${locBtn('shop','In shop')}${locBtn('dock','On dock')}
     </div>
   </div>`;
 
@@ -5215,23 +6200,24 @@ function renderBoats(){
     const editBtn=isCharter
       ? `<button onclick="event.stopPropagation();openBoatEdit('${b.id}')" title="แก้ไขเรือเช่า" style="background:none;border:none;color:${isSel?SVG_PINK.text:dim.ink4};font-size:12px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">&#9998;</button>`
       : '';
-    return`<div data-bid="${b.id}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;cursor:pointer;${isSel?'background:'+SVG_PINK.soft+';border:1px solid #F0C0D0;':'border:1px solid transparent;border-top:0.5px solid '+dim.line+';margin-top:2px;'}${isCharterInactive?'opacity:.65;':''}">
+    /* §bsRedesign · แถวกระชับ · ป้ายสถานะชิดขวาตำแหน่งเดียวกันทุกแถว · เลิกหรี่ตัวหนังสือของเรือที่ซ่อม/หยุดใช้
+       (10 จาก 15 ลำกำลังซ่อม = หรี่เกือบทั้งรายการ อ่านยาก · ป้ายสถานะบอกอยู่แล้ว) เหลือแค่วงกลมชื่อเป็นขาวดำ */
+    return`<div data-bid="${b.id}" data-q="${escB(((b.name||'')+' '+(b.type||'')).toLowerCase())}" onclick="selectBoat('${b.id}')" style="display:flex;align-items:center;gap:10px;min-height:54px;box-sizing:border-box;padding:7px 12px;cursor:pointer;border-bottom:1px solid #ECEBE6;background:${isSel?'#E8F3FB':'#fff'};${isSel?'box-shadow:inset 3px 0 0 #1272B3;':''}${isCharterInactive?'opacity:.65;':''}">
       <div style="width:32px;height:32px;border-radius:50%;background:${c};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;${avatarFilter}">${init}</div>
-      <div style="flex:1;min-width:0;${contentOpacity}">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600;color:${dim.ink}">${b.name}</span><span style="background:${ss.bg};color:${ss.color};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;letter-spacing:.04em">${ss.label}</span>${asnBadge}${projChip}</div>
-        <div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;overflow:hidden">
-          <span style="font-size:9px;color:${isSel?SVG_PINK.text:dim.ink3}">${metaLeft}</span>
-          ${locPill?'<span style="color:'+dim.ink5+';font-size:9px">·</span>'+locPill:''}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600;color:#0F1B3D">${b.name}</span>${asnBadge}${projChip}</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap;overflow:hidden">
+          <span style="font-size:11px;color:#5B6170">${metaLeft}</span>
+          ${locPill?'<span style="color:#9A9A92;font-size:10px">·</span>'+locPill:''}
         </div>
       </div>
-      ${editBtn}<span style="color:${isSel?SVG_PINK.text:(isDimmed?'#ddd':dim.ink5)};font-size:14px;flex-shrink:0">›</span>
+      ${editBtn}<span style="flex:none;background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span>
     </div>`;
   };
 
-  const sectionHd=(label,color,bg,count)=>`<div style="display:flex;align-items:center;gap:6px;margin:14px 0 8px;padding:0 4px 8px;border-bottom:1px solid rgba(0,0,0,.06)">
-    <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
-    <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
-    <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600">${count}</span>
+  const sectionHd=(label,color,bg,count)=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:9px 14px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">
+    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658">${String(label).replace(/^[^A-Za-z฀-๿]+/,'')}</span>
+    <span style="font-size:11px;color:#5B6170">${count} boat${count===1?'':'s'}</span>
   </div>`;
 
   const tlList=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='tublamu');
@@ -5275,10 +6261,10 @@ function renderBoats(){
   // Charter section
   let charterHtml='';
   if(allCharter.length){
-    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:6px;margin:16px 0 8px;padding:8px 12px;background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%);border-radius:10px">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9F1B4F">เรือเช่า</span>
-      <span style="background:#E03B7E;color:white;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">${charterBoats.length}</span>
-      <button onclick="openCharterModal()" style="margin-left:auto;background:#1A1A1A;color:white;border:none;border-radius:14px;padding:4px 11px;font-size:10px;font-weight:600;cursor:pointer">+ เพิ่ม</button>
+    charterHtml=`<div data-chhd="1" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#F1EEF9;border-bottom:1px solid #ECEBE6">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#3E2A78">เรือเช่า</span>
+      <span style="font-size:11px;color:#5B6170">${charterBoats.length} boat${charterBoats.length===1?'':'s'}</span>
+      <button onclick="openCharterModal()" style="margin-left:auto;height:28px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;border-radius:14px;padding:0 11px;font:600 11.5px inherit;font-family:inherit;cursor:pointer">+ เพิ่ม</button>
     </div>`+chGroupedRows(charterBoats,buildBoatRow,dim);
   }
 
@@ -5287,13 +6273,14 @@ function renderBoats(){
   }
 
   /* §bsKeepScroll · id คงที่ เพื่อจำตำแหน่งเลื่อนข้ามการวาดใหม่ (ดูท้ายฟังก์ชัน) */
-  const listPanel=`<div id="bs-list-panel" style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
+  const listPanel=`<div id="bs-list-panel" style="background:#fff;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);max-height:calc(100vh - 110px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin">
+    ${filterBar}
     ${listHtml}
     ${charterHtml}
   </div>`;
 
   // Detail panel placeholder — actual content handled by selectBoat() in the original `bdp` element
-  const detailPanel=`<div id="bs-detail-mount" style="background:white;border-radius:14px;padding:0;border:1px solid ${dim.line};min-height:400px;overflow:hidden"></div>`;
+  const detailPanel=`<div id="bs-detail-mount" style="background:white;border-radius:12px;padding:0;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);min-height:400px;overflow:hidden"></div>`;
 
   // Detach bdp before resetting innerHTML to avoid losing it
   const bdp=document.getElementById('bdp');
@@ -5312,13 +6299,14 @@ function renderBoats(){
   const _keepEl=document.getElementById('bs-list-panel');
   const _keepTop=_keepEl?_keepEl.scrollTop:0;
   const _keepWin=window.scrollY;
+  /* §bsFit · แผงขวาเลื่อนในตัวเองแล้ว · บันทึกสถานะจากช่องวันท้ายปี = วาดใหม่ทั้งหน้า ต้องคืนตำแหน่งเลื่อนของแผงขวาด้วย */
+  const _keepDet=(window._bsDetFor===selBoatId) ? ((document.getElementById('bs-detail-mount')||{}).scrollTop||0) : 0;
 
   // Wrap
   document.getElementById('bs-pink-wrap').innerHTML=`
     ${headerBar}
     ${kpiStrip}
-    ${filterBar}
-    <div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">
+    <div class="bs-2col" style="display:grid;grid-template-columns:380px minmax(0,1fr);gap:13px;align-items:start">
       ${listPanel}
       ${detailPanel}
     </div>`;
@@ -5340,6 +6328,9 @@ function renderBoats(){
      คืนตำแหน่งหน้าต่างหลังวาดครบแล้ว และคืนของรายการซ้ำอีกครั้งเผื่อโดนหนีบ */
   if(_newEl&&_keepTop&&_newEl.scrollTop!==_keepTop) _newEl.scrollTop=_keepTop;
   if(_keepWin&&window.scrollY!==_keepWin) window.scrollTo(0,_keepWin);
+  window._bsDetFor=selBoatId;
+  bsFit(); bsApplyQ();
+  if(_keepDet){ const _dm=document.getElementById('bs-detail-mount'); if(_dm) _dm.scrollTop=_keepDet; }
 }
 function bsCalShift(n){
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
@@ -5522,9 +6513,9 @@ function renderBoatDetailPink(){
   const pierDisplay=cur.loc||PIER_LBL[curPier]||curPier;
 
   const STATUS_STYLE={
-    available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
-    fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
-    unavailable:{bg:'#FCEBEB',color:'#A32D2D',label:'UNAVAILABLE'}
+    available:{bg:'#DDF1EA',color:'#0B5A43',label:'Available'},
+    fixing:{bg:'#FBEBD3',color:'#7A4300',label:'Fixing'},
+    unavailable:{bg:'#FBE3E0',color:'#8E2019',label:'Unavailable'}
   };
   // Charter: check if today is covered by log entry
   const hasLogToday=(b.log||[]).some(e=>e.from<=TODAY_STR&&(!e.to||e.to>=TODAY_STR));
@@ -5558,78 +6549,65 @@ function renderBoatDetailPink(){
     return diffDays>=0?`${diffDays} days ago`:'';
   })():'no service';
 
-  // Status timeline calendar (use bsCalDate state, default to today)
+  /* §bsYearCal (2026-10-07) · ปฏิทินสถานะทั้งปี 12 เดือน แบบเดียวกับปฏิทินของหน้า Programs
+     ผู้ใช้เลือกแบบนี้เพราะเห็นภาพรวมทั้งปี · และขอให้ยังเห็นว่าวันนั้นเรืออยู่ท่าไหน ด้วยตัวอักษรคนละสีกับสีสถานะ
+     ตรรกะต่อช่องเหมือนของเดิมทุกข้อ:
+       · สถานะอ่านจาก getStoredStatus (ช่องนี้คลิกแล้วแก้แถวนั้น ต้องตรงกับตาราง · §boatEff3)
+       · ท่าอ่านจาก getBoatCurrentPier(เรือ, วัน) กติกาเดียวกับทั้งระบบ (§bsCalPier)
+       · เรือเช่าวันที่ไม่มี log = ช่องว่าง · วันข้างหน้าที่ยังไม่มี log = ช่องว่าง (ยังโชว์ท่า)
+       · คลิกช่อง = bsCellClick เปิดฟอร์มเพิ่มสถานะของวันนั้น
+     ปีที่ดู = ปีของ window.bsCalDate (ตัวแปรเดิม) · ปุ่มเลื่อนปีเรียก bsCalShift(±12) */
   if(typeof window.bsCalDate==='undefined'||!window.bsCalDate)window.bsCalDate=new Date(TODAY_STR);
   const calRef=window.bsCalDate;
   const today=new Date(TODAY_STR);
-  const yr=calRef.getFullYear(), mo=calRef.getMonth();
-  const firstDay=new Date(yr,mo,1);
-  const lastDay=new Date(yr,mo+1,0);
-  const startWd=(firstDay.getDay()+6)%7; // Mon=0
-  const daysInMonth=lastDay.getDate();
-  const totalCells=Math.ceil((startWd+daysInMonth)/7)*7;
+  const yr=calRef.getFullYear();
   const MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthLabel=`${MONTHS_EN[mo]} ${yr}`;
-
-  const STATUS_CAL_COLOR={available:'#1D9E75',fixing:'#BA7517',unavailable:'#A32D2D'};
-
-  // Get status for each day + capture log entry
-  // Debug: log b.log state
   if(window.bsDebug)console.log('[BoatStatus]',b.name,'log:',JSON.parse(JSON.stringify(b.log||[])));
-  const calCells=[];
-  for(let i=0;i<totalCells;i++){
-    if(i<startWd||i>=startWd+daysInMonth){
-      calCells.push({empty:true});
-      continue;
-    }
-    const dayN=i-startWd+1;
-    const d=new Date(yr,mo,dayN);
-    const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(dayN).padStart(2,'0')}`;
-    const st=getStoredStatus(b,ds);   /* §boatEff3 · ช่องนี้คลิกแล้วแก้แถวนั้น ต้องตรงกับตาราง */
-    const isToday=ds===TODAY_STR;
-    const isFuture=ds>TODAY_STR;
-    // Find log entry covering this day (for edit on click)
-    const logEntry=(b.log||[]).find(e=>e.from<=ds&&(!e.to||e.to>=ds));
-    calCells.push({day:dayN,ds,status:st.s||'available',isToday,isFuture,logId:logEntry?logEntry.id:null});
-  }
-
-  const calRows=[];
-  for(let r=0;r<calCells.length;r+=7){
-    calRows.push(calCells.slice(r,r+7));
-  }
-
-  /* §bsCalPier (2026-10-03) · ปฏิทินสถานะของเรือ บอกด้วยว่าวันนั้นเรืออยู่ท่าไหน
-     ผู้ใช้ขอ "ปฏิทินของเรือ ระบุด้วยว่าอยู่ที่ท่าเรือไหน วันนั้น ๆ" · ของเดิมสีบอกแค่พร้อม/ซ่อม/หยุดใช้
-     เรือที่ย้ายท่ากลางเดือน (เช่น 13–14 พันวา · 15–23 ทับละมุ) ต้องไล่อ่านประวัติข้างล่างเอง
-     อ่านจากกติกาเดียวกับทั้งระบบ getBoatCurrentPier(เรือ, วัน) · อยู่อู่ = ป้ายประแจ */
-  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'\u{1F527}'};
+  const _bsPierShort={tublamu:'TL',panwa:'VP',ranong:'RN',shop:'SH'};
+  /* สีตัวอักษรของท่า · เลี่ยงเขียว/ส้ม/แดงที่เป็นสีพื้นของสถานะ · วางบนป้ายขาวจึงอ่านออกบนพื้นทุกสี */
+  const _bsPierInk={tublamu:'#0B4FA8',panwa:'#6B21A8',ranong:'#00646E',shop:'#1F1F1F'};
   const _bsPierFull=p=>p==='shop'?'In shop':((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[p])||((typeof laPierName==='function')?laPierName(p):p)||p);
-  const _bsPierTag=(c,onColor)=>{
-    let p=''; try{ p=getBoatCurrentPier(b,c.ds)||''; }catch(_){}
-    if(!p) return '';
-    const sh=_bsPierShort[p]||String(p).slice(0,2).toUpperCase();
-    return `<span data-bspier="${p}" title="${c.ds} · ${_bsPierFull(p)}" style="position:absolute;top:3px;right:3px;font-size:8.5px;font-weight:800;line-height:1;padding:2px 3px;border-radius:4px;font-family:'DM Sans',sans-serif;${onColor?'background:rgba(255,255,255,.26);color:#fff':'background:#F1EFE8;color:#6B6860'}">${sh}</span>`;
+  /* [พื้นวันที่ผ่านมา/วันนี้, ตัวหนังสือ, พื้นวันข้างหน้าที่มี log, ตัวหนังสือวันข้างหน้า] */
+  const _bsFill={available:['#DDF1EA','#0B3D2E','#EEF8F4','#0B3D2E'],fixing:['#E0A040','#3D2A05','#F5DDB2','#5C4310'],unavailable:['#A1271F','#FFFFFF','#EDB5AF','#5A120D']};
+  const _bsStLbl={available:'Available',fixing:'Fixing',unavailable:'Unavailable'};
+  const _bsNoTag='<span style="height:11px"></span>';
+  const bsMonth=(mo)=>{
+    const first=new Date(yr,mo,1).getDay(), n=new Date(yr,mo+1,0).getDate();
+    let cells='', nFix=0, nUn=0;
+    for(let i=0;i<first;i++) cells+='<div></div>';
+    for(let d=1;d<=n;d++){
+      const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday=ds===TODAY_STR, isFuture=ds>TODAY_STR;
+      const logEntry=(b.log||[]).find(e=>e.from<=ds&&(!e.to||e.to>=ds));
+      const logId=logEntry?logEntry.id:null;
+      const charterOff=isCharter&&!logId;
+      const blank=charterOff||(isFuture&&!logId);
+      let pr=''; if(!charterOff){ try{ pr=getBoatCurrentPier(b,ds)||''; }catch(_){} }
+      const tag=pr?`<span data-bspier="${pr}" style="font:700 9px/1 'DM Sans',sans-serif;letter-spacing:.02em;padding:1px 2px;border-radius:2px;background:#fff;color:${_bsPierInk[pr]||'#1F1F1F'}">${_bsPierShort[pr]||String(pr).slice(0,2).toUpperCase()}</span>`:_bsNoTag;
+      let bg='#fff', fg='#8A8A82', ring='inset 0 0 0 1px #ECEBE6', stTxt='no status set', dark=false;
+      if(!blank){
+        const stv=getStoredStatus(b,ds).s||'available';
+        const f=_bsFill[stv]||_bsFill.available;
+        bg=isFuture?f[2]:f[0]; fg=isFuture?f[3]:f[1]; ring='none'; stTxt=_bsStLbl[stv]||stv; dark=(stv==='unavailable'&&!isFuture);
+        if(stv==='fixing') nFix++; else if(stv==='unavailable') nUn++;
+      }
+      if(isToday) ring='inset 0 0 0 2px #0F1B3D'+(dark?', inset 0 0 0 3px #fff':'');
+      cells+=`<div onclick="bsCellClick('${ds}',${logId?`'${logId}'`:'null'})" title="${ds} · ${stTxt}${pr?' · '+_bsPierFull(pr):''}" style="height:34px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;background:${bg};color:${fg};box-shadow:${ring}"><span style="font:${isToday?700:400} 11px/1 'DM Mono',monospace">${d}</span>${tag}</div>`;
+    }
+    const isNow=(today.getFullYear()===yr)&&(today.getMonth()===mo);
+    const note=[nFix?nFix+' fixing':'', nUn?nUn+' unavail':''].filter(x=>x).join(' · ');
+    return `<div>
+      <div style="font-size:11px;font-weight:700;color:#0F1B3D;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:baseline;justify-content:space-between;gap:6px">
+        <span>${MONTHS_EN[mo]}${isNow?` <span style="background:#0F1B3D;color:#fff;padding:1px 5px;border-radius:4px;font-size:8.5px;letter-spacing:.04em;vertical-align:1px">NOW</span>`:''}</span>
+        ${note?`<span style="font-size:10.5px;font-weight:600;color:#7A4300;text-transform:none;letter-spacing:0">${note}</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:9.5px;color:#5B6170;text-align:center;margin-bottom:3px;font-weight:600">
+        <span style="color:#A63A1C">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#A63A1C">Sa</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
+    </div>`;
   };
-  const calHtml=calRows.map(row=>row.map(c=>{
-    if(c.empty)return`<div style="aspect-ratio:1"></div>`;
-    // Charter boats: only render colored cells when there's a log entry covering that day
-    // Otherwise render as empty white (charter is "off" by default)
-    if(isCharter&&!c.logId){
-      const todayBorder=c.isToday?`box-shadow:0 0 0 2px white,0 0 0 4px ${SVG_PINK.accent};`:'';
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${todayBorder}">${c.day}</div>`;
-    }
-    // Future days WITHOUT log entry → empty white cell
-    if(c.isFuture&&!c.logId){
-      return`<div onclick="bsCellClick('${c.ds}',null)" style="position:relative;aspect-ratio:1;background:white;border:0.5px solid rgba(0,0,0,.06);border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:${dim.ink5};font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">${c.day}${_bsPierTag(c,false)}</div>`;
-    }
-    // Past or future WITH log entry → status color
-    const bg=STATUS_CAL_COLOR[c.status]||'#1D9E75';
-    const ringStyle=c.isToday?`box-shadow:0 0 0 2px white,0 0 0 4px ${SVG_PINK.accent};background:${SVG_PINK.accent};font-weight:700`:'';
-    // Slightly fade future days with log to differentiate from past
-    const futureOpacity=c.isFuture&&!c.isToday?'opacity:.85;':'';
-    const handler=c.logId?`bsCellClick('${c.ds}','${c.logId}')`:`bsCellClick('${c.ds}',null)`;
-    return`<div onclick="${handler}" style="position:relative;aspect-ratio:1;background:${bg};border-radius:5px;display:flex;align-items:flex-end;padding:3px;color:white;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;${futureOpacity}${ringStyle}">${c.day}${_bsPierTag(c,true)}</div>`;
-  }).join('')).join('');
+  let yearHtml=''; for(let m=0;m<12;m++) yearHtml+=bsMonth(m);
 
   // Recent status changes — show ALL log entries (sorted by from desc)
   const events=[];
@@ -5692,30 +6670,39 @@ function renderBoatDetailPink(){
     const locLbl=ev.detail||(lt?lt.label:'');
     let locHtml='';
     if(locLbl&&lps){
-      locHtml=`<div style="display:flex;align-items:center;gap:5px;margin-top:3px"><span style="background:${lps.bg};color:${lps.color};padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${locLbl}</span>${ev.province?'<span style="color:'+dim.ink5+';font-size:9px">·</span><span style="font-size:10px;color:'+dim.ink3+'">'+ev.province+'</span>':''}</div>`;
+      locHtml=`<div style="display:flex;align-items:center;gap:5px;margin-top:3px"><span style="background:${lps.bg};color:${lps.color};padding:1px 7px;border-radius:5px;font-size:10.5px;font-weight:600">${locLbl}</span>${ev.province?'<span style="color:'+dim.ink5+';font-size:9px">·</span><span style="font-size:10px;color:'+dim.ink3+'">'+ev.province+'</span>':''}</div>`;
     } else if(ev.legacyLoc){
-      locHtml=`<div style="font-size:10px;color:${dim.ink3};margin-top:2px">${ev.legacyLoc}</div>`;
+      /* ค่าเก่าบางแถวเก็บขีดไว้แทนค่าว่าง · ไม่ต้องโชว์ขีดเป็นบรรทัดที่สอง */
+      if(!/^[\s\-–—]*$/.test(String(ev.legacyLoc))) locHtml=`<div style="font-size:11px;color:#5B6170;margin-top:2px">${ev.legacyLoc}</div>`;
     }
-    return`<div ${clickHandler} style="display:grid;grid-template-columns:120px 1fr 70px 24px;gap:12px;padding:11px 14px;align-items:center;${isLast?'':'border-bottom:0.5px solid rgba(0,0,0,.06)'};cursor:${ev.logId?'pointer':'default'}">
+    /* §bsDetail2 · แถวประวัติกระชับลง · ผลลัพธ์ (ซ่อมอยู่/ซ่อมเสร็จ/พร้อม) เป็นป้ายเดียวกับป้ายสถานะ · แถวที่ยังไม่จบเน้นพื้น */
+    const open=!ev.endDate;
+    return`<div ${clickHandler} style="display:grid;grid-template-columns:132px minmax(0,1fr) auto 14px;gap:12px;min-height:48px;box-sizing:border-box;padding:7px 14px;align-items:center;${isLast?'':'border-bottom:1px solid #ECEBE6;'}background:${open?'#F3F8FC':'#fff'};cursor:${ev.logId?'pointer':'default'}">
       <div>
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${dim.ink};font-weight:500">${fmtEvtDate(ev.date,ev.endDate)}</div>
-        ${dur?`<div style="font-size:9px;color:${dim.ink3};margin-top:1px">${dur}</div>`:''}
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:#0F1B3D;font-weight:500">${fmtEvtDate(ev.date,ev.endDate)}</div>
+        ${dur?`<div style="font-size:11px;color:#5B6170;margin-top:1px">${dur}</div>`:''}
       </div>
       <div style="min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="background:${evSt.bg};color:${evSt.color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600">${evSt.label}</span><span style="font-size:11px;color:${dim.ink};font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="flex:none;background:${evSt.bg};color:${evSt.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${evSt.label}</span><span style="font-size:13px;color:#0F1B3D;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
         ${locHtml}
       </div>
-      <div style="font-size:10px;color:${outcomeColor};text-align:right;font-weight:500">${ev.outcome}</div>
-      <span style="color:${dim.ink5};font-size:14px">${ev.logId?'›':''}</span>
+      <span style="font-size:11.5px;color:${open?'#0F1B3D':'#5B6170'};font-weight:${open?700:500};white-space:nowrap">${ev.outcome}</span>
+      <span style="color:#9A9A92;font-size:14px">${ev.logId?'›':''}</span>
     </div>`;
   }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:20px">ยังไม่มีประวัติสถานะ</div>`;
 
   // Render
-  mount.innerHTML=`<div style="background:white;border-radius:14px;padding:16px 18px;border:1px solid ${dim.line}">
+  const _bsBtn='height:36px;padding:0 15px;border-radius:18px;font:600 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px';
+  const _bsFact=(l,v,c)=>`<div style="flex:1 1 150px;padding:9px 14px;border-right:1px solid #ECEBE6"><div style="font-size:11px;color:#5B6170">${l}</div><div style="margin-top:2px;font-size:13.5px;font-weight:600;color:${c||'#0F1B3D'}">${v}</div></div>`;
+  const _bsLg=(sw,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;${sw}"></span>${l}</span>`;
+  const _bsLoc=(k,l)=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font:700 10px/1 'DM Sans',sans-serif;padding:2px 4px;border-radius:3px;background:#fff;border:1px solid #E4E3DD;color:${_bsPierInk[k]}">${_bsPierShort[k]}</span>${l}</span>`;
+  const _bsNav='width:32px;height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;cursor:pointer;color:#0F1B3D;display:inline-flex;align-items:center;justify-content:center';
+  const _bsTool='height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;padding:0 10px;cursor:pointer;color:#3E4658;font:600 11.5px inherit;font-family:inherit';
+  mount.innerHTML=`<div style="background:white;padding:18px 20px 20px">
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
@@ -5726,58 +6713,46 @@ function renderBoatDetailPink(){
           return `<div style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:#FDF2F8;color:#9F1B4F;padding:3px 10px;border-radius:10px;font-size:10px;font-weight:600;border:0.5px solid #F0C0D0">📍 ${fromLbl} → ${toLbl} <span style="opacity:.7;font-weight:400">· until ${active.endDate}</span></div>`;
         })()}
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="qfOpen('${b.id}')" title="Quick Fix Log · พบ + ซ่อม + จบในขั้นตอนเดียว" style="background:#E1F5EE;color:#0F6E56;border:1px solid #9FE1CB;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Quick Fix
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        <button onclick="qfOpen('${b.id}')" title="Quick Fix Log · พบ + ซ่อม + จบในขั้นตอนเดียว" style="${_bsBtn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Quick fix
         </button>
-        <button onclick="flOpenNewAssignment('${b.id}')" style="background:white;color:${dim.ink};border:1px solid rgba(0,0,0,.12);border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">+ Move</button>
-        <button onclick="openAddStatusModal()" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Status</button>
+        <button onclick="flOpenNewAssignment('${b.id}')" style="${_bsBtn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">Move boat</button>
+        <button onclick="openAddStatusModal()" style="${_bsBtn};background:#1272B3;color:#fff;border:1px solid #1272B3">Change status</button>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Engines</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px">${engs.length}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${engBrandModel||'no engines'}</div>
-      </div>
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Avg hours</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px">${avgHours.toLocaleString()}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${lastServiceLabel}</div>
-      </div>
-      <div style="background:${dim.bg};border-radius:10px;padding:10px 12px">
-        <div style="font-size:10px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">Spares on board</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px;color:${totalSpares?SVG_PINK.text:dim.ink}">${totalSpares}</div>
-        <div style="font-size:10px;color:${dim.ink2}">${spareDetail}</div>
-      </div>
+    <div style="display:flex;flex-wrap:wrap;margin-bottom:16px;border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+      ${_bsFact('Today', `${ss.label}${pierDisplay?' · '+pierDisplay:''}`, ss.color)}
+      ${_bsFact('Engines', engs.length?`<span style="font-family:'DM Mono',monospace;font-weight:500">${engs.length}</span> · ${engBrandModel||'—'}`:'No engines')}
+      ${_bsFact('Avg engine hours', `<span style="font-family:'DM Mono',monospace;font-weight:500">${avgHours.toLocaleString()}</span>${lastServiceLabel?` <span style="font-size:11px;font-weight:400;color:#5B6170">· service ${lastServiceLabel==='no service'?'none yet':lastServiceLabel}</span>`:''}`)}
+      ${_bsFact('Spares on board', totalSpares?`<span style="font-family:'DM Mono',monospace;font-weight:500">${totalSpares}</span> · ${spareDetail}`:'None')}
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">Status Timeline</span>
-      <div style="display:flex;align-items:center;gap:4px;background:${dim.bg};border-radius:14px;padding:2px">
-        <button onclick="bsCalShift(-1)" style="background:none;border:none;color:${dim.ink2};font-size:13px;cursor:pointer;padding:2px 8px;border-radius:10px;font-weight:600">‹</button>
-        <span style="font-size:11px;font-weight:600;color:${dim.ink};font-family:'DM Mono',monospace;min-width:74px;text-align:center">${monthLabel}</span>
-        <button onclick="bsCalShift(1)" style="background:none;border:none;color:${dim.ink2};font-size:13px;cursor:pointer;padding:2px 8px;border-radius:10px;font-weight:600">›</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#0F1B3D;margin-right:2px">Status timeline</span>
+        <button onclick="bsCalShift(-12)" aria-label="Previous year" style="${_bsNav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span style="font-size:16px;font-weight:500;min-width:52px;text-align:center;font-family:'DM Mono',monospace;color:#0F1B3D">${yr}</span>
+        <button onclick="bsCalShift(12)" aria-label="Next year" style="${_bsNav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${today.getFullYear()!==yr?`<button onclick="bsCalToday()" style="${_bsTool}">This year</button>`:''}
+        <button onclick="bsDebugLog('${b.id}')" title="Show raw log data" style="${_bsTool}">Raw log</button>
+        <button onclick="bsCleanupLog('${b.id}')" title="Cleanup overlapping log entries" style="${_bsTool}">Clean up</button>
       </div>
-      <button onclick="bsDebugLog('${b.id}')" style="background:${dim.bg};border:none;border-radius:14px;padding:4px 9px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500" title="Show raw log data">🔍</button>
-      <button onclick="bsCleanupLog('${b.id}')" style="background:${dim.bg};border:none;border-radius:14px;padding:4px 9px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500" title="Cleanup overlapping log entries">🧹</button>
-      <button onclick="bsCalToday()" style="margin-left:auto;background:${dim.bg};border:none;border-radius:14px;padding:4px 11px;font-size:10px;color:${dim.ink2};cursor:pointer;font-weight:500">Today</button>
+      <div style="display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11.5px;color:#3E4658">
+        ${_bsLg('background:#DDF1EA','Available')}
+        ${_bsLg('background:#E0A040','Fixing')}
+        ${_bsLg('background:#A1271F','Unavailable')}
+        ${_bsLg('background:#F5DDB2','Lighter = after today')}
+        ${_bsLg('border:2px solid #0F1B3D','Today')}
+      </div>
     </div>
-
-    <div style="background:#FBFAF7;border-radius:10px;padding:12px 14px;margin-bottom:14px;max-width:520px">
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:9px;color:${dim.ink3};font-weight:600;text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">
-        <span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">${calHtml}</div>
-      <div style="display:flex;align-items:center;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.06);font-size:10px;color:${dim.ink2};flex-wrap:wrap">
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#1D9E75;border-radius:3px"></span>Available</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#BA7517;border-radius:3px"></span>Fixing</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#A32D2D;border-radius:3px"></span>Unavailable</span>
-        <span data-bspier-legend="1" style="display:flex;align-items:center;gap:5px;color:${dim.ink3}">TL Tub Lamu &middot; VP Visit Panwa &middot; RN Ranong &middot; &#128295; ${laT('อู่')}</span>
-        <span style="margin-left:auto;font-family:'DM Mono',monospace">Today: ${MONTHS_EN[today.getMonth()]} ${today.getDate()}</span>
-      </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${yearHtml}</div>
+    <div data-bspier-legend="1" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:12px 0 18px;font-size:11.5px;color:#3E4658">
+      <span style="color:#5B6170">Where the boat is that day:</span>
+      ${_bsLoc('tublamu','Tub Lamu')}${_bsLoc('panwa','Visit Panwa')}${_bsLoc('ranong','Ranong')}${_bsLoc('shop',laT('อู่'))}
+      <span style="color:#5B6170">· คลิกที่วันเพื่อเพิ่มสถานะของวันนั้น</span>
     </div>
 
     ${(function(){
@@ -5788,40 +6763,40 @@ function renderBoatDetailPink(){
       const pastA = typeof getPastAssignments==='function'?getPastAssignments(b):[];
       const total = (activeA?1:0) + plannedA.length + pastA.length;
       if(total === 0) return '';
-      const renderAsnCard=(a,statusLabel,statusColor,statusBg)=>{
+      /* §bsDetail2 (2026-10-07) · ผู้ใช้: "ปรับให้ตรงกับดีไซน์เรา" · ส่วน Pier Assignments ยังเป็นโฉมเก่า
+         (หมุด emoji · ปุ่ม + New สีชมพู · การ์ดขอบซ้ายสี · วันที่แบบ ISO) → แถวในกรอบเดียว ป้ายสถานะชุดเดียวกับส่วนอื่น */
+      const escA=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const fmtA=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+      const renderAsnCard=(a,statusLabel,pillBg,pillFg)=>{
         const fromLbl=PIER_LABELS[a.fromPier]||a.fromPier;
         const toLbl=PIER_LABELS[a.toPier]||a.toPier;
-        return `<div style="background:#FBFAF7;border-radius:10px;padding:9px 11px;border-left:3px solid ${statusColor};margin-bottom:4px">
-          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600">${fromLbl} → ${toLbl}</div>
-              <div style="font-size:10px;color:${dim.ink2};margin-top:1px">${a.startDate} – ${a.endDate} · ${a.type==='permanent'?'Permanent':'Temporary'}</div>
-              ${a.reason?`<div style="font-size:10px;color:${dim.ink3};margin-top:2px;font-style:italic">${a.reason}</div>`:''}
-              ${a.cost?`<div style="font-size:10px;color:${dim.ink3};margin-top:1px;font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</div>`:''}
-            </div>
-            <div style="display:flex;flex-direction:column;gap:3px;align-items:end;flex-shrink:0">
-              <span style="background:${statusBg};color:${statusColor};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${statusLabel}</span>
-              ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="background:none;border:none;color:${dim.ink3};font-size:9px;cursor:pointer;padding:0">Cancel</button>`:''}
-            </div>
+        return `<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;min-height:50px;box-sizing:border-box;padding:8px 14px;border-bottom:1px solid #ECEBE6">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13px;font-weight:600;color:#0F1B3D">${escA(fromLbl)} → ${escA(toLbl)}</div>
+            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${fmtA(a.endDate)} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
           </div>
+          <span style="flex:none;background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${statusLabel}</span>
+          ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;font:600 11.5px inherit;font-family:inherit;cursor:pointer">Cancel</button>`:''}
         </div>`;
       };
-      return `<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="font-size:13px;font-weight:600">📍 Pier Assignments <span style="color:${dim.ink3};font-weight:400">${total}</span></span>
-          <button onclick="flOpenNewAssignment('${b.id}')" style="background:none;border:none;color:#9F1B4F;font-size:11px;font-weight:600;cursor:pointer">+ New</button>
+      return `<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700;color:#0F1B3D">Pier assignments <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${total}</span></span>
+          <button onclick="flOpenNewAssignment('${b.id}')" style="${_bsTool}">+ New</button>
         </div>
-        ${activeA?renderAsnCard(activeA,'Active','#0F6E56','#E0F5EC'):''}
-        ${plannedA.slice(0,2).map(a=>renderAsnCard(a,'Planned','#854F0B','#FAEEDA')).join('')}
-        ${pastA.slice(0,2).map(a=>renderAsnCard(a,'Completed','#999','#F0EEEA')).join('')}
+        <div style="border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+          ${activeA?renderAsnCard(activeA,'Active','#DDF1EA','#0B5A43'):''}
+          ${plannedA.slice(0,2).map(a=>renderAsnCard(a,'Planned','#FBEBD3','#7A4300')).join('')}
+          ${pastA.slice(0,2).map(a=>renderAsnCard(a,'Completed','#F1F0EC','#3E4658')).join('')}
+        </div>
       </div>`;
     })()}
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:13px;font-weight:600">Status history</span>
-      <span style="font-size:10px;color:${dim.ink3}">${events.length} entries</span>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:700;color:#0F1B3D">Status history <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${events.length}</span></span>
+      <span style="font-size:11.5px;color:#5B6170">คลิกแถวเพื่อแก้ไข</span>
     </div>
-    <div style="background:#FBFAF7;border-radius:10px;overflow:hidden;max-height:400px;overflow-y:auto">${eventsHtml}</div>
+    <div style="border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">${eventsHtml}</div>
   </div>`;
 }
 
@@ -9668,6 +10643,31 @@ function tmApplyMarketOrder(ids){
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'บันทึกลำดับ Market แล้ว', status:SB_MARKETS.length+' MARKETS', dur:2600});
 }
 
+/* ══ §progRedesign (2026-10-07) · หน้า Programs โฉมใหม่ ══════════════════════════════
+   แถบบนแบบ Boat Operation (วันที่ซ้าย · wordmark กลาง · ชิปสรุปขวา) บนพื้น navy
+   รายการซ้ายกระชับ มีแท็บท่า + ค้นหา + กรองตามสถานะ · ปุ่มแก้/ลบย้ายไปอยู่ในแผงรายละเอียด
+   ตัวกรองทั้งหมดเป็นการซ่อน/โชว์แถวใน DOM เท่านั้น ไม่ได้ตัดแถวออกจากรายการ
+   ⚠ ต้องเป็นแบบนี้ · ลากเรียงลำดับ (stApplyRouteOrder) อ่าน id ของทุกแถวในท่าเดียวกันจาก DOM
+     ถ้ากรองด้วยการไม่วาดแถว ลำดับที่ส่งไปจะไม่ครบ (ตัวกันจะ bail = ลากแล้วไม่บันทึก) */
+function progApplyFilter(){
+  const box=document.getElementById('prog-list-box'); if(!box) return;
+  const q=String(window._progQ||'').trim().toLowerCase(), st=window._progStat||'', pr=window._progPier||'all';
+  let shown=0;
+  box.querySelectorAll('.prog-grp').forEach(function(g){
+    const okP=(pr==='all'||g.dataset.pier===pr); let n=0;
+    g.querySelectorAll('.route-row-item').forEach(function(el){
+      const ok=okP && (!st||el.dataset.pstat===st) && (!q||(el.dataset.q||'').indexOf(q)>=0);
+      el.style.display=ok?'flex':'none'; if(ok) n++; });
+    g.style.display=(okP && (n>0 || (!q && !st)))?'':'none'; shown+=n; });
+  const em=document.getElementById('prog-nomatch'); if(em) em.style.display=shown?'none':'block';
+  document.querySelectorAll('[data-progpier]').forEach(function(b){ const on=(b.dataset.progpier===pr);
+    b.style.background=on?'#0F1B3D':'#fff'; b.style.color=on?'#fff':'#0F1B3D'; b.style.borderColor=on?'#0F1B3D':'#CFCFC8'; });
+  document.querySelectorAll('[data-progstat]').forEach(function(b){ b.style.boxShadow=(b.dataset.progstat===st)?'0 0 0 2px #fff':'none'; });
+  if(typeof window._progListFit==='function') window._progListFit();
+}
+function progSetPier(p){ window._progPier=p||'all'; progApplyFilter(); }
+function progSetStat(v){ window._progStat=(v && window._progStat!==v)?v:''; progApplyFilter(); }
+function progSetQ(v){ window._progQ=v||''; progApplyFilter(); }
 function renderSettings(){
   const wrap=document.getElementById('prog-pink-wrap');
   if(!wrap){
@@ -9696,46 +10696,49 @@ function renderSettings(){
   const tlCount=(groups.tublamu||[]).length;
   const vpCount=(groups.panwa||[]).length;
 
-  // Header bar
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:6px">
-      <div style="width:32px;height:32px;border-radius:50%;background:${dim.ink};color:white;display:flex;align-items:center;justify-content:center">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </div>
-    </div>
-    <button onclick="openRouteModal()" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-      เพิ่มโปรแกรม
-    </button>
+  // §progRedesign · แถบบน · โครงและค่าสีชุดเดียวกับ .bop2-top ของหน้า Boat Operation
+  const escP=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const _pd=new Date(TODAY_STR+'T00:00:00');
+  const _chip='height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;font:700 11.5px inherit;font-family:inherit;border:1px solid transparent;cursor:pointer';
+  const headerBar=`<style>
+    #view-settings{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif}
+    #view-settings > .page-hd{display:none}
+    #view-settings #prog-pink-wrap{background:transparent !important;margin:0 !important;padding:0 !important}
+    #view-settings #prog-q::placeholder{color:#B4BCDD}
+    /* §progSticky (2026-10-07) · แถบบนตรึงไว้ตอนเลื่อน · กินเต็มขอบ (margin ติดลบเท่า padding ของหน้า) พื้นทึบ
+       ไม่งั้นแถวรายการกับปฏิทินจะเลื่อนลอดให้เห็นข้างหลังตัวหนังสือ
+       กล่องรายการซ้ายตรึงต่อจากใต้แถบนี้ · ความสูงแถบวัดจริงใน _progListFit เพราะแถบขึ้นสองบรรทัดได้บนจอแคบ */
+    #view-settings #prog-top{position:sticky;top:0;z-index:6;margin:-18px -18px 11px;padding:13px 18px 11px;
+      background:#16265C;box-shadow:0 6px 14px -8px rgba(2,10,30,.55)}
+    @media (max-width:1100px){ #view-settings .prog-brand{display:none} }
+    @media (max-width:820px){ #view-settings{padding:12px 10px 64px} #view-settings .prog-2col{grid-template-columns:1fr !important}
+      #view-settings #prog-top{position:static;margin:-12px -10px 10px;padding:12px 10px 10px} }
+  </style>
+  <div id="prog-top" style="display:flex;align-items:center;gap:9px 12px;flex-wrap:wrap">
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:9px">
+      <span style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">${_pd.getDate()}</span>
+      <span style="line-height:1.15;display:inline-block">
+        <b style="display:block;font-size:13px;font-weight:700;color:#fff">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_pd.getDay()]}</b>
+        <i style="display:block;font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#B4BCDD;text-transform:uppercase;font-style:normal">${MONTHS_EN[_pd.getMonth()]} ${_pd.getFullYear()} · status today</i>
+      </span>
+      <input id="prog-q" type="search" aria-label="Search programs" placeholder="Search ${totalProg} programs" value="${escP(window._progQ||'')}" oninput="progSetQ(this.value)"
+        style="margin-left:8px;width:210px;max-width:100%;height:36px;box-sizing:border-box;padding:0 14px;border:1px solid rgba(255,255,255,.30);border-radius:18px;background:rgba(255,255,255,.10);font:500 12.5px inherit;font-family:inherit;color:#fff;outline-color:#fff">
+    </span>
+    <span class="prog-brand" style="flex:none;text-align:center;white-space:nowrap">
+      <i style="display:block;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD;font-style:normal;margin-bottom:2px">LOVE ANDAMAN</i>
+      <b style="display:block;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff">PROGRAMS</b>
+    </span>
+    <span style="flex:1 1 0;min-width:270px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="progSetStat('')" title="Show all programs" style="${_chip};background:rgba(255,255,255,.10);color:#E8EBF7;border-color:rgba(255,255,255,.14)">Programs<b style="font-weight:800;margin-left:6px">${totalProg}</b></button>
+      <button data-progstat="open" onclick="progSetStat('open')" title="Show only programs open today" style="${_chip};background:#D8F4E8;color:#0A5C3D">Open today<b style="font-weight:800;margin-left:6px">${openToday}</b></button>
+      <button data-progstat="closed" onclick="progSetStat('closed')" title="Show only programs closed today" style="${_chip};background:#FBE0DD;color:#8E2A20">Closed today<b style="font-weight:800;margin-left:6px">${closedToday}</b></button>
+      <button data-progstat="none" onclick="progSetStat('none')" title="Show only programs with no season set" style="${_chip};background:#FBEBD3;color:#7A4300">No season set<b style="font-weight:800;margin-left:6px">${noData}</b></button>
+      <button onclick="openRouteModal()" style="height:36px;padding:0 16px;border:none;border-radius:18px;background:#fff;color:#16265C;font:700 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่มโปรแกรม
+      </button>
+    </span>
   </div>`;
-
-  // KPI strip
-  const kpiStrip=`<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr;gap:8px;margin-bottom:14px;align-items:stretch">
-    <div style="grid-column:1;align-self:end;padding-bottom:6px">
-      <div style="font-size:13px;font-weight:500;color:${dim.ink4};margin-bottom:2px">Programs</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">${totalProg}</span>
-        <span style="font-size:18px;color:${dim.ink3};font-weight:500">routes</span>
-        <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${openToday} เปิดวันนี้</span>
-      </div>
-      <div style="font-size:11px;color:${dim.ink3}">${tlCount} Tub Lamu · ${vpCount} Visit Panwa${(groups.ranong||[]).length?` · ${(groups.ranong||[]).length} Ranong`:''}${(groups[LAND_PIER]||[]).length?` · ${(groups[LAND_PIER]||[]).length} Other`:''}</div>
-    </div>
-    <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Open Today</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#0F6E56">${openToday}</span><span style="font-size:11px;color:${dim.ink3};font-weight:500">/ ${totalProg}</span></div>
-      <div style="font-size:11px;color:#0F6E56;font-weight:600;margin-top:6px">${totalProg?Math.round(openToday/totalProg*100):0}% running</div>
-    </div>
-    <div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Closed Today</div>
-      <div style="font-size:18px;font-weight:700;line-height:1.2;color:#A32D2D;margin-top:2px">${closedToday}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">routes</div>
-    </div>
-    <div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">No Data</div>
-      <div style="font-size:18px;font-weight:700;line-height:1.2;color:${dim.ink3};margin-top:2px">${noData}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">no season set</div>
-    </div>
-  </div>`;
+  const kpiStrip='';
 
   const PIER_INFO={
     tublamu:{label:'Tub Lamu Pier',accent:'#0F6E56',bg:'#E1F5EE',color:'#0F6E56'},
@@ -9744,24 +10747,21 @@ function renderSettings(){
     other:{label:'Other · ไม่ใช้ท่าเรือ',accent:'#5B289A',bg:'#F3EAFB',color:'#5B289A'}   // §otherPier
   };
 
-  // Build list panel · §แสดง Ranong ด้วยถ้ามี route (เดิม loop hardcode แค่ tublamu/panwa → route ระนองไม่โผล่)
+  // Build list panel · §progRedesign · แถวกระชับ · หัวกลุ่มตามท่า · ครอบด้วย .prog-grp ให้ตัวกรองซ่อนทั้งกลุ่มได้
+  const fmtP=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const _pierKeys=PIER_ORDER.filter(pk => pk==='tublamu' || pk==='panwa' || (groups[pk]||[]).length)
+    .concat(Object.keys(groups).filter(pk => !PIER_ORDER.includes(pk) && (groups[pk]||[]).length));
   let listHtml='';
-  PIER_ORDER.filter(pk => pk==='tublamu' || pk==='panwa' || (groups[pk]||[]).length)
-    .concat(Object.keys(groups).filter(pk => !PIER_ORDER.includes(pk) && (groups[pk]||[]).length))
-    .forEach(pier=>{
+  _pierKeys.forEach(pier=>{
     const rows=groups[pier]||[];
     const pi=PIER_INFO[pier] || {label:pier,accent:'#5A5A52',bg:'#F1F0EC',color:'#5A5A52'};   // §otherPier · ค่าที่ไม่รู้จักก็ยังมีหัวข้อ
-    listHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:${listHtml?'10px':'0'}">
-      <div style="width:28px;height:28px;border-radius:50%;background:${pi.bg};color:${pi.color};display:flex;align-items:center;justify-content:center">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/><path d="M12 2v3"/></svg>
-      </div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${pi.label}</div>
-        <div style="font-size:10px;color:${dim.ink3}">${rows.length} programs</div>
-      </div>
-    </div>`;
+    listHtml+=`<div class="prog-grp" data-pier="${escP(pier)}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:9px 14px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658">${escP(pi.label)}</span>
+        <span style="font-size:11px;color:#5B6170">${rows.length} programs</span>
+      </div>`;
     if(!rows.length){
-      listHtml+=`<div style="padding:14px;font-size:11px;color:${dim.ink3};text-align:center;background:white;border-radius:14px;border:1px dashed ${dim.line};margin-bottom:6px">ยังไม่มีโปรแกรม</div>`;
+      listHtml+=`<div style="padding:14px;font-size:11.5px;color:#5B6170;text-align:center;border-bottom:1px solid #ECEBE6">ยังไม่มีโปรแกรม</div></div>`;
       return;
     }
     rows.forEach(r=>{
@@ -9769,53 +10769,45 @@ function renderSettings(){
       const isOpen=cur&&cur.type==='open';
       const isClosed=cur&&cur.type==='closed';
       const statusColor=isOpen?'#1D9E75':isClosed?'#A32D2D':dim.ink4;
-      const statusLabel=isOpen?'OPEN':isClosed?'CLOSED':'—';
-      const statusBg=isOpen?'#E1F5EE':isClosed?'#FCEBEB':'#F4F2EE';
-      const statusText=isOpen?'#0F6E56':isClosed?'#A32D2D':dim.ink3;
+      const pill=isOpen?['Open','#DDF1EA','#0B5A43']:isClosed?['Closed','#FBE3E0','#8E2019']:['No season','#FBEBD3','#7A4300'];
+      const subTxt=cur ? `${isOpen?'Open':'Closed'} ${fmtP(cur.from)} – ${fmtP(cur.to)}` : 'No season set';
       const isSel=selProgId===r.id;
-      listHtml+=`<div class="route-row-item" data-rid="${r.id}" draggable="true" data-sort-id="${r.id}" data-sortgroup="${pier}" style="background:white;border-radius:12px;border:1px solid ${isSel?dim.ink:dim.line};padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px;${isSel?'box-shadow:0 0 0 2px rgba(26,26,26,.04)':''}">
+      listHtml+=`<div class="route-row-item" data-rid="${r.id}" data-pstat="${isOpen?'open':isClosed?'closed':'none'}" data-q="${escP(((r.name||'')+' '+(r.islands||'')).toLowerCase())}" draggable="true" data-sort-id="${r.id}" data-sortgroup="${pier}" title="${escP(r.islands||'')}" style="display:flex;align-items:stretch;gap:9px;min-height:50px;box-sizing:border-box;padding:7px 12px 7px 6px;cursor:pointer;border-bottom:1px solid #ECEBE6;background:${isSel?'#E8F3FB':'#fff'};${isSel?'box-shadow:inset 3px 0 0 #1272B3;':''}">
         ${LA_GRIP}
-        <div style="width:6px;align-self:stretch;background:${r.color||statusColor};border-radius:3px;flex-shrink:0;${!isOpen?'opacity:.4':''}"></div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:600;${!isOpen?'color:'+dim.ink2:''}">${r.name}</span>
-            <span style="background:${statusBg};color:${statusText};padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">${statusLabel}</span>
-          </div>
-          <div style="font-size:10px;color:${dim.ink3};margin-top:2px">${r.islands||'—'}</div>
-          ${cur?`<div style="font-size:9px;color:${dim.ink3};margin-top:2px;font-family:'DM Mono',monospace">${fmtD(cur.from)} → ${fmtD(cur.to)}</div>`:''}
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="rri-edit" data-rid="${r.id}" style="background:${dim.bg};border:none;border-radius:8px;padding:5px 8px;cursor:pointer;color:${dim.ink2}" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="rri-del" data-rid="${r.id}" style="background:${dim.bg};border:none;border-radius:8px;padding:5px 8px;cursor:pointer;color:${dim.ink2}" onmouseover="this.style.background='#A32D2D';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
-        </div>
+        <span style="flex:none;width:4px;border-radius:2px;background:${r.color||statusColor}"></span>
+        <span style="flex:1;min-width:0;align-self:center">
+          <span style="display:block;font-size:13px;font-weight:600;line-height:1.3;color:#0F1B3D">${escP(r.name)}</span>
+          <span style="display:block;margin-top:1px;font-size:11px;color:#5B6170">${subTxt}</span>
+        </span>
+        <span style="flex:none;align-self:center;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;background:${pill[1]};color:${pill[2]}">${pill[0]}</span>
       </div>`;
     });
+    listHtml+=`</div>`;
   });
+  const _tab=(k,l,n)=>`<button data-progpier="${escP(k)}" onclick="progSetPier('${escP(k)}')" style="min-height:32px;padding:0 11px;border-radius:16px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12px inherit;font-family:inherit;cursor:pointer">${escP(l)} <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span></button>`;
+  const pierTabs=_tab('all','All',totalProg)+_pierKeys.map(pk=>_tab(pk, ((PIER_INFO[pk]||{}).label||pk).replace(/ Pier$/,'').replace(/ · .*$/,''), (groups[pk]||[]).length)).join('');
   /* §progScroll (2026-10-03) · หน้า Programs เลื่อนติด ๆ ขัด ๆ
      ผู้ใช้แจ้ง "ดูการ Scroll ในหน้านี้หน่อย ติด ๆ ขัด ๆ" · วัดแล้ว: รายการซ้าย 57 โปรแกรมสูง ~4,700px
      ส่วนแผงรายละเอียดขวา (ปฏิทิน 12 เดือน) สูง ~1,350px ถูกตรึงไว้ (sticky) ทั้งที่สูงกว่าจอ
      ครึ่งล่างของปฏิทินจึงค้างอยู่นอกจอ เลื่อนเท่าไหร่ก็ไม่ขึ้น จนกว่าจะเลื่อนสุดรายการ 5,000px
      สลับกัน · รายการซ้ายเป็นกล่องเลื่อนของตัวเอง สูงเท่าจอ ตรึงไว้ · แผงขวาไหลตามหน้าปกติ
      เลื่อนบนรายการ = เลื่อนรายการ (ไม่ลากหน้าไปด้วย) · เลื่อนบนปฏิทิน = เลื่อนหน้า เห็นครบทั้งปี */
-  const listPanel=`<div id="prog-list-box" style="background:transparent;border-radius:14px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;padding-right:4px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">โปรแกรมทั้งหมด</span>
-      <span style="font-size:10px;color:${dim.ink3}">${totalProg} routes</span>
-    </div>
+  const listPanel=`<div id="prog-list-box" style="background:#fff;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin">
+    <div style="position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:#fff;border-bottom:1px solid #ECEBE6">${pierTabs}</div>
     ${listHtml}
+    <div id="prog-nomatch" style="display:none;padding:22px 14px;text-align:center;font-size:12px;color:#5B6170">No programs match this filter.</div>
   </div>`;
 
   // Detail panel placeholder
-  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
+  const detailPanel=`<div id="prog-detail-mount" style="background:white;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(2,10,30,.34);overflow:hidden;min-height:400px"></div>`;
 
   /* §progScroll · กดเลือกโปรแกรม = วาดใหม่ทั้งหน้า · กล่องรายการเป็นตัวใหม่ ตำแหน่งเลื่อนกลับเป็น 0
      จำไว้ก่อนแล้วคืนให้ ไม่งั้นเลือกโปรแกรมท้าย ๆ ทีไร รายการเด้งกลับบนสุดทุกครั้ง */
   const _keepList=(document.getElementById('prog-list-box')||{}).scrollTop||0;
-  wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
+  /* §progFit · แผงขวาเลื่อนในตัวเองแล้ว · กดสลับวันในเดือนท้าย ๆ = วาดใหม่ทั้งหน้า ต้องคืนตำแหน่งเลื่อน ไม่งั้นเด้งกลับบนสุดทุกคลิก */
+  const _keepDet=(window._progDetFor===selProgId) ? ((document.getElementById('prog-detail-mount')||{}).scrollTop||0) : 0;
+  wrap.innerHTML=`${headerBar}${kpiStrip}<div class="prog-2col" style="display:grid;grid-template-columns:380px minmax(0,1fr);gap:13px;align-items:start">${listPanel}${detailPanel}</div>`;
+  progApplyFilter();   // §progRedesign · วาดใหม่ทั้งหน้าทุกครั้งที่เลือกโปรแกรม · ตัวกรองที่ค้างไว้ต้องกลับมาเหมือนเดิม
 
   /* §progScroll · กล่องรายการต้องจบในจอเสมอ · ตอนหน้ายังไม่เลื่อน กล่องเริ่มใต้หัวหน้า+แถบ KPI (~250px)
      ถ้าสูงเท่าจอเต็ม ๆ ท้ายกล่องจะหลุดใต้จอ โปรแกรมสุดท้ายมองไม่เห็น · วัดจากตำแหน่งจริงทุกครั้งที่หน้าเลื่อน */
@@ -9826,9 +10818,23 @@ function renderSettings(){
        และปล่อยให้เลื่อนต่อไปที่หน้าได้ ไม่งั้นนิ้วที่ปัดบนรายการจะลงไปหาปฏิทินข้างล่างไม่ได้ */
     const stack=!!dm&&dm.getBoundingClientRect().left<lb.getBoundingClientRect().right-4;
     lb.style.position=stack?'static':'sticky'; lb.style.overscrollBehavior=stack?'auto':'contain';
-    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs; return; }
-    let bot=window.innerHeight-14; if(dm&&dm.offsetHeight>lb.offsetHeight) bot=Math.min(bot, dm.getBoundingClientRect().bottom);
-    const h=Math.max(320, Math.round(bot-Math.max(14, gp.top)))+'px'; if(lb.style.maxHeight!==h) lb.style.maxHeight=h; };
+    if(stack){ const hs=Math.max(260, Math.round(window.innerHeight*0.45))+'px'; if(lb.style.maxHeight!==hs) lb.style.maxHeight=hs;
+      if(dm){ dm.style.maxHeight='none'; dm.style.overflowY='visible'; } return; }
+    /* §progFit (2026-10-07) · ผู้ใช้: "ควรตรึงขอบบนของ Header ก่อน ส่วนข้อมูลขวา ถ้าล้นค่อยมี Scroll down"
+       รอบก่อนตรึงแค่แถบบน แต่หน้ายังเลื่อนได้ → หัวการ์ดสองใบเลื่อนขึ้นไปซุกใต้แถบ โดนตัดครึ่ง
+       ตอนนี้หน้าไม่เลื่อนแล้ว · การ์ดสองใบสูงพอดีจอ (จากใต้แถบบนถึงขอบล่าง) แต่ละใบเลื่อนข้างในตัวเองเมื่อเนื้อหาล้น
+       วัดจากตำแหน่งจริงของกริดตอนหน้ายังไม่เลื่อน (gp.top + scrollY) · แถบขึ้นสองบรรทัดก็ยังพอดี */
+    const pt=document.getElementById('prog-top');
+    const pin=(pt && getComputedStyle(pt).position==='sticky') ? Math.round(pt.getBoundingClientRect().height)+11 : 14;
+    const pinPx=pin+'px'; if(lb.style.top!==pinPx) lb.style.top=pinPx;
+    const absTop=gp.top+(window.scrollY||0);
+    /* เผื่อ padding ล่างของ <main> ที่ครอบหน้าอยู่ · ไม่เผื่อ = หน้าจะยาวเกินจอไปเท่านั้นพอดี แล้วกลับมาเลื่อนได้อีก */
+    const _mn=document.querySelector('main.main');
+    const tail=Math.max(14, _mn ? (parseFloat(getComputedStyle(_mn).paddingBottom)||0) : 0)+2;
+    const h=Math.max(320, Math.round(window.innerHeight-absTop-tail))+'px';
+    if(lb.style.maxHeight!==h) lb.style.maxHeight=h;
+    if(dm){ if(dm.style.maxHeight!==h) dm.style.maxHeight=h; dm.style.overflowY='auto'; dm.style.overflowX='hidden';
+      dm.style.overscrollBehavior='contain'; dm.style.scrollbarWidth='thin'; } };
   if(!window._progListFitOn){ window._progListFitOn=1; let _q=0;
     const _f=()=>{ if(_q) return; _q=requestAnimationFrame(()=>{ _q=0; window._progListFit&&window._progListFit(); }); };
     window.addEventListener('scroll',_f,{passive:true}); window.addEventListener('resize',_f,{passive:true}); }
@@ -9856,6 +10862,9 @@ function renderSettings(){
   });
 
   renderProgDetailPink();
+  window._progDetFor=selProgId;
+  window._progListFit();
+  if(_keepDet){ const _dm=document.getElementById('prog-detail-mount'); if(_dm) _dm.scrollTop=_keepDet; }
 }
 
 function renderProgDetailPink(){
@@ -9886,31 +10895,47 @@ function renderProgDetailPink(){
   const statusText=isOpen?'#0F6E56':isClosed?'#A32D2D':dim.ink3;
   const statusLabel=isOpen?'OPEN':isClosed?'CLOSED':'NO DATA';
 
-  // Header strip (pink gradient like other detail pages)
-  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:50px;height:50px;border-radius:12px;background:${r.color||statusColor};color:white;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:20px;font-weight:700">${r.name}</span>
-          <span style="background:${statusBg};color:${statusText};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${statusLabel}</span>
+  // Header strip · §progRedesign · พื้นขาว · ปุ่มแยกตามหน้าที่ (แก้รายละเอียด / แก้วันเปิด-ปิด / ลบ)
+  const escP=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtP=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const pillLbl=isOpen?'Open':isClosed?'Closed':'No season set';
+  const pillBg=isOpen?'#DDF1EA':isClosed?'#FBE3E0':'#FBEBD3';
+  const pillFg=isOpen?'#0B5A43':isClosed?'#8E2019':'#7A4300';
+  const pierLbl=({tublamu:'Tub Lamu Pier',panwa:'Visit Panwa',ranong:'Ranong Pier'})[r.pier] || (laIsLandRoute(r)?'Other':(r.pier||'—'));
+  const _hdYear=(calMonthStr?new Date(calMonthStr+'-01'):new Date()).getFullYear();
+  const _hdOv=Object.keys(r.overrides||{}).filter(d=>d.startsWith(`${_hdYear}-`)).length;
+  const _btn='height:36px;padding:0 15px;border-radius:18px;font:600 12px inherit;font-family:inherit;cursor:pointer';
+  const _fact=(l,v,c)=>`<div style="flex:1 1 150px;padding:9px 14px;border-right:1px solid #ECEBE6"><div style="font-size:11px;color:#5B6170">${l}</div><div style="margin-top:2px;font-size:13.5px;font-weight:600;color:${c||'#0F1B3D'}">${v}</div></div>`;
+  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid #ECEBE6;background:#fff">
+    <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <span style="flex:none;width:8px;align-self:stretch;min-height:44px;border-radius:4px;background:${r.color||statusColor}"></span>
+      <div style="flex:1;min-width:220px">
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-size:21px;font-weight:700;letter-spacing:-.01em;color:#0F1B3D">${escP(r.name)}</span>
+          <span style="background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${pillLbl}</span>
         </div>
-        <div style="font-size:11px;color:${dim.ink2};margin-top:3px">${r.pier==='tublamu'?'Tub Lamu Pier':r.pier==='panwa'?'Visit Panwa':r.pier} · ${r.islands||'—'}</div>
+        <div style="font-size:12px;color:#5B6170;margin-top:3px">${escP(pierLbl)} · ${escP(r.islands||'—')}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="openRouteModal('${r.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button onclick="openRouteModal('${r.id}')" style="${_btn};background:#fff;color:#0F1B3D;border:1px solid #CFCFC8">Edit details</button>
         ${progEditMode
-          ? `<button onclick="toggleProgEdit(false)" style="background:#0F6E56;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(15,110,86,.25)">✓ Done</button>`
-          : `<button onclick="toggleProgEdit(true)" style="background:white;color:#6B7785;border:1px solid #DDE2DE;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✎ Modify</button>`
+          ? `<button onclick="toggleProgEdit(false)" style="${_btn};background:#0B6B4F;color:#fff;border:1px solid #0B6B4F;font-weight:700">Done editing</button>`
+          : `<button onclick="toggleProgEdit(true)" style="${_btn};background:#1272B3;color:#fff;border:1px solid #1272B3">Edit seasons &amp; days</button>`
         }
+        <button onclick="delRoute('${r.id}')" aria-label="Delete program" title="Delete program" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
       </div>
     </div>
-    ${cur?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;font-size:11px;color:${dim.ink2};border-left:3px solid ${statusColor}"><span style="font-weight:600;color:${dim.ink}">ปัจจุบัน: </span>${cur.type==='open'?'Open':'Closed'} · ${fmtD(cur.from)} → ${fmtD(cur.to)}${next?` · ถัดไป ${next.type==='open'?'Open':'Closed'} ${fmtD(next.from)}`:''}</div>`:''}
+    <div style="display:flex;flex-wrap:wrap;margin-top:14px;border:1px solid #ECEBE6;border-radius:10px;overflow:hidden">
+      ${_fact('Today', pillLbl, pillFg)}
+      ${_fact('Current period', cur?`${fmtP(cur.from)} – ${fmtP(cur.to)}`:'—')}
+      ${_fact('Next change', next?`${next.type==='open'?'Opens':'Closes'} ${fmtP(next.from)}`:'—')}
+      ${_fact(`Days set by hand · ${_hdYear}`, `<span style="font-family:'DM Mono',monospace;font-weight:500">${_hdOv}</span>`)}
+    </div>
     ${progEditMode
-      ? `<div style="margin-top:10px;padding:8px 12px;background:#FFF6E5;border:1px solid #F0D9A0;border-radius:8px;font-size:11px;color:#A05A1A;display:flex;align-items:center;gap:7px;font-weight:600">✎ Edit mode · changes affect bookings &amp; boat assignments</div>`
-      : `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.7);border:1px solid #DDE2DE;border-radius:8px;font-size:11px;color:#6B7785;display:flex;align-items:center;gap:7px">🔒 Read-only · click <b style="color:#1A2A33">Modify</b> to enable edits</div>`
+      ? `<div style="margin-top:10px;padding:8px 12px;background:#FFF6E5;border:1px solid #F0D9A0;border-radius:8px;font-size:11.5px;color:#8A4B00;font-weight:600">Edit mode · changes affect bookings &amp; boat assignments</div>`
+      : ''
     }
   </div>`;
 
@@ -9920,60 +10945,35 @@ function renderProgDetailPink(){
   const currentSeasons=seasons.filter(s=>s.from<=TODAY_STR&&s.to>=TODAY_STR);
   const futureSeasons=seasons.filter(s=>s.from>TODAY_STR);
 
+  /* §progSeasonUI (2026-10-07) · ผู้ใช้: "ตรงนี้หลุดดีไซน์ไป" · ส่วน Seasons ยังเป็นโฉมเก่า (ปุ่มชมพู ป้ายเล็ก วันที่ย่อปีสองหลัก)
+     ปรับให้ใช้ชุดเดียวกับส่วนบนของการ์ด: ป้ายสถานะ วันที่เต็ม ปุ่มลบมีไอคอนถังขยะ */
   const buildSeasonRow=(s)=>{
     const isCur=s.from<=TODAY_STR&&s.to>=TODAY_STR;
     const isPast=s.to<TODAY_STR;
     const isFuture=s.from>TODAY_STR;
-    const dotColor=s.type==='open'?'#1D9E75':'#A32D2D';
-    const labelBg=s.type==='open'?'#E1F5EE':'#FCEBEB';
-    const labelColor=s.type==='open'?'#0F6E56':'#A32D2D';
-    const op=isPast?0.5:1;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid rgba(0,0,0,.04);background:${isCur?'#FBFAF7':'transparent'};opacity:${op}">
-      <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
-      <span style="background:${labelBg};color:${labelColor};padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em;flex-shrink:0">${s.type==='open'?'OPEN':'CLOSED'}</span>
-      <span style="font-size:11px;color:${dim.ink};font-family:'DM Mono',monospace;flex:1">${fmtD(s.from)} → ${fmtD(s.to)}</span>
-      ${isCur?`<span style="background:#1A1A1A;color:white;padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">CURRENT</span>`:isFuture?`<span style="background:#FCE5EC;color:#9F1B4F;padding:1px 7px;border-radius:9px;font-size:9px;font-weight:600;letter-spacing:.04em">UPCOMING</span>`:''}
-      ${progEditMode ? `<button onclick="delSeason('${r.id}','${s.id}')" style="background:${dim.bg};border:none;border-radius:6px;padding:4px 6px;cursor:pointer;color:${dim.ink2};flex-shrink:0" onmouseover="this.style.background='#A32D2D';this.style.color='white'" onmouseout="this.style.background='${dim.bg}';this.style.color='${dim.ink2}'">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+    const isO=s.type==='open';
+    return `<div style="display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 20px;border-bottom:1px solid #ECEBE6;background:${isCur?'#F3F8FC':'#fff'};opacity:${isPast?0.6:1}">
+      <span style="flex:none;min-width:54px;text-align:center;background:${isO?'#DDF1EA':'#FBE3E0'};color:${isO?'#0B5A43':'#8E2019'};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${isO?'Open':'Closed'}</span>
+      <span style="font-size:13px;font-weight:500;color:#0F1B3D;flex:1">${fmtP(s.from)} – ${fmtP(s.to)}</span>
+      ${isCur?`<span style="background:#0F1B3D;color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">Current</span>`:isFuture?`<span style="background:#F1F0EC;color:#3E4658;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">Upcoming</span>`:''}
+      ${progEditMode ? `<button onclick="delSeason('${r.id}','${s.id}')" aria-label="Delete season" title="Delete this season" style="flex:none;width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
       </button>` : ''}
     </div>`;
   };
 
   // Build sections
+  const _secH=(t)=>`<div style="font-size:11px;font-weight:700;color:#3E4658;text-transform:uppercase;letter-spacing:.08em;padding:9px 20px 6px;background:#FAFAF7;border-bottom:1px solid #ECEBE6">${t}</div>`;
   let seasonsHtml='';
-  if(currentSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">ปัจจุบัน · CURRENT</div>${currentSeasons.map(buildSeasonRow).join('')}`;
-  }
-  if(futureSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">กำลังจะมาถึง · UPCOMING (${futureSeasons.length})</div>${futureSeasons.map(buildSeasonRow).join('')}`;
-  }
-  if(pastSeasons.length){
-    seasonsHtml+=`<div style="font-size:9px;font-weight:600;color:${dim.ink3};text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;background:#FBFAF7">ผ่านไปแล้ว · PAST (${pastSeasons.length})</div>${pastSeasons.map(buildSeasonRow).join('')}`;
-  }
+  if(currentSeasons.length) seasonsHtml+=_secH('Current')+currentSeasons.map(buildSeasonRow).join('');
+  if(futureSeasons.length)  seasonsHtml+=_secH(`Upcoming · ${futureSeasons.length}`)+futureSeasons.map(buildSeasonRow).join('');
+  if(pastSeasons.length)    seasonsHtml+=_secH(`Past · ${pastSeasons.length}`)+pastSeasons.map(buildSeasonRow).join('');
   if(!seasonsHtml){
-    seasonsHtml=`<div style="padding:24px;text-align:center;color:${dim.ink3};font-size:11px">ยังไม่มี season — กดเพิ่มด้านล่าง</div>`;
+    seasonsHtml=`<div style="padding:22px 20px;text-align:center;color:#5B6170;font-size:12.5px;border-top:1px solid #ECEBE6">ยังไม่มี Season — กด เพิ่ม Season เพื่อเริ่มตั้งค่า</div>`;
   }
 
-  // Add form
-  const addFormHtml=showSeasonForm?`<div style="padding:14px 16px;background:#FBFAF7;border-top:1px solid rgba(0,0,0,.06)">
-    <div style="font-size:11px;font-weight:600;margin-bottom:8px">เพิ่ม Season ใหม่</div>
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <div onclick="setSeasonType('open')" id="sst-open" style="flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid #1D9E75;background:#E1F5EE">
-        <div style="font-size:11px;font-weight:600;color:#0F6E56;display:flex;align-items:center;justify-content:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#1D9E75"></span>Open</div>
-      </div>
-      <div onclick="setSeasonType('closed')" id="sst-closed" style="flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid ${dim.line};background:white">
-        <div style="font-size:11px;font-weight:600;color:${dim.ink3};display:flex;align-items:center;justify-content:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:${dim.ink4}"></span>Closed</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div><label style="font-size:9px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">วันที่เริ่ม</label><input type="date" id="new-season-from" style="width:100%;margin-top:2px;font-size:11px;padding:5px 7px;border:1px solid ${dim.line};border-radius:6px;font-family:'DM Mono',monospace"></div>
-      <div><label style="font-size:9px;color:${dim.ink3};text-transform:uppercase;letter-spacing:.05em">วันที่สิ้นสุด</label><input type="date" id="new-season-to" style="width:100%;margin-top:2px;font-size:11px;padding:5px 7px;border:1px solid ${dim.line};border-radius:6px;font-family:'DM Mono',monospace"></div>
-    </div>
-    <div style="display:flex;gap:6px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="cancelSeasonForm()" style="font-size:11px;padding:5px 12px;border-radius:14px">ยกเลิก</button>
-      <button onclick="saveNewSeasonGuarded('${r.id}')" style="background:${dim.ink};color:white;border:none;border-radius:14px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer">บันทึก Season</button>
-    </div>
-  </div>`:'';
+  // §progSeasonModal · ฟอร์มเพิ่ม Season ย้ายไปเป็น popup (progSeasonModalOpen) · ไม่มีฟอร์มฝังท้ายการ์ดแล้ว
+  const addFormHtml='';
 
   // Calendar timeline — full year view, 12 months grid
   const calBase=calMonthStr?new Date(calMonthStr+'-01'):new Date();
@@ -9985,80 +10985,82 @@ function renderProgDetailPink(){
   function buildMiniMonth(monthIdx){
     const firstDay=new Date(calYear,monthIdx,1).getDay();
     const daysInMonth=new Date(calYear,monthIdx+1,0).getDate();
-    let cells='';
+    let cells='', nClosedHand=0;
     for(let i=0;i<firstDay;i++) cells+=`<div></div>`;
     for(let d=1;d<=daysInMonth;d++){
       const ds=`${calYear}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const st=getDayStatus(r,ds);
       const isToday=ds===TODAY_STR;
-      const isOverride=r.overrides&&r.overrides[ds];
-      let bg='transparent',fg=dim.ink4,brd='transparent';
+      const isOverride=!!(r.overrides&&r.overrides[ds]);
+      /* §progRedesign · สี่สถานะแยกกันด้วยความเข้ม ไม่ใช่แค่สี
+           เปิด = เขียวอ่อน · ปิดตาม Season = เทา · ปิดเองรายวัน = แดงทึบ · เปิดเองรายวัน = เขียวอ่อนมีขอบ */
+      let bg='transparent',fg='#9A9A92',ring='none';
       if(st){
-        if(st.type==='open'){bg='#E1F5EE';fg='#0F6E56';}
-        else {bg='#FCEBEB';fg='#A32D2D';}
+        if(st.type==='open'){ bg='#DDF1EA'; fg='#0B3D2E'; if(isOverride) ring='inset 0 0 0 1.5px #0B6B4F'; }
+        else if(isOverride){ bg='#A1271F'; fg='#FFFFFF'; nClosedHand++; }
+        else { bg='#ECEBE6'; fg='#5B6170'; }
       }
-      if(isOverride) brd=st.type==='open'?'#1D9E75':'#A32D2D';
-      if(isToday) brd=dim.ink;
-      const dot=isOverride?`<span style="position:absolute;top:1px;right:1px;width:3px;height:3px;border-radius:50%;background:${st.type==='open'?'#1D9E75':'#A32D2D'}"></span>`:'';
+      if(isToday) ring='inset 0 0 0 2px #0F1B3D'+((st&&st.type!=='open'&&isOverride)?', inset 0 0 0 3px #fff':'');
       const dayClickHandler = progEditMode ? `onclick="toggleDayOverrideGuarded('${r.id}','${ds}')"` : '';
       const dayCursor = progEditMode ? 'pointer' : 'default';
       const dayHover = progEditMode ? "onmouseover=\"this.style.transform='scale(1.15)';this.style.zIndex='5'\" onmouseout=\"this.style.transform='';this.style.zIndex=''\"" : '';
-      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · override':''}${progEditMode?'':' · read-only · click Modify to edit'}" style="position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:${isToday?700:500};color:${fg};background:${bg};border:1px solid ${brd};border-radius:3px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${dot}${d}</div>`;
+      cells+=`<div ${dayClickHandler} title="${ds}${isOverride?' · set by hand':''}${progEditMode?'':' · read-only · click Edit seasons and days'}" style="position:relative;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:${isToday||(isOverride&&st&&st.type!=='open')?600:400};color:${fg};background:${bg};box-shadow:${ring};border-radius:4px;cursor:${dayCursor};transition:transform .1s;font-family:'DM Mono',monospace" ${dayHover}>${d}</div>`;
     }
     const isCurrentMonth=(new Date().getFullYear()===calYear)&&(new Date().getMonth()===monthIdx);
-    return `<div style="background:white;border-radius:9px;padding:8px;border:${isCurrentMonth?'1.5px solid '+dim.ink:'1px solid '+dim.line}">
-      <div style="font-size:9.5px;font-weight:700;color:${isCurrentMonth?dim.ink:dim.ink2};text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between">
-        <span>${MONTH_NAMES[monthIdx]}</span>
-        ${isCurrentMonth?`<span style="background:${dim.ink};color:white;padding:0 5px;border-radius:5px;font-size:7px;letter-spacing:.04em">NOW</span>`:''}
+    return `<div>
+      <div style="font-size:11px;font-weight:700;color:#0F1B3D;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:baseline;justify-content:space-between;gap:6px">
+        <span>${MONTH_NAMES[monthIdx]}${isCurrentMonth?` <span style="background:#0F1B3D;color:#fff;padding:1px 5px;border-radius:4px;font-size:8.5px;letter-spacing:.04em;vertical-align:1px">NOW</span>`:''}</span>
+        ${nClosedHand?`<span style="font-size:10.5px;font-weight:600;color:#8E2019;text-transform:none;letter-spacing:0">${nClosedHand} closed</span>`:''}
       </div>
-      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · เดิม S M T W T F S ตัวเดียว
-           เสาร์กับอาทิตย์เป็น S ทั้งคู่ อังคารกับพฤหัสเป็น T ทั้งคู่ และตัวอักษร 7px สีจาง · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
-      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:8px;color:${dim.ink2};text-align:center;margin-bottom:3px;font-weight:700;letter-spacing:.01em">
-        <span style="color:#B4533F">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#B4533F">Sa</span>
+      <!-- §progWd · ผู้ใช้แจ้ง "ตัวย่อของวันให้เห็นแยกกันหน่อย บางที User งง" · ใช้สองตัวอักษร ไม่ซ้ำกันสักวัน -->
+      <div data-progwd="1" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:9.5px;color:#5B6170;text-align:center;margin-bottom:3px;font-weight:600">
+        <span style="color:#A63A1C">Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span style="color:#A63A1C">Sa</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px">${cells}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
     </div>`;
   }
 
   let monthsHtml='';
   for(let m=0;m<12;m++) monthsHtml+=buildMiniMonth(m);
 
-  const calendarHtml=`<div style="padding:14px 16px;background:white">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  const _lg=(sw,l)=>`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;${sw}"></span>${l}</span>`;
+  const _nav='width:32px;height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;cursor:pointer;color:#0F1B3D;display:inline-flex;align-items:center;justify-content:center';
+  const calendarHtml=`<div style="padding:14px 20px 18px;background:white">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;font-weight:600;color:${dim.ink2};text-transform:uppercase;letter-spacing:.05em">Calendar</span>
-        ${overrideCount?`<span style="background:${SVG_PINK.soft};color:${SVG_PINK.text};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
+        <button onclick="calNavYear(-1)" aria-label="Previous year" style="${_nav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span style="font-size:16px;font-weight:500;min-width:52px;text-align:center;font-family:'DM Mono',monospace;color:#0F1B3D">${calYear}</span>
+        <button onclick="calNavYear(1)" aria-label="Next year" style="${_nav}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${calMonthStr&&new Date().getFullYear()!==calYear?`<button onclick="calResetToday()" style="height:32px;background:#fff;border:1px solid #CFCFC8;border-radius:8px;padding:0 10px;cursor:pointer;color:#0F1B3D;font:600 11.5px inherit;font-family:inherit">This year</button>`:''}
+        ${overrideCount?`<span style="background:#F1F0EC;color:#3E4658;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600">${overrideCount} day${overrideCount>1?'s':''} set by hand</span>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:5px">
-        <button onclick="calNavYear(-1)" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 6px;cursor:pointer;color:${dim.ink2};display:inline-flex" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='${dim.ink2}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
-        <span style="font-size:13px;font-weight:700;min-width:60px;text-align:center;font-family:'DM Mono',monospace">${calYear}</span>
-        <button onclick="calNavYear(1)" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 6px;cursor:pointer;color:${dim.ink2};display:inline-flex" onmouseover="this.style.background='${dim.ink}';this.style.color='white'" onmouseout="this.style.background='white';this.style.color='${dim.ink2}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>
-        ${calMonthStr&&new Date().getFullYear()!==calYear?`<button onclick="calResetToday()" style="background:white;border:1px solid ${dim.line};border-radius:7px;padding:4px 9px;cursor:pointer;color:${dim.ink2};font-size:10px;font-weight:600;margin-left:3px">This year</button>`:''}
+      <div style="display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11.5px;color:#3E4658">
+        ${_lg('background:#DDF1EA','Open')}
+        ${_lg('background:#ECEBE6','Closed (season)')}
+        ${_lg('background:#A1271F','Closed by hand')}
+        ${_lg('background:#DDF1EA;border:1.5px solid #0B6B4F','Opened by hand')}
+        ${_lg('border:2px solid #0F1B3D','Today')}
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">${monthsHtml}</div>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:9px;border-top:0.5px solid rgba(0,0,0,.06);font-size:9.5px;color:${dim.ink3};flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#E1F5EE"></span>Open</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#FCEBEB"></span>Closed</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:3px;background:#E1F5EE;border:1.5px solid #1D9E75;position:relative;box-sizing:border-box"><span style="position:absolute;top:-1px;right:-1px;width:4px;height:4px;border-radius:50%;background:#1D9E75"></span></span>Override</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-left:auto"><span style="width:10px;height:10px;border-radius:3px;border:1.5px solid ${dim.ink};box-sizing:border-box"></span>Today</span>
-    </div>
-    <div style="margin-top:7px;font-size:9.5px;color:${dim.ink3};font-style:italic">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'🔒 อยู่ในโหมด Read-only · กดปุ่ม Modify ทางขวาบนเพื่อเริ่มแก้'}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${monthsHtml}</div>
+    <div style="margin-top:12px;font-size:11.5px;color:#5B6170">${progEditMode?'คลิกที่วันใดวันหนึ่งเพื่อสลับสถานะ open/closed · ระบบจะเตือนถ้ามี booking ในวันนั้น':'Read-only · กดปุ่ม Edit seasons &amp; days ด้านบนเพื่อเริ่มแก้'}</div>
   </div>`;
 
   mount.innerHTML=`${headerStrip}
     ${calendarHtml}
-    <div style="padding:14px 0 0">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px">
-        <span style="font-size:11px;font-weight:600;color:${dim.ink2};text-transform:uppercase;letter-spacing:.05em">Seasons · ${seasons.length}</span>
-        ${progEditMode && !showSeasonForm?`<button onclick="startSeasonForm()" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>เพิ่ม Season
-        </button>`:''}
+    <div style="border-top:1px solid #ECEBE6">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px">
+        <span style="font-size:13px;font-weight:700;color:#0F1B3D">Seasons <span style="font:400 12.5px 'DM Mono',monospace;color:#5B6170">${seasons.length}</span></span>
+        <button onclick="progAddSeason()" title="${progEditMode?'Add a season':'Turns on edit mode and opens the season form'}" style="height:36px;padding:0 15px;border-radius:18px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;font:600 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>เพิ่ม Season
+        </button>
       </div>
       <div>${seasonsHtml}</div>
       ${addFormHtml}
     </div>`;
 
+  /* §progSeasonModal · popup เป็นลูกของ body · หน้าวาดใหม่เมื่อไหร่ก็ตามที่ฟอร์มถูกปิด (บันทึก/ยกเลิก) popup ต้องหายตาม */
+  if(!showSeasonForm){ const _sm=document.getElementById('prog-season-modal'); if(_sm) _sm.remove(); }
   if(showSeasonForm) setSeasonType(addSeasonType);
 }
 
@@ -10203,6 +11205,70 @@ function toggleProgEdit(on){
 }
 
 function startSeasonForm(){showSeasonForm=true;renderSettings();}
+/* §progAddSeason (2026-10-07) · ผู้ใช้ถาม "ปุ่ม add season หายไปไหม" · ปุ่มเดิมโผล่เฉพาะตอนอยู่ในโหมดแก้ไข คนหาไม่เจอ
+   ตอนนี้โชว์ตลอด · กดแล้วเข้าโหมดแก้ไข (แถบเตือนสีเหลืองขึ้นตามปกติ) และเปิดฟอร์มให้เลย
+   ฟอร์มอยู่ท้ายแผงขวาซึ่งเลื่อนในตัวเอง · ต้องเลื่อนให้เห็น ไม่งั้นกดแล้วเหมือนไม่มีอะไรเกิดขึ้น */
+function progAddSeason(){
+  progEditMode=true; showSeasonForm=true;
+  renderSettings();
+  progSeasonModalOpen();
+}
+/* §progSeasonModal (2026-10-07) · ผู้ใช้: "ขอเป็น ปุ่มแอด Season ให้เป็น Popup เด้งขึ้นแทน"
+   ใช้ id เดิมของฟอร์ม (new-season-from / new-season-to / sst-open / sst-closed) ตั้งใจ
+   saveNewSeasonGuarded · saveNewSeason · setSeasonType · หน้าต่างเตือนผลกระทบ booking อ่านจาก id พวกนี้อยู่แล้ว
+   จึงไม่ต้องแตะตรรกะบันทึกหรือการเตือนเลย · popup เป็นแค่เปลือกใหม่ของฟอร์มเดิม
+   ปิด = cancelSeasonForm() → showSeasonForm=false → renderProgDetailPink ลบ popup ให้เอง
+   หน้าต่างเตือนผลกระทบ (z-index 9999) ขึ้นทับ popup นี้ (4000) ได้ตามปกติ */
+function progSeasonModalOpen(){
+  const r=ROUTES.find(x=>x.id===selProgId); if(!r) return;
+  const old=document.getElementById('prog-season-modal'); if(old) old.remove();
+  const esc=(x)=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const el=document.createElement('div');
+  el.id='prog-season-modal';
+  el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  el.style.cssText="position:fixed;inset:0;z-index:4000;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(10,18,48,.56);font-family:'DM Sans','IBM Plex Sans Thai',sans-serif";
+  const lbl='display:block;font-size:12.5px;font-weight:600;color:#3D3D38';
+  const inp="display:block;width:100%;box-sizing:border-box;margin-top:6px;height:44px;padding:0 12px;border:1.5px solid #C9CCD6;border-radius:10px;font:500 14px 'DM Mono',monospace;color:#0F1B3D;background:#fff;outline-color:#16265C";
+  const seg='flex:1;padding:8px 10px;text-align:center;border-radius:8px;cursor:pointer;border:1.5px solid rgba(0,0,0,.04);background:white';
+  el.innerHTML='<div style="width:460px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(2,10,30,.45);overflow:hidden;color:#0F1B3D">'
+    +'<div style="padding:20px 22px 0">'
+    +'<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#5F5F58;font-weight:700">Programs · Season</div>'
+    +'<div style="margin-top:3px;font-size:21px;font-weight:700;letter-spacing:-.01em">เพิ่ม Season</div>'
+    +'<div style="margin-top:2px;font-size:13px;color:#5B6170">'+esc(r.name)+'</div>'
+    +'<div style="margin-top:16px;'+lbl.replace('display:block;','')+'">ประเภท</div>'
+    +'<div style="display:flex;gap:8px;margin-top:6px">'
+    +'<div id="sst-open" role="button" tabindex="0" onclick="setSeasonType(\'open\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();setSeasonType(\'open\')}" style="'+seg+'"><div style="font-size:13px;font-weight:600;color:#999;display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px"><span style="width:7px;height:7px;border-radius:50%;background:#1D9E75"></span>Open</div></div>'
+    +'<div id="sst-closed" role="button" tabindex="0" onclick="setSeasonType(\'closed\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();setSeasonType(\'closed\')}" style="'+seg+'"><div style="font-size:13px;font-weight:600;color:#999;display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px"><span style="width:7px;height:7px;border-radius:50%;background:#A32D2D"></span>Closed</div></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">'
+    +'<div><label for="new-season-from" style="'+lbl+'">วันที่เริ่ม</label><input type="date" id="new-season-from" style="'+inp+'"></div>'
+    +'<div><label for="new-season-to" style="'+lbl+'">วันที่สิ้นสุด</label><input type="date" id="new-season-to" style="'+inp+'"></div>'
+    +'</div>'
+    +'<div id="prog-season-hint" style="min-height:18px;margin-top:8px;font-size:12px;color:#5F5F58">ถ้าเลือก Closed แล้วช่วงนั้นมี booking หรือเรือที่จัดไว้ ระบบจะเตือนก่อนบันทึก</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding:14px 22px;background:#F7F7F5;border-top:1px solid #E2E2DC">'
+    +'<button type="button" onclick="cancelSeasonForm()" style="height:40px;padding:0 18px;border-radius:10px;border:1px solid #D9D9D2;background:#fff;color:#3D3D38;font:600 13.5px inherit;font-family:inherit;cursor:pointer">ยกเลิก</button>'
+    +'<button type="button" onclick="progSeasonModalSave()" style="height:40px;padding:0 18px;border-radius:10px;border:1px solid #16265C;background:#16265C;color:#fff;font:600 13.5px inherit;font-family:inherit;cursor:pointer">บันทึก Season</button>'
+    +'</div></div>';
+  el.addEventListener('mousedown', function(e){ if(e.target===el) cancelSeasonForm(); });
+  el.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ e.preventDefault(); cancelSeasonForm(); }
+    else if(e.key==='Enter' && e.target && e.target.tagName==='INPUT'){ e.preventDefault(); progSeasonModalSave(); }
+  });
+  document.body.appendChild(el);
+  setSeasonType(addSeasonType);
+  const f=document.getElementById('new-season-from'); if(f) f.focus();
+}
+function progSeasonModalSave(){
+  const f=document.getElementById('new-season-from'), t=document.getElementById('new-season-to'), h=document.getElementById('prog-season-hint');
+  if(!f||!t) return;
+  const bad=(el,msg)=>{ el.style.borderColor='#B3261E'; if(h){ h.style.color='#B3261E'; h.textContent=msg; } el.focus(); };
+  f.style.borderColor='#C9CCD6'; t.style.borderColor='#C9CCD6';
+  if(!f.value){ bad(f,'กรุณาระบุวันที่เริ่ม'); return; }
+  if(!t.value){ bad(t,'กรุณาระบุวันที่สิ้นสุด'); return; }
+  if(f.value>t.value){ bad(t,'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม'); return; }
+  saveNewSeasonGuarded(selProgId);   // ตรรกะเดิมทั้งหมด · บันทึกเลย หรือเปิดหน้าต่างเตือนผลกระทบก่อน
+}
 function cancelSeasonForm(){showSeasonForm=false;renderSettings();}
 function setSeasonType(t){
   addSeasonType=t;

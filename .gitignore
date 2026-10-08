@@ -48,6 +48,7 @@ restored_attachments/
 .agents/
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
