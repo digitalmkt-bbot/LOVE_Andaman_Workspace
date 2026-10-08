@@ -75,6 +75,46 @@
     return (asked === 'quote' || asked === 'draft') ? 'quote' : 'confirm';
   }
 
+  /* §opsPickup (2026-10-08) · legacy keeps a trip's pickup as one text, filled from the pickup-area
+     table (bookingV2GetPickupTime); operation-backend keeps it as three fields. Split before saving,
+     joined back on read, so every screen still shows legacy's text:
+       '07:30'                → pickupTime 07:30
+       '07:30-07:45'          → pickupTime 07:30 · pickupTimeEnd 07:45
+       '08:20-'               → pickupTime 08:20 (a window with no end yet)
+       'Before 08:30 at pier' → pickupTimeEnd 08:30 · pickupAtPier
+     Also read: '7:30', '07.30', '07:30:00', '08.00 a.m.' (normalised to HH:MM). Same shapes and rules
+     as the server's importer (operation-backend src/tools/legacy-pickup.ts). */
+  var PK_T = '(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*(a\\.?m\\.?|p\\.?m\\.?)?';
+  var PK_ONE = new RegExp('^' + PK_T + '$', 'i');
+  var PK_WIN = new RegExp('^' + PK_T + '\\s*[-\u2013]\\s*(?:' + PK_T + ')?$', 'i');
+  var PK_PIER = new RegExp('^before\\s+' + PK_T + '\\s+at\\s+(?:the\\s+)?pier$', 'i');
+  function pkClock(hour, minute, half){
+    if(hour === undefined || minute === undefined) return undefined;
+    var h = Number(hour), m = Number(minute);
+    if(half){ if(h < 1 || h > 12) return undefined; h = /^p/i.test(half) ? (h % 12) + 12 : h % 12; }
+    if(h > 23 || m > 59) return undefined;
+    return String(h).padStart(2, '0') + ':' + minute;
+  }
+  /* {} for no pickup · null when the text is none of legacy's shapes, or a window ending before it starts */
+  function pickupSplit(text){
+    text = text == null ? '' : String(text).trim();
+    if(!text) return {};
+    var m, s, e;
+    if((m = PK_ONE.exec(text))){ s = pkClock(m[1], m[2], m[3]); return s ? { pickupTime: s } : null; }
+    if((m = PK_WIN.exec(text))){
+      s = pkClock(m[1], m[2], m[3]); e = m[4] === undefined ? undefined : pkClock(m[4], m[5], m[6]);
+      if(!s || (m[4] !== undefined && !e) || (e && e <= s)) return null;
+      return e ? { pickupTime: s, pickupTimeEnd: e } : { pickupTime: s };
+    }
+    if((m = PK_PIER.exec(text))){ e = pkClock(m[1], m[2], m[3]); return e ? { pickupTimeEnd: e, pickupAtPier: true } : null; }
+    return null;
+  }
+  function pickupJoin(start, end, atPier){
+    if(atPier && end) return 'Before ' + end + ' at pier';
+    if(start && end) return start + '-' + end;
+    return start || '';
+  }
+
   /* ── client booking → request body · `create` for POST, else PATCH ── */
   function toServer(bk, create){
     var b = { external_id: bk.id };
@@ -103,7 +143,9 @@
         if(Object.keys(draws).length) o.lockDraws = draws;
       }
       if(t.zone) o.zone = t.zone;
-      if(t.pickupTime) o.pickupTime = t.pickupTime;
+      var pk = pickupSplit(t.pickupTime);            // §opsPickup · a trip is sent whole: a field left out is cleared
+      if(!pk) throw new Error('Pickup time "' + t.pickupTime + '" on ' + t.date + ' is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
+      Object.assign(o, pk);
       if(t.ovn){ o.ovn = t.ovn; if(t.ovn === 'return' && t.ovnReturnDate) o.ovnReturnDate = t.ovnReturnDate; }
       if(t.ovnLeg){ o.ovnLeg = true; if(t.ovnOf != null) o.ovnOf = +t.ovnOf; }
       return o;
@@ -164,7 +206,7 @@
     var o = { opsTripId: t.id, routeId: g('routeId', 'route_id'), date: g('date', 'service_date'), bookingMode: g('bookingMode', 'booking_mode') || 'seat',
               pax: Object.assign({}, t.pax || {}), charterBoatId: g('charterBoatId', 'charter_boat_id') || null,
               lockDraws: lockDraws, lockDrawSel: sel, lockUse: locked, seatSource: { locked: locked, general: Math.max(0, total - locked) },
-              zone: t.zone || '', pickupTime: g('pickupTime', 'pickup_time') || '',
+              zone: t.zone || '', pickupTime: pickupJoin(g('pickupTime', 'pickup_time'), g('pickupTimeEnd', 'pickup_time_end'), g('pickupAtPier', 'pickup_at_pier')),
               ovn: t.ovn || null, ovnReturnDate: g('ovnReturnDate', 'ovn_return_date') || '', ovnLeg: !!g('ovnLeg', 'ovn_leg'),
               ovnOf: g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null, ops: {} };
     return o;
