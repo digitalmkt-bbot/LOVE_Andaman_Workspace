@@ -93,7 +93,8 @@ function bookingV2RenderTripsSection(){
       } else {
         msg = _isLandNoCap
           ? `Land programme · no daily quota set, so seats are <strong>not limited</strong>. Set one in Config &rarr; Programme if you want a cap.`
-          : `No boat assigned yet · this booking will be <strong>provisional</strong>. Confirmed once dispatcher assigns a boat in Boat Operation.`;
+          : `No boat assigned yet · this booking will be <strong>provisional</strong>. Confirmed once dispatcher assigns a boat in Boat Operation.`
+            + ((+al.unplacedPax > 0) ? ` <strong style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${al.unplacedPax}</strong> pax already waiting for a boat this day.` : '');   // §opsUnlimited (2026-10-08) · operation-backend's unplaced_pax
       }
       // Over-capacity warning if pax exceeds available
       let warn = '';

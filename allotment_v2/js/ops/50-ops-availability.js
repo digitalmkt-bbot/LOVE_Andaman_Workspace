@@ -18,8 +18,11 @@
    when they land (not while someone is typing). Every accepted write
    empties the cache, so the next read fetches fresh numbers.
 
-   Land routes (City tour etc.) stay local: operation-backend has no daily
-   quota for them.
+   §opsUnlimited (2026-10-08) · two kinds of day sell with no seat check on
+   the server, as legacy's hasAllotment:false does: a land route (City tour
+   etc. · unlimited, available_seats null) and a marine day no boat is
+   deployed on yet (available_seats 0 · unplaced_pax waits for a boat).
+   Neither is ever full. getAllotment.__orig is the local count.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -76,7 +79,19 @@
       .then(function(){ allotBusy[k] = 0; });
   }
 
+  function noBoat(s){ return Array.isArray(s.deployments) ? !s.deployments.length : !(+s.deployed_capacity > 0); }
+  /* legacy's "no limit" shape · the counts stay, for screens that show them */
+  function noLimit(r, s){
+    r.hasAllotment = false; r.isFull = false; r.state = 'no-allotment';
+    r.totalCapacity = 0; r.availableCapacity = 0; r.seatsAvailable = 0; r.fillPct = 0;
+    if(s){
+      r.seatsConsumed = +s.booked_pax || 0; r.lockedSeats = +s.locked_pax || 0; r.charterPax = +s.charter_pax || 0;
+      r.unplacedPax = +s.unplaced_pax || 0; r.unlimited = !!s.unlimited; r.serverAvailable = s.available_seats; r.fromServer = true;
+    }
+    return r;
+  }
   function apply(r, s){
+    if(s.unlimited || noBoat(s)) return noLimit(r, s);
     r.seatsConsumed = +s.booked_pax || 0;
     r.lockedSeats = +s.locked_pax || 0;
     r.seatsAvailable = Math.max(0, +s.available_seats || 0);
@@ -95,7 +110,13 @@
     var w = function(routeId, dateStr, excludeBkId){
       var r = orig.apply(this, arguments);
       try{
-        if(!O.enabled() || !O.state.loaded || !r || r.isLand || !routeId || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return r;
+        if(!O.enabled() || !O.state.loaded || !r || !routeId || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return r;
+        // a land route has no seat pool on the server · legacy's dailyCap quota no longer limits it
+        if(typeof laIsLandRoute === 'function' && laIsLandRoute(routeId)){
+          var ls = AV[routeId + '|' + dateStr];
+          if(!ls) ensure(dateStr);
+          return noLimit(r, ls ? ls.d : null);
+        }
         if(excludeBkId){
           var bk = (typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []).find(function(b){ return b && b.id === excludeBkId; });
           if(!bk || !bk.opsId) return r;                   // a booking the server never saw · nothing to exclude there
@@ -108,7 +129,7 @@
         return apply(r, s.d);
       }catch(_){ return r; }
     };
-    w.__ops = true; window.getAllotment = w;
+    w.__ops = true; w.__orig = orig; window.getAllotment = w;
   })();
 
   var refreshT = null;
