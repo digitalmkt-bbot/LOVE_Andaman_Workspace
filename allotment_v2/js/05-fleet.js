@@ -27486,7 +27486,7 @@ function flwPanel(it, E){
     b1='<button class="flw-btn pri" style="flex:1" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">'+(it.stage===1?'Open job to start it':it.stage===4?'Open job to close it':'Open job')+'</button>';
     if(open[0]) b2='<button class="flw-btn" data-id="'+E(open[0].id)+'" onclick="flwMemo(this.dataset.id)">Open memo</button>';
     if(inc) links.push(['Incident', E((inc.no||'INC')+' · '+cut(inc.title,60)), 'reported '+flwD(inc.date), '', 'data-k="inc" data-id="'+E(inc.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
-    (it.memos||[]).forEach(function(mo){ links.push(['Memo', E((mo.no||'MO')+' · '+cut(mo.title,54)), E(flwMemoLabel(mo)), flwMoney(mo.amount), 'data-id="'+E(mo.id)+'" onclick="flwMemo(this.dataset.id)"']); });
+    (it.memos||[]).forEach(function(mo){ links.push(['Memo', E((mo.no||'MO')+' · '+cut(mo.title,54)), E(flwMemoLabel(mo)), flwMoney(mo.amount), 'data-id="'+E(mo.id)+'" onclick="flwMemo(this.dataset.id)"', mo]); });
     var parts=m.parts||[]; if(parts.length){ var pc=0; parts.forEach(function(p){ pc+=(+p.qty||0)*(+p.cost||0); });
       links.push(['Parts', parts.length+' item'+(parts.length===1?'':'s')+' taken from stock', E(cut(parts.map(function(p){ return p.name; }).join(', '),70)), flwMoney(pc), '']); }
     var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean);
@@ -27526,6 +27526,9 @@ function flwPanel(it, E){
       +'onkeydown="if(event.key===\'Enter\')flwAct(\'note\',this.dataset.id,\'\')">'
       +'<button type="button" class="flw-btn" data-id="'+E(it.id)+'" onclick="flwAct(\'note\',this.dataset.id,\'\')">Add note</button></div>';
   if(it.kind!=='prj') noteH+='<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="'+it.kind+'" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full '+(it.kind==='inc'?'report':'job')+' page</a>'+(can?'':' · view only')+'</div>';
+  /* §flwMemo2 · every memo of the job gets its own next-step button, so a second or third memo does not have to wait for the first */
+  var mBtn=function(mo){ if(!mo || !can) return ''; var nx=flwMemoNext(mo); if(!nx) return '';
+    return '<button type="button" class="flw-btn" style="flex:none;height:30px;padding:0 10px;font-size:12px" data-id="'+E(mo.id)+'" data-x="'+nx.ask+'" onclick="event.stopPropagation();flwAct(\'moadv\',this.dataset.id,this.dataset.x)">'+nx.t+'</button>'; };
   if(proj && it.kind!=='prj') links.unshift(['Project', E((proj.no||'PRJ')+' · '+cut(proj.name,56)), E(String(proj.status||'')), '', 'data-k="prj" data-id="'+E(proj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
   var stepsH=steps.map(function(s,i){
     var cls=(s[2]==='now'||i===it.stage)?'now':(i<it.stage?(s[3]?'done skip':'done'):'todo'), when=(s[2]==='now')?'':s[2];
@@ -27544,7 +27547,7 @@ function flwPanel(it, E){
         +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+b1+b2+'</div>'
         +noteH+'</div>'
       +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
-        +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b></div>'; }).join('')):'')
+        +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b>'+mBtn(l[5])+'</div>'; }).join('')):'')
     +'</div>';
 }
 function flRenderWork(){
