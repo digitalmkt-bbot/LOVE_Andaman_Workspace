@@ -170,6 +170,69 @@
     return o;
   }
 
+  /* ── §opsApprovals (2026-10-08) · the server's approvals[] → bk.approval / bk.focApproval ──
+     The server records every approval it asks for (oldest first, kept after it is decided) and
+     decides from it whether a pending booking holds seats: one waiting because it is over the
+     allotment does not. The browser asks bkPendHoldsSeat the same question through approval.over,
+     so a booking without the server's entry counted seats the server does not sell against.
+     A booking the server has no entry for (imported from legacy) keeps the one it had. */
+  function latestOf(list, kind){
+    var mine = list.filter(function(a){ return a && a.kind === kind; });
+    for(var i = mine.length - 1; i >= 0; i--) if(mine[i].status === 'pending') return mine[i];
+    return mine.length ? mine[mine.length - 1] : null;
+  }
+  function routeName(id){ var r = (typeof ROUTES !== 'undefined' ? ROUTES : []).find(function(x){ return x && x.id === id; }); return (r && r.name) || id; }
+  /* the approval queue shows the licence headroom per day · the server's days[] don't carry it, so it
+     is read from this browser's allotment when the queue draws (a getter · JSON keeps the number) */
+  function overRow(d, bkId){
+    var o = { routeId: d.route_id, date: d.service_date, name: routeName(d.route_id), need: +d.need || 0, overBy: +d.over_by || 0 };
+    o.capFree = o.need - o.overBy;
+    Object.defineProperty(o, 'licFree', { enumerable: true, configurable: true, get: function(){
+      try{
+        var ga = (typeof getAllotment === 'function') ? (getAllotment.__orig || getAllotment) : null;
+        var al = ga ? ga(o.routeId, o.date, bkId) : null;
+        if(al && al.licenseAvailable != null) return al.licenseAvailable;
+      }catch(_){}
+      return '—';
+    } });
+    return o;
+  }
+  function approvalFrom(a, bkId, old){
+    old = old || {};
+    var over = a.over_capacity ? (a.days || []).map(function(d){ return overRow(d, bkId); }) : [];
+    var disc = +a.discount || 0;
+    var reason = a.over_capacity ? (disc > 0 ? 'over_capacity+discount' : 'over_capacity') : (disc > 0 ? 'discount' : (old.reason || ''));
+    return { status: a.status, reason: reason, targetStatus: a.target_status || old.targetStatus || 'confirmed',
+             over: over, totOver: a.over_capacity ? (a.over_total != null ? +a.over_total : over.reduce(function(s, o){ return s + o.overBy; }, 0)) : 0,
+             discount: disc, saleName: old.saleName || '',
+             requestedBy: a.requested_by || '', requestedAt: a.requested_at || '',
+             approvedBy: a.decided_by || '', approvedAt: a.decided_at || '', note: a.note || '' };
+  }
+  function focFrom(a, bk, old){
+    old = old || {};
+    return { count: a.foc_count != null ? +a.foc_count : (old.count || 0), reason: old.reason || bk.focReason || '',
+             status: a.status, requestedAt: a.requested_at || '', requestedBy: a.requested_by || '',
+             approvedAt: a.decided_at || '', approvedBy: a.decided_by || '', rejectReason: a.status === 'rejected' ? (a.note || '') : '' };
+  }
+  /* old · the booking's approvals before this answer, for what the server doesn't hold (sale name,
+     FOC reason) · a response without approvals[] leaves them as they are */
+  function approvalsInto(bk, ob, old){
+    if(!ob || !Array.isArray(ob.approvals)) return;
+    old = old || {};
+    var ap = latestOf(ob.approvals, 'approval'), fa = latestOf(ob.approvals, 'foc');
+    if(ap) bk.approval = approvalFrom(ap, bk.id, old.approval);
+    if(fa) bk.focApproval = focFrom(fa, bk, old.focApproval);
+  }
+  /* a pending_foc booking with no FOC entry (imported) · the FOC buttons need one, as
+     bookingV2EnsureApproval gives a pending_approval one its approval */
+  function focPlaceholder(bk){
+    if(bk.status !== 'pending_foc' || bk.focApproval) return;
+    var n = 0;
+    (bk.trips || []).forEach(function(t){ Object.keys(t.pax || {}).forEach(function(k){ if(/^foc/.test(k)) n += +t.pax[k] || 0; }); });
+    if(!n) n = (bk.passengers || []).filter(function(p){ return p && p.foc; }).length;
+    bk.focApproval = { count: n, reason: bk.focReason || '', status: 'pending', requestedAt: bk.bookedAt || bk.createdAt || '', requestedBy: '' };
+  }
+
   /* ── server booking → client booking ── */
   function fromServer(ob){
     var bk = { id: ob.external_id || ob.id, opsId: ob.id, schemaVer: 2, status: ob.status || 'confirmed',
@@ -194,6 +257,8 @@
       return o;
     });
     Object.assign(bk, records(ob, bk.trips));
+    approvalsInto(bk, ob, null);
+    focPlaceholder(bk);
     return bk;
   }
 
@@ -212,6 +277,9 @@
       'upgrades', 'altPickups', 'b2cOverride', 'refund', 'docCheck', 'createdAt', 'adjustments'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
+    // §opsApprovals · the local copy stays only where the server has no entry of that kind
+    approvalsInto(bk, ob, { approval: keep.approval, focApproval: keep.focApproval });
+    focPlaceholder(bk);
     return bk;
   }
 
@@ -242,6 +310,10 @@
     bk.status = j.status || bk.status;
     bk.bookedAt = j.booked_at || bk.bookedAt; bk.createdBy = j.created_by || '';
     bk.confirmedAt = j.confirmed_at || null; bk.confirmedBy = j.confirmed_by || '';
+    approvalsInto(bk, j, { approval: bk.approval, focApproval: bk.focApproval });   // §opsApprovals · who decided is the login
+    // the browser asked for an approval the server didn't (it found the seats) · drop the stale request
+    if(Array.isArray(j.approvals) && !latestOf(j.approvals, 'approval') && bk.status !== 'pending_approval'
+       && bk.approval && bk.approval.status === 'pending') delete bk.approval;
     return guessed;
   }
   function toldDifferent(bk, guessed){
