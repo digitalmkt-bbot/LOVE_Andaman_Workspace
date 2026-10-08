@@ -74030,7 +74030,7 @@ function bkNbfCSS(){
   +S+' .nbf-l > div:not(.bkv2-nb-draft){color:#E8EBF7 !important;margin-left:0 !important;font-size:13px !important}'
   +S+' .bkv2-nb-back{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap}'
   +S+' .bkv2-nb-back:hover{background:rgba(255,255,255,.20);color:#fff}'
-  +S+' .nbf-l .bkv2-nb-draft{height:24px;padding:0 10px;border-radius:12px;font-size:11.5px !important;font-weight:700;letter-spacing:0;text-transform:none;display:inline-flex;align-items:center;gap:6px}'
+  +S+' .nbf-l .bkv2-nb-draft{height:24px;padding:0 10px;border-radius:12px;font-size:11.5px !important;font-weight:700;letter-spacing:0;text-transform:none;display:inline-flex;align-items:center;gap:6px;margin-left:0}'
   +S+' .bkv2-nb-h1{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.30em;padding-left:.30em;color:#fff;text-transform:uppercase;white-space:nowrap}'
   +S+' .bkv2-nb-h1 i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD}'
   /* cards */
