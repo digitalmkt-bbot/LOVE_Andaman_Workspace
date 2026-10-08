@@ -27236,7 +27236,18 @@ function flwLast(L, d0){ var o={date:String(d0||''),text:'',by:'',n:0};
   (L||[]).forEach(function(e){ if(!e) return; o.n++; var x=String(e.date||''); if(x>=o.date){ o.date=x; o.text=String(e.text||''); o.by=String(e.by||''); } });
   return o; }
 function flwMemos(m){ return flwA('o').filter(function(mo){ return mo && mo.maintId===m.id && mo.status!=='cancelled'; }); }
-function flwMemoOpen(mo){ return mo.status==='pending_approval'||mo.status==='approved'||mo.status==='ordered'; }
+/* §flwMemo (2026-10-08) · memo steps follow flAdvanceMemo: parts memos go approve → order → receive → paid,
+   labour-only memos go approve → paid. A labour memo that is approved is not "waiting for parts" — only the bill is left. */
+function flwMemoLabour(mo){ return mo.memoType==='labor' || (mo.memoType==='mixed' && !(mo.items||[]).some(function(it){ return (it.category||'parts')==='parts'; })); }
+function flwMemoOpen(mo){ return mo.status==='pending_approval' || (!flwMemoLabour(mo) && (mo.status==='approved'||mo.status==='ordered')); }
+function flwMemoLabel(mo){ if(mo.status==='approved' && flwMemoLabour(mo)) return 'approved, not paid yet'; if(mo.status==='received') return 'received, not paid yet'; return FLW_MEMO[mo.status]||mo.status; }
+function flwMemoNext(mo){
+  if(mo.status==='pending_approval') return {t:'Approve', ask:''};
+  if(mo.status==='approved') return flwMemoLabour(mo)?{t:'Mark paid', ask:'paid'}:{t:'Mark ordered', ask:'ordered'};
+  if(mo.status==='ordered') return {t:'Receive parts', ask:''};
+  if(mo.status==='received') return {t:'Mark paid', ask:'paid'};
+  return null;
+}
 function flwProj(id){ return flwA('p').filter(function(p){ return p&&p.id===id; })[0]||null; }
 /* §flwPark (2026-10-08) · a job that only records that the boat is laid up on purpose (engine lent to another boat,
    off season, papers expired, charter use, or parked on the board) is not repair work that went silent.
@@ -27277,7 +27288,7 @@ function flwItems(){
       else stage=3; }
     var inc=m.incidentId?incById[m.incidentId]:null, subs=(typeof flBoardSubs==='function')?flBoardSubs(m):[], bits=[];
     if(m.parked) bits.push('parked');
-    if(open.length) bits.push('memo '+(open[0].no||'MO')+' '+(open[0].title||'')+' · '+(FLW_MEMO[open[0].status]||open[0].status)+(open.length>1?(' · +'+(open.length-1)+' more'):''));
+    if(open.length) bits.push('memo '+(open[0].no||'MO')+' '+(open[0].title||'')+' · '+flwMemoLabel(open[0])+(open.length>1?(' · +'+(open.length-1)+' more'):''));
     else if(done) bits.push('work closed '+flwD(m.endDate)+' · invoice not recorded');
     if(subs.length) bits.push(subs.filter(function(s){ return s&&s.d; }).length+' of '+subs.length+' sub-steps');
     if(inc) bits.push('from '+(inc.no||'INC')+' '+(inc.title||''));
@@ -27456,7 +27467,7 @@ function flwPanel(it, E){
     b1='<button class="flw-btn pri" style="flex:1" data-k="prj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open project</button>';
   } else {
     var inc=it.inc, subs=it.subs||[], doneN=subs.filter(function(s){ return s&&s.d; }).length, la=flwLast(m.progressLog, m.startDate);
-    var memoTxt=(it.memos||[]).length ? it.memos.slice(0,2).map(function(mo){ return E((mo.no||'MO')+' '+cut(mo.title,46))+' — '+E(FLW_MEMO[mo.status]||mo.status); }).join('<br>')+(it.memos.length>2?('<br>+'+(it.memos.length-2)+' more memos'):'') : 'No memo on this job';
+    var memoTxt=(it.memos||[]).length ? it.memos.slice(0,2).map(function(mo){ return E((mo.no||'MO')+' '+cut(mo.title,46))+' — '+E(flwMemoLabel(mo)); }).join('<br>')+(it.memos.length>2?('<br>+'+(it.memos.length-2)+' more memos'):'') : 'No memo on this job';
     steps=[
       ['Reported', inc?(E((inc.no||'INC')+' '+cut(inc.title,70))):'Opened directly as a job, without a problem report', inc?flwD(inc.date):'', !inc],
       ['Job open', E(it.no)+' opened'+(m.status==='pending'?' · not started yet':''), flwD(m.startDate)],
@@ -27467,7 +27478,7 @@ function flwPanel(it, E){
     var nextSub=subs.filter(function(s){ return s&&!s.d; })[0];
     if(it.stage===1) next='The job is open but work has not started.';
     else if(it.stage===2){ var mo=open[0];
-      next = mo ? ('Memo '+E((mo.no||'MO')+' '+cut(mo.title,50))+' is '+E(FLW_MEMO[mo.status]||mo.status)+'. '+(mo.status==='pending_approval'?'It needs approval before anything can be ordered.':mo.status==='approved'?'Place the order.':'Record the delivery when the parts arrive.'))
+      next = mo ? ('Memo '+E((mo.no||'MO')+' '+cut(mo.title,50))+' is '+E(flwMemoLabel(mo))+'. '+(mo.status==='pending_approval'?'It needs approval before anything can be ordered.':mo.status==='approved'?'Place the order, then mark it ordered.':'Record the delivery when the parts arrive.'))
                 : 'The last note says this job is waiting (parts, slipway, contractor or approval).'; }
     else if(it.stage===3) next = nextSub ? ('Next sub-step: '+E(cut(nextSub.t,60))+'.') : subs.length ? 'All '+subs.length+' sub-steps are done. Close the job with an outcome.' : 'Work is in progress. Add a note when something moves so the job does not go silent.';
     else if(it.stage===4) next='The boat is running again but this job was never closed. Close it with an outcome.';
@@ -27475,7 +27486,7 @@ function flwPanel(it, E){
     b1='<button class="flw-btn pri" style="flex:1" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">'+(it.stage===1?'Open job to start it':it.stage===4?'Open job to close it':'Open job')+'</button>';
     if(open[0]) b2='<button class="flw-btn" data-id="'+E(open[0].id)+'" onclick="flwMemo(this.dataset.id)">Open memo</button>';
     if(inc) links.push(['Incident', E((inc.no||'INC')+' · '+cut(inc.title,60)), 'reported '+flwD(inc.date), '', 'data-k="inc" data-id="'+E(inc.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
-    (it.memos||[]).forEach(function(mo){ links.push(['Memo', E((mo.no||'MO')+' · '+cut(mo.title,54)), E(FLW_MEMO[mo.status]||mo.status), flwMoney(mo.amount), 'data-id="'+E(mo.id)+'" onclick="flwMemo(this.dataset.id)"']); });
+    (it.memos||[]).forEach(function(mo){ links.push(['Memo', E((mo.no||'MO')+' · '+cut(mo.title,54)), E(flwMemoLabel(mo)), flwMoney(mo.amount), 'data-id="'+E(mo.id)+'" onclick="flwMemo(this.dataset.id)"']); });
     var parts=m.parts||[]; if(parts.length){ var pc=0; parts.forEach(function(p){ pc+=(+p.qty||0)*(+p.cost||0); });
       links.push(['Parts', parts.length+' item'+(parts.length===1?'':'s')+' taken from stock', E(cut(parts.map(function(p){ return p.name; }).join(', '),70)), flwMoney(pc), '']); }
     var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean);
@@ -27491,14 +27502,18 @@ function flwPanel(it, E){
     var blank=((m.parts||[]).length>0)?'':'1';
     if(it.stage===1){ b1=act('start',it.id,'Start job',1); b2=act('newmemo',it.id,'Request parts',0,blank); }
     else if(it.stage===2){
-      if(open[0]){ b1=act('memo',open[0].id,'Open memo '+E(open[0].no||''),1); b2=act('close',it.id,'Close job'); }
+      if(open[0]){ var mn=flwMemoNext(open[0]);
+        b1=mn?act('moadv',open[0].id,mn.t+' · '+E(open[0].no||'memo'),1,mn.ask):act('memo',open[0].id,'View memo '+E(open[0].no||''),1);
+        b2=act('memo',open[0].id,'View memo'); }
       else { b1=act('newmemo',it.id,'Request parts',1,blank); b2=act('close',it.id,'Close job'); } }
     else if(it.stage===3){
       if(nextSub){ b1=act('tick',it.id,'Tick “'+E(cut(nextSub.t,26))+'” done',1,subs.indexOf(nextSub)); b2=act('close',it.id,'Close job'); }
       else { b1=act('close',it.id,'Close job',subs.length?1:0); b2=act('newmemo',it.id,'Request parts',0,blank); } }
     else if(it.stage===4){ b1=act('close',it.id,'Close job',1); b2=''; }
     else { var unpaid=(it.memos||[]).filter(function(mo){ return mo.status!=='paid'; })[0];
-      if(unpaid){ b1=act('memo',unpaid.id,'Open memo '+E(unpaid.no||''),1); b2=act('newmemo',it.id,'Add invoice memo',0,'1'); }
+      if(unpaid){ var un=flwMemoNext(unpaid);
+        b1=un?act('moadv',unpaid.id,un.t+' · '+E(unpaid.no||'memo'),1,un.ask):act('memo',unpaid.id,'View memo '+E(unpaid.no||''),1);
+        b2=act('memo',unpaid.id,'View memo')+act('newmemo',it.id,'Add invoice memo',0,'1'); }
       else { b1=act('newmemo',it.id,'Add invoice memo',1,'1'); b2=''; } }
   }
   if(it.park){
@@ -27526,7 +27541,7 @@ function flwPanel(it, E){
     +'<div class="flw-scroll" id="flw-rp">'
       +(it.park?'':('<div class="flw-kick" style="padding:10px 18px 6px">Where it stands</div>'+stepsH))
       +'<div class="flw-next"'+(it.park?' style="margin-top:14px"':'')+'><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Next step</div>'
-        +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px">'+b1+b2+'</div>'
+        +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+b1+b2+'</div>'
         +noteH+'</div>'
       +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
         +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b></div>'; }).join('')):'')
@@ -27657,6 +27672,11 @@ function flwAct(a,id,x){
       if(!confirm('Start '+(m.no||'this job')+' now? The boat status will follow the job setting (usually Fixing).')) return;
       flMaintStart(id); flwAfter(); }
     else if(a==='memo'){ flViewMemo(id); }
+    else if(a==='moadv'){
+      /* one step forward on a memo · flAdvanceMemo opens the approval or receive dialog itself when the step needs one */
+      var mo=flwA('o').filter(function(q){ return q&&q.id===id; })[0]; if(!mo) return;
+      if(x && !confirm('Mark memo '+(mo.no||'')+' as '+x+'?')) return;
+      flAdvanceMemo(id); flwAfter(); }
     else if(a==='newmemo'){ flMaintCreateMemo(id, x==='1'); }
     else if(a==='tick'){ flBoardSubTick(null,id,+x,true); }
     else if(a==='close'){ flMaintOpenCloseModal(id); }
