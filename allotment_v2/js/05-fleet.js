@@ -27253,6 +27253,8 @@ function flwItems(){
   M.forEach(function(m){
     if(!m || m.status==='cancelled') return;
     var done=(m.status==='done'); if(done && !m.awaitingInvoice) return;
+    if(done){ var _all=flwA('o').filter(function(mo){ return mo && mo.maintId===m.id; });
+      if(_all.length && _all.every(function(mo){ return mo.status==='paid'; })) return; }   /* invoice settled · same rule as the Maintenance "Awaiting" tab */
     var memos=flwMemos(m), open=memos.filter(flwMemoOpen), stage, lane='';
     if(done) stage=5;
     else { try{ lane=flBoardLane(m); }catch(_){ lane=''; }
@@ -27435,7 +27437,7 @@ function flwPanel(it, E){
     else if(it.stage===2){ var mo=open[0];
       next = mo ? ('Memo '+E((mo.no||'MO')+' '+cut(mo.title,50))+' is '+E(FLW_MEMO[mo.status]||mo.status)+'. '+(mo.status==='pending_approval'?'It needs approval before anything can be ordered.':mo.status==='approved'?'Place the order.':'Record the delivery when the parts arrive.'))
                 : 'The last note says this job is waiting (parts, slipway, contractor or approval).'; }
-    else if(it.stage===3) next = nextSub ? ('Next sub-step: '+E(cut(nextSub.t,60))+'.') : 'Work is in progress. Add a note when something moves so the job does not go silent.';
+    else if(it.stage===3) next = nextSub ? ('Next sub-step: '+E(cut(nextSub.t,60))+'.') : subs.length ? 'All '+subs.length+' sub-steps are done. Close the job with an outcome.' : 'Work is in progress. Add a note when something moves so the job does not go silent.';
     else if(it.stage===4) next='The boat is running again but this job was never closed. Close it with an outcome.';
     else next='The work is closed. Record the supplier invoice.';
     b1='<button class="flw-btn pri" style="flex:1" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">'+(it.stage===1?'Open job to start it':it.stage===4?'Open job to close it':'Open job')+'</button>';
@@ -27448,6 +27450,31 @@ function flwPanel(it, E){
     if(as.length) links.push(['Asset', E(cut(as.join(' · '),70)), as.length+' linked', '', '']);
     if(la.text) links.push(['Notes', '“'+E(cut(la.text,80))+'”', E(la.by||'')+(la.by?' · ':'')+flwD(la.date)+' · '+la.n+' note'+(la.n===1?'':'s')+' in total', '', '']);
   }
+  /* §flWork2 (2026-10-08) · phase 2 · the Next step buttons call the SAME dialogs/functions the old pages use.
+     View-only users keep the phase-1 buttons (jump to the existing page). */
+  var can=(typeof flBoardCanEdit==='function')?flBoardCanEdit():true, noteH='';
+  var act=function(a,id,label,pri,x){ return '<button type="button" class="flw-btn'+(pri?' pri':'')+'"'+(pri?' style="flex:1"':'')+' data-a="'+a+'" data-id="'+E(id)+'" data-x="'+E(x==null?'':x)+'" onclick="flwAct(this.dataset.a,this.dataset.id,this.dataset.x)">'+label+'</button>'; };
+  if(can && it.kind==='inc'){ b1=act('job',it.id,'Open a job',1); b2=act('incedit',it.id,'Edit report'); }
+  else if(can && it.kind==='mj'){
+    var blank=((m.parts||[]).length>0)?'':'1';
+    if(it.stage===1){ b1=act('start',it.id,'Start job',1); b2=act('newmemo',it.id,'Request parts',0,blank); }
+    else if(it.stage===2){
+      if(open[0]){ b1=act('memo',open[0].id,'Open memo '+E(open[0].no||''),1); b2=act('close',it.id,'Close job'); }
+      else { b1=act('newmemo',it.id,'Request parts',1,blank); b2=act('close',it.id,'Close job'); } }
+    else if(it.stage===3){
+      if(nextSub){ b1=act('tick',it.id,'Tick “'+E(cut(nextSub.t,26))+'” done',1,subs.indexOf(nextSub)); b2=act('close',it.id,'Close job'); }
+      else { b1=act('close',it.id,'Close job',subs.length?1:0); b2=act('newmemo',it.id,'Request parts',0,blank); } }
+    else if(it.stage===4){ b1=act('close',it.id,'Close job',1); b2=''; }
+    else { var unpaid=(it.memos||[]).filter(function(mo){ return mo.status!=='paid'; })[0];
+      if(unpaid){ b1=act('memo',unpaid.id,'Open memo '+E(unpaid.no||''),1); b2=act('newmemo',it.id,'Add invoice memo',0,'1'); }
+      else { b1=act('newmemo',it.id,'Add invoice memo',1,'1'); b2=''; } }
+  }
+  if(can && it.kind!=='prj' && it.stage<5)
+    noteH='<div style="display:flex;gap:8px;margin-top:8px"><input id="flw-note" type="text" placeholder="Add a note: what moved today" data-id="'+E(it.id)+'" '
+      +'style="flex:1;min-width:0;height:36px;border:1px solid #CFCFC8;border-radius:10px;padding:0 10px;font-family:inherit;font-size:13px;color:#0F1B3D;background:#fff" '
+      +'onkeydown="if(event.key===\'Enter\')flwAct(\'note\',this.dataset.id,\'\')">'
+      +'<button type="button" class="flw-btn" data-id="'+E(it.id)+'" onclick="flwAct(\'note\',this.dataset.id,\'\')">Add note</button></div>';
+  if(it.kind!=='prj') noteH+='<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="'+it.kind+'" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full '+(it.kind==='inc'?'report':'job')+' page</a>'+(can?'':' · view only')+'</div>';
   if(proj && it.kind!=='prj') links.unshift(['Project', E((proj.no||'PRJ')+' · '+cut(proj.name,56)), E(String(proj.status||'')), '', 'data-k="prj" data-id="'+E(proj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
   var stepsH=steps.map(function(s,i){
     var cls=(s[2]==='now'||i===it.stage)?'now':(i<it.stage?(s[3]?'done skip':'done'):'todo'), when=(s[2]==='now')?'':s[2];
@@ -27456,7 +27483,7 @@ function flwPanel(it, E){
   var meta=[]; if(it.owner) meta.push('Owner '+E(it.owner)); else if(it.kind==='mj') meta.push('<span style="color:#8E2019;font-weight:600">No owner</span>');
   if(it.due) meta.push('due '+flwD(it.due)); meta.push('silent '+it.silent+' day'+(it.silent===1?'':'s'));
   return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
-      +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658">'+E(it.no)+'</span>'+pill(it.stage)
+      +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span>'+pill(it.stage)
         +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
       +'<div style="margin-top:4px;font-size:18px;font-weight:700;line-height:1.25">'+E(it.title)+'</div>'
       +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+meta.join(' · ')+'</div></div>'
@@ -27464,7 +27491,7 @@ function flwPanel(it, E){
       +'<div class="flw-kick" style="padding:10px 18px 6px">Where it stands</div>'+stepsH
       +'<div class="flw-next"><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Next step</div>'
         +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px">'+b1+b2+'</div>'
-        +'<div style="margin-top:8px;font-size:11px;color:#5B6170">For now the button opens the existing page for this step.</div></div>'
+        +noteH+'</div>'
       +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
         +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b></div>'; }).join('')):'')
     +'</div>';
@@ -27490,7 +27517,9 @@ function flRenderWork(){
     +'<div class="flw-wm"><i>LOVE ANDAMAN</i>FLEET WORK</div>'
     +'<div class="flw-chips"><span class="flw-chip"><b>'+flwMoney(scan.money)+'</b>tied up</span>'
       +(scan.silent?('<span class="flw-chip red"><b>'+scan.silent+'</b>silent over 60 days</span>'):'')
-      +(scan.noOwner?('<span class="flw-chip amb"><b>'+scan.noOwner+'</b>no owner</span>'):'')+'</div></div>';
+      +(scan.noOwner?('<span class="flw-chip amb"><b>'+scan.noOwner+'</b>no owner</span>'):'')
+      +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn" style="height:32px;border-radius:16px;border:0;font-weight:700;font-size:12.5px" onclick="flwAct(\'report\',\'\',\'\')">+ Report a problem</button>':'')
+      +'</div></div>';
   var stages='<div class="flw-stages">'+S.map(function(s,i){
     return '<button type="button" class="flw-stg'+(FLW.stage===i?' on':'')+'" onclick="flwStage('+i+')" title="Show only this stage"><u>0'+(i+1)+'</u><span>'+s.t+'<i>'+s.d+'</i></span><b>'+cnt[i]+'</b></button>'; }).join('')+'</div>';
 
@@ -27562,4 +27591,48 @@ function flRenderWork(){
   wrap.innerHTML=flwCSS()+top+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
   flwFit();
   ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e && keep[id]) e.scrollTop=keep[id]; });
+}
+/* §flWork2 · actions · every branch hands over to an existing function; this page owns no business rule.
+   After any fleet save (flSave) the page redraws itself, so dialogs opened from here refresh it when they finish. */
+function flwAfter(){
+  try{ var v=document.getElementById('view-fl-work'); if(!v || !v.classList.contains('active')) return;
+    clearTimeout(window._flwT); window._flwT=setTimeout(function(){ try{ flRenderWork(); }catch(_){ } },80); }catch(_){ }
+}
+function flwAct(a,id,x){
+  try{
+    if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
+    var mj=function(){ return flwA('m').filter(function(q){ return q&&q.id===id; })[0]||null; };
+    if(a==='report'){ flOpenAddIncidentModal(); }
+    else if(a==='job'){ flOpenCreateJobModal(id); }
+    else if(a==='incedit'){ flOpenAddIncidentModal(id); }
+    else if(a==='start'){ var m=mj(); if(!m) return;
+      if(!confirm('Start '+(m.no||'this job')+' now? The boat status will follow the job setting (usually Fixing).')) return;
+      flMaintStart(id); flwAfter(); }
+    else if(a==='memo'){ flViewMemo(id); }
+    else if(a==='newmemo'){ flMaintCreateMemo(id, x==='1'); }
+    else if(a==='tick'){ flBoardSubTick(null,id,+x,true); }
+    else if(a==='close'){ flMaintOpenCloseModal(id); }
+    else if(a==='note'){
+      var el=document.getElementById('flw-note'), t=el?String(el.value||'').trim():'';
+      if(!t){ if(el) el.focus(); return; }
+      var by=(typeof flBoardWho==='function'?flBoardWho():'')||'';
+      if(String(FLW.item).indexOf('inc:')===0){
+        var inc=flwA('i').filter(function(q){ return q&&q.id===id; })[0]; if(!inc) return;
+        if(!inc.progressLog) inc.progressLog=[];
+        inc.progressLog.push({date:TODAY_STR, text:t, by:by||'Fleet Work'});
+      } else {
+        var m2=mj(); if(!m2) return;
+        if(!m2.progressLog) m2.progressLog=[];
+        m2.progressLog.push({date:TODAY_STR, text:t, by:by});
+        if(typeof flPushLog==='function') flPushLog(id,t,by,TODAY_STR);
+      }
+      flSave(); flwAfter();
+    }
+  }catch(err){ try{ console.error('[flWork] action failed', a, err); }catch(_){ }
+    alert('This action could not be completed here. Open the full page and try there.'); }
+}
+if(!window._flwSaveHook && typeof flSave==='function'){
+  window._flwSaveHook=1;
+  var _flwSave0=flSave;
+  flSave=function(){ var r=_flwSave0.apply(this,arguments); flwAfter(); return r; };
 }
