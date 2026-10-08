@@ -61968,13 +61968,19 @@ function poBal(itemId){
       case 'lost':        b.onboat-=q; b.gone+=q; break;
       case 'laundry_out': b.dirty-=q; b.laundry+=q; break;
       case 'laundry_in':  b.laundry-=q; b.ready+=q; break;
-      case 'adjust':      b.ready+=q; break;
+      case 'adjust':      b.ready+=q; break;   /* ของเก่าก่อน §poRecv · ยังนับเหมือนเดิม */
+      /* §poRecv · รับของเข้า = เพิ่มของที่ท่ามีจริง · from: buy ซื้อใหม่ | transfer โอนจากท่าอื่น | found ได้คืนของที่แจ้งหาย
+         ได้คืนของที่เคยแจ้งหาย → ยอดหายสะสมลดลงด้วย (ไม่งั้นนับว่าหายทั้งที่อยู่ในตู้แล้ว) */
+      case 'receive':     b.ready+=q; if(m.from==='found') b.gone-=q; break;
+      /* §poRecv · นับสต็อก · qty = ส่วนต่างระหว่างที่นับได้กับบัญชีพร้อมใช้ (+/-) */
+      case 'count':       b.ready+=q; break;
       /* §poShip · ลงประจำเรือ = ออกจากคลังพร้อมใช้ แต่ยังเป็นของท่า
          ไม่เข้า onboat เพราะ onboat คือของที่ต้องได้คืนวันนี้ · อันนี้ไม่ต้องคืน */
       case 'assign':      b.ready-=q; b.onship+=q; break;
       case 'unassign':    b.onship-=q; b.ready+=q; break;
     }
   });
+  if(b.gone<0) b.gone=0;
   b.inhand=b.ready+b.onboat+b.onship+b.dirty+b.laundry+b.repair;
   return b;
 }
@@ -61982,8 +61988,11 @@ function poBal(itemId){
    บัญชีเก็บค่าจริงไว้เหมือนเดิม ตัวเลขบนจอเกินทะเบียนไม่ได้ ของจริงในตู้ก็ไม่เคยเกิน
    ส่วนที่เกินไม่ได้ถูกกลบ · ตัวเลขเปลี่ยนเป็นสีแดงและบอกไว้ใน title ว่าบัญชีขึ้นเท่าไหร่ */
 function poReadyShown(it, b){
-  var cap=poNum(it&&it.total); b=b||poBal(it&&it.id);
-  return Math.min(b.ready, cap);
+  /* §poRecv · เลิกตัดไว้ที่ทะเบียน · ยอดรวมตอนนี้คำนวณจากบัญชี (inhand) แล้ว ไม่ใช่เลขที่พิมพ์ไว้
+     การตัดเพดานทำให้ "ปรับยอด +20 แล้วเลขไม่ขยับ" คนเลยไปแก้ทะเบียนเพิ่ม แล้วของถูกนับซ้ำ
+     ติดลบโชว์ 0 · ตัวเลขจริงขึ้นสีแดงในแถว ให้ไปนับสต็อก */
+  b=b||poBal(it&&it.id);
+  return Math.max(0, b.ready);
 }
 
 /* ── เรือที่ออกวันนี้ที่ท่านี้ · ดึงจาก TRIPS + ROUTES.pier ของเดิม ── */
@@ -62655,8 +62664,9 @@ function poCSS(){
   +H+' .po-ir .l{font-size:12px;font-weight:700;color:#334155}'
   +H+' .po-ir .rw{flex:0 0 auto;display:flex;align-items:center;gap:9px}'
   +H+" .po-ir .v{font:800 14px 'DM Mono',monospace;color:#10B981;min-width:30px;text-align:right;flex:0 0 auto}"
-  +H+" .po-ir .u{font:500 10px 'DM Mono',monospace;color:#94A3B8;width:48px;flex:0 0 auto;white-space:nowrap}"
-  +H+' .po-ir .ac{display:flex;gap:3px;flex:0 0 auto;width:118px;justify-content:flex-end}'
+  +H+" .po-ir .u{font:500 10px 'DM Mono',monospace;color:#94A3B8;width:58px;flex:0 0 auto;white-space:nowrap}"
+  /* §poRecv · สามปุ่ม (ประจำเรือ · รับเข้า · นับ) · กว้างตายตัว 118 แล้วปุ่มล้นไปทับ "/152 ชิ้น" */
+  +H+' .po-ir .ac{display:flex;gap:2px;flex:0 0 auto;min-width:176px;justify-content:flex-end}'
   +H+' .po-mb{width:64px;height:6px;border-radius:999px;overflow:hidden;display:flex;background:#F1F5F9;flex:0 0 auto}'
   +H+' .po-mb i{display:block;height:100%}'
   +H+' .po-chs{display:flex;gap:5px;flex-wrap:wrap}'
@@ -65739,7 +65749,11 @@ function renderPierOffice(pier){
         +'&#128424; พิมพ์สรุปรวมทุกลำ</button>'):'')
       +'</div>'
     +'<div class="po-card">'+poBoatTable(boats,items,ro)+'</div>'
-    +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง</div>'
+    +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง'
+      +'<span style="flex:1"></span>'
+      +(ro?'':('<button class="po-btn" onclick="poRecvOpen()" title="ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย · ลงได้หลายรายการในใบเดียว">&#65291; รับของเข้า</button>'
+        +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'))
+      +'</div>'
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
     +'<div class="po-sec"><span class="n">3</span> วงจรผ้าเช็ดตัว</div>'
     +poLaundryBlock(ro);
@@ -66044,28 +66058,30 @@ function poStockTable(items, ro){
        ท่าที่มีของ 18 รายการ 6 ประเภทจบในหน้าจอเดียว ไม่ต้องเลื่อนหาหัวข้อ */
     var K=PO_KIND[k]||{t:k,u:'ชิ้น',c:'#9A9A93'}, list=by[k];
     var tot=0, rd=0;
-    list.forEach(function(it){ tot+=poNum(it.total); rd+=poReadyShown(it); });
+    list.forEach(function(it){ var b0=poBal(it.id); tot+=b0.inhand; rd+=poReadyShown(it,b0); });   /* §poRecv · ยอดรวม = ของที่มีจริงตามบัญชี */
     return '<div class="po-kc"><div class="po-kh"><span class="dot" style="background:'+K.c+'"></span>'
       +'<b>'+poE(K.t)+'</b><span class="sum">พร้อมใช้ <em>'+rd+'</em> / '+tot+' '+poE(K.u)+'</span></div>'
       + list.map(function(it){
           var b=poBal(it.id);
-          var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
+          var tip=it.label+' · มีอยู่ '+b.inhand+' '+K.u+' (ตั้งต้น '+poNum(it.total)+' · รับเข้า/นับ/หาย ตามประวัติ)'+(b.gone?(' · หาย/ตัดทิ้งสะสม '+b.gone):'');
           /* §poNoNeg · พร้อมใช้เกินทะเบียนแปลว่ามีของคืนกลับมามากกว่าที่เบิกออกไป · ไม่ใช่ของที่มีจริง */
-          var vOver=(b.ready>poNum(it.total));
-          if(vOver) tip+=' · บัญชีขึ้น '+b.ready+' ซึ่งเกินทะเบียน '+(b.ready-poNum(it.total))
-            +' — ยอดคืนมากกว่ายอดเบิก · ตัวเลขนี้ตัดไว้ที่ทะเบียนแล้ว';
+          /* §poRecv · บัญชีพร้อมใช้ติดลบ = เบิกออกมากกว่าที่มี · ต้องนับสต็อก */
+          var vOver=(b.ready<0);
+          if(vOver) tip+=' · บัญชีพร้อมใช้ติดลบ '+b.ready+' — เบิกออกไปมากกว่าที่มีในบัญชี · กด "นับ" เพื่อตั้งยอดตามของจริง';
           return '<div class="po-ir">'
             +'<span class="lw"><b class="l" title="'+poE(tip)+'">'+poE(it.label)+'</b>'
               +'<span class="po-chs">'+poStockChips(b)+'</span></span>'
             +'<span class="rw">'
             +poStockBar(b,'po-mb')
             +'<span class="v"'+(vOver?' style="color:#C0271C" title="'+poE(tip)+'"':'')+'>'+poReadyShown(it,b)+'</span>'
-            +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
+            +'<span class="u" title="ของที่ท่ามีอยู่ตอนนี้ตามบัญชี · ไม่รวมที่หาย/ตัดทิ้ง">/'+b.inhand+' '+poE(K.u)+'</span>'
             +'<span class="ac">'
               +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
               /* §poShip · ปุ่มอยู่ติดกับปรับยอด เพราะเดิมคนใช้ปรับยอดแทนอันนี้ */
               +'<button class="po-go" onclick="poShipOpen(\''+it.id+'\')" title="ลงประจำเรือ · หักจากพร้อมใช้ แต่ไม่ต้องตามคืน"'+(ro?' disabled':'')+'>ประจำเรือ'+(b.onship>0?('<b style="margin-left:4px">'+b.onship+'</b>'):'')+'</button>'
-              +'<button class="po-go" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
+              /* §poRecv · ปรับยอดแยกเป็นสองปุ่มตามขั้นตอนจริง · รับของเข้า กับ นับสต็อก */
+              +'<button class="po-go" onclick="poRecvOpen(\''+it.id+'\')" title="รับของเข้า · ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย"'+(ro?' disabled':'')+'>รับเข้า</button>'
+              +'<button class="po-go" onclick="poCountOpen(\''+it.id+'\')" title="นับสต็อก · ใส่จำนวนที่นับได้จริง ระบบคิดส่วนต่างให้"'+(ro?' disabled':'')+'>นับ</button>'
             +'</span></span></div>'; }).join('')
       +'</div>';
   }).join('');
@@ -66732,7 +66748,7 @@ function poIsCommit(bid, mode){
     });
   });
   if(over.length && !confirm('เบิกเกินจำนวนที่พร้อมใช้:\n'+over.join('\n')
-      +'\n\nบันทึกต่อไหม? (ยอดพร้อมใช้จะติดลบ ให้ไปปรับยอดทีหลัง)')) return false;
+      +'\n\nบันทึกต่อไหม? (ยอดพร้อมใช้จะติดลบ ให้ไปนับสต็อกทีหลัง)')) return false;
 
   /* 3 · ส่วนต่างฝั่งคืน · §poRetSplit · รายลาย/ไซส์ตรง ๆ · ระบบไม่เดาให้แล้ว
      ของที่หายผูกกับค่าปรับและทะเบียนรายลาย · เกลี่ยให้เท่ากับสร้างตัวเลขที่ไม่มีอยู่จริง */
@@ -67033,7 +67049,8 @@ function poKindDel(id){
 function poItemsOpen(){
   poKindSync();
   var its=(PIER_ITEMS||[]).filter(function(i){ return i.pier===_poPier; });
-  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">"ทะเบียน" คือจำนวนที่ซื้อเข้ามาทั้งหมด · ยอดคงเหลือคำนวณจากรายการเคลื่อนไหว ไม่ต้องมาแก้มือ</div>';
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">ตัวเลขแรกคือ<b>ยอดตั้งต้น</b>ของรายการ · ใส่ได้ตอนเพิ่มรายการใหม่ '
+    +'เมื่อมีการเคลื่อนไหวแล้วจะล็อก · ของเข้าเพิ่มใช้ <b>รับของเข้า</b> · ของไม่ตรงใช้ <b>นับสต็อก</b> · ทุกครั้งมีประวัติว่าใคร เมื่อไร</div>';
   body+=its.map(function(it){
     var b=poBal(it.id), u=PO_KIND[it.kind]?PO_KIND[it.kind].u:'ชิ้น';
     var KM=PO_KIND[it.kind]||{t:it.kind,u:'ชิ้น',c:'#9A9A93'};
@@ -67047,7 +67064,12 @@ function poItemsOpen(){
             :('<option value="'+poE(it.kind)+'" selected>'+poE(KM.t)+'</option>'))
       +'</select>'
       +'<div style="flex:1"><input id="poit_'+it.id+'" value="'+poE(it.label)+'" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;width:100%;font-family:inherit"></div>'
-      +poIn('poitt_'+it.id, poNum(it.total), '', 66)
+      /* §poRecv · ยอดตั้งต้นล็อกเมื่อมีการเคลื่อนไหวแล้ว · แก้ตรงนี้คือแก้ยอดย้อนหลังทั้งเส้นแบบไม่มีร่องรอย */
+      +((PIER_MOVES||[]).some(function(m){ return m && m.itemId===it.id; })
+        ? '<span title="ยอดตั้งต้น · ล็อกแล้วเพราะมีการเคลื่อนไหว · ของเข้าเพิ่มใช้ รับของเข้า · ของไม่ตรงใช้ นับสต็อก" '
+          +'style="display:inline-block;width:66px;text-align:center;font:700 12px inherit;color:#94A3B8;font-family:inherit">'
+          +'&#128274; '+poNum(it.total)+'</span>'
+        : poIn('poitt_'+it.id, poNum(it.total), '', 66))
       +'<span style="font-size:11px;color:#7C8091;width:56px">'+u+' · เหลือ '+b.inhand+'</span>'
       +'<button class="po-btn" onclick="poItemOff(\''+it.id+'\')">'+(it.active===false?'เปิดใช้':'ปิด')+'</button></div>';
   }).join('');
@@ -67085,7 +67107,7 @@ function poItemsOpen(){
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
     +'<select id="poni_kind" style="border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;font-family:inherit">'
     +poKinds().map(function(k){ return '<option value="'+poE(k.id)+'">'+poE(k.name||k.id)+' ('+poE(k.unit||'ชิ้น')+')</option>'; }).join('')+'</select>'
-    +poIn('poni_label','','ชื่อ/แบบ เช่น ตีนกบ · L (42-44)',230)+poIn('poni_total','','จำนวน',80)
+    +poIn('poni_label','','ชื่อ/แบบ เช่น ตีนกบ · L (42-44)',230)+poIn('poni_total','','ยอดตั้งต้น',80)
     +poBtn('เพิ่ม','poItemAdd()',1)+'</div></div>';
   poModal('ทะเบียนของ · '+poE(poPierName()), body,
     poBtn('ปิด','poModalClose()')+poBtn('บันทึกชื่อ/จำนวน','poItemsSave()',1), 700);
@@ -67103,7 +67125,7 @@ function poItemsSave(){
     if(it.pier!==_poPier) return;
     var l=document.getElementById('poit_'+it.id), t=document.getElementById('poitt_'+it.id);
     if(l && l.value.trim()) it.label=l.value.trim();
-    if(t) it.total=poNum(t.value);
+    if(t && !(PIER_MOVES||[]).some(function(m){ return m && m.itemId===it.id; })) it.total=poNum(t.value);   /* §poRecv · ล็อกเมื่อมีการเคลื่อนไหว */
   });
   poPersist(); poModalClose(); renderPierOffice();
 }
@@ -67139,6 +67161,135 @@ function poAdjSave(itemId){
   var q=poNum(poV('poadj')); if(!q){ poModalClose(); return; }
   poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:'', type:'adjust', qty:q, note:poV('poadjn')});
   poPersist(); poModalClose(); renderPierOffice();
+}
+
+/* ══ §poRecv (2026-10-08) · รับของเข้า + นับสต็อก แทน "ปรับยอด" ══════════════════════
+   เจ้าของ: "มันน่าจะต้องมีรายการเพิ่มของในสต็อก เหมือนรายการรับของเข้ามาใหม่ ตอนนี้ user ไปจัดการ
+   ในการปรับยอด เพราะถ้าไม่ตรง user ก็ต้องไปปรับเรื่อย ๆ · ขั้นตอนควรเป็น รับของเข้าใหม่ → เบิก คืน
+   → กรณีหายก็มีประวัติ และยอดรวมก็จะลดตาม"
+   สิ่งที่ตรวจเจอ
+     · ยอดหลัง / คือเลขทะเบียนที่พิมพ์ไว้ ไม่ลดเมื่อของหาย · พร้อมใช้ถูกตัดไว้ไม่ให้เกินเลขนั้น
+       ปรับยอด +20 แล้วจอไม่ขยับ → คนไปแก้ทะเบียนเพิ่ม → พร้อมใช้ถูกบวกซ้ำ (เริ่มนับจากทะเบียน)
+     · backup 3 ต.ค. · หน้ากากผู้ใหญ่ ทะเบียน 88 บัญชีจริง 123 · ท่อผู้ใหญ่ 65 / 111
+     · ปรับยอดถูกใช้แทน รับเข้า / ถอดจากเรือ / ได้คืนของหาย / แก้ตัวเลข ปนกันหมด
+   ตอนนี้
+     ยอดรวม = ยอดตั้งต้น + รับเข้า − หาย/ตัดทิ้ง ± นับสต็อก (poBal.inhand) · ไม่มีการพิมพ์ทับ
+     รับของเข้า  type 'receive' · from buy | transfer | found · ร้าน/ราคา/เลขบิล อยู่ในหมายเหตุ
+                 (ช่องแยกต้องเพิ่มคอลัมน์ใน pier_moves = เปลี่ยนฐานข้อมูล · ช่วงห้ามแก้ DB ถึง 15 ต.ค.)
+     นับสต็อก    type 'count' · ใส่จำนวนที่นับได้ในคลัง · ระบบบันทึกส่วนต่างพร้อมเหตุผล
+     ยอดตั้งต้น   ล็อกเมื่อรายการนั้นมีการเคลื่อนไหวแล้ว
+   ของเก่า type 'adjust' ยังนับเหมือนเดิม และยังโชว์ในประวัติว่า "ปรับยอด" */
+var PO_RECV_SRC={ buy:'ซื้อใหม่', transfer:'โอนจากท่าอื่น', found:'ได้คืน (ของที่แจ้งหาย)' };
+function poRecvItems(itemId){
+  if(itemId){ var it=poItem(itemId); return it?[it]:[]; }
+  return poItems(_poPier);
+}
+function poRecvRows(list, rowFn){
+  var last='', h='';
+  list.forEach(function(it){
+    var K=PO_KIND[it.kind]||{t:it.kind,u:'ชิ้น',c:'#9A9A93'};
+    if(list.length>1 && it.kind!==last){ last=it.kind;
+      h+='<div style="font-size:11px;font-weight:800;color:'+K.c+';margin:10px 0 2px">'+poE(K.t)+'</div>'; }
+    h+='<div style="'+poRowCss()+'">'+rowFn(it,K)+'</div>';
+  });
+  return '<div style="max-height:52vh;overflow:auto;padding-right:4px">'+h+'</div>';
+}
+function poRecvOpen(itemId){
+  if(!poCanEdit()) return;
+  var list=poRecvItems(itemId); if(!list.length) return;
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ของเข้าเพิ่มในท่า · ยอดพร้อมใช้และยอดรวมเพิ่มตาม'
+      +(list.length>1?' · ใส่จำนวนเฉพาะรายการที่รับเข้า ที่เว้นว่างไม่บันทึก':'')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">ที่มา<br><select id="porvsrc" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;font-family:inherit">'
+        +Object.keys(PO_RECV_SRC).map(function(k){ return '<option value="'+k+'">'+poE(PO_RECV_SRC[k])+'</option>'; }).join('')
+      +'</select></label>'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">วันที่รับ<br><input id="porvd" type="date" value="'+poE(_poDate)+'" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label>'
+    +'</div>'
+    +poRecvRows(list, function(it,K){ var b=poBal(it.id);
+      return '<span style="flex:1;font-weight:700;font-size:12.5px">'+poE(it.label)+'</span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">มีอยู่ '+b.inhand+' · พร้อมใช้ '+Math.max(0,b.ready)
+          +(b.gone?(' · หายสะสม '+b.gone):'')+'</span>'
+        +poIn('porv_'+it.id,'','+ '+K.u,82); })
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin:12px 0 4px">หมายเหตุ · ร้าน / ราคา / เลขบิล / มาจากท่าไหน</div>'
+    +'<input id="porvn" placeholder="เช่น ร้าน ABC Diving ฿150/คู่ บิล 0231" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;box-sizing:border-box;font-family:inherit">'
+    +'<div id="porverr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('รับของเข้า · '+poE(list.length===1?list[0].label:poPierName()), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกรับเข้า',"poRecvSave('"+poE(itemId||'')+"')",1), 620);
+}
+function poRecvSave(itemId){
+  if(!poGuard()) return;
+  var list=poRecvItems(itemId), src=poV('porvsrc')||'buy', d=poV('porvd')||_poDate, note=String(poV('porvn')||'').trim();
+  var err=function(t){ var e=document.getElementById('porverr'); if(e) e.innerHTML=t; return false; };
+  var lines=[], bad=[], over=[];
+  list.forEach(function(it){
+    var raw=String(poV('porv_'+it.id)||'').trim(); if(!raw) return;
+    var q=poNum(raw);
+    if(!(q>0)){ bad.push(it.label); return; }
+    if(src==='found'){ var g=poBal(it.id).gone; if(q>g) over.push(it.label+' (หายสะสม '+g+')'); }
+    lines.push({it:it,q:q});
+  });
+  if(bad.length) return err('จำนวนต้องมากกว่า 0 · '+poE(bad.join(', '))+'<br>ของไม่ครบหรือเกินให้ใช้ "นับสต็อก"');
+  if(!lines.length) return err('ใส่จำนวนที่รับเข้าอย่างน้อย 1 รายการ');
+  if(over.length && !confirm('Found more than reported lost for:\n'+over.join('\n')+'\n\nSave anyway?')) return false;
+  lines.forEach(function(x){
+    poAdd({date:d, pier:_poPier, itemId:x.it.id, boatId:'', type:'receive', qty:x.q, from:src, note:note});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
+}
+function poCountOpen(itemId){
+  if(!poCanEdit()) return;
+  var list=poRecvItems(itemId); if(!list.length) return;
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">นับเฉพาะของที่อยู่<b>ในคลัง</b> (พร้อมใช้) · '
+      +'ของที่อยู่กับเรือ ประจำเรือ ร้านซัก และรอซ่อม ไม่ต้องนับ · ระบบเทียบกับบัญชีแล้วบันทึกส่วนต่างให้'
+      +(list.length>1?' · ช่องที่เว้นว่าง = ไม่ได้นับ':'')+'</div>'
+    +poRecvRows(list, function(it,K){ var b=poBal(it.id);
+      var oth=[]; if(b.onboat) oth.push('กับเรือ '+b.onboat); if(b.onship) oth.push('ประจำเรือ '+b.onship);
+      if(b.dirty) oth.push('รอส่งซัก '+b.dirty); if(b.laundry) oth.push('ร้านซัก '+b.laundry); if(b.repair) oth.push('รอซ่อม '+b.repair);
+      return '<span style="flex:1;min-width:0"><b style="font-size:12.5px">'+poE(it.label)+'</b>'
+          +(oth.length?('<span style="display:block;font-size:10.5px;color:#94A3B8">นอกคลัง · '+poE(oth.join(' · '))+'</span>'):'')+'</span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">บัญชี <b style="color:'+(b.ready<0?'#B91C1C':'#0F172A')+'">'+b.ready+'</b></span>'
+        +'<input id="pocn_'+it.id+'" inputmode="numeric" placeholder="นับได้" oninput="poCountDiff(\''+poE(it.id)+'\')" '
+          +'style="border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;width:76px;font-family:inherit">'
+        +'<span id="pocd_'+it.id+'" style="width:48px;text-align:right;font:700 12px inherit;font-family:inherit"></span>'; })
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin:12px 0 4px">เหตุผลที่ไม่ตรง (ต้องใส่ถ้ามีส่วนต่าง)</div>'
+    +'<input id="pocnn" placeholder="เช่น นับสต็อกสิ้นเดือน · หายไม่ทราบสาเหตุ · ของเก่าก่อนเริ่มใช้ระบบ" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;box-sizing:border-box;font-family:inherit">'
+    +'<div style="display:flex;gap:10px;align-items:center;margin-top:10px"><label style="font-size:11px;font-weight:700;color:#475569">วันที่นับ <input id="pocnd" type="date" value="'+poE(_poDate)+'" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label></div>'
+    +'<div id="pocnerr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('นับสต็อก · '+poE(list.length===1?list[0].label:poPierName()), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกผลนับ',"poCountSave('"+poE(itemId||'')+"')",1), 640);
+}
+function poCountDiff(id){
+  var el=document.getElementById('pocd_'+id); if(!el) return;
+  var raw=String(poV('pocn_'+id)||'').trim();
+  if(!raw){ el.textContent=''; return; }
+  var d=poNum(raw)-poBal(id).ready;
+  el.textContent=d===0?'ตรง':((d>0?'+':'')+d);
+  el.style.color=d===0?'#047857':(d>0?'#1D4ED8':'#B91C1C');
+}
+function poCountSave(itemId){
+  if(!poGuard()) return;
+  var list=poRecvItems(itemId), note=String(poV('pocnn')||'').trim(), d=poV('pocnd')||_poDate;
+  var err=function(t){ var e=document.getElementById('pocnerr'); if(e) e.innerHTML=t; return false; };
+  var rows=[], bad=[], n=0;
+  list.forEach(function(it){
+    var raw=String(poV('pocn_'+it.id)||'').trim(); if(!raw) return;
+    var c=poNum(raw); if(c<0 || !/^\d+$/.test(raw)){ bad.push(it.label); return; }
+    n++;
+    var b=poBal(it.id), diff=c-b.ready;
+    if(diff) rows.push({it:it, c:c, was:b.ready, diff:diff});
+  });
+  if(bad.length) return err('ใส่เป็นจำนวนเต็ม 0 ขึ้นไป · '+poE(bad.join(', ')));
+  if(!n) return err('ใส่จำนวนที่นับได้อย่างน้อย 1 รายการ');
+  if(rows.length && !note) return err('มีส่วนต่าง '+rows.length+' รายการ · ใส่เหตุผลก่อนบันทึก');
+  rows.forEach(function(x){
+    poAdd({date:d, pier:_poPier, itemId:x.it.id, boatId:'', type:'count', qty:x.diff,
+           note:note+' · นับได้ '+x.c+' (บัญชี '+x.was+')'});
+  });
+  if(rows.length) poPersist();
+  poModalClose(); renderPierOffice();
+  if(!rows.length) alert('Counted '+n+' item(s) - all match the books. Nothing recorded.');
+  return true;
 }
 
 /* ══ §poShip · ของที่ลงประจำเรือ ══════════════════════════════════════
@@ -67181,7 +67332,7 @@ function poMoveEdit(id){
 function T_LDG(t){
   var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
          onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
-         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
+         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก'};
   return M[t]||t;
 }
 function poMoveEditSave(id){
@@ -67291,7 +67442,7 @@ function poShipSave(itemId){
   if(q<=0) return poShipErr('ใส่จำนวนที่จะลงประจำเรือ · ต้องมากกว่า 0');
   if(!bo)  return poShipErr('เลือกลำก่อน');
   if(q>b.ready) return poShipErr('พร้อมใช้มีแค่ '+b.ready+' '+u+' · ลงประจำ '+q
-    +' ไม่ได้ ยอดพร้อมใช้จะติดลบ<br>ถ้าของในตู้มีมากกว่านี้จริง ให้กด "ปรับยอด" เพิ่มเข้าคลังก่อน');
+    +' ไม่ได้ ยอดพร้อมใช้จะติดลบ<br>ถ้าของในตู้มีมากกว่านี้จริง ให้กด "รับเข้า" หรือ "นับ" ก่อน');
   poAdd({date:_poDate, pier:_poPier, itemId:itemId, boatId:bo, type:'assign', qty:q, note:poV('poshipn')});
   poPersist(); renderPierOffice(); poShipOpen(itemId);
 }
@@ -67346,7 +67497,7 @@ function poLaundryOutOpen(){
 function poLaundryInOpen(){
   if(!poCanEdit()) return;
   var tw=poItems(_poPier).filter(function(i){ return i.kind==='towel'; });
-  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่ร้านซักส่งกลับ · เข้าคลังพร้อมใช้ทันที ถ้าขาดให้ปรับยอดแยก</div>'
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่ร้านซักส่งกลับ · เข้าคลังพร้อมใช้ทันที ถ้าขาดให้นับสต็อกแยก</div>'
     +tw.map(function(it){ var b=poBal(it.id);
       return '<div style="'+poRowCss()+'"><div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(it.label)+'</div>'
         +'<div style="font-size:11px;color:#7C8091">อยู่ร้านซัก '+b.laundry+' ผืน'+poQAge(it.id,'laundry')+'</div></div>'
@@ -67373,11 +67524,11 @@ function poLaundrySave(isOut){
    ตัวเลขติดลบในตารางคือการแก้ยอดย้อนหลังของใบเดิม · ตัวสรุปบวก-ลบให้แล้ว
    ไม่ต้องไล่อ่านทีละแถวเพื่อหักกันเอง */
 var _poLdgF='all';
-var PO_LDG_G={ all:null, issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
+var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
                loss:['lost','writeoff','repair'], ship:['assign','unassign'],
-               adj:['adjust','onboard','fixed'] };
-var PO_LDG_GN={ all:'ทั้งหมด', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
-                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'ปรับยอด' };
+               adj:['count','adjust','onboard','fixed'] };
+var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
+                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด' };
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
 function poLdgBoatNm(id){
   var b=(typeof getBoat==='function' && id)?getBoat(id):null;
@@ -67409,12 +67560,13 @@ function poLedgerOpen(){
   var all=(PIER_MOVES||[]).filter(function(m){ return m.pier===_poPier; });
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
          laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
-         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ'};
+         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก'};
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
           laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
-          assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490']};
+          assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490'],
+          receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9']};
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -67552,7 +67704,7 @@ function poLedgerOpen(){
       return '<tr><td style="white-space:nowrap">'+poE(m.date)+'</td><td>'+poE(it?it.label:m.itemId)+'</td>'
         +'<td><span style="display:inline-block;background:'+tc[0]+';color:'+tc[1]
           +';border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'
-          +poE(T[m.type]||m.type)+'</span>'
+          +poE(T[m.type]||m.type)+(m.type==='receive'&&PO_RECV_SRC[m.from]?(' · '+poE(PO_RECV_SRC[m.from])):'')+'</span>'
           +(m.fine?(' <span style="color:#B4560A;font-weight:700;font-size:11px">ค่าปรับ '+poBaht(m.fine)+'</span>'):'')+'</td>'
         +'<td style="text-align:center;font-weight:700'+(q<0?';color:#B91C1C':'')+'">'+q+'</td>'
         +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td>'
