@@ -27556,7 +27556,7 @@ function flRenderWork(){
     +'<div class="flw-chips"><span class="flw-chip"><b>'+flwMoney(scan.money)+'</b>tied up</span>'
       +(nSilent?('<span class="flw-chip red"><b>'+nSilent+'</b>silent over 60 days</span>'):'')
       +(nNoOwner?('<span class="flw-chip amb"><b>'+nNoOwner+'</b>no owner</span>'):'')
-      +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn" style="height:32px;border-radius:16px;border:0;font-weight:700;font-size:12.5px" onclick="flwAct(\'report\',\'\',\'\')">+ Report a problem</button>':'')
+      +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn" style="height:32px;border-radius:16px;border:0;font-weight:700;font-size:12.5px" onclick="flwAdd()">+ Add work</button>':'')
       +'</div></div>';
   var stages='<div class="flw-stages">'+S.map(function(s,i){
     return '<button type="button" class="flw-stg'+(FLW.stage===i?' on':'')+'" onclick="flwStage('+i+')" title="Show only this stage"><u>0'+(i+1)+'</u><span>'+s.t+'<i>'+s.d+'</i></span><b>'+cnt[i]+'</b></button>'; }).join('')+'</div>';
@@ -27622,7 +27622,8 @@ function flRenderWork(){
           +(b?('<span class="flw-pill" style="font-size:12px;padding:3px 9px;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span>'):'')
           +(cur.isDown&&cur.down?('<span style="font-size:12.5px;font-weight:600;color:#8E2019">down '+cur.down+' days</span>'):'')+'</div>'
         +'<div style="margin-top:2px;font-size:13px;color:#5B6170">'+(bsub.join(' · ')||'&nbsp;')+'</div></div>'
-        +(b?'<button type="button" class="flw-btn" style="margin-left:auto" onclick="flwGo(\'boat\',\'\')">Boat Status</button>':'')+'</div>'
+        +(b?'<button type="button" class="flw-btn" style="margin-left:auto" onclick="flwGo(\'boat\',\'\')">Boat Status</button>':'')
+        +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn pri"'+(b?'':' style="margin-left:auto"')+' onclick="flwAdd()">+ Add work</button>':'')+'</div>'
       +blk
       +'<div class="flw-cols flw-hd"><span>No.</span><span>Work</span><span>Stage</span><span class="x o">Owner</span><span class="x" style="text-align:right">Silent</span><span class="x" style="text-align:right">Cost</span></div>'
       +'<div class="flw-scroll" id="flw-ml">'+(list.length?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
@@ -27682,4 +27683,57 @@ if(!window._flwSaveHook && typeof flSave==='function'){
   window._flwSaveHook=1;
   var _flwSave0=flSave;
   flSave=function(){ var r=_flwSave0.apply(this,arguments); flwAfter(); return r; };
+}
+/* §flwAdd (2026-10-08) · one "+ Add work" entry for every kind of fleet work.
+   Owner: "how many kinds of work get created? I want to handle them all from this page".
+   Counted on the Sep 2026 export (112 jobs, 66 reports, 21 projects): 60 jobs came from a problem report,
+   26 planned jobs stood alone, 26 sat inside a project; memos: 37 tied to a job, 12 to a project, 17 to nothing.
+   So there are four doors. Each one opens the EXISTING form; this chooser owns no data and no rule.
+   The boat selected on the page is pre-picked in the form. */
+var FLW_ADD=[
+  {k:'inc', t:'Report a problem', d:'Something broke or looks wrong. A job can be opened from the report afterwards. If it was fixed on the spot, tick Quick Fix in the form.', n:'most common · about half of all jobs start here'},
+  {k:'job', t:'Planned maintenance job', d:'Service by engine hours, routine checks, or a repair that has no problem report. Pick the type (Corrective / Preventive) in the form.', n:'about a quarter of jobs'},
+  {k:'prj', t:'Project', d:'Dry dock, overhaul or other long work that groups several jobs, memos and documents under one plan.', n:'about a quarter of jobs sit inside a project'},
+  {k:'memo', t:'Parts or labour request', d:'A memo for approval that is not tied to one job, for example stock parts for the store.', n:'about one memo in four'}
+];
+function flwAddClose(){ var o=document.getElementById('flw-add'); if(o) o.remove(); document.removeEventListener('keydown', flwAddKey); }
+function flwAddKey(e){ if(e.key==='Escape') flwAddClose(); }
+function flwAdd(){
+  if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
+  flwAddClose();
+  var b=FLW.boat?getBoat(FLW.boat):null, E=flBoardEsc;
+  var o=document.createElement('div'); o.id='flw-add';
+  o.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.56);display:flex;align-items:center;justify-content:center;padding:16px;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+  o.onclick=function(e){ if(e.target===o) flwAddClose(); };
+  o.innerHTML='<div style="width:560px;max-width:100%;max-height:100%;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.45);color:#0F1B3D">'
+    +'<div style="padding:18px 22px 6px"><div style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5F5F58">Add work'+(b?(' · '+E(b.name)):'')+'</div>'
+    +'<div style="margin-top:2px;font-size:21px;font-weight:700">What kind of work is it?</div></div>'
+    +'<div style="padding:8px 14px 6px">'+FLW_ADD.map(function(x){
+        return '<button type="button" data-k="'+x.k+'" onclick="flwAddGo(this.dataset.k)" style="display:block;width:100%;text-align:left;margin:0 0 8px;padding:12px 14px;border:1.5px solid #C9CCD6;border-radius:12px;background:#fff;cursor:pointer;font-family:inherit;color:#0F1B3D" '
+          +'onmouseover="this.style.borderColor=\'#16265C\';this.style.background=\'#F7F7F5\'" onmouseout="this.style.borderColor=\'#C9CCD6\';this.style.background=\'#fff\'">'
+          +'<span style="display:block;font-size:15px;font-weight:700">'+x.t+'</span>'
+          +'<span style="display:block;margin-top:2px;font-size:12.5px;line-height:1.45;color:#3E4658">'+x.d+'</span>'
+          +'<span style="display:block;margin-top:4px;font-size:11px;color:#5B6170">'+x.n+'</span></button>'; }).join('')+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;padding:10px 22px 14px;background:#F7F7F5;border-top:1px solid #ECEBE6;border-radius:0 0 16px 16px">'
+    +'<button type="button" onclick="flwAddClose()" style="height:40px;padding:0 16px;border:1px solid #CFCFC8;border-radius:10px;background:#fff;font:600 13px inherit;font-family:inherit;color:#0F1B3D;cursor:pointer">Cancel</button></div></div>';
+  document.body.appendChild(o);
+  document.addEventListener('keydown', flwAddKey);
+}
+function flwAddGo(k){
+  var boat=FLW.boat||'';
+  flwAddClose();
+  var pick=function(id){ setTimeout(function(){ try{
+      var el=document.getElementById(id); if(!el || !boat) return;
+      var ok=[].some.call(el.options||[], function(op){ return op.value===boat; }); if(!ok) return;
+      el.value=boat; el.dispatchEvent(new Event('change',{bubbles:true}));
+    }catch(_){ } },80); };
+  try{
+    if(k==='inc'){ flOpenAddIncidentModal(); pick('fl-inc-boat'); }
+    else if(k==='job'){ flOpenCreateJobModal();
+      var c=document.querySelector('.job-type-card[data-type="preventive"]'); if(c && typeof selectJobType==='function') selectJobType('preventive',c);
+      pick('job-boat'); }
+    else if(k==='prj'){ flProjOpenNew(); pick('fl-proj-boat'); }
+    else if(k==='memo'){ flOpenMemoFromInventory(); }
+  }catch(err){ try{ console.error('[flWork] add failed', k, err); }catch(_){ }
+    alert('This form could not be opened here. Use the tab for that page instead.'); }
 }
