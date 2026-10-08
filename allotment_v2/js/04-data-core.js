@@ -1061,6 +1061,7 @@ function nav(el){
   if(view.startsWith('fl-')){
     const flView=view.replace('fl-','');
     if(flView==='deployment') flRenderDeployment();          /* §flDeploy */
+    else if(flView==='work'){ if(typeof flRenderWork==='function') flRenderWork(); }   /* §flWork */
     else if(flView==='boatstatus') renderBoats();
     else if(flView==='dashboard') flRenderDashboard();
     else if(flView==='dailyreport') flRenderDR();

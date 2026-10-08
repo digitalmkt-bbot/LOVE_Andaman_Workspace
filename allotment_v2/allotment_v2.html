@@ -319,6 +319,11 @@
       .fl-gtabs button:hover{background:#fff}
       .fl-gtabs button.on,.fl-gtabs button.on:hover{background:#16265C;color:#fff}
     </style>
+    <!-- §flWork · the whole repair flow on one page (phase 1 read-only) -->
+    <div class="nav-item" data-view="fl-work" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+      Fleet Work
+    </div>
     <div class="nav-item" data-view="fl-dashboard" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       FL Dashboard
@@ -1171,6 +1176,12 @@
     </div>
 
     <!-- ══════════ FL INCIDENT ══════════ -->
+    <!-- ══════════ FL WORK (§flWork) ══════════ -->
+    <div id="view-fl-work" class="view">
+      <div class="page-hd"><div><h1>Fleet Work</h1><p>Every open problem, job and bill, by boat</p></div></div>
+      <div id="fl-work-wrap"></div>
+    </div>
+
     <div id="view-fl-incident" class="view">
       <div class="page-hd"><div><h1>Job Assignment</h1><p>Incidents · Tracking · Linked Maintenance</p></div></div>
       <div id="fl-inc-pink-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>

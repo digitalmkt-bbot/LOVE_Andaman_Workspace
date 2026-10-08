@@ -27202,3 +27202,364 @@ function fdCSS(){
   +H+' .fd-rw .rwf b{color:#A32D2D}';
   document.head.appendChild(s);
 }
+
+/* ══ §flWork (2026-10-08) · Fleet Work · the whole repair flow on one page · PHASE 1 = read-only ═══
+   Owner: "the work is scattered over many pages · bring the steps together on one page · by boat, with that boat's jobs".
+   What this page does: reads FL_INCIDENTS / FL_MAINT / FL_MEMOS / FL_PROJECTS as they are and sorts every open
+   item into 6 stages. It writes NOTHING. Buttons only jump to the existing pages (phase 2 will wire actions).
+   Rules are borrowed, not re-invented: lanes from flBoardLane, "boat is down" from getCurStatus / boatJobBlock,
+   cost from flMaintCalcCost / flProjCalcCost. One rule set for the board and for this page.
+   Stage of a job:  pending → Job open (or Waiting if a memo is not received yet) · open memo or board lane "wait" → Waiting
+                    board lane "close" (boat runs) → To close · otherwise Repairing · done + awaitingInvoice → Billing
+   ═══════════════════════════════════════════════════════════════════════════════════════════════════════ */
+var FLW={boat:null,item:'',stage:-1,bf:'work'};
+var FLW_ST=[
+  {t:'Reported', d:'problem logged, no job yet',   c:'#5B6170', pb:'#F1F0EC', pf:'#3E4658'},
+  {t:'Job open', d:'opened, not started',          c:'#1272B3', pb:'#DCEBF6', pf:'#0B4F7A'},
+  {t:'Waiting',  d:'parts · approval · contractor', c:'#D9952B', pb:'#FBEBD3', pf:'#7A4300'},
+  {t:'Repairing',d:'work in progress',             c:'#2E9C78', pb:'#DDF1EA', pf:'#0B5A43'},
+  {t:'To close', d:'boat runs, job still open',    c:'#16265C', pb:'#E3E7F3', pf:'#16265C'},
+  {t:'Billing',  d:'waiting for the invoice',      c:'#8E3A6B', pb:'#F3E3EC', pf:'#6B2550'}
+];
+var FLW_MEMO={pending_approval:'waiting for approval',approved:'approved, not ordered yet',ordered:'ordered, not received',received:'received',paid:'paid',cancelled:'cancelled'};
+var FLW_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function flwA(name){ try{
+  if(name==='m') return (typeof FL_MAINT!=='undefined'&&FL_MAINT)||[];
+  if(name==='i') return (typeof FL_INCIDENTS!=='undefined'&&FL_INCIDENTS)||[];
+  if(name==='o') return (typeof FL_MEMOS!=='undefined'&&FL_MEMOS)||[];
+  if(name==='p') return (typeof FL_PROJECTS!=='undefined'&&FL_PROJECTS)||[];
+}catch(_){ } return []; }
+function flwD(s){ s=String(s||'').slice(0,10); var a=s.split('-'); if(a.length<3||!+a[0]) return '—';
+  return (+a[2])+' '+FLW_MO[(+a[1]||1)-1]+(a[0]!==String(TODAY_STR).slice(0,4)?(' '+a[0]):''); }
+function flwMoney(v){ v=Math.round(+v||0); return v>0 ? ('฿'+v.toLocaleString('en-US')) : '—'; }
+function flwLast(L, d0){ var o={date:String(d0||''),text:'',by:'',n:0};
+  (L||[]).forEach(function(e){ if(!e) return; o.n++; var x=String(e.date||''); if(x>=o.date){ o.date=x; o.text=String(e.text||''); o.by=String(e.by||''); } });
+  return o; }
+function flwMemos(m){ return flwA('o').filter(function(mo){ return mo && mo.maintId===m.id && mo.status!=='cancelled'; }); }
+function flwMemoOpen(mo){ return mo.status==='pending_approval'||mo.status==='approved'||mo.status==='ordered'; }
+function flwProj(id){ return flwA('p').filter(function(p){ return p&&p.id===id; })[0]||null; }
+function flwItems(){
+  var out=[], M=flwA('m'), byId={}, incById={};
+  M.forEach(function(m){ if(m) byId[m.id]=m; });
+  flwA('i').forEach(function(x){ if(x) incById[x.id]=x; });
+  flwA('i').forEach(function(x){
+    if(!x) return; var st=String(x.status||'open');
+    if(st==='resolved'||st==='closed'||st==='cancelled') return;
+    if(x.maintId && byId[x.maintId]) return;                      /* already has a job · the job carries it */
+    var la=flwLast(x.progressLog, x.date);
+    out.push({key:'inc:'+x.id, kind:'inc', id:x.id, no:x.no||'INC', title:x.title||x.detail||'(no title)', boatId:x.boatId||'',
+      stage:0, owner:'', silent:Math.max(0,flBoardDaysTo(la.date)), cost:0, sub:'reported '+flwD(x.date), projId:'', ref:x});
+  });
+  M.forEach(function(m){
+    if(!m || m.status==='cancelled') return;
+    var done=(m.status==='done'); if(done && !m.awaitingInvoice) return;
+    var memos=flwMemos(m), open=memos.filter(flwMemoOpen), stage, lane='';
+    if(done) stage=5;
+    else { try{ lane=flBoardLane(m); }catch(_){ lane=''; }
+      if(m.status==='pending') stage=open.length?2:1;
+      else if(open.length || lane==='wait') stage=2;
+      else if(lane==='close') stage=4;
+      else stage=3; }
+    var inc=m.incidentId?incById[m.incidentId]:null, subs=(typeof flBoardSubs==='function')?flBoardSubs(m):[], bits=[];
+    if(m.parked) bits.push('parked');
+    if(open.length) bits.push('memo '+(open[0].no||'MO')+' '+(open[0].title||'')+' · '+(FLW_MEMO[open[0].status]||open[0].status)+(open.length>1?(' · +'+(open.length-1)+' more'):''));
+    else if(done) bits.push('work closed '+flwD(m.endDate)+' · invoice not recorded');
+    if(subs.length) bits.push(subs.filter(function(s){ return s&&s.d; }).length+' of '+subs.length+' sub-steps');
+    if(inc) bits.push('from '+(inc.no||'INC')+' '+(inc.title||''));
+    if(!bits.length) bits.push('opened '+flwD(m.startDate));
+    var cost=0; try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=m.cost||0; }
+    out.push({key:'mj:'+m.id, kind:'mj', id:m.id, no:m.no||'MJ', title:m.title||'(no title)', boatId:m.boatId||'', stage:stage,
+      owner:String(m.owner||'').trim(), silent:(typeof flBoardSilent==='function')?flBoardSilent(m):0, cost:cost, sub:bits.join(' · '),
+      projId:m.parentProjectId||'', due:m.dueDate||'', ref:m, inc:inc, memos:memos, subs:subs, lane:lane});
+  });
+  flwA('p').forEach(function(p){
+    if(!p || p.status!=='awaiting_bill') return;
+    var la=flwLast(p.log, p.workDoneOn||p.planFrom), cost=0; try{ cost=flProjCalcCost(p.id)||0; }catch(_){}
+    out.push({key:'prj:'+p.id, kind:'prj', id:p.id, no:p.no||'PRJ', title:p.name||'(no name)', boatId:p.boatId||'', stage:5,
+      owner:String(p.vendor||'').trim(), silent:Math.max(0,flBoardDaysTo(la.date)), cost:cost,
+      sub:'work done '+flwD(p.workDoneOn)+' · final invoice not closed', projId:p.id, ref:p});
+  });
+  return out;
+}
+function flwBoats(items){
+  var map={}, order=[];
+  function get(id){ if(!map[id]){ var b=id?getBoat(id):null, s='';
+      try{ s=b?((getCurStatus(b,TODAY_STR)||{}).s||''):''; }catch(_){}
+      map[id]={id:id, name:b?b.name:(id?('Boat '+id):'No boat · general'), b:b, s:s, items:[], down:0}; order.push(id); }
+    return map[id]; }
+  items.forEach(function(it){ get(it.boatId||'').items.push(it); });
+  if(FLW.bf==='all'){ try{ (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){ if(b && !b.retired && b.ownership!=='charter') get(b.id); }); }catch(_){} }
+  var L=order.map(function(id){ var o=map[id];
+    o.isDown=(o.s==='fixing'||o.s==='unavailable');
+    if(o.isDown){ try{ o.down=flBoardBoatDown(o.items.filter(function(x){ return x.kind==='mj'; }).map(function(x){ return x.ref; })); }catch(_){} }
+    return o; });
+  if(FLW.bf==='down') L=L.filter(function(o){ return o.isDown; });
+  if(FLW.stage>=0) L=L.filter(function(o){ return o.items.some(function(x){ return x.stage===FLW.stage; }); });
+  L.sort(function(a,b){ return (b.isDown-a.isDown) || (b.down-a.down) || (b.items.length-a.items.length) || String(a.name).localeCompare(String(b.name)); });
+  return L;
+}
+function flwPickBoat(id){ FLW.boat=id; FLW.item=''; flRenderWork(); }
+function flwPickItem(k){ FLW.item=k; flRenderWork(); }
+function flwStage(i){ FLW.stage=(FLW.stage===i)?-1:i; FLW.item=''; flRenderWork(); }
+function flwBF(k){ FLW.bf=k; flRenderWork(); }
+function flwGo(kind,id){
+  var map={inc:'fl-incident',mj:'fl-maintenance',prj:'fl-projects',boat:'fl-boatstatus'};
+  var el=document.querySelector('.nav-item[data-view="'+map[kind]+'"]'); if(!el) return;
+  nav(el);
+  setTimeout(function(){ try{
+    if(kind==='inc' && typeof flSelIncident==='function') flSelIncident(id);
+    else if(kind==='mj' && typeof flSelMaint==='function') flSelMaint(id);
+    else if(kind==='prj' && typeof flProjOpen==='function') flProjOpen(id);
+  }catch(_){ } },120);
+}
+function flwMemo(id){ try{ if(typeof flViewMemo==='function') flViewMemo(id); }catch(_){ } }
+function flwCSS(){
+  var V='#view-fl-work';
+  return '<style>'
+  +V+'{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
+  +V+' > .page-hd{display:none}'
+  +V+' #fl-work-wrap{background:transparent;margin:0;padding:0}'
+  +V+' .mono{font-family:\'DM Mono\',ui-monospace,monospace}'
+  +V+' .flw-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;min-height:46px}'
+  +V+' .flw-l{display:flex;align-items:center;gap:10px;color:#fff}'
+  +V+' .flw-l b{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1}'
+  +V+' .flw-l span{line-height:1.15;font-size:13px;font-weight:700}'
+  +V+' .flw-l span i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#B4BCDD}'
+  +V+' .flw-wm{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff;padding-left:.30em;white-space:nowrap}'
+  +V+' .flw-wm i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD}'
+  +V+' .flw-chips{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}'
+  +V+' .flw-chip{height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.14);white-space:nowrap}'
+  +V+' .flw-chip b{font-weight:800}'
+  +V+' .flw-chip.red{background:#FBE0DD;color:#8E2A20;border-color:transparent}'
+  +V+' .flw-chip.amb{background:#FBEBD3;color:#7A4300;border-color:transparent}'
+  +V+' .flw-stages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:10px}'
+  +V+' .flw-stg{height:54px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;font-family:inherit;min-width:0}'
+  +V+' .flw-stg.on{background:#fff;color:#0F1B3D;border-color:#fff}'
+  +V+' .flw-stg u{text-decoration:none;font-family:\'DM Mono\',monospace;font-size:11px;opacity:.7}'
+  +V+' .flw-stg span{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +V+' .flw-stg span i{display:block;font-style:normal;font-size:11px;font-weight:400;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +V+' .flw-stg b{font-family:\'DM Mono\',monospace;font-size:20px;font-weight:500}'
+  +V+' .flw-3{display:grid;grid-template-columns:300px minmax(0,1fr) 380px;gap:10px;margin-top:10px;align-items:start}'
+  +V+' .flw-card{background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34);overflow:hidden;display:flex;flex-direction:column;min-height:0;min-width:0}'
+  +V+' .flw-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain}'
+  +V+' .flw-kick{font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658}'
+  +V+' .flw-fc{height:28px;padding:0 10px;border-radius:14px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12px inherit;font-family:inherit;cursor:pointer}'
+  +V+' .flw-fc.on{background:#0F1B3D;border-color:#0F1B3D;color:#fff}'
+  +V+' .flw-fc i{font-style:normal;font-family:\'DM Mono\',monospace;opacity:.7}'
+  +V+' .flw-boat{display:flex;align-items:center;gap:10px;min-height:58px;padding:7px 14px;border-bottom:1px solid #ECEBE6;cursor:pointer}'
+  +V+' .flw-boat:hover,'+V+' .flw-row:hover{background:#F7F7F5}'
+  +V+' .flw-boat.on,'+V+' .flw-row.on{background:#E8F3FB;box-shadow:inset 3px 0 0 #1272B3}'
+  +V+' .flw-bar{flex:none;width:4px;align-self:stretch;border-radius:2px}'
+  +V+' .flw-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;white-space:nowrap}'
+  +V+' .flw-el{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +V+' .flw-dots{display:flex;gap:3px;margin-top:4px}'
+  +V+' .flw-dots i{flex:1;height:4px;border-radius:2px;background:#ECEBE6}'
+  +V+' .flw-cols{display:grid;grid-template-columns:70px minmax(0,1fr) 112px 84px 48px 78px;gap:10px;align-items:center}'
+  +V+' .flw-hd{padding:7px 18px;border-bottom:1px solid #ECEBE6;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5B6170}'
+  +V+' .flw-grp{display:flex;align-items:center;gap:10px;padding:8px 18px;background:#F7F7F5;border-bottom:1px solid #ECEBE6;font-size:12px;color:#5B6170}'
+  +V+' .flw-grp b{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658}'
+  +V+' .flw-grp a{margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer;white-space:nowrap}'
+  +V+' .flw-row{min-height:54px;padding:6px 18px;border-bottom:1px solid #ECEBE6;cursor:pointer}'
+  +V+' .flw-trk{display:flex;gap:2px;margin-top:5px}'
+  +V+' .flw-trk i{flex:1;height:3px;border-radius:2px;background:#ECEBE6}'
+  +V+' .flw-btn{height:36px;padding:0 14px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 13px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +V+' .flw-btn.pri{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
+  +V+' .flw-step{display:flex;gap:12px;padding:0 18px}'
+  +V+' .flw-step .dot{flex:none;width:20px;display:flex;flex-direction:column;align-items:center}'
+  +V+' .flw-step .dot b{width:20px;height:20px;border-radius:10px;border:2px solid #CFCFC8;background:#fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}'
+  +V+' .flw-step .dot u{flex:1;width:2px;min-height:8px;background:#ECEBE6}'
+  +V+' .flw-step.done .dot b{background:#2E9C78;border-color:#2E9C78}.flw-step.done .dot u{background:#2E9C78}'
+  +V+' .flw-step.skip .dot b{background:#B9BEC9;border-color:#B9BEC9}'+V+' .flw-step.skip .dot u{background:#ECEBE6}'
+  +V+' .flw-step.now .dot b{background:#D9952B;border-color:#D9952B}'
+  +V+' .flw-step .tx{flex:1;min-width:0;padding-bottom:8px;font-size:12px;color:#5B6170;line-height:1.4}'
+  +V+' .flw-step .tx b{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:600;color:#0F1B3D}'
+  +V+' .flw-step.now .tx b{font-weight:700}.flw-step.todo .tx b{color:#8A8F9C}'
+  +V+' .flw-step .tx b i{margin-left:auto;font-style:normal;font-family:\'DM Mono\',monospace;font-size:11.5px;font-weight:400;color:#5B6170}'
+  +V+' .flw-next{margin:2px 18px 0;padding:12px 14px;border-radius:10px;background:#F7F7F5;border:1px solid #ECEBE6;font-size:13px;line-height:1.45}'
+  +V+' .flw-link{display:flex;align-items:center;gap:10px;min-height:40px;padding:4px 18px;border-top:1px solid #ECEBE6;font-size:12.5px}'
+  +V+' .flw-link.go{cursor:pointer}.flw-link.go:hover{background:#F7F7F5}'
+  +V+' .flw-link u{flex:none;width:62px;text-decoration:none;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5B6170}'
+  +V+' .flw-link span{flex:1;min-width:0;font-weight:600}'
+  +V+' .flw-link span i{display:block;font-style:normal;font-weight:400;font-size:11px;color:#5B6170}'
+  +V+' .flw-empty{padding:28px 18px;text-align:center;font-size:13px;color:#5B6170}'
+  +'@media (max-width:1760px){'+V+' .flw-3{grid-template-columns:250px minmax(0,1fr) 340px}'+V+' .flw-cols{grid-template-columns:70px minmax(0,1fr) 112px 48px 78px}'+V+' .flw-cols > .o{display:none}}'
+  +'@media (max-width:1280px){'+V+' .flw-3{grid-template-columns:300px minmax(0,1fr)}'+V+' .flw-3 > .flw-card:nth-child(3){grid-column:1 / -1}'+V+' .flw-wm{font-size:13px;letter-spacing:.18em}}'
+  +'@media (max-width:820px){'+V+'{padding:12px 10px 64px}'+V+' .flw-top{grid-template-columns:1fr}'+V+' .flw-wm{display:none}'+V+' .flw-chips{justify-content:flex-start}'
+    +V+' .flw-stages{grid-template-columns:repeat(2,minmax(0,1fr))}'+V+' .flw-3{grid-template-columns:1fr}'
+    +V+' .flw-cols{grid-template-columns:62px minmax(0,1fr) 92px}'+V+' .flw-cols > .x{display:none}'+V+' .flw-stg{padding:0 10px;gap:6px}'+V+' .flw-stg u{display:none}'+V+' .flw-chip{font-size:11px;padding:0 9px}}'
+  +'</style>';
+}
+function flwFit(){
+  try{
+    var g=document.querySelector('#view-fl-work .flw-3'); if(!g || !g.offsetParent) return;
+    var cards=[].slice.call(g.children), wide=window.innerWidth>1280;
+    var mn=document.querySelector('main.main');
+    var tail=Math.max(14, mn?(parseFloat(getComputedStyle(mn).paddingBottom)||0):0)+2;
+    var h=Math.max(360, Math.round(window.innerHeight-(g.getBoundingClientRect().top+(window.scrollY||0))-tail));
+    cards.forEach(function(c,i){
+      if(wide) c.style.height=h+'px';
+      else if(window.innerWidth>820 && i<2) c.style.height=Math.max(360,Math.round(window.innerHeight*0.6))+'px';
+      else c.style.height='';
+    });
+  }catch(_){ }
+}
+if(!window._flwFitOn){ window._flwFitOn=1; window.addEventListener('resize', function(){ flwFit(); }, {passive:true}); }
+function flwPanel(it, E){
+  var S=FLW_ST, st=S[it.stage], m=it.ref, proj=it.projId?flwProj(it.projId):null;
+  var pill=function(i){ return '<span class="flw-pill" style="background:'+S[i].pb+';color:'+S[i].pf+'">'+S[i].t+'</span>'; };
+  var cut=function(s,n){ s=String(s||''); return s.length>n?(s.slice(0,n-1)+'…'):s; };
+  var steps=[], next='', b1='', b2='', links=[];
+  var open=(it.memos||[]).filter(flwMemoOpen);
+  if(it.kind==='inc'){
+    steps=[['Reported', cut(m.detail||m.title,120), flwD(m.date)],['Job open','Not opened yet',''],['Waiting','',''],['Repairing','',''],['To close','',''],['Billing','','']];
+    next='Nobody has decided what to do with this report yet: open a job, do a quick fix, or dismiss it.';
+    b1='<button class="flw-btn pri" style="flex:1" data-k="inc" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open in Job Assignment</button>';
+    (m.damagedAssets||[]).slice(0,3).forEach(function(a){ if(a&&a.label) links.push(['Damage', E(a.label), '', '', '']); });
+  } else if(it.kind==='prj'){
+    steps=[['Reported','',''],['Job open','Project '+E(it.no)+' '+E(it.title), flwD(m.planFrom)],['Waiting','',''],['Repairing','',''],
+           ['To close','Work marked done', flwD(m.workDoneOn)],['Billing','Final invoice is not closed yet'+(m.billNote?(' · '+E(cut(m.billNote,80))):''),'now']];
+    next='The work is done. Attach the final invoice and close the bill on the project.';
+    b1='<button class="flw-btn pri" style="flex:1" data-k="prj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open project</button>';
+  } else {
+    var inc=it.inc, subs=it.subs||[], doneN=subs.filter(function(s){ return s&&s.d; }).length, la=flwLast(m.progressLog, m.startDate);
+    var memoTxt=(it.memos||[]).length ? it.memos.slice(0,2).map(function(mo){ return E((mo.no||'MO')+' '+cut(mo.title,46))+' — '+E(FLW_MEMO[mo.status]||mo.status); }).join('<br>')+(it.memos.length>2?('<br>+'+(it.memos.length-2)+' more memos'):'') : 'No memo on this job';
+    steps=[
+      ['Reported', inc?(E((inc.no||'INC')+' '+cut(inc.title,70))):'Opened directly as a job, without a problem report', inc?flwD(inc.date):'', !inc],
+      ['Job open', E(it.no)+' opened'+(m.status==='pending'?' · not started yet':''), flwD(m.startDate)],
+      ['Waiting', memoTxt, '', !(it.memos||[]).length && it.lane!=='wait'],
+      ['Repairing', (subs.length?(doneN+' of '+subs.length+' sub-steps done'):'No sub-steps set')+(la.text?(' · last note: “'+E(cut(la.text,70))+'”'):''), it.stage>=3?flwD(la.date):''],
+      ['To close', it.stage===4?'The boat is running again, the job is still open':'Test, choose the outcome, release the boat', ''],
+      ['Billing', it.stage===5?('Work closed '+flwD(m.endDate)+' · invoice not recorded'):'Invoice and payment', '']];
+    var nextSub=subs.filter(function(s){ return s&&!s.d; })[0];
+    if(it.stage===1) next='The job is open but work has not started.';
+    else if(it.stage===2){ var mo=open[0];
+      next = mo ? ('Memo '+E((mo.no||'MO')+' '+cut(mo.title,50))+' is '+E(FLW_MEMO[mo.status]||mo.status)+'. '+(mo.status==='pending_approval'?'It needs approval before anything can be ordered.':mo.status==='approved'?'Place the order.':'Record the delivery when the parts arrive.'))
+                : 'The last note says this job is waiting (parts, slipway, contractor or approval).'; }
+    else if(it.stage===3) next = nextSub ? ('Next sub-step: '+E(cut(nextSub.t,60))+'.') : 'Work is in progress. Add a note when something moves so the job does not go silent.';
+    else if(it.stage===4) next='The boat is running again but this job was never closed. Close it with an outcome.';
+    else next='The work is closed. Record the supplier invoice.';
+    b1='<button class="flw-btn pri" style="flex:1" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">'+(it.stage===1?'Open job to start it':it.stage===4?'Open job to close it':'Open job')+'</button>';
+    if(open[0]) b2='<button class="flw-btn" data-id="'+E(open[0].id)+'" onclick="flwMemo(this.dataset.id)">Open memo</button>';
+    if(inc) links.push(['Incident', E((inc.no||'INC')+' · '+cut(inc.title,60)), 'reported '+flwD(inc.date), '', 'data-k="inc" data-id="'+E(inc.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
+    (it.memos||[]).forEach(function(mo){ links.push(['Memo', E((mo.no||'MO')+' · '+cut(mo.title,54)), E(FLW_MEMO[mo.status]||mo.status), flwMoney(mo.amount), 'data-id="'+E(mo.id)+'" onclick="flwMemo(this.dataset.id)"']); });
+    var parts=m.parts||[]; if(parts.length){ var pc=0; parts.forEach(function(p){ pc+=(+p.qty||0)*(+p.cost||0); });
+      links.push(['Parts', parts.length+' item'+(parts.length===1?'':'s')+' taken from stock', E(cut(parts.map(function(p){ return p.name; }).join(', '),70)), flwMoney(pc), '']); }
+    var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean);
+    if(as.length) links.push(['Asset', E(cut(as.join(' · '),70)), as.length+' linked', '', '']);
+    if(la.text) links.push(['Notes', '“'+E(cut(la.text,80))+'”', E(la.by||'')+(la.by?' · ':'')+flwD(la.date)+' · '+la.n+' note'+(la.n===1?'':'s')+' in total', '', '']);
+  }
+  if(proj && it.kind!=='prj') links.unshift(['Project', E((proj.no||'PRJ')+' · '+cut(proj.name,56)), E(String(proj.status||'')), '', 'data-k="prj" data-id="'+E(proj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)"']);
+  var stepsH=steps.map(function(s,i){
+    var cls=(s[2]==='now'||i===it.stage)?'now':(i<it.stage?(s[3]?'done skip':'done'):'todo'), when=(s[2]==='now')?'':s[2];
+    return '<div class="flw-step '+cls+'"><div class="dot"><b>'+(cls==='done'?'✓':cls==='done skip'?'–':'')+'</b>'+(i<5?'<u></u>':'')+'</div>'
+      +'<div class="tx"><b>'+S[i].t+(when&&when!=='—'?('<i>'+when+'</i>'):'')+'</b>'+(cls==='todo'&&it.kind!=='mj'?'':(s[1]||''))+'</div></div>'; }).join('');
+  var meta=[]; if(it.owner) meta.push('Owner '+E(it.owner)); else if(it.kind==='mj') meta.push('<span style="color:#8E2019;font-weight:600">No owner</span>');
+  if(it.due) meta.push('due '+flwD(it.due)); meta.push('silent '+it.silent+' day'+(it.silent===1?'':'s'));
+  return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658">'+E(it.no)+'</span>'+pill(it.stage)
+        +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
+      +'<div style="margin-top:4px;font-size:18px;font-weight:700;line-height:1.25">'+E(it.title)+'</div>'
+      +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+meta.join(' · ')+'</div></div>'
+    +'<div class="flw-scroll" id="flw-rp">'
+      +'<div class="flw-kick" style="padding:10px 18px 6px">Where it stands</div>'+stepsH
+      +'<div class="flw-next"><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Next step</div>'
+        +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px">'+b1+b2+'</div>'
+        +'<div style="margin-top:8px;font-size:11px;color:#5B6170">For now the button opens the existing page for this step.</div></div>'
+      +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
+        +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b></div>'; }).join('')):'')
+    +'</div>';
+}
+function flRenderWork(){
+  var wrap=document.getElementById('fl-work-wrap'); if(!wrap) return;
+  var E=(typeof flBoardEsc==='function')?flBoardEsc:function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var S=FLW_ST, keep={};
+  ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e) keep[id]=e.scrollTop; });
+  var items=[]; try{ items=flwItems(); }catch(err){ try{ console.error('[flWork] build failed', err); }catch(_){ } }
+  var scan={jobs:0,down:0,fleet:0,money:0,silent:0,noOwner:0}; try{ scan=flBoardScan(); }catch(_){}
+  var cnt=[0,0,0,0,0,0]; items.forEach(function(it){ cnt[it.stage]++; });
+  var boats=flwBoats(items);
+  var allB=(function(){ var k=FLW.bf, st=FLW.stage; FLW.bf='work'; FLW.stage=-1; var a=flwBoats(items); FLW.bf=k; FLW.stage=st; return a; })();
+  var nDown=allB.filter(function(o){ return o.isDown; }).length, nFleet=scan.fleet||0;
+  if(FLW.boat===null || !boats.some(function(o){ return o.id===FLW.boat; })) FLW.boat=boats.length?boats[0].id:null;
+  var cur=boats.filter(function(o){ return o.id===FLW.boat; })[0]||null;
+  var pill=function(i){ return '<span class="flw-pill" style="background:'+S[i].pb+';color:'+S[i].pf+'">'+S[i].t+'</span>'; };
+  var SP={fixing:['Fixing','#FBEBD3','#7A4300','#D9952B'],unavailable:['Unavailable','#FBE3E0','#8E2019','#C8473C'],available:['Available','#DDF1EA','#0B5A43','#2E9C78']};
+  var sp=function(s){ return SP[s]||['—','#F1F0EC','#3E4658','#CFCFC8']; };
+
+  var top='<div class="flw-top"><div class="flw-l"><b>'+nDown+'</b><span>Boats down<i>'+(nFleet?('of '+nFleet+' · '):'')+items.length+' open items</i></span></div>'
+    +'<div class="flw-wm"><i>LOVE ANDAMAN</i>FLEET WORK</div>'
+    +'<div class="flw-chips"><span class="flw-chip"><b>'+flwMoney(scan.money)+'</b>tied up</span>'
+      +(scan.silent?('<span class="flw-chip red"><b>'+scan.silent+'</b>silent over 60 days</span>'):'')
+      +(scan.noOwner?('<span class="flw-chip amb"><b>'+scan.noOwner+'</b>no owner</span>'):'')+'</div></div>';
+  var stages='<div class="flw-stages">'+S.map(function(s,i){
+    return '<button type="button" class="flw-stg'+(FLW.stage===i?' on':'')+'" onclick="flwStage('+i+')" title="Show only this stage"><u>0'+(i+1)+'</u><span>'+s.t+'<i>'+s.d+'</i></span><b>'+cnt[i]+'</b></button>'; }).join('')+'</div>';
+
+  var bl='<div class="flw-card"><div style="padding:12px 14px 10px;border-bottom:1px solid #ECEBE6"><div class="flw-kick">Boats</div>'
+    +'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+    +[['work','With work',allB.length],['down','Down',nDown],['all','All','']].map(function(f){
+        return '<button type="button" class="flw-fc'+(FLW.bf===f[0]?' on':'')+'" onclick="flwBF(\''+f[0]+'\')">'+f[1]+(f[2]!==''?(' <i>'+f[2]+'</i>'):'')+'</button>'; }).join('')
+    +'</div></div><div class="flw-scroll" id="flw-bl">'
+    +(boats.length?boats.map(function(o){
+        var p=sp(o.s), list=(FLW.stage>=0)?o.items.filter(function(x){ return x.stage===FLW.stage; }):o.items;
+        var has={}; o.items.forEach(function(x){ has[x.stage]=1; });
+        var sub=o.isDown?('Down '+(o.down?(o.down+' day'+(o.down===1?'':'s')):'today')):(o.b?'Running':'Not tied to a boat');
+        return '<div class="flw-boat'+(o.id===FLW.boat?' on':'')+'" data-id="'+E(o.id)+'" onclick="flwPickBoat(this.dataset.id)">'
+          +'<span class="flw-bar" style="background:'+p[3]+'"></span><span style="flex:1;min-width:0">'
+          +'<span style="display:flex;align-items:center;gap:8px"><b class="flw-el" style="font-size:14px;font-weight:700">'+E(o.name)+'</b>'
+            +(o.b?('<span class="flw-pill" style="font-size:10.5px;padding:1px 7px;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span>'):'')+'</span>'
+          +'<span class="flw-el" style="display:block;margin-top:1px;font-size:11.5px;color:'+(o.isDown&&o.down>60?'#8E2019':'#5B6170')+'">'+sub+'</span>'
+          +'<span class="flw-dots">'+S.map(function(s,i){ return '<i'+(has[i]?(' style="background:'+s.c+'"'):'')+' title="'+s.t+'"></i>'; }).join('')+'</span></span>'
+          +'<span style="flex:none;text-align:right"><b class="mono" style="display:block;font-size:17px;font-weight:500">'+list.length+'</b><i style="font-style:normal;font-size:10.5px;color:#5B6170">open</i></span></div>'; }).join('')
+      :'<div class="flw-empty">No boats match this filter.</div>')
+    +'</div></div>';
+
+  var mid='', right='';
+  if(!cur){ mid='<div class="flw-card"><div class="flw-empty">Nothing is open'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div></div>';
+            right='<div class="flw-card"><div class="flw-empty">Pick a boat, then a job.</div></div>'; }
+  else {
+    var list=(FLW.stage>=0)?cur.items.filter(function(x){ return x.stage===FLW.stage; }):cur.items.slice();
+    if(!list.some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
+    var p=sp(cur.s), b=cur.b, pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong'}, bsub=[];
+    if(b){ if(b.type) bsub.push(E(b.type)); if(b.capacity||b.cap) bsub.push((b.capacity||b.cap)+' PAX');
+      try{ var pr=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); if(pr) bsub.push(E(pierEn[pr]||pr)); }catch(_){} }
+    var blk=''; if(b && cur.isDown){ try{ var jb=(boatJobBlock(b.id,TODAY_STR)||{}).jobs||[];
+        var names=jb.slice(0,3).map(function(j){ var f=cur.items.filter(function(x){ return x.no===j.no; })[0], pj=flwA('p').filter(function(q){ return q&&q.no===j.no; })[0];
+          return E(j.no)+(f?(' '+E(f.title)):(pj?(' '+E(pj.name)):'')); });
+        if(names.length) blk='<div style="padding:9px 18px;background:#FBF1DF;border-bottom:1px solid #ECEBE6;font-size:12.5px;color:#7A4300;line-height:1.45"><b>What keeps this boat down:</b> '+names.join(' · ')+(jb.length>3?(' · +'+(jb.length-3)+' more'):'')+'</div>'; }catch(_){} }
+    var rowH=function(it){ var own=it.owner?E(it.owner):(it.kind==='mj'?'No owner':'—');
+      return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)">'
+        +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3">'+E(it.title)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:#5B6170">'+E(it.sub)+'</i></span>'
+        +'<span>'+pill(it.stage)+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
+        +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
+        +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+it.silent+' d</span>'
+        +'<span class="mono x" style="text-align:right;font-size:12.5px">'+flwMoney(it.cost)+'</span></div>'; };
+    var groups=[], seen={};
+    list.forEach(function(it){ if(it.projId && !seen[it.projId]){ seen[it.projId]=1; var pj=flwProj(it.projId);
+        groups.push({pj:pj, id:it.projId, rows:list.filter(function(x){ return x.projId===it.projId; })}); } });
+    var other=list.filter(function(x){ return !x.projId && x.kind!=='inc'; }), rep=list.filter(function(x){ return !x.projId && x.kind==='inc'; });
+    var sum=function(a){ var t=0; a.forEach(function(x){ t+=x.cost||0; }); return t; };
+    var body=groups.map(function(g){ var pj=g.pj;
+        return '<div class="flw-grp"><b class="flw-el">'+(pj?E((pj.no||'PRJ')+' · '+pj.name):'Project')+'</b><span class="flw-el">'+(pj?E(String(({planned:'Planned',inprogress:'In progress',on_hold:'On hold',awaiting_bill:'Awaiting bill',completed:'Completed'})[pj.status]||pj.status||'')+(pj.vendor?(' · '+pj.vendor):'')):'')+'</span>'
+          +'<span class="mono" style="margin-left:auto;color:#3E4658">'+flwMoney(sum(g.rows))+'</span>'
+          +(pj?('<a style="margin-left:12px" data-k="prj" data-id="'+E(pj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open project</a>'):'')+'</div>'+g.rows.map(rowH).join(''); }).join('')
+      +(other.length?('<div class="flw-grp"><b>'+(groups.length?'Other jobs':'Jobs')+'</b><span>'+(groups.length?'not part of a project':'')+'</span><span class="mono" style="margin-left:auto;color:#3E4658">'+flwMoney(sum(other))+'</span></div>'+other.map(rowH).join('')):'')
+      +(rep.length?('<div class="flw-grp"><b>Reported · no job yet</b><span>decide: open a job, quick fix, or dismiss</span></div>'+rep.map(rowH).join('')):'');
+    mid='<div class="flw-card"><div style="display:flex;align-items:center;gap:12px;padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
+        +'<div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:21px;font-weight:700">'+E(cur.name)+'</span>'
+          +(b?('<span class="flw-pill" style="font-size:12px;padding:3px 9px;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span>'):'')
+          +(cur.isDown&&cur.down?('<span style="font-size:12.5px;font-weight:600;color:#8E2019">down '+cur.down+' days</span>'):'')+'</div>'
+        +'<div style="margin-top:2px;font-size:13px;color:#5B6170">'+(bsub.join(' · ')||'&nbsp;')+'</div></div>'
+        +(b?'<button type="button" class="flw-btn" style="margin-left:auto" onclick="flwGo(\'boat\',\'\')">Boat Status</button>':'')+'</div>'
+      +blk
+      +'<div class="flw-cols flw-hd"><span>No.</span><span>Work</span><span>Stage</span><span class="x o">Owner</span><span class="x" style="text-align:right">Silent</span><span class="x" style="text-align:right">Cost</span></div>'
+      +'<div class="flw-scroll" id="flw-ml">'+(list.length?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
+      +'<div style="flex:none;display:flex;gap:14px;padding:9px 18px 11px;border-top:1px solid #ECEBE6;font-size:12px;color:#5B6170"><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+list.length+'</b> open item'+(list.length===1?'':'s')+'</span><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+flwMoney(sum(list))+'</b> on this boat</span>'
+        +(FLW.stage>=0?('<a style="margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="flwStage('+FLW.stage+')">Show all stages</a>'):'')+'</div></div>';
+    var sel=list.filter(function(x){ return x.key===FLW.item; })[0];
+    right='<div class="flw-card">'+(sel?flwPanel(sel,E):'<div class="flw-empty">Pick a job to see where it stands.</div>')+'</div>';
+  }
+  wrap.innerHTML=flwCSS()+top+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
+  flwFit();
+  ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e && keep[id]) e.scrollTop=keep[id]; });
+}
