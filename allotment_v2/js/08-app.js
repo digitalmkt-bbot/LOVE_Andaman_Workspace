@@ -48708,7 +48708,8 @@ function bkV2RenderTripsSection(){
         <div class="bkv2-nb-row" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px">
           <div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Route <em style="font-weight:500;color:#b4b2a9;font-style:normal">· type to search</em></label>
-            <div class="bkv2-nb-ddwrap">
+            <div class="bkv2-nb-ddwrap${t.routeId?' nbf-hasrc':''}" style="${(t.routeId && typeof tsRouteColor==='function') ? ('--rc:'+tsRouteColor(t.routeId)) : ''}">
+              <span class="nbf-rc"></span>
               <input id="bkv2-route-input-${idx}" class="bkv2-nb-input" type="text" placeholder="Type or pick route..." value="${escapeHTML(currentRouteLabel)}" autocomplete="off" oninput="bkV2RouteDDFilter(${idx}, this.value)" onfocus="bkV2RouteDDShow(${idx})" onkeydown="bkV2RouteDDKey(event, ${idx})">
               <div id="bkv2-route-dd-${idx}" class="bkv2-nb-dd"></div>
               <button type="button" class="nbf-clr" title="Clear and pick another route" aria-label="Clear route" onmousedown="event.preventDefault()" onclick="bkNbfRouteClear(${idx})">&times;</button>
@@ -49093,7 +49094,7 @@ function bkV2RenderReviewPanel(){
       ? `<span style="background:#F4E8FB;color:#6B289A;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.04em">CHARTER${sub.boatName?' · '+escapeHTML(sub.boatName):''}</span>`
       : '';
     return `
-      <div style="padding:6px 0;border-bottom:1px solid #f5f3ef;font-size:11px;line-height:1.4">
+      <div style="padding:6px 0 6px 10px;border-left:4px solid ${(typeof tsRouteColor==='function') ? tsRouteColor(t.routeId) : '#C9CCD6'};border-bottom:1px solid #f5f3ef;font-size:11px;line-height:1.4;margin-top:4px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px">
           <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)" title="${escapeHTML(route?.name||t.routeId)}">${i+1}. ${escapeHTML(route?.name||t.routeId)}</div>
           ${(function(){ /* §b2cEdit · ใบ B2C ยอดรายทริปเป็นของจริง ไม่ต้องขีดฆ่า */
@@ -55408,10 +55409,12 @@ function bkV2RouteDDRender(idx, val){
     if(o.pierId !== lastPier){
       lastPier = o.pierId;
       const nm = (typeof laPierName === 'function') ? laPierName(o.pierId) : (o.pier || '');
-      html += `<div class="bkv2-nb-dd-hd"><span class="lb">${nm}</span><span class="ln"></span></div>`;
+      const _cnt = shown.filter(x => x.pierId === o.pierId).length;
+      html += `<div style="display:flex;align-items:baseline;gap:8px;padding:9px 14px 5px;background:#F7F7F5;border-top:1px solid #ECEBE6;pointer-events:none;user-select:none"><span style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">${nm}</span><span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11.5px;color:#5B6170">${_cnt}</span></div>`;
     }
-    html += `<div class="bkv2-nb-dd-item${i === _bkV2RouteDDActive ? ' active' : ''}" data-label="${String(o.label).replace(/"/g,'&quot;')}" onmousedown="event.preventDefault();bkV2RouteDDPick(${idx}, this.dataset.label)">
-      <span class="bkv2-nb-dd-name">${o.label}</span>
+    html += `<div class="bkv2-nb-dd-item${i === _bkV2RouteDDActive ? ' active' : ''}" data-label="${String(o.label).replace(/"/g,'&quot;')}" onmousedown="event.preventDefault();bkV2RouteDDPick(${idx}, this.dataset.label)" style="display:flex;align-items:center;gap:10px;min-height:38px;padding:0 14px;border-radius:0;border-top:1px solid #F1F0EC">
+      <span style="flex:none;width:12px;height:12px;border-radius:4px;background:${(typeof tsRouteColor==='function') ? tsRouteColor(o.id) : '#8b909c'}"></span>
+      <span class="bkv2-nb-dd-name" style="font-size:13.5px;font-weight:600;color:#0F1B3D">${o.label}</span>
     </div>`;
   });
   dd.innerHTML = html;
@@ -74314,6 +74317,11 @@ function bkNbfCSS2(){
   +S+' #bkv2-agent-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:13px;border:none;background:#ECEBE6;color:#3E4658;font-size:17px;line-height:1;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}'
   +S+' #bkv2-agent-clear:hover{background:#16265C;color:#fff}'
   +S+' #bkv2-agent-input:placeholder-shown ~ #bkv2-agent-clear{display:none}'
+  +S+' .nbf-rc{display:none}'
+  +S+' .nbf-hasrc > input:not(:placeholder-shown){border-left:5px solid var(--rc,#C9CCD6);padding-left:32px}'
+  +S+' .nbf-hasrc > input:not(:placeholder-shown) ~ .nbf-rc,'+S+' .nbf-hasrc > .nbf-rc:has(+ input:not(:placeholder-shown)){display:block;position:absolute;left:13px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:4px;background:var(--rc,#C9CCD6);pointer-events:none;z-index:1}'
+  +S+' [id^="bkv2-route-dd-"]{padding:0;max-height:min(460px,56vh);border:1px solid #E3E2DC}'
+  +S+' [id^="bkv2-route-dd-"] .bkv2-nb-dd-item.active,'+S+' [id^="bkv2-route-dd-"] .bkv2-nb-dd-item:hover{background:#EEF1F8}'
   +S+' #bkv2-agent-dd{padding:0;max-height:min(520px,62vh);overflow-y:auto;border:1px solid #E3E2DC}'
   +S+' #bkv2-agent-dd .bkv2-nb-dd-item.active,'+S+' #bkv2-agent-dd .bkv2-nb-dd-item:hover{background:#EEF1F8}'
   +S+' .bkv2-nb-rt-preview:not([style]){background:transparent;border:none;padding:0;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
