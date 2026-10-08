@@ -48128,49 +48128,49 @@ function bkV2RenderNewBooking(){
       `}
 
       <div class="bkv2-nb-sec">
-        <div class="bkv2-nb-sec-h">Guests <em style="font-weight:500;color:#b4b2a9;font-style:normal;font-size:11px;text-transform:none;letter-spacing:0">&middot; lead + auto-sized to Adult pax</em><button type="button" onclick="bkV2GroupPasteOpen()" title="Paste a whole group (30-40 pax) at once" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#E6F1FB;color:#185FA5;border:1px solid #C5D8EA;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;padding:5px 11px;cursor:pointer;text-transform:none;letter-spacing:0">&#128203; Paste group list</button></div>
+        <div class="bkv2-nb-sec-h">Guests <em style="font-weight:500;color:#b4b2a9;font-style:normal;font-size:11px;text-transform:none;letter-spacing:0">&middot; lead + auto-sized to Adult pax</em><button type="button" onclick="bkV2GroupPasteOpen()" title="Paste a whole group (30-40 pax) at once" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:34px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:600;padding:0 12px;cursor:pointer;text-transform:none;letter-spacing:0">&#128203; Paste group list</button></div>
         <!-- Unified guest table · Lead = #1 with badge · additional passengers #2+ -->
-        <div style="background:#fafafa;border:1px solid var(--border);border-radius:var(--r-sm);overflow:visible">
+        <div style="background:#fff;border:1px solid #ECEBE6;border-radius:12px;overflow:visible">
           <table style="width:100%;border-collapse:collapse;table-layout:fixed">
             <colgroup>
-              <col style="width:38px">
-              <col>
-              <col style="width:180px">
               <col style="width:62px">
+              <col>
+              <col style="width:30%">
+              <col style="width:68px">
             </colgroup>
-            <thead><tr style="background:#f5f3ef">
-              <th style="padding:6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">#</th>
-              <th style="padding:6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">Full Name</th>
-              <th style="padding:6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">Nationality</th>
+            <thead><tr style="background:#F7F7F5">
+              <th style="padding:8px 6px 8px 14px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">#</th>
+              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Full name</th>
+              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Nationality</th>
               <th style="padding:6px;text-align:center;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em"></th>
             </tr></thead>
             <tbody>
               <!-- Lead pax row (#1) -->
               <tr style="background:var(--bk-navy-50)">
-                <td style="padding:6px 6px;vertical-align:middle">
-                  <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--bk-navy);font-weight:700;line-height:1.1">#1</div>
-                  <div style="background:var(--bk-navy);color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;letter-spacing:.08em;display:inline-block;margin-top:2px">LEAD</div>
-                  ${(d.leadType&&d.leadType!=='AD')?`<div style="background:${d.leadType==='FOC'?'#FCE9B5':'#E6F1FB'};color:${d.leadType==='FOC'?'#7A5A12':'#185FA5'};font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;letter-spacing:.06em;display:inline-block;margin-top:2px">${d.leadType}</div>`:''}
-                  ${((d.trips||[]).some(t=>bkV2PaxTot(t.pax,'foc')>0))?`<div onclick="event.stopPropagation();bkV2ToggleLeadFoc()" title="${d.leadFoc?'Lead เป็น FOC · คลิกเพื่อยกเลิก':'ตั้ง Lead เป็น FOC (ฟรี · ไม่ต้องมี Adult)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${d.leadFoc?'#D9A400':'#cfcabd'}">${d.leadFoc?'★':'☆'} <span style="font-size:7px;color:#a8a59e;vertical-align:1px;letter-spacing:.04em">FOC</span></div>`:''}
+                <td style="padding:8px 6px 8px 14px;vertical-align:middle">
+                  <div style="font-family:'DM Mono',monospace;font-size:12.5px;color:var(--bk-navy);font-weight:500;line-height:1.1">1</div>
+                  <div style="background:var(--bk-navy);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">LEAD</div>
+                  ${(d.leadType&&d.leadType!=='AD')?`<div style="background:${d.leadType==='FOC'?'#FCE9B5':'#E6F1FB'};color:${d.leadType==='FOC'?'#7A5A12':'#185FA5'};font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">${d.leadType}</div>`:''}
+                  ${((d.trips||[]).some(t=>bkV2PaxTot(t.pax,'foc')>0))?`<div onclick="event.stopPropagation();bkV2ToggleLeadFoc()" title="${d.leadFoc?'Lead เป็น FOC · คลิกเพื่อยกเลิก':'ตั้ง Lead เป็น FOC (ฟรี · ไม่ต้องมี Adult)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${d.leadFoc?'#D9A400':'#cfcabd'}">${d.leadFoc?'★':'☆'} <span style="font-size:9px;color:#8A8F9C;vertical-align:1px;letter-spacing:.04em">FOC</span></div>`:''}
                 </td>
                 <td style="padding:5px 6px">
-                  <input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box">
+                  <input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box">
                 </td>
                 <td style="padding:5px 6px">
                   <div class="bkv2-nb-ddwrap">
-                    <input id="bkv2-nat-input-lead" class="bkv2-nb-input" type="text" placeholder="Type or pick…" autocomplete="off" value="${d.leadNationality ? escapeHTML(bkV2NatDDLabel(d.leadNationality)) : ''}" oninput="bkV2NatDDFilter('lead', this.value)" onfocus="bkV2NatDDShow('lead')" onkeydown="bkV2NatDDKey(event,'lead')" onblur="bkV2NatDDBlur('lead')" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box">
+                    <input id="bkv2-nat-input-lead" class="bkv2-nb-input" type="text" placeholder="Type or pick…" autocomplete="off" value="${d.leadNationality ? escapeHTML(bkV2NatDDLabel(d.leadNationality)) : ''}" oninput="bkV2NatDDFilter('lead', this.value)" onfocus="bkV2NatDDShow('lead')" onkeydown="bkV2NatDDKey(event,'lead')" onblur="bkV2NatDDBlur('lead')" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box">
                     <div id="bkv2-nat-dd-lead" class="bkv2-nb-dd"></div>
                   </div>
                 </td>
-                <td style="padding:5px 6px;text-align:center">${d.leadNationality && bkV2GuessNationality(d.leadPax||'') === d.leadNationality ? '<span style="background:#E1F5EE;color:#0F6E56;font-size:8px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.06em">GUESS</span>' : ''}</td>
+                <td style="padding:5px 6px;text-align:center">${d.leadNationality && bkV2GuessNationality(d.leadPax||'') === d.leadNationality ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
               </tr>
               <!-- Lead contact sub-row · phone + email -->
               <tr style="background:var(--bk-navy-50);border-bottom:1px solid var(--bk-navy-light)">
                 <td></td>
-                <td colspan="3" style="padding:0 6px 8px">
-                  <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px;margin-top:-2px">
-                    <input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:5px 8px;font-size:11px;box-sizing:border-box">
-                    <input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:5px 8px;font-size:11px;box-sizing:border-box">
+                <td colspan="3" style="padding:0 6px 10px">
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:8px;margin-top:-1px">
+                    <input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:7px 10px;font-size:12.5px;font-family:'DM Mono',monospace;box-sizing:border-box;min-width:0;width:100%">
+                    <input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:7px 10px;font-size:12.5px;box-sizing:border-box;min-width:0;width:100%">
                   </div>
                 </td>
               </tr>
@@ -48193,14 +48193,16 @@ function bkV2RenderNewBooking(){
         ${(() => {
           const g = d.guides || { english:false, russian:false, chinese:false, otherLang:'' };
           const guidePill = (key, on, lbl, flagSvg) =>
-            `<label style="display:inline-flex;align-items:center;gap:7px;padding:6px 12px;background:${on?'#E1F5EE':'var(--white)'};border:1px solid ${on?'#9FE1CB':'var(--border)'};border-radius:14px;cursor:pointer;font-size:11.5px;font-weight:600;color:${on?'#0F6E56':'var(--ink-soft)'}"><input type="checkbox" ${on?'checked':''} onchange="bkV2ToggleGuide('${key}',this.checked)" style="accent-color:#0F6E56;margin:0;width:14px;height:14px">${flagSvg}<span>${lbl}</span></label>`;
+            `<label style="display:inline-flex;align-items:center;gap:8px;height:36px;box-sizing:border-box;padding:0 12px;background:${on?'#E8F3FB':'#fff'};border:1.5px solid ${on?'#1272B3':'#C9CCD6'};border-radius:18px;cursor:pointer;font-size:13px;font-weight:600;color:${on?'#0B4F7A':'#0F1B3D'}"><input type="checkbox" ${on?'checked':''} onchange="bkV2ToggleGuide('${key}',this.checked)" style="accent-color:#16265C;margin:0;width:15px;height:15px">${flagSvg}<span>${lbl}</span></label>`;
           return `
-            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-bottom:10px">
-              <span style="font-size:10px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-right:3px">Guide</span>
+            <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start;margin-bottom:12px">
+              <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Guide</span>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
               ${guidePill('english', g.english, 'English', bkV2FlagSVG('uk'))}
               ${guidePill('russian', g.russian, 'Russian', bkV2FlagSVG('ru'))}
               ${guidePill('chinese', g.chinese, 'Chinese', bkV2FlagSVG('cn'))}
-              <input type="text" placeholder="+ other language…" value="${(g.otherLang||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}" oninput="bkV2SetGuideOther(this.value)" style="flex:1;min-width:140px;padding:6px 12px;font-family:inherit;font-size:11.5px;background:var(--white);border:1px solid var(--border);border-radius:14px;color:var(--ink)">
+              <input type="text" placeholder="+ other language…" value="${(g.otherLang||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}" oninput="bkV2SetGuideOther(this.value)" style="flex:1;min-width:140px;height:36px;box-sizing:border-box;padding:0 12px;font-family:inherit;font-size:13px;background:#fff;border:1.5px dashed #C9CCD6;border-radius:18px;color:var(--ink)">
+            </div>
             </div>
           `;
         })()}
@@ -48299,7 +48301,7 @@ function bkV2RenderPickupSection(){
           const effectiveZone = tripsZones[0] || d.pickupZoneFilter || 'PK';
           const zoneLbl = (z) => laZoneLabel(z);           /* §rnZone */
           const mixed = tripsZones.length > 1;
-          return `<div style="padding:8px 12px;background:var(--white);border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px;height:34px;box-sizing:border-box">
+          return `<div style="padding:0 12px;background:#F7F7F5;border:1.5px solid #ECEBE6;border-radius:10px;font-size:13.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px;height:38px;box-sizing:border-box;white-space:nowrap">
             <span style="flex:1">${zoneLbl(effectiveZone)}${mixed?` <span style="font-size:9px;color:#a32d2d;font-weight:600;margin-left:4px">⚠ trips have mixed zones</span>`:''}</span>
           </div>`;
         })()}
@@ -48307,7 +48309,7 @@ function bkV2RenderPickupSection(){
       <div class="bkv2-nb-field">
         <label class="bkv2-nb-label">Pickup area * <em style="font-weight:500;color:#b4b2a9;font-style:normal">· type to search</em></label>
         ${(d.pickupZoneFilter==='NoTransfer' && d.pickupAreaId)
-          ? `<div style="padding:8px 11px;background:#E1F5EE;border:1px solid #9FE1CB;border-radius:var(--r-sm);font-size:12px;color:#0F6E56;font-weight:600;height:34px;display:flex;align-items:center;gap:7px;box-sizing:border-box"><span style="font-size:11px">✓ AUTO</span><span style="font-family:'DM Mono',monospace;font-size:11px">${escapeHTML(pickupLabel)}</span></div>`
+          ? `<div style="padding:0 12px;background:#DDF1EA;border:1.5px solid #DDF1EA;border-radius:10px;font-size:13px;color:#0B5A43;font-weight:600;height:38px;display:flex;align-items:center;gap:8px;box-sizing:border-box"><span style="font-size:11px">✓ AUTO</span><span style="font-family:'DM Mono',monospace;font-size:11px">${escapeHTML(pickupLabel)}</span></div>`
           : `<div class="bkv2-nb-ddwrap">
               <input id="bkv2-area-input-pickup" class="bkv2-nb-input" type="text" placeholder="Type or pick an area..." value="${escapeHTML(pickupLabel)}" autocomplete="off" oninput="bkV2AreaDDFilter('pickup', this.value)" onfocus="bkV2AreaDDShow('pickup')" onkeydown="bkV2AreaDDKey(event, 'pickup')">
               <div id="bkv2-area-dd-pickup" class="bkv2-nb-dd"></div>
@@ -48323,18 +48325,18 @@ function bkV2RenderPickupSection(){
             <input id="bkv2-hotel-input" class="bkv2-nb-input" type="text" autocomplete="off" placeholder="${_pickIsNT?'optional note · guest arrives on their own':'e.g. Thavorn Beach Village · Patong main road · etc.'}" value="${escapeHTML(d.hotelName||'')}" oninput="bkV2HotelDDFilter(this.value)" onfocus="bkV2HotelDDShow()" onkeydown="bkV2HotelDDKey(event)">
             <div id="bkv2-hotel-dd" class="bkv2-nb-dd"></div>
           </div>
-          ${pickupTimeRows ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
+          ${pickupTimeRows ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
             ${d.trips.filter(t => t.routeId).map(t => {
               const autoTime = bkV2GetPickupTime(t.routeId, d.pickupAreaId, t.date);
               const displayTime = t.pickupTime || autoTime || '';
               const isEdited = t.pickupTimeEdited;
               const routeName = (typeof ROUTES!=='undefined' && ROUTES.find(r=>r.id===t.routeId)?.name) || t.routeId;
               if(!displayTime && !t.date) return '';
-              return `<div style="display:flex;align-items:center;gap:10px;padding:4px 9px;background:#F4F8F5;border:1px solid #E5EDE7;border-radius:6px;font-size:11px">
+              return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F7F7F5;border:1px solid #ECEBE6;border-radius:9px;font-size:12.5px">
                 <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);min-width:80px">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : '—'}</span>
                 <span style="flex:1;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(routeName)}</span>
-                <span style="font-family:'DM Mono',monospace;font-weight:700;color:#0F6E56">${displayTime || '—'}</span>
-                ${displayTime ? `<span style="background:${isEdited?'#FAEEDA':'#DDF0E5'};color:${isEdited?'#633806':'#0F6E56'};font-size:8px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.06em">${isEdited?'EDITED':'AUTO'}</span>` : ''}
+                <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#0F1B3D">${displayTime || '—'}</span>
+                ${displayTime ? `<span style="background:${isEdited?'#FBEBD3':'#DDF1EA'};color:${isEdited?'#7A4300':'#0B5A43'};font-size:9px;padding:1px 7px;border-radius:5px;font-weight:700;letter-spacing:.06em">${isEdited?'EDITED':'AUTO'}</span>` : ''}
               </div>`;
             }).join('')}
           </div>` : ''}
@@ -48346,15 +48348,17 @@ function bkV2RenderPickupSection(){
       </div>
     ` : ''}
     <!-- Pickup time table moved inline under Hotel/Pickup Location · per request -->
-    <label style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:${d.pickupSelf?'#F6F2FE':'var(--white)'};border:1px solid ${d.pickupSelf?'#C7B8E8':'var(--border)'};border-radius:var(--r-sm);cursor:pointer;margin-top:10px">
-      <input type="checkbox" ${d.pickupSelf?'checked':''} onchange="bkV2TogglePickupSelf()" style="accent-color:#5B289A">
-      <span style="font-size:11px;color:${d.pickupSelf?'#5B289A':'var(--ink)'};font-weight:600">&#128694; ขารับ: ลูกค้ามาเองที่ท่าเรือ (self-arrive · เก็บเรทเต็ม)</span>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px">
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${d.pickupSelf?'#E8F3FB':'#fff'};border:1.5px solid ${d.pickupSelf?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${d.pickupSelf?'checked':''} onchange="bkV2TogglePickupSelf()" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
+      <span style="font-size:13px;color:${d.pickupSelf?'#0B4F7A':'var(--ink)'};font-weight:600">&#128694; ขารับ: ลูกค้ามาเองที่ท่าเรือ (self-arrive · เก็บเรทเต็ม)</span>
     </label>
-    ${(d.pickupSelf && (d.hotelName||'').trim())?`<div style="margin-top:6px;padding:7px 11px;background:#FCEBEB;border:1px solid #F0C4C4;border-radius:var(--r-sm);font-size:10.5px;color:#A32D2D;line-height:1.45">&#9888; ติ๊ก self-arrive (ลูกค้ามาเอง) แต่กรอกโรงแรม "<b>${escapeHTML(d.hotelName)}</b>" ไว้ — booking นี้จะ<b>ไม่ขึ้นในใบงานรถขาไป</b> · ถ้าลูกค้าให้ไปรับที่โรงแรม อย่าติ๊กช่องนี้</div>`:''}
-    <label style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:${d.dropoffSame?'var(--bk-navy-50)':'var(--white)'};border:1px solid ${d.dropoffSame?'var(--bk-navy-mid)':'var(--border)'};border-radius:var(--r-sm);cursor:pointer;margin-top:10px">
-      <input type="checkbox" ${d.dropoffSame?'checked':''} onchange="bkV2ToggleDropoffSame()" style="accent-color:var(--bk-navy)">
-      <span style="font-size:11px;color:${d.dropoffSame?'var(--bk-navy)':'var(--ink)'};font-weight:600">Drop-off same as pickup</span>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${d.dropoffSame?'#E8F3FB':'#fff'};border:1.5px solid ${d.dropoffSame?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${d.dropoffSame?'checked':''} onchange="bkV2ToggleDropoffSame()" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
+      <span style="font-size:13px;color:${d.dropoffSame?'#0B4F7A':'var(--ink)'};font-weight:600">Drop-off same as pickup</span>
     </label>
+    ${(d.pickupSelf && (d.hotelName||'').trim())?`<div style="grid-column:1/-1;padding:8px 12px;background:#FBE3E0;border-radius:10px;font-size:12.5px;color:#8E2019;line-height:1.45">&#9888; ติ๊ก self-arrive (ลูกค้ามาเอง) แต่กรอกโรงแรม "<b>${escapeHTML(d.hotelName)}</b>" ไว้ — booking นี้จะ<b>ไม่ขึ้นในใบงานรถขาไป</b> · ถ้าลูกค้าให้ไปรับที่โรงแรม อย่าติ๊กช่องนี้</div>`:''}
+    </div>
     ${!d.dropoffSame ? `
       <div class="bkv2-nb-row" style="margin-top:10px;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
         <div class="bkv2-nb-field">
@@ -48399,7 +48403,7 @@ function bkV2RenderPickupSection(){
         const _zone = _ar ? _ar.zone : '';
         const _areaSel = areaOptGroups.replace(`<option value="${a.areaId}">`, `<option value="${a.areaId}" selected>`);
         const zoneChip = _zone
-          ? `<div style="margin-top:3px"><span style="font-size:9px;font-weight:700;color:#5B289A;background:#EDE7FB;padding:1px 7px;border-radius:4px">โซน ${_zShort(_zone)} · auto</span></div>`
+          ? `<div style="margin-top:3px"><span style="font-size:9px;font-weight:700;color:#23335F;background:#EEF1F8;padding:1px 7px;border-radius:4px">โซน ${_zShort(_zone)} · auto</span></div>`
           : `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">เลือกจุดรับ → โซนมาอัตโนมัติ</div>`;
         return `
         <div class="bkv2-nb-row bkv2-alt-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
@@ -48418,8 +48422,8 @@ function bkV2RenderPickupSection(){
             const _dz   = _dar ? _dar.zone : '';
             const _dsel = areaOptGroups.replace(`<option value="${a.dropAreaId}">`, `<option value="${a.dropAreaId}" selected>`);
             return `<div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:${_same?'#8a7db0':'#5B289A'};cursor:pointer;font-weight:${_same?'400':'700'}">
-                <input type="checkbox" ${_same?'checked':''} onchange="bkV2ToggleAltDropSame(${i})" style="accent-color:#5B289A"> ส่งที่เดิม
+              <label style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:${_same?'#5B6170':'#0F1B3D'};cursor:pointer;font-weight:${_same?'400':'700'}">
+                <input type="checkbox" ${_same?'checked':''} onchange="bkV2ToggleAltDropSame(${i})" style="accent-color:#16265C"> ส่งที่เดิม
               </label>
               ${_same ? `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">ขากลับส่งจุดเดียวกับที่รับ</div>` : `
                 <select class="bkv2-nb-input" onchange="bkV2SetAltDropArea(${i},this.value)" style="cursor:pointer;margin-top:3px"><option value="">— เลือกจุดส่ง —</option>${_dsel}</select>
@@ -48429,7 +48433,7 @@ function bkV2RenderPickupSection(){
             </div>`; })()}
           <button onclick="bkV2RemoveAltPickup(${i})" title="ลบ" style="border:none;background:transparent;cursor:pointer;color:var(--ink-soft);font-size:16px;line-height:1;padding:6px 6px">&times;</button>
         </div>`; }).join('');
-      const summary = alt.length ? `<div style="margin-top:9px;padding:7px 10px;border-radius:7px;background:${_over?'#FDECEA':'#F0EBFA'};border:1px solid ${_over?'#F5C9C4':'#DDD1F2'};font-size:10.5px;color:${_over?'#A32D2D':'#5B289A'};line-height:1.5">
+      const summary = alt.length ? `<div style="margin-top:9px;padding:7px 10px;border-radius:7px;background:${_over?'#FBE3E0':'#EEF1F8'};border:1px solid ${_over?'#F0BDB7':'#D9DFEE'};font-size:10.5px;color:${_over?'#8E2019':'#23335F'};line-height:1.5">
         จุดรับหลัก (ด้านบน · รวม Lead): <b>${Math.max(0,_mainQty)} คน</b> <span style="opacity:.75">(${PAX_K.filter(k=>_mainBd[k]>0).map(k=>_mainBd[k]+' '+PAX_LBL[k]).join(' · ')||'—'})</span>
         &nbsp;·&nbsp; แยกไปจุดอื่น: <b>${_altTot} คน</b> <span style="opacity:.75">(${PAX_K.filter(k=>_altBd[k]>0).map(k=>_altBd[k]+' '+PAX_LBL[k]).join(' · ')||'—'})</span>
         &nbsp;·&nbsp; กลุ่มทั้งหมด: <b>${_hc} คน</b> <span style="opacity:.75">(${PAX_K.filter(k=>_bkBd[k]>0).map(k=>_bkBd[k]+' '+PAX_LBL[k]).join(' · ')||'—'})</span>
@@ -48437,15 +48441,15 @@ function bkV2RenderPickupSection(){
       </div>` : '';
       return `
         <datalist id="bkv2-altpick-names">${nameOpts}</datalist>
-        <div style="margin-top:10px;padding:9px 11px;background:${alt.length?'#F6F2FE':'var(--white)'};border:1px solid ${alt.length?'#C7B8E8':'var(--border)'};border-radius:var(--r-sm)">
+        <div style="margin-top:12px;padding:10px 12px;background:${alt.length?'#F7F7F5':'#fff'};border:1px solid ${alt.length?'#ECEBE6':'#D5D7DE'};border-radius:12px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <span style="font-size:11px;color:${alt.length?'#5B289A':'var(--ink)'};font-weight:600">&#128652; แยกคน · รับหรือส่งคนละที่${alt.length?` · ${alt.length} รายการ`:''}</span>
-            <button onclick="bkV2AddAltPickup()" style="font-size:11px;font-weight:600;color:#5B289A;background:#EDE7FB;border:1px solid #C7B8E8;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit">+ เพิ่มจุดรับ</button>
+            <span style="font-size:13px;color:#0F1B3D;font-weight:600">&#128652; แยกคน · รับหรือส่งคนละที่${alt.length?` · ${alt.length} รายการ`:''}</span>
+            <button onclick="bkV2AddAltPickup()" style="font-size:12.5px;font-weight:600;color:#0F1B3D;background:#fff;border:1px solid #CFCFC8;border-radius:8px;height:30px;padding:0 10px;cursor:pointer;font-family:inherit;white-space:nowrap">+ เพิ่มจุดรับ</button>
           </div>
-          ${alt.length?`<div class="bkv2-alt-row" style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#8a7db0;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
+          ${alt.length?`<div class="bkv2-alt-row" style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#5B6170;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
           ${rows}
           ${summary}
-          ${alt.length?'<div style="font-size:9.5px;color:#8a7db0;margin-top:6px">จุดรับหลักด้านบน = คนส่วนใหญ่ (รวม Lead) · รายการนี้ = คนที่รับคนละที่ · โซนมาจากจุดรับที่เลือกอัตโนมัติ · จำนวน "จุดรับหลัก" คำนวณอัตโนมัติ = กลุ่มทั้งหมด − ที่แยกไป</div>':''}
+          ${alt.length?'<div style="font-size:9.5px;color:#5B6170;margin-top:6px">จุดรับหลักด้านบน = คนส่วนใหญ่ (รวม Lead) · รายการนี้ = คนที่รับคนละที่ · โซนมาจากจุดรับที่เลือกอัตโนมัติ · จำนวน "จุดรับหลัก" คำนวณอัตโนมัติ = กลุ่มทั้งหมด − ที่แยกไป</div>':''}
         </div>`;
     })()}
   `;
@@ -48916,17 +48920,17 @@ function bkV2RenderAddOnsSection(){
 
   return `
     <div class="bkv2-nb-addons">
-      ${opts.map(o => { const _sel=d.addOns.find(x=>x.type===o.type); const _q=_sel?(_sel.qty||1):1; const _isChtr=o.type==='longtail-charter'; const _isVan=o.type.indexOf('transfer-')===0; const _isQty=_isChtr||_isVan; const _on=checked(o.type)&&!o.locked; const _amt=(o.amount||0)*((_isQty&&_on)?_q:1); const _btn='width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--bk-navy);font-size:13px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit'; const _qLbl=_isChtr?'ลำ':'คัน'; return `
+      ${opts.map(o => { const _sel=d.addOns.find(x=>x.type===o.type); const _q=_sel?(_sel.qty||1):1; const _isChtr=o.type==='longtail-charter'; const _isVan=o.type.indexOf('transfer-')===0; const _isQty=_isChtr||_isVan; const _on=checked(o.type)&&!o.locked; const _amt=(o.amount||0)*((_isQty&&_on)?_q:1); const _btn='width:28px;height:28px;border-radius:8px;border:1.5px solid #C9CCD6;background:#F7F7F5;color:#3E4658;font-size:15px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;padding:0'; const _qLbl=_isChtr?'ลำ':'คัน'; return `
         <label class="bkv2-nb-addon ${checked(o.type)?'on':''}" style="${o.locked?'opacity:.55;cursor:not-allowed;background:#fafafa':''}">
           <input type="checkbox" ${checked(o.type) && !o.locked?'checked':''} ${o.locked?'disabled':''} onchange="${o.locked?'':`bkV2ToggleAddOn('${o.type}')`}">
           <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:12px;color:var(--ink)">${escapeHTML(o.label)} ${o.locked?'<span style="background:#0F6E56;color:#fff;font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.06em;margin-left:4px;vertical-align:middle">LOCKED</span>':''}</div>
+            <div style="font-weight:600;font-size:13.5px;color:var(--ink)">${escapeHTML(o.label)} ${o.locked?'<span style="background:#0F6E56;color:#fff;font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.06em;margin-left:4px;vertical-align:middle">LOCKED</span>':''}</div>
             <div style="font-size:10px;color:var(--ink-soft);margin-top:1px;font-family:'DM Mono',monospace">${o.sub}</div>
-            ${(_isQty&&_on)?`<div onclick="event.preventDefault();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:7px;margin-top:7px;background:#F4F8FC;border:1px solid #DCE7F2;border-radius:8px;padding:4px 8px"><span style="font-size:10px;font-weight:600;color:var(--bk-navy)">จำนวน${_qLbl}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnQty('${o.type}',${_q-1})" style="${_btn}">&minus;</button><span style="font-size:13px;font-weight:700;min-width:16px;text-align:center;font-variant-numeric:tabular-nums">${_q}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnQty('${o.type}',${_q+1})" style="${_btn}">+</button><span style="font-size:10px;color:var(--ink-soft)">${_qLbl}</span></div>`:''}
-            ${(_on&&o.type==='longtail-join')?(function(){ const _m=bkV2LtJoinMax(); const _ja=(_sel&&_sel.jAd!=null)?+_sel.jAd:_m.A; const _jc=(_sel&&_sel.jChd!=null)?+_sel.jChd:_m.C; const _st=(w,v,mx)=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:10px;font-weight:600;color:var(--bk-navy)">${w==='ad'?'ผู้ใหญ่':'เด็ก'}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnJoin('${w}',${v-1})" style="${_btn}">&minus;</button><span style="font-size:13px;font-weight:700;min-width:16px;text-align:center;font-variant-numeric:tabular-nums">${v}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnJoin('${w}',${v+1})" style="${_btn}">+</button><span style="font-size:9.5px;color:var(--ink-soft)">/${mx}</span></span>`; return `<div onclick="event.preventDefault();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:7px;background:#F4F8FC;border:1px solid #DCE7F2;border-radius:8px;padding:4px 9px">${_st('ad',_ja,_m.A)}${_m.C>0?_st('chd',_jc,_m.C):''}<span style="font-size:9.5px;color:var(--ink-soft)">ลงหางยาวกี่คน · ตั้งต้นเท่าที่จอง</span></div>`; })():''}
-            ${(_on&&(o.type==='longtail-join'||o.type==='longtail-charter'))?`<div onclick="event.preventDefault();event.stopPropagation()" style="margin-top:7px"><input type="text" value="${escapeHTML((_sel&&_sel.note)||'')}" oninput="bkV2SetAddOnNote('${o.type}',this.value)" placeholder="หมายเหตุหางยาว · เช่น จุดลงเรือ / เวลานัด / ผู้ติดต่อ" style="width:100%;box-sizing:border-box;height:28px;border:1px solid #DCE7F2;border-radius:7px;padding:0 9px;font-size:11px;font-family:inherit;background:#fff;color:var(--ink)"></div>`:''}
+            ${(_isQty&&_on)?`<div onclick="event.preventDefault();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:8px;margin-top:8px;background:#fff;border:1px solid #D5D7DE;border-radius:10px;padding:5px 9px"><span style="font-size:12px;font-weight:600;color:var(--bk-navy)">จำนวน${_qLbl}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnQty('${o.type}',${_q-1})" style="${_btn}">&minus;</button><span style="font-family:'DM Mono',monospace;font-size:14.5px;font-weight:500;min-width:20px;text-align:center;font-variant-numeric:tabular-nums">${_q}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnQty('${o.type}',${_q+1})" style="${_btn}">+</button><span style="font-size:10px;color:var(--ink-soft)">${_qLbl}</span></div>`:''}
+            ${(_on&&o.type==='longtail-join')?(function(){ const _m=bkV2LtJoinMax(); const _ja=(_sel&&_sel.jAd!=null)?+_sel.jAd:_m.A; const _jc=(_sel&&_sel.jChd!=null)?+_sel.jChd:_m.C; const _st=(w,v,mx)=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:10px;font-weight:600;color:var(--bk-navy)">${w==='ad'?'ผู้ใหญ่':'เด็ก'}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnJoin('${w}',${v-1})" style="${_btn}">&minus;</button><span style="font-family:'DM Mono',monospace;font-size:14.5px;font-weight:500;min-width:20px;text-align:center;font-variant-numeric:tabular-nums">${v}</span><button type="button" onclick="event.preventDefault();event.stopPropagation();bkV2SetAddOnJoin('${w}',${v+1})" style="${_btn}">+</button><span style="font-size:9.5px;color:var(--ink-soft)">/${mx}</span></span>`; return `<div onclick="event.preventDefault();event.stopPropagation()" style="display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid #D5D7DE;border-radius:10px;padding:5px 9px">${_st('ad',_ja,_m.A)}${_m.C>0?_st('chd',_jc,_m.C):''}<span style="font-size:9.5px;color:var(--ink-soft)">ลงหางยาวกี่คน · ตั้งต้นเท่าที่จอง</span></div>`; })():''}
+            ${(_on&&(o.type==='longtail-join'||o.type==='longtail-charter'))?`<div onclick="event.preventDefault();event.stopPropagation()" style="margin-top:7px"><input type="text" value="${escapeHTML((_sel&&_sel.note)||'')}" oninput="bkV2SetAddOnNote('${o.type}',this.value)" placeholder="หมายเหตุหางยาว · เช่น จุดลงเรือ / เวลานัด / ผู้ติดต่อ" style="width:100%;box-sizing:border-box;height:36px;border:1.5px solid #C9CCD6;border-radius:9px;padding:0 10px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--ink)"></div>`:''}
           </div>
-          <div style="font-family:Manrope,sans-serif;font-weight:700;color:${o.locked?'var(--ink-soft)':'var(--bk-navy)'};font-size:14px;font-variant-numeric:tabular-nums;letter-spacing:-.01em">${o.locked?'—':`฿${_amt.toLocaleString()}`}</div>
+          <div style="font-family:'DM Mono',monospace;font-weight:500;color:${o.locked?'#A9ADB8':(_on?'#0F1B3D':'#8A8F9C')};font-size:14px;font-variant-numeric:tabular-nums">${o.locked?'—':`฿${_amt.toLocaleString()}`}</div>
         </label>
       `; }).join('')}
     </div>
@@ -49222,8 +49226,8 @@ function bkV2RenderReviewPanel(){
             <div class="rv-lab">Adjustments</div>
             ${rows}
             <div style="display:flex;gap:7px;margin-top:7px">
-              <button onclick="bkV2AddAdjustment('discount')" style="font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ Discount</button>
-              <button onclick="bkV2AddAdjustment('extra')" style="font-size:11px;font-weight:600;color:#0F7A5A;background:#E1F5EE;border:1px solid #B8E5D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ Extra charge</button>
+              <button onclick="bkV2AddAdjustment('discount')" style="font-size:12px;font-weight:600;color:#0F1B3D;background:#fff;border:1px solid #CFCFC8;border-radius:8px;height:30px;padding:0 10px;cursor:pointer;font-family:inherit">+ Discount</button>
+              <button onclick="bkV2AddAdjustment('extra')" style="font-size:12px;font-weight:600;color:#0F1B3D;background:#fff;border:1px solid #CFCFC8;border-radius:8px;height:30px;padding:0 10px;cursor:pointer;font-family:inherit">+ Extra charge</button>
             </div>
           </div>`;
       })()}
@@ -49247,35 +49251,35 @@ function bkV2RenderPassengerRows(){
   const d = _bkV2.newBooking;
   bkV2SyncPassengers();
   if(d.passengers.length === 0){
-    return `<tr><td colspan="4" style="padding:8px 12px;font-size:10px;color:var(--ink-soft);font-style:italic">Only lead · bump AD/CHD/INF/FOC in Trips to add more guests.</td></tr>`;
+    return `<tr><td colspan="4" style="padding:10px 14px;font-size:12px;color:var(--ink-soft);border-top:1px solid #ECEBE6">Only lead · bump AD/CHD/INF/FOC in Trips to add more guests.</td></tr>`;
   }
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const typeStyle = t => ({
-    AD:  {bg:'#f5f3ef',color:'#5A5A52'},
-    CHD: {bg:'#E8F4DE',color:'#3B6D11'},
-    INF: {bg:'#FBEAF0',color:'#993556'},
-    FOC: {bg:'#FAEEDA',color:'#A05A1A'}
-  })[t] || {bg:'#f5f3ef',color:'#5A5A52'};
+    AD:  {bg:'#EEF1F8',color:'#23335F'},
+    CHD: {bg:'#FBEBD3',color:'#7A4300'},
+    INF: {bg:'#F3E3EC',color:'#6B2550'},
+    FOC: {bg:'#DDF1EA',color:'#0B5A43'}
+  })[t] || {bg:'#EEF1F8',color:'#23335F'};
   const _totFoc = (d.trips||[]).reduce((s,t)=> s + ((typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax,'foc'):0), 0);
   return d.passengers.map((p, i) => {
     const seqNum = i + 2; // pax #2, #3, ... (lead is #1)
     const isGuess = p.nationality && bkV2GuessNationality(p.name||'') === p.nationality;
     const ts = typeStyle(p.type);
     return `
-      <tr style="border-bottom:1px solid #f5f3ef">
-        <td style="padding:5px 6px;vertical-align:middle">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);font-weight:700;line-height:1.1">#${seqNum}</div>
-          <div style="background:${ts.bg};color:${ts.color};font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;letter-spacing:.08em;display:inline-block;margin-top:2px">${p.type||'AD'}</div>
+      <tr style="border-top:1px solid #ECEBE6">
+        <td style="padding:7px 6px 7px 14px;vertical-align:middle">
+          <div style="font-family:'DM Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:500;line-height:1.1">${seqNum}</div>
+          <div style="background:${ts.bg};color:${ts.color};font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">${p.type||'AD'}</div>
           ${_totFoc>0?`<div onclick="event.stopPropagation();bkV2TogglePassengerFoc(${i})" title="${p.type==='FOC'?'FOC · คลิกเพื่อเอาออก':'เลือกเป็น FOC (ฟรี)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${p.type==='FOC'?'#D9A400':'#cfcabd'}">${p.type==='FOC'?'★':'☆'}</div>`:''}
         </td>
-        <td style="padding:5px 6px"><input class="bkv2-nb-input" type="text" placeholder="${p.type==='INF'?'Infant':p.type==='CHD'?'Child':p.type==='FOC'?'FOC':'Pax'} ${seqNum} name" value="${escapeHTML(p.name||'')}" oninput="bkV2SetPassenger(${i},'name',this.value)" onblur="bkV2SyncPassengers();bkV2Render()" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box"></td>
+        <td style="padding:5px 6px"><input class="bkv2-nb-input" type="text" placeholder="${p.type==='INF'?'Infant':p.type==='CHD'?'Child':p.type==='FOC'?'FOC':'Pax'} ${seqNum} name" value="${escapeHTML(p.name||'')}" oninput="bkV2SetPassenger(${i},'name',this.value)" onblur="bkV2SyncPassengers();bkV2Render()" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box"></td>
         <td style="padding:5px 6px">
           <div class="bkv2-nb-ddwrap">
-            <input id="bkv2-nat-input-p${i}" class="bkv2-nb-input" type="text" placeholder="Type or pick…" autocomplete="off" value="${p.nationality ? escapeHTML(bkV2NatDDLabel(p.nationality)) : ''}" oninput="bkV2NatDDFilter('p${i}', this.value)" onfocus="bkV2NatDDShow('p${i}')" onkeydown="bkV2NatDDKey(event,'p${i}')" onblur="bkV2NatDDBlur('p${i}')" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box">
+            <input id="bkv2-nat-input-p${i}" class="bkv2-nb-input" type="text" placeholder="Type or pick…" autocomplete="off" value="${p.nationality ? escapeHTML(bkV2NatDDLabel(p.nationality)) : ''}" oninput="bkV2NatDDFilter('p${i}', this.value)" onfocus="bkV2NatDDShow('p${i}')" onkeydown="bkV2NatDDKey(event,'p${i}')" onblur="bkV2NatDDBlur('p${i}')" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box">
             <div id="bkv2-nat-dd-p${i}" class="bkv2-nb-dd"></div>
           </div>
         </td>
-        <td style="padding:5px 6px;text-align:center">${isGuess ? '<span style="background:#E1F5EE;color:#0F6E56;font-size:8px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.06em">GUESS</span>' : ''}</td>
+        <td style="padding:5px 6px;text-align:center">${isGuess ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
       </tr>
     `;
   }).join('');
@@ -49312,35 +49316,39 @@ function bkV2RenderDietaryLuggageSection(){
   const luggage = d.largeLuggage || 0;
   // Compact pill style · all 4 items in 1 row
   const pill = (on, val, label, color, iconKey, onToggleStmt, onSetQtyStmt) => `
-    <label style="display:inline-flex;align-items:center;gap:8px;padding:7px 12px;background:${on?color+'14':'var(--white)'};border:1px solid ${on?color+'55':'var(--border)'};border-radius:14px;cursor:pointer;font-size:11.5px;font-weight:600;color:${on?color:'var(--ink)'}">
-      <input type="checkbox" ${on?'checked':''} onchange="${onToggleStmt}" style="accent-color:${color};width:14px;height:14px;margin:0;flex-shrink:0">
-      ${bkV2DietIcon(iconKey, on?color:'#94A3B8')}
+    <label style="display:inline-flex;align-items:center;gap:8px;height:36px;box-sizing:border-box;padding:0 12px;background:${on?'#E8F3FB':'#fff'};border:1.5px solid ${on?'#1272B3':'#C9CCD6'};border-radius:18px;cursor:pointer;font-size:13px;font-weight:600;color:${on?'#0B4F7A':'#0F1B3D'}">
+      <input type="checkbox" ${on?'checked':''} onchange="${onToggleStmt}" style="accent-color:#16265C;width:15px;height:15px;margin:0;flex-shrink:0">
+      ${bkV2DietIcon(iconKey, on?'#0B4F7A':'#94A3B8')}
       <span>${label}</span>
-      ${on ? `<span onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-left:2px"><input type="number" min="1" max="99" value="${val}" oninput="${onSetQtyStmt}" style="width:40px;height:22px;font-size:12px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;border:1px solid ${color}55;border-radius:4px;padding:0 3px;background:#fff;color:${color};font-family:inherit"></span>` : ''}
+      ${on ? `<span onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-left:2px"><input type="number" min="1" max="99" value="${val}" oninput="${onSetQtyStmt}" style="width:42px;height:24px;font-size:13px;font-weight:500;text-align:center;font-variant-numeric:tabular-nums;border:1px solid #9CC4E0;border-radius:6px;padding:0 3px;background:#fff;color:#0B4F7A;font-family:'DM Mono',monospace"></span>` : ''}
     </label>
   `;
   const totalSpecial = (m.veg||0) + (m.vegan||0) + (m.halal||0);
-  const luggageWarn = luggage >= 3 ? `<div style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:var(--r-sm);padding:7px 11px;margin-top:8px;font-size:11px;color:#633806">&#9888; ${luggage} large bag(s) may require van seat reduction · check with dispatcher</div>` : '';
+  const luggageWarn = luggage >= 3 ? `<div style="background:#FBEBD3;border-radius:10px;padding:8px 12px;margin-top:8px;font-size:12.5px;font-weight:600;color:#7A4300">&#9888; ${luggage} large bag(s) may require van seat reduction · check with dispatcher</div>` : '';
   return `
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
-      <span style="font-size:10px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-right:3px">Diet</span>
+    <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start">
+      <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Diet</span>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       ${pill((m.veg||0)>0, m.veg||0, 'Vegetarian', '#246b43', 'veg', "bkV2ToggleMealOn('veg',this.checked)", "bkV2SetMealQty('veg',this)")}
       ${pill((m.vegan||0)>0, m.vegan||0, 'Vegan', '#1f8a4a', 'vegan', "bkV2ToggleMealOn('vegan',this.checked)", "bkV2SetMealQty('vegan',this)")}
       ${pill((m.halal||0)>0, m.halal||0, 'Halal', '#8a5b1f', 'halal', "bkV2ToggleMealOn('halal',this.checked)", "bkV2SetMealQty('halal',this)")}
-      <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+      </div>
+      <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Luggage</span>
+      <div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       ${pill(luggage>0, luggage, 'Large luggage', '#5A4F2A', 'luggage', "bkV2ToggleLuggageOn(this.checked)", "bkV2SetLuggageQty(this.value)")}
     </div>
-    ${luggageWarn}
-    <div style="margin-top:10px">
-      <label class="bkv2-nb-label">Food allergies ${(typeof bkV2AllergyCount==='function'&&bkV2AllergyCount(m)>0)?`<em style="font-weight:600;color:#A32D2D;font-style:normal">· &#9888; ${bkV2AllergyCount(m)} ราย</em>`:''}</label>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;align-items:center">
+    ${luggageWarn}</div>
+    <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Allergies</span>
+    <div>
+      ${(typeof bkV2AllergyCount==='function'&&bkV2AllergyCount(m)>0)?`<div style="font-size:12px;font-weight:600;color:#8E2019;margin-bottom:6px">&#9888; ${bkV2AllergyCount(m)} ราย</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         ${(Array.isArray(m.allergyList)?m.allergyList:[]).map((a,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;background:#FCEBEB;border:1px solid #F0C9C9;color:#A32D2D;border-radius:12px;padding:4px 5px 4px 11px;font-size:11.5px;font-weight:700">${escapeHTML(a.name)} &times;<input type="number" min="1" max="99" value="${Math.floor(+a.qty||1)}" onchange="bkV2AllergySetQty(${i},this.value)" onclick="event.stopPropagation()" style="width:36px;height:21px;text-align:center;border:1px solid #E6B8B8;border-radius:4px;font-size:11px;font-weight:700;color:#A32D2D;font-family:inherit;background:#fff"><span onclick="bkV2AllergyRemove(${i})" style="cursor:pointer;color:#C77;font-size:14px;padding:0 3px;line-height:1" title="ลบ">&times;</span></span>`).join('')}
-        <input id="bkv2-allerg-name" placeholder="เพิ่มสิ่งที่แพ้ เช่น Peanut" onkeydown="if(event.key==='Enter'){event.preventDefault();bkV2AllergyAdd();}" style="flex:1;min-width:150px;height:30px;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:0 9px;font-size:12px;font-family:inherit">
-        <input id="bkv2-allerg-qty" type="number" min="1" max="99" value="1" title="จำนวนคน" style="width:48px;height:30px;box-sizing:border-box;text-align:center;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;font-family:inherit">
-        <button type="button" onclick="bkV2AllergyAdd()" style="height:30px;background:#A32D2D;color:#fff;border:none;border-radius:8px;padding:0 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">+ เพิ่ม</button>
+        <input id="bkv2-allerg-name" placeholder="เพิ่มสิ่งที่แพ้ เช่น Peanut" onkeydown="if(event.key==='Enter'){event.preventDefault();bkV2AllergyAdd();}" style="flex:1;min-width:150px;height:36px;box-sizing:border-box;border:1.5px solid #C9CCD6;border-radius:10px;padding:0 10px;font-size:13px;font-family:inherit">
+        <input id="bkv2-allerg-qty" type="number" min="1" max="99" value="1" title="จำนวนคน" style="width:52px;height:36px;box-sizing:border-box;text-align:center;border:1.5px solid #C9CCD6;border-radius:10px;font-size:13px;font-weight:500;font-family:'DM Mono',monospace">
+        <button type="button" onclick="bkV2AllergyAdd()" style="height:36px;background:#16265C;color:#fff;border:none;border-radius:10px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ เพิ่ม</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
-        ${['Peanut','Tree nuts','Shellfish','Fish','Egg','Milk/Lactose','Gluten','Soy'].map(p=>`<button type="button" onclick="bkV2AllergyAddPreset('${p}')" style="font-size:10.5px;color:#7a4a4a;background:#FBF1F1;border:1px solid #EAD2D2;border-radius:11px;padding:3px 9px;cursor:pointer;font-family:inherit">+ ${p}</button>`).join('')}
+        ${['Peanut','Tree nuts','Shellfish','Fish','Egg','Milk/Lactose','Gluten','Soy'].map(p=>`<button type="button" onclick="bkV2AllergyAddPreset('${p}')" style="font-size:10.5px;color:#3E4658;background:#fff;border:1px dashed #C9CCD6;border-radius:13px;padding:4px 10px;cursor:pointer;font-family:inherit">+ ${p}</button>`).join('')}
       </div>
       ${/* §bkAlFree (2026-09-14) · ช่องข้อความอิสระเรื่องอาหาร (specialMeals.allergies)
            ช่องนี้มีมานานแล้ว · ครัวกับใบพิมพ์อ่านมันอยู่ และหน้าเช็คอินหน้าท่าเขียนลงช่องนี้ได้
@@ -49354,8 +49362,9 @@ function bkV2RenderDietaryLuggageSection(){
         </label>
         <textarea id="bkv2-allerg-free" rows="2" placeholder="เช่น เด็ก 1 คนไม่กินเผ็ด · ขอข้าวสวยเพิ่ม 2 ที่ · ห้ามใส่ถั่วทุกจาน"
           oninput="bkV2SetMealNote(this.value)"
-          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${(m.allergies||'').trim()?'#F0C9C9':'var(--border)'};background:${(m.allergies||'').trim()?'#FFFBFB':'var(--white)'};border-radius:8px;padding:7px 9px;font-size:12px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
+          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${(m.allergies||'').trim()?'#F0C9C9':'var(--border)'};background:${(m.allergies||'').trim()?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
       </div>
+    </div>
     </div>
   `;
 }
@@ -56220,8 +56229,8 @@ function bkV2RenderAttachSection(){
   return `<div class="bkv2-nb-sec" id="bkv2-attach-sec">
     <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <label title="อัปโหลดไฟล์ (PDF / รูป)" style="display:inline-flex;align-items:center;justify-content:center;background:var(--bk-navy);color:#fff;border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">📎<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
-      <button type="button" title="Capture หน้าจอ" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">🖥</button>
+      <label title="อัปโหลดไฟล์ (PDF / รูป)" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1;background:var(--bk-navy);color:#fff;border-radius:10px;height:38px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">📎 Upload file<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
+      <button type="button" title="Capture หน้าจอ" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1;background:#fff;color:var(--bk-navy);border:1px solid #CFCFC8;border-radius:10px;height:38px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap">🖥 Capture screen</button>
     </div>
     <div style="font-size:10.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:10px">📋 ถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:var(--ink)">${_paste}</b> วางตรงนี้ได้เลย</div>
     <div id="bkv2-attach-list">${bkV2AttachListHTML()}</div>
@@ -74167,6 +74176,16 @@ function bkNbfCSS2(){
   +S+' .nbf-ck span{flex:none;width:17px;height:17px;border-radius:9px;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}'
   +S+' .nbf-ck i{font-style:normal;min-width:0}'
   +S+' .nbf-ck em{font-style:normal;font-size:10.5px;color:#8A8F9C;border:1px solid #D5D7DE;border-radius:5px;padding:0 5px;margin-left:2px;white-space:nowrap}'
+  +S+' .nbf-main .bkv2-nb-sec-h{flex-wrap:wrap;row-gap:6px}'
+  +S+' .nbf-main textarea.bkv2-nb-input{width:100%;box-sizing:border-box}'
+  +S+' .rv-card{background:transparent;border:none;border-radius:0;padding:0}'
+  +S+' .rv-section{padding:10px 0;border-bottom:1px solid #ECEBE6}'
+  +S+' .rv-lab{font-size:10px;letter-spacing:.10em;color:#5B6170;margin-bottom:4px}'
+  +S+' .rv-val{font-size:14px;font-weight:700;color:#0F1B3D}'
+  +S+' .rv-sub{font-size:12px;font-family:inherit;color:#5B6170}'
+  +S+' .rv-total{background:transparent;border:none;border-top:1px solid #ECEBE6;border-radius:0;padding:12px 0 2px;margin-top:0;align-items:baseline}'
+  +S+' .rv-total-lab{font-size:11px;letter-spacing:.10em;color:#3E4658}'
+  +S+" .rv-total-amt{font-family:'DM Mono',ui-monospace,monospace;font-size:26px;font-weight:500;color:#0F1B3D;letter-spacing:0}"
   +'@media(max-width:1500px){'+S+' .nbf-r{display:none}}';
   var st=document.createElement('style'); st.id='bknbf-css2'; st.textContent=css; document.head.appendChild(st);
 }
