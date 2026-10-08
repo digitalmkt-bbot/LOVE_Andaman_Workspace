@@ -74247,6 +74247,11 @@ function bkNbfCSS2(){
   if(document.getElementById('bknbf-css2')) return;
   var S='#view-booking .bkv2-nbf';
   var css=''
+  /* wordmark centred on the whole page, not on the left column (the top bar stops short of the review panel) */
+  +S+'{position:relative}'
+  +S+' .bkv2-nb-h1{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding-left:0;text-indent:.30em}'
+  +S+' .bkv2-nb-h1 i{text-indent:.34em}'
+  +'@media(max-width:1180px){'+S+' .bkv2-nb-h1{display:none}}'
   +S+' .nbf-steps{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}'
   +S+' .bkv2-nb-topbar{row-gap:10px}'
   +S+' .nbf-st{height:26px;padding:0 9px 0 5px;border-radius:13px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;font-family:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}'
