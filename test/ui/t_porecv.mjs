@@ -14,6 +14,7 @@
 //     นับแล้วตรง = ไม่บันทึกอะไร
 //   7 ทะเบียนของ · ยอดตั้งต้นล็อกเมื่อมีการเคลื่อนไหว (ไม่มีช่องให้แก้ และแก้ผ่านโค้ดก็ไม่เปลี่ยน) · ของใหม่ยังใส่ได้
 //   8 ประวัติ · ชิป "รับของเข้า" กรองได้ · ป้ายบอกที่มา · ไม่มี error
+//   9 ประวัติ · กล่องของประจำเรือ แยกตามลำ บอกรายการและจำนวนใต้ชื่อลำ
 import { open } from './_harness.mjs';
 
 let bad = 0;
@@ -153,6 +154,24 @@ if (R8.chip && R8.cnt && R8.n === 3 && R8.tags.filter(t => t === 'รับข�
     && R8.notes.includes('ไกด์เจอที่ร้านอาหาร') && !e1.length)
   ok('8 ประวัติ · ชิป "' + R8.chip + '" / "' + R8.cnt + '" · ป้ายบอกที่มา · ไม่มี error');
 else fail('8 ' + JSON.stringify(R8) + ' ' + e1.slice(0, 3).join(' | '));
+
+/* 9 · §poShipItems · ของประจำเรือ แยกตามลำ ต้องบอกรายการใต้ชื่อลำ */
+const R9 = await page.evaluate(({ C, D }) => {
+  const bo = (typeof poShipBoats === 'function' ? poShipBoats(_poPier) : [])[0];
+  if (!bo) return { err: 'no boat at this pier' };
+  poAdd({ date: _poDate, pier: _poPier, itemId: C, boatId: bo.id, type: 'assign', qty: 4 });
+  poAdd({ date: _poDate, pier: _poPier, itemId: D, boatId: bo.id, type: 'assign', qty: 2 });
+  poLedgerOpen();
+  const m = document.getElementById('po-modal');
+  const box = [...m.querySelectorAll('div')].find(d => d.firstElementChild && /ของประจำเรือ · แยกตามลำ/.test(d.firstElementChild.textContent) && d.children.length > 1);
+  const subs = box ? [...box.querySelectorAll('.po-shipi')].map(x => x.textContent.replace(/\s+/g, ' ').trim()) : [];
+  const out = { boat: bo.name || bo.id, subs, has: box ? box.textContent.includes(bo.name || bo.id) : false,
+    want: [poItem(C).label, poItem(D).label] };
+  poModalClose(); return out;
+}, { C, D });
+if (!R9.err && R9.has && R9.subs.length === 2 && R9.subs[0].startsWith(R9.want[0]) && /4/.test(R9.subs[0]) && R9.subs[1].startsWith(R9.want[1]) && /2/.test(R9.subs[1]))
+  ok('9 ของประจำเรือ · ' + R9.boat + ' → ' + R9.subs.join(' / '));
+else fail('9 ' + JSON.stringify(R9));
 
 await close();
 console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed');

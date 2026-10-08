@@ -67714,8 +67714,19 @@ function poLedgerOpen(){
       var shTot=SH.reduce(function(s2,x){ return s2+x.tot; },0);
       sum+='<div style="'+two+'">'
         +poLdgBox('ของประจำเรือ · แยกตามลำ', SH.length+' ลำ · '+shTot+' ชิ้น',
+            /* §poShipItems · "ของประจำเรือ ให้แยกรายการด้วย" · ใต้ชื่อลำบอกว่าลำนั้นมีอะไรบ้าง กี่ชิ้น */
             SH.slice(0,6).map(function(x){
-              return poLdgLine(poE(poLdgBoatNm(x.bid)), x.tot, '#0E7490'); }).join('')
+              return poLdgLine('<b style="font-weight:700;color:#0F172A">'+poE(poLdgBoatNm(x.bid))+'</b>', x.tot, '#0E7490')
+                + x.items.map(function(i){
+                    var it=poItem(i.itemId), c=(it&&PO_KIND[it.kind])?PO_KIND[it.kind].c:'#94A3B8';
+                    var u=(it&&PO_KIND[it.kind])?PO_KIND[it.kind].u:'';
+                    return '<div class="po-shipi" style="display:flex;justify-content:space-between;align-items:center;gap:8px;'
+                      +'padding:2px 0 2px 14px;font-size:11.5px;color:#64748B">'
+                      +'<span><i style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+c
+                      +';margin-right:6px;vertical-align:1px"></i>'+poE(it?it.label:i.itemId)+'</span>'
+                      +'<span style="font-variant-numeric:tabular-nums;color:#334155;font-weight:600">'+i.q
+                      +(u?(' <span style="color:#94A3B8;font-weight:500">'+poE(u)+'</span>'):'')+'</span></div>';
+                  }).join(''); }).join('')
             +(SH.length>6?poLdgLine('<span style="color:#94A3B8">และอีก '+(SH.length-6)+' ลำ</span>',
                 SH.slice(6).reduce(function(s2,x){ return s2+x.tot; },0),'#94A3B8'):''))
         +poLdgBox('ของประจำเรือ · แยกรายการ', shTot+' ชิ้น', (function(){
