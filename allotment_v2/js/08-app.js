@@ -48224,7 +48224,6 @@ function bkV2RenderNewBooking(){
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bkV2RenderAttachSection()}
              ${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}
-             <div style="margin-bottom:10px">${bkV2RenderActionMeta()}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                ${bkV2RenderSubmitButton()}
                <button class="bkv2-nb-btn" onclick="bkV2SaveDraft()" ${!d.agentId?'disabled':''} style="width:100%">Save Draft</button>
@@ -48560,6 +48559,11 @@ function bkV2RenderTripsSection(){
       allotBadge = `<div style="margin-top:8px;padding:8px 12px;background:${s.bg};border:${s.dashed?'1px dashed':'1px solid'} ${s.border};border-radius:10px;font-size:12.5px;color:${s.color};font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="background:${s.color};color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em;font-weight:700;flex-shrink:0">${s.tag}</span><span style="flex:1;min-width:0">${msg}</span></div>${warn}`;
     }
     const isCharter = t.bookingMode === 'charter';
+    /* §nbf6 · price per head for the row labels (seat mode with a rate only) · display only */
+    const _sr = (!isCharter && d.priceMode!=='manual' && t.routeId && rt.seatRates && rt.seatRates[t.routeId]) ? (rt.seatRates[t.routeId][t.zone||'PK']||null) : null;
+    const _pp = k => { if(!_sr) return ''; const a=Number(_sr['adult-'+k])||0, c=Number(_sr['child-'+k])||0; return (a||c) ? `<span style="display:block;font-family:'DM Mono',monospace;font-weight:400;font-size:11px;color:#5B6170;margin-top:1px" title="Adult / Child per head">${a.toLocaleString()} &middot; ${c.toLocaleString()}</span>` : ''; };
+    const _paxAll = bkV2PaxAllTot(t.pax);
+    const _thaiN = ['ad','chd','inf','foc'].reduce((s2,k)=>s2+bkNatTH(t,k),0);
     // Charter boat picker · only boats assigned to route+date · filter availability
     let charterPickerHtml = '';
     if(isCharter && t.routeId && t.date && typeof getAssignedBoatsForRouteDate === 'function'){
@@ -48785,7 +48789,7 @@ function bkV2RenderTripsSection(){
           <div style="font-size:11.5px;color:#3E4658;font-weight:600;margin-bottom:4px">Pax <span style="font-weight:400;color:#5B6170">&middot; FR + TH mixed</span></div>
           <table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px;border:1px solid #ECEBE6;border-radius:12px;overflow:hidden">
             <thead><tr>
-              <th style="background:#F7F7F5;padding:8px 12px;text-align:left;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em;width:76px">RATE</th>
+              <th style="background:#F7F7F5;padding:8px 12px;text-align:left;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em;width:96px">RATE</th>
               <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">ADULT</th>
               <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">CHILD</th>
               <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">INFANT</th>
@@ -48793,14 +48797,14 @@ function bkV2RenderTripsSection(){
             </tr></thead>
             <tbody>
               ${( (rt&&typeof rtNatScopeOf==='function'?rtNatScopeOf(rt):'both')!=='thai' || ((t.pax.ad_fr||0)+(t.pax.chd_fr||0)+(t.pax.inf_fr||0)+(t.pax.foc_fr||0))>0 ) ? `<tr>
-                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap" title="Foreign rate">🌐 FR</td>
+                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap;line-height:1.2" title="Foreign rate">🌐 FR${_pp('fr')}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'ad_fr',t.pax.ad_fr||0)}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'chd_fr',t.pax.chd_fr||0)}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'inf_fr',t.pax.inf_fr||0)}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'foc_fr',t.pax.foc_fr||0)}</td>
               </tr>` : ''}
               ${( (rt&&typeof rtNatScopeOf==='function'?rtNatScopeOf(rt):'both')!=='fr' || ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0))>0 ) ? `<tr>
-                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap" title="Thai rate">🇹🇭 TH</td>
+                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap;line-height:1.2" title="Thai rate">🇹🇭 TH${_pp('thai')}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'ad_th',t.pax.ad_th||0)}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'chd_th',t.pax.chd_th||0)}</td>
                 <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'inf_th',t.pax.inf_th||0)}</td>
@@ -48826,6 +48830,7 @@ function bkV2RenderTripsSection(){
               ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
             </tbody>
           </table>
+          ${_paxAll>0?`<div style="margin-top:6px;font-size:12px;color:#5B6170">Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}</div>`:''}
         </div>
         ${(t.ovn==='return' && t.date && t.ovnReturnDate)?((d.trips||[]).some(x=>x.ovnLeg&&x.routeId===t.routeId&&x.date===t.ovnReturnDate)?`<div style="margin-top:10px;font-size:12.5px;color:#0B5A43;font-weight:600;background:#DDF1EA;border-radius:10px;padding:8px 12px">&#10003; สร้าง trip ขากลับวัน ${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))} แล้ว · กันที่นั่งเรียบร้อย (ดู TRIP ถัดไป)</div>`:`<button type="button" onclick="bkV2CreateOvnReturnLeg(${idx})" style="margin-top:10px;width:100%;height:40px;background:#5B289A;color:#fff;border:none;border-radius:10px;padding:0 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128679; สร้าง trip ขากลับ (${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))}) + กันที่นั่ง</button>`):''}
       </div>
@@ -49382,9 +49387,9 @@ function bkV2RenderCashOnTourSection(){
   const cot = d.cashOnTour;
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   return `
-    <label style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:${cot?'#FFF6E5':'var(--white)'};border:1px solid ${cot?'#EAD9B0':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
-      <input type="checkbox" ${cot?'checked':''} onchange="bkV2ToggleCashOnTour(this.checked)" style="accent-color:#ba7517">
-      <span style="font-size:12px;color:${cot?'#633806':'var(--ink)'};font-weight:600">💰 Collect cash on tour</span>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${cot?'#E8F3FB':'#fff'};border:1.5px solid ${cot?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${cot?'checked':''} onchange="bkV2ToggleCashOnTour(this.checked)" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
+      <span style="font-size:13px;color:${cot?'#0B4F7A':'var(--ink)'};font-weight:600">💰 Collect cash on tour</span>
       <span style="font-size:10px;color:var(--ink-soft);margin-left:auto">guide collects from guest on tour day</span>
     </label>
     ${cot ? `
@@ -49402,14 +49407,14 @@ function bkV2RenderCashOnTourSection(){
       </div>
       <div style="margin-top:8px">
         <div style="font-size:10px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;margin-bottom:5px">HANDLING</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 11px;background:${cot.handling==='deduct'?'var(--bk-navy-50)':'var(--white)'};border:1px solid ${cot.handling==='deduct'?'var(--bk-navy-mid)':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${cot.handling==='deduct'?'#E8F3FB':'#fff'};border:1.5px solid ${cot.handling==='deduct'?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
             <input type="radio" name="cot-handling" ${cot.handling==='deduct'?'checked':''} onchange="bkV2SetCashOnTour('handling','deduct')" style="accent-color:var(--bk-navy);margin-top:2px">
-            <div><div style="font-size:11px;font-weight:700;color:${cot.handling==='deduct'?'var(--bk-navy)':'var(--ink)'}">Deduct from invoice</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Reduces total owed by agent</div></div>
+            <div><div style="font-size:13px;font-weight:600;color:${cot.handling==='deduct'?'#0B4F7A':'var(--ink)'}">Deduct from invoice</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Reduces total owed by agent</div></div>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 11px;background:${cot.handling==='separate'?'var(--bk-navy-50)':'var(--white)'};border:1px solid ${cot.handling==='separate'?'var(--bk-navy-mid)':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${cot.handling==='separate'?'#E8F3FB':'#fff'};border:1.5px solid ${cot.handling==='separate'?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
             <input type="radio" name="cot-handling" ${cot.handling==='separate'?'checked':''} onchange="bkV2SetCashOnTour('handling','separate')" style="accent-color:var(--bk-navy);margin-top:2px">
-            <div><div style="font-size:11px;font-weight:700;color:${cot.handling==='separate'?'var(--bk-navy)':'var(--ink)'}">Keep separate</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Full invoice still owed</div></div>
+            <div><div style="font-size:13px;font-weight:600;color:${cot.handling==='separate'?'#0B4F7A':'var(--ink)'}">Keep separate</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Full invoice still owed</div></div>
           </label>
         </div>
       </div>
@@ -49493,7 +49498,7 @@ function bkV2RenderPaymentSection(){
           <span style="font-family:'DM Mono',monospace;color:var(--bk-navy)">${escapeHTML(agent.contractVersion||'no contract')}</span>
         </div>
         <div style="font-size:10px;color:var(--ink-soft);font-family:'DM Mono',monospace">
-          ${limit?`Credit limit ฿${limit.toLocaleString()} · used ฿${balance.toLocaleString()} · available ฿${Math.max(0,limit-balance).toLocaleString()}`:'No credit limit set'}
+          ${limit?`Credit limit ฿${limit.toLocaleString()} · used ฿${balance.toLocaleString()} · available ฿${Math.max(0,limit-balance).toLocaleString()}`:'No credit limit set'}${(limit && agent.payType==='invoice' && !_bkV2.editingId)?(function(){ var g=0; try{ g=Number(bkV2CalcQuote().grandTotal)||0; }catch(_){ g=0; } var left=limit-balance-g; return g>0?` · after this booking <b style="color:${left<0?'#8E2019':'#0B5A43'}">${left<0?'&minus;':''}฿${Math.abs(left).toLocaleString()}</b>${left<0?' (over the limit)':''}`:''; })():''}
         </div>
       </div>
       <div style="height:1px;background:var(--border);margin:0 0 12px"></div>
