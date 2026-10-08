@@ -47987,6 +47987,7 @@ function bkV2RenderNewBooking(){
     rtPreview = `
       <div class="bkv2-nb-rt-preview">
         <div><strong>${escapeHTML(rt.code)} &middot; ${escapeHTML(rt.name)}</strong></div>
+        ${(typeof bkNbfAgentChips==='function')?bkNbfAgentChips():''}
         <div class="meta">${_n} route${_n===1?'':'s'} bookable${_rtN&&_rtN!==_n?(' &middot; '+_rtN+' in rate type'):''} &middot; valid ${validFrom} &rarr; ${validTo}</div>
         ${bkV2RtKeepNote()}
         ${_short?`<div class="meta" style="color:#8A5A0B;margin-top:3px">&#9888; \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49\u0e22\u0e36\u0e14\u0e15\u0e32\u0e21\u0e42\u0e1b\u0e23\u0e41\u0e01\u0e23\u0e21\u0e43\u0e19\u0e2a\u0e31\u0e0d\u0e0d\u0e32\u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e40\u0e22\u0e19\u0e15\u0e4c &middot; \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e43\u0e19 Rate Type \u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e22\u0e31\u0e07\u0e08\u0e2d\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 Agent \u0e14\u0e49\u0e27\u0e22</div>`:''}
@@ -48029,7 +48030,8 @@ function bkV2RenderNewBooking(){
         <div class="bkv2-nb-draft" style="${_bkV2.editingId?'background:#dbeafe;color:#1e40af':''}"><span class="dot" style="${_bkV2.editingId?'background:#1e40af':''}"></span>${_bkV2.editingId?'Editing':'Draft'}</div>
         </div>
       <div class="bkv2-nb-h1"><i>LOVE ANDAMAN</i>${_bkV2.editingId?'Edit Booking':'New Booking'}</div>
-        <div class="nbf-r">${(typeof bkNbfStepsHtml==='function')?bkNbfStepsHtml():''}</div>
+        <div></div>
+        <div class="nbf-steps">${(typeof bkNbfStepsHtml==='function')?bkNbfStepsHtml():''}</div>
       </div>
 
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;background:transparent;min-height:calc(100vh - 80px)">
@@ -48140,7 +48142,7 @@ function bkV2RenderNewBooking(){
             </colgroup>
             <thead><tr style="background:#F7F7F5">
               <th style="padding:8px 6px 8px 14px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">#</th>
-              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Full name</th>
+              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Full name <span style="font-weight:400;letter-spacing:0;text-transform:none">&middot; lead: phone and email</span></th>
               <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Nationality</th>
               <th style="padding:6px;text-align:center;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em"></th>
             </tr></thead>
@@ -48154,7 +48156,7 @@ function bkV2RenderNewBooking(){
                   ${((d.trips||[]).some(t=>bkV2PaxTot(t.pax,'foc')>0))?`<div onclick="event.stopPropagation();bkV2ToggleLeadFoc()" title="${d.leadFoc?'Lead เป็น FOC · คลิกเพื่อยกเลิก':'ตั้ง Lead เป็น FOC (ฟรี · ไม่ต้องมี Adult)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${d.leadFoc?'#D9A400':'#cfcabd'}">${d.leadFoc?'★':'☆'} <span style="font-size:9px;color:#8A8F9C;vertical-align:1px;letter-spacing:.04em">FOC</span></div>`:''}
                 </td>
                 <td style="padding:5px 6px">
-                  <input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box">
+                  <div style="display:flex;flex-wrap:wrap;gap:8px"><input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:8px 10px;font-size:13.5px;flex:2 1 200px;min-width:0;box-sizing:border-box"><input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:7px 10px;font-size:12.5px;font-family:'DM Mono',monospace;box-sizing:border-box;flex:1 1 150px;min-width:0"><input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:7px 10px;font-size:12.5px;box-sizing:border-box;flex:1.3 1 180px;min-width:0"></div>
                 </td>
                 <td style="padding:5px 6px">
                   <div class="bkv2-nb-ddwrap">
@@ -48164,16 +48166,7 @@ function bkV2RenderNewBooking(){
                 </td>
                 <td style="padding:5px 6px;text-align:center">${d.leadNationality && bkV2GuessNationality(d.leadPax||'') === d.leadNationality ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
               </tr>
-              <!-- Lead contact sub-row · phone + email -->
-              <tr style="background:var(--bk-navy-50);border-bottom:1px solid var(--bk-navy-light)">
-                <td></td>
-                <td colspan="3" style="padding:0 6px 10px">
-                  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:8px;margin-top:-1px">
-                    <input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:7px 10px;font-size:12.5px;font-family:'DM Mono',monospace;box-sizing:border-box;min-width:0;width:100%">
-                    <input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:7px 10px;font-size:12.5px;box-sizing:border-box;min-width:0;width:100%">
-                  </div>
-                </td>
-              </tr>
+              <!-- lead phone + email now sit beside the lead name (nbf7) -->
               ${bkV2RenderPassengerRows()}
             </tbody>
           </table>
@@ -48206,8 +48199,8 @@ function bkV2RenderNewBooking(){
             </div>
           `;
         })()}
-        <label class="bkv2-nb-label">Notes / Special Request</label>
-        <textarea class="bkv2-nb-input" rows="3" placeholder="e.g. VIP family · prefers speedboat · notify guide for life vest sizes" style="width:100%;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:4px" oninput="bkV2SetBookingField('notes', this.value)">${(d.notes||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}</textarea>
+        <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start"><span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Notes</span>
+        <textarea class="bkv2-nb-input" rows="3" placeholder="e.g. VIP family · prefers speedboat · notify guide for life vest sizes" style="width:100%;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:0" oninput="bkV2SetBookingField('notes', this.value)">${(d.notes||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}</textarea></div>
       </div>
 
       <!-- Combined: Payment + Cash on Tour in ONE card -->
@@ -48324,7 +48317,13 @@ function bkV2RenderPickupSection(){
             <input id="bkv2-hotel-input" class="bkv2-nb-input" type="text" autocomplete="off" placeholder="${_pickIsNT?'optional note · guest arrives on their own':'e.g. Thavorn Beach Village · Patong main road · etc.'}" value="${escapeHTML(d.hotelName||'')}" oninput="bkV2HotelDDFilter(this.value)" onfocus="bkV2HotelDDShow()" onkeydown="bkV2HotelDDKey(event)">
             <div id="bkv2-hotel-dd" class="bkv2-nb-dd"></div>
           </div>
-          ${pickupTimeRows ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        </div>
+        <div class="bkv2-nb-field">
+          <label class="bkv2-nb-label">Room #</label>
+          <input class="bkv2-nb-input" type="text" placeholder="A-205" value="${escapeHTML(d.roomNumber||'')}" oninput="bkV2SetBookingField('roomNumber', this.value)">
+        </div>
+      </div>
+      ${pickupTimeRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px"><div style="font-size:11.5px;font-weight:600;color:#3E4658">Pickup time <span style="font-weight:400;color:#5B6170">&middot; per trip &middot; type over it if another time was agreed</span></div>
             ${d.trips.filter(t => t.routeId).map(t => {
               const autoTime = bkV2GetPickupTime(t.routeId, d.pickupAreaId, t.date);
               const displayTime = t.pickupTime || autoTime || '';
@@ -48334,17 +48333,12 @@ function bkV2RenderPickupSection(){
               return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F7F7F5;border:1px solid #ECEBE6;border-radius:9px;font-size:12.5px">
                 <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);min-width:80px">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : '—'}</span>
                 <span style="flex:1;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(routeName)}</span>
-                <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#0F1B3D">${displayTime || '—'}</span>
+                <input type="text" value="${escapeHTML(displayTime)}" placeholder="—" onchange="bkV2SetTripPickupTime(${d.trips.indexOf(t)}, this.value)" style="width:136px;height:30px;box-sizing:border-box;text-align:center;font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#0F1B3D;background:#fff;border:1.5px solid #C9CCD6;border-radius:8px;padding:0 6px">
                 ${displayTime ? `<span style="background:${isEdited?'#FBEBD3':'#DDF1EA'};color:${isEdited?'#7A4300':'#0B5A43'};font-size:9px;padding:1px 7px;border-radius:5px;font-weight:700;letter-spacing:.06em">${isEdited?'EDITED':'AUTO'}</span>` : ''}
+                ${isEdited ? `<button type="button" onclick="bkV2ResetTripPickupTime(${d.trips.indexOf(t)})" style="border:none;background:none;color:#0F6CA6;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;white-space:nowrap">Reset to auto</button>` : ''}
               </div>`;
             }).join('')}
           </div>` : ''}
-        </div>
-        <div class="bkv2-nb-field">
-          <label class="bkv2-nb-label">Room #</label>
-          <input class="bkv2-nb-input" type="text" placeholder="A-205" value="${escapeHTML(d.roomNumber||'')}" oninput="bkV2SetBookingField('roomNumber', this.value)">
-        </div>
-      </div>
     ` : ''}
     <!-- Pickup time table moved inline under Hotel/Pickup Location · per request -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px">
@@ -48561,9 +48555,12 @@ function bkV2RenderTripsSection(){
     const isCharter = t.bookingMode === 'charter';
     /* §nbf6 · price per head for the row labels (seat mode with a rate only) · display only */
     const _sr = (!isCharter && d.priceMode!=='manual' && t.routeId && rt.seatRates && rt.seatRates[t.routeId]) ? (rt.seatRates[t.routeId][t.zone||'PK']||null) : null;
-    const _pp = k => { if(!_sr) return ''; const a=Number(_sr['adult-'+k])||0, c=Number(_sr['child-'+k])||0; return (a||c) ? `<span style="display:block;font-family:'DM Mono',monospace;font-weight:400;font-size:11px;color:#5B6170;margin-top:1px" title="Adult / Child per head">${a.toLocaleString()} &middot; ${c.toLocaleString()}</span>` : ''; };
+    const _pp = k => { if(!_sr) return ''; const a=Number(_sr['adult-'+k])||0, c=Number(_sr['child-'+k])||0; return (a||c) ? `<span style="display:block;font-family:'DM Mono',monospace;font-weight:400;font-size:11px;color:#5B6170;margin-top:1px" title="Adult / Child per head">${a.toLocaleString()}/${c.toLocaleString()}</span>` : ''; };
     const _paxAll = bkV2PaxAllTot(t.pax);
     const _thaiN = ['ad','chd','inf','foc'].reduce((s2,k)=>s2+bkNatTH(t,k),0);
+    /* formula shown only when it really adds up to the subtotal (no bundle, charge or special case hidden in it) */
+    const _fx = (() => { if(!_sr) return ''; const P=[['ad_fr','adult-fr'],['chd_fr','child-fr'],['ad_th','adult-thai'],['chd_th','child-thai']]; let sum=0; const parts=[]; P.forEach(([k,r])=>{ const q=Number((t.pax||{})[k])||0, pr=Number(_sr[r])||0; if(q>0&&pr>0){ sum+=q*pr; parts.push(q+' \u00d7 '+pr.toLocaleString()); } }); return (parts.length && sum===(Number(subtotal.total)||0)) ? parts.join(' + ') : ''; })();
+    const _mn = d.priceMode==='manual';
     // Charter boat picker · only boats assigned to route+date · filter availability
     let charterPickerHtml = '';
     if(isCharter && t.routeId && t.date && typeof getAssignedBoatsForRouteDate === 'function'){
@@ -48689,7 +48686,7 @@ function bkV2RenderTripsSection(){
     return `
       <div class="bkv2-nb-trip">
         <div class="bkv2-nb-trip-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:12px;font-weight:700;color:#3E4658;letter-spacing:.06em">TRIP ${idx+1}</span>
+          <span style="flex:none;width:4px;height:22px;border-radius:2px;background:${(t.routeId && typeof tsRouteColor==='function') ? tsRouteColor(t.routeId) : '#C9CCD6'}"></span><span style="font-size:12px;font-weight:700;color:#3E4658;letter-spacing:.06em">TRIP ${idx+1}</span>
           <div style="display:inline-flex;gap:3px;background:#E4E3DD;border-radius:10px;padding:3px;margin-left:6px">
             <button onclick="bkV2SetTripBookingMode(${idx},'seat')" style="padding:5px 11px;font-size:12px;font-weight:600;border:none;background:${!isCharter?'#16265C':'transparent'};color:${!isCharter?'#fff':'#3E4658'};border-radius:7px;cursor:pointer;font-family:inherit">Seat</button>
             <button onclick="bkV2SetTripBookingMode(${idx},'charter')" style="padding:5px 11px;font-size:12px;font-weight:600;border:none;background:${isCharter?'#6B289A':'transparent'};color:${isCharter?'#fff':'#3E4658'};border-radius:7px;cursor:pointer;font-family:inherit">Charter</button>
@@ -48779,11 +48776,6 @@ function bkV2RenderTripsSection(){
               </div>`;
             })()}
           </div>
-          <div class="bkv2-nb-field">
-            <label class="bkv2-nb-label">Subtotal${d.priceMode==='manual'?' · <span style="color:#A05A1A;font-weight:700">overridden</span>':''}</label>
-            <div style="height:42px;box-sizing:border-box;padding:0 12px;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-family:'DM Mono',monospace;font-size:18px;font-weight:500;${d.priceMode==='manual'?'color:#5B6170;text-decoration:line-through;opacity:.65':'color:#0F1B3D'};background:#F7F7F5;border:1px solid #ECEBE6;border-radius:10px;font-variant-numeric:tabular-nums" title="${d.priceMode==='manual'?'Rate-type reference only — Manual total is used':''}">&#3647;${(subtotal.total||0).toLocaleString()}${subtotal.bundle?` <span style="font-size:11.5px;color:#5B6170;font-weight:400;font-family:'DM Sans',sans-serif">incl. ฿${subtotal.bundle.toLocaleString()} bundle</span>`:''}</div>
-            ${d.priceMode==='manual'?`<div style="font-size:12px;color:#7A4300;margin-top:4px;text-align:right">ใช้ราคา Manual &#3647;${(Number(d.manualTotal)||0).toLocaleString()} ทั้งใบ · ตัวเลขบนเป็นเรทอ้างอิง</div>`:''}
-          </div>
         </div>
         <div style="margin-top:12px">
           <div style="font-size:11.5px;color:#3E4658;font-weight:600;margin-bottom:4px">Pax <span style="font-weight:400;color:#5B6170">&middot; FR + TH mixed</span></div>
@@ -48830,7 +48822,14 @@ function bkV2RenderTripsSection(){
               ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
             </tbody>
           </table>
-          ${_paxAll>0?`<div style="margin-top:6px;font-size:12px;color:#5B6170">Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}</div>`:''}
+          <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px">
+            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}`:''}</div>
+            <div style="margin-left:auto;text-align:right" title="${_mn?'Rate-type reference only — Manual total is used':''}">
+              <div style="font-size:11.5px;color:#5B6170">Subtotal${_mn?' &middot; <span style="color:#7A4300;font-weight:700">overridden</span>':''}${_fx?` &middot; <span style="font-family:'DM Mono',monospace">${_fx}</span>`:''}</div>
+              <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums;${_mn?'color:#5B6170;text-decoration:line-through;opacity:.65':'color:#0F1B3D'}">&#3647;${(subtotal.total||0).toLocaleString()}${subtotal.bundle?` <span style="font-size:11.5px;color:#5B6170;font-weight:400;font-family:'DM Sans',sans-serif;text-decoration:none">incl. ฿${subtotal.bundle.toLocaleString()} bundle</span>`:''}</div>
+              ${_mn?`<div style="font-size:12px;color:#7A4300;margin-top:2px">ใช้ราคา Manual &#3647;${(Number(d.manualTotal)||0).toLocaleString()} ทั้งใบ · ตัวเลขบนเป็นเรทอ้างอิง</div>`:''}
+            </div>
+          </div>
         </div>
         ${(t.ovn==='return' && t.date && t.ovnReturnDate)?((d.trips||[]).some(x=>x.ovnLeg&&x.routeId===t.routeId&&x.date===t.ovnReturnDate)?`<div style="margin-top:10px;font-size:12.5px;color:#0B5A43;font-weight:600;background:#DDF1EA;border-radius:10px;padding:8px 12px">&#10003; สร้าง trip ขากลับวัน ${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))} แล้ว · กันที่นั่งเรียบร้อย (ดู TRIP ถัดไป)</div>`:`<button type="button" onclick="bkV2CreateOvnReturnLeg(${idx})" style="margin-top:10px;width:100%;height:40px;background:#5B289A;color:#fff;border:none;border-radius:10px;padding:0 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128679; สร้าง trip ขากลับ (${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))}) + กันที่นั่ง</button>`):''}
       </div>
@@ -49145,11 +49144,11 @@ function bkV2RenderReviewPanel(){
 
   // Cash on Tour
   const cotHtml = d.cashOnTour ? `
-    <div class="rv-section" style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:var(--r-sm);padding:6px 9px;margin-top:8px">
-      <div style="font-size:9px;color:#633806;font-weight:700;letter-spacing:.06em">💰 CASH ON TOUR</div>
-      <div id="bkv2-cot-rv-amt" style="font-size:11px;color:#633806;font-weight:700;margin-top:2px;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${escapeHTML(d.cashOnTour.currency||'THB')} ${(d.cashOnTour.amount||0).toLocaleString()}</div>
-      <div style="font-size:9px;color:#633806;margin-top:1px">${d.cashOnTour.handling === 'deduct' ? 'Deduct from invoice' : 'Keep separate'}</div>
-      <div id="bkv2-cot-rv-note" style="font-size:9.5px;color:#7a5a14;margin-top:3px;line-height:1.35;border-top:1px dashed #EAD9B0;padding-top:3px;display:${(d.cashOnTour.note||'').trim()?'block':'none'}">${(d.cashOnTour.note||'').trim()?'📝 '+escapeHTML(d.cashOnTour.note):''}</div>
+    <div class="rv-section">
+      <div class="rv-lab">Cash on tour</div>
+      <div id="bkv2-cot-rv-amt" style="font-size:14px;color:#0F1B3D;font-weight:500;font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums">${escapeHTML(d.cashOnTour.currency||'THB')} ${(d.cashOnTour.amount||0).toLocaleString()}</div>
+      <div class="rv-sub">${d.cashOnTour.handling === 'deduct' ? 'Deduct from invoice' : 'Keep separate'}</div>
+      <div id="bkv2-cot-rv-note" style="font-size:12px;color:#5B6170;margin-top:2px;line-height:1.35;display:${(d.cashOnTour.note||'').trim()?'block':'none'}">${(d.cashOnTour.note||'').trim()?'📝 '+escapeHTML(d.cashOnTour.note):''}</div>
     </div>
   ` : '';
 
@@ -49246,7 +49245,7 @@ function bkV2RenderReviewPanel(){
         <span class="rv-total-lab">QUOTE TOTAL</span>
         <span class="rv-total-amt">฿${q.grandTotal.toLocaleString()}</span>
       </div>
-      ${q.totalFoc > 0 ? `<div style="font-size:10px;color:#A05A1A;margin-top:6px;text-align:center;font-style:italic">${q.totalFoc} FOC · ฿${q.focDiscount.toLocaleString()} forgone</div>` : ''}
+      ${q.totalFoc > 0 ? `<div style="font-size:12px;color:#5B6170;margin-top:2px;text-align:right">${q.totalFoc} FOC · ฿${q.focDiscount.toLocaleString()} forgone</div>` : ''}
     </div>
   `;
 }
@@ -74133,7 +74132,30 @@ function bkNbfChecks(){
   add('guests', !!d.leadPax, true, d.leadPax?'Lead guest named':'Enter the lead guest name');
   var needVan=withRoute.some(function(t){ return !t.ovnLeg && t.zone!=='NoTransfer' && t.zone!=='NT'; }) && !d.pickupSelf;
   if(needVan){ var pa=!!(d.pickupAreaId||d.pickupArea); add('pickup', pa, false, pa?'Pickup area chosen':'Pickup area not chosen yet'); }
+  if(d.agentId){ var na=(d.attachments||[]).length; add('docs', na>0, false, na>0?(na+' document'+(na===1?'':'s')+' attached'):'No document attached'); }
   return out;
+}
+/* chips under the agent field: how this agent pays, and seat locks waiting on the chosen dates · display only */
+function bkNbfAgentChips(){
+  var d=(typeof _bkV2!=='undefined'&&_bkV2)?_bkV2.newBooking:null; if(!d||!d.agentId) return '';
+  var out=[], ag=null; try{ ag=sbGetAgent(d.agentId); }catch(_){ ag=null; }
+  if(ag){
+    if(ag.payType==='invoice'){
+      var lim=Number(ag.creditLimit)||0, bal=Number(ag.creditBalance)||0;
+      out.push(lim ? ('Credit &middot; &#3647;'+Math.max(0,lim-bal).toLocaleString()+' left of &#3647;'+lim.toLocaleString()) : 'Credit &middot; no limit set');
+    } else { out.push('Prepaid'); }
+  }
+  try{
+    if(typeof bkV2DrawSources==='function'){
+      var seen={}, tot=0;
+      (d.trips||[]).forEach(function(t){
+        if(!t.routeId||!t.date||t.bookingMode==='charter') return; var k=t.routeId+'|'+t.date; if(seen[k]) return; seen[k]=1;
+        (bkV2DrawSources(t.routeId,t.date,d.agentId)||[]).forEach(function(x){ tot+=(+x.remaining||0); });
+      });
+      if(tot>0) out.push(tot+' locked seat'+(tot===1?'':'s')+' on the chosen date'+(Object.keys(seen).length===1?'':'s'));
+    }
+  }catch(_){ }
+  return out.map(function(t){ return '<div class="nbf-chip">'+t+'</div>'; }).join('');
 }
 function bkNbfChecksHtml(){
   var list=bkNbfChecks(); if(!list.length) return '';
@@ -74151,15 +74173,17 @@ function bkNbfChecksHtml(){
 }
 function bkNbfStepsHtml(){
   var list=bkNbfChecks(); if(!list.length) return '';
-  var defs=[['agent','Agent','Agent'],['trips','Trips','Trips'],['guests','Guests','Guests'],['pickup','Pickup','Pickup'],['pay','Pay','Payment']];
+  var defs=[['agent','Agent','Agent'],['trips','Trips','Trips'],['addons','Add-ons','Add-ons'],['guests','Guests','Guests'],['pickup','Pickup','Pickup'],['diet','Diet and guide','Dietary'],['pay','Payment','Payment'],['docs','Documents','Documents']];
   return defs.map(function(df){
     var mine=list.filter(function(c){ return c.sec===df[0]; });
     var bad=mine.some(function(c){ return c.block && !c.ok; }), warn=mine.some(function(c){ return !c.block && !c.ok; });
-    var bg=bad?'#D9952B':(warn?'#8E96B5':'#2E9C78'), mk=bad?'!':(warn?'&middot;':'&#10003;');
-    return '<button type="button" class="nbf-st" onclick="bkNbfGo(\''+df[2]+'\')" title="'+(bad?'Something here must be fixed before Confirm':(warn?'Reminder only':'OK'))+'"><span style="background:'+bg+'">'+mk+'</span>'+df[1]+'</button>';
+    var none=!mine.length;   /* nothing is checked in this section: plain chip, no tick it has not earned */
+    var bg=bad?'#D9952B':((warn||none)?'#8E96B5':'#2E9C78'), mk=bad?'!':((warn||none)?'&middot;':'&#10003;');
+    return '<button type="button" class="nbf-st" onclick="bkNbfGo(\''+df[2]+'\')" title="'+(bad?'Something here must be fixed before Confirm':(warn?'Reminder only':(none?'Go to this section':'OK')))+'"><span style="background:'+bg+'">'+mk+'</span>'+df[1]+'</button>';
   }).join('');
 }
 function bkNbfGo(label){
+  if(label==='Documents'){ var dd=document.getElementById('bkv2-attach-sec'); if(dd){ try{ dd.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ dd.scrollIntoView(); } } return; }
   var hs=document.querySelectorAll('#view-booking .bkv2-nbf .nbf-main .bkv2-nb-sec-h');
   for(var i=0;i<hs.length;i++){
     if(String(hs[i].textContent||'').trim().indexOf(label)===0){ try{ hs[i].scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ hs[i].scrollIntoView(); } return; }
@@ -74169,7 +74193,8 @@ function bkNbfCSS2(){
   if(document.getElementById('bknbf-css2')) return;
   var S='#view-booking .bkv2-nbf';
   var css=''
-  +S+' .nbf-r{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px;min-width:0}'
+  +S+' .nbf-steps{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}'
+  +S+' .bkv2-nb-topbar{row-gap:10px}'
   +S+' .nbf-st{height:26px;padding:0 9px 0 5px;border-radius:13px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;font-family:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}'
   +S+' .nbf-st:hover{background:rgba(255,255,255,.20)}'
   +S+' .nbf-st span{width:16px;height:16px;border-radius:8px;color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}'
@@ -74191,6 +74216,12 @@ function bkNbfCSS2(){
   +S+' .rv-total{background:transparent;border:none;border-top:1px solid #ECEBE6;border-radius:0;padding:12px 0 2px;margin-top:0;align-items:baseline}'
   +S+' .rv-total-lab{font-size:11px;letter-spacing:.10em;color:#3E4658}'
   +S+" .rv-total-amt{font-family:'DM Mono',ui-monospace,monospace;font-size:26px;font-weight:500;color:#0F1B3D;letter-spacing:0}"
-  +'@media(max-width:1500px){'+S+' .nbf-r{display:none}}';
+  +S+' .bkv2-nb-rt-preview:not([style]){background:transparent;border:none;padding:0;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
+  +S+' .bkv2-nb-rt-preview:not([style]) > div{padding:3px 9px;border-radius:6px;background:#EEF1F8;color:#23335F;font-size:12px;font-weight:600;margin:0}'
+  +S+' .bkv2-nb-rt-preview:not([style]) > div strong{color:#23335F;font-weight:600}'
+  +S+' .bkv2-nb-rt-preview:not([style]) > div.meta{background:#F1F0EC;color:#3E4658;font-weight:500;font-size:12px}'
+  +S+' .bkv2-nb-rt-preview:not([style]) > div.nbf-chip{background:#DDF1EA;color:#0B5A43}'
+  +S+' .bkv2-nb-rt-preview:not([style]) > div:empty{display:none}'
+  +'';
   var st=document.createElement('style'); st.id='bknbf-css2'; st.textContent=css; document.head.appendChild(st);
 }
