@@ -224,11 +224,14 @@
     return mine.length ? mine[mine.length - 1] : null;
   }
   function routeName(id){ var r = (typeof ROUTES !== 'undefined' ? ROUTES : []).find(function(x){ return x && x.id === id; }); return (r && r.name) || id; }
-  /* the approval queue shows the licence headroom per day · the server's days[] don't carry it, so it
-     is read from this browser's allotment when the queue draws (a getter · JSON keeps the number) */
+  /* "Real seats left" · the server records the registered seats still free when the approval was
+     asked (days[].licensed_free · §opsLicFree 2026-10-08), as legacy's licFree did. An approval asked
+     before the server kept it has null there: that one is read from this browser's allotment when
+     the queue draws (a getter · JSON keeps the number) */
   function overRow(d, bkId){
     var o = { routeId: d.route_id, date: d.service_date, name: routeName(d.route_id), need: +d.need || 0, overBy: +d.over_by || 0 };
     o.capFree = o.need - o.overBy;
+    if(d.licensed_free != null){ o.licFree = +d.licensed_free; return o; }
     Object.defineProperty(o, 'licFree', { enumerable: true, configurable: true, get: function(){
       try{
         var ga = (typeof getAllotment === 'function') ? (getAllotment.__orig || getAllotment) : null;

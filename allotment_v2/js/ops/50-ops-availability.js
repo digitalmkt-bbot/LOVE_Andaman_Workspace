@@ -97,6 +97,8 @@
     r.seatsAvailable = Math.max(0, +s.available_seats || 0);
     r.serverAvailable = +s.available_seats || 0;        // can be negative on an oversold day · kept for whoever wants to show it
     r.charterPax = +s.charter_pax || 0;
+    // §opsLicFree (2026-10-08) · the registered seats still free · the booking form's over-cap vs over-licence split
+    if(s.licensed_free != null) r.licenseAvailable = +s.licensed_free;
     r.fillPct = r.availableCapacity > 0 ? Math.round((r.seatsConsumed + r.lockedSeats) / r.availableCapacity * 100) : 0;
     r.isFull = r.seatsAvailable <= 0;
     if(r.state !== 'all-chartered' && r.hasAllotment) r.state = r.isFull ? 'full' : (r.fillPct >= 80 ? 'tight' : 'open');
