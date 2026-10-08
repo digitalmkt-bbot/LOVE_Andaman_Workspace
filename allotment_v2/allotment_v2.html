@@ -308,11 +308,17 @@
     <div style="height:1px;background:rgba(255,255,255,.08);margin:8px 4px"></div>
     <div class="nav-section" style="color:rgba(255,190,80,.5)">Fleet Management</div>
 
-    <!-- ─── At a glance ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-      At a glance
-    </div>
+    <!-- §flNavMerge (2026-10-08) · Fleet menu 13 → 10 · sub-headings removed.
+         Stock = Inventory / Memo + Supplies / Fuel · Analytics = Cost + Insights + Fuel (tabs inside the page).
+         Merged items stay in the DOM (class fl-merged, hidden) and sit BEFORE their group head on purpose:
+         code that asks for .nav-item.active must find the real page first. See flNavMergeSync(). -->
+    <style>
+      .sidebar .nav-item.fl-merged{display:none !important}
+      .fl-gtabs{display:inline-flex;gap:4px;padding:4px;background:#ECEBE6;border-radius:12px;align-self:center;flex:none}
+      .fl-gtabs button{border:0;background:transparent;font:600 12.5px 'DM Sans','IBM Plex Sans Thai',sans-serif;color:#3E4658;padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
+      .fl-gtabs button:hover{background:#fff}
+      .fl-gtabs button.on,.fl-gtabs button.on:hover{background:#16265C;color:#fff}
+    </style>
     <div class="nav-item" data-view="fl-dashboard" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       FL Dashboard
@@ -321,12 +327,6 @@
     <div class="nav-item" data-view="fl-deployment" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l3-9h12l3 9"/><path d="M2 20h20"/><path d="M12 8V4"/><path d="M9 4h6"/></svg>
       Fleet Deployment
-    </div>
-
-    <!-- ─── Today ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>
-      Today
     </div>
     <div class="nav-item" data-view="fl-boatstatus" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/></svg>
@@ -340,12 +340,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
       Job Assignment
     </div>
-
-    <!-- ─── Work ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg>
-      Work
-    </div>
     <div class="nav-item" data-view="fl-projects" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/><path d="M9 9h6M9 13h4"/></svg>
       Projects
@@ -354,38 +348,25 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
       Maintenance
     </div>
-    <div class="nav-item" data-view="fl-inventory" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-      Inventory / Memo
-    </div>
-    <div class="nav-item" data-view="fl-consumables" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+    <div class="nav-item fl-merged" data-view="fl-consumables" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14l-1 7H6L5 3z"/><path d="M6 10v9a2 2 0 002 2h8a2 2 0 002-2v-9"/><path d="M10 14h4"/></svg>
       เบิกของใช้ / น้ำมัน
     </div>
-
-    <!-- ─── Analytics ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
-      Analytics
+    <div class="nav-item" data-view="fl-inventory" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      Stock
     </div>
-    <div class="nav-item" data-view="fl-cost" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-      Cost Analytics
-    </div>
-    <div class="nav-item" data-view="fl-insights" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      Fleet Insights
-    </div>
-
-    <div class="nav-item" data-view="fl-fuel" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+    <div class="nav-item fl-merged" data-view="fl-fuel" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h12M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18M4 11h10M18 8l2 2v7a2 2 0 0 1-4 0v-1a2 2 0 0 0-2-2"/></svg>
       Fuel · น้ำมัน
     </div>
-
-    <!-- ─── Registry ─── -->
-    <div class="nav-section" style="color:rgba(255,190,80,.45);display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:9px">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-      Registry
+    <div class="nav-item fl-merged" data-view="fl-insights" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Fleet Insights
+    </div>
+    <div class="nav-item" data-view="fl-cost" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+      Analytics
     </div>
     <div class="nav-item" data-view="fl-asset" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>

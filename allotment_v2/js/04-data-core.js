@@ -1002,6 +1002,43 @@ function laSbInit(){
     document.head.appendChild(s); }
   try{ laSbInitAccordion(); }catch(e){}
   try{ poNavGroupInit(); }catch(e){}
+  try{ flNavMergeSync(); }catch(e){}   /* §flNavMerge */
+}
+/* §flNavMerge (2026-10-08) · owner: "Fleet has too many menu items" → 13 down to 10.
+   Two menu entries stand for several pages; the pages themselves are unchanged and get a tab strip in their header.
+   Per-page permissions still apply: the menu entry opens the first page the user may see, tabs list only allowed pages. */
+var FL_NAV_GROUPS=[
+  {k:'stock',label:'Stock',views:['fl-inventory','fl-consumables'],tabs:['Inventory / Memo','Supplies / Fuel']},
+  {k:'analytics',label:'Analytics',views:['fl-cost','fl-insights','fl-fuel'],tabs:['Cost','Insights','Fuel']}
+];
+function flNavOk(v){ try{ return (typeof window.laAllowed!=='function') || !!window.laAllowed(v); }catch(e){ return true; } }
+function flNavItem(v){ return document.querySelector('.sidebar .nav-item[data-view="'+v+'"]') || document.querySelector('.nav-item[data-view="'+v+'"]'); }
+function flNavGo(v){ var el=flNavItem(v); if(el) nav(el); }
+function flNavTabsPaint(g,view,ok){
+  var ve=document.getElementById('view-'+view); if(!ve) return;
+  var hd=ve.querySelector('.page-hd'); if(!hd) return;
+  var t=hd.querySelector('.fl-gtabs');
+  if(!t){ t=document.createElement('div'); t.className='fl-gtabs'; hd.appendChild(t); }
+  if(ok.length<2){ t.style.display='none'; return; }
+  t.style.display='';
+  t.innerHTML=ok.map(function(v){ return '<button type="button" class="'+(v===view?'on':'')+'" onclick="flNavGo(\''+v+'\')">'+g.tabs[g.views.indexOf(v)]+'</button>'; }).join('');
+}
+function flNavMergeSync(view){
+  FL_NAV_GROUPS.forEach(function(g){
+    var ok=g.views.filter(flNavOk), head=ok[0]||null;
+    g.views.forEach(function(v){
+      var it=flNavItem(v); if(!it) return;
+      it.classList.toggle('fl-merged', v!==head);
+      if(v!==head) return;
+      var node=null;
+      for(var i=it.childNodes.length-1;i>=0;i--){ var n=it.childNodes[i]; if(n.nodeType===3 && String(n.nodeValue||'').trim()){ node=n; break; } }
+      if(node && String(node.nodeValue).trim()!==g.label) node.nodeValue=' '+g.label+' ';
+      it.dataset.thLabel=g.label;   /* laLangApplyNav re-applies this label on language switch */
+    });
+    if(!view || g.views.indexOf(view)<0) return;
+    if(head && head!==view){ var h=flNavItem(head); if(h) h.classList.add('active'); }
+    flNavTabsPaint(g,view,ok);
+  });
 }
 // ══════════════════════════════════════
 function nav(el){
@@ -1017,6 +1054,7 @@ function nav(el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   el.classList.add('active');
+  try{ flNavMergeSync(view); setTimeout(function(){ try{ flNavMergeSync(view); }catch(_){} },0); }catch(e){}   /* §flNavMerge */
   const viewEl=document.getElementById('view-'+actualView);
   if(viewEl) viewEl.classList.add('active');
   // fleet views
