@@ -21,8 +21,14 @@
    change that would vanish on reload.
 
    Route calendar: getDayStatus() answers from the server's resolved
-   calendar for the dates it covers. Season/override edits in Config are
-   still local only · operation-backend has no route write endpoint yet.
+   calendar for the dates it covers. Season/override edits in Config go to
+   the server first (§opsCalendar, 2026-10-08):
+     POST   /v1/routes/{id}/seasons            saveNewSeason
+     DELETE /v1/routes/{id}/seasons/{sid}      delSeason
+     PUT    /v1/routes/{id}/days/{date}        toggleDayOverride (set)
+     DELETE /v1/routes/{id}/days/{date}        toggleDayOverride (clear)
+   409 bookings_on_closed_day → legacy's impact modal, and its "Close
+   anyway" resends with close_anyway.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -55,12 +61,18 @@
 
   function mapRoute(s, local){
     var o = { id: s.id, name: s.name };
+    put(o, 'kind', s.kind);                       // §opsCalendar (2026-10-08) · laRouteKind prefers it over the pier guess
     put(o, 'pier', s.pier); put(o, 'familyId', s.family_id); put(o, 'color', s.color);
     put(o, 'islands', s.islands); put(o, 'sort', s.sort);
     if(Array.isArray(s.times)) o.times = s.times.slice();
-    if(!local){ o.seasons = []; o.overrides = {}; if(!o.times) o.times = []; if(!o.color) o.color = '#1683C7'; }
+    // §opsCalendar · the calendar is edited on the server only · its seasons/overrides replace the local ones
+    if(Array.isArray(s.seasons)) o.seasons = s.seasons.map(seasonIn);
+    if(Array.isArray(s.overrides)) o.overrides = overridesIn(s.overrides);
+    if(!local){ if(!o.seasons) o.seasons = []; if(!o.overrides) o.overrides = {}; if(!o.times) o.times = []; if(!o.color) o.color = '#1683C7'; }
     return o;
   }
+  function seasonIn(x){ return { id: x.id, type: x.kind, from: x.from_date, to: x.to_date }; }
+  function overridesIn(list){ var o = {}; list.forEach(function(x){ if(x && x.service_date) o[x.service_date] = x.kind; }); return o; }
   function mapBoat(s, local){
     var o = { id: s.id, name: s.name, cap: s.capacity };
     put(o, 'type', s.type); put(o, 'pier', s.pier); put(o, 'crew', s.crew);
@@ -187,8 +199,141 @@
     });
   }
 
+  /* ── §opsCalendar (2026-10-08) · Settings → Programs writes the calendar on the server ──
+     The calendar lives on operation-backend only (sync:routes no longer copies it), and save('config')
+     goes nowhere, so a local-only edit vanished on reload. Server first: the local seasons/overrides
+     change only once the server took the write. The screens and dialogs stay legacy's. */
+  var armed = null;     // { key, resend? } · an impact modal is up · its "Close anyway" means close_anyway
+  function take(key){ if(armed && armed.key === key){ armed = null; return true; } return false; }
+  function RT(rid){ return '/v1/routes/' + encodeURIComponent(rid); }
+  function routeOf(rid){ return (typeof ROUTES !== 'undefined' ? ROUTES : []).find(function(x){ return x && x.id === rid; }); }
+  function redrawSettings(){ try{ if(typeof renderSettings === 'function') renderSettings(); }catch(_){} }
+  /* a write makes that route's resolved days stale · drop them, so getDayStatus answers from the
+     seasons/overrides just written (legacy's rules are the server's), then take the server's answer */
+  function refreshCalendar(rid){
+    delete window.OPS_ROUTE_DAYS[rid];
+    O.wrote('calendar');
+    return O.get('/v1/routes', { from: O.shift(O.today(), -CAL_BACK), to: O.shift(O.today(), CAL_AHEAD) }).then(function(j){
+      var s = ((j && j.routes) || []).find(function(x){ return x && x.id === rid; }); if(!s) return;
+      if(s.days) window.OPS_ROUTE_DAYS[rid] = s.days;
+      var r = routeOf(rid); if(r) Object.assign(r, mapRoute(s, r));
+      if(!O.busy()) redrawSettings();
+      O.wrote('calendar');
+    }).catch(function(e){ try{ console.warn('[ops] calendar ' + rid + ' · ' + e.message); }catch(_){} });
+  }
+  /* 409 bookings_on_closed_day · ask the way legacy asks: its impact modal when the change closes a
+     known range and this browser can list what is on it, else the server's own list in a confirm.
+     ask: { key, rid, from?, to?, day?, resend } */
+  function askCloseAnyway(e, ask){
+    var imp = (ask.from && typeof progCountBookingImpact === 'function') ? progCountBookingImpact(ask.rid, ask.from, ask.to) : null;
+    var r = routeOf(ask.rid), name = (r && r.name) || ask.rid;
+    if(imp && (imp.bookings.length || imp.trips.length)){
+      if(ask.day && typeof progShowImpactModalForDay === 'function'){ progShowImpactModalForDay(ask.rid, ask.from, name, imp); armed = { key: ask.key, resend: ask.resend }; return; }
+      if(!ask.day && typeof progShowImpactModal === 'function'){ progShowImpactModal(ask.rid, ask.from, ask.to, name, imp); armed = { key: ask.key, resend: ask.resend }; return; }
+    }
+    if(confirm(e.message + '\n\nClose anyway?')) ask.resend();
+  }
+  function calWrap(name, fn){
+    var orig = window[name];
+    if(typeof orig !== 'function' || orig.__ops) return;
+    var w = function(){
+      if(!O.enabled()) return orig.apply(this, arguments);
+      return fn.apply(this, [orig].concat([].slice.call(arguments)));
+    };
+    w.__ops = true; window[name] = w;
+  }
+  function wrapCalendarWrites(){
+    // a fresh click starts a fresh question · legacy's own guard then arms the modal it shows
+    ['saveNewSeasonGuarded', 'toggleDayOverrideGuarded'].forEach(function(n){
+      calWrap(n, function(orig){ armed = null; return orig.apply(this, [].slice.call(arguments, 1)); });
+    });
+    calWrap('progShowImpactModal', function(orig, rid){ armed = { key: 'season|' + rid }; return orig.apply(this, [].slice.call(arguments, 1)); });
+    calWrap('progShowImpactModalForDay', function(orig, rid, dateStr){ armed = { key: 'day|' + rid + '|' + dateStr }; return orig.apply(this, [].slice.call(arguments, 1)); });
+    // the season modal's "Close anyway" · re-runs the add, or the delete that the server refused
+    calWrap('progConfirmCloseAnyway', function(orig){
+      if(armed && armed.resend){
+        var a = armed; armed = null;
+        var m = document.getElementById('prog-impact-modal'); if(m) m.remove();
+        return a.resend();
+      }
+      return orig.apply(this, [].slice.call(arguments, 1));
+    });
+
+    calWrap('saveNewSeason', function(orig, rid){
+      var from = (document.getElementById('new-season-from') || {}).value, to = (document.getElementById('new-season-to') || {}).value;
+      if(!from || !to) return orig.call(this, rid);                // legacy's own "กรุณาระบุวันที่"
+      var r = routeOf(rid); if(!r) return;
+      var kind = addSeasonType === 'closed' ? 'closed' : 'open';
+      function send(force){
+        var body = { kind: kind, from_date: from, to_date: to }; if(force) body.close_anyway = true;
+        return O.queue(function(){ return O.post(RT(rid) + '/seasons', body); }).then(function(j){
+          var s = (j && j.season) || j;
+          if(!r.seasons) r.seasons = [];
+          r.seasons.push(seasonIn(s || { kind: kind, from_date: from, to_date: to }));
+          r.seasons.sort(function(a, b){ return String(a.from).localeCompare(String(b.from)); });
+          showSeasonForm = false;
+          redrawSettings(); refreshCalendar(rid);
+        }, function(e){
+          // an open season on a route with none closes every date outside it · no single range to list
+          if(e.code === 'bookings_on_closed_day' && !force) return askCloseAnyway(e, { key: 'season|' + rid, rid: rid,
+            from: kind === 'closed' ? from : null, to: to, resend: function(){ return send(true); } });
+          O.fail('Season not saved', e);
+        });
+      }
+      return send(take('season|' + rid));
+    });
+
+    calWrap('delSeason', function(orig, rid, sid){
+      armed = null;
+      var r = routeOf(rid); if(!r) return;
+      var s = (r.seasons || []).find(function(x){ return x.id === sid; }); if(!s) return;
+      var fmtD = function(d){ return d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'; };
+      var typeLabel = s.type === 'open' ? 'Open' : 'Closed';
+      if(!confirm('ลบ Season นี้?\n\n' + typeLabel + ' · ' + fmtD(s.from) + ' → ' + fmtD(s.to) + '\nโปรแกรม: ' + r.name + '\n\nการลบนี้ไม่สามารถยกเลิกได้')) return;
+      function send(force){
+        return O.queue(function(){ return O.del(RT(rid) + '/seasons/' + encodeURIComponent(sid) + (force ? '?close_anyway=true' : '')); }).then(function(){
+          r.seasons = (r.seasons || []).filter(function(x){ return x.id !== sid; });
+          redrawSettings(); refreshCalendar(rid);
+        }, function(e){
+          // deleting an open season closes its dates (unless another season covers them)
+          if(e.code === 'bookings_on_closed_day' && !force) return askCloseAnyway(e, { key: 'del|' + rid + '|' + sid, rid: rid,
+            from: s.type === 'open' ? s.from : null, to: s.to, resend: function(){ return send(true); } });
+          O.fail('Season not deleted', e);
+          if(e.status === 404) refreshCalendar(rid);               // gone on the server already · show what it has
+        });
+      }
+      return send(false);
+    });
+
+    // legacy's cycle: an override is cleared · else set to the opposite of the day's status (open if none)
+    calWrap('toggleDayOverride', function(orig, rid, dateStr){
+      var r = routeOf(rid); if(!r) return;
+      var has = !!(r.overrides && r.overrides[dateStr]);
+      var st = has ? null : getDayStatus(r, dateStr);
+      var kind = st ? (st.type === 'open' ? 'closed' : 'open') : 'open';
+      var key = 'day|' + rid + '|' + dateStr, path = RT(rid) + '/days/' + encodeURIComponent(dateStr);
+      function send(force){
+        return O.queue(function(){
+          if(has) return O.del(path + (force ? '?close_anyway=true' : ''));
+          var body = { kind: kind }; if(force) body.close_anyway = true;
+          return O.call('PUT', path, body);
+        }).then(function(){
+          if(!r.overrides) r.overrides = {};
+          if(has) delete r.overrides[dateStr]; else r.overrides[dateStr] = kind;
+          redrawSettings(); refreshCalendar(rid);
+        }, function(e){
+          if(e.code === 'bookings_on_closed_day' && !force) return askCloseAnyway(e, { key: key, day: true, rid: rid, from: dateStr, to: dateStr,
+            resend: function(){ return send(true); } });
+          O.fail('Day not changed', e);
+        });
+      }
+      return send(take(key));
+    });
+  }
+
   wrapDayStatus();
   lockAgentEdits();
   wrapAgentDetail();
+  wrapCalendarWrites();
   O.catalogue = { load: load, mapAgentDetail: mapAgentDetail };
 })();
