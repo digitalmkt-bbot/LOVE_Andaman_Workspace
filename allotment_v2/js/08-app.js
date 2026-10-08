@@ -48045,6 +48045,7 @@ function bkV2RenderNewBooking(){
             <div class="bkv2-nb-ddwrap">
               <input id="bkv2-agent-input" class="bkv2-nb-input" type="text" placeholder="Type code, name, or market..." value="${escapeHTML(currentAgentLabel)}" autocomplete="off" oninput="bkV2AgentDDFilter(this.value)" onfocus="bkV2AgentDDShow()" onkeydown="bkV2AgentDDKey(event)" style="text-overflow:ellipsis">
               <div id="bkv2-agent-dd" class="bkv2-nb-dd"></div>
+              <button type="button" id="bkv2-agent-clear" title="Clear and pick another agent" aria-label="Clear agent" onmousedown="event.preventDefault()" onclick="bkNbfAgentClear()">&times;</button>
             </div>
           </div>
           <div class="bkv2-nb-field">
@@ -74293,6 +74294,10 @@ function bkNbfCSS2(){
     +S+' .nbf-pk4{display:grid;grid-template-columns:max-content minmax(0,1fr) minmax(0,1.6fr) 150px;gap:0 12px;align-items:start}'
     +S+' .nbf-pk4 > .bkv2-nb-row{display:contents}'
   +'}'
+  +S+' #bkv2-agent-input{padding-right:40px}'
+  +S+' #bkv2-agent-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:13px;border:none;background:#ECEBE6;color:#3E4658;font-size:17px;line-height:1;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}'
+  +S+' #bkv2-agent-clear:hover{background:#16265C;color:#fff}'
+  +S+' #bkv2-agent-input:placeholder-shown ~ #bkv2-agent-clear{display:none}'
   +S+' #bkv2-agent-dd{padding:0;max-height:min(520px,62vh);overflow-y:auto;border:1px solid #E3E2DC}'
   +S+' #bkv2-agent-dd .bkv2-nb-dd-item.active,'+S+' #bkv2-agent-dd .bkv2-nb-dd-item:hover{background:#EEF1F8}'
   +S+' .bkv2-nb-rt-preview:not([style]){background:transparent;border:none;padding:0;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
@@ -74303,4 +74308,13 @@ function bkNbfCSS2(){
   +S+' .bkv2-nb-rt-preview:not([style]) > div:empty{display:none}'
   +'';
   var st=document.createElement('style'); st.id='bknbf-css2'; st.textContent=css; document.head.appendChild(st);
+}
+/* §agentClear · the x in the agent field: empties the text and opens the full list (Recent / Top / A to Z).
+   It only clears what is typed. The agent already chosen for the booking stays until another one is picked,
+   exactly as when the text is deleted by hand. */
+function bkNbfAgentClear(){
+  var inp=document.getElementById('bkv2-agent-input'); if(!inp) return;
+  inp.value='';
+  try{ inp.focus(); }catch(_){ }
+  if(typeof bkV2AgentDDFilter==='function') bkV2AgentDDFilter('');
 }
