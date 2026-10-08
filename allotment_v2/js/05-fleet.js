@@ -27334,6 +27334,9 @@ function flwCSS(){
   +V+' .flw-chip b{font-weight:800}'
   +V+' .flw-chip.red{background:#FBE0DD;color:#8E2A20;border-color:transparent}'
   +V+' .flw-chip.amb{background:#FBEBD3;color:#7A4300;border-color:transparent}'
+  +V+' .flw-tabs{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}'
+  +V+' .flw-tabs button{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font:600 12.5px inherit;font-family:inherit;cursor:pointer}'
+  +V+' .flw-tabs button.on{background:#fff;border-color:#fff;color:#0F1B3D;font-weight:700}'
   +V+' .flw-stages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:10px}'
   +V+' .flw-stg{height:54px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;font-family:inherit;min-width:0}'
   +V+' .flw-stg.on{background:#fff;color:#0F1B3D;border-color:#fff}'
@@ -27588,7 +27591,11 @@ function flRenderWork(){
     var sel=list.filter(function(x){ return x.key===FLW.item; })[0];
     right='<div class="flw-card">'+(sel?flwPanel(sel,E):'<div class="flw-empty">Pick a job to see where it stands.</div>')+'</div>';
   }
-  wrap.innerHTML=flwCSS()+top+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
+  /* §flWork3 · tabs to the three old pages · same list the sidebar group uses (FL_NAV_GROUPS) */
+  var tabsH=''; try{ var G=(typeof FL_NAV_GROUPS!=='undefined'?FL_NAV_GROUPS:[]).filter(function(g){ return g.k==='work'; })[0];
+    if(G){ var okv=G.views.filter(function(v){ return (typeof flNavOk==='function')?flNavOk(v):true; });
+      if(okv.length>1) tabsH='<div class="flw-tabs">'+okv.map(function(v){ return '<button type="button" class="'+(v==='fl-work'?'on':'')+'" data-v="'+v+'" onclick="flNavGo(this.dataset.v)">'+G.tabs[G.views.indexOf(v)]+'</button>'; }).join('')+'</div>'; } }catch(_){}
+  wrap.innerHTML=flwCSS()+top+tabsH+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
   flwFit();
   ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e && keep[id]) e.scrollTop=keep[id]; });
 }
