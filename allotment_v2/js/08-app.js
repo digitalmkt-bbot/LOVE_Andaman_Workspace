@@ -52367,7 +52367,7 @@ function bkV2RenderTab2(){
               if(!_rw) return _zp(_dash);
               return _zp(_zt(_rw, { raw:true }));
             })()}</td>
-            <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
+            <td class="t2-sbk">${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
               ${_movedBadge}
@@ -52704,7 +52704,9 @@ function bkV2RenderTab2(){
       + _c(40) + _c(46) + _c(42) + _c(46)                    /* AD CHD INF FOC */
       + _c(104)                                              /* Time · ต้องพอกับ "07:45-08:00" เต็ม · ชุดข้อมูลทดสอบไม่มีเวลารับ รอบแรกจึงตั้งแคบไป */
       + (vanMode ? _c(150) : '')                             /* กลุ่ม */
-      + _c(200) + _c(58) + _c(116) + _c(90)                  /* Pickup · Room · Zone · Send back */
+      /* §sbkFit (2026-10-08) · "ช่อง Send back อันนี้ด้วย" · 90px ไม่พอให้ป้าย "⚠ ยังไม่จัดรถกลับ" กับ "↩ กลับคันเดิม (เปิด Van)"
+         ป้ายโดนตัดครึ่ง · ยืมจาก Pickup (ข้อความยาวตัดบรรทัดได้อยู่แล้ว) กับ Room (เลขห้องสั้น) · ความกว้างรวมเท่าเดิม */
+      + _c(172) + _c(50) + _c(116) + _c(128)                 /* Pickup · Room · Zone · Send back */
       + (vanMode ? '' : _c(74))                              /* Add-on */
       + _c(128)                                              /* Special request */
       + (vanMode ? '' : _c(86) + _c(94) + _c(48))            /* Pay · Total · (VC) · Total เผื่อยอดหลักล้าน */
@@ -53702,6 +53704,10 @@ function bkV2RenderTab2(){
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:transparent;border-radius:0;padding:0;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    /* §sbkFit · ป้ายในช่อง Send back ตัดบรรทัดได้ แทนที่จะล้นแล้วโดนตัด · ชื่อโรงแรมยังตัดด้วย … (มี title) */
+    .t2-mtbl td.t2-sbk{white-space:normal}
+    .t2-mtbl td.t2-sbk .t2-sb{max-width:100%}
+    .t2-mtbl td.t2-sbk .t2-rb{white-space:normal !important;display:inline-block;max-width:100%;box-sizing:border-box;line-height:1.3;margin-top:2px}
     /* §pickW · Special request มีข้อความจริงแค่ 131 ใบจาก 3,205 (4%) แต่กินที่ 196px ทุกตาราง
        บีบเหลือ 150px แล้วยกที่ให้ชื่อจุดรับที่ต้องอ่านทุกแถว
        ชดเชยด้วยการเพิ่มจาก 2 เป็น 3 บรรทัด — แคบลงแต่ยังเห็นข้อความเท่าเดิม
