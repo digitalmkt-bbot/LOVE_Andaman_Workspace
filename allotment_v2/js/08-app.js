@@ -52516,8 +52516,12 @@ function bkV2RenderTab2(){
                โหมดจัดรถไม่มีช่องนั้น ปุ่มจึงไปอยู่ช่อง Boat แทน ซึ่งใบรออนุมัติยังไม่มีเรือ */
             + (vanMode?'':`<td><span class="pnhold${held?'':' no'}" title="${held?laT('ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป'):laT('ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้')}">${held?'&#128274; '+laT('กันที่นั่งไว้'):laT('ไม่กันที่นั่ง')}</span></td>`
                         + `<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}</td>`
-                        + `<td class="t2-c"><div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest')}">&#10003; ${laT('อนุมัติ')}</button></div></td>`)
-            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ')}">&#10003;</button></div>`:_pdash}</td>`
+                        /* §pnActFit (2026-10-08) · "ช่องเมเนจของ B2C โดนตัด" · ปุ่ม View + อนุมัติ ถูกยัดในช่อง VC ซึ่งกว้าง 48px
+                           (§btAlign ตรึงความกว้าง + td overflow:hidden) ปุ่มเลยล้นออกสองข้างและโดนตัด เห็นแค่ "✓ App"
+                           แยกกัน · ช่อง VC ใช้ปุ่ม VC แบบเดียวกับแถวคนจริง · ปุ่มอนุมัติไปอยู่ช่อง Boat (96px) ซึ่งใบรออนุมัติยังไม่มีเรือ */
+                        + `<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด')}" aria-label="Voucher">VC</button></td>`)
+            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ')}">&#10003;</button></div>`
+                : `<div class="pnacts"><button class="pnbtn ok pnapp" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest')}">&#10003; ${laT('อนุมัติ')}</button></div>`}</td>`
             + (rcMode?`<td class="t2-c">${_pdash}</td>`:'')
             + (wxClosed?`<td class="t2-c">${_pdash}</td>`:'')
             + `</tr>`;
