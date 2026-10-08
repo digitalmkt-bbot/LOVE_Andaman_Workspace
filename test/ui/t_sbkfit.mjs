@@ -9,6 +9,8 @@
 //   2 ป้ายครบตามสถานะ · ยังไม่จัด = "ยังไม่จัดรถกลับ" + "กลับคันเดิม"
 //   3 ชื่อโรงแรมยาว ตัดด้วย … ได้ แต่ต้องมี title ชื่อเต็ม
 //   4 ความกว้างรวมของตารางเท่าเดิม (ยืมจาก Pickup + Room) · ช่องในแถวเท่าหัวตาราง
+//   5 §zoneSlim · "Zone บีบให้แคบลงได้ · Own transport โชว์ถึงคำว่า Pier ก็ได้"
+//     ช่อง Zone ของใบมาเองขึ้นชื่อท่าเต็มคำ (ยาวก็ขึ้นสองบรรทัด) ไม่โดนตัด · ชื่อเต็ม "(self-arrive)" อยู่ใน title · Send back กว้างขึ้นเป็น 148
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -20,6 +22,10 @@ const prep = await page.evaluate(() => {
   const day = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
   const bk = SB_BOOKINGS.find(b => b.status === 'confirmed' && (b.trips || []).some(t => t.date === day) && !b.pickupSelf);
   bk.dropoffSame = false; bk.dropoffHotelName = 'ibis Styles Phuket City Airport Hotel'; bk.ops = Object.assign({}, bk.ops, { vanReturnId: null, returnSameVan: false });
+  /* ใบที่สองเป็นใบมาเองที่ท่า · พื้นที่ชื่อ "Tub Lamu Pier (self-arrive)" */
+  const pa = (typeof SB_PICKUP_AREAS !== 'undefined' ? SB_PICKUP_AREAS : []).find(a => /\(self-arrive\)/i.test(a.name || ''));
+  const bk2 = SB_BOOKINGS.find(b => b !== bk && b.status === 'confirmed' && (b.trips || []).some(t => t.date === day));
+  if (pa) { bk2.pickupAreaId = pa.id; } else { bk2.pickupAreaId = null; bk2.pickupArea = 'Tub Lamu Pier (self-arrive)'; }
   _bkV2.filterDate = day; _bkV2.filterRoute = null; bkV2SwitchTab('bytrip');
   return { day, id: bk.id, sep: bkV2RetInfo(bk, day) };
 });
@@ -35,10 +41,13 @@ for (const mode of ['normal', 'boat', 'van']) {
     const sb = td.querySelector('.t2-sb'), tr = td.closest('tr'), tbl = td.closest('table');
     const nh = [...tbl.querySelectorAll('thead th')].reduce((s, th) => s + (+th.colSpan || 1), 0), nr = [...tr.children].reduce((s, c) => s + (+c.colSpan || 1), 0);
     const w = [...tbl.querySelectorAll('col')].reduce((s, c) => s + (parseFloat(c.style.width) || 0), 0);
-    return { chips: [...td.querySelectorAll('.t2-rb')].map(b => b.textContent.trim()), clip, title: sb && sb.title, nh, nr, w, tdw: Math.round(q.width) };
+    const zt = [...document.querySelectorAll('.t2-zonetag')].find(z => /self-arrive/i.test(z.title || '') || /Pier/.test(z.textContent));
+    const zone = zt ? { txt: zt.textContent.trim(), title: zt.title, cut: zt.scrollWidth > zt.clientWidth + 1 || zt.scrollHeight > zt.clientHeight + 1 || zt.getBoundingClientRect().right > zt.closest('td').getBoundingClientRect().right + .5 } : null;
+    return { chips: [...td.querySelectorAll('.t2-rb')].map(b => b.textContent.trim()), clip, title: sb && sb.title, nh, nr, w, tdw: Math.round(q.width), zone };
   });
-  if (!R.err && !R.clip.length && R.chips.some(t => /ยังไม่จัดรถกลับ/.test(t)) && R.chips.some(t => /กลับคันเดิม/.test(t)) && /ibis Styles Phuket City Airport Hotel/.test(R.title || '') && R.nh === R.nr)
-    ok(`${mode} · ช่อง ${R.tdw}px · ${R.chips.join(' | ')} · ไม่โดนตัด · ตารางรวม ${R.w}px`);
+  if (!R.err && !R.clip.length && R.chips.some(t => /ยังไม่จัดรถกลับ/.test(t)) && R.chips.some(t => /กลับคันเดิม/.test(t)) && /ibis Styles Phuket City Airport Hotel/.test(R.title || '') && R.nh === R.nr
+      && R.tdw === 148 && R.zone && /Pier$/.test(R.zone.txt) && !/self/i.test(R.zone.txt) && !R.zone.cut)
+    ok(`${mode} · Send back ${R.tdw}px · ${R.chips.join(' | ')} · ไม่โดนตัด · Zone "${R.zone.txt}" (title "${R.zone.title}") · ตารางรวม ${R.w}px`);
   else fail(mode + ' ' + JSON.stringify(R));
 }
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));

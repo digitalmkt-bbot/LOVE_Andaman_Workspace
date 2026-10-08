@@ -52352,7 +52352,9 @@ function bkV2RenderTab2(){
                 const st=(o.raw?'background:#F4F3EF;color:#8A887F;font-style:italic':'')
                        + (o.lend?(o.raw?';opacity:.8':'opacity:.62;font-style:italic'):'');
                 const ti=[o.raw?_raw:'', o.lend?_lend:''].filter(Boolean).join(' · ');
-                return `<span class="t2-zonetag"${o.lend?' data-lend="1"':''}${st?` style="${st}"`:''} title="${ti||esc(t)}">${esc(t)}</span>`; };   /* §btClip */
+                /* §zoneSlim · "Tub Lamu Pier (self-arrive)" → "Tub Lamu Pier" บนจอ · ชื่อเต็มยังอยู่ใน title */
+                const _tv=String(t||'').replace(/\s*\((?:self[- ]?arrive|มาเอง)[^)]*\)\s*$/i,'') || t;
+                return `<span class="t2-zonetag"${o.lend?' data-lend="1"':''}${st?` style="${st}"`:''} title="${ti||esc(t)}">${esc(_tv)}</span>`; };   /* §btClip */
               const _dash='<span class="t2-dim">&mdash;</span>';
               if(a.split && a.pick && !a.pick.main){
                 const _sa=(a.pick.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.pick.areaId):null;
@@ -52714,7 +52716,9 @@ function bkV2RenderTab2(){
       + (vanMode ? _c(150) : '')                             /* กลุ่ม */
       /* §sbkFit (2026-10-08) · "ช่อง Send back อันนี้ด้วย" · 90px ไม่พอให้ป้าย "⚠ ยังไม่จัดรถกลับ" กับ "↩ กลับคันเดิม (เปิด Van)"
          ป้ายโดนตัดครึ่ง · ยืมจาก Pickup (ข้อความยาวตัดบรรทัดได้อยู่แล้ว) กับ Room (เลขห้องสั้น) · ความกว้างรวมเท่าเดิม */
-      + _c(172) + _c(50) + _c(116) + _c(128)                 /* Pickup · Room · Zone · Send back */
+      /* §zoneSlim (2026-10-08) · "Zone บีบให้แคบลงได้อีก · Own transport โชว์ถึงคำว่า Pier ก็ได้ · เพื่อมีที่ให้ Send back"
+         Zone 116 → 96 · ชื่อพื้นที่ยาวสุดที่ใช้จริงคือ "Tub Lamu Pier" (ตัด "(self-arrive)" ออกตอนโชว์) · Send back 128 → 148 */
+      + _c(172) + _c(50) + _c(96) + _c(148)                  /* Pickup · Room · Zone · Send back */
       + (vanMode ? '' : _c(74))                              /* Add-on */
       + _c(128)                                              /* Special request */
       + (vanMode ? '' : _c(86) + _c(94) + _c(48))            /* Pay · Total · (VC) · Total เผื่อยอดหลักล้าน */
@@ -53701,12 +53705,14 @@ function bkV2RenderTab2(){
          1. ตัดได้ แต่ต้องมีจุดไข่ปลา + title เสมอ · คนอ่านต้องรู้ว่ายังมีต่อ และตามต่อได้
          2. ตัวเลขเงินห้ามตัดเด็ดขาด · "ค้าง ฿3,200" ที่เหลือ "ค้าง ฿3" คือเลขคนละตัว
             ให้ตกบรรทัดแทน และมัดคำกับตัวเลขไว้ด้วยกันแยกบรรทัด                        */
-    .t2-zonetag{max-width:min(104px,100%);overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
+    .t2-zonetag{max-width:100%;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
     .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
+    /* §zoneSlim · คอลัมน์ Zone แคบลงเหลือ 96 · ชื่อท่ายาว ("Grand Andaman Pier", "Visit Panwa Pier") ขึ้นสองบรรทัดแทนการตัด … */
+    .t2-mtbl td .t2-zonetag{white-space:normal;line-height:1.25}
     .t2-zonepick{cursor:pointer;display:inline-block;max-width:100%;border-bottom:1px dashed transparent}
     .t2-zonepick:hover{border-bottom-color:#2F4E77}
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
