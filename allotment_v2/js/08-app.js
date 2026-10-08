@@ -48133,30 +48133,26 @@ function bkV2RenderNewBooking(){
         <div class="bkv2-nb-sec-h">Guests <em style="font-weight:500;color:#b4b2a9;font-style:normal;font-size:11px;text-transform:none;letter-spacing:0">&middot; lead + auto-sized to Adult pax</em><button type="button" onclick="bkV2GroupPasteOpen()" title="Paste a whole group (30-40 pax) at once" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:34px;background:#fff;color:#0F1B3D;border:1px solid #CFCFC8;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:600;padding:0 12px;cursor:pointer;text-transform:none;letter-spacing:0">&#128203; Paste group list</button></div>
         <!-- Unified guest table · Lead = #1 with badge · additional passengers #2+ -->
         <div style="background:#fff;border:1px solid #ECEBE6;border-radius:12px;overflow:visible">
-          <table style="width:100%;border-collapse:collapse;table-layout:fixed">
-            <colgroup>
-              <col style="width:62px">
-              <col>
-              <col style="width:30%">
-              <col style="width:68px">
-            </colgroup>
-            <thead><tr style="background:#F7F7F5">
-              <th style="padding:8px 6px 8px 14px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">#</th>
-              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Full name <span style="font-weight:400;letter-spacing:0;text-transform:none">&middot; lead: phone and email</span></th>
+          <table class="nbf-gt" style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#F7F7F5;border-radius:12px 12px 0 0">
+              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding-left:14px">No.</th>
+              <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Full name</th>
               <th style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Nationality</th>
-              <th style="padding:6px;text-align:center;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em"></th>
+              <th class="nbf-gp" style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Phone</th>
+              <th class="nbf-ge" style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Email</th>
+              <th class="nbf-gg" style="padding:8px 6px;text-align:left;font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.08em;text-transform:uppercase"></th>
             </tr></thead>
             <tbody>
               <!-- Lead pax row (#1) -->
-              <tr style="background:var(--bk-navy-50)">
-                <td style="padding:8px 6px 8px 14px;vertical-align:middle">
+              <tr class="nbf-lead" style="background:var(--bk-navy-50)">
+                <td class="nbf-gn" style="padding:8px 6px 8px 14px;vertical-align:middle">
                   <div style="font-family:'DM Mono',monospace;font-size:12.5px;color:var(--bk-navy);font-weight:500;line-height:1.1">1</div>
                   <div style="background:var(--bk-navy);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">LEAD</div>
                   ${(d.leadType&&d.leadType!=='AD')?`<div style="background:${d.leadType==='FOC'?'#FCE9B5':'#E6F1FB'};color:${d.leadType==='FOC'?'#7A5A12':'#185FA5'};font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">${d.leadType}</div>`:''}
                   ${((d.trips||[]).some(t=>bkV2PaxTot(t.pax,'foc')>0))?`<div onclick="event.stopPropagation();bkV2ToggleLeadFoc()" title="${d.leadFoc?'Lead เป็น FOC · คลิกเพื่อยกเลิก':'ตั้ง Lead เป็น FOC (ฟรี · ไม่ต้องมี Adult)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${d.leadFoc?'#D9A400':'#cfcabd'}">${d.leadFoc?'★':'☆'} <span style="font-size:9px;color:#8A8F9C;vertical-align:1px;letter-spacing:.04em">FOC</span></div>`:''}
                 </td>
                 <td style="padding:5px 6px">
-                  <div style="display:flex;flex-wrap:wrap;gap:8px"><input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:8px 10px;font-size:13.5px;flex:2 1 200px;min-width:0;box-sizing:border-box"><input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:7px 10px;font-size:12.5px;font-family:'DM Mono',monospace;box-sizing:border-box;flex:1 1 150px;min-width:0"><input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:7px 10px;font-size:12.5px;box-sizing:border-box;flex:1.3 1 180px;min-width:0"></div>
+                  <input class="bkv2-nb-input" type="text" placeholder="Lead pax name *" value="${escapeHTML(d.leadPax)}" oninput="bkV2SetBookingField('leadPax', this.value)" onblur="bkV2Render()" style="padding:8px 10px;font-size:13.5px;width:100%;box-sizing:border-box">
                 </td>
                 <td style="padding:5px 6px">
                   <div class="bkv2-nb-ddwrap">
@@ -48164,12 +48160,15 @@ function bkV2RenderNewBooking(){
                     <div id="bkv2-nat-dd-lead" class="bkv2-nb-dd"></div>
                   </div>
                 </td>
-                <td style="padding:5px 6px;text-align:center">${d.leadNationality && bkV2GuessNationality(d.leadPax||'') === d.leadNationality ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
+                <td class="nbf-gp" style="padding:5px 6px"><input class="bkv2-nb-input" type="text" placeholder="📞 Phone · +66 ..." value="${escapeHTML(d.leadPhone)}" oninput="bkV2SetBookingField('leadPhone', this.value)" style="padding:7px 10px;font-size:12.5px;font-family:'DM Mono',monospace;box-sizing:border-box;width:100%"></td>
+                <td class="nbf-ge" style="padding:5px 6px"><input class="bkv2-nb-input" type="email" placeholder="✉️ Email · lead@example.com" value="${escapeHTML(d.leadEmail)}" oninput="bkV2SetBookingField('leadEmail', this.value)" style="padding:7px 10px;font-size:12.5px;box-sizing:border-box;width:100%"></td>
+                <td class="nbf-gg" style="padding:5px 6px;text-align:center">${d.leadNationality && bkV2GuessNationality(d.leadPax||'') === d.leadNationality ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
               </tr>
               <!-- lead phone + email now sit beside the lead name (nbf7) -->
               ${bkV2RenderPassengerRows()}
             </tbody>
           </table>
+          <div style="padding:9px 14px 11px;font-size:12px;color:#5B6170;border-top:1px solid #ECEBE6">Only the lead needs a phone and email. A nationality marked &ldquo;guessed&rdquo; was filled from the name &middot; change it if it is wrong.</div>
         </div>
       </div>
 
@@ -48284,6 +48283,7 @@ function bkV2RenderPickupSection(){
   }
 
   return `
+    <div class="nbf-pk4">
     <!-- Row 1: ZONE pills (left, narrow) + PICKUP AREA input (right, filtered) -->
     <div class="bkv2-nb-row" style="grid-template-columns:auto minmax(0,1fr)">
       <div class="bkv2-nb-field">
@@ -48323,7 +48323,7 @@ function bkV2RenderPickupSection(){
           <input class="bkv2-nb-input" type="text" placeholder="A-205" value="${escapeHTML(d.roomNumber||'')}" oninput="bkV2SetBookingField('roomNumber', this.value)">
         </div>
       </div>
-      ${pickupTimeRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px"><div style="font-size:11.5px;font-weight:600;color:#3E4658">Pickup time <span style="font-weight:400;color:#5B6170">&middot; per trip &middot; type over it if another time was agreed</span></div>
+      ${pickupTimeRows ? `<div style="grid-column:1/-1;margin-top:10px;display:flex;flex-direction:column;gap:4px"><div style="font-size:11.5px;font-weight:600;color:#3E4658">Pickup time <span style="font-weight:400;color:#5B6170">&middot; per trip &middot; type over it if another time was agreed</span></div>
             ${d.trips.filter(t => t.routeId).map(t => {
               const autoTime = bkV2GetPickupTime(t.routeId, d.pickupAreaId, t.date);
               const displayTime = t.pickupTime || autoTime || '';
@@ -48332,7 +48332,7 @@ function bkV2RenderPickupSection(){
               if(!displayTime && !t.date) return '';
               return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F7F7F5;border:1px solid #ECEBE6;border-radius:9px;font-size:12.5px">
                 <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);min-width:80px">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : '—'}</span>
-                <span style="flex:1;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(routeName)}</span>
+                <span style="order:-1;flex:1;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(routeName)}</span>
                 <input type="text" value="${escapeHTML(displayTime)}" placeholder="—" onchange="bkV2SetTripPickupTime(${d.trips.indexOf(t)}, this.value)" style="width:136px;height:30px;box-sizing:border-box;text-align:center;font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#0F1B3D;background:#fff;border:1.5px solid #C9CCD6;border-radius:8px;padding:0 6px">
                 ${displayTime ? `<span style="background:${isEdited?'#FBEBD3':'#DDF1EA'};color:${isEdited?'#7A4300':'#0B5A43'};font-size:9px;padding:1px 7px;border-radius:5px;font-weight:700;letter-spacing:.06em">${isEdited?'EDITED':'AUTO'}</span>` : ''}
                 ${isEdited ? `<button type="button" onclick="bkV2ResetTripPickupTime(${d.trips.indexOf(t)})" style="border:none;background:none;color:#0F6CA6;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;white-space:nowrap">Reset to auto</button>` : ''}
@@ -48340,15 +48340,16 @@ function bkV2RenderPickupSection(){
             }).join('')}
           </div>` : ''}
     ` : ''}
+    </div>
     <!-- Pickup time table moved inline under Hotel/Pickup Location · per request -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px">
-    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${d.pickupSelf?'#E8F3FB':'#fff'};border:1.5px solid ${d.pickupSelf?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
-      <input type="checkbox" ${d.pickupSelf?'checked':''} onchange="bkV2TogglePickupSelf()" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
-      <span style="font-size:13px;color:${d.pickupSelf?'#0B4F7A':'var(--ink)'};font-weight:600">&#128694; ขารับ: ลูกค้ามาเองที่ท่าเรือ (self-arrive · เก็บเรทเต็ม)</span>
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${d.pickupSelf?'#E8F3FB':'#fff'};border:1.5px solid ${d.pickupSelf?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${d.pickupSelf?'checked':''} onchange="bkV2TogglePickupSelf()" style="accent-color:#16265C;width:16px;height:16px;margin:2px 0 0;flex:none">
+      <span style="font-size:13px;color:${d.pickupSelf?'#0B4F7A':'var(--ink)'};font-weight:600">&#128694; ขารับ: ลูกค้ามาเองที่ท่าเรือ (self-arrive · เก็บเรทเต็ม)<span style="display:block;font-size:12px;font-weight:400;color:#5B6170;margin-top:1px">No van on the way out &middot; the full rate still applies</span></span>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${d.dropoffSame?'#E8F3FB':'#fff'};border:1.5px solid ${d.dropoffSame?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
-      <input type="checkbox" ${d.dropoffSame?'checked':''} onchange="bkV2ToggleDropoffSame()" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
-      <span style="font-size:13px;color:${d.dropoffSame?'#0B4F7A':'var(--ink)'};font-weight:600">Drop-off same as pickup</span>
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${d.dropoffSame?'#E8F3FB':'#fff'};border:1.5px solid ${d.dropoffSame?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${d.dropoffSame?'checked':''} onchange="bkV2ToggleDropoffSame()" style="accent-color:#16265C;width:16px;height:16px;margin:2px 0 0;flex:none">
+      <span style="font-size:13px;color:${d.dropoffSame?'#0B4F7A':'var(--ink)'};font-weight:600">Drop-off same as pickup<span style="display:block;font-size:12px;font-weight:400;color:#5B6170;margin-top:1px">Untick to choose another area and location for the way back</span></span>
     </label>
     ${(d.pickupSelf && (d.hotelName||'').trim())?`<div style="grid-column:1/-1;padding:8px 12px;background:#FBE3E0;border-radius:10px;font-size:12.5px;color:#8E2019;line-height:1.45">&#9888; ติ๊ก self-arrive (ลูกค้ามาเอง) แต่กรอกโรงแรม "<b>${escapeHTML(d.hotelName)}</b>" ไว้ — booking นี้จะ<b>ไม่ขึ้นในใบงานรถขาไป</b> · ถ้าลูกค้าให้ไปรับที่โรงแรม อย่าติ๊กช่องนี้</div>`:''}
     </div>
@@ -49271,7 +49272,7 @@ function bkV2RenderPassengerRows(){
     const ts = typeStyle(p.type);
     return `
       <tr style="border-top:1px solid #ECEBE6">
-        <td style="padding:7px 6px 7px 14px;vertical-align:middle">
+        <td class="nbf-gn" style="padding:7px 6px 7px 14px;vertical-align:middle">
           <div style="font-family:'DM Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:500;line-height:1.1">${seqNum}</div>
           <div style="background:${ts.bg};color:${ts.color};font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.06em;display:inline-block;margin-top:3px">${p.type||'AD'}</div>
           ${_totFoc>0?`<div onclick="event.stopPropagation();bkV2TogglePassengerFoc(${i})" title="${p.type==='FOC'?'FOC · คลิกเพื่อเอาออก':'เลือกเป็น FOC (ฟรี)'}" style="cursor:pointer;font-size:13px;line-height:1;margin-top:3px;color:${p.type==='FOC'?'#D9A400':'#cfcabd'}">${p.type==='FOC'?'★':'☆'}</div>`:''}
@@ -49283,7 +49284,9 @@ function bkV2RenderPassengerRows(){
             <div id="bkv2-nat-dd-p${i}" class="bkv2-nb-dd"></div>
           </div>
         </td>
-        <td style="padding:5px 6px;text-align:center">${isGuess ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
+        <td class="nbf-gp nbf-na" style="padding:5px 6px"><div class="nbf-nn">not needed</div></td>
+        <td class="nbf-ge nbf-na" style="padding:5px 6px"><div class="nbf-nn">not needed</div></td>
+        <td class="nbf-gg" style="padding:5px 6px;text-align:center">${isGuess ? '<span style="background:#F1F0EC;color:#5B6170;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.04em" title="Filled from the name · change it if wrong">guessed</span>' : ''}</td>
       </tr>
     `;
   }).join('');
@@ -74216,6 +74219,24 @@ function bkNbfCSS2(){
   +S+' .rv-total{background:transparent;border:none;border-top:1px solid #ECEBE6;border-radius:0;padding:12px 0 2px;margin-top:0;align-items:baseline}'
   +S+' .rv-total-lab{font-size:11px;letter-spacing:.10em;color:#3E4658}'
   +S+" .rv-total-amt{font-family:'DM Mono',ui-monospace,monospace;font-size:26px;font-weight:500;color:#0F1B3D;letter-spacing:0}"
+  +S+' .nbf-gt,'+S+' .nbf-gt thead,'+S+' .nbf-gt tbody{display:block}'
+  +S+' .nbf-gt tr{display:grid;grid-template-columns:92px minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) 74px;align-items:center}'
+  +S+' .nbf-gt th,'+S+' .nbf-gt td{display:block;min-width:0;border-bottom:none}'
+  +S+' .nbf-gt td[colspan]{grid-column:1/-1}'
+  +S+' .nbf-gt .nbf-gn{display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
+  +S+' .nbf-gt .nbf-gn > div{margin-top:0 !important}'
+  +S+' .nbf-nn{height:38px;box-sizing:border-box;display:flex;align-items:center;padding:0 10px;border:1.5px solid #ECEBE6;border-radius:10px;font-size:12.5px;color:#A9ADB8;white-space:nowrap;overflow:hidden}'
+  +'@media(max-width:1500px){'
+    +S+' .nbf-gt tr{grid-template-columns:86px minmax(0,1fr) minmax(0,.8fr) 70px}'
+    +S+' .nbf-gt th.nbf-gp,'+S+' .nbf-gt th.nbf-ge,'+S+' .nbf-gt td.nbf-na{display:none}'
+    +S+' .nbf-gt tr.nbf-lead .nbf-gp{grid-column:2;grid-row:2;padding-top:0 !important;padding-bottom:9px !important}'
+    +S+' .nbf-gt tr.nbf-lead .nbf-ge{grid-column:3 / -1;grid-row:2;padding-top:0 !important;padding-bottom:9px !important}'
+    +S+' .nbf-gt .nbf-gg{grid-column:4;grid-row:1}'
+  +'}'
+  +'@media(min-width:1501px){'
+    +S+' .nbf-pk4{display:grid;grid-template-columns:max-content minmax(0,1fr) minmax(0,1.6fr) 150px;gap:0 12px;align-items:start}'
+    +S+' .nbf-pk4 > .bkv2-nb-row{display:contents}'
+  +'}'
   +S+' .bkv2-nb-rt-preview:not([style]){background:transparent;border:none;padding:0;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}'
   +S+' .bkv2-nb-rt-preview:not([style]) > div{padding:3px 9px;border-radius:6px;background:#EEF1F8;color:#23335F;font-size:12px;font-weight:600;margin:0}'
   +S+' .bkv2-nb-rt-preview:not([style]) > div strong{color:#23335F;font-weight:600}'
