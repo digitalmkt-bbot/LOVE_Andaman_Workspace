@@ -48018,20 +48018,24 @@ function bkV2RenderNewBooking(){
     || (typeof laIsInternalBk==='function' && laIsInternalBk(d) && d.priceMode==='manual')
     || (typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)));
 
+  if(typeof bkNbfCSS==='function') bkNbfCSS();
   return `
-    <div class="bkv2-nb">
+    <div class="bkv2-nb bkv2-nbf">
       <div class="bkv2-nb-topbar">
+        <div class="nbf-l">
         <button class="bkv2-nb-back" onclick="bkV2CloseNewBooking()">&larr; ${_bkV2.editingId?'Back to detail':'Back to list'}</button>
-        <div class="bkv2-nb-h1">${_bkV2.editingId?'Edit Booking':'New Booking'}</div>
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--ink-soft);margin-left:6px">${_bkV2.editingId?d.id:d.code}</div>
         <div class="bkv2-nb-draft" style="${_bkV2.editingId?'background:#dbeafe;color:#1e40af':''}"><span class="dot" style="${_bkV2.editingId?'background:#1e40af':''}"></span>${_bkV2.editingId?'Editing':'Draft'}</div>
+        </div>
+      <div class="bkv2-nb-h1"><i>LOVE ANDAMAN</i>${_bkV2.editingId?'Edit Booking':'New Booking'}</div>
+        <div></div>
       </div>
 
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;background:transparent;min-height:calc(100vh - 80px)">
-       <div>
+       <div class="nbf-main">
 
       <div class="bkv2-nb-sec">
-        <div class="bkv2-nb-sec-h">&#9679; Agent &amp; Voucher</div>
+        <div class="bkv2-nb-sec-h">Agent &amp; Voucher</div>
         <div class="bkv2-nb-row" style="grid-template-columns:minmax(0,2.2fr) minmax(0,1fr)">
           <div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Agent * <em style="font-weight:500;color:#b4b2a9;font-style:normal">· type to search</em></label>
@@ -48106,24 +48110,24 @@ function bkV2RenderNewBooking(){
         <div class="bkv2-nb-sec">
           <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px">
             <div>
-              <div class="bkv2-nb-sec-h">&#9679; Trips &amp; Pax</div>
+              <div class="bkv2-nb-sec-h">Trips &amp; Pax</div>
               ${bkV2RenderTripsSection()}
             </div>
             <div>
-              <div class="bkv2-nb-sec-h">&#9679; Add-ons</div>
+              <div class="bkv2-nb-sec-h">Add-ons</div>
               ${bkV2RenderAddOnsSection()}
             </div>
           </div>
         </div>
       ` : `
         <div class="bkv2-nb-sec">
-          <div class="bkv2-nb-sec-h">&#9679; Trips &amp; Pax</div>
+          <div class="bkv2-nb-sec-h">Trips &amp; Pax</div>
           ${bkV2RenderTripsSection()}
         </div>
       `}
 
       <div class="bkv2-nb-sec">
-        <div class="bkv2-nb-sec-h">&#9679; Guests <em style="font-weight:500;color:#b4b2a9;font-style:normal;font-size:11px;text-transform:none;letter-spacing:0">&middot; lead + auto-sized to Adult pax</em><button type="button" onclick="bkV2GroupPasteOpen()" title="Paste a whole group (30-40 pax) at once" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#E6F1FB;color:#185FA5;border:1px solid #C5D8EA;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;padding:5px 11px;cursor:pointer;text-transform:none;letter-spacing:0">&#128203; Paste group list</button></div>
+        <div class="bkv2-nb-sec-h">Guests <em style="font-weight:500;color:#b4b2a9;font-style:normal;font-size:11px;text-transform:none;letter-spacing:0">&middot; lead + auto-sized to Adult pax</em><button type="button" onclick="bkV2GroupPasteOpen()" title="Paste a whole group (30-40 pax) at once" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#E6F1FB;color:#185FA5;border:1px solid #C5D8EA;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;padding:5px 11px;cursor:pointer;text-transform:none;letter-spacing:0">&#128203; Paste group list</button></div>
         <!-- Unified guest table · Lead = #1 with badge · additional passengers #2+ -->
         <div style="background:#fafafa;border:1px solid var(--border);border-radius:var(--r-sm);overflow:visible">
           <table style="width:100%;border-collapse:collapse;table-layout:fixed">
@@ -48176,13 +48180,13 @@ function bkV2RenderNewBooking(){
       </div>
 
       <div class="bkv2-nb-sec">
-        <div class="bkv2-nb-sec-h">&#9679; Pickup &amp; Drop-off</div>
+        <div class="bkv2-nb-sec-h">Pickup &amp; Drop-off</div>
         ${bkV2RenderPickupSection()}
       </div>
 
       <!-- Combined: Dietary + Guides in ONE card -->
       <div class="bkv2-nb-sec">
-        <div class="bkv2-nb-sec-h">&#9679; Dietary, Luggage &amp; Guides</div>
+        <div class="bkv2-nb-sec-h">Dietary, Luggage &amp; Guides</div>
         ${bkV2RenderDietaryLuggageSection()}
         <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
         ${(() => {
@@ -48212,7 +48216,7 @@ function bkV2RenderNewBooking(){
        <div class="bkv2-review-cell">
          <div class="bkv2-review-sticky">
            <div class="bkv2-review-inner">
-             <div class="bkv2-nb-sec-h" style="margin-bottom:10px;color:var(--bk-navy)">&#9679; Booking Review</div>
+             <div class="bkv2-nb-sec-h" style="margin-bottom:10px;color:var(--bk-navy)">Booking Review</div>
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bkV2RenderAttachSection()}
@@ -49437,7 +49441,7 @@ function bkV2RenderQuoteSection(){
 
   return `
     <div class="bkv2-nb-sec" style="background:var(--bk-navy-50)">
-      <div class="bkv2-nb-sec-h">&#9679; Quote Summary</div>
+      <div class="bkv2-nb-sec-h">Quote Summary</div>
       <div style="display:grid;grid-template-columns:1fr 130px;gap:6px 14px;font-size:12px;line-height:1.6">
         <div style="color:var(--ink-soft)">Seat rates (${d.trips.filter(t=>t.routeId).length} trip${d.trips.filter(t=>t.routeId).length===1?'':'s'})</div>
         <div style="text-align:right;font-family:Manrope,sans-serif;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums">฿${q.totalSeat.toLocaleString()}</div>
@@ -49471,7 +49475,7 @@ function bkV2RenderPaymentSection(){
 
   return `
     <div class="bkv2-nb-sec">
-      <div class="bkv2-nb-sec-h">&#9679; Payment &amp; Cash on Tour <span style="background:var(--sand-mid);color:var(--ink-soft);font-size:9px;padding:1px 7px;border-radius:3px;letter-spacing:.06em;margin-left:6px">FROM CONTRACT</span></div>
+      <div class="bkv2-nb-sec-h">Payment &amp; Cash on Tour <span style="background:var(--sand-mid);color:var(--ink-soft);font-size:9px;padding:1px 7px;border-radius:3px;letter-spacing:.06em;margin-left:6px">FROM CONTRACT</span></div>
       <div style="background:var(--bk-navy-50);border:1px solid var(--bk-navy-light);border-radius:var(--r-sm);padding:11px 14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:3px">
           <span>${method}${netDays?` &middot; Net ${netDays}`:''}</span>
@@ -74010,3 +74014,55 @@ try{ window.laRebuildDerived('boot'); }catch(_){}
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", _famBoot);
   else _famBoot();
 })();
+
+/* §nbfSkin (2026-10-08) · New Booking form · navy shell + white cards, same look as Boat Operation / Fleet Work
+   CSS only + the top bar wrapper. No field, handler or save rule is changed.
+   Revert = remove this block, the "bkv2-nbf" / "nbf-main" classes and the two nbf-* wrappers in bkV2RenderNewBooking. */
+function bkNbfCSS(){
+  if(document.getElementById('bknbf-css')) return;
+  var S='#view-booking .bkv2-nbf';
+  var css=''
+  +S+'{--bk-navy:#16265C;--bk-navy-50:#EEF1F8;--ink:#0F1B3D;--ink-soft:#5B6170;--border:#D5D7DE;--r-sm:10px;'
+  +'background:#16265C !important;border-radius:16px;max-width:none;padding:14px 18px 22px;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
+  /* top bar */
+  +S+' .bkv2-nb-topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;min-height:46px;padding:0;margin-bottom:12px;background:transparent !important;border:none !important;box-shadow:none !important;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0}'
+  +S+' .nbf-l{display:flex;align-items:center;gap:10px;min-width:0}'
+  +S+' .nbf-l > div:not(.bkv2-nb-draft){color:#E8EBF7 !important;margin-left:0 !important;font-size:13px !important}'
+  +S+' .bkv2-nb-back{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap}'
+  +S+' .bkv2-nb-back:hover{background:rgba(255,255,255,.20);color:#fff}'
+  +S+' .nbf-l .bkv2-nb-draft{height:24px;padding:0 10px;border-radius:12px;font-size:11.5px !important;font-weight:700;letter-spacing:0;text-transform:none;display:inline-flex;align-items:center;gap:6px}'
+  +S+' .bkv2-nb-h1{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.30em;padding-left:.30em;color:#fff;text-transform:uppercase;white-space:nowrap}'
+  +S+' .bkv2-nb-h1 i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD}'
+  /* cards */
+  +S+' .bkv2-nb-sec,'+S+' .bkv2-nb-card{background:#fff !important;border:none !important;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34) !important;padding:14px 18px 16px}'
+  +S+' .nbf-main{counter-reset:nbf}'
+  +S+' .bkv2-nb-sec-h{font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658;gap:10px;margin-bottom:12px}'
+  +S+' .nbf-main .bkv2-nb-sec-h::before{counter-increment:nbf;content:counter(nbf);flex:none;width:22px;height:22px;border-radius:11px;background:#16265C;color:#fff;font-family:\'DM Mono\',ui-monospace,monospace;font-size:12px;font-weight:500;letter-spacing:0;display:inline-flex;align-items:center;justify-content:center}'
+  /* fields */
+  +S+' .bkv2-nb-label{font-size:11.5px;font-weight:600;color:#3E4658;letter-spacing:0;text-transform:none}'
+  +S+' .bkv2-nb-input{border:1.5px solid #C9CCD6;border-radius:10px;font-size:13.5px;color:#0F1B3D}'
+  +S+' .bkv2-nb-input:focus{border-color:#16265C;box-shadow:0 0 0 3px rgba(22,38,92,.12)}'
+  +S+' .bkv2-nb-input.read{background:#F7F7F5;border-color:#ECEBE6;color:#5B6170}'
+  +S+' .bkv2-nb-dd{border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.22)}'
+  /* trips + add-ons */
+  +S+' .bkv2-nb-trip{background:#fff;border:1px solid #E3E2DC;border-radius:12px;padding:14px}'
+  +S+' .bkv2-nb-addon{border:1.5px solid #D5D7DE;border-radius:10px;padding:10px 12px}'
+  +S+' .bkv2-nb-addon.on{border-color:#16265C;background:#EEF1F8}'
+  +S+' .bkv2-nb-btn{border-radius:10px;border:1px solid #CFCFC8;font-weight:600}'
+  +S+' .bkv2-nb-btn.pri{background:#16265C;border-color:#16265C;color:#fff}'
+  /* review panel */
+  +S+' .bkv2-review-sticky{background:#fff !important;border:none !important;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34) !important;-webkit-backdrop-filter:none;backdrop-filter:none}'
+  +S+' .bkv2-review-inner{padding:14px 18px 16px}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec-h{color:#3E4658 !important}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec-h::before{display:none}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec{background:transparent !important;box-shadow:none !important;border-radius:0;padding:0;margin:0 0 12px}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec-hd{font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658;margin-bottom:8px}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec-ttl{font-size:11px;font-weight:700}'
+  +S+' .bkv2-review-inner .bkv2-nb-sec-dot{display:none}'
+  +S+' .bkv2-review-inner .bkv2-nb-btn{min-height:40px;font-size:13px}'
+  +S+' .bkv2-review-inner .bkv2-nb-btn.pri{min-height:48px;font-size:15px;font-weight:700;border-radius:12px}'
+  +S+' .bkv2-review-inner .bkv2-nb-btn:disabled{opacity:1;background:#B9BEC9;border-color:#B9BEC9;color:#fff}'
+  +S+' .bkv2-review-inner .bkv2-nb-btn.ghost:disabled,'+S+' .bkv2-review-inner .bkv2-nb-btn:not(.pri):not([title]):disabled{background:#fff;border-color:#E3E2DC;color:#A9ADB8}'
+  +'@media(max-width:900px){'+S+'{padding:10px;border-radius:12px}'+S+' .bkv2-nb-topbar{grid-template-columns:1fr}'+S+' .bkv2-nb-h1{display:none}}';
+  var st=document.createElement('style'); st.id='bknbf-css'; st.textContent=css; document.head.appendChild(st);
+}
