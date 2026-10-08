@@ -27268,7 +27268,7 @@ function flwItems(){
     else if(done) bits.push('work closed '+flwD(m.endDate)+' · invoice not recorded');
     if(subs.length) bits.push(subs.filter(function(s){ return s&&s.d; }).length+' of '+subs.length+' sub-steps');
     if(inc) bits.push('from '+(inc.no||'INC')+' '+(inc.title||''));
-    if(!bits.length) bits.push('opened '+flwD(m.startDate));
+    if(!bits.length){ var _age=Math.max(0,flBoardDaysTo(String(m.startDate||''))); bits.push('opened '+flwD(m.startDate)+(m.startDate?(' · '+_age+' day'+(_age===1?'':'s')+' ago'):'')); }
     var cost=0; try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=m.cost||0; }
     out.push({key:'mj:'+m.id, kind:'mj', id:m.id, no:m.no||'MJ', title:m.title||'(no title)', boatId:m.boatId||'', stage:stage,
       owner:String(m.owner||'').trim(), silent:(typeof flBoardSilent==='function')?flBoardSilent(m):0, cost:cost, sub:bits.join(' · '),
@@ -27569,7 +27569,7 @@ function flRenderWork(){
   else {
     var list=(FLW.stage>=0)?cur.items.filter(function(x){ return x.stage===FLW.stage; }):cur.items.slice();
     if(!list.some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
-    var p=sp(cur.s), b=cur.b, pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong'}, bsub=[];
+    var p=sp(cur.s), b=cur.b, pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong',shop:'In shop'}, bsub=[];
     if(b){ if(b.type) bsub.push(E(b.type)); if(b.capacity||b.cap) bsub.push((b.capacity||b.cap)+' PAX');
       try{ var pr=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); if(pr) bsub.push(E(pierEn[pr]||pr)); }catch(_){} }
     var blk=''; if(b && cur.isDown){ try{ var jb=(boatJobBlock(b.id,TODAY_STR)||{}).jobs||[];
