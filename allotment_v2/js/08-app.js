@@ -36479,9 +36479,217 @@ function bkV2HistTagColor(tag){
     'Invoice':['#FBF0DD','#7A4A00'], 'Payment':['#E1F5EE','#0F6E56'],
     'Reschedule':['#E6F1FB','#185FA5'], 'Cancel':['#FCEBEB','#A32D2D'], 'Refund':['#FCEBEB','#A32D2D'],
     'Credit':['#FAEEDA','#854F0B'], 'Notify':['#FBF0DD','#7A4A00'], 'Weather':['#FCEBEB','#A32D2D'],
-    'FOC':['#FAEEDA','#854F0B'], 'Extra':['#E1F5EE','#0F6E56']
+    'FOC':['#FAEEDA','#854F0B'], 'Extra':['#E1F5EE','#0F6E56'],
+    'B2C':['#FFEDD5','#C2410C'], 'Seen':['#F1EFE8','#5F5E5A']   /* §b2cChg */
   };
   return m[tag]||['#F1EFE8','#5F5E5A'];
+}
+/* ══ §b2cChg (2026-10-08) · บอกในแถวของบุคกิ้งว่า B2C แก้อะไรมา ══════════════════════════
+   เจ้าของ: "บุคกิ้ง B2C sync อัตโนมัติ ถ้ามีการแก้มาจากฝั่ง B2C มันจะเปลี่ยนแบบเงียบ ๆ
+   ทาง By trip date ทำยังไงให้รู้ว่ามีการแก้ไข" → "ให้โชว์ในบรรทัดของบุคกิ้งนั้น ๆ เลย
+   แล้ว user กดรับทราบ ก็หายไปเอง"
+
+   ฝั่งเซิร์ฟเวอร์ (b2c-changelog.js + relSyncB2C) เขียนประวัติของใบนั้นทุกครั้งที่ sync เปลี่ยนอะไรจริง
+     kind 'b2c'      text "Pax: 2 Ad → 3 Ad · Hotel: A → B"   (หนึ่งช่องต่อหนึ่งฟิลด์ คั่นด้วย ' · ')
+     kind 'b2c_new'  ใบใหม่ที่เพิ่งเข้ามา
+   ฝั่งนี้
+     bkV2B2CPending(bk)  อ่านประวัติหลัง 'b2c_seen' ตัวล่าสุด · รวมหลายรอบเป็นบรรทัดเดียว (Pax 2 → 3 → 4)
+                         ฟิลด์ที่เปลี่ยนไปแล้วเปลี่ยนกลับ (2 → 3 → 2) ตัดทิ้ง
+     แถว By trip date    บรรทัดสรุปใต้แถวนั้น + ปุ่มรับทราบ (คนที่แก้ใบจองได้เท่านั้น)
+     รับทราบ            ต่อท้ายประวัติด้วย kind 'b2c_seen' · หายสำหรับทุกคน · รู้ว่าใครกดเมื่อไร
+     หัวหน้า By trip     ปุ่ม "B2C changes N" + แถบด้านขวารวมทุกวัน (ใบที่ B2C เลื่อนวันหายไปจากหน้าวันเดิม
+                         จึงต้องมีที่ให้เห็นรวม)
+   ใบใหม่จาก B2C ขึ้นป้ายเฉพาะที่วันเดินทางห่างจากเวลาที่เข้ามาไม่เกิน B2C_CHG_NEW_DAYS วัน
+   (ใบล่วงหน้าเป็นงานปกติ · ที่ต้องรู้คือใบที่เข้ามาหลังจัดรถ/เรือไปแล้ว) */
+var B2C_CHG_NEW_DAYS = 2;
+function bkV2B2CTripDate(bk){
+  const ds=(bk&&Array.isArray(bk.trips)?bk.trips:[]).map(t=>t&&t.date).filter(Boolean).sort();
+  if(!ds.length) return '';
+  const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  return ds.find(d=>d>=today) || ds[ds.length-1];
+}
+function bkV2B2CPending(bk){
+  const h=(bk && Array.isArray(bk.history)) ? bk.history : null;
+  if(!h || !h.length) return null;
+  let from=0;
+  for(let i=h.length-1;i>=0;i--){ if(h[i] && h[i].kind==='b2c_seen'){ from=i+1; break; } }
+  const ents=h.slice(from).filter(e=>e && (e.kind==='b2c' || e.kind==='b2c_new'));
+  if(!ents.length) return null;
+  const order=[], chains={}, extras=[];
+  let isNew=false, newText='';
+  ents.forEach(e=>{
+    if(e.kind==='b2c_new'){
+      const td=bkV2B2CTripDate(bk), at=String(e.at||'').slice(0,10);
+      const gap=(td && at) ? Math.round((new Date(td+'T00:00')-new Date(at+'T00:00'))/86400000) : 99;
+      if(gap<=B2C_CHG_NEW_DAYS){ isNew=true; newText=String(e.text||''); }
+      return;
+    }
+    String(e.text||'').split(' · ').forEach(seg=>{
+      const m=/^([^:]+): (.*) → (.*)$/.exec(seg);
+      if(!m){ const x=seg.trim(); if(x && extras.indexOf(x)<0) extras.push(x); return; }
+      const L=m[1];
+      if(!chains[L]){ chains[L]=[m[2]]; order.push(L); }
+      const c=chains[L];
+      if(c[c.length-1]!==m[2]) c.push(m[2]);
+      if(c[c.length-1]!==m[3]) c.push(m[3]);
+    });
+  });
+  const segs=order.map(L=>({label:L, vals:chains[L]})).filter(s=>s.vals.length>1 && s.vals[0]!==s.vals[s.vals.length-1]);
+  if(!segs.length && !isNew && !extras.length) return null;
+  const last=ents[ents.length-1];
+  const st=segs.find(s=>s.label==='Status');
+  const cancelled=!!(st && /^Cancel/.test(st.vals[st.vals.length-1]));
+  const moved=segs.some(s=>/^Date\b/.test(s.label));
+  return {at:last.at||'', segs, extras, isNew:isNew && !segs.length, newText, cancelled, moved, n:ents.length};
+}
+function bkV2B2CWhen(at){
+  const d=new Date(at); if(isNaN(d)) return '';
+  const hm=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const min=Math.round((Date.now()-d.getTime())/60000);
+  if(min<1) return hm+' (เมื่อสักครู่)';
+  if(min<60) return hm+' ('+min+' นาทีที่แล้ว)';
+  if(min<24*60) return hm+' ('+Math.round(min/60)+' ชม.ที่แล้ว)';
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+hm;
+}
+// เนื้อบรรทัดสรุป (ใช้ทั้งในแถวและในแถบรวม)
+function bkV2B2CBodyHtml(bk, p, date){
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fs=p.segs.map(s=>`<span class="b2cf"><span class="k">${esc(s.label)}</span>${s.vals.slice(0,-1).map(v=>`<s>${esc(v)}</s>`).join(' &rarr; ')} &rarr; <b>${esc(s.vals[s.vals.length-1])}</b></span>`);
+  p.extras.forEach(x=>fs.push(`<span class="b2cf">${esc(x)}</span>`));
+  if(p.isNew){ const t=p.newText.replace(/^New booking from B2C( · )?/,''); if(t) fs.push(`<span class="b2cf">${esc(t)}</span>`); }
+  // จัดรถไว้แล้ว แต่สิ่งที่กระทบรถเปลี่ยน → เตือนให้ตรวจรถ
+  let warn='';
+  try{
+    const o=(typeof bkOpsRead==='function' && date) ? bkOpsRead(bk,date) : (bk.ops||{});
+    const hasVan=!!(o && (o.vanId || o.vanGroup || (Array.isArray(o.vanSplits)&&o.vanSplits.length)));
+    if(hasVan && !p.cancelled && p.segs.some(s=>/^(Hotel|Pickup area|Self-arrive|Pax)/.test(s.label))) warn=`<span class="b2cw">&#9888; จัดรถแล้ว &middot; ตรวจรถ</span>`;
+    if(hasVan && p.cancelled) warn=`<span class="b2cw">&#9888; ยังอยู่ในกรุ๊ปรถ &middot; เอาออกจากรถ</span>`;
+  }catch(e){}
+  return fs.join('<span class="b2csep">&middot;</span>')+warn;
+}
+function bkV2B2CKind(p){ return p.cancelled?'r':(p.isNew?'n':'o'); }
+function bkV2B2CWho(p){
+  return p.cancelled ? '&#10005; B2C ยกเลิก' : p.isNew ? '&#65291; ใบใหม่จาก B2C' : '&#9998; B2C แก้ไข';
+}
+// แถวสรุปใต้แถวบุคกิ้งในหน้า By trip date
+function bkV2B2CStripRow(bk, colN, date){
+  const p=bkV2B2CPending(bk); if(!p) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const can=(typeof acctCanEditBookings!=='function') || acctCanEditBookings();
+  const id=esc(bk.id);
+  return `<tr class="t2-b2cchg k-${bkV2B2CKind(p)}" data-bk="${id}"><td colspan="${colN}"><div class="b2cl">`
+    + `<span class="b2cwho">${bkV2B2CWho(p)} &middot; ${esc(bkV2B2CWhen(p.at))}</span>`
+    + bkV2B2CBodyHtml(bk, p, date)
+    + (can?`<button class="b2cok" onclick="event.stopPropagation();bkV2B2CSeen('${id}')" title="รับทราบแล้ว · บรรทัดนี้จะหายไปสำหรับทุกคน และบันทึกในประวัติของใบนี้">&#10003; รับทราบ</button>`:'')
+    + `</div></td></tr>`;
+}
+function bkV2B2CRowFlag(bk){ return bkV2B2CPending(bk) ? ' t2-b2cflag' : ''; }
+// รายการที่ยังไม่มีคนรับทราบ · นับเฉพาะใบที่ยังไม่เดินทาง
+function bkV2B2CList(){
+  const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  const out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
+    if(!bk || !/^b2c_/.test(String(bk.id||''))) return;
+    const p=bkV2B2CPending(bk); if(!p) return;
+    const d=bkV2B2CTripDate(bk); if(!d || d<today) return;
+    out.push({bk, p, date:d});
+  });
+  return out;
+}
+function bkV2B2CHeadChip(){
+  const n=bkV2B2CList().length; if(!n) return '';
+  return `<button class="bt-b2cbtn" onclick="bkV2B2COpen()" title="บุคกิ้ง B2C ที่ถูกแก้/ยกเลิก/เข้ามาใหม่ และยังไม่มีคนรับทราบ · ทุกวันเดินทาง">&#128276; B2C changes <i>${n}</i> to review</button>`;
+}
+function bkV2B2CSeen(id, quiet){
+  if(typeof acctCanEditBookings==='function' && !acctCanEditBookings()){ if(!quiet) alert('View only - cannot mark as seen'); return false; }
+  const bk=(SB_BOOKINGS||[]).find(b=>b && b.id===id); if(!bk) return false;
+  const p=bkV2B2CPending(bk); if(!p) return false;
+  const sum=p.segs.map(s=>s.label).join(', ') || (p.isNew?'new booking':'');
+  bkV2AddHistory(bk,'b2c_seen','B2C change reviewed'+(sum?(' ('+sum+')'):''),'Seen');
+  if(quiet) return true;
+  bkV2PersistBookings();
+  bkV2B2CAfter();
+  return true;
+}
+function bkV2B2CSeenAll(){
+  const L=bkV2B2CList(); if(!L.length) return;
+  if(!confirm('Mark all '+L.length+' B2C changes as seen?')) return;
+  let n=0; L.forEach(x=>{ if(bkV2B2CSeen(x.bk.id,true)) n++; });
+  if(n){ bkV2PersistBookings(); }
+  bkV2B2CAfter();
+}
+function bkV2B2CAfter(){
+  try{ if(typeof _bkV2!=='undefined' && _bkV2 && _bkV2.tab==='bytrip' && document.getElementById('bkv2-host')) bkV2RenderKeep(); }catch(e){}
+  if(document.getElementById('b2cchg-drw')) bkV2B2COpen();
+}
+function bkV2B2CClose(){ const d=document.getElementById('b2cchg-drw'); if(d) d.remove(); }
+function bkV2B2COpen(){
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const L=bkV2B2CList();
+  const can=(typeof acctCanEditBookings!=='function') || acctCanEditBookings();
+  const dLbl=d=>{ const x=new Date(d+'T00:00'); return isNaN(x)?d:x.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); };
+  const rName=rid=>{ const r=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); return r?r.name:(rid||''); };
+  const item=x=>{
+    const bk=x.bk, p=x.p, t=(bk.trips||[]).find(tt=>tt.date===x.date)||(bk.trips||[])[0]||{};
+    const pax=(typeof bkV2Norm==='function')?((bkV2Norm(bk)||{}).paxTotal||0):0;
+    const code=(typeof bkV2DisplayCode==='function')?bkV2DisplayCode(bk):(bk.voucherRef||bk.id);
+    return `<div class="b2ci k-${bkV2B2CKind(p)}">`
+      + `<div class="b2ci-h"><b>${esc(code)}</b> &middot; ${esc(bk.leadPax||'—')}${pax?(' &middot; '+pax+' pax'):''}<span>${esc(bkV2B2CWhen(p.at))}</span></div>`
+      + `<div class="b2ci-s">${esc(rName(t.routeId))} &middot; ${esc(dLbl(x.date))}</div>`
+      + `<div class="b2cl">${bkV2B2CBodyHtml(bk,p,x.date)}</div>`
+      + `<div class="b2ci-a"><button onclick="bkV2B2CGo('${esc(bk.id)}')">${p.moved?('ไปที่ '+esc(dLbl(x.date))+' &rarr;'):'เปิดในหน้าวันนั้น &rarr;'}</button>`
+      + (can?`<button class="ok" onclick="bkV2B2CSeen('${esc(bk.id)}')">&#10003; รับทราบ</button>`:'')+`</div></div>`;
+  };
+  const moved=L.filter(x=>x.p.moved).sort((a,b)=>a.date.localeCompare(b.date));
+  const rest=L.filter(x=>!x.p.moved).sort((a,b)=>a.date.localeCompare(b.date)||String(b.p.at).localeCompare(String(a.p.at)));
+  let body='';
+  if(moved.length) body+=`<div class="b2cg">Travel date moved &middot; ${moved.length}</div>`+moved.map(item).join('');
+  let lastD='';
+  rest.forEach(x=>{ if(x.date!==lastD){ lastD=x.date; body+=`<div class="b2cg">${esc(dLbl(x.date))}</div>`; } body+=item(x); });
+  if(!L.length) body=`<div class="b2ce">&#10003; ไม่มีรายการค้าง &middot; ทุกการแก้ไขจาก B2C รับทราบแล้ว</div>`;
+  let d=document.getElementById('b2cchg-drw');
+  if(!d){ d=document.createElement('div'); d.id='b2cchg-drw'; document.body.appendChild(d); }
+  d.innerHTML=`<style>
+#b2cchg-drw{position:fixed;inset:0;z-index:9000;font-family:'DM Sans','Sarabun',sans-serif}
+#b2cchg-drw .b2cd-bg{position:absolute;inset:0;background:rgba(11,21,80,.28)}
+#b2cchg-drw .b2cd{position:absolute;top:0;right:0;bottom:0;width:min(440px,100vw);background:#fff;box-shadow:-10px 0 30px rgba(0,0,0,.2);display:flex;flex-direction:column}
+#b2cchg-drw .b2cd-h{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid #E6E8F0}
+#b2cchg-drw .b2cd-h b{display:block;font-size:15px;color:#1F2430}
+#b2cchg-drw .b2cd-h span{font-size:11px;color:#6B7390}
+#b2cchg-drw .b2cd-h button{margin-left:auto;border:0;background:#EEF0F5;border-radius:8px;width:30px;height:30px;font-size:18px;cursor:pointer}
+#b2cchg-drw .b2cd-b{flex:1;overflow:auto;padding:4px 0 12px}
+#b2cchg-drw .b2cg{padding:12px 16px 4px;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#6B7390}
+#b2cchg-drw .b2ci{margin:6px 12px;border:1px solid #E6E8F0;border-left:4px solid #F97316;border-radius:10px;padding:9px 11px}
+#b2cchg-drw .b2ci.k-r{border-left-color:#DC2626}#b2cchg-drw .b2ci.k-n{border-left-color:#2563EB}
+#b2cchg-drw .b2ci-h{display:flex;gap:6px;font-size:12.5px;color:#1F2430}
+#b2cchg-drw .b2ci-h span{margin-left:auto;font-size:10.5px;color:#6B7390;white-space:nowrap}
+#b2cchg-drw .b2ci-s{font-size:11px;color:#6B7390;margin:1px 0 6px}
+#b2cchg-drw .b2cl{display:flex;flex-wrap:wrap;gap:4px 7px;font-size:11.5px;line-height:1.5}
+#b2cchg-drw .b2cf{color:#1F2430}#b2cchg-drw .b2cf s{color:#9CA3AF}#b2cchg-drw .b2cf b{font-weight:800}
+#b2cchg-drw .b2cf .k{font-size:9.5px;text-transform:uppercase;color:#6B7390;font-weight:700;margin-right:4px}
+#b2cchg-drw .b2csep{color:#D1D5DB}
+#b2cchg-drw .b2cw{color:#92400E;background:#FEF3C7;border-radius:6px;padding:1px 7px;font-weight:700}
+#b2cchg-drw .b2ci-a{display:flex;gap:6px;margin-top:8px}
+#b2cchg-drw .b2ci-a button,#b2cchg-drw .b2cd-f button{border:1px solid #D7DAE6;background:#fff;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700;color:#000F4C;cursor:pointer;font-family:inherit}
+#b2cchg-drw .b2ci-a button.ok,#b2cchg-drw .b2cd-f button{background:#0F6E56;border-color:#0F6E56;color:#fff}
+#b2cchg-drw .b2cd-f{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid #E6E8F0;font-size:11.5px;color:#6B7390}
+#b2cchg-drw .b2ce{padding:40px 20px;text-align:center;color:#0F6E56;font-weight:700}
+</style><div class="b2cd-bg" onclick="bkV2B2CClose()"></div><div class="b2cd">`
+    + `<div class="b2cd-h"><div><b>&#128276; B2C changes</b><span>ยังไม่มีคนรับทราบ &middot; ทุกวันเดินทางที่ยังไม่ถึง</span></div><button onclick="bkV2B2CClose()" title="Close">&times;</button></div>`
+    + `<div class="b2cd-b">${body}</div>`
+    + ((L.length && can)?`<div class="b2cd-f"><span>${L.length} to review</span><button onclick="bkV2B2CSeenAll()">&#10003; รับทราบทั้งหมด</button></div>`:'')
+    + `</div>`;
+}
+function bkV2B2CGo(id){
+  const bk=(SB_BOOKINGS||[]).find(b=>b && b.id===id); if(!bk) return;
+  const d=bkV2B2CTripDate(bk); if(!d) return;
+  bkV2B2CClose();
+  try{ _bkV2.tab='bytrip'; _bkV2.detailId=null; }catch(e){}
+  bkV2Tab2PickDay(d);
+  setTimeout(()=>{ try{
+    const tr=document.querySelector('tr.t2-b2cchg[data-bk="'+String(id).replace(/"/g,'\\"')+'"]');
+    if(tr){ tr.scrollIntoView({block:'center'}); tr.classList.add('b2c-flash'); setTimeout(()=>tr.classList.remove('b2c-flash'),1800); }
+  }catch(e){} }, 120);
 }
 function bkV2WeatherKey(routeId,date){ return routeId+'|'+date; }
 function bkV2WeatherTagBookings(routeId,date){
@@ -51505,6 +51713,7 @@ function bkV2RenderTab2(){
             <input type="date" value="${date}" onclick="event.stopPropagation();try{this.showPicker()}catch(e){}" onchange="if(this.value)bkV2Tab2PickDay(this.value)"></label></span>
         ${_isToday?'<span class="bt-today">TODAY</span>':`<button class="bt-today gh" onclick="bkV2Tab2Today()">Go to today</button>`}
         <button class="bt-arw" onclick="bkV2Tab2DateShift(1)" title="Next day">&rsaquo;</button>
+        ${(typeof bkV2B2CHeadChip==='function')?bkV2B2CHeadChip():''}
         <span class="bt-brand">${_btSelFam?esc(_btSelFam.name):'LOVE ANDAMAN'}</span>
       </div>
       <div class="bt-hgrid${_bkV2CityTourOnly?' bt-hgrid-noboat':''}">
@@ -52065,7 +52274,7 @@ function bkV2RenderTab2(){
           : a.split ? `<div class="t2-altpick" title="แยกรับหลายจุด · บุคกิ้งเดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}">&#128652; ${a.pick&&a.pick.main?'จุดหลัก':'แยกรับ'} · เดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}</div>` : '';
         const _2nd = a.split && !a.first;   // a non-first split allocation row → hide booking-level cells (Pay/Total/Voucher/Add-on) to avoid duplicating them across the split rows
         return {g:a.g, boat:_rowBid||'', html:`
-          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}"${_rowStyle} data-al="${esc(a.key)}">
+          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}${(typeof bkV2B2CRowFlag==='function')?bkV2B2CRowFlag(bk):''}"${_rowStyle} data-al="${esc(a.key)}">
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
@@ -52151,7 +52360,7 @@ function bkV2RenderTab2(){
             <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : ((_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
             ${rcMode?`<td class="t2-c" style="background:#FDFAF1">${(function(){const rc=bk.ops&&bk.ops.reconfirm;if(rc&&rc.status==='done'){let tm='';try{tm=new Date(rc.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="background:#E1F5EE;color:#0F6E56;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px" title="re-confirmed ${esc(rc.via||'')} ${esc(tm)}">&#10003; ${rc.via==='phone'?'โทร':'list'}</span><button onclick="event.stopPropagation();bkV2ReconfirmClear('${esc(bk.id)}')" title="ยกเลิก" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer">&times;</button></span>`;}return `<div style="display:flex;gap:3px;justify-content:center"><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','list')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">List</button><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','phone')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">โทร</button></div>`;})()}</td>`:''}
             ${wxClosed?`<td class="t2-c" style="background:#FBE8E4">${bkV2WeatherInlineCell(bk.id)}</td>`:''}
-          </tr>${expandRow}`};
+          </tr>${(a.first && typeof bkV2B2CStripRow==='function')?bkV2B2CStripRow(bk, COLN, date):''}${expandRow}`};   /* §b2cChg · บรรทัดสรุปใต้แถว · ใบที่แยกหลายแถวขึ้นครั้งเดียว */
       });
       let body='';
       const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g).length; const px=alist.filter(a=>!a.g).reduce((s,a)=>s+a.head,0); return `<tr><td colspan="${COLN}" style="background:#FFF7E6;box-shadow:inset 4px 0 0 #E6A23C;padding:6px 12px"><span style="font-weight:700;font-size:12px;color:#9A6B00">&#9888; ยังไม่ assign</span> <span style="font-size:11px;color:#9A6B00">${n} booking · ${px} pax — จับเข้ากลุ่ม/เลือกรถ</span></td></tr>`; };
@@ -53217,6 +53426,28 @@ function bkV2RenderTab2(){
        สีฟ้าอมเขียวเพราะสามสีข้างเคียงถูกจองไปแล้ว — ขาว=ลูกค้า ม่วง=เหมาลำ แดง=ล็อกที่นั่ง
        เส้นประเหมือนแถวล็อก เพื่อบอกด้วยรูปแบบเดียวกันว่า "ไม่ใช่แถวของคนจริง" */
     .t2-mtbl tr.t2-vsrow.t2-row{background:#F4FBFD}
+    /* §b2cChg · แถวที่ B2C แก้มา + บรรทัดสรุปใต้แถว */
+    .t2-mtbl tr.t2-row.t2-b2cflag{background:#FFF7ED}
+    .t2-mtbl tr.t2-row.t2-b2cflag>td:first-child{box-shadow:inset 4px 0 0 #F97316}
+    .t2-mtbl tr.t2-b2cchg>td{overflow:visible !important;white-space:normal;background:#FFF7ED;padding:0 10px 8px 10px;border-bottom:1px solid #FED7AA;box-shadow:inset 4px 0 0 #F97316}
+    .t2-mtbl tr.t2-b2cchg.k-r>td{background:#FEF2F2;border-bottom-color:#FECACA;box-shadow:inset 4px 0 0 #DC2626}
+    .t2-mtbl tr.t2-b2cchg.k-n>td{background:#EFF6FF;border-bottom-color:#BFDBFE;box-shadow:inset 4px 0 0 #2563EB}
+    .t2-mtbl tr.t2-b2cchg .b2cl{position:sticky;left:10px;display:inline-flex;max-width:calc(100vw - 120px)}
+    .t2-mtbl tr.t2-b2cchg.b2c-flash>td{animation:b2cFlash 1.6s ease}
+    @keyframes b2cFlash{0%,40%{background:#FDBA74}100%{}}
+    .t2-b2cchg .b2cl{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;border:1px solid #FED7AA;border-radius:8px;padding:5px 6px 5px 10px;font-size:11.5px;white-space:normal;line-height:1.5}
+    .t2-b2cchg.k-r .b2cl{border-color:#FECACA}.t2-b2cchg.k-n .b2cl{border-color:#BFDBFE}
+    .t2-b2cchg .b2cl .b2cwho{font-weight:800;color:#C2410C;white-space:nowrap}
+    .t2-b2cchg.k-r .b2cl .b2cwho{color:#B91C1C}.t2-b2cchg.k-n .b2cl .b2cwho{color:#1D4ED8}
+    .t2-b2cchg .b2cl .b2cf{white-space:nowrap;color:#1F2430}
+    .t2-b2cchg .b2cl .b2cf s{color:#9CA3AF}.b2cl .b2cf b{font-weight:800}
+    .t2-b2cchg .b2cl .b2cf .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:#6B7390;font-weight:700;margin-right:4px}
+    .t2-b2cchg .b2cl .b2csep{color:#D1D5DB}
+    .t2-b2cchg .b2cl .b2cw{color:#92400E;background:#FEF3C7;border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap}
+    .t2-b2cchg .b2cl .b2cok{margin-left:auto;background:#0F6E56;color:#fff;border:0;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+    .t2-b2cchg .b2cl .b2cok:hover{background:#0B5A46}
+    .bt-b2cbtn{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:#F97316;color:#fff;border:0;border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 0 0 3px rgba(249,115,22,.28);white-space:nowrap}
+    .bt-b2cbtn i{font-style:normal;background:#fff;color:#C2410C;border-radius:999px;padding:0 7px}
     .t2-mtbl tr.t2-vsrow.t2-row>td{border-bottom:1px dashed #B3DAE6}
     .t2-mtbl tr.t2-vsrow.t2-row>td:first-child{box-shadow:inset 4px 0 0 #0E7490}
     table.t2-mtbl tr.t2-vsrow.t2-row:hover td{background:#EDF8FB;cursor:default}
