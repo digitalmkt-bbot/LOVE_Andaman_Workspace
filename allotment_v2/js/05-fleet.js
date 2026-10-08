@@ -27844,6 +27844,8 @@ function flnCSS(){
     +'#fln .fln-chip{height:34px;padding:0 11px;border-radius:17px;border:1.5px solid #C9CCD6;background:#fff;color:#0F1B3D;display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:12.5px;cursor:pointer;margin:0 6px 6px 0}'
     +'#fln .fln-chip i{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.75}#fln .fln-chip span{font-family:\'DM Mono\',monospace;font-weight:500}'
     +'#fln .fln-chip.on{background:#E8F3FB;border-color:#1272B3;color:#0B4F7A}'
+    +'#fln .fln-arow{display:grid;grid-template-columns:92px minmax(0,1fr);gap:0 10px;align-items:start;padding:8px 0 2px;border-top:1px solid #ECEBE6}#fln .fln-arow:first-child{border-top:0;padding-top:2px}'
+    +'#fln .fln-arow > b{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658;line-height:34px}'
     +'#fln .fln-card{display:block;text-align:left;padding:10px 12px;border-radius:12px;border:1.5px solid #C9CCD6;background:#fff;color:#0F1B3D;font-family:inherit;cursor:pointer}'
     +'#fln .fln-card b{display:flex;align-items:center;gap:8px;font-size:13.5px}#fln .fln-card u{width:18px;height:18px;border-radius:9px;box-sizing:border-box;border:2px solid #C9CCD6;background:#fff}'
     +'#fln .fln-card span{display:block;margin-top:3px;font-size:11.5px;line-height:1.4;color:#3E4658}#fln .fln-card.on{background:#E8F3FB;border-color:#1272B3}#fln .fln-card.on u{border-color:#1272B3;background:#1272B3}'
@@ -27865,7 +27867,9 @@ function flnRender(){
   var sel=function(id,list,val){ return '<select id="'+id+'" class="fln-in">'+list.map(function(x){ return '<option value="'+E(x[0])+'"'+(x[0]===val?' selected':'')+'>'+E(x[1])+'</option>'; }).join('')+'</select>'; };
   var num=function(n,t){ return '<div style="display:flex;align-items:center;gap:10px;margin-top:'+(n>1?18:0)+'px"><span style="width:22px;height:22px;border-radius:11px;background:#16265C;color:#fff;font-family:\'DM Mono\',monospace;font-size:12px;display:flex;align-items:center;justify-content:center">'+n+'</span><span style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">'+t+'</span></div>'; };
   var chips=function(type,label,list){ return list.map(function(x){ var on=!!F.assets[type+'|'+x.id];
-      return '<button type="button" class="fln-chip'+(on?' on':'')+'" data-a="asset" data-t="'+type+'" data-v="'+E(x.id)+'"><i>'+label+'</i><span>'+E(x.t)+'</span></button>'; }).join(''); };
+      return '<button type="button" class="fln-chip'+(on?' on':'')+'" data-a="asset" data-t="'+type+'" data-v="'+E(x.id)+'"><span>'+E(x.t)+'</span></button>'; }).join(''); };
+  /* §flnRows · one labelled row per kind, so engines, gearboxes and propellers cannot be mixed up */
+  var arow=function(type,label,list){ return '<div class="fln-arow"><b>'+label+'</b><div>'+(list.length?chips(type,label,list):'<span style="font-size:12.5px;color:#8A8F9C;line-height:34px">none on this boat</span>')+'</div></div>'; };
   var card=function(v,t,d){ var on=F.next===v; return '<button type="button" class="fln-card'+(on?' on':'')+'" data-a="next" data-v="'+v+'"><b><u></u>'+t+'</b><span>'+d+'</span></button>'; };
   var seg=function(act,cur,list){ return '<div class="fln-seg">'+list.map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" data-a="'+act+'" data-v="'+x[0]+'">'+x[1]+'</button>'; }).join('')+'</div>'; };
   var chk=function(act,on,t,d){ return '<button type="button" class="fln-chk" data-a="'+act+'"><u class="'+(on?'on':'')+'">'+(on?'✓':'')+'</u><b>'+t+'</b>'+(d?('<span>'+d+'</span>'):'')+'</button>'; };
@@ -27884,7 +27888,7 @@ function flnRender(){
   var s3 = F.next==='job'
     ? chk('parts',F.parts,'Open the parts request right after saving','usually decided after the assessment · it can also be requested later from the job')
     : '<div style="font-size:12.5px;color:#5B6170;line-height:1.5">'+(F.next==='quick'?'A Quick Fix does not create a job, so there is nothing to request. If parts were used, open a job instead.':'Parts are requested from the job once one is opened.')+'</div>';
-  var chipH=chips('engine','Engine',P.engine)+chips('gearbox','Gearbox',P.gearbox)+chips('propeller','Propeller',P.propeller);
+  var chipH=(P.engine.length+P.gearbox.length+P.propeller.length)?(arow('engine','Engine',P.engine)+arow('gearbox','Gearbox',P.gearbox)+arow('propeller','Propeller',P.propeller)):'';
   o.innerHTML=flnCSS()
     +'<div style="width:1080px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.45);color:#0F1B3D;overflow:hidden">'
     +'<div style="display:flex;align-items:flex-start;gap:16px;padding:18px 24px 14px;border-bottom:1px solid #ECEBE6"><div style="flex:1;min-width:0">'
@@ -27901,7 +27905,7 @@ function flnRender(){
       +'<div style="margin-top:10px">'+lab('Details','optional')+'<textarea id="fln-detail" class="fln-in" placeholder="what was seen, when, what was tried">'+E(F.detail)+'</textarea></div>'
       +'<div style="margin-top:10px">'+lab('What is affected','pick from the fit-out of this boat')
         +'<div>'+(chipH||'<span style="font-size:12.5px;color:#5B6170">No engines, gearboxes or propellers are registered on this boat.</span>')+'</div>'
-        +'<div style="margin-top:4px">'+inp('fln-hull',F.hull,'Hull or other items, separated by commas')+'</div></div>'
+        +'<div class="fln-arow" style="'+(chipH?'':'border-top:0;')+'padding-bottom:0"><b style="line-height:44px">Hull · other</b><div>'+inp('fln-hull',F.hull,'for example: hull crack, seat, bilge pump (separate with commas)')+'</div></div></div>'
       +'<div class="fln-g fln-3" style="grid-template-columns:auto 1fr;align-items:end;margin-top:10px"><div>'+lab('Priority','1 low · 5 highest')
         +'<div style="display:flex;gap:6px">'+[1,2,3,4,5].map(function(n){ return '<button type="button" class="fln-pr'+(F.prio===n?' on':'')+'" data-a="prio" data-v="'+n+'">'+n+'</button>'; }).join('')+'</div></div>'
         +'<div>'+lab('Likely cause','optional')+sel('fln-cause',FLN_CAUSE,F.cause)+'</div></div>'
