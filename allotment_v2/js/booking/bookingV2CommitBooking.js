@@ -121,7 +121,16 @@ function bookingV2CommitBooking(status){
     }
     // §non-operating guard (hard block · a trip cannot be booked on a day its route does not run · closed/off-season/weather)
     if(typeof bookingV2IsRouteOpenOn==='function'){
-      const _closedTrips = validTrips.filter(t=>!bookingV2IsRouteOpenOn(t.routeId, t.date)).map(t=>{ const _rn=(typeof ROUTES!=='undefined' && (ROUTES.find(r=>r.id===t.routeId)||{}).name)||t.routeId; return _rn+' · '+t.date+' (ทริปไม่ออกวันนี้)'; });
+      /* §opsClosedDay (2026-10-08) · only trips this save adds or moves · as operation-backend checks a PATCH
+         a trip left where it is was sold already · its day may have closed after the sale, and the booking's
+         notes must still save · a trip moved to another route or day is checked like a new one */
+      const _ncOld = _bkV2.editingId ? (SB_BOOKINGS||[]).find(b=>b.id===_bkV2.editingId) : null;
+      const _ncKept = t => {
+        if(!_ncOld) return false;
+        const ot = (_ncOld.trips||[]).find(x => t.opsTripId ? x.opsTripId===t.opsTripId : (x.routeId===t.routeId && x.date===t.date));
+        return !!ot && ot.routeId===t.routeId && ot.date===t.date;
+      };
+      const _closedTrips = validTrips.filter(t=>!_ncKept(t) && !bookingV2IsRouteOpenOn(t.routeId, t.date)).map(t=>{ const _rn=(typeof ROUTES!=='undefined' && (ROUTES.find(r=>r.id===t.routeId)||{}).name)||t.routeId; return _rn+' · '+t.date+' (ทริปไม่ออกวันนี้)'; });
       // §b2cSave · ใบ B2C ทริป/วันที่เป็นของต้นทางและแก้ที่นี่ไม่ได้ · บล็อกไว้ = ใบนั้นแก้อะไรไม่ได้เลย
       if(_closedTrips.length && !_extPrice) missHard.push('ทริปไม่ออกวันที่เลือก · route not running that day:\n    - '+_closedTrips.join('\n    - '));
       else if(_closedTrips.length) _bkV2._b2cClosedWarn = _closedTrips;
