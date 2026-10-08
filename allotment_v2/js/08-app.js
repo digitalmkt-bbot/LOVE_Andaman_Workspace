@@ -48472,9 +48472,9 @@ function bkV2RenderTripsSection(){
   // Compact pax stepper · used in 2x4 mixed grid
   const stepper = (idx, key, val) => `
     <div style="display:flex;align-items:center;width:calc(100% - 6px);max-width:96px;margin:0 auto;box-sizing:border-box;background:#fff;border:1.5px solid #C9CCD6;border-radius:9px;overflow:hidden">
-      <button onclick="bkV2BumpPax(${idx},'${key}',-1)" style="flex:none;width:22px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
-      <span style="flex:1;min-width:20px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0F1B3D':'#A9ADB8'}">${val}</span>
-      <button onclick="bkV2BumpPax(${idx},'${key}',1)" style="flex:none;width:22px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
+      <button onclick="bkV2BumpPax(${idx},'${key}',-1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
+      <span style="flex:1;min-width:16px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0F1B3D':'#A9ADB8'}">${val}</span>
+      <button onclick="bkV2BumpPax(${idx},'${key}',1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
     </div>
   `;
 
@@ -48488,9 +48488,9 @@ function bkV2RenderTripsSection(){
     const on  = bkNatHas(t);
     return `
     <div style="display:flex;align-items:center;width:calc(100% - 6px);max-width:96px;margin:0 auto;box-sizing:border-box;background:#fff;border:1.5px solid ${on?'#6FBFA0':'#9CCDB9'};border-radius:9px;overflow:hidden" title="ทั้งหมด ${all} คน${on?'':' · ยังไม่ได้ระบุ ถือตามช่อง TH ไปก่อน'}">
-      <button onclick="bkV2BumpNat(${idx},'${k}',-1)" style="flex:none;width:22px;height:30px;border:none;background:transparent;color:${val>0?'#0B5A43':'#A9ADB8'};font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
-      <span style="flex:1;min-width:20px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0B5A43':'#A9ADB8'}">${val}</span>
-      <button onclick="bkV2BumpNat(${idx},'${k}',1)" style="flex:none;width:22px;height:30px;border:none;background:transparent;color:${val<all?'#0B5A43':'#C9CCD6'};font-weight:700;cursor:${val<all?'pointer':'default'};font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
+      <button onclick="bkV2BumpNat(${idx},'${k}',-1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:transparent;color:${val>0?'#0B5A43':'#A9ADB8'};font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
+      <span style="flex:1;min-width:16px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0B5A43':'#A9ADB8'}">${val}</span>
+      <button onclick="bkV2BumpNat(${idx},'${k}',1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:transparent;color:${val<all?'#0B5A43':'#C9CCD6'};font-weight:700;cursor:${val<all?'pointer':'default'};font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
     </div>`;
   };
 
@@ -74025,8 +74025,8 @@ function bkNbfCSS(){
   +S+'{--bk-navy:#16265C;--bk-navy-50:#EEF1F8;--ink:#0F1B3D;--ink-soft:#5B6170;--border:#D5D7DE;--r-sm:10px;'
   +'background:#16265C !important;border-radius:16px;max-width:none;padding:14px 18px 22px;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
   /* top bar */
-  +S+' .bkv2-nb-topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;min-height:46px;padding:0;margin-bottom:12px;background:transparent !important;border:none !important;box-shadow:none !important;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0}'
-  +S+' .nbf-l{display:flex;align-items:center;gap:10px;min-width:0}'
+  +S+' .bkv2-nb-topbar{display:grid;grid-template-columns:minmax(max-content,1fr) auto 1fr;align-items:center;gap:14px;min-height:46px;padding:0;margin-bottom:12px;background:transparent !important;border:none !important;box-shadow:none !important;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0}'
+  +S+' .nbf-l{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}'
   +S+' .nbf-l > div:not(.bkv2-nb-draft){color:#E8EBF7 !important;margin-left:0 !important;font-size:13px !important}'
   +S+' .bkv2-nb-back{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap}'
   +S+' .bkv2-nb-back:hover{background:rgba(255,255,255,.20);color:#fff}'
@@ -74063,6 +74063,15 @@ function bkNbfCSS(){
   +S+' .bkv2-review-inner .bkv2-nb-btn.pri{min-height:48px;font-size:15px;font-weight:700;border-radius:12px}'
   +S+' .bkv2-review-inner .bkv2-nb-btn:disabled{opacity:1;background:#B9BEC9;border-color:#B9BEC9;color:#fff}'
   +S+' .bkv2-review-inner .bkv2-nb-btn.ghost:disabled,'+S+' .bkv2-review-inner .bkv2-nb-btn:not(.pri):not([title]):disabled{background:#fff;border-color:#E3E2DC;color:#A9ADB8}'
+  /* §nbf3 · readable type for the parts still styled inline (everything except the trip cards, which set their own sizes) */
+  +[['8px','10px'],['8.5px','10px'],['9px','10.5px'],['9.5px','11px'],['10px','11.5px'],['10.5px','12px'],['11px','12.5px'],['11.5px','12.5px']].map(function(m){
+      return S+' [style*="font-size:'+m[0]+'"]:not(.bkv2-nb-trip *){font-size:'+m[1]+' !important}';
+    }).join('')
+  +S+' .nbf-main table th{border-bottom:1px solid #ECEBE6}'
+  +S+' .bkv2-nb-row > .bkv2-nb-field{min-width:0}'
+  +S+' .bkv2-nb-row > .bkv2-nb-field > .bkv2-nb-input{min-width:0;max-width:100%;box-sizing:border-box}'
+  +'@media(max-width:1500px){'+S+' .nbf-main .bkv2-nb-sec > div[style*="1.6fr"]{grid-template-columns:minmax(0,1fr) !important}}'
+  +S+' .bkv2-review-inner{font-size:13px}'
   +'@media(max-width:900px){'+S+'{padding:10px;border-radius:12px}'+S+' .bkv2-nb-topbar{grid-template-columns:1fr}'+S+' .bkv2-nb-h1{display:none}}';
   var st=document.createElement('style'); st.id='bknbf-css'; st.textContent=css; document.head.appendChild(st);
 }
