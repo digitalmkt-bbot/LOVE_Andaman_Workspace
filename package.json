@@ -20,6 +20,7 @@
     "test:b2cchglog": "node --test test/unit/b2c-changelog.test.mjs",
     "test:b2cchg": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_b2cchg.mjs",
     "test:porecv": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_porecv.mjs",
+    "test:poship3": "LAD=allotment_v2/data_exports/subset_daydetail.json node test/ui/t_poship3.mjs",
     "test:embed": "node --test test/unit/embed-token.test.mjs && node test/ui/t_embed.mjs && node test/ui/t_embed_csp.mjs",
     "test:daydetail": "node test/ui/t_daydetail.mjs",
     "test:fleetcal": "node test/ui/t_fleetcal.mjs",

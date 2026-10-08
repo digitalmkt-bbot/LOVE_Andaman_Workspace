@@ -62080,6 +62080,11 @@ function poBal(itemId){
          ไม่เข้า onboat เพราะ onboat คือของที่ต้องได้คืนวันนี้ · อันนี้ไม่ต้องคืน */
       case 'assign':      b.ready-=q; b.onship+=q; break;
       case 'unassign':    b.onship-=q; b.ready+=q; break;
+      /* §poShip3 · ของประจำเรือที่ตรวจแล้วขาด · หักจากกองประจำเรือ ไม่ใช่กองเบิกรายวัน
+         ชนิดแยกจาก lost/writeoff/repair ตั้งใจ · ตัวนั้นถูกใบเบิก–คืนรายวัน (poBoatSum/poBoatCarry/คิวผ้า) อ่านอยู่ */
+      case 'ship_lost':     b.onship-=q; b.gone+=q; break;
+      case 'ship_writeoff': b.onship-=q; b.gone+=q; break;
+      case 'ship_repair':   b.onship-=q; b.repair+=q; break;
     }
   });
   if(b.gone<0) b.gone=0;
@@ -65857,7 +65862,14 @@ function renderPierOffice(pier){
         +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'))
       +'</div>'
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
-    +'<div class="po-sec"><span class="n">3</span> วงจรผ้าเช็ดตัว</div>'
+    /* §poShip3 · กอง 3 ของประจำเรือ · มีหน้าที่ของตัวเองบนหน้าหลัก */
+    +'<div class="po-sec"><span class="n">3</span> ของประจำเรือ · กองที่อยู่บนเรือ'
+      +'<span class="chip">'+(function(){ var A=poShipAll(_poPier); return A.length?(A.length+' ลำ · '+A.reduce(function(s2,x){ return s2+x.tot; },0)+' ชิ้น'):'ยังไม่มี'; })()+'</span>'
+      +'<span style="flex:1"></span>'
+      +(ro?'':'<button class="po-btn" onclick="poShipBoatPick()" title="ยกของจากคลังขึ้นเรือลำที่ยังไม่มีของประจำ">&#65291; ลงของประจำเรือลำใหม่</button>')
+      +'</div>'
+    +'<div class="po-card">'+poShipSection(ro)+'</div>'
+    +'<div class="po-sec"><span class="n">4</span> วงจรผ้าเช็ดตัว</div>'
     +poLaundryBlock(ro);
 }
 /* §poPrintAll · ใบสรุปเบิก-คืนรวมทุกลำของวันนั้น · A4 แนวนอน
@@ -67434,7 +67446,8 @@ function poMoveEdit(id){
 function T_LDG(t){
   var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
          onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
-         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก'};
+         adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
   return M[t]||t;
 }
 function poMoveEditSave(id){
@@ -67465,7 +67478,7 @@ function poShipByBoat(itemId){
     if(!x || x.itemId!==itemId) return;
     var q=poNum(x.qty), bo=x.boatId||'';
     if(x.type==='assign') m[bo]=(m[bo]||0)+q;
-    else if(x.type==='unassign') m[bo]=(m[bo]||0)-q;
+    else if(x.type==='unassign' || PO_SHIP_LOSS[x.type]) m[bo]=(m[bo]||0)-q;   /* §poShip3 */
   });
   return Object.keys(m).filter(function(k){ return m[k]>0; })
     .map(function(k){ return {bid:k, q:m[k]}; })
@@ -67476,7 +67489,7 @@ function poShipAll(pier){
   var m={};
   (PIER_MOVES||[]).forEach(function(x){
     if(!x || x.pier!==pier) return;
-    if(x.type!=='assign' && x.type!=='unassign') return;
+    if(x.type!=='assign' && x.type!=='unassign' && !PO_SHIP_LOSS[x.type]) return;   /* §poShip3 · ขาดจากการตรวจ หักออกจากลำนั้น */
     var q=poNum(x.qty)*(x.type==='assign'?1:-1), bo=x.boatId||'', id=x.itemId;
     (m[bo]=m[bo]||{})[id]=(m[bo][id]||0)+q;
   });
@@ -67489,6 +67502,141 @@ function poShipAll(pier){
     if(tot>0) out.push({bid:bo, tot:tot, items:its});
   });
   return out.sort(function(a,b){ return b.tot-a.tot; });
+}
+/* ══ §poShip3 (2026-10-08) · ของสามกอง · ตรวจ / เติม / ถอด ของประจำเรือรายลำ ══════════════════
+   เจ้าของ: "ของมันเป็น 3 กอง · 1 กองที่อยู่ออฟฟิศ เป็นกองใหญ่ที่นับ เช็ค · 2 เบิก คืนรายวัน เบิกเช้า คืนเย็น
+   · 3 เบิกแล้วของอยู่ที่เรือ ต้องเป็นการเช็ค ถ้าหาย อัพเดทรายการหายเพราะอะไร · หายควรหักจากกองนี้
+   · ถ้าจะเอาเพิ่ม ต้องไปเบิกจากกอง 1 ก่อน · ทีนี้ก็จะมีประวัติเข้าออกชัดเจน"
+     กอง 1 = poBal.ready   (รับของเข้า / นับสต็อก · §poRecv)
+     กอง 2 = poBal.onboat  (เบิก–คืนรายลำรายวัน · ตาราง 1)
+     กอง 3 = poBal.onship  (assign / unassign · §poShip) · ส่วนที่ขาดจากการตรวจ = ship_lost | ship_writeoff | ship_repair
+   ของเดิมกอง 3 มีแค่ "ลงประจำ" กับ "ถอดออกทั้งหมด" · ของหายบนเรือไม่มีที่ลง
+   ตอนนี้ตรวจรายลำ: นับได้เท่าไร → ส่วนที่ขาดต้องบอกว่าหาย/ตัดทิ้ง/ส่งซ่อม พร้อมเหตุผล
+   เติมได้เฉพาะจากกอง 1 (หักพร้อมใช้) · ถอดคืนเข้ากอง 1 ได้บางส่วน · ทุกบรรทัดผูกลำ ลงประวัติ */
+var PO_SHIP_LOSS={ ship_lost:'หาย', ship_writeoff:'เสีย · ตัดทิ้ง', ship_repair:'เสีย · ส่งซ่อม (ซ่อมได้)' };
+function poShipOn(bid){
+  var A=poShipAll(_poPier).filter(function(x){ return x.bid===bid; })[0], on={};
+  (A?A.items:[]).forEach(function(i){ on[i.itemId]=i.q; });
+  return on;
+}
+function poShipLast(bid){
+  var d='';
+  (PIER_MOVES||[]).forEach(function(m){
+    if(m && m.pier===_poPier && m.boatId===bid && (m.type==='assign'||m.type==='unassign'||PO_SHIP_LOSS[m.type]) && String(m.date||'')>d) d=String(m.date||'');
+  });
+  return d;
+}
+function poShipSection(ro){
+  var A=poShipAll(_poPier);
+  if(!A.length) return '<div class="po-empty">ยังไม่มีของประจำเรือ · ยกของจากคลังขึ้นเรือด้วย "ลงของประจำเรือลำใหม่" หรือปุ่ม "ประจำเรือ" ที่แถวของ</div>';
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:14px">'
+    + A.map(function(x){
+        var last=poShipLast(x.bid);
+        return '<div class="po-shipcard" data-bid="'+poE(x.bid)+'" style="border:1px solid #E2E8F0;border-radius:14px;padding:11px 13px;background:#fff">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+            +'<b style="font-size:13.5px;color:#0F172A">'+poE(poLdgBoatNm(x.bid))+'</b>'
+            +'<span style="font:700 12px inherit;color:#0E7490;font-family:inherit">'+x.tot+' ชิ้น</span>'
+            +'<span style="flex:1"></span>'
+            +(ro?'':'<button class="po-btn" onclick="poShipBoatOpen(\''+poE(x.bid)+'\')" title="ตรวจของบนเรือ · แจ้งของขาด · เติมจากคลัง · ถอดคืนคลัง">ตรวจ / เติม / ถอด</button>')
+          +'</div>'
+          + x.items.map(function(i){
+              var it=poItem(i.itemId), K=(it&&PO_KIND[it.kind])||{c:'#94A3B8',u:''};
+              return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 0;color:#334155">'
+                +'<span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+K.c+';margin-right:6px;vertical-align:1px"></i>'
+                +poE(it?it.label:i.itemId)+'</span><b style="font-variant-numeric:tabular-nums">'+i.q+' <span style="font-weight:500;color:#94A3B8">'+poE(K.u||'')+'</span></b></div>';
+            }).join('')
+          +(last?('<div style="font-size:10.5px;color:#94A3B8;margin-top:6px">เคลื่อนไหวล่าสุด '+poE(last)+'</div>'):'')
+          +'</div>';
+      }).join('')
+    +'</div>';
+}
+function poShipBoatPick(){
+  if(!poCanEdit()) return;
+  var BL=poShipBoats(_poPier);
+  if(!BL.length){ poModal('ลงของประจำเรือ','<div style="font-size:12.5px;color:#B45309">ท่านี้ยังไม่มีเรือในทะเบียน · เพิ่มเรือในหน้า Fleet ก่อน</div>',poBtn('ปิด','poModalClose()'),460); return; }
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">เลือกเรือ · ของที่ยกขึ้นจะหักจากคลังพร้อมใช้ (กอง 1)</div>'
+    +'<select id="pspick" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:600 12.5px inherit;font-family:inherit;min-width:220px">'
+    + BL.map(function(b){ return '<option value="'+poE(b.id)+'">'+poE(b.name||b.id)+'</option>'; }).join('')+'</select>';
+  poModal('ลงของประจำเรือ · เลือกเรือ', body, poBtn('ยกเลิก','poModalClose()')+poBtn('ต่อไป',"poShipBoatOpen(poV('pspick'))",1), 460);
+}
+function poShipBoatOpen(bid){
+  if(!poCanEdit() || !bid) return;
+  var on=poShipOn(bid), its=poItems(_poPier);
+  var has=its.filter(function(it){ return on[it.id]>0; }), rest=its.filter(function(it){ return !(on[it.id]>0); });
+  var inp=function(id,ph,w,extra){ return '<input id="'+id+'" inputmode="numeric" placeholder="'+ph+'" '+(extra||'')
+    +' style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 7px;font:600 12px inherit;width:'+(w||58)+'px;font-family:inherit">'; };
+  var head='<div style="display:grid;grid-template-columns:1fr 54px 74px 162px 86px 70px;gap:6px;align-items:center;font-size:10.5px;font-weight:700;color:#64748B;padding:0 0 6px;border-bottom:1px solid #E2E8F0">'
+    +'<span>รายการ</span><span style="text-align:center">บนเรือ</span><span>นับได้</span><span>ส่วนที่ขาด</span><span>เติมจากคลัง</span><span>ถอดคืน</span></div>';
+  var rowOn=function(it){ var q=on[it.id], b=poBal(it.id);
+    return '<div class="psrow" data-id="'+poE(it.id)+'" style="display:grid;grid-template-columns:1fr 54px 74px 162px 86px 70px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #F1F5F9">'
+      +'<b style="font-size:12.5px;color:#0F172A">'+poE(it.label)+'</b>'
+      +'<span style="text-align:center;font:800 13px inherit;color:#0E7490;font-family:inherit">'+q+'</span>'
+      +inp('psc_'+it.id,'นับ',62,'oninput="poShipBoatDiff(\''+poE(bid)+'\',\''+poE(it.id)+'\')"')
+      +'<span style="display:flex;gap:4px;align-items:center"><span id="psd_'+it.id+'" style="font:700 11.5px inherit;font-family:inherit;min-width:42px;white-space:nowrap"></span>'
+        +'<select id="psr_'+it.id+'" disabled style="border:1px solid #D8D4CA;border-radius:8px;padding:4px 5px;font:600 11px inherit;font-family:inherit;max-width:112px">'
+        +'<option value="">— เพราะ —</option>'+Object.keys(PO_SHIP_LOSS).map(function(k){ return '<option value="'+k+'">'+poE(PO_SHIP_LOSS[k])+'</option>'; }).join('')+'</select></span>'
+      +'<span>'+inp('psa_'+it.id,'+',50)+'<i style="display:block;font-style:normal;font-size:10px;color:#94A3B8">คลัง '+Math.max(0,b.ready)+'</i></span>'
+      +inp('psb_'+it.id,'−',50)
+      +'</div>'; };
+  var rowAdd=function(it){ var b=poBal(it.id);
+    return '<div class="psrow" data-id="'+poE(it.id)+'" style="display:grid;grid-template-columns:1fr 86px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #F8FAFC">'
+      +'<span style="font-size:12px;color:#334155">'+poE(it.label)+'</span>'
+      +'<span>'+inp('psa_'+it.id,'+',50)+' <i style="font-style:normal;font-size:10px;color:#94A3B8">คลัง '+Math.max(0,b.ready)+'</i></span></div>'; };
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">'
+      +'<b>นับได้</b> · ตรวจของบนเรือ ถ้าขาดต้องเลือกว่าขาดเพราะอะไร (หักจากกองประจำเรือ) · '
+      +'<b>เติมจากคลัง</b> · หักจากคลังพร้อมใช้ · <b>ถอดคืน</b> · กลับเข้าคลัง · ช่องที่เว้นว่างไม่บันทึก</div>'
+    +'<div style="max-height:50vh;overflow:auto;padding-right:4px">'
+    +(has.length?(head+has.map(rowOn).join('')):'<div style="font-size:12px;color:#94A3B8;margin-bottom:6px">ลำนี้ยังไม่มีของประจำเรือ</div>')
+    +(rest.length?('<div style="font-size:11px;font-weight:800;color:#475569;margin:12px 0 4px">ยกรายการอื่นจากคลังขึ้นเรือ</div>'+rest.map(rowAdd).join('')):'')
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin:12px 0 4px">รายละเอียด · ต้องใส่ถ้ามีของขาด</div>'
+    +'<input id="psn" placeholder="เช่น ตรวจเรือเช้านี้ หน้ากากแตก 2 ท่อหาย 1 ไม่ทราบสาเหตุ" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;box-sizing:border-box;font-family:inherit">'
+    +'<div id="pserr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px;line-height:1.5"></div>';
+  poModal('ของประจำเรือ · '+poE(poLdgBoatNm(bid)), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poShipBoatSave('"+poE(bid)+"')",1), 760);
+}
+function poShipBoatDiff(bid, id){
+  var el=document.getElementById('psd_'+id), sel=document.getElementById('psr_'+id); if(!el) return;
+  var raw=String(poV('psc_'+id)||'').trim(), has=poShipOn(bid)[id]||0;
+  if(!raw){ el.textContent=''; if(sel){ sel.disabled=true; sel.value=''; } return; }
+  var d=poNum(raw)-has;
+  el.textContent=d===0?'ครบ':(d<0?('ขาด '+(-d)):('+'+d+' ?'));
+  el.style.color=d===0?'#047857':'#B91C1C';
+  if(sel){ sel.disabled=!(d<0); if(d>=0) sel.value=''; }
+}
+function poShipBoatSave(bid){
+  if(!poGuard()) return false;
+  var err=function(t){ var e=document.getElementById('pserr'); if(e) e.innerHTML=t; return false; };
+  var on=poShipOn(bid), note=String(poV('psn')||'').trim(), errs=[], lines=[];
+  var num=function(raw,lbl,what){ if(raw==='') return 0; if(!/^\d+$/.test(raw)){ errs.push(poE(lbl)+': '+what+'ต้องเป็นจำนวนเต็ม'); return 0; } return +raw; };
+  poItems(_poPier).forEach(function(it){
+    var id=it.id, has=on[id]||0, b=poBal(id), L=it.label;
+    var cRaw=String(poV('psc_'+id)||'').trim(), short=0, c=null;
+    if(cRaw!==''){
+      c=num(cRaw,L,'จำนวนนับ');
+      if(c>has) errs.push(poE(L)+': นับได้ '+c+' มากกว่าในระบบ '+has+' · ของที่ยกจากคลังขึ้นเรือให้ใส่ช่อง "เติมจากคลัง"');
+      else short=has-c;
+    }
+    var why=poV('psr_'+id);
+    if(short>0 && !PO_SHIP_LOSS[why]) errs.push(poE(L)+': ขาด '+short+' · เลือกว่าขาดเพราะอะไร');
+    var add=num(String(poV('psa_'+id)||'').trim(),L,'จำนวนเติม'), back=num(String(poV('psb_'+id)||'').trim(),L,'จำนวนถอด');
+    if(add>Math.max(0,b.ready)) errs.push(poE(L)+': คลังพร้อมใช้มีแค่ '+Math.max(0,b.ready)+' · เติม '+add+' ไม่ได้ (รับของเข้าคลังก่อน)');
+    if(back>has-short) errs.push(poE(L)+': ถอดคืนได้ไม่เกิน '+(has-short));
+    if(short||add||back) lines.push({id:id, has:has, c:c, short:short, why:why, add:add, back:back});
+  });
+  if(lines.some(function(l){ return l.short>0; }) && !note) errs.push('มีของขาด · ใส่รายละเอียดว่าขาด/หายเพราะอะไร');
+  if(errs.length) return err(errs.join('<br>'));
+  if(!lines.length) return err('ยังไม่มีอะไรให้บันทึก · ถ้านับแล้วครบทุกรายการ ไม่ต้องบันทึก');
+  lines.forEach(function(l){
+    if(l.short) poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:l.why, qty:l.short,
+                       note:note+' · นับบนเรือได้ '+l.c+' (ระบบ '+l.has+')'});
+    if(l.add)   poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:'assign', qty:l.add,
+                       note:'เติมจากคลัง'+(note?(' · '+note):'')});
+    if(l.back)  poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:'unassign', qty:l.back,
+                       note:'ถอดคืนคลัง'+(note?(' · '+note):'')});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
 }
 function poShipErr(msg){
   var el=document.getElementById('poship_err'); if(!el) return;
@@ -67627,7 +67775,7 @@ function poLaundrySave(isOut){
    ไม่ต้องไล่อ่านทีละแถวเพื่อหักกันเอง */
 var _poLdgF='all';
 var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
-               loss:['lost','writeoff','repair'], ship:['assign','unassign'],
+               loss:['lost','writeoff','repair','ship_lost','ship_writeoff','ship_repair'], ship:['assign','unassign','ship_lost','ship_writeoff','ship_repair'],
                adj:['count','adjust','onboard','fixed'] };
 var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
                 loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด' };
@@ -67662,13 +67810,15 @@ function poLedgerOpen(){
   var all=(PIER_MOVES||[]).filter(function(m){ return m.pier===_poPier; });
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
          laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
-         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก'};
+         assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
           laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
           assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490'],
-          receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9']};
+          receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9'],
+          ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309']};
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -67689,6 +67839,8 @@ function poLedgerOpen(){
     }
     else if(t==='laundry_out') S.lout+=q;
     else if(t==='laundry_in') S.lin+=q;
+    /* §poShip3 · หาย/ตัดทิ้งจากของประจำเรือ · นับในยอดหาย แต่ไม่ใช่ของค้างคืน และไม่มีลูกค้าให้ปรับ */
+    else if(t==='ship_lost'||t==='ship_writeoff') S.lost+=q;
   });
   var nDay=Object.keys(dset).length;
   var OUT=Object.keys(S.out).map(function(id){ return {id:id,v:S.out[id]}; })
