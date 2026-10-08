@@ -7,7 +7,9 @@
    GET   /v1/bookings/{id}/history         that detail's History card
    POST  /v1/bookings · PATCH /{id}        save (bookingV2SyncToOpsBackend)
    POST  /{id}/cancel · /restore · /partial-cancel · /reschedule
-   PATCH /{id} {status}                    approve · reject · FOC · weather cancel
+   POST  /{id}/confirm                     "Submit" on a booking the server holds as a quote
+   POST  /{id}/approve · /reject           approve · reject · FOC approve · FOC reject
+   POST  /{id}/cancel-weather              weather cancel
    GET   /v1/manifest?date=&route_id=      By-trip day, refreshed live
 
    Server first (2026-10-05):
@@ -59,10 +61,27 @@
     var out = {}; Object.keys(p || {}).forEach(function(k){ var n = Math.round(+p[k] || 0); if(n > 0) out[k] = n; }); return out;
   }
 
-  /* ── client booking → request body ── */
-  function toServer(bk){
-    var b = { external_id: bk.id, status: bk.status || 'confirmed' };
-    HEADER.forEach(function(h){ var v = coerce(bk[h[0]], h[1]); if(v !== undefined) b[h[0]] = v; });
+  /* §opsAuthority (2026-10-08) · the server decides who made a booking, when, and its status.
+     · bookedAt / createdBy / confirmedAt / confirmedBy are stamped by the server from the login and
+       never sent: a create naming them is 400, and a PATCH changing them is 400.
+     · a create sends `intent` (which save button), not `status`: the server weighs the trips and
+       answers the status itself, pending_approval included. saveNow takes it from the answer.
+     · focReason goes with the booking: confirming FOC passengers without one is 400. */
+  var SERVER_STAMPED = { bookedAt: 1, createdBy: 1, confirmedAt: 1, confirmedBy: 1 };
+  /* the button pressed · "Save draft" asks for quote, "Submit" for confirmed or pending_foc. When the
+     browser already turned it into pending_approval, the button is in approval.targetStatus */
+  function intentOf(bk){
+    var asked = (bk.status === 'pending_approval' && bk.approval && bk.approval.targetStatus) || bk.status;
+    return (asked === 'quote' || asked === 'draft') ? 'quote' : 'confirm';
+  }
+
+  /* ── client booking → request body · `create` for POST, else PATCH ── */
+  function toServer(bk, create){
+    var b = { external_id: bk.id };
+    if(create) b.intent = intentOf(bk);           // a PATCH sends no status: a change goes through a command (saveNow)
+    HEADER.forEach(function(h){ if(SERVER_STAMPED[h[0]]) return; var v = coerce(bk[h[0]], h[1]); if(v !== undefined) b[h[0]] = v; });
+    var focReason = (bk.focApproval && bk.focApproval.reason) || bk.focReason;
+    if(focReason) b.focReason = String(focReason);
     if(bk.priceBreakdown && bk.priceBreakdown.total != null && bk.total == null) b.total = coerce(bk.priceBreakdown.total, 'num');
     Object.keys(STRUCTS).forEach(function(s){
       var src = bk[s]; if(!src || typeof src !== 'object') return;
@@ -187,8 +206,10 @@
       var old = keepTrips.find(function(x){ return x.opsTripId && x.opsTripId === t.opsTripId; }) || keepTrips[i];
       if(old){ ['ops', 'ovnCharge', 'promoId', 'rtRef'].forEach(function(k){ if(old[k] !== undefined && t.date === old.date) t[k] = old[k]; }); }
     });
+    // adjustments (discounts, extras) are not stored by the server yet · without this a refresh erased
+    // them, and the next edit re-priced the booking without them
     var keep = {}; ['ops', 'history', 'approval', 'focApproval', 'weatherResolve', 'rebook', 'invoiceId', 'paymentStatus',
-      'upgrades', 'altPickups', 'b2cOverride', 'refund', 'docCheck', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+      'upgrades', 'altPickups', 'b2cOverride', 'refund', 'docCheck', 'createdAt', 'adjustments'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     return bk;
@@ -213,17 +234,41 @@
     list.push(fromServer(ob)); return true;
   }
 
-  /* ── save · called from bookingV2CommitBooking via bookingV2SyncToOpsBackend ── */
+  /* §opsAuthority · what the server decided replaces what the browser guessed: the status, and who
+     made and confirmed the booking and when. The next PATCH then echoes stored values, and the screen
+     shows the real status. Returns the status the browser had expected. */
+  function takeServer(bk, j){
+    var guessed = bk.status;
+    bk.status = j.status || bk.status;
+    bk.bookedAt = j.booked_at || bk.bookedAt; bk.createdBy = j.created_by || '';
+    bk.confirmedAt = j.confirmed_at || null; bk.confirmedBy = j.confirmed_by || '';
+    return guessed;
+  }
+  function toldDifferent(bk, guessed){
+    if(bk.status === guessed) return;
+    O.toast({ kind: 'pending', title: 'Saved as ' + bk.status.replace(/_/g, ' '), id: bk.id, status: 'SERVER',
+      sub: 'The server decided ' + bk.status + ' (this screen expected ' + guessed + ')', dur: 9000 });
+  }
+  var NOT_YET_CONFIRMED = ['draft', 'quote', 'pending'];
+
+  /* ── save · called from bookingV2CommitBooking via bookingV2SyncToOpsBackend ──
+     an edit is a PATCH without status; "Submit" on a booking the server holds as a quote then asks
+     POST /confirm, and the server decides confirmed, pending_foc or pending_approval */
   function saveNow(bk){
     var pre = Promise.resolve();
     if(O.deployments) pre = pre.then(O.deployments.syncNow);     // a new charter cell must be a deployment first
     if(O.locks) pre = pre.then(O.locks.syncNow);                 // a lock must exist before a booking draws on it
+    var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
-      var body = toServer(bk);
+      var body = toServer(bk, !bk.opsId);
       return bk.opsId ? O.patch('/v1/bookings/' + encodeURIComponent(bk.opsId), body) : O.post('/v1/bookings', body);
+    }).then(function(j){
+      if(j && j.id && submit && NOT_YET_CONFIRMED.indexOf(j.status) >= 0) return O.post('/v1/bookings/' + encodeURIComponent(j.id) + '/confirm', {});
+      return j;
     }).then(function(j){
       if(j && j.id){
         bk.opsId = j.id; bk.updatedAt = j.updated_at || bk.updatedAt;
+        toldDifferent(bk, takeServer(bk, j));
         var used = {};
         (bk.trips || []).forEach(function(t, i){
           var hit = (j.trips || []).find(function(st){ return !used[st.id] && st.route_id === t.routeId && st.service_date === t.date; })
@@ -285,10 +330,17 @@
       if(!call) return ret;                                       // the user backed out of the prompt · nothing changed
       hold(bk.id);
       O.queue(function(){ return call(); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; }).then(function(j){
-        if(j && j.id){ Object.assign(bk, records(j, bk.trips)); bk.updatedAt = j.updated_at; persist(); }
-        if(j && Array.isArray(j.warnings) && j.warnings.length){
+        if(j && j.id){ Object.assign(bk, records(j, bk.trips)); bk.updatedAt = j.updated_at; takeServer(bk, j); persist(); render(); }
+        // two kinds of warning: /restore's seat-lock shortfalls, /approve's days past the registered seats
+        var warn = (j && Array.isArray(j.warnings)) ? j.warnings : [];
+        var short = warn.filter(function(x){ return x.lock_id; }), overLic = warn.filter(function(x){ return x.code === 'over_licence'; });
+        if(short.length){
           O.toast({ kind: 'pending', title: 'Restored with seat-lock shortfalls', id: bk.id, status: 'CHECK',
-            sub: j.warnings.map(function(x){ return (x.lock_id || '') + ' ' + x.got + '/' + x.wanted; }).join(' · '), dur: 9000 });
+            sub: short.map(function(x){ return x.lock_id + ' ' + x.got + '/' + x.wanted; }).join(' · '), dur: 9000 });
+        }
+        if(overLic.length){
+          O.toast({ kind: 'pending', title: 'Approved past the boats\' registered seats · add a boat before the trip', id: bk.id, status: 'CHECK',
+            sub: overLic.map(function(x){ return x.route_id + ' ' + x.service_date + ': ' + x.over_by + ' over'; }).join(' · '), dur: 12000 });
         }
         O.wrote('booking');
       }, function(e){ putBack(bk, before); O.fail(name.replace('bookingV2', '') + ' refused · put back', e); });
@@ -297,22 +349,32 @@
     w.__ops = true; window[name] = w;
   }
   var B = function(bk){ return '/v1/bookings/' + encodeURIComponent(bk.opsId); };
-  function statusPatch(bk, was){
-    if(bk.status === was.status) return null;
-    var body = { status: bk.status };
-    if(bk.status === 'confirmed'){ if(bk.confirmedBy) body.confirmedBy = String(bk.confirmedBy); if(bk.confirmedAt) body.confirmedAt = String(bk.confirmedAt); }
-    return function(){ return O.patch(B(bk), body); };
+  /* §opsAuthority · a status changes only through the server's commands (POST /{id}/approve, /reject,
+     /cancel-weather), never PATCH {status}. Who approved is the login: the name legacy prompts for is
+     not sent. `note` is the reason the user typed, where there is one. */
+  function command(kind, noteOf){
+    return function(bk, was){
+      if(bk.status === was.status) return null;                   // the user backed out of the prompt
+      var note = noteOf ? String(noteOf(bk) || '').trim() : '';
+      return function(){ return O.post(B(bk) + '/' + kind, note ? { note: note } : {}); };
+    };
   }
   tx('bookingV2RestoreBooking', function(bk, was){
     if(bk.status === was.status || RELEASED.indexOf(was.status) < 0) return null;
     return function(){ return O.post(B(bk) + '/restore'); };
   });
-  tx('bookingV2ApproveBooking', statusPatch);
-  tx('bookingV2RejectBooking', statusPatch);
-  tx('bookingV2FocApprove', statusPatch);
-  tx('bookingV2FocReject', statusPatch);
+  tx('bookingV2ApproveBooking', command('approve'));
+  tx('bookingV2RejectBooking', command('reject', function(bk){ return bk.approval && bk.approval.note; }));
+  // FOC approval needs the reason on the booking; one typed at the prompt is saved there first
+  tx('bookingV2FocApprove', function(bk, was){
+    var go = command('approve')(bk, was); if(!go) return null;
+    var typed = bk.focApproval && bk.focApproval.reason, had = (was.focApproval && was.focApproval.reason) || was.focReason;
+    if(!typed || typed === had) return go;
+    return function(){ return O.patch(B(bk), { focReason: String(typed) }).then(go); };
+  });
+  tx('bookingV2FocReject', command('reject', function(bk){ return bk.focApproval && bk.focApproval.rejectReason; }));
   tx('bookingV2WeatherResolveOne', function(bk, was){
-    if(bk.status === 'cancelled_weather' && was.status !== 'cancelled_weather') return function(){ return O.patch(B(bk), { status: 'cancelled_weather' }); };
+    if(bk.status === 'cancelled_weather' && was.status !== 'cancelled_weather') return function(){ return O.post(B(bk) + '/cancel-weather', {}); };
     var oldD = (was.trips || []).map(function(t){ return t.date; }), newD = (bk.trips || []).map(function(t){ return t.date; });
     var i = oldD.findIndex(function(d, k){ return d !== newD[k]; });
     if(i < 0) return null;
