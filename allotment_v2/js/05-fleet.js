@@ -27750,11 +27750,12 @@ var FLN=null;
 var FLN_REASON=[['engine_repair','Engine fault / engine repair'],['donor','Engine or parts lent to another boat'],['docs_expired','Documents or licence expired'],['dry_dock','Dry dock / refit'],['off_season','Off season / weather'],['charter','Charter / special use'],['scheduled_maint','Scheduled maintenance'],['other','Other (say why in the details)']];
 var FLN_CAUSE=[['','Not known yet'],['vibration','Vibration'],['wear','Wear'],['connector','Loose connector'],['electrical','Electrical fault'],['weather','Weather damage'],['operator','Operator error'],['other','Other']];
 function flnBoats(){ try{ return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && b.ownership!=='charter' && !b.retired; }); }catch(_){ return []; } }
-function flnParts(boatId){
+function flnParts(boatId, ext){
   var g=function(n){ try{ return n==='e'?FL_ENGINES:n==='g'?FL_GEARBOXES:FL_PROPELLERS; }catch(_){ return []; } };
   var f=function(a){ return (a||[]).filter(function(x){ return x && x.boatId===boatId; }); };
   return { engine:f(g('e')).map(function(x){ return {id:x.id, t:(x.pos||'')+(x.serial?(' · '+x.serial):'')}; }),
-           gearbox:f(g('g')).map(function(x){ return {id:x.id, t:String(x.serial||'')+(x.note?(' · '+x.note):'')}; }),
+           /* ext = the Create-job form also lists gearboxes linked to this boat's engines; the Incident form lists by boat only */
+           gearbox:(ext?(g('g')||[]).filter(function(x){ return x && (x.boatId===boatId || f(g('e')).some(function(e){ return e.id===x.engineId; })); }):f(g('g'))).map(function(x){ return {id:x.id, t:String(x.serial||'')+(x.note?(' · '+x.note):'')}; }),
            propeller:f(g('p')).map(function(x){ return {id:x.id, t:String(x.serial||'')+(x.note?(' · '+x.note):'')}; }) };
 }
 function flnOpen(){
@@ -27763,7 +27764,7 @@ function flnOpen(){
   var bs=flnBoats(), boat=(FLW.boat && bs.some(function(b){ return b.id===FLW.boat; }))?FLW.boat:(bs[0]?bs[0].id:'');
   var now=new Date(), hh=('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
   FLN={boat:boat, date:TODAY_STR, time:hh, by:(typeof flBoardWho==='function'?flBoardWho():'')||'', title:'', detail:'', cause:'', assets:{}, hull:'', prio:3,
-       next:'job', jtitle:'', jstatus:'fixing', reason:'', loc:'', mode:'single', start:false, owner:'', due:'', parts:false, busy:false};
+       kind:'inc', jtype:'preventive', next:'job', jtitle:'', jstatus:'fixing', reason:'', loc:'', mode:'single', start:false, owner:'', due:'', parts:false, busy:false};
   var o=document.getElementById('fln'); if(o) o.remove();
   o=document.createElement('div'); o.id='fln';
   o.style.cssText='position:fixed;inset:0;z-index:8990;background:rgba(10,18,48,.56);display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
@@ -27790,6 +27791,8 @@ function flnClick(e){
   flnSync();
   if(act==='close'){ flnClose(); return; }
   if(act==='kind'){ flnClose(); if(typeof flwAddGo==='function') flwAddGo(val); return; }
+  if(act==='kindin'){ FLN.kind=(val==='job')?'job':'inc'; FLN.jstatus=(FLN.kind==='job' && FLN.jtype==='preventive')?'available':'fixing'; FLN.reason=''; flnRender(); return; }
+  if(act==='jtype'){ FLN.jtype=val; FLN.jstatus=(val==='preventive')?'available':'fixing'; FLN.reason=''; if(val!=='preventive'){ FLN.assets={}; FLN.hull=''; } flnRender(); return; }
   if(act==='old'){ var b=FLN.boat; flnClose(); flOpenAddIncidentModal(null,{boatId:b}); return; }
   if(act==='asset'){ var k=a.getAttribute('data-t')+'|'+val; if(FLN.assets[k]) delete FLN.assets[k]; else FLN.assets[k]=1; }
   else if(act==='prio') FLN.prio=+val;
@@ -27808,6 +27811,27 @@ function flnPreview(){
   var E=flBoardEsc, b=getBoat(FLN.boat), nA=flnAssetList().length, rows=[], SL={fixing:'Fixing',unavailable:'Unavailable',available:'Available'};
   var row=function(c,k,t,d){ return '<div style="display:flex;gap:12px"><div style="flex:none;width:20px;display:flex;flex-direction:column;align-items:center"><span style="width:20px;height:20px;border-radius:10px;background:'+c+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">+</span><span style="flex:1;width:2px;min-height:10px;background:#D9D8D2"></span></div>'
     +'<div style="flex:1;min-width:0;padding-bottom:12px"><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5B6170">'+k+'</div><div style="font-size:13.5px;font-weight:600;line-height:1.3;overflow-wrap:anywhere">'+t+'</div><div style="font-size:12px;color:#5B6170;line-height:1.4">'+d+'</div></div></div>'; };
+  if(FLN.kind==='job'){
+    var jl=[FLN.jtype==='preventive'?'Preventive':'Corrective']; if(FLN.jtype==='preventive' && nA) jl.push(nA+' item'+(nA===1?'':'s')+' covered');
+    if(FLN.owner) jl.push('owner '+E(FLN.owner)); if(FLN.due) jl.push('due '+flwD(FLN.due)); jl.push(FLN.start?'started on saving':'not started');
+    var jr=[row('#1272B3','Job', E(FLN.title||'(job title)'), E((b?b.name:'')+' · from '+flwD(FLN.date))+'<br>'+jl.join(' · '))], ja=[];
+    if(FLN.parts) jr.push(row('#D9952B','Parts request','The memo form opens right after saving','you fill in the items there'));
+    if(FLN.start){
+      if(FLN.jstatus==='available') ja.push('The boat stays <b>Available</b> and keeps running.');
+      else { var ranJ=false; try{ ranJ=(typeof _flBoatRanOn==='function') && b && _flBoatRanOn(b.id,TODAY_STR); }catch(_){}
+        ja.push(E(b?b.name:'The boat')+' becomes <b>'+SL[FLN.jstatus]+'</b> from '+(ranJ?'tomorrow, because it already ran a trip today':'today')+'.'); }
+      ja.push('The job appears on Fleet Work at stage <b>'+(FLN.parts?'Waiting':(FLN.jstatus==='available'?'To close':'Repairing'))+'</b>.');
+    } else { ja.push('The boat status does not change until the job is started.'); ja.push('The job appears on Fleet Work at stage <b>Job open</b>.'); }
+    var openJ=0; try{ openJ=flwA('m').filter(function(m){ return m && m.boatId===FLN.boat && m.status!=='done' && m.status!=='cancelled'; }).length; }catch(_){}
+    el.innerHTML='<div style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">What will be created</div><div style="margin-top:10px">'+jr.join('')+'</div>'
+      +'<div style="padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #ECEBE6;font-size:13px;line-height:1.5"><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170;margin-bottom:2px">After saving</div>'+ja.join('<br>')+'</div>'
+      +(openJ?('<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#FBF1DF;color:#7A4300;font-size:12.5px;line-height:1.45">This boat already has '+openJ+' open job'+(openJ===1?'':'s')+'. The system will ask you to confirm before it adds another.</div>'):'')
+      +'<div style="margin-top:10px;font-size:12px;line-height:1.5;color:#5B6170">The job number is given by the system when you save.</div>'
+      +'<div style="flex:1;min-height:14px"></div>'
+      +'<button type="button" data-a="save" style="height:48px;border-radius:12px;border:0;background:#16265C;color:#fff;font:700 15px inherit;font-family:inherit;cursor:pointer">Save · create 1 record</button>'
+      +'<button type="button" data-a="close" style="margin-top:8px;height:40px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;font:600 13px inherit;font-family:inherit;color:#0F1B3D;cursor:pointer">Cancel</button>';
+    return;
+  }
   rows.push(row('#5B6170','Report', E(FLN.title||'(what is wrong)'), E((b?b.name:'')+' · '+flwD(FLN.date)+(FLN.time?(' '+FLN.time):'')+' · priority '+FLN.prio+(nA?(' · '+nA+' item'+(nA===1?'':'s')+' affected'):''))
     +(FLN.next==='quick'?'<br>saved and closed at once (Quick Fix)':FLN.next==='record'?'<br>waits at stage Reported':'')));
   var nJobs=0, after=[];
@@ -27861,6 +27885,7 @@ function flnCSS(){
 }
 function flnRender(){
   var o=document.getElementById('fln'); if(!o || !FLN) return;
+  if(FLN.kind==='job'){ flnRenderJob(); return; }
   var E=flBoardEsc, F=FLN, sc=o.scrollTop, b=getBoat(F.boat), P=flnParts(F.boat), nA=flnAssetList().length;
   var lab=function(t,x){ return '<div class="fln-lab">'+t+(x?(' <span>'+x+'</span>'):'')+'</div>'; };
   var inp=function(id,val,ph,type,extra){ return '<input id="'+id+'" type="'+(type||'text')+'" value="'+E(val)+'" placeholder="'+E(ph||'')+'" class="fln-in" '+(extra||'')+'>'; };
@@ -27896,7 +27921,7 @@ function flnRender(){
       +'<div style="margin-top:2px;font-size:21px;font-weight:700">What happened, and what should start now?</div></div>'
       +'<button type="button" data-a="close" aria-label="Close" style="width:36px;height:36px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;font-size:16px;cursor:pointer;color:#0F1B3D">&times;</button></div>'
     +'<div class="fln-kinds" style="display:flex;gap:6px;padding:12px 24px;border-bottom:1px solid #ECEBE6;background:#F7F7F5">'
-      +kinds.map(function(k,i){ return '<button type="button" class="fln-kind'+(i===0?' on':'')+'"'+(i===0?'':' data-a="kind" data-v="'+k[0]+'"')+'><b>'+k[1]+'</b><span>'+k[2]+'</span></button>'; }).join('')+'</div>'
+      +kinds.map(function(k,i){ return '<button type="button" class="fln-kind'+(i===0?' on':'')+'"'+(i===0?'':(' data-a="'+(k[0]==='job'?'kindin':'kind')+'" data-v="'+k[0]+'"'))+'><b>'+k[1]+'</b><span>'+k[2]+'</span></button>'; }).join('')+'</div>'
     +'<div class="fln-2"><div style="padding:16px 24px 18px;border-right:1px solid #ECEBE6;min-width:0">'
       +num(1,'The problem')
       +'<div class="fln-g" style="grid-template-columns:1.2fr 0.9fr 0.6fr 1fr;margin-top:10px"><div>'+lab('Boat')+sel('fln-boat',flnBoats().map(function(x){ return [x.id,x.name]; }),F.boat)+'</div>'
@@ -27924,6 +27949,7 @@ function flnRender(){
 function flnSave(){
   var F=FLN; if(!F || F.busy) return;
   flnSync();
+  if(F.kind==='job'){ flnSaveJob(); return; }
   if(!F.boat || !F.date || !F.title){ alert('Please fill in the boat, the date and what is wrong.'); return; }
   if(F.next==='job' && F.jstatus==='unavailable' && !F.reason){ alert('Please choose why the boat is unavailable.'); return; }
   F.busy=true;
@@ -27948,6 +27974,7 @@ function flnSave(){
     if(F.next==='job'){
       H('fl-modal-create-job',1);
       try{
+        try{ _projCreateForId=null; }catch(_){ }      /* never inherit a project from an earlier, abandoned Create-job dialog */
         flOpenCreateJobModal(inc.id);
         S('job-title', F.jtitle||F.title); S('job-location', F.loc);
         if(typeof selectJobStatusByValue==='function') selectJobStatusByValue(F.jstatus);
@@ -27978,4 +28005,91 @@ function flnSave(){
   FLW.boat=boat; FLW.stage=-1; FLW.bf=(FLW.bf==='down')?'work':FLW.bf; FLW.item=key;
   try{ flRenderWork(); }catch(_){ }
   if(typeof flShowToast==='function') flShowToast('Saved '+(inc.no||'the report')+(jobs.length?(' and '+(jobs[0].no||'the job')):'')+'.'+note);
+}
+/* §flnJob (2026-10-08) · "Planned job" in the same form · service by hours, routine checks, or a repair with no report.
+   Saves through the existing Create-job form (flSaveCreateJob) exactly like the problem path does. */
+function flnRenderJob(){
+  var o=document.getElementById('fln'); if(!o || !FLN) return;
+  var E=flBoardEsc, F=FLN, sc=o.scrollTop, b=getBoat(F.boat), P=flnParts(F.boat,true);
+  var lab=function(t,x){ return '<div class="fln-lab">'+t+(x?(' <span>'+x+'</span>'):'')+'</div>'; };
+  var inp=function(id,val,ph,type,extra){ return '<input id="'+id+'" type="'+(type||'text')+'" value="'+E(val)+'" placeholder="'+E(ph||'')+'" class="fln-in" '+(extra||'')+'>'; };
+  var sel=function(id,list,val){ return '<select id="'+id+'" class="fln-in">'+list.map(function(x){ return '<option value="'+E(x[0])+'"'+(x[0]===val?' selected':'')+'>'+E(x[1])+'</option>'; }).join('')+'</select>'; };
+  var num=function(n,t){ return '<div style="display:flex;align-items:center;gap:10px;margin-top:'+(n>1?18:0)+'px"><span style="width:22px;height:22px;border-radius:11px;background:#16265C;color:#fff;font-family:\'DM Mono\',monospace;font-size:12px;display:flex;align-items:center;justify-content:center">'+n+'</span><span style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">'+t+'</span></div>'; };
+  var seg=function(act,cur,list){ return '<div class="fln-seg">'+list.map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" data-a="'+act+'" data-v="'+x[0]+'">'+x[1]+'</button>'; }).join('')+'</div>'; };
+  var chk=function(act,on,t,d){ return '<button type="button" class="fln-chk" data-a="'+act+'"><u class="'+(on?'on':'')+'">'+(on?'✓':'')+'</u><b>'+t+'</b>'+(d?('<span>'+d+'</span>'):'')+'</button>'; };
+  var arow=function(type,label,list){ return '<div class="fln-arow"><b>'+label+'</b><div>'+(list.length?list.map(function(x){ var on=!!F.assets[type+'|'+x.id];
+      return '<button type="button" class="fln-chip'+(on?' on':'')+'" data-a="asset" data-t="'+type+'" data-v="'+E(x.id)+'"><span>'+E(x.t)+'</span></button>'; }).join(''):'<span style="font-size:12.5px;color:#8A8F9C;line-height:34px">none on this boat</span>')+'</div></div>'; };
+  var kinds=[['inc','A problem','something broke or looks wrong'],['job','Planned job','service, check, repair without a report'],['prj','Project','dry dock, overhaul, long work'],['memo','Parts request','memo not tied to one job']];
+  var covers = F.jtype==='preventive'
+    ? ('<div style="margin-top:10px">'+lab('What the job covers','pick from the fit-out of this boat')+'<div>'+arow('engine','Engine',P.engine)+arow('gearbox','Gearbox',P.gearbox)+arow('propeller','Propeller',P.propeller)
+        +'<div class="fln-arow" style="padding-bottom:0"><b style="line-height:44px">Hull · other</b><div>'+inp('fln-hull',F.hull,'for example: hull cleaning, safety check (separate with commas)')+'</div></div></div></div>')
+    : '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#F7F7F5;border:1px solid #ECEBE6;font-size:12.5px;line-height:1.45;color:#3E4658">A corrective job without a report does not carry a list of affected items. If a specific engine, gearbox or propeller is broken, use <a data-a="kindin" data-v="inc" style="color:#0F6CA6;font-weight:600;cursor:pointer">A problem</a> so the item is recorded.</div>';
+  o.innerHTML=flnCSS()
+    +'<div style="width:1080px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.45);color:#0F1B3D;overflow:hidden">'
+    +'<div style="display:flex;align-items:flex-start;gap:16px;padding:18px 24px 14px;border-bottom:1px solid #ECEBE6"><div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5F5F58">Add work'+(b?(' · '+E(b.name)):'')+'</div>'
+      +'<div style="margin-top:2px;font-size:21px;font-weight:700">What work is planned?</div></div>'
+      +'<button type="button" data-a="close" aria-label="Close" style="width:36px;height:36px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;font-size:16px;cursor:pointer;color:#0F1B3D">&times;</button></div>'
+    +'<div class="fln-kinds" style="display:flex;gap:6px;padding:12px 24px;border-bottom:1px solid #ECEBE6;background:#F7F7F5">'
+      +kinds.map(function(k,i){ return '<button type="button" class="fln-kind'+(i===1?' on':'')+'"'+(i===1?'':(' data-a="'+(i===0?'kindin':'kind')+'" data-v="'+k[0]+'"'))+'><b>'+k[1]+'</b><span>'+k[2]+'</span></button>'; }).join('')+'</div>'
+    +'<div class="fln-2"><div style="padding:16px 24px 18px;border-right:1px solid #ECEBE6;min-width:0">'
+      +num(1,'The job')
+      +'<div class="fln-g" style="grid-template-columns:1.2fr 0.9fr 1.6fr;margin-top:10px"><div>'+lab('Boat')+sel('fln-boat',flnBoats().map(function(x){ return [x.id,x.name]; }),F.boat)+'</div>'
+        +'<div>'+lab('Start date')+inp('fln-date',F.date,'','date')+'</div>'
+        +'<div>'+lab('Type','service or check · repair')+seg('jtype',F.jtype,[['preventive','Preventive'],['corrective','Corrective']])+'</div></div>'
+      +'<div style="margin-top:10px">'+lab('Job title')+inp('fln-title',F.title,'for example: 100-hour service, all engines')+'</div>'
+      +'<div style="margin-top:10px">'+lab('Details','optional')+'<textarea id="fln-detail" class="fln-in" placeholder="what will be done">'+E(F.detail)+'</textarea></div>'
+      +covers
+      +num(2,'While the job is open')
+      +'<div class="fln-g" style="grid-template-columns:1fr 0.8fr 1.4fr;margin-top:10px"><div>'+lab('Owner')+inp('fln-owner',F.owner,'who follows this job')+'</div><div>'+lab('Due')+inp('fln-due',F.due,'','date')+'</div>'
+        +'<div>'+lab('Where the work is done','optional')+inp('fln-loc',F.loc,'pier, workshop, slipway')+'</div></div>'
+      +'<div style="margin-top:10px">'+lab('Boat while the job is open')+seg('jstatus',F.jstatus,[['available','Available · keeps running'],['fixing','Fixing'],['unavailable','Unavailable']])+'</div>'
+      +(F.jstatus==='unavailable'?('<div style="margin-top:10px">'+lab('Why unavailable')+sel('fln-reason',[['','Choose a reason']].concat(FLN_REASON),F.reason)+'</div>'):'')
+      +'<div style="margin-top:12px">'+chk('start',F.start,'Start the job now','the boat status changes as set above')+'</div>'
+      +num(3,'Parts and labour')+'<div style="margin-top:10px">'+chk('parts',F.parts,'Open the parts request right after saving','it can also be requested later from the job')+'</div>'
+    +'</div><div id="fln-prev" style="background:#F7F7F5;padding:16px 20px 18px;display:flex;flex-direction:column;min-width:0"></div></div></div>';
+  o.scrollTop=sc;
+  flnPreview();
+}
+function flnSaveJob(){
+  var F=FLN; if(!F || F.busy) return;
+  if(!F.boat || !F.title){ alert('Please fill in the boat and the job title.'); return; }
+  if(F.jstatus==='unavailable' && !F.reason){ alert('Please choose why the boat is unavailable.'); return; }
+  F.busy=true;
+  var H=function(id,on){ var el=document.getElementById(id); if(el) el.style.display=on?'none':''; };
+  var S=function(id,v){ var el=document.getElementById(id); if(el) el.value=v; };
+  var job=null, note='', n0=FL_MAINT.length, CB={engine:'job-asset-eng-cb',gearbox:'job-asset-gb-cb',propeller:'job-asset-prop-cb'};
+  try{
+    H('fl-modal-create-job',1);
+    try{
+      try{ _projCreateForId=null; }catch(_){ }
+      flOpenCreateJobModal();
+      S('job-boat',F.boat);
+      var card=document.querySelector('.job-type-card[data-type="'+F.jtype+'"]'); if(card) selectJobType(F.jtype,card);
+      if(F.jtype==='preventive'){
+        Object.keys(F.assets).forEach(function(k){ var p=k.split('|'), cb=document.querySelector('.'+CB[p[0]]+'[value="'+p[1]+'"]'); if(cb) cb.checked=true; });
+        S('job-asset-hull',F.hull);
+      }
+      S('job-title',F.title); S('job-detail',F.detail); S('job-location',F.loc); S('job-start-date',F.date||TODAY_STR);
+      if(typeof selectJobStatusByValue==='function') selectJobStatusByValue(F.jstatus);
+      S('job-status-reason', F.jstatus==='unavailable'?F.reason:'');
+      flSaveCreateJob();
+    } finally { try{ closeModal('fl-modal-create-job'); }catch(_){ } H('fl-modal-create-job',0); }
+    if(FL_MAINT.length<=n0){ F.busy=false; alert('The job was not saved. Check the form and try again.'); return; }
+    job=FL_MAINT[0];
+    if(F.owner || F.due){ if(F.owner) job.owner=F.owner; if(F.due) job.dueDate=F.due; flSave(); }
+    if(F.start) flMaintStart(job.id);
+    if(F.parts){ if(window._flStartGear) note=' Finish the start dialog first, then request parts from the job.'; else flMaintCreateMemo(job.id, true); }
+  }catch(err){
+    try{ console.error('[flnForm] job save failed', err); }catch(_){ }
+    F.busy=false;
+    alert('Saving stopped part-way. '+(job?('The job '+(job.no||'')+' was created. Check it on Fleet Work before trying again.'):'Nothing was saved.'));
+    if(job){ flnClose(); try{ flRenderWork(); }catch(_){ } }
+    return;
+  }
+  var boat=F.boat;
+  flnClose();
+  FLW.boat=boat; FLW.stage=-1; FLW.bf=(FLW.bf==='down')?'work':FLW.bf; FLW.item='mj:'+job.id;
+  try{ flRenderWork(); }catch(_){ }
+  if(typeof flShowToast==='function') flShowToast('Saved '+(job.no||'the job')+'.'+note);
 }
