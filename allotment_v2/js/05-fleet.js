@@ -27300,6 +27300,12 @@ function flwBoats(items){
   L.sort(function(a,b){ return (b.isDown-a.isDown) || (b.down-a.down) || (b.items.length-a.items.length) || String(a.name).localeCompare(String(b.name)); });
   return L;
 }
+function flwAv(b,sz){
+  var c='#B9BEC9', t='—';
+  try{ if(b){ c=(b.ownership==='charter')?'#534AB7':((typeof boatAvatarColor==='function')?boatAvatarColor(b):c);
+              t=(typeof boatInitials==='function')?boatInitials(b.name):String(b.name||'').slice(0,2).toUpperCase(); } }catch(_){}
+  return '<span style="flex:none;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+c+';color:#fff;font-size:'+(sz>=40?13:11)+'px;font-weight:700;display:flex;align-items:center;justify-content:center">'+String(t).replace(/[&<>"]/g,'')+'</span>';
+}
 function flwPickBoat(id){ FLW.boat=id; FLW.item=''; flRenderWork(); }
 function flwPickItem(k){ FLW.item=k; flRenderWork(); }
 function flwStage(i){ FLW.stage=(FLW.stage===i)?-1:i; FLW.item=''; flRenderWork(); }
@@ -27535,11 +27541,13 @@ function flRenderWork(){
         var p=sp(o.s), list=(FLW.stage>=0)?o.items.filter(function(x){ return x.stage===FLW.stage; }):o.items;
         var has={}; o.items.forEach(function(x){ has[x.stage]=1; });
         var sub=o.isDown?('Down '+(o.down?(o.down+' day'+(o.down===1?'':'s')):'today')):(o.b?'Running':'Not tied to a boat');
+        /* §flwAv · same boat identity as the Boat Status list: coloured initials circle, 13px name, type · PAX line */
+        var meta=o.b?(E(o.b.type||'')+' · '+(o.b.cap||'?')+' PAX'):'';
         return '<div class="flw-boat'+(o.id===FLW.boat?' on':'')+'" data-id="'+E(o.id)+'" onclick="flwPickBoat(this.dataset.id)">'
-          +'<span class="flw-bar" style="background:'+p[3]+'"></span><span style="flex:1;min-width:0">'
-          +'<span style="display:flex;align-items:center;gap:8px"><b class="flw-el" style="font-size:14px;font-weight:700">'+E(o.name)+'</b>'
+          +flwAv(o.b,32)+'<span style="flex:1;min-width:0">'
+          +'<span style="display:flex;align-items:center;gap:6px"><b class="flw-el" style="font-size:13px;font-weight:600;color:#0F1B3D">'+E(o.name)+'</b>'
             +(o.b?('<span class="flw-pill" style="font-size:10.5px;padding:1px 7px;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span>'):'')+'</span>'
-          +'<span class="flw-el" style="display:block;margin-top:1px;font-size:11.5px;color:'+(o.isDown&&o.down>60?'#8E2019':'#5B6170')+'">'+sub+'</span>'
+          +'<span class="flw-el" style="display:block;margin-top:2px;font-size:11px;color:#5B6170">'+(meta?(meta+' · '):'')+'<span style="color:'+(o.isDown&&o.down>60?'#8E2019':'#5B6170')+'">'+sub+'</span></span>'
           +'<span class="flw-dots">'+S.map(function(s,i){ return '<i'+(has[i]?(' style="background:'+s.c+'"'):'')+' title="'+s.t+'"></i>'; }).join('')+'</span></span>'
           +'<span style="flex:none;text-align:right"><b class="mono" style="display:block;font-size:17px;font-weight:500">'+list.length+'</b><i style="font-style:normal;font-size:10.5px;color:#5B6170">open</i></span></div>'; }).join('')
       :'<div class="flw-empty">No boats match this filter.</div>')
@@ -27578,7 +27586,7 @@ function flRenderWork(){
       +(other.length?('<div class="flw-grp"><b>'+(groups.length?'Other jobs':'Jobs')+'</b><span>'+(groups.length?'not part of a project':'')+'</span><span class="mono" style="margin-left:auto;color:#3E4658">'+flwMoney(sum(other))+'</span></div>'+other.map(rowH).join('')):'')
       +(rep.length?('<div class="flw-grp"><b>Reported · no job yet</b><span>decide: open a job, quick fix, or dismiss</span></div>'+rep.map(rowH).join('')):'');
     mid='<div class="flw-card"><div style="display:flex;align-items:center;gap:12px;padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
-        +'<div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:21px;font-weight:700">'+E(cur.name)+'</span>'
+        +flwAv(b,40)+'<div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:21px;font-weight:700">'+E(cur.name)+'</span>'
           +(b?('<span class="flw-pill" style="font-size:12px;padding:3px 9px;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span>'):'')
           +(cur.isDown&&cur.down?('<span style="font-size:12.5px;font-weight:600;color:#8E2019">down '+cur.down+' days</span>'):'')+'</div>'
         +'<div style="margin-top:2px;font-size:13px;color:#5B6170">'+(bsub.join(' · ')||'&nbsp;')+'</div></div>'
