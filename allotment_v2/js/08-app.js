@@ -48019,6 +48019,7 @@ function bkV2RenderNewBooking(){
     || (typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)));
 
   if(typeof bkNbfCSS==='function') bkNbfCSS();
+  if(typeof bkNbfCSS2==='function') bkNbfCSS2();
   return `
     <div class="bkv2-nb bkv2-nbf">
       <div class="bkv2-nb-topbar">
@@ -48028,7 +48029,7 @@ function bkV2RenderNewBooking(){
         <div class="bkv2-nb-draft" style="${_bkV2.editingId?'background:#dbeafe;color:#1e40af':''}"><span class="dot" style="${_bkV2.editingId?'background:#1e40af':''}"></span>${_bkV2.editingId?'Editing':'Draft'}</div>
         </div>
       <div class="bkv2-nb-h1"><i>LOVE ANDAMAN</i>${_bkV2.editingId?'Edit Booking':'New Booking'}</div>
-        <div></div>
+        <div class="nbf-r">${(typeof bkNbfStepsHtml==='function')?bkNbfStepsHtml():''}</div>
       </div>
 
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;background:transparent;min-height:calc(100vh - 80px)">
@@ -48220,6 +48221,7 @@ function bkV2RenderNewBooking(){
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bkV2RenderAttachSection()}
+             ${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}
              <div style="margin-bottom:10px">${bkV2RenderActionMeta()}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                ${bkV2RenderSubmitButton()}
@@ -48274,7 +48276,7 @@ function bkV2RenderPickupSection(){
       const tripIdx = d.trips.indexOf(t);
       return `
         <tr>
-          <td style="padding:6px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft)">${t.date||'—'}</td>
+          <td style="padding:6px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft)">${t.date?(typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date):'—'}</td>
           <td style="padding:6px 8px;font-size:11px">${escapeHTML(routeName)}</td>
           <td style="padding:6px 0;text-align:right">
             <input type="text" value="${escapeHTML(displayTime)}" style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--bk-navy);background:transparent;border:1px solid transparent;border-radius:3px;padding:3px 6px;width:120px;text-align:right" onchange="bkV2SetTripPickupTime(${tripIdx}, this.value)" placeholder="—">
@@ -48329,7 +48331,7 @@ function bkV2RenderPickupSection(){
               const routeName = (typeof ROUTES!=='undefined' && ROUTES.find(r=>r.id===t.routeId)?.name) || t.routeId;
               if(!displayTime && !t.date) return '';
               return `<div style="display:flex;align-items:center;gap:10px;padding:4px 9px;background:#F4F8F5;border:1px solid #E5EDE7;border-radius:6px;font-size:11px">
-                <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);min-width:80px">${t.date || '—'}</span>
+                <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);min-width:80px">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : '—'}</span>
                 <span style="flex:1;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(routeName)}</span>
                 <span style="font-family:'DM Mono',monospace;font-weight:700;color:#0F6E56">${displayTime || '—'}</span>
                 ${displayTime ? `<span style="background:${isEdited?'#FAEEDA':'#DDF0E5'};color:${isEdited?'#633806':'#0F6E56'};font-size:8px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.06em">${isEdited?'EDITED':'AUTO'}</span>` : ''}
@@ -48708,7 +48710,7 @@ function bkV2RenderTripsSection(){
             <label class="bkv2-nb-label">Date</label>
             <div class="bkv2-cal-wrap">
               <div id="bkv2-cal-trig-${idx}" class="bkv2-nb-input bkv2-cal-trig" onclick="bkV2CalOpen(${idx})" tabindex="0" style="user-select:none">
-                <span style="font-family:'DM Mono',monospace;${t.date?'':'color:#b4b2a9'}">${t.date || 'dd/mm/yyyy'}</span>
+                <span style="font-family:'DM Mono',monospace;${t.date?'':'color:#b4b2a9'}">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : 'dd/mm/yyyy'}</span>
               </div>
               <div id="bkv2-cal-pop-${idx}" class="bkv2-cal-pop"></div>
             </div>
@@ -48821,7 +48823,7 @@ function bkV2RenderTripsSection(){
             </tbody>
           </table>
         </div>
-        ${(t.ovn==='return' && t.date && t.ovnReturnDate)?((d.trips||[]).some(x=>x.ovnLeg&&x.routeId===t.routeId&&x.date===t.ovnReturnDate)?`<div style="margin-top:10px;font-size:12.5px;color:#0B5A43;font-weight:600;background:#DDF1EA;border-radius:10px;padding:8px 12px">&#10003; สร้าง trip ขากลับวัน ${escapeHTML(t.ovnReturnDate||'')} แล้ว · กันที่นั่งเรียบร้อย (ดู TRIP ถัดไป)</div>`:`<button type="button" onclick="bkV2CreateOvnReturnLeg(${idx})" style="margin-top:10px;width:100%;height:40px;background:#5B289A;color:#fff;border:none;border-radius:10px;padding:0 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128679; สร้าง trip ขากลับ (${escapeHTML(t.ovnReturnDate||'')}) + กันที่นั่ง</button>`):''}
+        ${(t.ovn==='return' && t.date && t.ovnReturnDate)?((d.trips||[]).some(x=>x.ovnLeg&&x.routeId===t.routeId&&x.date===t.ovnReturnDate)?`<div style="margin-top:10px;font-size:12.5px;color:#0B5A43;font-weight:600;background:#DDF1EA;border-radius:10px;padding:8px 12px">&#10003; สร้าง trip ขากลับวัน ${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))} แล้ว · กันที่นั่งเรียบร้อย (ดู TRIP ถัดไป)</div>`:`<button type="button" onclick="bkV2CreateOvnReturnLeg(${idx})" style="margin-top:10px;width:100%;height:40px;background:#5B289A;color:#fff;border:none;border-radius:10px;padding:0 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128679; สร้าง trip ขากลับ (${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))}) + กันที่นั่ง</button>`):''}
       </div>
     `;
   }).join('');
@@ -49090,7 +49092,7 @@ function bkV2RenderReviewPanel(){
           })()}
         </div>
         <div style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
-          <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${t.date ? escapeHTML(t.date) : '<span style="color:#a32d2d">no date</span>'}</span>
+          <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${t.date ? escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date)) : '<span style="color:#a32d2d">no date</span>'}</span>
           <span style="color:var(--ink-soft)">&middot;</span>
           <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${tp} pax</span>
           <span style="font-size:9px;font-weight:600;color:var(--ink-soft);background:#efece6;padding:1px 6px;border-radius:4px;letter-spacing:.02em">${escapeHTML(t.zone)}</span>
@@ -74074,4 +74076,97 @@ function bkNbfCSS(){
   +S+' .bkv2-review-inner{font-size:13px}'
   +'@media(max-width:900px){'+S+'{padding:10px;border-radius:12px}'+S+' .bkv2-nb-topbar{grid-template-columns:1fr}'+S+' .bkv2-nb-h1{display:none}}';
   var st=document.createElement('style'); st.id='bknbf-css'; st.textContent=css; document.head.appendChild(st);
+}
+
+/* §nbfCheck (2026-10-08) · New Booking · "Before you confirm" list + step chips + DD/MM/YYYY display
+   Read-only: it reports the same conditions bkV2RenderSubmitButton already uses (the "block" rows)
+   plus a few reminders that never block. It changes no data and no save rule. */
+function bkNbfDMY(s){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s==null?'':s)); return m ? (m[3]+'/'+m[2]+'/'+m[1]) : String(s==null?'':s); }
+function bkNbfChecks(){
+  var d=(typeof _bkV2!=='undefined'&&_bkV2)?_bkV2.newBooking:null; if(!d) return [];
+  var out=[], trips=d.trips||[];
+  function add(sec,ok,block,t){ out.push({sec:sec,ok:!!ok,block:!!block,t:t}); }
+  var manual=(d.priceMode==='manual') || ((typeof bkV2IsB2CBk==='function') && bkV2IsB2CBk(d));
+  add('agent', !!d.agentId, true, d.agentId?'Agent chosen':'Choose an agent');
+  if(d.agentId){
+    var rtOk=!!(d.rateTypeRef||manual);
+    add('agent', rtOk, true, rtOk?'Price source ready':'Agent has no Rate Type · bind one in Agent List');
+    var v=String(d.voucherRef||'').trim();
+    add('agent', !!v, false, v?'Voucher ref filled':'Voucher ref is empty');
+  }
+  var withRoute=trips.filter(function(t){ return t.routeId && t.date; });
+  add('trips', withRoute.length>0, true, withRoute.length?(withRoute.length+' trip'+(withRoute.length===1?'':'s')+' with route and date'):'Add at least 1 trip with route and date');
+  var noRate=[]; try{ noRate=(typeof bkV2NoRateTrips==='function')?bkV2NoRateTrips():[]; }catch(_){ noRate=[]; }
+  if(noRate.length) add('trips', false, true, 'No rate for trip '+noRate.map(function(x){ return x.idx+1; }).join(', ')+' · change the zone or fix the Rate Type');
+  trips.forEach(function(t,i){
+    if(!t.routeId) return;
+    var pax=0; try{ pax=bkV2PaxAllTot(t.pax||{}); }catch(_){ }
+    if(!t.ovnLeg && !pax) add('trips', false, false, 'Trip '+(i+1)+' has 0 pax');
+    try{
+      if(t.bookingMode!=='charter' && t.date && d.agentId && pax>0 && typeof bkV2DrawSources==='function'){
+        var srcs=bkV2DrawSources(t.routeId,t.date,d.agentId)||[], sel=t.lockDrawSel||{};
+        var rem=srcs.reduce(function(s,x){ return s+(+x.remaining||0); },0);
+        var drawn=srcs.reduce(function(s,x){ return s+Math.min(Number(sel[x.lockId])||0, +x.remaining||0); },0);
+        if(rem>0 && drawn===0) add('trips', false, false, 'Trip '+(i+1)+': '+rem+' locked seat'+(rem===1?'':'s')+' of this agent not used');
+      }
+    }catch(_){ }
+  });
+  var q=null; try{ q=bkV2CalcQuote(); }catch(_){ q=null; }
+  if(q && q.totalFoc>0){
+    var fr=String(d.focReason||'').trim().length>0;
+    add('pay', fr, true, fr?'FOC reason entered':('Enter the FOC reason · '+q.totalFoc+' FOC pax'));
+  }
+  add('guests', !!d.leadPax, true, d.leadPax?'Lead guest named':'Enter the lead guest name');
+  var needVan=withRoute.some(function(t){ return !t.ovnLeg && t.zone!=='NoTransfer' && t.zone!=='NT'; }) && !d.pickupSelf;
+  if(needVan){ var pa=!!(d.pickupAreaId||d.pickupArea); add('pickup', pa, false, pa?'Pickup area chosen':'Pickup area not chosen yet'); }
+  return out;
+}
+function bkNbfChecksHtml(){
+  var list=bkNbfChecks(); if(!list.length) return '';
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var blockLeft=list.filter(function(c){ return c.block && !c.ok; }).length;
+  /* only what still needs attention is listed, so the panel stays short and the buttons stay in view */
+  var okN=list.filter(function(c){ return c.ok; }).length;
+  var rows=list.filter(function(c){ return !c.ok; }).sort(function(a,b){ return (b.block?1:0)-(a.block?1:0); }).map(function(c){
+    var bg=c.ok?'#2E9C78':(c.block?'#D9952B':'#C9CCD6'), mk=c.ok?'&#10003;':(c.block?'!':'&middot;');
+    var fg=c.ok?'#3E4658':(c.block?'#7A4300':'#5B6170');
+    return '<div class="nbf-ck"><span style="background:'+bg+'">'+mk+'</span><i style="color:'+fg+(c.block&&!c.ok?';font-weight:600':'')+'">'+esc(c.t)+(!c.ok&&!c.block?' <em>reminder</em>':'')+'</i></div>';
+  }).join('');
+  rows+='<div class="nbf-ck"><span style="background:#2E9C78">&#10003;</span><i style="color:#3E4658">'+okN+' of '+list.length+' checks passed</i></div>';
+  return '<div class="nbf-cks"><div class="nbf-cks-h"><span>Before you confirm</span><b style="color:'+(blockLeft?'#7A4300':'#0B5A43')+'">'+(blockLeft?(blockLeft+' to fix'):'ready')+'</b></div>'+rows+'</div>';
+}
+function bkNbfStepsHtml(){
+  var list=bkNbfChecks(); if(!list.length) return '';
+  var defs=[['agent','Agent','Agent'],['trips','Trips','Trips'],['guests','Guests','Guests'],['pickup','Pickup','Pickup'],['pay','Pay','Payment']];
+  return defs.map(function(df){
+    var mine=list.filter(function(c){ return c.sec===df[0]; });
+    var bad=mine.some(function(c){ return c.block && !c.ok; }), warn=mine.some(function(c){ return !c.block && !c.ok; });
+    var bg=bad?'#D9952B':(warn?'#8E96B5':'#2E9C78'), mk=bad?'!':(warn?'&middot;':'&#10003;');
+    return '<button type="button" class="nbf-st" onclick="bkNbfGo(\''+df[2]+'\')" title="'+(bad?'Something here must be fixed before Confirm':(warn?'Reminder only':'OK'))+'"><span style="background:'+bg+'">'+mk+'</span>'+df[1]+'</button>';
+  }).join('');
+}
+function bkNbfGo(label){
+  var hs=document.querySelectorAll('#view-booking .bkv2-nbf .nbf-main .bkv2-nb-sec-h');
+  for(var i=0;i<hs.length;i++){
+    if(String(hs[i].textContent||'').trim().indexOf(label)===0){ try{ hs[i].scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ hs[i].scrollIntoView(); } return; }
+  }
+}
+function bkNbfCSS2(){
+  if(document.getElementById('bknbf-css2')) return;
+  var S='#view-booking .bkv2-nbf';
+  var css=''
+  +S+' .nbf-r{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px;min-width:0}'
+  +S+' .nbf-st{height:26px;padding:0 9px 0 5px;border-radius:13px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;font-family:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}'
+  +S+' .nbf-st:hover{background:rgba(255,255,255,.20)}'
+  +S+' .nbf-st span{width:16px;height:16px;border-radius:8px;color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}'
+  +S+' .nbf-cks{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#F7F7F5;border:1px solid #ECEBE6}'
+  +S+' .nbf-cks-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px}'
+  +S+' .nbf-cks-h span{font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658}'
+  +S+' .nbf-cks-h b{font-size:12px;font-weight:700}'
+  +S+' .nbf-ck{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:12.5px;line-height:1.35}'
+  +S+' .nbf-ck span{flex:none;width:17px;height:17px;border-radius:9px;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}'
+  +S+' .nbf-ck i{font-style:normal;min-width:0}'
+  +S+' .nbf-ck em{font-style:normal;font-size:10.5px;color:#8A8F9C;border:1px solid #D5D7DE;border-radius:5px;padding:0 5px;margin-left:2px;white-space:nowrap}'
+  +'@media(max-width:1500px){'+S+' .nbf-r{display:none}}';
+  var st=document.createElement('style'); st.id='bknbf-css2'; st.textContent=css; document.head.appendChild(st);
 }
