@@ -48711,6 +48711,7 @@ function bkV2RenderTripsSection(){
             <div class="bkv2-nb-ddwrap">
               <input id="bkv2-route-input-${idx}" class="bkv2-nb-input" type="text" placeholder="Type or pick route..." value="${escapeHTML(currentRouteLabel)}" autocomplete="off" oninput="bkV2RouteDDFilter(${idx}, this.value)" onfocus="bkV2RouteDDShow(${idx})" onkeydown="bkV2RouteDDKey(event, ${idx})">
               <div id="bkv2-route-dd-${idx}" class="bkv2-nb-dd"></div>
+              <button type="button" class="nbf-clr" title="Clear and pick another route" aria-label="Clear route" onmousedown="event.preventDefault()" onclick="bkNbfRouteClear(${idx})">&times;</button>
             </div>
           </div>
           <div class="bkv2-nb-field">
@@ -74306,6 +74307,10 @@ function bkNbfCSS2(){
     +S+' .nbf-pk4 > .bkv2-nb-row{display:contents}'
   +'}'
   +S+' #bkv2-agent-input{padding-right:40px}'
+  +S+' .bkv2-nb-ddwrap > input[id^="bkv2-route-input-"]{padding-right:40px}'
+  +S+' .nbf-clr{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:13px;border:none;background:#ECEBE6;color:#3E4658;font-size:17px;line-height:1;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}'
+  +S+' .nbf-clr:hover{background:#16265C;color:#fff}'
+  +S+' .bkv2-nb-ddwrap > input:placeholder-shown ~ .nbf-clr{display:none}'
   +S+' #bkv2-agent-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:13px;border:none;background:#ECEBE6;color:#3E4658;font-size:17px;line-height:1;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}'
   +S+' #bkv2-agent-clear:hover{background:#16265C;color:#fff}'
   +S+' #bkv2-agent-input:placeholder-shown ~ #bkv2-agent-clear{display:none}'
@@ -74328,4 +74333,12 @@ function bkNbfAgentClear(){
   inp.value='';
   try{ inp.focus(); }catch(_){ }
   if(typeof bkV2AgentDDFilter==='function') bkV2AgentDDFilter('');
+}
+/* the x in a trip's Route field · same idea as the agent one: empties the text and opens the route list.
+   The route already chosen for the trip stays until another one is picked. */
+function bkNbfRouteClear(idx){
+  var inp=document.getElementById('bkv2-route-input-'+idx); if(!inp) return;
+  inp.value='';
+  try{ inp.focus(); }catch(_){ }
+  if(typeof bkV2RouteDDFilter==='function') bkV2RouteDDFilter(idx,'');
 }
