@@ -15206,7 +15206,7 @@ function ckRowHtml(r, date, kind, extraHtml){
        // §retVan · รถขากลับของแถวนี้ · เงียบไว้ถ้ากลับคันเดิมโดยปริยาย
        var _d=(typeof pckJobDrop==='function')?pckJobDrop(b,date):null; if(!_d) return '';
        var _w=(_d.van&&_d.van.kind==='pending');
-       return '<div style="margin-top:3px;font-size:10px;font-weight:700;line-height:1.35;'
+       return '<div class="ck-retl" title="'+e((_d.t?('ส่ง '+_d.t):'')+(_d.van?((_d.t?' · ':'')+ckRetVanTxt(_d.van)):''))+'" style="margin-top:3px;font-size:10px;font-weight:700;line-height:1.35;'
          +'color:'+(_w?'#A32D2D':(_d.self?'#7a7972':'#633806'))+'">'
          +(_d.t?('&#8627; ส่ง '+e(_d.t)):'')
          +(_d.van?((_d.t?' · ':'')+e(ckRetVanTxt(_d.van))):'')+'</div>';
@@ -17442,6 +17442,11 @@ function vckSheetCSS(){
         ดันมาต่อท้ายบรรทัดเดียวกัน จะได้กวาดสายตาลงมาตรง ๆ ได้ ── */
   +S+' tr.ck-row>td{overflow:hidden}'
   +S+' tr.ck-row td>div{display:inline;margin:0 0 0 6px !important;font-size:9.5px;line-height:1}'
+  /* §vckRetLine (2026-10-09) · "ตัวที่ส่งกลับให้เป็นอีกบรรทัดนึง · กินพื้นที่เยอะไป"
+     บรรทัด ↳ ส่ง … · ↩ กลับ VANx ต่อท้ายชื่อโรงแรมทำให้ช่องจุดรับกว้างมาก
+     ให้ลงบรรทัดใหม่ใต้ชื่อโรงแรม ยาวเกินก็ตัด … (ชี้เมาส์ดูเต็มได้) · แถวอื่นยังสูงบรรทัดเดียวเหมือนเดิม */
+  +S+' tr.ck-row td>div.ck-retl{display:block;margin:1px 0 0 0 !important;max-width:300px;'
+    +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9.5px;line-height:1.2}'
   /* ช่องเหตุการณ์หน้างาน · ป้าย No-show กับปุ่มทางกลับ เบียดกันบรรทัดเดียวไม่พอ
      ให้ป้ายอยู่บรรทัดบน ปุ่มอยู่บรรทัดล่าง แล้วย่อปุ่มให้พอดีความสูงแถว */
   +S+' tr.ck-row>td:nth-child(15){white-space:normal;overflow:visible;'
