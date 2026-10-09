@@ -67555,8 +67555,36 @@ function poWhoAcct(){ try{ var m=window.LA_ME||{}; return m.name||m.username||''
 function poWhoPick(){ try{ return localStorage.getItem(PO_WHO_KEY+_poPier)||''; }catch(_){ return ''; } }
 function poWhoPickName(){
   var id=poWhoPick(); if(!id) return '';
-  var s=(PIER_STAFF||[]).filter(function(x){ return x.id===id && x.pier===_poPier && x.active!==false; })[0];
+  var s=poWhoStaff().filter(function(x){ return x.id===id; })[0];
   return s?(s.nick||s.name||''):'';
+}
+/* §poWhoSect · "ผู้บันทึกตอนนี้ขึ้นทุกคน ต้องเลือกแค่บางกลุ่มที่โชว์"
+   กัปตัน/เด็กเรือไม่ได้มานั่งลงบัญชี · เลือกกลุ่มจากทะเบียนกลุ่ม (PIER_SECT) ที่ฟันเฟืองข้างช่อง
+   เก็บ PIER_CFG.whoSects[pier]=[sectId] · ไม่ตั้ง = โชว์ทุกคน · คนที่เคยเลือกไว้แต่หลุดกลุ่มถือว่ายังไม่เลือก */
+function poWhoSects(){ var W=(PIER_CFG&&PIER_CFG.whoSects)||{}; var a=W[_poPier]; return Array.isArray(a)?a:null; }
+function poWhoStaff(){
+  var sel=poWhoSects(), all=poStaff(_poPier);
+  if(!sel || !sel.length) return all;
+  return all.filter(function(s){ return sel.indexOf(s.sect)>=0; });
+}
+function poWhoSectOpen(){
+  if(!poGuard()) return;
+  var sects=(typeof paSects==='function')?paSects(_poPier):[], sel=poWhoSects()||[];
+  var cnt=function(id){ return poStaff(_poPier).filter(function(s){ return s.sect===id; }).length; };
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">ติ๊กกลุ่มที่จะขึ้นในช่อง "ผู้บันทึก" · ไม่ติ๊กเลย = ขึ้นทุกคน · แก้กลุ่มของพนักงานได้ที่ ทะเบียนกลุ่ม / ทะเบียนพนักงาน</div>'
+    +(sects.length?sects.map(function(x){
+      return '<label style="'+poRowCss()+';cursor:pointer"><input type="checkbox" id="pows_'+poE(x.id)+'"'+(sel.indexOf(x.id)>=0?' checked':'')+' style="width:17px;height:17px">'
+        +'<div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(x.name)+'</div><div style="font-size:11px;color:#7C8091">'+cnt(x.id)+' คน</div></div></label>'; }).join('')
+      :'<div style="color:#9A9A93;font-size:12.5px;padding:14px 0">ท่านี้ยังไม่มีทะเบียนกลุ่ม · ตั้งได้ที่หน้า ตารางการทำงาน ▸ ทะเบียนกลุ่ม</div>')
+    +(poStaff(_poPier).some(function(s){ return !s.sect; })?('<div style="font-size:11px;color:#B45309;margin-top:8px">พนักงานที่ยังไม่มีกลุ่ม '+poStaff(_poPier).filter(function(s){ return !s.sect; }).length+' คน · จะไม่ขึ้นถ้าติ๊กเลือกกลุ่ม</div>'):'');
+  poModal('กลุ่มที่เป็นผู้บันทึกได้ · '+poE((PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||{}).n||_poPier), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก','poWhoSectSave()',1), 460);
+}
+function poWhoSectSave(){
+  var pick=[]; ((typeof paSects==='function')?paSects(_poPier):[]).forEach(function(x){ var el=document.getElementById('pows_'+x.id); if(el&&el.checked) pick.push(x.id); });
+  if(!PIER_CFG.whoSects || typeof PIER_CFG.whoSects!=='object') PIER_CFG.whoSects={};
+  if(pick.length) PIER_CFG.whoSects[_poPier]=pick; else delete PIER_CFG.whoSects[_poPier];
+  poPersist(); poModalClose(); renderPierOffice();
 }
 function poWhoSet(v){
   try{ if(v) localStorage.setItem(PO_WHO_KEY+_poPier,v); else localStorage.removeItem(PO_WHO_KEY+_poPier); }catch(_){}
@@ -67570,14 +67598,15 @@ function poWhoGuard(){
   return false;
 }
 function poWhoBar(ro){
-  var st=poStaff(_poPier); if(ro || !st.length) return '';
+  var st=poWhoStaff(); if(ro || !poStaff(_poPier).length) return '';
   var cur=poWhoPick(), ok=!!poWhoPickName();
   return '<label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#475569" title="ชื่อที่จะลงในบัญชีทุกรายการที่บันทึกจากเครื่องนี้">ผู้บันทึก'
     +'<select id="po-who" class="'+(ok?'':'miss')+'" onchange="poWhoSet(this.value)" '
     +'style="border:none;background:#F1F5F9;border-radius:12px;padding:7px 10px;font:700 12px inherit;font-family:inherit;color:#0F172A;max-width:150px">'
     +'<option value="">— เลือกชื่อ —</option>'
     +st.map(function(s){ return '<option value="'+poE(s.id)+'"'+(s.id===cur?' selected':'')+'>'+poE(s.nick||s.name)+(s.role?(' · '+poE(s.role)):'')+'</option>'; }).join('')
-    +'</select></label>';
+    +'</select>'
+    +'<button class="nav" onclick="poWhoSectOpen()" title="เลือกกลุ่มพนักงานที่จะขึ้นในช่องนี้" style="padding:5px 7px">&#9881;</button></label>';
 }
 
 /* ══ §poFine (2026-10-09) · ค่าปรับค้างเก็บ ═════════════════════════════════════════════════════

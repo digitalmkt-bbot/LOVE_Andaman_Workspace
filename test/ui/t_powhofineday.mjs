@@ -112,6 +112,27 @@ if ((t3.openB === 0 || t3.disabledWhenOpen === true) && t3.enabledNow && t3.clos
   ok(`3 ${t3.openB ? 'มีลำค้าง → ปุ่ม disabled · ' : ''}ครบทุกลำ → ปิดวันโดย ${t3.by} · KPI/ชิปขึ้น "ปิดวัน" · เปิดใบไม่ได้ · เปิดวันอีกครั้ง (เหตุผล "${t3.why}") → เปิดใบได้`);
 else fail('3 ' + JSON.stringify(t3));
 
+
+// 5 · §poWhoSect · เลือกกลุ่มที่ขึ้นในช่องผู้บันทึก · office+service เท่านั้น · กัปตัน/เด็กเรือหาย · คนที่เลือกไว้แต่หลุดกลุ่ม = ยังไม่เลือก
+const t5 = await page.evaluate(() => {
+  const all = poStaff('panwa').length, sects = paSects('panwa');
+  const want = sects.filter(x => /office|service/i.test(x.name)).map(x => x.id);
+  poWhoSectOpen(); const boxes = document.querySelectorAll('#po-modal input[type=checkbox]').length;
+  want.forEach(id => { document.getElementById('pows_' + id).checked = true; });
+  poWhoSectSave();
+  const opts = [...document.querySelectorAll('#po-who option')].slice(1);
+  const names = opts.map(o => o.textContent);
+  const stillCaptain = names.some(n => /กัปตัน|เด็กเรือ/.test(n));
+  const picked = poWhoPickName();   // เต้ย เป็นกัปตัน · หลุดกลุ่มแล้วต้องว่าง
+  const missCls = document.getElementById('po-who').className;
+  delete PIER_CFG.whoSects.panwa; renderPierOffice('panwa');
+  const back = document.querySelectorAll('#po-who option').length - 1;
+  return { all, boxes, sectsN: sects.length, shown: opts.length, stillCaptain, picked, missCls, back };
+});
+if (t5.boxes === t5.sectsN && t5.shown < t5.all && t5.shown > 0 && !t5.stillCaptain && t5.picked === '' && /miss/.test(t5.missCls) && t5.back === t5.all)
+  ok(`5 ติ๊ก office+service → ช่องเหลือ ${t5.shown} จาก ${t5.all} คน ไม่มีกัปตัน/เด็กเรือ · คนที่เลือกไว้หลุดกลุ่ม → ช่องกลับเป็นเหลือง · ล้างค่า → กลับมา ${t5.back} คน`);
+else fail('5 ' + JSON.stringify(t5));
+
 // เก็บกวาด move ทดสอบของข้อ 4
 await page.evaluate((fid) => { if (fid) { const i = PIER_MOVES.findIndex(m => m.id === fid); if (i >= 0) PIER_MOVES.splice(i, 1); if (PIER_CFG.finePay) delete PIER_CFG.finePay[fid]; }
   PIER_MOVES.filter(m => /zz_test/.test(m.note || '')).forEach(m => PIER_MOVES.splice(PIER_MOVES.indexOf(m), 1)); }, t4.id || null);
