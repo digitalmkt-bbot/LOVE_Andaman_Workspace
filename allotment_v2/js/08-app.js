@@ -59992,7 +59992,7 @@ function bkV2PayOf(bk){
   }catch(_){}
   return out;
 }
-function bkV2VoucherTicket(bk, esc){
+function bkV2VoucherTicket(bk, esc, part){
   esc = esc || (s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]));
   const NAVY='#16265C', CYAN='#4FA9DC', ROW='#F2F3F5', MUT='#7C8091', RED='#E0232A';
   const trips=(bk.trips||[]), t0=trips[0]||{}, dsFirst=t0.date||'';
@@ -60251,6 +60251,7 @@ function bkV2VoucherTicket(bk, esc){
     }
   }catch(_){}
 
+  if(part==='pay') return payHtml+lostHtml;   /* §vc2 · staff payment strip only */
   return '<div class="bkv2-vcdoc">'
   /* §vcSkin · หัวบริษัทมีเส้นคั่นหนา · แยกส่วนหัวออกจากเนื้อใบให้ชัด */
   + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;'
@@ -60349,6 +60350,7 @@ function bkV2RenderBookingDetail(){
   const _mktSnap = bk.marketSnapshot || {};
   const _mktName = (typeof SB_MARKETS!=='undefined'?SB_MARKETS:[]).find(m=>m.id===_mktSnap.market)?.name || '';
   const _mktTxt = _mktName ? ` · ${_mktName}${_mktSnap.sub?` / ${_mktSnap.sub}`:''}` : '';
+  try{ bkVcCSS(); }catch(_){}
   const histList = (Array.isArray(bk.history)?bk.history.slice():[]);
   if(!histList.length && bk.rebook){ histList.push({at:bk.rebook.at,kind:'weather',tag:'Reschedule',text:'Rescheduled · '+bk.rebook.from+' → '+bk.rebook.to+(bk.rebook.reason==='weather'?' (weather)':''),by:'—'}); }
 
@@ -60369,13 +60371,9 @@ function bkV2RenderBookingDetail(){
         </div>
       </div>
 
-      <!-- TICKET hero (boarding-pass style · trip + travel date) -->
-      ${bkV2VoucherTicket(bk, escapeHTML)}
-
-      <!-- 2-col layout · main + sidebar -->
-      <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start">
-        <!-- LEFT main -->
-        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+      <!-- §vc2 · document on the left (fixed 900px) · use / staff / activity on the right -->
+      <div class="bkvc2-grid">
+        <div class="bkvc2-main">
 
           ${focPending?`
           <!-- FOC pending banner -->
@@ -60419,10 +60417,23 @@ function bkV2RenderBookingDetail(){
             </div>
           </div>`:''}
 
+          <!-- §vc2 · the sheet that goes out · agent copy or guest copy -->
+          <div class="bkvc2-hold">${bkVcDoc(bk, bkVcMode())}</div>
+          <!-- staff payment strip (invoice state, cash on tour ruling) · never on the copy -->
+          <div class="bkvc2-pay">${bkV2VoucherTicket(bk, escapeHTML, 'pay')}</div>
+
+        </div>
+
+        <!-- RIGHT · use this voucher, then staff-only details, then activity -->
+        <div class="bkvc2-side">
+
+          ${bkVcUseCard(bk)}
+          <div class="bkvc2-cap">For staff only &middot; never on either copy</div>
+
           <!-- AGENT & VOUCHER -->
           <div class="bkv2-nb-card">
             <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Agent &amp; Voucher</span></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:4px">
+            <div style="display:grid;grid-template-columns:1fr;gap:14px;padding-top:4px">
               <div>
                 <div class="bkv2-dt-lab">Agent</div>
                 <div class="bkv2-dt-val">${escapeHTML(agent?.name || b2c?.name || '—')}${agent?.code?` <span style="color:var(--ink-soft);font-weight:500">· ${escapeHTML(agent.code)}</span>`:''}</div>
@@ -60438,168 +60449,11 @@ function bkV2RenderBookingDetail(){
             </div>
           </div>
 
-          <!-- History moved to the right sidebar (below Activity) -->
-
-          <!-- TRIPS & PAX -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Trips &amp; Pax</span></div>
-            <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
-              ${(bk.trips||[]).map((t,i) => {
-                const route = ROUTES.find(r => r.id === t.routeId);
-                const px = t.pax || {};
-                const ad = bkV2PaxTot(px,'ad'), chd = bkV2PaxTot(px,'chd'), inf = bkV2PaxTot(px,'inf'), focN = bkV2PaxTot(px,'foc');
-                /* §trOtherVeh (2026-09-11) · "Other transfer" (TR-OTHER) is quoted per vehicle, not per
-                   pax — the B2C mapper already writes "Sedan × 2 · (round trip) · A → B" as the first
-                   line of bk.notes (server.js §b2cTransfer), so read the vehicle count back out of it
-                   rather than adding a vehQty/vehType column to sb_bookings__trips for one route.
-                   Falls back to the normal pax grid if the note doesn't match (e.g. a booking made by
-                   hand in ops, with no such note). */
-                const _vehM = (route?.extId==='TR-OTHER') ? String(bk.notes||'').split('\n')[0].match(/^(.+?)\s*[×x]\s*(\d+)/i) : null;
-                const vehGrid = _vehM ? `
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:'DM Mono',monospace">
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Vehicle</div><div style="font-size:16px;font-weight:700">${escapeHTML(_vehM[1].trim())} &times; ${escapeHTML(_vehM[2])}</div></div>
-                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
-                    </div>` : `
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-family:'DM Mono',monospace">
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Adult</div><div style="font-size:18px;font-weight:700">${ad}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Child</div><div style="font-size:18px;font-weight:700">${chd}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Infant</div><div style="font-size:18px;font-weight:700">${inf}</div></div>
-                      <div><div style="font-size:10px;color:#92400E;text-transform:uppercase;letter-spacing:0.5px">FOC</div><div style="font-size:18px;font-weight:700;color:${focN?'#92400E':'inherit'}">${focN}</div></div>
-                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
-                    </div>`;
-                return `
-                  <div style="border:1px solid rgba(26,35,50,0.08);border-radius:10px;padding:12px 14px;background:white">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                      <div style="width:6px;height:24px;border-radius:3px;background:#1F2A44"></div>
-                      <div style="flex:1;min-width:0">
-                        <div style="font-size:13px;font-weight:800;color:#1F2A44">${escapeHTML(route?.name || t.routeId)}</div>
-                        ${bkUpgActive(t)?`<div data-upgdetail="1" style="display:inline-block;font-size:11px;font-weight:700;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:2px 8px;margin-top:3px">${escapeHTML(bkUpgNote(bk, t.date))}${t.upg.by?(' &middot; '+escapeHTML(t.upg.by)):''}</div>`:''}
-                        <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${bkV2FmtFullDate(t.date)}</div>
-                      </div>
-                      ${t.charter?`<span style="background:#3A6FF7;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">CHARTER</span>`:''}
-                      ${t.bundle?`<span style="background:#10B981;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">${escapeHTML(t.bundle.type||'BUNDLE')} ${t.bundle.mode==='paid'?'paid':'free'}</span>`:''}
-                    </div>
-                    ${vehGrid}
-                  </div>
-                `;
-              }).join('')}
-              ${!(bk.trips||[]).length?'<div style="padding:14px;text-align:center;color:var(--ink-soft);font-size:12px">No trips</div>':''}
-            </div>
-          </div>
-
-          <!-- GUESTS -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Guests</span></div>
-            <div style="padding-top:4px">
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding:10px 0;border-bottom:1px solid rgba(26,35,50,0.05)">
-                <div>
-                  <div class="bkv2-dt-lab">Lead Pax</div>
-                  <div class="bkv2-dt-val">${escapeHTML(bk.leadPax || '—')}</div>
-                  ${bk.leadNationality?`<div class="bkv2-dt-sub">${escapeHTML(bk.leadNationality)}</div>`:''}
-                </div>
-                <div>
-                  <div class="bkv2-dt-lab">Phone</div>
-                  <div class="bkv2-dt-val">${escapeHTML(bk.leadPhone || '—')}</div>
-                </div>
-                <div>
-                  <div class="bkv2-dt-lab">Email</div>
-                  <div class="bkv2-dt-val">${escapeHTML(bk.leadEmail || '—')}</div>
-                </div>
-              </div>
-              ${(bk.passengers||[]).length?`
-                <div style="margin-top:8px">
-                  <div class="bkv2-dt-lab" style="margin-bottom:6px">Other passengers · ${bk.passengers.length}</div>
-                  <table style="width:100%;border-collapse:collapse;font-size:12px">
-                    <thead>
-                      <tr style="border-bottom:1px solid rgba(26,35,50,0.08)">
-                        <th style="text-align:left;padding:6px 8px;font-weight:700;color:var(--ink-soft);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">#</th>
-                        <th style="text-align:left;padding:6px 8px;font-weight:700;color:var(--ink-soft);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Name</th>
-                        <th style="text-align:left;padding:6px 8px;font-weight:700;color:var(--ink-soft);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Type</th>
-                        <th style="text-align:left;padding:6px 8px;font-weight:700;color:var(--ink-soft);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Nationality</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${bk.passengers.map((p,i)=>`
-                        <tr style="border-bottom:1px solid rgba(26,35,50,0.04)">
-                          <td style="padding:6px 8px;color:var(--ink-soft)">#${i+2}</td>
-                          <td style="padding:6px 8px">${escapeHTML(p.name || '—')}</td>
-                          <td style="padding:6px 8px"><span style="background:rgba(26,35,50,0.06);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700">${escapeHTML(p.type||'AD')}</span></td>
-                          <td style="padding:6px 8px">${escapeHTML(p.nationality || '—')}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              `:''}
-            </div>
-          </div>
-
-          <!-- PICKUP & DROP-OFF -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Pickup &amp; Drop-off</span></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:4px">
-              <div>
-                <div class="bkv2-dt-lab">Pickup</div>
-                <div class="bkv2-dt-val">${escapeHTML(bk.pickup || bk.hotelName || '—')}</div>
-                ${bk.roomNumber?`<div class="bkv2-dt-sub">Room ${escapeHTML(bk.roomNumber)}</div>`:''}
-                ${bk.pickupTime?`<div class="bkv2-dt-sub">${escapeHTML(bk.pickupTime)}</div>`:''}
-              </div>
-              <div>
-                <div class="bkv2-dt-lab">Drop-off</div>
-                <div class="bkv2-dt-val">${bk.dropoffSameAsPickup!==false && !bk.dropoffHotelName?'Same as pickup':escapeHTML(bk.dropoffHotelName||'—')}</div>
-              </div>
-            </div>
-            ${(Array.isArray(bk.altPickups)&&bk.altPickups.length)?`
-            <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
-              <div class="bkv2-dt-lab" style="color:#5B289A">&#128652; รับหลายจุด (บางคนรับคนละที่) · ${bk.altPickups.length} จุด</div>
-              <div style="display:flex;flex-direction:column;gap:6px;margin-top:7px">
-                ${bk.altPickups.map(a=>{ const _ar=a.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.areaId):null; const _z=(a.zone||(_ar?_ar.zone:'')); const _zl=(_z==='PK'?'PK':_z==='KL'?'KL':_z==='NoTransfer'?'NT':''); const _loc=(a.place||'').trim()||(_ar?_ar.name:'')||'—'; const _q=Math.max(1,parseInt(a.qty)||1); return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap"><span style="background:#EDE7FB;color:#5B289A;font-weight:700;border-radius:6px;padding:1px 8px;font-size:11px">${_q} คน</span><span style="color:var(--ink);font-weight:600">${escapeHTML((a.who||'').trim()||'—')}</span>${_zl?`<span style="background:#F0EBFA;color:#5B289A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">${_zl}</span>`:''}<span style="color:var(--ink-soft)">&rarr; ${escapeHTML(_loc)}</span></div>`; }).join('')}
-              </div>
-            </div>`:''}
-          </div>
-
-          <!-- DIETARY · LUGGAGE · GUIDES -->
-          ${(bk.diet||bk.dietNotes||bk.guides||bk.notes||bk.luggage)?`
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Dietary &amp; Special Requests</span></div>
-            <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
-              ${bk.diet&&Object.values(bk.diet).some(v=>v)?`<div><div class="bkv2-dt-lab">Diet</div><div class="bkv2-dt-val">${Object.entries(bk.diet).filter(([k,v])=>v).map(([k])=>k).join(' · ')}</div></div>`:''}
-              ${bk.dietNotes?`<div><div class="bkv2-dt-lab">Allergies / notes</div><div class="bkv2-dt-val" style="white-space:pre-wrap">${escapeHTML(bk.dietNotes)}</div></div>`:''}
-              ${bk.luggage&&Object.values(bk.luggage).some(v=>v)?`<div><div class="bkv2-dt-lab">Luggage</div><div class="bkv2-dt-val">${Object.entries(bk.luggage).filter(([k,v])=>v).map(([k])=>k).join(' · ')}</div></div>`:''}
-              ${bk.guides&&(Array.isArray(bk.guides)?bk.guides.length:Object.values(bk.guides).some(v=>v))?`<div><div class="bkv2-dt-lab">Guide languages</div><div class="bkv2-dt-val">${Array.isArray(bk.guides)?bk.guides.join(' · '):Object.entries(bk.guides).filter(([k,v])=>v).map(([k])=>k).join(' · ')}</div></div>`:''}
-              ${bk.notes?`<div><div class="bkv2-dt-lab">Notes / special request</div><div class="bkv2-dt-val" style="white-space:pre-wrap">${escapeHTML(bk.notes)}</div></div>`:''}
-            </div>
-          </div>`:''}
-
-          <!-- ADD-ONS -->
-          ${(bk.addOns||[]).length?`
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Add-on Services</span></div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
-              <tbody>
-                ${(bk.addOns||[]).map(a => {
-                  /* §addonUnit · show the working, not just the total: "4 × ฿200" under the name.
-                     Derived from qty + amount rather than stored, so it cannot drift from the money.
-                     Shown only when it divides exactly — a rounded unit price that does not multiply
-                     back to the total is worse than no unit price at all. qty is units for a charter
-                     (ลำ) and pax for a per-person add-on, so the row stays deliberately unlabelled. */
-                  const _q = Math.max(1, Math.round(Number(a.qty) || 1));
-                  const _amt = Math.round(Number(a.amount) || 0);
-                  const _unit = (_q > 1 && _amt > 0 && _amt % _q === 0) ? (_amt / _q) : null;
-                  return `
-                  <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
-                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${_unit !== null ? `<div style="font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:2px">${_q} × ฿${bkV2FmtTHB(_unit)}</div>` : ''}</td>
-                    <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700;vertical-align:top">฿${bkV2FmtTHB(_amt)}</td>
-                  </tr>
-                `;}).join('')}
-              </tbody>
-            </table>
-          </div>`:''}
 
           <!-- PAYMENT & CASH ON TOUR -->
           <div class="bkv2-nb-card">
             <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Payment</span></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:4px">
+            <div style="display:grid;grid-template-columns:1fr;gap:14px;padding-top:4px">
               <div>
                 <div class="bkv2-dt-lab">Method</div>
                 ${(function(){
@@ -60641,13 +60495,36 @@ function bkV2RenderBookingDetail(){
             </div>
           </div>
 
-        </div>
+          <!-- ADD-ONS -->
+          ${(bk.addOns||[]).length?`
+          <div class="bkv2-nb-card">
+            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Add-on Services</span></div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
+              <tbody>
+                ${(bk.addOns||[]).map(a => {
+                  /* §addonUnit · show the working, not just the total: "4 × ฿200" under the name.
+                     Derived from qty + amount rather than stored, so it cannot drift from the money.
+                     Shown only when it divides exactly — a rounded unit price that does not multiply
+                     back to the total is worse than no unit price at all. qty is units for a charter
+                     (ลำ) and pax for a per-person add-on, so the row stays deliberately unlabelled. */
+                  const _q = Math.max(1, Math.round(Number(a.qty) || 1));
+                  const _amt = Math.round(Number(a.amount) || 0);
+                  const _unit = (_q > 1 && _amt > 0 && _amt % _q === 0) ? (_amt / _q) : null;
+                  return `
+                  <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
+                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${_unit !== null ? `<div style="font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:2px">${_q} × ฿${bkV2FmtTHB(_unit)}</div>` : ''}</td>
+                    <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700;vertical-align:top">฿${bkV2FmtTHB(_amt)}</td>
+                  </tr>
+                `;}).join('')}
+              </tbody>
+            </table>
+          </div>`:''}
 
-        <!-- RIGHT sidebar · price summary + activity -->
-        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+          ${bkVcStaffTrips(bk, escapeHTML)}
 
           <!-- COST SUMMARY -->
-          <div class="bkv2-nb-card" style="position:sticky;top:14px">
+          <div class="bkv2-nb-card">
             <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Total</span></div>
             <div style="padding-top:8px">
               ${bk.priceBreakdown?`
@@ -74525,4 +74402,311 @@ function bkNbfRouteClear(idx){
   inp.value='';
   try{ inp.focus(); }catch(_){ }
   if(typeof bkV2RouteDDFilter==='function') bkV2RouteDDFilter(idx,'');
+}
+
+/* ═══ §vc2 (2026-10-09) · Booking detail = confirmation document + "Use this voucher" ═══
+   The document is what staff send out. Two copies of the same sheet:
+     agent = with the Billing box (totals only, no price per trip / per add-on)
+     guest = no Billing box at all; cash on tour stays so the guest knows what to bring
+   Agent code and rate type are on neither copy - they live in the staff column.
+   Every style is inline on purpose: the same HTML is cloned off-screen at a fixed 900px
+   for Copy / Save, so the picture is identical on every screen and for every user. */
+function bkVcMode(){ try{ return (_bkV2 && _bkV2.vcMode==='guest') ? 'guest' : 'agent'; }catch(_){ return 'agent'; } }
+function bkVcSetMode(m){ try{ _bkV2.vcMode=(m==='guest')?'guest':'agent'; }catch(_){}
+  if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else if(typeof bkV2Render==='function') bkV2Render(); }
+function bkVcDate(s){
+  if(!s) return '';
+  try{ var d=new Date(String(s).length>10?s:(s+'T12:00:00')); if(isNaN(d.getTime())) return String(s);
+    return ('0'+d.getDate()).slice(-2)+' '+['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()]+' '+d.getFullYear();
+  }catch(_){ return String(s); } }
+function bkVcTime(s){ try{ var d=new Date(s); if(isNaN(d.getTime())||String(s).length<=10) return ''; return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }catch(_){ return ''; } }
+function bkVcDoc(bk, mode){
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var guest=(mode==='guest');
+  var NAVY='#0B1E5B', CY='#00B4E0', MUT='#6B7693', SUB='#3E4A6B', LINE='#DCE3EC', YEL='#FFE45C';
+  var MONO="font-family:'DM Mono',monospace;";
+  var LAB='font-size:10.5px;font-weight:700;letter-spacing:.09em;color:'+MUT+';text-transform:uppercase;';
+  var money=function(n){ return '฿'+Math.round(+n||0).toLocaleString('en-US'); };
+  var PT=function(px,k){ return (typeof bkV2PaxTot==='function')?(bkV2PaxTot(px||{},k)||0):0; };
+  var trips=(bk.trips||[]);
+  var PIER={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'};
+  var st=String(bk.status||'');
+  var stLbl=(typeof bkV2StatusLabel==='function')?bkV2StatusLabel(st):st;
+  var stBad=/cancel|reject/.test(st), stWait=/pending|quote/.test(st);
+  var ag=(bk.agentId&&typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
+  var b2c=(bk.b2cChannel&&typeof sbGetB2C==='function')?sbGetB2C(bk.b2cChannel):null;
+  var isB2C=(bk.agentId==='a_b2c')||bk.channelType==='b2c';
+  var agName=(ag&&ag.name)||(b2c&&b2c.name)||(isB2C?'Direct booking':'Walk-in / Direct');
+  var code=(typeof bkV2DisplayCode==='function')?bkV2DisplayCode(bk):bk.id;
+  var vref=String(bk.voucherRef||'').trim();
+  var by=String(bk.confirmedBy||bk.createdBy||'').trim(); if(by==='b2c_sync') by='';
+  var when=bk.confirmedAt||bk.bookingDate||bk.createdAt||'';
+  var whenT=bkVcTime(when);
+
+  /* pax of the whole booking = the largest trip (same people travel on each trip) */
+  var paxAll=0; trips.forEach(function(t){ var n=PT(t.pax,'ad')+PT(t.pax,'chd')+PT(t.pax,'inf')+PT(t.pax,'foc'); if(n>paxAll) paxAll=n; });
+  var gd=bk.guides||{}, langs=[];
+  if(Array.isArray(gd)) langs=gd.slice(); else { if(gd.english)langs.push('English'); if(gd.russian)langs.push('Russian'); if(gd.chinese)langs.push('Chinese'); if(String(gd.otherLang||'').trim()) langs.push(String(gd.otherLang).trim()); }
+  var leadBits=[bk.leadPhone, bk.leadEmail, bk.leadNationality, paxAll?(paxAll+' guest'+(paxAll===1?'':'s')):'', langs.length?('Guide: '+langs.join(', ')):''].filter(function(x){ return String(x||'').trim(); });
+
+  /* pickup is stored once per booking; only the time can differ per trip */
+  var hotel=String(bk.hotelName||bk.pickup||'').trim();
+  var room=String(bk.roomNumber||'').trim();
+  var zoneTxt=[bk.pickupArea||'', bk.pickupZone||''].filter(Boolean).join(' · ');
+  var selfArr=/NoTransfer/i.test(String(bk.pickupZone||''));
+  var dropName=String(bk.dropoffHotelName||'').trim() || ((bk.dropoffSame===false||bk.dropoffSameAsPickup===false)?String(bk.dropoffArea||'').trim():'');
+  var dropDiff=!!dropName && dropName!==hotel;
+
+  var tripRows=trips.map(function(t){
+    var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){ return x.id===t.routeId; }):null;
+    var rc=(r&&r.color)||CY;
+    var dep=(r&&(r.times||[])[0])||'';
+    var pier=PIER[(r&&r.pier)||'']||'';
+    var ad=PT(t.pax,'ad'), ch=PT(t.pax,'chd'), inf=PT(t.pax,'inf'), foc=PT(t.pax,'foc');
+    var kind=[(t.charter||t.bookingMode==='charter')?'Charter':'', (t.bundle?String(t.bundle.type||'Bundle'):'')].filter(Boolean);
+    var upg=''; try{ if(typeof bkUpgActive==='function' && bkUpgActive(t) && typeof bkUpgNote==='function') upg=bkUpgNote(bk,t.date)||''; }catch(_){}
+    var dow=''; try{ var _d=new Date(t.date+'T12:00:00'); if(!isNaN(_d.getTime())) dow=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][_d.getDay()]; }catch(_){}
+    var tm=''; try{ var o=(typeof bkOpsRead==='function')?bkOpsRead(bk,t.date):(bk.ops||{}); tm=String((o&&o.pickupTimeFinal)||t.pickupTime||bk.pickupTime||'').trim(); }catch(_){ tm=String(t.pickupTime||bk.pickupTime||'').trim(); }
+    var _vehM=(r&&r.extId==='TR-OTHER')?String(bk.notes||'').split('\n')[0].match(/^(.+?)\s*[×x]\s*(\d+)/i):null;
+    var cell=function(l,n){ return '<span style="flex:1;text-align:center"><span style="display:block;font-size:10px;font-weight:700;letter-spacing:.06em;color:'+MUT+'">'+l+'</span>'
+      +'<span style="display:block;'+MONO+'font-size:15px;font-weight:500;color:'+(n?NAVY:'#B4BDCF')+'">'+(n||'·')+'</span></span>'; };
+    var paxBox=_vehM
+      ? ('<div style="border-radius:8px;background:#EEF2F8;padding:7px 12px"><div style="'+LAB+'">Vehicle</div><div style="font-size:15px;font-weight:700">'+esc(_vehM[1].trim())+' × '+esc(_vehM[2])+'</div></div>')
+      : ('<div style="display:flex;align-items:center;border-radius:8px;background:#EEF2F8;padding:5px 4px">'+cell('ADULT',ad)+cell('CHILD',ch)+cell('INFANT',inf)+cell('FOC',foc)+cell('TOTAL',ad+ch+inf+foc)+'</div>');
+    var pick;
+    if(selfArr && !hotel){
+      pick='<div style="margin-top:10px;padding:10px 14px;border:1.5px dashed #C4611A;border-radius:8px;background:#FFF8EC;color:#7A4300;font-size:13.5px"><b>SELF-ARRIVE · no transfer arranged</b>'
+        +(pier?('<br>Please make your own way to <b>'+esc(pier)+' pier</b> before departure time.'):'')+'</div>';
+    } else {
+      pick='<div style="margin-top:10px;padding:10px 14px;border-radius:8px;background:#F4F6FA;display:flex;gap:14px;align-items:center">'
+        +'<div style="flex:1;min-width:0"><div style="'+LAB+'">Pickup</div>'
+          +'<div style="margin-top:1px;font-size:18px;font-weight:700;line-height:1.25">'+(esc(hotel)||'<span style="color:#B4BDCF">not set</span>')+'</div>'
+          +(room?('<div style="font-size:16px;font-weight:600">Room '+esc(room)+'</div>'):'')
+          +(zoneTxt?('<div style="font-size:12.5px;color:'+SUB+'">'+esc(zoneTxt)+'</div>'):'')
+          +(dropDiff?'':'<div style="margin-top:3px;font-size:12.5px;color:'+SUB+'">Drop-off: same place</div>')
+        +'</div>'
+        +(dropDiff?('<div style="flex:1;min-width:0;align-self:stretch;padding-left:14px;border-left:2px solid '+LINE+'"><div style="'+LAB+'color:#C4611A">Drop-off · different place</div>'
+          +'<div style="margin-top:1px;font-size:18px;font-weight:700;line-height:1.25">'+esc(dropName)+'</div></div>'):'')
+        +'<div style="flex:none;text-align:center;white-space:nowrap;padding:6px 14px;border-radius:8px;background:'+YEL+'"><div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#5E4300">PICKUP TIME</div>'
+          +'<div style="'+MONO+'font-size:18px;font-weight:500;color:'+NAVY+'">'+(esc(tm)||'to be confirmed')+'</div></div>'
+      +'</div>';
+    }
+    return '<div style="display:grid;grid-template-columns:5px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid '+LINE+'">'
+      +'<div style="border-radius:3px;background:'+rc+'"></div><div>'
+      +'<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font-size:16px;font-weight:700">'+esc((r&&r.name)||t.routeId||'—')+'</span>'
+        +kind.map(function(k){ return '<span style="padding:1px 8px;border-radius:6px;background:#EEF2F8;font-size:11.5px;font-weight:600;color:'+SUB+'">'+esc(k)+'</span>'; }).join('')
+        +(upg?('<span style="padding:1px 8px;border-radius:6px;background:#F4E8FB;font-size:11.5px;font-weight:600;color:#4A1D6E">'+esc(upg)+'</span>'):'')+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:12px;margin-top:8px;align-items:start">'
+        +'<div><div style="'+LAB+'">Trip date</div><div style="display:inline-block;margin-top:2px;padding:2px 9px;border-radius:6px;background:'+YEL+';'+MONO+'font-size:17px;font-weight:500;color:'+NAVY+'">'+esc(bkVcDate(t.date)||'—')+'</div>'
+          +(dow?('<div style="font-size:12px;color:'+MUT+'">'+dow+'</div>'):'')+'</div>'
+        +'<div><div style="'+LAB+'">Pier</div><div style="font-size:14px;font-weight:600">'+(esc(pier)||'—')+'</div>'+(dep?('<div style="font-size:12px;color:'+MUT+'">Departs '+esc(dep)+'</div>'):'')+'</div>'
+        +paxBox
+      +'</div>'+pick+'</div></div>';
+  }).join('') || ('<div style="padding:18px;text-align:center;color:'+MUT+'">No trip on this booking</div>');
+
+  /* split pickup · some guests picked up somewhere else */
+  var altHtml='';
+  if(Array.isArray(bk.altPickups) && bk.altPickups.length){
+    altHtml='<div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:#F3EEFB"><div style="'+LAB+'color:#5B289A">Split pickup · '+bk.altPickups.length+' more place'+(bk.altPickups.length===1?'':'s')+'</div>'
+      +bk.altPickups.map(function(a){ var ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null;
+          var loc=String(a.place||'').trim()||(ar?ar.name:'')||'—'; var q=Math.max(1,parseInt(a.qty)||1);
+          return '<div style="display:flex;gap:10px;align-items:baseline;margin-top:4px;font-size:14px"><span style="'+MONO+'font-weight:500;white-space:nowrap">'+q+' pax</span><span style="font-weight:600">'+esc(loc)+'</span>'
+            +(a.room?('<span style="color:'+SUB+'">Room '+esc(a.room)+'</span>'):'')+(a.time?('<span style="margin-left:auto;padding:1px 8px;border-radius:6px;background:'+YEL+';'+MONO+'">'+esc(a.time)+'</span>'):'')+'</div>'; }).join('')
+      +'</div>';
+  }
+  /* services · same source as the boat job sheet (bundle and rate type count too) · no prices */
+  var svc=[];
+  try{
+    var _join=false,_chtr=0,_ptr=false;
+    trips.forEach(function(t){ if(typeof bkV2AddOnFlags!=='function') return; var f=bkV2AddOnFlags(bk,t.routeId)||{};
+      if(f.join)_join=true; if(f.charter)_chtr+=(+f.charterQty||1); if(f.transfer)_ptr=true; });
+    if(_join) svc.push('Longtail Join'); if(_chtr) svc.push('Longtail Charter'+(_chtr>1?(' ×'+_chtr):'')); if(_ptr) svc.push('Private Transfer');
+    (bk.addOns||[]).forEach(function(a){ if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;
+      var ty=String(a.type||''); if(/longtail|transfer/i.test(ty)) return; var lbl=String(a.label||ty).trim(); if(!lbl) return;
+      svc.push(lbl+((+a.qty>1)?(' ×'+(+a.qty)):'')); });
+  }catch(_){}
+  var svcHtml=svc.length?('<div style="display:flex;gap:10px;margin-top:12px;font-size:13.5px;align-items:baseline"><span style="'+LAB+'white-space:nowrap">Add-ons</span><span style="flex:1;font-weight:600">'+svc.map(esc).join(' · ')+'</span></div>'):'';
+  var cot=(bk.cashOnTour && +bk.cashOnTour.amount>0)?+bk.cashOnTour.amount:0;
+  var cotCur=(bk.cashOnTour&&bk.cashOnTour.currency&&bk.cashOnTour.currency!=='THB')?(bk.cashOnTour.currency+' '):'฿';
+  var cotTxt=cot?(cotCur+Math.round(cot).toLocaleString('en-US')):'';
+  var cotHtml=cot?('<div style="margin-top:12px;padding:9px 14px;border:1.5px dashed #C4611A;border-radius:8px;background:#FFF8EC;color:#7A4300;font-size:13.5px"><b>Cash on tour · '+cotTxt+'</b> — the guest pays this at the pier on the day.</div>'):'';
+
+  /* guests */
+  var TY={AD:'Adult',CHD:'Child',INF:'Infant',FOC:'FOC'};
+  var gl=[]; if(String(bk.leadPax||'').trim()) gl.push({name:bk.leadPax, tag:'(lead)', type:'', nat:bk.leadNationality||''});
+  (bk.passengers||[]).forEach(function(p){ if(p && String(p.name||'').trim()) gl.push({name:p.name, tag:'', type:TY[String(p.type||'').toUpperCase()]||p.type||'', nat:p.nationality||''}); });
+  var guestsHtml='<div style="'+LAB+'">Guests</div>'+(gl.length?gl.map(function(g,i){
+      return '<div style="display:flex;gap:12px;padding:7px 0;border-bottom:1px dashed '+LINE+';font-size:14px"><span style="width:18px;color:'+MUT+'">'+(i+1)+'.</span>'
+        +'<span style="flex:1;font-weight:600">'+esc(g.name)+(g.tag?(' <span style="font-weight:400;color:'+MUT+'">'+g.tag+'</span>'):'')+'</span>'
+        +'<span style="width:60px;color:'+SUB+'">'+esc(g.type)+'</span><span style="width:90px;text-align:right;color:'+SUB+'">'+esc(g.nat)+'</span></div>'; }).join('')
+    :('<div style="padding:7px 0;font-size:13px;color:'+MUT+'">No guest names on this booking</div>'));
+  /* requests */
+  var rq=[]; var sm=bk.specialMeals||{};
+  var dietB=[]; if(sm.veg)dietB.push(sm.veg+' vegetarian'); if(sm.vegan)dietB.push(sm.vegan+' vegan'); if(sm.halal)dietB.push(sm.halal+' halal');
+  if(bk.diet && typeof bk.diet==='object') Object.keys(bk.diet).forEach(function(k){ if(bk.diet[k]) dietB.push(k); });
+  if(dietB.length) rq.push('<b>Diet:</b> '+esc(dietB.join(' · ')));
+  var al=''; try{ al=(typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):String(sm.allergies||'').trim(); }catch(_){}
+  if(al) rq.push('<b>Allergy:</b> '+esc(al));
+  if(String(bk.dietNotes||'').trim()) rq.push('<b>Diet note:</b> '+esc(String(bk.dietNotes).trim()));
+  if(bk.luggage && typeof bk.luggage==='object'){ var lg=Object.keys(bk.luggage).filter(function(k){ return bk.luggage[k]; }); if(lg.length) rq.push('<b>Luggage:</b> '+esc(lg.join(' · '))); }
+  if(String(bk.notes||'').trim()) rq.push('<b>Note:</b> <span style="white-space:pre-wrap">'+esc(String(bk.notes).trim())+'</span>');
+  var reqHtml=rq.length?('<div style="margin-top:14px;'+LAB+'">Requests</div><div style="margin-top:5px;padding:9px 14px;border-radius:8px;background:#FFF8E0;color:#5E4300;font-size:13.5px;line-height:1.6">'+rq.join('<br>')+'</div>'):'';
+
+  /* right box · agent copy = Billing (totals only) · guest copy = On the day (only when there is cash on tour) */
+  var side='';
+  if(!guest){
+    var pb=bk.priceBreakdown||{}, rows=[], sum=0;
+    var add=function(l,v,col,sign){ rows.push('<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;color:'+(col||NAVY)+'"><span>'+l+'</span><span style="'+MONO+'">'+(sign||'')+money(Math.abs(v))+'</span></div>'); sum+=v; };
+    if(+pb.seat) add('Seat rates', +pb.seat); if(+pb.charter) add('Charter', +pb.charter); if(+pb.addOn) add('Add-ons', +pb.addOn);
+    (bk.adjustments||[]).forEach(function(a){ var v=Number(a.value)||0; if(v<=0) return; var base=(+pb.seat||0)+(+pb.addOn||0);
+      var amt=a.mode==='percent'?Math.round(base*v/100):Math.round(v);
+      if(a.kind==='extra') add('Extra charge'+(a.label?(' · '+esc(a.label)):''), amt, '#7A4300', '+');
+      else if(a.kind==='discount') add('Discount'+(a.label?(' · '+esc(a.label)):''), -amt, '#0B7A4B', '−'); });
+    (bk.feeItems||[]).forEach(function(f){ var amt=Math.round(+f.amount||0); if(!amt) return; add(esc(f.label||(f.type==='reschedule'?'Reschedule fee':'Fee')), amt, '#7A4300', '+'); });
+    var total=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(+bk.total||+pb.total||0);
+    /* lines are printed only when they add up to the total · a breakdown that does not sum is worse than none */
+    var showRows=rows.length && Math.round(sum)===Math.round(total);
+    var ps=bk.paymentSnapshot||{}; var pill='';
+    if(isB2C){ var pst=String(ps.paidStatus||''); pill=pst==='paid'?'PREPAID':(pst?'DEPOSIT':String(ps.method||'').toUpperCase()); }
+    else pill=String(ps.method||bk.payment||'').toUpperCase()+((+ps.netDays)?(' · NET '+(+ps.netDays)):'');
+    side='<div style="padding:14px 16px 16px;border-radius:12px;background:#EEF2F8">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:800;letter-spacing:.1em">BILLING</span>'
+        +(pill?('<span style="margin-left:auto;padding:2px 9px;border-radius:10px;background:'+NAVY+';color:#fff;'+MONO+'font-size:10.5px;letter-spacing:.06em">'+esc(pill)+'</span>'):'')+'</div>'
+      +(showRows?('<div style="margin-top:4px">'+rows.join('')+'</div>'):'')
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;padding:10px 0 6px;border-top:2px solid '+CY+';font-size:16px;font-weight:800"><span>'+(isB2C?'Total':'Net to invoice')+'</span><span style="'+MONO+'font-weight:500">'+money(total)+'</span></div>'
+      +(isB2C?'':('<div style="font-size:12px;color:'+SUB+';line-height:1.5">Billed to '+esc(agName)+'.</div>'))
+      +(cot?('<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px dashed #C9D2E0;font-size:13px;color:#7A4300;font-weight:600"><span>Guest pays at pier</span><span style="'+MONO+'">'+cotTxt+'</span></div>'):'')
+      +'</div>';
+  } else if(cot){
+    side='<div style="padding:14px 16px 16px;border-radius:12px;background:#EEF2F8"><div style="font-size:13px;font-weight:800;letter-spacing:.1em">ON THE DAY</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:8px;padding:8px 0;border-top:2px solid '+CY+';font-size:14px;font-weight:700;color:#7A4300"><span>Pay at the pier</span><span style="'+MONO+'font-weight:500">'+cotTxt+'</span></div>'
+      +'<div style="font-size:12.5px;color:'+SUB+';line-height:1.5">Cash on tour. Everything else is arranged through '+esc(agName)+'.</div></div>';
+  }
+
+  return '<div class="bkvc2-doc" style="width:900px;box-sizing:border-box;background:#fff;color:'+NAVY+';font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;border-radius:14px;overflow:hidden;text-align:left;line-height:1.35">'
+    +'<div style="display:flex;align-items:center;gap:14px;padding:16px 28px;background:'+NAVY+';color:#fff;border-bottom:5px solid '+CY+'">'
+      +'<div><div style="font-size:21px;font-weight:800;letter-spacing:.1em;line-height:1.1">LOVE ANDAMAN</div><div style="font-size:12px;font-style:italic;color:#B9C6E8">Your experience, Our Passion</div></div>'
+      +'<div style="margin-left:auto;text-align:right"><div style="font-size:13px;font-weight:700;letter-spacing:.14em">BOOKING CONFIRMATION</div>'
+        +'<div style="margin-top:3px;display:inline-block;padding:2px 10px;border-radius:10px;background:'+CY+';font-size:11px;font-weight:700;letter-spacing:.1em">'+(guest?'GUEST COPY':'AGENT COPY')+'</div></div></div>'
+    +'<div style="display:grid;grid-template-columns:'+(vref?'1.25fr 1fr 1fr':'1.25fr 1fr')+';border-bottom:1px solid '+LINE+'">'
+      +'<div style="padding:14px 28px;min-width:0"><div style="'+LAB+'">'+(vref?'Agent voucher no.':'Love Andaman booking no.')+'</div><div style="margin-top:2px;'+MONO+'font-size:25px;font-weight:500;color:#C8102E;overflow-wrap:anywhere;line-height:1.15">'+esc(vref||code||'—')+'</div></div>'
+      +(!vref?'':('<div style="padding:14px 18px;border-left:1px solid '+LINE+';min-width:0"><div style="'+LAB+'">Love Andaman booking no.</div><div style="margin-top:5px;'+MONO+'font-size:18px;font-weight:500;overflow-wrap:anywhere">'+esc(code||'—')+'</div></div>'))
+      +'<div style="padding:14px 18px;border-left:1px solid '+LINE+';min-width:0"><div style="'+LAB+'color:'+(stBad?'#C8102E':(stWait?'#9A5B00':MUT))+'">'+esc(stLbl||'—')+'</div>'
+        +'<div style="margin-top:5px;font-size:14px;font-weight:600">'+esc(bkVcDate(when)||'—')+(whenT?(' · '+whenT):'')+'</div>'+(by?('<div style="font-size:12px;color:'+MUT+'">by '+esc(by)+'</div>'):'')+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:2px dashed '+LINE+'">'
+      +'<div style="padding:14px 28px 16px;min-width:0"><div style="'+LAB+'">Booked by'+(isB2C?'':' (agent)')+'</div><div style="margin-top:3px;font-size:18px;font-weight:700">'+esc(agName)+'</div></div>'
+      +'<div style="padding:14px 18px 16px;border-left:1px solid '+LINE+';min-width:0"><div style="'+LAB+'">Lead guest</div><div style="margin-top:3px;font-size:18px;font-weight:700">'+(esc(bk.leadPax)||'—')+'</div>'
+        +(leadBits.length?('<div style="margin-top:2px;font-size:13px;color:'+SUB+';overflow-wrap:anywhere">'+leadBits.map(esc).join(' · ')+'</div>'):'')+'</div></div>'
+    +'<div style="padding:16px 28px 4px">'
+      +'<div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 16px;border-radius:8px;background:#E3F6FB"><span style="width:7px;height:7px;border-radius:4px;background:'+CY+'"></span><span style="font-size:13px;font-weight:800;letter-spacing:.1em">TRIPS</span>'
+        +'<span style="margin-left:auto;font-size:12.5px;color:'+SUB+'">'+trips.length+' trip'+(trips.length===1?'':'s')+(paxAll?(' · '+paxAll+' guest'+(paxAll===1?'':'s')):'')+'</span></div>'
+      +tripRows+altHtml+svcHtml+cotHtml+'</div>'
+    +'<div style="display:grid;grid-template-columns:'+(side?'minmax(0,1fr) 290px':'minmax(0,1fr)')+';gap:20px;padding:16px 28px 20px;align-items:start"><div>'+guestsHtml+reqHtml+'</div>'+side+'</div>'
+    +'<div style="padding:10px 28px 12px;background:#F4F6FA;border-top:1px solid '+LINE+';font-size:11.5px;color:'+SUB+';display:flex;gap:16px"><span>LOVE ISLAND CO.,LTD. · T.TALAD NUEA, A.MUENG, PHUKET 83000 · MOBILE +66 (0)887654678</span>'
+      +'<span style="margin-left:auto;white-space:nowrap">'+(vref?'Please quote the voucher no. on the day of travel':'')+'</span></div>'
+  +'</div>';
+}
+function bkVcLoad(id, src, ready){
+  return new Promise(function(res, rej){
+    if(ready()){ res(); return; }
+    var s=document.getElementById(id);
+    if(!s){ s=document.createElement('script'); s.id=id; s.src=src; document.body.appendChild(s); }
+    s.addEventListener('load', function(){ ready()?res():rej(new Error('library did not start')); });
+    s.addEventListener('error', function(){ try{ s.remove(); }catch(_){} rej(new Error('could not load the image library (internet needed)')); });
+  });
+}
+function bkVcFileName(ext){ var bk=bkV2GetDetailBooking()||{}; var c=(typeof bkV2DisplayCode==='function')?bkV2DisplayCode(bk):(bk.id||'booking');
+  return String(bk.voucherRef||c||'booking').replace(/[^A-Za-z0-9._-]+/g,'-')+'-'+bkVcMode()+'-copy.'+ext; }
+/* off-screen render at a fixed width → the same picture on every screen */
+function bkVcCanvas(){
+  var bk=bkV2GetDetailBooking(); if(!bk) return Promise.reject(new Error('booking not found'));
+  return bkVcLoad('vj-h2c','https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function(){ return !!window.html2canvas; }).then(function(){
+    var host=document.createElement('div');
+    host.style.cssText='position:fixed;left:-99999px;top:0;width:948px;background:#fff;padding:24px;box-sizing:border-box;z-index:-1';
+    host.innerHTML=bkVcDoc(bk, bkVcMode());
+    document.body.appendChild(host);
+    var wait=(document.fonts&&document.fonts.ready)?document.fonts.ready.catch(function(){}):Promise.resolve();
+    return wait.then(function(){ return window.html2canvas(host,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:1000}); })
+      .then(function(c){ host.remove(); return c; }, function(e){ host.remove(); throw e; });
+  });
+}
+function bkVcBlob(){ return bkVcCanvas().then(function(c){ return new Promise(function(res,rej){ c.toBlob(function(b){ b?res(b):rej(new Error('empty image')); },'image/png'); }); }); }
+function bkVcDownload(blob, name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); },4000); }
+function bkVcFlash(btn, txt){ if(!btn) return; var old=btn.getAttribute('data-lbl')||btn.textContent; btn.setAttribute('data-lbl',old); btn.textContent=txt; btn.disabled=(txt==='Working...');
+  if(txt!=='Working...') setTimeout(function(){ btn.textContent=old; btn.disabled=false; },1600); }
+function bkVcFail(btn, e){ bkVcFlash(btn,'Failed'); alert('Could not make the voucher image: '+((e&&e.message)||e)); }
+function bkVcCopy(btn){
+  bkVcFlash(btn,'Working...');
+  var p=bkVcBlob();
+  var toFile=function(){ p.then(function(b){ bkVcDownload(b, bkVcFileName('png')); bkVcFlash(btn,'Saved as file'); alert('This browser did not allow copying an image. The voucher was saved as a PNG file instead.'); }, function(e){ bkVcFail(btn,e); }); };
+  try{
+    if(navigator.clipboard && window.ClipboardItem){
+      navigator.clipboard.write([new ClipboardItem({'image/png':p})]).then(function(){ bkVcFlash(btn,'Copied'); }, function(){ toFile(); });
+    } else toFile();
+  }catch(_){ toFile(); }
+}
+function bkVcSavePng(btn){ bkVcFlash(btn,'Working...'); bkVcBlob().then(function(b){ bkVcDownload(b, bkVcFileName('png')); bkVcFlash(btn,'Saved'); }, function(e){ bkVcFail(btn,e); }); }
+function bkVcSavePdf(btn){
+  bkVcFlash(btn,'Working...');
+  Promise.all([bkVcCanvas(), bkVcLoad('bkvc-jspdf','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf&&window.jspdf.jsPDF); })]).then(function(r){
+    var c=r[0]; var pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=190, H=W*c.height/c.width; if(H>277){ W=W*277/H; H=277; }      /* one A4 page · shrink a long voucher to fit */
+    pdf.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',(210-W)/2,10,W,H);
+    pdf.save(bkVcFileName('pdf')); bkVcFlash(btn,'Saved');
+  }, function(e){ bkVcFail(btn,e); });
+}
+function bkVcPrint(){
+  var bk=bkV2GetDetailBooking(); if(!bk) return;
+  var w=window.open('','_blank'); if(!w){ alert('The browser blocked the print window. Allow pop-ups for this site and try again.'); return; }
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+bkVcFileName('').replace(/\.$/,'')+'</title>'
+    +'<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">'
+    +'<style>@page{size:A4;margin:10mm}body{margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.bkvc2-doc{margin:0 auto;zoom:.8}</style></head><body>'
+    +bkVcDoc(bk, bkVcMode())+'<scr'+'ipt>window.onload=function(){ setTimeout(function(){ window.print(); },400); };</scr'+'ipt></body></html>');
+  w.document.close(); w.focus();
+}
+function bkVcUseCard(bk){
+  var m=bkVcMode();
+  var seg=function(k,t,s){ var on=(m===k); return '<button type="button" onclick="bkVcSetMode(\''+k+'\')" style="height:54px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;'
+    +(on?'background:#fff;box-shadow:0 1px 2px rgba(11,30,91,.14);color:#0B1E5B':'background:transparent;color:#3E4A6B')+'"><span style="font-size:13.5px;font-weight:'+(on?700:600)+'">'+t+'</span><span style="font-size:11.5px;color:#6B7693">'+s+'</span></button>'; };
+  var b2='height:40px;border-radius:10px;border:1px solid #D5DBE6;background:#fff;color:#0B1E5B;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer';
+  return '<div class="bkv2-nb-card bkvc2-use">'
+    +'<div style="font-size:17px;font-weight:700;color:#0B1E5B">Use this voucher</div>'
+    +'<div style="font-size:12.5px;color:#6B7693">Confirm back to the agent, or save a copy</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:12px;padding:4px;border-radius:12px;background:#EEF2F8">'+seg('agent','Agent copy','with Billing total')+seg('guest','Guest copy','no Billing box')+'</div>'
+    +'<button type="button" onclick="bkVcCopy(this)" style="display:flex;align-items:center;justify-content:center;width:100%;height:44px;margin-top:12px;border-radius:12px;border:none;background:#0B1E5B;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Copy as image</button>'
+    +'<div style="margin-top:4px;font-size:12px;color:#6B7693;text-align:center">then paste into LINE, WhatsApp or email</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">'
+      +'<button type="button" onclick="bkVcSavePng(this)" style="'+b2+'">Save PNG</button><button type="button" onclick="bkVcSavePdf(this)" style="'+b2+'">Save PDF</button><button type="button" onclick="bkVcPrint()" style="'+b2+'">Print</button></div>'
+    +'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #ECEFF4;font-size:12px;color:#6B7693;line-height:1.5">'+(m==='guest'
+        ?'Guest copy has no Billing box. Agent name, trip date, pickup time and cash on tour stay.'
+        :'Agent copy shows the Billing total only. No price per trip or per add-on.')+' Agent code and rate type are on neither copy.</div>'
+  +'</div>';
+}
+/* per-trip subtotal · staff only (the document carries no price per trip) */
+function bkVcStaffTrips(bk, esc){
+  var ts=(bk.trips||[]); if(!ts.length) return '';
+  return '<div class="bkv2-nb-card"><div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Trip subtotals</span></div><div style="padding-top:6px">'
+    +ts.map(function(t){ var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){ return x.id===t.routeId; }):null;
+      return '<div class="bkv2-dt-row"><span style="font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;min-width:0;padding-right:10px">'+esc((r&&r.name)||t.routeId||'—')+'<span style="display:block;font-size:11px;color:var(--ink-soft)">'+esc(bkVcDate(t.date))+'</span></span><span>฿'+bkV2FmtTHB(t.subtotal||0)+'</span></div>'; }).join('')
+    +'</div></div>';
+}
+/* the sheet is always laid out at 900px · on a narrow screen it is scaled down as a whole,
+   never re-flowed, so what staff see is what Copy / Save produces */
+function bkVcFit(){ try{ var h=document.querySelector('#view-booking .bkvc2-hold'); if(!h) return; var d=h.querySelector('.bkvc2-doc'); if(!d) return;
+  var w=h.clientWidth; d.style.zoom=(w>0 && w<900)?(w/900):''; }catch(_){} }
+function bkVcCSS(){
+  setTimeout(bkVcFit,0);
+  if(document.getElementById('bkvc2-css')) return;
+  window.addEventListener('resize', bkVcFit);
+  var s=document.createElement('style'); s.id='bkvc2-css';
+  s.textContent=[
+    '#view-booking .bkv2-vc .bkvc2-grid{display:grid;grid-template-columns:minmax(0,900px) 340px;justify-content:center;gap:18px;align-items:start}',
+    '#view-booking .bkv2-vc .bkvc2-main,#view-booking .bkv2-vc .bkvc2-side{display:flex;flex-direction:column;gap:14px;min-width:0}',
+    '#view-booking .bkv2-vc .bkvc2-hold{overflow:hidden;border-radius:14px;box-shadow:0 1px 2px rgba(11,30,91,.08),0 14px 36px rgba(11,30,91,.08);background:#fff}',
+    '#view-booking .bkv2-vc .bkvc2-side .bkv2-nb-card{padding:16px 18px;border-radius:16px !important}',
+    '#view-booking .bkv2-vc .bkvc2-side .bkv2-nb-sec-hd,#view-booking .bkv2-vc .bkvc2-side .bkv2-nb-sec-ttl{font-size:14px}',
+    '#view-booking .bkv2-vc .bkvc2-cap{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6B7693;padding:4px 4px 0}',
+    '@media(max-width:1300px){#view-booking .bkv2-vc .bkvc2-grid{grid-template-columns:minmax(0,900px)}}'
+  ].join('\n');
+  document.head.appendChild(s);
 }
