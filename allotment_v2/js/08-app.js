@@ -60419,8 +60419,7 @@ function bkV2RenderBookingDetail(){
 
           <!-- §vc2 · the sheet that goes out · agent copy or guest copy -->
           <div class="bkvc2-hold">${bkVcDoc(bk, bkVcMode())}</div>
-          <!-- staff payment strip (invoice state, cash on tour ruling) · never on the copy -->
-          <div class="bkvc2-pay">${bkV2VoucherTicket(bk, escapeHTML, 'pay')}</div>
+          <!-- §vc2d · the PAYMENT strip under the sheet was removed on request (2026-10-09) -->
 
         </div>
 
