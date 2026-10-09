@@ -17609,6 +17609,10 @@ function vckStopRow(st){
 }
 function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
+  /* §vckStay (2026-10-09) · "Van Check-in ติ๊กแล้วเด้ง" · ตารางเลื่อนอยู่ในกล่องของตัวเอง (.vck-tw)
+     ติ๊กแล้ว ckAfter วาดใหม่ทั้งหน้า กล่องใหม่เริ่มที่บนสุด · ckAfter คืนแค่ตำแหน่งของหน้าจอ ไม่ใช่ของกล่อง
+     จำไว้ตรงนี้ จึงครอบทุกทางที่วาดใหม่ (ติ๊ก · เปลี่ยนสถานะ · รีเฟรชอัตโนมัติ · นาฬิกา) */
+  var _vtw0=host.querySelector('.vck-tw'), _vtT=_vtw0?_vtw0.scrollTop:0, _vtL=_vtw0?_vtw0.scrollLeft:0;
   var e=ckEsc, date=_vanCkDate;
   if(typeof bkV2VanGroupHeal==='function'){ try{ bkV2VanGroupHeal(date); }catch(_){} }
   /* §vckSplit · หน้าใบงานรถ / Van Assign เรียกตัวนี้ทุกหน้า แต่หน้านี้ไม่เคยเรียก
@@ -17852,6 +17856,8 @@ function renderVanCheckin(){
     +'<th class="ck-c ck-in">Status</th><th class="ck-in">สถานะ / บันทึกหน้างาน</th>'
     +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div></div>';
   ckSyncSticky(host); vckFitPane(); ckStartTick('vancheckin', renderVanCheckin);
+  if(_vtT||_vtL){ var _vtPut=function(){ var w=host.querySelector('.vck-tw'); if(!w) return; if(_vtT && w.scrollTop!==_vtT) w.scrollTop=_vtT; if(_vtL && w.scrollLeft!==_vtL) w.scrollLeft=_vtL; };
+    _vtPut(); try{ requestAnimationFrame(function(){ _vtPut(); requestAnimationFrame(_vtPut); }); }catch(_){} }   /* §vckStay · หลัง vckFitPane ปรับความสูงด้วย */
 }
 
 // ══ §Pier Check-in (2026-07-25) · เช็คอินหน้าท่า · จัดกลุ่มตามเรือ × เส้นทาง ══
