@@ -44,11 +44,9 @@
 
   // §opsAuth (2026-09-15): auth moved off server.js's sess cookie onto operation-backend's
   // Bearer tokens — this branch is deprecating server.js, and operation-backend has no cookie
-  // session to check. /api/me is no longer called at all. The token is a self-issued or Authentik
-  // JWT; its payload (sub/groups) is decoded client-side (NOT verified — the token is only ever
-  // sent back to operation-backend, which verifies it server-side on every request) just to know
-  // who's logged in for the sidebar. A 401 from any operation-backend call clears it and reloads
-  // to the login screen (see laOpsFetch below).
+  // session to check. /api/me is no longer called at all: who is logged in, and their rights, come
+  // from operation-backend's GET /v1/me (§opsMe below · the token itself is never decoded). A 401
+  // from any operation-backend call clears it and reloads to the login screen (see laOpsFetch below).
   var OPS_BACKEND = 'https://operationbackend-production.up.railway.app';
   // §legacyOff (2026-09-18) · does THIS deployment have a server.js blob backend behind /api?
   //   Until now the answer was inferred from /api/load returning exactly 401, which quietly made
@@ -65,7 +63,31 @@
   function opsToken(){ try{ return sessionStorage.getItem(OPS_TOKEN_KEY)||''; }catch(e){ return ''; } }
   function opsSetToken(tok){ try{ sessionStorage.setItem(OPS_TOKEN_KEY, tok); }catch(e){} }
   function opsClearToken(){ try{ sessionStorage.removeItem(OPS_TOKEN_KEY); }catch(e){} }
-  function opsPayload(tok){ try{ var p=String(tok).split('.')[1]; return JSON.parse(decodeURIComponent(escape(atob(p.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return {}; } }
+  // §opsMe · the login answer's `user` is kept for this tab, so a boot whose GET /v1/me fails on the
+  //   network still knows who is in · /v1/me replaces it on every boot that reaches the server
+  var OPS_USER_KEY = 'la_ops_user';
+  function opsRememberUser(u){ try{ sessionStorage.setItem(OPS_USER_KEY, JSON.stringify(u)); }catch(e){} }
+  function opsCachedUser(){ try{ var s=sessionStorage.getItem(OPS_USER_KEY); return s ? JSON.parse(s) : null; }catch(e){ return null; } }
+  function opsForgetUser(){ try{ sessionStorage.removeItem(OPS_USER_KEY); }catch(e){} }
+  function opsMeSync(tok){
+    function once(){ var x=new XMLHttpRequest();
+      try{ x.open('GET', bust(OPS_BACKEND+'/v1/me'), false); x.setRequestHeader('Authorization','Bearer '+tok); x.send(); }catch(e){ return {status:0}; }
+      var j=null; try{ j=JSON.parse(x.responseText); }catch(e){} return {status:x.status, json:j}; }
+    var r=once();
+    for(var i=0;i<2 && _laBootRetryable(r.status); i++){ _laHold(i===0?600:1400); r=once(); }
+    return r;
+  }
+  // /v1/me → legacy's ME keys, as /api/me gave them, so every guard reads what it always read
+  //   edit_areas null = no list: can_edit decides (can_edit_any is then the same) · view_perms null = every page
+  function opsMeFrom(u){
+    u=u||{};
+    return { id: u.id||'', username: u.username||'', name: u.name||u.username||'', role: u.role||'',
+      canEdit: (u.can_edit_any!==undefined) ? u.can_edit_any===true : u.can_edit!==false,
+      editAreas: Array.isArray(u.edit_areas) ? u.edit_areas.slice() : null,
+      perms: Array.isArray(u.view_perms) ? u.view_perms.slice() : null,
+      actions: Array.isArray(u.actions) ? u.actions.slice() : [],
+      salesId: u.sales_id||'', agentId: u.agent_id||'', dept: u.dept||null };
+  }
   window.LA_OPS_BACKEND = OPS_BACKEND;
   // Shared fetch wrapper for every operation-backend call (routes/boats/bookings/deployments/locks) —
   // adds the Bearer header and bounces to login on a 401 so a dead/expired token never sits silently.
@@ -73,7 +95,7 @@
     opts = opts || {}; opts.headers = opts.headers || {};
     var tok = opsToken(); if(tok) opts.headers['Authorization'] = 'Bearer '+tok;
     return fetch(OPS_BACKEND+path, opts).then(function(r){
-      if(r.status===401){ opsClearToken(); location.reload(); }
+      if(r.status===401){ opsClearToken(); opsForgetUser(); location.reload(); }
       return r;
     });
   };
@@ -81,8 +103,18 @@
   // 1) AUTH (before app init) — presence of an operation-backend token, nothing server.js-side.
   var _opsTok = opsToken();
   if(!_opsTok){ onReady(showLogin); return; }                    // not logged in → login screen, do not load/sync
-  var _opsPayload = opsPayload(_opsTok);
-  ME = { username: _opsPayload.sub||'', role: ((_opsPayload.groups||[]).indexOf('admin')>=0?'admin':'user'), groups: _opsPayload.groups||[] };
+  // §opsMe (2026-10-09) · who this is and what they may do comes from GET /v1/me, read on every boot.
+  //   The token's payload (sub/groups) has no areas, actions or pages, so laCanEditArea answered "yes"
+  //   to every non-admin. The server checks rights on every request anyway: these are the screen's
+  //   hints (hide what would be refused), the 403 is the answer. Asked synchronously, as /api/me was,
+  //   so the sidebar and edit guards are right before anything draws.
+  var _meR = opsMeSync(_opsTok);
+  if(_meR.status===401){ opsClearToken(); opsForgetUser(); onReady(showLogin); return; }   // expired, disabled, or logged out elsewhere
+  var _meU = (_meR.status===200 && _meR.json) ? _meR.json : opsCachedUser();
+  if(!_meU){ bootFail('GET /v1/me', _meR.status); return; }
+  if(_meR.status!==200){ try{ console.warn('[boot] GET /v1/me failed (status '+_meR.status+') · using the user from this tab\'s login'); }catch(e){} }
+  else opsRememberUser(_meU);
+  ME = opsMeFrom(_meU);
   window.LA_ME=ME;                                                // expose current user (edit-lock / audit)
   /* §per-user sidebar (พับ/กางกลุ่มเมนู) · ลองซ้ำจนกว่าเมนูซ้ายจะวาดเสร็จจริง
      (laSbInit ทำงานรอบแรกได้ แต่ตอนนั้นเมนูยังไม่นิ่ง ตัวพับกลุ่มเลยไม่ติด)
@@ -1134,7 +1166,8 @@
   ];
   window.LA_ACTS=LA_ACTS;
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }
-  window.laCanAct=function(key){ if(!ME || ME.role==='admin') return true; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };
+  // §opsMe · operation-backend keeps act- keys in their own list (/v1/me `actions`), not inside perms
+  window.laCanAct=function(key){ if(!ME || ME.role==='admin') return true; return Array.isArray(ME.actions) && ME.actions.indexOf(key)>=0; };
   var LA_PERM_EXPLICIT='*explicit';
   function laPermIsExplicit(perms){ return Array.isArray(perms) && perms.indexOf(LA_PERM_EXPLICIT)>=0; }
   /* ปิดหมุดเข้ารายการที่จะบันทึก · ตัดของเดิมออกก่อนกันซ้ำ */
@@ -1248,10 +1281,20 @@
     no.onclick=close;
     ov.onclick=function(e){ if(e.target===ov) close(); };
     yes.onclick=function(){
-      // §opsAuth: no server.js session to end — the token is purely client-held (sessionStorage),
-      // so "logout" is just discarding it. Nothing to fail on, nothing to await.
-      opsClearToken();
-      try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); }
+      // §opsMe (2026-10-09) · POST /v1/logout ends every session this user has, as legacy's
+      //   /api/logout did · then the token is dropped here. A logout the server didn't confirm still
+      //   signs this tab out, and says the other devices may still be in.
+      yes.disabled=true; no.disabled=true; msg.textContent='กำลังออกจากระบบ…';
+      var done=function(){ opsClearToken(); opsForgetUser(); try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
+      var notConfirmed=function(why){
+        try{ console.warn('[auth] POST /v1/logout not confirmed · '+why); }catch(_){}
+        msg.innerHTML='ออกจากเครื่องนี้แล้ว · เซิร์ฟเวอร์ไม่ยืนยัน ('+esc(why)+')<br>เครื่องอื่นที่ล็อกอินไว้อาจยังใช้งานได้';
+        setTimeout(done, 2500);
+      };
+      try{
+        window.laOpsFetch('/v1/logout', { method:'POST' }).then(function(r){ if(r.status===204 || r.ok) done(); else notConfirmed('HTTP '+r.status); },
+          function(e){ notConfirmed((e && e.message) || 'network'); });
+      }catch(e){ notConfirmed((e && e.message) || 'error'); }
     };
   };
 
@@ -1265,7 +1308,7 @@
     function go(){ var u=document.getElementById('la-u').value.trim(), p=document.getElementById('la-p').value; var e=document.getElementById('la-err'); e.textContent='กำลังเข้าสู่ระบบ...';
       // §opsAuth: login is against operation-backend now, not server.js's /api/login.
       var r=sx('POST', OPS_BACKEND+'/v1/login', JSON.stringify({username:u,password:p}), 'application/json');
-      if(r.status===200 && r.json && r.json.access_token){ opsSetToken(r.json.access_token); location.reload(); }
+      if(r.status===200 && r.json && r.json.access_token){ opsSetToken(r.json.access_token); if(r.json.user) opsRememberUser(r.json.user); location.reload(); }
       else { e.textContent=(r.json&&r.json.message)||'เข้าสู่ระบบไม่สำเร็จ'; } }
     document.getElementById('la-go').onclick=go;
     document.getElementById('la-p').addEventListener('keydown',function(ev){ if(ev.key==='Enter') go(); });

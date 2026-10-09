@@ -8,6 +8,8 @@
                           (LA_LEGACY_UNAVAILABLE) and a login token exists
      laOps.get/post/...   JSON in, JSON out · a refused call throws LaOpsError
                           carrying the server's {statusCode, message, code}
+     laOps.bookingWrite   a booking write with If-Match: the version it read
+                          goes out, the one it is answered with is kept
      laOps.queue(fn)      ONE write at a time, in order. Locks must exist on the
                           server before a booking draws from them, and a charter
                           boat must be deployed before the charter is saved.
@@ -37,8 +39,8 @@
     return e;
   }
 
-  function call(method, path, body){
-    var opts = { method: method, headers: {} };
+  function call(method, path, body, headers){
+    var opts = { method: method, headers: Object.assign({}, headers || {}) };
     if(body !== undefined){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
     return window.laOpsFetch(path, opts).then(function(r){
       if(r.status === 204) return null;
@@ -47,6 +49,28 @@
         if(!r.ok) throw LaOpsError(r.status, j, method + ' ' + path);
         return j;
       });
+    });
+  }
+
+  /* §opsVersion (2026-10-09) · a booking write sends the version it read and keeps the one it is
+     answered with. The server refuses a write from a stale copy with 409 stale_version and changes
+     nothing; the booking is then reloaded (laOps.bookings.reload) so the screen shows what is there.
+     Use it for: PATCH /v1/bookings/{id}, /confirm /approve /reject /cancel-weather /cancel /restore
+     /partial-cancel /reschedule, PUT …/meals, and /upgrade (which bumps the version). NOT for the
+     day-of writes (trip-ops, check-in, van groups, van stops, doc check, reconfirm): those neither
+     check the version nor move it (API team, 2026-10-09) · they go through call() as they are. */
+  function bookingWrite(method, path, bk, body){
+    var h = {};
+    if(bk && bk.opsVersion != null) h['If-Match'] = '"' + bk.opsVersion + '"';
+    return call(method, path, body, h).then(function(j){
+      if(bk && j && j.version != null && (!bk.opsId || j.id === bk.opsId)) bk.opsVersion = +j.version;
+      return j;
+    }, function(e){
+      // after the caller's own refusal handling (rollback, form back) has run · that's all microtasks
+      if(e && e.code === 'stale_version' && bk) setTimeout(function(){
+        var B = window.laOps && window.laOps.bookings; if(B && B.reload) B.reload(bk.id);
+      }, 0);
+      throw e;
     });
   }
 
@@ -126,7 +150,7 @@
   function wrote(kind){ listeners.forEach(function(fn){ try{ fn(kind); }catch(_){} }); }
 
   window.laOps = {
-    enabled: enabled, call: call, qs: qs,
+    enabled: enabled, call: call, qs: qs, bookingWrite: bookingWrite,
     get: function(p, q){ return call('GET', p + qs(q)); },
     post: function(p, b){ return call('POST', p, b === undefined ? {} : b); },
     patch: function(p, b){ return call('PATCH', p, b); },

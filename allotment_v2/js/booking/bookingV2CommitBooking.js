@@ -518,6 +518,11 @@ function bookingV2CommitBooking(status){
     // §opsSync · id of this booking's mirror on operation-backend, if it has one — carry it over
     //   so an edit PATCHes the same record instead of creating a duplicate every save.
     if(editing.opsId) newBk.opsId = editing.opsId;
+    // §opsVersion (2026-10-09) · the version the form was opened on (d is the clone taken then) goes back
+    //   as If-Match · not editing's: a refresh while the form was open may have moved that one on, and the
+    //   PATCH would then overwrite what someone else saved meanwhile
+    const _opsV = d.opsVersion != null ? d.opsVersion : editing.opsVersion;
+    if(_opsV != null) newBk.opsVersion = _opsV;
     // ⚠ Preserve operational assignments across edits — boat assign (ops.boatId), van group/van/return,
     //   reconfirm, final pickup time, upgrade, etc. were being WIPED on every edit (data-loss bug 2026-06-14).
     if(editing.ops) newBk.ops = editing.ops;

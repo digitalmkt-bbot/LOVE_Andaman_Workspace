@@ -20,6 +20,9 @@
        those functions prompt and mutate in one go, so they are wrapped ·
        snapshot → run → server → on refusal put the snapshot back.
 
+   Every write above except the create sends If-Match: the version last read
+   (bk.opsVersion · laOps.bookingWrite, §opsVersion 2026-10-09).
+
    Mapping lives here (laOpsToServer / laOpsFromServer) · the server reads
    the frontend's own camelCase header keys and answers snake_case.
    ══════════════════════════════════════════════════════════════════════════ */
@@ -282,6 +285,7 @@
   function fromServer(ob){
     var bk = { id: ob.external_id || ob.id, opsId: ob.id, schemaVer: 2, status: ob.status || 'confirmed',
                createdAt: ob.booked_at || ob.created_at || '', updatedAt: ob.updated_at || '',
+               opsVersion: ob.version != null ? +ob.version : null,        // §opsVersion · sent back as If-Match
                history: [], ops: {}, adjustments: [], _fromOpsBackend: true };
     HEADER.forEach(function(h){ var v = ob[snake(h[0])]; if(v !== undefined) bk[h[0]] = v; });
     ['leadPax', 'leadNationality', 'leadPhone', 'leadEmail', 'hotelName', 'voucherRef', 'bookingDate'].forEach(function(k){ if(bk[k] == null) bk[k] = ''; });
@@ -334,17 +338,37 @@
   function persist(){ try{ if(typeof bookingV2PersistBookings === 'function') bookingV2PersistBookings(); }catch(_){} }
   function find(id){ return (typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []).find(function(b){ return b && b.id === id; }); }
   function render(){ try{ if(typeof bookingV2Render === 'function') bookingV2Render(); }catch(_){} }
+  /* §opsFresh (2026-10-09) · "nothing new" means the server's copy is the one last merged, not that
+     updated_at is the same: the day-of writes (dispatch, check-in, van groups, reconfirm, doc check)
+     write their own tables and leave the booking's updated_at and version alone, so an updated_at
+     check would drop another dispatcher's boat or van change for good. Kept beside the bookings,
+     not on them: the server copy would double what each booking weighs. */
+  var seen = {};                  // server id → the copy last merged, as text
+  function sig(ob){ try{ return JSON.stringify(ob); }catch(_){ return String(ob.updated_at || '') + '|' + String(ob.version || ''); } }
   function upsert(ob){
     var list = (typeof SB_BOOKINGS !== 'undefined') ? SB_BOOKINGS : null; if(!list) return false;
     var cur = list.find(function(b){ return b && (b.opsId === ob.id || b.id === (ob.external_id || ob.id)); });
+    var s = sig(ob);
     if(cur){
       // a write of ours is in flight · the server copy may already include it, and the local change
       // lands when the answer does · merging now would apply the same change twice
       if(busyIds[cur.id]) return false;
-      if(cur.updatedAt && cur.updatedAt === ob.updated_at) return false;
-      mergeInto(cur, ob); return true;
+      if(seen[ob.id] === s) return false;
+      mergeInto(cur, ob); seen[ob.id] = s; return true;
     }
-    list.push(fromServer(ob)); return true;
+    list.push(fromServer(ob)); seen[ob.id] = s; return true;
+  }
+  /* §opsVersion · after 409 stale_version: the server's copy replaces this one, whatever was merged
+     before · then the screen is redrawn so the person sees what changed and can do it again */
+  function reload(id){
+    var bk = find(id); if(!bk || !bk.opsId) return Promise.resolve(null);
+    var sid = bk.opsId;
+    return O.get('/v1/bookings/' + encodeURIComponent(sid)).then(function(ob){
+      var cur = find(id); if(!cur || busyIds[id]) return null;    // the commit wrapper may have put a fresh object back
+      mergeInto(cur, ob); seen[sid] = sig(ob);
+      persist(); render();
+      return cur;
+    }).catch(function(e){ try{ console.warn('[ops] reload ' + id + ' · ' + (e && e.message)); }catch(_){} return null; });
   }
 
   /* §opsAuthority · what the server decided replaces what the browser guessed: the status, and who
@@ -378,9 +402,11 @@
     var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
       var body = toServer(bk, !bk.opsId);
-      return bk.opsId ? O.patch('/v1/bookings/' + encodeURIComponent(bk.opsId), body) : O.post('/v1/bookings', body);
+      return bk.opsId ? O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, body)
+                      : O.bookingWrite('POST', '/v1/bookings', bk, body);       // a create has no version yet: no If-Match
     }).then(function(j){
-      if(j && j.id && submit && NOT_YET_CONFIRMED.indexOf(j.status) >= 0) return O.post('/v1/bookings/' + encodeURIComponent(j.id) + '/confirm', {});
+      // the PATCH moved the version on · bookingWrite kept the new one, so /confirm sends it
+      if(j && j.id && submit && NOT_YET_CONFIRMED.indexOf(j.status) >= 0) return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(j.id) + '/confirm', bk, {});
       return j;
     }).then(function(j){
       if(j && j.id){
@@ -415,7 +441,7 @@
     O.toast({ kind: 'neutral', title: (title || kind) + '…', id: bookingId, status: 'SENDING', dur: 1500 });
     hold(bk.id);
     // released only after the local change is in · a refresh landing in between would apply it twice
-    return O.queue(function(){ return O.post('/v1/bookings/' + encodeURIComponent(bk.opsId) + '/' + kind, body); })
+    return O.queue(function(){ return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(bk.opsId) + '/' + kind, bk, body === undefined ? {} : body); })
       .then(function(j){
         try{
           applyLocal();
@@ -477,7 +503,12 @@
             sub: overLic.map(function(x){ return x.route_id + ' ' + x.service_date + ': ' + x.over_by + ' over'; }).join(' · '), dur: 12000 });
         }
         O.wrote('booking');
-      }, function(e){ putBack(bk, before); O.fail(name.replace('bookingV2', '') + ' refused · put back', e); });
+      }, function(e){
+        // §opsVersion · the snapshot's version is stale when an earlier call of this action went through
+        // (FOC: the reason PATCH, then a refused approve) · keep the newest one the server gave
+        var v = bk.opsVersion; putBack(bk, before); if(v != null) bk.opsVersion = v;
+        O.fail(name.replace('bookingV2', '') + ' refused · put back', e);
+      });
       return ret;
     };
     w.__ops = true; window[name] = w;
@@ -490,14 +521,14 @@
     return function(bk, was){
       if(bk.status === was.status) return null;                   // the user backed out of the prompt
       var note = noteOf ? String(noteOf(bk) || '').trim() : '';
-      return function(){ return O.post(B(bk) + '/' + kind, note ? { note: note } : {}); };
+      return function(){ return O.bookingWrite('POST', B(bk) + '/' + kind, bk, note ? { note: note } : {}); };
     };
   }
   // the cancellation-fee invoice is voided only once /restore went through · a refused restore
   // (route_closed, a charter boat taken meanwhile…) leaves it as it was
   tx('bookingV2RestoreBooking', function(bk, was){
     if(bk.status === was.status || RELEASED.indexOf(was.status) < 0) return null;
-    return function(){ return O.post(B(bk) + '/restore'); };
+    return function(){ return O.bookingWrite('POST', B(bk) + '/restore', bk, {}); };
   }, ['acctVoidInvoice']);
   tx('bookingV2ApproveBooking', command('approve'));
   tx('bookingV2RejectBooking', command('reject', function(bk){ return bk.approval && bk.approval.note; }));
@@ -506,15 +537,15 @@
     var go = command('approve')(bk, was); if(!go) return null;
     var typed = bk.focApproval && bk.focApproval.reason, had = (was.focApproval && was.focApproval.reason) || was.focReason;
     if(!typed || typed === had) return go;
-    return function(){ return O.patch(B(bk), { focReason: String(typed) }).then(go); };
+    return function(){ return O.bookingWrite('PATCH', B(bk), bk, { focReason: String(typed) }).then(go); };   // go sends the version this PATCH left
   });
   tx('bookingV2FocReject', command('reject', function(bk){ return bk.focApproval && bk.focApproval.rejectReason; }));
   tx('bookingV2WeatherResolveOne', function(bk, was){
-    if(bk.status === 'cancelled_weather' && was.status !== 'cancelled_weather') return function(){ return O.post(B(bk) + '/cancel-weather', {}); };
+    if(bk.status === 'cancelled_weather' && was.status !== 'cancelled_weather') return function(){ return O.bookingWrite('POST', B(bk) + '/cancel-weather', bk, {}); };
     var oldD = (was.trips || []).map(function(t){ return t.date; }), newD = (bk.trips || []).map(function(t){ return t.date; });
     var i = oldD.findIndex(function(d, k){ return d !== newD[k]; });
     if(i < 0) return null;
-    return function(){ return O.post(B(bk) + '/reschedule', { from_date: oldD[i], to_date: newD[i], reason: 'weather', charge_type: 'none' }); };
+    return function(){ return O.bookingWrite('POST', B(bk) + '/reschedule', bk, { from_date: oldD[i], to_date: newD[i], reason: 'weather', charge_type: 'none' }); };
   });
 
   /* ── save with rollback · bookingV2CommitBooking ── */
@@ -538,6 +569,14 @@
           if(typeof SB_BOOKINGS !== 'undefined') O.restoreInPlace(SB_BOOKINGS, before.bookings);
           if(typeof SB_SEAT_LOCKS !== 'undefined') O.restoreInPlace(SB_SEAT_LOCKS, before.locks);
           if(typeof TRIPS !== 'undefined') O.restoreInPlace(TRIPS, before.trips);
+          // §opsVersion · someone else saved this booking since the form was opened · the form holds
+          // their old values, so a second Save would quietly overwrite them. Stay on the booking's
+          // detail (where the commit landed): it is reloaded from the server, then edited again.
+          if(e && e.code === 'stale_version'){
+            persist(); render();
+            O.fail('Booking not saved · someone else changed it meanwhile · it is reloaded, make your change again', e);
+            return;
+          }
           // reopen the form with what was typed, so it can be fixed and saved again
           Object.assign(st, before.ui);
           persist(); render();
@@ -636,5 +675,5 @@
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
   O.bookings = { save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
-                 loadPending: loadPending, refreshDay: refreshDay };
+                 reload: reload, loadPending: loadPending, refreshDay: refreshDay };
 })();
