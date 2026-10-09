@@ -15208,8 +15208,8 @@ function ckRowHtml(r, date, kind, extraHtml){
        var _w=(_d.van&&_d.van.kind==='pending');
        return '<div class="ck-retl" title="'+e((_d.t?('ส่ง '+_d.t):'')+(_d.van?((_d.t?' · ':'')+ckRetVanTxt(_d.van)):''))+'" style="margin-top:3px;font-size:10px;font-weight:700;line-height:1.35;'
          +'color:'+(_w?'#A32D2D':(_d.self?'#7a7972':'#633806'))+'">'
-         +(_d.t?('&#8627; ส่ง '+e(_d.t)):'')
-         +(_d.van?((_d.t?' · ':'')+e(ckRetVanTxt(_d.van))):'')+'</div>';
+         +(_d.t?('<span class="ck-retd">&#8627; ส่ง '+e(_d.t)+'</span>'):'')
+         +(_d.van?('<span class="ck-retv">'+(_d.t?' · ':'')+e(ckRetVanTxt(_d.van))+'</span>'):'')+'</div>';
      })()+(r.priv?'<span title="รถเหมา · ไม่แชร์" style="display:inline-block;margin-left:5px;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;padding:1px 6px;border-radius:6px;vertical-align:middle;white-space:nowrap">เหมา'+(r.priv.qty>1?' ×'+r.priv.qty:'')+' · '+e(r.priv.zone)+'</span>':'')+'</td>'
    +'<td class="ck-c ck-mono">'+e(room)+'</td>'
    +'<td>'+(pArea?'<span class="ck-area">'+e(pArea)+'</span>':'<span class="ck-dim">—</span>')+'</td>'
@@ -17445,8 +17445,11 @@ function vckSheetCSS(){
   /* §vckRetLine (2026-10-09) · "ตัวที่ส่งกลับให้เป็นอีกบรรทัดนึง · กินพื้นที่เยอะไป"
      บรรทัด ↳ ส่ง … · ↩ กลับ VANx ต่อท้ายชื่อโรงแรมทำให้ช่องจุดรับกว้างมาก
      ให้ลงบรรทัดใหม่ใต้ชื่อโรงแรม ยาวเกินก็ตัด … (ชี้เมาส์ดูเต็มได้) · แถวอื่นยังสูงบรรทัดเดียวเหมือนเดิม */
-  +S+' tr.ck-row td>div.ck-retl{display:block;margin:1px 0 0 0 !important;max-width:300px;'
-    +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9.5px;line-height:1.2}'
+  +S+' tr.ck-row td>div.ck-retl{display:flex;margin:1px 0 0 0 !important;max-width:300px;'
+    +'white-space:nowrap;overflow:hidden;font-size:9.5px;line-height:1.2}'
+  /* "ขยายให้เห็นรถที่ส่งกลับได้" · ตัดเฉพาะชื่อจุดส่ง รถกลับต้องเห็นเต็มเสมอ */
+  +S+' tr.ck-row td>div.ck-retl>.ck-retd{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}'
+  +S+' tr.ck-row td>div.ck-retl>.ck-retv{flex:0 0 auto;white-space:pre}'
   /* ช่องเหตุการณ์หน้างาน · ป้าย No-show กับปุ่มทางกลับ เบียดกันบรรทัดเดียวไม่พอ
      ให้ป้ายอยู่บรรทัดบน ปุ่มอยู่บรรทัดล่าง แล้วย่อปุ่มให้พอดีความสูงแถว */
   +S+' tr.ck-row>td:nth-child(15){white-space:normal;overflow:visible;'
