@@ -74271,7 +74271,7 @@ function bkVcDoc(bk, mode){
   var paxAll=0; trips.forEach(function(t){ var n=PT(t.pax,'ad')+PT(t.pax,'chd')+PT(t.pax,'inf')+PT(t.pax,'foc'); if(n>paxAll) paxAll=n; });
   var gd=bk.guides||{}, langs=[];
   if(Array.isArray(gd)) langs=gd.slice(); else { if(gd.english)langs.push('English'); if(gd.russian)langs.push('Russian'); if(gd.chinese)langs.push('Chinese'); if(String(gd.otherLang||'').trim()) langs.push(String(gd.otherLang).trim()); }
-  var leadBits=[bk.leadPhone, bk.leadEmail, bk.leadNationality, paxAll?(paxAll+' guest'+(paxAll===1?'':'s')):'', langs.length?('Guide: '+langs.join(', ')):''].filter(function(x){ return String(x||'').trim(); });
+  var leadBits=[bk.leadPhone, bk.leadEmail, bk.leadNationality, paxAll?(paxAll+' guest'+(paxAll===1?'':'s')):''].filter(function(x){ return String(x||'').trim(); });
 
   /* pickup is stored once per booking; only the time can differ per trip */
   var hotel=String(bk.hotelName||bk.pickup||'').trim();
@@ -74435,7 +74435,7 @@ function bkVcDoc(bk, mode){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:2px dashed '+LINE+'">'
       +'<div style="padding:14px 28px 16px;min-width:0"><div style="'+LAB+'">Booked by'+(isB2C?'':' (agent)')+'</div><div style="margin-top:3px;font-size:18px;font-weight:700">'+esc(agName)+'</div></div>'
       +'<div style="padding:14px 18px 16px;border-left:1px solid '+LINE+';min-width:0"><div style="'+LAB+'">Lead guest</div><div style="margin-top:3px;font-size:18px;font-weight:700">'+(esc(bk.leadPax)||'—')+'</div>'
-        +(leadBits.length?('<div style="margin-top:2px;font-size:13px;color:'+SUB+';overflow-wrap:anywhere">'+leadBits.map(esc).join(' · ')+'</div>'):'')+'</div></div>'
+        +((leadBits.length||langs.length)?('<div style="margin-top:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:'+SUB+'">'+(leadBits.length?('<span style="overflow-wrap:anywhere;min-width:0">'+leadBits.map(esc).join(' · ')+'</span>'):'')/* guide language · green pill, the one colour nothing else on the sheet uses */+(langs.length?('<span style="padding:3px 11px;border-radius:7px;background:#DDF1EA;color:#0B5A43;font-size:13.5px;font-weight:700;white-space:nowrap"><span style="font-size:10.5px;letter-spacing:.08em;opacity:.85">GUIDE</span>&nbsp; '+langs.map(esc).join(', ')+'</span>'):'')+'</div>'):'')+'</div></div>'
     +'<div style="padding:16px 28px 4px">'
       +'<div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 16px;border-radius:8px;background:#E3F6FB"><span style="width:7px;height:7px;border-radius:4px;background:'+CY+'"></span><span style="font-size:13px;font-weight:800;letter-spacing:.1em">TRIPS</span>'
         +'<span style="margin-left:auto;font-size:12.5px;color:'+SUB+'">'+trips.length+' trip'+(trips.length===1?'':'s')+(paxAll?(' · '+paxAll+' guest'+(paxAll===1?'':'s')):'')+'</span></div>'
