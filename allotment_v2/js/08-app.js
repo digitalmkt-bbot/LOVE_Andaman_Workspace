@@ -61765,7 +61765,10 @@ function poGuard(){
 }
 function poE(x){ return (typeof ckEsc==='function')?ckEsc(x):String(x==null?'':x); }
 function poUid(p){ return p+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4); }
-function poWho(){ try{ return (ME&&(ME.name||ME.username))||''; }catch(_){ return ''; } }
+/* §poWho (2026-10-09) · ME ไม่ใช่ global (อยู่ใน closure ของ 01-auth-sync.js) · บรรทัดเดิมจึงคืน '' ทุกครั้ง
+   1,177 รายการในบัญชีท่า Panwa ไม่มีชื่อคนลงเลยสักรายการ · ท่าใช้ account เดียวกันทั้งท่าด้วย
+   จึงให้เลือกชื่อพนักงานจากทะเบียนของท่าที่แถบบน จำไว้ในเครื่องนั้น (localStorage) · ไม่มีค่อยถอยไปใช้ชื่อ account */
+function poWho(){ var p=poWhoPickName(); if(p) return p; return poWhoAcct(); }
 function poYMD(d){ return (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); }
 function poNum(v){ var n=parseInt(v,10); return isFinite(n)?n:0; }
 function poBaht(n){ return '&#3647;'+Math.round(n||0).toLocaleString(); }
@@ -62095,6 +62098,7 @@ function poCSS(){
   +H+' .po-bar input[type=date]{border:none;background:#F1F5F9;border-radius:12px;padding:7px 11px;'
      +'font:600 11.5px inherit;color:#1E293B;cursor:pointer;outline:none}'
   +H+' .po-bar .sep{width:1px;height:22px;background:#E2E8F0;margin:0 3px}'
+  +H+' .po-bar select.miss{background:#FEF3C7;color:#92400E;box-shadow:0 0 0 2px #FDE68A inset}'   /* §poWho */
   /* KPI · ป้ายไอคอนสีอยู่ขวา */
   /* ══ §pkTk4 · หน้าตั๋วอุทยาน · ชีทตามแบบฟอร์มของด่าน ═════════════════
      คอลัมน์เรียงเหมือนใบที่เขายื่นจริง (ที่ · ชื่อ-นามสกุล · สัญชาติ ·
@@ -65548,8 +65552,10 @@ function renderPierOffice(pier){
   var kpis='<div class="po-kpis">'
     +kpi('เรือออกวันนี้',boats.length,'ลำ',kPax+' pax'+(una>0?(' · ยังไม่ระบุเรือ '+una):''),'ship','#2563EB','#EFF6FF')
     +kpi('เบิกออกไป',kIss,'รายการ','คืนแล้ว '+kBack+(kMiss?(' · ขาด '+kMiss):''),'out','#D97706','#FFFBEB')
-    +kpi('สถานะปิดยอด',openN,'',openN?'ต้องเคลียร์ก่อนเลิกงาน':'ครบทุกลำ · ไม่มีเรือค้าง','check',
-        openN?'#D97706':'#059669', openN?'#FFFBEB':'#ECFDF5', openN?'#D97706':null)
+    +(function(){ var DC=poDayClosed(_poDate,_poPier);   /* §poDayClose */
+        if(DC && !openN) return kpi('สถานะปิดยอด','ปิดวัน','','โดย '+poE(DC.by||'—')+' · '+poHM(DC.at),'check','#059669','#ECFDF5','#059669');
+        return kpi('สถานะปิดยอด',openN,'',openN?'ต้องเคลียร์ก่อนเลิกงาน':(boats.length?'ครบทุกลำ · รอกดปิดวัน':'ครบทุกลำ · ไม่มีเรือค้าง'),'check',
+        openN?'#D97706':'#059669', openN?'#FFFBEB':'#ECFDF5', openN?'#D97706':null); })()
     +kpi('พร้อมใช้ในคลัง',kReady,'ชิ้น','รวมอุปกรณ์ทุกชนิด','box','#4F46E5','#EEF2FF','#059669')
     +kpi('อยู่ร้านซัก / รอซ่อม',kLaundry,'รายการ','รอซ่อม '+kRepair+' ชิ้น','wash','#E11D48','#FFF1F2')
     +'</div>';
@@ -65566,7 +65572,9 @@ function renderPierOffice(pier){
         +'<button class="pri">หน้าหลักเบิก-คืน</button>'
         +'<button onclick="poItemsOpen()">ทะเบียนของ</button>'
         +'<button onclick="poLedgerOpen()">ประวัติการเคลื่อนไหว</button>'
+        +poFineBarBtn()
         +'<span class="sep"></span>'
+        +poWhoBar(ro)
         +'<button class="nav" onclick="poShift(-1)" title="วันก่อนหน้า">&#8249;</button>'
         +'<input type="date" value="'+_poDate+'" onchange="poSetDate(this.value)">'
         +'<button class="nav" onclick="poShift(1)" title="วันถัดไป">&#8250;</button>'
@@ -65581,6 +65589,7 @@ function renderPierOffice(pier){
       /* §poPrintAll · ของเดิมพิมพ์ได้แต่ใบเซ็นซึ่งเป็นใบต่อลำ
          วันที่เรือออกหลายลำต้องถือกระดาษหลายใบแล้วบวกเอง */
       +'<span style="flex:1"></span>'
+      +poDayCloseBar(boats, ro)
       +(boats.length?('<button class="po-btn" onclick="poPrintAll()" '
         +'title="ใบเดียวจบทั้งวัน · ยอดเบิก-คืนของทุกลำในตารางเดียว พร้อมช่องเซ็น">'
         +'&#128424; พิมพ์สรุปรวมทุกลำ</button>'):'')
@@ -66495,6 +66504,7 @@ function poIsRender(){
 
 function poIssueOpen(bid){
   if(!poCanEdit()) return;
+  if(!poDayGuard() || !poWhoGuard()) return;   /* §poDayClose · §poWho */
   if(!poIsBuild(bid)) return;
   var B=_poIs.B;
   var PD=poSheetPending(_poDate,bid);
@@ -66545,6 +66555,7 @@ function poSheetPending(date, bid){
 /* mode · 'draft' = เก็บใบอย่างเดียว · อย่างอื่น = ตรวจครบแล้วเขียนลงบัญชี */
 function poIsCommit(bid, mode){
   if(!_poIs || _poIs.bid!==bid) return false;
+  if(!poDayGuard()) return false;   /* §poDayClose · เผื่อเปิดใบค้างไว้แล้วอีกเครื่องกดปิดวัน */
   poIsRead();
   var KS=_poIs.KS, S=_poIs.base, over=[];
   var DRAFT=(mode==='draft');
@@ -66703,6 +66714,7 @@ function poIsPrint(bid){
 
 function poCloseOpen(bid){
   if(!poCanEdit()) return;
+  if(!poDayGuard() || !poWhoGuard()) return;   /* §poDayClose · §poWho */
   var boats=poBoats(_poDate,_poPier), B=boats.filter(function(x){return x.bid===bid;})[0]||{boat:{name:bid}};
   var items=poItemsAll(_poPier), S=poBoatSum(_poDate,bid,_poPier), C=poBoatCarry(_poDate,bid);
   var rows=items.filter(function(it){ return (S[it.id] && S[it.id].iss>0) || (C[it.id]>0); });
@@ -66756,6 +66768,7 @@ function poMissSum(itemId, miss){
   el.textContent=(t===miss)?('ระบุครบแล้ว '+t+'/'+miss):('ระบุแล้ว '+t+' จาก '+miss+' · ยังขาด '+(miss-t));
 }
 function poCloseSave(bid){
+  if(!poDayGuard()) return;   /* §poDayClose */
   var items=poItemsAll(_poPier), S=poBoatSum(_poDate,bid,_poPier), C=poBoatCarry(_poDate,bid), bad=[], plan=[];
   items.forEach(function(it){
     var o=S[it.id], cy=C[it.id]||0; if(!o || (!o.iss && !cy)) return;
@@ -66783,6 +66796,7 @@ function poCloseSave(bid){
 
 function poDutyOpen(bid){
   if(!poCanEdit()) return;
+  if(!poDayGuard()) return;   /* §poDayClose */
   var st=poStaff(_poPier), on=poDuty(_poDate,bid);
   var B=poBoats(_poDate,_poPier).filter(function(x){return x.bid===bid;})[0]||{boat:{name:bid}};
   var body=st.length?st.map(function(s){
@@ -67040,6 +67054,7 @@ function poRecvRows(list, rowFn){
 }
 function poRecvOpen(itemId){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var list=poRecvItems(itemId); if(!list.length) return;
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ของเข้าเพิ่มในท่า · ยอดพร้อมใช้และยอดรวมเพิ่มตาม'
       +(list.length>1?' · ใส่จำนวนเฉพาะรายการที่รับเข้า ที่เว้นว่างไม่บันทึก':'')+'</div>'
@@ -67083,6 +67098,7 @@ function poRecvSave(itemId){
 }
 function poCountOpen(itemId){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var list=poRecvItems(itemId); if(!list.length) return;
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">นับเฉพาะของที่อยู่<b>ในคลัง</b> (พร้อมใช้) · '
       +'ของที่อยู่กับเรือ ประจำเรือ ร้านซัก และรอซ่อม ไม่ต้องนับ · ระบบเทียบกับบัญชีแล้วบันทึกส่วนต่างให้'
@@ -67282,6 +67298,7 @@ function poShipSection(ro){
 }
 function poShipBoatPick(){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var BL=poShipBoats(_poPier);
   if(!BL.length){ poModal('ลงของประจำเรือ','<div style="font-size:12.5px;color:#B45309">ท่านี้ยังไม่มีเรือในทะเบียน · เพิ่มเรือในหน้า Fleet ก่อน</div>',poBtn('ปิด','poModalClose()'),460); return; }
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">เลือกเรือ · ของที่ยกขึ้นจะหักจากคลังพร้อมใช้ (กอง 1)</div>'
@@ -67291,6 +67308,7 @@ function poShipBoatPick(){
 }
 function poShipBoatOpen(bid){
   if(!poCanEdit() || !bid) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var on=poShipOn(bid), its=poItems(_poPier);
   var has=its.filter(function(it){ return on[it.id]>0; }), rest=its.filter(function(it){ return !(on[it.id]>0); });
   var inp=function(id,ph,w,extra){ return '<input id="'+id+'" inputmode="numeric" placeholder="'+ph+'" '+(extra||'')
@@ -67302,9 +67320,12 @@ function poShipBoatOpen(bid){
       +'<b style="font-size:12.5px;color:#0F172A">'+poE(it.label)+'</b>'
       +'<span style="text-align:center;font:800 13px inherit;color:#0E7490;font-family:inherit">'+q+'</span>'
       +inp('psc_'+it.id,'นับ',62,'oninput="poShipBoatDiff(\''+poE(bid)+'\',\''+poE(it.id)+'\')"')
-      +'<span style="display:flex;gap:4px;align-items:center"><span id="psd_'+it.id+'" style="font:700 11.5px inherit;font-family:inherit;min-width:42px;white-space:nowrap"></span>'
+      +'<span style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><span id="psd_'+it.id+'" style="font:700 11.5px inherit;font-family:inherit;min-width:42px;white-space:nowrap"></span>'
         +'<select id="psr_'+it.id+'" disabled style="border:1px solid #D8D4CA;border-radius:8px;padding:4px 5px;font:600 11px inherit;font-family:inherit;max-width:112px">'
-        +'<option value="">— เพราะ —</option>'+Object.keys(PO_SHIP_LOSS).map(function(k){ return '<option value="'+k+'">'+poE(PO_SHIP_LOSS[k])+'</option>'; }).join('')+'</select></span>'
+        +'<option value="">— เพราะ —</option>'+Object.keys(PO_SHIP_LOSS).map(function(k){ return '<option value="'+k+'">'+poE(PO_SHIP_LOSS[k])+'</option>'; }).join('')+'</select>'
+        /* §poFine · หายจากของประจำเรือก็เรียกค่าปรับได้ (ลูกค้า/ไกด์ทำหาย) · ช่องโผล่เมื่อเลือก "หาย" */
+        +'<input id="psf_'+it.id+'" inputmode="numeric" placeholder="ค่าปรับ ฿ (ถ้าเรียกเก็บ)" title="ค่าปรับ (บาท) · ใส่เมื่อเรียกเก็บได้ · เว้นว่างถ้าไม่มี" style="display:none;flex:1 0 100%;border:1px solid #F0C36D;background:#FFFBEB;border-radius:8px;padding:4px 7px;font:600 11px inherit;font-family:inherit;width:100%;box-sizing:border-box">'
+        +'</span>'
       +'<span>'+inp('psa_'+it.id,'+',50)+'<i style="display:block;font-style:normal;font-size:10px;color:#94A3B8">คลัง '+Math.max(0,b.ready)+'</i></span>'
       +inp('psb_'+it.id,'−',50)
       +'</div>'; };
@@ -67332,7 +67353,13 @@ function poShipBoatDiff(bid, id){
   var d=poNum(raw)-has;
   el.textContent=d===0?'ครบ':(d<0?('ขาด '+(-d)):('+'+d+' ?'));
   el.style.color=d===0?'#047857':'#B91C1C';
-  if(sel){ sel.disabled=!(d<0); if(d>=0) sel.value=''; }
+  if(sel){ sel.disabled=!(d<0); if(d>=0) sel.value=''; sel.onchange=function(){ poShipFineTgl(id); }; poShipFineTgl(id); }
+}
+/* §poFine · ช่องค่าปรับโผล่เฉพาะตอนเลือกว่าขาดเพราะ "หาย" */
+function poShipFineTgl(id){
+  var sel=document.getElementById('psr_'+id), f=document.getElementById('psf_'+id); if(!sel||!f) return;
+  var show=(!sel.disabled && sel.value==='ship_lost');
+  f.style.display=show?'':'none'; if(!show) f.value='';
 }
 function poShipBoatSave(bid){
   if(!poGuard()) return false;
@@ -67352,14 +67379,18 @@ function poShipBoatSave(bid){
     var add=num(String(poV('psa_'+id)||'').trim(),L,'จำนวนเติม'), back=num(String(poV('psb_'+id)||'').trim(),L,'จำนวนถอด');
     if(add>Math.max(0,b.ready)) errs.push(poE(L)+': คลังพร้อมใช้มีแค่ '+Math.max(0,b.ready)+' · เติม '+add+' ไม่ได้ (รับของเข้าคลังก่อน)');
     if(back>has-short) errs.push(poE(L)+': ถอดคืนได้ไม่เกิน '+(has-short));
-    if(short||add||back) lines.push({id:id, has:has, c:c, short:short, why:why, add:add, back:back});
+    var fine=0;   /* §poFine */
+    if(short>0 && why==='ship_lost'){ var fRaw=String(poV('psf_'+id)||'').trim(); if(fRaw!==''){ if(!/^\d+$/.test(fRaw)) errs.push(poE(L)+': ค่าปรับต้องเป็นตัวเลข'); else fine=+fRaw; } }
+    if(short||add||back) lines.push({id:id, has:has, c:c, short:short, why:why, add:add, back:back, fine:fine});
   });
   if(lines.some(function(l){ return l.short>0; }) && !note) errs.push('มีของขาด · ใส่รายละเอียดว่าขาด/หายเพราะอะไร');
   if(errs.length) return err(errs.join('<br>'));
   if(!lines.length) return err('ยังไม่มีอะไรให้บันทึก · ถ้านับแล้วครบทุกรายการ ไม่ต้องบันทึก');
   lines.forEach(function(l){
-    if(l.short) poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:l.why, qty:l.short,
-                       note:note+' · นับบนเรือได้ '+l.c+' (ระบบ '+l.has+')'});
+    if(l.short){ var mv={date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:l.why, qty:l.short,
+                       note:note+' · นับบนเรือได้ '+l.c+' (ระบบ '+l.has+')'};
+      if(l.why==='ship_lost' && l.fine>0){ mv.fine=l.fine; mv.finePaid=false; }   /* §poFine */
+      poAdd(mv); }
     if(l.add)   poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:'assign', qty:l.add,
                        note:'เติมจากคลัง'+(note?(' · '+note):'')});
     if(l.back)  poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:'unassign', qty:l.back,
@@ -67375,6 +67406,7 @@ function poShipErr(msg){
 }
 function poShipOpen(itemId){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var it=poItem(itemId); if(!it) return;
   var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;
   var BL=poShipBoats(_poPier), cur=poShipByBoat(itemId);
@@ -67464,6 +67496,7 @@ function poQAge(itemId, bucket){
 }
 function poLaundryOutOpen(){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var tw=poItems(_poPier).filter(function(i){ return i.kind==='towel'; });
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่คืนเข้ามาแล้วรอส่งซัก · กรอกจำนวนที่ส่งออกไปวันนี้<br>'
     +'<b style="color:#16265C">ระบบตัดจากกองเก่าสุดก่อนเสมอ</b> · ไม่ต้องเลือกเองว่าส่งกองไหน</div>'
@@ -67476,6 +67509,7 @@ function poLaundryOutOpen(){
 }
 function poLaundryInOpen(){
   if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
   var tw=poItems(_poPier).filter(function(i){ return i.kind==='towel'; });
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่ร้านซักส่งกลับ · เข้าคลังพร้อมใช้ทันที ถ้าขาดให้นับสต็อกแยก</div>'
     +tw.map(function(it){ var b=poBal(it.id);
@@ -67510,6 +67544,144 @@ var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laun
 var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
                 loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด' };
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
+
+/* ══ §poWho (2026-10-09) · ผู้บันทึก ═══════════════════════════════════════════════════════════
+   ท่าเรือใช้ account เดียวกันทั้งท่า · ชื่อที่ลงในบัญชี (by) จึงต้องมาจากทะเบียนพนักงานของท่า
+   เก็บในเครื่องนั้น ๆ (localStorage) ไม่ใช่ในบัญชี · เปิดเครื่องใหม่/คนใหม่มานั่ง ต้องเลือกใหม่
+   บังคับเลือกก่อนบันทึกทุกทาง (เบิก–คืน · ปิดยอด · รับเข้า · นับ · ประจำเรือ · ซัก) ถ้าท่านั้นมีพนักงานในทะเบียน
+   ท่าที่ยังไม่มีทะเบียนพนักงาน ใช้ชื่อ account ไปก่อน · ไม่ขวางงาน */
+var PO_WHO_KEY='po_who::';
+function poWhoAcct(){ try{ var m=window.LA_ME||{}; return m.name||m.username||''; }catch(_){ return ''; } }
+function poWhoPick(){ try{ return localStorage.getItem(PO_WHO_KEY+_poPier)||''; }catch(_){ return ''; } }
+function poWhoPickName(){
+  var id=poWhoPick(); if(!id) return '';
+  var s=(PIER_STAFF||[]).filter(function(x){ return x.id===id && x.pier===_poPier && x.active!==false; })[0];
+  return s?(s.nick||s.name||''):'';
+}
+function poWhoSet(v){
+  try{ if(v) localStorage.setItem(PO_WHO_KEY+_poPier,v); else localStorage.removeItem(PO_WHO_KEY+_poPier); }catch(_){}
+  var el=document.getElementById('po-who'); if(el) el.classList.toggle('miss', !poWhoPickName() && poStaff(_poPier).length>0);
+}
+function poWhoOk(){ return !!poWhoPickName() || !poStaff(_poPier).length; }
+function poWhoGuard(){
+  if(poWhoOk()) return true;
+  try{ alert('เลือกชื่อผู้บันทึกที่แถบบนก่อน (ช่อง "ผู้บันทึก") · บัญชีจะได้รู้ว่าใครลงรายการ'); }catch(_){}
+  var el=document.getElementById('po-who'); if(el){ el.focus(); el.classList.add('miss'); }
+  return false;
+}
+function poWhoBar(ro){
+  var st=poStaff(_poPier); if(ro || !st.length) return '';
+  var cur=poWhoPick(), ok=!!poWhoPickName();
+  return '<label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#475569" title="ชื่อที่จะลงในบัญชีทุกรายการที่บันทึกจากเครื่องนี้">ผู้บันทึก'
+    +'<select id="po-who" class="'+(ok?'':'miss')+'" onchange="poWhoSet(this.value)" '
+    +'style="border:none;background:#F1F5F9;border-radius:12px;padding:7px 10px;font:700 12px inherit;font-family:inherit;color:#0F172A;max-width:150px">'
+    +'<option value="">— เลือกชื่อ —</option>'
+    +st.map(function(s){ return '<option value="'+poE(s.id)+'"'+(s.id===cur?' selected':'')+'>'+poE(s.nick||s.name)+(s.role?(' · '+poE(s.role)):'')+'</option>'; }).join('')
+    +'</select></label>';
+}
+
+/* ══ §poFine (2026-10-09) · ค่าปรับค้างเก็บ ═════════════════════════════════════════════════════
+   ปิดยอดลง "หาย" + ค่าปรับได้มาตั้งแต่แรก (finePaid:false) แต่ไม่มีหน้าไหนอ่าน finePaid เลย · 5 ใบ 8 สัปดาห์ ค้างหมด
+   ตรงนี้คือที่เดียวที่ปิดมัน · รับเงินแล้ว / ยกเว้น · เขียน finePaid=true ลงรายการเดิม (คอลัมน์มีอยู่แล้วใน pier_moves)
+   ใคร/เมื่อไหร่/อย่างไร เก็บใน PIER_CFG.finePay[moveId] (pier_cfg เป็น map json · ไม่ต้องแก้ตาราง) */
+function poFineRows(pier, paid){
+  return (PIER_MOVES||[]).filter(function(m){ return m && m.pier===pier && poNum(m.fine)>0 && (!!m.finePaid)===!!paid; })
+    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(b.at||'').localeCompare(String(a.at||'')); });
+}
+function poFineSum(rows){ return rows.reduce(function(s2,m){ return s2+poNum(m.fine); },0); }
+function poFineBarBtn(){
+  var R=poFineRows(_poPier,false); if(!R.length) return '<button onclick="poFineOpen()">ค่าปรับ</button>';
+  return '<button onclick="poFineOpen()" style="color:#B45309;background:#FFFBEB" title="ค่าปรับของหายที่ยังไม่ได้เก็บเงิน">ค่าปรับค้าง '+R.length+' · '+poBaht(poFineSum(R))+'</button>';
+}
+function poFinePayInfo(id){ var P=(PIER_CFG&&PIER_CFG.finePay)||{}; return P[id]||null; }
+function poFineOpen(){
+  var open=poFineRows(_poPier,false), done=poFineRows(_poPier,true).slice(0,30), ro=!poCanEdit();
+  var row=function(m, isOpen){
+    var it=poItem(m.itemId), P=poFinePayInfo(m.id);
+    return '<tr>'
+      +'<td style="white-space:nowrap">'+poE(m.date||'')+'</td>'
+      +'<td><b>'+poE(it?it.label:m.itemId)+'</b> × '+poNum(m.qty)+'<div style="font-size:10.5px;color:#7C8091">'+poE(poLdgBoatNm(m.boatId))+(m.type==='ship_lost'?' · ของประจำเรือ':'')+'</div></td>'
+      +'<td style="font-size:11px;color:#5F5E5A">'+poE(String(m.note||'').trim())+'</td>'
+      +'<td style="color:#7C8091">'+poE(m.by||'')+'</td>'
+      +'<td style="text-align:right;font-weight:800;color:'+(isOpen?'#B45309':'#1C7A4E')+'">'+poBaht(m.fine)+'</td>'
+      +(isOpen
+        ? ('<td style="white-space:nowrap">'+(ro?'':(
+            '<button class="po-btn pri" onclick="poFinePay(\''+poE(m.id)+'\',\'paid\')" title="เก็บเงินแล้ว">รับเงินแล้ว</button> '
+            +'<button class="po-btn" onclick="poFinePay(\''+poE(m.id)+'\',\'waived\')" title="ไม่เก็บ · ต้องใส่เหตุผล">ยกเว้น</button>'))+'</td>')
+        : ('<td style="font-size:11px;color:#7C8091">'+(P?((P.st==='waived'?'ยกเว้น':'รับเงินแล้ว')+' · '+poE(P.by||'')+' · '+poHM(P.at)+(P.how?(' · '+poE(P.how)):'')+(P.note?('<br>'+poE(P.note)):'')):'เก็บแล้ว')+'</td>'))
+      +'</tr>';
+  };
+  var tbl=function(rows,isOpen,empty){ return rows.length
+    ? ('<table class="po-t" style="width:100%"><thead><tr><th>วันที่</th><th>รายการ · เรือ</th><th>รายละเอียด</th><th>ผู้ลง</th><th style="text-align:right">ค่าปรับ</th><th>'+(isOpen?'':'ปิดโดย')+'</th></tr></thead><tbody>'+rows.map(function(m){ return row(m,isOpen); }).join('')+'</tbody></table>')
+    : ('<div style="font-size:12px;color:#94A3B8;padding:10px 0">'+empty+'</div>'); };
+  poModal('ค่าปรับของหาย · '+poE((PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||{}).n||_poPier),
+    '<div style="font-size:12px;color:#7C8091;margin-bottom:10px">ค่าปรับที่ลงไว้ตอน <b>ปิดยอด</b> (ลูกค้าไม่คืน) หรือ <b>ตรวจของประจำเรือ</b> (หาย) · กด <b>รับเงินแล้ว</b> เมื่อได้เงินจริง · <b>ยกเว้น</b> ต้องใส่เหตุผล</div>'
+    +'<div style="font-size:11.5px;font-weight:800;color:#B45309;margin:4px 0 6px">ค้างเก็บ '+open.length+' รายการ · '+poBaht(poFineSum(open))+'</div>'
+    +tbl(open,true,'ไม่มีค่าปรับค้างเก็บ')
+    +'<div style="font-size:11.5px;font-weight:800;color:#475569;margin:16px 0 6px">ปิดแล้ว (30 รายการล่าสุด)</div>'
+    +tbl(done,false,'ยังไม่มี'),
+    poBtn('ปิด','poModalClose()'), 900);
+}
+function poFinePay(id, st){
+  if(!poGuard() || !poWhoGuard()) return;
+  var m=(PIER_MOVES||[]).filter(function(x){ return x && x.id===id; })[0]; if(!m) return;
+  var how='', note='';
+  if(st==='waived'){ note=String(prompt('ยกเว้นค่าปรับ '+poBaht(m.fine)+' · เหตุผล (จำเป็น)','')||'').trim(); if(!note) return; }
+  else { how=String(prompt('รับเงิน '+poBaht(m.fine)+' · รับทางไหน (เงินสด / โอน / หักจากเอเจนต์)','เงินสด')||'').trim(); if(!how) return; }
+  m.finePaid=true;
+  if(!PIER_CFG.finePay || typeof PIER_CFG.finePay!=='object') PIER_CFG.finePay={};
+  PIER_CFG.finePay[id]={st:st, at:new Date().toISOString(), by:poWho(), how:how, note:note};
+  poPersist(); poFineOpen(); renderPierOffice();
+}
+function poHM(iso){ try{ var d=new Date(iso); if(isNaN(d)) return ''; return poYMD(d)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }catch(_){ return ''; } }
+
+/* ══ §poDayClose (2026-10-09) · ปิดวัน ══════════════════════════════════════════════════════════
+   13 จาก 84 ใบถูกแก้หลังวันเดินทาง (บางใบ 9 วัน) · ยอดวันเก่าไม่เคยนิ่ง
+   ปิดวัน = ใบเบิก–คืน / ปิดยอด / พนักงานลงเรือ ของวันนั้นล็อก · จะแก้ต้อง "เปิดวันอีกครั้ง" พร้อมเหตุผล (เก็บไว้ทั้งหมด)
+   ของในคลัง (รับเข้า / นับ / ซัก / ประจำเรือ) ไม่ล็อก · นั่นคือทางแก้ยอดที่ถูกต้องหลังปิดวัน
+   เก็บใน PIER_CFG.dayClose['pier::date'] = {at,by,reopen:[{at,by,why}]} · ไม่ต้องแก้ตาราง */
+function poDayKey(date,pier){ return pier+'::'+date; }
+function poDayClosed(date,pier){
+  var D=(PIER_CFG&&PIER_CFG.dayClose)||{}; var e=D[poDayKey(date,pier)];
+  return (e && e.at && !e.open) ? e : null;
+}
+function poDayGuard(){
+  var e=poDayClosed(_poDate,_poPier); if(!e) return true;
+  try{ alert('วันที่ '+_poDate+' ปิดวันแล้ว (โดย '+(e.by||'—')+' · '+poHM(e.at)+')\nจะแก้ใบเบิก–คืนของวันนี้ ต้องกด "เปิดวันอีกครั้ง" ที่หัวตารางก่อน และใส่เหตุผล\nถ้าแค่ยอดคลังไม่ตรง ให้ใช้ นับสต็อก แทน'); }catch(_){}
+  return false;
+}
+function poDayCloseBar(boats, ro){
+  if(ro || !boats.length) return '';
+  var e=poDayClosed(_poDate,_poPier);
+  if(e){
+    var n=(e.reopen||[]).length;
+    return '<span class="chip" style="background:#ECFDF5;color:#047857;border-color:#A7F3D0" title="ใบเบิก–คืนของวันนี้ล็อกแล้ว'+(n?(' · เคยเปิดใหม่ '+n+' ครั้ง'):'')+'">&#10003; ปิดวันแล้ว · '+poE(e.by||'—')+' · '+poHM(e.at).slice(11)+'</span>'
+      +'<button class="po-btn" onclick="poDayReopen()" title="ปลดล็อกเพื่อแก้ใบของวันนี้ · ต้องใส่เหตุผล">เปิดวันอีกครั้ง</button>';
+  }
+  var open=boats.filter(function(b){ var k=poBoatStage(_poDate,b.bid,_poPier).k; return k==='open'||k==='carry'; }).length;
+  var pend=boats.filter(function(b){ return !!poSheetPending(_poDate,b.bid); }).length;
+  var why=open?('ยังมี '+open+' ลำค้างคืน · ปิดยอดให้ครบก่อน'):(pend?('ยังมี '+pend+' ใบเป็นร่าง · ยืนยันหรือล้างร่างก่อน'):'');
+  return '<button class="po-btn'+(why?'':' pri')+'" onclick="poDayClose()"'+(why?' disabled':'')+' title="'+poE(why||'ล็อกใบเบิก–คืนของวันนี้ทุกลำ · ยอดจะไม่ถูกแก้ย้อนหลังโดยไม่มีเหตุผล')+'">&#128274; ปิดวัน</button>';
+}
+function poDayClose(){
+  if(!poGuard() || !poWhoGuard()) return;
+  var boats=poBoats(_poDate,_poPier);
+  if(boats.some(function(b){ var k=poBoatStage(_poDate,b.bid,_poPier).k; return k==='open'||k==='carry'; })){ alert('ยังมีลำค้างคืน · ปิดยอดให้ครบก่อน'); return; }
+  if(boats.some(function(b){ return !!poSheetPending(_poDate,b.bid); })){ alert('ยังมีใบเบิก–คืนเป็นร่าง · ยืนยันก่อน'); return; }
+  if(!confirm('ปิดวัน '+_poDate+' · ใบเบิก–คืนทุกลำของวันนี้จะล็อก\nแก้ย้อนหลังได้เฉพาะ "เปิดวันอีกครั้ง" พร้อมเหตุผล\nยืนยัน?')) return;
+  if(!PIER_CFG.dayClose || typeof PIER_CFG.dayClose!=='object') PIER_CFG.dayClose={};
+  var k=poDayKey(_poDate,_poPier), old=PIER_CFG.dayClose[k]||{};
+  PIER_CFG.dayClose[k]={at:new Date().toISOString(), by:poWho(), reopen:old.reopen||[]};
+  poPersist(); renderPierOffice();
+}
+function poDayReopen(){
+  if(!poGuard() || !poWhoGuard()) return;
+  var k=poDayKey(_poDate,_poPier), e=(PIER_CFG.dayClose||{})[k]; if(!e) return;
+  var why=String(prompt('เปิดวัน '+_poDate+' อีกครั้ง · เหตุผล (จำเป็น · จะถูกเก็บไว้)','')||'').trim(); if(!why) return;
+  e.reopen=(e.reopen||[]).concat([{at:new Date().toISOString(), by:poWho(), why:why, closedAt:e.at, closedBy:e.by}]);
+  e.open=1;   /* คง at/by เดิมไว้ให้เห็นว่าเคยปิดเมื่อไหร่ · กดปิดวันใหม่จะทับ */
+  poPersist(); renderPierOffice();
+}
 function poLdgBoatNm(id){
   var b=(typeof getBoat==='function' && id)?getBoat(id):null;
   return b?(b.name||id):(id||'ไม่ระบุลำ');
