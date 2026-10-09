@@ -60428,189 +60428,9 @@ function bkV2RenderBookingDetail(){
         <div class="bkvc2-side">
 
           ${bkVcUseCard(bk)}
-          <div class="bkvc2-cap">For staff only &middot; never on either copy</div>
+          ${bkVcStaffCard(bk)}
 
-          <!-- AGENT & VOUCHER -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Agent &amp; Voucher</span></div>
-            <div style="display:grid;grid-template-columns:1fr;gap:14px;padding-top:4px">
-              <div>
-                <div class="bkv2-dt-lab">Agent</div>
-                <div class="bkv2-dt-val">${escapeHTML(agent?.name || b2c?.name || '—')}${agent?.code?` <span style="color:var(--ink-soft);font-weight:500">· ${escapeHTML(agent.code)}</span>`:''}</div>
-                ${rt?`<div class="bkv2-dt-sub">Rate Type: ${escapeHTML(rt.code||'')} · ${escapeHTML(rt.name||'')}</div>`:''}
-                ${bk.channelType==='b2c'?`<div class="bkv2-dt-sub">B2C · Direct</div>`:''}
-              </div>
-              <div>
-                <div class="bkv2-dt-lab">Voucher Ref</div>
-                <div class="bkv2-dt-val">${escapeHTML(bk.voucherRef || '—')}</div>
-                <div class="bkv2-dt-sub"><strong style="color:var(--ink)">Booked ${bkV2FmtFullDate(_bkDate)}</strong>${_leadTxt}${_mktTxt}</div>
-                <div class="bkv2-dt-sub">Submitted by ${escapeHTML(bk.createdBy||'—')}${bk.confirmedBy?` &middot; Confirmed by <strong style="color:#0F6E56">${escapeHTML(bk.confirmedBy)}</strong>`:''}</div>
-              </div>
-            </div>
-          </div>
-
-
-          <!-- PAYMENT & CASH ON TOUR -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Payment</span></div>
-            <div style="display:grid;grid-template-columns:1fr;gap:14px;padding-top:4px">
-              <div>
-                <div class="bkv2-dt-lab">Method</div>
-                ${(function(){
-                  // §B2C payment card (2026-08-01): B2C bookings carry their settlement on
-                  // paymentSnapshot (paid / paidStatus / deposit / balance, derived server-side from
-                  // Σpayments + Σcredits on the B2C order) but this card only ever printed .method —
-                  // so a booking the customer had already paid in full read as a bare "bt".
-                  // Derived label: settled in full -> prepaid · anything outstanding -> deposit.
-                  // NOT "credit": no terms were extended, the balance is due before travel.
-                  // B2B is untouched — it keeps the contract method / Net days / contract version.
-                  const ps = bk.paymentSnapshot || {};
-                  if(bk.agentId !== 'a_b2c'){
-                    return `<div class="bkv2-dt-val">${escapeHTML(ps.method || bk.payment || '—')}</div>`
-                      + (ps.netDays?`<div class="bkv2-dt-sub">Net ${ps.netDays} days</div>`:'')
-                      + (ps.source?`<div class="bkv2-dt-sub">From: ${escapeHTML(ps.source)}${ps.contractVersion?` · ${escapeHTML(ps.contractVersion)}`:''}</div>`:'');
-                  }
-                  const st   = String(ps.paidStatus||'');
-                  const lbl  = st==='paid' ? 'prepaid' : (st ? 'deposit' : (ps.method || '—'));
-                  const term = (typeof bkV2PayLabel==='function' && ps.method) ? bkV2PayLabel(ps.method) : (ps.method||'');
-                  const paid = Number(ps.paid)||0, bal = Number(ps.balance)||0;
-                  // Amounts are ORDER-level and ride on the first line of a multi-item order only
-                  // (see mapB2CItemBooking · isFirstLine) — the status is on every line. So show
-                  // figures when we have them and say what they cover; never print "THB 0 received"
-                  // on a sibling line that simply carries no amount.
-                  const money = st==='paid' ? 'paid in full'
-                    : (paid||bal) ? [paid?`THB ${paid.toLocaleString()} received`:null,
-                                     bal ?`balance THB ${bal.toLocaleString()}`:null].filter(Boolean).join(' · ') + ' · order-level'
-                    : (st==='unpaid' ? 'not yet paid' : '');
-                  return `<div class="bkv2-dt-val">${escapeHTML(lbl)}</div>`
-                    + ((term||money)?`<div class="bkv2-dt-sub">${escapeHTML([term,money].filter(Boolean).join(' · '))}</div>`:'')
-                    + `<div class="bkv2-dt-sub">From: B2C sync</div>`;
-                })()}
-              </div>
-              <div>
-                <div class="bkv2-dt-lab">Cash on Tour</div>
-                <div class="bkv2-dt-val">${bk.cashOnTour?escapeHTML(bk.cashOnTour.currency||'THB')+' '+(bk.cashOnTour.amount||0).toLocaleString()+' · '+(bk.cashOnTour.handling==='deduct'?'หักจาก invoice':'แยกต่างหาก'):'—'}</div>
-                ${bk.cashOnTour&&(bk.cashOnTour.note||bk.cashOnTour.notes)?`<div class="bkv2-dt-sub">📝 ${escapeHTML(bk.cashOnTour.note||bk.cashOnTour.notes)}</div>`:''}
-              </div>
-            </div>
-          </div>
-
-          <!-- ADD-ONS -->
-          ${(bk.addOns||[]).length?`
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Add-on Services</span></div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
-              <tbody>
-                ${(bk.addOns||[]).map(a => {
-                  /* §addonUnit · show the working, not just the total: "4 × ฿200" under the name.
-                     Derived from qty + amount rather than stored, so it cannot drift from the money.
-                     Shown only when it divides exactly — a rounded unit price that does not multiply
-                     back to the total is worse than no unit price at all. qty is units for a charter
-                     (ลำ) and pax for a per-person add-on, so the row stays deliberately unlabelled. */
-                  const _q = Math.max(1, Math.round(Number(a.qty) || 1));
-                  const _amt = Math.round(Number(a.amount) || 0);
-                  const _unit = (_q > 1 && _amt > 0 && _amt % _q === 0) ? (_amt / _q) : null;
-                  return `
-                  <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
-                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${_unit !== null ? `<div style="font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:2px">${_q} × ฿${bkV2FmtTHB(_unit)}</div>` : ''}</td>
-                    <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700;vertical-align:top">฿${bkV2FmtTHB(_amt)}</td>
-                  </tr>
-                `;}).join('')}
-              </tbody>
-            </table>
-          </div>`:''}
-
-
-          ${bkVcStaffTrips(bk, escapeHTML)}
-
-          <!-- COST SUMMARY -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Total</span></div>
-            <div style="padding-top:8px">
-              ${bk.priceBreakdown?`
-                ${bk.priceBreakdown.seat?`<div class="bkv2-dt-row"><span>Seat rates</span><span>฿${bkV2FmtTHB(bk.priceBreakdown.seat)}</span></div>`:''}
-                ${bk.priceBreakdown.charter?`<div class="bkv2-dt-row"><span>Charter</span><span>฿${bkV2FmtTHB(bk.priceBreakdown.charter)}</span></div>`:''}
-                ${bk.priceBreakdown.addOn?`<div class="bkv2-dt-row"><span>Add-ons</span><span>฿${bkV2FmtTHB(bk.priceBreakdown.addOn)}</span></div>`:''}
-                ${bk.priceBreakdown.focDiscount?`<div class="bkv2-dt-row" style="color:#A05A1A;font-style:italic"><span>FOC · given free <span style="font-size:10.5px;color:var(--ink-soft);font-style:normal">value forgone · not in total</span></span><span>฿${bkV2FmtTHB(-bk.priceBreakdown.focDiscount)}</span></div>`:''}
-                ${(bk.adjustments||[]).map(a=>{
-                  const v=Number(a.value)||0; if(v<=0) return '';
-                  const base=(bk.priceBreakdown?(bk.priceBreakdown.seat||0)+(bk.priceBreakdown.addOn||0):0);
-                  const amt=a.mode==='percent'?Math.round(base*v/100):Math.round(v);
-                  const sub=(a.label?escapeHTML(a.label):'')+(a.mode==='percent'?` (${v}%)`:'')+(a.note?` · ${escapeHTML(a.note)}`:'');
-                  if(a.kind==='extra') return `<div class="bkv2-dt-row" style="color:#A05A1A"><span>Extra charge${sub?' · '+sub:''}</span><span>+฿${bkV2FmtTHB(amt)}</span></div>`;
-                  if(a.kind==='discount') return `<div class="bkv2-dt-row" style="color:#A32D2D"><span>Discount${sub?' · '+sub:''}</span><span>−฿${bkV2FmtTHB(amt)}</span></div>`;
-                  return '';
-                }).join('')}
-              `:''}
-              ${(bk.feeItems||[]).map(f=>{ const amt=Math.round(+f.amount||0); if(!amt) return ''; const lbl=escapeHTML(f.label||(f.type==='reschedule'?'Reschedule fee':'Fee')); return `<div class="bkv2-dt-row" style="color:#A05A1A"><span>${lbl}</span><span>+฿${bkV2FmtTHB(amt)}</span></div>`; }).join('')}
-              <div class="bkv2-dt-row" style="border-top:1px solid rgba(26,35,50,0.12);margin-top:10px;padding-top:10px;font-size:18px;font-weight:800;color:#1F2A44">
-                <span>Total</span><span>฿${bkV2FmtTHB((typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total || bk.priceBreakdown?.total || 0))}</span>
-              </div>
-              <div style="margin-top:8px;font-size:11px;color:var(--ink-soft)">${n.paxTotal} pax · ${escapeHTML(n.paxBreak||'')}</div>
-            </div>
-          </div>
-
-          <!-- ACTIVITY -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Activity</span></div>
-            <div style="padding-top:8px;display:flex;flex-direction:column;gap:8px">
-              <div style="display:flex;gap:8px;font-size:11px">
-                <div style="width:6px;height:6px;border-radius:50%;background:#10B981;margin-top:5px;flex-shrink:0"></div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:700;color:#1F2A44">Created</div>
-                  <div style="color:var(--ink-soft)">${bkV2FmtDateTime(bk.createdAt)} · by ${escapeHTML(bk.createdBy||'—')}</div>
-                </div>
-              </div>
-              ${foc?.requestedAt?`
-                <div style="display:flex;gap:8px;font-size:11px">
-                  <div style="width:6px;height:6px;border-radius:50%;background:#F59E0B;margin-top:5px;flex-shrink:0"></div>
-                  <div style="flex:1;min-width:0">
-                    <div style="font-weight:700;color:#1F2A44">FOC requested</div>
-                    <div style="color:var(--ink-soft)">${bkV2FmtDateTime(foc.requestedAt)} · ${foc.count} pax</div>
-                  </div>
-                </div>
-              `:''}
-              ${foc?.approvedAt?`
-                <div style="display:flex;gap:8px;font-size:11px">
-                  <div style="width:6px;height:6px;border-radius:50%;background:${foc.status==='approved'?'#10B981':'#c43a2e'};margin-top:5px;flex-shrink:0"></div>
-                  <div style="flex:1;min-width:0">
-                    <div style="font-weight:700;color:#1F2A44">FOC ${foc.status}</div>
-                    <div style="color:var(--ink-soft)">${bkV2FmtDateTime(foc.approvedAt)} · by ${escapeHTML(foc.approvedBy||'—')}</div>
-                  </div>
-                </div>
-              `:''}
-              ${bk.status==='cancelled'?`
-                <div style="display:flex;gap:8px;font-size:11px">
-                  <div style="width:6px;height:6px;border-radius:50%;background:#c43a2e;margin-top:5px;flex-shrink:0"></div>
-                  <div style="flex:1;min-width:0">
-                    <div style="font-weight:700;color:#1F2A44">Cancelled</div>
-                    <div style="color:var(--ink-soft)">${bkV2FmtDateTime(bk.cancelledAt)} · by ${escapeHTML(bk.cancelledBy||'—')}</div>
-                  </div>
-                </div>
-              `:''}
-            </div>
-          </div>
-
-          ${histList.length?`
-          <!-- HISTORY / ประวัติ · moved here to sit with Activity -->
-          <div class="bkv2-nb-card">
-            <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">History</span></div>
-            <div style="display:flex;flex-direction:column;padding-top:6px">
-              ${histList.slice().reverse().map(h=>{
-                const tc=(typeof bkV2HistTagColor==='function')?bkV2HistTagColor(h.tag):['#F1EFE8','#5F5E5A'];
-                return `
-                <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(26,35,50,0.05)">
-                  <div style="width:8px;height:8px;border-radius:50%;background:${tc[1]};margin-top:5px;flex-shrink:0"></div>
-                  <div style="flex:1;min-width:0">
-                    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-                      ${h.tag?`<span style="background:${tc[0]};color:${tc[1]};font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:6px;white-space:nowrap">${escapeHTML(h.tag)}</span>`:''}
-                      <span style="font-size:12px;color:#1F2A44;line-height:1.4">${escapeHTML(h.text)}</span>
-                    </div>
-                    <div style="font-size:10.5px;color:var(--ink-soft);margin-top:2px;font-family:'DM Mono',monospace">${bkV2FmtDateTime(h.at)}${h.by&&h.by!=='—'?' · '+escapeHTML(h.by):''}</div>
-                  </div>
-                </div>`;}).join('')}
-            </div>
-          </div>`:''}
+          ${bkVcActivityCard(bk)}
 
         </div>
       </div>
@@ -74709,4 +74529,106 @@ function bkVcCSS(){
     '@media(max-width:1300px){#view-booking .bkv2-vc .bkvc2-grid{grid-template-columns:minmax(0,900px)}}'
   ].join('\n');
   document.head.appendChild(s);
+}
+
+/* §vc2b (2026-10-09) · right column: one "For staff only" card + one Activity timeline
+   (was 5 separate cards + Activity + History). Same facts, same sources, one place to read. */
+function bkVcStaffCard(bk){
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var MUT='#6B7693', NAVY='#0B1E5B', MONO="font-family:'DM Mono',monospace;";
+  var thb=function(n){ return '฿'+((typeof bkV2FmtTHB==='function')?bkV2FmtTHB(n):Math.round(+n||0).toLocaleString('en-US')); };
+  var agent=bk.agentId?sbGetAgent(bk.agentId):null;
+  var rt=bk.rateTypeRef?(SB_RATE_TYPES||[]).find(function(r){ return r.id===bk.rateTypeRef; }):null;
+  var b2c=bk.b2cChannel?sbGetB2C(bk.b2cChannel):null;
+  var bkDate=bk.bookingDate||bk.createdAt;
+  var first=(bk.trips||[]).map(function(t){ return t.date; }).filter(Boolean).sort()[0];
+  var lead=''; if(bkDate&&first){ var dd=Math.round((new Date(first+'T00:00')-new Date(String(bkDate).slice(0,10)+'T00:00'))/86400000); if(!isNaN(dd)) lead=dd+' day'+(dd===1?'':'s')+' ahead'; }
+  var ms=bk.marketSnapshot||{}; var mk=((typeof SB_MARKETS!=='undefined'?SB_MARKETS:[]).find(function(m){ return m.id===ms.market; })||{}).name||'';
+  if(mk && ms.sub) mk+=' / '+ms.sub;
+  var row=function(l,v,sub,col){ if(!String(v||'').trim()) return '';
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #ECEFF4;font-size:13px;line-height:1.4"><span style="flex:none;color:'+MUT+'">'+l+'</span>'
+      +'<span style="min-width:0;text-align:right;font-weight:600;color:'+(col||NAVY)+';overflow-wrap:anywhere">'+v+(sub?('<span style="display:block;font-weight:400;font-size:11.5px;color:'+MUT+'">'+sub+'</span>'):'')+'</span></div>'; };
+  var sec=function(t){ return '<div style="margin-top:12px;padding-top:2px;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+MUT+'">'+t+'</div>'; };
+  var mrow=function(l,v,sub,col,big){ return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:'+(big?'10px 0 2px':'6px 0')+';border-top:'+(big?'2px solid #0B1E5B':'1px solid #ECEFF4')+';font-size:'+(big?'16px':'13px')+';font-weight:'+(big?800:400)+';color:'+(col||NAVY)+'">'
+      +'<span style="min-width:0">'+l+(sub?('<span style="display:block;font-size:11.5px;color:'+MUT+';font-weight:400">'+sub+'</span>'):'')+'</span><span style="flex:none;'+MONO+'font-weight:'+(big?500:500)+'">'+v+'</span></div>'; };
+
+  /* payment · B2B keeps contract method / net days · B2C shows settlement (same rules as before) */
+  var ps=bk.paymentSnapshot||{}, payV='', paySub='';
+  if(bk.agentId!=='a_b2c'){
+    payV=esc(ps.method||bk.payment||'')+((+ps.netDays)?(' · Net '+(+ps.netDays)+' days'):'');
+    paySub=ps.source?('From: '+esc(ps.source)+(ps.contractVersion?(' · '+esc(ps.contractVersion)):'')):'';
+  } else {
+    var pst=String(ps.paidStatus||''); payV=pst==='paid'?'prepaid':(pst?'deposit':esc(ps.method||''));
+    var term=(typeof bkV2PayLabel==='function'&&ps.method)?bkV2PayLabel(ps.method):(ps.method||'');
+    var paid=Number(ps.paid)||0, bal=Number(ps.balance)||0;
+    var mon=pst==='paid'?'paid in full':((paid||bal)?([paid?('THB '+paid.toLocaleString()+' received'):null, bal?('balance THB '+bal.toLocaleString()):null].filter(Boolean).join(' · ')+' · order-level'):(pst==='unpaid'?'not yet paid':''));
+    paySub=esc([term,mon].filter(Boolean).join(' · '))+((term||mon)?' · ':'')+'From: B2C sync';
+  }
+  var C=bk.cashOnTour, cotV='', cotSub='';
+  if(C){ cotV=esc(C.currency||'THB')+' '+(+C.amount||0).toLocaleString(); cotSub=(C.handling==='deduct'?'หักจาก invoice':'แยกต่างหาก')+((C.note||C.notes)?(' · '+esc(C.note||C.notes)):''); }
+
+  /* price · per trip, per add-on, adjustments, fees → total (same numbers the old cards showed) */
+  var pb=bk.priceBreakdown||null, price='', items=0;
+  (bk.trips||[]).forEach(function(t){ var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){ return x.id===t.routeId; }):null;
+    items+=(+t.subtotal||0); price+=mrow(esc((r&&r.name)||t.routeId||'—'), thb(t.subtotal||0), esc(bkVcDate(t.date))); });
+  (bk.addOns||[]).forEach(function(a){ var q=Math.max(1,Math.round(Number(a.qty)||1)), amt=Math.round(Number(a.amount)||0);
+    var unit=(q>1&&amt>0&&amt%q===0)?(amt/q):null;
+    items+=amt; price+=mrow(esc(a.label||a.type||'—'), thb(amt), unit!==null?(q+' × '+thb(unit)):'Add-on'); });
+  if(pb && pb.focDiscount) price+=mrow('FOC · given free', thb(-pb.focDiscount), 'value forgone · not in total', '#A05A1A');
+  (bk.adjustments||[]).forEach(function(a){ var v=Number(a.value)||0; if(v<=0) return; var base=pb?((pb.seat||0)+(pb.addOn||0)):0;
+    var amt=a.mode==='percent'?Math.round(base*v/100):Math.round(v);
+    var sub=[(a.label?esc(a.label):'')+(a.mode==='percent'?(' ('+v+'%)'):''), a.note?esc(a.note):''].filter(function(x){ return x.trim(); }).join(' · ');
+    if(a.kind==='extra'){ items+=amt; price+=mrow('Extra charge','+'+thb(amt),sub,'#A05A1A'); } else if(a.kind==='discount'){ items-=amt; } if(a.kind==='discount') price+=mrow('Discount','−'+thb(amt),sub,'#A32D2D'); });
+  (bk.feeItems||[]).forEach(function(f){ var amt=Math.round(+f.amount||0); if(!amt) return; items+=amt; price+=mrow(esc(f.label||(f.type==='reschedule'?'Reschedule fee':'Fee')),'+'+thb(amt),'','#A05A1A'); });
+  var total=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||(pb&&pb.total)||0);
+  var n=(typeof bkV2Norm==='function')?bkV2Norm(bk):{};
+  /* the lines above do not always add up to the stored total - say so instead of hiding it */
+  var gap=Math.round(total)-Math.round(items);
+  if(gap!==0) price+=mrow('Not itemised', (gap>0?'+':'-')+thb(Math.abs(gap)), 'total minus the lines above', '#8A5B00');
+  price+=mrow('Total', thb(total), '', NAVY, true);
+
+  return '<div class="bkv2-nb-card bkvc2-staff">'
+    +'<div style="font-size:17px;font-weight:700;color:'+NAVY+'">For staff only</div>'
+    +'<div style="font-size:12.5px;color:'+MUT+';margin-bottom:8px">Never on either copy</div>'
+    +row('Agent', esc((agent&&agent.name)||(b2c&&b2c.name)||'—'), (agent&&agent.code)?esc(agent.code):(bk.channelType==='b2c'?'B2C · Direct':''))
+    +row('Rate type', rt?esc(rt.code||''):'', rt?esc(rt.name||''):'')
+    +row('Voucher ref', esc(bk.voucherRef||''))
+    +row('Booked', esc(bkVcDate(bkDate)), esc([lead,mk].filter(Boolean).join(' · ')))
+    +row('Submitted by', esc(bk.createdBy||''))
+    +row('Confirmed by', esc(bk.confirmedBy||''), '', '#0F6E56')
+    +row('Payment', payV, paySub)
+    +row('Cash on tour', cotV, cotSub, '#7A4300')
+    +sec('Price')+'<div style="margin-top:4px">'+price+'</div>'
+    +'<div style="margin-top:4px;font-size:11.5px;color:'+MUT+'">'+(n.paxTotal||0)+' pax'+(n.paxBreak?(' · '+esc(n.paxBreak)):'')+'</div>'
+  +'</div>';
+}
+function bkVcActivityCard(bk){
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var MUT='#6B7693', NAVY='#0B1E5B';
+  var ev=[], foc=bk.focApproval||null;
+  var hist=(Array.isArray(bk.history)?bk.history.slice():[]);
+  if(!hist.length && bk.rebook) hist.push({at:bk.rebook.at,tag:'Reschedule',text:'Rescheduled · '+bk.rebook.from+' → '+bk.rebook.to+(bk.rebook.reason==='weather'?' (weather)':''),by:''});
+  var has=function(tag){ return hist.some(function(h){ return h&&h.tag===tag; }); };
+  hist.forEach(function(h){ if(!h) return; var tc=(typeof bkV2HistTagColor==='function')?bkV2HistTagColor(h.tag):null;
+    ev.push({at:h.at, t:h.tag||'Update', d:h.text||'', by:(h.by&&h.by!=='—')?h.by:'', c:(tc&&tc[1])||'#8E96B5'}); });
+  /* the three fixed events of the old Activity card · only when the history log does not already carry them */
+  if(!has('Created') && bk.createdAt) ev.push({at:bk.createdAt, t:'Created', d:'', by:bk.createdBy||'', c:'#2E9C78'});
+  if(foc && foc.requestedAt && !has('FOC')) ev.push({at:foc.requestedAt, t:'FOC requested', d:(foc.count||0)+' pax', by:foc.requestedBy||'', c:'#D9952B'});
+  if(foc && foc.approvedAt && !has('FOC')) ev.push({at:foc.approvedAt, t:'FOC '+(foc.status||''), d:'', by:foc.approvedBy||'', c:foc.status==='approved'?'#2E9C78':'#C6403F'});
+  if(bk.status==='cancelled' && !has('Cancel') && (bk.cancelledAt||(bk.cancellation&&bk.cancellation.at))) ev.push({at:bk.cancelledAt||bk.cancellation.at, t:'Cancelled', d:'', by:bk.cancelledBy||(bk.cancellation&&bk.cancellation.by)||'', c:'#C6403F'});
+  var ts=function(x){ var v=Date.parse(x.at); return isNaN(v)?0:v; };
+  ev=ev.map(function(e,i){ e.i=i; return e; }).sort(function(a,b){ return (ts(b)-ts(a))||(b.i-a.i); });
+  var when=function(a){ var d=bkVcDate(a); var t=bkVcTime(a); return d?(d+(t?(' '+t):'')):''; };
+  return '<div class="bkv2-nb-card bkvc2-act">'
+    +'<div style="font-size:17px;font-weight:700;color:'+NAVY+'">Activity</div>'
+    +'<div style="font-size:12.5px;color:'+MUT+'">Newest first'+(ev.length?(' · '+ev.length+' event'+(ev.length===1?'':'s')):'')+'</div>'
+    +(ev.length?ev.map(function(e,i){ var last=(i===ev.length-1);
+        return '<div style="display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;margin-top:12px">'
+          +'<div style="display:flex;flex-direction:column;align-items:center"><span style="flex:none;width:10px;height:10px;border-radius:5px;background:'+e.c+';margin-top:4px"></span><span style="flex:1;width:2px;background:'+(last?'transparent':'#E6EAF0')+';margin-top:4px"></span></div>'
+          +'<div style="min-width:0"><div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:13.5px;font-weight:700;color:'+NAVY+'">'+esc(e.t)+'</span>'
+            +'<span style="margin-left:auto;font-family:\'DM Mono\',monospace;font-size:11px;color:'+MUT+';white-space:nowrap">'+esc(when(e.at))+'</span></div>'
+          +((e.d||e.by)?('<div style="font-size:12.5px;color:'+MUT+';line-height:1.45;overflow-wrap:anywhere">'+esc(e.d)+((e.d&&e.by)?' · ':'')+(e.by?('by '+esc(e.by)):'')+'</div>'):'')
+          +'</div></div>'; }).join('')
+      :('<div style="margin-top:10px;font-size:12.5px;color:'+MUT+'">Nothing recorded yet</div>'))
+  +'</div>';
 }
