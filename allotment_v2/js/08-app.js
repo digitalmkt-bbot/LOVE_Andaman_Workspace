@@ -48230,9 +48230,9 @@ function bkV2RenderNewBooking(){
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bkV2RenderAttachSection()}
-             ${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}
+             <div id="nbf-checks-slot" style="display:contents">${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
-               ${bkV2RenderSubmitButton()}
+               <div id="nbf-submit-slot" style="display:contents">${bkV2RenderSubmitButton()}</div>
                <button class="bkv2-nb-btn" onclick="bkV2SaveDraft()" ${!d.agentId?'disabled':''} style="width:100%">Save Draft</button>
                <button class="bkv2-nb-btn ghost" onclick="bkV2CloseNewBooking()" style="width:100%">Cancel</button>
              </div>
@@ -57541,7 +57541,7 @@ function bkV2SetBookingField(key, val){
     if(guess) _bkV2.newBooking.leadNationality = guess;
   }
   // Text-input keys · update state but don't re-render (preserves focus)
-  if(_BKV2_NO_RENDER_KEYS.has(key)) return;
+  if(_BKV2_NO_RENDER_KEYS.has(key)){ bkV2NbRefreshSide(); return; }   /* §nbSideLive · ชื่อลูกค้าก็เป็นเงื่อนไขของปุ่ม */
   bkV2Render();
 }
 function bkV2SaveDraft(){
@@ -59255,6 +59255,26 @@ function bkV2SetFocReason(val){
   if(!_bkV2.newBooking) return;
   _bkV2.newBooking.focReason = val;
   // Don't re-render · textarea would lose focus
+  bkV2NbRefreshSide();   /* §nbSideLive */
+}
+/* §nbSideLive (2026-10-09) · "เขียน FOC แล้ว ยังไม่สามารถกดอัพเดทได้ ติดตรงไหน"
+   ช่องพิมพ์ (เหตุผล FOC · ชื่อลูกค้า ฯลฯ) ตั้งใจไม่วาดฟอร์มใหม่ทุกตัวอักษร ไม่งั้นช่องหลุดโฟกัส
+   ผลข้างเคียง · กล่อง "Before you confirm" กับปุ่ม Update/Submit ทางขวาไม่รู้ว่าพิมพ์แล้ว
+   ปุ่มเลยค้างเป็นสีเทาจนกว่าจะไปกดอย่างอื่นให้ทั้งหน้าวาดใหม่
+   ตัวนี้วาดใหม่เฉพาะสามช่องนั้น (กล่องเช็ค · ปุ่ม · แถบขั้นตอน) · ช่องที่กำลังพิมพ์ไม่ถูกแตะ */
+var _bkV2NbSideRaf=0;
+function bkV2NbRefreshSide(){
+  if(_bkV2NbSideRaf) return;
+  var go=function(){ _bkV2NbSideRaf=0; try{
+    if(!_bkV2.newBooking) return;
+    var c=document.getElementById('nbf-checks-slot');
+    if(c && typeof bkNbfChecksHtml==='function') c.innerHTML=bkNbfChecksHtml();
+    var b=document.getElementById('nbf-submit-slot');
+    if(b && typeof bkV2RenderSubmitButton==='function') b.innerHTML=bkV2RenderSubmitButton();
+    var st=document.querySelector('.nbf-steps');
+    if(st && typeof bkNbfStepsHtml==='function') st.innerHTML=bkNbfStepsHtml();
+  }catch(e){ console.warn('nbSideLive refresh failed', e); } };
+  try{ _bkV2NbSideRaf=requestAnimationFrame(go); }catch(_){ go(); }
 }
 // ── Booking-review adjustments · discount (%/amount) + extra charge ──
 function bkV2AddAdjustment(kind){
