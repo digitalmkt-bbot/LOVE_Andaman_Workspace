@@ -3284,6 +3284,13 @@ function renderDash(){
 
   // ── Selected date state — Dashboard shows data for this date ──
   const _ds = window._dashDate || TODAY_STR;
+  /* §opsDashboard · ask once per selected operational day. The renderer remains
+     synchronous so its existing inline handlers keep working; ops dashboard
+     redraws this view after the answer arrives. */
+  const _opsDashApi=(window.laOps&&window.laOps.dashboard)?window.laOps.dashboard:null;
+  if(_opsDashApi) _opsDashApi.ensure(_ds,'day');
+  const _opsDash=_opsDashApi?_opsDashApi.get(_ds,'day'):null;
+  const _opsDashState=_opsDashApi?_opsDashApi.status(_ds,'day'):'idle';
   const _dsAt = (offset)=>{
     const d = new Date(_ds);
     d.setDate(d.getDate()+offset);
@@ -3327,20 +3334,20 @@ function renderDash(){
   });
   // seat routes → booked from actual sales (SB_BOOKINGS · once per route) so it matches the chart
   _seatRoutesD.forEach(rid=>{ const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,_ds):0; totBooked+=sc; if(routeData[rid]) routeData[rid].booked+=sc; });
-  const totFree=totAllot-totBooked;
-  const fillPct=totAllot>0?Math.round(totBooked/totAllot*100):0;
+  let totFree=totAllot-totBooked;
+  let fillPct=totAllot>0?Math.round(totBooked/totAllot*100):0;
   const companyBoats=BOATS.filter(b=>!b.retired);
-  const activeBoats=Object.entries(ops).filter(([bid,op])=>{
+  let activeBoats=Object.entries(ops).filter(([bid,op])=>{
     if(!op.route) return false;
     const b=getBoat(bid); if(!b) return false;
     return getCurStatus(b,_ds).s==='available';
   }).length;
-  const availTotal=companyBoats.filter(b=>getCurStatus(b,_ds).s==='available').length;
-  const fixCount=companyBoats.filter(b=>getCurStatus(b,_ds).s==='fixing').length;
-  const unavailCount=companyBoats.filter(b=>getCurStatus(b,_ds).s==='unavailable').length;
+  let availTotal=companyBoats.filter(b=>getCurStatus(b,_ds).s==='available').length;
+  let fixCount=companyBoats.filter(b=>getCurStatus(b,_ds).s==='fixing').length;
+  let unavailCount=companyBoats.filter(b=>getCurStatus(b,_ds).s==='unavailable').length;
 
   // Fleet score = utilization (boats operating ÷ boats ready × 100)
-  const operatingCount=Object.entries(ops).filter(([bid,op])=>{
+  let operatingCount=Object.entries(ops).filter(([bid,op])=>{
     if(!op.route) return false;
     const b=getBoat(bid); if(!b) return false;
     if(getCurStatus(b,_ds).s!=='available') return false;
@@ -3349,6 +3356,21 @@ function renderDash(){
     if(_s && _s.type==='closed') return false;
     return true;
   }).length;
+  /* The server owns seat/capacity/status totals. Keep the existing local path
+     only while the response is in flight or unavailable, and label that state
+     below instead of presenting it as a fresh server result. */
+  if(_opsDash && _opsDash.summary){
+    const s=_opsDash.summary;
+    totAllot=+s.total_capacity||0;
+    totBooked=+s.booked_pax||0;
+    totFree=s.free_seats==null?0:+s.free_seats;
+    fillPct=s.fill_percent==null?0:+s.fill_percent;
+    operatingCount=+s.active_boats||0;
+    availTotal=+s.available_boats||0;
+    fixCount=+s.fixing_boats||0;
+    unavailCount=+s.unavailable_boats||0;
+    activeBoats=operatingCount;
+  }
   const fleetScore=availTotal>0?Math.min(100,Math.round(operatingCount/availTotal*100)):0;
   const fleetLabel=fleetScore>=90?'Excellent':fleetScore>=70?'Good':fleetScore>=50?'Fair':availTotal===0?'No fleet':'Watch';
   const fmtN=(n)=>(n||0).toLocaleString();
@@ -3388,6 +3410,17 @@ function renderDash(){
 
   // ── Bookings overview — reusable per-day aggregation (day / month / year modes) ──
   const _bkDay=(ds)=>{
+    /* The selected-day plot comes from the same authoritative response as the
+       operational KPI cards. Historical buckets stay on the established local
+       calculation until the API provides a compatible rolling-day series. */
+    if(ds===_ds && _opsDash && Array.isArray(_opsDash.routes)){
+      const routeBooked={}, charterBoats={}; let booked=0,capacity=0,charter=0;
+      _opsDash.routes.forEach(r=>{
+        const n=+r.booked_pax||0, c=+r.capacity||0, ch=+r.charter_pax||0;
+        routeBooked[r.route_id]=n; booked+=n; capacity+=c; charter+=ch;
+      });
+      return {ds,booked,capacity,routeBooked,charter,charterBoats,wx:(_opsDash.alerts||[]).filter(a=>a.code==='closed_route').length};
+    }
     const dOps=TRIPS[ds]||{};
     let booked=0, capacity=0, charter=0;
     const routeBooked={};
@@ -3966,9 +3999,15 @@ function renderDash(){
   const rightCol=`<div class="dv-col">${ai}${_dashLiveB2BHtml(dx,F)}</div>`;
   const midCol=`<div class="dv-col">${_dashSeatCalHtml(dx,F)}${proj}</div>`;
 
+  const _opsDashNote=!_opsDashApi?'':_opsDashState==='ready'
+    ? `<div style="padding:6px 16px;background:#E8F5ED;color:#0C6B47;font-size:11px;font-weight:700">Server dashboard · ${new Date(_opsDash.generated_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`
+    : _opsDashState==='failed'
+      ? '<div style="padding:6px 16px;background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:700">Dashboard server data unavailable · local values may be stale</div>'
+      : '<div style="padding:6px 16px;background:#FFF4D6;color:#8A5A00;font-size:11px;font-weight:700">Loading current Dashboard data from server…</div>';
   wrap.innerHTML = DV_CSS
     + `<div class="dv-fr">`
     +   _dvHead(_ds, todayDt, {pax:totBooked, fill:fillPct, free:totFree, bk:_bkTdy.bk})
+    +   _opsDashNote
     +   `<div class="dv-grid">${leftCol}${midCol}${rightCol}</div>`
     + `</div>`;
 }

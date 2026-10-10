@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 const DIR = process.cwd();
 const imp = (p) => import(pathToFileURL(path.join(DIR, p)).href);
 const { OperationsStore } = await imp('src/domain/operations.ts');
+const { hashPassword } = await imp('src/domain/users.ts');
 
 const today = new Date(); const ymd = (d) => d.toISOString().slice(0, 10);
 const day = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return ymd(d); };
@@ -65,6 +66,11 @@ for (const name of Object.getOwnPropertyNames(proto)) {
       this[SEEDED] = true;
       this.seedCatalogue(SEED);
       this.seedAgents(AGENTS);
+      // Auth now reads users from the operations store (not AUTH_PASSWORD_USERS).
+      // Seed the staff account that t_ops uses before the first request reaches it.
+      this.createUser({ username: 'tester', pass_hash: hashPassword('pw'), name: 'Tester', role: 'admin',
+        can_edit: true, edit_areas: null, actions: [], view_perms: null, sales_id: null, agent_id: null,
+        dept: null, disabled_at: null, tokens_valid_after: null, legacy_id: null });
     }
     return orig.apply(this, args);
   };

@@ -215,7 +215,21 @@ await settle(1200);
 s = await ev(() => SB_AGENTS.find((a) => a.id === 'a01'));
 ok('agent detail → company/signatory/activity from server', s.companyInfo.legalName === 'Sun Tour Co., Ltd.' && s.agentSignatory.name === 'Ivan' && s.activity.length === 1, { c: s.companyInfo, act: s.activity });
 
-console.log('\n[9] every page renders with operation-backend on');
+console.log('\n[9] Dashboard hydrates its operational KPIs from the server');
+await ev((d) => { window._dashDate = d; const el = document.querySelector('.nav-item[data-view="dashboard"]'); if(el) el.click(); }, D2);
+await page.waitForFunction((d) => window.laOps.dashboard && window.laOps.dashboard.get(d, 'day'), D2, { timeout: 30000 });
+await settle(400);
+const dash = await api(`/v1/dashboard?date=${D2}&mode=day`);
+s = await ev((d) => ({
+  cached: laOps.dashboard.get(d, 'day'),
+  state: laOps.dashboard.status(d, 'day'),
+  serverNote: document.querySelector('#dash-wrap') && document.querySelector('#dash-wrap').innerText.includes('Server dashboard'),
+  header: document.querySelector('#dash-wrap .dv-hd') && document.querySelector('#dash-wrap .dv-hd').innerText,
+}), D2);
+ok('Dashboard cache equals GET /v1/dashboard summary', s.cached && s.cached.summary.booked_pax === dash.summary.booked_pax && s.cached.summary.total_capacity === dash.summary.total_capacity && s.cached.summary.pending_approval_pax === dash.summary.pending_approval_pax, { cached: s.cached && s.cached.summary, server: dash.summary });
+ok('Dashboard identifies the authoritative server snapshot', s.state === 'ready' && s.serverNote && s.header.includes(String(dash.summary.booked_pax)), s);
+
+console.log('\n[10] every page renders with operation-backend on');
 const views = await page.$$eval('.nav-item[data-view]', (ns) => [...new Set(ns.map((n) => n.dataset.view))]);
 const broken = [];
 for (const v of views) {

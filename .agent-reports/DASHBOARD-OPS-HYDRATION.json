@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "task": "DASHBOARD-OPS-HYDRATION",
+  "title": "Hydrate staff Dashboard from operation-backend",
+  "status": "completed",
+  "git": {
+    "base": "integration/operation-backend",
+    "branch": "integration/operation-backend",
+    "worktree": "D:/projects/wt-operation-backend-integration",
+    "commit": null,
+    "pr": null
+  },
+  "input": {
+    "requestedOutcome": "Integrate the implemented GET /v1/dashboard endpoint into the staff Dashboard.",
+    "acceptanceCriteria": [
+      "Fetch and cache the authenticated day dashboard response.",
+      "Use server operational summary facts in Dashboard KPIs.",
+      "Make loading and fallback/staleness visible.",
+      "Preserve non-covered legacy UI rather than fabricating server facts."
+    ],
+    "allowedScope": [
+      "allotment_v2/allotment_v2.html",
+      "allotment_v2/js/04-data-core.js",
+      "allotment_v2/js/ops/60-ops-dashboard.js",
+      "test/helpers/ops-backend-local.mjs",
+      "test/ui/t_ops.mjs",
+      "docs/development/tasks/DASHBOARD_OPS_HYDRATION_HANDOFF.md",
+      ".agent-reports/DASHBOARD-OPS-HYDRATION.json"
+    ],
+    "constraints": [
+      "No database schema or migration change.",
+      "Keep classic script ordering and existing inline handlers working.",
+      "Do not silently present local values as a current server snapshot."
+    ]
+  },
+  "output": {
+    "summary": "Added a dashboard client and day-view hydration adapter. Server totals and selected-day route plot data replace equivalent local operational facts after the response arrives; other legacy dashboard regions remain explicitly local.",
+    "filesChanged": [
+      { "path": "allotment_v2/js/ops/60-ops-dashboard.js", "change": "added", "purpose": "Authenticated dashboard fetch/cache/status adapter." },
+      { "path": "allotment_v2/js/04-data-core.js", "change": "modified", "purpose": "Use server day summary and route facts; render source-state notice." },
+      { "path": "allotment_v2/allotment_v2.html", "change": "modified", "purpose": "Load dashboard adapter in classic script order." },
+      { "path": "test/ui/t_ops.mjs", "change": "modified", "purpose": "Add dashboard hydration assertions." },
+      { "path": "test/helpers/ops-backend-local.mjs", "change": "modified", "purpose": "Seed the store-backed test login required by current operation-backend auth." },
+      { "path": "docs/development/tasks/DASHBOARD_OPS_HYDRATION_HANDOFF.md", "change": "modified", "purpose": "Record delivered implementation and deliberate series limitation." },
+      { "path": ".agent-reports/DASHBOARD-OPS-HYDRATION.json", "change": "modified", "purpose": "Durable implementation handoff." }
+    ],
+    "interfaces": { "added": ["window.laOps.dashboard.{ensure,get,status,error,clear}"], "changed": ["Dashboard operational day KPI source"], "removed": [] },
+    "dataPersistence": { "impact": "none", "details": ["Response is in-memory cached only and invalidated after writes."], "migrationRequired": false }
+  },
+  "verification": [
+    { "command": "node --check allotment_v2/js/04-data-core.js && node --check allotment_v2/js/ops/60-ops-dashboard.js && node --check test/helpers/ops-backend-local.mjs && node --check test/ui/t_ops.mjs && git diff --check", "status": "passed", "evidence": "All syntax and whitespace checks passed." },
+    { "command": "node test/ui/t_ops.mjs", "status": "blocked", "evidence": "The fixture auth issue was repaired; suite then fails in pre-existing catalogue/calendar, lock-edit, and booking-form compatibility assertions before its new dashboard section." }
+  ],
+  "decisions": [
+    "Use only the endpoint's day response for the existing selected operational day.",
+    "Do not replace the rolling 30-day client chart with incompatible calendar-month aggregates.",
+    "Leave a visible loading/failure source indicator rather than silently falling back."
+  ],
+  "risks": ["Full dashboard parity still needs a daily-series API response and server coverage for remaining composite cards."],
+  "blockers": ["Existing t_ops assertions are incompatible with current backend behaviour outside this change."],
+  "dependencies": ["operation-backend GET /v1/dashboard version 1 response."],
+  "followUps": ["Add a daily-series response if the rolling chart is to become authoritative.", "Reconcile existing t_ops compatibility failures separately."],
+  "rollback": "Remove the dashboard script include and adapter; renderDash then uses its established local calculations."
+}
