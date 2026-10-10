@@ -7777,7 +7777,7 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
         ? '<span style="font-size:10px;color:var(--ink-soft);font-style:italic">locked</span>'
         : '<button onclick="if(confirm(\'Unassign '+esc(x.boat.name)+'?\')){bop2UnassignBoat(\''+dateStr+'\',\''+x.boat.id+'\');bop2CloseCellPopover();}" title="Unassign" style="font-size:13px;color:#a32d2d;background:none;border:none;cursor:pointer;padding:0 4px;line-height:1">×</button>';
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f5f3ef;border-radius:4px;font-size:11px;margin-bottom:3px">'
-        + '<span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:'+c+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'+ic+esc(x.boat.name)+'</span>'
+        + '<span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:'+c+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'+ic+esc(x.boat.name)+(function(){ var _wp=bop2PierIssue(x.boat, routeId, dateStr); return _wp ? ' <span class="bop2-pier-warn" title="Boat Status puts this boat at another pier on this day" style="font-size:9px;font-weight:800;color:#A32D2D;background:#FDECEA;border-radius:4px;padding:1px 5px">&#9888; at '+esc(bop2PierEn(_wp))+'</span>' : ''; })()+'</span>'
         + '<span style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0"><span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft)">'+seats+'</span>'+removeBtn+'</span>'
         + '</div>';
     }).join('');
@@ -7891,8 +7891,49 @@ function bop2GuardPast(ds, silent){
   if(!silent) alert('วันที่ '+ds+' ผ่านมาแล้ว · แก้เรือที่ deploy ไม่ได้\n\nวันเก่าถูกใช้ปิดวันและออกรายงานไปแล้ว (Daily Report · Travel Summary · ต้นทุนต่อเที่ยว)\nถ้าต้องแก้จริง ๆ แจ้งแอดมินให้แก้ที่ต้นทางแทน');
   return true;
 }
+/* §bopPier (2026-10-10) · ท่าของเรือ "ในวันนั้น" ต้องตรงกับท่าของโปรแกรม
+   owner: "เรือบางลำถูกกำหนดให้อยู่อีกท่าเรือนึง แต่อีกท่าเรือนึงหยิบมาใช้ได้"
+   เคสจริง Achilles · Boat Status วางไว้ทับละมุ 18–23 ต.ค. แต่ Boat Operation มีมันวิ่ง
+   Early Krabi / Early Phi Phi (ท่าพันวา) วันที่ 20, 21, 23 ต.ค.
+   ตัวเลือกในช่อง (bop2OpenCellPopover) กรองท่าตามวันถูกอยู่แล้ว แต่ทางอื่นไม่กรองเลย:
+     ปุ่ม + ในแผง drill และ Fleet pool (ตอนเลือก All piers), Copy week / Copy day,
+     Template, Assign range / Weekday pattern (กรองแค่วันแรกของช่วง), Swap
+   และช่องที่จัดไว้ก่อนแล้วค่อยย้ายท่าใน Boat Status ทีหลัง ก็ไม่มีอะไรเตือน
+   แก้ · ทุกทางที่เขียน TRIPS ในหน้านี้ถาม bop2PierIssue ก่อน
+        ช่องเดิมที่ขัดกันขึ้นป้าย "อยู่อีกท่า" ในตาราง แผง drill ป๊อปอัป และ Fleet pool
+   ไม่แก้ข้อมูลเดิมให้เอง · คนต้องเลือกว่าจะเปลี่ยนเรือ หรือไปแก้ท่าใน Boat Status */
+function bop2PierEn(p){ return p==='tublamu'?'Tub Lamu':p==='panwa'?'Visit Panwa':p==='ranong'?'Ranong':p==='shop'?'the shop':(p||'?'); }
+/* '' = ใช้ได้ · ไม่งั้นคืนรหัสท่าที่เรืออยู่วันนั้น (tublamu / panwa / ranong / shop) */
+function bop2PierIssue(boat, routeId, ds){
+  if(!boat || !routeId || typeof ROUTES==='undefined' || typeof getBoatCurrentPier!=='function') return '';
+  const rt = ROUTES.find(r => r && r.id === routeId);
+  if(!rt || !rt.pier) return '';
+  const p = getBoatCurrentPier(boat, ds);
+  return (p && p !== rt.pier) ? p : '';
+}
+/* ใช้กับงานจัดหลายวัน · ไม่ผ่าน = ข้ามวันนั้น (นับแยกให้ผู้ใช้เห็น) */
+function bop2CanPlace(boat, routeId, ds){
+  if(!boat) return false;
+  if(bop2PierIssue(boat, routeId, ds)) return false;
+  if(typeof getCurStatus==='function' && getCurStatus(boat, ds).s !== 'available') return false;
+  return true;
+}
 function bop2AssignBoat(routeId, date, boatId){
   if(bop2GuardPast(date)) return;
+  {                                                                            /* §bopPier */
+    const _bt = (typeof BOATS!=='undefined' ? BOATS : []).find(x => x && x.id === boatId);
+    const _wp = bop2PierIssue(_bt, routeId, date);
+    if(_wp){
+      alert((_bt.name||boatId) + ' is at ' + bop2PierEn(_wp) + ' on ' + date
+        + ' - it cannot run a programme from another pier.\n'
+        + 'To use it here, move it to this pier in Boat Status for that date first.');
+      return;
+    }
+    if(_bt && typeof getCurStatus==='function' && getCurStatus(_bt, date).s !== 'available'){
+      alert((_bt.name||boatId) + ' is not available on ' + date + ' (Boat Status). Pick another boat.');
+      return;
+    }
+  }
   if(!TRIPS[date]) TRIPS[date] = {};
   if(TRIPS[date][boatId]){
     if(opLocked(TRIPS[date][boatId])){ alert(opHoldOnly(TRIPS[date][boatId])   /* §bkLock */
@@ -8593,7 +8634,7 @@ function bop2CopyWeekToNext(){
   const offset = dates.length;
   const period = _bop2.viewMode === 'month' ? 'month' : 'week';
   if(!confirm('Copy ' + offset + ' days to next ' + period + '? Existing assignments at the target are kept (no overwrite). Charter slots are skipped.')) return;
-  let copied = 0, skipped = 0;
+  let copied = 0, skipped = 0, blocked = 0;
   dates.forEach(d => {
     if(!TRIPS[d]) return;
     const tgt = fmt(addDays(new Date(d), offset));
@@ -8602,12 +8643,14 @@ function bop2CopyWeekToNext(){
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
       if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[tgt][bid]) { skipped++; return; }
+      if(!bop2CanPlace((BOATS||[]).find(x => x.id === bid), op.route, tgt)) { blocked++; return; }   /* §bopPier */
       TRIPS[tgt][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
     });
   });
   save('operations');
-  alert('Copied ' + copied + ' assignments. Skipped ' + skipped + ' (existing/charter).');
+  alert('Copied ' + copied + ' assignments. Skipped ' + skipped + ' (existing/charter).'
+    + (blocked ? (' Not copied ' + blocked + ' (boat at another pier or not available that day).') : ''));
   bop2ShiftWeek(offset);
 }
 function bop2CopyDayToWeek(){
@@ -8616,19 +8659,21 @@ function bop2CopyDayToWeek(){
   if(!TRIPS[src] || Object.keys(TRIPS[src]).length === 0){ alert('Selected day has no boat assignments to copy.'); return; }
   const dates = bop2GetDates().filter(d => d !== src);
   if(!confirm('Copy ' + src + ' assignments to ' + dates.length + ' other day(s) in view? Existing target assignments are kept.')) return;
-  let copied = 0, skipped = 0;
+  let copied = 0, skipped = 0, blocked = 0;
   dates.forEach(d => {
     if(bop2GuardPast(d, true)) { skipped++; return; }   // §bopPastLock
     if(!TRIPS[d]) TRIPS[d] = {};
     Object.entries(TRIPS[src]).forEach(([bid, op]) => {
       if(opLocked(op)) { skipped++; return; }                                   /* §bkLock */
       if(TRIPS[d][bid]) { skipped++; return; }
+      if(!bop2CanPlace((BOATS||[]).find(x => x.id === bid), op.route, d)) { blocked++; return; }   /* §bopPier */
       TRIPS[d][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       copied++;
     });
   });
   save('operations');
-  alert('Copied to ' + copied + ' slot(s). Skipped ' + skipped + '.');
+  alert('Copied to ' + copied + ' slot(s). Skipped ' + skipped + '.'
+    + (blocked ? (' Not copied ' + blocked + ' (boat at another pier or not available that day).') : ''));
   renderOp();
 }
 // ═══════════════════════════════════════════════════════════════
@@ -8747,7 +8792,7 @@ function bop2ApplyAssignRange(){
   if(from > to){ alert('From date must be on or before To date'); return; }
   const boat = BOATS.find(b => b.id === bid);
   if(!boat){ alert('Boat not found'); return; }
-  let applied = 0, skipped = 0, chartered = 0, statusBlocked = 0, pastSkip = 0;
+  let applied = 0, skipped = 0, chartered = 0, statusBlocked = 0, pastSkip = 0, pierBlocked = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     const ds = fmt(d);
@@ -8755,6 +8800,7 @@ function bop2ApplyAssignRange(){
     // Skip if boat is fixing / unavailable on this date
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
+    if(bop2PierIssue(boat, rid, ds)){ pierBlocked++; continue; }               /* §bopPier */
     if(!TRIPS[ds]) TRIPS[ds] = {};
     if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
@@ -8764,6 +8810,7 @@ function bop2ApplyAssignRange(){
   save('operations');
   bop2CloseModal();
   const parts = ['Applied to ' + applied + ' day(s)'];
+  if(pierBlocked > 0) parts.push(pierBlocked + ' skipped (boat at another pier that day)');   /* §bopPier */
   if(skipped > 0) parts.push(skipped + ' kept existing');
   if(chartered > 0) parts.push(chartered + ' chartered (preserved)');
   if(statusBlocked > 0) parts.push(statusBlocked + ' skipped (boat not ready)');
@@ -8892,7 +8939,7 @@ function bop2ApplyTemplate(){
   const tpl = bop2LoadTemplates().find(t => t.id === tid);
   if(!tpl){ alert('Template not found'); return; }
   if(!from || !to || from > to){ alert('Invalid date range'); return; }
-  let applied = 0, skipped = 0, chartered = 0, pastSkip = 0;
+  let applied = 0, skipped = 0, chartered = 0, pastSkip = 0, blocked = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     const ds = fmt(d);
@@ -8903,6 +8950,7 @@ function bop2ApplyTemplate(){
       if(!TRIPS[ds]) TRIPS[ds] = {};
       if(opLocked(TRIPS[ds][bid])){ chartered++; return; }                      /* §bkLock */
       if(TRIPS[ds][bid] && !overwrite){ skipped++; return; }
+      if(!bop2CanPlace((BOATS||[]).find(x => x.id === bid), op.route, ds)){ blocked++; return; }   /* §bopPier */
       TRIPS[ds][bid] = { route: op.route, type: op.type || 'normal', booked: 0 };
       applied++;
     });
@@ -8910,6 +8958,7 @@ function bop2ApplyTemplate(){
   save('operations');
   bop2CloseModal();
   alert('Applied ' + applied + ' slots from "' + tpl.name + '". Skipped ' + skipped + '. Chartered ' + chartered + '.'
+    + (blocked ? (' Not applied ' + blocked + ' (boat at another pier or not available that day).') : '')
     + (pastSkip>0 ? (' ข้าม ' + pastSkip + ' วัน (ผ่านมาแล้ว).') : ''));   // §bopPastLock
   renderOp();
 }
@@ -8967,6 +9016,15 @@ function bop2ApplySwap(){
   if(bop2GuardPast(date)) return;   // §bopPastLock
   if(!TRIPS[date] || !TRIPS[date][a] || !TRIPS[date][b]){ alert('One or both boats are no longer assigned on this day'); return; }
   if(opLocked(TRIPS[date][a]) || opLocked(TRIPS[date][b])){ alert('Cannot swap a boat that is chartered or held whole'); return; }   /* §bkLock */
+  {                                                                            /* §bopPier */
+    const _A = (BOATS||[]).find(x => x.id === a), _B = (BOATS||[]).find(x => x.id === b);
+    const _wa = bop2PierIssue(_A, TRIPS[date][b].route, date), _wb = bop2PierIssue(_B, TRIPS[date][a].route, date);
+    if(_wa || _wb){
+      const _x = _wa ? _A : _B, _p = _wa || _wb;
+      alert('Cannot swap - ' + ((_x && _x.name) || '?') + ' is at ' + bop2PierEn(_p) + ' on ' + date + ', so it cannot take the other boat\'s programme.');
+      return;
+    }
+  }
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
   TRIPS[date][a].route = TRIPS[date][b].route; TRIPS[date][a].type = TRIPS[date][b].type;
   TRIPS[date][b].route = tmpR; TRIPS[date][b].type = tmpT;
@@ -9046,7 +9104,7 @@ function bop2ApplyWeekdayPattern(){
   if(!bid || !rid || !from || !to || from > to){ alert('Fill all fields with a valid range'); return; }
   const boat = BOATS.find(b => b.id === bid);
   if(!boat){ alert('Boat not found'); return; }
-  let applied = 0, skipped = 0, chartered = 0, totalDays = 0, statusBlocked = 0, pastSkip = 0;
+  let applied = 0, skipped = 0, chartered = 0, totalDays = 0, statusBlocked = 0, pastSkip = 0, pierBlocked = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     if(!dows.includes(d.getDay())) continue;
@@ -9055,6 +9113,7 @@ function bop2ApplyWeekdayPattern(){
     if(bop2GuardPast(ds, true)){ pastSkip++; continue; }   // §bopPastLock
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
+    if(bop2PierIssue(boat, rid, ds)){ pierBlocked++; continue; }               /* §bopPier */
     if(!TRIPS[ds]) TRIPS[ds] = {};
     if(opLocked(TRIPS[ds][bid])){ chartered++; continue; }                      /* §bkLock */
     if(TRIPS[ds][bid] && !overwrite){ skipped++; continue; }
@@ -9064,6 +9123,7 @@ function bop2ApplyWeekdayPattern(){
   save('operations');
   bop2CloseModal();
   const parts = ['Found ' + totalDays + ' matching day(s)', 'Applied ' + applied];
+  if(pierBlocked > 0) parts.push(pierBlocked + ' skipped (boat at another pier that day)');   /* §bopPier */
   if(skipped > 0) parts.push(skipped + ' kept existing');
   if(chartered > 0) parts.push(chartered + ' chartered');
   if(statusBlocked > 0) parts.push(statusBlocked + ' skipped (boat not ready)');
@@ -9449,7 +9509,9 @@ function bop2RenderShell(){
           <span style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 9px/1 'DM Sans';color:#fff;flex-shrink:0;background:${a.isCharter?'#6B289A':bop2BoatColor(a.boat.id)}">${escapeHTML(String(a.boat.name||'').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'--')}</span>
           <span style="flex:1;min-width:0">
             <span style="font-size:12px;font-weight:800;color:#2C2C2A;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.isCharter?'⚓ ':''}${escapeHTML(a.boat.name||'')}</span>
-            <span style="font-size:9.5px;font-weight:600;color:#9B9088;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML((a.route&&a.route.name)||'—')}</span>
+            <span style="font-size:9.5px;font-weight:600;color:#9B9088;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML((a.route&&a.route.name)||'—')}</span>${(() => {   /* §bopPier */
+              const _wp = a.route ? bop2PierIssue(a.boat, a.route.id, _selDate) : '';
+              return _wp ? `<span class="bop2-pier-warn" title="Boat Status puts this boat at ${escapeHTML(bop2PierEn(_wp))} on this day - change the boat, or fix the pier in Boat Status" style="font-size:9.5px;font-weight:800;color:#A32D2D;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#9888; อยู่ ${escapeHTML(bop2PierEn(_wp))} วันนี้ · ต้องเปลี่ยนเรือ</span>` : ''; })()}
           </span>
           <span style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:${a.seats>0?'#0C6B47':'#B6B1A8'};flex-shrink:0;text-align:right">${a.seats}<small style="font-size:8.5px;font-weight:600;color:#B6B1A8;display:block">/${a.capacity}</small></span>
         </div>`).join('')).join(''); })() : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
@@ -9738,17 +9800,18 @@ function bop2RenderHeatmapRow(route, dates){
     const selClass = isSel ? ' sel' : '';
 
     // boats that can actually run that day (status available) — a boat broken/unavailable after being assigned doesn't count
-    const usableBoats = boats.filter(bo => bo.boat && (typeof getCurStatus!=='function' || getCurStatus(bo.boat,d).s==='available'));
+    const usableBoats = boats.filter(bo => bo.boat && (typeof getCurStatus!=='function' || getCurStatus(bo.boat,d).s==='available')
+      && !bop2PierIssue(bo.boat, route.id, d));                                 /* §bopPier · อยู่อีกท่า = วิ่งไม่ได้เหมือนกัน */
 
     // ─── ALERT STATE · boat WAS assigned but is now broken/unavailable → must reassign (flag even with 0 pax — the schedule is invalid) ───
     if(boats.length > 0 && usableBoats.length === 0){
       const stripes = 'repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 5px,#fff 5px,#fff 10px)';
-      const brokenNm = boats.map(b=>b.boat.name).join(', ');
+      const brokenNm = boats.map(b=>{ const _wp=bop2PierIssue(b.boat, route.id, d); return b.boat.name + (_wp ? (' (at '+bop2PierEn(_wp)+')') : ''); }).join(', ');   /* §bopPier */
       const cellContent = isMonth
         ? `<div style="font-family:Manrope,sans-serif;font-size:11px;color:#A35A00;font-weight:700">${al.seatsConsumed}</div><div style="font-size:11px;line-height:1;margin-top:1px">&#128295;</div>`
         : `<div style="font-size:14px;line-height:1">&#128295;</div><div style="font-size:9px;color:#A35A00;font-weight:700;line-height:1.1;margin-top:2px;text-align:center">${al.seatsConsumed} pax</div><div style="font-size:9px;color:#A35A00;line-height:1.1;text-align:center">เปลี่ยนเรือ</div>`;
       const minH = isMonth ? '32px' : '52px';
-      row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${stripes};border:1px dashed #BA7517;border-radius:10px;min-height:${minH};padding:3px;flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${escapeHTML(route.name)} · ${d} · ${al.seatsConsumed} pax · เรือเสีย/ไม่พร้อม: ${escapeHTML(brokenNm)} — ต้องเปลี่ยนเรือ">${cellContent}</div>`;
+      row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${stripes};border:1px dashed #BA7517;border-radius:10px;min-height:${minH};padding:3px;flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${escapeHTML(route.name)} · ${d} · ${al.seatsConsumed} pax · ${boats.every(b=>bop2PierIssue(b.boat, route.id, d)) ? 'เรืออยู่อีกท่าวันนี้ (Boat Status)' : 'เรือเสีย/ไม่พร้อม'}: ${escapeHTML(brokenNm)} — ต้องเปลี่ยนเรือ">${cellContent}</div>`;
       return;
     }
 
@@ -9785,15 +9848,18 @@ function bop2RenderHeatmapRow(route, dates){
     } else if(isMonth){
       // Month: pax number + colored dots row
       const paxStr = (hasCharter && al.availableCapacity === 0) ? '⚓' : String(al.seatsConsumed);
-      const dots = boats.map(b => `<span style="width:5px;height:5px;border-radius:50%;background:${b.isCharter?'#6B289A':bop2BoatColor(b.boat.id)};${b.isCharter?'box-shadow:inset 0 0 0 1px #fff':''}"></span>`).join('');
+      const dots = boats.map(b => bop2PierIssue(b.boat, route.id, d)                /* §bopPier */
+        ? `<span title="${escapeHTML(b.boat.name)} is at ${bop2PierEn(bop2PierIssue(b.boat, route.id, d))} this day" style="font-size:8px;line-height:5px;color:#C44A36;font-weight:800">!</span>`
+        : `<span style="width:5px;height:5px;border-radius:50%;background:${b.isCharter?'#6B289A':bop2BoatColor(b.boat.id)};${b.isCharter?'box-shadow:inset 0 0 0 1px #fff':''}"></span>`).join('');
       cellInner = `<div style="font-family:Manrope,sans-serif;font-size:11px;color:${color};font-weight:700;line-height:1">${paxStr}</div>${dots ? `<div style="display:flex;gap:1px;margin-top:2px">${dots}</div>` : ''}`;
     } else {
       // Week: pax number + full boat names stacked
       const paxStr = (hasCharter && al.availableCapacity === 0) ? '⚓ Charter' : `${al.seatsConsumed}`;
       const names = boats.slice(0,3).map(b => {
-        const c = b.isCharter ? '#6B289A' : bop2BoatColor(b.boat.id);
-        const ic = b.isCharter ? '⚓ ' : '';
-        return `<div style="font-size:9px;color:${c};font-weight:600;line-height:1.15;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ic}${escapeHTML(b.boat.name)}</div>`;
+        const _wp = bop2PierIssue(b.boat, route.id, d);                          /* §bopPier */
+        const c = _wp ? '#C44A36' : b.isCharter ? '#6B289A' : bop2BoatColor(b.boat.id);
+        const ic = _wp ? '⚠ ' : b.isCharter ? '⚓ ' : '';
+        return `<div${_wp ? ` title="${escapeHTML(b.boat.name)} is at ${bop2PierEn(_wp)} this day - change the boat"` : ''} style="font-size:9px;color:${c};font-weight:600;${_wp?'text-decoration:line-through;':''}line-height:1.15;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ic}${escapeHTML(b.boat.name)}</div>`;
       }).join('');
       const more = boats.length > 3 ? `<div style="font-size:8px;color:${color};font-style:italic">+${boats.length-3}</div>` : '';
       cellInner = `<div style="font-family:Manrope,sans-serif;font-size:13px;color:${color};font-weight:700;line-height:1">${paxStr}</div><div style="margin-top:3px;width:100%">${names}${more}</div>`;
