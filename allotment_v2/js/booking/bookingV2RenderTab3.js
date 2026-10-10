@@ -149,7 +149,7 @@ function bookingV2RenderTab3(){
       <span class="gp"><span class="bkv2-kbd">${'⌘'}K</span>commands</span>
       <span class="gp"><span class="bkv2-kbd">C</span>new booking</span>
       <span class="gp"><span class="bkv2-kbd">/</span>search</span>
-      <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${_opsAllLoading?'\u2026':kCount}${_opsAllLoading||_opsAllCached||month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
+      <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${kCount}${_opsStatsLoading||month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
     </div>
   `;
 }
