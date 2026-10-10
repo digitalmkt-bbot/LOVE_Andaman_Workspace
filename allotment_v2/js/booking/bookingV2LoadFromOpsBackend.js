@@ -61,6 +61,29 @@ function bookingV2OpsEnsureMonth(month){
   var r=_opsBookingMonthRange(month); return bookingV2EnsureOpsRange(r);
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
+function bookingV2OpsEnsureAll(){
+  // Load all bookings from the backend — no date filter — so 'All time' on the
+  // All-bookings tab sees every record, matching the lk-inbox behavior where
+  // SB_BOOKINGS is populated by /api/load.
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
+  var key='all';
+  if(_opsBookingRanges[key] || _opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key]||null;
+  var all=[];
+  function page(cursor){
+    var path='/v1/bookings?limit=5000'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    return window.laOpsFetch(path).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(!j || !Array.isArray(j.bookings)) throw new Error('all-time booking list did not return bookings');
+      Array.prototype.push.apply(all,j.bookings.map(bookingV2FromOpsBooking));
+      if(j.next_cursor) return page(j.next_cursor);
+      _opsBookingMerge(all); _opsBookingRanges[key]=true;
+      console.log('[opsSync] loaded all '+all.length+' booking(s) for All-time view');
+      return {bookings:all};
+    });
+  }
+  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load all bookings: '+((e&&e.message)||e)); return null; });
+  _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
+  return _opsBookingRangeLoads[key];
+}
 // Recent-booking feed is intentionally requested only by the Dashboard/B2C
 // pages. Preferred source is GET /v1/bookings/recent (creation-time range +
 // source filter, Bangkok calendar days). Per the backend partial handoff
