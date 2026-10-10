@@ -17,9 +17,9 @@ function bookingV2RenderTab3(){
   // turn a month page back into an implicit all-history list.
   if(window.laOps&&window.laOps.enabled&&window.laOps.enabled() && _initialMonth!=='all') all=all.filter(b=>bookingV2MonthKey(b.travelDate)===_initialMonth);
   // All-time stats from /v1/bookings/stats when viewing 'All time' in ops mode.
-  var _opsStats=null, _opsStatsMonths={};
-  try{ if(window.LA_LEGACY_UNAVAILABLE&&window.laOpsStats&&_initialMonth==='all'){ _opsStats=window.laOpsStats; if(_opsStats&&_opsStats.by_status) _opsStatsMonths=_opsStats.by_status; } }catch(_){}
-  const kCount = _opsStats ? _opsStats.total : all.length;
+  var _opsStats=null, _opsStatsMonths={}, _opsStatsLoading=null;
+  try{ if(window.LA_LEGACY_UNAVAILABLE&&_initialMonth==='all'){ _opsStats=window.laOpsStats; if(_opsStats&&_opsStats.by_status) _opsStatsMonths=_opsStats.by_status; if(window.laOpsStats===false) _opsStatsLoading='Loading\u2026'; else if(window.laOpsStats===null) _opsStatsLoading='Not available'; } }catch(_){}
+  const kCount = _opsStats ? _opsStats.total : (_opsStatsLoading?'-':all.length);
   const kConfirmed = _opsStats ? ((_opsStats.by_status||{})['confirmed']||0) : all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
   const isPendingFoc = b => b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status);
@@ -31,6 +31,8 @@ function bookingV2RenderTab3(){
   // Ops stats for the pills that don't have a dedicated by_status key
   const kCompleted = _opsStats ? ((_opsStats.by_status||{})['completed']||0) : all.filter(b=>b.status==='completed').length;
   const kRejected = _opsStats ? ((_opsStats.by_status||{})['rejected']||0) : all.filter(b=>b.status==='rejected').length;
+  // Label for the Total KPI footer
+  const _kpiFoot = _opsStatsLoading ? _opsStatsLoading : ((window.laOps&&window.laOps.enabled&&window.laOps.enabled()&&_initialMonth!=='all')?bookingV2MonthLabel(_initialMonth):'all time');
   // §bkMonthPage · everything EXCEPT the month cut · the month chips count these, so their numbers always
   // reflect the status pill you are actually on rather than an all-time total.
   const preMonth = all.filter(b => {
@@ -85,7 +87,7 @@ function bookingV2RenderTab3(){
 
   return `
     <div class="bkv2-kpis">
-      <div class="bkv2-kpi"><div class="bkv2-kpi-lab">Total</div><div class="bkv2-kpi-val">${kCount}</div><div class="bkv2-kpi-foot">${(window.laOps&&window.laOps.enabled&&window.laOps.enabled()&&_initialMonth!=='all')?bookingV2MonthLabel(_initialMonth):'all time'}</div></div>
+      <div class="bkv2-kpi"><div class="bkv2-kpi-lab">Total</div><div class="bkv2-kpi-val">${kCount}</div><div class="bkv2-kpi-foot">${_kpiFoot}</div></div>
       <div class="bkv2-kpi"><div class="bkv2-kpi-lab">Confirmed</div><div class="bkv2-kpi-val" style="color:#0f6e56">${kConfirmed}</div><div class="bkv2-kpi-foot">&#3647;${bookingV2FmtTHB(kConfirmedRev)} booked</div></div>
       <div class="bkv2-kpi warn"><div class="bkv2-kpi-lab">Pending FOC</div><div class="bkv2-kpi-val">${kPendingFoc}</div><div class="bkv2-kpi-foot">awaiting approval</div></div>
       <div class="bkv2-kpi"><div class="bkv2-kpi-lab">Quote</div><div class="bkv2-kpi-val" style="color:var(--ink-soft)">${kQuote}</div><div class="bkv2-kpi-foot">not yet confirmed</div></div>
@@ -124,7 +126,7 @@ function bookingV2RenderTab3(){
       <span class="gp"><span class="bkv2-kbd">${'⌘'}K</span>commands</span>
       <span class="gp"><span class="bkv2-kbd">C</span>new booking</span>
       <span class="gp"><span class="bkv2-kbd">/</span>search</span>
-      <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${kCount}${month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
+      <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${_opsStatsLoading?'\u2026':kCount}${_opsStatsLoading||month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
     </div>
   `;
 }
