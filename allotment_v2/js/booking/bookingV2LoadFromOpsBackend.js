@@ -62,31 +62,46 @@ function bookingV2OpsEnsureMonth(month){
   var r=_opsBookingMonthRange(month); return bookingV2EnsureOpsRange(r);
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
-function bookingV2OpsEnsureAll(){
-  // Lightweight All-time summary: use stats + month-counts + first page of bookings.
-  // Not the whole database — the backend returns aggregates and 50 recent records.
+function bookingV2OpsEnsureSummary(){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
-  var key='all';
+  var key='summary';
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
   function fetchStats(){ return window.laOpsFetch('/v1/bookings/stats').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllStats=j; }); }
   function fetchMonthCounts(){ return window.laOpsFetch('/v1/bookings/month-counts').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllMonthCounts=j; }); }
-  function fetchFirstPage(){
-    return window.laOpsFetch('/v1/bookings?limit=50&order=desc').then(function(r){ return r.ok?r.json():null; }).then(function(j){
-      if(j && Array.isArray(j.bookings)){
-        var mapped=j.bookings.map(bookingV2FromOpsBooking);
-        // Replace SB_BOOKINGS with only these 50 records for the list display
-        if(typeof SB_BOOKINGS!=='undefined'){ SB_BOOKINGS.length=0; mapped.forEach(function(b){ SB_BOOKINGS.push(b); }); }
-      }
-    });
-  }
-  var load=Promise.all([fetchStats(), fetchMonthCounts(), fetchFirstPage()]).then(function(){
+  var load=Promise.all([fetchStats(), fetchMonthCounts()]).then(function(){
     _opsBookingRanges[key]=true;
-    console.log('[opsSync] loaded all-time stats from operation-backend');
     return {stats:window._opsAllStats, monthCounts:window._opsAllMonthCounts};
   }).catch(function(e){
     console.warn('[opsSync] failed to load all-time summary: '+((e&&e.message)||e));
-    _opsBookingRanges[key]=true;  // mark done even on error so we don't keep retrying
+    return null;
+  });
+  _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
+  return _opsBookingRangeLoads[key];
+}
+function bookingV2OpsEnsureAll(){
+  // Lightweight All-time summary: use stats + month-counts + first page of bookings.
+  // Not the whole database — the backend returns aggregates and recent records.
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
+  var key='all';
+  if(_opsBookingRanges[key]) return null;
+  if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
+  function fetchFirstPage(){
+    return window.laOpsFetch('/v1/bookings?limit=100&order=desc').then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(j && Array.isArray(j.bookings)){
+        var mapped=j.bookings.map(bookingV2FromOpsBooking);
+        _opsBookingMerge(mapped);
+      }
+    });
+  }
+  var sumLoad = bookingV2OpsEnsureSummary();
+  var pSummary = sumLoad ? sumLoad : Promise.resolve();
+  var load=Promise.all([pSummary, fetchFirstPage()]).then(function(){
+    _opsBookingRanges[key]=true;
+    return {stats:window._opsAllStats, monthCounts:window._opsAllMonthCounts};
+  }).catch(function(e){
+    console.warn('[opsSync] failed to load all-time: '+((e&&e.message)||e));
+    _opsBookingRanges[key]=true;
     return null;
   });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });

@@ -9,52 +9,45 @@ function bookingV2RenderTab3(){
       if(j && _bkV2.tab==='all' && _bkV2.month===_initialMonth && !_bkV2.newBooking) bookingV2Render();
     });
   }
-  // In operation-backend mode, 'All time' loads lightweight aggregates (stats + month-counts + 50 recent
-  // records) rather than the entire database. Detect whether the load is pending or cached.
-  var _opsAllLoading=false, _opsAllCached=false;
-  try{
-    if(window.LA_LEGACY_UNAVAILABLE && _initialMonth==='all'){
-      _opsAllCached = !!_opsBookingRanges['all'];
-      _opsAllLoading = !_opsAllCached && !!_opsBookingRangeLoads['all'];
-      // Fire the load from here too, catches the initial render-on-click path.
-      if(!_opsAllCached && !_opsAllLoading && typeof bookingV2OpsEnsureAll==='function'){
-        _opsAllLoading=true;
-        var p=bookingV2OpsEnsureAll();
-        if(p) p.then(function(j){ if(j && _bkV2.tab==='all' && _bkV2.month==='all' && !_bkV2.newBooking) bookingV2Render(); }).catch(function(e){ try{ console.warn('[ops] all-time load: '+(e&&e.message)); }catch(_){} });
-      }
-    }
-  }catch(_){}
+  // In operation-backend mode, ensure summary (stats + month-counts) is requested so
+  // KPIs, pills, and the month strip reflect all bookings, matching legacy behavior.
+  if(typeof bookingV2OpsEnsureSummary==='function'){
+    const _sumLoad=bookingV2OpsEnsureSummary();
+    if(_sumLoad) _sumLoad.then(function(j){
+      if(j && _bkV2.tab==='all' && !_bkV2.newBooking) bookingV2Render();
+    });
+  }
+  if(_initialMonth==='all' && typeof bookingV2OpsEnsureAll==='function'){
+    const _allLoad=bookingV2OpsEnsureAll();
+    if(_allLoad) _allLoad.then(function(j){
+      if(j && _bkV2.tab==='all' && _bkV2.month==='all' && !_bkV2.newBooking) bookingV2Render();
+    });
+  }
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _srcBookings = (typeof laIsLandRoute!=='function') ? SB_BOOKINGS : SB_BOOKINGS.filter(bk => (bk.schemaVer===2 ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly) : (laIsLandRoute(bk.programId)===_bkV2CityTourOnly)));
   let all = _srcBookings.map(bookingV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
-  // Do not let previously visited months (or the independent approvals load)
-  // turn a month page back into an implicit all-history list.
-  if(window.laOps&&window.laOps.enabled&&window.laOps.enabled() && _initialMonth!=='all') all=all.filter(b=>bookingV2MonthKey(b.travelDate)===_initialMonth);
-  // When viewing 'All time' in ops mode, SB_BOOKINGS may still be loading.
-  // Show a loading state instead of the per-month count.
-  const _opsIsAllTime = window.LA_LEGACY_UNAVAILABLE && _initialMonth==='all';
-  const _opsAllLoadingDisplay = _opsAllLoading ? '\u2026' : null;
-  // Use API stats when loaded, else fall back to local SB_BOOKINGS counts
-  const _UseStats = _opsAllCached && !!window._opsAllStats;
-  const _Stats = _UseStats ? window._opsAllStats : null;
+
+  // In ops mode, all-time aggregate stats come from /v1/bookings/stats.
+  const _opsActive = !!(window.laOps && window.laOps.enabled && window.laOps.enabled());
+  const _Stats = _opsActive ? window._opsAllStats : null;
+  const _opsStatsLoading = _opsActive && !_Stats;
+  const _opsAllLoadingDisplay = _opsStatsLoading ? '\u2026' : null;
+
   const kCount = _opsAllLoadingDisplay ? _opsAllLoadingDisplay : (_Stats ? _Stats.total : all.length);
-  const kConfirmed = _Stats ? (_Stats.by_status.confirmed||0) : all.filter(b=>b.status==='confirmed').length;
+  const kConfirmed = _Stats ? ((_Stats.by_status||{}).confirmed||0) : all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
   const isPendingFoc = b => b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status);
-  const kPendingFoc = _Stats ? (_Stats.by_status.pending_foc||0) : all.filter(isPendingFoc).length;
-  const kQuote = _Stats ? (_Stats.by_status.quote||0) : all.filter(b=>b.status==='quote').length;
-  const kConfirmedRev = _Stats ? _Stats.confirmed_revenue : all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);
+  const kPendingFoc = _Stats ? ((_Stats.by_status||{}).pending_foc||0) : all.filter(isPendingFoc).length;
+  const kQuote = _Stats ? ((_Stats.by_status||{}).quote||0) : all.filter(b=>b.status==='quote').length;
+  const kConfirmedRev = _Stats ? (_Stats.confirmed_revenue||0) : all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);
   const q = (_bkV2.search||'').toLowerCase().trim();
-  const kB2C = _Stats ? _Stats.b2c_count : all.filter(b=>b.id.startsWith('b2c_')).length;
-  // These are computed from the loaded data (like lk-inbox). When 'All time' is
-  // still loading, the KPIs show '\u2026' via kCount; pills show actual counts
-  // from whatever SB_BOOKINGS already has so they are never blank.
-  const kCompleted = _Stats ? (_Stats.by_status.completed||0) : all.filter(b=>b.status==='completed').length;
-  const kRejected = _Stats ? (_Stats.by_status.rejected||0) : all.filter(b=>b.status==='rejected').length;
-  // Label for the Total KPI footer
-  const _opsAllLabel = _opsAllLoading ? 'Loading\u2026' : (_UseStats ? 'all time' :
-    (window.laOps&&window.laOps.enabled&&window.laOps.enabled()&&_initialMonth!=='all' ? bookingV2MonthLabel(_initialMonth) : 'all time'));
+  const kB2C = _Stats ? (_Stats.b2c_count||0) : all.filter(b=>b.id.startsWith('b2c_')).length;
+  const kCompleted = _Stats ? ((_Stats.by_status||{}).completed||0) : all.filter(b=>b.status==='completed').length;
+  const kRejected = _Stats ? ((_Stats.by_status||{}).rejected||0) : all.filter(b=>b.status==='rejected').length;
+  // Legacy foot is always 'all time'
+  const _opsAllLabel = _opsStatsLoading ? 'Loading\u2026' : 'all time';
+
   // §bkMonthPage · everything EXCEPT the month cut · the month chips count these, so their numbers always
   // reflect the status pill you are actually on rather than an all-time total.
   const preMonth = all.filter(b => {
@@ -68,23 +61,22 @@ function bookingV2RenderTab3(){
     return true;
   });
   const pills = [
-    {k:'all', label:'All', n:_Stats ? _Stats.total : all.length},
-    {k:'b2c', label:'B2C', n:kB2C},
-    {k:'quote', label:'Quote', n:kQuote},
-    {k:'pending_foc', label:'Pending FOC', n:kPendingFoc},
-    {k:'confirmed', label:'Confirmed', n:kConfirmed},
-    {k:'completed', label:'Completed', n:kCompleted},
-    {k:'rejected', label:'Rejected', n:kRejected}
+    {k:'all', label:'All', n:_opsStatsLoading ? '\u2026' : (_Stats ? _Stats.total : all.length)},
+    {k:'b2c', label:'B2C', n:_opsStatsLoading ? '\u2026' : kB2C},
+    {k:'quote', label:'Quote', n:_opsStatsLoading ? '\u2026' : kQuote},
+    {k:'pending_foc', label:'Pending FOC', n:_opsStatsLoading ? '\u2026' : kPendingFoc},
+    {k:'confirmed', label:'Confirmed', n:_opsStatsLoading ? '\u2026' : kConfirmed},
+    {k:'completed', label:'Completed', n:_opsStatsLoading ? '\u2026' : kCompleted},
+    {k:'rejected', label:'Rejected', n:_opsStatsLoading ? '\u2026' : kRejected}
   ];
 
   // §bkMonthPage (2026-09-03) · the list is paginated by TRAVEL MONTH, not by page number — "‹ September 2026 ›"
   // is what staff actually think in, and it survives new bookings landing at the top (a numbered page silently
   // reshuffles under you when the data grows; a month does not).
-  // In ops all-time mode, month counts come from the API (avoids sending the whole database).
-  const _UseMonthCounts = _opsAllCached && !!window._opsAllMonthCounts && _opsIsAllTime;
-  const _ApiMonths = _UseMonthCounts ? window._opsAllMonthCounts.months : null;
+  // In ops mode, month counts come from GET /v1/bookings/month-counts so the strip shows all months.
+  const _ApiMonths = (_opsActive && window._opsAllMonthCounts) ? window._opsAllMonthCounts.months : null;
   var monthCounts, months, spanMonths, monthMin, monthMax;
-  if(_ApiMonths){
+  if(_ApiMonths && _ApiMonths.length){
     monthCounts = new Map(); _ApiMonths.forEach(function(m){ monthCounts.set(m.month, m.count); });
     months = _ApiMonths.map(m=>m.month).sort().reverse();
     spanMonths = _ApiMonths.map(m=>m.month).filter(Boolean).sort();
