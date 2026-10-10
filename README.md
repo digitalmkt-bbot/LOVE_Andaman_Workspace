@@ -5,12 +5,16 @@ Front-end in `allotment_v2/` — `allotment_v2.html` (markup) plus `js/01..08-*.
 
 ## Run locally
 ```bash
-npm start          # serves on http://localhost:3000  → opens the app
+npm start          # static operation-backend frontend on http://localhost:3000
 ```
+On `integration/operation-backend`, this starts `static-server.js`, not the legacy monolith.
+It serves no `/api` or OIDC/proxy endpoints; migrated UI calls operation-backend directly.
 Or open `allotment_v2/allotment_v2.html` via a local server (not file://).
 
 ## Deploy (Railway)
-Railway auto-detects Node (Nixpacks) and runs `npm start` (`server.js`).
+On `integration/operation-backend`, Railway runs `static-server.js` directly. This intentionally
+removes `server.js`, its database migrations, legacy `/api`, proxy, OIDC, and embed-token routes
+from this deployment. The legacy `lk-inbox` deployment remains separate.
 
 Set these variables in Railway → **Variables** to lock the public URL behind a login:
 - `ADMIN_USER` — username

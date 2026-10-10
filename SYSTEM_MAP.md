@@ -5,7 +5,12 @@
 > Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the ~6.2 MB of source.
 > Scope here: **Program/Routes · Boat Status · Boat Operation · Pickup Setup · Rate Types · B2C Channels · Agent List · Booking · Seat Locks · Accounting · Weather cancellation.**
 > Companion file: `CLAUDE.md` (deeper schemas, safety rules, change log). This file = the big picture.
-> Last updated: 2026-06-04.
+> Last updated: 2026-10-10 (operation-backend integration boundary added).
+
+> **`integration/operation-backend` deployment:** Railway runs `static-server.js`, not the
+> legacy `server.js`. It serves only frontend assets and `/health`; migrated Operations calls,
+> including Dashboard, go directly to operation-backend. The `lk-inbox` production monolith is
+> separate and unchanged.
 
 ---
 

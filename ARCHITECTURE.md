@@ -16,6 +16,14 @@ never tracked in git (`git log --all -- CHANGELOG.md` returns nothing). The work
 the closest thing to a durable design record; grep the relevant doc instead of looking for a
 changelog.
 
+## Integration deployment boundary (operation-backend branch)
+
+On `integration/operation-backend`, Railway starts `static-server.js`, **not** `server.js`.
+It is an intentionally small static host: it serves the frontend and `/health`, and has no
+legacy `/api`, database, migration, OIDC, proxy, or embed-token routes. Authentication and
+migrated Operations data use `operationbackend-production.up.railway.app` directly. This is
+not the production `lk-inbox` deployment, which continues to use the legacy monolith.
+
 ## The system in one paragraph
 
 `allotment_v2/allotment_v2.html` (~228KB of markup) plus `allotment_v2/js/01..08-*.js` (~6.2MB,

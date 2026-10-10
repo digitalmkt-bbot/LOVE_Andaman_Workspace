@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "task": "STATIC-OPS-FRONTEND-HOST",
+  "title": "Run integration frontend without server.js",
+  "status": "completed",
+  "git": { "base": "integration/operation-backend", "branch": "integration/operation-backend", "worktree": "D:/projects/wt-operation-backend-integration", "commit": null, "pr": null },
+  "input": {
+    "requestedOutcome": "Disable server.js entirely for the operation-backend integration deployment.",
+    "acceptanceCriteria": ["Railway no longer starts server.js", "Frontend assets remain available", "Legacy API is unavailable"],
+    "allowedScope": ["package.json", "railway.json", "static-server.js", "README.md", "ARCHITECTURE.md", "SYSTEM_MAP.md", "docs/development/tasks/STATIC_OPS_FRONTEND_HOST.md", ".agent-reports/STATIC-OPS-FRONTEND-HOST.json"],
+    "constraints": ["No database change", "Do not change lk-inbox production"]
+  },
+  "output": {
+    "summary": "Replaced the integration deployment entrypoint with a static frontend host.",
+    "filesChanged": [
+      {"path":"static-server.js","change":"added","purpose":"Static frontend and health host."},
+      {"path":"package.json","change":"modified","purpose":"npm start uses static host."},
+      {"path":"railway.json","change":"modified","purpose":"Railway directly starts static host."},
+      {"path":"README.md","change":"modified","purpose":"Document deployment boundary."},
+      {"path":"ARCHITECTURE.md","change":"modified","purpose":"Document branch architecture."},
+      {"path":"SYSTEM_MAP.md","change":"modified","purpose":"Document branch host boundary."},
+      {"path":"docs/development/tasks/STATIC_OPS_FRONTEND_HOST.md","change":"added","purpose":"Development record."},
+      {"path":".agent-reports/STATIC-OPS-FRONTEND-HOST.json","change":"added","purpose":"Durable manifest."}
+    ],
+    "interfaces":{"added":["GET /health"],"changed":["Railway start command"],"removed":["Legacy server.js routes from integration deployment"]},
+    "dataPersistence":{"impact":"none","details":["No database or migration code runs."],"migrationRequired":false}
+  },
+  "verification":[{"command":"node --check static-server.js; local curl smoke for /health, /, app, dashboard adapter, and /api/load","status":"passed","evidence":"Health 200; root redirects; app/script 200; legacy API 404."}],
+  "decisions":["Use a static host rather than repairing the retired monolith.","Keep only GET/HEAD static serving and reject traversal."],
+  "risks":["Legacy-only routes, including embeds and OIDC, are unavailable on this integration deployment."],
+  "blockers":[],"dependencies":["operation-backend CORS and deployed endpoints"],"followUps":["Verify Railway serves the new commit and Dashboard emits /v1/dashboard."],
+  "rollback":"Restore node server.js in package.json and railway.json."
+}
