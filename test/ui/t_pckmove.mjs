@@ -12,6 +12,7 @@
 //   6 ใบที่แยกลงหลายลำ · ย้ายที่นี่ไม่ได้
 //   7 ใบเหมาลำ · ไม่มีปุ่ม
 //   8 ไม่มี error
+//   9 §pckMoveRow · ปุ่ม ⇄ บนแถวของ manifest เลย ไม่ต้องเปิดแถบรายละเอียด · ไม่มีสิทธิ์ = ไม่มีปุ่ม (ข้อ 1)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -115,7 +116,9 @@ const setup = page => page.evaluate(() => {
   const P = await setup(page);
   if (P.err) { fail('prep ' + P.err); process.exit(1); }
   dlg.length = 0;
-  const r = await page.evaluate(() => { const s = __S; pckDetailOpen(s.bk); const btn = !!document.querySelector('#pck-drawer .pck-mvbtn'); pckDetailClose(); pckMoveOpen(s.bk);
+  const r = await page.evaluate(() => { const s = __S; nav(document.querySelector('.nav-item[data-view="piercheckin"]') || { dataset: { view: 'piercheckin' }, classList: { add(){}, remove(){} } }); _pckDate = s.d; renderPierCheckin();
+    const rowBtn = document.querySelectorAll('#piercheckin-host .pck-mvrow').length;
+    pckDetailOpen(s.bk); const btn = !!document.querySelector('#pck-drawer .pck-mvbtn') || rowBtn > 0; pckDetailClose(); pckMoveOpen(s.bk);
     return { btn, modal: !!document.getElementById('pck-move'), can: pckMoveCan(), boat: bkOpsRead(SB_BOOKINGS.find(x => x.id === s.bk), s.d).boatId }; });
   if (!r.btn && !r.modal && !r.can && dlg.length === 1 && /No permission/.test(dlg[0].msg) && !/[^\x00-\x7F]/.test(dlg[0].msg) && r.boat === P.from)
     ok('1 ไม่มีสิทธิ์ · แถบรายละเอียดไม่มีปุ่มย้ายลำ · เรียกตรง ๆ ก็ขึ้น "No permission" · เรือไม่เปลี่ยน');
@@ -173,6 +176,24 @@ const setup = page => page.evaluate(() => {
   const r7 = await page.evaluate(() => { const s = __S; const b = SB_BOOKINGS.find(x => x.id === s.bk); const t = b.trips.find(x => x.date === s.d); const m0 = t.bookingMode; t.bookingMode = 'charter';
     pckDetailOpen(s.bk); const btn = !!document.querySelector('#pck-drawer .pck-mvbtn'); const C = pckMoveCtx(s.bk, s.d); t.bookingMode = m0; pckDetailClose(); return { btn, err: C.err || '' }; });
   if (!r7.btn && /เหมาลำ/.test(r7.err)) ok('7 ใบเหมาลำ · ไม่มีปุ่ม · ย้ายที่นี่ไม่ได้'); else fail('7 ' + JSON.stringify(r7));
+  /* 9 · §pckMoveRow · ปุ่มบนแถวของ manifest ทั้งโหมดตารางและการ์ด · กดแล้วเปิดกล่องย้ายลำของใบนั้น · ไม่ล้นช่อง */
+  const r9 = await page.evaluate(async () => { const s = __S; const out = {};
+    nav(document.querySelector('.nav-item[data-view="piercheckin"]') || { dataset: { view: 'piercheckin' }, classList: { add(){}, remove(){} } });
+    _pckDate = s.d;
+    for (const mode of ['sheet', 'card']) {
+      try { if (typeof _pckView !== 'undefined') _pckView = mode; } catch (e) {}
+      renderPierCheckin(); await new Promise(z => setTimeout(z, 150));
+      const btns = [...document.querySelectorAll('#piercheckin-host .pck-mvrow')];
+      const mine = btns.find(b => (b.getAttribute('onclick') || '').indexOf("'" + s.bk + "'") > 0);
+      let clip = false; if (mine) { const td = mine.closest('td') || mine.parentElement, q = td.getBoundingClientRect(), r = mine.getBoundingClientRect(); clip = r.right > q.right + .5 || r.left < q.left - .5; }
+      if (mine) mine.click();
+      const m = document.getElementById('pck-move');
+      out[mode] = { n: btns.length, mine: !!mine, txt: mine ? mine.textContent.trim() : '', clip, dlg: !!m, dlgFor: m ? m.textContent.indexOf(SB_BOOKINGS.find(x => x.id === s.bk).leadPax || '') >= 0 : false };
+      pckMoveClose();
+    }
+    return out; });
+  if (r9.sheet && r9.sheet.mine && !r9.sheet.clip && r9.sheet.dlg && r9.sheet.dlgFor) ok(`9 ปุ่ม ⇄ บนแถว manifest (${r9.sheet.n} แถว) · กดแล้วเปิดกล่องย้ายลำของใบนั้น · ไม่ล้นช่อง` + (r9.card && r9.card.mine ? ` · โหมดการ์ด "${r9.card.txt}"` : ''));
+  else fail('9 ' + JSON.stringify(r9));
   await close();
 }
 const e1 = allErr.filter(e => !/Failed to load resource/.test(e));
