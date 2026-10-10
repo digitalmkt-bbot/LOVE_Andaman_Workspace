@@ -19124,6 +19124,110 @@ function pckFilterTail(any, nHidden){
 
 // §pierDetail · แผงรายละเอียดครบทุกอย่างของ booking หนึ่งใบ · หน้าท่าใช้ตรวจ ลค ก่อนปล่อยขึ้นเรือ
 function pckDetailClose(){ var el=document.getElementById('pck-drawer'); if(el) el.remove(); }
+/* ══ §pckMove (2026-10-10) · ย้ายลำฉุกเฉินจากหน้า Pier Check-in ═══════════════════════
+   เจ้าของ: "ในหน้า pier check in user สามารถย้ายเรือได้ไหม · กรณีต้องมีสลับฉุกเฉิน · ทำเลย
+   สิทธิ์ให้ admin เป็นคนกำหนดว่า user ไหนย้ายได้"
+   ของเดิมย้ายลำได้ที่ Booking → By trip date → Boat assign เท่านั้น · คนหน้าท่ามักไม่มีสิทธิ์แก้ใบจอง
+   ตรงนี้ย้ายได้ทีละใบ จากปุ่มในแถบรายละเอียด (เรือ ⇄ ย้ายลำ)
+   กติกา
+     สิทธิ์     act-pckmove (§actPerm · admin ติ๊กให้รายคนในหน้าจัดการผู้ใช้ · admin ได้เสมอ)
+     ลำปลายทาง  เฉพาะลำที่วิ่งโปรแกรมเดียวกันวันนั้น (baBoatsForRoute · ไม่รวมเรือเหมา)
+     ความจุ     เกิน cap ได้ไม่เกิน BA_CAP_TOL เหมือนหน้า Booking · เกินกว่านั้นย้ายไม่ได้ (ปลด cap ต้องไปหน้า Booking)
+     เหตุผล     ต้องเลือก · "อื่น ๆ" ต้องพิมพ์ · ลงประวัติใบจอง (ใคร เมื่อไร จากลำไหนไปลำไหน)
+     ไม่แตะ     สถานะเช็คอิน · ใบที่แยกลงหลายลำ / ใบเหมาลำ ย้ายที่นี่ไม่ได้ (ไปหน้า Booking)
+     เตือน      ลำเดิมเบิกอุปกรณ์ไปแล้ว · ต้องย้ายของตามคนที่หน้าเบิก–คืน
+   เรือทั้งลำเสียแล้วเปลี่ยนทั้งลำ = Boat Operation ไม่ใช่ที่นี่ */
+var PCK_MOVE_WHY=[{k:'breakdown',t:'เรือเสีย / มีปัญหา'},{k:'full',t:'ลำเดิมเต็ม / เกลี่ยคน'},
+                  {k:'group',t:'แยก / รวมกรุ๊ป'},{k:'guest',t:'ลูกค้าขอ'},{k:'other',t:'อื่น ๆ'}];
+function pckMoveCan(){ return (typeof window.laCanAct!=='function') || window.laCanAct('act-pckmove'); }
+function pckMoveCtx(bkId, date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return {err:'ไม่พบใบจอง', errEn:'Booking not found'};
+  var t=ckTripOn(b,date); if(!t) return {err:'ใบนี้ไม่มีทริปวันนี้', errEn:'This booking has no trip on this day'};
+  if(t.bookingMode==='charter') return {err:'ใบเหมาลำ · เปลี่ยนเรือที่หน้า Booking', errEn:'Charter booking - change its boat on the Booking page'};
+  var d=(typeof bkOpsDate==='function')?bkOpsDate(b,date):date;
+  if(typeof bkBoatSplits==='function' && bkBoatSplits(b,d)) return {err:'ใบนี้แยกลงหลายลำอยู่ · ย้ายที่หน้า Booking → By trip date', errEn:'This booking is split across boats - move it on Booking > By trip date'};
+  var O=bkOpsRead(b,d), cur=O.boatId||'';
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  var pool=(typeof baBoatsForRoute==='function'?baBoatsForRoute(d,t.routeId):[]);
+  var ch=(typeof baCharterBoatIds==='function')?baCharterBoatIds(d):new Set();
+  var tol=(typeof BA_CAP_TOL!=='undefined')?BA_CAP_TOL:2;
+  var opts=pool.filter(function(x){ return x.boatId!==cur && !ch.has(x.boatId); }).map(function(x){
+    var cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,d):(+((x.boat||{}).cap)||0);
+    var load=(typeof baAssignedPax==='function')?baAssignedPax(d,x.boatId):0;
+    var next=load+pax, lic=(typeof boatCapLicense==='function')?boatCapLicense(x.boatId):0;
+    var block=(cap>0 && next>cap+tol) || (lic>0 && next>lic);
+    return {id:x.boatId, name:(x.boat&&x.boat.name)||x.boatId, cap:cap, load:load, next:next, over:(cap>0 && next>cap), block:block};
+  });
+  var iss=0;
+  try{ if(cur && typeof poDayMoves==='function') poDayMoves(d,cur).forEach(function(m){ if(m.type==='issue') iss+=poNum(m.qty); else if(m.type==='return') iss-=poNum(m.qty); }); }catch(_){}
+  return {b:b, t:t, d:d, cur:cur, curName:cur?pckBoatName(cur):'', pax:pax, opts:opts, issued:Math.max(0,iss), tol:tol};
+}
+function pckMoveOpen(bkId){
+  var e=ckEsc, date=_pckDate;
+  if(!pckMoveCan()){ alert('No permission to move boats here. Ask an admin for the "Pier boat move" permission.'); return; }
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var C=pckMoveCtx(bkId,date);
+  if(C.err){ alert(C.errEn||'Cannot move this booking here'); return; }
+  var old=document.getElementById('pck-move'); if(old) old.remove();
+  var rows=C.opts.length ? C.opts.map(function(o){
+      return '<label class="pmv-o'+(o.block?' off':'')+'" title="'+e(o.block?'เกินที่นั่ง · ย้ายไม่ได้':'')+'">'
+        +'<input type="radio" name="pmvb" value="'+e(o.id)+'"'+(o.block?' disabled':'')+'>'
+        +'<b>'+e(o.name)+'</b>'
+        +'<span class="pmv-l'+(o.block?' bad':(o.over?' warn':''))+'">'+o.load+' → '+o.next+' / '+o.cap
+        +(o.block?' · เต็ม':(o.over?' · เกิน cap':''))+'</span></label>'; }).join('')
+    : '<div style="color:#A32D2D;font-size:12.5px;padding:8px 0">ไม่มีลำอื่นที่วิ่งโปรแกรมนี้วันนี้ · ต้องไปผูกเรือเพิ่มที่ Boat Operation ก่อน</div>';
+  var ov=document.createElement('div'); ov.id='pck-move';
+  ov.innerHTML='<style>#pck-move{position:fixed;inset:0;z-index:9500;font-family:inherit}'
+    +'#pck-move .pmv-bg{position:absolute;inset:0;background:rgba(15,23,42,.35)}'
+    +'#pck-move .pmv{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:16px 18px}'
+    +'#pck-move h3{margin:0 0 3px;font-size:15px;color:#15396B}#pck-move .sub{font-size:11.5px;color:#64748B;margin-bottom:10px}'
+    +'#pck-move .pmv-o{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:6px;cursor:pointer;font-size:13px}'
+    +'#pck-move .pmv-o.off{opacity:.5;cursor:not-allowed}#pck-move .pmv-o b{flex:1}'
+    +'#pck-move .pmv-l{font:600 11.5px \'DM Mono\',monospace;color:#0F6E56}#pck-move .pmv-l.warn{color:#B45309}#pck-move .pmv-l.bad{color:#B91C1C}'
+    +'#pck-move .lbl{font-size:11px;font-weight:700;color:#475569;margin:10px 0 4px}'
+    +'#pck-move select,#pck-move input[type=text]{width:100%;box-sizing:border-box;border:1px solid #D8D4CA;border-radius:9px;padding:7px 10px;font:500 12.5px inherit;font-family:inherit}'
+    +'#pck-move .warnbox{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:8px 10px;font-size:11.5px;margin-top:10px}'
+    +'#pck-move .err{color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px;min-height:1px}'
+    +'#pck-move .ft{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}'
+    +'#pck-move .ft button{border:1px solid #D8D4CA;background:#fff;border-radius:9px;padding:8px 14px;font:700 12.5px inherit;font-family:inherit;cursor:pointer}'
+    +'#pck-move .ft button.pri{background:#15396B;border-color:#15396B;color:#fff}</style>'
+    +'<div class="pmv-bg" onclick="pckMoveClose()"></div><div class="pmv">'
+    +'<h3>&#8644; ย้ายลำ · '+e(C.b.voucherRef||C.b.code||C.b.id)+'</h3>'
+    +'<div class="sub">'+e(C.b.leadPax||'—')+' · '+C.pax+' คน · ตอนนี้อยู่ <b>'+e(C.curName||'ยังไม่จัดเรือ')+'</b> · สถานะเช็คอินไม่เปลี่ยน</div>'
+    +rows
+    +'<div class="lbl">เหตุผล</div><select id="pmvwhy" onchange="document.getElementById(\'pmvnote\').placeholder=this.value===\'other\'?\'ต้องระบุ\':\'รายละเอียด (ไม่บังคับ)\'">'
+      +'<option value="">— เลือกเหตุผล —</option>'+PCK_MOVE_WHY.map(function(w){ return '<option value="'+w.k+'">'+e(w.t)+'</option>'; }).join('')+'</select>'
+    +'<input type="text" id="pmvnote" placeholder="รายละเอียด (ไม่บังคับ)" style="margin-top:6px">'
+    +(C.issued>0?('<div class="warnbox">&#9888; ลำเดิมเบิกอุปกรณ์วันนี้ไปแล้ว '+C.issued+' ชิ้น · ถ้าคนย้ายลำ ให้ย้ายของตามที่หน้าเบิก–คืนด้วย</div>'):'')
+    +'<div class="err" id="pmverr"></div>'
+    +'<div class="ft"><button onclick="pckMoveClose()">ยกเลิก</button>'+(C.opts.length?'<button class="pri" onclick="pckMoveSave(\''+e(bkId)+'\')">ย้ายลำ</button>':'')+'</div>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
+function pckMoveClose(){ var el=document.getElementById('pck-move'); if(el) el.remove(); }
+function pckMoveSave(bkId){
+  var err=function(t){ var x=document.getElementById('pmverr'); if(x) x.textContent=t; return false; };
+  if(!pckMoveCan()) return err('ไม่มีสิทธิ์ย้ายลำ');
+  if(typeof ckGuard==='function' && !ckGuard()) return false;
+  var date=_pckDate, C=pckMoveCtx(bkId,date); if(C.err) return err(C.err);
+  var pick=document.querySelector('#pck-move input[name=pmvb]:checked');
+  if(!pick) return err('เลือกลำที่จะย้ายไป');
+  var o=C.opts.filter(function(x){ return x.id===pick.value; })[0];
+  if(!o) return err('ลำนี้ไม่วิ่งโปรแกรมนี้แล้ว · ปิดแล้วเปิดใหม่');
+  if(o.block) return err('ลำนี้เต็ม ('+o.next+' / '+o.cap+') · ย้ายไม่ได้');
+  var why=(document.getElementById('pmvwhy')||{}).value||'', note=String((document.getElementById('pmvnote')||{}).value||'').trim();
+  if(!why) return err('เลือกเหตุผล');
+  if(why==='other' && !note) return err('เหตุผล "อื่น ๆ" ต้องพิมพ์รายละเอียด');
+  var W=PCK_MOVE_WHY.filter(function(w){ return w.k===why; })[0];
+  bkOpsFor(C.b, C.d).boatId=o.id;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(C.b,'ops','ย้ายลำหน้าท่า '+C.d+' · '+(C.curName||'ยังไม่จัดเรือ')+' → '+o.name
+    +' · '+(W?W.t:why)+(note?(' · '+note):'')+(o.over?(' · เกิน cap ('+o.next+'/'+o.cap+')'):''),'Boat');
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  pckMoveClose();
+  if(typeof ckAfter==='function') ckAfter('pier'); else if(typeof renderPierCheckin==='function') renderPierCheckin();
+  if(document.getElementById('pck-drawer')) pckDetailOpen(bkId);
+  return true;
+}
 function pckDetailOpen(bkId){
   var e=ckEsc, date=_pckDate;
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
@@ -19206,7 +19310,11 @@ function pckDetailOpen(bkId){
         row('เวลารับ','<b style="font-family:\'DM Mono\',monospace">'+e(O.pickupTimeFinal||t.pickupTime||'—')+'</b>')
        +row('รถ',veh?(e(veh.name||O.vanId)+(drv&&drv.driver?('<div style="font-size:11px;color:#8a8a82;margin-top:2px">'+e(drv.driver)+(drv.phone?(' · '+e(drv.phone)):'')+(drv.plate?(' · '+e(drv.plate)):'')+'</div>'):'')):'<span style="color:#6B289A;font-weight:700">มาเอง / รถเอเย่นต์</span>')
        +ckLine(vck,'เช็คอินรถ',ckBookedPax(t))
-       +row('เรือ',boat?('<b>'+e(boat.name||'')+'</b>'+(boat.cap||boat.licensePax?('<span style="color:#8a8a82;font-size:11px;margin-left:8px">cap '+(boat.cap||boat.licensePax)+'</span>'):'')):'<span style="color:#A32D2D;font-weight:700">ยังไม่จัดเรือ</span>')
+       +row('เรือ',(boat?('<b>'+e(boat.name||'')+'</b>'+(boat.cap||boat.licensePax?('<span style="color:#8a8a82;font-size:11px;margin-left:8px">cap '+(boat.cap||boat.licensePax)+'</span>'):'')):'<span style="color:#A32D2D;font-weight:700">ยังไม่จัดเรือ</span>')
+          /* §pckMove · ปุ่มย้ายลำ · เฉพาะคนที่ admin ให้สิทธิ์ · ใบเหมาลำไม่มีปุ่ม */
+          +((typeof pckMoveCan==='function' && pckMoveCan() && t.bookingMode!=='charter')
+            ?('<button class="pck-mvbtn" onclick="event.stopPropagation();pckMoveOpen(\''+e(b.id)+'\')" title="ย้ายใบนี้ไปลำอื่นที่วิ่งโปรแกรมเดียวกันวันนี้" '
+              +'style="margin-left:10px;border:1px solid #BFD3EA;background:#EEF4FB;color:#15396B;border-radius:8px;padding:3px 10px;font:700 11.5px inherit;font-family:inherit;cursor:pointer">&#8644; ย้ายลำ</button>'):''))
        +(function(){ var st=pckStage(pck), rk=pckStageRank(st);
            var stp=function(S,i,when,who){ var done=rk>=i;
              return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="width:15px;height:15px;border-radius:50%;flex:none;background:'+(done?S.col:'#EDEAE2')+';color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center">'+(done?'&#10003;':'')+'</span>'
