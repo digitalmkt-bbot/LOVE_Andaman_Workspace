@@ -125,6 +125,21 @@
     HEADER.forEach(function(h){ if(SERVER_STAMPED[h[0]]) return; var v = coerce(bk[h[0]], h[1]); if(v !== undefined) b[h[0]] = v; });
     var focReason = (bk.focApproval && bk.focApproval.reason) || bk.focReason;
     if(focReason) b.focReason = String(focReason);
+    /* §opsBookingFields (2026-10-10) · these are server-owned booking fields.  Send an
+       explicit empty array when the user cleared a list: PATCH semantics otherwise leave
+       the old server value in place. */
+    if(Array.isArray(bk.adjustments)) b.adjustments = bk.adjustments.filter(function(a){
+      return a && Number(a.value) > 0;
+    }).map(function(a){ return { kind: a.kind, mode: a.mode, value: Number(a.value), label: a.label || undefined, note: a.note || undefined }; });
+    if(Array.isArray(bk.altPickups)) b.altPickups = bk.altPickups.map(function(a){
+      return { areaId: a.areaId || a.area_id || null, dropSame: a.dropSame != null ? !!a.dropSame : !!a.drop_same,
+        dropAreaId: a.dropAreaId || a.drop_area_id || null, dropArea: a.dropArea || a.drop_area || '',
+        dropZone: a.dropZone || a.drop_zone || '', dropPlace: a.dropPlace || a.drop_place || '' };
+    });
+    if(bk.specialMeals && Array.isArray(bk.specialMeals.allergyList)) b.allergy_list = bk.specialMeals.allergyList.map(function(a){ return { name: a.name || '', qty: +a.qty || 0 }; });
+    else if(Array.isArray(bk.allergyList)) b.allergy_list = bk.allergyList;
+    if(Array.isArray(bk.attachments)) b.attachments = bk.attachments.filter(function(a){ return a && a.id; }).map(function(a){ return { id: a.id, kind: a.kind || 'booking' }; });
+    if(bk.companyPurpose || bk.company_purpose) b.companyPurpose = bk.companyPurpose || bk.company_purpose;
     if(bk.priceBreakdown && bk.priceBreakdown.total != null && bk.total == null) b.total = coerce(bk.priceBreakdown.total, 'num');
     Object.keys(STRUCTS).forEach(function(s){
       var src = bk[s]; if(!src || typeof src !== 'object') return;
@@ -151,6 +166,12 @@
       Object.assign(o, pk);
       if(t.ovn){ o.ovn = t.ovn; if(t.ovn === 'return' && t.ovnReturnDate) o.ovnReturnDate = t.ovnReturnDate; }
       if(t.ovnLeg){ o.ovnLeg = true; if(t.ovnOf != null) o.ovnOf = +t.ovnOf; }
+      /* The API owns these values; do not send operations or the displacement
+         acknowledgement.  They have dedicated commands and are read below. */
+      if(t.ovnCharge != null) o.ovnCharge = Number(t.ovnCharge) || 0;
+      if(t.charterPriceMode) o.charterPriceMode = t.charterPriceMode;
+      if(t.charterPriceManual != null) o.charterPriceManual = Number(t.charterPriceManual) || 0;
+      if(t.charterPriceNote != null) o.charterPriceNote = String(t.charterPriceNote);
       return o;
     });
     b.passengers = (bk.passengers || []).filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){
@@ -199,6 +220,15 @@
     return r;
   }
 
+  function operationsFrom(x){
+    x = x || {};
+    return { boatId: x.boat_id || x.boatId || null,
+      boatSplits: (x.boat_splits || x.boatSplits || []).map(function(s){ return { boatId: s.boat_id || s.boatId, ad: +s.ad || 0, chd: +s.chd || 0, inf: +s.inf || 0, foc: +s.foc || 0 }; }),
+      boatPulled: !!(x.boat_pulled != null ? x.boat_pulled : x.boatPulled),
+      pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
+      returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
+      pierNote: x.pier_note || x.pierNote || null, checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
+  }
   function tripFrom(t){
     var g = function(c, s){ return t[c] !== undefined ? t[c] : t[s]; };
     var draws = g('lockDraws', 'lock_draws') || {};
@@ -211,7 +241,14 @@
               lockDraws: lockDraws, lockDrawSel: sel, lockUse: locked, seatSource: { locked: locked, general: Math.max(0, total - locked) },
               zone: t.zone || '', pickupTime: pickupJoin(g('pickupTime', 'pickup_time'), g('pickupTimeEnd', 'pickup_time_end'), g('pickupAtPier', 'pickup_at_pier')),
               ovn: t.ovn || null, ovnReturnDate: g('ovnReturnDate', 'ovn_return_date') || '', ovnLeg: !!g('ovnLeg', 'ovn_leg'),
-              ovnOf: g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null, ops: {} };
+              ovnOf: g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null,
+              ovnCharge: g('ovnCharge', 'ovn_charge') != null ? +g('ovnCharge', 'ovn_charge') || 0 : 0,
+              charterPriceMode: g('charterPriceMode', 'charter_price_mode') || '',
+              charterPriceManual: g('charterPriceManual', 'charter_price_manual') != null ? +g('charterPriceManual', 'charter_price_manual') || 0 : 0,
+              charterPriceNote: g('charterPriceNote', 'charter_price_note') || '',
+              rtRef: g('rateTypeId', 'rate_type_id') || null, promoId: g('promoId', 'promo_id') || null,
+              subtotal: t.subtotal != null ? +t.subtotal || 0 : 0,
+              ops: operationsFrom(t.operations) };
     return o;
   }
 
@@ -299,6 +336,24 @@
     if(bk.total == null) bk.total = bk.priceBreakdown ? bk.priceBreakdown.total : 0;
     if(!bk.cashOnTour) bk.cashOnTour = null;
     bk.trips = (ob.trips || []).map(tripFrom);
+    /* Legacy stores the first service day's operations on bk.ops and later days on
+       their trip.  The API deliberately stores operations on every trip. */
+    if(bk.trips.length){
+      var firstDate = bk.trips[0].date;
+      bk.trips.forEach(function(t){ if(t.date === firstDate) bk.ops = t.ops || {}; });
+      bk.trips.forEach(function(t){ if(t.date === firstDate) t.ops = {}; });
+    }
+    bk.reconfirm = ob.reconfirm ? { sentAt: ob.reconfirm.sent_at || ob.reconfirm.sentAt || '', sentBy: ob.reconfirm.sent_by || ob.reconfirm.sentBy || '' } : null;
+    bk.docCheck = ob.doc_check || null;
+    bk.attachments = (ob.attachments || []).map(function(a){ return { id:a.id, name:a.name || '', mime:a.mime || '', size:+a.size || 0, kind:a.kind || '', by:a.by || '', at:a.at || '' }; });
+    bk.altPickups = (ob.alt_pickups || []).map(function(a){ return { areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
+    bk.adjustments = (ob.adjustments || []).map(function(a){ return { seq:a.seq, kind:a.kind, mode:a.mode, value:+a.value || 0, label:a.label || '', note:a.note || '' }; });
+    if(Array.isArray(ob.allergy_list)) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyList = ob.allergy_list; }
+    if(ob.allergy_count != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyCount = +ob.allergy_count || 0; }
+    if(ob.special_meals_pier_at != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.pierAt = ob.special_meals_pier_at; }
+    if(ob.special_meals_pier_by != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.pierBy = ob.special_meals_pier_by; }
+    bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:!!(u.to_company != null ? u.to_company : u.toCompany), feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, slips:u.slips || [] }; });
+    if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', type: p.type || 'AD', foc: !!p.foc }; });
     bk.addOns = (ob.add_ons || []).map(function(a){
       var o = { type: a.type, label: a.label || '', amount: +a.amount || 0, qty: a.qty != null ? a.qty : 1, note: a.note || '' };
@@ -315,15 +370,9 @@
      (van/boat/check-in ops, invoices, approval notes, weather follow-up…) */
   function mergeInto(bk, ob){
     var fresh = fromServer(ob);
-    var keepTrips = bk.trips || [];
-    fresh.trips.forEach(function(t, i){
-      var old = keepTrips.find(function(x){ return x.opsTripId && x.opsTripId === t.opsTripId; }) || keepTrips[i];
-      if(old){ ['ops', 'ovnCharge', 'promoId', 'rtRef'].forEach(function(k){ if(old[k] !== undefined && t.date === old.date) t[k] = old[k]; }); }
-    });
-    // adjustments (discounts, extras) are not stored by the server yet · without this a refresh erased
-    // them, and the next edit re-priced the booking without them
-    var keep = {}; ['ops', 'history', 'approval', 'focApproval', 'weatherResolve', 'rebook', 'invoiceId', 'paymentStatus',
-      'upgrades', 'altPickups', 'b2cOverride', 'refund', 'docCheck', 'createdAt', 'adjustments'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    /* Only retain values the API does not own.  In particular, never re-apply a
+       local operations/price/adjustment copy over the server response. */
+    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     // §opsApprovals · the local copy stays only where the server has no entry of that kind
@@ -418,10 +467,18 @@
                  || ((j.trips || [])[i] && !used[j.trips[i].id] ? j.trips[i] : null);
           if(hit){ used[hit.id] = 1; t.opsTripId = hit.id; }
         });
+        /* Save responses are authoritative for totals, rates, add-on amounts and
+           operations.  Do not leave the browser's quote visible after a server
+           repricing. */
+        mergeInto(bk, j);
         Object.assign(bk, records(j, bk.trips));
         persist();
       }
-      O.wrote('booking');
+      if(j && Array.isArray(j.price_warnings) && j.price_warnings.length){
+      O.toast({ kind:'pending', title:'Server adjusted the booking price', id:bk.id, status:'PRICE',
+        sub:j.price_warnings.map(function(w){ return w.message || w.code || ''; }).filter(Boolean).join(' · '), dur:9000 });
+    }
+    O.wrote('booking');
       return j;
     });
   }
@@ -660,7 +717,7 @@
   function loadPending(){
     var all = [];
     function page(cursor){
-      return O.get('/v1/bookings', { status: 'pending_approval', limit: 100, cursor: cursor }).then(function(j){
+      return O.get('/v1/bookings', { status: 'pending_approval,pending_foc', limit: 100, cursor: cursor }).then(function(j){
         Array.prototype.push.apply(all, (j && j.bookings) || []);
         if(j && j.next_cursor && all.length < 2000) return page(j.next_cursor);
       });

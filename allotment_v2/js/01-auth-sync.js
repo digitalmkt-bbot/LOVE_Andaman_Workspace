@@ -47,7 +47,10 @@
   // session to check. /api/me is no longer called at all: who is logged in, and their rights, come
   // from operation-backend's GET /v1/me (§opsMe below · the token itself is never decoded). A 401
   // from any operation-backend call clears it and reloads to the login screen (see laOpsFetch below).
-  var OPS_BACKEND = 'https://operationbackend-production.up.railway.app';
+  // §laConfig (2026-10-06) · server.js injects window.LA_CONFIG per deployment (env LA_LEGACY_SYNC,
+  //   OPS_BACKEND_URL). Absent = a plain static server → the built-in defaults below.
+  var LA_CFG = (window.LA_CONFIG && typeof window.LA_CONFIG === 'object') ? window.LA_CONFIG : {};
+  var OPS_BACKEND = LA_CFG.opsBackend || 'https://operationbackend-production.up.railway.app';
   // §legacyOff (2026-09-18) · does THIS deployment have a server.js blob backend behind /api?
   //   Until now the answer was inferred from /api/load returning exactly 401, which quietly made
   //   server.js load-bearing on a branch that calls it deprecated: delete it, or serve this app
@@ -57,7 +60,7 @@
   //   false → server.js is never called: no boot blob, no version poll, no SSE, no save push.
   //   Set back to true for a deployment that really does run server.js (lk-inbox), and the whole
   //   legacy sync path behaves exactly as before.
-  var LA_LEGACY_SYNC = false;
+  var LA_LEGACY_SYNC = (typeof LA_CFG.legacySync === 'boolean') ? LA_CFG.legacySync : false;
   window.LA_LEGACY_SYNC = LA_LEGACY_SYNC;
   var OPS_TOKEN_KEY = 'la_ops_token';
   function opsToken(){ try{ return sessionStorage.getItem(OPS_TOKEN_KEY)||''; }catch(e){ return ''; } }
@@ -1162,7 +1165,8 @@
      admin ได้เสมอ · เปิดไฟล์ตรง ๆ ไม่มีระบบ login (ME ว่าง) ได้เหมือนพฤติกรรมเดิมของสิทธิ์อื่น
      ⚠ เพิ่มคีย์ใหม่ต้องเพิ่ม PERM_KEYS.add('<key>') ใน server.js ด้วย ไม่งั้น cleanPerms ตัดทิ้งตอนบันทึก */
   var LA_ACTS=[
-    {v:'act-capunlock', t:'ปลด cap เรือเฉพาะวัน (ฉุกเฉิน)', d:'เพิ่มที่นั่งของเรือลำหนึ่งเฉพาะวันนั้น เมื่อเรือเต็มแล้วยังมีคนที่รับจองไปแล้วค้างอยู่ · ไม่เกินที่นั่งจดทะเบียน'}
+    {v:'act-capunlock', t:'ปลด cap เรือเฉพาะวัน (ฉุกเฉิน)', d:'เพิ่มที่นั่งของเรือลำหนึ่งเฉพาะวันนั้น เมื่อเรือเต็มแล้วยังมีคนที่รับจองไปแล้วค้างอยู่ · ไม่เกินที่นั่งจดทะเบียน'},
+    {v:'act-approve', t:'อนุมัติ booking / FOC', d:'อนุมัติ booking ที่เกิน allotment หรือผู้โดยสาร FOC ตามสิทธิ์ที่ server ตรวจสอบ'}
   ];
   window.LA_ACTS=LA_ACTS;
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }

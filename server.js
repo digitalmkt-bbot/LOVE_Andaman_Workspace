@@ -2070,11 +2070,32 @@ function _laImmutable(ext, q, fp, etag, data){
 }
 /* เติม ?v= ให้เฉพาะ js/ กับ css/ ที่เป็น path สัมพัทธ์ของเราเอง
    ไม่แตะ CDN ภายนอก และไม่แตะตัวที่มี query string อยู่แล้ว */
+/* §laConfig (2026-10-06) · per-deployment frontend config, injected into the app HTML
+   One commit runs on several deployments (sandbox → operation-backend only, rsvn → legacy), and
+   build:deploy minifies the same bytes for all of them — so these can't be baked into the JS.
+   Railway env:
+     LA_LEGACY_SYNC   true (default) = this deployment has a server.js blob behind /api
+                      false          = never call /api/load, /api/save, /api/events, /api/version
+     OPS_BACKEND_URL  operation-backend origin · unset = the client's built-in default
+   Read by js/01-auth-sync.js as window.LA_CONFIG. Missing (a plain static server) = the client
+   keeps its built-in defaults. `rev` changes whenever the config does. */
+const LA_CONFIG = (() => {
+  const c = {
+    legacySync: !/^(0|false|no|off)$/i.test(String(process.env.LA_LEGACY_SYNC ?? 'true').trim()),
+    opsBackend: String(process.env.OPS_BACKEND_URL || '').trim().replace(/\/+$/, ''),
+  };
+  c.rev = crypto.createHash('sha1').update(JSON.stringify(c)).digest('hex').slice(0, 10);
+  return c;
+})();
+const LA_CONFIG_TAG = '<script>window.LA_CONFIG=' + JSON.stringify(LA_CONFIG).replace(/</g, '\\u003c') + ';</script>';
+console.log('[config] legacySync=' + LA_CONFIG.legacySync + ' opsBackend=' + (LA_CONFIG.opsBackend || '(client default)') + ' rev=' + LA_CONFIG.rev);
 function _laStampAssets(buf){
   const v = _laAssetVer();
   return Buffer.from(String(buf)
     .replace(/(<script\s+src=")(js\/[^"?]+\.js)(")/g, '$1$2?v='+v+'$3')
-    .replace(/(<link\s+rel="stylesheet"\s+href=")(css\/[^"?]+\.css)(")/g, '$1$2?v='+v+'$3'), 'utf8');
+    .replace(/(<link\s+rel="stylesheet"\s+href=")(css\/[^"?]+\.css)(")/g, '$1$2?v='+v+'$3')
+    // §laConfig · ahead of the first <script> (js/10-embed.js) so every script can read it
+    .replace(/<script\b/, () => LA_CONFIG_TAG + '\n<script'), 'utf8');
 }
 const _gzCache = new Map();   // fp -> { etag, br?, gzip? }  (one buffer per encoding)
 // §brotli (2026-07-27): measured on the 4.89MB app HTML —
