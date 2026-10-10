@@ -62,28 +62,57 @@ function bookingV2OpsEnsureMonth(month){
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
 // Recent-booking feed is intentionally requested only by the Dashboard/B2C
-// pages. The list endpoint is newest-first, so pagination stops as soon as it
-// reaches the requested creation-date window instead of loading booking history.
-function bookingV2OpsEnsureRecent(days){
+// pages. Preferred source is GET /v1/bookings/recent (creation-time range +
+// source filter, Bangkok calendar days). Per the backend partial handoff
+// (docs/development/tasks/RECENT_BOOKING_FEED_BACKEND_HANDOFF.md) that route
+// is not final — agent logins currently 404 on it and its cursor is neither
+// signed nor bound to filters — so a 404/405 falls back to the legacy
+// newest-first /v1/bookings paging stopped at the creation-date cutoff.
+// Nothing here restores a boot preload or an all-history download.
+function bookingV2OpsEnsureRecent(days, source){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   days=Math.max(1,+days||7);
-  var now=new Date(), stamp=_opsBookingYMD(now), key='recent|'+stamp+'|'+days;
+  source=(source==='b2c'||source==='b2b')?source:'all';
+  var now=new Date(), stamp=_opsBookingYMD(now);
+  var fromYMD=_opsBookingYMD(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1));
+  var key='recent|'+fromYMD+'|'+stamp+'|'+source;
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
-  var cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1).getTime(), all=[], pages=0, MAX_PAGES=200;
-  function page(cursor){
+  var all=[], pages=0, MAX_PAGES=200;
+  var cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1).getTime();
+  function finish(via){
+    _opsBookingMerge(all); _opsBookingRanges[key]=true;
+    console.log('[opsSync] loaded '+all.length+' recent booking(s) via '+via+' for '+fromYMD+' → '+stamp+' source='+source);
+    return {bookings:all, via:via};
+  }
+  function recentPage(cursor){
+    var qp='created_from='+encodeURIComponent(fromYMD)+'&created_to='+encodeURIComponent(stamp)+'&source='+encodeURIComponent(source)+'&limit=100'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    return window.laOpsFetch('/v1/bookings/recent?'+qp).then(function(r){
+      if(r.status===404||r.status===405){ var e=new Error('recent endpoint unavailable (HTTP '+r.status+')'); e.code='recent_unsupported'; throw e; }
+      return r.ok?r.json():null;
+    }).then(function(j){
+      if(!j || !Array.isArray(j.bookings)) throw new Error('recent booking list did not return bookings');
+      Array.prototype.push.apply(all,j.bookings.map(bookingV2FromOpsBooking));
+      // At exhaustion next_cursor is omitted (not null) — either ends paging.
+      if(j.next_cursor && ++pages<MAX_PAGES) return recentPage(j.next_cursor);
+      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' recent pages; '+fromYMD+' → '+stamp+' is incomplete');
+      return finish('recent');
+    });
+  }
+  function legacyPage(cursor){
     var path='/v1/bookings?limit=100'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
     return window.laOpsFetch(path).then(function(r){ return r.ok?r.json():null; }).then(function(j){
       if(!j || !Array.isArray(j.bookings)) throw new Error('recent booking list did not return bookings');
       var mapped=j.bookings.map(bookingV2FromOpsBooking); Array.prototype.push.apply(all,mapped);
       var oldest=0; mapped.forEach(function(b){ var t=Date.parse(b.createdAt||b.bookingDate||''); if(t && (!oldest||t<oldest)) oldest=t; });
-      if(j.next_cursor && ++pages<MAX_PAGES && (!oldest || oldest>=cutoff)) return page(j.next_cursor);
-      _opsBookingMerge(all); _opsBookingRanges[key]=true;
-      console.log('[opsSync] loaded '+all.length+' recent booking(s) for '+days+' day feed');
-      return {bookings:all};
+      if(j.next_cursor && ++pages<MAX_PAGES && (!oldest || oldest>=cutoff)) return legacyPage(j.next_cursor);
+      return finish('legacy-list');
     });
   }
-  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load recent bookings: '+((e&&e.message)||e)); return null; });
+  var load=recentPage(null).catch(function(e){
+    if(e && e.code==='recent_unsupported'){ all=[]; pages=0; return legacyPage(null); }
+    console.warn('[opsSync] failed to load recent bookings: '+((e&&e.message)||e)); return null;
+  }).catch(function(e){ console.warn('[opsSync] failed to load recent bookings: '+((e&&e.message)||e)); return null; });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
   return _opsBookingRangeLoads[key];
 }
