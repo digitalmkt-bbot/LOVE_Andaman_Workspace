@@ -17,6 +17,7 @@
   var failed = [];
   function step(name, fn){
     return function(){
+      try{ if(window.laOpsBootScreen) window.laOpsBootScreen.show('Loading '+name+'…'); }catch(_){}
       return Promise.resolve().then(fn).catch(function(e){
         failed.push(name);
         try{ console.error('[ops] ' + name + ' failed to load · ' + (e && e.message)); }catch(_){}
@@ -41,7 +42,8 @@
       if(typeof bookingV2OpsResetCache==='function') bookingV2OpsResetCache();
       if(typeof bookingV2OpsAttachWriteInvalidation==='function') bookingV2OpsAttachWriteInvalidation();
     })
-    .then(step('pending approvals', function(){ return O.bookings && O.bookings.loadPending(); }))
+    // Pending approvals are an all-date queue. Load them only when its tab is
+    // opened; doing it here pages up to 2,000 unrelated bookings at every login.
     .then(step('charter cells', function(){ return O.deployments && O.deployments.markCharters(typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []); }))
     .then(function(){
       O.state.loaded = true;
@@ -53,5 +55,8 @@
           sub: failed.join(' · ') + ' · those screens show local data and will not save', dur: 12000 });
       }
       redraw();
+      // Render has been requested; remove the gate on the next frame so users
+      // never see a half-built app after a successful login.
+      requestAnimationFrame(function(){ try{ if(window.laOpsBootScreen) window.laOpsBootScreen.hide(); }catch(_){} });
     });
 })();

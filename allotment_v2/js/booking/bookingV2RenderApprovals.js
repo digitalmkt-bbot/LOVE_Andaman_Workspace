@@ -1,5 +1,11 @@
 // ── Over-capacity Pending-approval queue (manager) ──
 function bookingV2RenderApprovals(){
+  // This is intentionally the only entry point for the all-date approval
+  // queue; loading it at login can page thousands of unrelated bookings.
+  const _approvalLoad=(window.laOps&&window.laOps.bookings&&window.laOps.bookings.ensurePending)?window.laOps.bookings.ensurePending():null;
+  if(_approvalLoad) _approvalLoad.then(function(){
+    if(_bkV2.tab==='approvals' && !_bkV2.newBooking) bookingV2Render();
+  }).catch(function(e){ if(window.laOps&&window.laOps.fail) window.laOps.fail('Pending approvals did not load',e); });
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);

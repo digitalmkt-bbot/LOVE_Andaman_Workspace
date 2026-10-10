@@ -713,8 +713,10 @@
     }catch(_){}
   }, 60000);
 
-  /* ── pending approvals, any date · the boot window would miss one booked for next year ── */
+  /* ── pending approvals, any date · fetched only when the Approvals tab opens ── */
+  var pendingAt=0, pendingBusy=null;
   function loadPending(){
+    if(pendingBusy) return pendingBusy;
     var all = [];
     function page(cursor){
       return O.get('/v1/bookings', { status: 'pending_approval,pending_foc', limit: 100, cursor: cursor }).then(function(j){
@@ -722,15 +724,23 @@
         if(j && j.next_cursor && all.length < 2000) return page(j.next_cursor);
       });
     }
-    return page(null).then(function(){
+    pendingBusy=page(null).then(function(){
       var n = 0; all.forEach(function(ob){ if(upsert(ob)) n++; });
-      if(n) persist();
+      if(n) persist(); pendingAt=Date.now();
       try{ console.log('[ops] pending approvals · ' + all.length); }catch(_){}
-    });
+      return all;
+    }).then(function(v){ pendingBusy=null; return v; },function(e){ pendingBusy=null; throw e; });
+    return pendingBusy;
+  }
+  // Null means fresh/no request; a Promise is either the one in flight or a new refresh.
+  function ensurePending(){
+    if(pendingBusy) return pendingBusy;
+    if(pendingAt && Date.now()-pendingAt<60000) return null;
+    return loadPending();
   }
 
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
   O.bookings = { save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
-                 reload: reload, loadPending: loadPending, refreshDay: refreshDay };
+                 reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
 })();

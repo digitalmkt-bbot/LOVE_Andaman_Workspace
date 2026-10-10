@@ -42572,6 +42572,12 @@ function _ctDocSectionBody(sId, a, rt, lang, fmt){
 // B2C CHANNELS — render
 // ═══════════════════════════════════════════════════════════════
 function renderB2C(){
+  // Direct-sales data is page-owned in operation-backend mode. Load the
+  // recent creation feed only when this screen is opened, then redraw it.
+  const _b2cRecentLoad=(typeof bookingV2OpsEnsureRecent==='function')?bookingV2OpsEnsureRecent(30):null;
+  if(_b2cRecentLoad) _b2cRecentLoad.then(function(j){
+    if(j && document.querySelector('.nav-item.active[data-view="b2c"]')) renderB2C();
+  });
   // KPI
   const channels = SB_B2C.filter(c=>c.type==='channel');
   const campaigns = SB_B2C.filter(c=>c.type==='campaign');

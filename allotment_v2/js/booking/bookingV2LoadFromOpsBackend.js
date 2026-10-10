@@ -61,6 +61,32 @@ function bookingV2OpsEnsureMonth(month){
   var r=_opsBookingMonthRange(month); return bookingV2EnsureOpsRange(r);
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
+// Recent-booking feed is intentionally requested only by the Dashboard/B2C
+// pages. The list endpoint is newest-first, so pagination stops as soon as it
+// reaches the requested creation-date window instead of loading booking history.
+function bookingV2OpsEnsureRecent(days){
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
+  days=Math.max(1,+days||7);
+  var now=new Date(), stamp=_opsBookingYMD(now), key='recent|'+stamp+'|'+days;
+  if(_opsBookingRanges[key]) return null;
+  if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
+  var cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1).getTime(), all=[], pages=0, MAX_PAGES=200;
+  function page(cursor){
+    var path='/v1/bookings?limit=100'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    return window.laOpsFetch(path).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(!j || !Array.isArray(j.bookings)) throw new Error('recent booking list did not return bookings');
+      var mapped=j.bookings.map(bookingV2FromOpsBooking); Array.prototype.push.apply(all,mapped);
+      var oldest=0; mapped.forEach(function(b){ var t=Date.parse(b.createdAt||b.bookingDate||''); if(t && (!oldest||t<oldest)) oldest=t; });
+      if(j.next_cursor && ++pages<MAX_PAGES && (!oldest || oldest>=cutoff)) return page(j.next_cursor);
+      _opsBookingMerge(all); _opsBookingRanges[key]=true;
+      console.log('[opsSync] loaded '+all.length+' recent booking(s) for '+days+' day feed');
+      return {bookings:all};
+    });
+  }
+  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load recent bookings: '+((e&&e.message)||e)); return null; });
+  _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
+  return _opsBookingRangeLoads[key];
+}
 // Compatibility for explicit callers; no default bulk preload is allowed.
 function bookingV2LoadFromOpsBackend(options){
   options=options||{};

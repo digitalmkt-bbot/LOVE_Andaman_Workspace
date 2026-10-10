@@ -103,6 +103,28 @@
     });
   };
 
+  // Full-screen post-login progress. It is intentionally separate from the
+  // legacy /api/load overlay: this deployment boots from operation-backend.
+  window.laOpsBootScreen=(function(){
+    var ID='la-ops-boot-screen';
+    function ready(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn,{once:true}); }
+    function show(message){ ready(function(){
+      var el=document.getElementById(ID);
+      if(!el){
+        el=document.createElement('div'); el.id=ID;
+        el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
+        el.style.cssText='position:fixed;inset:0;z-index:100060;background:linear-gradient(135deg,#0e2235,#14506e 55%,#1f7ea3);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif;text-align:center;padding:24px';
+        el.innerHTML='<div style="max-width:330px"><div style="font-size:42px;margin-bottom:14px">🌊</div><div style="font-size:21px;font-weight:800;letter-spacing:.01em">LOVE Andaman</div><div style="font-size:13px;opacity:.72;margin-top:3px">Allotment Manager</div><div style="width:220px;height:4px;background:rgba(255,255,255,.18);border-radius:99px;overflow:hidden;margin:26px auto 14px"><div style="width:42%;height:100%;background:#8ee5ff;border-radius:inherit;animation:laOpsBootPulse 1.25s ease-in-out infinite"></div></div><div id="la-ops-boot-message" style="font-size:14px;font-weight:600">Loading…</div><button id="la-ops-boot-reload" onclick="location.reload()" style="display:none;margin-top:18px;border:1px solid rgba(255,255,255,.45);border-radius:8px;background:transparent;color:#fff;padding:7px 13px;font:600 12px inherit;cursor:pointer">Reload</button></div>';
+        var st=document.createElement('style'); st.textContent='@keyframes laOpsBootPulse{0%,100%{transform:translateX(-85%)}50%{transform:translateX(200%)}}'; document.head.appendChild(st);
+        document.body.appendChild(el);
+        setTimeout(function(){ var b=document.getElementById('la-ops-boot-reload'); if(b) b.style.display='inline-block'; },15000);
+      }
+      var msg=document.getElementById('la-ops-boot-message'); if(msg) msg.textContent=message||'Loading…';
+    }); }
+    function hide(){ ready(function(){ var el=document.getElementById(ID); if(el) el.remove(); }); }
+    return {show:show,hide:hide};
+  })();
+
   // 1) AUTH (before app init) — presence of an operation-backend token, nothing server.js-side.
   var _opsTok = opsToken();
   if(!_opsTok){ onReady(showLogin); return; }                    // not logged in → login screen, do not load/sync
@@ -118,7 +140,8 @@
   if(_meR.status!==200){ try{ console.warn('[boot] GET /v1/me failed (status '+_meR.status+') · using the user from this tab\'s login'); }catch(e){} }
   else opsRememberUser(_meU);
   ME = opsMeFrom(_meU);
-  window.LA_ME=ME;                                                // expose current user (edit-lock / audit)
+  window.LA_ME=ME;
+  if(!LA_LEGACY_SYNC) window.laOpsBootScreen.show('Preparing your workspace…');                                                // expose current user (edit-lock / audit)
   /* §per-user sidebar (พับ/กางกลุ่มเมนู) · ลองซ้ำจนกว่าเมนูซ้ายจะวาดเสร็จจริง
      (laSbInit ทำงานรอบแรกได้ แต่ตอนนั้นเมนูยังไม่นิ่ง ตัวพับกลุ่มเลยไม่ติด)
      §sbColorGone · เดิมเช็คว่าแถบเลือกสี (#la-sbcolor-sw) โผล่หรือยัง · แถบนั้นถูกตัดออกแล้ว

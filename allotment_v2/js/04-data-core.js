@@ -3289,6 +3289,10 @@ function renderDash(){
      redraws this view after the answer arrives. */
   const _opsDashApi=(window.laOps&&window.laOps.dashboard)?window.laOps.dashboard:null;
   if(_opsDashApi) _opsDashApi.ensure(_ds,'day');
+  // Dashboard-only feed for Bookings/day and Live B2C/B2B. It is newest-first
+  // and stops at the 30-day creation window; it is not a boot preload.
+  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function')?bookingV2OpsEnsureRecent(30):null;
+  if(_dashRecentLoad) _dashRecentLoad.then(function(j){ if(j && typeof renderDash==='function') renderDash(); });
   const _opsDash=_opsDashApi?_opsDashApi.get(_ds,'day'):null;
   const _opsDashState=_opsDashApi?_opsDashApi.status(_ds,'day'):'idle';
   const _dsAt = (offset)=>{
