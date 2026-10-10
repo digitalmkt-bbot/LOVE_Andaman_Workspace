@@ -35,9 +35,12 @@
     .then(step('catalogue', function(){ return O.catalogue && O.catalogue.load(); }))
     .then(step('deployments', function(){ return O.deployments && O.deployments.load(); }))
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
-    .then(step('bookings', function(){
-      return (typeof bookingV2LoadFromOpsBackend === 'function') ? bookingV2LoadFromOpsBackend().then(function(j){ if(!j) throw new Error('no bookings answer'); }) : null;
-    }))
+    .then(function(){
+      // Booking records are page-owned: Calendar loads its visible month and
+      // By-trip its selected day. Never download a 120-day booking blob at boot.
+      if(typeof bookingV2OpsResetCache==='function') bookingV2OpsResetCache();
+      if(typeof bookingV2OpsAttachWriteInvalidation==='function') bookingV2OpsAttachWriteInvalidation();
+    })
     .then(step('pending approvals', function(){ return O.bookings && O.bookings.loadPending(); }))
     .then(step('charter cells', function(){ return O.deployments && O.deployments.markCharters(typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []); }))
     .then(function(){

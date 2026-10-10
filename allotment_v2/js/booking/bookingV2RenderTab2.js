@@ -10,6 +10,12 @@ function bookingV2RenderTab2(){
   const vanMode = !!_bkV2.vanAssignMode;     // Van Assign mode → extra Van column + pickup time + job order
   const rcMode = !!_bkV2.reconfirmMode;      // Re-Confirm mode → extra Re-confirm column
   const date = bookingV2Tab2ActiveDate();
+  // By-trip owns exactly one operational date; it must not trigger a broad
+  // booking-window preload merely to populate this manifest.
+  const dayLoad=typeof bookingV2OpsEnsureDay==='function' ? bookingV2OpsEnsureDay(date) : null;
+  if(dayLoad) dayLoad.then(function(j){
+    if(j && _bkV2.tab==='bytrip' && _bkV2.filterDate===date && !_bkV2.newBooking) bookingV2Render();
+  });
   if(typeof bookingV2CharterBoatHeal==='function') bookingV2CharterBoatHeal(date);   // charter booking → ops.boatId = charterBoatId (assigned to its own boat · §59/§50)
   if(typeof bookingV2HealAltSplits==='function') bookingV2HealAltSplits(date);   // §altPickups · ALWAYS ensure auto van-splits exist for รับหลายจุด bookings (so they render as separate rows here too, not only in Van Assign)
   if(typeof bookingV2HealSelfArrivePickup==='function') bookingV2HealSelfArrivePickup(date);   // §self-arrive · ล้างเวลารับรถที่ค้างเมื่อสลับเป็น No-Transfer (เหลือ default "…at pier")

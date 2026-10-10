@@ -1,9 +1,21 @@
 // ── Tab 3 · All bookings (existing Linear list) ──
 function bookingV2RenderTab3(){
+  // The list is travel-month scoped in operation-backend mode. Its former
+  // all-history source was the boot preload; request only the month staff open.
+  const _initialMonth=_bkV2.month || bookingV2MonthKey(bookingV2LocalYMD(new Date()));
+  if(_initialMonth!=='all' && typeof bookingV2OpsEnsureMonth==='function'){
+    const _monthLoad=bookingV2OpsEnsureMonth(_initialMonth);
+    if(_monthLoad) _monthLoad.then(function(j){
+      if(j && _bkV2.tab==='all' && _bkV2.month===_initialMonth && !_bkV2.newBooking) bookingV2Render();
+    });
+  }
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _srcBookings = (typeof laIsLandRoute!=='function') ? SB_BOOKINGS : SB_BOOKINGS.filter(bk => (bk.schemaVer===2 ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly) : (laIsLandRoute(bk.programId)===_bkV2CityTourOnly)));
-  const all = _srcBookings.map(bookingV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
+  let all = _srcBookings.map(bookingV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
+  // Do not let previously visited months (or the independent approvals load)
+  // turn a month page back into an implicit all-history list.
+  if(window.laOps&&window.laOps.enabled&&window.laOps.enabled() && _initialMonth!=='all') all=all.filter(b=>bookingV2MonthKey(b.travelDate)===_initialMonth);
   const kCount = all.length;
   const kConfirmed = all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"

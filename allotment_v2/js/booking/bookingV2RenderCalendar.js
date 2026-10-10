@@ -3,6 +3,12 @@ function bookingV2RenderCalendar(){
   const cur = _bkV2.cursor;
   const year = cur.getFullYear();
   const month = cur.getMonth();
+  const monthKey = `${year}-${String(month+1).padStart(2,'0')}`;
+  // Page-owned data: only the month currently on screen is requested.
+  const monthLoad=typeof bookingV2OpsEnsureMonth==='function' ? bookingV2OpsEnsureMonth(monthKey) : null;
+  if(monthLoad) monthLoad.then(function(j){
+    if(j && _bkV2.tab==='cal' && !_bkV2.newBooking) bookingV2Render();
+  });
   const agg = bookingV2Aggregate();
   const first = new Date(year, month, 1);
   // Sun-first grid (matches sidebar Calendar): Sun=0 ... Sat=6
