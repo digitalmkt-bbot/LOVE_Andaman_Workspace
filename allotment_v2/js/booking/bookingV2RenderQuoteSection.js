@@ -29,7 +29,7 @@ function bookingV2RenderQuoteSection(){
 
   return `
     <div class="bkv2-nb-sec" style="background:var(--bk-navy-50)">
-      <div class="bkv2-nb-sec-h">&#9679; Quote Summary</div>
+      <div class="bkv2-nb-sec-h">Quote Summary</div>
       <div style="display:grid;grid-template-columns:1fr 130px;gap:6px 14px;font-size:12px;line-height:1.6">
         <div style="color:var(--ink-soft)">Seat rates (${d.trips.filter(t=>t.routeId).length} trip${d.trips.filter(t=>t.routeId).length===1?'':'s'})</div>
         <div style="text-align:right;font-family:Manrope,sans-serif;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums">฿${q.totalSeat.toLocaleString()}</div>

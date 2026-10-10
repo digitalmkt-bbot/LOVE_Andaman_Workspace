@@ -4,9 +4,9 @@ function bookingV2RenderCashOnTourSection(){
   const cot = d.cashOnTour;
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   return `
-    <label style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:${cot?'#FFF6E5':'var(--white)'};border:1px solid ${cot?'#EAD9B0':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
-      <input type="checkbox" ${cot?'checked':''} onchange="bookingV2ToggleCashOnTour(this.checked)" style="accent-color:#ba7517">
-      <span style="font-size:12px;color:${cot?'#633806':'var(--ink)'};font-weight:600">💰 Collect cash on tour</span>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${cot?'#E8F3FB':'#fff'};border:1.5px solid ${cot?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
+      <input type="checkbox" ${cot?'checked':''} onchange="bookingV2ToggleCashOnTour(this.checked)" style="accent-color:#16265C;width:16px;height:16px;margin:0;flex:none">
+      <span style="font-size:13px;color:${cot?'#0B4F7A':'var(--ink)'};font-weight:600">💰 Collect cash on tour</span>
       <span style="font-size:10px;color:var(--ink-soft);margin-left:auto">guide collects from guest on tour day</span>
     </label>
     ${cot ? `
@@ -24,14 +24,14 @@ function bookingV2RenderCashOnTourSection(){
       </div>
       <div style="margin-top:8px">
         <div style="font-size:10px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;margin-bottom:5px">HANDLING</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 11px;background:${cot.handling==='deduct'?'var(--bk-navy-50)':'var(--white)'};border:1px solid ${cot.handling==='deduct'?'var(--bk-navy-mid)':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${cot.handling==='deduct'?'#E8F3FB':'#fff'};border:1.5px solid ${cot.handling==='deduct'?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
             <input type="radio" name="cot-handling" ${cot.handling==='deduct'?'checked':''} onchange="bookingV2SetCashOnTour('handling','deduct')" style="accent-color:var(--bk-navy);margin-top:2px">
-            <div><div style="font-size:11px;font-weight:700;color:${cot.handling==='deduct'?'var(--bk-navy)':'var(--ink)'}">Deduct from invoice</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Reduces total owed by agent</div></div>
+            <div><div style="font-size:13px;font-weight:600;color:${cot.handling==='deduct'?'#0B4F7A':'var(--ink)'}">Deduct from invoice</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Reduces total owed by agent</div></div>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 11px;background:${cot.handling==='separate'?'var(--bk-navy-50)':'var(--white)'};border:1px solid ${cot.handling==='separate'?'var(--bk-navy-mid)':'var(--border)'};border-radius:var(--r-sm);cursor:pointer">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${cot.handling==='separate'?'#E8F3FB':'#fff'};border:1.5px solid ${cot.handling==='separate'?'#1272B3':'#C9CCD6'};border-radius:10px;cursor:pointer">
             <input type="radio" name="cot-handling" ${cot.handling==='separate'?'checked':''} onchange="bookingV2SetCashOnTour('handling','separate')" style="accent-color:var(--bk-navy);margin-top:2px">
-            <div><div style="font-size:11px;font-weight:700;color:${cot.handling==='separate'?'var(--bk-navy)':'var(--ink)'}">Keep separate</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Full invoice still owed</div></div>
+            <div><div style="font-size:13px;font-weight:600;color:${cot.handling==='separate'?'#0B4F7A':'var(--ink)'}">Keep separate</div><div style="font-size:9px;color:var(--ink-soft);margin-top:1px">Full invoice still owed</div></div>
           </label>
         </div>
       </div>

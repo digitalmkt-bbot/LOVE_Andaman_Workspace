@@ -12,14 +12,14 @@ function bookingV2RenderPaymentSection(){
 
   return `
     <div class="bkv2-nb-sec">
-      <div class="bkv2-nb-sec-h">&#9679; Payment &amp; Cash on Tour <span style="background:var(--sand-mid);color:var(--ink-soft);font-size:9px;padding:1px 7px;border-radius:3px;letter-spacing:.06em;margin-left:6px">FROM CONTRACT</span></div>
+      <div class="bkv2-nb-sec-h">Payment &amp; Cash on Tour <span style="background:var(--sand-mid);color:var(--ink-soft);font-size:9px;padding:1px 7px;border-radius:3px;letter-spacing:.06em;margin-left:6px">FROM CONTRACT</span></div>
       <div style="background:var(--bk-navy-50);border:1px solid var(--bk-navy-light);border-radius:var(--r-sm);padding:11px 14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:3px">
           <span>${method}${netDays?` &middot; Net ${netDays}`:''}</span>
           <span style="font-family:'DM Mono',monospace;color:var(--bk-navy)">${escapeHTML(agent.contractVersion||'no contract')}</span>
         </div>
         <div style="font-size:10px;color:var(--ink-soft);font-family:'DM Mono',monospace">
-          ${limit?`Credit limit ฿${limit.toLocaleString()} · used ฿${balance.toLocaleString()} · available ฿${Math.max(0,limit-balance).toLocaleString()}`:'No credit limit set'}
+          ${limit?`Credit limit ฿${limit.toLocaleString()} · used ฿${balance.toLocaleString()} · available ฿${Math.max(0,limit-balance).toLocaleString()}`:'No credit limit set'}${(limit && agent.payType==='invoice' && !_bkV2.editingId)?(function(){ var g=0; try{ g=Number(bookingV2CalcQuote().grandTotal)||0; }catch(_){ g=0; } var left=limit-balance-g; return g>0?` · after this booking <b style="color:${left<0?'#8E2019':'#0B5A43'}">${left<0?'&minus;':''}฿${Math.abs(left).toLocaleString()}</b>${left<0?' (over the limit)':''}`:''; })():''}
         </div>
       </div>
       <div style="height:1px;background:var(--border);margin:0 0 12px"></div>

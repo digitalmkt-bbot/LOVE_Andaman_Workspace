@@ -1,4 +1,4 @@
-function bookingV2VoucherTicket(bk, esc){
+function bookingV2VoucherTicket(bk, esc, part){
   esc = esc || (s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]));
   const NAVY='#16265C', CYAN='#4FA9DC', ROW='#F2F3F5', MUT='#7C8091', RED='#E0232A';
   const trips=(bk.trips||[]), t0=trips[0]||{}, dsFirst=t0.date||'';
@@ -257,6 +257,7 @@ function bookingV2VoucherTicket(bk, esc){
     }
   }catch(_){}
 
+  if(part==='pay') return payHtml+lostHtml;   /* §vc2 · staff payment strip only */
   return '<div class="bkv2-vcdoc">'
   /* §vcSkin · หัวบริษัทมีเส้นคั่นหนา · แยกส่วนหัวออกจากเนื้อใบให้ชัด */
   + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;'

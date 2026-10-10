@@ -1250,7 +1250,9 @@ function bookingV2RenderTab2(){
                 const st=(o.raw?'background:#F4F3EF;color:#8A887F;font-style:italic':'')
                        + (o.lend?(o.raw?';opacity:.8':'opacity:.62;font-style:italic'):'');
                 const ti=[o.raw?_raw:'', o.lend?_lend:''].filter(Boolean).join(' · ');
-                return `<span class="t2-zonetag"${o.lend?' data-lend="1"':''}${st?` style="${st}"`:''} title="${ti||esc(t)}">${esc(t)}</span>`; };   /* §btClip */
+                /* §zoneSlim · "Tub Lamu Pier (self-arrive)" → "Tub Lamu Pier" บนจอ · ชื่อเต็มยังอยู่ใน title */
+                const _tv=String(t||'').replace(/\s*\((?:self[- ]?arrive|มาเอง)[^)]*\)\s*$/i,'') || t;
+                return `<span class="t2-zonetag"${o.lend?' data-lend="1"':''}${st?` style="${st}"`:''} title="${ti||esc(t)}">${esc(_tv)}</span>`; };   /* §btClip */
               const _dash='<span class="t2-dim">&mdash;</span>';
               if(a.split && a.pick && !a.pick.main){
                 const _sa=(a.pick.areaId&&typeof bookingV2GetArea==='function')?bookingV2GetArea(a.pick.areaId):null;
@@ -1273,7 +1275,7 @@ function bookingV2RenderTab2(){
               if(!_rw) return _zp(_dash);
               return _zp(_zt(_rw, { raw:true }));
             })()}</td>
-            <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
+            <td class="t2-sbk">${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bookingV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bookingV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
               ${_movedBadge}
@@ -1422,8 +1424,12 @@ function bookingV2RenderTab2(){
                โหมดจัดรถไม่มีช่องนั้น ปุ่มจึงไปอยู่ช่อง Boat แทน ซึ่งใบรออนุมัติยังไม่มีเรือ */
             + (vanMode?'':`<td><span class="pnhold${held?'':' no'}" title="${held?laT('ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป'):laT('ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้')}">${held?'&#128274; '+laT('กันที่นั่งไว้'):laT('ไม่กันที่นั่ง')}</span></td>`
                         + `<td class="t2-r t2-mono">&#3647;${bookingV2FmtTHB(r.subtotal)}</td>`
-                        + `<td class="t2-c"><div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bookingV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest')}">&#10003; ${laT('อนุมัติ')}</button></div></td>`)
-            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bookingV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ')}">&#10003;</button></div>`:_pdash}</td>`
+                        /* §pnActFit (2026-10-08) · "ช่องเมเนจของ B2C โดนตัด" · ปุ่ม View + อนุมัติ ถูกยัดในช่อง VC ซึ่งกว้าง 48px
+                           (§btAlign ตรึงความกว้าง + td overflow:hidden) ปุ่มเลยล้นออกสองข้างและโดนตัด เห็นแค่ "✓ App"
+                           แยกกัน · ช่อง VC ใช้ปุ่ม VC แบบเดียวกับแถวคนจริง · ปุ่มอนุมัติไปอยู่ช่อง Boat (96px) ซึ่งใบรออนุมัติยังไม่มีเรือ */
+                        + `<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด')}" aria-label="Voucher">VC</button></td>`)
+            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bookingV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ')}">&#10003;</button></div>`
+                : `<div class="pnacts"><button class="pnbtn ok pnapp" onclick="event.stopPropagation();bookingV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest')}">&#10003; ${laT('อนุมัติ')}</button></div>`}</td>`
             + (rcMode?`<td class="t2-c">${_pdash}</td>`:'')
             + (wxClosed?`<td class="t2-c">${_pdash}</td>`:'')
             + `</tr>`;
@@ -1606,7 +1612,11 @@ function bookingV2RenderTab2(){
       + _c(40) + _c(46) + _c(42) + _c(46)                    /* AD CHD INF FOC */
       + _c(104)                                              /* Time · ต้องพอกับ "07:45-08:00" เต็ม · ชุดข้อมูลทดสอบไม่มีเวลารับ รอบแรกจึงตั้งแคบไป */
       + (vanMode ? _c(150) : '')                             /* กลุ่ม */
-      + _c(200) + _c(58) + _c(116) + _c(90)                  /* Pickup · Room · Zone · Send back */
+      /* §sbkFit (2026-10-08) · "ช่อง Send back อันนี้ด้วย" · 90px ไม่พอให้ป้าย "⚠ ยังไม่จัดรถกลับ" กับ "↩ กลับคันเดิม (เปิด Van)"
+         ป้ายโดนตัดครึ่ง · ยืมจาก Pickup (ข้อความยาวตัดบรรทัดได้อยู่แล้ว) กับ Room (เลขห้องสั้น) · ความกว้างรวมเท่าเดิม */
+      /* §zoneSlim (2026-10-08) · "Zone บีบให้แคบลงได้อีก · Own transport โชว์ถึงคำว่า Pier ก็ได้ · เพื่อมีที่ให้ Send back"
+         Zone 116 → 96 · ชื่อพื้นที่ยาวสุดที่ใช้จริงคือ "Tub Lamu Pier" (ตัด "(self-arrive)" ออกตอนโชว์) · Send back 128 → 148 */
+      + _c(172) + _c(50) + _c(96) + _c(148)                  /* Pickup · Room · Zone · Send back */
       + (vanMode ? '' : _c(74))                              /* Add-on */
       + _c(128)                                              /* Special request */
       + (vanMode ? '' : _c(86) + _c(94) + _c(48))            /* Pay · Total · (VC) · Total เผื่อยอดหลักล้าน */
@@ -2593,17 +2603,23 @@ function bookingV2RenderTab2(){
          1. ตัดได้ แต่ต้องมีจุดไข่ปลา + title เสมอ · คนอ่านต้องรู้ว่ายังมีต่อ และตามต่อได้
          2. ตัวเลขเงินห้ามตัดเด็ดขาด · "ค้าง ฿3,200" ที่เหลือ "ค้าง ฿3" คือเลขคนละตัว
             ให้ตกบรรทัดแทน และมัดคำกับตัวเลขไว้ด้วยกันแยกบรรทัด                        */
-    .t2-zonetag{max-width:min(104px,100%);overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
+    .t2-zonetag{max-width:100%;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
     .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
+    /* §zoneSlim · คอลัมน์ Zone แคบลงเหลือ 96 · ชื่อท่ายาว ("Grand Andaman Pier", "Visit Panwa Pier") ขึ้นสองบรรทัดแทนการตัด … */
+    .t2-mtbl td .t2-zonetag{white-space:normal;line-height:1.25}
     .t2-zonepick{cursor:pointer;display:inline-block;max-width:100%;border-bottom:1px dashed transparent}
     .t2-zonepick:hover{border-bottom-color:#2F4E77}
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:transparent;border-radius:0;padding:0;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    /* §sbkFit · ป้ายในช่อง Send back ตัดบรรทัดได้ แทนที่จะล้นแล้วโดนตัด · ชื่อโรงแรมยังตัดด้วย … (มี title) */
+    .t2-mtbl td.t2-sbk{white-space:normal}
+    .t2-mtbl td.t2-sbk .t2-sb{max-width:100%}
+    .t2-mtbl td.t2-sbk .t2-rb{white-space:normal !important;display:inline-block;max-width:100%;box-sizing:border-box;line-height:1.3;margin-top:2px}
     /* §pickW · Special request มีข้อความจริงแค่ 131 ใบจาก 3,205 (4%) แต่กินที่ 196px ทุกตาราง
        บีบเหลือ 150px แล้วยกที่ให้ชื่อจุดรับที่ต้องอ่านทุกแถว
        ชดเชยด้วยการเพิ่มจาก 2 เป็น 3 บรรทัด — แคบลงแต่ยังเห็นข้อความเท่าเดิม

@@ -43,7 +43,7 @@ function bookingV2RenderReviewPanel(){
       ? `<span style="background:#F4E8FB;color:#6B289A;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.04em">CHARTER${sub.boatName?' · '+escapeHTML(sub.boatName):''}</span>`
       : '';
     return `
-      <div style="padding:6px 0;border-bottom:1px solid #f5f3ef;font-size:11px;line-height:1.4">
+      <div style="padding:6px 0 6px 10px;border-left:4px solid ${(typeof tsRouteColor==='function') ? tsRouteColor(t.routeId) : '#C9CCD6'};border-bottom:1px solid #f5f3ef;font-size:11px;line-height:1.4;margin-top:4px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px">
           <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)" title="${escapeHTML(route?.name||t.routeId)}">${i+1}. ${escapeHTML(route?.name||t.routeId)}</div>
           ${(function(){ /* §b2cEdit · ใบ B2C ยอดรายทริปเป็นของจริง ไม่ต้องขีดฆ่า */
@@ -53,7 +53,7 @@ function bookingV2RenderReviewPanel(){
           })()}
         </div>
         <div style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
-          <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${t.date ? escapeHTML(t.date) : '<span style="color:#a32d2d">no date</span>'}</span>
+          <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${t.date ? escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date)) : '<span style="color:#a32d2d">no date</span>'}</span>
           <span style="color:var(--ink-soft)">&middot;</span>
           <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${tp} pax</span>
           <span style="font-size:9px;font-weight:600;color:var(--ink-soft);background:#efece6;padding:1px 6px;border-radius:4px;letter-spacing:.02em">${escapeHTML(t.zone)}</span>
@@ -97,11 +97,11 @@ function bookingV2RenderReviewPanel(){
 
   // Cash on Tour
   const cotHtml = d.cashOnTour ? `
-    <div class="rv-section" style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:var(--r-sm);padding:6px 9px;margin-top:8px">
-      <div style="font-size:9px;color:#633806;font-weight:700;letter-spacing:.06em">💰 CASH ON TOUR</div>
-      <div id="bkv2-cot-rv-amt" style="font-size:11px;color:#633806;font-weight:700;margin-top:2px;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${escapeHTML(d.cashOnTour.currency||'THB')} ${(d.cashOnTour.amount||0).toLocaleString()}</div>
-      <div style="font-size:9px;color:#633806;margin-top:1px">${d.cashOnTour.handling === 'deduct' ? 'Deduct from invoice' : 'Keep separate'}</div>
-      <div id="bkv2-cot-rv-note" style="font-size:9.5px;color:#7a5a14;margin-top:3px;line-height:1.35;border-top:1px dashed #EAD9B0;padding-top:3px;display:${(d.cashOnTour.note||'').trim()?'block':'none'}">${(d.cashOnTour.note||'').trim()?'📝 '+escapeHTML(d.cashOnTour.note):''}</div>
+    <div class="rv-section">
+      <div class="rv-lab">Cash on tour</div>
+      <div id="bkv2-cot-rv-amt" style="font-size:14px;color:#0F1B3D;font-weight:500;font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums">${escapeHTML(d.cashOnTour.currency||'THB')} ${(d.cashOnTour.amount||0).toLocaleString()}</div>
+      <div class="rv-sub">${d.cashOnTour.handling === 'deduct' ? 'Deduct from invoice' : 'Keep separate'}</div>
+      <div id="bkv2-cot-rv-note" style="font-size:12px;color:#5B6170;margin-top:2px;line-height:1.35;display:${(d.cashOnTour.note||'').trim()?'block':'none'}">${(d.cashOnTour.note||'').trim()?'📝 '+escapeHTML(d.cashOnTour.note):''}</div>
     </div>
   ` : '';
 
@@ -183,8 +183,8 @@ function bookingV2RenderReviewPanel(){
             <div class="rv-lab">Adjustments</div>
             ${rows}
             <div style="display:flex;gap:7px;margin-top:7px">
-              <button onclick="bookingV2AddAdjustment('discount')" style="font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ Discount</button>
-              <button onclick="bookingV2AddAdjustment('extra')" style="font-size:11px;font-weight:600;color:#0F7A5A;background:#E1F5EE;border:1px solid #B8E5D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ Extra charge</button>
+              <button onclick="bookingV2AddAdjustment('discount')" style="font-size:12px;font-weight:600;color:#0F1B3D;background:#fff;border:1px solid #CFCFC8;border-radius:8px;height:30px;padding:0 10px;cursor:pointer;font-family:inherit">+ Discount</button>
+              <button onclick="bookingV2AddAdjustment('extra')" style="font-size:12px;font-weight:600;color:#0F1B3D;background:#fff;border:1px solid #CFCFC8;border-radius:8px;height:30px;padding:0 10px;cursor:pointer;font-family:inherit">+ Extra charge</button>
             </div>
           </div>`;
       })()}
@@ -198,7 +198,7 @@ function bookingV2RenderReviewPanel(){
         <span class="rv-total-lab">QUOTE TOTAL</span>
         <span class="rv-total-amt">฿${q.grandTotal.toLocaleString()}</span>
       </div>
-      ${q.totalFoc > 0 ? `<div style="font-size:10px;color:#A05A1A;margin-top:6px;text-align:center;font-style:italic">${q.totalFoc} FOC · ฿${q.focDiscount.toLocaleString()} forgone</div>` : ''}
+      ${q.totalFoc > 0 ? `<div style="font-size:12px;color:#5B6170;margin-top:2px;text-align:right">${q.totalFoc} FOC · ฿${q.focDiscount.toLocaleString()} forgone</div>` : ''}
     </div>
   `;
 }

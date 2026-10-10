@@ -319,6 +319,25 @@
       .fl-gtabs button:hover{background:#fff}
       .fl-gtabs button.on,.fl-gtabs button.on:hover{background:#16265C;color:#fff}
     </style>
+    <!-- §flWork3 (2026-10-08) · Job Assignment, Maintenance and Projects now open from tabs inside Fleet Work.
+         Hidden items sit BEFORE the group head (same rule as §flNavMerge). -->
+    <div class="nav-item fl-merged" data-view="fl-projects" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/><path d="M9 9h6M9 13h4"/></svg>
+      Projects
+    </div>
+    <div class="nav-item fl-merged" data-view="fl-maintenance" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+      Maintenance
+    </div>
+    <div class="nav-item fl-merged" data-view="fl-incident" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+      Job Assignment
+    </div>
+    <!-- §flWork · the whole repair flow on one page (phase 1 read-only) -->
+    <div class="nav-item" data-view="fl-work" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+      Fleet Work
+    </div>
     <div class="nav-item" data-view="fl-dashboard" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       FL Dashboard
@@ -335,18 +354,6 @@
     <div class="nav-item" data-view="fl-dailyreport" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
       Daily Fleet Log
-    </div>
-    <div class="nav-item" data-view="fl-incident" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
-      Job Assignment
-    </div>
-    <div class="nav-item" data-view="fl-projects" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/><path d="M9 9h6M9 13h4"/></svg>
-      Projects
-    </div>
-    <div class="nav-item" data-view="fl-maintenance" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-      Maintenance
     </div>
     <div class="nav-item fl-merged" data-view="fl-consumables" onclick="nav(this)" style="border-left:2px solid rgba(255,190,80,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14l-1 7H6L5 3z"/><path d="M6 10v9a2 2 0 002 2h8a2 2 0 002-2v-9"/><path d="M10 14h4"/></svg>
@@ -1171,6 +1178,12 @@
     </div>
 
     <!-- ══════════ FL INCIDENT ══════════ -->
+    <!-- ══════════ FL WORK (§flWork) ══════════ -->
+    <div id="view-fl-work" class="view">
+      <div class="page-hd"><div><h1>Fleet Work</h1><p>Every open problem, job and bill, by boat</p></div></div>
+      <div id="fl-work-wrap"></div>
+    </div>
+
     <div id="view-fl-incident" class="view">
       <div class="page-hd"><div><h1>Job Assignment</h1><p>Incidents · Tracking · Linked Maintenance</p></div></div>
       <div id="fl-inc-pink-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>
@@ -3780,6 +3793,9 @@
 <script src="js/booking/bookingV2B2CClose.js"></script>
 <script src="js/booking/bookingV2B2COpen.js"></script>
 <script src="js/booking/bookingV2B2CGo.js"></script>
+<script src="js/booking/bookingV2AgentDDStats.js"></script>
+<script src="js/booking/bookingV2AgentDDWhen.js"></script>
+<script src="js/booking/bookingV2NbRefreshSide.js"></script>
 <script src="js/09-action-board.js?v=7a8214eb"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=e7b2d52f"></script>

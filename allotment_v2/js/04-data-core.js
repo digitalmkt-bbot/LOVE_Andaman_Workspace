@@ -1008,6 +1008,8 @@ function laSbInit(){
    Two menu entries stand for several pages; the pages themselves are unchanged and get a tab strip in their header.
    Per-page permissions still apply: the menu entry opens the first page the user may see, tabs list only allowed pages. */
 var FL_NAV_GROUPS=[
+  /* §flWork3 · the repair flow · Fleet Work is the front page, the three old pages are its tabs */
+  {k:'work',label:'Fleet Work',views:['fl-work','fl-incident','fl-maintenance','fl-projects'],tabs:['Overview','Job Assignment','Maintenance','Projects']},
   {k:'stock',label:'Stock',views:['fl-inventory','fl-consumables'],tabs:['Inventory / Memo','Supplies / Fuel']},
   {k:'analytics',label:'Analytics',views:['fl-cost','fl-insights','fl-fuel'],tabs:['Cost','Insights','Fuel']}
 ];
@@ -1061,6 +1063,7 @@ function nav(el){
   if(view.startsWith('fl-')){
     const flView=view.replace('fl-','');
     if(flView==='deployment') flRenderDeployment();          /* §flDeploy */
+    else if(flView==='work'){ if(typeof flRenderWork==='function') flRenderWork(); }   /* §flWork */
     else if(flView==='boatstatus') renderBoats();
     else if(flView==='dashboard') flRenderDashboard();
     else if(flView==='dailyreport') flRenderDR();

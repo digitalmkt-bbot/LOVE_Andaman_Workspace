@@ -20,6 +20,6 @@ function bookingV2SetBookingField(key, val){
     if(guess) _bkV2.newBooking.leadNationality = guess;
   }
   // Text-input keys · update state but don't re-render (preserves focus)
-  if(_BKV2_NO_RENDER_KEYS.has(key)) return;
+  if(_BKV2_NO_RENDER_KEYS.has(key)){ bookingV2NbRefreshSide(); return; }   /* §nbSideLive · ชื่อลูกค้าก็เป็นเงื่อนไขของปุ่ม */
   bookingV2Render();
 }

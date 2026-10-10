@@ -660,6 +660,9 @@
     "bkV2B2CAfter": "allotment_v2/js/booking/bookingV2B2CAfter.js",
     "bkV2B2CClose": "allotment_v2/js/booking/bookingV2B2CClose.js",
     "bkV2B2COpen": "allotment_v2/js/booking/bookingV2B2COpen.js",
-    "bkV2B2CGo": "allotment_v2/js/booking/bookingV2B2CGo.js"
+    "bkV2B2CGo": "allotment_v2/js/booking/bookingV2B2CGo.js",
+    "bkV2AgentDDStats": "allotment_v2/js/booking/bookingV2AgentDDStats.js",
+    "bkV2AgentDDWhen": "allotment_v2/js/booking/bookingV2AgentDDWhen.js",
+    "bkV2NbRefreshSide": "allotment_v2/js/booking/bookingV2NbRefreshSide.js"
   }
 }
