@@ -23,6 +23,7 @@ function _opsBookingMerge(mapped){
 }
 function bookingV2OpsResetCache(){
   _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null);
+  delete window._opsAllStats; delete window._opsAllMonthCounts;
   if(typeof SB_BOOKINGS!=='undefined') SB_BOOKINGS.length=0;
 }
 /* Return null when this complete range is cached; otherwise return its one
@@ -62,25 +63,32 @@ function bookingV2OpsEnsureMonth(month){
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
 function bookingV2OpsEnsureAll(){
-  // Load all bookings from the backend — no date filter — so 'All time' on the
-  // All-bookings tab sees every record, matching the lk-inbox behavior where
-  // SB_BOOKINGS is populated by /api/load.
+  // Lightweight All-time summary: use stats + month-counts + first page of bookings.
+  // Not the whole database — the backend returns aggregates and 50 recent records.
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   var key='all';
-  if(_opsBookingRanges[key] || _opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key]||null;
-  var all=[];
-  function page(cursor){
-    var path='/v1/bookings?limit=5000'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
-    return window.laOpsFetch(path).then(function(r){ return r.ok?r.json():null; }).then(function(j){
-      if(!j || !Array.isArray(j.bookings)) throw new Error('all-time booking list did not return bookings');
-      Array.prototype.push.apply(all,j.bookings.map(bookingV2FromOpsBooking));
-      if(j.next_cursor) return page(j.next_cursor);
-      _opsBookingMerge(all); _opsBookingRanges[key]=true;
-      console.log('[opsSync] loaded all '+all.length+' booking(s) for All-time view');
-      return {bookings:all};
+  if(_opsBookingRanges[key]) return null;
+  if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
+  function fetchStats(){ return window.laOpsFetch('/v1/bookings/stats').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllStats=j; }); }
+  function fetchMonthCounts(){ return window.laOpsFetch('/v1/bookings/month-counts').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllMonthCounts=j; }); }
+  function fetchFirstPage(){
+    return window.laOpsFetch('/v1/bookings?limit=50&order=desc').then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(j && Array.isArray(j.bookings)){
+        var mapped=j.bookings.map(bookingV2FromOpsBooking);
+        // Replace SB_BOOKINGS with only these 50 records for the list display
+        if(typeof SB_BOOKINGS!=='undefined'){ SB_BOOKINGS.length=0; mapped.forEach(function(b){ SB_BOOKINGS.push(b); }); }
+      }
     });
   }
-  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load all bookings: '+((e&&e.message)||e)); return null; });
+  var load=Promise.all([fetchStats(), fetchMonthCounts(), fetchFirstPage()]).then(function(){
+    _opsBookingRanges[key]=true;
+    console.log('[opsSync] loaded all-time stats from operation-backend');
+    return {stats:window._opsAllStats, monthCounts:window._opsAllMonthCounts};
+  }).catch(function(e){
+    console.warn('[opsSync] failed to load all-time summary: '+((e&&e.message)||e));
+    _opsBookingRanges[key]=true;  // mark done even on error so we don't keep retrying
+    return null;
+  });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
   return _opsBookingRangeLoads[key];
 }
@@ -153,5 +161,6 @@ function bookingV2OpsAttachWriteInvalidation(){
     // A write can move a booking between any cached day/month. Keep entities,
     // but revalidate query membership next time that date/month is opened.
     _opsBookingRanges=Object.create(null);
+    delete window._opsAllStats; delete window._opsAllMonthCounts;
   });
 }

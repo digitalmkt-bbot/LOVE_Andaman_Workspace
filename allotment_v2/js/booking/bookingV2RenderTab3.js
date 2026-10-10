@@ -9,9 +9,8 @@ function bookingV2RenderTab3(){
       if(j && _bkV2.tab==='all' && _bkV2.month===_initialMonth && !_bkV2.newBooking) bookingV2Render();
     });
   }
-  // In operation-backend mode, 'All time' loads ALL bookings on demand — match
-  // lk-inbox where SB_BOOKINGS has everything from /api/load. Detect whether the
-  // all-data load is pending or the cache is already populated.
+  // In operation-backend mode, 'All time' loads lightweight aggregates (stats + month-counts + 50 recent
+  // records) rather than the entire database. Detect whether the load is pending or cached.
   var _opsAllLoading=false, _opsAllCached=false;
   try{
     if(window.LA_LEGACY_UNAVAILABLE && _initialMonth==='all'){
@@ -34,23 +33,27 @@ function bookingV2RenderTab3(){
   if(window.laOps&&window.laOps.enabled&&window.laOps.enabled() && _initialMonth!=='all') all=all.filter(b=>bookingV2MonthKey(b.travelDate)===_initialMonth);
   // When viewing 'All time' in ops mode, SB_BOOKINGS may still be loading.
   // Show a loading state instead of the per-month count.
+  const _opsIsAllTime = window.LA_LEGACY_UNAVAILABLE && _initialMonth==='all';
   const _opsAllLoadingDisplay = _opsAllLoading ? '\u2026' : null;
-  const kCount = _opsAllLoadingDisplay ? _opsAllLoadingDisplay : all.length;
-  const kConfirmed = all.filter(b=>b.status==='confirmed').length;
+  // Use API stats when loaded, else fall back to local SB_BOOKINGS counts
+  const _UseStats = _opsAllCached && !!window._opsAllStats;
+  const _Stats = _UseStats ? window._opsAllStats : null;
+  const kCount = _opsAllLoadingDisplay ? _opsAllLoadingDisplay : (_Stats ? _Stats.total : all.length);
+  const kConfirmed = _Stats ? (_Stats.by_status.confirmed||0) : all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
   const isPendingFoc = b => b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status);
-  const kPendingFoc = all.filter(isPendingFoc).length;
-  const kQuote = all.filter(b=>b.status==='quote').length;
-  const kConfirmedRev = all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);
+  const kPendingFoc = _Stats ? (_Stats.by_status.pending_foc||0) : all.filter(isPendingFoc).length;
+  const kQuote = _Stats ? (_Stats.by_status.quote||0) : all.filter(b=>b.status==='quote').length;
+  const kConfirmedRev = _Stats ? _Stats.confirmed_revenue : all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);
   const q = (_bkV2.search||'').toLowerCase().trim();
-  const kB2C = all.filter(b=>b.id.startsWith('b2c_')).length;
+  const kB2C = _Stats ? _Stats.b2c_count : all.filter(b=>b.id.startsWith('b2c_')).length;
   // These are computed from the loaded data (like lk-inbox). When 'All time' is
   // still loading, the KPIs show '\u2026' via kCount; pills show actual counts
   // from whatever SB_BOOKINGS already has so they are never blank.
-  const kCompleted = all.filter(b=>b.status==='completed').length;
-  const kRejected = all.filter(b=>b.status==='rejected').length;
+  const kCompleted = _Stats ? (_Stats.by_status.completed||0) : all.filter(b=>b.status==='completed').length;
+  const kRejected = _Stats ? (_Stats.by_status.rejected||0) : all.filter(b=>b.status==='rejected').length;
   // Label for the Total KPI footer
-  const _opsAllLabel = _opsAllLoading ? 'Loading\u2026' : (_opsAllCached ? 'all time' :
+  const _opsAllLabel = _opsAllLoading ? 'Loading\u2026' : (_UseStats ? 'all time' :
     (window.laOps&&window.laOps.enabled&&window.laOps.enabled()&&_initialMonth!=='all' ? bookingV2MonthLabel(_initialMonth) : 'all time'));
   // §bkMonthPage · everything EXCEPT the month cut · the month chips count these, so their numbers always
   // reflect the status pill you are actually on rather than an all-time total.
@@ -65,7 +68,7 @@ function bookingV2RenderTab3(){
     return true;
   });
   const pills = [
-    {k:'all', label:'All', n:all.length},
+    {k:'all', label:'All', n:_Stats ? _Stats.total : all.length},
     {k:'b2c', label:'B2C', n:kB2C},
     {k:'quote', label:'Quote', n:kQuote},
     {k:'pending_foc', label:'Pending FOC', n:kPendingFoc},
@@ -77,12 +80,21 @@ function bookingV2RenderTab3(){
   // §bkMonthPage (2026-09-03) · the list is paginated by TRAVEL MONTH, not by page number — "‹ September 2026 ›"
   // is what staff actually think in, and it survives new bookings landing at the top (a numbered page silently
   // reshuffles under you when the data grows; a month does not).
-  const monthCounts = new Map();
-  for(const b of preMonth){ const k = bookingV2MonthKey(b.travelDate); if(k) monthCounts.set(k, (monthCounts.get(k)||0)+1); }
-  const months = [...monthCounts.keys()].sort().reverse();            // newest month first · drives the chip strip
-  // Calendar span of ALL data (not just months that survived the filter) so ‹ › can step across a quiet month.
-  const spanMonths = [...new Set(all.map(b => bookingV2MonthKey(b.travelDate)).filter(Boolean))].sort();
-  const monthMin = spanMonths[0] || '', monthMax = spanMonths[spanMonths.length-1] || '';
+  // In ops all-time mode, month counts come from the API (avoids sending the whole database).
+  const _UseMonthCounts = _opsAllCached && !!window._opsAllMonthCounts && _opsIsAllTime;
+  const _ApiMonths = _UseMonthCounts ? window._opsAllMonthCounts.months : null;
+  var monthCounts, months, spanMonths, monthMin, monthMax;
+  if(_ApiMonths){
+    monthCounts = new Map(); _ApiMonths.forEach(function(m){ monthCounts.set(m.month, m.count); });
+    months = _ApiMonths.map(m=>m.month).sort().reverse();
+    spanMonths = _ApiMonths.map(m=>m.month).filter(Boolean).sort();
+  }else{
+    monthCounts = new Map();
+    for(const b of preMonth){ var k=bookingV2MonthKey(b.travelDate); if(k) monthCounts.set(k, (monthCounts.get(k)||0)+1); }
+    months = [...monthCounts.keys()].sort().reverse();
+    spanMonths = [...new Set(all.map(b => bookingV2MonthKey(b.travelDate)).filter(Boolean))].sort();
+  }
+  monthMin = spanMonths[0] || ''; monthMax = spanMonths[spanMonths.length-1] || '';
   const thisMonth = bookingV2MonthKey(bookingV2LocalYMD(new Date()));
   let month = _bkV2.month || (monthCounts.has(thisMonth) ? thisMonth : (months[0] || thisMonth));
   if(!q) _bkV2.month = month;    // remember the browsed month — but never let a search overwrite it
@@ -115,7 +127,7 @@ function bookingV2RenderTab3(){
       ${pills.map(p => `<span class="bkv2-pill ${_bkV2.statusFilter===p.k?'on':''}" data-st="${p.k}" onclick="bookingV2SetFilter('${p.k}')"><span class="dot"></span>${p.label} &middot; ${p.n}</span>`).join('')}
       <input class="bkv2-search" id="bkv2-search-input" placeholder="ค้นหา &middot; VC &middot; ชื่อลูกค้า &middot; เบอร์ &middot; BK &middot; agent &middot; trip" value="${escapeHTML(_bkV2.search)}" oninput="bookingV2SetSearch(this.value)">
     </div>
-    ${bookingV2MonthBarHtml({month, months, monthCounts, monthMin, monthMax, allTotal: preMonth.length, searching: !!q})}
+    ${bookingV2MonthBarHtml({month, months, monthCounts, monthMin, monthMax, allTotal: _Stats ? _Stats.total : preMonth.length, searching: !!q})}
     ${filtered.length === 0 ? `
       <div class="bkv2-empty">
         <div class="ttl">${q ? 'No bookings match' : `No trips in ${bookingV2MonthLabel(month)}`}</div>
