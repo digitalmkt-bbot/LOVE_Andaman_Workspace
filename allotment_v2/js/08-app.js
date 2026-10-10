@@ -44890,7 +44890,8 @@ function _bkV2CalcQuoteRun(){
 var _bkV2NbSideRaf=0;
 
 
-try{ bookingV2LoadFromOpsBackend(); }catch(e){}
+// Bookings load only in js/ops/90-ops-boot.js, after catalogue/deployments/locks.
+// Calling it here used to race that sequence and duplicate the first paginated GET.
 // Cancellation modal · charge decision (none / full / partial) + required reason
 // Cancellation reason catalog · code = stable (for stats) · group = fault side · def = default charge suggestion
 const BKV2_CANCEL_REASONS = [
