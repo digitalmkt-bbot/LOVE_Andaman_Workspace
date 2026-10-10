@@ -32,12 +32,10 @@ function bookingV2MonthBarHtml(o){
         ${step('&rsaquo;', next, !opsMonthOnly && month !== 'all' && (!monthMax || month >= monthMax))}
         ${searching ? `<span style="font-size:11px;color:#9A5B00;background:#FBE9D6;border-radius:6px;padding:3px 8px">
             &#9873; search ignores the month &mdash; clear it to go back to ${bookingV2MonthLabel(_bkV2.month || month)}</span>` : ''}
-        ${opsMonthOnly
-          ? '<span style="margin-left:auto;font-size:11px;color:var(--ink-soft,#6b6862)">Server list · one travel month at a time</span>'
-          : `<button onclick="bookingV2SetMonth('all')" title="Every travel date · slower on a big list"
+        <button onclick="bookingV2SetMonth('all')" title="Every travel date"
             style="margin-left:auto;height:28px;padding:0 11px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11.5px;
               font-weight:${allOn?800:600};border:1px solid ${allOn?navy:'#E2E0DA'};background:${allOn?navy:'#fff'};
-              color:${allOn?'#fff':'var(--ink-soft,#6b6862)'}">All time &middot; ${allTotal}</button>`}
+              color:${allOn?'#fff':'var(--ink-soft,#6b6862)'}">All time &middot; ${allTotal}</button>
       </div>
       ${months.length <= 1 ? '' : `
       <div id="bkv2-monthstrip" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;scrollbar-width:thin">
