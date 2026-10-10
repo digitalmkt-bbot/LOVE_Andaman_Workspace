@@ -4810,10 +4810,15 @@ function flLoad(){
       if(!open||(open.s!=='fixing'&&open.s!=='unavailable')) return;
       var mref=String(open.note||'').match(/MJ-\d+/); if(!mref) return;
       var mj=_mjBy[mref[0]]; if(!mj||mj.status!=='done') return;   // only when the causing MJ is closed
+      /* §planKeep · ของเดิมดูแค่ MJ · มองไม่เห็นโปรเจกต์ · Okeanos: flMaintClose เขียน "Unavailable จาก PRJ-015"
+         แล้ว heal ตัวนี้เห็นคำว่า MJ-118 ในหมายเหตุ ก็เขียน Auto-restore available ทับทันที
+         ได้สองแถวขัดกันในวันเดียว คนอ่านก็นึกว่าระบบเพี้ยน · ตอนนี้ถามกติกาเดียวกับทั้งระบบ */
+      if(typeof boatJobBlock==='function' && boatJobBlock(b.id, TODAY_STR).jobs.length) return;
       var stillFixing=(FL_MAINT||[]).some(function(m){ return m.boatId===b.id && m.status==='inprogress' && m.setFixing!==false && (m.boatStatus==='fixing'||m.boatStatus==='unavailable'||m.boatStatus==null); });
       if(stillFixing) return;
-      open.to=mj.endDate||TODAY_STR;
-      b.log.push({id:'sl'+Date.now()+'_'+Math.floor(Math.random()*1e4), s:'available', from:mj.endDate||TODAY_STR, to:null, loc:open.loc||'', note:'Auto-restore · '+mref[0]+' done (เรือกลับมาพร้อมใช้)', reason:''});
+      var _hFrom=mj.endDate||TODAY_STR, _hNext=(typeof laNextRowFrom==='function')?laNextRowFrom(b,_hFrom):null;
+      open.to=_hFrom;
+      b.log.push({id:'sl'+Date.now()+'_'+Math.floor(Math.random()*1e4), s:'available', from:_hFrom, to:(_hNext&&typeof laDayBefore==='function')?laDayBefore(_hNext):null, loc:open.loc||'', note:'Auto-restore · '+mref[0]+' done (เรือกลับมาพร้อมใช้)', reason:''});
       _healed++;
     });
     if(_healed>0){ d.boats=BOATS; console.log('[flLoad] self-healed '+_healed+' boat(s) stuck fixing after a done MJ'); }
@@ -20658,11 +20663,13 @@ function _flMaintStartProceed(id){
     //   start the "not available" period TOMORROW so today still counts as operated. Editable afterwards.
     const _ranToday = _flBoatRanOn(b.id, TODAY_STR);
     const _fixFrom = _ranToday ? _flDayAfter(TODAY_STR) : TODAY_STR;
-    if(typeof autoClosePrevLog==='function') autoClosePrevLog(b,TODAY_STR);
+    /* §planKeep · แถวที่คนวางไว้ในอนาคตต้องอยู่ · แถวซ่อมนี้จบก่อนแถวนั้นหนึ่งวัน
+       ใบใหม่นี้ไม่อยู่ในรายการที่คนยกเว้นไว้ boatJobBlock จึงยังกันเรือวันนั้นตามปกติ · แค่ไม่ลบแผนของเขาทิ้ง */
+    const _sysTo=(typeof laAutoCloseKeepFuture==='function')?laAutoCloseKeepFuture(b,_fixFrom):(autoClosePrevLog(b,TODAY_STR),null);
     b.log.push({
       id:'sl'+Date.now(),
       s:targetStatus,
-      from:_fixFrom,to:null,
+      from:_fixFrom,to:_sysTo,
       loc:m.location||cur.loc||'',
       note:`Maintenance Job ${m.no}${_ranToday?' · วิ่งวันนี้แล้ว · เริ่มไม่พร้อม '+_fixFrom:''}`,
       reason: targetReason
@@ -20764,8 +20771,9 @@ function flMaintClose(id,outcome,note,awaitInvoice){
   // restore boat status + log repair to boat history
   if(b){
     const cur=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · สาขา setFixing:false คงค่าเดิม ต้องเป็นค่าดิบ */
-    // Auto-close any open log entries (e.g. fixing from Start Job) before pushing new entry
-    if(typeof autoClosePrevLog==='function') autoClosePrevLog(b,TODAY_STR);
+    /* §planKeep · ของเดิม autoClosePrevLog ตรงนี้ · ย้ายไปทำตอนจะเขียนแถวจริง (ด้านล่าง)
+       จะได้ตัดสินใจก่อนว่าต้องเขียนไหม · ถ้าวันนี้คนวางเรือล่วงหน้าไว้แล้ว ไม่แตะ */
+    const _planRow=(typeof laPlanRowAt==='function')?laPlanRowAt(b,TODAY_STR):null;
     
     /* §boatEff2 · งานที่ยังกันเรืออยู่หลังปิดใบนี้
        ของเดิมกรอง FL_MAINT เองและมองแค่ MJ · โปรเจกต์ไม่อยู่ในสายตาเลย
@@ -20783,7 +20791,11 @@ function flMaintClose(id,outcome,note,awaitInvoice){
     // ─── เคารพเจตนาเดิมของ MJ ───
     // ถ้า MJ มี setFixing:false (เรือยังใช้งานได้ระหว่างซ่อม) → ตอนปิดก็ไม่ควร force boat status
     // ปลดระวาง = ปลด "อะไหล่ตัวนั้น" (broken) เท่านั้น · ไม่ไปยุ่งสถานะเรือ (เรืออาจมีเครื่องอื่นใช้ได้)
-    if(m.setFixing===false){
+    if(_planRow){
+      /* §planKeep · คนตั้ง "พร้อมใช้" ล่วงหน้าไว้คลุมวันนี้ (ผ่าน dialog ที่เตือนแล้วว่ามีใบค้าง)
+         การปิดใบนี้ไม่ควรเขียนอะไรทับ · ใบอื่นที่ยังค้างก็ถูกยกเว้นไว้ในแถวนั้นแล้วตามที่เขาตัดสินใจ */
+      skipBoatLog = true;
+    } else if(m.setFixing===false){
       // เก็บ boat status ปัจจุบันไว้ (ไม่ override)
       finalBoatStatus = cur.s || 'available';
       finalReason = cur.reason || '';
@@ -20800,10 +20812,12 @@ function flMaintClose(id,outcome,note,awaitInvoice){
     }
     
     if(!skipBoatLog){
+      /* §planKeep · ปิดแถวเก่าโดยไม่ลบแถวอนาคตของคน · แถวใหม่จบก่อนแถวนั้นหนึ่งวัน */
+      const _sysTo=(typeof laAutoCloseKeepFuture==='function')?laAutoCloseKeepFuture(b,TODAY_STR):(autoClosePrevLog(b,TODAY_STR),null);
       b.log.push({
         id:'sl'+Date.now(),
         s:finalBoatStatus,
-        from:TODAY_STR, to:null,
+        from:TODAY_STR, to:_sysTo,
         loc:cur.loc||'',
         note:finalNote,
         reason:finalReason

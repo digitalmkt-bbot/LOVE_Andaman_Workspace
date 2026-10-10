@@ -464,6 +464,37 @@ function laRowPlanJobs(row){
   });
   return out.length?out:null;
 }
+/* ══ §planKeep (2026-10-10) · แถวที่ระบบเขียนเอง ห้ามลบแถวที่คนวางไว้ในอนาคต ═══════════
+   เคสจริง · Okeanos · PRJ-015 ยังเปิด · คนตั้ง "พร้อมใช้" ล่วงหน้าผ่าน dialog §boatPlanAhead
+   เพราะคาดว่างานจะเสร็จทัน จะได้เปิดที่นั่งขาย · แล้วพอปิด MJ-118 เรือกลับไป Unavailable
+   สาเหตุ · flMaintClose / เริ่มงาน / self-heal เขียนแถว to:null แล้วเรียก autoClosePrevLog(b,วันนี้)
+   ซึ่ง "ลบทุกแถวที่เริ่มตั้งแต่วันนี้เป็นต้นไป" (Case B) · แถววางล่วงหน้าจึงหายพร้อมเครื่องหมาย
+   พอเครื่องหมายหาย boatJobBlock ก็ไม่ยกเว้น PRJ-015 อีก · เรือเลยถูกกันเหมือนไม่เคยวางแผน
+   กติกาใหม่ · แถวที่ระบบเขียนเอง จบก่อนแถวถัดไปที่คนวางไว้หนึ่งวัน · แถวของคนอยู่ครบ */
+function laDayBefore(ds){
+  var p=String(ds||'').split('-').map(Number); if(p.length<3||!p[0]) return ds;
+  var d=new Date(p[0],p[1]-1,p[2]); d.setDate(d.getDate()-1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function laNextRowFrom(b, from){
+  var n=null; ((b&&b.log)||[]).forEach(function(e){ if(e&&e.from&&e.from>from&&(!n||e.from<n)) n=e.from; });
+  return n;
+}
+/* ปิดแถวเก่าเหมือน autoClosePrevLog(b,from) แต่ยกแถวอนาคตออกไปก่อนแล้วใส่คืน
+   คืนค่า to ที่แถวใหม่ของระบบควรใช้ (วันก่อนแถวอนาคตแถวแรก · ไม่มี = null) */
+function laAutoCloseKeepFuture(b, from){
+  if(!b||!Array.isArray(b.log)) return null;
+  var keep=b.log.filter(function(e){ return e&&e.from&&e.from>from; });
+  if(keep.length) b.log=b.log.filter(function(e){ return keep.indexOf(e)<0; });
+  if(typeof autoClosePrevLog==='function') autoClosePrevLog(b, from);
+  if(keep.length){ keep.forEach(function(e){ b.log.push(e); }); return laDayBefore(keep.map(function(e){ return e.from; }).sort()[0]); }
+  return null;
+}
+/* แถวที่คนวางล่วงหน้าไว้คลุมวันนี้ · ระบบไม่ควรเขียนทับ */
+function laPlanRowAt(b, ds){
+  var r=(b&&typeof getStoredStatus==='function')?getStoredStatus(b, ds):null;
+  return (r && (r.s||'available')==='available' && laRowPlanJobs(r)) ? r : null;
+}
 /* raw = อ่านใบงานดิบ ไม่สนการวางล่วงหน้าที่เคยกดยืนยันไว้
    ใช้ตอนจะถามคนว่า "ยังมีใบค้างอยู่นะ จะวางล่วงหน้าไหม" เท่านั้น
    ถ้าจุดนั้นอ่านแบบปกติ มันจะเห็นการวางล่วงหน้าของตัวเองแล้วนึกว่าไม่มีใบค้าง
