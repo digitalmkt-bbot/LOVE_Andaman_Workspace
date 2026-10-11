@@ -294,7 +294,7 @@
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
@@ -613,8 +613,21 @@
     };
     try{ x.send(); }catch(e){ fin(false); }
   }
+  /* §selfEcho (2026-10-11) · owner: "วันนี้เป็นอะไรไม่รู้ เด้งขึ้นรัวๆ" (กล่อง "มีข้อมูลใหม่จากคนอื่น · โดย admin" ทั้งที่เป็นตัวเอง)
+     เซิร์ฟเวอร์ตอบการเซฟแล้วค่อยกระจายเวอร์ชันใหม่ทาง SSE · แต่สาย SSE มาถึงก่อนคำตอบ HTTP ได้
+     ตอนนั้น VER ยังเป็นเลขเก่า การเซฟของเราเองจึงถูกนับเป็น "ของคนอื่น" → ขึ้นกล่อง แล้วอีกไม่กี่วิ
+     ดึงก้อนเต็มมาวาดหน้าใหม่ทั้งหน้า · แก้อะไรหนึ่งครั้ง = เด้งหนึ่งครั้ง
+     กันสองชั้น: ระหว่างที่การเซฟของเรายังไม่ได้คำตอบ ไม่ขึ้นกล่อง (_dirty) ·
+     ได้คำตอบแล้วถ้าเซิร์ฟเวอร์ไม่ได้บอกว่าเราตามหลังใคร (behind) และของที่รอมีเลขไม่เกินที่เราได้ = เสียงสะท้อนของเราเอง ทิ้ง
+     มีคนอื่นเซฟคั่น = behind > 0 → ยังดึงเหมือนเดิม ไม่มีอะไรหาย */
+  function _laDropEcho(){
+    if(!_laPending || (_laPending.version||0) > VER) return;
+    _laClearPending();
+    var bn=document.getElementById('la-refresh'); if(bn){ bn.remove(); _refreshShown=false; }
+  }
   function _laTryRefresh(){
     if(!_laPending) return;
+    if(_dirty) return;                       /* §selfEcho · การเซฟของเรายังไม่ได้คำตอบ · รอคำตอบก่อน (ตัวจับเวลา 3 วิ/คำตอบจะมาเรียกต่อ) */
     if((_laPending.version||0)<=_laCkSeen) return;   /* หน้าเช็คอินตามทันเวอร์ชันนี้แล้ว */
     if(_laBusy()){ showRefresh(_laPending); return; }
     if(_laCkCanNarrow()){ _laCkNarrow(function(okn){ if(!okn) _laSoftRefresh(); }); return; }
