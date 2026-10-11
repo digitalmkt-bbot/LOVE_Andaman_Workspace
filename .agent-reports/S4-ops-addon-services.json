@@ -11,7 +11,7 @@
     "base": "c91a571",
     "branch": "agent/ops-addons",
     "worktree": "D:/projects/wt-ops-addons",
-    "commit": "pending",
+    "commit": "d913c609139a5b608efb42db940c1ddc843ec2de",
     "pr": { "number": null, "url": "", "state": "none" }
   },
   "input": {
