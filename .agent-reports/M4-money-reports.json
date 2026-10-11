@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "task": "M4-money-reports",
+  "title": "M4: add accounting and computed-report adapters",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c66-7afc-7399-8025-56b75f28597f",
+    "model": "openai-codex/gpt-5.6-luna"
+  },
+  "git": {
+    "base": "c91a571",
+    "branch": "agent/ops-money-reports",
+    "worktree": "D:/projects/wt-ops-money-reports",
+    "commit": "a0073b8",
+    "pr": { "number": null, "url": "", "state": "none" }
+  },
+  "input": {
+    "requestedOutcome": "Add the M4 frontend adapter for accounting, agent statements, Travel Summary, and Daily Report using the verified operation-backend report contracts.",
+    "acceptanceCriteria": [
+      "Operations mode renders server-computed accounting, statement, travel-summary, and daily-report payloads.",
+      "Daily report settings use the documented server-first GET/PUT endpoints and only update the in-memory cache after success.",
+      "Permission and route failures are visible; legacy mode delegates to the original renderers and persistence.",
+      "Trip P&L, cost templates/plans, and P&L close/freeze remain legacy-only.",
+      "No backend, database, schema, migration, or mapping changes are made."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/33-ops-money-reports.js",
+      "allotment_v2/allotment_v2.html (M4 classic script tag only)",
+      "test/ui/t_ops_money_reports.mjs",
+      "docs/development/tasks/M4-money-reports.md",
+      ".agent-reports/M4-money-reports.json"
+    ],
+    "constraints": [
+      "Work only in D:/projects/wt-ops-money-reports on agent/ops-money-reports.",
+      "Use laOps/laOpsFetch plumbing and verified route contracts; no direct operation-backend fetch.",
+      "Preserve classic script ordering, server-first ops behavior, and legacy fallback.",
+      "Do not push or edit operation_backend."
+    ],
+    "assumptions": [
+      "01-auth-sync.js provides the authenticated laOpsFetch wrapper.",
+      "00-ops-core.js provides laOps.get, laOps.call, laOps.queue, invalidation, and ops-mode detection.",
+      "D:/projects/operation-backend/src/routes/money-reports.ts and src/domain/money-reports.ts are authoritative."
+    ]
+  },
+  "output": {
+    "summary": "Added an ops-only M4 adapter that renders server-computed accounting, agent statement, Travel Summary, and Daily Report views, with a server-first Daily Report settings write and unchanged legacy fallback.",
+    "filesChanged": [
+      { "path": "allotment_v2/allotment_v2.html", "change": "modified", "purpose": "Loads the M4 adapter as a classic script after the legacy app and ops core/adapters, before ops boot." },
+      { "path": "allotment_v2/js/ops/33-ops-money-reports.js", "change": "added", "purpose": "Loads and renders verified money-report endpoint payloads, wraps report entry points only in ops mode, surfaces errors, and keeps Trip P&L/cost plans unwrapped." },
+      { "path": "test/ui/t_ops_money_reports.mjs", "change": "added", "purpose": "Exercises report endpoint calls, server payload rendering, settings PUT, legacy no-call fallback, credits, and no legacy-blob mutation." },
+      { "path": "docs/development/tasks/M4-money-reports.md", "change": "added", "purpose": "Records M4 scope, contracts, decisions, verification, risks, and rollback." },
+      { "path": ".agent-reports/M4-money-reports.json", "change": "added", "purpose": "Provides the coordinator-readable M4 handoff manifest." }
+    ],
+    "behaviorChanges": [
+      { "area": "accounting dashboard", "before": "Aggregate KPIs/dashboard values were computed from browser SB_* data.", "after": "Ops mode loads GET /v1/reports/accounting and replaces the displayed aggregate block with server values while retaining the M1 invoice-table boundary." },
+      { "area": "agent statement", "before": "Statement values came from the local invoice/deposit projection.", "after": "Ops mode loads GET /v1/agents/:id/statement and renders server invoice, deposit, credit, balance, and credit-limit values." },
+      { "area": "travel and daily reports", "before": "Report bodies were computed by legacy browser aggregators.", "after": "Ops mode renders GET /v1/reports/travel-summary?date= and GET /v1/reports/daily?date= payloads, including the server settings snapshot." },
+      { "area": "daily settings and persistence", "before": "drCfgSet wrote legacy dr_cfg/blob state.", "after": "Ops mode sends PUT /v1/reports/daily/settings and updates the report cache only after success; report reads/settings do not write the legacy blob." },
+      { "area": "legacy compatibility", "before": "Classic renderers were always used.", "after": "Wrappers are inert unless laOps is enabled; disabled ops mode delegates to the original functions unchanged." }
+    ],
+    "interfaces": {
+      "added": [
+        "window.laOps.moneyReports",
+        "classic script tag js/ops/33-ops-money-reports.js"
+      ],
+      "changed": [
+        "Ops-mode wrappers for renderAccounting, acctDashboardHtml, acctStatementOpen, renderTravelSum, renderDailyReport, and drCfgSet"
+      ],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "Computed reports are read-only and are not written to localStorage or the legacy blob in ops mode.",
+        "Daily report settings are the only M4 write and go through PUT /v1/reports/daily/settings before the in-memory cache is changed.",
+        "No backend, schema, migration, mapping, or database files were changed."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "node --check D:/projects/wt-ops-money-reports/allotment_v2/js/ops/33-ops-money-reports.js", "status": "passed", "evidence": "Syntax check exited 0." },
+    { "command": "node --check D:/projects/wt-ops-money-reports/test/ui/t_ops_money_reports.mjs", "status": "passed", "evidence": "Syntax check exited 0." },
+    { "command": "cd /d D:/projects/wt-ops-money-reports && node test/ui/t_ops_money_reports.mjs", "status": "passed", "evidence": "10 focused assertions passed, including endpoint use, server rendering, credits, settings, legacy no-call behavior, and unchanged loveandaman_v2 blob." },
+    { "command": "cd /d D:/projects/operation-backend && node --import tsx --import ./test/setup.ts --test test/money-reports.test.ts", "status": "passed", "evidence": "6 backend money-report tests passed, 0 failed." },
+    { "command": "cd /d D:/projects/wt-ops-money-reports && npm run test:ops", "status": "failed", "evidence": "Existing unrelated ops scenarios failed for boat catalogue, route calendar, lock edit/release, and booking pickup; the suite aborted before any M4-specific assertion." },
+    { "command": "git -C D:/projects/wt-ops-money-reports diff --check", "status": "passed", "evidence": "No whitespace errors." },
+    { "command": "rg scan of the M4 adapter/test for bkV2, direct fetch, and Trip P&L/cost-plan identifiers", "status": "passed", "evidence": "No forbidden bkV2 or direct fetch matches; Trip P&L/cost-plan text is explanatory exclusion only and no such entry point is wrapped." }
+  ],
+  "decisions": [
+    "Keep the legacy invoice table renderer as the M1 integration boundary while replacing the accounting aggregate/dashboard block with the authoritative server report.",
+    "Render server statement credits in addition to invoices and deposits.",
+    "Cache computed reads by report/date, invalidate them after an ops write, and only update Daily Report settings after a successful PUT response.",
+    "Do not add any Trip P&L, cost-template, cost-plan, or close/freeze endpoint because the M4 packet marks those areas unmigrated."
+  ],
+  "risks": [
+    "The broader npm run test:ops suite has unrelated baseline failures in this worktree.",
+    "Accounting invoice list hydration and invoice mutations remain M1-owned; M4 intentionally does not invent an invoice endpoint or local approximation.",
+    "Report caches are invalidated after laOps writes but are otherwise retained for the current page/date until refreshed."
+  ],
+  "blockers": [
+    "npm run test:ops remains red for pre-existing boat/calendar/lock/booking scenarios; focused M4 and backend money-report tests pass."
+  ],
+  "dependencies": [
+    "P0 laOps auth/core and authenticated operations-mode detection",
+    "M1 server invoice projection for the accounting table",
+    "operation-backend money-reports routes/domain"
+  ],
+  "followUps": [
+    "Run the focused adapter test against an authenticated deployed operation-backend instance.",
+    "Integrate M1's authoritative invoice projection when the M1 packet lands."
+  ],
+  "rollback": "Revert local implementation commit a0073b8 or remove the M4 script tag and adapter; no database rollback is needed."
+}
