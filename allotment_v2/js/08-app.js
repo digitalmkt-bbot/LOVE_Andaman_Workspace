@@ -5443,7 +5443,13 @@ function sbDepositsPersist(){ if(typeof window.laCanEditArea==='function' && !wi
 // จงใจ "ไม่" หน่วงการเขียน · การเขียน blob คือสิ่งที่ไปกระตุ้น auto-save ขึ้นเซิร์ฟเวอร์ และถ้าหน่วงไว้
 // persist ตัวอื่นที่ยังอ่านแบบเดิมจะอ่านได้ของเก่าแล้วเขียนทับงานที่ยังค้างอยู่หาย
 var _laBlob=null, _laBlobRaw=null;
+/* §pcFast · ระหว่างวาดหน้าหนึ่งรอบ (renderPierCash) อ่านก้อนเดิมซ้ำ ไม่ต้องดึงจาก localStorage ทุกครั้ง
+   ของเดิมทุกครั้งที่เรียก = getItem ทั้งก้อน (หลาย MB) แล้วเทียบสตริงยาวทั้งก้อน
+   หน้าเงินสดย่อยเรียกหลายร้อยครั้งต่อการกดหนึ่งครั้ง (pcArr ต่อวัน×ลำ) · ข้อมูลจริงกินไป ~1 วิ
+   ปักไว้เฉพาะช่วงวาด (try/finally) · laBlobSave เขียนก้อนตัวเดียวกันนี้ จึงไม่มีทางได้ของเก่า */
+var _laBlobPin=null;
 function laBlob(){
+  if(_laBlobPin) return _laBlobPin;
   var raw;
   try{ raw=localStorage.getItem(LS_KEY)||'{}'; }catch(_){ raw='{}'; }
   if(_laBlob && raw===_laBlobRaw) return _laBlob;
@@ -13685,6 +13691,25 @@ function ckPaxBreak(p){
   return { ad:t('ad'), chd:t('chd'), inf:t('inf'), foc:t('foc') };
 }
 function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (x.date||'')===date; }) || null; }
+/* §pcFast (2026-10-11) · owner: "ดูเรื่องการคลิก มันจะดีเลย์ไปนิดนึง ตรงแต่ล่ะหัวข้อ" (เงินสดย่อย)
+   ทุกชีทของเงินสดย่อยถาม "ใบไหนเดินทางวันนี้" ทีละวัน×ทีละลำ ด้วยการไล่ SB_BOOKINGS ทั้งก้อน
+   (pxLongtail · pcPax · poBoats) · ข้อมูลจริง 5,400 ใบ × 31 วัน × 3 ลำ = กดทีละครั้ง 0.3–1 วิ
+   ตัวนี้จัดใบตามวันเดินทางไว้ครั้งเดียว ใช้ซ้ำได้ระหว่างวาดหนึ่งรอบ
+   สร้างใหม่เมื่อ SB_BOOKINGS เปลี่ยนก้อน/จำนวนเปลี่ยน หรือเก่ากว่า 1 วิ
+   คืน "ผู้มีสิทธิ์" ตามวันเดินทางเท่านั้น · ตัวเรียกยังเช็คสถานะ/ทริป/ลำเองทุกครั้งเหมือนเดิม
+   ลำดับเหมือน SB_BOOKINGS ทุกอย่าง */
+var _ckOnIx={at:0,n:-1,ref:null,map:null};
+function ckBksOn(date){
+  var L=(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS))?SB_BOOKINGS:[];
+  var now=Date.now();
+  if(!_ckOnIx.map || _ckOnIx.ref!==L || _ckOnIx.n!==L.length || now-_ckOnIx.at>1000){
+    var m={};
+    for(var i=0;i<L.length;i++){ var b=L[i], T=(b&&b.trips)||[], seen={};
+      for(var j=0;j<T.length;j++){ var d=T[j]&&T[j].date; if(d && !seen[d]){ seen[d]=1; (m[d]||(m[d]=[])).push(b); } } }
+    _ckOnIx={at:now,n:L.length,ref:L,map:m};
+  }
+  return _ckOnIx.map[date]||[];
+}
 // อ่านบล็อกเช็คอินของวันนั้น · kind = 'van' | 'pier'
 /* §vckSplit · บุคกิ้งที่รับหลายจุดถูกแตกเป็น ops.vanSplits[] แล้วขึ้นรถคนละคัน
    การเช็คอินจึงต้องแยกรายคัน · kind = 'van#<i>' เก็บลง ops.vanCkS[i]
@@ -15554,7 +15579,7 @@ function bkNatTH(t,k){
 function pcPax(date,bid,pier){
   var Z=function(){ return {ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0}; };
   var o=Z(), n=Z(), exact=0, anyNat=false;
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pcFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null;
@@ -16648,6 +16673,10 @@ function pcJumpToday(){
   }catch(_){}
 }
 function renderPierCash(pier){
+  _laBlobPin=null; try{ _laBlobPin=laBlob(); }catch(_){ _laBlobPin=null; }   /* §pcFast */
+  try{ return _renderPierCash(pier); } finally { _laBlobPin=null; }
+}
+function _renderPierCash(pier){
   pcRowsMigrate();   /* §pcRows ก1 · ย้ายเข้าตารางคู่ขนาน · ตัวอ่านยังใช้สตริงเหมือนเดิม */
   _PC_RATE={};   /* §pcCalc · ราคาอาจถูกแก้ที่หน้าต้นทุนระหว่างนี้ */
   _pcPier=pier||_pcPier;
@@ -30834,7 +30863,7 @@ function pxPax(date, bid){
    ย้ายมาใช้ตัวเดียวกันทั้งหมด จะได้ไม่มีสองคำตอบในระบบเดียว */
 function pxLongtail(date, bid){
   var chtr = 0, join = 0, upg = 0, upgDue = 0;
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pcFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -62165,7 +62194,7 @@ function poBoats(date, pier){
               dep:(rt.times&&rt.times[0])||'', pax:0, paxReal:0, bks:[]});
   });
   /* จำนวน ลค · นับจาก booking ที่ผูกลำไว้แล้ว (ops.boatId) แบบเดียวกับเช็คอินหน้าท่า */
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pcFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
