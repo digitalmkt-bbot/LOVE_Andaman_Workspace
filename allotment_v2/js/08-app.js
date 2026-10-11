@@ -75229,26 +75229,41 @@ function pc2StatPK(pier,ds){
   return o;
 }
 function pc2Head(P){
-  var bal=pcOpening(_pcPier,_pcDate)+pcTotals(_pcPier,_pcDate).net;
+  /* §pc2c · หัวหน้าแบบแถบเดียว (พื้น navy) + บรรทัดสิ่งที่ค้าง · ติดบนสุดตอนเลื่อน */
+  var T=pcTotals(_pcPier,_pcDate);
+  var bal=pcOpening(_pcPier,_pcDate)+T.net;
   var sl=pc2StatLT(_pcPier,_pcDate), sp=pc2StatPK(_pcPier,_pcDate);
-  var tb=function(i,t,badge,warn){
+  var waiting=Math.max(0,T.ref-T.pulled);
+  var chip=function(i,t,badge,warn){
     return '<button class="'+(_pcTab===i?'on':'')+'" onclick="pcTab('+i+')">'+t
       +(badge?('<span class="bd'+(warn?' w':'')+'">'+badge+'</span>'):'')+'</button>'; };
   var ltB=sl.need?(sl.miss?('ยังไม่กรอก '+sl.miss+' ลำ'):'กรอกครบ'):'';
   var pkB=sp.n?(sp.miss?('ยังไม่กรอก '+sp.miss+' ลำ'):'กรอกครบ'):'';
-  return '<div class="pc2-hd">'
-    +'<div class="pc2-ttl"><div class="k">PIER OFFICE · '+pcE(P.t||P.n||_pcPier)+'</div><div class="t">เงินสดย่อย</div></div>'
-    +'<div class="pc2-tabs">'+tb(0,'หน้าหลัก','คงเหลือ '+pcMoney(bal),bal<0)
-      +tb(1,'เรือหางยาว',ltB,sl.miss>0)+tb(2,'ค่าอุทยาน',pkB,sp.miss>0)+'</div>'
-    +'<div class="pc2-dt">'
-      +'<button class="rb" onclick="pcShift(-1)" title="วันก่อน">‹</button>'
-      +'<label class="dp"><b>'+pcE(pc2D(_pcDate))+' '+pcE(_pcDate.slice(0,4))+'</b><span>'+pcE(pc2DL(_pcDate).split(' ')[0])+'</span>'
-        +'<input type="date" value="'+pcE(_pcDate)+'" onclick="try{this.showPicker()}catch(e){}" onchange="pcPickDay(this.value)"></label>'
-      +'<button class="rb" onclick="pcShift(1)" title="วันถัดไป">›</button>'
-      +(_pcDate!==pcNowDS()?'<button class="pri" onclick="pcPickDay(pcNowDS())">วันนี้</button>':'')
-      +(_pcTab===1?'<button class="ol" onclick="pcPrintLT()">🖨 พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
-      +(_pcTab===2?'<button class="ol" onclick="pcPrintPK()">🖨 พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
-    +'</div></div>';
+  var prt=(_pcTab===1)?'pcPrintLT()':((_pcTab===2)?'pcPrintPK()':'pcPrintLedger()');
+  var prtT=(_pcTab===0)?'พิมพ์สมุดวันนี้':('พิมพ์ '+pcE(pc2D(_pcDate)));
+  var todo=[];
+  if(bal<0) todo.push('<button class="r" onclick="pcTab(0)"><i></i>คงเหลือติดลบ '+pcMoney(Math.abs(bal))+'</button>');
+  if(sl.miss) todo.push('<button class="a" onclick="pcTab(1)"><i></i>เรือหางยาว · ยังไม่กรอก '+sl.miss+' ลำ</button>');
+  if(sp.miss) todo.push('<button class="a" onclick="pcTab(2)"><i></i>ค่าอุทยาน · ยังไม่กรอก '+sp.miss+' ลำ</button>');
+  var dff=Math.round(sp.diff);
+  if(sp.keyed && dff!==0) todo.push('<button class="r" onclick="pcTab(2)"><i></i>ค่าอุทยาน · ต่าง '+(dff>0?'+':'−')+pcMoney(Math.abs(dff))+'</button>');
+  if(waiting>0) todo.push('<button class="c" onclick="pcTab(0)"><i></i>รอดึงเข้าสมุด '+pcMoney(waiting)+'</button>');
+  return '<div class="pc2-top">'
+    +'<div class="pc2-bar1">'
+      +'<div class="br"><span class="ic">฿</span><div><b>เงินสดย่อย</b><small>'+pcE(P.t||P.n||_pcPier)+'</small></div></div>'
+      +'<div class="pc2-chips">'+chip(0,'หน้าหลัก','คงเหลือ '+(bal<0?'−':'')+pcMoney(Math.abs(bal)),bal<0)
+        +chip(1,'เรือหางยาว',ltB,sl.miss>0)+chip(2,'ค่าอุทยาน',pkB,sp.miss>0)+'</div>'
+      +'<div class="dt">'
+        +'<button class="rb" onclick="pcShift(-1)" title="วันก่อน">‹</button>'
+        +'<label class="dp"><b>'+pcE(pc2D(_pcDate))+' '+pcE(_pcDate.slice(0,4))+'</b><span>'+pcE(pc2DL(_pcDate).split(' ')[0])+'</span>'
+          +'<input type="date" value="'+pcE(_pcDate)+'" onclick="try{this.showPicker()}catch(e){}" onchange="pcPickDay(this.value)"></label>'
+        +'<button class="rb" onclick="pcShift(1)" title="วันถัดไป">›</button>'
+        +(_pcDate!==pcNowDS()?'<button class="td" onclick="pcPickDay(pcNowDS())">วันนี้</button>':'')
+        +'<button class="pr" onclick="'+prt+'">🖨 '+prtT+'</button>'
+      +'</div></div>'
+    +'<div class="pc2-todo"><b>สิ่งที่ค้างของ '+pcE(pc2D(_pcDate))+'</b>'
+      +(todo.length?todo.join(''):'<span class="ok"><i></i>ไม่มีอะไรค้าง</span>')+'</div>'
+  +'</div>';
 }
 /* รายการวันของเดือน · ใช้ทั้งแท็บหางยาวและอุทยาน */
 function pc2DayList(pier, kind){
@@ -75663,6 +75678,37 @@ function pc2CSS2(S){
   var PKG='minmax(190px,2.4fr) repeat(8,minmax(30px,1fr)) minmax(38px,1.2fr) repeat(8,minmax(36px,1fr)) minmax(60px,1.6fr) minmax(38px,1.1fr) minmax(76px,2fr) minmax(86px,2.2fr) minmax(70px,1.6fr)';
   var LTG='minmax(90px,120px) minmax(150px,1fr) 196px 196px 120px minmax(120px,190px)';
   return [
+  S+' .pc2-top{position:sticky;top:var(--topbar,52px);z-index:20;margin:0 0 16px;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(11,30,91,.18)}',
+  S+' .pc2-bar1{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;min-height:60px;padding:8px 40px 8px 16px;background:#0B1E5B;color:#fff}'  /* ขวาเว้นให้ปุ่มลอย ⋯ ของแอป (มุมขวาบน 30px) ไม่ทับปุ่มพิมพ์ */,
+  S+' .pc2-bar1 .br{flex:1 1 0;display:flex;align-items:center;gap:11px;min-width:max-content}',
+  S+' .pc2-bar1 .ic{flex:none;width:34px;height:34px;border-radius:10px;background:#00B4E0;color:#0B1E5B;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800}',
+  S+' .pc2-bar1 .br b{display:block;font-size:17px;font-weight:800;line-height:1.15;white-space:nowrap}',
+  S+' .pc2-bar1 .br small{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;color:#8FA3D6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  S+' .pc2-chips{display:flex;gap:8px}',
+  S+' .pc2-chips button{display:flex;align-items:center;gap:7px;height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#B9C6E8;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}',
+  S+' .pc2-chips button:hover{background:rgba(255,255,255,.12);color:#fff}',
+  S+' .pc2-chips button.on{background:#00B4E0;border-color:#00B4E0;color:#0B1E5B;font-weight:800;box-shadow:0 6px 16px rgba(0,180,224,.35)}',
+  S+' .pc2-chips .bd{padding:1px 8px;border-radius:8px;background:rgba(255,255,255,.14);color:#DCE4F7;font-size:11px;font-weight:700}',
+  S+' .pc2-chips .bd.w{background:#FBEBD3;color:#7A4300}',
+  S+' .pc2-chips button.on .bd{background:rgba(11,30,91,.16);color:#0B1E5B} '+S+' .pc2-chips button.on .bd.w{background:#fff;color:#7A4300}',
+  S+' .pc2-bar1 .dt{flex:1 1 0;min-width:max-content;display:flex;align-items:center;justify-content:flex-end;gap:6px}',
+  S+' .pc2-bar1 .rb{width:34px;height:34px;border-radius:17px;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:17px;cursor:pointer}',
+  S+' .pc2-bar1 .rb:hover{background:rgba(255,255,255,.22)}',
+  S+' .pc2-bar1 .dp{position:relative;height:34px;padding:0 14px;border-radius:17px;background:#fff;color:#0B1E5B;display:flex;align-items:center;gap:9px;white-space:nowrap;cursor:pointer}',
+  S+' .pc2-bar1 .dp b{font-family:"DM Mono",monospace;font-size:14px;font-weight:500} '+S+' .pc2-bar1 .dp span{font-size:11.5px;color:#6B7693}',
+  S+' .pc2-bar1 .dp input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}',
+  S+' .pc2-bar1 .td{height:34px;padding:0 12px;border-radius:10px;border:none;background:#00B4E0;color:#0B1E5B;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap}',
+  S+' .pc2-bar1 .pr{height:34px;padding:0 12px;margin-left:4px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
+  S+' .pc2-bar1 .pr:hover{background:rgba(255,255,255,.1)}',
+  S+' .pc2-todo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 16px;background:#14296E;color:#DCE4F7;font-size:12.5px}',
+  S+' .pc2-todo>b{color:#FFD08A;font-weight:700;margin-right:2px}',
+  S+' .pc2-todo button,'+S+' .pc2-todo .ok{display:flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#DCE4F7;font-size:12.5px;cursor:pointer}',
+  S+' .pc2-todo button:hover{background:rgba(255,255,255,.16)}',
+  S+' .pc2-todo i{width:7px;height:7px;border-radius:4px;background:#8FA3D6}',
+  S+' .pc2-todo .a i{background:#D9952B} '+S+' .pc2-todo .r i{background:#E5605C} '+S+' .pc2-todo .c i{background:#00B4E0} '+S+' .pc2-todo .ok{cursor:default} '+S+' .pc2-todo .ok i{background:#2E9C78}',
+  S+' .pc2-chips{flex:none}',
+  /* จอไม่พอใส่บรรทัดเดียว · แถวบนชื่อหน้า+วันที่ แถวล่างชิปเต็มแถว (ไม่ปล่อยให้วันที่หล่นไปเอง) */
+  '@media (max-width:1520px){'+S+' .pc2-chips{order:3;flex:1 1 100%} '+S+' .pc2-chips button{flex:1;justify-content:center}}',
   S+' .pc2-body{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:start}',
   S+' .pc2-days{background:#fff;border-radius:16px;box-shadow:0 1px 2px rgba(11,30,91,.08);padding:10px;position:sticky;top:10px;max-height:calc(100vh - 120px);overflow:auto}',
   S+' .pc2-days .h{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:2px 6px 8px;font-size:12px;font-weight:700;color:'+M+'}',
