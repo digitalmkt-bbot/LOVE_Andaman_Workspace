@@ -75306,25 +75306,33 @@ function pc2Main(pier){
   rows.sort(function(a,b){ return a.t-b.t; });
   pcSelSync();
   var CAT={'in':['รับเงิน','in'],lt:['หางยาว','lt'],pk:['อุทยาน','pk'],dock:['ค่าจอด','dk'],other:['จ่ายอื่น','ot']};
-  var run=op, body='';
-  body+='<div class="pc2-lr op"><span></span><span>—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span class="m">'+pcN(op)+'</span><span></span></div>';
+  var run=op, body='', ED=pc2EdCur(), edHit=false, no=0;
+  body+='<div class="pc2-lr op"><span></span><span class="no">—</span><span class="c">—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span class="m'+(op<0?' neg':'')+'">'+(op<0?'−':'')+pcN(Math.abs(op))+'</span><span></span></div>';
   rows.forEach(function(r){
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
     var ck=isIn?'in':(r.x.src&&CAT[r.x.src]?r.x.src:'other');
+    no++;
+    /* §pc2d · บรรทัดที่กดแก้ · วาดเป็นช่องกรอกตรงตำแหน่งเดิม */
+    if(ED && ED.id && ED.id===String(r.x.id) && ED.ok===r.k){ edHit=true; body+=pc2EdRow(ED,run,no); run += isIn ? amt : -amt; return; }
     run += isIn ? amt : -amt;
-    body+='<div class="pc2-lr'+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'">'
+    body+='<div class="pc2-lr rw'+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
       +'<span class="sc" onclick="pcSelCellHit(this,event)"><input type="checkbox" class="pc-cb"'+(pcSelHas(r.k,r.x.id)?' checked':'')
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
-      +'<span class="tm">'+pcE(r.x.at||'—')+'</span>'
-      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+pcE(r.x.txt||'—')+'</span>'
-      +'<span><em class="cat '+CAT[ck][1]+'">'+CAT[ck][0]+'</em></span>'
-      +'<span class="by">'+pcE(r.x.by||'—')+'</span>'
+      +'<span class="no">'+no+'</span>'
+      +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
+      +'<span class="tx" title="'+pcE(r.x.txt||'')+'"><i>'+pcE(r.x.txt||'—')+'</i></span>'
+      +'<span class="ct"><em class="cat '+CAT[ck][1]+'">'+CAT[ck][0]+'</em></span>'
+      +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
       +'<span class="m out">'+(!isIn?pcN(amt):'')+'</span>'
-      +'<span class="m">'+pcN(run)+'</span>'
-      +'<span><button class="pc2-x" title="ลบรายการนี้" onclick="pcRowDel(\''+r.k+'\',\''+r.x.id+'\')">&times;</button></span></div>';
+      +'<span class="m'+(run<0?' neg':'')+'">'+(run<0?'−':'')+pcN(Math.abs(run))+'</span>'
+      +'<span class="act"><button class="pc2-ed2" title="แก้บรรทัดนี้" onclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\')">&#9998;</button>'
+        +'<button class="pc2-x" title="ลบรายการนี้" onclick="pcRowDel(\''+r.k+'\',\''+r.x.id+'\')">&times;</button></span></div>';
   });
-  if(!rows.length) body+='<div class="pc2-empty">ยังไม่มีรายการของวันนี้</div>';
+  /* แถวที่กดแก้หายไปแล้ว (คนอื่นลบ / เปลี่ยนวัน) · ปิดช่องกรอกทิ้ง */
+  if(ED && ED.id && !edHit){ _pc2Ed=null; ED=null; }
+  if(ED && !ED.id){ body+=pc2EdRow(ED,run,''); }
+  else if(!rows.length) body+='<div class="pc2-empty">ยังไม่มีรายการของวันนี้ · กด ＋ ด้านล่างเพื่อเพิ่มบรรทัดแรก</div>';
   /* รอดึงเข้าสมุด · หมวดไหนดึงแล้วไม่ดึงซ้ำ (pcPull เช็คเอง) */
   var pulled={}, pAmt={}; (D.out||[]).forEach(function(x){ if(x&&x.src){ pulled[x.src]=1; pAmt[x.src]=(pAmt[x.src]||0)+(+x.amt||0); } });
   var sl=pc2StatLT(pier,ds), sp=pc2StatPK(pier,ds);
@@ -75379,13 +75387,15 @@ function pc2Main(pier){
           +'<button class="ol" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button>'
           +'<button class="ol" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก">พิมพ์สมุดวันนี้</button>'
           +'<button class="pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">ใบรับรองแทนใบเสร็จ</button></div>'
+        +'<div class="pc2-ltw"><div class="pc2-ltb">'
         +'<div class="pc2-lr hd"><span class="sc"><input type="checkbox" id="pc-selall" class="pc-cb" title="เลือกทุกรายการของวันนี้" onchange="pcSelAll(this.checked)"></span>'
-          +'<span>เวลา</span><span>รายการ</span><span>หมวด</span><span>ผู้บันทึก</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'
+          +'<span class="no">#</span><span class="c">เวลา</span><span>รายการ</span><span class="ct">หมวด</span><span>ผู้บันทึก</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'
         +body
-        +'<div class="pc2-lr tot"><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
+        +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
+        +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
-        +'<div class="pc2-add"><button class="i" onclick="pcRowAdd(\'in\')">＋ รับเงิน</button><button class="o" onclick="pcRowAdd(\'out\')">＋ จ่ายเงิน</button></div>'
-        +'<div class="pc2-note"><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก (ไม่ถูกบันทึก)</div>'
+        +'<div class="pc2-add"><button class="i" onclick="pc2EdNew(\'in\')">＋ เพิ่มบรรทัดรับเงิน</button><button class="o" onclick="pc2EdNew(\'out\')">＋ เพิ่มบรรทัดจ่ายเงิน</button></div>'
+        +'<div class="pc2-note"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก (ไม่ถูกบันทึก)</div>'
       +'</div>'
     +'</div>'
     +'<div class="pc2-r">'+pendCard+monthCard+'</div>'
@@ -75670,7 +75680,7 @@ function pc2CSS(S){
   S+' .pc2-month .mt{display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:2px solid '+N+';font-size:14px;font-weight:800}',
   S+' .pc2-month .mt b{font-family:"DM Mono",monospace;font-weight:500}',
   S+' .pc2-month .lg{display:flex;gap:14px;margin-top:8px;font-size:12px;color:'+M+'}'
-  ].join('\n')+'\n'+pc2CSS2(S);
+  ].join('\n')+'\n'+pc2CSS2(S)+'\n'+pc2CSS3(S);
 }
 function pc2CSS2(S){
   var N='#0B1E5B', M='#6B7693', SUB='#3E4A6B', GL='#7F8BA6', CL='#E3E8F0', TF='#C3CBD9';
@@ -75810,5 +75820,172 @@ function pc2CSS2(S){
     +S+' .pc2-dl span{flex:none;font-size:11.5px}}',
   '@media (max-width:1380px){'+S+' .pc2-main{grid-template-columns:minmax(0,1fr)} '+S+' .pc2-r{display:grid;grid-template-columns:1fr 1fr;gap:14px} '+S+' .pc2-r .pc2-card{margin-bottom:0}}',
   '@media (max-width:1100px){'+S+' .pc2-kpi{grid-template-columns:repeat(2,minmax(0,1fr)) !important} '+S+' .pc2-r{grid-template-columns:1fr} '+S+' .pc2-lr{min-width:760px} '+S+' .pc2-led{overflow-x:auto}}'
+  ].join('\n');
+}
+/* ══ §pc2d · สมุดเดินบัญชีแบบตาราง · เพิ่มบรรทัด / แก้บรรทัด ในตารางเลย ════════
+   แทนหน้าต่าง pcRowAdd · บรรทัดที่กำลังกรอกเก็บในหน่วยความจำอย่างเดียว (ยังไม่ใช่ข้อมูล)
+   กด ✓ / Enter ถึงจะเขียนลง D.in / D.out แล้ว pcSave() เหมือนเดิมทุกอย่าง
+   ผูกกับ ท่า+วัน · เปลี่ยนวันแล้วบรรทัดที่ค้างกรอกหายไปเอง ไม่ไปโผล่ในวันอื่น
+   แก้บรรทัดเดิม · id เดิม by เดิม ts เดิม · แก้ได้ เวลา รายการ จำนวน และย้ายรับ↔จ่าย
+   แถวที่ดึงมาจากชีท (src) ย้ายฝั่งไม่ได้ ต้องเป็นรายจ่ายเสมอ */
+var _pc2Ed=null;
+function pc2EdK(){ return _pcPier+'|'+_pcDate; }
+function pc2EdCur(){ return (_pc2Ed && _pc2Ed.k===pc2EdK())?_pc2Ed:null; }
+function pc2HM(v){
+  var s=String(v==null?'':v).trim(), m;
+  if(!s) return '';
+  if((m=/^(\d{1,2})[:.\s](\d{1,2})$/.exec(s))) return (+m[1]<24 && +m[2]<60)?(('0'+(+m[1])).slice(-2)+':'+('0'+(+m[2])).slice(-2)):s;
+  if((m=/^(\d{3,4})$/.exec(s))){ var h=+s.slice(0,s.length-2), mi=+s.slice(-2); if(h<24 && mi<60) return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2); }
+  if((m=/^(\d{1,2})$/.exec(s)) && +s<24) return ('0'+(+s)).slice(-2)+':00';
+  return s;
+}
+function pc2EdNew(kind){
+  if(!pcGuard()) return;
+  var E=pc2EdCur();
+  /* บรรทัดใหม่ที่ยังว่างอยู่ · แค่สลับฝั่ง ไม่ต้องเปิดอีกบรรทัด */
+  if(E && !E.id && (E.txt||E.amt)){ E.kind=(kind==='in')?'in':'out'; pc2EdRefresh(E.txt?'amt':'txt'); return; }
+  _pc2Ed={ k:pc2EdK(), id:'', kind:(kind==='in')?'in':'out', ok:'', src:'',
+           at:(typeof ckNowHM==='function')?ckNowHM():'', txt:'', amt:'', by:pcWho() };
+  pc2EdRefresh('txt');
+}
+function pc2EdOpen(kind,id,ev){
+  if(ev && ev.target && ev.target.closest && ev.target.closest('.sc,button,input')) return;
+  if(!pcGuard()) return;
+  var D=pcDay(_pcPier,_pcDate,false); if(!D) return;
+  var k=(kind==='in')?'in':'out', hit=(D[k]||[]).filter(function(x){ return x && x.id===id; })[0];
+  if(!hit) return;
+  try{ var s=window.getSelection&&window.getSelection(); if(s&&s.removeAllRanges) s.removeAllRanges(); }catch(_){}
+  _pc2Ed={ k:pc2EdK(), id:String(id), kind:k, ok:k, src:String(hit.src||''),
+           at:String(hit.at||''), txt:String(hit.txt||''), amt:String(Math.round(+hit.amt||0)), by:String(hit.by||'') };
+  pc2EdRefresh('txt');
+}
+function pc2EdSet(f,v){
+  var E=pc2EdCur(); if(!E) return;
+  E[f]=String(v==null?'':v);
+  if(f==='amt'){
+    var pv=document.getElementById('pc2-ed-pv'); if(!pv) return;
+    var b=+pv.getAttribute('data-base')||0, a=pcNum(E.amt), r=b+(E.kind==='in'?a:-a);
+    pv.textContent=(r<0?'−':'')+pcN(Math.abs(r)); pv.classList.toggle('neg',r<0);
+    var inp=document.getElementById('pc2-ed-amt'); if(inp) inp.classList.remove('bad');
+  }
+}
+function pc2EdKind(k){
+  var E=pc2EdCur(); if(!E || E.src) return;
+  E.kind=(k==='in')?'in':'out'; pc2EdRefresh('amt');
+}
+function pc2EdCancel(){ _pc2Ed=null; pcKeep(); }
+function pc2EdFocus(f){
+  var el=document.getElementById('pc2-ed-'+f); if(!el) return;
+  try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
+  try{ var n=el.value.length; el.setSelectionRange(n,n); }catch(_){}
+  try{ var r=el.getBoundingClientRect(); if(r.bottom>window.innerHeight-20 || r.top<160) el.scrollIntoView({block:'center'}); }catch(_){}
+}
+/* วาดใหม่ทั้งแท็บ (pcKeep คืนตำแหน่งจอให้) แล้วพาโฟกัสกลับมาที่ช่อง · ไม่งั้นจอเด้ง */
+function pc2EdRefresh(f){ pcKeep(); pc2EdFocus(f||'txt'); }
+function pc2EdKey(ev,f){
+  if(ev.key==='Escape'){ ev.preventDefault(); pc2EdCancel(); return; }
+  if(ev.key!=='Enter' || ev.isComposing) return;
+  ev.preventDefault();
+  var E=pc2EdCur(); if(!E) return;
+  if(f==='at'){ pc2EdFocus('txt'); return; }
+  if(f==='txt' && !(pcNum(E.amt)>0)){ pc2EdFocus('amt'); return; }
+  pc2EdSave(1);
+}
+function pc2EdSave(next){
+  var E=pc2EdCur(); if(!E) return;
+  if(!pcGuard()) return;
+  var amt=pcNum(E.amt);
+  if(!(amt>0)){ var a=document.getElementById('pc2-ed-amt'); if(a){ a.classList.add('bad'); pc2EdFocus('amt'); } return; }
+  var D=pcDay(_pcPier,_pcDate,true), at=pc2HM(E.at), txt=String(E.txt||'').trim();
+  if(!E.id){
+    D[E.kind].push({ id:'pc'+Date.now()+Math.random().toString(36).slice(2,5),
+      txt:txt, amt:amt, at:at, by:pcWho(), ts:new Date().toISOString() });
+  } else {
+    var arr=D[E.ok]||[], i=-1;
+    for(var j=0;j<arr.length;j++) if(arr[j] && arr[j].id===E.id){ i=j; break; }
+    if(i<0){ alert('This row no longer exists (deleted on another screen). Nothing was saved.'); _pc2Ed=null; pcKeep(); return; }
+    var hit=arr[i]; hit.txt=txt; hit.amt=amt; hit.at=at;
+    if(!hit.src && E.kind!==E.ok){
+      arr.splice(i,1); D[E.kind].push(hit);
+      try{ delete _pcSel[E.ok+':'+E.id]; }catch(_){}
+    }
+  }
+  pcSave();
+  if(next && !E.id){
+    _pc2Ed={ k:pc2EdK(), id:'', kind:E.kind, ok:'', src:'', at:(typeof ckNowHM==='function')?ckNowHM():'', txt:'', amt:'', by:pcWho() };
+    pc2EdRefresh('txt');
+  } else { _pc2Ed=null; pcKeep(); }
+}
+/* บรรทัดที่กำลังกรอก · base = คงเหลือก่อนบรรทัดนี้ (ไว้คำนวณยอดจาง ๆ ระหว่างพิมพ์) */
+function pc2EdRow(E,base,no){
+  var isIn=(E.kind==='in'), a=pcNum(E.amt), pv=base+(E.amt===''?0:(isIn?a:-a));
+  var kd=' onkeydown="pc2EdKey(event,\'', ip=function(f,cls,ph,val,extra){
+    return '<input id="pc2-ed-'+f+'" class="pc2-ei '+cls+'" placeholder="'+ph+'" value="'+pcE(val)+'"'+(extra||'')
+      +kd+f+'\')" oninput="pc2EdSet(\''+f+'\',this.value)" autocomplete="off">'; };
+  var amtIn=ip('amt','r '+(isIn?'in':'out'),'0',E.amt,' inputmode="numeric"');
+  var CATS={lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'};
+  return '<div class="pc2-lr ed" id="pc2-ed">'
+    +'<span></span>'
+    +'<span class="no">'+(E.id?'แก้':'ใหม่')+'</span>'
+    +'<span>'+ip('at','c','00:00',E.at,' maxlength="5" inputmode="numeric"')+'</span>'
+    +'<span>'+ip('txt','','พิมพ์รายการ เช่น น้ำแข็ง 6 ถุง',E.txt,'')+'</span>'
+    +'<span>'+(E.src?('<em class="cat '+(E.src==='dock'?'dk':E.src)+'">'+(CATS[E.src]||'จ่ายอื่น')+'</em>')
+      :('<span class="pc2-tg"><button type="button" class="i'+(isIn?' on':'')+'" onclick="pc2EdKind(\'in\')">รับ</button>'
+       +'<button type="button" class="o'+(!isIn?' on':'')+'" onclick="pc2EdKind(\'out\')">จ่าย</button></span>'))+'</span>'
+    +'<span class="by"><i>'+pcE(E.by||'—')+'</i></span>'
+    +'<span'+(isIn?'':' class="nil"')+'>'+(isIn?amtIn:'')+'</span>'
+    +'<span'+(!isIn?'':' class="nil"')+'>'+(!isIn?amtIn:'')+'</span>'
+    +'<span class="m pv'+(pv<0?' neg':'')+'" id="pc2-ed-pv" data-base="'+base+'" title="ยอดคงเหลือถ้าบันทึกบรรทัดนี้">'+(pv<0?'−':'')+pcN(Math.abs(pv))+'</span>'
+    +'<span class="act"><button type="button" class="ok" title="บันทึก (Enter)" onclick="pc2EdSave(1)">&#10003;</button>'
+      +'<button type="button" class="no" title="ยกเลิก (Esc)" onclick="pc2EdCancel()">&times;</button></span>'
+  +'</div>';
+}
+function pc2CSS3(S){
+  var N='#0B1E5B', M='#6B7693', SUB='#3E4A6B', CL='#E3E8F0', RL='#DCE3EC';
+  var G='32px 34px 62px minmax(130px,1fr) 78px minmax(56px,84px) 84px 84px 94px 58px';
+  var L=S+' .pc2-led';
+  return [
+  L+' .pc2-ltw{overflow-x:auto;border-top:1px solid '+RL+'}',
+  L+' .pc2-ltb{min-width:760px}',
+  L+' .pc2-lr{grid-template-columns:'+G+';padding:0;border-top:none;border-bottom:1px solid '+RL+';align-items:stretch;min-height:42px;font-size:14px}',
+  L+' .pc2-lr>span{display:flex;align-items:center;padding:0 9px;border-right:1px solid '+CL+';min-width:0}',
+  L+' .pc2-lr>span:last-child{border-right:none}',
+  L+' .pc2-lr>span.m{justify-content:flex-end}',
+  L+' .pc2-lr>span.c,'+L+' .pc2-lr>span.no,'+L+' .pc2-lr>span.sc,'+L+' .pc2-lr>span.ct,'+L+' .pc2-lr>span.act{justify-content:center}',
+  L+' .pc2-lr>span.no{font-family:"DM Mono",monospace;font-size:12.5px;color:#9AA3B8;padding:0}',
+  L+' .pc2-lr>span.act{padding:0 4px;gap:2px}',
+  L+' .pc2-lr .tx i,'+L+' .pc2-lr .by i{font-style:normal;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
+  L+' .pc2-lr .tx,'+L+' .pc2-lr .by{display:flex}',
+  L+' .pc2-lr.hd{min-height:36px;background:#F4F6FA;border-bottom:1.5px solid '+N+';font-size:11px}',
+  L+' .pc2-lr.op{background:#FAFBFD}',
+  L+' .pc2-lr.tot{background:#F4F6FA;border-top:none;border-bottom:2px solid '+N+';min-height:44px}',
+  L+' .pc2-lr.rw{cursor:default}',
+  L+' .pc2-lr.rw:hover{background:#F8FAFD} '+L+' .pc2-lr.rw.pcp-on{background:#EEF4FD}',
+  L+' .pc2-lr em.cat{background:none !important;padding:0;font-size:12.5px}',
+  L+' .pc2-lr .m.neg{color:#A32D2D}',
+  L+' .pc2-ed2{width:26px;height:26px;border-radius:13px;border:none;background:transparent;color:#B4BDCF;font-size:14px;cursor:pointer}',
+  L+' .pc2-ed2:hover{background:#E8EEF8;color:'+N+'}',
+  L+' .pc2-lr.rw .pc2-ed2,'+L+' .pc2-lr.rw .pc2-x{opacity:.55} '+L+' .pc2-lr.rw:hover .pc2-ed2,'+L+' .pc2-lr.rw:hover .pc2-x{opacity:1}',
+  L+' .pc2-empty{border-bottom:1px solid '+RL+'}',
+  /* บรรทัดกำลังกรอก */
+  L+' .pc2-lr.ed{background:#FFFBEF;box-shadow:inset 3px 0 0 #D9952B;min-height:50px}',
+  L+' .pc2-lr.ed>span{padding:0 5px;border-right-color:#EFE3C6}',
+  L+' .pc2-lr.ed>span.no{color:#9A6B1F;font-family:inherit;font-weight:700;font-size:12px}',
+  L+' .pc2-lr.ed>span.nil{background:#F7F5EE}',
+  L+' .pc2-ei{width:100%;min-width:0;height:32px;box-sizing:border-box;border:1px solid #E7D3A6;border-radius:7px;background:#fff;padding:0 9px;font:inherit;font-size:14px;color:'+N+';outline:none}',
+  L+' .pc2-ei:focus{border:1.5px solid '+N+';box-shadow:0 0 0 3px rgba(11,30,91,.12)}',
+  L+' .pc2-ei.c{text-align:center;font-family:"DM Mono",monospace;padding:0 4px}',
+  L+' .pc2-ei.r{text-align:right;font-family:"DM Mono",monospace}',
+  L+' .pc2-ei.r.in{color:#0B7A4B} '+L+' .pc2-ei.r.out{color:#A32D2D}',
+  L+' .pc2-ei.bad{border:1.5px solid #C6403F;box-shadow:0 0 0 3px rgba(198,64,63,.15)}',
+  L+' .pc2-lr .pv{color:#9AA3B8} '+L+' .pc2-lr .pv.neg{color:#D99A9A}',
+  L+' .pc2-tg{flex:1;display:flex;padding:3px;border-radius:8px;background:#EEF1F6;gap:2px}',
+  L+' .pc2-tg button{flex:1;height:26px;border:none;border-radius:6px;background:transparent;font-size:12.5px;font-weight:600;color:'+SUB+';cursor:pointer;padding:0}',
+  L+' .pc2-tg button.i.on{background:#0B7A4B;color:#fff} '+L+' .pc2-tg button.o.on{background:#A32D2D;color:#fff}',
+  L+' .pc2-lr.ed .act button{width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:14px;padding:0}',
+  L+' .pc2-lr.ed .act .ok{border:none;background:'+N+';color:#fff} '+L+' .pc2-lr.ed .act .no{border:1px solid #D5DBE6;background:#fff;color:'+M+'}',
+  L+' .pc2-add button{height:42px;border-radius:10px}',
+  '@media (max-width:1380px){'+S+' .pc2-main{grid-template-columns:minmax(0,1fr)} '+S+' .pc2-r{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start} '+S+' .pc2-r .pc2-card{margin-bottom:0}}',
+  '@media (max-width:900px){'+S+' .pc2-r{grid-template-columns:1fr}}'
   ].join('\n');
 }
