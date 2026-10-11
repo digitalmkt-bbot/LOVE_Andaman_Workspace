@@ -63,7 +63,7 @@ added    .agent-reports/S1-ops-agents.json
 - **Blockers:** None for S1 implementation. `test:aginfo` and `test:aghd` need a harness login bypass in this environment; `test:ops` has pre-existing fixture/assertion failures.
 - **Dependencies:** `01-auth-sync.js` token/`laOpsFetch`, `00-ops-core.js`, catalogue Agent list data, and the documented operation-backend sales routes.
 - **Follow-up work:** Add a dedicated UI entry point for activate/deactivate/renew if product wants those lifecycle commands surfaced; currently stable global helpers are exposed for callers.
-- **Rollback procedure:** Revert commit `S1-ops-agents` (or remove the S1 script tag and adapter/test/report paths); do not issue destructive API calls as part of rollback.
+- **Rollback procedure:** Revert commit `9e64d594cb05cbc556484f064c2564fb10fc6436` (or remove the S1 script tag and adapter/test/report paths); do not issue destructive API calls as part of rollback.
 
 ## Agent handoff
 

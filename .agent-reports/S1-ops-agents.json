@@ -11,7 +11,7 @@
     "base": "231ce9e",
     "branch": "agent/ops-agents",
     "worktree": "D:/projects/wt-ops-agents",
-    "commit": "",
+    "commit": "9e64d594cb05cbc556484f064c2564fb10fc6436",
     "pr": { "number": null, "url": "", "state": "none" }
   },
   "input": {
