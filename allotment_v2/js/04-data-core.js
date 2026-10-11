@@ -875,6 +875,9 @@ var LA_T_EN={
   'ต่างท่า · ต้องเปลี่ยนจุดขึ้นเรือ':'Different pier · boarding point changes',
   'ย้ายไปเส้นทางอื่น':'Move to another programme',
   /* §upgConfirm2 (2026-10-11) */
+  'ไม่ต้องเก็บเงิน':'Nothing to collect',
+  'ต้องเก็บ':'Collect',
+  'เก็บแล้ว':'Collected',
   'ยืนยันการ Upgrade':'Confirm upgrade',
   'ตรวจอีกครั้งก่อนย้าย':'Check once more before moving',
   'จากโปรแกรม':'From',
