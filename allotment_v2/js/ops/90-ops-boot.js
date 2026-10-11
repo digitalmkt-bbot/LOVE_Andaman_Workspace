@@ -34,6 +34,7 @@
   var t0 = Date.now();
   Promise.resolve()
     .then(step('catalogue', function(){ return O.catalogue && O.catalogue.load(); }))
+    .then(step('staff & welfare', function(){ return O.staff && O.staff.load(); }))
     .then(step('deployments', function(){ return O.deployments && O.deployments.load(); }))
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
     .then(function(){
