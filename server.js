@@ -212,7 +212,7 @@ const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g
 const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 //
 const {
-  mapB2COrders, b2cFindArea, b2cCheckOrders, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
+  mapB2COrders, b2cFindArea, b2cCheckOrders, b2cAddonWant, b2cAddonMatch, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
 } = require('./b2c-map.js');   // §b2cMapMod · the pure mapper; relSyncB2C below does the I/O
 const b2cChg = require('./b2c-changelog.js');   // §b2cChg · history line when a sync changes a booking
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
@@ -423,7 +423,8 @@ function b2cHealthReport() {
     phase: B2C_HEALTH.phase,
     // §b2cCheck · data problems in what DID import. Separate from ok on purpose: the sync is healthy,
     // a booking it brought in is not — /api/b2c/health must not 503 an uptime monitor over one order.
-    issues: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').slice(0, 50),
+    // §b2cAddon · linked add-on-only lines ride along as info (not counted) so the panel can list them
+    issues: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn' || i.code === 'addon_linked').slice(0, 60),
     issueCount: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length,
     issuesAt: B2C_HEALTH.issuesAt,
     // Changes whenever the SET of flagged bookings changes — lets the client re-show a panel the
@@ -444,7 +445,23 @@ async function _b2cRunChecks(itemRows, b2cBks, paxByBooking, singleRef) {
         [b2cBks.map(b => b.id)]);
       opsNat = new Set(rows.map(r => r.sb_bookings_id));
     } catch (_) { /* no nat columns on this DB — check without it */ }
-    const found = b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat);
+    // §b2cAddon · find the agent booking each add-on-only B2C line belongs to (ref in its notes)
+    let addonLinks = new Map();
+    try {
+      const want = b2cAddonWant(b2cBks);
+      if (want.length) {
+        const { rows } = await pool.query(
+          `SELECT b.id, b.voucherref, t.date, t.routeid
+           FROM ${fqt('sb_bookings')} b JOIN ${fqt('sb_bookings__trips')} t ON t.sb_bookings_id = b.id
+           WHERE COALESCE(b.agentid, '') <> 'a_b2c'
+             AND COALESCE(b.status, '') NOT IN ('cancelled', 'cancelled_weather', 'rejected')
+             AND t.date = ANY($1)
+             AND upper(regexp_replace(COALESCE(b.voucherref, ''), '[^A-Za-z0-9]', '', 'g')) = ANY($2)`,
+          [[...new Set(want.map(w => w.date))], [...new Set([].concat(...want.map(w => w.refs)))]]);
+        addonLinks = b2cAddonMatch(want, rows);
+      }
+    } catch (e) { console.warn('[b2c-check] add-on link lookup skipped:', e.message); }
+    const found = b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat, addonLinks);
     const prev = (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length;
     B2C_HEALTH.issues = singleRef
       ? (B2C_HEALTH.issues || []).filter(i => i.ref !== String(singleRef)).concat(found)

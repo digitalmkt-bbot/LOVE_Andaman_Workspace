@@ -20384,6 +20384,8 @@ function bkLtUpgrade(b){
   return {n:n, due:due};
 }
 function bkLtState(b, routeId, date){
+  if(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(b))            /* §b2cAddon · นับที่ใบเอเจนต์แล้ว */
+    return {mode:'none', boats:0, joinBooked:false, joinExtra:0, up:0, upDue:0, fromUp:false};
   var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,routeId):{};
   var xPax=(typeof bkV2LongtailExtraPax==='function')?(bkV2LongtailExtraPax(b.id,date)||0):0;
   var xBoat=(typeof bkV2LongtailCharterExtraBoats==='function')?(bkV2LongtailCharterExtraBoats(b.id,date)||0):0;
@@ -51026,8 +51028,95 @@ function bkV2AddOnFlags(bk, routeId){
 }
 // Longtail-Join pax sold day-of via "+ extra" (SB_EXTRAS · qty = people). Optionally scoped to a trip date.
 // "Longtail Join" preset counts as Join · "Private Longtail" / เหมา = a whole boat, NOT per-person join.
+/* ══ §b2cAddon (2026-10-11) · บริการเสริมที่ซื้อผ่าน B2C ของทริปที่จองผ่านเอเจนต์ ═══════════════
+   owner: "ลค จองทริปกับเอเจนต์ แล้วมาจองบริการเสริมผ่านบริษัท ทีนี้มันเลยเข้ามาแค่บริการเสริม"
+   ใบ B2C แบบนี้มี 0 คน มีแต่ add-on (เช่นเหมาหางยาว) · ของเดิมขึ้นเตือน "จำนวนคนเป็น 0"
+   และหางยาวลำนั้นไม่ไปอยู่ที่แถวของใบเอเจนต์ ที่หน้าท่าใช้งานจริง
+   ฝ่ายขายเขียนเลขใบเอเจนต์ไว้ในหมายเหตุอยู่แล้ว ("ลูกค้าจองมาใน VC 22433 จาก IN&OUT",
+   "KLOOK Ref: cnc139595 Grc403963") · หาใบที่ voucherRef ตรงกัน (ไม่สนตัวพิมพ์/เครื่องหมาย)
+   วันเดินทางเดียวกัน · เส้นทางเดียวกันก่อน · เลขแรกที่เจอชนะ · ไม่มีเลข/หาไม่เจอ = ไม่ผูก (ไม่เดาจากชื่อ)
+   กติกาเดียวกับ b2c-map.js b2cAddonMatch (ฝั่งเซิร์ฟเวอร์ใช้กับกล่องเช็คใบ B2C) · แก้ต้องแก้คู่กัน
+   ผูก = คำนวณสดตอนเปิดหน้า ไม่เขียนอะไรลงใบไหนเลย · เงินยังอยู่ที่ใบ B2C ไม่ไปเพิ่มยอดใบเอเจนต์
+   หางยาวของใบ B2C นับให้ใบเอเจนต์ผ่าน bkV2LongtailExtraPax / bkV2LongtailCharterExtraBoats
+   (ทุกจุดที่นับหางยาวเรียกสองตัวนี้อยู่แล้ว) และตัวใบ B2C เองไม่นับซ้ำ (bkB2CAddonTo) */
+function bkB2CAddonRefs(txt){
+  var out=[];
+  String(txt||'').replace(/[A-Za-z0-9][A-Za-z0-9-]*/g, function(w){
+    var k=w.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(k.length>=4 && /\d/.test(k) && out.indexOf(k)<0) out.push(k);
+    return w; });
+  return out;
+}
+function _bkB2CRefNorm(v){ return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+var _B2C_DEAD=['cancelled','cancelled_weather','rejected'];
+function bkB2CAddonOnly(b){
+  if(!b || b.agentId!=='a_b2c' || _B2C_DEAD.indexOf(b.status)>=0 || !(b.addOns||[]).length) return false;
+  var px=0; (b.trips||[]).forEach(function(t){ var p=t.pax||{}; for(var k in p) px+=(+p[k]||0); });
+  return px===0;
+}
+var _b2cAddonIx={at:0,n:-1,to:{},of:{}};
+function _bkB2CAddonIndex(){
+  var L=(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS))?SB_BOOKINGS:[];
+  var now=Date.now();
+  if(_b2cAddonIx.n===L.length && now-_b2cAddonIx.at<1500) return _b2cAddonIx;
+  var ix={at:now,n:L.length,to:{},of:{}};
+  var want=L.filter(bkB2CAddonOnly);
+  if(want.length){
+    var byRef={};
+    L.forEach(function(b){
+      if(!b || b.agentId==='a_b2c' || _B2C_DEAD.indexOf(b.status)>=0) return;
+      var k=_bkB2CRefNorm(b.voucherRef); if(k.length<4) return;
+      (byRef[k]=byRef[k]||[]).push(b);
+    });
+    want.forEach(function(w){
+      var t=(w.trips||[])[0]||{}; if(!t.date) return;
+      var own=_bkB2CRefNorm(w.voucherRef);
+      var refs=bkB2CAddonRefs(w.notes).filter(function(r){ return r!==own; });
+      for(var i=0;i<refs.length;i++){
+        var hit=(byRef[refs[i]]||[]).map(function(b){
+            var bt=(b.trips||[]).filter(function(x){ return x && x.date===t.date; });
+            if(!bt.length) return null;
+            return {b:b, same:bt.some(function(x){ return x.routeId===t.routeId; })?0:1};
+          }).filter(Boolean)
+          .sort(function(a,c){ return (a.same-c.same) || String(a.b.id).localeCompare(String(c.b.id)); })[0];
+        if(hit){
+          ix.to[w.id]={bk:hit.b, vc:hit.b.voucherRef||'', date:t.date, routeId:t.routeId};
+          (ix.of[hit.b.id+'|'+t.date]=ix.of[hit.b.id+'|'+t.date]||[]).push(w);
+          break;
+        }
+      }
+    });
+  }
+  _b2cAddonIx=ix; return ix;
+}
+/* ใบ B2C นี้เป็นบริการเสริมของใบเอเจนต์ใบไหน · null = ไม่ใช่ / หาไม่เจอ */
+function bkB2CAddonTo(b){ return (b && b.agentId==='a_b2c') ? (_bkB2CAddonIndex().to[b.id]||null) : null; }
+/* ใบ B2C ที่ผูกกับใบเอเจนต์ใบนี้ในวันนั้น */
+function bkB2CAddonsOf(bkId, date){
+  if(!bkId) return [];
+  var I=_bkB2CAddonIndex();
+  if(date) return I.of[bkId+'|'+date]||[];
+  var out=[]; Object.keys(I.of).forEach(function(k){ if(k.indexOf(bkId+'|')===0) out=out.concat(I.of[k]); }); return out;
+}
+/* หางยาวที่ใบ B2C ที่ผูกไว้ซื้อมา · join = คน · boats = ลำ */
+function bkB2CAddonLt(bkId, date){
+  var o={join:0, boats:0, refs:[]};
+  bkB2CAddonsOf(bkId, date).forEach(function(l){
+    var got=false;
+    (l.addOns||[]).forEach(function(a){
+      var ty=String(a.type||''), lb=String(a.label||'');
+      var k=(typeof bkV2LtAddOnKind==='function')?bkV2LtAddOnKind(ty):'';
+      if(!k && /longtail|หางยาว/i.test(ty+' '+lb)) k=/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(ty+' '+lb)?'charter':'join';
+      if(k==='charter'){ o.boats+=(+a.qty||1); got=true; }
+      else if(k==='join'){ o.join+=((a.jAd!=null||a.jChd!=null)?((+a.jAd||0)+(+a.jChd||0)):(+a.qty||0)); got=true; }
+    });
+    if(got) o.refs.push(l.voucherRef||l.id);
+  });
+  return o;
+}
 function bkV2LongtailExtraPax(bkId, date){
   let n=0;
+  if(date) n+=bkB2CAddonLt(bkId, date).join;   /* §b2cAddon */
   (typeof bkV2ExtrasFor==='function'?bkV2ExtrasFor(bkId):[]).forEach(e=>{
     const nm=String(e.service||'');
     if(!/longtail|หางยาว/i.test(nm)) return;
@@ -51041,6 +51130,7 @@ function bkV2LongtailExtraPax(bkId, date){
 // "Longtail เหมา" add-on → counted together in the trip prep summary. Optionally scoped to a date.
 function bkV2LongtailCharterExtraBoats(bkId, date){
   let n=0;
+  if(date) n+=bkB2CAddonLt(bkId, date).boats;   /* §b2cAddon */
   (typeof bkV2ExtrasFor==='function'?bkV2ExtrasFor(bkId):[]).forEach(e=>{
     const nm=String(e.service||'');
     if(!/longtail|หางยาว/i.test(nm)) return;
@@ -51728,7 +51818,7 @@ function bkV2RenderTab2(){
       const ol=(gd.otherLang||'').trim(); if(ol) lang[ol]=(lang[ol]||0)+t;
       veg+=+mm.veg||0; vegan+=+mm.vegan||0; halal+=+mm.halal||0;
       allerg+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
-      const af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(r.bk,rid):null;
+      const af=(typeof bkV2AddOnFlags==='function' && !(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk)))?bkV2AddOnFlags(r.bk,rid):null;   /* §b2cAddon */
       if(af){ if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=t; }
       if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(r.bk.id,date)||0);
       if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(r.bk.id,date)||0);
@@ -51935,7 +52025,7 @@ function bkV2RenderTab2(){
         let vPax=0,uTot=0;
         grp2.forEach(r=>{ const bid=r.charter?(r.charterBoatId||bkOpsRead(r.bk,date).boatId):bkOpsRead(r.bk,date).boatId; const t=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); vPax+=t;
           const gd=r.bk.guides||{}; const mm=r.bk.specialMeals||{};
-          const _af=bkV2AddOnFlags(r.bk, rid2);   // longtail join / charter / transfer on this variant
+          const _af=(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk))?{}:bkV2AddOnFlags(r.bk, rid2);   // longtail join / charter / transfer on this variant · §b2cAddon linked B2C counted on the agent row
           const o=(bid&&ag[bid])?ag[bid]:null;
           const _exJoin=bkV2LongtailExtraPax(r.bk.id, date);   // day-of "+ extra" longtail join (qty = people)
           const _exChtr=bkV2LongtailCharterExtraBoats(r.bk.id, date);   // day-of "+ extra" private/charter longtail (qty = boats)
@@ -52007,7 +52097,7 @@ function bkV2RenderTab2(){
       if(g.chinese) langCnt['CN']=(langCnt['CN']||0)+_rp;
       const _ol=(g.otherLang||'').trim(); if(_ol) langCnt[esc(_ol)]=(langCnt[esc(_ol)]||0)+_rp;
       // ── add-on prep counts (shared detection · see bkV2AddOnFlags) ──
-      const _af=bkV2AddOnFlags(r.bk, r.routeId);
+      const _af=(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk))?{}:bkV2AddOnFlags(r.bk, r.routeId);   /* §b2cAddon */
       if(_af.charter) ltCharterBoats += (_af.charterQty||1);          // charter = whole boat · count boats (× qty)
       else if(_af.join) ltJoinPax+=_rp;          // join = per-head · count heads riding the longtail
       if(_af.transfer) ptPax+=_rp;
@@ -52337,6 +52427,14 @@ function bkV2RenderTab2(){
           if(_lb && _rtBundleAppliesTo(_lb, _trip.bookingMode==='charter')) _ltLabel = 'Longtail'+(_lb.mode==='free'?' (incl.)':' (bundle)');
         }
         if(_ltLabel) addonBadges.unshift(`<span class="t2-rb" style="background:#E6F1FB;color:#1683C7" title="${esc(_ltLabel)}${_ltNote?(' · หมายเหตุ: '+esc(_ltNote)):''}"   /* §btClip */>${esc(_ltLabel)}${_ltNote?` &#128221; ${esc(_ltNote)}`:''}</span>`);
+        /* §b2cAddon · ใบเอเจนต์: บริการเสริมที่ซื้อผ่าน B2C · ใบ B2C: บอกว่าเป็นของใบไหน */
+        const _b2cTo=(typeof bkB2CAddonTo==='function')?bkB2CAddonTo(bk):null;
+        const _b2cOf=(typeof bkB2CAddonsOf==='function')?bkB2CAddonsOf(bk.id, date):[];
+        const b2cAddonChips=(_b2cTo
+            ? `<span class="t2-rb b2c-addon-of" style="background:#EEF2F7;color:#3A4A5E" title="บริการเสริมของใบ VC ${esc(_b2cTo.vc)} · นับหางยาวที่แถวของใบนั้น · ใบนี้ไม่กินที่นั่ง">&#8627; ของ VC ${esc(_b2cTo.vc)}</span>`
+            : '')
+          + _b2cOf.map(l=>{ const _ls=(l.addOns||[]).map(a=>String(a.label||a.type||'')+((+a.qty||1)>1?(' ×'+(+a.qty)):'')).filter(Boolean).join(', ');
+              return `<span class="t2-rb b2c-addon-in" style="background:#FCEBDD;color:#8A3E05" title="${esc(_ls)} · ซื้อผ่าน B2C ${esc(l.voucherRef||l.id)} · จ่ายที่ใบ B2C · ไม่บวกยอดใบนี้">${esc(_ls||'Add-on')} · B2C ${esc(l.voucherRef||l.id)}</span>`; }).join('');
         const _extras=(typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(bk.id):[];
         const extrasChips=_extras.map(e=>{ const _g=(typeof bkxExGot==='function')?bkxExGot(e):true;
           return `<span class="t2-rb" style="background:${_g?'#E1F5EE':'#FDF3E3'};color:${_g?'#0F6E56':'#8A5300'};cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ${_g?('ขายหน้างาน '+(({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'})[e.method||'cash']||'เงินสด')):'ขายล่วงหน้า · เก็บเงินวันเดินทาง · ยังไม่ได้เก็บ'}" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}${_g?'':' &#9203;'}</span>`; }).join('');
@@ -52506,7 +52604,7 @@ function bkV2RenderTab2(){
               return _zp(_zt(_rw, { raw:true }));
             })()}</td>
             <td class="t2-sbk">${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
-            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
+            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${b2cAddonChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
               ${_movedBadge}
               ${_splitBadge}

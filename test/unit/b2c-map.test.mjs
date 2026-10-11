@@ -196,3 +196,40 @@ test('§b2cCheck · a cancelled order is never flagged', () => {
   const bks = runFixture(fx); bks.forEach(b => { b.status = 'cancelled'; });
   assert.deepEqual(checks(fx, bks), []);
 });
+
+// ── §b2cAddon · add-on-only B2C line for a trip booked through an agent ──────────────────────────
+test('§b2cAddon · refs from the special request: VC number, KLOOK refs; words and short numbers ignored', () => {
+  assert.deepEqual(map.b2cAddonRefs('ลูกค้าจองมาใน VC 22433 จาก IN&OUT / ลูกค้า 6 ท่าน'), ['22433']);
+  assert.deepEqual(map.b2cAddonRefs('เดย์ทริปจองผ่าน KLOOK Ref: cnc139595 Grc403963'), ['CNC139595', 'GRC403963']);
+});
+const addonOnly = (sreq) => runWith('LOV-3488828', fx => {
+  const it = fx.items[0]; it.pax_adult = 0; it.special_request = sreq; });
+test('§b2cAddon · 0 pax + only add-ons = add-on-only; with a seat it is not', () => {
+  const [b] = addonOnly('VC 22433');
+  assert.equal(map.b2cAddonOnly(b), true);
+  assert.equal(map.b2cAddonOnly(one('LOV-3488828')), false);
+});
+test('§b2cAddon · match: same date, voucherRef equal after case/punctuation, first ref wins, same route preferred', () => {
+  const [b] = addonOnly('KLOOK Ref: cnc139595 Grc403963');
+  const t = trip(b);
+  const want = map.b2cAddonWant([b]);
+  assert.deepEqual(want[0].refs, ['CNC139595', 'GRC403963']);
+  const rows = [
+    { id: 'BK-G', voucherref: 'GRC403963', date: t.date, routeid: t.routeId },
+    { id: 'BK-X', voucherref: 'CNC-139595', date: t.date, routeid: 'other' },
+    { id: 'BK-C', voucherref: 'cnc139595', date: t.date, routeid: t.routeId },
+    { id: 'BK-OLD', voucherref: 'CNC139595', date: '2020-01-01', routeid: t.routeId },
+  ];
+  const L = map.b2cAddonMatch(want, rows);
+  assert.equal(L.get(b.id).targetId, 'BK-C');
+  assert.equal(map.b2cAddonMatch(want, rows.filter(r => r.date !== t.date)).size, 0, 'another date never links');
+});
+test('§b2cCheck · add-on-only line: linked → info, not linked → addon_only warn (not pax0)', () => {
+  const fx = loadFixture('LOV-3488828'); fx.items[0].pax_adult = 0; fx.items[0].special_request = 'VC 22433';
+  const bks = runFixture(fx);
+  assert.deepEqual(warns(checks(fx, bks)), ['addon_only']);
+  const links = new Map([[bks[0].id, { targetId: 'BK-1', vc: '22433', ref: '22433' }]]);
+  const L = map.b2cCheckOrders(fx.items, bks, new Map([[fx.id, fx.paxRows || []]]), null, links);
+  assert.deepEqual(L.filter(i => i.sev === 'warn').map(i => i.code), []);
+  assert.ok(L.some(i => i.code === 'addon_linked' && /VC 22433/.test(i.msg)));
+});

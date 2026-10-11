@@ -787,7 +787,56 @@ function _b2cRawNat(p) { return String((p && p.nationality) || '').trim(); }
 // opsNat (optional) = Set of booking-line ids that already carry a hand-entered trip.nat in ops —
 // the sync restores those after the re-insert, so a mixed party ops already counted is not flagged.
 const B2C_DEAD = new Set(['cancelled', 'cancelled_weather', 'rejected']);
-function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
+
+// ── §b2cAddon (2026-10-11) · a B2C order that is ONLY an add-on for a trip booked through an agent ──
+// The owner: the guest booked the day trip with an agent (In & Out, KLOOK…) and then bought the
+// longtail charter from us through B2C. The B2C line arrives with 0 pax and just the add-on, so it
+// was flagged "pax 0" and its longtail never reached the agent booking the pier actually works from.
+// B2C sales already write the agent's voucher in the special request ("ลูกค้าจองมาใน VC 22433 จาก
+// IN&OUT", "KLOOK Ref: cnc139595 Grc403963"). Those refs find the agent booking: same travel date,
+// voucherRef equal after dropping case and punctuation; same route preferred; the first ref that hits
+// wins. No ref, or no booking with it on that date → no link (never guessed from a name).
+// The client (js/08-app.js §b2cAddon) runs the SAME rule to show the add-on on the agent's row; keep
+// the two in step.
+function b2cAddonRefs(text) {
+  const out = [];
+  String(text || '').replace(/[A-Za-z0-9][A-Za-z0-9-]*/g, w => {
+    const k = w.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (k.length >= 4 && /\d/.test(k) && !out.includes(k)) out.push(k);
+    return w;
+  });
+  return out;
+}
+const b2cRefNorm = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function b2cAddonOnly(bk) {
+  if (!bk || B2C_DEAD.has(bk.status) || !(bk.addOns || []).length) return false;
+  let px = 0;
+  for (const t of bk.trips || []) for (const v of Object.values(t.pax || {})) px += Number(v) || 0;
+  return px === 0;
+}
+// want: [{id, refs[], date, route}] · rows: [{id, voucherref, date, routeid}] (agent bookings, not B2C,
+// not cancelled) → Map(b2cId → {targetId, vc, ref})
+function b2cAddonMatch(want, rows) {
+  const links = new Map();
+  for (const w of want) {
+    for (const ref of w.refs) {
+      const hit = rows.filter(r => r.date === w.date && b2cRefNorm(r.voucherref) === ref)
+        .sort((a, b) => (a.routeid === w.route ? 0 : 1) - (b.routeid === w.route ? 0 : 1) || String(a.id).localeCompare(String(b.id)))[0];
+      if (hit) { links.set(w.id, { targetId: hit.id, vc: hit.voucherref, ref }); break; }
+    }
+  }
+  return links;
+}
+function b2cAddonWant(b2cBks) {
+  return b2cBks.filter(b2cAddonOnly).map(b => {
+    const t = (b.trips || [])[0] || {};
+    // notes = the special request / remark sales typed; never the booking's own voucher
+    const own = b2cRefNorm(b.voucherRef);
+    return { id: b.id, refs: b2cAddonRefs(b.notes).filter(r => r !== own), date: t.date || '', route: t.routeId || '' };
+  }).filter(w => w.refs.length && w.date);
+}
+
+function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat, addonLinks) {
   const issues = [];
   const byOrder = new Map();
   for (const it of itemRows) {
@@ -830,7 +879,12 @@ function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
                   + (+P.inf_fr || 0) + (+P.inf_th || 0) + (+P.foc || 0);
       if (!t.routeId) add(bk, 'warn', 'route', 'หาเส้นทางไม่เจอ (' + (it.product_id || '?') + ') · ไม่ขึ้นในเรือ/ใบงานจนกว่าจะเลือกเส้นทางเอง');
       if (!t.date) add(bk, 'warn', 'date', 'ไม่มีวันเดินทาง');
-      if (!isTransfer && heads <= 0) add(bk, 'warn', 'pax0', 'จำนวนคนเป็น 0 · ไม่กินที่นั่งและไม่ขึ้นในใบงาน');
+      // §b2cAddon · 0 pax with only add-ons = an add-on for an agent's booking, not a broken line
+      const _ln = !isTransfer && heads <= 0 && addonLinks && addonLinks.get(bk.id);
+      if (_ln) add(bk, 'info', 'addon_linked', 'บริการเสริมของใบเอเจนต์ VC ' + _ln.vc + ' · ขึ้นที่แถวของใบนั้น · ไม่กินที่นั่ง');
+      else if (!isTransfer && heads <= 0 && b2cAddonOnly(bk))
+        add(bk, 'warn', 'addon_only', 'มีแต่บริการเสริม ไม่มีจำนวนคน · หาใบเอเจนต์ไม่เจอ · ให้เขียนเลข VC ของเอเจนต์ในหมายเหตุที่ B2C');
+      else if (!isTransfer && heads <= 0) add(bk, 'warn', 'pax0', 'จำนวนคนเป็น 0 · ไม่กินที่นั่งและไม่ขึ้นในใบงาน');
 
       // Park fee: the whole party was priced Thai off the LEAD alone (B2C sent no split of its own —
       // paxAllThai), nobody has a real-nationality count, yet a traveller we know of is not Thai.
@@ -872,6 +926,7 @@ function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
 
 module.exports = {
   b2cCheckOrders,
+  b2cAddonRefs, b2cAddonOnly, b2cAddonMatch, b2cAddonWant,   // §b2cAddon
   b2cFindArea,
   mapB2COrders,
   B2C_ROUTE_MAP,

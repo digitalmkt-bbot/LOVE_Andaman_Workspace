@@ -754,13 +754,18 @@
     x.onload=function(){
       var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
       var L=(j&&j.issues)||[];
+      /* §b2cAddon · ใบที่มีแต่บริการเสริมและผูกกับใบเอเจนต์ได้แล้ว ไม่ใช่ปัญหา · แยกไว้ส่วนสีเขียวข้างล่าง */
+      var W=L.filter(function(i){ return i.code!=='addon_linked'; }), G=L.filter(function(i){ return i.code==='addon_linked'; });
       if(!L.length){ box.innerHTML='<div style="padding:10px 12px">ไม่มีรายการแล้ว</div>'; return; }
-      box.innerHTML=L.map(function(i){
-        return '<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #F3E7CC;align-items:baseline">'
+      var row=function(i,ok){
+        return '<div class="'+(ok?'la-b2ci-ok':'la-b2ci-warn')+'" style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid '+(ok?'#DCEDE2;background:#F1F8F3;color:#1F4D37':'#F3E7CC')+';align-items:baseline">'
           +'<a href="javascript:void 0" onclick="window.dashOpenBooking&&dashOpenBooking(\''+esc(i.id)+'\')" '
           +'style="font-family:\'DM Mono\',monospace;font-weight:700;color:#185FA5;white-space:nowrap;text-decoration:none">'+esc(i.ref)+'</a>'
           +'<span>'+esc(i.msg)+'</span></div>';
-      }).join('');
+      };
+      box.innerHTML=W.map(function(i){ return row(i,false); }).join('')
+        +(G.length?('<div style="padding:7px 12px 5px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#2F6B4F;background:#F1F8F3">บริการเสริมของใบเอเจนต์ · ไม่กินที่นั่ง · '+G.length+'</div>'
+          +G.map(function(i){ return row(i,true); }).join('')):'');
     };
     x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
     try{ x.send(); }catch(e){}
