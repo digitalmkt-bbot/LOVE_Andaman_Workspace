@@ -1,0 +1,60 @@
+{
+  "packet": "O3",
+  "status": "complete",
+  "objective": "Migrate day-of booking actions (insurance, meals, check-in, tour sales, upgrade collection) to operation-backend in operations mode.",
+  "branch": "agent/ops-day-actions",
+  "commit": "aa03c9567b181a5c2e52fa82137be004dc512403",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/36-ops-day-actions.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-day-actions.test.mjs",
+    "docs/development/tasks/O3-ops-day-actions.md",
+    ".agent-reports/O3.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/36-ops-day-actions.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/operations.ts",
+    "D:/projects/operation-backend/src/routes/sales-editing.ts",
+    "D:/projects/operation-backend/src/routes/money.ts",
+    "D:/projects/operation-backend/src/domain/insurance.ts",
+    "D:/projects/operation-backend/src/domain/checkin.ts",
+    "D:/projects/operation-backend/src/domain/pier-money.ts",
+    "D:/projects/operation-backend/src/domain/upgrades.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "PUT", "path": "/v1/bookings/:id/insurance", "body": "{passengers:[{passenger,age?,reviewed?}]}" },
+    { "method": "PUT", "path": "/v1/bookings/:id/meals", "body": "{veg,vegan,halal,allergies}" },
+    { "method": "PUT", "path": "/operations/trip-ops/:trip_id/checkins/:kind/:slot", "body": "{expected,actual_pax,checked_in_at,checked_in_by,...,events}" },
+    { "method": "DELETE", "path": "/operations/trip-ops/:trip_id/checkins/:kind/:slot", "body": null },
+    { "method": "GET", "path": "/v1/bookings/:id/tour-sales", "body": null },
+    { "method": "POST", "path": "/v1/bookings/:id/tour-sales", "body": "{trip_date?,service,qty,unit_price,to_company,seller?,method,fee_pct?,slip_ids?}" },
+    { "method": "PATCH", "path": "/v1/bookings/:id/tour-sales/:sale_id", "body": "{service?,qty?,unit_price?,to_company?,seller?,method?,fee_pct?,slip_ids?}" },
+    { "method": "POST", "path": "/v1/bookings/:id/tour-sales/:sale_id/collect", "body": "{method,fee_pct?,slip_ids?}" },
+    { "method": "DELETE", "path": "/v1/bookings/:id/tour-sales/:sale_id", "body": null },
+    { "method": "POST", "path": "/v1/bookings/:id/upgrades/:upgrade_id/collect", "body": "{method,fee_pct?,slip_ids?}" }
+  ],
+  "projection_mapping": "Versioned booking writes update SB_BOOKINGS and SB_EXTRAS from server responses; check-in writes merge returned trip.operations into bk.ops / trip.ops without bumping bk.opsVersion and preserve append-only no-show events.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Uses laOps.bookingWrite for versioned booking actions and unversioned laOps.call for check-ins; blocks insPersist/sbExtrasPersist in ops mode; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/36-ops-day-actions.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-day-actions.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-day-actions.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/checkin.test.ts", "result": "pass (3/3)" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [
+    {
+      "item": "Reconfirm UI wiring",
+      "why": "Explicitly marked inspect-first / leave legacy-only in O3 specification",
+      "required_source_evidence": "src/routes/operations.ts and src/domain/reconfirm.ts"
+    }
+  ],
+  "no_backend_or_db_changes": true
+}
