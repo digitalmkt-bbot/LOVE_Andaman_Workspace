@@ -1108,6 +1108,24 @@ html[data-sb-theme="dark"] .sb-pill:hover{ background:rgba(255,255,255,.24); }
 /* ย่อรางแล้วซ่อนเหมือนปุ่มธีม · ที่แนวนอนไม่พอทั้งสามปุ่ม */
 .sidebar.sb-collapsed .sb-pill{ display:none; }
 
+/* §sbSearch · ค้นหาเมนู · ซ่อนเฉพาะรายการที่ไม่ตรงคำค้น ไม่แตะสิทธิ์หรือการนำทาง */
+.sb-menu-search{ position:relative; display:flex; align-items:center; gap:6px; margin:8px 5px 6px; padding:0 8px; height:32px; border-radius:9px; background:rgba(255,255,255,.64); border:1px solid rgba(0,15,76,.12); }
+.sb-menu-search svg{ width:15px; height:15px; flex:none; fill:none; stroke:#5A6685; stroke-width:2; }
+.sb-menu-search input{ width:100%; min-width:0; border:0; outline:0; background:transparent; color:#233055; font:12px/1 DM Sans,Arial,sans-serif; }
+.sb-menu-search input::placeholder{ color:#71809c; }
+.sb-menu-search button{ display:none; flex:none; width:18px; height:18px; padding:0; border:0; border-radius:50%; background:rgba(0,15,76,.11); color:#233055; font-size:16px; line-height:16px; cursor:pointer; }
+.sb-menu-search button.show{ display:block; }
+.sb-menu-no-result{ display:none; position:absolute; top:38px; left:0; right:0; z-index:2; padding:8px; border-radius:8px; background:var(--ci-navy,#000F4C); color:#fff; font-size:11px; text-align:center; box-shadow:0 5px 14px rgba(0,15,76,.22); }
+.sb-menu-no-result.show{ display:block; }
+.sidebar .sb-search-hidden{ display:none !important; }
+.sidebar.sb-search-filtering > div[style*="height:1px"]{ display:none !important; }
+.sidebar.sb-collapsed .sb-menu-search{ display:none; }
+html[data-sb-theme="dark"] .sb-menu-search{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.16); }
+html[data-sb-theme="dark"] .sb-menu-search input{ color:#E5EEFF; }
+html[data-sb-theme="dark"] .sb-menu-search input::placeholder{ color:#9CB0D1; }
+html[data-sb-theme="dark"] .sb-menu-search svg{ stroke:#AFC2E2; }
+html[data-sb-theme="dark"] .sb-menu-search button{ background:rgba(255,255,255,.16); color:#fff; }
+
 /* ══ §sbScroll · ซ่อนแถบเลื่อนของ sidebar ทิ้งไปเลย แต่ยังเลื่อนได้ ══════════
    ราก · 01-base.css:1384 ตั้งกฎรวมทั้งแอปไว้ · thumb เป็น var(--sand-dark) #E8E4DC
      ซึ่งเป็นสีครีม · ตอน sidebar ยังเป็นกระจกขาวก็กลมกลืน พอพื้นเป็น ci-navy
