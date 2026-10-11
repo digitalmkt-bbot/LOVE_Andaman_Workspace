@@ -16789,14 +16789,16 @@ function pcPrintWin(title, fname, css, sheet, land){
        ไม่งั้นตารางดันกว้างเกินหน้าแล้วโดนตัดขวา */
     +'#sheet .pc-t td.rt,#sheet .pc-t td.ctx,#sheet .pc-t td.tx{white-space:normal}'
     +'#sheet .pc-t{table-layout:auto}'
-    +'.tb{display:flex;gap:9px;align-items:center;padding:11px 16px;background:#16265C;color:#fff;'
-      +'font:600 12px Sarabun,sans-serif;flex-wrap:wrap;position:sticky;top:0;z-index:9}'
-    +'.tb button{border:none;border-radius:8px;padding:8px 15px;font:700 12px Sarabun,sans-serif;cursor:pointer}'
+    +'.tb{display:flex;gap:10px;align-items:center;padding:12px 18px;background:#16265C;color:#fff;'
+      +'font:600 14px Sarabun,sans-serif;flex-wrap:wrap;position:sticky;top:0;z-index:9}'
+    +'.tb button{border:none;border-radius:9px;padding:10px 18px;font:700 14px Sarabun,sans-serif;cursor:pointer}'
     +'.tb .pri{background:#fff;color:#16265C}'
     +'.tb .img{background:rgba(255,255,255,.18);color:#fff}'
-    +'.tb .hint{opacity:.72;font-weight:400;font-size:11px}'
+    +'.tb .hint{opacity:.72;font-weight:400;font-size:12.5px}'
+    +'.tb .zm{margin-left:auto;display:flex;gap:6px;align-items:center}'
+    +'.tb .zm button{background:rgba(255,255,255,.18);color:#fff;padding:8px 13px}'
     +'@media print{.tb{display:none!important}body{background:#fff}'
-      +'#sheet{margin:0;padding:0;width:auto;max-width:none;box-shadow:none}'
+      +'#sheet{margin:0;padding:0;width:auto;max-width:none;box-shadow:none;zoom:1!important}'
       +'@page{size:A4'+(land?' landscape':'')+';margin:12mm}}';
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
    +'<title>'+pcE(title)+'</title>'
@@ -16805,10 +16807,18 @@ function pcPrintWin(title, fname, css, sheet, land){
    +'<div class="tb">'
      +'<button class="pri" onclick="window.print()">&#128424; พิมพ์ / บันทึก PDF</button>'
      +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
-     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+     +'<span class="hint">ปุ่มบนแถบนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+     +'<span class="zm"><button onclick="zm(-1)" title="ย่อ">−</button><button onclick="zm(0)" title="พอดีหน้าต่าง">พอดีจอ</button><button onclick="zm(1)" title="ขยาย">+</button></span>'
    +'</div>'
    +'<div id="sheet">'+sheet+'</div>'
-   +'<script>'+scr+'<\/script></body></html>';
+   +'<script>'+scr
+     /* §pc2b · บนจอขยายใบให้พอดีความกว้างหน้าต่าง · กระดาษกับรูป PNG ใช้ขนาดจริงเสมอ */
+     +';var ZK=0;function fit(){var s=document.getElementById("sheet");if(!s)return;s.style.zoom=1;'
+     +'var k=ZK||Math.max(0.6,Math.min(1.5,(window.innerWidth-40)/s.offsetWidth));s.style.zoom=k;}'
+     +'function zm(d){var s=document.getElementById("sheet");var c=+s.style.zoom||1;ZK=d===0?0:Math.max(0.5,Math.min(2.5,c+d*0.15));fit();}'
+     +'window.addEventListener("resize",fit);window.addEventListener("load",fit);setTimeout(fit,50);'
+     +'if(typeof shot==="function"){var _shot=shot;shot=function(){var s=document.getElementById("sheet");s.style.zoom=1;try{_shot();}finally{setTimeout(fit,900);}};}'
+   +'<\/script></body></html>';
   var w=window.open('','_blank','width=1220,height=880');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
@@ -75236,8 +75246,8 @@ function pc2Head(P){
         +'<input type="date" value="'+pcE(_pcDate)+'" onclick="try{this.showPicker()}catch(e){}" onchange="pcPickDay(this.value)"></label>'
       +'<button class="rb" onclick="pcShift(1)" title="วันถัดไป">›</button>'
       +(_pcDate!==pcNowDS()?'<button class="pri" onclick="pcPickDay(pcNowDS())">วันนี้</button>':'')
-      +(_pcTab===1?'<button class="ol" onclick="pcPrintLT()">พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
-      +(_pcTab===2?'<button class="ol" onclick="pcPrintPK()">พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
+      +(_pcTab===1?'<button class="ol" onclick="pcPrintLT()">🖨 พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
+      +(_pcTab===2?'<button class="ol" onclick="pcPrintPK()">🖨 พิมพ์ '+pcE(pc2D(_pcDate))+'</button>':'')
     +'</div></div>';
 }
 /* รายการวันของเดือน · ใช้ทั้งแท็บหางยาวและอุทยาน */
@@ -75402,7 +75412,8 @@ function pc2LTDay(pier, ds){
   else if(dm>0) bar='<div class="pc2-bar"><span><b>ยังไม่ได้ดึงเข้าสมุด</b>'+(s.miss?(' · '+pcE(s.missNames.join(', '))+' ยังไม่กรอก'):'')+'<br><small>ปุ่มนี้ดึงทุกหมวดของวันนี้ที่ยังไม่ได้ดึง (หางยาว อุทยาน ค่าจอด) รวม '+pcMoney(waiting)+'</small></span>'
     +'<button onclick="pcPull(\''+ds+'\')">⤓ ดึงเข้าสมุด</button></div>';
   return '<div class="pc2-card">'+head
-      +'<div class="cs">'+BS.length+' ลำออก · จอย '+dj+' คน · เหมา '+dc+' ลำ</div></div></div>'
+      +'<div class="cs">'+BS.length+' ลำออก · จอย '+dj+' คน · เหมา '+dc+' ลำ</div></div>'
+      +'<button class="ol pc2-prt" onclick="pcPickDay(\''+ds+'\');pcPrintLT()">🖨 พิมพ์ '+pcE(pc2D(ds))+'</button></div>'
     +'<div class="pc2-tw"><div class="pc2-tr lt hd"><span>เรือ</span><span>โปรแกรม</span><span>จอย · ใบจอง → ใช้จริง</span><span>เหมา · ใบจอง → ใช้จริง</span><span class="r">จ่ายจริง</span><span>หมายเหตุ</span></div>'
     +rows
     +'<div class="pc2-tr lt tot"><span>รวมวัน</span><span></span><span>'+dj+' คน → '+(anyU?duj:'—')+' ลำ</span><span>'+dc+' → '+(anyU?duc:'—')+' ลำ</span><span class="r">'+(dm?pcMoney(dm):'—')+'</span><span></span></div></div>'
@@ -75505,7 +75516,8 @@ function pc2PKDay(pier, ds){
     +((dm>0||ddk>0)&&!pkOff?(pulledPk?'<i class="ok">✓ ดึงเข้าสมุดแล้ว</i>':('<button onclick="pcPull(\''+ds+'\')" title="ดึงทุกหมวดของวันนี้ที่ยังไม่ได้ดึง (หางยาว อุทยาน ค่าจอด)">⤓ ดึง '+pcMoney(waiting)+' เข้าสมุด</button>')):'')
     +'</div>';
   return '<div class="pc2-card">'+head
-      +'<div class="cs">'+BS.length+' ลำ · '+dtot+' คน · '+groups.length+' เส้นทาง'+(s.miss?(' · ยังไม่กรอก '+pcE(s.missNames.join(', '))):'')+'</div></div></div>'
+      +'<div class="cs">'+BS.length+' ลำ · '+dtot+' คน · '+groups.length+' เส้นทาง'+(s.miss?(' · ยังไม่กรอก '+pcE(s.missNames.join(', '))):'')+'</div></div>'
+      +'<button class="ol pc2-prt" onclick="pcPickDay(\''+ds+'\');pcPrintPK()">🖨 พิมพ์ '+pcE(pc2D(ds))+'</button></div>'
     +'<div class="pc2-tw"><div class="pc2-pkt">'
       +'<div class="pc2-tr pk hd"><span class="hb gl rs3">เรือ</span>'
         +'<span class="g span9 gl" style="--gc:#2E9C78;color:#0B5A43">ตามใบจอง <small>ระบบอ่านให้</small></span>'
@@ -75647,7 +75659,8 @@ function pc2CSS(S){
 }
 function pc2CSS2(S){
   var N='#0B1E5B', M='#6B7693', SUB='#3E4A6B', GL='#7F8BA6', CL='#E3E8F0', TF='#C3CBD9';
-  var PKG='190px repeat(8,30px) 38px repeat(8,36px) 60px 38px 76px 86px minmax(70px,1fr)';
+  /* §pc2b · จอกว้าง · ที่ว่างที่เหลือแบ่งให้ทุกคอลัมน์ตามสัดส่วน ไม่ไปกองที่ช่องสุดท้ายช่องเดียว */
+  var PKG='minmax(190px,2.4fr) repeat(8,minmax(30px,1fr)) minmax(38px,1.2fr) repeat(8,minmax(36px,1fr)) minmax(60px,1.6fr) minmax(38px,1.1fr) minmax(76px,2fr) minmax(86px,2.2fr) minmax(70px,1.6fr)';
   var LTG='minmax(90px,120px) minmax(150px,1fr) 196px 196px 120px minmax(120px,190px)';
   return [
   S+' .pc2-body{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:start}',
@@ -75667,6 +75680,7 @@ function pc2CSS2(S){
   S+' .pc2-dayh{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #ECEFF4;scroll-margin-top:12px}',
   S+' .pc2-dayh b{font-size:17px;font-weight:700} '+S+' .pc2-dayh em{font-style:normal;margin-left:8px;padding:1px 8px;border-radius:8px;background:#E3F6FB;color:#0E5E80;font-size:11.5px;font-weight:700}',
   S+' .pc2-tw{overflow-x:auto}',
+  S+' .pc2-prt{margin-left:auto;white-space:nowrap}',
   S+' .pc2-rt{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%} '+S+' .pc2-rt i{flex:none;width:10px;height:10px;border-radius:3px} '+S+' .pc2-rt span{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   S+' .pc2-in{width:100%;box-sizing:border-box;height:32px;border-radius:7px;border:1px solid #E7D3A6;background:#fff;text-align:center;font-family:"DM Mono",monospace;font-size:14px;color:'+N+';outline:none}',
   S+' .pc2-in:focus{border-color:'+N+';box-shadow:0 0 0 3px rgba(11,30,91,.12)}',
@@ -75713,7 +75727,8 @@ function pc2CSS2(S){
   S+' .pc2-tr.pk .c.tt{background:#EEF5F1;font-weight:700}',
   S+' .pc2-tr.pk .c.kk{background:#FFFCF4;color:#7A4300}',
   S+' .pc2-tr.pk .k{padding:0 3px;background:#FFFCF4}',
-  S+' .pc2-tr.pk .k .pc2-in{height:28px;padding:0}',
+  S+' .pc2-tr.pk .k .pc2-in{height:28px;padding:0;max-width:64px;margin:0 auto}',
+  S+' .pc2-tr.pk .k .pc2-in.r{max-width:none}',
   S+' .pc2-tr.pk .k.kt{justify-content:center;font-family:"DM Mono",monospace;font-weight:700;color:#7A4300}',
   S+' .pc2-tr.pk .span10.k{padding:6px 8px}',
   S+' .pc2-tr.pk .nokey{flex:1;min-height:32px;border-radius:8px;border:1.5px dashed #E1C48A;display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#9A6B1F;flex-wrap:wrap;padding:2px 6px}',
