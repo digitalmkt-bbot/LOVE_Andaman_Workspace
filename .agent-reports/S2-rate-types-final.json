@@ -11,7 +11,7 @@
     "base": "origin/integration/operation-backend",
     "branch": "agent/ops-rate-types",
     "worktree": "D:/projects/wt-ops-rate-types",
-    "commit": "pending",
+    "commit": "07877f2a2d1143870e1da804a746d91df0bd2143",
     "pr": { "number": null, "url": "", "state": "none" }
   },
   "input": {
