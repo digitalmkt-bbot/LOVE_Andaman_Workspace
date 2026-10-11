@@ -71202,34 +71202,56 @@ function pjCSS(){
   +H+'.sk .pj-dcard .sm{font-size:21px;font-weight:600;color:#64748B;line-height:1.3;margin-top:1px}'
   +H+'.sk .pj-dcard .sm b{color:#0F172A;font-weight:700}'
   +'@media(max-width:600px){'+H+'.sk .pj-dcard .big,'+H+'.sk .pj-dcard .sm{font-size:16px}}'
-  /* §pjHd2 · แถบหัวเดียว · ซ้าย ชื่อท่า · กลาง วันที่ · ขวา แท็บ + เลือกวัน */
-  +H+'.sk .pj-hd2{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:20px;'
-    +'background:#fff;border:1px solid #E1E6EF;border-radius:18px;padding:14px 20px;margin:0 0 16px;'
+  /* §pjHd2/§pjHd3 · แถบหัวเดียว · ซ้าย ป้าย + ชื่อ + ชิปตัวกรอง · กลาง วันที่ · ขวา แท็บ + เลือกวัน + คัดลอก/3-4-5/พิมพ์ */
+  +H+'.sk .pj-hd2{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px;'
+    +'background:#fff;border:1px solid #E1E6EF;border-radius:18px;padding:12px 18px;margin:0 0 14px;'
     +'box-shadow:0 1px 2px rgba(15,23,42,.06),0 10px 26px rgba(15,23,42,.05)}'
   +H+'.sk .pj-hd2 .l{display:flex;align-items:center;gap:14px;min-width:0}'
-  +H+'.sk .pj-hd2 .pj-badge{width:46px;height:46px;flex:none;border-radius:13px;font-size:16px}'
-  +H+'.sk .pj-hd2 .tt{min-width:0}'
-  +H+'.sk .pj-hd2 h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:#0F172A;line-height:1.3}'
-  +H+'.sk .pj-hd2 p{font-size:12.5px;color:#64748B;margin:1px 0 0;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-  +H+'.sk .pj-hd2 .c{text-align:center;padding:4px 28px;border-left:1px solid #E8ECF2;border-right:1px solid #E8ECF2}'
+  +H+'.sk .pj-hd2 .pj-badge{width:50px;height:50px;flex:none;border-radius:14px;font-size:17px;box-shadow:0 4px 12px rgba(15,23,42,.16)}'
+  +H+'.sk .pj-hd2 .tt{min-width:0;display:flex;flex-direction:column;gap:6px}'
+  +H+'.sk .pj-hd2 h1{font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0;color:#0F172A;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+'.sk .pj-hd2 h1 small{font-size:12px;font-weight:500;color:#94A3B8;letter-spacing:0;margin-left:4px}'
+  +H+'.sk .pj-hd2 .fl{display:flex;align-items:center;gap:6px}'
+  +H+'.sk .pj-hd2 .pj-chips{display:flex;background:#F4F6FA;border:none;box-shadow:none;padding:3px;border-radius:10px;gap:2px}'
+  +H+'.sk .pj-hd2 .pj-chips button{display:flex;align-items:center;height:26px;padding:0 8px;border-radius:7px;font:600 12.5px inherit;font-family:inherit;gap:5px;color:#3E4A6B;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .pj-chips button i{width:6px;height:6px}'
+  +H+'.sk .pj-hd2 .pj-chips button:hover{background:#E8ECF3}'
+  +H+'.sk .pj-hd2 .pj-chips button.on{background:#0F172A;color:#fff;font-weight:800}'
+  +H+'.sk .pj-hd2 .pj-idlebtn{height:32px;padding:0 8px;border-radius:9px;font-size:12.5px;white-space:nowrap;display:flex;align-items:center;gap:5px}'
+  +H+'.sk .pj-hd2 .c{text-align:center;padding:2px 16px;border-left:1px solid #E8ECF2;border-right:1px solid #E8ECF2;min-width:0}'
   +H+'.sk .pj-hd2 .big{font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.3;white-space:nowrap}'
-  +H+'.sk .pj-hd2 .sm{font-size:15px;font-weight:600;color:#64748B;line-height:1.35;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .sm{font-size:14.5px;font-weight:600;color:#64748B;line-height:1.35;white-space:nowrap}'
   +H+'.sk .pj-hd2 .sm b{color:#0F172A;font-weight:700}'
-  +H+'.sk .pj-hd2 .r{display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding-right:36px}'
-  +H+'.sk .pj-hd2 .tabs{display:flex;gap:3px;padding:4px;background:#F4F6FA;border-radius:12px;flex-wrap:wrap;justify-content:flex-end}'
-  +H+'.sk .pj-hd2 .tabs button{border:none;background:none;border-radius:9px;height:34px;padding:0 14px;font:600 13px inherit;font-family:inherit;color:#3E4A6B;cursor:pointer;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .r{display:flex;flex-direction:column;align-items:flex-end;gap:7px;padding-right:36px}'
+  +H+'.sk .pj-hd2 .tabs{display:flex;gap:2px;padding:3px;background:#F4F6FA;border-radius:11px}'
+  +H+'.sk .pj-hd2 .tabs button{border:none;background:none;border-radius:8px;height:30px;padding:0 12px;font:600 12.5px inherit;font-family:inherit;color:#3E4A6B;cursor:pointer;white-space:nowrap}'
   +H+'.sk .pj-hd2 .tabs button:hover{background:#E8ECF3;color:#0F172A}'
   +H+'.sk .pj-hd2 .tabs button.on{background:#0F172A;color:#fff;font-weight:800;cursor:default}'
-  +H+'.sk .pj-hd2 .dt{display:flex;align-items:center;gap:6px}'
-  +H+'.sk .pj-hd2 .dt .nav{width:32px;height:32px;border-radius:16px;border:1px solid #D5DBE6;background:#fff;color:#64748B;font-size:16px;line-height:1;cursor:pointer;padding:0}'
+  +H+'.sk .pj-hd2 .dt{display:flex;align-items:center;gap:5px}'
+  +H+'.sk .pj-hd2 .dt .sep{width:1px;height:20px;background:#E2E8F0;margin:0 3px}'
+  +H+'.sk .pj-hd2 .dt .nav{width:30px;height:30px;border-radius:15px;border:1px solid #D5DBE6;background:#fff;color:#64748B;font-size:15px;line-height:1;cursor:pointer;padding:0}'
   +H+'.sk .pj-hd2 .dt .nav:hover{background:#F1F5F9;color:#0F172A}'
-  +H+'.sk .pj-hd2 .dt input[type=date]{height:32px;box-sizing:border-box;border:1px solid #D5DBE6;background:#F4F6FA;border-radius:10px;padding:0 10px;font:500 13.5px inherit;font-family:inherit;color:#0F172A}'
-  +H+'.sk .pj-hd2 .dt .now{height:32px;border:none;border-radius:10px;background:#EEF2FF;color:#4F46E5;font:700 12.5px inherit;font-family:inherit;padding:0 12px;cursor:pointer}'
-  +H+'.sk .pj-hd2 .dt .now:hover{background:#E0E7FF;color:#4338CA}'
-  /* จอแคบ · วันที่ขึ้นแถวบนเต็มกว้าง ซ้าย/ขวาลงมาแถวสอง */
-  +'@media(max-width:1560px){'+H+'.sk .pj-hd2{grid-template-columns:minmax(0,1fr) auto auto;gap:14px;padding:12px 16px} '+H+'.sk .pj-hd2 .tabs{flex-wrap:nowrap} '+H+'.sk .pj-hd2 h1{font-size:19px} '+H+'.sk .pj-hd2 .c{padding:2px 16px} '+H+'.sk .pj-hd2 .big{font-size:18px} '+H+'.sk .pj-hd2 .sm{font-size:13px} '+H+'.sk .pj-hd2 .tabs button{padding:0 10px;font-size:12.5px}}'
-  +'@media(max-width:1180px){'+H+'.sk .pj-hd2{grid-template-columns:minmax(0,1fr) auto} '+H+'.sk .pj-hd2 .c{grid-column:1/-1;grid-row:1;border:none;border-bottom:1px solid #E8ECF2;padding:0 0 10px}}'
-  +'@media(max-width:820px){'+H+'.sk .pj-hd2{grid-template-columns:1fr} '+H+'.sk .pj-hd2 .r{align-items:flex-start;padding-right:0} '+H+'.sk .pj-hd2 .big{font-size:17px;white-space:normal} '+H+'.sk .pj-hd2 .sm{font-size:13px;white-space:normal}}'
+  +H+'.sk .pj-hd2 .dt input[type=date]{height:30px;box-sizing:border-box;border:1px solid #D5DBE6;background:#F4F6FA;border-radius:9px;padding:0 8px;font:500 13px inherit;font-family:inherit;color:#0F172A}'
+  +H+'.sk .pj-hd2 .dt .now{height:30px;border:none;border-radius:9px;background:#EEF2FF;color:#4F46E5;font:700 12px inherit;font-family:inherit;padding:0 10px;cursor:pointer}'
+  +H+'.sk .pj-hd2 .dt .cp{height:30px;border:none;border-radius:9px;background:#ECFDF5;color:#047857;font:700 12px inherit;font-family:inherit;padding:0 9px;cursor:pointer;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .dt .cp:disabled{opacity:.45;cursor:default}'
+  +H+'.sk .pj-hd2 .dt .pj-wsw{display:flex;padding:2px;border-radius:9px}'
+  +H+'.sk .pj-hd2 .dt .pj-wsw button{padding:4px 8px;font-size:12px;border-radius:7px;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .dt .pr{height:30px;border:none;border-radius:9px;background:#0F172A;color:#fff;font:700 12px inherit;font-family:inherit;padding:0 11px;cursor:pointer;white-space:nowrap}'
+  +H+'.sk .pj-hd2 .dt .pr:hover{background:#1E293B}'
+  +H+'.sk .pj-warnrow{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}'
+  /* จอแคบ · ที่ไม่พอวางสามช่องในแถวเดียว (เมนูซ้ายกินไป ~264px)
+     <1780 วันที่ขึ้นบรรทัดบนของแถบ (บรรทัดเดียว) · ซ้าย/ขวาอยู่บรรทัดล่าง · ปุ่มคัดลอกเหลือแค่ไอคอน
+     <1420 ซ้ายกับขวาเรียงลงมาทีละแถว */
+  +H+'.sk .pj-hd2 .pj-chips{flex-wrap:nowrap}'
+  +'@media(max-width:1780px){'+H+'.sk .pj-hd2{grid-template-columns:minmax(0,1fr) auto;row-gap:8px;padding:10px 14px} '
+    +H+'.sk .pj-hd2 .c{grid-column:1/-1;grid-row:1;display:flex;align-items:baseline;justify-content:center;gap:12px;border:none;border-bottom:1px solid #E8ECF2;padding:0 0 8px} '
+    +H+'.sk .pj-hd2 .big{font-size:18px} '+H+'.sk .pj-hd2 .sm{font-size:13px} '
+    +H+'.sk .pj-hd2 .pj-badge{width:44px;height:44px;font-size:15px} '
+    +H+'.sk .pj-hd2 .pj-chips button{padding:0 6px;font-size:12px} '
+    +H+'.sk .pj-hd2 .dt .cp .tx{display:none}}'
+  +'@media(max-width:1420px){'+H+'.sk .pj-hd2{grid-template-columns:1fr} '+H+'.sk .pj-hd2 .r{align-items:flex-start;padding-right:0} '
+    +H+'.sk .pj-hd2 .fl,'+H+'.sk .pj-hd2 .dt,'+H+'.sk .pj-hd2 .pj-chips{flex-wrap:wrap} '+H+'.sk .pj-hd2 .c{flex-wrap:wrap} '+H+'.sk .pj-hd2 .big,'+H+'.sk .pj-hd2 .sm{white-space:normal}}'
   /* แถวตัวกรอง · แคปซูลซ้าย ปุ่มลงมือขวา */
   +H+'.sk .pj-frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}'
   +H+'.sk .pj-chips{background:#fff;border:1px solid #F1F5F9;padding:5px;border-radius:16px;gap:3px;'
@@ -72269,9 +72291,28 @@ function renderPierJob(pier){
      ใช้ class ใหม่ทั้งชุด · pj-nh / pj-dcard เดิมยังอยู่ใน pjCSS() ให้หน้าอื่นที่ใช้ร่วมกัน */
   host.innerHTML='<style id="pj-style">'+pjCSS()+(typeof plCSS==='function'?plCSS():'')+'</style>'
     +'<div class="pj-hd2">'
-      +'<div class="l"><div class="pj-badge">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div class="tt">'
-        +'<h1>'+poE(P.n||P.t)+' · ใบงานเรือ</h1>'
-        +'<p title="ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด">'+poE(P.t)+' — จ่ายคนลงเรือของวันนี้ · ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด</p></div></div>'
+      /* §pjHd3 · ป้ายท่าใช้สีเดียวกับหัวใบงานที่พิมพ์ (PJ_SKIN) · VP navy · TL ฟ้า */
+      +'<div class="l"><div class="pj-badge" style="background:'+pjSkin(P.k).bg+';color:'+pjSkin(P.k).ink+'">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div class="tt">'
+        +'<h1 title="'+poE(P.t+' — จ่ายคนลงเรือของวันนี้ · ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด')+'">'+poE(P.n||P.t)+' · ใบงานเรือ <small>'+poE(P.t)+'</small></h1>'
+        /* §pjHd3 · ชิปตัวกรองอยู่ใต้ชื่อ ในแถบหัวเดียวกัน · แบบกระชับ */
+        +'<div class="fl"><div class="pj-chips">'
+          + chip('all','ทั้งหมด',all.length,'')
+          + chip('go','เรือที่วิ่ง',cnt.go,'#0F6E56')
+          + chip('ready','เรือที่พร้อม',cnt.ready,'#4A5D7A')
+          + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
+          + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
+        +'</div>'
+        /* §pjHideIdle · ปุ่มสลับ · โชว์จำนวนที่ซ่อนอยู่เสมอ ไม่ให้หายเงียบ · ไม่มีลำไหนเข้าข่ายก็ไม่ต้องมีปุ่ม */
+        +((_idleN||!_pjHideIdle)
+          ? ('<button class="pj-idlebtn'+(_pjHideIdle?' on':'')+'" onclick="pjToggleIdle()"'
+             +' title="'+poE((_pjHideIdle?'ซ่อนลำที่ยังไม่วางอยู่':'แสดงทุกลำอยู่')
+               +' · ลำที่ยังไม่ได้ใส่อะไรลงไปเลยในวันนี้ — ไม่มีทริป ไม่มีคน ไม่มีหมายเหตุ'
+               +' · ลำที่จอดแต่จ่ายช่างไว้แล้วไม่นับ ยังเห็นตามปกติ'
+               +' · บนใบที่พิมพ์ ปุ่มนี้ย่อกล่อง "Not available" ให้เหลือแค่จำนวน')+'">'
+             +(_pjHideIdle?'&#128065; ซ่อน':'&#128065; แสดงทุกลำ')
+             +(_idleN?('<span class="n">'+_idleN+'</span>'):'')+'</button>')
+          : '')
+        +'</div></div></div>'
       +'<div class="c"><div class="big">'+poE(DW.big)+'</div>'
         +'<div class="sm">'+poE(DW.sm)+' · <b>'+poE(P.n||P.t)+'</b></div></div>'
       +'<div class="r">'
@@ -72286,27 +72327,17 @@ function renderPierJob(pier){
           +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
           +'<button class="nav" onclick="pjShift(1)" title="วันถัดไป">&#8250;</button>'
           +'<button class="now" onclick="pjToday()">วันนี้</button>'
+          +'<i class="sep"></i>'
+          +'<button class="cp" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+' title="คัดลอกคนจากเมื่อวาน">&#8634;<span class="tx"> คัดลอกเมื่อวาน</span></button>'
+          +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
+            +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+(_pjW===n?' ลำ':'')+'</button>'; }).join('')
+          +'</div>'
+          +'<button class="pr" onclick="pjPrint()" title="พิมพ์ใบงาน">&#128424; พิมพ์</button>'
         +'</div>'
       +'</div>'
     +'</div>'
-    +'<div class="pj-frow">'
-      +'<div class="pj-chips">'
-        + chip('all','ทั้งหมด',all.length,'')
-        + chip('go','เรือที่วิ่ง',cnt.go,'#0F6E56')
-        + chip('ready','เรือที่พร้อม',cnt.ready,'#4A5D7A')
-        + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
-        + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
-      +'</div>'
-      /* §pjHideIdle · ปุ่มสลับ · โชว์จำนวนที่ซ่อนอยู่เสมอ ไม่ให้หายเงียบ
-         ไม่มีลำไหนเข้าข่ายก็ไม่ต้องมีปุ่ม · ปุ่มที่กดแล้วไม่เกิดอะไรคือขยะบนจอ */
-      +((_idleN||!_pjHideIdle)
-        ? ('<button class="pj-idlebtn'+(_pjHideIdle?' on':'')+'" onclick="pjToggleIdle()"'
-           +' title="'+poE('ลำที่ยังไม่ได้ใส่อะไรลงไปเลยในวันนี้ — ไม่มีทริป ไม่มีคน ไม่มีหมายเหตุ'
-             +' · ลำที่จอดแต่จ่ายช่างไว้แล้วไม่นับ ยังเห็นตามปกติ'
-             +' · บนใบที่พิมพ์ ปุ่มนี้ย่อกล่อง "Not available" ให้เหลือแค่จำนวน')+'">'
-           +(_pjHideIdle?'&#128065; ซ่อนลำที่ยังไม่วาง':'&#128065; แสดงทุกลำอยู่')
-           +(_idleN?('<span class="n">'+_idleN+'</span>'):'')+'</button>')
-        : '')
+    /* §pjHd3 · แถวล่างเหลือแค่คำเตือน · ขึ้นเฉพาะวันที่มี */
+    +(function(){ var w=''
       +(cnt.stale?('<span class="pj-warnc red" title="'+poE(staleL.join(' \u00b7 ')
           +' — เรือไม่พร้อมแล้ว แต่แถวโปรแกรมยังอยู่ใน Boat Operation '
           +'· กด "เอาออก" บนการ์ดของลำนั้นเพื่อลบแถวทิ้ง')+'">'
@@ -72316,15 +72347,7 @@ function renderPierJob(pier){
         if(!np.length) return '';
         return '<span class="pj-warnc" title="'+poE(np.map(function(b){ return b.name||b.id; }).join(' \u00b7 '))+'">'
           +'&#9888; ยังไม่ได้ตั้งท่าประจำ '+np.length+' ลำ · ไม่ขึ้นในหน้าท่าไหนเลย — ตั้งได้ที่ Boat Operation</span>'; })()
-      +'<span style="flex:1"></span>'
-      +'<div class="pj-acts">'
-        +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
-        +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
-          +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+' ลำ</button>'; }).join('')
-        +'</div>'
-        +'<button class="pri" onclick="pjPrint()">&#128424; พิมพ์ใบงาน</button>'
-      +'</div>'
-    +'</div>'
+      ; return w?('<div class="pj-warnrow">'+w+'</div>'):''; })()
     +(boats.length
       ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
       : ('<div class="pj-empty">'
