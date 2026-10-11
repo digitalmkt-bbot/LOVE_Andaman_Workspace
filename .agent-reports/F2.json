@@ -1,0 +1,51 @@
+{
+  "packet": "F2",
+  "status": "complete",
+  "objective": "Migrate engines, gearboxes, and propellers CRUD and lifecycle commands to operation-backend in operations mode.",
+  "branch": "agent/ops-fleet-assets",
+  "commit": "1db82e18a7c9ba2d4b2398b0a8f97dffc6bf4837",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/23-ops-fleet-assets.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-fleet-assets.test.mjs",
+    "docs/development/tasks/F2-ops-fleet-assets.md",
+    ".agent-reports/F2.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/23-ops-fleet-assets.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/fleet.ts",
+    "D:/projects/operation-backend/src/domain/fleet-assets.ts",
+    "D:/projects/operation-backend/test/fleet.test.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/fleet/engines", "body": null },
+    { "method": "GET", "path": "/v1/fleet/gearboxes", "body": null },
+    { "method": "GET", "path": "/v1/fleet/propellers", "body": null },
+    { "method": "POST", "path": "/v1/fleet/engines/:id/install", "body": "{boat_id,pos,job_id?}" },
+    { "method": "POST", "path": "/v1/fleet/gearboxes/:id/install", "body": "{engine_id}" },
+    { "method": "POST", "path": "/v1/fleet/propellers/:id/install", "body": "{gearbox_id,prop_pos?}" },
+    { "method": "POST", "path": "/v1/fleet/:family/:id/status", "body": "{status,note?}" },
+    { "method": "POST", "path": "/v1/fleet/:family/:id/remove", "body": "{spare_location?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/gearboxes|propellers/:id/move", "body": "{spare_location,note?}" },
+    { "method": "POST", "path": "/v1/fleet/:family/:id/swap", "body": "{with_id}" },
+    { "method": "POST", "path": "/v1/fleet/engines|gearboxes/:id/service", "body": "{hours}" }
+  ],
+  "projection_mapping": "Maps server engine/gearbox/propeller records to FL_ENGINES, FL_GEARBOXES, FL_PROPELLERS including server-computed hours/lifetime_hours and service state; normalizes Starboard/Stbd to Std.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Hydrates and refetches the full engine->gearbox->propeller chain after every command; uses command endpoints rather than link-field PATCH; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/23-ops-fleet-assets.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-fleet-assets.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-fleet-assets.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/fleet.test.ts", "result": "pass" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}
