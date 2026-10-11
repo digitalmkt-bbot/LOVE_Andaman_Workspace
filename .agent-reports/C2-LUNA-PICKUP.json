@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "task": "C2-LUNA-PICKUP",
+  "title": "Pickup areas and time profiles frontend adapter",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c50-049b-7399-8025-554af17220ba",
+    "model": "openai-codex/gpt-5.6-luna"
+  },
+  "git": {
+    "base": "origin/lk-inbox",
+    "branch": "agent/ops-pickup",
+    "worktree": "D:/projects/wt-ops-pickup",
+    "commit": "",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Implement frontend migration packet C2 for pickup areas and time profiles.",
+    "acceptanceCriteria": [
+      "Hydrate pickup areas and profiles from operation-backend before Pickup Setup edits.",
+      "Use documented area, profile, cell, and resolve API contracts with server-first writes.",
+      "Preserve legacy mode and classic script ordering.",
+      "Add focused UI/API integration coverage without backend or DB changes."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/21-ops-pickup.js",
+      "the C2 classic script tag in allotment_v2/allotment_v2.html",
+      "test/ui/t_pickup_ops.mjs",
+      "docs/development/tasks/C2-LUNA-PICKUP.md",
+      ".agent-reports/C2-LUNA-PICKUP.json"
+    ],
+    "constraints": [
+      "Work only in D:/projects/wt-ops-pickup on agent/ops-pickup.",
+      "No backend, schema, migration, mapping, or database changes.",
+      "Use laOps/laOpsFetch, not direct operation-backend fetch calls.",
+      "Keep legacy mode unchanged and do not add async/module script attributes."
+    ],
+    "assumptions": [
+      "Existing 00-ops-core.js and 01-auth-sync.js provide the authenticated operations client.",
+      "Backend contracts match D:/projects/operation-backend/src/domain/pickup-areas.ts and src/routes/operations.ts.",
+      "Shared 08-app.js and 90-ops-boot.js remain coordinator-owned."
+    ]
+  },
+  "output": {
+    "summary": "Added an operations-mode pickup adapter with API hydration, server-first area/profile/cell CRUD, structured pickup text mapping, authoritative resolve, and focused real-backend browser coverage.",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/js/ops/21-ops-pickup.js",
+        "change": "added",
+        "purpose": "Maps pickup API resources to the legacy UI shape and wraps Pickup Setup writes only in operations mode."
+      },
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Loads the C2 adapter as a classic script after deployments."
+      },
+      {
+        "path": "test/ui/t_pickup_ops.mjs",
+        "change": "added",
+        "purpose": "Exercises the frontend against the operation-backend in-process store."
+      },
+      {
+        "path": "docs/development/tasks/C2-LUNA-PICKUP.md",
+        "change": "modified",
+        "purpose": "Records scope, behavior, contracts, tests, risks, and rollback."
+      },
+      {
+        "path": ".agent-reports/C2-LUNA-PICKUP.json",
+        "change": "modified",
+        "purpose": "Coordinator-readable handoff manifest."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Pickup Setup hydration",
+        "before": "Operations mode used the browser's seeded/local pickup arrays.",
+        "after": "Opening Pickup Setup loads active areas and full server profile cells before rendering."
+      },
+      {
+        "area": "Pickup mutations",
+        "before": "Area/profile/time changes mutated local state and local persistence.",
+        "after": "The API is called first; local projections change only after success and refresh."
+      },
+      {
+        "area": "Pickup windows",
+        "before": "Time cells were arbitrary legacy strings.",
+        "after": "Supported strings map to server pickup fields, including pier deadlines; invalid strings visibly fail."
+      },
+      {
+        "area": "Pickup resolution",
+        "before": "No operations-mode authoritative resolve client existed.",
+        "after": "laOps.pickup.resolve calls /v1/pickup-time and propagates 404 without local fallback."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "laOps.pickup.load()",
+        "laOps.pickup.refresh()",
+        "laOps.pickup.resolve(routeId, areaId, date)",
+        "laOps.pickup.isReady()"
+      ],
+      "changed": [
+        "Operations-mode wrappers for renderPickupSetup, psuSaveArea, psuDeleteArea, psuSetTimeCell, psuPersist, profile save/delete, and fallback profile resolution"
+      ],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "Operations-mode pickup writes now use existing operation-backend endpoints.",
+        "API-derived pickup state is not written to the legacy localStorage blob.",
+        "No database/schema/migration/backend source changed."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --check D:/projects/wt-ops-pickup/allotment_v2/js/ops/21-ops-pickup.js",
+      "status": "passed",
+      "evidence": "JavaScript syntax check completed successfully."
+    },
+    {
+      "command": "node D:/projects/wt-ops-pickup/test/ui/t_pickup_ops.mjs",
+      "status": "passed",
+      "evidence": "12 focused browser/API assertions passed against the operation-backend in-process store."
+    },
+    {
+      "command": "cd D:/projects/operation-backend && node --import tsx --import ./test/setup.ts --test test/pickup-areas.test.ts",
+      "status": "passed",
+      "evidence": "3 backend pickup contract tests passed; backend checkout was read/test-only."
+    },
+    {
+      "command": "git -C D:/projects/wt-ops-pickup diff --check",
+      "status": "passed",
+      "evidence": "No whitespace errors in the owned diff."
+    }
+  ],
+  "decisions": [
+    "Fetch profile details after the profile list because the list contract does not include cells.",
+    "Refresh after area/profile commands so server-side sibling inheritance is reflected locally.",
+    "Normalize only the documented HH:MM, HH:MM-HH:MM, and Before HH:MM at pier forms.",
+    "Keep shared 90-ops-boot.js untouched; Pickup Setup hydrates on entry before editing."
+  ],
+  "risks": [
+    "Arbitrary legacy time text is no longer writable in operations mode; unsupported text is surfaced as a save error.",
+    "Hydrating profile cells makes one detail request per profile."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Existing laOps core/auth client in allotment_v2/js/ops/00-ops-core.js and allotment_v2/js/01-auth-sync.js.",
+    "Pickup contracts in D:/projects/operation-backend/src/domain/pickup-areas.ts and src/routes/operations.ts."
+  ],
+  "followUps": [
+    "Coordinator may add the focused test to a package script if desired.",
+    "Shared boot-level pickup preloading can be considered later without changing this adapter contract."
+  ],
+  "rollback": "Revert this commit; legacy mode remains on the original handlers and existing server pickup data is unaffected."
+}
