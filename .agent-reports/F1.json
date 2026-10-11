@@ -1,0 +1,59 @@
+{
+  "packet": "F1",
+  "status": "complete",
+  "objective": "Migrate boat assignments, certificates, documents, and readiness hydration to operation-backend in operations mode.",
+  "branch": "agent/ops-fleet-boats",
+  "commit": "674536a62e6457e6f26535e970ad519aea700a5e",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/22-ops-fleet-boats.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-fleet-boats.test.mjs",
+    "docs/development/tasks/F1-ops-fleet-boats.md",
+    ".agent-reports/F1.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/22-ops-fleet-boats.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/operations.ts",
+    "D:/projects/operation-backend/src/routes/fleet.ts",
+    "D:/projects/operation-backend/src/routes/fleet-extras.ts",
+    "D:/projects/operation-backend/src/domain/catalogue.ts",
+    "D:/projects/operation-backend/src/domain/fleet-assignments.ts",
+    "D:/projects/operation-backend/src/domain/fleet-certificates.ts",
+    "D:/projects/operation-backend/src/domain/fleet-availability.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/boats", "body": null },
+    { "method": "GET", "path": "/v1/boats/:id", "body": null },
+    { "method": "GET", "path": "/v1/fleet/availability?from=&to=&boat_id=", "body": null },
+    { "method": "GET", "path": "/v1/boats/:id/assignments", "body": null },
+    { "method": "POST", "path": "/v1/boats/:id/assignments", "body": "{type,from_pier,to_pier,start_date,end_date,reason,cost}" },
+    { "method": "POST", "path": "/v1/boats/:id/assignments/:asn_id/cancel", "body": "{}" },
+    { "method": "GET", "path": "/v1/fleet/certificates", "body": null },
+    { "method": "GET", "path": "/v1/boats/:id/documents", "body": null },
+    { "method": "POST", "path": "/v1/boats/:id/documents/renew", "body": "{name,state,expires_on?}" }
+  ],
+  "projection_mapping": "Maps capacity/license_pax/registered_persons/name_th/documents/status_log to cap/licensePax/totalcap/nameTh/docs/log and status/from_date/to_date to s/from/to; keeps pier_today separate from home pier.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Hydrates BOATS and assignments from server in ops mode; disables flSave() blob writes; refetches affected boat after assignment/document commands; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/22-ops-fleet-boats.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-fleet-boats.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-fleet-boats.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/fleet-extras.test.ts", "result": "pass" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [
+    {
+      "item": "Boat CRUD, status-log mutation, retire, and capacity-override bodies",
+      "why": "Deferred to C3 discovery per F1 handoff specification",
+      "required_source_evidence": "src/routes/operations.ts and src/domain/catalogue.ts"
+    }
+  ],
+  "no_backend_or_db_changes": true
+}
