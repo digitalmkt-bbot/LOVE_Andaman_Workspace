@@ -59,21 +59,21 @@ else fail('3 ' + JSON.stringify(c3));
 
 const c4 = await page.evaluate(S => {
   const inA = [...document.querySelectorAll('#view-booking .b2c-addon-in')].map(e => e.textContent.trim());
-  const ofL = [...document.querySelectorAll('#view-booking .b2c-addon-of')].map(e => e.textContent.trim());
-  const cut = [...document.querySelectorAll('#view-booking .b2c-addon-in, #view-booking .b2c-addon-of')]
+  const cut = [...document.querySelectorAll('#view-booking .b2c-addon-in')]
     .filter(e => e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().right > e.closest('td').getBoundingClientRect().right + .5).length;
-  const rows = [...document.querySelectorAll('#view-booking tr.t2-row[data-al]')];
+  const vis = [...document.querySelectorAll('#view-booking tr')].filter(tr => tr.offsetParent && (tr.classList.contains('t2-row') || tr.classList.contains('t2-b2csub')));
   const has = (tr, id) => (tr.getAttribute('data-al') || '').indexOf(id) >= 0;
-  const iA = rows.findIndex(tr => has(tr, S.A)), iL = rows.findIndex(tr => has(tr, S.L));
-  const trL = rows[iL];
-  const blueLt = trL ? [...trL.querySelectorAll('.t2-rb')].filter(e => !e.classList.contains('b2c-addon-of') && /longtail/i.test(e.textContent)).length : -1;
-  const zOf = tr => { let p = tr.previousElementSibling; while (p && !p.classList.contains('t2-zband')) p = p.previousElementSibling; return p ? p.textContent.replace(/\s+/g, ' ').trim().slice(0, 40) : (tr.closest('table') ? 'tbl' : '?'); };
-  const zA = rows[iA] && zOf(rows[iA]), zL = trL && zOf(trL), sameTbl = rows[iA] && trL && rows[iA].closest('tbody') === trL.closest('tbody');
-  return { inA, ofL, cut, iA, iL, blueLt, zA, zL, sameTbl }; }, S);
-if (c4.inA.some(t => /เหมาหางยาว/.test(t) && /B2C LOV-7770001/.test(t)) && c4.ofL.some(t => /เหมาหางยาว/.test(t) && /VC 22433/.test(t)) && !c4.cut)
-  ok(`4 By trip date · agent row "${c4.inA[0]}" · B2C row "${c4.ofL[0]}" · not cut`);
+  const iA = vis.findIndex(tr => tr.classList.contains('t2-row') && has(tr, S.A));
+  const sub = vis[iA + 1] && vis[iA + 1].classList.contains('t2-b2csub') && has(vis[iA + 1], S.L) ? vis[iA + 1] : null;
+  const full = vis.filter(tr => tr.classList.contains('t2-row') && has(tr, S.L)).length;
+  const rowH = vis[iA] ? Math.round(vis[iA].getBoundingClientRect().height) : 0;
+  return { inA, cut, iA, sub: sub && sub.textContent.replace(/\s+/g, ' ').trim(), subH: sub ? Math.round(sub.getBoundingClientRect().height) : 0, rowH, full,
+           link: !!(sub && sub.querySelector('a[onclick*="' + S.L + '"]')) }; }, S);
+if (c4.inA.some(t => /เหมาหางยาว/.test(t) && /B2C LOV-7770001/.test(t)) && !c4.cut)
+  ok(`4 agent row chip "${c4.inA[0]}" · not cut`);
 else fail('4 ' + JSON.stringify(c4));
-if (c4.iA >= 0 && c4.iL === c4.iA + 1 && c4.blueLt === 0) ok('4b the B2C row sits right under the agent row and carries no second longtail badge');
+if (c4.sub && /เหมาหางยาว/.test(c4.sub) && /VC 22433/.test(c4.sub) && /LOV-7770001/.test(c4.sub) && c4.full === 0 && c4.subH > 0 && c4.subH <= 30 && c4.subH < c4.rowH / 2 && c4.link)
+  ok(`4b B2C add-on is one slim line (${c4.subH}px vs row ${c4.rowH}px) right under the agent row: "${c4.sub}"`);
 else fail('4b ' + JSON.stringify(c4));
 
 const c5 = await page.evaluate(async ([S, PANEL]) => {

@@ -52238,7 +52238,7 @@ function bkV2RenderTab2(){
           alist=alist.filter(a=>_mv.indexOf(a)<0);
           _mv.forEach(a=>{ const t=_tOf(a); let i=-1; alist.forEach((b,j)=>{ if(b.r.bk.id===t && b.g===a.g) i=j; });
             let k=i+1; while(k<alist.length && _tOf(alist[k])===t) k++;
-            alist.splice(k,0,a); });
+            a._b2cSub=true; alist.splice(k,0,a); });
         }
       }
       const groupColor={};
@@ -52413,6 +52413,22 @@ function bkV2RenderTab2(){
       const _rowObjs = alist.map(a=>{
         const r=a.r;
         const bk=r.bk;
+        /* §b2cAddon · owner: "ตัวที่ว่าเสริม เราอาจจะไม่ต้องทำให้มันใหญ่ มันต้องเล็กๆ"
+           ใบ B2C ที่เป็นบริการเสริมของแถวข้างบน · ไม่มีคน ไม่มีรถ ไม่มีเรือ · แถวเต็มความสูงไม่มีอะไรให้อ่าน
+           เหลือบรรทัดบาง ๆ บรรทัดเดียวใต้ใบเอเจนต์ · กดเลขใบเพื่อเปิดใบ B2C ได้เหมือนเดิม */
+        if(a._b2cSub){
+          const _L=bkB2CAddonTo(bk)||{};
+          const _ad=(bk.addOns||[]).map(x=>{ const t=String(x.type||'')+' '+String(x.label||''); const q=(+x.qty||1)>1?(' ×'+(+x.qty)):'';
+            return (/longtail|หางยาว/i.test(t) ? (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join') : String(x.label||x.type||''))+q; }).filter(Boolean).join(', ');
+          const _tot=Math.round(+((bk.priceBreakdown||{}).total)||+bk.total||0);
+          const _pd=String(((bk.paymentSnapshot||{}).paidStatus)||'').toLowerCase()==='paid';
+          return {g:a.g, boat:'', html:`
+          <tr class="t2-b2csub" data-al="${esc(a.key)}"><td colspan="${COLN}" style="padding:2px 12px 5px 26px;background:#FAFBFC;border-top:1px dashed #DCE3EA;font-size:11px;line-height:1.4;color:#6B7785">
+            &#8627; <a href="javascript:void 0" onclick="event.stopPropagation();(typeof bkV2OpenDetail==='function'?bkV2OpenDetail('${esc(bk.id)}'):(window.dashOpenBooking&&dashOpenBooking('${esc(bk.id)}')))" title="เปิดใบ B2C" style="font-family:'DM Mono',monospace;color:#185FA5;text-decoration:none">${esc(bk.voucherRef||bk.id)}</a>
+            <span style="color:#8A94A1">B2C</span> &middot; <b style="color:#8A3E05;font-weight:700">${esc(_ad||'Add-on')}</b> ของใบ VC ${esc(_L.vc||'')}
+            &middot; ไม่กินที่นั่ง${_tot?` &middot; &#3647;${_tot.toLocaleString()}${_pd?' จ่ายแล้ว':''}`:''}
+          </td></tr>`};
+        }
         const norm=bkV2Norm(bk);
         const lead = bk.leadPax || bk.customerName || '—';
         const others = Array.isArray(bk.passengers) ? bk.passengers : [];
