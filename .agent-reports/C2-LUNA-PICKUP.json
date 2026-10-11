@@ -11,7 +11,7 @@
     "base": "origin/lk-inbox",
     "branch": "agent/ops-pickup",
     "worktree": "D:/projects/wt-ops-pickup",
-    "commit": "",
+    "commit": "166830f9e9d15589bb2e174b3fe29320dbdb8fb5",
     "pr": {
       "number": null,
       "url": "",
