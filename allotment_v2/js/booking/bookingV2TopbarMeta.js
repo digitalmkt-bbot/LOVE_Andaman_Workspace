@@ -30,6 +30,11 @@ function bookingV2TopbarMeta(){
     const c = (SB_BOOKINGS||[]).filter(b=>b.status==='cancelled'||b.status==='cancelled_weather').length;
     return `${c} cancellation${c===1?'':'s'}`;
   } else {
-    return `${SB_BOOKINGS.length} bookings total`;
+    // In operation-backend mode the browser only caches visible month/recent rows;
+    // use the server aggregate rather than treating that cache length as all-time.
+    const ops = window.laOps && typeof window.laOps.enabled === 'function' && window.laOps.enabled();
+    const stats = ops ? window._opsAllStats : null;
+    const total = stats && Number.isFinite(Number(stats.total)) ? Number(stats.total) : SB_BOOKINGS.length;
+    return `${total} bookings total`;
   }
 }
