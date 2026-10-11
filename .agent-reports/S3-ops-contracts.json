@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "task": "S3-ops-contracts",
+  "title": "Recover operation-backend Contracts and Templates adapter",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c73-54f9-7399-8025-572a6a06d5c4",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "origin/integration/operation-backend",
+    "branch": "agent/ops-contracts",
+    "worktree": "D:/projects/wt-ops-contracts",
+    "commit": "915129cad41c2ac5f5f553bc69f0041dc31cf0a3",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Recover and review the dirty S3 Contracts/Templates frontend work, then commit only the S3 adapter, tag, focused test, task report, and manifest.",
+    "acceptanceCriteria": [
+      "Promo create/edit/void uses confirmed operation-backend contract endpoints.",
+      "Templates use confirmed list/detail/write/default endpoints.",
+      "Documents display confirmed records read-only without artifact upload or metadata mapping.",
+      "Syntax, focused tests, and diff checks pass."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/18-ops-contracts.js",
+      "allotment_v2/allotment_v2.html",
+      "test/unit/ops-contracts.test.mjs",
+      "docs/development/tasks/S3-ops-contracts.md",
+      ".agent-reports/S3-ops-contracts.json"
+    ],
+    "constraints": [
+      "No backend, database, schema, migration, or DB changes.",
+      "No push and no unrelated files.",
+      "Keep the script classic and ordered before 90-ops-boot.js.",
+      "Do not implement the explicitly BLOCKED legacy artifact metadata/upload mapping."
+    ],
+    "assumptions": [
+      "The recovered dirty adapter, tag, and test were created by the usage-limited Luna worker.",
+      "D:/projects/operation-backend is the authoritative API implementation."
+    ]
+  },
+  "output": {
+    "summary": "Recovered and corrected the S3 adapter: operation-backend is authoritative for promo contracts and templates in ops mode; confirmed document records display read-only; blocked legacy artifact behavior remains unavailable.",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Load the S3 adapter before ops boot as a classic script."
+      },
+      {
+        "path": "allotment_v2/js/ops/18-ops-contracts.js",
+        "change": "added",
+        "purpose": "Map contract/template APIs, read-only documents, and legacy entry-point wrappers."
+      },
+      {
+        "path": "test/unit/ops-contracts.test.mjs",
+        "change": "added",
+        "purpose": "Test mappings, create-versus-PATCH payload behavior, artifact blocking, and tag order."
+      },
+      {
+        "path": "docs/development/tasks/S3-ops-contracts.md",
+        "change": "added",
+        "purpose": "Record the S3 implementation and verification evidence."
+      },
+      {
+        "path": ".agent-reports/S3-ops-contracts.json",
+        "change": "added",
+        "purpose": "Provide the coordinator-readable S3 handoff."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Promo contracts",
+        "before": "Legacy local contract persistence was used.",
+        "after": "Ops mode loads server contracts and writes promo create/edit/void to /v1/contracts; PATCH excludes create-only agent_id."
+      },
+      {
+        "area": "Contract templates",
+        "before": "Legacy template seed/blob writers could persist local changes.",
+        "after": "Ops mode loads server details and writes template mutations, including reset/default/delete, to /v1/contract-templates."
+      },
+      {
+        "area": "Contract documents",
+        "before": "The legacy wizard stored generated artifact metadata in the browser.",
+        "after": "Ops mode displays existing server documents read-only and blocks unverified artifact generation/history mapping."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "window.laOpsContracts",
+        "window.__laOpsContractsCompat"
+      ],
+      "changed": [
+        "Legacy contract, template, renewal, and document entry points in operations mode"
+      ],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "Uses existing operation-backend contract and template write endpoints.",
+        "Does not write legacy localStorage contract, template, or artifact stores in operations mode.",
+        "No database schema or migration change."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --check allotment_v2/js/ops/18-ops-contracts.js",
+      "status": "passed",
+      "evidence": "Completed without syntax errors."
+    },
+    {
+      "command": "node --test test/unit/ops-contracts.test.mjs",
+      "status": "passed",
+      "evidence": "5 passing focused tests."
+    },
+    {
+      "command": "cd D:/projects/operation-backend && npm test",
+      "status": "passed",
+      "evidence": "Operation-backend suite completed successfully, including contracts coverage."
+    },
+    {
+      "command": "git diff --check and untracked-file whitespace checks",
+      "status": "passed",
+      "evidence": "No whitespace errors."
+    }
+  ],
+  "decisions": [
+    "Preserved and reviewed the recovered worker implementation instead of discarding it.",
+    "Removed agent_id from PATCH payloads because the backend accepts it only on POST create.",
+    "Wrapped cttResetKey so template resets cannot silently mutate only local browser state.",
+    "Blocked artifact reopen rather than translating legacy artifact ids into server document metadata."
+  ],
+  "risks": [
+    "No browser/live API end-to-end run was performed.",
+    "Legacy UI copy still says document generation although ops mode is intentionally read-only."
+  ],
+  "blockers": [
+    "Exact legacy generated-artifact metadata/upload mapping is explicitly BLOCKED and intentionally absent."
+  ],
+  "dependencies": [
+    "window.laOps shared client",
+    "S1 agRenew adapter",
+    "operation-backend sales editing routes"
+  ],
+  "followUps": [
+    "Define a verified server-side document generation/artifact metadata contract before replacing the legacy document wizard/history UX."
+  ],
+  "rollback": "Revert the S3 implementation and metadata commits; no database rollback is needed."
+}
