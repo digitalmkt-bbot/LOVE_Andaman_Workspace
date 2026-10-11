@@ -405,7 +405,7 @@
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
@@ -733,8 +733,21 @@
     };
     try{ x.send(); }catch(e){ fin(false); }
   }
+  /* §selfEcho (2026-10-11) · owner: "วันนี้เป็นอะไรไม่รู้ เด้งขึ้นรัวๆ" (กล่อง "มีข้อมูลใหม่จากคนอื่น · โดย admin" ทั้งที่เป็นตัวเอง)
+     เซิร์ฟเวอร์ตอบการเซฟแล้วค่อยกระจายเวอร์ชันใหม่ทาง SSE · แต่สาย SSE มาถึงก่อนคำตอบ HTTP ได้
+     ตอนนั้น VER ยังเป็นเลขเก่า การเซฟของเราเองจึงถูกนับเป็น "ของคนอื่น" → ขึ้นกล่อง แล้วอีกไม่กี่วิ
+     ดึงก้อนเต็มมาวาดหน้าใหม่ทั้งหน้า · แก้อะไรหนึ่งครั้ง = เด้งหนึ่งครั้ง
+     กันสองชั้น: ระหว่างที่การเซฟของเรายังไม่ได้คำตอบ ไม่ขึ้นกล่อง (_dirty) ·
+     ได้คำตอบแล้วถ้าเซิร์ฟเวอร์ไม่ได้บอกว่าเราตามหลังใคร (behind) และของที่รอมีเลขไม่เกินที่เราได้ = เสียงสะท้อนของเราเอง ทิ้ง
+     มีคนอื่นเซฟคั่น = behind > 0 → ยังดึงเหมือนเดิม ไม่มีอะไรหาย */
+  function _laDropEcho(){
+    if(!_laPending || (_laPending.version||0) > VER) return;
+    _laClearPending();
+    var bn=document.getElementById('la-refresh'); if(bn){ bn.remove(); _refreshShown=false; }
+  }
   function _laTryRefresh(){
     if(!_laPending) return;
+    if(_dirty) return;                       /* §selfEcho · การเซฟของเรายังไม่ได้คำตอบ · รอคำตอบก่อน (ตัวจับเวลา 3 วิ/คำตอบจะมาเรียกต่อ) */
     if((_laPending.version||0)<=_laCkSeen) return;   /* หน้าเช็คอินตามทันเวอร์ชันนี้แล้ว */
     if(_laBusy()){ showRefresh(_laPending); return; }
     if(_laCkCanNarrow()){ _laCkNarrow(function(okn){ if(!okn) _laSoftRefresh(); }); return; }
@@ -881,13 +894,18 @@
     x.onload=function(){
       var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
       var L=(j&&j.issues)||[];
+      /* §b2cAddon · ใบที่มีแต่บริการเสริมและผูกกับใบเอเจนต์ได้แล้ว ไม่ใช่ปัญหา · แยกไว้ส่วนสีเขียวข้างล่าง */
+      var W=L.filter(function(i){ return i.code!=='addon_linked'; }), G=L.filter(function(i){ return i.code==='addon_linked'; });
       if(!L.length){ box.innerHTML='<div style="padding:10px 12px">ไม่มีรายการแล้ว</div>'; return; }
-      box.innerHTML=L.map(function(i){
-        return '<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #F3E7CC;align-items:baseline">'
+      var row=function(i,ok){
+        return '<div class="'+(ok?'la-b2ci-ok':'la-b2ci-warn')+'" style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid '+(ok?'#DCEDE2;background:#F1F8F3;color:#1F4D37':'#F3E7CC')+';align-items:baseline">'
           +'<a href="javascript:void 0" onclick="window.dashOpenBooking&&dashOpenBooking(\''+esc(i.id)+'\')" '
           +'style="font-family:\'DM Mono\',monospace;font-weight:700;color:#185FA5;white-space:nowrap;text-decoration:none">'+esc(i.ref)+'</a>'
           +'<span>'+esc(i.msg)+'</span></div>';
-      }).join('');
+      };
+      box.innerHTML=W.map(function(i){ return row(i,false); }).join('')
+        +(G.length?('<div style="padding:7px 12px 5px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#2F6B4F;background:#F1F8F3">บริการเสริมของใบเอเจนต์ · ไม่กินที่นั่ง · '+G.length+'</div>'
+          +G.map(function(i){ return row(i,true); }).join('')):'');
     };
     x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
     try{ x.send(); }catch(e){}
@@ -1189,7 +1207,9 @@
      ⚠ เพิ่มคีย์ใหม่ต้องเพิ่ม PERM_KEYS.add('<key>') ใน server.js ด้วย ไม่งั้น cleanPerms ตัดทิ้งตอนบันทึก */
   var LA_ACTS=[
     {v:'act-capunlock', t:'ปลด cap เรือเฉพาะวัน (ฉุกเฉิน)', d:'เพิ่มที่นั่งของเรือลำหนึ่งเฉพาะวันนั้น เมื่อเรือเต็มแล้วยังมีคนที่รับจองไปแล้วค้างอยู่ · ไม่เกินที่นั่งจดทะเบียน'},
-    {v:'act-approve', t:'อนุมัติ booking / FOC', d:'อนุมัติ booking ที่เกิน allotment หรือผู้โดยสาร FOC ตามสิทธิ์ที่ server ตรวจสอบ'}
+    {v:'act-approve', t:'อนุมัติ booking / FOC', d:'อนุมัติ booking ที่เกิน allotment หรือผู้โดยสาร FOC ตามสิทธิ์ที่ server ตรวจสอบ'},
+    /* §pckMove (2026-10-10) · ย้ายลำฉุกเฉินจากหน้า Pier Check-in · admin เลือกคนที่ทำได้ */
+    {v:'act-pckmove', t:'ย้ายลำหน้าท่า (Pier Check-in)', d:'ย้ายบุคกิ้งไปอีกลำที่วิ่งโปรแกรมเดียวกันวันนั้น จากหน้าเช็คอินหน้าท่า · ต้องเลือกเหตุผล · ลงประวัติใบจอง · ไม่เกินที่นั่งของลำปลายทาง'}
   ];
   window.LA_ACTS=LA_ACTS;
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }

@@ -504,7 +504,7 @@ function bookingV2RenderTab2(){
       const ol=(gd.otherLang||'').trim(); if(ol) lang[ol]=(lang[ol]||0)+t;
       veg+=+mm.veg||0; vegan+=+mm.vegan||0; halal+=+mm.halal||0;
       allerg+=(typeof bookingV2AllergyCount==='function')?bookingV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
-      const af=(typeof bookingV2AddOnFlags==='function')?bookingV2AddOnFlags(r.bk,rid):null;
+      const af=(typeof bookingV2AddOnFlags==='function' && !(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk)))?bookingV2AddOnFlags(r.bk,rid):null;   /* §b2cAddon */
       if(af){ if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=t; }
       if(typeof bookingV2LongtailExtraPax==='function') ltJoin+=(bookingV2LongtailExtraPax(r.bk.id,date)||0);
       if(typeof bookingV2LongtailCharterExtraBoats==='function') ltChtr+=(bookingV2LongtailCharterExtraBoats(r.bk.id,date)||0);
@@ -711,7 +711,7 @@ function bookingV2RenderTab2(){
         let vPax=0,uTot=0;
         grp2.forEach(r=>{ const bid=r.charter?(r.charterBoatId||bkOpsRead(r.bk,date).boatId):bkOpsRead(r.bk,date).boatId; const t=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); vPax+=t;
           const gd=r.bk.guides||{}; const mm=r.bk.specialMeals||{};
-          const _af=bookingV2AddOnFlags(r.bk, rid2);   // longtail join / charter / transfer on this variant
+          const _af=(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk))?{}:bookingV2AddOnFlags(r.bk, rid2);   // longtail join / charter / transfer on this variant · §b2cAddon linked B2C counted on the agent row
           const o=(bid&&ag[bid])?ag[bid]:null;
           const _exJoin=bookingV2LongtailExtraPax(r.bk.id, date);   // day-of "+ extra" longtail join (qty = people)
           const _exChtr=bookingV2LongtailCharterExtraBoats(r.bk.id, date);   // day-of "+ extra" private/charter longtail (qty = boats)
@@ -783,7 +783,7 @@ function bookingV2RenderTab2(){
       if(g.chinese) langCnt['CN']=(langCnt['CN']||0)+_rp;
       const _ol=(g.otherLang||'').trim(); if(_ol) langCnt[esc(_ol)]=(langCnt[esc(_ol)]||0)+_rp;
       // ── add-on prep counts (shared detection · see bookingV2AddOnFlags) ──
-      const _af=bookingV2AddOnFlags(r.bk, r.routeId);
+      const _af=(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk))?{}:bookingV2AddOnFlags(r.bk, r.routeId);   /* §b2cAddon */
       if(_af.charter) ltCharterBoats += (_af.charterQty||1);          // charter = whole boat · count boats (× qty)
       else if(_af.join) ltJoinPax+=_rp;          // join = per-head · count heads riding the longtail
       if(_af.transfer) ptPax+=_rp;
@@ -915,6 +915,18 @@ function bookingV2RenderTab2(){
         // tiebreak: honor an active column Sort (Agency/Zone) if the user clicked one, else by pickup time
         if(sortCol){ const c=_rowCmp(x.r,y.r); if(c) return c; }
         const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; }); }
+      /* §b2cAddon · แถวใบ B2C ที่เป็นบริการเสริมของใบเอเจนต์ ต่อท้ายแถวของใบนั้นทันที
+         เฉพาะเมื่ออยู่ในโซนนี้และกลุ่มรถเดียวกัน · โหมดจัดเรือเรียงตามลำ ไม่ยุ่ง */
+      if(!_boatCluster && typeof bkB2CAddonTo==='function'){
+        const _tOf=a=>{ const L=bkB2CAddonTo(a.r.bk); return L ? L.bk.id : ''; };
+        const _mv=alist.filter(a=>{ const t=_tOf(a); return t && alist.some(b=>b!==a && b.r.bk.id===t && b.g===a.g); });
+        if(_mv.length){
+          alist=alist.filter(a=>_mv.indexOf(a)<0);
+          _mv.forEach(a=>{ const t=_tOf(a); let i=-1; alist.forEach((b,j)=>{ if(b.r.bk.id===t && b.g===a.g) i=j; });
+            let k=i+1; while(k<alist.length && _tOf(alist[k])===t) k++;
+            a._b2cSub=true; alist.splice(k,0,a); });
+        }
+      }
       const groupColor={};
       // §สีประจำรถ · 1 กลุ่ม = 1 คัน → ใช้สีของรถคันนั้น (เดิม PAL_BOAT[i%N] = สีตามลำดับกลุ่ม
       // ทำให้ Love3 เป็นสีนึงวันนี้ อีกสีพรุ่งนี้) · กลุ่มที่ยังไม่เลือกรถ ค่อยใช้สีกลางๆ
@@ -1087,6 +1099,22 @@ function bookingV2RenderTab2(){
       const _rowObjs = alist.map(a=>{
         const r=a.r;
         const bk=r.bk;
+        /* §b2cAddon · owner: "ตัวที่ว่าเสริม เราอาจจะไม่ต้องทำให้มันใหญ่ มันต้องเล็กๆ"
+           ใบ B2C ที่เป็นบริการเสริมของแถวข้างบน · ไม่มีคน ไม่มีรถ ไม่มีเรือ · แถวเต็มความสูงไม่มีอะไรให้อ่าน
+           เหลือบรรทัดบาง ๆ บรรทัดเดียวใต้ใบเอเจนต์ · กดเลขใบเพื่อเปิดใบ B2C ได้เหมือนเดิม */
+        if(a._b2cSub){
+          const _L=bkB2CAddonTo(bk)||{};
+          const _ad=(bk.addOns||[]).map(x=>{ const t=String(x.type||'')+' '+String(x.label||''); const q=(+x.qty||1)>1?(' ×'+(+x.qty)):'';
+            return (/longtail|หางยาว/i.test(t) ? (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join') : String(x.label||x.type||''))+q; }).filter(Boolean).join(', ');
+          const _tot=Math.round(+((bk.priceBreakdown||{}).total)||+bk.total||0);
+          const _pd=String(((bk.paymentSnapshot||{}).paidStatus)||'').toLowerCase()==='paid';
+          return {g:a.g, boat:'', html:`
+          <tr class="t2-b2csub" data-al="${esc(a.key)}"><td colspan="${COLN}" style="padding:2px 12px 5px 26px;background:#FAFBFC;border-top:1px dashed #DCE3EA;font-size:11px;line-height:1.4;color:#6B7785">
+            &#8627; <a href="javascript:void 0" onclick="event.stopPropagation();(typeof bookingV2OpenDetail==='function'?bookingV2OpenDetail('${esc(bk.id)}'):(window.dashOpenBooking&&dashOpenBooking('${esc(bk.id)}')))" title="เปิดใบ B2C" style="font-family:'DM Mono',monospace;color:#185FA5;text-decoration:none">${esc(bk.voucherRef||bk.id)}</a>
+            <span style="color:#8A94A1">B2C</span> &middot; <b style="color:#8A3E05;font-weight:700">${esc(_ad||'Add-on')}</b> ของใบ VC ${esc(_L.vc||'')}
+            &middot; ไม่กินที่นั่ง${_tot?` &middot; &#3647;${_tot.toLocaleString()}${_pd?' จ่ายแล้ว':''}`:''}
+          </td></tr>`};
+        }
         const norm=bookingV2Norm(bk);
         const lead = bk.leadPax || bk.customerName || '—';
         const others = Array.isArray(bk.passengers) ? bk.passengers : [];
@@ -1112,7 +1140,21 @@ function bookingV2RenderTab2(){
           const _lb = _rtB && _rtB.routeBundles && _rtB.routeBundles[r.routeId] && _rtB.routeBundles[r.routeId].longtail;
           if(_lb && _rtBundleAppliesTo(_lb, _trip.bookingMode==='charter')) _ltLabel = 'Longtail'+(_lb.mode==='free'?' (incl.)':' (bundle)');
         }
+        if(_ltLabel && typeof bkB2CAddonTo==='function' && bkB2CAddonTo(bk)) _ltLabel='';   /* §b2cAddon · นับ/โชว์ที่แถวใบเอเจนต์ */
         if(_ltLabel) addonBadges.unshift(`<span class="t2-rb" style="background:#E6F1FB;color:#1683C7" title="${esc(_ltLabel)}${_ltNote?(' · หมายเหตุ: '+esc(_ltNote)):''}"   /* §btClip */>${esc(_ltLabel)}${_ltNote?` &#128221; ${esc(_ltNote)}`:''}</span>`);
+        /* §b2cAddon · ใบเอเจนต์: บริการเสริมที่ซื้อผ่าน B2C · ใบ B2C: บอกว่าเป็นของใบไหน */
+        const _b2cTo=(typeof bkB2CAddonTo==='function')?bkB2CAddonTo(bk):null;
+        const _b2cOf=(typeof bkB2CAddonsOf==='function')?bkB2CAddonsOf(bk.id, date):[];
+        /* ป้ายสั้น ตัดบรรทัดได้ · ช่อง Add-on แคบ ป้ายยาวบรรทัดเดียวโดนตัดเหลือ "Longtail ..." อ่านไม่ออกว่ามาจาก B2C */
+        const _b2cShort=a=>{ const t=String(a.type||'')+' '+String(a.label||''); const q=(+a.qty||1)>1?(' ×'+(+a.qty)):'';
+          if(/longtail|หางยาว/i.test(t)) return (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join')+q;
+          return String(a.label||a.type||'')+q; };
+        const _b2cWrap='white-space:normal;line-height:1.25;text-overflow:clip;text-align:left';
+        const b2cAddonChips=(_b2cTo
+            ? `<span class="t2-rb b2c-addon-of" style="background:#EEF2F7;color:#3A4A5E;${_b2cWrap}" title="บริการเสริมของใบ VC ${esc(_b2cTo.vc)} · นับที่แถวของใบนั้น · ใบนี้ไม่กินที่นั่ง">${esc((bk.addOns||[]).map(_b2cShort).filter(Boolean).join(', '))}<br>&rarr; VC ${esc(_b2cTo.vc)}</span>`
+            : '')
+          + _b2cOf.map(l=>{ const _ls=(l.addOns||[]).map(a=>String(a.label||a.type||'')+((+a.qty||1)>1?(' ×'+(+a.qty)):'')).filter(Boolean).join(', ');
+              return `<span class="t2-rb b2c-addon-in" style="background:#FCEBDD;color:#8A3E05;${_b2cWrap}" title="${esc(_ls)} · ซื้อผ่าน B2C ${esc(l.voucherRef||l.id)} · จ่ายที่ใบ B2C · ไม่บวกยอดใบนี้">${esc((l.addOns||[]).map(_b2cShort).filter(Boolean).join(', ')||'Add-on')}<br>B2C ${esc(l.voucherRef||l.id)}</span>`; }).join('');
         const _extras=(typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(bk.id):[];
         const extrasChips=_extras.map(e=>{ const _g=(typeof bkxExGot==='function')?bkxExGot(e):true;
           return `<span class="t2-rb" style="background:${_g?'#E1F5EE':'#FDF3E3'};color:${_g?'#0F6E56':'#8A5300'};cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ${_g?('ขายหน้างาน '+(({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'})[e.method||'cash']||'เงินสด')):'ขายล่วงหน้า · เก็บเงินวันเดินทาง · ยังไม่ได้เก็บ'}" onclick="event.stopPropagation();bookingV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}${_g?'':' &#9203;'}</span>`; }).join('');
@@ -1282,18 +1324,18 @@ function bookingV2RenderTab2(){
               return _zp(_zt(_rw, { raw:true }));
             })()}</td>
             <td class="t2-sbk">${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
-            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bookingV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bookingV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
+            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${b2cAddonChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bookingV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bookingV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
               ${_movedBadge}
               ${_splitBadge}
               ${_altPickBadge}
               ${reqBadges.length?`<div class="t2-rbwrap">${reqBadges.join('')}</div>`:''}
               ${allergTxt?`<div class="t2-allerg" title="Allergy: ${esc(allergTxt)}">Allergy: ${esc(allergTxt)}</div>`:''}
-              ${(function(){ var _un=bkUpgNote(bk, date); return _un?`<div class="t2-note t2-upgnote" data-upgnote="1" title="${esc(_un)}">${esc(_un)}</div>`:''; })()}
+              ${''/* §upgPay · ย้ายไปช่อง Pay แล้ว (bkUpgPayChip) */}
               ${_note?`<div class="t2-note" title="${esc(_note)}">${esc(_note)}</div>`:''}
-              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge && !bkUpgNote(bk, date))?'<span class="t2-dim">—</span>':''}
+              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
             </td>
-            ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bookingV2PayChip(bk)}${_cot.chip}${reschCashChip}</div></td>`)}
+            ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bookingV2PayChip(bk)}${_cot.chip}${reschCashChip}${bkUpgPayChip(bk, date)}</div></td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bookingV2FmtTHB(r.subtotal)}${bookingV2PaidLine(bk)}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
             <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bookingV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : ((_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bookingV2BoatAvatarColor(_bid); const _pl=(typeof bookingV2BoatPulled==='function')&&bookingV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bookingV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>

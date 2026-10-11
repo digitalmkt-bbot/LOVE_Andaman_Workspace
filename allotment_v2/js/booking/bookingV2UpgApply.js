@@ -1,4 +1,4 @@
-function bookingV2UpgApply(){
+function bookingV2UpgApply(go){
   var U=_bkUpg; if(!U) return;
   var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }); if(!b) return;
   var t=bkUpgTripOn(b, U.date, U.from); if(!t){ alert('Trip not found.'); return; }
@@ -14,12 +14,14 @@ function bookingV2UpgApply(){
      ย้ายแล้วที่นั่งสองโปรแกรมเปลี่ยนทันทีและเรือเดิมถูกล้าง · ถามหลังตรวจทุกอย่างผ่านแล้ว จะได้ไม่ถามแล้วค่อยบอกว่าย้ายไม่ได้ */
   var _pEn=function(rid){ var p=bkUpgPierOf(rid); return ((typeof LA_PIER_NAME!=='undefined' && LA_PIER_NAME[p] && LA_PIER_NAME[p].en) || p || '-'); };
   var _pf=_pEn(U.from), _pt=_pEn(U.to);
-  if(!confirm('Confirm upgrade?\n\nFROM: '+fromNm+'  ['+_pf+']\nTO:   '+toNm+'  ['+_pt+']'
-      +(_pf!==_pt?'\n\n*** DIFFERENT PIER - the boarding point changes ***':'')
-      +'\n\nGuest: '+String(b.leadPax||b.customerName||b.voucherRef||b.id)+' - '+pax+' pax - '+U.date
-      +'\nExtra charge: '+(charge>0?('THB '+charge.toLocaleString()):'none')
-      +'\nReason: '+reason
-      +'\n\nOK = upgrade now   Cancel = go back')) return;
+  /* §upgConfirm2 (2026-10-11) · owner: "ปรับ UI" (ภาพกล่องยืนยันของเบราว์เซอร์ ตัวหนังสือล้นต้องเลื่อนอ่าน)
+     กล่อง confirm() ของเบราว์เซอร์อ่านยาก ตัดคำ ต้องเลื่อน และไม่มีสี · ย้ายเป็นขั้นยืนยันในหน้าต่างเดิม
+     กด Upgrade = ตรวจทุกอย่างแล้วโชว์หน้าสรุป · กดยืนยันในหน้าสรุป = เรียกตัวนี้อีกรอบด้วย go=true
+     ตรวจซ้ำอีกรอบตอนยืนยัน (ที่นั่งอาจถูกคนอื่นจองไประหว่างนั้น) */
+  if(go!==true){
+    bookingV2UpgConfirmView({ b:b, pax:pax, fromNm:fromNm, toNm:toNm, pf:_pf, pt:_pt, charge:charge, reason:reason, date:U.date });
+    return;
+  }
   if(charge>0){
     if(!Array.isArray(b.upgrades)) b.upgrades=[];
     upgId='up_'+Date.now();

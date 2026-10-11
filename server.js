@@ -232,7 +232,7 @@ const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g
 const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 //
 const {
-  mapB2COrders, b2cFindArea, b2cCheckOrders, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
+  mapB2COrders, b2cFindArea, b2cCheckOrders, b2cAddonWant, b2cAddonMatch, mapB2CItemBooking, b2cAllocAdjust, b2cNatCode, b2cAddonKey, b2cPassengersFromJson,
 } = require('./b2c-map.js');   // §b2cMapMod · the pure mapper; relSyncB2C below does the I/O
 const b2cChg = require('./b2c-changelog.js');   // §b2cChg · history line when a sync changes a booking
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
@@ -386,7 +386,11 @@ const B2C_OWN_BK = new Set([
 //      LOV-7485231 (TH+TH+US sold as 3 Thai) and LOV-3345176 (TH+TR sold as 2 Thai) re-count here.
 // v32: §b2cCheck · 'Laotian' resolves to LA (found by the new post-import check on LOV-5681391).
 //      Also §b2cMapMod: the mapper moved to b2c-map.js verbatim; that part changes no output.
-const B2C_MAP_VER = 32;
+// v33: §b2cParkFee · trip.nat also from the International Park Fee add-on qty and from travellers
+//      labelled non-Thai, when the full-list rule says nothing. LOV-4561646 (4 Ad + 2 Chd sold Thai,
+//      one US guest, park fee × 1) re-counts as 3 Thai adults + 2 Thai children. Marked soft
+//      (trip._natSoft): a hand count in ops that already has at least as many foreigners is kept.
+const B2C_MAP_VER = 33;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -439,7 +443,8 @@ function b2cHealthReport() {
     phase: B2C_HEALTH.phase,
     // §b2cCheck · data problems in what DID import. Separate from ok on purpose: the sync is healthy,
     // a booking it brought in is not — /api/b2c/health must not 503 an uptime monitor over one order.
-    issues: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').slice(0, 50),
+    // §b2cAddon · linked add-on-only lines ride along as info (not counted) so the panel can list them
+    issues: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn' || i.code === 'addon_linked').slice(0, 60),
     issueCount: (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length,
     issuesAt: B2C_HEALTH.issuesAt,
     // Changes whenever the SET of flagged bookings changes — lets the client re-show a panel the
@@ -460,7 +465,23 @@ async function _b2cRunChecks(itemRows, b2cBks, paxByBooking, singleRef) {
         [b2cBks.map(b => b.id)]);
       opsNat = new Set(rows.map(r => r.sb_bookings_id));
     } catch (_) { /* no nat columns on this DB — check without it */ }
-    const found = b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat);
+    // §b2cAddon · find the agent booking each add-on-only B2C line belongs to (ref in its notes)
+    let addonLinks = new Map();
+    try {
+      const want = b2cAddonWant(b2cBks);
+      if (want.length) {
+        const { rows } = await pool.query(
+          `SELECT b.id, b.voucherref, t.date, t.routeid
+           FROM ${fqt('sb_bookings')} b JOIN ${fqt('sb_bookings__trips')} t ON t.sb_bookings_id = b.id
+           WHERE COALESCE(b.agentid, '') <> 'a_b2c'
+             AND COALESCE(b.status, '') NOT IN ('cancelled', 'cancelled_weather', 'rejected')
+             AND t.date = ANY($1)
+             AND upper(regexp_replace(COALESCE(b.voucherref, ''), '[^A-Za-z0-9]', '', 'g')) = ANY($2)`,
+          [[...new Set(want.map(w => w.date))], [...new Set([].concat(...want.map(w => w.refs)))]]);
+        addonLinks = b2cAddonMatch(want, rows);
+      }
+    } catch (e) { console.warn('[b2c-check] add-on link lookup skipped:', e.message); }
+    const found = b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat, addonLinks);
     const prev = (B2C_HEALTH.issues || []).filter(i => i.sev === 'warn').length;
     B2C_HEALTH.issues = singleRef
       ? (B2C_HEALTH.issues || []).filter(i => i.ref !== String(singleRef)).concat(found)
@@ -947,6 +968,12 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
     catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
     const findArea = b2cFindArea(areaRows);   // §b2cMapMod · matcher + per-order loop live in b2c-map.js
     const b2cBks = mapB2COrders(itemRows, { findArea, paxByBooking, addonCat, progCat, trfCat, extCat });
+    // §b2cParkFee · a soft nat is a floor, not a full count: remember which trips carry one and keep
+    // the marker out of the row decomposition (it is not a column).
+    const natSoft = new Map();
+    for (const b of b2cBks) (b.trips || []).forEach((t, i) => {
+      if (t && t._natSoft) { if (t.nat) natSoft.set(b.id + '|' + i, t.nat); delete t._natSoft; }
+    });
     if (unchanged) { await _b2cRunChecks(itemRows, b2cBks, paxByBooking, null); _b2cHealthOk(); return; }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -1095,6 +1122,21 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
       for (const [bkId, byIdx] of Object.entries(savedTripNat)) {
         for (const [idx, old] of Object.entries(byIdx)) {
           if (NAT_COLS.every(c => old[c] == null)) continue;
+          // §b2cParkFee · the mapper's soft count (park-fee qty / labelled travellers) does not beat a
+          // count already on the trip that has at least as many foreigners (fewer or equal Thai heads):
+          // that one was typed by someone who knows which guest is the child. More foreigners → mapper.
+          const soft = natSoft.get(bkId + '|' + idx);
+          if (soft) {
+            const thOld = NAT_COLS.reduce((n, c) => n + (Number(old[c]) || 0), 0);
+            const thNew = (+soft.ad || 0) + (+soft.chd || 0) + (+soft.inf || 0) + (+soft.foc || 0);
+            if (thOld > thNew) continue;
+            await client.query(
+              `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
+               WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}`,
+              [...NAT_COLS.map(c => old[c]), bkId, Number(idx)]
+            );
+            continue;
+          }
           await client.query(
             `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
              WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}
@@ -2009,6 +2051,7 @@ PERM_KEYS.add(LA_PERM_EXPLICIT);
 /* §actPerm (2026-10-03) · สิทธิ์พิเศษรายการกระทำ (ไม่ใช่หน้าเมนู จึงไม่ได้มากับ laSyncPermKeys)
    ตรงกับ LA_ACTS ใน js/01-auth-sync.js · ไม่เพิ่มตรงนี้ cleanPerms จะตัดทิ้งตอน admin กดบันทึก ติ๊กแล้วหายเงียบ */
 PERM_KEYS.add('act-capunlock');
+PERM_KEYS.add('act-pckmove');   // §pckMove · ย้ายลำหน้าท่า · ตรงกับ LA_ACTS
 function embedTokenOk(t){
   if(!EMBED_SECRET || !t) return false;
   try{

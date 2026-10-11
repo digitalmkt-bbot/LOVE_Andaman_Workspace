@@ -1,7 +1,6 @@
-// Longtail-Join pax sold day-of via "+ extra" (SB_EXTRAS · qty = people). Optionally scoped to a trip date.
-// "Longtail Join" preset counts as Join · "Private Longtail" / เหมา = a whole boat, NOT per-person join.
 function bookingV2LongtailExtraPax(bkId, date){
   let n=0;
+  if(date) n+=bkB2CAddonLt(bkId, date).join;   /* §b2cAddon */
   (typeof bookingV2ExtrasFor==='function'?bookingV2ExtrasFor(bkId):[]).forEach(e=>{
     const nm=String(e.service||'');
     if(!/longtail|หางยาว/i.test(nm)) return;

@@ -2,6 +2,7 @@
 // "Longtail เหมา" add-on → counted together in the trip prep summary. Optionally scoped to a date.
 function bookingV2LongtailCharterExtraBoats(bkId, date){
   let n=0;
+  if(date) n+=bkB2CAddonLt(bkId, date).boats;   /* §b2cAddon */
   (typeof bookingV2ExtrasFor==='function'?bookingV2ExtrasFor(bkId):[]).forEach(e=>{
     const nm=String(e.service||'');
     if(!/longtail|หางยาว/i.test(nm)) return;

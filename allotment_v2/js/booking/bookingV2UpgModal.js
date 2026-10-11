@@ -4,7 +4,11 @@ function bookingV2UpgModal(){
   var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }), t=bkUpgTripOn(b, U.date, U.from);
   var pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot((t&&t.pax)||{}):0;
   var T=bookingV2UpgTargets(U.date, U.from, U.bkId);
-  var old=document.getElementById('bkv2-upg-ov'); if(old) old.remove();
+  /* §upgStay (2026-10-11) · owner: "เวลาจัด upgrade มันเด้ง" · เลือกโปรแกรมที่อยู่ล่าง ๆ แล้ววาดหน้าต่างใหม่ทั้งก้อน
+     กล่องเลื่อนใหม่เริ่มที่ 0 = เด้งกลับขึ้นบน · จำตำแหน่งเลื่อนไว้แล้วคืน */
+  var old=document.getElementById('bkv2-upg-ov');
+  var _upgSc=(old && old.firstElementChild && !old.querySelector('[data-upg-confirm]'))?old.firstElementChild.scrollTop:0;
+  if(old) old.remove();
   var ov=document.createElement('div'); ov.id='bkv2-upg-ov'; ov.className='la-modal';
   ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
   /* §upgPier · ผู้ใช้ขอ "ควรจะแยกท่าเรือให้หน่อย กลัวสับสน" · จัดกลุ่มตามท่า ท่าเดียวกับโปรแกรมเดิมขึ้นก่อน
@@ -39,4 +43,5 @@ function bookingV2UpgModal(){
     +'<button data-upg-go="1" onclick="bookingV2UpgApply()" style="border:none;background:#6B289A;color:#fff;border-radius:9px;padding:9px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">Upgrade</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+  if(_upgSc && ov.firstElementChild) ov.firstElementChild.scrollTop=_upgSc;   /* §upgStay */
 }

@@ -45,7 +45,14 @@
      "general": 0
     },
     "lockDrawSel": {},
-    "subtotal": 3398
+    "subtotal": 3398,
+    "nat": {
+     "ad": 1,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "_natSoft": true
    }
   ],
   "passengers": [],

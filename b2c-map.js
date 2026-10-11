@@ -430,6 +430,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // a matched area, and it would print raw customer text in the ops Zone column. dropoffHotelName
   // already carries it (§b2cNoHotel: that raw text is never the guest's hotel now, just the location).
   const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
+  const addOnRows = b2cMapAddOns(det, addOn, routeLookupId, addonCat);   // §b2cParkFee · read by the nat block below
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: opsRouteId,
@@ -471,6 +472,34 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
       const kids = P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
       if (th === heads) trip.nat = { ad: P.ad_fr + P.ad_th, chd: P.chd_fr + P.chd_th, inf: P.inf_fr + P.inf_th, foc: P.foc };
       else if (th === 0 || !kids) trip.nat = { ad: th, chd: 0, inf: 0, foc: 0 };
+    }
+  }
+  // §b2cParkFee (2026-10-11) · the rule above needs EVERY traveller labelled, and B2C usually leaves
+  // the Thai travellers' nationality blank. LOV-4561646: lead TH + 4 Thai names (blank) + Christopher
+  // Franck (US), sold as 4 Ad + 2 Chd Thai with "International Park Fee" × 1 — the park page bought
+  // 6 Thai tickets. Two facts B2C does give us, each a floor on the foreign head-count:
+  //   · the International Park Fee add-on — B2C charges it once per foreign head (qty), e.g.
+  //     LOV-0636823 TH+TH+4 US → qty 4, LOV-1739537 TH+2 JP → qty 2;
+  //   · travellers whose nationality IS filled in and is not Thai.
+  // Only ever RAISES the foreign count above what the price fields say (count high: a Thai ticket for
+  // a foreigner is the costly mistake at the counter). Which head is the foreigner is not known when
+  // there are children, so foreign heads come off the Thai adults first, then children, then infants;
+  // the pier fixes one person's type on the park page if it was a child. FOC stays as before (not Thai).
+  if (!trip.nat) {
+    const P = trip.pax;
+    const heads = P.ad_fr + P.ad_th + P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
+    const feeQty = addOnRows.filter(r => /international[\s_-]*park[\s_-]*fee/i.test(String(r.type) + ' ' + String(r.label)))
+      .reduce((n, r) => n + (Number(r.qty) || 0), 0);
+    const named = [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+      .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
+      .filter(n => n && n !== 'TH').length;
+    const foreign = Math.min(heads, Math.max(feeQty, named));
+    const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + P.foc;
+    if (heads > 0 && foreign > byPrice) {
+      let extra = foreign - byPrice;
+      const keep = n => { const k = Math.min(n, extra); extra -= k; return n - k; };
+      trip.nat = { ad: keep(P.ad_th), chd: keep(P.chd_th), inf: keep(P.inf_th), foc: 0 };
+      trip._natSoft = true;   // a floor, not a full count · server.js lets a hand count with as many foreigners stand
     }
   }
   // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
@@ -547,7 +576,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
              ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
-    addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
+    addOns: addOnRows,
     // Display rows for the Total panel. bookingV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
@@ -758,7 +787,56 @@ function _b2cRawNat(p) { return String((p && p.nationality) || '').trim(); }
 // opsNat (optional) = Set of booking-line ids that already carry a hand-entered trip.nat in ops —
 // the sync restores those after the re-insert, so a mixed party ops already counted is not flagged.
 const B2C_DEAD = new Set(['cancelled', 'cancelled_weather', 'rejected']);
-function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
+
+// ── §b2cAddon (2026-10-11) · a B2C order that is ONLY an add-on for a trip booked through an agent ──
+// The owner: the guest booked the day trip with an agent (In & Out, KLOOK…) and then bought the
+// longtail charter from us through B2C. The B2C line arrives with 0 pax and just the add-on, so it
+// was flagged "pax 0" and its longtail never reached the agent booking the pier actually works from.
+// B2C sales already write the agent's voucher in the special request ("ลูกค้าจองมาใน VC 22433 จาก
+// IN&OUT", "KLOOK Ref: cnc139595 Grc403963"). Those refs find the agent booking: same travel date,
+// voucherRef equal after dropping case and punctuation; same route preferred; the first ref that hits
+// wins. No ref, or no booking with it on that date → no link (never guessed from a name).
+// The client (js/08-app.js §b2cAddon) runs the SAME rule to show the add-on on the agent's row; keep
+// the two in step.
+function b2cAddonRefs(text) {
+  const out = [];
+  String(text || '').replace(/[A-Za-z0-9][A-Za-z0-9-]*/g, w => {
+    const k = w.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (k.length >= 4 && /\d/.test(k) && !out.includes(k)) out.push(k);
+    return w;
+  });
+  return out;
+}
+const b2cRefNorm = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function b2cAddonOnly(bk) {
+  if (!bk || B2C_DEAD.has(bk.status) || !(bk.addOns || []).length) return false;
+  let px = 0;
+  for (const t of bk.trips || []) for (const v of Object.values(t.pax || {})) px += Number(v) || 0;
+  return px === 0;
+}
+// want: [{id, refs[], date, route}] · rows: [{id, voucherref, date, routeid}] (agent bookings, not B2C,
+// not cancelled) → Map(b2cId → {targetId, vc, ref})
+function b2cAddonMatch(want, rows) {
+  const links = new Map();
+  for (const w of want) {
+    for (const ref of w.refs) {
+      const hit = rows.filter(r => r.date === w.date && b2cRefNorm(r.voucherref) === ref)
+        .sort((a, b) => (a.routeid === w.route ? 0 : 1) - (b.routeid === w.route ? 0 : 1) || String(a.id).localeCompare(String(b.id)))[0];
+      if (hit) { links.set(w.id, { targetId: hit.id, vc: hit.voucherref, ref }); break; }
+    }
+  }
+  return links;
+}
+function b2cAddonWant(b2cBks) {
+  return b2cBks.filter(b2cAddonOnly).map(b => {
+    const t = (b.trips || [])[0] || {};
+    // notes = the special request / remark sales typed; never the booking's own voucher
+    const own = b2cRefNorm(b.voucherRef);
+    return { id: b.id, refs: b2cAddonRefs(b.notes).filter(r => r !== own), date: t.date || '', route: t.routeId || '' };
+  }).filter(w => w.refs.length && w.date);
+}
+
+function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat, addonLinks) {
   const issues = [];
   const byOrder = new Map();
   for (const it of itemRows) {
@@ -801,7 +879,12 @@ function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
                   + (+P.inf_fr || 0) + (+P.inf_th || 0) + (+P.foc || 0);
       if (!t.routeId) add(bk, 'warn', 'route', 'หาเส้นทางไม่เจอ (' + (it.product_id || '?') + ') · ไม่ขึ้นในเรือ/ใบงานจนกว่าจะเลือกเส้นทางเอง');
       if (!t.date) add(bk, 'warn', 'date', 'ไม่มีวันเดินทาง');
-      if (!isTransfer && heads <= 0) add(bk, 'warn', 'pax0', 'จำนวนคนเป็น 0 · ไม่กินที่นั่งและไม่ขึ้นในใบงาน');
+      // §b2cAddon · 0 pax with only add-ons = an add-on for an agent's booking, not a broken line
+      const _ln = !isTransfer && heads <= 0 && addonLinks && addonLinks.get(bk.id);
+      if (_ln) add(bk, 'info', 'addon_linked', 'บริการเสริมของใบเอเจนต์ VC ' + _ln.vc + ' · ขึ้นที่แถวของใบนั้น · ไม่กินที่นั่ง');
+      else if (!isTransfer && heads <= 0 && b2cAddonOnly(bk))
+        add(bk, 'warn', 'addon_only', 'มีแต่บริการเสริม ไม่มีจำนวนคน · หาใบเอเจนต์ไม่เจอ · ให้เขียนเลข VC ของเอเจนต์ในหมายเหตุที่ B2C');
+      else if (!isTransfer && heads <= 0) add(bk, 'warn', 'pax0', 'จำนวนคนเป็น 0 · ไม่กินที่นั่งและไม่ขึ้นในใบงาน');
 
       // Park fee: the whole party was priced Thai off the LEAD alone (B2C sent no split of its own —
       // paxAllThai), nobody has a real-nationality count, yet a traveller we know of is not Thai.
@@ -843,6 +926,7 @@ function b2cCheckOrders(itemRows, b2cBks, paxByBooking, opsNat) {
 
 module.exports = {
   b2cCheckOrders,
+  b2cAddonRefs, b2cAddonOnly, b2cAddonMatch, b2cAddonWant,   // §b2cAddon
   b2cFindArea,
   mapB2COrders,
   B2C_ROUTE_MAP,

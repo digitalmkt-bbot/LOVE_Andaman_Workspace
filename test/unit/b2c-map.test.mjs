@@ -88,16 +88,40 @@ test('v32 · Laotian resolves to LA', () => {
 
 // ── §b2cNat edge cases real data has not produced yet ──────────────────────────────────────────
 const setPax = (fx, list) => { fx.paxRows = list.map((n, i) => ({ paxNo: i + 1, name: 'P' + i, nationality: n })); };
-test('§b2cNat · short traveller list → no nat (fall back to price fields, never guess)', () => {
+// §b2cParkFee (2026-10-11) · these three used to expect "no nat". The list rule still says nothing
+// for them, but a traveller labelled US and the International Park Fee add-on are both facts: at
+// least one head is foreign. Counting him Thai is what bought LOV-4561646 a Thai ticket for a US guest.
+const dropFee = fx => { for (const it of fx.items) { let d = it.details; if (typeof d === 'string') d = JSON.parse(d);
+  d.addonsSelected = (d.addonsSelected || []).filter(a => a.code !== 'international-park-fee'); it.details = d; } };
+const setFee = (fx, q) => { for (const it of fx.items) { let d = it.details; if (typeof d === 'string') d = JSON.parse(d);
+  (d.addonsSelected || []).forEach(a => { if (a.code === 'international-park-fee') a.qty = q; }); it.details = d; } };
+test('§b2cParkFee · short traveller list with a known foreigner → that foreigner counts', () => {
   const [b] = runWith('LOV-7485231', fx => setPax(fx, ['US']));
-  assert.equal(trip(b).nat, undefined);
+  assert.deepEqual(trip(b).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
 });
-test('§b2cNat · a traveller with blank nationality → no nat', () => {
+test('§b2cParkFee · a traveller with blank nationality → the labelled foreigner still counts', () => {
   const [b] = runWith('LOV-7485231', fx => setPax(fx, ['US', '']));
+  assert.deepEqual(trip(b).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · mixed party with a child → foreigner taken from the adults first', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 2; fx.items[0].pax_child = 1; setPax(fx, ['US', 'TH']); });
+  assert.deepEqual(trip(b).nat, { ad: 1, chd: 1, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · LOV-4561646 shape · 4 Ad + 2 Chd sold Thai, Thai names blank, one US, park fee × 1 → 3 Thai adults', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 4; fx.items[0].pax_child = 2; setPax(fx, ['', '', '', '', 'US']); });
+  assert.deepEqual(trip(b).pax, Object.assign({}, trip(b).pax, { ad_th: 4, chd_th: 2, ad_fr: 0, chd_fr: 0 }), 'price fields unchanged');
+  assert.deepEqual(trip(b).nat, { ad: 3, chd: 2, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · park fee qty above the labelled list wins (B2C charged it per foreign head)', () => {
+  const [b] = runWith('LOV-7485231', fx => { setFee(fx, 2); setPax(fx, ['US', '']); });
+  assert.deepEqual(trip(b).nat, { ad: 1, chd: 0, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · no park fee and nobody labelled foreign → no nat (fall back to price fields)', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
-test('§b2cNat · mixed party with a child → no nat (passengers carry no age, the child is unknowable)', () => {
-  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 2; fx.items[0].pax_child = 1; setPax(fx, ['US', 'TH']); });
+test('§b2cParkFee · never lowers the foreign count of a foreign-priced party', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_thai = 1; fx.items[0].pax_foreign = 2; setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
 test('§b2cNat · all-Thai party with a child → nat covers adults and child', () => {
@@ -132,12 +156,11 @@ test('§b2cCheck · every fixture (all bugs fixed) raises no warning', () => {
     assert.deepEqual(warns(checks(fx, runFixture(fx))), [], id);
   }
 });
-test('§b2cCheck · nat_mix — Thai-priced party with a foreigner and an incomplete list', () => {
+test('§b2cCheck · nat_mix — quiet now that the mapper counts the known foreigner itself (§b2cParkFee)', () => {
   const fx = loadFixture('LOV-7485231'); setPax(fx, ['US']);
   const bks = runFixture(fx);
-  assert.deepEqual(warns(checks(fx, bks)), ['nat_mix']);
-  assert.match(checks(fx, bks)[0].msg, /รู้สัญชาติแค่ 2 จาก 3/);
-  assert.deepEqual(warns(checks(fx, bks, new Set([bks[0].id]))), [], 'a nat typed by hand in ops answers it');
+  assert.deepEqual(trip(bks[0]).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
+  assert.deepEqual(warns(checks(fx, bks)), []);
 });
 test('§b2cCheck · nat_mix stays quiet when B2C sent its own Thai/foreign split', () => {
   const fx = loadFixture('LOV-7485231'); setPax(fx, ['US']);
@@ -172,4 +195,41 @@ test('§b2cCheck · a cancelled order is never flagged', () => {
   const fx = loadFixture('LOV-0824931'); fx.items[0].pax_adult = 0; fx.items[0].pax_thai = 0;
   const bks = runFixture(fx); bks.forEach(b => { b.status = 'cancelled'; });
   assert.deepEqual(checks(fx, bks), []);
+});
+
+// ── §b2cAddon · add-on-only B2C line for a trip booked through an agent ──────────────────────────
+test('§b2cAddon · refs from the special request: VC number, KLOOK refs; words and short numbers ignored', () => {
+  assert.deepEqual(map.b2cAddonRefs('ลูกค้าจองมาใน VC 22433 จาก IN&OUT / ลูกค้า 6 ท่าน'), ['22433']);
+  assert.deepEqual(map.b2cAddonRefs('เดย์ทริปจองผ่าน KLOOK Ref: cnc139595 Grc403963'), ['CNC139595', 'GRC403963']);
+});
+const addonOnly = (sreq) => runWith('LOV-3488828', fx => {
+  const it = fx.items[0]; it.pax_adult = 0; it.special_request = sreq; });
+test('§b2cAddon · 0 pax + only add-ons = add-on-only; with a seat it is not', () => {
+  const [b] = addonOnly('VC 22433');
+  assert.equal(map.b2cAddonOnly(b), true);
+  assert.equal(map.b2cAddonOnly(one('LOV-3488828')), false);
+});
+test('§b2cAddon · match: same date, voucherRef equal after case/punctuation, first ref wins, same route preferred', () => {
+  const [b] = addonOnly('KLOOK Ref: cnc139595 Grc403963');
+  const t = trip(b);
+  const want = map.b2cAddonWant([b]);
+  assert.deepEqual(want[0].refs, ['CNC139595', 'GRC403963']);
+  const rows = [
+    { id: 'BK-G', voucherref: 'GRC403963', date: t.date, routeid: t.routeId },
+    { id: 'BK-X', voucherref: 'CNC-139595', date: t.date, routeid: 'other' },
+    { id: 'BK-C', voucherref: 'cnc139595', date: t.date, routeid: t.routeId },
+    { id: 'BK-OLD', voucherref: 'CNC139595', date: '2020-01-01', routeid: t.routeId },
+  ];
+  const L = map.b2cAddonMatch(want, rows);
+  assert.equal(L.get(b.id).targetId, 'BK-C');
+  assert.equal(map.b2cAddonMatch(want, rows.filter(r => r.date !== t.date)).size, 0, 'another date never links');
+});
+test('§b2cCheck · add-on-only line: linked → info, not linked → addon_only warn (not pax0)', () => {
+  const fx = loadFixture('LOV-3488828'); fx.items[0].pax_adult = 0; fx.items[0].special_request = 'VC 22433';
+  const bks = runFixture(fx);
+  assert.deepEqual(warns(checks(fx, bks)), ['addon_only']);
+  const links = new Map([[bks[0].id, { targetId: 'BK-1', vc: '22433', ref: '22433' }]]);
+  const L = map.b2cCheckOrders(fx.items, bks, new Map([[fx.id, fx.paxRows || []]]), null, links);
+  assert.deepEqual(L.filter(i => i.sev === 'warn').map(i => i.code), []);
+  assert.ok(L.some(i => i.code === 'addon_linked' && /VC 22433/.test(i.msg)));
 });

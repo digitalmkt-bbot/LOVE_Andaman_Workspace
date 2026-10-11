@@ -19,6 +19,8 @@
 //  12 ที่มา + เหตุผล + ยอดเก็บเพิ่ม ขึ้นในช่องหมายเหตุของ By trip · Travel Summary · Pier Check-in · หน้ารายละเอียดใบ (ผู้ใช้เขียน "Free upgrade" แล้วไม่เห็นที่ไหนเลย)
 //     และหน้าต่าง Upgrade แยกโปรแกรมตามท่าเรือ ท่าเดียวกับโปรแกรมเดิมขึ้นก่อน (ข้อ 1)
 //  13 กด Upgrade แล้วถามยืนยันอีกรอบ (จาก → ไป · ยอด · เหตุผล) · Cancel แล้วไม่ย้าย
+//     §upgConfirm2 (2026-10-11) · ขั้นยืนยันอยู่ในหน้าต่างเดิม ไม่ใช่ confirm() ของเบราว์เซอร์
+//     "กลับไปแก้" แล้วค่าที่กรอกยังอยู่ · ต่างท่ามีกล่องเตือนสีเหลือง
 //  11 trip.upg รอดการเดินทางไป-กลับฐานข้อมูล (decomposeBlob → assembleBlob ของเซิร์ฟเวอร์จริง)
 import { open, goView, ROOT } from './_harness.mjs';
 import { createRequire } from 'node:module';
@@ -106,18 +108,28 @@ await page.evaluate(s => { const r = getRoute(s.to); window.__kp2 = r.pier; r.pi
 await page.evaluate(() => { const r = document.getElementById('bkupg-reason'); r.value = 'origin trip cancelled'; r.dispatchEvent(new Event('input')); const c = document.getElementById('bkupg-charge'); c.value = '500'; c.dispatchEvent(new Event('input')); document.querySelector('#bkv2-upg-ov [data-upg-go]').click(); });
 await page.waitForTimeout(400);
 await page.evaluate(s => { getRoute(s.to).pier = window.__kp2; }, S);
-const a13 = await st(), c13 = dlg[0] || { msg: '' };
-if (dlg.length === 1 && c13.type === 'confirm' && c13.msg.includes('FROM: ' + S.fromNm) && c13.msg.includes('TO:   ' + S.toNm) && /THB 500/.test(c13.msg) && /origin trip cancelled/.test(c13.msg) && /DIFFERENT PIER/.test(c13.msg) && !/[^\x00-\x7F]/.test(c13.msg.replace(S.fromNm, '').replace(S.toNm, '')) && c13.msg.indexOf('FROM') < c13.msg.indexOf('TO:')
+const c13 = await page.evaluate(() => { const p = document.querySelector('#bkv2-upg-ov [data-upg-confirm]'); if (!p) return null;
+  const t = p.textContent.replace(/\s+/g, ' '); return { t, diff: !!p.querySelector('[data-upg-diffpier]'), back: !!p.querySelector('[data-upg-back]'), go: !!p.querySelector('[data-upg-do]'),
+    fromFirst: t.indexOf('From') >= 0 || t.indexOf('จากโปรแกรม') >= 0 }; });
+const c13ok = c13 && c13.t.includes(S.fromNm) && c13.t.includes(S.toNm) && c13.t.indexOf(S.fromNm) < c13.t.lastIndexOf(S.toNm) && /฿500/.test(c13.t) && /origin trip cancelled/.test(c13.t) && c13.diff && c13.back && c13.go;
+await page.evaluate(() => document.querySelector('#bkv2-upg-ov [data-upg-back]').click()); await page.waitForTimeout(200);
+const back13 = await page.evaluate(() => ({ form: !!document.getElementById('bkupg-reason') && !document.querySelector('#bkv2-upg-ov [data-upg-confirm]'),
+  reason: (document.getElementById('bkupg-reason') || {}).value, charge: (document.getElementById('bkupg-charge') || {}).value }));
+const a13 = await st();
+if (dlg.length === 0 && c13ok && back13.form && back13.reason === 'origin trip cancelled' && back13.charge === '500'
     && a13.route === S.from && !a13.upg && !a13.ups.length && a13.modal && a13.freeA === S.usedA && a13.freeB === S.usedB)
-  ok('13 กด Upgrade แล้วถามยืนยัน บอกจากโปรแกรมไหนไปโปรแกรมไหน ยอดเก็บเพิ่ม และเหตุผล · กด Cancel แล้วไม่ย้าย หน้าต่างยังอยู่');
-else fail('13 ' + JSON.stringify({ dlg, a13 }));
+  ok('13 กด Upgrade แล้วขึ้นหน้ายืนยันในหน้าต่างเดิม (ไม่ใช่กล่องเบราว์เซอร์) · จาก → ไป · ฿500 · เหตุผล · เตือนต่างท่า · กลับไปแก้แล้วค่าที่กรอกยังอยู่ ไม่ย้าย');
+else fail('13 ' + JSON.stringify({ dlg, c13, back13, a13 }));
 
 /* ══ 3–6 ══ */
 dlg.length = 0; answer = true;
 await page.evaluate(() => document.querySelector('#bkv2-upg-ov [data-upg-go]').click());
+await page.waitForTimeout(200);
+const sameP3 = await page.evaluate(() => { const p = document.querySelector('#bkv2-upg-ov [data-upg-confirm]'); return p ? !p.querySelector('[data-upg-diffpier]') : null; });
+await page.evaluate(() => document.querySelector('#bkv2-upg-ov [data-upg-do]').click());
 await page.waitForTimeout(700);
 const a3 = await st();
-if (dlg.length === 1 && dlg[0].type === 'confirm' && !/DIFFERENT PIER/.test(dlg[0].msg) && !a3.modal && a3.route === S.to && a3.total === S.total && !a3.boat && a3.upg && a3.upg.fromRouteId === S.from && a3.upg.toRouteId === S.to && a3.upg.date === S.date && a3.upg.reason === 'origin trip cancelled' && a3.upg.charge === 500 && a3.upg.by)
+if (dlg.length === 0 && sameP3 === true && !a3.modal && a3.route === S.to && a3.total === S.total && !a3.boat && a3.upg && a3.upg.fromRouteId === S.from && a3.upg.toRouteId === S.to && a3.upg.date === S.date && a3.upg.reason === 'origin trip cancelled' && a3.upg.charge === 500 && a3.upg.by)
   ok(`3 ย้ายไป "${S.toNm}" · ยอดใบจองยัง ฿${a3.total.toLocaleString()} · เรือเดิม${S.boat ? 'ถูกล้าง' : 'ไม่มี'} · จำที่มา/เหตุผล/ยอด/คนทำ`);
 else fail('3 ' + JSON.stringify({ dlg, a3, S }));
 if (a3.freeA === S.usedA + S.pax && a3.freeB === S.usedB - S.pax) ok(`4 ที่นั่ง · "${S.fromNm}" ว่างเพิ่ม ${S.pax} (${S.usedA} → ${a3.freeA}) · "${S.toNm}" ถูกใช้เพิ่ม ${S.pax} (${S.usedB} → ${a3.freeB})`);
@@ -194,7 +206,7 @@ else fail('8 ' + JSON.stringify({ a8, dlg }));
 
 /* ══ 10 · ไม่เก็บเพิ่ม ══ */
 dlg.length = 0;
-await page.evaluate(async s => { bookingV2BoatUpgrade(s.id, s.from, s.date); await new Promise(z => setTimeout(z, 150)); _bkUpg.to = s.to; _bkUpg.reason = 'free move'; _bkUpg.charge = ''; bookingV2UpgApply(); await new Promise(z => setTimeout(z, 500)); }, S);
+await page.evaluate(async s => { bookingV2BoatUpgrade(s.id, s.from, s.date); await new Promise(z => setTimeout(z, 150)); _bkUpg.to = s.to; _bkUpg.reason = 'free move'; _bkUpg.charge = ''; bookingV2UpgApply(); await new Promise(z => setTimeout(z, 150)); bookingV2UpgApply(true); await new Promise(z => setTimeout(z, 500)); }, S);
 const a10 = await st();
 const allMsg = dlg.map(d => d.msg).join('');
 const e1 = errors.filter(e => !/Failed to load resource/.test(e));
