@@ -15796,6 +15796,15 @@ function pcBoats(date,pier){
     out.push({bid:B.bid, name:(B.boat&&B.boat.name)||B.bid, rid:B.rid||'',
               route:(B.route&&B.route.name)||B.rid||''});
   });
+  /* §pcRouteOrd (2026-10-11) · owner: "หน้านี้ โปรแกรมให้เรียงอิงตาม Program ใน Config"
+     ของเดิมเรียงตามลำดับที่เรือถูกวางใน Boat Operation · ทุกชีทของเงินสดย่อย (หลัก หางยาว ค่าอุทยาน พิมพ์)
+     อ่านลำดับจากตัวนี้ · เรียงตามโปรแกรมใน Program Config (laRouteOrdCmp ตัวเดียวกับปฏิทิน/By trip)
+     ในโปรแกรมเดียวกัน ลำดับเรือเท่าเดิม */
+  if(typeof laRouteOrdCmp==='function' && out.length>1){
+    out=out.map(function(x,i){ return [x,i]; })
+      .sort(function(a,b){ return laRouteOrdCmp(a[0].rid, b[0].rid) || (a[1]-b[1]); })
+      .map(function(x){ return x[0]; });
+  }
   return out;
 }
 /* วันที่ทั้งหมดของเดือนที่มีเรือออก · ชีทสองอันไล่ตามนี้ */
