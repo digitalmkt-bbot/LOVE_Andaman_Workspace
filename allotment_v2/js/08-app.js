@@ -2821,8 +2821,19 @@ function _laAnchorBack(st){
   }catch(_){}
   return false;
 }
+/* §scrollYank (2026-10-11) · owner: "เวลาเรากำลังเลื่อนๆ แล้วมี User อื่นลงรายละเอียด แล้วมันชอบเด้ง"
+   วาดใหม่เสร็จ คืนตำแหน่งเลื่อนทันที (ถูกแล้ว) แล้วมีรอบสองอีก 60ms ไว้เก็บตกของที่ layout มาช้า
+   แต่รอบสองเอาเลขที่ถ่ายไว้ "ก่อนวาด" ไปทับซ้ำ · คนที่ยังเลื่อนต่ออยู่ใน 60ms นั้น
+   (ลูกกลิ้ง/ทัชแพดยังไหลอยู่) โดนดึงกลับไปที่เดิม = เด้ง · หนักสุดที่กล่องเลื่อนในหน้าเช็คอิน
+   ซึ่งคืนด้วยเลขอย่างเดียว ไม่มีแถวยึด
+   รอบสองจึงทำเฉพาะเมื่อผู้ใช้ไม่ได้ขยับเองหลังวาด · จับจาก wheel/touchmove/keydown/mousedown
+   (ไม่ใช้ 'scroll' เพราะการตั้งค่า scrollTop ของเราเองก็ยิง scroll) */
+var _laUserMoveAt=0;
+['wheel','touchmove','keydown','mousedown'].forEach(function(ev){
+  try{ document.addEventListener(ev, function(){ _laUserMoveAt=Date.now(); }, {capture:true, passive:true}); }catch(_){} });
 window._laRerender=function(){
   try{
+    var _t0=Date.now();   /* §scrollYank */
     var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
     var inner=_laScrollSnap();
     var _anc={list:_laAnchorSnap(), y:null, top:0};
@@ -2843,6 +2854,7 @@ window._laRerender=function(){
     _laScrollBack(inner);
     var _held=_laAnchorBack(_anc);
     setTimeout(function(){ try{
+      if(_laUserMoveAt>=_t0) return;     /* §scrollYank · ผู้ใช้เลื่อนต่อเองแล้ว · ห้ามดึงกลับ */
       if(_held && _laAnchorBack(_anc)){ _laScrollBack(inner); return; }
       var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
       _laScrollBack(inner); }catch(e){} }, 60);
