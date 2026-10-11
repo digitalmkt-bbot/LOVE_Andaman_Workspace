@@ -52229,6 +52229,18 @@ function bkV2RenderTab2(){
         // tiebreak: honor an active column Sort (Agency/Zone) if the user clicked one, else by pickup time
         if(sortCol){ const c=_rowCmp(x.r,y.r); if(c) return c; }
         const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; }); }
+      /* §b2cAddon · แถวใบ B2C ที่เป็นบริการเสริมของใบเอเจนต์ ต่อท้ายแถวของใบนั้นทันที
+         เฉพาะเมื่ออยู่ในโซนนี้และกลุ่มรถเดียวกัน · โหมดจัดเรือเรียงตามลำ ไม่ยุ่ง */
+      if(!_boatCluster && typeof bkB2CAddonTo==='function'){
+        const _tOf=a=>{ const L=bkB2CAddonTo(a.r.bk); return L ? L.bk.id : ''; };
+        const _mv=alist.filter(a=>{ const t=_tOf(a); return t && alist.some(b=>b!==a && b.r.bk.id===t && b.g===a.g); });
+        if(_mv.length){
+          alist=alist.filter(a=>_mv.indexOf(a)<0);
+          _mv.forEach(a=>{ const t=_tOf(a); let i=-1; alist.forEach((b,j)=>{ if(b.r.bk.id===t && b.g===a.g) i=j; });
+            let k=i+1; while(k<alist.length && _tOf(alist[k])===t) k++;
+            alist.splice(k,0,a); });
+        }
+      }
       const groupColor={};
       // §สีประจำรถ · 1 กลุ่ม = 1 คัน → ใช้สีของรถคันนั้น (เดิม PAL_BOAT[i%N] = สีตามลำดับกลุ่ม
       // ทำให้ Love3 เป็นสีนึงวันนี้ อีกสีพรุ่งนี้) · กลุ่มที่ยังไม่เลือกรถ ค่อยใช้สีกลางๆ
@@ -52426,15 +52438,21 @@ function bkV2RenderTab2(){
           const _lb = _rtB && _rtB.routeBundles && _rtB.routeBundles[r.routeId] && _rtB.routeBundles[r.routeId].longtail;
           if(_lb && _rtBundleAppliesTo(_lb, _trip.bookingMode==='charter')) _ltLabel = 'Longtail'+(_lb.mode==='free'?' (incl.)':' (bundle)');
         }
+        if(_ltLabel && typeof bkB2CAddonTo==='function' && bkB2CAddonTo(bk)) _ltLabel='';   /* §b2cAddon · นับ/โชว์ที่แถวใบเอเจนต์ */
         if(_ltLabel) addonBadges.unshift(`<span class="t2-rb" style="background:#E6F1FB;color:#1683C7" title="${esc(_ltLabel)}${_ltNote?(' · หมายเหตุ: '+esc(_ltNote)):''}"   /* §btClip */>${esc(_ltLabel)}${_ltNote?` &#128221; ${esc(_ltNote)}`:''}</span>`);
         /* §b2cAddon · ใบเอเจนต์: บริการเสริมที่ซื้อผ่าน B2C · ใบ B2C: บอกว่าเป็นของใบไหน */
         const _b2cTo=(typeof bkB2CAddonTo==='function')?bkB2CAddonTo(bk):null;
         const _b2cOf=(typeof bkB2CAddonsOf==='function')?bkB2CAddonsOf(bk.id, date):[];
+        /* ป้ายสั้น ตัดบรรทัดได้ · ช่อง Add-on แคบ ป้ายยาวบรรทัดเดียวโดนตัดเหลือ "Longtail ..." อ่านไม่ออกว่ามาจาก B2C */
+        const _b2cShort=a=>{ const t=String(a.type||'')+' '+String(a.label||''); const q=(+a.qty||1)>1?(' ×'+(+a.qty)):'';
+          if(/longtail|หางยาว/i.test(t)) return (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join')+q;
+          return String(a.label||a.type||'')+q; };
+        const _b2cWrap='white-space:normal;line-height:1.25;text-overflow:clip;text-align:left';
         const b2cAddonChips=(_b2cTo
-            ? `<span class="t2-rb b2c-addon-of" style="background:#EEF2F7;color:#3A4A5E" title="บริการเสริมของใบ VC ${esc(_b2cTo.vc)} · นับหางยาวที่แถวของใบนั้น · ใบนี้ไม่กินที่นั่ง">&#8627; ของ VC ${esc(_b2cTo.vc)}</span>`
+            ? `<span class="t2-rb b2c-addon-of" style="background:#EEF2F7;color:#3A4A5E;${_b2cWrap}" title="บริการเสริมของใบ VC ${esc(_b2cTo.vc)} · นับที่แถวของใบนั้น · ใบนี้ไม่กินที่นั่ง">${esc((bk.addOns||[]).map(_b2cShort).filter(Boolean).join(', '))}<br>&rarr; VC ${esc(_b2cTo.vc)}</span>`
             : '')
           + _b2cOf.map(l=>{ const _ls=(l.addOns||[]).map(a=>String(a.label||a.type||'')+((+a.qty||1)>1?(' ×'+(+a.qty)):'')).filter(Boolean).join(', ');
-              return `<span class="t2-rb b2c-addon-in" style="background:#FCEBDD;color:#8A3E05" title="${esc(_ls)} · ซื้อผ่าน B2C ${esc(l.voucherRef||l.id)} · จ่ายที่ใบ B2C · ไม่บวกยอดใบนี้">${esc(_ls||'Add-on')} · B2C ${esc(l.voucherRef||l.id)}</span>`; }).join('');
+              return `<span class="t2-rb b2c-addon-in" style="background:#FCEBDD;color:#8A3E05;${_b2cWrap}" title="${esc(_ls)} · ซื้อผ่าน B2C ${esc(l.voucherRef||l.id)} · จ่ายที่ใบ B2C · ไม่บวกยอดใบนี้">${esc((l.addOns||[]).map(_b2cShort).filter(Boolean).join(', ')||'Add-on')}<br>B2C ${esc(l.voucherRef||l.id)}</span>`; }).join('');
         const _extras=(typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(bk.id):[];
         const extrasChips=_extras.map(e=>{ const _g=(typeof bkxExGot==='function')?bkxExGot(e):true;
           return `<span class="t2-rb" style="background:${_g?'#E1F5EE':'#FDF3E3'};color:${_g?'#0F6E56':'#8A5300'};cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ${_g?('ขายหน้างาน '+(({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'})[e.method||'cash']||'เงินสด')):'ขายล่วงหน้า · เก็บเงินวันเดินทาง · ยังไม่ได้เก็บ'}" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}${_g?'':' &#9203;'}</span>`; }).join('');

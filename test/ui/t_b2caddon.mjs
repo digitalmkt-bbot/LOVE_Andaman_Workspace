@@ -26,7 +26,9 @@ await goView(page, 'booking', 900);
 const S = await page.evaluate(() => {
   const c = {}; (SB_BOOKINGS || []).forEach(b => { if (b.status !== 'confirmed' || b.agentId === 'a_b2c') return; (b.trips || []).forEach(t => { if (t && t.date) c[t.date] = (c[t.date] || 0) + 1; }); });
   const day = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
-  const A = SB_BOOKINGS.find(b => b.status === 'confirmed' && b.agentId !== 'a_b2c' && (b.trips || []).some(t => t.date === day));
+  /* an agent booking not in a van group: rows only regroup inside one group (van frames stay intact) */
+  const _noGrp = b => { const o = bkOpsRead(b, day) || {}; return !(+o.vanGroup) && !(Array.isArray(o.vanSplits) && o.vanSplits.length); };
+  const A = SB_BOOKINGS.find(b => b.status === 'confirmed' && b.agentId !== 'a_b2c' && (b.trips || []).some(t => t.date === day) && _noGrp(b));
   const tA = A.trips.find(t => t.date === day);
   A.voucherRef = '22433';
   const base = bkV2LongtailCharterExtraBoats(A.id, day), baseLt = bkLtState(A, tA.routeId, day);
@@ -34,6 +36,8 @@ const S = await page.evaluate(() => {
     notes, note: 'B2C · Facebook · ' + id, trips: [{ routeId: tA.routeId, date, bookingMode: 'seat', pax: { ad_fr: 0, ad_th: 0, chd_fr: 0, chd_th: 0, inf_fr: 0, inf_th: 0, foc: 0, foc_fr: 0, foc_th: 0 } }],
     addOns: [{ type: 'longtail-charter', label: 'Longtail Charter', qty: 1, amount: 4999, note: '' }], passengers: [], history: [] });
   const L = mk('b2c_LOV-7770001_1', 'ลูกค้าจองมาใน VC 22433 จาก IN&OUT / ลูกค้า 6 ท่าน', day);
+  /* same pickup as the agent booking → same zone block on By trip date */
+  ['pickupSelf', 'pickupAreaId', 'pickupArea', 'pickupZone', 'hotelName'].forEach(k => { if (A[k] !== undefined) L[k] = A[k]; });
   const N = mk('b2c_LOV-7770002_1', 'จองผ่าน KLOOK Ref: ZZZ999999', day);
   SB_BOOKINGS.push(L, N);
   _bkV2.filterDate = day; _bkV2.filterRoute = null; bkV2SwitchTab('bytrip');
@@ -56,10 +60,21 @@ else fail('3 ' + JSON.stringify(c3));
 const c4 = await page.evaluate(S => {
   const inA = [...document.querySelectorAll('#view-booking .b2c-addon-in')].map(e => e.textContent.trim());
   const ofL = [...document.querySelectorAll('#view-booking .b2c-addon-of')].map(e => e.textContent.trim());
-  return { inA, ofL }; }, S);
-if (c4.inA.some(t => /Longtail Charter/.test(t) && /B2C LOV-7770001/.test(t)) && c4.ofL.some(t => /VC 22433/.test(t)))
-  ok(`4 By trip date · agent row "${c4.inA[0]}" · B2C row "${c4.ofL[0]}"`);
+  const cut = [...document.querySelectorAll('#view-booking .b2c-addon-in, #view-booking .b2c-addon-of')]
+    .filter(e => e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().right > e.closest('td').getBoundingClientRect().right + .5).length;
+  const rows = [...document.querySelectorAll('#view-booking tr.t2-row[data-al]')];
+  const has = (tr, id) => (tr.getAttribute('data-al') || '').indexOf(id) >= 0;
+  const iA = rows.findIndex(tr => has(tr, S.A)), iL = rows.findIndex(tr => has(tr, S.L));
+  const trL = rows[iL];
+  const blueLt = trL ? [...trL.querySelectorAll('.t2-rb')].filter(e => !e.classList.contains('b2c-addon-of') && /longtail/i.test(e.textContent)).length : -1;
+  const zOf = tr => { let p = tr.previousElementSibling; while (p && !p.classList.contains('t2-zband')) p = p.previousElementSibling; return p ? p.textContent.replace(/\s+/g, ' ').trim().slice(0, 40) : (tr.closest('table') ? 'tbl' : '?'); };
+  const zA = rows[iA] && zOf(rows[iA]), zL = trL && zOf(trL), sameTbl = rows[iA] && trL && rows[iA].closest('tbody') === trL.closest('tbody');
+  return { inA, ofL, cut, iA, iL, blueLt, zA, zL, sameTbl }; }, S);
+if (c4.inA.some(t => /เหมาหางยาว/.test(t) && /B2C LOV-7770001/.test(t)) && c4.ofL.some(t => /เหมาหางยาว/.test(t) && /VC 22433/.test(t)) && !c4.cut)
+  ok(`4 By trip date · agent row "${c4.inA[0]}" · B2C row "${c4.ofL[0]}" · not cut`);
 else fail('4 ' + JSON.stringify(c4));
+if (c4.iA >= 0 && c4.iL === c4.iA + 1 && c4.blueLt === 0) ok('4b the B2C row sits right under the agent row and carries no second longtail badge');
+else fail('4b ' + JSON.stringify(c4));
 
 const c5 = await page.evaluate(async ([S, PANEL]) => {
   if (typeof window._laB2CIssues !== 'function') (new Function('esc', 'bust', PANEL))(
