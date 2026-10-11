@@ -685,6 +685,22 @@
       .then(function(){ manifestBusy[date] = 0; });
   }
 
+  // A remote booking write needs an immediate refresh only when it touches the open
+  // booking/day. Other pages simply have their query caches invalidated by O.wrote().
+  if(O.onChange) O.onChange(function(change){
+    if(!change || change.kind !== 'booking' || !O.state.loaded) return;
+    var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
+    if(st.detailId){
+      var open = find(st.detailId);
+      if(open && open.opsId === change.entity_id && !busyIds[open.id]) refreshDetail(open);
+    }
+    if(st.tab === 'bytrip' && st.filterDate && Array.isArray(change.route_days)
+       && change.route_days.some(function(day){ return day && day.service_date === st.filterDate; })){
+      manifestAt[st.filterDate] = 0;
+      refreshDay(st.filterDate);
+    }
+  });
+
   (function(){
     var orig = window.bookingV2Render;
     if(typeof orig !== 'function' || orig.__opsRender) return;

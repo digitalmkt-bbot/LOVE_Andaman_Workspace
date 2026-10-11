@@ -144,10 +144,14 @@
   function shift(ds, days){ var d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + days); return ymd(d); }
   function today(){ return ymd(new Date()); }
 
-  /* change-listeners · availability and others refresh after any accepted write */
-  var listeners = [];
+  /* Write listeners invalidate local caches after this tab saves. Change listeners receive
+     the durable server event first, then the feed client invokes wrote('remote:…') so
+     existing cache invalidators also refresh after someone else's save. */
+  var listeners = [], changeListeners = [];
   function onWrite(fn){ listeners.push(fn); }
   function wrote(kind){ listeners.forEach(function(fn){ try{ fn(kind); }catch(_){} }); }
+  function onChange(fn){ changeListeners.push(fn); }
+  function changed(change){ changeListeners.forEach(function(fn){ try{ fn(change); }catch(_){} }); }
 
   window.laOps = {
     enabled: enabled, call: call, qs: qs, bookingWrite: bookingWrite,
@@ -159,7 +163,7 @@
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, activeView: activeView,
     ymd: ymd, shift: shift, today: today,
-    onWrite: onWrite, wrote: wrote,
+    onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }
   };
 })();
