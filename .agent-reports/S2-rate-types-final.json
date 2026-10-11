@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "task": "S2-rate-types-final",
+  "title": "S2: migrate rate types with booking-price compatibility",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c50-049c-7399-8025-554cb04fd7b4",
+    "model": "openai-codex/gpt-5.6-luna"
+  },
+  "git": {
+    "base": "origin/integration/operation-backend",
+    "branch": "agent/ops-rate-types",
+    "worktree": "D:/projects/wt-ops-rate-types",
+    "commit": "pending",
+    "pr": { "number": null, "url": "", "state": "none" }
+  },
+  "input": {
+    "requestedOutcome": "Migrate Rate Type loading and writes to operation-backend without changing the legacy shape used by booking quote functions.",
+    "acceptanceCriteria": [
+      "Use documented rate-type endpoints and map API detail to legacy booking-compatible fields.",
+      "Use server-first operations-mode mutations and leave legacy mode unchanged.",
+      "Keep net as the booking charge tier and preserve route validity, tiers, bundles, charter, longtail, and transfer data.",
+      "No backend, database, schema, migration, or mapping changes."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/17-ops-rate-types.js",
+      "allotment_v2/allotment_v2.html (S2 script tag only)",
+      "test/unit/ops-rate-types.test.mjs",
+      "docs/development/tasks/S2-rate-types-final.md",
+      ".agent-reports/S2-rate-types-final.json"
+    ],
+    "constraints": [
+      "Work only in D:/projects/wt-ops-rate-types on agent/ops-rate-types.",
+      "Use laOps/laOpsFetch plumbing; no direct operation-backend fetch.",
+      "Preserve classic script order and legacy behavior.",
+      "Do not push."
+    ],
+    "assumptions": [
+      "00-ops-core.js is loaded before the S2 adapter.",
+      "Backend contracts in src/routes/operations.ts and src/domain/rate-types.ts are authoritative."
+    ]
+  },
+  "output": {
+    "summary": "Added an ops-only Rate Type adapter that loads API details into the legacy camelCase projection and performs server-first create/edit/delete operations.",
+    "filesChanged": [
+      { "path": "allotment_v2/allotment_v2.html", "change": "modified", "purpose": "Loads the S2 adapter after ops core/adapters and before ops boot." },
+      { "path": "allotment_v2/js/ops/17-ops-rate-types.js", "change": "added", "purpose": "Maps rate-type API contracts, loads authoritative details, wraps legacy UI writes, and preserves booking net-price compatibility." },
+      { "path": "test/unit/ops-rate-types.test.mjs", "change": "added", "purpose": "Checks API-to-legacy projection and legacy-to-API price round-trip behavior." },
+      { "path": "docs/development/tasks/S2-rate-types-final.md", "change": "added", "purpose": "Durable task report and verification evidence." },
+      { "path": ".agent-reports/S2-rate-types-final.json", "change": "added", "purpose": "Coordinator handoff manifest." }
+    ],
+    "behaviorChanges": [
+      { "area": "ops rate-type load", "before": "Local seed/blob rate types were available to the page.", "after": "Authenticated operation-backend list/detail responses replace the projection; failed loads clear it and disable writes." },
+      { "area": "ops rate-type mutation", "before": "rtPersist wrote local blob state.", "after": "POST/PATCH/PUT/DELETE API calls complete before the in-memory projection is replaced; failures surface through laOps." },
+      { "area": "booking prices", "before": "Booking readers consumed legacy seatRates directly.", "after": "API net cells populate seatRates; sell/min_sell stay separate in priceTiers." }
+    ],
+    "interfaces": {
+      "added": ["window.laOps.rateTypes", "window.__laOpsRateTypeCompat"],
+      "changed": ["ops-mode wrappers for rtOpenNew, rtOpenEdit, rtSaveDraft, rtPersist, rtAddonTypesOpen, rtDeleteRT"],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": ["Legacy mode still delegates to original rtPersist and rt* functions.", "Custom add-on pricing is refused in S2 rather than sent or silently discarded."],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "node --check D:/projects/wt-ops-rate-types/allotment_v2/js/ops/17-ops-rate-types.js", "status": "passed", "evidence": "Syntax check exited 0." },
+    { "command": "node --check D:/projects/wt-ops-rate-types/allotment_v2/js/08-app.js", "status": "passed", "evidence": "Shared file syntax check exited 0; file was not modified." },
+    { "command": "cd D:/projects/wt-ops-rate-types && node --test test/unit/ops-rate-types.test.mjs", "status": "passed", "evidence": "2 tests passed, 0 failed." },
+    { "command": "cd D:/projects/operation-backend && npm test", "status": "passed", "evidence": "573 passed, 8 skipped, 0 failed." },
+    { "command": "cd D:/projects/wt-ops-rate-types && npm run test:ops", "status": "blocked", "evidence": "Cannot resolve package playwright in the frontend worktree." },
+    { "command": "git -C D:/projects/wt-ops-rate-types diff --check", "status": "passed", "evidence": "No whitespace errors." }
+  ],
+  "decisions": [
+    "Fetch list summaries and then every detail so booking quote consumers receive all route prices.",
+    "Refuse unsupported custom add-on pricing visibly because S4 owns that catalogue and the S2 API contract has no field for it.",
+    "Refetch the server detail after multi-call edits before replacing local state."
+  ],
+  "risks": [
+    "Existing edits use multiple documented route-block calls; a later refusal can leave a server-side partial mutation, after which the adapter refetches the authoritative record.",
+    "Authenticated browser integration coverage remains pending the missing Playwright dependency."
+  ],
+  "blockers": [
+    "Frontend ops UI test is blocked because playwright is not installed in D:/projects/wt-ops-rate-types; install dependencies and rerun npm run test:ops."
+  ],
+  "dependencies": ["P0 laOps auth/core", "S1 agent ownership/bindings", "operation-backend rate-type routes"],
+  "followUps": ["Run authenticated browser integration test after installing Playwright."],
+  "rollback": "Revert the local commit or remove the S2 tag/adapter; no database rollback is needed.",
+  "exclusions_honored": ["No backend or DB files changed.", "No shared 08-app.js, 90-ops-boot.js, or booking renderer changes.", "No push performed.", "No unrelated worktree files touched."],
+  "no_backend_or_db_changes": true
+}
