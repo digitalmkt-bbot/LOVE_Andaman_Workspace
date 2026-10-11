@@ -88,16 +88,40 @@ test('v32 · Laotian resolves to LA', () => {
 
 // ── §b2cNat edge cases real data has not produced yet ──────────────────────────────────────────
 const setPax = (fx, list) => { fx.paxRows = list.map((n, i) => ({ paxNo: i + 1, name: 'P' + i, nationality: n })); };
-test('§b2cNat · short traveller list → no nat (fall back to price fields, never guess)', () => {
+// §b2cParkFee (2026-10-11) · these three used to expect "no nat". The list rule still says nothing
+// for them, but a traveller labelled US and the International Park Fee add-on are both facts: at
+// least one head is foreign. Counting him Thai is what bought LOV-4561646 a Thai ticket for a US guest.
+const dropFee = fx => { for (const it of fx.items) { let d = it.details; if (typeof d === 'string') d = JSON.parse(d);
+  d.addonsSelected = (d.addonsSelected || []).filter(a => a.code !== 'international-park-fee'); it.details = d; } };
+const setFee = (fx, q) => { for (const it of fx.items) { let d = it.details; if (typeof d === 'string') d = JSON.parse(d);
+  (d.addonsSelected || []).forEach(a => { if (a.code === 'international-park-fee') a.qty = q; }); it.details = d; } };
+test('§b2cParkFee · short traveller list with a known foreigner → that foreigner counts', () => {
   const [b] = runWith('LOV-7485231', fx => setPax(fx, ['US']));
-  assert.equal(trip(b).nat, undefined);
+  assert.deepEqual(trip(b).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
 });
-test('§b2cNat · a traveller with blank nationality → no nat', () => {
+test('§b2cParkFee · a traveller with blank nationality → the labelled foreigner still counts', () => {
   const [b] = runWith('LOV-7485231', fx => setPax(fx, ['US', '']));
+  assert.deepEqual(trip(b).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · mixed party with a child → foreigner taken from the adults first', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 2; fx.items[0].pax_child = 1; setPax(fx, ['US', 'TH']); });
+  assert.deepEqual(trip(b).nat, { ad: 1, chd: 1, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · LOV-4561646 shape · 4 Ad + 2 Chd sold Thai, Thai names blank, one US, park fee × 1 → 3 Thai adults', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 4; fx.items[0].pax_child = 2; setPax(fx, ['', '', '', '', 'US']); });
+  assert.deepEqual(trip(b).pax, Object.assign({}, trip(b).pax, { ad_th: 4, chd_th: 2, ad_fr: 0, chd_fr: 0 }), 'price fields unchanged');
+  assert.deepEqual(trip(b).nat, { ad: 3, chd: 2, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · park fee qty above the labelled list wins (B2C charged it per foreign head)', () => {
+  const [b] = runWith('LOV-7485231', fx => { setFee(fx, 2); setPax(fx, ['US', '']); });
+  assert.deepEqual(trip(b).nat, { ad: 1, chd: 0, inf: 0, foc: 0 });
+});
+test('§b2cParkFee · no park fee and nobody labelled foreign → no nat (fall back to price fields)', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
-test('§b2cNat · mixed party with a child → no nat (passengers carry no age, the child is unknowable)', () => {
-  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = 2; fx.items[0].pax_child = 1; setPax(fx, ['US', 'TH']); });
+test('§b2cParkFee · never lowers the foreign count of a foreign-priced party', () => {
+  const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_thai = 1; fx.items[0].pax_foreign = 2; setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
 test('§b2cNat · all-Thai party with a child → nat covers adults and child', () => {
@@ -132,12 +156,11 @@ test('§b2cCheck · every fixture (all bugs fixed) raises no warning', () => {
     assert.deepEqual(warns(checks(fx, runFixture(fx))), [], id);
   }
 });
-test('§b2cCheck · nat_mix — Thai-priced party with a foreigner and an incomplete list', () => {
+test('§b2cCheck · nat_mix — quiet now that the mapper counts the known foreigner itself (§b2cParkFee)', () => {
   const fx = loadFixture('LOV-7485231'); setPax(fx, ['US']);
   const bks = runFixture(fx);
-  assert.deepEqual(warns(checks(fx, bks)), ['nat_mix']);
-  assert.match(checks(fx, bks)[0].msg, /รู้สัญชาติแค่ 2 จาก 3/);
-  assert.deepEqual(warns(checks(fx, bks, new Set([bks[0].id]))), [], 'a nat typed by hand in ops answers it');
+  assert.deepEqual(trip(bks[0]).nat, { ad: 2, chd: 0, inf: 0, foc: 0 });
+  assert.deepEqual(warns(checks(fx, bks)), []);
 });
 test('§b2cCheck · nat_mix stays quiet when B2C sent its own Thai/foreign split', () => {
   const fx = loadFixture('LOV-7485231'); setPax(fx, ['US']);

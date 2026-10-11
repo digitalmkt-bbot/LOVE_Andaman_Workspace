@@ -366,7 +366,11 @@ const B2C_OWN_BK = new Set([
 //      LOV-7485231 (TH+TH+US sold as 3 Thai) and LOV-3345176 (TH+TR sold as 2 Thai) re-count here.
 // v32: §b2cCheck · 'Laotian' resolves to LA (found by the new post-import check on LOV-5681391).
 //      Also §b2cMapMod: the mapper moved to b2c-map.js verbatim; that part changes no output.
-const B2C_MAP_VER = 32;
+// v33: §b2cParkFee · trip.nat also from the International Park Fee add-on qty and from travellers
+//      labelled non-Thai, when the full-list rule says nothing. LOV-4561646 (4 Ad + 2 Chd sold Thai,
+//      one US guest, park fee × 1) re-counts as 3 Thai adults + 2 Thai children. Marked soft
+//      (trip._natSoft): a hand count in ops that already has at least as many foreigners is kept.
+const B2C_MAP_VER = 33;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -927,6 +931,12 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
     catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
     const findArea = b2cFindArea(areaRows);   // §b2cMapMod · matcher + per-order loop live in b2c-map.js
     const b2cBks = mapB2COrders(itemRows, { findArea, paxByBooking, addonCat, progCat, trfCat, extCat });
+    // §b2cParkFee · a soft nat is a floor, not a full count: remember which trips carry one and keep
+    // the marker out of the row decomposition (it is not a column).
+    const natSoft = new Map();
+    for (const b of b2cBks) (b.trips || []).forEach((t, i) => {
+      if (t && t._natSoft) { if (t.nat) natSoft.set(b.id + '|' + i, t.nat); delete t._natSoft; }
+    });
     if (unchanged) { await _b2cRunChecks(itemRows, b2cBks, paxByBooking, null); _b2cHealthOk(); return; }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -1075,6 +1085,21 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
       for (const [bkId, byIdx] of Object.entries(savedTripNat)) {
         for (const [idx, old] of Object.entries(byIdx)) {
           if (NAT_COLS.every(c => old[c] == null)) continue;
+          // §b2cParkFee · the mapper's soft count (park-fee qty / labelled travellers) does not beat a
+          // count already on the trip that has at least as many foreigners (fewer or equal Thai heads):
+          // that one was typed by someone who knows which guest is the child. More foreigners → mapper.
+          const soft = natSoft.get(bkId + '|' + idx);
+          if (soft) {
+            const thOld = NAT_COLS.reduce((n, c) => n + (Number(old[c]) || 0), 0);
+            const thNew = (+soft.ad || 0) + (+soft.chd || 0) + (+soft.inf || 0) + (+soft.foc || 0);
+            if (thOld > thNew) continue;
+            await client.query(
+              `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
+               WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}`,
+              [...NAT_COLS.map(c => old[c]), bkId, Number(idx)]
+            );
+            continue;
+          }
           await client.query(
             `UPDATE ${fqt('sb_bookings__trips')} SET ${NAT_COLS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
              WHERE sb_bookings_id=$${NAT_COLS.length + 1} AND idx=$${NAT_COLS.length + 2}

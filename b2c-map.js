@@ -430,6 +430,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // a matched area, and it would print raw customer text in the ops Zone column. dropoffHotelName
   // already carries it (§b2cNoHotel: that raw text is never the guest's hotel now, just the location).
   const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
+  const addOnRows = b2cMapAddOns(det, addOn, routeLookupId, addonCat);   // §b2cParkFee · read by the nat block below
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: opsRouteId,
@@ -471,6 +472,34 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
       const kids = P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
       if (th === heads) trip.nat = { ad: P.ad_fr + P.ad_th, chd: P.chd_fr + P.chd_th, inf: P.inf_fr + P.inf_th, foc: P.foc };
       else if (th === 0 || !kids) trip.nat = { ad: th, chd: 0, inf: 0, foc: 0 };
+    }
+  }
+  // §b2cParkFee (2026-10-11) · the rule above needs EVERY traveller labelled, and B2C usually leaves
+  // the Thai travellers' nationality blank. LOV-4561646: lead TH + 4 Thai names (blank) + Christopher
+  // Franck (US), sold as 4 Ad + 2 Chd Thai with "International Park Fee" × 1 — the park page bought
+  // 6 Thai tickets. Two facts B2C does give us, each a floor on the foreign head-count:
+  //   · the International Park Fee add-on — B2C charges it once per foreign head (qty), e.g.
+  //     LOV-0636823 TH+TH+4 US → qty 4, LOV-1739537 TH+2 JP → qty 2;
+  //   · travellers whose nationality IS filled in and is not Thai.
+  // Only ever RAISES the foreign count above what the price fields say (count high: a Thai ticket for
+  // a foreigner is the costly mistake at the counter). Which head is the foreigner is not known when
+  // there are children, so foreign heads come off the Thai adults first, then children, then infants;
+  // the pier fixes one person's type on the park page if it was a child. FOC stays as before (not Thai).
+  if (!trip.nat) {
+    const P = trip.pax;
+    const heads = P.ad_fr + P.ad_th + P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
+    const feeQty = addOnRows.filter(r => /international[\s_-]*park[\s_-]*fee/i.test(String(r.type) + ' ' + String(r.label)))
+      .reduce((n, r) => n + (Number(r.qty) || 0), 0);
+    const named = [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+      .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
+      .filter(n => n && n !== 'TH').length;
+    const foreign = Math.min(heads, Math.max(feeQty, named));
+    const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + P.foc;
+    if (heads > 0 && foreign > byPrice) {
+      let extra = foreign - byPrice;
+      const keep = n => { const k = Math.min(n, extra); extra -= k; return n - k; };
+      trip.nat = { ad: keep(P.ad_th), chd: keep(P.chd_th), inf: keep(P.inf_th), foc: 0 };
+      trip._natSoft = true;   // a floor, not a full count · server.js lets a hand count with as many foreigners stand
     }
   }
   // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
@@ -547,7 +576,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
              ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
-    addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
+    addOns: addOnRows,
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
