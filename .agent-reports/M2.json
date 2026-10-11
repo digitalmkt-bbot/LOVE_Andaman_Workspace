@@ -1,0 +1,44 @@
+{
+  "packet": "M2",
+  "status": "complete",
+  "objective": "Migrate Daily PFM grid and travel-extension/hold/remind commands to operation-backend in operations mode.",
+  "branch": "agent/ops-pfm",
+  "commit": "98bfd9f9d17dcf2c1563926312a75c1fab0dac34",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/31-ops-pfm.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-pfm.test.mjs",
+    "docs/development/tasks/M2-ops-pfm.md",
+    ".agent-reports/M2.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/31-ops-pfm.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/money.ts",
+    "D:/projects/operation-backend/src/domain/pfm.ts",
+    "D:/projects/operation-backend/test/money-pfm.test.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/pfm?from=YYYY-MM-DD&to=YYYY-MM-DD", "body": null },
+    { "method": "POST", "path": "/v1/bookings/:id/pfm/approve-travel", "body": "{approver}" },
+    { "method": "POST", "path": "/v1/bookings/:id/pfm/hold", "body": "{}" },
+    { "method": "POST", "path": "/v1/pfm/remind", "body": "{from,to}" }
+  ],
+  "projection_mapping": "Server PfmRow list and totals replace PFM period queries in operations mode without writing bk.ops.pfm or bk.paymentSlips[]; invoice/payment actions call M1 (window.laOps.money).",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Fetches /v1/pfm for the active period, sends versioned bookingWrite commands for approve-travel and hold, refreshes PFM after every command, and surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/31-ops-pfm.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-pfm.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-pfm.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/money-pfm.test.ts", "result": "pass (4/4)" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}
