@@ -18773,6 +18773,11 @@ function pckAddonCell(r, date){
     var bg=(a.kind==='longtail')?'#E6F1FB':'#EDE7FB', fg=(a.kind==='longtail')?'#1683C7':'#5B289A';
     return '<span class="ck-ao" style="background:'+bg+';color:'+fg+'" title="'+e(a.note?('หมายเหตุ: '+a.note):'จองมาล่วงหน้า')+'">'+e(a.label)+(a.note?' &#128221;':'')+'</span>';
   }).join('');
+  /* §b2cAddon · ซื้อผ่าน B2C แยกใบ · เงินอยู่ที่ใบ B2C ไม่ต้องเก็บหน้าท่า */
+  var b2c=((!_ovn && typeof bkB2CAddonsOf==='function')?bkB2CAddonsOf(b.id, date):[]).map(function(l){
+    return '<span class="ck-ao b2c-addon-in" style="background:#FCEBDD;color:#8A3E05" title="'+e('ซื้อผ่าน B2C '+(l.voucherRef||l.id)+' · เงินอยู่ที่ใบ B2C · ไม่ต้องเก็บหน้าท่า')+'">'
+      +e(bkB2CAddonText(l))+' &middot; B2C</span>';
+  }).join('');
   // §extraDay · ของขายหน้างานเป็นของ "วันที่ขาย" ไม่ใช่ของทั้งใบ · กติกาเดียวกับ pckMoney
   var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).filter(function(x){
     return !(date && x.tripDate && x.tripDate!==date);
@@ -18784,7 +18789,7 @@ function pckAddonCell(r, date){
     var got=!!u.collected;
     return '<span class="ck-ao" style="background:'+(got?'#DCF4E8':'#FBF0DD')+';color:'+(got?'#0F6E56':'#7A4A00')+'" title="'+e(u.label+' · '+(got?'เก็บเงินแล้ว':'ยังไม่เก็บ'))+'">&#11014; '+e(u.label)+' '+m(u.sellPrice)+'</span>';
   }).join('');
-  var body=pre+ex+up;
+  var body=pre+b2c+ex+up;
   return (body||(_ovn?'<span class="ck-dim" title="ของที่จองมากับใบถูกใช้ไปแล้ววันขาไป">— ของวันขาไป</span>':'<span class="ck-dim">—</span>'))
     +'<div class="ck-aoact"><button onclick="event.stopPropagation();bkV2ExtraAdd(\''+b.id+'\')" title="ขายเพิ่มหน้างาน (เงินสด)">+ ขายเพิ่ม</button>'
     +'<button onclick="event.stopPropagation();bkV2UpgradeOpen(\''+b.id+'\')" title="อัปเกรดหน้างาน">&#11014;</button></div>';
@@ -19327,7 +19332,10 @@ function pckDetailOpen(bkId){
              +stp(PCK_STAGES[2],3,pck&&pck.at,pck&&pck.by)+'</span></div>'; })()
        +ckLine(pck,'เช็คอินหน้าท่า',pckExpected(b,date,ckBookedPax(t))))
     +(function(){ var L=ckAddonList(b,t.routeId);
-        var rows2=L.map(function(a){ return row(a.kind==='longtail'?'หางยาว':'Add-on','<b>'+e(a.label)+'</b>'+(a.note?('<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">&#128221; '+e(a.note)+'</div>'):'')); }).join('');
+        var rows2=L.map(function(a){ return row(a.kind==='longtail'?'หางยาว':'Add-on','<b>'+e(a.label)+'</b>'+(a.note?('<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">&#128221; '+e(a.note)+'</div>'):'')); }).join('')
+          /* §b2cAddon · ซื้อผ่าน B2C แยกใบ */
+          +((typeof bkB2CAddonsOf==='function')?bkB2CAddonsOf(b.id,date):[]).map(function(l){ return row('B2C','<b>'+e(bkB2CAddonText(l))+'</b><div style="font-size:10.5px;color:#8a8a82;margin-top:2px">ซื้อผ่าน B2C '+e(l.voucherRef||l.id)+' · เงินอยู่ที่ใบนั้น</div>'); }).join('')
+          +((typeof bkB2CAddonTo==='function' && bkB2CAddonTo(b))?row('ของใบ','VC <b>'+e(bkB2CAddonTo(b).vc||'')+'</b> · หางยาวนับที่แถวของใบนั้น'):'');
         return sec('Add-on ที่จองมา', rows2 || row('—','<span style="color:#a5a49d">ไม่มี</span>')); })()
     +sec('เงิน',
         (M.cot>0?row('Cash on Tour','<b style="font-family:\'DM Mono\',monospace;font-size:14px;color:#7A4A00">'+m(M.cot)+'</b>'+(M.handling==='deduct'?'<span style="font-size:10.5px;color:#8a8a82;margin-left:8px">หักจากบิล</span>':'')+(M.note?('<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">'+e(M.note)+'</div>'):'')):'')
@@ -19470,6 +19478,7 @@ function pckAgg(rows){
   var a={n:0, pax:0, arr:0, clr:0, on:0, arrP:0, clrP:0, onP:0, due:0, ns:0, vd:0, sx:0};
   rows.forEach(function(r){
     if(r.strand){ a.sx++; return; }   /* §strandPck · ค้างจัดการ · นับแยก ไม่เข้ายอดใด */
+    if(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.b)) return;   /* §b2cAddon · ไม่มีคน ไม่ใช่ใบที่รอเช็คอิน */
     if(r._vd){ if(r.money && r.money.due>0) a.due+=r.money.due; a.vd++; return; }   // §onsiteVoid · ปิดรายการแล้ว ไม่นับใน ถึงท่า/เคลียร์/ขึ้นเรือ/ที่นั่ง · เงินค้างยังนับ
     a.n++;
     var _px=(r.expect!=null?r.expect:r.booked);
@@ -20108,6 +20117,19 @@ function pckMealSave(){
   if(typeof renderPierCheckin === 'function') renderPierCheckin();
 }
 function pckRowHtml(r, date, sheet){
+  /* §b2cAddon · ใบ B2C ที่เป็นบริการเสริมของใบเอเจนต์ · ไม่มีคน ไม่มีอะไรให้เช็คอิน
+     เหลือบรรทัดบาง ๆ บอกว่าเป็นของใบไหน · หางยาวไปขึ้นที่แถวของใบเอเจนต์แล้ว (pckAddonCell)
+     ยังมียอดค้าง (ไม่ได้จ่ายผ่าน B2C) → บอกไว้ในบรรทัดเดียวกัน ไม่ให้เงียบ */
+  var _b2cL=(!r.strand && typeof bkB2CAddonTo==='function')?bkB2CAddonTo(r.b):null;
+  if(_b2cL){
+    var _e2=ckEsc, _bb=r.b, _due=(r.money && +r.money.due>0)?+r.money.due:0;
+    return '<tr class="ck-row pck-b2csub"><td colspan="'+(sheet?16:12)+'" style="padding:3px 12px 5px 26px;background:#FAFBFC;border-top:1px dashed #DCE3EA;font-size:11px;line-height:1.4;color:#6B7785;text-align:left">'
+      +'&#8627; <a href="javascript:void 0" onclick="event.stopPropagation();pckDetailOpen(\''+_e2(_bb.id)+'\')" style="font-family:\'DM Mono\',monospace;color:#185FA5;text-decoration:none" title="เปิดใบ B2C">'+_e2(_bb.voucherRef||_bb.id)+'</a>'
+      +' <span style="color:#8A94A1">B2C</span> &middot; <b style="color:#8A3E05;font-weight:700">'+_e2(bkB2CAddonText(_bb))+'</b> ของใบ VC '+_e2(_b2cL.vc||'')
+      +' &middot; ไม่มีคน ไม่ต้องเช็คอิน'
+      +(_due?(' &middot; <b style="color:#A32D2D">ค้าง &#3647;'+Math.round(_due).toLocaleString()+'</b>'):'')
+      +'</td></tr>';
+  }
   /* §strandPck · แถวค้าง · ตัดปุ่มสั่งการทิ้งหมด เหลือเหตุผลกับปุ่มล้าง
      คอลัมน์หน้ายังครบ เพราะหน้าท่าต้องเทียบกับใบงานไกด์ที่ถืออยู่ว่าเป็นบรรทัดเดียวกัน
      ตารางแผ่นใหญ่ 16 ช่อง · แบบการ์ด 12 ช่อง · ท้ายแถวเหลือ 5 ช่องเท่ากันทั้งคู่ */
@@ -51098,6 +51120,13 @@ function bkB2CAddonsOf(bkId, date){
   if(date) return I.of[bkId+'|'+date]||[];
   var out=[]; Object.keys(I.of).forEach(function(k){ if(k.indexOf(bkId+'|')===0) out=out.concat(I.of[k]); }); return out;
 }
+/* ชื่อสั้นของ add-on สำหรับป้ายเล็ก ๆ · เหมาหางยาว / หางยาว join / ชื่อเดิม */
+function bkB2CAddonShort(a){
+  var t=String((a&&a.type)||'')+' '+String((a&&a.label)||''), q=(+(a&&a.qty)||1)>1?(' \u00d7'+(+a.qty)):'';
+  if(/longtail|หางยาว/i.test(t)) return (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join')+q;
+  return String((a&&(a.label||a.type))||'')+q;
+}
+function bkB2CAddonText(b){ return ((b&&b.addOns)||[]).map(bkB2CAddonShort).filter(Boolean).join(', ')||'Add-on'; }
 /* หางยาวที่ใบ B2C ที่ผูกไว้ซื้อมา · join = คน · boats = ลำ */
 function bkB2CAddonLt(bkId, date){
   var o={join:0, boats:0, refs:[]};
@@ -64999,6 +65028,7 @@ function pkTkData(date, pier){
     (B.bks||[]).forEach(function(x){
       var b=x.b;
       if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,x.t)) return;
+      if(typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)) return;   /* §b2cAddon · ไม่มีคน ไม่มีตั๋ว */
       var bc=pkBkCnt(b,x.t,date);
       /* เก็บ index เดิมของ passengers[] ไว้ด้วย · ใช้ผูกกับประเภทที่ User เปลี่ยนเอง
          ใบที่ไม่มีรายชื่อเลยใช้ชื่อหัวกรุ๊ป · index เป็น 'L' */
