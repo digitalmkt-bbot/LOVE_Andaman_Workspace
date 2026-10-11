@@ -29387,7 +29387,7 @@ function bkV2UpgModal(){
     +'</div></div>';
   document.body.appendChild(ov);
 }
-function bkV2UpgApply(){
+function bkV2UpgApply(go){
   var U=_bkUpg; if(!U) return;
   var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }); if(!b) return;
   var t=bkUpgTripOn(b, U.date, U.from); if(!t){ alert('Trip not found.'); return; }
@@ -29403,12 +29403,14 @@ function bkV2UpgApply(){
      ย้ายแล้วที่นั่งสองโปรแกรมเปลี่ยนทันทีและเรือเดิมถูกล้าง · ถามหลังตรวจทุกอย่างผ่านแล้ว จะได้ไม่ถามแล้วค่อยบอกว่าย้ายไม่ได้ */
   var _pEn=function(rid){ var p=bkUpgPierOf(rid); return ((typeof LA_PIER_NAME!=='undefined' && LA_PIER_NAME[p] && LA_PIER_NAME[p].en) || p || '-'); };
   var _pf=_pEn(U.from), _pt=_pEn(U.to);
-  if(!confirm('Confirm upgrade?\n\nFROM: '+fromNm+'  ['+_pf+']\nTO:   '+toNm+'  ['+_pt+']'
-      +(_pf!==_pt?'\n\n*** DIFFERENT PIER - the boarding point changes ***':'')
-      +'\n\nGuest: '+String(b.leadPax||b.customerName||b.voucherRef||b.id)+' - '+pax+' pax - '+U.date
-      +'\nExtra charge: '+(charge>0?('THB '+charge.toLocaleString()):'none')
-      +'\nReason: '+reason
-      +'\n\nOK = upgrade now   Cancel = go back')) return;
+  /* §upgConfirm2 (2026-10-11) · owner: "ปรับ UI" (ภาพกล่องยืนยันของเบราว์เซอร์ ตัวหนังสือล้นต้องเลื่อนอ่าน)
+     กล่อง confirm() ของเบราว์เซอร์อ่านยาก ตัดคำ ต้องเลื่อน และไม่มีสี · ย้ายเป็นขั้นยืนยันในหน้าต่างเดิม
+     กด Upgrade = ตรวจทุกอย่างแล้วโชว์หน้าสรุป · กดยืนยันในหน้าสรุป = เรียกตัวนี้อีกรอบด้วย go=true
+     ตรวจซ้ำอีกรอบตอนยืนยัน (ที่นั่งอาจถูกคนอื่นจองไประหว่างนั้น) */
+  if(go!==true){
+    bkV2UpgConfirmView({ b:b, pax:pax, fromNm:fromNm, toNm:toNm, pf:_pf, pt:_pt, charge:charge, reason:reason, date:U.date });
+    return;
+  }
   if(charge>0){
     if(!Array.isArray(b.upgrades)) b.upgrades=[];
     upgId='up_'+Date.now();
@@ -29423,6 +29425,45 @@ function bkV2UpgApply(){
   acctPersistBookings();
   bkV2UpgModalClose();
   if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else if(typeof bkV2Render==='function' && document.getElementById('bkv2-host')) bkV2Render(); else renderBoatAssign();
+}
+/* §upgConfirm2 · หน้าสรุปก่อนยืนยัน · วาดทับเนื้อในของหน้าต่าง Upgrade เดิม (กลับไปแก้ได้ ค่าที่กรอกยังอยู่) */
+function bkV2UpgConfirmView(c){
+  var ov=document.getElementById('bkv2-upg-ov'); if(!ov) return;
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
+  var diff=(c.pf!==c.pt);
+  var card=function(lbl, nm, pier, on){
+    return '<div style="flex:1;min-width:0;border:1px solid '+(on?'#CDB4E6':'#E4E1D9')+';background:'+(on?'#F7F1FC':'#FAFAF8')+';border-radius:12px;padding:10px 12px">'
+      +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:'+(on?'#6B289A':'#8a8a82')+'">'+e(lbl)+'</div>'
+      +'<div style="font-size:14px;font-weight:800;line-height:1.3;margin-top:3px;color:'+(on?'#3E1563':'#5F5E5A')+'">'+e(nm)+'</div>'
+      +'<div style="margin-top:6px"><span style="font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px;background:'+(on&&diff?'#FBF0DD':'#EEF2F1')+';color:'+(on&&diff?'#7A4A00':'#3F5B52')+'">&#9875; '+e(pier)+'</span></div></div>';
+  };
+  var row=function(k,v){ return '<div style="display:flex;gap:12px;padding:7px 0;border-top:1px solid #F1EFE9;font-size:13px">'
+    +'<span style="width:96px;flex-shrink:0;color:#8a8a82">'+e(k)+'</span><span style="flex:1;min-width:0;font-weight:700;color:#2C2C2A">'+v+'</span></div>'; };
+  var who=(c.b&&(c.b.leadPax||c.b.customerName||c.b.voucherRef||c.b.id))||'';
+  ov.innerHTML='<div data-upg-confirm="1" role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;width:min(480px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4"><div style="font-size:15px;font-weight:800;color:#4A1D6E">&#10548; '+e(laT('ยืนยันการ Upgrade'))+'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e(laT('ตรวจอีกครั้งก่อนย้าย'))+'</div></div>'
+    +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
+    +'<div style="display:flex;align-items:stretch;gap:8px">'
+      +card(laT('จากโปรแกรม'), c.fromNm, c.pf, false)
+      +'<div aria-hidden="true" style="align-self:center;font-size:18px;color:#6B289A;font-weight:800">&rarr;</div>'
+      +card(laT('ไปโปรแกรม'), c.toNm, c.pt, true)
+    +'</div>'
+    +(diff?('<div data-upg-diffpier="1" style="display:flex;gap:9px;align-items:flex-start;background:#FFF6E5;border:1px solid #F0D9A8;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#6B4500;line-height:1.45">'
+      +'<span aria-hidden="true" style="font-size:15px">&#9888;</span><span><b>'+e(laT('ต่างท่า · ต้องเปลี่ยนจุดขึ้นเรือ'))+'</b><br>'+e(laT('รถรับและเวลารับอาจต้องแก้ใหม่'))+'</span></div>'):'')
+    +'<div>'
+      +row(laT('ลูกค้า'), e(who)+' <span style="font-weight:600;color:#8a8a82">&middot; '+c.pax+' pax</span>')
+      +row(laT('วันที่เดินทาง'), e(c.date))
+      +row(laT('เก็บเพิ่ม'), c.charge>0?('<span style="color:#7A4A00">&#3647;'+e(c.charge.toLocaleString())+'</span>'):('<span style="font-weight:600;color:#8a8a82">'+e(laT('ไม่เก็บ'))+'</span>'))
+      +row(laT('เหตุผล'), e(c.reason))
+    +'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;line-height:1.5">'+e(laT('กดยืนยันแล้ว ที่นั่งย้ายไปโปรแกรมใหม่ทันที · เรือเดิมถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง'))+'</div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
+    +'<button type="button" data-upg-back="1" onclick="bkV2UpgModal()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:10px 16px;min-height:40px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&larr; '+e(laT('กลับไปแก้'))+'</button>'
+    +'<button type="button" data-upg-do="1" onclick="bkV2UpgApply(true)" style="border:none;background:#6B289A;color:#fff;border-radius:9px;padding:10px 20px;min-height:40px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit">'+e(laT('ยืนยัน Upgrade'))+'</button>'
+    +'</div></div>';
+  try{ var bt=ov.querySelector('[data-upg-do]'); if(bt) bt.focus(); }catch(_){}
 }
 function bkV2UpgUndo(bkId, routeId, date){
   var b=SB_BOOKINGS.find(function(x){ return x.id===bkId; }); if(!b) return;
