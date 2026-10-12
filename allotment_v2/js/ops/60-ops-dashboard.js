@@ -20,7 +20,9 @@
   function key(date, mode){ return date + '|' + (mode || 'day'); }
   function validDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s || ''); }
   function redraw(){
-    if(O.busy() || O.activeView() !== 'dashboard' || typeof window.renderDash !== 'function') return;
+    /* while the loader is up nothing is painted yet, so a focused input elsewhere
+       must not hold the page on the loader forever */
+    if((O.busy() && !window._dashLoaderShown) || O.activeView() !== 'dashboard' || typeof window.renderDash !== 'function') return;
     window.renderDash();
   }
   function ensure(date, mode){

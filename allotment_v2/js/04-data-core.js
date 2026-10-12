@@ -3338,9 +3338,22 @@ function renderDash(){
   // Dashboard-only feed for Bookings/day and Live B2C/B2B. It is newest-first
   // and stops at the 30-day creation window; it is not a boot preload.
   const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function')?bookingV2OpsEnsureRecent(30):null;
-  if(_dashRecentLoad) _dashRecentLoad.then(function(j){ if(j && typeof renderDash==='function') renderDash(); });
+  if(_dashRecentLoad && !window._dashRecentPending){
+    window._dashRecentPending=true;
+    _dashRecentLoad.then(function(){ window._dashRecentPending=false; if(typeof renderDash==='function') renderDash(); });
+  }
   const _opsDash=_opsDashApi?_opsDashApi.get(_ds,'day'):null;
   const _opsDashState=_opsDashApi?_opsDashApi.status(_ds,'day'):'idle';
+  /* Wait for every dashboard feed before painting: the server summary and the
+     recent-bookings feed both feed the cards. Failed requests are final and
+     render with their own banner; only in-flight requests hold the page. */
+  if(_opsDashState==='loading' || window._dashRecentPending){
+    window._dashLoaderShown=true;
+    wrap.innerHTML = DV_CSS
+      + `<div class="dv-fr"><div style="padding:96px 16px;text-align:center;color:#8A8A8A;font-size:13px;font-weight:600">Loading dashboard data…</div></div>`;
+    return;
+  }
+  window._dashLoaderShown=false;
   const _dsAt = (offset)=>{
     const d = new Date(_ds);
     d.setDate(d.getDate()+offset);
