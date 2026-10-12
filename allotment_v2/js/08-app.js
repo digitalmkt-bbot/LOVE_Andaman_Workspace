@@ -76536,6 +76536,27 @@ function pc2CSS3(S){
     'body.btc #view-booking .t2-vcbtn{border-radius:6px!important;width:auto!important;height:auto!important;padding:1px 6px!important;font-size:10px!important;color:#5B6275!important;border:1px solid #DDE1E8!important;background:#fff!important}',
     'body.btc #view-booking td>.t2-dim,body.btc #view-booking td .t2-zonepick>.t2-dim,body.btc #view-booking td.t2-req>.t2-dim{font-size:0}',
     'body.btc #view-booking td>.t2-dim::after,body.btc #view-booking td .t2-zonepick>.t2-dim::after,body.btc #view-booking td.t2-req>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
+
+    /* one-line rows (round 6): every cell stays on one line, full text on hover */
+    'body.btc #view-booking table.t2-mtbl tr.t2-row>td{white-space:nowrap;line-height:1.3}',
+    'body.btc #view-booking tr.t2-row>td.t2-pk .t2-pickcell{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk{overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk br{display:none}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-sb{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx{display:table-cell}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx .t2-sb{max-width:calc(100% - 46px)}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-rb{font-size:10px;padding:1px 5px;margin-left:3px;vertical-align:middle}',
+    'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq{overflow:hidden;text-overflow:ellipsis}',
+    'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq>*{display:inline!important;margin:0 4px 0 0!important;white-space:nowrap}',
+    'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq .t2-rbwrap>*{display:inline-block;margin-right:3px}',
+    'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq .t2-note{color:#5B6275}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2{display:inline-flex!important;margin-left:6px;vertical-align:middle}',
+    'body.btc #view-booking tr.t2-row>td:first-child>*{display:inline-block;vertical-align:middle;margin-right:4px}',
+    'body.btc #view-booking tr.t2-row>td:first-child{overflow:hidden;text-overflow:ellipsis}',
+    'body.btc #view-booking tr.t2-row>td.t2-ag img{max-height:18px;width:auto}',
+    'body.btc #view-booking tr.t2-row>td.t2-ag>div{max-height:30px;overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-r .btc-paid{display:none}',
+    'body.btc #view-booking tr.t2-row>td.t2-r .btc-due{display:block;font-size:10.5px;line-height:1.2;color:#B42318;font-weight:600}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -76754,8 +76775,8 @@ function pc2CSS3(S){
 
   /* fixed table · narrower columns in Compact so more of the table fits (Classic widths untouched) */
   /* voucher / agency / customer are sticky on the left with offsets computed from Classic widths → never touch those three */
-  var COLW = {'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':130,'room':40,'zone':70,
-              'send back':76,'add-on':70,'special request':90,'pay':80,'total':84,'':40};
+  var COLW = {'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':122,'room':40,'zone':68,
+              'send back':100,'add-on':62,'special request':84,'pay':78,'total':84,'':40};
   function colWidths(root){
     var ts = root.querySelectorAll('table.t2-mtbl:not(.btc-cw)');
     for(var i = 0; i < ts.length; i++){
@@ -76833,6 +76854,44 @@ function pc2CSS3(S){
     }
   }
 
+
+  /* one-line rows: shorten return chips, keep only the outstanding line under the total, tooltips with the full text */
+  function oneLine(root){
+    var trs = root.querySelectorAll('tr.t2-row:not(.btc-ol)');
+    for(var i = 0; i < trs.length; i++){
+      var tr = trs[i]; tr.classList.add('btc-ol');
+      var sb = tr.querySelector(':scope > td.t2-sbk');
+      if(sb){
+        var rbs = sb.querySelectorAll('.t2-rb');
+        for(var k = 0; k < rbs.length; k++){
+          var t = rbs[k].textContent.trim();
+          if(!rbs[k].title) rbs[k].title = t;
+          if(/^⚠/.test(t)) rbs[k].textContent = '⚠ รถกลับ';
+          else if(/กลับคันเดิม/.test(t)) rbs[k].textContent = '↩ คันเดิม' + (/✓/.test(t) ? ' ✓' : '');
+          else if(/ลูกค้ากลับเอง/.test(t)) rbs[k].textContent = '↩ เอง';
+        }
+        if(rbs.length){ sb.classList.add('btc-sbx'); if(!sb.title) sb.title = sb.innerText.replace(/\s+/g, ' ').trim(); }
+      }
+      var reqs = tr.querySelectorAll(':scope > td.t2-req');
+      for(var r = 0; r < reqs.length; r++){
+        if(reqs[r].querySelector('.t2-addoncell')) continue;      // add-on column, not special request
+        reqs[r].classList.add('btc-rq');
+        var tx = reqs[r].innerText.replace(/\s+/g, ' ').trim();
+        if(tx && tx !== '—' && !reqs[r].title) reqs[r].title = tx;
+      }
+      var pk = tr.querySelector(':scope > td.t2-pk'); if(pk && !pk.title){ var pt = pk.innerText.replace(/\s+/g, ' ').trim(); if(pt) pk.title = pt; }
+      var tot = tr.querySelector(':scope > td.t2-r');
+      if(tot){
+        var pl = tot.querySelector(':scope > div');
+        if(pl && /จ่าย/.test(pl.textContent)){
+          var m = pl.textContent.match(/ค้าง\s*(฿?[\d,]+)/);
+          if(m){ var due = document.createElement('span'); due.className = 'btc-due'; due.textContent = 'ค้าง ' + (m[1].charAt(0) === '฿' ? m[1] : '฿' + m[1]); due.title = pl.title || pl.textContent; tot.appendChild(due); }
+          pl.classList.add('btc-paid'); if(!tot.title) tot.title = pl.title || pl.textContent.replace(/\s+/g, ' ').trim();
+        }
+      }
+    }
+  }
+
   function rows(root){
     var ags = root.querySelectorAll('td.t2-ag > div[style*="background"]:not(.btc-ag)');
     for(var i = 0; i < ags.length; i++){
@@ -76866,7 +76925,7 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); rows(root); }
+        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
