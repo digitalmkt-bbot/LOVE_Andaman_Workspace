@@ -76374,7 +76374,11 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-c{border-radius:14px}',
     /* programmes: aligned columns */
     'body.btc #view-booking .bt-pgf{background:#F6F8FC!important;border-radius:7px}',
-    'body.btc #view-booking .bt-pgv{display:grid;grid-template-columns:minmax(70px,1fr) 128px auto;gap:8px;font-size:12px;padding:3px 10px 3px 26px}',
+    'body.btc #view-booking .bt-pgv{display:grid;grid-template-columns:minmax(70px,1fr) 128px 84px auto;gap:8px;font-size:12px;padding:3px 10px 3px 26px}',
+    'body.btc #view-booking .bt-pgv.off{grid-template-columns:minmax(70px,1fr) auto auto}',
+    'body.btc #view-booking .btc-pbar{display:flex;height:6px;border-radius:3px;background:#E6E9EF;overflow:hidden;align-self:center}',
+    'body.btc #view-booking .btc-pbar i{display:block;height:100%}',
+    'body.btc #view-booking .btc-pbar i.l{background:repeating-linear-gradient(45deg,#A78BFA 0 3px,#DDD6FE 3px 6px)}',
     'body.btc #view-booking .bt-pgv .vn{font-weight:700;color:#0F1B3D;overflow:hidden;text-overflow:ellipsis}',
     'body.btc #view-booking .bt-pgv>span:nth-child(2){color:#5B6275;font-size:11.5px}',
     'body.btc #view-booking .bt-pgv .sp{justify-content:flex-end}',
@@ -76423,6 +76427,43 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-bt .b .nm{white-space:nowrap;overflow:hidden}',
     'body.btc #view-booking .btc-bt .x{padding:2px 0 2px 59px;display:flex;flex-wrap:wrap;gap:5px}',
     'body.btc #view-booking .btc-bt .x .bt-ghost,body.btc #view-booking .btc-bt .x .bt-prep{padding:0;margin:0;border:0;background:none}',
+
+    /* notice → table */
+    'body.btc #view-booking .btc-nt{width:100%;font-size:12px}',
+    'body.btc #view-booking .btc-nt .h,body.btc #view-booking .btc-nt .r{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--nc),58px);gap:4px;align-items:center}',
+    'body.btc #view-booking .btc-nt .h{height:20px;font-size:9.5px;font-weight:700;color:#8A8F9C;border-bottom:1px solid #EEF0F3}',
+    'body.btc #view-booking .btc-nt .h span{text-align:center}',
+    'body.btc #view-booking .btc-nt .h span:first-child{text-align:left}',
+    'body.btc #view-booking .btc-nt .r{height:24px;border-bottom:1px solid #F5F6F8}',
+    'body.btc #view-booking .btc-nt .r.tot{border-bottom:0;font-weight:800}',
+    'body.btc #view-booking .btc-nt .p{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    'body.btc #view-booking .btc-nt .c{text-align:center;font-weight:800;cursor:pointer;border-radius:6px;padding:1px 0}',
+    'body.btc #view-booking .btc-nt .c:hover{filter:brightness(.95)}',
+    'body.btc #view-booking .btc-nt .c.z{color:#D5D9E0;font-weight:400;cursor:default}',
+    'body.btc #view-booking .btc-nt .x{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}',
+    'body.btc #view-booking .bt-ncb .t2-hd-warn.btc-done{display:block;background:none;border:0;padding:0}',
+    /* van mode: vans panel + group editor bar */
+    'body.btc #view-booking .bt-vans .bt-vgrid>div{border-radius:9px!important;border-color:#DDE3EA!important}',
+    
+    'body.btc #view-booking tr.btc-vg>td{padding:8px 12px!important}',
+    'body.btc #view-booking tr.btc-vg>td>div{gap:8px!important;flex-wrap:nowrap!important}',
+    'body.btc #view-booking tr.btc-vg .btc-lb{font-size:10.5px;font-weight:700;color:#8A8F9C;white-space:nowrap}',
+    'body.btc #view-booking tr.btc-vg .btc-sep{width:1px;height:22px;background:rgba(0,0,0,.12)}',
+    'body.btc #view-booking tr.btc-vg select,body.btc #view-booking tr.btc-vg input{height:27px;border-radius:7px!important;font-size:12px!important;box-sizing:border-box}',
+    'body.btc #view-booking tr.btc-vg button{height:27px;border-radius:14px!important;padding:0 12px!important;font-size:11.5px!important}',
+    'body.btc #view-booking tr.btc-vg select[onchange*="SetVan"]{max-width:190px}',
+    'body.btc #view-booking tr.btc-vg select[onchange*="SetReturn"]{max-width:150px}',
+    'body.btc #view-booking tr.btc-vg input[oninput*="SetTime"]{width:76px!important}',
+    'body.btc #view-booking tr.btc-vg input[oninput*="vanJobsSetDriver"]{width:96px!important}',
+    'body.btc #view-booking tr.btc-vg .btc-o9{order:9}',
+    'body.btc #view-booking tr.btc-vg .btc-sort{order:10;margin-left:auto!important}',
+    'body.btc #view-booking tr.btc-vg .btc-disb{order:11;margin-left:0!important}',
+    'body.btc #view-booking tr.btc-vg .btc-save{order:12}',
+    /* boat mode */
+    'body.btc #view-booking tr.btc-bb>td{background:#F2F6FF!important;box-shadow:inset 4px 0 0 #1F5FBF!important;border-top:1px solid #D6E2FB;padding:8px 12px!important}',
+    'body.btc #view-booking tr.btc-bb>td>div>span:first-child{font-size:13px!important;color:#1F5FBF!important}',
+    'body.btc #view-booking tr.btc-bb>td>div>span:nth-child(2){font-size:12px!important}',
+    'body.btc #view-booking .t2-bcell button[data-babtn="pick"]{border-color:#BFD0F5!important;color:#1F5FBF!important;padding:4px 10px!important}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -76523,6 +76564,109 @@ function pc2CSS3(S){
     tgl.setAttribute('data-btc', '1');
   }
 
+
+  /* programme rows: seat bar (ทึบ = จอง · ลายม่วง = ล็อก) */
+  function progBars(root){
+    var vs = root.querySelectorAll('.bt-prog .bt-pgv:not(.off):not([data-btc])');
+    for(var i = 0; i < vs.length; i++){
+      var v = vs[i]; v.setAttribute('data-btc', '1');
+      var seat = v.querySelector('.bt-seat'); if(!seat) continue;
+      var bk = parseInt((seat.querySelector('b') || {}).textContent, 10) || 0;
+      var m = seat.textContent.match(/\/\s*(\d+)/); var cap = m ? parseInt(m[1], 10) : 0;
+      var lk = 0; var lkEl = v.querySelector('.bt-lk:not(.bt-bhold)'); if(lkEl){ var ml = lkEl.textContent.match(/(\d+)/); if(ml) lk = parseInt(ml[1], 10); }
+      var p = v.previousElementSibling; while(p && !p.classList.contains('bt-pgf')) p = p.previousElementSibling;
+      var col = '#8b909c'; if(p){ var mc = (p.getAttribute('style') || '').match(/--e:\s*([^;]+)/); if(mc) col = mc[1].trim(); }
+      var bar = document.createElement('span'); bar.className = 'btc-pbar';
+      if(cap > 0){ bar.innerHTML = '<i style="width:' + Math.min(100, bk * 100 / cap) + '%;background:' + col + '"></i><i class="l" style="width:' + Math.min(100 - Math.min(100, bk * 100 / cap), lk * 100 / cap) + '%"></i>'; bar.title = 'จอง ' + bk + (lk ? ' · ล็อก ' + lk : '') + ' / ' + cap; }
+      var sp = v.querySelector(':scope > .sp'); if(sp) v.insertBefore(bar, sp); else v.appendChild(bar);
+    }
+  }
+
+  /* Notice: "ยังจัดไม่ครบ" chips → table โปรแกรม × (รถ · เรือ · รถกลับ · Re-confirm) · คลิกตัวเลข = ปุ่มเดิม (เข้าโหมดนั้น) */
+  function noticeTable(root){
+    var w = root.querySelector('.bt-ncb .t2-hd-warn:not(.btc-done)');
+    if(!w) return;
+    var KIND = [['Van', 'รถ', '#FFEDD5', '#9A3412'], ['Boat', 'เรือ', '#FEE4E2', '#B42318'], ['รถกลับ', 'รถกลับ', '#FEF3C7', '#92400E'], ['Re-confirm', 'Re-confirm', '#DBEAFE', '#1E40AF']];
+    var chips = w.querySelectorAll('.t2-hd-warnchip'); var data = {}, order = [], used = {}, other = [];
+    var BYBG = {'rgb(224, 124, 36)': 0, 'rgb(192, 57, 43)': 1, 'rgb(184, 134, 11)': 2, 'rgb(24, 95, 165)': 3};   // Van · Boat · return van · Re-confirm (สีปุ่มเดิม)
+    for(var i = 0; i < chips.length; i++){
+      var ch = chips[i]; var k = BYBG[ch.style.backgroundColor];
+      if(k === undefined){ other.push(ch); continue; }
+      used[k] = ch;
+      var nodes = ch.childNodes, name = '', first = true;
+      for(var n = 0; n < nodes.length; n++){
+        var nd = nodes[n];
+        if(nd.nodeType === 3){ name += nd.textContent; continue; }
+        if(nd.tagName !== 'B') continue;
+        var nm = name.trim();
+        if(first){ var p = nm.indexOf('·'); nm = p >= 0 ? nm.slice(p + 1) : nm; first = false; }
+        nm = nm.replace(/^\s*·\s*/, '').trim();
+        if(!data[nm]){ data[nm] = {}; order.push(nm); }
+        data[nm][k] = (data[nm][k] || 0) + (parseInt(nd.textContent, 10) || 0);
+        name = '';
+      }
+    }
+    var cols = []; for(var c = 0; c < KIND.length; c++) if(used[c]) cols.push(c);
+    if(!cols.length){ w.classList.add('btc-done'); return; }
+    var h = ['<div class="btc-nt" style="--nc:' + cols.length + '"><div class="h"><span>ยังไม่ครบ (pax)</span>'];
+    cols.forEach(function(c){ h.push('<span>' + KIND[c][1] + '</span>'); });
+    h.push('</div>');
+    var tot = {};
+    order.forEach(function(nm){
+      h.push('<div class="r"><span class="p" title="' + esc(nm) + '">' + esc(nm) + '</span>');
+      cols.forEach(function(c){
+        var v = data[nm][c] || 0; tot[c] = (tot[c] || 0) + v;
+        h.push(v ? '<span class="c" data-k="' + c + '" style="background:' + KIND[c][2] + ';color:' + KIND[c][3] + '" title="' + esc(used[c].title || '') + '">' + v + '</span>' : '<span class="c z">·</span>');
+      });
+      h.push('</div>');
+    });
+    if(order.length > 1){
+      h.push('<div class="r tot"><span>รวม</span>');
+      cols.forEach(function(c){ h.push('<span class="c" data-k="' + c + '" style="color:' + KIND[c][3] + '">' + (tot[c] || 0) + '</span>'); });
+      h.push('</div>');
+    }
+    h.push('</div>');
+    var box = document.createElement('div'); box.innerHTML = h.join('');
+    var keep = [].slice.call(other);
+    w.innerHTML = ''; w.appendChild(box.firstChild);
+    if(keep.length){ var x = document.createElement('div'); x.className = 'btc-nt x'; keep.forEach(function(e){ x.appendChild(e); }); w.appendChild(x); }
+    w.addEventListener('click', function(ev){ var t = ev.target.closest('.c[data-k]'); if(!t) return; var src = used[+t.getAttribute('data-k')]; if(src){ ev.stopPropagation(); src.click(); } });
+    w.classList.add('btc-done');
+  }
+
+  /* van mode · group editor row: labels + order (เดิมทุกช่อง ทุกปุ่ม · แค่เรียงใหม่) */
+  function vanGroups(root){
+    var trs = root.querySelectorAll('tr[data-grp]:not(.btc-vg)');
+    for(var i = 0; i < trs.length; i++){
+      var tr = trs[i]; var d = tr.querySelector('td > div'); if(!d) continue;
+      var vsel = d.querySelector('select[onchange*="bkV2VanGroupSetVan"]');
+      if(!vsel){ continue; }                                  // not van mode → leave
+      tr.classList.add('btc-vg');
+      var tin = d.querySelector('input[oninput*="bkV2VanGroupSetTime"]');
+      var rsel = d.querySelector('select[onchange*="bkV2VanGroupSetReturn"]');
+      var drv = d.querySelector('[oninput*="vanJobsSetDriver"]'); drv = drv ? drv.closest('span') : null;
+      var stop = d.querySelector('button[onclick*="vsOpen"]');
+      var save = d.querySelector('button[onclick*="bkV2VanGroupSave"]');
+      var sort = d.querySelector('button[onclick*="bkV2VanGroupClearSeq"]');
+      var disb = d.querySelector('button[onclick*="bkV2VanGroupDisband"]');
+      function lab(el, t){ if(!el) return; var s = document.createElement('span'); s.className = 'btc-lb'; s.textContent = t; el.parentNode.insertBefore(s, el); }
+      if(vsel){ var sep = document.createElement('span'); sep.className = 'btc-sep'; vsel.parentNode.insertBefore(sep, vsel); }
+      lab(vsel, 'รถ'); lab(tin, 'รับ'); lab(rsel, 'ขากลับ'); lab(drv, 'คนขับ');
+      if(stop) stop.classList.add('btc-o9');
+      if(sort) sort.classList.add('btc-sort'); if(disb) disb.classList.add('btc-disb'); if(save) save.classList.add('btc-save');
+      // everything else keeps DOM order (order:0) · plate input of partner vans stays next to driver
+    }
+  }
+
+  /* boat mode · per-boat band (no class in Classic) */
+  function boatBands(root){
+    var trs = root.querySelectorAll('table.t2-mtbl tr:not(.t2-row):not(.t2-pband):not(.t2-zband):not([data-grp]):not(.btc-bb):not(.btc-nb)');
+    for(var i = 0; i < trs.length; i++){
+      var tr = trs[i]; var f = tr.querySelector('td > div > span:first-child');
+      if(f && f.textContent.indexOf('🚤') >= 0 && /booking/.test(tr.textContent)) tr.classList.add('btc-bb'); else tr.classList.add('btc-nb');
+    }
+  }
+
   function rows(root){
     var ags = root.querySelectorAll('td.t2-ag > div[style*="background"]:not(.btc-ag)');
     for(var i = 0; i < ags.length; i++){
@@ -76554,7 +76698,7 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); rows(root); }
+        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); rows(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
