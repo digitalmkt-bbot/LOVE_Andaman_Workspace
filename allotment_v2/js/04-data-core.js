@@ -8713,9 +8713,11 @@ function bop2OpenModal(type){
   else if(type === 'templates') body = bop2TemplatesForm();
   else if(type === 'swap') body = bop2SwapForm();
   else if(type === 'weekdayPattern') body = bop2WeekdayPatternForm();
+  else if(type === 'replaceRange') body = bop2ReplaceForm();   /* §bopReplace */
   wrap.innerHTML = '<div style="background:#fff;border-radius:8px;max-width:560px;width:100%;max-height:88vh;overflow:auto">' + body + '</div>';
   wrap.addEventListener('click', e => { if(e.target === wrap) bop2CloseModal(); });
   document.body.appendChild(wrap);
+  if(type === 'replaceRange') bop2ReplacePreview();
 }
 function bop2CloseModal(){
   const m = document.getElementById('bop2-modal');
@@ -9049,6 +9051,149 @@ function bop2ApplySwap(){
   renderOp();
 }
 
+// ─── §bopReplace · REPLACE A BOAT OVER A DATE RANGE ─────────────
+/* §bopReplace (2026-10-12) · owner, Boat Operation ม.ค. 2027 แถว Whale Shark เต็มไปด้วย 🔧 เปลี่ยนเรือ:
+     "อันนี้เรา วางเรือไว้ แล้วจู่ๆเรือเสีย ต้องปลดเรือออกทั้งแถวทีเดียวยังไง" → เลือก "เปลี่ยนเป็นเรืออื่น"
+   ของเดิมต้อง Unassign แล้ว Assign ใหม่ทีละวัน (Clear month ล้างทุกเรือ ใช้ไม่ได้)
+   ต่อวันในช่วง: ช่องของเรือเสียย้ายไปเรือใหม่ (เส้นทาง/ประเภทเดิม) และบุคกิ้งที่จัดลงเรือเสียวันนั้นย้ายตาม
+   ไม่แตะวันที่: ผ่านมาแล้ว · เหมาลำ/ล็อคทั้งลำ · เรือใหม่มีงานแล้ว · เรือใหม่อยู่อีกท่า/ไม่พร้อม · คนเกินที่นั่งเรือใหม่
+   วันที่ข้าม เลือกได้ว่าจะถอดเรือเสียออก (ไปขึ้น "ต้องจัดเรือ") หรือคงไว้ · ไม่เลือกเรือแทน = ถอดออกอย่างเดียว */
+const BOP2_RP_WHY = { past:'วันผ่านมาแล้ว', locked:'เหมาลำ / ล็อคทั้งลำ', busy:'เรือใหม่มีงานแล้ว', pier:'เรือใหม่อยู่อีกท่า',
+  status:'เรือใหม่ไม่พร้อม', cap:'คนเกินที่นั่งเรือใหม่', none:'ไม่ได้เลือกเรือแทน' };
+function bop2RpNext(ds){ const p=String(ds).split('-').map(Number); return fmt(new Date(p[0], p[1]-1, p[2]+1, 12, 0, 0)); }
+function bop2ReplacePlan(fromId, toId, d1, d2){
+  const A=(BOATS||[]).find(x=>x && x.id===fromId), B=toId ? (BOATS||[]).find(x=>x && x.id===toId) : null;
+  const out={ move:[], skip:[], A:A, B:B };
+  if(!A || !d1 || !d2 || d2<d1) return out;
+  const tol=(typeof BA_CAP_TOL!=='undefined') ? BA_CAP_TOL : 2;
+  for(let d=d1, n=0; d<=d2 && n<400; d=bop2RpNext(d), n++){
+    const op=TRIPS[d] && TRIPS[d][fromId]; if(!op) continue;
+    const r={ d:d, route:op.route, pax:(typeof baAssignedPax==='function') ? baAssignedPax(d, fromId) : 0 };
+    if(bop2IsPast(d)) r.why='past';
+    else if(opLocked(op)) r.why='locked';
+    else if(!B) r.why='none';
+    else if(TRIPS[d][toId]) r.why='busy';
+    else if(bop2PierIssue(B, op.route, d)) r.why='pier';
+    else if(typeof getCurStatus==='function' && getCurStatus(B, d).s!=='available') r.why='status';
+    else if(typeof boatCapFor==='function'){
+      const cap=boatCapFor(toId, d), cur=(typeof baAssignedPax==='function') ? baAssignedPax(d, toId) : 0;
+      if(cap>0 && r.pax+cur>cap+tol) r.why='cap';
+    }
+    (r.why ? out.skip : out.move).push(r);
+  }
+  return out;
+}
+/* บุคกิ้งที่จัดลงเรือเสียในวันนั้น (ทั้งลำ หรือก้อนที่แยกลำ) ย้ายไปเรือใหม่ · คืนจำนวนบุคกิ้งที่ย้าย */
+function bop2RpMoveBookings(d, fromId, toId){
+  let n=0;
+  (typeof SB_BOOKINGS!=='undefined' ? SB_BOOKINGS : []).forEach(b=>{
+    if(!b || ['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(typeof bkHasTripOn==='function' && !bkHasTripOn(b, d)) return;
+    if(typeof bkOpsRead!=='function' || typeof bkOpsFor!=='function') return;
+    const o=bkOpsRead(b, d); let hit=false;
+    if(Array.isArray(o.boatSplits)) o.boatSplits.forEach(s=>{ if(s && s.boatId===fromId){ s.boatId=toId; hit=true; } });
+    if(o.boatId===fromId){ bkOpsFor(b, d).boatId=toId; hit=true; }
+    if(hit) n++;
+  });
+  return n;
+}
+function bop2RpVal(id){ const e=document.getElementById(id); return e ? (e.type==='checkbox' ? e.checked : e.value) : ''; }
+function bop2ReplaceForm(){
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const sel=(_bop2 && _bop2.selDate) || TODAY_STR;
+  const from=(sel<TODAY_STR) ? TODAY_STR : sel;
+  /* ถึง = วันสุดท้ายของเดือน/สัปดาห์ที่เปิดดูอยู่ · ถ้าเลือกวันนอกช่วงที่ดู ใช้ 30 วันถัดไป */
+  const vd=bop2GetDates(); let to=vd[vd.length-1] || from;
+  if(to<from){ to=from; for(let i=0;i<30;i++) to=bop2RpNext(to); }
+  /* เรือเสียตั้งต้น · ช่องที่เลือกไว้ (🔧) เอาเรือที่ไม่พร้อมของช่องนั้น ไม่งั้นเอาเรือลำแรกของช่องนั้น */
+  let pre='';
+  const day=TRIPS[sel] || {};
+  const inCell=Object.keys(day).filter(bid=>!_bop2.selRoute || (day[bid] && day[bid].route===_bop2.selRoute));
+  const bad=inCell.find(bid=>{ const b=(BOATS||[]).find(x=>x.id===bid); return b && typeof getCurStatus==='function' && getCurStatus(b, sel).s!=='available'; });
+  pre=bad || inCell[0] || '';
+  const boats=(BOATS||[]).filter(b=>b && !b.retired).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const opt=(b, on)=>'<option value="'+esc(b.id)+'"'+(on?' selected':'')+'>'+esc(b.name)+' · '+bop2PierAbbr(b.pier)+(b.cap?(' · '+b.cap+' pax'):'')+'</option>';
+  const L='display:block;font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em';
+  const I='display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit';
+  return `
+    <div style="padding:18px 20px;border-bottom:1px solid #eee">
+      <div style="font-size:18px;font-weight:700;color:#0F6E56">🔧 Replace a boat over a date range</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:3px">เรือเสีย · ย้ายทุกวันที่จัดไว้ในช่วงนี้ไปเรือลำอื่นทีเดียว · บุคกิ้งที่จัดลงเรือย้ายตาม</div>
+    </div>
+    <div style="padding:18px 20px;display:grid;gap:12px" oninput="bop2ReplacePreview()" onchange="bop2ReplacePreview()">
+      <label style="${L}">BOAT THAT BROKE
+        <select id="bop2rp-from" style="${I}">${boats.map(b=>opt(b, b.id===pre)).join('')}</select>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label style="${L}">FROM<input type="date" id="bop2rp-d1" value="${from}" min="${TODAY_STR}" style="${I}"></label>
+        <label style="${L}">TO<input type="date" id="bop2rp-d2" value="${to}" min="${TODAY_STR}" style="${I}"></label>
+      </div>
+      <label style="${L}">REPLACE WITH
+        <select id="bop2rp-to" style="${I}"><option value="">— ไม่ใส่เรือแทน · ถอดออกอย่างเดียว —</option>${boats.map(b=>opt(b, false)).join('')}</select>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px"><input type="checkbox" id="bop2rp-drop"> วันที่ใส่เรือแทนไม่ได้ ให้ถอดเรือเสียออก (ไปขึ้น "ต้องจัดเรือ")</label>
+      <div id="bop2rp-prev" style="padding:9px 11px;background:#F4F8F5;border-radius:6px;font-size:11.5px;line-height:1.5;color:#1A2A33"></div>
+    </div>
+    <div style="padding:14px 20px;background:#fafafa;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="bop2CloseModal()" style="padding:8px 18px;border:1.5px solid #C44A36;background:#fff;color:#C44A36;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">Cancel</button>
+      <button id="bop2rp-go" onclick="bop2ApplyReplace()" style="padding:8px 18px;background:#0F6E56;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;box-shadow:0 2px 6px rgba(15,110,86,.22)">Apply</button>
+    </div>
+  `;
+}
+function bop2ReplacePreview(){
+  const box=document.getElementById('bop2rp-prev'); if(!box) return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const A=bop2RpVal('bop2rp-from'), B=bop2RpVal('bop2rp-to'), d1=bop2RpVal('bop2rp-d1'), d2=bop2RpVal('bop2rp-d2');
+  /* ไม่เลือกเรือแทน = ถอดออกอย่างเดียว · ติ๊กให้และล็อคไว้ · เลือกเรือแล้วคืนค่าที่ผู้ใช้ติ๊กเอง (ตั้งต้น = ไม่ติ๊ก) */
+  const dl=document.getElementById('bop2rp-drop');
+  if(dl){
+    if(!B && !dl.disabled){ dl.dataset.u=dl.checked?'1':''; dl.checked=true; dl.disabled=true; }
+    else if(B && dl.disabled){ dl.checked=dl.dataset.u==='1'; dl.disabled=false; }
+  }
+  const drop=bop2RpVal('bop2rp-drop');
+  if(A && B && A===B){ box.innerHTML='<b style="color:#A32D2D">เลือกเรือคนละลำ</b>'; return; }
+  const P=bop2ReplacePlan(A, B, d1, d2);
+  const nm=(P.A && P.A.name) || A, n=P.move.length+P.skip.length;
+  if(!n){ box.innerHTML=esc(nm)+' ไม่มีวันที่จัดไว้ในช่วงนี้'; return; }
+  const sd=ds=>{ const x=new Date(ds+'T12:00:00'); return x.getDate()+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][x.getMonth()]; };
+  const g={}; P.skip.forEach(s=>{ (g[s.why]=g[s.why]||[]).push(s.d); });
+  const canDrop=P.skip.filter(s=>s.why!=='past' && s.why!=='locked').length;
+  let h='<b>'+esc(nm)+'</b> จัดไว้ <b>'+n+'</b> วันในช่วงนี้';
+  if(B) h+='<br>✓ เปลี่ยนเป็น <b>'+esc((P.B&&P.B.name)||B)+'</b> ได้ <b>'+P.move.length+'</b> วัน';
+  Object.keys(g).forEach(k=>{ h+='<br>· ข้าม '+g[k].length+' วัน · '+BOP2_RP_WHY[k]+' <span style="color:#6B7785">('+g[k].slice(0,6).map(sd).join(', ')+(g[k].length>6?' …':'')+')</span>'; });
+  if(canDrop) h+='<br>'+((drop||!B) ? '<b style="color:#A32D2D">ถอดออก '+canDrop+' วัน</b> · ไปขึ้นในรายการ "ต้องจัดเรือ"' : 'วันที่ข้าม ' + canDrop + ' วัน ยังเป็น '+esc(nm)+' อยู่ (ติ๊กด้านบนถ้าจะถอดออก)');
+  box.innerHTML=h;
+}
+function bop2ApplyReplace(){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const A=bop2RpVal('bop2rp-from'), B=bop2RpVal('bop2rp-to'), d1=bop2RpVal('bop2rp-d1'), d2=bop2RpVal('bop2rp-d2');
+  const drop=!B || !!bop2RpVal('bop2rp-drop');
+  if(!A){ alert('Pick the boat that broke'); return; }
+  if(B && A===B){ alert('Pick two different boats'); return; }
+  if(!d1 || !d2 || d2<d1){ alert('Check the date range'); return; }
+  const P=bop2ReplacePlan(A, B, d1, d2);
+  const dropList=drop ? P.skip.filter(s=>s.why!=='past' && s.why!=='locked') : [];
+  if(!P.move.length && !dropList.length){ alert('Nothing to change in this range.'); return; }
+  const an=(P.A && P.A.name) || A, bn=(P.B && P.B.name) || B;
+  if(!confirm((P.move.length ? ('Move '+an+' -> '+bn+' on '+P.move.length+' day(s), with its bookings.\n') : '')
+    + (dropList.length ? ('Remove '+an+' from '+dropList.length+' day(s) (no replacement).\n') : '')
+    + (P.skip.length-dropList.length>0 ? ('Leave '+(P.skip.length-dropList.length)+' day(s) as they are.\n') : '')
+    + '\nContinue?')) return;
+  let nb=0;
+  P.move.forEach(m=>{
+    TRIPS[m.d][B]=Object.assign({}, TRIPS[m.d][A]);
+    delete TRIPS[m.d][A];
+    nb+=bop2RpMoveBookings(m.d, A, B);
+  });
+  dropList.forEach(s=>{ if(TRIPS[s.d] && TRIPS[s.d][A] && !opLocked(TRIPS[s.d][A])){ delete TRIPS[s.d][A]; if(!Object.keys(TRIPS[s.d]).length) delete TRIPS[s.d]; } });
+  save('operations');
+  if(nb && typeof acctPersistBookings==='function') acctPersistBookings();
+  bop2CloseModal();
+  alert('Done. ' + (P.move.length ? (P.move.length+' day(s) now on '+bn+' ('+nb+' booking(s) moved). ') : '')
+    + (dropList.length ? (dropList.length+' day(s) removed - see the list of trips that need a boat.') : ''));
+  renderOp();
+}
+
 // ─── #4 APPLY PATTERN BY WEEKDAY ────────────────────────────────
 function bop2UpdateWeekdayBoatOpts(){
   const routeSel = document.getElementById('bop2wp-route');
@@ -9191,6 +9336,7 @@ function bop2ShowBulkMenu(ev){
     + item('#DDF0E5', iconCal,      'Pattern by weekday',      'e.g. every Mon → Andaman Ryder', "bop2CloseBulkMenu();bop2OpenModal('weekdayPattern')")
     + item('#DDF0E5', iconBookmark, 'Templates',               'save / load weekly pattern',     "bop2CloseBulkMenu();bop2OpenModal('templates')")
     + item('#DDF0E5', iconSwap,     'Swap two boats',          'exchange routes on one day',     "bop2CloseBulkMenu();bop2OpenModal('swap')")
+    + item('#DDF0E5', iconSwap,     'Replace a boat (range)',  'boat broke · move its days to another boat', "bop2CloseBulkMenu();bop2OpenModal('replaceRange')")
     + sectionLbl('Quick copy')
     + item('#FFF3C4', iconCopy,     'Copy view → next '+period, 'duplicate to following period',  "bop2CloseBulkMenu();bop2CopyWeekToNext()")
     + item('#FFF3C4', iconRefresh,  'Copy selected day → view', 'replicate one day to all',       "bop2CloseBulkMenu();bop2CopyDayToWeek()")
