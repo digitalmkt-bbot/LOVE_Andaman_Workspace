@@ -96,7 +96,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
       Re-confirm
     </div>
-    <div class="nav-item" data-view="bookingflow" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
+    <!-- §hideBF (2026-10-12) · owner: "เอา Booking flow ออกก่อน ตอนนี้ไม่ได้ใช้ หรือซ่อนไว้ก็ได้"
+         ซ่อนแค่เมนู · หน้าและโค้ดยังอยู่ครบ · เอากลับ = ลบ class pf-hide ออก
+         ใช้ class + CSS !important เพราะ laApplyPerms ตั้ง style.display ทับ inline ทุกรอบ -->
+    <div class="nav-item pf-hide" data-view="bookingflow" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
       Booking Flow
     </div>
@@ -1251,6 +1254,7 @@
      (same look as #fl-modal-assignment / calSetModal / progSeasonModal). CSS is scoped to these two dialogs only;
      ids, fields, pickSt / saveStatus / saveCharterBoat are untouched. -->
 <style>
+  .nav-item.pf-hide{display:none !important}   /* §hideBF · เมนูที่ซ่อนไว้ชั่วคราว */
   :is(#status-modal,#charter-modal){background:rgba(10,18,48,.56) !important}
   :is(#status-modal,#charter-modal) .modal{border-radius:16px !important;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important;overflow:hidden;font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
   :is(#status-modal,#charter-modal) .modal-hd{padding:20px 22px 8px !important;border-bottom:none !important;background:#fff !important;align-items:flex-start}
@@ -1585,7 +1589,7 @@
       <div class="form-2"><div class="form-row"><label class="form-label">ชั่วโมงสะสมเดิม (h)</label><input type="number" id="fl-eng-base-hours" step="0.1" placeholder="เช่น 4727.3" style="font-family:'DM Mono',monospace"><div style="font-size:9px;color:#999;margin-top:2px">ชั่วโมงจริงของเครื่อง ณ ตอนเริ่มนับ · ชั่วโมงที่วิ่งหลังจากนี้จะบวกต่อให้เอง</div></div><div class="form-row"><label class="form-label">Service Interval (h)</label><input type="number" id="fl-eng-svc" placeholder="100"></div></div>
       <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea id="fl-eng-note"></textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-engine')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveEngine()">บันทึก</button></div>
+    <div class="modal-footer"><button id="fl-eng-del" class="btn btn-ghost" style="display:none;margin-right:auto;color:#A32D2D" onclick="flDeleteEngine()" title="ลบได้เฉพาะเครื่องที่ยังไม่มีประวัติ (เพิ่มผิด / ซ้ำ)">ลบเครื่องนี้</button><button class="btn btn-ghost" onclick="closeModal('fl-modal-engine')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveEngine()">บันทึก</button></div>
   </div>
 </div>
 <div class="modal-overlay" id="fl-modal-gearbox">

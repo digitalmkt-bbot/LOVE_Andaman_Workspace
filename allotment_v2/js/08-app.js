@@ -11131,6 +11131,39 @@ function ckToggle(bkId, date, kind){
   ckPersist(); ckAfter(kind);
   if(ns>0 && !cur.reasonCode) ckReasonOpen(bkId,date,kind);
 }
+/* ══ §ckTap (2026-10-12) · "กดเช็คอินแล้วเด้ง เหมือนกดแล้วไม่ติด เลยกดอีก · มันดีเล แล้วมันก็มั่ว"
+   วัดบนระบบจริง (12 ต.ค. · Mac 8 คอร์) · กดหนึ่งครั้ง = เขียนก้อนข้อมูล 27.8 MB (~220ms)
+   + วาดหน้าใหม่ (~150ms) แบบจอค้าง · ไม่มีอะไรเปลี่ยนบนจอจนกว่าจะเสร็จ · อีก 1 วิ
+   ตัวเซฟยังแตก/เทียบก้อนอีก (~300ms) · เครื่องหน้าท่าช้ากว่านี้หลายเท่า = ค้างเป็นวินาที
+   คนเลยกดซ้ำ · การกดที่สองไม่หาย มันรอคิว แล้วทำงานต่อทันทีที่จอว่าง
+   ckToggle ของแถวที่เพิ่งติ๊ก = "กดซ้ำ = ยกเลิก" → ติ๊กหายไปเอง นี่คือ "มั่ว"
+   ตัวนี้คั่นหน้า ckToggle เฉพาะการกดจากปุ่ม (ที่อื่นยังเรียก ckToggle ตรงเหมือนเดิม)
+   1. เปลี่ยนปุ่มให้เห็นทันทีว่ารับแล้ว (สลับสถานะ + จาง) แล้วรอให้จอวาดหนึ่งเฟรม ค่อยทำงานจริง
+   2. ระหว่างกำลังทำ แถวเดียวกันกดซ้ำไม่มีผล
+   3. การกดของแถวเดียวกันที่เกิดตอนจอค้าง (เวลาของ event ก่อนงานเสร็จ) หรือห่างไม่ถึง 0.45 วิ = ทิ้ง
+   ⚠ ไม่ได้แยกการเขียนข้อมูลออกจากกัน · ckToggle ยังอ่าน เขียน และเซฟในจังหวะเดียวเหมือนเดิม
+     (ถ้าเขียนก่อนแล้วเซฟทีหลัง ข้อมูลจากเครื่องอื่นที่เข้ามาคั่นกลางจะทับติ๊กของเรา) */
+var _ckTapPend={}, _ckTapDone={};
+function ckTap(bkId, date, kind, el){
+  var k=bkId+'|'+date+'|'+kind, now=performance.now(), ev=window.event;
+  var ts=(ev && ev.timeStamp>0 && ev.timeStamp<=now+50)?ev.timeStamp:now;   /* เบราว์เซอร์เก่าให้เวลาแบบ epoch · ใช้เวลาตอนนี้แทน */
+  if(_ckTapPend[k]) return;
+  if(_ckTapDone[k] && ts<_ckTapDone[k]+450) return;
+  _ckTapPend[k]=1;
+  var cls=el && el.classList, flip=function(){ try{
+      if(cls.contains('ck-ck')) cls.toggle('on'); else if(cls.contains('pck-ok')) cls.toggle('off'); }catch(_){} };
+  if(cls){ flip(); try{ el.style.opacity='.55'; el.style.cursor='progress'; el.style.pointerEvents='none'; }catch(_){} }
+  var run=function(){
+    try{ ckToggle(bkId, date, kind); }
+    finally{
+      delete _ckTapPend[k]; _ckTapDone[k]=performance.now();
+      /* ไม่ได้วาดใหม่ (ไม่มีสิทธิ์ · ค้างเงินแล้วเด้งกล่องเตือน · หาใบไม่เจอ) → คืนปุ่มเป็นเหมือนเดิม */
+      if(cls && el.isConnected){ flip(); try{ el.style.opacity=''; el.style.cursor=''; el.style.pointerEvents=''; }catch(_){} }
+    }
+  };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(function(){ setTimeout(run,0); });
+  else setTimeout(run,0);
+}
 // legacy names (คงไว้กันของเดิมเรียก)
 function bkVCkStep(bkId,date,delta){ ckStep(bkId,date,'van',delta); }
 function bkVCkToggle(bkId,date){ ckToggle(bkId,date,'van'); }
@@ -11765,7 +11798,7 @@ function ckRowHtml(r, date, kind, extraHtml){
    +(_isVan
       ? ('<td class="ck-c ck-in">'+vckSelHtml(b.id,date,kind,_vst)+'</td>'
          +'<td class="ck-in">'+vckNoteHtml(ck,_vst,r,rsn)+'</td>')
-      : ('<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckToggle(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
+      : ('<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckTap(\''+b.id+'\',\''+date+'\',\''+kind+'\',this)" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
          +'<td class="ck-in">'+rsn+'</td>'))
    +'</tr>';
 }
@@ -15669,9 +15702,32 @@ function pckFilterBar(all, cnt, nHidden, part){
   var _q='<input id="pck-q" value="'+e(_pckQ)+'" oninput="pckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม" style="height:30px;font-size:11.5px;font-family:inherit;border:1.5px solid '+(_pckQ?'#185FA5':'#E7E4DC')+';border-radius:8px;padding:2px 10px;background:#fff;min-width:210px;flex:1">'
     +sel('pck-van',_pckVan,'pckSetVan','\u{1F68C} ทุกคัน',vans,function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}; return (v.name||id)+' ('+cnt.van[id]+')'; });
   if(part==='search') return '<div class="ck-fbar pck-fsearch">'+_q+'</div>';
-  if(part==='chips')  return '<div class="ck-fbar pck-fchips">'+arrHtml
-    +(arrHtml?'<span class="ck-fsep"></span>':'')+statHtml
-    +pckFilterTail(any, nHidden)+'</div>';
+  if(part==='chips'){
+    /* §pckChipFit (2026-10-12) · owner: "ฝั่งชิป ทำยังไงให้ดูกระชับหน่อย"
+       ชื่อสั้นลง (ชื่อเต็มอยู่ใน title) · ชิปที่เป็น 0 จางลงและไม่มีกรอบ · ปุ่มสี Service/ผู้บันทึกเหลือไอคอน
+       ตัวกรองทุกตัวยังอยู่ครบ กดได้เหมือนเดิม */
+    var sc=function(on, short, full, fn, n, col){
+      col=col||'#185FA5'; var z=!on && !n;
+      return '<button class="pck-sc'+(on?' on':'')+(z?' z':'')+'" title="'+e(full)+'" onclick="'+fn+'" style="--c:'+col+'">'
+        +e(short)+(n!=null?'<b>'+n+'</b>':'')+'</button>'; };
+    var SH={PK:'PK',KL:'KL',OWN:'มาเอง',NOVAN:'ไม่จัดรถ'};
+    var a2=arrOrder.filter(function(k){ return cnt.arr[k]; }).map(function(k){
+      return sc(_pckArr===k, SH[k]||PCK_ARR_LBL[k], PCK_ARR_LBL[k], "pckSetArr('"+k+"')", cnt.arr[k], k==='OWN'?'#6B289A':(k==='NOVAN'?'#A32D2D':'#185FA5')); }).join('');
+    var s2=sc(_pckStat==='wait','ยังไม่ถึง','ยังไม่ถึงท่า',"pckSetStat('wait')",cnt.stat.wait,'#5F5E5A')
+      +sc(_pckStat==='arr','ถึงแล้ว','ถึงแล้ว · ยังไม่เคลียร์',"pckSetStat('arr')",cnt.stat.arr,'#0C447C')
+      +sc(_pckStat==='clr','เคลียร์แล้ว','เคลียร์แล้ว · รอขึ้นเรือ',"pckSetStat('clr')",cnt.stat.clr,'#7A4A00')
+      +sc(_pckStat==='on','ขึ้นเรือ','ขึ้นเรือแล้ว',"pckSetStat('on')",cnt.stat.on,'#0F6E56')
+      +'<span class="ck-fsep"></span>'
+      +sc(_pckStat==='due','ค้างจ่าย','ค้างจ่าย',"pckSetStat('due')",cnt.stat.due,'#7A4A00')
+      +(cnt.stat.ns?sc(_pckStat==='ns','No-show','No-show / CXL',"pckSetStat('ns')",cnt.stat.ns,'#A32D2D'):'')
+      +(cnt.stat.vd?sc(_pckStat==='vd','ปิดแล้ว','ยกเลิกหน้างาน · ปิดแล้ว',"pckSetStat('vd')",cnt.stat.vd,'#8a8a82'):'');
+    var tail='<span class="pck-sctail">'
+      +'<button class="pck-sci" onclick="pckSvcSetOpen()" title="ตั้งสีช่อง Service / ป้ายภาษาไกด์ ในใบงานไกด์" aria-label="สี Service">&#127912;</button>'
+      +'<button class="pck-sci pck-bytog2'+(_pckShowBy?' on':'')+'" onclick="pckToggleBy()" title="'+(_pckShowBy?'ซ่อนผู้บันทึก booking':'แสดงผู้บันทึก booking ในแต่ละแถว')+'" aria-label="ผู้บันทึก">&#128100;</button>'
+      +(any?'<button class="pck-sc clr" onclick="pckClearFilters()" title="ล้างตัวกรองทั้งหมด">&#10005; ล้าง'+(nHidden?(' <b>'+nHidden+'</b>'):'')+'</button>':'')
+      +'</span>';
+    return '<div class="ck-fbar pck-fchips">'+a2+(a2?'<span class="ck-fsep"></span>':'')+s2+tail+'</div>';
+  }
   return '<div class="ck-fbar">'
     +_q
     +'<span class="ck-fsep"></span>'+arrHtml
@@ -16318,7 +16374,7 @@ function pckMgUnlock(id){
 }
 function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
   var e=ckEsc;
-  var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
+  var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
     +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>';
   var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
   var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
@@ -16339,7 +16395,7 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
     +'<button class="ck-ev ck-ev-ns ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="No-show · ลูกค้าไม่มา ไม่แจ้งล่วงหน้า">&#10005;</button>'
     +'<button class="ck-ev ck-ev-cx ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="CXL · ลูกค้าแจ้งยกเลิกหน้างาน">&#8856;</button>'
     +'</span>';
-  var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
+  var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
     +(on?('<span class="tm">'+e(pckHHMM(ck.at)||'')+'</span>'):'')+'</button>';
 
   if(on && !_pckMgOpen[b.id])
@@ -19431,13 +19487,16 @@ function pckSheetHtml(boats, border, date, warnRows){
 function pckViewBar(){
   var b=function(fn,v,cur,lbl){
     return '<button onclick="'+fn+'(\''+v+'\')" class="pcs-seg'+(cur===v?' on':'')+'">'+lbl+'</button>'; };
+  /* §pckBarFix · ปุ่ม ตาราง|การ์ด ต้องอยู่ที่เดิมตอนสลับ · เดิม "เรียง" หายไปในโหมดการ์ด
+     ปุ่มเลยเลื่อนไปทางขวาใต้เมาส์ · ตอนนี้ "เรียง" อยู่ซ้าย ปุ่มมุมมองอยู่ขวาสุดเสมอ
+     และในโหมดการ์ด "เรียง" แค่ซ่อน (ยังกินที่เท่าเดิม) ของในแถบจึงไม่ขยับเลย */
+  var card=_pckView!=='sheet';
   return '<div class="pcs-bar">'
-    +'<span class="k">มุมมอง</span><span class="pcs-segs">'
+    +'<span class="pcs-sortg"'+(card?' style="visibility:hidden" aria-hidden="true"':'')+'>'
+      +'<span class="k pcs-ks">เรียง</span><span class="pcs-segs" title="เรียงตาราง: ตามเรือ / ตามรถ">'
+      +b('pckSetGrp','boat',_pckGrp,'เรือ')+b('pckSetGrp','van',_pckGrp,'รถ')+'</span></span>'
+    +'<span class="k pcs-kv" style="margin-left:8px">มุมมอง</span><span class="pcs-segs pcs-viewsegs">'
       +b('pckSetView','sheet',_pckView,'ตาราง')+b('pckSetView','card',_pckView,'การ์ด')+'</span>'
-    +(_pckView==='sheet'
-      ? ('<span class="k" style="margin-left:12px">เรียงโดย</span><span class="pcs-segs">'
-         +b('pckSetGrp','boat',_pckGrp,'เรือ')+b('pckSetGrp','van',_pckGrp,'รถ')+'</span>')
-      : '')
     +'</div>';
 }
 
@@ -19693,6 +19752,26 @@ function pckHeadCSS(){
   +H+' .pkh-card .ck-fbar input,'+H+' .pkh-card .ck-fbar select{height:32px !important;font-size:13px !important}'
   +H+' .pkh-fwrap .pcs-seg{padding:4px 13px !important;font-size:11.5px !important}'
   +H+' .pkh-fwrap .k{font-size:10.5px}'
+  /* §pckChipFit · ชิปกรองแบบกระชับ */
+  +H+' .pkh-fwrap{gap:4px !important;padding:5px 8px !important}'
+  +H+' .pkh-fwrap .pck-sc{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px !important;border-radius:999px;'
+    +'border:1px solid #E3E0D7;background:#fff;color:#4A4944;font:600 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +H+' .pkh-fwrap .pck-sc b{font:700 11px "DM Mono",monospace;color:var(--c)}'
+  +H+' .pkh-fwrap .pck-sc.z{border-color:transparent;background:transparent;color:#A9A79F}'
+  +H+' .pkh-fwrap .pck-sc.z b{color:#C6C4BC}'
+  +H+' .pkh-fwrap .pck-sc.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);color:var(--c);font-weight:800}'
+  +H+' .pkh-fwrap .pck-sc.clr{border-color:#E6C9C3;color:#A32D2D}'
+  +H+' .pkh-fwrap .pck-sctail{display:inline-flex;gap:3px;margin-left:auto}'
+  +H+' .pkh-fwrap .pck-sci{width:28px;height:26px;padding:0 !important;border-radius:8px;border:1px solid #E3E0D7;background:#fff;font-size:13px !important;cursor:pointer;line-height:1}'
+  +H+' .pkh-fwrap .pck-sci.on{border-color:#185FA5;background:#EAF2FB}'
+  +H+' .pkh-fwrap .pcs-kv{display:none}'
+  +H+' .pkh-fwrap>.pcs-bar{display:inline-flex !important;align-items:center;gap:4px;padding:0 !important;margin:0 !important}'
+  +H+' .pkh-fwrap .pcs-ks{margin-left:4px !important;color:#8a8a82}'
+  +H+' .pkh-fwrap .pcs-sortg{display:inline-flex;align-items:center;gap:4px}'
+  +H+' .pkh-fwrap .pcs-viewsegs{margin-left:4px}'
+  +H+' .pkh-fwrap .pck-sc.z{padding:0 6px !important}'
+  +H+' .pkh-fwrap .pcs-seg{padding:3px 11px !important;font-size:11px !important}'
+  +H+' .pkh-fwrap .ck-fsep{height:16px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
   +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
@@ -19766,6 +19845,7 @@ function pckSheetCSS(){
   var S='.pck-host table.ck-tbl.pck-sheet';
   return ''
   +'.pck-host .pcs-bar{display:flex;align-items:center;gap:7px;margin:0 0 10px}'
+  +'.pck-host .pcs-sortg{display:inline-flex;align-items:center;gap:7px}'
   +'.pck-host .pcs-bar .k{font-size:11px;font-weight:700;color:#5F5E5A}'
   +'.pck-host .pcs-segs{display:inline-flex;border:1.5px solid #D8D4CA;border-radius:999px;'
     +'overflow:hidden;background:#fff}'
@@ -20351,8 +20431,14 @@ function renderPierCheckin(){
     warnHtml='<div class="pck-warncard"><div class="pck-warnhd">&#9888; ยังไม่จัดเรือ · '+noBoat.length+' booking · '+npx+' pax — จัดเรือก่อนถึงเช็คอินหน้าท่าได้'
       +(_nCxl?('<span style="background:#F1EFE8;color:#6b6a63;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:8px">ยกเลิกแล้ว '+_nCxl+' ใบ · ต้องจัดจริง '+_nAct+'</span>'):'')
       +'<a onclick="nav(document.querySelector(\'[data-view=booking]\'))" style="margin-left:auto;color:#185FA5;cursor:pointer;text-decoration:none">&rarr; ไปจัดเรือ (By-trip)</a></div>'
-      +'<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
-      +noBoat.map(function(r){ return pckRowHtml(r,date); }).join('')+'</tbody></table></div></div>';
+      /* §pckWarnSheet (2026-10-12) · owner: "อันนี้กดชิปเป็นตาราง แต่ส่วนที่ยังไม่ได้จัดขึ้นเป็นแบบการ์ด"
+         มุมมองตาราง → ใช้แถวแบบตารางเหมือนข้างล่าง · ห่อด้วย pck-tw ไม่ใช่ pcs-tw
+         (pckFitPane / ตัวจำตำแหน่งเลื่อน หา .pcs-tw ตัวแรก ต้องเป็นตารางหลักเสมอ) */
+      +(_pckView==='sheet'
+        ? ('<div class="pck-tw"><table class="ck-tbl pck-tbl pck-sheet">'+PCK_SHEET_THEAD+'<tbody>'
+           +noBoat.map(function(r){ return pckRowHtml(r,date,true); }).join('')+'</tbody></table></div></div>')
+        : ('<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
+           +noBoat.map(function(r){ return pckRowHtml(r,date); }).join('')+'</tbody></table></div></div>'));
   }
   if(!cardsHtml && !warnHtml){
     cardsHtml='<div style="background:#fff;border:1px solid #E7E4DC;border-radius:14px;padding:44px;text-align:center;color:#b0aea6;font-size:12px">'
