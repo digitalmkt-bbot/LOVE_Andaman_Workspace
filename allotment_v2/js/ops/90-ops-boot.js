@@ -39,6 +39,7 @@
     .then(step('add-on types', function(){ return O.addonTypes && O.addonTypes.load(); }))
     .then(step('deployments', function(){ return O.deployments && O.deployments.load(); }))
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
+    .then(step('weather closures', function(){ return O.weather && O.weather.load(); }))
     .then(function(){
       // Booking records are page-owned: Calendar loads its visible month and
       // By-trip its selected day. Never download a 120-day booking blob at boot.
