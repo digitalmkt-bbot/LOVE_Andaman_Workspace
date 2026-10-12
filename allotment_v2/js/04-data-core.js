@@ -3338,23 +3338,27 @@ function renderDash(){
   // Dashboard-only feed for Bookings/day and Live B2C/B2B. It is newest-first
   // and stops at the 30-day creation window; it is not a boot preload.
   /* A failed feed resolves null without being recorded, so every renderDash()
-     would start it again and the settle-redraw would loop. Hold off for 15s
-     after a settle; the loader still clears on that settle. */
-  const _dashRecentCooling=Date.now()-(window._dashRecentSettledAt||0)<15000;
+     would start it again and the settle-redraw would loop. After a failure,
+     hold off for 15s; the loader still clears on that settle. */
+  const _dashRecentCooling=Date.now()-(window._dashRecentFailedAt||0)<15000;
   const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function' && !_dashRecentCooling)?bookingV2OpsEnsureRecent(30):null;
   if(_dashRecentLoad && !window._dashRecentPending){
     window._dashRecentPending=true;
-    _dashRecentLoad.then(function(){
-      window._dashRecentPending=false; window._dashRecentSettledAt=Date.now();
+    _dashRecentLoad.then(function(j){
+      window._dashRecentPending=false;
+      if(j) window._dashRecentLoadedOnce=true; else window._dashRecentFailedAt=Date.now();
       if(typeof renderDash==='function') renderDash();
     });
   }
   const _opsDash=_opsDashApi?_opsDashApi.get(_ds,'day'):null;
   const _opsDashState=_opsDashApi?_opsDashApi.status(_ds,'day'):'idle';
-  /* Wait for every dashboard feed before painting: the server summary and the
-     recent-bookings feed both feed the cards. Failed requests are final and
-     render with their own banner; only in-flight requests hold the page. */
-  if(_opsDashState==='loading' || window._dashRecentPending){
+  /* Wait for the dashboard feeds before painting the first time. After that,
+     a refresh (for example after a write) keeps the last data on screen and
+     updates it when the answer arrives, instead of blanking the page. Failed
+     requests render with their own banner. */
+  const _dashWaitOps=_opsDashState==='loading' && !_opsDash;
+  const _dashWaitRecent=!!window._dashRecentPending && !window._dashRecentLoadedOnce;
+  if(_dashWaitOps || _dashWaitRecent){
     window._dashLoaderShown=true;
     wrap.innerHTML = DV_CSS
       + `<div class="dv-fr"><div style="padding:96px 16px;text-align:center;color:#8A8A8A;font-size:13px;font-weight:600">Loading dashboard data…</div></div>`;

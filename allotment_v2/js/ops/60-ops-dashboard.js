@@ -16,7 +16,7 @@
 (function(){
   'use strict';
   var O = window.laOps; if(!O) return;
-  var cache = {}, loading = {}, failed = {};
+  var cache = {}, loading = {}, failed = {}, stale = {};
   function key(date, mode){ return date + '|' + (mode || 'day'); }
   function validDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s || ''); }
   function redraw(){
@@ -29,12 +29,12 @@
     mode = (mode === 'month' || mode === 'year') ? mode : 'day';
     if(!O.enabled() || !validDate(date)) return Promise.resolve(null);
     var k = key(date, mode);
-    if(cache[k]) return Promise.resolve(cache[k]);
+    if(cache[k] && !stale[k]) return Promise.resolve(cache[k]);
     if(loading[k]) return loading[k];
     delete failed[k];
     loading[k] = O.get('/v1/dashboard', { date: date, mode: mode }).then(function(j){
       if(!j || j.version !== 1 || !j.summary) throw new Error('invalid dashboard response');
-      cache[k] = j;
+      cache[k] = j; delete stale[k];
       return j;
     }).catch(function(e){
       failed[k] = e;
@@ -44,12 +44,15 @@
     return loading[k];
   }
   function get(date, mode){ return cache[key(date, mode || 'day')] || null; }
+  /* a write makes the cached summary stale, but it stays on screen until the
+     refetch lands; the next ensure() refetches it */
+  function markStale(){ Object.keys(cache).forEach(function(k){ stale[k] = true; }); }
   function status(date, mode){
     var k = key(date, mode || 'day');
-    return cache[k] ? 'ready' : loading[k] ? 'loading' : failed[k] ? 'failed' : 'idle';
+    return loading[k] ? 'loading' : cache[k] ? 'ready' : failed[k] ? 'failed' : 'idle';
   }
   function error(date, mode){ return failed[key(date, mode || 'day')] || null; }
-  function clear(){ cache = {}; loading = {}; failed = {}; }
-  O.onWrite(function(){ clear(); });
+  function clear(){ cache = {}; loading = {}; failed = {}; stale = {}; }
+  O.onWrite(function(){ markStale(); failed = {}; });
   O.dashboard = { ensure: ensure, get: get, status: status, error: error, clear: clear };
 })();

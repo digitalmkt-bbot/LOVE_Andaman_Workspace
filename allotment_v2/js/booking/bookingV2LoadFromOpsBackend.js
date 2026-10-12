@@ -172,7 +172,11 @@ var _opsBookingWriteHook=false;
 function bookingV2OpsAttachWriteInvalidation(){
   if(_opsBookingWriteHook || !window.laOps || !window.laOps.onWrite) return;
   _opsBookingWriteHook=true;
-  window.laOps.onWrite(function(){
+  window.laOps.onWrite(function(kind){
+    // Remote van/pickup changes arrive from the change feed and cannot move a
+    // booking. Dropping the range cache for them re-pages the whole recent feed
+    // on every poll, so skip them.
+    if(typeof kind==='string' && /^remote:(van|van_day|van_stop|van_group|pickup_area|pickup_profile)$/.test(kind)) return;
     // A write can move a booking between any cached day/month. Keep entities,
     // but revalidate query membership next time that date/month is opened.
     _opsBookingRanges=Object.create(null);
