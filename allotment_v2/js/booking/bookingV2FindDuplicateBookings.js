@@ -15,9 +15,17 @@ function bookingV2FindDuplicateBookings(d, excludeId){
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     const reasons=[];
     const bv=norm(b.voucherRef||b.code);
-    if(vref && bv && bv===vref) reasons.push('เลข Voucher ตรงกัน ('+(b.voucherRef||b.code)+')');
     const bt=(b.trips||[]).filter(t=>t.routeId&&t.date);
     const sharedDR=bt.some(t=>myDR.has(t.date+'|'+t.routeId));
+    /* §tripNext · ใบ B2C ในออเดอร์เดียวกัน (b2c_<ref>_1, _2) ใช้เลข voucher เดียวกันอยู่แล้ว
+       คนละทริป = ซื้อหลายทริป · บรรทัดที่มีแต่บริการเสริม = ของเสริมของทริปนี้ · ทั้งสองแบบไม่ใช่ลงซ้ำ
+       สองบรรทัดที่เป็นทริปเดียวกันวันเดียวกันและมีคนทั้งคู่ ยังเตือนตามเดิม */
+    const _ord=x=>{ const k=String(x||'').match(/^(b2c_.*)_\d+$/); return k?k[1]:''; };
+    if(_ord(d.id) && _ord(d.id)===_ord(b.id)){
+      const _ao=x=>(typeof bkB2CAddonOnly==='function')&&bkB2CAddonOnly(x);
+      if(!sharedDR || _ao(b) || _ao(d)) return;   /* อีกทริปของออเดอร์ หรือบรรทัดบริการเสริมของทริปนี้ */
+    }
+    if(vref && bv && bv===vref) reasons.push('เลข Voucher ตรงกัน ('+(b.voucherRef||b.code)+')');
     if(lead && norm(b.leadPax||b.customerName)===lead && sharedDR) reasons.push('ชื่อลูกค้า + วัน + ทริป ตรงกัน');
     if(reasons.length) out.push({bk:b, reasons});
   });

@@ -85,7 +85,7 @@ function bookingV2RenderTab2(){
   const _btHit = r => {
     if(!_btQ) return true;
     const b=r.bk||{}; const ag=(typeof sbGetAgent==='function')?(sbGetAgent(b.agentId)||{}):{};
-    const hay=[b.voucherRef,b.code,b.id,b.leadPax,b.customerName,b.phone,b.customerPhone,
+    const hay=[b.voucherRef,b.code,b.id,(/^b2c_/.test(b.id||'')&&typeof bookingV2DisplayCode==='function')?bookingV2DisplayCode(b):'',b.leadPax,b.customerName,b.phone,b.customerPhone,
                b.hotelName,b.pickupHotelName,b.pickupArea,ag.name,ag.code]
       .concat((b.altPickups||[]).map(a=>a&&a.place))
       .filter(Boolean).join(' ').toLowerCase();
@@ -178,6 +178,20 @@ function bookingV2RenderTab2(){
           return true;
         })
     : [];
+  /* §btDeploy (2026-10-12) · owner: "มันจะมีวันที่วางเรือไว้แล้ว แต่ยังไม่มีบุคกิ้ง
+       ทีนี้รายละเอียดในหน้า By trip date มันจะไม่ขึ้นว่ามีทริปนี้อยู่ เพิ่มให้เห็นได้ไหม"
+     กระดานนี้ดึงทริปจากใบจองอย่างเดียว · เรือที่ Boat Operation วางไว้ (TRIPS) แต่ยังไม่มีใครจอง
+     จึงหายไปทั้งทริป · ดันเส้นทางพวกนี้ขึ้นมาเหมือนเส้นทางที่มีล็อค · การ์ดเรือขึ้น 0/cap ตามปกติ */
+  const deployRouteIds = [...new Set(Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {})
+      .map(op => op && op.route).filter(Boolean))]
+    .filter(rid => {
+      if(!(typeof ROUTES!=='undefined' && ROUTES.some(x=>x.id===rid))) return false;
+      if((typeof laIsLandRoute==='function' && laIsLandRoute(rid)) !== _bkV2CityTourOnly) return false;
+      if(famF && (bookingV2RouteFamily(rid)?.id)!==famF) return false;
+      if(routeF && rid!==routeF) return false;
+      if(pierF!=='all'){ const rt=ROUTES.find(x=>x.id===rid); if(rt?.pier!==pierF) return false; }
+      return true;
+    });
   // Surface routes a booking was manually rescheduled AWAY from on this date (so the ghost row shows even with 0 active bookings)
   const reschedFromRouteIds = [...new Set((SB_BOOKINGS||[])
       .filter(b=> b.reschedule && b.reschedule.fromDate===date)
@@ -196,7 +210,7 @@ function bookingV2RenderTab2(){
   /* §btOther · ตารางข้างบนคือกระดานจัดเรือ · โปรแกรมที่ไม่ใช้เรือไม่มีช่องให้กรอก
      จึงดึงออกมาไว้ส่วนล่าง (_btOtherSection) แทนการดันเข้าการ์ดเรือที่เติมไม่ได้ */
   const _isLandRid = rid => (typeof laIsLandRoute==='function') && laIsLandRoute(rid);
-  const _allRidsAll = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds])];
+  const _allRidsAll = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds, ...(_btQ?[]:deployRouteIds)])];   /* §btDeploy · ตอนค้นหา ไม่ดันทริปว่างขึ้นมา */
   const _otherRids = _allRidsAll.filter(_isLandRid);
   const _allRids = _allRidsAll.filter(rid => !_isLandRid(rid));
   const _famMinTime = {};
@@ -266,6 +280,8 @@ function bookingV2RenderTab2(){
   const _famAgg = {};
   rowsPier.forEach(r => { if(r.cxl) return; const f=bookingV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bookingV2LockedTotal==='function')?bookingV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bookingV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
+  /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
+  Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bookingV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
   const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
   const _dayLocked = (typeof bookingV2DayLockedTotal==='function') ? bookingV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -671,6 +687,20 @@ function bookingV2RenderTab2(){
 
   let _prevFam = null;
   const _btVanParts = [];   /* §btVanCard · ชิ้นส่วนแถบรถของแต่ละทริป · เอาไปประกอบเป็นการ์ดบนหัว */
+  /* §btDeploy · ทริปที่ยังไม่มีใบจอง · ชื่อทริปเคยอยู่ในแถบแรกของตาราง (§btBand) ซึ่งไม่ถูกวาดเมื่อไม่มีแถว
+     เหลือแค่ข้อความ "ยังไม่มี booking" ลอย ๆ ไม่รู้ว่าของทริปไหน · ทำเป็นแถบบรรทัดเดียว: ชื่อ · เวลา · ท่า · เรือที่วางไว้ */
+  const _btEmptyTrip = rid => {
+    const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid)||{};
+    const col=(bookingV2RouteFamily(rid)||{}).color||'#8b909c';
+    const pr=rt.pier==='tublamu'?'Tub Lamu':rt.pier==='panwa'?'Visit Panwa':rt.pier==='ranong'?'Ranong':(rt.pier||'');
+    const bts=bookingV2Tab2Boats(rid, date, []).map(b=>{ const bo=(typeof BOATS!=='undefined'?BOATS:[]).find(x=>x.id===b.id)||{};
+      const cap=(typeof boatCapFor==='function')?boatCapFor(b.id,date):(+bo.cap||0);
+      return '<span class="t2-depb">'+esc(b.name)+(cap?' <b>0/'+cap+'</b>':'')+'</span>'; }).join('');
+    return '<div class="t2-nobk t2-dep" data-dep="'+esc(rid)+'" style="--c:'+col+'">'
+      +'<span class="t2-depnm">'+esc(rt.name||rid)+'</span>'
+      +'<span class="t2-depmt">'+esc((rt.times&&rt.times[0])||'')+(pr?' · '+esc(pr):'')+'</span>'
+      +bts+'<span class="t2-depno">'+(bts?'วางเรือไว้แล้ว · ':'')+'ยังไม่มี booking</span></div>';
+  };
   const trips = routeIds.map(rid=>{
     const grp = groups[rid] || [];
     // Per-boat color map for this route · shared by the row Boat chip + the summary cards (distinguish boats)
@@ -1261,7 +1291,10 @@ function bookingV2RenderTab2(){
               ${(function(){ var _ut=bkUpgTripOn(bk, date, rid); if(!bkUpgActive(_ut)) return ''; var _u=_ut.upg;
                 return `<span class="t2-upgfrom" data-upgfrom="${esc(_u.fromRouteId)}" title="${esc('Upgrade · '+bkUpgRouteName(_u.fromRouteId)+' > '+bkUpgRouteName(_u.toRouteId)+' · '+(_u.reason||'')+(_u.charge>0?(' · +THB '+Number(_u.charge).toLocaleString()):' · no charge')+(_u.by?(' · '+_u.by):''))}">&#10548; ${laT('จาก')} ${esc(bkUpgRouteName(_u.fromRouteId))}</span>`; })()}
               ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="${esc(lead)} · Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead" title="${esc(lead)}">${esc(lead)}</span>`;   /* §btClip */ })()}${pcBadge}${(function(){var _el=(typeof bookingV2EditLockActive==='function')&&bookingV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bookingV2FindDuplicateBookings!=='function')return''; const _dd=bookingV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}${r.cxl?'':_btDrawTag(bk.id)}
-              ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bookingV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
+              ${(function(){ const _lo=others.length?`<button class="t2-more" onclick="event.stopPropagation();bookingV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>';
+                /* §tripNext · มีทริปอื่น → บรรทัดที่สองเป็นแถวเดียว [lead only / +N][→ วัน ทริป] ชื่อทริปยาวตัดด้วย … ไม่ดันแถวให้สูงขึ้น */
+                const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid):'';
+                return _nx?('<div class="t2-cul2">'+_lo+_nx+'</div>'):_lo; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -1978,7 +2011,7 @@ function bookingV2RenderTab2(){
         ${rcStrip}
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
               (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
-        ${(grp.length===0 && !pendBlocks && !lockBlocks && !boatLockRows) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
+        ${(grp.length===0 && !pendBlocks && !lockBlocks && !boatLockRows) ? _btEmptyTrip(rid) : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
@@ -2655,6 +2688,22 @@ function bookingV2RenderTab2(){
     .t2-zonetag{max-width:100%;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
     .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
     .t2-leadonly{font-size:10px;margin-left:4px}
+    .t2-nxt{display:inline-flex;align-items:center;gap:3px;max-width:150px;font-size:10px;font-weight:700;line-height:1.5;color:#185FA5;background:#EEF4FB;border:1px solid #D3E2F3;border-radius:5px;padding:0 5px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px}
+    .t2-nxt i{font-style:normal}
+    .t2-nxt span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .t2-cu .t2-leadonly{white-space:nowrap}
+    .t2-cul2{display:flex;align-items:center;flex-wrap:nowrap;min-width:0;margin-top:2px}
+    .t2-cul2>:first-child{margin-left:0}
+    .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:none}
+    .t2-cul2 .t2-more,.t2-cul2 .t2-leadonly{flex:none}
+    .t2-nxt:hover{background:#DFEBF8}
+    .t2-dep{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-style:normal !important;border-left:4px solid var(--c);padding-left:12px !important}
+    .t2-depnm{font-weight:800;font-size:13px;color:#1A2A33}
+    .t2-depmt{font-size:11.5px;color:#6B7785;font-family:'DM Mono',monospace}
+    .t2-depb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#1A2A33;background:#F1F4F7;border:1px solid #E1E6EC;border-radius:999px;padding:1px 9px}
+    .t2-depb b{font:600 10.5px 'DM Mono',monospace;color:#6B7785}
+    .t2-depno{font-size:11.5px;color:#8A8A82;font-style:italic}
+    .t2-nxt b{font-weight:800;color:#5B7FA6}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}

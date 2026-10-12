@@ -43405,6 +43405,52 @@ function bkB2CAddonShort(a){
   return String((a&&(a.label||a.type))||'')+q;
 }
 function bkB2CAddonText(b){ return ((b&&b.addOns)||[]).map(bkB2CAddonShort).filter(Boolean).join(', ')||'Add-on'; }
+/* §tripNext (2026-10-12) · ลูกค้าคนเดียวซื้อหลายทริปในออเดอร์เดียว (B2C ส่งมาเป็น b2c_<ref>_1, _2 …)
+   หรือใบเดียวมีหลายทริป · ที่แถวของวันนี้บอกสั้นๆ ว่าเขามีทริปไหนอีก วันไหน
+   นับเฉพาะทริปจริง: ไม่นับใบที่ยกเลิก ไม่นับใบที่มีแต่บริการเสริม และไม่นับทริปเดียวกับแถวนี้ */
+var _bkOrdIdx=null, _bkOrdAt=0, _bkOrdSrc=null, _bkOrdLen=-1;
+function _bkOrderLines(bk){
+  var m=/^b2c_/.test(String(bk&&bk.id||''))&&String(bk.id).match(/^(.*)_(\d+)$/); if(!m) return [];
+  var A=(typeof SB_BOOKINGS!=='undefined'&&SB_BOOKINGS)||[], now=Date.now();
+  if(!_bkOrdIdx||_bkOrdSrc!==A||_bkOrdLen!==A.length||now-_bkOrdAt>1000){
+    _bkOrdIdx={}; _bkOrdSrc=A; _bkOrdLen=A.length; _bkOrdAt=now;
+    A.forEach(function(x){ var k=String(x&&x.id||'').match(/^(b2c_.*)_(\d+)$/); if(k) (_bkOrdIdx[k[1]]=_bkOrdIdx[k[1]]||[]).push(x); });
+  }
+  return _bkOrdIdx[m[1]]||[];
+}
+function bkOtherTrips(bk, date, rid){
+  var out=[], seen={}, dead=['cancelled','cancelled_weather','rejected'];
+  var add=function(b){
+    if(b!==bk && (dead.indexOf(b.status)>=0 || (typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)))) return;
+    (b.trips||[]).forEach(function(t){
+      if(!t||!t.date||!t.routeId) return;
+      if(t.date===date && t.routeId===rid) return;
+      var k=t.date+'|'+t.routeId; if(seen[k]) return; seen[k]=1;
+      out.push({bk:b, date:t.date, rid:t.routeId});
+    });
+  };
+  add(bk); _bkOrderLines(bk).forEach(function(x){ if(x.id!==bk.id) add(x); });
+  return out.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+}
+function bkOtherTripsChip(bk, date, rid){
+  if(!bk) return '';
+  var L=bkOtherTrips(bk, date, rid); if(!L.length) return '';
+  var esc=function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var rn=function(id){ return (typeof bookingV2RouteShort==='function')?bookingV2RouteShort(id):id; };
+  var dt=function(d){ var x=new Date(d+'T00:00'); return isNaN(x)?d:x.toLocaleDateString('en-GB',{day:'numeric',month:'short'}).replace('Sept','Sep'); };
+  var code=function(b){ return (typeof bookingV2DisplayCode==='function'&&/^b2c_/.test(b.id))?bookingV2DisplayCode(b):(b.voucherRef||b.id); };
+  var pick=L.filter(function(x){ return x.date>=date; })[0]||L[L.length-1];
+  var arr=pick.date>date?'→':pick.date<date?'←':'+';
+  var tip='ทริปอื่นของลูกค้าคนนี้: '
+    +L.map(function(x){ return dt(x.date)+' '+rn(x.rid)+(x.bk.id!==bk.id?' ('+code(x.bk)+')':''); }).join(' · ')+' · คลิกไปที่วันนั้น';
+  return '<span class="t2-nxt" data-nxt="'+esc(pick.date)+'" title="'+esc(tip)+'" onclick="event.stopPropagation();bkOtherTripGo(\''+esc(pick.date)+'\',\''+esc(code(pick.bk))+'\')">'
+    +'<i>'+arr+'</i><span>'+esc(pick.date===date?'':dt(pick.date)+' ')+esc(rn(pick.rid))+'</span>'+(L.length>1?'<b>+'+(L.length-1)+'</b>':'')+'</span>';
+}
+function bkOtherTripGo(date, code){
+  if(typeof bookingV2Tab2PickDay!=='function') return;
+  bookingV2Tab2PickDay(date);
+  if(code && typeof bookingV2Tab2SetQ==='function') bookingV2Tab2SetQ(code);
+}
 /* หางยาวที่ใบ B2C ที่ผูกไว้ซื้อมา · join = คน · boats = ลำ */
 function bkB2CAddonLt(bkId, date){
   var o={join:0, boats:0, refs:[]};

@@ -390,7 +390,9 @@ const B2C_OWN_BK = new Set([
 //      labelled non-Thai, when the full-list rule says nothing. LOV-4561646 (4 Ad + 2 Chd sold Thai,
 //      one US guest, park fee × 1) re-counts as 3 Thai adults + 2 Thai children. Marked soft
 //      (trip._natSoft): a hand count in ops that already has at least as many foreigners is kept.
-const B2C_MAP_VER = 33;
+// v34: hotelName = details.pickupHotel alone. The pickup area is no longer prepended ("Karon · …"),
+//      because it already lands in pickupArea. A booking with no hotel gets an empty hotelName.
+const B2C_MAP_VER = 34;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
