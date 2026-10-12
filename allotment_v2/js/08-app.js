@@ -14637,6 +14637,39 @@ function ckToggle(bkId, date, kind){
   ckPersist(); ckAfter(kind);
   if(ns>0 && !cur.reasonCode) ckReasonOpen(bkId,date,kind);
 }
+/* ══ §ckTap (2026-10-12) · "กดเช็คอินแล้วเด้ง เหมือนกดแล้วไม่ติด เลยกดอีก · มันดีเล แล้วมันก็มั่ว"
+   วัดบนระบบจริง (12 ต.ค. · Mac 8 คอร์) · กดหนึ่งครั้ง = เขียนก้อนข้อมูล 27.8 MB (~220ms)
+   + วาดหน้าใหม่ (~150ms) แบบจอค้าง · ไม่มีอะไรเปลี่ยนบนจอจนกว่าจะเสร็จ · อีก 1 วิ
+   ตัวเซฟยังแตก/เทียบก้อนอีก (~300ms) · เครื่องหน้าท่าช้ากว่านี้หลายเท่า = ค้างเป็นวินาที
+   คนเลยกดซ้ำ · การกดที่สองไม่หาย มันรอคิว แล้วทำงานต่อทันทีที่จอว่าง
+   ckToggle ของแถวที่เพิ่งติ๊ก = "กดซ้ำ = ยกเลิก" → ติ๊กหายไปเอง นี่คือ "มั่ว"
+   ตัวนี้คั่นหน้า ckToggle เฉพาะการกดจากปุ่ม (ที่อื่นยังเรียก ckToggle ตรงเหมือนเดิม)
+   1. เปลี่ยนปุ่มให้เห็นทันทีว่ารับแล้ว (สลับสถานะ + จาง) แล้วรอให้จอวาดหนึ่งเฟรม ค่อยทำงานจริง
+   2. ระหว่างกำลังทำ แถวเดียวกันกดซ้ำไม่มีผล
+   3. การกดของแถวเดียวกันที่เกิดตอนจอค้าง (เวลาของ event ก่อนงานเสร็จ) หรือห่างไม่ถึง 0.45 วิ = ทิ้ง
+   ⚠ ไม่ได้แยกการเขียนข้อมูลออกจากกัน · ckToggle ยังอ่าน เขียน และเซฟในจังหวะเดียวเหมือนเดิม
+     (ถ้าเขียนก่อนแล้วเซฟทีหลัง ข้อมูลจากเครื่องอื่นที่เข้ามาคั่นกลางจะทับติ๊กของเรา) */
+var _ckTapPend={}, _ckTapDone={};
+function ckTap(bkId, date, kind, el){
+  var k=bkId+'|'+date+'|'+kind, now=performance.now(), ev=window.event;
+  var ts=(ev && ev.timeStamp>0 && ev.timeStamp<=now+50)?ev.timeStamp:now;   /* เบราว์เซอร์เก่าให้เวลาแบบ epoch · ใช้เวลาตอนนี้แทน */
+  if(_ckTapPend[k]) return;
+  if(_ckTapDone[k] && ts<_ckTapDone[k]+450) return;
+  _ckTapPend[k]=1;
+  var cls=el && el.classList, flip=function(){ try{
+      if(cls.contains('ck-ck')) cls.toggle('on'); else if(cls.contains('pck-ok')) cls.toggle('off'); }catch(_){} };
+  if(cls){ flip(); try{ el.style.opacity='.55'; el.style.cursor='progress'; el.style.pointerEvents='none'; }catch(_){} }
+  var run=function(){
+    try{ ckToggle(bkId, date, kind); }
+    finally{
+      delete _ckTapPend[k]; _ckTapDone[k]=performance.now();
+      /* ไม่ได้วาดใหม่ (ไม่มีสิทธิ์ · ค้างเงินแล้วเด้งกล่องเตือน · หาใบไม่เจอ) → คืนปุ่มเป็นเหมือนเดิม */
+      if(cls && el.isConnected){ flip(); try{ el.style.opacity=''; el.style.cursor=''; el.style.pointerEvents=''; }catch(_){} }
+    }
+  };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(function(){ setTimeout(run,0); });
+  else setTimeout(run,0);
+}
 // legacy names (คงไว้กันของเดิมเรียก)
 function bkVCkStep(bkId,date,delta){ ckStep(bkId,date,'van',delta); }
 function bkVCkToggle(bkId,date){ ckToggle(bkId,date,'van'); }
@@ -15271,7 +15304,7 @@ function ckRowHtml(r, date, kind, extraHtml){
    +(_isVan
       ? ('<td class="ck-c ck-in">'+vckSelHtml(b.id,date,kind,_vst)+'</td>'
          +'<td class="ck-in">'+vckNoteHtml(ck,_vst,r,rsn)+'</td>')
-      : ('<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckToggle(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
+      : ('<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckTap(\''+b.id+'\',\''+date+'\',\''+kind+'\',this)" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
          +'<td class="ck-in">'+rsn+'</td>'))
    +'</tr>';
 }
@@ -19824,7 +19857,7 @@ function pckMgUnlock(id){
 }
 function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
   var e=ckEsc;
-  var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
+  var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
     +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>';
   var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
   var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
@@ -19845,7 +19878,7 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
     +'<button class="ck-ev ck-ev-ns ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="No-show · ลูกค้าไม่มา ไม่แจ้งล่วงหน้า">&#10005;</button>'
     +'<button class="ck-ev ck-ev-cx ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="CXL · ลูกค้าแจ้งยกเลิกหน้างาน">&#8856;</button>'
     +'</span>';
-  var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
+  var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
     +(on?('<span class="tm">'+e(pckHHMM(ck.at)||'')+'</span>'):'')+'</button>';
 
   if(on && !_pckMgOpen[b.id])
