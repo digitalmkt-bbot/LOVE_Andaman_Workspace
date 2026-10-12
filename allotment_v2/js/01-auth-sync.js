@@ -1542,18 +1542,16 @@
       var st=document.createElement('style'); st.id='la-uwin-css'; st.textContent=lauCSS();
       document.head.appendChild(st);
     }
+    if(!document.getElementById('la-uwin-css3')){ var st3=document.createElement('style'); st3.id='la-uwin-css3'; st3.textContent=lauCSS3(); document.head.appendChild(st3); }   // §laUsers3
     window.__laTab='list';
     LAU={q:'',dept:'',area:'',role:'',hideOff:1,rows:null,err:'',draft:null,cur:null,add:null,dirty:{},pwd:null,del:null};
     var ov=document.createElement('div'); ov.id='la-uwin';
     ov.onclick=function(e){ if(e.target===ov) __laClose(); };
     ov.innerHTML='<div class="shell">'
-      +'<div class="hd">'
-        +'<div class="mk">&#9783;</div>'
-        +'<div><h1>จัดการผู้ใช้ + สิทธิ์เข้าถึง</h1><div class="s">LOVE Andaman · Operations</div></div>'
-        +'<div class="sp"></div>'
-        +'<div class="tabs" id="la-tabs"></div>'
-        +'<button class="ic" onclick="__laClose()">&#10005;</button>'
-      +'</div>'
+      +'<div class="hd"><div class="bg3"><b id="la-big">—</b><span>Users<i id="la-bigs">จัดการผู้ใช้ + สิทธิ์เข้าถึง</i></span></div>'
+        +'<div class="wm"><i>LOVE ANDAMAN</i>USERS &amp; ACCESS</div>'
+        +'<div class="rt"><button class="b pri" onclick="__laSetTab(\'add\')">+ เพิ่มผู้ใช้</button><button class="ic" onclick="__laClose()">&#10005;</button></div></div>'
+      +'<div class="tabs3" id="la-tabs"></div>'
       +'<div class="body"><div class="stats" id="la-stats"></div>'
         +'<div class="tool" id="la-tool"></div><div id="la-main"></div></div>'
       +'<div class="ftr"><span id="la-ftl">—</span><span>ผู้ใช้ต้องออกแล้วเข้าใหม่ สิทธิ์ใหม่จึงจะมีผล</span></div>'
@@ -1563,7 +1561,7 @@
   };
   window.__laClose=function(){ var w=document.getElementById('la-uwin'); if(w) w.remove(); };
   window.__laSetTab=function(t){
-    if(Object.keys(LAU.dirty).length && t!=='matrix'){
+    if(Object.keys(LAU.dirty).length && t!=='matrix' && t!=='list'){
       if(!confirm('ยังมีสิทธิ์ที่แก้ในตารางแต่ยังไม่ได้บันทึก · ออกจากแท็บนี้แล้วจะหายไป')) return;
       LAU.dirty={};
     }
@@ -1612,33 +1610,223 @@
       if(LAU.role==='staff' && u.role==='admin') return false;
       if(LAU.role==='ro' && (u.role==='admin'||u.edit.length)) return false;
       if(LAU.role==='sales' && !u.salesId) return false;
+      if(LAU.st && !lauStIs(u,LAU.st)) return false;   // §laUsers3 · แถบ 01–06
       return true;
     });
+  }
+
+  /* §laUsers3 · หน้าตาใหม่แบบพื้นเทา (เหมือน Company Asset / Fleet Work) · 2026-10-12
+     แผนกซ้าย · ผู้ใช้ตรงกลางพร้อมแถบสิทธิ์ 7 พื้นที่ · รายละเอียด + ตั้งสิทธิ์รายพื้นที่ด้านขวา
+     ตั้งสิทธิ์ด้านขวาเขียนลง LAU.dirty แบบเดียวกับตารางสิทธิ์ แล้วบันทึกด้วย __laSaveMatrix (ไม่ได้เพิ่มทางบันทึกใหม่) */
+  function lauEditN(u,D){ D=D||{perms:u.perms,edit:u.edit}; if(u.role==='admin') return LA_AREAS.length;
+    return LA_AREAS.filter(function(a){ return lauLvl(u.role,D.perms,D.edit,a.k)==='edit'; }).length; }
+  function lauWide(u){ return u.role!=='admin' && u.perms.length>=LA_NAV.length*0.6; }
+  function lauStIs(u,st){
+    if(!st) return true;
+    if(st==='admin') return u.role==='admin';
+    if(st==='edit') return u.role!=='admin' && lauEditN(u)>0;
+    if(st==='ro') return u.role!=='admin' && !lauEditN(u);
+    if(st==='sales') return !!u.salesId;
+    if(st==='check') return lauWide(u);
+    return true;
+  }
+  var LAU_STG=[['','ผู้ใช้ทั้งหมด'],['admin','ผู้ดูแลระบบ','แก้ได้ทุกอย่าง'],['edit','แก้ไขได้','อย่างน้อย 1 พื้นที่'],
+    ['ro','ดูอย่างเดียว','ไม่มีพื้นที่แก้ไข'],['sales','ผูกกับเซลล์','เห็นเฉพาะเอเยนต์ตัวเอง'],['check','ต้องเช็ก','ถือเกิน 60% ของเมนูทั้งหมด']];
+  function lauStages(US){
+    return LAU_STG.map(function(s,i){
+      var n=US.filter(function(u){ return lauStIs(u,s[0]); }).length, on=(LAU.st||'')===s[0];
+      var sub=i===0?(LA_DEPTS.filter(function(d){ return US.some(function(u){ return u.dept===d.k; }); }).length+' แผนก'):s[2];
+      return '<button type="button" class="stg'+(on?' on':'')+(s[0]==='check'&&n&&!on?' red':'')+'" onclick="__laSt(\''+s[0]+'\')">'
+        +'<u>0'+(i+1)+'</u><span>'+esc(s[1])+'<i>'+esc(sub)+'</i></span><b>'+n+'</b></button>'; }).join('');
+  }
+  window.__laSt=function(k){ LAU.st=(LAU.st===k||!k)?'':k; __laRender(); };
+  window.__laPick=function(id){ LAU.sel=id; __laRender(); };
+  window.__laQ=function(v){ LAU.q=v; __laRender(); };
+  window.__laSetLvl=function(id,k,lvl){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
+    var D=LAU.dirty[id]||{perms:u.perms.slice(),edit:u.edit.slice()};
+    var L=lauLvl(u.role,D.perms,D.edit,k), M=lauMenus(k).map(function(m){return m.v;});
+    if(lvl==='no'){ D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; }); D.edit=D.edit.filter(function(x){return x!==k;}); }
+    else { if(L==='no') D.perms=D.perms.concat(M);
+      if(lvl==='edit'){ if(D.edit.indexOf(k)<0) D.edit=D.edit.concat([k]); }
+      else D.edit=D.edit.filter(function(x){return x!==k;}); }
+    LAU.dirty[id]=D; __laRender();
+  };
+  function lauStrip(u,D){
+    return LA_AREAS.map(function(a){
+      var C=lauAC(a.k), L=u.role==='admin'?'edit':lauLvl(u.role,D.perms,D.edit,a.k), g=u.role==='admin'?lauMenus(a.k).length:lauGot(D.perms,a.k), n=lauMenus(a.k).length||1;
+      if(L==='no') return '<i class="sb" title="'+esc(lauAT(a.k))+' · ไม่มีสิทธิ์"></i>';
+      var p=Math.round(g/n*100), f=L==='edit'?C:(C+'55');
+      return '<i class="sb" title="'+esc(lauAT(a.k)+' · '+g+'/'+n+' เมนู · '+(L==='edit'?'แก้ไขได้':'ดูอย่างเดียว'))+'" style="background:linear-gradient(90deg,'+f+' '+p+'%,#EEF0F3 '+p+'%);box-shadow:inset 0 0 0 1px '+C+'"></i>'; }).join('');
+  }
+  function lauAvTxt(u){ return esc(String(u.name||u.username).trim().slice(0,2).toUpperCase()); }
+  function lauList2(F){
+    var US=LAU.rows||[];
+    /* แผนก · นับตามตัวกรองอื่น ๆ ทั้งหมดยกเว้นแผนก */
+    var dsave=LAU.dept; LAU.dept=''; var F0=lauFiltered(); LAU.dept=dsave;
+    var left='<div class="c3"><div class="lh"><div class="kick">แผนก</div>'
+      +'<div class="srch3"><i>&#128269;</i><input id="la-q" value="'+esc(LAU.q)+'" placeholder="ค้นหา username / ชื่อ…" oninput="__laQ(this.value)"></div></div>'
+      +[{k:'',t:'ทุกแผนก'}].concat(LA_DEPTS).map(function(d){ var n=F0.filter(function(u){ return !d.k||u.dept===d.k; }).length; if(d.k&&!n) return '';
+        return '<div class="dp'+((LAU.dept||'')===d.k?' on':'')+'" onclick="__laFld(\'dept\',\''+d.k+'\')"><span>'+esc(d.t)+'</span><b>'+n+'</b></div>'; }).join('')
+      +'<div class="lg3"><div class="kick" style="margin-bottom:6px">สีของพื้นที่</div>'
+      +LA_AREAS.map(function(a){ return '<div><i style="background:'+lauAC(a.k)+'"></i>'+esc(lauAT(a.k))+'<em>'+lauMenus(a.k).length+'</em></div>'; }).join('')
+      +'<p>แท่งทึบ = แก้ไขได้ · แท่งจาง = ดูอย่างเดียว · ความยาว = ถือกี่เมนูในพื้นที่นั้น</p></div></div>';
+    if(!F.some(function(u){ return u.id===LAU.sel; })) LAU.sel=F.length?F[0].id:null;
+    var by={}; F.forEach(function(u){ (by[u.dept]=by[u.dept]||[]).push(u); });
+    var ab='<span class="abh">'+LA_AREAS.map(function(a){ return '<i style="color:'+lauAC(a.k)+'">'+esc(lauAT(a.k)).replace('ปฏิบัติการ','ปฏิบัติ').replace('เรือ/ช่าง','เรือ')+'</i>'; }).join('')+'</span>';
+    var mid='<div class="c3"><div class="mh"><b>'+esc(LAU.dept?lauDeptT(LAU.dept):'ทุกแผนก')+'</b><span>'+F.length+' คน</span>'
+      +'<button class="lnk" onclick="__laSetTab(\'add\')">+ เพิ่มผู้ใช้</button></div>'
+      +'<div class="ur hd3"><span>ผู้ใช้</span><span>'+ab+'</span><span style="text-align:right">เมนู</span></div>'
+      +(F.length?LA_DEPTS.filter(function(d){ return by[d.k]; }).map(function(d){
+          return (LAU.dept?'':('<div class="dg">'+esc(d.t)+'<em>'+by[d.k].length+'</em></div>'))
+            +by[d.k].map(function(u){ var D=lauDraftOf(u), en=lauEditN(u,D), me=lauIsMe(u), dirty=!!LAU.dirty[u.id];
+              return '<div class="ur'+(u.id===LAU.sel?' on':'')+'" onclick="__laPick('+u.id+')"><div class="who3"><span class="av3" style="background:'+lauAvC(u)+'">'+lauAvTxt(u)+'</span>'
+                +'<div style="min-width:0"><div class="u3"><b>'+esc(u.username)+'</b> <span>'+esc(u.name||'')+'</span>'
+                  +(u.role==='admin'?'<em class="tg adm">ADMIN</em>':'')+(me?'<em class="tg me">คุณ</em>':'')+(u.salesId?('<em class="tg sl">'+esc(lauSalesName(u.salesId))+'</em>'):'')+(dirty?'<em class="tg dt">ยังไม่บันทึก</em>':'')+'</div>'
+                  +'<div class="m3">'+(u.role==='admin'?'admin · แก้ได้ทุกอย่าง':(en?('แก้ได้ '+en+' พื้นที่'):'ดูอย่างเดียว'))+'</div></div></div>'
+                +'<div class="strip">'+lauStrip(u,D)+'</div><b class="mn3">'+(u.role==='admin'?LA_NAV.length:D.perms.length)+'</b></div>'; }).join(''); }).join('')
+        :'<div style="padding:40px;text-align:center;color:#8A8F9C">ไม่พบผู้ใช้ที่ตรงเงื่อนไข</div>')+'</div>';
+    var u=US.filter(function(x){ return x.id===LAU.sel; })[0];
+    return '<div class="g3">'+left+mid+(u?lauDetail(u):'<div class="c3" style="padding:40px;text-align:center;color:#8A8F9C">เลือกผู้ใช้</div>')+'</div>';
+  }
+  function lauDetail(u){
+    var D=lauDraftOf(u), adm=u.role==='admin', me=lauIsMe(u), en=lauEditN(u,D);
+    var vw=adm?0:LA_AREAS.filter(function(a){ return lauLvl(u.role,D.perms,D.edit,a.k)==='view'; }).length;
+    var mn=adm?LA_NAV.length:D.perms.length;
+    var h='<div class="c3"><div class="dh3"><span class="av3 big" style="background:'+lauAvC(u)+'">'+lauAvTxt(u)+'</span>'
+      +'<div style="flex:1;min-width:0"><div class="u3" style="font-size:19px"><b>'+esc(u.username)+'</b>'
+        +'<em class="tg '+(adm?'adm':'st')+'">'+(adm?'ADMIN':'STAFF')+'</em>'+(me?'<em class="tg me">คุณ</em>':'')+'</div>'
+      +'<div class="m3" style="font-size:12.5px">'+esc((u.name?u.name+' · ':'')+'แผนก '+lauDeptT(u.dept)+' · '+mn+' เมนู')+(u.salesId?(' · ผูกกับเซลล์ '+esc(lauSalesName(u.salesId))):'')+'</div></div>'
+      +'<button class="b sm" onclick="__laEditPerms('+u.id+')">เลือกรายเมนู</button>'
+      +'<button class="b sm" onclick="__laReset('+u.id+')">&#128273; รหัสผ่าน</button>'
+      +'<button class="b sm dl"'+(me?' disabled title="ลบบัญชีตัวเองไม่ได้"':'')+' onclick="__laDelUser('+u.id+')">ลบ</button></div>';
+    /* เตือน · ถือกว้าง · หรือถือพื้นที่ที่คนอื่นในแผนกส่วนใหญ่ไม่มี */
+    var al=[];
+    if(lauWide(u)) al.push(['red','<b>ถือสิทธิ์กว้าง</b> — เข้าได้ '+u.perms.length+' จาก '+LA_NAV.length+' เมนู ('+Math.round(u.perms.length/LA_NAV.length*100)+'%)'+(en?'':' แม้จะเป็นดูอย่างเดียว')]);
+    if(!adm){ var peers=(LAU.rows||[]).filter(function(x){ return x.id!==u.id && x.dept===u.dept && x.role!=='admin'; });
+      if(peers.length>=2){ var odd=LA_AREAS.filter(function(a){ if(lauLvl(u.role,D.perms,D.edit,a.k)==='no') return false;
+          var c=peers.filter(function(p){ return lauLvl(p.role,p.perms,p.edit,a.k)!=='no'; }).length; return c*2<peers.length; });
+        if(odd.length) al.push(['amb','<b>ถือสิทธิ์มากกว่าคนอื่นในแผนก</b> — '+odd.map(function(a){ var L=lauLvl(u.role,D.perms,D.edit,a.k);
+          return esc(lauAT(a.k))+' ('+(L==='edit'?'แก้ไข':'ดู')+')'; }).join(' · ')+' ที่คนอื่นในแผนก '+esc(lauDeptT(u.dept))+' ส่วนใหญ่ไม่มี']); } }
+    if(!adm && !mn) al.push(['amb','ยังไม่มีสิทธิ์เข้าหน้าไหนเลย']);
+    h+=al.map(function(x){ return '<div class="al3 '+x[0]+'"><b>!</b><span>'+x[1]+'</span></div>'; }).join('');
+    var T=function(k,v,s,c){ return '<div><div class="kick">'+k+'</div><b style="color:'+(c||'#0F1B3D')+'">'+v+'</b><i>'+s+'</i></div>'; };
+    h+='<div class="tl3">'+T('เมนูที่เข้าได้',mn,'จาก '+LA_NAV.length)+T('พื้นที่แก้ไขได้',en,'จาก '+LA_AREAS.length,'#0F6E56')+T('ดูอย่างเดียว',vw,'พื้นที่')
+      +T('ผูกกับเซลล์',u.salesId?esc(lauSalesName(u.salesId)):'—',u.salesId?'เห็นเฉพาะเอเยนต์ตัวเอง':'ไม่ผูก',u.salesId?'#0F6E56':'#8A8F9C')+'</div>';
+    h+='<div class="sh3"><span class="kick">สิทธิ์ตามพื้นที่</span><span style="margin-left:auto;font-size:11.5px;color:#8A8F9C">'+(adm?'admin ข้ามสิทธิ์รายพื้นที่':'กดปุ่มด้านขวาเพื่อเปลี่ยน · เลือกรายหน้าได้ที่ "เลือกรายเมนู"')+'</span></div>';
+    h+=LA_AREAS.map(function(a){ var C=lauAC(a.k), n=lauMenus(a.k).length, L=adm?'edit':lauLvl(u.role,D.perms,D.edit,a.k), g=adm?n:lauGot(D.perms,a.k), p=Math.round(g/(n||1)*100);
+      var seg=[['no','ไม่มี'],['view','ดู'],['edit','แก้ไข']].map(function(s){ var on=s[0]===L;
+        return '<button type="button"'+(adm?' disabled':'')+' class="'+(on?'on':'')+'" style="'+(on?(s[0]==='no'?'background:#E4E7EC;color:#3E4658':('background:'+C+';color:#fff')):'')+'" onclick="__laSetLvl('+u.id+',\''+a.k+'\',\''+s[0]+'\')">'+s[1]+'</button>'; }).join('');
+      return '<div class="ar3"><div class="an"><i style="background:'+C+'"></i><b>'+esc(lauAT(a.k))+'</b><span>'+esc(lauAS(a.k))+'</span></div>'
+        +'<div><div class="bar3"><div style="width:'+p+'%;background:'+(L==='edit'?C:(C+'66'))+'"></div></div><div class="cap3">'+g+'/'+n+' เมนู'+(g===n&&g?' · ครบทุกหน้า':(g?' · บางหน้า':''))+'</div></div>'
+        +'<div class="seg3">'+seg+'</div></div>'; }).join('');
+    var nd=Object.keys(LAU.dirty).length;
+    h+='<div class="sv3'+(nd?' on':'')+'"><span>'+(nd?('&#9888; แก้สิทธิ์ไว้ '+nd+' คน ยังไม่ได้บันทึก'):'ยังไม่มีการเปลี่ยนแปลง')+'</span>'
+      +'<button class="b sm"'+(nd?'':' disabled')+' onclick="__laDirtyDrop()">ทิ้งการแก้ไข</button>'
+      +'<button class="b sm pri"'+(nd?'':' disabled')+' onclick="__laSaveMatrix()">บันทึกสิทธิ์</button></div>';
+    return h+'</div>';
+  }
+  function lauCSS3(){ var W='#la-uwin'; return ''
+   +W+'{font-family:"DM Sans","IBM Plex Sans Thai","Sarabun",sans-serif;color:#0F1B3D}'
+   +W+' .shell{max-width:1480px;height:94vh;max-height:94vh;background:#EEF0F3;border-radius:18px}'
+   +W+' .hd{background:transparent;border:0;padding:16px 20px 0;display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}'
+   +W+' .hd .bg3{display:flex;align-items:center;gap:10px}'+W+' .hd .bg3 b{font-size:24px;font-weight:800;line-height:1}'
+   +W+' .hd .bg3 span{font-size:13px;font-weight:700;line-height:1.15}'+W+' .hd .bg3 span i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.16em;color:#8A8F9C}'
+   +W+' .hd .wm{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.3em;color:#16265C;padding-left:.3em;white-space:nowrap}'
+   +W+' .hd .wm i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#8A8F9C}'
+   +W+' .hd .rt{display:flex;justify-content:flex-end;align-items:center;gap:8px}'
+   +W+' .tabs3{display:flex;gap:6px;padding:10px 20px 0}'
+   +W+' .tabs3 button{height:32px;padding:0 14px;border-radius:16px;border:1px solid #DCDFE6;background:#fff;color:#3E4658;font-size:12.5px;font-weight:600;cursor:pointer}'
+   +W+' .tabs3 button.on{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
+   +W+' .body{padding:10px 20px 14px;gap:10px}'
+   +W+' .stats{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}'
+   +W+' .stg{height:54px;padding:0 14px;border-radius:12px;border:1px solid #DCDFE6;background:#fff;color:#0F1B3D;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;min-width:0}'
+   +W+' .stg.on{background:#16265C;border-color:#16265C;color:#fff}'+W+' .stg.red{border-color:#EFB2AA;color:#A32D2D}'
+   +W+' .stg u{text-decoration:none;font-family:"DM Mono",monospace;font-size:11px;opacity:.7}'
+   +W+' .stg span{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+   +W+' .stg span i{display:block;font-style:normal;font-size:11px;font-weight:400;opacity:.75;overflow:hidden;text-overflow:ellipsis}'
+   +W+' .stg b{font-family:"DM Mono",monospace;font-size:20px;font-weight:500}'
+   +W+' .tool{border-radius:12px;box-shadow:none;border-color:#E3E6EC}'
+   +W+' .ftr{background:transparent;border-top:1px solid #DCDFE6;color:#5B6170}'
+   +W+' .kick{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658}'
+   +W+' .g3{display:grid;grid-template-columns:230px minmax(0,1fr) minmax(0,1.1fr);gap:10px;align-items:start}'
+   +W+' .c3{background:#fff;border-radius:12px;border:1px solid #E3E6EC;box-shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.06);overflow:hidden;min-width:0}'
+   +W+' .lh{padding:12px 14px 10px}'
+   +W+' .srch3{position:relative;margin-top:8px}'+W+' .srch3 input{width:100%;height:32px;border:1px solid #DCDFE6;border-radius:9px;padding:0 10px 0 30px;font-size:12.5px;outline:none}'
+   +W+' .srch3 input:focus{border-color:#16265C}'+W+' .srch3 i{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-style:normal;color:#8A8F9C;font-size:12px}'
+   +W+' .dp{display:flex;align-items:center;gap:10px;min-height:42px;padding:3px 14px;border-top:1px solid #ECEBE6;cursor:pointer;font-size:13px;font-weight:600}'
+   +W+' .dp span{flex:1}'+W+' .dp b{font-family:"DM Mono",monospace;font-weight:500}'+W+' .dp:hover{background:#F7F7F5}'
+   +W+' .dp.on{background:#E8F3FB;box-shadow:inset 3px 0 0 #1272B3}'
+   +W+' .lg3{padding:12px 14px;border-top:1px solid #ECEBE6;font-size:12px}'+W+' .lg3 div{display:flex;align-items:center;gap:8px;padding:2px 0}'
+   +W+' .lg3 div i{width:22px;height:8px;border-radius:3px}'+W+' .lg3 em{margin-left:auto;font-style:normal;color:#8A8F9C;font-family:"DM Mono",monospace}'
+   +W+' .lg3 p{font-size:11px;color:#8A8F9C;margin:8px 0 0;line-height:1.5}'
+   +W+' .mh{display:flex;align-items:baseline;gap:8px;padding:12px 16px}'+W+' .mh b{font-size:15px;font-weight:800}'+W+' .mh span{font-size:12px;color:#8A8F9C}'
+   +W+' .lnk{margin-left:auto;border:0;background:none;color:#0F6CA6;font-size:12px;font-weight:700;cursor:pointer}'
+   +W+' .ur{display:grid;grid-template-columns:minmax(0,1fr) 186px 40px;gap:10px;align-items:center;padding:7px 16px;border-bottom:1px solid #F0F0EC;cursor:pointer}'
+   +W+' .ur:hover{background:#F7F7F5}'+W+' .ur.on{background:#E8F3FB;box-shadow:inset 3px 0 0 #1272B3}'
+   +W+' .ur.hd3{cursor:default;background:#FAFAF8;border-top:1px solid #ECEBE6;font-size:10px;font-weight:700;letter-spacing:.04em;color:#5B6170;padding:6px 16px}'
+   +W+' .dg{padding:6px 16px;background:#F4F5F8;border-bottom:1px solid #ECEBE6;font-size:11px;font-weight:700;letter-spacing:.06em;color:#3E4658}'+W+' .dg em{font-style:normal;color:#8A8F9C;margin-left:6px}'
+   +W+' .who3{display:flex;align-items:center;gap:10px;min-width:0}'
+   +W+' .av3{flex:none;width:32px;height:32px;border-radius:16px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}'
+   +W+' .av3.big{width:44px;height:44px;border-radius:22px;font-size:14px}'
+   +W+' .u3{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}'+W+' .u3 b{font-family:"DM Mono",monospace;font-weight:600}'+W+' .u3 span{font-size:12px;color:#5B6170}'
+   +W+' .u3 .tg{font-style:normal;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:6px}'
+   +W+' .tg.adm{background:#FDF1E4;color:#8A5A00}'+W+' .tg.me{background:#DDF1EA;color:#0B5A43}'+W+' .tg.sl{background:#E3EEF9;color:#185FA5}'+W+' .tg.st{background:#E8EEF8;color:#16265C}'+W+' .tg.dt{background:#FAEEDA;color:#854F0B}'
+   +W+' .m3{font-size:10.5px;color:#8A8F9C;margin-top:1px}'
+   +W+' .strip{display:flex;gap:3px}'+W+' .sb{flex:1;height:8px;border-radius:3px;background:#EEF0F3}'
+   +W+' .mn3{text-align:right;font-family:"DM Mono",monospace;font-weight:500;font-size:13px}'
+   +W+' .dh3{display:flex;align-items:center;gap:10px;padding:16px 18px;flex-wrap:wrap}'
+   +W+' .b.dl{border-color:#E6C9C3;color:#A32D2D}'
+   +W+' .al3{display:flex;align-items:center;gap:10px;padding:9px 18px;font-size:12.5px;border-top:1px solid}'
+   +W+' .al3 > b{flex:none;width:20px;height:20px;border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px}'
+   +W+' .al3.red{background:#FBEDED;border-color:#F2C9C3;color:#8E2A20}'+W+' .al3.red > b{background:#A32D2D}'
+   +W+' .al3.amb{background:#FBF3E4;border-color:#EBD3A6;color:#6E4108}'+W+' .al3.amb > b{background:#BA7517}'
+   +W+' .tl3{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6}'
+   +W+' .tl3 > div{padding:11px 16px;border-right:1px solid #ECEBE6;min-width:0}'+W+' .tl3 > div:last-child{border-right:0}'
+   +W+' .tl3 b{display:block;font-family:"DM Mono",monospace;font-size:21px;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+W+' .tl3 i{font-style:normal;font-size:10.5px;color:#8A8F9C}'
+   +W+' .sh3{display:flex;align-items:center;gap:8px;padding:10px 18px 8px;background:#FAFAF8;border-bottom:1px solid #ECEBE6}'
+   +W+' .ar3{display:grid;grid-template-columns:150px minmax(0,1fr) 168px;gap:12px;align-items:center;padding:9px 18px;border-bottom:1px solid #F0F0EC}'
+   +W+' .ar3 .an{display:flex;align-items:center;gap:8px;min-width:0}'+W+' .ar3 .an i{flex:none;width:10px;height:10px;border-radius:3px}'
+   +W+' .ar3 .an b{font-size:13px;white-space:nowrap}'
+   +W+' .abh{display:flex;gap:3px}'+W+' .abh i{flex:1;font-style:normal;font-size:9px;text-align:center;white-space:nowrap;overflow:hidden;letter-spacing:0}'+W+' .ar3 .an span{font-size:10.5px;color:#8A8F9C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+   +W+' .bar3{height:8px;border-radius:4px;background:#EEF0F3;overflow:hidden}'+W+' .bar3 div{height:100%}'
+   +W+' .cap3{font-size:11px;color:#8A8F9C;margin-top:3px}'
+   +W+' .seg3{display:inline-flex;border:1px solid #DCDFE6;border-radius:8px;overflow:hidden;justify-self:end}'
+   +W+' .seg3 button{border:0;background:#fff;padding:5px 11px;font-size:11.5px;font-weight:700;color:#8A8F9C;cursor:pointer}'
+   +W+' .seg3 button:disabled{cursor:default}'
+   +W+' .sv3{display:flex;align-items:center;gap:8px;padding:12px 18px;background:#F7F8FA;font-size:12px;color:#5B6170}'+W+' .sv3 span{flex:1}'
+   +W+' .sv3.on{background:#FFFBF0;color:#854F0B;font-weight:700}'
+   +'@media (max-width:1250px){'+W+' .g3{grid-template-columns:200px minmax(0,1fr)}'+W+' .g3 > .c3:last-child{grid-column:1 / -1}}'
+   +'@media (max-width:820px){'+W+' .g3{grid-template-columns:1fr}'+W+' .stats{grid-template-columns:repeat(3,1fr)}'+W+' .hd{grid-template-columns:1fr auto}'+W+' .hd .wm{display:none}}';
   }
 
   window.__laRender=function(){
     var w=document.getElementById('la-uwin'); if(!w) return;
     var T=window.__laTab;
+    var fq=document.activeElement&&document.activeElement.id==='la-q';
     document.getElementById('la-tabs').innerHTML=[['list','รายชื่อ'],['matrix','ตารางสิทธิ์'],
-      ['ov','ภาพรวม'],['add','+ เพิ่มผู้ใช้']].map(function(p){
+      ['ov','ภาพรวม']].concat(T==='add'?[['add','เพิ่มผู้ใช้']]:[]).map(function(p){
         return '<button class="'+(T===p[0]?'on':'')+'" onclick="__laSetTab(\''+p[0]+'\')">'+p[1]+'</button>'; }).join('');
 
     var US=LAU.rows||[];
-    document.getElementById('la-stats').innerHTML=lauStats(US);
+    document.getElementById('la-stats').innerHTML=lauStages(US);
+    var bg=document.getElementById('la-big'); if(bg) bg.textContent=LAU.rows?US.length:'—';
+    var bgs=document.getElementById('la-bigs'); if(bgs) bgs.textContent=LA_NAV.length+' เมนู · '+LA_AREAS.length+' พื้นที่';
     document.getElementById('la-ftl').textContent = LAU.err ? LAU.err : (US.length+' บัญชี');
 
     var tool=document.getElementById('la-tool');
-    tool.style.display=(T==='add')?'none':'';
-    if(T!=='add') tool.innerHTML=lauTool();
+    tool.style.display=(T==='add'||T==='list')?'none':'';
+    if(T!=='add'&&T!=='list') tool.innerHTML=lauTool();
 
     var el=document.getElementById('la-main');
     if(LAU.err){ el.innerHTML='<div class="card" style="text-align:center;padding:36px">'
       +'<div style="font-size:13px;font-weight:700;color:#B4392B">'+esc(LAU.err)+'</div>'
       +'<button class="b" style="margin-top:12px" onclick="__laLoadUsers()">ลองใหม่</button></div>'; return; }
     var F=lauFiltered();
-    el.innerHTML = T==='list' ? lauList(F) : T==='matrix' ? lauMatrix(F)
+    el.innerHTML = T==='list' ? lauList2(F) : T==='matrix' ? lauMatrix(F)
                  : T==='ov' ? lauOverview(US) : lauAdd();
     if(T==='add') __laAddHint();
+    if(fq){ var qi=document.getElementById('la-q'); if(qi){ qi.focus(); try{ qi.setSelectionRange(qi.value.length,qi.value.length); }catch(_){ } } }
   };
 
   function lauStats(US){
