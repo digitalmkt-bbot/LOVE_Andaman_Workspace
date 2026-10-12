@@ -22,7 +22,7 @@ function _opsBookingMerge(mapped){
   });
 }
 function bookingV2OpsResetCache(){
-  _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null);
+  _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null); _opsDailyCounts=Object.create(null);
   delete window._opsAllStats; delete window._opsAllMonthCounts;
   if(typeof SB_BOOKINGS!=='undefined') SB_BOOKINGS.length=0;
 }
@@ -116,16 +116,22 @@ function bookingV2OpsEnsureAll(){
 // newest-first /v1/bookings paging stopped at the creation-date cutoff.
 // Nothing here restores a boot preload or an all-history download.
 function bookingV2OpsEnsureRecent(days, source){
-  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   days=Math.max(1,+days||7);
-  source=(source==='b2c'||source==='b2b')?source:'all';
-  var now=new Date(), stamp=_opsBookingYMD(now);
-  var fromYMD=_opsBookingYMD(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1));
-  var key='recent|'+fromYMD+'|'+stamp+'|'+source;
+  var now=new Date();
+  return bookingV2OpsEnsureCreated(_opsBookingYMD(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1)),_opsBookingYMD(now),{source:source});
+}
+/* Bookings created fromYMD..toYMD (Bangkok days), newest first. opts.maxPages
+   caps the paging: {maxPages:1} is "the newest page", not the whole range. */
+function bookingV2OpsEnsureCreated(fromYMD, toYMD, opts){
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
+  opts=opts||{};
+  var source=(opts.source==='b2c'||opts.source==='b2b')?opts.source:'all';
+  var stamp=toYMD, MAX_PAGES=Math.max(1,+opts.maxPages||200);
+  var key='recent|'+fromYMD+'|'+stamp+'|'+source+'|'+MAX_PAGES;
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
-  var all=[], pages=0, MAX_PAGES=200;
-  var cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1).getTime();
+  var all=[], pages=0;
+  var cutoff=new Date(fromYMD+'T00:00:00').getTime();
   function finish(via){
     _opsBookingMerge(all); _opsBookingRanges[key]=true;
     console.log('[opsSync] loaded '+all.length+' recent booking(s) via '+via+' for '+fromYMD+' → '+stamp+' source='+source);
@@ -147,7 +153,7 @@ function bookingV2OpsEnsureRecent(days, source){
       Array.prototype.push.apply(all,j.bookings.map(bookingV2FromOpsBooking));
       // At exhaustion next_cursor is omitted (not null) — either ends paging.
       if(j.next_cursor && ++pages<MAX_PAGES) return recentPage(j.next_cursor);
-      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' recent pages; '+fromYMD+' → '+stamp+' is incomplete');
+      if(j.next_cursor && !opts.maxPages) console.warn('[opsSync] stopped after '+pages+' recent pages; '+fromYMD+' → '+stamp+' is incomplete');
       return finish('recent');
     });
   }
@@ -168,6 +174,45 @@ function bookingV2OpsEnsureRecent(days, source){
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
   return _opsBookingRangeLoads[key];
 }
+/* Bookings + first-trip pax per sale day, counted by the server
+   (GET /v1/bookings/daily-counts). bookingV2OpsDailyCounts() reads the cached
+   answer as {YYYY-MM-DD:{bk,pax}}, or null before it has arrived. */
+var _opsDailyCounts = Object.create(null);
+function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD){
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
+  var key='daily|'+fromYMD+'|'+toYMD;
+  if(_opsDailyCounts[key]) return null;
+  if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
+  var load=window.laOpsFetch('/v1/bookings/daily-counts?from='+encodeURIComponent(fromYMD)+'&to='+encodeURIComponent(toYMD)).then(function(r){
+    if(!r.ok) throw new Error('daily-counts HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(!j || !Array.isArray(j.days)) throw new Error('daily-counts did not return days');
+    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]={bk:+d.bookings||0, pax:+d.pax||0}; });
+    _opsDailyCounts[key]=m;
+    return j;
+  }).catch(function(e){ console.warn('[opsSync] failed to load daily booking counts: '+((e&&e.message)||e)); return null; });
+  _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; });
+  return _opsBookingRangeLoads[key];
+}
+function bookingV2OpsDailyCounts(fromYMD, toYMD){ return _opsDailyCounts['daily|'+fromYMD+'|'+toYMD]||null; }
+/* Everything the Dashboard reads for selected day ds, in parallel, one or two
+   requests each: the newest page of bookings (Live feed rows), every booking
+   created on ds (the feed's day summary), and 60 days of daily counts ending
+   on ds (Bookings/day, 30 days plus the 30 before for its trend). Returns null
+   when all three are cached. */
+function _opsDashCountsFrom(ds){ var d=new Date(ds+'T00:00:00'); return _opsBookingYMD(new Date(d.getFullYear(),d.getMonth(),d.getDate()-59)); }
+function bookingV2OpsDashboardCounts(ds){ return bookingV2OpsDailyCounts(_opsDashCountsFrom(ds),ds); }
+function bookingV2OpsEnsureDashboard(ds){
+  var now=new Date(), today=_opsBookingYMD(now);
+  var loads=[
+    bookingV2OpsEnsureCreated(_opsBookingYMD(new Date(now.getFullYear(),now.getMonth(),now.getDate()-29)),today,{maxPages:1}),
+    bookingV2OpsEnsureCreated(ds,ds),
+    bookingV2OpsEnsureDailyCounts(_opsDashCountsFrom(ds),ds),
+  ].filter(Boolean);
+  if(!loads.length) return null;
+  return Promise.all(loads).then(function(rs){ return rs.every(Boolean)?rs:null; });
+}
 // Compatibility for explicit callers; no default bulk preload is allowed.
 function bookingV2LoadFromOpsBackend(options){
   options=options||{};
@@ -185,7 +230,7 @@ function bookingV2OpsAttachWriteInvalidation(){
     if(typeof kind==='string' && /^remote:(van|van_day|van_stop|van_group|pickup_area|pickup_profile)$/.test(kind)) return;
     // A write can move a booking between any cached day/month. Keep entities,
     // but revalidate query membership next time that date/month is opened.
-    _opsBookingRanges=Object.create(null);
+    _opsBookingRanges=Object.create(null); _opsDailyCounts=Object.create(null);
     delete window._opsAllStats; delete window._opsAllMonthCounts;
   });
 }

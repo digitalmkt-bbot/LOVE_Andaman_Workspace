@@ -2380,6 +2380,12 @@ window._ddFit=function(){
 if(!window._ddFitOn){ window._ddFitOn=1; window.addEventListener('resize', function(){ window._ddFit(); }, {passive:true}); }
 window._ddKey=function(e){ if(e.key==='Escape') window.dashDayDetailClose(); };
 window._ddPaint=function(){
+  /* The rows are bookings created in the picked range; load that range from
+     operation-backend and paint again once it lands (only on success, so a
+     failed load does not loop). */
+  var rg=_ddRg();
+  var ld=(typeof bookingV2OpsEnsureCreated==='function')?bookingV2OpsEnsureCreated(rg.from,rg.to):null;
+  if(ld) ld.then(function(j){ if(j && document.getElementById('dv-ddbd')) window._ddPaint(); });
   var hd=document.getElementById('dv-ddhd'), bd=document.getElementById('dv-ddbd');
   if(hd) hd.innerHTML=_ddHeadHtml();
   if(bd) bd.innerHTML=_ddBodyHtml();
@@ -3335,8 +3341,8 @@ function renderDash(){
      redraws this view after the answer arrives. */
   const _opsDashApi=(window.laOps&&window.laOps.dashboard)?window.laOps.dashboard:null;
   if(_opsDashApi) _opsDashApi.ensure(_ds,'day');
-  // Dashboard-only feed for Bookings/day and Live B2C/B2B. It is newest-first
-  // and stops at the 30-day creation window; it is not a boot preload.
+  // Dashboard-only feeds for Bookings/day (server daily counts) and Live
+  // B2C/B2B (newest page + the selected day); see bookingV2OpsEnsureDashboard.
   /* A failed feed resolves null without being recorded, so every renderDash()
      would start it again and the settle-redraw would loop. After a failure,
      hold off for 15s; the loader still clears on that settle. */
@@ -3345,7 +3351,7 @@ function renderDash(){
      that (on DOM ready) is forgotten by the reset, so the next render starts a
      second full copy. Wait until boot has loaded, then start it once. */
   const _opsBooting=!!(window.laOps && window.laOps.enabled && window.laOps.enabled() && !(window.laOps.state && window.laOps.state.loaded));
-  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function' && !_dashRecentCooling && !_opsBooting)?bookingV2OpsEnsureRecent(30):null;
+  const _dashRecentLoad=(typeof bookingV2OpsEnsureDashboard==='function' && !_dashRecentCooling && !_opsBooting)?bookingV2OpsEnsureDashboard(_ds):null;
   if(_dashRecentLoad && !window._dashRecentPending){
     window._dashRecentPending=true;
     _dashRecentLoad.then(function(j){
@@ -3970,19 +3976,10 @@ function renderDash(){
   /* §dashV3 · ชุดตัวแปร Fleet Score / trend ของการ์ด Bookings/day ใบเก่าถูกลบ
      ใบใหม่คิดค่าเฉลี่ย · ค่าสูงสุด · แนวโน้ม ของตัวเองจากช่วง 7 หรือ 30 วัน
      ที่ผู้ใช้เลือก จึงไม่ต้องคำนวณชุดเดิมค้างไว้อีก */
-  // ── Bookings + pax per day (counted by bookingDate = creation date) ──
-  /* §dashV3 · เดิมวนทั้งกอง booking ใหม่ทุกวันที่ถาม (7 วันนี้ + 7 วันก่อน = 14 รอบ)
-     พอการ์ดใหม่มีปุ่ม 30 วัน จะกลายเป็น 60 รอบ · ทำดัชนีรอบเดียวแล้วเปิดตารางเอา
-     ผลลัพธ์เท่าเดิมทุกตัว แค่คิดครั้งเดียว */
-  const _BKIDX=(function(){ const m={};
-    (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
-      if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
-      const cd=String(b.bookingDate||b.createdAt||'').slice(0,10); if(!cd) return;
-      const t0=(b.trips||[])[0];
-      const px=(t0 && typeof bookingV2PaxAllTot==='function') ? bookingV2PaxAllTot(t0.pax||{}) : 0;
-      const e=m[cd]||(m[cd]={pax:0,bk:0}); e.bk++; e.pax+=px;
-    });
-    return m; })();
+  // ── Bookings + pax per sale day: counted by operation-backend
+  //    (GET /v1/bookings/daily-counts, 60 days ending on _ds). Until it answers,
+  //    or if it fails, every day reads 0. ──
+  const _BKIDX=(typeof bookingV2OpsDashboardCounts==='function' && bookingV2OpsDashboardCounts(_ds))||{};
   const _bkForDay=(ds)=>{ const e=_BKIDX[ds]; return {pax:e?e.pax:0, bk:e?e.bk:0}; };
   /* ══ §dashV3 · การ์ด Bookings/day ═══════════════════════════════════════
      ใบเดิมเป็นแผ่นน้ำตาลเข้ม มี 7 ช่องตัวเลข + แถบเล็ก ๆ ใต้ตัวเลข
