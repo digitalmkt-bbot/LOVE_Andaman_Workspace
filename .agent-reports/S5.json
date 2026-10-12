@@ -1,0 +1,33 @@
+{
+  "packet": "S5",
+  "status": "partial",
+  "objective": "Markets and salespeople writes to operation-backend; Sales Board",
+  "branch": "integration/operation-backend",
+  "commit": "0bd0b0e",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/27-ops-sales-board.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-sales-markets.test.mjs"
+  ],
+  "shared_files_touched_with_coordination": [],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/sales-editing.ts",
+    "D:/projects/operation-backend/src/domain/team.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "POST", "path": "/v1/markets", "body": "{id,name,color,subs}" },
+    { "method": "PATCH", "path": "/v1/markets/:id", "body": "{name,color,subs}" },
+    { "method": "DELETE", "path": "/v1/markets/:id", "body": null },
+    { "method": "PUT", "path": "/v1/markets/order", "body": "{ids}" },
+    { "method": "POST", "path": "/v1/sales", "body": "{code,name,full_name,designation,email,tel,color,signature?,active}" },
+    { "method": "PATCH", "path": "/v1/sales/:id", "body": "same fields" },
+    { "method": "DELETE", "path": "/v1/sales/:id", "body": null }
+  ],
+  "projection_mapping": "SB_MARKETS / SB_SALES row-by-row from responses; market order from response.markets; signature kept locally when omitted",
+  "legacy_mode_result": "wrappers delegate to original; zero API requests",
+  "tests": { "ops_sales_markets": "10 pass / 0 fail" },
+  "blocked_items": [
+    { "item": "PUT /v1/sales/:id/targets/:month, PUT /v1/sales/:id/followups, GET /v1/sales-board", "required_evidence": "legacy sbEditTarget/board/followup writers and payloads; parser in src/domain/sales-board.ts" }
+  ],
+  "backend_db_schema_change": false
+}
