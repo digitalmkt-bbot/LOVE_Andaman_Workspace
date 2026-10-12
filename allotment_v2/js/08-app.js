@@ -19208,9 +19208,32 @@ function pckFilterBar(all, cnt, nHidden, part){
   var _q='<input id="pck-q" value="'+e(_pckQ)+'" oninput="pckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม" style="height:30px;font-size:11.5px;font-family:inherit;border:1.5px solid '+(_pckQ?'#185FA5':'#E7E4DC')+';border-radius:8px;padding:2px 10px;background:#fff;min-width:210px;flex:1">'
     +sel('pck-van',_pckVan,'pckSetVan','\u{1F68C} ทุกคัน',vans,function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}; return (v.name||id)+' ('+cnt.van[id]+')'; });
   if(part==='search') return '<div class="ck-fbar pck-fsearch">'+_q+'</div>';
-  if(part==='chips')  return '<div class="ck-fbar pck-fchips">'+arrHtml
-    +(arrHtml?'<span class="ck-fsep"></span>':'')+statHtml
-    +pckFilterTail(any, nHidden)+'</div>';
+  if(part==='chips'){
+    /* §pckChipFit (2026-10-12) · owner: "ฝั่งชิป ทำยังไงให้ดูกระชับหน่อย"
+       ชื่อสั้นลง (ชื่อเต็มอยู่ใน title) · ชิปที่เป็น 0 จางลงและไม่มีกรอบ · ปุ่มสี Service/ผู้บันทึกเหลือไอคอน
+       ตัวกรองทุกตัวยังอยู่ครบ กดได้เหมือนเดิม */
+    var sc=function(on, short, full, fn, n, col){
+      col=col||'#185FA5'; var z=!on && !n;
+      return '<button class="pck-sc'+(on?' on':'')+(z?' z':'')+'" title="'+e(full)+'" onclick="'+fn+'" style="--c:'+col+'">'
+        +e(short)+(n!=null?'<b>'+n+'</b>':'')+'</button>'; };
+    var SH={PK:'PK',KL:'KL',OWN:'มาเอง',NOVAN:'ไม่จัดรถ'};
+    var a2=arrOrder.filter(function(k){ return cnt.arr[k]; }).map(function(k){
+      return sc(_pckArr===k, SH[k]||PCK_ARR_LBL[k], PCK_ARR_LBL[k], "pckSetArr('"+k+"')", cnt.arr[k], k==='OWN'?'#6B289A':(k==='NOVAN'?'#A32D2D':'#185FA5')); }).join('');
+    var s2=sc(_pckStat==='wait','ยังไม่ถึง','ยังไม่ถึงท่า',"pckSetStat('wait')",cnt.stat.wait,'#5F5E5A')
+      +sc(_pckStat==='arr','ถึงแล้ว','ถึงแล้ว · ยังไม่เคลียร์',"pckSetStat('arr')",cnt.stat.arr,'#0C447C')
+      +sc(_pckStat==='clr','เคลียร์แล้ว','เคลียร์แล้ว · รอขึ้นเรือ',"pckSetStat('clr')",cnt.stat.clr,'#7A4A00')
+      +sc(_pckStat==='on','ขึ้นเรือ','ขึ้นเรือแล้ว',"pckSetStat('on')",cnt.stat.on,'#0F6E56')
+      +'<span class="ck-fsep"></span>'
+      +sc(_pckStat==='due','ค้างจ่าย','ค้างจ่าย',"pckSetStat('due')",cnt.stat.due,'#7A4A00')
+      +(cnt.stat.ns?sc(_pckStat==='ns','No-show','No-show / CXL',"pckSetStat('ns')",cnt.stat.ns,'#A32D2D'):'')
+      +(cnt.stat.vd?sc(_pckStat==='vd','ปิดแล้ว','ยกเลิกหน้างาน · ปิดแล้ว',"pckSetStat('vd')",cnt.stat.vd,'#8a8a82'):'');
+    var tail='<span class="pck-sctail">'
+      +'<button class="pck-sci" onclick="pckSvcSetOpen()" title="ตั้งสีช่อง Service / ป้ายภาษาไกด์ ในใบงานไกด์" aria-label="สี Service">&#127912;</button>'
+      +'<button class="pck-sci pck-bytog2'+(_pckShowBy?' on':'')+'" onclick="pckToggleBy()" title="'+(_pckShowBy?'ซ่อนผู้บันทึก booking':'แสดงผู้บันทึก booking ในแต่ละแถว')+'" aria-label="ผู้บันทึก">&#128100;</button>'
+      +(any?'<button class="pck-sc clr" onclick="pckClearFilters()" title="ล้างตัวกรองทั้งหมด">&#10005; ล้าง'+(nHidden?(' <b>'+nHidden+'</b>'):'')+'</button>':'')
+      +'</span>';
+    return '<div class="ck-fbar pck-fchips">'+a2+(a2?'<span class="ck-fsep"></span>':'')+s2+tail+'</div>';
+  }
   return '<div class="ck-fbar">'
     +_q
     +'<span class="ck-fsep"></span>'+arrHtml
@@ -22971,10 +22994,10 @@ function pckViewBar(){
   var b=function(fn,v,cur,lbl){
     return '<button onclick="'+fn+'(\''+v+'\')" class="pcs-seg'+(cur===v?' on':'')+'">'+lbl+'</button>'; };
   return '<div class="pcs-bar">'
-    +'<span class="k">มุมมอง</span><span class="pcs-segs">'
+    +'<span class="k pcs-kv">มุมมอง</span><span class="pcs-segs">'
       +b('pckSetView','sheet',_pckView,'ตาราง')+b('pckSetView','card',_pckView,'การ์ด')+'</span>'
     +(_pckView==='sheet'
-      ? ('<span class="k" style="margin-left:12px">เรียงโดย</span><span class="pcs-segs">'
+      ? ('<span class="k pcs-ks" style="margin-left:8px">เรียง</span><span class="pcs-segs" title="เรียงตาราง: ตามเรือ / ตามรถ">'
          +b('pckSetGrp','boat',_pckGrp,'เรือ')+b('pckSetGrp','van',_pckGrp,'รถ')+'</span>')
       : '')
     +'</div>';
@@ -23232,6 +23255,24 @@ function pckHeadCSS(){
   +H+' .pkh-card .ck-fbar input,'+H+' .pkh-card .ck-fbar select{height:32px !important;font-size:13px !important}'
   +H+' .pkh-fwrap .pcs-seg{padding:4px 13px !important;font-size:11.5px !important}'
   +H+' .pkh-fwrap .k{font-size:10.5px}'
+  /* §pckChipFit · ชิปกรองแบบกระชับ */
+  +H+' .pkh-fwrap{gap:4px !important;padding:5px 8px !important}'
+  +H+' .pkh-fwrap .pck-sc{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px !important;border-radius:999px;'
+    +'border:1px solid #E3E0D7;background:#fff;color:#4A4944;font:600 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +H+' .pkh-fwrap .pck-sc b{font:700 11px "DM Mono",monospace;color:var(--c)}'
+  +H+' .pkh-fwrap .pck-sc.z{border-color:transparent;background:transparent;color:#A9A79F}'
+  +H+' .pkh-fwrap .pck-sc.z b{color:#C6C4BC}'
+  +H+' .pkh-fwrap .pck-sc.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);color:var(--c);font-weight:800}'
+  +H+' .pkh-fwrap .pck-sc.clr{border-color:#E6C9C3;color:#A32D2D}'
+  +H+' .pkh-fwrap .pck-sctail{display:inline-flex;gap:3px;margin-left:auto}'
+  +H+' .pkh-fwrap .pck-sci{width:28px;height:26px;padding:0 !important;border-radius:8px;border:1px solid #E3E0D7;background:#fff;font-size:13px !important;cursor:pointer;line-height:1}'
+  +H+' .pkh-fwrap .pck-sci.on{border-color:#185FA5;background:#EAF2FB}'
+  +H+' .pkh-fwrap .pcs-kv{display:none}'
+  +H+' .pkh-fwrap>.pcs-bar{display:inline-flex !important;align-items:center;gap:4px;padding:0 !important;margin:0 !important}'
+  +H+' .pkh-fwrap .pcs-ks{margin-left:4px !important;color:#8a8a82}'
+  +H+' .pkh-fwrap .pck-sc.z{padding:0 6px !important}'
+  +H+' .pkh-fwrap .pcs-seg{padding:3px 11px !important;font-size:11px !important}'
+  +H+' .pkh-fwrap .ck-fsep{height:16px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
   +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
@@ -23890,8 +23931,14 @@ function renderPierCheckin(){
     warnHtml='<div class="pck-warncard"><div class="pck-warnhd">&#9888; ยังไม่จัดเรือ · '+noBoat.length+' booking · '+npx+' pax — จัดเรือก่อนถึงเช็คอินหน้าท่าได้'
       +(_nCxl?('<span style="background:#F1EFE8;color:#6b6a63;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:8px">ยกเลิกแล้ว '+_nCxl+' ใบ · ต้องจัดจริง '+_nAct+'</span>'):'')
       +'<a onclick="nav(document.querySelector(\'[data-view=booking]\'))" style="margin-left:auto;color:#185FA5;cursor:pointer;text-decoration:none">&rarr; ไปจัดเรือ (By-trip)</a></div>'
-      +'<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
-      +noBoat.map(function(r){ return pckRowHtml(r,date); }).join('')+'</tbody></table></div></div>';
+      /* §pckWarnSheet (2026-10-12) · owner: "อันนี้กดชิปเป็นตาราง แต่ส่วนที่ยังไม่ได้จัดขึ้นเป็นแบบการ์ด"
+         มุมมองตาราง → ใช้แถวแบบตารางเหมือนข้างล่าง · ห่อด้วย pck-tw ไม่ใช่ pcs-tw
+         (pckFitPane / ตัวจำตำแหน่งเลื่อน หา .pcs-tw ตัวแรก ต้องเป็นตารางหลักเสมอ) */
+      +(_pckView==='sheet'
+        ? ('<div class="pck-tw"><table class="ck-tbl pck-tbl pck-sheet">'+PCK_SHEET_THEAD+'<tbody>'
+           +noBoat.map(function(r){ return pckRowHtml(r,date,true); }).join('')+'</tbody></table></div></div>')
+        : ('<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
+           +noBoat.map(function(r){ return pckRowHtml(r,date); }).join('')+'</tbody></table></div></div>'));
   }
   if(!cardsHtml && !warnHtml){
     cardsHtml='<div style="background:#fff;border:1px solid #E7E4DC;border-radius:14px;padding:44px;text-align:center;color:#b0aea6;font-size:12px">'
