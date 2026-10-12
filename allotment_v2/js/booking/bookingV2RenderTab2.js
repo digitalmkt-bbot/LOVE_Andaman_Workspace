@@ -19,6 +19,7 @@ function bookingV2RenderTab2(){
   if(typeof bookingV2CharterBoatHeal==='function') bookingV2CharterBoatHeal(date);   // charter booking → ops.boatId = charterBoatId (assigned to its own boat · §59/§50)
   if(typeof bookingV2HealAltSplits==='function') bookingV2HealAltSplits(date);   // §altPickups · ALWAYS ensure auto van-splits exist for รับหลายจุด bookings (so they render as separate rows here too, not only in Van Assign)
   if(typeof bookingV2HealSelfArrivePickup==='function') bookingV2HealSelfArrivePickup(date);   // §self-arrive · ล้างเวลารับรถที่ค้างเมื่อสลับเป็น No-Transfer (เหลือ default "…at pier")
+  if(vanMode && typeof bookingV2OpsVansDay==='function') bookingV2OpsVansDay(date);   // §opsHandoff · server van groups for the day (ops mode only; no-op otherwise)
   if(vanMode && typeof bookingV2VanGroupHeal==='function') bookingV2VanGroupHeal(date);   // keep grouped bookings' vanId in sync (safety net · prevents ตกบุคกิ้ง)
   const dObj = new Date(date + 'T00:00');
   const dateBig = dObj.toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
