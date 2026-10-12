@@ -51342,6 +51342,52 @@ function bkB2CAddonShort(a){
   return String((a&&(a.label||a.type))||'')+q;
 }
 function bkB2CAddonText(b){ return ((b&&b.addOns)||[]).map(bkB2CAddonShort).filter(Boolean).join(', ')||'Add-on'; }
+/* §tripNext (2026-10-12) · ลูกค้าคนเดียวซื้อหลายทริปในออเดอร์เดียว (B2C ส่งมาเป็น b2c_<ref>_1, _2 …)
+   หรือใบเดียวมีหลายทริป · ที่แถวของวันนี้บอกสั้นๆ ว่าเขามีทริปไหนอีก วันไหน
+   นับเฉพาะทริปจริง: ไม่นับใบที่ยกเลิก ไม่นับใบที่มีแต่บริการเสริม และไม่นับทริปเดียวกับแถวนี้ */
+var _bkOrdIdx=null, _bkOrdAt=0, _bkOrdSrc=null, _bkOrdLen=-1;
+function _bkOrderLines(bk){
+  var m=/^b2c_/.test(String(bk&&bk.id||''))&&String(bk.id).match(/^(.*)_(\d+)$/); if(!m) return [];
+  var A=(typeof SB_BOOKINGS!=='undefined'&&SB_BOOKINGS)||[], now=Date.now();
+  if(!_bkOrdIdx||_bkOrdSrc!==A||_bkOrdLen!==A.length||now-_bkOrdAt>1000){
+    _bkOrdIdx={}; _bkOrdSrc=A; _bkOrdLen=A.length; _bkOrdAt=now;
+    A.forEach(function(x){ var k=String(x&&x.id||'').match(/^(b2c_.*)_(\d+)$/); if(k) (_bkOrdIdx[k[1]]=_bkOrdIdx[k[1]]||[]).push(x); });
+  }
+  return _bkOrdIdx[m[1]]||[];
+}
+function bkOtherTrips(bk, date, rid){
+  var out=[], seen={}, dead=['cancelled','cancelled_weather','rejected'];
+  var add=function(b){
+    if(b!==bk && (dead.indexOf(b.status)>=0 || (typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)))) return;
+    (b.trips||[]).forEach(function(t){
+      if(!t||!t.date||!t.routeId) return;
+      if(t.date===date && t.routeId===rid) return;
+      var k=t.date+'|'+t.routeId; if(seen[k]) return; seen[k]=1;
+      out.push({bk:b, date:t.date, rid:t.routeId});
+    });
+  };
+  add(bk); _bkOrderLines(bk).forEach(function(x){ if(x.id!==bk.id) add(x); });
+  return out.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+}
+function bkOtherTripsChip(bk, date, rid){
+  if(!bk) return '';
+  var L=bkOtherTrips(bk, date, rid); if(!L.length) return '';
+  var esc=function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var rn=function(id){ return (typeof bkV2RouteShort==='function')?bkV2RouteShort(id):id; };
+  var dt=function(d){ var x=new Date(d+'T00:00'); return isNaN(x)?d:x.toLocaleDateString('en-GB',{day:'numeric',month:'short'}).replace('Sept','Sep'); };
+  var code=function(b){ return (typeof bkV2DisplayCode==='function'&&/^b2c_/.test(b.id))?bkV2DisplayCode(b):(b.voucherRef||b.id); };
+  var pick=L.filter(function(x){ return x.date>=date; })[0]||L[L.length-1];
+  var arr=pick.date>date?'→':pick.date<date?'←':'+';
+  var tip='ทริปอื่นของลูกค้าคนนี้: '
+    +L.map(function(x){ return dt(x.date)+' '+rn(x.rid)+(x.bk.id!==bk.id?' ('+code(x.bk)+')':''); }).join(' · ')+' · คลิกไปที่วันนั้น';
+  return '<span class="t2-nxt" data-nxt="'+esc(pick.date)+'" title="'+esc(tip)+'" onclick="event.stopPropagation();bkOtherTripGo(\''+esc(pick.date)+'\',\''+esc(code(pick.bk))+'\')">'
+    +'<i>'+arr+'</i><span>'+esc(pick.date===date?'':dt(pick.date)+' ')+esc(rn(pick.rid))+'</span>'+(L.length>1?'<b>+'+(L.length-1)+'</b>':'')+'</span>';
+}
+function bkOtherTripGo(date, code){
+  if(typeof bkV2Tab2PickDay!=='function') return;
+  bkV2Tab2PickDay(date);
+  if(code && typeof bkV2Tab2SetQ==='function') bkV2Tab2SetQ(code);
+}
 /* หางยาวที่ใบ B2C ที่ผูกไว้ซื้อมา · join = คน · boats = ลำ */
 function bkB2CAddonLt(bkId, date){
   var o={join:0, boats:0, refs:[]};
@@ -51642,7 +51688,7 @@ function bkV2RenderTab2(){
   const _btHit = r => {
     if(!_btQ) return true;
     const b=r.bk||{}; const ag=(typeof sbGetAgent==='function')?(sbGetAgent(b.agentId)||{}):{};
-    const hay=[b.voucherRef,b.code,b.id,b.leadPax,b.customerName,b.phone,b.customerPhone,
+    const hay=[b.voucherRef,b.code,b.id,(/^b2c_/.test(b.id||'')&&typeof bkV2DisplayCode==='function')?bkV2DisplayCode(b):'',b.leadPax,b.customerName,b.phone,b.customerPhone,
                b.hotelName,b.pickupHotelName,b.pickupArea,ag.name,ag.code]
       .concat((b.altPickups||[]).map(a=>a&&a.place))
       .filter(Boolean).join(' ').toLowerCase();
@@ -52818,7 +52864,10 @@ function bkV2RenderTab2(){
               ${(function(){ var _ut=bkUpgTripOn(bk, date, rid); if(!bkUpgActive(_ut)) return ''; var _u=_ut.upg;
                 return `<span class="t2-upgfrom" data-upgfrom="${esc(_u.fromRouteId)}" title="${esc('Upgrade · '+bkUpgRouteName(_u.fromRouteId)+' > '+bkUpgRouteName(_u.toRouteId)+' · '+(_u.reason||'')+(_u.charge>0?(' · +THB '+Number(_u.charge).toLocaleString()):' · no charge')+(_u.by?(' · '+_u.by):''))}">&#10548; ${laT('จาก')} ${esc(bkUpgRouteName(_u.fromRouteId))}</span>`; })()}
               ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="${esc(lead)} · Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead" title="${esc(lead)}">${esc(lead)}</span>`;   /* §btClip */ })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}${r.cxl?'':_btDrawTag(bk.id)}
-              ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
+              ${(function(){ const _lo=others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>';
+                /* §tripNext · มีทริปอื่น → บรรทัดที่สองเป็นแถวเดียว [lead only / +N][→ วัน ทริป] ชื่อทริปยาวตัดด้วย … ไม่ดันแถวให้สูงขึ้น */
+                const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid):'';
+                return _nx?('<div class="t2-cul2">'+_lo+_nx+'</div>'):_lo; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -54212,6 +54261,16 @@ function bkV2RenderTab2(){
     .t2-zonetag{max-width:100%;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
     .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
     .t2-leadonly{font-size:10px;margin-left:4px}
+    .t2-nxt{display:inline-flex;align-items:center;gap:3px;max-width:150px;font-size:10px;font-weight:700;line-height:1.5;color:#185FA5;background:#EEF4FB;border:1px solid #D3E2F3;border-radius:5px;padding:0 5px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px}
+    .t2-nxt i{font-style:normal}
+    .t2-nxt span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .t2-cu .t2-leadonly{white-space:nowrap}
+    .t2-cul2{display:flex;align-items:center;flex-wrap:nowrap;min-width:0;margin-top:2px}
+    .t2-cul2>:first-child{margin-left:0}
+    .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:none}
+    .t2-cul2 .t2-more,.t2-cul2 .t2-leadonly{flex:none}
+    .t2-nxt:hover{background:#DFEBF8}
+    .t2-nxt b{font-weight:800;color:#5B7FA6}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
@@ -58209,9 +58268,17 @@ function bkV2FindDuplicateBookings(d, excludeId){
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     const reasons=[];
     const bv=norm(b.voucherRef||b.code);
-    if(vref && bv && bv===vref) reasons.push('เลข Voucher ตรงกัน ('+(b.voucherRef||b.code)+')');
     const bt=(b.trips||[]).filter(t=>t.routeId&&t.date);
     const sharedDR=bt.some(t=>myDR.has(t.date+'|'+t.routeId));
+    /* §tripNext · ใบ B2C ในออเดอร์เดียวกัน (b2c_<ref>_1, _2) ใช้เลข voucher เดียวกันอยู่แล้ว
+       คนละทริป = ซื้อหลายทริป · บรรทัดที่มีแต่บริการเสริม = ของเสริมของทริปนี้ · ทั้งสองแบบไม่ใช่ลงซ้ำ
+       สองบรรทัดที่เป็นทริปเดียวกันวันเดียวกันและมีคนทั้งคู่ ยังเตือนตามเดิม */
+    const _ord=x=>{ const k=String(x||'').match(/^(b2c_.*)_\d+$/); return k?k[1]:''; };
+    if(_ord(d.id) && _ord(d.id)===_ord(b.id)){
+      const _ao=x=>(typeof bkB2CAddonOnly==='function')&&bkB2CAddonOnly(x);
+      if(!sharedDR || _ao(b) || _ao(d)) return;   /* อีกทริปของออเดอร์ หรือบรรทัดบริการเสริมของทริปนี้ */
+    }
+    if(vref && bv && bv===vref) reasons.push('เลข Voucher ตรงกัน ('+(b.voucherRef||b.code)+')');
     if(lead && norm(b.leadPax||b.customerName)===lead && sharedDR) reasons.push('ชื่อลูกค้า + วัน + ทริป ตรงกัน');
     if(reasons.length) out.push({bk:b, reasons});
   });
