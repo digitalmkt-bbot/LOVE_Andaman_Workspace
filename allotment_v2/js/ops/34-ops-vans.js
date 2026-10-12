@@ -29,6 +29,7 @@
   var BASE = '/operations/van-groups';
   var CLOSED = ['cancelled', 'cancelled_weather', 'rejected'];
   var serverIds = {};     // 'date|routeId|number' -> server group id
+  var groupInfo = {};     // server group id -> {date, routeId, number, vanId} · read by 35-ops-van-jobs.js
   var originals = {};
   var WRAPPED = ['bookingV2VanGroupSetVan', 'bookingV2AssignVan', 'bookingV2VanGroupSetTime', 'bookingV2VanGroupDisband',
     'bookingV2VanGroupSelected', 'bookingV2VanGroupSave', 'bookingV2VanGroupClearSeq', 'bookingV2VanGroupSetReturn',
@@ -128,6 +129,7 @@
     if(!g || g.number == null) return;
     var num = +g.number;
     serverIds[keyOf(date, routeId, num)] = g.id;
+    groupInfo[g.id] = { date: date, routeId: routeId, number: num, vanId: g.van_id || null };
     var listed = {};
     (g.members || []).forEach(function(m){ if(m && (+m.idx || 0) === 0) listed[m.booking_id] = true; });
     allBookings().forEach(function(b){
@@ -192,7 +194,7 @@
   }
 
   /* ── loader ── */
-  O.vans = { load: load, serverIdOf: serverIdOf };
+  O.vans = { load: load, serverIdOf: serverIdOf, groupInfo: function(id){ return groupInfo[id] || null; } };
 
   /* ── writes ── */
   wrap('bookingV2VanGroupSetVan', function(date, routeId, zone, gid, vanId){
@@ -366,15 +368,17 @@
   wrap('bookingV2VanAutoAssign', function(){ return notYet('Auto-assign is not on operation-backend yet · assign vans by hand'); });
 
   /* Render hook · the by-trip screen calls this in Van mode. Loads every route's groups for the day once per
-     5 seconds (a render inside the window does not re-fetch), then redraws once. */
-  var dayLoadedAt = {};
+     5 seconds (a render inside the window does not re-fetch), then redraws once. Answers the load's promise
+     (the same one inside the window), so the van job screens can wait for the groups. */
+  var dayLoadedAt = {}, dayLoading = {};
   function loadDay(date){
-    if(!O.enabled() || !date) return;
+    if(!O.enabled() || !date) return Promise.resolve(null);
     var now = Date.now();
-    if(dayLoadedAt[date] && now - dayLoadedAt[date] < 5000) return;
+    if(dayLoadedAt[date] && now - dayLoadedAt[date] < 5000) return dayLoading[date];
     dayLoadedAt[date] = now;
     var routes = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : [];
-    Promise.all(routes.map(function(r){ return load(date, r.id); })).then(function(){ redraw(); });
+    dayLoading[date] = Promise.all(routes.map(function(r){ return load(date, r.id); })).then(function(){ redraw(); });
+    return dayLoading[date];
   }
   window.bookingV2OpsVansDay = loadDay;
   O.vans.loadDay = loadDay;

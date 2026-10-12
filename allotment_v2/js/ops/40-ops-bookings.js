@@ -357,6 +357,7 @@
     bk.ops = bk.ops || {};
     bk.ops.reconfirm = ob.reconfirm ? { status: ob.reconfirm.status || '', via: ob.reconfirm.via || 'reconfirm', at: ob.reconfirm.at || '', by: ob.reconfirm.by || '', sent: !!ob.reconfirm.sent, sentAt: ob.reconfirm.sent_at || '', sentBy: ob.reconfirm.sent_by || '' } : null;
     bk.docCheck = ob.doc_check || null;
+    bk.jobNote = ob.job_note != null ? ob.job_note : null;   // the van job order's special request override (35-ops-van-jobs.js)
     bk.attachments = (ob.attachments || []).map(function(a){ return { id:a.id, name:a.name || '', mime:a.mime || '', size:+a.size || 0, kind:a.kind || '', by:a.by || '', at:a.at || '' }; });
     bk.altPickups = (ob.alt_pickups || []).map(function(a){ return { areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
     bk.adjustments = (ob.adjustments || []).map(function(a){ return { seq:a.seq, kind:a.kind, mode:a.mode, value:+a.value || 0, label:a.label || '', note:a.note || '' }; });
