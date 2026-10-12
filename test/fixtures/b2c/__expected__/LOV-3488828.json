@@ -12,7 +12,7 @@
   "leadEmail": "guest4@example.test",
   "status": "confirmed",
   "bookingDate": "2026-09-07",
-  "hotelName": "Visit Panwa Pier",
+  "hotelName": "",
   "pickupZone": "NoTransfer",
   "pickupSelf": true,
   "pickupAreaId": "nt-panwa-pier",

@@ -522,7 +522,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     leadEmail: h.customer_email || h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
     bookingDate: td(h.bk_created_at) || date,
-    hotelName: pickupLoc,
+    hotelName: pickupHotel,
     pickupZone: pickupZone,
     pickupSelf: noTransfer,
     pickupAreaId: areaId,

@@ -12,7 +12,7 @@
   "leadEmail": "guest4@example.test",
   "status": "confirmed",
   "bookingDate": "2026-09-25",
-  "hotelName": "Phuket Town · Phuket Emerald Beach Resort",
+  "hotelName": "Phuket Emerald Beach Resort",
   "pickupZone": "PK",
   "pickupSelf": false,
   "pickupAreaId": "pk-town",
