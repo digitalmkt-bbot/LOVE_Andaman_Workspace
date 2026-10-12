@@ -24,7 +24,10 @@ function bookingV2UpgradeSave(bkId){
     bk.upgrades.push(Object.assign({id:'up_'+Date.now(), label, sellPrice, toCompany, commission, collected, note, seller, settle:'pending', at:new Date().toISOString()}, _upay));
     if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(bk,'extra','Upgrade · '+label+' · ขาย ฿'+pckNum(sellPrice)+' · บริษัท ฿'+pckNum(toCompany)+' · คอม ฿'+pckNum(commission)+(seller?' · '+seller:''),'Extra');
   }
-  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  /* operation-backend is on: the upgrade list goes to the server with the booking (PATCH). Off: the legacy save. */
+  var _upSync=(typeof bookingV2SyncToOpsBackend==='function')?bookingV2SyncToOpsBackend(bk):null;
+  if(_upSync && _upSync.catch) _upSync.catch(function(e){ if(window.laOps && window.laOps.fail) window.laOps.fail('Upgrade not saved', e); });
+  else if(typeof acctPersistBookings==='function') acctPersistBookings();
   if(typeof _bkUpgPayInit==='function') _bkUpgPayInit(null);   // §upgPay · ล้างบล็อกรับเงินกลับเป็นค่าตั้งต้น
   bookingV2Render(); bookingV2UpgradeRender();
 }

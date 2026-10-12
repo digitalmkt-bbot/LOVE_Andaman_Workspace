@@ -22,7 +22,10 @@ function bookingV2UpgApply(go){
     bookingV2UpgConfirmView({ b:b, pax:pax, fromNm:fromNm, toNm:toNm, pf:_pf, pt:_pt, charge:charge, reason:reason, date:U.date });
     return;
   }
-  if(charge>0){
+  /* opsOn · operation-backend is the master: the server makes the upgrade sale and returns it, so the
+     local copy takes what the server returns and does not add its own sale. */
+  var applyLocal=function(opsOn){
+  if(charge>0 && !opsOn){
     if(!Array.isArray(b.upgrades)) b.upgrades=[];
     upgId='up_'+Date.now();
     b.upgrades.push({ id:upgId, label:'Upgrade > '+toNm, sellPrice:charge, toCompany:charge, commission:0, collected:false,
@@ -33,7 +36,18 @@ function bookingV2UpgApply(go){
   O.boatId=null; if(O.boatSplits) delete O.boatSplits;       /* เรือของเส้นทางเดิมใช้ต่อไม่ได้ · จัดใหม่ในโปรแกรมปลายทาง */
   if(b.ops && b.ops.upgrade) b.ops.upgrade=null;              /* ธงแบบเก่า · เลิกใช้ */
   if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','Upgrade route · '+fromNm+' > '+toNm+' · '+reason+(charge>0?(' · +THB '+charge.toLocaleString()):' · no charge'),'Edit');
-  acctPersistBookings();
+  if(!opsOn) acctPersistBookings();
   bookingV2UpgModalClose();
   if(_bkV2 && _bkV2.boatAssignMode && typeof bookingV2Render==='function') bookingV2Render(); else if(typeof bookingV2Render==='function' && document.getElementById('bkv2-host')) bookingV2Render(); else renderBoatAssign();
+  };
+  /* Server first when operation-backend is on: POST /v1/bookings/:id/upgrade moves the trip, makes the sale
+     and records the upgrade (undo-able). Nothing changes locally until it says yes. */
+  var opsOn=!!(window.laOps && window.laOps.enabled && window.laOps.enabled() && typeof window.laOpsBookingAction==='function');
+  if(opsOn){
+    if(!b.opsId || !t.opsTripId){ alert('Save this booking to operation-backend first, then upgrade.'); return; }
+    window.laOpsBookingAction(b.id,'upgrade',{trip_id:t.opsTripId, to_route_id:U.to, reason:reason, charge:charge},
+      function(){ applyLocal(true); }, 'Upgrade route', true);
+    return;
+  }
+  applyLocal(false);
 }

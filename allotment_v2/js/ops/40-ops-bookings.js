@@ -136,6 +136,15 @@
         dropAreaId: a.dropAreaId || a.drop_area_id || null, dropArea: a.dropArea || a.drop_area || '',
         dropZone: a.dropZone || a.drop_zone || '', dropPlace: a.dropPlace || a.drop_place || '' };
     });
+    /* §opsUpgrades · a present list replaces the server's whole list, so send it every time it exists; an
+       empty array clears it. Card fee and customer_paid are the server's (it works them out), not sent. */
+    if(Array.isArray(bk.upgrades)) b.upgrades = bk.upgrades.filter(function(u){ return u && u.id; }).map(function(u){
+      return { id: u.id, label: u.label || 'Upgrade', sell_price: Number(u.sellPrice) || 0,
+        to_company: u.toCompany != null ? Number(u.toCompany) || 0 : null, seller: u.seller || null, note: u.note || null,
+        collected: u.collected != null ? !!u.collected : null, settle: u.settle || null, method: u.method || null,
+        fee_pct: u.feePct != null ? Number(u.feePct) || 0 : null,
+        slips: (u.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id: s.id }; }) };
+    });
     if(bk.specialMeals && Array.isArray(bk.specialMeals.allergyList)) b.allergy_list = bk.specialMeals.allergyList.map(function(a){ return { name: a.name || '', qty: +a.qty || 0 }; });
     else if(Array.isArray(bk.allergyList)) b.allergy_list = bk.allergyList;
     if(Array.isArray(bk.attachments)) b.attachments = bk.attachments.filter(function(a){ return a && a.id; }).map(function(a){ return { id: a.id, kind: a.kind || 'booking' }; });
@@ -355,7 +364,9 @@
     if(ob.allergy_count != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyCount = +ob.allergy_count || 0; }
     if(ob.special_meals_pier_at != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.pierAt = ob.special_meals_pier_at; }
     if(ob.special_meals_pier_by != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.pierBy = ob.special_meals_pier_by; }
-    bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:!!(u.to_company != null ? u.to_company : u.toCompany), feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, slips:u.slips || [] }; });
+    /* §opsUpgrades · every field the server returns is kept: the list is sent back whole on each PATCH,
+       so a field dropped here would be wiped on the server. to_company is an amount, not a flag. */
+    bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, label:u.label || 'Upgrade', sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:+(u.to_company != null ? u.to_company : u.toCompany) || 0, commission:+u.commission || 0, seller:u.seller || '', note:u.note || '', collected:!!u.collected, settle:u.settle || 'pending', method:u.method || null, feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, fee:+u.fee || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, at:u.at || null, slips:u.slips || [] }; });
     if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', type: p.type || 'AD', foc: !!p.foc }; });
     bk.addOns = (ob.add_ons || []).map(function(a){
@@ -492,7 +503,9 @@
 
   /* ── server-first actions · cancel / partial-cancel / reschedule ──
      kind: 'cancel' | 'partial-cancel' | 'reschedule' · applyLocal runs only after the server said yes */
-  window.laOpsBookingAction = function(bookingId, kind, body, applyLocal, title){
+  /* full = true takes the whole booking the command returns (trips and upgrades too), for a command that
+     changes a trip's route and creates an upgrade sale on the server. */
+  window.laOpsBookingAction = function(bookingId, kind, body, applyLocal, title, full){
     var bk = find(bookingId);
     if(!bk || !O.enabled() || !bk.opsId){
       if(bk && O.enabled() && !bk.opsId) try{ console.warn('[ops] ' + bookingId + ' has no operation-backend id · ' + kind + ' is local only'); }catch(_){}
@@ -505,7 +518,8 @@
       .then(function(j){
         try{
           applyLocal();
-          if(j){ Object.assign(bk, records(j, bk.trips)); bk.status = j.status || bk.status; if(j.total != null) bk.total = +j.total; bk.updatedAt = j.updated_at; persist(); }
+          if(j && full){ mergeInto(bk, j); persist(); }
+          else if(j){ Object.assign(bk, records(j, bk.trips)); bk.status = j.status || bk.status; if(j.total != null) bk.total = +j.total; bk.updatedAt = j.updated_at; persist(); }
         } finally { free(bk.id); }
         O.wrote('booking');
         render();
