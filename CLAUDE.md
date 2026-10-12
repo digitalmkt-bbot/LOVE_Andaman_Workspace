@@ -1,214 +1,123 @@
-# LOVE Andaman — allotment_v2
+# LOVE Andaman — allotment_v2 · branch `integration/operation-backend`
 
-> Cowork context file, loaded every session. Focus: the `allotment_v2` module.
-> Per-domain history and design live in `allotment_v2/docs/workflows/` (not auto-loaded — see **ARCHITECTURE.md** for the map) — grep the relevant doc when a task needs the detail behind a specific change. There is no `CHANGELOG.md`; it is not tracked in git (`git log --all -- CHANGELOG.md` returns nothing).
+> Context file, loaded every session. This file describes **this branch only**. `lk-inbox` (the monolith that serves staff at `rsvn.loveandaman.com`) has its own CLAUDE.md — nothing about `lk-inbox`'s deploy, database or `server.js` applies here.
 
-## ⛔ DB-CHANGE FREEZE — until 2026-10-15 (inclusive)
+## 0. What this branch is
 
-**Any feature that needs a database change must go through a pull request — never a direct push to `lk-inbox`.** "Database change" = a new/edited file in `db/migrations/` or `db/baseline/`, an edit to `os-backend/src/mapping/field_mapping.json` / `operation_schemas_model.json`, new DDL (`ALTER/CREATE/DROP TABLE|VIEW|INDEX`, `ADD COLUMN`, …) in `os-backend/`, or DDL run from the shell. If a task needs one: **stop, make no change, and tell the user it has to be opened as a PR (branch from `origin/lk-inbox`, PR into `lk-inbox`) until 15 Oct.**
+**The staff app moving onto [`operation_backend`](https://github.com/TheTaTha5/operation_backend).** There is **no `server.js`** here (deleted 2026-10-12). Railway runs `static-server.js`: static files + `GET /health`, nothing else. All data goes from the browser straight to operation-backend. **Any `/api/*` call still in `allotment_v2/js/` is a 404** — rewire it to operation-backend, never revive a legacy endpoint.
 
-> **Claude — when you see a task will need a database change, check this BEFORE planning or writing any code.** If today is on or before 2026-10-15, do not start. Reply to the user with exactly:
-> **"⛔ This feature needs a database change (\<say what: new column / table / migration / mapping\>). Until 15 Oct, any update that changes the database must be opened as a Pull Request into `lk-inbox` for review — it cannot be pushed straight to production. I have not made any changes. Do you want me to prepare it on a separate branch for a PR instead?"**
-> Then wait. Only continue on a non-`lk-inbox` branch, and only if the user says so.
+- **End goal:** the frontend is a display client. Data and business rules belong on operation-backend; judge a change by how much browser logic it lets us delete.
+- **Sandbox frontend:** `loveandamanworkspace-pano-frontend-production.up.railway.app` — a push to this branch deploys it (not prod, not rsvn).
+- **operation-backend:** code at `D:/projects/operation-backend`, deployed at `operationbackend-production.up.railway.app`. The client's base URL is `LA_CFG.opsBackend` (default that URL, `01-auth-sync.js`).
+- **Cutover to-do list:** `D:/projects/operation-backend/docs/readiness-2026-10-12-en.md`.
 
-Don't route around it (client-only stand-in, raw SQL, stuffing it into another blob key). Enforced by `tools/db-freeze.mjs` via a `.claude/settings.json` PreToolUse hook and `.githooks/pre-push` (enabled by `npm install` → `core.hooksPath`); both switch off by themselves after the date — then delete them and this section. A dev working on the approved PR branch can start Claude with `ALLOW_DB_CHANGE=1`; the pre-push gate on `lk-inbox` still holds.
+**Does the server have endpoint X? Grep, don't trust docs.** `grep -rn "'/v1/…\|'/operations/…" D:/projects/operation-backend/src/routes/*.ts` on `main` is the only answer. Plans and handoff notes have been wrong about this before (a plan marked van jobs "BLOCKED" while `/operations/van-jobs` was already on `main`). If a documented route 404s on Railway, the deploy may be stale — see the infra note below — not unimplemented.
 
-## 0. START HERE (new-chat orientation)
+**Known infra gotcha (2026-09-15/16):** the `operation_backend` Postgres service on Railway (project `ERP_LOVEANDAMAN`, "Main Postgres Database") picked up `operation_backend`'s own `railway.json` (`preDeployCommand: node dist/migrate.js`) and crash-looped, silently blocking every operation-backend deploy. Railway Config-as-Code has no per-service scoping; the fix was disconnecting that service's config-as-code path in the dashboard. If `operationbackend-production` looks stuck on an old build, check this first.
 
-**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~2.9k lines, markup only) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)** where essentially all the code lives, and `allotment_v2/css/01-base.css` + `02-skins.css` (~295KB). It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+**DB changes:** this branch has no database of its own. Schema changes go in operation-backend's `migrations/`. The `lk-inbox` DB freeze (until 2026-10-15) does not cover operation-backend, but its hook (`tools/db-freeze.mjs` via `.claude/settings.json`) still trips on DDL text in Bash/Edit — that is a false positive here. `db/` and `os-backend/` in this tree belong to `lk-inbox` and nothing here uses them.
 
-**There is no `server.js` on this branch (`integration/operation-backend`) — it was deleted 2026-10-12, along with `api-proxy.js`, `auth/oidc.js`, `b2c-catalog.js` and every test/tool that booted it.** Railway runs `static-server.js`: static files + `GET /health`, nothing else, so **any `/api/*` call left in `allotment_v2/js/` is a 404** and has to be rewired to operation-backend, not revived. All data lives on [`operation_backend`](https://github.com/TheTaTha5/operation_backend) (Fastify + Postgres, `operationbackend-production.up.railway.app`); this frontend is tested at `loveandamanworkspace-pano-frontend-production.up.railway.app`. `rsvn.loveandaman.com` still runs the old monolith from `lk-inbox` and is untouched by this branch. The cutover to-do list is `D:/projects/operation-backend/docs/readiness-2026-10-12-en.md`.
+## 1. How the client talks to operation-backend
 
-**What's actually wired to operation-backend so far (2026-09-16):**
-- **Auth** — `allotment_v2/js/01-auth-sync.js` no longer calls `/api/me`/`/api/login`/`/api/logout`. Login is `POST {OPS_BACKEND}/v1/login` with `{username,password}` (operation-backend's fixed-credential `PasswordAuthenticator`, not Authentik/OIDC — that PKCE flow was scoped out in favor of something simpler). The returned bearer token lives in `sessionStorage`, decoded client-side only to populate the sidebar's current-user display; every actual auth check happens server-side on operation-backend. `window.laOpsFetch(path, opts)` is the shared wrapper (attaches `Authorization: Bearer`, clears the token + reloads to login on 401) — use it for any new operation-backend call site.
-- **Bookings** — `bookingV2CommitBooking` (in `allotment_v2/js/booking/bookingV2CommitBooking.js`, see below) calls `bookingV2SyncToOpsBackend` after its local save, POSTing/PATCHing `/v1/bookings` on operation-backend (tracked via a new `opsId` field, carried across edits the same way `ops`/`history`/etc. already were). `bookingV2LoadFromOpsBackend`/`bookingV2FromOpsBooking` repopulate `SB_BOOKINGS` from `GET /v1/bookings` on boot, — the `js/ops/*.js` adapters are on whenever `window.LA_LEGACY_UNAVAILABLE` is set, which is always on this branch.
-- **Everything else is not wired yet**: agents, rate types, invoices/payments/deposits/VAT/accounting, fleet, van jobs, pickup setup/zones, market/demand data. Those UI screens will render against an empty/stale local blob until they get their own operation-backend equivalent and call sites.
+- **Login:** `POST /v1/login` `{username,password}` → bearer token in `sessionStorage` (`la_ops_token`). `window.laOpsFetch(path, opts)` attaches it and sends the user back to login on 401.
+- **`allotment_v2/js/ops/*.js`** — one adapter per area (catalogue, agents, rate types, contracts, pickup, fleet, money, PFM, park, vans, day actions, reconfirm, bookings, availability, dashboard, changes, …), loaded after `js/booking/*.js` and before `11-router.js`. Each **wraps the legacy global function** by name: `wrap('bookingV2Foo', fn)` replaces `window.bookingV2Foo`, falls back to the original only when `laOps.enabled()` is false. The `onclick=` handlers keep calling the same names.
+- **`ops/00-ops-core.js` = `window.laOps`**, the shared plumbing:
+  - `get/post/patch/del/call` — JSON in/out; a refusal throws `LaOpsError` with the server's `{statusCode, message, code}`.
+  - `bookingWrite` — booking writes send `If-Match: "<opsVersion>"`; a `409 stale_version` reloads that booking. Day-of writes (trip-ops, check-in, van groups/stops, doc check, reconfirm) do **not** use it.
+  - `queue(fn)` — one write at a time, in order. Never call `queue()` from inside a queued fn (deadlock).
+  - `runBatch(ops)` — several calls as a unit, best-effort undo on failure.
+  - `fail(title, e)` — the server's message as a red toast.
+- **Server first:** a write the server refuses must not stay on screen. Ask the server, then change local state; bulk writers snapshot → run → restore on refusal.
+- **`409` with a `*_anyway` code** = legacy's "do it anyway" dialog: show it, resend with the flag. Pattern: `ops/10-ops-catalogue.js` (`close_anyway`).
+- **Use the server's own computed views** (`/operations/van-jobs`, `/van-board`, `/v1/quote`, …) instead of rebuilding them in the browser.
+- **Not wired yet** (still local-only or still calling `/api/*`): see the readiness doc. Check `js/ops/` before assuming either way.
 
-**Embed (`?embed=1`).** `allotment_v2/js/10-embed.js` — **the first `<script>` in `<head>`, ahead of `01-auth-sync.js`, and it must stay there** — strips the topbar/sidebar for an iframe and defaults to read-only (overrides `bookingV2Toggle{Van,Boat,Reconfirm}Mode` / `bookingV2NewBooking`). That is UX, not a permission boundary. The `/embed/*` short URLs and the `EMBED_TOKEN_SECRET` ticket for CS viewers lived in `server.js` and are **gone** on this branch; a view-only entry for the iframe has to come from operation-backend.
+## 2. The frontend files
 
-**Coverage reality check on operation-backend itself** (verify against the repo's current `main` before trusting this — it moves): implements **routes/boats catalogue, deployments, allotment/manifest/availability, bookings, seat locks, and password login** (`/v1/login`). Its Railway deploy has a history of silently running a stale build (see `db/` note below) — a 404 on a documented route often means "deploy hasn't caught up," not "not implemented."
-
-**Known infra gotcha (2026-09-15/16):** the `operation_backend` Postgres service on Railway (project `ERP_LOVEANDAMAN`, "Main Postgres Database") was picking up `operation_backend`'s own `railway.json` (`preDeployCommand: node dist/migrate.js`) as if it were an app service, crash-looping instead of booting real Postgres — which was silently blocking every deploy of `operation_backend` itself (its own pre-deploy migration step could never reach a live database). Railway's Config-as-Code has no per-service scoping (confirmed against their docs), so this had to be fixed by disconnecting that service's config-as-code path in the Railway dashboard, not in any repo. If `operationbackend-production` looks stuck on an old build again, check this first.
-
-**Starting a new chat:**
-1. Do NOT dump the changelog back at the user or re-read the whole file.
-
-2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
-
-**Deploy workflow (verified 2026-08-17):**
-- Edit → `node --check allotment_v2/js/<file>.js` on each file you touched → back up to `BACKUP/`. (The old "extract the main `<script>` out of the HTML first" ritual is gone — since 2026-08-27 the JS is real `.js` files.)
-- **`lk-inbox` IS production.** Railway auto-deploys it (~1–2 min), so **`git push origin lk-inbox` is a production release** — staff see the change minutes later, and its migrations run against the live database on the way. Treat every push as shipping, not as saving work. (This changed on 2026-08-12; older notes saying "pushing to lk-inbox doesn't touch prod" are obsolete.)
-- Plain git from the sandbox works — auth is configured. GitHub Desktop / computer-use is NOT needed.
-- Verify: `git ls-remote origin refs/heads/lk-inbox` must equal `git rev-parse lk-inbox`.
-- **Always `git fetch` + fast-forward before working.** Other sessions push to `lk-inbox` constantly, and a rejected push usually means someone already shipped the thing you were about to. Read their commit before re-doing the work — on 2026-08-17 an entire pier-check-in permission fix was written twice this way, and the upstream one was the better fix.
-- **Branch layout (2026-09-08).** `refactor/frontend` — the HTML→`js/`+`css/` split, Authentik SSO, the `platform/` scaffold — was merged into `lk-inbox` and shipped. It is no longer a long-lived side branch; new work branches from `lk-inbox`. Per-ticket work happens in a git worktree under `D:/projects/wt-*`, branched from `origin/lk-inbox`, never in the main checkout.
-- **Do NOT merge `lk-inbox` → `main`.** `main` is a stale snapshot (last merged 2026-08-12, ~100 commits behind) that nothing deploys from; merging would ship a hundred commits to prod in one shot. It carries one commit of its own (`7e7782e`, the 27 Jul B2C-availability COALESCE hotfix) whose fix already exists on `lk-inbox` — divergent history, not a missing fix.
-- `backend-db-implementation` is **dead** (last touched 2026-07-10, ~680 commits behind). Ignore it and `HANDOFF_2026-07-04.md`'s branch instructions.
-- **`db/migrations/` belongs to `lk-inbox`'s monolith.** Nothing on this branch applies them. Schema changes for this branch go in operation-backend's own `migrations/`.
-
-**Verifying what is actually live:** don't guess from branch names — check the prod DB. Its `OPS_DATABASE_URL` is in the B2C repo's `.env` (`D:/projects/Loveandaman-Kingdom/.env`); the URL in `db/rt.cjs` is dead. App tables are in schema `operation_schemas`; **`schema_migrations` is in schema `allotment`** (the boot runner creates it unqualified, so it lands in the connection's default schema). `SELECT name, applied_at FROM allotment.schema_migrations ORDER BY applied_at` is the fastest honest answer to "what code is prod actually running" — each row is a deploy that happened. That query is how the `lk-inbox`-is-prod fact above was established on 2026-08-17 (005→018 applied 13–15 Aug, all from `lk-inbox`-only commits, while `main` had not moved since 12 Aug).
-
-**Pending (not done):** move the Booking top-tab bar onto the same row as the date stepper — user wants 3 mockups (A merge tabs+date · B tabs in day-header · C keep 2 rows, tighten). Awaiting their pick.
-
-**Companion docs in the workspace:** `ARCHITECTURE.md` (points at `allotment_v2/docs/workflows/`, the real per-domain design/behavior docs), `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec).
-
----
-
-## 1. Company & workspace
-
-**LOVE Andaman** — Phuket marine tourism. Routes: Similan, Surin, Phi Phi, Phang Nga Bay, Whale Shark. Fleet ~15 vessels (verify in `DEFAULT_BOATS`).
-
-**Language:** Thai + English UI is fine, but use **English/ASCII in `alert()`, `console.log()`, and any new hooks** (Thai encoding breaks in some contexts).
+`allotment_v2/allotment_v2.html` (markup) plus classic `<script src>` files in load order: `js/01..11-*.js` (~80k lines; `08-app.js` alone ~47k), `js/booking/` (~650 one-function files lifted out of `08-app.js`), `js/ops/`. **One global scope, ~2,500 inline `onclick=` handlers calling functions by name.** Read `allotment_v2/js/README.md` before touching script tags: `defer`, `async`, `type="module"` or reordering breaks every handler. `js/10-embed.js` must stay the first script in `<head>`. Cloudflare **Rocket Loader must stay off** (same breakage, looks like a permissions bug).
 
 ```
-LOVE_Andaman_Workspace/        ← repo root · Railway builds THIS (Nixpacks) and runs `npm start`
-├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md · OPERATIONS_PIPELINE_DESIGN.md
-│
-├── railway.json · package.json
-│
-├── allotment_v2/              ← THE STAFF APP · this is what "the app" means in this file
-│   ├── allotment_v2.html      ← markup + the <link>/<script src> tags (~2.9k lines)
-│   ├── js/01..08-*.js         ← ALL the app code (~80k lines) · see js/README.md
-│   ├── css/01-base.css        ← base sheet · css/02-skins.css = the 14 re-skin layers
-│   ├── start_server.command   ← static local server, no /api (§4)
-│   ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
-│   ├── assets/                ← hero images, per-route voucher overrides, favicons, logo
-│   ├── BACKUP/                ← timestamped pre-edit copies
-│   └── data_exports/          ← localStorage JSON exports (created on demand, gitignored)
-│
-├── db/
-│   ├── migrations/            ← 019+ only · auto-applied at boot (§0) · 001–018 pruned
-│   └── baseline/              ← 2026-08-20 schema snapshot that 001–018 collapse into
-│
-├── tools/                     ← dev-db · js-split-linemap · ci-boot-smoke · check-persist-gates …
-├── test/                      ← node:test · unit/ + e2e/ · `node --test`
-└── docs/development/tasks/    ← LAM-* task reports
+LOVE_Andaman_Workspace/
+├── static-server.js           ← the Railway service: files + /health, no API
+├── railway.json · package.json · .railwayignore
+├── allotment_v2/
+│   ├── allotment_v2.html
+│   ├── js/01..11-*.js         ← legacy app code, global scope
+│   ├── js/booking/            ← bookingV2* functions, one per file
+│   ├── js/ops/                ← operation-backend adapters (§1)
+│   ├── css/01-base.css · 02-skins.css (14 re-skin layers)
+│   ├── docs/workflows/        ← per-domain legacy behaviour docs (see ARCHITECTURE.md)
+│   └── assets/
+├── b2c-map.js · b2c-changelog.js  ← legacy B2C import rules, kept as reference for porting
+├── test/unit/                 ← `node --test test/unit/` (ops-* adapter tests)
+├── test/ui/                   ← Playwright UI tests (`npm run test:ops`, …)
+└── tools/                     ← js-split-linemap, build-assets, …
 ```
 
-**Local dev:** `npm start` (`static-server.js`) or `allotment_v2/start_server.command` serves the frontend; point it at an operation-backend (local or Railway) for data.
+**Local dev:** `npm start` (`static-server.js`) or `allotment_v2/start_server.command`, then point it at an operation-backend. Never open via `file://`, never test in the Claude artifact preview.
+
+**After editing:** `node --check` each touched file; bump the `?v=` cache-bust on any changed js/css (`static-server.js` caches them for a year as `immutable`).
+
+**Language:** Thai + English UI is fine, but use **English/ASCII in `alert()`, `console.log()` and new hooks**.
 
 ---
 
-## 2. Data storage model (read carefully)
+## 3. Browser object shapes
 
-**Backend = operation-backend (Postgres) on this branch.** The browser client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from the `DEFAULT_*` / `FL_DEFAULT_*` constants in `js/04-data-core.js` and `js/05-fleet.js` on first run, refreshed from operation-backend on login — and each `js/ops/*.js` adapter sends changes to its REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
+The browser still holds data in these shapes (adapters map them to and from the server's). Server-side shapes: read operation-backend's `src/routes/openapi.ts` / route handlers.
 
+### 3.1 Boat (`DEFAULT_BOATS` / `boats[]`)
+Key fields: `id`, `name`, `type`; `pier` (home, operational), `homeportCity`/`homeport` (legal registration); `cap` (booking cap), `licensePax` (real registered seats), `totalcap`, `crew`, `engineCount`; specs `material/gt/nt/loa/beam/depth/bhp`; legal `reg/callsign/owner/ownerAddr/docs[]`; status `log[]` whose LAST entry is current: `{s:'available'|'fixing'|'unavailable', from, to(null=ongoing), loc?, note?, reason?}`.
 
-Key default constants (grep for line): `DEFAULT_ROUTES`, `DEFAULT_BOATS`, `FL_DEFAULT_ENGINES`, `FL_DEFAULT_GEARBOXES`, `FL_DEFAULT_PROPELLERS`, `FL_DEFAULT_MAINTENANCE`, `FL_DEFAULT_INCIDENTS`, `FL_DEFAULT_INVENTORY`, `FL_DEFAULT_MEMOS`.
+**Location:** "อยู่ท่าไหน" → `pier`; "ตอนนี้อยู่ที่ไหนจริง" → `log[last].loc` else `pier`; "จดทะเบียนจังหวัดอะไร" → `homeportCity`. Say which field you used.
 
-The blob's sub-keys (each maps to relational table(s) on the backend): Sales/Booking — `sb_rate_types`, `sb_pickup_zones`, `sb_pickup_areas`, `sb_pickup_time_profiles`, `agent_artifacts`, `sb_bookings`, `sb_seat_locks`, `sb_nationalities`, `sb_markets`, `sb_sales`, `sb_addon_types`, `sb_agents`, `sb_market_stats`, `sb_invoices`, `sb_payments`, `sb_deposits`; Fleet — `fleet_inventory`, `fleet_consumable_logs`, `fleet_fuelbudget`, `vanjob_*` (`vanjob_pickup_th`, `vanjob_sreq`, `vanjob_driver`). The blob is shared by `save()` (operations) AND `flSave()` (fleet) — **always read-modify-write** (parse → update only your keys → write back); never clobber.
+**Pier enum (exact):** `tublamu` (Similan/Surin), `panwa` (Phi Phi), `ranong` (Myanmar day trips, Grand Andaman Pier). ❌ Never `visitpanwa` / `"Tub Lamu"` / `"Visit Panwa"`. List current values before assigning any enum string.
 
-p_state` is DEAD on prod. A local test server run as the `postgres` role writes `public` instead (harmless, but clean up).
+**Engine/gearbox/propeller positions:** `Port · C.Port · Center · C.Std · Std` (Suzuki "Starboard" ≡ "Std"); normalize via `flPosLabel`/`flPosRank`. 1 engine = 1 gearbox = 1 propeller; a `spare` part is detached (`engineId`/`gearboxId` null).
 
-⚠ **Set `SESSION_SECRET` on Railway** so re-logins are predictable (daily + on deploy). If unset, every redeploy invalidates all sessions. Session/expiry changes only affect NEW logins.
+### 3.2 Rate Type (`SB_RATE_TYPES`)
+`{id, code, name, active, routes[], seatRates{route:{zone:{paxType:price}}}, routeValidity{route:{from,to}}, routeBundles{route:{longtail:{mode:'free'|'paid',adult,child}}}, charterRates{route:{boatType:{starterPrice,starterIncludes,extraPerPax}}}, addOns{longtail:{applies[],byRoute{…}}, privateTransfer{…}}}`. Zones: `PK`, `KL`, `NoTransfer` (server also accepts `RN`). Longtail is per-route (`_rtLongtailForRoute`). Add-on types are data-driven: `RT_ADDON_DEFS` = `RT_ADDON_BUILTIN` + `SB_ADDON_TYPES`.
 
-⚠ **Load conditions matter.** `sb_bookings`, `sb_agents`, etc. must be loaded with `Array.isArray(...)` (accepts an empty array so a deliberately-cleared list stays cleared and doesn't revert to seed). A key that's persisted but never loaded = data vanishes on refresh (this bit `sb_bookings` historically).
+### 3.3 Booking (`SB_BOOKINGS`)
+Key fields: `id`, `opsId` (server id), `opsVersion`, `agentId`, `channel`, `leadPax`, `leadNationality`, `leadPhone`, `leadEmail`, `hotelName`, `pickupAreaId`, `status` (`confirmed`/`pending_approval`/`cancelled`/`cancelled_weather`/`rejected`), `bookingDate`, `voucherRef`, `trips[]`, `passengers[]`, `addOns[]`, `adjustments[]`, `priceBreakdown{…}`, `paymentSnapshot`, `history[]`, `ops{boatId,vanId,vanGroup,vanSeq,vanReturnId,vanSplits[],pfm{}}`.
+- `trip`: `{routeId, date, bookingMode:'seat'|'charter', pax:{ad_fr,ad_th,chd_fr,chd_th,inf_fr,inf_th,foc}, charterBoatId?, lockDrawSel{}, seatSource{locked,general}}`.
+- Cancelled statuses are excluded from every aggregate: `['cancelled','cancelled_weather','rejected']`.
+- `bookingV2CommitBooking` rebuilds a fresh object on edit — its `if(editing)` block must carry over `ops`, `opsId`, `opsVersion`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`.
 
-**Back-fill migration pattern (important):** `FL_DEFAULT_*` only seeds when the persisted array is empty, so items *appended* to a default list never reach already-seeded rows. When adding to a default list, also add an **idempotent merge in `flLoad`** that pushes only the missing ids. Reuse this pattern for every future default-list addition.
-
-**Backups:** HTML → `cp` to `BACKUP/allotment_v2_<YYYYMMDD>_<desc>.html` before any significant edit. Prefer local-server E2E against the live DB using scratch records (`zz_test_*`, create→patch→delete, verify residue 0) over touching real data. In-app data → the header **💾 Backup** button into `data_exports/`.
-
-`FLEET_VERSION='fleet_v34'` · `DATA_VERSION='2026o'` · `LS_KEY='loveandaman_v2'`. Bump `FLEET_VERSION` + add migration in `flLoad()` for structural fleet changes (version whitelist accepts `fleet_v2`→`fleet_v34`).
-
----
-
-## 3. Schema reference (verified)
-
-### 3.1 Boat (`DEFAULT_BOATS` / localStorage `boats[]`)
-Key fields: `id`, `name`, `type`; location `pier` (home, operational), `homeportCity`/`homeport` (legal registration); capacity `cap` (booking cap), `licensePax` (real registered seats), `totalcap`, `crew`, `engineCount`; specs `material/gt/nt/loa/beam/depth/bhp`; legal `reg/callsign/owner/ownerAddr/docs[]`; and a **status `log[]`** whose LAST entry is the current status: `{s:'available'|'fixing'|'unavailable', from, to(null=ongoing), loc?, note?, reason?}`.
-
-**Location disambiguation:** "อยู่ท่าไหน" (operational) → `pier`; "ตอนนี้อยู่ที่ไหนจริง" → `log[last].loc` else `pier`; "จดทะเบียนจังหวัดอะไร" → `homeportCity`. When quoting boat data, say which field you're using.
-
-**Pier enum (exact — don't guess from UI labels):** `tublamu` (Tub Lamu, Similan/Surin), `panwa` (Visit Panwa, Phi Phi), `ranong` (Ranong — **live since 2026-08**, runs the Myanmar day trips Se La Va + Nyaung Oo Phee out of Grand Andaman Pier; wired into Boat Op groups/pills, Boat Status tabs, Pier Office `PO_PIERS`, `CAL_PIERS`, daily-availability broadcast). ❌ Never `visitpanwa` / `"Tub Lamu"` / `"Visit Panwa"` — breaks UI grouping. Before assigning any enum string, list current values first: `[...new Set(d.boats.map(b=>b.field))]`.
-
-**Boat Status UI groups into 3 tabs by (pier + status):** Tub Lamu = `pier==='tublamu' && last.s!=='fixing'`; Visit Panwa = `pier==='panwa' && last.s!=='fixing'`; In Shop = `last.s==='fixing'` (any pier).
-
-**Engine/gearbox/propeller positions:** `Port · C.Port · Center · C.Std · Std` (Suzuki "Starboard" ≡ "Std"). Normalize via `flPosLabel`/`flPosRank`. Link invariants: 1 engine = 1 gearbox = 1 propeller; a `spare` part must be detached (`engineId`/`gearboxId` nulled).
-
-### 3.2 Rate Type (`SB_RATE_TYPES` — Sales/B2B, grep ~line 26210)
-Reusable price packages bound to agents via `agent.rateTypeId`. Shape: `{id, code, name, active, routes[], seatRates{route:{zone:{paxType:price}}}, routeValidity{route:{from,to}} (source of truth for active period), routeBundles{route:{longtail:{mode:'free'|'paid',adult,child}}} (forced add-on baked into seat price), charterRates{route:{boatType:{starterPrice,starterIncludes,extraPerPax}}}, addOns{longtail:{applies[],byRoute{route:{join:{adult,child},charter:{price,capacity}}}}, privateTransfer{...}}}`. Zones: `PK` (Phuket), `KL` (Khao Lak), `NoTransfer`.
-
-- **Longtail is per-route** (`byRoute`); read via `_rtNormalizeLongtail` / `_rtLongtailForRoute(rt,routeId)` (migrates old flat shape).
-- **Add-on types are data-driven:** `RT_ADDON_DEFS` (rebuilt by `rtRebuildAddonDefs` = `RT_ADDON_BUILTIN` + UI-created `SB_ADDON_TYPES`) is the single source of truth. To add a code-level type: push one object into `RT_ADDON_BUILTIN` + write its `_rtAddon{Detail,Edit,Contract,Summary,Init}_<key>` fns → it cascades to the Rate Type page, Agent Pricing tab, edit modal, contract PDF, and preview.
-- **Persist** with `rtPersist()` (read-modify-write). Shared detail renderer `rtBuildDetailBody(rt)` feeds both the Rate Type page and the Agent Pricing Matrix tab.
-
-### 3.3 Zone/region expansion
-Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see `allotment_v2/docs/workflows/04-transfer-vans-pickup.md` (the four "where" concepts) / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
-
-### 3.4 Booking (`SB_BOOKINGS`)
-Key fields: `id`, `schemaVer`, `agentId`, `channel`, `leadPax`, `leadNationality`, `leadPhone`, `leadEmail`, `hotelName`, `pickupAreaId`, `status` (`confirmed`/`pending_approval`/`cancelled`/`cancelled_weather`/`rejected`), `bookingDate`, `voucherRef`, `trips[]`, `passengers[]`, `addOns[]`, `adjustments[]`, `priceBreakdown{seat,addOn,focDiscount,discount,extra,total}`, `paymentSnapshot`, `marketSnapshot`, `history[]`, `ops{boatId,vanId,vanGroup,vanSeq,vanReturnId,vanSplits[],pfm{}}`.
-
-- Cancelled statuses excluded from every aggregate: `['cancelled','cancelled_weather','rejected']`.
-- `trip` shape: `{routeId, date, bookingMode:'seat'|'charter', pax:{ad_fr,ad_th,chd_fr,chd_th,inf_fr,inf_th,foc}, charterBoatId?, charterPriceMode?, lockDrawSel{}, seatSource{locked,general}}`.
-- Edit preserve: `bookingV2CommitBooking` rebuilds a fresh object — the `if(editing)` block MUST carry over `ops`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`. Miss one = that data wiped on every edit.
-
-### 3.5 Agent (`SB_AGENTS`)
-Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `contact{name,phone,email}`, `rateTypeId`, `market`, `sales` (links to `SB_SALES` id), `payType` (`invoice`/`proforma`/`cash`), `vatMode` (`none`/`exclude`/`include`), `creditLimit`, `contractVersion`. Persisted by `sbAgentsPersist()`. Load condition `Array.isArray(d.sb_agents)` — an empty array keeps the list cleared (does NOT revert to seed).
+### 3.4 Agent (`SB_AGENTS`)
+`id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `contact{name,phone,email}`, `rateTypeId`, `market`, `sales` (→ `SB_SALES`), `payType` (`invoice`/`proforma`/`cash`), `vatMode` (`none`/`exclude`/`include`), `creditLimit`, `contractVersion`.
 
 ---
 
-## 4. Safety rules
+## 4. Working with the files
 
-- **Back up first** for any edit touching `DEFAULT_*`/`FL_DEFAULT_*`, `flLoad()`/`save()`/`flSave()`, any localStorage logic, or >~50 lines.
-- **Don't break structure:** don't rename/delete existing fields (mark inactive instead), don't change the `loveandaman_v2` schema, always read-modify-write `LS_KEY`. Add new fields as optional with defaults.
-- **Verify enum values** before assigning unknown strings (see pier example above).
-- **Keep data fixes user-triggered.** Don't add new auto-mutations to `flLoad` that could wrongly rewrite legitimate data (an over-eager spare-detach / dedupe self-heal was removed for this reason). The existing self-heals (engine status, boat stuck-fixing, charter-boat mirror, van-group `vanId`) are deliberately idempotent and targeted — match that bar or don't add one.
-- **Preserve runtime safety systems:** `flLoad()` auto-snapshot + `flListSnapshots()`/`flRestoreSnapshot(N)`, defensive field-level merge, version whitelist.
-- **Browser must run via localhost, not `file://`.** Double-click `allotment_v2/start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. This is a **static file server only** (no `/api`) — it can't log in or sync to Postgres; use it for pure front-end/UI edits and point it at operation-backend when you need data. Never test in the Claude artifact preview (isolated storage).
+- Never read a big file whole: `grep -rn` over `allotment_v2/js/` → read a 30–50 line window → targeted edit → `node --check`.
+- Line citations from before 2026-08-27 (`bookingV2InferZone:69054`, …) point into the pre-split HTML: `node tools/js-split-linemap.mjs 69054`, or grep the function name.
+- **Visual system:** DM Sans / DM Mono for numbers; accent Ocean blue `#1683C7` (`softui-ocean-skin`). Each skin in `css/02-skins.css` sits behind a `/* ==== <id> ==== */` marker — delete the section to revert it. Icons are inline SVG, no Tabler webfont.
+- **Comms:** concise, show snippets, state the diff after edits.
 
----
-
-## 5. Working with the file, look & feel, comms
-
-- The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
-- **Line citations written before 2026-08-27** (`bookingV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
-- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `softui-ocean-skin` layer. The CSS lives in `allotment_v2/css/`: `01-base.css` is the base sheet, `02-skins.css` holds the 14 re-skin layers in cascade order, each behind a `/* ==== <id> ==== */` marker — **delete the marked section to revert a skin** (they were `<style id="...-skin">` blocks in the HTML before 2026-08-27; same layers, same order). Two tiny `<style>` blocks remain inline in `<body>` on purpose. **No Tabler webfont in the app** — icons are inline SVG.
-- **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
-
----
-
-## 6. Gotchas & recurring patterns
-
-These bite repeatedly. Read the relevant one before touching that area; full context is in `allotment_v2/docs/workflows/` (see **ARCHITECTURE.md** for which doc covers which domain).
+## 5. Gotchas
 
 **JS / render**
-- **`esc` / `escapeHTML` is NOT global** — it's declared locally per function. Any new top-level render fn that builds HTML with `esc(...)` must declare its own `const esc=...` or it throws silently on click.
-- **Timezone:** build `YYYY-MM-DD` with `bookingV2LocalYMD(dt)`, never `toISOString().slice(0,10)` (UTC shift breaks +07:00 date stepping).
-- **Scroll-jump on re-render:** replacing a mount's `innerHTML` while the focused element (a button/input) lives inside it makes the browser scroll to top. Fix = **surgical update** of just the changed sub-region (extract an inner-render fn, update only `#...-list`/`#...-body`/count badge), or capture+restore `scrollTop`/`window.scrollY` and blur first. Hit in withdraw parts, fleet asset lists, doc-check.
-- **`backdrop-filter` creates a stacking context** that traps typeahead dropdowns ("ซ้อนกัน"). Keep it off form-body cards that contain dropdowns; use a translucent bg only there.
-- **Sticky-header offsets** read CSS vars `--topbar` / `--t2-vangroup-top` (auto-computed in the `bookingV2Render` rAF) — never hardcode `52`.
+- `esc` / `escapeHTML` is **not global** — declare a local `const esc=…` in any new render fn.
+- Build `YYYY-MM-DD` with `bookingV2LocalYMD(dt)`, never `toISOString().slice(0,10)` (+07:00 shift).
+- Replacing a mount's `innerHTML` while focus is inside it scrolls to top — update only the changed sub-region, or save/restore scroll and blur first.
+- `backdrop-filter` makes a stacking context that traps typeahead dropdowns — keep it off form cards with dropdowns.
+- Sticky offsets read `--topbar` / `--t2-vangroup-top` — never hardcode `52`.
 
-**Booking / edit**
-- **Edit-preserve block in `bookingV2CommitBooking`:** editing rebuilds a fresh `newBk`, so the `if(editing){...}` block must carry over `ops` (boat/van assignment!), `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory` — plus `history`/`weatherResolve`/`rebook`/`invoiceId`/`paymentStatus`. Miss one and that data is wiped on every edit. (`SB_EXTRAS` is a separate store, unaffected.)
-- **Cancelled statuses** are excluded from every pax/revenue/count aggregate: `['cancelled','cancelled_weather','rejected']`.
-- **Capacity model:** `boat.cap` = booking cap; `boat.licensePax` = real seats. Over cap → `status:'pending_approval'` (approval queue); over license → hard block. Boat-assign tolerance = `cap+2` (`BA_CAP_TOL`).
+**Legacy business rules still in the browser** (being ported to the server — check `todo/legacy-browser-rules.md` in operation-backend before re-implementing one client-side)
+- Capacity: `boat.cap` = booking cap, `boat.licensePax` = real seats. Over cap → `pending_approval`; over licence → hard block. Boat-assign tolerance `cap+2` (`BA_CAP_TOL`).
+- Seat locks reduce the sellable pool; a booking may never silently consume locked seats. Sub-group holds count at parent level only (`bookingV2LockPoolHold`). Month locks release per trip (`releaseDaysBefore`/`releaseTime`).
+- Van group = one outbound van; return van is per booking/part. Never auto-pick a van (`ห้ามเดา`) — surface "รถปนกัน" conflicts instead.
+- Charter boats are out of the seat pool (`baCharterBoatIds`, `getSeatsConsumed` skips `bookingMode==='charter'`).
+- Self-arrive pickup (`bk.pickupSelf`) and self-return (`bookingV2RetInfo().selfRet`) drop a booking from van job orders without changing the rate.
+- Engine hours = `baseHours + (latest − first Daily-Log reading)`, skipping readings ≤ 0. Per-asset maintenance cost = job cost ÷ same-type assets on the job, only on asset detail pages.
+- `assets/hero/<routeId>.jpg` is shared (voucher + pickup card); `assets/voucher/<routeId>.jpg` overrides it on the voucher.
 
-**Seat locks**
-- Locks reduce the sellable pool (`getAllotment` subtracts `lockedSeats`). Anti-overbook guard in `bookingV2CommitBooking`: would-eat-locked-seats → **hard block**; true physical oversell → soft confirm. A booking can never silently consume locked seats.
-- Parent/sub-group locks: `bookingV2LockPoolHold` counts the hold at parent/standalone level only (child → 0) to avoid double-counting. Month locks use a rolling per-trip release (`releaseDaysBefore`/`releaseTime`), not a single global expiry — don't let a stale `expiry` carry onto a month lock.
+## 6. Module map
 
-**Vans / boats**
-- **Van group = one outbound van by design; return van is per-booking.** Disband must null both `vanId` and `vanReturnId`; `bookingV2VanGroupHeal` reconciles `vanId` only and must NOT spread `vanReturnId` across a group. Never auto-pick a van (`ห้ามเดา`) — detect and surface "รถปนกัน" conflicts instead.
-- **Charter boats are excluded from the seat pool.** `baCharterBoatIds(date)` / `baDayBoats(date)` filter them out; `getSeatsConsumed` excludes `bookingMode==='charter'`; `bookingV2CharterBoatHeal` mirrors `trip.charterBoatId`→`ops.boatId`. Availability only drops if the charter reserves its boat in Boat-Op `TRIPS`.
-- Van/return job orders + per-date partner driver/phone/plate overrides live in `VANJOB_DRIVER[date::vanId]`; self-arrive pickup (`bk.pickupSelf`) and self-return drop-off (`bookingV2RetInfo().selfRet`) drop a booking from the van job orders without changing the rate.
+Booking v2 (`#view-booking` → `bookingV2Render`, tabs cal/bytrip/all/locks/approvals) · Agent Info · Rate Types · Contracts · Add-on Services · Accounting (invoices/payments/deposits/VAT/statements) · Demand/Market (`renderMarketData`) · Daily PFM · Pickup Map · Insurance · FOC Detail · Booking Flow.
 
-**Fleet**
-- **Engine hours = `baseHours + (latest − first Daily-Log meter reading)`, skipping readings ≤ 0** (a `0` placeholder entry otherwise blows the total up). Service cycle = countdown vs `lastServiceHours`; reset it at maintenance-job close (`flMaintServiceReset`) or via the engine/gearbox detail button.
-- **Per-asset maintenance cost** = job cost ÷ count of same-type assets on the job (`flMaintCostShare`), applied ONLY on the Engine/Gearbox/Propeller detail pages. Job / boat / project / dashboard totals still count each job once.
-- **Engine swap:** the engine is the swappable unit; gearbox + propeller stay at the boat's drive position (`onBoatId`/`onBoatPos`, "คาเรือ · รอเครื่อง") and the incoming engine adopts them. Repair/store location = the engine's `spareLocation` (syncs with the MJ's `m.location`).
+Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job Orders / ใบงานรถ (`renderVanJobs`), Pickup Setup (`renderPickupSetup`), Maintenance / Incidents / Engines / Gearboxes / Propellers / Projects.
 
-**Docs / assets**
-- `assets/hero/<routeId>.jpg` is **shared** (Voucher ticket + Pickup-Setup marketing card) and has marketing text baked in — that's why a per-route `assets/voucher/<routeId>.jpg` override layer exists (rendered on top).
-- Doc-Check Pre-Check OCR (Tesseract.js, English) needs network at runtime; images only (PDF → manual). Results cached on `bk.docCheck.pre`; auto-tick only when the user can edit `operations`.
-
----
-
-## 7. Module map (where things live)
-
-Completed: Agent Info · Add-on Services · Renewal · Rate Types · Contract Document (P5) · Booking v2 (P6: `#view-booking`→`bookingV2Render`, tabs cal/bytrip/all/locks/approvals) · Accounting (P7: invoices/payments/deposits/VAT/statements) · Demand/Market Intelligence (P8: `renderMarketData`, immigration `.xls` import, 6 tabs) · Daily PFM (Finexy skin) · Pickup Map (Leaflet) · Insurance · FOC Detail · Booking Flow · Consumable requisition · Fuel Intelligence.
-
-Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job Orders (`renderVanJobs`), Pickup Setup (`renderPickupSetup`), Maintenance/Incidents/Engines/Gearboxes/Propellers/Projects.
-
-Sidebar groups: OPERATIONS (Booking · Boat Operation · Transfer Fleet · Van Jobs · Pickup time setup) · SALES (Agent List · Rate Types · B2C · Staff & Welfare · Demand · FOC Detail · Insurance · Booking Flow · Pickup Map) · ACCOUNTING & FINANCE (Accounting · Daily PFM) · Fleet Management · Overview · Config.
-
-*Full per-domain design and behavior detail is in `allotment_v2/docs/workflows/` — see **ARCHITECTURE.md** for the map, then grep the relevant doc for the reasoning behind any specific behavior.*
+Per-domain legacy behaviour: `allotment_v2/docs/workflows/` (map in `ARCHITECTURE.md`). These describe how the legacy browser behaves, not how operation-backend works.
