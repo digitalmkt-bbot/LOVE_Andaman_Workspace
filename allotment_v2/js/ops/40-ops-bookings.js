@@ -344,6 +344,9 @@
       bk.trips.forEach(function(t){ if(t.date === firstDate) t.ops = {}; });
     }
     bk.reconfirm = ob.reconfirm ? { sentAt: ob.reconfirm.sent_at || ob.reconfirm.sentAt || '', sentBy: ob.reconfirm.sent_by || ob.reconfirm.sentBy || '' } : null;
+    // Legacy board and Re-confirm page read bk.ops.reconfirm {status,via,at,by,sent,sentAt,sentBy} (see 39-ops-reconfirm.js)
+    bk.ops = bk.ops || {};
+    bk.ops.reconfirm = ob.reconfirm ? { status: ob.reconfirm.status || '', via: ob.reconfirm.via || 'reconfirm', at: ob.reconfirm.at || '', by: ob.reconfirm.by || '', sent: !!ob.reconfirm.sent, sentAt: ob.reconfirm.sent_at || '', sentBy: ob.reconfirm.sent_by || '' } : null;
     bk.docCheck = ob.doc_check || null;
     bk.attachments = (ob.attachments || []).map(function(a){ return { id:a.id, name:a.name || '', mime:a.mime || '', size:+a.size || 0, kind:a.kind || '', by:a.by || '', at:a.at || '' }; });
     bk.altPickups = (ob.alt_pickups || []).map(function(a){ return { areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
