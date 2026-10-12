@@ -1,0 +1,31 @@
+{
+  "packet": "RECONFIRM",
+  "status": "complete",
+  "objective": "Ops-board re-confirm (single, clear, bulk) to operation-backend",
+  "branch": "integration/operation-backend",
+  "commit": "aba0599",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/39-ops-reconfirm.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-reconfirm.test.mjs"
+  ],
+  "shared_files_touched_with_coordination": [
+    { "path": "allotment_v2/js/ops/40-ops-bookings.js", "reservation": "coordinated mapping change (+3 lines)", "entry_points": ["bk.ops.reconfirm projection in fromServer"] }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/operations.ts",
+    "D:/projects/operation-backend/src/domain/reconfirm.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "PUT", "path": "/v1/bookings/:id/reconfirm", "body": "{status:'done', via:'list'|'phone'}" },
+    { "method": "DELETE", "path": "/v1/bookings/:id/reconfirm?all=true", "body": null },
+    { "method": "PUT (bulk, per booking)", "path": "/v1/bookings/:id/reconfirm", "body": "{status:'done', via}" }
+  ],
+  "projection_mapping": "server reconfirm -> bk.ops.reconfirm {status,via,at,by,sent,sentAt,sentBy}; null when absent",
+  "legacy_mode_result": "wrappers delegate to original; zero API requests",
+  "tests": { "reconfirm": "8 pass / 0 fail", "ops_suite_at_commit": "44 pass / 0 fail" },
+  "blocked_items": [
+    { "item": "rcSetStatus, rcSendAgent, rcUnsendAgent (POST /v1/reconfirm/sent), rcToggleBooking", "reason": "route and body confirmed; not wired in this packet" }
+  ],
+  "backend_db_schema_change": false
+}
