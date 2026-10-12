@@ -12,7 +12,7 @@
   "leadEmail": "guest4@example.test",
   "status": "confirmed",
   "bookingDate": "2026-09-30",
-  "hotelName": "Phuket Town · The base uptown Phuket",
+  "hotelName": "The base uptown Phuket",
   "pickupZone": "PK",
   "pickupSelf": false,
   "pickupAreaId": "pk-town",
