@@ -28942,6 +28942,7 @@ function faInvRows(){ var out=[]; (typeof FL_INVENTORY!=='undefined'?FL_INVENTOR
 function faInvAt(pier){ var re=pier==='pier:panwa'?/panwa|พันวา/i:pier==='pier:tublamu'?/tub|ตับ|lamu/i:/กลาง|central/i; return faInvRows().filter(function(r){ return re.test(r.loc); }); }
 function faLogDays(o){ var l=(o.log||[]).slice().reverse().find(function(x){ return x.date; }); return l?{d:-faDays(l.date),date:l.date}:null; }
 function faSpKey(r){ if(r.onBoat) return 'onboat'; if(!r.loc||r.loc.type==='unknown') return 'unk'; if(r.loc.type==='pier'||r.loc.type==='shop'||r.loc.type==='boat') return 'loc:'+r.loc.key; return 'other'; }
+function faBoatHasSp(b){ if(flGetBoatSpares(b.id).total) return true; var n=String(b.name||'').toLowerCase(); return faInvRows().some(function(r){ return r.qty>0 && r.loc && r.loc.toLowerCase().indexOf(n)>=0; }); }
 function faSparesView(boats,P){
   if(!document.getElementById('fa-css4')){ var V='#view-fl-asset', st=document.createElement('style'); st.id='fa-css4';
     st.textContent=V+' .fa-3sp{display:grid;grid-template-columns:250px minmax(0,1fr) 360px;gap:10px;align-items:start}'+V+' .fa-3sp .fa-dt td{padding:7px 10px}'
@@ -28959,8 +28960,9 @@ function faSparesView(boats,P){
   var shops=[['shop:honda-phuket','🔧','อู่ Honda Phuket'],['shop:suzuki-phuket','🔧','อู่ Suzuki Phuket'],['shop:prop-shop-phuket','⟳','ร้านใบจักร Phuket']];
   var nav='<div class="fa-card"><div style="padding:12px 14px 10px"><div class="fa-kick">Spares</div></div>'
     +NI('ov','≡','#16265C','#fff','ภาพรวม','ประจำเรือ + ทุกท่า','')
-    +H('ประจำเรือ · วันนี้')+[['tublamu','TL','#00BCDF','#002A33','เรือที่ท่า Tub Lamu'],['panwa','VP','#16265C','#fff','เรือที่ท่า Visit Panwa'],['shop','🔧','#FBEBD3','#7A4300','เรือที่อยู่อู่']].filter(function(p){ return (bp[p[0]]||[]).length; })
-      .map(function(p){ return NI('bp:'+p[0],p[1],p[2],p[3],p[4],(bp[p[0]]||[]).length+' ลำ',(bp[p[0]]||[]).length); }).join('')
+    +H('ประจำเรือ · วันนี้')+[['tublamu','TL','#00BCDF','#002A33','เรือที่ท่า Tub Lamu'],['panwa','VP','#16265C','#fff','เรือที่ท่า Visit Panwa'],['shop','🔧','#FBEBD3','#7A4300','เรือที่อยู่อู่']].map(function(p){ return [p,(bp[p[0]]||[]).filter(faBoatHasSp)]; }).filter(function(x){ return x[1].length; })
+      .map(function(x){ var p=x[0]; return NI('bp:'+p[0],p[1],p[2],p[3],p[4],x[1].length+' ลำมี spare',x[1].length); }).join('')
+      +(boats.some(faBoatHasSp)?'':'<div style="padding:8px 14px 10px;font-size:11.5px;color:#8A8F9C">ยังไม่มีเรือลำไหนมี spare บนเรือ</div>')
     +H('คลังท่า')+piers.filter(function(p){ return (by['loc:'+p[0]]||[]).length||faInvAt(p[0]).length; }).map(function(p){ var L=by['loc:'+p[0]]||[], inv=faInvAt(p[0]).length; return NI('loc:'+p[0],p[1],p[2],p[3],p[4],sub(L,inv),L.length); }).join('')
     +H('ส่งซ่อม')+shops.filter(function(p){ return (by['loc:'+p[0]]||[]).length; }).map(function(p){ var L=by['loc:'+p[0]]; return NI('loc:'+p[0],p[1],'#FBEBD3','#7A4300',p[2],sub(L),L.length); }).join('')
       +((by.other||[]).length?NI('other','⚙','#FBEBD3','#7A4300','ที่อื่น / อู่อื่น',sub(by.other),by.other.length):'')
@@ -28985,19 +28987,19 @@ function faSpOnBoat(boats,bp){
   var known=order.map(function(o){ return o[0]; }); var oth=boats.filter(function(b){ return known.indexOf(faBoatPier(b))<0; }); if(oth.length) order.push(['__o','—','#F1F0EC','#3E4658','อื่น ๆ']);
   var inv=faInvRows();
   var rows=order.filter(function(o){ return !only||o[0]===only; }).map(function(o){ var L=o[0]==='__o'?oth:(bp[o[0]]||[]); if(!L.length) return '';
-    var info=L.map(function(b){ var s=flGetBoatSpares(b.id), iv=inv.filter(function(r){ return r.loc && r.loc.toLowerCase().indexOf(String(b.name).toLowerCase())>=0 && r.qty>0; }); return {b:b,s:s,iv:iv}; });
-    var ok=info.filter(function(x){ return x.s.propellers.length; }).length, none=info.filter(function(x){ return !x.s.total && !x.iv.length; }).length;
-    return '<tr class="g"><td colspan="5"><span style="display:inline-flex;align-items:center;gap:8px"><i style="width:18px;height:18px;border-radius:5px;background:'+o[2]+';color:'+o[3]+';font-size:9px;font-style:normal;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+o[1]+'</i><b style="letter-spacing:.06em;color:#3E4658">'+o[4]+'</b><span style="font-weight:500;color:#5B6170">'+L.length+' ลำ · มีใบจักรสำรอง '+ok+' · ยังไม่บันทึก '+none+'</span></span></td></tr>'
+    var info=L.map(function(b){ var s=flGetBoatSpares(b.id), iv=inv.filter(function(r){ return r.loc && r.loc.toLowerCase().indexOf(String(b.name).toLowerCase())>=0 && r.qty>0; }); return {b:b,s:s,iv:iv}; })
+      .filter(function(x){ return x.s.total||x.iv.length; });
+    if(!info.length) return '';
+    var ok=info.filter(function(x){ return x.s.propellers.length; }).length;
+    return '<tr class="g"><td colspan="5"><span style="display:inline-flex;align-items:center;gap:8px"><i style="width:18px;height:18px;border-radius:5px;background:'+o[2]+';color:'+o[3]+';font-size:9px;font-style:normal;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+o[1]+'</i><b style="letter-spacing:.06em;color:#3E4658">'+o[4]+'</b><span style="font-weight:500;color:#5B6170">'+info.length+' ลำมี spare · มีใบจักรสำรอง '+ok+'</span></span></td></tr>'
       +info.map(function(x){ var b=x.b, S=FA_BST[faBoatSt(b)]||FA_BST.available;
         var pr=x.s.propellers.map(function(p){ var r=faPart('prop',p); return '<div class="mono" style="font-size:12px">'+faE(p.serial)+'</div><div style="font-size:10.5px;color:#8A8F9C">'+faE((r.size||'')+(p.rotation?(' · '+p.rotation):''))+'</div>'; }).join('')||'<span style="color:#C5C8CF">—</span>';
         var gb=x.s.gearboxes.map(function(g){ return '<div class="mono" style="font-size:12px">'+faE(g.serial)+'</div><div style="font-size:10.5px;color:#8A8F9C">'+faE((g.brand||'')+' '+(g.modelSuffix||'')+' · '+(g.shaftLength||''))+'</div>'; }).join('')||'<span style="color:#C5C8CF">—</span>';
         var iv=x.iv.length?x.iv.slice(0,3).map(function(r){ return faE(r.it.name)+' '+r.qty; }).join(' · '):'<span style="color:#C5C8CF">—</span>';
         var st=x.s.propellers.length?['มีใบจักรสำรอง','#DDF1EA','#0B5A43']:(x.s.total||x.iv.length)?['ไม่มีใบจักรสำรอง','#FAEEDA','#854F0B']:['ยังไม่บันทึก','#FBE3E0','#A32D2D'];
         return '<tr><td><div style="display:flex;align-items:center;gap:9px">'+faAv(b,28)+'<div><b style="font-size:13px">'+faE(b.name)+'</b><div><span style="padding:0 6px;border-radius:5px;font-size:10px;font-weight:600;background:'+S[1]+';color:'+S[2]+'">'+S[0]+'</span></div></div></div></td><td>'+pr+'</td><td>'+gb+'</td><td style="font-size:12px">'+iv+'</td><td><span class="fa-st" style="font-size:10.5px;padding:2px 8px;background:'+st[1]+';color:'+st[2]+'">'+st[0]+'</span></td></tr>'; }).join(''); }).join('');
-  var tot=boats.filter(function(b){ return flGetBoatSpares(b.id).total; }).length;
   return '<div class="fa-card" style="margin-bottom:10px"><div style="display:flex;align-items:flex-end;gap:10px;padding:14px 18px;border-bottom:1px solid #ECEBE6"><div style="flex:1"><div class="fa-kick">1 · ประจำเรือ</div><b style="font-size:19px;font-weight:800">ของสำรองที่อยู่บนเรือแต่ละลำ วันนี้</b></div><span class="mono" style="font-size:12px;color:#5B6170;border:1px solid #DCDFE6;border-radius:9px;padding:6px 10px">'+faFmtD(TODAY_STR,1)+'</span></div>'
-    +(tot?'':'<div class="fa-alert amb" style="border-top:0"><b>!</b><span style="flex:1">ยังไม่มีเรือลำไหนบันทึก spare ไว้บนเรือ — ตั้งได้ที่ปุ่ม "ย้ายที่เก็บ" ของเกียร์ / ใบจักร แล้วเลือก "บนเรือ …"</span></div>')
-    +'<div style="overflow-x:auto"><table class="fa-dt" style="min-width:760px"><thead><tr><th style="width:220px">Boat</th><th>ใบจักรสำรอง</th><th>เกียร์สำรอง</th><th>ของใช้บนเรือ</th><th style="width:130px">สถานะ</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    +(!rows?'<div style="padding:22px 18px;font-size:12.5px;color:#5B6170">ยังไม่มีเรือลำไหนมี spare ใส่ไว้บนเรือ — บันทึกได้ที่ปุ่ม "ย้ายที่เก็บ" ของเกียร์ / ใบจักร แล้วเลือก "บนเรือ …" เรือลำนั้นจะขึ้นในตารางนี้</div>':'<div style="overflow-x:auto"><table class="fa-dt" style="min-width:760px"><thead><tr><th style="width:220px">Boat</th><th>ใบจักรสำรอง</th><th>เกียร์สำรอง</th><th>ของใช้บนเรือ</th><th style="width:130px">สถานะ</th></tr></thead><tbody>'+rows+'</tbody></table></div>')+'</div>';
 }
 function faSpChips(list,keyf,colf){ var m={}; list.forEach(function(r){ var k=keyf(r); if(!m[k]) m[k]={n:0,bad:0,r:r}; m[k].n++; if(r.st==='damaged'||r.st==='broken'||r.st==='fixing') m[k].bad++; });
   return Object.keys(m).sort().map(function(k){ var x=m[k], c=colf(x.r); return '<span style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:7px;font-size:11.5px;font-weight:600;background:'+c[0]+';color:'+c[1]+';border:1px '+(x.bad===x.n?'dashed':'solid')+' '+c[2]+'">'+faE(k)+' '+x.n+(x.bad?(' · เสีย '+x.bad):'')+'</span>'; }).join(' '); }
