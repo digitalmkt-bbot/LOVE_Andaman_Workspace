@@ -76474,6 +76474,27 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.btc-bb>td>div>span:first-child{font-size:13px!important;color:#1F5FBF!important}',
     'body.btc #view-booking tr.btc-bb>td>div>span:nth-child(2){font-size:12px!important}',
     'body.btc #view-booking .t2-bcell button[data-babtn="pick"]{border-color:#BFD0F5!important;color:#1F5FBF!important;padding:4px 10px!important}',
+
+    /* zeros / empty → dot */
+    'body.btc #view-booking td.t2-c>.t2-dim{font-size:0}',
+    'body.btc #view-booking td.t2-c>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
+    /* trip band capacity bar */
+    'body.btc #view-booking .t2-pband .btc-tbar{display:inline-flex;width:160px;height:6px;border-radius:3px;background:#E6E9EF;overflow:hidden;vertical-align:middle;margin:0 10px}',
+    'body.btc #view-booking .t2-pband .btc-tbar i{display:block;height:100%}',
+    'body.btc #view-booking .t2-pband .btc-tbar i.l{background:repeating-linear-gradient(45deg,#A78BFA 0 3px,#DDD6FE 3px 6px)}',
+    'body.btc #view-booking .t2-pband .ps em{border-radius:10px}',
+    /* group header summary */
+    'body.btc #view-booking .btc-gnp{font-size:11.5px;font-weight:600;color:#B42318;white-space:nowrap}',
+    /* selected programme card */
+    'body.btc #view-booking .bt-boat .btc-sbar{display:flex;height:7px;border-radius:4px;background:#E6E9EF;overflow:hidden;margin:6px 10px 4px}',
+    'body.btc #view-booking .bt-boat .btc-sbar i{display:block;height:100%}',
+    'body.btc #view-booking .bt-boat .btc-sbar i.l{background:repeating-linear-gradient(45deg,#A78BFA 0 3px,#DDD6FE 3px 6px)}',
+    'body.btc #view-booking .bt-brow .btc-bbar{flex:1;display:flex;height:4px;border-radius:2px;background:#EEF0F3;overflow:hidden;margin:0 8px;min-width:30px}',
+    'body.btc #view-booking .bt-brow .btc-bbar i{display:block;height:100%}',
+    /* vans panel: capacity line on vans that have a seat count */
+    'body.btc #view-booking .bt-vans .bt-vgrid>div{position:relative;overflow:hidden}',
+    'body.btc #view-booking .bt-vans .btc-vbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#EEF0F3}',
+    'body.btc #view-booking .bt-vans .btc-vbar i{display:block;height:100%;background:#0F7B4F}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -76689,6 +76710,88 @@ function pc2CSS3(S){
     }
   }
 
+
+  /* fixed table · narrower columns in Compact so more of the table fits (Classic widths untouched) */
+  /* voucher / agency / customer are sticky on the left with offsets computed from Classic widths → never touch those three */
+  var COLW = {'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':130,'room':40,'zone':70,
+              'send back':76,'add-on':70,'special request':90,'pay':80,'total':84,'':40};
+  function colWidths(root){
+    var ts = root.querySelectorAll('table.t2-mtbl:not(.btc-cw)');
+    for(var i = 0; i < ts.length; i++){
+      var t = ts[i]; t.classList.add('btc-cw');
+      var cols = t.querySelectorAll(':scope > colgroup > col'), ths = t.querySelectorAll(':scope > thead > tr > th');
+      if(!cols.length || cols.length !== ths.length) continue;
+      for(var c = 0; c < cols.length; c++){
+        var k = ths[c].textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+        if(!(k in COLW)) continue;
+        var cur = parseFloat(cols[c].style.width) || 0;
+        if(cur > COLW[k]){ cols[c].setAttribute('data-btcw', cur); cols[c].style.width = COLW[k] + 'px'; }
+      }
+    }
+  }
+  function mkBar(bk, lk, cap, col){
+    if(!(cap > 0)) return '';
+    var b = Math.min(100, bk * 100 / cap), l = Math.max(0, Math.min(100 - b, lk * 100 / cap));
+    return '<i style="width:' + b + '%;background:' + col + '"></i>' + (l ? '<i class="l" style="width:' + l + '%"></i>' : '');
+  }
+  /* trip band: bar between booked/cap and the free chip */
+  function tripBars(root){
+    var ps = root.querySelectorAll('.t2-pband .ps:not(.btc-tb)');
+    for(var i = 0; i < ps.length; i++){
+      var p = ps[i]; p.classList.add('btc-tb');
+      var bk = parseInt((p.querySelector('b') || {}).textContent, 10) || 0;
+      var txt = ''; for(var q = 0; q < p.childNodes.length; q++){ var nd = p.childNodes[q]; if(nd.nodeType === 3 || nd.tagName === 'B') txt += nd.textContent; }
+      var m = txt.match(/\/\s*(\d+)/); var cap = m ? parseInt(m[1], 10) : 0;
+      var tr = p.closest('tr'); var col = '#8b909c'; var mc = (tr.getAttribute('style') || '').match(/--pc:\s*([^;]+)/); if(mc) col = mc[1].trim();
+      var em = p.querySelector('em');
+      if(cap > 0){ var bar = document.createElement('span'); bar.className = 'btc-tbar'; bar.innerHTML = mkBar(bk, 0, cap, col); if(em) p.insertBefore(bar, em); else p.appendChild(bar); }
+      if(em) em.textContent = freeTh(em.textContent);
+    }
+  }
+  /* normal mode group header: how many rows in the group have no pickup */
+  function groupNoPickup(root){
+    var trs = root.querySelectorAll('tr[data-grp]:not(.btc-vg):not(.btc-gn)');
+    for(var i = 0; i < trs.length; i++){
+      var tr = trs[i]; tr.classList.add('btc-gn');
+      if(tr.querySelector('select[onchange*="bkV2VanGroupSetVan"]')) continue;   // van mode
+      var n = 0, r = tr.nextElementSibling;
+      while(r && r.classList.contains('t2-row')){ if(r.querySelector('.t2-needpickup')) n++; r = r.nextElementSibling; }
+      if(!n) continue;
+      var d = tr.querySelector('td > div'); if(!d) continue;
+      var sp = document.createElement('span'); sp.className = 'btc-gnp'; sp.textContent = '● ไม่มีจุดรับ ' + n;
+      var auto = null; for(var c = 0; c < d.children.length; c++){ if(/margin-left:\s*auto/.test(d.children[c].getAttribute('style') || '')){ auto = d.children[c]; break; } }
+      d.insertBefore(sp, auto);
+    }
+  }
+  /* programme picked: seat bar under Free/Booked/Capacity/Locked + a bar per boat */
+  function selCard(root){
+    var c = root.querySelector('.bt-boat:not(.btc-sc)'); if(!c) return;
+    var av = c.querySelector('.bt-avrow'); if(!av) return;
+    c.classList.add('btc-sc');
+    var vals = av.querySelectorAll('.bt-av .v'); var num = function(i){ return vals[i] ? (parseInt(vals[i].textContent, 10) || 0) : 0; };
+    var bk = num(1), cap = num(2), lk = num(3);
+    var col = ((c.getAttribute('style') || '').match(/--c:\s*([^;]+)/) || [])[1] || '#8b909c';
+    if(cap > 0){ var bar = document.createElement('div'); bar.className = 'btc-sbar'; bar.innerHTML = mkBar(bk, lk, cap, col.trim()); bar.title = 'จอง ' + bk + ' · ล็อก ' + lk + ' / ' + cap; av.parentNode.insertBefore(bar, av.nextSibling); }
+    var rows = c.querySelectorAll('.bt-brow');
+    for(var i = 0; i < rows.length; i++){
+      var ld = rows[i].querySelector('.ld'); if(!ld) continue;
+      var m = ld.textContent.match(/(\d+)\s*\/\s*(\d+)/); if(!m) continue;
+      var d = rows[i].querySelector('.d'); var bc = d ? (d.style.background || d.style.backgroundColor) : col;
+      var b = document.createElement('span'); b.className = 'btc-bbar'; b.innerHTML = mkBar(+m[1], 0, +m[2], bc);
+      rows[i].insertBefore(b, ld);
+    }
+  }
+  /* vans panel: thin capacity line at the bottom of vans that show "x/y pax" (no height change) */
+  function vanBars(root){
+    var cs = root.querySelectorAll('.bt-vans .bt-vgrid > div:not(.btc-vb)');
+    for(var i = 0; i < cs.length; i++){
+      var c = cs[i]; c.classList.add('btc-vb');
+      var m = c.textContent.match(/(\d+)\s*\/\s*(\d+)\s*pax/); if(!m || !(+m[2] > 0)) continue;
+      var b = document.createElement('span'); b.className = 'btc-vbar'; b.innerHTML = '<i style="width:' + Math.min(100, m[1] * 100 / m[2]) + '%"></i>';
+      c.appendChild(b);
+    }
+  }
+
   function rows(root){
     var ags = root.querySelectorAll('td.t2-ag > div[style*="background"]:not(.btc-ag)');
     for(var i = 0; i < ags.length; i++){
@@ -76720,7 +76823,7 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); rows(root); }
+        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); rows(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
