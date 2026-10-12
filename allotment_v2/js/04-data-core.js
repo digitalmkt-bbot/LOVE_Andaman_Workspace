@@ -3341,7 +3341,11 @@ function renderDash(){
      would start it again and the settle-redraw would loop. After a failure,
      hold off for 15s; the loader still clears on that settle. */
   const _dashRecentCooling=Date.now()-(window._dashRecentFailedAt||0)<15000;
-  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function' && !_dashRecentCooling)?bookingV2OpsEnsureRecent(30):null;
+  /* Boot resets the booking cache once it has loaded. A feed started before
+     that (on DOM ready) is forgotten by the reset, so the next render starts a
+     second full copy. Wait until boot has loaded, then start it once. */
+  const _opsBooting=!!(window.laOps && window.laOps.enabled && window.laOps.enabled() && !(window.laOps.state && window.laOps.state.loaded));
+  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function' && !_dashRecentCooling && !_opsBooting)?bookingV2OpsEnsureRecent(30):null;
   if(_dashRecentLoad && !window._dashRecentPending){
     window._dashRecentPending=true;
     _dashRecentLoad.then(function(j){
@@ -3357,7 +3361,7 @@ function renderDash(){
      updates it when the answer arrives, instead of blanking the page. Failed
      requests render with their own banner. */
   const _dashWaitOps=_opsDashState==='loading' && !_opsDash;
-  const _dashWaitRecent=!!window._dashRecentPending && !window._dashRecentLoadedOnce;
+  const _dashWaitRecent=_opsBooting || (!!window._dashRecentPending && !window._dashRecentLoadedOnce);
   if(_dashWaitOps || _dashWaitRecent){
     window._dashLoaderShown=true;
     wrap.innerHTML = DV_CSS
