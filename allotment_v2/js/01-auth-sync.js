@@ -1543,6 +1543,7 @@
       document.head.appendChild(st);
     }
     if(!document.getElementById('la-uwin-css3')){ var st3=document.createElement('style'); st3.id='la-uwin-css3'; st3.textContent=lauCSS3(); document.head.appendChild(st3); }   // §laUsers3
+    if(!document.getElementById('la-uwin-css3m')){ var st4=document.createElement('style'); st4.id='la-uwin-css3m'; st4.textContent=lauCSS3m(); document.head.appendChild(st4); }
     window.__laTab='list';
     LAU={q:'',dept:'',area:'',role:'',hideOff:1,rows:null,err:'',draft:null,cur:null,add:null,dirty:{},pwd:null,del:null};
     var ov=document.createElement('div'); ov.id='la-uwin';
@@ -1800,6 +1801,85 @@
    +'@media (max-width:820px){'+W+' .g3{grid-template-columns:1fr}'+W+' .stats{grid-template-columns:repeat(3,1fr)}'+W+' .hd{grid-template-columns:1fr auto}'+W+' .hd .wm{display:none}}';
   }
 
+  /* §laUsers3 · แบบ C · ตารางสิทธิ์ใหม่ + ลิ้นชักเลือกรายเมนู
+     ช่องบอกระดับ + จำนวน (แก้ 10/16 · ดู ครบ) · คลิกช่อง = __laCycle เดิม · คลิกชื่อ = เปิดรายเมนูด้านขวา
+     ทุกอย่างเขียนลง LAU.dirty แล้วบันทึกด้วย __laSaveMatrix เหมือนเดิม */
+  window.__laMxOpen=function(id){ LAU.mx=(LAU.mx===id)?null:id; __laRender(); };
+  function lauDraftW(u){ var D=LAU.dirty[u.id]; if(!D){ D={perms:u.perms.slice(),edit:u.edit.slice()}; LAU.dirty[u.id]=D; } return D; }
+  function lauCleanDirty(u){ var D=LAU.dirty[u.id]; if(!D) return;
+    var same=function(a,b){ a=a.slice().sort(); b=b.slice().sort(); return a.length===b.length && a.every(function(x,i){ return x===b[i]; }); };
+    if(same(D.perms,u.perms) && same(D.edit.filter(function(k){ return lauGot(D.perms,k)>0; }),u.edit.filter(function(k){ return lauGot(u.perms,k)>0; }))) delete LAU.dirty[u.id]; }
+  window.__laMenu=function(id,v){ var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
+    var D=lauDraftW(u), i=D.perms.indexOf(v); if(i>=0) D.perms.splice(i,1); else D.perms.push(v); lauCleanDirty(u); __laRender(); };
+  window.__laMenuAll=function(id,k,on){ var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
+    var D=lauDraftW(u), M=lauMenus(k).map(function(m){ return m.v; });
+    D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; }); if(on) D.perms=D.perms.concat(M); lauCleanDirty(u); __laRender(); };
+  window.__laAreaEd=function(id,k,ed){ var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
+    var D=lauDraftW(u); D.edit=D.edit.filter(function(x){ return x!==k; }); if(ed) D.edit.push(k); lauCleanDirty(u); __laRender(); };
+  function lauCell2(u,D,a){
+    var C=lauAC(a.k), n=lauMenus(a.k).length, adm=u.role==='admin';
+    var L=adm?'edit':lauLvl(u.role,D.perms,D.edit,a.k), g=adm?n:lauGot(D.perms,a.k);
+    if(L==='no') return '<button class="mc no"'+(adm?' disabled':' onclick="__laCycle('+u.id+',\''+a.k+'\')"')+' title="ไม่มีสิทธิ์ · คลิกเพื่อให้ดู">·</button>';
+    var lab=(L==='edit'?'แก้':'ดู')+' '+(g===n?'ครบ':(g+'/'+n));
+    return '<button class="mc" style="'+(L==='edit'?('background:'+C+';border-color:'+C+';color:#fff'):('background:#fff;border-color:'+C+';color:'+C))+'"'
+      +(adm?' disabled':' onclick="__laCycle('+u.id+',\''+a.k+'\')"')+' title="'+esc(lauAT(a.k)+' · '+g+'/'+n+' เมนู · '+(L==='edit'?'แก้ไขได้':'ดูอย่างเดียว')+(adm?'':' · คลิกเพื่อวน'))+'">'+lab+'</button>';
+  }
+  function lauMatrix2(F){
+    var nd=Object.keys(LAU.dirty).length;
+    if(LAU.mx && !(LAU.rows||[]).some(function(x){ return x.id===LAU.mx; })) LAU.mx=null;
+    var by={}; F.forEach(function(u){ (by[u.dept]=by[u.dept]||[]).push(u); });
+    var th='<tr><th class="nm">ผู้ใช้</th>'+LA_AREAS.map(function(a){ return '<th style="color:'+lauAC(a.k)+'">'+esc(lauAT(a.k))+'<i>'+lauMenus(a.k).length+'</i></th>'; }).join('')+'<th class="r">เมนู</th></tr>';
+    var body=LA_DEPTS.filter(function(d){ return by[d.k]; }).map(function(d){
+      return '<tr class="dg2"><td colspan="'+(LA_AREAS.length+2)+'">'+esc(d.t)+' <em>'+by[d.k].length+'</em></td></tr>'
+        +by[d.k].map(function(u){ var D=lauDraftOf(u), on=LAU.mx===u.id, dirty=!!LAU.dirty[u.id];
+          return '<tr class="'+(on?'on ':'')+(dirty?'dt':'')+'"><td class="nm" onclick="__laMxOpen('+u.id+')" title="คลิกเพื่อเลือกรายเมนู"><div class="who3"><span class="av3" style="width:26px;height:26px;font-size:10px;background:'+lauAvC(u)+'">'+lauAvTxt(u)+'</span>'
+            +'<b>'+esc(u.username)+'</b><span class="nmn">'+esc(u.name||'')+'</span>'+(u.role==='admin'?'<em class="tg adm">ADMIN</em>':'')+(dirty?'<em class="tg dt">ยังไม่บันทึก</em>':'')+'</div></td>'
+            +LA_AREAS.map(function(a){ return '<td>'+lauCell2(u,D,a)+'</td>'; }).join('')
+            +'<td class="r">'+(u.role==='admin'?LA_NAV.length:D.perms.length)+'</td></tr>'; }).join(''); }).join('');
+    var mx='<div class="c3"><div class="mh"><b>ตารางสิทธิ์</b><span>คลิกช่องเพื่อวน ไม่มี → ดู → แก้ไข · คลิกชื่อเพื่อเลือกรายเมนู</span></div>'
+      +'<div style="overflow:auto"><table class="mx2"><thead>'+th+'</thead><tbody>'+(body||'<tr><td colspan="9" style="padding:30px;text-align:center;color:#8A8F9C">ไม่พบผู้ใช้</td></tr>')+'</tbody></table></div>'
+      +(nd?('<div class="sv3 on"><span>&#9888; แก้สิทธิ์ไว้ '+nd+' คน ยังไม่ได้บันทึก</span><button class="b sm" onclick="__laDirtyDrop()">ทิ้งการแก้ไข</button><button class="b sm pri" onclick="__laSaveMatrix()">บันทึกทั้งหมด</button></div>'):'')+'</div>';
+    var u=LAU.mx?(LAU.rows||[]).filter(function(x){ return x.id===LAU.mx; })[0]:null;
+    return '<div class="gmx'+(u?' open':'')+'">'+mx+(u?lauDrawer(u):'')+'</div>';
+  }
+  function lauDrawer(u){
+    var D=lauDraftOf(u), adm=u.role==='admin', mn=adm?LA_NAV.length:D.perms.length;
+    var h='<div class="c3 drw"><div class="dh3"><span class="av3 big" style="width:38px;height:38px;background:'+lauAvC(u)+'">'+lauAvTxt(u)+'</span><div style="flex:1;min-width:0"><div class="u3" style="font-size:16px"><b>'+esc(u.username)+'</b>'+(adm?'<em class="tg adm">ADMIN</em>':'')+'</div>'
+      +'<div class="m3" style="font-size:12px">เลือกรายเมนู · '+mn+' จาก '+LA_NAV.length+(u.name?(' · '+esc(u.name)):'')+'</div></div><button class="ic" onclick="__laMxOpen('+u.id+')">&#10005;</button></div>';
+    if(adm) return h+'<div style="padding:18px;font-size:12.5px;color:#5B6170">admin เข้าได้ทุกเมนูและแก้ไขได้ทุกพื้นที่ · ไม่ต้องเลือกรายเมนู</div></div>';
+    h+=LA_AREAS.map(function(a){ var C=lauAC(a.k), M=lauMenus(a.k), g=lauGot(D.perms,a.k), L=lauLvl(u.role,D.perms,D.edit,a.k), open=g>0;
+      var seg='<span class="seg3"><button type="button" class="'+(L==='view'?'on':'')+'" style="'+(L==='view'?('background:'+C+';color:#fff'):'')+'"'+(g?'':' disabled')+' onclick="__laAreaEd('+u.id+',\''+a.k+'\',0)">ดู</button>'
+        +'<button type="button" class="'+(L==='edit'?'on':'')+'" style="'+(L==='edit'?('background:'+C+';color:#fff'):'')+'"'+(g?'':' disabled')+' onclick="__laAreaEd('+u.id+',\''+a.k+'\',1)">แก้ไข</button></span>';
+      return '<div class="ah"><i style="background:'+C+'"></i><b>'+esc(lauAT(a.k))+'</b><span class="mono3">'+g+'/'+M.length+'</span>'
+        +'<button class="lnk" style="margin-left:auto;font-size:11px" onclick="__laMenuAll('+u.id+',\''+a.k+'\','+(g===M.length?0:1)+')">'+(g===M.length?'เอาออกทั้งหมด':'เลือกทั้งหมด')+'</button>'+seg+'</div>'
+        +'<div class="mg">'+M.map(function(m){ var ck=D.perms.indexOf(m.v)>=0;
+          return '<label class="mi'+(ck?' ck':'')+'"><input type="checkbox"'+(ck?' checked':'')+' onchange="__laMenu('+u.id+',\''+m.v+'\')" style="accent-color:'+C+'">'+esc(m.t)+'</label>'; }).join('')+'</div>'; }).join('');
+    var nd=!!LAU.dirty[u.id];
+    h+='<div class="sv3'+(nd?' on':'')+'"><span>'+(nd?'คนนี้มีการแก้ที่ยังไม่บันทึก':'ยังไม่มีการเปลี่ยนแปลง')+'</span><button class="b sm pri"'+(Object.keys(LAU.dirty).length?'':' disabled')+' onclick="__laSaveMatrix()">บันทึก</button></div>';
+    return h+'</div>';
+  }
+  function lauCSS3m(){ var W='#la-uwin'; return ''
+   +W+' .gmx{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start}'+W+' .gmx.open{grid-template-columns:minmax(0,1fr) 420px}'
+   +W+' .mx2{width:100%;border-collapse:collapse}'
+   +W+' .mx2 th{padding:8px 4px;font-size:10.5px;font-weight:700;background:#FAFAF8;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;white-space:nowrap}'
+   +W+' .mx2 th i{display:block;font-style:normal;font-weight:500;color:#8A8F9C}'
+   +W+' .mx2 th.nm{text-align:left;padding-left:14px;color:#5B6170}'+W+' .mx2 .r{text-align:right;padding-right:14px;font-family:"DM Mono",monospace;font-size:12.5px}'
+   +W+' .mx2 td{padding:3px 3px;border-bottom:1px solid #F0F0EC}'
+   +W+' .mx2 td.nm{padding:5px 14px;cursor:pointer;min-width:200px}'+W+' .mx2 td.nm:hover{background:#F7F7F5}'
+   +W+' .mx2 .nmn{font-size:11px;color:#8A8F9C}'+W+' .mx2 td.nm b{font-family:"DM Mono",monospace;font-size:12.5px}'
+   +W+' .mx2 tr.on td{background:#E8F3FB}'+W+' .mx2 tr.on td.nm{box-shadow:inset 3px 0 0 #1272B3}'+W+' .mx2 tr.dt td{background:#FFFBF0}'
+   +W+' .mx2 tr.dg2 td{padding:6px 14px;background:#F4F5F8;font-size:11px;font-weight:700;letter-spacing:.06em;color:#3E4658}'+W+' .mx2 tr.dg2 em{font-style:normal;color:#8A8F9C}'
+   +W+' .mc{width:100%;min-width:62px;height:28px;border-radius:7px;border:1.5px solid;font-size:11px;font-weight:700;font-family:"DM Mono",monospace;cursor:pointer;white-space:nowrap}'
+   +W+' .mc.no{background:#F4F5F8;border-color:#EEF0F3;color:#C5C8CF}'+W+' .mc:disabled{cursor:default}'
+   +W+' .drw{position:sticky;top:0;max-height:calc(94vh - 230px);overflow:auto}'
+   +W+' .ah{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#FAFAF8;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6}'
+   +W+' .ah i{width:10px;height:10px;border-radius:3px}'+W+' .ah b{font-size:12.5px}'+W+' .mono3{font-family:"DM Mono",monospace;font-size:11.5px;color:#8A8F9C}'
+   +W+' .ah .seg3 button{padding:3px 9px;font-size:10.5px}'+W+' .ah .seg3 button:disabled{opacity:.4}'
+   +W+' .mg{display:grid;grid-template-columns:1fr 1fr;gap:1px 10px;padding:6px 16px 8px}'
+   +W+' .mi{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;color:#8A8F9C;cursor:pointer}'+W+' .mi.ck{color:#0F1B3D}'
+   +'@media (max-width:1250px){'+W+' .gmx.open{grid-template-columns:1fr}}';
+  }
+
   window.__laRender=function(){
     var w=document.getElementById('la-uwin'); if(!w) return;
     var T=window.__laTab;
@@ -1823,7 +1903,7 @@
       +'<div style="font-size:13px;font-weight:700;color:#B4392B">'+esc(LAU.err)+'</div>'
       +'<button class="b" style="margin-top:12px" onclick="__laLoadUsers()">ลองใหม่</button></div>'; return; }
     var F=lauFiltered();
-    el.innerHTML = T==='list' ? lauList2(F) : T==='matrix' ? lauMatrix(F)
+    el.innerHTML = T==='list' ? lauList2(F) : T==='matrix' ? lauMatrix2(F)
                  : T==='ov' ? lauOverview(US) : lauAdd();
     if(T==='add') __laAddHint();
     if(fq){ var qi=document.getElementById('la-q'); if(qi){ qi.focus(); try{ qi.setSelectionRange(qi.value.length,qi.value.length); }catch(_){ } } }
