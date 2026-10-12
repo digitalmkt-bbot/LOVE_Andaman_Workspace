@@ -24,6 +24,9 @@ test('insurance, meals, check-in, and tour-sale request/response mappers match v
   });
   assert.deepEqual(JSON.parse(JSON.stringify(c.parseCheckinKindAndSlot('pier:2'))), { kind: 'pier', slot: 2 });
   assert.deepEqual(JSON.parse(JSON.stringify(c.parseCheckinKindAndSlot('van'))), { kind: 'van', slot: 0 });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.parseCheckinKindAndSlot('van#2'))), { kind: 'van', slot: 2 });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.parseCheckinKindAndSlot('pier#1'))), { kind: 'pier', slot: 1 });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.parseCheckinKindAndSlot('pier#0'))), { kind: 'pier', slot: 0 });
 
   const ckBody = c.toCheckinBody(
     { expected: 4, actualPax: 3, at: '2026-10-12T08:00:00Z', by: 'PierA', events: [] },

@@ -182,7 +182,8 @@
 
   function parseCheckinKindAndSlot(kind){
     var s = String(kind || '');
-    var m = /^(van|pier)(?::(\d+))?$/.exec(s);
+    // legacy _ckSlot writes split-van slots as 'van#2' / 'pier#1'
+    var m = /^(van|pier)(?:[#:](\d+))?$/.exec(s);
     if(!m) return { kind: s === 'pier' ? 'pier' : 'van', slot: 0 };
     return { kind: m[1], slot: m[2] != null ? parseInt(m[2], 10) : 0 };
   }
