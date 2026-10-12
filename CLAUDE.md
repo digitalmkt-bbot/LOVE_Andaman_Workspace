@@ -7,7 +7,7 @@
 **The staff app moving onto [`operation_backend`](https://github.com/TheTaTha5/operation_backend).** There is **no `server.js`** here (deleted 2026-10-12). Railway runs `static-server.js`: static files + `GET /health`, nothing else. All data goes from the browser straight to operation-backend. **Any `/api/*` call still in `allotment_v2/js/` is a 404** — rewire it to operation-backend, never revive a legacy endpoint.
 
 - **End goal:** the frontend is a display client. Data and business rules belong on operation-backend; judge a change by how much browser logic it lets us delete.
-- **Sandbox frontend:** `loveandamanworkspace-pano-frontend-production.up.railway.app` — a push to this branch deploys it (not prod, not rsvn).
+- **Production frontend (since 2026-10-12):** `loveandamanworkspace-pano-frontend-production.up.railway.app`. Railway auto-deploys this branch, so **`git push origin integration/operation-backend` is a production release** — staff see it minutes later. Treat every push as shipping: `git fetch` first, `node --check` + tests, bump `?v=`, then verify `git ls-remote origin refs/heads/integration/operation-backend` equals `git rev-parse HEAD`. (Until 2026-10-12 this was the sandbox.)
 - **operation-backend:** code at `D:/projects/operation-backend`, deployed at `operationbackend-production.up.railway.app`. The client's base URL is `LA_CFG.opsBackend` (default that URL, `01-auth-sync.js`).
 - **Cutover to-do list:** `D:/projects/operation-backend/docs/readiness-2026-10-12-en.md`.
 
