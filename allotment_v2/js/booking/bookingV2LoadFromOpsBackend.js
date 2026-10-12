@@ -131,12 +131,18 @@ function bookingV2OpsEnsureRecent(days, source){
     console.log('[opsSync] loaded '+all.length+' recent booking(s) via '+via+' for '+fromYMD+' → '+stamp+' source='+source);
     return {bookings:all, via:via};
   }
+  /* 200 is the endpoint's maximum page. Every page is a cross-origin request
+     with Authorization, so it also costs a CORS preflight; bigger pages halve
+     both. A build that still caps at 100 answers 400, so drop back to 100. */
+  var pageLimit=200;
   function recentPage(cursor){
-    var qp='created_from='+encodeURIComponent(fromYMD)+'&created_to='+encodeURIComponent(stamp)+'&source='+encodeURIComponent(source)+'&limit=100'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
+    var qp='created_from='+encodeURIComponent(fromYMD)+'&created_to='+encodeURIComponent(stamp)+'&source='+encodeURIComponent(source)+'&limit='+pageLimit+(cursor?'&cursor='+encodeURIComponent(cursor):'');
     return window.laOpsFetch('/v1/bookings/recent?'+qp).then(function(r){
+      if(r.status===400 && pageLimit>100){ pageLimit=100; return { retry: true }; }
       if(r.status===404||r.status===405){ var e=new Error('recent endpoint unavailable (HTTP '+r.status+')'); e.code='recent_unsupported'; throw e; }
       return r.ok?r.json():null;
     }).then(function(j){
+      if(j && j.retry) return recentPage(cursor);
       if(!j || !Array.isArray(j.bookings)) throw new Error('recent booking list did not return bookings');
       Array.prototype.push.apply(all,j.bookings.map(bookingV2FromOpsBooking));
       // At exhaustion next_cursor is omitted (not null) — either ends paging.
