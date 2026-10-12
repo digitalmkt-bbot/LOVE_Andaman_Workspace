@@ -102,6 +102,7 @@ function createRuntime(){
     }),
     queue: fn => Promise.resolve().then(fn),
     fail: (title, err) => calls.push({ fail: title, message: err && err.message }),
+    loadingHtml: label => '<div class="la-ops-loading">' + label + '</div>',
     wrote: kind => calls.push({ wrote: kind }),
     onWrite: () => {},
     onChange: () => {},

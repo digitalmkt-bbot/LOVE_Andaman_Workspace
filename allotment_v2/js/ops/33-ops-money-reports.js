@@ -163,7 +163,7 @@
   wrap('renderAccounting',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var self=this; var host=document.getElementById('acct-body');
-    if(!reports.accounting){ if(host) host.innerHTML='<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading accounting from operation-backend…</div>'; return loadAccounting().then(function(){ renderAccountingFromServer.call(self); },function(e){ fail('Accounting report did not load',e); hostError('acct-body','Accounting report did not load from operation-backend.'); }); }
+    if(!reports.accounting){ if(host) host.innerHTML=O.loadingHtml('Loading accounting…'); return loadAccounting().then(function(){ renderAccountingFromServer.call(self); },function(e){ fail('Accounting report did not load',e); hostError('acct-body','Accounting report did not load from operation-backend.'); }); }
     return renderAccountingFromServer.call(self);
   });
   wrap('acctDashboardHtml',function(orig){
@@ -174,19 +174,19 @@
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var id=text(agentId); if(!id) return;
     if(reports.statements[id]) return modal(statementHtml(reports.statements[id]));
-    modal('<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading statement from operation-backend…</div>');
+    modal(O.loadingHtml('Loading statement…'));
     return loadStatement(id).then(function(d){ modal(statementHtml(d)); },function(e){ fail('Agent statement did not load',e); modal('<div style="padding:32px;color:#A32D2D">Agent statement did not load from operation-backend.</div>'); });
   });
   wrap('renderTravelSum',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var host=document.getElementById('travelsum-host'), date=dateOf(typeof _tsDate!=='undefined'?_tsDate:null);
-    if(!reports.travel[date]){ if(host) host.innerHTML='<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading Travel Summary from operation-backend…</div>'; return loadTravel(date).then(function(d){ if(host) host.innerHTML=travelHtml(d); },function(e){ fail('Travel Summary did not load',e); hostError('travelsum-host','Travel Summary did not load from operation-backend.'); }); }
+    if(!reports.travel[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Travel Summary…'); return loadTravel(date).then(function(d){ if(host) host.innerHTML=travelHtml(d); },function(e){ fail('Travel Summary did not load',e); hostError('travelsum-host','Travel Summary did not load from operation-backend.'); }); }
     if(host) host.innerHTML=travelHtml(reports.travel[date]);
   });
   wrap('renderDailyReport',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var host=document.getElementById('dailyreport-host'), date=dateOf(typeof _drDate!=='undefined'?_drDate:null);
-    if(!reports.daily[date]){ if(host) host.innerHTML='<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading Daily Report from operation-backend…</div>'; return loadDaily(date).then(function(d){ if(host) host.innerHTML=dailyHtml(d); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
+    if(!reports.daily[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Daily Report…'); return loadDaily(date).then(function(d){ if(host) host.innerHTML=dailyHtml(d); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
     if(host) host.innerHTML=dailyHtml(reports.daily[date]);
   });
   wrap('drCfgSet',function(orig,key,value){

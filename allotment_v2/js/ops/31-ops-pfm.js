@@ -288,7 +288,7 @@
     if(!state.cache[key]){
       var host = document.getElementById('dailypfm-host');
       if(host && !state.loading[key]){
-        host.innerHTML = '<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading Daily PFM from operation-backend…</div>';
+        host.innerHTML = O.loadingHtml('Loading Daily PFM…');
       }
       return loadRange(r.from, r.to, false).then(function(){
         return orig.apply(self, args);

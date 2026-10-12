@@ -79,6 +79,10 @@
     var host = document.getElementById('psu-host');
     if(host) host.innerHTML = '<div style="padding:32px;text-align:center;color:#5a5a52">' + esc(message) + '</div>';
   }
+  function showLoading(message){
+    var host = document.getElementById('psu-host');
+    if(host) host.innerHTML = O.loadingHtml(message);
+  }
   function showError(){ show('Pickup Setup could not load from operation-backend. Reload and try again.'); }
 
   function wrap(name, replacement){
@@ -207,7 +211,7 @@
   wrap('renderPickupSetup', function(orig){
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
     if(ready) return orig.apply(this, [].slice.call(arguments, 1));
-    show('Loading pickup areas and time profiles…');
+    showLoading('Loading pickup areas and time profiles…');
     return load().then(function(){ return orig.apply(this, [].slice.call(arguments, 1)); }.bind(this), function(e){
       O.fail('Could not load Pickup Setup', e); showError();
     });

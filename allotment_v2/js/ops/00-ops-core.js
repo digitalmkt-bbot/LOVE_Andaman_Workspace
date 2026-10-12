@@ -138,6 +138,11 @@
     try{ if(typeof _bkV2 !== 'undefined' && _bkV2 && _bkV2.newBooking) return true; }catch(_){}
     return false;
   }
+  /* placeholder while a view waits on operation-backend: spinner + label (css .la-ops-loading in 01-base.css) */
+  function loadingHtml(label){
+    var t = String(label == null ? 'Loading…' : label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
+    return '<div class="la-ops-loading" role="status" aria-live="polite"><span class="la-ops-loading-ring"></span><span>' + t + '</span></div>';
+  }
   function activeView(){ var el = document.querySelector('.nav-item.active[data-view]'); return el ? el.dataset.view : ''; }
 
   function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -161,7 +166,7 @@
     del: function(p){ return call('DELETE', p); },
     queue: queue, runBatch: runBatch,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
-    busy: busy, activeView: activeView,
+    busy: busy, activeView: activeView, loadingHtml: loadingHtml,
     ymd: ymd, shift: shift, today: today,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }

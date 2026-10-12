@@ -719,7 +719,7 @@
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){
       var host = document.getElementById('acct-body');
-      if(host && !state.loading) host.innerHTML = '<div style="padding:32px;text-align:center;color:var(--fd-ink-soft)">Loading invoices from operation-backend…</div>';
+      if(host && !state.loading) host.innerHTML = O.loadingHtml('Loading invoices…');
       return loadAll(false).then(function(){
         return orig.apply(self, args);
       }, function(){

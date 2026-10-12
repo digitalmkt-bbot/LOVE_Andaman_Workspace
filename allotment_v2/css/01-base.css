@@ -735,6 +735,15 @@ body.ts-printing .view{padding-bottom:0}
 @keyframes laRfIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
 @keyframes laRfPulse{0%{box-shadow:0 0 0 0 rgba(29,158,117,.55)}
   70%{box-shadow:0 0 0 7px rgba(29,158,117,0)}100%{box-shadow:0 0 0 0 rgba(29,158,117,0)}}
+/* §opsLoading (2026-10-13) · laOps.loadingHtml() · spinner while a view waits on operation-backend */
+.la-ops-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:56px 24px;min-height:180px;color:#7a766e;font:500 13px/1.4 'DM Sans',sans-serif;text-align:center;
+  animation:laOpsLoadIn .25s ease-out both}
+.la-ops-loading-ring{width:30px;height:30px;border-radius:50%;border:3px solid rgba(22,131,199,.16);
+  border-top-color:#1683C7;animation:laOpsSpin .8s linear infinite}
+@keyframes laOpsSpin{to{transform:rotate(360deg)}}
+@keyframes laOpsLoadIn{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.la-ops-loading-ring{animation-duration:2.4s}.la-ops-loading{animation:none}}
 body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
 @media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues{display:none!important}}
 /* §b2cCheck (2026-10-03) · ใบ B2C ที่ต้องเช็ค · อยู่เลนเดียวกับ #la-refresh (คอลัมน์ sidebar ก้นซ้าย = "เรื่องของระบบ")
