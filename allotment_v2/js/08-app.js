@@ -51781,6 +51781,20 @@ function bkV2RenderTab2(){
           return true;
         })
     : [];
+  /* §btDeploy (2026-10-12) · owner: "มันจะมีวันที่วางเรือไว้แล้ว แต่ยังไม่มีบุคกิ้ง
+       ทีนี้รายละเอียดในหน้า By trip date มันจะไม่ขึ้นว่ามีทริปนี้อยู่ เพิ่มให้เห็นได้ไหม"
+     กระดานนี้ดึงทริปจากใบจองอย่างเดียว · เรือที่ Boat Operation วางไว้ (TRIPS) แต่ยังไม่มีใครจอง
+     จึงหายไปทั้งทริป · ดันเส้นทางพวกนี้ขึ้นมาเหมือนเส้นทางที่มีล็อค · การ์ดเรือขึ้น 0/cap ตามปกติ */
+  const deployRouteIds = [...new Set(Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {})
+      .map(op => op && op.route).filter(Boolean))]
+    .filter(rid => {
+      if(!(typeof ROUTES!=='undefined' && ROUTES.some(x=>x.id===rid))) return false;
+      if((typeof laIsLandRoute==='function' && laIsLandRoute(rid)) !== _bkV2CityTourOnly) return false;
+      if(famF && (bkV2RouteFamily(rid)?.id)!==famF) return false;
+      if(routeF && rid!==routeF) return false;
+      if(pierF!=='all'){ const rt=ROUTES.find(x=>x.id===rid); if(rt?.pier!==pierF) return false; }
+      return true;
+    });
   // Surface routes a booking was manually rescheduled AWAY from on this date (so the ghost row shows even with 0 active bookings)
   const reschedFromRouteIds = [...new Set((SB_BOOKINGS||[])
       .filter(b=> b.reschedule && b.reschedule.fromDate===date)
@@ -51799,7 +51813,7 @@ function bkV2RenderTab2(){
   /* §btOther · ตารางข้างบนคือกระดานจัดเรือ · โปรแกรมที่ไม่ใช้เรือไม่มีช่องให้กรอก
      จึงดึงออกมาไว้ส่วนล่าง (_btOtherSection) แทนการดันเข้าการ์ดเรือที่เติมไม่ได้ */
   const _isLandRid = rid => (typeof laIsLandRoute==='function') && laIsLandRoute(rid);
-  const _allRidsAll = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds])];
+  const _allRidsAll = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds, ...(_btQ?[]:deployRouteIds)])];   /* §btDeploy · ตอนค้นหา ไม่ดันทริปว่างขึ้นมา */
   const _otherRids = _allRidsAll.filter(_isLandRid);
   const _allRids = _allRidsAll.filter(rid => !_isLandRid(rid));
   const _famMinTime = {};
@@ -51869,6 +51883,8 @@ function bkV2RenderTab2(){
   const _famAgg = {};
   rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
+  /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
+  Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bkV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
   const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
   const _dayLocked = (typeof bkV2DayLockedTotal==='function') ? bkV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -52274,6 +52290,20 @@ function bkV2RenderTab2(){
 
   let _prevFam = null;
   const _btVanParts = [];   /* §btVanCard · ชิ้นส่วนแถบรถของแต่ละทริป · เอาไปประกอบเป็นการ์ดบนหัว */
+  /* §btDeploy · ทริปที่ยังไม่มีใบจอง · ชื่อทริปเคยอยู่ในแถบแรกของตาราง (§btBand) ซึ่งไม่ถูกวาดเมื่อไม่มีแถว
+     เหลือแค่ข้อความ "ยังไม่มี booking" ลอย ๆ ไม่รู้ว่าของทริปไหน · ทำเป็นแถบบรรทัดเดียว: ชื่อ · เวลา · ท่า · เรือที่วางไว้ */
+  const _btEmptyTrip = rid => {
+    const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid)||{};
+    const col=(bkV2RouteFamily(rid)||{}).color||'#8b909c';
+    const pr=rt.pier==='tublamu'?'Tub Lamu':rt.pier==='panwa'?'Visit Panwa':rt.pier==='ranong'?'Ranong':(rt.pier||'');
+    const bts=bkV2Tab2Boats(rid, date, []).map(b=>{ const bo=(typeof BOATS!=='undefined'?BOATS:[]).find(x=>x.id===b.id)||{};
+      const cap=(typeof boatCapFor==='function')?boatCapFor(b.id,date):(+bo.cap||0);
+      return '<span class="t2-depb">'+esc(b.name)+(cap?' <b>0/'+cap+'</b>':'')+'</span>'; }).join('');
+    return '<div class="t2-nobk t2-dep" data-dep="'+esc(rid)+'" style="--c:'+col+'">'
+      +'<span class="t2-depnm">'+esc(rt.name||rid)+'</span>'
+      +'<span class="t2-depmt">'+esc((rt.times&&rt.times[0])||'')+(pr?' · '+esc(pr):'')+'</span>'
+      +bts+'<span class="t2-depno">'+(bts?'วางเรือไว้แล้ว · ':'')+'ยังไม่มี booking</span></div>';
+  };
   const trips = routeIds.map(rid=>{
     const grp = groups[rid] || [];
     // Per-boat color map for this route · shared by the row Boat chip + the summary cards (distinguish boats)
@@ -53584,7 +53614,7 @@ function bkV2RenderTab2(){
         ${rcStrip}
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
               (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
-        ${(grp.length===0 && !pendBlocks && !lockBlocks && !boatLockRows) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
+        ${(grp.length===0 && !pendBlocks && !lockBlocks && !boatLockRows) ? _btEmptyTrip(rid) : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
@@ -54270,6 +54300,12 @@ function bkV2RenderTab2(){
     .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:none}
     .t2-cul2 .t2-more,.t2-cul2 .t2-leadonly{flex:none}
     .t2-nxt:hover{background:#DFEBF8}
+    .t2-dep{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-style:normal !important;border-left:4px solid var(--c);padding-left:12px !important}
+    .t2-depnm{font-weight:800;font-size:13px;color:#1A2A33}
+    .t2-depmt{font-size:11.5px;color:#6B7785;font-family:'DM Mono',monospace}
+    .t2-depb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#1A2A33;background:#F1F4F7;border:1px solid #E1E6EC;border-radius:999px;padding:1px 9px}
+    .t2-depb b{font:600 10.5px 'DM Mono',monospace;color:#6B7785}
+    .t2-depno{font-size:11.5px;color:#8A8A82;font-style:italic}
     .t2-nxt b{font-weight:800;color:#5B7FA6}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
