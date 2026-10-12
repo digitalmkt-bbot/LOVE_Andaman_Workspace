@@ -4,7 +4,9 @@ function bookingV2EditBooking(bookingId){
   if(bk.schemaVer !== 2){ alert('Legacy bookings cannot be edited · please cancel and recreate'); return; }
   if(['cancelled','completed','rejected'].includes(bk.status)){
     if(!confirm(`This booking is ${bk.status}. Edit anyway?`)) return;
-  }
+    /* the person said OK here · the server's 409 booking_closed is not asked a second time */
+    if(typeof window.laOpsEditAgreed === 'function') window.laOpsEditAgreed(bk.id, true);
+  } else if(typeof window.laOpsEditAgreed === 'function') window.laOpsEditAgreed(bk.id, false);
   const _lk = bookingV2EditLockActive(bk);
   if(_lk && !confirm('⚠ '+_lk.by+' กำลังแก้ไข booking นี้อยู่ (เปิดเมื่อ ~'+_lk.mins+' นาทีที่แล้ว)\n\nถ้าแก้พร้อมกัน คนที่บันทึกทีหลังจะทับงานของอีกคน\n\nเปิดแก้ไขต่อหรือไม่?')) return;
   // Deep-clone bk into _bkV2.newBooking shape

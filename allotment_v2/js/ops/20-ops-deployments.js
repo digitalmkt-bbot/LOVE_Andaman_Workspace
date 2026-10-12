@@ -68,13 +68,25 @@
     }catch(_){}
   }
 
+  /* §opsAnyway · the server refuses 409 and the person decides: a boat with bookings on it is pulled,
+     moved or shrunk (legacy's confirm in boatSetRoute / boatRemove), or a boat that is not ready that day
+     is deployed. OK resends with the flag; Cancel ends the sync and the screen rolls back. */
+  function pulled(e){ return e.message.replace(/\. Send remove_anyway.*$/, '') + '\n\nเปลี่ยน/ถอดเรือลำนี้? — booking เหล่านั้นจะถูกติดธง ⚠ ให้จัดเรือใหม่ (หน้าจัดเรือ + Daily Fleet Log)'; }
+  var DEP_RULES = {
+    seats_sold: { flag: 'remove_anyway', ask: pulled },
+    boat_not_ready: { flag: 'deploy_anyway', ask: function(e){ return e.message.replace(/\. Send deploy_anyway.*$/, '') + '\n\nใส่เรือลำนี้ลงเส้นทางต่อไหม?'; } }
+  };
   function postDep(x){
     var b = (typeof getBoat === 'function') ? getBoat(x.boat) : null;
     var body = { boat_id: x.boat, route_id: x.route, service_date: x.date, capacity: x.capacity };
     if(b && +b.totalcap > 0) body.registered_persons = +b.totalcap;
-    return O.post('/operations/deployments', body);
+    return O.anyway(function(f){ return O.post('/operations/deployments', Object.assign({}, body, f)); }, DEP_RULES);
   }
-  function delDep(d, b){ return O.del('/operations/deployments/' + encodeURIComponent(d) + '/' + encodeURIComponent(b)); }
+  function delDep(d, b){
+    return O.anyway(function(f){
+      return O.del('/operations/deployments/' + encodeURIComponent(d) + '/' + encodeURIComponent(b) + (f.remove_anyway ? '?remove_anyway=true' : ''));
+    }, { seats_sold: DEP_RULES.seats_sold });
+  }
 
   /* un-queued · callers already hold the queue */
   /* §opsBoatMove · calls that must run after this sync deploys a boat and before it removes one

@@ -459,6 +459,16 @@
   /* ── save · called from bookingV2CommitBooking via bookingV2SyncToOpsBackend ──
      an edit is a PATCH without status; "Submit" on a booking the server holds as a quote then asks
      POST /confirm, and the server decides confirmed, pending_foc or pending_approval */
+  var editAgreed = {};            // booking id → the person agreed to "Edit anyway?" when opening it
+  window.laOpsEditAgreed = function(id, yes){ if(yes) editAgreed[id] = true; else delete editAgreed[id]; };
+  var SAVE_RULES = {
+    booking_closed: { flag: 'edit_anyway' },
+    no_charter_price: { flag: 'free_anyway', ask: function(e){
+      return 'WARNING - charter trip will be saved at 0 THB\n\n' + e.message.replace(/\. Send the agreed price.*$/, '') +
+        '\n\nPress Cancel to go back and enter the agreed charter price in the red box.\nPress OK only if this charter is really free.'; } },
+    charter_displaces_seats: { flag: 'displace_anyway', ask: function(e){
+      return e.message.replace(/\. Send displace_anyway.*$/, '') + '\n\nConfirm anyway · Notify dispatcher?'; } }
+  };
   function saveNow(bk){
     var pre = Promise.resolve();
     if(O.deployments) pre = pre.then(O.deployments.syncNow);     // a new charter cell must be a deployment first
@@ -466,8 +476,17 @@
     var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
       var body = toServer(bk, !bk.opsId);
-      return bk.opsId ? O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, body)
-                      : O.bookingWrite('POST', '/v1/bookings', bk, body);       // a create has no version yet: no If-Match
+      /* §opsAnyway · legacy's confirms, answered after the server refuses: "Edit anyway?" on a closed
+         booking, "Press OK only if this charter is really free", "Confirm anyway · Notify dispatcher".
+         A confirm already given on screen (edit opened on a closed booking, charter modal) goes first. */
+      var agreed = {};
+      if(editAgreed[bk.id]) agreed.edit_anyway = true;
+      if((bk.trips || []).some(function(t){ return t && t.charterDisplacementAck; })) agreed.displace_anyway = true;
+      return O.anyway(function(f){
+        var b = Object.assign({}, body, f);
+        return bk.opsId ? O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, b)
+                        : O.bookingWrite('POST', '/v1/bookings', bk, b);       // a create has no version yet: no If-Match
+      }, SAVE_RULES, agreed);
     }).then(function(j){
       // the PATCH moved the version on · bookingWrite kept the new one, so /confirm sends it
       if(j && j.id && submit && NOT_YET_CONFIRMED.indexOf(j.status) >= 0) return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(j.id) + '/confirm', bk, {});

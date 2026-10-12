@@ -84,6 +84,25 @@
     return out.length ? '?' + out.join('&') : '';
   }
 
+  /* §opsAnyway (2026-10-13) · the server refuses a risky action with 409 + a code and accepts the same
+     request again with a flag once the person has agreed. send(extra) makes the call (extra holds the
+     flags to add to the body or query); rules maps a refusal code to { flag, ask?(err) → question }.
+     The question defaults to the server's own message. OK → resend with the flag; Cancel → the refusal
+     goes on to the caller (e.declined), nothing was changed. preset = flags already agreed to. */
+  function anyway(send, rules, preset){
+    function once(extra){
+      return send(extra).catch(function(e){
+        var r = e && e.status === 409 && rules[e.code];
+        if(!r || extra[r.flag]) throw e;
+        var q = (typeof r.ask === 'function' ? r.ask(e) : '') || e.message;
+        if(!confirm(q)){ e.declined = true; throw e; }
+        var next = Object.assign({}, extra); next[r.flag] = true;
+        return once(next);
+      });
+    }
+    return once(Object.assign({}, preset || {}));
+  }
+
   /* one write at a time · a failed job doesn't block the next one */
   var chain = Promise.resolve();
   function queue(fn){
@@ -164,7 +183,7 @@
     post: function(p, b){ return call('POST', p, b === undefined ? {} : b); },
     patch: function(p, b){ return call('PATCH', p, b); },
     del: function(p){ return call('DELETE', p); },
-    queue: queue, runBatch: runBatch,
+    queue: queue, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, activeView: activeView, loadingHtml: loadingHtml,
     ymd: ymd, shift: shift, today: today,
