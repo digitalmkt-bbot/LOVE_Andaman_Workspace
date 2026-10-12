@@ -327,8 +327,6 @@ test('create from ticked rows refuses rows from two zones, with no request', asy
 
 test('out-of-scope actions in ops mode: refused with a toast, no request, no legacy write', async () => {
   const rt = runtime({ sel: { b1: 1 } });
-  rt.ctx.bookingV2AssignVanReturn('b1', 'veh02', D);
-  rt.ctx.bookingV2SetReturnSameVan('b1', true, D);
   rt.ctx.bookingV2VanGroupSetReturn(D, R, 'PK', 3, 'veh02');
   rt.ctx.bookingV2VanSplit('b1', D);
   rt.ctx.bookingV2VanUnsplit('b1', D);
@@ -340,7 +338,7 @@ test('out-of-scope actions in ops mode: refused with a toast, no request, no leg
   assert.equal(rt.legacyCalls.length, 0);
   assert.equal(rt.bks.find((b) => b.id === 'b1').ops.vanId, undefined);
   const notYet = rt.toasts.filter((t) => t.kind === 'pending');
-  assert.equal(notYet.length, 8);
+  assert.equal(notYet.length, 6);
   assert.ok(notYet.every((t) => /not on operation-backend yet|vans is not/.test(t.title)), JSON.stringify(notYet));
   assert.equal(rt.alerts.length, 0);
 });
@@ -375,4 +373,60 @@ test('legacy mode: every wrapped function delegates to the original and makes no
   assert.equal(rt.requests.length, 0);
   assert.deepEqual(plain(rt.legacyCalls.map((c) => c[0])), calls.map((c) => c[0]));
   assert.equal(rt.toasts.length, 0);
+});
+
+// ── return vans (per booking, legacy design): PATCH /operations/trip-ops/{trip_id} ──
+
+const partOf = (over = {}) => ({ idx: 0, source: 'main', ad: 2, chd: 0, inf: 0, foc: 0,
+  group: { id: 'vgrp_3', number: 3, van_id: 'veh07', return_van_id: null, pickup_time: '06:40' },
+  sequence: 1, return_van_id: null, alt: null, ...over });
+const bookingRead = (parts) => ({ id: 'lg_1', trips: [{ id: 'trip_1', operations: { van_parts: parts } }] });
+
+test('return van: reads the trip part, PATCHes only its return_van_id, local follows the answer', async () => {
+  const rt = runtime({ handlers: {
+    'GET /v1/bookings/lg_1': { body: bookingRead([partOf()]) },
+    'PATCH /operations/trip-ops/trip_1': (body) => ({ body: { trip: { operations: { van_parts: [partOf({ return_van_id: body.van_parts[0].return_van_id })] } }, warnings: [] } }),
+  } });
+  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests), [
+    { method: 'GET', path: '/v1/bookings/lg_1' },
+    { method: 'PATCH', path: '/operations/trip-ops/trip_1', body: { van_parts: [
+      { idx: 0, ad: 2, chd: 0, inf: 0, foc: 0, group_id: 'vgrp_3', sequence: 1, return_van_id: 'veh09' }] } },
+  ]);
+  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, 'veh09');
+  assert.equal(byId(rt.bks, 'b1').ops.returnSameVan, false);
+});
+
+test('return van on a split trip is refused with no write', async () => {
+  const rt = runtime({ handlers: {
+    'GET /v1/bookings/lg_1': { body: bookingRead([partOf({ idx: 0, ad: 1 }), partOf({ idx: 1, ad: 1, sequence: 2 })]) },
+  } });
+  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  await rt.flush(); await rt.flush();
+  assert.equal(rt.requests.filter((r) => r.method === 'PATCH').length, 0);
+  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, undefined);
+  assert.equal(rt.toasts.at(-1).title, 'Return van not set');
+});
+
+test('return van refused by the server (409): nothing changes locally, the code is shown', async () => {
+  const rt = runtime({ handlers: {
+    'GET /v1/bookings/lg_1': { body: bookingRead([partOf()]) },
+    'PATCH /operations/trip-ops/trip_1': { status: 409, body: { code: 'van_not_in_pool', message: 'veh09 is not in the return pool' } },
+  } });
+  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  await rt.flush(); await rt.flush();
+  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, undefined);
+  assert.match(rt.toasts.at(-1).title, /van_not_in_pool/);
+});
+
+test('same van: PATCHes return_same_van, and turning it on clears the return van locally', async () => {
+  const rt = runtime({ bks: bookings().map((b) => (b.id === 'b1' ? { ...b, ops: { vanReturnId: 'veh09' } } : b)), handlers: {
+    'PATCH /operations/trip-ops/trip_1': (body) => ({ body: { trip: { operations: { return_same_van: body.return_same_van } }, warnings: [] } }),
+  } });
+  rt.ctx.bookingV2SetReturnSameVan('b1', true, D);
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests), [{ method: 'PATCH', path: '/operations/trip-ops/trip_1', body: { return_same_van: true } }]);
+  assert.equal(byId(rt.bks, 'b1').ops.returnSameVan, true);
+  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, null);
 });

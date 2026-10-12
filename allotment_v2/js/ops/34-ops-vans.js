@@ -297,9 +297,58 @@
   });
 
   /* ── refused in ops mode: not on operation-backend yet ── */
-  wrap('bookingV2AssignVanReturn', function(){ return notYet('Return van is not on operation-backend yet'); });
-  wrap('bookingV2AssignVanReturnSplit', function(){ return notYet('Return van is not on operation-backend yet'); });
-  wrap('bookingV2SetReturnSameVan', function(){ return notYet('Return van is not on operation-backend yet'); });
+  /* ── return vans (per booking, legacy design) ──
+     A booking's return van is its trip part's return_van_id: PATCH /operations/trip-ops/{trip_id} with van_parts.
+     The part keeps its passengers, group and order, which the server reads back from the booking first.
+     A split trip (more than one part) is refused here. */
+  function tripOpsOf(b, date){
+    var t = (b.trips || []).find(function(x){ return x && (x.date || '') === date && x.opsTripId; });
+    return t || null;
+  }
+  function tripPatch(b, date, body, onDone){
+    var t = tripOpsOf(b, date);
+    if(!b.opsId || !t) return refuse('Return van not set', 'This booking has no operation-backend trip for ' + date);
+    var tid = t.opsTripId;
+    return O.queue(function(){
+      if(body.van_parts === undefined) return O.call('PATCH', '/operations/trip-ops/' + enc(tid), body);
+      var rv = body.van_parts[0].return_van_id;
+      return O.get('/v1/bookings/' + enc(b.opsId)).then(function(bk){
+        var trip = ((bk && bk.trips) || []).find(function(x){ return x && x.id === tid; });
+        var parts = (trip && trip.operations && trip.operations.van_parts) || [];
+        if(parts.length !== 1) { var e = new Error('split trip: return van per part is not handled here'); e.code = 'split'; throw e; }
+        var p = parts[0];
+        var full = { van_parts: [{ idx: 0, ad: p.ad, chd: p.chd, inf: p.inf, foc: p.foc,
+          group_id: p.group ? p.group.id : null, sequence: p.sequence == null ? null : p.sequence, return_van_id: rv }] };
+        return O.call('PATCH', '/operations/trip-ops/' + enc(tid), full);
+      });
+    }).then(function(j){ onDone(j); redraw(); return j; }, function(e){
+      if(e && e.code === 'split') return refuse('Return van not set', 'This trip is split across vans; set the return van on each part by hand');
+      O.fail('Return van not set · ' + failCode(e), e);
+      return null;
+    });
+  }
+  wrap('bookingV2AssignVanReturn', function(bkId, vanId, date){
+    var b = byClientId(bkId); if(!b) return null;
+    if(isClosed(b)) return refuse('Return van not set', 'This booking is ' + b.status);
+    var d = date || (b.trips && b.trips[0] && b.trips[0].date) || '';
+    return tripPatch(b, d, { van_parts: [{ return_van_id: vanId || null }] }, function(j){
+      var o = bkOpsFor(b, d);
+      var p = j && j.trip && j.trip.operations && j.trip.operations.van_parts && j.trip.operations.van_parts[0];
+      o.vanReturnId = p ? (p.return_van_id || null) : (vanId || null);
+      if(vanId) o.returnSameVan = false;
+    });
+  });
+  wrap('bookingV2AssignVanReturnSplit', function(){ return notYet('Return van per split part is not on operation-backend yet'); });
+  wrap('bookingV2SetReturnSameVan', function(bkId, val, date){
+    var b = byClientId(bkId); if(!b) return null;
+    if(isClosed(b)) return refuse('Same van not set', 'This booking is ' + b.status);
+    var d = date || (b.trips && b.trips[0] && b.trips[0].date) || '';
+    return tripPatch(b, d, { return_same_van: !!val }, function(j){
+      var o = bkOpsFor(b, d);
+      o.returnSameVan = !!val;
+      if(val) o.vanReturnId = null;   // the server drops every part's own return van when the group comes back on its van
+    });
+  });
   wrap('bookingV2VanGroupSetReturn', function(){ return notYet('Return van is not on operation-backend yet'); });
   wrap('bookingV2VanSplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
   wrap('bookingV2VanUnsplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
