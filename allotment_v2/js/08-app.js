@@ -76498,6 +76498,21 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-vans .bt-vgrid>div{position:relative;overflow:hidden}',
     'body.btc #view-booking .bt-vans .btc-vbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#EEF0F3}',
     'body.btc #view-booking .bt-vans .btc-vbar i{display:block;height:100%;background:#0F7B4F}',
+
+    /* quieter rows (round 5) */
+    'body.btc #view-booking table.t2-mtbl tr.t2-row>td{background-image:linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6))}',
+    'body.btc #view-booking table.t2-mtbl td{border-right-color:transparent}',
+    'body.btc #view-booking table.t2-mtbl tr>td.t2-cu,body.btc #view-booking table.t2-mtbl tr>th.t2-cu{box-shadow:2px 0 4px -3px rgba(15,23,42,.12)!important}',
+    'body.btc #view-booking .t2-addbtn{border:0!important;background:transparent!important;color:#C2C7D0!important;box-shadow:none!important}',
+    'body.btc #view-booking .t2-addbtn-up{visibility:hidden}',
+    'body.btc #view-booking tr.t2-row:hover .t2-addbtn-up{visibility:visible}',
+    'body.btc #view-booking tr.t2-row:hover .t2-addbtn{color:#5B6275!important}',
+    'body.btc #view-booking .t2-pay{background:transparent!important;border-color:transparent!important;padding-left:0!important;padding-right:0!important}',
+    'body.btc #view-booking .t2-vcbtn{border-radius:6px!important;width:auto!important;height:auto!important;padding:1px 6px!important;font-size:10px!important;color:#5B6275!important;border:1px solid #DDE1E8!important;background:#fff!important}',
+    'body.btc #view-booking td.t2-c>span[title*="เรือที่ขึ้น"]>span:first-child{display:none!important}',
+    'body.btc #view-booking td.t2-c>span[title*="เรือที่ขึ้น"]>span:last-child{font-weight:500!important;color:#5B6275!important}',
+    'body.btc #view-booking td>.t2-dim,body.btc #view-booking td .t2-zonepick>.t2-dim,body.btc #view-booking td.t2-req>.t2-dim{font-size:0}',
+    'body.btc #view-booking td>.t2-dim::after,body.btc #view-booking td .t2-zonepick>.t2-dim::after,body.btc #view-booking td.t2-req>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -76806,6 +76821,8 @@ function pc2CSS3(S){
       var c = lds[k].style.backgroundColor || lds[k].style.background;
       if(c){ lds[k].style.setProperty('--rcc', c); lds[k].classList.add('btc-rc'); }
     }
+    var nps = root.querySelectorAll('.t2-needpickup:not(.btc-np)');
+    for(var q = 0; q < nps.length; q++){ nps[q].classList.add('btc-np'); if(/no pickup/i.test(nps[q].textContent)) nps[q].textContent = 'ไม่มีจุดรับ'; }
     var tms = root.querySelectorAll('td.t2-tm:not(.btc-tmd)');
     for(var t = 0; t < tms.length; t++){
       var d = tms[t].children;
