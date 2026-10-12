@@ -22993,13 +22993,16 @@ function pckSheetHtml(boats, border, date, warnRows){
 function pckViewBar(){
   var b=function(fn,v,cur,lbl){
     return '<button onclick="'+fn+'(\''+v+'\')" class="pcs-seg'+(cur===v?' on':'')+'">'+lbl+'</button>'; };
+  /* §pckBarFix · ปุ่ม ตาราง|การ์ด ต้องอยู่ที่เดิมตอนสลับ · เดิม "เรียง" หายไปในโหมดการ์ด
+     ปุ่มเลยเลื่อนไปทางขวาใต้เมาส์ · ตอนนี้ "เรียง" อยู่ซ้าย ปุ่มมุมมองอยู่ขวาสุดเสมอ
+     และในโหมดการ์ด "เรียง" แค่ซ่อน (ยังกินที่เท่าเดิม) ของในแถบจึงไม่ขยับเลย */
+  var card=_pckView!=='sheet';
   return '<div class="pcs-bar">'
-    +'<span class="k pcs-kv">มุมมอง</span><span class="pcs-segs">'
+    +'<span class="pcs-sortg"'+(card?' style="visibility:hidden" aria-hidden="true"':'')+'>'
+      +'<span class="k pcs-ks">เรียง</span><span class="pcs-segs" title="เรียงตาราง: ตามเรือ / ตามรถ">'
+      +b('pckSetGrp','boat',_pckGrp,'เรือ')+b('pckSetGrp','van',_pckGrp,'รถ')+'</span></span>'
+    +'<span class="k pcs-kv" style="margin-left:8px">มุมมอง</span><span class="pcs-segs pcs-viewsegs">'
       +b('pckSetView','sheet',_pckView,'ตาราง')+b('pckSetView','card',_pckView,'การ์ด')+'</span>'
-    +(_pckView==='sheet'
-      ? ('<span class="k pcs-ks" style="margin-left:8px">เรียง</span><span class="pcs-segs" title="เรียงตาราง: ตามเรือ / ตามรถ">'
-         +b('pckSetGrp','boat',_pckGrp,'เรือ')+b('pckSetGrp','van',_pckGrp,'รถ')+'</span>')
-      : '')
     +'</div>';
 }
 
@@ -23270,6 +23273,8 @@ function pckHeadCSS(){
   +H+' .pkh-fwrap .pcs-kv{display:none}'
   +H+' .pkh-fwrap>.pcs-bar{display:inline-flex !important;align-items:center;gap:4px;padding:0 !important;margin:0 !important}'
   +H+' .pkh-fwrap .pcs-ks{margin-left:4px !important;color:#8a8a82}'
+  +H+' .pkh-fwrap .pcs-sortg{display:inline-flex;align-items:center;gap:4px}'
+  +H+' .pkh-fwrap .pcs-viewsegs{margin-left:4px}'
   +H+' .pkh-fwrap .pck-sc.z{padding:0 6px !important}'
   +H+' .pkh-fwrap .pcs-seg{padding:3px 11px !important;font-size:11px !important}'
   +H+' .pkh-fwrap .ck-fsep{height:16px}'
@@ -23346,6 +23351,7 @@ function pckSheetCSS(){
   var S='.pck-host table.ck-tbl.pck-sheet';
   return ''
   +'.pck-host .pcs-bar{display:flex;align-items:center;gap:7px;margin:0 0 10px}'
+  +'.pck-host .pcs-sortg{display:inline-flex;align-items:center;gap:7px}'
   +'.pck-host .pcs-bar .k{font-size:11px;font-weight:700;color:#5F5E5A}'
   +'.pck-host .pcs-segs{display:inline-flex;border:1.5px solid #D8D4CA;border-radius:999px;'
     +'overflow:hidden;background:#fff}'
