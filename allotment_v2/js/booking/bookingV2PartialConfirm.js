@@ -32,7 +32,8 @@ function bookingV2PartialConfirm(bookingId, tripIdx){
     return;
   }
   if(typeof laOpsBookingAction==='function')
+    /* §opsHandoff · waived.amount is computed by the server (waived.count × per-passenger price); sending it is a 400 */
     laOpsBookingAction(bookingId, 'partial-cancel', { trip_id:t.opsTripId, pax:removed, category, note,
-      charged:{count:chargedCount, amount:chargeAmt}, waived:{count:waivedCount, amount:waiveAmt} }, _apply, 'Reduce pax');
+      charged:{count:chargedCount, amount:chargeAmt}, waived:{count:waivedCount} }, _apply, 'Reduce pax');
   else _apply();
 }

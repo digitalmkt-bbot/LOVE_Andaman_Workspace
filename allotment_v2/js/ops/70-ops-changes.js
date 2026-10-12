@@ -26,12 +26,25 @@
     O.toast({ kind: action === 'deleted' ? 'error' : action === 'created' ? 'success' : 'neutral',
       title: title, id: change.entity_id || '', status: action.toUpperCase(), sub: sub, dur: 7000 });
   }
+  /* §opsHandoff (2026-10-12) · a van or pickup change redraws the screen that shows it, but only while
+     that screen is open. Goes through _laRerender so scroll and focus survive. van_bill is not listed:
+     _laRerender goes through nav(), which clears the bill view's open accordions. */
+  var SCREEN_BY_KIND = { van:'vanjobs', van_day:'vanjobs', van_stop:'vanjobs', van_group:'vanjobs',
+    pickup_area:'pickup-setup', pickup_profile:'pickup-setup' };
+  function repaintFor(change){
+    var view = SCREEN_BY_KIND[change.kind];
+    if(!view) return;
+    var act = document.querySelector('.nav-item.active');
+    if(!act || !act.dataset || act.dataset.view !== view) return;
+    if(typeof window._laRerender === 'function') window._laRerender();
+  }
   function apply(change){
     if(!change || !Number.isInteger(+change.version)) return;
     cursor = +change.version;
     // All listeners refresh only what they already display/cache. Keep remote changes
     // separate from a local write so this tab can suppress its own notification only.
     if(O.changed) O.changed(change);
+    repaintFor(change);
     if(O.wrote) O.wrote('remote:' + (change.kind || 'change'));
     bookingToast(change);
   }
