@@ -77,9 +77,19 @@
   function delDep(d, b){ return O.del('/operations/deployments/' + encodeURIComponent(d) + '/' + encodeURIComponent(b)); }
 
   /* un-queued · callers already hold the queue */
+  /* §opsBoatMove · calls that must run after this sync deploys a boat and before it removes one
+     (Boat Operation "replace boat" moves the bookings A → B: B must be deployed first, and A then
+     leaves with no bookings on it). Each entry: {ops: [{label, run, undo}], onFail(err)}. */
+  var between = [];
+  function addBetween(entry){
+    if(!ready){ try{ entry.onFail && entry.onFail(new Error('Boat Operation has not loaded from operation-backend')); }catch(_){} return; }
+    between.push(entry); schedule();
+  }
+
   function syncNow(){
     if(!ready || !O.enabled()) return Promise.resolve(false);
-    var want = desired(), ops = [];
+    var want = desired(), ops = [], removes = [];
+    var mid = between.splice(0);
     Object.keys(want).forEach(function(k){
       var w = want[k], had = synced[k];
       if(had && had.route === w.route && had.capacity === w.capacity) return;
@@ -90,10 +100,12 @@
     Object.keys(synced).forEach(function(k){
       if(want[k]) return;
       var had = synced[k], p = k.split('::');
-      ops.push({ label: 'remove ' + p[1] + ' on ' + p[0],
+      removes.push({ label: 'remove ' + p[1] + ' on ' + p[0],
         run: function(){ return delDep(p[0], p[1]).catch(function(e){ if(e.status === 404) return null; throw e; }); },
         undo: function(){ return postDep({ boat: p[1], date: p[0], route: had.route, capacity: had.capacity }); } });
     });
+    mid.forEach(function(m){ ops = ops.concat(m.ops || []); });
+    ops = ops.concat(removes);
     if(!ops.length) return Promise.resolve(false);
     return O.runBatch(ops).then(function(){
       synced = {}; Object.keys(want).forEach(function(k){ synced[k] = { route: want[k].route, capacity: want[k].capacity }; });
@@ -101,6 +113,7 @@
       O.wrote('deployments');
       return true;
     }, function(err){
+      mid.forEach(function(m){ try{ m.onFail && m.onFail(err); }catch(_){} });   // bookings back first, so rollback's redraw shows them
       rollback();
       throw err;
     });
@@ -164,5 +177,5 @@
     snapshot();
   }
 
-  O.deployments = { load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, isReady: function(){ return ready; } };
+  O.deployments = { load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
 })();
