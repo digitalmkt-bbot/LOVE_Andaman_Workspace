@@ -1609,6 +1609,7 @@ function flSaveSafety(){
 }
 
 function flRenderDocsList(){
+  if(typeof faRenderDocs==='function'){ try{ faRenderDocs(); return; }catch(e){ try{ console.error('[asset2] docs — falling back to the old page', e); }catch(_){ } } }   // §asset2
   const wrap=document.getElementById('fl-docs-pink-wrap');
   if(!wrap)return;
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
