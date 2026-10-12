@@ -36,6 +36,7 @@
     var msg = (body && (body.message || body.error)) || ('HTTP ' + status);
     var e = new Error(msg);
     e.name = 'LaOpsError'; e.status = status; e.code = (body && body.code) || ''; e.path = path || '';
+    e.body = body || null;     // the whole answer · seats_short lists its days in body.short, boat_taken its blockers
     return e;
   }
 

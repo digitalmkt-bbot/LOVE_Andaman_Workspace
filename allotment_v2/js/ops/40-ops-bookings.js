@@ -472,7 +472,6 @@
   function saveNow(bk){
     var pre = Promise.resolve();
     if(O.deployments) pre = pre.then(O.deployments.syncNow);     // a new charter cell must be a deployment first
-    if(O.locks) pre = pre.then(O.locks.syncNow);                 // a lock must exist before a booking draws on it
     var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
       var body = toServer(bk, !bk.opsId);
@@ -484,8 +483,17 @@
       if((bk.trips || []).some(function(t){ return t && t.charterDisplacementAck; })) agreed.displace_anyway = true;
       return O.anyway(function(f){
         var b = Object.assign({}, body, f);
-        return bk.opsId ? O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, b)
-                        : O.bookingWrite('POST', '/v1/bookings', bk, b);       // a create has no version yet: no If-Match
+        if(bk.opsId) return O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, b);
+        /* §opsHold · opened from a whole-boat hold ("เหมาลำ"): the server makes the booking and
+           turns the hold into it in one step, so the boat is never free in between */
+        var hold = O.locks && O.locks.holdFor && O.locks.holdFor(bk.id);
+        if(hold) return O.call('POST', '/v1/seat-locks/' + encodeURIComponent(hold.id) + '/convert', b, { 'If-Match': '"' + hold.version + '"' }).then(function(res){
+          var j = res && res.booking;
+          if(j && j.version != null) bk.opsVersion = +j.version;
+          O.locks.doneHold(bk.id);
+          return j;
+        }, function(e){ O.locks.reloadSoon(); throw e; });   // refused: the hold is as it was, redraw it
+        return O.bookingWrite('POST', '/v1/bookings', bk, b);       // a create has no version yet: no If-Match
       }, SAVE_RULES, agreed);
     }).then(function(j){
       // the PATCH moved the version on · bookingWrite kept the new one, so /confirm sends it
