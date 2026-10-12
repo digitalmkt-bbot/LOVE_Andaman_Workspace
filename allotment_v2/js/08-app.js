@@ -58291,15 +58291,41 @@ function bkV2RestoreBooking(bookingId){
 // Match flags it: (A) same voucher/ref · (B) same lead name + a shared trip date+route.
 // NOTE: a 3rd criterion "same agent + same date + same pax" was dropped — in real data it flagged 362/654
 // bookings (OTAs routinely send many same-size groups on the same day) → useless noise. Voucher + name are reliable.
-function bkV2FindDuplicateBookings(d, excludeId){
+/* §dupFast (2026-10-12) · วัดด้วยข้อมูลจริง 12 ต.ค. (5,637 ใบ) · หน้า By trip date วันละ 59 ใบใช้ 1.2 วินาที
+   เกือบครึ่ง (~0.5 วิ) อยู่ที่ฟังก์ชันนี้ · ทุกแถวไล่เทียบกับทุกใบในระบบ (60 × 5,637)
+   ทำดัชนีครั้งเดียว: เลข voucher → ใบ และ ชื่อลูกค้า|วัน|เส้นทาง → ใบ · ต่อแถวดูแค่ใบที่เข้าข่าย
+   ใบที่ไม่อยู่ในดัชนีทั้งสองแบบ ไม่มีเหตุผลข้อไหนเข้าอยู่แล้ว ผลจึงเหมือนเดิมทุกใบ (ลำดับเดิมด้วย)
+   ดัชนีอายุ 1 วิ หรือจนกว่ารายการใบเปลี่ยน · ตอนกดบันทึกใบ (fresh) สร้างใหม่ทุกครั้ง */
+var _bkDupIdx=null, _bkDupAt=0, _bkDupSrc=null, _bkDupLen=-1;
+function _bkDupNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function _bkDupIndex(fresh){
+  const A=(typeof SB_BOOKINGS!=='undefined' && SB_BOOKINGS) || [], now=Date.now();
+  if(!fresh && _bkDupIdx && _bkDupSrc===A && _bkDupLen===A.length && now-_bkDupAt<1000) return _bkDupIdx;
+  const v=new Map(), l=new Map(), pos=new Map();
+  A.forEach((b,i)=>{
+    if(!b) return; pos.set(b,i);
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    const bv=_bkDupNorm(b.voucherRef||b.code); if(bv){ if(!v.has(bv)) v.set(bv,[]); v.get(bv).push(b); }
+    const ln=_bkDupNorm(b.leadPax||b.customerName);
+    if(ln) (b.trips||[]).forEach(t=>{ if(!t||!t.routeId||!t.date) return; const k=ln+'|'+t.date+'|'+t.routeId; if(!l.has(k)) l.set(k,[]); const L=l.get(k); if(L[L.length-1]!==b) L.push(b); });
+  });
+  _bkDupIdx={v, l, pos}; _bkDupSrc=A; _bkDupLen=A.length; _bkDupAt=now;
+  return _bkDupIdx;
+}
+function bkV2FindDuplicateBookings(d, excludeId, fresh){
   if(!d) return [];
-  const norm=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const norm=_bkDupNorm;
   const vref=norm(d.voucherRef||d.code);
   const lead=norm(d.leadPax||d.customerName);
   const myTrips=(d.trips||[]).filter(t=>t.routeId&&t.date);
   const myDR=new Set(myTrips.map(t=>t.date+'|'+t.routeId));
+  const X=_bkDupIndex(fresh);
+  const cand=new Set();
+  if(vref) (X.v.get(vref)||[]).forEach(b=>cand.add(b));
+  if(lead) myDR.forEach(dr=>{ (X.l.get(lead+'|'+dr)||[]).forEach(b=>cand.add(b)); });
+  const list=[...cand].sort((a,b)=>(X.pos.get(a)||0)-(X.pos.get(b)||0));
   const out=[];
-  (SB_BOOKINGS||[]).forEach(b=>{
+  list.forEach(b=>{
     if(b.id===excludeId) return;
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     const reasons=[];
@@ -58488,7 +58514,7 @@ function bkV2CommitBooking(status){
     }
     // ── Duplicate-booking guard (soft · warn, allow proceed) ──
     if(typeof bkV2FindDuplicateBookings==='function'){
-      const _dups=bkV2FindDuplicateBookings(d, _bkV2.editingId||null);
+      const _dups=bkV2FindDuplicateBookings(d, _bkV2.editingId||null, true);   /* §dupFast · ตอนบันทึกอ่านสดเสมอ */
       if(_dups.length){
         const _lines=_dups.slice(0,6).map(x=>{ const b=x.bk; const _vc=b.voucherRef||b.code||b.id; const _t0=(b.trips||[])[0]||{}; const _rn=((typeof getRoute==='function'&&getRoute(_t0.routeId))||{}).name||''; return '• '+_vc+' · '+(b.leadPax||'-')+' · '+(_t0.date||'')+(_rn?(' · '+_rn):'')+'\n   ('+x.reasons.join(' · ')+')'; }).join('\n');
         if(!confirm('⚠ พบ booking ที่อาจซ้ำ '+_dups.length+' รายการ:\n\n'+_lines+(_dups.length>6?'\n…':'')+'\n\nบันทึกเป็น booking ใหม่ต่อไปหรือไม่?')) return;
@@ -76473,11 +76499,10 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.btc-vg .btc-disb{order:11;margin-left:0!important}',
     'body.btc #view-booking tr.btc-vg .btc-save{order:12}',
     /* boat mode */
-    'body.btc #view-booking tr.btc-bb>td{background:#F2F6FF!important;box-shadow:inset 4px 0 0 #1F5FBF!important;border-top:1px solid #D6E2FB;padding:8px 12px!important}',
-    'body.btc #view-booking tr.btc-bb>td>div>span:first-child{font-size:13px!important;color:#1F5FBF!important}',
+    'body.btc #view-booking tr.btc-bb>td{border-top:1px solid #E3E6EC;padding:8px 12px!important}',
+    'body.btc #view-booking tr.btc-bb>td>div>span:first-child{font-size:13px!important}',
     'body.btc #view-booking tr.btc-bb>td>div>span:nth-child(2){font-size:12px!important}',
-    'body.btc #view-booking .t2-bcell button[data-babtn="pick"]{border-color:#BFD0F5!important;color:#1F5FBF!important;padding:4px 10px!important}',
-
+    
     /* zeros / empty → dot */
     'body.btc #view-booking td.t2-c>.t2-dim{font-size:0}',
     'body.btc #view-booking td.t2-c>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
@@ -76509,8 +76534,6 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-row:hover .t2-addbtn{color:#5B6275!important}',
     'body.btc #view-booking .t2-pay{background:transparent!important;border-color:transparent!important;padding-left:0!important;padding-right:0!important}',
     'body.btc #view-booking .t2-vcbtn{border-radius:6px!important;width:auto!important;height:auto!important;padding:1px 6px!important;font-size:10px!important;color:#5B6275!important;border:1px solid #DDE1E8!important;background:#fff!important}',
-    'body.btc #view-booking td.t2-c>span[title*="เรือที่ขึ้น"]>span:first-child{display:none!important}',
-    'body.btc #view-booking td.t2-c>span[title*="เรือที่ขึ้น"]>span:last-child{font-weight:500!important;color:#5B6275!important}',
     'body.btc #view-booking td>.t2-dim,body.btc #view-booking td .t2-zonepick>.t2-dim,body.btc #view-booking td.t2-req>.t2-dim{font-size:0}',
     'body.btc #view-booking td>.t2-dim::after,body.btc #view-booking td .t2-zonepick>.t2-dim::after,body.btc #view-booking td.t2-req>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
     /* table */
