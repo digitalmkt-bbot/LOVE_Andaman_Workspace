@@ -76544,7 +76544,7 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-row>td.t2-sbk br{display:none}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-sb{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx{display:table-cell}',
-    'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx .t2-sb{max-width:calc(100% - 46px)}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx:not(.btc-fc) .t2-sb{max-width:calc(100% - 46px)}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-rb{font-size:10px;padding:1px 5px;margin-left:3px;vertical-align:middle}',
     'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq{overflow:hidden;text-overflow:ellipsis}',
     'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq>*{display:inline!important;margin:0 4px 0 0!important;white-space:nowrap}',
@@ -76557,6 +76557,19 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-row>td.t2-ag>div{max-height:30px;overflow:hidden}',
     'body.btc #view-booking tr.t2-row>td.t2-r .btc-paid{display:none}',
     'body.btc #view-booking tr.t2-row>td.t2-r .btc-due{display:block;font-size:10.5px;line-height:1.2;color:#B42318;font-weight:600}',
+
+    /* floating warning tags (round 7) */
+    'body.btc #view-booking tr.t2-row>td.btc-fc{position:relative;overflow:visible!important}',
+    'body.btc #view-booking .btc-ft{position:absolute;top:-8px;right:4px;z-index:6;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;line-height:15px;padding:0 6px;border-radius:8px;white-space:nowrap;background:#D92D20;color:#fff;box-shadow:0 2px 5px rgba(15,27,61,.18);cursor:default;text-decoration:none!important;margin:0!important}',
+    'body.btc #view-booking .btc-ft .x{display:none}',
+    'body.btc #view-booking .btc-ft:hover{font-size:10.5px;line-height:18px;top:-10px;padding:0 9px;border-radius:9px;z-index:8}',
+    'body.btc #view-booking .btc-ft:hover{width:max-content;max-width:none}',
+    'body.btc #view-booking .btc-ft:hover .x{display:inline!important;white-space:nowrap!important}',
+    'body.btc #view-booking .btc-ft:hover .s{display:none}',
+    'body.btc #view-booking .btc-ft .btc-fa{background:transparent!important;color:#fff!important;padding:0!important;margin:0!important;font-size:inherit!important;text-decoration:underline;cursor:pointer}',
+    'body.btc #view-booking .btc-ft.due{background:#FEE4E2;color:#B42318;box-shadow:0 1px 3px rgba(180,35,24,.18)}',
+    'body.btc #view-booking .btc-ft.bk{top:-7px;right:2px;font-size:9px!important;line-height:13px!important;padding:0 5px;background:#EEF0F3;color:#8A8F9C!important;text-decoration:none!important;box-shadow:none}',
+    'body.btc #view-booking .btc-ft.bk::before{content:"จอง "}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -76862,13 +76875,21 @@ function pc2CSS3(S){
       var tr = trs[i]; tr.classList.add('btc-ol');
       var sb = tr.querySelector(':scope > td.t2-sbk');
       if(sb){
-        var rbs = sb.querySelectorAll('.t2-rb');
-        for(var k = 0; k < rbs.length; k++){
-          var t = rbs[k].textContent.trim();
-          if(!rbs[k].title) rbs[k].title = t;
-          if(/^⚠/.test(t)) rbs[k].textContent = '⚠ รถกลับ';
-          else if(/กลับคันเดิม/.test(t)) rbs[k].textContent = '↩ คันเดิม' + (/✓/.test(t) ? ' ✓' : '');
-          else if(/ลูกค้ากลับเอง/.test(t)) rbs[k].textContent = '↩ เอง';
+        var rbs = [].slice.call(sb.querySelectorAll('.t2-rb')), alertEl = null, actEl = null;
+        rbs.forEach(function(rb){
+          var t = rb.textContent.trim(); if(!rb.title) rb.title = t;
+          if(/^⚠/.test(t)) alertEl = rb;
+          else if(/กลับคันเดิม/.test(t) && !/✓/.test(t)) actEl = rb;
+          else if(/กลับคันเดิม/.test(t)) rb.textContent = '↩ คันเดิม ✓';
+          else if(/ลูกค้ากลับเอง/.test(t)) rb.textContent = '↩ เอง';
+        });
+        if(alertEl){
+          /* warning floats at the cell's top-right corner · hover shows the long text + the original "same van" button */
+          var ft = document.createElement('span'); ft.className = 'btc-ft'; ft.title = alertEl.title || '';
+          ft.innerHTML = '<span class="s">⚠ รถกลับ</span><span class="x">ยังไม่จัดรถกลับ ·</span>';
+          if(actEl){ actEl.textContent = '↩ ใช้คันเดิม'; actEl.classList.add('x', 'btc-fa'); ft.appendChild(actEl); }
+          alertEl.parentNode.removeChild(alertEl);
+          sb.appendChild(ft); sb.classList.add('btc-fc');
         }
         if(rbs.length){ sb.classList.add('btc-sbx'); if(!sb.title) sb.title = sb.innerText.replace(/\s+/g, ' ').trim(); }
       }
@@ -76879,13 +76900,15 @@ function pc2CSS3(S){
         var tx = reqs[r].innerText.replace(/\s+/g, ' ').trim();
         if(tx && tx !== '—' && !reqs[r].title) reqs[r].title = tx;
       }
+      var lost = tr.querySelectorAll(':scope > td.t2-c > div[style*="line-through"]');
+      for(var q = 0; q < lost.length; q++){ lost[q].classList.add('btc-ft', 'bk'); lost[q].parentNode.classList.add('btc-fc'); if(!lost[q].title) lost[q].title = 'จองมา ' + lost[q].textContent.trim(); }
       var pk = tr.querySelector(':scope > td.t2-pk'); if(pk && !pk.title){ var pt = pk.innerText.replace(/\s+/g, ' ').trim(); if(pt) pk.title = pt; }
       var tot = tr.querySelector(':scope > td.t2-r');
       if(tot){
         var pl = tot.querySelector(':scope > div');
         if(pl && /จ่าย/.test(pl.textContent)){
           var m = pl.textContent.match(/ค้าง\s*(฿?[\d,]+)/);
-          if(m){ var due = document.createElement('span'); due.className = 'btc-due'; due.textContent = 'ค้าง ' + (m[1].charAt(0) === '฿' ? m[1] : '฿' + m[1]); due.title = pl.title || pl.textContent; tot.appendChild(due); }
+          if(m){ var due = document.createElement('span'); due.className = 'btc-ft due'; due.textContent = 'ค้าง ' + m[1].replace('฿', ''); due.title = pl.title || pl.textContent; tot.appendChild(due); tot.classList.add('btc-fc'); }
           pl.classList.add('btc-paid'); if(!tot.title) tot.title = pl.title || pl.textContent.replace(/\s+/g, ' ').trim();
         }
       }
