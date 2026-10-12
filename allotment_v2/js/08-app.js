@@ -76374,14 +76374,24 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-c{border-radius:14px}',
     /* programmes: aligned columns */
     'body.btc #view-booking .bt-pgf{background:#F6F8FC!important;border-radius:7px}',
-    'body.btc #view-booking .bt-pgv{display:grid;grid-template-columns:minmax(70px,1fr) 128px 84px auto;gap:8px;font-size:12px;padding:3px 10px 3px 26px}',
-    'body.btc #view-booking .bt-pgv.off{grid-template-columns:minmax(70px,1fr) auto auto}',
+    'body.btc #view-booking .bt-pgf{background:#F6F8FC!important;border-radius:7px;box-shadow:inset 3px 0 0 var(--e)!important}',
+    'body.btc #view-booking .bt-pgf.on{box-shadow:inset 3px 0 0 var(--e),0 0 0 1.5px var(--e)!important}',
+    'body.btc #view-booking .bt-pgf .nm{color:var(--e)!important}',
+    'body.btc #view-booking .bt-pgf .n::after{content:" pax";font-family:"DM Sans",sans-serif;font-size:11px;font-weight:500;color:#5B6275}',
+    'body.btc #view-booking .bt-pgf .bt-tag{background:transparent!important;font-size:10.5px;font-weight:500;color:#8A8F9C;padding:0}',
+    'body.btc #view-booking .bt-pgf .bt-tag.no{color:#B42318}',
+    'body.btc #view-booking .bt-pgv.btc-pr{display:grid;grid-template-columns:minmax(56px,1fr) auto 44px 54px minmax(34px,84px) 60px;gap:8px;align-items:center;font-size:12px;padding:3px 10px 3px 26px}',
+    'body.btc #view-booking .btc-pr .vn{font-weight:700;color:#0F1B3D;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    'body.btc #view-booking .btc-pr .tm{color:#5B6275;font-size:11.5px;white-space:nowrap}',
+    'body.btc #view-booking .btc-pr .tm b{color:#0F1B3D;font-weight:600}',
+    'body.btc #view-booking .btc-pr .lk{font-size:11px;font-weight:700;color:#6D28D9;white-space:nowrap}',
+    'body.btc #view-booking .btc-pr .lk .bt-lk{background:transparent;padding:0;color:#53207A!important}',
+    'body.btc #view-booking .btc-pr .st{text-align:right;white-space:nowrap}',
+    'body.btc #view-booking .btc-pr .fr{text-align:right}',
+    'body.btc #view-booking .btc-pr .fr .bt-free{display:inline-block}',
     'body.btc #view-booking .btc-pbar{display:flex;height:6px;border-radius:3px;background:#E6E9EF;overflow:hidden;align-self:center}',
     'body.btc #view-booking .btc-pbar i{display:block;height:100%}',
     'body.btc #view-booking .btc-pbar i.l{background:repeating-linear-gradient(45deg,#A78BFA 0 3px,#DDD6FE 3px 6px)}',
-    'body.btc #view-booking .bt-pgv .vn{font-weight:700;color:#0F1B3D;overflow:hidden;text-overflow:ellipsis}',
-    'body.btc #view-booking .bt-pgv>span:nth-child(2){color:#5B6275;font-size:11.5px}',
-    'body.btc #view-booking .bt-pgv .sp{justify-content:flex-end}',
     'body.btc #view-booking .bt-seat{font-size:12px;color:#8A8F9C}',
     'body.btc #view-booking .bt-seat b{color:#0F1B3D}',
     'body.btc #view-booking .bt-free,body.btc #view-booking .bt-tgh .sm em{border-radius:10px;padding:2px 8px;font-size:11px}',
@@ -76401,7 +76411,7 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-mc .x{grid-area:t;justify-self:end}',
     /* boats running table (built by pass()) */
     'body.btc #view-booking .btc-bt{width:100%;font-size:12px}',
-    'body.btc #view-booking .btc-bt .h,body.btc #view-booking .btc-bt .r,body.btc #view-booking .btc-bt .b{display:grid;grid-template-columns:40px minmax(0,1fr) 64px 60px;gap:6px;align-items:center}',
+    'body.btc #view-booking .btc-bt .h,body.btc #view-booking .btc-bt .r,body.btc #view-booking .btc-bt .b{display:grid;grid-template-columns:40px minmax(0,1fr) 24px 56px 32px 58px;gap:6px;align-items:center}',
     'body.btc #view-booking .btc-bt .h{height:22px;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:#8A8F9C;border-bottom:1px solid #E3E6EC}',
     'body.btc #view-booking .btc-bt .t{padding:3px 0;border-bottom:1px solid #EEF0F3;cursor:pointer}',
     'body.btc #view-booking .btc-bt .t:nth-child(odd){background:#FAFBFD}',
@@ -76410,11 +76420,11 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-bt .tm{font-family:"DM Mono",monospace;font-weight:600;color:#0F1B3D}',
     'body.btc #view-booking .btc-bt .nm{display:flex;align-items:center;gap:6px;min-width:0}',
     'body.btc #view-booking .btc-bt .nm i{width:7px;height:7px;border-radius:4px;background:var(--tc);flex:none}',
-    'body.btc #view-booking .btc-bt .nm b{color:var(--tc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    'body.btc #view-booking .btc-bt .pr{font-size:10.5px;color:#8A8F9C;white-space:nowrap;flex:none}',
+    'body.btc #view-booking .btc-bt .nm b{color:var(--tc);line-height:1.2}',
+    'body.btc #view-booking .btc-bt .pr{font-size:11px;color:#5B6275;white-space:nowrap}',
     'body.btc #view-booking .btc-bt .n{text-align:right;font-family:"DM Mono",monospace;white-space:nowrap}',
     'body.btc #view-booking .btc-bt .n s{text-decoration:none;color:#8A8F9C}',
-    'body.btc #view-booking .btc-bt .lk{display:block;font-size:10.5px;font-weight:700;color:#6D28D9;line-height:1.1}',
+    'body.btc #view-booking .btc-bt .lk{text-align:right;font-weight:700;color:#6D28D9}',
     'body.btc #view-booking .btc-bt .fr{text-align:right}',
     'body.btc #view-booking .btc-bt .fr em{font-style:normal;font-size:11px;font-weight:800;border-radius:10px;padding:2px 8px;white-space:nowrap;background:#DCF4E8;color:#0C6B47}',
     'body.btc #view-booking .btc-bt .fr em.low{background:#FEF3C7;color:#B45309}',
@@ -76424,7 +76434,7 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-bt .b .nm{padding-left:13px}',
     'body.btc #view-booking .btc-bt .b .nm i{width:6px;height:6px;background:var(--bc)}',
     'body.btc #view-booking .btc-bt .b.over{color:#B42318}',
-    'body.btc #view-booking .btc-bt .b .nm{white-space:nowrap;overflow:hidden}',
+    'body.btc #view-booking .btc-bt .b .nm{white-space:nowrap;overflow:hidden;grid-column:2/4}',
     'body.btc #view-booking .btc-bt .x{padding:2px 0 2px 59px;display:flex;flex-wrap:wrap;gap:5px}',
     'body.btc #view-booking .btc-bt .x .bt-ghost,body.btc #view-booking .btc-bt .x .bt-prep{padding:0;margin:0;border:0;background:none}',
 
@@ -76516,7 +76526,7 @@ function pc2CSS3(S){
     var trips = tgl.querySelectorAll(':scope > .bt-tgp');
     if(!trips.length) return;                       // "No trip running today" → leave as is
     var date = (typeof bkV2Tab2ActiveDate === 'function') ? bkV2Tab2ActiveDate() : null;
-    var html = ['<div class="btc-bt"><div class="h"><span>เวลา</span><span>รอบ · เรือ</span><span style="text-align:right">จอง/ที่นั่ง</span><span style="text-align:right">ว่าง</span></div>'];
+    var html = ['<div class="btc-bt"><div class="h"><span>เวลา</span><span>รอบ · เรือ</span><span>ท่า</span><span style="text-align:right">จอง/ที่นั่ง</span><span style="text-align:right">ล็อก</span><span style="text-align:right">ว่าง</span></div>'];
     for(var i = 0; i < trips.length; i++){
       var tp = trips[i];
       var oc = tp.getAttribute('onclick') || '';
@@ -76533,9 +76543,10 @@ function pc2CSS3(S){
       var mf = emTxt.match(/^(\d+)\s*free$/i); if(mf) emTxt = 'ว่าง ' + mf[1]; else if(/^full$/i.test(emTxt)) emTxt = 'เต็ม';
       var lk = 0; try{ if(rid && date && typeof bkV2LockedTotal === 'function') lk = bkV2LockedTotal(rid, date) || 0; }catch(e){}
       html.push('<div class="t" style="--tc:' + esc(tc) + '"' + (oc ? ' onclick="' + esc(oc) + '"' : '') + ' title="' + esc(nm) + ' · เลือกรอบนี้">'
-        + '<div class="r"><span class="tm">' + esc(t0) + '</span><span class="nm" title="' + esc(nm + (pier ? ' · ' + pier : '')) + '"><i></i><b>' + esc(nm) + '</b><span class="pr">' + esc(pierS) + '</span></span>'
-        + '<span class="n"><b>' + esc((sp[0]||'').trim()) + '</b>' + (sp.length > 1 ? '<s>/' + esc(sp[1].trim()) + '</s>' : '')
-        + (lk > 0 ? '<span class="lk" title="ที่นั่งที่ล็อกไว้">🔒' + lk + '</span>' : '') + '</span>'
+        + '<div class="r"><span class="tm">' + esc(t0) + '</span><span class="nm" title="' + esc(nm + (pier ? ' · ' + pier : '')) + '"><i></i><b>' + esc(nm) + '</b></span>'
+        + '<span class="pr" title="' + esc(pier) + '">' + esc(pierS) + '</span>'
+        + '<span class="n"><b>' + esc((sp[0]||'').trim()) + '</b>' + (sp.length > 1 ? '<s>/' + esc(sp[1].trim()) + '</s>' : '') + '</span>'
+        + '<span class="lk">' + (lk > 0 ? lk : '') + '</span>'
         + '<span class="fr">' + (em ? '<em class="' + esc(em.className) + '">' + esc(emTxt) + '</em>' : '') + '</span></div>');
       var chips = tp.querySelectorAll('.bt-tgb > span');
       for(var j = 0; j < chips.length; j++){
@@ -76548,7 +76559,7 @@ function pc2CSS3(S){
           var ovn = s && s.classList.contains('ovn');
           html.push('<div class="b' + (c.classList.contains('over') ? ' over' : '') + '" style="--bc:' + esc(bc) + '"><span></span><span class="nm"><i></i>⛴ ' + esc(bn)
             + (ovn ? ' <span style="font-size:10.5px;color:#0369A1;font-weight:700">' + esc(st) + '</span>' : '') + '</span>'
-            + '<span class="n">' + (ovn ? '' : esc((sa[0]||'').trim()) + (sa.length > 1 ? '<s>/' + esc(sa.slice(1).join('/').trim()) + '</s>' : '')) + '</span><span></span></div>');
+            + '<span class="n">' + (ovn ? '' : esc((sa[0]||'').trim()) + (sa.length > 1 ? '<s>/' + esc(sa.slice(1).join('/').trim()) + '</s>' : '')) + '</span><span></span><span></span></div>');
         } else {
           html.push('<div class="x">' + c.outerHTML + '</div>');   // whole-boat hold / "no boat" chip · keep as drawn
         }
@@ -76566,19 +76577,30 @@ function pc2CSS3(S){
 
 
   /* programme rows: seat bar (ทึบ = จอง · ลายม่วง = ล็อก) */
+  function freeTh(t){ t = String(t || '').trim(); var m = t.match(/^(\d+)\s*free$/i); if(m) return 'ว่าง ' + m[1]; if(/^full$/i.test(t)) return 'เต็ม'; return t; }
+  function pierShort(p){ return /tub\s*lamu/i.test(p) ? 'TL' : (/panwa/i.test(p) ? 'VP' : (/ranong/i.test(p) ? 'RN' : p)); }
   function progBars(root){
-    var vs = root.querySelectorAll('.bt-prog .bt-pgv:not(.off):not([data-btc])');
+    var vs = root.querySelectorAll('.bt-prog .bt-pgv:not(.off):not(.btc-pr)');
     for(var i = 0; i < vs.length; i++){
-      var v = vs[i]; v.setAttribute('data-btc', '1');
-      var seat = v.querySelector('.bt-seat'); if(!seat) continue;
-      var bk = parseInt((seat.querySelector('b') || {}).textContent, 10) || 0;
-      var m = seat.textContent.match(/\/\s*(\d+)/); var cap = m ? parseInt(m[1], 10) : 0;
-      var lk = 0; var lkEl = v.querySelector('.bt-lk:not(.bt-bhold)'); if(lkEl){ var ml = lkEl.textContent.match(/(\d+)/); if(ml) lk = parseInt(ml[1], 10); }
+      var v = vs[i];
+      var vn = v.querySelector(':scope > .vn'); var tmEl = vn ? vn.nextElementSibling : null;
+      var sp = v.querySelector(':scope > .sp'); if(!vn || !tmEl || !sp) continue;
+      var seat = sp.querySelector('.bt-seat'), free = sp.querySelector('.bt-free');
+      var lkEl = sp.querySelector('.bt-lk:not(.bt-bhold)'), hold = sp.querySelector('.bt-bhold');
+      var bk = seat ? (parseInt((seat.querySelector('b') || {}).textContent, 10) || 0) : 0;
+      var mcap = seat ? seat.textContent.match(/\/\s*(\d+)/) : null; var cap = mcap ? parseInt(mcap[1], 10) : 0;
+      var lk = 0; if(lkEl){ var ml = lkEl.textContent.match(/(\d+)/); if(ml) lk = parseInt(ml[1], 10); }
       var p = v.previousElementSibling; while(p && !p.classList.contains('bt-pgf')) p = p.previousElementSibling;
       var col = '#8b909c'; if(p){ var mc = (p.getAttribute('style') || '').match(/--e:\s*([^;]+)/); if(mc) col = mc[1].trim(); }
-      var bar = document.createElement('span'); bar.className = 'btc-pbar';
-      if(cap > 0){ bar.innerHTML = '<i style="width:' + Math.min(100, bk * 100 / cap) + '%;background:' + col + '"></i><i class="l" style="width:' + Math.min(100 - Math.min(100, bk * 100 / cap), lk * 100 / cap) + '%"></i>'; bar.title = 'จอง ' + bk + (lk ? ' · ล็อก ' + lk : '') + ' / ' + cap; }
-      var sp = v.querySelector(':scope > .sp'); if(sp) v.insertBefore(bar, sp); else v.appendChild(bar);
+      var tt = tmEl.textContent.trim().split(' · ');
+      var h = '<span class="vn" title="' + esc(vn.textContent.trim()) + '">' + esc(vn.textContent.trim()) + '</span>'
+            + '<span class="tm" title="' + esc(tmEl.textContent.trim()) + '"><b>' + esc(tt[0] || '') + '</b>' + (tt.length > 1 ? ' · ' + esc(pierShort(tt.slice(1).join(' · '))) : '') + '</span>'
+            + '<span class="lk">' + (lk > 0 ? '🔒 ' + lk : '') + (hold ? ' ' + hold.outerHTML : '') + '</span>'
+            + '<span class="st">' + (seat ? (cap ? '<b style="color:#0F1B3D">' + bk + '</b><span style="color:#8A8F9C">/' + cap + '</span>' : '<b style="color:#0F1B3D">' + bk + '</b>') : '') + '</span>'
+            + '<span class="btc-pbar" title="จอง ' + bk + (lk ? ' · ล็อก ' + lk : '') + (cap ? ' / ' + cap : '') + '">'
+            + (cap > 0 ? '<i style="width:' + Math.min(100, bk * 100 / cap) + '%;background:' + col + '"></i><i class="l" style="width:' + Math.max(0, Math.min(100 - Math.min(100, bk * 100 / cap), lk * 100 / cap)) + '%"></i>' : '') + '</span>'
+            + '<span class="fr">' + (free ? '<span class="' + esc(free.className) + '">' + esc(freeTh(free.textContent)) + '</span>' : '') + '</span>';
+      v.innerHTML = h; v.classList.add('btc-pr');
     }
   }
 
