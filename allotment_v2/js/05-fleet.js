@@ -24669,7 +24669,28 @@ function flOpenAddEngineModal(id){
   flPickSt('eng',e?flStValues.indexOf(e.status):0);
   // preselect saved location (Spare or Fixing) · add a legacy option if the saved value isn't in the list
   if(e&&e.spareLocation){ const _el=document.getElementById('fl-eng-spare-loc'); _el.value=e.spareLocation; if(_el.value!==e.spareLocation){ const o=document.createElement('option'); o.value=e.spareLocation; o.textContent=e.spareLocation+' (legacy)'; o.selected=true; _el.appendChild(o); } }
+  { const _del=document.getElementById('fl-eng-del'); if(_del) _del.style.display=e?'':'none'; }
   openModal('fl-modal-engine');
+}
+/* §engDup · ลบเครื่องที่เพิ่มผิด · ลบได้เฉพาะตัวที่ยังไม่มีอะไรผูกอยู่เลย
+   (ไม่มีประวัติ · ไม่มี Gearbox / งานซ่อม / ชั่วโมงรายวัน / เหตุการณ์ ที่อ้าง id นี้)
+   ตัวที่มีของผูกอยู่ ลบแล้วประวัติลอย · ให้เปลี่ยนสถานะเป็น Broken/Spare แทน */
+function flEngRefs(id){
+  const q='"'+id+'"', out=[];
+  [['Gearbox',FL_GEARBOXES],['Maintenance',FL_MAINT],['Daily hours',FL_DAILY],['Incidents',FL_INCIDENTS]].forEach(([n,v])=>{
+    try{ if(JSON.stringify(v||'').indexOf(q)>=0) out.push(n); }catch(_){} });
+  return out;
+}
+function flDeleteEngine(){
+  const e=flEditEngId?flGetEng(flEditEngId):null; if(!e) return;
+  const refs=flEngRefs(e.id), nlog=(e.log||[]).length;
+  if(nlog||refs.length){ alert('Cannot delete '+e.serial+': it has history ('+(nlog?nlog+' log entries':'')+(nlog&&refs.length?', ':'')+refs.join(', ')+'). Set it to Broken or Spare instead.'); return; }
+  if(!confirm('Delete engine '+e.serial+' ('+(e.model||'')+')? This cannot be undone.')) return;
+  FL_ENGINES=FL_ENGINES.filter(x=>x.id!==e.id);
+  if(flSelEngId===e.id) flSelEngId=null;
+  flEditEngId=null;
+  flSave(); closeModal('fl-modal-engine');
+  flRenderEngList(); if(typeof flRenderEngDetailPink==='function') flRenderEngDetailPink();
 }
 function flOpenEditEngModal(id){
   flOpenAddEngineModal(id);
@@ -24690,6 +24711,16 @@ function flSaveEngine(){
   const boatId=document.getElementById('fl-eng-boat-sel').value||null;
   const pos=document.getElementById('fl-eng-pos-sel').value;
   const spareLocation=(status==='spare'||status==='fixing')?document.getElementById('fl-eng-spare-loc').value:null;
+  /* §engDup (2026-10-12) · owner: "Okeanos มันซ้ำ 1 ลูก" · BBNJ-1010052 ถูกเพิ่มซ้ำผ่านปุ่ม + Add Engine
+     (11 ต.ค.) ทั้งที่มีอยู่แล้ว · Serial คือตัวตนของเครื่อง ห้ามมีสองเรคคอร์ด
+     เทียบแบบไม่สนตัวพิมพ์ เว้นวรรค และขีด · ไม่นับตัวที่กำลังแก้อยู่ */
+  { const _k=v=>String(v||'').toUpperCase().replace(/[\s\-]/g,'');
+    /* แก้เครื่องเดิมโดยไม่ได้เปลี่ยน Serial = ไม่ตรวจ · ข้อมูลเก่าที่ซ้ำอยู่แล้วจะได้ยังแก้ช่องอื่นได้ */
+    const _was=flEditEngId?flGetEng(flEditEngId):null;
+    const _d=(_was && _k(_was.serial)===_k(serial))?null:FL_ENGINES.find(x=>x.id!==flEditEngId && _k(x.serial)===_k(serial));
+    if(_d){ const _b=(typeof BOATS!=='undefined'?BOATS:[]).find(b=>b.id===_d.boatId);
+      alert('Serial '+serial+' already exists ('+(_b?_b.name:'not installed')+(_d.pos?(' / '+_d.pos):'')+'). Not saved - open that engine and edit it instead.');
+      return; } }
   if(flEditEngId){const e=flGetEng(flEditEngId);if(e)Object.assign(e,{brand,model,serial,hp,buyDate,price,baseHours,serviceInterval,note,status,boatId,pos,spareLocation});}
   else FL_ENGINES.push({id:LA_UID('e'),brand,model,serial,hp,buyDate,price,baseHours,serviceInterval,note,status,boatId,pos,spareLocation});
   flSave();closeModal('fl-modal-engine');

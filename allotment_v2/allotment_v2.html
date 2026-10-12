@@ -1589,7 +1589,7 @@
       <div class="form-2"><div class="form-row"><label class="form-label">ชั่วโมงสะสมเดิม (h)</label><input type="number" id="fl-eng-base-hours" step="0.1" placeholder="เช่น 4727.3" style="font-family:'DM Mono',monospace"><div style="font-size:9px;color:#999;margin-top:2px">ชั่วโมงจริงของเครื่อง ณ ตอนเริ่มนับ · ชั่วโมงที่วิ่งหลังจากนี้จะบวกต่อให้เอง</div></div><div class="form-row"><label class="form-label">Service Interval (h)</label><input type="number" id="fl-eng-svc" placeholder="100"></div></div>
       <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea id="fl-eng-note"></textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-engine')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveEngine()">บันทึก</button></div>
+    <div class="modal-footer"><button id="fl-eng-del" class="btn btn-ghost" style="display:none;margin-right:auto;color:#A32D2D" onclick="flDeleteEngine()" title="ลบได้เฉพาะเครื่องที่ยังไม่มีประวัติ (เพิ่มผิด / ซ้ำ)">ลบเครื่องนี้</button><button class="btn btn-ghost" onclick="closeModal('fl-modal-engine')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveEngine()">บันทึก</button></div>
   </div>
 </div>
 <div class="modal-overlay" id="fl-modal-gearbox">
