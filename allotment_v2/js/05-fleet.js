@@ -28191,7 +28191,7 @@ function faCSS(){
   if(document.getElementById('fa-css')) return;
   var V='#view-fl-asset', s=document.createElement('style'); s.id='fa-css';
   s.textContent=''
-  +V+'{padding:18px 18px 64px;background:#EEF0F3;min-height:100%;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
+  +V+'{margin-top:-22px;padding:18px 18px 64px;background:#EEF0F3;min-height:calc(100vh + 22px);box-sizing:border-box;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
   +V+' > .page-hd,'+V+' > #fl-asset-tabs{display:none !important}'
   +V+' [id$="-pink-wrap"]{background:transparent !important}'
   +V+' .fa-pad{margin:10px 0 0 !important;padding:0 !important}'
