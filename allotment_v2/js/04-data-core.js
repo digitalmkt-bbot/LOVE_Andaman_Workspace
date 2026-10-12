@@ -3337,10 +3337,17 @@ function renderDash(){
   if(_opsDashApi) _opsDashApi.ensure(_ds,'day');
   // Dashboard-only feed for Bookings/day and Live B2C/B2B. It is newest-first
   // and stops at the 30-day creation window; it is not a boot preload.
-  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function')?bookingV2OpsEnsureRecent(30):null;
+  /* A failed feed resolves null without being recorded, so every renderDash()
+     would start it again and the settle-redraw would loop. Hold off for 15s
+     after a settle; the loader still clears on that settle. */
+  const _dashRecentCooling=Date.now()-(window._dashRecentSettledAt||0)<15000;
+  const _dashRecentLoad=(typeof bookingV2OpsEnsureRecent==='function' && !_dashRecentCooling)?bookingV2OpsEnsureRecent(30):null;
   if(_dashRecentLoad && !window._dashRecentPending){
     window._dashRecentPending=true;
-    _dashRecentLoad.then(function(){ window._dashRecentPending=false; if(typeof renderDash==='function') renderDash(); });
+    _dashRecentLoad.then(function(){
+      window._dashRecentPending=false; window._dashRecentSettledAt=Date.now();
+      if(typeof renderDash==='function') renderDash();
+    });
   }
   const _opsDash=_opsDashApi?_opsDashApi.get(_ds,'day'):null;
   const _opsDashState=_opsDashApi?_opsDashApi.status(_ds,'day'):'idle';
