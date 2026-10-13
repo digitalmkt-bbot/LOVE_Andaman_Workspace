@@ -2,10 +2,10 @@
 //
 // Source (2026-10-13) · owner: "เรื่องจัดเรือ สามารถให้เลือกเรือในหน้า By trip date ได้โดยไม่ต้องเปิดโหมดเรือแล้วได้ไหม"
 // Checks
-//   1 normal view · a row with a boat: its boat label becomes the picker button (same width as the plain label) · a row without one has "+ เลือกเรือ"
+//   1 (§btBoatPick · owner "เลือกเรือ ให้เป็นปุ่ม + พอ") normal view · a row with a boat: its boat label becomes the picker button (same width as the plain label) · a row without one has a "+" button
 //   2 click → the same boat picker as Boat mode (only boats on that route) · "unassign" → saved on the booking
-//     for that day (ops), the row turns into "+ เลือกเรือ" · Boat mode not switched on
-//   3 "+ เลือกเรือ" on an unassigned row → pick → assigned
+//     for that day (ops), the row turns into "+" · Boat mode not switched on
+//   3 "+" on an unassigned row → pick → assigned
 //   4 charter rows and cancelled rows keep a plain label (no button)
 //   5 view-only user (no booking edit right) → no buttons anywhere
 //   6 Boat mode still shows its own cell (tick box + picker + upgrade) · Compact: button inside the cell, not clipped
@@ -44,7 +44,7 @@ const c1 = await page.evaluate(S => { const q = id => document.querySelector('#v
   const a = q(S.w), b = q(S.wo); const nm = a && [...a.querySelectorAll('span')].pop();
   return { a: a && a.textContent.replace(/\s+/g, ' ').trim(), cut: !!(nm && nm.scrollWidth > nm.clientWidth + 1), aAdd: a && a.classList.contains('add'), b: b && b.textContent.trim(), bAdd: b && b.classList.contains('add'),
     all: document.querySelectorAll('#view-booking .t2-bpk').length }; }, S);
-if (c1.a && !c1.aAdd && c1.bAdd && /เลือกเรือ/.test(c1.b)) ok(`1 picker on every editable row (${c1.all}) · "${c1.a}" · "${c1.b}"`); else fail('1 ' + JSON.stringify(c1));
+if (c1.a && !c1.aAdd && c1.bAdd && c1.b === '+') ok(`1 picker on every editable row (${c1.all}) · "${c1.a}" · "${c1.b}"`); else fail('1 ' + JSON.stringify(c1));
 
 const c2 = await page.evaluate(async S => {
   const bk = SB_BOOKINGS.find(b => b.id === S.w), before = bkOpsRead(bk, S.d).boatId;
@@ -58,7 +58,7 @@ const c2 = await page.evaluate(async S => {
   return { before, after, items, routeOnly: items.length >= 1 && items.every(i => S.boats.includes(i)), add: btn && btn.classList.contains('add'), boatMode: !!_bkV2.boatAssignMode, closed: !document.getElementById('bkv2-boatpick') };
 }, S);
 if (!c2.nopop && c2.before && c2.after === '' && c2.routeOnly && c2.add && !c2.boatMode && c2.closed)
-  ok(`2 picker lists ${c2.items.length} boat(s) of the route · unassign ${c2.before} → none, row shows "+ เลือกเรือ" · Boat mode stays off`); else fail('2 ' + JSON.stringify(c2));
+  ok(`2 picker lists ${c2.items.length} boat(s) of the route · unassign ${c2.before} → none, row shows "+" · Boat mode stays off`); else fail('2 ' + JSON.stringify(c2));
 const c2b = await page.evaluate(async S => { document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk.add').click(); await new Promise(z => setTimeout(z, 150));
   document.getElementById('bkv2-boatpick').querySelector('[onclick^="bkV2BoatPickSet(\'' + S.w + '\',\'' + S.boats[0] + '\'"]').click(); await new Promise(z => setTimeout(z, 500));
   return bkOpsRead(SB_BOOKINGS.find(b => b.id === S.w), S.d).boatId; }, S);
@@ -70,7 +70,7 @@ const c3 = await page.evaluate(async S => {
   const b = document.querySelector('#view-booking tr.t2-row[data-al="' + S.wo + '"] .t2-bpk');
   return { after: bkOpsRead(SB_BOOKINGS.find(b => b.id === S.wo), S.d).boatId, add: b && b.classList.contains('add') };
 }, S);
-if (c3.after === S.boats[0] && c3.add === false) ok(`3 "+ เลือกเรือ" → ${c3.after} assigned`); else fail('3 ' + JSON.stringify(c3));
+if (c3.after === S.boats[0] && c3.add === false) ok(`3 "+" → ${c3.after} assigned`); else fail('3 ' + JSON.stringify(c3));
 
 const c4 = await page.evaluate(async S => {
   const cxl = ['cancelled', 'rejected', 'cancelled_weather'];

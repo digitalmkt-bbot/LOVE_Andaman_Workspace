@@ -51495,7 +51495,7 @@ function bkV2BoatPickWrap(bk, rid, a, r, has, inner){
     var on = 'event.stopPropagation();bkV2BoatPicker(this,\''+q(bk.id)+'\',\''+q(rid)+'\')';
     return has
       ? '<button type="button" class="t2-bpk" onclick="'+on+'" title="'+q(laT('กดเพื่อเปลี่ยนเรือ'))+'">'+inner+'</button>'
-      : '<button type="button" class="t2-bpk add" onclick="'+on+'" title="'+q(laT('กดเพื่อเลือกเรือ'))+'">+ '+laT('เลือกเรือ')+'</button>';
+      : '<button type="button" class="t2-bpk add" onclick="'+on+'" title="'+q(laT('กดเพื่อเลือกเรือ'))+'" aria-label="'+q(laT('เลือกเรือ'))+'">+</button>'   /* §btBoatPick · owner "เลือกเรือ ให้เป็นปุ่ม + พอ" */;
   }catch(_){ return inner; }
 }
 // §splitOwn · กดชิปบุคกิ้งเดียวกัน → เลื่อนไปแถวอีกฝั่งแล้วกระพริบให้เห็น
@@ -54582,7 +54582,7 @@ function bkV2RenderTab2(){
     .t2-bpk{display:inline-flex;align-items:center;max-width:calc(100% + 7px);min-width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:2px 3px 2px 2px;margin:-3px -4px -3px -3px;font:inherit;color:inherit;cursor:pointer;text-align:left}
     .t2-bpk>span{min-width:0}
     .t2-bpk:hover{border-color:#9DBCE3;background:#F1F6FD}
-    .t2-bpk.add{border:1px dashed #C9D6E8;color:#185FA5;font-size:11px;font-weight:700;padding:2px 8px;white-space:nowrap}
+    .t2-bpk.add{width:24px;height:22px;margin:0;padding:0;justify-content:center;border:1px dashed #9DBCE3;color:#185FA5;font-size:15px;font-weight:700;line-height:1;white-space:nowrap}
     .t2-bpk.add:hover{border-style:solid;background:#EAF2FC}
     /* §together · ป้าย Together + popup ลอย · สีต่อบุคกิ้ง (--tgc) */
     .t2-tog{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;line-height:1.5;color:#fff;background:var(--tgc,#7C3AED);border-radius:5px;padding:0 6px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px;flex:none;letter-spacing:.02em;box-shadow:0 1px 2px rgba(15,27,61,.18)}
