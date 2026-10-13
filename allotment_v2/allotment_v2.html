@@ -298,6 +298,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3z"/><path d="M14 10h3.5l2.5 3v3h-6z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg>
       วางบิลรถร่วม
     </div>
+    <div class="nav-item" data-view="commissions" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9.5h4.5a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3H15M12 7v2M12 15.5v2"/></svg>
+      Commission payouts
+    </div>
     <div class="nav-item" data-view="prpo" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6l1 3H8l1-3z"/><path d="M5 6h14v15H5z"/><path d="M9 11h6"/><path d="M9 15h6"/></svg>
       PR/PO Dashboard
@@ -996,6 +1000,7 @@
     <!-- ══════════ SETTINGS ══════════ -->
     <div id="view-dailypfm" class="view"><div id="dailypfm-host"></div></div>
     <div id="view-vanbill" class="view"><div id="vanbill-host"></div></div>
+    <div id="view-commissions" class="view"><div id="commissions-host"></div></div>
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-insurance" class="view"><div id="insurance-host"></div></div>
@@ -3835,9 +3840,12 @@
 <script src="js/ops/32-ops-park.js"></script>
 <script src="js/ops/42-ops-pier-core.js?v=89bf3043"></script>
 <script src="js/ops/43-ops-pier-lists.js?v=f0492a8c"></script>
+<script src="js/ops/44-ops-pier-money.js"></script>
 <script src="js/ops/47-ops-pier-job.js?v=cb789ba2"></script>
 <script src="js/ops/29-ops-addon-types.js"></script>
 <script src="js/ops/34-ops-vans.js?v=28c79547"></script>
+<script src="js/ops/45-ops-van-bills.js"></script>
+<script src="js/ops/46-ops-commissions.js"></script>
 <script src="js/ops/35-ops-van-jobs.js?v=ee4c74d4"></script>
 <script src="js/ops/37-ops-boat-assign.js?v=2d29cbba"></script>
 <script src="js/ops/38-ops-attachments.js"></script>
