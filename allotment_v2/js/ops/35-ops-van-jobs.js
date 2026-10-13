@@ -21,8 +21,8 @@
    vsCheck                               → PUT|DELETE /operations/van-stops/{id}/check-in
 
    Not on the server, so still local: the driver-arrived stamp (vck_arrive), sheet highlights and
-   the sheet template. The Transfer Fleet page's own edits (vans, day routes, ranges) are not wired
-   here: its screen reads what this loads, its writes stay local until they get their own adapter.
+   the sheet template. The Transfer Fleet page's own edits (vans, day routes, ranges) are written by
+   35-ops-vehicles.js, which loads right after this file and uses this file's loaders via O.vanJobs.
 
    Legacy job key "van~route[~group]" ⇄ server key (group id, or "van~route" for a return-only van).
    Legacy mode (!O.enabled()): every wrapped function delegates to the original.
@@ -392,5 +392,17 @@
   /* by-trip Van mode shows the day's stops too · load them with the groups */
   wrap('bookingV2OpsVansDay', function(date){ return loadDay(date); });
 
-  O.vanJobs = { loadDay: loadDay, legacyKeysOf: legacyKeysOf };
+  /* the Transfer Fleet adapter (35-ops-vehicles.js) keeps these caches in step with what it writes */
+  O.vanJobs = {
+    loadDay: loadDay, legacyKeysOf: legacyKeysOf,
+    loadVans: loadVans, vehicleOf: vehicleOf,
+    putCell: function(c){ if(c && c.van_id) cells[c.van_id + '|' + c.service_date] = c; },
+    putRange: function(kind, r){ (kind === 'zone' ? zoneRanges : statusRanges)[r.id] = r; },
+    dropRange: function(kind, id){ delete (kind === 'zone' ? zoneRanges : statusRanges)[id]; },
+    dropVan: function(vanId){
+      Object.keys(cells).forEach(function(k){ if(k.indexOf(vanId + '|') === 0) delete cells[k]; });
+      [statusRanges, zoneRanges].forEach(function(m){ Object.keys(m).forEach(function(k){ if(m[k].van_id === vanId) delete m[k]; }); });
+    },
+    invalidate: function(){ vansWindow = null; }
+  };
 })();
