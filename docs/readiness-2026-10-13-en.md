@@ -23,9 +23,9 @@ All four blockers from the first review now have code behind them (merged 2026-1
 | Pier Office audit/close | Backend: `GET /v1/pier-office/{pier}/moves`, `.../boats/{id}/outstanding`, `ship-writeoff`, `ship-repair`. `48-ops-pier-office.js` hydrates the ledger and reads outstanding before the close dialog. | Write-off/repair semantics were derived from legacy `poBal`; ops should confirm. A pier is capped at its newest 5000 moves. `GET /v1/pier-office/boats/{id}/team` is not built. |
 | Invoice/PFM payment slips | Backend: `POST/DELETE /v1/invoices/:id/payments/:pid/slips`. `38-ops-attachments.js` attaches after payment, cleans up the upload on refusal, and fixes slip view/delete. | The target is a heuristic: the latest live non-credit payment on the first non-void invoice. Multi-booking invoices, pier payments, upgrades and Cash on Tour are not handled. |
 
-### Still a blocker: daily-report email images
+### Daily-report email images: disabled, out of scope
 
-`drmUpload` (`08-app.js` ~23945, the only real `/api/mailimg` caller) uploads the trend and donut charts for the daily report email and 404s. Email clients need a **public** URL, and `/v1/attachments` requires a login. Needs a decision: a public image endpoint on operation-backend, or embedding/dropping the charts.
+`drmEnsureImgs` (`08-app.js`) no longer uploads the trend/donut charts to the removed `/api/mailimg`. The report email uses its bar-chart fallback and shows no error. Embedded chart images would need a public image URL, which operation-backend does not provide; that is deliberately not part of this cutover. The `/api/mailimg` item is removed from the acceptance list.
 
 ## Newly wired: petty cash / เงินสดย่อย
 
@@ -48,7 +48,7 @@ The adapter is server-first and restores data from server reads after a refused 
 These are not confirmed code blockers, but must pass in a browser against PostgreSQL/Railway before approval:
 
 1. Contract artifact upload/metadata in operations mode (`js/ops/18-ops-contracts.js`).
-2. Every attachment UI path, including any reachable `/api/mailimg` caller.
+2. Every attachment UI path.
 3. All newly added operations adapters, especially Pier Office, return-van-per-split-part, attachments, and petty cash.
 4. Concurrent-write/refusal behavior and authentication expiry on production-like data.
 

@@ -23950,6 +23950,11 @@ function drmUpload(dataUrl, name){
 }
 // เตรียมรูปกราฟไว้ก่อนเขียนจดหมาย · ทำครั้งเดียวต่อวัน/โหมด แล้วจำไว้
 function drmEnsureImgs(D, done){
+  // Chart images for the report email are disabled: they were hosted by the removed /api/mailimg, and
+  // operation-backend has no public image URL. The mail uses its bar charts (state '' = no notice).
+  _drImg={ key:drImgKey(D), trend:'', donut:'', state:'' };
+  if(done) done();
+  return;
   var key=drImgKey(D);
   if(_drImg.key===key && (_drImg.state==='ok'||_drImg.state==='run')){ if(done&&_drImg.state==='ok') done(); return; }
   _drImg={ key:key, trend:'', donut:'', state:'run' };
