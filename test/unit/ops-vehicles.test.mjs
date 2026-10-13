@@ -268,3 +268,15 @@ test('vehAdd opens the form (the server needs a name) and sends nothing', async 
   assert.deepEqual(plain(rt.legacyCalls), [['vehFormOpen', [null]]]);
   assert.equal(rt.writes().length, 0);
 });
+
+test('edit via form does not send color unless the user picked one (legacy form state has no color)', async () => {
+  const rt = runtime({ handlers: { 'PATCH /operations/vans/veh01': (b) => ({ body: van('veh01', { color: '#8b5cf6' }) }) } });
+  await rt.loadVans();
+  rt.ctx._vehForm = { id: 'veh01', name: 'Van', plate: 'P', type: 'van', capacity: 9, ownership: 'own', zoneBase: 'PK', driver: '', driverPhone: '', active: true };
+  rt.ctx.vehFormSave(); await rt.settle();
+  assert.equal('color' in plain(rt.writes()[0].body), false, 'a no-change save must not wipe the stored colour');
+  // picking "auto" in the form (vehFormSetColor sets '') is an explicit request to clear it
+  rt.ctx._vehForm = { id: 'veh01', name: 'Van', plate: 'P', type: 'van', capacity: 9, ownership: 'own', zoneBase: 'PK', driver: '', driverPhone: '', active: true, color: '' };
+  rt.ctx.vehFormSave(); await rt.settle();
+  assert.equal(plain(rt.writes()[1].body).color, null);
+});

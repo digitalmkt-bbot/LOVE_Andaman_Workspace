@@ -109,12 +109,16 @@
 
   /* ════ The catalogue: add, edit, delete ════ */
   function vanBody(d){
-    return {
+    var body = {
       name: String(d.name || '').trim(), plate: d.plate || null, type: d.type || 'van', capacity: Math.max(1, parseInt(d.capacity, 10) || 1),
       ownership: d.ownership || 'own', partner_name: d.ownership === 'own' ? null : (d.partnerName || null),
       zone_base: d.zoneBase || null, driver: d.driver || null, driver_phone: d.driverPhone || null,
-      active: d.active !== false, color: d.color || null
+      active: d.active !== false
     };
+    /* legacy vehFormOpen does not copy the van's colour into the form, so d.color is undefined unless the
+       user picked one (vehFormSetColor sets '' for auto). Sending null here would wipe the stored colour. */
+    if(d.color !== undefined) body.color = d.color || null;
+    return body;
   }
   var saving = false;
   wrap('vehAdd', function(){
