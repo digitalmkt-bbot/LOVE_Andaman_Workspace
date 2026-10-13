@@ -13,7 +13,8 @@
        note / wb / wbc / wc                   note / wristband_text / wristband_colour / work_code
        lock                                   completed_at (complete / reopen are the server's commands)
        mv ('' route's, '-' no meal, id)       restaurant_id (effective: the day's venue, else the route's)
-       lb (own slot names), mj (repair job)   not on the server: kept in the browser only
+       lb (own slot names), mj (repair job)   slot_labels / maintenance_job_id (400 if not this boat's open job)
+       mv                                     read from meal.mode ('none' -> '-', 'day' -> venue id, else ''); written only by the venue PUT
      legacy PIER_TEAM[boat] {cap, asst, crew} is built from what the jobs show (the server sends no team read:
      a day with no job shows the team, a recorded job lists where it differs); PIER_DUTY from duty_staff_ids
 
@@ -22,9 +23,8 @@
      · screens still change PIER_JOB / PIER_TEAM / PIER_DUTY and call poPersist(); 42-ops-pier-core.js
        sends the difference, and a refusal (409 job_complete, job_incomplete with the missing list,
        day_closed, 400) puts the card back and shows the server's message
-   Not wired: lb (slot names), mj (the repair job picked on a card); a job's `mv` shows the effective restaurant, so
-   "no meal today" reads as the route's default after a reload. Other screens that read a day's job
-   (check-in crew line, roster labels) see only the days opened here.
+   Not wired: other screens that read a day's job (check-in crew line) see only the days opened here; the roster
+   endpoint (GET /v1/pier-office/{pier}/roster) already counts deployed boats with no saved card.
    Legacy mode: every wrapper delegates to the captured original when !enabled().
    Classic script · loads after 08-app.js and 42-ops-pier-core.js.
    ════════════════════════════════════════════════════════════════════════ */
@@ -45,16 +45,27 @@
     while(out.length && out[out.length - 1] === null) out.pop();
     return out;
   }
+  function labels(o){
+    var out = {};
+    if(o && typeof o === 'object') Object.keys(o).forEach(function(k){ var t = String(o[k] == null ? '' : o[k]).trim(); if(k.trim() && t) out[k] = t; });
+    return out;
+  }
+  // server meal.mode -> legacy mv: 'none' = '-' (no meal), 'day' = the venue id, 'route'/'unset' = '' (the route's)
+  function mvOf(v){
+    var m = v.meal;
+    if(!m) return v.restaurant_id || '';
+    return m.mode === 'none' ? '-' : (m.mode === 'day' ? (m.venue_id || '') : '');
+  }
   function proj(J){
     return { captain_id: nul(J.cap), assistant_id: nul(J.asst), crew: slots(J.crew), island: slots(J.island), note: nul(J.note),
-             wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc) };
+             wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc),
+             slot_labels: labels(J.lb), maintenance_job_id: nul(J.mj) };
   }
   function fromView(v, prev){
     var J = { cap: v.captain_id || '', asst: v.assistant_id || '', crew: (v.crew || []).map(function(x){ return x || ''; }),
               island: (v.island || []).map(function(x){ return x || ''; }), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
-              lock: v.completed_at ? 1 : 0, mv: v.restaurant_id || '', wc: v.work_code || '', lb: {} };
-    if(prev && prev.lb && typeof prev.lb === 'object') J.lb = clone(prev.lb);
-    if(prev && prev.mj) J.mj = prev.mj;
+              lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels) };
+    if(v.maintenance_job_id) J.mj = v.maintenance_job_id;
     return J;
   }
   function teamFromView(v){
@@ -80,8 +91,8 @@
     if(v.recorded) JOB[key] = fromView(v, JOB[key]); else delete JOB[key];
     TEAM[bid] = teamFromView(v);
     if((v.duty_staff_ids || []).length) DUTY[key] = v.duty_staff_ids.slice(); else delete DUTY[key];
-    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id, asst: v.assistant_id, crew: v.crew, island: v.island, note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code }),
-                         lock: v.completed_at ? 1 : 0, mv: v.restaurant_id || '' };
+    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id, asst: v.assistant_id, crew: v.crew, island: v.island, note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id }),
+                         lock: v.completed_at ? 1 : 0, mv: mvOf(v) };
     st.base.team[bid] = clone(TEAM[bid]);
     st.base.duty[key] = (v.duty_staff_ids || []).slice();
   }

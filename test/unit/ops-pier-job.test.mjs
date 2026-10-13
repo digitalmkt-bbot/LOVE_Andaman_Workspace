@@ -150,6 +150,21 @@ test('the restaurant: "-" is the server\'s "none", a venue id is sent as it is',
   assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PUT', '/v1/trip-actuals/' + DATE + '/b1/venue', { venue: 'none' }]]);
 });
 
+test('slot labels, the repair job and "no meal today" come back from the server and survive a reload', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: {} } });
+  rt.state.b1 = view({ slot_labels: { crew0: 'Diver' }, maintenance_job_id: 'fj1', restaurant_id: null, meal: { mode: 'none', venue_id: null } });
+  await open(rt);
+  assert.deepEqual(J(rt.w.PIER_JOB[K1].lb), { crew0: 'Diver' });
+  assert.equal(rt.w.PIER_JOB[K1].mj, 'fj1');
+  assert.equal(rt.w.PIER_JOB[K1].mv, '-');
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt), [], 'nothing changed: nothing sent');
+  rt.w.PIER_JOB[K1].lb = { crew0: 'Diver', crew1: 'Deck hand' };
+  rt.w.PIER_JOB[K1].mj = '';
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b1'), { slot_labels: { crew0: 'Diver', crew1: 'Deck hand' }, maintenance_job_id: null }]]);
+});
+
 test('duty and the usual team: PUT whole, only when changed', async () => {
   const rt = runtime({ answers: { ['PUT /v1/pier-office/' + PIER + '/days/' + DATE + '/boats/b1/duty']: {}, ['PUT /v1/pier-office/boats/b1/team']: {} } });
   await open(rt);
