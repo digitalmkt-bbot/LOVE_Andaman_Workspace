@@ -66137,6 +66137,14 @@ function pk2CSS(S){
   S+' .pk2-dmx .pk2-ov tr.bt.sel td{background:#E9F0FB}',
   S+' .pk2-dmx .pk2-ov tr.bt.sel td.rt{box-shadow:inset 3px 0 0 '+N+';color:'+N+';font-weight:700}',
   S+' .pk2-dmx .pk2-ov tr.bt.sel td.sum{background:#DCE7F7}',
+  /* §pkDayMx2 · ชื่อเส้นทาง | ป้ายเรือ | เวลา · ช่องกว้างคงที่ ทุกแถวตรงกัน */
+  S+' .pk2-dmx .pk2-ov .rg{display:grid;grid-template-columns:minmax(0,1fr) 112px 46px;gap:10px;align-items:center}',
+  S+' .pk2-dmx .pk2-ov .rg .rn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+  S+' .pk2-dmx .pk2-ov tr.bt .rg .bn{display:block;margin:0;padding:2px 9px;border-radius:7px;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em}',
+  S+' .pk2-dmx .pk2-ov .rg .tm{font-family:"DM Mono",monospace;font-size:12.5px;color:'+SUB+';text-align:right}',
+  S+' .pk2-dmx .pk2-ov th.rt .rg{font-size:11px;font-weight:700;color:'+M+'}',
+  S+' .pk2-dmx .pk2-ov th.rt .rg span:nth-child(2){text-align:center} '+S+' .pk2-dmx .pk2-ov th.rt .rg span:nth-child(3){text-align:right}',
+  S+' .pk2-dmx .pk2-ov tr.bt.sel td.rt .rg .bn{box-shadow:0 0 0 2px #fff,0 0 0 3.5px '+N+'}',
   S+' .pk2-dmx .pk2-ov td.ms u{text-decoration:none;font-size:11.5px;font-weight:700;color:#7A4300;background:#FBEBD3;border-radius:8px;padding:1px 7px}',
   S+' .pk2-dmx .pk2-ov td.ms .ok{font-family:inherit;font-size:12px;color:#0B6B47}',
   /* หัวตารางวันเดียวไม่ต้องตรึง · ตารางสั้น และอยู่ชิดแถบบน (ตรึงแล้วหัวไปทับแถวรวม) */
@@ -66195,6 +66203,12 @@ function pk2Cells(s,TY){
       :'<td class="n df">—</td>';
   return h;
 }
+/* §pkDayMx2 · สีเรือ = สีที่ตั้งใน Boat Status (getBoatColor · ตัวเข้มที่อ่านตัวขาวบนพื้นได้) · ไม่มีสีตั้ง → สีประจำลำของ By trip */
+function pk2BoatCol(bid){
+  try{ if(typeof getBoatColor==='function'){ var g=getBoatColor(bid); if(g && g.text && g.text!=='#666') return g.text; } }catch(_){}
+  try{ if(typeof bkV2BoatAvatarColor==='function') return bkV2BoatAvatarColor(bid); }catch(_){}
+  return '#3E4A6B';
+}
 /* ชิปโปรแกรม + ตาราง Matrix ของวันเดียว · flat = [{g,B}] จาก renderPierPark */
 function pk2DayMx(flat, sel, TY){
   var fams=[], fm={};
@@ -66215,7 +66229,9 @@ function pk2DayMx(flat, sel, TY){
     pk2Add(S,s,TY); miss+=m; rts[x.g.rid]=1;
     return '<tr class="bt'+(x===sel?' sel':'')+'" style="--rc:'+((x.g.route&&x.g.route.color)||'#94A3B8')+'" '
       +'onclick="pkTab(\''+x.g.rid+'\',\''+B.bid+'\')" title="กดเพื่อดูรายชื่อลำนี้">'
-      +'<td class="rt"><i class="d"></i>'+poE(rn)+' <span class="bn">'+poE((B.boat&&B.boat.name)||B.bid)+(B.dep?(' '+poE(B.dep)):'')+'</span></td>'
+      +'<td class="rt"><span class="rg"><span class="rn"><i class="d"></i>'+poE(rn)+'</span>'
+        +'<span class="bn" style="background:'+pk2BoatCol(B.bid)+'">'+poE((B.boat&&B.boat.name)||B.bid)+'</span>'
+        +'<span class="tm">'+poE(B.dep||'')+'</span></span></td>'
       +pk2Cells(s,TY)
       +'<td class="n ms">'+(m?('<u>'+m+'</u>'):((+B.tot||0)?'<b class="ok">ครบ</b>':'<span class="z">—</span>'))+'</td></tr>';
   }).join('');
@@ -66229,7 +66245,7 @@ function pk2DayMx(flat, sel, TY){
     +TY.map(function(){ return '<col class="c-t">'; }).join('')+'<col class="c-s"><col class="c-d"><col class="c-d"></colgroup>';
   return '<div class="pk2-fcs">'+chips+'<span class="cs">กดแถวเพื่อดูรายชื่อลำนั้น</span></div>'
     +'<div class="pk2-ovw pk2-dmx"><table class="pk2-ov">'+cg
-    +'<thead><tr class="g"><th class="rt" rowspan="2">เส้นทาง · ลำ</th>'
+    +'<thead><tr class="g"><th class="rt" rowspan="2"><span class="rg"><span>เส้นทาง</span><span>ลำ</span><span>ออก</span></span></th>'
       +'<th class="gh go sep" colspan="4">เดินทาง</th><th class="gh tk sep" colspan="'+TY.length+'">ตั๋วที่ออก</th>'
       +'<th class="n sum" rowspan="2">รวม<br>ตั๋ว</th>'
       +'<th class="n" rowspan="2" title="ตั๋วที่ออก − หัวที่เดินทาง · ลบคือซื้อขาด บวกคือซื้อเกิน">ขาด/<br>เกิน</th>'
@@ -66665,7 +66681,7 @@ function renderPierPark(pier){
     }
     var sheetCard='<div class="pc2-card pk2-sc">'
       +(flat.length
-        ? (pk2DayMx(flat, sel, TY)+bh+recOf(cur)+'<div class="pk2-shw">'+sheetOf(cur)+'</div>')
+        ? (pk2DayMx(flat, sel, TY)+bh+'<div class="pk2-shw">'+sheetOf(cur)+'</div>')   /* §pkDayMx2 · กล่องตั๋วของลำนี้ (recOf) เอาออก · ตารางบนมีตัวเลขเดียวกันแล้ว */
         : '<div class="pc2-empty">วันนี้ยังไม่มีเรือออกจากท่านี้</div>')
       +'</div>';
     /* แผงขวา */
