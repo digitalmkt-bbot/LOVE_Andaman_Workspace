@@ -9,7 +9,7 @@ This is a current-code review of the `main` integration frontend against `operat
 ## Deploy state (2026-10-13)
 
 - **operation-backend** `main` `8c0ab08` is deployed. It carries the pier-cash row PATCH, the pier ledger/outstanding/write-off/repair routes, invoice payment-slip add/remove, and the two controlled-error fixes. Verified live: `GET /v1/pier-office/tublamu/moves` returns 401 (route exists), not 404.
-- **This frontend** `main` `546f8c0` is pushed. It wires Reconfirm, petty cash, Transfer Fleet writes, the pier ledger and payment slips. The new calls depend on the backend routes above.
+- **This frontend** `main` `38c0525` is pushed (`origin/main` equals local `HEAD`). It wires Reconfirm, petty cash, Transfer Fleet writes, the pier ledger and payment slips, and disables the report-email chart upload. The new calls depend on the backend routes above. At the last check the production page still served the previous build (`08-app.js?v=a05dae53`), so the `38c0525` deploy had not finished; re-check `08-app.js` is not `a05dae53` before testing.
 - **Not done:** any browser acceptance run, and any run of the new tests against real PostgreSQL.
 
 ## Release blockers
