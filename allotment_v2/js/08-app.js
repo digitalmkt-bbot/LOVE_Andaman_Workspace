@@ -9494,9 +9494,8 @@ function bkV2BoatPicker(el, bkId, routeId){
   ov.addEventListener('mousedown',ev=>{ ov._d=(ev.target===ov); });
   ov.onclick=ev=>{ if(ev.target===ov && ov._d) bkV2BoatPickClose(); };
   document.body.appendChild(ov);
-  /* แถวของใบนี้ในตาราง · ไฮไลต์ไว้ตลอดที่ตัวเลือกเปิดอยู่ */
-  try{ const tr=el.closest && el.closest('tr'); if(tr) tr.classList.add('bpk-row');
-    document.querySelectorAll('#view-booking tr.t2-row').forEach(r=>{ const k=String(r.getAttribute('data-al')||''); if(r!==tr && (k===bkId || k.indexOf(bkId+'@')===0 || k.indexOf(bkId+'#')===0)) r.classList.add('bpk-row2'); }); }catch(_){}
+  /* §bpkCell · owner "ตัวไฮไลต์ ไฮไลต์แค่ของเรือดีกว่า" · ไฮไลต์เฉพาะช่องเรือที่กด (ไม่ทั้งแถว) ตลอดที่ตัวเลือกเปิดอยู่ */
+  try{ const td=el.closest && el.closest('td'); if(td) td.classList.add('bpk-cell'); }catch(_){}
   // position next to the button (right side · flip left / clamp if off-screen)
   try{
     const panel=document.getElementById('bkv2-boatpick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||260, ph=panel.offsetHeight||240;
@@ -9510,7 +9509,7 @@ function _bkV2BpkEsc(ev){ if(ev.key==='Escape') bkV2BoatPickClose(); }
 function bkV2BoatPickClose(){
   const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove();
   try{ document.removeEventListener('keydown', _bkV2BpkEsc); }catch(_){}
-  document.querySelectorAll('tr.bpk-row, tr.bpk-row2').forEach(r=>r.classList.remove('bpk-row','bpk-row2'));
+  document.querySelectorAll('td.bpk-cell').forEach(c=>c.classList.remove('bpk-cell'));
 }
 function bkV2BoatPickCSS(){
   if(document.getElementById('bpk2-css')) return;
@@ -9549,10 +9548,8 @@ function bkV2BoatPickCSS(){
     '#bkv2-boatpick .bpk-act button.on{background:#F3EEFE;border-color:#C7B8E8;color:#5B289A}',
     '#bkv2-boatpick .bpk-act button.un{flex:0 0 auto;color:#A32D2D;border-color:#F0CFCB;padding:3px 7px}',
     '#bkv2-boatpick .bpk-act button.un:hover{background:#FDECEA}',
-    /* แถวของใบที่กำลังเลือกเรือ */
-    '#view-booking tr.t2-row.bpk-row>td{background:#FFF6D6!important;box-shadow:inset 0 2px 0 #F2B705,inset 0 -2px 0 #F2B705}',
-    '#view-booking tr.t2-row.bpk-row>td:first-child{box-shadow:inset 4px 0 0 #F2B705,inset 0 2px 0 #F2B705,inset 0 -2px 0 #F2B705}',
-    '#view-booking tr.t2-row.bpk-row2>td{background:#FFFBEA!important}'
+    /* ช่องเรือที่กำลังเลือก */
+    'td.bpk-cell{background:#FFF6D6!important;box-shadow:inset 0 0 0 2px #F2B705!important}'
   ].join('\n');
   document.head.appendChild(st);
 }
