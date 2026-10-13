@@ -487,6 +487,36 @@
     });
   }
 
+  /* A slip added to, or taken off, an already-recorded payment. Answers the invoice. */
+  function addPaymentSlipsServer(invoiceId, paymentId, slipIds){
+    var ids = (slipIds || []).map(function(s){ return typeof s === 'string' ? s : (s && s.id); }).filter(Boolean);
+    return O.queue(function(){
+      return O.post('/v1/invoices/' + enc(invoiceId) + '/payments/' + enc(paymentId) + '/slips', { slip_ids: ids });
+    }).then(function(res){
+      var mapped = upsertInvoice(res);
+      O.wrote('invoice-payment');
+      redrawAccounting();
+      return mapped;
+    }, function(e){
+      O.fail('Payment slip was not added', e);
+      throw e;
+    });
+  }
+
+  function removePaymentSlipServer(invoiceId, paymentId, attachmentId){
+    return O.queue(function(){
+      return O.del('/v1/invoices/' + enc(invoiceId) + '/payments/' + enc(paymentId) + '/slips/' + enc(attachmentId));
+    }).then(function(res){
+      var mapped = upsertInvoice(res);
+      O.wrote('invoice-payment');
+      redrawAccounting();
+      return mapped;
+    }, function(e){
+      O.fail('Payment slip was not removed', e);
+      throw e;
+    });
+  }
+
   function voidInvoiceServer(invoiceId, reason){
     var body = nullable(reason) ? { reason: nullable(reason) } : {};
     return O.queue(function(){
@@ -919,6 +949,8 @@
     patchHeader: patchInvoiceHeaderServer,
     setDiscount: setInvoiceDiscountServer,
     correctPayments: correctPaymentsServer,
+    addPaymentSlips: addPaymentSlipsServer,
+    removePaymentSlip: removePaymentSlipServer,
     createDeposit: createDepositServer,
     voidDeposit: voidDepositServer,
     payoutRefund: payoutRefundServer,
