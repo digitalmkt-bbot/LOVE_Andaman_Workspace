@@ -7,6 +7,9 @@
 //     for that day (ops), the row turns into "+" · Boat mode not switched on
 //   3 "+" on an unassigned row → pick → assigned
 //   4 charter rows and cancelled rows keep a plain label (no button)
+//   8 §bpk2 · owner "ทำให้เห็นหน่อยว่าเราคลิกเรือของบุคกิ้งนั้น · ยังไม่มี Upgrade กับ แยกลงเรือ · ขอออกแบบ UI ใหม่นิด"
+//     header names the booking (lead · voucher · pax · programme) · its row is highlighted while the picker is open
+//     each boat shows load now → load with this booking · Upgrade and split-boat buttons open their forms · Esc closes and clears the highlight
 //   5 view-only user (no booking edit right) → no buttons anywhere
 //   6 Boat mode still shows its own cell (tick box + picker + upgrade) · Compact: button inside the cell, not clipped
 //   7 no page errors
@@ -51,7 +54,7 @@ const c2 = await page.evaluate(async S => {
   document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk').click(); await new Promise(z => setTimeout(z, 150));
   const pop = document.getElementById('bkv2-boatpick'); if (!pop) return { nopop: true };
   const items = [...pop.querySelectorAll('[onclick^="bkV2BoatPickSet"]')].map(e => (e.getAttribute('onclick').match(/'([^']+)','([^']*)'/) || [])[2]).filter(Boolean);
-  const un = pop.querySelector('[onclick="bkV2BoatPickSet(\'' + S.w + '\',\'\')"]'); if (!un) return { nounassign: true, items };
+  const un = pop.querySelector('.bpk-act button.un'); if (!un) return { nounassign: true, items };
   un.click(); await new Promise(z => setTimeout(z, 500));
   const after = bkOpsRead(SB_BOOKINGS.find(b => b.id === S.w), S.d).boatId || '';
   const btn = document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk');
@@ -98,6 +101,32 @@ const c6 = await page.evaluate(async S => {
   btcSet('classic'); return r; }, S);
 if (c6.bm && c6.bmOld === 0 && c6.inCell) ok(`6 Boat mode keeps its own cell · Compact button ${c6.w}px in a ${c6.cw}px cell`); else fail('6 ' + JSON.stringify(c6));
 
+const c8 = await page.evaluate(async S => {
+  const bk = SB_BOOKINGS.find(b => b.id === S.w), d = S.d;
+  const pax = (bk.trips || []).filter(t => t.date === d).reduce((x, t) => x + bkV2PaxAllTot(t.pax || {}), 0);
+  const btn = document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk'); btn.click(); await new Promise(z => setTimeout(z, 150));
+  const pop = document.getElementById('bkv2-boatpick'), who = pop.querySelector('.bpk-who').textContent.replace(/\s+/g, ' ').trim();
+  const tr = document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"]'), hl = tr.classList.contains('bpk-row'), bg = getComputedStyle(tr.querySelector('td')).backgroundColor;
+  const ld = [...pop.querySelectorAll('.bpk-b .ld em')].map(e => e.textContent.trim());
+  const acts = [...pop.querySelectorAll('.bpk-act button')].map(b => b.textContent.trim());
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(z => setTimeout(z, 50));
+  const closed = !document.getElementById('bkv2-boatpick'), cleared = !document.querySelector('tr.bpk-row, tr.bpk-row2');
+  // Upgrade button opens the upgrade form · split button the split form
+  document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk').click(); await new Promise(z => setTimeout(z, 100));
+  const upB = [...document.querySelectorAll('#bkv2-boatpick .bpk-act button')].find(b => /Upgrade/.test(b.textContent)); upB.click(); await new Promise(z => setTimeout(z, 200));
+  const upOpen = !!document.getElementById('bkv2-upg-ov') || /upgrade/i.test((document.querySelector('[id*="upg"]') || {}).id || ''); if (typeof bkV2UpgModalClose === 'function') bkV2UpgModalClose();
+  const pickGone = !document.getElementById('bkv2-boatpick');
+  let spOpen = null;
+  document.querySelector('#view-booking tr.t2-row[data-al="' + S.w + '"] .t2-bpk').click(); await new Promise(z => setTimeout(z, 100));
+  const spB = [...document.querySelectorAll('#bkv2-boatpick .bpk-act button')].find(b => /แยก/.test(b.textContent));
+  if (spB) { spB.click(); await new Promise(z => setTimeout(z, 200)); spOpen = !!document.getElementById('bk-boatsplit-modal'); if (typeof bkV2BoatSplitClose === 'function') bkV2BoatSplitClose(); }
+  if (typeof bkV2BoatPickClose === 'function') bkV2BoatPickClose();
+  return { who, lead: bk.leadPax, pax, hl, bg, ld, acts, closed, cleared, upOpen, pickGone, spOpen, splitExpected: pax >= 2 };
+}, S);
+if (c8.who.indexOf(String(c8.lead).trim()) === 0 && c8.who.includes(c8.pax + ' คน') && c8.hl && c8.bg !== 'rgba(0, 0, 0, 0)' && c8.ld.length && c8.closed && c8.cleared
+    && c8.upOpen && c8.pickGone && (c8.splitExpected ? c8.spOpen === true : c8.spOpen === null) && c8.acts.some(a => /Upgrade/.test(a)))
+  ok(`8 header "${c8.who}" · row highlighted (${c8.bg}) · loads [${c8.ld.join(' | ')}] · actions [${c8.acts.join(' | ')}] · Upgrade form ✓ · split form ${c8.spOpen === null ? 'n/a (1 pax)' : '✓'} · Esc clears`);
+else fail('8 ' + JSON.stringify(c8));
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));
 if (!e1.length) ok('7 no page errors'); else fail('7 ' + e1.slice(0, 3).join(' | '));
 if (process.env.SHOT) { const t = page.locator(`#view-booking tr.t2-row[data-al="${S.w}"] .t2-bpk`); await t.scrollIntoViewIfNeeded(); await t.click(); await page.waitForTimeout(200);

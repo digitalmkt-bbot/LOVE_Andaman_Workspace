@@ -9467,8 +9467,8 @@ function bkV2BoatPicker(el, bkId, routeId){
     return `<div class="bpk-b${on?' on':''}${hard?' hard':''}" onclick="bkV2BoatPickSet('${q(bkId)}','${q(x.boatId)}','${q(date)}')" title="${q(nm+' · '+(on?laT('เรือปัจจุบันของใบนี้'):(laT('ใส่ใบนี้')+' '+myPax+' '+laT('คน')+' → '+next+'/'+cap)))}">
       <span class="av" style="background:${col}">${q((typeof bkV2BoatInitials==='function')?bkV2BoatInitials(nm):nm.slice(0,2))}</span>
       <span class="nm"><b>${q(nm)}</b><i>${q(_baPierShort(x.boat.pier))}${(wide&&rid2!==routeId)?(' · '+q(r2?r2.name:rid2)):''}</i></span>
-      <span class="ld"><span class="bar"><s style="width:${pct2}%;background:${over?'#E5484D':col}33"></s><s style="width:${pct}%;background:${col}"></s></span>
-        <em class="${over?'ov':''}">${on?(load+'/'+cap):(load+' → <b>'+next+'</b>/'+cap)}</em></span>
+      <em class="${over?'ov':''}">${on?(load+'/'+cap):(load+'→<b>'+next+'</b>/'+cap)}</em>
+      <span class="bar"><s style="width:${pct2}%;background:${over?'#E5484D':col}40"></s><s style="width:${pct}%;background:${col}"></s></span>
       <span class="ck">${on?'&#10003;':''}</span>
     </div>`; }).join('') : '<div class="bpk-none">'
       +(wide ? 'ยังไม่มีเรือลำไหนวิ่งในวันนี้เลย<br><span>ไปผูกเรือกับวันนี้ที่ Boat Operation ก่อน</span>'
@@ -9476,18 +9476,17 @@ function bkV2BoatPicker(el, bkId, routeId){
       +'</div>';
   const _cls='event.stopPropagation();bkV2BoatPickClose();';
   const actH = `<div class="bpk-act">
-      <button type="button" class="${_up?'on':''}" onclick="${_cls}bkV2BoatUpgrade('${q(bkId)}','${q(routeId)}','${q(date)}')" title="${q(_up?('Upgrade · '+((typeof bkUpgRouteName==='function')?bkUpgRouteName(_upT.upg.fromRouteId):'')+' · '+laT('กดเพื่อยกเลิก')):laT('ย้ายใบนี้ไปโปรแกรมอื่น (Upgrade)'))}">&#10548; ${_up?laT('ยกเลิก Upgrade'):'Upgrade'}</button>
-      ${_canSplit?`<button type="button" class="${_sp?'on':''}" onclick="${_cls}bkV2BoatSplit('${q(bkId)}','${q(date)}')" title="${q(laT('แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)'))}">&#8646; ${_sp?laTp('แยก {0} ลำ · แก้', _sp.length):laT('แยกลงหลายลำ')}</button>`:''}
-      ${cur?`<button type="button" class="un" onclick="event.stopPropagation();bkV2BoatPickSet('${q(bkId)}','','${q(date)}')" title="${q(laT('ถอดเรือออกจากใบนี้'))}">&times; ${laT('ถอดเรือ')}</button>`:''}
+      <button type="button" class="${_up?'on':''}" onclick="${_cls}bkV2BoatUpgrade('${q(bkId)}','${q(routeId)}','${q(date)}')" title="${q(_up?('Upgrade · '+((typeof bkUpgRouteName==='function')?bkUpgRouteName(_upT.upg.fromRouteId):'')+' · '+laT('กดเพื่อยกเลิก')):laT('ย้ายใบนี้ไปโปรแกรมอื่น (Upgrade)'))}">&#10548; ${_up?laT('ยกเลิก'):'Upgrade'}</button>
+      ${_canSplit?`<button type="button" class="${_sp?'on':''}" onclick="${_cls}bkV2BoatSplit('${q(bkId)}','${q(date)}')" title="${q(laT('แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)'))}">&#8646; ${_sp?laTp('แยก {0} ลำ', _sp.length):laT('แยกลำ')}</button>`:''}
+      ${cur?`<button type="button" class="un" onclick="event.stopPropagation();bkV2BoatPickSet('${q(bkId)}','','${q(date)}')" title="${q(laT('ถอดเรือออกจากใบนี้'))}">&times; ${laT('ถอด')}</button>`:''}
     </div>`;
   bkV2BoatPickCSS();
   const ov=document.createElement('div'); ov.id='bkv2-boatpick';
   ov.style.cssText='position:fixed;inset:0;z-index:600;background:transparent';
   ov.innerHTML=`<div id="bkv2-boatpick-panel" class="bpk">
     <div class="bpk-h">
-      <div class="bpk-t"><span>&#128676; ${laT('เลือกเรือ')}${wide?(' <em>'+(_ovnFallback?laT('ขากลับ · ทุกลำของวัน'):'all routes')+'</em>'):''}</span>
-        <button type="button" onclick="bkV2BoatPickClose()" title="${laT('ปิด')}">&times;</button></div>
-      <div class="bpk-who"><b>${q(bk.leadPax||bk.customerName||'—')}</b><span>${q(_code)}${_code?' · ':''}<b>${myPax}</b> ${laT('คน')} · ${q(_rn)}${_up?' · ⤴':''}${_sp?(' · ⇆ '+_sp.length+' '+laT('ลำ')):''}</span></div>
+      <div class="bpk-who"><b>${q(bk.leadPax||bk.customerName||'—')}</b><span>&#128676; ${myPax} ${laT('คน')}${_code?(' · '+q(_code)):''} · ${q(_rn)}${_up?' · ⤴':''}${_sp?(' · ⇆ '+_sp.length+' '+laT('ลำ')):''}${wide?(' · <em>'+(_ovnFallback?laT('ขากลับ · ทุกลำของวัน'):'all routes')+'</em>'):''}</span></div>
+      <button type="button" class="x" onclick="bkV2BoatPickClose()" title="${laT('ปิด')}">&times;</button>
     </div>
     <div class="bpk-l">${rowsH}</div>
     ${actH}
@@ -9500,9 +9499,9 @@ function bkV2BoatPicker(el, bkId, routeId){
     document.querySelectorAll('#view-booking tr.t2-row').forEach(r=>{ const k=String(r.getAttribute('data-al')||''); if(r!==tr && (k===bkId || k.indexOf(bkId+'@')===0 || k.indexOf(bkId+'#')===0)) r.classList.add('bpk-row2'); }); }catch(_){}
   // position next to the button (right side · flip left / clamp if off-screen)
   try{
-    const panel=document.getElementById('bkv2-boatpick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||300, ph=panel.offsetHeight||300;
+    const panel=document.getElementById('bkv2-boatpick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||260, ph=panel.offsetHeight||240;
     let left=r.right+8; if(left+pw>window.innerWidth-8) left=Math.max(8, r.left-pw-8);
-    let top=r.top-12; if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
+    let top=r.top-6; if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
     panel.style.left=left+'px'; panel.style.top=Math.max(8,top)+'px';
   }catch(_){}
   try{ document.addEventListener('keydown', _bkV2BpkEsc); }catch(_){}
@@ -9517,40 +9516,38 @@ function bkV2BoatPickCSS(){
   if(document.getElementById('bpk2-css')) return;
   const st=document.createElement('style'); st.id='bpk2-css';
   st.textContent=[
-    '#bkv2-boatpick .bpk{position:fixed;width:300px;max-width:92vw;background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(15,27,61,.24),0 0 0 1px rgba(15,27,61,.08);overflow:hidden;font-family:"DM Sans",sans-serif;color:#0F1B3D}',
-    '#bkv2-boatpick .bpk-h{background:#0B1E5B;color:#fff;padding:9px 12px 10px}',
-    '#bkv2-boatpick .bpk-t{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.04em;color:#B9C6E8}',
-    '#bkv2-boatpick .bpk-t em{font-style:normal;font-size:9.5px;background:rgba(255,255,255,.14);color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px}',
-    '#bkv2-boatpick .bpk-t button{background:transparent;border:0;color:#B9C6E8;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}',
-    '#bkv2-boatpick .bpk-t button:hover{color:#fff}',
-    '#bkv2-boatpick .bpk-who{margin-top:3px;display:flex;flex-direction:column;min-width:0}',
-    '#bkv2-boatpick .bpk-who>b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#bkv2-boatpick .bpk-who>span{font-size:11px;color:#C9D4F0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#bkv2-boatpick .bpk-who>span b{color:#fff}',
-    '#bkv2-boatpick .bpk-l{max-height:46vh;overflow-y:auto}',
-    '#bkv2-boatpick .bpk-b{display:grid;grid-template-columns:26px minmax(0,1fr) 104px 14px;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid #EEF0F3;cursor:pointer}',
+    /* §bpk3 · owner "ให้ดูกระชับกว่านี้" · กว้าง 260 · หัวสองบรรทัดเล็ก · เรือแถวละบรรทัด 30px · ปุ่มท้ายเล็ก */
+    '#bkv2-boatpick .bpk{position:fixed;width:260px;max-width:92vw;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(15,27,61,.22),0 0 0 1px rgba(15,27,61,.08);overflow:hidden;font-family:"DM Sans",sans-serif;color:#0F1B3D}',
+    '#bkv2-boatpick .bpk-h{display:flex;align-items:flex-start;gap:6px;background:#0B1E5B;color:#fff;padding:6px 6px 6px 10px}',
+    '#bkv2-boatpick .bpk-h .x{flex:none;background:transparent;border:0;color:#B9C6E8;font-size:16px;line-height:1;cursor:pointer;padding:0 3px}',
+    '#bkv2-boatpick .bpk-h .x:hover{color:#fff}',
+    '#bkv2-boatpick .bpk-who{flex:1;display:flex;flex-direction:column;min-width:0}',
+    '#bkv2-boatpick .bpk-who>b{font-size:12.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-who>span{font-size:10.5px;line-height:1.3;color:#C9D4F0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-who em{font-style:normal;background:rgba(255,255,255,.16);color:#fff;border-radius:5px;padding:0 4px}',
+    '#bkv2-boatpick .bpk-l{max-height:40vh;overflow-y:auto}',
+    '#bkv2-boatpick .bpk-b{display:grid;grid-template-columns:20px minmax(0,1fr) auto 34px 10px;align-items:center;gap:6px;height:30px;padding:0 8px 0 10px;border-top:1px solid #EEF0F3;cursor:pointer}',
     '#bkv2-boatpick .bpk-l>.bpk-b:first-child{border-top:0}',
     '#bkv2-boatpick .bpk-b:hover{background:#F4F7FC}',
     '#bkv2-boatpick .bpk-b.on{background:#EEF8F3}',
-    '#bkv2-boatpick .bpk-b .av{width:26px;height:26px;border-radius:50%;color:#fff;font:700 9.5px/26px "DM Mono",monospace;text-align:center}',
-    '#bkv2-boatpick .bpk-b .nm{display:flex;flex-direction:column;min-width:0}',
-    '#bkv2-boatpick .bpk-b .nm b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#bkv2-boatpick .bpk-b .nm i{font-style:normal;font-size:10.5px;color:#8A8F9C}',
-    '#bkv2-boatpick .bpk-b .ld{display:flex;flex-direction:column;align-items:flex-end;gap:3px}',
-    '#bkv2-boatpick .bpk-b .bar{position:relative;width:100%;height:5px;border-radius:3px;background:#E9ECF2;overflow:hidden}',
-    '#bkv2-boatpick .bpk-b .bar s{position:absolute;left:0;top:0;bottom:0;border-radius:3px}',
-    '#bkv2-boatpick .bpk-b .ld em{font-style:normal;font:500 10.5px "DM Mono",monospace;color:#5B6478;white-space:nowrap}',
-    '#bkv2-boatpick .bpk-b .ld em b{color:#0F1B3D}',
-    '#bkv2-boatpick .bpk-b .ld em.ov,#bkv2-boatpick .bpk-b .ld em.ov b{color:#C62828}',
-    '#bkv2-boatpick .bpk-b .ck{color:#0F6E56;font-weight:800;font-size:13px}',
+    '#bkv2-boatpick .bpk-b .av{width:20px;height:20px;border-radius:50%;color:#fff;font:700 8px/20px "DM Mono",monospace;text-align:center}',
+    '#bkv2-boatpick .bpk-b .nm{display:flex;align-items:baseline;gap:5px;min-width:0}',
+    '#bkv2-boatpick .bpk-b .nm b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-b .nm i{flex:none;font-style:normal;font-size:9.5px;color:#9AA0AC}',
+    '#bkv2-boatpick .bpk-b em{font-style:normal;font:500 10px "DM Mono",monospace;color:#5B6478;white-space:nowrap;text-align:right}',
+    '#bkv2-boatpick .bpk-b em b{color:#0F1B3D}',
+    '#bkv2-boatpick .bpk-b em.ov,#bkv2-boatpick .bpk-b em.ov b{color:#C62828}',
+    '#bkv2-boatpick .bpk-b .bar{position:relative;height:4px;border-radius:2px;background:#E9ECF2;overflow:hidden}',
+    '#bkv2-boatpick .bpk-b .bar s{position:absolute;left:0;top:0;bottom:0;border-radius:2px}',
+    '#bkv2-boatpick .bpk-b .ck{color:#0F6E56;font-weight:800;font-size:11px}',
     '#bkv2-boatpick .bpk-b.hard .nm b{color:#9AA0AC}',
-    '#bkv2-boatpick .bpk-none{padding:16px 13px;text-align:center;color:#A32D2D;font-size:12px;line-height:1.6}',
+    '#bkv2-boatpick .bpk-none{padding:12px 10px;text-align:center;color:#A32D2D;font-size:11.5px;line-height:1.5}',
     '#bkv2-boatpick .bpk-none span{color:#8a8a82}',
-    '#bkv2-boatpick .bpk-act{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-top:1px solid #E6E9EF;background:#FAFBFD}',
-    '#bkv2-boatpick .bpk-act button{flex:1 1 auto;border:1px solid #D5DCE8;background:#fff;color:#1B2A55;border-radius:8px;padding:5px 8px;font:600 11.5px "DM Sans",sans-serif;cursor:pointer;white-space:nowrap}',
+    '#bkv2-boatpick .bpk-act{display:flex;gap:4px;padding:5px 6px;border-top:1px solid #E6E9EF;background:#FAFBFD}',
+    '#bkv2-boatpick .bpk-act button{flex:1 1 0;min-width:0;border:1px solid #D5DCE8;background:#fff;color:#1B2A55;border-radius:6px;padding:3px 4px;font:600 10.5px "DM Sans",sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '#bkv2-boatpick .bpk-act button:hover{background:#EEF3FB;border-color:#9DBCE3}',
     '#bkv2-boatpick .bpk-act button.on{background:#F3EEFE;border-color:#C7B8E8;color:#5B289A}',
-    '#bkv2-boatpick .bpk-act button.un{flex:0 0 auto;color:#A32D2D;border-color:#F0CFCB}',
+    '#bkv2-boatpick .bpk-act button.un{flex:0 0 auto;color:#A32D2D;border-color:#F0CFCB;padding:3px 7px}',
     '#bkv2-boatpick .bpk-act button.un:hover{background:#FDECEA}',
     /* แถวของใบที่กำลังเลือกเรือ */
     '#view-booking tr.t2-row.bpk-row>td{background:#FFF6D6!important;box-shadow:inset 0 2px 0 #F2B705,inset 0 -2px 0 #F2B705}',
