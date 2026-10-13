@@ -5973,8 +5973,12 @@ function _daDepMin(g){
   const m=t.match(/^(\d{1,2}):(\d{2})/);
   return m ? (+m[1]*60 + +m[2]) : 9999;
 }
+/* §daOrd (2026-10-13) · "ให้เรียงตามลำดับที่วางใน Program"
+   เดิมเรียงตามเวลาออก (§daSortTime) · ลำดับในข้อความที่ส่งเอเจ้นจึงไม่ตรงกับหน้า Program Config
+   ตอนนี้ใช้กติกาเดียวกับทั้งแอป (laRouteOrdCmp · §routeOrd) · เวลาออกเหลือเป็นตัวตัดสินเมื่อไม่มีลำดับ */
 function _daSortRows(rows){
   return (rows||[]).slice().sort((a,b)=>{
+    if(typeof laRouteOrdCmp==='function' && a.r && b.r){ const o=laRouteOrdCmp(a.r,b.r); if(o) return o; }
     const d=_daDepMin(a)-_daDepMin(b); if(d) return d;
     if(a.type!==b.type) return a.type==='early' ? -1 : 1;   // เวลาเท่ากัน · Early ขึ้นก่อน
     return String(_daRouteName(a.r)||'').localeCompare(String(_daRouteName(b.r)||''));
