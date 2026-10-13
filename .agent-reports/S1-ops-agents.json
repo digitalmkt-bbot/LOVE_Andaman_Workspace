@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "task": "S1-ops-agents",
+  "title": "Migrate Agent List writes to operation-backend",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c50-049a-7399-8025-55486e5cdacf",
+    "model": "openai-codex/gpt-5.6-luna"
+  },
+  "git": {
+    "base": "231ce9e",
+    "branch": "agent/ops-agents",
+    "worktree": "D:/projects/wt-ops-agents",
+    "commit": "9e64d594cb05cbc556484f064c2564fb10fc6436",
+    "pr": { "number": null, "url": "", "state": "none" }
+  },
+  "input": {
+    "requestedOutcome": "Replace sb_agents browser-local persistence with operation-backend Agents API integration in operations mode.",
+    "acceptanceCriteria": [
+      "Server-authoritative Agent list/detail projections.",
+      "Create, edit, programs, rate type, table, delete, and lifecycle routes use documented API contracts.",
+      "Failed writes do not update the local projection or localStorage.",
+      "Legacy mode and classic-script ordering remain unchanged.",
+      "Focused UI and backend checks are recorded."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/16-ops-agents.js",
+      "allotment_v2/allotment_v2.html script tag",
+      "test/ui/t_ops_agents.mjs",
+      "docs/development/tasks/S1-ops-agents.md",
+      ".agent-reports/S1-ops-agents.json"
+    ],
+    "constraints": [
+      "No backend, database, migration, mapping, or schema changes.",
+      "Use laOps/laOpsFetch rather than direct fetch.",
+      "Preserve legacy mode and server-first semantics.",
+      "Do not modify shared legacy renderer files or excluded parity files.",
+      "Do not push."
+    ],
+    "assumptions": [
+      "00-ops-core.js is available before the adapter.",
+      "10-ops-catalogue.js loads after the adapter and can retain summary catalogue behavior.",
+      "Backend routes are the contracts in sales-editing.ts, agent-writes.ts, and agents.ts."
+    ]
+  },
+  "output": {
+    "summary": "Added an operations-only Agent adapter with authoritative detail/activity hydration, server-first create/edit/table/bulk/delete flows, lifecycle helpers, nested snake-case mapping, and visible errors; legacy functions remain the fallback.",
+    "filesChanged": [
+      { "path": "allotment_v2/allotment_v2.html", "change": "modified", "purpose": "Load the S1 classic adapter after ops core and before catalogue wrappers." },
+      { "path": "allotment_v2/js/ops/16-ops-agents.js", "change": "added", "purpose": "Map Agent UI projections and mutations to operation-backend routes in operations mode." },
+      { "path": "test/ui/t_ops_agents.mjs", "change": "added", "purpose": "Focused controllable-API UI test for pending, successful, and failed Agent writes." },
+      { "path": "docs/development/tasks/S1-ops-agents.md", "change": "added", "purpose": "Durable S1 implementation and verification report." },
+      { "path": ".agent-reports/S1-ops-agents.json", "change": "added", "purpose": "Coordinator-readable S1 handoff manifest." }
+    ],
+    "behaviorChanges": [
+      { "area": "Agent reads", "before": "Operations mode used catalogue summaries and a former read-only/detail wrapper.", "after": "The adapter fetches full Agent detail and activity and replaces the legacy projection from server data." },
+      { "area": "Agent writes", "before": "Operations mode blocked writes or could fall back to local persistence.", "after": "Operations-mode writes use POST/PATCH/PUT/DELETE operation-backend routes and update memory only after success." },
+      { "area": "Legacy compatibility", "before": "lk-inbox used the original local persistence functions.", "after": "The adapter delegates to original functions whenever operations mode is disabled." }
+    ],
+    "interfaces": {
+      "added": ["window.laOpsAgentLifecycle", "window.agActivate", "window.agDeactivate", "window.agRenew"],
+      "changed": ["operations-mode Agent UI entry points", "legacy Agent shape ↔ snake/nested Agent API mapping"],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": ["No database/schema files changed.", "Operations-mode SB_AGENTS projection is updated only from API responses.", "Operations-mode sbAgentsPersist/agTblPersist are suppressed to prevent localStorage becoming authoritative.", "Failed operations leave the local projection unchanged."],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "node --check allotment_v2/js/ops/16-ops-agents.js", "status": "passed", "evidence": "No syntax errors." },
+    { "command": "node --check test/ui/t_ops_agents.mjs", "status": "passed", "evidence": "No syntax errors." },
+    { "command": "node test/ui/t_ops_agents.mjs", "status": "passed", "evidence": "0 adapter failures; pending create, payload mapping, successful projection, edit, and failed edit checks passed." },
+    { "command": "cd D:/projects/operation-backend && npm test", "status": "passed", "evidence": "573 passed, 0 failed, 8 skipped." },
+    { "command": "npm run test:agprog", "status": "passed", "evidence": "pangs 0 / failures 0." },
+    { "command": "npm run test:ops", "status": "failed", "evidence": "Existing broader ops smoke failed boat/calendar/lock and booking fixture assertions; no S1 adapter assertion failed." },
+    { "command": "npm run test:aginfo && npm run test:aghd", "status": "blocked", "evidence": "Static harness login modal intercepted clicks in this environment." },
+    { "command": "git diff --check", "status": "passed", "evidence": "No whitespace errors." }
+  ],
+  "decisions": [
+    "Load S1 before 10-ops-catalogue.js so catalogue's former Agent read-only wrappers do not override S1 write wrappers.",
+    "Refuse import visibly in operations mode because no verified bulk import endpoint exists.",
+    "Retry rate-type changes with drop_unpriced only after the server returns that specific conflict and the user confirms."
+  ],
+  "risks": [
+    "Bulk requests can partially succeed before a later request fails; each successful response is reconciled and the failure is surfaced.",
+    "Lifecycle commands are exposed as helpers but have no new UI button yet."
+  ],
+  "blockers": [],
+  "dependencies": ["01-auth-sync.js", "00-ops-core.js", "10-ops-catalogue.js", "operation-backend sales-editing routes"],
+  "followUps": ["If required by product, attach Agent activate/deactivate/renew helpers to a future UI control."],
+  "rollback": "Revert the S1 commit or remove the S1 script tag and adapter/test/report files; do not issue destructive API calls during rollback."
+}

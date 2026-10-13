@@ -1,0 +1,1 @@
+function bookingV2PartialToggleRefund(){ const v=(document.querySelector('input[name=bkp-money]:checked')||{}).value; const r=document.getElementById('bkp-refund-row'); if(r) r.style.display=(v==='refund')?'block':'none'; }

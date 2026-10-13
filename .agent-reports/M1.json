@@ -1,0 +1,56 @@
+{
+  "packet": "M1",
+  "status": "complete",
+  "objective": "Migrate invoices, payments, deposits, and refund/credit transactions to operation-backend in operations mode.",
+  "branch": "agent/ops-money",
+  "commit": "30d509efc48667cedc4bf346f9fd3c8c961041a0",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/30-ops-money.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-money.test.mjs",
+    "docs/development/tasks/M1-ops-money.md",
+    ".agent-reports/M1.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/30-ops-money.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/operations.ts",
+    "D:/projects/operation-backend/src/routes/money.ts",
+    "D:/projects/operation-backend/src/routes/credit.ts",
+    "D:/projects/operation-backend/src/domain/invoices.ts",
+    "D:/projects/operation-backend/src/domain/refunds.ts",
+    "D:/projects/operation-backend/src/domain/credit.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/invoices", "body": null },
+    { "method": "POST", "path": "/v1/invoices", "body": "{agent_id,booking_ids,kind?,note?,ref?,dear?,accept_at?,remark?}" },
+    { "method": "PATCH", "path": "/v1/invoices/:id", "body": "{note?,ref?,dear?,accept_at?,remark?,wht_amount?}" },
+    { "method": "PUT", "path": "/v1/invoices/:id/discounts", "body": "{lines:[{seq,discount}]}" },
+    { "method": "POST", "path": "/v1/invoices/:id/void", "body": "{reason?}" },
+    { "method": "POST", "path": "/v1/invoices/:id/payments", "body": "{amount,method:'transfer'|'cash'|'card'|'credit',paid_on?,ref?,slip_ids?,overpay_anyway?}" },
+    { "method": "POST", "path": "/v1/invoices/:id/payment-corrections", "body": "{payments:[{id,amount?,method?,paid_on?,deleted?}],reason?,overpay_anyway?}" },
+    { "method": "GET", "path": "/v1/deposits", "body": null },
+    { "method": "POST", "path": "/v1/deposits", "body": "{agent_id,amount,method?,received_on?,ref?,note?,slip_ids?}" },
+    { "method": "POST", "path": "/v1/deposits/:id/void", "body": "{reason}" },
+    { "method": "GET", "path": "/v1/refunds", "body": null },
+    { "method": "POST", "path": "/v1/refunds/:id/payout", "body": "{method:'transfer'|'cash'|'cheque',paid_on?,ref?,slip_ids?}" },
+    { "method": "DELETE", "path": "/v1/refunds/:id/payout", "body": null }
+  ],
+  "projection_mapping": "Server InvoiceView maps to SB_INVOICES with server-computed VAT/totals/paid/balance/refunded/credited/overpaid; SB_PAYMENTS derives from live invoice payments and refunds; SB_DEPOSITS maps from /v1/deposits without local decrement on credit spend.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Hydrates from /v1/invoices, /v1/deposits, and /v1/refunds in ops mode; disables writers when initial load fails; queues writes via laOps.queue; updates projections only after server success; surfaces 409 overpayment and discount refusals via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/30-ops-money.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-money.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-money.test.mjs", "result": "pass (4/4)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/invoices.test.ts test/credit.test.ts", "result": "pass (14/14)" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}

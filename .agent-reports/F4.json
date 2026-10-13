@@ -1,0 +1,65 @@
+{
+  "packet": "F4",
+  "status": "complete",
+  "objective": "Migrate stock items, movements, consumables, job parts, and purchase memos to operation-backend in operations mode.",
+  "branch": "agent/ops-fleet-stock",
+  "commit": "6a2f3a73e65a70c337a69b297d7a0eb8466c95f8",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/25-ops-fleet-stock.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-fleet-stock.test.mjs",
+    "docs/development/tasks/F4-ops-fleet-stock.md",
+    ".agent-reports/F4.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/25-ops-fleet-stock.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/fleet-stock.ts",
+    "D:/projects/operation-backend/src/domain/fleet-stock.ts",
+    "D:/projects/operation-backend/src/domain/fleet-memos.ts",
+    "D:/projects/operation-backend/src/domain/fleet-seams.ts",
+    "D:/projects/operation-backend/test/fleet-stock.test.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/fleet/warehouses", "body": null },
+    { "method": "GET", "path": "/v1/fleet/suppliers", "body": null },
+    { "method": "GET", "path": "/v1/fleet/stock-items", "body": null },
+    { "method": "POST", "path": "/v1/fleet/stock-items", "body": "{name,part_no?,category?,supplier?,unit?,min_qty?,cost?,note?,qty?,warehouse?}" },
+    { "method": "PATCH", "path": "/v1/fleet/stock-items/:id", "body": "{name?,part_no?,category?,supplier?,unit?,min_qty?,cost?,note?,part_no_anyway?}" },
+    { "method": "POST", "path": "/v1/fleet/stock-items/:id/receive", "body": "{warehouse,qty,date?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/stock-items/:id/transfer", "body": "{from,to,qty,date?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/stock-items/:id/adjust", "body": "{warehouse,qty,date?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/stock-items/:id/merge", "body": "{from_ids}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/parts", "body": "{item_id,warehouse,qty?,late_anyway?}" },
+    { "method": "DELETE", "path": "/v1/fleet/jobs/:id/parts/:idx", "body": null },
+    { "method": "GET", "path": "/v1/fleet/consumables", "body": null },
+    { "method": "POST", "path": "/v1/fleet/consumables", "body": "{item_id,warehouse,qty,boat_id,engine_id?,engine_label?,date?,by?,note?,allow_negative?}" },
+    { "method": "DELETE", "path": "/v1/fleet/consumables/:id", "body": null },
+    { "method": "GET", "path": "/v1/fleet/memos", "body": null },
+    { "method": "POST", "path": "/v1/fleet/memos", "body": "{no,title,boat_id?,memo_type,scope,lines,...}" },
+    { "method": "PATCH", "path": "/v1/fleet/memos/:id", "body": "{title?,lines?,...}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/approve", "body": "{approved_by,approved_date?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/order", "body": "{ordered_date?,ordered_by?}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/receive", "body": "{warehouse,date?,note?,lines:[{line_id,qty}]}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/short-close", "body": "{}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/pay", "body": "{paid_date?,paid_by?,paid_via?}" },
+    { "method": "POST", "path": "/v1/fleet/memos/:id/cancel", "body": "{reason,allow_negative?}" }
+  ],
+  "projection_mapping": "Maps server StockView, Consumable, and MemoView to FL_INVENTORY, FL_CONSUMABLE_LOGS, and FL_MEMOS; quantities come strictly from server movement-derived stocks/total_qty.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Hydrates stock, memos, and consumables from server; never sends local stocks[].qty or movement history; refetches affected items/memos after commands; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/25-ops-fleet-stock.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-fleet-stock.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-fleet-stock.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/fleet-stock.test.ts", "result": "pass" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}

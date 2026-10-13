@@ -1,0 +1,1 @@
+function bookingV2SubCommit(){ const m=_bkV2SubModal; if(!m) return; if(!String(m.name||'').trim()){ alert('Type a sub-group name (e.g. A)'); return; } const c=bookingV2CreateSubLock(m.parentId, m.name, m.qty, {expiry:m.expiry, reason:m.reason}); if(c){ _bkV2SubModal=null; bookingV2Render(); } }

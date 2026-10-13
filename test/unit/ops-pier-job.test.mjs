@@ -1,0 +1,177 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const SOURCES = ['42-ops-pier-core.js', '43-ops-pier-lists.js', '47-ops-pier-job.js'].map((f) => fs.readFileSync('allotment_v2/js/ops/' + f, 'utf8'));
+const J = (x) => JSON.parse(JSON.stringify(x === undefined ? null : x));
+const PIER = 'panwa', DATE = '2026-10-12';
+const JOB = (b) => `/v1/pier-office/${PIER}/days/${DATE}/boats/${b}/job`;
+const LISTS = { item_kinds: [], items: [], attendance_codes: [], sections: [], staff: [], license_types: [], license_classes: [] };
+
+const view = (o) => ({
+  pier: PIER, date: DATE, boat_id: 'b1', recorded: true, captain_id: 'ps_cap', assistant_id: null, crew: ['ps_c1', null, 'ps_c3'], island: [],
+  note: 'n', wristband_text: null, wristband_colour: null, work_code: null, duty_staff_ids: ['ps_cap'], sailed: true, kind: 'boat', restaurant_id: 'mv1',
+  wristband_carried: { colour: '#7C3AED', text: 'purple', from_date: '2026-10-10' }, substitutes: [{ role: 'crew', position: 0, team_id: 'ps_old' }],
+  missing: [], completed_at: null, completed_by: null, updated_at: 't', updated_by: 'GSA', ...o,
+});
+const UNREC = view({ boat_id: 'b2', recorded: false, captain_id: 'ps_t', crew: ['ps_t1'], note: null, duty_staff_ids: [], substitutes: [], missing: [{ key: 'wristband', label: 'WB' }], wristband_carried: null, restaurant_id: null });
+
+function runtime({ enabled = true, answers = {} } = {}) {
+  const calls = [], fails = [], wrote = [], legacy = [];
+  const req = (method, path, body) => {
+    calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
+    const a = answers[method + ' ' + path];
+    if (typeof a === 'function') return Promise.resolve().then(() => a(body));
+    if (a instanceof Error) return Promise.reject(a);
+    if (a !== undefined) return Promise.resolve(J(a));
+    return Promise.reject(new Error('no answer for ' + method + ' ' + path));
+  };
+  const state = { b1: view({}), b2: J(UNREC) };
+  const defaults = {
+    'GET /v1/pier-office': LISTS,
+    ['GET ' + JOB('b1')]: () => state.b1,
+    ['GET ' + JOB('b2')]: () => state.b2,
+  };
+  Object.keys(defaults).forEach((k) => { if (answers[k] === undefined) answers[k] = defaults[k]; });
+  const win = {
+    laOps: {
+      enabled: () => enabled, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
+      wrote: (k) => wrote.push(k), fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message, body: e && e.body }), toast: () => {},
+    },
+    _poPier: PIER, _poDate: DATE,
+    poPersist: () => { legacy.push('poPersist'); },
+    poModalClose: () => {},
+    renderPierJob: () => { legacy.push('renderPierJob'); },
+    pjAllBoats: () => [{ bid: 'b1' }, { bid: 'b2' }],
+    pjLockMiss: () => ['legacy-miss'], pjWbOf: () => ({ c: 'legacy', t: '', from: '' }), pjSubList: () => ({ legacy: 1 }),
+    pjCopyYday: () => { legacy.push('pjCopyYday'); },
+    pjRaw: (d, b) => (win.PIER_JOB || {})[d + '::' + b] || null,
+    poYMD: (d) => d.toISOString().slice(0, 10),
+    PIER_JOB: {}, PIER_TEAM: {}, PIER_DUTY: {},
+  };
+  const ctx = { window: win, console, Promise, Array, Object, Error, String, Number, JSON, Math, encodeURIComponent, isFinite, parseInt,
+    document: { getElementById: () => null, activeElement: null }, setTimeout, clearTimeout, Date };
+  const vmc = vm.createContext(ctx);
+  SOURCES.forEach((s) => vm.runInContext(s, vmc));
+  const flush = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setTimeout(r, 3)); await new Promise((r) => setImmediate(r)); } };
+  return { w: win, calls, fails, wrote, legacy, flush, state };
+}
+const writes = (rt) => rt.calls.filter((c) => c.method !== 'GET');
+const open = async (rt) => { rt.w.renderPierJob(); await rt.flush(); };
+const K1 = DATE + '::b1', K2 = DATE + '::b2';
+
+test('legacy mode: pjLockMiss, pjWbOf and pjSubList are legacy\'s and nothing is called', async () => {
+  const rt = runtime({ enabled: false });
+  assert.deepEqual(rt.w.pjLockMiss(DATE, 'b1'), ['legacy-miss']);
+  assert.equal(rt.w.pjWbOf(DATE, 'b1').c, 'legacy');
+  assert.deepEqual(J(rt.w.pjSubList(DATE, 'b1')), { legacy: 1 });
+  rt.w.renderPierJob(); await rt.flush();
+  assert.deepEqual(rt.calls, []);
+});
+
+test('load: a job per boat; a recorded one fills PIER_JOB, an unrecorded one only the team; duty, missing, wristband, substitutes are the server\'s', async () => {
+  const rt = runtime();
+  await open(rt);
+  assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path).sort(), [JOB('b1'), JOB('b2')]);
+  assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {} });
+  assert.equal(rt.w.PIER_JOB[K2], undefined);
+  assert.deepEqual(J(rt.w.PIER_TEAM.b2), { cap: 'ps_t', asst: '', crew: ['ps_t1'] }, 'no job: the team is what the card shows');
+  assert.deepEqual(J(rt.w.PIER_TEAM.b1), { cap: 'ps_cap', asst: '', crew: ['ps_old', 'ps_c3'] }, 'a recorded job: the team is the job with the substitutes put back');
+  assert.deepEqual(J(rt.w.PIER_DUTY), { [K1]: ['ps_cap'] });
+  assert.deepEqual(rt.w.pjLockMiss(DATE, 'b2'), ['WB']);
+  assert.deepEqual(rt.w.pjLockMiss(DATE, 'b1'), []);
+  assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '#7C3AED', t: 'purple', from: '2026-10-10' });
+  assert.deepEqual(J(rt.w.pjSubList(DATE, 'b1')), { crew0: 'ps_old' });
+  rt.w.renderPierJob(); await rt.flush();
+  assert.equal(rt.calls.filter((c) => c.path === JOB('b1')).length, 1, 'read once per day');
+});
+
+test('a save: only the changed facts are PATCHed, then the card is read back', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: () => { rt.state.b1 = view({ captain_id: 'ps_new', crew: ['ps_c1', null, 'ps_c3'], note: 'n', substitutes: [], duty_staff_ids: ['ps_cap'] }); return {}; } } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].cap = 'ps_new';
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b1'), { captain_id: 'ps_new' }]]);
+  assert.equal(rt.calls.filter((c) => c.path === JOB('b1') && c.method === 'GET').length, 2);
+  assert.equal(rt.w.PIER_JOB[K1].cap, 'ps_new');
+  assert.deepEqual(rt.wrote, ['pier']);
+});
+
+test('a card with no job yet: filling a field records it with just that field', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b2')]: {} } });
+  await open(rt);
+  rt.w.PIER_JOB[K2] = { cap: 'ps_t', asst: '', crew: ['ps_t1'], island: [], note: '', wb: 'red', wbc: '#DC2626', lock: 0, mv: '', wc: '', lb: {} };
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b2'), { wristband_text: 'red', wristband_colour: '#DC2626' }]]);
+});
+
+test('the lock: complete after the facts, reopen before them', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: {}, ['POST ' + JOB('b1') + '/complete']: {}, ['POST ' + JOB('b1') + '/reopen']: {} } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].note = 'changed'; rt.w.PIER_JOB[K1].lock = 1;
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => c.method + ' ' + c.path), ['PATCH ' + JOB('b1'), 'POST ' + JOB('b1') + '/complete']);
+  const rt2 = runtime({ answers: { ['PATCH ' + JOB('b1')]: {}, ['POST ' + JOB('b1') + '/reopen']: {} }, });
+  rt2.state.b1 = view({ completed_at: 't', completed_by: 'x' });
+  await open(rt2);
+  assert.equal(rt2.w.PIER_JOB[K1].lock, 1);
+  rt2.w.PIER_JOB[K1].lock = 0; rt2.w.PIER_JOB[K1].note = 'edit';
+  rt2.w.poPersist(); await rt2.flush();
+  assert.deepEqual(writes(rt2).map((c) => c.method + ' ' + c.path), ['POST ' + JOB('b1') + '/reopen', 'PATCH ' + JOB('b1')]);
+});
+
+test('a refusal: job_incomplete shows the server\'s list and the card is not left locked', async () => {
+  const refusal = Object.assign(new Error('The job is not complete: ไกด์ missing'), { code: 'job_incomplete', status: 409, body: { missing: [{ key: 'guides', label: 'ไกด์' }] } });
+  const rt = runtime({ answers: { ['POST ' + JOB('b1') + '/complete']: refusal } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].lock = 1;
+  rt.w.poPersist(); await rt.flush();
+  assert.equal(rt.fails.length, 1);
+  assert.equal(rt.fails[0].code, 'job_incomplete');
+  assert.equal(rt.w.PIER_JOB[K1].lock, 0);
+});
+
+test('a refusal: editing a complete job (409 job_complete) puts the old value back', async () => {
+  const refusal = Object.assign(new Error('The job is complete: reopen it first'), { code: 'job_complete', status: 409 });
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: refusal } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].note = 'sneaky';
+  rt.w.poPersist(); await rt.flush();
+  assert.equal(rt.w.PIER_JOB[K1].note, 'n');
+  assert.equal(rt.fails[0].code, 'job_complete');
+});
+
+test('the restaurant: "-" is the server\'s "none", a venue id is sent as it is', async () => {
+  const rt = runtime({ answers: { ['PUT /v1/trip-actuals/' + DATE + '/b1/venue']: {} } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].mv = '-';
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PUT', '/v1/trip-actuals/' + DATE + '/b1/venue', { venue: 'none' }]]);
+});
+
+test('duty and the usual team: PUT whole, only when changed', async () => {
+  const rt = runtime({ answers: { ['PUT /v1/pier-office/' + PIER + '/days/' + DATE + '/boats/b1/duty']: {}, ['PUT /v1/pier-office/boats/b1/team']: {} } });
+  await open(rt);
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt), [], 'nothing changed: nothing sent');
+  rt.w.PIER_DUTY[K1] = ['ps_cap', 'ps_x'];
+  rt.w.PIER_TEAM.b1 = { cap: 'ps_cap', asst: 'ps_a', crew: ['ps_c1', 'ps_c3'] };
+  rt.w.poPersist(); await rt.flush();
+  const w = writes(rt);
+  assert.deepEqual(w.map((c) => [c.method, c.path, c.body]).sort((a, b) => a[1].localeCompare(b[1])), [
+    ['PUT', '/v1/pier-office/boats/b1/team', { captain_id: 'ps_cap', assistant_id: 'ps_a', crew_ids: ['ps_c1', 'ps_c3'] }],
+    ['PUT', '/v1/pier-office/' + PIER + '/days/' + DATE + '/boats/b1/duty', { staff_ids: ['ps_cap', 'ps_x'] }],
+  ]);
+});
+
+test('a refusal: duty of a closed day is the server\'s 409 day_closed and the list goes back', async () => {
+  const refusal = Object.assign(new Error('The day 2026-10-12 is closed'), { code: 'day_closed', status: 409 });
+  const rt = runtime({ answers: { ['PUT /v1/pier-office/' + PIER + '/days/' + DATE + '/boats/b1/duty']: refusal } });
+  await open(rt);
+  rt.w.PIER_DUTY[K1] = [];
+  delete rt.w.PIER_DUTY[K1];
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(J(rt.w.PIER_DUTY[K1]), ['ps_cap']);
+  assert.equal(rt.fails[0].code, 'day_closed');
+});

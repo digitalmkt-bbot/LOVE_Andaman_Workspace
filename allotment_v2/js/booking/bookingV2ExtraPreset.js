@@ -1,0 +1,1 @@
+function bookingV2ExtraPreset(){ const i=+(document.getElementById('bkx-preset')||{}).value||0; const p=BKV2_EXTRA_PRESETS[i]||{}; const n=document.getElementById('bkx-name'); const pr=document.getElementById('bkx-price'); if(n)n.value=p.name||''; if(pr)pr.value=p.price||0; bookingV2ExtraRecalc(); }

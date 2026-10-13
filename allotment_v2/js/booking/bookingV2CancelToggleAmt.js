@@ -1,0 +1,1 @@
+function bookingV2CancelToggleAmt(){ const v=(document.querySelector('input[name=bkc-charge]:checked')||{}).value; const r=document.getElementById('bkc-amt-row'); if(r) r.style.display=(v==='partial')?'block':'none'; }

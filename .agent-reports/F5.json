@@ -1,0 +1,59 @@
+{
+  "packet": "F5",
+  "status": "complete",
+  "objective": "Migrate fleet projects, daily log, safety equipment, fuel budgets, and fleet reports to operation-backend in operations mode.",
+  "branch": "agent/ops-fleet-daily",
+  "commit": "ccfdb4e8a288034ca8d966a430c70c337ccd029b",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/26-ops-fleet-daily.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-fleet-daily.test.mjs",
+    "docs/development/tasks/F5-ops-fleet-daily.md",
+    ".agent-reports/F5.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/26-ops-fleet-daily.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/fleet-stock.ts",
+    "D:/projects/operation-backend/src/routes/fleet-extras.ts",
+    "D:/projects/operation-backend/src/routes/fleet-insights.ts",
+    "D:/projects/operation-backend/src/domain/fleet-projects.ts",
+    "D:/projects/operation-backend/src/domain/fleet-daily.ts",
+    "D:/projects/operation-backend/src/domain/fleet-safety.ts",
+    "D:/projects/operation-backend/src/domain/fleet-replace.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/fleet/projects", "body": null },
+    { "method": "POST", "path": "/v1/fleet/projects", "body": "{no,name,boat_id,type,vendor?,plan_from,plan_to?,planned_budget?,notes?}" },
+    { "method": "PATCH", "path": "/v1/fleet/projects/:id", "body": "{name?,boat_id?,type?,vendor?,plan_from?,plan_to?,planned_budget?,notes?,phase?,bill_note?}" },
+    { "method": "POST", "path": "/v1/fleet/projects/:id/start|hold|resume|cancel|reopen|work-done|bill-back|complete", "body": "{...}" },
+    { "method": "GET", "path": "/v1/fleet/daily-log?from=&to=", "body": null },
+    { "method": "PATCH", "path": "/v1/fleet/daily-log/:date/boats/:boat_id", "body": "{fuel_litres?,pax_actual?,meters?}" },
+    { "method": "PUT", "path": "/v1/fleet/daily-log/:date/boats/:boat_id/water", "body": "{open,close}" },
+    { "method": "PUT", "path": "/v1/fleet/daily-log/:date/boats/:boat_id/issues", "body": "{item_id:qty}" },
+    { "method": "POST", "path": "/v1/fleet/daily-log/:date/boats/:boat_id/extras", "body": "{name,qty,unit}" },
+    { "method": "POST", "path": "/v1/fleet/daily-log/:date/piers/:pier/requests", "body": "{name,pax,fuel,price,engine_hours,water_open,water_close,issues}" },
+    { "method": "PUT", "path": "/v1/fleet/daily-log/:date/fuel-prices", "body": "{key:price}" },
+    { "method": "POST", "path": "/v1/fleet/daily-log/:date/piers/:pier/lock|unlock", "body": "{}" },
+    { "method": "GET", "path": "/v1/fleet/safety", "body": null },
+    { "method": "POST", "path": "/v1/fleet/safety/:id/replace", "body": "{reason,description?,date,source,item_id?,incident_no,job_no,memo_no?,...}" },
+    { "method": "PUT", "path": "/v1/fleet/fuel-budgets/:month", "body": "{amount}" },
+    { "method": "GET", "path": "/v1/fleet/dashboard|/v1/fleet/repair-history|/v1/fleet/reports/cost|/v1/fleet/reports/upkeep|/v1/fleet/reports/fuel|/v1/fleet/insights|/v1/fleet/reports/fleet", "body": null }
+  ],
+  "projection_mapping": "Maps server ProjectView, DailyLogView, and SafetyView to FL_PROJECTS, FL_DAILY/FL_FUEL_PRICE/FL_DR_LOCK (per-date replacement), and FL_SAFETY.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Daily responses replace only the affected date cache; honors server pier locks; delegates project cascade and safety replace side effects to server; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/26-ops-fleet-daily.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-fleet-daily.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-fleet-daily.test.mjs", "result": "pass (3/3)" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}

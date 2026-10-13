@@ -1,0 +1,1 @@
+function bookingV2SetEditLock(bkId){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.editLock={uid:_bkV2MeUid(), by:_bkV2MeName(), at:Date.now()}; try{acctPersistBookings();}catch(e){} }

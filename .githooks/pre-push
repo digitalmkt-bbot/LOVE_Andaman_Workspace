@@ -1,0 +1,3 @@
+#!/bin/sh
+# DB-change freeze (see tools/db-freeze.mjs): refuse pushing DB changes straight to lk-inbox.
+exec node "$(git rev-parse --show-toplevel)/tools/db-freeze.mjs" pre-push "$@"

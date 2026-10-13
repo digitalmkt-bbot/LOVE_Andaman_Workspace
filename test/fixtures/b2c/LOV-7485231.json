@@ -1,0 +1,892 @@
+{
+ "id": "LOV-7485231",
+ "note": "lead TH + TH + US sold at the Thai rate · park fee must count 2 Thai 1 foreign (§b2cNat)",
+ "capturedAt": "2026-10-03",
+ "items": [
+  {
+   "booking_id": "LOV-7485231",
+   "line_no": 1,
+   "type": "day_trip",
+   "travel_date": "2026-10-03",
+   "product_id": "POW-004",
+   "route_id": null,
+   "pax_adult": "3",
+   "pax_child": "0",
+   "pax_infant": "0",
+   "pax_foc": "0",
+   "pax_thai": "0",
+   "pax_foreign": "0",
+   "subtotal": "13397.00",
+   "variant_id": null,
+   "qty": null,
+   "is_open_date": "false",
+   "special_request": "[scrubbed note]",
+   "remark": "",
+   "details": {
+    "locked": true,
+    "noTransfer": false,
+    "opsRouteId": "r12",
+    "pickupZone": "PK",
+    "unitPrices": {
+     "foc": 0,
+     "adult": 3499,
+     "child": 2799,
+     "infant": 0
+    },
+    "dropoffSame": true,
+    "pickupHotel": "Phuket Emerald Beach Resort",
+    "lockedPrices": {
+     "foc": 0,
+     "adult": 3499,
+     "child": 2799,
+     "infant": 0,
+     "usedSeason": "",
+     "promoApplied": true
+    },
+    "addonsSelected": [
+     {
+      "qty": 3,
+      "name": "Join Transfer ( Phuket )",
+      "amount": 600,
+      "addonId": "AD-001",
+      "fromPromo": false,
+      "unitPrice": 200
+     },
+     {
+      "qty": 1,
+      "code": "international-park-fee",
+      "name": "International Park Fee",
+      "amount": 500,
+      "addonId": "AD-002",
+      "fromPromo": false,
+      "unitPrice": 500
+     },
+     {
+      "qty": 1,
+      "code": "longtail-charter",
+      "name": "Longtail Charter จองล่วงหน้า 3 วันก่อนการเดินทาง",
+      "amount": 1800,
+      "addonId": "AD-004",
+      "fromPromo": false,
+      "unitPrice": 1800
+     }
+    ],
+    "pickupLocation": "Phuket Town",
+    "dropoffLocation": "Phuket Emerald Beach Resort · Phuket Town"
+   },
+   "_sync_source": "booking_items",
+   "bk_status": "confirmed",
+   "bk_travel_date": {
+    "$date": "2026-10-03"
+   },
+   "bk_passengers": [
+    {
+     "dob": "",
+     "name": "Guest 5",
+     "phone": "",
+     "remark": "",
+     "passport": "",
+     "nationality": "American"
+    },
+    {
+     "dob": "",
+     "name": "Guest 6",
+     "phone": "",
+     "remark": "",
+     "passport": "",
+     "nationality": "Thai"
+    }
+   ],
+   "booked_by_name": "Guest 1",
+   "booked_by_email": "guest3@example.test",
+   "bk_subtotal": "13397.00",
+   "bk_discount": "597.00",
+   "bk_surcharge": "0.00",
+   "bk_discount_label": "ลดพิเศษ",
+   "bk_surcharge_label": null,
+   "bk_total": "12800.00",
+   "bk_deposit": "12800.00",
+   "bk_balance": "0.00",
+   "payment_method_id": "PM-BANK",
+   "bk_payment_type": "Bank transfer",
+   "bk_payment_method_name": "Bank transfer",
+   "bk_created_at": {
+    "$ts": "2026-09-25T01:07:20.752Z"
+   },
+   "channel_name": "Facebook",
+   "bk_customer_name": null,
+   "bk_customer_nat": null,
+   "crm_nationality": "Thai",
+   "customer_name": "Guest 2",
+   "customer_phone": "+66000000000",
+   "customer_email": "guest4@example.test",
+   "bk_paid": "12800"
+  }
+ ],
+ "paxRows": [
+  {
+   "paxNo": 1,
+   "name": "Guest 7",
+   "nationality": "US"
+  },
+  {
+   "paxNo": 2,
+   "name": "Guest 6",
+   "nationality": "TH"
+  }
+ ],
+ "catalogs": {
+  "addon": [
+   [
+    "POW-003::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 200
+    }
+   ],
+   [
+    "POW-003::AD-002",
+    {
+     "name": "International Park Fee",
+     "code": "international-park-fee",
+     "price": 500
+    }
+   ],
+   [
+    "POW-003::AD-003",
+    {
+     "name": "เรือหางยาว",
+     "code": "longtail-join",
+     "price": 500
+    }
+   ],
+   [
+    "POW-003::AD-004",
+    {
+     "name": "Longtail Charter",
+     "code": "longtail-charter",
+     "price": 2500
+    }
+   ],
+   [
+    "POW-003::AD-005",
+    {
+     "name": "Longtail Charter จองล่วงหน้า 3 วันก่อนการเดินทาง",
+     "code": "longtail-charter-3",
+     "price": 1800
+    }
+   ],
+   [
+    "POW-003::AD-006",
+    {
+     "name": "Longtail Join จองล่วงหน้า 3 วันก่อนการเดินทาง",
+     "code": "longtail-join-3",
+     "price": 400
+    }
+   ],
+   [
+    "POW-004::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 200
+    }
+   ],
+   [
+    "POW-004::AD-002",
+    {
+     "name": "International Park Fee",
+     "code": "international-park-fee",
+     "price": 500
+    }
+   ],
+   [
+    "POW-004::AD-003",
+    {
+     "name": "Longtail Charter",
+     "code": "longtail-charter",
+     "price": 2500
+    }
+   ],
+   [
+    "POW-004::AD-004",
+    {
+     "name": "Longtail Charter จองล่วงหน้า 3 วันก่อนการเดินทาง",
+     "code": "longtail-charter",
+     "price": 1800
+    }
+   ],
+   [
+    "POW-005::AD-001",
+    {
+     "name": "Van Transfer (Join)",
+     "code": "van-transfer-join",
+     "price": 200
+    }
+   ],
+   [
+    "POW-005::AD-002",
+    {
+     "name": "International Park Fee",
+     "code": "international-park-fee",
+     "price": 1600
+    }
+   ],
+   [
+    "POW-007::AD-001",
+    {
+     "name": "Van Transfer (Join)",
+     "code": "van-transfer-join",
+     "price": 200
+    }
+   ],
+   [
+    "POW-007::AD-002",
+    {
+     "name": "International Park Fee",
+     "code": "international-park-fee",
+     "price": 500
+    }
+   ],
+   [
+    "POW-006::AD-001",
+    {
+     "name": "Van Transfer (Join)",
+     "code": "van-transfer-join",
+     "price": 200
+    }
+   ],
+   [
+    "POW-006::AD-002",
+    {
+     "name": "International Park Fee",
+     "code": "international-park-fee",
+     "price": 1500
+    }
+   ],
+   [
+    "POW-008::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 300
+    }
+   ],
+   [
+    "POW-008::AD-002",
+    {
+     "name": "Join Transfer ( Khaolak )",
+     "code": "",
+     "price": 0
+    }
+   ],
+   [
+    "POW-008::AD-003",
+    {
+     "name": "International Park Fee",
+     "code": "",
+     "price": 500
+    }
+   ],
+   [
+    "POW-009::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 300
+    }
+   ],
+   [
+    "POW-009::AD-002",
+    {
+     "name": "Join Transfer ( Khaolak )",
+     "code": "",
+     "price": 0
+    }
+   ],
+   [
+    "POW-009::AD-003",
+    {
+     "name": "International Park Fee",
+     "code": "",
+     "price": 500
+    }
+   ],
+   [
+    "POW-002::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 300
+    }
+   ],
+   [
+    "POW-002::AD-002",
+    {
+     "name": "Join Transfer ( Khaolak )",
+     "code": "",
+     "price": 0
+    }
+   ],
+   [
+    "POW-002::AD-003",
+    {
+     "name": "International Park Fee",
+     "code": "",
+     "price": 500
+    }
+   ],
+   [
+    "POW-002::AD-004",
+    {
+     "name": "Longtail Charter",
+     "code": "longtail-charter",
+     "price": 4999
+    }
+   ],
+   [
+    "POW-002::AD-005",
+    {
+     "name": "Longtail Join",
+     "code": "longtail-join",
+     "price": 749
+    }
+   ],
+   [
+    "POW-002::AD-006",
+    {
+     "name": "Longtail Charter ท่านที่ 7-9",
+     "code": "longtail-charter-7-9",
+     "price": 400
+    }
+   ],
+   [
+    "POW-001::AD-001",
+    {
+     "name": "Join Transfer ( Phuket )",
+     "code": "",
+     "price": 300
+    }
+   ],
+   [
+    "POW-001::AD-002",
+    {
+     "name": "Join Transfer ( Khaolak )",
+     "code": "",
+     "price": 0
+    }
+   ],
+   [
+    "POW-001::AD-003",
+    {
+     "name": "International Park Fee",
+     "code": "",
+     "price": 500
+    }
+   ]
+  ],
+  "prog": [
+   [
+    "POW-002",
+    "r6"
+   ],
+   [
+    "POW-003",
+    "r10"
+   ],
+   [
+    "POW-004",
+    "r12"
+   ],
+   [
+    "POW-005",
+    "r1784542898734"
+   ],
+   [
+    "POW-007",
+    "r11"
+   ],
+   [
+    "POW-006",
+    "r1784882390130"
+   ],
+   [
+    "POW-008",
+    "r4"
+   ],
+   [
+    "POW-009",
+    "r2"
+   ],
+   [
+    "POW-001",
+    "r5"
+   ]
+  ],
+  "trf": [
+   [
+    "TR-001",
+    "r1789031868147"
+   ],
+   [
+    "TR-002",
+    "r1789031884355"
+   ],
+   [
+    "TR-003",
+    "r1789030036795"
+   ],
+   [
+    "TR-004",
+    "r1789031919260"
+   ]
+  ],
+  "ext": [
+   [
+    "TR-OTHER",
+    "r1789036422820"
+   ],
+   [
+    "TR-003:V1",
+    "r1789040275187"
+   ],
+   [
+    "TR-003:V2",
+    "r1789040275830"
+   ],
+   [
+    "TR-003",
+    "r1789030036795"
+   ],
+   [
+    "TR-001",
+    "r1789031868147"
+   ],
+   [
+    "TR-002",
+    "r1789031884355"
+   ],
+   [
+    "TR-004",
+    "r1789031919260"
+   ],
+   [
+    "PTP-001",
+    "r1789118931074"
+   ],
+   [
+    "PTP-001:VT-001",
+    "r1789118931075"
+   ],
+   [
+    "PTP-001:VT-002",
+    "r1789118931076"
+   ],
+   [
+    "PTP-002",
+    "r1789118931077"
+   ],
+   [
+    "PTP-002:VT-001",
+    "r1789118931078"
+   ],
+   [
+    "PTP-002:VT-002",
+    "r1789118931079"
+   ],
+   [
+    "PTP-003",
+    "r1789118931080"
+   ],
+   [
+    "PTP-003:VT-001",
+    "r1789118931081"
+   ],
+   [
+    "PTP-003:VT-002",
+    "r1789118931082"
+   ],
+   [
+    "PTP-004",
+    "r1789118931083"
+   ],
+   [
+    "PTP-004:VT-001",
+    "r1789118931084"
+   ],
+   [
+    "PTP-004:VT-002",
+    "r1789118931085"
+   ],
+   [
+    "PTP-005",
+    "r1789118931086"
+   ],
+   [
+    "PTP-005:VT-001",
+    "r1789118931087"
+   ],
+   [
+    "PTP-005:VT-002",
+    "r1789118931088"
+   ],
+   [
+    "PTP-005:VT-003",
+    "r1789118931089"
+   ],
+   [
+    "PTP-005:VT-004",
+    "r1789118931090"
+   ],
+   [
+    "PTP-006",
+    "r1789118931091"
+   ],
+   [
+    "PTP-006:VT-001",
+    "r1789118931092"
+   ],
+   [
+    "PTP-006:VT-002",
+    "r1789118931093"
+   ],
+   [
+    "PTP-006:VT-003",
+    "r1789118931094"
+   ],
+   [
+    "PTP-007",
+    "r1789118931095"
+   ],
+   [
+    "PTP-007:VT-001",
+    "r1789118931096"
+   ],
+   [
+    "PTP-007:VT-002",
+    "r1789118931097"
+   ],
+   [
+    "PTP-007:VT-003",
+    "r1789118931098"
+   ],
+   [
+    "PTP-007:VT-004",
+    "r1789118931099"
+   ],
+   [
+    "PTP-007:VT-005",
+    "r1789118931100"
+   ],
+   [
+    "PTP-007:VT-006",
+    "r1789118931101"
+   ],
+   [
+    "PTP-007:VT-007",
+    "r1789118931102"
+   ],
+   [
+    "PTP-007:VT-008",
+    "r1789118931103"
+   ],
+   [
+    "PTP-007:VT-009",
+    "r1789118931104"
+   ],
+   [
+    "PTP-007:VT-010",
+    "r1789118931105"
+   ],
+   [
+    "PTP-007:VT-011",
+    "r1789118931106"
+   ],
+   [
+    "PTP-008",
+    "r1789118931107"
+   ],
+   [
+    "PTP-008:VT-001",
+    "r1789118931108"
+   ],
+   [
+    "PTP-008:VT-002",
+    "r1789118931109"
+   ]
+  ]
+ },
+ "areas": [
+  {
+   "id": "kl-bangniang",
+   "name": "Bang Niang",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-bangsak",
+   "name": "Bang Sak",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-center",
+   "name": "Center",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-khaolak",
+   "name": "Khaolak",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-khukkhak",
+   "name": "Khuk Khak",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-merlin",
+   "name": "Merlin",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-nanglao",
+   "name": "Nang Thong",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-numkhem",
+   "name": "Num Khem",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-pakarang",
+   "name": "Pakarang",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-pakwip",
+   "name": "Pakwip",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-poseidon",
+   "name": "Poseidon",
+   "zone": "KL"
+  },
+  {
+   "id": "kl-tublamuhotel",
+   "name": "Tublamu (hotel)",
+   "zone": "KL"
+  },
+  {
+   "id": "nt-grand-andaman-pier-s",
+   "name": "Grand Andaman Pier (self-arrive)",
+   "zone": "NoTransfer"
+  },
+  {
+   "id": "nt-panwa-pier",
+   "name": "Visit Panwa Pier (self-arrive)",
+   "zone": "NoTransfer"
+  },
+  {
+   "id": "nt-tublamu-pier",
+   "name": "Tub Lamu Pier (self-arrive)",
+   "zone": "NoTransfer"
+  },
+  {
+   "id": "pk-airport",
+   "name": "Airport",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-aopor",
+   "name": "Aopor",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-aoyon",
+   "name": "Aoyon",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-bangnon",
+   "name": "BangNon",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-bangtao",
+   "name": "Bangtao",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-chalong",
+   "name": "Chalong",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-chaofa",
+   "name": "Chaofa",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-cherngtalay",
+   "name": "Cherngtalay",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-kalim",
+   "name": "Kalim",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-kamala",
+   "name": "Kamala",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-karon",
+   "name": "Karon",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-kata",
+   "name": "Kata",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-kathu",
+   "name": "Kathu",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-khokkloi",
+   "name": "Khok Kloi",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-kokaeo",
+   "name": "Ko Kaeo",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-laguna",
+   "name": "Laguna",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-layan",
+   "name": "Layan",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-maikhao",
+   "name": "Maikhao",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-monument",
+   "name": "Monument",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-naiharn",
+   "name": "Naiharn",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-naithon",
+   "name": "Naithon",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-naiyang",
+   "name": "Naiyang",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-natai",
+   "name": "Natai",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-pakhlok",
+   "name": "Pa Khlok",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-panwa",
+   "name": "Panwa",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-patong",
+   "name": "Patong",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-rawai",
+   "name": "Rawai",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-saiyuan",
+   "name": "Saiyuan",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-sapam",
+   "name": "Sapam",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-siray",
+   "name": "Siray",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-surin",
+   "name": "Surin (beach)",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-talang",
+   "name": "Thalang",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-town",
+   "name": "Phuket Town",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-tritrang",
+   "name": "Tritrang",
+   "zone": "PK"
+  },
+  {
+   "id": "pk-yamu",
+   "name": "Yamu",
+   "zone": "PK"
+  },
+  {
+   "id": "rn-bangnon",
+   "name": "BangNon",
+   "zone": "RN"
+  },
+  {
+   "id": "rn-bangrin",
+   "name": "BangRin",
+   "zone": "RN"
+  },
+  {
+   "id": "rn-pakman",
+   "name": "Pakman",
+   "zone": "RN"
+  },
+  {
+   "id": "rn-ranong-town",
+   "name": "Ranong town",
+   "zone": "RN"
+  }
+ ]
+}

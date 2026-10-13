@@ -1,0 +1,1 @@
+function bookingV2AllergySetQty(i,val){ const sm=_bkV2.newBooking&&_bkV2.newBooking.specialMeals; if(!sm||!Array.isArray(sm.allergyList)||!sm.allergyList[i])return; sm.allergyList[i].qty=Math.max(1,Math.floor(Number(val)||1)); bookingV2Render(); }

@@ -1,10 +1,16 @@
 # LOVE Andaman — System Map (Sales & Booking + Operations)
 
-> Machine-readable architecture map of `allotment_v2.html`.
-> Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the 2.9 MB source file.
+> Machine-readable architecture map of the allotment_v2 front end — `allotment_v2.html` (markup +
+> CSS) and `allotment_v2/js/01..08-*.js` (all ~80k lines of code; see `allotment_v2/js/README.md`).
+> Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the ~6.2 MB of source.
 > Scope here: **Program/Routes · Boat Status · Boat Operation · Pickup Setup · Rate Types · B2C Channels · Agent List · Booking · Seat Locks · Accounting · Weather cancellation.**
 > Companion file: `CLAUDE.md` (deeper schemas, safety rules, change log). This file = the big picture.
-> Last updated: 2026-08-19.
+> Last updated: 2026-10-13 (operation-backend integration boundary added).
+
+> **Production deployment (`main`):** Railway runs `static-server.js`, not the legacy
+> `server.js`. It serves only frontend assets and `/health`; migrated Operations calls,
+> including Dashboard, go directly to operation-backend. The `lk-inbox` production monolith is
+> separate and unchanged.
 
 ---
 
@@ -37,8 +43,8 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 ### 2.1 Program / Routes  `(catalog · the spine)`
 - **Store:** `ROUTES` (seed `DEFAULT_ROUTES`, ~line 3328) · persisted in `loveandaman_v2`.
 - **Key fields:** `id` (`r1`…`r12`), `name`, `islands`, `times[]` (departure times), `color`, `pier` (`tublamu`|`panwa`), `seasons[]` = `{id, type:'open'|'closed', from, to}`.
-- **Program family:** routes are grouped into 5 **programs** via `bkV2RouteFamily()` (name-pattern match): `_BKV2_FAMILIES` = Similan Islands · Surin Islands · Phi Phi Bamboo · Krabi + Phang Nga · Whale Shark Phi Phi Maiton.
-- **Open/closed on a date:** `bkV2IsRouteOpenOn(routeId, date)` / `getDayStatus(route, date)` read `seasons[]` → off-season routes render hatched/closed.
+- **Program family:** routes are grouped into 5 **programs** via `bookingV2RouteFamily()` (name-pattern match): `_BKV2_FAMILIES` = Similan Islands · Surin Islands · Phi Phi Bamboo · Krabi + Phang Nga · Whale Shark Phi Phi Maiton.
+- **Open/closed on a date:** `bookingV2IsRouteOpenOn(routeId, date)` / `getDayStatus(route, date)` read `seasons[]` → off-season routes render hatched/closed.
 - **Role:** the master list of what can be sold and run. Everything references a `routeId`.
 
 ### 2.2 Boat Status  `(fleet readiness)`
@@ -67,6 +73,7 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 ### 2.6 B2C Channels  `(direct sales source)`
 - **Store:** `sb_b2c`.
 - **Role:** non-agent direct sales (OTA/own website). A booking can reference a `b2cChannel` instead of an `agentId`. Behaves like an agent for sourcing but typically prepaid.
+- **B2C website import (`b2c-map.js`, 2026-10-03):** website orders arrive through `relSyncB2C` in `server.js` (all the DB I/O) → `mapB2COrders` in **`b2c-map.js`** (pure: B2C rows → ops booking shape). Every sync then runs `b2cCheckOrders` (wrong / half-known imports: no route, 0 pax, Thai-priced party with a foreigner, unreadable nationality, money that does not add up) → `/api/b2c/health` `issues[]` → the amber "ใบ B2C ที่ต้องเช็ค" panel bottom-left. Change the mapper ⇒ `npm run test:b2c` (fixtures = real scrubbed orders in `test/fixtures/b2c/`, one per past bug) and bump `B2C_MAP_VER`. New bug ⇒ `node tools/b2c-fixture-capture.mjs LOV-…` + a pinned test. See what the checks flag on live data: `node tools/b2c-check-live.mjs`. A booking field ops starts reading must be filled here too, or every B2C booking silently falls back.
 
 ### 2.7 Agent List  `(who sells · terms)`
 - **Store:** `SB_AGENTS` · key `sb_agents`.
@@ -77,10 +84,10 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 
 ### 2.8 Booking  `(what's sold · central hub)`
 - **Store:** `SB_BOOKINGS` · key `sb_bookings`.
-- **View:** `#view-booking` → `bkV2Render()`. Tabs (`_bkV2.tab`): `cal` (Calendar/Matrix) · `bytrip` (By-trip-date manifest) · `all` (linear list) · `locks` (Seat Locks).
+- **View:** `#view-booking` → `bookingV2Render()`. Tabs (`_bkV2.tab`): `cal` (Calendar/Matrix) · `bytrip` (By-trip-date manifest) · `all` (linear list) · `locks` (Seat Locks).
 - **Key fields:** `id`, `agentId` | `b2cChannel`, `rateTypeRef`, `leadPax`/`passengers[]`, `pickupAreaId`/`pickupZone`, `trips[]` = `{routeId, date, zone, pax{ad,chd,inf,foc}, bookingMode:'seat'|'charter', charterBoatId, pickupTime, subtotal, seatSource, lockDraws}`, `addOns[]`, `adjustments[]` (discount/extra), `priceBreakdown`, `status`, `weatherResolve` (§5.3), `rebook`, `history[]` (audit timeline), `incomplete[]` (soft-missing fields).
 - **Forecasting record (2026-06-04):** each booking is self-contained for demand/market trend analysis — `bookingDate` (date booked · editable later), `bookedAt` (exact ISO timestamp), `marketSnapshot` `{market, sub, agentId, at}` (frozen at create time so trends stay correct even if the agent later changes market). Pair with `trips[].date` (travel date) to compute **lead time** = travelDate − bookingDate. Query: group by `marketSnapshot.market` × `bookingDate` (booking curve) or × `trips.date` (travel demand).
-- **Quote:** `bkV2CalcQuote()` builds price from the bound **Rate Type** (seat + charter + add-ons + bundles) − discounts + extras.
+- **Quote:** `bookingV2CalcQuote()` builds price from the bound **Rate Type** (seat + charter + add-ons + bundles) − discounts + extras.
 - **Role:** converges Agent + Rate Type + Pickup + Program + Boat Operation capacity into a sellable, priced, manifested trip; emits invoices/payments to Accounting; draws Seat Locks.
 
 ### 2.9 Seat Locks  `(held inventory)`
@@ -170,7 +177,7 @@ flowchart LR
 `getAllotment(route, date)` → `seatsAvailable = availableCapacity − seatsConsumed − lockedSeats`.
 - `availableCapacity` = Σ cap of **seat** boats assigned in Boat Operation (Boat Status must be `available`).
 - `seatsConsumed` = Σ pax of confirmed seat bookings (`getSeatsConsumed`, excludes `cancelled` / `rejected` / `cancelled_weather`).
-- `lockedSeats` = `bkV2LockedTotal(route,date)` from Seat Locks.
+- `lockedSeats` = `bookingV2LockedTotal(route,date)` from Seat Locks.
 Booking commit hard-blocks any booking that would consume locked seats it didn't draw.
 
 ### 5.2 Agent credit

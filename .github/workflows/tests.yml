@@ -1,0 +1,101 @@
+name: tests
+
+# LAM-22 (S1-08): stand up the test harness.
+#
+# What this runs:
+#   1. `node --test` over test/ — DOM-free unit tests (always run, zero external deps) plus the
+#      one required end-to-end proof (test/e2e/booking-write-path.test.mjs), which self-skips with
+#      a clear reason when the relational booking schema isn't provisioned on DATABASE_URL.
+#   2. db/test_seat_lock_race.mjs — the existing seat-lock concurrency proof. It creates its own
+#      throwaway schema, so unlike the e2e test above it does NOT depend on db/migrations. It is
+#      currently expected to fail on a stock Postgres service container for an unrelated,
+#      pre-existing reason — see the step below and docs/development/tasks/LAM-22.md.
+#
+# What this does NOT yet do: apply db/migrations to the ephemeral Postgres before the suite runs.
+# db/migrations/ was deleted at 094dde1 and LAM-73 (still To Do) owns deciding whether it is
+# rebuilt from pg_get_viewdef, restored as-is, or abandoned. Once that lands, add a step here that
+# applies db/migrations/*.sql in order before the test step — the e2e test itself needs no changes,
+# it will simply stop skipping.
+#
+# package.json changes this harness would like (NOT made here — root package.json is owned by
+# LAM-16, running in parallel; see docs/development/tasks/LAM-22.md "dependencies"):
+#   scripts.test -> "node --test"
+#   scripts["test:e2e"] -> "node --test test/e2e"
+# No new devDependencies are required: everything here runs on Node's built-in test runner
+# (node:test, stable since Node 18) and the `pg` package already in dependencies.
+
+on:
+  push:
+    branches:
+      - "agent/**"
+      - "refactor/booking-v2-migration"
+  pull_request:
+    branches:
+      - "refactor/booking-v2-migration"
+      - "main"
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: love_andaman_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/love_andaman_test
+      DATA_BACKEND: relational
+      SESSION_SECRET: ci-test-secret-not-for-prod
+      PORT: 8790
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Apply relational schema from db/migrations (if present)
+        run: |
+          if [ -d db/migrations ] && ls db/migrations/*.sql >/dev/null 2>&1; then
+            echo "Applying db/migrations/*.sql to $DATABASE_URL ..."
+            for f in $(ls db/migrations/*.sql | sort); do
+              echo "  -> $f"
+              PGPASSWORD=postgres psql -h localhost -U postgres -d love_andaman_test -v ON_ERROR_STOP=1 -f "$f"
+            done
+          else
+            echo "::warning::db/migrations/ not present on this branch (tracked by LAM-73) — the e2e write-path test will report itself skipped, not passed."
+          fi
+
+      - name: Run test suite (node --test)
+        run: node --test
+
+      - name: Install db/ dependencies
+        working-directory: db
+        run: npm ci
+
+      - name: Seat-lock concurrency proof (db/test_seat_lock_race.mjs)
+        working-directory: db
+        # Known non-blocking: this script hardcodes `ssl:{rejectUnauthorized:false}` in its Pool
+        # config (mirroring server.js's Railway-only TLS setting), which makes node-postgres
+        # REQUIRE TLS. The stock `postgres:16` service container above does not speak TLS, so this
+        # currently fails with "The server does not support SSL connections" — a pre-existing bug
+        # in a file outside LAM-22's owned paths (test/, .github/workflows/tests.yml, docs/, .agent-reports/).
+        # Kept non-blocking (continue-on-error) so the concurrency proof still runs and is visible
+        # in CI logs without red-X'ing every PR over a bug this task cannot fix. See
+        # docs/development/tasks/LAM-22.md "dependencies" for the one-line fix needed in db/.
+        continue-on-error: true
+        run: node test_seat_lock_race.mjs

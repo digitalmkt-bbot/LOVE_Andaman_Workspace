@@ -1,0 +1,77 @@
+// Defensive bootstrap for deployments where 08-app.js and the split booking
+// scripts are served from different cache generations.
+window._bkV2 = window._bkV2 || {
+  tab:'cal', view:'cal', cursor:new Date(), selected:null, avgMode:'week',
+  expanded:new Set(), panelHid:false, filterRoute:null, filterDate:null,
+  search:'', statusFilter:'all', page:1, pageSize:200, month:null,
+  newBooking:null, detailId:null, editingId:null,
+  boatAssignMode:false, vanAssignMode:false, reconfirmMode:false
+};
+// Families were formerly only a top-level const in 08-app.js. Keep an explicit
+// global fallback so split scripts remain safe across mixed asset generations.
+window._BKV2_FAMILIES = window._BKV2_FAMILIES || [
+  {id:'similan',name:'Similan Islands',color:'#185fa5'},
+  {id:'surin',name:'Surin Islands',color:'#3B6D11'},
+  {id:'phiphi',name:'Phi Phi Bamboo',color:'#c0392b'},
+  {id:'krabi',name:'Krabi + Phang Nga',color:'#0F6E56'},
+  {id:'whaleshark',name:'Whale Shark Phi Phi Maiton',color:'#BA7517'},
+  {id:'selava',name:'Day Trip - Se La Va',color:'#BA7517'},
+  {id:'nyaung',name:'Day Trip - Nyaung Oo Phee Island',color:'#0F6E56'},
+  {id:'transfer',name:'Transfer',color:'#5B289A'},
+  {id:'citytour',name:'City Tour',color:'#7B4BB7'},
+  {id:'activity',name:'Activities',color:'#C77D1E'}
+];
+
+// Main entry (called from renderBooking)
+function bookingV2Render(){
+  const host = document.getElementById('bkv2-host');
+  if(!host) return;
+  try{
+    // P3 · Detail view (read-only by default · Edit toggles into newBooking flow)
+    if(_bkV2.detailId && !_bkV2.newBooking){
+      host.innerHTML = `<div class="bkv2">${bookingV2RenderBookingDetail()}</div>`;
+      return;
+    }
+    // If New Booking form is open · render that instead of tabs
+    if(_bkV2.newBooking){
+      host.innerHTML = `<div class="bkv2">${bookingV2RenderNewBooking()}</div>`;
+      return;
+    }
+    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bookingV2RenderTopbar()}</div><div class="bkv2 bkv2-bodycard">${bookingV2RenderTabBody()}</div>${bookingV2RenderLockModal()}${(typeof bookingV2LockOverlays==='function'?bookingV2LockOverlays():'')}`;
+    // Stack the sticky headers below the (sticky) day header · set LITERAL px offsets (no calc-in-custom-prop, which can fail to resolve)
+    requestAnimationFrame(()=>{ try{
+      const vb=document.getElementById('view-booking'); if(!vb) return;
+      /* §btHead · หัว By-trip ตรึงแล้ว (top:-22px) · ชั้นล่างต้องเกาะใต้ความสูงจริงของมัน
+         ฮาร์ดโค้ดไม่ได้ เพราะการ์ดในหัวตกบรรทัดตามความกว้างจอ */
+      const _bth=host.querySelector('.bt-pkh');
+      const h=_bth?_bth.offsetHeight:0;
+      /* §btFreeze · ระยะซ้ายของคอลัมน์ที่ตรึง · ฮาร์ดโค้ดไม่ได้เพราะความกว้างจริง
+         ขึ้นกับ padding/border ของธีม และเปลี่ยนตามโหมด (Van ซ่อน 4 คอลัมน์) */
+      try{ const _hr=host.querySelector('table.t2-mtbl thead tr');
+        if(_hr && _hr.children.length>2){
+          const w1=Math.round(_hr.children[0].getBoundingClientRect().width);
+          const w2=Math.round(_hr.children[1].getBoundingClientRect().width);
+          vb.style.setProperty('--t2-fz1', w1+'px');
+          vb.style.setProperty('--t2-fz2', (w1+w2)+'px');
+        } }catch(_){}
+      const TOP=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'))||0;   // topbar height (0 after topbar removal · auto-reverts if bar restored)
+      const vanOn=!!(typeof _bkV2!=='undefined'&&_bkV2&&_bkV2.vanAssignMode);
+      // measure the actual van+grouping strip height (was hardcoded 96 → gap/overlap when real height differed)
+      const vs=host.querySelector('.bkv2-vanstrip'); const VANGROUP=(vanOn&&vs)?vs.offsetHeight:0;
+      /* §btScroll · ตัวเลื่อนย้ายมาอยู่ที่ .t2-wrap แล้ว · ชั้นที่ตรึงต้องวัดจาก
+         ขอบบนของกล่องนั้น ไม่ใช่จากขอบจอ · ไม่งั้นแถบ VANS ไปลอยกลางตาราง */
+      vb.style.setProperty('--t2-vangroup-top', '0px');
+      vb.style.setProperty('--t2-head-top', VANGROUP+'px');
+      /* §btPin · ก้อนหัว By-trip ตรึงใต้แถบแท็บ · ต้องรู้ความสูงแถบแท็บจริง
+         วัดทุกครั้งที่วาด ไม่ฝังตัวเลข · แถบนี้ห่อปุ่มกับตัวกรองที่ตัดบรรทัดได้
+         ความสูงจึงเปลี่ยนตามความกว้างจอ (CLAUDE.md §6 · ห้าม hardcode 52) */
+      try{ ctBtPinFit(); ctBtPinFitLater(); }catch(_){}
+      /* §btUnclamp (was §btScroll) · .t2-wrap เคยถูกจำกัดความสูงพอดีจอ + ดึงขอบล่างด้วย margin
+         ติดลบ เพื่อกันไม่ให้หน้าเลื่อนเกินกล่องที่ตรึงไว้ · ตอนนี้หัวไม่ตรึงแล้ว (§btHead) ทั้งหน้า
+         เลื่อนเป็นชิ้นเดียวตามปกติ ไม่ต้องคำนวณ/ดึงอะไรอีก ทิ้งไว้จะดึงเนื้อหาส่วนล่างของตารางหาย */
+    }catch(_){} });
+  }catch(e){
+    console.error('[bookingV2Render] render failed:', e);
+    host.innerHTML = `<div class="bkv2" style="padding:24px"><div style="font-size:13px;color:#A32D2D;font-weight:600">⚠ Booking view render error</div><div style="font-size:12px;color:var(--ink-soft,#888);margin-top:6px;font-family:'DM Mono',monospace">${String((e&&e.message)||e).replace(/[<>&]/g,'')}</div><button onclick="_bkV2.detailId=null;_bkV2.newBooking=null;_bkV2.editingId=null;_bkV2.tab='cal';try{bookingV2Render()}catch(_){}" style="margin-top:14px;background:#185FA5;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer">Reset to Calendar view</button></div>`;
+  }
+}

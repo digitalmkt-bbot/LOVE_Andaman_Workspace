@@ -1,0 +1,396 @@
+function bookingV2RenderTripsSection(){
+  const d = _bkV2.newBooking;
+  const rt = bookingV2GetRT();
+  const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
+  if(!rt){
+    // §b2cEdit · ใบ B2C ไม่มี Rate Type และไม่ควรมี · แสดงทริปจริงแบบอ่านอย่างเดียว
+    if(typeof bookingV2IsB2CBk==='function' && bookingV2IsB2CBk(d)) return bookingV2RenderB2CTripsRO(d);
+    return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">Pick an agent first to enable trip selection.</div>`;
+  }
+
+  // Routes covered by this rate type · with full name
+  const coveredRoutes = (rt.routes || []).map(rid => {
+    const r = (typeof ROUTES !== 'undefined') ? ROUTES.find(rr => rr.id === rid) : null;
+    return r ? { id:rid, name:r.name } : null;
+  }).filter(Boolean);
+
+  const zones = LA_PICKUP_ZONES;                          /* §rnZone */
+  const zoneLabel = z => laZoneLabel(z);
+
+  // Compact pax stepper · used in 2x4 mixed grid
+  const stepper = (idx, key, val) => `
+    <div style="display:flex;align-items:center;width:calc(100% - 6px);max-width:96px;margin:0 auto;box-sizing:border-box;background:#fff;border:1.5px solid #C9CCD6;border-radius:9px;overflow:hidden">
+      <button onclick="bookingV2BumpPax(${idx},'${key}',-1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
+      <span style="flex:1;min-width:16px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0F1B3D':'#A9ADB8'}">${val}</span>
+      <button onclick="bookingV2BumpPax(${idx},'${key}',1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:#F7F7F5;color:#3E4658;font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
+    </div>
+  `;
+
+  /* §pkNat · ตัวนับหัวคนไทยจริง · หน้าตาเหมือน stepper ปกติแต่เป็นสีเขียวของ "ไม่เกี่ยวกับเงิน"
+     ค่าที่โชว์ตอนยังไม่มีใครแตะ = ช่อง TH ของแถวราคา · เท่ากับพฤติกรรมเดิมเป๊ะ
+     บวกเกินหัวทั้งหมดของประเภทนั้นไม่ได้ · ปุ่ม + จะจางลงเมื่อเต็มแล้ว */
+  const natStep = (idx, k, t) => {
+    const px = t.pax || {};
+    const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+    const val = bkNatTH(t, k);
+    const on  = bkNatHas(t);
+    return `
+    <div style="display:flex;align-items:center;width:calc(100% - 6px);max-width:96px;margin:0 auto;box-sizing:border-box;background:#fff;border:1.5px solid ${on?'#6FBFA0':'#9CCDB9'};border-radius:9px;overflow:hidden" title="ทั้งหมด ${all} คน${on?'':' · ยังไม่ได้ระบุ ถือตามช่อง TH ไปก่อน'}">
+      <button onclick="bookingV2BumpNat(${idx},'${k}',-1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:transparent;color:${val>0?'#0B5A43':'#A9ADB8'};font-weight:700;cursor:pointer;font-family:inherit;font-size:15px;line-height:1;padding:0">&minus;</button>
+      <span style="flex:1;min-width:16px;text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:14.5px;font-variant-numeric:tabular-nums;color:${val>0?'#0B5A43':'#A9ADB8'}">${val}</span>
+      <button onclick="bookingV2BumpNat(${idx},'${k}',1)" style="flex:0 1 22px;min-width:15px;height:30px;border:none;background:transparent;color:${val<all?'#0B5A43':'#C9CCD6'};font-weight:700;cursor:${val<all?'pointer':'default'};font-family:inherit;font-size:15px;line-height:1;padding:0">+</button>
+    </div>`;
+  };
+
+  // Bundle helper · detect free/paid longtail bundle for a route
+  const bundleInfo = (rId) => {
+    const b = rt.routeBundles?.[rId]?.longtail;
+    if(!b) return null;
+    return { mode: b.mode, adult: b.adult||0, child: b.child||0 };
+  };
+  const routeDataList = coveredRoutes.map(r => `<option value="${escapeHTML(r.name)}"></option>`).join('');
+  const tripRows = d.trips.map((t, idx) => {
+    const subtotal = bookingV2TripSubtotal(t);
+    const totAd  = bookingV2PaxTot(t.pax,'ad');
+    const totChd = bookingV2PaxTot(t.pax,'chd');
+    const totInf = bookingV2PaxTot(t.pax,'inf');
+    const totFoc = bookingV2PaxTot(t.pax,'foc');
+    const currentRouteLabel = t.routeId ? (coveredRoutes.find(r=>r.id===t.routeId)?.name || '') : '';
+    const bi = (t.routeId && _rtBundleAppliesTo(rt.routeBundles?.[t.routeId]?.longtail, t.bookingMode==='charter')) ? bundleInfo(t.routeId) : null;
+    const bundleBadge = bi
+      ? (bi.mode === 'free'
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#DDF1EA;border:none;border-radius:10px;font-size:12.5px;color:#0B5A43;font-weight:600;display:flex;align-items:center;gap:8px"><span style="background:#0B5A43;color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em">BUNDLED</span>Longtail Join included (free) · auto-applied</div>`
+          : `<div style="margin-top:8px;padding:8px 12px;background:#FBEBD3;border:none;border-radius:10px;font-size:12.5px;color:#7A4300;font-weight:600;display:flex;align-items:center;gap:8px"><span style="background:#7A4300;color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em">BUNDLED</span>Longtail Join · auto +฿${bi.adult}/A &middot; +฿${bi.child}/C</div>`)
+      : '';
+    // Allotment status badge · only if route + date selected
+    let allotBadge = '';
+    if(t.routeId && t.date && typeof getAllotment === 'function'){
+      const al = getAllotment(t.routeId, t.date, _bkV2.editingId || null);   // exclude this booking's own seats when editing
+      const totPaxThisTrip = bookingV2PaxAllTot(t.pax);
+      const styles = {
+        'open':          { bg:'#DDF1EA', border:'#DDF1EA', color:'#0B5A43', tag:'OPEN'  },
+        'tight':         { bg:'#FBEBD3', border:'#FBEBD3', color:'#7A4300', tag:'TIGHT' },
+        'full':          { bg:'#FBE3E0', border:'#FBE3E0', color:'#8E2019', tag:'FULL'  },
+        'all-chartered': { bg:'#F4E8FB', border:'#D7B5F0', color:'#6B289A', tag:'CHARTERED' },
+        'no-allotment':  { bg:'#fafafa', border:'#d3d1c7', color:'#5A5A52', tag:'PROVISIONAL', dashed:true },
+        'no-limit':      { bg:'#F3EAFB', border:'#D7B5F0', color:'#5B289A', tag:'NO LIMIT', dashed:true }   // §otherPier
+      };
+      /* §otherPier · โปรแกรมบกที่ยังไม่ตั้งโควตา ไม่ใช่ ยังไม่มีเรือ · มันขายได้ไม่จำกัด */
+      const _isLandNoCap = (typeof laIsLandRoute==='function') && laIsLandRoute(t.routeId) && !al.hasAllotment;
+      const s = _isLandNoCap ? styles['no-limit'] : (styles[al.state] || styles['no-allotment']);
+      let msg = '';
+      if(al.state === 'open' || al.state === 'tight'){
+        msg = al.isLand   // §otherPier · ไม่มีเรือให้นับ
+          ? `<strong style="font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums">${al.seatsAvailable}</strong> seat${al.seatsAvailable===1?'':'s'} left of the ${al.availableCapacity}/day quota (${al.seatsConsumed} booked)`
+          : `<strong style="font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums">${al.seatsAvailable}</strong> seat${al.seatsAvailable===1?'':'s'} available · ${al.assignedBoats.length} boat${al.assignedBoats.length===1?'':'s'} (${al.seatsConsumed}/${al.availableCapacity} booked${al.charteredBoats.length?` · ${al.charteredBoats.length} chartered`:''})`;
+      } else if(al.state === 'full'){
+        msg = al.isLand   // §otherPier
+          ? `Daily quota full · all ${al.availableCapacity} seats booked. Raise the quota in Config &rarr; Programme, or rent another vehicle.`
+          : `Sold out · all ${al.availableCapacity} seats booked. Ask dispatcher to add more boats in Boat Operation.`;
+      } else if(al.state === 'all-chartered'){
+        msg = `All ${al.assignedBoats.length} boat${al.assignedBoats.length===1?'':'s'} chartered for this date · no seats available.`;
+      } else {
+        msg = _isLandNoCap
+          ? `Land programme · no daily quota set, so seats are <strong>not limited</strong>. Set one in Config &rarr; Programme if you want a cap.`
+          : `No boat assigned yet · this booking will be <strong>provisional</strong>. Confirmed once dispatcher assigns a boat in Boat Operation.`
+            + ((+al.unplacedPax > 0) ? ` <strong style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${al.unplacedPax}</strong> pax already waiting for a boat this day.` : '');   // §opsUnlimited (2026-10-08) · operation-backend's unplaced_pax
+      }
+      // Over-capacity warning if pax exceeds available
+      let warn = '';
+      if(al.hasAllotment && totPaxThisTrip > al.seatsAvailable && totPaxThisTrip > 0){
+        warn = `<div style="margin-top:6px;padding:8px 12px;background:#FBE3E0;color:#8E2019;border-radius:10px;font-size:12.5px;font-weight:600">⚠ Over capacity · ${totPaxThisTrip} pax requested · only ${al.seatsAvailable} seat${al.seatsAvailable===1?'':'s'} left. Booking can be saved but needs dispatcher action.</div>`;
+      }
+      allotBadge = `<div style="margin-top:8px;padding:8px 12px;background:${s.bg};border:${s.dashed?'1px dashed':'1px solid'} ${s.border};border-radius:10px;font-size:12.5px;color:${s.color};font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="background:${s.color};color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em;font-weight:700;flex-shrink:0">${s.tag}</span><span style="flex:1;min-width:0">${msg}</span></div>${warn}`;
+    }
+    const isCharter = t.bookingMode === 'charter';
+    /* §nbf6 · price per head for the row labels (seat mode with a rate only) · display only */
+    const _sr = (!isCharter && d.priceMode!=='manual' && t.routeId && rt.seatRates && rt.seatRates[t.routeId]) ? (rt.seatRates[t.routeId][t.zone||'PK']||null) : null;
+    const _pp = k => { if(!_sr) return ''; const a=Number(_sr['adult-'+k])||0, c=Number(_sr['child-'+k])||0; return (a||c) ? `<span style="display:block;font-family:'DM Mono',monospace;font-weight:400;font-size:11px;color:#5B6170;margin-top:1px" title="Adult / Child per head">${a.toLocaleString()}/${c.toLocaleString()}</span>` : ''; };
+    const _paxAll = bookingV2PaxAllTot(t.pax);
+    const _thaiN = ['ad','chd','inf','foc'].reduce((s2,k)=>s2+bkNatTH(t,k),0);
+    /* formula shown only when it really adds up to the subtotal (no bundle, charge or special case hidden in it) */
+    const _fx = (() => { if(!_sr) return ''; const P=[['ad_fr','adult-fr'],['chd_fr','child-fr'],['ad_th','adult-thai'],['chd_th','child-thai']]; let sum=0; const parts=[]; P.forEach(([k,r])=>{ const q=Number((t.pax||{})[k])||0, pr=Number(_sr[r])||0; if(q>0&&pr>0){ sum+=q*pr; parts.push(q+' \u00d7 '+pr.toLocaleString()); } }); return (parts.length && sum===(Number(subtotal.total)||0)) ? parts.join(' + ') : ''; })();
+    const _mn = d.priceMode==='manual';
+    // Charter boat picker · only boats assigned to route+date · filter availability
+    let charterPickerHtml = '';
+    if(isCharter && t.routeId && t.date && typeof getAssignedBoatsForRouteDate === 'function'){
+      const assigned = getAssignedBoatsForRouteDate(t.routeId, t.date);
+      const charterRatesByType = rt.charterRates?.[t.routeId] || {};
+      const opts = assigned.map(a => {
+        const bt = (a.boat?.type || '').toLowerCase();
+        const hasCharterRate = !!charterRatesByType[bt];
+        const alreadyChartered = !!a.charterBookingId;
+        // seats currently booked on this boat (cannot derive per-boat directly · check route+date seatsConsumed > 0)
+        const hasSeats = (typeof getSeatsConsumed === 'function') && getSeatsConsumed(t.routeId, t.date) > 0;
+        let label = `${a.boat.name} · ${a.boat.cap} cap · ${a.boat.type}`;
+        let disabled = false;
+        let note = '';
+        if(alreadyChartered){ note = ' · ALREADY CHARTERED'; disabled = true; }
+        /* §chManualNoRate · ไม่มีเรทเหมา ≠ เลือกไม่ได้ · ยังเหมาได้ด้วยราคาที่ตกลงกันเอง (กล่องแดงข้างล่างให้กรอก) */
+        else if(!hasCharterRate){ note = ' · no charter rate · enter agreed price'; }
+        else if(hasSeats){ note = ' · has existing seat bookings (will need confirm)'; }
+        return `<option value="${a.boatId}" ${t.charterBoatId===a.boatId?'selected':''} ${disabled?'disabled':''}>${escapeHTML(label+note)}</option>`;
+      }).join('');
+      const noBoats = assigned.length === 0;
+      const noAvailable = assigned.length > 0 && !assigned.some(a => !a.charterBookingId && charterRatesByType[(a.boat?.type||'').toLowerCase()]);
+      charterPickerHtml = `
+        <div class="bkv2-nb-row" style="margin-top:8px">
+          <div class="bkv2-nb-field" style="grid-column:1/-1">
+            <label class="bkv2-nb-label">Charter boat <em style="font-weight:500;color:#b4b2a9;font-style:normal">· pick from boats assigned in Boat Operation</em></label>
+            ${noBoats ? `<div style="padding:8px 11px;background:#FFF6E5;border:1px dashed #EAD9B0;color:#633806;font-size:11px;border-radius:var(--r-sm)">No boat assigned for this route+date yet · go to Boat Operation to assign first</div>` :
+              noAvailable ? `<div style="padding:8px 11px;background:#FDE7E7;border:1px solid #F5B7B7;color:#a32d2d;font-size:11px;border-radius:var(--r-sm)">All assigned boats are chartered or have no charter rate set</div>` :
+              `<select class="bkv2-nb-input" onchange="bookingV2SetTripCharterBoat(${idx}, this.value || null)">
+                <option value="">&mdash; pick a boat &mdash;</option>
+                ${opts}
+              </select>`}
+          </div>
+        </div>
+      `;
+    }
+    // Charter price · Rate (auto) or Flexible (manual) · when charter mode + boat picked
+    let charterBreakdownHtml = '';
+    if(isCharter && subtotal.isCharter && t.charterBoatId && !subtotal.error){
+      const totPax = bookingV2PaxAllTot(t.pax);
+      const manual = t.charterPriceMode === 'manual';
+      const seg = `
+        <div style="display:inline-flex;background:#fff;border:1px solid #D7B5F0;border-radius:5px;overflow:hidden">
+          <button onclick="bookingV2SetTripCharterPriceMode(${idx},'rate')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 10px;background:${!manual?'#6B289A':'#fff'};color:${!manual?'#fff':'#6B289A'}">RATE</button>
+          <button onclick="bookingV2SetTripCharterPriceMode(${idx},'manual')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 10px;background:${manual?'#6B289A':'#fff'};color:${manual?'#fff':'#6B289A'}">FLEXIBLE</button>
+        </div>`;
+      const body = manual ? `
+          <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
+            <span style="font-size:11px;color:#6B289A;font-weight:600">Charter price ฿</span>
+            <input type="number" min="0" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bookingV2SetTripCharterManual(${idx}, this.value)" placeholder="0" style="width:110px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #D7B5F0;border-radius:5px">
+            ${subtotal.noRateCard
+              ? `<span data-chnorate="ok" style="font-size:10px;color:#A05A1A">no rate card for this boat type &middot; agreed price</span>`
+              : `<span style="font-size:10px;color:${subtotal.manualDelta===0?'#6B289A':(subtotal.manualDelta<0?'#0F7A5A':'#A05A1A')}">rate ฿${subtotal.rateTotal.toLocaleString()}${subtotal.manualDelta!==0?` · ${subtotal.manualDelta<0?'&minus;':'+'}฿${Math.abs(subtotal.manualDelta).toLocaleString()}`:''}</span>`}
+          </div>
+          <input value="${escapeHTML(t.charterPriceNote||'')}" oninput="bookingV2SetTripCharterNote(${idx}, this.value)" placeholder="Reason / note · e.g. repeat charter discount" style="margin-top:6px;width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;border:1px solid #D7B5F0;border-radius:5px;color:#6B289A">
+      ` : `
+          <div style="display:flex;justify-content:space-between;gap:6px;margin-top:6px"><span>Starter (first ${subtotal.starterIncludes} pax)</span><span style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">฿${subtotal.starterPrice.toLocaleString()}</span></div>
+          ${subtotal.extras > 0 ? `<div style="display:flex;justify-content:space-between;gap:6px"><span>+ ${subtotal.extras} extra pax × ฿${subtotal.extraRate.toLocaleString()}</span><span style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">฿${subtotal.extraTotal.toLocaleString()}</span></div>` : ''}
+          <div style="display:flex;justify-content:space-between;gap:6px;border-top:1px solid #D7B5F0;padding-top:3px;margin-top:3px;font-weight:700"><span>Total · ${totPax} pax</span><span style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">฿${subtotal.total.toLocaleString()}</span></div>
+      `;
+      charterBreakdownHtml = `
+        <div style="margin-top:8px;padding:10px 12px;background:#F4E8FB;border:1px solid #D7B5F0;border-radius:12px;font-size:12.5px;color:#6B289A;line-height:1.5">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span style="font-weight:700;letter-spacing:.08em;font-size:10.5px">CHARTER PRICE</span><span style="margin-left:auto">${seg}</span></div>
+          ${body}
+        </div>
+      `;
+    } else if(isCharter && t.charterBoatId && subtotal.error){
+      /* §chManualNoRate · เดิมมีแค่ป้ายแดง ไม่มีช่องให้กรอกราคา · ทางเดียวที่เหลือคือบันทึกยอด 0
+         ให้กรอกราคาที่ตกลงกันได้ตรงนี้เลย · กรอกแล้วสลับเป็น FLEXIBLE ให้เอง */
+      charterBreakdownHtml = `<div data-chnorate="ask" style="margin-top:6px;padding:8px 10px;background:#FDE7E7;color:#a32d2d;font-size:11px;border:1px solid #F5B7B7;border-radius:var(--r-sm);line-height:1.5">
+          <b>&#9888; ${escapeHTML(subtotal.error)} for this boat type (${escapeHTML(subtotal.boatName||'')})</b> &middot; this trip is priced <b>฿0</b>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:6px;flex-wrap:wrap">
+            <span style="font-weight:700">Agreed charter price ฿</span>
+            <input type="number" min="0" data-chnorate-in="1" value="${(Number(t.charterPriceManual)||0)||''}" onchange="bookingV2SetTripCharterManualForce(${idx}, this.value)" placeholder="0" style="width:120px;font-size:13px;font-weight:700;padding:5px 8px;text-align:right;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #E0A0A0;border-radius:5px">
+            <span style="font-size:10px">or pick another boat &middot; or add the rate in Rate Type</span>
+          </div>
+        </div>`;
+    }
+    // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
+    let lockBannerHtml = '';
+    if(!isCharter && t.routeId && t.date && d.agentId && typeof bookingV2DrawSources==='function'){
+      const srcs = bookingV2DrawSources(t.routeId, t.date, d.agentId);
+      const remTotal = srcs.reduce((s,x)=>s+x.remaining,0);
+      if(remTotal > 0){
+        const pax = bookingV2PaxAllTot(t.pax);
+        const sel = t.lockDrawSel || {};
+        const drawnTot = srcs.reduce((s,x)=> s + Math.min(Number(sel[x.lockId])||0, x.remaining), 0);
+        const general = Math.max(0, pax - drawnTot);
+        const undrawn = pax>0 && drawnTot===0;   // has lock but hasn't used it → LOUD reminder
+        const accent = undrawn ? '#7A4300' : '#16265C';
+        const stepBtn = `width:30px;height:30px;border:1.5px solid ${undrawn?'#E3C48E':'#C9D6EE'};background:#fff;border-radius:8px;cursor:pointer;color:${accent};font-weight:700;font-size:15px;font-family:inherit;padding:0`;
+        const srcRows = srcs.map(x=>{
+          const v = Math.min(Number(sel[x.lockId])||0, x.remaining);
+          const canInc = drawnTot < pax && v < x.remaining;
+          return `
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding:5px 8px 5px 10px;background:#fff;border-radius:9px">
+              <span style="font-size:12.5px;font-weight:600;color:${accent};flex:1;min-width:120px">${escapeHTML(x.label)} <span style="opacity:.7;font-weight:400">· เหลือ ${x.remaining}</span></span>
+              <button onclick="bookingV2SetTripLockDraw(${idx},'${x.lockId}',${Math.max(0,v-1)})" ${v<=0?'disabled':''} style="${stepBtn}">&minus;</button>
+              <span style="font-family:'DM Mono',monospace;font-size:14.5px;font-weight:500;color:${accent};min-width:24px;text-align:center;font-variant-numeric:tabular-nums">${v}</span>
+              <button onclick="bookingV2SetTripLockDraw(${idx},'${x.lockId}',${v+1})" ${canInc?'':'disabled'} style="${stepBtn}">+</button>
+            </div>`;
+        }).join('');
+        lockBannerHtml = undrawn ? `
+          <div style="margin-top:10px;padding:10px 12px;background:#FBF1DF;border:1.5px solid #E0A93B;border-radius:12px;box-shadow:0 0 0 3px rgba(224,169,59,.15)">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:14px">⚠</span>
+              <span style="font-size:13px;font-weight:700;color:#7A4300;flex:1;min-width:150px">อย่าลืมใช้ seat lock · มี <b>${remTotal}</b> ที่ว่างของเอเจนต์นี้</span>
+              <button onclick="bookingV2AutoDrawLocks(${idx})" style="font-size:12.5px;font-weight:700;color:#fff;background:#7A4300;border:none;border-radius:8px;height:32px;padding:0 12px;cursor:pointer;font-family:inherit;white-space:nowrap">⚡ ใช้ lock ก่อน (ดึง ${Math.min(remTotal,pax)})</button>
+            </div>
+            <div style="margin-top:3px;font-size:12px;color:#7A4300">กด "ใช้ lock ก่อน" เพื่อดึงอัตโนมัติ หรือเลือกกรุ๊ปเองด้านล่าง</div>
+            ${srcRows}
+          </div>` : `
+          <div style="margin-top:10px;padding:10px 12px;background:#EEF3FC;border:1px solid #C9D6EE;border-radius:12px">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+              <span style="font-size:13px">🔒</span>
+              <span style="font-size:13px;font-weight:700;color:#16265C">${remTotal} locked seat${remTotal===1?'':'s'} · เลือกดึงจากกรุ๊ป</span>
+            </div>
+            ${srcRows}
+            <div style="margin-top:8px;font-size:12px;color:#23335F">ดึงจากล็อค <b>${drawnTot}</b> ที่ (ไม่กระทบ pool) + <b>${general}</b> ที่นั่งใหม่ · ยืนยันตอนบันทึก</div>
+          </div>`;
+      }
+    }
+    return `
+      <div class="bkv2-nb-trip">
+        <div class="bkv2-nb-trip-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="flex:none;width:4px;height:22px;border-radius:2px;background:${(t.routeId && typeof tsRouteColor==='function') ? tsRouteColor(t.routeId) : '#C9CCD6'}"></span><span style="font-size:12px;font-weight:700;color:#3E4658;letter-spacing:.06em">TRIP ${idx+1}</span>
+          <div style="display:inline-flex;gap:3px;background:#E4E3DD;border-radius:10px;padding:3px;margin-left:6px">
+            <button onclick="bookingV2SetTripBookingMode(${idx},'seat')" style="padding:5px 11px;font-size:12px;font-weight:600;border:none;background:${!isCharter?'#16265C':'transparent'};color:${!isCharter?'#fff':'#3E4658'};border-radius:7px;cursor:pointer;font-family:inherit">Seat</button>
+            <button onclick="bookingV2SetTripBookingMode(${idx},'charter')" style="padding:5px 11px;font-size:12px;font-weight:600;border:none;background:${isCharter?'#6B289A':'transparent'};color:${isCharter?'#fff':'#3E4658'};border-radius:7px;cursor:pointer;font-family:inherit">Charter</button>
+          </div>
+          ${t.ovnLeg ? `<span style="margin-left:auto;font-size:12px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:5px 11px;white-space:nowrap">&#127769; OVN ขากลับ · กันที่นั่ง</span>` : `<div style="margin-left:auto;display:inline-flex;background:#E4E3DD;border-radius:10px;padding:3px;gap:3px">
+            ${[['','Day Trip'],['return','OVN'],['self','OVN o/w']].map(([v,lbl])=>{ const on=(t.ovn||'')===v; const onbg=v==='return'?'#5B289A':v==='self'?'#9A5B00':'#16265C'; const onc='#fff'; return `<button type="button" onclick="bookingV2SetTripOvn(${idx},'${v}')" title="${v===''?'ทริปไป-กลับวันเดียว':v==='return'?'ค้างคืน · เรารับกลับวันอื่น (กันที่นั่ง+จัดรถกลับ)':'ค้างคืน · ลูกค้ากลับเอง (one-way)'}" style="padding:5px 11px;font-size:12px;font-weight:600;border:none;background:${on?onbg:'transparent'};color:${on?onc:'#3E4658'};border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap">${lbl}</button>`; }).join('')}
+          </div>`}
+          ${d.trips.length > 1 ? `<button onclick="bookingV2RemoveTrip(${idx})" style="height:28px;padding:0 10px;background:#fff;border:1px solid #F0BDB7;border-radius:8px;color:#8E2019;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:8px;white-space:nowrap">&times; Remove</button>` : ''}
+        </div>
+        ${t.ovn?`<div style="margin-bottom:9px;background:${t.ovn==='return'?'#F6F2FE':'#FCF6EC'};border:1px solid ${t.ovn==='return'?'#E4D7FB':'#F0E0C4'};border-radius:8px;padding:9px 11px">
+          <div style="font-size:12px;color:${t.ovn==='return'?'#5B289A':'#9A5B00'};margin-bottom:8px">${t.ovn==='return'?'🌙 OVN · ขากลับค้างคืน · กันที่นั่งวันกลับ + จัดรถกลับ · ขึ้นเรือท่าเกาะ':'🌙 OVN o/w · ค้างคืน · ลูกค้ากลับเอง (one-way) · ไม่กันที่นั่งกลับ ไม่จัดรถ'}</div>
+          <div style="display:grid;grid-template-columns:${t.ovn==='return'?'1fr 1fr':'1fr'};gap:8px;align-items:end">
+            ${t.ovn==='return'?`<div><label class="bkv2-nb-label" style="color:#5B289A">วันกลับ (OVN) *</label>${t.date?`<input class="bkv2-nb-input" type="date" min="${escapeHTML(t.date)}" value="${escapeHTML(t.ovnReturnDate||'')}" onchange="bookingV2SetTripField(${idx},'ovnReturnDate',this.value)" style="width:100%;box-sizing:border-box">`:`<div class="bkv2-nb-input" style="width:100%;box-sizing:border-box;color:#b4b2a9;background:#f3f1ec;cursor:not-allowed;font-size:11px;display:flex;align-items:center">&#9888; เลือก DATE (วันไป) ก่อน</div>`}</div>`:''}
+            <div><label class="bkv2-nb-label" style="color:#854F0B">ค่าค้างคืน (Extra) &#3647;</label><input class="bkv2-nb-input" type="number" min="0" value="${Number(t.ovnCharge)||0}" onchange="bookingV2SetTripField(${idx},'ovnCharge',this.value)" placeholder="0" style="width:100%;box-sizing:border-box;text-align:right;font-variant-numeric:tabular-nums"></div>
+          </div>
+        </div>`:''}
+        <div class="bkv2-nb-row" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px">
+          <div class="bkv2-nb-field">
+            <label class="bkv2-nb-label">Route <em style="font-weight:500;color:#b4b2a9;font-style:normal">· type to search</em></label>
+            <div class="bkv2-nb-ddwrap${t.routeId?' nbf-hasrc':''}" style="${(t.routeId && typeof tsRouteColor==='function') ? ('--rc:'+tsRouteColor(t.routeId)) : ''}">
+              <span class="nbf-rc"></span>
+              <input id="bkv2-route-input-${idx}" class="bkv2-nb-input" type="text" placeholder="Type or pick route..." value="${escapeHTML(currentRouteLabel)}" autocomplete="off" oninput="bookingV2RouteDDFilter(${idx}, this.value)" onfocus="bookingV2RouteDDShow(${idx})" onkeydown="bookingV2RouteDDKey(event, ${idx})">
+              <div id="bkv2-route-dd-${idx}" class="bkv2-nb-dd"></div>
+              <button type="button" class="nbf-clr" title="Clear and pick another route" aria-label="Clear route" onmousedown="event.preventDefault()" onclick="bkNbfRouteClear(${idx})">&times;</button>
+            </div>
+          </div>
+          <div class="bkv2-nb-field">
+            <label class="bkv2-nb-label">Date</label>
+            <div class="bkv2-cal-wrap">
+              <div id="bkv2-cal-trig-${idx}" class="bkv2-nb-input bkv2-cal-trig" onclick="bookingV2CalOpen(${idx})" tabindex="0" style="user-select:none">
+                <span style="font-family:'DM Mono',monospace;${t.date?'':'color:#b4b2a9'}">${t.date ? (typeof bkNbfDMY==='function'?bkNbfDMY(t.date):t.date) : 'dd/mm/yyyy'}</span>
+              </div>
+              <div id="bkv2-cal-pop-${idx}" class="bkv2-cal-pop"></div>
+            </div>
+            ${(() => {
+              if(!t.routeId || typeof ROUTES === 'undefined') return '';
+              const route = ROUTES.find(r => r.id === t.routeId);
+              if(!route) return '';
+              const fmtD = s => s ? new Date(s).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'2-digit'}) : '—';
+              const upcoming = (route.seasons||[]).filter(s => s.type === 'closed' && s.to >= (TODAY_STR||'')).sort((a,b) => a.from.localeCompare(b.from))[0];
+              const tripDateStatus = t.date ? (typeof getDayStatus === 'function' ? getDayStatus(route, t.date) : null) : null;
+              const isCurDateClosed = tripDateStatus && tripDateStatus.type === 'closed';
+              if(isCurDateClosed){
+                return `<div style="margin-top:6px;padding:7px 10px;background:#FBE3E0;color:#8E2019;border-radius:8px;font-size:12px;font-weight:600">⚠ Selected date is in a closed period · pick another date</div>`;
+              }
+              if(upcoming){
+                return `<div style="margin-top:6px;font-size:12px;color:#5B6170"><span style="color:#7A4300;font-weight:600">⚠ Closed period:</span> ${fmtD(upcoming.from)} → ${fmtD(upcoming.to)}</div>`;
+              }
+              return '';
+            })()}
+          </div>
+        </div>
+        ${charterPickerHtml}
+        ${charterBreakdownHtml}
+        ${lockBannerHtml}
+        ${allotBadge}
+        ${(!isCharter && d.priceMode!=='manual' && subtotal?.noRate && t.routeId && t.zone) ? `<div style="margin-top:8px;padding:8px 12px;background:#FBE3E0;border:1.5px dashed #C4483C;border-radius:10px;font-size:12.5px;color:#8E2019;font-weight:600;display:flex;align-items:center;gap:8px"><span style="background:#8E2019;color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em;font-weight:700">NO RATE</span><span style="flex:1">Rate Type doesn't cover ${t.zone === 'NoTransfer' ? 'No-Transfer' : t.zone} on this route · cannot save until fixed or zone changed</span></div>` : ''}
+        ${bundleBadge}
+        <div class="bkv2-nb-row" style="grid-template-columns:minmax(0,1fr);gap:10px;margin-top:10px">
+          <div class="bkv2-nb-field">
+            <label class="bkv2-nb-label">Pickup zone *</label>
+            ${(() => {
+              const rt = bookingV2GetRT();
+              const zoneAvailable = (z) => {
+                if(t.ovnLeg) return true;   // OVN return leg · ราคา 0 · เลือกได้ทุกโซน (โดยเฉพาะ No Transfer · ขึ้นเรือที่ท่าเกาะ)
+                /* §internal · ตั้งราคาเอง = ตารางราคาไม่เกี่ยว · ทุกโซนกดได้
+                   bookingV2NoRateTrips กับแถบ NO RATE ยกเว้น manual ไว้อยู่แล้ว
+                   ตรงนี้เคยตก · ปุ่มจึงขีดฆ่าทั้งที่ใบนั้นไม่ได้ใช้ตารางราคาเลย */
+                if(d.priceMode === 'manual') return true;
+                if(!t.routeId || !rt) return true;
+                const sr = rt.seatRates?.[t.routeId]?.[z];
+                if(!sr) return false;
+                return (sr['adult-fr']||0) > 0 || (sr['adult-thai']||0) > 0;
+              };
+              return `<div style="display:inline-flex;background:#ECEBE6;border-radius:12px;padding:4px;height:42px;align-items:stretch;width:100%;box-sizing:border-box;gap:3px">
+                ${/* §rnZone · zoneAvailable() ไม่ได้ "ซ่อน" โซนที่ไม่มีเรต แต่ขึ้นเป็นปุ่มขีดฆ่ากดไม่ได้
+                     ตั้งใจให้เห็นว่ามีโซนนี้อยู่ แต่สัญญาใบนี้ยังไม่ได้ตั้งราคาไว้ (tooltip บอกเหตุผล)
+                     ต่างจากการซ่อนซึ่งทำให้คนคิดว่าระบบไม่รองรับ แล้วไปหาทางอ้อมเอง
+                     RN จึงกดได้เฉพาะสัญญาที่ตั้งเรตระนองไว้จริง · ยังไม่ได้ตั้ง = เห็นแต่กดไม่ลง */''}
+                ${LA_PICKUP_ZONES.map(z => {
+                  const lbl = laZoneLabel(z);
+                  const on = (t.zone||'PK') === z;
+                  const available = zoneAvailable(z);
+                  if(!available){
+                    return `<button type="button" disabled title="No rate for ${lbl} in this agent's Rate Type" style="flex:1;padding:0 8px;font-size:12.5px;font-weight:600;border:none;background:transparent;color:#B4B6BD;border-radius:9px;cursor:not-allowed;font-family:inherit;text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lbl}</button>`;
+                  }
+                  return `<button type="button" onclick="bookingV2SetTripField(${idx},'zone','${z}')" style="flex:1;padding:0 8px;font-size:12.5px;font-weight:600;border:none;background:${on?'#16265C':'transparent'};color:${on?'#fff':'#3E4658'};border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lbl}</button>`;
+                }).join('')}
+              </div>`;
+            })()}
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:11.5px;color:#3E4658;font-weight:600;margin-bottom:4px">Pax <span style="font-weight:400;color:#5B6170">&middot; FR + TH mixed</span></div>
+          <table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px;border:1px solid #ECEBE6;border-radius:12px;overflow:hidden">
+            <thead><tr>
+              <th style="background:#F7F7F5;padding:8px 12px;text-align:left;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em;width:96px">RATE</th>
+              <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">ADULT</th>
+              <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">CHILD</th>
+              <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#5B6170;font-weight:700;letter-spacing:.08em">INFANT</th>
+              <th style="background:#F7F7F5;padding:8px 0;text-align:center;font-size:10px;color:#7A4300;font-weight:700;letter-spacing:.08em">FOC</th>
+            </tr></thead>
+            <tbody>
+              ${( (rt&&typeof rtNatScopeOf==='function'?rtNatScopeOf(rt):'both')!=='thai' || ((t.pax.ad_fr||0)+(t.pax.chd_fr||0)+(t.pax.inf_fr||0)+(t.pax.foc_fr||0))>0 ) ? `<tr>
+                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap;line-height:1.2" title="Foreign rate">🌐 FR${_pp('fr')}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'ad_fr',t.pax.ad_fr||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'chd_fr',t.pax.chd_fr||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'inf_fr',t.pax.inf_fr||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'foc_fr',t.pax.foc_fr||0)}</td>
+              </tr>` : ''}
+              ${( (rt&&typeof rtNatScopeOf==='function'?rtNatScopeOf(rt):'both')!=='fr' || ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0))>0 ) ? `<tr>
+                <td style="background:#fff;padding:7px 8px 7px 12px;font-weight:600;font-size:13px;border-top:1px solid #ECEBE6;white-space:nowrap;line-height:1.2" title="Thai rate">🇹🇭 TH${_pp('thai')}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'ad_th',t.pax.ad_th||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'chd_th',t.pax.chd_th||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'inf_th',t.pax.inf_th||0)}</td>
+                <td style="background:#fff;padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${stepper(idx,'foc_th',t.pax.foc_th||0)}</td>
+              </tr>` : ''}
+              <tr style="background:#EEF1F8">
+                <td style="padding:8px 12px;font-size:10px;color:#23335F;font-weight:700;letter-spacing:.08em;border-top:1px solid #ECEBE6;white-space:nowrap">TOTAL</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums;color:${totAd>0?'#0F1B3D':'#A9ADB8'};font-size:14.5px;border-top:1px solid #ECEBE6">${totAd}</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums;color:${totChd>0?'#0F1B3D':'#A9ADB8'};font-size:14.5px;border-top:1px solid #ECEBE6">${totChd}</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums;color:${totInf>0?'#0F1B3D':'#A9ADB8'};font-size:14.5px;border-top:1px solid #ECEBE6">${totInf}</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-variant-numeric:tabular-nums;color:${totFoc?'#7A4300':'#A9ADB8'};font-size:14.5px;border-top:1px solid #ECEBE6">${totFoc}</td>
+              </tr>
+              ${/* §pkNat · สัญชาติจริงของ นทท. · ไม่เกี่ยวกับราคาเลย ใช้ตอนซื้อตั๋วอุทยานอย่างเดียว
+                    สองแถวบนเลือกเรทตามสัญญา · บางสัญญาไม่มีราคาไทย คนไทยจึงต้องคีย์เป็น ตปท.
+                    แถวนี้บอกความจริงว่าใครเป็นคนไทย ค่าอุทยานจะได้ไม่จ่ายเรทฝรั่งให้คนไทย */''}
+              <tr style="background:#EAF5F0">
+                <td style="padding:7px 4px 7px 12px;font-weight:600;font-size:12.5px;color:#0B5A43;border-top:1px solid #ECEBE6;line-height:1.25;white-space:nowrap" title="จำนวนคนไทยจริงบนทริปนี้ · ใช้คิดค่าอุทยานอย่างเดียว ไม่กระทบราคาที่นั่ง">ไทยจริง<span style="display:block;font-weight:400;font-size:10.5px">ค่าอุทยาน</span></td>
+                <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'ad',t)}</td>
+                <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'chd',t)}</td>
+                <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'inf',t)}</td>
+                <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'foc',t)}</td>
+              </tr>
+              ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
+            </tbody>
+          </table>
+          <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px">
+            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}`:''}</div>
+            <div style="margin-left:auto;text-align:right" title="${_mn?'Rate-type reference only — Manual total is used':''}">
+              <div style="font-size:11.5px;color:#5B6170">Subtotal${_mn?' &middot; <span style="color:#7A4300;font-weight:700">overridden</span>':''}${_fx?` &middot; <span style="font-family:'DM Mono',monospace">${_fx}</span>`:''}</div>
+              <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums;${_mn?'color:#5B6170;text-decoration:line-through;opacity:.65':'color:#0F1B3D'}">&#3647;${(subtotal.total||0).toLocaleString()}${subtotal.bundle?` <span style="font-size:11.5px;color:#5B6170;font-weight:400;font-family:'DM Sans',sans-serif;text-decoration:none">incl. ฿${subtotal.bundle.toLocaleString()} bundle</span>`:''}</div>
+              ${_mn?`<div style="font-size:12px;color:#7A4300;margin-top:2px">ใช้ราคา Manual &#3647;${(Number(d.manualTotal)||0).toLocaleString()} ทั้งใบ · ตัวเลขบนเป็นเรทอ้างอิง</div>`:''}
+            </div>
+          </div>
+        </div>
+        ${(t.ovn==='return' && t.date && t.ovnReturnDate)?((d.trips||[]).some(x=>x.ovnLeg&&x.routeId===t.routeId&&x.date===t.ovnReturnDate)?`<div style="margin-top:10px;font-size:12.5px;color:#0B5A43;font-weight:600;background:#DDF1EA;border-radius:10px;padding:8px 12px">&#10003; สร้าง trip ขากลับวัน ${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))} แล้ว · กันที่นั่งเรียบร้อย (ดู TRIP ถัดไป)</div>`:`<button type="button" onclick="bookingV2CreateOvnReturnLeg(${idx})" style="margin-top:10px;width:100%;height:40px;background:#5B289A;color:#fff;border:none;border-radius:10px;padding:0 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128679; สร้าง trip ขากลับ (${escapeHTML((typeof bkNbfDMY==='function'?bkNbfDMY(t.ovnReturnDate||''):(t.ovnReturnDate||'')))}) + กันที่นั่ง</button>`):''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    ${tripRows}
+    <button onclick="bookingV2AddTrip()" style="margin-top:10px;width:100%;height:40px;background:#fff;border:1.5px dashed #C9CCD6;color:#0F6CA6;padding:0 12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">+ Add another trip</button>
+  `;
+}

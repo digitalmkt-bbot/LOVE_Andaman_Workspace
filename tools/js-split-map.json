@@ -1,0 +1,66 @@
+[
+  {
+    "name": "01-auth-sync.js",
+    "origStart": 5,
+    "origEnd": 719,
+    "offset": 4,
+    "lines": 715,
+    "bytes": 90720
+  },
+  {
+    "name": "02-sidebar.js",
+    "origStart": 3729,
+    "origEnd": 3747,
+    "offset": 3728,
+    "lines": 19,
+    "bytes": 1840
+  },
+  {
+    "name": "03-topbar-nav.js",
+    "origStart": 4160,
+    "origEnd": 4186,
+    "offset": 4159,
+    "lines": 27,
+    "bytes": 2091
+  },
+  {
+    "name": "04-data-core.js",
+    "origStart": 5557,
+    "origEnd": 13383,
+    "offset": 5556,
+    "lines": 7827,
+    "bytes": 567481
+  },
+  {
+    "name": "05-fleet.js",
+    "origStart": 13806,
+    "origEnd": 36255,
+    "offset": 13805,
+    "lines": 22450,
+    "bytes": 1654762
+  },
+  {
+    "name": "06-engine-assign.js",
+    "origStart": 36291,
+    "origEnd": 38157,
+    "offset": 36290,
+    "lines": 1867,
+    "bytes": 122245
+  },
+  {
+    "name": "07-charter.js",
+    "origStart": 39185,
+    "origEnd": 39227,
+    "offset": 39184,
+    "lines": 43,
+    "bytes": 2079
+  },
+  {
+    "name": "08-app.js",
+    "origStart": 39246,
+    "origEnd": 86154,
+    "offset": 39245,
+    "lines": 46909,
+    "bytes": 4094627
+  }
+]

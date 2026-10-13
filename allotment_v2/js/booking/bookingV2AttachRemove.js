@@ -1,0 +1,1 @@
+function bookingV2AttachRemove(id){ const d=_bkV2.newBooking; if(!d) return; if(!confirm('ลบเอกสารนี้?')) return; fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{}); d.attachments=(d.attachments||[]).filter(a=>a.id!==id); bookingV2RefreshAttachSection(); }

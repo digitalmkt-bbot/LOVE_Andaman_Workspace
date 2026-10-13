@@ -1,0 +1,2 @@
+// ── Re-confirmation · confirm actual pickup time with the agent ──
+function bookingV2Reconfirm(bkId, via){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done', via:via||'list', at:new Date().toISOString(), by:laBy()}; if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+')','Notify'); acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "task": "S4-ops-addon-services",
+  "title": "Migrate Add-on Services catalogue to operation-backend",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a12c5d-3d10-7399-8025-56103109a856",
+    "model": "openai-codex/gpt-5.6-luna"
+  },
+  "git": {
+    "base": "c91a571",
+    "branch": "agent/ops-addons",
+    "worktree": "D:/projects/wt-ops-addons",
+    "commit": "d913c609139a5b608efb42db940c1ddc843ec2de",
+    "pr": { "number": null, "url": "", "state": "none" }
+  },
+  "input": {
+    "requestedOutcome": "Wire the durable Add-on Services catalogue to operation-backend in operations mode without mapping custom booking add-on types.",
+    "acceptanceCriteria": [
+      "GET /v1/addon-services?active=all replaces the operations-mode service projection.",
+      "Create, edit, complete variant replacement, and delete use the documented API routes.",
+      "Successful responses update memory/UI only after the server accepts the mutation; failed writes leave the projection unchanged and surface an error.",
+      "Legacy mode remains delegated to the original functions and classic script order is preserved.",
+      "SB_ADDON_TYPES and booking-priced add-on data are not mapped or mutated."
+    ],
+    "allowedScope": [
+      "allotment_v2/js/ops/19-ops-addon-services.js",
+      "allotment_v2/allotment_v2.html script tag",
+      "test/unit/ops-addon-services.test.mjs",
+      "docs/development/tasks/S4-ops-addon-services.md",
+      ".agent-reports/S4-ops-addon-services.json"
+    ],
+    "constraints": [
+      "No backend, schema, migration, mapping, database, or DDL changes.",
+      "Use laOps/laOpsFetch through the existing core client; no direct fetch.",
+      "Preserve server-first operations behavior and legacy fallback.",
+      "Do not modify shared legacy renderer files or excluded parity files.",
+      "Do not push any branch."
+    ],
+    "assumptions": [
+      "01-auth-sync.js provides the authenticated operations client.",
+      "00-ops-core.js provides serialized writes and visible error reporting.",
+      "The legacy Add-on Services functions are defined before the ops adapter tag.",
+      "Backend contracts are the handlers/domain in operation-backend sales-editing.ts and addon-services.ts."
+    ]
+  },
+  "output": {
+    "summary": "Added an operations-only Add-on Services adapter with authoritative server loading, server-first service and variant mutations, legacy fallback, and an explicit exclusion of custom booking add-on types.",
+    "filesChanged": [
+      { "path": "allotment_v2/js/ops/19-ops-addon-services.js", "change": "added", "purpose": "Map the legacy Add-on Services renderer and handlers to /v1/addon-services in operations mode." },
+      { "path": "allotment_v2/allotment_v2.html", "change": "modified", "purpose": "Load the S4 adapter after the existing rate-type adapter and before ops boot." },
+      { "path": "test/unit/ops-addon-services.test.mjs", "change": "added", "purpose": "Verify API mapping, list/create/variant-replace/delete, failed-write rollback, exclusion, and legacy fallback." },
+      { "path": "docs/development/tasks/S4-ops-addon-services.md", "change": "added", "purpose": "Durable S4 implementation, contract, verification, and rollback report." },
+      { "path": ".agent-reports/S4-ops-addon-services.json", "change": "added", "purpose": "Coordinator-readable S4 handoff manifest." }
+    ],
+    "behaviorChanges": [
+      { "area": "Add-on Services reads", "before": "The configuration screen used a RAM-only local seed.", "after": "Operations mode loads active and inactive services from the server and replaces the legacy projection." },
+      { "area": "Add-on Services writes", "before": "Legacy handlers mutated RAM without a durable operation-backend path.", "after": "Create, service edit, variant full-list replacement, and delete call documented API routes and reconcile only after success." },
+      { "area": "Compatibility/exclusion", "before": "The operations migration had no S4 service adapter.", "after": "Legacy mode is unchanged, and SB_ADDON_TYPES/custom booking add-on types are untouched." }
+    ],
+    "interfaces": {
+      "added": ["window.laOps.addonServices", "window.__laOpsAddonServiceCompat", "allotment_v2/js/ops/19-ops-addon-services.js"],
+      "changed": ["operations-mode renderAddonSvc and aos* service/variant handlers", "legacy service shape ↔ Add-on Service API mapping"],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "No database/schema/migration files changed.",
+        "Operations-mode SB_ADDON_SVCS is replaced from API responses and is not written to localStorage.",
+        "Failed operations leave the in-memory server projection unchanged.",
+        "Custom booking add-on type state is neither read nor mutated by this adapter."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "node --check D:/projects/wt-ops-addons/allotment_v2/js/ops/19-ops-addon-services.js", "status": "passed", "evidence": "No syntax errors." },
+    { "command": "node --check D:/projects/wt-ops-addons/test/unit/ops-addon-services.test.mjs", "status": "passed", "evidence": "No syntax errors." },
+    { "command": "cd /d D:/projects/wt-ops-addons && node --test test/unit/ops-addon-services.test.mjs", "status": "passed", "evidence": "4 passed, 0 failed; list/create/variant replacement/delete, failed-write rollback, custom-type exclusion, and legacy delegation covered." },
+    { "command": "cd /d D:/projects/operation-backend && npm test", "status": "passed", "evidence": "581 total: 573 passed, 0 failed, 8 skipped; includes sales-editing Add-on Services route coverage." },
+    { "command": "git -C D:/projects/wt-ops-addons diff --check", "status": "passed", "evidence": "No whitespace errors." }
+  ],
+  "decisions": [
+    "Load active=all because the configuration screen must display inactive services too.",
+    "Send the complete variants array on variant changes because the backend PATCH contract replaces the list as one fact.",
+    "Keep custom booking add-on types on the legacy path; this adapter contains no SB_ADDON_TYPES mapping or persistence.",
+    "Use the server response as the only successful service projection update; DELETE 204 removes the local row only after acceptance."
+  ],
+  "risks": [
+    "Variant replacement has no verified frontend concurrency token and may race another editor; a later server reload remains authoritative.",
+    "Legacy agent-level addonServices cleanup was not copied because no server association contract was verified and the packet excludes booking-priced add-on mapping."
+  ],
+  "blockers": [],
+  "dependencies": ["01-auth-sync.js", "00-ops-core.js", "08-app.js legacy Add-on Services functions", "operation-backend sales-editing.ts", "operation-backend addon-services.ts"],
+  "followUps": ["Audit a separate backend contract before migrating custom booking add-on types."],
+  "rollback": "Revert the S4 local commit or remove the S4 script tag, adapter, focused test, and handoff artifacts; do not issue compensating destructive API calls."
+}

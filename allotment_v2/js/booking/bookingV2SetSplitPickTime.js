@@ -1,0 +1,1 @@
+function bookingV2SetSplitPickTime(bkId, idx, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); const sp=Array.isArray(_o.vanSplits)?_o.vanSplits[+idx]:null; if(!bkSplitOwnPick(sp)) return bookingV2SetPickupFinal(bkId, val, date); sp.pickTime=(val||'').trim(); acctPersistBookings(); }

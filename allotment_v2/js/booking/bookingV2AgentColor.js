@@ -1,0 +1,1 @@
+function bookingV2AgentColor(agentId){ const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(a&&a.color) return a.color; const s=String(agentId||(a&&a.name)||''); let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return BKV2_AGENT_PALETTE[h%BKV2_AGENT_PALETTE.length]; }

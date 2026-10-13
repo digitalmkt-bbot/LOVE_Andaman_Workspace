@@ -2,6 +2,11 @@
 .DS_Store
 *~
 .~lock.*#
+# FUSE orphans: deleting a file another process still has open on a FUSE mount (sshfs, NTFS-3G,
+# gvfs, rclone…) renames it to .fuse_hiddenXXXX instead of unlinking, and an unclean unmount or a
+# crashed holder leaves it there forever. One 3.2MB copy of allotment_v2.html rode along in the
+# Initial commit this way and sat in every clone and worktree until 2026-08-27.
+.fuse_hidden*
 
 # ── Node ──
 node_modules/
@@ -41,8 +46,22 @@ restored_attachments/
 
 # ── Claude Code local tooling (per-machine, not project code) ──
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/settings.json
 skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
+
+# ── ที่พักของที่รอลบ · ไฟล์ล็อกของ git กับสคริปต์แพตช์ชั่วคราว ──
+# git ในสภาพแวดล้อมนี้ลบไฟล์เองไม่ได้ ต้อง mv มาพักไว้ที่นี่แทน
+# ของในนี้ไม่ใช่โค้ดของโปรเจกต์ · ลบทิ้งได้ตลอด ไม่ต้องเข้า repo
+_to_delete/
+
+# ── Screenshots / rendered images ──
+# Session screenshots ("Claude outputs/*.png") are scratch evidence, not project code.
+# EXCEPTION: allotment_v2/assets/ ships to prod (favicons, logo) — those must stay committable.
+*.png
+!allotment_v2/assets/**/*.png
+.build/

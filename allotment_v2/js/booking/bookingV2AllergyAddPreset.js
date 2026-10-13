@@ -1,0 +1,1 @@
+function bookingV2AllergyAddPreset(name){ const sm=_bkV2EnsureSM(); if(!sm) return; const ex=sm.allergyList.find(a=>(a.name||'').toLowerCase()===String(name).toLowerCase()); if(ex) ex.qty=Math.floor(+ex.qty||0)+1; else sm.allergyList.push({name:String(name),qty:1}); bookingV2Render(); }

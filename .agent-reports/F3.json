@@ -1,0 +1,62 @@
+{
+  "packet": "F3",
+  "status": "complete",
+  "objective": "Migrate incidents and maintenance jobs to operation-backend in operations mode.",
+  "branch": "agent/ops-fleet-jobs",
+  "commit": "9c19c2ff2e12f7a8f381e2de7feba389813b044b",
+  "owned_files_changed": [
+    "allotment_v2/js/ops/24-ops-fleet-jobs.js",
+    "allotment_v2/allotment_v2.html",
+    "test/unit/ops-fleet-jobs.test.mjs",
+    "docs/development/tasks/F3-ops-fleet-jobs.md",
+    ".agent-reports/F3.json"
+  ],
+  "shared_files_touched_with_coordination": [
+    {
+      "path": "allotment_v2/allotment_v2.html",
+      "reservation": "serialized by coordinator",
+      "entry_points": ["js/ops/24-ops-fleet-jobs.js"]
+    }
+  ],
+  "backend_contract_files_inspected": [
+    "D:/projects/operation-backend/src/routes/fleet.ts",
+    "D:/projects/operation-backend/src/domain/fleet-jobs.ts",
+    "D:/projects/operation-backend/test/fleet.test.ts"
+  ],
+  "endpoints_exercised": [
+    { "method": "GET", "path": "/v1/fleet/incidents", "body": null },
+    { "method": "POST", "path": "/v1/fleet/incidents", "body": "{no,boat_id,date,time?,title,detail?,remark?,cause?,quick_fix?,priority?,damaged_assets}" },
+    { "method": "PATCH", "path": "/v1/fleet/incidents/:id", "body": "{no?,boat_id?,date?,time?,title?,detail?,remark?,priority?,damaged_assets?}" },
+    { "method": "DELETE", "path": "/v1/fleet/incidents/:id", "body": null },
+    { "method": "POST", "path": "/v1/fleet/incidents/:id/log", "body": "{text,by?}" },
+    { "method": "POST", "path": "/v1/fleet/incidents/:id/swap", "body": "{asset_type,asset_id,spare_id,propellers?}" },
+    { "method": "GET", "path": "/v1/fleet/jobs", "body": null },
+    { "method": "POST", "path": "/v1/fleet/jobs", "body": "{no?,nos?,per_asset?,create_anyway?,boat_id,title,type,assets?}" },
+    { "method": "PATCH", "path": "/v1/fleet/jobs/:id", "body": "{pinned?,board_lane?,owner?,due_date?,parked?}" },
+    { "method": "DELETE", "path": "/v1/fleet/jobs/:id", "body": null },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/start", "body": "{gear?,stash_location?}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/close", "body": "{outcome,note,awaiting_invoice?,reset_service?}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/reset-service", "body": "{}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/boat-status", "body": "{status,effective_date,reason?,note?}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/assets", "body": "{type,asset_id?,label?,detail?}" },
+    { "method": "DELETE", "path": "/v1/fleet/jobs/:id/assets/:idx", "body": null },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/log", "body": "{text,by?,date?}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/split", "body": "{by,nos}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/steps", "body": "{text}" },
+    { "method": "POST", "path": "/v1/fleet/jobs/:id/steps/template", "body": "{}" },
+    { "method": "PATCH", "path": "/v1/fleet/jobs/:id/steps/:idx", "body": "{done}" },
+    { "method": "DELETE", "path": "/v1/fleet/jobs/:id/steps/:idx", "body": null }
+  ],
+  "projection_mapping": "Maps server Incident and Job records to FL_INCIDENTS and FL_MAINT, preserving boatStatus || (setFixing===false ? 'available' : 'fixing') and server-computed cost/lane/silent_days/blocks_boat.",
+  "legacy_mode_verified": true,
+  "load_write_error_behavior": "Hydrates incidents and jobs in ops mode; refetches affected incident/job plus dependent boat and drivetrain assets after commands; surfaces errors via laOps.fail.",
+  "tests": [
+    { "command": "node --check allotment_v2/js/ops/24-ops-fleet-jobs.js", "result": "pass" },
+    { "command": "node --check test/unit/ops-fleet-jobs.test.mjs", "result": "pass" },
+    { "command": "node --test test/unit/ops-fleet-jobs.test.mjs", "result": "pass (3/3)" },
+    { "command": "node --import tsx --import ./test/setup.ts --test test/fleet.test.ts", "result": "pass" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "blocked_items": [],
+  "no_backend_or_db_changes": true
+}

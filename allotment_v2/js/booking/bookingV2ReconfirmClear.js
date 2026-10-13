@@ -1,0 +1,1 @@
+function bookingV2ReconfirmClear(bkId){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b||!b.ops) return; b.ops.reconfirm=null; acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }

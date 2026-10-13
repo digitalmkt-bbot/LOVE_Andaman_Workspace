@@ -1,0 +1,2 @@
+function bookingV2UpgradeRecalc(){ const sell=pckN((document.getElementById('bku-sell')||{}).value); const comp=pckN((document.getElementById('bku-company')||{}).value); const comm=Math.max(0,pckN(sell-comp)); const el=document.getElementById('bku-comm'); if(el) el.textContent='฿'+pckNum(comm);
+  if(_bkExtraPay.m==='card') bookingV2ExtraPayRender();   /* §upgPay · ราคาขายขยับ ค่าธรรมเนียมบัตรต้องขยับตาม */ }
