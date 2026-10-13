@@ -23,6 +23,8 @@
 //   node tools/sync-upstream.mjs --apply         # do it; leaves conflicts marked, does not commit
 //   node tools/sync-upstream.mjs --to <ref> --from <sha>   # override the range
 //   node tools/sync-upstream.mjs --selftest      # check the transform reproduces our tree
+//   --ops-spec <url|file>  operation-backend OpenAPI for the "Backend impact" section (default <OPS_BACKEND>/docs/json)
+//   --no-spec              skip fetching it
 //
 // All content is read from git blobs (LF), never the CRLF working copy — merging across that
 // difference makes every line conflict.
@@ -43,7 +45,7 @@ const flag = (n) => args.includes(n);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 
 const git = (a, o = {}) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 30, ...o });
-const show = (ref, p) => { try { return git(['show', `${ref}:${p}`]); } catch { return null; } };
+const show = (ref, p) => { try { return git(['show', `${ref}:${p}`], { stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return null; } };
 const lsTree = (ref, dir) => git(['ls-tree', '-r', '--name-only', ref, '--', dir]).split('\n').filter(Boolean);
 
 // ---------- manifest ----------
@@ -229,7 +231,145 @@ function plan(from, to) {
       files.push({ p, status: m.conflicts ? 'conflict' : 'clean', ...m });
     }
   }
-  return { ports, added, removed, untracked, files };
+  return { ports, added, removed, untracked, files, fromFns, toFns };
+}
+
+// ---------- backend impact ----------
+// This branch has no server.js (deleted 2026-10-12): static-server.js serves files only and the browser
+// talks to operation-backend. Whatever upstream builds on lk-inbox's backend is dead here and fails quietly:
+//   - an '/api/…' call is a 404;
+//   - a write into the localStorage blob (LS_KEY, *Persist(), save()) never leaves the browser, because
+//     the blob only reached a server through /api/save.
+// So every new or changed upstream function doing either is listed, with operation-backend endpoints
+// that look related (from its live OpenAPI spec), for a human to wire through js/ops/ or to build.
+const OPS_BACKEND = process.env.OPS_BACKEND || 'https://operationbackend-production.up.railway.app';
+const API_LIT = /(['"`])(\/api\/[^'"`\s?#]*)/g;
+const BLOB_WRITE = [/\bLS_KEY\b/, /(?<![\w$.])\w*Persist\w*\s*\(/, /(?<![\w$.])(?:save|flSave)\s*\(/];
+// lk-inbox files that run on its server, not in the browser
+const SERVER_SIDE = /^(server\.js|api-proxy\.js|auth\/|db\/|os-backend\/|b2c-[\w-]+\.js$)/;
+
+async function loadOpsSpec() {
+  if (flag('--no-spec')) return { error: 'skipped (--no-spec)' };
+  const src = opt('--ops-spec', `${OPS_BACKEND}/docs/json`);
+  try {
+    const json = /^https?:/.test(src)
+      ? await (await fetch(src, { signal: AbortSignal.timeout(10000) })).json()
+      : JSON.parse(fs.readFileSync(src, 'utf8'));
+    const ops = [];
+    for (const [p, o] of Object.entries(json.paths || {})) for (const m of Object.keys(o)) ops.push(`${m.toUpperCase()} ${p}`);
+    return { src, ops };
+  } catch (e) { return { src, error: e.message }; }
+}
+
+const GENERIC = new Set(['api', 'v1', 'get', 'set', 'save', 'load', 'render', 'open', 'close', 'new', 'list', 'all', 'data',
+  'persist', 'sync', 'item', 'items', 'row', 'rows', 'css', 'html', 'init', 'show', 'hide', 'tab', 'view', 'go', 'do', 'the']);
+function tokens(...names) {
+  const out = new Set();
+  for (const n of names) for (const t of String(n).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/)) {
+    if (t.length >= 3 && !GENERIC.has(t) && !/^\d+$/.test(t)) out.add(t.replace(/s$/, ''));
+  }
+  return [...out];
+}
+function candidates(spec, toks) {
+  if (!spec.ops || !toks.length) return [];
+  return spec.ops.map((o) => ({ o, n: toks.filter((t) => o.toLowerCase().includes(t)).length }))
+    .filter((x) => x.n).sort((a, b) => b.n - a.n || a.o.length - b.o.length).slice(0, 4).map((x) => x.o);
+}
+
+// '/api/…' route a line of server.js belongs to: the nearest `u === '/api/x'` / `u.startsWith('/api/x')` above it.
+function serverRoutes(from, to) {
+  const src = show(to, 'server.js');
+  if (src == null) return [];
+  const lines = src.split('\n');
+  const routeAt = [];
+  let cur = null;
+  for (const l of lines) {
+    const m = l.match(/\bu\s*(?:===\s*|\.startsWith\(\s*)['"`](\/api\/[^'"`]*)/) || l.match(/\.test\(\s*u\s*\).*?(\/api\/[\w/-]*)/);
+    if (m) cur = m[1] + (/req\.method\s*===\s*'(\w+)'/.test(l) ? ` ${l.match(/req\.method\s*===\s*'(\w+)'/)[1]}` : '');
+    routeAt.push(cur);
+  }
+  const hunks = git(['diff', '-U0', from, to, '--', 'server.js']).split('\n').filter((l) => l.startsWith('@@'));
+  const old = show(from, 'server.js') || '';
+  const touched = new Map();
+  for (const h of hunks) {
+    const [, s, n = '1'] = h.match(/\+(\d+)(?:,(\d+))?/);
+    const a = +s, b = a + Math.max(+n, 1) - 1;
+    for (let i = a; i <= b; i++) {
+      const r = routeAt[i - 1] || '(top level, before any route)';
+      if (!touched.has(r)) touched.set(r, r.startsWith('(') || old.includes(`'${r.split(' ')[0]}'`) ? 'changed' : 'NEW');
+    }
+  }
+  return [...touched].map(([route, kind]) => ({ route, kind }));
+}
+
+function backendImpact(from, to, P, spec) {
+  // functions our js/ops/ adapters replace (wrap('name', …) / window.name = …)
+  const wrapped = new Map();
+  for (const p of lsTree('HEAD', `${JS_DIR}/ops`)) {
+    const src = show('HEAD', p) || '';
+    for (const m of src.matchAll(/\bwrap\(\s*['"]([\w$]+)['"]|window\.([\w$]+)\s*=\s*function/g)) wrapped.set(m[1] || m[2], p);
+  }
+  // our copy of an upstream function (moved file per the manifest, else the same path) — does it already
+  // reach operation-backend? Then the upstream blob write is not the whole story here.
+  const parsed = new Map();
+  const ourFn = (name, upPath) => {
+    const e = entryFor(name), p = e ? e.file : upPath;
+    if (!parsed.has(p)) { const s = show('HEAD', p); parsed.set(p, s == null ? new Map() : topLevelFunctions(s, p)); }
+    return parsed.get(p).get(renameName(name));
+  };
+  const OPS_CALL = /\blaOps\b|laOpsFetch|ToOpsBackend|OpsEnsure|EnsureOps/;
+  const fns = [];
+  for (const [name, t] of P.toFns) {
+    const f = P.fromFns.get(name);
+    if (f && f.text === t.text) continue;
+    const before = f ? f.text : '';
+    const api = [...new Set([...t.text.matchAll(API_LIT)].map((m) => m[2]))]
+      .map((a) => before.includes(a) ? a : `${a} (new)`);
+    const blob = BLOB_WRITE.some((re) => re.test(t.text));
+    // reads every booking: here SB_BOOKINGS holds only the date ranges some view has loaded
+    const allBk = /\bSB_BOOKINGS\b/.test(t.text);
+    const ours = renameName(name), adapter = wrapped.get(ours) || wrapped.get(name);
+    // new code leaning on a function an adapter replaced: the adapter may not serve what it now asks
+    // (e.g. a month view calling a per-day reader whose adapter caches one day)
+    const before2 = f ? f.text : '';
+    const callsWrapped = [...wrapped.keys()].filter((w) => w !== ours && w !== name && !/^render/.test(w)   // a redraw, not a data read
+      && new RegExp(`(?<![\\w$.])${w.replace(/\$/g, '\\$')}\\s*\\(`).test(t.text)
+      && !new RegExp(`(?<![\\w$.])${w.replace(/\$/g, '\\$')}\\s*\\(`).test(before2));
+    if (!api.length && !blob && !allBk && !adapter && !callsWrapped.length) continue;
+    const mine = ourFn(name, t.path), opsHere = !!(mine && OPS_CALL.test(mine.text));
+    if (!api.length && !blob && !adapter && !callsWrapped.length && opsHere) continue;   // only reads bookings, and ours loads them
+    fns.push({ name, ours, path: t.path, isNew: !f, api, blob, allBk, adapter, opsHere,
+      callsWrapped: callsWrapped.map((w) => `${w} (${wrapped.get(w).replace(JS_DIR + '/', '')})`),
+      cand: candidates(spec, tokens(...api.map((a) => a.replace(' (new)', '')), ...(api.length ? [] : [name]))) });
+  }
+  const server = git(['diff', '--name-only', from, to]).split('\n').filter((p) => p && SERVER_SIDE.test(p));
+  return { fns, server, routes: server.includes('server.js') ? serverRoutes(from, to) : [], spec };
+}
+
+function reportBackend(B) {
+  const L = (s = '') => console.log(s);
+  L();
+  L(`## Backend impact (no server.js on this branch: /api/* is a 404, blob writes stay in the browser)`);
+  L(`  operation-backend spec: ${B.spec.error ? `NOT LOADED (${B.spec.error}) — check ${OPS_BACKEND}/docs by hand` : `${B.spec.ops.length} operations from ${B.spec.src}`}`);
+  if (B.server.length) {
+    L(`  lk-inbox server-side files changed (not merged into anything that runs here):`);
+    for (const p of B.server) L(`    ${p}`);
+  }
+  if (B.routes.length) {
+    L(`  server.js routes touched upstream:`);
+    for (const r of B.routes) L(`    ${r.kind.padEnd(8)} ${r.route}`);
+  }
+  if (!B.fns.length) { L(`  no new/changed upstream function calls /api/*, writes the blob, or is replaced by js/ops/`); return; }
+  for (const x of B.fns) {
+    const what = [x.api.length && `calls ${x.api.join(', ')}`,
+      x.blob && (x.opsHere ? 'writes the legacy blob, but our copy already calls operation-backend — check the change is carried'
+        : 'writes the legacy blob (local-only here)'),
+      x.callsWrapped.length && `newly calls ${x.callsWrapped.join(', ')} — check the adapter serves these calls (dates, ranges)`,
+      x.allBk && !x.opsHere && 'reads SB_BOOKINGS (only loaded date ranges here — misses the rest unless it loads them or the server answers)',
+      x.adapter && `WRAPPED HERE by ${x.adapter.replace(JS_DIR + '/', '')} — read it: if it calls the original the change flows through, if it replaces it port the change`].filter(Boolean).join(' · ');
+    L(`  ${x.isNew ? 'NEW' : 'chg'} ${x.ours}  [${x.path.replace(JS_DIR + '/', '')}]  ${what}`);
+    if ((x.api.length || x.blob || x.allBk) && !x.adapter && !x.opsHere) L(`        operation-backend candidates: ${x.cand.length ? x.cand.join(' | ') : '(none matched by name — check /docs)'}`);
+  }
 }
 
 // ---------- report ----------
@@ -343,6 +483,7 @@ try {
   else {
     const P = plan(from, to);
     report(from, to, P);
+    reportBackend(backendImpact(from, to, P, await loadOpsSpec()));
     if (flag('--apply')) apply(to, P);
   }
 } finally {

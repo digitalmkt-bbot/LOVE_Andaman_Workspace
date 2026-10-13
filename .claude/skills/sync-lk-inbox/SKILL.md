@@ -1,9 +1,22 @@
 ---
 name: sync-lk-inbox
-description: Pull origin/lk-inbox into the integration/operation-backend refactor branch without losing upstream fixes to functions this branch has moved (bkV2* in 08-app.js -> js/booking/bookingV2*.js, and any later module extraction). Use whenever the user says pull/sync/merge lk-inbox, "the devs pushed again", or before starting refactor work on a module. Also covers registering a newly extracted module in tools/refactor-manifest.json.
+description: Pull origin/lk-inbox into the integration/operation-backend refactor branch without losing upstream fixes to functions this branch has moved (bkV2* in 08-app.js -> js/booking/bookingV2*.js, and any later module extraction). Use whenever the user says pull/sync/merge lk-inbox, "the devs pushed again", or before starting refactor work on a module. Also checks what each upstream feature needs from operation-backend (this branch has no server.js) against its live swagger, and covers registering a newly extracted module in tools/refactor-manifest.json.
 ---
 
 # Sync lk-inbox into the refactor branch
+
+**This branch has no `server.js`** (deleted 2026-10-12). Railway runs `static-server.js` (files + `/health`), and
+the browser talks only to operation-backend. lk-inbox still builds features on its own backend, so a merged
+feature can look fine and still be broken here:
+- an `'/api/…'` call is a **404**;
+- a write into the localStorage blob (`LS_KEY`, `*Persist()`, `save()`) **never leaves the browser**: the blob
+  reached a server only through `/api/save`;
+- a read over `SB_BOOKINGS` or an adapter's cache sees **only the dates some view has loaded** (bookings are
+  loaded per range, not at boot).
+
+The rule: every upstream feature that needs data gets it from an operation-backend endpoint, wired in
+`js/ops/`. Never revive `server.js` or an `/api/*` route, and never paper over a missing endpoint by keeping
+data in the blob. A missing endpoint is reported, then built in operation-backend (we own both repos).
 
 **Never run a plain `git merge origin/lk-inbox` (or rebase) here.** lk-inbox still edits `bkV2Foo` inside
 `js/08-app.js`; this branch moved it to `js/booking/bookingV2Foo.js`. A textual merge either conflicts in
@@ -28,10 +41,41 @@ copy. `tools/sync-upstream.mjs` merges per function instead, driven by `tools/re
    - *Moved functions deleted upstream* — delete our file + its `<script>` tag + manifest entry, after grepping
      that nothing on our side still calls it (our operation-backend code may).
    - *Other files* — merged in "our space" (renames applied, moved functions cut out). `we deleted, upstream
-     edited` is expected for `os-backend/src/mapping/*` (deleted deliberately on this branch) — tell the user,
-     don't restore. For `server.js`: it's dead on this branch, merging is fine, don't spend effort on it.
+     edited` is expected for `server.js` and `os-backend/src/mapping/*` (deleted deliberately on this branch):
+     they stay deleted, never restore them. What upstream changed in them is covered by *Backend impact*.
    - *NOT covered by the manifest* — new upstream functions that stay in 08-app.js etc. Only relevant if they
      belong to a module we've already extracted (e.g. `bkUpg*` helpers next to booking) — mention, don't act.
+   - *Backend impact* — see step 2b.
+
+2b. **Backend impact: what each upstream feature needs from operation-backend.** The report's last section
+   lists every new/changed upstream function that calls `/api/*`, writes the blob, reads `SB_BOOKINGS`, is
+   wrapped by a `js/ops/` adapter, or newly calls a function an adapter replaced; plus the lk-inbox server
+   files and `server.js` routes upstream touched. Endpoint candidates come from the live swagger
+   (`<opsBackend>/docs/json`, override with `--ops-spec <url|file>`, skip with `--no-spec`). They are matched
+   by name only, so **open each one** before trusting it. For each item:
+   - Find what the feature needs. A `server.js` route change means read that handler's diff
+     (`git diff <from>..origin/lk-inbox -- server.js`) and find the frontend caller.
+   - Check operation-backend for it in two places: the swagger (what is deployed:
+     `https://operationbackend-production.up.railway.app/docs`) and the routes on `main`
+     (`git -C D:/projects/operation-backend grep -n "'/v1/<thing>" origin/main -- src/routes`). On `main` but
+     not in the swagger = a stale deploy (see CLAUDE.md's infra note), not a missing endpoint.
+   - Read the adapter before judging a wrapped function. If it calls the original, upstream's change flows
+     through; if it replaces it, port the change. If new code calls an adapter-replaced reader, check the
+     adapter serves those calls (a per-day cache can't answer a month view).
+   - `b2c-map.js` / `b2c-changelog.js` changed = a B2C import rule changed. operation-backend's B2C import
+     needs the same rule (CLAUDE.md keeps these files as the reference for porting).
+   - Not flagged ≠ fine: the checks are text heuristics. Skim the upstream commit list
+     (`git log --oneline <from>..origin/lk-inbox`) for features that store or load data some other way.
+
+   **Report to the user** before applying, one row per feature, not per function:
+
+   | Upstream feature (commit) | Needs | operation-backend | Action |
+   |---|---|---|---|
+   | e.g. Park tickets month view (bd6384b) | park tickets for a whole month | **MISSING**: only `GET /v1/pier-office/{pier}/park-tickets?date=` (one day) | add a month/range endpoint, then wire `js/ops/32-ops-park.js` |
+   | … | … | **EXISTS**: `METHOD /v1/…` (in swagger + main) | wire in `js/ops/…` |
+
+   Every MISSING row is the list of endpoints to build. Say plainly which merged features won't work here
+   until they're built.
 
 3. **Apply.** `npm run sync:upstream -- --apply`. It starts a real merge (`git merge -s ours --no-commit`),
    writes the computed files, stages the clean ones, leaves conflicted ones unstaged with diff3 markers
@@ -53,7 +97,8 @@ copy. `tools/sync-upstream.mjs` merges per function instead, driven by `tools/re
 
 6. **Commit** (it's a merge commit, both parents already recorded):
    `Merge origin/lk-inbox (<N> commits) via tools/sync-upstream.mjs` + a body listing ported functions,
-   new files, and how each conflict was resolved. Push only if the user asks.
+   new files, how each conflict was resolved, and the MISSING endpoints from step 2b. Push only if the user
+   asks: this branch's frontend is production, so a push ships to staff.
 
 Abort at any point: the tool prints the exact command (`git merge --abort && git checkout HEAD -- <conflicted>`
 — `merge --abort` alone leaves unstaged conflicted files behind).
