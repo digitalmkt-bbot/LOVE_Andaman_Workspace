@@ -35348,10 +35348,15 @@ function _ctBtPinFitMeasure(){
    แก้ที่ต้นเหตุ: ห่อตัววัด เก็บ scrollTop/scrollLeft ของ .t2-wrap ไว้ก่อน
    แล้วคืนหลังวัดเสร็จ · ครอบทุกทางที่เรียกวัด (วาดใหม่ / 300ms / resize)
    คืนเฉพาะตอนมีค่าจริง · จอที่ไม่ตรึง scrollTop เป็น 0 อยู่แล้ว คืนก็ไม่มีผล */
+/* §btcJump (2026-10-13) · owner "ตรวจ Version compact มันชอบเด้ง" · วัดแล้วเจอสามอย่าง
+   1 ตอนวัด มีจังหวะที่ใส่ bt-pinok ชั่วคราว (หน้าสั้นลงเหลือจอเดียว) แล้วค่อยถอดออก
+     เบราว์เซอร์ตัดตำแหน่งเลื่อนของหน้าทิ้งในจังหวะนั้น · หน้าเด้งขึ้นบน (วัดได้ 1200 → 3)
+     เดิมคืนให้แค่ .t2-wrap · ตอนนี้คืนตำแหน่งเลื่อนของหน้าด้วย
+   2 / 3 ดูที่ตัวห่อ bkV2Render ข้างล่าง */
 function ctBtPinFit(){
   var v = document.getElementById('view-booking');
   var w = v ? v.querySelector('.t2-wrap') : null;
-  var st = w ? w.scrollTop : 0, sl = w ? w.scrollLeft : 0;
+  var st = w ? w.scrollTop : 0, sl = w ? w.scrollLeft : 0, wy = window.scrollY || 0;
   try{ _ctBtPinFitMeasure(); }
   finally{
     if(st || sl){ try{
@@ -35359,6 +35364,7 @@ function ctBtPinFit(){
       if(w2){ if(st && w2.scrollTop !== st) w2.scrollTop = st;
               if(sl && w2.scrollLeft !== sl) w2.scrollLeft = sl; }
     }catch(_){} }
+    if(wy && (window.scrollY || 0) !== wy){ try{ window.scrollTo(0, wy); }catch(_){} }   /* §btcJump 1 */
   }
 }
 /* ⚠ ตอน rAF หลังวาดเสร็จใหม่ ๆ ความสูงยังไม่นิ่ง (วัดได้ topcard 45px
@@ -35374,9 +35380,36 @@ function ctBtPinFitLater(){ clearTimeout(_ctPinT);
 (function(){
   if(typeof window === 'undefined' || typeof window.bkV2Render !== 'function') return;
   var _orig = window.bkV2Render;
+  /* §btcJump 2 · bkV2Render() วาดตารางใหม่ทั้งก้อน · .t2-wrap ตัวใหม่เริ่มที่ 0
+     โหมด Compact ตารางเป็นตัวเลื่อนเอง (หน้าไม่เลื่อน) จึงเด้งกลับหัวตารางทุกครั้ง
+     มีคนเรียก bkV2Render() ตรง ๆ อยู่ ~200 ที่ (ที่ใช้ bkV2RenderKeep มีแค่ ~40)
+     ไล่แก้ทีละที่ไม่จบ · คืนตำแหน่งที่ตัวห่อแทน · เฉพาะตอนยังเป็นหน้าเดิม
+     (แท็บ วันที่ เส้นทาง เดิม) · เปลี่ยนวัน/แท็บ ยังเริ่มที่หัวตารางเหมือนเดิม
+     §btcJump 3 · Compact แปลงหัวหน้า (การ์ดเรือ/โปรแกรม/Notice) หลังวาดเสร็จ ใน rAF
+     แต่การวัดความสูงกล่องตารางเกิดก่อนนั้น · วัดจากหัวแบบ Classic (สูงกว่า 6px)
+     ตารางจึงขยับขึ้นลงทุกครั้งที่วาด และหน้าเลื่อนได้เกิน 6px อยู่ 300ms
+     แปลงให้เสร็จก่อนวัด · btcPass เรียกซ้ำได้ (แปลงเฉพาะของที่ยังไม่แปลง)          */
+  var _key = function(){ try{ var b = (typeof _bkV2 !== 'undefined' && _bkV2) || {};   /* _bkV2 เป็น const ระดับไฟล์ ไม่ได้อยู่บน window */
+    return [b.tab, b.filterDate, b.filterRoute, (typeof _bkV2CityTourOnly !== 'undefined' && _bkV2CityTourOnly) ? 1 : 0].join('|'); }catch(_){ return ''; } };
+  var _wrap = function(){ var h = document.getElementById('bkv2-host'); return h ? h.querySelector('.t2-wrap') : null; };
+  /* หน้าที่วาดไว้ครั้งก่อน · คนเรียกมักตั้งวันที่ใหม่ก่อนแล้วค่อยเรียกวาด จึงเทียบกับรอบก่อน ไม่ใช่ค่าตอนเข้า */
+  var _lastK = null;
   window.bkV2Render = function(){
+    var k0 = _lastK, w0 = _wrap(), t0 = w0 ? w0.scrollTop : 0, l0 = w0 ? w0.scrollLeft : 0, y0 = window.scrollY || 0;
     var out = _orig.apply(this, arguments);
+    var k1 = _key(); _lastK = k1;
+    try{ if(typeof window.btcIsOn === 'function' && window.btcIsOn() && typeof window.btcPass === 'function') window.btcPass(); }catch(_){ }
     try{ ctBtPinFit(); ctBtPinFitLater(); }catch(_){ }
+    if((t0 || l0 || y0) && k0 !== null && k1 === k0){
+      /* คืนเฉพาะค่าที่ "โดนล้าง" (กล่องใหม่อยู่ที่ 0 / หน้าถูกตัดจนเกือบบนสุด)
+         ใครตั้งใจเลื่อนไปที่อื่นหลังวาด (scrollIntoView ไปแถวที่ค้นเจอ ฯลฯ) จะไม่ถูกดึงกลับ */
+      var put = function(){ try{
+        var w = _wrap();
+        if(w){ if(t0 && w.scrollTop === 0) w.scrollTop = t0; if(l0 && w.scrollLeft === 0) w.scrollLeft = l0; }
+        if(y0 > 10 && (window.scrollY || 0) < 10) window.scrollTo(0, y0);
+      }catch(_){ } };
+      put(); try{ requestAnimationFrame(function(){ put(); requestAnimationFrame(put); }); }catch(_){ }
+    }
     return out;
   };
 })();
@@ -54364,7 +54397,9 @@ function bkV2RenderTab2(){
        ป้าย B2C จึงถอดกรอบ/เงา · แผ่นกรมท่าเล็กลงเป็นไอคอน 20px แทนแถบสี · ชื่อใช้ฟอนต์/สีเดียวกับชื่อเอเยนต์อื่น · ไม่มีคำขวัญ */
     body.btc #view-booking td.t2-ag .la-agtab{border:0!important;box-shadow:none!important;border-radius:0!important;margin:0!important;padding:5px 8px 5px 1px!important;gap:7px!important;max-width:none!important}
     body.btc #view-booking td.t2-ag .la-agtab>span:first-child{width:20px!important;height:20px!important;border-radius:4px;background-size:cover!important}
-    body.btc #view-booking td.t2-ag .la-agtab b{font-family:inherit!important;font-weight:800!important;font-size:12.5px!important;line-height:1.2!important;letter-spacing:.04em!important;color:#0F1B3D!important}
+    /* §btcJump · owner ปรับช่อง Agency ของ Compact กลับเป็น 150px (e51bc9a) · 12.5px ยาว 119px แต่มีที่ 113px ตัว N ท้ายโดนตัด
+       ลดเป็น 11.5px ระยะตัวอักษร .03em (~108px) · เผื่อฟอนต์เครื่องอื่นกว้างกว่า ใส่ … ไว้แทนการตัดกลางตัว */
+    body.btc #view-booking td.t2-ag .la-agtab b{font-family:inherit!important;font-weight:800!important;font-size:11.5px!important;line-height:1.2!important;letter-spacing:.03em!important;color:#0F1B3D!important;overflow:hidden;text-overflow:ellipsis}
     body.btc #view-booking td.t2-ag .la-agtab i{display:none!important}
     .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
     .t2-mtbl th.t2-vc{width:104px}
