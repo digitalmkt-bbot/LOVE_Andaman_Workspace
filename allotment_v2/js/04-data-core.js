@@ -1148,6 +1148,7 @@ function nav(el){
     else if(view==='addonsvc') renderAddonSvc();
     else if(view==='dailypfm') renderDailyPFM();
     else if(view==='vanbill'){ _vb.open={}; _vb.foc=''; renderVanBill(); }
+    else if(view==='commissions') renderCommissions();
     else if(view==='vehicles') renderVehicles();
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
