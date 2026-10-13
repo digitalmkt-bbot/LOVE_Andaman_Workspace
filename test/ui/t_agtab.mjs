@@ -5,10 +5,12 @@
 //   §agTab2 · "ใช้แบบ ตามที่เราแนบไปเลย ตัด อีเมล เบอร์โทรออก" → แผ่น la-tab + LOVE ANDAMAN + Your experience, Our Passion
 //   §agTab3 · "ให้มันเหมือนแบบเลย ตรวจดู" → owner เลือกขยายช่อง Agency เป็น 196px
 //     สัดส่วนตามแบบ · แผ่นเต็มความสูงป้าย · ชื่อตัวหนา (Arial Black) สีกรมท่า · คำขวัญตัวเอียงสีเทาบรรทัดเดียว
+//   §agTab4 · "ปรับให้มันเข้ากับ Compact ได้ไหม ตัวโลโก้" → Compact ถอดกรอบ แผ่นเป็นไอคอน 20px + ชื่อแบบเอเยนต์อื่น ไม่มีคำขวัญ
 // Checks
 //   1 By trip date (Classic) · ใบ B2C ขึ้นแผ่น la-tab + LOVE ANDAMAN + คำขวัญ · ไม่มีอีเมล/เบอร์ · ไม่มี <img> ในช่อง
 //     ช่อง Agency กว้าง 196px · แผ่นเต็มความสูงป้าย · คำขวัญบรรทัดเดียวไม่ถูกตัด · ชื่อสีกรมท่าตัวหนา 900
-//   2 Compact · ป้ายไม่ถูกเปลี่ยนเป็นแถบสีด้านซ้าย · สูงไม่เกิน 30px · แผ่นและตัวหนังสือไม่โดนตัด
+//   2 Compact · ป้ายไม่ถูกเปลี่ยนเป็นแถบสีด้านซ้าย · ไม่มีกรอบ/เงา · ไอคอน 20px · ไม่มีคำขวัญ
+//     ชื่อสีและฟอนต์เดียวกับชื่อเอเยนต์อื่น · สูงไม่เกิน 30px · ไม่โดนตัด
 //   3 เอเยนต์อื่นยังเป็นชิปสีประจำเอเยนต์เหมือนเดิม
 //   4 ทุกหน้าที่ใช้ laAgencyMark ได้ป้ายแบบเดียวกัน (ลองที่หน้าเช็คอินหน้าท่า)
 //   5 ไม่มี error
@@ -42,7 +44,10 @@ const read = () => page.evaluate(() => {
     other: other ? getComputedStyle(other.querySelector('div')).backgroundColor : null,
     colW: Math.round(b2c.getBoundingClientRect().width), boxH: Math.round(br.height),
     tagLines: (() => { const i = txt.querySelector('i'); if (!i) return 0; return Math.round(i.getBoundingClientRect().height / parseFloat(getComputedStyle(i).lineHeight)); })(),
-    titleW: getComputedStyle(txt.querySelector('b')).fontWeight, titleC: getComputedStyle(txt.querySelector('b')).color };
+    titleW: getComputedStyle(txt.querySelector('b')).fontWeight, titleC: getComputedStyle(txt.querySelector('b')).color,
+    titleF: getComputedStyle(txt.querySelector('b')).fontFamily, tagShown: !!(txt.querySelector('i') && txt.querySelector('i').offsetParent),
+    border: getComputedStyle(box).borderTopWidth, shadow: getComputedStyle(box).boxShadow,
+    otherF: other ? getComputedStyle(other.querySelector('div')).fontFamily : null, otherC: other ? getComputedStyle(other.querySelector('div')).color : null };
 });
 const c1 = await read();
 if (!c1.none && c1.tileBg && /^LOVE ANDAMAN ?Your experience, Our Passion$/.test(c1.text) && !/@|\d{3}-/.test(c1.text) && !c1.imgs && c1.boxBg === 'rgba(0, 0, 0, 0)' && !c1.clipped
@@ -52,7 +57,9 @@ if (c1.other && c1.other !== 'rgba(0, 0, 0, 0)') ok('3 เอเยนต์อ�
 if (SP) await page.screenshot({ path: SP + 'agtab_classic.png' });
 await page.evaluate(() => { if (typeof btcSet === 'function') btcSet('compact'); }); await page.waitForTimeout(1000);
 const c2 = await read();
-if (!c2.none && !c2.btc && c2.h <= 30 && !c2.clipped && c2.tileBg && c2.tileH >= 26) ok(`2 Compact · ป้ายคงเดิม สูง ${c2.h}px · แผ่น ${c2.tileH}px ไม่โดนตัด`); else fail('2 ' + JSON.stringify(c2));
+if (!c2.none && !c2.btc && c2.h <= 30 && !c2.clipped && c2.tileBg && c2.tileH === 20 && !c2.tagShown && c2.border === '0px' && c2.shadow === 'none'
+    && c2.titleF === c2.otherF && c2.titleC === c2.otherC)
+  ok(`2 Compact · ไม่มีกรอบ · ไอคอน ${c2.tileH}px + ชื่อฟอนต์/สีเดียวกับเอเยนต์อื่น (${c2.titleC}) · ไม่มีคำขวัญ · สูง ${c2.h}px`); else fail('2 ' + JSON.stringify(c2));
 if (SP) await page.screenshot({ path: SP + 'agtab_compact.png' });
 await page.evaluate(() => { if (typeof btcSet === 'function') btcSet('classic'); });
 const c4 = await page.evaluate(() => { const b = SB_BOOKINGS.find(x => /^b2c_/.test(x.id));

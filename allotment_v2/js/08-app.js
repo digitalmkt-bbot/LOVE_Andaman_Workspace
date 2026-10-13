@@ -54304,10 +54304,12 @@ function bkV2RenderTab2(){
     .t2-mtbl td.t2-cu,.t2-mtbl th.t2-cu{max-width:210px;width:210px}
     .t2-mtbl td.t2-cu{white-space:normal;line-height:1.5}
     .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:196px;width:196px;overflow:hidden}   /* §agTab3 · เดิม 142 · ป้าย Love Andaman แบบหัวอีเมลต้องการที่ */
-    body.btc #view-booking td.t2-ag .la-agtab{height:30px}
-    body.btc #view-booking td.t2-ag .la-agtab>span:first-child{width:29px!important;height:28px!important}
-    body.btc #view-booking td.t2-ag .la-agtab b{font-size:10.5px!important}
-    body.btc #view-booking td.t2-ag .la-agtab i{font-size:7.5px!important;margin-top:0!important}
+    /* §agTab4 · owner "ปรับให้มันเข้ากับ Compact ได้ไหม ตัวโลโก้" · Compact เอเยนต์อื่นเป็นแถบสี + ชื่อ ไม่มีกรอบ
+       ป้าย B2C จึงถอดกรอบ/เงา · แผ่นกรมท่าเล็กลงเป็นไอคอน 20px แทนแถบสี · ชื่อใช้ฟอนต์/สีเดียวกับชื่อเอเยนต์อื่น · ไม่มีคำขวัญ */
+    body.btc #view-booking td.t2-ag .la-agtab{border:0!important;box-shadow:none!important;border-radius:0!important;margin:0!important;padding:5px 8px 5px 1px!important;gap:7px!important;max-width:none!important}
+    body.btc #view-booking td.t2-ag .la-agtab>span:first-child{width:20px!important;height:20px!important;border-radius:4px;background-size:cover!important}
+    body.btc #view-booking td.t2-ag .la-agtab b{font-family:inherit!important;font-weight:800!important;font-size:12.5px!important;line-height:1.2!important;letter-spacing:.04em!important;color:#0F1B3D!important}
+    body.btc #view-booking td.t2-ag .la-agtab i{display:none!important}
     .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
     .t2-mtbl th.t2-vc{width:104px}
     .t2-upgfrom{display:block;width:max-content;max-width:100%;box-sizing:border-box;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
