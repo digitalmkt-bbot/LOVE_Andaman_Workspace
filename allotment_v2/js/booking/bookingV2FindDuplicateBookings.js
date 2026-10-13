@@ -2,15 +2,20 @@
 // Match flags it: (A) same voucher/ref · (B) same lead name + a shared trip date+route.
 // NOTE: a 3rd criterion "same agent + same date + same pax" was dropped — in real data it flagged 362/654
 // bookings (OTAs routinely send many same-size groups on the same day) → useless noise. Voucher + name are reliable.
-function bookingV2FindDuplicateBookings(d, excludeId){
+function bookingV2FindDuplicateBookings(d, excludeId, fresh){
   if(!d) return [];
-  const norm=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const norm=_bkDupNorm;
   const vref=norm(d.voucherRef||d.code);
   const lead=norm(d.leadPax||d.customerName);
   const myTrips=(d.trips||[]).filter(t=>t.routeId&&t.date);
   const myDR=new Set(myTrips.map(t=>t.date+'|'+t.routeId));
+  const X=_bkDupIndex(fresh);
+  const cand=new Set();
+  if(vref) (X.v.get(vref)||[]).forEach(b=>cand.add(b));
+  if(lead) myDR.forEach(dr=>{ (X.l.get(lead+'|'+dr)||[]).forEach(b=>cand.add(b)); });
+  const list=[...cand].sort((a,b)=>(X.pos.get(a)||0)-(X.pos.get(b)||0));
   const out=[];
-  (SB_BOOKINGS||[]).forEach(b=>{
+  list.forEach(b=>{
     if(b.id===excludeId) return;
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     const reasons=[];

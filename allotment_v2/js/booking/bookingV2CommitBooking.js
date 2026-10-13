@@ -162,7 +162,7 @@ function bookingV2CommitBooking(status){
     }
     // ── Duplicate-booking guard (soft · warn, allow proceed) ──
     if(typeof bookingV2FindDuplicateBookings==='function'){
-      const _dups=bookingV2FindDuplicateBookings(d, _bkV2.editingId||null);
+      const _dups=bookingV2FindDuplicateBookings(d, _bkV2.editingId||null, true);   /* §dupFast · ตอนบันทึกอ่านสดเสมอ */
       if(_dups.length){
         const _lines=_dups.slice(0,6).map(x=>{ const b=x.bk; const _vc=b.voucherRef||b.code||b.id; const _t0=(b.trips||[])[0]||{}; const _rn=((typeof getRoute==='function'&&getRoute(_t0.routeId))||{}).name||''; return '• '+_vc+' · '+(b.leadPax||'-')+' · '+(_t0.date||'')+(_rn?(' · '+_rn):'')+'\n   ('+x.reasons.join(' · ')+')'; }).join('\n');
         if(!confirm('⚠ พบ booking ที่อาจซ้ำ '+_dups.length+' รายการ:\n\n'+_lines+(_dups.length>6?'\n…':'')+'\n\nบันทึกเป็น booking ใหม่ต่อไปหรือไม่?')) return;
