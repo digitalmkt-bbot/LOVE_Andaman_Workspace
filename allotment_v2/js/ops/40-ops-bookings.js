@@ -147,7 +147,7 @@
     });
     if(bk.specialMeals && Array.isArray(bk.specialMeals.allergyList)) b.allergy_list = bk.specialMeals.allergyList.map(function(a){ return { name: a.name || '', qty: +a.qty || 0 }; });
     else if(Array.isArray(bk.allergyList)) b.allergy_list = bk.allergyList;
-    if(Array.isArray(bk.attachments)) b.attachments = bk.attachments.filter(function(a){ return a && a.id; }).map(function(a){ return { id: a.id, kind: a.kind || 'booking' }; });
+    if(Array.isArray(bk.attachments)) b.attachments = bk.attachments.filter(function(a){ return a && a.id; }).map(function(a){ var o={ id: a.id }; if(a.kind==='upload'||a.kind==='capture'||a.kind==='paste') o.kind=a.kind; return o; });
     if(bk.companyPurpose || bk.company_purpose) b.companyPurpose = bk.companyPurpose || bk.company_purpose;
     if(bk.priceBreakdown && bk.priceBreakdown.total != null && bk.total == null) b.total = coerce(bk.priceBreakdown.total, 'num');
     Object.keys(STRUCTS).forEach(function(s){
