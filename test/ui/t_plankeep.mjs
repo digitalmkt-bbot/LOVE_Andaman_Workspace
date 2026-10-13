@@ -7,6 +7,7 @@
 // 1 วางล่วงหน้า "พร้อม" ตั้งแต่พรุ่งนี้ (ยกเว้น PRJ) → ปิด MJ วันนี้ → แถวแผนยังอยู่ · แถวปิดงานจบวันนี้ · พรุ่งนี้เรือพร้อม
 // 2 วางล่วงหน้า "พร้อม" ตั้งแต่วันนี้ → ปิด MJ → ไม่เขียนแถวใหม่ทับ · วันนี้เรือพร้อม
 // 3 เริ่ม MJ ใหม่วันนี้ ขณะมีแผน "พร้อม" พรุ่งนี้ → แผนยังอยู่ · แถวซ่อมจบวันนี้ (MJ ใหม่ยังกันพรุ่งนี้ได้เพราะไม่อยู่ในรายการยกเว้น)
+// 5 แผนคลุมวันนี้ → เปิดใบเล็กวันเดียว → ปิด · แผนต้องอยู่ (เคส Verona/Tadeo/Romeo/Okeanos 10–11 ต.ค.)
 // 4 โค้ดเดิม (ก่อนแพตช์) ข้อ 1 ต้องล้ม · ยืนยันว่าเทสจับบั๊กได้จริง
 import { open } from './_harness.mjs';
 let bad = 0;
@@ -51,6 +52,16 @@ const r = await page.evaluate(() => {
   const fixRow = b.log.find(e => /Maintenance Job MJ-902/.test(e.note || ''));
   out.t3 = { planAlive: !!b.log.find(e => e.id === 'zz_plan'), fixTo: fixRow && fixRow.to, today: st(T), tomorrowBlockedBy: (boatEffStatus(b, TM).jobBlockNos || ''), tomorrowStored: getStoredStatus(b, TM).s };
 
+
+  // 5 · §planKeep2 · แผน "พร้อม" คลุมวันนี้ (ยกเว้น MJ-901 + PRJ-900) → เปิดใบเล็กใหม่วันนี้ → ปิดใบเล็ก → แผนยังอยู่ · เรือพร้อม
+  reset(); mkPrj(); mkMj('MJ-901'); plan(T);
+  const m5 = { id: 'zz_MJ-905', no: 'MJ-905', boatId: b.id, status: 'planned', startDate: T, setFixing: true, boatStatus: 'fixing', title: 'zz_test ลากเรือลงน้ำ', assets: [] }; FL_MAINT.push(m5);
+  const rows0 = b.log.length;
+  _flMaintStartProceed(m5.id);
+  const whileOpen = st(T), blockedBy = (boatEffStatus(b, T).jobBlockNos || ''), rowsAfterStart = b.log.length;
+  flMaintClose(m5.id, 'success', '');
+  out.t5 = { planAlive: !!b.log.find(e => e.id === 'zz_plan'), rowsAfterStart, rowsEnd: b.log.length, rows0, whileOpen, blockedBy, after: st(T), stored: getStoredStatus(b, T).id };
+
   const s0 = JSON.parse(snap); b.log = s0.log; FL_MAINT.length = 0; s0.mj.forEach(x => FL_MAINT.push(x)); FL_PROJECTS.length = 0; s0.prj.forEach(x => FL_PROJECTS.push(x));
   return { T, TM, boat: b.name, ...out };
 });
@@ -67,6 +78,10 @@ const t3 = r.t3;
 if (t3.planAlive && t3.fixTo === r.T && t3.today === 'fixing' && t3.tomorrowStored === 'available' && /MJ-902/.test(t3.tomorrowBlockedBy))
   ok(`3 เริ่ม MJ ใหม่ · แผนยังอยู่ · แถวซ่อมจบ ${t3.fixTo} · พรุ่งนี้ตารางบอก available แต่ MJ ใหม่ยังกัน (${t3.tomorrowBlockedBy})`);
 else fail('3 ' + JSON.stringify(t3));
+const t5 = r.t5;
+if (t5.planAlive && t5.rowsAfterStart === t5.rows0 && t5.rowsEnd === t5.rows0 && t5.whileOpen === 'fixing' && /MJ-905/.test(t5.blockedBy) && t5.after === 'available' && t5.stored === 'zz_plan')
+  ok(`5 แผนคลุมวันนี้ · เปิดใบเล็ก → ไม่เขียนแถว · จอขึ้น ${t5.whileOpen} (${t5.blockedBy}) · ปิดใบ → ${t5.after} จากแถวแผนเดิม`);
+else fail('5 ' + JSON.stringify(t5));
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (!e1.length) ok('ไม่มี error ใน console'); else fail('console: ' + e1.slice(0, 3).join(' | '));
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);

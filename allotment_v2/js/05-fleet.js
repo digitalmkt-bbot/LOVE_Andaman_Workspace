@@ -20671,6 +20671,17 @@ function _flMaintStartProceed(id){
     //   start the "not available" period TOMORROW so today still counts as operated. Editable afterwards.
     const _ranToday = _flBoatRanOn(b.id, TODAY_STR);
     const _fixFrom = _ranToday ? _flDayAfter(TODAY_STR) : TODAY_STR;
+    /* §planKeep2 (2026-10-13) · "วางเรือว่างล่วงหน้า · มีงานซ่อมรอปิดหลายงาน · ปิดงานแล้วกลายเป็น Fixing"
+       ลำดับที่พัง · วางแผน "พร้อม" คลุมวันนี้ (ยกเว้น MJ/PRJ ชุดเก่าไว้) → เปิดใบเล็กวันเดียว เช่น "ลากเรือลงน้ำ"
+       → autoClosePrevLog ลบแถวแผนที่เริ่มวันนี้ทิ้ง (Case B) พร้อมรายการยกเว้น → ปิดใบเล็ก
+       → flMaintClose เห็น MJ ชุดเก่าค้าง เขียน "ยังคงสถานะ Fixing/Unavailable จาก …" · แผนหายเงียบ ๆ
+       Verona/Tadeo/Romeo/Okeanos 10–11 ต.ค. เป็นแบบนี้ทุกลำ
+       ตอนนี้ · ถ้าวันที่เริ่มมีแถวแผนคลุมอยู่ ไม่เขียนแถวซ่อมเลย · ใบใหม่ไม่อยู่ในรายการยกเว้น
+       boatJobBlock จึงกันเรือให้เองระหว่างที่ใบเปิด (จอขึ้น Fixing พร้อมบอกว่าจากใบไหน)
+       ปิดใบเมื่อไหร่ เรือกลับไปตามแผนทันที · แถวแผนไม่ถูกแตะ */
+    if(typeof laPlanRowAt==='function' && laPlanRowAt(b,_fixFrom)){
+      renderBoats();
+    } else {
     /* §planKeep · แถวที่คนวางไว้ในอนาคตต้องอยู่ · แถวซ่อมนี้จบก่อนแถวนั้นหนึ่งวัน
        ใบใหม่นี้ไม่อยู่ในรายการที่คนยกเว้นไว้ boatJobBlock จึงยังกันเรือวันนั้นตามปกติ · แค่ไม่ลบแผนของเขาทิ้ง */
     const _sysTo=(typeof laAutoCloseKeepFuture==='function')?laAutoCloseKeepFuture(b,_fixFrom):(autoClosePrevLog(b,TODAY_STR),null);
@@ -20683,6 +20694,7 @@ function _flMaintStartProceed(id){
       reason: targetReason
     });
     renderBoats();
+    }   /* §planKeep2 */
   }
   // Only cascade asset status to 'fixing' if boatStatus = fixing
   const cascadeAssetFixing = (targetStatus === 'fixing');
