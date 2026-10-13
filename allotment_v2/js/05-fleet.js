@@ -11441,12 +11441,13 @@ function flRenderBoatDetailPink(){
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600">${fromLbl} → ${toLbl}</div>
-          <div style="font-size:10px;color:${dim.ink2};margin-top:2px">${a.startDate} – ${a.endDate} · ${ASN_TYPE_LABEL[a.type]||a.type}</div>
+          <div style="font-size:10px;color:${dim.ink2};margin-top:2px">${a.startDate} – ${a.endDate||'<b style="color:#9A5B00">ยังไม่กำหนดวันกลับ</b>'} · ${ASN_TYPE_LABEL[a.type]||a.type}</div>
           ${a.reason?`<div style="font-size:10px;color:${dim.ink3};margin-top:3px;font-style:italic">${a.reason}</div>`:''}
           ${a.cost?`<div style="font-size:10px;color:${dim.ink3};margin-top:2px;font-family:'DM Mono',monospace">Cost: ฿${a.cost.toLocaleString()}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:end;flex-shrink:0">
           <span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600">${statusLabel}</span>
+          ${(a.status!=='cancelled'&&!a.endDate&&a.type!=='permanent')?`<button onclick="flAsnSetEnd('${b.id}','${a.id}')" style="background:#0B1E5B;border:none;color:#fff;border-radius:6px;font-size:9.5px;font-weight:600;cursor:pointer;padding:2px 7px">ตั้งวันกลับ</button>`:''}
           ${a.status!=='cancelled'?`<button onclick="flCancelAssignment('${b.id}','${a.id}')" style="background:none;border:none;color:${dim.ink3};font-size:9px;cursor:pointer;padding:0">Cancel</button>`:''}
         </div>
       </div>
@@ -23754,6 +23755,8 @@ function flOpenNewAssignment(boatId){
   const end = new Date();
   end.setDate(end.getDate()+7);
   document.getElementById('asn-end').value = end.toISOString().slice(0,10);
+  /* §asnOpen · เปิดฟอร์มใหม่ทุกครั้ง = มีวันจบ (ติ๊ก "ยังไม่รู้วันกลับ" เองถ้าไม่รู้) */
+  const _op=document.getElementById('asn-open'); if(_op){ _op.checked=false; flAsnOpenToggle(); }
   document.getElementById('asn-reason').value = '';
   document.getElementById('asn-cost').value = '';
   document.getElementById('asn-warn').style.display='none';
@@ -23770,9 +23773,12 @@ function flSaveAssignment(){
   if(fromPier === toPier){alert('From และ To ต้องต่างกัน');return;}
   const type = document.getElementById('asn-type').value;
   const startDate = document.getElementById('asn-start').value;
-  const endDate = document.getElementById('asn-end').value;
-  if(!startDate || !endDate){alert('กรุณาระบุวันเริ่ม-วันจบ');return;}
-  if(endDate < startDate){alert('วันจบต้องหลังวันเริ่ม');return;}
+  /* §asnOpen · ติ๊ก "ยังไม่รู้วันกลับ" = ไม่มีวันจบ (endDate ว่าง) · Permanent ไม่ต้องมีวันจบ */
+  const _openEnd = !!(document.getElementById('asn-open')||{}).checked;
+  const endDate = _openEnd ? '' : document.getElementById('asn-end').value;
+  if(!startDate){alert('Please set the start date');return;}
+  if(!endDate && !_openEnd && type!=='permanent'){alert('Please set the end date, or tick "return date not known yet"');return;}
+  if(endDate && endDate < startDate){alert('วันจบต้องหลังวันเริ่ม');return;}
   const reason = document.getElementById('asn-reason').value.trim();
   const cost = parseFloat(document.getElementById('asn-cost').value) || 0;
   
@@ -23780,8 +23786,8 @@ function flSaveAssignment(){
   const newId = 'asn_' + Date.now();
   // Determine initial status
   let status = 'planned';
-  if(startDate <= TODAY_STR && endDate >= TODAY_STR) status = 'active';
-  else if(endDate < TODAY_STR) status = 'completed';
+  if(startDate <= TODAY_STR && (!endDate || endDate >= TODAY_STR)) status = 'active';
+  else if(endDate && endDate < TODAY_STR) status = 'completed';
   
   b.assignments.push({
     id: newId,
@@ -23821,6 +23827,31 @@ function flSaveAssignment(){
   _pierAsnBoatId = null;
 }
 
+/* §asnOpen · ฟอร์ม Temporary · ติ๊ก "ยังไม่รู้วันกลับ" แล้วช่องวันจบปิดไป */
+function flAsnOpenToggle(){
+  const op=document.getElementById('asn-open'), en=document.getElementById('asn-end'); if(!op||!en) return;
+  en.disabled=!!op.checked; en.style.opacity=op.checked?'.45':''; if(op.checked) en.dataset.keep=en.value;
+  else if(!en.value && en.dataset.keep) en.value=en.dataset.keep;
+}
+/* §asnOpen · รู้วันกลับแล้ว · ใส่วันจบให้ใบที่ยังไม่มี · สถานะคิดใหม่ตามวัน (กลับวันนี้/ก่อนหน้า = จบแล้ว) */
+function flAsnSetEnd(boatId, asnId){
+  const b=BOATS.find(x=>x.id===boatId); if(!b||!b.assignments) return;
+  const a=b.assignments.find(x=>x.id===asnId); if(!a) return;
+  /* ข้อความในกล่อง prompt เป็นภาษาอังกฤษ (กติกาเดียวกับ alert · ภาษาไทยในกล่องระบบเพี้ยนบางเครื่อง) */
+  const v=prompt('Return date (YYYY-MM-DD): last day '+b.name+' stays at '+(PIER_LABELS[a.toPier]||a.toPier)+', then back to '+(PIER_LABELS[a.fromPier]||a.fromPier), TODAY_STR);
+  if(v==null) return;
+  const d=String(v).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(new Date(d+'T00:00'))){ alert('Date format must be YYYY-MM-DD'); return; }
+  if(d < a.startDate){ alert('Return date must be on or after the start date ('+a.startDate+')'); return; }
+  a.endDate=d;
+  if(a.status!=='cancelled') a.status = (a.startDate<=TODAY_STR && d>=TODAY_STR) ? 'active' : (d<TODAY_STR ? 'completed' : 'planned');
+  const ls=JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+  if(ls.boats){ const bls=ls.boats.find(x=>x.id===boatId); if(bls){ bls.assignments=b.assignments; localStorage.setItem(LS_KEY, JSON.stringify(ls)); } }
+  try{ if(typeof save==='function') save('config'); }catch(_){}
+  if(typeof flRenderBoatDetailPink==='function') flRenderBoatDetailPink();
+  if(typeof renderBoats==='function') renderBoats();
+  if(typeof flShowToast==='function') flShowToast('ตั้งวันกลับ '+d+' · '+b.name);
+}
 function flCancelAssignment(boatId, asnId){
   if(!confirm('ยกเลิก assignment นี้?')) return;
   const b = BOATS.find(x=>x.id===boatId);
@@ -23852,8 +23883,9 @@ function flAutoUpdateAssignments(){
     if(!b.assignments) return;
     b.assignments.forEach(a=>{
       if(a.status === 'cancelled') return;
-      const newStatus = (a.startDate <= today && a.endDate >= today) ? 'active'
-        : (a.endDate < today) ? 'completed' : 'planned';
+      const _e = (typeof asnEndOf==='function') ? asnEndOf(a) : (a.endDate||'9999-12-31');   /* §asnOpen */
+      const newStatus = (a.startDate <= today && _e >= today) ? 'active'
+        : (_e < today) ? 'completed' : 'planned';
       if(a.status !== newStatus){
         a.status = newStatus;
         changed = true;
@@ -25659,11 +25691,11 @@ function fdCard(b, ds){
   /* ใบจริงที่มีอยู่ในระบบแล้ว · ✕ = ตั้งใจถอน (ยังเป็นร่าง ต้องกดบันทึกอีกที) */
   (b.assignments||[]).forEach(function(a){
     if(!a || a.status==='cancelled') return;
-    if(a.endDate < ds || a.startDate > ds) return;
+    if((a.endDate && a.endDate < ds) || a.startDate > ds) return;   /* §asnOpen */
     var willDrop=(_fdPlan.drop||[]).some(function(d){ return d && d.asnId===a.id; });
     flag+='<div class="fd-asn'+(willDrop?' drop':'')+'">'+(willDrop?'<em>จะถอน</em> ':'')
       +'ย้ายท่า '+fdE(fdPierNm(a.fromPier))+' → '+fdE(fdPierNm(a.toPier))
-      +' <small>'+fdE(a.startDate)+'→'+fdE(a.endDate)+'</small>'
+      +' <small>'+fdE(a.startDate)+'→'+fdE(a.endDate||'ยังไม่กำหนด')+'</small>'
       +'<button onclick="event.stopPropagation();fdDropAsn(\''+fdE(b.id)+'\',\''+fdE(a.id)+'\')" '
       +'title="'+(willDrop?'ยกเลิกการถอน':'ตั้งใจถอนใบนี้')+'">'+(willDrop?'↺':'✕')+'</button></div>';
   });
@@ -28864,7 +28896,7 @@ function faBoatSide(o){
       return '<div class="fa-prow" onclick="flGoToMaint(\''+m.id+'\')"><div style="flex:1;min-width:0"><div class="fa-el" style="font-size:12.5px;font-weight:600">'+faE(m.title||m.detail||'Repair')+'</div><div style="font-size:10.5px;color:#8A8F9C">'+faE(m.no||'')+' · '+faFmtD(m.startDate,1)+'</div></div><b class="mono" style="font-weight:500;font-size:12.5px">'+(c?faMoney(c):'—')+'</b></div>'; }).join(''):'<div style="padding:14px 18px;color:#8A8F9C;font-size:12px">ยังไม่มีงานที่ปิดแล้ว</div>');
   var asg=(b.assignments||[]).filter(function(a){ return a.status!=='cancelled'; });
   var pa='<div class="fa-sec fa-kick">Pier assignments · '+asg.length+'<span style="margin-left:auto;letter-spacing:0;text-transform:none"><button type="button" class="fa-btn" style="height:26px;font-size:11.5px" onclick="flOpenNewAssignment(\''+b.id+'\')">+ New</button></span></div>'
-    +(asg.length?asg.slice(0,4).map(function(a){ var PN={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'}; return '<div class="fa-kv"><span>'+faE(faFmtD(a.startDate,1))+(a.endDate?(' → '+faFmtD(a.endDate,1)):'')+'</span><b>'+faE((PN[a.fromPier]||a.fromPier||'')+' → '+(PN[a.toPier]||a.toPier||''))+'<i style="font-style:normal;font-weight:400;color:#8A8F9C"> · '+faE(a.status||'')+'</i></b></div>'; }).join(''):'<div style="padding:12px 18px;color:#8A8F9C;font-size:12px">ยังไม่มีใบย้ายท่า</div>');
+    +(asg.length?asg.slice(0,4).map(function(a){ var PN={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'}; return '<div class="fa-kv"><span>'+faE(faFmtD(a.startDate,1))+(a.endDate?(' → '+faFmtD(a.endDate,1)):' → ยังไม่กำหนดวันกลับ')+'</span><b>'+faE((PN[a.fromPier]||a.fromPier||'')+' → '+(PN[a.toPier]||a.toPier||''))+'<i style="font-style:normal;font-weight:400;color:#8A8F9C"> · '+faE(a.status||'')+'</i></b></div>'; }).join(''):'<div style="padding:12px 18px;color:#8A8F9C;font-size:12px">ยังไม่มีใบย้ายท่า</div>');
   return docs+inc+rep+pa;
 }
 

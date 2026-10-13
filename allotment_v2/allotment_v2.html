@@ -1560,7 +1560,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=96dba7ae"></script>
+<script src="js/04-data-core.js?v=7107b61f"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -1983,7 +1983,7 @@
 .outcome-pill:hover{border-color:#bbb}
 </style>
 
-<script src="js/05-fleet.js?v=b37fb172"></script>
+<script src="js/05-fleet.js?v=6fcf8331"></script>
 <!-- Assign Engine Modal -->
 <div class="modal-overlay" id="fl-modal-assign-eng">
   <div class="modal" style="max-width:420px">
@@ -2165,7 +2165,8 @@
       </div>
       <div class="form-2">
         <div class="form-row"><label class="form-label" for="asn-start">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
-        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="asn-open" onchange="flAsnOpenToggle()"> ยังไม่รู้วันกลับ</label></div>
       </div>
       <div class="form-row"><label class="form-label" for="asn-reason">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
       <div class="form-row"><label class="form-label" for="asn-cost">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
@@ -3143,7 +3144,7 @@
   </div>
 </div>
 
-<script src="js/08-app.js?v=3fac2c70"></script>
+<script src="js/08-app.js?v=615e1c35"></script>
 <script src="js/09-action-board.js?v=5637c4dc"></script>
 </body>
 </html>

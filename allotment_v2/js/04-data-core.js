@@ -6843,9 +6843,10 @@ function renderBoatDetailPink(){
         return `<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;min-height:50px;box-sizing:border-box;padding:8px 14px;border-bottom:1px solid #ECEBE6">
           <div style="flex:1;min-width:200px">
             <div style="font-size:13px;font-weight:600;color:#0F1B3D">${escA(fromLbl)} → ${escA(toLbl)}</div>
-            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${fmtA(a.endDate)} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
+            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${a.endDate?fmtA(a.endDate):'<b style="color:#9A5B00">ยังไม่กำหนดวันกลับ</b>'} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
           </div>
           <span style="flex:none;background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${statusLabel}</span>
+          ${(a.status!=='cancelled'&&!a.endDate&&a.type!=='permanent')?`<button onclick="event.stopPropagation();flAsnSetEnd('${b.id}','${a.id}')" title="ใส่วันที่เรือกลับท่าเดิม" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#0B1E5B;border:1px solid #0B1E5B;color:#fff;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">ตั้งวันกลับ</button>`:''}
           ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;font:600 11.5px inherit;font-family:inherit;cursor:pointer">Cancel</button>`:''}
         </div>`;
       };
@@ -7586,7 +7587,7 @@ function getBoatCurrentPier(b, ds){
   //    §boatPierDate · ใบย้ายท่าที่ครอบคลุม "วันที่ถาม" ไม่ใช่วันนี้
   if(b.assignments && Array.isArray(b.assignments)){
     const active = b.assignments.find(a =>
-      a.status !== 'cancelled' && a.startDate <= ds && a.endDate >= ds
+      a.status !== 'cancelled' && a.startDate <= ds && asnEndOf(a) >= ds   /* §asnOpen */
     );
     if(active) return active.toPier;
   }
@@ -7611,12 +7612,20 @@ function getBoatShopLocation(b){
   return activeMj ? String(activeMj.location).trim() : '';
 }
 
+/* ══ §asnOpen (2026-10-13) · ใบย้ายท่าที่ "ยังไม่รู้วันกลับ" ══════════════════════════
+   owner (ฟอร์ม Move boat to another pier): "ถ้ารู้วันย้าย แต่ยังไม่รู้วันกลับล่ะ"
+   ใบที่ endDate ว่าง = อยู่ท่าใหม่ไปเรื่อย ๆ ตั้งแต่วันเริ่ม จนกว่าจะกด "ตั้งวันกลับ"
+   ทุกที่ที่ถามว่าใบไหนครอบวันนั้น ใช้ asnEndOf() แทน a.endDate ตรง ๆ (ว่าง = 9999-12-31)
+   ไม่ต้องแก้ฐานข้อมูล · boats__assignments.enddate เป็น text อยู่แล้ว */
+function asnEndOf(a){ return (a && a.endDate) ? a.endDate : '9999-12-31'; }
+function asnIsOpen(a){ return !!(a && !a.endDate && a.status!=='cancelled'); }
+function asnEndLabel(a, fmt){ return (a && a.endDate) ? (fmt?fmt(a.endDate):a.endDate) : 'ยังไม่กำหนดวันกลับ'; }
 // Get active assignment for a boat (if any)
 function getActiveAssignment(b){
   if(!b.assignments || !Array.isArray(b.assignments)) return null;
   const today = TODAY_STR;
   return b.assignments.find(a => 
-    a.status !== 'cancelled' && a.startDate <= today && a.endDate >= today
+    a.status !== 'cancelled' && a.startDate <= today && asnEndOf(a) >= today   /* §asnOpen */
   );
 }
 
@@ -7634,7 +7643,7 @@ function getPastAssignments(b){
   if(!b.assignments || !Array.isArray(b.assignments)) return [];
   const today = TODAY_STR;
   return b.assignments.filter(a => 
-    a.status !== 'cancelled' && a.endDate < today
+    a.status !== 'cancelled' && a.endDate && a.endDate < today   /* §asnOpen · ใบที่ยังไม่มีวันจบไม่มีทางเป็นใบที่จบแล้ว */
   ).sort((a,b)=>b.endDate.localeCompare(a.endDate));
 }
 

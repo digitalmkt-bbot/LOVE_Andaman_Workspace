@@ -71564,7 +71564,7 @@ function pjAsnAt(boat, date){
   var a=(boat && boat.assignments)||[];
   for(var i=0;i<a.length;i++){
     var x=a[i];
-    if(x && x.status!=='cancelled' && x.startDate && x.endDate && x.startDate<=date && x.endDate>=date) return x;
+    if(x && x.status!=='cancelled' && x.startDate && x.startDate<=date && (!x.endDate || x.endDate>=date)) return x;   /* §asnOpen · ไม่มีวันจบ = ยังอยู่ */
   }
   return null;
 }
@@ -72883,7 +72883,7 @@ function pjCard(B, pier, ro){
         ? ('<span class="pj-move" title="ใบย้ายท่า '+poE(B._asn.startDate||'')+' – '+poE(B._asn.endDate||'')
             +(B._asn.reason?(' \u00b7 '+poE(B._asn.reason)):'')+'">ย้ายมาจาก '
             +poE((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[B._asn.fromPier])||B._asn.fromPier)
-            +(B._asn.type==='permanent'?' \u00b7 ถาวร':(B._asn.endDate?(' \u00b7 ถึง '+poE(pjDocDate(B._asn.endDate))):''))+'</span>')
+            +(B._asn.type==='permanent'?' \u00b7 ถาวร':(B._asn.endDate?(' \u00b7 ถึง '+poE(pjDocDate(B._asn.endDate))):' \u00b7 ยังไม่กำหนดวันกลับ'))+'</span>')
         : '')
      +(B._shop?('<span class="pj-shop" title="เรือไม่ได้อยู่ที่ท่า · ท่านี้เป็นผู้รับผิดชอบ">อยู่อู่ '+poE(B._shop)+'</span>'):'')
      +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
