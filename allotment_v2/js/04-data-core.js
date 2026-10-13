@@ -8328,6 +8328,13 @@ const FC_CSS=`<style>
   .fm-sep{grid-column:1 / span 8;height:1px;background:#EEF0F4;margin:4px 0}
   .fm-lg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;font-size:12px;color:#374151;padding:12px 14px}
   .fm-ro{font-size:12px;color:#6B7280;text-align:center;padding:2px 8px}
+  /* §fcMob2 · หัวเว้นที่ให้ปุ่มลอยของแอป · Today อยู่ท้ายแถวสัปดาห์ · ท้ายหน้าเว้นให้ป้ายแจ้งเตือนมุมล่างซ้ายของแอป */
+  .fm-hd{padding-right:118px;min-height:44px}
+  .fm-hd .br b{font-size:17px}
+  .fm-wk{gap:8px}
+  .fm-wk .rg{flex:1;text-align:center;white-space:nowrap}
+  .fm-wk .fm-tdy{width:auto;height:42px;border-radius:10px;padding:0 12px;font-size:13px;background:#1F8A5B;color:#fff}
+  .fm-body{padding-bottom:110px}
   /* ══ §fcMock (2026-10-13) · "ยังไม่เหมือน Mockup" · ชั้นนี้ทำให้หน้าตาตรงกับ mockup ที่อนุมัติ ══════
      ฟอนต์ IBM Plex Sans Thai (โหลดอยู่แล้วในหน้า) · ตัวเลข DM Mono · ตัวหนังสือ 12.5–14px แทน 9.5–11px
      พื้นขาว เส้นเทา แทนโทนครีม · ชิปเต็มความกว้างช่อง ชื่อซ้าย ตัวเลขขวา แถบใต้ (เฉพาะ 7 วัน)
@@ -8723,12 +8730,14 @@ function fcMobileHtml(){
   var d0=new Date(days[0]+'T00:00:00'), d6=new Date(days[6]+'T00:00:00');
   var rng=d0.getDate()+(d0.getMonth()!==d6.getMonth()?(' '+MO[d0.getMonth()]):'')+' – '+d6.getDate()+' '+MO[d6.getMonth()]+' '+d6.getFullYear();
   var h='<div class="fm"><div class="fm-top">'
-    +'<div class="fm-hd"><span class="br"><i>LOVE ANDAMAN</i><b>FLEET CALENDAR</b></span>'
-      +'<button class="fm-btn fm-tdy" onclick="fcMobToday()">Today</button></div>'
+    /* §fcMob2 (2026-10-13) · ภาพจากโทรศัพท์จริง · ปุ่ม ☰ / … ของแถบบนแอปลอยทับมุมขวา ปุ่ม Today หายไปใต้มัน
+       ย้าย Today ลงไปแถวสัปดาห์ · หัวเว้นขวาให้ปุ่มของแอป · LOVE ANDAMAN มีบนแถบแอปอยู่แล้ว ไม่ต้องซ้ำ */
+    +'<div class="fm-hd"><span class="br"><b>FLEET CALENDAR</b></span></div>'
     +'<div class="fm-seg"><button class="'+(_fc.mob==='day'?'on':'')+'" onclick="fcMobMode(\'day\')">By day</button>'
       +'<button class="'+(_fc.mob==='boat'?'on':'')+'" onclick="fcMobMode(\'boat\')">By boat</button></div>'
-    +'<div class="fm-wk"><button aria-label="Previous week" onclick="fcMobShift(-1)">&lsaquo;</button><span>'+rng+'</span>'
-      +'<button aria-label="Next week" onclick="fcMobShift(1)">&rsaquo;</button></div>';
+    +'<div class="fm-wk"><button aria-label="Previous week" onclick="fcMobShift(-1)">&lsaquo;</button><span class="rg">'+rng+'</span>'
+      +'<button aria-label="Next week" onclick="fcMobShift(1)">&rsaquo;</button>'
+      +'<button class="fm-btn fm-tdy" onclick="fcMobToday()">Today</button></div>';
   if(_fc.mob==='day'){
     h+='<div class="fm-days">'+days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), f=freeOn(ds);
       return '<button class="fm-day'+(ds===_fc.sel?' on':'')+(ds===TODAY?' t':'')+'" onclick="fcMobDay(\''+ds+'\')">'
