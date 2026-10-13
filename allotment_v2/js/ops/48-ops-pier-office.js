@@ -17,7 +17,9 @@
    PUT    /v1/pier-office/staff/{id}/pay-rate · GET|PUT /v1/pier-office/pay-rules
    GET    /v1/pier-office/{pier}/stock                              balances (poBal answers from them)
    POST   /v1/pier-office/{pier}/stock/{receive|count|adjust|laundry-out|laundry-in|mark-fixed|write-off}
-   POST   /v1/pier-office/{pier}/boats/{boat}/stock/{assign|unassign|ship-lost}
+   GET    /v1/pier-office/{pier}/moves?from=&limit=                  the stock ledger with each fine's status (PIER_MOVES, poLedgerOpen, finePay)
+   GET    /v1/pier-office/{pier}/days/{date}/boats/{boat}/outstanding   per item: carry, issued, settled, outstanding (poBoatSum, poBoatCarry, the close dialog)
+   POST   /v1/pier-office/{pier}/boats/{boat}/stock/{assign|unassign|ship-lost|ship-writeoff|ship-repair}
    POST   /v1/pier-office/{pier}/days/{date}/boats/{boat}/close     the boat's "close" (return, repair, write-off, lost, on board)
    PATCH  /v1/pier-office/moves/{id}                                the note of a move
    POST   /v1/pier-office/moves/{id}/fine-payment                   paid or waived
@@ -32,11 +34,12 @@
    drawn again. Browser rules this replaces when ops mode is on: the licence check, the roster layers, the pay
    formula, the sign-out sheet's stock diff (poIsCommit), the day-close checks.
 
-   Not on the server, so not wired (the server has no read for them yet, see todo/pier-client-wiring-model.md):
-     · the stock ledger (poLedgerOpen, poBoatSum, poBoatCarry): moves are not listed, so the ledger and the
-       per-boat sums show only what this browser session wrote; fine rows likewise
-     · a boat's "outstanding" per item before the close dialog
-     · ship_writeoff / ship_repair (no server command): refused with a message
+   The ledger (2026-10-13): when the office draws, the pier's moves are read and PIER_MOVES is replaced by them
+   (moves not yet sent are kept), so poLedgerOpen, poBoatSum, poBoatCarry and the fine rows show the server's
+   history, not just this session's. The boat close dialog (poCloseOpen) first reads the boat's per-item
+   outstanding; poBoatSum / poBoatCarry answer from it until the next write. ship_writeoff / ship_repair
+   are the ship-writeoff / ship-repair commands (a note is required, no fine).
+   Reads cover up to 5000 moves from 2000-01-01 (the server's cap); a longer ledger shows a toast and the newest 5000.
    Legacy mode (!O.enabled()): every wrapper delegates to the captured original.
    Classic script · loads after 47-ops-pier-job.js.
    ════════════════════════════════════════════════════════════════════════ */
@@ -45,7 +48,7 @@
   var O = window.laOps; if(!O || !O.pier) return;
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
-  ['paCell', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
+  ['paCell', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
    'renderPierOffice', 'renderPierAtt'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
@@ -448,7 +451,8 @@
 
   /* moves · every move the screens add (poAdd) goes to its command; the server's moves replace them */
   var CMD = { receive: 'receive', count: 'count', adjust: 'adjust', laundry_out: 'laundry-out', laundry_in: 'laundry-in', fixed: 'mark-fixed' };
-  var BOATCMD = { assign: 'assign', unassign: 'unassign', ship_lost: 'ship-lost' };
+  var BOATCMD = { assign: 'assign', unassign: 'unassign', ship_lost: 'ship-lost', ship_writeoff: 'ship-writeoff', ship_repair: 'ship-repair' };
+  var SHIP_LOSS = { ship_lost: 1, ship_writeoff: 1, ship_repair: 1 };
   var CLOSE_T = { 'return': 'returned', repair: 'repair', writeoff: 'writeoff', lost: 'lost', onboard: 'onboard' };
   function moves(){ return arr('PIER_MOVES'); }
   // moves already in the browser when the office first loads are not ours to send
@@ -477,7 +481,7 @@
     U.forEach(function(m){
       var t = m.type, boat = m.boatId || '';
       if(boat && CLOSE_T[t] && !(t === 'writeoff' && m.from === 'repair')) add('close|' + m.pier + '|' + m.date + '|' + boat, 'close', m);
-      else if(BOATCMD[t] && boat) add('boat|' + t + '|' + m.pier + '|' + m.date + '|' + boat + '|' + (t === 'ship_lost' ? text(m.note) + '|' + (m.fine > 0 ? m.id : '') : ''), 'boat', m);
+      else if(BOATCMD[t] && boat) add('boat|' + t + '|' + m.pier + '|' + m.date + '|' + boat + '|' + (SHIP_LOSS[t] ? text(m.note) + '|' + (t === 'ship_lost' && m.fine > 0 ? m.id : '') : ''), 'boat', m);
       else if(t === 'writeoff' && m.from === 'repair') add('wo|' + m.pier + '|' + m.date + '|' + text(m.note), 'wo', m);
       else if(CMD[t] && !boat) add('cmd|' + t + '|' + m.pier + '|' + m.date + '|' + (m.from || '') + '|' + text(m.note), 'cmd', m);
       else if(CMD[t] && t === 'adjust') add('cmd|' + t + '|' + m.pier + '|' + m.date + '||' + text(m.note), 'cmd', m);
@@ -557,6 +561,57 @@
     },
     commit: function(){}
   });
+
+  /* ledger · the pier's moves from the server replace PIER_MOVES (what is not sent yet stays) */
+  var LEDGER_FROM = '2000-01-01', LEDGER_LIMIT = 5000;
+  function loadMoves(pier){
+    return O.get('/v1/pier-office/' + enc(pier) + '/moves', { from: LEDGER_FROM, limit: LEDGER_LIMIT }).then(function(j){
+      var list = moves(), keep = list.filter(function(m){ return m && (m.pier !== pier || !m.srv); });
+      var F = cfg().finePay; if(!F || typeof F !== 'object') F = cfg().finePay = {};
+      if(fineBase === null) fineBase = {};
+      // the server answers newest first; legacy lists oldest first
+      (j.moves || []).slice().reverse().forEach(function(sm){
+        keep.push(fromServerMove(sm));
+        var f = sm.fine;
+        if(f && (f.status === 'paid' || f.status === 'waived')){
+          var e = { st: f.status, at: f.paid_at || '', by: f.paid_by || '', how: f.how || '', note: f.note || '' };
+          F[sm.id] = e; fineBase[sm.id] = clone(e);
+        }
+      });
+      list.length = 0; keep.forEach(function(m){ list.push(m); });
+      if(j.total > (j.moves || []).length) O.fail('Stock ledger is long', new Error('Showing the newest ' + j.moves.length + ' of ' + j.total + ' moves'));
+    });
+  }
+  /* outstanding · a boat's day per item, from the server (the close dialog's figures) */
+  var outst = {};
+  O.onWrite(function(kind){ if(kind === 'pier') outst = {}; });
+  function outKey(pier, date, boat){ return pier + '|' + date + '|' + boat; }
+  function hasUnsent(boat){ return moves().some(function(m){ return m && !m.srv && m.boatId === boat; }); }
+  function outOf(date, boat){
+    var e = outst[outKey(window._poPier, date, boat)];
+    return ready() && e && !hasUnsent(boat) ? e : null;
+  }
+  window.poBoatSum = function(date, boatId, pier){
+    var r = L.poBoatSum.apply(this, arguments), e = outst[outKey(pier, date, boatId)];
+    if(!ready() || !e || hasUnsent(boatId)) return r;
+    e.forEach(function(x){
+      if(r && r[x.item_id]) r[x.item_id] = { iss: x.issued, ret: x.returned, rep: x.repair, wo: x.writeoff, lost: x.lost, ob: x.onboard };
+    });
+    return r;
+  };
+  window.poBoatCarry = function(date, boatId){
+    var e = outOf(date, boatId);
+    if(!e) return L.poBoatCarry.apply(this, arguments);
+    var out = {}; e.forEach(function(x){ if(x.carry > 0) out[x.item_id] = x.carry; });
+    return out;
+  };
+  window.poCloseOpen = function(bid){
+    var self = this, args = arguments, pier = window._poPier, date = window._poDate;
+    if(!ready()) return L.poCloseOpen.apply(self, args);
+    return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/outstanding').then(function(j){
+      outst[outKey(pier, date, bid)] = j.items || [];
+    }, function(e){ O.fail('Boat outstanding not read', e); }).then(function(){ return L.poCloseOpen.apply(self, args); });
+  };
 
   /* fines · PIER_CFG.finePay[moveId] = { st: 'paid'|'waived', how, note } */
   var fineBase = null;
@@ -694,6 +749,7 @@
     if(ready()){
       var pier = window._poPier, date = window._poDate;
       ensure('stock|' + pier, function(){ return loadStock(pier); }, 'renderPierOffice');
+      ensure('moves|' + pier, function(){ return loadMoves(pier); }, 'renderPierOffice');
       ensure('day|' + pier + '|' + date, function(){ return loadDay(pier, date); }, 'renderPierOffice');
     }
     return r;
@@ -719,5 +775,5 @@
   };
 
   // test hooks
-  P._office = { cycleKey: cycleKey, sheetBody: sheetBody, setView: setView, state: function(){ return { stock: stock, stages: stages, cells: cells, pay: pay, dayBase: dayBase }; } };
+  P._office = { loadMoves: loadMoves, cycleKey: cycleKey, sheetBody: sheetBody, setView: setView, state: function(){ return { stock: stock, stages: stages, cells: cells, pay: pay, dayBase: dayBase }; } };
 })();
