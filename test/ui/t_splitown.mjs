@@ -10,9 +10,11 @@
 // Checks
 //   1 the self-arrive split rows are in the Own transportation zone, not in the booking's van zone
 //   2 the main rows stay in the van zone
-//   3 chips both sides: main row "🔗 +N มาเอง", self row "🔗 กลุ่มเดียวกัน · <zone> N" · same color
+//   3 §together · "👥 Together" on both rows of a booking · same color on both · the two bookings get different colors
+//     the self row shows the name picked at booking time (altPickups[].who) instead of the lead · no +N button there
 //   4 zone band counts: Own transportation +2 booking and +self pax · van zone pax minus the self pax
-//   5 click a chip → scrolls to the other row and flashes it
+//   5 hover a chip → floating popup: one line per row (people, name, how, zone), "แถวนี้" on this row
+//     click pins it · its "ไปที่แถว" button scrolls to the other row and flashes it · Esc closes
 //   6 an Own transportation zone appears even when that trip had none before
 //   7 Boat Assign mode (no split rows) keeps the booking whole in its van zone
 //   8 the day header "ยังไม่จัดรถ" no longer waits on a van for the self-arrive person
@@ -70,8 +72,9 @@ const read = () => page.evaluate(S => {
       if (!tr.classList.contains('t2-row')) return;
       const al = tr.getAttribute('data-al') || ''; const id = al.split('@')[0].split('#')[0];
       if (id !== S.A && id !== S.B) return;
-      const ch = tr.querySelector('.t2-spl');
-      out.rows.push({ al, zone, chip: ch ? ch.textContent.trim() : '', go: ch ? ch.getAttribute('data-spl') : '', col: ch ? getComputedStyle(ch).color : '' });
+      const ch = tr.querySelector('.t2-tog'), cu = tr.querySelector('td.t2-cu');
+      out.rows.push({ al, zone, chip: ch ? ch.textContent.trim() : '', col: ch ? getComputedStyle(ch).backgroundColor : '',
+        lead: cu ? (cu.querySelector('.t2-lead') || {}).textContent : '', more: !!(cu && cu.querySelector('.t2-more, .t2-leadonly')) });
     });
   });
   return out;
@@ -84,8 +87,11 @@ else fail('1 ' + JSON.stringify(R1.rows));
 if (main.length === 2 && main.every(r => /@0$/.test(r.al)) && main.some(r => r.zone === zl(S.zA)) && main.some(r => r.zone === zl(S.zB))) ok('2 main rows stay in ' + [...new Set(main.map(r => r.zone))].join(' / '));
 else fail('2 ' + JSON.stringify(main));
 const c3 = [S.A, S.B].map(id => { const m = main.find(r => r.al.startsWith(id)), o = own.find(r => r.al.startsWith(id)); return { m, o }; });
-if (c3.every(({ m, o }) => m && o && /^🔗 \+1 มาเอง$/.test(m.chip) && /^🔗 กลุ่มเดียวกัน · (Khao Lak|Phuket|Ranong) \d+$/.test(o.chip) && m.go === o.al && o.go === m.al && m.col === o.col))
-  ok('3 chips · ' + c3.map(({ m, o }) => `"${m.chip}" ↔ "${o.chip}"`).join(' · '));
+const leadA = await page.evaluate(id => SB_BOOKINGS.find(b => b.id === id).leadPax, S.A);
+const [cA, cB] = c3;
+if (c3.every(({ m, o }) => m && o && m.chip === '👥 Together' && o.chip === '👥 Together' && m.col === o.col) && cA.m.col !== cB.m.col
+    && cA.o.lead === 'Guide Zz Test' && !cA.o.more && cA.m.lead === leadA && cB.o.lead === cB.m.lead)
+  ok(`3 Together on both rows · A ${cA.m.col} · B ${cB.m.col} · A's self row shows "${cA.o.lead}" (lead ${leadA}) · B (no name picked) keeps the lead`);
 else fail('3 ' + JSON.stringify(c3));
 const bo = R1.bands['Own transportation'] || '';
 if (!S.before['Own transportation'] && bo === '2 booking · 2 pax') ok('4/6 Own transportation band appears: "' + bo + '" (none before)'); else fail('4 ' + JSON.stringify({ before: S.before, after: R1.bands }));
@@ -97,12 +103,30 @@ if (SP) for (const [k, f] of [['@0', 'splitown_main.png'], ['@1', 'splitown_own.
   const b = await tr.boundingBox(); await page.screenshot({ path: SP + f, clip: { x: b.x, y: Math.max(0, b.y - (k === '@1' ? 120 : 30)), width: 1500, height: b.height + (k === '@1' ? 160 : 60) } }); }
 
 const c5 = await page.evaluate(async S => {
-  const ch = [...document.querySelectorAll('#view-booking .t2-spl')].find(c => c.closest('tr').getAttribute('data-al') === S.A + '@0');
-  window.scrollTo(0, 0); ch.click(); await new Promise(z => setTimeout(z, 900));
+  const ch = document.querySelector('#view-booking tr.t2-row[data-al="' + S.A + '@0"] .t2-tog');
+  ch.scrollIntoView({ block: 'center' }); await new Promise(z => setTimeout(z, 150));
+  ch.dispatchEvent(new MouseEvent('mouseenter')); await new Promise(z => setTimeout(z, 100));
+  const pop = document.getElementById('t2-tog-pop'), vis = () => pop && getComputedStyle(pop).display === 'block';
+  const lines = [...pop.querySelectorAll('.tg-li')].map(l => ({ t: l.querySelector('.tg-tx').textContent.replace(/\s+/g, ' ').trim(), here: l.classList.contains('here'), go: !!l.querySelector('.tg-go') }));
+  const hover = vis(), head = pop.querySelector('.tg-hd').textContent;
+  ch.dispatchEvent(new MouseEvent('mouseleave')); await new Promise(z => setTimeout(z, 300)); const gone = !vis();
+  ch.click(); await new Promise(z => setTimeout(z, 50)); ch.dispatchEvent(new MouseEvent('mouseleave')); await new Promise(z => setTimeout(z, 300)); const pinned = vis();
+  pop.querySelector('.tg-go').click(); await new Promise(z => setTimeout(z, 900));
   const tr = document.querySelector('#view-booking tr.t2-row[data-al="' + S.A + '@1"]'); const r = tr.getBoundingClientRect();
-  return { flash: tr.classList.contains('t2-splfl'), inView: r.top >= 0 && r.bottom <= innerHeight };
+  const flash = tr.classList.contains('t2-splfl'), inView = r.top >= 0 && r.bottom <= innerHeight, closedAfterGo = !vis();
+  const c2 = tr.querySelector('.t2-tog'); c2.click(); await new Promise(z => setTimeout(z, 50)); const re = vis();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); const esc = !vis();
+  return { hover, head, lines, gone, pinned, flash, inView, closedAfterGo, re, esc };
 }, S);
-if (c5.flash && c5.inView) ok('5 chip click scrolls to the other row and flashes it'); else fail('5 ' + JSON.stringify(c5));
+if (c5.hover && c5.lines.length === 2 && c5.lines[0].here && !c5.lines[0].go && !c5.lines[1].here && c5.lines[1].go && /Guide Zz Test/.test(c5.lines[1].t) && /มาเองที่ท่า/.test(c5.lines[1].t)
+    && c5.gone && c5.pinned && c5.flash && c5.inView && c5.closedAfterGo && c5.re && c5.esc)
+  ok(`5 popup "${c5.head.trim()}" · ${c5.lines.map(l => '[' + l.t + ']').join(' ')} · hover/pin/go/Esc all work`);
+else fail('5 ' + JSON.stringify(c5));
+if (SP) { const t = page.locator(`#view-booking tr.t2-row[data-al="${S.A}@1"] .t2-tog`); await t.scrollIntoViewIfNeeded(); await t.click(); await page.waitForTimeout(200);
+  const b = await page.locator(`#view-booking tr.t2-row[data-al="${S.A}@1"]`).boundingBox(), p = await page.locator('#t2-tog-pop').boundingBox();
+  const y0 = Math.max(0, Math.min(b.y, p.y) - 70), y1 = Math.max(b.y + b.height, p.y + p.height) + 10;
+  await page.screenshot({ path: SP + 'together_pop.png', clip: { x: 0, y: y0, width: 1500, height: y1 - y0 } });
+  await page.keyboard.press('Escape'); }
 
 await page.evaluate(() => { bkV2ToggleBoatMode(); }); await page.waitForTimeout(700);
 const R7 = await read();
