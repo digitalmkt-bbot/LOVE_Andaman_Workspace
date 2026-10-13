@@ -8,6 +8,7 @@
 // 2 วางล่วงหน้า "พร้อม" ตั้งแต่วันนี้ → ปิด MJ → ไม่เขียนแถวใหม่ทับ · วันนี้เรือพร้อม
 // 3 เริ่ม MJ ใหม่วันนี้ ขณะมีแผน "พร้อม" พรุ่งนี้ → แผนยังอยู่ · แถวซ่อมจบวันนี้ (MJ ใหม่ยังกันพรุ่งนี้ได้เพราะไม่อยู่ในรายการยกเว้น)
 // 5 แผนคลุมวันนี้ → เปิดใบเล็กวันเดียว → ปิด · แผนต้องอยู่ (เคส Verona/Tadeo/Romeo/Okeanos 10–11 ต.ค.)
+// 6 §planWarn · เริ่มใบที่กันเรือบนเรือที่มีแผน ต้องถามก่อน
 // 4 โค้ดเดิม (ก่อนแพตช์) ข้อ 1 ต้องล้ม · ยืนยันว่าเทสจับบั๊กได้จริง
 import { open } from './_harness.mjs';
 let bad = 0;
@@ -62,6 +63,20 @@ const r = await page.evaluate(() => {
   flMaintClose(m5.id, 'success', '');
   out.t5 = { planAlive: !!b.log.find(e => e.id === 'zz_plan'), rowsAfterStart, rowsEnd: b.log.length, rows0, whileOpen, blockedBy, after: st(T), stored: getStoredStatus(b, T).id };
 
+
+  // 6 · §planWarn · เริ่มใบที่กันเรือ บนเรือที่มีแผนอนาคต → ต้องถามก่อน · ยกเลิก = ไม่เริ่ม · ใบ available ไม่ถาม
+  reset(); mkPrj(); plan(TM);
+  const m6 = { id: 'zz_MJ-906', no: 'MJ-906', boatId: b.id, status: 'pending', startDate: T, setFixing: true, boatStatus: 'fixing', title: 'zz_test', assets: [] }; FL_MAINT.push(m6);
+  const m7 = { id: 'zz_MJ-907', no: 'MJ-907', boatId: b.id, status: 'pending', startDate: T, setFixing: false, boatStatus: 'available', title: 'zz_test', assets: [] }; FL_MAINT.push(m7);
+  window.__asked = []; const _c = window.confirm;
+  window.confirm = (t) => { window.__asked.push(t); return false; };   // ครั้งแรกตอบยกเลิก
+  flMaintStart(m6.id); const st6cancel = m6.status;
+  window.confirm = (t) => { window.__asked.push(t); return true; };    // ครั้งที่สองตอบเริ่ม
+  flMaintStart(m6.id); const st6ok = m6.status;
+  flMaintStart(m7.id); const st7 = m7.status;
+  window.confirm = _c;
+  out.t6 = { asked: window.__asked.length, mentionsPlan: /พร้อม/.test(window.__asked[0] || '') && window.__asked[0].indexOf(TM) >= 0 && /MJ-906/.test(window.__asked[0]), st6cancel, st6ok, st7, planAlive: !!b.log.find(e => e.id === 'zz_plan') };
+
   const s0 = JSON.parse(snap); b.log = s0.log; FL_MAINT.length = 0; s0.mj.forEach(x => FL_MAINT.push(x)); FL_PROJECTS.length = 0; s0.prj.forEach(x => FL_PROJECTS.push(x));
   return { T, TM, boat: b.name, ...out };
 });
@@ -82,6 +97,10 @@ const t5 = r.t5;
 if (t5.planAlive && t5.rowsAfterStart === t5.rows0 && t5.rowsEnd === t5.rows0 && t5.whileOpen === 'fixing' && /MJ-905/.test(t5.blockedBy) && t5.after === 'available' && t5.stored === 'zz_plan')
   ok(`5 แผนคลุมวันนี้ · เปิดใบเล็ก → ไม่เขียนแถว · จอขึ้น ${t5.whileOpen} (${t5.blockedBy}) · ปิดใบ → ${t5.after} จากแถวแผนเดิม`);
 else fail('5 ' + JSON.stringify(t5));
+const t6 = r.t6;
+if (t6.asked === 2 && t6.mentionsPlan && t6.st6cancel === 'pending' && t6.st6ok === 'inprogress' && t6.st7 === 'inprogress' && t6.planAlive)
+  ok(`6 เริ่มใบ Fixing บนเรือมีแผน → ถาม (ระบุช่วงแผน + เลขใบ) · ยกเลิกแล้วใบยัง pending · ตกลงแล้ว inprogress · ใบ Available ไม่ถาม · แผนยังอยู่`);
+else fail('6 ' + JSON.stringify(t6));
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR/.test(e));
 if (!e1.length) ok('ไม่มี error ใน console'); else fail('console: ' + e1.slice(0, 3).join(' | '));
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);

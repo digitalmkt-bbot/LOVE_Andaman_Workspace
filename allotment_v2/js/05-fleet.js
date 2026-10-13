@@ -20464,8 +20464,31 @@ function _flMountedGearProp(m){
 // Start guard: when starting an engine repair that has a mounted gearbox/propeller, ask what to do with them.
 // Fires for ANY job type (scheduled/preventive/corrective) whose engine asset carries a gearbox/propeller —
 // so an engine SWAP can keep the gearbox+propeller on the boat (new engine adopts them).
+/* §planWarn (2026-10-13) · "ผิดที่ user" — ไม่ใช่ · จอไม่เคยบอกว่าใบนี้จะทับแผน
+   เรือที่วางแผน "พร้อม" ไว้ล่วงหน้า (§boatPlanAhead) · เปิดใบที่กันเรือทับลงไป ใบนั้นไม่อยู่ในรายการยกเว้น
+   boatJobBlock จึงกันเรือทุกวันที่แผนคลุม จนกว่าจะปิดใบหรือยืนยันแผนซ้ำ · ถูกกติกา แต่คนกดไม่รู้
+   ถามก่อนเริ่ม · บอกให้ครบว่ามี 3 ทาง · ยกเลิก = กลับไปแก้ก่อน · ตกลง = เริ่มทั้งที่รู้ */
+function flPlanWarn(m){
+  try{
+    const b=getBoat(m.boatId); if(!b||!Array.isArray(b.log)) return true;
+    const target=m.boatStatus||(m.setFixing===false?'available':'fixing');
+    if(target==='available') return true;
+    const plans=b.log.filter(e=>e&&e.s==='available'&&(typeof laRowPlanJobs==='function')&&laRowPlanJobs(e)&&(!e.to||e.to>=TODAY_STR))
+      .sort((x,y)=>String(x.from).localeCompare(String(y.from)));
+    if(!plans.length) return true;
+    const rng=plans.map(e=>e.from+' → '+(e.to||'ไม่กำหนด')).join('\n    ');
+    return confirm('เรือ '+(b.name||b.id)+' วางแผนไว้ว่า "พร้อม" ช่วง\n    '+rng
+      +'\n\nใบ '+(m.no||'')+' ตั้งสถานะเรือเป็น '+(target==='fixing'?'Fixing':'Unavailable')
+      +'\nเริ่มงานแล้ว ใบนี้จะกันเรือทับแผนทุกวัน จนกว่าจะปิดใบ'
+      +'\n\n· ซ่อมไปวิ่งไปได้ → ยกเลิก แล้วแก้สถานะเรือในใบเป็น Available'
+      +'\n· ต้องจอด แต่เสร็จทันแผน → เริ่มงาน แล้วไปยืนยันแผนซ้ำที่ Boat Status (ใบนี้จะเข้ารายการยกเว้น)'
+      +'\n· ต้องจอด และไม่ทันแผน → เริ่มงาน (เรือจะถูกกันตามใบ)'
+      +'\n\nเริ่มงานเลย?');
+  }catch(_){ return true; }
+}
 function flMaintStart(id){
   const m=FL_MAINT.find(x=>x.id===id);if(!m)return;
+  if(!flPlanWarn(m)) return;   /* §planWarn */
   const engAssets=(m.assets||[]).filter(a=>a.type==='engine'&&a.engId);
   const parts=_flMountedGearProp(m);
   if(engAssets.length && parts.length){ flStartGearOpen(id,parts); return; }
