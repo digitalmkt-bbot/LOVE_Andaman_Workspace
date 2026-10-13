@@ -13,9 +13,8 @@
    withoutStatus). Reconfirm is a day-of write: it is NOT versioned, so it goes
    through laOps.call, never laOps.bookingWrite.
 
-   Not wired here (route is confirmed, but the UI path is not in this packet):
-   the Re-confirm page status picker (rcSetStatus), agent send/unsend
-   (rcSendAgent / rcUnsendAgent → POST /v1/reconfirm/sent), rcToggleBooking.
+   Re-confirm page (via 'reconfirm'): rcSetStatus → PUT (status) or DELETE (cleared; a sent list
+   stays sent), rcSendAgent / rcUnsendAgent / rcToggleBooking → POST /v1/reconfirm/sent.
 
    Projection: the server's `reconfirm` object becomes legacy `bk.ops.reconfirm`
    `{status, via, at, by, sent, sentAt, sentBy}` (null when the server has none).
@@ -171,6 +170,72 @@
   wrap('bookingV2ReconfirmAll', function(orig, date, rid, via){
     if(!window.confirm('Mark ALL un-confirmed bookings on this trip as re-confirmed (' + (via === 'phone' ? 'phone' : 'list') + ')?')) return null;
     return setReconfirmAllServer(date, rid, via).catch(function(){ return null; });
+  });
+
+  // ── Re-confirm page ──
+  function redrawPage(){
+    if(typeof window.renderReconfirm === 'function') window.renderReconfirm();
+    redraw();
+  }
+  function applySent(res){
+    ((res && res.bookings) || []).forEach(function(r){
+      var bk = findBooking(r.id);
+      if(!bk) return;
+      bk.ops = bk.ops || {};
+      bk.ops.reconfirm = reconfirmFromServer(r.reconfirm);
+      bk.reconfirm = r.reconfirm ? { sentAt: r.reconfirm.sent_at || '', sentBy: r.reconfirm.sent_by || '' } : null;
+    });
+  }
+  function setSent(localIds, sent, failTitle){
+    var ids = localIds.map(toServerBookingId);
+    if(!ids.length) return Promise.resolve(null);
+    return O.queue(function(){
+      return O.call('POST', '/v1/reconfirm/sent', { booking_ids: ids, sent: !!sent });
+    }).then(function(res){
+      applySent(res);
+      O.wrote('booking-reconfirm-sent');
+      redrawPage();
+      return res;
+    }, function(e){
+      O.fail(failTitle, e);
+      return null;
+    });
+  }
+  function agentDayIds(key, onlyWithRecord){
+    var date = window._rcDate;
+    return listBookings().filter(function(b){
+      if(!b || DEAD.indexOf(b.status) >= 0) return false;
+      if(window._rcAgentKey(b) !== key || !window._rcDayMatch(b, date)) return false;
+      return !onlyWithRecord || !!(b.ops && b.ops.reconfirm);
+    }).map(function(b){ return b.id; });
+  }
+
+  wrap('rcSetStatus', function(orig, bkId, v){
+    var sid = toServerBookingId(bkId);
+    return O.queue(function(){
+      return v
+        ? O.call('PUT', '/v1/bookings/' + enc(sid) + '/reconfirm', { status: v, via: 'reconfirm' })
+        : O.call('DELETE', '/v1/bookings/' + enc(sid) + '/reconfirm');
+    }).then(function(ob){
+      applyBookingResponse(ob);
+      O.wrote('booking-reconfirm');
+      redrawPage();
+      return ob;
+    }, function(e){
+      O.fail('Could not save re-confirm', e);
+      redrawPage();
+      return null;
+    });
+  });
+  wrap('rcSendAgent', function(orig, key){
+    return setSent(agentDayIds(key, false), true, 'Could not mark the re-confirm list as sent');
+  });
+  wrap('rcUnsendAgent', function(orig, key){
+    return setSent(agentDayIds(key, true), false, 'Could not undo the re-confirm send');
+  });
+  wrap('rcToggleBooking', function(orig, bkId){
+    var was = typeof window._rcSent === 'function' && !!window._rcSent(findBooking(bkId) || {});
+    return setSent([bkId], !was, 'Could not update the re-confirm send');
   });
 
   var api = {

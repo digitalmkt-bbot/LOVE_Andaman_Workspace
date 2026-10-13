@@ -159,3 +159,47 @@ test('legacy mode: every wrapper delegates to the original and makes no API requ
   ]);
   assert.deepEqual(rt.calls, []);
 });
+
+function pageRuntime(respond) {
+  const rt = runtime({ respond });
+  rt.window._rcDate = '2026-10-12';
+  rt.window._rcAgentKey = () => 'a1';
+  rt.window._rcDayMatch = (bk, d) => (bk.trips || []).some((t) => t.date === d);
+  rt.window._rcSent = (bk) => !!(bk.ops && bk.ops.reconfirm && bk.ops.reconfirm.sent);
+  return rt;
+}
+
+test('re-confirm page: status picker PUTs via "reconfirm"; empty value DELETEs without all', async () => {
+  const rt = pageRuntime(async () => serverBooking());
+  // wrappers capture the legacy original at load; the page ones exist only if the global was defined at load, so call through window
+  await rt.window.rcSetStatus('bk_client_1', 'wa');
+  await rt.window.rcSetStatus('bk_client_1', '');
+  assert.deepEqual(rt.calls, [
+    { method: 'PUT', path: '/v1/bookings/bk_srv_1/reconfirm', body: { status: 'wa', via: 'reconfirm' } },
+    { method: 'DELETE', path: '/v1/bookings/bk_srv_1/reconfirm', body: undefined },
+  ]);
+});
+
+test('re-confirm page: send / unsend / toggle go through POST /v1/reconfirm/sent', async () => {
+  const rt = pageRuntime(async (m, p, body) => ({
+    bookings: body.booking_ids.map((id) => ({ id, reconfirm: body.sent ? { status: null, sent: true, sent_at: 'S', sent_by: 'RM' } : null })),
+    skipped: [],
+  }));
+  await rt.window.rcSendAgent('a1');
+  // bk 2 is cancelled, so it is not sent
+  assert.deepEqual(rt.calls[0].body, { booking_ids: ['bk_srv_1', 'bk_srv_3', 'bk_srv_4'], sent: true });
+  assert.equal(rt.SB_BOOKINGS[0].ops.reconfirm.sent, true);
+  await rt.window.rcToggleBooking('bk_client_1');
+  assert.deepEqual(rt.calls[1].body, { booking_ids: ['bk_srv_1'], sent: false });
+  assert.equal(rt.SB_BOOKINGS[0].ops.reconfirm, null);
+  await rt.window.rcUnsendAgent('a1');
+  assert.deepEqual(rt.calls[2].body, { booking_ids: ['bk_srv_3', 'bk_srv_4'], sent: false }, 'only bookings with a record (1 was cleared, 2 is cancelled)');
+});
+
+test('re-confirm page: a refused send reports and changes nothing', async () => {
+  const rt = pageRuntime(async () => { const e = new Error('no'); e.status = 400; throw e; });
+  const before = JSON.stringify(rt.SB_BOOKINGS);
+  await rt.window.rcSendAgent('a1');
+  assert.equal(JSON.stringify(rt.SB_BOOKINGS), before);
+  assert.equal(rt.failures.length, 1);
+});
