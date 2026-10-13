@@ -119,7 +119,7 @@
       }),
       docs: (Array.isArray(p.documents) ? p.documents : []).map(function(d){
         return {
-          id: d.id, name: d.name || '', attId: d.attachment_id || null, url: d.url || (d.attachment_id ? '/api/attach/' + encodeURIComponent(d.attachment_id) : ''),
+          id: d.id, name: d.name || '', attId: d.attachment_id || null, url: d.attachment_id ? window.laOpsAttachments.viewUrl(d.attachment_id) : (d.url || ''),
           mime: d.mime || null, size: d.size || null, note: d.note || '',
           type: d.type || null, phase: d.phase || null, status: d.status || 'required',
           addedAt: d.added_at || null, by: d.by || null

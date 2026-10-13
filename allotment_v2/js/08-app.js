@@ -5900,7 +5900,7 @@ function pfmRecSlipsHTML(){
 }
 function pfmSlipUpload(file,kind){
   if(!_pfmRec||!file) return; const bid=_pfmRec.bkId;
-  const post=(blob,mime,name)=>{ if(blob&&blob.size>6*1024*1024){ alert('ไฟล์ใหญ่เกิน 6MB · กรุณาย่อ/บีบอัดก่อน'); return; } const fr=new FileReader(); fr.onload=()=>{ const b64=String(fr.result).split(',')[1]||''; fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:bid,filename:name,mime:mime,dataB64:b64})}).then(r=>r.json()).then(j=>{ if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; } if(!_pfmRec) return; _pfmRec.slips.push({id:j.id,name:j.filename,mime:j.mime,size:j.size,kind:kind||'upload',at:new Date().toISOString()}); pfmRecRefreshSlips(); }).catch(e=>alert('อัปโหลดไม่สำเร็จ: '+e.message)); }; fr.readAsDataURL(blob); };
+  const post=(blob,mime,name)=>{ if(blob&&blob.size>6*1024*1024){ alert('ไฟล์ใหญ่เกิน 6MB · กรุณาย่อ/บีบอัดก่อน'); return; } const fr=new FileReader(); fr.onload=()=>{ const b64=String(fr.result).split(',')[1]||''; laOpsAttachments.upload({bookingId:bid,filename:name,mime:mime,dataB64:b64}).then(j=>{ if(!_pfmRec) return; _pfmRec.slips.push({id:j.id,name:j.filename,mime:j.mime,size:j.size,kind:kind||'upload',at:new Date().toISOString()}); pfmRecRefreshSlips(); }).catch(e=>alert('อัปโหลดไม่สำเร็จ: '+e.message)); }; fr.readAsDataURL(blob); };
   if(/^image\//.test(file.type||'')){ (typeof _bkV2DownscaleImage==='function'?_bkV2DownscaleImage:function(f,m,cb){cb(f,f.type);})(file,1600,(b,m)=>{ if(b) post(b,m,((file.name||'slip').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'slip'); }); }
   else post(file,file.type||'application/octet-stream',file.name||'slip');
 }
@@ -5909,7 +5909,7 @@ function pfmSlipCapture(){
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป แทน'); return; }
   navigator.mediaDevices.getDisplayMedia({video:true}).then(stream=>{ const v=document.createElement('video'); v.srcObject=stream; v.muted=true; v.play(); setTimeout(()=>{ try{ const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720; c.getContext('2d').drawImage(v,0,0,c.width,c.height); stream.getTracks().forEach(t=>t.stop()); c.toBlob(b=>{ if(b) pfmSlipUpload(new File([b],'slip-'+Date.now()+'.jpg',{type:'image/jpeg'}),'capture'); },'image/jpeg',0.9); }catch(e){ try{stream.getTracks().forEach(t=>t.stop());}catch(_){} } },350); }).catch(e=>{});
 }
-function pfmSlipRemove(id){ if(!_pfmRec) return; fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{}); _pfmRec.slips=_pfmRec.slips.filter(s=>s.id!==id); pfmRecRefreshSlips(); }
+function pfmSlipRemove(id){ if(!_pfmRec) return; laOpsAttachments.remove(id).then(()=>{ _pfmRec.slips=_pfmRec.slips.filter(s=>s.id!==id); pfmRecRefreshSlips(); }).catch(e=>alert('ลบไฟล์บนเซิร์ฟเวอร์ไม่สำเร็จ: '+e.message)); }
 function pfmRecSubmit(){
   const r=_pfmRec; if(!r) return;
   const amt=Math.max(0,Number(r.amount)||0); if(amt<=0){ alert('ใส่จำนวนเงินก่อน'); return; }
@@ -14756,15 +14756,12 @@ function pckSlipUpload(file, bkId, cb){
     var fr=new FileReader();
     fr.onload=function(){
       var b64=String(fr.result).split(',')[1]||'';
-      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({bookingId:bkId, filename:name, mime:mime, dataB64:b64})})
-        .then(function(r){ return r.json(); })
+      laOpsAttachments.upload({bookingId:bkId,filename:name,mime:mime,dataB64:b64})
         .then(function(j){
-          if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; }
           var meta={ id:j.id, name:j.filename, mime:j.mime, size:j.size };
           // ลงทะเบียนไว้ที่ b.paymentSlips ด้วย เพื่อให้หน้าดูสลิปเดิม (pfmSlipsRender) เห็นไฟล์นี้เหมือนกัน
           var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; });
-          if(b){ b.paymentSlips=Array.isArray(b.paymentSlips)?b.paymentSlips:[];
+          if(b&&!(window.laOps&&laOps.enabled())){ b.paymentSlips=Array.isArray(b.paymentSlips)?b.paymentSlips:[];
                  b.paymentSlips.push({id:meta.id,name:meta.name,mime:meta.mime,size:meta.size,kind:'pier',amount:0,
                                       at:new Date().toISOString(), by:(typeof laBy==='function'?laBy():'')}); }
           cb(meta);
@@ -21435,7 +21432,7 @@ function _tsSlipPage(r, i, total, seq, date, kicker){
     body='<div class="miss"><div class="mi">&#9888;</div><b>รูด/โอนแล้วแต่ยังไม่มีสลิป</b><span>'+r.miss+' รายการ</span></div>';
   } else {
     body='<div class="grid '+grid+'">'+r.imgs.map(function(x,k){
-      var f=x.f||{}, url='/api/attach/'+encodeURIComponent(f.id);
+      var f=x.f||{}, url=laOpsAttachments.viewUrl(f.id);
       var isImg=/^image\//.test(f.mime||'');
       var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
       var box=isImg?('<img src="'+url+'" alt="">')
@@ -43878,7 +43875,7 @@ function docCheckRunPre(bkId){
   _docOcrGetWorker().then(function(worker){
     var chain=Promise.resolve('');
     imgs.forEach(function(a){ chain=chain.then(function(acc){
-      return worker.recognize('/api/attach/'+encodeURIComponent(a.id)).then(function(r){
+      return worker.recognize(laOpsAttachments.viewUrl(a.id)).then(function(r){
         return acc+'\n'+((r&&r.data&&r.data.text)||'');
       });
     }); });
@@ -44069,7 +44066,7 @@ function _docPackPage(r, i, total, seq, date, kicker){
     body='<div class="miss"><div class="mi">&#9888;</div><b>ยังไม่ได้แนบเอกสาร</b><span>'+pax+' pax &middot; ต้องการ '+pax+' ไฟล์</span></div>';
   } else {
     body='<div class="grid '+grid+'">'+files.map(function(f,k){
-      var url='/api/attach/'+encodeURIComponent(f.id);
+      var url=laOpsAttachments.viewUrl(f.id);
       var isImg=/^image\//.test(f.mime||'');
       var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
       // §mark · PDF วาดเป็นภาพจริงตอนเปิดหน้าต่างพิมพ์ (ดู _docPackBoot)
@@ -44273,7 +44270,7 @@ function pfmSlipsRender(){
       <div style="font-size:11.5px;margin-top:4px">กด <b style="color:#163d2b">แนบไฟล์</b> · <b style="color:#163d2b">แคปจอ</b> · หรือถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:#163d2b">${_paste}</b> วางตรงนี้</div>
     </div>`;
   const cards = ss.map(s => {
-    const url = '/api/attach/' + encodeURIComponent(s.id);
+    const url = laOpsAttachments.viewUrl(s.id);
     const mime = String(s.mime||'');
     const isImg = /^image\//.test(mime), isPdf = /pdf/i.test(mime) || /\.pdf$/i.test(s.name||'');
     const H = _one ? '66vh' : '42vh';
@@ -44314,9 +44311,8 @@ function pfmSlipsAttach(file, kind){
     const fr = new FileReader();
     fr.onload = () => {
       const b64 = String(fr.result).split(',')[1]||'';
-      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:bid,filename:name,mime:mime,dataB64:b64})})
-        .then(r=>r.json()).then(j=>{
-          if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; }
+      laOpsAttachments.upload({bookingId:bid,filename:name,mime:mime,dataB64:b64})
+        .then(j=>{
           const b=(SB_BOOKINGS||[]).find(x=>x.id===bid); if(!b) return;
           b.paymentSlips = Array.isArray(b.paymentSlips) ? b.paymentSlips : [];
           b.paymentSlips.push({ id:j.id, name:j.filename, mime:j.mime, size:j.size, kind:kind||'upload', amount:0, at:new Date().toISOString(), by:(typeof laBy==='function'?laBy():'') });
@@ -44352,7 +44348,7 @@ function pfmSlipDelete(id){
   const b=(SB_BOOKINGS||[]).find(x=>x.id===_pfmSlipBk); if(!b) return;
   const s=(b.paymentSlips||[]).find(x=>x.id===id);
   if(!confirm('ลบสลิป "'+((s&&s.name)||id)+'" ทิ้งถาวร?\n\nไฟล์จะถูกลบออกจากระบบ · ยอดเงินที่บันทึกไว้ไม่เปลี่ยน')) return;
-  fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).then(r=>r.json()).then(j=>{ if(j&&j.error) alert('ลบไฟล์บนเซิร์ฟเวอร์ไม่สำเร็จ: '+j.error); }).catch(()=>{});
+  laOpsAttachments.remove(id).then(()=>{
   b.paymentSlips=(b.paymentSlips||[]).filter(x=>x.id!==id);
   try{ acctPersistBookings(); }catch(_){}
   let _touched=false;
@@ -44360,6 +44356,7 @@ function pfmSlipDelete(id){
   if(_touched && typeof sbPaymentsPersist==='function'){ try{ sbPaymentsPersist(); }catch(_){} }
   if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','ลบสลิป: '+((s&&s.name)||id),'Payment');
   pfmSlipsRender();
+  }).catch(e=>alert('ลบไฟล์บนเซิร์ฟเวอร์ไม่สำเร็จ: '+e.message));
 }
 /* วางรูปจากคลิปบอร์ดขณะเปิดหน้าจัดการสลิป (คนละตัวกับ listener ของ Record modal) */
 document.addEventListener('paste', function(ev){
@@ -44485,7 +44482,7 @@ function pfmPrintReport(){
       +   '<span class="pct">'+r.pct+'%</span></td>'
       + '<td>'+(r.slip
           ? '<div class="sl">'+(/^image\//.test(r.slip.mime||'')
-              ? '<img src="/api/attach/'+encodeURIComponent(r.slip.id)+'" alt="">'
+              ? '<img src="'+laOpsAttachments.viewUrl(r.slip.id)+'" alt="">'
               : '<span class="sn">📄</span>')
             + '<div><b>'+B(r.slip.amt)+'</b>'+(r.slip.n>1?(' <span class="of">· '+r.slip.n+' ใบ</span>'):'')
             + '<br><span class="of">'+e(when(r.slip.at))+'</span></div></div>'
@@ -44499,7 +44496,7 @@ function pfmPrintReport(){
       + '<div class="sub">ใบที่ '+(i+1)+'–'+Math.min(i+2, slipCards.length)+' จาก '+slipCards.length+' ใบ</div></div>'
       + '<div class="sub" style="text-align:right">Daily PFM</div></header>'
       + '<div class="sgrid">' + chunk.map(s => {
-          const url='/api/attach/'+encodeURIComponent(s.id);
+          const url=laOpsAttachments.viewUrl(s.id);
           const isImg=/^image\//.test(s.mime||'');
           return '<div class="sc">'
            + (isImg ? '<div class="sim"><img src="'+url+'" alt=""></div>' : '<div class="sim nf">📄 '+e(s.name||'')+'</div>')
@@ -44686,7 +44683,7 @@ function _docCheckDrawer(bkId, e, rName){
     return `<span style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${one('ad','AD')}${one('chd','CHD')}${one('inf','INF')}${one('foc','FOC')}<span style="font-size:10px;color:#8a8a82;font-weight:700;white-space:nowrap">= ${tot} pax</span></span>`;
   };
   const tripsBlock=(b.trips||[]).map((t,i)=>{ const rn=rName(t.routeId); return (i>0?'<div style="border-top:1px dashed #e8eae6;margin:7px 0"></div>':'')+subrow('Date',e(t.date||'-'))+subrow('Trip',e(rn))+subrow('Pax',_dcPaxChips(t.pax)); }).join('')||'-';
-  const fileHtml = files.length ? files.map(a=>{ const url='/api/attach/'+encodeURIComponent(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
+  const fileHtml = files.length ? files.map(a=>{ const url=laOpsAttachments.viewUrl(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
     return `<div style="margin-bottom:14px;border:1px solid #e3e6e1;border-radius:10px;overflow:hidden;background:#fff">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:12px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
       ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:100%;display:block"></a>`:isPdf?`<iframe src="${url}" style="width:100%;height:640px;border:none"></iframe>`:`<div style="padding:24px;text-align:center;font-size:12px;color:#8a8a82">📄 ${e(a.name||'file')} — <a href="${url}" target="_blank">เปิด</a></div>`}

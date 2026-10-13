@@ -14756,13 +14756,13 @@ function flProjDeleteVendorVisit(projId, vvId){
    ที่อื่นก่อนแล้วค่อยก๊อปลิงก์กลับมา — ในทางปฏิบัติแปลว่าไม่มีใครแนบ
 
    ใช้ท่อเดียวกับสลิปที่มีอยู่แล้ว ไม่ได้สร้างของใหม่:
-     POST /api/attach {bookingId,filename,mime,dataB64} → ตาราง attachments
-     GET  /api/attach/<id>  เสิร์ฟไฟล์แบบ inline (ต้องมี session)
+     POST /v1/attachments {filename,mime,data_b64} → attachment metadata
+     GET  /v1/attachments/<id> is fetched with Bearer auth by the adapter
    bookingId ที่ส่งคือ 'proj_<projId>' เป็นแค่ตัวคั่น ไม่ได้อ้างบุ๊กกิ้งจริง
    (ตาราง attachments ไม่มี FK ไปหา bookings · ฝั่ง mailimg ก็ใช้วิธีนี้อยู่แล้ว)
    จึงไม่ต้อง migrate อะไรเลย
 
-   ⚠ blob เก็บแค่ ref — {attId, url:'/api/attach/<id>', mime, size} ไม่เคยเก็บ base64
+   ⚠ blob เก็บแค่ ref — {attId, url, mime, size} ไม่เคยเก็บ base64
      เก็บ data: URL ลง docs[] = blob ของทั้งแอปบวมทุกครั้งที่ถ่ายรูป (ดู §fkIndex)
    ⚠ รูปย่อก่อนส่งด้วย _bkV2DownscaleImage ซึ่งอยู่ 08-app.js (โหลดทีหลังไฟล์นี้)
      เรียกตอนคลิกเท่านั้นจึงมีตัวจริงเสมอ · ยังใส่ fallback ไว้เผื่อ
@@ -14798,10 +14798,8 @@ function _flProjUploadOne(file, projId, cb){
     const fr = new FileReader();
     fr.onload = ()=>{
       const b64 = String(fr.result).split(',')[1]||'';
-      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({bookingId:'proj_'+projId, filename:name, mime:mime, dataB64:b64})})
-        .then(r=>r.json())
-        .then(j=>{ if(j&&j.error){ alert('Upload failed: '+j.error); cb(null); return; }
+      laOpsAttachments.upload({bookingId:'proj_'+projId,filename:name,mime:mime,dataB64:b64})
+        .then(j=>{
                    cb({id:j.id, name:j.filename, mime:j.mime, size:j.size}); })
         .catch(e=>{ alert('Upload failed: '+e.message); cb(null); });
     };
@@ -14833,7 +14831,7 @@ function flProjAddPhoto(projId){
       p.docs.push({
         id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
         name: meta.name,
-        url: '/api/attach/'+encodeURIComponent(meta.id),
+        url: laOpsAttachments.viewUrl(meta.id),
         attId: meta.id,
         mime: meta.mime,
         size: meta.size,
@@ -14888,7 +14886,7 @@ function flProjAttachDoc(projId){
       p.docs.push({
         id:'dc_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
         name: (files.length===1 && typed) ? typed : (meta.name||f.name||'file'),
-        url: '/api/attach/'+encodeURIComponent(meta.id),
+        url: laOpsAttachments.viewUrl(meta.id),
         attId: meta.id,
         mime: meta.mime,
         size: meta.size,
@@ -14913,7 +14911,7 @@ function flProjAttachToDoc(projId, docId){
   const d = p.docs.find(x=>x.id===docId); if(!d) return;
   _flProjPickFiles('', false, files=>{
     _flProjUploadAll(files, projId, meta=>{
-      d.url  = '/api/attach/'+encodeURIComponent(meta.id);
+      d.url  = laOpsAttachments.viewUrl(meta.id);
       d.attId= meta.id;
       d.mime = meta.mime;
       d.size = meta.size;
@@ -14944,7 +14942,7 @@ function flProjChildMJs(projId){
 }
 /* ══ §slipView · กดดูสลิปที่แนบไว้ ═══════════════════════════════════════
    สลิปอัปโหลดได้มานานแล้ว (pckSlipUpload → POST /api/attach → ตาราง attachments)
-   และเซิร์ฟเวอร์ก็มี GET /api/attach/<id> ที่เสิร์ฟไฟล์แบบ inline อยู่แล้ว
+   และ adapter จะเปิดไฟล์ผ่าน GET /v1/attachments/<id> พร้อม Bearer token
    แต่ทุกหน้าที่โชว์สลิปเรนเดอร์แค่ "ชื่อไฟล์" เป็นตัวหนังสือตาย กดไม่ได้
    บัญชีจึงต้องไปสแกนซัมลงไดร์ฟเอง ทั้งที่ไฟล์อยู่ในระบบแล้ว
 
@@ -14955,7 +14953,7 @@ function flProjChildMJs(projId){
    ไม่งั้นเปิดจากในกล่อง Extra วันเดินทางแล้วจะโดนกล่องบัง
    ═════════════════════════════════════════════════════════════════════════ */
 var _LA_SLIP=null;
-function laSlipUrl(s){ return '/api/attach/'+encodeURIComponent((s&&s.id)||''); }
+function laSlipUrl(s){ return laOpsAttachments.viewUrl((s&&s.id)||''); }
 function laSlipIsImg(s){ return /^image\//i.test(String((s&&s.mime)||'')); }
 /* list = [{id,name,mime}] · title = ป้ายบอกว่าสลิปของก้อนเงินไหน */
 function laSlipView(list, title, i){
@@ -16600,7 +16598,7 @@ function flProjDeleteDoc(projId, docId){
   if(!confirm(`Delete document: ${d.name}?`)) return;
   // §projAttach · ไฟล์ที่อัปขึ้นเซิร์ฟเวอร์ต้องลบตามด้วย ไม่งั้นเหลือค้างในตาราง attachments
   // ลิงก์ที่แปะเอง (ไม่มี attId) ไม่ต้องยุ่ง · ยิงแบบ fire-and-forget เหมือน bookingV2AttachRemove
-  if(d.attId) fetch('/api/attach/'+encodeURIComponent(d.attId),{method:'DELETE'}).catch(()=>{});
+  if(d.attId&&!(window.laOps&&laOps.enabled())) laOpsAttachments.remove(d.attId).catch(()=>{});
   p.docs = p.docs.filter(x=>x.id!==docId);
   if(!p.log) p.log=[];
   p.log.push({date:TODAY_STR, text:`- Document removed: ${d.name}`, by:'user'});

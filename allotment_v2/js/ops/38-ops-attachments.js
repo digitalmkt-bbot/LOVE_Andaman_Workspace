@@ -5,6 +5,7 @@
   var originalFetch=window.fetch;
   function on(){ return O.enabled && O.enabled(); }
   function path(id){ return '/v1/attachments/'+encodeURIComponent(id); }
+  function legacyPath(id){ return '/api/attach/'+encodeURIComponent(id); }
   function json(r){ return r.text().then(function(t){ var j=null; try{ j=t?JSON.parse(t):null; }catch(_){} if(!r.ok){ var e=new Error((j&& (j.message||j.error))||('HTTP '+r.status)); e.status=r.status; e.body=j; throw e; } return j; }); }
   /* Legacy callers do r.json() then test j.error. The server answers {statusCode,message} on a
      refusal and an empty 204 on delete, so translate both to the legacy shape. */
@@ -17,7 +18,7 @@
       return new Response(JSON.stringify(j),{status:200,headers:{'Content-Type':'application/json'}});
     });
   }
-  /* Existing screens still call fetch('/api/attach', …).  Route only that legacy
+  /* Compatibility only for any unconverted extension callers: route that legacy
      transport in ops mode; all other fetches, including /api/mailimg, are untouched. */
   window.fetch=function(input, opts){
     if(!on() || typeof input!=='string' || input.indexOf('/api/attach')!==0) return originalFetch.apply(this,arguments);
@@ -29,15 +30,24 @@
     if(m==='DELETE') return window.laOpsFetch(path(id),{method:'DELETE'}).then(legacyReply);
     return window.laOpsFetch(path(id),opts);
   };
+  function upload(file){
+    var body={ filename:file && file.filename, mime:file && file.mime, data_b64:file && (file.data_b64 || file.dataB64) };
+    if(on()) return window.laOpsFetch('/v1/attachments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(json).then(function(meta){ if(meta&&meta.name&&!meta.filename) meta.filename=meta.name; return meta; });
+    return originalFetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:file&&file.bookingId,filename:body.filename,mime:body.mime,dataB64:body.data_b64})}).then(json);
+  }
+  function remove(id){
+    if(on()) return window.laOpsFetch(path(id),{method:'DELETE'}).then(function(r){ if(!r.ok) return json(r); return null; });
+    return originalFetch(legacyPath(id),{method:'DELETE'}).then(function(r){ if(!r.ok) return json(r); return null; });
+  }
   function blob(id){
-    if(!on()) return originalFetch('/api/attach/'+encodeURIComponent(id)).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); });
+    if(!on()) return originalFetch(legacyPath(id)).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); });
     return window.laOpsFetch(path(id)).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); });
   }
   /* Browser URL consumers cannot carry the Bearer header. Mark them with this
      attribute and the observer below replaces a harmless placeholder with a blob URL. */
   function viewAttr(id){ return on() ? 'data-la-attachment-id="'+String(id).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'"' : ''; }
   var blank='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-  function viewUrl(id){ return on() ? blank : '/api/attach/'+encodeURIComponent(id); }
+  function viewUrl(id){ return on() ? 'about:blank#la-attachment-'+encodeURIComponent(id) : legacyPath(id); }
   function hydrate(el){
     var id=el&&el.getAttribute&&el.getAttribute('data-la-attachment-id'); if(!id||el.dataset.laAttachmentLoading) return;
     el.dataset.laAttachmentLoading='1';
@@ -46,7 +56,7 @@
   function legacyView(el){
     if(!on() || !el || !el.getAttribute) return;
     var raw=el.getAttribute('src')||el.getAttribute('href')||'';
-    var m=/^\/api\/attach\/([^?#]+)/.exec(raw); if(!m) return;
+    var m=/^\/api\/attach\/([^?#]+)/.exec(raw) || /#la-attachment-([^?#]+)/.exec(raw); if(!m) return;
     el.setAttribute('data-la-attachment-id',decodeURIComponent(m[1]));
     if(el.hasAttribute('src')) el.setAttribute('src',el.tagName==='IFRAME'?'about:blank':blank); else el.setAttribute('href',blank);
     hydrate(el);
@@ -55,7 +65,7 @@
     if(!root) return;
     if(root.nodeType===1){ legacyView(root); if(root.hasAttribute&&root.hasAttribute('data-la-attachment-id')) hydrate(root); }
     if(root.querySelectorAll){
-      Array.prototype.forEach.call(root.querySelectorAll('img[src^="/api/attach/"],iframe[src^="/api/attach/"],a[href^="/api/attach/"]'),legacyView);
+      Array.prototype.forEach.call(root.querySelectorAll('img[src^="/api/attach/"],iframe[src^="/api/attach/"],a[href^="/api/attach/"],img[src*="#la-attachment-"],iframe[src*="#la-attachment-"],a[href*="#la-attachment-"]'),legacyView);
       Array.prototype.forEach.call(root.querySelectorAll('[data-la-attachment-id]'),hydrate);
     }
   }
@@ -66,7 +76,7 @@
      Print sheets write HTML into a new window with /api/attach/<id> URLs, and Tesseract
      fetches such a URL itself; neither can send the Bearer header.  Fetch the bytes
      first and hand over blob URLs. */
-  var ATTACH_RE=/\/api\/attach\/([A-Za-z0-9_.~%\-]+)/g;
+  var ATTACH_RE=/(?:\/api\/attach\/|#la-attachment-)([A-Za-z0-9_.~%\-]+)/g;
   function idsIn(html){ var out=[],m; ATTACH_RE.lastIndex=0; while((m=ATTACH_RE.exec(String(html)))){ var id=decodeURIComponent(m[1]); if(out.indexOf(id)<0) out.push(id); } return out; }
   function rewriteHtml(html,urls){ return String(html).replace(ATTACH_RE,function(all,enc){ var id=decodeURIComponent(enc); return urls[id]||blank; }); }
   function blobUrls(ids){
@@ -107,7 +117,7 @@
         if(!wk||wk.__laProxy) return wk;
         var px=Object.create(wk); px.__laProxy=true;
         px.recognize=function(img){
-          var m=typeof img==='string'&&/^\/api\/attach\/([^?#]+)/.exec(img), args=arguments;
+          var m=typeof img==='string'&&(/^(?:\/api\/attach\/|about:blank#la-attachment-)([^?#]+)/.exec(img)), args=arguments;
           if(!m) return wk.recognize.apply(wk,args);
           return blob(decodeURIComponent(m[1])).then(function(b){ var u=URL.createObjectURL(b);
             var rest=[].slice.call(args,1);
@@ -169,6 +179,13 @@
       return F.projectDoc('DELETE',projId,docId).catch(fail('Document was not deleted'));
     }; });
   }
+  /* The backend accepts payment slips while a payment is recorded, but has no command
+     to add one to an already-recorded invoice payment. Do not upload an orphan and then
+     mutate only the legacy paymentSlips cache in operations mode. */
+  wrapGlobal('pfmSlipsAttach',function(orig){ return function(){
+    if(!on()) return orig.apply(this,arguments);
+    alert('Adding a payment slip after recording a payment is not supported yet. Add it while recording the payment.');
+  }; });
   installPrint(); installFleetDocs();
-  window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
+  window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
 })();
