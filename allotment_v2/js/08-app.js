@@ -51414,6 +51414,22 @@ function bkOtherTripsChip(bk, date, rid){
   return '<span class="t2-nxt" data-nxt="'+esc(pick.date)+'" title="'+esc(tip)+'" onclick="event.stopPropagation();bkOtherTripGo(\''+esc(pick.date)+'\',\''+esc(code(pick.bk))+'\')">'
     +'<i>'+arr+'</i><span>'+esc(pick.date===date?'':dt(pick.date)+' ')+esc(rn(pick.rid))+'</span>'+(L.length>1?'<b>+'+(L.length-1)+'</b>':'')+'</span>';
 }
+// §splitOwn · แถวแยก (ไม่ใช่จุดหลัก) ที่จุดรับเป็นโซนมาเอง · ไม่ต้องมีรถไปรับ
+function bkV2SplitIsSelf(s){
+  if(!s || s.main) return false;
+  var z=String(s.pickZone||'').trim(); if(z==='NoTransfer'||z==='NT') return true;
+  var ar=(s.pickAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(s.pickAreaId):null;
+  return !!(ar && (ar.zone==='NoTransfer'||ar.zone==='NT'));
+}
+// §splitOwn · กดชิปบุคกิ้งเดียวกัน → เลื่อนไปแถวอีกฝั่งแล้วกระพริบให้เห็น
+function bkV2SplitGo(key){
+  if(!key) return;
+  var tr=document.querySelector('#view-booking tr.t2-row[data-al="'+String(key).replace(/"/g,'')+'"]');
+  if(!tr) return;
+  try{ tr.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){ tr.scrollIntoView(); }
+  tr.classList.remove('t2-splfl'); void tr.offsetWidth; tr.classList.add('t2-splfl');
+  setTimeout(function(){ tr.classList.remove('t2-splfl'); }, 1700);
+}
 function bkOtherTripGo(date, code){
   if(typeof bkV2Tab2PickDay!=='function') return;
   bkV2Tab2PickDay(date);
@@ -51938,7 +51954,7 @@ function bkV2RenderTab2(){
     const zone=(dts[0].zone||b.pickupZone||'NoTransfer');
     if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT'){
       const ops=b.ops||{};
-      const vanOk = ops.vanId || (Array.isArray(ops.vanSplits)&&ops.vanSplits.length&&ops.vanSplits.every(s=>s.vanId));
+      const vanOk = ops.vanId || (Array.isArray(ops.vanSplits)&&ops.vanSplits.length&&ops.vanSplits.every(s=>s.vanId || (typeof bkV2SplitIsSelf==='function' && bkV2SplitIsSelf(s))));   /* §splitOwn · คนที่มาเองไม่ต้องรอรถ */
       if(!vanOk){ _unVanN++; _unVanPax+=pax; _unVanR[_lbl]=(_unVanR[_lbl]||0)+pax; }
     }
     if(typeof bkV2RetInfo==='function'){ const _ri=bkV2RetInfo(b,date); if(_ri.alert){ _unRetN++; _unRetPax+=pax; _unRetR[_lbl]=(_unRetR[_lbl]||0)+pax; } }
@@ -52523,6 +52539,23 @@ function bkV2RenderTab2(){
     grp.forEach(r=>{ const zk=(r.charter && !r.cxl)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
     const _zord=z=> z==='__CHARTER__'? -100 : bkV2ZoneOrder(z);
     const zones = Object.keys(zg).sort((a,b)=>_zord(a)-_zord(b));
+    /* ══ §splitOwn (2026-10-13) · แถวแยกที่เดินทางมาเอง ย้ายไปอยู่โซน Own transportation ══
+       ที่มา · owner: บุคกิ้งเดียวแยกรับ · กลุ่มขึ้นรถที่ Khao Lak อีกคน (ไกด์) มาเองที่ท่า
+       "ตอนแสดงผล เดินทางเองควรอยู่ที่ Own Transportation และมีป้ายว่าเป็นบุคกิ้งเดียวกันไหม"
+       ของเดิมโซนผูกกับบุคกิ้ง แถวแยกทุกแถวจึงอยู่โซนของบุคกิ้งแม่ ไปปนกับคนที่รอจัดรถ
+       ตอนนี้แถวแยก (ไม่ใช่จุดหลัก) ที่จุดรับเป็นโซนมาเอง ไปขึ้นที่โซน Own transportation
+       ทั้งสองฝั่งมีชิป 🔗 บอกว่าบุคกิ้งเดียวกัน กดแล้วเลื่อนไปแถวอีกฝั่ง
+       แสดงผลอย่างเดียว · ไม่แก้ใบจอง ไม่แก้ vanSplits                                   */
+    const _ownZ = zones.find(z=>z==='NoTransfer'||z==='NT') || 'NoTransfer';
+    const _spSelf = bkV2SplitIsSelf;
+    const _ownMoved = [];
+    if(!boatMode || vanMode) grp.forEach(r=>{
+      if(r.cxl || r.charter || r.zone==='NoTransfer' || r.zone==='NT') return;
+      const _o=bkOpsRead(r.bk,date);
+      if(Array.isArray(_o.boatSplits) && _o.boatSplits.length>1) return;   // แยกลงหลายลำ · แถวเป็นต่อลำ ไม่ใช่ต่อจุดรับ
+      const _sp=_o.vanSplits; if(!Array.isArray(_sp) || _sp.length<2) return;
+      if(_sp.some(_spSelf)) _ownMoved.push(r); });
+    if(_ownMoved.length && zones.indexOf(_ownZ)<0){ zones.push(_ownZ); zones.sort((a,b)=>_zord(a)-_zord(b)); }
     // When this trip is split across 2+ boats, color-code each row by its assigned boat (left accent + faint tint)
     const _routeBoatIds = [...new Set(grp.filter(r=>!r.cxl && bkOpsRead(r.bk,date).boatId).map(r=>bkOpsRead(r.bk,date).boatId))];   /* §per-trip ops · เดิมอ่านเรือของวันแรกเสมอ */
     const _multiBoat = _routeBoatIds.length >= 2;
@@ -52530,8 +52563,13 @@ function bkV2RenderTab2(){
     const zoneBlocks = zones.map(z=>{
       const list = (zg[z]||[]).filter(r=>!r.cxl);   // active only · cancelled go to their own block below
       if(sortCol) list.sort(_rowCmp);
-      if(!list.length) return '';
-      const zpax = list.reduce((s,r)=> s + (P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc')), 0);
+      const _inRows = (z===_ownZ) ? _ownMoved : [];   // §splitOwn · บุคกิ้งจากโซนอื่นที่มีแถวมาเอง
+      if(!list.length && !_inRows.length) return '';
+      /* §splitOwn · ยอดคนของโซน · ย้ายคนที่มาเองออกจากโซนแม่ แล้วนับเข้าโซน Own transportation */
+      const _spOwnPax = r => { const _sp=bkOpsRead(r.bk,date).vanSplits||[]; return _sp.filter(_spSelf).reduce((t,s)=>t+bkPaxSum(bkSplitPax(s)),0); };
+      const zpax = list.reduce((s,r)=> s + (P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc')) - (_ownMoved.indexOf(r)>=0?_spOwnPax(r):0), 0)
+        + _inRows.reduce((s,r)=>s+_spOwnPax(r),0);
+      const _zbkN = list.length + _inRows.length;
       // ── Van grouping: cluster rows by bk.ops.vanGroup · ungrouped last · color per group ──
       //    shown in Van-Assign mode (editable) AND in the normal manifest (read-only · soft pastel)
       const _rowTime=r=>((bkOpsRead(r.bk,date).pickupTimeFinal||r.pickupTime||r.bk.pickupTime||'').trim());
@@ -52555,6 +52593,17 @@ function bkV2RenderTab2(){
         const sq = _hasSp ? (+_o.vanSplits[0].vanSeq||0)   : (+_o.vanSeq||0);
         return [{r,idx:-1,head:_pHead(r),g,seq:sq,vanId:_o.vanId||null,key:b.id,split:false,first:true}]; };
       let alist=[]; list.forEach(r=>{ _allocsOf(r).forEach(a=>alist.push(a)); });
+      /* §splitOwn · แถวมาเองออกจากโซนแม่ · โซน Own transportation รับแถวเหล่านั้นเข้ามา */
+      const _spOf = a => (a.split && !a.bsplit && a.idx>=0) ? ((bkOpsRead(a.r.bk,date).vanSplits||[])[a.idx]||null) : null;
+      const _spGoTo = (r, want) => { const _sp=bkOpsRead(r.bk,date).vanSplits||[]; const i=_sp.findIndex(s=>want?_spSelf(s):!_spSelf(s)); return i<0?'':(r.bk.id+'@'+i); };
+      if(_ownMoved.length){
+        alist=alist.filter(a=>!(_ownMoved.indexOf(a.r)>=0 && _spSelf(_spOf(a))));
+        alist.forEach(a=>{ if(_ownMoved.indexOf(a.r)>=0 && a.first){ const _n=_spOwnPax(a.r);
+          a.spOwn={ out:true, n:_n, go:_spGoTo(a.r,true), zl:bkV2ZoneLabel(_ownZ) }; } });
+        _inRows.forEach(r=>{ const _src=bkV2ZoneLabel(r.zone);
+          const _rest=(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))-_spOwnPax(r);
+          _allocsOf(r).forEach(a=>{ if(_spSelf(_spOf(a))){ a.spOwn={ out:false, n:_rest, go:_spGoTo(r,false), zl:_src }; alist.push(a); } }); });
+      }
       const _rowG=r=>{ const b=r.bk; const _o=bkOpsRead(b,date); if(Array.isArray(_o.vanSplits)&&_o.vanSplits.length) return +_o.vanSplits[0].vanGroup||0; return +_o.vanGroup||0; };
       const _anyGroup = alist.some(a=>a.g>0);
       const _grouped = vanMode || _anyGroup;
@@ -52928,7 +52977,14 @@ function bkV2RenderTab2(){
               ${(function(){ const _lo=others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>';
                 /* §tripNext · มีทริปอื่น → บรรทัดที่สองเป็นแถวเดียว [lead only / +N][→ วัน ทริป] ชื่อทริปยาวตัดด้วย … ไม่ดันแถวให้สูงขึ้น */
                 const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid):'';
-                return _nx?('<div class="t2-cul2">'+_lo+_nx+'</div>'):_lo; })()}
+                /* §splitOwn · ชิปบุคกิ้งเดียวกัน · แถวมาเองชี้กลับไปกลุ่มที่ขึ้นรถ · แถวกลุ่มชี้ไปคนที่มาเอง */
+                const _so=a.spOwn; const _sc=_so?_bkV2SplitColor(bk.id):'';
+                const _spc=_so?(`<span class="t2-spl" data-spl="${esc(_so.go)}" style="--spc:${_sc}" onclick="event.stopPropagation();bkV2SplitGo('${esc(_so.go)}')" title="${esc(laT('บุคกิ้งเดียวกัน')+' '+(bk.voucherRef||lead||bk.id)+' · '+(_so.out
+                    ? laTp('อีก {0} คนเดินทางมาเอง · อยู่โซน {1}', _so.n, _so.zl)
+                    : laTp('คนนี้เดินทางมาเอง · อีก {0} คนขึ้นรถที่โซน {1}', _so.n, _so.zl))+' · '+laT('คลิกไปที่แถวนั้น'))}">&#128279; <span>${_so.out
+                    ? esc('+'+_so.n+' '+laT('มาเอง'))
+                    : esc(laT('กลุ่มเดียวกัน')+' · '+_so.zl+' '+_so.n)}</span></span>`):'';
+                return (_nx||_spc)?('<div class="t2-cul2">'+_lo+_spc+_nx+'</div>'):_lo; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -53054,7 +53110,7 @@ function bkV2RenderTab2(){
           + `</div></td></tr>`
         : `<tr class="t2-zband"><td colspan="${COLN}" style="--zc:${bkV2ZoneColor(z)}"><div class="zw">`
           + `<span class="zkind">${laT('โซน')}</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
-          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
+          + `<span class="zsub">${_zbkN} booking &middot; ${zpax} pax</span></div></td></tr>`;
       /* §btGap · เหมาลำกับลูกค้าจอยเป็นคนละเรื่องกัน · ติดกันแล้วอ่านเหมือนกลุ่มเดียว
          เว้นช่องว่างสองบรรทัดคั่นไว้ · ใส่เป็นแถวเปล่า เพราะทั้งหมดอยู่ในตารางเดียว
          margin บน <tr> ไม่มีผล */
@@ -54337,6 +54393,12 @@ function bkV2RenderTab2(){
     .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:none}
     .t2-cul2 .t2-more,.t2-cul2 .t2-leadonly{flex:none}
     .t2-nxt:hover{background:#DFEBF8}
+    /* §splitOwn · ชิปบุคกิ้งเดียวกัน (แยกมาเอง) · สีเดียวกับเส้นซ้ายของแถวแยก */
+    .t2-spl{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;line-height:1.5;color:var(--spc,#5B289A);background:color-mix(in srgb,var(--spc,#5B289A) 9%,#fff);border:1px solid color-mix(in srgb,var(--spc,#5B289A) 32%,#fff);border-radius:5px;padding:0 5px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px;flex:0 1 auto;min-width:0}
+    .t2-spl span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .t2-spl:hover{background:color-mix(in srgb,var(--spc,#5B289A) 18%,#fff)}
+    #view-booking tr.t2-splfl>td{animation:t2SplFl 1.6s ease-out}
+    @keyframes t2SplFl{0%,35%{background:#FFF1B8}100%{background:transparent}}
     .t2-dep{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-style:normal !important;border-left:4px solid var(--c);padding-left:12px !important}
     .t2-depnm{font-weight:800;font-size:13px;color:#1A2A33}
     .t2-depmt{font-size:11.5px;color:#6B7785;font-family:'DM Mono',monospace}
