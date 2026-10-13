@@ -9438,39 +9438,128 @@ function bkV2BoatPicker(el, bkId, routeId){
   const wide = up || _ovnFallback;
   const pool = wide ? baDayBoats(date) : _routeBoats;
   const cur=_O.boatId||'';
-  const PAL=[['#EEEDFE','#534AB7'],['#FAEEDA','#854F0B'],['#FBEAF0','#993556'],['#E6F1FB','#185FA5'],['#E1F5EE','#0F6E56'],['#FAECE7','#993C1D']];
-  const rowsH = pool.length ? pool.map((x,ix)=>{ const c=PAL[ix%PAL.length]; const cap=x.boat.cap||0; const load=(typeof baAssignedPax==='function')?baAssignedPax(date,x.boatId):0; const rid2=x.routeId; const r2=(typeof getRoute==='function'?getRoute(rid2):null);
-    return `<div onclick="bkV2BoatPickSet('${bkId}','${x.boatId}','${date}')" style="display:flex;align-items:center;gap:9px;padding:9px 13px;cursor:pointer;border-top:1px solid #f0eee7;${cur===x.boatId?'background:#F3FBF7':''}" onmouseover="this.style.background='#f7f7f4'" onmouseout="this.style.background='${cur===x.boatId?'#F3FBF7':'#fff'}'">
-      <span style="width:10px;height:10px;border-radius:50%;background:${c[1]};flex:none"></span>
-      <span style="flex:1;font-weight:700;font-size:13px;color:${c[1]}">${e(x.boat.name||x.boatId)}${(wide&&rid2!==routeId)?` <span style="font-weight:500;color:#999;font-size:11px">· ${e(r2?r2.name:rid2)}</span>`:''}</span>
-      <span style="font-size:11px;color:#8a8a82;font-family:'DM Mono',monospace;white-space:nowrap">${_baPierShort(x.boat.pier)} · ${load}/${cap}</span>
-      ${cur===x.boatId?'<span style="color:#0F6E56;font-size:13px">&#10003;</span>':''}
-    </div>`; }).join('') : '<div style="padding:16px 13px;text-align:center;color:#A32D2D;font-size:12px;line-height:1.6">'
-      +(wide ? 'ยังไม่มีเรือลำไหนวิ่งในวันนี้เลย<br><span style="color:#8a8a82">ไปผูกเรือกับวันนี้ที่ Boat Operation ก่อน</span>'
-             : 'เส้นทางนี้ยังไม่มีเรือในวันนี้<br><span style="color:#8a8a82">ไปผูกเรือกับเส้นทางที่ Boat Operation ก่อน</span>')
+  /* ══ §bpk2 (2026-10-13) · หน้าตาตัวเลือกเรือใหม่ ══════════════════════════════════
+     owner (ภาพตัวเลือกเรือจาก By trip): "ตอนคลิกเรือ ทำให้เห็นหน่อยว่าเราคลิกเรือของบุคกิ้งนั้น
+     และมันยังไม่มีตัวที่เราทำไว้ Upgrade กับ แยกลงเรือด้วย · ขอออกแบบ UI ใหม่นิด"
+     · หัวบอกว่าเป็นของใบไหน: ชื่อลูกค้า · voucher · จำนวนคน · โปรแกรม · และแถวนั้นในตารางถูกไฮไลต์ไว้ตลอดที่เปิด
+     · เรือแต่ละลำ: วงสีประจำเรือ + ชื่อ · ท่า · แถบความจุ · ยอดตอนนี้ → ยอดถ้าใส่ใบนี้ (เกินขึ้นแดง)
+     · ท้าย: ⤴ Upgrade · ⇆ แยกลงหลายลำ · × ถอดเรือ (ปุ่มเดียวกับในโหมดเรือ ทำงานเหมือนเดิม)
+     กดเลือก/ถอด → bkV2AssignBoat ตัวเดิม (ด่าน cap / เหมาลำ / แยกลำ ครบ) */
+  const q=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const myPax=(bk.trips||[]).filter(t=>t && (t.date||'')===date).reduce((s2,t)=>s2+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
+  const _code=(/^b2c_/.test(String(bk.id)) && typeof bkV2DisplayCode==='function') ? bkV2DisplayCode(bk) : (bk.voucherRef||'');
+  const _rn=(typeof bkV2RouteShort==='function' && bkV2RouteShort(routeId)) || (((typeof getRoute==='function' && getRoute(routeId))||{}).name) || routeId;
+  const _upT=(typeof bkUpgTripOn==='function')?bkUpgTripOn(bk, date, routeId):null;
+  const _up=!!(_upT && typeof bkUpgActive==='function' && bkUpgActive(_upT));
+  const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null;
+  const _poolN=(typeof bkBoatPoolOn==='function' && typeof bkPaxSum==='function')?bkPaxSum(bkBoatPoolOn(bk,date)):myPax;
+  const _canSplit=!!_sp || _poolN>=2;
+  const TOL=(typeof BA_CAP_TOL!=='undefined')?BA_CAP_TOL:2;
+  const rowsH = pool.length ? pool.map(x=>{
+    const cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,date):(x.boat.cap||0);
+    const load=(typeof baAssignedPax==='function')?baAssignedPax(date,x.boatId):0;
+    const on=(cur===x.boatId);
+    const next=on?load:load+myPax;
+    const over=cap>0 && next>cap, hard=cap>0 && next>cap+TOL;
+    const pct=cap>0?Math.min(100,Math.round(load/cap*100)):0, pct2=cap>0?Math.min(100,Math.round(next/cap*100)):0;
+    const col=(typeof bkV2BoatAvatarColor==='function')?bkV2BoatAvatarColor(x.boatId):'#185FA5';
+    const nm=x.boat.name||x.boatId, rid2=x.routeId, r2=(typeof getRoute==='function'?getRoute(rid2):null);
+    return `<div class="bpk-b${on?' on':''}${hard?' hard':''}" onclick="bkV2BoatPickSet('${q(bkId)}','${q(x.boatId)}','${q(date)}')" title="${q(nm+' · '+(on?laT('เรือปัจจุบันของใบนี้'):(laT('ใส่ใบนี้')+' '+myPax+' '+laT('คน')+' → '+next+'/'+cap)))}">
+      <span class="av" style="background:${col}">${q((typeof bkV2BoatInitials==='function')?bkV2BoatInitials(nm):nm.slice(0,2))}</span>
+      <span class="nm"><b>${q(nm)}</b><i>${q(_baPierShort(x.boat.pier))}${(wide&&rid2!==routeId)?(' · '+q(r2?r2.name:rid2)):''}</i></span>
+      <span class="ld"><span class="bar"><s style="width:${pct2}%;background:${over?'#E5484D':col}33"></s><s style="width:${pct}%;background:${col}"></s></span>
+        <em class="${over?'ov':''}">${on?(load+'/'+cap):(load+' → <b>'+next+'</b>/'+cap)}</em></span>
+      <span class="ck">${on?'&#10003;':''}</span>
+    </div>`; }).join('') : '<div class="bpk-none">'
+      +(wide ? 'ยังไม่มีเรือลำไหนวิ่งในวันนี้เลย<br><span>ไปผูกเรือกับวันนี้ที่ Boat Operation ก่อน</span>'
+             : 'เส้นทางนี้ยังไม่มีเรือในวันนี้<br><span>ไปผูกเรือกับเส้นทางที่ Boat Operation ก่อน</span>')
       +'</div>';
+  const _cls='event.stopPropagation();bkV2BoatPickClose();';
+  const actH = `<div class="bpk-act">
+      <button type="button" class="${_up?'on':''}" onclick="${_cls}bkV2BoatUpgrade('${q(bkId)}','${q(routeId)}','${q(date)}')" title="${q(_up?('Upgrade · '+((typeof bkUpgRouteName==='function')?bkUpgRouteName(_upT.upg.fromRouteId):'')+' · '+laT('กดเพื่อยกเลิก')):laT('ย้ายใบนี้ไปโปรแกรมอื่น (Upgrade)'))}">&#10548; ${_up?laT('ยกเลิก Upgrade'):'Upgrade'}</button>
+      ${_canSplit?`<button type="button" class="${_sp?'on':''}" onclick="${_cls}bkV2BoatSplit('${q(bkId)}','${q(date)}')" title="${q(laT('แยกคนลงหลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ)'))}">&#8646; ${_sp?laTp('แยก {0} ลำ · แก้', _sp.length):laT('แยกลงหลายลำ')}</button>`:''}
+      ${cur?`<button type="button" class="un" onclick="event.stopPropagation();bkV2BoatPickSet('${q(bkId)}','','${q(date)}')" title="${q(laT('ถอดเรือออกจากใบนี้'))}">&times; ${laT('ถอดเรือ')}</button>`:''}
+    </div>`;
+  bkV2BoatPickCSS();
   const ov=document.createElement('div'); ov.id='bkv2-boatpick';
   ov.style.cssText='position:fixed;inset:0;z-index:600;background:transparent';
-  ov.innerHTML=`<div id="bkv2-boatpick-panel" style="position:fixed;width:288px;max-width:92vw;background:#fff;border:1px solid #e0ddd4;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden;font-family:'DM Sans',sans-serif">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid #eee">
-      <div style="font-size:12px;font-weight:800;color:#185FA5">&#128676; Select boat${up?' <span style="color:#6B289A;font-size:9px;background:#F4E8FB;padding:1px 6px;border-radius:6px">all routes</span>':(_ovnFallback?' <span style="color:#8A5B00;font-size:9px;background:#FBEAD5;padding:1px 6px;border-radius:6px" title="เส้นทางเดิมไม่ได้วิ่งวันนี้ · เลือกเรือลำอื่นพากลับได้">OVN · ทั้งวัน</span>':'')}</div>
-      <button onclick="document.getElementById('bkv2-boatpick').remove()" style="background:transparent;border:none;font-size:18px;color:#999;cursor:pointer;line-height:1">&times;</button>
+  ov.innerHTML=`<div id="bkv2-boatpick-panel" class="bpk">
+    <div class="bpk-h">
+      <div class="bpk-t"><span>&#128676; ${laT('เลือกเรือ')}${wide?(' <em>'+(_ovnFallback?laT('ขากลับ · ทุกลำของวัน'):'all routes')+'</em>'):''}</span>
+        <button type="button" onclick="bkV2BoatPickClose()" title="${laT('ปิด')}">&times;</button></div>
+      <div class="bpk-who"><b>${q(bk.leadPax||bk.customerName||'—')}</b><span>${q(_code)}${_code?' · ':''}<b>${myPax}</b> ${laT('คน')} · ${q(_rn)}${_up?' · ⤴':''}${_sp?(' · ⇆ '+_sp.length+' '+laT('ลำ')):''}</span></div>
     </div>
-    <div style="max-height:50vh;overflow-y:auto">${rowsH}</div>
-    ${cur?`<div onclick="bkV2BoatPickSet('${bkId}','')" style="padding:9px 13px;border-top:1px solid #f0eee7;cursor:pointer;color:#A32D2D;font-size:12px;font-weight:600" onmouseover="this.style.background='#FCEBEB'" onmouseout="this.style.background='#fff'">&times; Unassign</div>`:''}
+    <div class="bpk-l">${rowsH}</div>
+    ${actH}
   </div>`;
   ov.addEventListener('mousedown',ev=>{ ov._d=(ev.target===ov); });
-  ov.onclick=ev=>{ if(ev.target===ov && ov._d) ov.remove(); };
+  ov.onclick=ev=>{ if(ev.target===ov && ov._d) bkV2BoatPickClose(); };
   document.body.appendChild(ov);
+  /* แถวของใบนี้ในตาราง · ไฮไลต์ไว้ตลอดที่ตัวเลือกเปิดอยู่ */
+  try{ const tr=el.closest && el.closest('tr'); if(tr) tr.classList.add('bpk-row');
+    document.querySelectorAll('#view-booking tr.t2-row').forEach(r=>{ const k=String(r.getAttribute('data-al')||''); if(r!==tr && (k===bkId || k.indexOf(bkId+'@')===0 || k.indexOf(bkId+'#')===0)) r.classList.add('bpk-row2'); }); }catch(_){}
   // position next to the button (right side · flip left / clamp if off-screen)
   try{
-    const panel=document.getElementById('bkv2-boatpick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||288, ph=panel.offsetHeight||300;
+    const panel=document.getElementById('bkv2-boatpick-panel'); const r=el.getBoundingClientRect(); const pw=panel.offsetWidth||300, ph=panel.offsetHeight||300;
     let left=r.right+8; if(left+pw>window.innerWidth-8) left=Math.max(8, r.left-pw-8);
-    let top=r.top; if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
-    panel.style.left=left+'px'; panel.style.top=top+'px';
+    let top=r.top-12; if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
+    panel.style.left=left+'px'; panel.style.top=Math.max(8,top)+'px';
   }catch(_){}
+  try{ document.addEventListener('keydown', _bkV2BpkEsc); }catch(_){}
 }
-function bkV2BoatPickSet(bkId, boatId, date){ const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove(); bkV2AssignBoat(bkId, boatId, date||''); }
+function _bkV2BpkEsc(ev){ if(ev.key==='Escape') bkV2BoatPickClose(); }
+function bkV2BoatPickClose(){
+  const ov=document.getElementById('bkv2-boatpick'); if(ov) ov.remove();
+  try{ document.removeEventListener('keydown', _bkV2BpkEsc); }catch(_){}
+  document.querySelectorAll('tr.bpk-row, tr.bpk-row2').forEach(r=>r.classList.remove('bpk-row','bpk-row2'));
+}
+function bkV2BoatPickCSS(){
+  if(document.getElementById('bpk2-css')) return;
+  const st=document.createElement('style'); st.id='bpk2-css';
+  st.textContent=[
+    '#bkv2-boatpick .bpk{position:fixed;width:300px;max-width:92vw;background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(15,27,61,.24),0 0 0 1px rgba(15,27,61,.08);overflow:hidden;font-family:"DM Sans",sans-serif;color:#0F1B3D}',
+    '#bkv2-boatpick .bpk-h{background:#0B1E5B;color:#fff;padding:9px 12px 10px}',
+    '#bkv2-boatpick .bpk-t{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.04em;color:#B9C6E8}',
+    '#bkv2-boatpick .bpk-t em{font-style:normal;font-size:9.5px;background:rgba(255,255,255,.14);color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px}',
+    '#bkv2-boatpick .bpk-t button{background:transparent;border:0;color:#B9C6E8;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}',
+    '#bkv2-boatpick .bpk-t button:hover{color:#fff}',
+    '#bkv2-boatpick .bpk-who{margin-top:3px;display:flex;flex-direction:column;min-width:0}',
+    '#bkv2-boatpick .bpk-who>b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-who>span{font-size:11px;color:#C9D4F0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-who>span b{color:#fff}',
+    '#bkv2-boatpick .bpk-l{max-height:46vh;overflow-y:auto}',
+    '#bkv2-boatpick .bpk-b{display:grid;grid-template-columns:26px minmax(0,1fr) 104px 14px;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid #EEF0F3;cursor:pointer}',
+    '#bkv2-boatpick .bpk-l>.bpk-b:first-child{border-top:0}',
+    '#bkv2-boatpick .bpk-b:hover{background:#F4F7FC}',
+    '#bkv2-boatpick .bpk-b.on{background:#EEF8F3}',
+    '#bkv2-boatpick .bpk-b .av{width:26px;height:26px;border-radius:50%;color:#fff;font:700 9.5px/26px "DM Mono",monospace;text-align:center}',
+    '#bkv2-boatpick .bpk-b .nm{display:flex;flex-direction:column;min-width:0}',
+    '#bkv2-boatpick .bpk-b .nm b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#bkv2-boatpick .bpk-b .nm i{font-style:normal;font-size:10.5px;color:#8A8F9C}',
+    '#bkv2-boatpick .bpk-b .ld{display:flex;flex-direction:column;align-items:flex-end;gap:3px}',
+    '#bkv2-boatpick .bpk-b .bar{position:relative;width:100%;height:5px;border-radius:3px;background:#E9ECF2;overflow:hidden}',
+    '#bkv2-boatpick .bpk-b .bar s{position:absolute;left:0;top:0;bottom:0;border-radius:3px}',
+    '#bkv2-boatpick .bpk-b .ld em{font-style:normal;font:500 10.5px "DM Mono",monospace;color:#5B6478;white-space:nowrap}',
+    '#bkv2-boatpick .bpk-b .ld em b{color:#0F1B3D}',
+    '#bkv2-boatpick .bpk-b .ld em.ov,#bkv2-boatpick .bpk-b .ld em.ov b{color:#C62828}',
+    '#bkv2-boatpick .bpk-b .ck{color:#0F6E56;font-weight:800;font-size:13px}',
+    '#bkv2-boatpick .bpk-b.hard .nm b{color:#9AA0AC}',
+    '#bkv2-boatpick .bpk-none{padding:16px 13px;text-align:center;color:#A32D2D;font-size:12px;line-height:1.6}',
+    '#bkv2-boatpick .bpk-none span{color:#8a8a82}',
+    '#bkv2-boatpick .bpk-act{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-top:1px solid #E6E9EF;background:#FAFBFD}',
+    '#bkv2-boatpick .bpk-act button{flex:1 1 auto;border:1px solid #D5DCE8;background:#fff;color:#1B2A55;border-radius:8px;padding:5px 8px;font:600 11.5px "DM Sans",sans-serif;cursor:pointer;white-space:nowrap}',
+    '#bkv2-boatpick .bpk-act button:hover{background:#EEF3FB;border-color:#9DBCE3}',
+    '#bkv2-boatpick .bpk-act button.on{background:#F3EEFE;border-color:#C7B8E8;color:#5B289A}',
+    '#bkv2-boatpick .bpk-act button.un{flex:0 0 auto;color:#A32D2D;border-color:#F0CFCB}',
+    '#bkv2-boatpick .bpk-act button.un:hover{background:#FDECEA}',
+    /* แถวของใบที่กำลังเลือกเรือ */
+    '#view-booking tr.t2-row.bpk-row>td{background:#FFF6D6!important;box-shadow:inset 0 2px 0 #F2B705,inset 0 -2px 0 #F2B705}',
+    '#view-booking tr.t2-row.bpk-row>td:first-child{box-shadow:inset 4px 0 0 #F2B705,inset 0 2px 0 #F2B705,inset 0 -2px 0 #F2B705}',
+    '#view-booking tr.t2-row.bpk-row2>td{background:#FFFBEA!important}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
+function bkV2BoatPickSet(bkId, boatId, date){ bkV2BoatPickClose(); bkV2AssignBoat(bkId, boatId, date||''); }
 /* ══ §zonePick (2026-10-05) · By trip · กดชื่อโซนแล้วเปลี่ยนพื้นที่รับได้เลย ═════════
    ผู้ใช้ขอ "กดที่ชื่อโซน ขึ้นป๊อปอัปให้เลือกโซน แล้วกดยืนยัน"
    ช่อง Zone ของ By trip คือ bk.pickupAreaId (ชื่อพื้นที่จาก Pickup Setup) · ที่นี่เปลี่ยนแค่ตัวนั้น
@@ -51484,11 +51573,11 @@ function bkV2SplitIsSelf(s){
    ที่มา · owner "สามารถให้เลือกเรือในหน้า By trip date ได้โดยไม่ต้องเปิดโหมดเรือแล้วได้ไหม"
    ช่อง Boat ของแถวกลายเป็นปุ่ม · กดแล้วเปิดตัวเลือกเรือตัวเดียวกับโหมดเรือ (bkV2BoatPicker)
    บันทึกผ่าน bkV2AssignBoat ตัวเดิม · ด่าน cap / เรือเหมาลำ / บุคกิ้งแยกลำ ทำงานเหมือนเดิมทุกอย่าง
-   ไม่เปิดให้กด: ไม่มีสิทธิ์แก้ใบจอง · ใบยกเลิก · เหมาลำ (เรือผูกตอนจอง) · แถวแยกลงหลายลำ (ใช้โหมดเรือ)
-   ติ๊กหลายแถวแล้วจัดทีเดียว / Upgrade / แยกลำ ยังอยู่ในโหมดเรือเหมือนเดิม */
+   ไม่เปิดให้กด: ไม่มีสิทธิ์แก้ใบจอง · ใบยกเลิก · เหมาลำ (เรือผูกตอนจอง)
+   §bpk2 · Upgrade / แยกลงหลายลำ อยู่ท้ายตัวเลือกเรือแล้ว · ติ๊กหลายแถวแล้วจัดทีเดียวยังอยู่ในโหมดเรือ */
 function bkV2BoatPickWrap(bk, rid, a, r, has, inner){
   try{
-    if(!bk || !r || r.cxl || r.charter || r.charterBoatId || (a && a.bsplit)) return inner;
+    if(!bk || !r || r.cxl || r.charter || r.charterBoatId) return inner;   /* §bpk2 · แถวแยกลงหลายลำก็กดได้แล้ว (ในตัวเลือกมีปุ่มแก้การแยก) */
     if(typeof acctCanEditBookings === 'function' && !acctCanEditBookings()) return inner;
     if(typeof bkV2BoatPicker !== 'function') return inner;
     var q = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); };
