@@ -6,7 +6,7 @@
      จะตั้งนาฬิกาคืนหน้าเดิม และทา class ให้ทันก่อนวาดจอครั้งแรก
      ไม่มี ?embed=1 ใน URL = ไฟล์นี้ออกทันที ไม่แตะอะไรเลย -->
 <script src="js/10-embed.js"></script>
-<script src="js/01-auth-sync.js?v=959d5ea7"></script>
+<script src="js/01-auth-sync.js?v=9defe5b1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LOVE Andaman · Allotment</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/allotment_v2/assets/favicon-32.png">
@@ -297,6 +297,10 @@
     <div class="nav-item" data-view="vanbill" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3z"/><path d="M14 10h3.5l2.5 3v3h-6z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg>
       วางบิลรถร่วม
+    </div>
+    <div class="nav-item" data-view="commissions" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9.5h4.5a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3H15M12 7v2M12 15.5v2"/></svg>
+      Commission payouts
     </div>
     <div class="nav-item" data-view="prpo" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6l1 3H8l1-3z"/><path d="M5 6h14v15H5z"/><path d="M9 11h6"/><path d="M9 15h6"/></svg>
@@ -996,6 +1000,7 @@
     <!-- ══════════ SETTINGS ══════════ -->
     <div id="view-dailypfm" class="view"><div id="dailypfm-host"></div></div>
     <div id="view-vanbill" class="view"><div id="vanbill-host"></div></div>
+    <div id="view-commissions" class="view"><div id="commissions-host"></div></div>
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-insurance" class="view"><div id="insurance-host"></div></div>
@@ -1560,7 +1565,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=2204fb9b"></script>
+<script src="js/04-data-core.js?v=84954d2f"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -3806,6 +3811,7 @@
 <script src="js/ops/00-ops-core.js?v=c961756c"></script>
 <script src="js/ops/16-ops-agents.js"></script>
 <script src="js/ops/10-ops-catalogue.js?v=5d5ee34d"></script>
+<script src="js/ops/14-ops-users.js"></script>
 <script src="js/ops/15-ops-staff.js"></script>
 <script src="js/ops/20-ops-deployments.js?v=6923666c"></script>
 <script src="js/ops/21-ops-pickup.js?v=9e786668"></script>
@@ -3826,20 +3832,25 @@
 <script src="js/ops/30-ops-money.js?v=5b78bbad"></script>
 <script src="js/ops/31-ops-pfm.js?v=aaf81ce5"></script>
 <script src="js/ops/33-ops-money-reports.js?v=bfc1d497"></script>
+<script src="js/ops/44-ops-costing-pl.js?v=ceba2af1"></script>
 <script src="js/ops/36-ops-day-actions.js?v=7a7546cd"></script>
-<script src="js/ops/27-ops-sales-board.js"></script>
+<script src="js/ops/27-ops-sales-board.js?v=545f2f20"></script>
 <script src="js/ops/39-ops-reconfirm.js"></script>
 <script src="js/ops/27-ops-weather.js"></script>
 <script src="js/ops/28-ops-nationalities.js"></script>
 <script src="js/ops/32-ops-park.js"></script>
 <script src="js/ops/42-ops-pier-core.js?v=89bf3043"></script>
 <script src="js/ops/43-ops-pier-lists.js?v=f0492a8c"></script>
+<script src="js/ops/44-ops-pier-money.js"></script>
 <script src="js/ops/47-ops-pier-job.js?v=cb789ba2"></script>
 <script src="js/ops/29-ops-addon-types.js"></script>
 <script src="js/ops/34-ops-vans.js?v=28c79547"></script>
+<script src="js/ops/45-ops-van-bills.js"></script>
+<script src="js/ops/46-ops-commissions.js"></script>
 <script src="js/ops/35-ops-van-jobs.js?v=ee4c74d4"></script>
 <script src="js/ops/37-ops-boat-assign.js?v=2d29cbba"></script>
 <script src="js/ops/38-ops-attachments.js"></script>
+<script src="js/ops/44-ops-b2c-health.js"></script>
 <script src="js/ops/90-ops-boot.js?v=293600d0"></script>
 <script src="js/11-router.js?v=34bea09a"></script>
 </body>

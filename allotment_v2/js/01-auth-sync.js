@@ -12,7 +12,8 @@
   window.LA_UID=function(p){ return (p||'')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); };
   // cache-buster on every GET — iPadOS Safari serves stale cached /api GETs (empty/old data, survives reload)
   function bust(url){ return url+(url.indexOf('?')<0?'?_=':'&_=')+Date.now(); }
-  function sx(method,url,body,ct){ var x=new XMLHttpRequest(); try{ x.open(method,method==='GET'?bust(url):url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
+  function sx(method,url,body,ct){ if(window.laOpsUsersSx && url.indexOf('/api/users')===0){ var _ou=window.laOpsUsersSx(method,url,body); if(_ou) return _ou; }   /* §opsUsers · ops/14-ops-users.js */
+    var x=new XMLHttpRequest(); try{ x.open(method,method==='GET'?bust(url):url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
   function fmt(s){ try{ return new Date(s).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return s||''; } }
   /* §laStamp · เวลาที่ข้อมูลอัพเดตล่าสุดเคยอยู่แต่ใน LASTBY ซึ่งเป็นตัวแปรใน IIFE นี้
      หน้าอื่นเลยเอาไปโชว์ไม่ได้ · ปล่อยค่าดิบขึ้น window ไว้ให้หน้าที่อยากบอกความสดของข้อมูล */
@@ -890,9 +891,10 @@
     var box=document.getElementById('la-b2c-issues-list'), wrap=document.getElementById('la-b2c-issues'); if(!box) return;
     if(box.style.display!=='none'){ box.style.display='none'; wrap.classList.remove('open'); return; }
     box.style.display='block'; wrap.classList.add('open'); box.innerHTML='<div style="padding:10px 12px;opacity:.7">กำลังโหลด…</div>';
-    var x=new XMLHttpRequest(); x.open('GET',bust('/api/b2c/health'),true); x.timeout=8000;
-    x.onload=function(){
-      var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+    /* §opsB2CHealth · the list comes from operation-backend /v1/b2c/issues (ops/44-ops-b2c-health.js) */
+    var fail=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
+    if(!window.laOpsB2CIssues){ fail(); return; }
+    window.laOpsB2CIssues(function(j){
       var L=(j&&j.issues)||[];
       /* §b2cAddon · ใบที่มีแต่บริการเสริมและผูกกับใบเอเจนต์ได้แล้ว ไม่ใช่ปัญหา · แยกไว้ส่วนสีเขียวข้างล่าง */
       var W=L.filter(function(i){ return i.code!=='addon_linked'; }), G=L.filter(function(i){ return i.code==='addon_linked'; });
@@ -906,9 +908,7 @@
       box.innerHTML=W.map(function(i){ return row(i,false); }).join('')
         +(G.length?('<div style="padding:7px 12px 5px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#2F6B4F;background:#F1F8F3">บริการเสริมของใบเอเจนต์ · ไม่กินที่นั่ง · '+G.length+'</div>'
           +G.map(function(i){ return row(i,true); }).join('')):'');
-    };
-    x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
-    try{ x.send(); }catch(e){}
+    }, fail);
   };
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   // §opsAuth (2026-09-18) · a 401 on /api/events turns into an endless EventSource reconnect loop.
@@ -1187,7 +1187,7 @@
        ใส่เข้ากลุ่ม operations · เรียงตามลำดับในเมนูจริง (Booking → Re-confirm → Booking Flow → ตรวจเอกสาร) */
     {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'landcheckin',t:'เช็คอิน City tour',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
-    {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},{v:'vanbill',t:'วางบิลรถร่วม',a:'accounting'},{v:'prpo',t:'PR/PO Dashboard',a:'accounting'},
+    {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},{v:'vanbill',t:'วางบิลรถร่วม',a:'accounting'},{v:'commissions',t:'Commission payouts',a:'accounting'},{v:'prpo',t:'PR/PO Dashboard',a:'accounting'},
     {v:'fl-work',t:'Fleet Work',a:'fleet'},{v:'fl-deployment',t:'Fleet Deployment',a:'fleet'},{v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},
