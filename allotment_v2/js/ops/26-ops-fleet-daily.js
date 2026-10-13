@@ -119,7 +119,7 @@
       }),
       docs: (Array.isArray(p.documents) ? p.documents : []).map(function(d){
         return {
-          id: d.id, name: d.name || '', attId: d.attachment_id || null, url: d.url || '',
+          id: d.id, name: d.name || '', attId: d.attachment_id || null, url: d.url || (d.attachment_id ? '/api/attach/' + encodeURIComponent(d.attachment_id) : ''),
           mime: d.mime || null, size: d.size || null, note: d.note || '',
           type: d.type || null, phase: d.phase || null, status: d.status || 'required',
           addedAt: d.added_at || null, by: d.by || null
@@ -952,6 +952,11 @@
     replaceSafety: function(id, body){
       return O.queue(function(){ return O.post('/v1/fleet/safety/' + enc(id) + '/replace', toSafetyReplaceBody(body)); })
         .then(function(res){ if(res && res.old_item) upsertSafety(res.old_item); if(res && res.new_item) upsertSafety(res.new_item); return res; });
+    },
+    /* A project document: POST (sub '') / PATCH|DELETE (sub = doc id). The server returns the whole project. */
+    projectDoc: function(method, projId, sub, body){
+      return O.queue(function(){ return O.call(method, '/v1/fleet/projects/' + enc(projId) + '/documents' + (sub ? '/' + enc(sub) : ''), body); })
+        .then(function(res){ if(res && res.id) upsertProject(res); O.wrote('fleet-project-doc'); redrawDailyAndProjects(); return res; });
     },
     loadDashboard: function(date){ return O.get('/v1/fleet/dashboard', date ? { date: date } : {}); },
     loadRepairHistory: function(boatId){ return O.get('/v1/fleet/repair-history', { boat_id: boatId }); },
