@@ -1,0 +1,251 @@
+/* ════════════════════════════════════════════════════════════════════════
+   §opsPierJob (2026-10-13) · pier job sheets, the boat's usual team and duty on operation-backend
+   ────────────────────────────────────────────────────────────────────────
+   GET   /v1/pier-office/{pier}/days/{date}/boats/{boat}/job          → the job card, with what the server works out
+   PATCH /v1/pier-office/{pier}/days/{date}/boats/{boat}/job          → captain, assistant, crew, island, note, wristband, work code
+   POST  …/job/complete | /job/reopen                                 → legacy's "จัดเสร็จแล้ว" lock (pjLockSet)
+   PUT   /v1/pier-office/{pier}/days/{date}/boats/{boat}/duty         → who was on the boat (poDutySave)
+   PUT   /v1/pier-office/boats/{boat}/team                            → the boat's usual team (pjTeamSave)
+   PUT   /v1/trip-actuals/{date}/{boat}/venue                         → the day's restaurant (pjMvSet)
+
+     legacy PIER_JOB['date::boat']            server job
+       cap / asst / crew[] / island[]         captain_id / assistant_id / crew / island ('' is a blank slot = null)
+       note / wb / wbc / wc                   note / wristband_text / wristband_colour / work_code
+       lock                                   completed_at (complete / reopen are the server's commands)
+       mv ('' route's, '-' no meal, id)       restaurant_id (effective: the day's venue, else the route's)
+       lb (own slot names), mj (repair job)   not on the server: kept in the browser only
+     legacy PIER_TEAM[boat] {cap, asst, crew} is built from what the jobs show (the server sends no team read:
+     a day with no job shows the team, a recorded job lists where it differs); PIER_DUTY from duty_staff_ids
+
+     · the server works out `missing` (pjLockMiss), the carried wristband (pjWbOf), the substitutes (pjSubList),
+       sailed and kind; those legacy functions answer from it
+     · screens still change PIER_JOB / PIER_TEAM / PIER_DUTY and call poPersist(); 42-ops-pier-core.js
+       sends the difference, and a refusal (409 job_complete, job_incomplete with the missing list,
+       day_closed, 400) puts the card back and shows the server's message
+   Not wired: lb (slot names), mj (the repair job picked on a card); a job's `mv` shows the effective restaurant, so
+   "no meal today" reads as the route's default after a reload. Other screens that read a day's job
+   (check-in crew line, roster labels) see only the days opened here.
+   Legacy mode: every wrapper delegates to the captured original when !enabled().
+   Classic script · loads after 08-app.js and 42-ops-pier-core.js.
+   ════════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var O = window.laOps; if(!O || !O.pier) return;
+  var P = O.pier, clone = P.clone, nul = P.nul;
+  var L = { pjLockMiss: window.pjLockMiss, pjWbOf: window.pjWbOf, pjSubList: window.pjSubList, pjCopyYday: window.pjCopyYday, renderPierJob: window.renderPierJob };
+  var enc = encodeURIComponent;
+  function enabled(){ return P.enabled(); }
+  function obj(name){ var o = window[name]; if(!o || typeof o !== 'object'){ o = window[name] = {}; } return o; }
+
+  var st = { views: {}, keys: {}, bids: {}, base: { job: {}, team: {}, duty: {} }, loaded: '', loading: '', seq: 0 };
+
+  /* ── legacy <-> server ──────────────────────────────────────────────── */
+  function slots(a){
+    var out = (Array.isArray(a) ? a : []).map(function(x){ return x ? String(x) : null; });
+    while(out.length && out[out.length - 1] === null) out.pop();
+    return out;
+  }
+  function proj(J){
+    return { captain_id: nul(J.cap), assistant_id: nul(J.asst), crew: slots(J.crew), island: slots(J.island), note: nul(J.note),
+             wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc) };
+  }
+  function fromView(v, prev){
+    var J = { cap: v.captain_id || '', asst: v.assistant_id || '', crew: (v.crew || []).map(function(x){ return x || ''; }),
+              island: (v.island || []).map(function(x){ return x || ''; }), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
+              lock: v.completed_at ? 1 : 0, mv: v.restaurant_id || '', wc: v.work_code || '', lb: {} };
+    if(prev && prev.lb && typeof prev.lb === 'object') J.lb = clone(prev.lb);
+    if(prev && prev.mj) J.mj = prev.mj;
+    return J;
+  }
+  function teamFromView(v){
+    var T = { cap: v.captain_id || '', asst: v.assistant_id || '', crew: (v.crew || []).filter(Boolean) };
+    if(v.recorded){
+      var crew = (v.crew || []).map(function(x){ return x || ''; });
+      (v.substitutes || []).forEach(function(s){
+        if(s.role === 'captain') T.cap = s.team_id;
+        else if(s.role === 'assistant') T.asst = s.team_id;
+        else if(s.role === 'crew') crew[s.position] = s.team_id;
+      });
+      T.crew = crew.filter(Boolean);
+    }
+    return T;
+  }
+  function projTeam(T){ T = T || {}; return { captain_id: nul(T.cap), assistant_id: nul(T.asst), crew_ids: (T.crew || []).filter(Boolean) }; }
+  function jkey(date, bid){ return date + '::' + bid; }
+
+  /* ── what the server said, put into the legacy globals ──────────────── */
+  function apply(date, bid, v){
+    var key = jkey(date, bid), JOB = obj('PIER_JOB'), TEAM = obj('PIER_TEAM'), DUTY = obj('PIER_DUTY');
+    st.views[key] = v; st.keys[key] = 1; st.bids[bid] = 1;
+    if(v.recorded) JOB[key] = fromView(v, JOB[key]); else delete JOB[key];
+    TEAM[bid] = teamFromView(v);
+    if((v.duty_staff_ids || []).length) DUTY[key] = v.duty_staff_ids.slice(); else delete DUTY[key];
+    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id, asst: v.assistant_id, crew: v.crew, island: v.island, note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code }),
+                         lock: v.completed_at ? 1 : 0, mv: v.restaurant_id || '' };
+    st.base.team[bid] = clone(TEAM[bid]);
+    st.base.duty[key] = (v.duty_staff_ids || []).slice();
+  }
+  function snapshot(){
+    var JOB = obj('PIER_JOB'), TEAM = obj('PIER_TEAM'), DUTY = obj('PIER_DUTY');
+    Object.keys(st.keys).forEach(function(key){
+      var c = JOB[key], bid = key.split('::')[1], was = st.base.job[key];
+      st.base.job[key] = c ? { rec: true, J: clone(c), proj: proj(c), lock: c.lock ? 1 : 0, mv: c.mv || '' } : was;
+      st.base.duty[key] = (DUTY[key] || []).slice();
+      if(TEAM[bid]) st.base.team[bid] = clone(TEAM[bid]);
+    });
+  }
+  function restoreAll(){
+    var JOB = obj('PIER_JOB'), TEAM = obj('PIER_TEAM'), DUTY = obj('PIER_DUTY');
+    Object.keys(st.keys).forEach(function(key){
+      var b = st.base.job[key], bid = key.split('::')[1];
+      if(b && b.rec) JOB[key] = clone(b.J); else delete JOB[key];
+      if(st.base.duty[key] && st.base.duty[key].length) DUTY[key] = st.base.duty[key].slice(); else delete DUTY[key];
+      if(st.base.team[bid]) TEAM[bid] = clone(st.base.team[bid]);
+    });
+  }
+
+  /* ── reads ───────────────────────────────────────────────────────────── */
+  function jobPath(pier, date, bid){ return '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/job'; }
+  function boatIds(pier, date){
+    var list = [];
+    try{ list = typeof window.pjAllBoats === 'function' ? window.pjAllBoats(date, pier) : (typeof window.poBoats === 'function' ? window.poBoats(date, pier) : []); }catch(_){ list = []; }
+    var seen = {}, out = [];
+    list.forEach(function(b){ if(b && b.bid && !seen[b.bid]){ seen[b.bid] = 1; out.push(b.bid); } });
+    return out;
+  }
+  function pool(items, worker, size){
+    var i = 0, errors = [];
+    function next(){
+      if(i >= items.length) return Promise.resolve();
+      var it = items[i++];
+      return worker(it).catch(function(e){ errors.push(e); }).then(next);
+    }
+    var ps = []; for(var k = 0; k < (size || 6); k++) ps.push(next());
+    return Promise.all(ps).then(function(){ if(errors.length) throw errors[0]; });
+  }
+  function loadDay(pier, date){
+    var ids = boatIds(pier, date), key = pier + '|' + date, my = ++st.seq;
+    st.loading = key;
+    return pool(ids, function(bid){
+      return O.get(jobPath(pier, date, bid)).then(function(v){ if(my === st.seq) apply(date, bid, v); });
+    }).then(function(){
+      if(my !== st.seq) return null;
+      st.loaded = key; st.loading = '';
+      return true;
+    }, function(e){
+      if(my === st.seq) st.loading = '';
+      O.fail('Job sheets did not load', e);
+      return null;
+    });
+  }
+  function ensure(){
+    var pier = window._poPier, date = window._poDate;
+    if(!pier || !date || P.busy()) return;
+    var key = pier + '|' + date;
+    if(st.loaded === key || st.loading === key) return;
+    loadDay(pier, date).then(function(ok){ if(ok) window.renderPierJob(); });
+  }
+  window.renderPierJob = function(){
+    var r = L.renderPierJob.apply(this, arguments);
+    if(enabled()) ensure();
+    return r;
+  };
+  function reloadKeys(keys){
+    return pool(keys, function(key){
+      var p = key.split('::'), date = p[0], bid = p[1];
+      return O.get(jobPath(window._poPier, date, bid)).then(function(v){ apply(date, bid, v); });
+    });
+  }
+
+  /* ── the functions that used to compute ─────────────────────────────── */
+  window.pjLockMiss = function(date, bid){
+    if(!enabled()) return L.pjLockMiss.apply(this, arguments);
+    var v = st.views[jkey(date, bid)];
+    return v ? (v.missing || []).map(function(m){ return m.label; }) : L.pjLockMiss.apply(this, arguments);
+  };
+  window.pjWbOf = function(date, bid){
+    if(!enabled()) return L.pjWbOf.apply(this, arguments);
+    var v = st.views[jkey(date, bid)], raw = typeof window.pjRaw === 'function' ? window.pjRaw(date, bid) : null;
+    if(raw && (String(raw.wbc || '').trim() || String(raw.wb || '').trim())) return { c: String(raw.wbc || ''), t: String(raw.wb || ''), from: '' };
+    var c = v && v.wristband_carried;
+    return c ? { c: c.colour || '', t: c.text || '', from: c.from_date || '' } : { c: '', t: '', from: '' };
+  };
+  window.pjSubList = function(date, bid){
+    if(!enabled()) return L.pjSubList.apply(this, arguments);
+    var v = st.views[jkey(date, bid)]; if(!v) return L.pjSubList.apply(this, arguments);
+    var out = {};
+    (v.substitutes || []).forEach(function(s){
+      if(s.role === 'captain') out.cap = s.team_id;
+      else if(s.role === 'assistant') out.asst = s.team_id;
+      else out['crew' + s.position] = s.team_id;
+    });
+    return out;
+  };
+  // yesterday's cards are read first: legacy copies them from the browser's copy
+  window.pjCopyYday = function(pier){
+    if(!enabled()) return L.pjCopyYday.apply(this, arguments);
+    var self = this, args = arguments;
+    var d = new Date(window._poDate + 'T12:00:00'); d.setDate(d.getDate() - 1);
+    var prev = typeof window.poYMD === 'function' ? window.poYMD(d) : d.toISOString().slice(0, 10);
+    var ids = boatIds(pier, window._poDate);
+    return pool(ids, function(bid){ return O.get(jobPath(pier, prev, bid)).then(function(v){ apply(prev, bid, v); }); }).then(function(){
+      return L.pjCopyYday.apply(self, args);
+    }, function(e){ O.fail('Yesterday\'s job sheets did not load', e); });
+  };
+
+  /* ── writes ──────────────────────────────────────────────────────────── */
+  function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+  P.register({
+    name: 'jobs', order: 95,
+    restore: function(){
+      restoreAll();
+      var keys = Object.keys(st.keys);
+      if(keys.length) reloadKeys(keys).then(function(){ P.redraw(); }, function(){});
+    },
+    commit: function(){ snapshot(); },
+    plan: function(){
+      var jobs = [], JOB = obj('PIER_JOB'), TEAM = obj('PIER_TEAM'), DUTY = obj('PIER_DUTY'), touched = [];
+      var pier = window._poPier;
+      Object.keys(st.keys).forEach(function(key){
+        var p = key.split('::'), date = p[0], bid = p[1], cur = JOB[key], b = st.base.job[key];
+        if(cur && b){
+          var a = proj(cur), diff = {}, any = false;
+          Object.keys(a).forEach(function(k){ if(!same(a[k], b.proj[k])){ diff[k] = a[k]; any = true; } });
+          var lockWas = b.lock, lockNow = cur.lock ? 1 : 0, mvNow = cur.mv || '', mvChanged = mvNow !== b.mv;
+          if(any || lockWas !== lockNow || mvChanged){
+            touched.push(key);
+            jobs.push({ phase: 2, label: 'job ' + key, run: function(){
+              var base = jobPath(pier, date, bid), chain = Promise.resolve();
+              if(lockWas && !lockNow) chain = chain.then(function(){ return O.call('POST', base + '/reopen', {}); });
+              if(mvChanged) chain = chain.then(function(){
+                return O.call('PUT', '/v1/trip-actuals/' + enc(date) + '/' + enc(bid) + '/venue', { venue: mvNow === '-' ? 'none' : (mvNow || null) });
+              });
+              if(any) chain = chain.then(function(){ return O.call('PATCH', base, diff); });
+              if(!lockWas && lockNow) chain = chain.then(function(){ return O.call('POST', base + '/complete', {}); });
+              return chain;
+            } });
+          }
+        }
+        var duty = (DUTY[key] || []).slice(), dutyWas = st.base.duty[key] || [];
+        if(!same(duty.slice().sort(), dutyWas.slice().sort())){
+          if(touched.indexOf(key) < 0) touched.push(key);
+          jobs.push({ phase: 2, label: 'duty ' + key, run: function(){
+            return O.call('PUT', '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/duty', { staff_ids: duty });
+          } });
+        }
+      });
+      Object.keys(st.bids).forEach(function(bid){
+        var cur = TEAM[bid], was = st.base.team[bid];
+        if(!cur || !was || same(projTeam(cur), projTeam(was))) return;
+        jobs.push({ phase: 2, label: 'team ' + bid, run: function(){
+          var t = projTeam(cur);
+          return O.call('PUT', '/v1/pier-office/boats/' + enc(bid) + '/team', t);
+        } });
+      });
+      if(jobs.length) jobs.push({ phase: 9, label: 'jobs refresh', run: function(){ return reloadKeys(touched.length ? touched : Object.keys(st.keys)); } });
+      return jobs;
+    }
+  });
+
+  O.pierJob = { state: st, loadDay: loadDay };
+})();
