@@ -1,0 +1,62 @@
+# Replacement Readiness — 2026-10-13
+
+## Verdict
+
+**BLOCK — do not replace `lk-inbox` yet.**
+
+This is a current-code review of the `main` integration frontend against `operation-backend`, after fetching `origin/main` at `23f1529`. It supersedes earlier claims that User Admin, Sales Board, B2C Health, quote, commissions, pier money, van bills, Trip P&L/costing, capacity overrides, and most Pier Office screens were unwired: operations adapters now exist for those areas. Adapter presence and Node tests are not browser acceptance testing.
+
+## Release blockers
+
+All four blockers from the first review now have code behind them (merged 2026-10-13, backend `8c0ab08`). **None has been browser-tested.** Treat them as "wired, awaiting acceptance", not "done".
+
+| Area | What changed | Still open |
+| --- | --- | --- |
+| Transfer Fleet | `ops/35-ops-vehicles.js` writes vans, day cells and status/zone ranges to `/operations/vans*` and `/operations/van-days`. The backend already had every route. | `costPerDay` and the van log panel are still browser-local. Two fast clicks on a day cell send the same value. |
+| Reconfirm | `ops/39-ops-reconfirm.js` wires `rcSetStatus`, `rcSendAgent`, `rcUnsendAgent`, `rcToggleBooking`. | Browser test. |
+| Pier Office audit/close | Backend: `GET /v1/pier-office/{pier}/moves`, `.../boats/{id}/outstanding`, `ship-writeoff`, `ship-repair`. `48-ops-pier-office.js` hydrates the ledger and reads outstanding before the close dialog. | Write-off/repair semantics were derived from legacy `poBal`; ops should confirm. A pier is capped at its newest 5000 moves. `GET /v1/pier-office/boats/{id}/team` is not built. |
+| Invoice/PFM payment slips | Backend: `POST/DELETE /v1/invoices/:id/payments/:pid/slips`. `38-ops-attachments.js` attaches after payment, cleans up the upload on refusal, and fixes slip view/delete. | The target is a heuristic: the latest live non-credit payment on the first non-void invoice. Multi-booking invoices, pier payments, upgrades and Cash on Tour are not handled. |
+
+### Still a blocker: daily-report email images
+
+`drmUpload` (`08-app.js` ~23945, the only real `/api/mailimg` caller) uploads the trend and donut charts for the daily report email and 404s. Email clients need a **public** URL, and `/v1/attachments` requires a login. Needs a decision: a public image endpoint on operation-backend, or embedding/dropping the charts.
+
+## Newly wired: petty cash / เงินสดย่อย
+
+The pending local frontend change adds `allotment_v2/js/ops/46-ops-pier-cash.js` and its script tag. It routes these operations to `/v1/pier-cash`:
+
+- daily ledger reads and month carry-forward values;
+- manual incoming/outgoing rows and deletion;
+- pulling longtail, park, and dock totals into the ledger;
+- longtail and park sheet cells, including park fill;
+- company-name settings.
+
+The adapter is server-first and restores data from server reads after a refused sheet write. `test/unit/ops-pier-cash.test.mjs` covers hydration, write paths, legacy fallback, park fill, and the row-editor behavior.
+
+### Petty-cash row edit and certificate
+
+`PATCH /v1/pier-cash/rows/:id` now exists and the row editor uses it (source rows pulled from a sheet remain non-editable). The certificate view reads from `GET /v1/pier-cash/:pier/days/:date/certificate` by temporarily swapping legacy helpers for the server response during one synchronous print call; this relies on `pcPrintWin` being synchronous and needs a browser check, including the company-name dialog retry.
+
+## Other verification still required
+
+These are not confirmed code blockers, but must pass in a browser against PostgreSQL/Railway before approval:
+
+1. Contract artifact upload/metadata in operations mode (`js/ops/18-ops-contracts.js`).
+2. Every attachment UI path, including any reachable `/api/mailimg` caller.
+3. All newly added operations adapters, especially Pier Office, return-van-per-split-part, attachments, and petty cash.
+4. Concurrent-write/refusal behavior and authentication expiry on production-like data.
+
+## Backend defects (fixed, one unverified)
+
+- Deleting an in-use pier licence class now returns 409 `licence_class_in_use` with the dependent licences (tested on the in-memory store).
+- An unknown booking `agent_id` now maps the Postgres `bookings_agent_fk` violation to a 400. **Its test is skipped without `DATABASE_URL`; run it against real Postgres.**
+
+## Resolved since the earlier review
+
+- Attachments normally route through `/v1/attachments` in operations mode.
+- Split-part return-van assignment sends the complete `van_parts` payload to `PATCH /operations/trip-ops/:trip_id`.
+- Boat job sheets / ใบงานเรือ, most Pier Office lists/configuration, stock commands, roster, licences, settings, sign-out sheets, boat close, day close/reopen, User Admin, Sales Board, B2C Health, commissions, pier money, capacity overrides, van bills, Trip P&L/costing, and quote have operations adapters.
+
+## Cutover rule
+
+Do not schedule the one-day cutover until every release blocker is resolved, the backend defects return controlled errors, and the browser acceptance list passes. On the cutover day, stop legacy writes before the final legacy import, run the importer once, then let staff enter data only in the replacement.
