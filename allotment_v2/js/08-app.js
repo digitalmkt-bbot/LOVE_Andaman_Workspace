@@ -76890,6 +76890,10 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-lockc .bt-lkl{max-height:none;flex:1 1 auto;min-height:0;contain:size;padding-bottom:4px}',
     'body.btc #view-booking .bt-lkfoot{padding:4px 12px 6px}',
     'body.btc #view-booking .bt-lkfoot .hint{display:none}',
+
+    'body.btc #view-booking tr.t2-row>td.btc-fcs{overflow:visible!important}',
+    'body.btc #view-booking .btc-ft.lk{box-shadow:0 2px 5px rgba(15,27,61,.22);max-width:none}',
+    'body.btc #view-booking .btc-ft.lk:hover .s{display:none}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
@@ -77109,7 +77113,7 @@ function pc2CSS3(S){
   /* fixed table · narrower columns in Compact so more of the table fits (Classic widths untouched) */
   /* voucher / agency / customer are sticky on the left · Classic measures their offsets once after drawing (--t2-fz1/2)
      Agency is narrowed in Compact (the compact B2C tag needs ~150px, Classic keeps 196) → offsets are re-measured below */
-  var COLW = {'agency':150,'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':122,'room':40,'zone':68,
+  var COLW = {'agency':150,'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':168,'room':40,'zone':68,
               'send back':100,'add-on':62,'special request':84,'pay':78,'total':84,'':40};
   function colWidths(root){
     var ts = root.querySelectorAll('table.t2-mtbl:not(.btc-cw)');
@@ -77232,6 +77236,14 @@ function pc2CSS3(S){
         reqs[r].classList.add('btc-rq');
         var tx = reqs[r].innerText.replace(/\s+/g, ' ').trim();
         if(tx && tx !== '—' && !reqs[r].title) reqs[r].title = tx;
+      }
+      /* seats drawn from someone's lock: long dark chip after the name → small floating '🔒 ล็อก' tag in the holder's colour, full name on hover */
+      var dws = tr.querySelectorAll(':scope > td.t2-cu .t2-drawn:not(.btc-ft)');
+      for(var w = 0; w < dws.length; w++){
+        var dw = dws[w], full = dw.textContent.replace(/^\s*🔒\s*/, '').trim();
+        dw.innerHTML = '<span class="s">🔒 ล็อก</span><span class="x">🔒 ' + esc(full) + '</span>';
+        dw.classList.add('btc-ft', 'lk'); dw.style.right = (4 + w * 52) + 'px';
+        dw.parentNode.closest('td').classList.add('btc-fcs');
       }
       var lost = tr.querySelectorAll(':scope > td.t2-c > div[style*="line-through"]');
       for(var q = 0; q < lost.length; q++){ lost[q].classList.add('btc-ft', 'bk'); lost[q].parentNode.classList.add('btc-fc'); if(!lost[q].title) lost[q].title = 'จองมา ' + lost[q].textContent.trim(); }
