@@ -51689,6 +51689,14 @@ function bkV2TogHide(force){
   if(_bkV2TogPin) return;
   _bkV2TogT = setTimeout(function(){ pop.style.display = 'none'; }, 180);
 }
+// §cxlFold · กาง/พับ รายการยกเลิกของทริปหนึ่ง · แก้ที่หน้าจอตรง ๆ ไม่วาดใหม่ทั้งหน้า
+function bkV2CxlToggle(el, key){
+  var sec = el && el.closest ? el.closest('.t2-cxl-sec') : null; if(!sec) return;
+  var on = !sec.classList.contains('open');
+  sec.classList.toggle('open', on);
+  window._bkV2CxlOpen = window._bkV2CxlOpen || {};
+  if(on) window._bkV2CxlOpen[key] = 1; else delete window._bkV2CxlOpen[key];
+}
 function bkOtherTripGo(date, code){
   if(typeof bkV2Tab2PickDay!=='function') return;
   bkV2Tab2PickDay(date);
@@ -53728,9 +53736,15 @@ function bkV2RenderTab2(){
     // ── Cancelled bookings · kept as a record in their own block · not counted in totals ──
     // §pendSeat · กลุ่มรออนุมัติของทริปนี้ · แสดงเหนือ manifest ไม่ปนกับคนที่จะเดินทางจริง
     const _cxlRows = grp.filter(r=>r.cxl);
+    /* §cxlFold (2026-10-13) · owner "รายการยกเลิกทำเป็นซ่อนได้ไหม และถ้าจะดูให้ User กด"
+       เริ่มต้นพับไว้ เหลือแถบหัวบรรทัดเดียว · กดแถบแล้วกาง/พับ ที่หน้าจอทันที (ไม่วาดใหม่)
+       จำไว้ในหน่วยความจำต่อ วัน+โปรแกรม · วาดใหม่ (มีคนเซฟ ฯลฯ) ยังกางค้างไว้ · โหลดหน้าใหม่กลับไปพับ */
+    const _cxlKey = date+'|'+rid;
+    const _cxlOpen = !!(window._bkV2CxlOpen && window._bkV2CxlOpen[_cxlKey]);
     const cxlBlock = _cxlRows.length ? `
-      <div class="t2-cxl-sec">
-        <div class="t2-cxl-hd">&#10005; Cancelled &middot; ${_cxlRows.length} booking${_cxlRows.length>1?'s':''} <span style="font-weight:500;text-transform:none;color:#b08">(record kept &middot; not counted)</span></div>
+      <div class="t2-cxl-sec${_cxlOpen?' open':''}">
+        <div class="t2-cxl-hd" role="button" tabindex="0" onclick="bkV2CxlToggle(this,'${esc(_cxlKey)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bkV2CxlToggle(this,'${esc(_cxlKey)}')}" title="${laT('กดเพื่อดู / ซ่อนรายการที่ยกเลิก')}">&#10005; Cancelled &middot; ${_cxlRows.length} booking${_cxlRows.length>1?'s':''} <span style="font-weight:500;text-transform:none;color:#b08">(record kept &middot; not counted)</span><span class="t2-cxl-tg"><span class="sh">${laT('ดูรายการ')}</span><span class="hd">${laT('ซ่อน')}</span> <i>&#9662;</i></span></div>
+        <div class="t2-cxl-list">
         ${_cxlRows.map(r=>{
           const bk=r.bk; const norm=bkV2Norm(bk);
           const lead=bk.leadPax||bk.customerName||'—';
@@ -53748,6 +53762,7 @@ function bkV2RenderTab2(){
             <button class="t2-ghost-go" style="color:#0F6E56;border-color:#9FE1CB" onclick="event.stopPropagation();bkV2RestoreBooking('${esc(bk.id)}')" title="${laT('กู้คืน booking (ยกเลิกการยกเลิก)')}">&#8634; ${laT('กู้คืน')}</button>
           </div>`;
         }).join('')}
+        </div>
       </div>` : '';
 
     // ── Per-boat load strip (under the trip header · ALWAYS shown when boats serve this trip) ──
@@ -54298,6 +54313,18 @@ function bkV2RenderTab2(){
     .t2-pend-row .t2-cxl-ag{color:#8a7350}
     .t2-cxl-sec{margin-top:10px;border:1px solid #E6C9C3;border-radius:9px;background:#FCF6F5;padding:9px 13px}
     .t2-cxl-hd{font-size:10px;font-weight:700;color:#A32D2D;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+    /* §cxlFold · แถบหัวกดได้ · พับอยู่ = เห็นแค่แถบนี้ */
+    .t2-cxl-sec .t2-cxl-hd{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+    .t2-cxl-sec:not(.open) .t2-cxl-hd{margin-bottom:0}
+    .t2-cxl-sec:not(.open) .t2-cxl-list{display:none}
+    .t2-cxl-tg{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0;color:#A32D2D;background:#fff;border:1px solid #F0CFCB;border-radius:999px;padding:2px 10px}
+    .t2-cxl-tg i{font-style:normal;font-size:9px;transition:transform .15s}
+    .t2-cxl-sec.open .t2-cxl-tg i{transform:rotate(180deg)}
+    .t2-cxl-sec .t2-cxl-tg .hd,.t2-cxl-sec.open .t2-cxl-tg .sh{display:none}
+    .t2-cxl-sec.open .t2-cxl-tg .hd{display:inline}
+    .t2-cxl-hd:hover .t2-cxl-tg{background:#FDECEA}
+    .t2-cxl-hd:focus:not(:focus-visible){outline:none}
+    .t2-cxl-hd:focus-visible{outline:2px solid #E8A39C;outline-offset:2px;border-radius:6px}
     .t2-cxl-row{display:flex;align-items:center;gap:13px;padding:6px 0;border-top:0.5px solid #F0DBD6;font-size:11.5px;color:#8d726d}
     .t2-cxl-row:first-of-type{border-top:none}
     .t2-cxl-vc{font-family:'DM Mono',monospace;font-size:10.5px;min-width:90px;text-decoration:line-through;opacity:.75}
