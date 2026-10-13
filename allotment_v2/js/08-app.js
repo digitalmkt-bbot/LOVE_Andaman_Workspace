@@ -77191,6 +77191,33 @@ function pc2CSS3(S){
     'body.btc #view-booking td>.t2-dim,body.btc #view-booking td .t2-zonepick>.t2-dim,body.btc #view-booking td.t2-req>.t2-dim{font-size:0}',
     'body.btc #view-booking td>.t2-dim::after,body.btc #view-booking td .t2-zonepick>.t2-dim::after,body.btc #view-booking td.t2-req>.t2-dim::after{content:"\\00B7";font-size:14px;color:#C9CED8}',
 
+    /* §btcSharp (2026-10-13) · owner "เอาแบบเดิม แต่เน้นความคมชัดแบบที่คุณวาด" · same layout, crisper type and colour
+       numbers line up (tabular) · body text dark navy · captions readable grey (#6B7180 was #8A8F9C) · lock bars solid lilac
+       (no hatch) · lock icon as a line icon · seat-lock rows not italic · card borders one tone */
+    'body.btc #view-booking{font-variant-numeric:tabular-nums}',
+    'body.btc #view-booking .bt-c{border-color:#E1E5EC!important;box-shadow:none!important}',
+    'body.btc #view-booking table.t2-mtbl td{color:#0F1B3D}',
+    'body.btc #view-booking table.t2-mtbl th{color:#6B7180!important;font-size:10px;letter-spacing:.07em}',
+    'body.btc #view-booking td.t2-tm{font-weight:500}',
+    'body.btc #view-booking .btc-bt .h,body.btc #view-booking .btc-nt .h{color:#6B7180}',
+    'body.btc #view-booking .btc-bt .n s,body.btc #view-booking .bt-seat{color:#6B7180}',
+    'body.btc #view-booking .btc-bt .b{color:#4B5263}',
+    'body.btc #view-booking .btc-pr .tm{color:#4B5263}',
+    'body.btc #view-booking .btc-pr .lk,body.btc #view-booking .btc-bt .lk{color:#6D28D9;font-weight:700}',
+    'body.btc #view-booking .btc-lki{vertical-align:-1px;margin-right:3px}',
+    'body.btc #view-booking .bt-pgf .bt-tag{color:#6B7180}',
+    'body.btc #view-booking .bt-mc .s{color:#6B7180}',
+    'body.btc #view-booking .btc-pbar,body.btc #view-booking .t2-pband .btc-tbar,body.btc #view-booking .bt-boat .btc-sbar{background:#EDF0F4}',
+    'body.btc #view-booking .btc-pbar i.l,body.btc #view-booking .t2-pband .btc-tbar i.l,body.btc #view-booking .bt-boat .btc-sbar i.l{background:#D6C9FB}',
+    'body.btc #view-booking .bt-free.ok,body.btc #view-booking .btc-bt .fr em{background:#E3F5EC;color:#0B6142}',
+    'body.btc #view-booking .bt-free.low,body.btc #view-booking .btc-bt .fr em.low{background:#FFF0D6;color:#9A4A06}',
+    'body.btc #view-booking .btc-nt .r{border-bottom-color:#F0F2F5}',
+    'body.btc #view-booking .btc-nt .r.tot{border-top:1px solid #E1E5EC}',
+    'body.btc #view-booking .btc-nt .c.z{color:#CDD2DA}',
+    'body.btc #view-booking tr.t2-lrow>td,body.btc #view-booking tr.t2-lrow>td *{font-style:normal!important}',
+    'body.btc #view-booking tr.t2-lrow .lkwait{color:#6B7180;font-weight:500}',
+    'body.btc #view-booking tr.t2-lrow .lkcode{font-weight:700}',
+
     /* one-line rows (round 6): every cell stays on one line, full text on hover */
     'body.btc #view-booking table.t2-mtbl tr.t2-row>td{white-space:nowrap;line-height:1.3}',
     'body.btc #view-booking tr.t2-row>td.t2-pk .t2-pickcell{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
@@ -77340,6 +77367,7 @@ function pc2CSS3(S){
 
 
   /* programme rows: seat bar (ทึบ = จอง · ลายม่วง = ล็อก) */
+  var LKI = '<svg class="btc-lki" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';   // §btcSharp
   function freeTh(t){ t = String(t || '').trim(); var m = t.match(/^(\d+)\s*free$/i); if(m) return 'ว่าง ' + m[1]; if(/^full$/i.test(t)) return 'เต็ม'; return t; }
   function pierShort(p){ return /tub\s*lamu/i.test(p) ? 'TL' : (/panwa/i.test(p) ? 'VP' : (/ranong/i.test(p) ? 'RN' : p)); }
   function progBars(root){
@@ -77358,7 +77386,7 @@ function pc2CSS3(S){
       var tt = tmEl.textContent.trim().split(' · ');
       var h = '<span class="vn" title="' + esc(vn.textContent.trim()) + '">' + esc(vn.textContent.trim()) + '</span>'
             + '<span class="tm" title="' + esc(tmEl.textContent.trim()) + '"><b>' + esc(tt[0] || '') + '</b>' + (tt.length > 1 ? ' · ' + esc(pierShort(tt.slice(1).join(' · '))) : '') + '</span>'
-            + '<span class="lk">' + (lk > 0 ? '🔒 ' + lk : '') + (hold ? ' ' + hold.outerHTML : '') + '</span>'
+            + '<span class="lk">' + (lk > 0 ? LKI + lk : '') + (hold ? ' ' + hold.outerHTML : '') + '</span>'
             + '<span class="st">' + (seat ? (cap ? '<b style="color:#0F1B3D">' + bk + '</b><span style="color:#8A8F9C">/' + cap + '</span>' : '<b style="color:#0F1B3D">' + bk + '</b>') : '') + '</span>'
             + '<span class="btc-pbar" title="จอง ' + bk + (lk ? ' · ล็อก ' + lk : '') + (cap ? ' / ' + cap : '') + '">'
             + (cap > 0 ? '<i style="width:' + Math.min(100, bk * 100 / cap) + '%;background:' + col + '"></i><i class="l" style="width:' + Math.max(0, Math.min(100 - Math.min(100, bk * 100 / cap), lk * 100 / cap)) + '%"></i>' : '') + '</span>'
@@ -77371,7 +77399,7 @@ function pc2CSS3(S){
   function noticeTable(root){
     var w = root.querySelector('.bt-ncb .t2-hd-warn:not(.btc-done)');
     if(!w) return;
-    var KIND = [['Van', 'รถ', '#FFEDD5', '#9A3412'], ['Boat', 'เรือ', '#FEE4E2', '#B42318'], ['รถกลับ', 'รถกลับ', '#FEF3C7', '#92400E'], ['Re-confirm', 'Re-confirm', '#DBEAFE', '#1E40AF']];
+    var KIND = [['Van', 'รถ', '#FFF1DE', '#9A4A06'], ['Boat', 'เรือ', '#FDECEA', '#B42318'], ['รถกลับ', 'รถกลับ', '#FBF3D5', '#7A5300'], ['Re-confirm', 'Re-confirm', '#EAF0FF', '#1D4ED8']];   // §btcSharp softer tints
     var chips = w.querySelectorAll('.t2-hd-warnchip'); var data = {}, order = [], used = {}, other = [];
     var BYBG = {'rgb(224, 124, 36)': 0, 'rgb(192, 57, 43)': 1, 'rgb(184, 134, 11)': 2, 'rgb(24, 95, 165)': 3};   // Van · Boat · return van · Re-confirm (สีปุ่มเดิม)
     for(var i = 0; i < chips.length; i++){
@@ -77456,8 +77484,8 @@ function pc2CSS3(S){
   /* fixed table · narrower columns in Compact so more of the table fits (Classic widths untouched) */
   /* voucher / agency / customer are sticky on the left · Classic measures their offsets once after drawing (--t2-fz1/2)
      Agency is narrowed in Compact (the compact B2C tag needs ~150px, Classic keeps 196) → offsets are re-measured below */
-  var COLW = {'agency':150,'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':168,'room':40,'zone':68,
-              'send back':100,'add-on':62,'special request':84,'pay':78,'total':84,'':40};
+  var COLW = {'agency':150,'ad':38,'chd':40,'inf':38,'foc':40,'time':104,'pickup':168,'room':64,'zone':68,
+              'send back':100,'add-on':62,'special request':84,'pay':78,'total':72,'':40};
   function colWidths(root){
     var ts = root.querySelectorAll('table.t2-mtbl:not(.btc-cw)');
     for(var i = 0; i < ts.length; i++){
@@ -77627,6 +77655,26 @@ function pc2CSS3(S){
     }
   }
 
+  /* §btcSharp · 🔒 emoji → line icon (crisp, same colour as the text) · text nodes only, so numbers / names stay as they are */
+  function lockIcons(root){
+    try{
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function(n){
+        if(n.nodeValue.indexOf('\uD83D\uDD12') < 0) return NodeFilter.FILTER_REJECT;
+        var pe = n.parentNode; if(!pe || /^(SCRIPT|STYLE|TEXTAREA|OPTION|TITLE)$/.test(pe.tagName) || pe.closest('select,input,[contenteditable]')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT; } });
+      var list = []; while(w.nextNode()) list.push(w.currentNode);
+      for(var i = 0; i < list.length; i++){
+        var n = list[i], parts = n.nodeValue.split('\uD83D\uDD12'), f = document.createDocumentFragment();
+        for(var k = 0; k < parts.length; k++){
+          if(k){ var t = document.createElement('span'); t.innerHTML = LKI; f.appendChild(t.firstChild); }
+          var tx = k ? parts[k].replace(/^\s+/, '') : parts[k];
+          if(tx) f.appendChild(document.createTextNode(tx));
+        }
+        n.parentNode.replaceChild(f, n);
+      }
+    }catch(e){}
+  }
+
   var busy = false;
   function pass(){
     if(busy) return; busy = true;
@@ -77636,7 +77684,7 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); }
+        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
