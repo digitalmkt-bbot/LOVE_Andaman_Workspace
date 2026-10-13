@@ -12,7 +12,8 @@
   window.LA_UID=function(p){ return (p||'')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); };
   // cache-buster on every GET — iPadOS Safari serves stale cached /api GETs (empty/old data, survives reload)
   function bust(url){ return url+(url.indexOf('?')<0?'?_=':'&_=')+Date.now(); }
-  function sx(method,url,body,ct){ var x=new XMLHttpRequest(); try{ x.open(method,method==='GET'?bust(url):url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
+  function sx(method,url,body,ct){ if(window.laOpsUsersSx && url.indexOf('/api/users')===0){ var _ou=window.laOpsUsersSx(method,url,body); if(_ou) return _ou; }   /* §opsUsers · ops/14-ops-users.js */
+    var x=new XMLHttpRequest(); try{ x.open(method,method==='GET'?bust(url):url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
   function fmt(s){ try{ return new Date(s).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return s||''; } }
   /* §laStamp · เวลาที่ข้อมูลอัพเดตล่าสุดเคยอยู่แต่ใน LASTBY ซึ่งเป็นตัวแปรใน IIFE นี้
      หน้าอื่นเลยเอาไปโชว์ไม่ได้ · ปล่อยค่าดิบขึ้น window ไว้ให้หน้าที่อยากบอกความสดของข้อมูล */
@@ -890,9 +891,10 @@
     var box=document.getElementById('la-b2c-issues-list'), wrap=document.getElementById('la-b2c-issues'); if(!box) return;
     if(box.style.display!=='none'){ box.style.display='none'; wrap.classList.remove('open'); return; }
     box.style.display='block'; wrap.classList.add('open'); box.innerHTML='<div style="padding:10px 12px;opacity:.7">กำลังโหลด…</div>';
-    var x=new XMLHttpRequest(); x.open('GET',bust('/api/b2c/health'),true); x.timeout=8000;
-    x.onload=function(){
-      var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+    /* §opsB2CHealth · the list comes from operation-backend /v1/b2c/issues (ops/44-ops-b2c-health.js) */
+    var fail=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
+    if(!window.laOpsB2CIssues){ fail(); return; }
+    window.laOpsB2CIssues(function(j){
       var L=(j&&j.issues)||[];
       /* §b2cAddon · ใบที่มีแต่บริการเสริมและผูกกับใบเอเจนต์ได้แล้ว ไม่ใช่ปัญหา · แยกไว้ส่วนสีเขียวข้างล่าง */
       var W=L.filter(function(i){ return i.code!=='addon_linked'; }), G=L.filter(function(i){ return i.code==='addon_linked'; });
@@ -906,9 +908,7 @@
       box.innerHTML=W.map(function(i){ return row(i,false); }).join('')
         +(G.length?('<div style="padding:7px 12px 5px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#2F6B4F;background:#F1F8F3">บริการเสริมของใบเอเจนต์ · ไม่กินที่นั่ง · '+G.length+'</div>'
           +G.map(function(i){ return row(i,true); }).join('')):'');
-    };
-    x.onerror=x.ontimeout=function(){ box.innerHTML='<div style="padding:10px 12px">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; };
-    try{ x.send(); }catch(e){}
+    }, fail);
   };
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   // §opsAuth (2026-09-18) · a 401 on /api/events turns into an endless EventSource reconnect loop.
