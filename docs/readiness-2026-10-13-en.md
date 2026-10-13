@@ -10,7 +10,31 @@ This is a current-code review of the `main` integration frontend against `operat
 
 - **operation-backend** `main` `8c0ab08` is deployed. It carries the pier-cash row PATCH, the pier ledger/outstanding/write-off/repair routes, invoice payment-slip add/remove, and the two controlled-error fixes. Verified live: `GET /v1/pier-office/tublamu/moves` returns 401 (route exists), not 404.
 - **This frontend** `main` `38c0525` is pushed (`origin/main` equals local `HEAD`). It wires Reconfirm, petty cash, Transfer Fleet writes, the pier ledger and payment slips, and disables the report-email chart upload. The new calls depend on the backend routes above. At the last check the production page still served the previous build (`08-app.js?v=a05dae53`), so the `38c0525` deploy had not finished; re-check `08-app.js` is not `a05dae53` before testing.
-- **Not done:** any browser acceptance run, and any run of the new tests against real PostgreSQL.
+- **Acceptance:** run against local Docker, see below. Not yet run against the real production database or by staff.
+
+## Acceptance run (2026-10-13, local Docker)
+
+Backend `8c0ab08` built in Docker (Postgres 18), restored from the saved Oct 10 dumps, then the cutover import run in the README order into an **empty** `operations` database: `seed:routes`, `seed:boats`, `import:pipeline --commit --sales --rate-types --all`, `import:fleet`, `import:fleet-stock --all`. All exited 0. The frontend was served from this repo's `main` against that API and driven in Chrome.
+
+Import result: 5,414 of 5,436 bookings, 837 agents, 22 boats, 1,188 pier moves, 154 cash rows, 477 invoices, 53 vans. `verify:import`: 6 of 23 checks differ.
+- 22 bookings missing, all `b2c_*` (not imported by default).
+- Per-day seat and charter passenger diffs (2 + 1) and monthly THB diffs (2); probably those 22 bookings, not confirmed.
+- 5 active-lock diffs on 11-13 Oct (probably lock expiry); 104 legacy columns hold data that no import code reads (`paymentstatus`, `cashontour`, `lockdrawsel`, ...). Decide whether any of those matter before cutover.
+- Note: the saved `operations` dump (4,373 bookings, 0 agents) cannot migrate to current `main`: migration 240 adds `bookings_agent_fk` and fails. Cutover must start from an empty database, as above.
+
+| Area | Result |
+| --- | --- |
+| Unknown `agent_id` on booking create | **Pass on Postgres**: 400, nothing written |
+| Delete licence class in use | **Pass**: 409 `licence_class_in_use`, lists the 12 licences |
+| Petty cash: edit row, certificate | **Pass**: persisted `1600.00`; certificate shows the server rows, Thai total, company name |
+| Reconfirm: send, undo, status picker | **Pass**; server state and history line match |
+| Transfer Fleet: load, edit, day-cell writes | **Pass** |
+| Transfer Fleet: van form save | **Bug found and fixed** (`0cdae76`): the legacy form state has no colour, so every save sent `color:null` and wiped the van's colour. Now sent only when the user picks one. |
+| Pier ledger and boat close dialog | **Pass**: 1,188 moves; Hermetis close lists 1 + 2 + 15 = 18, equal to the server's carry. Needs a recorder chosen in the top bar first (legacy guard, expected). |
+| Payment slip after payment: attach, view, delete | **Pass**: server 0 to 1 to 0, file removed |
+| Ship write-off / repair success path | API refusals pass (400 no note, 409 over stock); a successful write-off was **not** exercised |
+
+Not covered: contract artifact upload, the other attachment paths, concurrent writes and login expiry, a van delete, the petty-cash print layout (the print window was captured, not rendered), and any run against the real production database.
 
 ## Release blockers
 
