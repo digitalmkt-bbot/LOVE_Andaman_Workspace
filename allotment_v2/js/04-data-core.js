@@ -8328,6 +8328,85 @@ const FC_CSS=`<style>
   .fm-sep{grid-column:1 / span 8;height:1px;background:#EEF0F4;margin:4px 0}
   .fm-lg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;font-size:12px;color:#374151;padding:12px 14px}
   .fm-ro{font-size:12px;color:#6B7280;text-align:center;padding:2px 8px}
+  /* ══ §fcMock (2026-10-13) · "ยังไม่เหมือน Mockup" · ชั้นนี้ทำให้หน้าตาตรงกับ mockup ที่อนุมัติ ══════
+     ฟอนต์ IBM Plex Sans Thai (โหลดอยู่แล้วในหน้า) · ตัวเลข DM Mono · ตัวหนังสือ 12.5–14px แทน 9.5–11px
+     พื้นขาว เส้นเทา แทนโทนครีม · ชิปเต็มความกว้างช่อง ชื่อซ้าย ตัวเลขขวา แถบใต้ (เฉพาะ 7 วัน)
+     ลบทั้งก้อนนี้ = กลับไปหน้าตาเดิม */
+  #view-fleetcal{font-family:'IBM Plex Sans Thai','DM Sans',sans-serif;padding:16px 24px 24px}
+  #view-fleetcal .fm{font-family:'IBM Plex Sans Thai','DM Sans',sans-serif}
+  .fc-top{margin:0 0 12px}
+  .fc-top .d{font-size:32px;font-weight:700;font-family:'DM Mono',monospace}
+  .fc-top .wk{font-size:15px;font-weight:700}
+  .fc-top .w{font-size:11px;font-family:'DM Mono',monospace;color:#B9C4E0}
+  .fc-arw{width:38px;height:38px;border-radius:999px;font-size:16px;background:rgba(255,255,255,.12);border:0;color:#fff}
+  .fc-tb{background:#1F8A5B;font-size:13.5px;padding:8px 16px;min-height:38px}
+  .fc-brand i{font-size:10px;letter-spacing:.3em;color:#B9C4E0;font-family:'DM Mono',monospace}
+  .fc-brand b{font-size:21px;font-weight:700;letter-spacing:.22em}
+  .fc-chip{height:34px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:600;background:rgba(255,255,255,.14);border:0;color:#fff}
+  .fc-chip b{font-family:'DM Mono',monospace;font-weight:700}
+  .fc-chip.g{background:#D1FAE5;color:#065F46}
+  .fc-chip.r{background:#FEE2E2;color:#991B1B}
+  .fc-chip.o{background:#FEF3C7;color:#78350F}
+  .fc-seg{background:transparent;border:0;padding:0;gap:6px}
+  .fc-seg button{background:rgba(255,255,255,.12);border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:600;color:#fff;min-height:38px}
+  .fc-seg button.on{background:#fff;color:#16265C;font-weight:700}
+  .fc-piers{margin:0 0 16px;gap:8px}
+  .fc-pp{font-size:13.5px;font-weight:600;padding:8px 15px;min-height:38px;border-radius:999px;color:#fff;background:rgba(255,255,255,.12);border:0}
+  .fc-pp.on{background:#fff;color:#16265C;font-weight:700}
+  .fc-card{border:1px solid #D9DEE7;border-radius:12px;box-shadow:none;padding:0;background:#fff}
+  .fc-ch2{margin:0;padding:12px 16px;border-bottom:1px solid #D9DEE7;background:#F5F6F8;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:#374151;text-transform:none}
+  .fc-ch2 .pill{background:#fff;border:1px solid #D9DEE7;color:#111827;font-family:'DM Mono',monospace;font-size:12px;padding:3px 10px}
+  .fc-ch2 .lg{font-size:12.5px;color:#4B5563;gap:16px;font-weight:500}
+  .fc-ch2 .lg .ro{color:#6B7280}
+  .fc-lgb{width:22px;height:5px}
+  .fc-wrap{margin:0}
+  .fc-mt{font-size:14px;--lcw:230px}
+  .fc-mt th,.fc-mt td{border-bottom:1px solid #EEF0F4}
+  .fc-mt .fc-mh{padding:10px 8px;border-bottom:1px solid #D9DEE7;color:#111827}
+  .fc-mt .fc-mh .wd{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6B7280}
+  .fc-mt .fc-mh .dn{display:block;width:auto;height:auto;border-radius:0;font-family:'DM Mono',monospace;font-size:22px;font-weight:600;color:#111827;line-height:1.15;margin-top:2px}
+  .fc-mt .fc-mh .sm{display:block;font-size:11.5px;font-weight:500;color:#6B7280;margin-top:2px;white-space:nowrap}
+  .fc-mt .fc-mh .rg{display:block;font-size:12px;font-weight:500;color:#6B7280;margin-top:4px;text-transform:none;letter-spacing:0;font-family:'IBM Plex Sans Thai',sans-serif}
+  .fc-mt .fc-mh.sticky{padding-left:14px}
+  .fc-mt .fc-mh.today{background:#EEF4FF;box-shadow:inset 0 -3px 0 #2563EB}
+  .fc-mt .fc-mh.today .dn{background:none;color:#1D4ED8}
+  .fc-mt .fc-mh.today .wd{color:#1D4ED8}
+  .fc-mt tr.fc-mg th{background:#F3F4F6;color:#111827;font-size:14px;font-weight:700;padding:10px 14px;border-top:1px solid #D9DEE7;border-bottom:1px solid #D9DEE7}
+  .fc-mt tr.fc-mg td{background:#F3F4F6;font-family:'IBM Plex Sans Thai',sans-serif;font-size:12.5px;color:#374151;border-top:1px solid #D9DEE7;border-bottom:1px solid #D9DEE7;padding:10px 6px}
+  .fc-mgc .ff{font-weight:700}
+  .fc-mgc .fo b,.fc-mgc .fo{font-weight:500}
+  .fc-pb{width:auto;height:auto;padding:2px 6px;border-radius:6px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700}
+  .fc-mt th.fc-rn{padding:10px 14px;font-size:14px;font-weight:500;color:#111827}
+  .fc-mt th.fc-rn .in{gap:8px}
+  .fc-mt th.fc-rn .in i{width:8px;height:8px}
+  .fc-mt tr.fr th.fc-rn{font-size:14px}
+  .fc-mt tr.fc-dorm th.fc-rn{background:#FAFAFA;color:#6B7280;font-size:13px}
+  .fc-mt th.fc-rn .in em{font-family:'DM Mono',monospace;font-size:12px;color:#6B7280}
+  .fc-mx{padding:6px;text-align:left;border-left:1px solid #F3F4F6}
+  .fc-mx.has,.fc-mx.no{background:#fff}
+  .fc-mx.td{background:#F5F9FF}
+  .fc-mx.hasf.td,.fc-mx.nof.td{background:#E7F8EE}
+  .fc-mx .zero,.fc-mx.nof .zero{display:block;padding:4px 2px;font-size:12px;font-weight:600}
+  /* สกินของแอปใส่ letter-spacing ให้ th · ชื่อโปรแกรมเลยห่างจนอ่านเป็นคำยาก */
+  .fc-mt th.fc-rn,.fc-mt tr.fc-mg th,.fc-mt th.fc-rn .nm{letter-spacing:0}
+  .fc-mt.w .fc-bc .nm{min-width:0}
+  .fc-mt.w .fc-bc b{font-size:12px}
+  .fc-mt td.dormc{background:#FAFAFA;padding:8px 10px}
+  .fc-mt td.dormc span{font-size:12px;padding:2px 8px;border:1px dashed #D1D5DB;color:#6B7280;border-radius:6px;margin:2px 6px 2px 0}
+  /* ชิป · มุมมอง 7 วัน · เต็มช่อง ชื่อซ้าย เลขขวา แถบใต้ (ตรงกับ mockup) */
+  .fc-mt.w .fc-bc{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:6px;
+    width:100%;margin:0 0 5px;padding:5px 8px 6px;border-radius:8px;text-align:left}
+  .fc-mt.w .fc-bc .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+  .fc-mt.w .fc-bc b{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600}
+  .fc-mt.w .fc-bc u{grid-column:1 / span 2;height:4px;margin-top:4px}
+  .fc-mt.w .fc-bc.out{display:inline-flex;width:auto;margin:0 5px 5px 0;padding:2px 8px;border-radius:6px;gap:5px}
+  .fc-mt.w .fc-bc.out .nm{font-size:12px}
+  .fc-mt.w .fc-bc.out b{font-size:11px;font-weight:500;color:#16A34A}
+  /* 14 วัน · ช่องแคบ · ชิปเล็กแต่ตัวหนังสืออ่านได้ */
+  .fc-mt:not(.w) .fc-bc{font-size:11px;padding:4px 6px 5px}
+  .fc-mt:not(.w) .fc-bc b{font-family:'DM Mono',monospace;font-size:11px}
+  .fc-cal,.fc-wh{font-family:'IBM Plex Sans Thai',sans-serif}
+  @media (max-width:820px){ #view-fleetcal{padding:10px} }
 </style>`;
 // ═══════════════════════════════════════════════════════════════════════
 // §fleetCal · ปฏิทินกองเรือ · อ่านอย่างเดียว · แก้เรือยังทำที่ Boat Operation
@@ -8349,7 +8428,7 @@ const FC_CSS=`<style>
 //   และไม่นับใบเหมาลำเข้าพูล · หน้านี้ถามระดับลำ จึงต้องใช้คนบนลำ
 //   ป้ายบนหน้าจอเลยเขียนว่า "คนบนลำ / ที่รับได้" ให้ชัด ไม่ใช่ "ที่นั่งที่ขายได้"
 // ═══════════════════════════════════════════════════════════════════════
-var _fc = { mode:'m14', from:null, ym:null, pier:'all' };
+var _fc = { mode:'m7', from:null, ym:null, pier:'all' };   /* §fcMock · ค่าเริ่ม 7 วันตาม mockup */
 var FC_PIER=[['tublamu','TL','Tub Lamu','#0F6E56','#E1F5EE'],
              ['panwa','VP','Visit Panwa','#185FA5','#E6F1FB'],
              ['ranong','RN','Ranong','#BA7517','#FAEEDA'],
@@ -8498,10 +8577,15 @@ function fcMatrixHtml(){
     if(off){ var pk=C[days[0]][b.id].pier||b.pier||'other'; (dormBy[pk]=dormBy[pk]||[]).push(b); }
   });
   var cols='<colgroup><col class="lc">'+days.map(function(){return '<col class="dc">';}).join('')+'</colgroup>';
-  var head='<tr><th class="fc-mh sticky">Pier · Program</th>'
-    +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), t=(ds===TODAY);
+  var MOS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dl=new Date(days[days.length-1]+'T00:00:00'), df=new Date(days[0]+'T00:00:00');
+  var head='<tr><th class="fc-mh sticky"><span class="wd">Pier · Program</span>'
+      +'<span class="rg">'+df.getDate()+' → '+dl.getDate()+' '+MOS[dl.getMonth()]+'</span></th>'
+    +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), t=(ds===TODAY), nb=0, px=0;
+      boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='run' && fcPierOn(c.rpier||c.pier)){ nb++; px+=(c.pax||0); } });
       return '<th class="fc-mh'+(t?' today':'')+'" onclick="fcOpenDay(\''+ds+'\')" title="'+ds+' · open in Boat Operation">'
-        +'<span class="wd">'+WD[dt.getDay()]+'</span><span class="dn">'+dt.getDate()+'</span></th>'; }).join('')+'</tr>';
+        +'<span class="wd">'+WD[dt.getDay()]+'</span><span class="dn">'+dt.getDate()+'</span>'
+        +'<span class="sm">'+nb+' boat'+(nb===1?'':'s')+(wide?(' · '+px+' pax'):'')+'</span></th>'; }).join('')+'</tr>';
   var body='';
   FC_PIER.forEach(function(p){
     var pk=p[0], progs=prog[pk]||{}, dorm=dormBy[pk]||[];
@@ -8526,7 +8610,7 @@ function fcMatrixHtml(){
       +'<i class="dot"></i><span class="nm">Free at pier</span></span></th>'
       +days.map(function(ds){ var out=[];
         boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free'&&c.pier===pk) out.push(fcChip(b,c,'free')); });
-        return '<td class="fc-mx '+(out.length?'hasf':'nof')+'">'
+        return '<td class="fc-mx '+(out.length?'hasf':'nof')+(ds===TODAY?' td':'')+'">'
           +(out.length?out.join(''):'<span class="zero">No free boat</span>')+'</td>'; }).join('')+'</tr>';
     keys.forEach(function(rid){ var pr=progs[rid];
       body+='<tr class="fc-pr"><th class="sticky fc-rn"><span class="in">'
@@ -8539,7 +8623,7 @@ function fcMatrixHtml(){
             if(c.k!=='run' || (c.rpier||c.pier)!==pk) return;
             if(rid==='__chr' ? !c.chr : (c.chr||c.rid!==rid)) return;
             out.push(fcChip(b,c)); });
-          return '<td class="fc-mx '+(out.length?'has':'no')+'">'+out.join('')+'</td>'; }).join('')+'</tr>';
+          return '<td class="fc-mx '+(out.length?'has':'no')+(ds===TODAY?' td':'')+'">'+out.join('')+'</td>'; }).join('')+'</tr>';
     });
     /* ลำที่ไม่พร้อมทั้งช่วง ยุบเป็นแถวเดียว · แยกแถวละลำได้ลายทางเปล่า 13 แถวกินครึ่งจอ */
     if(dorm.length) body+='<tr class="fc-dorm"><th class="sticky fc-rn"><span class="in">'
