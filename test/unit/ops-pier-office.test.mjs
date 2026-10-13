@@ -32,6 +32,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
   };
   const defaults = {
     'GET /v1/pier-office': LISTS, 'GET /v1/pier-office/settings': SETTINGS, 'GET /v1/pier-office/panwa/stock': { pier: 'panwa', items: [] },
+    'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': { pier: 'panwa', from: '2000-01-01', to: null, total: 0, moves: [] },
     'GET /v1/pier-office/pay-rules': { rules: [{ code: 'PP', multiplier: 1, per_day: 0, flat: 0 }], defaulted: false },
     'GET /v1/pier-office/staff/ps_1/licences': { staff_id: 'ps_1', licences: [LIC] },
   };
@@ -63,7 +64,9 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
     paCell: () => ({ c: 'LEGACY', src: 'none', boat: '', atPier: '' }),
     paPayOf: () => ({ total: -1, parts: [], missing: false, rate: null }),
     poBal: () => ({ ready: -1, onboat: 0, onship: 0, dirty: 0, laundry: 0, repair: 0, gone: 0, inhand: -1 }),
-    poBoatStage: () => ({ k: 'legacy' }), poSheetPending: () => 'legacy', plCheckBoat: () => [{ lv: 'bad', t: 'legacy' }],
+    poBoatStage: () => ({ k: 'legacy' }),
+    poBoatSum: () => ({ pi_a: { iss: -1, ret: 0, rep: 0, wo: 0, lost: 0, ob: 0 }, pi_t: { iss: 0, ret: 0, rep: 0, wo: 0, lost: 0, ob: 0 } }), poBoatCarry: () => ({ legacy: 1 }),
+    poCloseOpen: (b) => { legacy.push('poCloseOpen:' + b); }, poSheetPending: () => 'legacy', plCheckBoat: () => [{ lv: 'bad', t: 'legacy' }],
     poIssueOpen: (b) => { legacy.push('poIssueOpen:' + b); }, poIssueDraft: () => { legacy.push('poIssueDraft'); }, poIssueSave: () => { legacy.push('poIssueSave'); },
     poIsPrint: () => { legacy.push('poIsPrint'); }, poSignSheet: (b) => { legacy.push('poSignSheet:' + b); }, poDayGuard: () => true, poIsRead: () => {},
     poIsPax: (r) => (+r.ad || 0), paPayCan: () => true,
@@ -212,11 +215,12 @@ test('pay: the allowance comes from the server; a rate is a PUT; the rules go as
 
 test('stock: balances are the server\'s; receive, count and laundry go to their commands and the server\'s moves replace the local ones', async () => {
   const bal = (o) => [{ item_id: 'pi_a', label: 'Fin M', ...BAL(o) }];
-  let ready = 40;
+  let ready = 40; const ledger = [];
   const rt = runtime({ answers: {
     'GET /v1/pier-office/panwa/stock': () => ({ pier: PIER, items: [{ id: 'pi_a', label: 'Fin M', kind_id: 'pk_fin', total: 40, active: true, note: null, ...BAL({ ready, inhand: ready }) }] }),
-    'POST /v1/pier-office/panwa/stock/receive': () => { ready = 45; return { moves: [MOVE({})], counts: [], balances: bal({ ready: 45, inhand: 45 }) }; },
-    'POST /v1/pier-office/panwa/stock/count': () => { ready = 42; return { moves: [MOVE({ id: 'pm_2', type: 'count', qty: -3, source: null, note: 'month end · counted 42 (books 45)' })], counts: [], balances: bal({ ready: 42, inhand: 42 }) }; },
+    'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': () => ({ pier: PIER, total: ledger.length, moves: ledger.slice().reverse() }),
+    'POST /v1/pier-office/panwa/stock/receive': () => { ready = 45; ledger.push(MOVE({})); return { moves: [MOVE({})], counts: [], balances: bal({ ready: 45, inhand: 45 }) }; },
+    'POST /v1/pier-office/panwa/stock/count': () => { ready = 42; ledger.push(MOVE({ id: 'pm_2', type: 'count', qty: -3, source: null, note: 'month end · counted 42 (books 45)' })); return { moves: [ledger[1]], counts: [], balances: bal({ ready: 42, inhand: 42 }) }; },
   } });
   await boot(rt);
   rt.w.renderPierOffice(); await rt.flush();
@@ -247,11 +251,102 @@ test('stock: a refused command takes the local move away and shows the server\'s
 test('stock: a move the server has no command for is refused, not kept in the browser', async () => {
   const rt = runtime();
   await boot(rt);
-  rt.w.PIER_MOVES.push({ id: 'pm_y', date: DATE, pier: PIER, itemId: 'pi_a', boatId: 'b1', type: 'ship_repair', qty: 1 });
+  rt.w.PIER_MOVES.push({ id: 'pm_y', date: DATE, pier: PIER, itemId: 'pi_a', boatId: 'b1', type: 'bogus', qty: 1 });
   await save(rt);
   assert.equal(rt.w.PIER_MOVES.length, 0);
-  assert.match(rt.fails[0].message, /ship_repair/);
+  assert.match(rt.fails[0].message, /bogus/);
   assert.deepEqual(writes(rt), []);
+});
+
+test('ship write-off and ship repair are their own commands, grouped by note, with no fine', async () => {
+  const rt = runtime({ answers: {
+    'POST /v1/pier-office/panwa/boats/b1/stock/ship-writeoff': { boat_id: 'b1', moves: [MOVE({ id: 'pm_w', type: 'ship_writeoff', boat_id: 'b1', source: null, note: 'cracked' })], balances: [{ item_id: 'pi_a', ...BAL({}) }] },
+    'POST /v1/pier-office/panwa/boats/b1/stock/ship-repair': { boat_id: 'b1', moves: [MOVE({ id: 'pm_p', type: 'ship_repair', boat_id: 'b1', source: null, note: 'strap' })], balances: [{ item_id: 'pi_a', ...BAL({}) }] },
+  } });
+  await boot(rt);
+  const m = (o) => ({ date: DATE, pier: PIER, itemId: 'pi_a', boatId: 'b1', ...o });
+  rt.w.PIER_MOVES.push({ id: 'w1', ...m({ type: 'ship_writeoff', qty: 1, note: 'cracked' }) }, { id: 'w2', ...m({ type: 'ship_writeoff', qty: 2, note: 'cracked' }) },
+    { id: 'r1', ...m({ type: 'ship_repair', qty: 1, note: 'strap' }) });
+  await save(rt);
+  assert.deepEqual(writes(rt).map((c) => [c.path, c.body]), [
+    ['/v1/pier-office/panwa/boats/b1/stock/ship-writeoff', { date: DATE, lines: [{ item_id: 'pi_a', qty: 3 }], note: 'cracked' }],
+    ['/v1/pier-office/panwa/boats/b1/stock/ship-repair', { date: DATE, lines: [{ item_id: 'pi_a', qty: 1 }], note: 'strap' }]]);
+  assert.deepEqual(rt.w.PIER_MOVES.map((x) => [x.id, x.type, x.srv]), [['pm_w', 'ship_writeoff', true], ['pm_p', 'ship_repair', true]]);
+});
+
+test('ledger: the pier\'s moves are read into PIER_MOVES (oldest first), fines come with their status, unsent moves stay', async () => {
+  const lost = MOVE({ id: 'pm_l', date: '2026-10-11', type: 'lost', boat_id: 'b1', qty: 2, source: null, fine_baht: 300, fine_status: 'paid',
+    fine: { move_id: 'pm_l', status: 'paid', how: 'cash', note: null, paid_at: 'p', paid_by: 'GSA' } });
+  const older = MOVE({ id: 'pm_o', date: '2026-10-01', type: 'issue', boat_id: 'b1', qty: 4, source: null });
+  const rt = runtime({ answers: { 'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': { pier: PIER, from: '2000-01-01', to: null, total: 2, moves: [lost, older] } } });
+  await boot(rt);
+  rt.w.PIER_MOVES.push({ id: 'old_blob', srv: true, date: '2026-09-01', pier: PIER, itemId: 'pi_a', boatId: '', type: 'receive', qty: 1 },
+    { id: 'mine', date: DATE, pier: PIER, itemId: 'pi_a', boatId: '', type: 'receive', qty: 1, from: 'buy' });
+  rt.w.renderPierOffice(); await rt.flush();
+  assert.deepEqual(rt.w.PIER_MOVES.map((m) => m.id), ['mine', 'pm_o', 'pm_l'], 'the blob\'s old server-side row goes, the unsent one stays');
+  const l = rt.w.PIER_MOVES.find((m) => m.id === 'pm_l');
+  assert.equal(l.fine, 300); assert.equal(l.finePaid, true);
+  assert.deepEqual(J(rt.w.PIER_CFG.finePay.pm_l), { st: 'paid', at: 'p', by: 'GSA', how: 'cash', note: '' });
+  const asked = rt.calls.filter((c) => c.path.indexOf('/moves') > 0);
+  assert.equal(asked.length, 1);
+});
+
+test('ledger: a fine already settled on the server is not sent again', async () => {
+  const lost = MOVE({ id: 'pm_l', type: 'lost', boat_id: 'b1', qty: 2, source: null, fine_baht: 300, fine_status: 'waived',
+    fine: { move_id: 'pm_l', status: 'waived', how: null, note: 'regular', paid_at: 'p', paid_by: 'GSA' } });
+  const rt = runtime({ answers: { 'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': { pier: PIER, from: '2000-01-01', to: null, total: 1, moves: [lost] } } });
+  await boot(rt);
+  rt.w.renderPierOffice(); await rt.flush();
+  await save(rt);
+  assert.deepEqual(writes(rt), []);
+});
+
+test('ledger: a truncated answer is said out loud; a failed read is a toast, not a crash', async () => {
+  const rt = runtime({ answers: { 'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': { pier: PIER, from: '2000-01-01', to: null, total: 9000, moves: [MOVE({})] } } });
+  await boot(rt);
+  rt.w.renderPierOffice(); await rt.flush();
+  assert.match(rt.fails[0].message, /newest 1 of 9000/);
+  const rt2 = runtime({ answers: { 'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': new Error('down') } });
+  await boot(rt2);
+  rt2.w.renderPierOffice(); await rt2.flush();
+  assert.equal(rt2.fails.filter((f) => f.message === 'down').length, 1);
+});
+
+test('close dialog: the boat\'s outstanding is read first and poBoatSum / poBoatCarry answer from it until the next write', async () => {
+  const OUT = '/v1/pier-office/panwa/days/' + DATE + '/boats/b1/outstanding';
+  const rt = runtime({ answers: { ['GET ' + OUT]: { pier: PIER, date: DATE, boat_id: 'b1', stage: { k: 'open' }, items: [
+    { item_id: 'pi_a', label: 'Fin M', carry: 3, issued: 5, returned: 2, repair: 0, writeoff: 0, lost: 1, onboard: 0, outstanding: 5 }] } } });
+  await boot(rt);
+  rt.w._poDate = DATE;
+  await rt.w.poCloseOpen('b1');
+  assert.deepEqual(rt.legacy.filter((x) => /poCloseOpen/.test(x)), ['poCloseOpen:b1'], 'the legacy dialog opens after the read');
+  assert.deepEqual(J(rt.w.poBoatCarry(DATE, 'b1')), { pi_a: 3 });
+  assert.deepEqual(J(rt.w.poBoatSum(DATE, 'b1', PIER).pi_a), { iss: 5, ret: 2, rep: 0, wo: 0, lost: 1, ob: 0 });
+  assert.equal(rt.w.poBoatSum(DATE, 'b1', PIER).pi_t.iss, 0, 'items the server did not list keep legacy\'s zero row');
+  // a move waiting to be sent on this boat: legacy's own sums, which include it
+  rt.w.PIER_MOVES.push({ id: 'u1', date: DATE, pier: PIER, itemId: 'pi_a', boatId: 'b1', type: 'return', qty: 1 });
+  assert.deepEqual(J(rt.w.poBoatCarry(DATE, 'b1')), { legacy: 1 });
+  // a write clears the answer
+  rt.w.PIER_MOVES.length = 0;
+  rt.w.laOps.wrote('pier');
+  assert.deepEqual(J(rt.w.poBoatCarry(DATE, 'b1')), { legacy: 1 });
+});
+
+test('close dialog: a failed outstanding read is a toast and the dialog still opens', async () => {
+  const OUT = '/v1/pier-office/panwa/days/' + DATE + '/boats/b1/outstanding';
+  const rt = runtime({ answers: { ['GET ' + OUT]: new Error('down') } });
+  await boot(rt);
+  await rt.w.poCloseOpen('b1');
+  assert.equal(rt.fails.length, 1);
+  assert.deepEqual(rt.legacy.filter((x) => /poCloseOpen/.test(x)), ['poCloseOpen:b1']);
+});
+
+test('close dialog, legacy mode: nothing is read', async () => {
+  const rt = runtime({ enabled: false });
+  rt.w.poCloseOpen('b1');
+  assert.deepEqual(rt.calls, []);
+  assert.deepEqual(rt.legacy, ['poCloseOpen:b1']);
+  assert.deepEqual(J(rt.w.poBoatCarry(DATE, 'b1')), { legacy: 1 });
 });
 
 test('boat close: the returns and the misses of one boat are one close command, with the fine on the lost line', async () => {
@@ -353,6 +448,7 @@ test('sheet: confirming asks about a decrease the server reports, then writes th
   const lower = Object.assign(new Error('This lowers Fin M issued by 1'), { status: 409, code: 'confirm_decrease' });
   const rt = runtime({ answers: {
     ['PUT ' + SHEET]: sheetView('draft'),
+    ['GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000']: () => ({ pier: PIER, total: n > 1 ? 1 : 0, moves: n > 1 ? [MOVE({ id: 'pm_s', type: 'issue', boat_id: 'b1', qty: 2, source: null, sheet_id: 'k' })] : [] }),
     ['POST ' + SHEET + '/commit']: (b) => { n++; if (!b || !b.confirm_decrease) throw lower; return { sheet: sheetView('committed'), moves: [MOVE({ id: 'pm_s', type: 'issue', boat_id: 'b1', qty: 2, source: null, sheet_id: 'k' })], balances: [{ item_id: 'pi_a', ...BAL({ ready: 38, on_boat: 2 }) }] }; },
   } });
   await boot(rt);
