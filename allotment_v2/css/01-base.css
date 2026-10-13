@@ -745,6 +745,24 @@ body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #l
   font:12.5px/1.45 'DM Sans',sans-serif;box-shadow:0 12px 32px rgba(2,10,30,.16)}
 #la-b2c-issues.open{width:min(560px,calc(100vw - 28px))}
 body:has(#la-b2c-issues) #la-refresh{bottom:132px}
+/* §noticeMini (2026-10-13) · owner (ภาพป้ายสองอันทับตาราง) "ปรับอันนี้หน่อย เวลาเรายุบหน้าจอ"
+   ยุบ sidebar แล้วเลนซ้ายแคบเหลือ 84px (เท่าป้ายผู้ใช้ตอนยุบ · 02-skins §sb-collapsed) แต่ป้ายสองอันยังกว้าง 250px
+   เลยล้ำเข้าไปทับคอลัมน์แรกของตาราง · ตอนยุบให้แคบเท่าเลน:
+   · มีข้อมูลใหม่ = ชื่อสั้นสองบรรทัด + ปุ่มโหลดเต็มความกว้าง · จุดเขียวไปอยู่มุม
+   · ใบ B2C ที่ต้องเช็ค = ⚠ จำนวน + "B2C เช็ค" · กดแล้วรายการกางออกกว้างเหมือนเดิม (คนกดเองแล้ว ทับได้) */
+.la-b2ci-sh{display:none}
+body.sb-collapsed #la-refresh{width:84px;max-width:84px;box-sizing:border-box;flex-direction:column;align-items:stretch;
+  gap:6px;padding:9px 7px 7px;text-align:center}
+body.sb-collapsed #la-refresh .la-rf-dot{position:absolute;top:6px;right:6px}
+body.sb-collapsed #la-refresh .la-rf-tx b{font-size:10.5px;line-height:1.25}
+body.sb-collapsed #la-refresh .la-rf-tx i{display:none}
+body.sb-collapsed #la-refresh button{padding:6px 4px;font-size:11px}
+body.sb-collapsed #la-b2c-issues:not(.open){width:84px}
+body.sb-collapsed #la-b2c-issues:not(.open) .la-b2ci-full{display:none!important}
+body.sb-collapsed #la-b2c-issues:not(.open) .la-b2ci-sh{display:flex;flex-direction:column;align-items:center;padding:7px 4px;cursor:pointer}
+body.sb-collapsed #la-b2c-issues .la-b2ci-sh b{font-size:13px;line-height:1.2}
+body.sb-collapsed #la-b2c-issues .la-b2ci-sh i{font-style:normal;font-size:10px;font-weight:700;opacity:.8}
+body.sb-collapsed:has(#la-b2c-issues) #la-refresh{bottom:136px}
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
 .page-hd h1{font-size:20px;font-weight:600;color:var(--ink)}
 .page-hd p{font-size:12px;color:var(--ink-soft);margin-top:2px}
