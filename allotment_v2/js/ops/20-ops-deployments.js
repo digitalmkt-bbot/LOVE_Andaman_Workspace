@@ -30,11 +30,13 @@
   var snapTrips = null, snapCap = null;
 
   function key(d, b){ return d + '::' + b; }
+  /* the deployment's NORMAL seats, never the day override (js/ops/49 owns that on the server):
+     what the server holds if known, else the boat's own cap */
   function capFor(boatId, date){
-    var c = 0;
-    try{ c = (typeof boatCapFor === 'function') ? boatCapFor(boatId, date) : 0; }catch(_){}
-    if(!(c > 0)){ var b = (typeof getBoat === 'function') ? getBoat(boatId) : null; c = b ? (+b.cap || 0) : 0; }
-    return Math.round(c);
+    var had = synced[key(date, boatId)];
+    if(had && had.capacity > 0) return Math.round(had.capacity);
+    var b = (typeof getBoat === 'function') ? getBoat(boatId) : null;
+    return b ? Math.round(+b.cap || 0) : 0;
   }
   function trips(){ return (typeof TRIPS !== 'undefined') ? TRIPS : null; }
   function capOvr(){ return (typeof BOAT_CAP_OVR !== 'undefined') ? BOAT_CAP_OVR : null; }
