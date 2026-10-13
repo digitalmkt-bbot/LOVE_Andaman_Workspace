@@ -13,6 +13,7 @@
 //   3 §together · "👥 Together" on both rows of a booking · same color on both · the two bookings get different colors
 //     the self row shows the name picked at booking time (altPickups[].who) instead of the lead · no +N button there
 //   4 zone band counts: Own transportation +2 booking and +self pax · van zone pax minus the self pax
+//   4b §togFloat · the tag floats across the top edge of the customer cell (like "⚠ รถกลับ") · not clipped, Classic and Compact
 //   5 hover a chip → floating popup: one line per row (people, name, how, zone), "แถวนี้" on this row
 //     click pins it · its "ไปที่แถว" button scrolls to the other row and flashes it · Esc closes
 //   6 an Own transportation zone appears even when that trip had none before
@@ -102,6 +103,14 @@ if (SP) for (const [k, f] of [['@0', 'splitown_main.png'], ['@1', 'splitown_own.
   const tr = page.locator(`#view-booking tr.t2-row[data-al="${S.A}${k}"]`); await tr.scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
   const b = await tr.boundingBox(); await page.screenshot({ path: SP + f, clip: { x: b.x, y: Math.max(0, b.y - (k === '@1' ? 120 : 30)), width: 1500, height: b.height + (k === '@1' ? 160 : 60) } }); }
 
+const fl = async () => page.evaluate(S => [S.A + '@0', S.A + '@1'].map(k => { const tr = document.querySelector('#view-booking tr.t2-row[data-al="' + k + '"]');
+  tr.scrollIntoView({ block: 'center' }); const t = tr.querySelector('.t2-tog'), r = t.getBoundingClientRect(), rr = tr.getBoundingClientRect(), cu = tr.querySelector('td.t2-cu').getBoundingClientRect();
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
+  return { above: Math.round(rr.top - r.top), inCell: r.left >= cu.left && r.right <= cu.right, onTop: !!(hit && (hit === t || t.contains(hit))), pos: getComputedStyle(t).position }; }), S);
+const f1 = await fl(); await page.evaluate(async () => { btcSet('compact'); await new Promise(z => setTimeout(z, 700)); }); const f2 = await fl();
+await page.evaluate(async () => { btcSet('classic'); await new Promise(z => setTimeout(z, 700)); });
+if ([...f1, ...f2].every(f => f.pos === 'absolute' && f.above >= 5 && f.inCell && f.onTop)) ok(`4b tag floats ${f1[0].above}px above the row edge, inside the customer column, on top · Classic and Compact`);
+else fail('4b ' + JSON.stringify({ classic: f1, compact: f2 }));
 const c5 = await page.evaluate(async S => {
   const ch = document.querySelector('#view-booking tr.t2-row[data-al="' + S.A + '@0"] .t2-tog');
   ch.scrollIntoView({ block: 'center' }); await new Promise(z => setTimeout(z, 150));

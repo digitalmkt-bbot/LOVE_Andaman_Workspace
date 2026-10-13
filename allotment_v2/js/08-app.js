@@ -51514,6 +51514,8 @@ function bkV2TogColor(id, date){
     return BKV2_TOG_PAL[(i < 0 ? 0 : i) % BKV2_TOG_PAL.length];
   }catch(_){ return BKV2_TOG_PAL[0]; }
 }
+/* §togCompact · owner "ขอให้กระชับกว่านี้หน่อย" · popup เหลือแถวละบรรทัดเดียว [ไอคอน · จำนวน · ชื่อ · โซน/รถ · ›]
+   รายละเอียดเต็ม (จุดรับ ฯลฯ) อยู่ใน title ของแต่ละบรรทัด · ตัดบรรทัดท้าย (Pay/Total) ออก */
 function bkV2TogHtml(bkId, date, curKey){
   var esc = function(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var b = (SB_BOOKINGS||[]).find(function(x){ return x.id === bkId; }); if(!b) return '';
@@ -51522,7 +51524,6 @@ function bkV2TogHtml(bkId, date, curKey){
   var t = (b.trips||[]).find(function(x){ return x && x.date === date; }) || {};
   var z = ((typeof bkV2EffZone === 'function') ? bkV2EffZone(b, t) : (t.zone||b.pickupZone)) || 'NoTransfer';
   var zl = function(k){ return (typeof bkV2ZoneLabel === 'function') ? bkV2ZoneLabel(k) : k; };
-  var col = bkV2TogColor(b.id, date);
   var code = (/^b2c_/.test(String(b.id)) && typeof bkV2DisplayCode === 'function') ? bkV2DisplayCode(b) : (b.voucherRef || '');
   var tot = 0;
   var li = sp.map(function(s, i){
@@ -51534,22 +51535,23 @@ function bkV2TogHtml(bkId, date, curKey){
     var ar = (s.pickAreaId && typeof bkV2GetArea === 'function') ? bkV2GetArea(s.pickAreaId) : null;
     var place = (main || (!s.pickHotel && !s.pickAreaId)) ? (b.hotelName || b.pickup || '') : (s.pickHotel || (ar ? ar.name : ''));
     place = String(place||'').replace(/\s*\((?:self[- ]?arrive|มาเอง)[^)]*\)\s*$/i, '');
-    var zone = self ? zl('NoTransfer') : zl((!main && s.pickZone) ? s.pickZone : z);
+    var zone = zl((!main && s.pickZone) ? s.pickZone : z);
     var van = s.vanId && typeof vehGet === 'function' ? ((vehGet(s.vanId)||{}).name || s.vanId) : '';
-    var how = self ? laT('มาเองที่ท่า') : (van ? (laT('ขึ้นรถ')+' '+van) : laT('ขึ้นรถ · ยังไม่เลือกรถ'));
+    var meta = self ? laT('มาเอง') : (zone + (van ? (' · ' + van) : ''));
+    var tip = n + ' ' + laT('คน') + (who ? (' · ' + who) : '') + ' · ' + (self ? laT('มาเองที่ท่า') : ((van ? (laT('ขึ้นรถ') + ' ' + van) : laT('ขึ้นรถ · ยังไม่เลือกรถ')) + ' · ' + zone + (place ? (' · ' + place) : '')));
     var key = b.id + '@' + i, here = (key === curKey);
-    return '<div class="tg-li'+(here?' here':'')+'">'
+    return '<div class="tg-li'+(here?' here':'')+'" title="'+esc(tip)+'">'
       + '<span class="tg-ic">'+(self?'&#128694;':'&#128656;')+'</span>'
-      + '<span class="tg-tx"><span class="tg-l1"><b>'+n+' '+laT('คน')+'</b>'+(who?(' &middot; '+esc(who)):'')+'</span>'
-      + '<i>'+esc(how)+' &middot; '+esc(zone)+(place && !self ? (' &middot; '+esc(place)) : '')+'</i></span>'
+      + '<b class="tg-n">'+n+'</b>'
+      + '<span class="tg-nm">'+esc(who||'—')+'</span>'
+      + '<span class="tg-m">'+esc(meta)+'</span>'
       + (here ? '<span class="tg-here">'+laT('แถวนี้')+'</span>'
-              : '<button type="button" class="tg-go" onclick="event.stopPropagation();bkV2TogHide(true);bkV2SplitGo(\''+esc(key)+'\')">'+laT('ไปที่แถว')+' &rsaquo;</button>')
+              : '<button type="button" class="tg-go" title="'+laT('ไปที่แถว')+'" onclick="event.stopPropagation();bkV2TogHide(true);bkV2SplitGo(\''+esc(key)+'\')">&rsaquo;</button>')
       + '</div>';
   }).join('');
-  return '<div class="tg-h" style="--tgc:'+col+'"><span class="tg-chip">&#128101; Together</span>'
-    + '<span class="tg-hd"><b>'+laT('บุคกิ้งเดียวกัน')+(code?(' '+esc(code)):'')+'</b><i>'+esc(b.leadPax||'')+' &middot; '+tot+' '+laT('คน')+' &middot; '+laTp('แยกเป็น {0} แถว', sp.length)+'</i></span></div>'
-    + li
-    + '<div class="tg-f">'+laT('เงิน · ใบวางบิล เป็นใบเดียว · Pay / Total อยู่ที่แถวแรก')+'</div>';
+  return '<div class="tg-h"><span class="tg-chip">&#128101; Together</span>'
+    + '<span class="tg-hd" title="'+esc(laT('บุคกิ้งเดียวกัน')+(code?(' '+code):'')+' · '+laT('เงิน · ใบวางบิล เป็นใบเดียว · Pay / Total อยู่ที่แถวแรก'))+'"><b>'+esc(b.leadPax||code||'')+'</b><i>'+tot+' '+laT('คน')+'</i></span></div>'
+    + li;
 }
 var _bkV2TogT = 0, _bkV2TogPin = false;
 function bkV2TogShow(el, pin){
@@ -54564,23 +54566,21 @@ function bkV2RenderTab2(){
     .t2-tog.fl{position:absolute;top:-8px;left:6px;z-index:7;margin:0;font-size:9.5px;line-height:15px;padding:0 7px;border-radius:8px;box-shadow:0 2px 5px rgba(15,27,61,.2)}
     .t2-tog.fl:hover{font-size:10.5px;line-height:18px;top:-10px;padding:0 9px;border-radius:9px;z-index:8;filter:none}
     .t2-tog:hover{filter:brightness(1.08)}
-    #t2-tog-pop{position:fixed;z-index:9000;display:none;width:340px;max-width:calc(100vw - 16px);background:#fff;border-radius:12px;box-shadow:0 12px 32px rgba(15,27,61,.22),0 0 0 1px rgba(15,27,61,.08);border-top:4px solid var(--tgc,#7C3AED);font-size:12px;color:#0F1B3D;overflow:hidden}
-    #t2-tog-pop .tg-h{display:flex;align-items:flex-start;gap:8px;padding:10px 12px 8px;background:color-mix(in srgb,var(--tgc) 7%,#fff)}
-    #t2-tog-pop .tg-chip{flex:none;font-size:10px;font-weight:800;color:#fff;background:var(--tgc);border-radius:5px;padding:1px 6px;margin-top:1px}
-    #t2-tog-pop .tg-hd{display:flex;flex-direction:column;min-width:0}
-    #t2-tog-pop .tg-hd b{font-size:12.5px}
-    #t2-tog-pop .tg-hd i{font-style:normal;font-size:11px;color:#5B6478}
-    #t2-tog-pop .tg-li{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid #EEF0F3}
+    #t2-tog-pop{position:fixed;z-index:9000;display:none;width:280px;max-width:calc(100vw - 16px);background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(15,27,61,.2),0 0 0 1px rgba(15,27,61,.08);border-top:3px solid var(--tgc,#7C3AED);font-size:11.5px;color:#0F1B3D;overflow:hidden}
+    #t2-tog-pop .tg-h{display:flex;align-items:center;gap:7px;padding:6px 10px;background:color-mix(in srgb,var(--tgc) 7%,#fff)}
+    #t2-tog-pop .tg-chip{flex:none;font-size:9.5px;font-weight:800;color:#fff;background:var(--tgc);border-radius:5px;padding:0 6px;line-height:16px}
+    #t2-tog-pop .tg-hd{display:flex;align-items:baseline;gap:6px;min-width:0}
+    #t2-tog-pop .tg-hd b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #t2-tog-pop .tg-hd i{flex:none;font-style:normal;font-size:11px;color:#5B6478}
+    #t2-tog-pop .tg-li{display:grid;grid-template-columns:16px 22px minmax(0,1fr) auto 32px;align-items:center;gap:5px;height:28px;padding:0 6px 0 10px;border-top:1px solid #EEF0F3}
     #t2-tog-pop .tg-li.here{background:color-mix(in srgb,var(--tgc) 6%,#fff);box-shadow:inset 3px 0 0 var(--tgc)}
-    #t2-tog-pop .tg-ic{flex:none;font-size:15px}
-    #t2-tog-pop .tg-tx{flex:1;min-width:0;display:flex;flex-direction:column}
-    #t2-tog-pop .tg-tx b{font-weight:800}
-    #t2-tog-pop .tg-l1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #t2-tog-pop .tg-tx i{font-style:normal;font-size:11px;color:#5B6478;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #t2-tog-pop .tg-here{flex:none;font-size:10px;font-weight:800;color:var(--tgc)}
-    #t2-tog-pop .tg-go{flex:none;border:1px solid color-mix(in srgb,var(--tgc) 40%,#fff);background:#fff;color:var(--tgc);font:inherit;font-size:11px;font-weight:700;border-radius:7px;padding:3px 8px;cursor:pointer}
-    #t2-tog-pop .tg-go:hover{background:color-mix(in srgb,var(--tgc) 10%,#fff)}
-    #t2-tog-pop .tg-f{padding:6px 12px 8px;font-size:10.5px;color:#8A8F9C;border-top:1px solid #EEF0F3}
+    #t2-tog-pop .tg-ic{font-size:13px;line-height:1}
+    #t2-tog-pop .tg-n{font-weight:800;text-align:right}
+    #t2-tog-pop .tg-nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #t2-tog-pop .tg-m{font-size:10.5px;color:#5B6478;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+    #t2-tog-pop .tg-here{font-size:9.5px;font-weight:800;color:var(--tgc);text-align:center}
+    #t2-tog-pop .tg-go{width:22px;height:20px;border:1px solid color-mix(in srgb,var(--tgc) 40%,#fff);background:#fff;color:var(--tgc);font:inherit;font-size:14px;font-weight:800;line-height:1;border-radius:6px;padding:0;cursor:pointer}
+    #t2-tog-pop .tg-go:hover{background:color-mix(in srgb,var(--tgc) 12%,#fff)}
     #view-booking tr.t2-splfl>td{animation:t2SplFl 1.6s ease-out}
     @keyframes t2SplFl{0%,35%{background:#FFF1B8}100%{background:transparent}}
     .t2-dep{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-style:normal !important;border-left:4px solid var(--c);padding-left:12px !important}
