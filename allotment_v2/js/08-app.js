@@ -11194,6 +11194,14 @@ function pckExtraCSS(){ return ''
   +'.pck-host tr.ck-row.ck-clr .ck-agblk{filter:none;opacity:1}'
   +'.pck-host tr.ck-row.ck-clr .ck-lead{background:#F6E27A !important;color:#3a2e00}'
   +'.pck-host tr.ck-row.ck-clr .ck-vch,.pck-host tr.ck-row.ck-clr .ck-by{color:#5F5E5A}'
+  /* Pier staff scan vouchers, names, phones and hotels before anyone has checked in.
+     The shared check-in style intentionally mutes untouched rows, but that made this
+     manifest look disabled. Keep the status controls neutral while restoring legibility. */
+  +'.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid)>td{color:#3C3B37}'
+  +'.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-agblk{filter:none;opacity:1}'
+  +'.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-lead{background:#F1EFE8 !important;color:#3C3B37}'
+  +'.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-vch,.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-by{color:#5F5E5A}'
+  +'.pck-host tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-tel{opacity:1}'
   +'#pck-drawer{position:fixed;inset:0;z-index:100003;font-family:"DM Sans",sans-serif}'
   +'#pck-drawer .pd-scrim{position:absolute;inset:0;background:rgba(0,0,0,.42)}'
   +'#pck-drawer .pd-panel{position:absolute;right:0;top:0;bottom:0;width:430px;max-width:96vw;background:#fff;display:flex;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,.18)}'
@@ -19957,8 +19965,9 @@ function pckSheetCSS(){
     +'max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +S+' .ck-ao{max-width:140px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}'
   /* แถวที่ยังไม่มีใครแตะ · ซีดลงเหมือนหน้าเช็คอินรถ สายตาจะได้ไปที่แถวที่กำลังทำ */
-  +S+' tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-agblk{filter:grayscale(1) brightness(1.9) contrast(.35)}'
-  +S+' tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid):hover .ck-agblk{filter:none}'
+  /* Untouched pier rows are actionable, not disabled: retain the agency colour so the
+     manifest stays scannable. Arrival/cleared/void states still carry their own cues. */
+  +S+' tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-agblk{filter:none;opacity:1}'
   +S+' .pck-gchip.pcs-gd{font-size:9.5px;font-weight:800;padding:1px 7px;letter-spacing:.02em}'
   /* ── ปุ่มเช็คอิน = ปุ่มที่ยื่นสายรัดให้แขก สีจึงต้องอยู่ตรงนั้น ──
      ยังไม่กด = ขอบสีสายรัด เครื่องหมายถูกสีสายรัด หยิบถูกเส้นตั้งแต่ยังไม่กด

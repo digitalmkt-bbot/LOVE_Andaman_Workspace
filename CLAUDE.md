@@ -1,13 +1,13 @@
-# LOVE Andaman — allotment_v2 · branch `integration/operation-backend`
+# LOVE Andaman — allotment_v2 · branch `main`
 
-> Context file, loaded every session. This file describes **this branch only**. `lk-inbox` (the monolith that serves staff at `rsvn.loveandaman.com`) has its own CLAUDE.md — nothing about `lk-inbox`'s deploy, database or `server.js` applies here.
+> Context file, loaded every session. This file describes the production `main` branch only. `lk-inbox` (the monolith that serves staff at `rsvn.loveandaman.com`) has its own CLAUDE.md — nothing about `lk-inbox`'s deploy, database or `server.js` applies here.
 
-## 0. What this branch is
+## 0. What main is
 
 **The staff app moving onto [`operation_backend`](https://github.com/TheTaTha5/operation_backend).** There is **no `server.js`** here (deleted 2026-10-12). Railway runs `static-server.js`: static files + `GET /health`, nothing else. All data goes from the browser straight to operation-backend. **Any `/api/*` call still in `allotment_v2/js/` is a 404** — rewire it to operation-backend, never revive a legacy endpoint.
 
 - **End goal:** the frontend is a display client. Data and business rules belong on operation-backend; judge a change by how much browser logic it lets us delete.
-- **Production frontend (since 2026-10-12):** `loveandamanworkspace-pano-frontend-production.up.railway.app`. Railway auto-deploys this branch, so **`git push origin integration/operation-backend` is a production release** — staff see it minutes later. Treat every push as shipping: `git fetch` first, `node --check` + tests, bump `?v=`, then verify `git ls-remote origin refs/heads/integration/operation-backend` equals `git rev-parse HEAD`. (Until 2026-10-12 this was the sandbox.)
+- **Production frontend:** `loveandamanworkspace-pano-frontend-production.up.railway.app`. Railway auto-deploys `main`, so **`git push origin main` is a production release** — staff see it minutes later. Treat every push as shipping: `git fetch` first, `node --check` + tests, bump `?v=`, then verify `git ls-remote origin refs/heads/main` equals `git rev-parse HEAD`.
 - **operation-backend:** code at `D:/projects/operation-backend`, deployed at `operationbackend-production.up.railway.app`. The client's base URL is `LA_CFG.opsBackend` (default that URL, `01-auth-sync.js`).
 - **Cutover to-do list:** `D:/projects/operation-backend/docs/readiness-2026-10-12-en.md`.
 
@@ -15,7 +15,7 @@
 
 **Known infra gotcha (2026-09-15/16):** the `operation_backend` Postgres service on Railway (project `ERP_LOVEANDAMAN`, "Main Postgres Database") picked up `operation_backend`'s own `railway.json` (`preDeployCommand: node dist/migrate.js`) and crash-looped, silently blocking every operation-backend deploy. Railway Config-as-Code has no per-service scoping; the fix was disconnecting that service's config-as-code path in the dashboard. If `operationbackend-production` looks stuck on an old build, check this first.
 
-**DB changes:** this branch has no database of its own. Schema changes go in operation-backend's `migrations/`. The `lk-inbox` DB freeze (until 2026-10-15) does not cover operation-backend, but its hook (`tools/db-freeze.mjs` via `.claude/settings.json`) still trips on DDL text in Bash/Edit — that is a false positive here. `db/` and `os-backend/` in this tree belong to `lk-inbox` and nothing here uses them.
+**DB changes:** this frontend has no database of its own. Schema changes go in operation-backend's `migrations/`. The `lk-inbox` DB freeze (until 2026-10-15) does not cover operation-backend, but its hook (`tools/db-freeze.mjs` via `.claude/settings.json`) still trips on DDL text in Bash/Edit — that is a false positive here. `db/` and `os-backend/` in this tree belong to `lk-inbox` and nothing here uses them.
 
 ## 1. How the client talks to operation-backend
 
