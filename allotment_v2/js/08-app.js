@@ -66115,6 +66115,32 @@ function pk2CSS(S){
   S+' .pk2-rtl .rr i{flex:none;width:8px;height:8px;border-radius:4px}',
   S+' .pk2-rtl .rr .t{flex:1;min-width:0;font-size:13px;font-weight:700} '+S+' .pk2-rtl .rr small{display:block;font-size:11.5px;font-weight:500;color:'+M+'}',
   S+' .pk2-rtl .rr b{font-family:"DM Mono",monospace}',
+  /* §pkDayMx · ชิปโปรแกรม + ตารางรายวัน */
+  S+' .pk2-fcs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:14px 16px 12px}',
+  S+' .pk2-fcs .cs{margin-left:auto;font-size:12px;color:'+M+'}',
+  S+' .pk2-fc{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:17px;border:1px solid #DCE1EA;background:#fff;color:'+N+';font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}',
+  S+' .pk2-fc:hover{background:#F6F8FB}',
+  S+' .pk2-fc i{width:8px;height:8px;border-radius:4px}',
+  S+' .pk2-fc em{font-style:normal;font-family:"DM Mono",monospace;font-size:12.5px;font-weight:500;color:'+M+'}',
+  S+' .pk2-fc u{text-decoration:none;font-size:11px;font-weight:700;color:#7A4300;background:#FBEBD3;border-radius:8px;padding:1px 7px}',
+  S+' .pk2-fc.on{background:'+N+';border-color:'+N+';color:#fff}',
+  S+' .pk2-fc.on em{color:#C2CCE8}',
+  S+' .pk2-fc.on u{background:#F5C77E;color:#3D2300}',
+  S+' .pk2-dmx{border-top:1px solid #ECEFF4;border-bottom:1px solid #ECEFF4}',
+  S+' .pk2-dmx .pk2-ov tr.dy td{cursor:default}',
+  S+' .pk2-dmx .pk2-ov tr.dy:hover td{background:#FAFBFD}',
+  S+' .pk2-dmx .pk2-ov tr.dy:hover td.sum{background:#EEF3F9}',
+  S+' .pk2-dmx .pk2-ov tr.dy td.rt i{font-style:normal;font-size:11px;color:'+M+'}',
+  S+' .pk2-dmx .pk2-ov tr.dy td.rt b{font-size:15px;font-weight:800}',
+  S+' .pk2-dmx .pk2-ov td.rt,'+S+' .pk2-dmx .pk2-ov th.rt{padding-left:16px}',
+  S+' .pk2-dmx .pk2-ov tr.bt td.rt{padding-left:16px}',
+  S+' .pk2-dmx .pk2-ov tr.bt.sel td{background:#E9F0FB}',
+  S+' .pk2-dmx .pk2-ov tr.bt.sel td.rt{box-shadow:inset 3px 0 0 '+N+';color:'+N+';font-weight:700}',
+  S+' .pk2-dmx .pk2-ov tr.bt.sel td.sum{background:#DCE7F7}',
+  S+' .pk2-dmx .pk2-ov td.ms u{text-decoration:none;font-size:11.5px;font-weight:700;color:#7A4300;background:#FBEBD3;border-radius:8px;padding:1px 7px}',
+  S+' .pk2-dmx .pk2-ov td.ms .ok{font-family:inherit;font-size:12px;color:#0B6B47}',
+  /* หัวตารางวันเดียวไม่ต้องตรึง · ตารางสั้น และอยู่ชิดแถบบน (ตรึงแล้วหัวไปทับแถวรวม) */
+  S+' .pk2-dmx .pk2-ov thead th{position:static}',
   '@media (max-width:1100px){'+S+' .pc2-main{grid-template-columns:minmax(0,1fr)} '+S+' .pk2-ovw{overflow-x:auto}}'
   ].join('\n');
 }
@@ -66122,6 +66148,96 @@ function pk2CSS(S){
    สามตัวเลขต่อลำ · เดินทาง (booked · หัวที่จ่ายจริง) / ต้องออกตั๋ว (tot) / มีชื่อแล้ว (tot-missTot)
    สองตัวแรกต่างกันได้โดยไม่ผิด · คนที่จองแต่ไม่มาไม่ต้องซื้อตั๋วให้
    แต่ "มีชื่อแล้ว" น้อยกว่า "ต้องออกตั๋ว" เมื่อไหร่ แปลว่าวันนั้นยังค้างงาน */
+/* ══ §pkDayMx (2026-10-13) · หน้ารายวัน · ตาราง Matrix แทนแท็บลำ ═══════════════════════════════
+   owner: "เอาเป็นชิปแยกตาม Variant ... เป็นแบบ Matrix ยอดที่จองกับยอดที่มีรายชื่อ"
+          + ส่งภาพภาพรวมเดือน "แบบนี้ แล้วมีชิปให้กด Similan Islands Surin Islands · Card บน 4 ใบ ตัดออกได้" (แบบ D)
+   · แท็บลำใบใหญ่ → ตารางหน้าตาเดียวกับภาพรวมเดือน หนึ่งแถวต่อลำ · กดแถว = เลือกลำ (pkTab เดิม)
+   · ชิปกรองตามโปรแกรม (bkV2RouteFamily · Similan / Surin / ...) · จำไว้ในหน้า ไม่ลงฐานข้อมูล
+   · คอลัมน์ท้ายเพิ่ม "รอชื่อ" (missTot) · ลำที่ชื่อครบขึ้น "ครบ"
+   · การ์ดตัวเลขสี่ใบบนหน้ารายวันเอาออก (ตัวเลขเดียวกันอยู่ในแถวรวมของตาราง)
+   ตัวเลขทุกช่องมาจาก pkTkData ผ่าน pk2BoatS ตัวเดียวกับ pk2Month · ไม่มีสูตรนับชุดที่สอง */
+var _pkFam = 'all';
+function pkSetFam(f){ _pkFam=String(f||'all'); renderPierPark(); }
+function pk2FamOf(rid){
+  try{ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null;
+    if(f) return {id:f.id, n:f.name, c:f.color}; }catch(_){}
+  return {id:'other', n:'อื่น ๆ', c:'#94A3B8'};
+}
+var PK2_GOK=['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'];
+function pk2Zero(TY){ var s={go:{},ty:{},pc:{},th:0,fr:0,foc:0,goT:0,tyT:0};
+  PK2_GOK.forEach(function(k){ s.go[k]=0; }); TY.forEach(function(T){ s.ty[T.k]=0; s.pc[T.k]=0; }); return s; }
+function pk2Add(a,b,TY){ PK2_GOK.forEach(function(k){ a.go[k]+=b.go[k]; }); TY.forEach(function(T){ a.ty[T.k]+=b.ty[T.k]; a.pc[T.k]+=b.pc[T.k]; });
+  a.th+=b.th; a.fr+=b.fr; a.foc+=b.foc; a.goT+=b.goT; a.tyT+=b.tyT; }
+/* ตัวเลขของลำเดียว · เดินทาง (pax8 / totPc) · ตั๋วที่ออก (cnt / tot) · ใช้ทั้ง pk2Month และหน้ารายวัน */
+function pk2BoatS(B,TY){
+  var s=pk2Zero(TY), p8=B.pax8||{};
+  PK2_GOK.forEach(function(k){ s.go[k]=+p8[k]||0; });
+  s.th=s.go.ad_th+s.go.chd_th+s.go.inf_th; s.fr=s.go.ad_fr+s.go.chd_fr+s.go.inf_fr; s.foc=s.go.foc_th+s.go.foc_fr;
+  s.goT=+B.totPc||0;
+  TY.forEach(function(Ty){ s.ty[Ty.k]=+((B.cnt||{})[Ty.k])||0; s.pc[Ty.k]=+((B.cntPc||{})[Ty.k])||0; });
+  s.tyT=+B.tot||0;
+  return s;
+}
+/* ช่องตัวเลขหนึ่งแถว · หน้าตาเดียวกับ cells() ในภาพรวมเดือน */
+function pk2Cells(s,TY){
+  var n0=function(v){ return v?String(v):'<span class="z">0</span>'; };
+  var d=s.tyT-s.goT;
+  var h='<td class="n sep" title="ไทย · AD '+s.go.ad_th+' · CHD '+s.go.chd_th+' · INF '+s.go.inf_th+'">'+n0(s.th)+'</td>'
+    +'<td class="n" title="ต่างชาติ · AD '+s.go.ad_fr+' · CHD '+s.go.chd_fr+' · INF '+s.go.inf_fr+'">'+n0(s.fr)+'</td>'
+    +'<td class="n" title="FOC · ไทย '+s.go.foc_th+' · ต่างชาติ '+s.go.foc_fr+'">'+n0(s.foc)+'</td>'
+    +'<td class="n sum">'+s.goT+'</td>';
+  TY.forEach(function(T,i){
+    var v=s.ty[T.k]||0, w=s.pc[T.k]||0, off=(w!==v);
+    h+='<td class="n'+(i===0?' sep':'')+(off?' off':'')+'"'+(off?(' title="ควรออก '+w+' · ในชีท '+v+' · มีคนย้ายกองเอง"'):'')+'>'+n0(v)+'</td>';
+  });
+  h+='<td class="n sum">'+s.tyT+'</td>';
+  h+=d?('<td class="n df '+(d<0?'short':'over')+'" title="'+(d<0?'ซื้อขาด ':'ซื้อเกิน ')+Math.abs(d)+' ใบ">'+(d<0?'−':'+')+Math.abs(d)+'</td>')
+      :'<td class="n df">—</td>';
+  return h;
+}
+/* ชิปโปรแกรม + ตาราง Matrix ของวันเดียว · flat = [{g,B}] จาก renderPierPark */
+function pk2DayMx(flat, sel, TY){
+  var fams=[], fm={};
+  flat.forEach(function(x){ var f=pk2FamOf(x.g.rid);
+    if(!fm[f.id]){ fm[f.id]={f:f, n:0, miss:0}; fams.push(fm[f.id]); }
+    fm[f.id].n+=(+x.B.totPc||0); fm[f.id].miss+=(+x.B.missTot||0); });
+  var fid=(_pkFam!=='all' && fm[_pkFam])?_pkFam:'all';
+  var allN=0, allM=0; fams.forEach(function(F){ allN+=F.n; allM+=F.miss; });
+  var chip=function(id,n,c,cnt,miss){
+    return '<button class="pk2-fc'+(fid===id?' on':'')+'" onclick="pkSetFam(\''+id+'\')"><i style="background:'+c+'"></i>'+poE(n)
+      +'<em>'+cnt+'</em>'+(miss?('<u>รอชื่อ '+miss+'</u>'):'')+'</button>'; };
+  var chips=chip('all','ทั้งหมด','#0B1E5B',allN,allM)
+    +fams.map(function(F){ return chip(F.f.id,F.f.n,F.f.c,F.n,F.miss); }).join('');
+  var list=flat.filter(function(x){ return fid==='all' || pk2FamOf(x.g.rid).id===fid; });
+  var S=pk2Zero(TY), miss=0, rts={};
+  var rows=list.map(function(x){
+    var B=x.B, s=pk2BoatS(B,TY), m=+B.missTot||0, rn=(x.g.route&&x.g.route.name)||x.g.rid;
+    pk2Add(S,s,TY); miss+=m; rts[x.g.rid]=1;
+    return '<tr class="bt'+(x===sel?' sel':'')+'" style="--rc:'+((x.g.route&&x.g.route.color)||'#94A3B8')+'" '
+      +'onclick="pkTab(\''+x.g.rid+'\',\''+B.bid+'\')" title="กดเพื่อดูรายชื่อลำนี้">'
+      +'<td class="rt"><i class="d"></i>'+poE(rn)+' <span class="bn">'+poE((B.boat&&B.boat.name)||B.bid)+(B.dep?(' '+poE(B.dep)):'')+'</span></td>'
+      +pk2Cells(s,TY)
+      +'<td class="n ms">'+(m?('<u>'+m+'</u>'):((+B.tot||0)?'<b class="ok">ครบ</b>':'<span class="z">—</span>'))+'</td></tr>';
+  }).join('');
+  var WD=['อา','จ','อ','พ','พฤ','ศ','ส'], dd=new Date(_poDate+'T12:00:00');
+  var nR=Object.keys(rts).length;
+  var head='<tr class="dy"><td class="rt"><b>'+dd.getDate()+'</b> <i>'+WD[dd.getDay()]+'</i> · '+list.length+' ลำ · '+nR+' เส้นทาง'
+      +(miss?(' <u>รอชื่อ '+miss+'</u>'):'')+'</td>'+pk2Cells(S,TY)
+      +'<td class="n ms">'+(miss?('<u>'+miss+'</u>'):(list.length?'<b class="ok">ครบ</b>':''))+'</td></tr>';
+  var hdTy=TY.map(function(T,i){ return '<th class="n'+(i===0?' sep':'')+'" title="'+poE(T.n)+' · '+poE(T.code||'—')+'">'+poE(T.s||T.n)+'</th>'; }).join('');
+  var cg='<colgroup><col><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-s">'
+    +TY.map(function(){ return '<col class="c-t">'; }).join('')+'<col class="c-s"><col class="c-d"><col class="c-d"></colgroup>';
+  return '<div class="pk2-fcs">'+chips+'<span class="cs">กดแถวเพื่อดูรายชื่อลำนั้น</span></div>'
+    +'<div class="pk2-ovw pk2-dmx"><table class="pk2-ov">'+cg
+    +'<thead><tr class="g"><th class="rt" rowspan="2">เส้นทาง · ลำ</th>'
+      +'<th class="gh go sep" colspan="4">เดินทาง</th><th class="gh tk sep" colspan="'+TY.length+'">ตั๋วที่ออก</th>'
+      +'<th class="n sum" rowspan="2">รวม<br>ตั๋ว</th>'
+      +'<th class="n" rowspan="2" title="ตั๋วที่ออก − หัวที่เดินทาง · ลบคือซื้อขาด บวกคือซื้อเกิน">ขาด/<br>เกิน</th>'
+      +'<th class="n" rowspan="2" title="คนที่ยังไม่มีชื่อในชีท · ด่านออกตั๋วตามรายชื่อ">รอ<br>ชื่อ</th></tr>'
+    +'<tr class="s"><th class="n sep">ไทย</th><th class="n">ต่างชาติ</th><th class="n">FOC</th><th class="n sum">รวม</th>'+hdTy+'</tr></thead>'
+    +'<tbody>'+head+rows+'</tbody></table></div>';
+}
+
 function pkOvBody(M){
   /* §pk2 (2026-10-13) · ภาพรวมเดือนหน้าตาใหม่ (แบบ A ที่เจ้าของเลือก · หน้าตาเดียวกับเงินสดย่อย)
      ตัวเลขทุกช่องยังมาจาก pkTkData() ตัวเดียวกับหน้ารายวัน (ผ่าน pk2Month) · ไม่มีสูตรนับชุดที่สอง
@@ -66241,12 +66357,7 @@ function pk2Month(m, pier){
     var D=[]; try{ D=pkTkData(ds,pier)||[]; }catch(e){ D=[]; }
     var dd=new Date(y, mo-1, i), boats=[], ds_=z(), miss=0;
     D.forEach(function(g){ (g.boats||[]).forEach(function(B){
-      var s=z(), p8=B.pax8||{};
-      GOK.forEach(function(k){ s.go[k]=+p8[k]||0; });
-      s.th=s.go.ad_th+s.go.chd_th+s.go.inf_th; s.fr=s.go.ad_fr+s.go.chd_fr+s.go.inf_fr; s.foc=s.go.foc_th+s.go.foc_fr;
-      s.goT=+B.totPc||0;
-      TY.forEach(function(Ty){ s.ty[Ty.k]=+((B.cnt||{})[Ty.k])||0; s.pc[Ty.k]=+((B.cntPc||{})[Ty.k])||0; });
-      s.tyT=+B.tot||0;
+      var s=pk2BoatS(B,TY);   /* §pkDayMx · สูตรต่อลำตัวเดียวกับหน้ารายวัน */
       var rc=(g.route&&g.route.color)||'#94A3B8', rn=(g.route&&g.route.name)||g.rid;
       boats.push({s:s, rc:rc, rn:rn, bn:(B.boat&&B.boat.name)||B.bid, dep:B.dep||''});
       add(ds_, s); miss+=(+B.missTot||0);
@@ -66442,6 +66553,8 @@ function renderPierPark(pier){
   if(!sel && window._pkTab && typeof window._pkTab==='object')
     sel=flat.filter(function(x){ return window._pkTab[x.g.rid]===x.B.bid; })[0];
   if(!sel) sel=flat[0];
+  /* §pkDayMx · กรองโปรแกรมอยู่ · ลำที่เลือกต้องอยู่ในโปรแกรมนั้น */
+  if(_pkFam!=='all'){ var _fl=flat.filter(function(x){ return pk2FamOf(x.g.rid).id===_pkFam; }); if(_fl.length && _fl.indexOf(sel)<0) sel=_fl[0]; }
   var cur=sel?sel.B:null, curRn=sel?((sel.g.route&&sel.g.route.name)||sel.g.rid):'';
   var rcOf=function(g){ return (g.route&&g.route.color)||'#94A3B8'; };
   var dl=pc2D(_poDate), isToday=(_poDate===poYMD(new Date()));
@@ -66552,7 +66665,7 @@ function renderPierPark(pier){
     }
     var sheetCard='<div class="pc2-card pk2-sc">'
       +(flat.length
-        ? ('<div class="pk2-tabs">'+tabs+'</div>'+bh+recOf(cur)+'<div class="pk2-shw">'+sheetOf(cur)+'</div>')
+        ? (pk2DayMx(flat, sel, TY)+bh+recOf(cur)+'<div class="pk2-shw">'+sheetOf(cur)+'</div>')
         : '<div class="pc2-empty">วันนี้ยังไม่มีเรือออกจากท่านี้</div>')
       +'</div>';
     /* แผงขวา */
@@ -66579,7 +66692,7 @@ function renderPierPark(pier){
       +'<div class="mh"><span>วันที่</span><span>ลำ</span><span>ตั๋ว</span><span>รอชื่อ</span><span></span></div>'
       +'<div class="ml">'+nearRows+'</div>'
       +'<div class="lg"><span><i class="miss"></i>ยังรอชื่อ</span><span><i class="ok"></i>รายชื่อครบ</span></div></div>';
-    body=kpi+'<div class="pc2-main"><div class="pc2-col">'+sheetCard+'</div>'
+    body='<div class="pc2-main"><div class="pc2-col">'+sheetCard+'</div>'   /* §pkDayMx · การ์ดสี่ใบเอาออก */
       +'<div class="pc2-col">'+waitCard+tyCard+monCard+'</div></div>';
   }
 
