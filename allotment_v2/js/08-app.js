@@ -35413,6 +35413,30 @@ function ctBtPinFitLater(){ clearTimeout(_ctPinT);
     return out;
   };
 })();
+/* §b2cChipFit · ชื่อกลางแถววันที่ (.bt-brand) อยู่กลางแบบ absolute · ไม่กันที่ให้ตัวเอง
+   วัดจริงหลังวาด ถ้าชนปุ่มข้าง ๆ (ลูกศรวันที่ / B2C changes / Classic-Compact) ซ่อนไว้ · ไม่ชนก็โชว์ตามเดิม
+   ปุ่มสลับมุมมองถูกเติมทีหลังใน rAF ของ Compact จึงวัดซ้ำในเฟรมถัดไปด้วย */
+function btBrandFit(){
+  try{
+    var hd = document.querySelector('#view-booking .bt-hdtop'); if(!hd) return;
+    var br = hd.querySelector('.bt-brand'); if(!br) return;
+    br.classList.remove('bt-brand-off');
+    var a = br.getBoundingClientRect(); if(!a.width) return;
+    var hit = [].slice.call(hd.children).some(function(el){
+      if(el === br || !el.getBoundingClientRect) return false;
+      var b = el.getBoundingClientRect(); if(!b.width) return false;
+      return a.left < b.right + 6 && b.left < a.right + 6 && a.top < b.bottom && b.top < a.bottom;
+    });
+    if(hit) br.classList.add('bt-brand-off');
+  }catch(_){ }
+}
+function btBrandFitLater(){ try{ requestAnimationFrame(function(){ btBrandFit(); requestAnimationFrame(btBrandFit); }); }catch(_){ btBrandFit(); } }
+(function(){
+  if(typeof window === 'undefined' || typeof window.bkV2Render !== 'function') return;
+  var _o = window.bkV2Render;
+  window.bkV2Render = function(){ var out = _o.apply(this, arguments); btBrandFit(); btBrandFitLater(); return out; };
+  window.addEventListener('resize', function(){ btBrandFitLater(); });
+})();
 /* หมุนแท็บเล็ต / ย่อขยายหน้าต่าง = เงื่อนไขเปลี่ยน ต้องคิดใหม่
    หน่วงไว้ ไม่ต้องคิดทุกพิกเซลระหว่างลาก */
 (function(){ var t=0;
@@ -37006,7 +37030,7 @@ function bkV2B2CList(){
 }
 function bkV2B2CHeadChip(){
   const n=bkV2B2CList().length; if(!n) return '';
-  return `<button class="bt-b2cbtn" onclick="bkV2B2COpen()" title="บุคกิ้ง B2C ที่ถูกแก้/ยกเลิก/เข้ามาใหม่ และยังไม่มีคนรับทราบ · ทุกวันเดินทาง">&#128276; B2C changes <i>${n}</i> to review</button>`;
+  return `<button class="bt-b2cbtn" onclick="bkV2B2COpen()" title="บุคกิ้ง B2C ที่ถูกแก้/ยกเลิก/เข้ามาใหม่ และยังไม่มีคนรับทราบ · ทุกวันเดินทาง · ${n} to review">&#128276; B2C changes <i>${n}</i></button>`;   /* §b2cChipFit · ตัด "to review" ออกจากปุ่ม (อยู่ใน title) ให้ปุ่มสั้นลง ไม่ไปทับ LOVE ANDAMAN กลางแถว */
 }
 function bkV2B2CSeen(id, quiet){
   if(typeof acctCanEditBookings==='function' && !acctCanEditBookings()){ if(!quiet) alert('View only - cannot mark as seen'); return false; }
@@ -54194,6 +54218,12 @@ function bkV2RenderTab2(){
     .t2-b2cchg .b2cl .b2cok:hover{background:#0B5A46}
     .bt-b2cbtn{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:#F97316;color:#fff;border:0;border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 0 0 3px rgba(249,115,22,.28);white-space:nowrap}
     .bt-b2cbtn i{font-style:normal;background:#fff;color:#C2410C;border-radius:999px;padding:0 7px}
+    /* §b2cChipFit (2026-10-13) · owner ส่งภาพปุ่ม "B2C changes" ทับ LOVE ANDAMAN กลางแถววันที่ · "ตรวจหน่อย"
+       ปุ่มนี้กับปุ่ม Classic/Compact (.btc-tg) ต่างมี margin-left:auto · ที่ว่างถูกแบ่งครึ่ง ปุ่มนี้เลยลอยมากลางแถว
+       ให้ปุ่มสลับมุมมองเกาะติดขวาของปุ่มนี้แทน · ทั้งคู่ไปอยู่ชิดขวาด้วยกัน
+       ชื่อกลางแถวยังทับได้ตอนจอแคบ (เจอที่ 1280 ทับปุ่ม › ของวันที่อยู่แล้วตั้งแต่ก่อน) · btBrandFit ซ่อนเมื่อชนกัน */
+    .bt-hdtop .bt-b2cbtn ~ .btc-tg{margin-left:10px}
+    .bt-brand.bt-brand-off{visibility:hidden}
     .t2-mtbl tr.t2-vsrow.t2-row>td{border-bottom:1px dashed #B3DAE6}
     .t2-mtbl tr.t2-vsrow.t2-row>td:first-child{box-shadow:inset 4px 0 0 #0E7490}
     table.t2-mtbl tr.t2-vsrow.t2-row:hover td{background:#EDF8FB;cursor:default}
