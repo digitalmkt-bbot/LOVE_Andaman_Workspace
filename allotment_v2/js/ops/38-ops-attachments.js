@@ -179,12 +179,57 @@
       return F.projectDoc('DELETE',projId,docId).catch(fail('Document was not deleted'));
     }; });
   }
-  /* The backend accepts payment slips while a payment is recorded, but has no command
-     to add one to an already-recorded invoice payment. Do not upload an orphan and then
-     mutate only the legacy paymentSlips cache in operations mode. */
-  wrapGlobal('pfmSlipsAttach',function(orig){ return function(){
+  /* Payment slips on an already-recorded invoice/PFM payment (POST/DELETE
+     /v1/invoices/:id/payments/:pid/slips). The slip list on screen is derived from the
+     invoice's live payments; nothing is written to bk.paymentSlips for persistence. */
+  function slipInvoice(bkId){ return typeof window.acctBookingInvoice==='function' ? window.acctBookingInvoice(bkId) : null; }
+  function livePayments(inv){ return ((inv&&inv.payments)||[]).filter(function(p){ return p&&!p.deletedAt; }); }
+  function slipTarget(inv){ var l=livePayments(inv), cash=l.filter(function(p){ return p.method!=='credit'; }); return (cash.length?cash:l).slice(-1)[0]||null; }
+  function syncSlipView(bkId){
+    var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).find(function(x){ return x&&x.id===bkId; }), inv=slipInvoice(bkId); if(!b) return;
+    var out=[]; livePayments(inv).forEach(function(p){ (p.slips||[]).forEach(function(s){ if(s&&s.id) out.push({id:s.id,name:s.name,mime:s.mime,size:s.size,kind:'payment',amount:p.amount,at:p.recordedAt,by:p.recordedBy,paymentId:p.id}); }); });
+    b.paymentSlips=out;
+  }
+  function rerenderSlips(bkId){ syncSlipView(bkId); if(typeof window.pfmSlipsRender==='function') window.pfmSlipsRender(); }
+  wrapGlobal('pfmViewSlips',function(orig){ return function(bkId){ if(on()) syncSlipView(bkId); return orig.apply(this,arguments); }; });
+  function attachSlip(bkId, blobData, mime, name){
+    var M=O.money, inv=slipInvoice(bkId), pay=slipTarget(inv);
+    if(!M||!M.addPaymentSlips){ alert('Payment slips are unavailable'); return; }
+    if(!inv||!pay){ alert('Record a payment before adding a slip.'); return; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var b64=String(fr.result).split(',')[1]||'';
+      upload({filename:name,mime:mime,dataB64:b64}).then(function(meta){
+        /* Server first: if the attach is refused, the upload must not stay behind. */
+        return M.addPaymentSlips(inv.id,pay.id,[meta.id]).then(function(){ rerenderSlips(bkId); },function(){
+          return remove(meta.id).then(null,function(){});
+        });
+      },function(e){ O.fail('Slip upload failed',e); });
+    };
+    fr.readAsDataURL(blobData);
+  }
+  wrapGlobal('pfmSlipsAttach',function(orig){ return function(file, kind){
     if(!on()) return orig.apply(this,arguments);
-    alert('Adding a payment slip after recording a payment is not supported yet. Add it while recording the payment.');
+    var bkId=(typeof _pfmSlipBk!=='undefined'?_pfmSlipBk:null); if(!bkId||!file) return;
+    var post=function(bl,mime,name){
+      if(bl&&bl.size>6*1024*1024){ alert('File "'+name+'" is over 6MB'); return; }
+      attachSlip(bkId,bl,mime,name);
+    };
+    if(/^image\//.test(file.type||'')){
+      var dn=(typeof window._bkV2DownscaleImage==='function')?window._bkV2DownscaleImage:function(f,m,cb){ cb(f,f.type); };
+      dn(file,1600,function(bl,mi){ if(bl) post(bl,mi,((file.name||'slip').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'slip'); });
+    } else post(file,file.type||'application/octet-stream',file.name||'file');
+  }; });
+  wrapGlobal('pfmSlipDelete',function(orig){ return function(id){
+    if(!on()) return orig.apply(this,arguments);
+    var bkId=(typeof _pfmSlipBk!=='undefined'?_pfmSlipBk:null); if(!bkId) return;
+    var inv=slipInvoice(bkId), pay=livePayments(inv).find(function(p){ return (p.slips||[]).some(function(s){ return s&&s.id===id; }); });
+    if(!pay){ alert('This slip is not on an invoice payment, so it cannot be removed here.'); return; }
+    if(!confirm('Delete this slip permanently?')) return;
+    return O.money.removePaymentSlip(inv.id,pay.id,id).then(function(){
+      rerenderSlips(bkId);
+      return remove(id).then(null,function(e){ O.fail('Slip file was not deleted',e); });
+    },function(){});
   }; });
   installPrint(); installFleetDocs();
   window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
