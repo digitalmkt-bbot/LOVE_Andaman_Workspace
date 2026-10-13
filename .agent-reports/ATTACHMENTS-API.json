@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "task": "ATTACHMENTS-API",
+  "title": "Operation-backend attachment adapter",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a13327-f178-7309-8f1f-66e66a9f7af1",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "main",
+    "branch": "agent/attachments-api",
+    "worktree": "D:/projects/wt-integration-attachments",
+    "commit": "98522123ca0a289ea39758a847e8775d04222181",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Route legacy attachment usage to operation-backend in ops mode.",
+    "acceptanceCriteria": [
+      "Upload, view and delete use /v1/attachments with Bearer transport in ops mode.",
+      "Legacy mode and /api/mailimg remain unchanged."
+    ],
+    "allowedScope": [
+      "allotment_v2 attachment adapter and directly related view markup",
+      "task report and manifest"
+    ],
+    "constraints": [
+      "No operation-backend API/schema changes.",
+      "Do not push or create a PR."
+    ],
+    "assumptions": [
+      "Existing attachment callers retain their legacy-shaped metadata."
+    ]
+  },
+  "output": {
+    "summary": "Added an authenticated attachment transport/view adapter and loaded it after the ops adapters.",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/js/ops/38-ops-attachments.js",
+        "change": "added",
+        "purpose": "Route attachment fetches and hydrate protected views."
+      },
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Load attachment adapter."
+      },
+      {
+        "path": "allotment_v2/js/08-app.js",
+        "change": "modified",
+        "purpose": "Use protected view URLs in PFM cards."
+      },
+      {
+        "path": "allotment_v2/js/booking/bookingV2AttachListHTML.js",
+        "change": "modified",
+        "purpose": "Use protected view URLs in booking documents."
+      },
+      {
+        "path": "docs/development/tasks/ATTACHMENTS-API.md",
+        "change": "added",
+        "purpose": "Task handoff."
+      },
+      {
+        "path": ".agent-reports/ATTACHMENTS-API.json",
+        "change": "added",
+        "purpose": "Task manifest."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Attachments in ops mode",
+        "before": "Legacy /api/attach transport and unauthenticated URLs were used.",
+        "after": "Fetch calls use authenticated /v1/attachments; views are hydrated from authenticated blobs."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "window.laOpsAttachments internal adapter"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "Uses existing operation-backend attachment endpoints only."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --check allotment_v2/js/ops/38-ops-attachments.js && node --check allotment_v2/js/booking/bookingV2AttachListHTML.js && node --check allotment_v2/js/08-app.js",
+      "status": "passed",
+      "evidence": "All changed JavaScript files parsed successfully."
+    }
+  ],
+  "decisions": [
+    "Intercept only /api/attach while laOps is enabled; /api/mailimg is untouched.",
+    "Use object URLs because image/link elements cannot add the Bearer header."
+  ],
+  "risks": [
+    "A browser end-to-end check remains useful for dynamically inserted PDF/canvas viewers."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Existing laOpsFetch token transport and operation-backend attachment endpoint."
+  ],
+  "followUps": [],
+  "rollback": "Remove the adapter script and file; legacy callers remain intact."
+}

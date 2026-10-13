@@ -5890,11 +5890,11 @@ function pfmRecRefreshSlips(){ const el=document.getElementById('pfm-rec-slips')
 function pfmRecSlipsHTML(){
   const ss=(_pfmRec&&_pfmRec.slips)||[];
   if(!ss.length) return `<div style="font-size:11px;color:#b0aea4;text-align:center;padding:14px;border:1px dashed #d7dbe2;border-radius:9px">ยังไม่มีสลิป · อัปโหลด / แคปหน้าจอ / วางรูป</div>`;
-  return ss.map(s=>{ const url='/api/attach/'+encodeURIComponent(s.id); const isImg=/^image\//.test(s.mime||'');
+  return ss.map(s=>{ const url=laOpsAttachments.viewUrl(s.id), attr=laOpsAttachments.viewAttr(s.id); const isImg=/^image\//.test(s.mime||'');
     return `<div style="display:flex;align-items:center;gap:9px;border:1px solid #e3e6e1;border-radius:9px;padding:6px 9px;margin-bottom:6px;background:#fff">
-      ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;display:block"></a>`:`<span style="font-size:18px">📄</span>`}
+      ${isImg?`<a href="${url}" ${attr} target="_blank" rel="noopener"><img src="${url}" ${attr} style="width:40px;height:40px;object-fit:cover;border-radius:6px;display:block"></a>`:`<span style="font-size:18px">📄</span>`}
       <span style="flex:1;font-size:11.5px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(s.kind==='capture'?'🖥 ':s.kind==='paste'?'📋 ':'📎 ')+String(s.name||'slip')}</span>
-      <a href="${url}" target="_blank" rel="noopener" style="font-size:11px;color:#185FA5;text-decoration:none">เปิด ↗</a>
+      <a href="${url}" ${attr} target="_blank" rel="noopener" style="font-size:11px;color:#185FA5;text-decoration:none">เปิด ↗</a>
       <button onclick="pfmSlipRemove('${s.id}')" title="ลบ" style="border:none;background:transparent;color:#A32D2D;font-size:15px;cursor:pointer;line-height:1">&times;</button>
     </div>`; }).join('');
 }
