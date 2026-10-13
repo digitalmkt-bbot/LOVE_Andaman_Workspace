@@ -17,9 +17,19 @@
    Server first: local arrays change only after the server answers.
    Legacy persistence (sbMarketsPersist / sbSalesPersist) is a no-op in ops mode.
 
-   NOT wired here (S5 remainder): sales targets (PUT /v1/sales/:id/targets/:month),
-   followups (PUT /v1/sales/:id/followups), GET /v1/sales-board. Their legacy
-   entry points and bodies are not verified for this packet.
+   Sales Board (source: sales-editing.ts ~450-490, domain/sales-board.ts):
+   - GET /v1/sales-board?month=YYYY-MM  -> the whole board (pax, FOC, target, streak, rank, previous rank,
+     agents with pax / previous pax / trend / followed flags). Cached per month (20 s, then refreshed in
+     the background; any non-sales write marks it stale).
+   - salesPaxAgg / salesTargetFor / salesStreak / salesIsFollowed  -> read the cached server board instead
+     of summing SB_BOOKINGS in the browser. renderSalesBoard shows "Loading" until the first answer.
+     Previous month: the server sends previous_pax per agent and previous_rank per salesperson; the
+     browser only needs the order, so previous bySales is a rank-preserving stand-in (not real pax).
+   - salesSetTarget(id,ym,pax) -> PUT /v1/sales/:id/targets/:month {pax}  (0 clears; 403 for a sales login)
+   - salesToggleFollow(id,ym,agentId,kind) -> PUT /v1/sales/:id/followups {month,agent_id,kind:'agent'|'foc',marked}
+     The server sets an explicit state (no toggle), so a retry cannot undo it.
+   Still in the browser: agentTrend() (pure, same thresholds as the server), the per-person booking count
+   (nBk) and layout inside renderSalesBoard in 08-app.js. SB_SALES.targets/followup are no longer written.
 
    Load order: after 19-ops-addon-services.js, before 90-ops-boot.js. Classic script.
    ══════════════════════════════════════════════════════════════════════════ */
@@ -276,6 +286,138 @@
     wrap(name, function(){ return undefined; });
   });
 
+  // ── Sales Board (the server board replaces salesPaxAgg and friends) ──
+
+  var BOARD_TTL = 20000;
+  var boards = {};      // 'YYYY-MM' -> { board, at }
+  var inflight = {};
+
+  function nowMs(){ return Date.now(); }
+  function curMonth(){ return typeof _sbMonth !== 'undefined' ? _sbMonth : null; }
+  function boardFor(ym){ var e = boards[ym]; return e ? e.board : null; }
+  function boardWithPrev(ym){
+    for(var k in boards){ if(boards[k] && boards[k].board && boards[k].board.previous_month === ym) return boards[k].board; }
+    return null;
+  }
+  function resetSig(){ try{ _sbSig = null; }catch(_){} }
+
+  function aggFromBoard(ym){
+    var out = { bySales: {}, byAgent: {}, focBySales: {}, focByAgent: {} };
+    var b = boardFor(ym);
+    if(b){
+      (b.sales || []).forEach(function(r){ out.bySales[r.sales_id] = r.pax; if(r.foc) out.focBySales[r.sales_id] = r.foc; });
+      (b.agents || []).forEach(function(a){ out.byAgent[a.agent_id] = a.pax; if(a.foc) out.focByAgent[a.agent_id] = a.foc; });
+      return out;
+    }
+    var p = boardWithPrev(ym);
+    if(p){
+      var n = (p.sales || []).length;
+      // order only: renderSalesBoard uses previous-month bySales just to rank people
+      (p.sales || []).forEach(function(r){ out.bySales[r.sales_id] = n - r.previous_rank + 1; });
+      (p.agents || []).forEach(function(a){ out.byAgent[a.agent_id] = a.previous_pax; });
+    }
+    return out;
+  }
+  function salesRow(salesId, ym){
+    var b = boardFor(ym);
+    return b ? (b.sales || []).find(function(r){ return r.sales_id === salesId; }) || null : null;
+  }
+
+  function fetchBoard(ym){
+    return O.get('/v1/sales-board?month=' + enc(ym)).then(function(board){
+      boards[ym] = { board: board, at: nowMs() };
+      return board;
+    });
+  }
+  function refreshBoard(ym){
+    if(inflight[ym]) return inflight[ym];
+    var origRender = originals.renderSalesBoard;
+    inflight[ym] = fetchBoard(ym).then(function(){
+      if(curMonth() === ym && typeof origRender === 'function') origRender();
+    }, function(e){
+      if(!boards[ym]){
+        var el = document.getElementById('salesboard-wrap');
+        if(el) el.innerHTML = '<div style="padding:40px;text-align:center;color:#b0aea6">Could not load the Sales Board</div>';
+        O.fail('Could not load Sales Board', e);
+      }
+    }).then(function(){ delete inflight[ym]; });
+    return inflight[ym];
+  }
+
+  function setTargetServer(salesId, ym, pax){
+    var n = Math.max(0, parseInt(pax, 10) || 0);
+    return O.queue(function(){
+      return O.call('PUT', '/v1/sales/' + enc(salesId) + '/targets/' + enc(ym), { pax: n });
+    }).then(function(res){
+      O.wrote('sales-target');
+      return fetchBoard(ym).then(function(){
+        resetSig();
+        if(typeof window.renderSalesBoard === 'function') window.renderSalesBoard();
+        return res;
+      });
+    }, function(e){
+      O.fail('Could not save target', e);
+      throw e;
+    });
+  }
+
+  function setFollowServer(salesId, ym, agentId, kind){
+    var k = kind === 'foc' ? 'foc' : 'agent';
+    var now = window.salesIsFollowed(salesId, ym, agentId, kind);
+    return O.queue(function(){
+      return O.call('PUT', '/v1/sales/' + enc(salesId) + '/followups', { month: ym, agent_id: agentId, kind: k, marked: !now });
+    }).then(function(res){
+      var b = boardFor(ym);
+      var a = b ? (b.agents || []).find(function(x){ return x.agent_id === agentId; }) : null;
+      if(a){ if(k === 'foc') a.feedback_collected = !now; else a.followed = !now; }
+      O.wrote('sales-followup');
+      resetSig();
+      if(typeof window.renderSalesBoard === 'function') window.renderSalesBoard();
+      return res;
+    }, function(e){
+      O.fail('Could not save follow-up', e);
+      throw e;
+    });
+  }
+
+  wrap('salesPaxAgg', function(orig, ym){ return aggFromBoard(ym); });
+  wrap('salesTargetFor', function(orig, salesId, ym){ var r = salesRow(salesId, ym); return (r && +r.target) || 0; });
+  wrap('salesStreak', function(orig, salesId, ym){ var r = salesRow(salesId, ym); return r ? r.streak : 0; });
+  wrap('salesIsFollowed', function(orig, salesId, ym, agentId, kind){
+    var b = boardFor(ym);
+    var a = b ? (b.agents || []).find(function(x){ return x.agent_id === agentId && x.sales_id === salesId; }) : null;
+    return !!(a && (kind === 'foc' ? a.feedback_collected : a.followed));
+  });
+  wrap('salesSetTarget', function(orig, salesId, ym, pax){
+    if(!salesId || !ym) return undefined;
+    return setTargetServer(salesId, ym, pax).catch(function(){ return null; });
+  });
+  wrap('salesToggleFollow', function(orig, salesId, ym, agentId, kind){
+    if(!salesId || !agentId) return undefined;
+    return setFollowServer(salesId, ym, agentId, kind).catch(function(){ return null; });
+  });
+  wrap('renderSalesBoard', function(orig){
+    var ym = curMonth();
+    if(!ym) return orig();
+    var ent = boards[ym];
+    if(ent){
+      orig();
+      if(nowMs() - ent.at > BOARD_TTL) refreshBoard(ym);
+      return undefined;
+    }
+    var el = document.getElementById('salesboard-wrap');
+    if(el){ el.innerHTML = '<div style="padding:40px;text-align:center;color:#b0aea6">Loading Sales Board...</div>'; resetSig(); }
+    return refreshBoard(ym);
+  });
+
+  // bookings or agents may have changed: keep the cache for the next paint but refresh it
+  if(typeof O.onWrite === 'function'){
+    O.onWrite(function(kind){
+      if(String(kind || '').indexOf('sales-') === 0) return;
+      for(var k in boards){ if(boards[k]) boards[k].at = 0; }
+    });
+  }
+
   var api = {
     createMarket: createMarketServer,
     updateMarket: updateMarketServer,
@@ -283,7 +425,10 @@
     applyMarketOrder: applyMarketOrderServer,
     createSales: createSalesServer,
     updateSales: updateSalesServer,
-    deleteSales: deleteSalesServer
+    deleteSales: deleteSalesServer,
+    setTarget: setTargetServer,
+    setFollow: setFollowServer,
+    loadBoard: fetchBoard
   };
   O.salesMarkets = api;
   window.laOpsSalesMarkets = api;
