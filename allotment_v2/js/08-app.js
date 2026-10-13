@@ -10623,7 +10623,7 @@ function bkV2HealAltSplits(date){
 }
 // Boat avatar (matches Boat Status style) · colored round initials + stable color per boat
 function bkV2BoatInitials(name){ name=String(name||''); const w=name.trim().split(/\s+/); if(w.length>=2) return (w[0][0]+w[1][0]).toUpperCase(); if(name.length>=2&&/\d/.test(name)) return (name.match(/[A-Z]/g)?.[0]||name[0])+name.slice(-1); return name.slice(0,2).toUpperCase(); }
-function bkV2BoatAvatarColor(boatId){ if(typeof getBoatColor==='function'){ const _g=getBoatColor(boatId); if(_g&&_g.text&&_g.text!=='#666') return _g.text; } const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5']; const arr=(typeof BOATS!=='undefined'&&BOATS)||[]; let i=arr.findIndex(x=>x.id===boatId); if(i<0)i=0; return palette[i%palette.length]; }
+function bkV2BoatAvatarColor(boatId){ if(typeof getBoatColor==='function'){ const _g=getBoatColor(boatId); if(_g&&_g.text&&_g.text!=='#666') return _g.fill||_g.text; }   /* §boatFill · สีที่เลือกไว้จริง (ไม่ไล่เข้มจนเป็นสีอื่น) */ const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5']; const arr=(typeof BOATS!=='undefined'&&BOATS)||[]; let i=arr.findIndex(x=>x.id===boatId); if(i<0)i=0; return palette[i%palette.length]; }
 // Mix a (light) group color 50% toward white → softer row/header shading on the By-trip-date page
 function _bkV2Soft(hex, amt){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); if(hex.length!==6) return '#'+hex; const a=(amt==null?0.5:amt); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); const m=x=>Math.round(x+(255-x)*a); return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; }
 function bkV2SetPickupFinal(bkId, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); _o.pickupTimeFinal=(val||'').trim(); acctPersistBookings(); }   // no re-render · keep input focus
@@ -52328,7 +52328,7 @@ function bkV2RenderTab2(){
     }
     return order.map(bid=>{ const a=acc[bid], bo=a.boat||{};
       const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
-      let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.text; }
+      let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
       return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null};
     });
   };
@@ -52623,7 +52623,7 @@ function bkV2RenderTab2(){
     // Per-boat color map for this route · shared by the row Boat chip + the summary cards (distinguish boats)
     const _baBoatsRoute = (typeof baBoatsForRoute==='function') ? baBoatsForRoute(date, rid) : [];
     const PAL_BOAT=[['#E6F1FB','#185FA5'],['#E1F5EE','#0F6E56'],['#EEEDFE','#534AB7'],['#FAEEDA','#854F0B'],['#FAECE7','#993C1D'],['#FBEAF0','#993556'],['#EAF3DE','#3B6D11']];
-    const boatColor={}; _baBoatsRoute.forEach((x,ix)=>{ let _p=null; if(typeof getBoatColor==='function'){ const _c=getBoatColor(x.boatId); if(_c&&_c.text&&_c.text!=='#666') _p=[_c.bg,_c.text]; } boatColor[x.boatId]=_p||PAL_BOAT[ix%PAL_BOAT.length]; });   // §prefer editable boat identity colour
+    const boatColor={}; _baBoatsRoute.forEach((x,ix)=>{ let _p=null; if(typeof getBoatColor==='function'){ const _c=getBoatColor(x.boatId); if(_c&&_c.text&&_c.text!=='#666') _p=[_c.bg,_c.fill||_c.text]; }   /* §boatFill */ boatColor[x.boatId]=_p||PAL_BOAT[ix%PAL_BOAT.length]; });   // §prefer editable boat identity colour
     // Van color map · distinct color per vehicle used on this route
     const _vanIdsRoute=[...new Set([].concat.apply([],grp.map(r=>{ const o=r.bk&&r.bk.ops; if(!o) return []; if(Array.isArray(o.vanSplits)&&o.vanSplits.length) return o.vanSplits.map(s=>s.vanId).filter(Boolean); return o.vanId?[o.vanId]:[]; })))];
     const vanColor={}; _vanIdsRoute.forEach(vid=>{ vanColor[vid]=vehChipPair(vid); });   /* §สีประจำรถ · เดิมเป็น PAL_BOAT[ix%N] = สีตามลำดับ */

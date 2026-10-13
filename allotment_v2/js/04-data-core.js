@@ -630,7 +630,15 @@ function _boatColorFromHex(hex){
   while(n<40 && (_cRatio(ink,bgO)<4.5 || _cRatio(ink,{r:255,g:255,b:255})<4.5)){
     ink={ r:Math.round(ink.r*0.92), g:Math.round(ink.g*0.92), b:Math.round(ink.b*0.92) }; n++;
   }
-  return {bg:css(bgO), text:css(ink), soft:css(softO), raw:hex};
+  /* §boatFill (2026-10-13) · owner "เรากดเปลี่ยนสีใน Boat Status แล้วเหมือนไม่เปลี่ยน"
+     text ไล่เข้มจนผ่าน 4.5:1 ทั้งบนพื้นอ่อนและกับตัวหนังสือขาว · สีสด/สีอ่อน (ส้ม เหลือง ฟ้าอ่อน) เลยกลายเป็นน้ำตาล/กรมท่า
+     ดูแล้วเหมือนสีไม่เปลี่ยน · fill = สีสำหรับ "พื้น" ของวงชื่อเรือ/แถบ · ไล่เข้มแค่พอให้ตัวอักษรขาวตัวหนาอ่านได้ (3:1)
+     สีที่เลือกจึงยังเป็นสีนั้น · text เดิมยังอยู่สำหรับตัวหนังสือเล็กบนพื้นอ่อน */
+  let fill={r:c.r, g:c.g, b:c.b}, m=0;
+  while(m<40 && _cRatio(fill,{r:255,g:255,b:255})<3){
+    fill={ r:Math.round(fill.r*0.94), g:Math.round(fill.g*0.94), b:Math.round(fill.b*0.94) }; m++;
+  }
+  return {bg:css(bgO), text:css(ink), soft:css(softO), raw:hex, fill:css(fill)};
 }
 // §per-boat identity colour · editable override (b.color hex) → falls back to the baked BOAT_COLORS, then generic grey · single source used by Boat Asset, Boat Status, By-trip, n8n canvas, job rows
 function getBoatColor(boatId){
@@ -6126,7 +6134,7 @@ function renderBoats(){
 
   // Avatar color helper
   const boatAvatarColor=(b)=>{
-    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.text; }
+    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.fill||_gc.text; }   /* §boatFill */
     const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
     const i=allCompany.findIndex(x=>x.id===b.id);
     return palette[i%palette.length>=0?(i%palette.length):0];
@@ -6561,7 +6569,7 @@ function renderBoatDetailPink(){
   const idx=allCompany.findIndex(x=>x.id===b.id);
   const isCharter=b.ownership==='charter';
   const _idc=(typeof getBoatColor==='function')?getBoatColor(b.id):null;
-  const ac=isCharter?'#534AB7':((_idc&&_idc.text&&_idc.text!=='#666')?_idc.text:palette[(idx<0?0:idx)%palette.length]);
+  const ac=(isCharter&&!b.color)?'#534AB7':((_idc&&_idc.text&&_idc.text!=='#666')?(_idc.fill||_idc.text):palette[(idx<0?0:idx)%palette.length]);   /* §boatFill · เรือเช่าที่ตั้งสีไว้ใช้สีของมัน */
   const initials=(()=>{
     const w=b.name.split(/\s+/);
     if(w.length>=2)return (w[0][0]+w[1][0]).toUpperCase();
@@ -6764,7 +6772,7 @@ function renderBoatDetailPink(){
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${(_idc&&_idc.raw)||ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${(_idc&&_idc.raw)||(_idc&&/^#[0-9a-fA-F]{6}$/.test(_idc.text||'')?_idc.text:'#185FA5')}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';

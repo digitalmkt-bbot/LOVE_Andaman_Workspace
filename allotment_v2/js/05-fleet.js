@@ -8058,7 +8058,7 @@ function flRenderDashboard(){
 
   // Color helpers
   const boatAvatarColor=(b)=>{
-    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.text; }
+    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.fill||_gc.text; }   /* §boatFill */
     const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
     const i=companyBoats.findIndex(x=>x.id===b.id);
     return palette[i%palette.length];
@@ -9396,7 +9396,7 @@ function flRenderDR(){
 
   // Boat row builder
   const boatAvatarColor=(b)=>{
-    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.text; }
+    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.fill||_gc.text; }   /* §boatFill */
     const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
     const i=companyBoats.findIndex(x=>x.id===b.id);
     return palette[i%palette.length];
@@ -11048,7 +11048,7 @@ function flRenderBoatList(){
 
   // Boat list grouped by pier
   const boatAvatarColor=(b)=>{
-    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.text; }
+    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.fill||_gc.text; }   /* §boatFill */
     const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
     const i=allCompany.findIndex(x=>x.id===b.id);
     return palette[i%palette.length>=0?(i%palette.length):0];
@@ -11156,7 +11156,8 @@ function flRenderBoatDetailPink(){
   const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
   const idx=allCompany.findIndex(x=>x.id===b.id);
   const _idc=(typeof getBoatColor==='function')?getBoatColor(b.id):null;
-  const ac=(_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text))?_idc.text:palette[(idx<0?0:idx)%palette.length];
+  /* §boatFill · สีที่ตั้งเองเป็น rgb() ไม่ใช่ #hex · เงื่อนไขเดิมเลยตกไปใช้สีไล่ลำดับ (สีที่ตั้งไม่ขึ้นหน้านี้เลย) */
+  const ac=(_idc&&_idc.raw)?(_idc.fill||_idc.text):((_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text))?_idc.text:palette[(idx<0?0:idx)%palette.length]);
   const initials=(()=>{
     const w=b.name.split(/\s+/);
     if(w.length>=2)return (w[0][0]+w[1][0]).toUpperCase();
@@ -11201,7 +11202,7 @@ function flRenderBoatDetailPink(){
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="font-size:20px;font-weight:700;${b.retired?'text-decoration:line-through;color:#666':''}">${b.name}</span>
-          ${b.retired?'':`<label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:17px;height:17px;border-radius:5px;background:${ac};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.2)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label>`}
+          ${b.retired?'':`<label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:17px;height:17px;border-radius:5px;background:${(_idc&&_idc.raw)||ac};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.2)"></span><input type="color" value="${(_idc&&_idc.raw)||(_idc&&/^#[0-9a-fA-F]{6}$/.test(_idc.text||'')?_idc.text:'#185FA5')}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label>`}
           ${b.retired?`<span style="background:#1A1A1A;color:white;padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">✕ RETIRED</span>`:`<span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span>`}
         </div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:3px">${b.type||'—'} · ${b.cap||'?'} PAX · ${pierName}${engs.length?` · ${engBrandModel?engBrandModel:engs.length+' engines'}`:''} · ID ${b.id}${b.retired&&b.retiredDate?` · Retired ${b.retiredDate}`:''}</div>

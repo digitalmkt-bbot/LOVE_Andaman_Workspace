@@ -334,7 +334,7 @@ function flRenderSafetyList(){
   const PIER_LBL={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'};
   // Shared boat-avatar helpers (same as Boats tab)
   const _boatPalette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
-  const _boatAvatarColor=(b)=>{if(typeof getBoatColor==='function'){const _g=getBoatColor(b.id);if(_g&&_g.text&&_g.text!=='#666')return _g.text;}const i=companyBoats.findIndex(x=>x.id===b.id);return _boatPalette[i%_boatPalette.length>=0?(i%_boatPalette.length):0];};
+  const _boatAvatarColor=(b)=>{if(typeof getBoatColor==='function'){const _g=getBoatColor(b.id);if(_g&&_g.text&&_g.text!=='#666')return _g.fill||_g.text;}const i=companyBoats.findIndex(x=>x.id===b.id);return _boatPalette[i%_boatPalette.length>=0?(i%_boatPalette.length):0];};
   const _boatInitials=(name)=>{const w=name.split(/\s+/);if(w.length>=2)return (w[0][0]+w[1][0]).toUpperCase();if(name.length>=2&&/\d/.test(name))return (name.match(/[A-Z]/g)?.[0]||name[0])+name.slice(-1);return name.slice(0,2).toUpperCase();};
   const _statusStyle={available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},unavailable:{bg:'#FCEBEB',color:'#A32D2D',label:'UNAVAIL'}};
   // Column headers
