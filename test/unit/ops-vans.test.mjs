@@ -398,15 +398,24 @@ test('return van: reads the trip part, PATCHes only its return_van_id, local fol
   assert.equal(byId(rt.bks, 'b1').ops.returnSameVan, false);
 });
 
-test('return van on a split trip is refused with no write', async () => {
-  const rt = runtime({ handlers: {
-    'GET /v1/bookings/lg_1': { body: bookingRead([partOf({ idx: 0, ad: 1 }), partOf({ idx: 1, ad: 1, sequence: 2 })]) },
+test('return van on a split trip PATCHes every server part and changes only the selected split locally', async () => {
+  const before = [partOf({ idx: 0, ad: 1, return_van_id: 'veh08' }), partOf({ idx: 1, ad: 1, sequence: 2 })];
+  const after = [partOf({ idx: 0, ad: 1, return_van_id: 'veh08' }), partOf({ idx: 1, ad: 1, sequence: 2, return_van_id: 'veh09' })];
+  const rt = runtime({ bks: bookings().map((b) => (b.id === 'b1' ? { ...b, ops: { vanSplits: [{ vanReturnId: 'veh08' }, { vanReturnId: null }] } } : b)), handlers: {
+    'GET /v1/bookings/lg_1': { body: bookingRead(before) },
+    'PATCH /operations/trip-ops/trip_1': { body: { trip: { operations: { van_parts: after } }, warnings: [] } },
   } });
-  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  rt.ctx.bookingV2AssignVanReturnSplit('b1', 1, 'veh09', D);
   await rt.flush(); await rt.flush();
-  assert.equal(rt.requests.filter((r) => r.method === 'PATCH').length, 0);
-  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, undefined);
-  assert.equal(rt.toasts.at(-1).title, 'Return van not set');
+  assert.deepEqual(plain(rt.requests), [
+    { method: 'GET', path: '/v1/bookings/lg_1' },
+    { method: 'PATCH', path: '/operations/trip-ops/trip_1', body: { van_parts: [
+      { idx: 0, ad: 1, chd: 0, inf: 0, foc: 0, group_id: 'vgrp_3', sequence: 1, return_van_id: 'veh08' },
+      { idx: 1, ad: 1, chd: 0, inf: 0, foc: 0, group_id: 'vgrp_3', sequence: 2, return_van_id: 'veh09' },
+    ] } },
+  ]);
+  assert.equal(byId(rt.bks, 'b1').ops.vanSplits[0].vanReturnId, 'veh08');
+  assert.equal(byId(rt.bks, 'b1').ops.vanSplits[1].vanReturnId, 'veh09');
 });
 
 test('return van refused by the server (409): nothing changes locally, the code is shown', async () => {
