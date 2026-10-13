@@ -76819,6 +76819,15 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-ft.due{background:#FEE4E2;color:#B42318;box-shadow:0 1px 3px rgba(180,35,24,.18)}',
     'body.btc #view-booking .btc-ft.bk{top:-7px;right:2px;font-size:9px!important;line-height:13px!important;padding:0 5px;background:#EEF0F3;color:#8A8F9C!important;text-decoration:none!important;box-shadow:none}',
     'body.btc #view-booking .btc-ft.bk::before{content:"จอง "}',
+
+    /* header cards: lists run to the bottom edge (round 8) · contain:size so a long list scrolls instead of growing the header */
+    'body.btc #view-booking .bt-boat .bt-tgl{max-height:none;flex:1 1 auto;min-height:0;contain:size;padding-bottom:4px}',
+    'body.btc #view-booking .bt-boat .bt-blist{max-height:none;flex:1 1 auto;min-height:0;contain:size}',
+    'body.btc #view-booking .bt-boat .bt-tgfoot{display:none}',
+    'body.btc #view-booking .bt-lockc{display:flex;flex-direction:column}',
+    'body.btc #view-booking .bt-lockc .bt-lkl{max-height:none;flex:1 1 auto;min-height:0;contain:size;padding-bottom:4px}',
+    'body.btc #view-booking .bt-lkfoot{padding:4px 12px 6px}',
+    'body.btc #view-booking .bt-lkfoot .hint{display:none}',
     /* table */
     'body.btc #view-booking table.t2-mtbl th{background:#FAFBFC;color:#8A8F9C;box-shadow:inset 0 -1px 0 #E3E6EC;font-weight:700}',
     'body.btc #view-booking table.t2-mtbl td{padding:4px 9px;border-right-color:#F3F4F7;border-bottom-color:#EEF0F3}',
