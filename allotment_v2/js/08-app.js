@@ -9286,7 +9286,9 @@ function bkV2AssignBoat(bkId, boatId, date){
   bkOpsFor(b, _d).boatId = boatId || null;
   acctPersistBookings();
   // re-render whichever surface is showing
-  if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
+  /* §btBoatPick · เลือกเรือจากหน้า By trip นอกโหมดเรือ · ต้องวาดหน้า By trip ใหม่ด้วย (เดิมวาดหน้า Boat Assign) */
+  const _onBt = (typeof _bkV2!=='undefined' && _bkV2 && _bkV2.tab==='bytrip') && (function(){ const v=document.getElementById('view-booking'); return !!(v && v.offsetParent!==null); })();
+  if(_bkV2 && (_bkV2.boatAssignMode || _onBt) && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
 }
 /* ══ §btTickScroll (2026-09-05) · ติ๊กเลือกแถวแล้วตารางเด้งกลับหัว ═════════════
    ติ๊กหนึ่งครั้ง = bkV2Render() วาดใหม่ทั้งหน้า · innerHTML ใหม่ทำให้ .t2-wrap
@@ -51478,6 +51480,24 @@ function bkV2SplitIsSelf(s){
   var ar=(s.pickAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(s.pickAreaId):null;
   return !!(ar && (ar.zone==='NoTransfer'||ar.zone==='NT'));
 }
+/* ══ §btBoatPick (2026-10-13) · เลือกเรือได้จากหน้า By trip date โดยไม่ต้องเปิดโหมดเรือ ══════
+   ที่มา · owner "สามารถให้เลือกเรือในหน้า By trip date ได้โดยไม่ต้องเปิดโหมดเรือแล้วได้ไหม"
+   ช่อง Boat ของแถวกลายเป็นปุ่ม · กดแล้วเปิดตัวเลือกเรือตัวเดียวกับโหมดเรือ (bkV2BoatPicker)
+   บันทึกผ่าน bkV2AssignBoat ตัวเดิม · ด่าน cap / เรือเหมาลำ / บุคกิ้งแยกลำ ทำงานเหมือนเดิมทุกอย่าง
+   ไม่เปิดให้กด: ไม่มีสิทธิ์แก้ใบจอง · ใบยกเลิก · เหมาลำ (เรือผูกตอนจอง) · แถวแยกลงหลายลำ (ใช้โหมดเรือ)
+   ติ๊กหลายแถวแล้วจัดทีเดียว / Upgrade / แยกลำ ยังอยู่ในโหมดเรือเหมือนเดิม */
+function bkV2BoatPickWrap(bk, rid, a, r, has, inner){
+  try{
+    if(!bk || !r || r.cxl || r.charter || r.charterBoatId || (a && a.bsplit)) return inner;
+    if(typeof acctCanEditBookings === 'function' && !acctCanEditBookings()) return inner;
+    if(typeof bkV2BoatPicker !== 'function') return inner;
+    var q = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); };
+    var on = 'event.stopPropagation();bkV2BoatPicker(this,\''+q(bk.id)+'\',\''+q(rid)+'\')';
+    return has
+      ? '<button type="button" class="t2-bpk" onclick="'+on+'" title="'+q(laT('กดเพื่อเปลี่ยนเรือ'))+'">'+inner+'</button>'
+      : '<button type="button" class="t2-bpk add" onclick="'+on+'" title="'+q(laT('กดเพื่อเลือกเรือ'))+'">+ '+laT('เลือกเรือ')+'</button>';
+  }catch(_){ return inner; }
+}
 // §splitOwn · กดชิปบุคกิ้งเดียวกัน → เลื่อนไปแถวอีกฝั่งแล้วกระพริบให้เห็น
 function bkV2SplitGo(key){
   if(!key) return;
@@ -53218,7 +53238,7 @@ function bkV2RenderTab2(){
             ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}${bkUpgPayChip(bk, date)}</div></td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
-            <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : ((_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
+            <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : bkV2BoatPickWrap(bk, rid, a, r, !!(_rowBid||r.charterBoatId), (_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
             ${rcMode?`<td class="t2-c" style="background:#FDFAF1">${(function(){const rc=bk.ops&&bk.ops.reconfirm;if(rc&&rc.status==='done'){let tm='';try{tm=new Date(rc.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="background:#E1F5EE;color:#0F6E56;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px" title="re-confirmed ${esc(rc.via||'')} ${esc(tm)}">&#10003; ${rc.via==='phone'?'โทร':'list'}</span><button onclick="event.stopPropagation();bkV2ReconfirmClear('${esc(bk.id)}')" title="ยกเลิก" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer">&times;</button></span>`;}return `<div style="display:flex;gap:3px;justify-content:center"><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','list')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">List</button><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','phone')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">โทร</button></div>`;})()}</td>`:''}
             ${wxClosed?`<td class="t2-c" style="background:#FBE8E4">${bkV2WeatherInlineCell(bk.id)}</td>`:''}
           </tr>${(a.first && typeof bkV2B2CStripRow==='function')?bkV2B2CStripRow(bk, COLN, date):''}${expandRow}`};   /* §b2cChg · บรรทัดสรุปใต้แถว · ใบที่แยกหลายแถวขึ้นครั้งเดียว */
@@ -54557,6 +54577,13 @@ function bkV2RenderTab2(){
     .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:none}
     .t2-cul2 .t2-more,.t2-cul2 .t2-leadonly{flex:none}
     .t2-nxt:hover{background:#DFEBF8}
+    /* §btBoatPick · ช่อง Boat เป็นปุ่มเลือกเรือ (นอกโหมดเรือ) · ดูเหมือนเดิม มีกรอบตอนชี้ */
+    /* ไม่มีลูกศร · กรอบติดลบเท่า padding ชื่อเรือจึงได้ความกว้างเท่าเดิม ไม่ถูกตัดเพิ่ม · ชี้แล้วขึ้นกรอบฟ้าบอกว่ากดได้ */
+    .t2-bpk{display:inline-flex;align-items:center;max-width:calc(100% + 7px);min-width:0;background:transparent;border:1px solid transparent;border-radius:8px;padding:2px 3px 2px 2px;margin:-3px -4px -3px -3px;font:inherit;color:inherit;cursor:pointer;text-align:left}
+    .t2-bpk>span{min-width:0}
+    .t2-bpk:hover{border-color:#9DBCE3;background:#F1F6FD}
+    .t2-bpk.add{border:1px dashed #C9D6E8;color:#185FA5;font-size:11px;font-weight:700;padding:2px 8px;white-space:nowrap}
+    .t2-bpk.add:hover{border-style:solid;background:#EAF2FC}
     /* §together · ป้าย Together + popup ลอย · สีต่อบุคกิ้ง (--tgc) */
     .t2-tog{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;line-height:1.5;color:#fff;background:var(--tgc,#7C3AED);border-radius:5px;padding:0 6px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px;flex:none;letter-spacing:.02em;box-shadow:0 1px 2px rgba(15,27,61,.18)}
     .t2-cul2>.t2-tog:first-child{margin-left:0}
