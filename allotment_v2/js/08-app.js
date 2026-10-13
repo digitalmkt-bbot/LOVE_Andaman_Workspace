@@ -77107,8 +77107,9 @@ function pc2CSS3(S){
 
 
   /* fixed table · narrower columns in Compact so more of the table fits (Classic widths untouched) */
-  /* voucher / agency / customer are sticky on the left with offsets computed from Classic widths → never touch those three */
-  var COLW = {'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':122,'room':40,'zone':68,
+  /* voucher / agency / customer are sticky on the left · Classic measures their offsets once after drawing (--t2-fz1/2)
+     Agency is narrowed in Compact (the compact B2C tag needs ~150px, Classic keeps 196) → offsets are re-measured below */
+  var COLW = {'agency':150,'ad':38,'chd':40,'inf':38,'foc':40,'time':86,'pickup':122,'room':40,'zone':68,
               'send back':100,'add-on':62,'special request':84,'pay':78,'total':84,'':40};
   function colWidths(root){
     var ts = root.querySelectorAll('table.t2-mtbl:not(.btc-cw)');
@@ -77123,6 +77124,18 @@ function pc2CSS3(S){
         if(cur > COLW[k]){ cols[c].setAttribute('data-btcw', cur); cols[c].style.width = COLW[k] + 'px'; }
       }
     }
+    fzFix(root);
+  }
+  /* sticky left offsets for Agency / Customer · same measurement Classic does, redone after our width change */
+  function fzFix(root){
+    try{
+      var hr = root.querySelector('table.t2-mtbl thead tr'); if(!hr || hr.children.length < 3) return;
+      var w1 = Math.round(hr.children[0].getBoundingClientRect().width), w2 = Math.round(hr.children[1].getBoundingClientRect().width);
+      if(!w1 || !w2) return;
+      var vb = document.getElementById('view-booking');
+      if(vb.style.getPropertyValue('--t2-fz1') !== w1 + 'px') vb.style.setProperty('--t2-fz1', w1 + 'px');
+      if(vb.style.getPropertyValue('--t2-fz2') !== (w1 + w2) + 'px') vb.style.setProperty('--t2-fz2', (w1 + w2) + 'px');
+    }catch(e){}
   }
   function mkBar(bk, lk, cap, col){
     if(!(cap > 0)) return '';
