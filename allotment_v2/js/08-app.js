@@ -52385,6 +52385,11 @@ function bkV2RenderTab2(){
         const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
       .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))));
     const nRun=rids.filter(r=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date)).length;
+    /* §famSum (2026-10-13) · owner "ตัวผลรวมที่เป็น Variant เพิ่มจำนวนล็อคทั้งหมดด้วย และผลรวมจะเป็นเท่าไหร่"
+       แถวหัวโปรแกรมรวมทุก variant ที่วิ่งวันนี้: 🔒 ล็อกทั้งหมด · รวม = จอง + ล็อก / ที่นั่งทั้งหมด · ว่าง
+       ตัวเลขมาจากชุดเดียวกับแถว variant (getAllotment · bkV2LockedTotal) ผลรวมจึงตรงกับที่บวกด้วยตาเสมอ
+       variant ที่ไม่ได้ตั้งโควตา (โปรแกรมบก) นับยอดจอง แต่ไม่มีที่นั่งให้หาร */
+    let _fBk=0,_fCap=0,_fLk=0,_fAv=0,_fCapN=0;
     const vars=rids.map(rid=>{
       const open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
       const ron=(routeF===rid);
@@ -52402,6 +52407,7 @@ function bkV2RenderTab2(){
       const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rid,date):0;
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
+      _fBk+=bk; _fLk+=lk; if(!_noCap){ _fCap+=cap; _fAv+=Math.max(0,av); _fCapN++; }   /* §famSum */
       const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">${laT('ไม่จำกัด')}</span>`
                                : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
@@ -52412,6 +52418,16 @@ function bkV2RenderTab2(){
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
       <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>
+      ${(function(){ /* §famSum */
+        if(!_fLk && !_fCapN) return '';
+        const _tot=_fBk+_fLk, _r=_fCap>0?_fAv/_fCap:0, _c=_fAv<=0?'full':(_r<0.20?'low':'ok');
+        const _thai=(typeof window.btcIsOn==='function' && window.btcIsOn());
+        const _tip=laT('จอง')+' '+_fBk+' + '+laT('ล็อก')+' '+_fLk+' = '+_tot+(_fCapN?(' / '+_fCap+' · '+laT('ว่าง')+' '+_fAv):'');
+        return `<span class="bt-fsum" title="${esc(_tip)}">`
+          + (_fLk?`<span class="lk">&#128274; ${_fLk}</span>`:'')
+          + `<span class="tt">${laT('รวม')} <b>${_tot}</b>${_fCapN?('/'+_fCap):''}</span>`
+          + (_fCapN?`<span class="bt-free ${_c}">${_fAv<=0?(_thai?'เต็ม':'full'):(_thai?('ว่าง '+_fAv):(_fAv+' free'))}</span>`:'')
+          + `</span>`; })()}
       <span class="sp"><span class="bt-tag run">${nRun} running</span>${rids.length-nRun>0?`<span class="bt-tag no">${rids.length-nRun} not running</span>`:''}</span></div>${vars}`;
   }).join('') || '<div class="bt-none">No programme on this day</div>';
 
@@ -54945,6 +54961,12 @@ function bkV2RenderTab2(){
     .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
+    /* §famSum · ผลรวมของทุก variant บนแถวหัวโปรแกรม */
+    .bt-pgf .bt-fsum{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:#5B6275;white-space:nowrap}
+    .bt-pgf .bt-fsum+.sp{margin-left:10px}
+    .bt-pgf .bt-fsum .lk{font-weight:700;color:#6D28D9}
+    .bt-pgf .bt-fsum .tt b{font-family:'DM Mono',monospace;font-weight:800;color:#0F1B3D}
+    .bt-pgf .bt-fsum .tt{font-family:'DM Mono',monospace}
     .bt-tag{border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;white-space:nowrap}
     .bt-tag.run{background:#E6F5EC;color:#0F6E56}
     .bt-tag.no{background:#FBEDEA;color:#A32D2D}
