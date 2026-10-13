@@ -51208,23 +51208,27 @@ var LA_LOGO_TAB = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABsCAYAAAC
 function laAgencyTabStyle(opt){
   opt = opt || {};
   return (opt.inline ? 'display:inline-flex;vertical-align:middle;' : 'display:flex;max-width:190px;')
-    + 'align-items:center;gap:6px;overflow:hidden;box-sizing:border-box;border:1px solid #E3E6EC;'
+    + 'align-items:center;gap:8px;overflow:hidden;box-sizing:border-box;border:1px solid #E6E8EE;'
     + 'border-radius:'+(opt.radius||'8px')+';'+(opt.margin===false?'':'margin:2px 3px;')
     + 'padding:0 8px 0 0;box-shadow:0 1px 2px rgba(11,30,91,.08);';
 }
-/* h = ขนาดเดิมของโลโก้ (ยังรับค่าเดิมจากทุกจุดที่เรียก) · tile = ความสูงแผ่นกรมท่า
+/* h = ขนาดเดิมของโลโก้ (ยังรับค่าเดิมจากทุกจุดที่เรียก) · tile = ความสูงแผ่นกรมท่า (= ความสูงป้าย)
+   §agTab3 · owner "ให้มันเหมือนแบบเลย ตรวจดู" → ช่อง Agency กว้างขึ้นเป็น 196px (owner เลือกเอง)
+   สัดส่วนตามแบบ: แผ่นเต็มความสูงป้าย · ชื่อตัวหนาแบบ Arial Black สีกรมท่า · คำขวัญตัวเอียงสีเทาบรรทัดเดียว
    แผ่นสูง 26px ขึ้นไปถึงจะมีคำขวัญ · เล็กกว่านั้นเหลือแค่ LOVE ANDAMAN */
 function laAgencyTabInner(h, opt){
   opt = opt || {}; h = h || 20;
   var T = opt.tile || (h>=20 ? 32 : Math.max(16, h+6));
   var W = Math.round(T*110/108);
   var tag = (T>=26 && opt.tag!==false);
-  var f1 = tag ? 10 : Math.max(9, Math.round(T*0.5));
+  var f1 = tag ? Math.max(10, Math.round(T*0.3)) : Math.max(9, Math.round(T*0.5));
+  var f2 = Math.max(7.5, Math.round(T*0.21*2)/2);
   return '<span aria-hidden="true" style="flex:none;width:'+W+'px;height:'+T+'px;'
-      + 'background:url('+LA_LOGO_TAB+') left center/contain no-repeat"></span>'
-    + '<span style="display:flex;flex-direction:column;justify-content:center;min-width:0;text-align:left">'
-      + '<b style="font:800 '+f1+'px/1.1 \'DM Sans\',sans-serif;letter-spacing:.05em;color:#0B1E5B;white-space:nowrap">LOVE ANDAMAN</b>'
-      + (tag ? '<i style="font:italic 500 7.5px/1.1 \'DM Sans\',sans-serif;color:#5B6478;margin-top:1px;white-space:normal">Your experience, Our Passion</i>' : '')
+      + 'background:url('+LA_LOGO_TAB+') left center/cover no-repeat"></span>'
+    + '<span style="display:flex;flex-direction:column;justify-content:center;min-width:0;text-align:left;overflow:hidden">'
+      + '<b style="font:900 '+f1+'px/1.1 \'Arial Black\',\'Helvetica Neue\',Arial,sans-serif;letter-spacing:.06em;color:#03114E;white-space:nowrap">LOVE ANDAMAN</b>'
+      + (tag ? ('<i style="font:italic 400 '+f2+'px/1.25 \'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;color:#555;margin-top:'+Math.max(1,Math.round(T*0.05))+'px;'
+          + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Your experience, Our Passion</i>') : '')
     + '</span>';
 }
 // §fn · ป้ายเอเยนต์ของใบที่ขายเอง · คืน HTML ของป้าย · ไม่ใช่ใบ B2C คืน ''
@@ -51233,7 +51237,7 @@ function laAgencyMark(bk, h, opt){
   if(!bk || !/^b2c_/.test(String(bk.id||''))) return '';
   opt = opt || {};
   // §markFit · inline = หดตามโลโก้ (ใช้ตอนอยู่ปนกับป้ายเล็ก ๆ) · ไม่ใส่ = ยืดเต็มช่องตาราง
-  return '<div title="Love Andaman · '+laT('ขายเอง (B2C)')+'" style="'+laAgencyTabStyle(opt)+'">'
+  return '<div class="la-agtab" title="Love Andaman · '+laT('ขายเอง (B2C)')+'" style="'+laAgencyTabStyle(opt)+'">'
     + laAgencyTabInner(h||20, opt) + '</div>';
 }
 // ชุดเต็ม · ใช้ตรงที่มีที่พอให้อ่านคำว่า LOVE andaman ออก
@@ -51556,7 +51560,7 @@ function _btOtherSection(date, rows, rids){
     const _card = 'margin:2px 3px;padding:8px 10px;border-radius:8px;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     const _clk  = b.agentId ? ` onclick="event.stopPropagation();bkV2AgentColorEdit('${esc(b.agentId)}',event)" style="cursor:pointer;` : ' style="';
     const agCell = b2c
-      ? `<div${_clk}${laAgencyTabStyle()}" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}">${laAgencyTabInner(20,{tile:28})}</div>`   /* §agTab */
+      ? `<div${_clk}${laAgencyTabStyle()}" class="la-agtab" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}">${laAgencyTabInner(20,{tile:34})}</div>`   /* §agTab */
       : b.agentId
         ? `<div${_clk}background:${_acol};color:${_ink};${_card};font-weight:600" title="${esc(agName)}">${esc(agName)}</div>`
         : `<span class="t2-agency">${esc(agName)}</span>`;
@@ -52916,7 +52920,7 @@ function bkV2RenderTab2(){
         return {g:a.g, boat:_rowBid||'', html:`
           <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}${(typeof bkV2B2CRowFlag==='function')?bkV2B2CRowFlag(bk):''}"${_rowStyle} data-al="${esc(a.key)}">
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
-            <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="${laAgencyTabStyle()}cursor:pointer">${laAgencyTabInner(22,{tile:28})}</div>`   /* §agTab */:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
+            <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="${laAgencyTabStyle()}cursor:pointer" class="la-agtab">${laAgencyTabInner(22,{tile:40})}</div>`   /* §agTab */:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
               ${(function(){ var _ut=bkUpgTripOn(bk, date, rid); if(!bkUpgActive(_ut)) return ''; var _u=_ut.upg;
                 return `<span class="t2-upgfrom" data-upgfrom="${esc(_u.fromRouteId)}" title="${esc('Upgrade · '+bkUpgRouteName(_u.fromRouteId)+' > '+bkUpgRouteName(_u.toRouteId)+' · '+(_u.reason||'')+(_u.charge>0?(' · +THB '+Number(_u.charge).toLocaleString()):' · no charge')+(_u.by?(' · '+_u.by):''))}">&#10548; ${laT('จาก')} ${esc(bkUpgRouteName(_u.fromRouteId))}</span>`; })()}
@@ -53320,7 +53324,7 @@ function bkV2RenderTab2(){
        ทุกตารางใช้ชุดเดียวกัน จึงตรงกันทุกคอลัมน์ · ตัวเลขพิมพ์ออกเหมือนเดิมทุกตัว ไม่ได้หายไปไหน */
     const _c = w => '<col style="width:' + w + 'px">';
     const colGroup = '<colgroup>'
-      + _c(104) + _c(142) + _c(210)                          /* Voucher · Agency · Customer */
+      + _c(104) + _c(196) + _c(210)                          /* Voucher · Agency · Customer · §agTab3 Agency 142 → 196 ให้ป้าย Love Andaman เหมือนแบบ */
       + _c(40) + _c(46) + _c(42) + _c(46)                    /* AD CHD INF FOC */
       + _c(104)                                              /* Time · ต้องพอกับ "07:45-08:00" เต็ม · ชุดข้อมูลทดสอบไม่มีเวลารับ รอบแรกจึงตั้งแคบไป */
       + (vanMode ? _c(150) : '')                             /* กลุ่ม */
@@ -54299,7 +54303,11 @@ function bkV2RenderTab2(){
        จุดรับ 270px · โซน 212px · Agency 172px — บีบลงโดยให้ป้ายตกบรรทัดแทน  */
     .t2-mtbl td.t2-cu,.t2-mtbl th.t2-cu{max-width:210px;width:210px}
     .t2-mtbl td.t2-cu{white-space:normal;line-height:1.5}
-    .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:142px;width:142px;overflow:hidden}
+    .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:196px;width:196px;overflow:hidden}   /* §agTab3 · เดิม 142 · ป้าย Love Andaman แบบหัวอีเมลต้องการที่ */
+    body.btc #view-booking td.t2-ag .la-agtab{height:30px}
+    body.btc #view-booking td.t2-ag .la-agtab>span:first-child{width:29px!important;height:28px!important}
+    body.btc #view-booking td.t2-ag .la-agtab b{font-size:10.5px!important}
+    body.btc #view-booking td.t2-ag .la-agtab i{font-size:7.5px!important;margin-top:0!important}
     .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
     .t2-mtbl th.t2-vc{width:104px}
     .t2-upgfrom{display:block;width:max-content;max-width:100%;box-sizing:border-box;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -54316,7 +54324,7 @@ function bkV2RenderTab2(){
          2. ตัวเลขเงินห้ามตัดเด็ดขาด · "ค้าง ฿3,200" ที่เหลือ "ค้าง ฿3" คือเลขคนละตัว
             ให้ตกบรรทัดแทน และมัดคำกับตัวเลขไว้ด้วยกันแยกบรรทัด                        */
     .t2-zonetag{max-width:100%;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
-    .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
+    .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:192px}
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-nxt{display:inline-flex;align-items:center;gap:3px;max-width:150px;font-size:10px;font-weight:700;line-height:1.5;color:#185FA5;background:#EEF4FB;border:1px solid #D3E2F3;border-radius:5px;padding:0 5px;margin-left:5px;white-space:nowrap;cursor:pointer;vertical-align:1px}
     .t2-nxt i{font-style:normal}

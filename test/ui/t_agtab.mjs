@@ -3,8 +3,11 @@
 // Source (2026-10-13) · owner: "อยากปรับ Logo ตรงนี้ใหม่" (กล่องขาวขอบเทา ในช่อง Agency ของ By trip date)
 //   แล้วส่งตัวอย่าง · หัวลายเซ็นอีเมล LOVE ANDAMAN · แผ่นกรมท่า โลโก้ขาว มุมขวาเฉียงสีฟ้า (เหมือน assets/la-tab.png)
 //   §agTab2 · "ใช้แบบ ตามที่เราแนบไปเลย ตัด อีเมล เบอร์โทรออก" → แผ่น la-tab + LOVE ANDAMAN + Your experience, Our Passion
+//   §agTab3 · "ให้มันเหมือนแบบเลย ตรวจดู" → owner เลือกขยายช่อง Agency เป็น 196px
+//     สัดส่วนตามแบบ · แผ่นเต็มความสูงป้าย · ชื่อตัวหนา (Arial Black) สีกรมท่า · คำขวัญตัวเอียงสีเทาบรรทัดเดียว
 // Checks
 //   1 By trip date (Classic) · ใบ B2C ขึ้นแผ่น la-tab + LOVE ANDAMAN + คำขวัญ · ไม่มีอีเมล/เบอร์ · ไม่มี <img> ในช่อง
+//     ช่อง Agency กว้าง 196px · แผ่นเต็มความสูงป้าย · คำขวัญบรรทัดเดียวไม่ถูกตัด · ชื่อสีกรมท่าตัวหนา 900
 //   2 Compact · ป้ายไม่ถูกเปลี่ยนเป็นแถบสีด้านซ้าย · สูงไม่เกิน 30px · แผ่นและตัวหนังสือไม่โดนตัด
 //   3 เอเยนต์อื่นยังเป็นชิปสีประจำเอเยนต์เหมือนเดิม
 //   4 ทุกหน้าที่ใช้ laAgencyMark ได้ป้ายแบบเดียวกัน (ลองที่หน้าเช็คอินหน้าท่า)
@@ -36,11 +39,15 @@ const read = () => page.evaluate(() => {
     text: txt.textContent.replace(/\s+/g, ' ').trim(), imgs: b2c.querySelectorAll('img').length, boxBg: getComputedStyle(box).backgroundColor,
     h: Math.round(br.height), clipped: tr.bottom > br.bottom + .5 || xr.bottom > br.bottom + .5 || xr.right > br.right + .5
       || [...txt.children].some(c => c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > br.right - 1 || c.getBoundingClientRect().bottom > br.bottom + .5), btc: box.classList.contains('btc-ag'),
-    other: other ? getComputedStyle(other.querySelector('div')).backgroundColor : null };
+    other: other ? getComputedStyle(other.querySelector('div')).backgroundColor : null,
+    colW: Math.round(b2c.getBoundingClientRect().width), boxH: Math.round(br.height),
+    tagLines: (() => { const i = txt.querySelector('i'); if (!i) return 0; return Math.round(i.getBoundingClientRect().height / parseFloat(getComputedStyle(i).lineHeight)); })(),
+    titleW: getComputedStyle(txt.querySelector('b')).fontWeight, titleC: getComputedStyle(txt.querySelector('b')).color };
 });
 const c1 = await read();
-if (!c1.none && c1.tileBg && /^LOVE ANDAMAN ?Your experience, Our Passion$/.test(c1.text) && !/@|\d{3}-/.test(c1.text) && !c1.imgs && c1.boxBg === 'rgba(0, 0, 0, 0)' && !c1.clipped)
-  ok(`1 Classic · แผ่น la-tab ${c1.tileH}px + "${c1.text}" · ไม่มีอีเมล/เบอร์ · สูง ${c1.h}px (${S.day} · B2C ${S.n} ใบ)`); else fail('1 ' + JSON.stringify(c1));
+if (!c1.none && c1.tileBg && /^LOVE ANDAMAN ?Your experience, Our Passion$/.test(c1.text) && !/@|\d{3}-/.test(c1.text) && !c1.imgs && c1.boxBg === 'rgba(0, 0, 0, 0)' && !c1.clipped
+    && c1.colW === 196 && c1.tileH >= c1.boxH - 3 && c1.tagLines === 1 && c1.titleW === '900' && c1.titleC === 'rgb(3, 17, 78)')
+  ok(`1 Classic · ช่อง ${c1.colW}px · แผ่น la-tab ${c1.tileH}px เต็มป้าย ${c1.h}px + "${c1.text}" · คำขวัญ ${c1.tagLines} บรรทัด · ไม่มีอีเมล/เบอร์ (${S.day} · B2C ${S.n} ใบ)`); else fail('1 ' + JSON.stringify(c1));
 if (c1.other && c1.other !== 'rgba(0, 0, 0, 0)') ok('3 เอเยนต์อื่นยังเป็นชิปสี ' + c1.other); else fail('3 ' + JSON.stringify(c1.other));
 if (SP) await page.screenshot({ path: SP + 'agtab_classic.png' });
 await page.evaluate(() => { if (typeof btcSet === 'function') btcSet('compact'); }); await page.waitForTimeout(1000);
