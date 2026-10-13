@@ -630,7 +630,15 @@ function _boatColorFromHex(hex){
   while(n<40 && (_cRatio(ink,bgO)<4.5 || _cRatio(ink,{r:255,g:255,b:255})<4.5)){
     ink={ r:Math.round(ink.r*0.92), g:Math.round(ink.g*0.92), b:Math.round(ink.b*0.92) }; n++;
   }
-  return {bg:css(bgO), text:css(ink), soft:css(softO), raw:hex};
+  /* §boatFill (2026-10-13) · owner "เรากดเปลี่ยนสีใน Boat Status แล้วเหมือนไม่เปลี่ยน"
+     text ไล่เข้มจนผ่าน 4.5:1 ทั้งบนพื้นอ่อนและกับตัวหนังสือขาว · สีสด/สีอ่อน (ส้ม เหลือง ฟ้าอ่อน) เลยกลายเป็นน้ำตาล/กรมท่า
+     ดูแล้วเหมือนสีไม่เปลี่ยน · fill = สีสำหรับ "พื้น" ของวงชื่อเรือ/แถบ · ไล่เข้มแค่พอให้ตัวอักษรขาวตัวหนาอ่านได้ (3:1)
+     สีที่เลือกจึงยังเป็นสีนั้น · text เดิมยังอยู่สำหรับตัวหนังสือเล็กบนพื้นอ่อน */
+  let fill={r:c.r, g:c.g, b:c.b}, m=0;
+  while(m<40 && _cRatio(fill,{r:255,g:255,b:255})<3){
+    fill={ r:Math.round(fill.r*0.94), g:Math.round(fill.g*0.94), b:Math.round(fill.b*0.94) }; m++;
+  }
+  return {bg:css(bgO), text:css(ink), soft:css(softO), raw:hex, fill:css(fill)};
 }
 // §per-boat identity colour · editable override (b.color hex) → falls back to the baked BOAT_COLORS, then generic grey · single source used by Boat Asset, Boat Status, By-trip, n8n canvas, job rows
 function getBoatColor(boatId){
@@ -6021,8 +6029,12 @@ function _daDepMin(g){
   const m=t.match(/^(\d{1,2}):(\d{2})/);
   return m ? (+m[1]*60 + +m[2]) : 9999;
 }
+/* §daOrd (2026-10-13) · "ให้เรียงตามลำดับที่วางใน Program"
+   เดิมเรียงตามเวลาออก (§daSortTime) · ลำดับในข้อความที่ส่งเอเจ้นจึงไม่ตรงกับหน้า Program Config
+   ตอนนี้ใช้กติกาเดียวกับทั้งแอป (laRouteOrdCmp · §routeOrd) · เวลาออกเหลือเป็นตัวตัดสินเมื่อไม่มีลำดับ */
 function _daSortRows(rows){
   return (rows||[]).slice().sort((a,b)=>{
+    if(typeof laRouteOrdCmp==='function' && a.r && b.r){ const o=laRouteOrdCmp(a.r,b.r); if(o) return o; }
     const d=_daDepMin(a)-_daDepMin(b); if(d) return d;
     if(a.type!==b.type) return a.type==='early' ? -1 : 1;   // เวลาเท่ากัน · Early ขึ้นก่อน
     return String(_daRouteName(a.r)||'').localeCompare(String(_daRouteName(b.r)||''));
@@ -6182,7 +6194,7 @@ function renderBoats(){
 
   // Avatar color helper
   const boatAvatarColor=(b)=>{
-    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.text; }
+    if(typeof getBoatColor==='function'){ const _gc=getBoatColor(b.id); if(_gc&&_gc.text&&_gc.text!=='#666') return _gc.fill||_gc.text; }   /* §boatFill */
     const palette=['#185FA5','#534AB7','#1D9E75','#BA7517','#A32D2D','#0F6E56','#7F77DD','#D85A30','#993556','#185FA5'];
     const i=allCompany.findIndex(x=>x.id===b.id);
     return palette[i%palette.length>=0?(i%palette.length):0];
@@ -6617,7 +6629,7 @@ function renderBoatDetailPink(){
   const idx=allCompany.findIndex(x=>x.id===b.id);
   const isCharter=b.ownership==='charter';
   const _idc=(typeof getBoatColor==='function')?getBoatColor(b.id):null;
-  const ac=isCharter?'#534AB7':((_idc&&_idc.text&&_idc.text!=='#666')?_idc.text:palette[(idx<0?0:idx)%palette.length]);
+  const ac=(isCharter&&!b.color)?'#534AB7':((_idc&&_idc.text&&_idc.text!=='#666')?(_idc.fill||_idc.text):palette[(idx<0?0:idx)%palette.length]);   /* §boatFill · เรือเช่าที่ตั้งสีไว้ใช้สีของมัน */
   const initials=(()=>{
     const w=b.name.split(/\s+/);
     if(w.length>=2)return (w[0][0]+w[1][0]).toUpperCase();
@@ -6820,7 +6832,7 @@ function renderBoatDetailPink(){
     <div style="display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);margin-bottom:14px">
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${_idc&&_idc.text&&/^#[0-9a-fA-F]{6}$/.test(_idc.text)?_idc.text:'#185FA5'}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${(_idc&&_idc.raw)||ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${(_idc&&_idc.raw)||(_idc&&/^#[0-9a-fA-F]{6}$/.test(_idc.text||'')?_idc.text:'#185FA5')}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
         <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
@@ -6891,9 +6903,10 @@ function renderBoatDetailPink(){
         return `<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;min-height:50px;box-sizing:border-box;padding:8px 14px;border-bottom:1px solid #ECEBE6">
           <div style="flex:1;min-width:200px">
             <div style="font-size:13px;font-weight:600;color:#0F1B3D">${escA(fromLbl)} → ${escA(toLbl)}</div>
-            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${fmtA(a.endDate)} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
+            <div style="font-size:11.5px;color:#5B6170;margin-top:1px">${fmtA(a.startDate)} – ${a.endDate?fmtA(a.endDate):'<b style="color:#9A5B00">ยังไม่กำหนดวันกลับ</b>'} · ${a.type==='permanent'?'Permanent':'Temporary'}${a.reason?' · '+escA(a.reason):''}${a.cost?` · <span style="font-family:'DM Mono',monospace">฿${a.cost.toLocaleString()}</span>`:''}</div>
           </div>
           <span style="flex:none;background:${pillBg};color:${pillFg};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${statusLabel}</span>
+          ${(a.status!=='cancelled'&&!a.endDate&&a.type!=='permanent')?`<button onclick="event.stopPropagation();flAsnSetEnd('${b.id}','${a.id}')" title="ใส่วันที่เรือกลับท่าเดิม" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#0B1E5B;border:1px solid #0B1E5B;color:#fff;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">ตั้งวันกลับ</button>`:''}
           ${a.status!=='cancelled'&&a.status!=='completed'?`<button onclick="event.stopPropagation();flCancelAssignment('${b.id}','${a.id}')" style="flex:none;height:28px;padding:0 10px;border-radius:14px;background:#fff;border:1px solid #CFCFC8;color:#8E2019;font:600 11.5px inherit;font-family:inherit;cursor:pointer">Cancel</button>`:''}
         </div>`;
       };
@@ -7634,7 +7647,7 @@ function getBoatCurrentPier(b, ds){
   //    §boatPierDate · ใบย้ายท่าที่ครอบคลุม "วันที่ถาม" ไม่ใช่วันนี้
   if(b.assignments && Array.isArray(b.assignments)){
     const active = b.assignments.find(a =>
-      a.status !== 'cancelled' && a.startDate <= ds && a.endDate >= ds
+      a.status !== 'cancelled' && a.startDate <= ds && asnEndOf(a) >= ds   /* §asnOpen */
     );
     if(active) return active.toPier;
   }
@@ -7659,12 +7672,20 @@ function getBoatShopLocation(b){
   return activeMj ? String(activeMj.location).trim() : '';
 }
 
+/* ══ §asnOpen (2026-10-13) · ใบย้ายท่าที่ "ยังไม่รู้วันกลับ" ══════════════════════════
+   owner (ฟอร์ม Move boat to another pier): "ถ้ารู้วันย้าย แต่ยังไม่รู้วันกลับล่ะ"
+   ใบที่ endDate ว่าง = อยู่ท่าใหม่ไปเรื่อย ๆ ตั้งแต่วันเริ่ม จนกว่าจะกด "ตั้งวันกลับ"
+   ทุกที่ที่ถามว่าใบไหนครอบวันนั้น ใช้ asnEndOf() แทน a.endDate ตรง ๆ (ว่าง = 9999-12-31)
+   ไม่ต้องแก้ฐานข้อมูล · boats__assignments.enddate เป็น text อยู่แล้ว */
+function asnEndOf(a){ return (a && a.endDate) ? a.endDate : '9999-12-31'; }
+function asnIsOpen(a){ return !!(a && !a.endDate && a.status!=='cancelled'); }
+function asnEndLabel(a, fmt){ return (a && a.endDate) ? (fmt?fmt(a.endDate):a.endDate) : 'ยังไม่กำหนดวันกลับ'; }
 // Get active assignment for a boat (if any)
 function getActiveAssignment(b){
   if(!b.assignments || !Array.isArray(b.assignments)) return null;
   const today = TODAY_STR;
   return b.assignments.find(a => 
-    a.status !== 'cancelled' && a.startDate <= today && a.endDate >= today
+    a.status !== 'cancelled' && a.startDate <= today && asnEndOf(a) >= today   /* §asnOpen */
   );
 }
 
@@ -7682,7 +7703,7 @@ function getPastAssignments(b){
   if(!b.assignments || !Array.isArray(b.assignments)) return [];
   const today = TODAY_STR;
   return b.assignments.filter(a => 
-    a.status !== 'cancelled' && a.endDate < today
+    a.status !== 'cancelled' && a.endDate && a.endDate < today   /* §asnOpen · ใบที่ยังไม่มีวันจบไม่มีทางเป็นใบที่จบแล้ว */
   ).sort((a,b)=>b.endDate.localeCompare(a.endDate));
 }
 

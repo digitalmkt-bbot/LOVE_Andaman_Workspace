@@ -2170,7 +2170,8 @@
       </div>
       <div class="form-2">
         <div class="form-row"><label class="form-label" for="asn-start">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
-        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="asn-open" onchange="flAsnOpenToggle()"> ยังไม่รู้วันกลับ</label></div>
       </div>
       <div class="form-row"><label class="form-label" for="asn-reason">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
       <div class="form-row"><label class="form-label" for="asn-cost">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
@@ -3806,6 +3807,16 @@
 <script src="js/booking/bookingV2AgentDDWhen.js"></script>
 <script src="js/booking/bookingV2NbRefreshSide.js"></script>
 <script src="js/booking/bookingV2UpgConfirmView.js"></script>
+<script src="js/booking/bookingV2BoatPickClose.js"></script>
+<script src="js/booking/bookingV2BoatPickCSS.js"></script>
+<script src="js/booking/bookingV2SplitIsSelf.js"></script>
+<script src="js/booking/bookingV2BoatPickWrap.js"></script>
+<script src="js/booking/bookingV2SplitGo.js"></script>
+<script src="js/booking/bookingV2TogColor.js"></script>
+<script src="js/booking/bookingV2TogHtml.js"></script>
+<script src="js/booking/bookingV2TogShow.js"></script>
+<script src="js/booking/bookingV2TogHide.js"></script>
+<script src="js/booking/bookingV2CxlToggle.js"></script>
 <script src="js/09-action-board.js?v=7a8214eb"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=c961756c"></script>

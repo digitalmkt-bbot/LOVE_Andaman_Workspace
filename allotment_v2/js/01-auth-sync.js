@@ -876,7 +876,9 @@
     }
     if(el.getAttribute('data-sig')===sig && el.getAttribute('data-n')===String(n)) return;   /* ไม่ต้องวาดใหม่ทุก 10 วิ */
     el.setAttribute('data-sig',sig); el.setAttribute('data-n',String(n));
-    el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
+    /* §noticeMini · sidebar ยุบ (body.sb-collapsed) เลนซ้ายแคบเหลือ 84px · ใช้แถว .la-b2ci-sh สั้น ๆ แทน (CSS สลับให้) */
+    el.innerHTML='<div class="la-b2ci-sh" onclick="_laB2CIssuesOpen()" title="ใบ B2C ที่ต้องเช็ค '+n+' รายการ"><b>&#9888; '+n+'</b><i>B2C เช็ค</i></div>'
+      +'<div class="la-b2ci-full" style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
       +'<span>&#9888;</span><b style="cursor:pointer;flex:1" onclick="_laB2CIssuesOpen()">ใบ B2C ที่ต้องเช็ค '+n+' รายการ</b>'
       +'<span title="ซ่อนจนกว่าจะมีใบใหม่ที่มีปัญหา" style="cursor:pointer;opacity:.6;padding:0 4px" '
       +'onclick="_laB2CIssuesHide(\''+esc(sig)+'\')">&times;</span></div>'
