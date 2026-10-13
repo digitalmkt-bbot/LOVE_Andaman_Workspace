@@ -4,7 +4,13 @@
 
 **BLOCK — do not replace `lk-inbox` yet.**
 
-This is a current-code review of the `main` integration frontend against `operation-backend`, after fetching `origin/main` at `23f1529`. It supersedes earlier claims that User Admin, Sales Board, B2C Health, quote, commissions, pier money, van bills, Trip P&L/costing, capacity overrides, and most Pier Office screens were unwired: operations adapters now exist for those areas. Adapter presence and Node tests are not browser acceptance testing.
+This is a current-code review of the `main` integration frontend against `operation-backend`. It supersedes earlier claims that User Admin, Sales Board, B2C Health, quote, commissions, pier money, van bills, Trip P&L/costing, capacity overrides, and most Pier Office screens were unwired: operations adapters now exist for those areas. Adapter presence and Node tests are not browser acceptance testing.
+
+## Deploy state (2026-10-13)
+
+- **operation-backend** `main` `8c0ab08` is deployed. It carries the pier-cash row PATCH, the pier ledger/outstanding/write-off/repair routes, invoice payment-slip add/remove, and the two controlled-error fixes. Verified live: `GET /v1/pier-office/tublamu/moves` returns 401 (route exists), not 404.
+- **This frontend** `main` `546f8c0` is pushed. It wires Reconfirm, petty cash, Transfer Fleet writes, the pier ledger and payment slips. The new calls depend on the backend routes above.
+- **Not done:** any browser acceptance run, and any run of the new tests against real PostgreSQL.
 
 ## Release blockers
 
