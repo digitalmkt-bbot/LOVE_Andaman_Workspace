@@ -66466,7 +66466,7 @@ function pkTkData(date, pier){
    และวันที่มีหลายเส้นทาง ต้องเลื่อนผ่านทั้งเส้นอื่นกว่าจะถึงเส้นที่ต้องดู
    ชิปเส้นทาง กดแล้วเห็นเฉพาะเส้นนั้น · กดซ้ำเอาตัวกรองออก
    ตัวกรองเก็บไว้ในหน่วยความจำเท่านั้น · เปลี่ยนวันแล้วเส้นนั้นอาจไม่มี จึงล้างให้เองตอนวาด
-   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName เท่านั้น (ดู CLAUDE.md) */
+   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName/parkSets เท่านั้น (ดู CLAUDE.md · parkSets = §pkSets) */
 var _pkRoute = '';
 /* §pkOv (2026-09-28) · หน้าภาพรวมทั้งเดือน · เรียงวัน ในวันแยกเรือ
    ที่มา · ผู้ใช้ขอเอง · "เพิ่มหน้า Overview เพื่อให้เห็นภาพรวมของทั้งเดือน
@@ -66736,6 +66736,23 @@ function pk2BoatCol(bid){
   try{ if(typeof bkV2BoatAvatarColor==='function') return bkV2BoatAvatarColor(bid); }catch(_){}
   return '#3E4A6B';
 }
+/* §pkSets · ชิปโปรแกรม + ชิป Ticket Management ท้ายแถว · ใช้ทั้งตาราง Matrix และโหมดจัดชุด */
+function pk2FamChips(flat, fid){
+  var fams=[], fm={};
+  flat.forEach(function(x){ var f=pk2FamOf(x.g.rid);
+    if(!fm[f.id]){ fm[f.id]={f:f, n:0, miss:0}; fams.push(fm[f.id]); }
+    fm[f.id].n+=(+x.B.totPc||0); fm[f.id].miss+=(+x.B.missTot||0); });
+  var allN=0, allM=0; fams.forEach(function(F){ allN+=F.n; allM+=F.miss; });
+  var chip=function(id,n,c,cnt,miss){
+    return '<button class="pk2-fc'+(fid===id?' on':'')+'" onclick="pkSetFam(\''+id+'\')"><i style="background:'+c+'"></i>'+poE(n)
+      +'<em>'+cnt+'</em>'+(miss?('<u>รอชื่อ '+miss+'</u>'):'')+'</button>'; };
+  var nSets=pkSets(_poDate).length;
+  return chip('all','ทั้งหมด','#0B1E5B',allN,allM)
+    +fams.map(function(F){ return chip(F.f.id,F.f.n,F.f.c,F.n,F.miss); }).join('')
+    +'<button class="pk2-fc pk3-tab'+(fid==='sets'?' on':'')+'" onclick="pkSetFam(\'sets\')" title="จัดชุดตั๋ว · เลือกลำ กำหนดจำนวน สุ่มรายชื่อ เซฟเป็นชุด">'
+      +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v2H4v-2a2 2 0 0 0 0-4z"></path></svg>Ticket Management'
+      +'<em>'+nSets+' ชุด</em></button>';
+}
 /* ชิปโปรแกรม + ตาราง Matrix ของวันเดียว · flat = [{g,B}] จาก renderPierPark */
 function pk2DayMx(flat, sel, TY){
   var fams=[], fm={};
@@ -66743,12 +66760,7 @@ function pk2DayMx(flat, sel, TY){
     if(!fm[f.id]){ fm[f.id]={f:f, n:0, miss:0}; fams.push(fm[f.id]); }
     fm[f.id].n+=(+x.B.totPc||0); fm[f.id].miss+=(+x.B.missTot||0); });
   var fid=(_pkFam!=='all' && fm[_pkFam])?_pkFam:'all';
-  var allN=0, allM=0; fams.forEach(function(F){ allN+=F.n; allM+=F.miss; });
-  var chip=function(id,n,c,cnt,miss){
-    return '<button class="pk2-fc'+(fid===id?' on':'')+'" onclick="pkSetFam(\''+id+'\')"><i style="background:'+c+'"></i>'+poE(n)
-      +'<em>'+cnt+'</em>'+(miss?('<u>รอชื่อ '+miss+'</u>'):'')+'</button>'; };
-  var chips=chip('all','ทั้งหมด','#0B1E5B',allN,allM)
-    +fams.map(function(F){ return chip(F.f.id,F.f.n,F.f.c,F.n,F.miss); }).join('');
+  var chips=pk2FamChips(flat, fid);   /* §pkSets · ชิปชุดเดียวกับโหมดจัดชุด */
   var list=flat.filter(function(x){ return fid==='all' || pk2FamOf(x.g.rid).id===fid; });
   var S=pk2Zero(TY), miss=0, rts={};
   var rows=list.map(function(x){
@@ -67136,6 +67148,10 @@ function renderPierPark(pier){
     if(nPcDiff) todo.push('<button class="a" onclick="poGoView(\'pop\')"><i></i>เงินสดย่อยนับต่าง '+nPcDiff+' ลำ</button>');
     if(nFix) todo.push('<button class="c"><i></i>แก้ประเภท '+nFix+'</button>');
     if(nTyped) todo.push('<button class="c"><i></i>กรอกชื่อเอง '+nTyped+'</button>');
+    /* §pkSets · วันที่เริ่มจัดชุดแล้ว บอกว่าเหลือตั๋วที่ยังไม่เข้าชุดอีกเท่าไร */
+    if(pkSets(_poDate).length){ var _U=pkSetUsed(_poDate), _free=0;
+      flat.forEach(function(x){ _free+=pkSetAvail(x.B,_U).length; });
+      todo.push('<button class="'+(_free?'a':'c')+'" onclick="pkSetFam(\'sets\')"><i></i>'+(_free?('ยังไม่เข้าชุดตั๋ว '+_free+' ใบ'):'เข้าชุดตั๋วครบทุกใบ')+'</button>'); }
   }
   var dtHtml = ov
     ? ('<button class="rb" onclick="pkMonShift(-1)" title="เดือนก่อน">‹</button>'
@@ -67207,9 +67223,12 @@ function renderPierPark(pier){
         +'<button class="pri" onclick="pkTkExcel(\''+cur.bid+'\')" title="ได้ไฟล์ 3 คอลัมน์ของลำนี้ วางลงแบบฟอร์มด่านได้เลย">&#8681; บันทึก Excel ลำนี้</button>'
       +'</div>';
     }
+    /* §pkSets · โหมดจัดชุด · การ์ดซ้ายเป็นตารางเลือกลำ + รายชื่อที่สุ่ม · การ์ดขวาเป็นชุดที่บันทึกแล้ว */
+    var setsMode=(_pkFam==='sets');
     var sheetCard='<div class="pc2-card pk2-sc">'
       +(flat.length
-        ? (pk2DayMx(flat, sel, TY)+bh+'<div class="pk2-shw">'+sheetOf(cur)+'</div>')   /* §pkDayMx2 · กล่องตั๋วของลำนี้ (recOf) เอาออก · ตารางบนมีตัวเลขเดียวกันแล้ว */
+        ? (setsMode ? pk3Body(flat, TY, TYM, ro)
+                    : (pk2DayMx(flat, sel, TY)+bh+'<div class="pk2-shw">'+sheetOf(cur)+'</div>'))   /* §pkDayMx2 · กล่องตั๋วของลำนี้ (recOf) เอาออก · ตารางบนมีตัวเลขเดียวกันแล้ว */
         : '<div class="pc2-empty">วันนี้ยังไม่มีเรือออกจากท่านี้</div>')
       +'</div>';
     /* แผงขวา */
@@ -67237,14 +67256,14 @@ function renderPierPark(pier){
       +'<div class="ml">'+nearRows+'</div>'
       +'<div class="lg"><span><i class="miss"></i>ยังรอชื่อ</span><span><i class="ok"></i>รายชื่อครบ</span></div></div>';
     body='<div class="pc2-main"><div class="pc2-col">'+sheetCard+'</div>'   /* §pkDayMx · การ์ดสี่ใบเอาออก */
-      +'<div class="pc2-col">'+waitCard+tyCard+monCard+'</div></div>';
+      +'<div class="pc2-col">'+(setsMode?pk3Side(flat, TY, TYM, ro):(waitCard+tyCard+monCard))+'</div></div>';
   }
 
   /* พิมพ์ชื่อแล้วหน้านี้วาดใหม่ทั้งหน้า (pkNmEdit) · กล่องชีทเลื่อนในตัวเอง จำตำแหน่งไว้คืนให้ ถ้ายังเป็นลำเดิม */
   var _shOld=host.querySelector('.pk2-shw .pk-sheet'), _shKey=sel?(sel.g.rid+'|'+sel.B.bid+'|'+_poDate):'';
   var _shY=(_shOld && host._pkShKey===_shKey)?_shOld.scrollTop:0;
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
-    +'<style id="pk2-style">'+pc2CSS('#pk-host-'+P.k+' .pk2')+'\n'+pk2CSS('#pk-host-'+P.k+' .pk2')+'</style>'
+    +'<style id="pk2-style">'+pc2CSS('#pk-host-'+P.k+' .pk2')+'\n'+pk2CSS('#pk-host-'+P.k+' .pk2')+'\n'+pk3CSS('#pk-host-'+P.k+' .pk2')+'</style>'   /* §pkSets */
     +'<div class="pk2">'+top+body+'</div>';
   host._pkShKey=_shKey;
   if(_shY){ var _shNew=host.querySelector('.pk2-shw .pk-sheet'); if(_shNew) _shNew.scrollTop=_shY; }
@@ -67363,6 +67382,384 @@ function pkTab(rid,bid){
   window._pkTab[rid]=bid;
   _pkSel=rid+'|'+bid;   /* §pk2 · แท็บลำแถวเดียวข้ามทุกเส้นทาง */
   renderPierPark();
+}
+
+
+/* ══ §pkSets (2026-10-14) · Ticket Management · จัดชุดตั๋วอุทยาน ═══════════════════════════════════════
+   owner: "เพิ่มแถบอีกอันอยู่แถบเดียวกับทริป เป็น Ticket management · เลือกเรือขึ้นมา และกำหนดว่าจะทำตั๋วจำนวนเท่าไหร่
+           ระบบดึงรายชื่อมาให้ตรงตามที่ระบุ · อาจต้องทำหลายชุด และตั้งชื่อได้"
+         + "อิงตารางแบบเดิม · ข้าง Surin Islands เป็นอีกแถบ · เลือกเรือมาก่อน กำหนดในตาราง · ตารางล่างดึงรายชื่อ Random · เซฟเป็น 1 ชุด"
+         + "บนเรือ แยก ผญไทย เด็กไทย · FOC แยกไทย ตช · เรือไม่ต้องขึ้นทุกลำ ให้ User เลือก"
+   ที่เก็บ · PIER_CFG.parkSets[date] = [{id,name,bid,rid,cnt:{cat:n},people:[{k,full,nat3,cat,bkId,vc,ph}],by,at,bought,boughtAt}]
+     poPersist ส่งขึ้นฐานข้อมูลอยู่แล้ว (pier_cfg) · ไม่มีตาราง/คอลัมน์ใหม่ · เกิน 120 วันตัดทิ้งเองเหมือน parkName
+   กติกา · k = ใบจอง + ตำแหน่งในใบ (ชื่อจากใบจอง = index · ช่องรอชื่อ = ประเภท+ลำดับ) · คนหนึ่งอยู่ได้ชุดเดียว
+          · สุ่มเฉพาะคนที่ยังไม่อยู่ในชุดและตรงประเภท · คนมีชื่อแล้วก่อน คนรอชื่อท้ายสุด · ติ๊กออกแล้วสุ่มคนใหม่แทนทันที
+          · ชุดที่กด "ซื้อแล้ว" ล็อก · คนที่หายจากใบจองหลังเซฟ ขึ้นแดงในชุด ไม่หายเงียบ
+   ในหน่วยความจำเท่านั้น · เรือที่เลือกขึ้นตาราง (_pkSetBoats) · ร่างชุดที่ยังไม่เซฟ (_pkSetD) · เมนูเลือกเรือ (_pkSetMenu) */
+var _pkSetBoats=[];
+var _pkSetMenu=false;
+var _pkSetD=null;
+var _pkSetDate='';
+function pkSets(date){ var M=PIER_CFG&&PIER_CFG.parkSets; if(!M||typeof M!=='object') return []; return Array.isArray(M[date])?M[date]:[]; }
+function pkSetsWrite(date, arr){
+  if(!PIER_CFG.parkSets||typeof PIER_CFG.parkSets!=='object') PIER_CFG.parkSets={};
+  if(arr&&arr.length) PIER_CFG.parkSets[date]=arr; else delete PIER_CFG.parkSets[date];
+  try{ var c=new Date(); c.setDate(c.getDate()-120); var lim=c.toISOString().slice(0,10);
+    Object.keys(PIER_CFG.parkSets).forEach(function(x){ if(String(x)<lim) delete PIER_CFG.parkSets[x]; }); }catch(_){}
+  try{ poPersist(); }catch(_){}
+}
+function pkSetKey(p){ return String(p.bkId||'')+'|'+(p.ph?('ph|'+(p.auto||p.cat)+'|'+p.seq):('ix|'+p.ix)); }
+function pkSetUsed(date, exceptId){ var U={}; pkSets(date).forEach(function(S){ if(exceptId&&S.id===exceptId) return; (S.people||[]).forEach(function(q){ U[q.k]=S.id; }); }); return U; }
+function pkSetAvail(B, used){ return (B.people||[]).filter(function(p){ return !p.over && !used[pkSetKey(p)]; }); }
+function pkSetById(id){ return pkSets(_poDate).filter(function(S){ return S.id===id; })[0]||null; }
+function pkSetBoatX(flat,bid){ return flat.filter(function(x){ return x.B.bid===bid; })[0]||null; }
+function pkSetDraft(){ if(_pkSetD && _pkSetDate!==_poDate){ _pkSetD=null; } return _pkSetD; }
+function pkSetNameDef(bid){
+  var nm=bid; try{ var b=getBoat(bid); if(b&&b.name) nm=b.name; }catch(_){}
+  var n=pkSets(_poDate).filter(function(S){ return S.bid===bid; }).length+1;
+  return nm+' ชุด '+n;
+}
+/* เติมรายชื่อให้ครบตามจำนวน · ของเดิมที่ยังใช้ได้เก็บไว้ · ที่ขาดสุ่มเพิ่ม (คนมีชื่อก่อน) */
+function pkSetFill(D, B, used){
+  var P={}; (B.people||[]).forEach(function(p){ P[pkSetKey(p)]=p; });
+  var keep=[], have={};
+  D.picks.forEach(function(k){ var p=P[k]; if(!p||p.over||used[k]||D.skip[k]) return;
+    var c=p.cat, w=+D.cnt[c]||0; if((have[c]||0)>=w) return; have[c]=(have[c]||0)+1; keep.push(k); });
+  var sh=function(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; };
+  Object.keys(D.cnt).forEach(function(c){
+    var w=+D.cnt[c]||0, h=have[c]||0; if(w<=h) return;
+    var pool=(B.people||[]).filter(function(p){ var k=pkSetKey(p); return p.cat===c && !p.over && !used[k] && !D.skip[k] && keep.indexOf(k)<0; });
+    var named=sh(pool.filter(function(p){ return !(p.ph&&!p.typed); })), blank=sh(pool.filter(function(p){ return p.ph&&!p.typed; }));
+    var add=named.concat(blank).slice(0, w-h);
+    add.forEach(function(p){ keep.push(pkSetKey(p)); });
+  });
+  D.picks=keep; return D;
+}
+function pkSetTab(bid, rid){
+  var D=pkSetDraft();
+  if(D && D.bid!==bid && D.picks.length && !D.id){
+    if(!confirm('Discard the unsaved set for the other boat?')) return; D=null; }
+  if(D && D.bid!==bid && D.id){ D=null; }
+  if(!D){ _pkSetD=D={id:null,bid:bid,rid:rid,name:'',cnt:{},picks:[],skip:{},fresh:{},locked:false}; _pkSetDate=_poDate; }
+  if(_pkSetBoats.indexOf(bid)<0) _pkSetBoats.push(bid);
+  renderPierPark();
+}
+function pkSetCnt(cat, v){
+  var D=pkSetDraft(); if(!D||D.locked) return;
+  v=Math.max(0, parseInt(v,10)||0); D.cnt[cat]=v;
+  var flat=pk3Flat(), x=pkSetBoatX(flat,D.bid); if(x) pkSetFill(D, x.B, pkSetUsed(_poDate, D.id));
+  renderPierPark();
+  try{ var el=document.querySelector('#pk-host-'+_poPier+' .pk3-in[data-cat="'+cat+'"]'); if(el){ el.focus(); el.select(); } }catch(_){}
+}
+function pkSetQuick(mode){
+  var D=pkSetDraft(); if(!D||D.locked) return;
+  var flat=pk3Flat(), x=pkSetBoatX(flat,D.bid); if(!x) return;
+  var used=pkSetUsed(_poDate, D.id), av=pkSetAvail(x.B, used), by={};
+  av.forEach(function(p){ if(mode==='named' && p.ph && !p.typed) return; if(mode==='fr' && !/FR$/.test(p.cat)) return; by[p.cat]=(by[p.cat]||0)+1; });
+  D.cnt={}; Object.keys(by).forEach(function(c){ D.cnt[c]=(mode==='half')?Math.ceil(by[c]/2):by[c]; });
+  D.picks=[]; D.skip={}; D.fresh={}; pkSetFill(D, x.B, used); renderPierPark();
+}
+function pkSetTog(k){
+  var D=pkSetDraft(); if(!D||D.locked) return;
+  var flat=pk3Flat(), x=pkSetBoatX(flat,D.bid); if(!x) return;
+  var used=pkSetUsed(_poDate, D.id);
+  var i=D.picks.indexOf(k);
+  if(i>=0){ D.picks.splice(i,1); D.skip[k]=1; var before=D.picks.slice(); pkSetFill(D, x.B, used);
+    D.picks.forEach(function(q){ if(before.indexOf(q)<0) D.fresh[q]=1; }); }
+  else {
+    delete D.skip[k];
+    var p=(x.B.people||[]).filter(function(q){ return pkSetKey(q)===k; })[0]; if(!p) return;
+    var have=D.picks.filter(function(q){ var r=(x.B.people||[]).filter(function(z){ return pkSetKey(z)===q; })[0]; return r&&r.cat===p.cat; }).length;
+    if(have>=(+D.cnt[p.cat]||0)){ alert('This ticket type is full in this set. Untick someone first, or raise the count in the table.'); return; }
+    D.picks.push(k); delete D.fresh[k];
+  }
+  renderPierPark();
+}
+function pkSetShuffle(){ var D=pkSetDraft(); if(!D||D.locked) return; var x=pkSetBoatX(pk3Flat(),D.bid); if(!x) return;
+  D.picks=[]; D.skip={}; D.fresh={}; pkSetFill(D, x.B, pkSetUsed(_poDate, D.id)); renderPierPark(); }
+function pkSetName(v){ var D=pkSetDraft(); if(!D) return; D.name=String(v||'').trim(); }
+function pkSetNew(){ _pkSetD=null; if(!_pkSetBoats.length) _pkSetMenu=true; renderPierPark(); }
+function pkSetBoatAdd(bid){ if(_pkSetBoats.indexOf(bid)<0) _pkSetBoats.push(bid); _pkSetMenu=false; renderPierPark(); }
+function pkSetBoatDel(bid){ _pkSetBoats=_pkSetBoats.filter(function(b){ return b!==bid; }); var D=pkSetDraft(); if(D&&D.bid===bid&&!D.id) _pkSetD=null; renderPierPark(); }
+function pkSetBoatAll(){ pk3Flat().forEach(function(x){ if(_pkSetBoats.indexOf(x.B.bid)<0) _pkSetBoats.push(x.B.bid); }); _pkSetMenu=false; renderPierPark(); }
+function pkSetMenu(){ _pkSetMenu=!_pkSetMenu; renderPierPark(); }
+function pk3Flat(){ var D=pkTkData(_poDate,_poPier), flat=[]; D.forEach(function(g){ (g.boats||[]).forEach(function(B){ flat.push({g:g,B:B}); }); }); return flat; }
+function pkSetSave(){
+  if(!poGuard()) return;
+  var D=pkSetDraft(); if(!D||D.locked) return;
+  var flat=pk3Flat(), x=pkSetBoatX(flat,D.bid); if(!x){ alert('Boat not found on this date.'); return; }
+  var used=pkSetUsed(_poDate, D.id), P={}; (x.B.people||[]).forEach(function(p){ P[pkSetKey(p)]=p; });
+  var tot=0; Object.keys(D.cnt).forEach(function(c){ tot+=(+D.cnt[c]||0); });
+  if(!tot){ alert('Enter how many tickets go in this set first.'); return; }
+  var by={}; D.picks.forEach(function(k){ var p=P[k]; if(p) by[p.cat]=(by[p.cat]||0)+1; });
+  var short=Object.keys(D.cnt).filter(function(c){ return (+D.cnt[c]||0)>(by[c]||0); });
+  if(short.length){ alert('Not enough people left on this boat for: '+short.map(function(c){ return c+(pkTkCat(c).code?('/'+pkTkCat(c).code):'')+' (need '+D.cnt[c]+', have '+(by[c]||0)+')'; }).join(', ')); return; }
+  var people=D.picks.map(function(k){ var p=P[k]; return {k:k, full:p.full||'', nat3:(p.nat3||p.nat2||''), cat:p.cat, bkId:p.bkId, vc:p.vc||'', ph:!!(p.ph&&!p.typed)}; });
+  var arr=pkSets(_poDate).slice(), now=new Date().toISOString(), by2=(typeof laBy==='function')?laBy():'';
+  var cnt={}; Object.keys(D.cnt).forEach(function(c){ if(+D.cnt[c]) cnt[c]=+D.cnt[c]; });
+  var name=D.name||pkSetNameDef(D.bid);
+  if(D.id){ arr=arr.map(function(S){ return S.id===D.id ? {id:S.id,name:name,bid:D.bid,rid:D.rid,cnt:cnt,people:people,by:S.by,at:S.at,editBy:by2,editAt:now,bought:false} : S; }); }
+  else { arr.push({id:'ts_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name:name, bid:D.bid, rid:D.rid, cnt:cnt, people:people, by:by2, at:now, bought:false}); }
+  pkSetsWrite(_poDate, arr); _pkSetD=null; renderPierPark();
+}
+function pkSetOpen(id){
+  var S=pkSetById(id); if(!S) return;
+  if(_pkSetBoats.indexOf(S.bid)<0) _pkSetBoats.push(S.bid);
+  _pkSetD={id:S.id,bid:S.bid,rid:S.rid,name:S.name||'',cnt:JSON.parse(JSON.stringify(S.cnt||{})),picks:(S.people||[]).map(function(q){ return q.k; }),skip:{},fresh:{},locked:!!S.bought};
+  _pkSetDate=_poDate; _pkSetMenu=false; renderPierPark();
+}
+function pkSetDel(id){
+  if(!poGuard()) return; var S=pkSetById(id); if(!S) return;
+  if(!confirm('Delete this set? ('+(S.people||[]).length+' tickets, id '+String(S.id).slice(-4).toUpperCase()+')')) return;   /* ASCII only · ชื่อชุดเป็นไทยได้ */
+  pkSetsWrite(_poDate, pkSets(_poDate).filter(function(x){ return x.id!==id; }));
+  if(_pkSetD&&_pkSetD.id===id) _pkSetD=null; renderPierPark();
+}
+function pkSetBought(id, on){
+  if(!poGuard()) return; var now=new Date().toISOString(), by=(typeof laBy==='function')?laBy():'';
+  pkSetsWrite(_poDate, pkSets(_poDate).map(function(S){ if(S.id!==id) return S; var T=JSON.parse(JSON.stringify(S)); T.bought=!!on; if(on){ T.boughtAt=now; T.boughtBy=by; } else { delete T.boughtAt; delete T.boughtBy; } return T; }));
+  if(_pkSetD&&_pkSetD.id===id) _pkSetD.locked=!!on; renderPierPark();
+}
+/* Excel · ชีทต่อชุด 3 คอลัมน์แบบเดียวกับชีทตั๋วอุทยาน + ชีทสรุปรหัส · which = id ของชุด | 'draft' | 'all' */
+function pkSetXls(which){
+  if(typeof XLSX==='undefined'){ alert('Excel writer (SheetJS) not loaded. Check the internet connection and refresh.'); return; }
+  var TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
+  var sets=[];
+  if(which==='draft'){ var D=pkSetDraft(); if(!D) return; var x=pkSetBoatX(pk3Flat(),D.bid); if(!x) return;
+    var P={}; (x.B.people||[]).forEach(function(p){ P[pkSetKey(p)]=p; });
+    sets.push({name:D.name||pkSetNameDef(D.bid), bid:D.bid, people:D.picks.map(function(k){ var p=P[k]||{}; return {full:p.full||'', nat3:(p.nat3||p.nat2||''), cat:p.cat}; })}); }
+  else if(which==='all') sets=pkSets(_poDate);
+  else { var S=pkSetById(which); if(S) sets=[S]; }
+  if(!sets.length){ alert('No set to export.'); return; }
+  var wb=XLSX.utils.book_new(), used={}, sum=[['ชุด','เรือ','ประเภท','Code','จำนวน']];
+  sets.forEach(function(S){
+    var rows=(S.people||[]).map(function(q){ var T=TYM[q.cat]||TY[0]; return [q.full||'', q.nat3||'', T.code||'']; });
+    var ws=XLSX.utils.aoa_to_sheet(rows.length?rows:[['','','']]); ws['!cols']=[{wch:34},{wch:10},{wch:13}];
+    var nm=String(S.name||S.bid).replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,28)||'set'; var t=nm, i2=2; while(used[t]){ t=nm.slice(0,26)+' '+(i2++); } used[t]=1;
+    XLSX.utils.book_append_sheet(wb, ws, t);
+    var by={}; (S.people||[]).forEach(function(q){ by[q.cat]=(by[q.cat]||0)+1; });
+    var bn=S.bid; try{ var b=getBoat(S.bid); if(b&&b.name) bn=b.name; }catch(_){}
+    Object.keys(by).forEach(function(c){ var T=TYM[c]||{}; sum.push([S.name||'', bn, T.n||c, T.code||'', by[c]]); });
+  });
+  var ws2=XLSX.utils.aoa_to_sheet(sum); ws2['!cols']=[{wch:24},{wch:14},{wch:30},{wch:12},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'สรุปรหัส');
+  var P=(typeof PO_PIERS!=='undefined')?PO_PIERS.filter(function(x){return x.k===_poPier;})[0]:null;
+  XLSX.writeFile(wb, 'park_sets_'+_poDate+'_'+((P&&P.k)||_poPier)+(sets.length===1?('_'+String(sets[0].name||'').replace(/[^\w฀-๿-]+/g,'_').slice(0,24)):'')+'.xlsx');
+}
+/* ── การ์ดซ้าย · ชิป + เลือกเรือ + ตาราง + รายชื่อ ── */
+function pk3Body(flat, TY, TYM, ro){
+  var e=poE, date=_poDate, D=pkSetDraft(), used=pkSetUsed(date, D?D.id:null), usedAll=pkSetUsed(date);
+  var chosen=_pkSetBoats.map(function(b){ return pkSetBoatX(flat,b); }).filter(Boolean);
+  _pkSetBoats=chosen.map(function(x){ return x.B.bid; });   /* ลำที่ไม่ออกวันนี้แล้วหลุดเอง */
+  var rest=flat.filter(function(x){ return _pkSetBoats.indexOf(x.B.bid)<0; });
+  var bn=function(B){ return e((B.boat&&B.boat.name)||B.bid); };
+  /* แถวเลือกเรือ */
+  var pick='<div class="pk3-bp"><span class="lb">เรือที่เลือก</span>'
+    +chosen.map(function(x){ return '<span class="pk3-bc" style="background:'+pk2BoatCol(x.B.bid)+'">'+bn(x.B)+'<small>'+pkSetAvail(x.B,usedAll).length+'</small>'
+        +'<button type="button" aria-label="เอาออก" onclick="pkSetBoatDel(\''+x.B.bid+'\')">&#10005;</button></span>'; }).join('')
+    +(rest.length?('<button type="button" class="pk3-add'+(_pkSetMenu?' on':'')+'" onclick="pkSetMenu()">+ เพิ่มเรือ &#9662;</button>'):'')
+    +'<span class="cs">'+(chosen.length?('ตารางขึ้นเฉพาะลำที่เลือก'+(rest.length?(' · อีก '+rest.length+' ลำยังไม่ได้เลือก'):'')):'ยังไม่ได้เลือกเรือ · กด "+ เพิ่มเรือ"')+'</span>'
+    +((_pkSetMenu&&rest.length)?('<div class="pk3-menu"><div class="h">เรือของวันนี้ที่ยังไม่ได้เลือก · เลข = ตั๋วที่ยังไม่เข้าชุด</div>'
+        +rest.map(function(x){ var rn=(x.g.route&&x.g.route.name)||x.g.rid, m=+x.B.missTot||0;
+          return '<button type="button" onclick="pkSetBoatAdd(\''+x.B.bid+'\')"><span class="bn" style="background:'+pk2BoatCol(x.B.bid)+'">'+bn(x.B)+'</span>'
+            +'<span class="rn">'+e(rn)+' · '+e(x.B.dep||'')+(m?(' <u>รอชื่อ '+m+'</u>'):'')+'</span><b>'+pkSetAvail(x.B,usedAll).length+'</b></button>'; }).join('')
+        +'<div class="f"><button type="button" onclick="pkSetBoatAll()">เลือกทุกลำ</button><button type="button" onclick="pkSetMenu()">ปิด</button></div></div>'):'')
+    +'</div>';
+  /* ตาราง */
+  var n0=function(v){ return v?String(v):'<span class="z">0</span>'; };
+  var GO=['ad_th','chd_th','ad_fr','chd_fr','foc_th','foc_fr'];
+  var cg='<colgroup><col>'+GO.map(function(){ return '<col class="c-n">'; }).join('')+'<col class="c-n"><col class="c-s">'
+    +TY.map(function(){ return '<col class="c-t">'; }).join('')+'<col class="c-s"><col class="c-d"><col class="c-d"></colgroup>';
+  var hdTy=TY.map(function(T,i){ return '<th class="n'+(i===0?' sep':'')+'" title="'+e(T.n)+' · '+e(T.code||'—')+'">'+e(T.s||T.n)+'</th>'; }).join('');
+  var head='<thead><tr class="g"><th class="rt" rowspan="2"><span class="rg"><span>เส้นทาง</span><span>ลำ</span><span>ออก</span></span></th>'
+    +'<th class="gh go sep" colspan="8">บนเรือ</th><th class="gh tk sep" colspan="'+(TY.length+1)+'">ชุดนี้ · กำหนดจำนวนตั๋ว</th>'
+    +'<th class="n" rowspan="2" title="อยู่ในชุดที่บันทึกแล้ว">ชุดอื่น<br>แล้ว</th><th class="n" rowspan="2" title="ยังไม่อยู่ในชุดไหน">เหลือ</th></tr>'
+    +'<tr class="s"><th class="n sep">ผญ ไทย</th><th class="n">เด็กไทย</th><th class="n">ผญ ตช</th><th class="n">เด็ก ตช</th><th class="n">FOC ไทย</th><th class="n">FOC ตช</th><th class="n">ต่ำกว่า 3</th><th class="n sum">รวม</th>'
+    +hdTy+'<th class="n sum">รวม</th></tr></thead>';
+  var S8={}, St=0, Su=0, Sl=0, Sd=0;
+  var rows=chosen.map(function(x){
+    var B=x.B, p8=B.pax8||{}, rn=(x.g.route&&x.g.route.name)||x.g.rid, on=!!(D&&D.bid===B.bid);
+    var inf=(+p8.inf_th||0)+(+p8.inf_fr||0);
+    GO.forEach(function(k){ S8[k]=(S8[k]||0)+(+p8[k]||0); }); S8.inf=(S8.inf||0)+inf; St+=(+B.totPc||0);
+    var nU=(B.people||[]).filter(function(p){ return !p.over && usedAll[pkSetKey(p)]; }).length, nL=pkSetAvail(B,usedAll).length; Su+=nU; Sl+=nL;
+    var av={}; pkSetAvail(B,used).forEach(function(p){ av[p.cat]=(av[p.cat]||0)+1; });
+    var tk='', dT=0;
+    if(on){ TY.forEach(function(T,i){ var v=+D.cnt[T.k]||0, mx=av[T.k]||0, over=v>mx; dT+=v;
+        tk+='<td class="n'+(i===0?' sep':'')+' pk3-c">'+(ro||D.locked
+          ?('<b class="'+(v?'':'z')+'">'+v+'</b>')
+          :('<input class="pk3-in'+(over?' over':'')+(v?' has':'')+'" data-cat="'+T.k+'" type="number" min="0" inputmode="numeric" value="'+v+'" '
+            +'title="'+e(T.n)+' · เหลือ '+mx+'" onclick="event.stopPropagation()" onchange="pkSetCnt(\''+T.k+'\',this.value)">'))
+          +'<small>/'+mx+'</small></td>'; });
+      Sd+=dT; tk+='<td class="n sum big">'+dT+'</td>'; }
+    else tk='<td class="pk3-hint" colspan="'+(TY.length+1)+'">กดแถวเพื่อกำหนด'+((+B.missTot||0)?(' <u>รอชื่อ '+B.missTot+'</u>'):'')+'</td>';
+    return '<tr class="bt'+(on?' sel':'')+'" style="--rc:'+((x.g.route&&x.g.route.color)||'#94A3B8')+'" onclick="pkSetTab(\''+B.bid+'\',\''+x.g.rid+'\')" title="กดเพื่อกำหนดจำนวนตั๋วของลำนี้">'
+      +'<td class="rt"><span class="rg"><span class="rn"><i class="d"></i>'+e(rn)+'</span><span class="bn" style="background:'+pk2BoatCol(B.bid)+'">'+bn(B)+'</span><span class="tm">'+e(B.dep||'')+'</span></span></td>'
+      +GO.map(function(k,i){ return '<td class="n'+(i===0?' sep':'')+'">'+n0(+p8[k]||0)+'</td>'; }).join('')+'<td class="n">'+n0(inf)+'</td><td class="n sum">'+(+B.totPc||0)+'</td>'
+      +tk+'<td class="n">'+n0(nU)+'</td><td class="n'+(nL?' left':'')+'">'+n0(nL)+'</td></tr>';
+  }).join('');
+  var WD=['อา','จ','อ','พ','พฤ','ศ','ส'], dd=new Date(date+'T12:00:00'), nS=pkSets(date).length;
+  var top='<tr class="dy"><td class="rt"><b>'+dd.getDate()+'</b> <i>'+WD[dd.getDay()]+'</i> · เลือก '+chosen.length+' จาก '+flat.length+' ลำ'
+    +(nS?(' <u class="ok">บันทึกแล้ว '+nS+' ชุด</u>'):'')+'</td>'
+    +GO.map(function(k,i){ return '<td class="n'+(i===0?' sep':'')+'">'+n0(S8[k]||0)+'</td>'; }).join('')+'<td class="n">'+n0(S8.inf||0)+'</td><td class="n sum">'+St+'</td>'
+    +'<td class="n sep" colspan="'+TY.length+'"></td><td class="n sum">'+(Sd||'')+'</td><td class="n">'+n0(Su)+'</td><td class="n left">'+n0(Sl)+'</td></tr>';
+  var tbl='<div class="pk2-ovw pk2-dmx pk3-mx"><table class="pk2-ov">'+cg+head+'<tbody>'+top+rows
+    +(chosen.length?'':('<tr><td class="pk3-hint" colspan="'+(TY.length+13)+'">ยังไม่มีเรือในตาราง · กด "+ เพิ่มเรือ" ด้านบน แล้วกดแถวเรือเพื่อกำหนดจำนวน</td></tr>'))
+    +'</tbody></table></div>';
+  /* รายชื่อที่สุ่ม */
+  var list='';
+  if(D){ var x=pkSetBoatX(flat,D.bid);
+    if(x){ var B=x.B, P={}; (B.people||[]).forEach(function(p){ P[pkSetKey(p)]=p; });
+      pkSetFill(D, B, used);
+      var rn=(x.g.route&&x.g.route.name)||x.g.rid, tot=0; Object.keys(D.cnt).forEach(function(c){ tot+=(+D.cnt[c]||0); });
+      var want=D.cnt, by={}; D.picks.forEach(function(k){ var p=P[k]; if(p) by[p.cat]=(by[p.cat]||0)+1; });
+      var short=Object.keys(want).filter(function(c){ return (+want[c]||0)>(by[c]||0); });
+      var blank=D.picks.filter(function(k){ var p=P[k]; return p&&p.ph&&!p.typed; }).length;
+      var gone=D.picks.filter(function(k){ return !P[k]; });
+      var ord=D.picks.slice().sort(function(a,b){ var pa=P[a]||{}, pb=P[b]||{}, ia=99, ib=99;
+        TY.forEach(function(T,i){ if(T.k===pa.cat) ia=i; if(T.k===pb.cat) ib=i; }); return ia-ib; });
+      var no=0;
+      var trs=ord.map(function(k){ var p=P[k], T=p?(TYM[p.cat]||TY[0]):null; no++;
+        if(!p) return '<tr class="pk3-gone"><td class="n"><input type="checkbox" checked disabled></td><td class="n">'+no+'</td><td class="nmc"><span class="fx">(ชื่อนี้ไม่อยู่ในใบจองแล้ว)</span></td><td colspan="6" class="nt"><span class="dpb">หายจากใบจอง · ยกเลิก/ย้ายลำ · ติ๊กออกแล้วบันทึกใหม่</span></td></tr>';
+        var th=(String(p.nat2||'').toUpperCase()==='TH'), cls=[]; if(th) cls.push('pk-th'); if(D.fresh[k]) cls.push('pk3-new'); if(p.ph&&!p.typed) cls.push('pk-nn');
+        return '<tr class="'+cls.join(' ')+'"><td class="n"><input type="checkbox" checked'+(ro||D.locked?' disabled':'')+' aria-label="อยู่ในชุด" onchange="pkSetTog(\''+e(k)+'\')"></td>'
+          +'<td class="n">'+no+'</td><td class="nmc"><span class="'+(p.ph&&!p.typed?'nn':'fx')+'">'+e(p.full||'ยังไม่มีรายชื่อ')+'</span></td>'
+          +'<td class="m ctr nat'+(th?' th':'')+'">'+e(p.nat3||p.nat2||'')+'</td><td class="id"></td>'
+          +'<td class="g'+(T.grp==='ad'?' on':'')+'">'+(T.grp==='ad'?'1':'0')+'</td><td class="g'+(T.grp==='chd'?' on':'')+'">'+(T.grp==='chd'?'1':'0')+'</td><td class="g'+(T.grp==='inf'?' on':'')+'">'+(T.grp==='inf'?'1':'0')+'</td>'
+          +'<td class="nt">'+(p.vc?('<span class="vc">ใบ '+e(p.vc)+'</span>'):'')+(D.fresh[k]?'<span class="tpb">ใหม่</span>':'')+(p.ph&&!p.typed?'<span class="nnb">รอชื่อ</span>':'')+(p.fixed?'<span class="fxb">แก้ประเภท</span>':'')+'</td>'
+          +'<td class="cd"><span class="ro">'+e(T.code||'—')+'</span></td></tr>'; }).join('');
+      var skipped=Object.keys(D.skip).filter(function(k){ return P[k]; }).map(function(k){ var p=P[k], T=TYM[p.cat]||TY[0];
+        return '<tr class="pk3-skip"><td class="n"><input type="checkbox"'+(ro||D.locked?' disabled':'')+' aria-label="เอากลับเข้าชุด" onchange="pkSetTog(\''+e(k)+'\')"></td><td class="n">—</td><td class="nmc"><span class="fx">'+e(p.full||'ยังไม่มีรายชื่อ')+'</span></td>'
+          +'<td class="m ctr nat">'+e(p.nat3||p.nat2||'')+'</td><td class="id"></td><td class="g">'+(T.grp==='ad'?'1':'0')+'</td><td class="g">'+(T.grp==='chd'?'1':'0')+'</td><td class="g">'+(T.grp==='inf'?'1':'0')+'</td>'
+          +'<td class="nt"><span class="dpb">ติ๊กออก · ติ๊กกลับได้</span></td><td class="cd"><span class="ro">'+e(T.code||'—')+'</span></td></tr>'; }).join('');
+      var st = D.locked ? '<span class="st ok">ซื้อแล้ว · ล็อก</span>'
+        : gone.length ? '<span class="st bad">มี '+gone.length+' ชื่อที่หายจากใบจอง</span>'
+        : short.length ? '<span class="st bad">คนไม่พอ · '+short.map(function(c){ return e(pkTkCat(c).s||c)+' ขาด '+((+want[c]||0)-(by[c]||0)); }).join(' · ')+'</span>'
+        : tot ? ('<span class="st ok">ครบ '+D.picks.length+'/'+tot+(blank?(' · รอชื่อ '+blank):'')+' · ไม่ซ้ำกับชุดอื่น</span>') : '<span class="st">ใส่จำนวนในตารางก่อน</span>';
+      list='<div class="pk2-bh pk3-bh">'
+        +'<span class="bn">'+bn(B)+'</span><span class="mt">'+e(rn)+(B.dep?(' · ออก '+e(B.dep)):'')+' · '+(+B.totPc||0)+' คน · <b>ชุดนี้ '+tot+' คน</b></span>'
+        +'<label class="pk3-nm">ชื่อชุด<input type="text" value="'+e(D.name)+'" placeholder="'+e(pkSetNameDef(D.bid))+'"'+(ro||D.locked?' disabled':'')+' onchange="pkSetName(this.value)"></label>'
+        +'<span class="sp"></span>'
+        +(D.id?('<span class="mt">#'+e(D.id.slice(-4).toUpperCase())+(D.locked?'':' · กำลังแก้')+'</span>'):'')
+        +((ro||D.locked)?'':('<button type="button" class="ol" onclick="pkSetShuffle()" title="ทิ้งรายชื่อชุดนี้แล้วสุ่มใหม่ทั้งหมด">&#8635; สุ่มรายชื่อใหม่</button>'))
+        +'<button type="button" class="ol" onclick="pkSetXls(\''+(D.id||'draft')+'\')">&#8681; Excel ชุดนี้</button>'
+        +((ro||D.locked)?'':('<button type="button" class="pri" onclick="pkSetSave()">'+(D.id?'บันทึกการแก้':'บันทึกเป็น 1 ชุด')+'</button>'))
+        +(D.id&&!ro?(D.locked?('<button type="button" class="ol" onclick="pkSetBought(\''+e(D.id)+'\',0)">ปลดล็อก</button>'):('<button type="button" class="ol ok" onclick="pkSetBought(\''+e(D.id)+'\',1)" title="ซื้อตั๋วชุดนี้ที่ด่านแล้ว · ล็อกไม่ให้แก้">&#10003; ซื้อแล้ว</button>')):'')
+        +'</div>'
+        +'<div class="pk3-info"><span>สุ่มจากคนบน '+bn(B)+' ที่ยังไม่อยู่ในชุดไหน · ตรงประเภทตามที่กำหนด · คนมีชื่อแล้วมาก่อน</span>'+st
+        +((ro||D.locked)?'':'<span class="qk">ทางลัด: <button type="button" onclick="pkSetQuick(\'all\')">ทั้งลำที่เหลือ</button><button type="button" onclick="pkSetQuick(\'half\')">ครึ่งลำ</button><button type="button" onclick="pkSetQuick(\'fr\')">เฉพาะต่างชาติ</button><button type="button" onclick="pkSetQuick(\'named\')">เฉพาะที่มีชื่อแล้ว</button></span>')
+        +'</div>'
+        +'<div class="pk2-shw"><div class="pk-sheet pk3-sheet"><table><colgroup><col class="c-ck"><col class="c-no"><col class="c-nm"><col class="c-na"><col class="c-id"><col class="c-g"><col class="c-g"><col class="c-g"><col class="c-nt"><col class="c-cd"></colgroup>'
+        +'<thead><tr><th class="n"></th><th class="n">ที่</th><th>ชื่อ - นามสกุล</th><th>สัญชาติ</th><th>บัตรประชาชน / พาส</th><th class="g">ผู้ใหญ่</th><th class="g">เด็ก</th><th class="g">เด็กเล็ก</th><th>หมายเหตุ</th><th>Code</th></tr></thead>'
+        +'<tbody>'+(trs||('<tr><td colspan="10" class="pk-e">'+(tot?'ไม่มีคนที่ตรงประเภทเหลือบนลำนี้':'ใส่จำนวนตั๋วในตารางด้านบน แล้วรายชื่อจะขึ้นที่นี่')+'</td></tr>'))+skipped+'</tbody></table></div></div>';
+    }
+  } else if(chosen.length){
+    list='<div class="pk3-info"><span>กดแถวเรือในตารางเพื่อเริ่มชุดใหม่ · หรือเปิดชุดที่บันทึกแล้วจากการ์ดขวา</span></div>';
+  }
+  return '<div class="pk2-fcs">'+pk2FamChips(flat,'sets')+'<span class="cs">Ticket Management · '+e(pc2D(date))+'</span></div>'+pick+tbl+list;
+}
+/* ── การ์ดขวา · ชุดที่บันทึกแล้ว · ตั๋วตามประเภทในชุด · กติกา ── */
+function pk3Side(flat, TY, TYM, ro){
+  var e=poE, date=_poDate, sets=pkSets(date), D=pkSetDraft();
+  var bn=function(bid){ var x=pkSetBoatX(flat,bid); return e((x&&x.B.boat&&x.B.boat.name)||bid); };
+  var live={}; flat.forEach(function(x){ (x.B.people||[]).forEach(function(p){ if(!p.over) live[pkSetKey(p)]=1; }); });
+  var rows=sets.map(function(S){ var n=(S.people||[]).length, gone=(S.people||[]).filter(function(q){ return !live[q.k]; }).length, on=!!(D&&D.id===S.id);
+    var by={}; (S.people||[]).forEach(function(q){ by[q.cat]=(by[q.cat]||0)+1; });
+    var what=Object.keys(by).map(function(c){ return e((TYM[c]||{}).s||c)+' '+by[c]; }).join(' · ');
+    return '<button type="button" class="pk3-set'+(on?' on':'')+'" onclick="pkSetOpen(\''+e(S.id)+'\')">'
+      +'<span class="bn" style="background:'+pk2BoatCol(S.bid)+'">'+bn(S.bid)+'</span>'
+      +'<span class="t"><b>'+e(S.name||'')+'</b><small>'+what+(S.by?(' · '+e(S.by)):'')+'</small></span>'
+      +'<span class="v"><b>'+n+'</b><small class="'+(gone?'bad':(S.bought?'ok':'rd'))+'">'+(gone?('หาย '+gone):(S.bought?'ซื้อแล้ว':'พร้อมซื้อ'))+'</small></span></button>'; }).join('');
+  var card1='<div class="pc2-card pc2-pend pk3-sets"><div class="ch"><b>ชุดที่บันทึกแล้ว · '+sets.length+'</b><span>'+e(pc2D(date))+'</span></div>'
+    +(rows||'<div class="pc2-mut">ยังไม่มีชุด · กดแถวเรือในตาราง ใส่จำนวน แล้วบันทึก</div>')
+    +'<div class="f">'+(ro?'':'<button type="button" class="ol" onclick="pkSetNew()">+ ชุดใหม่</button>')+(sets.length?'<button type="button" class="ol" onclick="pkSetXls(\'all\')">Excel ทุกชุด</button>':'')
+    +((D&&D.id&&!ro)?('<button type="button" class="ol dl" onclick="pkSetDel(\''+e(D.id)+'\')">ลบชุดที่เปิดอยู่</button>'):'')+'</div></div>';
+  var inS={}, all={}, tot=0, totAll=0; sets.forEach(function(S){ (S.people||[]).forEach(function(q){ inS[q.cat]=(inS[q.cat]||0)+1; tot++; }); });
+  flat.forEach(function(x){ (x.B.people||[]).forEach(function(p){ if(p.over) return; all[p.cat]=(all[p.cat]||0)+1; totAll++; }); });
+  var ty=TY.filter(function(T){ return all[T.k]||inS[T.k]; }).map(function(T){
+    return '<div class="r"><span><i style="background:'+(T.c||'#94A3B8')+'"></i>'+e(T.n)+' <em>'+e(T.code||'ยังไม่ใส่รหัส')+'</em></span><b class="'+((inS[T.k]||0)?'':'z')+'">'+(inS[T.k]||0)+'<small>/'+(all[T.k]||0)+'</small></b></div>'; }).join('');
+  var card2='<div class="pc2-card pk2-side"><div class="ch"><b>ตั๋วในชุดแล้ว · ตามประเภท</b></div>'
+    +(ty?('<div class="pk2-tyd">'+ty+'<div class="r t"><span>รวมในชุด</span><b>'+tot+'<small>/'+totAll+'</small></b></div></div>'):'<div class="pc2-empty">ยังไม่มีตั๋ว</div>')+'</div>';
+  var card3='<div class="pc2-card pk3-rule"><b>กติกาของชุด</b>หนึ่งคนอยู่ได้ชุดเดียว · สุ่มเฉพาะคนที่ยังไม่อยู่ในชุดและตรงประเภท · ใส่เกินที่เหลือจะขึ้นแดง บันทึกไม่ได้ · ชุดที่กด "ซื้อแล้ว" ล็อก · ไม่กระทบใบจองและชีทตั๋วอุทยาน</div>';
+  return card1+card2+card3;
+}
+function pk3CSS(S){
+  var N='#0B1E5B', M='#6B7693';
+  return [
+  S+' .pk3-tab{margin-left:auto}',
+  S+' .pk3-tab.on{background:'+N+';border-color:'+N+'}',
+  S+' .pk3-tab svg{margin-right:-2px;color:#19B5E6}',
+  S+' .pk3-bp{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 16px 12px}',
+  S+' .pk3-bp .lb{font-size:11.5px;font-weight:700;color:'+M+'}',
+  S+' .pk3-bp .cs{font-size:11.5px;color:'+M+'}',
+  S+' .pk3-bc{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 5px 0 10px;border-radius:8px;color:#fff;font-weight:800;font-size:12px}',
+  S+' .pk3-bc small{font-family:"DM Mono",monospace;font-weight:600;opacity:.8}',
+  S+' .pk3-bc button{width:20px;height:20px;border-radius:10px;border:none;background:rgba(255,255,255,.22);color:#fff;cursor:pointer;font-size:10px;line-height:20px;padding:0}',
+  S+' .pk3-bc button:hover{background:rgba(255,255,255,.4)}',
+  S+' .pk3-add{height:30px;padding:0 12px;border-radius:8px;border:1px dashed #9AA3C7;background:#fff;color:#0C5E8E;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer}',
+  S+' .pk3-add.on,'+S+' .pk3-add:hover{background:#EEF4FB;border-style:solid}',
+  S+' .pk3-menu{position:absolute;left:16px;top:38px;z-index:30;width:330px;max-width:calc(100% - 32px);background:#fff;border:1px solid #D9DEE9;border-radius:10px;box-shadow:0 10px 30px rgba(15,27,61,.16);padding:6px;display:flex;flex-direction:column}',
+  S+' .pk3-menu .h{font-size:10.5px;font-weight:700;color:'+M+';padding:6px 8px 4px}',
+  S+' .pk3-menu>button{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;border:none;background:#fff;border-radius:7px;cursor:pointer;text-align:left;font-family:inherit;font-size:12.5px;color:#1A2A44}',
+  S+' .pk3-menu>button:hover{background:#F3FAFD}',
+  S+' .pk3-menu .bn{display:inline-block;padding:2px 8px;border-radius:6px;color:#fff;font-weight:800;font-size:11px;min-width:76px;text-align:center}',
+  S+' .pk3-menu .rn{flex:1;min-width:0;color:'+M+';font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+  S+' .pk3-menu .rn u{text-decoration:none;color:#7A4300;font-weight:700}',
+  S+' .pk3-menu>button b{font-family:"DM Mono",monospace}',
+  S+' .pk3-menu .f{border-top:1px solid #EEF0F4;margin-top:4px;padding:6px 6px 2px;display:flex;gap:6px}',
+  S+' .pk3-menu .f button{height:28px;padding:0 10px;border-radius:7px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:11.5px;font-weight:700;color:#1A2A44;cursor:pointer}',
+  S+' .pk3-mx .pk2-ov th.gh.tk{background:#E6F1FB;color:#0C447C}',
+  S+' .pk3-mx .pk2-ov td.pk3-c{padding:3px 4px;white-space:nowrap}',
+  S+' .pk3-mx .pk2-ov td.pk3-c small{font-family:"DM Mono",monospace;font-size:10px;color:'+M+';margin-left:2px}',
+  S+' .pk3-mx .pk2-ov td.pk3-c b.z{color:#CBD5E1;font-weight:500}',
+  S+' .pk3-mx{overflow-x:auto}',
+  S+' .pk3-mx .pk2-ov{min-width:1260px}',
+  S+' .pk3-mx .pk2-ov col.c-n{width:58px} '+S+' .pk3-mx .pk2-ov col.c-t{width:70px} '+S+' .pk3-mx .pk2-ov col.c-s{width:52px}',
+  S+' .pk3-mx .pk2-ov thead tr.s th.n{font-size:10px;padding-left:2px;padding-right:2px;white-space:nowrap}',
+  S+' .pk3-in{width:40px;height:30px;border:1px solid #D9DEE9;border-radius:7px;text-align:right;padding:0 5px;font-family:"DM Mono",monospace;font-weight:700;font-size:13px;color:#B9BFD0;background:#fff;-moz-appearance:textfield}',
+  S+' .pk3-in::-webkit-outer-spin-button,'+S+' .pk3-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
+  S+' .pk3-in.has{color:'+N+';border-color:#19B5E6;border-width:2px}',
+  S+' .pk3-in.over{color:#A32D2D;border-color:#A32D2D;background:#FBEDEB}',
+  S+' .pk3-in:focus{outline:2px solid #19B5E6;outline-offset:1px}',
+  S+' .pk3-mx .pk2-ov td.pk3-hint{text-align:center;font-size:11px;color:#B9BFD0;cursor:pointer}',
+  S+' .pk3-mx .pk2-ov td.pk3-hint u{text-decoration:none;color:#7A4300;background:#FBEBD3;border-radius:6px;padding:1px 6px;font-weight:700;font-size:10px}',
+  S+' .pk3-mx .pk2-ov td.n.left{color:#9A5B00;font-weight:700}',
+  S+' .pk3-mx .pk2-ov td.n.sum.big{font-size:15px;font-weight:800;color:#0C447C}',
+  S+' .pk3-mx .pk2-ov tr.dy td.rt u.ok{text-decoration:none;font-size:11px;font-weight:700;color:#0C447C;background:#E6F1FB;border-radius:8px;padding:1px 7px}',
+  S+' .pk3-bh{flex-wrap:wrap}',
+  S+' .pk3-nm{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:'+M+'}',
+  S+' .pk3-nm input{height:32px;width:200px;border:1px solid #D9DEE9;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13px;font-weight:700;color:'+N+';background:#fff}',
+  S+' .pk3-bh .ol.ok{color:#0B6B47;border-color:#BFE3D2}',
+  S+' .pk3-info{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:0 16px 10px;font-size:11.5px;color:'+M+'}',
+  S+' .pk3-info .st{font-weight:700;color:'+M+'}',
+  S+' .pk3-info .st.ok{color:#0B6B47}',
+  S+' .pk3-info .st.bad{color:#A32D2D}',
+  S+' .pk3-info .qk button{height:26px;padding:0 9px;margin-left:4px;border-radius:7px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:11px;font-weight:700;color:#1A2A44;cursor:pointer}',
+  S+' .pk3-info .qk button:hover{background:#F3FAFD}',
+  S+' .pk3-sheet col.c-ck{width:34px}',
+  S+' .pk3-sheet td.nt .vc{font-size:10.5px;color:'+M+';margin-right:6px}',
+  S+' .pk3-sheet tr.pk3-new td{background:#EAF6EF}',
+  S+' .pk3-sheet tr.pk3-skip td{color:#8A91A8;background:#FAFBFD}',
+  S+' .pk3-sheet tr.pk3-skip td.nmc .fx{text-decoration:line-through;color:#8A91A8}',
+  S+' .pk3-sheet tr.pk3-gone td{background:#FBEDEB}',
+  S+' .pk3-sheet input[type=checkbox]{width:15px;height:15px;accent-color:'+N+';cursor:pointer}',
+  S+' .pk3-sets .pk3-set{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:none;border-bottom:1px solid #EEF0F4;background:#fff;cursor:pointer;text-align:left;font-family:inherit}',
+  S+' .pk3-sets .pk3-set:hover{background:#F6F8FB}',
+  S+' .pk3-sets .pk3-set.on{background:#F3FAFD;box-shadow:inset 3px 0 0 #19B5E6}',
+  S+' .pk3-sets .pk3-set .bn{display:inline-block;padding:3px 9px;border-radius:7px;color:#fff;font-weight:800;font-size:11px;min-width:64px;text-align:center}',
+  S+' .pk3-sets .pk3-set .t{flex:1;min-width:0;line-height:1.2}',
+  S+' .pk3-sets .pk3-set .t b{display:block;font-size:12.5px;color:#1A2A44}',
+  S+' .pk3-sets .pk3-set .t small{display:block;font-size:10.5px;color:'+M+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+  S+' .pk3-sets .pk3-set .v{text-align:right;line-height:1.2}',
+  S+' .pk3-sets .pk3-set .v b{display:block;font-family:"DM Mono",monospace;font-size:15px;color:'+N+'}',
+  S+' .pk3-sets .pk3-set .v small{font-size:10px;font-weight:700}',
+  S+' .pk3-sets .pk3-set .v small.ok{color:#0B6B47} '+S+' .pk3-sets .pk3-set .v small.rd{color:#0C5E8E} '+S+' .pk3-sets .pk3-set .v small.bad{color:#A32D2D}',
+  S+' .pk3-sets .f{display:flex;gap:6px;padding:10px 14px;border-top:1px solid #EEF0F4}',
+  S+' .pk3-sets .f .ol{height:30px;padding:0 10px;border-radius:8px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:12px;font-weight:700;color:#1A2A44;cursor:pointer}',
+  S+' .pk3-sets .f .ol.dl{color:#A32D2D;margin-left:auto}',
+  S+' .pk2-side .pk2-tyd b small{font-weight:500;color:'+M+';margin-left:2px}',
+  S+' .pk2-side .pk2-tyd b.z{color:#CBD5E1}',
+  S+' .pk3-rule{background:#FFF8E8;border:1px solid #FFE2A8;padding:12px 14px;font-size:11.5px;color:#6B5312;line-height:1.65}',
+  S+' .pk3-rule b{display:block;color:#7A4A00;margin-bottom:4px}'
+  ].join('\n');
 }
 
 function pkSetDate(v){ if(v) _poDate=v; renderPierPark(); }
