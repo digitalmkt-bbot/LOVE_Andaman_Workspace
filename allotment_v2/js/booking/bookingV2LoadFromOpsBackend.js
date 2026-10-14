@@ -17,8 +17,11 @@ function _opsBookingMerge(mapped){
   SB_BOOKINGS.forEach(function(b,i){ at[b.opsId||b.id]=i; });
   mapped.forEach(function(b){
     var k=b.opsId||b.id, i=at[k];
-    if(i===undefined){ at[k]=SB_BOOKINGS.length; SB_BOOKINGS.push(b); }
-    else Object.assign(SB_BOOKINGS[i],b);
+    if(i===undefined){ at[k]=SB_BOOKINGS.length; SB_BOOKINGS.push(b); return; }
+    // §vanKeep · the booking API has no van fields; keep the ones the van-groups load put on
+    var V=window.laOps&&window.laOps.vans, kept=V&&V.take?V.take(SB_BOOKINGS[i]):null;
+    Object.assign(SB_BOOKINGS[i],b);
+    if(kept) V.put(SB_BOOKINGS[i],kept);
   });
 }
 function bookingV2OpsResetCache(){

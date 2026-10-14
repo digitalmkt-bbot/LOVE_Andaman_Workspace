@@ -364,7 +364,11 @@
     var now = Date.now();
     if(dayAt[date] && now - dayAt[date] < 5000) return dayLoading[date];
     dayAt[date] = now;
-    var groups = (O.vans && O.vans.loadDay) ? O.vans.loadDay(date) : Promise.resolve(null);
+    // §vanKeep · groups land only on bookings already in the browser, so the day's bookings come first
+    var books = (typeof bookingV2OpsEnsureDay === 'function') ? bookingV2OpsEnsureDay(date) : null;
+    var groups = Promise.resolve(books).catch(function(){}).then(function(){
+      return (O.vans && O.vans.loadDay) ? O.vans.loadDay(date) : null;
+    });
     dayLoading[date] = Promise.all([
       loadVans(date).catch(function(e){ console.warn('[ops] vans did not load · ' + (e && e.message)); }),
       loadNames().catch(function(e){ console.warn('[ops] Thai pickup names did not load · ' + (e && e.message)); }),

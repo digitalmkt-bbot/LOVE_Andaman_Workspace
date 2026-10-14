@@ -388,8 +388,10 @@
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
+    if(vans) O.vans.put(bk, vans);
     // §opsApprovals · the local copy stays only where the server has no entry of that kind
     approvalsInto(bk, ob, { approval: keep.approval, focApproval: keep.focApproval });
     focPlaceholder(bk);
