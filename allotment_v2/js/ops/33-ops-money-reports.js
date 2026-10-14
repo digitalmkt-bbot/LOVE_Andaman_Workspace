@@ -126,13 +126,16 @@
   }
   function travelHtml(d){
     d=d||{}; var m=d.money||{}, c=d.cot||{}, ns=d.noshow||{};
-    var rows=(d.collect_rows||[]).map(function(x){ return row([{value:x.voucher_ref||x.booking_id},{value:x.route_id},{value:money(x.target),right:true},{value:money(x.paid),right:true},{value:money(x.due),right:true},{value:x.not_counted||'—'}]); }).join('');
+    // §tsRows · scope chips etc. come from laOps.travelRows (57), which narrows the money rows to the chosen selection
+    var TR=window.laOps&&window.laOps.travelRows, V=(TR&&TR.view)?TR.view(d):null;
+    var rows=(V?V.rows:(d.collect_rows||[])).map(function(x){ return row([{value:x.voucher_ref||x.booking_id},{value:x.route_id},{value:money(x.target),right:true},{value:money(x.paid),right:true},{value:money(x.due),right:true},{value:x.not_counted||'—'}]); }).join('');
     // §tsEmpty (2026-10-14) · an all-zero grid looks broken; say outright that the SERVER has
     // no bookings for the day (its honest answer), so staff don't read zeros as a loading bug.
     var emptyNote=(!n(d.bookings) && !(d.collect_rows||[]).length)
       ? '<div data-ops-ts-empty="1" style="margin-bottom:16px;padding:12px 15px;background:#fdf8ee;border:0.5px solid #e8dcc0;border-radius:12px;font-size:12px;color:#8a6d1a">operation-backend reports no bookings for '+esc(d.date)+'. The snapshot below is genuinely empty, not still loading.</div>' : '';
     return reportNav('Travel Summary',d.date,'tsDateShift(-1)','tsDateShift(1)')
       +emptyNote
+      +(V?V.html:'')
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+card('Bookings',String(n(d.bookings)))+card('Booked',String(n(d.booked)))+card('Travelled',String(n(d.travelled)),'#0F6E56')+card('No-show / CXL',String(n(d.no_show))+' / '+String(n(d.cxl)),'#A05A1A')+card('Received',money(m.received),'#0F6E56')+card('To collect',money(m.to_collect),'#A05A1A')+'</div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Money by method</b><div style="margin-top:9px;font-size:12px">Cash '+money(m.cash)+' · Transfer '+money(m.transfer)+' · Card '+money(m.card)+' · Fees '+money(m.fees)+'</div><div style="margin-top:7px;font-size:12px">Sales '+money(m.sales)+' · Sales due '+money(m.sales_due)+' · Commission '+money(m.commission)+'</div></div><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>COT / no-show</b><div style="margin-top:9px;font-size:12px">COT total '+money(c.total)+' · Payout '+money(c.payout)+' · Deduct '+money(c.deduct)+'</div><div style="margin-top:7px;font-size:12px">No-show cases '+String(n(ns.cases))+' · Pending '+String(n(ns.pending))+' · Charged '+money(ns.charged)+'</div></div></div>'
       +table([{label:'Booking'},{label:'Route'},{label:'Target',right:true},{label:'Paid',right:true},{label:'Due',right:true},{label:'Note'}],rows,'No money rows');
@@ -140,7 +143,10 @@
   function loadTravel(date){
     date=dateOf(date); if(reports.travel[date]) return Promise.resolve(reports.travel[date]);
     var key='travel:'+date; if(reports.loading[key]) return reports.loading[key];
-    return setLoading(key,O.get('/v1/reports/travel-summary',{date:date}).then(function(d){ if(!d || d.date!==date) throw new Error('invalid travel summary response'); reports.travel[date]=d; return d; }));
+    var TR=window.laOps&&window.laOps.travelRows;
+    // The roster is an extra read for the scope chips; the summary still shows without it.
+    var roster=TR?TR.load(date).catch(function(e){ reports.errors['Travel Summary scope']=e; return null; }):Promise.resolve(null);
+    return setLoading(key,Promise.all([O.get('/v1/reports/travel-summary',{date:date}),roster]).then(function(x){ var d=x[0]; if(!d || d.date!==date) throw new Error('invalid travel summary response'); d._roster=x[1]; reports.travel[date]=d; return d; }));
   }
 
   function dailyHtml(d){
@@ -148,10 +154,13 @@
     var routes=(d.by_route||[]).map(function(x){ return row([{value:x.name||x.route_id},{value:x.bookings},{value:x.pax},{value:money(x.revenue),right:true},{value:money(x.per_pax),right:true}]); }).join('');
     var agents=(d.by_agent||[]).map(function(x){ return row([{value:x.name||x.key},{value:x.bookings},{value:x.pax},{value:money(x.revenue),right:true},{value:money(x.due),right:true}]); }).join('');
     return reportNav('Daily Report',d.date,'drDateShift(-1)','drDateShift(1)')
+      +'<div id="dr-trend-host" data-ops-dr-trend="1"></div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+card('Bookings',String(n(d.bookings)))+card('Pax',String(n(p.total)))+card('Revenue',money(d.revenue),'#0F6E56')+card('Per paying pax',money(d.revenue_per_pax))+card('Due',money(d.due),'#A05A1A')+card('Got',money(d.got),'#0F6E56')+'</div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Passenger mix</b><div style="margin-top:9px;font-size:12px">Adult '+String(n(p.ad))+' · Child '+String(n(p.chd))+' · Infant '+String(n(p.inf))+' · FOC '+String(n(p.foc))+'</div></div><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Van cost</b><div style="margin-top:9px;font-size:12px">'+money(v.total)+' · '+String(n(v.vans))+' vans'+(v.estimated?' · estimated':'')+'</div><div style="margin-top:8px;font-size:11px;color:var(--fd-ink-soft)">Settings: '+money(s.van_cost)+' / van · quota '+String(n(s.van_quota))+' · target '+money(s.target_per_pax)+'/pax</div><div style="margin-top:10px;display:flex;gap:6px;align-items:center"><input id="ops-dr-van-cost" type="number" value="'+esc(s.van_cost)+'" style="width:90px"><button onclick="drCfgSet(\'vanCost\',document.getElementById(\'ops-dr-van-cost\').value)">Save van cost</button></div></div></div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:360px">'+table([{label:'Route'},{label:'Bookings'},{label:'Pax'},{label:'Revenue',right:true},{label:'Per pax',right:true}],routes,'No route rows')+'</div><div style="flex:1;min-width:360px">'+table([{label:'Agent'},{label:'Bookings'},{label:'Pax'},{label:'Revenue',right:true},{label:'Due',right:true}],agents,'No agent rows')+'</div></div>';
   }
+  // §drTrend · the 14-day trend is its own adapter (58); it fills the placeholder dailyHtml leaves
+  function paintDaily(host,d,date){ host.innerHTML=dailyHtml(d); var T=window.laOps&&window.laOps.dailyTrend; if(T&&T.mount) T.mount(date); }
   function loadDaily(date){
     date=dateOf(date); if(reports.daily[date]) return Promise.resolve(reports.daily[date]);
     var key='daily:'+date; if(reports.loading[key]) return reports.loading[key];
@@ -191,8 +200,8 @@
   wrap('renderDailyReport',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var host=document.getElementById('dailyreport-host'), date=dateOf(typeof _drDate!=='undefined'?_drDate:null);
-    if(!reports.daily[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Daily Report…'); return loadDaily(date).then(function(d){ if(host) host.innerHTML=dailyHtml(d); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
-    if(host) host.innerHTML=dailyHtml(reports.daily[date]);
+    if(!reports.daily[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Daily Report…'); return loadDaily(date).then(function(d){ if(host) paintDaily(host,d,date); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
+    if(host) paintDaily(host,reports.daily[date],date);
   });
   wrap('drCfgSet',function(orig,key,value){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
