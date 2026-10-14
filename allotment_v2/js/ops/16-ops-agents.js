@@ -439,4 +439,42 @@
     var oldTblPersist=window.agTblPersist;
     window.agTblPersist=function(){ if(enabled()) return; return oldTblPersist.apply(this,arguments); };
   }
+  /* §agHist · Recent Bookings tab (agTabHist -> agSumBlock month x route table, plus the paged list).
+     Both read SB_BOOKINGS filtered to the agent, which in operation mode holds only the date ranges
+     other screens happened to load. On first draw per agent, load THAT agent's bookings through the
+     shared booking loader (GET /v1/bookings?agent_id=, limit 500, cursor-paged, every status so the
+     cancelled column is real) and redraw the tab once. Scope = all of the agent's bookings, the same
+     as legacy (it summed everything it held); capped at 40 pages (20,000 bookings) with a console warning if hit. The first draw is the legacy render over what is loaded;
+     a failed load keeps it (never blank) and is not retried until a write or reopening the app. A
+     laOps write drops the per-agent state, and the next open reloads with refresh. */
+  var legacyHist=window.agTabHist;
+  if(typeof legacyHist==='function'){
+    var histState=Object.create(null), histEver=Object.create(null), histEpoch=0;
+    O.onWrite(function(){ histEpoch++; histState=Object.create(null); });
+    var histOnScreen=function(id){
+      var t=document.querySelector('#ag-main .sb-tab.on[data-tab="hist"]');
+      return !!(t && String(t.getAttribute('onclick')||'').indexOf("'"+id+"'")>=0 && document.getElementById('ag-tabbody'));
+    };
+    var hist=function(a){
+      if(enabled() && a && a.id && !histState[a.id] && typeof window.bookingV2EnsureOpsRange==='function'){
+        var id=a.id, epoch=histEpoch;
+        var load=window.bookingV2EnsureOpsRange({agentId:id,limit:500,maxPages:40,refresh:!!histEver[id]});
+        if(!load) histState[id]='done';
+        else{
+          histState[id]='loading';
+          load.then(function(r){ return r; },function(){ return null; }).then(function(r){
+            if(epoch!==histEpoch) return;
+            histEver[id]=true; histState[id]=r?'done':'failed';
+            if(!r){ console.warn('[ops] agent history: could not load bookings for '+id+'; showing the bookings already loaded'); return; }
+            if(histOnScreen(id)){
+              var body=document.getElementById('ag-tabbody'), ag=(typeof sbGetAgent==='function')?sbGetAgent(id):a;
+              if(body && ag) body.innerHTML=window.agTabHist(ag);
+            }
+          });
+        }
+      }
+      return legacyHist.apply(this,arguments);
+    };
+    hist.__ops=true; hist.__opsAgents=true; window.agTabHist=hist;
+  }
 })();

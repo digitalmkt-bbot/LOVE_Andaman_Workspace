@@ -11,7 +11,7 @@ function _opsBookingMonthRange(month){
   d.setMonth(d.getMonth()+1); d.setDate(0);
   return {from:from,to:_opsBookingYMD(d)};
 }
-function _opsBookingRangeKey(o){ return [o.routeId||'',o.from||'',o.to||'',o.limit||100].join('|'); }
+function _opsBookingRangeKey(o){ var k=[o.routeId||'',o.from||'',o.to||'',o.limit||100]; if(o.agentId) k.push(o.agentId); return k.join('|'); }
 function _opsBookingMerge(mapped){
   var at=Object.create(null);
   SB_BOOKINGS.forEach(function(b,i){ at[b.opsId||b.id]=i; });
@@ -36,24 +36,27 @@ function bookingV2EnsureOpsRange(options){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   options=options||{};
   var from=options.from, to=options.to;
-  if(!from || !to) return null;
-  var q={routeId:options.routeId,from:from,to:to,limit:options.limit||100};
+  /* agentId: one agent's bookings; from/to may then be left out (all of that agent's trips).
+     The server wants from and to together or neither. refresh: forget a cached load first. */
+  if(!options.agentId && (!from || !to)) return null;
+  var q={routeId:options.routeId,from:from,to:to,limit:options.limit||100,agentId:options.agentId};
   var key=_opsBookingRangeKey(q);
+  if(options.refresh && !_opsBookingRangeLoads[key]) delete _opsBookingRanges[key];
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
   var params=[];
-  [['route_id',q.routeId],['from',from],['to',to],['limit',q.limit]].forEach(function(pair){
+  [['agent_id',q.agentId],['route_id',q.routeId],['from',from],['to',to],['limit',q.limit]].forEach(function(pair){
     if(pair[1]!==undefined && pair[1]!==null && pair[1]!=='') params.push(encodeURIComponent(pair[0])+'='+encodeURIComponent(pair[1]));
   });
-  var base='/v1/bookings?'+params.join('&'), all=[], pages=0, MAX_PAGES=200;
+  var base='/v1/bookings?'+params.join('&'), all=[], pages=0, MAX_PAGES=options.maxPages||200;
   function page(cursor){
     return window.laOpsFetch(base+(cursor?'&cursor='+encodeURIComponent(cursor):'')).then(function(r){ return r.ok?r.json():null; }).then(function(j){
       if(!j || !Array.isArray(j.bookings)) throw new Error('booking list did not return bookings');
       Array.prototype.push.apply(all,j.bookings);
       if(j.next_cursor && ++pages<MAX_PAGES) return page(j.next_cursor);
-      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+from+' → '+to+' is incomplete');
+      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' is incomplete');
       var mapped=all.map(bookingV2FromOpsBooking); _opsBookingMerge(mapped); _opsBookingRanges[key]=true;
-      console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+from+' → '+to+' from operation-backend');
+      console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' from operation-backend');
       return {bookings:all};
     });
   }
