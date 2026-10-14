@@ -311,6 +311,8 @@
     var date = lastView && lastView.date; if(!date) return Promise.resolve();
     var roster = cache[date], row = roster && roster.after && roster.after[bookingId];
     var body = { mode: mode };
+    // Legacy asked before a button replaced a part decision (its deduct and payout amounts are not editable here).
+    if(row && row.cot && row.cot.decision && row.cot.decision.mode === 'part' && typeof window.confirm === 'function' && !window.confirm('This booking has a part-kept / part-paid-out decision. Replace it?')) return Promise.resolve();
     if(mode === 'nocol'){
       var el = document.getElementById('ts-cotr-' + bookingId), why = el ? text(el.value).trim() : '';
       if(!why){ O.fail('Cash on tour not saved', new Error('Write why it was not collected')); return Promise.resolve(); }
@@ -318,7 +320,16 @@
     }
     var bk = { id: bookingId, opsId: bookingId, opsVersion: row && row.version != null ? row.version : null };
     return O.queue(function(){ return O.bookingWrite('PUT', '/v1/bookings/' + encodeURIComponent(bookingId) + '/cot-decisions/' + encodeURIComponent(date), bk, body); })
-      .then(function(){ O.wrote('cot-decision'); rerender(); }, function(e){ O.fail('Cash on tour not saved', e); rerender(); });
+      .then(function(){ O.wrote('cot-decision'); rerender(); }, function(e){
+        O.fail('Cash on tour not saved', e);
+        // A stale version stays cached otherwise and every later save resends it: drop the roster and the
+        // summary so the next render reads /v1/after-trip again and gets the booking's fresh version.
+        if(e && e.code === 'stale_version'){
+          delete cache[date];
+          var MR = window.laOps && window.laOps.moneyReports; if(MR && MR.clear) MR.clear();
+          O.wrote('cot-stale'); rerender();
+        }
+      });
   }
 
   /* What 33 renders: the money rows to show, plus the blocks around them. null = no roster, show the day. */

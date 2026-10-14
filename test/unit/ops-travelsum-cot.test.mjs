@@ -73,3 +73,17 @@ test('a not-collected decision with no reason is refused before any request', as
   assert.equal(h.writes.length, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(fails)), ['Cash on tour not saved']);
 });
+
+test('after a stale_version refusal the next save re-reads after-trip and sends the fresh version', async () => {
+  const h = await run();
+  const reads = []; let version = 7;
+  const get = h.ctx.laOps.get;
+  h.ctx.laOps.get = (p, q) => { if (p === '/v1/after-trip') { reads.push(1); return Promise.resolve({ rows: [{ booking_id: 'b1', version, cot: { amount: 800, suggested_mode: 'full', decision: null } }] }); } return get(p, q); };
+  h.ctx.laOps.bookingWrite = (m, p, b, body) => { h.writes.push({ version: b.opsVersion }); if (h.writes.length === 1) { const e = new Error('stale'); e.code = 'stale_version'; return Promise.reject(e); } return Promise.resolve({}); };
+  version = 9;                                              // the server moved on; the page still caches 7
+  await h.ctx.laOps.travelRows.cotPick('b1', 'full');       // 1st click: sends the cached 7, refused
+  await new Promise((r) => setTimeout(r, 20));              // the re-render re-reads
+  await h.ctx.laOps.travelRows.cotPick('b1', 'full');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.writes.map((w) => w.version))), [7, 9]);
+  assert.ok(reads.length >= 1, 'after-trip was read again');
+});
