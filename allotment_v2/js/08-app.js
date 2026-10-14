@@ -67644,7 +67644,7 @@ function pk3Body(flat, TY, TYM, ro){
       +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(F.s[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
       +'<td class="n sep" colspan="'+TY.length+'"></td><td class="n sum"></td><td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'; };
   var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+'</td></tr>'
-    +famRow(FA)+FL.filter(function(F){ return _pkSetFamF==='all' || F.f.id===_pkSetFamF; }).map(famRow).join('')
+    +(_pkSetFamF==='all'?(famRow(FA)+FL.map(famRow).join('')):FL.filter(function(F){ return F.f.id===_pkSetFamF; }).map(famRow).join(''))   /* §pkSets5 · owner "โฟกัสแค่บางเกาะ" · เลือกแล้วเหลือแถวเดียว ไม่มีแถวรวม */
     +'<tr class="fh"><td colspan="'+(TY.length+15)+'">ลำที่เลือกมาทำชุด</td></tr>';
   var WD=['อา','จ','อ','พ','พฤ','ศ','ส'], dd=new Date(date+'T12:00:00'), nS=pkSets(date).length;
   var top='<tr class="dy"><td class="rt"><b>'+dd.getDate()+'</b> <i>'+WD[dd.getDay()]+'</i> · เลือก '+chosen.length+' จาก '+flat.length+' ลำ'
