@@ -47,9 +47,17 @@
     if(!target) return;
     target.length = 0; Array.prototype.push.apply(target, next);
   }
+  /* §flatFallback (2026-10-14) · the server keeps the legacy flat table as a DATELESS profile
+     (migration artifact, decision D4). It is a resolver fallback, not a season: putting it in
+     SB_PICKUP_TIME_PROFILES made Pickup Setup show a broken "INVALID DATES - -> -" card and
+     count it as a second profile (lk-inbox shows 1). Dated profiles go to the screen; dateless
+     ones stay here for psuResolveProfile only. */
+  var fallbackProfiles = [];
   function applyState(areaRows, detailRows){
     replaceArray(areas(), areaRows.map(mapArea).filter(function(a){ return a.active !== false; }));
-    replaceArray(profiles(), detailRows.map(mapProfile));
+    var mapped = detailRows.map(mapProfile);
+    fallbackProfiles = mapped.filter(function(p){ return !p.from && !p.to; });
+    replaceArray(profiles(), mapped.filter(function(p){ return p.from || p.to; }));
     // The server's fallback profile is authoritative. The old flat seed must not
     // remain available as a second source of truth in operations mode.
     if(typeof SB_PICKUP_TIMES !== 'undefined') SB_PICKUP_TIMES = {};
@@ -237,7 +245,8 @@
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
     var found = orig.apply(this, [].slice.call(arguments, 1));
     if(found) return found;
-    var list = (profiles() || []).filter(function(p){ return !p.from && !p.to; });
+    // §flatFallback · dateless server profiles live outside SB_PICKUP_TIME_PROFILES
+    var list = fallbackProfiles.slice();
     list.sort(function(a,b){ return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
     return list[0] || null;
   });

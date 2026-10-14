@@ -127,7 +127,12 @@
   function travelHtml(d){
     d=d||{}; var m=d.money||{}, c=d.cot||{}, ns=d.noshow||{};
     var rows=(d.collect_rows||[]).map(function(x){ return row([{value:x.voucher_ref||x.booking_id},{value:x.route_id},{value:money(x.target),right:true},{value:money(x.paid),right:true},{value:money(x.due),right:true},{value:x.not_counted||'—'}]); }).join('');
+    // §tsEmpty (2026-10-14) · an all-zero grid looks broken; say outright that the SERVER has
+    // no bookings for the day (its honest answer), so staff don't read zeros as a loading bug.
+    var emptyNote=(!n(d.bookings) && !(d.collect_rows||[]).length)
+      ? '<div data-ops-ts-empty="1" style="margin-bottom:16px;padding:12px 15px;background:#fdf8ee;border:0.5px solid #e8dcc0;border-radius:12px;font-size:12px;color:#8a6d1a">operation-backend reports no bookings for '+esc(d.date)+'. The snapshot below is genuinely empty, not still loading.</div>' : '';
     return reportNav('Travel Summary',d.date,'tsDateShift(-1)','tsDateShift(1)')
+      +emptyNote
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+card('Bookings',String(n(d.bookings)))+card('Booked',String(n(d.booked)))+card('Travelled',String(n(d.travelled)),'#0F6E56')+card('No-show / CXL',String(n(d.no_show))+' / '+String(n(d.cxl)),'#A05A1A')+card('Received',money(m.received),'#0F6E56')+card('To collect',money(m.to_collect),'#A05A1A')+'</div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Money by method</b><div style="margin-top:9px;font-size:12px">Cash '+money(m.cash)+' · Transfer '+money(m.transfer)+' · Card '+money(m.card)+' · Fees '+money(m.fees)+'</div><div style="margin-top:7px;font-size:12px">Sales '+money(m.sales)+' · Sales due '+money(m.sales_due)+' · Commission '+money(m.commission)+'</div></div><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>COT / no-show</b><div style="margin-top:9px;font-size:12px">COT total '+money(c.total)+' · Payout '+money(c.payout)+' · Deduct '+money(c.deduct)+'</div><div style="margin-top:7px;font-size:12px">No-show cases '+String(n(ns.cases))+' · Pending '+String(n(ns.pending))+' · Charged '+money(ns.charged)+'</div></div></div>'
       +table([{label:'Booking'},{label:'Route'},{label:'Target',right:true},{label:'Paid',right:true},{label:'Due',right:true},{label:'Note'}],rows,'No money rows');
