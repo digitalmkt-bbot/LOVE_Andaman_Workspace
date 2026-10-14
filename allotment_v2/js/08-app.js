@@ -54969,10 +54969,10 @@ function bkV2RenderTab2(){
     /* §btCols · จุดรับตัดเป็น 2 บรรทัดได้อยู่แล้ว · 270 → 196 คืนที่ให้ตาราง 74px */
     .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:196px;max-width:196px}
     /* §rtFt · ป้ายรถกลับลอยใต้ชื่อโรงแรม · ไม่ดันแถว · ยาวเกินตัด … ชี้กางเต็ม */
-    /* §rtFt2 · เม็ดป้ายรถกลับ ลอยใต้ชื่อจุดส่งในช่อง Send back · ทึบ ตัวขาว เงาเบา เหมือนป้ายล็อก */
+    /* §rtFt2/§rtFt3 · เม็ดป้ายรถกลับ (z 20: อยู่เหนือแถบกรุ๊ปถัดไป · ใต้หัวตารางที่ตรึง) ลอยใต้ชื่อจุดส่งในช่อง Send back · ทึบ ตัวขาว เงาเบา เหมือนป้ายล็อก */
     .t2-mtbl td.t2-sbk{position:relative;overflow:visible}
-    .t2-mtbl td.t2-sbk .t2-rtft{position:absolute;left:9px;top:calc(100% - 10px);z-index:4;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(15,27,61,.22)}
-    .t2-mtbl td.t2-sbk .t2-rtft:hover{max-width:none;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.25)}
+    .t2-mtbl td.t2-sbk .t2-rtft{position:absolute;left:9px;top:calc(100% - 10px);z-index:20;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(15,27,61,.22)}
+    .t2-mtbl td.t2-sbk .t2-rtft:hover{max-width:none;z-index:30;box-shadow:0 4px 14px rgba(2,10,30,.25)}
     /* §btGap · จุดรับ / โซน / ห้อง ไม่ต้องมีพื้นชิป · มีเส้นแบ่งคอลัมน์แล้ว
        ตาแยกค่าออกจากช่องข้าง ๆ ได้อยู่ · ชิปซ้อนอีกชั้นทำให้ตารางลาย */
     .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.3;vertical-align:middle;font-weight:700;font-size:12.5px;color:#26303F}
