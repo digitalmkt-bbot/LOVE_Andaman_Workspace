@@ -43700,44 +43700,71 @@ function _bkNatClean(name){ name=String(name||'').trim(); name=name.replace(/\s*
 function _bkNatNorm(s){ return String(s||'').toLowerCase().replace(/[^a-z฀-๿]/g,''); }
 // Cheap heuristic · returns nationality code based on name keywords / scripts
 // ─── Nationality learning system · token-frequency from past bookings ───
+// §natBoot (2026-09-23) · loveandaman_v2 is the whole state blob (~23 MB). Every load used to
+//   JSON.parse it and every save parsed + stringified it again, once PER PASSENGER. On a browser that
+//   had never run the bootstrap that froze the main thread for minutes (the cs embed hung for good).
+//   Now: the parsed table is cached against the exact blob string (the Storage shim hands back the
+//   same _mem string until someone writes, so an unchanged blob is an O(1) identity check and any
+//   write, cloud refresh included, invalidates it), and records are batched into ONE save.
+let _natRaw = null, _natCache = null;
 function _natLearnLoad(){
-  try { const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); return d.nat_learn || {}; }
-  catch(e){ return {}; }
+  try {
+    const raw = localStorage.getItem('loveandaman_v2');
+    if(_natCache && raw === _natRaw) return _natCache;
+    const d = JSON.parse(raw||'{}');
+    _natRaw = raw; _natCache = (d && d.nat_learn) || {};
+    return _natCache;
+  } catch(e){ return {}; }
 }
 function _natLearnSave(data){
   try {
     const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}');
     d.nat_learn = data;
     localStorage.setItem('loveandaman_v2', JSON.stringify(d));
-  } catch(e){ console.warn('nat learn save failed', e); }
+    _natRaw = localStorage.getItem('loveandaman_v2'); _natCache = data;
+  } catch(e){ _natRaw = null; _natCache = null; console.warn('nat learn save failed', e); }
 }
 function _natTokenize(name){
   if(!name) return [];
   return String(name).toUpperCase().split(/[\s\-_,\.]+/).map(t => t.trim()).filter(t => t.length >= 2 && !/^(MR|MS|MRS|DR|JR|SR)$/.test(t));
 }
-function natLearnRecord(name, code){
-  if(!name || !code || code === 'OTHER') return;
-  const tokens = _natTokenize(name);
-  if(tokens.length === 0) return;
-  const data = _natLearnLoad();
-  tokens.forEach(t => {
-    if(!data[t]) data[t] = {};
-    data[t][code] = (data[t][code] || 0) + 1;
+// §natBoot · pairs = [[name, code], ...] · one load, one save, however many passengers
+function natLearnRecordMany(pairs){
+  let data = null, n = 0;
+  (pairs || []).forEach(pr => {
+    const name = pr && pr[0], code = pr && pr[1];
+    if(!name || !code || code === 'OTHER') return;
+    const tokens = _natTokenize(name);
+    if(tokens.length === 0) return;
+    if(!data) data = _natLearnLoad();
+    tokens.forEach(t => {
+      if(!data[t]) data[t] = {};
+      data[t][code] = (data[t][code] || 0) + 1;
+    });
+    n++;
   });
-  _natLearnSave(data);
+  if(data) _natLearnSave(data);
+  return n;
+}
+function natLearnRecord(name, code){ natLearnRecordMany([[name, code]]); }
+// §natBoot · a booking's lead + passengers as record pairs
+function _natLearnPairs(lead, leadNat, passengers){
+  const out = [];
+  if(lead && leadNat) out.push([lead, leadNat]);
+  (passengers || []).forEach(p => { if(p && p.name && p.nationality) out.push([p.name, p.nationality]); });
+  return out;
 }
 // One-time bootstrap · scan all existing SB_BOOKINGS to seed the learning table
 function natLearnBootstrap(){
   if(localStorage.getItem('_nat_bootstrap_done') === '1') return;
+  // §natBoot · embed / view-only sessions never sync the result, so there is nothing to seed
+  if(window.__laEmbed || (typeof laCanEdit === 'function' && !laCanEdit())) return;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return;
-  let recorded = 0;
-  SB_BOOKINGS.forEach(bk => {
-    if(bk.leadPax && bk.leadNationality){ natLearnRecord(bk.leadPax, bk.leadNationality); recorded++; }
-    (bk.passengers || []).forEach(p => {
-      if(p.name && p.nationality){ natLearnRecord(p.name, p.nationality); recorded++; }
-    });
-  });
+  // §natBoot · mark done BEFORE the work: a tab closed mid-run must not start over on every load
   localStorage.setItem('_nat_bootstrap_done', '1');
+  const pairs = [];
+  SB_BOOKINGS.forEach(bk => { if(bk) Array.prototype.push.apply(pairs, _natLearnPairs(bk.leadPax, bk.leadNationality, bk.passengers)); });
+  const recorded = natLearnRecordMany(pairs);
   if(recorded > 0) console.log('Nationality learning · bootstrap recorded ' + recorded + ' name-nationality pairs');
 }
 // Trigger bootstrap once DOM is ready
