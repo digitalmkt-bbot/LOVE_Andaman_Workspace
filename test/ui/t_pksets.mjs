@@ -12,7 +12,7 @@
 //   7 Excel ชุด/ทุกลำ · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส (ราคา/ใบ · รวม) · (§pkSets9) ทุกลำ = ไฟล์ละลำ · การ์ดขวามียอดเงินต่อชุด/ต่อลำ/รวม · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
 //  10 (§pkCalc) การ์ด "ตารางคำนวณ" ใบแรกฝั่งขวา · จำนวน × ราคา = รวม คิดสดโดยไม่วาดหน้าใหม่ · ราคา/ใบ จำใน PIER_CFG.parkPrice · แถวพิมพ์เอง 3 แถว · ดึงจำนวนจากเส้นทาง/ชุด
-//  13 (§pkLine) การ์ด "สรุปส่งไลน์" · วันที่ · จำนวนทั้งหมดแยก 4 ประเภท · รายการซื้อ (เวลา เรือ จำนวน) · เรือที่ไม่ได้ซื้อ · คัดลอก
+//  13 (§pkLine/2) การ์ด "สรุปส่งไลน์" · กระชับ · ประเภทที่เป็น 0 / หัวข้อที่ว่างไม่ขึ้น · ซื้อ (เวลา เรือ จำนวน) · ไม่ซื้อ (เวลา เรือ) · คัดลอก
 //  12 (§pkSets8) ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทาง/แถวรวม/แถววัน = รวมคนในชุดที่บันทึกแล้ว แยกประเภท
 //  11 (§pkSets6) คอลัมน์ "ชุดนี้" เรียง ผญ ไทย · เด็กไทย · ต่ำกว่า 3 · ผญ ตปท · เด็ก ตปท · (ประเภทที่เพิ่มเอง) เหมือนบนเรือ
 //   8 กลับแท็บ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ทุกข้อความเป็น ASCII · ไม่มี error
@@ -152,14 +152,16 @@ const r13 = await page.evaluate(({ H, D }) => { const h = document.querySelector
 await page.evaluate(() => { window.__cp = null; document.execCommand = () => { window.__cp = document.activeElement && document.activeElement.value; return true; }; try { Object.defineProperty(window, 'isSecureContext', { value: false }); } catch (_) {} });
 await page.click(H + ' .pk3-line .pri'); await page.waitForTimeout(150);
 const c13 = await page.evaluate((H) => ({ cp: window.__cp, btn: document.querySelector(H + ' .pk3-line .pri').textContent }), H);
-const L = r13.t.split('\n'), iBuy = L.findIndex(l => /^รายการซื้อ/.test(l)), iRest = L.findIndex(l => /^เรือที่ไม่ได้ซื้อ/.test(l));
-const want4 = `ผญ ไทย ${r13.by.adTH || 0} · เด็ก ไทย ${r13.by.chTH || 0} · ผญ ตช ${r13.by.adFR || 0} · เด็ก ตช ${r13.by.chFR || 0}`;
-const buyOk = L[iBuy] === `รายการซื้อ (${r13.setB.length} ลำ)` && r13.setB.every(b => { const B = r13.boats.find(x => x.bid === b); const i = L.findIndex((l, j) => j > iBuy && j < iRest && l.startsWith(`- ${B.dep} ${B.nm} · `)); return i > 0 && /^  ผญ ไทย \d+ · เด็ก ไทย \d+ · ผญ ตช \d+ · เด็ก ตช \d+/.test(L[i + 1]); });
+const L = r13.t.split('\n'), iBuy = L.indexOf('ซื้อ'), iRest = L.indexOf('ไม่ซื้อ');
+const MAIN = [['adTH', 'ผญไทย'], ['chTH', 'เด็กไทย'], ['adFR', 'ผญตช'], ['chFR', 'เด็กตช']];
+const want4 = MAIN.filter(m => r13.by[m[0]]).map(m => m[1] + ' ' + r13.by[m[0]]).join(' · ');
+const noZero = !/ 0( ·|$)/m.test(r13.t);
+const buyLines = L.slice(iBuy + 1, iRest > 0 ? iRest - 1 : L.length);
+const buyOk = iBuy > 0 && buyLines.length === r13.setB.length && r13.setB.every(b => { const B = r13.boats.find(x => x.bid === b); return buyLines.some(l => l.startsWith(`${B.dep} ${B.nm}`) && / · (ผญไทย|เด็กไทย|ผญตช|เด็กตช) \d+/.test(l)); });
 const restB = r13.boats.filter(b => !r13.setB.includes(b.bid));
-const restOk = L[iRest] === `เรือที่ไม่ได้ซื้อ (${restB.length} ลำ)` && restB.every(b => L.slice(iRest).includes(`- ${b.dep} ${b.nm}`)) && L.slice(iRest + 1).filter(l => l.startsWith('- ')).length === restB.length;
-const iTot = L.indexOf('จำนวนทั้งหมด ' + r13.n + ' คน');
-if (r13.inRight && r13.pre === r13.t && /^สรุปซื้อตั๋วอุทยาน/.test(L[0]) && /^วัน.+ 16 ก\.ย\. 2569$/.test(L[1]) && iTot > 0 && L[iTot + 1].startsWith(want4) && iRest > iBuy && buyOk && restOk && c13.cp === r13.t && /คัดลอกแล้ว/.test(c13.btn))
-  ok(`13 สรุปส่งไลน์ · ${L[1]} · รวม ${r13.n} คน (${want4}) · ซื้อ ${r13.setB.length} ลำ · ไม่ได้ซื้อ ${restB.length} ลำ · คัดลอกได้`); else fail('13 ' + JSON.stringify({ L, r13: { n: r13.n, by: r13.by, setB: r13.setB, inRight: r13.inRight, same: r13.pre === r13.t }, buyOk, restOk, c13 }));
+const restOk = restB.length ? (iRest > iBuy && L.slice(iRest + 1).length === restB.length && restB.every(b => L.slice(iRest + 1).includes(`${b.dep} ${b.nm}`))) : iRest < 0;
+if (r13.inRight && r13.pre === r13.t && L[0] === 'ตั๋วอุทยาน · พ. 16 ก.ย. 69' && L[1] === `รวม ${r13.n} · ${want4}` && noZero && buyOk && restOk && c13.cp === r13.t && /คัดลอกแล้ว/.test(c13.btn))
+  ok(`13 สรุปส่งไลน์ (กระชับ · ไม่มี 0) · ${L[0]} · ${L[1]} · ซื้อ ${r13.setB.length} ลำ · ไม่ซื้อ ${restB.length} ลำ · คัดลอกได้`); else fail('13 ' + JSON.stringify({ L, r13: { n: r13.n, by: r13.by, setB: r13.setB, inRight: r13.inRight, same: r13.pre === r13.t }, noZero, buyOk, restOk, c13 }));
 // 8
 await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /ทั้งหมด/.test(b.textContent)).click(), H); await page.waitForTimeout(400); a = await st();
 const cfgSame = await page.evaluate(() => JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined, parkPrice: undefined })) === window.__cfg0);
