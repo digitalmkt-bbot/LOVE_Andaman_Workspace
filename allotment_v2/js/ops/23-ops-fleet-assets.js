@@ -453,15 +453,22 @@
       }).catch(function(e){ O.fail('Could not create engine', e); return null; });
     }
     var cur = listEngines().find(function(x){ return x && x.id === editId; }) || {};
+    /* the edit is a sequence (facts -> status -> install/remove) with no rollback · track which steps landed
+       so a refusal mid-way can say so and the lists can be re-synced to what the server now holds */
+    var landed = [], planned = ['details'];
+    function step(label, call){ return function(){ return call().then(function(r){ landed.push(label); return r; }); }; }
     return O.queue(function(){
-      var p = O.patch('/v1/fleet/engines/' + enc(editId), toEngineFactsBody(input, false));
+      var p = step('details', function(){ return O.patch('/v1/fleet/engines/' + enc(editId), toEngineFactsBody(input, false)); })();
       if(status && status !== cur.status){
-        p = p.then(function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/status', toStatusBody(status)); });
+        planned.push('status');
+        p = p.then(step('status', function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/status', toStatusBody(status)); }));
       }
       if(boatId && (boatId !== cur.boatId || pos !== cur.pos)){
-        p = p.then(function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/install', toInstallEngineBody(boatId, pos)); });
+        planned.push('install');
+        p = p.then(step('install', function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/install', toInstallEngineBody(boatId, pos)); }));
       } else if(!boatId && cur.boatId){
-        p = p.then(function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/remove', toRemoveOrMoveBody(spareLoc)); });
+        planned.push('remove');
+        p = p.then(step('remove', function(){ return O.post('/v1/fleet/engines/' + enc(editId) + '/remove', toRemoveOrMoveBody(spareLoc)); }));
       }
       return p;
     }).then(function(){
@@ -470,6 +477,24 @@
         O.wrote('fleet-engine-update');
         redrawAssets();
       });
+    }, function(e){
+      /* refused mid-sequence · the server kept whatever it accepted (no rollback, that would be a second
+         write nobody asked for): show its message + what already saved, re-sync the lists, and leave the
+         modal open re-filled with the server's current values */
+      var err = e;
+      if(landed.length){
+        err = new Error(((e && e.message) || 'refused') + ' | Already saved: ' + landed.join(', ') +
+          '. Refused: ' + (planned[landed.length] || 'update') +
+          (planned.length > landed.length + 1 ? '. Not attempted: ' + planned.slice(landed.length + 1).join(', ') : '') + '.');
+        if(e && e.status) err.status = e.status;
+        if(e && e.code) err.code = e.code;
+      }
+      O.fail('Could not update engine', err);
+      return refetchChain().then(function(){
+        redrawAssets();
+        if(typeof window.flOpenAddEngineModal === 'function') window.flOpenAddEngineModal(editId);
+        return null;
+      }, function(){ return null; });
     }).catch(function(e){ O.fail('Could not update engine', e); return null; });
   });
 
