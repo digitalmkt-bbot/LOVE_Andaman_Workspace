@@ -73822,6 +73822,8 @@ function pjPrint(){
    +'.sheet{background:#fff;margin:0 auto;padding:18px 20px;border:1px solid #CBD5E1;border-radius:12px;'
      +'max-width:1880px;box-shadow:0 2px 12px rgba(15,23,42,.07)}'
    +'@media screen{body{padding:18px 16px 60px}}'
+   +'.tb button.fit{background:#fff;color:#475569}.tb button.fit.on{background:#E0F2FE;border-color:#7DD3FC;color:#0369A1}'
+   +'@media print{.sheet{zoom:1 !important}}'   /* §pjZoom · กระดาษขนาดจริงเสมอ */
    +'@media print{body{background:#fff;padding:0}.tb{display:none}'
      +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
    /* §pjTop · หัวใบ · โครงเดียวกับหน้า Booking แต่พื้นขาว */
@@ -74544,7 +74546,12 @@ function pjPrint(){
    +'<div class="tb">'
      +'<button class="pri" onclick="window.print()">&#128424; พิมพ์</button>'
      +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
-     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+     /* §pjZoom (2026-10-14) · owner "ขอใบงาน ให้ FIT กับหน้าจอ ตอนนี้มันใหญ่เกิน"
+        ใบนี้สูงกว่าจอเสมอเมื่อเรือ ≥8 ลำ (หัวตารางลูกเรือ + 7 แถวคน) · ย่อทั้งใบบนจอให้เห็นครบ
+        ใช้ zoom ไม่ใช่ transform · เนื้อหาจัดวางใหม่ตามความกว้างที่ได้ จึงไม่เหลือขอบขาวข้าง ๆ
+        เฉพาะบนจอ · กระดาษและรูป PNG ยังเป็นขนาดจริง (ปุ่มรูปตั้ง zoom กลับ 1 ก่อนถ่าย) */
+     +'<button class="fit on" id="bfit" onclick="fitToggle()">&#8982; พอดีจอ</button>'
+     +'<span class="hint">ปุ่มพวกนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป · พอดีจอ = ย่อให้เห็นทั้งใบ ไม่มีผลกับรูปและกระดาษ</span>'
    +'</div>'
    + sheet
    +'<script>'+scr+'<\/script></body></html>';
@@ -74561,10 +74568,27 @@ function pjShotScript(fn){
   return ""
    +"var FN="+JSON.stringify(fn)+";"
    +"function bz(t,d){var b=document.getElementById('bimg');b.textContent=t;b.disabled=!!d;}"
+   /* §pjZoom · ย่อใบให้พอดีจอ · ทำงานเฉพาะหน้าที่มีปุ่ม #bfit (ใบงานเรือ) · หน้าอื่นที่ใช้สคริปต์นี้ร่วมไม่ถูกแตะ
+      FIT จำไว้ใน localStorage (หน้าต่างนี้อยู่ origin เดียวกับแอป) · ค่าเริ่มต้นเปิด */
+   +"var FIT=true;try{FIT=localStorage.getItem('la_pjfit')!=='0';}catch(_){}"
+   +"function fit(){var el=document.getElementById('sheet'),b=document.getElementById('bfit');if(!el||!b)return;b.className='fit'+(FIT?' on':'');"
+     +"if(!FIT){el.style.zoom='';document.body.style.paddingBottom='';return;}"
+     +"var k=1;for(var i=0;i<6;i++){el.style.zoom=String(k);"
+       +"var r=el.getBoundingClientRect(),h=r.height;"   /* ความกว้าง zoom จัดให้เองตามหน้าต่าง · คุมแค่ความสูง */
+       +"var avail=window.innerHeight-r.top-14;"
+       +"var nk=Math.min(1,k*avail/h);if(Math.abs(nk-k)<0.005)break;k=nk;}"
+     /* ย่อแล้วเนื้อหาจัดวางใหม่ ความสูงไม่ได้ลดเป็นสัดส่วนตรง ๆ · รอบสุดท้ายต้องยืนยันว่าอยู่ในจอจริง */
+     +"for(var j=0;j<4;j++){el.style.zoom=String(k);var r2=el.getBoundingClientRect();"
+       +"if(r2.height<=window.innerHeight-r2.top-14)break;k=k*(window.innerHeight-r2.top-14)/r2.height*0.995;}"
+     +"el.style.zoom=(k<0.985)?k.toFixed(3):'';document.body.style.paddingBottom=(k<0.985)?'12px':'';}"
+   +"function fitToggle(){FIT=!FIT;try{localStorage.setItem('la_pjfit',FIT?'1':'0');}catch(_){}fit();}"
+   +"var _ft;window.addEventListener('resize',function(){clearTimeout(_ft);_ft=setTimeout(fit,120);});"
+   +"window.addEventListener('load',function(){fit();setTimeout(fit,400);});"
+   +"setTimeout(fit,50);"
    +"function save(c){var fin=function(u,rv){var a=document.createElement('a');a.href=u;a.download=FN+'.png';"
      +"document.body.appendChild(a);a.click();a.remove();"
      +"if(rv)setTimeout(function(){try{URL.revokeObjectURL(u);}catch(_){}},5000);"
-     +"bz('\u{1F4F7} \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e39\u0e1b PNG',0);};"
+     +"bz('\u{1F4F7} \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e39\u0e1b PNG',0);fit();};"
      +"try{if(c.toBlob){c.toBlob(function(b){b?fin(URL.createObjectURL(b),1):fin(c.toDataURL('image/png'),0);},'image/png');return;}}catch(_){}"
      +"fin(c.toDataURL('image/png'),0);}"
    +"function svgShot(ok,bad){try{"
@@ -74585,7 +74609,7 @@ function pjShotScript(fn){
      +"im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);"
    +"}catch(_){bad();}}"
    +"function shot(){bz('\u0e01\u0e33\u0e25\u0e31\u0e07\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e23\u0e39\u0e1b...',1);"
-     +"var el=document.getElementById('sheet');"
+     +"var el=document.getElementById('sheet');el.style.zoom='';"   /* §pjZoom · ถ่ายที่ขนาดจริงเสมอ */
      +"var bad=function(){svgShot(save,function(){bz('\u{1F4F7} \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e39\u0e1b PNG',0);"
        +"alert('\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e23\u0e39\u0e1b\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u00b7 \u0e43\u0e0a\u0e49\u0e1b\u0e38\u0e48\u0e21 \u0e1e\u0e34\u0e21\u0e1e\u0e4c \u0e41\u0e25\u0e49\u0e27\u0e40\u0e25\u0e37\u0e2d\u0e01 Save as PDF \u0e41\u0e17\u0e19\u0e44\u0e14\u0e49');});};"
      +"var run=function(){try{html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false})"
