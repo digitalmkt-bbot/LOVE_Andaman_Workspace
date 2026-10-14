@@ -16,9 +16,13 @@
    - created  GET /v1/bookings/recent for the current month (1 → today) and
               the whole previous month (the card's comparison period)
    The two cards that reach back three months (Was big · Steady senders) would
-   need the browser to hold ~4 months of bookings — nearly the whole database
-   today. They stay computed over what is loaded (current + previous month)
-   until the server grows a per-agent month aggregate (see commit message).
+   need the browser to hold ~4 months of bookings — nearly the whole database.
+   They now read GET /v1/bookings/agent-month-stats?months=4 (per agent, per
+   CREATION month: live pax, bookings, cancelled, last_created); see
+   overlayAgentMonths below. Month pax (byMon), this month's pax (inCur) and
+   the last-booked date (lastIn) come from the server; the same-days-of-last-
+   month comparison, revenue, travel pax and cancel counts stay on the loaded
+   windows because the endpoint has no per-day split.
    Load order: after js/booking/*.js and 40-ops-bookings.js. Classic script.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -61,9 +65,57 @@
     return loads.filter(Boolean);
   }
 
+  /* ── per-agent month aggregate ─────────────────────────────────────────── */
+  var AM_TTL = 60000, amCache = null;      // { at, key, months }
+  function amKey(){ return today().slice(0, 7); }
+  if(O.onWrite) O.onWrite(function(){ amCache = null; });
+  function loadAgentMonths(){
+    if(amCache && amCache.key === amKey() && Date.now() - amCache.at < AM_TTL) return null;
+    var key = amKey();
+    return O.get('/v1/bookings/agent-month-stats', { months: 4 }).then(function(r){
+      amCache = (r && Array.isArray(r.months)) ? { at: Date.now(), key: key, months: r.months } : null;
+      return amCache;
+    }, function(e){
+      amCache = null;
+      console.warn('[ops] Action Board: agent month stats did not load; using loaded bookings', e && e.message);
+      return null;
+    });
+  }
+  /* last_created is an ISO instant; the board shows Bangkok calendar days. */
+  function bkkDay(iso){
+    var t = Date.parse(iso); if(isNaN(t)) return '';
+    return new Date(t + 7 * 3600000).toISOString().slice(0, 10);
+  }
+  function blankRec(id){
+    return { id: id, inCur: 0, inPrev: 0, inPrevFull: 0, tvCur: 0, tvPrev: 0, revCur: 0, revPrev: 0,
+             bkCur: 0, bkPrev: 0, cxCur: 0, cxPrev: 0, lastIn: '', byMon: {} };
+  }
+  function overlayAgentMonths(S){
+    if(!amCache || !S || !S.M) return S;
+    // server months are authoritative for their window: clear the browser's partial sums first
+    Object.keys(S.M).forEach(function(id){
+      amCache.months.forEach(function(m){ if(S.M[id].byMon[m.month] !== undefined) S.M[id].byMon[m.month] = 0; });
+    });
+    amCache.months.forEach(function(m){
+      (m.agents || []).forEach(function(a){
+        if(!a.agent_id) return;
+        var r = S.M[a.agent_id] || (S.M[a.agent_id] = blankRec(a.agent_id));
+        r.byMon[m.month] = a.pax || 0;
+        if(m.month === S.cur) r.inCur = a.pax || 0;
+        var d = a.last_created ? bkkDay(a.last_created) : '';
+        if(d && (!r.lastIn || d > r.lastIn)) r.lastIn = d;
+      });
+    });
+    return S;
+  }
+  wrap('_abAgentStats', function(orig){
+    return overlayAgentMonths(orig.apply(this, [].slice.call(arguments, 1)));
+  });
+
   wrap('abRender', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     var loads = kickLoads();
+    var am = loadAgentMonths(); if(am) loads.push(am);
     if(!loads.length) return orig.apply(self, args);
     var host = document.getElementById('ab-wrap');
     if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading bookings for the Action Board…');
