@@ -67567,30 +67567,41 @@ function pkSetBought(id, on){
 /* §pkLine2 (2026-10-15) · owner "ต้องกระชับกว่านี้ อันไหนไม่มี ไม่ต้องระบุ"
    ประเภทที่เป็น 0 ไม่ขึ้น · ลำละบรรทัดเดียว · ยอดของลำขึ้นเฉพาะเมื่อมีหลายประเภท · หัวข้อที่ว่างไม่ขึ้นทั้งหัวข้อ · ปีย่อ พ.ศ. 2 หลัก */
 var PK_LINE_MAIN=[['adTH','ผญไทย'],['chTH','เด็กไทย'],['adFR','ผญตช'],['chFR','เด็กตช']];
+/* §pkLine3 (2026-10-15) · owner "รายการซื้อ · รายการทั้งหมด = รายการที่มีอยู่ในหน้าของเกาะนั้น ๆ ระบุ เวลา เรือ จำนวน"
+     + "รายการรวมต้องแยกรายละเอียดให้ด้วย" + "เว้น 1 บรรทัด" (ตามร่างที่ owner ดูแล้ว)
+   ต่อเกาะ (โปรแกรม): รายการซื้อ · n ลำ · n คน / บรรทัดแยกประเภท / ว่าง / ลำละบรรทัด (เวลา เรือ รวม · ประเภท)
+                     รายการทั้งหมด · ทุกลำของเกาะในหน้า · นับคนบนเรือจริง (ไม่นับ over) · รูปแบบเดียวกัน
+   เลือกเกาะอยู่ = เกาะเดียว (ชื่อเกาะอยู่หัว) · ทั้งหมด = แยกช่วงต่อเกาะ · ประเภท 0 / หัวข้อว่าง / ลำที่ไม่มีคน ไม่ขึ้น */
 function pkLineText(){
   var date=_poDate, flat=pk3Flat(), TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
-  var famF=_pkSetFamF||'all', inF=function(rid){ return famF==='all' || pk2FamOf(rid).id===famF; };
-  var famNm=(famF==='all')?'':((flat.map(function(x){ return pk2FamOf(x.g.rid); }).filter(function(f){ return f.id===famF; })[0]||{}).n||'');
-  var bx={}; flat.forEach(function(x){ bx[x.B.bid]=x; });
-  var byB={}, tot={}, totN=0;
-  pkSets(date).forEach(function(S){ var x=bx[S.bid]; var rid=x?x.g.rid:S.rid; if(!inF(rid)) return;
-    var b=byB[S.bid]||(byB[S.bid]={c:{}, n:0});
-    (S.people||[]).forEach(function(q){ b.c[q.cat]=(b.c[q.cat]||0)+1; b.n++; tot[q.cat]=(tot[q.cat]||0)+1; totN++; }); });
+  var famF=_pkSetFamF||'all', bx={}, FAM=[], FM={};
+  flat.forEach(function(x){ bx[x.B.bid]=x; var f=pk2FamOf(x.g.rid); if(!FM[f.id]){ FM[f.id]=f; FAM.push(f); } });
+  if(famF!=='all') FAM=FAM.filter(function(f){ return f.id===famF; });
   var nm=function(bid){ var x=bx[bid]; if(x&&x.B.boat&&x.B.boat.name) return x.B.boat.name; try{ var b=getBoat(bid); if(b&&b.name) return b.name; }catch(_){} return bid; };
   var dep=function(bid){ var x=bx[bid]; return (x&&x.B.dep)||''; };
+  var byDep=function(a,b){ return String(dep(a)).localeCompare(String(dep(b))) || String(nm(a)).localeCompare(String(nm(b))); };
   var parts=function(c){ var o=[]; PK_LINE_MAIN.forEach(function(m){ if(c[m[0]]) o.push(m[1]+' '+c[m[0]]); });
     Object.keys(c).forEach(function(k){ if(!c[k] || PK_LINE_MAIN.some(function(m){ return m[0]===k; })) return; o.push(String((TYM[k]||{}).s||k).replace(/\s+/g,'')+' '+c[k]); });
     return o; };
-  var byDep=function(a,b){ return String(dep(a)).localeCompare(String(dep(b))) || String(nm(a)).localeCompare(String(nm(b))); };
+  var add=function(o,c){ Object.keys(c).forEach(function(k){ o[k]=(o[k]||0)+c[k]; }); };
+  /* หนึ่งหัวข้อ · rows = [{bid,c,n}] */
+  var sect=function(L, title, rows){ if(!rows.length) return; var tc={}, tn=0; rows.forEach(function(r){ add(tc,r.c); tn+=r.n; });
+    L.push(''); L.push(title+' · '+rows.length+' ลำ · '+tn+' คน'); L.push(parts(tc).join(' · ')); L.push('');
+    rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).forEach(function(r){ var ps=parts(r.c); L.push((dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)+' '+r.n+(ps.length?(' · '+ps.join(' · ')):'')); }); };
   var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'], MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  var d=new Date(date+'T12:00:00'), L=[];
-  L.push('ตั๋วอุทยาน'+(famNm?(' '+famNm):'')+' · '+WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2));
-  var bought=Object.keys(byB).sort(byDep);
-  if(totN){ L.push('รวม '+totN+' · '+parts(tot).join(' · ')); L.push(''); L.push('ซื้อ');
-    bought.forEach(function(bid){ var b=byB[bid], ps=parts(b.c); L.push((dep(bid)?(dep(bid)+' '):'')+nm(bid)+(ps.length>1?(' '+b.n):'')+' · '+ps.join(' · ')); }); }
-  var rest=flat.filter(function(x){ return inF(x.g.rid) && !byB[x.B.bid]; }).map(function(x){ return x.B.bid; })
-    .filter(function(b,i,a){ return a.indexOf(b)===i; }).sort(byDep);
-  if(rest.length){ L.push(''); L.push('ไม่ซื้อ'); rest.forEach(function(bid){ L.push((dep(bid)?(dep(bid)+' '):'')+nm(bid)); }); }
+  var d=new Date(date+'T12:00:00'), dS=WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2);
+  var one=(FAM.length===1), L=[];
+  L.push('ตั๋วอุทยาน'+(one?(' '+FAM[0].n):'')+' · '+dS);
+  FAM.forEach(function(f){
+    var inF=function(rid){ try{ return pk2FamOf(rid).id===f.id; }catch(_){ return false; } };
+    if(!one){ L.push(''); L.push('— '+f.n+' —'); }
+    var bought={}; pkSets(date).forEach(function(S){ var x=bx[S.bid]; if(!inF(x?x.g.rid:S.rid)) return;
+      var r=bought[S.bid]||(bought[S.bid]={bid:S.bid,c:{},n:0}); (S.people||[]).forEach(function(q){ r.c[q.cat]=(r.c[q.cat]||0)+1; r.n++; }); });
+    sect(L, 'รายการซื้อ', Object.keys(bought).map(function(k){ return bought[k]; }).filter(function(r){ return r.n; }));
+    var seen={}, all=[]; flat.forEach(function(x){ if(!inF(x.g.rid) || seen[x.B.bid]) return; seen[x.B.bid]=1;
+      var c={}, n=0; (x.B.people||[]).forEach(function(p){ if(p.over) return; c[p.cat]=(c[p.cat]||0)+1; n++; }); if(n) all.push({bid:x.B.bid,c:c,n:n}); });
+    sect(L, 'รายการทั้งหมด', all);
+  });
   return L.join('\n');
 }
 function pkLineCopy(btn){
