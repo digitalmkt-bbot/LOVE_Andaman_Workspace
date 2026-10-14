@@ -3499,3 +3499,50 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-costing .ct-otbl td.ct-colon,#view-costing .ct-otbl td.ct-rowon,#view-costing .ct-sheet .ct-otbl td.ct-stick.ct-rowon{background:#EEF3FB !important}
 #view-costing .ct-sheet .ct-otbl thead th{background:#F7F8FB}
 #view-costing .ct-otbl td,#view-costing .ct-otbl th{border-color:#EDF0F5}
+/* §ctV2 · จับคู่เส้นทาง · ตัวเลขสรุป + ค้นหา/ตัวกรอง */
+#view-costing .ct-mtiles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:14px;margin-bottom:14px}
+#view-costing .ct-mt{padding:14px 18px;display:flex;flex-direction:column;gap:2px}
+#view-costing .ct-mt small{font-size:12px;font-weight:700;color:#5F6880}
+#view-costing .ct-mt b{font:600 28px/1.15 "DM Mono",monospace;color:#0B6142}
+#view-costing .ct-mt b span{font-size:14px;color:#5F6880}
+#view-costing .ct-mt em{font-style:normal;font-size:12px;color:#5F6880;line-height:1.4}
+#view-costing .ct-mt.warn{background:#FFF6E8;border-color:#F3DDB6}
+#view-costing .ct-mt.warn small,#view-costing .ct-mt.warn b{color:#9A4A06}
+#view-costing .ct-mt.fl{flex-direction:row;align-items:center;gap:12px}
+#view-costing .ct-msrch{flex:1;display:flex;align-items:center;gap:8px;height:40px;border:1px solid #DCE1EA;border-radius:10px;padding:0 12px;color:#5F6880;background:#fff}
+#view-costing .ct-msrch input{border:0;outline:0;flex:1;font:inherit;font-size:13.5px;color:#0F1B3D;background:transparent;min-width:0}
+#view-costing .ct-seg{display:inline-flex;gap:2px;background:#F2F4F8;border-radius:10px;padding:3px;flex:none}
+#view-costing .ct-seg button{border:0;background:transparent;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;color:#3E4A6B;cursor:pointer;white-space:nowrap}
+#view-costing .ct-seg button.on{background:#0B1E5B;color:#fff}
+#view-costing .ct-mrow .ct-sug{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;margin-top:5px}
+#view-costing .ct-mrow .ct-sug .ct-mini{margin:0!important;display:inline-flex}
+#view-costing .ct-mrow .ct-sug br{display:none}
+#view-costing .ct-tag{font-size:11.5px;border-radius:8px;padding:2px 9px}
+#view-costing .ct-tag.m{background:#E3F5EC;color:#0B6142;border-color:transparent}
+#view-costing .ct-tag.f{background:#FFF0D6;color:#9A4A06;border-color:transparent}
+#view-costing .ct-mrow td{padding-top:9px;padding-bottom:9px}
+/* §ctV2 · ราคาจริง · ทะเบียนร้าน | ร้านประจำเส้นทาง */
+#view-costing .ct-rgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;align-items:start;margin-bottom:14px}
+#view-costing .ct-rgrid>.ct-catcard{margin:0}
+#view-costing .ct-cath .ct-seg button{padding:4px 10px;font-size:12px}
+#view-costing .ct-rgrid .ct-mtbl{table-layout:fixed;width:100%;min-width:0}
+#view-costing .ct-rgrid .ct-scroll{overflow-x:auto}
+#view-costing .ct-rgrid .ct-sel{max-width:100%;min-width:0;width:100%}
+#view-costing .ct-rgrid td{padding-right:14px}
+#view-costing .ct-nm .ct-dot{margin-right:7px;vertical-align:1px}
+#view-costing .ct-catcard>.ct-hint{padding:10px 16px 12px;font-size:12px;line-height:1.6}
+/* §ctV2 · แถวรวมต่อทริป */
+#view-costing .ct-otbl tr.ct-totrow td{background:#F7F8FB !important;border-top:2px solid #0B1E5B;padding:12px 14px;font-weight:700;color:#0B1E5B}
+#view-costing .ct-otbl tr.ct-totrow td.ct-tot b{display:block;text-align:right;font-size:15.5px;font-variant-numeric:tabular-nums}
+#view-costing .ct-otbl tr.ct-totrow td.ct-tot .ct-u{display:block;text-align:right;font-weight:500;font-size:11.5px}
+/* §ctV2 · สูตรกลาง · ชีทเดียว หมวดพับได้ */
+#view-costing .ct-tsheet{overflow:hidden}
+#view-costing .ct-tsh{display:grid;grid-template-columns:250px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 16px;background:#F7F8FB;border-bottom:1px solid #E2E6EE;font-size:11.5px;font-weight:700;color:#5F6880}
+#view-costing .ct-tcat .ct-cath{cursor:pointer;background:#F4F6FA;border-bottom:1px solid #E2E6EE;padding:9px 16px;user-select:none}
+#view-costing .ct-tcat .ct-cath:hover{background:#ECF0F6}
+#view-costing .ct-tcat .ct-cath b{font-size:13.5px;color:#0B1E5B}
+#view-costing .ct-tchev{font-style:normal;display:inline-block;width:16px;color:#5F6880}
+#view-costing .ct-tcat.fold .ct-cath{background:#fff}
+#view-costing .ct-tcat .ct-mtbl td{padding-top:7px;padding-bottom:7px;border-bottom-color:#F0F2F6;vertical-align:top}
+#view-costing .ct-tcat .ct-part{gap:6px;margin-bottom:5px}
+#view-costing .ct-tcat .ct-lname{font-weight:600;color:#0B1E5B}

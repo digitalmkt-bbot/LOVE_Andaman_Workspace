@@ -34756,7 +34756,7 @@ function ctRealHtml(){
       + '<td class="ct-del"><button class="ct-mini" onclick="mvToggle(\'' + v.id + '\')">'
         + (v.active === false ? 'เปิดใช้' : 'ปิด') + '</button></td></tr>';
   }).join('');
-  if(!vRows) vRows = '<tr><td colspan="8" class="ct-u" style="padding:14px 4px">ยังไม่มีร้านในทะเบียน · '
+  if(!vRows) vRows = '<tr><td colspan="8" class="ct-u" style="padding:30px 12px;text-align:center"><b style="display:block;font-size:14px;color:#0B1E5B;margin-bottom:4px">ยังไม่มีร้านในทะเบียน</b>'
     + 'กดปุ่มขวาบนเพื่อเพิ่มร้านแรก</td></tr>';
 
   var venueSel = function(rid, cur){
@@ -34767,9 +34767,12 @@ function ctRealHtml(){
             + e(v.name || v.id) + ' · ฿' + (+v.priceAd || 0) + '/' + (+v.priceCh || 0) + '</option>'; }).join('')
       + '</select>';
   };
+  var rf = _ct.rf || 'all', nNoMeal = 0;   /* §ctV2 · ตัวกรอง "ยังไม่เลือกร้าน" */
+  (typeof ROUTES !== 'undefined' ? ROUTES : []).forEach(function(r){ if(!r.mealVenueId) nNoMeal++; });
   var rRows = ctRoutesByPier().map(function(g){
-    return '<tr class="ct-pierh"><td colspan="2">' + e(g.name) + ' · ' + g.routes.length + ' เส้นทาง</td></tr>'
-      + g.routes.map(function(r){
+    var rs = g.routes.filter(function(r){ return rf !== 'un' || !r.mealVenueId; }); if(!rs.length) return '';
+    return '<tr class="ct-pierh"><td colspan="2">' + e(g.name) + ' · ' + rs.length + ' เส้นทาง</td></tr>'
+      + rs.map(function(r){
           return '<tr><td class="ct-nm"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
             + '<b>' + e(r.name || r.id) + '</b><div class="ct-nmsub">' + e(r.islands || '') + '</div></td>'
             + '<td>' + venueSel(r.id, r.mealVenueId || '') + '</td></tr>'; }).join('');
@@ -34823,6 +34826,7 @@ function ctRealHtml(){
       + 'ตอนคิด P&amp;L รายทริป ตัวเลขในหน้านี้จะไปทับตัวประมาณเป็นรายบรรทัด</span></div>'
       + '<div class="ct-bar2r"><button class="ct-btn" onclick="mvAdd()">' + ctIcon('plus', 13) + ' เพิ่มร้านอาหาร</button></div></div>'
 
+    + '<div class="ct-rgrid">'   /* §ctV2 · สองคอลัมน์ */
     + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ทะเบียนร้านอาหาร</b></span>'
       + '<span class="ct-cnt">' + (MEAL_VENUES || []).length + ' ร้าน</span></div>'
       + '<div class="ct-scroll"><table class="ct-mtbl">'
@@ -34834,11 +34838,14 @@ function ctRealHtml(){
       + 'ระบบรู้แค่เวลาออกจากท่า ไม่เคยรู้เวลาถึงเกาะ</div></div>'
 
     + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ร้านประจำเส้นทาง</b></span>'
-      + '<span class="ct-cnt">' + (typeof ROUTES !== 'undefined' ? ROUTES.length : 0) + ' เส้นทาง</span></div>'
-      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:300px"></colgroup>'
-      + '<tbody>' + rRows + '</tbody></table></div>'
+      + '<span class="ct-cnt">' + (typeof ROUTES !== 'undefined' ? ROUTES.length : 0) + ' เส้นทาง</span>'
+      + '<span class="ct-seg" style="margin-left:10px"><button class="' + (rf === 'all' ? 'on' : '') + '" onclick="_ct.rf=\'all\';ctRender()">ทั้งหมด</button>'
+      + '<button class="' + (rf === 'un' ? 'on' : '') + '" onclick="_ct.rf=\'un\';ctRender()">ยังไม่เลือกร้าน ' + nNoMeal + '</button></span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:46%"></colgroup>'
+      + '<tbody>' + (rRows || '<tr><td colspan="2" class="ct-u" style="text-align:center;padding:22px">ทุกเส้นทางเลือกร้านแล้ว</td></tr>') + '</tbody></table></div>'
       + '<div class="ct-hint">นี่คือค่าเริ่มต้น · วันไหนร้านเต็มหรือเรือไปไม่ทัน จะเปลี่ยนเฉพาะลำนั้นวันนั้นได้ที่ใบงานเรือ (ก้อนถัดไป)</div></div>'
 
+    + '</div>'   /* /ct-rgrid */
     + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ค่ารถ · คิดตามกลุ่ม</b></span>'
       + '<span class="ct-cnt">' + GS.length + ' กลุ่ม · ' + GS.reduce(function(a, g){ return a + g.vans.length; }, 0) + ' คัน</span></div>'
       + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:26%"><col style="width:330px"></colgroup>'
@@ -35006,9 +35013,18 @@ function ctMatchHtml(){
 
   /* §ctRoute · หนึ่งแถวหนึ่งเส้นทางจริง · จัดกลุ่มตามท่าไว้ให้กวาดตาหาง่ายเท่านั้น
      ไม่ได้แปลว่าเส้นในท่าเดียวกันต้องใช้แผนเดียวกัน */
+  /* §ctV2 · ค้นหา + ตัวกรอง (จำไว้ในหน้า ไม่ลงข้อมูล) */
+  var mq = String(_ct.mq || '').trim().toLowerCase(), mf = _ct.mf || 'all';
+  var keep = function(r){
+    if(mf === 'un' && ctPlanOfFam(r.id)) return false;
+    if(mf === 'trips' && !ctRouteTrips(r.id)) return false;
+    if(mq && String((r.name || '') + ' ' + r.id + ' ' + (r.islands || '')).toLowerCase().indexOf(mq) < 0) return false;
+    return true; };
+  var nShow = 0;
   var rows = ctRoutesByPier().map(function(g){
-    return '<tr class="ct-pierh"><td colspan="5">' + e(g.name) + ' · ' + g.routes.length + ' เส้นทาง</td></tr>'
-      + g.routes.map(function(r){
+    var rs = g.routes.filter(keep); if(!rs.length) return ''; nShow += rs.length;
+    return '<tr class="ct-pierh"><td colspan="5">' + e(g.name) + ' · ' + rs.length + ' เส้นทาง</td></tr>'
+      + rs.map(function(r){
     var pl = ctPlanOfFam(r.id), nT = ctRouteTrips(r.id);
     var fam = ctRouteFamId(r.id);
     var sug = null, sib = null;
@@ -35086,18 +35102,17 @@ function ctMatchHtml(){
        + 'P&amp;L จะไม่หยิบไปใช้เลย</div></div>')
     : '';
 
-  return '<div class="ct-card ct-bar2"><div><b>จับคู่เส้นทาง</b>'
-      + '<span class="ct-sub">เส้นทางไหนใช้แผนไหน · ตัดสินที่นี่ที่เดียว '
-      + 'แล้ว <em class="var">P&amp;L รายทริป</em> จะหยิบแผนนั้นไปคิดให้เอง</span></div>'
-      + '<div class="ct-bar2r"><span class="ct-u">จับคู่แล้ว <b>' + nLinked + '</b> จาก ' + RTS.length + ' เส้นทาง</span></div></div>'
-
-    + (nLinked < RTS.length
-        ? ('<div class="ct-warn"><div class="wi">!</div><div>'
-           + '<b>ยังเหลืออีก ' + (RTS.length - nLinked) + ' เส้นทางที่ยังไม่ได้จับคู่แผน</b>'
-           + '<p>เส้นที่ยังไม่จับคู่ ทุกทริปจะคิดต้นทุนด้วย<b>สูตรกลางชุดเดียวกันหมด</b> '
-           + '— เส้นที่วิ่งไกลกว่า กินข้าวแพงกว่า จอดคนละท่า ก็คิดเท่ากันหมด<br>'
-           + 'P&amp;L จะขึ้นป้ายเหลืองบนการ์ดของเรือทุกลำที่วิ่งเส้นเหล่านี้ ไม่แอบใช้เงียบ ๆ</p></div></div>')
-        : '')
+  /* §ctV2 · หัวแท็บ = ตัวเลขสรุปสองช่อง + ค้นหา/ตัวกรอง (คำอธิบายย้ายไปอยู่ในช่องตัวเลข) */
+  var segB = function(k, t){ return '<button class="' + (mf === k ? 'on' : '') + '" onclick="_ct.mf=\'' + k + '\';ctRender()">' + t + '</button>'; };
+  return '<div class="ct-mtiles">'
+      + '<div class="ct-card ct-mt ok"><small>จับคู่แล้ว</small><b>' + nLinked + '<span> / ' + RTS.length + '</span></b>'
+        + '<em>เส้นทางไหนใช้แผนไหน ตัดสินที่นี่ · P&amp;L รายทริปหยิบไปคิดให้เอง</em></div>'
+      + '<div class="ct-card ct-mt' + (nLinked < RTS.length ? ' warn' : ' ok') + '"><small>ยังไม่จับคู่</small><b>' + (RTS.length - nLinked) + '</b>'
+        + '<em>ทุกทริปของเส้นเหล่านี้คิดด้วยสูตรกลางชุดเดียว · P&amp;L ขึ้นป้ายเหลืองให้</em></div>'
+      + '<div class="ct-card ct-mt fl"><label class="ct-msrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex:none"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>'
+        + '<input data-fk="ct.mq" placeholder="ค้นหาเส้นทาง · รหัส · เกาะ" value="' + e(_ct.mq || '') + '" oninput="_ct.mq=this.value;ctRender()"></label>'
+        + '<span class="ct-seg">' + segB('all', 'ทั้งหมด') + segB('un', 'ยังไม่จับคู่') + segB('trips', 'มีทริป 30 วัน') + '</span></div>'
+    + '</div>'
 
     + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15)
       + '<b>เส้นทาง → แผนต้นทุน</b></span>'
@@ -35107,7 +35122,7 @@ function ctMatchHtml(){
       + '<thead><tr><th>เส้นทาง</th><th style="text-align:right">ออกจริง</th>'
       + '<th>แผนต้นทุนที่ใช้</th><th style="text-align:right">ต้นทุน/หัว</th>'
       + '<th style="text-align:right">สถานะ</th></tr></thead>'
-      + '<tbody>' + rows + '</tbody></table></div>'
+      + '<tbody>' + (nShow ? rows : '<tr><td colspan="5" class="ct-u" style="text-align:center;padding:26px">ไม่มีเส้นทางที่ตรงกับตัวกรอง</td></tr>') + '</tbody></table></div>'
       + '<div class="ct-hint">หนึ่งแถวคือ<b>หนึ่งเส้นทางจริง</b> · '
       + 'เส้นที่ต้นทุนเหมือนกันจริง กดปุ่ม “ใช้แผนของ …” ผูกแผนเดียวกันได้ · '
       + 'ต่างเมื่อไหร่ค่อยแยกแผน ไม่ต้องรื้อโครง<br>'
@@ -35271,11 +35286,13 @@ function ctTplHtml(){
         + '<td class="ct-del"><button class="ct-x" title="ลบรายการ" onclick="ctDelLine(' + li + ')">' + ctIcon('trash', 14) + '</button></td></tr>';
     });
     var cnt = (T.lines || []).filter(function(l){ return (l.g || 'อื่นๆ') === g; }).length;
-    return '<div class="ct-card ct-catcard"><div class="ct-cath">'
-      + '<span>' + ctIcon('folder', 15) + '<b>' + ctE(g) + '</b>'
-      + '<button class="ct-ren" title="เปลี่ยนชื่อหมวด (มีผลทุกบรรทัดในหมวด)" onclick="ctRenameGroup(\'' + ctE(g) + '\')">&#9998;</button></span>'
+    var fold = !!((_ct.tfold || {})[g]);   /* §ctV2 · หมวดพับได้ · จำไว้ในหน้า */
+    return '<div class="ct-tcat' + (fold ? ' fold' : '') + '"><div class="ct-cath" onclick="ctV2TFold(\'' + ctE(g) + '\')" title="คลิกเพื่อหุบ / กางหมวดนี้">'
+      + '<span><i class="ct-tchev">' + (fold ? '&#9656;' : '&#9662;') + '</i><b>' + ctE(g) + '</b>'
+      + '<button class="ct-ren" title="เปลี่ยนชื่อหมวด (มีผลทุกบรรทัดในหมวด)" onclick="event.stopPropagation();ctRenameGroup(\'' + ctE(g) + '\')">&#9998;</button></span>'
       + '<span class="ct-cnt">' + cnt + ' รายการ</span></div>'
-      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col style="width:230px"><col><col style="width:44px"></colgroup><tbody>' + rows + '</tbody></table></div></div>';
+      + (fold ? '' : ('<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col style="width:250px"><col><col style="width:44px"></colgroup><tbody>' + rows + '</tbody></table></div>'))
+      + '</div>';
   }).join('');
 
   return '<div class="ct-card ct-bar2"><div><b>จัดการสูตรกลาง</b>'
@@ -35284,7 +35301,13 @@ function ctTplHtml(){
     + '<div class="ct-bar2r"><span class="ct-vatset">VAT ของกิจการ ' + ctNum(T.vatRate, 'vat', 'ctVatSet(this.value)', 52) + ' %</span>'
     + '<button class="ct-btn ghost" onclick="ctResetTpl()">คืนค่าเริ่มต้น</button>'
     + '<button class="ct-btn" onclick="ctAddLine()">' + ctIcon('plus', 13) + ' เพิ่มรายการต้นทุน</button></div></div>'
-    + body;
+    + '<div class="ct-card ct-tsheet"><div class="ct-tsh"><span>รายการ · หมวด · ขอคืน VAT</span><span>ส่วนประกอบ · ชนิด · คิดแบบ · จำนวน · ราคาแยก</span>'
+    + '<button class="ct-mini" onclick="ctV2TFoldAll()">หุบ / กาง ทุกหมวด</button></div>' + body + '</div>';
+}
+function ctV2TFold(g){ _ct.tfold = _ct.tfold || {}; if(_ct.tfold[g]) delete _ct.tfold[g]; else _ct.tfold[g] = 1; ctRender(); }
+function ctV2TFoldAll(){
+  var G = ctGroups(ctTpl()), o = _ct.tfold || {}, all = G.length && G.every(function(g){ return o[g]; });
+  _ct.tfold = {}; if(!all) G.forEach(function(g){ _ct.tfold[g] = 1; }); ctRender();
 }
 
 // ── แท็บ 3 · ปรับ / ปิด รายแผน ───────────────────────────────────────────────────────────────────
@@ -35568,6 +35591,17 @@ var CT_PCOL = ['#C2410C','#0F6E56','#185FA5','#8A5B00','#7E22CE','#0E7490','#9F1
 /* §ctTripBg · พื้นอ่อนคู่กับสีเข้มด้านบน · ผสมกับพื้นครีมของหน้านี้ไว้แล้ว
    ใส่เป็นค่าตายตัวไม่ใช้ color-mix เพราะ Safari รุ่นที่สตาฟใช้ยังมีบางเครื่องไม่รองรับ */
 var CT_PBG  = ['#FBEDE6','#E7F1EE','#E8EFF6','#F6EFE2','#F1E9F8','#E6F0F3','#F8E9ED','#EDF2E4'];
+/* §ctV2 · แถวรวมต่อทริป ท้ายตารางปรับ/ปิด · บวกยอดของแต่ละหมวดที่ไม่ได้ปิด ด้วยสูตรเดียวกับแถวหมวด (ctCalc) */
+function ctV2OvrTot(P, G, T){
+  var cells = P.map(function(pl, _pi){
+    var pax = Math.max(1, +pl.pax || 1), th2 = Math.min(Math.max(0, +pl.paxTH || 0), pax), on = {}, tot = 0;
+    G.forEach(function(g){ if(!ctGrpCfg(pl, g).off) on[g] = 1; });
+    ctCalc(pl, { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:th2, paxFR:pax - th2, paxCh:ctChdAt(pl, pax) }, T)
+      .rows.forEach(function(r){ if(on[r.g]) tot += r.amt; });
+    return '<td class="ct-gtd ct-tot" data-col="' + _pi + '"><b>' + ctB(tot) + '</b><span class="ct-u">' + pax + ' คน · ' + ctB(Math.round(tot / pax)) + '/หัว</span></td>';
+  }).join('');
+  return '<tr class="ct-totrow"><td class="ct-stick ct-tot">รวมต่อทริป<span class="ct-u" style="display:block;font-weight:500;font-size:11.5px">ก่อนหักภาษีซื้อคืน</span></td>' + cells + '</tr>';
+}
 function ctOvrHtml(){
   var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
   var pxf = function(pl, k, lb){
@@ -35748,7 +35782,7 @@ function ctOvrHtml(){
          .ct-sheet มี overflow:auto อยู่แล้ว (ตั้งแต่ §ctSheet) จึงปัดซ้าย-ขวาดูได้
          เลื่อนแล้วคอลัมน์ชื่อรายการกับหัวตารางยังตรึงอยู่เหมือนเดิม */
     + '<div class="ct-card ct-tblcard"><div class="ct-scroll ct-sheet"><table class="ct-otbl" style="min-width:'
-      + (250 + Math.max(1, P.length) * 260) + 'px"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
+      + (250 + Math.max(1, P.length) * 260) + 'px"><thead>' + head + '</thead><tbody>' + body + ctV2OvrTot(P, G, T) + '</tbody></table></div></div>';
 }
 
 // ── mutators ────────────────────────────────────────────────────────────────────────────────────
