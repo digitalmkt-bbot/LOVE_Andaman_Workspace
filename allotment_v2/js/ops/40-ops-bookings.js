@@ -231,12 +231,15 @@
 
   function operationsFrom(x){
     x = x || {};
-    return { boatId: x.boat_id || x.boatId || null,
+    var r = { boatId: x.boat_id || x.boatId || null,
       boatSplits: (x.boat_splits || x.boatSplits || []).map(function(s){ return { boatId: s.boat_id || s.boatId, ad: +s.ad || 0, chd: +s.chd || 0, inf: +s.inf || 0, foc: +s.foc || 0 }; }),
       boatPulled: !!(x.boat_pulled != null ? x.boat_pulled : x.boatPulled),
       pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
       returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
       pierNote: x.pier_note || x.pierNote || null, checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
+    /* check-in state: same mapping as the write path (36-ops-day-actions applyServerCheckins) -> pierCheckin / vanCheckin */
+    if(O.applyCheckins) O.applyCheckins(r, x);
+    return r;
   }
   function tripFrom(t){
     var g = function(c, s){ return t[c] !== undefined ? t[c] : t[s]; };
