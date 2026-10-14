@@ -3546,3 +3546,56 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-costing .ct-tcat .ct-mtbl td{padding-top:7px;padding-bottom:7px;border-bottom-color:#F0F2F6;vertical-align:top}
 #view-costing .ct-tcat .ct-part{gap:6px;margin-bottom:5px}
 #view-costing .ct-tcat .ct-lname{font-weight:600;color:#0B1E5B}
+
+/* ==== §bkActivity (2026-10-14) · All bookings · design A ==== */
+/* owner: "ในหน้า All booking ขอปรับหน้าตาใหม่ · ขอให้ไล่เรียงแบบล่าสุด กรณีที่มีแก้ไขให้ขึ้นอัพเดทด้วย"
+   KPI เตี้ยลงเป็นแถวเดียว · แถวรายการเตี้ยลง (ยอดคนแยกย้ายไปใต้ชื่อทริป) · เส้นสีสถานะซ้ายแถว
+   กลุ่มวัน · ป้าย ใหม่/แก้ไข/ยกเลิก ใต้เลขใบ · คอลัมน์ Activity ท้ายตาราง */
+#view-booking .bkv2-kpis .bkv2-kpi{display:flex;align-items:baseline;gap:10px;padding:9px 16px}
+#view-booking .bkv2-kpis .bkv2-kpi-lab{margin:0}
+#view-booking .bkv2-kpis .bkv2-kpi-foot{margin:0}
+#view-booking .bkv2-kpis .bkv2-kpi-val{margin-left:auto;font-size:20px;font-weight:700}
+#view-booking .bkv2-sortbar{display:flex;align-items:center;gap:8px;padding:9px 18px 0;flex-wrap:wrap}
+#view-booking .bkv2-sortbar .lb{font-size:11px;color:var(--ink-soft)}
+#view-booking .bkv2-seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white)}
+#view-booking .bkv2-seg button{border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);padding:5px 11px;cursor:pointer;white-space:nowrap}
+#view-booking .bkv2-seg button:hover{background:var(--sand-mid)}
+#view-booking .bkv2-seg button.on{background:var(--bk-navy);color:var(--white)}
+#view-booking .bkv2-sortbar .hint{font-size:11px;color:var(--ink-soft);opacity:.85}
+#view-booking .bkv2-tbl tbody td{padding:8px 14px}
+#view-booking .bkv2-tbl tr.bkv2-day{cursor:default}
+#view-booking .bkv2-tbl tr.bkv2-day td,#view-booking .bkv2-tbl tr.bkv2-day:hover td{padding:5px 14px;background:#FAFBFC;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+#view-booking .bkv2-tbl tr.bkv2-day td i{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0;opacity:.8}
+#view-booking .bkv2-tbl tr.bkr td:first-child{box-shadow:inset 3px 0 0 var(--st,transparent)}
+#view-booking .bkv2-tbl tr.bkr.confirmed,#view-booking .bkv2-tbl tr.bkr.completed{--st:#1D9E75}
+#view-booking .bkv2-tbl tr.bkr.pending_foc,#view-booking .bkv2-tbl tr.bkr.pending,#view-booking .bkv2-tbl tr.bkr.pending_approval{--st:#E0A040}
+#view-booking .bkv2-tbl tr.bkr.quote,#view-booking .bkv2-tbl tr.bkr.cancelled,#view-booking .bkv2-tbl tr.bkr.cancelled_weather,#view-booking .bkv2-tbl tr.bkr.rejected{--st:#C9CDD6}
+#view-booking .bkv2-tbl tr.bkr.fresh td{background:#F5FAFF}
+#view-booking .bkv2-tbl tr.bkr.fresh:hover td{background:#EDF5FD}
+#view-booking .bkv2-tbl .bk-id{font-size:11.5px;font-weight:700;color:var(--ink)}
+#view-booking .bkv2-tbl .bk-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:3px;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#view-booking .bkv2-tag{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;border-radius:5px;padding:0 6px;line-height:16px;font-family:'DM Sans',sans-serif;white-space:nowrap}
+#view-booking .bkv2-tag.new{background:#DDEEFF;color:#0F5E93}
+#view-booking .bkv2-tag.upd{background:#FFF1D6;color:#8A4B00}
+#view-booking .bkv2-tag.cxl{background:#FCEBEB;color:#A32D2D}
+#view-booking .bkv2-tag.b2c{background:#E6F7F9;color:#0E7D8A}
+#view-booking .bkv2-tag.dup{background:#FBE9D6;color:#9A5B00;cursor:help}
+#view-booking .bkv2-tbl .trip-name{font-weight:700}
+#view-booking .bkv2-tbl .trip-pax{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px}
+#view-booking .bkv2-tbl .tv-date{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-tbl .tv-date .dow{font-weight:500;color:var(--ink-soft);font-size:10.5px;margin-left:4px}
+#view-booking .bkv2-tbl .tv-date.soon{color:#B4530A}
+#view-booking .bkv2-tbl .tv-soon{font-size:10px;color:#B4530A;margin-top:1px}
+#view-booking .bkv2-tbl .pax-total{font-size:14px;font-weight:700}
+#view-booking .bkv2-tbl .price{font-weight:700}
+#view-booking .bkv2-tbl .price.zero{color:var(--ink-soft);font-weight:500}
+#view-booking .bkv2-tbl .act{font-size:11px;line-height:1.35;color:var(--ink-soft);max-width:240px}
+#view-booking .bkv2-tbl .act b{display:block;color:var(--ink);font-weight:700;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-booking .bkv2-tbl .act .by{opacity:.8}
+#view-booking .bkv2-tbl .act .ic{display:inline-block;width:16px;height:16px;border-radius:50%;text-align:center;line-height:16px;font-size:10px;margin-right:4px;vertical-align:-3px;font-family:'DM Sans',sans-serif}
+#view-booking .bkv2-tbl .act .ic.create{background:#DDEEFF;color:#0F5E93}
+#view-booking .bkv2-tbl .act .ic.edit{background:#FFF1D6;color:#8A4B00}
+#view-booking .bkv2-tbl .act .ic.cancel{background:#FCEBEB;color:#A32D2D}
+#view-booking .bkv2-tbl .act .ic.foc{background:#FAEEDA;color:#8A5410}
+#view-booking .bkv2-tbl .act .ic.notify,#view-booking .bkv2-tbl .act .ic.weather,#view-booking .bkv2-tbl .act .ic.reschedule{background:#E8F0FB;color:#2F5FA8}
+#view-booking .bkv2-tbl .act .ic.extra,#view-booking .bkv2-tbl .act .ic.note,#view-booking .bkv2-tbl .act .ic.b2c{background:#EEF1F6;color:#6B7280}

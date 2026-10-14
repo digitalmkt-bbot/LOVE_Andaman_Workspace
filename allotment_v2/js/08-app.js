@@ -48097,6 +48097,7 @@ const _bkV2 = {
   page: 1,              // §bkPage · Tab 3 'all' · 1-based page · reset to 1 whenever the filter/search/month changes
   pageSize: 200,        // §bkMonthPage · rows per page INSIDE the picked month · only kicks in when a month is bigger than this
   month: null,          // §bkMonthPage · Tab 3 'all' · travel month 'YYYY-MM' | 'all' · null = auto-pick (this month, else newest with data)
+  sort: null,           // §bkActivity · Tab 3 'all' · 'activity' | 'travel' | 'created' · null = read la_bkSort (default activity)
   newBooking: null,     // P2 · draft object when form is open · null when closed
   detailId: null,       // P3 · booking id when detail view is open · null when on list
   editingId: null,      // P3 · booking id when editing existing · used by Edit mode
@@ -55401,10 +55402,22 @@ function bkV2RenderTab3(){
   if(!q) _bkV2.month = month;    // remember the browsed month — but never let a search overwrite it
   if(q) month = 'all';           // a search has to reach every month, not only the one you happen to be sitting on
   const monthRows = month === 'all' ? preMonth : preMonth.filter(b => bkV2MonthKey(b.travelDate) === month);
-  // Travel-date order, now that a "page" IS a travel month · newest trip first, tiebreak by booking recency.
+  // One id→record map instead of an SB_BOOKINGS.find() per row (that find was O(n) inside an O(n) map).
+  const rawById = new Map((SB_BOOKINGS||[]).map(b => [b.id, b]));
+  /* §bkActivity (2026-10-14) · owner "ขอให้ไล่เรียงแบบล่าสุด กรณีที่มีแก้ไขให้ขึ้นอัพเดทด้วย" · design A
+     เรียงได้สามแบบ · ค่าเริ่มต้น "ความเคลื่อนไหวล่าสุด" = ใบที่เพิ่งสร้าง/แก้/ยกเลิก/FOC ขึ้นบนสุด
+     อ่านจาก history[] (บันทึกทุกครั้งที่สร้าง แก้ ยกเลิก) + updatedAt + createdAt ที่มีอยู่แล้ว ไม่แตะฐานข้อมูล
+     ยังกรองตามเดือนเดินทางที่เลือกเหมือนเดิม · "All time" คือทุกใบ */
+  const sortMode = bkV2SortMode();
+  const actOf = new Map();
+  for(const b of monthRows) actOf.set(b.id, bkV2LastAct(rawById.get(b.id), b));
+  const _actAt = b => String((actOf.get(b.id)||{}).at||'');
   const filtered = monthRows.slice().sort((a,b) =>
-    String(b.travelDate||'').localeCompare(String(a.travelDate||'')) ||
-    String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+    sortMode === 'travel'
+      ? (String(b.travelDate||'').localeCompare(String(a.travelDate||'')) || String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    : sortMode === 'created'
+      ? (String(b.createdAt||'').localeCompare(String(a.createdAt||'')) || String(b.id||'').localeCompare(String(a.id||'')))
+      : (_actAt(b).localeCompare(_actAt(a)) || String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
 
   // §bkPage · safety net only · a normal month is well under pageSize so no pager shows at all. 'All time'
   // and freak months still get sliced, because the row template below does O(SB_BOOKINGS) work per row.
@@ -55414,8 +55427,45 @@ function bkV2RenderTab3(){
   _bkV2.page = page;
   const from = (page - 1) * pageSize;
   const pageRows = filtered.slice(from, from + pageSize);
-  // One id→record map instead of an SB_BOOKINGS.find() per row (that find was O(n) inside an O(n) map).
-  const rawById = new Map((SB_BOOKINGS||[]).map(b => [b.id, b]));
+  /* §bkActivity · คีย์สำหรับจัดกลุ่มเป็นวัน · โหมดวันเดินทางใช้วันเดินทาง · อีกสองโหมดใช้วันตามเวลาท้องถิ่น */
+  const _dayKeyOf = b => sortMode === 'travel' ? String(b.travelDate||'').slice(0,10)
+    : bkV2LocalDayKey(sortMode === 'created' ? b.createdAt : (actOf.get(b.id)||{}).at);
+  const _CXL = ['cancelled','cancelled_weather','rejected'];
+  const _todayK = bkV2LocalYMD(new Date());
+  const _soonK = bkV2LocalYMD(new Date(Date.now() + 2*86400000));
+  const _rowHtml = (b, i) => {
+    const act = actOf.get(b.id) || {};
+    const dk = _dayKeyOf(b), pk = i ? _dayKeyOf(pageRows[i-1]) : null;
+    const dayRow = dk !== pk ? `<tr class="bkv2-day"><td colspan="8">${sortMode==='travel'?'เดินทาง ':''}${bkV2DayLabel(dk, sortMode!=='travel')}</td></tr>` : '';
+    const fresh = !!b.createdAt && (Date.now() - new Date(b.createdAt).getTime()) < 86400000 && !_CXL.includes(b.status);
+    const isCxl = _CXL.includes(b.status);
+    const edited = !!act.kind && act.kind !== 'create';
+    const tags = (fresh ? '<span class="bkv2-tag new">ใหม่</span>' : '')
+      + (isCxl ? `<span class="bkv2-tag cxl">ยกเลิก ${bkV2FmtDate(act.at)}</span>`
+        : edited ? `<span class="bkv2-tag upd">แก้ไข ${bkV2FmtDate(act.at)}</span>`
+        : `<span>created ${bkV2FmtDate(b.createdAt)}</span>`)
+      + (b.id.startsWith('b2c_') ? '<span class="bkv2-tag b2c">'+bkV2B2CMark(10)+'B2C</span>' : '')
+      + (function(){ /* ป้าย "อาจซ้ำ" ของเดิม · คงไว้ */
+          const _o=rawById.get(b.id); if(!_o||_CXL.includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function') return '';
+          const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length) return '';
+          const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', ');
+          const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · ');
+          return `<span class="bkv2-tag dup" title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})">&#9888; อาจซ้ำ</span>`; })();
+    const tvK = String(b.travelDate||'').slice(0,10);
+    const soon = !isCxl && tvK >= _todayK && tvK <= _soonK;
+    const actTxt = act.kind === 'create' ? 'สร้างใบจอง' : (act.text || bkV2ActKindLabel(act.kind));
+    return dayRow + `
+            <tr class="bkr ${b.status}${fresh?' fresh':''}" data-id="${escapeHTML(b.id)}" onclick="bkV2OpenDetail('${b.id}')">
+              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="bk-sub">${tags}</div></td>
+              <td><div class="agent-name">${escapeHTML(b.agentName)}</div><div class="agent-rt">${escapeHTML(b.agentSub)}</div></td>
+              <td><div class="trip-name">${escapeHTML(b.tripSummary)}</div><div class="trip-pax">${b.paxBreak}</div></td>
+              <td><div class="tv-date${soon?' soon':''}">${bkV2FmtDate(b.travelDate)}<span class="dow">${bkV2Dow(b.travelDate)}</span></div>${soon?`<div class="tv-soon">${tvK===_todayK?'วันนี้':'ใกล้ถึง'}</div>`:''}</td>
+              <td class="num"><div class="pax-total">${b.paxTotal}</div></td>
+              <td class="num"><div class="price${b.total?'':' zero'}">&#3647;${bkV2FmtTHB(b.total)}</div></td>
+              <td><span class="bkv2-chip ${b.status}"><span class="dot"></span>${bkV2StatusLabel(b.status)}</span>${b.focCount > 0 ? `<span class="bkv2-foc-flag">FOC ${b.focCount}</span>` : ''}</td>
+              <td><div class="act" title="${escapeHTML(actTxt)}"><b><span class="ic ${escapeHTML(act.kind||'note')}">${bkV2ActIcon(act.kind)}</span>${escapeHTML(actTxt)}</b>${bkV2RelTime(act.at)}${act.at?' · '+bkV2FmtClock(act.at):''}${act.by?` <span class="by">· ${escapeHTML(act.by)}</span>`:''}</div></td>
+            </tr>`;
+  };
 
   return `
     <div class="bkv2-kpis">
@@ -55428,6 +55478,15 @@ function bkV2RenderTab3(){
       ${pills.map(p => `<span class="bkv2-pill ${_bkV2.statusFilter===p.k?'on':''}" data-st="${p.k}" onclick="bkV2SetFilter('${p.k}')"><span class="dot"></span>${p.label} &middot; ${p.n}</span>`).join('')}
       <input class="bkv2-search" id="bkv2-search-input" placeholder="ค้นหา &middot; VC &middot; ชื่อลูกค้า &middot; เบอร์ &middot; BK &middot; agent &middot; trip" value="${escapeHTML(_bkV2.search)}" oninput="bkV2SetSearch(this.value)">
     </div>
+    <div class="bkv2-sortbar">
+      <span class="lb">เรียงตาม</span>
+      <div class="bkv2-seg">
+        <button class="${sortMode==='activity'?'on':''}" onclick="bkV2SetSort('activity')">&#9889; ความเคลื่อนไหวล่าสุด</button>
+        <button class="${sortMode==='travel'?'on':''}" onclick="bkV2SetSort('travel')">&#128197; วันเดินทาง</button>
+        <button class="${sortMode==='created'?'on':''}" onclick="bkV2SetSort('created')">&#127381; วันที่สร้าง</button>
+      </div>
+      <span class="hint">${sortMode==='activity'?'ใบที่เพิ่งสร้าง แก้ไข หรือยกเลิก ขึ้นบนสุด · จัดกลุ่มเป็นวัน':sortMode==='travel'?'ทริปใกล้สุดขึ้นก่อน · จัดกลุ่มเป็นวันเดินทาง':'ใบที่สร้างล่าสุดขึ้นก่อน · ไม่สนว่าแก้ไขเมื่อไหร่'}</span>
+    </div>
     ${bkV2MonthBarHtml({month, months, monthCounts, monthMin, monthMax, allTotal: preMonth.length, searching: !!q})}
     ${filtered.length === 0 ? `
       <div class="bkv2-empty">
@@ -55437,19 +55496,9 @@ function bkV2RenderTab3(){
       </div>
     ` : `
       <table class="bkv2-tbl">
-        <thead><tr><th style="width:120px">BOOKING</th><th>AGENT</th><th>TRIP</th><th>TRAVEL</th><th class="num">PAX</th><th class="num">TOTAL</th><th>STATUS</th></tr></thead>
+        <thead><tr><th style="width:168px">BOOKING</th><th>AGENT</th><th>TRIP</th><th style="width:110px">TRAVEL</th><th class="num" style="width:60px">PAX</th><th class="num" style="width:100px">TOTAL</th><th style="width:150px">STATUS</th><th style="width:240px">ACTIVITY &middot; ล่าสุด</th></tr></thead>
         <tbody>
-          ${pageRows.map(b => `
-            <tr onclick="bkV2OpenDetail('${b.id}')">
-              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="trip-date">created ${bkV2FmtDate(b.createdAt)}</div>${b.id.startsWith('b2c_')?'<span style="display:inline-block;margin-top:3px;background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span>':''}${(function(){ const _o=rawById.get(b.id); if(!_o||['cancelled','rejected','cancelled_weather'].includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<div title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})" style="display:inline-block;margin-top:3px;background:#FBE9D6;color:#9A5B00;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;cursor:help">&#9888; อาจซ้ำ</div>`; })()}</td>
-              <td><div class="agent-name">${escapeHTML(b.agentName)}</div><div class="agent-rt">${escapeHTML(b.agentSub)}</div></td>
-              <td><div class="trip-name">${escapeHTML(b.tripSummary)}</div></td>
-              <td><div class="trip-date">${bkV2FmtDate(b.travelDate)}</div></td>
-              <td class="num"><div class="pax-total">${b.paxTotal}</div><div class="pax-break">${b.paxBreak}</div></td>
-              <td class="num"><div class="price">&#3647;${bkV2FmtTHB(b.total)}</div></td>
-              <td><span class="bkv2-chip ${b.status}"><span class="dot"></span>${bkV2StatusLabel(b.status)}</span>${b.focCount > 0 ? `<span class="bkv2-foc-flag">FOC ${b.focCount}</span>` : ''}</td>
-            </tr>
-          `).join('')}
+          ${pageRows.map(_rowHtml).join('')}
         </tbody>
       </table>
     `}
@@ -55610,6 +55659,43 @@ function bkV2ClearFilter(which){
   bkV2Render();
 }
 function bkV2SetFilter(k){ _bkV2.statusFilter = k; _bkV2.page = 1; bkV2Render(); }
+/* §bkActivity · การเรียงของแท็บ All bookings · จำต่อเครื่อง */
+function bkV2SortMode(){
+  if(!_bkV2.sort){ let v=''; try{ v=localStorage.getItem('la_bkSort')||''; }catch(_){} _bkV2.sort = ['activity','travel','created'].includes(v) ? v : 'activity'; }
+  return _bkV2.sort;
+}
+function bkV2SetSort(k){ _bkV2.sort = k; _bkV2.page = 1; try{ localStorage.setItem('la_bkSort', k); }catch(_){} bkV2Render(); }
+/* ความเคลื่อนไหวล่าสุดของใบ · {at, kind, text, by} · เลือกตัวที่เวลาใหม่สุดจาก history[] / updatedAt / cancellation / createdAt */
+function bkV2LastAct(raw, b){
+  const out = { at: String((b && b.createdAt) || (raw && raw.createdAt) || ''), kind: 'create', text: '', by: (raw && raw.createdBy) || '' };
+  if(!raw) return out;
+  const take = (at, kind, text, by) => { if(at && String(at) > out.at){ out.at = String(at); out.kind = kind; out.text = text || ''; out.by = by || ''; } };
+  if(raw.updatedAt) take(raw.updatedAt, 'edit', 'Edited booking details', raw.updatedBy);
+  if(Array.isArray(raw.history)) for(const h of raw.history){ if(h) take(h.at, h.kind || 'note', h.text, h.by); }
+  const cx = raw.cancellation; if(cx && typeof cx === 'object') take(cx.at, 'cancel', cx.reason ? ('ยกเลิก · ' + cx.reason) : 'ยกเลิก', cx.by);
+  return out;
+}
+function bkV2ActKindLabel(k){ return ({create:'สร้างใบจอง', edit:'แก้ไข', cancel:'ยกเลิก', foc:'FOC', notify:'แจ้งเอเยนต์', weather:'สภาพอากาศ', reschedule:'เลื่อนวัน', extra:'บริการเสริม', note:'บันทึก'})[k] || (k || ''); }
+function bkV2ActIcon(k){ return ({create:'+', edit:'&#9998;', cancel:'&#10005;', foc:'&#9733;', notify:'&#9993;', weather:'&#9729;', reschedule:'&#8635;', extra:'&#9670;'})[k] || '&#8226;'; }
+function bkV2LocalDayKey(iso){ if(!iso) return ''; const d = new Date(iso); return isNaN(d) ? String(iso).slice(0,10) : bkV2LocalYMD(d); }
+function bkV2Dow(d){ if(!d) return ''; const dt = new Date(String(d).length <= 10 ? d + 'T00:00' : d); return isNaN(dt) ? '' : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]; }
+function bkV2FmtClock(iso){ const d = new Date(iso); return isNaN(d) ? '' : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function bkV2RelTime(iso){
+  if(!iso) return '';
+  const t = new Date(iso).getTime(); if(isNaN(t)) return '';
+  const m = Math.round((Date.now() - t) / 60000);
+  if(m < 1) return 'เมื่อกี้'; if(m < 60) return m + ' นาทีที่แล้ว';
+  const h = Math.round(m / 60); if(h < 24) return h + ' ชม. ที่แล้ว';
+  const d = Math.round(h / 24); if(d === 1) return 'เมื่อวาน'; if(d < 30) return d + ' วันก่อน';
+  return bkV2FmtDate(iso);
+}
+/* ป้ายกลุ่มวัน · relative=true → วันนี้/เมื่อวาน ก่อน แล้วค่อยเป็นวันที่ */
+function bkV2DayLabel(k, relative){
+  if(!k) return '<i>ไม่ระบุวัน</i>';
+  const today = bkV2LocalYMD(new Date()), yest = bkV2LocalYMD(new Date(Date.now() - 86400000));
+  const base = (relative && k === today) ? 'วันนี้' : (relative && k === yest) ? 'เมื่อวาน' : bkV2FmtDate(k);
+  return `${base} <i>&middot; ${bkV2Dow(k)}${(relative && (k===today||k===yest)) ? ' ' + bkV2FmtDate(k) : ''}</i>`;
+}
 function bkV2SetSearch(v){
   _bkV2.search = v;
   _bkV2.page = 1;           // §bkPage · a new search must land on page 1, not page 47 of the old result set
