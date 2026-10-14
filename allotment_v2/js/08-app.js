@@ -19127,6 +19127,17 @@ function pckPierOf(rid){
   var rt=(typeof getRoute==='function'?getRoute(rid):null)||{};
   return rt.pier||'';
 }
+/* ══ §pckPierPrint (2026-10-14) · owner "อันนี้ต้องแยกบายท่าเรือด้วย" ═══════════════════
+   ปุ่มพิมพ์ "ทุกลำ" (ใบสั่งงานไกด์ · ใบสั่งงาน+ทะเบียน · ทะเบียนรายชื่อ) กวาดทุกใบของวันนั้น
+   ทั้งที่หน้าเช็คอินกรองท่าอยู่ · เลือกท่าพังงาแล้วยังถามเรื่องเรือทับละมุ (Tadeo, Zeus …)
+   ตรงนี้ตัวเดียวตัดสินว่าทริปนี้อยู่ในท่าที่เลือกไหม · ไม่ได้เลือกท่า (ทุกท่า) = ผ่านหมดเหมือนเดิม */
+function pckInPier(t){
+  if(!_pckPier) return true;
+  return pckPierOf(t && t.routeId) === _pckPier;
+}
+function pckPierTag(){
+  return _pckPier ? (' · ท่า'+(PCK_PIER_LBL[_pckPier]||_pckPier)) : '';
+}
 function pckPierBar(date){
   var cnt={}, tot=0;
   pckProgData(date).forEach(function(A){
@@ -21782,13 +21793,14 @@ function goPrint(bid){
     (SB_BOOKINGS||[]).forEach(function(b){
       if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
       var t=ckTripOn(b,date); if(!t) return;
+      if(!pckInPier(t)) return;                /* §pckPierPrint · เฉพาะท่าที่เลือกบนหน้าเช็คอิน */
       var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       var k=O.boatId||t.charterBoatId||''; if(k && !seen[k]){ seen[k]=1; ids.push(k); }
     });
   }
-  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้'+pckPierTag()+' — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
   var miss=ids.filter(function(k){ return !goAsn(date,k).g.length; });
-  if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
+  if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ'+pckPierTag()+' ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
   /* §goCombo · เจ้าท่ารับใบสั่งงานกับทะเบียนรายชื่อพร้อมกันอยู่แล้ว
      แยกพิมพ์คนละหน้าต่างทำให้ต้องมาจับคู่ว่าใบไหนของลำไหนเอง · ออกต่อกันเป็นชุดเดียว
      ลำละ 2 หน้า เรียงใบสั่งงานก่อน แล้วทะเบียนของลำเดียวกันตามทันที */
@@ -21970,6 +21982,7 @@ function pckGuideJobOrder(bid){
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
+    if(bid==='all' && !pckInPier(t)) return;   /* §pckPierPrint · "ทุกลำ" = ทุกลำของท่าที่เลือก */
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var booked=ckBookedPax(t);
     var row={b:b, t:t, O:O, booked:booked, expect:booked, ck:O.pierCheckin||null,
@@ -22302,6 +22315,7 @@ function pckTravelReg(bid){
     (SB_BOOKINGS||[]).forEach(function(b){
       if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
       var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+      if(!pckInPier(t)) return;                /* §pckPierPrint */
       var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       var k=O.boatId||t.charterBoatId||''; if(!k||seen[k]) return; seen[k]=1; ks.push(k);
     });
@@ -22314,7 +22328,7 @@ function pckTravelReg(bid){
   if(!ks.length){ alert('ยังไม่มี booking ที่จัดเรือแล้วในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบทะเบียนได้'); return; }
 
   var sheets=ks.map(function(k){ return pckTravelSheet(k,date); }).join('');
-  var ttl='ทะเบียนรายชื่อผู้เดินทาง · '+(bid==='all'?('ทุกลำ '+ks.length+' ใบ'):pckBoatName(bid))+' · '+date;
+  var ttl='ทะเบียนรายชื่อผู้เดินทาง · '+(bid==='all'?('ทุกลำ '+ks.length+' ใบ'+pckPierTag()):pckBoatName(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(ttl)+'</title>'
    +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=DM+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
    + pckTravelCss()+'</head><body>'
