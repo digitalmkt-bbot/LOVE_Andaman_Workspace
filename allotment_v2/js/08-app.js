@@ -23949,15 +23949,6 @@ function drmPngDonut(D){
   c.fillText('TOTAL PAX', cx, cy+21);
   return cv.toDataURL('image/png');
 }
-function drmUpload(dataUrl, name){
-  var b64=String(dataUrl||'').split(',')[1]||'';
-  if(!b64) return Promise.reject(new Error('no image'));
-  return fetch('/api/mailimg',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({filename:name,dataB64:b64})})
-    .then(function(r){ return r.json(); })
-    .then(function(j){ if(!j||!j.url) throw new Error((j&&j.error)||'upload failed');
-      return location.origin+j.url; });
-}
 // เตรียมรูปกราฟไว้ก่อนเขียนจดหมาย · ทำครั้งเดียวต่อวัน/โหมด แล้วจำไว้
 function drmEnsureImgs(D, done){
   // Chart images for the report email are disabled: they were hosted by the removed /api/mailimg, and
@@ -23965,22 +23956,6 @@ function drmEnsureImgs(D, done){
   _drImg={ key:drImgKey(D), trend:'', donut:'', state:'' };
   if(done) done();
   return;
-  var key=drImgKey(D);
-  if(_drImg.key===key && (_drImg.state==='ok'||_drImg.state==='run')){ if(done&&_drImg.state==='ok') done(); return; }
-  _drImg={ key:key, trend:'', donut:'', state:'run' };
-  if(done) drMailPaint();
-  var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
-  var jobs=[];
-  try{ jobs.push(drmUpload(drmPngTrend(T),'trend-'+D.date+'.png').then(function(u){ _drImg.trend=u; })); }catch(_){}
-  try{ if(D.mOrder.length) jobs.push(drmUpload(drmPngDonut(D),'donut-'+D.date+'.png').then(function(u){ _drImg.donut=u; })); }catch(_){}
-  Promise.all(jobs).then(function(){
-    if(_drImg.key!==key) return;
-    _drImg.state='ok'; if(done) done(); drMailPaint();
-  }).catch(function(err){
-    if(_drImg.key!==key) return;
-    _drImg.state='err'; console.warn('[dailyreport] chart upload failed', err);
-    if(done) done(); drMailPaint();
-  });
 }
 function drMailHTML(D){
   var e=ckEsc, C=drMailCfg(), I=C.inc, o='';
