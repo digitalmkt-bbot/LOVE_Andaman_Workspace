@@ -74016,10 +74016,15 @@ function pjPrint(){
    +'td.pxn.z{color:#CBD5E1;font-weight:500}'
    +'tr.pxr th.k{padding:4px 10px}'
    /* §pjPaxRow · สี่ประเภทเรียงในช่องเดียว · ป้ายเล็กบน ตัวเลขใหญ่ล่าง */
-   +'td.pxg{background:#FCFCEA;padding:5px 8px;text-align:center}'
-   +'td.pxg span{display:inline-flex;flex-direction:column;align-items:center;min-width:'+(fs+22)+'px;'
-     +'margin:0 2px}'
-   +'td.pxg span i{font-style:normal;font-size:'+(fs-6)+'px;font-weight:700;letter-spacing:.1em;color:#9AA5B8}'
+   /* §pjPaxLine (2026-10-14) · owner "เรียงให้เป็นบรรทัดเดียว" · 9 ลำ ช่องแคบกว่า 4×(fs+22)px
+      FOC ตกลงไปบรรทัดสอง · ตอนนี้สี่ช่องแบ่งความกว้างเท่ากันในกล่อง flex ที่ห้ามตกบรรทัด
+      ตัวเลขใหญ่สุด 3 หลัก (fs+3) กว้างไม่ถึง 36px จึงยังพอในคอลัมน์แคบสุด */
+   +'td.pxg{background:#FCFCEA;padding:4px 4px;text-align:center}'
+   +'td.pxg .pxw{display:flex;flex-wrap:nowrap;justify-content:center;gap:2px}'
+   +'td.pxg span{display:inline-flex;flex-direction:column;align-items:center;flex:1 1 0;min-width:0;'
+     +'margin:0}'
+   +'td.pxg span i{font-style:normal;font-size:'+(fs-6)+'px;font-weight:700;letter-spacing:.1em;color:#9AA5B8;white-space:nowrap}'
+   +'td.pxg span b{white-space:nowrap}'   /* §pjPaxLine · เลข 3 หลักห้ามหักกลาง */
    +".td-x,td.pxg span b{font-family:'Sarabun',sans-serif;font-size:"+(fs+3)+"px;"
      +'font-weight:700;color:#2D4479;line-height:1.15}'
    +'td.pxg span.z b{color:#C9D0DB;font-weight:500}'
@@ -74394,10 +74399,10 @@ function pjPrint(){
         var o='<tr class="pxr"><th class="k">AD / CHD / INF / FOC</th>'
           + boats.map(function(B){ if(!isGo(B)) return '<td class="mut off2">\u2014</td>';
               var P=PX[gi(B)];
-              return '<td class="pxg">'+PXKIND.map(function(x){
+              return '<td class="pxg"><div class="pxw">'+PXKIND.map(function(x){
                 var v=+P[x.k]||0;
                 return '<span'+(v?'':' class="z"')+'><i>'+x.k.toUpperCase()+'</i><b>'+v+'</b></span>'; }).join('')
-              +'</td>'; }).join('')
+              +'</div></td>'; }).join('')
           +'</tr>';
         o+='<tr class="pxt pxr"><th class="k">TOTAL PAX<i>\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21</i></th>'
           + boats.map(function(B){ if(!isGo(B)) return '<td class="pxn tot z2">\u2014</td>';
