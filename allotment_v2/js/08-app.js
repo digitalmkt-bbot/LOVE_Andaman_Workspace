@@ -72958,7 +72958,7 @@ function pjCSS(){
   +H+' .bc .top .pj-chp{display:inline-block;margin-left:7px;vertical-align:3px;background:#5B289A;color:#fff;border:1.5px solid rgba(255,255,255,.75);border-radius:6px;padding:0 7px;font-size:10.5px;line-height:17px;font-weight:800;letter-spacing:.02em}'
   +H+' .pj-chc{margin:10px 12px;display:flex;align-items:center;justify-content:center;gap:9px;height:38px;border-radius:10px;background:linear-gradient(100deg,#4C1D95,#6D28D9);color:#fff;box-shadow:0 2px 8px rgba(76,29,149,.25)}'
   +H+' .pj-chc .i{font-size:11px;line-height:18px;font-weight:900;letter-spacing:.12em;background:#FDE68A;color:#4C1D95;border-radius:5px;padding:0 6px}'
-  +H+' .pj-chc .t{font-size:15px;font-weight:800;letter-spacing:.04em}'
+  +H+' .pj-chc .t{font-size:14px;font-weight:800;letter-spacing:.14em;white-space:nowrap}'   /* §pjChtr2 */
   +H+' .pj-chc .e{font-size:9.5px;font-weight:800;letter-spacing:.18em;opacity:.7;border-left:1px solid rgba(255,255,255,.35);padding-left:9px}'
   +H+' .pj-chx{margin:-4px 12px 10px;background:#FBE7E5;color:#A32D2D;border:1px solid #F0C9C9;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:800;text-align:center}'
   /* §pjDep · ช่องเวลาแบบแก้ได้ หน้าตาเหมือนตัวเลขใหญ่เดิม · เส้นประใต้บอกว่าแตะได้ */
@@ -74276,7 +74276,7 @@ function pjCard(B, pier, ro){
         return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
      +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
    +(function(){ var C=pjChtrOf(B); if(!C) return '';   /* §pjChtr · การ์ดเหมาลำใต้จำนวนลูกค้า */
-       return '<div class="pj-chc"><span class="i">VIP</span><span class="t">เหมาลำ</span><span class="e">CHARTER</span></div>'
+       return '<div class="pj-chc"><span class="i">VIP</span><span class="t">CHARTER</span></div>'   /* §pjChtr2 · owner: "ให้เป็น VIP CHARTER ก็พอ" */
          +(C.mixed?('<div class="pj-chx">&#9888; มีที่นั่งปกติปน '+C.seat+' คน · ตรวจการจัดเรือ</div>'):''); })() )
    /* §pjWork · ลำที่ไม่ได้ออกไม่มี ลค · ช่องนี้บอกช่วงเวลาของงานแทน */
    : ( pjSecHd('ช่วงงาน','cust')   /* §pjSame */
@@ -74810,7 +74810,9 @@ function pjPrint(){
    /* §pjChtr · บรรทัดเหมาลำใต้ชื่อทริป + ป้ายเล็กใต้ชื่อเรือ */
    +'tr.rt td.trip .chl{margin:6px auto 0;display:flex;align-items:center;justify-content:center;gap:8px;max-width:260px;height:26px;border-radius:8px;background:linear-gradient(100deg,#4C1D95,#6D28D9);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
    +'tr.rt td.trip .chl .i{font-size:'+(fs-3)+'px;line-height:16px;font-weight:900;letter-spacing:.12em;background:#FDE68A;color:#4C1D95;border-radius:4px;padding:0 5px}'
-   +'tr.rt td.trip .chl .t{font-size:'+(fs)+'px;font-weight:800;letter-spacing:.03em}'
+   +'tr.rt td.trip .chl .t{font-size:'+(fs-2)+'px;font-weight:800;letter-spacing:.14em;white-space:nowrap}'   /* §pjChtr2 */
+   +'tr.rt td.trip .chl{white-space:nowrap}'
+   +'tr.rt td.trip .chl .i{white-space:nowrap;flex:0 0 auto}'
    +'tr.rt td.trip .chl .e{font-size:'+(fs-4)+'px;font-weight:800;letter-spacing:.18em;opacity:.75;border-left:1px solid rgba(255,255,255,.4);padding-left:8px}'
    +'.bh .chh{display:table;margin:3px auto 0;background:#5B289A;color:#fff;border-radius:4px;padding:0 6px;font-size:'+(fs-3)+'px;font-weight:800;letter-spacing:.06em}'
    +".tmc{font:800 "+(fs+7)+"px 'Sarabun',sans-serif !important;color:#111;background:#F6F8FB}"
@@ -75216,7 +75218,7 @@ function pjPrint(){
           var C=pjChtrOf(B);   /* §pjChtr */
           return '<td class="v ctr trip" style="background:'+pjTint(rt.color||'#64748B')
             +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')
-            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">\u0e40\u0e2b\u0e21\u0e32\u0e25\u0e33</span><span class="e">CHARTER</span></div>'):'')+'</td>'; }).join('')
+            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">CHARTER</span></div>'):'')+'</td>'; }).join('')
       +'</tr>'; };
   var timeRow=function(){
     return '<tr><th class="k">TIME<i>\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01</i></th>'
