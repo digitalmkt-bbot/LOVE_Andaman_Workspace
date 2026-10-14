@@ -7876,7 +7876,13 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'inf': return '<span style="'+MONO+';color:'+((d.inf||0)?'#2C2C2A':'#C9C7C0')+'">'+(d.inf||0)+'</span>';
     case 'foc': return '<span style="'+MONO+';color:'+((d.foc||0)?'#993C1D':'#C9C7C0')+'">'+(d.foc||0)+'</span>';
     case 'time': return '<span style="'+MONO+'">'+esc(d.time)+'</span>';
-    case 'hotel': return esc(d.hotel||'—')+(d.drop?'<div class="rc-drop" title="จุดส่งขากลับต่างจากจุดรับ" style="font-size:11px;color:#7A4A00;background:#FFF1D6;border-radius:5px;padding:1px 6px;margin-top:3px;display:inline-block;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis">&#8617; Drop-off: '+esc(d.drop)+'</div>':'');
+    /* §rcDropFt (2026-10-14) · owner: "ทำเป็น Popup ลอยขึ้นมาไหม จะได้ไม่กินเนื้อที่" · บรรทัด Drop-off ใต้ชื่อโรงแรม
+       ทำให้แถวสูงขึ้นทั้งแถวเพื่อข้อมูลที่นาน ๆ มีที · เหลือป้ายเล็กลอยมุมขวาของช่อง เอาเมาส์ชี้ค่อยกางเป็นที่ส่งเต็ม
+       (แบบเดียวกับป้ายลอยใน By trip · Compact) · ใบพิมพ์ (บรรทัด 'drop' ข้างบน) ยังพิมพ์เต็มเหมือนเดิม */
+    case 'hotel': return d.drop
+      ? '<div class="rc-hc"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'
+        +'<span class="rc-ft" title="จุดส่งขากลับต่างจากจุดรับ"><span class="s">&#8617; ส่ง</span><span class="x">&#8617; Drop-off: '+esc(d.drop)+'</span></span></div>'
+      : esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
     case 'zone': return esc(d.zone);
     /* §rcPlate · ทะเบียนเด่น ชื่อรถเล็กใต้ · ยังไม่จัดรถ = ขีด (ไม่เดา) · รถกลับคนละคันบอกไว้ */
@@ -7896,10 +7902,20 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +(_rcPick[_k]?' checked':'')+' onchange="rcPick(this)" '
         +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
     }
-    var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis'); if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
+    var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis');
+    if(c.k==='hotel' && d.drop) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
   /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
      ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
   var out='<style id="rc-skin">'
+    /* §rcDropFt · ป้ายส่งขากลับลอยในช่องโรงแรม · ชื่อโรงแรมเว้นที่ขวาให้ป้าย · hover กางเต็ม ลอยทับคอลัมน์ข้าง ๆ */
+    +'#reconfirm-host .rc-hc{position:relative;padding-right:40px;min-height:16px}'
+    +'#reconfirm-host .rc-hn{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'#reconfirm-host .rc-ft{position:absolute;top:-1px;right:0;z-index:3;font-size:10px;line-height:15px;font-weight:700;'
+      +'color:#7A4A00;background:#FFF1D6;border:1px solid #F3DDA6;border-radius:5px;padding:0 5px;white-space:nowrap;cursor:default}'
+    +'#reconfirm-host .rc-ft .x{display:none}'
+    +'#reconfirm-host .rc-ft:hover{left:0;right:auto;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.18);font-weight:600}'   /* กางไปทางขวา ทับคอลัมน์ถัดไป */
+    +'#reconfirm-host .rc-ft:hover .s{display:none}'
+    +'#reconfirm-host .rc-ft:hover .x{display:inline}'
     /* §rcBop · พื้นหลังและขอบชุดเดียวกับ #view-operation
        ของเดิมไล่เฉดสองก้อน และไม่มีขอบด้านข้าง การ์ดจึงชนขอบจอ */
     +'#view-reconfirm{background:#16265C !important;padding:18px;'
