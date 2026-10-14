@@ -2217,9 +2217,25 @@ function applyObj(target, diff){
 }
 // Merge a client diff onto the server blob (concurrent-safe per record + per object sub-key).
 // diff = { sets:{key:value|null}, cols:{key:{idf,up,del}}, objs:{key:{p,d}} }
+// §smerge (2026-10-14) · a blob value that is a JSON *string* of an object (client ctWrite: go_asn, go_no,
+// colour maps) used to travel as a `sets` whole-value replace, so two devices editing different sub-keys
+// of the same map clobbered each other (guide assignment for one boat vanished). The client now sends
+// only the changed sub-keys (diff.smaps / op 'smerge'); the server parses the stored string, merges per
+// sub-key with applyObj, and stores it back as a string so every reader (ctRead) sees the same shape.
+function smergeString(curStr, patch){
+  let obj = null;
+  if (typeof curStr === 'string') { try { obj = JSON.parse(curStr); } catch (_) { obj = null; } }
+  else if (curStr && typeof curStr === 'object' && !Array.isArray(curStr)) obj = curStr;
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) obj = {};
+  applyObj(obj, patch || {});
+  return JSON.stringify(obj);
+}
 function applyDiff(blob, diff){
   const sets = (diff && diff.sets) || {}, cols = (diff && diff.cols) || {}, objs = (diff && diff.objs) || {};
-  Object.keys(sets).forEach(k=>{ const v=sets[k]; if(v===null) delete blob[k]; else blob[k]=v; });
+  const smaps = (diff && diff.smaps) || {};
+  Object.keys(sets).forEach(k=>{ if (Object.prototype.hasOwnProperty.call(smaps, k)) return;   // §smerge · the merge wins over the legacy full copy
+    const v=sets[k]; if(v===null) delete blob[k]; else blob[k]=v; });
+  Object.keys(smaps).forEach(k=>{ blob[k] = smergeString(blob[k], smaps[k]); });
   Object.keys(objs).forEach(k=>{ if(!blob[k]||typeof blob[k]!=='object'||Array.isArray(blob[k])) blob[k]={}; applyObj(blob[k], objs[k]); });
   Object.keys(cols).forEach(k=>{ const c=cols[k]||{}; const idf=c.idf||'id';
     const arr = Array.isArray(blob[k]) ? blob[k] : [];
@@ -2315,6 +2331,14 @@ async function _restInsertRows(client, tables, rows){          // parents first,
 //   {op:'putall', r, body}      replace the whole collection (id-less wholesale sets · body null/[]/{}= clear)
 //   {op:'meta',   id, body}     upsert one top-level scalar in app_meta (body null = delete the key)
 async function restApplyOp(client, op){
+  if (op.op === 'smerge'){   // §smerge · per-sub-key merge into a JSON-string map kept in app_meta
+    const r = await client.query(`SELECT ${qic('value')} AS value FROM ${fqt('app_meta')} WHERE ${qic('key')}=$1`, [op.id]);
+    let cur = null; if (r.rows[0]) { try { cur = JSON.parse(r.rows[0].value); } catch (_) { cur = null; } }
+    const next = smergeString(cur, op.body);
+    await client.query(`DELETE FROM ${fqt('app_meta')} WHERE ${qic('key')}=$1`, [op.id]);
+    await client.query(`INSERT INTO ${fqt('app_meta')} (${qic('key')},${qic('value')}) VALUES ($1,$2)`, [op.id, JSON.stringify(next)]);
+    return op.id;
+  }
   if (op.op === 'meta'){
     await client.query(`DELETE FROM ${fqt('app_meta')} WHERE ${qic('key')}=$1`, [op.id]);
     if (op.body !== null && op.body !== undefined)
@@ -2812,7 +2836,7 @@ const server = http.createServer((req, res) => {
         let p; try{ p=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
         const ops = Array.isArray(p.ops) ? p.ops : null;
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
-        if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
+        if(!ops.every(o=>o && ((o.op==='meta'||o.op==='smerge') ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});   /* §smerge */
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
           .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
             J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
