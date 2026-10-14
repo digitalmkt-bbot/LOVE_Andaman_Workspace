@@ -74105,7 +74105,7 @@ function pjPrint(){
   var gdCell=function(i,R){
     var g=(GB[i][R.kind==='gd'?'g':'t']||[])[R.idx]; if(!g) return '';
     var L=(g.langs||[]);
-    return e(g.name||'')+(L.length?(' <span class="rl">'+e(L.join('/'))+'</span>'):''); };
+    return nm1(e(g.name||'')+(L.length?(' <span class="rl">'+e(L.join('/'))+'</span>'):'')); };   /* §pjOneLine */
   var PX=GO.map(function(B){ var p=pjPax(_poDate,B.bid,_poPier); p.all=p.ad+p.chd+p.inf+p.foc; return p; });
   var totPax=0; PX.forEach(function(p){ totPax+=p.all; });
   var mx=function(a){ var m=0; a.forEach(function(v){ if(v>m) m=v; }); return m; };
@@ -74481,7 +74481,14 @@ function pjPrint(){
    +".brd .c-x.over em{display:block;font-style:normal;font-family:'Sarabun',sans-serif;"
      +'font-size:'+(fs-5)+'px;font-weight:800;color:#A32D2D}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
-   +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52}'
+   +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52;white-space:nowrap}'   /* §pjOneLine */
+   /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw เป็นกรอบวัดความกว้างช่อง (container) · .pn1 ย่อตาม --r ที่สคริปต์วัดให้ */
+   +'.nmw{display:block;container-type:inline-size;overflow:hidden}'
+   +'.pn1{display:inline-block;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:top;'
+     +'font-size:clamp('+(fs*0.62).toFixed(2)+'px,calc(100cqi * var(--r,1)),'+fs+'px)}'
+   +'td.v .pn1 .rl{font-size:.86em}'
+   +'.pn1.ms{font-size:'+fs+'px !important;max-width:none !important}'
+   +'.pn1.wr{white-space:normal;text-overflow:clip;overflow:visible}'
    +'.bandc i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(15,23,42,.22);display:inline-block;flex:none}'
    +'.brd .c-r{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
    /* §pjChip · ป้ายหมายเหตุเคยเป็นพื้นทึบทั้งก้อน · หลายป้ายเรียงกันกลายเป็นแถบสีพาด
@@ -74525,8 +74532,13 @@ function pjPrint(){
     return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; };
   var lic=function(sid){ var t=''; try{ t=plPrintLic(sid).replace(/^\s*\(|\)\s*$/g,''); }catch(_){}
     return t?(' <span class="rl">· '+e(t)+'</span>'):''; };
+  /* §pjOneLine (2026-10-14) · owner "ปรับให้อยู่บรรทัดเดียวกัน"
+     ชื่อลูกเรือ/ไกด์เคยตกสองบรรทัด ตัดกลางชื่อเล่น เช่น "(บัง / สัน)" "(ซอ / แมะ)"
+     ตอนนี้ชื่อหนึ่งคน = หนึ่งบรรทัดเสมอ · ช่องแคบกว่าชื่อ ตัวหนังสือย่อลงเฉพาะชื่อนั้น (ไม่ต่ำกว่า 62%)
+     ขนาดคิดด้วย CSS (100cqi × อัตราส่วนที่วัดจากตัวหนังสือจริงครั้งเดียว) · จอ / พอดีจอ / กระดาษ / รูป PNG ได้ผลเดียวกัน */
+  var nm1=function(h){ return h?('<span class="nmw"><span class="pn1">'+h+'</span></span>'):''; };
   var who=function(sid,withLic){ if(!sid) return ''; var nm=pjStaffName(sid); if(!nm) return '';
-    return e(nm)+(withLic?lic(sid):''); };
+    return nm1(e(nm)+(withLic?lic(sid):'')); };
   /* ช่องของลำที่ไม่ออก · โผล่แค่แถวแรก แล้วยาวคลุมลงมาทั้งตัวตาราง */
   /* §pjFlat · เหตุผลที่ลำนี้ไม่ได้ออกวันนี้ · อยู่ในช่องเดียวของแถวชื่อทริป
      ของเดิมเป็นบล็อกยาวพาดทั้งคอลัมน์ · ที่นี่ย่อเหลือป้ายเดียว รายละเอียดเป็นบรรทัดเล็ก */
@@ -74906,7 +74918,7 @@ function pjPrint(){
     var tbl=function(rs){
       return '<table class="brd">'
       +(two
-        ? '<colgroup><col style="width:54px"><col style="width:132px"><col><col style="width:56px"><col style="width:62px"></colgroup>'
+        ? '<colgroup><col style="width:54px"><col style="width:132px"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
         : '<colgroup><col style="width:78px"><col style="width:158px"><col><col style="width:82px"><col style="width:118px"></colgroup>')
       +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th>Pax</th><th>Band</th></tr></thead>'
       +'<tbody>'+rs.map(function(r){ return r.html; }).join('')+'</tbody></table>'; };
@@ -74964,7 +74976,21 @@ function pjPrint(){
      +'<span class="hint">ปุ่มพวกนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป · พอดีจอ = ย่อให้เห็นทั้งใบ ไม่มีผลกับรูปและกระดาษ</span>'
    +'</div>'
    + sheet
-   +'<script>'+scr+'<\/script></body></html>';
+   +'<script>'+scr+'<\/script>'
+   /* §pjOneLine · วัดความกว้างธรรมชาติของแต่ละชื่อครั้งเดียว (ที่ zoom 1 · หลังฟอนต์โหลด) แล้วเก็บเป็นอัตราส่วน --r
+      ที่เหลือ CSS คิดเองทุกความกว้าง · ปิด/เปิดพอดีจอ ย่อหน้าต่าง หรือสั่งพิมพ์ ไม่ต้องวัดใหม่ */
+   +'<script>'+"(function(){function m(){var el=document.getElementById('sheet');if(!el)return;var z=el.style.zoom;el.style.zoom='';"
+     +"var L=el.querySelectorAll('.pn1'),W=[];for(var i=0;i<L.length;i++)L[i].classList.add('ms');"
+     +"for(var j=0;j<L.length;j++)W.push(L[j].getBoundingClientRect().width);"
+     +"var fs=L.length?parseFloat(getComputedStyle(L[0]).fontSize):0;"
+     +"for(var k=0;k<L.length;k++){L[k].classList.remove('ms');L[k].classList.remove('wr');if(W[k]>0&&fs)L[k].style.setProperty('--r',(fs/W[k]*0.97).toFixed(5));}"
+     /* ยังล้นที่ขนาดเล็กสุด (ชื่อยาวผิดปกติ/จอแคบมาก) · ยอมตกบรรทัดที่ช่องว่างดีกว่าถูกตัด ... · เช็กที่ zoom 1 ซึ่งช่องแคบที่สุด */
+     +"for(var q=0;q<L.length;q++){if(L[q].scrollWidth>L[q].clientWidth+1)L[q].classList.add('wr');}"
+     +"el.style.zoom=z;if(typeof fit==='function')fit();}"
+     +"var _mt;window.addEventListener('resize',function(){clearTimeout(_mt);_mt=setTimeout(m,250);});"
+     +"try{if(document.fonts&&document.fonts.ready){document.fonts.ready.then(m);}else{window.addEventListener('load',m);}}catch(_){window.addEventListener('load',m);}"
+     +"window.addEventListener('load',function(){setTimeout(m,300);});})();"
+   +'<\/script></body></html>';
 
   var w=window.open('','_blank','width=1220,height=880');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
