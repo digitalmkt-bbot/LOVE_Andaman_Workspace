@@ -153,7 +153,7 @@ await page.evaluate(() => { window.__cp = null; document.execCommand = () => { w
 await page.click(H + ' .pk3-line .pri'); await page.waitForTimeout(150);
 const c13 = await page.evaluate((H) => ({ cp: window.__cp, btn: document.querySelector(H + ' .pk3-line .pri').textContent }), H);
 const L = r13.t.split('\n');
-const MAIN = [['adTH', 'ผญไทย'], ['chTH', 'เด็กไทย'], ['adFR', 'ผญตช'], ['chFR', 'เด็กตช']];
+const MAIN = [['adTH', 'ผญท'], ['chTH', 'ดท'], ['adFR', 'ผญตช'], ['chFR', 'ดตช'], ['inf', 'ดเล็ก']];   // §pkLine4 ชื่อย่อ
 const brk = c => MAIN.filter(m => c[m[0]]).map(m => m[1] + ' ' + c[m[0]]).join(' · ');
 // expected per family · bought (sets) + all boats (people on board)
 const exp13 = await page.evaluate((D) => { const F = pk3Flat(), fams = []; const by = {};
