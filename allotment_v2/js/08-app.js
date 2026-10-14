@@ -72076,6 +72076,13 @@ var PJ_PAL=['#7A1F1A','#C0271C','#B4560A','#D9761F','#B8860B','#A8791F',
             '#A82063','#C43E6E','#6E4B34','#5A6270','#3D4A5C','#2A2F3A'];
 /* §pjDocAlways · ผสมสีเข้าหาเทา · ใช้กับหัวการ์ดของลำที่ไม่ได้ออก
    ทำที่ตอนสร้าง HTML ไม่ใช่ CSS filter · ลูกในการ์ดจะได้ไม่โดนลดสีตามไปด้วย */
+/* §pjInk2 · สีพื้นอ่อนไหม · ความสว่างแบบ sRGB ถ่วงน้ำหนัก · เกิน 0.6 = อ่อน (ขาว/ครีม/เหลือง/เขียวอ่อน) */
+function pjIsLight(hex){
+  var h=String(hex||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) return false;
+  var r=parseInt(h.substr(0,2),16)/255, g=parseInt(h.substr(2,2),16)/255, b=parseInt(h.substr(4,2),16)/255;
+  return (0.2126*r+0.7152*g+0.0722*b) > 0.6;
+}
 function pjMute(hex, amt){
   var h=String(hex||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   if(!/^[0-9a-f]{6}$/i.test(h)) return '#8B93A1';
@@ -72489,6 +72496,11 @@ function pjCSS(){
   +H+' .bc .top .tm-in:hover,'+H+' .bc .top .tm-in:focus{border-bottom-color:#fff;background:rgba(255,255,255,.08)}'
   +H+' .bc .top .tm-in::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.55;cursor:pointer}'
   +H+' .bc .top .tmO{background:rgba(255,255,255,.22);border-radius:4px;padding:0 4px;letter-spacing:0}'
+  /* §pjInk2 · บนพื้นอ่อน: เส้นประและไอคอนนาฬิกาเป็นสีเข้ม · ป้ายใบอนุญาตด้านล่างมีสีของตัวเองอยู่แล้ว */
+  +H+' .bc .top.lt .tm-in{border-bottom-color:rgba(0,0,0,.35)}'
+  +H+' .bc .top.lt .tm-in:hover,'+H+' .bc .top.lt .tm-in:focus{border-bottom-color:#1A2433;background:rgba(0,0,0,.05)}'
+  +H+' .bc .top.lt .tm-in::-webkit-calendar-picker-indicator{filter:none;opacity:.6}'
+  +H+' .bc .top.lt .tmO{background:rgba(0,0,0,.08)}'
   +H+' .bc .pg{padding:11px 15px 10px;color:#fff;position:relative}'
   +H+' .bc .pg{height:58px;display:flex;flex-direction:column;justify-content:center}'
   +H+' .bc .pg .pn{font-size:15px;font-weight:800;line-height:1.2;padding-right:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
@@ -73540,8 +73552,11 @@ function pjCard(B, pier, ro){
             return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
               +out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
           })(); };
+  /* §pjInk2 (2026-10-14) · owner's screenshot (Tub Lamu, 5th card): boat colour near white → name, time and
+     DEPARTURE invisible · หัวการ์ดเคยตั้งตัวหนังสือขาวตายตัว · สีอ่อน (ความสว่างสูง) ใช้หมึกเข้มแทน */
+  var lt=pjIsLight(col);
   var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
-   +'<div class="top" style="background:'+col+'">'
+   +'<div class="top'+(lt?' lt':'')+'" style="background:'+col+(lt?';color:#1A2433':'')+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
        +(B.boat.licensePax?(' &middot; '+B.boat.licensePax+' ที่นั่ง'):'')+'</div></div>'
