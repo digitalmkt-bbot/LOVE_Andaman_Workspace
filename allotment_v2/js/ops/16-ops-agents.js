@@ -35,6 +35,7 @@
   var legacyPickerApply=window.rtAgentPickerApply;
   var legacyRtmSave=window.rtmSave;
   var legacyExpBulkApply=window.rtExpBulkApply;
+  var legacyProgBulkApply=window.agProgBulkApply;
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v==null ? '' : String(v).trim(); }
@@ -397,6 +398,39 @@
   }
   if(typeof legacyRtmSave==='function'){ saveSeasons.__ops=true; saveSeasons.__opsAgents=true; window.rtmSave=saveSeasons; }
   if(typeof legacyExpBulkApply==='function'){ bulkSeasons.__ops=true; bulkSeasons.__opsAgents=true; window.rtExpBulkApply=bulkSeasons; }
+
+  /* "Fill programmes to the rate" for many agents (agProgBulkApply).  Legacy added a.programPeriods rows and called
+     sbAgentsPersist (a no-op here).  PUT /v1/agents/:id/programs REPLACES the agent's programme list, and the list
+     response carries route ids only (no periods or notes), so each candidate is read in full first; then the legacy
+     apply runs as the snapshot step, every agent whose periods changed is PUT (one queued write each), a refused agent
+     goes back to its snapshot and the refusals come out in ONE red toast. */
+  function bulkPrograms(){
+    if(!enabled()) return legacyProgBulkApply.apply(this,arguments);
+    var self=this, args=arguments;
+    var P=(typeof agProgBulkPlan==='function') ? agProgBulkPlan() : null; if(!P) return;
+    var list=(window._agProgBulkScope==='partial') ? P.partial : P.empty; if(!list || !list.length) return;
+    var ids=list.map(function(f){ return f.a.id; });
+    return Promise.all(ids.map(function(id){ return fetchAgent(id); })).then(function(){
+      var before={}; ids.forEach(function(id){ var a=current(id); if(a) before[id]={periods:clone(a.programPeriods||[]), programs:clone(a.programs||[]), activity:clone(a.activity||[])}; });
+      legacyProgBulkApply.apply(self,args);
+      var changed=ids.map(current).filter(function(a){ return a && before[a.id] && JSON.stringify(a.programPeriods||[])!==JSON.stringify(before[a.id].periods); });
+      var refused=[], chain=Promise.resolve();
+      changed.forEach(function(a){
+        chain=chain.then(function(){
+          return write('PUT','/v1/agents/'+enc(a.id)+'/programs',{programs:programsBody(a.programPeriods)}).then(function(){ return fetchAgent(a.id); },function(e){
+            var b=before[a.id]; a.programPeriods=b.periods; a.programs=b.programs; a.activity=b.activity;
+            refused.push((a.code||a.name||a.id)+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
+          });
+        });
+      });
+      return chain.then(function(){
+        if(O.wrote) O.wrote('agents');
+        redraw();
+        if(refused.length) fail('Programmes refused for '+refused.length+' of '+changed.length+' agent(s)',new Error(refused.join('\n')));
+      });
+    },function(e){ return fail('Could not read the agents\' programmes',e); });
+  }
+  if(typeof legacyProgBulkApply==='function'){ bulkPrograms.__ops=true; bulkPrograms.__opsAgents=true; window.agProgBulkApply=bulkPrograms; }
 
   if(typeof legacyPersist==='function'){
     window.sbAgentsPersist=function(){ if(enabled()) return; return legacyPersist.apply(this,arguments); };
