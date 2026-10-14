@@ -63395,6 +63395,23 @@ function poPaxLeft(b, date, t){
   o.tot=o.ad+o.chd+o.inf+o.foc;
   return o;
 }
+/* §pjDep (2026-10-14) · owner: "ขอให้ User แก้เวลาได้ และอัพเดทในใบงานด้วย"
+   เวลาออกเรือบนการ์ดเคยอ่านจากโปรแกรม (rt.times[0]) อย่างเดียว · วันที่ออกช้า/เร็วกว่าปกติแก้ไม่ได้
+   เก็บไว้ในใบงานเรือของลำนั้นวันนั้น (PIER_JOB.dep) · ทุกหน้าที่ไล่ลำของวันผ่าน poBoats
+   (ใบงานเรือ+ใบพิมพ์ · เช็คอิน · ตั๋วอุทยาน · เงินสดย่อย · บอร์ด Departures) จึงได้เวลาเดียวกัน */
+function pjDepOf(date, bid, fallback){
+  try{ var o=(typeof pjRaw==='function')?pjRaw(date,bid):null; var v=o&&String(o.dep||'').trim();
+       if(v && /^\d{1,2}:\d{2}$/.test(v)) return v.length===4?('0'+v):v; }catch(_){}
+  return fallback;
+}
+function pjDepSet(bid, val){
+  if(!poGuard()) return;
+  var v=String(val||'').trim();
+  if(v && !/^\d{1,2}:\d{2}$/.test(v)){ alert('Time must be HH:MM'); return; }
+  if(v.length===4) v='0'+v;
+  pjSet(_poDate, bid, {dep:v});
+  renderPierJob();
+}
 function poBoats(date, pier){
   var out=[], seen={};
   var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
@@ -63405,7 +63422,7 @@ function poBoats(date, pier){
     var boat=(typeof getBoat==='function')?getBoat(bid):null;
     seen[bid]=1;
     out.push({bid:bid, boat:boat||{id:bid,name:bid}, rid:op.route, route:rt,
-              dep:(rt.times&&rt.times[0])||'', pax:0, paxReal:0, bks:[]});
+              dep:pjDepOf(date,bid,(rt.times&&rt.times[0])||''), pax:0, paxReal:0, bks:[]});   /* §pjDep */
   });
   /* จำนวน ลค · นับจาก booking ที่ผูกลำไว้แล้ว (ops.boatId) แบบเดียวกับเช็คอินหน้าท่า */
   ckBksOn(date).forEach(function(b){   /* §pcFast */
@@ -63421,7 +63438,7 @@ function poBoats(date, pier){
     if(!row){
       if(bid && !seen[bid]){
         var boat=(typeof getBoat==='function')?getBoat(bid):null;
-        row={bid:bid, boat:boat||{id:bid,name:bid}, rid:t.routeId, route:rt, dep:(rt.times&&rt.times[0])||'', pax:0, paxReal:0, bks:[]};
+        row={bid:bid, boat:boat||{id:bid,name:bid}, rid:t.routeId, route:rt, dep:pjDepOf(date,bid,(rt.times&&rt.times[0])||''), pax:0, paxReal:0, bks:[]};   /* §pjDep */
         seen[bid]=1; out.push(row);
       } else return;   /* ยังไม่ผูกลำ · ไปโผล่ในกล่อง "ยังไม่ระบุเรือ" */
     }
@@ -71837,11 +71854,12 @@ function pjOf(d,b){
      ต้องอยู่ในรายการช่องที่รู้จัก ด้วยเหตุผลเดียวกับ lock/mv ไม่งั้นหลุดทุกครั้งที่บันทึกช่องอื่น */
   /* §pjLbScope · lb (ชื่อช่องที่ตั้งเองของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย
      ด้วยเหตุผลเดียวกับ lock/mv/wc — ตกหล่นเมื่อไหร่ ชื่อที่ตั้งไว้หลุดทุกครั้งที่บันทึกช่องอื่น */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, _std:true};
+  /* §pjDep · dep = เวลาออกเรือของลำนี้วันนี้ที่คนแก้เอง ('' = ตามโปรแกรม) · อยู่ในรายการนี้ด้วยเหตุผลเดียวกับ lock/mv */
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
           lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''),
-          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, _std:false};
+          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), _std:false};
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -72465,6 +72483,12 @@ function pjCSS(){
   +H+' .bc .top .be{font-size:9.5px;font-weight:600;opacity:.82;margin-top:1px;letter-spacing:.06em}'
   +H+' .bc .top .tm{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;text-align:right}'
   +H+' .bc .top .tmL{font-size:8.5px;font-weight:700;opacity:.82;letter-spacing:.1em;text-align:right;margin-top:2px}'
+  /* §pjDep · ช่องเวลาแบบแก้ได้ หน้าตาเหมือนตัวเลขใหญ่เดิม · เส้นประใต้บอกว่าแตะได้ */
+  +H+' .bc .top .tm-in{background:transparent;border:none;border-bottom:1px dashed rgba(255,255,255,.55);color:inherit;'
+    +'font-family:inherit;width:108px;padding:0 0 1px;cursor:pointer;outline:none;border-radius:0}'
+  +H+' .bc .top .tm-in:hover,'+H+' .bc .top .tm-in:focus{border-bottom-color:#fff;background:rgba(255,255,255,.08)}'
+  +H+' .bc .top .tm-in::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.55;cursor:pointer}'
+  +H+' .bc .top .tmO{background:rgba(255,255,255,.22);border-radius:4px;padding:0 4px;letter-spacing:0}'
   +H+' .bc .pg{padding:11px 15px 10px;color:#fff;position:relative}'
   +H+' .bc .pg{height:58px;display:flex;flex-direction:column;justify-content:center}'
   +H+' .bc .pg .pn{font-size:15px;font-weight:800;line-height:1.2;padding-right:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
@@ -73521,7 +73545,14 @@ function pjCard(B, pier, ro){
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
        +(B.boat.licensePax?(' &middot; '+B.boat.licensePax+' ที่นั่ง'):'')+'</div></div>'
-     +'<div><div class="tm">'+poE(B.dep||'--:--')+'</div><div class="tmL">DEPARTURE</div></div></div>'
+     /* §pjDep · ช่องเวลาแก้ได้ (ถ้ามีสิทธิ์และใบยังไม่ปิด) · ค่าที่แก้เองขึ้นป้าย "แก้แล้ว" · ลบว่าง = กลับไปตามโปรแกรม */
+     +'<div>'+(function(){
+         var ov=!!(J.dep), rtT=((rt.times&&rt.times[0])||'');
+         if(lro) return '<div class="tm">'+poE(B.dep||'--:--')+'</div><div class="tmL">DEPARTURE'+(ov?' &middot; แก้แล้ว':'')+'</div>';
+         return '<input type="time" class="tm tm-in" value="'+poE(B.dep||'')+'" onchange="pjDepSet(\''+poE(bid)+'\',this.value)" '
+           +'title="เวลาออกเรือของลำนี้วันนี้ · แก้ได้ · ล้างว่าง = ตามโปรแกรม'+(rtT?(' ('+poE(rtT)+')'):'')+'">'
+           +'<div class="tmL">DEPARTURE'+(ov?' &middot; <span class="tmO">แก้แล้ว</span>':'')+'</div>';
+       })()+'</div></div>'
      /* §pjDocs · ใบอนุญาตใช้เรือ + ใบเข้าเกาะของโปรแกรมวันนี้ */
      + pjDocsHtml(B.boat, rt, _poDate)
    +'</div>'
