@@ -247,6 +247,73 @@
   wrap('vbPersist', function(){ return; });          // the bill lives on the server, not in the blob
   O.onChange(function(){ drop(); });
 
+  /* Transfer Fleet's van_rates blob is a server-backed cell map. */
+  var vr = { loaded: false, loading: null, rates: {}, known: {}, pending: 0, failed: false };
+  function vrFlat(R){
+    var out = {};
+    Object.keys(R || {}).forEach(function(g){
+      var G = R[g] || {};
+      if(G.base != null) out[JSON.stringify([g, null, 'base'])] = n(G.base);
+      Object.keys(G.rt || {}).forEach(function(r){
+        ['base', 'PK', 'KL'].forEach(function(f){
+          if(G.rt[r][f] != null) out[JSON.stringify([g, r, f])] = n(G.rt[r][f]);
+        });
+      });
+    });
+    return out;
+  }
+  function vrApply(view){
+    var R = {};
+    (view.rates || []).forEach(function(c){
+      var G = R[c.group_key] = R[c.group_key] || {};
+      if(c.route_id == null) G.base = n(c.rate);
+      else { G.rt = G.rt || {}; (G.rt[c.route_id] = G.rt[c.route_id] || {})[c.field] = n(c.rate); }
+    });
+    vr.rates = R; vr.known = vrFlat(R); vr.loaded = true;
+  }
+  function vrLoad(force){
+    if(vr.loading) return vr.loading;
+    if(vr.loaded && !force) return Promise.resolve();
+    vr.loading = O.get('/v1/van-rates').then(vrApply);
+    return vr.loading.then(function(){ vr.loading = null; }, function(e){ vr.loading = null; throw e; });
+  }
+  function vrRepaint(){ if(typeof window.ctRender === 'function') window.ctRender(); }
+  function vrWrite(val){
+    if(!vr.loaded) { O.fail('Van rates were not saved', new Error('Wait for van rates to load')); return; }
+    var next = vrFlat(val), jobs = Object.keys(next).filter(function(k){ return next[k] !== vr.known[k]; });
+    Object.keys(vr.known).forEach(function(k){ if(!(k in next)) jobs.push(k); });
+    if(!jobs.length) return Promise.resolve();
+    // Keep successive edits while queued; only the final server answer replaces this draft.
+    vr.rates = O.clone(val); vr.known = next; vr.pending++;
+    return O.queue(function(){
+      var last;
+      return jobs.reduce(function(p, k){ return p.then(function(){
+        var a = JSON.parse(k);
+        return O.call('PUT', '/v1/van-rates', { group: a[0], route_id: a[1], field: a[2], rate: k in next ? next[k] : null })
+          .then(function(v){ last = v; });
+      }); }, Promise.resolve()).then(function(){ return last; });
+    }).then(function(v){ return v; }, function(e){ vr.failed = true; O.fail('Van rates were not saved', e); })
+      .then(function(v){
+        vr.pending--; drop();
+        if(vr.pending) return;
+        if(vr.failed){ vr.failed = false; return vrLoad(true).then(vrRepaint, function(e){ vr.loaded = false; O.fail('Van rates could not reload', e); }); }
+        vrApply(v); vrRepaint();
+      });
+  }
+  wrap('ctRender', function(orig){
+    var self = this, args = [].slice.call(arguments, 1);
+    if(vr.loaded) return orig.apply(self, args);
+    return vrLoad().then(function(){ return orig.apply(self, args); }, function(e){ O.fail('Van rates could not load', e); });
+  });
+  wrap('ctRead', function(orig, key){
+    if(key !== 'van_rates') return orig.apply(this, [].slice.call(arguments, 1));
+    if(!vr.loaded){ vrLoad().then(vrRepaint, function(e){ O.fail('Van rates could not load', e); }); return null; }
+    return O.clone(vr.rates);
+  });
+  wrap('ctWrite', function(orig, key, val){
+    return key === 'van_rates' ? vrWrite(val) : orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   window.laOpsVanBills = { render: render, setRow: setRow, setCodeRate: setCodeRate, setRate: setRate, setPerPax: setPerPax,
     addExtra: addExtra, setExtra: setExtra, delExtra: delExtra, save: save, pullRates: pullRates, send: send, unsend: unsend,
     pay: pay, unpay: unpay, originals: originals };
