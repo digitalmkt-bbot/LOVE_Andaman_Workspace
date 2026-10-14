@@ -599,7 +599,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
            (dropoffSep && !dropAreaId)
              ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
+    passengers: isFirstLine ? b2cPassengerList(paxRows, trip.pax) : [],   /* §b2cPaxType */
     addOns: addOnRows,
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
@@ -750,12 +750,30 @@ function b2cPassengersFromJson(itemRows) {
 // bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
 // webhook mapper — erp/src/mapExternalBooking.js maps ext.passengers straight through as AD — and
 // matches ops semantics, where passengers[] is the guests after the lead (rendered from #2).
-function b2cPassengerList(rows) {
+//
+// §b2cPaxType (2026-10-14) · every name used to arrive as AD. LOV-1709525 (4 AD + 1 CHD, "เด็กอายุ 7
+// ขวบ" in the note): the park sheet had no child name to seat and flagged the last adult. B2C's
+// traveller rows carry no age type, but the booking form already types #2+ by position (bkV2Sync-
+// Passengers: the lead takes one adult seat, then AD, CHD, INF, FOC in order) and showed CHD on
+// that same row — so the stored type now follows the same rule and the two agree. Names beyond
+// the head count stay AD, as before. No pax (charter line without counts) → AD, as before.
+function b2cPassengerList(rows, pax) {
   if (!Array.isArray(rows) || !rows.length) return [];
+  const P = pax || {};
+  const n = k => Number(P[k]) || 0;
+  const ad = n('ad_fr') + n('ad_th'), chd = n('chd_fr') + n('chd_th'), inf = n('inf_fr') + n('inf_th'), foc = n('foc') + n('foc_fr') + n('foc_th');
+  const leadType = ad > 0 ? 'AD' : (foc > 0 ? 'FOC' : (chd > 0 ? 'CHD' : (inf > 0 ? 'INF' : 'AD')));
+  const queue = [];
+  const push = (t, c) => { for (let i = 0; i < c; i++) queue.push(t); };
+  push('AD', leadType === 'AD' ? Math.max(0, ad - 1) : ad);
+  push('CHD', leadType === 'CHD' ? Math.max(0, chd - 1) : chd);
+  push('INF', leadType === 'INF' ? Math.max(0, inf - 1) : inf);
+  push('FOC', leadType === 'FOC' ? Math.max(0, foc - 1) : foc);
   const out = [];
   for (const r of rows) {
     if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
-    out.push({ name: r.name, nationality: r.nationality, type: 'AD', foc: false });
+    const type = queue[out.length] || 'AD';
+    out.push({ name: r.name, nationality: r.nationality, type, foc: type === 'FOC' });
   }
   return out;
 }
