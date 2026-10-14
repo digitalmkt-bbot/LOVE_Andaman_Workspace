@@ -3866,6 +3866,16 @@ function renderBookingFlow(){
   const mkCountAll={}; B.forEach(b=>{ const c=mkOf(b).code; mkCountAll[c]=(mkCountAll[c]||0)+1; });
   const topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
   B.forEach(b=>{ const bd=bkDate(b); if(!bd) return; const bk=findBucket(bd); if(!bk) return; bk.total++; bk.list.push(b); const c=mkOf(b).code; bk.mk[c]=(bk.mk[c]||0)+1; });
+  /* §bfSrvTot · bucket totals from the server's daily-counts (live bookings per sale day,
+     GET /v1/bookings/daily-counts via js/ops/53-ops-booking-flow.js). SB_BOOKINGS holds only
+     the date ranges some view loaded, so counting it undercounts any bucket outside them —
+     last month read 789 of 1171 and the MoM delta compared against an unloaded month.
+     The unloaded remainder of a bucket lands in the gray "other" segment below. */
+  const _bfDcw=window._opsBfDaily;
+  const _bfDc=(_bfDcw&&typeof bookingV2OpsDailyCounts==='function')?bookingV2OpsDailyCounts(_bfDcw.from,_bfDcw.to):null;
+  if(_bfDc){ buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return;
+    let t=0; Object.keys(_bfDc).forEach(ds=>{ if(ds>=bk.from&&ds<=bk.to) t+=(_bfDc[ds].bk||0); });
+    bk.total=t; }); }
   buckets.forEach(bk=>{ let s=0; topN.forEach(c=>s+=bk.mk[c]||0); bk.mk.__other=Math.max(0,bk.total-s); });
   const mkOrder=topN.map((c,i)=>{ const m=(typeof sbGetMarket==='function')?sbGetMarket(c):null; return {code:c, name:m?(m.name||m.code||c):(c==='b2c'?'B2C':c==='unassigned'?'ไม่ระบุ':c), color:(m&&m.color)||FALL[i%FALL.length]}; }).concat([{code:'__other',name:'อื่นๆ',color:'#94A3B8'}]);
 
