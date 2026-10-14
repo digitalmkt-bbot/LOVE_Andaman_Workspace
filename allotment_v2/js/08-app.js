@@ -7910,15 +7910,15 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* §rcDropFt · ป้ายส่งขากลับลอยในช่องโรงแรม · ชื่อโรงแรมเว้นที่ขวาให้ป้าย · hover กางเต็ม ลอยทับคอลัมน์ข้าง ๆ */
     /* §rcDropFt2 · owner "ให้กางเลยได้ไหม" · โชว์ที่ส่งเลยไม่ต้องชี้ · ยังบรรทัดเดียว: ป้ายต่อท้ายชื่อโรงแรม
        แล้วล้นไปทางขวาทับช่อง Room (ซึ่งส่วนใหญ่ว่าง) · ยาวเกิน 230px ตัด … ชี้ค่อยกางเต็ม */
-    +'#reconfirm-host .rc-hc{display:flex;align-items:center;gap:6px;min-height:16px;width:calc(100% + 52px);overflow:hidden}'   /* ล้นได้ถึงท้ายช่อง Room เท่านั้น */
-    +'#reconfirm-host .rc-hc.rm{width:100%}'   /* §rcDropFt3 · ช่อง Room มีเลข → ป้ายอยู่แค่ในช่อง Hotel */
-    +'#reconfirm-host .rc-hn{flex:0 1 auto;min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    +'#reconfirm-host .rc-ft{flex:0 1 auto;min-width:40px;position:relative;z-index:3;font-size:10px;line-height:15px;font-weight:600;'
-      +'color:#7A4A00;background:#FFF1D6;border:1px solid #F3DDA6;border-radius:5px;padding:0 5px;white-space:nowrap;cursor:default;'
-      +'overflow:hidden;text-overflow:ellipsis}'
+    /* §rcDropFt4 · owner วาดกรอบแดงใต้ชื่อโรงแรม: "ขึ้นลอย ๆ ตามกรอบ มันก็จะไม่ทับ" · ป้ายลอยใต้บรรทัดชื่อ
+       กว้างได้ถึงท้ายช่อง Room · ไม่ดันแถว (ลอยทับขอบล่างของแถว) · ชื่อโรงแรมกับเลขห้องไม่โดนบัง */
+    +'#reconfirm-host .rc-hc{position:relative;min-height:16px}'
+    +'#reconfirm-host .rc-hn{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'#reconfirm-host .rc-ft{position:absolute;left:0;top:calc(100% - 1px);z-index:3;max-width:calc(100% + 60px);'
+      +'font-size:10px;line-height:14px;font-weight:600;color:#7A4A00;background:#FFF1D6;border:1px solid #F3DDA6;border-radius:5px;'
+      +'padding:0 5px;white-space:nowrap;cursor:default;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 4px rgba(2,10,30,.10)}'
     +'#reconfirm-host .rc-ft .s{display:none}'
-    +'#reconfirm-host .rc-hc:hover{overflow:visible}'
-    +'#reconfirm-host .rc-ft:hover{flex:none;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.18)}'
+    +'#reconfirm-host .rc-ft:hover{max-width:none;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.18)}'
     /* §rcBop · พื้นหลังและขอบชุดเดียวกับ #view-operation
        ของเดิมไล่เฉดสองก้อน และไม่มีขอบด้านข้าง การ์ดจึงชนขอบจอ */
     +'#view-reconfirm{background:#16265C !important;padding:18px;'
