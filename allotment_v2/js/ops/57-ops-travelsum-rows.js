@@ -69,7 +69,27 @@
     return true;
   }
   function docNo(date, st){
-    return 'TS-' + text(date).replace(/-/g, '') + (st.route ? '-' + st.route.toUpperCase() : st.pier ? '-' + st.pier.toUpperCase() : '-ALL');
+    return 'TS-' + text(date).replace(/-/g, '') + (st.route ? '-' + st.route.toUpperCase() : st.pier ? '-' + st.pier.toUpperCase() : '-ALL')
+      + (st.vat ? (st.vat === 'vat' ? '-VAT' : '-NOVAT') : '');
+  }
+
+  /* ── VAT: the agent's own vatMode (include | exclude | none). No agent (walk-in) = no VAT. ── */
+  function agentOf(id){ var f = g('sbGetAgent'); return id && f ? f(id) : null; }
+  function vatMode(r){
+    var a = r && r.agentId ? agentOf(r.agentId) : null;
+    var m = a && a.vatMode;
+    return m === 'include' || m === 'exclude' ? m : 'none';
+  }
+  function hasVat(r){ return vatMode(r) !== 'none'; }
+  function vatKeep(st, r){ return !st.vat || (st.vat === 'vat' ? hasVat(r) : !hasVat(r)); }
+  /* Agents with no VAT mode set fall into "no VAT" silently; name them so the totals are not trusted blindly. */
+  function vatGap(rows){
+    var seen = {}, out = [];
+    rows.forEach(function(r){
+      if(!r.agentId || seen[r.agentId]) return; seen[r.agentId] = 1;
+      var a = agentOf(r.agentId); if(a && !a.vatMode) out.push(a.name || a.code || r.agentId);
+    });
+    return out;
   }
 
   var CHIP = 'border:0.5px solid var(--fd-line-soft);border-radius:999px;padding:4px 11px;font-size:11px;cursor:pointer;background:#fff;color:var(--fd-ink)';
@@ -79,7 +99,7 @@
   }
 
   /* The pier and route chips + the document number, from the whole day's roster. */
-  function scopeChips(roster, st, date){
+  function scopeChips(roster, st, date, inScope){
     var pMap = {}, pOrder = [], rMap = {}, rOrder = [];
     roster.rows.forEach(function(r){
       var k = r.routeId, pk = pierOf(k);
@@ -92,11 +112,17 @@
     var pierHtml = pOrder.map(function(p){ return chip(pierName(p), pMap[p], st.pier === p, "tsPickPier('" + esc(p) + "')"); }).join(' ');
     var inPier = rOrder.filter(function(k){ return !st.pier || pierOf(k) === st.pier; });
     var routeHtml = inPier.map(function(k){ return chip(routeName(k), rMap[k], st.route === k, "tsPickRoute('" + esc(k) + "')"); }).join(' ');
+    var nVat = 0, nNo = 0;
+    inScope.forEach(function(r){ if(hasVat(r)) nVat++; else nNo++; });
+    var gap = vatGap(inScope);
+    var vatHtml = '<div data-ops-ts-vat="1" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px"><span style="font-size:10.5px;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;font-weight:600">VAT</span>'
+      + chip('With VAT', nVat, st.vat === 'vat', "tsPickVat('vat')") + chip('No VAT', nNo, st.vat === 'novat', "tsPickVat('novat')") + '</div>'
+      + (gap.length ? '<div data-ops-ts-vatgap="1" style="margin-top:6px;font-size:10.5px;color:#8a6d1a">No VAT mode set for ' + esc(gap.join(', ')) + ': counted as No VAT.</div>' : '');
     return '<div data-ops-ts-scope="1" style="margin-bottom:16px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:12px 15px">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px"><div style="font-size:10.5px;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Scope · pier › route</div>'
       + '<div data-ops-ts-docno="1" style="font-family:\'DM Mono\',monospace;font-size:11.5px;color:var(--fd-ink)">Doc no. ' + esc(docNo(date, st)) + '</div></div>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (routeHtml ? '8' : '0') + 'px">' + pierHtml + '</div>'
-      + (routeHtml ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + routeHtml + '</div>' : '') + '</div>';
+      + (routeHtml ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + routeHtml + '</div>' : '') + vatHtml + '</div>';
   }
 
   /* The money rows of the chosen scope, summed the way the server sums its own totals:
@@ -111,7 +137,7 @@
   }
   function subtotalHtml(rows, st, date){
     var s = subtotal(rows);
-    var label = st.route ? routeName(st.route) : st.pier ? pierName(st.pier) : 'All';
+    var label = (st.route ? routeName(st.route) : st.pier ? pierName(st.pier) : 'All') + (st.vat ? (st.vat === 'vat' ? ' · With VAT' : ' · No VAT') : '');
     function c(t, v){ return '<div style="flex:1;min-width:120px"><div style="font-size:10px;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em">' + esc(t) + '</div><div style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums">' + v + '</div></div>'; }
     return '<div data-ops-ts-subtotal="1" style="margin-bottom:16px;background:#f4f9fd;border:0.5px solid #cfe3f3;border-radius:12px;padding:12px 15px">'
       + '<div style="font-size:11.5px;font-weight:600;margin-bottom:8px">Money in this selection · ' + esc(label) + ' · ' + s.n + ' booking' + (s.n === 1 ? '' : 's') + '</div>'
@@ -126,11 +152,13 @@
     if(st.route && !roster.rows.some(function(r){ return r.routeId === st.route; })){ st.route = ''; window._tsRoute = ''; }
     if(st.route){ st.pier = pierOf(st.route); window._tsPier = st.pier; }
     if(st.pier && !roster.rows.some(function(r){ return pierOf(r.routeId) === st.pier; })){ st.pier = ''; window._tsPier = ''; }
+    // Chip counts for VAT follow the pier/route scope; the rows follow both.
+    var inScope = roster.rows.filter(function(r){ return scopeKeep(st, r.routeId); });
     var keep = {};
-    roster.rows.forEach(function(r){ if(scopeKeep(st, r.routeId)) keep[r.id] = true; });
-    var scoped = !!(st.pier || st.route);
+    inScope.forEach(function(r){ if(vatKeep(st, r)) keep[r.id] = true; });
+    var scoped = !!(st.pier || st.route || st.vat);
     var rows = (d.collect_rows || []).filter(function(r){ return !scoped || keep[r.booking_id]; });
-    var html = scopeChips(roster, st, date) + (scoped ? subtotalHtml(rows, st, date) : '');
+    var html = scopeChips(roster, st, date, inScope) + (scoped ? subtotalHtml(rows, st, date) : '');
     return { rows: rows, html: html, state: st, docNo: docNo(date, st) };
   }
 
