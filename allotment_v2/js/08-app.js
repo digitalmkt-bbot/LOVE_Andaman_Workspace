@@ -19493,8 +19493,12 @@ function pckFilterBar(all, cnt, nHidden, part){
   var any=(_pckBoat||_pckVan||_pckArr||_pckStat||_pckQ);
   /* §pckHead2 · part='search' เอาแค่ช่องค้นหา+เลือกคัน · part='chips' เอาแค่ตัวกรอง
      ไม่ส่ง part มา = ได้ทั้งแถบเหมือนเดิม (ของเดิมที่ไหนเรียกอยู่ก็ยังได้เท่าเดิม) */
-  var _q='<input id="pck-q" value="'+e(_pckQ)+'" oninput="pckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม" style="height:30px;font-size:11.5px;font-family:inherit;border:1.5px solid '+(_pckQ?'#185FA5':'#E7E4DC')+';border-radius:8px;padding:2px 10px;background:#fff;min-width:210px;flex:1">'
-    +sel('pck-van',_pckVan,'pckSetVan','\u{1F68C} ทุกคัน',vans,function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}; return (v.name||id)+' ('+cnt.van[id]+')'; });
+  /* §pckPlate (2026-10-15) · owner "เพิ่มการค้นหาทะเบียนรถได้หมด · ตัวให้เลือกรถโชว์ทะเบียนด้วย · มีปุ่มล้าง X กรณีค้นหาเสร็จแล้วได้ค้นหาต่อ"
+     ทะเบียนของวันนั้น (รถร่วมแก้ทะเบียนรายวันได้ · vanJobsDriverInfo) ไม่ใช่แค่ทะเบียนในทะเบียนรถ */
+  var pl=function(id){ try{ var d=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(id,_pckDate):null; var p=d?d.plate:(((typeof vehGet==='function'?vehGet(id):null)||{}).plate||''); return (p&&p!=='-')?String(p):''; }catch(_){ return ''; } };
+  var _q='<span class="pck-qw"><input id="pck-q" value="'+e(_pckQ)+'" oninput="pckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม / ทะเบียนรถ" style="height:30px;font-size:11.5px;font-family:inherit;border:1.5px solid '+(_pckQ?'#185FA5':'#E7E4DC')+';border-radius:8px;padding:2px '+(_pckQ?'30px':'10px')+' 2px 10px;background:#fff;min-width:0;flex:1;width:100%">'
+    +(_pckQ?'<button type="button" class="pck-qx" onclick="pckSetQ(\'\')" title="ล้างคำค้น · ค้นต่อได้เลย" aria-label="ล้างคำค้น">&#10005;</button>':'')+'</span>'
+    +sel('pck-van',_pckVan,'pckSetVan','\u{1F68C} ทุกคัน',vans,function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}, p=pl(id); return (v.name||id)+(p?(' · '+p):'')+' ('+cnt.van[id]+')'; });
   if(part==='search') return '<div class="ck-fbar pck-fsearch">'+_q+'</div>';
   if(part==='chips'){
     /* §pckChipFit (2026-10-12) · owner: "ฝั่งชิป ทำยังไงให้ดูกระชับหน่อย"
@@ -23523,6 +23527,10 @@ function pckHeadCSS(){
   +H+' .pkh-none{font-size:10.5px;color:#a5a49d}'
   /* แถบเดิมที่ยกมาวางในการ์ด · ถอดกรอบ/พื้นหลังของตัวเองออก การ์ดมีให้แล้ว */
   +H+' .pkh-card .ck-fbar{margin:0;padding:6px 9px;border:0;background:none;box-shadow:none;border-radius:0}'
+  /* §pckPlate · ช่องค้นหา + ปุ่ม X ล้างคำค้น */
+  +H+' .pck-qw{position:relative;display:flex;flex:1;min-width:210px}'
+  +H+' .pck-qx{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:12px;border:none;background:#E7E4DC;color:#5F5E5A;font-size:11px;font-weight:800;line-height:24px;text-align:center;padding:0;cursor:pointer;font-family:inherit}'
+  +H+' .pck-qx:hover{background:#185FA5;color:#fff}'
   +H+' .pkh-card .pcs-bar{margin:0;padding:0 9px 7px}'
   +H+' .pkh-card .pck-btabs{margin:0;padding:0;border:0;background:none;box-shadow:none}'
   +H+' .pkh-card .ck-unitbar-lbl{display:none}'
@@ -23623,6 +23631,8 @@ function pckHeadCSS(){
     +H+' .pkh-kpi{justify-content:flex-start;width:100%;margin-top:2px}'
     /* ช่องค้น voucher · เต็มบรรทัด แตะแล้วพิมพ์ได้เลย ไม่ต้องเล็ง */
     +H+' .pck-fsearch{flex-wrap:wrap}'
+    +H+' .pck-qw{flex:1 1 100%;min-width:0}'   /* §pckPlate · ตัวห่อช่องค้นหาเต็มบรรทัดเหมือนช่องเดิม */
+    +H+' .pck-qx{width:32px;height:32px;line-height:32px;font-size:14px;right:7px}'
     /* สองช่องนี้ถูกสร้างพร้อม style= ติดแท็ก · inline ชนะสไตล์ชีตเสมอ ต้องทับด้วย !important
        ต่ำกว่า 16px เมื่อไร iOS ซูมจอเข้าเองตอนแตะ แล้วไม่ซูมกลับ */
     +H+' #pck-q{flex:1 1 100% !important;min-width:0 !important;height:auto !important;'
@@ -24017,8 +24027,12 @@ function renderPierCheckin(){
       }
     }
     if(q){
-      var blob=[r.b.voucherRef,r.b.code,r.b.leadPax,r.b.leadPhone,r.b.phone,r.b.hotelName,r.b.pickup,r.b.roomNo].join(' ').toLowerCase();
-      if(blob.indexOf(q)<0){
+      /* §pckPlate · ค้นทะเบียนรถ/ชื่อรถ/คนขับ ได้ทุกคันของใบนี้ (ขาไปทุกคัน + ขากลับ) · ทะเบียนเทียบแบบไม่สนช่องว่าง (พิมพ์ กข1234 หรือ กข 1234 ก็เจอ) */
+      var vb=''; try{ var ids=(r.vanIds&&r.vanIds.length)?r.vanIds.slice():(r.vanId?[r.vanId]:[]); var rv=r.O&&r.O.vanReturnId; if(rv&&ids.indexOf(rv)<0) ids.push(rv);
+        vb=ids.map(function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}, d=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(id,date):{}; return [v.name,v.plate,d.plate,d.driver].join(' '); }).join(' '); }catch(_){}
+      var blob=[r.b.voucherRef,r.b.code,r.b.leadPax,r.b.leadPhone,r.b.phone,r.b.hotelName,r.b.pickup,r.b.roomNo,vb].join(' ').toLowerCase();
+      var qz=q.replace(/[\s\-]+/g,'');
+      if(blob.indexOf(q)<0 && !(qz && vb.toLowerCase().replace(/[\s\-]+/g,'').indexOf(qz)>=0)){
         var hit=(r.b.passengers||[]).some(function(p){ return String((p&&p.name)||'').toLowerCase().indexOf(q)>=0; });
         if(!hit) return false;
       }
