@@ -7296,6 +7296,35 @@ function renderDevLog(){ var host=document.getElementById('devlog-host'); if(!ho
    (same status the By-trip-date "Re-Confirm" mode sets) so both stay in sync.
    Name-cell color (after sent): YELLOW = invoice agent OR paid · PURPLE = other unpaid. */
 var _rcDate=null, _rcView='agent';
+/* ══ §rcSearch (2026-10-14) · owner "เพิ่มช่องค้นหาให้ด้วย" ═══════════════════════════════
+   ช่องค้นหาบนแถบบนของหน้า Re-confirm · กรองแถวที่วาดไว้แล้ว ไม่วาดหน้าใหม่ (พิมพ์แล้วโฟกัสไม่หลุด)
+   ค้นจาก เอเย่นต์ / Booking # / ชื่อลูกค้า+ผู้โดยสาร / โทร / โรงแรม / Drop-off / โปรแกรม / ห้อง / ย่าน / ทะเบียน / add-on / หมายเหตุ / ผู้บันทึก
+   หลายคำ = ต้องเจอทุกคำ · การ์ดที่ไม่เหลือแถวซ่อนทั้งใบ · คำค้นจำไว้ข้ามการวาดใหม่ (เปลี่ยนสถานะแล้วยังกรองอยู่)
+   ใบ Sheet / Send ไม่สนช่องค้นหา · ใช้ช่องติ๊กเลือกรายการเหมือนเดิม */
+var _rcQ='';
+function _rcSearchText(d){
+  try{
+    var bk=d.bk||{}, P=(Array.isArray(bk.passengers)?bk.passengers:[]).map(function(p){ return (p&&p.name)||''; });
+    var v=d.van||{};
+    return [d.agentName,d.voucher,d.lead,d.phone,d.hotel,d.drop,d.prog,d.room,d.zone,v.plate,v.name,v.retPlate,v.retName,d.addon,d.special,bk.createdBy,bk.leadEmail].concat(P)
+      .filter(Boolean).join(' ').toLowerCase().replace(/\s+/g,' ');
+  }catch(_){ return ''; }
+}
+function rcSearch(q){ _rcQ=String(q||''); rcApplySearch(document.getElementById('reconfirm-host')); }
+function rcSearchClear(){ _rcQ=''; var i=document.getElementById('rc-q'); if(i){ i.value=''; i.focus(); } rcApplySearch(document.getElementById('reconfirm-host')); }
+function rcApplySearch(host){
+  if(!host) return;
+  var toks=_rcQ.toLowerCase().trim().split(/\s+/).filter(Boolean), n=0, tot=0;
+  var trs=host.querySelectorAll('tr[data-s]');
+  for(var i=0;i<trs.length;i++){ var t=trs[i].getAttribute('data-s')||'', ok=true; tot++;
+    for(var j=0;j<toks.length;j++){ if(t.indexOf(toks[j])<0){ ok=false; break; } }
+    trs[i].style.display=ok?'':'none'; if(ok) n++; }
+  var cards=host.querySelectorAll('.rc-card');
+  for(var c=0;c<cards.length;c++){ var vis=cards[c].querySelector('tr[data-s]:not([style*="display: none"])'); cards[c].style.display=(toks.length&&!vis)?'none':''; }
+  var nq=document.getElementById('rc-noq'); if(nq) nq.style.display=(toks.length&&!n&&tot)?'':'none';
+  var cnt=document.getElementById('rc-qn'); if(cnt){ cnt.style.display=toks.length?'':'none'; cnt.innerHTML='พบ<b>'+n+'</b>'; }
+  var x=document.getElementById('rc-qx'); if(x) x.style.display=toks.length?'':'none';
+}
 /* §rcPick · แถวที่ติ๊กไว้ · คีย์คือ bookingId|routeId
    ใบเดียวอาจมีสองทริปในวันเดียวกัน ใช้ bookingId เฉย ๆ จะติดไปทั้งสองแถว
    เป็นสถานะบนจอชั่วคราว ไม่ได้เก็บลงข้อมูล */
@@ -7857,7 +7886,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'payment': return d.cot?'<span style="color:#993C1D;'+MONO+'">'+esc(d.cot)+'</span>':'<span style="color:#B4B2A9">—</span>';
     case 'status': var st=_rcStateOf(d.bk); if(!st.v){ return '<button onclick="rcStatusPop(\''+d.bk.id+'\',event)" style="border:1px dashed #cbd3ce;background:#fff;color:#8a8880;border-radius:16px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">+ set status</button>'; } var _sc=rcStateColor(st.v), _si=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_sc):'#fff'; return '<button onclick="rcStatusPop(\''+d.bk.id+'\',event)" style="border:none;background:'+_sc+';color:'+_si+';border-radius:16px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;max-width:184px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(st.l)+'">'+esc(st.l)+' &#9662;</button>'; }
     return ''; }
-  function rowFor(d,cols,r,agKey){ return '<tr>'+cols.map(function(c){
+  function rowFor(d,cols,r,agKey){ return '<tr data-s="'+esc(_rcSearchText(d))+'">'+cols.map(function(c){   /* §rcSearch */
     /* §rcPick · ช่องติ๊กรู้จักแถวจาก bookingId|routeId ที่ส่งเข้ามา */
     if(c.k==='pick'){
       if(!r) return '<td style="'+TD+'"></td>';
@@ -7939,6 +7968,19 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       +'align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(255,255,255,.10);'
       +'color:#E8EBF7;border:1px solid rgba(255,255,255,.10);white-space:nowrap}'
     +'#reconfirm-host .rc-chip b{font-weight:800}'
+    /* §rcSearch · ช่องค้นหาเม็ดเดียวกับชิป · พื้นขาวจาง ตัวอักษรขาว */
+    +'#reconfirm-host .rc-qw{position:relative;display:inline-flex;align-items:center;flex:none}'
+    +'#reconfirm-host .rc-q{height:26px;width:210px;max-width:46vw;padding:0 24px 0 28px;border-radius:13px;font-size:11.5px;'
+      +'font-family:inherit;background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.14);outline:none;transition:all .15s}'
+    +'#reconfirm-host .rc-q::placeholder{color:#9AA2C8}'
+    +'#reconfirm-host .rc-q:focus{background:#fff;color:#16265C;border-color:#fff;width:260px}'
+    +'#reconfirm-host .rc-q:focus::placeholder{color:#9AA0B8}'
+    +'#reconfirm-host .rc-qi{position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9AA2C8;font-size:12px;line-height:1}'
+    +'#reconfirm-host .rc-q:focus~.rc-qi{color:#16265C}'
+    +'#reconfirm-host .rc-qx{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:9px;border:none;'
+      +'background:rgba(0,0,0,.18);color:#fff;font-size:11px;line-height:18px;padding:0;text-align:center}'
+    +'#reconfirm-host .rc-q:focus~.rc-qx{background:#16265C}'
+    +'#reconfirm-host .rc-noq{background:#fff;border-radius:12px;padding:30px;text-align:center;color:#8A8880;font-size:13px;margin-bottom:12px}'
     +'#reconfirm-host .rc-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}'
     +'#reconfirm-host .rc-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}'
     +'#reconfirm-host .rc-sub{display:flex;gap:12px;flex-wrap:wrap;align-items:center;'
@@ -7992,6 +8034,13 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       +'<span class="rc-mid"><span class="rc-brand">LOVE ANDAMAN</span>'
         +'<span class="rc-page">RE-CONFIRM</span></span>'
       +'<span class="rc-chips">'
+      /* §rcSearch · ค้นหาอยู่หน้าชิปตัวเลข · ค่าเดิมใส่กลับหลังวาดใหม่ */
+      +'<span class="rc-qw"><input id="rc-q" class="rc-q" type="text" value="'+esc(_rcQ)+'" '
+        +'placeholder="ค้นหา ชื่อ / Booking # / โรงแรม / โทร" autocomplete="off" '
+        +'oninput="rcSearch(this.value)" onkeydown="if(event.key===\'Escape\'){rcSearchClear();}">'
+        +'<span class="rc-qi"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg></span>'
+        +'<button class="rc-qx" id="rc-qx" onclick="rcSearchClear()" title="ล้างคำค้น" style="display:none">&times;</button></span>'
+      +'<span class="rc-chip" id="rc-qn" style="display:none"></span>'
       +'<span class="rc-chip">เอเย่นต์<b>'+_nAg+'</b></span>'
       +'<span class="rc-chip">ทริป<b>'+Object.keys(byRoute).length+'</b></span>'
       +'<span class="rc-chip">pax<b>'+totPax+'</b></span>'
@@ -8021,6 +8070,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
   +'</div>';
   if(!rows.length){ out+='<div class="rc-empty">No bookings on this day</div></div>';
     host.innerHTML=out; rcSyncSticky(host); return; }
+  out+='<div class="rc-noq" id="rc-noq" style="display:none">ไม่พบรายการที่ตรงกับคำค้น</div>';   /* §rcSearch */
   if(_rcView==='trip'){
     var colsT=_rcCols(true);
     Object.keys(byRoute).forEach(function(rid){ var grp=byRoute[rid].slice();
@@ -8076,7 +8126,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'</tbody></table></div></div>';
     });
   }
-  out+='</div>'; host.innerHTML=out; rcSyncSticky(host);
+  out+='</div>'; host.innerHTML=out; rcSyncSticky(host); rcApplySearch(host);   /* §rcSearch */
 }
 /* §rcSkin · ตรึงสองชั้น · ค่า top วัดจากของจริงหลังวาด ไม่ฮาร์ดโค้ด
    วิธีเดียวกับ ckSyncSticky ของหน้าเช็คอินหน้าท่าที่ใช้อยู่แล้ว
