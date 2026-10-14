@@ -50,7 +50,7 @@
   var O = window.laOps; if(!O || !O.pier) return;
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
-  ['paCell', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
+  ['paCell', 'paHasJob', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
    'renderPierOffice', 'renderPierAtt'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
@@ -186,7 +186,7 @@
   };
 
   /* ════ roster · PIER_SHIFT ═══════════════════════════════════════════ */
-  var rbase = {}, rcover = {}, cells = {}, lastRoster = null;
+  var rbase = {}, rcover = {}, cells = {}, rosters = {}, lastRoster = null;
   function sKey(date, sid){ return String(date) + '::' + String(sid); }
   function rsig(rec){ return rec ? (rec.c || '') + '|' + (rec.c && rec.plan ? 1 : 0) + '|' + (rec.n || '') : ''; }
   function staffPier(sid){
@@ -197,6 +197,11 @@
   function loadRoster(pier, from, to){
     return O.get('/v1/pier-office/' + enc(pier) + '/roster', { from: from, to: to }).then(function(j){
       var S = shifts(), seen = {};
+      var daysMap = {};
+      (j.days || []).forEach(function(d){
+        rcover[d.date + '|' + pier] = 1;
+        daysMap[d.date] = !!d.has_job;
+      });
       (j.rows || []).forEach(function(r){
         (r.cells || []).forEach(function(c){
           var k = sKey(c.date, r.staff_id); seen[k] = 1; cells[k] = c;
@@ -208,8 +213,8 @@
           } else { delete S[k]; delete rbase[k]; }
         });
       });
-      (j.days || []).forEach(function(d){ rcover[d.date + '|' + pier] = 1; });
-      lastRoster = { pier: pier, from: j.from, to: j.to, key: 'roster|' + pier + '|' + j.from + '|' + j.to };
+      rosters[pier] = { pier: pier, from: j.from, to: j.to, days: daysMap, key: 'roster|' + pier + '|' + j.from + '|' + j.to };
+      lastRoster = rosters[pier];
       return j;
     });
   }
@@ -219,13 +224,21 @@
     return (b && b.name) || id;
   }
   window.paCell = function(date, pier, st, E){
-    if(ready() && lastRoster && lastRoster.pier === pier && date >= lastRoster.from && date <= lastRoster.to){
+    var r = ready() && rosters[pier];
+    if(r && date >= r.from && date <= r.to){
       var k = sKey(date, st && st.id), c = cells[k];
       if(c && rsig(shifts()[k]) === rsig(rbase[k])){
         return { c: c.code || '', src: c.layer, boat: boatName(c.boat_id), atPier: c.at_pier || '', rid: '' };
       }
     }
-    return L.paCell.apply(this, arguments);
+    return L.paCell ? L.paCell.apply(this, arguments) : { c:'', src:'none', boat:'', atPier:'' };
+  };
+  window.paHasJob = function(date, pier, E){
+    var r = ready() && rosters[pier];
+    if(r && date >= r.from && date <= r.to && r.days && r.days[date] !== undefined){
+      return !!r.days[date];
+    }
+    return L.paHasJob ? L.paHasJob.apply(this, arguments) : false;
   };
   P.register({
     name: 'roster', order: 90,

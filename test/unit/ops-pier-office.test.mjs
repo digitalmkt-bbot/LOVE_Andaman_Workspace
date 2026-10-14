@@ -193,6 +193,30 @@ test('a staff member who is not in a loaded range is never written', async () =>
   assert.deepEqual(writes(rt), []);
 });
 
+test('roster: multi-pier switching preserves cached rosters and paHasJob reflects server days', async () => {
+  const ROSTER_PANWA = '/v1/pier-office/panwa/roster?from=2026-09-26&to=2026-10-25';
+  const ROSTER_TUBLAMU = '/v1/pier-office/tublamu/roster?from=2026-09-26&to=2026-10-25';
+  const rt = runtime({ answers: {
+    ['GET ' + ROSTER_PANWA]: { pier: 'panwa', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: true }, { date: '2026-10-06', has_job: false }], rows: [{ staff_id: 'ps_1', cells: [{ date: '2026-10-05', code: 'PP', layer: 'boat', boat_id: 'b1', at_pier: 'panwa' }] }] },
+    ['GET ' + ROSTER_TUBLAMU]: { pier: 'tublamu', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: false }], rows: [{ staff_id: 'ps_2', cells: [{ date: '2026-10-05', code: 'TB', layer: 'boat', boat_id: 'b2', at_pier: 'tublamu' }] }] },
+  } });
+  await boot(rt);
+  rt.w._poPier = 'panwa';
+  rt.w.renderPierAtt(); await rt.flush();
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+  assert.equal(rt.w.paHasJob('2026-10-06', 'panwa'), false);
+
+  rt.w._poPier = 'tublamu';
+  rt.w.renderPierAtt(); await rt.flush();
+  assert.equal(rt.w.paCell('2026-10-05', 'tublamu', { id: 'ps_2' }).c, 'TB');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'tublamu'), false);
+
+  rt.w._poPier = 'panwa';
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+});
+
 test('pay: the allowance comes from the server; a rate is a PUT; the rules go as the whole table', async () => {
   const rt = runtime({ answers: {
     'PUT /v1/pier-office/staff/ps_1/pay-rate': { staff_id: 'ps_1', rate: 900 },
