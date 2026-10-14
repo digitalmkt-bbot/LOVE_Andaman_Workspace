@@ -75839,7 +75839,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
 
 /* ── ชิ้นส่วนของชีต · ทุกอย่างเป็น <tr> ในตารางเดียวกัน คอลัมน์จึงตรงกันทั้งหน้า ──
    PP_COLS ต้องตรงกับจำนวน <th> เสมอ · ใช้เป็น colspan ของแถวกางรายชื่อ */
-var PP_COLS=10;
+var PP_COLS=9;   /* §ppNoCnt (2026-10-14) · owner: 'ใบจอง ไม่ต้องมี ตัดออกเลย' · เหลือ วันที่ เรือ ผญ เด็ก ทารก FOC รวม กินอาหาร อาหารพิเศษ */
 /* §ppCap · ยอดจอง / ที่นั่งเต็มลำ · เฉพาะแถวที่รู้ลำแล้ว (วัน × ลำ)
    cap ของวันนั้นจาก boatCapFor (รวม override รายวัน · ไม่เกิน licensePax) · เกิน cap ขึ้นสีแดง
    แถวท่าใช้ ppPierCapTag (รวมที่นั่งทุกเที่ยวเรือของท่า) · แถวโปรแกรม/รวมทั้งหมดไม่มี cap */
@@ -75873,7 +75873,7 @@ function ppPierCapTag(PB){
 function ppNumCells(A, cls, cap){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
-  return n(A.n)+n(A.ad)+n(A.chd)+n(A.inf)+n(A.foc)
+  return n(A.ad)+n(A.chd)+n(A.inf)+n(A.foc)   /* §ppNoCnt · ไม่มีช่องใบจอง */
     +'<td class="num tot'+c+'">'+A.tot+(cap||'')+'</td>'
     +'<td class="num eat'+c+'">'+A.eat+'</td>';
 }
@@ -75900,7 +75900,7 @@ function ppProgRows(g, pk){
     +'<div class="lb">'
       +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
       +'<span class="mt">'+meta+'</span>'
-      +'<span class="sm">'+GA.n+' ใบจอง · '+GA.tot+' คน · เตรียมอาหาร '+GA.eat+' ที่</span>'
+      +'<span class="sm">'+GA.tot+' คน · เตรียมอาหาร '+GA.eat+' ที่</span>'   /* §ppNoCnt */
     +'</div></td></tr>';
 
   out+=g.ck.map(function(ck){
@@ -76097,12 +76097,12 @@ function ppBodySheet(P,pOrd,GT){
   var e=ckEsc;
   /* ทุกตารางใช้ colgroup ชุดเดียวกัน + table-layout:fixed · คอลัมน์จึงตรงกันทุกท่า
      ถึงจะเป็นคนละ <table> ก็ตาม (นี่คือเหตุผลที่แยกตารางได้โดยไม่เสียการเทียบตัวเลข) */
-  var COLS='<colgroup><col style="width:96px"><col style="width:232px">'
-    +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
+  var COLS='<colgroup><col style="width:96px"><col style="width:292px">'
+    +'<col style="width:62px"><col style="width:54px">'
     +'<col style="width:54px"><col style="width:52px"><col style="width:84px">'
     +'<col style="width:74px"><col></colgroup>';
   var HEAD='<thead><tr class="lbl">'
-    +'<th>วันที่</th><th>เรือ</th><th class="r">ใบจอง</th>'
+    +'<th>วันที่</th><th>เรือ</th>'   /* §ppNoCnt */
     +'<th class="r">ผู้ใหญ่</th><th class="r">เด็ก</th><th class="r">ทารก</th>'
     +'<th class="r">FOC</th><th class="r">รวม</th><th class="r">กินอาหาร</th>'
     +'<th>อาหารพิเศษ</th></tr></thead>';
