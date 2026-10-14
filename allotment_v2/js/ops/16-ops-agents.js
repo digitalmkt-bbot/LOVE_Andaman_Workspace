@@ -32,6 +32,7 @@
   var legacyFillDown=window.agFillDown;
   var legacyTblDeleteSelected=window.agTblDeleteSelected;
   var legacyPersist=window.sbAgentsPersist;
+  var legacyPickerApply=window.rtAgentPickerApply;
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v==null ? '' : String(v).trim(); }
@@ -244,6 +245,53 @@
     var chain=Promise.resolve(); ids.forEach(function(id){ chain=chain.then(function(){ var a=current(id); if(!a) return; var req=fieldRequest(a,src.k,clone(value)); return write(req.method,req.path,req.body).then(function(row){refreshAfter(id,row);}); }); });
     return chain.then(function(){ redraw(); },function(e){return fail('Could not fill agent values',e);});
   }
+  /* Rate Types screen · bulk "assign agents to this rate type" picker (rtAgentPickerApply).
+     Legacy set a.rateTypeId locally and called rtPersist, a deliberate no-op in ops mode, so the
+     assignment vanished on reload. Here: one queued PUT /v1/agents/:id/rate-type per agent whose
+     binding really changes (bind = {rate_type_id:id}, unbind = {rate_type_id:null}); local state
+     changes only from the row the server answered with. Refusals (rate_type_inactive,
+     unpriced_programs, forbidden, ...) are collected into ONE summary; the other agents proceed.
+     drop_unpriced is never sent here: removing programmes needs the per-agent confirm in agEditSave. */
+  function pickerApply(){
+    var rtId=(typeof _rtAgentPickerRtId!=='undefined') ? _rtAgentPickerRtId : null; if(!rtId) return;
+    var sel=(typeof _rtAgentPickerSelected!=='undefined') ? _rtAgentPickerSelected : null;
+    var changes=[];
+    list().forEach(function(a){
+      if(!a) return;
+      if(typeof laAgentInScope==='function' && !laAgentInScope(a)) return;
+      var want=!!(sel && sel.has(a.id)), here=a.rateTypeId===rtId;
+      if(want && !here) changes.push({id:a.id,name:a.name||a.code||a.id,to:rtId});
+      else if(!want && here) changes.push({id:a.id,name:a.name||a.code||a.id,to:null});
+    });
+    if(!changes.length){ if(typeof rtAgentPickerClose==='function') rtAgentPickerClose(); return; }
+    var bound=0, unbound=0, refused=[], chain=Promise.resolve();
+    changes.forEach(function(c){
+      chain=chain.then(function(){
+        return write('PUT','/v1/agents/'+enc(c.id)+'/rate-type',{rate_type_id:c.to}).then(function(row){
+          if(row && row.id===c.id) putProjection(row,current(c.id));
+          else { var a=current(c.id); if(a) a.rateTypeId=c.to; }
+          if(c.to) bound++; else unbound++;
+        },function(e){
+          refused.push(c.name+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
+        });
+      });
+    });
+    return chain.then(function(){
+      var done=bound+unbound;
+      if(done){
+        if(O.wrote) O.wrote('agents');
+        if(typeof rtAgentPickerClose==='function') rtAgentPickerClose();
+        if(typeof rtRenderCards==='function') rtRenderCards();
+        if(typeof rtRenderDetail==='function') rtRenderDetail(rtId);
+        try{ if(typeof _rtViewMode!=='undefined' && _rtViewMode==='agents' && typeof rtRenderAgentColumn==='function') rtRenderAgentColumn(rtId); }catch(_){}
+        redraw();
+      }
+      if(refused.length) fail(done ? 'Rate type assigned to '+done+' agent(s) · '+refused.length+' refused' : 'Rate type assignment refused · nothing changed', new Error(refused.join('\n')));
+      console.log('[Rate Type] Bulk assign:', {bound:bound, unbound:unbound, refused:refused.length});
+    });
+  }
+  if(typeof legacyPickerApply==='function'){ var pa=function(){ return enabled()?pickerApply.apply(this,arguments):legacyPickerApply.apply(this,arguments); }; pa.__ops=true; pa.__opsAgents=true; window.rtAgentPickerApply=pa; }
+
   function deleteSelected(){
     if(!enabled()) return legacyTblDeleteSelected.apply(this,arguments);
     if(!(typeof window.laIsAdmin==='function' && window.laIsAdmin())){ alert('Only an admin can delete agent profiles.'); return; }
