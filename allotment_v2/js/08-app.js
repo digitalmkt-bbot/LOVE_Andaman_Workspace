@@ -7880,7 +7880,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
        ทำให้แถวสูงขึ้นทั้งแถวเพื่อข้อมูลที่นาน ๆ มีที · เหลือป้ายเล็กลอยมุมขวาของช่อง เอาเมาส์ชี้ค่อยกางเป็นที่ส่งเต็ม
        (แบบเดียวกับป้ายลอยใน By trip · Compact) · ใบพิมพ์ (บรรทัด 'drop' ข้างบน) ยังพิมพ์เต็มเหมือนเดิม */
     case 'hotel': return d.drop
-      ? '<div class="rc-hc"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'
+      ? '<div class="rc-hc'+(d.room?' rm':'')+'"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'   /* §rcDropFt3 · มีเลขห้อง = ไม่ล้นไปบัง */
         +'<span class="rc-ft" title="จุดส่งขากลับต่างจากจุดรับ"><span class="s">&#8617; ส่ง</span><span class="x">&#8617; Drop-off: '+esc(d.drop)+'</span></span></div>'
       : esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
@@ -7911,6 +7911,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* §rcDropFt2 · owner "ให้กางเลยได้ไหม" · โชว์ที่ส่งเลยไม่ต้องชี้ · ยังบรรทัดเดียว: ป้ายต่อท้ายชื่อโรงแรม
        แล้วล้นไปทางขวาทับช่อง Room (ซึ่งส่วนใหญ่ว่าง) · ยาวเกิน 230px ตัด … ชี้ค่อยกางเต็ม */
     +'#reconfirm-host .rc-hc{display:flex;align-items:center;gap:6px;min-height:16px;width:calc(100% + 52px);overflow:hidden}'   /* ล้นได้ถึงท้ายช่อง Room เท่านั้น */
+    +'#reconfirm-host .rc-hc.rm{width:100%}'   /* §rcDropFt3 · ช่อง Room มีเลข → ป้ายอยู่แค่ในช่อง Hotel */
     +'#reconfirm-host .rc-hn{flex:0 1 auto;min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     +'#reconfirm-host .rc-ft{flex:0 1 auto;min-width:40px;position:relative;z-index:3;font-size:10px;line-height:15px;font-weight:600;'
       +'color:#7A4A00;background:#FFF1D6;border:1px solid #F3DDA6;border-radius:5px;padding:0 5px;white-space:nowrap;cursor:default;'
