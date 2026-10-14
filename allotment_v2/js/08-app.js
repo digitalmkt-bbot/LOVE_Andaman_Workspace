@@ -67580,20 +67580,23 @@ function pk3Body(flat, TY, TYM, ro){
     +'</div>';
   /* ตาราง */
   var n0=function(v){ return v?String(v):'<span class="z">0</span>'; };
-  var GO=['ad_th','chd_th','ad_fr','chd_fr','foc_th','foc_fr'];
-  var cg='<colgroup><col>'+GO.map(function(){ return '<col class="c-n">'; }).join('')+'<col class="c-n"><col class="c-s">'
+  /* §pkSets2 · owner "ต้องแยกแบบนี้ ผญไทย เด็กไทย เด็กไทยต่ำกว่า 3 ปี FOC ไทย ต้องมียอดรวมของกลุ่มนั้น ๆ ด้วย"
+     บนเรือ = ไทย (ผญ · เด็ก · ต่ำกว่า 3 · FOC · รวมไทย) + ต่างชาติ (ชุดเดียวกัน · รวม ตช) + รวมทั้งลำ */
+  var GO=['ad_th','chd_th','inf_th','foc_th','_th','ad_fr','chd_fr','inf_fr','foc_fr','_fr'];
+  var g8=function(p8){ var o={}; GO.forEach(function(k){ o[k]=+p8[k]||0; }); o._th=o.ad_th+o.chd_th+o.inf_th+o.foc_th; o._fr=o.ad_fr+o.chd_fr+o.inf_fr+o.foc_fr; return o; };
+  var cg='<colgroup><col>'+GO.map(function(k){ return '<col class="'+(/^_/.test(k)?'c-s':'c-n')+'">'; }).join('')+'<col class="c-s">'
     +TY.map(function(){ return '<col class="c-t">'; }).join('')+'<col class="c-s"><col class="c-d"><col class="c-d"></colgroup>';
   var hdTy=TY.map(function(T,i){ return '<th class="n'+(i===0?' sep':'')+'" title="'+e(T.n)+' · '+e(T.code||'—')+'">'+e(T.s||T.n)+'</th>'; }).join('');
   var head='<thead><tr class="g"><th class="rt" rowspan="2"><span class="rg"><span>เส้นทาง</span><span>ลำ</span><span>ออก</span></span></th>'
-    +'<th class="gh go sep" colspan="8">บนเรือ</th><th class="gh tk sep" colspan="'+(TY.length+1)+'">ชุดนี้ · กำหนดจำนวนตั๋ว</th>'
+    +'<th class="gh go sep" colspan="5">บนเรือ · ไทย</th><th class="gh go sep" colspan="5">บนเรือ · ต่างชาติ</th><th class="n sum" rowspan="2">รวม<br>ทั้งลำ</th><th class="gh tk sep" colspan="'+(TY.length+1)+'">ชุดนี้ · กำหนดจำนวนตั๋ว</th>'
     +'<th class="n" rowspan="2" title="อยู่ในชุดที่บันทึกแล้ว">ชุดอื่น<br>แล้ว</th><th class="n" rowspan="2" title="ยังไม่อยู่ในชุดไหน">เหลือ</th></tr>'
-    +'<tr class="s"><th class="n sep">ผญ ไทย</th><th class="n">เด็กไทย</th><th class="n">ผญ ตช</th><th class="n">เด็ก ตช</th><th class="n">FOC ไทย</th><th class="n">FOC ตช</th><th class="n">ต่ำกว่า 3</th><th class="n sum">รวม</th>'
+    +'<tr class="s"><th class="n sep">ผญ <br>ไทย</th><th class="n">เด็ก<br>ไทย</th><th class="n">ต่ำกว่า 3 <br>ไทย</th><th class="n">FOC <br>ไทย</th><th class="n sum">รวม<br>ไทย</th>'
+    +'<th class="n sep">ผญ <br>ตช</th><th class="n">เด็ก <br>ตช</th><th class="n">ต่ำกว่า 3 <br>ตช</th><th class="n">FOC <br>ตช</th><th class="n sum">รวม <br>ตช</th>'
     +hdTy+'<th class="n sum">รวม</th></tr></thead>';
   var S8={}, St=0, Su=0, Sl=0, Sd=0;
   var rows=chosen.map(function(x){
-    var B=x.B, p8=B.pax8||{}, rn=(x.g.route&&x.g.route.name)||x.g.rid, on=!!(D&&D.bid===B.bid);
-    var inf=(+p8.inf_th||0)+(+p8.inf_fr||0);
-    GO.forEach(function(k){ S8[k]=(S8[k]||0)+(+p8[k]||0); }); S8.inf=(S8.inf||0)+inf; St+=(+B.totPc||0);
+    var B=x.B, p8=g8(B.pax8||{}), rn=(x.g.route&&x.g.route.name)||x.g.rid, on=!!(D&&D.bid===B.bid);
+    GO.forEach(function(k){ S8[k]=(S8[k]||0)+p8[k]; }); St+=(+B.totPc||0);
     var nU=(B.people||[]).filter(function(p){ return !p.over && usedAll[pkSetKey(p)]; }).length, nL=pkSetAvail(B,usedAll).length; Su+=nU; Sl+=nL;
     var av={}; pkSetAvail(B,used).forEach(function(p){ av[p.cat]=(av[p.cat]||0)+1; });
     var tk='', dT=0;
@@ -67607,16 +67610,16 @@ function pk3Body(flat, TY, TYM, ro){
     else tk='<td class="pk3-hint" colspan="'+(TY.length+1)+'">กดแถวเพื่อกำหนด'+((+B.missTot||0)?(' <u>รอชื่อ '+B.missTot+'</u>'):'')+'</td>';
     return '<tr class="bt'+(on?' sel':'')+'" style="--rc:'+((x.g.route&&x.g.route.color)||'#94A3B8')+'" onclick="pkSetTab(\''+B.bid+'\',\''+x.g.rid+'\')" title="กดเพื่อกำหนดจำนวนตั๋วของลำนี้">'
       +'<td class="rt"><span class="rg"><span class="rn"><i class="d"></i>'+e(rn)+'</span><span class="bn" style="background:'+pk2BoatCol(B.bid)+'">'+bn(B)+'</span><span class="tm">'+e(B.dep||'')+'</span></span></td>'
-      +GO.map(function(k,i){ return '<td class="n'+(i===0?' sep':'')+'">'+n0(+p8[k]||0)+'</td>'; }).join('')+'<td class="n">'+n0(inf)+'</td><td class="n sum">'+(+B.totPc||0)+'</td>'
+      +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(p8[k])+'</td>'; }).join('')+'<td class="n sum">'+(+B.totPc||0)+'</td>'
       +tk+'<td class="n">'+n0(nU)+'</td><td class="n'+(nL?' left':'')+'">'+n0(nL)+'</td></tr>';
   }).join('');
   var WD=['อา','จ','อ','พ','พฤ','ศ','ส'], dd=new Date(date+'T12:00:00'), nS=pkSets(date).length;
   var top='<tr class="dy"><td class="rt"><b>'+dd.getDate()+'</b> <i>'+WD[dd.getDay()]+'</i> · เลือก '+chosen.length+' จาก '+flat.length+' ลำ'
     +(nS?(' <u class="ok">บันทึกแล้ว '+nS+' ชุด</u>'):'')+'</td>'
-    +GO.map(function(k,i){ return '<td class="n'+(i===0?' sep':'')+'">'+n0(S8[k]||0)+'</td>'; }).join('')+'<td class="n">'+n0(S8.inf||0)+'</td><td class="n sum">'+St+'</td>'
+    +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(S8[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+St+'</td>'
     +'<td class="n sep" colspan="'+TY.length+'"></td><td class="n sum">'+(Sd||'')+'</td><td class="n">'+n0(Su)+'</td><td class="n left">'+n0(Sl)+'</td></tr>';
   var tbl='<div class="pk2-ovw pk2-dmx pk3-mx"><table class="pk2-ov">'+cg+head+'<tbody>'+top+rows
-    +(chosen.length?'':('<tr><td class="pk3-hint" colspan="'+(TY.length+13)+'">ยังไม่มีเรือในตาราง · กด "+ เพิ่มเรือ" ด้านบน แล้วกดแถวเรือเพื่อกำหนดจำนวน</td></tr>'))
+    +(chosen.length?'':('<tr><td class="pk3-hint" colspan="'+(TY.length+15)+'">ยังไม่มีเรือในตาราง · กด "+ เพิ่มเรือ" ด้านบน แล้วกดแถวเรือเพื่อกำหนดจำนวน</td></tr>'))
     +'</tbody></table></div>';
   /* รายชื่อที่สุ่ม */
   var list='';
@@ -67725,9 +67728,9 @@ function pk3CSS(S){
   S+' .pk3-mx .pk2-ov td.pk3-c small{font-family:"DM Mono",monospace;font-size:10px;color:'+M+';margin-left:2px}',
   S+' .pk3-mx .pk2-ov td.pk3-c b.z{color:#CBD5E1;font-weight:500}',
   S+' .pk3-mx{overflow-x:auto}',
-  S+' .pk3-mx .pk2-ov{min-width:1260px}',
+  S+' .pk3-mx .pk2-ov{min-width:1500px}',
   S+' .pk3-mx .pk2-ov col.c-n{width:58px} '+S+' .pk3-mx .pk2-ov col.c-t{width:70px} '+S+' .pk3-mx .pk2-ov col.c-s{width:52px}',
-  S+' .pk3-mx .pk2-ov thead tr.s th.n{font-size:10px;padding-left:2px;padding-right:2px;white-space:nowrap}',
+  S+' .pk3-mx .pk2-ov thead tr.s th.n{font-size:10px;padding-left:2px;padding-right:2px;white-space:nowrap;line-height:1.25;vertical-align:bottom}',
   S+' .pk3-in{width:40px;height:30px;border:1px solid #D9DEE9;border-radius:7px;text-align:right;padding:0 5px;font-family:"DM Mono",monospace;font-weight:700;font-size:13px;color:#B9BFD0;background:#fff;-moz-appearance:textfield}',
   S+' .pk3-in::-webkit-outer-spin-button,'+S+' .pk3-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
   S+' .pk3-in.has{color:'+N+';border-color:#19B5E6;border-width:2px}',

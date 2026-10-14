@@ -3,7 +3,7 @@
 // ที่มา (2026-10-14) · owner: "เพิ่มแถบอีกอันอยู่แถบเดียวกับทริป เป็น Ticket management ... เลือกเรือ กำหนดจำนวน ระบบดึงรายชื่อ
 //   ทำหลายชุด ตั้งชื่อได้" + "อิงตารางแบบเดิม · ตารางล่างดึงรายชื่อ Random · เซฟเป็น 1 ชุด" + "บนเรือแยก ผญไทย เด็กไทย FOC ไทย/ตช · เรือให้ User เลือก"
 // กัน
-//   1 ชิป Ticket Management อยู่ท้ายแถวชิปโปรแกรม · กดแล้วตารางเดิมหาย ขึ้นแถว "เรือที่เลือก" ว่าง + ตารางหัว บนเรือ 8 ช่อง / ชุดนี้ · ยังไม่มีแถวเรือ
+//   1 ชิป Ticket Management อยู่ท้ายแถวชิปโปรแกรม · กดแล้วตารางเดิมหาย ขึ้นแถว "เรือที่เลือก" ว่าง + หัวตาราง บนเรือ·ไทย (ผญ เด็ก <3 FOC รวมไทย) / บนเรือ·ต่างชาติ (เหมือนกัน) / รวมทั้งลำ / ชุดนี้ · ยังไม่มีแถวเรือ (§pkSets2)
 //   2 + เพิ่มเรือ → เมนูมีทุกลำของวัน · เลือกลำ → แถวขึ้นลำเดียว · กดแถว → ช่องกรอกตามประเภทขึ้น · ใส่ 3 → รายชื่อ 3 คน ประเภทตรง ไม่ซ้ำ มาจากลำนั้น
 //   3 ติ๊กออก 1 คน → คนใหม่ (ป้าย "ใหม่") ประเภทเดียวกันมาแทน · ยังครบ 3 · คนที่ติ๊กออกอยู่ท้ายขีดฆ่า · ติ๊กกลับได้ (ถ้าเต็มขึ้น alert ASCII)
 //   4 บันทึก → PIER_CFG.parkSets[date] มี 1 ชุด 3 คน ชื่อเริ่มต้น "<เรือ> ชุด 1" · poPersist ถูกเรียก · การ์ดขวาขึ้นชุด · "เหลือ" ลด 3 · ชุดใหม่สุ่มไม่ซ้ำคนที่เซฟแล้ว
@@ -30,7 +30,7 @@ const st = () => page.evaluate((H) => { const h = document.querySelector(H);
   const left = sel ? +(sel.lastElementChild.textContent) : null;
   return { chips, on, has3: !!mx, hasOld: !!h.querySelector('.pk2-dmx:not(.pk3-mx)'), bp: !!h.querySelector('.pk3-bp'), bc: [...h.querySelectorAll('.pk3-bc')].map(b => b.firstChild.textContent.trim()),
     menu: [...h.querySelectorAll('.pk3-menu > button .bn')].map(b => b.textContent.trim()), nBt: bt.length, selBoat: sel ? sel.querySelector('.bn').textContent.trim() : '', ins, rows, skip, left,
-    goHead: [...h.querySelectorAll('.pk3-mx thead tr.s th')].slice(0, 8).map(t => t.textContent.trim()),
+    goHead: [...h.querySelectorAll('.pk3-mx thead tr.s th')].slice(0, 10).map(t => t.textContent.trim()), goTop: [...h.querySelectorAll('.pk3-mx thead tr.g th')].slice(1, 4).map(t => t.textContent.replace(/\s+/g, ' ').trim()),
     sets: [...h.querySelectorAll('.pk3-set')].map(b => ({ name: b.querySelector('.t b').textContent, n: +b.querySelector('.v b').textContent, tag: b.querySelector('.v small').textContent })),
     stTxt: (h.querySelector('.pk3-info .st') || {}).textContent || '', saveBtn: !!h.querySelector('.pk3-bh .pri'), locked: /ล็อก/.test((h.querySelector('.pk3-info .st') || {}).textContent || ''),
     nameVal: (h.querySelector('.pk3-nm input') || {}).value, namePh: (h.querySelector('.pk3-nm input') || {}).placeholder };
@@ -42,22 +42,23 @@ let a = await st();
 const tabChip = a.chips.find(c => /Ticket Management/.test(c));
 await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /Ticket Management/.test(b.textContent)).click(), H); await page.waitForTimeout(400);
 a = await st();
-if (tabChip && /0 ชุด/.test(tabChip) && a.chips[a.chips.length - 1] === tabChip && /Ticket Management/.test(a.on) && a.has3 && !a.hasOld && a.bp && a.bc.length === 0 && a.nBt === 0 && a.goHead.join('|') === 'ผญ ไทย|เด็กไทย|ผญ ตช|เด็ก ตช|FOC ไทย|FOC ตช|ต่ำกว่า 3|รวม')
-  ok('1 ชิป Ticket Management ท้ายแถว · กดแล้วเป็นโหมดจัดชุด · ยังไม่มีเรือ · หัว บนเรือ 8 ช่อง'); else fail('1 ' + JSON.stringify({ tabChip, on: a.on, has3: a.has3, hasOld: a.hasOld, bp: a.bp, bc: a.bc, nBt: a.nBt, goHead: a.goHead }));
+if (tabChip && /0 ชุด/.test(tabChip) && a.chips[a.chips.length - 1] === tabChip && /Ticket Management/.test(a.on) && a.has3 && !a.hasOld && a.bp && a.bc.length === 0 && a.nBt === 0 && a.goHead.map(x => x.replace(/\s+/g, '')).join('|') === 'ผญไทย|เด็กไทย|ต่ำกว่า3ไทย|FOCไทย|รวมไทย|ผญตช|เด็กตช|ต่ำกว่า3ตช|FOCตช|รวมตช' && a.goTop.join('|') === 'บนเรือ · ไทย|บนเรือ · ต่างชาติ|รวมทั้งลำ')
+  ok('1 ชิป Ticket Management ท้ายแถว · กดแล้วเป็นโหมดจัดชุด · ยังไม่มีเรือ · หัว บนเรือ ไทย 5 / ต่างชาติ 5 / รวมทั้งลำ'); else fail('1 ' + JSON.stringify({ tabChip, on: a.on, has3: a.has3, hasOld: a.hasOld, bp: a.bp, bc: a.bc, nBt: a.nBt, goHead: a.goHead, goTop: a.goTop }));
 // 2
 const info = await page.evaluate(({ D, P }) => { const F = pkTkData(D, P), out = []; F.forEach(g => g.boats.forEach(B => { const by = {}; B.people.forEach(p => { if (!p.over) by[p.cat] = (by[p.cat] || 0) + 1; }); out.push({ bid: B.bid, name: B.boat.name, by, names: B.people.filter(p => !p.over).map(p => p.full) }); })); return out; }, { D: DATE, P: PIER });
 const big = info.slice().sort((x, y) => y.names.length - x.names.length)[0]; const cat = Object.keys(big.by).sort((x, y) => big.by[y] - big.by[x])[0]; const avail = big.by[cat];
 await page.click(H + ' .pk3-add'); await page.waitForTimeout(250); a = await st();
 const menuAll = info.every(b => a.menu.includes(b.name));
 await page.evaluate(({ H, n }) => [...document.querySelectorAll(H + ' .pk3-menu > button')].find(b => b.querySelector('.bn').textContent.trim() === n).click(), { H, n: big.name }); await page.waitForTimeout(300); a = await st();
-const oneRow = a.nBt === 1 && a.bc.join() === big.name && !a.selBoat;
+const sums = await page.evaluate((H) => { const tds = [...document.querySelectorAll(H + ' .pk3-mx tr.bt td')].slice(1, 12).map(t => +t.textContent || 0); return { th: tds[0] + tds[1] + tds[2] + tds[3] === tds[4], fr: tds[5] + tds[6] + tds[7] + tds[8] === tds[9], all: tds[4] + tds[9] === tds[10], tds }; }, H);
+const oneRow = a.nBt === 1 && a.bc.join() === big.name && !a.selBoat && sums.th && sums.fr && sums.all;
 await page.click(H + ' .pk3-mx tr.bt'); await page.waitForTimeout(300); a = await st();
 const insOk = a.selBoat === big.name && a.ins.length >= 5 && a.ins.find(i => i.cat === cat && i.max === avail);
 await page.evaluate(({ H, c }) => { const i = document.querySelector(H + ' .pk3-in[data-cat="' + c + '"]'); i.value = '3'; i.dispatchEvent(new Event('change')); }, { H, c: cat }); await page.waitForTimeout(300); a = await st();
 const code = await page.evaluate(c => pkTkCat(c).code || '—', cat);
 const pick1 = a.rows.map(r => r.nm);
 if (menuAll && oneRow && insOk && avail >= 5 && a.rows.length === 3 && a.rows.every(r => r.code === code && r.ck) && new Set(pick1).size === 3 && pick1.every(n => big.names.includes(n) || /ยังไม่มีรายชื่อ/.test(n)) && /ครบ 3\/3/.test(a.stTxt))
-  ok(`2 เมนูมีทุกลำ · เลือก ${big.name} · กดแถว ช่องกรอกขึ้น (เหลือ ${avail}) · ใส่ 3 → สุ่มได้ 3 คน code ${code} ไม่ซ้ำ`); else fail('2 ' + JSON.stringify({ menuAll, oneRow, insOk, avail, rows: a.rows, stTxt: a.stTxt }));
+  ok(`2 เมนูมีทุกลำ · เลือก ${big.name} (รวมไทย+รวม ตช = รวมทั้งลำ ${sums.tds[10]}) · กดแถว ช่องกรอกขึ้น (เหลือ ${avail}) · ใส่ 3 → สุ่มได้ 3 คน code ${code} ไม่ซ้ำ`); else fail('2 ' + JSON.stringify({ menuAll, oneRow, sums, insOk, avail, rows: a.rows, stTxt: a.stTxt }));
 // 3
 await page.evaluate((H) => document.querySelector(H + ' .pk3-sheet tbody tr input[type=checkbox]').click(), H); await page.waitForTimeout(300); a = await st();
 const pick2 = a.rows.map(r => r.nm), fresh = a.rows.filter(r => r.nw);
