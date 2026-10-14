@@ -37,7 +37,9 @@
    The ledger (2026-10-13): when the office draws, the pier's moves are read and PIER_MOVES is replaced by them
    (moves not yet sent are kept), so poLedgerOpen, poBoatSum, poBoatCarry and the fine rows show the server's
    history, not just this session's. The boat close dialog (poCloseOpen) first reads the boat's per-item
-   outstanding; poBoatSum / poBoatCarry answer from it until the next write. ship_writeoff / ship_repair
+   outstanding; poBoatSum / poBoatCarry answer from it until the next write. Its save (poCloseSave) is
+   server first (2026-10-14): the close command answers before any move is added or the dialog closes.
+   ship_writeoff / ship_repair
    are the ship-writeoff / ship-repair commands (a note is required, no fine).
    Reads cover up to 5000 moves from 2000-01-01 (the server's cap); a longer ledger shows a toast and the newest 5000.
    Legacy mode (!O.enabled()): every wrapper delegates to the captured original.
@@ -48,7 +50,7 @@
   var O = window.laOps; if(!O || !O.pier) return;
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
-  ['paCell', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
+  ['paCell', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
    'renderPierOffice', 'renderPierAtt'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
@@ -611,6 +613,60 @@
     return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/outstanding').then(function(j){
       outst[outKey(pier, date, bid)] = j.items || [];
     }, function(e){ O.fail('Boat outstanding not read', e); }).then(function(){ return L.poCloseOpen.apply(self, args); });
+  };
+
+  /* boat close "ปิดยอด" · server first (2026-10-14). The dialog's numbers go to the close command before
+     anything changes: no local moves, no early redraw. The server's moves, balances and stage come back and
+     are put in, then the dialog closes. A refusal (409 day_closed / nothing_outstanding, 400 returned_too_many /
+     shortfall_unaccounted) is the red toast plus the reason in the dialog, which stays open with what was
+     typed. The command has no "anyway" flag. An item goes in only while the boat still has some of it out,
+     worked out with the same getters the dialog drew from (the server's outstanding, once read). */
+  var closing = {};
+  function intOf(v){ var n = parseInt(v, 10); return isFinite(n) ? n : 0; }
+  function field(id){ var el = document.getElementById(id); return el ? el.value : null; }
+  function pierItems(pier){
+    if(typeof window.poItemsAll === 'function') return window.poItemsAll(pier) || [];
+    return arr('PIER_ITEMS').filter(function(i){ return i && i.pier === pier; });
+  }
+  function closeLines(pier, date, bid){
+    var S = window.poBoatSum(date, bid, pier) || {}, C = window.poBoatCarry(date, bid) || {}, lines = [];
+    pierItems(pier).forEach(function(it){
+      var ret = field('poret_' + it.id), o = S[it.id];
+      if(ret === null || !o) return;   // not on the dialog
+      var out = (C[it.id] || 0) + o.iss - (o.ret + o.rep + o.wo + o.lost + o.ob);
+      if(!(out > 0)) return;
+      var line = { item_id: it.id, returned: intOf(ret), repair: 0, writeoff: 0, lost: 0, onboard: 0 };
+      (window.PO_MISS || []).forEach(function(m){ var k = CLOSE_T[m.k]; if(k && k !== 'returned') line[k] = intOf(field('pom_' + m.k + '_' + it.id)); });
+      var fine = intOf(field('pofine_' + it.id));
+      if(line.lost > 0 && fine > 0) line.fine_baht = fine;
+      lines.push(line);
+    });
+    return lines;
+  }
+  function closeMsg(t){ var el = document.getElementById('pocwmsg'); if(el) el.textContent = t; }
+  window.poCloseSave = function(bid){
+    if(!ready()) return L.poCloseSave.apply(this, arguments);
+    if(typeof window.poDayGuard === 'function' && !window.poDayGuard()) return undefined;
+    if(closing[bid]) return undefined;
+    var pier = window._poPier, date = window._poDate, lines = closeLines(pier, date, bid);
+    if(!lines.length){ closeMsg('Nothing outstanding on this boat'); return undefined; }
+    closing[bid] = 1; closeMsg('');
+    var url = '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/close';
+    return O.queue(function(){ return O.call('POST', url, { lines: lines }); }).then(function(out){
+      delete closing[bid];
+      (out.moves || []).forEach(function(m){ moves().push(fromServerMove(m)); });
+      putBalances(pier, out.balances);
+      var st = out.stage, k = pier + '|' + date + '|' + bid;
+      if(st) stages[k] = { k: st.k, left: st.left, issued: st.issued, carry: st.carry, onboard: st.onboard, sheet_status: (stages[k] || {}).sheet_status };
+      O.wrote('pier');
+      window.poModalClose(); window.renderPierOffice();
+      return true;
+    }, function(e){
+      delete closing[bid];
+      closeMsg((e && e.message) || 'Not closed');
+      O.fail('Boat not closed', e);
+      return false;
+    });
   };
 
   /* fines · PIER_CFG.finePay[moveId] = { st: 'paid'|'waived', how, note } */
