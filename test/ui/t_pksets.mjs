@@ -154,17 +154,17 @@ await page.click(H + ' .pk3-line .pri'); await page.waitForTimeout(150);
 const c13 = await page.evaluate((H) => ({ cp: window.__cp, btn: document.querySelector(H + ' .pk3-line .pri').textContent }), H);
 const L = r13.t.split('\n');
 const MAIN = [['adTH', 'ผญท'], ['chTH', 'ดท'], ['adFR', 'ผญตช'], ['chFR', 'ดตช'], ['inf', 'ดเล็ก']];   // §pkLine4 ชื่อย่อ
-const brk = c => MAIN.filter(m => c[m[0]]).map(m => m[1] + ' ' + c[m[0]]).join(' · ');
+const brk = c => MAIN.filter(m => c[m[0]]).map(m => m[1] + ' ' + c[m[0]]).join(' ');   // §pkLine5 เว้นวรรคเดียว
 // expected per family · bought (sets) + all boats (people on board)
 const exp13 = await page.evaluate((D) => { const F = pk3Flat(), fams = []; const by = {};
   F.forEach(x => { const f = pk2FamOf(x.g.rid); if (!by[f.id]) { by[f.id] = { n: f.n, all: [], buy: {} }; fams.push(f.id); } const c = {}; let n = 0; x.B.people.forEach(p => { if (p.over) return; c[p.cat] = (c[p.cat] || 0) + 1; n++; }); if (n) by[f.id].all.push({ nm: x.B.boat.name, dep: x.B.dep, c, n }); });
   pkSets(D).forEach(S => { const x = F.find(y => y.B.bid === S.bid); const id = pk2FamOf(x.g.rid).id; const r = by[id].buy[S.bid] || (by[id].buy[S.bid] = { nm: x.B.boat.name, dep: x.B.dep, c: {}, n: 0 }); S.people.forEach(q => { r.c[q.cat] = (r.c[q.cat] || 0) + 1; r.n++; }); });
   return fams.map(id => ({ n: by[id].n, all: by[id].all, buy: Object.values(by[id].buy) })); }, DATE);
 const block = (rows, title) => { if (!rows.length) return []; const tc = {}; let tn = 0; rows.forEach(r => { Object.keys(r.c).forEach(k => tc[k] = (tc[k] || 0) + r.c[k]); tn += r.n; });
-  return ['', `${title} · ${rows.length} ลำ · ${tn} คน`, brk(tc), ''].concat(rows.slice().sort((a, b) => (a.dep + a.nm).localeCompare(b.dep + b.nm)).map(r => `${r.dep} ${r.nm} ${r.n} · ${brk(r.c)}`)); };
+  return ['', `${title} · ${rows.length} ลำ · ${tn} คน`, brk(tc), ''].concat(rows.slice().sort((a, b) => (a.dep + a.nm).localeCompare(b.dep + b.nm)).map(r => `${r.dep} ${r.nm} ${brk(r.c)}`)   /* §pkLine5 ไม่มียอดรวมต่อลำ */); };
 let want13 = ['ตั๋วอุทยาน' + (exp13.length === 1 ? ' ' + exp13[0].n : '') + ' · พ. 16 ก.ย. 69'];
 exp13.forEach(f => { if (exp13.length > 1) want13.push('', `— ${f.n} —`); want13 = want13.concat(block(f.buy, 'รายการซื้อ'), block(f.all, 'รายการทั้งหมด')); });
-const noZero = !/ 0( ·|$)/m.test(r13.t);
+const noZero = !/ 0( |$)/m.test(r13.t) && !/^\d\d:\d\d .* · /m.test(r13.t);
 // เลือกเกาะ → เกาะเดียว ชื่อเกาะในหัว ไม่มีหัวช่วง
 const one13 = await page.evaluate((fid) => { _pkSetFamF = fid; const t = pkLineText(); _pkSetFamF = 'all'; return t; }, await page.evaluate(() => pk2FamOf(pk3Flat()[0].g.rid).id));
 if (r13.inRight && r13.pre === r13.t && r13.t === want13.join('\n') && noZero && /^ตั๋วอุทยาน \S/.test(one13) && !/— .* —/.test(one13) && /รายการทั้งหมด · \d+ ลำ/.test(one13) && c13.cp === r13.t && /คัดลอกแล้ว/.test(c13.btn))

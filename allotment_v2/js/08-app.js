@@ -67587,8 +67587,9 @@ function pkLineText(){
   var add=function(o,c){ Object.keys(c).forEach(function(k){ o[k]=(o[k]||0)+c[k]; }); };
   /* หนึ่งหัวข้อ · rows = [{bid,c,n}] */
   var sect=function(L, title, rows){ if(!rows.length) return; var tc={}, tn=0; rows.forEach(function(r){ add(tc,r.c); tn+=r.n; });
-    L.push(''); L.push(title+' · '+rows.length+' ลำ · '+tn+' คน'); L.push(parts(tc).join(' · ')); L.push('');
-    rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).forEach(function(r){ var ps=parts(r.c); L.push((dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)+' '+r.n+(ps.length?(' · '+ps.join(' · ')):'')); }); };
+    /* §pkLine5 (2026-10-15) · owner "ในเรือแต่ละลำไม่ต้องมีผลรวม และไม่ต้องห่างกันมาก" · ประเภทคั่นด้วยเว้นวรรคเดียว · บรรทัดเรือไม่มียอดรวม */
+    L.push(''); L.push(title+' · '+rows.length+' ลำ · '+tn+' คน'); L.push(parts(tc).join(' ')); L.push('');
+    rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).forEach(function(r){ var ps=parts(r.c); L.push((dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)+(ps.length?(' '+ps.join(' ')):'')); }); };
   var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'], MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   var d=new Date(date+'T12:00:00'), dS=WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2);
   var one=(FAM.length===1), L=[];
