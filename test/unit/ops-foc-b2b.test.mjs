@@ -90,8 +90,8 @@ test('FOC Detail loads its travel window and aggregates only that window', async
   rt.ctx.renderFocDetail();
   await rt.settle();
 
-  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings?from=' + from + '&to=' + to + '&limit=100'],
-    'the render asks the server for exactly the screen\'s window');
+  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings?from=' + from + '&to=' + to + '&limit=500'],
+    'the render asks the server for exactly the screen\'s window (limit 500: ~4k rows, 8 pages not 40)');
   assert.equal(rt.renders.renderFocDetail.length, 2, 'renders once now, once when the window arrives');
   assert.deepEqual(rt.renders.renderFocDetail[0], ['inWin'], 'the first paint shows only cached in-window bookings');
   assert.deepEqual(rt.renders.renderFocDetail[1].sort(), ['S1', 'S2', 'inWin'],

@@ -90,7 +90,9 @@
   }
   wrap('renderFocDetail', function(){
     var w = focWindow();
-    var load = (typeof bookingV2EnsureOpsRange === 'function') ? bookingV2EnsureOpsRange({ from: w.from, to: w.to }) : null;
+    /* limit 500: the 120-day window holds ~4k bookings — at the default 100/page that is ~40
+       sequential round-trips (~30 s before the screen fills); 500 cuts it to ~8 */
+    var load = (typeof bookingV2EnsureOpsRange === 'function') ? bookingV2EnsureOpsRange({ from: w.from, to: w.to, limit: 500 }) : null;
     var subset = (allBookings() || []).filter(function(b){ return tripIn(b, w.from, w.to); });
     var r = withBookings(subset, function(){ return originals.renderFocDetail ? originals.renderFocDetail() : undefined; });
     focBanner(w, !!load);
