@@ -75555,7 +75555,7 @@ function ppBoatName(id){ if(!id) return 'ยังไม่จัดเรือ
 function ppBoatColor(id){ if(!id) return '#94A3B8';
   try{ return (typeof pckBoatColor==='function')?pckBoatColor(id):'#185FA5'; }catch(_){ return '#185FA5'; } }
 function ppDayLbl(ds){ try{ var d=new Date(String(ds)+'T12:00:00');
-    return d.toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'}); }catch(_){ return ds; } }
+    return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'}); }catch(_){ return ds; } }   /* §ppBt · owner: วันที่ให้กระชับ */
 function ppRangeLbl(){ try{
     var o={day:'numeric',month:'short',year:'numeric'};
     var a=new Date(_ppFrom+'T12:00:00').toLocaleDateString('th-TH',o);
@@ -75798,7 +75798,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-day{white-space:nowrap;font-family:"DM Mono",ui-monospace,monospace;font-size:11.5px;color:#475569}'
  +S+' .pp-bt{display:flex;align-items:center;gap:7px;min-width:0}'
  +S+' .pp-bt i{width:9px;height:9px;flex:none}'
- +S+' .pp-bt b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .pp-bt b{font-weight:700;white-space:nowrap;flex:none}'+S+' .pp-bt .pp-tag{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}'+S+' .pp-day .pp-dep{margin-left:6px;font-weight:700;color:#0F172A}'   /* §ppBt */
  +S+' .pp-bt.na b{color:#B4560A;font-weight:800}'
  +S+' .pp-tag{font-size:9px;font-weight:800;border-radius:2px;padding:1px 5px;border:1px solid;margin-left:4px;'
    +'white-space:nowrap;flex:none}'
@@ -75916,7 +75916,10 @@ function ppProgRows(g, pk){
           +(open?'ซ่อน':('รายชื่อผู้เดินทาง '+A.n))+'</button>')
       : '';
     var tr='<tr class="d">'
-      +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
+      +'<td class="pp-day">'+e(ppDayLbl(C.date))+(function(){   /* §ppBt · เวลาเรือออก · ใบงานเรือแก้ไว้ (pjDep) มาก่อน */
+          var R=C.rt||rt, t0=(R&&R.times&&R.times[0])||'';
+          var t=(C.boatId && typeof pjDepOf==='function')?pjDepOf(C.date,C.boatId,t0):t0;
+          return t?('<b class="pp-dep">'+e(t)+'</b>'):''; })()+'</td>'
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
         +'<b>'+e(ppBoatName(C.boatId))+'</b>'
@@ -76097,12 +76100,12 @@ function ppBodySheet(P,pOrd,GT){
   var e=ckEsc;
   /* ทุกตารางใช้ colgroup ชุดเดียวกัน + table-layout:fixed · คอลัมน์จึงตรงกันทุกท่า
      ถึงจะเป็นคนละ <table> ก็ตาม (นี่คือเหตุผลที่แยกตารางได้โดยไม่เสียการเทียบตัวเลข) */
-  var COLS='<colgroup><col style="width:96px"><col style="width:292px">'
+  var COLS='<colgroup><col style="width:124px"><col style="width:280px">'
     +'<col style="width:62px"><col style="width:54px">'
     +'<col style="width:54px"><col style="width:52px"><col style="width:84px">'
     +'<col style="width:74px"><col></colgroup>';
   var HEAD='<thead><tr class="lbl">'
-    +'<th>วันที่</th><th>เรือ</th>'   /* §ppNoCnt */
+    +'<th>วันที่ · ออก</th><th>เรือ</th>'   /* §ppNoCnt · §ppBt */
     +'<th class="r">ผู้ใหญ่</th><th class="r">เด็ก</th><th class="r">ทารก</th>'
     +'<th class="r">FOC</th><th class="r">รวม</th><th class="r">กินอาหาร</th>'
     +'<th>อาหารพิเศษ</th></tr></thead>';
