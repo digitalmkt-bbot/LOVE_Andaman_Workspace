@@ -1916,9 +1916,15 @@ function verify(token){ try{ const [p,sig] = String(token).split('.'); const exp
 // In memory because verify() must stay synchronous (18 call sites); persisted so a restart cannot
 // resurrect a signed-out session; re-read periodically so a second Railway replica converges.
 const LOGOUT_AFTER = new Map();   // lowercased username → ms timestamp of that user's last sign-out
+/* §userRename (2026-10-14) · username ที่ถูกเปลี่ยนชื่อไปแล้ว → ตัด session เก่าที่ยังถือชื่อเดิม
+   แยกจาก LOGOUT_AFTER เพราะตัวนั้นถูกล้างแล้วโหลดใหม่จากตาราง users ทุกรอบ (ชื่อเดิมไม่อยู่ในตารางแล้ว) */
+const RENAMED_OUT = new Map();   // lowercased OLD username → ms timestamp of the rename
 function revoked(o){
   if(!o || !o.username) return false;
-  const cut = LOGOUT_AFTER.get(String(o.username).toLowerCase());
+  const k = String(o.username).toLowerCase();
+  const rn = RENAMED_OUT.get(k);
+  if(rn && !(o.iat && o.iat > rn)) return true;
+  const cut = LOGOUT_AFTER.get(k);
   if(!cut) return false;
   return !(o.iat && o.iat > cut);   // pre-009 tokens have no iat → treated as older → dead on first logout
 }
@@ -2803,6 +2809,33 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} if(!b.id||!b.password) return J(res,400,{error:'no id/password'});
       pool.query(`UPDATE ${USERS_T} SET pass_hash=$1 WHERE id=$2`,[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
+  }
+  /* §userRename (2026-10-14) · owner "ขอให้แก้ชื่อ User ได้หน่อย"
+     แก้ username (ชื่อที่ใช้ล็อกอิน) และชื่อที่แสดง · admin เท่านั้น · ไม่แตะโครงตาราง (UPDATE แถวเดียว)
+     username ซ้ำ (ไม่สนตัวพิมพ์เล็ก/ใหญ่) = 409 · ห้ามว่าง ห้ามมีช่องว่าง
+     เปลี่ยน username แล้ว session ที่ยังถือชื่อเดิมถูกตัด · ผู้ใช้ล็อกอินใหม่ด้วยชื่อใหม่ รหัสผ่านเดิม
+     ของที่บันทึกไว้แล้ว (createdBy / ประวัติ) ยังเป็นชื่อเดิม · ไม่ไล่แก้ย้อนหลัง */
+  if(u === '/api/users/rename' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
+      const un=String(b.username==null?'':b.username).trim(), nm=String(b.name==null?'':b.name).trim();
+      if(!un) return J(res,400,{error:'ต้องมี username'});
+      if(/\s/.test(un) || un.length>60) return J(res,400,{error:'username ห้ามมีช่องว่าง และยาวไม่เกิน 60 ตัวอักษร'});
+      if(nm.length>80) return J(res,400,{error:'ชื่อยาวเกิน 80 ตัวอักษร'});
+      pool.query(`SELECT id,username FROM ${USERS_T} WHERE id=$1`,[id]).then(r=>{
+        const old=r.rows[0]; if(!old) return J(res,404,{error:'ไม่พบผู้ใช้นี้'});
+        return pool.query(`SELECT id FROM ${USERS_T} WHERE lower(username)=lower($1) AND id<>$2`,[un,id]).then(d=>{
+          if(d.rows.length) return J(res,409,{error:'username นี้มีอยู่แล้ว'});
+          return pool.query(`UPDATE ${USERS_T} SET username=$1, name=$2 WHERE id=$3`,[un,(nm||un),id]).then(()=>{
+            const renamed = String(old.username).toLowerCase()!==un.toLowerCase();
+            if(renamed){ RENAMED_OUT.set(String(old.username).toLowerCase(), Date.now()); RENAMED_OUT.delete(un.toLowerCase()); }
+            console.log('[users] rename id='+id+' "'+old.username+'" -> "'+un+'" by '+s.username);
+            J(res,200,{ok:true, username:un, name:(nm||un), renamed:renamed, self:(id===s.uid)});
+          });
+        });
+      }).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message}));
+    }); return;
   }
   if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});

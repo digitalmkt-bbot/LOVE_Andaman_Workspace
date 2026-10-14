@@ -1719,6 +1719,7 @@
       +'<div style="flex:1;min-width:0"><div class="u3" style="font-size:19px"><b>'+esc(u.username)+'</b>'
         +'<em class="tg '+(adm?'adm':'st')+'">'+(adm?'ADMIN':'STAFF')+'</em>'+(me?'<em class="tg me">คุณ</em>':'')+'</div>'
       +'<div class="m3" style="font-size:12.5px">'+esc((u.name?u.name+' · ':'')+'แผนก '+lauDeptT(u.dept)+' · '+mn+' เมนู')+(u.salesId?(' · ผูกกับเซลล์ '+esc(lauSalesName(u.salesId))):'')+'</div></div>'
+      +'<button class="b sm" title="แก้ username (ชื่อที่ใช้ล็อกอิน) และชื่อที่แสดง" onclick="__laRename('+u.id+')">&#9998; แก้ชื่อ</button>'   /* §userRename */
       +'<button class="b sm" title="หน้าต่างเดิม · สิทธิ์พิเศษ (การกระทำนอกจากการเข้าหน้า)" onclick="__laEditPerms('+u.id+')">สิทธิ์พิเศษ</button>'
       +'<button class="b sm" onclick="__laReset('+u.id+')">&#128273; รหัสผ่าน</button>'
       +'<button class="b sm dl"'+(me?' disabled title="ลบบัญชีตัวเองไม่ได้"':'')+' onclick="__laDelUser('+u.id+')">ลบ</button></div>';
@@ -2003,6 +2004,7 @@
           +(u.role==='admin'?'admin':(u.edit.length?(u.edit.length+' พื้นที่แก้ไขได้'):'ดูอย่างเดียว'))+'</b></div></div></div>'
       +'<div class="bds">'+(bds||'<span style="font-size:12px;color:#CBD5E1">ยังไม่มีสิทธิ์เข้าหน้าไหนเลย</span>')+'</div>'
       +'<div class="acts">'
+        +'<button class="b sm" onclick="__laRename('+u.id+')">แก้ชื่อ</button>'   /* §userRename */
         +'<button class="b sm" onclick="__laEditPerms('+u.id+')">สิทธิ์</button>'
         +'<button class="b sm" onclick="__laReset('+u.id+')">รหัสผ่าน</button>'
         +'<button class="ic" title="'+(me?'ลบบัญชีตัวเองไม่ได้':'ลบผู้ใช้')+'"'+(me?' disabled':'')
@@ -2316,6 +2318,65 @@
       dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }
     LAU.add=null; window.__laTab='list'; __laLoadUsers(); lauToast('สร้างบัญชี '+u+' แล้ว');
+  };
+
+  /* ── §userRename (2026-10-14) · แก้ username / ชื่อที่แสดง ──
+     owner "ขอให้แก้ชื่อ User ได้หน่อย" · เดิมสร้างแล้วแก้ชื่อไม่ได้ ต้องลบแล้วสร้างใหม่ (สิทธิ์หายหมด)
+     ตรวจซ้ำ/ช่องว่างตั้งแต่พิมพ์ · เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น
+     เปลี่ยนชื่อตัวเอง (username) → session เดิมถูกตัด · ต้องเข้าใหม่ด้วยชื่อใหม่ จึงรีโหลดให้ */
+  window.__laRename=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    LAU.ren=u;
+    var w=document.getElementById('la-uwin'); var old=w.querySelector('#la-rmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-rmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg sm"><div class="dh"><div><h3>แก้ชื่อผู้ใช้</h3>'
+      +'<p>'+esc(u.username)+(u.name?(' ('+esc(u.name)+')'):'')+'</p></div>'
+      +'<button class="ic" onclick="document.getElementById(\'la-rmask\').remove()">&#10005;</button></div>'
+      +'<div class="db"><div class="f"><label>Username · ใช้ล็อกอิน</label>'
+        +'<input id="la-r1" autocomplete="off" spellcheck="false" oninput="__laRenChk()"></div>'
+        +'<div class="f"><label>ชื่อที่แสดง</label>'
+        +'<input id="la-r2" autocomplete="off" placeholder="เว้นว่าง = ใช้ username" oninput="__laRenChk()">'
+        +'<div class="hint" id="la-rmsg">&nbsp;</div></div></div>'
+      +'<div class="df"><span></span><div style="display:flex;gap:8px">'
+        +'<button class="b" onclick="document.getElementById(\'la-rmask\').remove()">ยกเลิก</button>'
+        +'<button class="b pri" id="la-rgo" disabled onclick="__laRenSave()">บันทึกชื่อ</button></div></div></div>';
+    w.appendChild(d);
+    var a=document.getElementById('la-r1'), b=document.getElementById('la-r2');
+    if(a){ a.value=u.username||''; } if(b){ b.value=u.name||''; }
+    __laRenChk(); if(a){ a.focus(); a.select(); }
+  };
+  window.__laRenChk=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var m=document.getElementById('la-rmsg'), go=document.getElementById('la-rgo');
+    var dup=(LAU.rows||[]).some(function(x){ return x.id!==u.id && String(x.username).toLowerCase()===a.toLowerCase(); });
+    var same=(a===u.username && (b||a)===(u.name||u.username));
+    var ok=false, msg='';
+    if(!a) msg='<span style="color:#B4392B">ต้องมี username</span>';
+    else if(/\s/.test(a)) msg='<span style="color:#B4392B">username ห้ามมีช่องว่าง</span>';
+    else if(a.length>60) msg='<span style="color:#B4392B">username ยาวเกิน 60 ตัวอักษร</span>';
+    else if(dup) msg='<span style="color:#B4392B">username นี้มีคนใช้อยู่แล้ว</span>';
+    else if(b.length>80) msg='<span style="color:#B4392B">ชื่อยาวเกิน 80 ตัวอักษร</span>';
+    else if(same) msg='ยังไม่ได้เปลี่ยนอะไร';
+    else { ok=true;
+      msg=(a.toLowerCase()!==String(u.username).toLowerCase())
+        ? ('<span style="color:#9A5B00">เปลี่ยน username แล้ว '+(lauIsMe(u)?'คุณ':esc(u.username))+' ต้องเข้าสู่ระบบใหม่ด้วย <b>'+esc(a)+'</b> · รหัสผ่านเดิม'
+           +' · ถ้าเข้าผ่าน Authentik ชื่อต้องตรงกับใน Authentik · งานที่บันทึกไว้แล้วยังขึ้นชื่อเดิม</span>')
+        : '<span style="color:#0F6E56">พร้อมบันทึก</span>'; }
+    if(m) m.innerHTML=msg||'&nbsp;'; if(go) go.disabled=!ok;
+  };
+  window.__laRenSave=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var r=sx('POST','/api/users/rename',JSON.stringify({id:u.id,username:a,name:b}),'application/json');
+    if(r.status!==200||!r.json||!r.json.ok){ lauToast((r.json&&r.json.error)||('แก้ชื่อไม่สำเร็จ (HTTP '+r.status+')'),1); return; }
+    var m=document.getElementById('la-rmask'); if(m) m.remove();
+    if(r.json.self && r.json.renamed){
+      lauToast('เปลี่ยน username เป็น '+a+' แล้ว · กำลังพาไปเข้าสู่ระบบใหม่');
+      setTimeout(function(){ try{ location.reload(); }catch(_){} },1600); return; }
+    LAU.ren=null; __laLoadUsers();
+    lauToast(r.json.renamed?('เปลี่ยน '+u.username+' เป็น '+a+' แล้ว'):('แก้ชื่อของ '+a+' แล้ว'));
   };
 
   /* ── รหัสผ่าน ── */
