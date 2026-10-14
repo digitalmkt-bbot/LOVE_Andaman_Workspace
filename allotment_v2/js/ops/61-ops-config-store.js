@@ -8,6 +8,12 @@
    their ctWrite(key, value) to the server.
 
    dr_cfg                 GET|PUT /v1/reports/daily/settings   (van cost, van quota, target / pax)
+   inv_cfg                GET|PUT /v1/config/inv_cfg           (invoice seller / contact / bank head)
+   dr_mail                GET|PUT /v1/config/dr_mail           (daily report e-mail form)
+   pmap_agpanel           GET|PUT /v1/config/pmap_agpanel      (pickup map: agent panel open, 0|1)
+   pmap_zonebg            GET|PUT /v1/config/pmap_zonebg       (pickup map: zone background, 0|1)
+   guides                 GET|PUT /v1/config/guides            (the guide register, whole list)
+   (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
    over legacy's defaults. Off unless laOps.enabled() and the login is not an
@@ -18,6 +24,7 @@
   'use strict';
   var O = window.laOps; if(!O) return;
   var RETRY_MS = 15000;
+  var DEBOUNCE_MS = 600;            // typing in a settings field saves once it pauses
   var H = {};                       // ctRead / ctWrite key -> { read(), write(val), load() }
 
   function active(){ var me = window.LA_ME; return !!O.enabled() && !(me && me.agentId); }
@@ -34,7 +41,7 @@
 
   /* one cache cell: { loaded, loading, failedAt } + the caller's fetch */
   function cell(title, fetch){
-    var c = { loaded: false, loading: null, failedAt: 0 };
+    var c = { title: title, loaded: false, loading: null, failedAt: 0 };
     c.load = function(force){
       if(c.loading) return c.loading;
       if(c.loaded && !force) return Promise.resolve();
@@ -83,6 +90,74 @@
     if(kind === 'daily-report-settings' && active() && dr.cell.loaded) dr.cell.load(true).catch(noop);
   });
 
+  /* ── the config store · one GET for every key, one PUT per key ──
+     Server-first: an edit shows at once (the legacy readers are synchronous and redraw from the cache),
+     is saved after a pause, and a refused save puts the last saved value back. The PUT carries the version
+     the cache read, so a save over someone else's newer one is a 409 stale_version: the key is read again. */
+  var CFG = {
+    inv_cfg: { title: 'Invoice header', wait: DEBOUNCE_MS },
+    dr_mail: { title: 'Daily report e-mail', wait: DEBOUNCE_MS },
+    pmap_agpanel: { title: 'Pickup map panel', wait: 0 },
+    pmap_zonebg: { title: 'Pickup map zones', wait: 0 },
+    guides: { title: 'Guide register', wait: DEBOUNCE_MS },
+  };
+  var ents = {};                    // key -> { value, version, snap, seq, timer }
+  function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
+  function applyEntry(r){
+    var e = ent(r.key); e.value = O.clone(r.value); e.version = r.version == null ? null : r.version;
+    e.snap = null; e.seq++;
+    /* the pickup map keeps its toggle in a variable after the first read: drop it so it reads the saved one */
+    try{ if(r.key === 'pmap_zonebg') _pmapZoneBg = null; if(r.key === 'pmap_agpanel') _pmapAgOpen = null; }catch(_){}
+  }
+  var cfgCell = cell('Settings', function(){
+    return O.get('/v1/config').then(function(r){ ((r && r.entries) || []).forEach(applyEntry); });
+  });
+  function cfgRepaint(){
+    var reg = document.querySelector('#acct-modal .go-reg');
+    if(reg && typeof window.goRegOpen === 'function'){ try{ window.goRegOpen(); }catch(_){} return; }
+    redraw();
+  }
+  function cfgRead(key){
+    if(cfgCell.loaded) return O.clone(ent(key).value);
+    cfgCell.miss(); return null;
+  }
+  function cfgWrite(key, val){
+    if(!cfgCell.loaded){ O.fail(CFG[key].title + ' not saved', new Error('The settings are still loading, try again')); return; }
+    var e = ent(key);
+    if(!e.snap) e.snap = { value: e.value, version: e.version };   // the last saved state, before the first unsaved edit
+    e.value = O.clone(val); e.seq++;
+    clearTimeout(e.timer);
+    if(!CFG[key].wait){ e.timer = null; return flush(key); }
+    e.timer = setTimeout(function(){ flush(key); }, CFG[key].wait);
+  }
+  function flush(key){
+    var e = ent(key); clearTimeout(e.timer); e.timer = null;
+    if(!e.snap) return Promise.resolve();
+    return O.queue(function(){
+      if(!e.snap) return null;                                    // an earlier save of this key was refused: nothing left to send
+      var mine = e.seq, body = { value: O.clone(e.value) };
+      if(e.version != null) body.version = e.version;
+      return O.call('PUT', '/v1/config/' + encodeURIComponent(key), body).then(function(r){
+        e.version = r.version;
+        if(e.seq === mine){ e.value = O.clone(r.value); e.snap = null; }
+        else e.snap = { value: O.clone(r.value), version: r.version };   // typed on since: its own save follows
+      });
+    }).then(noop, function(err){
+      clearTimeout(e.timer); e.timer = null;
+      var snap = e.snap; e.snap = null; e.seq++;
+      if(snap){ e.value = snap.value; e.version = snap.version; }
+      if(err && err.code === 'stale_version'){
+        return O.get('/v1/config/' + encodeURIComponent(key)).then(applyEntry, noop).then(function(){
+          O.fail(CFG[key].title + ' not saved: it was changed by someone else, the saved version is shown', err); cfgRepaint();
+        });
+      }
+      O.fail(CFG[key].title + ' not saved', err); cfgRepaint();
+    });
+  }
+  Object.keys(CFG).forEach(function(k){
+    H[k] = { read: function(){ return cfgRead(k); }, write: function(v){ return cfgWrite(k, v); }, cell: cfgCell };
+  });
+
   /* ── wiring ── */
   function wrap(name, fn){
     var orig = window[name]; if(typeof orig !== 'function') return;
@@ -101,9 +176,13 @@
   });
 
   /* start the loads at once, so most first reads find the answer already there */
-  if(active()) Object.keys(H).forEach(function(k){
-    H[k].cell.load().catch(function(e){ O.fail(k + ' did not load', e); });
-  });
+  if(active()){
+    var seen = [];
+    Object.keys(H).forEach(function(k){
+      var c = H[k].cell; if(seen.indexOf(c) >= 0) return; seen.push(c);
+      c.load().catch(function(e){ O.fail(c.title + ' did not load', e); });
+    });
+  }
 
-  window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw };
+  window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw, flush: flush, ents: ents };
 })();
