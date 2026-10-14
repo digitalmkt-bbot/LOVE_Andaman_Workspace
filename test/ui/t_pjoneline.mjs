@@ -7,6 +7,8 @@
 //   3 ชื่อสั้นยังเป็นขนาดปกติ (ไม่ย่อทั้งใบ) · ชื่อยาวย่อแต่ไม่ต่ำกว่า 62%
 //   4 ปิดพอดีจอ (ขนาดจริง) ก็ยังบรรทัดเดียว · สื่อพิมพ์ก็บรรทัดเดียว · ชื่อยาวผิดปกติจนย่อสุดแล้วยังล้น → ตกบรรทัด ไม่ถูกตัด
 //   5 ไม่มี error
+//   7 (§pjOneLine3 · owner "พอขยายแบบนี้ชื่อคนในตาราง ต้องขยายตามนะ") ขยายหน้าต่าง/พอดีจอ ชื่อที่ถูกย่อต้องโตตามช่อง
+//     ชื่อที่ย่อกินช่อง ≥ 85% ทุกขนาดหน้าต่าง · หน้าต่างใหญ่ ชื่อยาวตัวใหญ่กว่าหน้าต่างเล็ก
 //   6 (§pjOneLine2 · owner "บรรทัดยังไม่เต็มเลย") ใบไม่พึ่งหน่วย cqi / container query · ขนาดชื่อที่ย่อเป็น px ใส่ตรงที่ตัวชื่อ
 //     เบราว์เซอร์ที่ไม่รู้จัก cqi ทิ้งกฎทั้งบรรทัด ชื่อเลยไม่ย่อแล้วตกบรรทัดเต็มขนาด
 import { open } from './_harness.mjs';
@@ -64,6 +66,16 @@ if (b.namesOne === b.nn && !b.clipped.length && c.namesOne === c.nn && !c.clippe
 const x = await p.evaluate(() => { const el = [...document.querySelectorAll('.pn1')][0]; el.innerHTML = 'นายสมมุติ ทดลองยาวมากผิดปกติเป็นพิเศษ (บังสันติภาพยาวมาก)'; el.style.removeProperty('--r');
   window.dispatchEvent(new Event('resize')); return new Promise(z => setTimeout(() => z({ wr: el.classList.contains('wr'), clipped: el.scrollWidth > el.clientWidth + 1 }), 500)); });
 if (x.wr && !x.clipped) ok('4b ชื่อยาวผิดปกติ · ยอมตกบรรทัดแทนถูกตัด'); else fail('4b ' + JSON.stringify(x));
+const fill = () => p.evaluate(() => { const L = [...document.querySelectorAll('.pn1')].filter(el => el.style.fontSize && !el.classList.contains('wr'));
+  const r = L.map(el => el.getBoundingClientRect().width / el.parentNode.getBoundingClientRect().width);
+  const big = [...document.querySelectorAll('.pn1')].find(el => /ทับสมุทรทอง/.test(el.textContent));
+  return { n: L.length, min: r.length ? Math.min(...r) : 1, f: big ? parseFloat(getComputedStyle(big).fontSize) : 0, zoom: document.getElementById('sheet').style.zoom }; });
+await p.evaluate(() => { const el = [...document.querySelectorAll('.pn1')][0]; el.textContent = 'นาย ก ข (ค)'; if (!FIT) fitToggle(); window.fit(); });
+await p.setViewportSize({ width: 1220, height: 880 }); await p.waitForTimeout(500); const sm = await fill();
+await p.setViewportSize({ width: 1900, height: 640 }); await p.waitForTimeout(600); const lgw = await fill();   /* เตี้ย → พอดีจอย่อ zoom < 1 ช่องในเลย์เอาต์กว้างขึ้น = กรณีในรูปของ owner */
+await p.click('#bfit'); await p.waitForTimeout(300); const off = await fill(); await p.click('#bfit'); await p.waitForTimeout(300);   /* ปิดพอดีจอ = ขนาดจริง */
+if (sm.min >= 0.85 && lgw.min >= 0.85 && off.min >= 0.85 && lgw.f > sm.f && lgw.zoom && +lgw.zoom < 1) ok(`7 ชื่อโตตามช่อง · 1220px ${sm.f}px → 1900px (zoom ${lgw.zoom}) ${lgw.f}px · กินช่อง ≥ ${Math.round(Math.min(sm.min, lgw.min, off.min) * 100)}%`);
+else fail('7 ' + JSON.stringify({ sm, lgw, off }));
 if (process.env.SHOT) { await p.click('#bfit'); await p.waitForTimeout(300); await p.screenshot({ path: process.env.SHOT }); }
 await p.close();
 if (errors.length) fail('errors: ' + errors.join(' | ')); else ok('5 ไม่มี error');

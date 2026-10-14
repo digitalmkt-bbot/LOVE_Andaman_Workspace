@@ -74557,7 +74557,7 @@ function pjPrint(){
   /* §pjOneLine (2026-10-14) · owner "ปรับให้อยู่บรรทัดเดียวกัน"
      ชื่อลูกเรือ/ไกด์เคยตกสองบรรทัด ตัดกลางชื่อเล่น เช่น "(บัง / สัน)" "(ซอ / แมะ)"
      ตอนนี้ชื่อหนึ่งคน = หนึ่งบรรทัดเสมอ · ช่องแคบกว่าชื่อ ตัวหนังสือย่อลงเฉพาะชื่อนั้น (ไม่ต่ำกว่า 62%)
-     ขนาดเป็น px ที่สคริปต์ในใบคิดให้ทีละชื่อ (§pjOneLine2) · วัดที่ zoom 1 · จอ / พอดีจอ / รูป PNG ได้ผลเดียวกัน */
+     ขนาดเป็น px ที่สคริปต์ในใบคิดให้ทีละชื่อ (§pjOneLine2) · คิดใหม่ทุกครั้งที่ใบถูกย่อ/ขยาย (§pjOneLine3) */
   var nm1=function(h){ return h?('<span class="nmw"><span class="pn1">'+h+'</span></span>'):''; };
   var who=function(sid,withLic){ if(!sid) return ''; var nm=pjStaffName(sid); if(!nm) return '';
     return nm1(e(nm)+(withLic?lic(sid):'')); };
@@ -74999,20 +74999,29 @@ function pjPrint(){
    +'</div>'
    + sheet
    +'<script>'+scr+'<\/script>'
-   +'<script>'+"(function(){var MIN="+(fs*0.62).toFixed(2)+";function m(){var el=document.getElementById('sheet');if(!el)return;var z=el.style.zoom;el.style.zoom='';"
-     /* §pjOneLine2 · วัดที่ zoom 1 (ช่องแคบที่สุด = ขนาดเดียวกับรูป PNG) · ชื่อเต็มขนาดกว้างเท่าไร ช่องกว้างเท่าไร → ขนาดตัวอักษรเป็น px */
+   +'<script>'+"(function(){var MIN="+(fs*0.62).toFixed(2)+";"
+     /* §pjOneLine3 (2026-10-14) · owner "พอขยายแบบนี้ชื่อคนในตาราง ต้องขยายตามนะ"
+        รอบก่อนคิดขนาดชื่อที่ zoom 1 เสมอ · พอเปิดพอดีจอ/ขยายหน้าต่าง ช่องกว้างขึ้นแต่ชื่อยังเล็กเท่าเดิม
+        ตอนนี้วัดกับช่อง "ตามที่เห็นจริงตอนนั้น" · ทุกครั้งที่ใบถูกย่อ/ขยาย (fit) จะคิดใหม่ทันที
+        ใหญ่สุด = ขนาดปกติของใบ · เล็กสุด 62% · ถ่ายรูป/พิมพ์ คิดใหม่ที่ขนาดจริงก่อน */
+     +"function size(){var el=document.getElementById('sheet');if(!el)return;"
      +"var L=el.querySelectorAll('.pn1'),W=[],A=[];for(var i=0;i<L.length;i++){L[i].style.fontSize='';L[i].classList.remove('wr');L[i].classList.add('ms');}"
+     /* zoom ย่อทั้งชื่อและช่องเท่ากัน · อัตราส่วนจึงถูกที่ทุก zoom */
      +"for(var j=0;j<L.length;j++){W.push(L[j].getBoundingClientRect().width);A.push(L[j].parentNode.getBoundingClientRect().width);}"
      +"var fs=L.length?parseFloat(getComputedStyle(L[0]).fontSize):0;"
      +"for(var k=0;k<L.length;k++){L[k].classList.remove('ms');if(!(W[k]>0)||!(A[k]>0)||!fs)continue;"
        +"var f=Math.min(fs,Math.max(MIN,fs*A[k]/W[k]*0.97));if(f<fs-0.05)L[k].style.fontSize=f.toFixed(2)+'px';}"
      /* ย่อสุดแล้วยังล้น (ชื่อยาวผิดปกติ) · ยอมตกบรรทัดที่ช่องว่างดีกว่าถูกตัดเป็น ... */
-     +"for(var q=0;q<L.length;q++){if(L[q].scrollWidth>L[q].clientWidth+1)L[q].classList.add('wr');}"
-     +"el.style.zoom=z;if(typeof fit==='function')fit();}"
-     +"var _mt;window.addEventListener('resize',function(){clearTimeout(_mt);_mt=setTimeout(m,250);});"
-     /* ฟอนต์ Sarabun มาทีหลังได้ · วัดซ้ำทุกครั้งที่ฟอนต์โหลดเสร็จ ไม่งั้นขนาดคิดจากฟอนต์สำรอง */
-     +"try{if(document.fonts){if(document.fonts.ready)document.fonts.ready.then(m);if(document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',function(){setTimeout(m,30);});}}catch(_){}"
-     +"m();window.addEventListener('load',function(){m();setTimeout(m,300);setTimeout(m,1500);});})();"
+     +"for(var q=0;q<L.length;q++){if(L[q].scrollWidth>L[q].clientWidth+1)L[q].classList.add('wr');}}"
+     /* ห่อ fit เดิม · ปุ่มพอดีจอ / ย่อขยายหน้าต่าง / ถ่ายรูปเสร็จ ล้วนเรียก fit · ขนาดชื่อจึงตามทุกครั้ง
+        fit สองรอบ เพราะชื่อเล็ก/ใหญ่ขึ้นทำให้แถวสูงต่างไปนิดหน่อย */
+     +"var F=window.fit;window.fit=function(){if(typeof F==='function')F();size();if(typeof F==='function'){F();size();}};"
+     +"var S=window.shot;if(typeof S==='function')window.shot=function(){var el=document.getElementById('sheet');if(el)el.style.zoom='';size();return S.apply(this,arguments);};"
+     +"window.addEventListener('beforeprint',function(){var el=document.getElementById('sheet');if(el)el.style.zoom='';size();});"
+     +"window.addEventListener('afterprint',function(){window.fit();});"
+     /* ฟอนต์ Sarabun มาทีหลังได้ · คิดซ้ำเมื่อฟอนต์โหลดเสร็จ */
+     +"try{if(document.fonts){if(document.fonts.ready)document.fonts.ready.then(function(){window.fit();});if(document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',function(){setTimeout(window.fit,30);});}}catch(_){}"
+     +"window.fit();window.addEventListener('load',function(){setTimeout(window.fit,300);setTimeout(window.fit,1500);});})();"
    +'<\/script></body></html>';
 
   var w=window.open('','_blank','width=1220,height=880');
