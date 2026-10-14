@@ -35,7 +35,7 @@
   var SPAN = 62;
 
   function put(route, date, cap){ if(route && date && cap) AV[route + '|' + date] = { d: cap, at: Date.now() }; }
-  function clear(){ AV = {}; AL = {}; windows = {}; }
+  function clear(){ AV = {}; AL = {}; windows = {}; pending = {}; }
 
   var redrawT = null;
   function redraw(){
@@ -54,21 +54,30 @@
   }
 
   function windowStart(date){ return date.slice(0, 8) + '01'; }
+  /* Returns null when the window is already loaded, else its in-flight promise (resolves true when
+     the numbers landed, false when the request failed) — callers that must wait for the numbers
+     (reports) await it; everyone else ignores it and gets the redraw. */
+  var pending = {};
   function ensure(date){
     var w = windowStart(date);
-    if(windows[w]) return;
+    if(windows[w] === 'loading' && pending[w]) return pending[w];
+    if(windows[w]) return null;
     windows[w] = 'loading';
     var to = O.shift(w, SPAN - 1);
-    O.get('/v1/availability', { from: w, to: to }).then(function(j){
+    var p = pending[w] = O.get('/v1/availability', { from: w, to: to }).then(function(j){
       ((j && j.days) || []).forEach(function(d){ put(d.route_id, d.service_date, d); });
       windows[w] = Date.now();
       redraw();
+      return true;
     }).catch(function(e){
       // leave the window un-marked after a short pause, so it is retried · local numbers meanwhile
       setTimeout(function(){ if(windows[w] === 'loading') delete windows[w]; }, 30000);
       try{ console.warn('[ops] availability ' + w + ' · ' + e.message); }catch(_){}
-    });
+      return false;
+    }).then(function(ok){ if(pending[w] === p) delete pending[w]; return ok; });
+    return p;
   }
+  function cached(route, date){ var s = AV[route + '|' + date]; return s ? s.d : null; }
   function ensureAllot(route, date, opsId){
     var k = route + '|' + date + '|' + opsId;
     if(AL[k] || allotBusy[k]) return;
@@ -134,6 +143,89 @@
     w.__ops = true; w.__orig = orig; window.getAllotment = w;
   })();
 
+  /* ══ §opsCalAvail (2026-10-14) · the Calendar's per-boat rows from the server ════════════
+     _calTripsFor(ds, pier) (04-data-core.js) is what the Calendar month grid, its day panel,
+     the route matrix and the Dashboard's 7-day table read. It never went through getAllotment:
+     it counted seats itself from SB_BOOKINGS (getSeatsConsumed, charter boats from charter
+     bookings, bookingV2LockedTotal), and on operation-backend SB_BOOKINGS holds only the date
+     ranges another screen loaded. Measured on the 13 Oct snapshot: October showed 7,832 seats
+     free where /v1/availability says 4,474; 31% of route-days matched.
+     Now, for a route-day the server has answered, the rows are the server's deployments
+     (boat, capacity, chartered) and the seats are the server's booked / locked / available,
+     spread over the boats in deployment order the way legacy spreads them (non-charter boats
+     fill one after another; locks come out of what is left; a chartered boat sells 0).
+     Routes the server has not answered yet keep the legacy rows and the window is fetched
+     (the calendar redraws when it lands). Land routes (unlimited) keep the legacy rows. */
+  function calRowsFor(ds, pier, legacy){
+    var byRoute = {}, order = [], out = [], done = {};
+    legacy.forEach(function(x){
+      var rid = x && x.r && x.r.id; if(!rid) return;
+      if(!byRoute[rid]){ byRoute[rid] = []; order.push(rid); }
+      byRoute[rid].push(x);
+    });
+    var missing = false;
+    function serverRows(rid, s){
+      var r = (typeof getRoute === 'function') ? getRoute(rid) : null;
+      if(!r) return [];
+      var old = {}; (byRoute[rid] || []).forEach(function(x){ if(x.b) old[x.b.id] = x; });
+      var wx = (typeof bookingV2IsWeatherClosed === 'function') && !!bookingV2IsWeatherClosed(rid, ds);
+      var deps = Array.isArray(s.deployments) ? s.deployments : [];
+      var rows = deps.map(function(d){
+        var b = (typeof getBoat === 'function' ? getBoat(d.boat_id) : null) || { id: d.boat_id, name: d.boat_id, cap: +d.capacity || 0 };
+        var lx = old[d.boat_id], st = '';
+        try{ st = (typeof getCurStatus === 'function') ? ((getCurStatus(b, ds) || {}).s || '') : ''; }catch(_){}
+        var down = lx ? !!lx.boatDown : (!!st && st !== 'available');
+        return { r: r, b: b, op: lx ? lx.op : { route: rid, type: d.trip_type || 'normal', booked: 0 },
+                 free: 0, cap: Math.max(0, Math.round(+d.capacity || 0)), booked: 0, locked: 0, isCharter: !!d.chartered,
+                 routeClosed: false, weatherClosed: wx, boatDown: down, boatDownSt: lx ? (lx.boatDownSt || '') : (down ? st : ''),
+                 boatName: b.name || b.id, fromServer: true };
+      });
+      var bk = Math.max(0, +s.booked_pax || 0), lk = Math.max(0, +s.locked_pax || 0), ch = Math.max(0, +s.charter_pax || 0);
+      var seat = rows.filter(function(x){ return !x.isCharter; }), chart = rows.filter(function(x){ return x.isCharter; });
+      seat.forEach(function(x){ var t = Math.min(x.cap, bk); x.booked = t; bk -= t; x.free = x.cap - t; });
+      if(bk > 0 && seat.length) seat[seat.length - 1].booked += bk;           // oversold · the count stays visible
+      seat.forEach(function(x){ var t = Math.min(x.free, lk); x.locked = t; x.free -= t; lk -= t; });
+      // never show more free seats than the server sells (its own rules may hold some back)
+      var over = seat.reduce(function(a, x){ return a + x.free; }, 0) - Math.max(0, +s.available_seats || 0);
+      for(var i = seat.length - 1; i >= 0 && over > 0; i--){ var cut = Math.min(seat[i].free, over); seat[i].free -= cut; over -= cut; }
+      chart.forEach(function(x, i){ var t = (i === chart.length - 1) ? ch : Math.min(x.cap, ch); x.booked = t; ch -= t; });
+      return rows;
+    }
+    function routeRows(rid){
+      if(done[rid]) return [];
+      done[rid] = 1;
+      var s = cached(rid, ds);
+      if(!s){ missing = true; return byRoute[rid] || []; }
+      if(s.unlimited) return byRoute[rid] || [];
+      if(s.open === false) return [];
+      return serverRows(rid, s);
+    }
+    order.forEach(function(rid){ routeRows(rid).forEach(function(x){ out.push(x); }); });
+    // deployments the browser's TRIPS does not hold (outside its window, or placed by someone else)
+    (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES) ? ROUTES : []).forEach(function(r){
+      if(!r || done[r.id] || (pier && r.pier !== pier)) return;
+      var s = cached(r.id, ds);
+      if(!s){ missing = true; return; }
+      if(s.unlimited || s.open === false || !(s.deployments || []).length) return;
+      try{ var ds2 = (typeof getDayStatus === 'function') ? getDayStatus(r, ds) : null; if(ds2 && ds2.type === 'closed') return; }catch(_){}
+      routeRows(r.id).forEach(function(x){ out.push(x); });
+    });
+    if(missing) ensure(ds);
+    return out;
+  }
+  (function(){
+    var orig = window._calTripsFor;
+    if(typeof orig !== 'function' || orig.__ops) return;
+    var w = function(ds, pier){
+      var rows = orig.apply(this, arguments);
+      try{
+        if(!O.enabled() || !O.state.loaded || !/^\d{4}-\d{2}-\d{2}$/.test(ds || '') || !Array.isArray(rows)) return rows;
+        return calRowsFor(ds, pier, rows);
+      }catch(_){ return rows; }
+    };
+    w.__ops = true; w.__orig = orig; window._calTripsFor = w;
+  })();
+
   var refreshT = null;
   O.onWrite(function(){
     clear();
@@ -160,5 +252,5 @@
   }
   setInterval(function(){ if(O.enabled() && O.state.loaded && !document.hidden) refreshQuiet(); }, 120000);
 
-  O.availability = { ensure: ensure, put: put, clear: clear, preload: function(){ var t = O.today(); ensure(t); ensure(O.shift(windowStart(t), SPAN)); } };
+  O.availability = { ensure: ensure, get: cached, calRows: calRowsFor, put: put, clear: clear, preload: function(){ var t = O.today(); ensure(t); ensure(O.shift(windowStart(t), SPAN)); } };
 })();
