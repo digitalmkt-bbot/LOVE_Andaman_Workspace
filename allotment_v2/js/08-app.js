@@ -71749,6 +71749,7 @@ function pjSet(d,b,patch){
   Object.keys(patch).forEach(function(x){ cur[x]=patch[x]; });
   PIER_JOB[k]=cur; poPersist();
   _pjWbMemo={};                       /* §pjWbCarry · ของที่สืบทอดมาอาจเปลี่ยนไปแล้ว */
+  pjDupReset();                       /* §pjDupCrew */
 }
 /* ══ §pjWbCarry (2026-09-23) · เปิดใบวันถัดไป ให้ได้สีสายรัดของลำนั้นติดมาด้วย ══
    สายรัดซื้อมาเป็นล็อต · ล็อตหนึ่งใช้หลายวันจนหมดแล้วค่อยเปลี่ยน
@@ -72632,6 +72633,8 @@ function pjCSS(){
   +H+'.sk .pj-hd2 .dt .pr{height:30px;border:none;border-radius:9px;background:#0F172A;color:#fff;font:700 12px inherit;font-family:inherit;padding:0 11px;cursor:pointer;white-space:nowrap}'
   +H+'.sk .pj-hd2 .dt .pr:hover{background:#1E293B}'
   +H+'.sk .pj-warnrow{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}'
+  +H+'.sk .pj-dup{display:inline-flex;align-items:center;font-size:9.5px;font-weight:800;color:#A32D2D;background:#FCEBEB;border:1px solid #F3C5C5;border-radius:5px;padding:1px 6px;margin-right:4px;white-space:nowrap;cursor:help}'
+  +H+'.sk .pj-dupw{white-space:normal;cursor:help}'
   /* จอแคบ · ที่ไม่พอวางสามช่องในแถวเดียว (เมนูซ้ายกินไป ~264px)
      <1780 วันที่ขึ้นบรรทัดบนของแถบ (บรรทัดเดียว) · ซ้าย/ขวาอยู่บรรทัดล่าง · ปุ่มคัดลอกเหลือแค่ไอคอน
      <1420 ซ้ายกับขวาเรียงลงมาทีละแถว */
@@ -72713,13 +72716,18 @@ function pjRoleHit(role, roles){
   for(var i=0;i<roles.length;i++){ var k=String(roles[i]||'').trim().toLowerCase(); if(k && r.indexOf(k)>=0) return true; }
   return false;
 }
-function pjOpts(pier, sel, roles){
+function pjOpts(pier, sel, roles, busy, bid){
   var all=(PIER_STAFF||[]).filter(function(s){ return s.active!==false; });
   var want=(roles&&roles.length)?String(roles[0]):'';
+  busy=busy||{};
+  /* §pjDupCrew · คนที่อยู่ลำอื่นแล้ววันนี้ ยังเลือกได้ (บางวันย้ายลำจริง) แต่ชื่อบอกไว้ว่าอยู่ลำไหน */
+  var where=function(s){ var L=(busy[s.id]||[]).filter(function(x){ return x.bid!==bid; });
+    return L.length ? ('⚠ อยู่ '+L.map(function(x){ return x.name+(x.pier!==pier?(' '+pjPierShort(x.pier)):''); }).join('/')) : ''; };
   var opt=function(s, tag){
+    var w=where(s);
     return '<option value="'+poE(s.id)+'"'+(s.id===sel?' selected':'')+'>'
       +poE((s.name||s.nick||s.id)+(s.nick&&s.name?(' ('+s.nick+')'):''))
-      +(s.role?(' · '+poE(s.role)):'')+(tag?(' · '+poE(tag)):'')+'</option>';
+      +(s.role?(' · '+poE(s.role)):'')+(tag?(' · '+poE(tag)):'')+(w?(' · '+poE(w)):'')+'</option>';
   };
   var grp=function(list, label, tagFn){
     if(!list.length) return '';
@@ -72841,6 +72849,12 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var badge='';
   var hp=val?pjHomePier(val):'';
   if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
+  /* §pjDupCrew · คนนี้อยู่ลำอื่นวันนี้ด้วย (ท่าไหนก็ตาม) → ป้ายแดง บอกลำและท่า */
+  var elsewhere=(kind==='go'||kind==='wk') && val ? pjCrewElsewhere(_poDate,bid,val) : [];
+  if(elsewhere.length){
+    var _el=elsewhere.map(function(x){ return x.name+(x.pier!==pier?(' ('+pjPierShort(x.pier)+')'):''); }).join(' · ');
+    badge+='<span class="pj-dup" title="'+poE(pjStaffName(val)+' อยู่บน '+_el+' วันเดียวกัน — คนเดียวลงสองลำไม่ได้ เลือกใหม่ที่ลำใดลำหนึ่ง')+'">&#9888; ซ้ำ · '+poE(_el)+'</span>';
+  }
   /* ══ §pjFreeAll (2026-10-03) · เรือเช่า · ทุกช่องของ Captain & Crew พิมพ์ชื่อเองได้ ════════
      ของเดิมพิมพ์เองได้เฉพาะช่องกัปตัน · ช่องที่กดเพิ่มเข้ามา (ผู้ช่วยกัปตัน เด็กเรือ คนเกาะ)
      ยังเป็นเมนูเลือกจากทะเบียนพนักงาน ซึ่งคนของเจ้าของเรือไม่มีชื่ออยู่ในนั้น เลือกใครไม่ได้เลย
@@ -72869,7 +72883,7 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
     +(freeCaptain
       ? (dlHtml+'<input class="pj-free" data-pjfree="'+slot+'" list="'+dlId+'" value="'+poE(nmTxt)+'" placeholder="'+(slot==='cap'?'พิมพ์ชื่อกัปตัน':'พิมพ์ชื่อ')+'" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>')
-      : pjPickBox(nmTxt, pjOpts(pier,val,roles),
+      : pjPickBox(nmTxt, pjOpts(pier,val,roles,pjCrewBusyAll(_poDate),bid),
                   'pjPick(&#39;'+bid+'&#39;,&#39;'+slot+'&#39;,this.value)', ro))
     +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+kHtml+'</div>'+sel
@@ -72900,6 +72914,38 @@ function pjGuideRow(label, name, langs){
    บนการ์ดใบเดียวกันแค่กดเลือกในบรรทัดนั้นเลย
    เก็บที่เดิม (goAsn ของใบสั่งงานมัคคุเทศก์) ปุ่ม "จัดไกด์" ยังใช้ได้เหมือนเดิม
    สองทางเขียนลงที่เดียวกัน แก้ทางไหนอีกทางก็เห็น */
+/* ══ §pjDupCrew (2026-10-14) · owner "ใบงานเรือทับละมุ+ภูเก็ต วันนี้มั่วกันมาก" ════════
+   ช่องลูกเรือไม่เคยรู้ว่าคนคนนั้นถูกจ่ายลงลำอื่นไปแล้ว (ช่องไกด์รู้ · pjGdBusy)
+   และใบที่ยังไม่บันทึกใช้ "ทีมประจำลำ" (PIER_TEAM) เป็นค่าตั้งต้น · คนที่ย้ายลำ/ย้ายท่า
+   จึงโผล่สองใบพร้อมกันโดยไม่มีใครเตือน · ทั้งในท่าเดียวกันและข้ามท่า
+   ตรงนี้กวาดทุกท่า ทุกลำของวันนั้น: ลำที่ออกเรือนับทีมที่แสดง (รวมทีมประจำ) ·
+   ลำที่จอดนับเฉพาะใบที่บันทึกไว้จริง (ทีมประจำของลำที่จอดไม่ใช่การจ่ายงาน)
+   คืน id -> [{bid, name, pier}] · ใช้ขึ้นป้ายบนการ์ด ป้ายในเมนูเลือก และแถบเตือนหัวหน้า */
+var _pjDupMemo={date:'', m:null};
+function pjCrewBusyAll(date){
+  if(_pjDupMemo.date===date && _pjDupMemo.m) return _pjDupMemo.m;
+  var m={};
+  try{
+    (PO_PIERS||[]).forEach(function(P){
+      pjAllBoats(date, P.k).forEach(function(B){
+        var going=!!(B.rid), saved=!!pjRaw(date,B.bid);
+        if(!going && !saved) return;
+        var J=pjOf(date,B.bid), ids=[J.cap,J.asst].concat(J.crew||[],J.island||[]);
+        var nm=(B.boat&&B.boat.name)||B.bid, seen={};
+        ids.forEach(function(id){ if(!id || seen[id]) return; seen[id]=1;
+          (m[id]=m[id]||[]).push({bid:B.bid, name:nm, pier:P.k}); });
+      });
+    });
+  }catch(_){}
+  _pjDupMemo={date:date, m:m};
+  return m;
+}
+function pjDupReset(){ _pjDupMemo={date:'', m:null}; }
+/* คนคนนี้อยู่ลำอื่นที่ไม่ใช่ลำนี้ไหม · คืน [] ถ้าไม่ */
+function pjCrewElsewhere(date, bid, id){
+  if(!id) return [];
+  return (pjCrewBusyAll(date)[id]||[]).filter(function(x){ return x.bid!==bid; });
+}
 /* ไกด์คนไหนถูกจ่ายให้ลำอื่นไปแล้ววันเดียวกัน · id -> ชื่อลำ
    ไม่ห้าม (บางวันคนเดียวคุมสองลำจริง) แต่ต้องเห็นก่อนกด
    ไม่ใช่รู้ตอนกระดาษสองใบออกมาชื่อชนกัน */
@@ -73730,6 +73776,17 @@ function renderPierJob(pier){
     +'</div>'
     /* §pjHd3 · แถวล่างเหลือแค่คำเตือน · ขึ้นเฉพาะวันที่มี */
     +(function(){ var w=''
+      /* §pjDupCrew · คนเดียวอยู่หลายลำวันนี้ (ทุกท่า) · ขึ้นที่หัวหน้าให้เห็นก่อนพิมพ์ */
+      +(function(){
+        var m=pjCrewBusyAll(_poDate), L=[];
+        Object.keys(m).forEach(function(id){ if(m[id].length>1) L.push({id:id, at:m[id]}); });
+        if(!L.length) return '';
+        var txt=L.map(function(x){ return pjStaffName(x.id)+' → '+x.at.map(function(y){ return y.name+' ('+pjPierShort(y.pier)+')'; }).join(' + '); }).join('\n');
+        var here=L.filter(function(x){ return x.at.some(function(y){ return y.pier===_poPier; }); }).length;
+        return '<span class="pj-warnc red pj-dupw" title="'+poE(txt)+'">&#9888; คนซ้ำลำ '+L.length+' คน'
+          +(here<L.length?(' (เกี่ยวกับท่านี้ '+here+')'):'')+' · '
+          +poE(L.slice(0,3).map(function(x){ return pjStaffName(x.id).split(' ')[0]+': '+x.at.map(function(y){ return y.name+(y.pier!==_poPier?(' '+pjPierShort(y.pier)):''); }).join('+'); }).join(' · '))
+          +(L.length>3?(' · อีก '+(L.length-3)+' คน'):'')+'</span>'; })()
       +(cnt.stale?('<span class="pj-warnc red" title="'+poE(staleL.join(' \u00b7 ')
           +' — เรือไม่พร้อมแล้ว แต่แถวโปรแกรมยังอยู่ใน Boat Operation '
           +'· กด "เอาออก" บนการ์ดของลำนั้นเพื่อลบแถวทิ้ง')+'">'
