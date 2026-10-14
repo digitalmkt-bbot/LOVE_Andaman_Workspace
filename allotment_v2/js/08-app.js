@@ -67844,7 +67844,7 @@ function pk3Calc(flat, TY, TYM, ro){
   var fam=(_pkSetFamF==='all')?'ทุกเส้นทาง':((flat.map(function(x){ return pk2FamOf(x.g.rid); }).filter(function(f){ return f.id===_pkSetFamF; })[0]||{}).n||'');
   var inp=function(k,f,v,ph,cls){ return '<input class="pk3-ci'+(cls?(' '+cls):'')+'" data-f="'+f+'" value="'+e(v)+'" placeholder="'+e(ph||'')+'" inputmode="decimal" autocomplete="off" oninput="pkCalcIn(this)"'+(ro&&f==='p'?' readonly':'')+'>'; };
   var rows=TY.map(function(T){ var q=_pkCalc.q[T.k]||'', p=PR[T.k]||'', r=pkCalcNum(q)*pkCalcNum(p);
-    return '<tr data-k="'+e(T.k)+'"><td class="l"><i style="background:'+(T.c||'#94A3B8')+'"></i>'+e(T.s||T.n)+'</td>'
+    return '<tr data-k="'+e(T.k)+'"><td class="l" title="'+e(T.n)+'"><i style="background:'+(T.c||'#94A3B8')+'"></i>'+e(T.s||T.n)+'</td>'
       +'<td>'+inp(T.k,'q',q,'0')+'</td><td class="x">×</td><td>'+inp(T.k,'p',p,'ราคา')+'</td><td class="pk3-cr'+(r?'':' z')+'">'+(r?pkCalcFmt(r):'—')+'</td></tr>'; }).join('');
   rows+=_pkCalc.free.map(function(F,i){ var r=pkCalcNum(F.q)*pkCalcNum(F.p);
     return '<tr data-k="free'+i+'"><td class="l">'+inp('free'+i,'n',F.n||'','พิมพ์รายการ','nm')+'</td>'
@@ -67854,7 +67854,7 @@ function pk3Calc(flat, TY, TYM, ro){
     +'<div class="pk3-cb"><button type="button" class="ol" onclick="pkCalcFill(\'draft\')" title="เอาจำนวนจากชุดที่เปิดอยู่">ดึงจากชุดนี้'+(D?'':' ·')+'</button>'
     +'<button type="button" class="ol" onclick="pkCalcFill(\'fam\')" title="จำนวนบนเรือของเส้นทางที่เลือก แยกประเภทตั๋ว">ดึงจาก '+e(fam)+'</button>'
     +'<button type="button" class="ol" onclick="pkCalcClear()">ล้าง</button></div>'
-    +'<table><thead><tr><th>รายการ</th><th>จำนวน</th><th></th><th>ราคา/ใบ</th><th>รวม</th></tr></thead><tbody>'+rows+'</tbody>'
+    +'<table><colgroup><col><col class="c-q"><col class="c-x"><col class="c-p"><col class="c-r"></colgroup><thead><tr><th>รายการ</th><th>จำนวน</th><th></th><th>ราคา/ใบ</th><th>รวม</th></tr></thead><tbody>'+rows+'</tbody>'   /* §pkCalc2 */
     +'<tfoot><tr><td colspan="4">รวมทั้งหมด</td><td class="pk3-ct">'+pkCalcFmt(tot)+'</td></tr></tfoot></table>'
     +'<div class="pk3-cn">ราคา/ใบ จำไว้ให้ทุกเครื่อง · จำนวนและแถวที่พิมพ์เองอยู่แค่ในหน้านี้</div></div>';
 }
@@ -67976,14 +67976,17 @@ function pk3CSS(S){
   S+' .pk3-calc .ch{padding-bottom:8px} '+S+' .pk3-calc .ch span{margin-left:auto;font-size:12px;color:'+M+'}',
   S+' .pk3-cb{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}',
   S+' .pk3-cb .ol{height:28px;padding:0 10px;border-radius:7px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:11.5px;font-weight:700;color:#1A2A44;cursor:pointer}',
-  S+' .pk3-calc table{width:100%;border-collapse:collapse;font-size:12.5px}',
+  /* §pkCalc2 (2026-10-15) · owner ส่งภาพ: คอลัมน์ ราคา/ใบ กับ รวม ตกขอบการ์ด (ชื่อประเภทยาวดันตารางกว้างเกิน 360px) → ตารางคอลัมน์คงที่ ชื่อยาวตัดด้วย … (ชื่อเต็มใน title) */
+  S+' .pk3-calc table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}',
+  S+' .pk3-calc col.c-q{width:66px} '+S+' .pk3-calc col.c-x{width:14px} '+S+' .pk3-calc col.c-p{width:74px} '+S+' .pk3-calc col.c-r{width:78px}',
   S+' .pk3-calc th{font-size:10px;font-weight:700;color:'+M+';text-align:right;padding:4px 6px;border-bottom:1px solid #ECEFF4;background:#FAFBFD}',
   S+' .pk3-calc th:first-child{text-align:left;padding-left:14px}',
   S+' .pk3-calc td{padding:3px 6px;border-bottom:1px solid #F1F2F6;text-align:right;white-space:nowrap}',
-  S+' .pk3-calc td.l{text-align:left;padding-left:14px;font-weight:700;color:#1A2A44;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}',
-  S+' .pk3-calc td.l i{width:8px;height:8px;border-radius:4px;flex:none}',
+  S+' .pk3-calc td.l{text-align:left;padding-left:14px;font-weight:700;color:#1A2A44;min-width:0;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',   /* §pkCalc2 · max-width:0 = ให้ fixed layout ตัดชื่อยาว */
+  S+' .pk3-calc td.l i{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;vertical-align:1px}',
+  S+' .pk3-calc td.pk3-cr{overflow:hidden;text-overflow:ellipsis}',
   S+' .pk3-calc td.x{color:'+M+';padding:0}',
-  S+' .pk3-ci{width:62px;height:30px;border:1px solid #D9DEE9;border-radius:7px;text-align:right;padding:0 7px;font-family:"DM Mono",monospace;font-weight:700;font-size:12.5px;color:'+N+';background:#fff}',
+  S+' .pk3-ci{width:100%;box-sizing:border-box;height:30px;border:1px solid #D9DEE9;border-radius:7px;text-align:right;padding:0 7px;font-family:"DM Mono",monospace;font-weight:700;font-size:12.5px;color:'+N+';background:#fff}',
   S+' .pk3-ci.nm{width:100%;text-align:left;font-family:inherit;font-weight:600}',
   S+' .pk3-ci:focus{outline:2px solid #19B5E6;outline-offset:1px}',
   S+' .pk3-ci::placeholder{color:#B9BFD0;font-weight:500}',
