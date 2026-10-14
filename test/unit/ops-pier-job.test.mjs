@@ -17,8 +17,12 @@ const view = (o) => ({
 });
 const UNREC = view({ boat_id: 'b2', recorded: false, captain_id: 'ps_t', crew: ['ps_t1'], note: null, duty_staff_ids: [], substitutes: [], missing: [{ key: 'wristband', label: 'WB' }], wristband_carried: null, restaurant_id: null });
 
-function runtime({ enabled = true, answers = {} } = {}) {
-  const calls = [], fails = [], wrote = [], legacy = [];
+// the real O.anyway, cut out of 00-ops-core.js so the test runs the shipped helper
+const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
+const ANYWAY_SRC = CORE.slice(CORE.indexOf('function anyway(send, rules, preset){'), CORE.indexOf('/* one write at a time'));
+
+function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
+  const calls = [], fails = [], wrote = [], legacy = [], asked = [];
   const req = (method, path, body) => {
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
     const a = answers[method + ' ' + path];
@@ -37,6 +41,8 @@ function runtime({ enabled = true, answers = {} } = {}) {
   const win = {
     laOps: {
       enabled: () => enabled, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
+      anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
+      anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       wrote: (k) => wrote.push(k), fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message, body: e && e.body }), toast: () => {},
     },
     _poPier: PIER, _poDate: DATE,
@@ -55,7 +61,7 @@ function runtime({ enabled = true, answers = {} } = {}) {
   const vmc = vm.createContext(ctx);
   SOURCES.forEach((s) => vm.runInContext(s, vmc));
   const flush = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setTimeout(r, 3)); await new Promise((r) => setImmediate(r)); } };
-  return { w: win, calls, fails, wrote, legacy, flush, state };
+  return { w: win, asked, calls, fails, wrote, legacy, flush, state };
 }
 const writes = (rt) => rt.calls.filter((c) => c.method !== 'GET');
 const open = async (rt) => { rt.w.renderPierJob(); await rt.flush(); };
@@ -189,4 +195,32 @@ test('a refusal: duty of a closed day is the server\'s 409 day_closed and the li
   rt.w.poPersist(); await rt.flush();
   assert.deepEqual(J(rt.w.PIER_DUTY[K1]), ['ps_cap']);
   assert.equal(rt.fails[0].code, 'day_closed');
+});
+
+const BUSY_409 = () => Object.assign(new Error('Ann is already on boat b2'), { code: 'guide_double_booked', status: 409, body: { busy: [{ staff_id: 'ps_g', name: 'Ann', boat_id: 'b2' }] } });
+
+test('guide_double_booked: the confirm names who is where, OK resends the same PATCH with guide_anyway', async () => {
+  let n = 0;
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: (body) => { if (!body.guide_anyway && ++n) throw BUSY_409(); return view({ island: ['ps_g'] }); } } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].island = ['ps_g'];
+  rt.w.poPersist(); await rt.flush();
+  const patches = writes(rt).filter((c) => c.method === 'PATCH');
+  assert.equal(patches.length, 2);
+  assert.deepEqual(patches[0].body, { island: ['ps_g'] });
+  assert.deepEqual(patches[1].body, { island: ['ps_g'], guide_anyway: true });
+  assert.equal(rt.asked.length, 1);
+  assert.match(rt.asked[0], /Ann .* b2/);
+  assert.equal(rt.fails.length, 0);
+});
+
+test('guide_double_booked: Cancel sends nothing more, the card goes back, no red toast', async () => {
+  const rt = runtime({ confirmAnswer: false, answers: { ['PATCH ' + JOB('b1')]: () => { throw BUSY_409(); } } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].island = ['ps_g'];
+  rt.w.poPersist(); await rt.flush();
+  assert.equal(writes(rt).filter((c) => c.method === 'PATCH').length, 1);
+  assert.equal(rt.asked.length, 1);
+  assert.deepEqual(J(rt.w.PIER_JOB[K1].island), []);
+  assert.equal(rt.fails.length, 0);
 });

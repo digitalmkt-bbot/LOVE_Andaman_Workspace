@@ -152,7 +152,7 @@
     }, function(e){
       inflight--;
       restoreAll();
-      O.fail('Pier office not saved' + (e && e.code ? ' · ' + e.code : ''), e);
+      if(!(e && e.declined)) O.fail('Pier office not saved' + (e && e.code ? ' · ' + e.code : ''), e);   // declined = said no at a confirm: no red toast
       // part of the batch may have gone through: read what the server holds, then draw it
       return (idle() ? P.load() : Promise.resolve(null)).then(function(){ P.redraw(); return null; });
     });
