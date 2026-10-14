@@ -75422,6 +75422,7 @@ function _ppSpan(a,b){ var x=new Date(String(a)+'T12:00:00'), y=new Date(String(
    อยากดูยาวกว่านั้นกดปุ่มช่วง (7 วัน / 14 วัน / เดือนนี้) หรือเลือกวันที่เอาเองได้ */
 var _ppFrom=_ppYMD(new Date()), _ppTo=_ppFrom;
 var _ppRoute='', _ppPier='', _ppOnlySp=false, _ppOpen={};
+var _ppMv='';   /* §ppMv · ร้านอาหารที่เลือกกรอง · '' = ทุกร้าน · '-' = ลำที่ไม่มีร้าน */
 
 /* กลับมาที่เดิมหลังวาดใหม่ · แถวมันยาว ถ้าเด้งขึ้นหัวทุกครั้งที่กดกางจะหาที่เดิมไม่เจอ
    ตอนนี้กล่องชีตเลื่อนในตัวเอง จึงต้องจำ scrollTop ของกล่องด้วย ไม่ใช่แค่ของหน้า */
@@ -75456,6 +75457,7 @@ function ppRangeIs(kind){
   return false;
 }
 function ppPickRoute(id){ _ppRoute=(id===_ppRoute)?'':(id||''); ppAfter(); }
+function ppPickMv(id){ _ppMv=(id===_ppMv)?'':(id||''); ppAfter(); }   /* §ppMv */
 function ppPickPier(p){ _ppPier=(p===_ppPier)?'':(p||''); ppAfter(); }
 function ppOnlySp(){ _ppOnlySp=!_ppOnlySp; ppAfter(); }
 function ppToggle(k){ _ppOpen[k]=!_ppOpen[k]; ppAfter(); }
@@ -75541,7 +75543,7 @@ function ppBarColor(hex){
 /* ท่าที่ไม่มีทัวร์ต้องขึ้นด้วย · เห็นแล้วรู้ว่า "วันนี้ท่านี้ไม่มีจริง ๆ"
    ไม่ใช่ "หน้ายังโหลดไม่ครบ" หรือ "ลืมกรอง" · สองอย่างนี้ต่างกันมากสำหรับคนสั่งของ */
 function ppNoTourMsg(){
-  if(_ppRoute || _ppOnlySp) return 'ไม่มีทัวร์ตามตัวกรองที่เลือก';
+  if(_ppRoute || _ppOnlySp || _ppMv) return 'ไม่มีทัวร์ตามตัวกรองที่เลือก';   /* §ppMv */
   if(_ppFrom===_ppTo){
     return (_ppFrom===_ppYMD(new Date())) ? 'ไม่มีทัวร์ออกวันนี้'
       : ('ไม่มีทัวร์ออกวัน'+ppDayLbl(_ppFrom));
@@ -75595,8 +75597,12 @@ function ppRows(){
           var _q=Math.max(1, ad+chd+foc);
           alList.push({name:_alTxt, qty:_q, ft:false, all:true}); alN=_q; }
         else { alList.push({name:_alTxt, qty:0, ft:true}); alUnk=1; } }
+      /* §ppMv (2026-10-14) · owner: "เพิ่ม filter ที่เป็นแยกร้านอาหาร" · ร้านของทริป = ที่ตั้งรายลำในใบงานเรือ
+         มาก่อนร้านประจำเส้นทาง (mvForTrip ตัวเดียวกับแถบครัว) · ไม่มีร้าน = '-' */
+      var _bid=O.boatId||t.charterBoatId||'', _mv=null;
+      try{ _mv=(typeof mvForTrip==='function')?mvForTrip(d,_bid,rid):null; }catch(_){ _mv=null; }
       out.push({ b:b, t:t, date:d, routeId:rid, rt:rt,
-        boatId:O.boatId||t.charterBoatId||'',
+        boatId:_bid, mvId:(_mv&&_mv.id)||'-', mvName:(_mv&&_mv.name)||'',
         ad:ad, chd:chd, inf:inf, foc:foc, tot:ad+chd+inf+foc, eat:ad+chd+foc,
         veg:veg, vegan:vegan, halal:halal, allergy:alN, alUnk:alUnk, alList:alList,
         ovn:!!(t&&t.ovnLeg), chtr:(t.bookingMode==='charter'),
@@ -75945,6 +75951,12 @@ function renderPrPo(){
   if(_ppRoute && !(_ppRoute in rN)) _ppRoute='';
 
   var shown=_ppRoute?inPier.filter(function(r){ return (r.routeId||'')===_ppRoute; }):inPier;
+  /* §ppMv · ชิปร้านอาหาร นับจากชุดหลังกรองท่า+โปรแกรม · หัว = คนที่ต้องเตรียมอาหาร */
+  var mvN={}, mvNm={}, mvOrd=[];
+  shown.forEach(function(r){ var k=r.mvId||'-'; if(!(k in mvN)){ mvN[k]=0; mvNm[k]=r.mvName||''; mvOrd.push(k); } mvN[k]+=r.eat; });
+  mvOrd.sort(function(a,b){ if(a==='-') return 1; if(b==='-') return -1; return String(mvNm[a]).localeCompare(String(mvNm[b]),'th'); });
+  if(_ppMv && !(_ppMv in mvN)) _ppMv='';
+  if(_ppMv) shown=shown.filter(function(r){ return (r.mvId||'-')===_ppMv; });
   var nSpecialAll=shown.filter(function(r){ return r.sp; }).length;
   if(_ppOnlySp) shown=shown.filter(function(r){ return r.sp; });
 
@@ -76032,6 +76044,10 @@ function renderPrPo(){
         return '<button class="pp-f'+(k===_ppRoute?' on':'')+'" onclick="ppPickRoute(\''+e(k)+'\')">'
           +'<i style="background:'+e((rt&&rt.color)||'#94A3B8')+'"></i>'
           +e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+' <b>'+rN[k]+'</b></button>'; }).join('')
+    + (mvOrd.length>1 || (mvOrd.length===1 && mvOrd[0]!=='-') ? ('<span style="width:9px"></span><span class="pp-flab">ร้านอาหาร</span>'
+      + mvOrd.map(function(k){
+          return '<button class="pp-f'+(k===_ppMv?' on':'')+'" onclick="ppPickMv(\''+e(k)+'\')" title="'+(k==='-'?'ลำที่ยังไม่ได้ตั้งร้าน / ไม่มีอาหาร':'กรองเฉพาะลำที่กินร้านนี้')+'">'
+            +'&#127860; '+e(k==='-'?'ไม่มีร้าน':mvNm[k])+' <b>'+mvN[k]+'</b></button>'; }).join('')) : '')   /* §ppMv */
     + '<span style="width:9px"></span>'
     + '<button class="pp-f'+(_ppOnlySp?' on':'')+'" onclick="ppOnlySp()">'
       +'&#127869; เฉพาะที่มีอาหารพิเศษ <b>'+nSpecialAll+'</b></button>'
@@ -76041,7 +76057,7 @@ function renderPrPo(){
   var body = pOrd.length
     ? ppBody(P, pOrd, GT)
     : ('<div class="pp-empty">ไม่มีใบจองในช่วงนี้'
-        +((_ppRoute||_ppPier||_ppOnlySp)?' ตามตัวกรองที่เลือกไว้':'')+'</div>');
+        +((_ppRoute||_ppPier||_ppOnlySp||_ppMv)?' ตามตัวกรองที่เลือกไว้':'')+'</div>');
   host.innerHTML='<style id="pp-style">'+ppCSS()+ppSkinCSS()+'</style>'
     +'<div class="pp-wrap pp-skin-'+_ppSkin+'">'
     + head + kpis + sumBox + filt + body
