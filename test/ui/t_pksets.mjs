@@ -10,6 +10,7 @@
 //   5 ใส่เกินที่เหลือ → ช่องแดง · บันทึกไม่ได้ (alert ASCII) · ชุดไม่เพิ่ม
 //   6 เปิดชุด → ร่างโหลดกลับ · ซื้อแล้ว → ล็อก ช่องกรอกหาย · ปลดล็อก → แก้ได้ · ลบ → หาย
 //   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
+//   9 (§pkSets3) แถวยอดจริงของวันต่อโปรแกรม (ทุกลำ) บนตาราง · ไทย+ตช=รวม · กดแถวโปรแกรม → เมนูเพิ่มเรือกรองตามนั้น · โหมดนี้เต็มจอ การ์ดชุดอยู่ใต้ตาราง
 //   8 กลับแท็บ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ทุกข้อความเป็น ASCII · ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -111,6 +112,25 @@ await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc'
 const cfgSame = await page.evaluate(() => JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined })) === window.__cfg0);
 const asciiDlg = dlg.every(m => !/[^\x00-\x7F]/.test(m));
 if (!a.has3 && a.hasOld && cfgSame && asciiDlg && !errors.length) ok('8 กลับ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ASCII · ไม่มี error'); else fail('8 ' + JSON.stringify({ has3: a.has3, hasOld: a.hasOld, cfgSame, asciiDlg, errors }));
+// 9 §pkSets3 · แถวยอดจริงต่อโปรแกรม (ทุกลำของวัน) · กดแถวเลือกโปรแกรม → เมนูเพิ่มเรือกรอง · ไม่มีคอลัมน์ขวา (เต็มจอ)
+await page.evaluate((H) => { _pkSetBoats = []; _pkSetD = null; _pkSetFamF = 'all'; [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /Ticket Management/.test(b.textContent)).click(); }, H); await page.waitForTimeout(400);
+const f9 = await page.evaluate(({ H, D, P }) => { const h = document.querySelector(H);
+  const fm = [...h.querySelectorAll('.pk3-mx tr.fm')].map(t => ({ n: t.querySelector('.fn').childNodes[1].textContent.trim(), c: [...t.querySelectorAll('td.n')].slice(0, 11).map(x => +x.textContent || 0) }));
+  const F = pkTkData(D, P); const exp = {}; let all = 0; F.forEach(g => { const f = pk2FamOf(g.rid); g.boats.forEach(B => { exp[f.n] = (exp[f.n] || 0) + (+B.totPc || 0); all += (+B.totPc || 0); }); });
+  const fams = Object.keys(exp);
+  return { fm, exp, all, fams, full: !!h.querySelector('.pk3-full'), side: !!h.querySelector('.pk3-sidegrid .pk3-sets'), rightCol: !!h.querySelector('.pc2-main > .pc2-col + .pc2-col') }; }, { H, D: DATE, P: PIER });
+const fmAll = f9.fm[0] || { c: [] };
+const famOk = f9.fm.length === 1 + f9.fams.length && fmAll.n === 'ทั้งหมด' && fmAll.c[10] === f9.all && fmAll.c[4] + fmAll.c[9] === fmAll.c[10] && f9.fams.every(n => { const r = f9.fm.find(x => x.n === n); return r && r.c[10] === f9.exp[n] && r.c[0] + r.c[1] + r.c[2] + r.c[3] === r.c[4]; });
+await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk3-mx tr.fm')][1].click(), H); await page.waitForTimeout(300);
+await page.click(H + ' .pk3-add'); await page.waitForTimeout(250);
+const g9 = await page.evaluate(({ H, D, P }) => { const h = document.querySelector(H); const sel = h.querySelector('.pk3-mx tr.fm.sel .fn').childNodes[1].textContent.trim();
+  const menu = [...h.querySelectorAll('.pk3-menu > button .bn')].map(b => b.textContent.trim());
+  const F = pkTkData(D, P); const want = []; F.forEach(g => { if (pk2FamOf(g.rid).n === sel) g.boats.forEach(B => want.push(B.boat.name)); });
+  return { sel, menu, want, add: (h.querySelector('.pk3-add') || {}).textContent }; }, { H, D: DATE, P: PIER });
+const filtOk = g9.sel !== 'ทั้งหมด' && g9.menu.length === g9.want.length && g9.want.every(n => g9.menu.includes(n)) && g9.add.includes(g9.sel);
+if (famOk && f9.full && f9.side && !f9.rightCol && filtOk) ok(`9 แถวยอดจริงต่อโปรแกรม ${f9.fams.join('/')} (ไทย+ตช=รวม · รวม=ยอดวัน ${f9.all}) · กด ${g9.sel} → เมนูเรือเหลือ ${g9.menu.length} ลำ · เต็มจอ การ์ดอยู่ใต้ตาราง`);
+else fail('9 ' + JSON.stringify({ famOk, fm: f9.fm, exp: f9.exp, all: f9.all, full: f9.full, side: f9.side, rightCol: f9.rightCol, g9 }));
+await page.evaluate(() => { _pkSetFamF = 'all'; _pkSetMenu = false; });
 if (process.env.SHOT) { await page.evaluate((H) => { [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /Ticket Management/.test(b.textContent)).click(); }, H); await page.waitForTimeout(300); await page.evaluate((D) => pkSetOpen(pkSets(D)[0].id), DATE); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
 await close();
 console.log(bad ? `FAIL ${bad}` : 'PASS'); process.exit(bad ? 1 : 0);
