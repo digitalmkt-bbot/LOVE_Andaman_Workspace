@@ -65942,8 +65942,21 @@ function pkTkNatName(code){
 }
 /* ประเภทของคนหนึ่งคน · ผู้ใหญ่/เด็ก จาก p.type · ไทย/ตปท จากสัญชาติของคนนั้น
    FOC คิดเรทผู้ใหญ่ (ตรงกับ pcParkRate) · ทารกแยกออกไปเป็นช่องของตัวเอง */
+/* §pkKidName (2026-10-14) · ตัวแมพ B2C ให้ผู้ร่วมเดินทางทุกคนเป็น AD (B2C ไม่มีช่องอายุ)
+   แต่คนขายมักพิมพ์บอกไว้ในชื่อเอง: "ด.ช.ภาณุภัทร พรมนัส (3 ขวบ)" · ของเดิมเด็กคนนี้ถูกมองเป็นผู้ใหญ่
+   แล้วถูกจับลงช่องเด็กเล็กแบบ "สัญชาติไม่ตรง" (LOV-0660717 · 15 ต.ค.)
+   อ่านจากชื่อเฉพาะตอน type เป็น AD/ว่าง: มี "(N ขวบ/ปี)" → ≤3 เด็กเล็ก · 4–12 เด็ก
+   คำนำหน้า ด.ช./ด.ญ./เด็กชาย/เด็กหญิง ไม่มีอายุ → เด็ก · type ที่คีย์ชัดว่า CHD/INF ไม่แตะ */
+function pkKidTypeFromName(nm){
+  var s=String(nm||'').trim(); if(!s) return '';
+  var m=s.match(/\(\s*(\d{1,2})\s*(?:ขวบ|ปี|y\.?o\.?|yrs?|years?)\s*\)/i);
+  if(m){ var a=+m[1]; if(a<=3) return 'INF'; if(a<=12) return 'CHD'; return ''; }
+  if(/^(ด\.?ช\.?|ด\.?ญ\.?|เด็กชาย|เด็กหญิง)\s*/.test(s)) return 'CHD';
+  return '';
+}
 function pkTkCatOf(p){
   var ty=String((p&&p.type)||'AD').toUpperCase();
+  if(ty==='AD'){ var kid=pkKidTypeFromName(p&&p.name); if(kid) ty=kid; }   /* §pkKidName */
   var th=String((p&&p.nationality)||'').trim().toUpperCase()==='TH';
   if(ty==='INF') return 'inf';
   if(ty==='CHD') return th?'chTH':'chFR';
@@ -66033,7 +66046,7 @@ function pkTkData(date, pier){
       };
       var rest=[];
       ps.forEach(function(w){
-        var a=pkTkCatOf({type:w.p.type, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});
+        var a=pkTkCatOf({type:w.p.type, name:w.p.name, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});   /* §pkKidName */
         if(slot[a]>0){ slot[a]--; people.push(mk(w,a,false,false)); }
         else rest.push(w);
       });
@@ -66041,7 +66054,7 @@ function pkTkData(date, pier){
         var free=''; for(var i=0;i<PK_CATS.length;i++){ if(slot[PK_CATS[i].k]>0){ free=PK_CATS[i].k; break; } }
         if(free){ slot[free]--; people.push(mk(w,free,true,false)); }
         else {
-          var a=pkTkCatOf({type:w.p.type, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});
+          var a=pkTkCatOf({type:w.p.type, name:w.p.name, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});   /* §pkKidName */
           people.push(mk(w,a,false,true));
         }
       });
