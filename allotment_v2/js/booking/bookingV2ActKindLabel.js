@@ -1,0 +1,1 @@
+function bookingV2ActKindLabel(k){ return ({create:'สร้างใบจอง', edit:'แก้ไข', cancel:'ยกเลิก', foc:'FOC', notify:'แจ้งเอเยนต์', weather:'สภาพอากาศ', reschedule:'เลื่อนวัน', extra:'บริการเสริม', note:'บันทึก'})[k] || (k || ''); }

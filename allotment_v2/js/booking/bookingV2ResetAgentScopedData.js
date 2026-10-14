@@ -12,6 +12,7 @@ function bookingV2ResetAgentScopedData(){
     t.charterBoatId = null;
     t.charterDisplacementAck = false;
   });
+  try{ bookingV2PruneLtAddOns(); }catch(_){}   /* §ltStale · ไม่มีเส้นทางแล้ว หางยาวก็ไม่มี */
   // Booking-level pickup
   d.pickupAreaId = null;
   d.pickupZoneFilter = 'PK';

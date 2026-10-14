@@ -47,5 +47,7 @@ function bookingV2AssignBoat(bkId, boatId, date){
   bkOpsFor(b, _d).boatId = boatId || null;
   acctPersistBookings();
   // re-render whichever surface is showing
-  if(_bkV2 && _bkV2.boatAssignMode && typeof bookingV2Render==='function') bookingV2Render(); else renderBoatAssign();
+  /* §btBoatPick · เลือกเรือจากหน้า By trip นอกโหมดเรือ · ต้องวาดหน้า By trip ใหม่ด้วย (เดิมวาดหน้า Boat Assign) */
+  const _onBt = (typeof _bkV2!=='undefined' && _bkV2 && _bkV2.tab==='bytrip') && (function(){ const v=document.getElementById('view-booking'); return !!(v && v.offsetParent!==null); })();
+  if(_bkV2 && (_bkV2.boatAssignMode || _onBt) && typeof bookingV2Render==='function') bookingV2Render(); else renderBoatAssign();
 }

@@ -1,9 +1,6 @@
-/* §pkNat · ตั้งจำนวนคนไทยจริงของทริป · ไม่แตะ pax และไม่แตะราคาเลย
-   ครั้งแรกที่แตะ ต้องหล่อทั้งสี่ช่องจากแถว TH ก่อน แล้วค่อยบวก/ลบ
-   ถ้าปล่อยให้มีแค่ช่องเดียว อีกสามช่องจะกลายเป็น 0 ทันที (bkNatHas เป็นจริงแล้ว)
-   เด็กไทยที่คีย์ไว้ในแถว TH ก็จะหายไปเงียบ ๆ ทั้งที่คนกดไม่ได้ตั้งใจ */
 function bookingV2BumpNat(idx, k, delta){
   if(!_bkV2.newBooking) return;
+  _bkV2.newBooking._natOpen = _bkV2.newBooking._natOpen || {}; _bkV2.newBooking._natOpen[idx] = true;   /* §natRow · แถวอยู่ต่อแม้กดจนเท่าแถว TH */
   const t = _bkV2.newBooking.trips[idx];
   if(!t || !t.pax) return;
   const px = t.pax;
@@ -12,5 +9,6 @@ function bookingV2BumpNat(idx, k, delta){
   }
   const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
   t.nat[k] = Math.max(0, Math.min(all, (+t.nat[k]||0) + delta));
+  if(bkNatSameAsPrice(t)) delete t.nat;   /* §natZero */
   bookingV2Render();
 }

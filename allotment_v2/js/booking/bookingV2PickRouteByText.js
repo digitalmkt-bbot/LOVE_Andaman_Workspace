@@ -3,7 +3,7 @@ function bookingV2PickRouteByText(idx, txt){
   const t = _bkV2.newBooking.trips[idx];
   if(!t) return;
   const trimmed = String(txt||'').trim();
-  if(!trimmed){ t.routeId = ''; bookingV2Render(); return; }
+  if(!trimmed){ t.routeId = ''; try{ bookingV2PruneLtAddOns(); }catch(_){} bookingV2Render(); return; }
   const norm = trimmed.toLowerCase();
   // Resolve allowed routes via the same logic as the dropdown (contract programs first · rate type fallback)
   const covered = bookingV2RouteDDOpts().map(o => (typeof ROUTES !== 'undefined' ? ROUTES.find(r => r.id === o.id) : null)).filter(Boolean);
@@ -15,6 +15,7 @@ function bookingV2PickRouteByText(idx, txt){
       const nd = bookingV2NextOpenDate(r.id, t.date);
       if(nd && nd !== t.date){ t.date = nd; t.pickupTimeEdited = false; }
     }
+    try{ bookingV2PruneLtAddOns(); }catch(_){}   /* §ltStale */
     bookingV2Render();
   }
 }

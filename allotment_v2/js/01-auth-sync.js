@@ -345,6 +345,8 @@
     Object.keys(d.sets||{}).forEach(function(k){ if(!ok) return; var v=d.sets[k];
       if(REST_RESOURCES[k]) ops.push({op:'putall', r:k, body:v});
       else ops.push({op:'meta', id:k, body:v}); });
+    /* §smerge · คีย์ย่อยที่เปลี่ยนของ JSON-string map → เซิร์ฟเวอร์ merge ลง app_meta ทีละคีย์ */
+    Object.keys(d.smaps||{}).forEach(function(k){ if(!ok) return; if(REST_RESOURCES[k]){ ok=false; return; } ops.push({op:'smerge', id:k, body:d.smaps[k]}); });
     if(!ok){ try{ console.warn('[sync] diff has a key the REST index does not know -> legacy /api/save (run the mapping drift check)'); }catch(e){} }
     return ok?ops:null;
   }
@@ -413,7 +415,7 @@
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
       else { _laRetry('เซิร์ฟเวอร์ตอบ '+x.status+(x.status===0?' (เชื่อมต่อไม่ได้)':'')); } };   // transient (5xx/0) → retry + warn
     x.onerror=function(){ _laRetry('เชื่อมต่อระบบไม่ได้'); };
-    try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
+    try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:_legacyDiff(d,cur)})); }catch(e){} }   /* §smerge */
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   // §opsAuth (2026-09-18) · the flush below is a SYNCHRONOUS XHR, so pointing it at a dead endpoint
   //   stalls every page unload. No legacy session = nothing to flush there.
@@ -423,7 +425,7 @@
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops=laDiffToOps(d,cur);
     var url = ops ? '/api/v1/_batch' : '/api/save';
-    var payload = JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}});
+    var payload = JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:_legacyDiff(d,cur)});   /* §smerge */
     // SYNCHRONOUS save so it commits to cloud BEFORE the page reloads (otherwise the reload reloads stale data → reverts the edit)
     try{ var x=new XMLHttpRequest(); x.open('POST',url,false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); } }
     catch(e){ if(navigator.sendBeacon) navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); }
@@ -440,7 +442,7 @@
       else if(JSON.stringify(b[k])!==JSON.stringify(c[k])){ p[k]={v:c[k]}; ch=true; } });
     Object.keys(b).forEach(function(k){ if(!(k in c)){ d.push(k); ch=true; } });
     return ch ? {p:p,d:d} : null; }
-  function computeDiff(base,cur){ var sets={},cols={},objs={},ch=false,keys={};
+  function computeDiff(base,cur){ var sets={},cols={},objs={},smaps={},ch=false,keys={};
     Object.keys(base||{}).forEach(function(k){keys[k]=1;}); Object.keys(cur||{}).forEach(function(k){keys[k]=1;});
     Object.keys(keys).forEach(function(k){ var b=base?base[k]:undefined, c=cur?cur[k]:undefined;
       var isCol = Array.isArray(c) && c.length>0 && c.every(function(x){return x&&typeof x==='object'&&x.id!=null;});
@@ -453,8 +455,20 @@
         var del=[]; Object.keys(bmap).forEach(function(id){ if(!seen[id]) del.push(id); });
         if(up.length||patch.length||del.length){ cols[k]={idf:'id',up:up,patch:patch,del:del}; ch=true; } }
       else if(_isPlainObj(b)&&_isPlainObj(c)){ var od=_deepDiff(b,c); if(od){ objs[k]=od; ch=true; } }   // object map → per-sub-key merge (no clobber)
+      /* §smerge (2026-10-14) · ค่าที่เป็น JSON string ของ object (ctWrite: go_asn · go_no · สีต่าง ๆ) เคยไปทาง sets =
+         ทับทั้งก้อน · สองเครื่องจ่ายไกด์วันเดียวกัน เครื่องที่เซฟทีหลังลบของอีกเครื่อง (ใบสั่งงาน LKC66 15 ต.ค. หาย)
+         ถ้าทั้ง base และ cur แปลงเป็น object ได้ → ส่งเฉพาะคีย์ย่อยที่เปลี่ยน ให้เซิร์ฟเวอร์ merge เหมือน objs */
+      else if(typeof b==='string' && typeof c==='string' && b!==c && _jsonObj(b) && _jsonObj(c)){
+        var sd=_deepDiff(_jsonObj(b),_jsonObj(c)); if(sd){ smaps[k]=sd; ch=true; } }
       else { if(JSON.stringify(b)!==JSON.stringify(c)){ sets[k]=(c===undefined?null:c); ch=true; } } });
-    return {sets:sets,cols:cols,objs:objs,_changed:ch}; }
+    return {sets:sets,cols:cols,objs:objs,smaps:smaps,_changed:ch}; }
+  /* §smerge · สตริงที่เป็น JSON object · คืน object หรือ null · ตัดสินจากตัวอักษรแรกก่อน ไม่ parse ทุกสตริง */
+  function _jsonObj(s){ if(typeof s!=='string' || s.charAt(0)!=='{') return null; try{ var o=JSON.parse(s); return _isPlainObj(o)?o:null; }catch(e){ return null; } }
+  /* §smerge · ตอนถอยไปทาง /api/save เดิม ให้ส่งค่าเต็มของคีย์พวกนี้ไปใน sets ด้วย เซิร์ฟเวอร์เก่าที่ไม่รู้จัก smaps
+     จะได้ยังเซฟ (แบบทับเหมือนเดิม) · เซิร์ฟเวอร์ใหม่ข้าม sets ของคีย์ที่มีใน smaps */
+  function _legacyDiff(d, cur){ var sets={}; Object.keys(d.sets||{}).forEach(function(k){ sets[k]=d.sets[k]; });
+    Object.keys(d.smaps||{}).forEach(function(k){ sets[k]=cur[k]; });
+    return {sets:sets,cols:d.cols,objs:d.objs,smaps:d.smaps}; }
   // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
   // ── AUTO-REFRESH when others save · seamless when idle · never interrupts typing/editing ──
   /* ══ §ckStale (2026-09-22) · "กดขึ้นเช็คอิน แล้วก็หาย แล้วก็กลับมา" ═══════
@@ -876,7 +890,9 @@
     }
     if(el.getAttribute('data-sig')===sig && el.getAttribute('data-n')===String(n)) return;   /* ไม่ต้องวาดใหม่ทุก 10 วิ */
     el.setAttribute('data-sig',sig); el.setAttribute('data-n',String(n));
-    el.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
+    /* §noticeMini · sidebar ยุบ (body.sb-collapsed) เลนซ้ายแคบเหลือ 84px · ใช้แถว .la-b2ci-sh สั้น ๆ แทน (CSS สลับให้) */
+    el.innerHTML='<div class="la-b2ci-sh" onclick="_laB2CIssuesOpen()" title="ใบ B2C ที่ต้องเช็ค '+n+' รายการ"><b>&#9888; '+n+'</b><i>B2C เช็ค</i></div>'
+      +'<div class="la-b2ci-full" style="display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px">'
       +'<span>&#9888;</span><b style="cursor:pointer;flex:1" onclick="_laB2CIssuesOpen()">ใบ B2C ที่ต้องเช็ค '+n+' รายการ</b>'
       +'<span title="ซ่อนจนกว่าจะมีใบใหม่ที่มีปัญหา" style="cursor:pointer;opacity:.6;padding:0 4px" '
       +'onclick="_laB2CIssuesHide(\''+esc(sig)+'\')">&times;</span></div>'
@@ -1824,6 +1840,7 @@
       +'<div style="flex:1;min-width:0"><div class="u3" style="font-size:19px"><b>'+esc(u.username)+'</b>'
         +'<em class="tg '+(adm?'adm':'st')+'">'+(adm?'ADMIN':'STAFF')+'</em>'+(me?'<em class="tg me">คุณ</em>':'')+'</div>'
       +'<div class="m3" style="font-size:12.5px">'+esc((u.name?u.name+' · ':'')+'แผนก '+lauDeptT(u.dept)+' · '+mn+' เมนู')+(u.salesId?(' · ผูกกับเซลล์ '+esc(lauSalesName(u.salesId))):'')+'</div></div>'
+      +'<button class="b sm" title="แก้ username (ชื่อที่ใช้ล็อกอิน) และชื่อที่แสดง" onclick="__laRename('+u.id+')">&#9998; แก้ชื่อ</button>'   /* §userRename */
       +'<button class="b sm" title="หน้าต่างเดิม · สิทธิ์พิเศษ (การกระทำนอกจากการเข้าหน้า)" onclick="__laEditPerms('+u.id+')">สิทธิ์พิเศษ</button>'
       +'<button class="b sm" onclick="__laReset('+u.id+')">&#128273; รหัสผ่าน</button>'
       +'<button class="b sm dl"'+(me?' disabled title="ลบบัญชีตัวเองไม่ได้"':'')+' onclick="__laDelUser('+u.id+')">ลบ</button></div>';
@@ -2108,6 +2125,7 @@
           +(u.role==='admin'?'admin':(u.edit.length?(u.edit.length+' พื้นที่แก้ไขได้'):'ดูอย่างเดียว'))+'</b></div></div></div>'
       +'<div class="bds">'+(bds||'<span style="font-size:12px;color:#CBD5E1">ยังไม่มีสิทธิ์เข้าหน้าไหนเลย</span>')+'</div>'
       +'<div class="acts">'
+        +'<button class="b sm" onclick="__laRename('+u.id+')">แก้ชื่อ</button>'   /* §userRename */
         +'<button class="b sm" onclick="__laEditPerms('+u.id+')">สิทธิ์</button>'
         +'<button class="b sm" onclick="__laReset('+u.id+')">รหัสผ่าน</button>'
         +'<button class="ic" title="'+(me?'ลบบัญชีตัวเองไม่ได้':'ลบผู้ใช้')+'"'+(me?' disabled':'')
@@ -2421,6 +2439,65 @@
       dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }
     LAU.add=null; window.__laTab='list'; __laLoadUsers(); lauToast('สร้างบัญชี '+u+' แล้ว');
+  };
+
+  /* ── §userRename (2026-10-14) · แก้ username / ชื่อที่แสดง ──
+     owner "ขอให้แก้ชื่อ User ได้หน่อย" · เดิมสร้างแล้วแก้ชื่อไม่ได้ ต้องลบแล้วสร้างใหม่ (สิทธิ์หายหมด)
+     ตรวจซ้ำ/ช่องว่างตั้งแต่พิมพ์ · เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น
+     เปลี่ยนชื่อตัวเอง (username) → session เดิมถูกตัด · ต้องเข้าใหม่ด้วยชื่อใหม่ จึงรีโหลดให้ */
+  window.__laRename=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    LAU.ren=u;
+    var w=document.getElementById('la-uwin'); var old=w.querySelector('#la-rmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-rmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg sm"><div class="dh"><div><h3>แก้ชื่อผู้ใช้</h3>'
+      +'<p>'+esc(u.username)+(u.name?(' ('+esc(u.name)+')'):'')+'</p></div>'
+      +'<button class="ic" onclick="document.getElementById(\'la-rmask\').remove()">&#10005;</button></div>'
+      +'<div class="db"><div class="f"><label>Username · ใช้ล็อกอิน</label>'
+        +'<input id="la-r1" autocomplete="off" spellcheck="false" oninput="__laRenChk()"></div>'
+        +'<div class="f"><label>ชื่อที่แสดง</label>'
+        +'<input id="la-r2" autocomplete="off" placeholder="เว้นว่าง = ใช้ username" oninput="__laRenChk()">'
+        +'<div class="hint" id="la-rmsg">&nbsp;</div></div></div>'
+      +'<div class="df"><span></span><div style="display:flex;gap:8px">'
+        +'<button class="b" onclick="document.getElementById(\'la-rmask\').remove()">ยกเลิก</button>'
+        +'<button class="b pri" id="la-rgo" disabled onclick="__laRenSave()">บันทึกชื่อ</button></div></div></div>';
+    w.appendChild(d);
+    var a=document.getElementById('la-r1'), b=document.getElementById('la-r2');
+    if(a){ a.value=u.username||''; } if(b){ b.value=u.name||''; }
+    __laRenChk(); if(a){ a.focus(); a.select(); }
+  };
+  window.__laRenChk=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var m=document.getElementById('la-rmsg'), go=document.getElementById('la-rgo');
+    var dup=(LAU.rows||[]).some(function(x){ return x.id!==u.id && String(x.username).toLowerCase()===a.toLowerCase(); });
+    var same=(a===u.username && (b||a)===(u.name||u.username));
+    var ok=false, msg='';
+    if(!a) msg='<span style="color:#B4392B">ต้องมี username</span>';
+    else if(/\s/.test(a)) msg='<span style="color:#B4392B">username ห้ามมีช่องว่าง</span>';
+    else if(a.length>60) msg='<span style="color:#B4392B">username ยาวเกิน 60 ตัวอักษร</span>';
+    else if(dup) msg='<span style="color:#B4392B">username นี้มีคนใช้อยู่แล้ว</span>';
+    else if(b.length>80) msg='<span style="color:#B4392B">ชื่อยาวเกิน 80 ตัวอักษร</span>';
+    else if(same) msg='ยังไม่ได้เปลี่ยนอะไร';
+    else { ok=true;
+      msg=(a.toLowerCase()!==String(u.username).toLowerCase())
+        ? ('<span style="color:#9A5B00">เปลี่ยน username แล้ว '+(lauIsMe(u)?'คุณ':esc(u.username))+' ต้องเข้าสู่ระบบใหม่ด้วย <b>'+esc(a)+'</b> · รหัสผ่านเดิม'
+           +' · ถ้าเข้าผ่าน Authentik ชื่อต้องตรงกับใน Authentik · งานที่บันทึกไว้แล้วยังขึ้นชื่อเดิม</span>')
+        : '<span style="color:#0F6E56">พร้อมบันทึก</span>'; }
+    if(m) m.innerHTML=msg||'&nbsp;'; if(go) go.disabled=!ok;
+  };
+  window.__laRenSave=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var r=sx('POST','/api/users/rename',JSON.stringify({id:u.id,username:a,name:b}),'application/json');
+    if(r.status!==200||!r.json||!r.json.ok){ lauToast((r.json&&r.json.error)||('แก้ชื่อไม่สำเร็จ (HTTP '+r.status+')'),1); return; }
+    var m=document.getElementById('la-rmask'); if(m) m.remove();
+    if(r.json.self && r.json.renamed){
+      lauToast('เปลี่ยน username เป็น '+a+' แล้ว · กำลังพาไปเข้าสู่ระบบใหม่');
+      setTimeout(function(){ try{ location.reload(); }catch(_){} },1600); return; }
+    LAU.ren=null; __laLoadUsers();
+    lauToast(r.json.renamed?('เปลี่ยน '+u.username+' เป็น '+a+' แล้ว'):('แก้ชื่อของ '+a+' แล้ว'));
   };
 
   /* ── รหัสผ่าน ── */

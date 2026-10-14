@@ -5,7 +5,10 @@ function bookingV2AddOnFlags(bk, routeId){
     if(_k==='charter'){ charter=true; charterQty+=(+a.qty||1); }
     else if(_k==='charter-pax') charter=true;          /* §ltCode · คนเพิ่มในลำเดิม ไม่ใช่ลำใหม่ */
     /* §ltJoinQty · จำนวนคนที่ลงจอยจริง · null = ใบเก่าที่ไม่เคยระบุ → คิดทุกหัวเหมือนเดิม */
-    else if(_k==='join'){ join=true;
+    else if(_k==='join'){
+      /* §ltStale · ใบเก่าที่ค้าง "0A + 0C" = ไม่มีใครลง · ไม่นับเป็นหางยาว */
+      if(a.jAd!=null && a.jChd!=null && ((+a.jAd||0)+(+a.jChd||0))===0) return;
+      join=true;
       if(a.jAd!=null || a.jChd!=null) joinPax=Math.max(0,(+a.jAd||0)+(+a.jChd||0)); }
     else if(ty.indexOf('transfer-')===0) transfer=true;
     else if(/longtail|หางยาว/i.test(ty)||/longtail|หางยาว/i.test(lbl)){

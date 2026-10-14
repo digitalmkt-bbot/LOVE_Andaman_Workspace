@@ -6,7 +6,7 @@
      จะตั้งนาฬิกาคืนหน้าเดิม และทา class ให้ทันก่อนวาดจอครั้งแรก
      ไม่มี ?embed=1 ใน URL = ไฟล์นี้ออกทันที ไม่แตะอะไรเลย -->
 <script src="js/10-embed.js"></script>
-<script src="js/01-auth-sync.js?v=79eeca83"></script>
+<script src="js/01-auth-sync.js?v=fb14eb8a"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LOVE Andaman · Allotment</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/allotment_v2/assets/favicon-32.png">
@@ -14,13 +14,13 @@
 <link rel="icon" href="/allotment_v2/assets/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/allotment_v2/assets/favicon-180.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Quicksand:wght@500;600;700&family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/01-base.css?v=b0568423">
-<link rel="stylesheet" href="css/02-skins.css?v=sbsearch01">
+<link rel="stylesheet" href="css/01-base.css?v=41c803c4">
+<link rel="stylesheet" href="css/02-skins.css?v=d1685593">
 <!-- §dashV3 · สกิน liquid-glass ของ Dashboard เดิมถูกลบทั้งบล็อก
      มันทาทับดีไซน์เก่าที่ไม่มีอยู่แล้ว (พื้นครีมไล่สี · การ์ดขาวฝ้า ·
      แผ่นเขียว Bookings overview · แผ่นน้ำตาล Bookings/day)
      ทุกกฎในนั้นเป็น !important จึงไปทับของใหม่จนอ่านไม่ออก -->
-<script src="js/02-sidebar.js?v=sbsearch01"></script>
+<script src="js/02-sidebar.js?v=6ae9e36a"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -1565,7 +1565,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=93a14a18"></script>
+<script src="js/04-data-core.js?v=d5a87b34"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -1988,7 +1988,7 @@
 .outcome-pill:hover{border-color:#bbb}
 </style>
 
-<script src="js/05-fleet.js?v=6e7968a8"></script>
+<script src="js/05-fleet.js?v=38f75df7"></script>
 <!-- Assign Engine Modal -->
 <div class="modal-overlay" id="fl-modal-assign-eng">
   <div class="modal" style="max-width:420px">
@@ -2024,7 +2024,7 @@
   </div>
 </div>
 
-<script src="js/06-engine-assign.js?v=9059ff85"></script>
+<script src="js/06-engine-assign.js?v=acd045d4"></script>
 
 <!-- Approve Memo Modal -->
 <div class="modal-overlay" id="fl-modal-approve">
@@ -2170,7 +2170,8 @@
       </div>
       <div class="form-2">
         <div class="form-row"><label class="form-label" for="asn-start">วันเริ่ม *</label><input type="date" id="asn-start" style="width:100%"></div>
-        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%"></div>
+        <div class="form-row"><label class="form-label" for="asn-end">วันจบ *</label><input type="date" id="asn-end" style="width:100%">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="asn-open" onchange="flAsnOpenToggle()"> ยังไม่รู้วันกลับ</label></div>
       </div>
       <div class="form-row"><label class="form-label" for="asn-reason">เหตุผล</label><input type="text" id="asn-reason" placeholder="เช่น high season support, charter, etc." style="width:100%"></div>
       <div class="form-row"><label class="form-label" for="asn-cost">ค่าใช้จ่าย (THB)</label><input type="number" id="asn-cost" placeholder="0" min="0" step="100" style="width:100%"></div>
@@ -3152,7 +3153,7 @@
      ไม่งั้น ReferenceError แล้ว 08-app.js หยุดกลางไฟล์ · let/const ข้างล่างจุดนั้นไม่ถูกประกาศเลย (TDZ) ทั้งแอปพังเป็นแถว
      ใส่ได้เฉพาะฟังก์ชันใบ (ไม่เรียกอะไรของ 08-app.js) · ห้ามย้ายทั้งโฟลเดอร์มา -->
 <script src="js/booking/bookingV2LocalYMD.js"></script>
-<script src="js/08-app.js?v=2173d413"></script>
+<script src="js/08-app.js?v=eceed26a"></script>
 <script src="js/booking/bookingV2GetArea.js"></script>
 <script src="js/booking/bookingV2SplitArea.js"></script>
 <script src="js/booking/bookingV2GetPickupTime.js"></script>
@@ -3298,14 +3299,14 @@
 <script src="js/booking/bookingV2HealOvnLegs.js"></script>
 <script src="js/booking/bookingV2CharterBoatHeal.js"></script>
 <script src="js/booking/bookingV2BoatPulled.js"></script>
-<script src="js/booking/bookingV2AssignBoat.js"></script>
+<script src="js/booking/bookingV2AssignBoat.js?v=17344e49"></script>
 <script src="js/booking/bookingV2KeepScroll.js"></script>
 <script src="js/booking/bookingV2RenderKeep.js"></script>
 <script src="js/booking/bookingV2BoatSelToggle.js"></script>
 <script src="js/booking/bookingV2BoatSelClear.js"></script>
 <script src="js/booking/bookingV2BoatAssignSelected.js"></script>
-<script src="js/booking/bookingV2BoatPicker.js"></script>
-<script src="js/booking/bookingV2BoatPickSet.js"></script>
+<script src="js/booking/bookingV2BoatPicker.js?v=0389cc96"></script>
+<script src="js/booking/bookingV2BoatPickSet.js?v=c8edb15b"></script>
 <script src="js/booking/bookingV2ToggleBoatMode.js"></script>
 <script src="js/booking/bookingV2ToggleVanMode.js"></script>
 <script src="js/booking/bookingV2GrpOrderAll.js"></script>
@@ -3367,13 +3368,13 @@
 <script src="js/booking/bookingV2HealSelfArrivePickup.js"></script>
 <script src="js/booking/bookingV2HealAltSplits.js"></script>
 <script src="js/booking/bookingV2BoatInitials.js"></script>
-<script src="js/booking/bookingV2BoatAvatarColor.js"></script>
+<script src="js/booking/bookingV2BoatAvatarColor.js?v=5f2a5860"></script>
 <script src="js/booking/bookingV2SetPickupFinal.js"></script>
 <script src="js/booking/bookingV2SetSplitPickTime.js"></script>
 <script src="js/booking/bookingV2ScrollToVan.js"></script>
 <script src="js/booking/bookingV2VanJobOrder.js"></script>
 <script src="js/booking/bookingV2AssignVanReturnSplit.js"></script>
-<script src="js/booking/bookingV2VanCellHTML.js"></script>
+<script src="js/booking/bookingV2VanCellHTML.js?v=c09d966c"></script>
 <script src="js/booking/bookingV2BoatUpgrade.js"></script>
 <script src="js/booking/bookingV2PayChip.js"></script>
 <script src="js/booking/bookingV2PaidSplit.js"></script>
@@ -3460,7 +3461,7 @@
 <script src="js/booking/bookingV2Render.js?v=booking-state-global"></script>
 <script src="js/booking/bookingV2RenderNewBooking.js"></script>
 <script src="js/booking/bookingV2RenderPickupSection.js"></script>
-<script src="js/booking/bookingV2RenderTripsSection.js"></script>
+<script src="js/booking/bookingV2RenderTripsSection.js?v=317a12c0"></script>
 <script src="js/booking/bookingV2RenderAddOnsSection.js"></script>
 <script src="js/booking/bookingV2RenderCharterConfirmModal.js"></script>
 <script src="js/booking/bookingV2HasAvailableAddOns.js"></script>
@@ -3526,7 +3527,7 @@
 <script src="js/booking/bookingV2B2CLogo.js"></script>
 <script src="js/booking/bookingV2IsB2CFeeAddOn.js"></script>
 <script src="js/booking/bookingV2LtAddOnKind.js"></script>
-<script src="js/booking/bookingV2AddOnFlags.js"></script>
+<script src="js/booking/bookingV2AddOnFlags.js?v=be2887cc"></script>
 <script src="js/booking/bookingV2LongtailExtraPax.js"></script>
 <script src="js/booking/bookingV2LongtailCharterExtraBoats.js"></script>
 <script src="js/booking/bookingV2AgentColor.js"></script>
@@ -3534,8 +3535,8 @@
 <script src="js/booking/bookingV2AgentColorEdit.js"></script>
 <script src="js/booking/bookingV2AgentColorSet.js"></script>
 <script src="js/booking/bookingV2OtherToggleAll.js"></script>
-<script src="js/booking/bookingV2RenderTab2.js"></script>
-<script src="js/booking/bookingV2RenderTab3.js"></script>
+<script src="js/booking/bookingV2RenderTab2.js?v=cbb60e13"></script>
+<script src="js/booking/bookingV2RenderTab3.js?v=eb530471"></script>
 <script src="js/booking/bookingV2MonthKey.js"></script>
 <script src="js/booking/bookingV2MonthLabel.js"></script>
 <script src="js/booking/bookingV2MonthShift.js"></script>
@@ -3615,7 +3616,7 @@
 <script src="js/booking/bookingV2AreaDDKey.js"></script>
 <script src="js/booking/bookingV2AreaDDPick.js"></script>
 <script src="js/booking/bookingV2PickAgentByText.js"></script>
-<script src="js/booking/bookingV2ResetAgentScopedData.js"></script>
+<script src="js/booking/bookingV2ResetAgentScopedData.js?v=b0a12392"></script>
 <script src="js/booking/bookingV2CalOpen.js"></script>
 <script src="js/booking/bookingV2CalClose.js"></script>
 <script src="js/booking/bookingV2CalOutside.js"></script>
@@ -3625,11 +3626,11 @@
 <script src="js/booking/bookingV2CalClear.js"></script>
 <script src="js/booking/bookingV2CalPick.js"></script>
 <script src="js/booking/bookingV2CalRender.js"></script>
-<script src="js/booking/bookingV2PickRouteByText.js"></script>
+<script src="js/booking/bookingV2PickRouteByText.js?v=40d3fc72"></script>
 <script src="js/booking/bookingV2PickPickupAreaByText.js"></script>
 <script src="js/booking/bookingV2PickDropoffAreaByText.js"></script>
-<script src="js/booking/bookingV2BumpPax.js"></script>
-<script src="js/booking/bookingV2BumpNat.js"></script>
+<script src="js/booking/bookingV2BumpPax.js?v=6f233102"></script>
+<script src="js/booking/bookingV2BumpNat.js?v=f5e0bd78"></script>
 <script src="js/booking/bookingV2SetTripCharterPriceMode.js"></script>
 <script src="js/booking/bookingV2SetTripCharterManual.js"></script>
 <script src="js/booking/bookingV2SetTripCharterNote.js"></script>
@@ -3708,7 +3709,7 @@
 <script src="js/booking/bookingV2FindDuplicateBookings.js"></script>
 <script src="js/booking/bookingV2VoucherDupHtml.js"></script>
 <script src="js/booking/bookingV2VoucherLiveCheck.js"></script>
-<script src="js/booking/bookingV2CommitBooking.js"></script>
+<script src="js/booking/bookingV2CommitBooking.js?v=c31882e8"></script>
 <script src="js/booking/bookingV2GetRT.js"></script>
 <script src="js/booking/bookingV2ResolveRateType.js"></script>
 <script src="js/booking/bookingV2AddOnRT.js"></script>
@@ -3795,7 +3796,7 @@
 <script src="js/booking/bookingV2B2CStripRow.js"></script>
 <script src="js/booking/bookingV2B2CRowFlag.js"></script>
 <script src="js/booking/bookingV2B2CList.js"></script>
-<script src="js/booking/bookingV2B2CHeadChip.js"></script>
+<script src="js/booking/bookingV2B2CHeadChip.js?v=505a0703"></script>
 <script src="js/booking/bookingV2B2CSeen.js"></script>
 <script src="js/booking/bookingV2B2CSeenAll.js"></script>
 <script src="js/booking/bookingV2B2CAfter.js"></script>
@@ -3806,6 +3807,32 @@
 <script src="js/booking/bookingV2AgentDDWhen.js"></script>
 <script src="js/booking/bookingV2NbRefreshSide.js"></script>
 <script src="js/booking/bookingV2UpgConfirmView.js"></script>
+<script src="js/booking/bookingV2BoatPickClose.js?v=e62c8297"></script>
+<script src="js/booking/bookingV2BoatPickCSS.js?v=8639560f"></script>
+<script src="js/booking/bookingV2NtRetSel.js?v=20c9bf06"></script>
+<script src="js/booking/bookingV2SplitIsSelf.js?v=1f8bea66"></script>
+<script src="js/booking/bookingV2BoatPickWrap.js?v=cc7e211b"></script>
+<script src="js/booking/bookingV2SplitGo.js?v=76b8aa87"></script>
+<script src="js/booking/bookingV2TogColor.js?v=dbc16480"></script>
+<script src="js/booking/bookingV2TogHtml.js?v=e0a7a299"></script>
+<script src="js/booking/bookingV2TogShow.js?v=45651c3b"></script>
+<script src="js/booking/bookingV2TogHide.js?v=29e62739"></script>
+<script src="js/booking/bookingV2CxlToggle.js?v=8fd86424"></script>
+<script src="js/booking/bookingV2SortMode.js?v=145720a0"></script>
+<script src="js/booking/bookingV2SetSort.js?v=1121340b"></script>
+<script src="js/booking/bookingV2LastAct.js?v=203d543c"></script>
+<script src="js/booking/bookingV2ActKindLabel.js?v=3580a9ac"></script>
+<script src="js/booking/bookingV2ActIcon.js?v=7fd68f9b"></script>
+<script src="js/booking/bookingV2LocalDayKey.js?v=cd832e36"></script>
+<script src="js/booking/bookingV2Dow.js?v=e6655c20"></script>
+<script src="js/booking/bookingV2FmtClock.js?v=4565d970"></script>
+<script src="js/booking/bookingV2RelTime.js?v=b1fbd116"></script>
+<script src="js/booking/bookingV2DayLabel.js?v=33cd0e71"></script>
+<script src="js/booking/bookingV2LtRoutesApply.js?v=03f1a270"></script>
+<script src="js/booking/bookingV2PruneLtAddOns.js?v=97b2a9a2"></script>
+<script src="js/booking/bookingV2NatOpen.js?v=863e6bb4"></script>
+<script src="js/booking/bookingV2NatToggle.js?v=20fd0261"></script>
+<script src="js/booking/bookingV2NatWarn.js?v=355a8a63"></script>
 <script src="js/09-action-board.js?v=c2953402"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=589f9599"></script>
