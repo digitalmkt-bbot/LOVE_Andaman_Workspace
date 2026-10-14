@@ -205,6 +205,22 @@
   };
 
   /* ── writes ──────────────────────────────────────────────────────────── */
+  // 409 guide_double_booked lists who is on another boat (body.busy); OK resends with guide_anyway (legacy's pjGdBusy marker, but asked first).
+  // O.anyway fits: the flag goes in the body next to the diff. Cancel = declined, the card is put back, nothing was saved.
+  function boatName(id){
+    try{ var l = window.boats || window.DEFAULT_BOATS || []; for(var i = 0; i < l.length; i++) if(l[i] && l[i].id === id && l[i].name) return l[i].name; }catch(_){}
+    return id;
+  }
+  function patchJob(base, diff){
+    if(typeof O.anyway !== 'function') return O.call('PATCH', base, diff);
+    return O.anyway(function(extra){ return O.call('PATCH', base, Object.assign({}, diff, extra)); }, {
+      guide_double_booked: { flag: 'guide_anyway', ask: function(e){
+        var busy = (e && e.body && e.body.busy) || [];
+        if(!busy.length) return '';
+        return busy.map(function(b){ return (b.name || b.staff_id) + ' อยู่ ' + boatName(b.boat_id); }).join('\n') + '\n\nAssign anyway?';
+      } }
+    });
+  }
   function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
   P.register({
     name: 'jobs', order: 95,
@@ -231,7 +247,7 @@
               if(mvChanged) chain = chain.then(function(){
                 return O.call('PUT', '/v1/trip-actuals/' + enc(date) + '/' + enc(bid) + '/venue', { venue: mvNow === '-' ? 'none' : (mvNow || null) });
               });
-              if(any) chain = chain.then(function(){ return O.call('PATCH', base, diff); });
+              if(any) chain = chain.then(function(){ return patchJob(base, diff); });
               if(!lockWas && lockNow) chain = chain.then(function(){ return O.call('POST', base + '/complete', {}); });
               return chain;
             } });
