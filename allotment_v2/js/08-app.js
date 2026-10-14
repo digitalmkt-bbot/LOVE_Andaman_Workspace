@@ -15689,6 +15689,38 @@ function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 function bkNatHas(t){ var n=t&&t.nat; return !!(n && typeof n==='object'
   && ['ad','chd','inf','foc'].some(function(k){ return n[k]!=null && n[k]!==''; })); }
 /* หัวคนไทยจริงของประเภทนั้น · ไม่เกินหัวทั้งหมดของประเภทนั้น (pax แก้ทีหลังได้ nat ต้องไม่ค้างเกิน) */
+/* §focNat (2026-10-14) · owner: "FOC ถูกตีเป็นต่างชาติหมด" · ชีทตั๋วอุทยาน 15 ต.ค. ใบ LOV-0660717
+   ใบ B2C เก็บ FOC เป็นก้อนเดียว (pax.foc) และตัวแมพตั้ง foc_th/foc_fr = 0 ไว้ตายตัว
+   (b2c-map.js: "FOC stays as before (not Thai)") · bkNatTH จึงได้คนไทย 0 → FOC ทุกคนเป็นต่างชาติ
+   ชื่อไทยหาช่องไทยไม่เจอ ก็ถูกจับลงช่องต่างชาติแล้วติดป้าย "สัญชาติไม่ตรง"
+   วัดจาก backup 13 ต.ค.: 23 ใบ · 65 หัว ตั้งแต่ 1 ต.ค. · หัวกรุ๊ปไทยทุกใบ
+   กฎ: เฉพาะใบที่ FOC มาแบบรวม ไม่มีแยกสัญชาติ และยังไม่มี nat (ไม่เคยมีคนยืนยัน)
+   · หัวกรุ๊ปไม่ใช่ไทย → ต่างชาติทั้งหมด (เหมือนเดิม)
+   · หัวกรุ๊ปไทย → FOC เป็นไทย ยกเว้นชื่อที่ระบุสัญชาติอื่นไว้ (ที่ยังไม่ได้นับในช่องราคา ตปท.)
+     LOV-8099472 หัวไทย + เยอรมัน 3 · FOC 4 → ไทย 1 ตปท 3 · LOV-0660717 ชื่อไทยทั้งใบ → ไทย 3
+   คืน null = ไม่ใช่เคสนี้ ให้ไปใช้ bkNatTH ตามเดิม */
+function bkFocThInfer(b,t){
+  var px=(t&&t.pax)||{};
+  var foc=+px.foc||0;
+  if(!foc || (+px.foc_th||0) || (+px.foc_fr||0)) return null;
+  if(typeof bkNatHas==='function' && bkNatHas(t)) return null;
+  var lead=String((b&&b.leadNationality)||'').trim().toUpperCase();
+  if(!lead) return null;
+  if(lead!=='TH') return 0;
+  var fr=0;
+  ((b&&b.passengers)||[]).forEach(function(q){
+    if(!q||!q.name) return;
+    var n=String(q.nationality||'').trim().toUpperCase();
+    if(n && n!=='TH') fr++;
+  });
+  var frPrice=(+px.ad_fr||0)+(+px.chd_fr||0)+(+px.inf_fr||0);
+  return Math.max(0, foc-Math.max(0, fr-frPrice));
+}
+/* bkNatTH ที่รู้จักใบจอง · ใช้กับ FOC ของ B2C ที่ไม่มีแยกสัญชาติ · ที่เหลือเหมือน bkNatTH */
+function bkNatTHb(b,t,k){
+  if(k==='foc'){ var v=bkFocThInfer(b,t); if(v!=null) return v; }
+  return bkNatTH(t,k);
+}
 function bkNatTH(t,k){
   var px=(t&&t.pax)||{};
   var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
@@ -15750,7 +15782,7 @@ function pcPax(date,bid,pier){
       var f=typed?(all?(leftK[k]/all)*r2:0):ratio;
       o[k+'_th'] += (+px[k+'_th']||0) * f;
       o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * f;
-      var th=bkNatTH(t,k);
+      var th=bkNatTHb(b,t,k);   /* §focNat */
       n[k+'_th'] += th * f;
       n[k+'_fr'] += Math.max(0, all-th) * f;
     });
@@ -63931,7 +63963,7 @@ function repOpsGather(from,to){
       }
       /* สัญชาติ · ตัวเลขไทย/ตปท มาจากช่องที่คีย์จริง · รายประเทศยืมจากหัวกรุ๊ป */
       var th=0;
-      try{ ['ad','chd','inf','foc'].forEach(function(k){ th+=(typeof bkNatTH==='function')?bkNatTH(t,k):0; }); }catch(_){}
+      try{ ['ad','chd','inf','foc'].forEach(function(k){ th+=(typeof bkNatTHb==='function')?bkNatTHb(b,t,k):((typeof bkNatTH==='function')?bkNatTH(t,k):0); }); }catch(_){}   /* §focNat */
       th=Math.min(th, booked);
       var ratio=booked>0?(real/booked):0;
       O.natTH+=th*ratio; O.natFR+=(booked-th)*ratio;
@@ -65852,7 +65884,7 @@ function pkBkCnt(b,t,date){
   var px=(t&&t.pax)||{};
   ['ad','chd','inf','foc'].forEach(function(k){
     var all=(+px[k]||0)+(+px[k+'_th']||0)+(+px[k+'_fr']||0);
-    var th=(typeof bkNatTH==='function')?bkNatTH(t,k):(+px[k+'_th']||0);
+    var th=(typeof bkNatTHb==='function')?bkNatTHb(b,t,k):((typeof bkNatTH==='function')?bkNatTH(t,k):(+px[k+'_th']||0));   /* §focNat */
     var real=+R[k]||0; if(!real) return;
     var rth=all>0?Math.min(real,Math.round(real*th/all)):0;
     var rfr=real-rth;
