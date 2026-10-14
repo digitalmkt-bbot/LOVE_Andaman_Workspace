@@ -33569,6 +33569,35 @@ function ctPaintTabs(){
   [].slice.call(bar.querySelectorAll('button[data-t]')).forEach(function(b){
     b.className = 'ct-tab' + ((b.getAttribute('data-t') === _ct.tab) ? ' on' : '');
   });
+  try{ ctV2Head(bar); }catch(e){ console.warn('[ctV2] head', e); }
+}
+/* §ctV2 (2026-10-14) · หัวหน้าแบบใหม่ · ตัวเลขบนแท็บ + แถบ "สิ่งที่ค้าง" ใต้หัว
+   นับจากฟังก์ชันเดิมของหน้า (ctBreakEven · ctPlanOfFam · mvList) · ไม่มีสูตรชุดที่สอง · อ่านอย่างเดียว */
+function ctV2Head(bar){
+  var P = ctPlans(), T = ctTpl();
+  var RTS = (typeof ROUTES !== 'undefined' ? ROUTES : []);
+  var noBe = P.filter(function(x){ var cap = Math.max(1, ctPlanSeats(x) * Math.max(1, +x.boats || 1)); return !ctBreakEven(x, cap, T); });
+  var nLinked = RTS.filter(function(r){ return !!ctPlanOfFam(r.id); }).length, nUn = RTS.length - nLinked;
+  var badge = { plan: P.length, match: nUn };
+  [].slice.call(bar.querySelectorAll('button[data-t]')).forEach(function(b){
+    var k = b.getAttribute('data-t'), el = b.querySelector('.ct-tb');
+    if(badge[k]){ if(!el){ el = document.createElement('span'); el.className = 'ct-tb'; b.appendChild(el); } el.textContent = badge[k]; }
+    else if(el) el.remove();
+  });
+  var head = bar.closest('.ct-head'); if(!head) return;
+  var box = head.querySelector('.ct-todo');
+  if(!box){ box = document.createElement('div'); box.className = 'ct-todo'; head.appendChild(box); }
+  var e = ctE, t = [], tab = _ct.tab || 'plan';
+  var go = function(tb, js){ return ' onclick="' + (js ? js + ';' : '') + 'ctSetTab(\'' + tb + '\')"'; };
+  if(noBe.length) t.push('<button class="t r"' + go('plan', noBe.length === 1 ? ('ctPickPlan(\'' + e(noBe[0].id) + '\')') : '') + '><i></i>'
+    + (noBe.length === 1 ? ('เต็มลำยังไม่คุ้ม · ' + e(noBe[0].name || noBe[0].id)) : ('เต็มลำยังไม่คุ้ม ' + noBe.length + ' แผน')) + '</button>');
+  if(nUn) t.push('<button class="t"' + go('match') + '><i></i>ยังไม่จับคู่ ' + nUn + ' จาก ' + RTS.length + ' เส้นทาง</button>');
+  if(tab === 'plan'){ var pl = (_ct.pid && ctPlan(_ct.pid)) || null; if(pl && !pl.famId) t.push('<button class="t"' + go('plan') + '><i></i>แผนนี้ยังไม่ผูกเส้นทาง</button>'); }
+  try{ if(typeof mvList === 'function' && !mvList().length) t.push('<button class="t"' + go('real') + '><i></i>ยังไม่มีร้านอาหารในทะเบียน</button>'); }catch(_){}
+  var note = { plan:'แก้ตัวเลขแล้วคำนวณใหม่ทันที · ไม่กระทบใบจอง', tpl:'สูตรนี้คือค่าตั้งต้นของทุกแผน', real:'สูตรกลางบอกว่าควรจ่าย · หน้านี้เก็บที่จ่ายจริง',
+    match:'เส้นทางที่ยังไม่จับคู่ คิดต้นทุนด้วยสูตรกลาง', ovr:'ว่าง = ใช้ค่าจากสูตรกลาง' }[tab] || '';
+  box.innerHTML = '<b>สิ่งที่ค้าง</b>' + (t.length ? t.join('') : '<span class="ok"><i></i>ไม่มีอะไรค้าง</span>')
+    + '<span class="nt">' + e(note) + '</span>';
 }
 /* §ctKeepScroll · กดกางหมวด/รายการแล้วหน้าเด้งกลับไปข้างบน
    ต้นเหตุคือ host.innerHTML = ... ที่บรรทัดล่าง · ระหว่างที่เนื้อหาถูกล้าง ความสูงเหลือ ~0

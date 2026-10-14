@@ -3377,3 +3377,125 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
   #view-agents .agi-period-col{flex:0 0 auto}
   #view-agents .agi-prog-actions{margin-left:auto}
 }
+
+/* ══ §ctV2 (2026-10-14) · หน้าต้นทุน & จุดคุ้มทุน · ดีไซน์ใหม่ (แบบแรก + หัวขาว ที่เจ้าของเลือก) ══════════
+   owner: "ปรับดีไซน์หน้าต้นทุน ในทุกหน้า" → "ใช้แบบแรกที่เสนอมา แต่ Header ขอเป็นสีขาว" → "ทำเลย"
+   ทับ §ctSkin (ส้ม/ครีม) ด้วยชั้นนี้ชั้นเดียว · ตัวแปรสีเดิมถูกตั้งใหม่เป็นโทนกรมท่า/เทาฟ้า
+   ตรรกะ ปุ่ม ช่องกรอก ทุกตัวเป็นของเดิม · ลบบล็อกนี้ทิ้ง = กลับเป็นหน้าตาเดิมทันที */
+#view-costing{
+  --b50:#EEF3FB; --b100:#E3EAF8; --b200:#C9D6F0; --b300:#9DB2E0; --b500:#0B1E5B; --b600:#13286E;
+  --cr50:#F7F8FB; --cr200:#E2E6EE;
+  --sd50:#FAFBFD; --sd100:#F2F4F8; --sd200:#E2E6EE; --sd300:#CDD3DF; --sd400:#A9B2C4;
+  --es700:#3E4A6B; --es800:#26324F; --es900:#0F1B3D; --es950:#0B1E5B;
+  --mt50:#E8F6EF; --mt100:#D3EEE1; --mt500:#12A26B; --mt700:#0B6142;
+  color:#0F1B3D;
+}
+#view-costing .ct-k-v,#view-costing .ct-in,#view-costing td,#view-costing .ct-rt-sub{font-variant-numeric:tabular-nums}
+
+/* หัวหน้า · การ์ดขาว + แท็บกรมท่า + แถบสิ่งที่ค้าง */
+#view-costing .ct-head{background:#fff;border:1px solid #E2E6EE;border-radius:16px;box-shadow:0 1px 2px rgba(11,30,91,.05);
+  padding:12px 16px 0;margin-bottom:14px;align-items:center;gap:12px 16px;overflow:hidden}
+#view-costing .ct-logo{width:38px;height:38px;border-radius:10px;background:#0B1E5B;box-shadow:none}
+#view-costing .ct-h1 h1{font-size:18px;color:#0B1E5B;letter-spacing:0}
+#view-costing .ct-pill{display:none}
+#view-costing .ct-h2{font-size:12px;color:#5F6880}
+#view-costing #ct-tabs{background:#F2F4F8;border:0;border-radius:12px;padding:4px;gap:4px}
+#view-costing .ct-tab{color:#3E4A6B;font-size:13px;font-weight:600;border-radius:9px;padding:8px 14px}
+#view-costing .ct-tab:hover{color:#0B1E5B;background:#E8ECF3}
+#view-costing .ct-tab.on{background:#0B1E5B;color:#fff;box-shadow:none}
+#view-costing .ct-tab.on svg{color:#00B4E0}
+#view-costing .ct-tab .ct-tb{font-size:11px;font-weight:700;border-radius:8px;padding:0 6px;line-height:17px;background:#FFF0D6;color:#9A4A06;margin-left:2px}
+#view-costing .ct-tab.on .ct-tb{background:#F5C77E;color:#3D2300}
+#view-costing .ct-todo{flex:1 1 100%;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 -16px;padding:8px 16px;
+  background:#F8F9FC;border-top:1px solid #EDF0F5;font-size:12.5px}
+#view-costing .ct-todo > b{color:#9A4A06;font-weight:700;margin-right:2px}
+#view-costing .ct-todo .t{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:8px;background:#fff;
+  border:1px solid #E2E6EE;color:#0F1B3D;font:inherit;cursor:pointer;white-space:nowrap}
+#view-costing .ct-todo .t:hover{border-color:#B9C4DA}
+#view-costing .ct-todo .t i{width:7px;height:7px;border-radius:4px;background:#E8940C}
+#view-costing .ct-todo .t.r i{background:#D9534A}
+#view-costing .ct-todo .ok{display:inline-flex;align-items:center;gap:7px;color:#0B6142}
+#view-costing .ct-todo .ok i{width:7px;height:7px;border-radius:4px;background:#12A26B}
+#view-costing .ct-todo .nt{margin-left:auto;color:#5F6880;font-size:12px}
+
+/* การ์ด · มุมเล็กลง ขอบเทาฟ้า */
+#view-costing .ct-card{border-radius:14px;border-color:#E2E6EE;box-shadow:none}
+#view-costing .ct-card-h{border-bottom-color:#EDF0F5;color:#0B1E5B}
+#view-costing .ct-card-h b{font-size:13.5px;letter-spacing:0;color:#0B1E5B}
+#view-costing .ct-card-h .ct-sub{font-size:12px;color:#5F6880}
+#view-costing .ct-card-h.split{background:#FAFBFD}
+#view-costing .ct-hint{color:#5F6880}
+
+/* แผนคำนวณ · การ์ดสรุปขึ้นไปอยู่ใต้ชื่อแผน ก่อนช่องกรอก */
+#view-costing .ct-main > .ct-namebar{order:-3}
+#view-costing .ct-main > .ct-kpis{order:-2}
+#view-costing .ct-main{gap:14px}
+#view-costing .ct-wrap{gap:14px}
+/* แถบซ้าย · รายการแผน */
+#view-costing .ct-side-h{font-size:13.5px;font-weight:700;color:#0B1E5B;letter-spacing:0}
+#view-costing .ct-rt{border-radius:12px;border-color:#E2E6EE;background:#fff;box-shadow:none}
+#view-costing .ct-rt.on{background:#EEF3FB;border-color:#0B1E5B;box-shadow:inset 3px 0 0 #0B1E5B;color:#0B1E5B}
+#view-costing .ct-rt.on .ct-rt-nm,#view-costing .ct-rt.on .ct-rt-sub{color:#0B1E5B}
+#view-costing .ct-rt-nm{font-size:13.5px;color:#0B1E5B}
+#view-costing .ct-rt-sub{font-size:12px;color:#5F6880}
+#view-costing .ct-rt-ic{background:#F2F4F8;color:#3E4A6B}
+#view-costing .ct-rt.on .ct-rt-ic{background:#0B1E5B;color:#fff}
+#view-costing .ct-rt-badge{font-size:11.5px;background:#E3F5EC;color:#0B6142}
+#view-costing .ct-rt-badge.warn{background:#FDECEA;color:#B42318}
+#view-costing .ct-addrt{border-color:#C9D0DD;color:#3E4A6B;border-radius:12px}
+/* การ์ดตัวเลข */
+#view-costing .ct-k{border-radius:14px}
+#view-costing .ct-k-lb{font-size:12px;letter-spacing:.03em}
+#view-costing .ct-k-v{font-size:30px}
+#view-costing .ct-k-note{font-size:12.5px;color:#5F6880}
+#view-costing .ct-k.brand .ct-k-v{color:#0B1E5B}
+#view-costing .ct-k.brand .ct-k-v.neg{color:#B42318}
+/* ช่องกรอก ปุ่ม */
+#view-costing .ct-in,#view-costing .ct-sel{border-color:#DCE1EA;border-radius:9px;color:#0F1B3D}
+#view-costing .ct-in:focus,#view-costing .ct-sel:focus{border-color:#0B1E5B;box-shadow:0 0 0 3px rgba(11,30,91,.12);outline:0}
+#view-costing .ct-btn{background:#0B1E5B;border-color:#0B1E5B;color:#fff;border-radius:9px;box-shadow:none}
+#view-costing .ct-btn:hover{background:#13286E}
+#view-costing .ct-btn.ghost{background:#fff;color:#3E4A6B;border:1px solid #DCE1EA}
+#view-costing .ct-mini{border-radius:7px}
+/* ตาราง */
+#view-costing table th,#view-costing .ct-tbl th{color:#5F6880;background:#F7F8FB}
+#view-costing .ct-pierh td{background:#F4F6FA;color:#0B1E5B;font-weight:800;letter-spacing:.05em}
+#view-costing .ct-cath{background:#FAFBFD;border-bottom-color:#EDF0F5}
+#view-costing .ct-cath span:first-child{color:#0B1E5B}
+#view-costing .ct-cnt{color:#5F6880}
+#view-costing .ct-bar2 b{font-size:16px;color:#0B1E5B}
+#view-costing .ct-bar2 .ct-sub{font-size:12.5px;color:#5F6880}
+#view-costing .ct-warn{border-radius:12px}
+/* หัว · ชื่อหน้ายืดได้ คำอธิบายตัดท้าย แท็บไม่ล้นขอบ */
+#view-costing .ct-brand{flex:1 1 320px;min-width:0}
+#view-costing .ct-brand>div{min-width:0}
+#view-costing .ct-h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-costing #ct-tabs{flex-wrap:wrap}
+/* รายการแผน · กระชับขึ้น ป้ายบนแผนที่เลือกอ่านออก */
+#view-costing .ct-rt{padding:10px 12px;gap:10px}
+#view-costing .ct-rt-badge{margin-top:5px;border:0}
+#view-costing .ct-rt.on .ct-rt-badge{background:#E3F5EC;color:#0B6142}
+#view-costing .ct-rt.on .ct-rt-badge.warn{background:#FDECEA;color:#B42318}
+#view-costing .ct-rt.on .ct-dot{background:#0B1E5B}
+/* ช่องกรอก · ชื่อช่องอยู่บน ช่องเต็มความกว้าง เรียง 6 คอลัมน์ */
+#view-costing .ct-grid8{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 14px;padding:14px 18px}
+#view-costing .ct-grid8 .ct-f{display:flex;flex-direction:column;gap:5px}
+#view-costing .ct-grid8 .ct-f>span{font-size:12px;font-weight:600;color:#5F6880;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-costing .ct-grid8 .ct-f.hot>span{color:#9A4A06}
+#view-costing .ct-grid8 .ct-in{width:100%!important;height:36px;font-size:14px;text-align:right}
+#view-costing .ct-grid8 select.ct-in{text-align:left}
+#view-costing .ct-in.hot{border-color:#F0B66A;background:#FFF8EC}
+#view-costing .ct-grid8 .ct-f{text-align:left}
+/* การ์ดจุดคุ้มทุน · ถ้า "ไม่ถึง" เป็นโทนแดง (เดิมเขียวตลอด) */
+#view-costing .ct-k.mint:has(.ct-k-v>span){background:#FDF1EF;border-color:#F6D3CD}
+#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-lb,#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-v,#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-row{color:#B42318}
+#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-ic{background:#F9DCD7;color:#B42318}
+/* ปรับ / ปิด รายแผน · ตัวตารางพื้นขาว · ไฮไลต์แถว/คอลัมน์เป็นฟ้าอ่อน (เดิมครีม/ส้ม) */
+#view-costing .ct-otbl th{background:#F7F8FB}
+#view-costing .ct-otbl td.ct-pcol:not(.ct-colon):not(.ct-rowon):not(.ct-cellon){background:#fff !important}
+#view-costing .ct-grow td{background:#F4F6FA}
+#view-costing .ct-sheet .ct-otbl .ct-grow td.ct-stick{background:#F4F6FA}
+#view-costing .ct-otbl tbody tr:not(.ct-grow):hover td{background:#F7F9FC}
+#view-costing .ct-otbl td.ct-colon,#view-costing .ct-otbl td.ct-rowon,#view-costing .ct-sheet .ct-otbl td.ct-stick.ct-rowon{background:#EEF3FB !important}
+#view-costing .ct-sheet .ct-otbl thead th{background:#F7F8FB}
+#view-costing .ct-otbl td,#view-costing .ct-otbl th{border-color:#EDF0F5}
