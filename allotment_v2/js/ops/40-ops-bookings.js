@@ -153,8 +153,16 @@
     if(Array.isArray(bk.adjustments)) b.adjustments = bk.adjustments.filter(function(a){
       return a && Number(a.value) > 0;
     }).map(function(a){ return { kind: a.kind, mode: a.mode, value: Number(a.value), label: a.label || undefined, note: a.note || undefined }; });
+    /* The server replaces the whole list and defaults whatever is missing (heads 0, who/area/zone/place
+       null), so every field it stores goes every time. Legacy's qty-only entries count as adults. */
     if(Array.isArray(bk.altPickups)) b.altPickups = bk.altPickups.map(function(a){
-      return { areaId: a.areaId || a.area_id || null, dropSame: a.dropSame != null ? !!a.dropSame : !!a.drop_same,
+      var head = function(k){ var n = Number(a[k]); return Number.isInteger(n) && n >= 0 ? n : 0; };
+      var counted = ['ad','chd','inf','foc'].some(function(k){ return a[k] != null && a[k] !== ''; });
+      var qty = Number(a.qty);
+      return { who: a.who || null, ad: counted ? head('ad') : (Number.isInteger(qty) && qty > 0 ? qty : 0),
+        chd: counted ? head('chd') : 0, inf: counted ? head('inf') : 0, foc: counted ? head('foc') : 0,
+        areaId: a.areaId || a.area_id || null, area: a.area || null, zone: a.zone || null, place: a.place || null,
+        dropSame: a.dropSame != null ? !!a.dropSame : !!a.drop_same,
         dropAreaId: a.dropAreaId || a.drop_area_id || null, dropArea: a.dropArea || a.drop_area || '',
         dropZone: a.dropZone || a.drop_zone || '', dropPlace: a.dropPlace || a.drop_place || '' };
     });
@@ -388,7 +396,7 @@
     /* §bookingSlips: payment slips on the booking itself (a direct/B2C booking has no invoice payment); server-owned, shown by 38-ops-attachments.js */
     bk.slips = (ob.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id:s.id, attachmentId:s.attachment_id || s.attachmentId || '', addedAt:s.added_at || s.addedAt || '', addedBy:s.added_by || s.addedBy || '' }; });
     bk.attachments = (ob.attachments || []).map(function(a){ return { id:a.id, name:a.name || '', mime:a.mime || '', size:+a.size || 0, kind:a.kind || '', by:a.by || '', at:a.at || '' }; });
-    bk.altPickups = (ob.alt_pickups || []).map(function(a){ return { areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
+    bk.altPickups = (ob.alt_pickups || []).map(function(a){ var ad = +a.ad || 0, chd = +a.chd || 0, inf = +a.inf || 0, foc = +a.foc || 0; return { who:a.who || '', ad:ad, chd:chd, inf:inf, foc:foc, qty:ad + chd + inf + foc, area:a.area || '', zone:a.zone || '', place:a.place || '', areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
     bk.adjustments = (ob.adjustments || []).map(function(a){ return { seq:a.seq, kind:a.kind, mode:a.mode, value:+a.value || 0, label:a.label || '', note:a.note || '' }; });
     if(Array.isArray(ob.allergy_list)) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyList = ob.allergy_list; }
     if(ob.allergy_count != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyCount = +ob.allergy_count || 0; }
