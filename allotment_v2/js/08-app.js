@@ -78069,6 +78069,10 @@ function pc2CSS3(S){
     'body.btc #view-booking table.t2-mtbl tr.t2-row>td{white-space:nowrap;line-height:1.3}',
     'body.btc #view-booking tr.t2-row>td.t2-pk .t2-pickcell{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk{overflow:hidden}',
+    /* §rtFt4 · owner "ทำไมยังไม่ลอย": Compact ตัด overflow ของช่อง Send back ไว้ ป้ายรถกลับ (rtFt2) จึงโดนตัดครึ่ง
+       ช่องที่มีป้ายให้ล้นได้ · ชื่อจุดส่งยังตัด … ด้วย .t2-sb เอง */
+    'body.btc #view-booking tr.t2-row>td.t2-sbk:has(.t2-rtft){overflow:visible}',
+    'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-rtft{top:calc(100% - 8px);left:6px}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk br{display:none}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk .t2-sb{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}',
     'body.btc #view-booking tr.t2-row>td.t2-sbk.btc-sbx{display:table-cell}',
