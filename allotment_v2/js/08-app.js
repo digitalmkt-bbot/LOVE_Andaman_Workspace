@@ -67666,20 +67666,29 @@ function pk3Body(flat, TY, TYM, ro){
       +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(p8[k])+'</td>'; }).join('')+'<td class="n sum">'+(+B.totPc||0)+'</td>'
       +tk+'<td class="n">'+n0(nU)+'</td><td class="n'+(nL?' left':'')+'">'+n0(nL)+'</td></tr>';
   }).join('');
+  /* §pkSets8 (2026-10-15) · owner "ผลรวมที่ทำ จำนวนแต่ละชุด โชว์ในแถวนี้ ใต้แต่ละคอลัมน์"
+     ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทางและแถววัน = รวมคนในชุดที่บันทึกแล้ว แยกตามประเภท (นับจากรายชื่อจริงในชุด ไม่ใช่ตัวเลขที่ตั้ง)
+     แถวเส้นทาง = ชุดของเส้นทางนั้น (แถวรวม = ทุกชุด) · แถววัน = ชุดของลำที่เลือกขึ้นตาราง · ร่างที่ยังไม่บันทึกอยู่ในแถวเรือเหมือนเดิม */
+  var setBy=function(fn){ var o={}, t=0, n=0; pkSets(date).forEach(function(S){ if(!fn(S)) return; n++; (S.people||[]).forEach(function(q){ o[q.cat]=(o[q.cat]||0)+1; t++; }); }); return {o:o,t:t,n:n}; };
+  var setTds=function(SB){ var tt=SB.n?('รวมในชุดที่บันทึกแล้ว '+SB.n+' ชุด'):'ยังไม่มีชุดที่บันทึก';
+    return TY.map(function(T,i){ return '<td class="n sv'+tySep(T,i)+'" title="'+tt+' · '+e(T.n)+'">'+n0(SB.o[T.k]||0)+'</td>'; }).join('')+'<td class="n sum sv" title="'+tt+'">'+n0(SB.t)+'</td>'; };
+  var famOfSet=function(S){ try{ return S.rid?pk2FamOf(S.rid).id:''; }catch(_){ return ''; } };
   /* §pkSets3 · แถวยอดจริง · เลือกเส้นทางแล้วเหลือแถวของเส้นทางนั้น (กับแถวรวม) · กดแถวก็เลือกได้เหมือนชิป */
   var famRow=function(F){ var on=(_pkSetFamF===F.f.id);
     return '<tr class="fm'+(on?' sel':'')+'" onclick="pkSetFamF(\''+e(F.f.id)+'\')" title="กดเพื่อกรองเรือตามโปรแกรมนี้">'
       +'<td class="rt"><span class="fn"><i style="background:'+F.f.c+'"></i>'+e(F.f.n)+'<em>'+F.n+' ลำ</em>'+(on&&F.f.id!=='all'?'<u>กรองอยู่</u>':'')+'</span></td>'
       +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(F.s[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
-      +'<td class="n sep" colspan="'+TY.length+'"></td><td class="n sum"></td><td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'; };
-  var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+'</td></tr>'
+      +setTds(setBy(function(S){ return F.f.id==='all' || famOfSet(S)===F.f.id; }))   /* §pkSets8 */
+      +'<td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'; };
+  var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+(pkSets(date).length?' · ใต้ "ชุดนี้" = รวมในชุดที่บันทึกแล้ว':'')+'</td></tr>'
     +(_pkSetFamF==='all'?(famRow(FA)+FL.map(famRow).join('')):FL.filter(function(F){ return F.f.id===_pkSetFamF; }).map(famRow).join(''))   /* §pkSets5 · owner "โฟกัสแค่บางเกาะ" · เลือกแล้วเหลือแถวเดียว ไม่มีแถวรวม */
     +'<tr class="fh"><td colspan="'+(TY.length+15)+'">ลำที่เลือกมาทำชุด</td></tr>';
   var WD=['อา','จ','อ','พ','พฤ','ศ','ส'], dd=new Date(date+'T12:00:00'), nS=pkSets(date).length;
   var top='<tr class="dy"><td class="rt"><b>'+dd.getDate()+'</b> <i>'+WD[dd.getDay()]+'</i> · เลือก '+chosen.length+' จาก '+flat.length+' ลำ'
     +(nS?(' <u class="ok">บันทึกแล้ว '+nS+' ชุด</u>'):'')+'</td>'
     +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(S8[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+St+'</td>'
-    +'<td class="n sep" colspan="'+TY.length+'"></td><td class="n sum">'+(Sd||'')+'</td><td class="n">'+n0(Su)+'</td><td class="n left">'+n0(Sl)+'</td></tr>';
+    +setTds(setBy(function(S){ return _pkSetBoats.indexOf(S.bid)>=0; }))   /* §pkSets8 · ชุดที่บันทึกแล้วของลำที่เลือก · ร่าง (Sd) อยู่ในแถวเรือ */
+    +'<td class="n">'+n0(Su)+'</td><td class="n left">'+n0(Sl)+'</td></tr>';
   var tbl='<div class="pk2-ovw pk2-dmx pk3-mx"><table class="pk2-ov">'+cg+head+'<tbody>'+famRows+top+rows
     +(chosen.length?'':('<tr><td class="pk3-hint" colspan="'+(TY.length+15)+'">ยังไม่มีเรือในตาราง · กด "+ เพิ่มเรือ" ด้านบน แล้วกดแถวเรือเพื่อกำหนดจำนวน</td></tr>'))
     +'</tbody></table></div>';
@@ -67843,6 +67852,8 @@ function pk3CSS(S){
   S+' .pk3-mx .pk2-ov tr.fm.sel td{background:#E9F0FB}',
   S+' .pk3-mx .pk2-ov tr.fm.sel td.rt{box-shadow:inset 3px 0 0 '+N+'}',
   S+' .pk3-mx .pk2-ov tr.fm td.n{font-weight:700}',
+  S+' .pk3-mx .pk2-ov td.sv{color:#0B6B47}',   /* §pkSets8 · รวมในชุดที่บันทึกแล้ว */
+  S+' .pk3-mx .pk2-ov td.sv.sum{background:#E9F8F0}',
   S+' .pk3-mx .pk2-ov tr.fm .fn{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:'+N+'}',
   S+' .pk3-mx .pk2-ov tr.fm .fn i{width:8px;height:8px;border-radius:4px;flex:none}',
   S+' .pk3-mx .pk2-ov tr.fm .fn em{font-style:normal;font-size:11px;font-weight:600;color:'+M+'}',

@@ -12,6 +12,7 @@
 //   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
 //  10 (§pkCalc) การ์ด "ตารางคำนวณ" ใบแรกฝั่งขวา · จำนวน × ราคา = รวม คิดสดโดยไม่วาดหน้าใหม่ · ราคา/ใบ จำใน PIER_CFG.parkPrice · แถวพิมพ์เอง 3 แถว · ดึงจำนวนจากเส้นทาง/ชุด
+//  12 (§pkSets8) ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทาง/แถวรวม/แถววัน = รวมคนในชุดที่บันทึกแล้ว แยกประเภท
 //  11 (§pkSets6) คอลัมน์ "ชุดนี้" เรียง ผญ ไทย · เด็กไทย · ต่ำกว่า 3 · ผญ ตปท · เด็ก ตปท · (ประเภทที่เพิ่มเอง) เหมือนบนเรือ
 //   8 กลับแท็บ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ทุกข้อความเป็น ASCII · ไม่มี error
 import { open, goView } from './_harness.mjs';
@@ -120,6 +121,16 @@ const x7 = await page.evaluate((D) => { const out = [];
 const one = x7.out[0] || {}, all = x7.out[1] || {};
 if (x7.sets.length === 2 && x7.sets[1].name === 'ชุดทดสอบ' && one.sheets && one.sheets.length === 2 && one.rows[0].length === 2 && one.rows[0][0].length === 3 && one.rows[0][0][2] === code && one.sheets[1] === 'สรุปรหัส' && all.sheets.length === 3 && all.sheets.includes('ชุดทดสอบ') && /park_sets_2026-09-16/.test(all.fn))
   ok(`7 Excel · ชุดเดียว ${one.sheets.length} ชีท (3 คอลัมน์ · code ${code}) · ทุกชุด ${all.sheets.length} ชีท`); else fail('7 ' + JSON.stringify({ sets: x7.sets, one: { s: one.sheets, r0: one.rows && one.rows[0] }, all: { s: all.sheets, fn: all.fn } }));
+// 12 (§pkSets8) ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทาง/แถวรวม/แถววัน = รวมคนในชุดที่บันทึกแล้ว แยกประเภท (ตอนนี้ 2 ชุด · cat 2+1 = 3 บนลำ big)
+await page.waitForTimeout(200);
+const r12 = await page.evaluate(({ H, D, c, bid }) => { const h = document.querySelector(H); const TY = pk3TyOrder(pkTypes()); const ci = TY.findIndex(T => T.k === c);
+  const row = tr => { const sv = [...tr.querySelectorAll('td.sv')].map(t => +t.textContent || 0); return { n: sv.length, cat: sv[ci], tot: sv[sv.length - 1], other: sv.filter((v, i) => i !== ci && i !== sv.length - 1).reduce((a, b) => a + b, 0) }; };
+  const fm = [...h.querySelectorAll('.pk3-mx tr.fm')].map(tr => ({ nm: tr.querySelector('.fn').childNodes[1].textContent.trim(), ...row(tr) }));
+  const fam = pk2FamOf(pkSets(D)[0].rid).n; const want = pkSets(D).reduce((a, S) => a + S.people.filter(q => q.cat === c).length, 0);
+  return { ty: TY.length, fm, dy: row(h.querySelector('.pk3-mx tr.dy')), fam, want, nSets: pkSets(D).length, chosen: _pkSetBoats.includes(bid), fh: h.querySelector('.pk3-mx tr.fh').textContent }; }, { H, D: DATE, c: cat, bid: big.bid });
+const famR = r12.fm.find(x => x.nm === r12.fam), allR = r12.fm.find(x => x.nm === 'ทั้งหมด'), othR = r12.fm.filter(x => x.nm !== r12.fam && x.nm !== 'ทั้งหมด');
+if (r12.want === 3 && r12.nSets === 2 && famR && famR.n === r12.ty + 1 && famR.cat === 3 && famR.tot === 3 && famR.other === 0 && allR && allR.cat === 3 && allR.tot === 3 && othR.every(x => x.tot === 0) && r12.chosen && r12.dy.cat === 3 && r12.dy.tot === 3 && /รวมในชุดที่บันทึกแล้ว/.test(r12.fh))
+  ok(`12 ใต้ "ชุดนี้" · แถว ${r12.fam} = ${famR.cat} (${cat}) รวม ${famR.tot} · แถวรวม ${allR.tot} · แถววัน ${r12.dy.tot} · เส้นทางอื่น 0`); else fail('12 ' + JSON.stringify(r12));
 // 8
 await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /ทั้งหมด/.test(b.textContent)).click(), H); await page.waitForTimeout(400); a = await st();
 const cfgSame = await page.evaluate(() => JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined, parkPrice: undefined })) === window.__cfg0);
