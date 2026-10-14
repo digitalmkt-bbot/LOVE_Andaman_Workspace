@@ -314,14 +314,11 @@
     };
   }
 
-  function mergeTripOperations(bk, date, serverTrip){
-    if(!bk || !serverTrip || !serverTrip.operations) return;
-    var ops = serverTrip.operations;
-    var trips = Array.isArray(bk.trips) ? bk.trips : [];
-    var trip = trips.find(function(t){ return t && (t.opsTripId === serverTrip.id || t.date === date); });
-    var firstDate = trips[0] ? trips[0].date : '';
-    var targetOps = (trip && trip.date !== firstDate) ? (trip.ops = trip.ops || {}) : (bk.ops = bk.ops || {});
-
+  /* Server trip.operations.checkins {van:[],pier:[]} -> the local fields legacy screens read:
+     targetOps.checkins (raw), targetOps.pierCheckin / vanCheckin (slot 0 + _s{slot>0}).
+     Shared by the write path (mergeTripOperations) and the booking LOAD (40-ops-bookings operationsFrom). */
+  function applyServerCheckins(targetOps, ops){
+    ops = ops || {};
     targetOps.checkins = clone(ops.checkins || { van: [], pier: [] });
     ['van', 'pier'].forEach(function(k){
       var list = (ops.checkins && Array.isArray(ops.checkins[k])) ? ops.checkins[k] : [];
@@ -341,6 +338,17 @@
         targetOps[prop] = null;
       }
     });
+  }
+
+  function mergeTripOperations(bk, date, serverTrip){
+    if(!bk || !serverTrip || !serverTrip.operations) return;
+    var ops = serverTrip.operations;
+    var trips = Array.isArray(bk.trips) ? bk.trips : [];
+    var trip = trips.find(function(t){ return t && (t.opsTripId === serverTrip.id || t.date === date); });
+    var firstDate = trips[0] ? trips[0].date : '';
+    var targetOps = (trip && trip.date !== firstDate) ? (trip.ops = trip.ops || {}) : (bk.ops = bk.ops || {});
+
+    applyServerCheckins(targetOps, ops);
   }
 
   function writeCheckinServer(b, date, kind, val){
@@ -731,6 +739,7 @@
     collectUpgrade: collectUpgradeServer
   };
 
+  O.applyCheckins = applyServerCheckins;
   O.dayActions = api;
   window.laOpsDayActions = api;
   window.__laOpsDayActionsCompat = {
@@ -739,6 +748,7 @@
     parseCheckinKindAndSlot: parseCheckinKindAndSlot,
     toCheckinBody: toCheckinBody,
     fromServerCheckinRecord: fromServerCheckinRecord,
+    mergeTripOperations: mergeTripOperations,
     fromServerTourSale: fromServerTourSale,
     toTourSaleBody: toTourSaleBody,
     toCollectBody: toCollectBody
