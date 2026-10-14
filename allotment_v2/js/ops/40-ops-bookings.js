@@ -64,6 +64,28 @@
     var out = {}; Object.keys(p || {}).forEach(function(k){ var n = Math.round(+p[k] || 0); if(n > 0) out[k] = n; }); return out;
   }
 
+  /* §thaiPax (2026-10-15) · t.nat {ad,chd,inf,foc} (really-Thai heads, changes no price) <-> the server's
+     trips[].thai_passengers {adults,children,infants,free_of_charge} (migration 241).  Unset (no key
+     typed) is null, which tells the server "nobody checked" so park tickets read the grid's _th count;
+     all zeros is a real answer.  The server refuses a count above its category's heads on the trip
+     sent, so clamp like legacy bkNatTH does (the pax can be lowered after the count was typed). */
+  var THAI_FIELDS = [['ad', 'adults'], ['chd', 'children'], ['inf', 'infants'], ['foc', 'free_of_charge']];
+  function thaiOut(t){
+    var n = t && t.nat;
+    if(!(n && typeof n === 'object' && THAI_FIELDS.some(function(f){ return n[f[0]] != null && n[f[0]] !== ''; }))) return null;
+    var px = t.pax || {}, out = {};
+    THAI_FIELDS.forEach(function(f){
+      var all = (+px[f[0] + '_th'] || 0) + (+px[f[0] + '_fr'] || 0) + (+px[f[0]] || 0);
+      out[f[1]] = Math.max(0, Math.min(Math.round(all), Math.round(+n[f[0]] || 0)));
+    });
+    return out;
+  }
+  function thaiIn(th){
+    if(!th || typeof th !== 'object') return undefined;
+    var nat = {}; THAI_FIELDS.forEach(function(f){ nat[f[0]] = Math.max(0, Math.round(+th[f[1]] || 0)); });
+    return nat;
+  }
+
   /* §opsAuthority (2026-10-08) · the server decides who made a booking, when, and its status.
      · bookedAt / createdBy / confirmedAt / confirmedBy are stamped by the server from the login and
        never sent: a create naming them is 400, and a PATCH changing them is 400.
@@ -169,6 +191,7 @@
         });
         if(Object.keys(draws).length) o.lockDraws = draws;
       }
+      o.thai_passengers = thaiOut(t);                   // §thaiPax · null = not set (a trip is sent whole)
       if(t.zone) o.zone = t.zone;
       var pk = pickupSplit(t.pickupTime);            // §opsPickup · a trip is sent whole: a field left out is cleared
       if(!pk) throw new Error('Pickup time "' + t.pickupTime + '" on ' + t.date + ' is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
@@ -258,6 +281,7 @@
               rtRef: g('rateTypeId', 'rate_type_id') || null, promoId: g('promoId', 'promo_id') || null,
               subtotal: t.subtotal != null ? +t.subtotal || 0 : 0,
               ops: operationsFrom(t.operations) };
+    var nat = thaiIn(t.thai_passengers); if(nat) o.nat = nat;       // §thaiPax
     return o;
   }
 

@@ -33,6 +33,9 @@
   var legacyTblDeleteSelected=window.agTblDeleteSelected;
   var legacyPersist=window.sbAgentsPersist;
   var legacyPickerApply=window.rtAgentPickerApply;
+  var legacyRtmSave=window.rtmSave;
+  var legacyExpBulkApply=window.rtExpBulkApply;
+  var legacyProgBulkApply=window.agProgBulkApply;
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v==null ? '' : String(v).trim(); }
@@ -44,6 +47,11 @@
   function list(){ return (typeof SB_AGENTS!=='undefined' && Array.isArray(SB_AGENTS)) ? SB_AGENTS : []; }
   function current(id){ return list().find(function(a){ return a && a.id===id; }); }
   function clone(v){ return O.clone ? O.clone(v) : (v==null ? v : JSON.parse(JSON.stringify(v))); }
+  /* Rate seasons: the server's {rate_type_id, from, to:null|date} <-> legacy's {rt, from, to:''}.  laSeasonsOf() keeps
+     only rows with an `rt`, so the server's own spelling was invisible to every season screen. */
+  function seasonsIn(list){ return (list||[]).map(function(x){ return {rt:x.rate_type_id||x.rt, from:x.from, to:x.to||''}; }); }
+  function seasonsOut(list){ return (list||[]).filter(function(x){ return x && x.rt && x.from; })
+    .map(function(x){ return {rate_type_id:x.rt, from:x.from, to:x.to||null}; }); }
 
   /* The list response is deliberately smaller than the detail response. Keep
      only UI caches that have no server equivalent; all agent facts come from
@@ -68,7 +76,7 @@
       programs:programs.map(function(p){ return typeof p==='string' ? p : p.route_id; }),
       programPeriods:programs.map(function(p){ return { routeId:p.route_id, bookFrom:p.book_from||'', bookTo:p.book_to||'', note:p.note||'' }; })
     });
-    if(Array.isArray(s.rate_seasons)) o.rateSeasons=clone(s.rate_seasons);
+    if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
     return o;
   }
@@ -336,6 +344,94 @@
     var ia=function(){ if(!enabled()) return legacyImportApply.apply(this,arguments); return fail('Agent import unavailable',{message:'Use single-agent create or edit in operation-backend mode.'}); };
     ia.__ops=true; ia.__opsAgents=true; window.agImportApply=ia;
   }
+  /* Rate seasons (PUT /v1/agents/:id/rate-seasons replaces the agent's whole table and writes the activity line).
+     Both legacy savers set a.rateSeasons and called sbAgentsPersist, a no-op in ops mode: the table vanished on reload.
+     · rtmSave  (the agent's own season tab)   one PUT; the screen is redrawn from the server's table.
+     · rtExpBulkApply (set the whole group)    the list response carries no seasons, so each candidate's table is READ first
+       (legacy leaves an agent that already has one alone, and a PUT would replace it), then the legacy apply runs
+       as the snapshot step and every agent whose table changed is PUT, one queued write each; a refused agent goes back to
+       its snapshot and the refusals come out in ONE red toast while the others proceed. */
+  function saveSeasons(){
+    if(!enabled()) return legacyRtmSave.apply(this,arguments);
+    if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return;
+    var a=current(window._rtmAgent); if(!a) return;
+    var clean=(window._rtmDraft||[]).filter(function(x){ return x && x.rt && x.from; })
+      .map(function(x){ return {rt:x.rt, from:x.from, to:x.to||''}; })
+      .sort(function(x,y){ return String(x.from).localeCompare(String(y.from)); });
+    return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',{seasons:seasonsOut(clean)}).then(function(){
+      return fetchAgent(a.id);
+    }).then(function(){
+      if(typeof rtmInit==='function') rtmInit(a.id);
+      if(typeof rtmRedraw==='function') rtmRedraw();
+      if(O.wrote) O.wrote('agents');
+      if(typeof flShowToast==='function') flShowToast('บันทึกตารางฤดูกาลแล้ว');
+    },function(e){ return fail('Could not save rate seasons',e); });
+  }
+  function bulkSeasons(){
+    if(!enabled()) return legacyExpBulkApply.apply(this,arguments);
+    var self=this, args=arguments;
+    var P=(typeof rtExpBulkPlan==='function') ? rtExpBulkPlan(window._rtExpBulkRt) : null;
+    if(!P || !P.total) return;
+    var ags=[]; P.groups.forEach(function(g){ g.ags.forEach(function(a){ if(ags.indexOf(a)<0) ags.push(a); }); });
+    return Promise.all(ags.map(function(a){
+      return O.get('/v1/agents/'+enc(a.id)+'/rate-seasons').then(function(r){ a.rateSeasons=seasonsIn(r && r.seasons); });
+    })).then(function(){
+      var before={}; ags.forEach(function(a){ before[a.id]={seasons:clone(a.rateSeasons||[]), activity:clone(a.activity||[])}; });
+      legacyExpBulkApply.apply(self,args);
+      var changed=ags.filter(function(a){ return JSON.stringify(a.rateSeasons||[])!==JSON.stringify(before[a.id].seasons); });
+      var refused=[], chain=Promise.resolve();
+      changed.forEach(function(a){
+        chain=chain.then(function(){
+          return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',{seasons:seasonsOut(a.rateSeasons)}).then(function(){ return fetchAgent(a.id); },function(e){
+            a.rateSeasons=before[a.id].seasons; a.activity=before[a.id].activity;
+            refused.push((a.code||a.name||a.id)+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
+          });
+        });
+      });
+      return chain.then(function(){
+        if(O.wrote) O.wrote('agents');
+        if(typeof rtExpRender==='function') rtExpRender();
+        redraw();
+        if(refused.length) fail('Rate seasons refused for '+refused.length+' of '+changed.length+' agent(s)',new Error(refused.join('\n')));
+      });
+    },function(e){ return fail('Could not read the agents\' rate seasons',e); });
+  }
+  if(typeof legacyRtmSave==='function'){ saveSeasons.__ops=true; saveSeasons.__opsAgents=true; window.rtmSave=saveSeasons; }
+  if(typeof legacyExpBulkApply==='function'){ bulkSeasons.__ops=true; bulkSeasons.__opsAgents=true; window.rtExpBulkApply=bulkSeasons; }
+
+  /* "Fill programmes to the rate" for many agents (agProgBulkApply).  Legacy added a.programPeriods rows and called
+     sbAgentsPersist (a no-op here).  PUT /v1/agents/:id/programs REPLACES the agent's programme list, and the list
+     response carries route ids only (no periods or notes), so each candidate is read in full first; then the legacy
+     apply runs as the snapshot step, every agent whose periods changed is PUT (one queued write each), a refused agent
+     goes back to its snapshot and the refusals come out in ONE red toast. */
+  function bulkPrograms(){
+    if(!enabled()) return legacyProgBulkApply.apply(this,arguments);
+    var self=this, args=arguments;
+    var P=(typeof agProgBulkPlan==='function') ? agProgBulkPlan() : null; if(!P) return;
+    var list=(window._agProgBulkScope==='partial') ? P.partial : P.empty; if(!list || !list.length) return;
+    var ids=list.map(function(f){ return f.a.id; });
+    return Promise.all(ids.map(function(id){ return fetchAgent(id); })).then(function(){
+      var before={}; ids.forEach(function(id){ var a=current(id); if(a) before[id]={periods:clone(a.programPeriods||[]), programs:clone(a.programs||[]), activity:clone(a.activity||[])}; });
+      legacyProgBulkApply.apply(self,args);
+      var changed=ids.map(current).filter(function(a){ return a && before[a.id] && JSON.stringify(a.programPeriods||[])!==JSON.stringify(before[a.id].periods); });
+      var refused=[], chain=Promise.resolve();
+      changed.forEach(function(a){
+        chain=chain.then(function(){
+          return write('PUT','/v1/agents/'+enc(a.id)+'/programs',{programs:programsBody(a.programPeriods)}).then(function(){ return fetchAgent(a.id); },function(e){
+            var b=before[a.id]; a.programPeriods=b.periods; a.programs=b.programs; a.activity=b.activity;
+            refused.push((a.code||a.name||a.id)+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
+          });
+        });
+      });
+      return chain.then(function(){
+        if(O.wrote) O.wrote('agents');
+        redraw();
+        if(refused.length) fail('Programmes refused for '+refused.length+' of '+changed.length+' agent(s)',new Error(refused.join('\n')));
+      });
+    },function(e){ return fail('Could not read the agents\' programmes',e); });
+  }
+  if(typeof legacyProgBulkApply==='function'){ bulkPrograms.__ops=true; bulkPrograms.__opsAgents=true; window.agProgBulkApply=bulkPrograms; }
+
   if(typeof legacyPersist==='function'){
     window.sbAgentsPersist=function(){ if(enabled()) return; return legacyPersist.apply(this,arguments); };
   }
