@@ -12,10 +12,13 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+delete process.env.DATABASE_URL;
+
 const DIR = process.cwd();
 const imp = (p) => import(pathToFileURL(path.join(DIR, p)).href);
 const { OperationsStore } = await imp('src/domain/operations.ts');
 const { hashPassword } = await imp('src/domain/users.ts');
+const { parseRateTypeCreate } = await imp('src/domain/rate-types.ts');
 
 const today = new Date(); const ymd = (d) => d.toISOString().slice(0, 10);
 const day = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return ymd(d); };
@@ -53,6 +56,19 @@ const AGENTS = {
   ],
   activity: { a01: [{ at: '2026-09-01T10:00:00Z', by: 'tester', kind: 'note', text: 'Seeded activity line' }] },
 };
+// The agents' rate type. An agent booking is priced by the server from its rate (operation-backend
+// src/domain/pricing.ts enforcedPriceMode, 8b1eeaa: only walk-in, company and staff may be priced by
+// hand) and a rate-priced trip whose route+zone has no price is 409 no_rate (assertPriced, dd7e57c).
+// Without this the seeded agents could not book at all. Parsed by the server's own parser, so a
+// shape the server would refuse fails here, not silently. Net prices: the only tier ever billed.
+const RATE_TYPES = [{
+  id: 'rt001', code: 'RT001', name: 'Test agent net',
+  routes: [
+    { route_id: 'r5', zones: { NoTransfer: { net: { ad_fr: 1200, chd_fr: 900, ad_th: 1000, chd_th: 700 } },
+                               PK: { net: { ad_fr: 1500, chd_fr: 1100, ad_th: 1300, chd_th: 900 } } } },
+    { route_id: 'r4', zones: { NoTransfer: { net: { ad_fr: 1800, chd_fr: 1300, ad_th: 1500, chd_th: 1000 } } } },
+  ],
+}];
 
 const proto = OperationsStore.prototype;
 const SEEDED = Symbol('seeded');
@@ -66,6 +82,7 @@ for (const name of Object.getOwnPropertyNames(proto)) {
       this[SEEDED] = true;
       this.seedCatalogue(SEED);
       this.seedAgents(AGENTS);
+      for (const rt of RATE_TYPES) this.createRateType(parseRateTypeCreate(rt));
       // Auth now reads users from the operations store (not AUTH_PASSWORD_USERS).
       // Seed the staff account that t_ops uses before the first request reaches it.
       this.createUser({ username: 'tester', pass_hash: hashPassword('pw'), name: 'Tester', role: 'admin',
