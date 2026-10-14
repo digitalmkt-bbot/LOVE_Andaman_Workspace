@@ -12333,7 +12333,10 @@ function renderVanJobs(){
       _E.pax+=pax; _E.bk++; if(_pk) _E.pickups[_pk]=1; };
     const addVan=(vid,pax,src)=>_addTo(agg,vid,pax,src);
     const _selfPick=!!b.pickupSelf;   // ขารับมาเอง → ไม่มีรถไปรับ (ไม่ addVan/ไม่นับ unassigned) · ขากลับยังจัดได้
-    if(Array.isArray(O.vanSplits)&&O.vanSplits.length){ O.vanSplits.forEach(s=>{ const hp=+s.pax||0; if(!_selfPick){ if(s.vanId) addVan(s.vanId,hp,s); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,hp); } if(s.vanReturnId && s.vanReturnId!==s.vanId && !_ovnOut) _addTo(aggRet,s.vanReturnId,hp,s); }); }
+    /* §vjSplitSelf (2026-10-14) · owner: หน้านี้แดง "ยังไม่จัดรถ" แต่ By trip บอกจัดครบ · BK-26100583 (15 ต.ค.):
+       8 คนขึ้นรถ veh35 · ไกด์ 1 คนแยกจุดรับ "มาเองที่ท่า" (split.pickZone NoTransfer) · ของเดิมตัดสินจุดรับย่อย
+       ด้วยโซนของทั้งใบ (KL) จึงนับไกด์คนนั้นเป็นยังไม่จัดรถ · ใช้กติกาเดียวกับ By trip (bkV2SplitIsSelf) */
+    if(Array.isArray(O.vanSplits)&&O.vanSplits.length){ O.vanSplits.forEach(s=>{ const hp=+s.pax||0; if(!_selfPick){ if(s.vanId) addVan(s.vanId,hp,s); else { const _sSelf=(typeof bkV2SplitIsSelf==='function')&&bkV2SplitIsSelf(s); const _sz=String(s.pickZone||z||''); if(!_sSelf && _sz&&_sz!=='NoTransfer'&&_sz!=='NT') _addUn(t.routeId,hp); } } if(s.vanReturnId && s.vanReturnId!==s.vanId && !_ovnOut) _addTo(aggRet,s.vanReturnId,hp,s); }); }
     else { const vid=O.vanId; if(!_selfPick){ if(vid) addVan(vid,full,O); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,full); } const rv=O.vanReturnId; if(rv && rv!==vid && !_ovnOut) _addTo(aggRet,rv,full,O); }
     if(_selfPick){ let _hasVan=!!O.vanId; if(Array.isArray(O.vanSplits)) _hasVan=_hasVan||O.vanSplits.some(s=>s&&s.vanId); const _tz=z&&z!=='NoTransfer'&&z!=='NT'; if(_hasVan||_tz) selfWarn.push({vc:(b.voucherRef||b.code||b.id||'-'), name:(b.leadPax||'-'), hotel:_pk||'', hasVan:_hasVan}); }
     // RETURN leg not yet arranged (separate drop-off · not self-return · no return van assigned)
