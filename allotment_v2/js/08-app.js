@@ -18095,8 +18095,9 @@ function goComboCss(){ return '<style>'
   +'}'
   +'</style>'; }
 // bid = รหัสเรือ หรือ 'all'
-function goPrint(bid){
-  var date=_pckDate, e=ckEsc;
+/* goPrint is three steps so ops/62 can fetch the order numbers between the question and the sheet:
+   goPrintIds (which boats) -> goPrintAsk (the "no guide yet" question) -> goPrintOpen (numbers + sheets + window) */
+function goPrintIds(bid,date){
   var ids=[];
   if(bid && bid!=='all') ids=[bid];
   else {
@@ -18108,9 +18109,22 @@ function goPrint(bid){
       var k=O.boatId||t.charterBoatId||''; if(k && !seen[k]){ seen[k]=1; ids.push(k); }
     });
   }
-  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  return ids;
+}
+function goPrintAsk(date,ids){
   var miss=ids.filter(function(k){ return !goAsn(date,k).g.length; });
-  if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
+  return !(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม'));
+}
+function goPrint(bid){
+  var date=_pckDate;
+  var ids=goPrintIds(bid,date);
+  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  if(!goPrintAsk(date,ids)) return;
+  goPrintOpen(bid,date,ids);
+}
+// w0 = หน้าต่างที่เปิดไว้ก่อนแล้ว (ops/62 เปิดก่อนรอเลขที่จากเซิร์ฟเวอร์ เพื่อไม่ให้ pop-up ถูกบล็อก)
+function goPrintOpen(bid,date,ids,w0){
+  var e=ckEsc;
   /* §goCombo · เจ้าท่ารับใบสั่งงานกับทะเบียนรายชื่อพร้อมกันอยู่แล้ว
      แยกพิมพ์คนละหน้าต่างทำให้ต้องมาจับคู่ว่าใบไหนของลำไหนเอง · ออกต่อกันเป็นชุดเดียว
      ลำละ 2 หน้า เรียงใบสั่งงานก่อน แล้วทะเบียนของลำเดียวกันตามทันที */
@@ -18134,7 +18148,7 @@ function goPrint(bid){
         +'if(x){x.className="cb"+(o?" on":"");x.innerHTML=o?"&#10003;":"&nbsp;";}'
         +'if(y){y.className="cb"+(o?"":" on");y.innerHTML=o?"&nbsp;":"&#10003;";}});}<' + '/script>'
     +'</body></html>';
-  var w=window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
+  var w=w0||window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
 // ── หน้าต่างจ่ายไกด์ / ทะเบียน · acctModal อยู่ระดับ body สไตล์เลยต้องพกไปเอง ──
