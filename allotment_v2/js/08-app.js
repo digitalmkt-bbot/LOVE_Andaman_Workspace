@@ -2827,7 +2827,7 @@ window._laRerender=function(){
   if(SB_BOOKINGS.length !== before){ const o=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(LS_KEY, JSON.stringify(o)); }
 }catch(e){ console.warn('dummy booking cleanup failed', e); } })();
 // auto-calc total for legacy v1 seed bookings only (v2 has explicit total)
-SB_BOOKINGS.forEach(bk=>{ if(bk.schemaVer!==2) bk.total = sbCalcBookingTotal(bk); });
+SB_BOOKINGS.forEach(bk=>{ if(bk.schemaVer!==2 && !bk._fromOpsBackend) bk.total = sbCalcBookingTotal(bk); }); /* §srvTotal · a booking from operation-backend keeps the server total (no programId: the mock tables would zero it) */
 
 // ════════ SEAT LOCKS (Step 3a · hold seats on a trip · draw before general pool) ════════
 // Pool-level hold on route+date · holderType: 'agent' | 'office' | 'global' · stored in LS d.sb_seat_locks
