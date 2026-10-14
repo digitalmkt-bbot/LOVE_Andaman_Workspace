@@ -53488,7 +53488,11 @@ function bkV2RenderTab2(){
         const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
                  (จัดรถกลับแล้ว · กลับคันเดิม · ลูกค้ากลับเอง) ย้ายไปเป็นป้ายลอยใต้ชื่อโรงแรมในช่อง Pickup (_rtFt ด้านล่าง)
                  ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */
-              if(_ri.selfRet||_ri.arranged||_ri.sameVan){ return loc; } return loc+`<br><span class="t2-rb" style="background:#FBE3E1;color:#C0392B;font-weight:700;white-space:nowrap" title="ส่งกลับคนละที่กับตอนรับ · ยังไม่จัดรถกลับ">⚠ ยังไม่จัดรถกลับ</span> <span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',true,'${date}')" style="background:${vanMode?'#EAF1FA':'#EFE7D6'};color:${vanMode?'#2C5F94':'#8A6A1A'};white-space:nowrap;cursor:pointer;font-weight:700" title="${vanMode?'รถขาไปพากลับเอง ไปส่งจุดใหม่ (ไม่ต้องจัดรถคันอื่น)':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม${vanMode?'':' (เปิด Van)'}</span>`; })() : '';
+              /* §rtFt2 · owner: "มันต้องอยู่ที่ Dropoff ทำให้สวยเหมือนอันนี้ (ป้ายล็อก)" · ป้ายลอยใต้ชื่อจุดส่งในช่องนี้เอง
+                 หน้าตาเป็นเม็ดทึบตัวขาวแบบป้าย 🔒 ล็อก ของ Compact */
+              if(_ri.selfRet) return loc+`<span class="t2-rtft" style="background:#6B7280" title="จุดส่งกลับเป็นท่าเรือ self-arrive · ลูกค้าเดินทางกลับเอง ไม่ต้องจัดรถ">&#8617; ลูกค้ากลับเอง</span>`;
+              if(_ri.arranged){ const vn=_ri.retId?((vehGet(_ri.retId)||{}).name||_ri.retId):''; return loc+`<span class="t2-rtft" style="background:#0F6E56" title="รถกลับ: ${esc(vn)} · ส่งที่ ${esc(_ri.drop||'')}">&#8617; กลับ ${esc(vn)}</span>`; }
+              if(_ri.sameVan) return loc+`<span class="t2-rtft" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',false,'${date}')" style="background:#2C5F94;cursor:pointer" title="${vanMode?'รถขาไปพากลับ · ส่งจุดใหม่ · คลิกเพื่อยกเลิก':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">&#8617; กลับคันเดิม &#10003;</span>`; return loc+`<br><span class="t2-rb" style="background:#FBE3E1;color:#C0392B;font-weight:700;white-space:nowrap" title="ส่งกลับคนละที่กับตอนรับ · ยังไม่จัดรถกลับ">⚠ ยังไม่จัดรถกลับ</span> <span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',true,'${date}')" style="background:${vanMode?'#EAF1FA':'#EFE7D6'};color:${vanMode?'#2C5F94':'#8A6A1A'};white-space:nowrap;cursor:pointer;font-weight:700" title="${vanMode?'รถขาไปพากลับเอง ไปส่งจุดใหม่ (ไม่ต้องจัดรถคันอื่น)':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม${vanMode?'':' (เปิด Van)'}</span>`; })() : '';
         // §OVN return day — there is no pickup, so the hotel only appears if we print it HERE. Without this
         // the row showed the OVN chip and nothing else: the driver had a passenger and nowhere to take her.
         const _ovnDropTxt = (_ovTrip && _ovTrip.ovnLeg)
@@ -53596,12 +53600,7 @@ function bkV2RenderTab2(){
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
-              const _rtFt=(function(){   /* §rtFt · ป้ายลอยรถกลับ */
-                if(!_ri.sep) return '';
-                if(_ri.selfRet) return `<span class="t2-rtft" style="background:#EDEFF2;color:#5F6B7A" title="จุดส่งกลับเป็นท่าเรือ self-arrive · ลูกค้าเดินทางกลับเอง ไม่ต้องจัดรถ">&#8617; ลูกค้ากลับเอง</span>`;
-                if(_ri.arranged){ const vn=_ri.retId?((vehGet(_ri.retId)||{}).name||_ri.retId):''; return `<span class="t2-rtft" style="background:#E1F5EE;color:#0F6E56" title="รถกลับ: ${esc(vn)} · ส่งที่ ${esc(_ri.drop||'')}">&#8617; กลับ ${esc(vn)}</span>`; }
-                if(_ri.sameVan) return `<span class="t2-rtft" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',false,'${date}')" style="background:#EAF1FA;color:#2C5F94;cursor:pointer" title="${vanMode?'รถขาไปพากลับ · ส่งจุดใหม่ · คลิกเพื่อยกเลิก':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">&#8617; กลับคันเดิม &#10003;</span>`;
-                return ''; })();
+              const _rtFt='';   /* §rtFt2 · ป้ายย้ายไปช่อง Send back */
               return ((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room" title="ห้อง ${esc(bk.roomNumber)}">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(function(){
@@ -54970,9 +54969,10 @@ function bkV2RenderTab2(){
     /* §btCols · จุดรับตัดเป็น 2 บรรทัดได้อยู่แล้ว · 270 → 196 คืนที่ให้ตาราง 74px */
     .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:196px;max-width:196px}
     /* §rtFt · ป้ายรถกลับลอยใต้ชื่อโรงแรม · ไม่ดันแถว · ยาวเกินตัด … ชี้กางเต็ม */
-    .t2-mtbl td.t2-pk{position:relative;overflow:visible}
-    .t2-mtbl td.t2-pk .t2-rtft{position:absolute;left:9px;top:calc(100% - 9px);z-index:3;font-size:10px;line-height:14px;font-weight:700;border-radius:5px;padding:0 5px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 4px rgba(2,10,30,.12);border:1px solid rgba(0,0,0,.06)}
-    .t2-mtbl td.t2-pk .t2-rtft:hover{max-width:none;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.18)}
+    /* §rtFt2 · เม็ดป้ายรถกลับ ลอยใต้ชื่อจุดส่งในช่อง Send back · ทึบ ตัวขาว เงาเบา เหมือนป้ายล็อก */
+    .t2-mtbl td.t2-sbk{position:relative;overflow:visible}
+    .t2-mtbl td.t2-sbk .t2-rtft{position:absolute;left:9px;top:calc(100% - 10px);z-index:4;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(15,27,61,.22)}
+    .t2-mtbl td.t2-sbk .t2-rtft:hover{max-width:none;z-index:9;box-shadow:0 4px 14px rgba(2,10,30,.25)}
     /* §btGap · จุดรับ / โซน / ห้อง ไม่ต้องมีพื้นชิป · มีเส้นแบ่งคอลัมน์แล้ว
        ตาแยกค่าออกจากช่องข้าง ๆ ได้อยู่ · ชิปซ้อนอีกชั้นทำให้ตารางลาย */
     .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.3;vertical-align:middle;font-weight:700;font-size:12.5px;color:#26303F}
