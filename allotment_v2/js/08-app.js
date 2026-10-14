@@ -75422,7 +75422,7 @@ function _ppSpan(a,b){ var x=new Date(String(a)+'T12:00:00'), y=new Date(String(
    อยากดูยาวกว่านั้นกดปุ่มช่วง (7 วัน / 14 วัน / เดือนนี้) หรือเลือกวันที่เอาเองได้ */
 var _ppFrom=_ppYMD(new Date()), _ppTo=_ppFrom;
 var _ppRoute='', _ppPier='', _ppOnlySp=false, _ppOpen={};
-var _ppMv='';   /* §ppMv · ร้านอาหารที่เลือกกรอง · '' = ทุกร้าน · '-' = ลำที่ไม่มีร้าน */
+var _ppMv=false;   /* §ppByMv · true = จัดกลุ่มตารางตามร้านอาหาร (เห็นทุกร้าน) แทนตามโปรแกรม */
 
 /* กลับมาที่เดิมหลังวาดใหม่ · แถวมันยาว ถ้าเด้งขึ้นหัวทุกครั้งที่กดกางจะหาที่เดิมไม่เจอ
    ตอนนี้กล่องชีตเลื่อนในตัวเอง จึงต้องจำ scrollTop ของกล่องด้วย ไม่ใช่แค่ของหน้า */
@@ -75457,7 +75457,7 @@ function ppRangeIs(kind){
   return false;
 }
 function ppPickRoute(id){ _ppRoute=(id===_ppRoute)?'':(id||''); ppAfter(); }
-function ppPickMv(id){ _ppMv=(id===_ppMv)?'':(id||''); ppAfter(); }   /* §ppMv */
+function ppByMv(){ _ppMv=!_ppMv; ppAfter(); }   /* §ppByMv */
 function ppPickPier(p){ _ppPier=(p===_ppPier)?'':(p||''); ppAfter(); }
 function ppOnlySp(){ _ppOnlySp=!_ppOnlySp; ppAfter(); }
 function ppToggle(k){ _ppOpen[k]=!_ppOpen[k]; ppAfter(); }
@@ -75895,7 +75895,7 @@ function ppProgRows(g, pk){
   var bar=ppBarColor(col), ink=ppInkOn(bar);
   var meta=[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
       ((rt&&rt.islands)?e(rt.islands):''),
-      (g.ck.length+' เที่ยวเรือ')].filter(Boolean).join(' · ');
+      (g.ck.length+((rt&&rt.mv)?' ลำ':' เที่ยวเรือ'))].filter(Boolean).join(' · ');   /* §ppByMv */
   var out='<tr class="g-prog"><td colspan="'+PP_COLS+'" style="background:'+e(bar)+';color:'+ink+'">'
     +'<div class="lb">'
       +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
@@ -75908,7 +75908,7 @@ function ppProgRows(g, pk){
     var tags='';
     if(A.chtr) tags+='<span class="pp-tag" style="background:#F5F0FF;border-color:#DDD0F5;color:#5B289A">เหมาลำ</span>';
     if(A.ovn)  tags+='<span class="pp-tag" style="background:#FBF9FF;border-color:#DDD0F5;color:#4A2E86">ค้างคืน</span>';
-    if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(k, C.date))
+    if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(C.rid||k, C.date))   /* §ppByMv */
       tags+='<span class="pp-tag" style="background:#FBE9E9;border-color:#F0C9C9;color:#A32D2D">ปิดจากอากาศ</span>';
     var more=A.n
       ? ('<button class="pp-more'+(open?' on':'')+(A.sp.length?' hot':'')+'" '
@@ -75919,7 +75919,9 @@ function ppProgRows(g, pk){
       +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
-        +'<b>'+e(ppBoatName(C.boatId))+'</b>'+tags+'</div></td>'
+        +'<b>'+e(ppBoatName(C.boatId))+'</b>'
+        +((rt&&rt.mv&&C.rt)?('<span class="pp-tag" style="background:#F8FAFC;border-color:'+e(C.rt.color||'#CBD5E1')+';color:#334155" title="โปรแกรมของลำนี้"><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+e(C.rt.color||'#94A3B8')+';margin-right:4px;vertical-align:1px"></i>'+e(C.rt.name||C.rid)+'</span>'):'')   /* §ppByMv */
+        +tags+'</div></td>'
       + ppNumCells(A, '', ppCapTag(C.boatId, C.date, A.tot))
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
@@ -75951,12 +75953,10 @@ function renderPrPo(){
   if(_ppRoute && !(_ppRoute in rN)) _ppRoute='';
 
   var shown=_ppRoute?inPier.filter(function(r){ return (r.routeId||'')===_ppRoute; }):inPier;
-  /* §ppMv · ชิปร้านอาหาร นับจากชุดหลังกรองท่า+โปรแกรม · หัว = คนที่ต้องเตรียมอาหาร */
-  var mvN={}, mvNm={}, mvOrd=[];
-  shown.forEach(function(r){ var k=r.mvId||'-'; if(!(k in mvN)){ mvN[k]=0; mvNm[k]=r.mvName||''; mvOrd.push(k); } mvN[k]+=r.eat; });
-  mvOrd.sort(function(a,b){ if(a==='-') return 1; if(b==='-') return -1; return String(mvNm[a]).localeCompare(String(mvNm[b]),'th'); });
-  if(_ppMv && !(_ppMv in mvN)) _ppMv='';
-  if(_ppMv) shown=shown.filter(function(r){ return (r.mvId||'-')===_ppMv; });
+  /* §ppByMv · owner: "กด filter ร้านอาหาร แล้วตารางแยกให้เลยว่าร้านนี้มีเรืออะไรบ้าง แต่เห็นครบทุกร้าน"
+     ไม่กรองออก · สลับการจัดกลุ่มเป็น ท่า → ร้านอาหาร → (วัน+ลำ) · นับร้านไว้โชว์บนปุ่ม */
+  var mvSeen={}; shown.forEach(function(r){ mvSeen[r.mvId||'-']=1; });
+  var nMv=Object.keys(mvSeen).filter(function(k){ return k!=='-'; }).length;
   var nSpecialAll=shown.filter(function(r){ return r.sp; }).length;
   if(_ppOnlySp) shown=shown.filter(function(r){ return r.sp; });
 
@@ -75967,11 +75967,13 @@ function renderPrPo(){
     var pk=((r.rt&&r.rt.pier)||'');
     if(!P[pk]){ P[pk]={pier:pk, A:ppBlank(), G:{}, gOrd:[]}; pOrd.push(pk); }
     var PB=P[pk]; ppAdd(PB.A,r); ppAdd(GT,r);
-    var k=r.routeId||'';
-    if(!PB.G[k]){ PB.G[k]={rid:k, rt:r.rt, A:ppBlank(), cells:{}, ck:[]}; PB.gOrd.push(k); }
+    /* §ppByMv · โหมดแยกร้าน: คีย์กลุ่ม = ร้าน · แถบกลุ่มใช้ route จำลอง (ชื่อร้าน สีกลาง) ทุก skin จึงวาดได้เหมือนเดิม
+       แถวเรือจำได้ว่ามาจากโปรแกรมไหน (cells.rid) ไว้โชว์ข้างชื่อเรือ */
+    var k=_ppMv?('mv:'+(r.mvId||'-')):(r.routeId||'');
+    if(!PB.G[k]){ PB.G[k]={rid:k, rt:(_ppMv?{id:k, name:(r.mvName||'ไม่มีร้าน / ยังไม่ตั้งร้าน'), color:(r.mvId&&r.mvId!=='-')?'#0F6E56':'#94A3B8', times:[], islands:'', mv:true}:r.rt), A:ppBlank(), cells:{}, ck:[]}; PB.gOrd.push(k); }
     var g=PB.G[k]; ppAdd(g.A,r);
     var ck=r.date+'|'+(r.boatId||'');
-    if(!g.cells[ck]){ g.cells[ck]={date:r.date, boatId:r.boatId||'', A:ppBlank()}; g.ck.push(ck); }
+    if(!g.cells[ck]){ g.cells[ck]={date:r.date, boatId:r.boatId||'', rid:r.routeId||'', rt:r.rt, A:ppBlank()}; g.ck.push(ck); }
     ppAdd(g.cells[ck].A, r);
     trips[pk+'|'+k+'|'+ck]=1; progs[pk+'|'+k]=1;
   });
@@ -75982,7 +75984,9 @@ function renderPrPo(){
     if(!P[p.k]){ P[p.k]={pier:p.k, A:ppBlank(), G:{}, gOrd:[], empty:true}; pOrd.push(p.k); }
   });
   pOrd.sort(function(a,b){ return ppPierRank(a)-ppPierRank(b); });
-  pOrd.forEach(function(pk){ P[pk].gOrd.sort(function(a,b){ return rank(a)-rank(b); }); });
+  pOrd.forEach(function(pk){ P[pk].gOrd.sort(function(a,b){
+    if(_ppMv){ var G=P[pk].G; if(a==='mv:-') return 1; if(b==='mv:-') return -1; return String(G[a].rt.name).localeCompare(String(G[b].rt.name),'th'); }   /* §ppByMv */
+    return rank(a)-rank(b); }); });
   var nTrips=Object.keys(trips).length, nProgs=Object.keys(progs).length;
   var days=_ppSpan(_ppFrom,_ppTo);
 
@@ -76044,10 +76048,8 @@ function renderPrPo(){
         return '<button class="pp-f'+(k===_ppRoute?' on':'')+'" onclick="ppPickRoute(\''+e(k)+'\')">'
           +'<i style="background:'+e((rt&&rt.color)||'#94A3B8')+'"></i>'
           +e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+' <b>'+rN[k]+'</b></button>'; }).join('')
-    + (mvOrd.length>1 || (mvOrd.length===1 && mvOrd[0]!=='-') ? ('<span style="width:9px"></span><span class="pp-flab">ร้านอาหาร</span>'
-      + mvOrd.map(function(k){
-          return '<button class="pp-f'+(k===_ppMv?' on':'')+'" onclick="ppPickMv(\''+e(k)+'\')" title="'+(k==='-'?'ลำที่ยังไม่ได้ตั้งร้าน / ไม่มีอาหาร':'กรองเฉพาะลำที่กินร้านนี้')+'">'
-            +'&#127860; '+e(k==='-'?'ไม่มีร้าน':mvNm[k])+' <b>'+mvN[k]+'</b></button>'; }).join('')) : '')   /* §ppMv */
+    + '<span style="width:9px"></span><button class="pp-f'+(_ppMv?' on':'')+'" onclick="ppByMv()" title="จัดกลุ่มตารางตามร้านอาหาร · แต่ละร้านมีเรือลำไหนบ้าง · เห็นทุกร้าน">'
+      +'&#127860; แยกตามร้านอาหาร <b>'+nMv+'</b></button>'   /* §ppByMv */
     + '<span style="width:9px"></span>'
     + '<button class="pp-f'+(_ppOnlySp?' on':'')+'" onclick="ppOnlySp()">'
       +'&#127869; เฉพาะที่มีอาหารพิเศษ <b>'+nSpecialAll+'</b></button>'
@@ -76114,7 +76116,7 @@ function ppBodySheet(P,pOrd,GT){
         +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
         +'<span class="pn">'+e(M.n)+'</span>'
         +(M.t?('<span class="pt">'+e(M.t)+'</span>'):'')
-        +(PB.empty?'':('<span class="pt">· '+PB.gOrd.length+' โปรแกรม</span>'))
+        +(PB.empty?'':('<span class="pt">· '+PB.gOrd.length+(_ppMv?' ร้าน':' โปรแกรม')+'</span>'))   /* §ppByMv */
       +'</div>';
     if(PB.empty){
       /* ท่าว่างไม่ต้องมีหัวคอลัมน์ · ไม่มีตัวเลขให้อ่านใต้หัวอยู่แล้ว */
