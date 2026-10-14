@@ -18929,6 +18929,7 @@ function ckAddonList(bk, routeId){
   (bk.addOns||[]).forEach(function(a){
     if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;   // §b2cFee
     var ty=String(a.type||''), lbl=String(a.label||a.type||'');
+    if(ty==='longtail-join' && a.jAd!=null && a.jChd!=null && ((+a.jAd||0)+(+a.jChd||0))===0) return;   /* §ltStale */
     if(/longtail|หางยาว/i.test(ty) || /longtail|หางยาว/i.test(lbl)){
       ltLabel=(lbl||'Longtail').replace(/\s*\(per boat[^)]*\)/i,'');
       if((a.note||'').trim()) ltNote=(a.note||'').trim();
@@ -51478,7 +51479,10 @@ function bkV2AddOnFlags(bk, routeId){
     if(_k==='charter'){ charter=true; charterQty+=(+a.qty||1); }
     else if(_k==='charter-pax') charter=true;          /* §ltCode · คนเพิ่มในลำเดิม ไม่ใช่ลำใหม่ */
     /* §ltJoinQty · จำนวนคนที่ลงจอยจริง · null = ใบเก่าที่ไม่เคยระบุ → คิดทุกหัวเหมือนเดิม */
-    else if(_k==='join'){ join=true;
+    else if(_k==='join'){
+      /* §ltStale · ใบเก่าที่ค้าง "0A + 0C" = ไม่มีใครลง · ไม่นับเป็นหางยาว */
+      if(a.jAd!=null && a.jChd!=null && ((+a.jAd||0)+(+a.jChd||0))===0) return;
+      join=true;
       if(a.jAd!=null || a.jChd!=null) joinPax=Math.max(0,(+a.jAd||0)+(+a.jChd||0)); }
     else if(ty.indexOf('transfer-')===0) transfer=true;
     else if(/longtail|หางยาว/i.test(ty)||/longtail|หางยาว/i.test(lbl)){
@@ -56728,6 +56732,7 @@ function bkV2ResetAgentScopedData(){
     t.charterBoatId = null;
     t.charterDisplacementAck = false;
   });
+  try{ bkV2PruneLtAddOns(); }catch(_){}   /* §ltStale · ไม่มีเส้นทางแล้ว หางยาวก็ไม่มี */
   // Booking-level pickup
   d.pickupAreaId = null;
   d.pickupZoneFilter = 'PK';
@@ -56856,12 +56861,46 @@ function bkV2CalRender(){
   `;
 }
 
+/* §ltStale (2026-10-14) · ใบ BK-26100458-XPEN ติ๊ก Longtail Join ไว้ตอนเป็นเส้นทางที่มีหางยาว
+   แล้วเปลี่ยนเส้นทางเป็น Similan · ฟอร์มเปลี่ยนแค่ routeId ไม่ได้ล้าง Add-on ที่ติ๊กไว้
+   ตัวเลือกหายจากหน้าจอ คนแก้เลยเอาออกไม่ได้ · บันทึกออกมาเป็น "Longtail Join (0A + 0C)" ฿0
+   หน้าท่า / By-trip / ใบงานไกด์ จึงเห็นว่าใบนี้มีหางยาว ทั้งที่ไม่มีใครลง
+   ตัดทิ้งทันทีที่เส้นทางในใบไม่มีเส้นไหนรองรับหางยาวแล้ว · และเช็กซ้ำตอนบันทึก */
+function bkV2LtRoutesApply(){
+  var d = _bkV2.newBooking; if(!d) return false;
+  var rt = (typeof bkV2AddOnRT === 'function') ? bkV2AddOnRT() : null;
+  var ltn = (rt && typeof _rtNormalizeLongtail === 'function') ? _rtNormalizeLongtail(rt.addOns && rt.addOns.longtail) : null;
+  if(!ltn) return false;
+  return (d.trips || []).some(function(t){
+    return t.routeId && (!ltn.applies.length || ltn.applies.indexOf(t.routeId) >= 0);
+  });
+}
+function bkV2PruneLtAddOns(){
+  var d = _bkV2.newBooking; if(!d || !Array.isArray(d.addOns)) return 0;
+  var ok = bkV2LtRoutesApply(), n = 0;
+  d.addOns = d.addOns.filter(function(a){
+    var k = (typeof bkV2LtAddOnKind === 'function') ? bkV2LtAddOnKind(a && a.type) : '';
+    if(!k) return true;
+    if(!ok){ n++; return false; }
+    return true;
+  });
+  /* จำนวนคนที่ลงจอยต้องไม่เกินหัวของเส้นทางที่รองรับ · เส้นทางเปลี่ยนแล้วหัวอาจลดลง */
+  d.addOns.forEach(function(a){
+    if(a && a.type === 'longtail-join' && (a.jAd != null || a.jChd != null)){
+      var m = bkV2LtJoinMax();
+      if(a.jAd != null) a.jAd = Math.min(+a.jAd || 0, m.A);
+      if(a.jChd != null) a.jChd = Math.min(+a.jChd || 0, m.C);
+    }
+  });
+  if(n) console.log('[ltStale] dropped ' + n + ' longtail add-on(s): no trip route supports longtail');
+  return n;
+}
 function bkV2PickRouteByText(idx, txt){
   if(!_bkV2.newBooking) return;
   const t = _bkV2.newBooking.trips[idx];
   if(!t) return;
   const trimmed = String(txt||'').trim();
-  if(!trimmed){ t.routeId = ''; bkV2Render(); return; }
+  if(!trimmed){ t.routeId = ''; try{ bkV2PruneLtAddOns(); }catch(_){} bkV2Render(); return; }
   const norm = trimmed.toLowerCase();
   // Resolve allowed routes via the same logic as the dropdown (contract programs first · rate type fallback)
   const covered = bkV2RouteDDOpts().map(o => (typeof ROUTES !== 'undefined' ? ROUTES.find(r => r.id === o.id) : null)).filter(Boolean);
@@ -56873,6 +56912,7 @@ function bkV2PickRouteByText(idx, txt){
       const nd = bkV2NextOpenDate(r.id, t.date);
       if(nd && nd !== t.date){ t.date = nd; t.pickupTimeEdited = false; }
     }
+    try{ bkV2PruneLtAddOns(); }catch(_){}   /* §ltStale */
     bkV2Render();
   }
 }
@@ -59260,6 +59300,12 @@ function bkV2CommitBooking(status){
       /* §ltJoinQty · เก็บจำนวนคนที่ลงจอยจริง · ฝั่งปฏิบัติการอ่านตัวนี้ ไม่ใช่เดาจากหัวทั้งลำ */
       if(a.type==='longtail-join'){ _o.jAd = (info.joinAd!=null)?info.joinAd:null; _o.jChd = (info.joinChd!=null)?info.joinChd:null; }
       return _o;
+    }).filter(function(o){
+      /* §ltStale · หางยาวที่ไม่มีเส้นทางไหนในใบรองรับ หรือ join ที่ 0 คน ไม่บันทึกลงใบ */
+      var k = bkV2LtAddOnKind(o.type); if(!k) return true;
+      if(!bkV2LtRoutesApply()){ console.log('[ltStale] save: dropped ' + o.type + ' (no route supports longtail)'); return false; }
+      if(k === 'join' && o.jAd != null && o.jChd != null && ((+o.jAd || 0) + (+o.jChd || 0)) === 0){ console.log('[ltStale] save: dropped longtail-join with 0 pax'); return false; }
+      return true;
     }),
     adjustments: Array.isArray(d.adjustments)
       ? d.adjustments.filter(a => (Number(a.value)||0) > 0)
