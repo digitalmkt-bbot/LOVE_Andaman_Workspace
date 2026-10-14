@@ -95,10 +95,9 @@ test('b2c panel rows come from issues and held orders; badge from counts and sig
     counts: { held: 1, warn: 1, info: 0 }, signature: 'abc123' };
   const rt = runtime({ answers: { 'GET /v1/b2c/issues': [200, j] } });
   const got = await new Promise((ok, no) => rt.window.laOpsB2CIssues(ok, no));
-  assert.equal(got.issues.length, 2);
-  assert.equal(got.issues[0].ref, 'LK-1');
-  assert.equal(got.issues[1].id, 'b9');
-  assert.equal(got.issues[1].msg, 'bad nat');
+  assert.equal(got.issues.length, 1);   // held orders have their own section (ops-b2c-held.test.mjs)
+  assert.equal(got.issues[0].id, 'b9');
+  assert.equal(got.issues[0].msg, 'bad nat');
   rt.window.laOps.b2cHealth.poll();
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(JSON.parse(JSON.stringify(rt.badges)), [{ issueCount: 2, issueSig: 'abc123' }]);
