@@ -572,19 +572,24 @@ function renderStaff(){
   const dmy=d=>{ if(!d) return ''; const dt=new Date(String(d).slice(0,10)+'T00:00'); return isNaN(dt)?String(d):dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); };
   const pct = totQuota>0 ? Math.round(totUsed/totQuota*100) : 0;
   const monthsLeft = Math.max(0, 12 - (yr === new Date().getFullYear() ? new Date().getMonth()+1 : (yr < new Date().getFullYear() ? 12 : 0)));
-  const rowHtml = r => {
+  /* §swA2 (2026-10-14) · owner "ข้อมูลทำเป็นแบบตาราง ชื่อแผนกอยู่หัว แล้วชื่อพนักงานถัดไปอีกช่องนึง"
+     แผนกเป็นช่องแรกของตาราง (รวมช่องตามจำนวนคนในแผนก) · ชื่อพนักงานเป็นช่องถัดไป · ไม่มีแถวหัวกลุ่มคั่น
+     ช่องแผนกไม่แก้ตรง ๆ (ช่องเดียวแทนหลายคน) · ย้ายแผนกรายคนผ่านช่องเล็กที่โผล่เมื่อชี้แถว */
+  const rowHtml = (r, i, g) => {
     const s=r.s, qv=r.q, u=r.u, rem=qv-u, over=u>qv;
+    const dcell = i===0 ? (function(){
+      const gq = g.rows.reduce((a,x)=>a+x.q,0), gu = g.rows.reduce((a,x)=>a+x.u,0), gc = deptCol[g.k] || _SW_PAL[6];
+      return `<td class="sw-dcell" rowspan="${g.rows.length}"><div class="sw-dname"><span class="dot" style="background:${gc[1]}"></span>${esc(g.name)}</div><div class="sw-dn">${g.rows.length} คน</div><div class="sw-dsum">โควต้า <b>${gq}</b> · ใช้ <b class="u">${gu}</b> · เหลือ <b class="${gq-gu<0?'neg':'rem'}">${gq-gu}</b></div></td>`; })() : '';
     const col = deptCol[r.k] || _SW_PAL[6];
     const dup = s.code && codeCount[String(s.code).trim().toUpperCase()] > 1;
     const lu = lastUse[s.id];
     const sub = lu ? `ใช้ล่าสุด ${esc(dmy(lu.date))}${lu.route?' · '+esc(lu.route):''}` : (qv===0 ? 'ไม่มีโควต้าปีนี้' : (u===0 ? 'ยังไม่ใช้ปีนี้' : ''));
     const uPct = qv>0 ? Math.min(100, u/qv*100) : (u>0?100:0);
     const bar = over ? `<span class="u" style="width:${qv>0?Math.round(qv/u*100):0}%"></span><span class="o" style="flex:1"></span>` : `<span class="u" style="width:${uPct}%"></span>`;
-    return `<tr class="sw-row${s.active?'':' off'}">
-      <td><span class="sw-av" style="background:${col[0]};color:${col[1]}">${esc(staffInitials(s.name||s.code))}</span></td>
+    return `<tr class="sw-row${s.active?'':' off'}${i===0?' first':''}">
+      ${dcell}
+      <td><div class="sw-namewrap"><span class="sw-av" style="background:${col[0]};color:${col[1]}">${esc(staffInitials(s.name||s.code))}</span><div class="sw-namecol"><input class="sw-ghost name" value="${esc(s.name)}" placeholder="ชื่อพนักงาน" oninput="staffSetField('${s.id}','name',this.value)" onblur="renderStaff()"><div class="sw-sub">${sub}</div></div><div class="sw-deptwrap" title="ย้ายแผนก"><input class="sw-ghost dept" value="${esc(s.dept)}" placeholder="แผนก" list="sw-depts" oninput="staffSetField('${s.id}','dept',this.value)" onchange="renderStaff()"></div></div></td>
       <td><div class="sw-codewrap"><input class="sw-ghost mono" value="${esc(s.code)}" placeholder="EMP-000" oninput="staffSetField('${s.id}','code',this.value)" onchange="renderStaff()">${dup?'<span class="sw-warn" title="มีพนักงานใช้รหัสนี้มากกว่าหนึ่งคน">รหัสซ้ำ</span>':''}</div></td>
-      <td><input class="sw-ghost name" value="${esc(s.name)}" placeholder="ชื่อพนักงาน" oninput="staffSetField('${s.id}','name',this.value)" onblur="renderStaff()"><div class="sw-sub">${sub}</div></td>
-      <td><div class="sw-deptwrap"><span class="dot" style="background:${col[1]}"></span><input class="sw-ghost dept" value="${esc(s.dept)}" placeholder="แผนก" list="sw-depts" oninput="staffSetField('${s.id}','dept',this.value)" onchange="renderStaff()"></div></td>
       <td><div class="sw-bar"><span class="trk">${bar}</span><span class="t${over?' over':''}">${u}<i>/${qv}</i></span></div></td>
       <td class="num"><input type="number" min="0" value="${qv}" onchange="staffSetQuota('${s.id}',${yr},this.value)" class="sw-qin" aria-label="โควต้า"></td>
       <td class="num"><span class="sw-num u${u?'':' zero'}">${u}</span></td>
@@ -594,10 +599,7 @@ function renderStaff(){
   };
   /* กลุ่มตามแผนก · กรองแล้วยังอยู่ในกลุ่มเดิม · หัวกลุ่มสรุปเฉพาะแถวที่แสดง */
   const groups = deptKeys.map(k => ({ k, name: deptName[k], rows: rows.filter(r => r.k === k) })).filter(g => g.rows.length);
-  const body = groups.map(g => {
-    const gq = g.rows.reduce((a,r)=>a+r.q,0), gu = g.rows.reduce((a,r)=>a+r.u,0);
-    return `<tr class="sw-grp"><td></td><td colspan="4">${esc(g.name)} <span class="n">${g.rows.length} คน</span></td><td class="num sum">${gq}</td><td class="num sum">${gu}</td><td class="num sum${gq-gu<0?' neg':''}">${gq-gu}</td><td></td></tr>` + g.rows.map(rowHtml).join('');
-  }).join('');
+  const body = groups.map(g => g.rows.map((r,i) => rowHtml(r, i, g)).join('')).join('');
   host.innerHTML = `
     <div class="sw-page">
       <datalist id="sw-depts">${deptKeys.filter(k=>k!=='__none').map(k=>`<option value="${esc(deptName[k])}"></option>`).join('')}</datalist>
@@ -633,8 +635,8 @@ function renderStaff(){
       </div>
       <div class="sw-card">
         <table class="sw-tbl">
-          <thead><tr><th style="width:44px"></th><th style="width:150px">Code</th><th>ชื่อ</th><th style="width:190px">แผนก</th><th style="width:220px">โควต้า ${yr} · ใช้ไป</th><th class="num" style="width:84px">โควต้า</th><th class="num" style="width:60px">ใช้</th><th class="num" style="width:64px">เหลือ</th><th style="width:110px">Active</th></tr></thead>
-          <tbody>${body || `<tr><td colspan="9" class="sw-empty">${q||_staffDept!=='all'||_staffUse!=='all'?'ไม่มีพนักงานที่ตรงตัวกรอง':'ยังไม่มีพนักงาน · กด + เพิ่มพนักงาน'}</td></tr>`}</tbody>
+          <thead><tr><th style="width:170px">แผนก</th><th>ชื่อพนักงาน</th><th style="width:150px">Code</th><th style="width:220px">โควต้า ${yr} · ใช้ไป</th><th class="num" style="width:84px">โควต้า</th><th class="num" style="width:60px">ใช้</th><th class="num" style="width:64px">เหลือ</th><th style="width:110px">Active</th></tr></thead>
+          <tbody>${body || `<tr><td colspan="8" class="sw-empty">${q||_staffDept!=='all'||_staffUse!=='all'?'ไม่มีพนักงานที่ตรงตัวกรอง':'ยังไม่มีพนักงาน · กด + เพิ่มพนักงาน'}</td></tr>`}</tbody>
         </table>
       </div>
       <div class="sw-note">โควต้า = ที่นั่งฟรีต่อปีต่อคน · "ใช้ไป" คำนวณจากใบจองที่เป็น staff welfare · แถบแดง = ใช้เกินโควต้า (คิดเงินส่วนเกิน) · ชี้ที่ชื่อ/รหัส/แผนกแล้วพิมพ์แก้ได้เลย · เปลี่ยนปีเพื่อตั้ง/ดูโควต้าของปีนั้น</div>

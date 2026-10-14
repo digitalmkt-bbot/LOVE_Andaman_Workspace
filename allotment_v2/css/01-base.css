@@ -3680,3 +3680,21 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #staff-host .sw-del{height:26px;padding:0 9px;border-radius:7px;border:1px solid transparent;background:transparent;color:#A32D2D;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;opacity:0}
 #staff-host tr.sw-row:hover .sw-del{opacity:1;border-color:#FCEBEB;background:#fff}
 #staff-host .sw-note{font-size:11px;color:#9AA3B2;line-height:1.6}
+/* §swA2 · แผนกเป็นช่องแรกของตาราง (rowspan) · ชื่อพนักงานช่องถัดไป */
+#staff-host .sw-tbl td.sw-dcell{vertical-align:top;background:#FAFBFC;border-right:1px solid #E6E8EE;border-bottom:1px solid #E6E8EE;padding:10px 12px}
+#staff-host .sw-tbl tr.sw-row:hover td.sw-dcell{background:#FAFBFC}
+#staff-host .sw-tbl tr.sw-row.off td.sw-dcell{opacity:1}
+#staff-host .sw-tbl tr.sw-row.first td{border-top:1px solid #E6E8EE}
+#staff-host .sw-dname{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:#1E2433}
+#staff-host .sw-dname .dot{width:8px;height:8px;border-radius:50%;flex:none}
+#staff-host .sw-dn{font-family:'DM Mono',monospace;font-size:11px;color:#6B7280;margin-top:2px}
+#staff-host .sw-dsum{font-size:11px;color:#9AA3B2;margin-top:6px;line-height:1.5}
+#staff-host .sw-dsum b{font-family:'DM Mono',monospace;color:#1E2433}
+#staff-host .sw-dsum b.u{color:#854F0B}
+#staff-host .sw-dsum b.rem{color:#0F6E56}
+#staff-host .sw-dsum b.neg{color:#A32D2D}
+#staff-host .sw-namewrap{display:flex;align-items:center;gap:10px}
+#staff-host .sw-namecol{flex:1;min-width:0}
+#staff-host .sw-namewrap .sw-deptwrap{opacity:0;width:130px;flex:none}
+#staff-host tr.sw-row:hover .sw-namewrap .sw-deptwrap,#staff-host .sw-namewrap .sw-deptwrap:focus-within{opacity:1}
+#staff-host .sw-ghost.dept{width:130px;font-size:11px;color:#6B7280}
