@@ -7,7 +7,7 @@
 //   2 + เพิ่มเรือ → เมนูมีทุกลำของวัน · เลือกลำ → แถวขึ้นลำเดียว · กดแถว → ช่องกรอกตามประเภทขึ้น · ใส่ 3 → รายชื่อ 3 คน ประเภทตรง ไม่ซ้ำ มาจากลำนั้น
 //   3 ติ๊กออก 1 คน → คนใหม่ (ป้าย "ใหม่") ประเภทเดียวกันมาแทน · ยังครบ 3 · คนที่ติ๊กออกอยู่ท้ายขีดฆ่า · ติ๊กกลับได้ (ถ้าเต็มขึ้น alert ASCII)
 //   4 บันทึก → PIER_CFG.parkSets[date] มี 1 ชุด 3 คน ชื่อเริ่มต้น "<เรือ> ชุด 1" · poPersist ถูกเรียก · การ์ดขวาขึ้นชุด · "เหลือ" ลด 3 · ชุดใหม่สุ่มไม่ซ้ำคนที่เซฟแล้ว
-//   5 ใส่เกินที่เหลือ → ช่องแดง · บันทึกไม่ได้ (alert ASCII) · ชุดไม่เพิ่ม
+//   5 (§pkSets7) ใส่เกินที่เหลือบนลำ → ช่องเหลือง เลขจาง ๆ ติดลบ · รายชื่อดึงจากลำอื่นในเส้นทางเดียวกัน ตรงประเภท (ป้าย "จาก <ลำ>") · บันทึกได้ from=ลำจริง · ช่อง 0 ว่าง placeholder 0
 //   6 เปิดชุด → ร่างโหลดกลับ · ซื้อแล้ว → ล็อก ช่องกรอกหาย · ปลดล็อก → แก้ได้ · ลบ → หาย
 //   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
@@ -82,13 +82,24 @@ const leftNow = a.left, mx2 = (a.ins.find(i => i.cat === cat) || {}).max;
 await page.evaluate(({ H, c, v }) => { const i = document.querySelector(H + ' .pk3-in[data-cat="' + c + '"]'); i.value = String(v); i.dispatchEvent(new Event('change')); }, { H, c: cat, v: Math.min(3, avail - 3) }); await page.waitForTimeout(300); a = await st();
 const savedNames = S1.people.map(q => q.full);
 if (leftNow === big.names.length - 3 && mx2 === avail - 3 && a.rows.length === Math.min(3, avail - 3) && a.rows.every(r => !savedNames.includes(r.nm) || /ยังไม่มีรายชื่อ/.test(r.nm))) ok(`4b ชุดใหม่ลำเดิม · เหลือ ${leftNow} · ช่อง ${cat} เหลือ ${mx2} · สุ่มไม่ซ้ำคนที่เซฟแล้ว`); else fail('4b ' + JSON.stringify({ leftNow, want: big.names.length - 3, mx2, rows: a.rows, savedNames }));
-// 5 over
+// 5 (§pkSets7) ใส่เกินที่เหลือบนลำ → ช่องเหลือง (pull) · เลขจาง ๆ ข้าง ๆ = เหลือ − ใส่ (ติดลบ = ดึงจากลำอื่น) · รายชื่อดึงจากลำอื่นในเส้นทางเดียวกัน ตรงประเภท มีป้าย "จาก <ลำ>" · บันทึกได้ (from=ลำจริง)
 dlg.length = 0;
-await page.evaluate(({ H, c, v }) => { const i = document.querySelector(H + ' .pk3-in[data-cat="' + c + '"]'); i.value = String(v); i.dispatchEvent(new Event('change')); }, { H, c: cat, v: avail + 5 }); await page.waitForTimeout(300); a = await st();
-const over = (a.ins.find(i => i.cat === cat) || {}).over;
+const pool5 = await page.evaluate(({ c }) => { const PL = pkSetPool(pk3Flat(), _pkSetD), used = pkSetUsed(_poDate, _pkSetD.id); const f = l => l.filter(p => p.cat === c && !p.over && !used[pkSetKey(p)]).length; return { own: f(PL.own), oth: f(PL.oth), fam: PL.fam && PL.fam.n, othBoats: [...new Set(PL.oth.map(p => pkSetPool(pk3Flat(), _pkSetD).P[pkSetKey(p)].x.B.boat.name))] }; }, { c: cat });
+await page.evaluate(({ H, c, v }) => { const i = document.querySelector(H + ' .pk3-in[data-cat="' + c + '"]'); i.value = String(v); i.dispatchEvent(new Event('change')); }, { H, c: cat, v: pool5.own + 5 }); await page.waitForTimeout(300); a = await st();
+const r5 = await page.evaluate(({ H, c }) => { const h = document.querySelector(H), sel = h.querySelector('.pk3-mx tr.bt.sel'), i = sel.querySelector('.pk3-in[data-cat="' + c + '"]');
+  const sm = i.parentElement.querySelector('small.rm'); const zero = [...sel.querySelectorAll('.pk3-in')].filter(x => x !== i);
+  const rows = [...h.querySelectorAll('.pk3-sheet tbody tr')].filter(t => !t.classList.contains('pk3-skip') && !t.querySelector('.pk-e'));
+  const oth = rows.filter(t => t.querySelector('.othb')).map(t => ({ nm: t.querySelector('.nmc').textContent.trim(), b: t.querySelector('.othb').textContent.trim(), code: t.querySelector('.cd').textContent.trim() }));
+  const sumTd = sel.querySelector('td.sum.big'); return { pull: i.classList.contains('pull'), over: i.classList.contains('over'), rm: sm.textContent, neg: sm.classList.contains('neg'), zeroEmpty: zero.every(x => x.value === '' && x.placeholder === '0'), nRows: rows.length, oth, sum: sumTd.firstChild.textContent, sumRm: sumTd.querySelector('small.rm').textContent, st: (h.querySelector('.pk3-info .st') || {}).textContent, info: (h.querySelector('.pk3-info > span') || {}).textContent }; }, { H, c: cat });
+const n5a = await page.evaluate((D) => pkSets(D).length, DATE);
 await page.click(H + ' .pk3-bh .pri'); await page.waitForTimeout(300);
-const n5 = await page.evaluate((D) => pkSets(D).length, DATE);
-if (over && /คนไม่พอ/.test(a.stTxt) && dlg.length === 1 && /Not enough people/.test(dlg[0]) && !/[^\x00-\x7F]/.test(dlg[0]) && n5 === 1) ok('5 ใส่เกิน → ช่องแดง · บันทึกไม่ได้ (alert ASCII) · ชุดไม่เพิ่ม'); else fail('5 ' + JSON.stringify({ over, stTxt: a.stTxt, dlg, n5 }));
+const s5 = await page.evaluate((D) => { const S = pkSets(D); const last = S[S.length - 1]; return { n: S.length, from: last ? last.people.filter(q => q.from).map(q => q.from) : [], bid: last && last.bid, ids: S.map(x => x.id) }; }, DATE);
+const enough = pool5.oth >= 5;
+const okPull = r5.pull && !r5.over && r5.rm === '−5' && r5.neg && r5.zeroEmpty && /ลำอื่นใน/.test(r5.info) && r5.sum === String(pool5.own + 5);
+const okList = enough ? (r5.nRows === pool5.own + 5 && r5.oth.length === 5 && r5.oth.every(o => o.code === code && pool5.othBoats.some(b => o.b === 'จาก ' + b)) && /ครบ .* จากลำอื่น 5/.test(r5.st) && s5.n === n5a + 1 && s5.from.length === 5 && s5.from.every(b => b !== big.bid) && dlg.length === 0)
+  : (r5.nRows === pool5.own + pool5.oth && r5.oth.length === pool5.oth && /คนไม่พอ/.test(r5.st) && dlg.length === 1 && /Not enough people/.test(dlg[0]) && !/[^\x00-\x7F]/.test(dlg[0]) && s5.n === n5a);
+if (okPull && okList) ok(`5 ใส่ ${pool5.own + 5} (เหลือบนลำ ${pool5.own}) → ช่องเหลือง เลขจาง −5 · ช่องอื่นว่าง (placeholder 0) · ` + (enough ? `ดึงจากลำอื่นใน ${pool5.fam} 5 คน (ป้าย ${[...new Set(r5.oth.map(o => o.b))].join('/')}) · บันทึกได้ from=ลำจริง` : `ลำอื่นมีแค่ ${pool5.oth} → คนไม่พอ · บันทึกไม่ได้ (alert ASCII)`)); else fail('5 ' + JSON.stringify({ pool5, r5, s5, n5a, dlg, okPull, okList }));
+if (s5.n === n5a + 1) await page.evaluate(({ D, id }) => { pkSetsWrite(D, pkSets(D).filter(S => S.id !== id)); }, { D: DATE, id: s5.ids[s5.ids.length - 1] });
 await page.evaluate(() => { _pkSetD = null; });
 // 6 open / bought / unlock / delete
 await page.evaluate((H) => document.querySelector(H + ' .pk3-set').click(), H); await page.waitForTimeout(300); a = await st();
