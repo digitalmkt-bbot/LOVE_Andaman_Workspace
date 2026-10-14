@@ -75458,6 +75458,16 @@ function ppRangeIs(kind){
 }
 function ppPickRoute(id){ _ppRoute=(id===_ppRoute)?'':(id||''); ppAfter(); }
 function ppByMv(){ _ppMv=!_ppMv; ppAfter(); }   /* §ppByMv */
+/* §ppMv2 · สีแถบร้านอาหาร · owner: "สีของแต่ละร้านให้แตกต่างกัน"
+   ผูกกับลำดับร้านในทะเบียน (MEAL_VENUES) ไม่ใช่ลำดับที่โผล่ในวันนั้น · ร้านเดิมได้สีเดิมทุกวัน */
+var PP_MV_PAL=['#0F6E56','#185FA5','#9A3412','#6D28D9','#0E7490','#A21CAF','#4D7C0F','#B91C1C','#334155','#B45309'];
+function ppMvColor(id){
+  if(!id || id==='-') return '#94A3B8';
+  var L=(typeof MEAL_VENUES!=='undefined' && Array.isArray(MEAL_VENUES))?MEAL_VENUES:[];
+  var i=-1; for(var k=0;k<L.length;k++){ if(L[k] && L[k].id===id){ i=k; break; } }
+  if(i<0){ i=0; for(var c=0;c<String(id).length;c++) i=(i*31+String(id).charCodeAt(c))>>>0; }
+  return PP_MV_PAL[i % PP_MV_PAL.length];
+}
 function ppPickPier(p){ _ppPier=(p===_ppPier)?'':(p||''); ppAfter(); }
 function ppOnlySp(){ _ppOnlySp=!_ppOnlySp; ppAfter(); }
 function ppToggle(k){ _ppOpen[k]=!_ppOpen[k]; ppAfter(); }
@@ -75798,7 +75808,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-day{white-space:nowrap;font-family:"DM Mono",ui-monospace,monospace;font-size:11.5px;color:#475569}'
  +S+' .pp-bt{display:flex;align-items:center;gap:7px;min-width:0}'
  +S+' .pp-bt i{width:9px;height:9px;flex:none}'
- +S+' .pp-bt b{font-weight:700;white-space:nowrap;flex:none}'+S+' .pp-bt .pp-tag{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}'+S+' .pp-day .pp-dep{margin-left:6px;font-weight:700;color:#0F172A}'   /* §ppBt */
+ +S+' .pp-bt b{font-weight:700;white-space:nowrap;flex:none}'+S+' .pp-bt .pp-tag{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}'+S+' .pp-bt.mvm b{width:104px;overflow:hidden;text-overflow:ellipsis}'   /* §ppMv2 · ชื่อเรือกว้างเท่ากัน ป้ายโปรแกรมจึงตรงกัน */+S+' .pp-day .pp-dep{margin-left:6px;font-weight:700;color:#0F172A}'   /* §ppBt */
  +S+' .pp-bt.na b{color:#B4560A;font-weight:800}'
  +S+' .pp-tag{font-size:9px;font-weight:800;border-radius:2px;padding:1px 5px;border:1px solid;margin-left:4px;'
    +'white-space:nowrap;flex:none}'
@@ -75882,10 +75892,14 @@ function ppProgRows(g, pk){
   var e=ckEsc, k=g.rid;
   var rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
   var col=(rt&&rt.color)||'#94A3B8';
+  /* §ppMv2 · owner: "ลำดับเรียงตามเรือออก" · ในวันเดียวกัน เรียงตามเวลาเรือออก (ใบงานเรือแก้ไว้มาก่อน) */
+  var _dep=function(C){ var R=C.rt||rt, t0=(R&&R.times&&R.times[0])||'';
+    var t=(C.boatId && typeof pjDepOf==='function')?pjDepOf(C.date,C.boatId,t0):t0; return t||'99:99'; };
   g.ck.sort(function(a,b){
     var A=g.cells[a], B=g.cells[b];
     if(A.date!==B.date) return A.date<B.date?-1:1;
     if(!A.boatId!==!B.boatId) return A.boatId?-1:1;      /* ยังไม่จัดเรือ ไปท้ายสุดของวัน */
+    var da=_dep(A), db=_dep(B); if(da!==db) return da<db?-1:1;
     return String(ppBoatName(A.boatId)).localeCompare(String(ppBoatName(B.boatId)),'en',{numeric:true,sensitivity:'base'});
   });
   var GA=g.A;
@@ -75920,7 +75934,7 @@ function ppProgRows(g, pk){
           var R=C.rt||rt, t0=(R&&R.times&&R.times[0])||'';
           var t=(C.boatId && typeof pjDepOf==='function')?pjDepOf(C.date,C.boatId,t0):t0;
           return t?('<b class="pp-dep">'+e(t)+'</b>'):''; })()+'</td>'
-      +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
+      +'<td><div class="pp-bt'+(C.boatId?'':' na')+((rt&&rt.mv)?' mvm':'')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
         +'<b>'+e(ppBoatName(C.boatId))+'</b>'
         +((rt&&rt.mv&&C.rt)?('<span class="pp-tag" style="background:#F8FAFC;border-color:'+e(C.rt.color||'#CBD5E1')+';color:#334155" title="โปรแกรมของลำนี้"><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+e(C.rt.color||'#94A3B8')+';margin-right:4px;vertical-align:1px"></i>'+e(C.rt.name||C.rid)+'</span>'):'')   /* §ppByMv */
@@ -75973,7 +75987,7 @@ function renderPrPo(){
     /* §ppByMv · โหมดแยกร้าน: คีย์กลุ่ม = ร้าน · แถบกลุ่มใช้ route จำลอง (ชื่อร้าน สีกลาง) ทุก skin จึงวาดได้เหมือนเดิม
        แถวเรือจำได้ว่ามาจากโปรแกรมไหน (cells.rid) ไว้โชว์ข้างชื่อเรือ */
     var k=_ppMv?('mv:'+(r.mvId||'-')):(r.routeId||'');
-    if(!PB.G[k]){ PB.G[k]={rid:k, rt:(_ppMv?{id:k, name:(r.mvName||'ไม่มีร้าน / ยังไม่ตั้งร้าน'), color:(r.mvId&&r.mvId!=='-')?'#0F6E56':'#94A3B8', times:[], islands:'', mv:true}:r.rt), A:ppBlank(), cells:{}, ck:[]}; PB.gOrd.push(k); }
+    if(!PB.G[k]){ PB.G[k]={rid:k, rt:(_ppMv?{id:k, name:(r.mvName||'ไม่มีร้าน / ยังไม่ตั้งร้าน'), color:ppMvColor(r.mvId), times:[], islands:'', mv:true}:r.rt), A:ppBlank(), cells:{}, ck:[]}; PB.gOrd.push(k); }
     var g=PB.G[k]; ppAdd(g.A,r);
     var ck=r.date+'|'+(r.boatId||'');
     if(!g.cells[ck]){ g.cells[ck]={date:r.date, boatId:r.boatId||'', rid:r.routeId||'', rt:r.rt, A:ppBlank()}; g.ck.push(ck); }
@@ -76100,7 +76114,7 @@ function ppBodySheet(P,pOrd,GT){
   var e=ckEsc;
   /* ทุกตารางใช้ colgroup ชุดเดียวกัน + table-layout:fixed · คอลัมน์จึงตรงกันทุกท่า
      ถึงจะเป็นคนละ <table> ก็ตาม (นี่คือเหตุผลที่แยกตารางได้โดยไม่เสียการเทียบตัวเลข) */
-  var COLS='<colgroup><col style="width:124px"><col style="width:280px">'
+  var COLS='<colgroup><col style="width:124px"><col style="width:330px">'
     +'<col style="width:62px"><col style="width:54px">'
     +'<col style="width:54px"><col style="width:52px"><col style="width:84px">'
     +'<col style="width:74px"><col></colgroup>';
