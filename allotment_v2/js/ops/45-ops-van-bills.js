@@ -271,10 +271,24 @@
     });
     vr.rates = R; vr.known = vrFlat(R); vr.loaded = true;
   }
+  /* Readers of vanRates() outside the Costing screen get {} until the first load lands. After that first
+     successful load, redraw the active one (unless someone is typing). costing repaints itself (ctRender/ctRead).
+     In ops mode renderDailyReport / renderTripPL draw the server's own figures and never read vanRates();
+     they are listed only so a local-fallback draw cannot stay stale. The pick-up "fill rates" action (08-app 7890)
+     reads vanRate() on click, so it needs no redraw. */
+  var READERS = { dailyreport: 'renderDailyReport', trippl: 'renderTripPL', dailypfm: 'renderDailyPfm' };
+  function vrRefreshReaders(){
+    try{
+      if(O.busy && O.busy()) return;
+      var fn = READERS[O.activeView ? O.activeView() : ''];
+      if(fn && typeof window[fn] === 'function') window[fn]();
+    }catch(_){}
+  }
   function vrLoad(force){
     if(vr.loading) return vr.loading;
     if(vr.loaded && !force) return Promise.resolve();
-    vr.loading = O.get('/v1/van-rates').then(vrApply);
+    var first = !vr.loaded;
+    vr.loading = O.get('/v1/van-rates').then(vrApply).then(function(){ if(first) vrRefreshReaders(); });
     return vr.loading.then(function(){ vr.loading = null; }, function(e){ vr.loading = null; throw e; });
   }
   function vrRepaint(){ if(typeof window.ctRender === 'function') window.ctRender(); }
@@ -284,6 +298,8 @@
     Object.keys(vr.known).forEach(function(k){ if(!(k in next)) jobs.push(k); });
     if(!jobs.length) return Promise.resolve();
     // Keep successive edits while queued; only the final server answer replaces this draft.
+    // Snapshot first: a refusal puts the pre-edit state back at once (server-first), then reloads.
+    var snap = { rates: vr.rates, known: vr.known };
     vr.rates = O.clone(val); vr.known = next; vr.pending++;
     return O.queue(function(){
       var last;
@@ -292,7 +308,10 @@
         return O.call('PUT', '/v1/van-rates', { group: a[0], route_id: a[1], field: a[2], rate: k in next ? next[k] : null })
           .then(function(v){ last = v; });
       }); }, Promise.resolve()).then(function(){ return last; });
-    }).then(function(v){ return v; }, function(e){ vr.failed = true; O.fail('Van rates were not saved', e); })
+    }).then(function(v){ return v; }, function(e){
+      vr.failed = true; vr.rates = snap.rates; vr.known = snap.known; vrRepaint();
+      O.fail('Van rates were not saved', e);
+    })
       .then(function(v){
         vr.pending--; drop();
         if(vr.pending) return;
@@ -303,7 +322,13 @@
   wrap('ctRender', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     if(vr.loaded) return orig.apply(self, args);
-    return vrLoad().then(function(){ return orig.apply(self, args); }, function(e){ O.fail('Van rates could not load', e); });
+    return vrLoad().then(function(){ return orig.apply(self, args); }, function(e){
+      O.fail('Van rates could not load', e);
+      var host = document.getElementById('ct-body'); if(!host) return;
+      host.innerHTML = '<div data-van-rates-unavailable="1" style="padding:32px;text-align:center;color:#A32D2D">'
+        + 'Van rates are unavailable (they did not load from operation-backend), so Costing is not shown. '
+        + '<button onclick="ctRender()">Retry</button></div>';
+    });
   });
   wrap('ctRead', function(orig, key){
     if(key !== 'van_rates') return orig.apply(this, [].slice.call(arguments, 1));
