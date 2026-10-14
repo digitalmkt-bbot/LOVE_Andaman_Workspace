@@ -73783,17 +73783,21 @@ function pjPrint(){
    /* §pjDate3 · หัวใบเป็นแถบ navy เต็มความกว้าง · แถบวันที่เป็นพื้นขาว
       สีทึบมีที่เดียวคือชื่อใบ · วันที่เด่นด้วยขนาด ไม่ใช่ด้วยสี */
    +'.shead{display:flex;align-items:center;justify-content:center;border-radius:8px;'
-     +'padding:9px 20px 11px;background:'+SK.bg+'}'   /* §pjPierSkin · สีตามท่า */
+     +'padding:5px 20px 6px;background:'+SK.bg+'}'   /* §pjPierSkin · สีตามท่า */   /* §pjFit · เตี้ยลง */
    /* §pjDate · วันที่เคยแชร์บรรทัดกับชื่อท่า · ตัวเลข 38px ข้าง ๆ ชื่อท่า 26px
       อ่านแล้วเป็น "หัวใบที่มีวันที่อยู่ด้วย" ไม่ใช่ "ใบของวันนี้"
       ใบเรือหน้าตาเหมือนกันทุกวัน · ส่งใบเมื่อวานเข้าไลน์แล้วไม่มีใครทักได้จริง
       วันที่จึงได้แถบของตัวเองเต็มความกว้าง ไม่ต้องแข่งกับอะไรในบรรทัดเดียวกัน */
-   +'.dstrip{background:#fff;border-bottom:2px solid '+SK.line+';margin:2px 0 12px;'
-     +'padding:8px 24px 11px;display:flex;align-items:baseline;justify-content:center;gap:17px}'
-   +'.dstrip b{font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.27em;'
+   /* §pjFit (2026-10-14) · owner: "ให้มัน Fit กับจอ · แถวบนมันยาวไป"
+      หัวใบ (ป้ายท่า + วันที่ 53px) กับบอร์ด Departures แถวละ 42px กินจอแรกหมด
+      9 ลำ = Section B หลุดจอทั้งก้อน · ขนาดอักษรยังต้องอ่านบนมือถือได้ (§pjBig)
+      จึงลดช่องไฟกับหัวใบเป็นหลัก · ตัวอักษรลดนิดเดียว · และบอร์ดแบ่งสองคอลัมน์เมื่อ ≥6 ลำ */
+   +'.dstrip{background:#fff;border-bottom:2px solid '+SK.line+';margin:2px 0 8px;'
+     +'padding:4px 24px 6px;display:flex;align-items:baseline;justify-content:center;gap:14px}'
+   +'.dstrip b{font-size:'+(fs)+'px;font-weight:700;letter-spacing:.27em;'
      +'color:#8994A6;text-transform:uppercase}'
-   +'.dstrip u{text-decoration:none;font-size:'+(fs+36)+'px;font-weight:800;line-height:.92;color:#111}'
-   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:'+SK.mo+'}'
+   +'.dstrip u{text-decoration:none;font-size:'+(fs+19)+'px;font-weight:800;line-height:.92;color:#111}'
+   +'.dstrip i{font-style:normal;font-size:'+(fs)+'px;font-weight:700;letter-spacing:.25em;color:'+SK.mo+'}'
    /* §pjTop2 · หัวใบเป็นป้ายชื่องานก้อนเดียว · พื้น navy ตัวขาว
       ของเดิมเป็นตัวหนังสือสี navy บนพื้นขาว อ่านแล้วเป็นแค่บรรทัดหนึ่งในหัวใบ
       ไม่ใช่ "ชื่อใบ" · ใบนี้ถูกแคปส่งไลน์ ป้ายทึบทำให้รู้ทันทีว่าใบอะไร */
@@ -73802,12 +73806,12 @@ function pjPrint(){
       สองชิ้นใช้สีเดียวกันแต่กลับขั้วกัน อ่านเป็นชุดเดียวกันโดยไม่แย่งกันเอง
       และแถบใหญ่ที่สุดของใบเป็นพื้นขาว ปริ้นแล้วไม่กินหมึกทั้งแถบ */
    +'.sh-c{flex:none;text-align:center;white-space:nowrap;padding:0}'
-   +'.sh-c b{display:block;font-size:'+(fs-6.5)+'px;font-weight:700;letter-spacing:.30em;'
+   +'.sh-c b{display:block;font-size:'+(fs-8)+'px;font-weight:700;letter-spacing:.30em;'
      +'padding-left:.30em;color:'+SK.sub+';line-height:1.1}'
    /* §pjTop3 · บรรทัดใหญ่คือ "ท่าไหน" ไม่ใช่ชื่อบริษัท · ใบนี้ออกทีละท่า
       คนที่รับใบต้องรู้ก่อนอื่นว่าเป็นใบของท่าตัวเอง · ชื่อบริษัทซ้ำทุกใบอยู่แล้ว */
-   +'.sh-c span{display:block;font-size:'+(fs+1.5)+'px;font-weight:800;letter-spacing:.20em;'
-     +'padding-left:.20em;color:'+SK.ink+';line-height:1.2;margin-top:1px;text-transform:uppercase}'
+   +'.sh-c span{display:block;font-size:'+(fs)+'px;font-weight:800;letter-spacing:.20em;'
+     +'padding-left:.20em;color:'+SK.ink+';line-height:1.15;margin-top:1px;text-transform:uppercase}'
 
    +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
    +'.pill{border:1px solid #DCE2EC;background:#F5F7FA;border-radius:999px;padding:4px 12px;'
@@ -73958,14 +73962,14 @@ function pjPrint(){
    +'.fb.pg{flex:2.4 1 470px}'
    +'.fb.ok{flex:.7 1 150px}'
    +'.fb.dn{flex:1.9 1 400px}'
-   +'.fb{flex:1 1 320px;min-width:0;background:#fff;border:1px solid #E4E8EE;border-radius:6px;padding:8px 11px 9px}'
+   +'.fb{flex:1 1 320px;min-width:0;background:#fff;border:1px solid #E4E8EE;border-radius:6px;padding:6px 11px 6px}'
    +'.fb.ok{border-left:4px solid #1C9B62}'
    +'.fb.dn{border-left:4px solid #A3550B}'
    /* §pjHideIdle · กล่อง Not available แบบย่อ · เหลือหัวกล่องอย่างเดียว ไม่มีรายชื่อ
       ไม่ยืดเต็มแถว ปล่อยที่ที่เหลือให้กล่องอื่น */
    +'.fb.dn.slim{flex:0 0 auto;min-width:0}'
    +'.fb.dn.slim .fb-h{margin-bottom:0}'
-   +'.fb-h{display:flex;align-items:baseline;gap:7px;margin-bottom:6px;'
+   +'.fb-h{display:flex;align-items:baseline;gap:7px;margin-bottom:3px;'
      +'font-size:'+(fs-1)+'px;font-weight:800;color:#2C3A52}'
    +'.fb-h em{font-style:normal;font-size:'+(fs-5)+'px;font-weight:600;letter-spacing:.12em;color:#94A3B8}'
    +".fb-h b{margin-left:auto;font-family:'Sarabun',sans-serif;font-size:"+(fs+3)+"px;color:#111}"
@@ -73986,24 +73990,35 @@ function pjPrint(){
    +'.brd tbody td{border-left:0;border-right:0;border-radius:0}'
    +'.brd tbody tr:last-child td{border-radius:0}'
    +'.brd th{text-align:left;font-size:'+(fs-4.5)+'px;font-weight:700;letter-spacing:.13em;'
-     +'text-transform:uppercase;color:#9AA5B8;padding:0 8px 6px;border-bottom:1px solid #E4E8EE}'
+     +'text-transform:uppercase;color:#9AA5B8;padding:0 8px 3px;border-bottom:1px solid #E4E8EE}'
    /* §pjBrd5 · ช่องไฟใต้หัวตารางห่างกว่าระยะระหว่างแถวเกือบสองเท่า
       อ่านแล้วเหมือนหัวตารางหลุดออกจากก้อนข้อมูล · จัดให้ระยะเท่ากันทั้งใบ */
-   +'.brd td{padding:8px;vertical-align:middle;border-bottom:1px solid #F0F2F6;line-height:1.25}'
+   +'.brd td{padding:3px 8px;vertical-align:middle;border-bottom:1px solid #F0F2F6;line-height:1.2}'   /* §pjFit · 8 → 3 */
+   /* §pjFit · ≥6 ลำ แบ่งสองคอลัมน์ · เรียงตามเวลาลงซ้ายก่อนแล้วต่อขวา · คอลัมน์แคบลงจึงเลื่อนชื่อโปรแกรมชิดซ้าย */
+   +'.brd2{display:flex;gap:22px;align-items:flex-start}.brd2 .brd{flex:1 1 0;min-width:0}'
+   +'.brd2 .brd th.h-p,.brd2 .brd td.c-p{text-align:left}'
+   /* ชื่อโปรแกรมยาว (Early Tratato Similan Islands) · ช่องแคบลงครึ่งหนึ่ง จึงให้ตกบรรทัดได้แทนตัด ... */
+   +'.brd2 .brd td.c-p{white-space:normal;font-size:'+(fs-2)+'px;line-height:1.1}'
+   +'.brd2 .brd .c-b .bpill{font-size:'+(fs-4.5)+'px;padding:2px 7px}'
+   /* หน้าต่างแคบกว่า ~1180px (จอโน้ตบุ๊ก 13" · popup ถูกย่อ) สองคอลัมน์จะบีบชื่อโปรแกรมเป็น 3 บรรทัด
+      แย่กว่าคอลัมน์เดียว · จึงซ้อนสองตารางลงเป็นคอลัมน์เดียว ซ่อนหัวตารางซ้ำของตารางล่าง */
+   +'@media (max-width:1180px){.brd2{display:block}.brd2 .brd+.brd thead{display:none}'
+     +'.brd2 .brd td.c-p{white-space:nowrap;font-size:'+(fs+.5)+'px}'
+     +'.brd2 .brd .c-b .bpill{font-size:'+(fs-3.5)+'px;padding:2px 8px}}'
    +'.brd tbody tr:last-child td{border-bottom:0}'
    /* §pjBrd5 · ชื่อโปรแกรมคือสิ่งที่คนหาก่อนอื่นบนบอร์ด · ใหญ่กว่าช่องอื่นและอยู่กลาง */
    +'.brd th.h-p,.brd td.c-p{text-align:center}'
-   +".brd .c-t{font-family:'Sarabun',sans-serif;font-size:"+(fs+4)+"px;font-weight:800;"
+   +".brd .c-t{font-family:'Sarabun',sans-serif;font-size:"+(fs+2)+"px;font-weight:800;"
      +'color:#111;letter-spacing:-.03em;line-height:1;white-space:nowrap}'
    /* §pjCk · ชื่อเรือเป็นป้ายสีทึบ แบบป้าย agency ในหน้าเช็คอิน */
    +'.brd .c-b{white-space:nowrap;overflow:hidden}'
    +'.brd .c-b .bpill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;'
-     +'border-radius:4px;padding:3px 9px;color:#fff;font-size:'+(fs-2)+'px;font-weight:800;'
+     +'border-radius:4px;padding:2px 8px;color:#fff;font-size:'+(fs-2.5)+'px;font-weight:800;'
      +'letter-spacing:.03em;text-transform:uppercase;vertical-align:middle}'
-   +'.brd .c-p{font-size:'+(fs+1.5)+'px;font-weight:800;color:#16265C;letter-spacing:.005em;'
+   +'.brd .c-p{font-size:'+(fs+.5)+'px;font-weight:800;color:#16265C;letter-spacing:.005em;'
      +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
    +".brd .c-x{font-family:'Sarabun',sans-serif;white-space:nowrap}"
-   +'.brd .c-x b{font-size:'+(fs+1)+'px;font-weight:700;color:#2D4479}'
+   +'.brd .c-x b{font-size:'+(fs)+'px;font-weight:700;color:#2D4479}'
    +'.brd .c-x s{text-decoration:none;font-size:'+(fs-2)+'px;color:#8994A6}'
    +'.brd .c-x.over b{color:#A32D2D}'
    +".brd .c-x.over em{display:block;font-style:normal;font-family:'Sarabun',sans-serif;"
@@ -74025,7 +74040,7 @@ function pjPrint(){
    +'.pc.wb i{width:11px;height:11px;border-radius:3px;border:1px solid rgba(15,23,42,.2);display:inline-block}'
    /* §pjSecbar · ป้ายหมวดของใบ · ตัวใหญ่เว้นระยะ ภาษาเดียวกับป้ายแถวในตาราง
       เส้นคั่นอยู่ "ใต้" ป้าย ไม่ใช่เหนือ · ป้ายจึงเกาะอยู่กับของที่มันกำกับ */
-   +'.secbar{display:flex;align-items:baseline;gap:11px;margin:17px 0 8px;padding:0 2px 6px;'
+   +'.secbar{display:flex;align-items:baseline;gap:11px;margin:10px 0 5px;padding:0 2px 6px;'
      +'border-bottom:1px solid #D8DEE8}'
    +'.secbar:first-child{margin-top:0}'
    +'.secbar span{font-size:'+(fs-1.5)+'px;font-weight:800;color:#111;letter-spacing:.15em;'
@@ -74418,12 +74433,19 @@ function pjPrint(){
         +'</tr>' }; });
     rows.sort(function(a,b){ return a.dep<b.dep?-1:(a.dep>b.dep?1:0); });
 
-    return '<div class="fb pg"><div class="fb-h">Departures<b>'+GO.length+'</b></div>'
-      +'<table class="brd">'
-      +'<colgroup><col style="width:78px"><col style="width:158px"><col>'
-        +'<col style="width:82px"><col style="width:118px"></colgroup>'
+    /* §pjFit · ≥6 ลำ แบ่งสองตารางข้างกัน · ซ้ายได้ครึ่งแรก (ปัดขึ้น) ตามเวลา · 9 ลำ = 5+4 */
+    var two = rows.length>=6;
+    var tbl=function(rs){
+      return '<table class="brd">'
+      +(two
+        ? '<colgroup><col style="width:54px"><col style="width:132px"><col><col style="width:56px"><col style="width:62px"></colgroup>'
+        : '<colgroup><col style="width:78px"><col style="width:158px"><col><col style="width:82px"><col style="width:118px"></colgroup>')
       +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th>Pax</th><th>Band</th></tr></thead>'
-      +'<tbody>'+rows.map(function(r){ return r.html; }).join('')+'</tbody></table></div>';
+      +'<tbody>'+rs.map(function(r){ return r.html; }).join('')+'</tbody></table>'; };
+    var half=Math.ceil(rows.length/2);
+    return '<div class="fb pg"><div class="fb-h">Departures<b>'+GO.length+'</b></div>'
+      +(two ? ('<div class="brd2">'+tbl(rows.slice(0,half))+tbl(rows.slice(half))+'</div>') : tbl(rows))
+      +'</div>';
   };
 
   var DW=pjDateWords(_poDate);
