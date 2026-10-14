@@ -7,6 +7,8 @@
 
      GET /v1/bookings?service_date=D&limit=5000   the day's roster (route, agent, documents per booking)
      GET /v1/bookings/:id/pier-money?date=D       a booking's pier payments and on-tour sales, with their slips
+     GET /v1/after-trip?date=D                    each booking's cash-on-tour decision, suggested mode, version
+     PUT /v1/bookings/:id/cot-decisions/:date     one decision (full | none | payout | nocol + reason)
      GET /v1/attachments/:id                      one file (opened on click; all of a pack in the print window)
 
    Chips reuse the legacy handlers (tsPickPier / tsPickRoute) and globals (_tsPier,
@@ -51,8 +53,12 @@
   function load(date){
     if(cache[date]) return Promise.resolve(cache[date]);
     if(loading[date]) return loading[date];
-    var p = fetchAll(date).then(function(list){
-      var r = { date: date, rows: rosterOf(date, list) };
+    // The cash-on-tour decisions are an extra read; without them the scope and packs still work.
+    var decisions = O.get('/v1/after-trip', { date: date }).then(function(res){
+      var m = {}; ((res && res.rows) || []).forEach(function(x){ m[x.booking_id] = x; }); return m;
+    }, function(){ return null; });
+    var p = Promise.all([fetchAll(date), decisions]).then(function(x){
+      var r = { date: date, rows: rosterOf(date, x[0]), after: x[1] };
       cache[date] = r; delete loading[date]; return r;
     }, function(e){ delete loading[date]; throw e; });
     loading[date] = p; return p;
@@ -254,6 +260,67 @@
     }, function(e){ if(w) w.close(); O.fail('Pack did not load', e); });
   }
 
+  /* ── Cash on tour: each booking's decision, with the "not collected" reason pre-filled ── */
+  var MODES = { full: 'Kept in full', none: 'Not kept', payout: 'Paid out', part: 'Part kept / part paid out', nocol: 'Not collected' };
+  /* Legacy tsCotWhySug: what the people at the van and pier already recorded for this booking and day,
+     read from the structured check-in events (never from free-text notes), so staff do not retype it. */
+  function whySuggestion(r){
+    var ck = (r && r.t && r.t.operations && r.t.operations.checkins) || {}, bits = [], any = false, zero = false;
+    ['van', 'pier'].forEach(function(k){
+      (ck[k] || []).forEach(function(c){
+        any = true; if(c && c.actual_pax === 0) zero = true;
+        (c && c.events || []).forEach(function(x){
+          if(!x || x.undone || !(n(x.pax) > 0)) return;
+          var lb = g('ckReasonLabel') ? window.ckReasonLabel(x.reason_code) : text(x.reason_code);
+          var one = (x.type === 'cxl' ? 'Cancelled on site' : 'No-show') + ' ' + n(x.pax) + ' pax' + (lb ? ' · ' + lb : '') + (text(x.note).trim() ? ' · ' + text(x.note).trim() : '');
+          if(bits.indexOf(one) < 0) bits.push(one);
+        });
+      });
+    });
+    if(!bits.length && any && zero) bits.push('Customer did not travel');
+    return bits.join(' · ');
+  }
+  function cotHtml(roster, collectRows, date){
+    var after = roster.after; if(!after) return '';
+    var list = collectRows.filter(function(c){ return n(c.cot) > 0; });
+    if(!list.length) return '';
+    var byId = {}; roster.rows.forEach(function(r){ byId[r.id] = r; });
+    var BTN = 'border:0.5px solid var(--fd-line-soft);border-radius:8px;background:#fff;padding:3px 9px;font-size:10.5px;cursor:pointer;margin-right:4px';
+    var BTN_SUG = BTN.replace('var(--fd-line-soft)', '#1683C7');
+    var TD = 'padding:6px 8px;font-size:11.5px;vertical-align:top';
+    var body = list.map(function(c){
+      var a = after[c.booking_id] || {}, cot = a.cot || {}, dec = cot.decision || null, r = byId[c.booking_id];
+      var sug = cot.suggested_mode || '';
+      var current = dec ? esc(MODES[dec.mode] || dec.mode) + (n(dec.deduct) || n(dec.payout) ? ' · kept ' + money(dec.deduct) + ' · paid out ' + money(dec.payout) : '') + (dec.ref ? ' · ' + esc(dec.ref) : '')
+        : '<span style="color:#A05A1A">Not decided</span>';
+      var why = dec && dec.mode === 'nocol' ? text(dec.ref) : whySuggestion(r);
+      var id = esc(c.booking_id), idq = id.replace(/'/g, '');
+      function b(mode, label){ return '<button type="button" data-ops-ts-cotmode="' + mode + '" style="' + (sug === mode && !dec ? BTN_SUG : BTN) + '" onclick="laOps.travelRows.cotPick(\'' + idq + '\',\'' + mode + '\')">' + label + (sug === mode && !dec ? ' (suggested)' : '') + '</button>'; }
+      return '<tr style="border-top:0.5px solid var(--fd-line-soft)"><td style="' + TD + '">' + esc(c.voucher_ref || c.booking_id) + '</td><td style="' + TD + ';text-align:right">' + money(c.cot) + '</td><td style="' + TD + '">' + current + '</td><td style="' + TD + '">'
+        + b('full', 'Keep all') + b('none', 'Keep none') + b('payout', 'Pay out')
+        + '<div style="margin-top:6px"><input id="ts-cotr-' + id + '" data-ops-ts-cotreason="1" value="' + esc(why) + '" placeholder="Why it was not collected" style="width:230px;font-size:11px;padding:3px 6px;border:0.5px solid var(--fd-line-soft);border-radius:6px"> '
+        + '<button type="button" data-ops-ts-cotmode="nocol" style="' + BTN + '" onclick="laOps.travelRows.cotPick(\'' + idq + '\',\'nocol\')">Not collected</button></div></td></tr>';
+    }).join('');
+    return '<div data-ops-ts-cot="1" style="margin-bottom:16px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:12px 15px;overflow:auto">'
+      + '<div style="font-size:11.5px;font-weight:600;margin-bottom:8px">Cash on tour · decisions · ' + list.length + ' booking' + (list.length === 1 ? '' : 's') + '</div>'
+      + '<table style="width:100%;border-collapse:collapse"><thead><tr><th style="' + TD + ';text-align:left;font-size:9.5px;color:var(--fd-ink-soft);text-transform:uppercase">Booking</th><th style="' + TD + ';text-align:right;font-size:9.5px;color:var(--fd-ink-soft);text-transform:uppercase">COT</th><th style="' + TD + ';text-align:left;font-size:9.5px;color:var(--fd-ink-soft);text-transform:uppercase">Decision</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+  /* PUT the decision; the screen shows the server's answer (caches cleared, rows read again), not a local guess. */
+  function cotPick(bookingId, mode){
+    if(g('laGuardEdit') && !window.laGuardEdit('operations')) return Promise.resolve();
+    var date = lastView && lastView.date; if(!date) return Promise.resolve();
+    var roster = cache[date], row = roster && roster.after && roster.after[bookingId];
+    var body = { mode: mode };
+    if(mode === 'nocol'){
+      var el = document.getElementById('ts-cotr-' + bookingId), why = el ? text(el.value).trim() : '';
+      if(!why){ O.fail('Cash on tour not saved', new Error('Write why it was not collected')); return Promise.resolve(); }
+      body.ref = why;
+    }
+    var bk = { id: bookingId, opsId: bookingId, opsVersion: row && row.version != null ? row.version : null };
+    return O.queue(function(){ return O.bookingWrite('PUT', '/v1/bookings/' + encodeURIComponent(bookingId) + '/cot-decisions/' + encodeURIComponent(date), bk, body); })
+      .then(function(){ O.wrote('cot-decision'); rerender(); }, function(e){ O.fail('Cash on tour not saved', e); rerender(); });
+  }
+
   /* What 33 renders: the money rows to show, plus the blocks around them. null = no roster, show the day. */
   function view(d){
     var roster = d && d._roster; if(!roster) return null;
@@ -272,11 +339,11 @@
     var pendingIds = pendingRows.filter(function(c){ return !slipCache[date + '|' + c.booking_id]; }).map(function(c){ return c.booking_id; });
     var slips = slipPack(kept, date);
     var noSlipRows = (d.collect_rows || []).filter(function(c){ return keep[c.booking_id] && n(c.no_slip) > 0; }).length;
-    var html = scopeChips(roster, st, date, inScope) + (scoped ? subtotalHtml(rows, st, date) : '') + packsHtml(ref, slips, pendingIds.length, noSlipRows);
+    var html = scopeChips(roster, st, date, inScope) + (scoped ? subtotalHtml(rows, st, date) : '') + packsHtml(ref, slips, pendingIds.length, noSlipRows) + cotHtml(roster, rows, date);
     lastView = { date: date, docNo: docNo(date, st), ref: ref, slips: slips, slipIds: pendingIds };
     return { rows: rows, html: html, state: st, docNo: docNo(date, st) };
   }
 
   O.onWrite(function(){ cache = {}; slipCache = {}; });
-  window.laOps.travelRows = { load: load, view: view, rosterOf: rosterOf, docNo: docNo, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack, clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; } };
+  window.laOps.travelRows = { load: load, view: view, rosterOf: rosterOf, docNo: docNo, slipsLoad: slipsLoad, cotPick: cotPick, whySuggestion: whySuggestion, openFile: openFile, printPack: printPack, clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; } };
 })();
