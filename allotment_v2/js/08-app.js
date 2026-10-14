@@ -66095,7 +66095,7 @@ function pkTkData(date, pier){
         return { f:nm.f, l:nm.l, full:String(p.name||'').trim(),
                  nat2:nat, nat3:(typeof pckNat3==='function'?pckNat3(nat):nat),
                  natName:pkTkNatName(nat), cat:(fix||cat), auto:cat, fixed:!!fix, ix:w.ix,
-                 mism:!!mism, over:!!over, vc:vcs, bkId:b.id, lead:leadNm };
+                 mism:(mism||false), over:!!over, vc:vcs, bkId:b.id, lead:leadNm };   /* §pkMism · 'nat' | 'type' | false */
       };
       var rest=[];
       ps.forEach(function(w){
@@ -66105,7 +66105,14 @@ function pkTkData(date, pier){
       });
       rest.forEach(function(w){
         var free=''; for(var i=0;i<PK_CATS.length;i++){ if(slot[PK_CATS[i].k]>0){ free=PK_CATS[i].k; break; } }
-        if(free){ slot[free]--; people.push(mk(w,free,true,false)); }
+        if(free){ slot[free]--;
+          /* §pkMism (2026-10-14) · owner: "เขียนว่าสัญชาติไม่ตรง แต่จริง ๆ ก็ตรงแล้ว" (BK-26100720 ด.ช. มีคุณ ·
+             LOV-1709525 Jiratchaya) · ป้ายเดิมเรียกทุกเคสว่าสัญชาติ ทั้งที่ส่วนใหญ่คือจำนวนช่องเด็ก/ผู้ใหญ่
+             ในใบไม่ตรงกับชื่อ · บอกให้ตรงว่าอะไรไม่ตรง จะได้ไปแก้ถูกที่ */
+          var _want=pkTkCatOf({type:w.p.type, name:w.p.name, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});
+          var _nat=function(k){ return k==='inf'?null:(/TH$/.test(k)); };
+          var _why=(_nat(_want)!=null && _nat(free)!=null && _nat(_want)!==_nat(free)) ? 'nat' : 'type';
+          var _pp=mk(w,free,_why,false); _pp.want=_want; people.push(_pp); }
         else {
           var a=pkTkCatOf({type:w.p.type, name:w.p.name, nationality:String(w.p.nationality||b.leadNationality||'').trim().toUpperCase()});   /* §pkKidName */
           people.push(mk(w,a,false,true));
@@ -66682,7 +66689,8 @@ function renderPierPark(pier){
           +(p.fixed?('<span class="fxb" title="ตามใบจองคือ '+poE((TYM[p.auto]||{}).n||p.auto)+'">แก้ประเภท</span>'):'')
           +(p.ph&&p.typed?'<span class="tpb" title="ชื่อนี้กรอกที่หน้าท่า ไม่ได้มาจากใบจอง">กรอกเอง</span>':'')
           +(p.ph&&!p.typed?('<span class="nnb" title="ใบ '+poE(p.vc)+(p.lead?(' · หัวกรุ๊ป '+poE(p.lead)):'')+'">รอชื่อ</span>'):'')
-          +(p.mism?('<span class="msb" title="สัญชาติในชื่อไม่ตรงกับที่คีย์ไว้ในใบ '+poE(p.vc)+'">สัญชาติไม่ตรง</span>'):'')
+          +(p.mism==='type'?('<span class="msb" title="ชื่อนี้เป็น '+((TYM[p.want]||{}).s||p.want||'')+' ตามใบ '+poE(p.vc)+' แต่ช่องนั้นเต็มแล้ว · ลงช่อง '+((TYM[p.cat]||{}).s||'')+' ไปก่อน · แก้จำนวน ผญ/เด็ก ที่ใบจอง">ประเภทไม่ตรง</span>')
+            :p.mism?('<span class="msb" title="สัญชาติในชื่อไม่ตรงกับที่คีย์ไว้ในใบ '+poE(p.vc)+'">สัญชาติไม่ตรง</span>'):'')
           +(p.over?('<span class="ovb" title="ใบ '+poE(p.vc)+' มีรายชื่อมากกว่าหัวที่จ่าย">เกินหัวที่จ่าย</span>'):'')
         +'</td>'
         +'<td class="cd">'
