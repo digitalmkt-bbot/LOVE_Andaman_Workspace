@@ -2,15 +2,25 @@
 
 ## Verdict
 
-**BLOCK — do not replace `lk-inbox` yet**, but the gap is much narrower than on 14 Oct. Today
-two backend waves and one frontend wave shipped (every piece through its own verifier), and the
-full legacy import was rehearsed end to end on a local copy. Every booking, passenger and money
-difference it reported traces to the 22 B2C lines the owner accepted (P13).
+**BLOCK — do not replace `lk-inbox` yet. The data is ready; the screens are not.**
 
-What still blocks, in order: the deploy build (not running on Railway), one live regression on
-the pier roster, browser acceptance (today's waves, and the pier office, which has been wired
-since 13 Oct but never clicked through), legacy feature drift since 13 Oct, and a short list of
-operator data fixes.
+- **Data — ready.** The full legacy import was rehearsed end to end on a local copy; every booking,
+  passenger and money difference traces to the 22 B2C lines the owner accepted (P13). Side by side,
+  bookings match lk-inbox **100% field by field** (305 bookings over 14–17 Oct). Every endpoint the
+  frontend needs exists and is live.
+- **Screens — not ready.** On the same data, 17 of 70 screens are identical, 18 close, 34 different
+  (after the lk-inbox sync below). Most remaining differences are data drift or degraded server
+  views with a visible note, but the main day-of-operations screen (By-Trip) still renders
+  differently, and none of the 13–15 Oct work has had a live click-through.
+
+The earlier docs measured *wiring* (does each function reach the server?). That is essentially
+done. What decides replacement is *sameness* (does staff see the same thing and can they do the
+same work?), traced screen by screen from the identity run — a finite list, not open-ended wiring.
+
+What still blocks, in order: By-Trip and Van Jobs differences (staff live in them), the deploy
+build (not running on Railway), the pier roster regression, live acceptance of the shipped waves
+and the pier office, the lk-inbox features that need server support (below), and the operator data
+fixes.
 
 Supersedes `readiness-2026-10-14-en.md`. Working state lives in `D:/projects/compare-stack`
 (`goal.md` = board + decisions, `HANDOFF-BACKEND.md`, `HANDOFF-CLIENT.md`,
@@ -75,17 +85,35 @@ Both local databases restored fresh from the 13 Oct dumps; API built from backen
 - Rate types, boats, agents, markets and salespeople are mastered here since 9 Oct; anything staff
   created in legacy since must be recreated here by hand (the import only inserts unknown agents).
 
-## Screen identity (2026-10-15 run — in progress)
+## Side-by-side results (2026-10-15, local stack, vs production lk-inbox `bb05572`)
 
-Run on the code that just shipped vs **production lk-inbox `bb05572`** (not the stale
-`3f43891` checkout the 14 Oct run used). lk-inbox froze on Market Data again (known), which cost
-its last 28 screens; a second lk-only pass is queued. On the 42 screens with both sides:
-improved — Action Board 54→93%, Pickup Setup 74→100%, Pier Office Panwa 85→100%, B2B dashboard
-36→65%, Calendar 70→84%; dropped and **not yet explained** — Staff 100→28%, Pier Office Tub Lamu
-88→38%, Fleet Calendar 84→48%, Van Jobs 100→83%, Pier Office Ranong 100→82%. Some of the drop is
-likely the 68 lk-inbox commits since `3f43891` (feature drift, below); each will be traced from
-the differing lines before it is called a regression. The data comparison (`compare.mjs`) is
-running. This section will be updated with both results.
+Both apps on the freshly imported data; the main side is this frontend plus the lk-inbox sync below.
+Every test browser blocks production hosts (0 requests escaped).
+
+**Data comparison (`compare.mjs`).** Bookings per date — 14 Oct 38/38, 15 Oct 139/139, 16 Oct
+58/60, 17 Oct 70/70 — matched with **0 field differences**; the 2 on 16 Oct are the accepted P13
+transfer lines (LOV-6882506_3/_4). Boot: main is ready in 1.6 s vs lk-inbox 8.6 s (but 18 MB vs 6 MB
+transferred — the deploy build would cut that).
+
+**Screen identity (`allviews.mjs`, 70 menu screens).** 17 identical · 18 close (≥90%) · 34
+different · 1 not compared (lk-inbox freezes on Market Data, known). Against 14 Oct: Action Board
+54→93%, Pickup Setup 74→100%, Add-on Services 24→100% (the catalogue import), Pickup Map 88→99.5%,
+FOC detail 5→52%; and the sync below took Staff 28→100%, Pier Office Ranong 82→100%, Fleet
+Calendar 48→81%, Pier Office Panwa 75→91%, PR/PO 88→99%. Accounting and Booking Flow showed 0% in
+one run because they fill after ~4 s (one server call each) and the capture window closed first —
+slow, not broken.
+
+**Traced so far:**
+- **By-Trip (day view, 85–90%)** — seat counts match (14/38, 66/66, 24 free). Different: lk-inbox
+  shows van group cards with vehicle, plate, driver and phone; main does not. lk-inbox marks
+  bookings that drew from a seat lock (🔒 agent); main does not. Main raises "return van not
+  assigned" warnings lk-inbox does not. Main lacks the route's combined "รวม 80/104" chip. Payment
+  labels differ on the three C3 agents (operator fix). **Not yet fixed — first item to trace.**
+- **Van Jobs 15 Oct (83%)** — 247 unassigned pax in lk-inbox vs 244 on main (Similan Speedboat 52
+  vs 49), and main lists one extra return passenger: one booking classified differently.
+- **B2B dashboard** — current figures identical; the "last period" comparison depends on which
+  months the browser happened to load (order-dependent partial data, pre-existing).
+- Daily PFM 91% / Rate Types 60% — master-data drift and the C3 agents (operator actions below).
 
 ## Release blockers
 
@@ -95,7 +123,8 @@ running. This section will be updated with both results.
 | **Pier roster over-count (live regression)** | `d808304` over-counts unplaced slots (Panwa 391 vs 171, Tub Lamu 701 vs 281) on a staff-facing screen | trace against lk-inbox on the stack (`C-pier-roster-overcount`) |
 | Pier office | **wired since 13 Oct** — `05842c1` (settings, licences, roster, pay, stock, sign-out sheets, day close), `701ccce` (stock ledger, boat outstanding), `06ffcad` (boat close); `48-ops-pier-office.js` intercepts `poPersist()` per area, unit-tested (`ops-pier-office.test.mjs`). The 13–14 Oct docs carried it as "still browser-local" because the screens still *call* `poPersist()` — that is the adapter's contract, not a gap | **never browser-verified**: one live pass of the pier screens (3 piers × office/activity/job/duty/checkin) on the stack, which also covers the roster regression above and the pier identity drops |
 | Browser acceptance of today's waves | all unit-tested with fail-without proofs and verified; **live click-through deferred** (the stack was down) | the deferred checks listed per batch in `goal.md` — popups on guide-order print, COT 409 path, config `stale_version` with two browsers, check-in after reload, dashboard unbilled, resync-contract |
-| **Legacy feature drift** | lk-inbox moved **68 commits** past `3f43891` (Park tickets · Ticket Management, VIP charter marks on boat job sheets, meal/PR-PO sheet changes); the 13 Oct sync branch `sync/lk-inbox-2026-10-13` (26 commits) is **still unpushed** | run the lk-inbox sync again on top of `main`, then wire whatever those features persist |
+| **lk-inbox features needing server support** | **Synced** (94 commits, `bb05572`, merge `095ded1`, supersedes the unpushed 13 Oct sync; served locally with 0 page errors). Display features work. Not yet in ops mode: Park ticket sets + per-type prices (saved in one browser only), park matrix Thai/foreign/FOC columns and times, departure time per boat (lost on reload), cross-pier crew warning, open-ended pier assignment (saves +7 days), planKeep2, user rename, return van for self-arrive bookings, the new B2C typing rules for Love Kingdom's own pushes | operation-backend items B19–B31 (`HANDOFF-BACKEND.md`), then the matching `js/ops` ports |
+| **Alt pickups wiped on save (fixed in this push)** | every booking save from main zeroed each extra pickup's head counts and blanked its name, place and zone (the adapter sent only area/drop fields to a replace-whole-list API). 8 bookings / 11 alt pickups on the 13 Oct copy, 4 upcoming | fixed `4665417`; **check production** for alt pickups with 0 heads on bookings edited since 12 Oct |
 | Server gaps behind degraded screens | Daily Report ops pane (boats/vans/meals/docs/return leg), scoped Travel Summary head counts, booked-date trend by market — each shown with a visible note today | `HANDOFF-BACKEND.md` B16–B18 |
 | Client wiring still owed for shipped endpoints | rate-expiry scanner on agent `rate_seasons` (triage #35, B11), internal/company booking year list (triage #140, B14) | small client batch |
 | Final unwired scan | not yet run on `c33fecc` | recipe in `goal.md` §Scan |
