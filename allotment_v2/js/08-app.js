@@ -74497,13 +74497,17 @@ function pjPrint(){
      +'font-size:'+(fs-5)+'px;font-weight:800;color:#A32D2D}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
    +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52;white-space:nowrap}'   /* §pjOneLine */
-   /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw เป็นกรอบวัดความกว้างช่อง (container) · .pn1 ย่อตาม --r ที่สคริปต์วัดให้ */
-   +'.nmw{display:block;container-type:inline-size;overflow:hidden}'
-   +'.pn1{display:inline-block;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:top;'
-     +'font-size:clamp('+(fs*0.62).toFixed(2)+'px,calc(100cqi * var(--r,1)),'+fs+'px)}'
+   /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw = ความกว้างช่อง · .pn1 = ชื่อ ขนาดตัวอักษรสคริปต์ใส่ให้ */
+   /* §pjOneLine2 · รอบแรกใช้หน่วย cqi ของ CSS · เบราว์เซอร์ที่ไม่รู้จักหน่วยนี้ทิ้งทั้งบรรทัด
+      ชื่อจึงไม่ย่อ แล้วไปตกบรรทัดที่ขนาดเต็ม (owner: "บรรทัดยังไม่เต็มเลย")
+      ตอนนี้สคริปต์คิดขนาดเป็น px ใส่ให้ทีละชื่อ ใช้ได้ทุกเบราว์เซอร์ */
+   +'.nmw{display:block;overflow:hidden}'
+   +'.pn1{display:inline-block;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:top}'
    +'td.v .pn1 .rl{font-size:.86em}'
    +'.pn1.ms{font-size:'+fs+'px !important;max-width:none !important}'
    +'.pn1.wr{white-space:normal;text-overflow:clip;overflow:visible}'
+   /* กระดาษกว้างไม่เท่าหน้าต่าง · ขนาดที่คิดไว้ส่วนใหญ่ยังพอดีบรรทัดเดียว ถ้าไม่พอให้ตัดคำ ดีกว่าถูกตัดเป็น ... */
+   +'@media print{.pn1{white-space:normal;text-overflow:clip;overflow:visible}}'
    +'.bandc i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(15,23,42,.22);display:inline-block;flex:none}'
    +'.brd .c-r{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
    /* §pjChip · ป้ายหมายเหตุเคยเป็นพื้นทึบทั้งก้อน · หลายป้ายเรียงกันกลายเป็นแถบสีพาด
@@ -74550,7 +74554,7 @@ function pjPrint(){
   /* §pjOneLine (2026-10-14) · owner "ปรับให้อยู่บรรทัดเดียวกัน"
      ชื่อลูกเรือ/ไกด์เคยตกสองบรรทัด ตัดกลางชื่อเล่น เช่น "(บัง / สัน)" "(ซอ / แมะ)"
      ตอนนี้ชื่อหนึ่งคน = หนึ่งบรรทัดเสมอ · ช่องแคบกว่าชื่อ ตัวหนังสือย่อลงเฉพาะชื่อนั้น (ไม่ต่ำกว่า 62%)
-     ขนาดคิดด้วย CSS (100cqi × อัตราส่วนที่วัดจากตัวหนังสือจริงครั้งเดียว) · จอ / พอดีจอ / กระดาษ / รูป PNG ได้ผลเดียวกัน */
+     ขนาดเป็น px ที่สคริปต์ในใบคิดให้ทีละชื่อ (§pjOneLine2) · วัดที่ zoom 1 · จอ / พอดีจอ / รูป PNG ได้ผลเดียวกัน */
   var nm1=function(h){ return h?('<span class="nmw"><span class="pn1">'+h+'</span></span>'):''; };
   var who=function(sid,withLic){ if(!sid) return ''; var nm=pjStaffName(sid); if(!nm) return '';
     return nm1(e(nm)+(withLic?lic(sid):'')); };
@@ -74992,19 +74996,20 @@ function pjPrint(){
    +'</div>'
    + sheet
    +'<script>'+scr+'<\/script>'
-   /* §pjOneLine · วัดความกว้างธรรมชาติของแต่ละชื่อครั้งเดียว (ที่ zoom 1 · หลังฟอนต์โหลด) แล้วเก็บเป็นอัตราส่วน --r
-      ที่เหลือ CSS คิดเองทุกความกว้าง · ปิด/เปิดพอดีจอ ย่อหน้าต่าง หรือสั่งพิมพ์ ไม่ต้องวัดใหม่ */
-   +'<script>'+"(function(){function m(){var el=document.getElementById('sheet');if(!el)return;var z=el.style.zoom;el.style.zoom='';"
-     +"var L=el.querySelectorAll('.pn1'),W=[];for(var i=0;i<L.length;i++)L[i].classList.add('ms');"
-     +"for(var j=0;j<L.length;j++)W.push(L[j].getBoundingClientRect().width);"
+   +'<script>'+"(function(){var MIN="+(fs*0.62).toFixed(2)+";function m(){var el=document.getElementById('sheet');if(!el)return;var z=el.style.zoom;el.style.zoom='';"
+     /* §pjOneLine2 · วัดที่ zoom 1 (ช่องแคบที่สุด = ขนาดเดียวกับรูป PNG) · ชื่อเต็มขนาดกว้างเท่าไร ช่องกว้างเท่าไร → ขนาดตัวอักษรเป็น px */
+     +"var L=el.querySelectorAll('.pn1'),W=[],A=[];for(var i=0;i<L.length;i++){L[i].style.fontSize='';L[i].classList.remove('wr');L[i].classList.add('ms');}"
+     +"for(var j=0;j<L.length;j++){W.push(L[j].getBoundingClientRect().width);A.push(L[j].parentNode.getBoundingClientRect().width);}"
      +"var fs=L.length?parseFloat(getComputedStyle(L[0]).fontSize):0;"
-     +"for(var k=0;k<L.length;k++){L[k].classList.remove('ms');L[k].classList.remove('wr');if(W[k]>0&&fs)L[k].style.setProperty('--r',(fs/W[k]*0.97).toFixed(5));}"
-     /* ยังล้นที่ขนาดเล็กสุด (ชื่อยาวผิดปกติ/จอแคบมาก) · ยอมตกบรรทัดที่ช่องว่างดีกว่าถูกตัด ... · เช็กที่ zoom 1 ซึ่งช่องแคบที่สุด */
+     +"for(var k=0;k<L.length;k++){L[k].classList.remove('ms');if(!(W[k]>0)||!(A[k]>0)||!fs)continue;"
+       +"var f=Math.min(fs,Math.max(MIN,fs*A[k]/W[k]*0.97));if(f<fs-0.05)L[k].style.fontSize=f.toFixed(2)+'px';}"
+     /* ย่อสุดแล้วยังล้น (ชื่อยาวผิดปกติ) · ยอมตกบรรทัดที่ช่องว่างดีกว่าถูกตัดเป็น ... */
      +"for(var q=0;q<L.length;q++){if(L[q].scrollWidth>L[q].clientWidth+1)L[q].classList.add('wr');}"
      +"el.style.zoom=z;if(typeof fit==='function')fit();}"
      +"var _mt;window.addEventListener('resize',function(){clearTimeout(_mt);_mt=setTimeout(m,250);});"
-     +"try{if(document.fonts&&document.fonts.ready){document.fonts.ready.then(m);}else{window.addEventListener('load',m);}}catch(_){window.addEventListener('load',m);}"
-     +"window.addEventListener('load',function(){setTimeout(m,300);});})();"
+     /* ฟอนต์ Sarabun มาทีหลังได้ · วัดซ้ำทุกครั้งที่ฟอนต์โหลดเสร็จ ไม่งั้นขนาดคิดจากฟอนต์สำรอง */
+     +"try{if(document.fonts){if(document.fonts.ready)document.fonts.ready.then(m);if(document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',function(){setTimeout(m,30);});}}catch(_){}"
+     +"m();window.addEventListener('load',function(){m();setTimeout(m,300);setTimeout(m,1500);});})();"
    +'<\/script></body></html>';
 
   var w=window.open('','_blank','width=1220,height=880');

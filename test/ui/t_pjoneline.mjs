@@ -7,6 +7,8 @@
 //   3 ชื่อสั้นยังเป็นขนาดปกติ (ไม่ย่อทั้งใบ) · ชื่อยาวย่อแต่ไม่ต่ำกว่า 62%
 //   4 ปิดพอดีจอ (ขนาดจริง) ก็ยังบรรทัดเดียว · สื่อพิมพ์ก็บรรทัดเดียว · ชื่อยาวผิดปกติจนย่อสุดแล้วยังล้น → ตกบรรทัด ไม่ถูกตัด
 //   5 ไม่มี error
+//   6 (§pjOneLine2 · owner "บรรทัดยังไม่เต็มเลย") ใบไม่พึ่งหน่วย cqi / container query · ขนาดชื่อที่ย่อเป็น px ใส่ตรงที่ตัวชื่อ
+//     เบราว์เซอร์ที่ไม่รู้จัก cqi ทิ้งกฎทั้งบรรทัด ชื่อเลยไม่ย่อแล้วตกบรรทัดเต็มขนาด
 import { open } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -33,6 +35,7 @@ const html = await page.evaluate(() => {
   return cap.replace(/<link[^>]+fonts[^>]*>/g, '');
 });
 if (html.indexOf('ERR:') === 0) { fail('pjPrint ' + html); await close(); process.exit(1); }
+if (!/cqi|container-type/.test(html)) ok('6a ใบไม่ใช้ cqi / container-type'); else fail('6a ใบยังใช้ cqi / container-type');
 const p = await page.context().newPage(); await p.setViewportSize({ width: 1500, height: 900 });
 await p.setContent(html); await p.waitForTimeout(900);
 const M = () => p.evaluate(() => {
@@ -51,6 +54,8 @@ const M = () => p.evaluate(() => {
 const a = await M();
 if (a.two && a.nb >= 6 && a.bandsOne === a.nb) ok(`1 ป้ายสี ${a.nb} อัน บรรทัดเดียวทั้งหมด`); else fail('1 ' + JSON.stringify({ two: a.two, nb: a.nb, one: a.bandsOne }));
 if (a.nn >= 18 && a.namesOne === a.nn && !a.clipped.length) ok(`2 ชื่อ ${a.nn} ช่อง บรรทัดเดียว · ไม่ถูกตัด`); else fail('2 ' + JSON.stringify({ nn: a.nn, one: a.namesOne, clipped: a.clipped.slice(0, 4) }));
+const px = await p.evaluate(() => [...document.querySelectorAll('.pn1')].filter(el => el.style.fontSize).map(el => el.style.fontSize));
+if (px.length && px.every(v => /^[\d.]+px$/.test(v))) ok(`6b ชื่อที่ย่อ ${px.length} ช่อง ใส่ขนาดเป็น px (${px[0]})`); else fail('6b ' + JSON.stringify(px));
 const base = Math.max(...a.fs), sh = a.fs[a.txt.indexOf('นาย ก ข (ค)')], lg = Math.min(...a.fs);
 if (sh === base && lg < base && lg >= base * 0.62 - 0.1) ok(`3 ชื่อสั้น ${sh}px (ปกติ) · ชื่อยาวสุดย่อเหลือ ${lg.toFixed(1)}px`); else fail('3 ' + JSON.stringify({ base, sh, lg }));
 await p.click('#bfit'); await p.waitForTimeout(250); const b = await M();
