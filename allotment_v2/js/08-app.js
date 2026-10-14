@@ -63415,6 +63415,20 @@ function poPaxLeft(b, date, t){
    เวลาออกเรือบนการ์ดเคยอ่านจากโปรแกรม (rt.times[0]) อย่างเดียว · วันที่ออกช้า/เร็วกว่าปกติแก้ไม่ได้
    เก็บไว้ในใบงานเรือของลำนั้นวันนั้น (PIER_JOB.dep) · ทุกหน้าที่ไล่ลำของวันผ่าน poBoats
    (ใบงานเรือ+ใบพิมพ์ · เช็คอิน · ตั๋วอุทยาน · เงินสดย่อย · บอร์ด Departures) จึงได้เวลาเดียวกัน */
+/* §pjChtr (2026-10-14) · owner: "กรณีที่เป็นเหมาลำ จะโชว์ในนี้ได้ยังไง และตัวใบงานด้วย"
+   ใบงานเรือเคยไม่บอกเลยว่าลำไหนเป็นเหมาลำ · อ่านจาก booking ที่ผูกลำนี้วันนี้ (poBoats row.bks · t.bookingMode)
+   คืน null = ไม่ใช่เหมาลำ · who = เอเยนต์ (ถ้าไม่ใช่ B2C/บริษัท) ไม่งั้นชื่อหัวกรุ๊ป · mixed = มีที่นั่งปกติปนในลำเดียวกัน
+   ไม่โชว์ราคา · ราคาเป็นข้อมูลฝ่ายขาย ไม่ใช่ของหน้าท่า */
+function pjChtrOf(B){
+  var bks=(B&&B.bks)||[], ch=[], seat=0;
+  bks.forEach(function(x){ if(x && x.t && x.t.bookingMode==='charter') ch.push(x); else if(x) seat+=(+x.pax||0); });
+  if(!ch.length) return null;
+  var b=ch[0].b||{}, ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  var agn=ag&&(ag.name||ag.displayName)||'';
+  var who=(agn && !/^(a_b2c|a_company|a_staff)$/.test(String(b.agentId||'')))?agn:(b.leadPax||agn||'');
+  var n=ch.reduce(function(a,x){ return a+(+x.pax||0); },0);
+  return { who:String(who||'').trim(), n:n, mixed:seat>0, seat:seat, vc:(b.voucherRef||b.id||'') };
+}
 function pjDepOf(date, bid, fallback){
   try{ var o=(typeof pjRaw==='function')?pjRaw(date,bid):null; var v=o&&String(o.dep||'').trim();
        if(v && /^\d{1,2}:\d{2}$/.test(v)) return v.length===4?('0'+v):v; }catch(_){}
@@ -72903,6 +72917,13 @@ function pjCSS(){
   +H+' .bc .top .be{font-size:9.5px;font-weight:600;opacity:.82;margin-top:1px;letter-spacing:.06em}'
   +H+' .bc .top .tm{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;text-align:right}'
   +H+' .bc .top .tmL{font-size:8.5px;font-weight:700;opacity:.82;letter-spacing:.1em;text-align:right;margin-top:2px}'
+  /* §pjChtr · ป้ายเหมาลำ · ม่วงเดียวกับป้ายเหมาลำหน้าอื่น */
+  +H+' .bc .top .pj-chp{display:inline-block;margin-left:7px;vertical-align:3px;background:#5B289A;color:#fff;border:1.5px solid rgba(255,255,255,.75);border-radius:6px;padding:0 7px;font-size:10.5px;line-height:17px;font-weight:800;letter-spacing:.02em}'
+  +H+' .pj-chc{margin:10px 12px;display:flex;align-items:center;justify-content:center;gap:9px;height:38px;border-radius:10px;background:linear-gradient(100deg,#4C1D95,#6D28D9);color:#fff;box-shadow:0 2px 8px rgba(76,29,149,.25)}'
+  +H+' .pj-chc .i{font-size:11px;line-height:18px;font-weight:900;letter-spacing:.12em;background:#FDE68A;color:#4C1D95;border-radius:5px;padding:0 6px}'
+  +H+' .pj-chc .t{font-size:15px;font-weight:800;letter-spacing:.04em}'
+  +H+' .pj-chc .e{font-size:9.5px;font-weight:800;letter-spacing:.18em;opacity:.7;border-left:1px solid rgba(255,255,255,.35);padding-left:9px}'
+  +H+' .pj-chx{margin:-4px 12px 10px;background:#FBE7E5;color:#A32D2D;border:1px solid #F0C9C9;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:800;text-align:center}'
   /* §pjDep · ช่องเวลาแบบแก้ได้ หน้าตาเหมือนตัวเลขใหญ่เดิม · เส้นประใต้บอกว่าแตะได้ */
   +H+' .bc .top .tm-in{background:transparent;border:none;border-bottom:1px dashed rgba(255,255,255,.55);color:inherit;'
     +'font-family:inherit;width:108px;padding:0 0 1px;cursor:pointer;outline:none;border-radius:0}'
@@ -73970,7 +73991,8 @@ function pjCard(B, pier, ro){
   var lt=pjIsLight(col);
   var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
    +'<div class="top'+(lt?' lt':'')+'" style="background:'+col+(lt?';color:#1A2433':'')+'">'
-     +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
+     +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)
+       +(function(){ var C=pjChtrOf(B); return C?'<span class="pj-chp" title="เหมาลำ">เหมาลำ</span>':''; })()+'</div>'   /* §pjChtr */
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
        +(B.boat.licensePax?(' &middot; '+B.boat.licensePax+' ที่นั่ง'):'')+'</div></div>'
      /* §pjDep · ช่องเวลาแก้ได้ (ถ้ามีสิทธิ์และใบยังไม่ปิด) · ค่าที่แก้เองขึ้นป้าย "แก้แล้ว" · ลบว่าง = กลับไปตามโปรแกรม */
@@ -74215,7 +74237,10 @@ function pjCard(B, pier, ro){
    +'<div class="pj-pax">'
      +[['AD',pax.ad],['CHD',pax.chd],['INF',pax.inf],['FOC',pax.foc]].map(function(x){
         return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
-     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>' )
+     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
+   +(function(){ var C=pjChtrOf(B); if(!C) return '';   /* §pjChtr · การ์ดเหมาลำใต้จำนวนลูกค้า */
+       return '<div class="pj-chc"><span class="i">VIP</span><span class="t">เหมาลำ</span><span class="e">CHARTER</span></div>'
+         +(C.mixed?('<div class="pj-chx">&#9888; มีที่นั่งปกติปน '+C.seat+' คน · ตรวจการจัดเรือ</div>'):''); })() )
    /* §pjWork · ลำที่ไม่ได้ออกไม่มี ลค · ช่องนี้บอกช่วงเวลาของงานแทน */
    : ( pjSecHd('ช่วงงาน','cust')   /* §pjSame */
    +'<div class="pj-wbrow"><span class="k">ที่อยู่</span>'
@@ -74745,6 +74770,12 @@ function pjPrint(){
       ต้องเขียนเป็น tr.rt td.trip · ของเดิมเป็น td.trip เฉย ๆ (0,1,1)
       แพ้ tr.rt td (0,1,2) ที่ตั้ง vertical-align:top ไว้ · กฎเลยไม่เคยมีผลเลย */
    +'tr.rt td.trip{vertical-align:middle;padding:8px 10px;letter-spacing:.01em}'
+   /* §pjChtr · บรรทัดเหมาลำใต้ชื่อทริป + ป้ายเล็กใต้ชื่อเรือ */
+   +'tr.rt td.trip .chl{margin:6px auto 0;display:flex;align-items:center;justify-content:center;gap:8px;max-width:260px;height:26px;border-radius:8px;background:linear-gradient(100deg,#4C1D95,#6D28D9);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+   +'tr.rt td.trip .chl .i{font-size:'+(fs-3)+'px;line-height:16px;font-weight:900;letter-spacing:.12em;background:#FDE68A;color:#4C1D95;border-radius:4px;padding:0 5px}'
+   +'tr.rt td.trip .chl .t{font-size:'+(fs)+'px;font-weight:800;letter-spacing:.03em}'
+   +'tr.rt td.trip .chl .e{font-size:'+(fs-4)+'px;font-weight:800;letter-spacing:.18em;opacity:.75;border-left:1px solid rgba(255,255,255,.4);padding-left:8px}'
+   +'.bh .chh{display:table;margin:3px auto 0;background:#5B289A;color:#fff;border-radius:4px;padding:0 6px;font-size:'+(fs-3)+'px;font-weight:800;letter-spacing:.06em}'
    +".tmc{font:800 "+(fs+7)+"px 'Sarabun',sans-serif !important;color:#111;background:#F6F8FB}"
    +'td.rt2{color:#41506A;font-weight:600}'
    +'td.mut2{color:#C3CAD6;text-align:center}'
@@ -75145,8 +75176,10 @@ function pjPrint(){
       + boats.map(function(B){
           if(!isGo(B)) return offLbl(B);
           var rt=B.route||{};
+          var C=pjChtrOf(B);   /* §pjChtr */
           return '<td class="v ctr trip" style="background:'+pjTint(rt.color||'#64748B')
-            +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')+'</td>'; }).join('')
+            +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')
+            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">\u0e40\u0e2b\u0e21\u0e32\u0e25\u0e33</span><span class="e">CHARTER</span></div>'):'')+'</td>'; }).join('')
       +'</tr>'; };
   var timeRow=function(){
     return '<tr><th class="k">TIME<i>\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01</i></th>'
