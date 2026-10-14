@@ -54,5 +54,34 @@
   function error(date, mode){ return failed[key(date, mode || 'day')] || null; }
   function clear(){ cache = {}; loading = {}; failed = {}; stale = {}; }
   O.onWrite(function(){ markStale(); failed = {}; });
-  O.dashboard = { ensure: ensure, get: get, status: status, error: error, clear: clear };
+
+  /* "ยังไม่ได้วางบิล" (unbilled) in the needs-action popup comes from the server's
+     `unbilled {count, baht, agents}` (legacy _dashBoardData rule, 04-data-core.js,
+     evaluated on the server). It is company-wide, so any cached dashboard entry
+     carries it whatever date/mode was asked for: take the newest. The server's baht
+     has 2 decimals; legacy showed whole baht (Math.round), so round here. Until the
+     first response lands (or if it fails) the legacy local figure stays on screen. */
+  function unbilled(){
+    var best = null;
+    Object.keys(cache).forEach(function(k){
+      var j = cache[k];
+      if(j && j.unbilled && (!best || String(j.generated_at || '') > String(best.generated_at || ''))) best = j;
+    });
+    return best ? best.unbilled : null;
+  }
+  var legacyBoard = window._dashBoardData;
+  if(typeof legacyBoard === 'function'){
+    var board = function(){
+      var d = legacyBoard.apply(this, arguments);
+      var u = O.enabled() ? unbilled() : null;
+      if(d && u){
+        d.unN = Math.max(0, Math.round(+u.count || 0));
+        d.unB = Math.round(+u.baht || 0);
+        d.unAg = Math.max(0, Math.round(+u.agents || 0));
+      }
+      return d;
+    };
+    board.__ops = true; window._dashBoardData = board;
+  }
+  O.dashboard = { ensure: ensure, get: get, status: status, error: error, clear: clear, unbilled: unbilled };
 })();

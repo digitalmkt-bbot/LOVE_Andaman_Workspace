@@ -13,6 +13,7 @@
    PUT    /v1/agents/:id/programs
    PUT    /v1/agents/:id/rate-type
    POST   /v1/agents/:id/activate|deactivate|renew
+   POST   /v1/agents/:id/resync-contract   (agent page "Sync to bound rate")
    DELETE /v1/agents/:id
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -36,6 +37,7 @@
   var legacyRtmSave=window.rtmSave;
   var legacyExpBulkApply=window.rtExpBulkApply;
   var legacyProgBulkApply=window.agProgBulkApply;
+  var legacySyncRate=window.agAlertSyncRate;
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v==null ? '' : String(v).trim(); }
@@ -317,6 +319,30 @@
   window.agActivate=function(id){ return lifecycle(id,'activate'); };
   window.agDeactivate=function(id){ return lifecycle(id,'deactivate'); };
   window.agRenew=function(id,body){ return lifecycle(id,'renew',body); };
+
+  /* Agent page "Sync to bound rate" (legacy agAlertSyncRate): the server moves the agent's active
+     MAIN contracts onto the rate the agent is bound to. Server first: nothing local changes until
+     the 2xx. 409 no_rate_type = the agent has no bound rate; the server's message is shown. */
+  function syncRate(agentId){
+    var a=current(agentId); if(!a) return;
+    return write('POST','/v1/agents/'+enc(agentId)+'/resync-contract',{}).then(function(r){
+      if(r && r.agent) applyResponse(agentId,r.agent);
+      var changed=(r&&+r.changed)||0, unchanged=(r&&+r.unchanged)||0;
+      var contracts=(window.laOpsContracts&&typeof window.laOpsContracts.load==='function') ? window.laOpsContracts.load() : Promise.resolve(false);
+      /* contracts view + the activity log both changed on the server: re-read them, then redraw once */
+      return Promise.all([
+        Promise.resolve(contracts).catch(function(){ return false; }),
+        fetchAgent(agentId).catch(function(){ return null; })
+      ]).then(function(){
+        if(O.wrote) O.wrote('agents');
+        redraw(agentId);
+        alert(changed>0
+          ? ('Synced '+changed+' main contract(s) to the bound rate. '+unchanged+' already matched or not eligible.')
+          : ('Nothing to sync. '+unchanged+' contract(s) already matched or not eligible.'));
+      });
+    },function(e){ fail('Could not sync contracts to the bound rate',e); });
+  }
+  if(typeof legacySyncRate==='function'){ var sr=function(){ return enabled()?syncRate.apply(this,arguments):legacySyncRate.apply(this,arguments); }; sr.__ops=true; sr.__opsAgents=true; window.agAlertSyncRate=sr; }
 
   /* Detail reads are authoritative too. This is installed before 10-ops-catalogue.js,
      which detects __ops and does not add its former read-only/detail wrapper. */
