@@ -56999,7 +56999,19 @@ function bkV2BumpPax(idx, paxKey, delta){
   if(!_bkV2.newBooking) return;
   const t = _bkV2.newBooking.trips[idx];
   if(!t || !t.pax) return;
+  const _before = t.pax[paxKey]||0;
   t.pax[paxKey] = Math.max(0, (t.pax[paxKey]||0) + delta);
+  /* §natZero · ช่องคนไทยจริงที่ยังตามแถวราคาอยู่ ขยับตาม · เกินหัวทั้งหมดไม่ได้ */
+  if(bkNatHas(t)){
+    const m = String(paxKey).match(/^(ad|chd|inf|foc)(?:_(th|fr))?$/);
+    if(m){
+      const k = m[1], px = t.pax;
+      if(m[2]==='th' && (+t.nat[k]||0) === _before) t.nat[k] = +px[paxKey]||0;
+      const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+      t.nat[k] = Math.max(0, Math.min(all, +t.nat[k]||0));
+      if(bkNatSameAsPrice(t)) delete t.nat;
+    }
+  }
   // Any pax bump can change the names-list size (lead can be AD/CHD/INF/FOC) → re-sync
   bkV2SyncPassengers();
   bkV2Render();
@@ -57008,6 +57020,17 @@ function bkV2BumpPax(idx, paxKey, delta){
    ครั้งแรกที่แตะ ต้องหล่อทั้งสี่ช่องจากแถว TH ก่อน แล้วค่อยบวก/ลบ
    ถ้าปล่อยให้มีแค่ช่องเดียว อีกสามช่องจะกลายเป็น 0 ทันที (bkNatHas เป็นจริงแล้ว)
    เด็กไทยที่คีย์ไว้ในแถว TH ก็จะหายไปเงียบ ๆ ทั้งที่คนกดไม่ได้ตั้งใจ */
+/* §natZero (2026-10-14) · owner, park sheet 15 ต.ค.: FOC ของใบ Staff (BK-26100018) กับ ผญ ไทยของ
+   Suntan / KLOOK ถูกตีเป็นต่างชาติ ทั้งที่คีย์ในแถว TH · ใบพวกนี้มี nat = {0,0,0,0}
+   ซึ่งระบบอ่านว่า "มีคนดูแล้วว่าไม่มีคนไทย" (023_trip_traveller_nationality.sql)
+   ที่มาของศูนย์: กดแถวเขียวตอนช่อง pax ยังว่าง → หล่อ nat จากศูนย์ กดแล้วก็ยังศูนย์ (เพดาน = 0)
+   แล้วค่อยคีย์ pax ทีหลัง · nat ไม่ตามไป · backup 13 ต.ค.: 11 ทริปตั้งแต่ ก.ย.
+   กติกาใหม่: nat ที่เท่ากับแถวราคาทุกช่องไม่มีข้อมูลเพิ่ม → ไม่เก็บ (ลบทิ้ง กลับไปใช้แถวราคา)
+   และช่องที่ยังตามแถวราคาอยู่ จะขยับตามเมื่อแก้ pax · ค่าที่คนตั้งใจตั้งให้ต่างจากราคา ยังอยู่ */
+function bkNatSameAsPrice(t){
+  const px=(t&&t.pax)||{}, n=(t&&t.nat)||{};
+  return ['ad','chd','inf','foc'].every(k => (+n[k]||0) === (+px[k+'_th']||0));
+}
 function bkV2BumpNat(idx, k, delta){
   if(!_bkV2.newBooking) return;
   const t = _bkV2.newBooking.trips[idx];
@@ -57018,6 +57041,7 @@ function bkV2BumpNat(idx, k, delta){
   }
   const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
   t.nat[k] = Math.max(0, Math.min(all, (+t.nat[k]||0) + delta));
+  if(bkNatSameAsPrice(t)) delete t.nat;   /* §natZero */
   bkV2Render();
 }
 // ── Charter price · Rate (auto) vs Flexible (manual override) ──
