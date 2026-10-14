@@ -12,6 +12,7 @@
 //   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
 //  10 (§pkCalc) การ์ด "ตารางคำนวณ" ใบแรกฝั่งขวา · จำนวน × ราคา = รวม คิดสดโดยไม่วาดหน้าใหม่ · ราคา/ใบ จำใน PIER_CFG.parkPrice · แถวพิมพ์เอง 3 แถว · ดึงจำนวนจากเส้นทาง/ชุด
+//  11 (§pkSets6) คอลัมน์ "ชุดนี้" เรียง ผญ ไทย · เด็กไทย · ต่ำกว่า 3 · ผญ ตปท · เด็ก ตปท · (ประเภทที่เพิ่มเอง) เหมือนบนเรือ
 //   8 กลับแท็บ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ทุกข้อความเป็น ASCII · ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -135,6 +136,9 @@ else fail('9 ' + JSON.stringify({ famOk, fm: f9.fm, exp: f9.exp, all: f9.all, fu
 await page.evaluate(() => { _pkSetFamF = 'all'; _pkSetMenu = false; });
 // 10 §pkCalc · การ์ดคำนวณเป็นใบแรกฝั่งขวา · พิมพ์จำนวน × ราคา → รวมสดไม่วาดใหม่ (โฟกัสอยู่) · ราคาจำใน PIER_CFG.parkPrice (persist) · แถวพิมพ์เอง · ดึงจากเส้นทาง
 await page.evaluate(() => { delete PIER_CFG.parkPrice; pkCalcClear(); }); await page.waitForTimeout(300);
+const o11 = await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk3-mx thead tr.s th')].slice(10, 15).map(t => t.textContent.trim()), H);
+const want11 = await page.evaluate(() => ['adTH', 'chTH', 'inf', 'adFR', 'chFR'].map(k => (pkTypes().find(T => T.k === k) || {}).s).filter(Boolean));
+if (o11.join('|') === want11.join('|')) ok('11 คอลัมน์ ชุดนี้ เรียงเหมือนบนเรือ · ' + o11.join(' · ')); else fail('11 ' + JSON.stringify({ o11, want11 }));
 const c10 = await page.evaluate((H) => { const h = document.querySelector(H); const col = h.querySelector('.pk3-full > .pc2-col + .pc2-col'); return { first: col && col.firstElementChild.classList.contains('pk3-calc'), rows: h.querySelectorAll('.pk3-calc tr[data-k]').length, ty: pkTypes().length }; }, H);
 const p0 = await page.evaluate(() => window.__persist);
 await page.click(H + ' .pk3-calc tr[data-k="' + cat + '"] [data-f=q]'); await page.keyboard.type('12');

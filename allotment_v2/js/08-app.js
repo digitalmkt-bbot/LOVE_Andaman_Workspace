@@ -67569,7 +67569,16 @@ function pkSetXls(which){
   XLSX.writeFile(wb, 'park_sets_'+_poDate+'_'+((P&&P.k)||_poPier)+(sets.length===1?('_'+String(sets[0].name||'').replace(/[^\w฀-๿-]+/g,'_').slice(0,24)):'')+'.xlsx');
 }
 /* ── การ์ดซ้าย · ชิป + เลือกเรือ + ตาราง + รายชื่อ ── */
+/* §pkSets6 · owner "คอลัมน์ ชุดนี้ เรียงให้เหมือนกับ บนเรือ" · ไทย (ผญ · เด็ก · ต่ำกว่า 3) | ต่างชาติ (ผญ · เด็ก) | ประเภทที่เพิ่มเอง
+   เรียงเฉพาะหน้านี้ · ลำดับใน pkTypes() (ชีท/Excel/ประเภทตั๋ว) ไม่แตะ */
+function pk3TyOrder(TY){
+  var want=['adTH','chTH','inf','adFR','chFR'], out=[];
+  want.forEach(function(k){ TY.forEach(function(T){ if(T.k===k) out.push(T); }); });
+  TY.forEach(function(T){ if(out.indexOf(T)<0) out.push(T); });
+  return out;
+}
 function pk3Body(flat, TY, TYM, ro){
+  TY=pk3TyOrder(TY);   /* §pkSets6 */
   var e=poE, date=_poDate, D=pkSetDraft(), used=pkSetUsed(date, D?D.id:null), usedAll=pkSetUsed(date);
   var chosen=_pkSetBoats.map(function(b){ return pkSetBoatX(flat,b); }).filter(Boolean);
   _pkSetBoats=chosen.map(function(x){ return x.B.bid; });   /* ลำที่ไม่ออกวันนี้แล้วหลุดเอง */
@@ -67610,7 +67619,9 @@ function pk3Body(flat, TY, TYM, ro){
   /* ตาราง */
   var cg='<colgroup><col>'+GO.map(function(k){ return '<col class="'+(/^_/.test(k)?'c-s':'c-n')+'">'; }).join('')+'<col class="c-s">'
     +TY.map(function(){ return '<col class="c-t">'; }).join('')+'<col class="c-s"><col class="c-d"><col class="c-d"></colgroup>';
-  var hdTy=TY.map(function(T,i){ return '<th class="n'+(i===0?' sep':'')+'" title="'+e(T.n)+' · '+e(T.code||'—')+'">'+e(T.s||T.n)+'</th>'; }).join('');
+  /* §pkSets6 · ขีดคั่นหน้ากลุ่มต่างชาติและหน้าประเภทที่เพิ่มเอง · ตรงกับขีดคั่นของ บนเรือ */
+  var tySep=function(T,i){ return (i===0 || T.k==='adFR' || (i>0 && !T.base && TY[i-1].base))?' sep':''; };
+  var hdTy=TY.map(function(T,i){ return '<th class="n'+tySep(T,i)+'" title="'+e(T.n)+' · '+e(T.code||'—')+'">'+e(T.s||T.n)+'</th>'; }).join('');
   var head='<thead><tr class="g"><th class="rt" rowspan="2"><span class="rg"><span>เส้นทาง</span><span>ลำ</span><span>ออก</span></span></th>'
     +'<th class="gh go sep" colspan="5">บนเรือ · ไทย</th><th class="gh go sep" colspan="5">บนเรือ · ต่างชาติ</th><th class="n sum" rowspan="2">รวม<br>ทั้งลำ</th><th class="gh tk sep" colspan="'+(TY.length+1)+'">ชุดนี้ · กำหนดจำนวนตั๋ว</th>'
     +'<th class="n" rowspan="2" title="อยู่ในชุดที่บันทึกแล้ว">ชุดอื่น<br>แล้ว</th><th class="n" rowspan="2" title="ยังไม่อยู่ในชุดไหน">เหลือ</th></tr>'
@@ -67625,7 +67636,7 @@ function pk3Body(flat, TY, TYM, ro){
     var av={}; pkSetAvail(B,used).forEach(function(p){ av[p.cat]=(av[p.cat]||0)+1; });
     var tk='', dT=0;
     if(on){ TY.forEach(function(T,i){ var v=+D.cnt[T.k]||0, mx=av[T.k]||0, over=v>mx; dT+=v;
-        tk+='<td class="n'+(i===0?' sep':'')+' pk3-c">'+(ro||D.locked
+        tk+='<td class="n'+tySep(T,i)+' pk3-c">'+(ro||D.locked
           ?('<b class="'+(v?'':'z')+'">'+v+'</b>')
           :('<input class="pk3-in'+(over?' over':'')+(v?' has':'')+'" data-cat="'+T.k+'" type="number" min="0" inputmode="numeric" value="'+v+'" '
             +'title="'+e(T.n)+' · เหลือ '+mx+'" onclick="event.stopPropagation()" onchange="pkSetCnt(\''+T.k+'\',this.value)">'))
