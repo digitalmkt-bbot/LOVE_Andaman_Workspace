@@ -77346,6 +77346,8 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-lrow>td,body.btc #view-booking tr.t2-lrow>td *{font-style:normal!important}',
     'body.btc #view-booking tr.t2-lrow .lkwait{color:#6B7180;font-weight:500}',
     'body.btc #view-booking tr.t2-lrow .lkcode{font-weight:700}',
+    /* §btcNoBar (2026-10-14) · owner "ตัวที่เป็นขีดๆ เอาออกเลย" (= หลอดสีที่นั่งในกล่อง Programmes) · ซ่อนแต่เก็บช่องไว้ ป้ายว่างจึงอยู่แนวเดิม */
+    'body.btc #view-booking .btc-pr .btc-pbar{visibility:hidden}',
 
     /* one-line rows (round 6): every cell stays on one line, full text on hover */
     'body.btc #view-booking table.t2-mtbl tr.t2-row>td{white-space:nowrap;line-height:1.3}',
