@@ -11,6 +11,7 @@
 //   6 เปิดชุด → ร่างโหลดกลับ · ซื้อแล้ว → ล็อก ช่องกรอกหาย · ปลดล็อก → แก้ได้ · ลบ → หาย
 //   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
+//  10 (§pkCalc) การ์ด "ตารางคำนวณ" ใบแรกฝั่งขวา · จำนวน × ราคา = รวม คิดสดโดยไม่วาดหน้าใหม่ · ราคา/ใบ จำใน PIER_CFG.parkPrice · แถวพิมพ์เอง 3 แถว · ดึงจำนวนจากเส้นทาง/ชุด
 //   8 กลับแท็บ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ทุกข้อความเป็น ASCII · ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -36,7 +37,7 @@ const st = () => page.evaluate((H) => { const h = document.querySelector(H);
     stTxt: (h.querySelector('.pk3-info .st') || {}).textContent || '', saveBtn: !!h.querySelector('.pk3-bh .pri'), locked: /ล็อก/.test((h.querySelector('.pk3-info .st') || {}).textContent || ''),
     nameVal: (h.querySelector('.pk3-nm input') || {}).value, namePh: (h.querySelector('.pk3-nm input') || {}).placeholder };
 }, H);
-await page.evaluate(({ D, P }) => { _poPier = P; _poDate = D; _pkFam = 'all'; _pkSetBoats = []; _pkSetD = null; delete PIER_CFG.parkSets; window.__persist = 0; const r = window.laBlobSave; window.laBlobSave = function () { window.__persist++; return r ? r.apply(this, arguments) : undefined; }; window.__cfg0 = JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined })); renderPierPark(P); }, { D: DATE, P: PIER });
+await page.evaluate(({ D, P }) => { _poPier = P; _poDate = D; _pkFam = 'all'; _pkSetBoats = []; _pkSetD = null; delete PIER_CFG.parkSets; window.__persist = 0; const r = window.laBlobSave; window.laBlobSave = function () { window.__persist++; return r ? r.apply(this, arguments) : undefined; }; window.__cfg0 = JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined, parkPrice: undefined })); renderPierPark(P); }, { D: DATE, P: PIER });
 await page.waitForTimeout(400);
 // 1
 let a = await st();
@@ -109,7 +110,7 @@ if (x7.sets.length === 2 && x7.sets[1].name === 'ชุดทดสอบ' && on
   ok(`7 Excel · ชุดเดียว ${one.sheets.length} ชีท (3 คอลัมน์ · code ${code}) · ทุกชุด ${all.sheets.length} ชีท`); else fail('7 ' + JSON.stringify({ sets: x7.sets, one: { s: one.sheets, r0: one.rows && one.rows[0] }, all: { s: all.sheets, fn: all.fn } }));
 // 8
 await page.evaluate((H) => [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /ทั้งหมด/.test(b.textContent)).click(), H); await page.waitForTimeout(400); a = await st();
-const cfgSame = await page.evaluate(() => JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined })) === window.__cfg0);
+const cfgSame = await page.evaluate(() => JSON.stringify(Object.assign({}, PIER_CFG, { parkSets: undefined, parkPrice: undefined })) === window.__cfg0);
 const asciiDlg = dlg.every(m => !/[^\x00-\x7F]/.test(m));
 if (!a.has3 && a.hasOld && cfgSame && asciiDlg && !errors.length) ok('8 กลับ "ทั้งหมด" ตารางเดิมกลับมา · PIER_CFG คีย์อื่นไม่ถูกแตะ · alert ASCII · ไม่มี error'); else fail('8 ' + JSON.stringify({ has3: a.has3, hasOld: a.hasOld, cfgSame, asciiDlg, errors }));
 // 9 §pkSets3 · แถวยอดจริงต่อโปรแกรม (ทุกลำของวัน) · กดแถวเลือกโปรแกรม → เมนูเพิ่มเรือกรอง · ไม่มีคอลัมน์ขวา (เต็มจอ)
@@ -132,6 +133,25 @@ const filtOk = g9.sel !== 'ทั้งหมด' && g9.chipOn.includes(g9.sel) 
 if (famOk && f9.full && filtOk) ok(`9 ชิปเส้นทางก่อน · ${f9.fams.join('/')} (ไทย+ตช=รวม · รวม=ยอดวัน ${f9.all}) · เลือก ${g9.sel} → ยอดขึ้น แถวเหลือเส้นทางนั้นแถวเดียว เมนูเรือ ${g9.menu.length} ลำ · เต็มจอ · การ์ดขวา 1 + ใต้ตาราง 2`);
 else fail('9 ' + JSON.stringify({ famOk, fm: f9.fm, exp: f9.exp, all: f9.all, full: f9.full, g9 }));
 await page.evaluate(() => { _pkSetFamF = 'all'; _pkSetMenu = false; });
+// 10 §pkCalc · การ์ดคำนวณเป็นใบแรกฝั่งขวา · พิมพ์จำนวน × ราคา → รวมสดไม่วาดใหม่ (โฟกัสอยู่) · ราคาจำใน PIER_CFG.parkPrice (persist) · แถวพิมพ์เอง · ดึงจากเส้นทาง
+await page.evaluate(() => { delete PIER_CFG.parkPrice; pkCalcClear(); }); await page.waitForTimeout(300);
+const c10 = await page.evaluate((H) => { const h = document.querySelector(H); const col = h.querySelector('.pk3-full > .pc2-col + .pc2-col'); return { first: col && col.firstElementChild.classList.contains('pk3-calc'), rows: h.querySelectorAll('.pk3-calc tr[data-k]').length, ty: pkTypes().length }; }, H);
+const p0 = await page.evaluate(() => window.__persist);
+await page.click(H + ' .pk3-calc tr[data-k="' + cat + '"] [data-f=q]'); await page.keyboard.type('12');
+await page.click(H + ' .pk3-calc tr[data-k="' + cat + '"] [data-f=p]'); await page.keyboard.type('150'); await page.waitForTimeout(200);
+const d10 = await page.evaluate(({ H, c }) => { const h = document.querySelector(H); const tr = h.querySelector('.pk3-calc tr[data-k="' + c + '"]');
+  return { row: tr.querySelector('.pk3-cr').textContent, tot: h.querySelector('.pk3-ct').textContent, focus: document.activeElement === tr.querySelector('[data-f=p]'), price: (PIER_CFG.parkPrice || {})[c], persist: window.__persist }; }, { H, c: cat });
+await page.click(H + ' .pk3-calc tr[data-k="free0"] [data-f=n]'); await page.keyboard.type('ค่าเรือเล็ก');
+await page.click(H + ' .pk3-calc tr[data-k="free0"] [data-f=q]'); await page.keyboard.type('2');
+await page.click(H + ' .pk3-calc tr[data-k="free0"] [data-f=p]'); await page.keyboard.type('250.5'); await page.waitForTimeout(200);
+const e10 = await page.evaluate((H) => ({ tot: document.querySelector(H + ' .pk3-ct').textContent, free: _pkCalc.free[0] }), H);
+await page.evaluate(() => pkCalcFill('fam')); await page.waitForTimeout(300);
+const f10 = await page.evaluate(({ H, c, D, P }) => { const h = document.querySelector(H); const q = h.querySelector('.pk3-calc tr[data-k="' + c + '"] [data-f=q]').value; const p = h.querySelector('.pk3-calc tr[data-k="' + c + '"] [data-f=p]').value;
+  let n = 0; pkTkData(D, P).forEach(g => g.boats.forEach(B => B.people.forEach(x => { if (!x.over && x.cat === c) n++; }))); return { q, n, p, free: h.querySelector('.pk3-calc tr[data-k="free0"] [data-f=n]').value }; }, { H, c: cat, D: DATE, P: PIER });
+if (c10.first && c10.rows === c10.ty + 3 && d10.row === '1,800' && d10.tot === '1,800' && d10.focus && d10.price === '150' && d10.persist > p0 && e10.tot === '2,301' && e10.free.n === 'ค่าเรือเล็ก' && f10.q === String(f10.n) && f10.p === '150' && f10.free === 'ค่าเรือเล็ก')
+  ok(`10 การ์ดคำนวณใบแรก · ${cat} 12×150 = 1,800 (โฟกัสอยู่ · ราคา persist) · แถวเอง 2×250.5 → รวม 2,301 · ดึงจากเส้นทาง = ${f10.n}`);
+else fail('10 ' + JSON.stringify({ c10, d10, e10, f10 }));
+await page.evaluate(() => { delete PIER_CFG.parkPrice; pkCalcClear(); });
 if (process.env.SHOT) { await page.evaluate((H) => { [...document.querySelectorAll(H + ' .pk2-fcs .pk2-fc')].find(b => /Ticket Management/.test(b.textContent)).click(); }, H); await page.waitForTimeout(300); await page.evaluate((D) => pkSetOpen(pkSets(D)[0].id), DATE); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
 await close();
 console.log(bad ? `FAIL ${bad}` : 'PASS'); process.exit(bad ? 1 : 0);

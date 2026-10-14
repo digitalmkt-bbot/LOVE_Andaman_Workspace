@@ -66480,7 +66480,7 @@ function pkTkData(date, pier){
    และวันที่มีหลายเส้นทาง ต้องเลื่อนผ่านทั้งเส้นอื่นกว่าจะถึงเส้นที่ต้องดู
    ชิปเส้นทาง กดแล้วเห็นเฉพาะเส้นนั้น · กดซ้ำเอาตัวกรองออก
    ตัวกรองเก็บไว้ในหน่วยความจำเท่านั้น · เปลี่ยนวันแล้วเส้นนั้นอาจไม่มี จึงล้างให้เองตอนวาด
-   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName/parkSets เท่านั้น (ดู CLAUDE.md · parkSets = §pkSets) */
+   ไม่เก็บลงเครื่อง · หน้านี้เขียนได้แค่ PIER_CFG.parkTypes/parkFix/parkName/parkSets/parkPrice เท่านั้น (ดู CLAUDE.md · parkSets = §pkSets · parkPrice = §pkCalc) */
 var _pkRoute = '';
 /* §pkOv (2026-09-28) · หน้าภาพรวมทั้งเดือน · เรียงวัน ในวันแยกเรือ
    ที่มา · ผู้ใช้ขอเอง · "เพิ่มหน้า Overview เพื่อให้เห็นภาพรวมของทั้งเดือน
@@ -67729,7 +67729,64 @@ function pk3Side(flat, TY, TYM, ro, part){
   var card2='<div class="pc2-card pk2-side"><div class="ch"><b>ตั๋วในชุดแล้ว · ตามประเภท</b></div>'
     +(ty?('<div class="pk2-tyd">'+ty+'<div class="r t"><span>รวมในชุด</span><b>'+tot+'<small>/'+totAll+'</small></b></div></div>'):'<div class="pc2-empty">ยังไม่มีตั๋ว</div>')+'</div>';
   var card3='<div class="pc2-card pk3-rule"><b>กติกาของชุด</b>หนึ่งคนอยู่ได้ชุดเดียว · สุ่มเฉพาะคนที่ยังไม่อยู่ในชุดและตรงประเภท · ใส่เกินที่เหลือจะขึ้นแดง บันทึกไม่ได้ · ชุดที่กด "ซื้อแล้ว" ล็อก · ไม่กระทบใบจองและชีทตั๋วอุทยาน</div>';
-  return part==='b' ? (card2+card3) : card1;   /* §pkSets4 · r = การ์ดขวา (ชุดที่บันทึกแล้ว) · b = ใต้ตาราง */
+  return part==='b' ? (card2+card3) : (pk3Calc(flat, TY, TYM, ro)+card1);   /* §pkSets4 · r = การ์ดขวา (คำนวณ + ชุดที่บันทึกแล้ว) · b = ใต้ตาราง */
+}
+/* ══ §pkCalc (2026-10-14) · owner "เพิ่มการ์ดตรงนี้ 1 ใบ เอาไว้อันแรก เป็นเหมือนตาราง Excel ที่เราพิมพ์ใส่ตัวเลข แล้วคูณได้"
+   ตารางคิดเงินตั๋ว · แถวละ ประเภท × จำนวน × ราคา = รวม · แถวว่างพิมพ์เองได้ 3 แถว · รวมท้ายตาราง
+   คิดสดในช่อง ไม่วาดหน้าใหม่ (พิมพ์แล้วโฟกัสไม่หลุด) · จำนวนจำไว้ในหน้า · ราคาต่อใบจำใน PIER_CFG.parkPrice (ทุกเครื่องเห็นเหมือนกัน)
+   ปุ่ม "ดึงจากชุดนี้" = จำนวนจากร่างชุดที่เปิดอยู่ · "ดึงจากเส้นทาง" = จำนวนบนเรือของเส้นทางที่เลือก (แยกประเภทตั๋ว) */
+var _pkCalc={q:{}, free:[{n:'',q:'',p:''},{n:'',q:'',p:''},{n:'',q:'',p:''}]};
+function pkPrice(){ var M=PIER_CFG&&PIER_CFG.parkPrice; return (M&&typeof M==='object')?M:{}; }
+function pkPriceSet(k,v){
+  if(!PIER_CFG.parkPrice||typeof PIER_CFG.parkPrice!=='object') PIER_CFG.parkPrice={};
+  v=String(v==null?'':v).trim(); if(v) PIER_CFG.parkPrice[k]=v; else delete PIER_CFG.parkPrice[k];
+  try{ poPersist(); }catch(_){}
+}
+function pkCalcNum(v){ var n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
+function pkCalcFmt(n){ return (Math.round(n*100)/100).toLocaleString('en-US',{maximumFractionDigits:2}); }
+function pkCalcIn(el){
+  var tr=el.closest('tr'), host=el.closest('.pk3-calc'); if(!tr||!host) return;
+  var k=tr.getAttribute('data-k'), f=el.getAttribute('data-f'), v=el.value;
+  if(/^free\d$/.test(k)){ var i=+k.slice(4); _pkCalc.free[i]=_pkCalc.free[i]||{n:'',q:'',p:''}; _pkCalc.free[i][f]=v; }
+  else if(f==='q') _pkCalc.q[k]=v;
+  else if(f==='p') pkPriceSet(k,v);
+  pkCalcSum(host);
+}
+function pkCalcSum(host){
+  var tot=0;
+  host.querySelectorAll('tr[data-k]').forEach(function(tr){
+    var q=pkCalcNum((tr.querySelector('[data-f=q]')||{}).value), p=pkCalcNum((tr.querySelector('[data-f=p]')||{}).value), r=q*p; tot+=r;
+    var c=tr.querySelector('.pk3-cr'); if(c){ c.textContent=r?pkCalcFmt(r):'—'; c.classList.toggle('z',!r); }
+  });
+  var t=host.querySelector('.pk3-ct'); if(t) t.textContent=pkCalcFmt(tot);
+}
+function pkCalcFill(mode){
+  var flat=pk3Flat(), TY=pkTypes(), q={};
+  if(mode==='draft'){ var D=pkSetDraft(); if(!D){ alert('Open or start a set first.'); return; } Object.keys(D.cnt).forEach(function(c){ if(+D.cnt[c]) q[c]=String(+D.cnt[c]); }); }
+  else { flat.forEach(function(x){ if(_pkSetFamF!=='all' && pk2FamOf(x.g.rid).id!==_pkSetFamF) return;
+      (x.B.people||[]).forEach(function(p){ if(p.over) return; q[p.cat]=(+q[p.cat]||0)+1; }); });
+    Object.keys(q).forEach(function(c){ q[c]=String(q[c]); }); }
+  _pkCalc.q=q; renderPierPark();
+}
+function pkCalcClear(){ _pkCalc={q:{}, free:[{n:'',q:'',p:''},{n:'',q:'',p:''},{n:'',q:'',p:''}]}; renderPierPark(); }
+function pk3Calc(flat, TY, TYM, ro){
+  var e=poE, PR=pkPrice(), D=pkSetDraft();
+  var fam=(_pkSetFamF==='all')?'ทุกเส้นทาง':((flat.map(function(x){ return pk2FamOf(x.g.rid); }).filter(function(f){ return f.id===_pkSetFamF; })[0]||{}).n||'');
+  var inp=function(k,f,v,ph,cls){ return '<input class="pk3-ci'+(cls?(' '+cls):'')+'" data-f="'+f+'" value="'+e(v)+'" placeholder="'+e(ph||'')+'" inputmode="decimal" autocomplete="off" oninput="pkCalcIn(this)"'+(ro&&f==='p'?' readonly':'')+'>'; };
+  var rows=TY.map(function(T){ var q=_pkCalc.q[T.k]||'', p=PR[T.k]||'', r=pkCalcNum(q)*pkCalcNum(p);
+    return '<tr data-k="'+e(T.k)+'"><td class="l"><i style="background:'+(T.c||'#94A3B8')+'"></i>'+e(T.s||T.n)+'</td>'
+      +'<td>'+inp(T.k,'q',q,'0')+'</td><td class="x">×</td><td>'+inp(T.k,'p',p,'ราคา')+'</td><td class="pk3-cr'+(r?'':' z')+'">'+(r?pkCalcFmt(r):'—')+'</td></tr>'; }).join('');
+  rows+=_pkCalc.free.map(function(F,i){ var r=pkCalcNum(F.q)*pkCalcNum(F.p);
+    return '<tr data-k="free'+i+'"><td class="l">'+inp('free'+i,'n',F.n||'','พิมพ์รายการ','nm')+'</td>'
+      +'<td>'+inp('free'+i,'q',F.q||'','0')+'</td><td class="x">×</td><td>'+inp('free'+i,'p',F.p||'','ราคา')+'</td><td class="pk3-cr'+(r?'':' z')+'">'+(r?pkCalcFmt(r):'—')+'</td></tr>'; }).join('');
+  var tot=0; TY.forEach(function(T){ tot+=pkCalcNum(_pkCalc.q[T.k])*pkCalcNum(PR[T.k]); }); _pkCalc.free.forEach(function(F){ tot+=pkCalcNum(F.q)*pkCalcNum(F.p); });
+  return '<div class="pc2-card pk3-calc"><div class="ch"><b>ตารางคำนวณ</b><span>จำนวน × ราคา</span></div>'
+    +'<div class="pk3-cb"><button type="button" class="ol" onclick="pkCalcFill(\'draft\')" title="เอาจำนวนจากชุดที่เปิดอยู่">ดึงจากชุดนี้'+(D?'':' ·')+'</button>'
+    +'<button type="button" class="ol" onclick="pkCalcFill(\'fam\')" title="จำนวนบนเรือของเส้นทางที่เลือก แยกประเภทตั๋ว">ดึงจาก '+e(fam)+'</button>'
+    +'<button type="button" class="ol" onclick="pkCalcClear()">ล้าง</button></div>'
+    +'<table><thead><tr><th>รายการ</th><th>จำนวน</th><th></th><th>ราคา/ใบ</th><th>รวม</th></tr></thead><tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td colspan="4">รวมทั้งหมด</td><td class="pk3-ct">'+pkCalcFmt(tot)+'</td></tr></tfoot></table>'
+    +'<div class="pk3-cn">ราคา/ใบ จำไว้ให้ทุกเครื่อง · จำนวนและแถวที่พิมพ์เองอยู่แค่ในหน้านี้</div></div>';
 }
 function pk3CSS(S){
   var N='#0B1E5B', M='#6B7693';
@@ -67831,6 +67888,26 @@ function pk3CSS(S){
   S+' .pk3-sets .f .ol.dl{color:#A32D2D;margin-left:auto}',
   S+' .pk2-side .pk2-tyd b small{font-weight:500;color:'+M+';margin-left:2px}',
   S+' .pk2-side .pk2-tyd b.z{color:#CBD5E1}',
+  S+' .pk3-calc{border-top:4px solid '+N+'}',
+  S+' .pk3-calc .ch{padding-bottom:8px} '+S+' .pk3-calc .ch span{margin-left:auto;font-size:12px;color:'+M+'}',
+  S+' .pk3-cb{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}',
+  S+' .pk3-cb .ol{height:28px;padding:0 10px;border-radius:7px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:11.5px;font-weight:700;color:#1A2A44;cursor:pointer}',
+  S+' .pk3-calc table{width:100%;border-collapse:collapse;font-size:12.5px}',
+  S+' .pk3-calc th{font-size:10px;font-weight:700;color:'+M+';text-align:right;padding:4px 6px;border-bottom:1px solid #ECEFF4;background:#FAFBFD}',
+  S+' .pk3-calc th:first-child{text-align:left;padding-left:14px}',
+  S+' .pk3-calc td{padding:3px 6px;border-bottom:1px solid #F1F2F6;text-align:right;white-space:nowrap}',
+  S+' .pk3-calc td.l{text-align:left;padding-left:14px;font-weight:700;color:#1A2A44;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}',
+  S+' .pk3-calc td.l i{width:8px;height:8px;border-radius:4px;flex:none}',
+  S+' .pk3-calc td.x{color:'+M+';padding:0}',
+  S+' .pk3-ci{width:62px;height:30px;border:1px solid #D9DEE9;border-radius:7px;text-align:right;padding:0 7px;font-family:"DM Mono",monospace;font-weight:700;font-size:12.5px;color:'+N+';background:#fff}',
+  S+' .pk3-ci.nm{width:100%;text-align:left;font-family:inherit;font-weight:600}',
+  S+' .pk3-ci:focus{outline:2px solid #19B5E6;outline-offset:1px}',
+  S+' .pk3-ci::placeholder{color:#B9BFD0;font-weight:500}',
+  S+' .pk3-calc td.pk3-cr{font-family:"DM Mono",monospace;font-weight:700;color:'+N+';padding-right:14px}',
+  S+' .pk3-calc td.pk3-cr.z{color:#CBD5E1;font-weight:500}',
+  S+' .pk3-calc tfoot td{padding:9px 14px;font-weight:800;color:'+N+';border-top:2px solid '+N+';border-bottom:none;background:#F7F8FB}',
+  S+' .pk3-calc tfoot td.pk3-ct{font-family:"DM Mono",monospace;font-size:16px}',
+  S+' .pk3-cn{padding:8px 14px 12px;font-size:10.5px;color:'+M+'}',
   S+' .pk3-rule{background:#FFF8E8;border:1px solid #FFE2A8;padding:12px 14px;font-size:11.5px;color:#6B5312;line-height:1.65}',
   S+' .pk3-rule b{display:block;color:#7A4A00;margin-bottom:4px}'
   ].join('\n');
