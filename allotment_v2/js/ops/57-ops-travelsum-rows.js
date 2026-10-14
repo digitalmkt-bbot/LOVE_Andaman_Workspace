@@ -5,7 +5,9 @@
    money rows (collect_rows). Legacy also let staff scope the sheet by pier and route
    and gave it a document number. Those scopes are rebuilt here from server rows:
 
-     GET /v1/bookings?service_date=D&limit=5000   the day's roster (route, agent per booking)
+     GET /v1/bookings?service_date=D&limit=5000   the day's roster (route, agent, documents per booking)
+     GET /v1/bookings/:id/pier-money?date=D       a booking's pier payments and on-tour sales, with their slips
+     GET /v1/attachments/:id                      one file (opened on click; all of a pack in the print window)
 
    Chips reuse the legacy handlers (tsPickPier / tsPickRoute) and globals (_tsPier,
    _tsRoute), which re-enter renderTravelSum (wrapped by 33-ops-money-reports.js). This
@@ -15,7 +17,7 @@
   'use strict';
   var O = window.laOps; if(!O) return;
   var DEAD = ['cancelled','cancelled_weather','rejected'];
-  var cache = {}, loading = {};
+  var cache = {}, loading = {}, slipCache = {}, slipBusy = {};
 
   function text(v){ return v == null ? '' : String(v); }
   function esc(v){ return text(v).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
@@ -145,6 +147,113 @@
       + '<div style="margin-top:8px;font-size:10.5px;color:var(--fd-ink-soft)">The cards at the top are the whole day: the server returns head counts for the day only.</div></div>';
   }
 
+  /* ── Reference pack and slip pack: the files behind the day's sheet, in the chosen selection ── */
+  function agentName(r){ var a = agentOf(r.agentId); return (a && (a.name || a.code)) || (r.agentId ? r.agentId : 'Walk-in'); }
+  function sortAZ(a, b){ return text(a).localeCompare(text(b), 'en', { numeric: true, sensitivity: 'base' }); }
+  function byRouteAgentVoucher(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || sortAZ(agentName(x), agentName(y)) || sortAZ(x.voucher, y.voucher); }
+  /* Legacy tsRefPackList: a booking with documents, or any agent booking. */
+  function refPack(rows){
+    return rows.filter(function(r){ return (r.b.attachments || []).length > 0 || !!r.agentId; }).sort(byRouteAgentVoucher);
+  }
+  var METHOD = { cash: 'Cash', transfer: 'Transfer', card: 'Card', cot: 'Cash on tour' };
+  function fileOf(f){ return typeof f === 'string' ? { id: f, name: f } : f; }
+  /* Legacy tsSlipPackList: slips of pier payments, on-tour sales, upgrades and the booking itself. */
+  function slipPack(rows, date){
+    var out = [];
+    rows.forEach(function(r){
+      var det = slipCache[date + '|' + r.id], files = [];
+      function add(list, cap){ (list || []).map(fileOf).forEach(function(f){ if(f && f.id) files.push({ id: f.id, name: f.name || f.id, mime: f.mime || '', cap: cap }); }); }
+      if(det){
+        (det.payments || []).forEach(function(p){ add(p.slips, (METHOD[p.method] || p.method) + ' ' + money(p.amount) + (n(p.fee) > 0 ? ' · fee ' + money(p.fee) : '') + ' · pier payment'); });
+        (det.tour_sales || []).forEach(function(s){ add(s.slips, (METHOD[s.method] || s.method) + ' ' + money(s.total) + (n(s.fee) > 0 ? ' · fee ' + money(s.fee) : '') + ' · ' + text(s.service)); });
+      }
+      (r.b.upgrades || []).forEach(function(u){ add(u.slips, 'Upgrade ' + text(u.label || u.name || '')); });
+      add((r.b.slips || []).map(function(s){ return { id: s.attachment_id, name: s.attachment_id }; }), 'Booking slip');
+      if(files.length) out.push({ r: r, files: files });
+    });
+    return out;
+  }
+  /* The money rows whose slips are not read yet: paid at the pier, or sold on tour. */
+  function needsSlipRead(collect, keep){
+    return collect.filter(function(c){ return keep[c.booking_id] && (n(c.paid) > 0 || (c.sales && n(c.sales.count) > 0)); });
+  }
+  function loadSlips(date, ids){
+    var todo = ids.filter(function(id){ return !slipCache[date + '|' + id]; }), i = 0;
+    function worker(){
+      if(i >= todo.length) return Promise.resolve();
+      var id = todo[i++];
+      return O.get('/v1/bookings/' + encodeURIComponent(id) + '/pier-money', { date: date }).then(function(res){ slipCache[date + '|' + id] = res || {}; }).then(worker);
+    }
+    return Promise.all([worker(), worker(), worker(), worker()]);
+  }
+  function rerender(){ if(typeof window.renderTravelSum === 'function') window.renderTravelSum(); }
+  var lastView = null;
+  /* The Load button: read the slips of the money rows in the current selection, then redraw. */
+  function slipsLoad(){
+    var cur = lastView; if(!cur) return Promise.resolve();
+    var key = cur.date; if(slipBusy[key]) return slipBusy[key];
+    slipBusy[key] = loadSlips(cur.date, cur.slipIds).then(function(){ delete slipBusy[key]; rerender(); }, function(e){ delete slipBusy[key]; O.fail('Slip pack did not load', e); });
+    return slipBusy[key];
+  }
+
+  function fileLink(f){
+    return '<a href="#" data-ops-ts-file="' + esc(f.id) + '" style="color:#1683C7" onclick="laOps.travelRows.openFile(\'' + esc(f.id).replace(/'/g, '') + '\');return false">' + esc(f.name) + '</a>';
+  }
+  function packsHtml(ref, slips, pending, noSlipRows){
+    var BOX = 'flex:1;min-width:300px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:12px 15px';
+    var HD = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;font-size:11.5px;font-weight:600';
+    var BTN = 'border:0.5px solid var(--fd-line-soft);border-radius:8px;background:#fff;padding:3px 9px;font-size:10.5px;cursor:pointer';
+    var TD = 'padding:5px 6px;font-size:11px';
+    var nRef = ref.reduce(function(s, r){ return s + (r.b.attachments || []).length; }, 0);
+    var refList = ref.map(function(r){
+      return '<tr style="border-top:0.5px solid var(--fd-line-soft)"><td style="' + TD + '">' + esc(r.voucher) + '</td><td style="' + TD + '">' + esc(agentName(r)) + '</td><td style="' + TD + '">'
+        + ((r.b.attachments || []).map(fileLink).join(' · ') || '<span style="color:var(--fd-ink-soft)">no file</span>') + '</td></tr>';
+    }).join('');
+    var nSlip = slips.reduce(function(s, x){ return s + x.files.length; }, 0);
+    var slipList = slips.map(function(x){
+      return '<tr style="border-top:0.5px solid var(--fd-line-soft)"><td style="' + TD + '">' + esc(x.r.voucher) + '</td><td style="' + TD + '">'
+        + x.files.map(function(f){ return fileLink(f) + ' <span style="color:var(--fd-ink-soft)">' + esc(f.cap) + '</span>'; }).join('<br>') + '</td></tr>';
+    }).join('');
+    var slipBody = (pending ? '<button type="button" style="' + BTN + ';margin-bottom:8px" onclick="laOps.travelRows.slipsLoad()">Load slips for ' + pending + ' booking' + (pending === 1 ? '' : 's') + '</button>' : '')
+      + (slipList ? '<table style="width:100%;border-collapse:collapse"><tbody>' + slipList + '</tbody></table>' : (pending ? '' : '<div style="font-size:11px;color:var(--fd-ink-soft)">No slip files on these bookings.</div>'));
+    return '<div data-ops-ts-packs="1" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
+      + '<div data-ops-ts-refpack="1" style="' + BOX + '"><div style="' + HD + '"><span>Reference pack · ' + ref.length + ' booking' + (ref.length === 1 ? '' : 's') + ' · ' + nRef + ' file' + (nRef === 1 ? '' : 's') + '</span>'
+      + (nRef ? '<button type="button" style="' + BTN + '" onclick="laOps.travelRows.printPack(\'ref\')">Print pack</button>' : '') + '</div>'
+      + (refList ? '<table style="width:100%;border-collapse:collapse"><tbody>' + refList + '</tbody></table>' : '<div style="font-size:11px;color:var(--fd-ink-soft)">No documents on these bookings.</div>') + '</div>'
+      + '<div data-ops-ts-slippack="1" style="' + BOX + '"><div style="' + HD + '"><span>Slip pack · ' + nSlip + ' file' + (nSlip === 1 ? '' : 's')
+      + (noSlipRows ? ' · <span style="color:#A32D2D">' + noSlipRows + ' booking' + (noSlipRows === 1 ? '' : 's') + ' paid without a slip</span>' : '') + '</span>'
+      + (nSlip ? '<button type="button" style="' + BTN + '" onclick="laOps.travelRows.printPack(\'slip\')">Print pack</button>' : '') + '</div>' + slipBody + '</div></div>';
+  }
+
+  /* Open one file: fetched with the login (a plain link cannot carry the token). */
+  function fetchBlob(id){
+    return window.laOpsFetch('/v1/attachments/' + encodeURIComponent(id)).then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); });
+  }
+  function openFile(id){
+    var w = window.open ? window.open('', '_blank') : null;
+    return fetchBlob(id).then(function(b){ var u = URL.createObjectURL(b); if(w) w.location.href = u; else window.open(u, '_blank'); },
+      function(e){ if(w) w.close(); O.fail('File did not open', e); });
+  }
+  /* Print pack: every file of the pack on one printable page, images inline, other types as a note. */
+  function printPack(kind){
+    var cur = lastView; if(!cur) return Promise.resolve();
+    var items = [];
+    if(kind === 'ref') cur.ref.forEach(function(r){ (r.b.attachments || []).forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: r.voucher + ' · ' + agentName(r) + ' · ' + f.name }); }); });
+    else cur.slips.forEach(function(x){ x.files.forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: x.r.voucher + ' · ' + f.cap }); }); });
+    if(!items.length) return Promise.resolve();
+    var w = window.open ? window.open('', '_blank') : null;
+    return Promise.all(items.map(function(it){ return fetchBlob(it.id).then(function(b){ it.url = URL.createObjectURL(b); it.type = b.type || it.mime; }, function(){ it.url = ''; }); })).then(function(){
+      var title = (kind === 'ref' ? 'Reference pack ' : 'Slip pack ') + cur.docNo;
+      var body = items.map(function(it){
+        var img = it.url && /^image\//.test(it.type || '');
+        return '<figure style="break-inside:avoid;margin:0 0 18px"><figcaption style="font:12px sans-serif;margin-bottom:4px">' + esc(it.cap) + '</figcaption>'
+          + (img ? '<img src="' + it.url + '" style="max-width:100%">' : '<div style="font:12px sans-serif;color:#555">' + (it.url ? 'Not an image: open it from the sheet.' : 'File could not be loaded.') + '</div>') + '</figure>';
+      }).join('');
+      var html = '<!doctype html><meta charset="utf-8"><title>' + esc(title) + '</title><body style="margin:18px"><h3 style="font:600 15px sans-serif">' + esc(title) + '</h3>' + body;
+      if(w){ w.document.open(); w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 400); }
+    }, function(e){ if(w) w.close(); O.fail('Pack did not load', e); });
+  }
+
   /* What 33 renders: the money rows to show, plus the blocks around them. null = no roster, show the day. */
   function view(d){
     var roster = d && d._roster; if(!roster) return null;
@@ -158,10 +267,16 @@
     inScope.forEach(function(r){ if(vatKeep(st, r)) keep[r.id] = true; });
     var scoped = !!(st.pier || st.route || st.vat);
     var rows = (d.collect_rows || []).filter(function(r){ return !scoped || keep[r.booking_id]; });
-    var html = scopeChips(roster, st, date, inScope) + (scoped ? subtotalHtml(rows, st, date) : '');
+    var kept = inScope.filter(function(r){ return keep[r.id]; });
+    var ref = refPack(kept), pendingRows = needsSlipRead(d.collect_rows || [], keep);
+    var pendingIds = pendingRows.filter(function(c){ return !slipCache[date + '|' + c.booking_id]; }).map(function(c){ return c.booking_id; });
+    var slips = slipPack(kept, date);
+    var noSlipRows = (d.collect_rows || []).filter(function(c){ return keep[c.booking_id] && n(c.no_slip) > 0; }).length;
+    var html = scopeChips(roster, st, date, inScope) + (scoped ? subtotalHtml(rows, st, date) : '') + packsHtml(ref, slips, pendingIds.length, noSlipRows);
+    lastView = { date: date, docNo: docNo(date, st), ref: ref, slips: slips, slipIds: pendingIds };
     return { rows: rows, html: html, state: st, docNo: docNo(date, st) };
   }
 
-  O.onWrite(function(){ cache = {}; });
-  window.laOps.travelRows = { load: load, view: view, rosterOf: rosterOf, docNo: docNo, clear: function(){ cache = {}; loading = {}; } };
+  O.onWrite(function(){ cache = {}; slipCache = {}; });
+  window.laOps.travelRows = { load: load, view: view, rosterOf: rosterOf, docNo: docNo, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack, clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; } };
 })();
