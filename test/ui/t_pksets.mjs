@@ -9,7 +9,7 @@
 //   4 บันทึก → PIER_CFG.parkSets[date] มี 1 ชุด 3 คน ชื่อเริ่มต้น "<เรือ> ชุด 1" · poPersist ถูกเรียก · การ์ดขวาขึ้นชุด · "เหลือ" ลด 3 · ชุดใหม่สุ่มไม่ซ้ำคนที่เซฟแล้ว
 //   5 (§pkSets7) ใส่เกินที่เหลือบนลำ → ช่องเหลือง เลขจาง ๆ ติดลบ · รายชื่อดึงจากลำอื่นในเส้นทางเดียวกัน ตรงประเภท (ป้าย "จาก <ลำ>") · บันทึกได้ from=ลำจริง · ช่อง 0 ว่าง placeholder 0
 //   6 เปิดชุด → ร่างโหลดกลับ · ซื้อแล้ว → ล็อก ช่องกรอกหาย · ปลดล็อก → แก้ได้ · ลบ → หาย
-//   7 Excel ชุด/ทุกชุด · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส · ไม่เรียก writeFile จริง
+//   7 Excel ชุด/ทุกลำ · ชีทต่อชุด 3 คอลัมน์ + ชีทสรุปรหัส (ราคา/ใบ · รวม) · (§pkSets9) ทุกลำ = ไฟล์ละลำ · การ์ดขวามียอดเงินต่อชุด/ต่อลำ/รวม · ไม่เรียก writeFile จริง
 //   9 (§pkSets3/4) เลือกเส้นทางก่อน (ชิป) → ยอดจริงของเส้นทางขึ้น แถวในตารางเหลือเส้นทางนั้น → เมนูเพิ่มเรือกรอง · ไทย+ตช=รวม · เต็มจอ (pk3-wide) · การ์ดขวา 1 ใบ + ใต้ตาราง 2 ใบ
 //  10 (§pkCalc) การ์ด "ตารางคำนวณ" ใบแรกฝั่งขวา · จำนวน × ราคา = รวม คิดสดโดยไม่วาดหน้าใหม่ · ราคา/ใบ จำใน PIER_CFG.parkPrice · แถวพิมพ์เอง 3 แถว · ดึงจำนวนจากเส้นทาง/ชุด
 //  12 (§pkSets8) ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทาง/แถวรวม/แถววัน = รวมคนในชุดที่บันทึกแล้ว แยกประเภท
@@ -112,15 +112,26 @@ dlg.length = 0; await page.evaluate((H) => document.querySelector(H + ' .pk3-set
 const n6 = await page.evaluate((D) => pkSets(D).length, DATE);
 if (opened && bought && b6.locked && b6.ins.length === 0 && !b6.saveBtn && /ซื้อแล้ว/.test(b6.sets[0].tag) && !c6.locked && c6.ins.length > 0 && dlg.length === 1 && /^Delete this set/.test(dlg[0]) && n6 === 0 && d6.sets.length === 0)
   ok('6 เปิดชุด → ร่างกลับมา · ซื้อแล้ว → ล็อก · ปลดล็อก → แก้ได้ · ลบ → หาย'); else fail('6 ' + JSON.stringify({ opened, bought, b6: { locked: b6.locked, ins: b6.ins.length, save: b6.saveBtn, tag: b6.sets[0] && b6.sets[0].tag }, c6: { locked: c6.locked, ins: c6.ins.length }, dlg, n6 }));
-// 7 excel
+// 7 excel (§pkSets9: 'all' = ไฟล์ละลำ · ชีทสรุปมี ราคา/ใบ + รวม) · การ์ดขวาโชว์ยอดเงินต่อชุด/ต่อลำ/รวม
 await page.evaluate(({ D, bid, c }) => { _pkSetD = null; pkSetTab(bid, pkTkData(D, _poPier).find(g => g.boats.some(B => B.bid === bid)).rid); pkSetCnt(c, 2); pkSetSave(); pkSetTab(bid, _pkSetD ? _pkSetD.rid : pkTkData(D, _poPier).find(g => g.boats.some(B => B.bid === bid)).rid); pkSetCnt(c, 1); pkSetName('ชุดทดสอบ'); pkSetSave(); }, { D: DATE, bid: big.bid, c: cat });
 await page.waitForTimeout(300);
+// ชุดที่ 3 บนลำอื่น (ลำแรกที่มีคนเหลือ) · เอาไว้ทดสอบไฟล์ละลำ · ลบทิ้งหลังเช็ก
+const o7 = await page.evaluate(({ D, bid }) => { const F = pk3Flat(); const used = pkSetUsed(D); const y = F.find(x => x.B.bid !== bid && pkSetAvail(x.B, used).length); if (!y) return null; const p = pkSetAvail(y.B, used)[0]; _pkSetD = null; pkSetTab(y.B.bid, y.g.rid); pkSetCnt(p.cat, 1); pkSetName('ลำอื่น'); pkSetSave(); const S = pkSets(D); return { bid: y.B.bid, name: y.B.boat.name, cat: p.cat, id: S[S.length - 1].id, n: S.length }; }, { D: DATE, bid: big.bid });
+await page.evaluate(({ c, c2 }) => { delete PIER_CFG.parkPrice; pkPriceSet(c, '100'); if (c2 && c2 !== c) pkPriceSet(c2, '40'); renderPierPark(); }, { c: cat, c2: o7 && o7.cat }); await page.waitForTimeout(300);
 const x7 = await page.evaluate((D) => { const out = [];
   if (typeof XLSX === 'undefined') { /* harness โหลด CDN ไม่ได้ · ตัวแทนขั้นต่ำที่ pkSetXls ใช้ */
-    window.XLSX = { utils: { book_new: () => ({ SheetNames: [], Sheets: {} }), aoa_to_sheet: rows => ({ __rows: rows }), book_append_sheet: (wb, ws, n) => { wb.SheetNames.push(n); wb.Sheets[n] = ws; }, sheet_to_json: ws => ws.__rows }, writeFile: () => {} }; } const W = XLSX.writeFile; XLSX.writeFile = (wb, fn) => { out.push({ fn, sheets: wb.SheetNames, rows: wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1 })) }); }; try { pkSetXls(pkSets(D)[0].id); pkSetXls('all'); } finally { XLSX.writeFile = W; } return { out, sets: pkSets(D).map(S => ({ name: S.name, n: S.people.length })) }; }, DATE);
-const one = x7.out[0] || {}, all = x7.out[1] || {};
-if (x7.sets.length === 2 && x7.sets[1].name === 'ชุดทดสอบ' && one.sheets && one.sheets.length === 2 && one.rows[0].length === 2 && one.rows[0][0].length === 3 && one.rows[0][0][2] === code && one.sheets[1] === 'สรุปรหัส' && all.sheets.length === 3 && all.sheets.includes('ชุดทดสอบ') && /park_sets_2026-09-16/.test(all.fn))
-  ok(`7 Excel · ชุดเดียว ${one.sheets.length} ชีท (3 คอลัมน์ · code ${code}) · ทุกชุด ${all.sheets.length} ชีท`); else fail('7 ' + JSON.stringify({ sets: x7.sets, one: { s: one.sheets, r0: one.rows && one.rows[0] }, all: { s: all.sheets, fn: all.fn } }));
+    window.XLSX = { utils: { book_new: () => ({ SheetNames: [], Sheets: {} }), aoa_to_sheet: rows => ({ __rows: rows }), book_append_sheet: (wb, ws, n) => { wb.SheetNames.push(n); wb.Sheets[n] = ws; }, sheet_to_json: ws => ws.__rows }, writeFile: () => {} }; } const W = XLSX.writeFile; XLSX.writeFile = (wb, fn) => { out.push({ fn, sheets: wb.SheetNames, rows: wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1 })) }); }; try { pkSetXls(pkSets(D)[0].id); pkSetXls('all'); } finally { XLSX.writeFile = W; }
+  const h = document.querySelector('#pk-host-' + _poPier); const card = [...h.querySelectorAll('.pk3-set')].map(b => ({ name: b.querySelector('.t b').textContent, amt: b.querySelector('.v .amt').textContent, pt: b.querySelector('.v .amt').classList.contains('pt') }));
+  return { out, sets: pkSets(D).map(S => ({ name: S.name, n: S.people.length, bid: S.bid })), card, bsum: [...h.querySelectorAll('.pk3-bsum')].map(x => x.textContent), gsum: (h.querySelector('.pk3-gsum') || {}).textContent }; }, DATE);
+const one = x7.out[0] || {}, allF = x7.out.slice(1);
+const sumRows = one.rows ? one.rows[one.rows.length - 1] : [];
+const perBoat = o7 && allF.length === 2 && allF[0].sheets.length === 3 && allF[0].sheets.includes('ชุดทดสอบ') && allF[1].sheets.length === 2 && allF[1].sheets[0] === 'ลำอื่น' && allF[1].fn.includes(o7.name.replace(/[^\w฀-๿-]+/g, '_')) && allF.every(f => /park_sets_2026-09-16/.test(f.fn)) && allF[0].fn !== allF[1].fn;
+const sumOk = sumRows.length === 3 && sumRows[0].length === 7 && sumRows[0][5] === 'ราคา/ใบ' && sumRows[1][4] === 2 && sumRows[1][5] === 100 && sumRows[1][6] === 200 && sumRows[2][0] === 'รวม' && sumRows[2][6] === 200;
+const p3 = o7 && o7.cat === cat ? 100 : 40;
+const cardOk = x7.card.length === 3 && x7.card[0].amt === '฿ 200' && x7.card[1].amt === '฿ 100' && x7.card[2].amt === '฿ ' + p3 && x7.card.every(c => !c.pt) && x7.bsum.length === 1 && /2 ชุด · 3 คน/.test(x7.bsum[0]) && /฿ 300/.test(x7.bsum[0]) && /3 ชุด · 4 คน/.test(x7.gsum) && new RegExp('฿ ' + (300 + p3)).test(x7.gsum);
+if (x7.sets.length === 3 && x7.sets[1].name === 'ชุดทดสอบ' && one.sheets && one.sheets.length === 2 && one.rows[0].length === 2 && one.rows[0][0].length === 3 && one.rows[0][0][2] === code && one.sheets[1] === 'สรุปรหัส' && sumOk && perBoat && cardOk)
+  ok(`7 Excel · ชุดเดียว ${one.sheets.length} ชีท (3 คอลัมน์ · code ${code} · สรุป 2×100=200) · ทุกลำ → ${allF.length} ไฟล์ (${big.name} 3 ชีท / ${o7.name} 2 ชีท) · การ์ด ฿200 ฿100 ฿${p3} · รวมลำ ฿300 · รวมทุกชุด ฿${300 + p3}`); else fail('7 ' + JSON.stringify({ sets: x7.sets, one: { s: one.sheets, r0: one.rows && one.rows[0], sum: sumRows }, allF: allF.map(f => ({ s: f.sheets, fn: f.fn })), o7, card: x7.card, bsum: x7.bsum, gsum: x7.gsum, sumOk, perBoat, cardOk }));
+await page.evaluate(({ D, id }) => { pkSetsWrite(D, pkSets(D).filter(S => S.id !== id)); delete PIER_CFG.parkPrice; renderPierPark(); }, { D: DATE, id: o7 && o7.id }); await page.waitForTimeout(300);
 // 12 (§pkSets8) ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทาง/แถวรวม/แถววัน = รวมคนในชุดที่บันทึกแล้ว แยกประเภท (ตอนนี้ 2 ชุด · cat 2+1 = 3 บนลำ big)
 await page.waitForTimeout(200);
 const r12 = await page.evaluate(({ H, D, c, bid }) => { const h = document.querySelector(H); const TY = pk3TyOrder(pkTypes()); const ci = TY.findIndex(T => T.k === c);
