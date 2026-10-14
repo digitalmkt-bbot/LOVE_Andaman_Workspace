@@ -29413,9 +29413,33 @@ function vanJobsSaveImage(date, vanId, routeId, leg, grp){
 }
 // Van cell · vehicle dropdown (zone-aware) + editable final pickup time
 function bkV2AssignVanReturnSplit(bkId, ai, vanId, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b)return; const o=bkOpsFor(b, bkOpsDate(b,date)); if(!Array.isArray(o.vanSplits)||!o.vanSplits[ai])return; o.vanSplits[ai].vanReturnId=vanId||null; acctPersistBookings(); bkV2RenderKeep(); }   /* §per-trip ops · รถกลับของ split ตามวัน */
+/* §ntRetVan (2026-10-14) · เจ้าของ: "เคสที่เดินทางเองขามา แต่ขากลับใช้รถกลับด้วย ไม่สามารถจัดรถได้"
+   ช่องรถของแถว self-arrive คืนคำว่า self-arrive แล้วจบ · ไม่มีที่ให้เลือกรถขากลับ
+   ทั้งที่ใบตั้ง "ส่งคนละที่" ไว้ และการ์ดรถก็นับเป็น "ยังไม่จัดรถ" · ใบงานขากลับอ่าน vanReturnId
+   โดยไม่สนโซนขาไปอยู่แล้ว (_collect) · ขาดแค่ช่องให้เลือก · รถที่เลือกได้ = รถของเส้นทางวันนั้น
+   + รถในโซนของจุดส่ง (จุดส่งอยู่ภูเก็ต ก็เอารถภูเก็ตมาส่ง ไม่ใช่รถของโซนขาไป) */
+function bkV2NtRetSel(bk, date, routeId){
+  const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ri=(typeof bkV2RetInfo==='function')?bkV2RetInfo(bk,date):null;
+  if(!ri || !ri.sep || ri.selfRet) return '';
+  const _O=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):(bk.ops||{});
+  const ar=(bk.dropoffAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.dropoffAreaId):null;
+  const dz=(ar&&ar.zone)||null;
+  const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, dz):[];
+  const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(dz, date):[];
+  const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];
+  const rvid=_O.vanReturnId||'';
+  let ropts='<option value="">&#8617; รถกลับ</option>';
+  pool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>&#8617; ${e(v.name||v.id)}</option>`; });
+  if(rvid && !pool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>&#8617; ${e((vo&&vo.name)||rvid)}</option>`; }
+  return `<select onchange="event.stopPropagation();bkV2AssignVanReturn('${bk.id}',this.value,'${date}')" onclick="event.stopPropagation()" title="มาเอง แต่ขากลับส่ง ${e(ri.drop)} · เลือกรถขากลับ" style="border:1px solid ${rvid?'#C7B8E8':'#D9534A'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#A32D2D'};max-width:84px;padding:1px 0 1px 2px">${ropts}</select>`;
+}
 function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, isSplit, isFirst){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if(zone==='NoTransfer'||zone==='NT') return '<span style="font-size:10px;color:#8a8a82;font-style:italic">self-arrive</span>';
+  if(zone==='NoTransfer'||zone==='NT'){
+    const _nr=(!isSplit||isFirst)?bkV2NtRetSel(bk,date,routeId):'';   /* §ntRetVan */
+    return '<span style="font-size:10px;color:#8a8a82;font-style:italic">self-arrive</span>'+(_nr?('<div style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">'+_nr+'</div>'):'');
+  }
   const _O = (typeof bkOpsRead==='function') ? bkOpsRead(bk, date) : (bk.ops||{});   // per-day van block
   const key = allocKey || bk.id;
   const ai = (typeof key==='string' && key.indexOf('@')>=0) ? +key.split('@')[1] : -1;
