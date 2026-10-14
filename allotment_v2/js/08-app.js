@@ -49453,18 +49453,25 @@ function bkV2RenderTripsSection(){
               ${/* §pkNat · สัญชาติจริงของ นทท. · ไม่เกี่ยวกับราคาเลย ใช้ตอนซื้อตั๋วอุทยานอย่างเดียว
                     สองแถวบนเลือกเรทตามสัญญา · บางสัญญาไม่มีราคาไทย คนไทยจึงต้องคีย์เป็น ตปท.
                     แถวนี้บอกความจริงว่าใครเป็นคนไทย ค่าอุทยานจะได้ไม่จ่ายเรทฝรั่งให้คนไทย */''}
-              <tr style="background:#EAF5F0">
+              ${/* §natRow (2026-10-14) · owner, BK-26100720 (Influencer 12 คนไทย): แถวนี้ถูกกดตอน pax ยัง 0
+                    → ตั๋วอุทยาน 12 ตปท ทั้งที่คีย์แถว TH · "กดเลือก TH ก็ควรเป็นไทย" — ใช่ และปกติก็เป็นอย่างนั้น
+                    แถวนี้มีไว้เฉพาะเคสยกเว้น (จ่ายเรท TH แต่ตัวจริง ตปท. หรือกลับกัน) จึงซ่อนไว้หลังปุ่ม
+                    โผล่เองเมื่อค่าต่างจากแถว TH อยู่แล้ว · และเตือนแดงเมื่อคนจ่ายเรทไทยจะถูกซื้อตั๋ว ตปท. */''}
+              ${bkV2NatOpen(idx,t) ? `<tr style="background:#EAF5F0">
                 <td style="padding:7px 4px 7px 12px;font-weight:600;font-size:12.5px;color:#0B5A43;border-top:1px solid #ECEBE6;line-height:1.25;white-space:nowrap" title="จำนวนคนไทยจริงบนทริปนี้ · ใช้คิดค่าอุทยานอย่างเดียว ไม่กระทบราคาที่นั่ง">ไทยจริง<span style="display:block;font-weight:400;font-size:10.5px">ค่าอุทยาน</span></td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'ad',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'chd',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'inf',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'foc',t)}</td>
-              </tr>
-              ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
+              </tr>` : ''}
+              ${(() => { const w = bkV2NatWarn(t); if(!w) return '';
+                 return w.bad
+                   ? `<tr><td colspan="5" style="padding:7px 12px 8px;font-size:12.5px;font-weight:600;color:#A32D2D;background:#FBE7E5;line-height:1.4">&#9888; ตั๋วอุทยาน: ${w.fr} ตปท &middot; ${w.th} ไทย ทั้งที่คีย์แถว TH ${w.thPrice} คน &middot; ถ้าทุกคนเป็นคนไทยจริง กดแถวไทยจริงให้เท่าแถว TH</td></tr>`
+                   : `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>`; })()}
             </tbody>
           </table>
           <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px">
-            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}`:''}</div>
+            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(ตามแถว TH)</span>'} ${bkV2NatOpen(idx,t)?'':`<button type="button" onclick="bkV2NatToggle(${idx})" style="margin-left:6px;background:#fff;border:1px solid #9CCDB9;border-radius:7px;padding:2px 9px;font-size:11px;font-weight:700;color:#0B5A43;cursor:pointer;font-family:inherit" title="เฉพาะเคสที่สัญชาติจริงไม่ตรงกับแถวราคา เช่น จ่ายเรท TH แต่ถือพาสปอร์ตต่างชาติ">แก้สัญชาติอุทยาน</button>`}`:''}</div>
             <div style="margin-left:auto;text-align:right" title="${_mn?'Rate-type reference only — Manual total is used':''}">
               <div style="font-size:11.5px;color:#5B6170">Subtotal${_mn?' &middot; <span style="color:#7A4300;font-weight:700">overridden</span>':''}${_fx?` &middot; <span style="font-family:'DM Mono',monospace">${_fx}</span>`:''}</div>
               <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums;${_mn?'color:#5B6170;text-decoration:line-through;opacity:.65':'color:#0F1B3D'}">&#3647;${(subtotal.total||0).toLocaleString()}${subtotal.bundle?` <span style="font-size:11.5px;color:#5B6170;font-weight:400;font-family:'DM Sans',sans-serif;text-decoration:none">incl. ฿${subtotal.bundle.toLocaleString()} bundle</span>`:''}</div>
@@ -57031,8 +57038,30 @@ function bkNatSameAsPrice(t){
   const px=(t&&t.pax)||{}, n=(t&&t.nat)||{};
   return ['ad','chd','inf','foc'].every(k => (+n[k]||0) === (+px[k+'_th']||0));
 }
+/* §natRow · แถวไทยจริงเปิดอยู่ไหม: ค่าต่างจากแถว TH อยู่แล้ว หรือกดปุ่มเปิดในการแก้ครั้งนี้ */
+function bkV2NatOpen(idx, t){
+  const nb=_bkV2.newBooking; if(nb && nb._natOpen && nb._natOpen[idx]) return true;   /* อยู่กับใบที่กำลังแก้ · เปิดใบใหม่ก็หาย */
+  return !!(t && bkNatHas(t) && typeof bkNatSameAsPrice==='function' && !bkNatSameAsPrice(t));
+}
+function bkV2NatToggle(idx){
+  const nb=_bkV2.newBooking; if(!nb) return;
+  nb._natOpen = nb._natOpen || {}; nb._natOpen[idx] = true;
+  bkV2Render();
+}
+/* §natRow · เตือนเมื่อคนที่จ่ายเรท TH จะถูกซื้อตั๋วอุทยานแบบ ตปท. (nat ไทย < หัวแถว TH)
+   คืน null เมื่อไม่มี nat หรือ nat เท่าแถวราคา · bad=false คือทางกลับกัน (จ่ายเรท FR แต่เป็นไทย) แค่บอก */
+function bkV2NatWarn(t){
+  if(!t || !t.pax || !bkNatHas(t)) return null;
+  if(typeof bkNatSameAsPrice==='function' && bkNatSameAsPrice(t)) return null;
+  const px=t.pax, K=['ad','chd','inf','foc'];
+  const th=K.reduce((a,k)=>a+bkNatTH(t,k),0);
+  const thPrice=K.reduce((a,k)=>a+(+px[k+'_th']||0),0);
+  const all=K.reduce((a,k)=>a+(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0),0);
+  return { th:th, fr:Math.max(0,all-th), thPrice:thPrice, bad: th < thPrice };
+}
 function bkV2BumpNat(idx, k, delta){
   if(!_bkV2.newBooking) return;
+  _bkV2.newBooking._natOpen = _bkV2.newBooking._natOpen || {}; _bkV2.newBooking._natOpen[idx] = true;   /* §natRow · แถวอยู่ต่อแม้กดจนเท่าแถว TH */
   const t = _bkV2.newBooking.trips[idx];
   if(!t || !t.pax) return;
   const px = t.pax;
