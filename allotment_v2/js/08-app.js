@@ -74013,7 +74013,7 @@ function pjPrint(){
    /* §pjCk · ชื่อเรือเป็นป้ายสีทึบ แบบป้าย agency ในหน้าเช็คอิน */
    +'.brd .c-b{white-space:nowrap;overflow:hidden}'
    +'.brd .c-b .bpill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;'
-     +'border-radius:4px;padding:2px 8px;color:#fff;font-size:'+(fs-2.5)+'px;font-weight:800;'
+     +'border-radius:4px;padding:2px 8px 2px 7px;color:#111;font-size:'+(fs-2.5)+'px;font-weight:800;'   /* §pjInk · ตัวดำ */
      +'letter-spacing:.03em;text-transform:uppercase;vertical-align:middle}'
    +'.brd .c-p{font-size:'+(fs+.5)+'px;font-weight:800;color:#16265C;letter-spacing:.005em;'
      +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
@@ -74231,7 +74231,8 @@ function pjPrint(){
           +';border-bottom:'+(go?'5px':'3px')+' solid '+col+'">'
           /* §pjHead4 · ชื่อเรือใช้สีของเรือเอง · ขีดหนาใต้ชื่อบอกสีเดียวกัน
              อ่านชื่อกับอ่านสีเป็นการกวาดตาครั้งเดียว ไม่ใช่สองครั้ง */
-          +'<span class="bn" style="color:'+col+'">'+e(B.boat.name||B.bid)+'</span>'
+          /* §pjInk · ชื่อเรือกลับเป็นตัวดำ (owner) · สีเรือยังอยู่ที่พื้นจางและขีดหนาใต้ชื่อ */
+          +'<span class="bn">'+e(B.boat.name||B.bid)+'</span>'
           +'</div></th>'; }).join('')
     +'</tr></thead>';
 
@@ -74402,6 +74403,12 @@ function pjPrint(){
      §pjBrd4 · ใบนี้ออก "ก่อน" เริ่ม Operation จึงมีแต่ของที่รู้ล่วงหน้าได้
      สถานะเช็คอิน / ที่นั่งเหลือ / รถคันสุดท้ายถึงกี่โมง เป็นของที่เกิดตอนวันงาน
      ตอนพิมพ์ใบยังไม่มีค่า ใส่ไปก็เป็นเลขหลอก จึงไม่ใส่ */
+  /* §pjInk · pckBoatColor คืน hex ที่เลือกไว้ หรือ rgb() จาก getBoatColor · pjTint2 รับเฉพาะ hex 6 หลัก */
+  var _pjC6=function(bid){
+    var c=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
+    var m=/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(String(c));
+    if(m) c='#'+[m[1],m[2],m[3]].map(function(v){ return ('0'+(+v).toString(16)).slice(-2); }).join('');
+    return /^#[0-9a-fA-F]{6}$/.test(c)?c:'#185FA5'; };
   var progBox=function(){
     if(!GO.length) return '';
     var rows=GO.map(function(B,i){
@@ -74419,8 +74426,12 @@ function pjPrint(){
       return { dep:(dep||'~'), html:
         '<tr class="br">'
         +'<td class="c-t">'+e(dep||'--:--')+'</td>'
-        +'<td class="c-b"><span class="bpill" style="background:'
-          +((typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5')+'">'
+        /* §pjInk (2026-10-14) · owner "ตัวหนังสือเรือ เป็นสีดำ" (ทั้งป้ายนี้และหัวตาราง Section B)
+           ของเดิมตัวขาวบนพื้นสีเรือทึบ · สีเรือสด/อ่อน (ฟ้า เขียวอ่อน) ตัวขาวจางหาย
+           ตอนนี้ตัวดำบนพื้นสีเรือจาง (โครงเดียวกับหัวคอลัมน์ Section B) · แถบทึบด้านซ้ายคือสีเรือจริง
+           สีเรือจึงยังเทียบกับหัวตารางด้านล่างได้ด้วยตา · ตัวหนังสืออ่านออกไม่ว่าสีเรือเข้มหรืออ่อน */
+        +'<td class="c-b"><span class="bpill" style="background:'+pjTint2(_pjC6(B.bid),0.68)
+          +';border-left:5px solid '+e(_pjC6(B.bid))+'">'
           +e(B.boat.name||B.bid)+'</span></td>'
         +'<td class="c-p">'+e(rt.name||'\u2014')+'</td>'
         +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
