@@ -8,8 +8,8 @@ const SOURCE = fs.readFileSync('allotment_v2/js/ops/27-ops-sales-board.js', 'utf
 const BOARD = {
   month: '2026-10', previous_month: '2026-09', total_pax: 30,
   sales: [
-    { sales_id: 's2', name: 'Bee', pax: 20, foc: 2, target: 15, streak: 3, rank: 1, previous_rank: 2 },
-    { sales_id: 's1', name: 'Nok', pax: 10, foc: 0, target: null, streak: 0, rank: 2, previous_rank: 1 },
+    { sales_id: 's2', name: 'Bee', pax: 20, foc: 2, target: 15, streak: 3, rank: 1, previous_rank: 2, bookings: 7 },
+    { sales_id: 's1', name: 'Nok', pax: 10, foc: 0, target: null, streak: 0, rank: 2, previous_rank: 1, bookings: 0 },
   ],
   agents: [
     { agent_id: 'a1', sales_id: 's1', pax: 10, previous_pax: 4, foc: 0, followed: true, feedback_collected: false },
@@ -40,7 +40,7 @@ function runtime({ enabled = true, respond }) {
     _sbMonth: '2026-10', _sbSig: 'x',
   };
   ['tmSaveModal', 'tmDeleteMarket', 'tmDeleteSales', 'tmApplyMarketOrder', 'sbMarketsPersist', 'sbSalesPersist',
-    'salesPaxAgg', 'salesTargetFor', 'salesStreak', 'salesIsFollowed', 'salesSetTarget', 'salesToggleFollow', 'renderSalesBoard']
+    'salesPaxAgg', 'salesBookingCounts', 'salesPersonMix', 'salesTargetFor', 'salesStreak', 'salesIsFollowed', 'salesSetTarget', 'salesToggleFollow', 'renderSalesBoard']
     .forEach((n) => { window[n] = () => { legacy.push(n); return 'legacy:' + n; }; });
   vm.runInNewContext(SOURCE, ctx);
   return { window, ctx, calls, failures, wrote, legacy, el, writeListeners };
@@ -147,4 +147,15 @@ test('a non-sales write marks the cache stale so the next render refetches', asy
   await rt.window.renderSalesBoard();
   await new Promise((r) => setImmediate(r));
   assert.equal(rt.calls.length, 2);
+});
+
+test('booking counts come from the server board; the route mix is not summed from the partial booking cache', async () => {
+  const off = runtime({ enabled: false, respond: ok });
+  assert.equal(off.window.salesBookingCounts('2026-10'), 'legacy:salesBookingCounts');
+  assert.equal(off.window.salesPersonMix('s2', '2026-10'), 'legacy:salesPersonMix');
+  const rt = runtime({ respond: ok });
+  await rt.window.renderSalesBoard();
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesBookingCounts('2026-10'))), { s2: 7 });
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesPersonMix('s2', '2026-10'))), { routePax: {}, routeVal: {}, value: null });
+  assert.ok(!rt.legacy.includes('salesBookingCounts') && !rt.legacy.includes('salesPersonMix'));
 });

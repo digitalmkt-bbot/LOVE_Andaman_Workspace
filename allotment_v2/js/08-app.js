@@ -41853,7 +41853,7 @@ function renderSalesBoard(){
     const rank = sales.findIndex(x=>x.s.id===who.id)+1;
     const myAgents = (SB_AGENTS||[]).filter(a=>a.sales===who.id);
     const nHave = myAgents.filter(a=>(agg.byAgent[a.id]||0)>0).length;
-    const nBk = (SB_BOOKINGS||[]).filter(b=>!_SB_CXL.includes(b.status)&&b.agentId&&(sbGetAgent(b.agentId)||{}).sales===who.id&&(b.trips||[]).some(t=>_ymOf(t.date)===ym)).length;
+    const nBk = (salesBookingCounts(ym)||{})[who.id]||0;   /* §salesBk */
     const prevRank = {}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
     const rankMove = (prevRank[who.id]&&rank) ? (prevRank[who.id]-rank) : 0;
     const streak = salesStreak(who.id, ym);
@@ -41923,19 +41923,13 @@ function renderSalesBoard(){
         </div>
       </div>`;
     /* ── RIGHT detail: KPI + donuts (pax by route / guest type) + follow-up header ── */
-    const _routePax={}, _routeVal={}; let _valTotal=0;
-    (SB_BOOKINGS||[]).forEach(b=>{ if(_SB_CXL.includes(b.status)||!b.agentId||(sbGetAgent(b.agentId)||{}).sales!==who.id)return;
-      const _mt=(b.trips||[]).filter(t=>_ymOf(t.date)===ym); if(!_mt.length)return;
-      const _tot=+((b.priceBreakdown||{}).total)||0; _valTotal+=_tot;   /* §มูลค่าที่ขายได้ · priceBreakdown.total (ยอดหลังส่วนลด) */
-      const _bpax=_mt.reduce((s,t)=>s+(getTripPaxTotal(t)||0),0)||1;    /* กระจายมูลค่าลงเส้นทางตามสัดส่วน pax */
-      _mt.forEach(t=>{ const px=getTripPaxTotal(t)||0; const rid=t.routeId||'?';
-        if(px)_routePax[rid]=(_routePax[rid]||0)+px;
-        if(_tot)_routeVal[rid]=(_routeVal[rid]||0)+_tot*(px/_bpax); }); });
+    /* §salesBk · route mix + sold value (04-data-core.js salesPersonMix · value null = not available) */
+    const _mix = salesPersonMix(who.id, ym) || {}; const _routePax=_mix.routePax||{}, _routeVal=_mix.routeVal||{}, _valTotal=_mix.value;
     const _rNm = rid => ((ROUTES||[]).find(r=>r.id===rid)||{}).name || rid || '—';
     const _routeArr = Object.entries(_routePax).map(([rid,px])=>({rid,px})).sort((a,b)=>b.px-a.px);
     const _rPal = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#888780'];
     const _vPal = ['#3B6D11','#639922','#97C459','#C0DD97','#27500A','#888780'];
-    const _fB = v => { v=Math.round(v||0); return v>=1000 ? '฿'+Math.round(v/1000)+'k' : '฿'+v; };
+    const _fB = v => { if(v==null) return '—'; v=Math.round(v||0); return v>=1000 ? '฿'+Math.round(v/1000)+'k' : '฿'+v; };
     const _routeValArr = Object.entries(_routeVal).map(([rid,v])=>({rid,v})).sort((a,b)=>b.v-a.v);
     const _v5 = _routeValArr.slice(0,5); const _vOther = _routeValArr.slice(5).reduce((s,x)=>s+x.v,0);
     const _vSeg = _v5.map((x,i)=>({val:x.v,color:_vPal[i]})).concat(_vOther?[{val:_vOther,color:_vPal[5]}]:[]);
@@ -42070,7 +42064,7 @@ function renderSalesBoard(){
 
   /* ══════════ VIEW: LEADERBOARD ══════════ */
   const agCount={}; (SB_AGENTS||[]).forEach(a=>{ if(a.sales) agCount[a.sales]=(agCount[a.sales]||0)+1; });
-  const bkBySales={}; (SB_BOOKINGS||[]).forEach(b=>{ if(_SB_CXL.includes(b.status)||!b.agentId)return; const sid=(sbGetAgent(b.agentId)||{}).sales; if(!sid)return; if((b.trips||[]).some(t=>_ymOf(t.date)===ym)) bkBySales[sid]=(bkBySales[sid]||0)+1; });
+  const bkBySales=salesBookingCounts(ym)||{};   /* §salesBk */
   const curRank={}; sales.forEach((x,i)=>{ curRank[x.s.id]=i+1; });
   const prevRank={}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
   let topGrow=null; Object.keys(agg.byAgent).forEach(aid=>{ const t=agentTrend(agg.byAgent[aid]||0, aggPrev.byAgent[aid]||0); if(t.cat==='up' && (!topGrow||t.pct>topGrow.pct)) topGrow={aid,pct:t.pct}; });
