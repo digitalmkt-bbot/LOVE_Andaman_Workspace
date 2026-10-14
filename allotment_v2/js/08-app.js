@@ -517,6 +517,24 @@ function staffAdd(){
 function staffSetField(id, field, val){ const s=staffGet(id); if(!s) return; if(field==='active'){ s.active=!!val; } else { s[field]=val; } sbStaffPersist(); }
 function staffSetQuota(id, year, val){ const s=staffGet(id); if(!s) return; if(!s.quota) s.quota={}; s.quota[String(year)]=Math.max(0, parseInt(val)||0); sbStaffPersist(); renderStaff(); }
 function staffDelete(id){ const s=staffGet(id); if(!s) return; if(!confirm('Delete staff "'+(s.name||s.code||id)+'"?')) return; SB_STAFF=SB_STAFF.filter(x=>x.id!==id); sbStaffPersist(); renderStaff(); }
+/* ══ §swA (2026-10-14) · owner "ปรับดีไซน์หน้านี้หน่อย" → เลือกแบบ A ═══════════════════
+   ทะเบียนจัดกลุ่มตามแผนก (หัวกลุ่มสรุปโควต้า/ใช้/เหลือ) · แถบโควต้าต่อคน (เกิน = แดง)
+   ช่องกรอกเดิมเหลือเป็น "ghost input" เห็นเป็นข้อความจนกว่าจะชี้/คลิก · โควต้ายังเป็นช่องตัวเลข
+   Active เป็นสวิตช์ · ปุ่มลบโผล่เมื่อชี้แถว · ชิปกรองแผนก / การใช้ · ช่องค้นหา · เตือนรหัสซ้ำ
+   ไม่แตะโครงข้อมูล SB_STAFF · "ใช้ล่าสุด" อ่านจากใบจองสวัสดิการที่มีอยู่ (staffTripsFor) */
+let _staffDept = 'all', _staffUse = 'all', _staffQ = '';
+function staffSetDept(k){ _staffDept = k; renderStaff(); }
+function staffSetUse(k){ _staffUse = k; renderStaff(); }
+function staffSetQ(v){ _staffQ = String(v||''); renderStaff(); try{ const i=document.getElementById('sw-q'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }catch(_){} }
+function staffDeptKey(d){ return String(d||'').trim().toLowerCase() || '__none'; }
+/* สีประจำแผนก · ชุดคงที่ ไล่ตามลำดับที่แผนกโผล่ · แผนกเดียวกันสีเดียวกันตลอดหน้า */
+const _SW_PAL = [['#E8F0FB','#1F4E8C'],['#E3F6EC','#0F6E56'],['#FBEFD9','#8A4B00'],['#EEE9FB','#5B3FBF'],['#FCEBEB','#A32D2D'],['#E6F7F9','#0E7D8A'],['#EEF1F6','#4B5563']];
+function staffInitials(name){
+  const w = String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!w.length) return '?';
+  const pick = x => Array.from(x)[0] || '';
+  return (w.length >= 2 ? pick(w[0]) + pick(w[w.length-1]) : Array.from(w[0]).slice(0,2).join('')).toUpperCase();
+}
 function renderStaff(){
   const host=document.getElementById('staff-host'); if(!host) return;
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -524,53 +542,102 @@ function renderStaff(){
   const totStaff=SB_STAFF.filter(s=>s.active).length, totAll=SB_STAFF.length;
   const totQuota=SB_STAFF.reduce((a,s)=>a+staffQuota(s.id,yr),0);
   const totUsed=SB_STAFF.reduce((a,s)=>a+staffWelfareUsed(s.id,yr),0);
-  const kpi=(lab,val,col)=>`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:12px 15px;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82">${lab}</div><div style="font-size:23px;font-weight:700;color:${col||'#1B2A55'};font-family:'DM Mono',monospace;margin-top:3px">${val}</div></div>`;
-  const th='padding:8px 10px;text-align:left;font-size:9.5px;color:#8a8a82;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.08)';
-  const rows=SB_STAFF.map(s=>{ const q=staffQuota(s.id,yr), u=staffWelfareUsed(s.id,yr), rem=q-u;
-    return `<tr style="border-bottom:0.5px solid rgba(0,0,0,.05);${s.active?'':'opacity:.5'}">
-      <td style="padding:6px 10px"><input value="${esc(s.code)}" oninput="staffSetField('${s.id}','code',this.value)" style="width:90px;border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;font-family:'DM Mono',monospace;font-size:11px"></td>
-      <td style="padding:6px 10px"><input value="${esc(s.name)}" oninput="staffSetField('${s.id}','name',this.value)" placeholder="ชื่อพนักงาน" style="width:160px;border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;font-size:12px"></td>
-      <td style="padding:6px 10px"><input value="${esc(s.dept)}" oninput="staffSetField('${s.id}','dept',this.value)" placeholder="แผนก" style="width:120px;border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;font-size:12px"></td>
-      <td style="padding:6px 10px;text-align:center"><input type="number" min="0" value="${q}" onchange="staffSetQuota('${s.id}',${yr},this.value)" style="width:60px;border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;text-align:center;font-family:'DM Mono',monospace;font-size:13px;font-weight:700"></td>
-      <td style="padding:6px 10px;text-align:center;font-family:'DM Mono',monospace;color:#854F0B">${u}</td>
-      <td style="padding:6px 10px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:${rem<0?'#A32D2D':'#0F6E56'}">${rem}</td>
-      <td style="padding:6px 10px;text-align:center"><input type="checkbox" ${s.active?'checked':''} onchange="staffSetField('${s.id}','active',this.checked); renderStaff()"></td>
-      <td style="padding:6px 10px;text-align:center"><button onclick="staffDelete('${s.id}')" style="background:transparent;border:1px solid #FCEBEB;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:10px;cursor:pointer">ลบ</button></td>
-    </tr>`; }).join('');
+  const trips = (typeof staffTripsFor==='function') ? staffTripsFor(yr) : [];
+  const nTrips = trips.length;
+  /* ทะเบียน · ข้อมูลต่อคน */
+  const lastUse = {};
+  trips.forEach(x => { if(x.purpose!=='welfare' || !x.staff) return; const k=x.staff.id; if(!lastUse[k] || (x.t.date||'') > (lastUse[k].date||'')) lastUse[k] = { date:x.t.date, route:(x.route&&x.route.name)||x.t.routeId||'' }; });
+  const codeCount = {};
+  SB_STAFF.forEach(s => { const c=String(s.code||'').trim().toUpperCase(); if(c) codeCount[c]=(codeCount[c]||0)+1; });
+  const deptName = {}, deptN = {};
+  SB_STAFF.forEach(s => { const k=staffDeptKey(s.dept); if(!deptName[k]) deptName[k] = String(s.dept||'').trim() || 'ไม่ระบุแผนก'; deptN[k]=(deptN[k]||0)+1; });
+  const deptKeys = Object.keys(deptN).sort((a,b) => (a==='__none')-(b==='__none') || deptN[b]-deptN[a] || deptName[a].localeCompare(deptName[b],'th'));
+  const deptCol = {}; deptKeys.forEach((k,i) => deptCol[k] = _SW_PAL[i % _SW_PAL.length]);
+  const nDept = deptKeys.filter(k=>k!=='__none').length;
+  const nUsed = SB_STAFF.filter(s => staffWelfareUsed(s.id,yr) > 0).length;
+  const nOver = SB_STAFF.filter(s => staffWelfareUsed(s.id,yr) > staffQuota(s.id,yr)).length;
+  const nInactive = SB_STAFF.filter(s => !s.active).length;
+  const q = _staffQ.trim().toLowerCase();
+  const rowsAll = SB_STAFF.map(s => ({ s, k:staffDeptKey(s.dept), q:staffQuota(s.id,yr), u:staffWelfareUsed(s.id,yr) }));
+  const rows = rowsAll.filter(r => {
+    if(_staffDept !== 'all' && r.k !== _staffDept) return false;
+    if(_staffUse === 'used' && !(r.u > 0)) return false;
+    if(_staffUse === 'unused' && !(r.u === 0 && r.s.active)) return false;
+    if(_staffUse === 'inactive' && r.s.active) return false;
+    if(q){ const blob = `${r.s.code} ${r.s.name} ${r.s.dept}`.toLowerCase(); if(!blob.includes(q)) return false; }
+    return true;
+  });
+  const kpi=(lab,val,col,foot,bar)=>`<div class="sw-kpi"><div class="lab">${lab}</div><div class="val" style="color:${col||'#1B2A55'}">${val}</div>${foot?`<div class="foot">${foot}</div>`:''}${bar!=null?`<div class="trk"><div class="u" style="width:${Math.min(100,bar)}%;background:${col}"></div></div>`:''}</div>`;
+  const chip=(on,label,n,fn)=>`<button class="sw-chip${on?' on':''}" onclick="${fn}">${esc(label)}${n!=null?` <i>${n}</i>`:''}</button>`;
+  const dmy=d=>{ if(!d) return ''; const dt=new Date(String(d).slice(0,10)+'T00:00'); return isNaN(dt)?String(d):dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); };
+  const pct = totQuota>0 ? Math.round(totUsed/totQuota*100) : 0;
+  const monthsLeft = Math.max(0, 12 - (yr === new Date().getFullYear() ? new Date().getMonth()+1 : (yr < new Date().getFullYear() ? 12 : 0)));
+  const rowHtml = r => {
+    const s=r.s, qv=r.q, u=r.u, rem=qv-u, over=u>qv;
+    const col = deptCol[r.k] || _SW_PAL[6];
+    const dup = s.code && codeCount[String(s.code).trim().toUpperCase()] > 1;
+    const lu = lastUse[s.id];
+    const sub = lu ? `ใช้ล่าสุด ${esc(dmy(lu.date))}${lu.route?' · '+esc(lu.route):''}` : (qv===0 ? 'ไม่มีโควต้าปีนี้' : (u===0 ? 'ยังไม่ใช้ปีนี้' : ''));
+    const uPct = qv>0 ? Math.min(100, u/qv*100) : (u>0?100:0);
+    const bar = over ? `<span class="u" style="width:${qv>0?Math.round(qv/u*100):0}%"></span><span class="o" style="flex:1"></span>` : `<span class="u" style="width:${uPct}%"></span>`;
+    return `<tr class="sw-row${s.active?'':' off'}">
+      <td><span class="sw-av" style="background:${col[0]};color:${col[1]}">${esc(staffInitials(s.name||s.code))}</span></td>
+      <td><div class="sw-codewrap"><input class="sw-ghost mono" value="${esc(s.code)}" placeholder="EMP-000" oninput="staffSetField('${s.id}','code',this.value)" onchange="renderStaff()">${dup?'<span class="sw-warn" title="มีพนักงานใช้รหัสนี้มากกว่าหนึ่งคน">รหัสซ้ำ</span>':''}</div></td>
+      <td><input class="sw-ghost name" value="${esc(s.name)}" placeholder="ชื่อพนักงาน" oninput="staffSetField('${s.id}','name',this.value)" onblur="renderStaff()"><div class="sw-sub">${sub}</div></td>
+      <td><div class="sw-deptwrap"><span class="dot" style="background:${col[1]}"></span><input class="sw-ghost dept" value="${esc(s.dept)}" placeholder="แผนก" list="sw-depts" oninput="staffSetField('${s.id}','dept',this.value)" onchange="renderStaff()"></div></td>
+      <td><div class="sw-bar"><span class="trk">${bar}</span><span class="t${over?' over':''}">${u}<i>/${qv}</i></span></div></td>
+      <td class="num"><input type="number" min="0" value="${qv}" onchange="staffSetQuota('${s.id}',${yr},this.value)" class="sw-qin" aria-label="โควต้า"></td>
+      <td class="num"><span class="sw-num u${u?'':' zero'}">${u}</span></td>
+      <td class="num"><span class="sw-num rem${rem<0?' neg':(rem===0?' zero':'')}">${rem<0?'−'+(-rem):rem}</span></td>
+      <td><div class="sw-act"><label class="sw-sw${s.active?' on':''}" title="${s.active?'Active':'ไม่ active'}"><input type="checkbox" ${s.active?'checked':''} onchange="staffSetField('${s.id}','active',this.checked); renderStaff()"><span></span></label><button class="sw-del" onclick="staffDelete('${s.id}')" title="ลบพนักงาน">ลบ</button></div></td>
+    </tr>`;
+  };
+  /* กลุ่มตามแผนก · กรองแล้วยังอยู่ในกลุ่มเดิม · หัวกลุ่มสรุปเฉพาะแถวที่แสดง */
+  const groups = deptKeys.map(k => ({ k, name: deptName[k], rows: rows.filter(r => r.k === k) })).filter(g => g.rows.length);
+  const body = groups.map(g => {
+    const gq = g.rows.reduce((a,r)=>a+r.q,0), gu = g.rows.reduce((a,r)=>a+r.u,0);
+    return `<tr class="sw-grp"><td></td><td colspan="4">${esc(g.name)} <span class="n">${g.rows.length} คน</span></td><td class="num sum">${gq}</td><td class="num sum">${gu}</td><td class="num sum${gq-gu<0?' neg':''}">${gq-gu}</td><td></td></tr>` + g.rows.map(rowHtml).join('');
+  }).join('');
   host.innerHTML = `
-    <div style="padding:24px 28px;font-family:'DM Sans',sans-serif">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-        <h1 style="font-size:24px;font-weight:700;color:#1B2A55;margin:0">Staff &amp; Welfare</h1>
-        <div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:20px;padding:4px 6px;margin-left:auto">
-          <button onclick="staffSetYear(-1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&lsaquo;</button>
-          <b style="font-family:'DM Mono',monospace;font-size:14px;color:#1B2A55">${yr}</b>
-          <button onclick="staffSetYear(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&rsaquo;</button>
+    <div class="sw-page">
+      <datalist id="sw-depts">${deptKeys.filter(k=>k!=='__none').map(k=>`<option value="${esc(deptName[k])}"></option>`).join('')}</datalist>
+      <div class="sw-head">
+        <div class="sw-title"><h1>Staff &amp; Welfare</h1><span>ทะเบียนพนักงาน · โควต้าเที่ยวฟรี (สวัสดิการ) นับเป็นที่นั่งต่อปี · พาครอบครัวได้ (หักตามจำนวนหัว) · แท็บ ของบริษัท รวมใบที่ไม่ใช่เอเยนต์และไม่ใช่ B2C ทั้งหมด</span></div>
+        <div class="sw-tabs">
+          <button class="${_staffTab==='roster'?'on':''}" onclick="staffSetTab('roster')">ทะเบียน</button>
+          <button class="${_staffTab==='trips'?'on':''}" onclick="staffSetTab('trips')">ทริปพนักงาน <i>${nTrips}</i></button>
+          <button class="${_staffTab==='internal'?'on gold':''}" onclick="staffSetTab('internal')">ของบริษัท</button>
         </div>
-      </div>
-      <div style="font-size:12px;color:#8a8a82;margin-bottom:18px">ทะเบียนพนักงาน + โควต้าเที่ยวฟรี (สวัสดิการ) · นับเป็น <b>ที่นั่งต่อปี</b> · ปรับโควต้าได้ตามนโยบายแต่ละปี · พาครอบครัวได้ (หักตามจำนวนหัว)<br>แท็บ <b>ของบริษัท</b> รวมใบที่ไม่ใช่เอเยนต์และไม่ใช่ B2C ทั้งหมด · แขกบริษัท · PR / Influencer · ราคาพิเศษ · ทริปพนักงาน</div>
-      <div style="display:inline-flex;gap:3px;background:#eef0f3;border-radius:10px;padding:3px;margin-bottom:16px">
-        <button onclick="staffSetTab('roster')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='roster'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทะเบียน · Roster</button>
-        <button onclick="staffSetTab('trips')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทริปพนักงาน · Staff trips</button>
-        <button onclick="staffSetTab('internal')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='internal'?'background:#B8860B;color:#fff':'background:transparent;color:#666'}">ของบริษัท · Internal / Company</button>
+        <div class="sw-year">
+          <button onclick="staffSetYear(-1)" aria-label="ปีก่อน">&lsaquo;</button>
+          <b>${yr}</b>
+          <button onclick="staffSetYear(1)" aria-label="ปีถัดไป">&rsaquo;</button>
+        </div>
       </div>
       ${_staffTab==='internal' ? laInternalReport(yr) : _staffTab==='trips' ? staffTripsReport(yr) : `
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-        ${kpi('Active staff', totStaff+'<span style="font-size:13px;color:#8a8a82">/'+totAll+'</span>')}
-        ${kpi('Quota seats · '+yr, totQuota, '#185FA5')}
-        ${kpi('Used', totUsed, '#854F0B')}
-        ${kpi('Remaining', (totQuota-totUsed), (totQuota-totUsed)<0?'#A32D2D':'#0F6E56')}
+      <div class="sw-kpis">
+        ${kpi('Active staff', totStaff+'<i>/ '+totAll+'</i>', '#1B2A55', nDept+' แผนก')}
+        ${kpi('Quota seats · '+yr, totQuota, '#185FA5', totStaff?('เฉลี่ย '+(Math.round(totQuota/totStaff*10)/10)+' ที่/คน'):'')}
+        ${kpi('Used', totUsed+'<i>'+pct+'%</i>', '#854F0B', nUsed+' คนใช้แล้ว'+(nOver?(' · '+nOver+' คนใช้เกิน'):''), pct)}
+        ${kpi('Remaining', (totQuota-totUsed), (totQuota-totUsed)<0?'#A32D2D':'#0F6E56', monthsLeft?('ถึงสิ้นปี · อีก '+monthsLeft+' เดือน'):'ปีนี้ปิดแล้ว')}
       </div>
-      <div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden">
-        <div style="display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid rgba(0,0,0,.06);background:#fafafa">
-          <span style="font-size:13px;font-weight:700;color:#1B2A55">รายชื่อพนักงาน</span>
-          <button onclick="staffAdd()" style="margin-left:auto;background:#185FA5;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer">+ เพิ่มพนักงาน</button>
-        </div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr><th style="${th}">Code</th><th style="${th}">ชื่อ</th><th style="${th}">แผนก</th><th style="${th};text-align:center">โควต้า ${yr}</th><th style="${th};text-align:center">ใช้ไป</th><th style="${th};text-align:center">เหลือ</th><th style="${th};text-align:center">Active</th><th style="${th};text-align:center"></th></tr></thead>
-          <tbody>${rows}</tbody>
+      <div class="sw-filters">
+        ${chip(_staffDept==='all','ทุกแผนก',totAll,"staffSetDept('all')")}
+        ${deptKeys.map(k=>chip(_staffDept===k,deptName[k],deptN[k],`staffSetDept('${k}')`)).join('')}
+        <span class="sep"></span>
+        ${chip(_staffUse==='used','ใช้โควต้าแล้ว',nUsed,"staffSetUse(_staffUse==='used'?'all':'used')")}
+        ${chip(_staffUse==='unused','ยังไม่ใช้',SB_STAFF.filter(s=>s.active&&staffWelfareUsed(s.id,yr)===0).length,"staffSetUse(_staffUse==='unused'?'all':'unused')")}
+        ${chip(_staffUse==='inactive','ไม่ active',nInactive,"staffSetUse(_staffUse==='inactive'?'all':'inactive')")}
+        <input id="sw-q" class="sw-search" value="${esc(_staffQ)}" placeholder="ค้นหาชื่อ · รหัส · แผนก" oninput="staffSetQ(this.value)">
+        <button class="sw-add" onclick="staffAdd()">+ เพิ่มพนักงาน</button>
+      </div>
+      <div class="sw-card">
+        <table class="sw-tbl">
+          <thead><tr><th style="width:44px"></th><th style="width:150px">Code</th><th>ชื่อ</th><th style="width:190px">แผนก</th><th style="width:220px">โควต้า ${yr} · ใช้ไป</th><th class="num" style="width:84px">โควต้า</th><th class="num" style="width:60px">ใช้</th><th class="num" style="width:64px">เหลือ</th><th style="width:110px">Active</th></tr></thead>
+          <tbody>${body || `<tr><td colspan="9" class="sw-empty">${q||_staffDept!=='all'||_staffUse!=='all'?'ไม่มีพนักงานที่ตรงตัวกรอง':'ยังไม่มีพนักงาน · กด + เพิ่มพนักงาน'}</td></tr>`}</tbody>
         </table>
       </div>
-      <div style="font-size:11px;color:#8a8a82;margin-top:12px">โควต้า = ที่นั่งฟรีต่อปีต่อคน · "ใช้ไป" คำนวณจาก booking ที่เป็น staff welfare (ยังไม่มี = 0) · เปลี่ยนปีเพื่อตั้ง/ดูโควต้าแต่ละปี</div>
+      <div class="sw-note">โควต้า = ที่นั่งฟรีต่อปีต่อคน · "ใช้ไป" คำนวณจากใบจองที่เป็น staff welfare · แถบแดง = ใช้เกินโควต้า (คิดเงินส่วนเกิน) · ชี้ที่ชื่อ/รหัส/แผนกแล้วพิมพ์แก้ได้เลย · เปลี่ยนปีเพื่อตั้ง/ดูโควต้าของปีนั้น</div>
       `}
     </div>`;
 }
