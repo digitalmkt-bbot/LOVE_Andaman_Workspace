@@ -154,10 +154,13 @@
     var routes=(d.by_route||[]).map(function(x){ return row([{value:x.name||x.route_id},{value:x.bookings},{value:x.pax},{value:money(x.revenue),right:true},{value:money(x.per_pax),right:true}]); }).join('');
     var agents=(d.by_agent||[]).map(function(x){ return row([{value:x.name||x.key},{value:x.bookings},{value:x.pax},{value:money(x.revenue),right:true},{value:money(x.due),right:true}]); }).join('');
     return reportNav('Daily Report',d.date,'drDateShift(-1)','drDateShift(1)')
+      +'<div id="dr-trend-host" data-ops-dr-trend="1"></div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+card('Bookings',String(n(d.bookings)))+card('Pax',String(n(p.total)))+card('Revenue',money(d.revenue),'#0F6E56')+card('Per paying pax',money(d.revenue_per_pax))+card('Due',money(d.due),'#A05A1A')+card('Got',money(d.got),'#0F6E56')+'</div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Passenger mix</b><div style="margin-top:9px;font-size:12px">Adult '+String(n(p.ad))+' · Child '+String(n(p.chd))+' · Infant '+String(n(p.inf))+' · FOC '+String(n(p.foc))+'</div></div><div style="flex:1;min-width:260px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px"><b>Van cost</b><div style="margin-top:9px;font-size:12px">'+money(v.total)+' · '+String(n(v.vans))+' vans'+(v.estimated?' · estimated':'')+'</div><div style="margin-top:8px;font-size:11px;color:var(--fd-ink-soft)">Settings: '+money(s.van_cost)+' / van · quota '+String(n(s.van_quota))+' · target '+money(s.target_per_pax)+'/pax</div><div style="margin-top:10px;display:flex;gap:6px;align-items:center"><input id="ops-dr-van-cost" type="number" value="'+esc(s.van_cost)+'" style="width:90px"><button onclick="drCfgSet(\'vanCost\',document.getElementById(\'ops-dr-van-cost\').value)">Save van cost</button></div></div></div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:360px">'+table([{label:'Route'},{label:'Bookings'},{label:'Pax'},{label:'Revenue',right:true},{label:'Per pax',right:true}],routes,'No route rows')+'</div><div style="flex:1;min-width:360px">'+table([{label:'Agent'},{label:'Bookings'},{label:'Pax'},{label:'Revenue',right:true},{label:'Due',right:true}],agents,'No agent rows')+'</div></div>';
   }
+  // §drTrend · the 14-day trend is its own adapter (58); it fills the placeholder dailyHtml leaves
+  function paintDaily(host,d,date){ host.innerHTML=dailyHtml(d); var T=window.laOps&&window.laOps.dailyTrend; if(T&&T.mount) T.mount(date); }
   function loadDaily(date){
     date=dateOf(date); if(reports.daily[date]) return Promise.resolve(reports.daily[date]);
     var key='daily:'+date; if(reports.loading[key]) return reports.loading[key];
@@ -197,8 +200,8 @@
   wrap('renderDailyReport',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var host=document.getElementById('dailyreport-host'), date=dateOf(typeof _drDate!=='undefined'?_drDate:null);
-    if(!reports.daily[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Daily Report…'); return loadDaily(date).then(function(d){ if(host) host.innerHTML=dailyHtml(d); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
-    if(host) host.innerHTML=dailyHtml(reports.daily[date]);
+    if(!reports.daily[date]){ if(host) host.innerHTML=O.loadingHtml('Loading Daily Report…'); return loadDaily(date).then(function(d){ if(host) paintDaily(host,d,date); },function(e){ fail('Daily Report did not load',e); hostError('dailyreport-host','Daily Report did not load from operation-backend.'); }); }
+    if(host) paintDaily(host,reports.daily[date],date);
   });
   wrap('drCfgSet',function(orig,key,value){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
