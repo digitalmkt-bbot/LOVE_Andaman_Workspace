@@ -115,13 +115,29 @@
       var b = boats[id], ks = Object.keys(b.piers).sort(function(x, y){ return b.piers[y] - b.piers[x]; });
       b.pier = ks[0] || b.homePier || ''; b.pierAll = ks; b.moved = !!(b.pier && b.homePier && b.pier !== b.homePier);
     });
+    return finish(boats, order);
+  }
+  /* B16: the server's own boat rows (booked pax, bookings, piers, departure) */
+  function boatsFromOps(list){
+    var boats = {}, order = [];
+    (list || []).forEach(function(r){
+      var id = r.boat_id; if(!id || boats[id]) return;
+      boats[id] = { id: id, name: r.name || boat(id).name || id, type: r.type || '', homePier: r.home_pier || '', pier: r.pier || '',
+        pierAll: r.piers || (r.pier ? [r.pier] : []), moved: !!r.moved, cap: n(r.cap), pax: n(r.pax), bookings: has(r.bookings) ? n(r.bookings) : null,
+        routes: r.routes || {}, dep: r.dep || '' };
+      order.push(id);
+    });
+    return finish(boats, order);
+  }
+  function finish(boats, order){
     order.sort(function(a, c){ return pct(boats[c].pax, boats[c].cap) - pct(boats[a].pax, boats[a].cap); });
     var seat = 0, capTot = 0, over = 0;
     order.forEach(function(id){ var b = boats[id]; seat += b.pax; capTot += b.cap; if(b.cap > 0 && b.pax > b.cap) over++; });
     return { boats: boats, order: order, seatTot: seat, capTot: capTot, over: over };
   }
   function vansOf(vj, daily){
-    var vans = {}, order = [];
+    var vans = {}, order = [], ops = (daily && daily.ops) || null;
+    if(ops && ops.vans) return vansFromOps(ops, vj, daily);
     ((vj && vj.jobs) || []).forEach(function(j){
       if(!j.van_id) return;
       var V = j.van || {}, D = j.driver || {};
@@ -137,6 +153,21 @@
       retTodo: ret.length, retTodoPax: ret.reduce(function(a, r){ return a + n(r.pax); }, 0),
       byVan: vc.by_van || {} };
   }
+  /* B16: the server's van rows in legacy order (first pickup, zone, boats); the day's driver from van-jobs */
+  function vansFromOps(ops, vj, daily){
+    var drv = {}, vans = {}, order = [], vc = daily.van_cost || {}, def = {};
+    ((vj && vj.jobs) || []).forEach(function(j){ if(j.van_id && j.driver && !drv[j.van_id]) drv[j.van_id] = j.driver; });
+    (vc.default_rate_by_van || []).forEach(function(id){ def[id] = 1; });
+    ops.vans.forEach(function(r){
+      var D = drv[r.van_id] || {};
+      vans[r.van_id] = { id: r.van_id, name: r.name || r.van_id, plate: D.plate || r.plate || '', driver: D.name || '', phone: D.phone || '',
+        own: '', cap: n(r.capacity), zones: r.zone ? [r.zone] : [], n: n(r.n), pax: n(r.pax), first: r.first_pickup || '', boats: r.boats || [], noRate: !!def[r.van_id] };
+      order.push(r.van_id);
+    });
+    var ret = ops.ret || {};
+    return { vans: vans, order: order, pax: order.reduce(function(a, id){ return a + vans[id].pax; }, 0),
+      retTodo: n(ret.todo), retTodoPax: n(ret.todoPax), byVan: vc.by_van || {}, fromOps: true };
+  }
   function model(date, x){
     var d = x.daily || {}, p = d.pax || {}, s = d.settings || {}, vc = d.van_cost || {}, lt = d.longtail || {}, ops = d.ops || null;
     var M = { date: date, d: d, ops: ops,
@@ -150,7 +181,8 @@
       vanCost: n(vc.total), vanEst: !!vc.estimated, vanNoRate: n(vc.default_rate_vans), nVan: n(vc.vans),
       ltChtr: n(lt.charter_boats), ltJoin: n(lt.join_pax), ltCost: n(lt.cost), known: n(d.known_cost), net: n(d.net_before_boat_costs),
       routes: (d.by_route || []).map(function(r){ var R = route(r.route_id); return { id: r.route_id, name: r.name || R.name || r.route_id, color: R.color || '#94a3b8',
-        n: n(r.bookings), pax: n(r.pax), rev: n(r.revenue), per: n(r.per_pax), share: n(r.share_pct), seats: 0, cap: 0 }; }),
+        n: n(r.bookings), pax: n(r.pax), rev: n(r.revenue), per: n(r.per_pax), share: n(r.share_pct), seats: 0, cap: 0,
+        split: has(r.ad) ? { ad: n(r.ad), chd: n(r.chd), inf: n(r.inf), foc: n(r.foc) } : null }; }),
       mkts: (d.by_market || []).map(function(m, i){ return { id: m.id, name: m.name || m.id, color: palette()[i % palette().length], pax: n(m.pax), n: n(m.bookings), rev: n(m.revenue) }; }),
       agents: d.by_agent || []
     };
@@ -158,14 +190,14 @@
     var docs = {}, docWarn = 0;
     M.agents.forEach(function(a){ Object.keys(a.docs || {}).forEach(function(k){ docs[k] = (docs[k] || 0) + n(a.docs[k]); if(a.agent_id && k !== 'verified') docWarn += n(a.docs[k]); }); });
     M.docs = docs; M.docWarn = docWarn;
-    if(x.boats){
-      M.bt = boatsOf(x.boats);
+    if((ops && ops.boats) || x.boats){
+      M.bt = (ops && ops.boats) ? boatsFromOps(ops.boats) : boatsOf(x.boats);
       var byId = {}; M.routes.forEach(function(r){ byId[r.id] = r; });
       M.bt.order.forEach(function(id){ var b = M.bt.boats[id];
         Object.keys(b.routes).forEach(function(rid){ var r = byId[rid]; if(!r) return; var share = b.pax > 0 ? b.routes[rid] / b.pax : 0; r.seats += b.routes[rid]; r.cap += Math.round(b.cap * share); });
       });
     }
-    if(x.vj) M.vn = vansOf(x.vj, d);
+    if(x.vj || (ops && ops.vans)) M.vn = vansOf(x.vj, d);
     M.vanList = x.vanList || null;
     M.perVanPax = (M.vn && M.vn.pax > 0) ? M.vanCost / M.vn.pax : 0;
     return M;
@@ -292,6 +324,17 @@
     Object.keys(o).forEach(function(k){ o[k] = n(p[k + '_th']) + n(p[k + '_fr']) + n(p[k]); });
     return o;
   }
+  /* the pickup window as staff write it (legacy text): HH:MM · HH:MM-HH:MM · Before HH:MM at pier; the final time wins */
+  function win(start, end, atPier){
+    if(atPier && end) return 'Before ' + end + ' at pier';
+    if(start && end) return start + '-' + end;
+    return start || '';
+  }
+  function pickupText(t){
+    var o = (t && t.operations) || {};
+    if(o.pickup_time_final || (o.pickup_final_at_pier && o.pickup_time_final_end)) return win(o.pickup_time_final, o.pickup_time_final_end, o.pickup_final_at_pier);
+    return win(t.pickup_time, t.pickup_time_end, t.pickup_at_pier);
+  }
   function rowsOf(date, list, M){
     var agName = {}; M.agents.forEach(function(a){ if(a.agent_id) agName[a.agent_id] = a.name; });
     var rName = {}; M.routes.forEach(function(r){ rName[r.id] = r.name; });
@@ -300,7 +343,7 @@
       if(!b || DEAD.indexOf(b.status) >= 0) return;
       var t = (b.trips || []).filter(function(x){ return x && x.service_date === date; })[0]; if(!t) return;
       var ag = b.agent_id ? (agName[b.agent_id] || ((g('sbGetAgent') && g('sbGetAgent')(b.agent_id)) || {}).name || b.agent_id) : (b.source || 'walk-in');
-      out.push({ b: b, t: t, route: rName[t.route_id] || route(t.route_id).name || t.route_id, agent: ag, voucher: b.voucher_ref || b.code || '' });
+      out.push({ b: b, t: t, route: rName[t.route_id] || route(t.route_id).name || t.route_id, agent: ag, voucher: b.voucher_ref || '' });
     });
     var az = function(a, c){ return String(a || '').localeCompare(String(c || ''), 'en', { numeric: true, sensitivity: 'base' }); };
     return out.sort(function(x, y){ return az(x.route, y.route) || az(x.agent, y.agent) || az(x.voucher, y.voucher); });
@@ -341,16 +384,16 @@
       var b = r.b, p = gridOf(r.t), agC = agentColor(b.agent_id);
       var ml = []; if(n(b.special_meals_veg)) ml.push('มังสวิรัติ '+n(b.special_meals_veg)); if(n(b.special_meals_vegan)) ml.push('วีแกน '+n(b.special_meals_vegan)); if(n(b.special_meals_halal)) ml.push('ฮาลาล '+n(b.special_meals_halal));
       var al = text(b.special_meals_allergies).trim();
-      var lg = []; if(b.guide_english) lg.push('EN'); if(b.guide_russian) lg.push('RU'); if(b.guide_chinese) lg.push('CN'); if(text(b.guide_other).trim()) lg.push(text(b.guide_other).trim());
+      var lg = []; if(b.guide_english) lg.push('EN'); if(b.guide_russian) lg.push('RU'); if(b.guide_chinese) lg.push('CN'); var ol = text(b.guide_other_lang || b.guide_other).trim(); if(ol) lg.push(ol);
       var drop = (b.dropoff_same === false) ? (b.dropoff_hotel_name || b.dropoff_area || '—') : '';
-      var tm = (r.t.operations && r.t.operations.pickup_time_final) || r.t.pickup_time || '—';
+      var tm = pickupText(r.t) || '—';
       var cell = function(x){ return x ? ('<td class="c" style="font-weight:700">'+x+'</td>') : '<td class="c dr-z0">0</td>'; };
       return '<tr><td class="dr-mono" style="font-weight:700">'+e(r.voucher||'—')+'</td>'
         +'<td>'+sq(agC, b.lead_pax||r.agent)+'<span><b>'+e(b.lead_pax||'—')+'</b><span>'+e(b.lead_phone||'')+'</span></span></span></td>'
         +'<td><span class="dr-tag" style="background:'+agC+'1f;color:'+agC+'">'+e(r.agent)+'</span></td>'
         +cell(p.ad)+cell(p.chd)+cell(p.inf)+cell(p.foc)
         +'<td>'+e(r.route||'—')+'</td>'
-        +'<td>'+e(b.hotel_name||b.pickup_area||'—')+' · <b class="dr-mono">'+e(tm)+'</b></td>'
+        +'<td>'+e(b.hotel_name||'—')+' · <b class="dr-mono">'+e(tm)+'</b></td>'
         +'<td>'+(drop?('<b>'+e(drop)+'</b>'):'<span class="dr-z0">จุดเดิม</span>')+'</td>'
         +'<td>'+(lg.length?lg.map(function(x){ return '<span class="dr-tag" style="background:#f5f3ff;color:#7c3aed">'+e(x)+'</span>'; }).join(' '):'<span class="dr-z0">—</span>')+'</td>'
         +'<td>'+(ml.length?('<span class="dr-tag" style="background:#d1fae5;color:#047857">'+e(ml.join(' · '))+'</span>'):'')
@@ -501,16 +544,18 @@
 
     var body = vn.order.map(function(id){ var x = vn.vans[id], pc = pct(x.pax, x.cap);
       var col = (x.cap&&x.pax>x.cap)?'#be123c':(pc>=80?'#047857':'#4f46e5');
-      var V = (M.vanList && M.vanList[id]) || {};
+      var V = (M.vanList && M.vanList[id]) || {}, own = x.own || V.ownership || '';
+      var bts = (x.boats || []).map(function(bid){ var bb = M.bt && M.bt.boats[bid]; return '<span class="dr-tag" style="background:#ecfdf5;color:#047857">'+e((bb && bb.name) || boat(bid).name || bid)+'</span>'; }).join(' ');
       var cost = has(vn.byVan[id]) ? vn.byVan[id] : C.vanCost;
-      return '<tr><td>'+sq('#8b5cf6',x.name)+'<span><b>'+e(x.name)+'</b><span>'+e(V.type||'')+(x.own==='partner'?' · รถร่วม':'')+'</span></span></span></td>'
+      return '<tr><td>'+sq('#8b5cf6',x.name)+'<span><b>'+e(x.name)+'</b><span>'+e(V.type||'')+(own==='partner'?' · รถร่วม':'')+'</span></span></span></td>'
         +'<td class="dr-mono">'+e(x.plate||'—')+'</td>'
         +'<td>'+e(x.driver||'—')+(x.phone?('<div style="font-size:10px;color:#9ca3af" class="dr-mono">'+e(x.phone)+'</div>'):'')+'</td>'
-        +'<td>'+e(x.zones.map(zoneLabel).join(' · ')||'—')+'</td><td class="c dr-mono">'+na()+'</td><td class="c">'+x.n+'</td>'
+        +'<td>'+e(x.zones.map(zoneLabel).join(' · ')||'—')+'</td><td class="c dr-mono">'+(vn.fromOps?e(x.first||'—'):na())+'</td><td class="c">'+x.n+'</td>'
         +'<td class="c dr-mono" style="font-weight:700">'+x.pax+'</td><td class="c dr-mono">'+(x.cap||'—')+'</td>'
         +'<td class="c" style="font-weight:700;color:'+col+'">'+(x.cap?(pc+'%'):'—')+'</td>'
-        +'<td>'+na()+'</td>'
-        +'<td class="r dr-mono" style="font-weight:700">'+B(cost)+'</td></tr>';
+        +'<td>'+(vn.fromOps?(bts||'<span class="dr-z0">—</span>'):na())+'</td>'
+        +'<td class="r dr-mono" style="font-weight:700">'+B(cost)
+          +(x.noRate?'<div style="font-size:9px;font-weight:600;color:#b45309">ยังไม่ตั้งเรต</div>':'')+'</td></tr>';
     }).join('');
     if(nv && n(nv.n)){
       body += '<tr style="opacity:.75"><td>'+sq('#9ca3af','—')+'<span><b>ยังไม่จัดรถ</b><span>'+nv.n+' booking</span></span></span></td>'
@@ -673,14 +718,18 @@
   function load(date, tab){
     var mode = window._drTrendMode === 'booked' ? 'booked' : 'travel';
     var need = { daily: day(date) };
-    if(tab === 'ov' || tab === 'bt') need.boats = boatsRaw(date);
-    if(tab === 'ov' || tab === 'vn') need.vj = vanJobs(date);
+    /* the pier-office / deployments / van-board join only stands in while the report has no ops block (B16) */
+    var hasOps = function(d, k){ return !!(d && d.ops && d.ops[k]); };
+    var boatsFor = function(ds){ return day(ds).then(function(d){ return hasOps(d, 'boats') ? null : boatsRaw(ds); }); };
+    if(tab === 'ov' || tab === 'bt') need.boats = boatsFor(date);
+    if(tab === 'vn') need.vj = vanJobs(date);                 // the day's driver per van
+    if(tab === 'ov') need.vj = day(date).then(function(d){ return hasOps(d, 'vans') ? null : vanJobs(date); });
     if(tab === 'px') need.roster = roster(date);
     if(tab === 'vn') need.vanList = vanList();
     if(tab === 'ov'){
       var d7 = shift(date, -7);
       need.trend = trend(date, mode);
-      need.p7 = Promise.all([day(d7), boatsRaw(d7)]).then(function(r){ return { daily: r[0], boats: r[1] }; });
+      need.p7 = Promise.all([day(d7), boatsFor(d7)]).then(function(r){ return { daily: r[0], boats: r[1] }; });
     }
     var keys = Object.keys(need);
     return Promise.all(keys.map(function(k){ return need[k]; })).then(function(vals){

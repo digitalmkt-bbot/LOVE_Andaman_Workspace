@@ -64,7 +64,7 @@ export const JOBS = { date: DATE, jobs: [
   { van_id: 'veh2', van: { name: 'Love5', plate: '31-1', capacity: 10, ownership: 'own' }, driver: {}, zones: ['KL'], pax: 4, bookings: 2, capacity: 10 },
   { van_id: null, van: null, driver: {}, zones: ['PK'], pax: 2, bookings: 1 },
 ], return_unarranged: [{ booking_id: 'x1', pax: 2 }, { booking_id: 'x2', pax: 3 }], self_arrive: [] };
-export const VANS = { vans: [{ id: 'veh1', type: 'van' }, { id: 'veh2', type: 'minibus' }] };
+export const VANS = { vans: [{ id: 'veh1', type: 'van', ownership: 'partner' }, { id: 'veh2', type: 'minibus' }] };
 const bk = (id, route, extra = {}) => ({ id, voucher_ref: 'V-' + id, status: 'confirmed', agent_id: 'a13', lead_pax: 'Lead ' + id, lead_phone: '081',
   hotel_name: 'Hotel ' + id, guide_english: true, special_meals_veg: 0,
   trips: [{ service_date: DATE, route_id: route, pickup_time: '07:00', pax: { ad_fr: 2, chd_th: 1 }, pax_total: 3, operations: {} }], ...extra });

@@ -146,3 +146,62 @@ test('with laOps off the legacy page renders and nothing is read', async () => {
   assert.deepEqual(h.legacy, ['renderDailyReport', 'drMailShow']);
   assert.equal(h.reads.length, 0);
 });
+
+// ── B16 (operation-backend feat/daily-report-ops-block): the report's own ops block ──
+const OPS = {
+  boats: [
+    { boat_id: 'b8', name: 'Tadeo', type: 'Speedboat', pier: 'tublamu', home_pier: 'tublamu', piers: ['tublamu'], moved: false, cap: 38, pax: 39, bookings: 17, routes: { r2: 39 }, dep: '08:00' },
+    { boat_id: 'b11', name: 'Achilles', type: 'Speedboat', pier: 'tublamu', home_pier: 'panwa', piers: ['tublamu'], moved: true, cap: 65, pax: 43, bookings: 20, routes: { r10: 43 }, dep: '08:30' },
+  ],
+  no_boat: { n: 0, pax: 0 },
+  vans: [
+    { van_id: 'veh2', name: 'Love5', plate: '31-1', capacity: 10, n: 2, pax: 4, first_pickup: '05.20', zone: 'KL', boats: ['b11'] },
+    { van_id: 'veh1', name: 'Queen1', plate: '30-8678', capacity: 12, n: 3, pax: 7, first_pickup: '07:15-07:30', zone: 'PK', boats: ['b8', 'b11'] },
+  ],
+  no_van: { n: 0, pax: 0 }, self_arrive: { n: 0, pax: 0 }, zones: {}, ret: { same: 5, samePax: 13, arr: 0, arrPax: 0, todo: 0, todoPax: 0, self: 0, selfPax: 0 },
+  ovn: { n: 0, pax: 0, days: {} }, meals: { veg: 0, vegan: 0, halal: 0, allergy: 0 }, langs: {},
+};
+const DAILY16 = { ...DAILY, ops: OPS,
+  by_route: DAILY.by_route.map((r, i) => ({ ...r, ...(i === 0 ? { ad: 6, chd: 1, inf: 0, foc: 1 } : { ad: 3, chd: 1, inf: 1, foc: 0 }) })),
+  van_cost: { ...DAILY.van_cost, default_rate_by_van: ['veh2'] } };
+
+test('B16 boats: the server rows (booked pax, bookings per boat, moved pier); no pier-office join is read', async () => {
+  const h = load({ data: { daily: DAILY16 } });
+  const bt = textOf(await show(h, 'bt'));
+  assert.match(bt, /Tadeo Speedboat Speedboat Tub Lamu 08:00 Early Tiger 17 38 39 -1 102.6%/);
+  assert.match(bt, /Achilles Speedboat Speedboat Tub Lamu \(ย้ายจาก Visit Panwa\) 08:30 Phi Phi 20 65 43 22 66.2%/);
+  const ov = textOf(await show(h, 'ov'));
+  assert.match(ov, /ที่นั่งเรือที่ใช้ 79.6% เฉลี่ย 82 ที่นั่ง จากความจุ 103 · 2 ลำ/);
+  assert.match(ov, /สัปดาห์ก่อน 79.6%/, '7 days back reads the booked seats of that day\'s report');
+  assert.ok(!h.reads.some(([p]) => /pier-office|deployments|van-board/.test(p)), 'the stand-in join is not read');
+});
+
+test('B16 route split, vans in server order with first pickup and boats, no-rate flag', async () => {
+  const h = load({ data: { daily: DAILY16 }, extra: { bookingV2ZoneLabel: (z) => ({ PK: 'Phuket', KL: 'Khao Lak' })[z] || z } });
+  const px = textOf(await show(h, 'px'));
+  assert.match(px, /Early Tiger 8 คน ผู้ใหญ่ 6 · เด็ก 1 · FOC 1 3 booking/);
+  assert.match(px, /Phi Phi 5 คน ผู้ใหญ่ 3 · เด็ก 1 · ทารก 1 2 booking/);
+  const vn = textOf(await show(h, 'vn'));
+  assert.ok(vn.indexOf('Love5') < vn.indexOf('Queen1'), 'the server row order, not van-jobs order');
+  assert.match(vn, /Love5 minibus 31-1 — Khao Lak 05.20 2 4 10 40% Achilles ฿1,900 ยังไม่ตั้งเรต/);
+  assert.match(vn, /Queen1 van · รถร่วม 30-8678 Ju 098 Phuket 07:15-07:30 3 7 12 58.3% Tadeo Achilles ฿1,500/);
+});
+
+test('passenger list: pickup window as staff write it, the final time first; other guide language', async () => {
+  const t = (extra) => ({ service_date: DATE_15, route_id: 'r2', pax: { ad_fr: 1 }, pax_total: 1, operations: {}, ...extra });
+  const DATE_15 = '2026-10-15';
+  const rows = [
+    { id: 'p1', voucher_ref: 'A1', status: 'confirmed', agent_id: 'a13', hotel_name: 'H1', trips: [t({ pickup_time: '07:15', pickup_time_end: '07:30' })] },
+    { id: 'p2', voucher_ref: 'A2', status: 'confirmed', agent_id: 'a13', hotel_name: 'H2', trips: [t({ pickup_time_end: '08:30', pickup_at_pier: true })] },
+    { id: 'p3', voucher_ref: 'A3', status: 'confirmed', agent_id: 'a13', hotel_name: 'H3', guide_other_lang: 'Spanish',
+      trips: [t({ pickup_time: '06:00', operations: { pickup_time_final: '06:40', pickup_time_final_end: '06:55' } })] },
+    { id: 'p4', status: 'confirmed', agent_id: 'a13', code: 'BK-1', pickup_area: 'Tub Lamu Pier (self-arrive)', trips: [t({ pickup_time: '07:00' })] },
+  ];
+  const h = load({ data: { roster: { bookings: rows } } });
+  const px = textOf(await show(h, 'px'));
+  assert.match(px, /H1 · 07:15-07:30/);
+  assert.match(px, /H2 · Before 08:30 at pier/);
+  assert.match(px, /H3 · 06:40-06:55 จุดเดิม Spanish/);
+  assert.match(px, /— · 07:00/, 'no hotel: "—" as lk, not the pickup area');
+  assert.ok(!/BK-1/.test(px), 'the voucher column is the agent voucher only, as lk');
+});
