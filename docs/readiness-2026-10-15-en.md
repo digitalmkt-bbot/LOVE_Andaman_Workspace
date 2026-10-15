@@ -88,8 +88,10 @@ proven. The fix (operation-backend branch `docs/one-time-cutover`) recognises a 
 guard REFUSES on exactly **one staff-made booking: `BK-26100428-0Z7P`** (BIG COUNTRY, ฿6,700, travel
 29 Dec, entered on main by Pier.Asst on 13 Oct), **which staff also entered in lk-inbox as
 `BK-26100689-GRA5`**. Importing both would have duplicated it. No invoices, payments or refunds were
-made on main on imported records. Owner decision before cutover: drop main's copy with `--remove`, or
-keep it and drop legacy's. Before cutover day, list every booking made on main and reconcile each one.
+made on main on imported records. **Owner decision (15 Oct): drop main's copy** — on cutover day the
+import runs with `--remove=booking_4f58c78f-be3f-4b14-9983-004af80990e0`; legacy's BK-26100689-GRA5
+stays (operation-backend `todo/cutover-checks.md` §4). Re-run the dry run before the day and reconcile
+any other booking made on main the same way.
 
 **Cutover-day notes from the rehearsal:**
 - The guards refuse a re-import once staff have made bookings, invoices or payments on
@@ -189,6 +191,12 @@ catalogue (built) · P13 B2C lines live in B2C only · **#9 seat locks never aut
 legacy since 29 Sep; the 901-vs-516 locked-seat figure is an open, stack-gated investigation —
 likely legacy's calendar capping "locked" at the boats' free seats; if confirmed, the server
 copies that capping).
+
+Decided later on 15 Oct: **#12 yes** — roster route codes (WS/KB, guessed from route names as legacy
+does) and their pay rules come back · **#13 yes** — the Daily Report and daily booking counts count
+the company's ฿0 internal bookings in pax and bookings, as lk-inbox does · **#14 yes** — Travel
+Summary lists every recorded date move (more complete than lk-inbox, which lists only moves it had
+snapshotted) · **double-entered booking** — drop main's copy at cutover (above).
 
 Open: **#6** delete the obsolete `handoff/b2-c-20261014` branch · **#10** guide-order design
 (may numbers reset, pmap toggles shared or per user, guide list its own endpoints, …) ·
