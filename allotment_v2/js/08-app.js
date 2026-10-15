@@ -18045,12 +18045,19 @@ function pcPrintWin(title, fname, css, sheet, land){
    +'<script>'+scr
      /* §pc2b · บนจอขยายใบให้พอดีความกว้างหน้าต่าง · กระดาษกับรูป PNG ใช้ขนาดจริงเสมอ */
      +';var ZK=0;function fit(){var s=document.getElementById("sheet");if(!s)return;s.style.zoom=1;'
-     +'var k=ZK||Math.max(0.6,Math.min(1.5,(window.innerWidth-40)/s.offsetWidth));s.style.zoom=k;}'
+     /* §pcFit (2026-10-15) · owner "ตัวปริ้นขอขึ้นให้มาพอดีจอ" · เดิมขยายตามความกว้างอย่างเดียว และไม่เกิน 1.5 เท่า
+        บนจอใหญ่ใบเลยเล็กลอยกลางจอ · ตอนนี้ขยายให้ทั้งหน้าพอดีจอ (กว้างและสูง) · ใบที่ยาวเกินราว 1.5 หน้า A4 ยังพอดีความกว้างเหมือนเดิม (ย่อทั้งใบให้เห็นหมดจะเล็กจนอ่านไม่ได้)
+        ปุ่ม "พอดีจอ" ใช้ตัวเดียวกัน · กระดาษ/PDF/PNG ยังขนาดจริง (zoom:1 ตอนพิมพ์ + shot() ตั้ง zoom 1 ก่อนถ่าย) */
+     +'var k=ZK;if(!k){var tb=document.querySelector(".tb"),th=tb?tb.offsetHeight:0;'
+     +'var kw=(window.innerWidth-40)/s.offsetWidth,kh=(window.innerHeight-th-30)/s.offsetHeight,kf=Math.min(kw,kh);'
+     +'k=(s.offsetHeight>s.offsetWidth*1.414*1.45)?Math.min(kw,1.5):kf;k=Math.max(0.5,Math.min(3,k));}s.style.zoom=k;}'
      +'function zm(d){var s=document.getElementById("sheet");var c=+s.style.zoom||1;ZK=d===0?0:Math.max(0.5,Math.min(2.5,c+d*0.15));fit();}'
      +'window.addEventListener("resize",fit);window.addEventListener("load",fit);setTimeout(fit,50);'
      +'if(typeof shot==="function"){var _shot=shot;shot=function(){var s=document.getElementById("sheet");s.style.zoom=1;try{_shot();}finally{setTimeout(fit,900);}};}'
    +'<\/script></body></html>';
-  var w=window.open('','_blank','width=1220,height=880');
+  /* §pcFit · หน้าต่างพิมพ์เปิดเต็มพื้นที่จอ (เดิม 1220×880) · ใบในหน้าต่างขยายพอดีจอตาม fit() */
+  var _W=Math.max(900,(window.screen&&screen.availWidth)||1220), _H=Math.max(700,(window.screen&&screen.availHeight)||880);
+  var w=window.open('','_blank','width='+_W+',height='+_H+',left=0,top=0');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
   setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
