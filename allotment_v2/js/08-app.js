@@ -16927,6 +16927,39 @@ function pcPkLineInfo(pier,ds){
     return { bid:bid, isl:ir, boat:(bid in bi)?bi[bid]:999, col:col };
   };
 }
+/* §pcGrp (2026-10-15) · owner: "เพิ่มประเภท เลือกประเภทนั้น สีเปลี่ยนทั้งบรรทัด และพ่วงไปถึงการปริ้น ให้ปริ้นทั้งกลุ่มของประเภทนั้นได้"
+   ประเภทที่เลือกเองต่อบรรทัดต้องมีคอลัมน์ใหม่ใน po_cash_rows = แก้ฐานข้อมูล · ช่วงห้ามแก้ DB (ถึง 15 ต.ค.) owner เลือกทางที่ 3:
+   จัดกลุ่มอัตโนมัติจากคำขึ้นต้นของรายการ · คำนวณตอนวาด ไม่บันทึกอะไรเพิ่ม · บรรทัดที่ดึงจากชีทใช้ src (pk/lt/dock) ก่อน
+   ตรงกับข้อความในสมุดจริง 15 ต.ค.: "ค่ารถตู้นอกโซน…" · "ค่าแรงไกด์รัสเซีย…" · "ค่าอาหารกลางวัน…" · "ค่าอุทยานเกาะ…"
+   ลำดับในรายการนี้ = ลำดับที่เช็ค (ตัวแรกที่ตรงชนะ) · เพิ่มกลุ่ม = เพิ่มบรรทัดที่นี่ */
+var PC_GRP=[
+  {k:'van',   t:'รถตู้',   re:/^\s*ค่ารถ/,                     c:'#C2410C', bg:'#FFF4EC'},
+  {k:'guide', t:'ไกด์',    re:/^\s*ค่า(แรง)?ไกด์/,               c:'#7C3AED', bg:'#F6F1FF'},
+  {k:'food',  t:'อาหาร',   re:/^\s*ค่าอาหาร/,                   c:'#BE185D', bg:'#FDF0F6'},
+  {k:'park',  t:'อุทยาน',  re:/^\s*ค่าอุทยาน/,      src:'pk',   c:'#4D7C0F', bg:'#F3FAEA'},
+  {k:'lt',    t:'หางยาว',  re:/^\s*ค่าเรือหางยาว/,  src:'lt',   c:'#0E7490', bg:'#ECF8FB'},
+  {k:'dock',  t:'ค่าจอด',  re:/^\s*ค่าจอด/,         src:'dock', c:'#475569', bg:'#F2F4F7'},
+  {k:'fuel',  t:'น้ำมัน',  re:/^\s*ค่าน้ำมัน/,                  c:'#A16207', bg:'#FEF8E7'}
+];
+function pcGrpOf(x,kind){
+  if(!x || kind==='in') return null;
+  var src=String(x.src||''), t=String(x.txt||'');
+  for(var i=0;i<PC_GRP.length;i++){ if(src && PC_GRP[i].src===src) return PC_GRP[i]; }
+  for(var j=0;j<PC_GRP.length;j++){ if(PC_GRP[j].re.test(t)) return PC_GRP[j]; }
+  return null;
+}
+function pcGrpByKey(k){ for(var i=0;i<PC_GRP.length;i++){ if(PC_GRP[i].k===k) return PC_GRP[i]; } return null; }
+/* แถบกลุ่มใต้สมุด · กลุ่มที่มีรายจ่ายวันนี้ · จำนวน · ยอด · พิมพ์ใบรับรองเฉพาะกลุ่ม */
+function pcGrpBar(D){
+  var agg={}, order=[];
+  (D.out||[]).forEach(function(x){ var g=pcGrpOf(x,'out'); if(!g) return; if(!agg[g.k]){ agg[g.k]={g:g,n:0,amt:0}; } agg[g.k].n++; agg[g.k].amt+=(+x.amt||0); });
+  PC_GRP.forEach(function(g){ if(agg[g.k]) order.push(agg[g.k]); });
+  if(!order.length) return '';
+  return '<div class="pc2-grps"><span class="l">พิมพ์ตามกลุ่ม</span>'+order.map(function(a){
+    return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+'">'
+      +'<i></i><b>'+pcE(a.g.t)+'</b><span>'+a.n+' รายการ · '+pcN(a.amt)+'</span><em>&#128424;</em></button>'; }).join('')
+    +'<span class="h">จัดกลุ่มจากคำขึ้นต้นของรายการ (ค่ารถ… · ค่าแรงไกด์… · ค่าอาหาร… · ค่าอุทยาน…)</span></div>';
+}
 /* เรียงแถวของสมุด · เวลาก่อน (ของเดิม) · บรรทัดค่าอุทยานที่เวลาเดียวกันรวมเป็นก้อนเดียวตรงที่บรรทัดแรกของก้อนอยู่ แล้วเรียงตามอุทยาน + ลำ
    rows = [{t, k, x}] · คืน array ใหม่ · แถวอื่นลำดับเดิม */
 function pcLedgerSort(rows,pier,ds){
@@ -18040,6 +18073,11 @@ function pcPrintCert(opt){
     rows=rows.filter(function(x){ return pcSelHas('out',x.id); });
     if(!rows.length){ alert('No rows selected.'); return; }
   }
+  var _grp=opt.grp?pcGrpByKey(opt.grp):null;   /* §pcGrp · เฉพาะกลุ่ม */
+  if(opt.grp){
+    rows=rows.filter(function(x){ var g=pcGrpOf(x,'out'); return g && g.k===opt.grp; });
+    if(!rows.length){ alert('No rows in this group.'); return; }
+  }
   rows=pcLedgerSort(rows.map(function(x){ return {t:rk(x.at),k:'out',x:x}; }),_pcPier,ds).map(function(r){ return r.x; });   /* §pkLineOrd */
   var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
   var tot=0, body='';
@@ -18071,7 +18109,8 @@ function pcPrintCert(opt){
     +'#sheet .cf-sg .l{border-bottom:1px dotted #6b7280;min-width:168px;margin-bottom:4px}';
 
   var sheet=pcPrintHead('เงินสดย่อย · ใบเบิก Petty Cash',
-     opt.only ? ('ดึงเฉพาะ '+rows.length+' รายการจ่ายที่เลือกไว้ในสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
+     _grp ? ('กลุ่ม '+_grp.t+' · '+rows.length+' รายการจ่ายจากสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
+     : opt.only ? ('ดึงเฉพาะ '+rows.length+' รายการจ่ายที่เลือกไว้ในสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
               : 'ดึงรายจ่ายของวันที่เลือกจากสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
    +'<div class="cf-t">ใบรับรองแทนใบเสร็จรับเงิน</div>'
    +'<div class="cf-co"><span>บจ. / หจก.</span><span class="fill">'+pcE(pcCoName())+'</span>'
@@ -79042,13 +79081,14 @@ function pc2Main(pier){
     /* §pc2d · บรรทัดที่กดแก้ · วาดเป็นช่องกรอกตรงตำแหน่งเดิม */
     if(ED && ED.id && ED.id===String(r.x.id) && ED.ok===r.k){ edHit=true; body+=pc2EdRow(ED,run,no); run += isIn ? amt : -amt; return; }
     run += isIn ? amt : -amt;
-    body+='<div class="pc2-lr rw'+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
+    var _g=pcGrpOf(r.x,r.k);   /* §pcGrp · สีทั้งบรรทัดตามกลุ่ม */
+    body+='<div class="pc2-lr rw'+(_g?(' pcg-'+_g.k):'')+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
       +'<span class="sc" onclick="pcSelCellHit(this,event)"><input type="checkbox" class="pc-cb"'+(pcSelHas(r.k,r.x.id)?' checked':'')
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
       +'<span class="no">'+no+'</span>'
       +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
       +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+'</span>'
-      +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+((r._pk&&r._pk.col)?(' style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+';border-color:'+pcE(r._pk.col)+'"'):'')+'>'+CAT[ck][0]+'</em></span>'
+      +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+(_g?(' style="color:'+_g.c+';background:#fff;border-color:'+_g.c+'"'):'')+'>'+(_g?pcE(_g.t):CAT[ck][0])+'</em></span>'
       +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
       +'<span class="m out">'+(!isIn?pcN(amt):'')+'</span>'
@@ -79130,6 +79170,7 @@ function pc2Main(pier){
         +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
         +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
+        +pcGrpBar(D)   /* §pcGrp */
         +'<div class="pc2-add"><button class="i" onclick="pc2EdNew(\'in\')">＋ เพิ่มบรรทัดรับเงิน</button><button class="o" onclick="pc2EdNew(\'out\')">＋ เพิ่มบรรทัดจ่ายเงิน</button></div>'
         +'<div class="pc2-note"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก (ไม่ถูกบันทึก)</div>'
       +'</div>'
@@ -79379,6 +79420,21 @@ function pc2CSS(S){
   S+' .pc2-lr input.pc-cb{width:16px;height:16px;margin:0;accent-color:'+N+';cursor:pointer}',
   S+' .pc2-lr .tm{font-family:"DM Mono",monospace;color:'+SUB+'}',
   S+' .pc2-lr .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}',
+  /* §pcGrp · สีพื้นทั้งบรรทัด + แถบซ้าย (ตรงกับ PC_GRP) */
+  S+' .pc2-lr.rw.pcg-van:not(.pcp-on){background:#FFF4EC;box-shadow:inset 4px 0 0 #C2410C}',
+  S+' .pc2-lr.rw.pcg-guide:not(.pcp-on){background:#F6F1FF;box-shadow:inset 4px 0 0 #7C3AED}',
+  S+' .pc2-lr.rw.pcg-food:not(.pcp-on){background:#FDF0F6;box-shadow:inset 4px 0 0 #BE185D}',
+  S+' .pc2-lr.rw.pcg-park:not(.pcp-on){background:#F3FAEA;box-shadow:inset 4px 0 0 #4D7C0F}',
+  S+' .pc2-lr.rw.pcg-lt:not(.pcp-on){background:#ECF8FB;box-shadow:inset 4px 0 0 #0E7490}',
+  S+' .pc2-lr.rw.pcg-dock:not(.pcp-on){background:#F2F4F7;box-shadow:inset 4px 0 0 #475569}',
+  S+' .pc2-lr.rw.pcg-fuel:not(.pcp-on){background:#FEF8E7;box-shadow:inset 4px 0 0 #A16207}',
+  S+' .pc2-grps{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 14px 2px}',
+  S+' .pc2-grps .l{font-size:12px;font-weight:800;color:#3E4A6B;margin-right:2px}',
+  S+' .pc2-grps .h{font-size:11px;color:#8A93AE;flex-basis:100%}',
+  S+' .pc2-grps .g{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border:1px solid var(--gc);border-radius:9px;background:var(--gb);color:var(--gc);font:inherit;font-size:12px;cursor:pointer}',
+  S+' .pc2-grps .g:hover{filter:brightness(.97)}',
+  S+' .pc2-grps .g i{width:9px;height:9px;border-radius:5px;background:var(--gc)}',
+  S+' .pc2-grps .g span{color:#3E4A6B;font-variant-numeric:tabular-nums}',
   S+' .pc2-lr .tx b.pkd{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:7px;vertical-align:1px;flex:none}',   /* §pkLineOrd · จุดสีอุทยาน */
   S+' .pc2-lr .by{color:'+SUB+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   S+' .pc2-lr .m{text-align:right;font-family:"DM Mono",monospace;font-weight:500}',
