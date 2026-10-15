@@ -16857,11 +16857,13 @@ function pcTotals(pier,ds){
      สมุดยังแยกสองหมวดเหมือนเดิม: ค่าอุทยาน = amt − dock · ค่าจอดเรือ = dock · สองหมวดรวมกัน = เงินที่จ่ายจริงพอดี
      ของเดิมดึงค่าอุทยาน = amt ทั้งก้อน แล้วดึงค่าจอดอีกรอบ · คนหน้าท่าคีย์ amt รวมค่าจอด (15 ต.ค. ทุกลำ: ต่าง = ค่าจอดพอดี)
      ค่าจอดจึงเข้าสมุดสองครั้ง (15 ต.ค. ปุ่มดึง ฿55,750 = 54,950 + 800) */
-  Object.keys(D.pk||{}).forEach(function(k){ var Q=pcPkParts(D.pk[k]); vpk+=Q.park; vdk+=Q.dock; });
+  /* §pkPullBoat (2026-10-15) · owner: รายการที่ดึงต้องเป็น "ค่าอุทยานเกาะสิมิลัน วันที่ ชื่อเรือ" · ราคาที่ดึง = ราคาที่จ่าย (รวมค่าจอดแล้ว) · แยกรายลำ
+     ค่าอุทยานของวัน = Σ ยอดของแต่ละลำ (pcPkLedgerAmt) · ค่าจอดไม่เป็นหมวดแยกในสมุดอีก (อยู่ในบรรทัดของลำนั้นแล้ว) · vdk เหลือไว้โชว์ว่าในนั้นเป็นค่าจอดเท่าไร */
+  Object.keys(D.pk||{}).forEach(function(k){ vpk+=pcPkLedgerAmt(D.pk[k]); vdk+=(+D.pk[k].dock||0); });
   /* §pcSum · หางยาว/อุทยาน/ค่าจอด ไม่เข้าสมุดเอง · เป็นแค่ยอดอ้างอิงจากอีกสองชีท
      สมุดเดินบัญชีนับเฉพาะรายการที่คนหน้าท่าบันทึกเอง จะได้ตรงกับเงินในลิ้นชักจริง
      อยากให้เข้าสมุดค่อยกดปุ่ม "ดึงเข้าสมุด" ทีละวัน */
-  var ref=vlt+vpk+vdk;
+  var ref=vlt+vpk;   /* §pkPullBoat · ค่าจอดอยู่ใน vpk แล้ว */
   var pulled=0;
   (D.out||[]).forEach(function(x){ if(x && x.src) pulled+=(+x.amt||0); });
   return { in:vin, lt:vlt, pk:vpk, dock:vdk, ref:ref, pulled:pulled,
@@ -16874,16 +16876,61 @@ function pcPkParts(C){
 }
 /* §pkDockIn · ยอดที่ควรจ่ายที่ด่านของลำหนึ่ง = ค่าอุทยานที่คำนวณ + ค่าจอดที่กรอก · ไม่มีราคาอุทยาน = null */
 function pcPkDue(exp,C){ return (exp==null)?null:(exp+(+(C&&C.dock)||0)); }
-/* §pcSum · ดึงยอดจากสองชีทเข้ามาเป็นรายการจ่ายจริงในสมุด · หมวดไหนดึงแล้วไม่ดึงซ้ำ */
+/* §pkPullBoat · ยอดที่ลงสมุดของลำหนึ่ง = เงินที่จ่ายที่ด่าน (รวมค่าจอดแล้ว) · ยังไม่กรอกเงินแต่มีค่าจอด = ค่าจอดอย่างเดียว */
+function pcPkLedgerAmt(C){ C=C||{}; var amt=+C.amt||0; return amt>0?amt:(+C.dock||0); }
+/* ชื่ออุทยานของเส้นทาง · จับจากชื่อเส้นทาง/โปรแกรมด้วยชุดเดียวกับใบอุทยานของใบงานเรือ (PJ_PARK) */
+var PC_PK_ISL={similan:'เกาะสิมิลัน', surin:'เกาะสุรินทร์', phiphi:'เกาะพีพี', phangnga:'อ่าวพังงา', tarn:'ธารโบกขรณี'};
+function pcPkIsland(rid){
+  try{
+    var r=(typeof getRoute==='function'?getRoute(rid):null)||{}, f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null;
+    var txt=(r.name||'')+' '+((f&&f.name)||''), L=(typeof PJ_PARK!=='undefined'&&Array.isArray(PJ_PARK))?PJ_PARK:[];
+    for(var i=0;i<L.length;i++){ if(L[i].hit.test(txt)) return PC_PK_ISL[L[i].k]||L[i].t; }
+    return (f&&f.name)||r.name||'';
+  }catch(_){ return ''; }
+}
+function pcPkLineDate(ds){ try{ var d=new Date(ds+'T12:00:00'); var MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2); }catch(_){ return ds; } }
+/* ข้อความบรรทัดในสมุด · "ค่าอุทยานเกาะสิมิลัน 15 ต.ค. 69 Zeus" · ลำที่มีแต่ค่าจอด = "ค่าจอดเรือ …" */
+function pcPkLineTxt(ds,B,C){
+  var isl=pcPkIsland(B&&B.rid), only=!(+((C||{}).amt)>0);
+  return (only?'ค่าจอดเรือ':'ค่าอุทยาน')+(isl?isl:'')+' '+pcPkLineDate(ds)+' '+((B&&B.name)||'');
+}
+/* สถานะการดึงค่าอุทยานของวัน · รายลำ
+   old = วันที่ดึงแบบเดิม (ก้อนเดียว src 'pk' ไม่มี bid · หรือ src 'dock') · ไม่ดึงรายลำทับ แค่เทียบยอดรวม
+   off = ยอดที่ดึงไว้ไม่ตรงกับชีท (แก้ชีททีหลัง) · waiting = ยอดของลำที่ยังไม่ได้ดึง */
+function pcPkPullState(pier,ds){
+  var D=pcDay(pier,ds,false)||{pk:{},out:[]}, out=D.out||[], BS=pcBoats(ds,pier), seen={}, lines=[];
+  BS.forEach(function(B){ seen[B.bid]=1; lines.push({B:B, C:(D.pk||{})[B.bid]||{}}); });
+  Object.keys(D.pk||{}).forEach(function(bid){ if(!seen[bid]) lines.push({B:{bid:bid, rid:'', name:((typeof getBoat==='function'&&getBoat(bid))||{}).name||bid}, C:D.pk[bid]}); });
+  var old=out.some(function(x){ return x && ((x.src==='pk' && !x.bid) || x.src==='dock'); });
+  var o={old:old, off:false, waiting:0, total:0, pulledAmt:0, nPulled:0, nWait:0, lines:[]};
+  out.forEach(function(x){ if(x && (x.src==='pk'||x.src==='dock')) o.pulledAmt+=(+x.amt||0); });
+  lines.forEach(function(L){
+    var v=pcPkLedgerAmt(L.C); o.total+=v;
+    var hit=out.filter(function(x){ return x && x.src==='pk' && x.bid===L.B.bid; });
+    var pa=hit.reduce(function(a,x){ return a+(+x.amt||0); },0);
+    if(hit.length){ o.nPulled++; if(Math.round(pa)!==Math.round(v)) o.off=true; }
+    else if(v>0 && !old){ o.waiting+=v; o.nWait++; }
+    o.lines.push({B:L.B, C:L.C, v:v, pulled:hit.length?pa:null});
+  });
+  /* ลำที่ดึงไว้แต่ไม่อยู่ในชีทแล้ว */
+  out.forEach(function(x){ if(x && x.src==='pk' && x.bid && !lines.some(function(L){ return L.B.bid===x.bid; })) o.off=true; });
+  if(old && Math.round(o.pulledAmt)!==Math.round(o.total)) o.off=true;
+  return o;
+}
+/* §pcSum · ดึงยอดจากสองชีทเข้ามาเป็นรายการจ่ายจริงในสมุด · หมวดไหนดึงแล้วไม่ดึงซ้ำ
+   §pkPullBoat · ค่าอุทยานดึงรายลำ · ลำไหนดึงแล้วไม่ดึงซ้ำ · ลำที่เพิ่งกรอกทีหลังกดดึงอีกทีได้ */
 function pcPull(ds){
   if(!pcGuard()) return;
   var T=pcTotals(_pcPier,ds), D=pcDay(_pcPier,ds,true), n=0;
-  var want=[{k:'lt',v:T.lt,t:'ค่าเรือหางยาว'},{k:'pk',v:T.pk,t:'ค่าอุทยาน'},{k:'dock',v:T.dock,t:'ค่าจอดเรือ'}];
-  want.forEach(function(w){
-    if(!(w.v>0)) return;
-    if((D.out||[]).some(function(x){ return x && x.src===w.k; })) return;
-    D.out.push({ id:'pc'+Date.now()+Math.random().toString(36).slice(2,5), src:w.k,
-      txt:w.t+' (ดึงจากชีท)', amt:w.v, at:'', by:pcWho(), ts:new Date().toISOString() });
+  var mk=function(){ return 'pc'+Date.now()+Math.random().toString(36).slice(2,5); };
+  if(T.lt>0 && !(D.out||[]).some(function(x){ return x && x.src==='lt'; })){
+    D.out.push({ id:mk(), src:'lt', txt:'ค่าเรือหางยาว (ดึงจากชีท)', amt:T.lt, at:'', by:pcWho(), ts:new Date().toISOString() }); n++;
+  }
+  var S=pcPkPullState(_pcPier,ds);
+  if(!S.old) S.lines.forEach(function(L){
+    if(!(L.v>0) || L.pulled!==null) return;
+    D.out.push({ id:mk(), src:'pk', bid:String(L.B.bid), txt:pcPkLineTxt(ds,L.B,L.C), amt:L.v, at:'', by:pcWho(), ts:new Date().toISOString() });
     n++;
   });
   if(!n){ alert('ไม่มียอดใหม่ให้ดึง · ดึงครบแล้วหรือยังไม่ได้กรอกยอดในอีกสองชีท'); return; }
@@ -17438,7 +17485,7 @@ function pcMonthTable(pier){
      +'<tr><th colspan="5" style="border-right-color:#16265C"></th>'
      +'<th class="r gs" style="width:96px;background:#F7FBF9">หางยาว</th>'
      +'<th class="r" style="width:96px;background:#F7FBF9">อุทยาน</th>'
-     +'<th class="r" style="width:96px;background:#F7FBF9">ค่าจอด</th>'
+     +'<th class="r" style="width:96px;background:#F7FBF9" title="อยู่ในค่าอุทยานแล้ว · ไม่บวกซ้ำ">ในนั้นค่าจอด</th>'
      +'<th class="gs"></th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
      +'<tfoot><tr class="grand"><td class="c">รวมทั้งเดือน</td><td></td>'
@@ -78776,9 +78823,18 @@ function pc2Main(pier){
   var sl=pc2StatLT(pier,ds), sp=pc2StatPK(pier,ds);
   var cats=[{k:'lt',t:'ค่าเรือหางยาว',v:T.lt,c:'#0E9BC7',s:sl.need?(sl.miss?(sl.miss+' ลำยังไม่กรอก · '+sl.missNames.join(', ')):'กรอกครบ '+sl.need+' ลำ'):'ไม่มีหางยาววันนี้'},
             {k:'pk',t:'ค่าอุทยาน',v:T.pk,c:'#65A30D',s:sp.n?(sp.miss?(sp.miss+' ลำยังไม่กรอก · '+sp.missNames.join(', ')):'กรอกครบ '+sp.n+' ลำ'):'ไม่มีเรือออก'},
-            {k:'dock',t:'ค่าจอดเรือ',v:T.dock,c:'#8E96B5',s:'กรอกในชีทค่าอุทยาน'}];
+            ];
+  var PS=pcPkPullState(pier,ds);   /* §pkPullBoat · ค่าอุทยานดึงรายลำ (รวมค่าจอดแล้ว) · ไม่มีหมวดค่าจอดแยก */
   var waiting=0;
   var pend=cats.map(function(c){
+    if(c.k==='pk'){
+      var stP=PS.off?('<em class="wn">ดึงไว้ '+pcMoney(PS.pulledAmt)+' · ไม่ตรงชีท</em>')
+        :(PS.waiting>0?(PS.nPulled?('<em>ดึงแล้ว '+PS.nPulled+' ลำ · รอ '+PS.nWait+' ลำ</em>'):'')
+        :((PS.nPulled||PS.old)?'<em class="ok">ดึงแล้ว</em>':(c.v>0?'':'<em>ยังไม่มียอด</em>')));
+      waiting+=PS.waiting;
+      return '<div class="pr"><i style="background:'+c.c+'"></i><span class="t">'+c.t+'<small>'+pcE(c.s)+' · รวมค่าจอด'+(T.dock?(' '+pcN(T.dock)):'')+' · ลงสมุดรายลำ</small></span>'
+        +'<span class="v">'+(c.v>0?pcMoney(c.v):'—')+stP+'</span></div>';
+    }
     /* ดึงแล้วแต่ยอดในชีทถูกแก้ทีหลัง · pcPull ไม่ดึงซ้ำ ต้องบอกให้ไปแก้ในสมุดเอง */
     var st=pulled[c.k]?(Math.round(pAmt[c.k])!==Math.round(c.v)?('<em class="wn">ดึงไว้ '+pcMoney(pAmt[c.k])+' · ไม่ตรงชีท</em>'):'<em class="ok">ดึงแล้ว</em>'):(c.v>0?'':'<em>ยังไม่มียอด</em>');
     if(!pulled[c.k] && c.v>0) waiting+=c.v;
@@ -78972,13 +79028,12 @@ function pc2PKDay(pier, ds){
   });
   var dd=(dP&&dm>0)?Math.round(dm-dexP):null;
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
-  var pulledPk=false, pPk=0, pDk=0, hasPk=false, hasDk=false; (D2.out||[]).forEach(function(x){ if(!x) return; if(x.src==='pk'){ pulledPk=true; hasPk=true; pPk+=(+x.amt||0); } if(x.src==='dock'){ pulledPk=true; hasDk=true; pDk+=(+x.amt||0); } });
-  /* §pkDockIn · ค่าอุทยานที่ดึงต้องเท่ากับ เงินที่จ่าย − ค่าจอด (T.pk) · วันที่ดึงไว้ก่อนแก้ (ดึงเงินที่จ่ายทั้งก้อน) จะขึ้นเตือนตรงนี้ */
-  var pkOff=(hasPk&&Math.round(pPk)!==Math.round(T.pk))||(hasDk&&Math.round(pDk)!==Math.round(ddk));
-  var waiting=Math.max(0,T.ref-T.pulled), s=pc2StatPK(pier,ds);
+  /* §pkPullBoat · ดึงรายลำ · ปุ่มดึงขึ้นตราบใดที่ยังมีลำที่ยังไม่ได้ดึง · ยอดที่ดึงไว้ไม่ตรงชีท (แก้ทีหลัง / ดึงแบบเดิมที่นับค่าจอดซ้ำ) ขึ้นเตือน */
+  var PS=pcPkPullState(pier,ds), pkOff=PS.off, pulledPk=PS.nPulled>0||PS.old, pPk=PS.pulledAmt, pDk=0;
+  var waiting=PS.waiting+((T.lt>0 && !(D2.out||[]).some(function(x){ return x && x.src==='lt'; }))?T.lt:0), s=pc2StatPK(pier,ds);
   var bar='<div class="pc2-sum"><b>รวม '+pcE(pc2D(ds))+'</b><span>คำนวณ</span><em>'+(anyx?pcMoney(dex):'—')+'</em><span>จ่ายจริง (รวมจอด)</span><em>'+pcMoney(dm)+'</em><span>ในนั้นค่าจอด</span><em>'+pcMoney(ddk)+'</em>'
     +(pkOff?'<i class="wn" title="ปุ่มดึงไม่ดึงซ้ำ · แก้หรือลบรายการในสมุดของวันนี้ (หน้าหลัก) แล้วดึงใหม่">⚠ ดึงไว้ '+pcMoney(pPk+pDk)+' · ไม่ตรงกับชีท</i>':'')
-    +((dm>0||ddk>0)&&!pkOff?(pulledPk?'<i class="ok">✓ ดึงเข้าสมุดแล้ว</i>':('<button onclick="pcPull(\''+ds+'\')" title="ดึงทุกหมวดของวันนี้ที่ยังไม่ได้ดึง (หางยาว อุทยาน ค่าจอด)">⤓ ดึง '+pcMoney(waiting)+' เข้าสมุด</button>')):'')
+    +((dm>0||ddk>0)&&!pkOff?(PS.waiting>0?('<button onclick="pcPull(\''+ds+'\')" title="ลงสมุดรายลำ · ค่าอุทยาน<เกาะ> <วันที่> <เรือ> · ยอด = เงินที่จ่าย (รวมค่าจอด) · ลำที่ดึงแล้วไม่ดึงซ้ำ">⤓ ดึง '+PS.nWait+' ลำ '+pcMoney(waiting)+' เข้าสมุด</button>'):(pulledPk?'<i class="ok">✓ ดึงเข้าสมุดแล้ว'+(PS.nPulled?(' · '+PS.nPulled+' ลำ'):'')+'</i>':'')):'')
     +'</div>';
   return '<div class="pc2-card">'+head
       +'<div class="cs">'+BS.length+' ลำ · '+dtot+' คน · '+groups.length+' เส้นทาง'+(s.miss?(' · ยังไม่กรอก '+pcE(s.missNames.join(', '))):'')+'</div></div>'
