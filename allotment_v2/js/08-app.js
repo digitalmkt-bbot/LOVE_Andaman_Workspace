@@ -68534,10 +68534,10 @@ var PK_LINE_MAIN=[['adTH','ผท'],['chTH','ดท'],['adFR','ผตช'],['chF
    ให้ทุกช่องกว้างเท่าช่องที่ยาวสุด · เครื่องที่อ่านใช้ฟอนต์เดียวกัน = ตรงเป๊ะ · ฟอนต์ต่างกัน (iPhone/Android/PC) เพี้ยนเล็กน้อย
    ข้อจำกัด: บรรทัดยาวเกินจอมือถือจะตัดบรรทัด แล้วไม่ตรง */
 var PK_LINE_FONT='14px -apple-system,BlinkMacSystemFont,"Sukhumvit Set",Thonburi,"Leelawadee UI","Noto Sans Thai","Segoe UI",sans-serif';
-function pkLineAlign(rows){
+function pkLineAlign(rows, tight){
   var c=null; try{ c=document.createElement('canvas').getContext('2d'); c.font=PK_LINE_FONT; }catch(_){ c=null; }
   if(!c) return rows.map(function(r){ return r.filter(Boolean).join(' '); });
-  var W=function(t){ return c.measureText(t).width; }, SP=W(' '), HS='\u200A', HW=W(HS)||1, GAP=W('  ');
+  var W=function(t){ return c.measureText(t).width; }, SP=W(' '), HS='\u200A', HW=W(HS)||1, GAP=W(tight?' ':'  ');   /* §pkLine9 · โหมด : เว้นวรรคเดียวก่อน : */
   var pad=function(t,w){ var d=w-W(t), n=Math.max(0,Math.floor(d/SP)); t+=new Array(n+1).join(' '); d-=n*SP; var h=Math.max(0,Math.round(d/HW)); return t+new Array(h+1).join(HS); };
   var nc=rows.reduce(function(m,r){ return Math.max(m,r.length); },0), cw=[];
   for(var i=0;i<nc;i++) cw[i]=rows.reduce(function(m,r){ return Math.max(m, r[i]?W(r[i]):0); },0);
@@ -68566,9 +68566,11 @@ function pkLineText(){
     var keys=PK_LINE_MAIN.map(function(m){ return m[0]; }).filter(function(k){ return tc[k]; });
     Object.keys(tc).forEach(function(k){ if(tc[k] && keys.indexOf(k)<0) keys.push(k); });
     var lab=function(k){ var m=PK_LINE_MAIN.filter(function(x){ return x[0]===k; })[0]; return m?m[1]:String((TYM[k]||{}).s||k).replace(/\s+/g,''); };
+    /* §pkLine9 (2026-10-15) · owner "ตัดเวลาออก · ไม่ต้องเว้น อันไหนไม่มียอดข้าม · ชื่อเรือ : จำนวน · : ให้ตรงกันในแต่ละชุด"
+       ช่องแรก = ชื่อเรือ (เติมวรรคตามความกว้างจริงให้ : ตรงกันในหัวข้อเดียวกัน) · หลัง : ต่อกันธรรมดา ประเภท 0 ไม่ขึ้น · ยังเรียงตามเวลาออก */
     var cells=rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).map(function(r){
-      return [(dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)].concat(keys.map(function(k){ return r.c[k]?(r.c[k]+' '+lab(k)):''; })); });
-    pkLineAlign(cells).forEach(function(t){ L.push(t); }); };
+      return [nm(r.bid), ': '+keys.filter(function(k){ return r.c[k]; }).map(function(k){ return r.c[k]+' '+lab(k); }).join(' ')]; });
+    pkLineAlign(cells, 1).forEach(function(t){ L.push(t); }); };
   var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'], MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   var d=new Date(date+'T12:00:00'), dS=WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2);
   var one=(FAM.length===1), L=[];
