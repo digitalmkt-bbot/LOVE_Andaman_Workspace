@@ -16941,19 +16941,33 @@ var PC_GRP=[
   {k:'dock',  t:'ค่าจอด',  re:/^\s*ค่าจอด/,         src:'dock', c:'#475569', bg:'#F2F4F7'},
   {k:'fuel',  t:'น้ำมัน',  re:/^\s*ค่าน้ำมัน/,                  c:'#A16207', bg:'#FEF8E7'}
 ];
+/* §pcGrpPark (2026-10-15) · owner "อุทยานต้องแยกกัน ระหว่างสิมิลันกับสุรินทร์" · กลุ่มอุทยานแตกตามอุทยานจากข้อความ
+   (บรรทัดที่ดึงจากชีทมีชื่อเกาะในข้อความเสมอ · pcPkLineTxt) · ไม่เจอชื่ออุทยานก็อยู่กลุ่ม "อุทยาน" รวมเหมือนเดิม
+   สีตรงกับสีโปรแกรม (Similan น้ำเงิน · Surin เขียว · Phi Phi แดง) */
+var PC_GRP_PARK=[
+  {k:'park_sm', t:'อุทยานสิมิลัน',   re:/สิมิลัน|similan/i,          c:'#185FA5', bg:'#EEF4FC'},
+  {k:'park_sr', t:'อุทยานสุรินทร์',   re:/สุรินทร|surin/i,            c:'#3B6D11', bg:'#EFF7EA'},
+  {k:'park_pp', t:'อุทยานพีพี',      re:/พีพี|phi[\s._-]*phi/i,     c:'#B42318', bg:'#FDF0EF'},
+  {k:'park_pn', t:'อุทยานอ่าวพังงา',  re:/พังงา|phang[\s._-]*nga/i,  c:'#0F6E56', bg:'#EAF6F1'}
+];
+/* รายการกลุ่มตามลำดับที่โชว์ · อุทยานแตกเป็นรายอุทยานตรงตำแหน่งของมัน */
+function pcGrpList(){
+  var out=[]; PC_GRP.forEach(function(g){ if(g.k==='park'){ PC_GRP_PARK.forEach(function(q){ out.push(q); }); } out.push(g); }); return out;
+}
 function pcGrpOf(x,kind){
   if(!x || kind==='in') return null;
-  var src=String(x.src||''), t=String(x.txt||'');
-  for(var i=0;i<PC_GRP.length;i++){ if(src && PC_GRP[i].src===src) return PC_GRP[i]; }
-  for(var j=0;j<PC_GRP.length;j++){ if(PC_GRP[j].re.test(t)) return PC_GRP[j]; }
-  return null;
+  var src=String(x.src||''), t=String(x.txt||''), g=null;
+  for(var i=0;i<PC_GRP.length && !g;i++){ if(src && PC_GRP[i].src===src) g=PC_GRP[i]; }
+  for(var j=0;j<PC_GRP.length && !g;j++){ if(PC_GRP[j].re.test(t)) g=PC_GRP[j]; }
+  if(g && g.k==='park'){ for(var q=0;q<PC_GRP_PARK.length;q++){ if(PC_GRP_PARK[q].re.test(t)) return PC_GRP_PARK[q]; } }
+  return g;
 }
-function pcGrpByKey(k){ for(var i=0;i<PC_GRP.length;i++){ if(PC_GRP[i].k===k) return PC_GRP[i]; } return null; }
+function pcGrpByKey(k){ var L=pcGrpList(); for(var i=0;i<L.length;i++){ if(L[i].k===k) return L[i]; } return null; }
 /* แถบกลุ่มใต้สมุด · กลุ่มที่มีรายจ่ายวันนี้ · จำนวน · ยอด · พิมพ์ใบรับรองเฉพาะกลุ่ม */
 function pcGrpBar(D){
   var agg={}, order=[];
   (D.out||[]).forEach(function(x){ var g=pcGrpOf(x,'out'); if(!g) return; if(!agg[g.k]){ agg[g.k]={g:g,n:0,amt:0}; } agg[g.k].n++; agg[g.k].amt+=(+x.amt||0); });
-  PC_GRP.forEach(function(g){ if(agg[g.k]) order.push(agg[g.k]); });
+  pcGrpList().forEach(function(g){ if(agg[g.k]) order.push(agg[g.k]); });   /* §pcGrpPark */
   if(!order.length) return '';
   return '<div class="pc2-grps"><span class="l">พิมพ์ตามกลุ่ม</span>'+order.map(function(a){
     return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+'">'
@@ -17865,6 +17879,7 @@ function renderPierCash(pier){
 }
 function _renderPierCash(pier){
   pcRowsMigrate();   /* §pcRows ก1 · ย้ายเข้าตารางคู่ขนาน · ตัวอ่านยังใช้สตริงเหมือนเดิม */
+  try{ if(typeof pcSugClose==='function') pcSugClose(); }catch(_){}   /* §pcSug · วาดใหม่ = ช่องเดิมหาย · ช่องใหม่โฟกัสแล้วเปิดเอง */
   _PC_RATE={};   /* §pcCalc · ราคาอาจถูกแก้ที่หน้าต้นทุนระหว่างนี้ */
   _pcPier=pier||_pcPier;
   var host=document.getElementById('pc-host-'+_pcPier); if(!host) return;
@@ -79425,6 +79440,10 @@ function pc2CSS(S){
   S+' .pc2-lr.rw.pcg-guide:not(.pcp-on){background:#F6F1FF;box-shadow:inset 4px 0 0 #7C3AED}',
   S+' .pc2-lr.rw.pcg-food:not(.pcp-on){background:#FDF0F6;box-shadow:inset 4px 0 0 #BE185D}',
   S+' .pc2-lr.rw.pcg-park:not(.pcp-on){background:#F3FAEA;box-shadow:inset 4px 0 0 #4D7C0F}',
+  S+' .pc2-lr.rw.pcg-park_sm:not(.pcp-on){background:#EEF4FC;box-shadow:inset 4px 0 0 #185FA5}',
+  S+' .pc2-lr.rw.pcg-park_sr:not(.pcp-on){background:#EFF7EA;box-shadow:inset 4px 0 0 #3B6D11}',
+  S+' .pc2-lr.rw.pcg-park_pp:not(.pcp-on){background:#FDF0EF;box-shadow:inset 4px 0 0 #B42318}',
+  S+' .pc2-lr.rw.pcg-park_pn:not(.pcp-on){background:#EAF6F1;box-shadow:inset 4px 0 0 #0F6E56}',
   S+' .pc2-lr.rw.pcg-lt:not(.pcp-on){background:#ECF8FB;box-shadow:inset 4px 0 0 #0E7490}',
   S+' .pc2-lr.rw.pcg-dock:not(.pcp-on){background:#F2F4F7;box-shadow:inset 4px 0 0 #475569}',
   S+' .pc2-lr.rw.pcg-fuel:not(.pcp-on){background:#FEF8E7;box-shadow:inset 4px 0 0 #A16207}',
@@ -79656,6 +79675,7 @@ function pc2EdOpen(kind,id,ev){
 function pc2EdSet(f,v){
   var E=pc2EdCur(); if(!E) return;
   E[f]=String(v==null?'':v);
+  if(f==='txt' && !E.id){ _pcSugI=-1; pcSugShow(); }   /* §pcSug */
   if(f==='amt'){
     var pv=document.getElementById('pc2-ed-pv'); if(!pv) return;
     var b=+pv.getAttribute('data-base')||0, a=pcNum(E.amt), r=b+(E.kind==='in'?a:-a);
@@ -79667,7 +79687,7 @@ function pc2EdKind(k){
   var E=pc2EdCur(); if(!E || E.src) return;
   E.kind=(k==='in')?'in':'out'; pc2EdRefresh('amt');
 }
-function pc2EdCancel(){ _pc2Ed=null; pcKeep(); }
+function pc2EdCancel(){ pcSugClose(); _pc2Ed=null; pcKeep(); }
 function pc2EdFocus(f){
   var el=document.getElementById('pc2-ed-'+f); if(!el) return;
   try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
@@ -79677,7 +79697,8 @@ function pc2EdFocus(f){
 /* วาดใหม่ทั้งแท็บ (pcKeep คืนตำแหน่งจอให้) แล้วพาโฟกัสกลับมาที่ช่อง · ไม่งั้นจอเด้ง */
 function pc2EdRefresh(f){ pcKeep(); pc2EdFocus(f||'txt'); }
 function pc2EdKey(ev,f){
-  if(ev.key==='Escape'){ ev.preventDefault(); pc2EdCancel(); return; }
+  if(f==='txt' && pcSugKey2(ev)) return;   /* §pcSug · ↑↓ / Enter ในรายการแนะนำ */
+  if(ev.key==='Escape'){ ev.preventDefault(); pcSugClose(); pc2EdCancel(); return; }
   if(ev.key!=='Enter' || ev.isComposing) return;
   ev.preventDefault();
   var E=pc2EdCur(); if(!E) return;
@@ -79710,6 +79731,75 @@ function pc2EdSave(next){
     pc2EdRefresh('txt');
   } else { _pc2Ed=null; pcKeep(); }
 }
+/* ══ §pcSug (2026-10-15) · owner "เวลาพิมพ์ของวันถัดไป ให้ขึ้นตัวที่เคยพิมพ์ด้วยได้ไหม · User จ่ายรายการเดิม ๆ คล้าย ๆ กัน เพียงแต่เปลี่ยนวันที่"
+   พิมพ์ในช่องรายการ → รายการที่เคยลงในสมุดของท่านนี้ (ย้อน 60 วัน · ฝั่งเดียวกัน รับ/จ่าย · ไม่เอาบรรทัดที่ดึงจากชีท)
+   วันที่ในข้อความเปลี่ยนเป็นวันที่ของหน้าให้เอง (15/10/26 · 15/10/2026 · 15/10/69 · 15 ต.ค. 69) · ยอดใส่ยอดล่าสุดไว้ให้ แก้ได้
+   รายการเดียวกันที่ต่างแค่วันที่ = อันเดียว · เรียงใช้ล่าสุดก่อน แล้วตามจำนวนครั้ง · อ่านจากสมุดที่มีอยู่ ไม่บันทึกอะไรเพิ่ม */
+var PC_TH_MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function pcSugRe(){ return /(\d{1,2})\/(\d{1,2})\/(\d{2,4})|(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(\d{2,4})/g; }
+/* เปลี่ยนทุกวันที่ในข้อความเป็นวัน ds · คงรูปแบบเดิม (ปี 2 หลัก/4 หลัก · ค.ศ./พ.ศ.) */
+function pcSugRedate(txt,ds){
+  var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return txt;
+  var dd=d.getDate(), mm=d.getMonth()+1, y=d.getFullYear(), p2=function(v){ return (v<10?'0':'')+v; };
+  var yr=function(orig){ var n=+orig, be=(orig.length===4)?(n>2400):(n>=60);   /* 2 หลัก: 60+ = พ.ศ. (69) · ต่ำกว่า = ค.ศ. (26) */
+    var Y=be?(y+543):y; return orig.length===4?String(Y):String(Y).slice(-2); };
+  return String(txt||'').replace(pcSugRe(), function(m,a,b,c,e,f,g){
+    if(c!=null) return (a.length===2?p2(dd):String(dd))+'/'+(b.length===2?p2(mm):String(mm))+'/'+yr(c);
+    return dd+' '+PC_TH_MO[mm-1]+' '+yr(g); });
+}
+function pcSugKey(txt){ return String(txt||'').replace(pcSugRe(),'#').replace(/\s+/g,' ').trim().toLowerCase(); }
+var _pcSugC=null;
+function pcSugList(kind){
+  var ck=_pcPier+'|'+_pcDate+'|'+kind;
+  if(_pcSugC && _pcSugC.k===ck && _pcSugC.at>Date.now()-15000) return _pcSugC.L;
+  var A=pcPier(_pcPier)||{}, lim=new Date(_pcDate+'T12:00:00'); lim.setDate(lim.getDate()-60);
+  var from=lim.toISOString().slice(0,10), M={};
+  Object.keys(A).forEach(function(ds){
+    if(ds>=_pcDate || ds<from) return;
+    ((A[ds]||{})[kind]||[]).forEach(function(x){
+      if(!x || x.src || !String(x.txt||'').trim()) return;
+      var k=pcSugKey(x.txt), o=M[k];
+      if(!o) o=M[k]={txt:x.txt, ds:ds, amt:+x.amt||0, n:0};
+      o.n++; if(ds>=o.ds){ o.ds=ds; o.txt=x.txt; o.amt=+x.amt||0; }   /* ข้อความ/ยอดของครั้งล่าสุด */
+    });
+  });
+  var L=Object.keys(M).map(function(k){ return M[k]; }).sort(function(a,b){ return (b.ds.localeCompare(a.ds)) || (b.n-a.n); });
+  _pcSugC={k:ck, at:Date.now(), L:L}; return L;
+}
+var _pcSugI=-1, _pcSugL=[];
+function pcSugClose(){ var e=document.getElementById('pc2-sug'); if(e) e.remove(); _pcSugI=-1; _pcSugL=[]; }
+function pcSugShow(){
+  var E=pc2EdCur(), inp=document.getElementById('pc2-ed-txt');
+  if(!E || E.id || !inp){ pcSugClose(); return; }
+  var q=pcSugKey(E.txt), words=q.split(' ').filter(Boolean);
+  var L=pcSugList(E.kind).filter(function(o){ var k=pcSugKey(o.txt); return words.every(function(w){ return k.indexOf(w)>=0; }); }).slice(0,8);
+  if(!L.length){ pcSugClose(); return; }
+  _pcSugL=L; if(_pcSugI>=L.length) _pcSugI=L.length-1;
+  var box=document.getElementById('pc2-sug');
+  if(!box){ box=document.createElement('div'); box.id='pc2-sug'; document.body.appendChild(box);
+    box.addEventListener('mousedown', function(ev){ ev.preventDefault(); });   /* กดแล้วช่องพิมพ์ไม่หลุดโฟกัสก่อนเลือก */ }
+  var r=inp.getBoundingClientRect();
+  box.style.cssText='position:fixed;z-index:100040;left:'+Math.round(r.left)+'px;top:'+Math.round(r.bottom+3)+'px;width:'+Math.min(Math.max(600,Math.round(r.width)),Math.max(320,window.innerWidth-Math.round(r.left)-16))+'px;'
+    +'background:#fff;border:1px solid #CBD5E1;border-radius:10px;box-shadow:0 14px 34px rgba(11,30,91,.18);overflow:hidden;font:13px "Sarabun","DM Sans",sans-serif';
+  box.innerHTML='<div style="padding:6px 10px;font-size:11px;font-weight:700;color:#6B7693;background:#F6F8FB;border-bottom:1px solid #EEF0F4">เคยลงไว้ · เปลี่ยนวันที่เป็นวันนี้ให้ · ↑↓ เลือก · Enter ใช้</div>'
+    +L.map(function(o,i){ var t=pcSugRedate(o.txt,_pcDate);
+      return '<div data-i="'+i+'" onclick="pcSugPick('+i+')" style="display:flex;gap:10px;align-items:center;padding:7px 10px;cursor:pointer;'+(i===_pcSugI?'background:#EEF4FD;':'')+'border-top:'+(i?'1px solid #F1F3F8':'0')+'">'
+        +'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0B1E5B;font-weight:600">'+pcE(t)+'</span>'
+        +'<span style="flex:none;font-size:11px;color:#8A93AE">'+pcE(pcDS(o.ds))+(o.n>1?(' · '+o.n+' ครั้ง'):'')+'</span>'
+        +'<b style="flex:none;font-family:\'DM Mono\',monospace;color:#A32D2D">'+pcN(o.amt)+'</b></div>'; }).join('');
+}
+function pcSugPick(i){
+  var o=_pcSugL[i], E=pc2EdCur(); if(!o || !E) return;
+  E.txt=pcSugRedate(o.txt,_pcDate); E.amt=String(Math.round(o.amt||0));
+  pcSugClose(); pc2EdRefresh('amt');
+}
+function pcSugKey2(ev){
+  var box=document.getElementById('pc2-sug'); if(!box || !_pcSugL.length) return false;
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ ev.preventDefault(); var n=_pcSugL.length; _pcSugI=(ev.key==='ArrowDown')?((_pcSugI+1)%n):((_pcSugI<=0)?n-1:_pcSugI-1); pcSugShow(); return true; }
+  if(ev.key==='Enter' && _pcSugI>=0 && !ev.isComposing){ ev.preventDefault(); pcSugPick(_pcSugI); return true; }
+  if(ev.key==='Escape'){ pcSugClose(); return false; }
+  return false;
+}
 /* บรรทัดที่กำลังกรอก · base = คงเหลือก่อนบรรทัดนี้ (ไว้คำนวณยอดจาง ๆ ระหว่างพิมพ์) */
 function pc2EdRow(E,base,no){
   var isIn=(E.kind==='in'), a=pcNum(E.amt), pv=base+(E.amt===''?0:(isIn?a:-a));
@@ -79722,7 +79812,7 @@ function pc2EdRow(E,base,no){
     +'<span></span>'
     +'<span class="no">'+(E.id?'แก้':'ใหม่')+'</span>'
     +'<span>'+ip('at','c','00:00',E.at,' maxlength="5" inputmode="numeric"')+'</span>'
-    +'<span>'+ip('txt','','พิมพ์รายการ เช่น น้ำแข็ง 6 ถุง',E.txt,'')+'</span>'
+    +'<span>'+ip('txt','','พิมพ์รายการ เช่น น้ำแข็ง 6 ถุง',E.txt,(E.id?'':' onfocus="_pcSugI=-1;pcSugShow()" onblur="setTimeout(pcSugClose,120)"'))+'</span>'
     +'<span>'+(E.src?('<em class="cat '+(E.src==='dock'?'dk':E.src)+'">'+(CATS[E.src]||'จ่ายอื่น')+'</em>')
       :('<span class="pc2-tg"><button type="button" class="i'+(isIn?' on':'')+'" onclick="pc2EdKind(\'in\')">รับ</button>'
        +'<button type="button" class="o'+(!isIn?' on':'')+'" onclick="pc2EdKind(\'out\')">จ่าย</button></span>'))+'</span>'
