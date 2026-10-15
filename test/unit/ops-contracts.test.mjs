@@ -87,6 +87,50 @@ test('new templates let the server allocate a code while edits preserve an exist
   assert.equal(edited.code, 'CT-09');
 });
 
+/* §ctplFit · the boot load used to paint the hidden Contract Templates view: the preview box had
+   no width, the A4 stack was scaled to the 120px floor, and the unchanged-data check kept that
+   thumbnail when the page was opened. The page must only be painted while it has a width. */
+function bootWithView(width) {
+  const window = {};
+  const wrap = { offsetWidth: width };
+  const calls = [];
+  const context = {
+    window, console, JSON, Number, String, Object, Array, Promise, Date, encodeURIComponent, setTimeout, clearTimeout,
+    confirm: () => false, alert: () => {},
+    document: { getElementById: (id) => (id === 'cttv-wrap' ? wrap : null) },
+    SB_CONTRACTS: [], SB_CONTRACT_TEMPLATES: {}, _cttSig: 'painted-while-hidden',
+    renderContractTemplates: () => { calls.push(wrap.offsetWidth); },
+  };
+  window.laOps = {
+    enabled: () => true,
+    clone: (v) => (v == null ? v : JSON.parse(JSON.stringify(v))),
+    fail: () => {},
+    get: async (p) => {
+      if (p === '/v1/contracts') return { contracts: [] };
+      if (p === '/v1/contract-templates') return { contract_templates: [{ id: 'ctt_1' }] };
+      if (p === '/v1/contract-templates/ctt_1') return { id: 'ctt_1', code: 'CT-01', name: 'Standard', is_default: true };
+      throw new Error('unexpected GET ' + p);
+    },
+  };
+  vm.runInNewContext(source, context, { filename: '18-ops-contracts.js' });
+  return { context, wrap, calls, api: window.laOpsContracts };
+}
+
+test('boot load does not paint the hidden Contract Templates page and forgets its signature', async () => {
+  const { context, calls, api } = bootWithView(0);
+  await Promise.all([api.load(), api.loadTemplates()]);
+  assert.ok(context.SB_CONTRACT_TEMPLATES.ctt_1, 'templates still load into the store');
+  assert.deepEqual(calls, [], 'no paint while the view has no width (the preview would scale to 120px)');
+  assert.equal(context._cttSig, null, 'nav() must repaint at the real width instead of keeping a hidden paint');
+});
+
+test('a load that lands while the page is open paints it, always at a real width', async () => {
+  const { calls, api } = bootWithView(1180);
+  await Promise.all([api.load(), api.loadTemplates()]);
+  assert.ok(calls.length >= 1, 'the open page is repainted with the server data');
+  assert.ok(calls.every((w) => w > 0), 'every paint happens after the container has a width');
+});
+
 test('adapter uses shared ops plumbing and keeps the classic tag before boot', () => {
   assert.equal(source.includes('fetch('), false);
   assert.ok(source.includes("/v1/agents/"));

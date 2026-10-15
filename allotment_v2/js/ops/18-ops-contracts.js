@@ -33,8 +33,19 @@
     if(!SB_CONTRACT_TEMPLATES) SB_CONTRACT_TEMPLATES={};
     return SB_CONTRACT_TEMPLATES;
   }
+  /* §ctplFit · paint Contract Templates only while it is on screen. _cttPreviewNow() scales the
+     794px A4 stack to the preview box's width; painted while the view is display:none (the boot
+     load lands before anyone opens the page) that width is 0, the scale drops to its 120px floor,
+     and renderContractTemplates' unchanged-data check then keeps that thumbnail when nav() opens
+     the page. Off screen, forget the painted signature instead so nav() paints it at its real width. */
+  function redrawTemplates(){
+    if(typeof renderContractTemplates!=='function') return;
+    var w=document.getElementById('cttv-wrap');
+    if(w&&w.offsetWidth>0){ renderContractTemplates(); return; }
+    try{ _cttSig=null; }catch(_){ }
+  }
   function redraw(){
-    try{ if(typeof renderContractTemplates==='function') renderContractTemplates(); }catch(_){ }
+    try{ redrawTemplates(); }catch(_){ }
     try{ if(typeof agRenderDetail==='function'&&typeof _agSelected!=='undefined'&&_agSelected) agRenderDetail(_agSelected); }catch(_){ }
   }
   function replaceContract(row){
