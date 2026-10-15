@@ -316,6 +316,9 @@
     return write('POST',path,body||{}).then(function(row){ refreshAfter(id,row); return row; },function(e){ fail('Could not '+action+' agent',e); throw e; });
   }
   window.laOpsAgentLifecycle=lifecycle;
+  /* §ctplSample · GET /v1/agents/:id -> the legacy agent shape, for screens that need one agent's
+     full record without opening the Agent page (Contract Templates preview, 18-ops-contracts.js). */
+  window.laOpsAgentMap=function(s){ return mapAgent(s,null); };
   window.agActivate=function(id){ return lifecycle(id,'activate'); };
   window.agDeactivate=function(id){ return lifecycle(id,'deactivate'); };
   window.agRenew=function(id,body){ return lifecycle(id,'renew',body); };
