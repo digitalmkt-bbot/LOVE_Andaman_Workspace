@@ -25500,17 +25500,18 @@ function tsCSSDoc(){
 & .ts-man .ts-rn{ width:18px !important; text-align:center; color:var(--mut); font:600 6.6pt/1.4 'DM Mono',ui-monospace,monospace; background:var(--head) !important; padding:3px 2px }
 & .ts-man thead th:nth-child(2){ width:7.2% !important } & .ts-man thead th:nth-child(3){ width:7% !important } & .ts-man thead th:nth-child(4){ width:9% !important }
 & .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){ width:3% !important }
-& .ts-man thead th:nth-child(9){ width:6% !important; font-size:6pt } & .ts-man thead th:nth-child(10){ width:8.4% !important } & .ts-man thead th:nth-child(11){ width:5% !important }
-& .ts-man thead th:nth-child(12){ width:7% !important } & .ts-man thead th:nth-child(13){ width:7.5% !important } & .ts-man thead th:nth-child(14){ width:7.5% !important }
-& .ts-man thead th:nth-child(15){ width:9.5% !important } & .ts-man thead th:nth-child(16){ width:6.5% !important } & .ts-man thead th:nth-child(17){ width:6.4% !important } & .ts-man thead th:nth-child(18){ width:7.4% !important }
-& .ts-man td:nth-child(18) .ts-chip{ white-space:nowrap }
+& .ts-man thead th:nth-child(9){ width:6% !important; font-size:6pt } & .ts-man thead th:nth-child(10){ width:8.4% !important } & .ts-man thead th:nth-child(11){ width:4.2% !important } & .ts-man thead th:nth-child(12){ width:4.2% !important }
+& .ts-man thead th:nth-child(13){ width:6.4% !important } & .ts-man thead th:nth-child(14){ width:6.8% !important } & .ts-man thead th:nth-child(15){ width:7% !important }
+& .ts-man thead th:nth-child(16){ width:9.5% !important } & .ts-man thead th:nth-child(17){ width:6.5% !important } & .ts-man thead th:nth-child(18){ width:5.8% !important } & .ts-man thead th:nth-child(19){ width:7.2% !important }
+& .ts-man td:nth-child(19) .ts-chip{ white-space:nowrap }
+& .ts-man td.ts-zone .ts-zarea{ font-weight:700 } & .ts-man td.ts-zone .ts-tel{ font-size:6pt }
 & .ts-man td:nth-child(9){ white-space:nowrap; text-align:center; font-weight:800; background:#F6F7FB !important }
 & .ts-vch{ font:700 7.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink) }
 & .ts-lead{ font-weight:700; color:var(--ink); white-space:normal; max-width:none }
 & .ts-tel{ font:500 6.6pt/1.4 'DM Mono',ui-monospace,monospace; color:var(--mut); white-space:normal; max-width:none }
 & .ts-ag{ display:inline-block; max-width:100%; font-size:6.8pt; padding:1px 5px; border-radius:2px; font-weight:800; white-space:normal; line-height:1.25 }
 & .ts-chip{ display:inline-block; font-size:6.6pt; padding:1px 5px; border-radius:2px; border:1px solid var(--grid); background:#fff; font-weight:700; white-space:normal; line-height:1.3; margin:0 2px 2px 0 }
-& .ts-man td:nth-child(13) .ts-chip{ white-space:nowrap; display:block; width:max-content; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-size:6.4pt }
+& .ts-man td:nth-child(14) .ts-chip{ white-space:nowrap; display:block; width:max-content; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-size:6.4pt }   /* §tsManZone · Van · Boat เลื่อนเป็น 14 */
 & .ts-ao{ display:inline-block; font-size:6.6pt; padding:0 4px; border-radius:2px; white-space:normal; max-width:none; overflow:visible; text-overflow:clip; margin:0 2px 2px 0 }
 & .ts-px{ font:700 8pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink); text-align:center; background:#FBFBFE !important }
 & .ts-px.zero{ color:#C9CCDA; font-weight:400 } & .ts-px.lost{ color:var(--bad) }
@@ -25647,17 +25648,24 @@ var TS_HEAD_COL={
    สถานะค้นหา/กรองอยู่นอก render จะได้ไม่หายตอนกดชิปท่าเรือแล้ววาดใหม่ */
 var _tsManQ='', _tsManF='';
 /* §tsManCols · คอลัมน์ที่ซ่อน · จำไว้ในเครื่องนี้แยกตามผู้ใช้ (localStorage) · # กับ Voucher ซ่อนไม่ได้ */
-var TS_MAN_COLS=['Voucher','Agency','Customer (lead)','AD','CHD','INF','FOC','Actual / Booked','Pickup point · Room','Drop-off','Add-on · Upsell','Van · Boat','คำขอพิเศษ','Pay','Total','Cancel · Charge','Status'];
+/* §tsManZone (2026-10-15) · owner "เพิ่ม Zone ให้หน่อย" · คอลัมน์ที่ 10 ถัดจาก Pickup · โซนรับ (ชื่อพื้นที่ · PK/KL ตัวเล็ก)
+   คอลัมน์หลังจากนั้นขยับไป 1 · ที่ซ่อนไว้ของเดิม (คีย์เก่า) แปลงเลขให้แล้วเก็บคีย์ใหม่ · ตารางมี 18 คอลัมน์ */
+var TS_MAN_COLS=['Voucher','Agency','Customer (lead)','AD','CHD','INF','FOC','Actual / Booked','Pickup point · Room','Zone','Drop-off','Add-on · Upsell','Van · Boat','คำขอพิเศษ','Pay','Total','Cancel · Charge','Status'];
+var TS_MAN_NCOL=TS_MAN_COLS.length;
 var _tsManHC=null, _tsManColsOpen=false;
-function tsManColsKey(){ return 'lad.tsManCols.'+((typeof laBy==='function')?laBy():''); }
+function tsManColsKey(){ return 'lad.tsManCols2.'+((typeof laBy==='function')?laBy():''); }
 function tsManHC(){
   if(_tsManHC) return _tsManHC;
-  var v=[]; try{ v=JSON.parse(localStorage.getItem(tsManColsKey())||'[]'); }catch(_){ v=[]; }
-  _tsManHC=(Array.isArray(v)?v:[]).map(Number).filter(function(k){ return k>=2 && k<=17; });
+  var v=null; try{ v=JSON.parse(localStorage.getItem(tsManColsKey())||'null'); }catch(_){ v=null; }
+  if(!Array.isArray(v)){   /* §tsManZone · ย้ายจากคีย์เก่า (17 คอลัมน์) · เลข ≥10 ขยับ +1 */
+    var o=[]; try{ o=JSON.parse(localStorage.getItem('lad.tsManCols.'+((typeof laBy==='function')?laBy():''))||'[]'); }catch(_){ o=[]; }
+    v=(Array.isArray(o)?o:[]).map(Number).map(function(k){ return k>=10?k+1:k; });
+  }
+  _tsManHC=v.map(Number).filter(function(k){ return k>=2 && k<=TS_MAN_NCOL; });
   return _tsManHC;
 }
 function tsManCol(k, on){
-  k=+k; if(!(k>=2 && k<=17)) return;
+  k=+k; if(!(k>=2 && k<=TS_MAN_NCOL)) return;
   var hc=tsManHC().filter(function(x){ return x!==k; }); if(!on) hc.push(k); hc.sort(function(a,b){ return a-b; });
   _tsManHC=hc; try{ localStorage.setItem(tsManColsKey(), JSON.stringify(hc)); }catch(_){ }
   tsManApply();
@@ -28818,12 +28826,13 @@ function tsCSSv6(){
 & .ts-man{border-collapse:separate;border-spacing:0;width:100%;min-width:0;font-size:12px;table-layout:fixed}
 /* ความกว้างคอลัมน์ (table-layout:fixed อ่านจากหัว) · ตัวเลขแคบ ข้อความยาวแบ่งส่วนที่เหลือ · คอลัมน์ที่ซ่อนคืนที่ให้คอลัมน์อื่นเอง */
 & .ts-man thead th:nth-child(5),& .ts-man thead th:nth-child(6),& .ts-man thead th:nth-child(7),& .ts-man thead th:nth-child(8){width:40px}
-& .ts-man thead th:nth-child(9){width:72px}& .ts-man thead th:nth-child(11){width:7%}& .ts-man thead th:nth-child(13){width:8%}
-& .ts-man thead th:nth-child(16){width:92px}& .ts-man thead th:nth-child(18){width:98px}
-& .ts-man td:nth-child(18) .ts-chip,& .ts-man td:nth-child(9){white-space:nowrap}
+& .ts-man thead th:nth-child(9){width:72px}& .ts-man thead th:nth-child(11){width:6%}& .ts-man thead th:nth-child(12){width:7%}& .ts-man thead th:nth-child(14){width:8%}
+& .ts-man thead th:nth-child(17){width:92px}& .ts-man thead th:nth-child(19){width:98px}
+& .ts-man td:nth-child(19) .ts-chip,& .ts-man td:nth-child(9){white-space:nowrap}
+& .ts-man .ts-zarea{font-weight:700;color:#1a2332}
 & .ts-man thead th{white-space:normal;overflow-wrap:anywhere}
 & .ts-man thead th:nth-child(2){width:7%}& .ts-man thead th:nth-child(3){width:7%}& .ts-man thead th:nth-child(4){width:9.5%}
-& .ts-man thead th:nth-child(10){width:10%}& .ts-man thead th:nth-child(12){width:7%}& .ts-man thead th:nth-child(14){width:8%}& .ts-man thead th:nth-child(15){width:11%}& .ts-man thead th:nth-child(17){width:8%}
+& .ts-man thead th:nth-child(10){width:10%}& .ts-man thead th:nth-child(13){width:7%}& .ts-man thead th:nth-child(15){width:8%}& .ts-man thead th:nth-child(16){width:11%}& .ts-man thead th:nth-child(18){width:8%}
 /* ช่องแคบลงแล้ว ป้าย/ชิปต้องตัดบรรทัดได้ ไม่ล้นไปทับช่องข้าง */
 & .ts-man .ts-chip,& .ts-man .ts-ao,& .ts-man .ts-pyg,& .ts-man .ts-net,& .ts-man .ts-totb,& .ts-man .ts-sqtx,& .ts-man .ts-pyd{white-space:normal;max-width:none;overflow:visible;text-overflow:clip;word-break:normal;overflow-wrap:anywhere}
 & .ts-man td[style*="max-width"]{max-width:none !important}
@@ -28865,6 +28874,7 @@ function tsCSSv6(){
 & .ts-man[data-hc~="15"] tr[data-tsman]>td:nth-child(16),& .ts-man[data-hc~="15"] thead th:nth-child(16),& .ts-man[data-hc~="15"] [data-col="15"]{display:none}
 & .ts-man[data-hc~="16"] tr[data-tsman]>td:nth-child(17),& .ts-man[data-hc~="16"] thead th:nth-child(17),& .ts-man[data-hc~="16"] [data-col="16"]{display:none}
 & .ts-man[data-hc~="17"] tr[data-tsman]>td:nth-child(18),& .ts-man[data-hc~="17"] thead th:nth-child(18),& .ts-man[data-hc~="17"] [data-col="17"]{display:none}
+& .ts-man[data-hc~="18"] tr[data-tsman]>td:nth-child(19),& .ts-man[data-hc~="18"] thead th:nth-child(19),& .ts-man[data-hc~="18"] [data-col="18"]{display:none}
 
 & .ts-man th,& .ts-man td{border-right:1px solid #E3E5EE;border-bottom:1px solid #E3E5EE;padding:5px 8px;vertical-align:top;overflow-wrap:anywhere;background:#fff}
 & .ts-man thead th{position:sticky;top:var(--tsbar,0px);z-index:5;background:#F3F4F9;color:#3A3F5C;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid #C9CCDA;padding:7px 8px;line-height:1.25;white-space:nowrap}
@@ -29324,8 +29334,8 @@ function renderTravelSum(){
   var _sumRow=function(cls,label,S){
     return '<tr class="'+cls+' ts-scr ts-noprint"><td class="ts-rn"></td><td colspan="3" data-span="1-3">'+label+'</td>'
       +_pxTd(S.ad).replace('<td ','<td data-col="4" ')+_pxTd(S.chd).replace('<td ','<td data-col="5" ')+_pxTd(S.inf).replace('<td ','<td data-col="6" ')+_pxTd(S.foc).replace('<td ','<td data-col="7" ')
-      +'<td class="c ts-mono" data-col="8" style="font-weight:800">'+S.t+' / '+S.b+'</td><td colspan="6" data-span="9-14"></td>'
-      +'<td class="r ts-mono ts-totc" data-col="15" style="font-weight:800">'+money(S.m)+'</td><td colspan="2" data-span="16-17"></td></tr>';
+      +'<td class="c ts-mono" data-col="8" style="font-weight:800">'+S.t+' / '+S.b+'</td><td colspan="7" data-span="9-15"></td>'   /* §tsManZone · +1 */
+      +'<td class="r ts-mono ts-totc" data-col="16" style="font-weight:800">'+money(S.m)+'</td><td colspan="2" data-span="17-18"></td></tr>';
   };
   var _gClose=function(){ if(_gS){ body+=_sumRow('ts-gsum','รวม '+e(_gS.name)+' · '+_gS.n+' ใบ',_gS); _gS=null; } };
   var stg=function(done,actual,total){
@@ -29346,7 +29356,7 @@ function renderTravelSum(){
       _gS={name:rt.name||r.routeId||'—',ad:0,chd:0,inf:0,foc:0,t:0,b:0,m:0,n:0};
       /* §tsManSheet · ชื่อเรือของกลุ่มขึ้นที่หัว · เนื้อหาหัวกลุ่มห่อ ts-gw ให้ตรึงซ้ายตอนเลื่อนบนจอ */
       var gBoats=[]; grp.forEach(function(x){ var bt=x.boat?((typeof getBoat==='function'?getBoat(x.boat):null)||{}):null; var nm=bt?(bt.name||x.boat):''; if(nm&&gBoats.indexOf(nm)<0) gBoats.push(nm); });
-      body+='<tr class="ts-grow" style="--rc:'+(rt.color||'#999')+'"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="17" data-span="1-17" style="padding:7px 11px"><div class="ts-gw">'
+      body+='<tr class="ts-grow" style="--rc:'+(rt.color||'#999')+'"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="18" data-span="1-18" style="padding:7px 11px"><div class="ts-gw">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +(gBoats.length?('<span class="ts-scr ts-noprint ts-gboat">'+e(gBoats.join(' · '))+'</span>'):'')
@@ -29414,6 +29424,13 @@ function renderTravelSum(){
         +((b.hotelName||b.pickup)
             ? (e(b.hotelName||b.pickup)+(room?('<span class="ts-room">ห้อง '+e(room)+'</span>'):''))
             : '<span class="ts-chip n" title="ใบนี้ไม่มีจุดรับ · ลูกค้ามาเองที่ท่า">No pickup</span>')+'</td>'
+      +(function(){   /* §tsManZone · ชื่อพื้นที่รับ (เหมือนช่อง โซน ของหน้าเช็คอิน) · ใต้ชื่อ = กลุ่มโซน PK/KL */
+          var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
+          var zk=''; try{ zk=(typeof bkV2EffZone==='function')?(bkV2EffZone(b,r.t)||''):((r.t&&r.t.zone)||b.pickupZone||''); }catch(_){ zk=''; }   /* โซนเดียวกับหน้าเช็คอิน (pckArrivalOf) */
+          var zl=(zk&&typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(zk):zk;
+          if(!(b.hotelName||b.pickup)) return '<td class="ts-zone"><span style="color:var(--zn400)">—</span></td>';
+          return '<td class="ts-zone">'+(area?('<div class="ts-zarea">'+e(area)+'</div>'):'')+(zl&&zl!==area?('<div class="ts-tel">'+e(zl)+'</div>'):(area?'':'<span style="color:var(--zn400)">—</span>'))+'</td>';
+        })()
       +'<td style="max-width:150px">'+(sb?('<div class="ts-sbk">'+e(sb.t)+'</div><span class="ts-chip '+sb.cls+'">'+e(sb.tag)+'</span>')
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
       +'<td class="ts-aocol">'+_aoH+'</td>'
@@ -29484,11 +29501,11 @@ function renderTravelSum(){
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
     +'<th class="ts-rn ts-scr ts-noprint">#</th><th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
-    +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
+    +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Zone</th><th>Drop-off</th>'
     +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="18" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="19" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div>'
     +'<div class="ts-scr ts-noprint ts-mnone" data-tsman-none style="display:none">ไม่พบใบที่ตรงกับที่ค้นหา</div></div>'
     +'<div class="ts-sign">'

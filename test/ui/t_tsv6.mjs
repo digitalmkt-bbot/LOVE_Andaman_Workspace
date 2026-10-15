@@ -215,7 +215,7 @@ const m14 = await page.evaluate(() => { const h = document.getElementById('trave
     if (c.includes('ts-gsum')) { const d = r.children; sums.push({ got: [num(d[2].textContent), num(d[3].textContent), num(d[4].textContent), num(d[5].textContent), d[6].textContent.replace(/\s/g, ''), num(d[8].textContent)], exp: [acc.ad, acc.chd, acc.inf, acc.foc, acc.t + '/' + acc.b, acc.m] }); continue; }
     if (!r.hasAttribute('data-tsman') || c.includes('ts-cxlrow')) continue;
     const d = r.children, px = i => d[i].classList.contains('lost') ? num(d[i].firstChild.textContent) : num(d[i].textContent);
-    acc.ad += px(4); acc.chd += px(5); acc.inf += px(6); acc.foc += px(7); const ab = d[8].textContent.split('/'); acc.t += +ab[0]; acc.b += +ab[1]; acc.m += num(d[15].firstChild.textContent); }
+    acc.ad += px(4); acc.chd += px(5); acc.inf += px(6); acc.foc += px(7); const ab = d[8].textContent.split('/'); acc.t += +ab[0]; acc.b += +ab[1]; acc.m += num(d[16].firstChild.textContent); }   /* §tsManZone · Total เลื่อนเป็นช่องที่ 16 */
   const gt = T.querySelector('tr.ts-gtot'), gtot = num(gt.children[8].textContent), gexp = sums.reduce((a, s) => a + s.exp[5], 0);
   const chips = [...h.querySelectorAll('[data-tsmanf]')].map(b => [b.getAttribute('data-tsmanf'), +b.querySelector('i').textContent]);
   const tagN = k => data.filter(r => (' ' + r.getAttribute('data-tsman') + ' ').includes(' ' + k + ' ')).length;
@@ -241,7 +241,7 @@ await page.evaluate(() => { tsManQ('__nothing__'); }); await page.waitForTimeout
 const f4 = await page.evaluate(() => ({ n: [...document.querySelectorAll('#travelsum-host .ts-man tbody tr[data-tsman]')].filter(r => !r.classList.contains('ts-hide')).length, none: getComputedStyle(document.querySelector('[data-tsman-none]')).display }));
 await page.evaluate(() => { tsManQ(''); _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(400);
 const okM = m14.n >= 20 && m14.seq && m14.rnScr && m14.thSticky && m14.frozen.join() === '0px,static,static,static' && m14.tblW === 0 && nar.frozen.join() === '0px,34px,146px,268px,sticky,sticky,static' && nar.offs.join() === '0,34,146,268' && nar.ovx > 0
-  && m14.nsum === m14.ngrow && m14.sums.every(Boolean) && m14.gtot === m14.gexp && m14.gtot > 0 && m14.gtSticky && m14.total17 === 18 && m14.gw === 'sticky' && m14.grid === '1px'
+  && m14.nsum === m14.ngrow && m14.sums.every(Boolean) && m14.gtot === m14.gexp && m14.gtot > 0 && m14.gtSticky && m14.total17 === 19 && m14.gw === 'sticky' && m14.grid === '1px'
   && m14.chips.length === 6 && m14.chips[0][1] === m14.n && m14.chips.slice(1).every(([k, n]) => n === m14.tags[k]) && m14.tags.cxl > 0 && m14.tags.warn > 0 && m14.tags.addon > 0;
 const okF = f1.n === m14.tags.cxl && f1.allCxl && f1.on && f2.n === 1 && f2.hiddenGrow >= 1 && f2.none === 'none' && f3.q === vch && f3.n === f3.exp && f4.n === 0 && f4.none === 'block';
 if (okM && okF) ok(`14 หมวด 04 เป็นชีท · ${m14.n} แถวมีเลข 1..${m14.n} · หัวตรึงบน · จอกว้างพอดีความกว้าง · จอแคบ 1000 เลื่อนในกล่องและ # Voucher Agency Customer ตรึงซ้ายที่ 0/34/146/268 · แถวรวม ${m14.nsum} กลุ่ม + รวมวัน ${m14.gtot.toLocaleString()} ตรงกับผลบวก · ชิป/ค้นหากรองได้ และค่าคงอยู่หลังกดชิปท่าเรือ`);
@@ -252,7 +252,7 @@ await page.evaluate(() => { try { localStorage.removeItem(tsManColsKey()); } cat
 const SPAN = () => page.evaluate(() => { const T = document.querySelector('#travelsum-host .ts-man'); const rows = [...T.querySelectorAll('tbody tr')].filter(r => !r.querySelector('.ts-empty'));
   const w = r => [...r.children].filter(c => getComputedStyle(c).display !== 'none').reduce((a, c) => a + c.colSpan, 0);
   const ws = [...new Set(rows.map(w))], th = [...T.querySelectorAll('thead th')].filter(c => getComputedStyle(c).display !== 'none').length;
-  return { ws, th, hc: T.getAttribute('data-hc'), dropVis: getComputedStyle(T.querySelector('tr[data-tsman]').children[10]).display !== 'none', hdr: T.querySelectorAll('thead th')[10].textContent.trim(),
+  return { ws, th, hc: T.getAttribute('data-hc'), dropVis: getComputedStyle(T.querySelector('tr[data-tsman]').children[11]).display !== 'none', hdr: T.querySelectorAll('thead th')[11].textContent.trim(),   /* §tsManZone · Drop-off = ช่องที่ 11 */
     key: tsManColsKey(), stored: (() => { try { return localStorage.getItem(tsManColsKey()); } catch (_) { return 'ERR'; } })(), btn: document.querySelector('#travelsum-host .ts-mcolbtn').textContent }; });
 const cs0 = await SPAN();
 /* กล่องตารางไม่มีเลื่อนของตัวเอง · เลื่อนหน้าแล้วหัวคอลัมน์มาเกาะใต้แถบหัว */
@@ -264,7 +264,7 @@ await page.evaluate(() => window.scrollTo(0, 0));
 /* ซ่อน Drop-off (10) กับ Cancel · Charge (16) · ทุกแถวยังกว้างเท่ากัน · จำลง localStorage · วาดใหม่ยังซ่อน · ผู้ใช้อื่นไม่โดน · แสดงทั้งหมดกลับมาครบ */
 await page.evaluate(() => { tsManColsToggle(); }); await page.waitForTimeout(100);
 const popOpen = await page.evaluate(() => getComputedStyle(document.querySelector('#travelsum-host .ts-mcols-pop')).display);
-await page.click('[data-tscol="10"]'); await page.waitForTimeout(150); await page.click('[data-tscol="16"]'); await page.waitForTimeout(150);
+await page.click('[data-tscol="11"]'); await page.waitForTimeout(150); await page.click('[data-tscol="17"]'); await page.waitForTimeout(150);   /* §tsManZone · Drop-off 11 · Cancel 17 */
 const cs1 = await SPAN();
 await page.click('[data-tspier="panwa"]'); await page.waitForTimeout(400); const cs2 = await SPAN();
 const other = await page.evaluate(() => { const me = window.LA_ME; window.LA_ME = { username: '__someone_else__' }; const k = tsManColsKey(); _tsManHC = null; const hc = tsManHC().slice(); window.LA_ME = me; _tsManHC = null; return { k, hc }; });
@@ -272,10 +272,10 @@ await page.evaluate(() => { tsManColsReset(); }); await page.waitForTimeout(150)
 const lock = await page.evaluate(() => { const cb = document.querySelector('[data-tscol="1"]'); tsManCol(1, false); return { dis: cb.disabled, hc: tsManHC().slice() }; });
 await page.evaluate(() => { _tsManColsOpen = false; _tsPier = ''; renderTravelSum(); }); await page.waitForTimeout(300);
 const okFull = full.ov === 'visible' && full.mh === 'none' && full.cardOv === 'clip' && full.inner === 0 && full.scrolled && full.barTop === 0 && Math.abs(full.thUnderBar) <= 1 && full.gtBottom === 0;
-const okCols = cs0.ws.join() === '18' && cs0.th === 18 && cs0.dropVis && /Drop-off/.test(cs0.hdr) && cs0.stored === null && popOpen === 'block'
-  && cs1.ws.join() === '16' && cs1.th === 16 && !cs1.dropVis && cs1.hc === '10 16' && cs1.stored === '[10,16]' && /ซ่อน 2/.test(cs1.btn)
-  && cs2.ws.join() === '16' && cs2.hc === '10 16' && other.k !== cs1.key && other.hc.length === 0
-  && cs3.ws.join() === '18' && cs3.th === 18 && cs3.dropVis && cs3.stored === null && !/ซ่อน/.test(cs3.btn) && lock.dis && lock.hc.length === 0;
+const okCols = cs0.ws.join() === '19' && cs0.th === 19 && cs0.dropVis && /Drop-off/.test(cs0.hdr) && cs0.stored === null && popOpen === 'block'
+  && cs1.ws.join() === '17' && cs1.th === 17 && !cs1.dropVis && cs1.hc === '11 17' && cs1.stored === '[11,17]' && /ซ่อน 2/.test(cs1.btn)
+  && cs2.ws.join() === '17' && cs2.hc === '11 17' && other.k !== cs1.key && other.hc.length === 0
+  && cs3.ws.join() === '19' && cs3.th === 19 && cs3.dropVis && cs3.stored === null && !/ซ่อน/.test(cs3.btn) && lock.dis && lock.hc.length === 0;
 if (okFull && okCols) ok(`15 ตารางยาวเต็ม ไม่มีกล่องเลื่อนซ้อน · หัวคอลัมน์เกาะใต้แถบหัว แถวรวมวันเกาะล่างจอ · ซ่อน Drop-off + Cancel แล้วทุกแถวเหลือ 16 ช่องเท่ากัน · จำใน ${cs1.key} · วาดใหม่ยังซ่อน · ผู้ใช้อื่นไม่โดน · แสดงทั้งหมดกลับครบ · Voucher ซ่อนไม่ได้`);
 else fail('15 ' + JSON.stringify({ full, cs0, cs1, cs2, cs3, other, lock, popOpen }));
 
