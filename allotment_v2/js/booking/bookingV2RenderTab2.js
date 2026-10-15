@@ -215,10 +215,17 @@ function bookingV2RenderTab2(){
   const _allRids = _allRidsAll.filter(rid => !_isLandRid(rid));
   const _famMinTime = {};
   _allRids.forEach(rid => { const fid=_famOf(rid), t=_timeOf(rid); if(!(fid in _famMinTime) || t < _famMinTime[fid]) _famMinTime[fid]=t; });
+  /* §btOrder (2026-10-15) · owner ถามว่าทำไม 19 กับ 20 ต.ค. เรียงไม่เหมือนกัน
+     รอบที่ออกเวลาเดียวกัน (Speedboat กับ Catamaran 08:30) เดิมไม่มีกฎ · ลำดับขึ้นกับว่าเจอใบจองของรอบไหนก่อนในข้อมูล
+     จึงสลับไปมาวันต่อวัน · owner: "ให้รอบที่ออกเวลาเดียวกันเรียงตามลำดับที่ตั้งไว้" = ลำดับใน ROUTES (หน้าตั้งค่าเส้นทาง) */
+  const _btRouteIdx = rid => { const i=(typeof ROUTES!=='undefined'?ROUTES:[]).findIndex(x=>x.id===rid); return i<0?9999:i; };
+  /* §btOrderCfg · "ลำดับที่ตั้งไว้" = ลำดับของหน้า Program Config (laRouteOrdCmp: ท่า · เลข sort · ตำแหน่งใน ROUTES)
+     ตัวเดียวกับที่เงินสดย่อยใช้ (§pcRouteOrd) · ของรอบแรกใช้ตำแหน่งใน ROUTES ดิบ ไม่สนเลข sort ที่ตั้งในหน้านั้น */
+  const _btOrdCmp = (a,b) => (typeof laRouteOrdCmp==='function') ? laRouteOrdCmp(a,b) : (_btRouteIdx(a)-_btRouteIdx(b));
   const routeIds = _allRids.sort((a,b)=>{
     const fa=_famOf(a), fb=_famOf(b);
     if(fa!==fb) return (_famMinTime[fa]||'99').localeCompare(_famMinTime[fb]||'99') || fa.localeCompare(fb);
-    return _timeOf(a).localeCompare(_timeOf(b));
+    return _timeOf(a).localeCompare(_timeOf(b)) || _btOrdCmp(a,b);
   });
 
   const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
@@ -282,7 +289,11 @@ function bookingV2RenderTab2(){
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bookingV2LockedTotal==='function')?bookingV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bookingV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
   Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bookingV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
-  const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
+  /* §btOrder (2026-10-15) · การ์ด Programmes เดิมเรียงโปรแกรมตาม pax มากไปน้อย (ไม่นับล็อก) · ลำดับเลยเปลี่ยนทุกวัน
+     (19 ต.ค. Surin 29 > Phi Phi 15 · 20 ต.ค. Phi Phi 35 > Surin 12) · owner: "ตายตัวทุกวัน (Similan → Surin → Phi Phi → …)"
+     = ลำดับใน _BKV2_FAMILIES: Similan · Surin · Phi Phi · Krabi + Phang Nga · Whale Shark · Se La Va · Nyaung Oo Phee · Transfer · City Tour · Activities */
+  const _btFamIdx = a => { const i=_BKV2_FAMILIES.findIndex(f=>f.id===(a&&a.fam&&a.fam.id)); return i<0?999:i; };
+  const _famList = Object.values(_famAgg).sort((a,b)=> _btFamIdx(a)-_btFamIdx(b));
   const _dayLocked = (typeof bookingV2DayLockedTotal==='function') ? bookingV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
   const _isToday = date === (typeof bookingV2LocalYMD==='function' ? bookingV2LocalYMD(new Date()) : '');
@@ -466,7 +477,7 @@ function bookingV2RenderTab2(){
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
         const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
-      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))));
+      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))) || _btOrdCmp(x,y));   /* §btOrder · เวลาเดียวกัน → ลำดับที่ตั้งไว้ (Program Config) */
     const nRun=rids.filter(r=>(typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(r,date)).length;
     /* §famSum (2026-10-13) · owner "ตัวผลรวมที่เป็น Variant เพิ่มจำนวนล็อคทั้งหมดด้วย และผลรวมจะเป็นเท่าไหร่"
        แถวหัวโปรแกรมรวมทุก variant ที่วิ่งวันนี้: 🔒 ล็อกทั้งหมด · รวม = จอง + ล็อก / ที่นั่งทั้งหมด · ว่าง
@@ -1264,7 +1275,14 @@ function bookingV2RenderTab2(){
         const _ovTrip=(bk.trips||[]).find(x=>x.date===date&&x.routeId===r.routeId);
         let _ovSB='';
         if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
-        const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; if(_ri.selfRet){ return loc+`<br><span class="t2-rb" style="background:#EDEFF2;color:#5F6B7A;white-space:nowrap" title="จุดส่งกลับเป็นท่าเรือ self-arrive · ลูกค้าเดินทางกลับเอง ไม่ต้องจัดรถ">↩ ลูกค้ากลับเอง</span>`; } if(_ri.arranged){ const vn=_ri.retId?((vehGet(_ri.retId)||{}).name||_ri.retId):''; return loc+`<br><span class="t2-rb" style="background:#E1F5EE;color:#0F6E56;white-space:nowrap" title="รถกลับ: ${esc(vn)}">↩ ${esc(vn)}</span>`; } if(_ri.sameVan){ return loc+`<br><span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bookingV2ToggleVanMode();return;}bookingV2SetReturnSameVan('${bk.id}',false,'${date}')" style="background:#EAF1FA;color:#2C5F94;white-space:nowrap;cursor:pointer" title="${vanMode?'รถขาไปพากลับ · ส่งจุดใหม่ · คลิกเพื่อยกเลิก':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม ✓</span>`; } return loc+`<br><span class="t2-rb" style="background:#FBE3E1;color:#C0392B;font-weight:700;white-space:nowrap" title="ส่งกลับคนละที่กับตอนรับ · ยังไม่จัดรถกลับ">⚠ ยังไม่จัดรถกลับ</span> <span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bookingV2ToggleVanMode();return;}bookingV2SetReturnSameVan('${bk.id}',true,'${date}')" style="background:${vanMode?'#EAF1FA':'#EFE7D6'};color:${vanMode?'#2C5F94':'#8A6A1A'};white-space:nowrap;cursor:pointer;font-weight:700" title="${vanMode?'รถขาไปพากลับเอง ไปส่งจุดใหม่ (ไม่ต้องจัดรถคันอื่น)':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม${vanMode?'':' (เปิด Van)'}</span>`; })() : '';
+        const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
+                 (จัดรถกลับแล้ว · กลับคันเดิม · ลูกค้ากลับเอง) ย้ายไปเป็นป้ายลอยใต้ชื่อโรงแรมในช่อง Pickup (_rtFt ด้านล่าง)
+                 ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */
+              /* §rtFt2 · owner: "มันต้องอยู่ที่ Dropoff ทำให้สวยเหมือนอันนี้ (ป้ายล็อก)" · ป้ายลอยใต้ชื่อจุดส่งในช่องนี้เอง
+                 หน้าตาเป็นเม็ดทึบตัวขาวแบบป้าย 🔒 ล็อก ของ Compact */
+              if(_ri.selfRet) return loc+`<span class="t2-rtft" style="background:#6B7280" title="จุดส่งกลับเป็นท่าเรือ self-arrive · ลูกค้าเดินทางกลับเอง ไม่ต้องจัดรถ">&#8617; ลูกค้ากลับเอง</span>`;
+              if(_ri.arranged){ const vn=_ri.retId?((vehGet(_ri.retId)||{}).name||_ri.retId):''; return loc+`<span class="t2-rtft" style="background:#0F6E56" title="รถกลับ: ${esc(vn)} · ส่งที่ ${esc(_ri.drop||'')}">&#8617; กลับ ${esc(vn)}</span>`; }
+              if(_ri.sameVan) return loc+`<span class="t2-rtft" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bookingV2ToggleVanMode();return;}bookingV2SetReturnSameVan('${bk.id}',false,'${date}')" style="background:#2C5F94;cursor:pointer" title="${vanMode?'รถขาไปพากลับ · ส่งจุดใหม่ · คลิกเพื่อยกเลิก':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">&#8617; กลับคันเดิม &#10003;</span>`; return loc+`<br><span class="t2-rb" style="background:#FBE3E1;color:#C0392B;font-weight:700;white-space:nowrap" title="ส่งกลับคนละที่กับตอนรับ · ยังไม่จัดรถกลับ">⚠ ยังไม่จัดรถกลับ</span> <span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bookingV2ToggleVanMode();return;}bookingV2SetReturnSameVan('${bk.id}',true,'${date}')" style="background:${vanMode?'#EAF1FA':'#EFE7D6'};color:${vanMode?'#2C5F94':'#8A6A1A'};white-space:nowrap;cursor:pointer;font-weight:700" title="${vanMode?'รถขาไปพากลับเอง ไปส่งจุดใหม่ (ไม่ต้องจัดรถคันอื่น)':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม${vanMode?'':' (เปิด Van)'}</span>`; })() : '';
         // §OVN return day — there is no pickup, so the hotel only appears if we print it HERE. Without this
         // the row showed the OVN chip and nothing else: the driver had a passenger and nowhere to take her.
         const _ovnDropTxt = (_ovTrip && _ovTrip.ovnLeg)
@@ -1372,7 +1390,8 @@ function bookingV2RenderTab2(){
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bookingV2VanCellHTML==='function')?bookingV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bookingV2GetArea==='function'?bookingV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
-              return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>'; })()}</td>
+              const _rtFt='';   /* §rtFt2 · ป้ายย้ายไปช่อง Send back */
+              return ((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room" title="ห้อง ${esc(bk.roomNumber)}">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(function(){
               /* ══ §splitZone · โซนของแถวที่แยกคนออกมา ════════════════════════
@@ -1425,7 +1444,7 @@ function bookingV2RenderTab2(){
               ${_note?`<div class="t2-note" title="${esc(_note)}">${esc(_note)}</div>`:''}
               ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
             </td>
-            ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bookingV2PayChip(bk)}${_cot.chip}${reschCashChip}${bkUpgPayChip(bk, date)}</div></td>`)}
+            ${vanMode?'':(_2nd?'<td></td>':`<td${bkUpgPayChip(bk, date)?' class="t2-pyc"':''}><div class="t2-paywrap">${bookingV2PayChip(bk)}${_cot.chip}${reschCashChip}</div>${bkUpgPayChip(bk, date, 'fl')}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bookingV2FmtTHB(r.subtotal)}${bookingV2PaidLine(bk)}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bookingV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
             <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bookingV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : bookingV2BoatPickWrap(bk, rid, a, r, !!(_rowBid||r.charterBoatId), (_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bookingV2BoatAvatarColor(_bid); const _pl=(typeof bookingV2BoatPulled==='function')&&bookingV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bookingV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
@@ -2739,6 +2758,11 @@ function bookingV2RenderTab2(){
        วันที่มี 31 แถว: สูง 3,100 → 2,624px (-15%) · กว้าง 1,585 → 1,743px */
     /* §btCols · จุดรับตัดเป็น 2 บรรทัดได้อยู่แล้ว · 270 → 196 คืนที่ให้ตาราง 74px */
     .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:196px;max-width:196px}
+    /* §rtFt · ป้ายรถกลับลอยใต้ชื่อโรงแรม · ไม่ดันแถว · ยาวเกินตัด … ชี้กางเต็ม */
+    /* §rtFt2/§rtFt3 · เม็ดป้ายรถกลับ (z 20: อยู่เหนือแถบกรุ๊ปถัดไป · ใต้หัวตารางที่ตรึง) ลอยใต้ชื่อจุดส่งในช่อง Send back · ทึบ ตัวขาว เงาเบา เหมือนป้ายล็อก */
+    .t2-mtbl td.t2-sbk{position:relative;overflow:visible}
+    .t2-mtbl td.t2-sbk .t2-rtft{position:absolute;left:9px;top:calc(100% - 10px);z-index:20;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(15,27,61,.22)}
+    .t2-mtbl td.t2-sbk .t2-rtft:hover{max-width:none;z-index:30;box-shadow:0 4px 14px rgba(2,10,30,.25)}
     /* §btGap · จุดรับ / โซน / ห้อง ไม่ต้องมีพื้นชิป · มีเส้นแบ่งคอลัมน์แล้ว
        ตาแยกค่าออกจากช่องข้าง ๆ ได้อยู่ · ชิปซ้อนอีกชั้นทำให้ตารางลาย */
     .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.3;vertical-align:middle;font-weight:700;font-size:12.5px;color:#26303F}
@@ -2763,6 +2787,10 @@ function bookingV2RenderTab2(){
     .t2-mtbl th.t2-vc{width:104px}
     .t2-upgfrom{display:block;width:max-content;max-width:100%;box-sizing:border-box;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .t2-note.t2-upgnote{color:#4A1D6E;font-weight:700}
+    /* §upgPayFt · เม็ด Free Upgrade ลอยขอบล่างช่อง Pay (แบบ §rtFt) */
+    .t2-mtbl tr.t2-row>td.t2-pyc,body.btc #view-booking tr.t2-row>td.t2-pyc{position:relative;overflow:visible!important}
+    .t2-upgpay.fl{position:absolute;left:8px;top:calc(100% - 10px);z-index:20;display:inline-flex;align-items:center;gap:3px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;box-shadow:0 2px 5px rgba(15,27,61,.22);cursor:help}
+    .t2-upgpay.fl:hover{z-index:30;box-shadow:0 4px 14px rgba(2,10,30,.25)}
     .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-vch{display:inline-block;max-width:min(96px,100%);overflow:hidden;text-overflow:ellipsis;vertical-align:middle}   /* §btClip */
     /* ══ §btClip (2026-10-01) · กติกาการตัดข้อความในตารางนี้ ═════════════

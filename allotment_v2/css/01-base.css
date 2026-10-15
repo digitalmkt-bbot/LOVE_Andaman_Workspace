@@ -3386,3 +3386,324 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
   #view-agents .agi-period-col{flex:0 0 auto}
   #view-agents .agi-prog-actions{margin-left:auto}
 }
+
+/* ══ §ctV2 (2026-10-14) · หน้าต้นทุน & จุดคุ้มทุน · ดีไซน์ใหม่ (แบบแรก + หัวขาว ที่เจ้าของเลือก) ══════════
+   owner: "ปรับดีไซน์หน้าต้นทุน ในทุกหน้า" → "ใช้แบบแรกที่เสนอมา แต่ Header ขอเป็นสีขาว" → "ทำเลย"
+   ทับ §ctSkin (ส้ม/ครีม) ด้วยชั้นนี้ชั้นเดียว · ตัวแปรสีเดิมถูกตั้งใหม่เป็นโทนกรมท่า/เทาฟ้า
+   ตรรกะ ปุ่ม ช่องกรอก ทุกตัวเป็นของเดิม · ลบบล็อกนี้ทิ้ง = กลับเป็นหน้าตาเดิมทันที */
+#view-costing{
+  --b50:#EEF3FB; --b100:#E3EAF8; --b200:#C9D6F0; --b300:#9DB2E0; --b500:#0B1E5B; --b600:#13286E;
+  --cr50:#F7F8FB; --cr200:#E2E6EE;
+  --sd50:#FAFBFD; --sd100:#F2F4F8; --sd200:#E2E6EE; --sd300:#CDD3DF; --sd400:#A9B2C4;
+  --es700:#3E4A6B; --es800:#26324F; --es900:#0F1B3D; --es950:#0B1E5B;
+  --mt50:#E8F6EF; --mt100:#D3EEE1; --mt500:#12A26B; --mt700:#0B6142;
+  color:#0F1B3D;
+}
+#view-costing .ct-k-v,#view-costing .ct-in,#view-costing td,#view-costing .ct-rt-sub{font-variant-numeric:tabular-nums}
+
+/* หัวหน้า · การ์ดขาว + แท็บกรมท่า + แถบสิ่งที่ค้าง */
+#view-costing .ct-head{background:#fff;border:1px solid #E2E6EE;border-radius:16px;box-shadow:0 1px 2px rgba(11,30,91,.05);
+  padding:12px 16px 0;margin-bottom:14px;align-items:center;gap:12px 16px;overflow:hidden}
+#view-costing .ct-logo{width:38px;height:38px;border-radius:10px;background:#0B1E5B;box-shadow:none}
+#view-costing .ct-h1 h1{font-size:18px;color:#0B1E5B;letter-spacing:0}
+#view-costing .ct-pill{display:none}
+#view-costing .ct-h2{font-size:12px;color:#5F6880}
+#view-costing #ct-tabs{background:#F2F4F8;border:0;border-radius:12px;padding:4px;gap:4px}
+#view-costing .ct-tab{color:#3E4A6B;font-size:13px;font-weight:600;border-radius:9px;padding:8px 14px}
+#view-costing .ct-tab:hover{color:#0B1E5B;background:#E8ECF3}
+#view-costing .ct-tab.on{background:#0B1E5B;color:#fff;box-shadow:none}
+#view-costing .ct-tab.on svg{color:#00B4E0}
+#view-costing .ct-tab .ct-tb{font-size:11px;font-weight:700;border-radius:8px;padding:0 6px;line-height:17px;background:#FFF0D6;color:#9A4A06;margin-left:2px}
+#view-costing .ct-tab.on .ct-tb{background:#F5C77E;color:#3D2300}
+#view-costing .ct-todo{flex:1 1 100%;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 -16px;padding:8px 16px;
+  background:#F8F9FC;border-top:1px solid #EDF0F5;font-size:12.5px}
+#view-costing .ct-todo > b{color:#9A4A06;font-weight:700;margin-right:2px}
+#view-costing .ct-todo .t{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:8px;background:#fff;
+  border:1px solid #E2E6EE;color:#0F1B3D;font:inherit;cursor:pointer;white-space:nowrap}
+#view-costing .ct-todo .t:hover{border-color:#B9C4DA}
+#view-costing .ct-todo .t i{width:7px;height:7px;border-radius:4px;background:#E8940C}
+#view-costing .ct-todo .t.r i{background:#D9534A}
+#view-costing .ct-todo .ok{display:inline-flex;align-items:center;gap:7px;color:#0B6142}
+#view-costing .ct-todo .ok i{width:7px;height:7px;border-radius:4px;background:#12A26B}
+#view-costing .ct-todo .nt{margin-left:auto;color:#5F6880;font-size:12px}
+
+/* การ์ด · มุมเล็กลง ขอบเทาฟ้า */
+#view-costing .ct-card{border-radius:14px;border-color:#E2E6EE;box-shadow:none}
+#view-costing .ct-card-h{border-bottom-color:#EDF0F5;color:#0B1E5B}
+#view-costing .ct-card-h b{font-size:13.5px;letter-spacing:0;color:#0B1E5B}
+#view-costing .ct-card-h .ct-sub{font-size:12px;color:#5F6880}
+#view-costing .ct-card-h.split{background:#FAFBFD}
+#view-costing .ct-hint{color:#5F6880}
+
+/* แผนคำนวณ · การ์ดสรุปขึ้นไปอยู่ใต้ชื่อแผน ก่อนช่องกรอก */
+#view-costing .ct-main > .ct-namebar{order:-3}
+#view-costing .ct-main > .ct-kpis{order:-2}
+#view-costing .ct-main{gap:14px}
+#view-costing .ct-wrap{gap:14px}
+/* แถบซ้าย · รายการแผน */
+#view-costing .ct-side-h{font-size:13.5px;font-weight:700;color:#0B1E5B;letter-spacing:0}
+#view-costing .ct-rt{border-radius:12px;border-color:#E2E6EE;background:#fff;box-shadow:none}
+#view-costing .ct-rt.on{background:#EEF3FB;border-color:#0B1E5B;box-shadow:inset 3px 0 0 #0B1E5B;color:#0B1E5B}
+#view-costing .ct-rt.on .ct-rt-nm,#view-costing .ct-rt.on .ct-rt-sub{color:#0B1E5B}
+#view-costing .ct-rt-nm{font-size:13.5px;color:#0B1E5B}
+#view-costing .ct-rt-sub{font-size:12px;color:#5F6880}
+#view-costing .ct-rt-ic{background:#F2F4F8;color:#3E4A6B}
+#view-costing .ct-rt.on .ct-rt-ic{background:#0B1E5B;color:#fff}
+#view-costing .ct-rt-badge{font-size:11.5px;background:#E3F5EC;color:#0B6142}
+#view-costing .ct-rt-badge.warn{background:#FDECEA;color:#B42318}
+#view-costing .ct-addrt{border-color:#C9D0DD;color:#3E4A6B;border-radius:12px}
+/* การ์ดตัวเลข */
+#view-costing .ct-k{border-radius:14px}
+#view-costing .ct-k-lb{font-size:12px;letter-spacing:.03em}
+#view-costing .ct-k-v{font-size:30px}
+#view-costing .ct-k-note{font-size:12.5px;color:#5F6880}
+#view-costing .ct-k.brand .ct-k-v{color:#0B1E5B}
+#view-costing .ct-k.brand .ct-k-v.neg{color:#B42318}
+/* ช่องกรอก ปุ่ม */
+#view-costing .ct-in,#view-costing .ct-sel{border-color:#DCE1EA;border-radius:9px;color:#0F1B3D}
+#view-costing .ct-in:focus,#view-costing .ct-sel:focus{border-color:#0B1E5B;box-shadow:0 0 0 3px rgba(11,30,91,.12);outline:0}
+#view-costing .ct-btn{background:#0B1E5B;border-color:#0B1E5B;color:#fff;border-radius:9px;box-shadow:none}
+#view-costing .ct-btn:hover{background:#13286E}
+#view-costing .ct-btn.ghost{background:#fff;color:#3E4A6B;border:1px solid #DCE1EA}
+#view-costing .ct-mini{border-radius:7px}
+/* ตาราง */
+#view-costing table th,#view-costing .ct-tbl th{color:#5F6880;background:#F7F8FB}
+#view-costing .ct-pierh td{background:#F4F6FA;color:#0B1E5B;font-weight:800;letter-spacing:.05em}
+#view-costing .ct-cath{background:#FAFBFD;border-bottom-color:#EDF0F5}
+#view-costing .ct-cath span:first-child{color:#0B1E5B}
+#view-costing .ct-cnt{color:#5F6880}
+#view-costing .ct-bar2 b{font-size:16px;color:#0B1E5B}
+#view-costing .ct-bar2 .ct-sub{font-size:12.5px;color:#5F6880}
+#view-costing .ct-warn{border-radius:12px}
+/* หัว · ชื่อหน้ายืดได้ คำอธิบายตัดท้าย แท็บไม่ล้นขอบ */
+#view-costing .ct-brand{flex:1 1 320px;min-width:0}
+#view-costing .ct-brand>div{min-width:0}
+#view-costing .ct-h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-costing #ct-tabs{flex-wrap:wrap}
+/* รายการแผน · กระชับขึ้น ป้ายบนแผนที่เลือกอ่านออก */
+#view-costing .ct-rt{padding:10px 12px;gap:10px}
+#view-costing .ct-rt-badge{margin-top:5px;border:0}
+#view-costing .ct-rt.on .ct-rt-badge{background:#E3F5EC;color:#0B6142}
+#view-costing .ct-rt.on .ct-rt-badge.warn{background:#FDECEA;color:#B42318}
+#view-costing .ct-rt.on .ct-dot{background:#0B1E5B}
+/* ช่องกรอก · ชื่อช่องอยู่บน ช่องเต็มความกว้าง เรียง 6 คอลัมน์ */
+#view-costing .ct-grid8{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 14px;padding:14px 18px}
+#view-costing .ct-grid8 .ct-f{display:flex;flex-direction:column;gap:5px}
+#view-costing .ct-grid8 .ct-f>span{font-size:12px;font-weight:600;color:#5F6880;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-costing .ct-grid8 .ct-f.hot>span{color:#9A4A06}
+#view-costing .ct-grid8 .ct-in{width:100%!important;height:36px;font-size:14px;text-align:right}
+#view-costing .ct-grid8 select.ct-in{text-align:left}
+#view-costing .ct-in.hot{border-color:#F0B66A;background:#FFF8EC}
+#view-costing .ct-grid8 .ct-f{text-align:left}
+/* การ์ดจุดคุ้มทุน · ถ้า "ไม่ถึง" เป็นโทนแดง (เดิมเขียวตลอด) */
+#view-costing .ct-k.mint:has(.ct-k-v>span){background:#FDF1EF;border-color:#F6D3CD}
+#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-lb,#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-v,#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-row{color:#B42318}
+#view-costing .ct-k.mint:has(.ct-k-v>span) .ct-k-ic{background:#F9DCD7;color:#B42318}
+/* ปรับ / ปิด รายแผน · ตัวตารางพื้นขาว · ไฮไลต์แถว/คอลัมน์เป็นฟ้าอ่อน (เดิมครีม/ส้ม) */
+#view-costing .ct-otbl th{background:#F7F8FB}
+#view-costing .ct-otbl td.ct-pcol:not(.ct-colon):not(.ct-rowon):not(.ct-cellon){background:#fff !important}
+#view-costing .ct-grow td{background:#F4F6FA}
+#view-costing .ct-sheet .ct-otbl .ct-grow td.ct-stick{background:#F4F6FA}
+#view-costing .ct-otbl tbody tr:not(.ct-grow):hover td{background:#F7F9FC}
+#view-costing .ct-otbl td.ct-colon,#view-costing .ct-otbl td.ct-rowon,#view-costing .ct-sheet .ct-otbl td.ct-stick.ct-rowon{background:#EEF3FB !important}
+#view-costing .ct-sheet .ct-otbl thead th{background:#F7F8FB}
+#view-costing .ct-otbl td,#view-costing .ct-otbl th{border-color:#EDF0F5}
+/* §ctV2 · จับคู่เส้นทาง · ตัวเลขสรุป + ค้นหา/ตัวกรอง */
+#view-costing .ct-mtiles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:14px;margin-bottom:14px}
+#view-costing .ct-mt{padding:14px 18px;display:flex;flex-direction:column;gap:2px}
+#view-costing .ct-mt small{font-size:12px;font-weight:700;color:#5F6880}
+#view-costing .ct-mt b{font:600 28px/1.15 "DM Mono",monospace;color:#0B6142}
+#view-costing .ct-mt b span{font-size:14px;color:#5F6880}
+#view-costing .ct-mt em{font-style:normal;font-size:12px;color:#5F6880;line-height:1.4}
+#view-costing .ct-mt.warn{background:#FFF6E8;border-color:#F3DDB6}
+#view-costing .ct-mt.warn small,#view-costing .ct-mt.warn b{color:#9A4A06}
+#view-costing .ct-mt.fl{flex-direction:row;align-items:center;gap:12px}
+#view-costing .ct-msrch{flex:1;display:flex;align-items:center;gap:8px;height:40px;border:1px solid #DCE1EA;border-radius:10px;padding:0 12px;color:#5F6880;background:#fff}
+#view-costing .ct-msrch input{border:0;outline:0;flex:1;font:inherit;font-size:13.5px;color:#0F1B3D;background:transparent;min-width:0}
+#view-costing .ct-seg{display:inline-flex;gap:2px;background:#F2F4F8;border-radius:10px;padding:3px;flex:none}
+#view-costing .ct-seg button{border:0;background:transparent;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;color:#3E4A6B;cursor:pointer;white-space:nowrap}
+#view-costing .ct-seg button.on{background:#0B1E5B;color:#fff}
+#view-costing .ct-mrow .ct-sug{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;margin-top:5px}
+#view-costing .ct-mrow .ct-sug .ct-mini{margin:0!important;display:inline-flex}
+#view-costing .ct-mrow .ct-sug br{display:none}
+#view-costing .ct-tag{font-size:11.5px;border-radius:8px;padding:2px 9px}
+#view-costing .ct-tag.m{background:#E3F5EC;color:#0B6142;border-color:transparent}
+#view-costing .ct-tag.f{background:#FFF0D6;color:#9A4A06;border-color:transparent}
+#view-costing .ct-mrow td{padding-top:9px;padding-bottom:9px}
+/* §ctV2 · ราคาจริง · ทะเบียนร้าน | ร้านประจำเส้นทาง */
+#view-costing .ct-rgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;align-items:start;margin-bottom:14px}
+#view-costing .ct-rgrid>.ct-catcard{margin:0}
+#view-costing .ct-cath .ct-seg button{padding:4px 10px;font-size:12px}
+#view-costing .ct-rgrid .ct-mtbl{table-layout:fixed;width:100%;min-width:0}
+#view-costing .ct-rgrid .ct-scroll{overflow-x:auto}
+#view-costing .ct-rgrid .ct-sel{max-width:100%;min-width:0;width:100%}
+#view-costing .ct-rgrid td{padding-right:14px}
+#view-costing .ct-nm .ct-dot{margin-right:7px;vertical-align:1px}
+#view-costing .ct-catcard>.ct-hint{padding:10px 16px 12px;font-size:12px;line-height:1.6}
+/* §ctV2 · แถวรวมต่อทริป */
+#view-costing .ct-otbl tr.ct-totrow td{background:#F7F8FB !important;border-top:2px solid #0B1E5B;padding:12px 14px;font-weight:700;color:#0B1E5B}
+#view-costing .ct-otbl tr.ct-totrow td.ct-tot b{display:block;text-align:right;font-size:15.5px;font-variant-numeric:tabular-nums}
+#view-costing .ct-otbl tr.ct-totrow td.ct-tot .ct-u{display:block;text-align:right;font-weight:500;font-size:11.5px}
+/* §ctV2 · สูตรกลาง · ชีทเดียว หมวดพับได้ */
+#view-costing .ct-tsheet{overflow:hidden}
+#view-costing .ct-tsh{display:grid;grid-template-columns:250px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 16px;background:#F7F8FB;border-bottom:1px solid #E2E6EE;font-size:11.5px;font-weight:700;color:#5F6880}
+#view-costing .ct-tcat .ct-cath{cursor:pointer;background:#F4F6FA;border-bottom:1px solid #E2E6EE;padding:9px 16px;user-select:none}
+#view-costing .ct-tcat .ct-cath:hover{background:#ECF0F6}
+#view-costing .ct-tcat .ct-cath b{font-size:13.5px;color:#0B1E5B}
+#view-costing .ct-tchev{font-style:normal;display:inline-block;width:16px;color:#5F6880}
+#view-costing .ct-tcat.fold .ct-cath{background:#fff}
+#view-costing .ct-tcat .ct-mtbl td{padding-top:7px;padding-bottom:7px;border-bottom-color:#F0F2F6;vertical-align:top}
+#view-costing .ct-tcat .ct-part{gap:6px;margin-bottom:5px}
+#view-costing .ct-tcat .ct-lname{font-weight:600;color:#0B1E5B}
+
+/* ==== §bkActivity (2026-10-14) · All bookings · design A ==== */
+/* owner: "ในหน้า All booking ขอปรับหน้าตาใหม่ · ขอให้ไล่เรียงแบบล่าสุด กรณีที่มีแก้ไขให้ขึ้นอัพเดทด้วย"
+   KPI เตี้ยลงเป็นแถวเดียว · แถวรายการเตี้ยลง (ยอดคนแยกย้ายไปใต้ชื่อทริป) · เส้นสีสถานะซ้ายแถว
+   กลุ่มวัน · ป้าย ใหม่/แก้ไข/ยกเลิก ใต้เลขใบ · คอลัมน์ Activity ท้ายตาราง */
+#view-booking .bkv2-kpis .bkv2-kpi{display:flex;align-items:baseline;gap:10px;padding:9px 16px}
+#view-booking .bkv2-kpis .bkv2-kpi-lab{margin:0}
+#view-booking .bkv2-kpis .bkv2-kpi-foot{margin:0}
+#view-booking .bkv2-kpis .bkv2-kpi-val{margin-left:auto;font-size:20px;font-weight:700}
+#view-booking .bkv2-sortbar{display:flex;align-items:center;gap:8px;padding:9px 18px 0;flex-wrap:wrap}
+#view-booking .bkv2-sortbar .lb{font-size:11px;color:var(--ink-soft)}
+#view-booking .bkv2-seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white)}
+#view-booking .bkv2-seg button{border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);padding:5px 11px;cursor:pointer;white-space:nowrap}
+#view-booking .bkv2-seg button:hover{background:var(--sand-mid)}
+#view-booking .bkv2-seg button.on{background:var(--bk-navy);color:var(--white)}
+#view-booking .bkv2-sortbar .hint{font-size:11px;color:var(--ink-soft);opacity:.85}
+#view-booking .bkv2-tbl tbody td{padding:8px 14px}
+#view-booking .bkv2-tbl tr.bkv2-day{cursor:default}
+#view-booking .bkv2-tbl tr.bkv2-day td,#view-booking .bkv2-tbl tr.bkv2-day:hover td{padding:5px 14px;background:#FAFBFC;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+#view-booking .bkv2-tbl tr.bkv2-day td i{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0;opacity:.8}
+#view-booking .bkv2-tbl tr.bkr td:first-child{box-shadow:inset 3px 0 0 var(--st,transparent)}
+#view-booking .bkv2-tbl tr.bkr.confirmed,#view-booking .bkv2-tbl tr.bkr.completed{--st:#1D9E75}
+#view-booking .bkv2-tbl tr.bkr.pending_foc,#view-booking .bkv2-tbl tr.bkr.pending,#view-booking .bkv2-tbl tr.bkr.pending_approval{--st:#E0A040}
+#view-booking .bkv2-tbl tr.bkr.quote,#view-booking .bkv2-tbl tr.bkr.cancelled,#view-booking .bkv2-tbl tr.bkr.cancelled_weather,#view-booking .bkv2-tbl tr.bkr.rejected{--st:#C9CDD6}
+#view-booking .bkv2-tbl tr.bkr.fresh td{background:#F5FAFF}
+#view-booking .bkv2-tbl tr.bkr.fresh:hover td{background:#EDF5FD}
+#view-booking .bkv2-tbl .bk-id{font-size:11.5px;font-weight:700;color:var(--ink)}
+#view-booking .bkv2-tbl .bk-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:3px;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#view-booking .bkv2-tag{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;border-radius:5px;padding:0 6px;line-height:16px;font-family:'DM Sans',sans-serif;white-space:nowrap}
+#view-booking .bkv2-tag.new{background:#DDEEFF;color:#0F5E93}
+#view-booking .bkv2-tag.upd{background:#FFF1D6;color:#8A4B00}
+#view-booking .bkv2-tag.cxl{background:#FCEBEB;color:#A32D2D}
+#view-booking .bkv2-tag.b2c{background:#E6F7F9;color:#0E7D8A}
+#view-booking .bkv2-tag.dup{background:#FBE9D6;color:#9A5B00;cursor:help}
+#view-booking .bkv2-tbl .trip-name{font-weight:700}
+#view-booking .bkv2-tbl .trip-pax{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px}
+#view-booking .bkv2-tbl .tv-date{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-tbl .tv-date .dow{font-weight:500;color:var(--ink-soft);font-size:10.5px;margin-left:4px}
+#view-booking .bkv2-tbl .tv-date.soon{color:#B4530A}
+#view-booking .bkv2-tbl .tv-soon{font-size:10px;color:#B4530A;margin-top:1px}
+#view-booking .bkv2-tbl .pax-total{font-size:14px;font-weight:700}
+#view-booking .bkv2-tbl .price{font-weight:700}
+#view-booking .bkv2-tbl .price.zero{color:var(--ink-soft);font-weight:500}
+#view-booking .bkv2-tbl .act{font-size:11px;line-height:1.35;color:var(--ink-soft);max-width:240px}
+#view-booking .bkv2-tbl .act b{display:block;color:var(--ink);font-weight:700;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-booking .bkv2-tbl .act .by{opacity:.8}
+#view-booking .bkv2-tbl .act .ic{display:inline-block;width:16px;height:16px;border-radius:50%;text-align:center;line-height:16px;font-size:10px;margin-right:4px;vertical-align:-3px;font-family:'DM Sans',sans-serif}
+#view-booking .bkv2-tbl .act .ic.create{background:#DDEEFF;color:#0F5E93}
+#view-booking .bkv2-tbl .act .ic.edit{background:#FFF1D6;color:#8A4B00}
+#view-booking .bkv2-tbl .act .ic.cancel{background:#FCEBEB;color:#A32D2D}
+#view-booking .bkv2-tbl .act .ic.foc{background:#FAEEDA;color:#8A5410}
+#view-booking .bkv2-tbl .act .ic.notify,#view-booking .bkv2-tbl .act .ic.weather,#view-booking .bkv2-tbl .act .ic.reschedule{background:#E8F0FB;color:#2F5FA8}
+#view-booking .bkv2-tbl .act .ic.extra,#view-booking .bkv2-tbl .act .ic.note,#view-booking .bkv2-tbl .act .ic.b2c{background:#EEF1F6;color:#6B7280}
+
+/* ==== §swA (2026-10-14) · Staff & Welfare · design A ==== */
+/* owner: "ปรับดีไซน์หน้านี้หน่อย" · ทะเบียนจัดกลุ่มตามแผนก · แถบโควต้า · ghost input · สวิตช์ active */
+#staff-host .sw-page{padding:22px 24px 60px;font-family:'DM Sans','Sarabun',sans-serif;color:#1E2433;display:flex;flex-direction:column;gap:14px}
+#staff-host .sw-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+#staff-host .sw-title{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 360px}
+#staff-host .sw-title h1{margin:0;font-size:22px;font-weight:800;color:#1E2433}
+#staff-host .sw-title span{font-size:12px;color:#6B7280}
+#staff-host .sw-tabs{display:inline-flex;gap:2px;background:#E9EBF0;border-radius:10px;padding:3px;margin-left:12px}
+#staff-host .sw-tabs button{height:32px;padding:0 14px;border-radius:8px;border:0;background:transparent;font:inherit;font-size:12.5px;font-weight:600;color:#6B7280;cursor:pointer;white-space:nowrap}
+#staff-host .sw-tabs button i{font-style:normal;font-family:'DM Mono',monospace;font-weight:500;opacity:.7;margin-left:3px}
+#staff-host .sw-tabs button.on{background:#1E2433;color:#fff}
+#staff-host .sw-tabs button.on.gold{background:#B8860B}
+#staff-host .sw-year{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+#staff-host .sw-year button{width:30px;height:30px;border-radius:8px;border:1px solid #E6E8EE;background:#fff;font:inherit;font-size:15px;color:#6B7280;cursor:pointer;line-height:1}
+#staff-host .sw-year b{font-family:'DM Mono',monospace;font-size:15px;font-weight:700;min-width:52px;text-align:center}
+#staff-host .sw-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#staff-host .sw-kpi{background:#fff;border:1px solid #E6E8EE;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+#staff-host .sw-kpi .lab{font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#6B7280}
+#staff-host .sw-kpi .val{font-family:'DM Mono',monospace;font-size:24px;font-weight:700;line-height:1}
+#staff-host .sw-kpi .val i{font-style:normal;font-size:12px;color:#9AA3B2;font-weight:500;margin-left:4px}
+#staff-host .sw-kpi .foot{font-size:11px;color:#9AA3B2}
+#staff-host .sw-kpi .trk{height:6px;border-radius:3px;background:#EEF1F6;overflow:hidden;margin-top:4px}
+#staff-host .sw-kpi .trk .u{height:100%}
+#staff-host .sw-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#staff-host .sw-filters .sep{width:1px;height:18px;background:#E0E3EA;margin:0 4px}
+#staff-host .sw-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;border:1px solid #E6E8EE;background:#fff;font:inherit;font-size:11.5px;font-weight:600;color:#6B7280;cursor:pointer;white-space:nowrap}
+#staff-host .sw-chip:hover{border-color:#B8C4D6}
+#staff-host .sw-chip.on{background:#1683C7;border-color:#1683C7;color:#fff}
+#staff-host .sw-chip i{font-style:normal;font-family:'DM Mono',monospace;opacity:.65}
+#staff-host .sw-search{margin-left:auto;height:30px;width:240px;border:1px solid #E6E8EE;border-radius:9px;padding:0 11px;font:inherit;font-size:12px;background:#fff;outline:none}
+#staff-host .sw-search:focus{border-color:#1683C7}
+#staff-host .sw-add{height:32px;padding:0 14px;border-radius:9px;border:0;background:#1683C7;color:#fff;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+#staff-host .sw-card{background:#fff;border:1px solid #E6E8EE;border-radius:14px;overflow:hidden}
+#staff-host .sw-tbl{width:100%;border-collapse:collapse}
+#staff-host .sw-tbl thead th{height:34px;background:#F6F7F9;border-bottom:1px solid #E6E8EE;font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:#6B7280;text-align:left;padding:0 10px;font-weight:600}
+#staff-host .sw-tbl th.num,#staff-host .sw-tbl td.num{text-align:right}
+#staff-host .sw-tbl td{padding:4px 10px;border-bottom:1px solid #F0F2F5;vertical-align:middle;font-size:13px;height:50px;box-sizing:border-box}
+#staff-host .sw-tbl tr.sw-row:hover td{background:#F8FAFD}
+#staff-host .sw-tbl tr.sw-row.off td{opacity:.55}
+#staff-host .sw-tbl tr.sw-grp td{height:36px;background:#FAFBFC;border-top:1px solid #E6E8EE;border-bottom:1px solid #E6E8EE;font-size:11.5px;font-weight:700;color:#1E2433}
+#staff-host .sw-tbl tr.sw-grp td .n{font-family:'DM Mono',monospace;font-weight:500;color:#6B7280;margin-left:6px}
+#staff-host .sw-tbl tr.sw-grp td.sum{font-family:'DM Mono',monospace;font-size:11px;color:#6B7280;font-weight:500}
+#staff-host .sw-tbl tr.sw-grp td.sum.neg{color:#A32D2D}
+#staff-host .sw-tbl td.sw-empty{text-align:center;color:#9AA3B2;padding:36px 10px;height:auto}
+#staff-host .sw-av{width:30px;height:30px;border-radius:50%;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;letter-spacing:.02em}
+#staff-host .sw-ghost{border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px;margin-left:-6px;font:inherit;font-size:13px;color:#1E2433;width:100%;box-sizing:border-box;outline:none}
+#staff-host .sw-ghost:hover{border-color:#E6E8EE;background:#fff}
+#staff-host .sw-ghost:focus{border-color:#1683C7;background:#fff}
+#staff-host .sw-ghost.mono{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700;width:96px}
+#staff-host .sw-ghost.name{font-weight:700}
+#staff-host .sw-ghost.dept{font-size:11.5px;font-weight:600;width:150px}
+#staff-host .sw-ghost::placeholder{color:#C9CDD6;font-weight:500}
+#staff-host .sw-codewrap{display:flex;align-items:center;gap:4px}
+#staff-host .sw-warn{display:inline-flex;font-size:10px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:5px;padding:1px 6px;white-space:nowrap;cursor:help}
+#staff-host .sw-sub{font-size:10.5px;color:#9AA3B2;margin-top:-1px;padding-left:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#staff-host .sw-deptwrap{display:flex;align-items:center;gap:6px}
+#staff-host .sw-deptwrap .dot{width:7px;height:7px;border-radius:50%;flex:none}
+#staff-host .sw-bar{display:flex;align-items:center;gap:10px}
+#staff-host .sw-bar .trk{flex:1;height:8px;border-radius:4px;background:#EEF1F6;overflow:hidden;display:flex}
+#staff-host .sw-bar .u{background:#1683C7;height:100%}
+#staff-host .sw-bar .o{background:#E05A3A;height:100%}
+#staff-host .sw-bar .t{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700;white-space:nowrap;min-width:40px;text-align:right}
+#staff-host .sw-bar .t i{font-style:normal;font-weight:500;color:#9AA3B2}
+#staff-host .sw-bar .t.over{color:#A32D2D}
+#staff-host .sw-qin{width:56px;height:28px;border:1px solid #E6E8EE;border-radius:7px;text-align:center;font:inherit;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;background:#fff;outline:none}
+#staff-host .sw-qin:focus{border-color:#1683C7}
+#staff-host .sw-num{font-family:'DM Mono',monospace;font-size:13px;font-weight:700}
+#staff-host .sw-num.u{color:#854F0B}
+#staff-host .sw-num.rem{color:#0F6E56}
+#staff-host .sw-num.rem.neg{color:#A32D2D}
+#staff-host .sw-num.zero{color:#C9CDD6;font-weight:500}
+#staff-host .sw-act{display:flex;align-items:center;gap:8px}
+#staff-host .sw-sw{position:relative;width:34px;height:20px;border-radius:999px;background:#C9CDD6;cursor:pointer;flex:none;display:inline-block}
+#staff-host .sw-sw.on{background:#1D9E75}
+#staff-host .sw-sw input{position:absolute;opacity:0;width:0;height:0}
+#staff-host .sw-sw span{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .12s}
+#staff-host .sw-sw.on span{left:16px}
+#staff-host .sw-del{height:26px;padding:0 9px;border-radius:7px;border:1px solid transparent;background:transparent;color:#A32D2D;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;opacity:0}
+#staff-host tr.sw-row:hover .sw-del{opacity:1;border-color:#FCEBEB;background:#fff}
+#staff-host .sw-note{font-size:11px;color:#9AA3B2;line-height:1.6}
+/* §swA2 · แผนกเป็นช่องแรกของตาราง (rowspan) · ชื่อพนักงานช่องถัดไป */
+#staff-host .sw-tbl td.sw-dcell{vertical-align:top;background:#FAFBFC;border-right:1px solid #E6E8EE;border-bottom:1px solid #E6E8EE;padding:10px 12px}
+#staff-host .sw-tbl tr.sw-row:hover td.sw-dcell{background:#FAFBFC}
+#staff-host .sw-tbl tr.sw-row.off td.sw-dcell{opacity:1}
+#staff-host .sw-tbl tr.sw-row.first td{border-top:1px solid #E6E8EE}
+#staff-host .sw-dname{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:#1E2433}
+#staff-host .sw-dname .dot{width:8px;height:8px;border-radius:50%;flex:none}
+#staff-host .sw-dn{font-family:'DM Mono',monospace;font-size:11px;color:#6B7280;margin-top:2px}
+#staff-host .sw-dsum{font-size:11px;color:#9AA3B2;margin-top:6px;line-height:1.5}
+#staff-host .sw-dsum b{font-family:'DM Mono',monospace;color:#1E2433}
+#staff-host .sw-dsum b.u{color:#854F0B}
+#staff-host .sw-dsum b.rem{color:#0F6E56}
+#staff-host .sw-dsum b.neg{color:#A32D2D}
+#staff-host .sw-namewrap{display:flex;align-items:center;gap:10px}
+#staff-host .sw-namecol{flex:1;min-width:0}
+#staff-host .sw-namewrap .sw-deptwrap{opacity:0;width:130px;flex:none}
+#staff-host tr.sw-row:hover .sw-namewrap .sw-deptwrap,#staff-host .sw-namewrap .sw-deptwrap:focus-within{opacity:1}
+#staff-host .sw-ghost.dept{width:130px;font-size:11px;color:#6B7280}

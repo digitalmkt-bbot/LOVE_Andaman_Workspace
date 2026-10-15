@@ -674,6 +674,22 @@
     "bkV2TogHtml": "allotment_v2/js/booking/bookingV2TogHtml.js",
     "bkV2TogShow": "allotment_v2/js/booking/bookingV2TogShow.js",
     "bkV2TogHide": "allotment_v2/js/booking/bookingV2TogHide.js",
-    "bkV2CxlToggle": "allotment_v2/js/booking/bookingV2CxlToggle.js"
+    "bkV2CxlToggle": "allotment_v2/js/booking/bookingV2CxlToggle.js",
+    "bkV2NtRetSel": "allotment_v2/js/booking/bookingV2NtRetSel.js",
+    "bkV2SortMode": "allotment_v2/js/booking/bookingV2SortMode.js",
+    "bkV2SetSort": "allotment_v2/js/booking/bookingV2SetSort.js",
+    "bkV2LastAct": "allotment_v2/js/booking/bookingV2LastAct.js",
+    "bkV2ActKindLabel": "allotment_v2/js/booking/bookingV2ActKindLabel.js",
+    "bkV2ActIcon": "allotment_v2/js/booking/bookingV2ActIcon.js",
+    "bkV2LocalDayKey": "allotment_v2/js/booking/bookingV2LocalDayKey.js",
+    "bkV2Dow": "allotment_v2/js/booking/bookingV2Dow.js",
+    "bkV2FmtClock": "allotment_v2/js/booking/bookingV2FmtClock.js",
+    "bkV2RelTime": "allotment_v2/js/booking/bookingV2RelTime.js",
+    "bkV2DayLabel": "allotment_v2/js/booking/bookingV2DayLabel.js",
+    "bkV2LtRoutesApply": "allotment_v2/js/booking/bookingV2LtRoutesApply.js",
+    "bkV2PruneLtAddOns": "allotment_v2/js/booking/bookingV2PruneLtAddOns.js",
+    "bkV2NatOpen": "allotment_v2/js/booking/bookingV2NatOpen.js",
+    "bkV2NatToggle": "allotment_v2/js/booking/bookingV2NatToggle.js",
+    "bkV2NatWarn": "allotment_v2/js/booking/bookingV2NatWarn.js"
   }
 }

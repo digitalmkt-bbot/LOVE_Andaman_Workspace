@@ -48,13 +48,13 @@ if (c1.top && /11, 30, 91/.test(c1.bg) && /ตั๋วอุทยาน/.test(
 
 const c2 = await page.evaluate(async H => {
   const h = () => document.querySelector(H);
-  const n = h().querySelectorAll('.pk2-bt').length, out = [];
+  const n = h().querySelectorAll('.pk2-dmx tr.bt').length, out = [];   // §pkDayMx · แท็บลำ → แถวในตาราง Matrix
   for (let i = 0; i < n; i++) {
-    h().querySelectorAll('.pk2-bt')[i].click(); await new Promise(z => setTimeout(z, 120));
-    const t = h().querySelectorAll('.pk2-bt')[i];
-    out.push({ on: t.classList.contains('on'), tab: +t.querySelector('.n').textContent, w: +((t.querySelector('.w') || {}).textContent || '0').replace(/\D/g, ''),
+    h().querySelectorAll('.pk2-dmx tr.bt')[i].click(); await new Promise(z => setTimeout(z, 120));
+    const t = h().querySelectorAll('.pk2-dmx tr.bt')[i];
+    out.push({ on: t.classList.contains('sel'), tab: +t.querySelectorAll('td.sum')[1].textContent, w: +((t.querySelector('td.ms u') || {}).textContent || '0').replace(/\D/g, ''),
       rows: h().querySelectorAll('.pk-sheet tbody tr:not(.pk-ovr)').length, nn: h().querySelectorAll('.pk-sheet tbody tr.pk-nn').length,
-      bn: (h().querySelector('.pk2-bh .bn') || {}).textContent, name: t.querySelector('.t b').textContent });
+      bn: (h().querySelector('.pk2-bh .bn') || {}).textContent, name: t.querySelector('.bn').textContent });
   }
   return out; }, H);
 const c2bad = c2.filter(x => !x.on || x.tab !== x.rows || x.w !== x.nn || !x.name.startsWith(x.bn));
@@ -62,7 +62,10 @@ if (c2.length === R0.n && !c2bad.length) ok(`2 แท็บ ${c2.length} ลำ 
 else fail('2 ' + JSON.stringify({ n: R0.n, c2 }));
 
 const c3 = await page.evaluate(H => { const h = document.querySelector(H);
-  const k = [...h.querySelectorAll('.pc2-kpi .k')].map(e => ({ h: e.querySelector('.h').textContent, v: +e.querySelector('.v').firstChild.textContent.replace(/\D/g, '') }));
+  /* §pkDayMx · การ์ดสี่ใบเอาออก · ตัวเลขเดียวกันอยู่ในแถวรวมของตาราง Matrix */
+  const dy = h.querySelector('.pk2-dmx tr.dy');
+  const k = [{ h: 'ลำวันนี้', v: h.querySelectorAll('.pk2-dmx tr.bt').length }, { h: 'ตั๋วทั้งวัน', v: dy ? +dy.querySelectorAll('td.sum')[1].textContent : -1 },
+    { h: 'รอชื่อ', v: dy ? +((dy.querySelector('td.ms u') || {}).textContent || '0') : -1 }];
   const chipW = +((h.querySelector('.pc2-chips .bd') || {}).textContent || '0').replace(/\D/g, '');
   return { k, chipW }; }, H);
 const sumTab = c2.reduce((a, x) => a + x.rows, 0), sumNN = c2.reduce((a, x) => a + x.nn, 0);
@@ -103,10 +106,10 @@ const c6 = await page.evaluate(async ([H, d]) => { const h = () => document.quer
 if (c6.boats === R0.n && c6.tot === sumTab && c6.now === c6.od) ok(`6 การ์ดเดือน · วันนี้ ${c6.boats} ลำ ${c6.tot} ตั๋ว · กด ${c6.od} แล้วไปวันนั้นจริง`); else fail('6 ' + JSON.stringify(c6));
 
 const c7 = await page.evaluate(async ([H, d]) => { const h = () => document.querySelector(H);
-  const tabs = h().querySelectorAll('.pk2-bt'); const last = tabs[tabs.length - 1]; last.click(); await new Promise(z => setTimeout(z, 150));
+  const tabs = h().querySelectorAll('.pk2-dmx tr.bt'); const last = tabs[tabs.length - 1]; last.click(); await new Promise(z => setTimeout(z, 150));
   const want = h().querySelector('.pk2-bh .bn').textContent;
   pkShift(1); await new Promise(z => setTimeout(z, 150)); pkSetDate(d); await new Promise(z => setTimeout(z, 150));
-  return { want, got: h().querySelector('.pk2-bh .bn').textContent, on: h().querySelector('.pk2-bt.on .t b').textContent }; }, [H, R0.d]);
+  return { want, got: h().querySelector('.pk2-bh .bn').textContent, on: h().querySelector('.pk2-dmx tr.bt.sel .bn').textContent }; }, [H, R0.d]);
 if (c7.want === c7.got && c7.on.startsWith(c7.want)) ok(`7 เลือก ${c7.want} ไว้ เปลี่ยนวันไปกลับ ยังเป็น ${c7.got}`); else fail('7 ' + JSON.stringify(c7));
 
 const c8 = await page.evaluate(() => window.__snap === JSON.stringify([SB_BOOKINGS, TRIPS]));

@@ -453,6 +453,23 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     lockDrawSel: {},
     subtotal: seat,
   };
+  // §focNat (2026-10-14) · FOC has no nationality in B2C (pax.foc is flat, foc_th/foc_fr fixed at 0),
+  // and every rule below treated FOC as foreign. Owner, park sheet 15 Oct (LOV-0660717: lead TH,
+  // FOC 3, all Thai names): three Thai guests were put down as foreign adults. Backup of 13 Oct:
+  // 23 live B2C lines with FOC from 1 Oct, every one with a Thai lead. The lead's nationality is
+  // the one fact B2C always gives: lead TH → FOC are Thai, except travellers labelled with another
+  // nationality who are not already in the foreign price fields (LOV-8099472: TH + 3 DE, FOC 4 →
+  // 1 Thai 3 foreign). Lead not Thai → FOC foreign, as before. js/08-app.js bkFocThInfer applies
+  // the same rule client-side to lines imported before this.
+  const focThai = (() => {
+    const P = trip.pax;
+    if (!(P.foc > 0) || leadNat !== 'TH') return 0;
+    const namedFr = (Array.isArray(paxRows) ? paxRows : [])
+      .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || '')
+      .filter(n => n && n !== 'TH').length;
+    const frPrice = P.ad_fr + P.chd_fr + P.inf_fr;
+    return Math.max(0, P.foc - Math.max(0, namedFr - frPrice));
+  })();
   // §b2cNat · real Thai head-count for the park fee, kept apart from the PRICE fields above.
   // pax.ad_th/_fr picks the seat rate (B2C sells the whole party at the Thai price when the lead
   // is Thai — paxAllThai), but the park counter charges by passport. trip.nat is the ops field
@@ -494,13 +511,20 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
       .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
       .filter(n => n && n !== 'TH').length;
     const foreign = Math.min(heads, Math.max(feeQty, named));
-    const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + P.foc;
+    const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + (P.foc - focThai);   /* §focNat · Thai FOC are not foreign-priced heads */
     if (heads > 0 && foreign > byPrice) {
       let extra = foreign - byPrice;
       const keep = n => { const k = Math.min(n, extra); extra -= k; return n - k; };
-      trip.nat = { ad: keep(P.ad_th), chd: keep(P.chd_th), inf: keep(P.inf_th), foc: 0 };
+      trip.nat = { ad: keep(P.ad_th), chd: keep(P.chd_th), inf: keep(P.inf_th), foc: keep(focThai) };   /* §focNat */
       trip._natSoft = true;   // a floor, not a full count · server.js lets a hand count with as many foreigners stand
     }
+  }
+  // §focNat · no other rule fired, but the line has FOC and a Thai lead: without a nat the park page
+  // reads foc_th (0) and buys foreign tickets for them. Soft, like §b2cParkFee: a hand count stands.
+  if (!trip.nat && focThai > 0) {
+    const P = trip.pax;
+    trip.nat = { ad: P.ad_th, chd: P.chd_th, inf: P.inf_th, foc: focThai };
+    trip._natSoft = true;
   }
   // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
   // rate card once ops assigns a boat. charterBoatId stays null — ops picks the boat in-app.
@@ -575,7 +599,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
            (dropoffSep && !dropAreaId)
              ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
+    passengers: isFirstLine ? b2cPassengerList(paxRows, trip.pax) : [],   /* §b2cPaxType */
     addOns: addOnRows,
     // Display rows for the Total panel. bookingV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
@@ -726,12 +750,30 @@ function b2cPassengersFromJson(itemRows) {
 // bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
 // webhook mapper — erp/src/mapExternalBooking.js maps ext.passengers straight through as AD — and
 // matches ops semantics, where passengers[] is the guests after the lead (rendered from #2).
-function b2cPassengerList(rows) {
+//
+// §b2cPaxType (2026-10-14) · every name used to arrive as AD. LOV-1709525 (4 AD + 1 CHD, "เด็กอายุ 7
+// ขวบ" in the note): the park sheet had no child name to seat and flagged the last adult. B2C's
+// traveller rows carry no age type, but the booking form already types #2+ by position (bookingV2Sync-
+// Passengers: the lead takes one adult seat, then AD, CHD, INF, FOC in order) and showed CHD on
+// that same row — so the stored type now follows the same rule and the two agree. Names beyond
+// the head count stay AD, as before. No pax (charter line without counts) → AD, as before.
+function b2cPassengerList(rows, pax) {
   if (!Array.isArray(rows) || !rows.length) return [];
+  const P = pax || {};
+  const n = k => Number(P[k]) || 0;
+  const ad = n('ad_fr') + n('ad_th'), chd = n('chd_fr') + n('chd_th'), inf = n('inf_fr') + n('inf_th'), foc = n('foc') + n('foc_fr') + n('foc_th');
+  const leadType = ad > 0 ? 'AD' : (foc > 0 ? 'FOC' : (chd > 0 ? 'CHD' : (inf > 0 ? 'INF' : 'AD')));
+  const queue = [];
+  const push = (t, c) => { for (let i = 0; i < c; i++) queue.push(t); };
+  push('AD', leadType === 'AD' ? Math.max(0, ad - 1) : ad);
+  push('CHD', leadType === 'CHD' ? Math.max(0, chd - 1) : chd);
+  push('INF', leadType === 'INF' ? Math.max(0, inf - 1) : inf);
+  push('FOC', leadType === 'FOC' ? Math.max(0, foc - 1) : foc);
   const out = [];
   for (const r of rows) {
     if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
-    out.push({ name: r.name, nationality: r.nationality, type: 'AD', foc: false });
+    const type = queue[out.length] || 'AD';
+    out.push({ name: r.name, nationality: r.nationality, type, foc: type === 'FOC' });
   }
   return out;
 }

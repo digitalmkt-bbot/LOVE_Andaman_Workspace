@@ -365,18 +365,25 @@ function bookingV2RenderTripsSection(){
               ${/* §pkNat · สัญชาติจริงของ นทท. · ไม่เกี่ยวกับราคาเลย ใช้ตอนซื้อตั๋วอุทยานอย่างเดียว
                     สองแถวบนเลือกเรทตามสัญญา · บางสัญญาไม่มีราคาไทย คนไทยจึงต้องคีย์เป็น ตปท.
                     แถวนี้บอกความจริงว่าใครเป็นคนไทย ค่าอุทยานจะได้ไม่จ่ายเรทฝรั่งให้คนไทย */''}
-              <tr style="background:#EAF5F0">
+              ${/* §natRow (2026-10-14) · owner, BK-26100720 (Influencer 12 คนไทย): แถวนี้ถูกกดตอน pax ยัง 0
+                    → ตั๋วอุทยาน 12 ตปท ทั้งที่คีย์แถว TH · "กดเลือก TH ก็ควรเป็นไทย" — ใช่ และปกติก็เป็นอย่างนั้น
+                    แถวนี้มีไว้เฉพาะเคสยกเว้น (จ่ายเรท TH แต่ตัวจริง ตปท. หรือกลับกัน) จึงซ่อนไว้หลังปุ่ม
+                    โผล่เองเมื่อค่าต่างจากแถว TH อยู่แล้ว · และเตือนแดงเมื่อคนจ่ายเรทไทยจะถูกซื้อตั๋ว ตปท. */''}
+              ${bookingV2NatOpen(idx,t) ? `<tr style="background:#EAF5F0">
                 <td style="padding:7px 4px 7px 12px;font-weight:600;font-size:12.5px;color:#0B5A43;border-top:1px solid #ECEBE6;line-height:1.25;white-space:nowrap" title="จำนวนคนไทยจริงบนทริปนี้ · ใช้คิดค่าอุทยานอย่างเดียว ไม่กระทบราคาที่นั่ง">ไทยจริง<span style="display:block;font-weight:400;font-size:10.5px">ค่าอุทยาน</span></td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'ad',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'chd',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'inf',t)}</td>
                 <td style="padding:7px 0;text-align:center;border-top:1px solid #ECEBE6">${natStep(idx,'foc',t)}</td>
-              </tr>
-              ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
+              </tr>` : ''}
+              ${(() => { const w = bookingV2NatWarn(t); if(!w) return '';
+                 return w.bad
+                   ? `<tr><td colspan="5" style="padding:7px 12px 8px;font-size:12.5px;font-weight:600;color:#A32D2D;background:#FBE7E5;line-height:1.4">&#9888; ตั๋วอุทยาน: ${w.fr} ตปท &middot; ${w.th} ไทย ทั้งที่คีย์แถว TH ${w.thPrice} คน &middot; ถ้าทุกคนเป็นคนไทยจริง กดแถวไทยจริงให้เท่าแถว TH</td></tr>`
+                   : `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>`; })()}
             </tbody>
           </table>
           <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px">
-            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(from the TH row until ไทยจริง is set)</span>'}`:''}</div>
+            <div style="flex:1;min-width:170px;font-size:12px;color:#5B6170;line-height:1.45">${_paxAll>0?`Park tickets by nationality: <b style="color:#0F1B3D">${Math.max(0,_paxAll-_thaiN)}</b> foreign &middot; <b style="color:#0B5A43">${_thaiN}</b> Thai${bkNatHas(t)?'':' <span style="color:#8A8F9C">(ตามแถว TH)</span>'} ${bookingV2NatOpen(idx,t)?'':`<button type="button" onclick="bookingV2NatToggle(${idx})" style="margin-left:6px;background:#fff;border:1px solid #9CCDB9;border-radius:7px;padding:2px 9px;font-size:11px;font-weight:700;color:#0B5A43;cursor:pointer;font-family:inherit" title="เฉพาะเคสที่สัญชาติจริงไม่ตรงกับแถวราคา เช่น จ่ายเรท TH แต่ถือพาสปอร์ตต่างชาติ">แก้สัญชาติอุทยาน</button>`}`:''}</div>
             <div style="margin-left:auto;text-align:right" title="${_mn?'Rate-type reference only — Manual total is used':''}">
               <div style="font-size:11.5px;color:#5B6170">Subtotal${_mn?' &middot; <span style="color:#7A4300;font-weight:700">overridden</span>':''}${_fx?` &middot; <span style="font-family:'DM Mono',monospace">${_fx}</span>`:''}</div>
               <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums;${_mn?'color:#5B6170;text-decoration:line-through;opacity:.65':'color:#0F1B3D'}">&#3647;${(subtotal.total||0).toLocaleString()}${subtotal.bundle?` <span style="font-size:11.5px;color:#5B6170;font-weight:400;font-family:'DM Sans',sans-serif;text-decoration:none">incl. ฿${subtotal.bundle.toLocaleString()} bundle</span>`:''}</div>

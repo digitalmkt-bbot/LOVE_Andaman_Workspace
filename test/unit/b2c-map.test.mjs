@@ -120,6 +120,39 @@ test('§b2cParkFee · no park fee and nobody labelled foreign → no nat (fall b
   const [b] = runWith('LOV-7485231', fx => { dropFee(fx); setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
+// §focNat (2026-10-14) · FOC on a Thai-lead party are Thai unless a name says otherwise (LOV-0660717 / LOV-8099472).
+test('§focNat · LOV-0660717 shape · lead TH, FOC 3 + 1 Thai infant, names blank → 3 Thai FOC', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 0; fx.items[0].pax_infant = 1; fx.items[0].pax_foc = 3; setPax(fx, ['', '', '']); });
+  assert.equal(trip(b).pax.foc, 3, 'price fields unchanged');
+  assert.deepEqual(trip(b).nat, { ad: 0, chd: 0, inf: 1, foc: 3 });
+});
+test('§focNat · LOV-8099472 shape · lead TH + 3 DE, FOC 4 → 1 Thai 3 foreign', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 0; fx.items[0].pax_foc = 4; setPax(fx, ['DE', 'DE', 'DE']); });
+  assert.deepEqual(trip(b).nat, { ad: 0, chd: 0, inf: 0, foc: 1 });
+});
+test('§focNat · lead not Thai → FOC stay foreign (no nat)', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].crm_nationality = 'German'; fx.items[0].pax_adult = 0; fx.items[0].pax_foc = 2; setPax(fx, ['']); });
+  assert.equal(trip(b).nat, undefined);
+});
+test('§focNat · park fee × 2 on 2 Thai adults + 2 FOC → two heads foreign, taken off the adults first (§b2cParkFee order), FOC stay Thai', () => {
+  const [b] = runWith('LOV-7485231', fx => { setFee(fx, 2); fx.items[0].pax_adult = 2; fx.items[0].pax_foc = 2; setPax(fx, ['', '', '']); });
+  assert.deepEqual(trip(b).nat, { ad: 0, chd: 0, inf: 0, foc: 2 });
+});
+// §b2cPaxType (2026-10-14) · traveller names typed by position, the booking form's rule (LOV-1709525).
+test('§b2cPaxType · LOV-1709525 shape · 4 AD + 1 CHD, 4 names → AD AD AD CHD', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 4; fx.items[0].pax_child = 1; setPax(fx, ['TH', 'TH', 'TH', 'TH']); });
+  assert.deepEqual(b.passengers.map(p => p.type), ['AD', 'AD', 'AD', 'CHD']);
+  assert.equal(b.passengers.some(p => p.foc), false);
+});
+test('§b2cPaxType · FOC seats fill last and carry the foc flag; extra names stay AD', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 2; fx.items[0].pax_infant = 1; fx.items[0].pax_foc = 1; setPax(fx, ['TH', 'TH', 'TH', 'TH']); });
+  assert.deepEqual(b.passengers.map(p => p.type), ['AD', 'INF', 'FOC', 'AD']);
+  assert.deepEqual(b.passengers.map(p => p.foc), [false, false, true, false]);
+});
+test('§b2cPaxType · all-FOC party · lead takes the first FOC seat', () => {
+  const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 0; fx.items[0].pax_foc = 3; setPax(fx, ['TH', 'TH']); });
+  assert.deepEqual(b.passengers.map(p => p.type), ['FOC', 'FOC']);
+});
 test('§b2cParkFee · never lowers the foreign count of a foreign-priced party', () => {
   const [b] = runWith('LOV-7485231', fx => { fx.items[0].pax_thai = 1; fx.items[0].pax_foreign = 2; setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);

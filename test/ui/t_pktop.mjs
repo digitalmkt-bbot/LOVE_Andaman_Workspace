@@ -37,7 +37,7 @@ if (R0.err) { fail(R0.err); await close(); process.exit(1); }
 ok(`ใช้ ${R0.pier} ${R0.d} · ${R0.n} ลำ ${R0.nr} เส้นทาง`);
 const H = `#pk-host-${R0.pier}`;
 
-const c1 = await page.evaluate(H => [...document.querySelectorAll(H + ' .pk2-bt')].map(b => ({ boat: b.querySelector('.t b').textContent.trim(), rt: b.querySelector('.t small').textContent.trim() })), H);
+const c1 = await page.evaluate(H => [...document.querySelectorAll(H + ' .pk2-dmx tr.bt')].map(b => { const bn = b.querySelector('.bn').textContent.trim(); return { boat: bn, rt: b.querySelector('td.rt').textContent.replace(bn, '').trim() }; }), H);   // §pkDayMx
 if (c1.length === R0.n && new Set(c1.map(x => x.rt)).size === R0.nr) ok('1 แท็บ ' + c1.length + ' ลำ ข้าม ' + R0.nr + ' เส้นทาง · ' + c1.map(x => x.boat + ' (' + x.rt + ')').join(' · '));
 else fail('1 ' + JSON.stringify(c1));
 
@@ -52,10 +52,10 @@ const c3 = await page.evaluate(async H => { const box = document.querySelector(H
   a.thTop2 = Math.round(th.getBoundingClientRect().top); box.scrollTop = 0; return a; }, H);
 if (c3.thTop === c3.boxTop && c3.r1 >= c3.thBot - 1 && (c3.can < 10 || c3.thTop2 === c3.boxTop)) ok(`3 หัวชีทตรึงที่ขอบกล่อง · ไม่ทับแถวแรก · เลื่อนในกล่องแล้วหัวยังอยู่ (เลื่อนได้ ${c3.can}px)`); else fail('3 ' + JSON.stringify(c3));
 
-const c4 = await page.evaluate(async ([H, d, o]) => { const tabs = document.querySelectorAll(H + ' .pk2-bt'); tabs[tabs.length - 1].click(); await new Promise(z => setTimeout(z, 100));
+const c4 = await page.evaluate(async ([H, d, o]) => { const tabs = document.querySelectorAll(H + ' .pk2-dmx tr.bt'); tabs[tabs.length - 1].click(); await new Promise(z => setTimeout(z, 100));
   if (!o) return { skip: true };
   pkSetDate(o); await new Promise(z => setTimeout(z, 150));
-  const on = document.querySelectorAll(H + ' .pk2-bt.on').length, sheet = !!document.querySelector(H + ' .pk-sheet');
+  const on = document.querySelectorAll(H + ' .pk2-dmx tr.bt.sel').length, sheet = !!document.querySelector(H + ' .pk-sheet');
   pkSetDate(d); return { on, sheet }; }, [H, R0.d, R0.other]);
 if (c4.skip || (c4.on === 1 && c4.sheet)) ok('4 เปลี่ยนวันแล้วยังมีลำถูกเลือกและมีชีท ไม่ใช่หน้าเปล่า'); else fail('4 ' + JSON.stringify(c4));
 

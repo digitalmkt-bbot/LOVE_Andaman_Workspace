@@ -173,7 +173,9 @@
   //   (เจอจริง 30 ก.ค. 2026 · เซิร์ฟเวอร์ตีกลับ trips 94→0 — ถ้าไม่มีตัวกันฝั่งนั้น ข้อมูลหายเกลี้ยง)
   _SP.removeItem=function(k){ if(_isLS(this)&&k===LS){ _mem=null; _dirty=false; try{ clearTimeout(_t); }catch(e){} return; } _oDel.call(this,k); };
   _SP.setItem=function(k,v){ if(!_isLS(this)||k!==LS){ return _oSet.call(this,k,v); } _mem=v;   // state blob → memory only (no quota)
-    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; _laEditSeq++; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
+    /* §ckSaveSeq (2026-10-15) · หน้าเช็คอิน (ท่า/รถ) รอ 250ms พอ · ของเดิม 1 วิ คือเวลาที่อีกเครื่องต้องรอเปล่า ๆ ก่อนจะได้เห็น
+       หน้าอื่นคง 1 วิ (พิมพ์ฟอร์มยาว ๆ ต้องรวมการแก้) */
+    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; _laEditSeq++; clearTimeout(_t); _t=setTimeout(function(){ save(v); }, (typeof _laLiveView==='function' && _laLiveView())?250:1000); } };   // view-only users never sync
   // Reclaim quota on devices poisoned by the broken shim: the pre-mem-store ~6MB blob still sitting
   // in real localStorage, the junk 'setItem'/'getItem'/'removeItem' items WebKit created from the old
   // instance assignments, and any oversized _snap_ full copies. All dead weight — SQL is the store.
@@ -182,6 +184,13 @@
 
   // 2) LOAD from cloud (sync gate) · BASE = snapshot we loaded (used to diff our changes)
   var BASE={}, _refreshShown=false, _dirty=false, _recoverPush=false;
+  /* §lazyBase (2026-10-15) · BASE ใช้แค่ตอนคิด diff ก่อนเซฟ · ไม่ต้อง parse ทุกครั้งที่ดึงก้อนใหม่
+     วัดบน prod วันนี้ ก้อน 34.6 MB · parse หนึ่งรอบ ~150ms บนเครื่องแรง ๆ · ของเดิมดึงหนึ่งครั้ง parse สามรอบ
+     และดึงทุกครั้งที่ใครก็ตามเซฟ (วัดได้ 2 รอบใน 30 วิ) → จอค้างครั้งละ 1.5 วิขึ้นไป
+     ตอนนี้เก็บสตริงไว้ก่อน (_baseStr) แล้ว parse ตอนมีคนต้องใช้จริง · ส่วนใหญ่ก้อนใหม่มาทับก่อนจะมีใครเซฟ
+     ⚠ อ่าน BASE ผ่าน _base() เสมอ · เขียน BASE ตรง ๆ ต้องล้าง _baseStr ด้วย ไม่งั้นสตริงเก่ามาทับทีหลัง */
+  var _baseStr=null;
+  function _base(){ if(_baseStr!==null){ var s=_baseStr; _baseStr=null; try{ BASE=JSON.parse(s); }catch(e){ BASE={}; } } return BASE; }
   function _laMark(v){ try{ localStorage.setItem(LS+'__v', String(v)); }catch(e){} }   // remember which server version the local data is synced to (survives reload)
   // Graft LOCAL-ONLY records (ids the server doesn't have) into the server blob · additive only, never overwrites a server record → no revert
   function _laGraftLocalOnly(srv, loc){ var g=0; Object.keys(loc||{}).forEach(function(k){ var lv=loc[k], sv=srv[k];
@@ -270,7 +279,7 @@
         var j=JSON.parse(x.responseText);
         if(typeof j.data!=='string' || j.data.length<2){ fail('ข้อมูลว่าง'); return; }
         VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):''; _laStamp(j);
-        try{ BASE=JSON.parse(j.data); }catch(e){ BASE={}; }
+        _baseStr=j.data;                                   /* §lazyBase */
         _orig(LS, j.data); _laMark(VER);
         _syncReady=true; _dirty=false; try{ clearTimeout(_t); }catch(e){}   // §syncGate · ข้อมูลจริงถึงแล้วค่อยเปิดเซฟ · ทิ้งงานค้างที่เกิดตอน state ยังว่าง
         var ov=el('la-bootload'); if(ov) ov.remove();
@@ -298,7 +307,7 @@
     try{ if(_loc && _loc.length>2) _locObj=JSON.parse(_loc); }catch(e){}
     try{ if(_srvStr) _srvObj=JSON.parse(_srvStr); }catch(e){}
     if(_srvObj){
-      try{BASE=JSON.parse(_srvStr);}catch(e){BASE={};}                                   // BASE = pure server snapshot → a recover-push diffs against this
+      _baseStr=_srvStr;                                   // BASE = pure server snapshot → a recover-push diffs against this · §lazyBase · _srvObj gets grafted below, so BASE must be its own parse
       if(_locObj){
         var _lv=parseInt(localStorage.getItem(LS+'__v')||'-1',10);
         var _keepLocal=false;
@@ -345,10 +354,12 @@
     Object.keys(d.sets||{}).forEach(function(k){ if(!ok) return; var v=d.sets[k];
       if(REST_RESOURCES[k]) ops.push({op:'putall', r:k, body:v});
       else ops.push({op:'meta', id:k, body:v}); });
+    /* §smerge · คีย์ย่อยที่เปลี่ยนของ JSON-string map → เซิร์ฟเวอร์ merge ลง app_meta ทีละคีย์ */
+    Object.keys(d.smaps||{}).forEach(function(k){ if(!ok) return; if(REST_RESOURCES[k]){ ok=false; return; } ops.push({op:'smerge', id:k, body:d.smaps[k]}); });
     if(!ok){ try{ console.warn('[sync] diff has a key the REST index does not know -> legacy /api/save (run the mapping drift check)'); }catch(e){} }
     return ok?ops:null;
   }
-  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
+  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _baseStr=null; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   var _laSaveErrShown=false;
   function _laSaveErr(msg,color){ _laSaveErrShown=true; onReady(function(){ var d=document.getElementById('la-saveerr'); if(!d){ d=document.createElement('div'); d.id='la-saveerr'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100001;color:#fff;border-radius:22px;padding:9px 18px;font:13px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:82vw;text-align:center'; document.body.appendChild(d);} d.style.background=color||'#A32D2D'; d.innerHTML='⚠ '+msg; }); }
   function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); _laRetryN=0; }
@@ -403,29 +414,42 @@
     //   every other domain is local-only on this branch by design, not because a session expired.
     if(window.LA_LEGACY_UNAVAILABLE){ _dirty=false; return; }
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
-    var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
+    var d=computeDiff(_base(),cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
+    /* ══ §ckSaveSeq (2026-10-15) · owner "เช็คอิน กดแล้วเด้ง ต้องกดใหม่" (สองเครื่องกดสลับกัน) ═════
+       จำลองได้ใน t_cklive2.mjs (NET=400): ติ๊กที่กด "ระหว่างที่การเซฟก่อนหน้ายังไม่ได้คำตอบ" หายถาวร
+         t0    กดใบ 1 → เซฟออกไป (ก้อนมีใบ 1)
+         t0+.4 กดใบ 2 → เขียนลงเครื่อง · ตั้งคิวเซฟรอบหน้า
+         t0+.5 คำตอบเซฟใบ 1 มาถึง → ของเดิมตั้ง _dirty=false ทั้งที่ใบ 2 ยังไม่ได้ออกจากเครื่อง
+               behind (อีกเครื่องเซฟคั่น) → ดึง /api/ck ทันที · คำขอนี้ออกเดินทาง "หลัง" กดใบ 2
+               ด่าน _laEditSeq จึงปล่อยผ่าน · คำตอบไม่มีใบ 2 → ทับใบ 2 ทั้งในเครื่องและใน BASE
+         t0+1.4 คิวเซฟใบ 2 มาถึง · diff เป็นศูนย์ (ถูกทับไปแล้ว) → ไม่เซฟอะไร · ติ๊กหายเงียบ
+       แก้: คำตอบเซฟล้าง _dirty ได้เฉพาะเมื่อไม่มีการแก้เกิดขึ้นระหว่างที่เซฟเดินทาง (เทียบ _laEditSeq)
+            มีการแก้คั่น = ยัง dirty อยู่ · คิวเซฟรอบหน้าจะพาไปเอง · ตัวดึงข้อมูลรอจนกว่าจะเซฟครบ
+       และ "ตามหลังอยู่" (behind) ต้องจำไว้จนกว่าจะได้ดึงจริง (_laCatchup) · ไม่งั้นเซฟรอบถัดไปที่ behind=false
+            จะเห็นของที่รอว่าเป็นเสียงสะท้อนของตัวเอง (§selfEcho) แล้วทิ้ง ทั้งที่ยังไม่เคยดึงของอีกเครื่องมาเลย */
+    var seqS=_laEditSeq;
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _baseStr=null; _laMark(VER); _dirty=(_laEditSeq!==seqS); _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind) _laCatchup=true; if(_laCatchup){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
       else { _laRetry('เซิร์ฟเวอร์ตอบ '+x.status+(x.status===0?' (เชื่อมต่อไม่ได้)':'')); } };   // transient (5xx/0) → retry + warn
     x.onerror=function(){ _laRetry('เชื่อมต่อระบบไม่ได้'); };
-    try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
+    try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:_legacyDiff(d,cur)})); }catch(e){} }   /* §smerge */
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   // §opsAuth (2026-09-18) · the flush below is a SYNCHRONOUS XHR, so pointing it at a dead endpoint
   //   stalls every page unload. No legacy session = nothing to flush there.
   function _laFlush(){ if(!_dirty) return; if(window.LA_LEGACY_UNAVAILABLE){ _dirty=false; return; }
   try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
     if(!_laBlobUsable(cur)){ _dirty=false; return; }   // §emptyBlobGuard · ปิดหน้าตอน blob ว่าง = ไม่มีอะไรให้เซฟ ไม่ใช่คำสั่งลบ
-    var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
+    var d=computeDiff(_base(),cur); if(!d._changed){ _dirty=false; return; }
     var ops=laDiffToOps(d,cur);
     var url = ops ? '/api/v1/_batch' : '/api/save';
-    var payload = JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}});
+    var payload = JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:_legacyDiff(d,cur)});   /* §smerge */
     // SYNCHRONOUS save so it commits to cloud BEFORE the page reloads (otherwise the reload reloads stale data → reverts the edit)
-    try{ var x=new XMLHttpRequest(); x.open('POST',url,false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); } }
+    try{ var x=new XMLHttpRequest(); x.open('POST',url,false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _baseStr=null; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); } }
     catch(e){ if(navigator.sendBeacon) navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); }
   }catch(e){} }
   window.addEventListener('beforeunload', _laFlush);
@@ -440,7 +464,7 @@
       else if(JSON.stringify(b[k])!==JSON.stringify(c[k])){ p[k]={v:c[k]}; ch=true; } });
     Object.keys(b).forEach(function(k){ if(!(k in c)){ d.push(k); ch=true; } });
     return ch ? {p:p,d:d} : null; }
-  function computeDiff(base,cur){ var sets={},cols={},objs={},ch=false,keys={};
+  function computeDiff(base,cur){ var sets={},cols={},objs={},smaps={},ch=false,keys={};
     Object.keys(base||{}).forEach(function(k){keys[k]=1;}); Object.keys(cur||{}).forEach(function(k){keys[k]=1;});
     Object.keys(keys).forEach(function(k){ var b=base?base[k]:undefined, c=cur?cur[k]:undefined;
       var isCol = Array.isArray(c) && c.length>0 && c.every(function(x){return x&&typeof x==='object'&&x.id!=null;});
@@ -453,8 +477,20 @@
         var del=[]; Object.keys(bmap).forEach(function(id){ if(!seen[id]) del.push(id); });
         if(up.length||patch.length||del.length){ cols[k]={idf:'id',up:up,patch:patch,del:del}; ch=true; } }
       else if(_isPlainObj(b)&&_isPlainObj(c)){ var od=_deepDiff(b,c); if(od){ objs[k]=od; ch=true; } }   // object map → per-sub-key merge (no clobber)
+      /* §smerge (2026-10-14) · ค่าที่เป็น JSON string ของ object (ctWrite: go_asn · go_no · สีต่าง ๆ) เคยไปทาง sets =
+         ทับทั้งก้อน · สองเครื่องจ่ายไกด์วันเดียวกัน เครื่องที่เซฟทีหลังลบของอีกเครื่อง (ใบสั่งงาน LKC66 15 ต.ค. หาย)
+         ถ้าทั้ง base และ cur แปลงเป็น object ได้ → ส่งเฉพาะคีย์ย่อยที่เปลี่ยน ให้เซิร์ฟเวอร์ merge เหมือน objs */
+      else if(typeof b==='string' && typeof c==='string' && b!==c && _jsonObj(b) && _jsonObj(c)){
+        var sd=_deepDiff(_jsonObj(b),_jsonObj(c)); if(sd){ smaps[k]=sd; ch=true; } }
       else { if(JSON.stringify(b)!==JSON.stringify(c)){ sets[k]=(c===undefined?null:c); ch=true; } } });
-    return {sets:sets,cols:cols,objs:objs,_changed:ch}; }
+    return {sets:sets,cols:cols,objs:objs,smaps:smaps,_changed:ch}; }
+  /* §smerge · สตริงที่เป็น JSON object · คืน object หรือ null · ตัดสินจากตัวอักษรแรกก่อน ไม่ parse ทุกสตริง */
+  function _jsonObj(s){ if(typeof s!=='string' || s.charAt(0)!=='{') return null; try{ var o=JSON.parse(s); return _isPlainObj(o)?o:null; }catch(e){ return null; } }
+  /* §smerge · ตอนถอยไปทาง /api/save เดิม ให้ส่งค่าเต็มของคีย์พวกนี้ไปใน sets ด้วย เซิร์ฟเวอร์เก่าที่ไม่รู้จัก smaps
+     จะได้ยังเซฟ (แบบทับเหมือนเดิม) · เซิร์ฟเวอร์ใหม่ข้าม sets ของคีย์ที่มีใน smaps */
+  function _legacyDiff(d, cur){ var sets={}; Object.keys(d.sets||{}).forEach(function(k){ sets[k]=d.sets[k]; });
+    Object.keys(d.smaps||{}).forEach(function(k){ sets[k]=cur[k]; });
+    return {sets:sets,cols:d.cols,objs:d.objs,smaps:d.smaps}; }
   // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
   // ── AUTO-REFRESH when others save · seamless when idle · never interrupts typing/editing ──
   /* ══ §ckStale (2026-09-22) · "กดขึ้นเช็คอิน แล้วก็หาย แล้วก็กลับมา" ═══════
@@ -470,6 +506,7 @@
      ตัวนับนี้ตอบข้อนั้น · ถ่ายเลขไว้ก่อนยิง เทียบตอนคำตอบมาถึง ต่างเมื่อไหร่ = ทิ้งคำตอบนั้น
      ⚠ ทิ้งแล้วไม่ต้องไปดึงก้อนเต็มแทน · ของก้อนนั้นเก่าพอกัน · ปล่อยให้รอบถัดไปดึงใหม่ */
   var _laEditSeq=0;
+  var _laCatchup=false;   /* §ckSaveSeq · เซิร์ฟเวอร์บอกว่าเราตามหลังอยู่ และยังไม่ได้ดึงของนั้นมา */
   var _laPending=null, _laLastInput=Date.now();
   /* §ckLive2 · จำว่าของใหม่มารอตั้งแต่เมื่อไหร่ · หน้าเช็คอินใช้ตั้งเพดานเวลารอ
      ตัวกัน "เพิ่งแตะจอ" เป็นความสุภาพ ไม่ใช่กุญแจล็อก · ถ้าไม่มีเพดาน
@@ -620,17 +657,21 @@
       if(_laEditSeq!==seq0) return;
       if((j.version||0) < VER) return;                             /* เวอร์ชันถอยหลัง · ไม่เอา */
       if(_laBusy()) return;                                        // user resumed during fetch → defer
+      /* §lazyBase · parse ก้อนนี้ครั้งเดียว ส่งต่อให้ _laReloadData ใช้ตัวเดียวกัน · BASE parse เองทีหลังตอนจะเซฟ
+         ห้ามใช้ live เป็น BASE · ตัวแปรในแอปชี้เข้า live แล้วแก้ในที่ → BASE ขยับตาม → diff เป็นศูนย์ → ไม่เซฟ (ดู §ckOwn) */
+      var live; try{ live=JSON.parse(j.data); }catch(e){ _laReload(); return; }
       _orig(LS, j.data);                                           // write WITHOUT triggering a save
-      VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};} _laMark(VER);
-      /* §b2cPop · เทียบจาก BASE ที่เพิ่ง parse ไปแล้ว · ไม่ parse เพิ่มสักรอบ
+      VER=j.version||VER; _baseStr=j.data; _laMark(VER);
+      /* §b2cPop · เทียบจากก้อนที่เพิ่ง parse ไปแล้ว · ไม่ parse เพิ่มสักรอบ · สแกนก่อน _laReloadData (ตัวนั้นแก้บางอาร์เรย์ในที่)
          และไม่เช็ค updated_by อีกแล้ว · ของเดิมเช็คแล้วใบจองหลุดเงียบ
          เวลามีคนอื่นกดบันทึกคั่นระหว่างที่ผู้ใช้ยุ่งอยู่ */
-      var _b2cNew=[]; try{ _b2cNew=_laB2CScan(BASE); }catch(e){}
+      var _b2cNew=[]; try{ _b2cNew=_laB2CScan(live); }catch(e){}
       /* §sseCatchup · มีคนเซฟเพิ่มระหว่างที่ก้อนนี้โหลดอยู่ = ของที่รอใหม่กว่าที่ได้มา · อย่าล้าง
          ไม่งั้นเวอร์ชันนั้นหายเงียบจนกว่า poll 10 วิจะเจอ */
       if(!_laPending || (_laPending.version||0) <= VER) _laClearPending();
       _laCkFullAt=Date.now();                         /* §ckDay · นับคิวก้อนเต็มรอบใหม่ */
-      var ok = window._laReloadData ? window._laReloadData() : false;
+      _laCatchup=false;                                            /* §ckSaveSeq */
+      var ok = window._laReloadData ? window._laReloadData(live) : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
       if(window._laRerender) window._laRerender();
       LASTBY = j.updated_by ? (j.updated_by+' · '+fmt(j.updated_at)) : LASTBY; _laStamp(j);
@@ -716,15 +757,17 @@
          สำเนาลึกแก้ไขเรื่องนี้จบ · ที่ตั้งใจคือ BASE ต้องไม่ขยับเมื่อมีคนแก้ของในเครื่อง
          ซึ่งยังคงเดิมทุกอย่าง (เทสข้อ 10 ยังกันข้อนั้นอยู่) */
       try{
-        if(BASE && Array.isArray(BASE.sb_bookings)){
-          var at={}; BASE.sb_bookings.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
+        var _B=_base();                              /* §lazyBase */
+        if(_B && Array.isArray(_B.sb_bookings)){
+          var at={}; _B.sb_bookings.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
           j.bookings.forEach(function(b){ if(b&&b.id&&at[b.id]!=null)
-            BASE.sb_bookings[at[b.id]]=JSON.parse(JSON.stringify(b)); });
+            _B.sb_bookings[at[b.id]]=JSON.parse(JSON.stringify(b)); });
         }
       }catch(e){ return fin(false); }
       var okApplied=false;
       try{ okApplied=!!window._laCkApply(date, j.bookings); }catch(e){ okApplied=false; }
       if(!okApplied) return fin(false);              /* ชุด id ไม่ตรง หรือวาดไม่ได้ → ดึงเต็ม */
+      _laCatchup=false;                              /* §ckSaveSeq · ดึงของอีกเครื่องมาแล้ว */
       _laCkSeen=Math.max(_laCkSeen, j.version||0);
       if(_laPending && (_laPending.version||0)<=_laCkSeen){
         _laPending=null; _laPendAt=0;                /* หน้านี้ตามทันแล้ว · ไม่ต้องขึ้นแถบเตือน */
@@ -748,6 +791,10 @@
   }
   function _laTryRefresh(){
     if(!_laPending) return;
+    /* §hiddenDefer (2026-10-15) · แท็บที่ซ่อนอยู่ไม่ต้องดึงก้อนเต็ม 35 MB ทุกครั้งที่มีคนเซฟ · ไม่มีใครดูอยู่
+       ของเดิมรอบ 10 วิ/SSE เรียกตรงนี้โดยไม่ดู hidden → แท็บพื้นหลังโหลด+parse+วาดใหม่ทั้งวัน
+       _laPending ค้างไว้ · กลับมาดูจอ visibilitychange เรียก _laCheckVersion(0) → ดึงทันที */
+    if(document.hidden) return;
     if(_dirty) return;                       /* §selfEcho · การเซฟของเรายังไม่ได้คำตอบ · รอคำตอบก่อน (ตัวจับเวลา 3 วิ/คำตอบจะมาเรียกต่อ) */
     if((_laPending.version||0)<=_laCkSeen) return;   /* หน้าเช็คอินตามทันเวอร์ชันนี้แล้ว */
     if(_laBusy()){ showRefresh(_laPending); return; }
@@ -869,7 +916,11 @@
     var el=document.getElementById('la-b2c-issues');
     var n=(h&&h.issueCount)||0, sig=(h&&h.issueSig)||'';
     var hidden=''; try{ hidden=localStorage.getItem(_LA_B2CI_KEY)||''; }catch(e){}
-    if(!n || hidden===sig){ if(el) el.remove(); return; }
+    /* §b2cRO (2026-10-15) · owner "ตัว B2C เช็ค ไม่ต้องขึ้นของที่เป็นดูอย่างเดียว"
+       คนที่แก้งาน operations ไม่ได้ ก็แก้ใบที่มีปัญหาไม่ได้ · กล่องนี้มีแต่บังจอ (มือถือบังการ์ด booking)
+       เช็คทุกรอบที่ /api/version ส่งมา (ราว 10 วิ) · ME โหลดเสร็จทีหลังก็ซ่อนเองในรอบถัดไป */
+    var ro=false; try{ ro=(typeof window.laCanEditArea==='function') && !window.laCanEditArea('operations'); }catch(e){}
+    if(!n || hidden===sig || ro){ if(el) el.remove(); return; }
     if(!el){
       el=document.createElement('div'); el.id='la-b2c-issues';   /* หน้าตา/ตำแหน่งอยู่ css/01-base.css §b2cCheck */
       document.body.appendChild(el);
@@ -948,7 +999,7 @@
   /* §b2cPop · จำ id ของใบ b2c ที่รู้จักแล้วไว้ในหน่วยความจำ
      ของเดิมเทียบด้วยการ JSON.parse สตริงบล็อบทั้งเก่าและใหม่
      วัดของจริงบล็อบ 15.2 MB · เท่ากับ parse 15 MB สองรอบทุกครั้งที่มีของเข้า
-     ตอนนี้รับ object ที่ _laSoftRefresh parse ไว้แล้ว (BASE) · parse เพิ่ม 0 รอบ
+     ตอนนี้รับ object ที่ _laSoftRefresh parse ไว้แล้ว (live · §lazyBase) · parse เพิ่ม 0 รอบ
      จึงเทียบได้ทุกรอบโดยไม่ต้องเดาจาก updated_by
 
      รอบแรกที่เห็นข้อมูล จำเฉย ๆ ไม่เด้ง
@@ -1090,6 +1141,10 @@
     document.head.appendChild(st);
   }
   function _laB2CAlert(list){ if(!list||!list.length) return;
+    /* §bkMroQuiet (2026-10-15) · owner "หน้าของ Version ดูอย่างเดียว ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น"
+       body.bk-mro = มือถือ + บัญชีแก้ operations ไม่ได้ + อยู่หน้า Booking (08-app.js §bkMro ตั้งให้)
+       การ์ด B2C ใบใหม่มีแต่ปุ่มพาไปจัดงาน · ไม่วาดการ์ด ไม่ส่งเสียง · ใบจะขึ้นในรายการเองหลังดึงข้อมูลรอบนั้น */
+    try{ if(document.body && document.body.classList.contains('bk-mro')) return; }catch(e){}
     var n=list.length, show=list.slice(0,3), rest=n-show.length, one=list[0];
     var tPax=0, tAmt=0, dates=[];
     list.forEach(function(x){ tPax+=(+x.pax||0); tAmt+=(+x.total||0); if(x.date) dates.push(x.date); });
@@ -1826,6 +1881,7 @@
       +'<div style="flex:1;min-width:0"><div class="u3" style="font-size:19px"><b>'+esc(u.username)+'</b>'
         +'<em class="tg '+(adm?'adm':'st')+'">'+(adm?'ADMIN':'STAFF')+'</em>'+(me?'<em class="tg me">คุณ</em>':'')+'</div>'
       +'<div class="m3" style="font-size:12.5px">'+esc((u.name?u.name+' · ':'')+'แผนก '+lauDeptT(u.dept)+' · '+mn+' เมนู')+(u.salesId?(' · ผูกกับเซลล์ '+esc(lauSalesName(u.salesId))):'')+'</div></div>'
+      +'<button class="b sm" title="แก้ username (ชื่อที่ใช้ล็อกอิน) และชื่อที่แสดง" onclick="__laRename('+u.id+')">&#9998; แก้ชื่อ</button>'   /* §userRename */
       +'<button class="b sm" title="หน้าต่างเดิม · สิทธิ์พิเศษ (การกระทำนอกจากการเข้าหน้า)" onclick="__laEditPerms('+u.id+')">สิทธิ์พิเศษ</button>'
       +'<button class="b sm" onclick="__laReset('+u.id+')">&#128273; รหัสผ่าน</button>'
       +'<button class="b sm dl"'+(me?' disabled title="ลบบัญชีตัวเองไม่ได้"':'')+' onclick="__laDelUser('+u.id+')">ลบ</button></div>';
@@ -2110,6 +2166,7 @@
           +(u.role==='admin'?'admin':(u.edit.length?(u.edit.length+' พื้นที่แก้ไขได้'):'ดูอย่างเดียว'))+'</b></div></div></div>'
       +'<div class="bds">'+(bds||'<span style="font-size:12px;color:#CBD5E1">ยังไม่มีสิทธิ์เข้าหน้าไหนเลย</span>')+'</div>'
       +'<div class="acts">'
+        +'<button class="b sm" onclick="__laRename('+u.id+')">แก้ชื่อ</button>'   /* §userRename */
         +'<button class="b sm" onclick="__laEditPerms('+u.id+')">สิทธิ์</button>'
         +'<button class="b sm" onclick="__laReset('+u.id+')">รหัสผ่าน</button>'
         +'<button class="ic" title="'+(me?'ลบบัญชีตัวเองไม่ได้':'ลบผู้ใช้')+'"'+(me?' disabled':'')
@@ -2423,6 +2480,65 @@
       dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }
     LAU.add=null; window.__laTab='list'; __laLoadUsers(); lauToast('สร้างบัญชี '+u+' แล้ว');
+  };
+
+  /* ── §userRename (2026-10-14) · แก้ username / ชื่อที่แสดง ──
+     owner "ขอให้แก้ชื่อ User ได้หน่อย" · เดิมสร้างแล้วแก้ชื่อไม่ได้ ต้องลบแล้วสร้างใหม่ (สิทธิ์หายหมด)
+     ตรวจซ้ำ/ช่องว่างตั้งแต่พิมพ์ · เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น
+     เปลี่ยนชื่อตัวเอง (username) → session เดิมถูกตัด · ต้องเข้าใหม่ด้วยชื่อใหม่ จึงรีโหลดให้ */
+  window.__laRename=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    LAU.ren=u;
+    var w=document.getElementById('la-uwin'); var old=w.querySelector('#la-rmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-rmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg sm"><div class="dh"><div><h3>แก้ชื่อผู้ใช้</h3>'
+      +'<p>'+esc(u.username)+(u.name?(' ('+esc(u.name)+')'):'')+'</p></div>'
+      +'<button class="ic" onclick="document.getElementById(\'la-rmask\').remove()">&#10005;</button></div>'
+      +'<div class="db"><div class="f"><label>Username · ใช้ล็อกอิน</label>'
+        +'<input id="la-r1" autocomplete="off" spellcheck="false" oninput="__laRenChk()"></div>'
+        +'<div class="f"><label>ชื่อที่แสดง</label>'
+        +'<input id="la-r2" autocomplete="off" placeholder="เว้นว่าง = ใช้ username" oninput="__laRenChk()">'
+        +'<div class="hint" id="la-rmsg">&nbsp;</div></div></div>'
+      +'<div class="df"><span></span><div style="display:flex;gap:8px">'
+        +'<button class="b" onclick="document.getElementById(\'la-rmask\').remove()">ยกเลิก</button>'
+        +'<button class="b pri" id="la-rgo" disabled onclick="__laRenSave()">บันทึกชื่อ</button></div></div></div>';
+    w.appendChild(d);
+    var a=document.getElementById('la-r1'), b=document.getElementById('la-r2');
+    if(a){ a.value=u.username||''; } if(b){ b.value=u.name||''; }
+    __laRenChk(); if(a){ a.focus(); a.select(); }
+  };
+  window.__laRenChk=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var m=document.getElementById('la-rmsg'), go=document.getElementById('la-rgo');
+    var dup=(LAU.rows||[]).some(function(x){ return x.id!==u.id && String(x.username).toLowerCase()===a.toLowerCase(); });
+    var same=(a===u.username && (b||a)===(u.name||u.username));
+    var ok=false, msg='';
+    if(!a) msg='<span style="color:#B4392B">ต้องมี username</span>';
+    else if(/\s/.test(a)) msg='<span style="color:#B4392B">username ห้ามมีช่องว่าง</span>';
+    else if(a.length>60) msg='<span style="color:#B4392B">username ยาวเกิน 60 ตัวอักษร</span>';
+    else if(dup) msg='<span style="color:#B4392B">username นี้มีคนใช้อยู่แล้ว</span>';
+    else if(b.length>80) msg='<span style="color:#B4392B">ชื่อยาวเกิน 80 ตัวอักษร</span>';
+    else if(same) msg='ยังไม่ได้เปลี่ยนอะไร';
+    else { ok=true;
+      msg=(a.toLowerCase()!==String(u.username).toLowerCase())
+        ? ('<span style="color:#9A5B00">เปลี่ยน username แล้ว '+(lauIsMe(u)?'คุณ':esc(u.username))+' ต้องเข้าสู่ระบบใหม่ด้วย <b>'+esc(a)+'</b> · รหัสผ่านเดิม'
+           +' · ถ้าเข้าผ่าน Authentik ชื่อต้องตรงกับใน Authentik · งานที่บันทึกไว้แล้วยังขึ้นชื่อเดิม</span>')
+        : '<span style="color:#0F6E56">พร้อมบันทึก</span>'; }
+    if(m) m.innerHTML=msg||'&nbsp;'; if(go) go.disabled=!ok;
+  };
+  window.__laRenSave=function(){
+    var u=LAU.ren; if(!u) return;
+    var a=String((document.getElementById('la-r1')||{}).value||'').trim(), b=String((document.getElementById('la-r2')||{}).value||'').trim();
+    var r=sx('POST','/api/users/rename',JSON.stringify({id:u.id,username:a,name:b}),'application/json');
+    if(r.status!==200||!r.json||!r.json.ok){ lauToast((r.json&&r.json.error)||('แก้ชื่อไม่สำเร็จ (HTTP '+r.status+')'),1); return; }
+    var m=document.getElementById('la-rmask'); if(m) m.remove();
+    if(r.json.self && r.json.renamed){
+      lauToast('เปลี่ยน username เป็น '+a+' แล้ว · กำลังพาไปเข้าสู่ระบบใหม่');
+      setTimeout(function(){ try{ location.reload(); }catch(_){} },1600); return; }
+    LAU.ren=null; __laLoadUsers();
+    lauToast(r.json.renamed?('เปลี่ยน '+u.username+' เป็น '+a+' แล้ว'):('แก้ชื่อของ '+a+' แล้ว'));
   };
 
   /* ── รหัสผ่าน ── */

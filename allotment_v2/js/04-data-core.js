@@ -8277,6 +8277,199 @@ const FC_CSS=`<style>
     .fc-calw{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .fc-cal{min-width:720px}
   }
+  /* ══ §fcLoad (2026-10-13) · ชิปบอก "เต็มแค่ไหน" ไม่ใช่ "ลำไหน" ═════════════════════════
+     ของเดิมพื้นชิปเป็นสีประจำลำ · 20 ลำ 20 สี อ่านไม่ออกว่าลำไหนใกล้เต็ม/เกิน
+     ตอนนี้พื้นขาว ชื่อเข้ม จุดเล็กหน้าชื่อคือสีประจำลำ · แถบล่างกับตัวเลขบอกระดับ
+       ฟ้า < 50% · ส้ม 50–89% · ส้มเข้ม 90%+ · แดง = เกินที่นั่ง · ประ = ยังไม่มีคน · ม่วง = เหมาลำ */
+  .fc-bc{background:#fff;color:#111827;border-color:#D9DEE7;font-size:10.5px;font-weight:700}
+  .fc-bc .nm{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .fc-bc .nm i{width:6px;height:6px;border-radius:999px;flex:0 0 auto}
+  .fc-bc b{opacity:1;font-size:11px}
+  .fc-bc u{height:3px;background:#EEF0F4}
+  .fc-bc.z{border-style:dashed;background:#FCFCFD}
+  .fc-bc.z b{color:#9CA3AF}
+  .fc-bc.ov{background:#FEF2F2;border-color:#FCA5A5}
+  .fc-bc.ov b{color:#B91C1C}
+  .fc-bc.h{background:#F5F3FF;border-color:#C4B5FD}
+  .fc-bc.h b{color:#6D28D9}
+  .fc-bc.out{background:#fff;border:1px solid #86EFAC;color:#065F46}
+  .fc-bc.out b{opacity:1;color:#16A34A;font-size:10px}
+  /* §freeFirst · แถวเรือว่างขึ้นก่อนทุกท่า · สีเขียวทั้งแถว */
+  .fc-mt tr.fr th.fc-rn{color:#065F46;font-weight:800;background:#F0FDF4}
+  .fc-mt tr.fr th.fc-rn .in i.dot{background:#16A34A;box-shadow:none}
+  .fc-mx.hasf,.fc-mx.nof{background:#F0FDF4}
+  .fc-mx.nof .zero{color:#B91C1C;font-size:10px;font-weight:700}
+  .fc-mgc .ff{color:#047857;font-weight:800}
+  .fc-mgc .ff.z{color:#B91C1C}
+  .fc-mgc .fo{color:#6B7785;font-weight:600;margin-left:3px}
+  .fc-rl.fr .rn{color:#065F46;font-weight:800}
+  .fc-chip.o{background:#FEF3C7;color:#78350F;border-color:transparent}
+  .fc-lgb{display:inline-block;width:18px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  /* ══ §fcMob · มุมมองมือถือ · By day / By boat ══════════════════════════════════ */
+  .fm{font-family:'DM Sans',Manrope,sans-serif;color:#111827;margin:-10px}
+  .fm *{box-sizing:border-box}
+  .fm-top{padding:12px 14px 14px;color:#fff}
+  .fm-hd{display:flex;align-items:center;gap:10px}
+  .fm-hd .br{flex:1;line-height:1.1}
+  .fm-hd .br i{font-style:normal;font-size:9.5px;letter-spacing:.26em;color:#8E97C4}
+  .fm-hd .br b{display:block;font-size:16px;font-weight:800;letter-spacing:.16em}
+  .fm-btn{border:0;border-radius:999px;padding:8px 14px;min-height:40px;font:700 13px 'DM Sans',sans-serif;cursor:pointer}
+  .fm-tdy{background:#0F6E56;color:#fff}
+  .fm-seg{display:flex;gap:4px;margin-top:12px;background:rgba(255,255,255,.1);border-radius:12px;padding:4px}
+  .fm-seg button{flex:1;border:0;background:none;color:#B9C4E0;border-radius:9px;padding:9px;min-height:40px;font:700 13.5px 'DM Sans',sans-serif;cursor:pointer}
+  .fm-seg button.on{background:#fff;color:#16265C}
+  .fm-wk{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:14px;font-weight:700}
+  .fm-wk button{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;cursor:pointer}
+  .fm-days{display:flex;gap:4px;margin-top:12px;justify-content:space-between}
+  .fm-day{flex:1 1 0;min-width:0;border:0;border-radius:12px;padding:7px 0 6px;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:64px;font-family:inherit}
+  .fm-day .w{font-size:10px;font-weight:700;letter-spacing:.06em;color:#B9C4E0}
+  .fm-day .d{font-size:18px;font-weight:800}
+  .fm-day .n{font-size:10.5px;font-weight:700;color:#86EFAC;white-space:nowrap}
+  .fm-day .n.z{color:#FCA5A5}
+  .fm-day.on{background:#fff;color:#16265C}
+  .fm-day.on .w{color:#475569}
+  .fm-day.on .n{color:#047857}
+  .fm-day.on .n.z{color:#B91C1C}
+  .fm-day.t .d{text-decoration:underline;text-underline-offset:3px}
+  .fm-body{background:#EEF1F6;padding:12px 12px 22px;display:flex;flex-direction:column;gap:12px;border-radius:14px 14px 0 0}
+  .fm-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .fm-tile{background:#fff;border:1px solid #D9DEE7;border-radius:12px;padding:9px 11px}
+  .fm-tile .k{font-size:12px;color:#6B7280}
+  .fm-tile .v{font-size:22px;font-weight:800}
+  .fm-tile .v small{font-size:12px;color:#6B7280;font-weight:600}
+  .fm-tile.g{background:#F0FDF4;border-color:#86EFAC}.fm-tile.g .k{color:#065F46}.fm-tile.g .v{color:#047857}
+  .fm-tile.r{background:#FEF2F2;border-color:#FCA5A5}.fm-tile.r .k{color:#991B1B}.fm-tile.r .v{color:#B91C1C}
+  .fm-pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .fm-pill{flex:0 0 auto;border:1px solid #D1D5DB;background:#fff;color:#374151;border-radius:999px;padding:8px 14px;min-height:40px;font:700 13px 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap}
+  .fm-pill.on{background:#111827;border-color:#111827;color:#fff}
+  .fm-card{background:#fff;border:1px solid #D9DEE7;border-radius:14px;overflow:hidden}
+  .fm-ph{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #EEF0F4;font-size:15px;font-weight:800}
+  .fm-ph .pb{color:#fff;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:800}
+  .fm-ph .r{margin-left:auto;font-size:12.5px;font-weight:600;color:#4B5563}
+  .fm-ph .r .f{color:#047857;font-weight:800}.fm-ph .r .f.z{color:#B91C1C}
+  .fm-free{padding:12px 14px 14px;background:#F0FDF4;border-bottom:1px solid #BBF7D0}
+  .fm-free.z{background:#FEF2F2;border-bottom-color:#FECACA}
+  .fm-free .t{font-size:13px;font-weight:800;color:#065F46}
+  .fm-free.z .t{color:#991B1B}
+  .fm-free .s{font-size:12.5px;color:#7F1D1D;margin-top:2px}
+  .fm-free .l{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .fm-av{display:inline-flex;align-items:center;gap:6px;border:1px solid #86EFAC;border-radius:10px;padding:8px 12px;min-height:44px;font-size:14.5px;font-weight:800;color:#065F46;background:#fff}
+  .fm-av small{font-size:12px;font-weight:700;color:#16A34A}
+  .fm-pg{padding:10px 14px 12px;border-bottom:1px solid #EEF0F4}
+  .fm-pg.ov{background:#FEF2F2}
+  .fm-pg .t{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+  .fm-pg .t i{width:8px;height:8px;border-radius:999px;flex:0 0 auto}
+  .fm-pg .t .tag{margin-left:auto;background:#DC2626;color:#fff;border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:800}
+  .fm-b{display:flex;align-items:center;gap:10px;margin-top:8px;min-height:36px}
+  .fm-b .nm{font-size:14.5px;font-weight:700;width:100px;flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fm-b .bar{flex:1;height:8px;border-radius:4px;background:#EEF0F4;overflow:hidden}
+  .fm-b .bar i{display:block;height:100%}
+  .fm-b .n{font-size:14px;font-weight:800;width:64px;text-align:right;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .fm-b .n small{color:#9CA3AF;font-weight:600;font-size:12px}
+  .fm-note{padding:10px 14px 12px;font-size:12.5px;color:#6B7280;border-top:1px solid #EEF0F4}
+  .fm-g{display:grid;grid-template-columns:88px repeat(7,minmax(0,1fr));gap:3px;align-items:stretch}
+  .fm-gh{text-align:center;font-size:10px;font-weight:700;color:#6B7280;padding:4px 0}
+  .fm-gh b{display:block;font-size:14px;color:#111827}
+  .fm-gh.t b{color:#1D4ED8}
+  .fm-gp{grid-column:1 / span 8;display:flex;align-items:center;gap:8px;padding:10px 4px 4px;font-weight:800;font-size:14px}
+  .fm-gp .pb{color:#fff;border-radius:6px;padding:2px 6px;font-size:11px}
+  .fm-gf{font-size:12.5px;font-weight:800;color:#065F46;padding:6px 4px;display:flex;align-items:center}
+  .fm-gfc{border-radius:7px;min-height:32px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;background:#16A34A}
+  .fm-gfc.z{background:#FEE2E2;color:#B91C1C}
+  .fm-gb{font-size:13px;font-weight:700;padding:6px 0 6px 4px;display:flex;flex-direction:column;justify-content:center;line-height:1.15;min-width:0}
+  .fm-gb span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fm-gb small{font-size:10.5px;color:#9CA3AF;font-weight:600}
+  .fm-gc{border-radius:7px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9.5px;font-weight:800;letter-spacing:-.02em;border:1px solid transparent;overflow:hidden;white-space:nowrap}
+  .fm-gc span{font-size:10.5px;font-weight:700}
+  .fm-sep{grid-column:1 / span 8;height:1px;background:#EEF0F4;margin:4px 0}
+  .fm-lg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;font-size:12px;color:#374151;padding:12px 14px}
+  .fm-ro{font-size:12px;color:#6B7280;text-align:center;padding:2px 8px}
+  /* §fcMob2 · หัวเว้นที่ให้ปุ่มลอยของแอป · Today อยู่ท้ายแถวสัปดาห์ · ท้ายหน้าเว้นให้ป้ายแจ้งเตือนมุมล่างซ้ายของแอป */
+  .fm-hd{padding-right:118px;min-height:44px}
+  .fm-hd .br b{font-size:17px}
+  .fm-wk{gap:8px}
+  .fm-wk .rg{flex:1;text-align:center;white-space:nowrap}
+  .fm-wk .fm-tdy{width:auto;height:42px;border-radius:10px;padding:0 12px;font-size:13px;background:#1F8A5B;color:#fff}
+  .fm-body{padding-bottom:110px}
+  /* ══ §fcMock (2026-10-13) · "ยังไม่เหมือน Mockup" · ชั้นนี้ทำให้หน้าตาตรงกับ mockup ที่อนุมัติ ══════
+     ฟอนต์ IBM Plex Sans Thai (โหลดอยู่แล้วในหน้า) · ตัวเลข DM Mono · ตัวหนังสือ 12.5–14px แทน 9.5–11px
+     พื้นขาว เส้นเทา แทนโทนครีม · ชิปเต็มความกว้างช่อง ชื่อซ้าย ตัวเลขขวา แถบใต้ (เฉพาะ 7 วัน)
+     ลบทั้งก้อนนี้ = กลับไปหน้าตาเดิม */
+  #view-fleetcal{font-family:'IBM Plex Sans Thai','DM Sans',sans-serif;padding:16px 24px 24px}
+  #view-fleetcal .fm{font-family:'IBM Plex Sans Thai','DM Sans',sans-serif}
+  .fc-top{margin:0 0 12px}
+  .fc-top .d{font-size:32px;font-weight:700;font-family:'DM Mono',monospace}
+  .fc-top .wk{font-size:15px;font-weight:700}
+  .fc-top .w{font-size:11px;font-family:'DM Mono',monospace;color:#B9C4E0}
+  .fc-arw{width:38px;height:38px;border-radius:999px;font-size:16px;background:rgba(255,255,255,.12);border:0;color:#fff}
+  .fc-tb{background:#1F8A5B;font-size:13.5px;padding:8px 16px;min-height:38px}
+  .fc-brand i{font-size:10px;letter-spacing:.3em;color:#B9C4E0;font-family:'DM Mono',monospace}
+  .fc-brand b{font-size:21px;font-weight:700;letter-spacing:.22em}
+  .fc-chip{height:34px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:600;background:rgba(255,255,255,.14);border:0;color:#fff}
+  .fc-chip b{font-family:'DM Mono',monospace;font-weight:700}
+  .fc-chip.g{background:#D1FAE5;color:#065F46}
+  .fc-chip.r{background:#FEE2E2;color:#991B1B}
+  .fc-chip.o{background:#FEF3C7;color:#78350F}
+  .fc-seg{background:transparent;border:0;padding:0;gap:6px}
+  .fc-seg button{background:rgba(255,255,255,.12);border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:600;color:#fff;min-height:38px}
+  .fc-seg button.on{background:#fff;color:#16265C;font-weight:700}
+  .fc-piers{margin:0 0 16px;gap:8px}
+  .fc-pp{font-size:13.5px;font-weight:600;padding:8px 15px;min-height:38px;border-radius:999px;color:#fff;background:rgba(255,255,255,.12);border:0}
+  .fc-pp.on{background:#fff;color:#16265C;font-weight:700}
+  .fc-card{border:1px solid #D9DEE7;border-radius:12px;box-shadow:none;padding:0;background:#fff}
+  .fc-ch2{margin:0;padding:12px 16px;border-bottom:1px solid #D9DEE7;background:#F5F6F8;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:#374151;text-transform:none}
+  .fc-ch2 .pill{background:#fff;border:1px solid #D9DEE7;color:#111827;font-family:'DM Mono',monospace;font-size:12px;padding:3px 10px}
+  .fc-ch2 .lg{font-size:12.5px;color:#4B5563;gap:16px;font-weight:500}
+  .fc-ch2 .lg .ro{color:#6B7280}
+  .fc-lgb{width:22px;height:5px}
+  .fc-wrap{margin:0}
+  .fc-mt{font-size:14px;--lcw:230px}
+  .fc-mt th,.fc-mt td{border-bottom:1px solid #EEF0F4}
+  .fc-mt .fc-mh{padding:10px 8px;border-bottom:1px solid #D9DEE7;color:#111827}
+  .fc-mt .fc-mh .wd{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6B7280}
+  .fc-mt .fc-mh .dn{display:block;width:auto;height:auto;border-radius:0;font-family:'DM Mono',monospace;font-size:22px;font-weight:600;color:#111827;line-height:1.15;margin-top:2px}
+  .fc-mt .fc-mh .sm{display:block;font-size:11.5px;font-weight:500;color:#6B7280;margin-top:2px;white-space:nowrap}
+  .fc-mt .fc-mh .rg{display:block;font-size:12px;font-weight:500;color:#6B7280;margin-top:4px;text-transform:none;letter-spacing:0;font-family:'IBM Plex Sans Thai',sans-serif}
+  .fc-mt .fc-mh.sticky{padding-left:14px}
+  .fc-mt .fc-mh.today{background:#EEF4FF;box-shadow:inset 0 -3px 0 #2563EB}
+  .fc-mt .fc-mh.today .dn{background:none;color:#1D4ED8}
+  .fc-mt .fc-mh.today .wd{color:#1D4ED8}
+  .fc-mt tr.fc-mg th{background:#F3F4F6;color:#111827;font-size:14px;font-weight:700;padding:10px 14px;border-top:1px solid #D9DEE7;border-bottom:1px solid #D9DEE7}
+  .fc-mt tr.fc-mg td{background:#F3F4F6;font-family:'IBM Plex Sans Thai',sans-serif;font-size:12.5px;color:#374151;border-top:1px solid #D9DEE7;border-bottom:1px solid #D9DEE7;padding:10px 6px}
+  .fc-mgc .ff{font-weight:700}
+  .fc-mgc .fo b,.fc-mgc .fo{font-weight:500}
+  .fc-pb{width:auto;height:auto;padding:2px 6px;border-radius:6px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700}
+  .fc-mt th.fc-rn{padding:10px 14px;font-size:14px;font-weight:500;color:#111827}
+  .fc-mt th.fc-rn .in{gap:8px}
+  .fc-mt th.fc-rn .in i{width:8px;height:8px}
+  .fc-mt tr.fr th.fc-rn{font-size:14px}
+  .fc-mt tr.fc-dorm th.fc-rn{background:#FAFAFA;color:#6B7280;font-size:13px}
+  .fc-mt th.fc-rn .in em{font-family:'DM Mono',monospace;font-size:12px;color:#6B7280}
+  .fc-mx{padding:6px;text-align:left;border-left:1px solid #F3F4F6}
+  .fc-mx.has,.fc-mx.no{background:#fff}
+  .fc-mx.td{background:#F5F9FF}
+  .fc-mx.hasf.td,.fc-mx.nof.td{background:#E7F8EE}
+  .fc-mx .zero,.fc-mx.nof .zero{display:block;padding:4px 2px;font-size:12px;font-weight:600}
+  /* สกินของแอปใส่ letter-spacing ให้ th · ชื่อโปรแกรมเลยห่างจนอ่านเป็นคำยาก */
+  .fc-mt th.fc-rn,.fc-mt tr.fc-mg th,.fc-mt th.fc-rn .nm{letter-spacing:0}
+  .fc-mt.w .fc-bc .nm{min-width:0}
+  .fc-mt.w .fc-bc b{font-size:12px}
+  .fc-mt td.dormc{background:#FAFAFA;padding:8px 10px}
+  .fc-mt td.dormc span{font-size:12px;padding:2px 8px;border:1px dashed #D1D5DB;color:#6B7280;border-radius:6px;margin:2px 6px 2px 0}
+  /* ชิป · มุมมอง 7 วัน · เต็มช่อง ชื่อซ้าย เลขขวา แถบใต้ (ตรงกับ mockup) */
+  .fc-mt.w .fc-bc{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:6px;
+    width:100%;margin:0 0 5px;padding:5px 8px 6px;border-radius:8px;text-align:left}
+  .fc-mt.w .fc-bc .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+  .fc-mt.w .fc-bc b{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600}
+  .fc-mt.w .fc-bc u{grid-column:1 / span 2;height:4px;margin-top:4px}
+  .fc-mt.w .fc-bc.out{display:inline-flex;width:auto;margin:0 5px 5px 0;padding:2px 8px;border-radius:6px;gap:5px}
+  .fc-mt.w .fc-bc.out .nm{font-size:12px}
+  .fc-mt.w .fc-bc.out b{font-size:11px;font-weight:500;color:#16A34A}
+  /* 14 วัน · ช่องแคบ · ชิปเล็กแต่ตัวหนังสืออ่านได้ */
+  .fc-mt:not(.w) .fc-bc{font-size:11px;padding:4px 6px 5px}
+  .fc-mt:not(.w) .fc-bc b{font-family:'DM Mono',monospace;font-size:11px}
+  .fc-cal,.fc-wh{font-family:'IBM Plex Sans Thai',sans-serif}
+  @media (max-width:820px){ #view-fleetcal{padding:10px} }
 </style>`;
 // ═══════════════════════════════════════════════════════════════════════
 // §fleetCal · ปฏิทินกองเรือ · อ่านอย่างเดียว · แก้เรือยังทำที่ Boat Operation
@@ -8298,7 +8491,7 @@ const FC_CSS=`<style>
 //   และไม่นับใบเหมาลำเข้าพูล · หน้านี้ถามระดับลำ จึงต้องใช้คนบนลำ
 //   ป้ายบนหน้าจอเลยเขียนว่า "คนบนลำ / ที่รับได้" ให้ชัด ไม่ใช่ "ที่นั่งที่ขายได้"
 // ═══════════════════════════════════════════════════════════════════════
-var _fc = { mode:'m14', from:null, ym:null, pier:'all' };
+var _fc = { mode:'m7', from:null, ym:null, pier:'all' };   /* §fcMock · ค่าเริ่ม 7 วันตาม mockup */
 var FC_PIER=[['tublamu','TL','Tub Lamu','#0F6E56','#E1F5EE'],
              ['panwa','VP','Visit Panwa','#185FA5','#E6F1FB'],
              ['ranong','RN','Ranong','#BA7517','#FAEEDA'],
@@ -8407,19 +8600,25 @@ function fcAbbr(name){
   if(!a) a=String(name||'?').slice(0,3).toUpperCase();
   return _fcAb[name]=a;
 }
-function fcFill(p){ return p>=95?'#C44A36':p>=80?'#B4690E':p>=50?'#0F6E56':'#6FAE92'; }
+/* §fcLoad · สีตามระดับความเต็ม · ใช้ร่วมกันทั้ง matrix / เดือน / มือถือ */
+function fcFill(p){ return p>100?'#DC2626':p>=90?'#EA580C':p>=50?'#D97706':p>0?'#0891B2':'#CBD5E1'; }
+function fcInk(p){ return p>100?'#B91C1C':p>=90?'#C2410C':p>=50?'#92400E':p>0?'#0E7490':'#9CA3AF'; }
+function fcPct(pax,cap){ return cap?Math.round((pax||0)/cap*100):0; }
+function fcIsOver(b,c){ return !!(c && c.k==='run' && (b.cap||0)>0 && (c.pax||0)>(b.cap||0)); }
 function fcChip(b,c,mode){
   var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
   var col=(typeof getBoatColor==='function')?getBoatColor(b.id):{bg:'#F1F5F1',text:'#6B7785'};
-  var cap=b.cap||0;
-  if(mode==='free') return '<span class="fc-bc out" style="border-color:'+col.text+';color:'+col.text
-    +'" title="'+e(b.name)+' · available at pier · capacity '+cap+'">'+e(b.name)+'<b>'+cap+'</b></span>';
-  var pax=c.pax||0, pct=cap?Math.min(100,Math.round(pax/cap*100)):0, held=c.chr&&!pax;
-  return '<span class="fc-bc" style="background:'+col.bg+';color:'+col.text+'" title="'+e(b.name)+' · '
+  var cap=b.cap||0, dot='<i style="background:'+col.text+'"></i>';
+  if(mode==='free') return '<span class="fc-bc out" title="'+e(b.name)+' · free at pier · '+cap+' seats">'
+    +'<span class="nm">'+dot+e(b.name)+'</span><b>'+cap+'</b></span>';
+  var pax=c.pax||0, pct=fcPct(pax,cap), held=c.chr&&!pax, over=pax>cap&&cap>0;
+  var cls=held?' h':over?' ov':(!pax?' z':'');
+  return '<span class="fc-bc'+cls+'" title="'+e(b.name)+' · '
     +(c.chr?('Charter'+(c.ag?(' · '+e(c.ag)):'')):e(c.routeFull))
-    +(held?' · boat held (outbound / return on different days)':(' · '+pax+' pax on board of '+cap))+'">'
-    +e(b.name)+'<b>'+(held?'Held':(pax+'/'+cap))+'</b>'
-    +'<u><s style="width:'+pct+'%;background:'+fcFill(pct)+'"></s></u></span>';
+    +(held?' · boat held (outbound / return on different days)':(' · '+pax+' pax on board of '+cap+(over?(' · '+(pax-cap)+' over'):'')))+'">'
+    +'<span class="nm">'+dot+e(b.name)+'</span><b style="color:'+(held?'#6D28D9':fcInk(pct))+'">'+(held?'Held':(pax+'/'+cap))+'</b>'
+    +'<u><s style="width:'+(held?100:Math.max(pax?6:100,Math.min(100,pct)))+'%;background:'
+    +(held?'repeating-linear-gradient(135deg,#7C3AED,#7C3AED 3px,#C4B5FD 3px,#C4B5FD 6px)':fcFill(pct))+'"></s></u></span>';
 }
 /* ── MATRIX · ท่า → โปรแกรม × วัน ─────────────────────────────────────── */
 function fcMatrixHtml(){
@@ -8441,10 +8640,15 @@ function fcMatrixHtml(){
     if(off){ var pk=C[days[0]][b.id].pier||b.pier||'other'; (dormBy[pk]=dormBy[pk]||[]).push(b); }
   });
   var cols='<colgroup><col class="lc">'+days.map(function(){return '<col class="dc">';}).join('')+'</colgroup>';
-  var head='<tr><th class="fc-mh sticky">Pier · Program</th>'
-    +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), t=(ds===TODAY);
+  var MOS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dl=new Date(days[days.length-1]+'T00:00:00'), df=new Date(days[0]+'T00:00:00');
+  var head='<tr><th class="fc-mh sticky"><span class="wd">Pier · Program</span>'
+      +'<span class="rg">'+df.getDate()+' → '+dl.getDate()+' '+MOS[dl.getMonth()]+'</span></th>'
+    +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), t=(ds===TODAY), nb=0, px=0;
+      boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='run' && fcPierOn(c.rpier||c.pier)){ nb++; px+=(c.pax||0); } });
       return '<th class="fc-mh'+(t?' today':'')+'" onclick="fcOpenDay(\''+ds+'\')" title="'+ds+' · open in Boat Operation">'
-        +'<span class="wd">'+WD[dt.getDay()]+'</span><span class="dn">'+dt.getDate()+'</span></th>'; }).join('')+'</tr>';
+        +'<span class="wd">'+WD[dt.getDay()]+'</span><span class="dn">'+dt.getDate()+'</span>'
+        +'<span class="sm">'+nb+' boat'+(nb===1?'':'s')+(wide?(' · '+px+' pax'):'')+'</span></th>'; }).join('')+'</tr>';
   var body='';
   FC_PIER.forEach(function(p){
     var pk=p[0], progs=prog[pk]||{}, dorm=dormBy[pk]||[];
@@ -8462,7 +8666,15 @@ function fcMatrixHtml(){
         boats.forEach(function(b){ var c=C[ds][b.id];
           if(c.k==='run' && (c.rpier||c.pier)===pk) run++;
           else if(c.k==='free' && c.pier===pk) free++; });
-        return '<td class="fc-mgc">'+((run||free)?('<b>'+run+'</b><span>/'+free+'</span>'):'')+'</td>'; }).join('')+'</tr>';
+        /* §freeFirst · ว่างขึ้นก่อน */
+        return '<td class="fc-mgc">'+((run||free)?('<span class="ff'+(free?'':' z')+'">'+free+' free</span><span class="fo">· '+run+' out</span>'):'')+'</td>'; }).join('')+'</tr>';
+    /* §freeFirst (2026-10-13) · "User อยากเห็นเรือว่างก่อน ของแต่ละท่า" · แถวเรือว่างย้ายจากท้ายท่าขึ้นมาแถวแรก */
+    if(liveBy[pk]) body+='<tr class="fc-pr fr"><th class="sticky fc-rn"><span class="in">'
+      +'<i class="dot"></i><span class="nm">Free at pier</span></span></th>'
+      +days.map(function(ds){ var out=[];
+        boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free'&&c.pier===pk) out.push(fcChip(b,c,'free')); });
+        return '<td class="fc-mx '+(out.length?'hasf':'nof')+(ds===TODAY?' td':'')+'">'
+          +(out.length?out.join(''):'<span class="zero">No free boat</span>')+'</td>'; }).join('')+'</tr>';
     keys.forEach(function(rid){ var pr=progs[rid];
       body+='<tr class="fc-pr"><th class="sticky fc-rn"><span class="in">'
         +'<i style="background:'+pr.color+'"></i>'
@@ -8474,14 +8686,8 @@ function fcMatrixHtml(){
             if(c.k!=='run' || (c.rpier||c.pier)!==pk) return;
             if(rid==='__chr' ? !c.chr : (c.chr||c.rid!==rid)) return;
             out.push(fcChip(b,c)); });
-          return '<td class="fc-mx '+(out.length?'has':'no')+'">'+out.join('')+'</td>'; }).join('')+'</tr>';
+          return '<td class="fc-mx '+(out.length?'has':'no')+(ds===TODAY?' td':'')+'">'+out.join('')+'</td>'; }).join('')+'</tr>';
     });
-    if(liveBy[pk]) body+='<tr class="fc-pr fr"><th class="sticky fc-rn"><span class="in">'
-      +'<i class="dot"></i><span class="nm">Available at pier</span></span></th>'
-      +days.map(function(ds){ var out=[];
-        boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free'&&c.pier===pk) out.push(fcChip(b,c,'free')); });
-        return '<td class="fc-mx '+(out.length?'hasf':'nof')+'">'
-          +(out.length?out.join(''):'<span class="zero">none</span>')+'</td>'; }).join('')+'</tr>';
     /* ลำที่ไม่พร้อมทั้งช่วง ยุบเป็นแถวเดียว · แยกแถวละลำได้ลายทางเปล่า 13 แถวกินครึ่งจอ */
     if(dorm.length) body+='<tr class="fc-dorm"><th class="sticky fc-rn"><span class="in">'
       +'<i class="x"></i><span class="nm">Out of service</span><em>'+dorm.length+'</em></span></th>'
@@ -8524,15 +8730,17 @@ function fcMonthHtml(){
       var x=g[p[0]];
       if(!x.run.length && !x.free.length){ if(x.off.length) quiet.push(p[1]); return; }
       h+='<div class="fc-pg"><div class="fc-pgh"><span class="fc-pb" style="background:'+p[3]+'">'+p[1]+'</span>'
-        +'<span class="fc-pgn">out '+x.run.length+' · free '+x.free.length+'</span></div>';
+        +'<span class="fc-pgn">free '+x.free.length+' · out '+x.run.length+'</span></div>';
+      /* §freeFirst · เรือว่างก่อน */
+      h+='<div class="fc-rl fr"><span class="rn"><i class="dot"></i>Free</span><span class="bs">'
+        +(x.free.length?x.free.map(function(o){ return fcChip(o.b,o.c,'free'); }).join('')
+                       :'<span class="none">&mdash; none</span>')+'</span></div>';
       var byR={}; x.run.forEach(function(o){ var k=o.c.chr?'__chr':o.c.rid; (byR[k]=byR[k]||[]).push(o); });
       Object.keys(byR).forEach(function(k){ var arr=byR[k], c0=arr[0].c;
         h+='<div class="fc-rl"><span class="rn"><i style="background:'+(k==='__chr'?'#6B289A':c0.color)+'"></i>'
           +(k==='__chr'?('&#9875; Charter'+(c0.ag?(' · <em>'+e(c0.ag)+'</em>'):'')):e(c0.routeFull))+'</span>'
           +'<span class="bs">'+arr.map(function(o){ return fcChip(o.b,o.c); }).join('')+'</span></div>'; });
-      h+='<div class="fc-rl fr"><span class="rn"><i class="dot"></i>Available</span><span class="bs">'
-        +(x.free.length?x.free.map(function(o){ return fcChip(o.b,o.c,'free'); }).join('')
-                       :'<span class="none">&mdash; none</span>')+'</span></div></div>';
+      h+='</div>';
     });
     if(quiet.length) h+='<div class="fc-quiet">'+quiet.join(' · ')+' &mdash; no boats ready</div>';
     cells+=h+'</div>';
@@ -8541,15 +8749,165 @@ function fcMonthHtml(){
     +['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(w){ return '<div class="fc-wh">'+w+'</div>'; }).join('')
     +cells+'</div></div>';
 }
+/* ══ §fcMob (2026-10-13) · Fleet Calendar บนโทรศัพท์ ══════════════════════════════════
+   ที่มา · เจ้าของ "ขอดูว่าถ้าไปอยู่ในโทรศัพท์จะเป็นอย่างไร" → mockup → "ลงแอปจริง"
+   สองมุมมอง · By day = เลือกวันจากแถบ 7 วัน แล้วไล่ดูทีละท่า (เรือว่างก่อน → โปรแกรม → ลำ)
+              By boat = ตารางลำ × 7 วัน แยกตามท่าที่ลำอยู่วันแรก · แถว Free ขึ้นก่อน ลำที่ว่างขึ้นก่อน
+   ข้อมูลทุกช่องมาจาก fcCell / fcLoadMap ตัวเดียวกับจอคอม · ไม่มีกติกาใหม่ */
+var FC_MOB_BP=700;
+function fcIsMobile(){ try{ return (window.innerWidth||1200)<=FC_MOB_BP; }catch(_){ return false; } }
+(function(){ try{
+  var was=null, t=null;
+  window.addEventListener('resize', function(){
+    clearTimeout(t); t=setTimeout(function(){
+      var now=fcIsMobile(); if(was===null){ was=now; return; }
+      if(now!==was){ was=now; var v=document.getElementById('view-fleetcal');
+        if(v && v.offsetParent!==null && typeof renderFleetCal==='function') renderFleetCal(); }
+    }, 180); });
+}catch(_){} })();
+window.fcMobMode=function(m){ _fc.mob=(m==='boat')?'boat':'day'; renderFleetCal(); };
+window.fcMobDay=function(ds){ _fc.sel=ds; renderFleetCal(); };
+window.fcMobShift=function(d){ _fc.mfrom=fcAddDays(_fc.mfrom||fcToday_(), (+d||0)*7);
+  _fc.sel=_fc.mfrom; renderFleetCal(); };
+window.fcMobToday=function(){ _fc.mfrom=fcToday_(); _fc.sel=_fc.mfrom; renderFleetCal(); };
+function fcMobileHtml(){
+  var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var TODAY=fcToday_();
+  if(!_fc.mob) _fc.mob='day';
+  if(!_fc.mfrom) _fc.mfrom=TODAY;
+  var days=[], i; for(i=0;i<7;i++) days.push(fcAddDays(_fc.mfrom,i));
+  if(!_fc.sel || days.indexOf(_fc.sel)<0) _fc.sel=days[0];
+  var boats=fcBoats(), load=fcLoadMap(days), memo={};
+  var C={}; days.forEach(function(ds){ C[ds]={}; boats.forEach(function(b){ C[ds][b.id]=fcCell(b,ds,load,memo); }); });
+  var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'], MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var piers=FC_PIER.filter(function(p){ return p[0]!=='shop' && p[0]!=='other'; });
+  var pierOf=function(c){ return (c.k==='run')?(c.rpier||c.pier):c.pier; };
+  var freeOn=function(ds){ var n=0; boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free' && fcPierOn(c.pier)) n++; }); return n; };
+  var d0=new Date(days[0]+'T00:00:00'), d6=new Date(days[6]+'T00:00:00');
+  var rng=d0.getDate()+(d0.getMonth()!==d6.getMonth()?(' '+MO[d0.getMonth()]):'')+' – '+d6.getDate()+' '+MO[d6.getMonth()]+' '+d6.getFullYear();
+  var h='<div class="fm"><div class="fm-top">'
+    /* §fcMob2 (2026-10-13) · ภาพจากโทรศัพท์จริง · ปุ่ม ☰ / … ของแถบบนแอปลอยทับมุมขวา ปุ่ม Today หายไปใต้มัน
+       ย้าย Today ลงไปแถวสัปดาห์ · หัวเว้นขวาให้ปุ่มของแอป · LOVE ANDAMAN มีบนแถบแอปอยู่แล้ว ไม่ต้องซ้ำ */
+    +'<div class="fm-hd"><span class="br"><b>FLEET CALENDAR</b></span></div>'
+    +'<div class="fm-seg"><button class="'+(_fc.mob==='day'?'on':'')+'" onclick="fcMobMode(\'day\')">By day</button>'
+      +'<button class="'+(_fc.mob==='boat'?'on':'')+'" onclick="fcMobMode(\'boat\')">By boat</button></div>'
+    +'<div class="fm-wk"><button aria-label="Previous week" onclick="fcMobShift(-1)">&lsaquo;</button><span class="rg">'+rng+'</span>'
+      +'<button aria-label="Next week" onclick="fcMobShift(1)">&rsaquo;</button>'
+      +'<button class="fm-btn fm-tdy" onclick="fcMobToday()">Today</button></div>';
+  if(_fc.mob==='day'){
+    h+='<div class="fm-days">'+days.map(function(ds){ var dt=new Date(ds+'T00:00:00'), f=freeOn(ds);
+      return '<button class="fm-day'+(ds===_fc.sel?' on':'')+(ds===TODAY?' t':'')+'" onclick="fcMobDay(\''+ds+'\')">'
+        +'<span class="w">'+WD[dt.getDay()]+'</span><span class="d">'+dt.getDate()+'</span>'
+        +'<span class="n'+(f?'':' z')+'">'+f+' free</span></button>'; }).join('')+'</div>';
+  }
+  h+='</div><div class="fm-body">';
+  h+='<div class="fm-pills"><button class="fm-pill'+(_fc.pier==='all'?' on':'')+'" onclick="fcSetPier(\'all\')">All piers</button>'
+    +FC_PIER.filter(function(p){ return p[0]!=='other'; }).map(function(p){
+      return '<button class="fm-pill'+(_fc.pier===p[0]?' on':'')+'" onclick="fcSetPier(\''+p[0]+'\')">'+e(p[2])+'</button>'; }).join('')+'</div>';
+
+  if(_fc.mob==='day'){
+    var ds=_fc.sel, nRun=0, nPax=0, nOver=0, nFree=freeOn(ds);
+    boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k!=='run' || !fcPierOn(pierOf(c))) return;
+      nRun++; nPax+=(c.pax||0); if(fcIsOver(b,c)) nOver++; });
+    h+='<div class="fm-tiles"><div class="fm-tile g"><div class="k">Free boats</div><div class="v">'+nFree+'</div></div>'
+      +'<div class="fm-tile"><div class="k">Running</div><div class="v">'+nRun+' <small>· '+nPax+' pax</small></div></div>'
+      +'<div class="fm-tile'+(nOver?' r':'')+'"><div class="k">Overbooked</div><div class="v">'+nOver+'</div></div></div>';
+    piers.forEach(function(p){
+      var pk=p[0]; if(!fcPierOn(pk)) return;
+      var free=[], run=[], off=[];
+      boats.forEach(function(b){ var c=C[ds][b.id];
+        if(c.k==='run' && pierOf(c)===pk) run.push({b:b,c:c});
+        else if(c.k==='free' && c.pier===pk) free.push({b:b,c:c});
+        else if(c.k==='off' && c.pier===pk) off.push(b); });
+      if(!free.length && !run.length && !off.length) return;
+      h+='<section class="fm-card"><div class="fm-ph"><span class="pb" style="background:'+p[3]+'">'+p[1]+'</span>'+e(p[2])
+        +'<span class="r"><span class="f'+(free.length?'':' z')+'">'+free.length+' free</span> · '+run.length+' out</span></div>';
+      h+='<div class="fm-free'+(free.length?'':' z')+'"><div class="t">Free at pier'+(free.length?'':' · none')+'</div>'
+        +(free.length?('<div class="l">'+free.map(function(o){ return '<span class="fm-av">'+e(o.b.name)+' <small>'+(o.b.cap||0)+' seats</small></span>'; }).join('')+'</div>')
+                     :'<div class="s">Every boat here is assigned or unavailable on this day</div>')+'</div>';
+      var byR={}, order=[];
+      run.forEach(function(o){ var k=o.c.chr?'__chr':o.c.rid; if(!byR[k]){ byR[k]=[]; order.push(k); } byR[k].push(o); });
+      order.sort(function(a,b){ if(a==='__chr'||b==='__chr') return a===b?0:(a==='__chr'?1:-1);
+        return (typeof laRouteOrdCmp==='function')?laRouteOrdCmp(a,b):0; });
+      order.forEach(function(k){ var arr=byR[k], c0=arr[0].c, ov=arr.reduce(function(s2,o){ return s2+Math.max(0,(o.c.pax||0)-(o.b.cap||0)); },0);
+        h+='<div class="fm-pg'+(ov?' ov':'')+'"><div class="t"><i style="background:'+(k==='__chr'?'#7C3AED':c0.color)+'"></i>'
+          +(k==='__chr'?'Charter':e(c0.routeFull))+(ov?('<span class="tag">+'+ov+' over</span>'):'')+'</div>'
+          +arr.map(function(o){ var cap=o.b.cap||0, pax=o.c.pax||0, held=o.c.chr&&!pax, pct=fcPct(pax,cap);
+            return '<div class="fm-b"><span class="nm">'+e(o.b.name)+'</span><span class="bar"><i style="width:'
+              +(held?100:Math.max(pax?6:100,Math.min(100,pct)))+'%;background:'+(held?'#7C3AED':(o.c.chr?'#7C3AED':fcFill(pct)))+'"></i></span>'
+              +'<span class="n" style="color:'+(held||o.c.chr?'#6D28D9':fcInk(pct))+'">'+(held?'Held':(pax+'<small>/'+cap+'</small>'))+'</span></div>'; }).join('')
+          +'</div>'; });
+      if(off.length) h+='<div class="fm-note">Out of service '+off.length+' · '+off.map(function(b){ return e(b.name); }).join(' · ')+'</div>';
+      h+='</section>';
+    });
+    if(fcPierOn('shop')){ var shop=boats.filter(function(b){ return C[ds][b.id].pier==='shop'; });
+      if(shop.length) h+='<section class="fm-card"><div class="fm-ph"><span class="pb" style="background:#854F0B">SHOP</span>In shop'
+        +'<span class="r">'+shop.length+'</span></div><div class="fm-note" style="border-top:0">'+shop.map(function(b){ return e(b.name); }).join(' · ')+'</div></section>'; }
+  } else {
+    var cell=function(b,c){
+      if(c.k==='free') return '<div class="fm-gc" style="background:#DCFCE7;border-color:#4ADE80;color:#065F46" title="Free at pier">FREE</div>';
+      if(c.k==='off') return '<div class="fm-gc" style="background:#F3F4F6;border:1px dashed #9CA3AF;color:#6B7280" title="Unavailable">SHOP</div>';
+      var cap=b.cap||0, pax=c.pax||0, held=c.chr&&!pax, pct=fcPct(pax,cap);
+      var bg='#F8FAFC', bd='#E5E7EB', fg='#6B7280';
+      if(c.chr){ bg='#F5F3FF'; bd='#C4B5FD'; fg='#6D28D9'; }
+      else if(pax>cap&&cap){ bg='#FEE2E2'; bd='#FCA5A5'; fg='#B91C1C'; }
+      else if(pct>=90){ bg='#FFEDD5'; bd='#FDBA74'; fg='#C2410C'; }
+      else if(pct>=50){ bg='#FEF3C7'; bd='#FCD34D'; fg='#92400E'; }
+      else if(pax>0){ bg='#ECFEFF'; bd='#A5F3FC'; fg='#0E7490'; }
+      var code=rcode(c);
+      return '<div class="fm-gc" style="background:'+bg+';border-color:'+bd+';color:'+fg+'" title="'+e(c.chr?'Charter':c.routeFull)+' · '+(held?'held':(pax+'/'+cap))+'">'
+        +e(code)+'<span>'+(held?'held':pax)+'</span></div>';
+    };
+    /* รหัสโปรแกรมในช่องแคบ · ตัวอักษรท่า + ลำดับใน Program Config (T1 T2 … V1 …) · ไม่ซ้ำกันแน่นอน
+       ตัวย่อจากชื่อ (fcAbbr) ชนกัน · "Similan … Speedboat" กับ "… Catamaran" ได้ "S" ทั้งคู่ */
+    var RC={};
+    FC_PIER.forEach(function(p){ var L=String(p[1]||'?').charAt(0), n=0;
+      (typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.pier===p[0]; })
+        .sort(function(a,b){ return (typeof laRouteOrdCmp==='function')?laRouteOrdCmp(a,b):0; })
+        .forEach(function(r){ RC[r.id]=L+(++n); }); });
+    var rcode=function(c){ return c.chr?'CH':(RC[c.rid]||fcAbbr(c.routeFull||'')); };
+    var codes={};
+    h+='<div class="fm-card" style="padding:8px 8px 10px"><div class="fm-g"><div class="fm-gh" style="text-align:left;padding-left:4px">'+rng.replace(/ \d{4}$/,'')+'</div>'
+      +days.map(function(ds){ var dt=new Date(ds+'T00:00:00'); return '<div class="fm-gh'+(ds===TODAY?' t':'')+'">'+WD[dt.getDay()]+'<b>'+dt.getDate()+'</b></div>'; }).join('');
+    var dormAll=[];
+    piers.concat([['shop','SHOP','In shop','#854F0B']]).forEach(function(p){
+      var pk=p[0]; if(!fcPierOn(pk)) return;
+      var list=boats.filter(function(b){ return C[days[0]][b.id].pier===pk; });
+      var dorm=list.filter(function(b){ return days.every(function(ds){ return C[ds][b.id].k==='off'; }); });
+      list=list.filter(function(b){ return dorm.indexOf(b)<0; });
+      dorm.forEach(function(b){ dormAll.push(b); });
+      if(!list.length) return;
+      var rank=function(b){ var c=C[days[0]][b.id]; return c.k==='free'?0:c.k==='run'?1:2; };
+      list.sort(function(a,b){ return (rank(a)-rank(b)) || String(a.name).localeCompare(String(b.name)); });
+      h+='<div class="fm-gp"><span class="pb" style="background:'+p[3]+'">'+p[1]+'</span>'+e(p[2])+'</div>';
+      if(pk!=='shop') h+='<div class="fm-gf">Free</div>'+days.map(function(ds){ var n=0;
+          boats.forEach(function(b){ var c=C[ds][b.id]; if(c.k==='free' && c.pier===pk) n++; });
+          return '<div class="fm-gfc'+(n?'':' z')+'">'+n+'</div>'; }).join('');
+      list.forEach(function(b){
+        h+='<div class="fm-gb"><span>'+e(b.name)+'</span><small>'+(b.cap||0)+' seats</small></div>'
+          +days.map(function(ds){ var c=C[ds][b.id]; if(c.k==='run') codes[rcode(c)]=c.chr?'Charter':(c.routeFull||''); return cell(b,c); }).join('');
+      });
+      h+='<div class="fm-sep"></div>';
+    });
+    h+='</div>'+(dormAll.length?('<div style="font-size:12px;color:#6B7280;padding:6px 4px 0">Out of service all week · '+dormAll.map(function(b){ return e(b.name); }).join(' · ')+'</div>'):'')+'</div>';
+    var ks=Object.keys(codes).sort(function(a,b){ var x=a.replace(/\d+$/,''), y=b.replace(/\d+$/,'');
+      return x===y ? ((+a.slice(x.length)||0)-(+b.slice(y.length)||0)) : (x==='CH'?1:y==='CH'?-1:x.localeCompare(y)); });
+    if(ks.length) h+='<div class="fm-card fm-lg">'+ks.map(function(k){ return '<span><b>'+e(k)+'</b> '+e(codes[k])+'</span>'; }).join('')+'</div>';
+  }
+  h+='<div class="fm-ro">Read-only · assign boats in Boat Operation</div></div></div>';
+  return h;
+}
 function renderFleetCal(){
   fcInit();
   var host=document.getElementById('fc-host'); if(!host) return;
   var TODAY=fcToday_(), boats=fcBoats();
   var load=fcLoadMap([TODAY]), memo={};
-  var nRun=0,nFree=0,nOff=0;
+  /* §fcMob · จอโทรศัพท์ใช้มุมมองของตัวเอง (By day / By boat) · ตาราง 14 คอลัมน์อ่านไม่ได้ในจอ 390 */
+  if(fcIsMobile()){ host.innerHTML=FC_CSS+fcMobileHtml(); return; }
+  var nRun=0,nFree=0,nOff=0,nOver=0;
   boats.forEach(function(b){ var c=fcCell(b,TODAY,load,memo);
     if(!fcPierOn(c.pier)) return;
-    if(c.k==='run')nRun++; else if(c.k==='free')nFree++; else nOff++; });
+    if(c.k==='run'){ nRun++; if(fcIsOver(b,c)) nOver++; } else if(c.k==='free')nFree++; else nOff++; });
   var MO=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   var WDL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var isMo=(_fc.mode==='mo');
@@ -8564,9 +8922,10 @@ function renderFleetCal(){
     +'<button class="fc-arw" onclick="fcShift(1)" title="Next period">&rsaquo;</button>'
     +'<button class="fc-tb" onclick="fcToday()">Today</button></div>'
     +'<span class="fc-brand"><i>LOVE ANDAMAN</i><b>FLEET CALENDAR</b></span>'
-    +'<div class="fc-tr"><span class="fc-chip">Deployed <b>'+nRun+'</b></span>'
-    +'<span class="fc-chip g">Available <b>'+nFree+'</b></span>'
+    +'<div class="fc-tr"><span class="fc-chip g">Free at pier <b>'+nFree+'</b></span>'
+    +'<span class="fc-chip">Running <b>'+nRun+'</b></span>'
     +'<span class="fc-chip r">Unavailable <b>'+nOff+'</b></span>'
+    +(nOver?'<span class="fc-chip o">Overbooked <b>'+nOver+'</b></span>':'')
     +'<span class="fc-seg">'
       +'<button class="'+(_fc.mode==='m7'?'on':'')+'" onclick="fcSetMode(\'m7\')">7 days</button>'
       +'<button class="'+(_fc.mode==='m14'?'on':'')+'" onclick="fcSetMode(\'m14\')">14 days</button>'
@@ -8583,10 +8942,13 @@ function renderFleetCal(){
     +'<div class="fc-ch2">'+(isMo?'Month view':('Matrix · '+fcNDays()+' days'))
       +'<span class="pill">'+rangeLbl+'</span>'
       +'<span class="lg">'
-        +(isMo?'<span>each cell: pier → program → boat</span>'
-              :'<span><i style="background:#fff;box-shadow:inset 0 0 0 1px #E0DDD6"></i>available</span>'
-               +'<span><i style="background:repeating-linear-gradient(135deg,#F4F2EE,#F4F2EE 3px,#EDEAE4 3px,#EDEAE4 6px)"></i>unavailable</span>'
-               +'<span><i style="background:#6B289A"></i>charter</span>')
+        +(isMo?'<span>each cell: pier → free boats → program → boat</span>':'')
+        +'<span><i class="fc-lgb" style="background:#CBD5E1"></i>no bookings</span>'
+        +'<span><i class="fc-lgb" style="background:#0891B2"></i>under 50%</span>'
+        +'<span><i class="fc-lgb" style="background:#D97706"></i>50–89%</span>'
+        +'<span><i class="fc-lgb" style="background:#EA580C"></i>90%+</span>'
+        +'<span><i class="fc-lgb" style="background:#DC2626"></i>overbooked</span>'
+        +'<span><i class="fc-lgb" style="background:#7C3AED"></i>charter</span>'
         +'<span>numbers = pax on board / capacity</span>'
         +'<span class="ro">read-only · assign boats in <b>Boat Operation</b></span>'
       +'</span></div>'

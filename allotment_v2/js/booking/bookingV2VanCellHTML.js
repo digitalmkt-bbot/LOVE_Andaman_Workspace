@@ -1,6 +1,9 @@
 function bookingV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, isSplit, isFirst){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if(zone==='NoTransfer'||zone==='NT') return '<span style="font-size:10px;color:#8a8a82;font-style:italic">self-arrive</span>';
+  if(zone==='NoTransfer'||zone==='NT'){
+    const _nr=(!isSplit||isFirst)?bookingV2NtRetSel(bk,date,routeId):'';   /* §ntRetVan */
+    return '<span style="font-size:10px;color:#8a8a82;font-style:italic">self-arrive</span>'+(_nr?('<div style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">'+_nr+'</div>'):'');
+  }
   const _O = (typeof bkOpsRead==='function') ? bkOpsRead(bk, date) : (bk.ops||{});   // per-day van block
   const key = allocKey || bk.id;
   const ai = (typeof key==='string' && key.indexOf('@')>=0) ? +key.split('@')[1] : -1;

@@ -404,6 +404,12 @@ function bookingV2CommitBooking(status){
       /* §ltJoinQty · เก็บจำนวนคนที่ลงจอยจริง · ฝั่งปฏิบัติการอ่านตัวนี้ ไม่ใช่เดาจากหัวทั้งลำ */
       if(a.type==='longtail-join'){ _o.jAd = (info.joinAd!=null)?info.joinAd:null; _o.jChd = (info.joinChd!=null)?info.joinChd:null; }
       return _o;
+    }).filter(function(o){
+      /* §ltStale · หางยาวที่ไม่มีเส้นทางไหนในใบรองรับ หรือ join ที่ 0 คน ไม่บันทึกลงใบ */
+      var k = bookingV2LtAddOnKind(o.type); if(!k) return true;
+      if(!bookingV2LtRoutesApply()){ console.log('[ltStale] save: dropped ' + o.type + ' (no route supports longtail)'); return false; }
+      if(k === 'join' && o.jAd != null && o.jChd != null && ((+o.jAd || 0) + (+o.jChd || 0)) === 0){ console.log('[ltStale] save: dropped longtail-join with 0 pax'); return false; }
+      return true;
     }),
     adjustments: Array.isArray(d.adjustments)
       ? d.adjustments.filter(a => (Number(a.value)||0) > 0)

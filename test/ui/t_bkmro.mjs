@@ -1,0 +1,233 @@
+// §bkMro · Booking · By trip บนมือถือ สำหรับผู้ใช้ดูได้อย่างเดียว
+// ที่มา (2026-10-15) · owner: "User ที่ดูได้อย่างเดียว · โหมดจัดรถเรือไม่ต้องขึ้น · ชื่อ Agent ไม่ต้องแสดง · หมายถึงในหน้าโทรศัพท์" + mockup → "ทำเลย"
+// กัน
+//   1 มือถือ + ดูอย่างเดียว → เปิด · ซ่อนแท็บ Seat Locks/รออนุมัติ/Cancellations/All · + New booking · การ์ดโหมด Van/Boat/Re-confirm · Seat Lock · ตาราง
+//     · การ์ด Programmes / Boats running / ค้นหา / Notice ยังอยู่ · ป้ายดูอย่างเดียว
+//   2 การ์ดต่อใบ = จำนวนแถวในตาราง · ไม่มีชื่อเอเจนต์ ไม่มี ฿ · ไม่มีปุ่มอื่นนอกจากการ์ด · เวลา/เรือตรงกับแถว
+//   3 แตะการ์ด → แผ่นรายละเอียด (voucher · ชื่อ · ไม่มีปุ่มนอกจากปิด) · ปิดได้
+//   4 จอคอม หรือ ผู้ใช้แก้ไขได้ → ไม่เปิด (ตารางเดิม) · 5 อยู่แท็บ All แล้วเปิด → กลับ By trip · 6 ไม่มี error
+// รอบ 2 (owner ส่งภาพมือถือจริง: "ยังไม่เหมือน Mockup · Calendar ให้เหลือแค่ปฏิทิน · มันโยกไปมาได้")
+//   7 ไม่มีอะไรล้นจอ (360px) ทั้ง By trip และ Calendar · ยกเว้นของในแถบเลื่อนของตัวเอง · หัวไม่ตรึง (sticky) แล้ว
+//   8 หัวแบบ mockup: แท็บ 2 อัน + ป้าย · แถบวันที่ · ยอด booking/pax/ลำ ตรงกับหน้าคอม · Programmes / Boats running วาดใหม่ (การ์ดหน้าคอมซ่อน)
+//   9 ใบยกเลิกพับไว้ท้ายหน้า · รวมทั้งวันตรงกับยอดหน้าคอม · รวมท้ายเส้นทาง
+//  10 Calendar เหลือแค่ปฏิทิน (ไม่มีการ์ดสถิติ / ค่าเฉลี่ย / แผงขวา) · 7 คอลัมน์พอดีจอ · แตะวัน → By trip ของวันนั้น
+// รอบ 3 (owner: "B2C เช็ค ไม่ต้องขึ้นของที่เป็นดูอย่างเดียว · Header กับ Card ซ้อนกันอยู่ · ตัวโปรแกรม ปรับให้กระชับ")
+//  11 ป้าย/แท็บไม่อยู่ใต้ปุ่มลอยมุมขวาบน · .main (ตัวเลื่อนของแอปบนมือถือ) ไม่เลื่อนข้าง
+//  12 Programmes แถวละบรรทัดเดียว (≤ 34px) · 13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีที่แก้ operations ไม่ได้ (คนแก้ได้ยังเห็น)
+// รอบ 4 (owner: "หน้าจอในโทรศัพท์ เลื่อน ๆ อยู่แล้วเด้ง")
+//  14 เลื่อน .main ลงไปแล้ววาดใหม่ (bookingV2Render · bookingV2RenderKeep = ที่ sync / กดกรองเรียก) → ตำแหน่งเลื่อนไม่เปลี่ยน ไม่มี scroll event · กล่องใบยกเลิกที่กางไว้ยังกางอยู่
+//     (ก่อนแก้: เลื่อนไว้ 2000 → วาดใหม่ → 0)
+// รอบ 5 (owner: "ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น · ตัวที่เป็น Card Notice ตัดทิ้ง")
+//  15 ป้ายลอย (ดูอย่างเดียว · มีข้อมูลใหม่ · toast · B2C เช็ค) ไม่ขึ้น · การ์ด B2C ใบใหม่ไม่วาด ไม่ส่งเสียง · ป้ายเซฟไม่สำเร็จยังขึ้น
+//  16 ไปหน้าอื่น → ผิวมือถือปิด (หน้าเช็คอินยังปัดข้างได้ ป้ายลอยกลับมา) · กลับมา Booking → เปิดอีก
+// รอบ 6 (owner: "Boat running ไม่ขึ้น" · เครื่องนั้นเลือกมุมมอง Compact ไว้ · Compact เขียนการ์ดเรือทับเป็นตาราง)
+//  17 เลือก Compact ไว้ → ผิวมือถือยังมี Boats running ครบทุกทริป (Compact ปิดในผิวนี้) · หน้าที่ Compact แปลงไปแล้วก่อนผิวเปิด → วาดใหม่ให้เอง
+//     · จอคอมยังเป็น Compact ตามที่เลือก
+// รอบ 7 (owner: "ถ้ามีเรือออก 2 ลำ Prep แยกเรือไหม · อยากให้แยก")
+//  18 Boats running แยก PREP ตามเรือ · ทุกทริป ผลรวมทุกลำ (รวมแถว "ยังไม่ลงเรือ") = PREP รวมของรอบในการ์ดหน้าคอม ทุกตัว (ภาษา/อาหาร/แพ้/Longtail)
+//     · 16 ก.ย. Phi Phi Bamboo 2 ลำ (Artemis / Oceanus) · 15 ก.ย. 3 ทริป (รอบที่ไม่เหลือใบใช้ PREP รวมเดิม)
+import { open, goView } from './_harness.mjs';
+import fs from 'node:fs';
+let bad = 0;
+const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
+const { page, errors, close } = await open({ blob: process.env.LAD, width: 390, height: 844 });
+await page.evaluate(() => { window.__bkMroForce = true; });
+await goView(page, 'booking', 800);
+await page.evaluate(() => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = '2026-09-16'; bookingV2Render(); }); await page.waitForTimeout(1200);
+const vis = 'e => !!e && getComputedStyle(e).display !== "none" && e.getClientRects().length > 0';
+const S = () => page.evaluate((visSrc) => { const vis = eval(visSrc); const h = document.getElementById('view-booking');
+  const tab = k => vis(h.querySelector('.bk-mro-tabs button[onclick*="\'' + k + '\'"]')) || vis(h.querySelector('.bkv2-utab[onclick*="\'' + k + '\'"]'));
+  const mode = [...h.querySelectorAll('.bt-c')].find(c => c.querySelector('.bt-mrow'));
+  const list = h.querySelector('.bk-mro-l');
+  const rows = [...h.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')];
+  const ags = [...new Set(rows.map(r => { const b = SB_BOOKINGS.find(x => x.id === r.getAttribute('data-al')); const a = b && sbGetAgent(b.agentId); return a && a.name; }).filter(n => n && n.length > 3))];
+  const lt = list ? list.textContent : '';
+  /* ชื่อเอเจนต์บางเจ้าเป็นชื่อเดียวกับโรงแรม/อยู่ในข้อความคำขอ (Club Wyndham · Lamoon Resotel) · นับเฉพาะชื่อที่มีแค่ในช่อง Agency */
+  const iAg = [...h.querySelector('table.t2-mtbl').querySelectorAll('thead th')].findIndex(t => /^agency/i.test(t.textContent.trim()));
+  const restTxt = rows.map(r => [...r.children].filter((c, i) => i !== iAg).map(c => c.textContent).join(' ')).join(' ');
+  const agOnly = ags.filter(n => !restTxt.includes(n));
+  return { on: document.body.classList.contains('bk-mro'), tabs: { cal: tab('cal'), bytrip: tab('bytrip'), all: tab('all'), locks: tab('locks'), appr: tab('approvals'), cancel: tab('cancel') },
+    newbtn: vis(h.querySelector('.bkv2-newbtn2')) || vis(h.querySelector('.bkv2-newbtn')), mode: vis(mode), lock: vis(h.querySelector('.bt-lockc')), table: vis(h.querySelector('.t2-wrap')),
+    prog: vis(h.querySelector('.bt-prog')), boat: vis(h.querySelector('.bt-boat')), mprog: vis(h.querySelector('.bk-mro-pg')), mboat: vis(h.querySelector('.bk-mro-bc')), search: vis(h.querySelector('#bt-q')), notice: vis(h.querySelector('.bt-notice')), ro: vis(h.querySelector('.bk-mro-ro')),
+    cards: list ? list.querySelectorAll('.bk-mro-c').length : 0, rows: rows.length, agHit: agOnly.filter(n => lt.includes(n)), nAg: agOnly.length, agEl: list ? list.querySelectorAll('.t2-ag,[onclick*="AgentColor"]').length : -1, baht: /฿/.test(lt), otherBtns: list ? [...list.querySelectorAll('button')].filter(b => !b.classList.contains('bk-mro-c')).length : -1, tab: _bkV2.tab };
+}, vis);
+let a = await S();
+if (a.on && a.tabs.cal && a.tabs.bytrip && !a.tabs.all && !a.tabs.locks && !a.tabs.appr && !a.tabs.cancel && !a.newbtn && !a.mode && !a.lock && !a.table && !a.prog && !a.boat && a.mprog && a.mboat && a.search && !a.notice && a.ro)
+  ok('1 มือถือ+ดูอย่างเดียว · เหลือแท็บ Calendar/By trip · ไม่มี New booking · ไม่มีการ์ดโหมด Van/Boat/Re-confirm · ไม่มี Seat Lock · ไม่มีตาราง · Programmes/Boats running (วาดใหม่)/ค้นหา อยู่ · การ์ด Notice ตัดทิ้ง · ป้ายดูอย่างเดียว');
+else fail('1 ' + JSON.stringify(a));
+const chk = await page.evaluate(() => { const rows = [...document.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')]; const cards = [...document.querySelectorAll('.bk-mro-c')];
+  const ths = [...document.querySelector('table.t2-mtbl').querySelectorAll('thead th')].map(t => t.textContent.trim().toLowerCase()); const iT = ths.findIndex(x => /^time/.test(x));
+  const bad = []; rows.forEach((r, i) => { const c = cards[i]; if (!c) { bad.push(i); return; } const tm = (r.children[iT].textContent.match(/\d{1,2}[:.]\d{2}/) || [''])[0]; if (tm && !c.querySelector('.tm').textContent.startsWith(tm)) bad.push('tm' + i);
+    const be = r.lastElementChild.querySelector('[title$="เรือที่ขึ้น"]'); const bn = be ? be.getAttribute('title').split(' · ')[0] : ''; if (bn && !c.textContent.includes('→ ' + bn)) bad.push('bt' + i); });
+  return { bad: bad.slice(0, 5), n: rows.length }; });
+if (a.cards === a.rows && a.rows > 0 && a.nAg > 0 && !a.agHit.length && a.agEl === 0 && !a.baht && a.otherBtns === 0 && !chk.bad.length) ok(`2 การ์ด ${a.cards} ใบ = แถวตาราง · เวลา/เรือตรง · ไม่มีชื่อเอเจนต์ (${a.nAg} เจ้าในวันนั้น) · ไม่มี ฿ · ไม่มีปุ่มอื่น`);
+else fail('2 ' + JSON.stringify({ cards: a.cards, rows: a.rows, agHit: a.agHit, baht: a.baht, other: a.otherBtns, chk }));
+// 3 sheet
+await page.evaluate(() => document.querySelectorAll('.bk-mro-c')[2].click()); await page.waitForTimeout(300);
+const sh = await page.evaluate(() => { const s = document.getElementById('bk-mro-sh'); if (!s) return null; const id = [...document.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')][2].getAttribute('data-al'); const b = SB_BOOKINGS.find(x => x.id === id); const ag = sbGetAgent(b.agentId);
+  return { name: s.textContent.includes(b.leadPax), btns: [...s.querySelectorAll('button')].map(x => x.getAttribute('aria-label') || x.textContent), ag: !!(ag && ag.name && ag.name.length > 3 && s.textContent.includes(ag.name)), baht: /฿/.test(s.textContent) }; });
+await page.evaluate(() => document.querySelector('#bk-mro-sh .x').click()); await page.waitForTimeout(150);
+const shGone = await page.evaluate(() => !document.getElementById('bk-mro-sh'));
+if (sh && sh.name && sh.btns.length === 1 && !sh.ag && !sh.baht && shGone) ok('3 แตะการ์ด → แผ่นรายละเอียด (ชื่อลูกค้า · ไม่มีชื่อเอเจนต์/เงิน · มีแค่ปุ่มปิด) · ปิดได้'); else fail('3 ' + JSON.stringify({ sh, shGone }));
+// 7-10 · รอบ 2
+const OVF = `(() => { const vw = document.documentElement.clientWidth, out = [];
+  const scroller = e => { for (let p = e.parentElement; p && p.id !== 'view-booking'; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o === 'auto' || o === 'scroll') return true; } return false; };
+  document.querySelectorAll('#view-booking *').forEach(e => { const b = e.getBoundingClientRect(); if (b.width && b.right > vw + 1 && getComputedStyle(e).display !== 'none' && !scroller(e)) out.push((typeof e.className === 'string' && e.className.slice(0, 30)) || e.tagName); });
+  return { sw: document.documentElement.scrollWidth, vw, out: out.slice(0, 5), n: out.length,
+    sticky: [...document.querySelectorAll('#view-booking .bkv2-topcard,#view-booking .bt-pkh')].filter(e => getComputedStyle(e).position === 'sticky').length }; })()`;
+await page.setViewportSize({ width: 360, height: 800 }); await page.waitForTimeout(500);
+const o7a = await page.evaluate(OVF);
+await page.evaluate(() => bookingV2SwitchTab('cal')); await page.waitForTimeout(800);
+const o7b = await page.evaluate(OVF);
+if (o7a.sw <= o7a.vw && !o7a.n && !o7a.sticky && o7b.sw <= o7b.vw && !o7b.n && !o7b.sticky) ok('7 จอ 360px · By trip และ Calendar ไม่มีอะไรล้นจอ (ไม่โยก) · หัวไม่ตรึงทับหัวแอป');
+else fail('7 ' + JSON.stringify({ o7a, o7b }));
+// 10 calendar
+const c10 = await page.evaluate((visSrc) => { const vis = eval(visSrc); const h = document.getElementById('view-booking');
+  const g = h.querySelector('.bkv2-cal-grid'), vw = document.documentElement.clientWidth;
+  const cell = [...h.querySelectorAll('.bkv2-cal-cell')].find(c => /'(\d{4}-\d{2}-\d{2})'/.test(c.getAttribute('onclick') || '') && !/past/.test(c.className)) || [...h.querySelectorAll('.bkv2-cal-cell')].find(c => /'(\d{4}-\d{2}-\d{2})'/.test(c.getAttribute('onclick') || ''));
+  const d = cell ? /'(\d{4}-\d{2}-\d{2})'/.exec(cell.getAttribute('onclick'))[1] : '';
+  const r = { stats: vis(h.querySelector('.bkv2-stats')), avg: vis(h.querySelector('.bkv2-routes')), side: vis(h.querySelector('.bkv2-selday')), hints: vis(h.querySelector('.bkv2-foot-hints')),
+    grid: vis(g), gw: g ? Math.round(g.getBoundingClientRect().right) : 0, vw, cols: g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0, d, tabs: h.querySelectorAll('.bk-mro-tabs button').length };
+  if (cell) cell.click(); return r; }, vis);
+await page.waitForTimeout(900);
+const c10b = await page.evaluate(() => ({ tab: _bkV2.tab, d: bookingV2Tab2ActiveDate(), sel: _bkV2.selected }));
+if (!c10.stats && !c10.avg && !c10.side && !c10.hints && c10.grid && c10.gw <= c10.vw && c10.cols === 7 && c10.d && c10b.tab === 'bytrip' && c10b.d === c10.d && !c10b.sel)
+  ok(`10 Calendar เหลือแค่ปฏิทิน (ไม่มีการ์ดสถิติ/ค่าเฉลี่ย/แผงขวา) · 7 คอลัมน์พอดีจอ · แตะ ${c10.d} → By trip วันนั้น`);
+else fail('10 ' + JSON.stringify({ c10, c10b }));
+await page.evaluate(() => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = '2026-09-16'; bookingV2Render(); }); await page.waitForTimeout(1000);
+// 8 header
+const c8 = await page.evaluate(() => { const h = document.getElementById('view-booking');
+  const dt = [...h.querySelectorAll('.bt-prog .bt-daytot b')].map(b => +b.textContent);
+  const tl = [...h.querySelectorAll('.bk-mro-tiles b')].map(b => +b.textContent);
+  const bc = h.querySelector('.bt-boat .bt-ct .bt-cnt'); const nb = bc ? +(bc.textContent.match(/\d+/) || [0])[0] : -1;
+  const fams = h.querySelectorAll('.bt-prog .bt-pgf').length, pf = h.querySelectorAll('.bk-mro-pg .bk-mro-pr:not(.sub)').length;
+  const tps = h.querySelectorAll('.bt-boat .bt-tgp').length, mtp = h.querySelectorAll('.bk-mro-bc .bk-mro-tp').length;
+  const chips = [...h.querySelectorAll('.bk-mro-pg .bk-mro-chips button')].map(b => b.textContent.trim());
+  return { dt, tl, nb, fams, pf, tps, mtp, chips, date: !!h.querySelector('.bk-mro-date .dn'), dn: (h.querySelector('.bk-mro-date .dn') || {}).textContent, tabs: h.querySelectorAll('.bk-mro-tabs .seg button').length, ro: !!h.querySelector('.bk-mro-top .bk-mro-hrow .bk-mro-ro') }; });
+if (c8.tabs === 2 && c8.ro && c8.date && c8.dn === '16' && c8.tl[0] === c8.dt[0] && c8.tl[1] === c8.dt[1] && c8.tl[2] === c8.nb && c8.pf === c8.fams && c8.fams > 0 && c8.mtp === c8.tps && c8.chips.length === 4 && c8.chips.every(Boolean))
+  ok(`8 หัวแบบ mockup · แท็บ 2 + ป้าย · วันที่ 16 · ยอด ${c8.tl.join('/')} = หน้าคอม · Programmes ${c8.pf} แถว · Boats running ${c8.mtp} ทริป · ชิปท่า ${c8.chips.join(',')}`);
+else fail('8 ' + JSON.stringify(c8));
+// pier chip works
+await page.evaluate(() => [...document.querySelectorAll('.bk-mro-pg .bk-mro-chips button')].find(b => b.textContent.trim() === 'Tub Lamu').click()); await page.waitForTimeout(700);
+const c8b = await page.evaluate(() => ({ p: _bkV2T2Pier, on: (document.querySelector('.bk-mro-pg .bk-mro-chips button.on') || {}).textContent }));
+await page.evaluate(() => bookingV2Tab2SetPier('all')); await page.waitForTimeout(700);
+if (c8b.p === 'tublamu' && /Tub Lamu/.test(c8b.on || '')) ok('8b แตะชิปท่า → กรองท่าเหมือนหน้าคอม'); else fail('8b ' + JSON.stringify(c8b));
+// 9 cancelled + day totals · 15 ก.ย. มีใบยกเลิก 3 ใบ (หน้าคอมวาดเป็นกล่อง .t2-cxl-row ท้ายทริป ไม่ใช่แถวตาราง)
+await page.evaluate(() => { _bkV2.filterDate = '2026-09-15'; bookingV2Render(); }); await page.waitForTimeout(1000);
+const c9 = await page.evaluate(() => { const h = document.getElementById('view-booking');
+  const cxR = [...h.querySelectorAll('.t2-cxl-row,.t2-ghost-row')];
+  const cx = new Set(cxR.map(r => r.querySelector('[class$="-vc"]').textContent + '|' + r.querySelector('[class$="-cu"]').textContent)).size + h.querySelectorAll('table.t2-mtbl tr.t2-row.t2-cxl[data-al]').length;
+  const det = h.querySelector('.bk-mro-cx'); const inDet = det ? det.querySelectorAll('.bk-mro-c,.bk-mro-cr').length : 0;
+  const agN = [...new Set(cxR.map(r => (r.querySelector('.t2-cxl-ag,.t2-ghost-ag') || {}).textContent).filter(n => n && n.length > 3))];
+  const dTxt = det ? det.textContent : ''; const leak = agN.filter(n => dTxt.includes(n)); const baht = /฿/.test(dTxt);
+  const outCx = [...h.querySelectorAll('.bk-mro-rt .bk-mro-c.cx')].length;
+  const dt = [...h.querySelectorAll('.bt-prog .bt-daytot b')].map(b => +b.textContent);
+  const f = (h.querySelector('.bk-mro-dt .f') || {}).textContent || ''; const m = f.match(/(\d+) ใบ · (\d+) คน/);
+  const g = [...h.querySelectorAll('.bk-mro-dt .g b')].map(b => +b.textContent);
+  const rf = h.querySelectorAll('.bk-mro-rf').length, bands = h.querySelectorAll('table.t2-mtbl tr.t2-pband').length;
+  return { cx, inDet, outCx, agN: agN.length, leak, baht, open: det ? det.open : null, dt, f, n: m ? [+m[1], +m[2]] : null, gsum: g.reduce((a, b) => a + b, 0), rf, bands }; });
+if (c9.cx > 0 && c9.inDet === c9.cx && !c9.outCx && c9.open === false && !c9.leak.length && !c9.baht && c9.n && c9.n[1] === c9.dt[1] && c9.gsum === c9.dt[1] && c9.rf >= 1 && c9.rf <= c9.bands)
+  ok(`9 15 ก.ย. ใบยกเลิก/ย้ายวัน ${c9.cx} ใบพับไว้ท้ายหน้า (ไม่มีชื่อเอเจนต์ ${c9.agN} เจ้า · ไม่มีค่าปรับ ฿) · รวมทั้งวัน ${c9.n[0]} ใบ ${c9.n[1]} คน = หน้าคอม · รวมท้ายเส้นทาง ${c9.rf}`);
+else fail('9 ' + JSON.stringify(c9));
+// 14 scroll jump (ยังอยู่ 15 ก.ย. ที่มีกล่องใบยกเลิก)
+const c14 = await page.evaluate(async () => { const m = document.querySelector('.main'), out = {};
+  const det = document.querySelector('.bk-mro-cx'); if (det) { det.open = true; await new Promise(r => setTimeout(r, 50)); }
+  m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight - 300); await new Promise(r => setTimeout(r, 150)); out.before = m.scrollTop;
+  let ev = 0; const on = () => ev++; m.addEventListener('scroll', on);
+  bookingV2Render(); out.r1 = m.scrollTop; await new Promise(r => setTimeout(r, 300)); out.r1b = m.scrollTop;
+  bookingV2RenderKeep(); out.r2 = m.scrollTop; await new Promise(r => setTimeout(r, 400)); out.r2b = m.scrollTop;
+  m.removeEventListener('scroll', on); out.ev = ev; out.open = !!(document.querySelector('.bk-mro-cx') || {}).open; out.hadDet = !!det;
+  m.scrollTop = 0; return out; });
+if (c14.before > 500 && [c14.r1, c14.r1b, c14.r2, c14.r2b].every(v => Math.abs(v - c14.before) <= 1) && !c14.ev && c14.hadDet && c14.open)
+  ok(`14 เลื่อนไว้ที่ ${c14.before}px แล้ววาดใหม่ 2 แบบ → ยังอยู่ที่เดิม · ไม่มี scroll event · กล่องใบยกเลิกยังกางอยู่`);
+else fail('14 ' + JSON.stringify(c14));
+await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
+// 11 header vs floating buttons · 12 compact programmes
+const c11 = await page.evaluate(() => { const tb = document.querySelector('.topbar').getBoundingClientRect(), mn = document.querySelector('.main');
+  const hit = e => { const r = e.getBoundingClientRect(); return r.right > tb.left && r.left < tb.right && r.bottom > tb.top && r.top < tb.bottom; };
+  const els = [...document.querySelectorAll('.bk-mro-top .bk-mro-ro, .bk-mro-top .seg button, .bk-mro-date button, .bk-mro-date .mid')];
+  const rows = [...document.querySelectorAll('.bk-mro-pg .bk-mro-pr')].map(e => Math.round(e.getBoundingClientRect().height));
+  return { n: els.length, hit: els.filter(hit).map(e => e.className || e.textContent), mainSW: mn.scrollWidth, mainCW: mn.clientWidth, rows }; });
+if (c11.n >= 4 && !c11.hit.length && c11.mainSW <= c11.mainCW) ok('11 ป้ายดูอย่างเดียว / แท็บ / แถบวันที่ ไม่ซ้อนกับปุ่มลอยมุมขวาบน · .main ไม่เลื่อนข้าง'); else fail('11 ' + JSON.stringify(c11));
+if (c11.rows.length && c11.rows.every(h => h <= 34)) ok(`12 Programmes แถวละบรรทัดเดียว (${c11.rows.join('/')}px)`); else fail('12 ' + JSON.stringify(c11.rows));
+// 13 B2C check box
+/* บูต sync (01-auth-sync.js) จบก่อนนิยามฟังก์ชันนี้เมื่อรันบน localhost · ดึงตัวฟังก์ชันจริงจากไฟล์มารันในหน้า */
+const B2C_SRC = (() => { const f = fs.readFileSync(new URL('../../allotment_v2/js/01-auth-sync.js', import.meta.url), 'utf8');
+  const i = f.indexOf('function _laB2CIssues(h){'), j = f.indexOf('window._laB2CIssues=_laB2CIssues;'); if (i < 0 || j < i) throw new Error('_laB2CIssues not found'); return f.slice(i, j); })();
+await page.evaluate(src => { window._laB2CIssues = new Function('var _LA_B2CI_KEY="la_b2c_issue_hide_t"; function esc(s){return String(s);} ' + src + ' return _laB2CIssues;')(); }, B2C_SRC);
+const c13 = await page.evaluate(() => { const real = window.laCanEditArea; const out = {};
+  window.laCanEditArea = () => false; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ro = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = () => true; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ed = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = () => false; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ro2 = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = real; return out; });
+if (!c13.ro && c13.ed && !c13.ro2) ok('13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีดูอย่างเดียว · บัญชีที่แก้ได้ยังเห็น'); else fail('13 ' + JSON.stringify(c13));
+// 5 tab all → back to bytrip
+await page.evaluate(() => { _bkV2.tab = 'all'; bookingV2Render(); }); await page.waitForTimeout(700); const t5 = await page.evaluate(() => _bkV2.tab);
+// 15 floating notices
+const ALERT_SRC = (() => { const f = fs.readFileSync(new URL('../../allotment_v2/js/01-auth-sync.js', import.meta.url), 'utf8');
+  const i = f.indexOf('function _laB2CAlert(list){'), e = '}); _laBeep(); }', j = f.indexOf(e, i); if (i < 0 || j < i) throw new Error('_laB2CAlert not found'); return f.slice(i, j + e.length); })();
+const c15 = await page.evaluate(src => { const out = {}; let drawn = 0, beep = 0;
+  const A = new Function('onReady', '_laBeep', src + ' return _laB2CAlert;')(() => drawn++, () => beep++);
+  ['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => { const d = document.createElement('div'); d.id = id; d.textContent = 'x'; d.style.position = 'fixed'; document.body.appendChild(d); });
+  const vis = id => getComputedStyle(document.getElementById(id)).display !== 'none';
+  out.on = { viewonly: vis('la-viewonly'), refresh: vis('la-refresh'), toast: vis('la-toast'), stw: vis('la-savetoast-wrap'), err: vis('la-saveerr') };
+  A([{ pax: 2, total: 1, date: '2026-09-16' }]); out.drawnOn = drawn; out.beepOn = beep;
+  document.body.classList.remove('bk-mro'); A([{ pax: 2, total: 1, date: '2026-09-16' }]); out.drawnOff = drawn; document.body.classList.add('bk-mro');
+  return out; }, ALERT_SRC);
+if (!c15.on.viewonly && !c15.on.refresh && !c15.on.toast && !c15.on.stw && c15.on.err && c15.drawnOn === 0 && c15.beepOn === 0 && c15.drawnOff === 1)
+  ok('15 ป้ายลอย (ดูอย่างเดียว / มีข้อมูลใหม่ / toast) ไม่ขึ้น · การ์ด B2C ใบใหม่ไม่วาด ไม่ส่งเสียง · ป้ายเซฟไม่สำเร็จยังขึ้น · นอกผิวนี้การ์ด B2C ยังวาด');
+else fail('15 ' + JSON.stringify(c15));
+// 16 other page → off · back → on
+await goView(page, 'dashboard', 700);
+const c16a = await page.evaluate(() => ({ on: document.body.classList.contains('bk-mro'), ox: getComputedStyle(document.querySelector('.main')).overflowX, vo: getComputedStyle(document.getElementById('la-viewonly')).display }));
+await goView(page, 'booking', 900);
+const c16b = await page.evaluate(() => ({ on: document.body.classList.contains('bk-mro'), list: !!document.querySelector('#view-booking .bk-mro-l, #view-booking .bk-mro-top') }));
+['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => page.evaluate(i => document.getElementById(i)?.remove(), id));
+if (!c16a.on && c16a.ox !== 'hidden' && c16a.vo !== 'none' && c16b.on && c16b.list) ok('16 ไปหน้าอื่น → ผิวมือถือปิด (.main ปัดข้างได้ · ป้ายลอยกลับมา) · กลับ Booking → เปิดอีก');
+else fail('16 ' + JSON.stringify({ c16a, c16b }));
+// 18 per-boat PREP
+const P18 = () => page.evaluate(() => {
+  const parse = el => { const o = {}; (el ? [...el.querySelectorAll('.bt-pc')] : []).forEach(c => { const t = c.textContent.replace(/\s+/g, ' ').trim(); let m;
+    if ((m = /^(.+?) · (\d+)$/.exec(t))) o[m[1]] = (o[m[1]] || 0) + +m[2]; else if ((m = /^⚠ (\d+) allergy$/.exec(t))) o.allergy = (o.allergy || 0) + +m[1]; else if ((m = /^(\d+) (\w+)$/.exec(t))) o[m[2]] = (o[m[2]] || 0) + +m[1]; }); return o; };
+  const tps = [...document.querySelectorAll('#view-booking .bt-boat .bt-tgp')], mtp = [...document.querySelectorAll('#view-booking .bk-mro-bc .bk-mro-tp')];
+  return tps.map((tp, i) => { const want = parse(tp.querySelector('.bt-prep')); const got = {}; const bx = mtp[i] ? [...mtp[i].querySelectorAll('.bx')] : [];
+    bx.forEach(b => { const o = parse(b); Object.keys(o).forEach(k => got[k] = (got[k] || 0) + o[k]); });
+    const keys = [...new Set(Object.keys(want).concat(Object.keys(got)))]; return { n: bx.length, un: mtp[i] ? !!mtp[i].querySelector('.bn.un') : false, ok: keys.every(k => want[k] === got[k]), want, got }; }); });
+await page.evaluate(() => { _bkV2.filterDate = '2026-09-16'; bookingV2Render(); }); await page.waitForTimeout(900);
+const p18a = await P18();
+/* ใบหนึ่งยังไม่ลงเรือ (แก้ในหน่วยความจำ ไม่เซฟ) → ต้องมีแถว "ยังไม่ลงเรือ" และผลรวมยังตรง */
+const unId = await page.evaluate(() => { const id = [...document.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')].map(t => t.getAttribute('data-al')).find(i => { const bb = SB_BOOKINGS.find(x => x.id === i); return bb && !(bb.trips || []).some(t => t.bookingMode === 'charter'); }); const b = SB_BOOKINGS.find(x => x.id === id);
+  const o = bkOpsFor(b, '2026-09-16'); window.__t18 = { id, was: o.boatId }; o.boatId = null; bookingV2Render(); return id; });
+await page.waitForTimeout(900);
+const p18u = await P18();
+await page.evaluate(() => { const b = SB_BOOKINGS.find(x => x.id === window.__t18.id); bkOpsFor(b, '2026-09-16').boatId = window.__t18.was; bookingV2Render(); }); await page.waitForTimeout(600);
+await page.evaluate(() => { _bkV2.filterDate = '2026-09-15'; bookingV2Render(); }); await page.waitForTimeout(900);
+const p18b = await P18();
+const all18 = p18a.concat(p18b, p18u);
+if (all18.length && all18.every(x => x.ok && (x.n >= 1 || !Object.keys(x.want).length)) && p18a.some(x => x.n >= 2) && Object.keys(p18a[0].want).length && p18u.some(x => x.un))
+  ok(`18 PREP แยกตามเรือ · ${all18.length} ทริป · ผลรวมทุกลำ = PREP รวมของรอบ · มีรอบ 2 ลำ (${p18a.map(x => x.n).join('/')} ลำ) · ใบที่ยังไม่ลงเรือขึ้นแถว "ยังไม่ลงเรือ" และยอดยังตรง`);
+else fail('18 ' + JSON.stringify({ p18a, p18b, p18u }));
+// 17 Compact saved on this device
+await page.evaluate(() => { localStorage.setItem('la_bt_view', 'compact'); _bkV2.filterDate = '2026-09-16'; bookingV2Render(); }); await page.waitForTimeout(900);
+const S17 = () => page.evaluate(() => ({ btc: document.body.classList.contains('btc'), tps: document.querySelectorAll('#view-booking .bt-boat .bt-tgp').length,
+  mtp: document.querySelectorAll('#view-booking .bk-mro-bc .bk-mro-tp').length, none: !!document.querySelector('#view-booking .bk-mro-bc .bk-mro-none2'), btcTbl: !!document.querySelector('#view-booking .btc-bt') }));
+const c17a = await S17();
+await page.evaluate(() => { window.__bkMroForce = false; window.bkMroPass(); bookingV2Render(); }); await page.waitForTimeout(900);
+const c17pre = await S17();                                  // ผิวปิด · Compact แปลงหน้าแล้ว
+await page.evaluate(() => { window.__bkMroForce = true; window.bkMroPass(); }); await page.waitForTimeout(1200);
+const c17b = await S17();
+await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(900);
+const c17d = await S17();
+await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => { localStorage.removeItem('la_bt_view'); bookingV2Render(); }); await page.waitForTimeout(900);
+if (!c17a.btc && c17a.mtp > 0 && c17a.mtp === c17a.tps && !c17a.none && !c17a.btcTbl && c17pre.btcTbl && !c17b.btc && c17b.mtp === c17a.mtp && !c17b.btcTbl && c17d.btc && c17d.btcTbl)
+  ok(`17 เลือก Compact ไว้ → ผิวมือถือยังมี Boats running ${c17a.mtp} ทริป · หน้าที่ Compact แปลงแล้วก่อนเปิดผิว → วาดใหม่ได้ครบ · จอคอมยังเป็น Compact`);
+else fail('17 ' + JSON.stringify({ c17a, c17pre, c17b, c17d }));
+// 4 desktop / editor
+await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(600); const d4 = await S();
+await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => { window.__bkMroForce = false; bookingV2Render(); }); await page.waitForTimeout(600); const e4 = await S();
+if (!d4.on && d4.table && d4.tabs.all && !e4.on && e4.table) ok('4 จอคอม (ดูอย่างเดียว) → ตารางเดิม · มือถือแต่แก้ไขได้ → ตารางเดิม'); else fail('4 ' + JSON.stringify({ d4: { on: d4.on, table: d4.table, all: d4.tabs.all }, e4: { on: e4.on, table: e4.table } }));
+if (t5 === 'bytrip') ok('5 อยู่แท็บ All bookings ตอนเปิดผิวมือถือ → พากลับ By trip'); else fail('5 ' + t5);
+const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));
+if (!e1.length) ok('6 ไม่มี error'); else fail('6 ' + e1.slice(0, 3).join(' | '));
+await close();
+console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
