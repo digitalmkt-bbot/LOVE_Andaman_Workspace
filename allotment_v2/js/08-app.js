@@ -12762,7 +12762,7 @@ function vbPrint(internal){
     +'.pier{margin-top:12px;font-size:12px;font-weight:800;padding:5px 9px;color:#fff;border-radius:5px}'
     +'.cd{display:inline-block;font-size:8.5px;font-weight:800;color:#fff;border-radius:3px;padding:0 4px;margin-right:4px}'
     +'.sub{font-size:9px;color:#6B7280}.neg{color:#B42318}.pos{color:#0F7A4E}'
-    +'.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}'
+    +'.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px;align-items:start}'
     +'.words{margin-top:8px;padding:7px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:11px}'
     +'.note{font-size:9.5px;color:#4B5563;line-height:1.6;margin-top:7px}'
     +'.sig{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:30px;page-break-inside:avoid}'
@@ -12822,7 +12822,8 @@ function vbPrint(internal){
       var m=(st.rows||{})[vbRowKey(r)]||{}, C=vbCode(r.routeId);
       var rate=(m.rate!=null?m.rate:vbRateOf(C.c, st))||0, ex=+m.ex||0, cut=+m.cut||0, per=(m.per!=null?m.per:vbPerOf(st,pier))||0;
       var bill=rate+ex-cut, sale=r.pax*per; tb+=bill; tex+=ex; tcut+=cut; tsale+=sale; tpax+=r.pax;
-      if(!cs[C.c]) cs[C.c]={n:0,b:0,col:C.col}; cs[C.c].n++; cs[C.c].b+=bill;
+      if(!cs[C.c]) cs[C.c]={n:0,b:0,col:C.col,pax:0,mix:{}}; cs[C.c].n++; cs[C.c].b+=bill; cs[C.c].pax+=r.pax;
+      var _mk=rate+'|'+ex+'|'+cut; if(!cs[C.c].mix[_mk]) cs[C.c].mix[_mk]={rate:rate,ex:ex,cut:cut,n:0}; cs[C.c].mix[_mk].n++;   /* §vbMixPrint */
       var v=(typeof vehGet==='function')?vehGet(r.vanId):null; vs[(v&&v.name)||r.vanId]=1;
       var rn=((typeof getRoute==='function'?getRoute(r.routeId):null)||{}).name||r.routeId||'';
       var pk=Object.keys(r.areas||{}).map(vbArea).join(', ')||'—', dp=Object.keys(r.drops||{}).map(vbArea).join(', ');
@@ -12838,7 +12839,8 @@ function vbPrint(internal){
     }).join('');
     extras.forEach(function(x){ var n=+x.van||0, bill=n*(+x.rate||0)+(+x.ex||0)-(+x.cut||0), sale=(+x.pax||0)*(+x.per||0);
       tb+=bill; tex+=(+x.ex||0); tcut+=(+x.cut||0); tsale+=sale; tpax+=(+x.pax||0); i++;
-      if(!cs['+']) cs['+']={n:0,b:0,col:'#5B6570'}; cs['+'].n+=n; cs['+'].b+=bill;
+      if(!cs['+']) cs['+']={n:0,b:0,col:'#5B6570',pax:0,mix:{}}; cs['+'].n+=n; cs['+'].b+=bill; cs['+'].pax+=(+x.pax||0);
+      var _xk=(+x.rate||0)+'|'+(+x.ex||0)+'|'+(+x.cut||0); if(!cs['+'].mix[_xk]) cs['+'].mix[_xk]={rate:+x.rate||0,ex:+x.ex||0,cut:+x.cut||0,n:0}; cs['+'].mix[_xk].n+=n;
       body+='<tr class="'+(i%2?'':'z')+'"><td class="l">'+i+'</td><td class="l">'+e(x.date?(x.date.slice(8,10)+'/'+x.date.slice(5,7)):'—')+'</td>'
         +'<td class="l"><span class="cd" style="background:#5B6570">นอก</span><b>'+e(x.note||'รถนอก')+'</b></td><td class="l">'+n+' คัน</td><td>'+(+x.pax||0)+'</td>'
         +'<td>'+N(x.rate)+(n>1?(' ×'+n):'')+'</td><td>'+(+x.ex?N(x.ex):'—')+'</td><td>'+(+x.cut?('-'+N(x.cut)):'—')+'</td><td><b>'+N(bill)+'</b></td>'
@@ -12853,9 +12855,19 @@ function vbPrint(internal){
       +(body||'<tr><td colspan="'+cols+'" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
       +'<tr class="tot"><td></td><td class="l" colspan="3">รวม '+i+' รายการ</td><td>'+tpax+'</td><td>'+N(tb-tex+tcut)+'</td><td>'+N(tex)+'</td><td>'+(tcut?('-'+N(tcut)):'0')+'</td><td>'+N(tb)+'</td>'
       +(IN2?('<td>'+N(tsale)+'</td><td class="'+(pl<0?'neg':'pos')+'">'+(pl<0?'-':'')+N(Math.abs(pl))+'</td>'):'')+'</tr></table>'
-      +'<div class="grid2"><table style="margin:0"><tr><th class="l">ตามรหัส</th><th>เที่ยว</th><th>บาท</th></tr>'
-      +Object.keys(cs).map(function(c){ return '<tr><td class="l"><span class="cd" style="background:'+cs[c].col+'">'+(c==='+'?'นอก':e(c))+'</span>'+e(c==='+'?'รถนอก':(VB_CODE_TH[c]||''))+'</td><td>'+cs[c].n+'</td><td>'+N(cs[c].b)+'</td></tr>'; }).join('')+'</table>'
-      +'<table style="margin:0"><tr><th class="l">สรุป</th><th>บาท</th></tr><tr><td class="l">ค่ารถ</td><td>'+N(tb-tex+tcut)+'</td></tr><tr><td class="l">+ Extra</td><td>'+N(tex)+'</td></tr>'
+      /* §vbMixPrint · owner: "ใบวางบิลที่ปริ้น เพิ่มรายละเอียดส่วนนี้ด้วย" (การ์ดรหัสบนจอ)
+         ที่มาของยอดต่อรหัส · เรต + extra − หัก = ต่อคัน × จำนวนคัน = บาท · เจ้าของรถเช็กตามได้ทีละบรรทัด */
+      +'<div class="grid2"><table style="margin:0"><tr><th class="l">ตามรหัส · ที่มาของยอด</th><th>คัน</th><th>บาท</th></tr>'
+      +Object.keys(cs).map(function(c){ var X=cs[c], L=Object.keys(X.mix||{}).map(function(k){ return X.mix[k]; });
+          L.sort(function(a,b){ return (b.n-a.n)||((b.rate+b.ex-b.cut)-(a.rate+a.ex-a.cut)); });
+          return '<tr class="z"><td class="l"><span class="cd" style="background:'+X.col+'">'+(c==='+'?'นอก':e(c))+'</span><b>'+e(c==='+'?'รถนอก':(VB_CODE_TH[c]||c))+'</b>'
+              +' <span class="sub">'+X.n+' คัน · '+(X.pax||0)+' คน</span></td><td></td><td><b>'+N(X.b)+'</b></td></tr>'
+            + L.map(function(m){ var per=m.rate+m.ex-m.cut;
+                var f=N(m.rate)+(m.ex?(' + '+N(m.ex)):'')+(m.cut?(' − '+N(m.cut)):'')+((m.ex||m.cut)?(' = '+N(per)):'');
+                return '<tr><td class="l" style="padding-left:18px;color:#4B5563">'+(m.rate>0||m.ex||m.cut?f:'<span class="neg">ยังไม่มีเรต</span>')+'</td>'
+                  +'<td style="color:#6B7280">× '+m.n+'</td><td>'+N(per*m.n)+'</td></tr>'; }).join(''); }).join('')
+      +'</table>'
+      +'<table style="margin:0"><tr><th class="l">สรุป</th><th>บาท</th></tr><tr><td class="l">ค่ารถ '+i+' เที่ยว</td><td>'+N(tb-tex+tcut)+'</td></tr><tr><td class="l">+ Extra</td><td>'+N(tex)+'</td></tr>'
       +'<tr><td class="l">− หัก</td><td>'+N(tcut)+'</td></tr><tr class="tot"><td class="l">ยอดวางบิล</td><td>'+N(tb)+'</td></tr></table></div>'
       +'<div class="words"><b>จำนวนเงิน (ตัวอักษร)</b> &nbsp; '+e(typeof pcBahtText==='function'?pcBahtText(tb):'')+'</div>'
       +'<div class="note">คน = ลูกค้าที่ขึ้นรถจริง · ขากลับ = เที่ยวรับกลับจากท่า · โปรดตรวจและเซ็นรับรองยอด แล้วส่งคืนฝ่ายปฏิบัติการ</div>'
