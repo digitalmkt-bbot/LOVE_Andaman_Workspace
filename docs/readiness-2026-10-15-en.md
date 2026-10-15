@@ -59,7 +59,7 @@ Both local databases restored fresh from the 13 Oct dumps; API built from backen
 
 | Step | Result |
 | --- | --- |
-| Dry run, all six importers | exit 0; **no refusal guard tripped** — the 13 Oct copy reads pre-cutover |
+| Dry run, all six importers | exit 0; no refusal guard tripped — **but see the correction below: the guard could not see bookings made on main** |
 | `import:attachments` | 6,460 files named, 6,387 already present, 64 copied, 9 named but absent from legacy's store |
 | `import:legacy` | 5,792 bookings · 5,804 trips · 1,655 seat locks (552 sub-groups) · 489 invoices · 409 payments · 168 pier payments · 53 vans · 5 weather closures |
 | `import:day-money`, `import:pier-office`, `import:users`, `import:addon-services` | exit 0 |
@@ -79,6 +79,17 @@ Both local databases restored fresh from the 13 Oct dumps; API built from backen
   `seed:boats --commit` and `import:legacy --commit --sales --rate-types`: BMP added, all 5 rate
   types present, both agents bound as in legacy; rate types, deployments and boats-per-day verify
   with 0 differences. What still differs is only the P13 lines above.
+
+**Correction — the import guard was blind to bookings made on main (found 15 Oct, fixed, not yet
+shipped).** `legacy-import-guard.ts` treated every booking carrying an `external_id` as a Love Kingdom
+push, and main's own bookings carry their `BK-…` code there, so "no booking made here" was never
+proven. The fix (operation-backend branch `docs/one-time-cutover`) recognises a push by the B2C rule
+(agent `a_b2c` or a `b2c_` id) and honours `--remove`. Run read-only against production, the fixed
+guard REFUSES on exactly **one staff-made booking: `BK-26100428-0Z7P`** (BIG COUNTRY, ฿6,700, travel
+29 Dec, entered on main by Pier.Asst on 13 Oct), **which staff also entered in lk-inbox as
+`BK-26100689-GRA5`**. Importing both would have duplicated it. No invoices, payments or refunds were
+made on main on imported records. Owner decision before cutover: drop main's copy with `--remove`, or
+keep it and drop legacy's. Before cutover day, list every booking made on main and reconcile each one.
 
 **Cutover-day notes from the rehearsal:**
 - The guards refuse a re-import once staff have made bookings, invoices or payments on
