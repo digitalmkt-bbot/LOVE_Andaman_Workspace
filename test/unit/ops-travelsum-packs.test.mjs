@@ -1,4 +1,5 @@
-// §tsPacks · Travel Summary reference pack + slip pack, from server rows.
+// §tsPacks · Travel Summary reference pack + slip pack, from server rows. On the sheet they are
+// two actions beside print (legacy printed them behind the summary), not lists on the page.
 //   node --test test/unit/ops-travelsum-packs.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,36 +35,42 @@ async function run(extra = {}) {
   await h.ctx.window.renderTravelSum();
   return h;
 }
+const btn = (html, k) => new RegExp('data-ops-ts-' + k + '="1"[^>]*>([^<]*)<b>(\\d+)</b>').exec(html);
 
-test('reference pack lists bookings with documents or an agent, with their files', async () => {
-  const { host } = await run();
-  assert.match(host.innerHTML, /Reference pack · 2 bookings · 2 files/);
-  assert.ok(host.innerHTML.includes('voucher-b1.jpg') && host.innerHTML.includes('passport.jpg'));
-  const ref = host.innerHTML.split('data-ops-ts-refpack')[1].split('data-ops-ts-slippack')[0];
-  assert.ok(ref.includes('V-b3') && !ref.includes('V-b2'), 'walk-in without files is left out');
+test('reference pack lists bookings with documents or an agent; the bar shows its file count', async () => {
+  const { host, ctx } = await run();
+  assert.deepEqual(btn(host.innerHTML, 'refpack').slice(1), ['เอกสาร ', '2']);
+  assert.match(host.innerHTML, /data-ops-ts-refpack="1"[^>]*title="[^"]*2 ใบ"/, 'two bookings: b1 (files) and b3 (agent)');
+  assert.doesNotMatch(host.innerHTML, /voucher-b1\.jpg/, 'the file list is not drawn on the page');
+  assert.equal(typeof ctx.laOps.travelRows.printPack, 'function');
 });
 
 test('the reference pack follows the pier scope', async () => {
   const { host } = await run({ _tsPier: 'tublamu' });
-  assert.match(host.innerHTML, /Reference pack · 1 booking · 0 files/);
+  assert.deepEqual(btn(host.innerHTML, 'refpack').slice(1), ['เอกสาร ', '0']);
+  assert.match(host.innerHTML, /data-ops-ts-refpack="1"[^>]*title="[^"]*1 ใบ"/);
 });
 
-test('slip pack asks before reading, then lists every slip file with its payment caption', async () => {
+test('slip pack asks before reading, then counts every slip file of the selection', async () => {
   const h = await run();
-  assert.match(h.host.innerHTML, /Load slips for 2 bookings/, 'b1 paid at the pier, b3 sold on tour');
+  assert.deepEqual(btn(h.host.innerHTML, 'slippack').slice(1), ['โหลดสลิป ', '2'], 'b1 paid at the pier, b3 sold on tour');
   assert.equal(h.calls.filter(([p]) => p.endsWith('/pier-money')).length, 0, 'nothing is read until asked');
   await h.ctx.laOps.travelRows.slipsLoad();
   const reads = h.calls.filter(([p]) => p.endsWith('/pier-money')).map(([p, q]) => p + '?' + q.date).sort();
   assert.deepEqual(reads, ['/v1/bookings/b1/pier-money?' + DATE, '/v1/bookings/b3/pier-money?' + DATE]);
-  const slip = h.host.innerHTML.split('data-ops-ts-slippack')[1];
-  assert.match(slip, /Slip pack · 3 files/);
-  assert.ok(slip.includes('slip-b1.jpg') && slip.includes('Transfer ฿400'));
-  assert.ok(slip.includes('card-b3.jpg') && slip.includes('Card ฿900') && slip.includes('fee ฿27') && slip.includes('Snorkel'));
-  assert.ok(slip.includes('att9'), 'the slip attached straight to the booking');
-  assert.doesNotMatch(slip, /Load slips/);
+  assert.deepEqual(btn(h.host.innerHTML, 'slippack').slice(1), ['สลิป ', '3'], 'transfer slip, card slip, booking slip');
 });
 
-test('a booking paid without a slip is counted from the server no_slip', async () => {
-  const { host } = await run();
-  assert.match(host.innerHTML, /1 booking paid without a slip/);
+test('a booking paid without a slip is named on the slip action, from the server no_slip', async () => {
+  const h = await run();
+  await h.ctx.laOps.travelRows.slipsLoad();
+  assert.match(h.host.innerHTML, /data-ops-ts-slippack="1"[^>]*title="[^"]*1 ใบยังไม่มีสลิป"/);
+});
+
+test('the legacy print does not append packs built from browser bookings in ops mode', async () => {
+  const { ctx } = await run();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsRefPackList('2026-10-14'))), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsSlipPackList('2026-10-14'))), []);
+  ctx.laOps.enabled = () => false;
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsRefPackList('2026-10-14'))), ['legacy']);
 });
