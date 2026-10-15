@@ -81,7 +81,9 @@
   //   (เจอจริง 30 ก.ค. 2026 · เซิร์ฟเวอร์ตีกลับ trips 94→0 — ถ้าไม่มีตัวกันฝั่งนั้น ข้อมูลหายเกลี้ยง)
   _SP.removeItem=function(k){ if(_isLS(this)&&k===LS){ _mem=null; _dirty=false; try{ clearTimeout(_t); }catch(e){} return; } _oDel.call(this,k); };
   _SP.setItem=function(k,v){ if(!_isLS(this)||k!==LS){ return _oSet.call(this,k,v); } _mem=v;   // state blob → memory only (no quota)
-    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; _laEditSeq++; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
+    /* §ckSaveSeq (2026-10-15) · หน้าเช็คอิน (ท่า/รถ) รอ 250ms พอ · ของเดิม 1 วิ คือเวลาที่อีกเครื่องต้องรอเปล่า ๆ ก่อนจะได้เห็น
+       หน้าอื่นคง 1 วิ (พิมพ์ฟอร์มยาว ๆ ต้องรวมการแก้) */
+    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; _laEditSeq++; clearTimeout(_t); _t=setTimeout(function(){ save(v); }, (typeof _laLiveView==='function' && _laLiveView())?250:1000); } };   // view-only users never sync
   // Reclaim quota on devices poisoned by the broken shim: the pre-mem-store ~6MB blob still sitting
   // in real localStorage, the junk 'setItem'/'getItem'/'removeItem' items WebKit created from the old
   // instance assignments, and any oversized _snap_ full copies. All dead weight — SQL is the store.
@@ -295,8 +297,21 @@
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
+    /* ══ §ckSaveSeq (2026-10-15) · owner "เช็คอิน กดแล้วเด้ง ต้องกดใหม่" (สองเครื่องกดสลับกัน) ═════
+       จำลองได้ใน t_cklive2.mjs (NET=400): ติ๊กที่กด "ระหว่างที่การเซฟก่อนหน้ายังไม่ได้คำตอบ" หายถาวร
+         t0    กดใบ 1 → เซฟออกไป (ก้อนมีใบ 1)
+         t0+.4 กดใบ 2 → เขียนลงเครื่อง · ตั้งคิวเซฟรอบหน้า
+         t0+.5 คำตอบเซฟใบ 1 มาถึง → ของเดิมตั้ง _dirty=false ทั้งที่ใบ 2 ยังไม่ได้ออกจากเครื่อง
+               behind (อีกเครื่องเซฟคั่น) → ดึง /api/ck ทันที · คำขอนี้ออกเดินทาง "หลัง" กดใบ 2
+               ด่าน _laEditSeq จึงปล่อยผ่าน · คำตอบไม่มีใบ 2 → ทับใบ 2 ทั้งในเครื่องและใน BASE
+         t0+1.4 คิวเซฟใบ 2 มาถึง · diff เป็นศูนย์ (ถูกทับไปแล้ว) → ไม่เซฟอะไร · ติ๊กหายเงียบ
+       แก้: คำตอบเซฟล้าง _dirty ได้เฉพาะเมื่อไม่มีการแก้เกิดขึ้นระหว่างที่เซฟเดินทาง (เทียบ _laEditSeq)
+            มีการแก้คั่น = ยัง dirty อยู่ · คิวเซฟรอบหน้าจะพาไปเอง · ตัวดึงข้อมูลรอจนกว่าจะเซฟครบ
+       และ "ตามหลังอยู่" (behind) ต้องจำไว้จนกว่าจะได้ดึงจริง (_laCatchup) · ไม่งั้นเซฟรอบถัดไปที่ behind=false
+            จะเห็นของที่รอว่าเป็นเสียงสะท้อนของตัวเอง (§selfEcho) แล้วทิ้ง ทั้งที่ยังไม่เคยดึงของอีกเครื่องมาเลย */
+    var seqS=_laEditSeq;
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=(_laEditSeq!==seqS); _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind) _laCatchup=true; if(_laCatchup){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
@@ -369,6 +384,7 @@
      ตัวนับนี้ตอบข้อนั้น · ถ่ายเลขไว้ก่อนยิง เทียบตอนคำตอบมาถึง ต่างเมื่อไหร่ = ทิ้งคำตอบนั้น
      ⚠ ทิ้งแล้วไม่ต้องไปดึงก้อนเต็มแทน · ของก้อนนั้นเก่าพอกัน · ปล่อยให้รอบถัดไปดึงใหม่ */
   var _laEditSeq=0;
+  var _laCatchup=false;   /* §ckSaveSeq · เซิร์ฟเวอร์บอกว่าเราตามหลังอยู่ และยังไม่ได้ดึงของนั้นมา */
   var _laPending=null, _laLastInput=Date.now();
   /* §ckLive2 · จำว่าของใหม่มารอตั้งแต่เมื่อไหร่ · หน้าเช็คอินใช้ตั้งเพดานเวลารอ
      ตัวกัน "เพิ่งแตะจอ" เป็นความสุภาพ ไม่ใช่กุญแจล็อก · ถ้าไม่มีเพดาน
@@ -523,6 +539,7 @@
          ไม่งั้นเวอร์ชันนั้นหายเงียบจนกว่า poll 10 วิจะเจอ */
       if(!_laPending || (_laPending.version||0) <= VER) _laClearPending();
       _laCkFullAt=Date.now();                         /* §ckDay · นับคิวก้อนเต็มรอบใหม่ */
+      _laCatchup=false;                                            /* §ckSaveSeq */
       var ok = window._laReloadData ? window._laReloadData() : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
       if(window._laRerender) window._laRerender();
@@ -618,6 +635,7 @@
       var okApplied=false;
       try{ okApplied=!!window._laCkApply(date, j.bookings); }catch(e){ okApplied=false; }
       if(!okApplied) return fin(false);              /* ชุด id ไม่ตรง หรือวาดไม่ได้ → ดึงเต็ม */
+      _laCatchup=false;                              /* §ckSaveSeq · ดึงของอีกเครื่องมาแล้ว */
       _laCkSeen=Math.max(_laCkSeen, j.version||0);
       if(_laPending && (_laPending.version||0)<=_laCkSeen){
         _laPending=null; _laPendAt=0;                /* หน้านี้ตามทันแล้ว · ไม่ต้องขึ้นแถบเตือน */
