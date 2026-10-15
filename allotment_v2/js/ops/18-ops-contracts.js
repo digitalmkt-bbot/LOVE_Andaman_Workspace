@@ -43,6 +43,7 @@
     var w=document.getElementById('cttv-wrap');
     if(w&&w.offsetWidth>0){ renderContractTemplates(); return; }
     try{ _cttSig=null; }catch(_){ }
+    try{ prepSample(); }catch(_){ }   /* §ctplSample · fetch the sample's record ahead, paint nothing */
   }
   function redraw(){
     try{ redrawTemplates(); }catch(_){ }
@@ -219,7 +220,7 @@
     if(typeof originals.cttSetSection==='function') window.cttSetSection=function(id,sid,on){if(!enabled())return originals.cttSetSection.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;t.sections=t.sections||{};t.sections[sid]=!!on;return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not save template sections',e);});};
     if(typeof originals.cttSetDefault==='function') window.cttSetDefault=function(id){if(!enabled())return originals.cttSetDefault.apply(this,arguments);return O.queue(function(){return O.post('/v1/contract-templates/'+enc(id)+'/default',{});}).then(function(){return loadTemplates();}).catch(function(e){O.fail('Could not set default contract template',e);});};
     if(typeof originals.cttToggleActive==='function') window.cttToggleActive=function(id){if(!enabled())return originals.cttToggleActive.apply(this,arguments);var t=listTemplates()[id];if(!t)return;return templateEdit(id,'active',!t.active);};
-    if(typeof originals.cttDelete==='function') window.cttDelete=function(id){if(!enabled())return originals.cttDelete.apply(this,arguments);var t=listTemplates()[id];if(!t||!confirm('Delete contract template "'+t.name+'"?'))return;return O.queue(function(){return O.del('/v1/contract-templates/'+enc(id));}).then(function(){delete listTemplates()[id];redraw();}).catch(function(e){O.fail('Could not delete contract template',e);});};
+    if(typeof originals.cttDelete==='function') window.cttDelete=function(id){if(!enabled())return originals.cttDelete.apply(this,arguments);var t=listTemplates()[id];if(!t||!confirm('Delete contract template "'+t.name+'"?'))return;return O.queue(function(){return O.del('/v1/contract-templates/'+enc(id));}).then(function(){delete listTemplates()[id];countsStale=true;redraw();}).catch(function(e){O.fail('Could not delete contract template',e);});};
     if(typeof originals.cttResetKey==='function') window.cttResetKey=function(id,key,lang){if(!enabled())return originals.cttResetKey.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;var L=lang==='th'?'th':'en',v=typeof CT_DOC_I18N!=='undefined'&&CT_DOC_I18N[L]&&CT_DOC_I18N[L][key];if(v===undefined)return;t.text=t.text||{en:{},th:{}};t.text[L]=t.text[L]||{};t.text[L][key]=clone(v);return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not reset contract template text',e);});};
   }
 
@@ -257,6 +258,66 @@
   if(typeof originals.ctArtifactPersist==='function')window.ctArtifactsPersist=function(){if(!enabled())return originals.ctArtifactPersist.apply(this,arguments);};
   if(typeof originals.ctArtifactRemove==='function')window.ctArtifactRemove=function(){if(!enabled())return originals.ctArtifactRemove.apply(this,arguments);O.fail('Contract document history is read-only in operations mode',new Error('Legacy artifact metadata mapping is blocked'));return null;};
   if(typeof originals.ctArtifactReopen==='function')window.ctArtifactReopen=function(){if(!enabled())return originals.ctArtifactReopen.apply(this,arguments);O.fail('Contract artifact reopen is unavailable in operations mode',new Error('Legacy artifact metadata mapping is blocked'));return null;};
+
+  /* §ctplSample · the preview's sample agent and the per-template agent counts.
+     The preview draws the contract for cttSampleAgent(), but SB_AGENTS holds the /v1/agents list rows,
+     which carry no contract version/dates, company block or programme periods: the cover read
+     "Version —", the party box "—", and the programme pages were missing. Fetch that one agent's
+     full record (GET /v1/agents/:id), keep it per agent id for the session, and paint again.
+     A failed fetch leaves the list row in place (the preview still draws) and warns once.
+     An agent object holds the full record when it has its own contractVersion key: the list
+     mapping (10-ops-catalogue mapAgentSummary) never sets it, the detail mapping always does. */
+  var sample={cache:{},inflight:{},failed:{}}, countsStale=false;
+  function hasDetail(a){ return !!a&&Object.prototype.hasOwnProperty.call(a,'contractVersion'); }
+  function agentRow(id){ return (typeof SB_AGENTS!=='undefined'&&Array.isArray(SB_AGENTS)?SB_AGENTS:[]).find(function(a){return a&&a.id===id;}); }
+  function forgetPainted(){ try{ _cttSig=null; }catch(_){ } }
+  function prepSample(){
+    var a=typeof cttSampleAgent==='function'?cttSampleAgent():null;
+    if(!a||!a.id||hasDetail(a)) return;
+    var id=a.id;
+    /* a catalogue reload swaps the list rows back in: put the cached record on again */
+    if(sample.cache[id]){ Object.assign(a,sample.cache[id]); forgetPainted(); return; }
+    if(sample.inflight[id]||sample.failed[id]) return;
+    if(typeof window.laOpsAgentMap!=='function'){ sample.failed[id]=true; console.warn('[ops] contract preview: agent mapping unavailable, using the list row for '+id); return; }
+    sample.inflight[id]=O.get('/v1/agents/'+enc(id)).then(function(s){
+      var full=window.laOpsAgentMap(s); sample.cache[id]=full;
+      var cur=agentRow(id); if(cur&&!hasDetail(cur)) Object.assign(cur,full);
+      forgetPainted(); redrawTemplates();
+    }).catch(function(e){
+      sample.failed[id]=true;
+      console.warn('[ops] contract preview: could not load agent '+id+', using the list row: '+((e&&e.message)||e));
+    }).finally(function(){ delete sample.inflight[id]; });
+  }
+  /* An agent write can rebind an agent to another template or change the sample's record:
+     drop the cached records and refresh the counts the next time the page is on screen. */
+  if(typeof O.onWrite==='function') O.onWrite(function(kind){
+    var k=String(kind||'');
+    if(k==='agents'||/^remote:(agent|contract_template)/.test(k)){ sample.cache={}; sample.failed={}; countsStale=true; }
+  });
+  /* The agent list (SB_AGENTS) arrives with the boot's catalogue step, usually after the templates:
+     fetch the sample's record then, so the page's first paint already has it. */
+  if(O.catalogue&&typeof O.catalogue.load==='function'){
+    var catalogueLoad=O.catalogue.load;
+    O.catalogue.load=function(){
+      return Promise.resolve(catalogueLoad.apply(this,arguments)).then(function(r){ try{ if(enabled()) prepSample(); }catch(_){ } return r; });
+    };
+  }
+  originals.renderContractTemplates=window.renderContractTemplates; originals.cttUse=window.cttUse;
+  if(typeof originals.renderContractTemplates==='function') window.renderContractTemplates=function(){
+    if(!enabled()) return originals.renderContractTemplates.apply(this,arguments);
+    var w=document.getElementById('cttv-wrap');
+    if(countsStale&&w&&w.offsetWidth>0&&!state.templates.loading){ countsStale=false; loadTemplates(); }
+    try{ prepSample(); }catch(_){ }
+    return originals.renderContractTemplates.apply(this,arguments);
+  };
+  /* "N เอเยนต์" per template: legacy counted SB_AGENTS[].contractTemplateId, which the /v1/agents
+     list rows don't carry (always 0). The server counts the same thing (every agent bound to the
+     template, active or not) and returns it as `agents` on each template. */
+  if(typeof originals.cttUse==='function') window.cttUse=function(id){
+    if(!enabled()) return originals.cttUse.apply(this,arguments);
+    var t=listTemplates()[id]; if(!t) return 0;
+    return typeof t.agents==='number'?t.agents:originals.cttUse.apply(this,arguments);
+  };
 
   window.__laOpsContractsCompat={fromServerContract:fromServerContract,toPromoBody:toPromoBody,promoWriteBody:promoWriteBody,fromServerTemplate:fromServerTemplate,templateBody:templateBody,seatPrices:seatPrices};
   window.laOpsContracts={state:state,load:loadContracts,loadTemplates:loadTemplates,loadDocuments:loadDocuments,documents:state.documents,fromServerContract:fromServerContract,toPromoBody:toPromoBody};

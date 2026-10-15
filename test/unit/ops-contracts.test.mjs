@@ -140,3 +140,123 @@ test('adapter uses shared ops plumbing and keeps the classic tag before boot', (
   const html = fs.readFileSync(path.join(root, 'allotment_v2/allotment_v2.html'), 'utf8');
   assert.ok(html.indexOf('js/ops/18-ops-contracts.js') < html.indexOf('js/ops/90-ops-boot.js'));
 });
+
+/* §ctplSample · the preview's sample agent gets its full server record, and the per-template
+   "N agents" count comes from the server's `agents`. Loads the real agent mapping from
+   16-ops-agents.js and runs both adapters against a legacy-shaped global scope. */
+function agentMap() {
+  const src = fs.readFileSync(path.join(root, 'allotment_v2/js/ops/16-ops-agents.js'), 'utf8');
+  const window = { laOps: { enabled: () => true, get: async () => ({}), call: async () => ({}), queue: (fn) => Promise.resolve().then(fn), wrote: () => {}, fail: () => {} } };
+  const noop = () => {};
+  vm.runInNewContext(src, { window, SB_AGENTS: [], console, Promise, Array, Object, Error, String, Number, JSON, Set, encodeURIComponent, agRenderList: noop, renderAgKPI: noop, confirm: () => true, alert: noop });
+  return window.laOpsAgentMap;
+}
+const LEGACY_PAGE = [
+  "var _cttSig = 'painted';",
+  'function cttSampleAgent(){ var list = SB_AGENTS || []; return list.find(function(a){ return a.rateTypeId && (a.programPeriods||[]).length; }) || list.find(function(a){ return a.rateTypeId; }) || list[0] || null; }',
+  'function cttUse(id){ return (SB_AGENTS||[]).filter(function(a){ return a.contractTemplateId === id; }).length; }',
+  'function renderContractTemplates(){ var a = cttSampleAgent() || {};',
+  "  paints.push({ sample: a.name, version: a.contractVersion, address: (a.companyInfo||{}).address, periods: (a.programPeriods||[]).length, use: cttUse('ctt_std') }); }",
+].join('\n');
+const summaryRow = () => ({ id: 'a1', name: '2 The Beach', rateTypeId: 'rt1', programs: ['r1', 'r2'], programPeriods: [], companyInfo: {} });
+async function settle() { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 5)); }
+function bootPage({ failDetail = false, width = 900, agents = [summaryRow()] } = {}) {
+  const gets = [], warns = [], paints = [], writeListeners = [];
+  const wrap = { offsetWidth: width };
+  const ctx = {
+    console: { log() {}, warn: (m) => warns.push(String(m)), error() {} },
+    JSON, Number, String, Object, Array, Promise, Date, encodeURIComponent, setTimeout, clearTimeout,
+    confirm: () => false, alert: () => {}, paints,
+    document: { getElementById: (id) => (id === 'cttv-wrap' ? wrap : null) },
+    SB_CONTRACTS: [], SB_CONTRACT_TEMPLATES: {}, SB_AGENTS: agents,
+  };
+  ctx.window = ctx;
+  ctx.laOpsAgentMap = agentMap();
+  ctx.laOps = {
+    enabled: () => true, clone: (v) => (v == null ? v : JSON.parse(JSON.stringify(v))), fail: () => {},
+    onWrite: (fn) => writeListeners.push(fn),
+    catalogue: { load: async () => { ctx.SB_AGENTS.splice(0, ctx.SB_AGENTS.length, summaryRow()); return 'catalogue'; } },
+    get: async (p) => {
+      gets.push(p);
+      if (p === '/v1/contracts') return { contracts: [] };
+      if (p === '/v1/contract-templates') return { contract_templates: [{ id: 'ctt_std' }] };
+      if (p === '/v1/contract-templates/ctt_std') return { id: 'ctt_std', code: 'CT-STD', name: 'Standard B2B Agreement', is_default: true, agents: 69 };
+      if (p === '/v1/agents/a1') {
+        if (failDetail) throw new Error('HTTP 503');
+        return { id: 'a1', name: '2 The Beach', rate_type_id: 'rt1', contract_version: 'v2025-1', contract_start: '2025-10-01', contract_end: '2026-09-30',
+          company: { legal_name: '2 The Beach', address: 'Patong' }, programs: [{ route_id: 'r1' }, { route_id: 'r2' }] };
+      }
+      throw new Error('unexpected GET ' + p);
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(LEGACY_PAGE, ctx);
+  vm.runInContext(source, ctx, { filename: '18-ops-contracts.js' });
+  return { ctx, wrap, gets, warns, paints, writeListeners };
+}
+
+test('the preview draws the sample agent from its full server record, fetched once per session', async () => {
+  const { ctx, gets, paints } = bootPage();
+  await settle();
+  const last = paints.at(-1);
+  assert.equal(last.sample, '2 The Beach');
+  assert.equal(last.version, 'v2025-1', 'cover shows the contract version, not "—"');
+  assert.equal(last.address, 'Patong', 'party box shows the address, not "—"');
+  assert.equal(last.periods, 2, 'programme pages are drawn');
+  ctx.renderContractTemplates(); ctx.renderContractTemplates();
+  await settle();
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 1, 'cached per agent id');
+  ctx.SB_AGENTS.splice(0, 1, summaryRow());               // a catalogue reload swaps the list row back in
+  ctx.renderContractTemplates();
+  await settle();
+  assert.equal(paints.at(-1).version, 'v2025-1', 'the cached record is put back on the new row');
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 1);
+});
+
+test('a hidden page fetches the sample record ahead but paints nothing', async () => {
+  const { gets, paints, ctx } = bootPage({ width: 0 });
+  await settle();
+  assert.deepEqual(paints, []);
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 1);
+  assert.equal(ctx.SB_AGENTS[0].contractVersion, 'v2025-1');
+  assert.equal(ctx._cttSig, null, 'nav() paints fresh at the real width');
+});
+
+test('the agent list arriving after the templates fetches the sample, so the first paint has it', async () => {
+  const { ctx, wrap, gets, paints } = bootPage({ width: 0, agents: [] });
+  await settle();
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 0, 'no agents yet');
+  assert.equal(await ctx.laOps.catalogue.load(), 'catalogue', 'the boot step still gets its result');
+  await settle();
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 1);
+  wrap.offsetWidth = 900;                                   // nav() opens the page
+  ctx.renderContractTemplates();
+  assert.equal(paints[0].version, 'v2025-1', 'the very first paint shows the full record');
+});
+
+test('a failed sample fetch keeps the list row, warns in English, and does not retry every paint', async () => {
+  const { ctx, gets, warns, paints } = bootPage({ failDetail: true });
+  await settle();
+  assert.ok(paints.length >= 1, 'the preview still draws');
+  assert.equal(paints.at(-1).sample, '2 The Beach');
+  assert.equal(paints.at(-1).version, undefined);
+  assert.ok(warns.some((w) => /could not load agent a1/.test(w)), warns.join(' | '));
+  ctx.renderContractTemplates();
+  await settle();
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 1);
+});
+
+test('template agent counts come from the server and refresh after an agent write', async () => {
+  const { ctx, gets, paints, writeListeners } = bootPage();
+  await settle();
+  assert.equal(paints.at(-1).use, 69, 'legacy counted SB_AGENTS[].contractTemplateId, which list rows lack (0)');
+  assert.equal(ctx.cttUse('missing'), 0);
+  const before = gets.filter((p) => p === '/v1/contract-templates').length;
+  writeListeners.forEach((fn) => fn('agents'));
+  ctx.SB_AGENTS.splice(0, 1, summaryRow());               // and the agent list was reloaded after it
+  ctx.renderContractTemplates();
+  await settle();
+  assert.equal(gets.filter((p) => p === '/v1/contract-templates').length, before + 1, 'counts reloaded once the page is on screen');
+  assert.equal(gets.filter((p) => p === '/v1/agents/a1').length, 2, 'the cached record was dropped, so the sample is fetched again');
+  assert.equal(paints.at(-1).version, 'v2025-1');
+});
