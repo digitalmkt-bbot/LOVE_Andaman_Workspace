@@ -182,26 +182,28 @@ function bookingV2OpsEnsureCreated(fromYMD, toYMD, opts){
 }
 /* Bookings + first-trip pax per sale day, counted by the server
    (GET /v1/bookings/daily-counts). bookingV2OpsDailyCounts() reads the cached
-   answer as {YYYY-MM-DD:{bk,pax}}, or null before it has arrived. */
+   answer as {YYYY-MM-DD:{bk,pax}}, or null before it has arrived. withMarkets
+   (Booking Flow) also asks the server for each day's bookings per market id and
+   adds it as mk. */
 var _opsDailyCounts = Object.create(null);
-function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD){
+function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD, withMarkets){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
-  var key='daily|'+fromYMD+'|'+toYMD;
+  var key='daily|'+fromYMD+'|'+toYMD+(withMarkets?'|mk':'');
   if(_opsDailyCounts[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
-  var load=window.laOpsFetch('/v1/bookings/daily-counts?from='+encodeURIComponent(fromYMD)+'&to='+encodeURIComponent(toYMD)).then(function(r){
+  var load=window.laOpsFetch('/v1/bookings/daily-counts?'+(withMarkets?'markets=1&':'')+'from='+encodeURIComponent(fromYMD)+'&to='+encodeURIComponent(toYMD)).then(function(r){
     if(!r.ok) throw new Error('daily-counts HTTP '+r.status);
     return r.json();
   }).then(function(j){
     if(!j || !Array.isArray(j.days)) throw new Error('daily-counts did not return days');
-    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]={bk:+d.bookings||0, pax:+d.pax||0}; });
+    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]=withMarkets?{bk:+d.bookings||0, pax:+d.pax||0, mk:d.markets||null}:{bk:+d.bookings||0, pax:+d.pax||0}; });
     _opsDailyCounts[key]=m;
     return j;
   }).catch(function(e){ console.warn('[opsSync] failed to load daily booking counts: '+((e&&e.message)||e)); return null; });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; });
   return _opsBookingRangeLoads[key];
 }
-function bookingV2OpsDailyCounts(fromYMD, toYMD){ return _opsDailyCounts['daily|'+fromYMD+'|'+toYMD]||null; }
+function bookingV2OpsDailyCounts(fromYMD, toYMD){ return _opsDailyCounts['daily|'+fromYMD+'|'+toYMD+'|mk']||_opsDailyCounts['daily|'+fromYMD+'|'+toYMD]||null; }
 /* Everything the Dashboard reads for selected day ds, in parallel, one or two
    requests each: the newest page of bookings (Live feed rows), every booking
    created on ds (the feed's day summary), and 60 days of daily counts ending

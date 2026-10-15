@@ -129,3 +129,45 @@ test('bfSrvTot: without server counts the render still works on what is loaded',
   const html = runRender({ serverCounts: false });
   assert.match(html, /New bookings/);
 });
+
+/* ── §bfSrvMk: the by-market bars ── */
+// The browser store holds only this month's/last month's slice; the older bars used to
+// fall into gray "other" because the market split was counted from loaded bookings only.
+test('bfSrvMk: every bar is split by the server\'s market counts and the legend is ranked over the whole window', () => {
+  const host = { innerHTML: '' };
+  const now = new Date();
+  const mon = (back) => ymd(new Date(now.getFullYear(), now.getMonth() - back, 1));
+  const today = ymd(now);
+  const dcFrom = mon(5);
+  const dc = {};
+  // oldest month: 100 bookings, all of them in the top markets; hpk is the biggest overall
+  dc[mon(3).slice(0, 7) + '-05'] = { bk: 100, pax: 0, mk: { hpk: 50, ru: 30, ota: 12, b2c: 8 } };
+  dc[mon(1).slice(0, 7) + '-05'] = { bk: 200, pax: 0, mk: { hpk: 90, ru: 60, ota: 30, b2c: 20 } };
+  dc[mon(0) + ''] = { bk: 10, pax: 0, mk: { ota: 10 } };
+  const MK = { hpk: ['Hotel Phuket', '#0F6E56'], ru: ['Russian Market', '#A05A1A'], ota: ['Online Travel Agent', '#185FA5'], b2c: ['B2C', '#E0457F'] };
+  // a loaded slice that, ranked alone, would put ota first (the old wrong legend order)
+  const mk = (ds) => ({ status: 'confirmed', bookingDate: ds, agentId: 'a1', marketSnapshot: { market: 'ota' }, trips: [{ routeId: 'r1', date: ds, pax: { ad_fr: 2 } }] });
+  const ctx = {
+    console, Promise, Date, String, Error, Math, Object, Array, JSON, isNaN, Number,
+    document: { getElementById: (id) => (id === 'bookingflow-host' ? host : null) },
+    SB_BOOKINGS: [mk(mon(0)), mk(mon(0).slice(0, 8) + '02'), mk(mon(1).slice(0, 8) + '05')],
+    bookingV2LocalYMD: ymd,
+    bookingV2PaxAllTot: (p) => Object.values(p || {}).reduce((s, x) => s + (+x || 0), 0),
+    laMonAbbrTH: () => ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'],
+    pmMarket: (b) => (b.marketSnapshot && b.marketSnapshot.market) || 'unassigned',
+    sbGetMarket: (c) => (MK[c] ? { name: MK[c][0], color: MK[c][1] } : null),
+    _opsBfDaily: { from: dcFrom, to: today },
+    bookingV2OpsDailyCounts: (from, to) => (from === dcFrom && to === today ? dc : null),
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(sliceRender(), ctx);
+  ctx.renderBookingFlow();
+  const html = host.innerHTML;
+  const legend = [...html.matchAll(/<span><i style="background:[^"]+"><\/i>([^<]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(legend.slice(0, 4), ['Hotel Phuket', 'Russian Market', 'Online Travel Agent', 'B2C']);
+  const rects = [...html.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="(#[0-9A-Fa-f]{6})"/g)].map((m) => ({ h: +m[1], fill: m[2] }));
+  const gray = rects.filter((r) => r.fill === '#94A3B8' && r.h > 0);
+  assert.equal(gray.length, 0, 'no bar has a gray "other" remainder: the split is complete for every month');
+  assert.ok(rects.some((r) => r.fill === '#0F6E56' && r.h > 0), 'Hotel Phuket is drawn on the older bars');
+});

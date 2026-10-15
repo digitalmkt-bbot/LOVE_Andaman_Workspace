@@ -11,12 +11,13 @@
      GET /v1/bookings/daily-counts (live bookings per sale day, 6 months in
      one request) — window._opsBfDaily tells the legacy render which cached
      window to read (§bfSrvTot in 08-app.js). No month is ever guessed from
-     a partial browser store again, loaded or not.
+     a partial browser store again, loaded or not. The by-market split of every bar comes from the
+     same call (markets=1, §bfSrvMk in 08-app.js), so older bars are no longer gray "other".
    - booking DETAILS (market split, sales, pax, lead time) are loaded for the
      current + previous KPI bucket only: bookings CREATED from the earliest of
      [1st of month, Monday 7 weeks back, today−13] to today — the comparison
      windows of the month/week/day modes. Older bars keep the server total;
-     their unloaded remainder shows as the gray "other" segment.
+     their market split is the server's too.
    - trips for the travel calendar / dual line / cohort: service dates from
      min(today−14, 1st of month) to max(today+15, end of month).
    Load order: after js/booking/*.js and 40-ops-bookings.js. Classic script.
@@ -68,7 +69,7 @@
     var loads = [];
     if(typeof window.bookingV2OpsEnsureDailyCounts === 'function'){
       window._opsBfDaily = { from: W.daily.from, to: W.daily.to };        // §bfSrvTot reads this window
-      loads.push(window.bookingV2OpsEnsureDailyCounts(W.daily.from, W.daily.to));
+      loads.push(window.bookingV2OpsEnsureDailyCounts(W.daily.from, W.daily.to, true));
     }
     if(typeof window.bookingV2OpsEnsureCreated === 'function')
       loads.push(window.bookingV2OpsEnsureCreated(W.created.from, W.created.to));

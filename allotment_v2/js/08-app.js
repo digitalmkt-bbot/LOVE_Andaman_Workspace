@@ -3933,7 +3933,7 @@ function renderBookingFlow(){
   const findBucket=ds=>{ for(let i=0;i<buckets.length;i++){ if(ds>=buckets[i].from && ds<=buckets[i].to) return buckets[i]; } return null; };
   // top markets overall
   const mkCountAll={}; B.forEach(b=>{ const c=mkOf(b).code; mkCountAll[c]=(mkCountAll[c]||0)+1; });
-  const topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
+  let topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
   B.forEach(b=>{ const bd=bkDate(b); if(!bd) return; const bk=findBucket(bd); if(!bk) return; bk.total++; bk.list.push(b); const c=mkOf(b).code; bk.mk[c]=(bk.mk[c]||0)+1; });
   /* §bfSrvTot · bucket totals from the server's daily-counts (live bookings per sale day,
      GET /v1/bookings/daily-counts via js/ops/53-ops-booking-flow.js). SB_BOOKINGS holds only
@@ -3944,7 +3944,19 @@ function renderBookingFlow(){
   const _bfDc=(_bfDcw&&typeof bookingV2OpsDailyCounts==='function')?bookingV2OpsDailyCounts(_bfDcw.from,_bfDcw.to):null;
   if(_bfDc){ buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return;
     let t=0; Object.keys(_bfDc).forEach(ds=>{ if(ds>=bk.from&&ds<=bk.to) t+=(_bfDc[ds].bk||0); });
-    bk.total=t; }); }
+    bk.total=t; });
+    /* §bfSrvMk · the by-market split comes from the same server answer (daily-counts?markets=1: stamped
+       market, else the agent's, else b2c/unassigned = pmMarket). Without it every bar older than the
+       two loaded KPI buckets fell into gray "other", and the legend order was ranked over only the
+       loaded bookings. Legend = top 4 markets over the whole window, as legacy ranks them. */
+    const _bfAllMk={}; let _bfHasMk=false;
+    Object.keys(_bfDc).forEach(ds=>{ const mk=_bfDc[ds].mk; if(!mk) return; _bfHasMk=true; Object.keys(mk).forEach(c=>{ _bfAllMk[c]=(_bfAllMk[c]||0)+mk[c]; }); });
+    if(_bfHasMk){
+      topN=Object.keys(_bfAllMk).sort((a,b)=>_bfAllMk[b]-_bfAllMk[a]).slice(0,4);
+      buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return; bk.mk={};
+        Object.keys(_bfDc).forEach(ds=>{ if(ds<bk.from||ds>bk.to) return; const mk=_bfDc[ds].mk||{}; Object.keys(mk).forEach(c=>{ bk.mk[c]=(bk.mk[c]||0)+mk[c]; }); }); });
+    }
+  }
   buckets.forEach(bk=>{ let s=0; topN.forEach(c=>s+=bk.mk[c]||0); bk.mk.__other=Math.max(0,bk.total-s); });
   const mkOrder=topN.map((c,i)=>{ const m=(typeof sbGetMarket==='function')?sbGetMarket(c):null; return {code:c, name:m?(m.name||m.code||c):(c==='b2c'?'B2C':c==='unassigned'?'ไม่ระบุ':c), color:(m&&m.color)||FALL[i%FALL.length]}; }).concat([{code:'__other',name:'อื่นๆ',color:'#94A3B8'}]);
 
