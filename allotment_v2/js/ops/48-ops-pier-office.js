@@ -62,12 +62,20 @@
   function guarded(fn){ try{ return fn(); }catch(_){ return undefined; } }
 
   /* ── what is fresh · a render asks, the answer is cached, the screen is drawn again ── */
-  var fresh = {}, inflight = {};
+  var fresh = {}, inflight = {}, later = {};
   function invalidate(){ fresh = {}; }
   O.onWrite(function(kind){ if(kind === 'pier') invalidate(); });
   P.afterLoad(function(){ invalidate(); stampLegacyMoves(); return Promise.resolve(); });
   function ensure(key, load, view){
-    if(!ready() || fresh[key] || inflight[key] || P.busy()) return;
+    if(!ready() || fresh[key] || inflight[key]) return;
+    /* §opsPierBusyRetry (2026-10-15) · a write is pending: ask again once it settles. The usual cause is the
+       render itself: renderPierAtt's one-time migrations (paEnsureWsLt, paEnsureLtSplit, paEnsureNoteMig,
+       paSkinApply) call poPersist on the first draw of a session. That run sends nothing, so nothing draws
+       again, and skipping here left the roster empty (every total 0) until the next navigation. */
+    if(P.busy()){
+      if(!later[key]) later[key] = setTimeout(function(){ delete later[key]; ensure(key, load, view); }, 300);
+      return;
+    }
     inflight[key] = 1;
     load().then(function(){ fresh[key] = true; }, function(e){
       fresh[key] = true;   // do not ask again until something is written
