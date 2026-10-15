@@ -33,9 +33,16 @@
   function num(v){ return v === '' || v == null ? null : n(v); }
 
   function address(){ return '/v1/van-bills/' + enc(_vb.sup) + '/' + enc(_vb.ym) + '/' + enc(_vb.per); }
+  function overviewKey(){ return '/v1/van-bills?month=' + enc(_vb.ym) + '&period=' + enc(_vb.per); }
   function viewKey(){
-    if(_vb.mode === 'ov') return '/v1/van-bills?month=' + enc(_vb.ym) + '&period=' + enc(_vb.per);
+    if(_vb.mode === 'ov') return overviewKey();
     return address() + (_vb.van ? '?van_id=' + enc(_vb.van) : '');
+  }
+  /* The van owners of this period, as the server's overview lists them. Not vbSuppliers(): that reads
+     SB_VEHICLES, which nothing fills in ops mode, so it answers with 08-app.js's demo vehicles. */
+  function partnerNames(){
+    var hit = cache[overviewKey()];
+    return hit ? (hit.view.partners || []).map(function(p){ return text(p.partner); }).filter(Boolean) : [];
   }
   function host(){ return document.getElementById('vanbill-host'); }
   function put(key, view){ cache[key] = { at: Date.now(), view: view }; }
@@ -67,7 +74,7 @@
     return '<span style="display:inline-block;padding:2px 9px;border-radius:99px;background:' + c + ';color:#fff;font-size:10.5px;font-weight:600">' + esc(v.state) + '</span>';
   }
   function bar(){
-    var sups = typeof vbSuppliers === 'function' ? vbSuppliers() : [];
+    var sups = partnerNames();
     var b = '<div class="vb-bar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">'
       + '<span class="vb-mode"><button class="' + (_vb.mode === 'ov' ? 'on' : '') + '" onclick="vbMode(\'ov\')">Overview</button>'
       + '<button class="' + (_vb.mode === 'ov' ? '' : 'on') + '" onclick="vbMode(\'one\')">By partner</button></span>'
@@ -92,10 +99,10 @@
     }).join('');
     var t = v.totals || {};
     return '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
-      + card('Billed', baht(t.bill), n(t.trips) + ' vans · ' + n(t.pax) + ' pax') + card('Sale', baht(t.sale)) + card('Profit / loss', baht(t.pl)) + '</div>'
+      + card('Billed', baht(t.bill), n(t.trips) + ' trips · ' + n(t.pax) + ' pax') + card('Sale', baht(t.sale)) + card('Profit / loss', baht(t.pl)) + '</div>'
       + '<div style="background:#fff;border:1px solid #e3e6ec;border-radius:12px;overflow:auto"><table style="width:100%;border-collapse:collapse">'
       + '<thead><tr style="background:#fafaf8;font-size:10px;text-transform:uppercase;color:#6b7686">'
-      + ['Partner', 'Vans', 'Pax', 'Billed', 'Sale', 'P/L', '', 'State'].map(function(h, i){ return '<th style="' + CSS + 'text-align:' + (i && i < 6 ? 'right' : 'left') + '">' + h + '</th>'; }).join('')
+      + ['Partner', 'Trips', 'Pax', 'Billed', 'Sale', 'P/L', '', 'State'].map(function(h, i){ return '<th style="' + CSS + 'text-align:' + (i && i < 6 ? 'right' : 'left') + '">' + h + '</th>'; }).join('')
       + '</tr></thead><tbody>' + (rows || '<tr><td colspan="8" style="padding:24px;text-align:center;color:#6b7686">No partner vans</td></tr>') + '</tbody></table></div>';
   }
   function rowHtml(r, ro){
@@ -159,10 +166,15 @@
     if(!_vb.ym){
       var t = O.today(); _vb.ym = t.slice(0, 7); var dd = +t.slice(8, 10); _vb.per = dd <= 10 ? 1 : (dd <= 20 ? 2 : 3);
     }
-    var sups = typeof vbSuppliers === 'function' ? vbSuppliers() : [];
     if(_vb.mode !== 'ov'){
+      if(!cache[overviewKey()]){
+        h.innerHTML = '<div style="padding:18px 20px">' + bar() + O.loadingHtml('Loading van bills…') + '</div>';
+        load(overviewKey()).then(function(){ render(); }, drawError);
+        return;
+      }
+      var sups = partnerNames();
       if(!_vb.sup || sups.indexOf(_vb.sup) < 0) _vb.sup = sups[0] || '';
-      if(!_vb.sup){ h.innerHTML = '<div style="padding:40px;text-align:center;color:#6b7686">No partner vans yet</div>'; return; }
+      if(!_vb.sup){ h.innerHTML = '<div style="padding:18px 20px">' + bar() + '<div style="padding:40px;text-align:center;color:#6b7686">No partner vans in this period</div></div>'; return; }
     }
     var key = viewKey(), hit = cache[key];
     if(hit){ draw(hit.view); if(Date.now() - hit.at < TTL) return; }

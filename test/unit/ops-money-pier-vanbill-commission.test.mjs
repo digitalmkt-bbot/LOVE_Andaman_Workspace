@@ -167,9 +167,46 @@ test('van bills: overview is drawn from the server, nothing computed locally', a
   assert.equal(rt.legacy.filter((l) => l[0] === 'vbPersist').length, 0, 'the blob writer is silenced');
 });
 
+// The partner view takes its owner list from the server's overview of the period.
+const overview = (names) => ({ body: { month: '2026-10', period: 2, totals: {},
+  partners: names.map((partner) => ({ partner, trips: 1, pax: 7, bill: 0, sale: 0, pl: 0, missing_rate: 0, state: 'draft' })) } });
+
+test('van bills: a row click opens that owner\'s bill, not a demo vehicle\'s partner', async () => {
+  // vbSuppliers() reads SB_VEHICLES, which in ops mode still holds 08-app.js's demo vehicles ('Co A', 'Co B' here)
+  const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['ภูเก็ตล่ำซำ', 'Queen']),
+    'GET /v1/van-bills/%E0%B8%A0%E0%B8%B9%E0%B9%80%E0%B8%81%E0%B9%87%E0%B8%95%E0%B8%A5%E0%B9%88%E0%B8%B3%E0%B8%8B%E0%B9%8D%E0%B8%B2/2026-10/2': { body: bill({ partner: 'ภูเก็ตล่ำซำ' }) },
+  } });
+  rt.ctx._vb.ym = '2026-10';
+  rt.ctx.renderVanBill(); await rt.settle();
+  assert.match(rt.hosts['vanbill-host'].innerHTML, /Trips/);
+  assert.match(rt.hosts['vanbill-host'].innerHTML, /1 trips · 7 pax|0 trips · 0 pax/);
+  // what the row's onclick does: vbOpenSup(data-p) sets the owner and mode, then renders
+  Object.assign(rt.ctx._vb, { sup: 'ภูเก็ตล่ำซำ', mode: 'one' });
+  rt.ctx.renderVanBill(); await rt.settle();
+  assert.equal(rt.ctx._vb.sup, 'ภูเก็ตล่ำซำ', 'the clicked owner is kept');
+  assert.ok(rt.requests.some((r) => r.path.startsWith('/v1/van-bills/%E0%B8%A0')), 'that owner\'s bill is fetched');
+  const html = rt.hosts['vanbill-host'].innerHTML;
+  assert.match(html, /<option value="ภูเก็ตล่ำซำ" selected>/);
+  assert.doesNotMatch(html, /Co A|Co B/, 'no demo partners in the picker');
+});
+
+test('van bills: opening "By partner" with no owner picked loads the period\'s owners first', async () => {
+  const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['Queen']),
+    'GET /v1/van-bills/Queen/2026-10/2': { body: bill({ partner: 'Queen' }) },
+  } });
+  Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: '' });
+  rt.ctx.renderVanBill(); await rt.settle();
+  assert.equal(rt.ctx._vb.sup, 'Queen');
+  assert.equal(rt.requests[0].path, '/v1/van-bills?month=2026-10&period=2');
+  assert.equal(rt.requests[1].path, '/v1/van-bills/Queen/2026-10/2');
+});
+
 test('van bills: an edit sends the whole override map and shows the server answer', async () => {
   let patched;
   const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['Co A']),
     'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
     'PATCH /v1/van-bills/Co%20A/2026-10/2': (body) => { patched = body; return { body: bill({ totals: { vans: 1, pax: 7, bill: 2100, sale: 700, pl: -1400, ex: 0, cut: 0 } }) }; },
   } });
@@ -183,6 +220,7 @@ test('van bills: an edit sends the whole override map and shows the server answe
 
 test('van bills: a refused edit shows the server message and the screen keeps the server figures', async () => {
   const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['Co A']),
     'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill({ state: 'paid', paid: { at: 'x', by: 'u', on: '2026-10-13', via: 'cash', ref: null, amount: 1700 } }) },
     'PATCH /v1/van-bills/Co%20A/2026-10/2': { status: 409, body: { statusCode: 409, code: 'bill_paid', message: 'The bill is paid: undo the payment first' } },
   } });
@@ -196,6 +234,7 @@ test('van bills: a refused edit shows the server message and the screen keeps th
 
 test('van bills: send, pay and pull-rates go to their endpoints', async () => {
   const rt = runtime({ promptAnswer: 'transfer', handlers: {
+    'GET /v1/van-bills': overview(['Co A']),
     'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
     'POST /v1/van-bills/Co%20A/2026-10/2/send': { body: bill({ state: 'sent', sent: { at: '2026-10-13T00:00:00Z', by: 'u', bill: 1700, changed_since_sent: false } }) },
     'POST /v1/van-bills/Co%20A/2026-10/2/pay': (body) => ({ body: bill({ state: 'paid', paid: { at: 'x', by: 'u', on: D, via: body.via, ref: body.ref, amount: 1700 } }) }),
