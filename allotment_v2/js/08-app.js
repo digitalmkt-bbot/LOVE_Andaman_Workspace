@@ -16895,6 +16895,51 @@ function pcPkLineTxt(ds,B,C){
   var isl=pcPkIsland(B&&B.rid), only=!(+((C||{}).amt)>0);
   return (only?'ค่าจอดเรือ':'ค่าอุทยาน')+(isl?isl:'')+' '+pcPkLineDate(ds)+' '+((B&&B.name)||'');
 }
+/* §pkLineOrd (2026-10-15) · ลำของบรรทัดค่าอุทยานในสมุด
+   ตาราง po_cash_rows ไม่มีคอลัมน์ bid (เพิ่มคอลัมน์ = แก้ฐานข้อมูล · ช่วงห้ามแก้ DB ถึง 15 ต.ค.) · ฟิลด์ bid ที่ใส่ไว้จึงหายหลังโหลดใหม่
+   แทนที่จะเพิ่มฟิลด์ · id ของบรรทัดเป็นกุญแจธรรมชาติ "pkl|ท่า|วันที่|bid" แบบเดียวกับ pcCellId ของตาราง lt/pk (id เป็นคอลัมน์ที่มีอยู่แล้ว)
+   บรรทัดที่ดึงไปก่อนหน้านี้ (id สุ่ม) · หาเรือจากท้ายข้อความ "… <ชื่อเรือ>" */
+function pcPkLineId(pier,ds,bid){ return 'pkl|'+pier+'|'+ds+'|'+bid; }
+function pcPkLineBid(x,BS){
+  if(!x || x.src!=='pk') return '';
+  if(x.bid) return String(x.bid);
+  var m=/^pkl\|[^|]*\|[^|]*\|(.+)$/.exec(String(x.id||'')); if(m) return m[1];
+  var t=String(x.txt||''), hit='', len=0;
+  (BS||[]).forEach(function(B){ var n=String((B&&B.name)||''); if(n && n.length>len && t.slice(-(n.length+1))===(' '+n)){ hit=String(B.bid); len=n.length; } });
+  return hit;
+}
+/* ลำดับ + สีของบรรทัดค่าอุทยาน · เรียงตามอุทยาน (สิมิลัน → สุรินทร์ → พีพี → …) แล้วตามลำดับเรือในชีท · สี = สีของโปรแกรม */
+var PC_PK_ISL_ORD=['similan','surin','phiphi','phangnga','tarn'];
+function pcPkLineInfo(pier,ds){
+  var BS=pcBoats(ds,pier), bi={}, by={};
+  BS.forEach(function(B,i){ bi[String(B.bid)]=i; by[String(B.bid)]=B; });
+  var islKey=function(rid){ try{ var r=(typeof getRoute==='function'?getRoute(rid):null)||{}, f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null;
+      var t=(r.name||'')+' '+((f&&f.name)||''), L=(typeof PJ_PARK!=='undefined'&&Array.isArray(PJ_PARK))?PJ_PARK:[];
+      for(var i=0;i<L.length;i++){ if(L[i].hit.test(t)) return L[i].k; } }catch(_){} return ''; };
+  return function(x){
+    var bid=pcPkLineBid(x,BS); if(!bid && !(x && x.src==='pk')) return null;
+    var B=by[bid]||null, k=B?islKey(B.rid):'';
+    if(!k){ var t=String((x&&x.txt)||''); for(var j=0;j<PC_PK_ISL_ORD.length;j++){ if(t.indexOf(PC_PK_ISL[PC_PK_ISL_ORD[j]])>=0){ k=PC_PK_ISL_ORD[j]; break; } } }
+    var ir=PC_PK_ISL_ORD.indexOf(k); if(ir<0) ir=PC_PK_ISL_ORD.length;
+    var col='';
+    try{ var f=B&&(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(B.rid):null; col=(f&&f.color)||(B&&typeof pcRouteColor==='function'?pcRouteColor(B.rid):'')||''; }catch(_){}
+    if(!col){ col={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',phangnga:'#0F6E56',tarn:'#0F6E56'}[k]||''; }
+    return { bid:bid, isl:ir, boat:(bid in bi)?bi[bid]:999, col:col };
+  };
+}
+/* เรียงแถวของสมุด · เวลาก่อน (ของเดิม) · บรรทัดค่าอุทยานที่เวลาเดียวกันรวมเป็นก้อนเดียวตรงที่บรรทัดแรกของก้อนอยู่ แล้วเรียงตามอุทยาน + ลำ
+   rows = [{t, k, x}] · คืน array ใหม่ · แถวอื่นลำดับเดิม */
+function pcLedgerSort(rows,pier,ds){
+  var info=pcPkLineInfo(pier,ds), first={};
+  rows.forEach(function(r,i){ r._i=i; r._pk=(r.k==='out')?info(r.x):null; if(r._pk && first[r.t]==null) first[r.t]=i; });
+  return rows.slice().sort(function(a,b){
+    if(a.t!==b.t) return a.t-b.t;
+    var ka=a._pk?first[a.t]:a._i, kb=b._pk?first[b.t]:b._i;
+    if(ka!==kb) return ka-kb;
+    if(a._pk && b._pk) return (a._pk.isl-b._pk.isl) || (a._pk.boat-b._pk.boat) || (a._i-b._i);
+    return a._i-b._i;
+  });
+}
 /* สถานะการดึงค่าอุทยานของวัน · รายลำ
    old = วันที่ดึงแบบเดิม (ก้อนเดียว src 'pk' ไม่มี bid · หรือ src 'dock') · ไม่ดึงรายลำทับ แค่เทียบยอดรวม
    off = ยอดที่ดึงไว้ไม่ตรงกับชีท (แก้ชีททีหลัง) · waiting = ยอดของลำที่ยังไม่ได้ดึง */
@@ -16902,19 +16947,19 @@ function pcPkPullState(pier,ds){
   var D=pcDay(pier,ds,false)||{pk:{},out:[]}, out=D.out||[], BS=pcBoats(ds,pier), seen={}, lines=[];
   BS.forEach(function(B){ seen[B.bid]=1; lines.push({B:B, C:(D.pk||{})[B.bid]||{}}); });
   Object.keys(D.pk||{}).forEach(function(bid){ if(!seen[bid]) lines.push({B:{bid:bid, rid:'', name:((typeof getBoat==='function'&&getBoat(bid))||{}).name||bid}, C:D.pk[bid]}); });
-  var old=out.some(function(x){ return x && ((x.src==='pk' && !x.bid) || x.src==='dock'); });
+  var old=out.some(function(x){ return x && ((x.src==='pk' && !pcPkLineBid(x,BS)) || x.src==='dock'); });   /* §pkLineOrd */
   var o={old:old, off:false, waiting:0, total:0, pulledAmt:0, nPulled:0, nWait:0, lines:[]};
   out.forEach(function(x){ if(x && (x.src==='pk'||x.src==='dock')) o.pulledAmt+=(+x.amt||0); });
   lines.forEach(function(L){
     var v=pcPkLedgerAmt(L.C); o.total+=v;
-    var hit=out.filter(function(x){ return x && x.src==='pk' && x.bid===L.B.bid; });
+    var hit=out.filter(function(x){ return x && x.src==='pk' && pcPkLineBid(x,BS)===String(L.B.bid); });
     var pa=hit.reduce(function(a,x){ return a+(+x.amt||0); },0);
     if(hit.length){ o.nPulled++; if(Math.round(pa)!==Math.round(v)) o.off=true; }
     else if(v>0 && !old){ o.waiting+=v; o.nWait++; }
     o.lines.push({B:L.B, C:L.C, v:v, pulled:hit.length?pa:null});
   });
   /* ลำที่ดึงไว้แต่ไม่อยู่ในชีทแล้ว */
-  out.forEach(function(x){ if(x && x.src==='pk' && x.bid && !lines.some(function(L){ return L.B.bid===x.bid; })) o.off=true; });
+  out.forEach(function(x){ var b=pcPkLineBid(x,BS); if(b && !lines.some(function(L){ return String(L.B.bid)===b; })) o.off=true; });
   if(old && Math.round(o.pulledAmt)!==Math.round(o.total)) o.off=true;
   return o;
 }
@@ -16930,7 +16975,7 @@ function pcPull(ds){
   var S=pcPkPullState(_pcPier,ds);
   if(!S.old) S.lines.forEach(function(L){
     if(!(L.v>0) || L.pulled!==null) return;
-    D.out.push({ id:mk(), src:'pk', bid:String(L.B.bid), txt:pcPkLineTxt(ds,L.B,L.C), amt:L.v, at:'', by:pcWho(), ts:new Date().toISOString() });
+    D.out.push({ id:pcPkLineId(_pcPier,ds,L.B.bid), src:'pk', bid:String(L.B.bid), txt:pcPkLineTxt(ds,L.B,L.C), amt:L.v, at:'', by:pcWho(), ts:new Date().toISOString() });
     n++;
   });
   if(!n){ alert('ไม่มียอดใหม่ให้ดึง · ดึงครบแล้วหรือยังไม่ได้กรอกยอดในอีกสองชีท'); return; }
@@ -17995,7 +18040,7 @@ function pcPrintCert(opt){
     rows=rows.filter(function(x){ return pcSelHas('out',x.id); });
     if(!rows.length){ alert('No rows selected.'); return; }
   }
-  rows.sort(function(a,b){ return rk(a.at)-rk(b.at); });
+  rows=pcLedgerSort(rows.map(function(x){ return {t:rk(x.at),k:'out',x:x}; }),_pcPier,ds).map(function(r){ return r.x; });   /* §pkLineOrd */
   var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
   var tot=0, body='';
   rows.forEach(function(x){
@@ -18054,7 +18099,7 @@ function pcPrintLedger(){
   var rows=[];
   (D.in||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
   (D.out||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'out',x:x}); });
-  rows.sort(function(a,b){ return a.t-b.t; });
+  rows=pcLedgerSort(rows,_pcPier,ds);   /* §pkLineOrd */
   var run=op, body='', i=0;
   body+='<tr><td class="rn">—</td><td class="c">—</td><td><i>ยอดยกมาจากวันก่อนหน้า</i></td>'
     +'<td class="rt">ยกมา</td><td class="rt">ระบบ</td><td></td><td></td>'
@@ -78788,7 +78833,7 @@ function pc2Main(pier){
   var rows=[];
   (D['in']||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
   (D.out||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'out',x:x}); });
-  rows.sort(function(a,b){ return a.t-b.t; });
+  rows=pcLedgerSort(rows,pier,ds);   /* §pkLineOrd · ค่าอุทยานเรียงตามอุทยาน แล้วตามลำ */
   pcSelSync();
   var CAT={'in':['รับเงิน','in'],lt:['หางยาว','lt'],pk:['อุทยาน','pk'],dock:['ค่าจอด','dk'],other:['จ่ายอื่น','ot']};
   var run=op, body='', ED=pc2EdCur(), edHit=false, no=0;
@@ -78805,8 +78850,8 @@ function pc2Main(pier){
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
       +'<span class="no">'+no+'</span>'
       +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
-      +'<span class="tx" title="'+pcE(r.x.txt||'')+'"><i>'+pcE(r.x.txt||'—')+'</i></span>'
-      +'<span class="ct"><em class="cat '+CAT[ck][1]+'">'+CAT[ck][0]+'</em></span>'
+      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+'</span>'
+      +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+((r._pk&&r._pk.col)?(' style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+';border-color:'+pcE(r._pk.col)+'"'):'')+'>'+CAT[ck][0]+'</em></span>'
       +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
       +'<span class="m out">'+(!isIn?pcN(amt):'')+'</span>'
@@ -79137,6 +79182,7 @@ function pc2CSS(S){
   S+' .pc2-lr input.pc-cb{width:16px;height:16px;margin:0;accent-color:'+N+';cursor:pointer}',
   S+' .pc2-lr .tm{font-family:"DM Mono",monospace;color:'+SUB+'}',
   S+' .pc2-lr .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}',
+  S+' .pc2-lr .tx b.pkd{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:7px;vertical-align:1px;flex:none}',   /* §pkLineOrd · จุดสีอุทยาน */
   S+' .pc2-lr .by{color:'+SUB+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   S+' .pc2-lr .m{text-align:right;font-family:"DM Mono",monospace;font-weight:500}',
   S+' .pc2-lr .m.in{color:#0B7A4B} '+S+' .pc2-lr .m.out{color:#A32D2D}',
