@@ -788,7 +788,11 @@
     var el=document.getElementById('la-b2c-issues');
     var n=(h&&h.issueCount)||0, sig=(h&&h.issueSig)||'';
     var hidden=''; try{ hidden=localStorage.getItem(_LA_B2CI_KEY)||''; }catch(e){}
-    if(!n || hidden===sig){ if(el) el.remove(); return; }
+    /* §b2cRO (2026-10-15) · owner "ตัว B2C เช็ค ไม่ต้องขึ้นของที่เป็นดูอย่างเดียว"
+       คนที่แก้งาน operations ไม่ได้ ก็แก้ใบที่มีปัญหาไม่ได้ · กล่องนี้มีแต่บังจอ (มือถือบังการ์ด booking)
+       เช็คทุกรอบที่ /api/version ส่งมา (ราว 10 วิ) · ME โหลดเสร็จทีหลังก็ซ่อนเองในรอบถัดไป */
+    var ro=false; try{ ro=(typeof window.laCanEditArea==='function') && !window.laCanEditArea('operations'); }catch(e){}
+    if(!n || hidden===sig || ro){ if(el) el.remove(); return; }
     if(!el){
       el=document.createElement('div'); el.id='la-b2c-issues';   /* หน้าตา/ตำแหน่งอยู่ css/01-base.css §b2cCheck */
       document.body.appendChild(el);

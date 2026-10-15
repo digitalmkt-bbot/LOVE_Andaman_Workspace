@@ -11,7 +11,11 @@
 //   8 หัวแบบ mockup: แท็บ 2 อัน + ป้าย · แถบวันที่ · ยอด booking/pax/ลำ ตรงกับหน้าคอม · Programmes / Boats running วาดใหม่ (การ์ดหน้าคอมซ่อน)
 //   9 ใบยกเลิกพับไว้ท้ายหน้า · รวมทั้งวันตรงกับยอดหน้าคอม · รวมท้ายเส้นทาง
 //  10 Calendar เหลือแค่ปฏิทิน (ไม่มีการ์ดสถิติ / ค่าเฉลี่ย / แผงขวา) · 7 คอลัมน์พอดีจอ · แตะวัน → By trip ของวันนั้น
+// รอบ 3 (owner: "B2C เช็ค ไม่ต้องขึ้นของที่เป็นดูอย่างเดียว · Header กับ Card ซ้อนกันอยู่ · ตัวโปรแกรม ปรับให้กระชับ")
+//  11 ป้าย/แท็บไม่อยู่ใต้ปุ่มลอยมุมขวาบน · .main (ตัวเลื่อนของแอปบนมือถือ) ไม่เลื่อนข้าง
+//  12 Programmes แถวละบรรทัดเดียว (≤ 34px) · 13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีที่แก้ operations ไม่ได้ (คนแก้ได้ยังเห็น)
 import { open, goView } from './_harness.mjs';
+import fs from 'node:fs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
 const { page, errors, close } = await open({ blob: process.env.LAD, width: 390, height: 844 });
@@ -84,10 +88,10 @@ const c8 = await page.evaluate(() => { const h = document.getElementById('view-b
   const dt = [...h.querySelectorAll('.bt-prog .bt-daytot b')].map(b => +b.textContent);
   const tl = [...h.querySelectorAll('.bk-mro-tiles b')].map(b => +b.textContent);
   const bc = h.querySelector('.bt-boat .bt-ct .bt-cnt'); const nb = bc ? +(bc.textContent.match(/\d+/) || [0])[0] : -1;
-  const fams = h.querySelectorAll('.bt-prog .bt-pgf').length, pf = h.querySelectorAll('.bk-mro-pg .bk-mro-pf').length;
+  const fams = h.querySelectorAll('.bt-prog .bt-pgf').length, pf = h.querySelectorAll('.bk-mro-pg .bk-mro-pr:not(.sub)').length;
   const tps = h.querySelectorAll('.bt-boat .bt-tgp').length, mtp = h.querySelectorAll('.bk-mro-bc .bk-mro-tp').length;
   const chips = [...h.querySelectorAll('.bk-mro-pg .bk-mro-chips button')].map(b => b.textContent.trim());
-  return { dt, tl, nb, fams, pf, tps, mtp, chips, date: !!h.querySelector('.bk-mro-date .dn'), dn: (h.querySelector('.bk-mro-date .dn') || {}).textContent, tabs: h.querySelectorAll('.bk-mro-tabs .seg button').length, ro: !!h.querySelector('.bk-mro-tabs .bk-mro-ro') }; });
+  return { dt, tl, nb, fams, pf, tps, mtp, chips, date: !!h.querySelector('.bk-mro-date .dn'), dn: (h.querySelector('.bk-mro-date .dn') || {}).textContent, tabs: h.querySelectorAll('.bk-mro-tabs .seg button').length, ro: !!h.querySelector('.bk-mro-top .bk-mro-hrow .bk-mro-ro') }; });
 if (c8.tabs === 2 && c8.ro && c8.date && c8.dn === '16' && c8.tl[0] === c8.dt[0] && c8.tl[1] === c8.dt[1] && c8.tl[2] === c8.nb && c8.pf === c8.fams && c8.fams > 0 && c8.mtp === c8.tps && c8.chips.length === 4 && c8.chips.every(Boolean))
   ok(`8 หัวแบบ mockup · แท็บ 2 + ป้าย · วันที่ 16 · ยอด ${c8.tl.join('/')} = หน้าคอม · Programmes ${c8.pf} แถว · Boats running ${c8.mtp} ทริป · ชิปท่า ${c8.chips.join(',')}`);
 else fail('8 ' + JSON.stringify(c8));
@@ -114,6 +118,25 @@ if (c9.cx > 0 && c9.inDet === c9.cx && !c9.outCx && c9.open === false && !c9.lea
   ok(`9 15 ก.ย. ใบยกเลิก/ย้ายวัน ${c9.cx} ใบพับไว้ท้ายหน้า (ไม่มีชื่อเอเจนต์ ${c9.agN} เจ้า · ไม่มีค่าปรับ ฿) · รวมทั้งวัน ${c9.n[0]} ใบ ${c9.n[1]} คน = หน้าคอม · รวมท้ายเส้นทาง ${c9.rf}`);
 else fail('9 ' + JSON.stringify(c9));
 await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
+// 11 header vs floating buttons · 12 compact programmes
+const c11 = await page.evaluate(() => { const tb = document.querySelector('.topbar').getBoundingClientRect(), mn = document.querySelector('.main');
+  const hit = e => { const r = e.getBoundingClientRect(); return r.right > tb.left && r.left < tb.right && r.bottom > tb.top && r.top < tb.bottom; };
+  const els = [...document.querySelectorAll('.bk-mro-top .bk-mro-ro, .bk-mro-top .seg button, .bk-mro-date button, .bk-mro-date .mid')];
+  const rows = [...document.querySelectorAll('.bk-mro-pg .bk-mro-pr')].map(e => Math.round(e.getBoundingClientRect().height));
+  return { n: els.length, hit: els.filter(hit).map(e => e.className || e.textContent), mainSW: mn.scrollWidth, mainCW: mn.clientWidth, rows }; });
+if (c11.n >= 4 && !c11.hit.length && c11.mainSW <= c11.mainCW) ok('11 ป้ายดูอย่างเดียว / แท็บ / แถบวันที่ ไม่ซ้อนกับปุ่มลอยมุมขวาบน · .main ไม่เลื่อนข้าง'); else fail('11 ' + JSON.stringify(c11));
+if (c11.rows.length && c11.rows.every(h => h <= 34)) ok(`12 Programmes แถวละบรรทัดเดียว (${c11.rows.join('/')}px)`); else fail('12 ' + JSON.stringify(c11.rows));
+// 13 B2C check box
+/* บูต sync (01-auth-sync.js) จบก่อนนิยามฟังก์ชันนี้เมื่อรันบน localhost · ดึงตัวฟังก์ชันจริงจากไฟล์มารันในหน้า */
+const B2C_SRC = (() => { const f = fs.readFileSync(new URL('../../allotment_v2/js/01-auth-sync.js', import.meta.url), 'utf8');
+  const i = f.indexOf('function _laB2CIssues(h){'), j = f.indexOf('window._laB2CIssues=_laB2CIssues;'); if (i < 0 || j < i) throw new Error('_laB2CIssues not found'); return f.slice(i, j); })();
+await page.evaluate(src => { window._laB2CIssues = new Function('var _LA_B2CI_KEY="la_b2c_issue_hide_t"; function esc(s){return String(s);} ' + src + ' return _laB2CIssues;')(); }, B2C_SRC);
+const c13 = await page.evaluate(() => { const real = window.laCanEditArea; const out = {};
+  window.laCanEditArea = () => false; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ro = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = () => true; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ed = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = () => false; _laB2CIssues({ issueCount: 2, issueSig: 'zz_t' }); out.ro2 = !!document.getElementById('la-b2c-issues');
+  window.laCanEditArea = real; return out; });
+if (!c13.ro && c13.ed && !c13.ro2) ok('13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีดูอย่างเดียว · บัญชีที่แก้ได้ยังเห็น'); else fail('13 ' + JSON.stringify(c13));
 // 5 tab all → back to bytrip
 await page.evaluate(() => { _bkV2.tab = 'all'; bkV2Render(); }); await page.waitForTimeout(700); const t5 = await page.evaluate(() => _bkV2.tab);
 // 4 desktop / editor

@@ -80101,6 +80101,7 @@ function pc2CSS3(S){
   var CSS = [
     /* ── กันจอโยก ── */
     'html.bk-mro-x,body.bk-mro{overflow-x:hidden!important;max-width:100%}',
+    'body.bk-mro .main{overflow-x:hidden!important}',   /* มือถือ .main คือตัวเลื่อนของแอป (02-skins §mobile) ไม่ใช่ body */
     V.trim() + '{overflow-x:hidden;max-width:100%;min-width:0}',
     V + '#bkv2-host,' + V + '.bkv2-bodycard,' + V + '.t2-shell,' + V + '.t2-main{min-width:0!important;max-width:100%!important}',
     V + '.bkv2-topcard,' + V + '.bt-pkh{position:static!important;top:auto!important}',
@@ -80118,6 +80119,9 @@ function pc2CSS3(S){
     'body.bk-mro.bk-mro-list #view-booking .t2-wrap{display:none!important}',
     /* ── แท็บ + ป้าย ── */
     '.bk-mro-top{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}',
+    /* ปุ่มลอยมุมขวาบน (เมนู ⋯) กว้าง ~98px สูง 54px + safe-area · .main เว้นบนแค่ 30px + safe-area
+       แถวแรกจึงเป็นป้ายดูอย่างเดียวแถวสั้น ๆ ข้างปุ่ม (เว้นขวา 96px เหมือน §mobHead) · แท็บเริ่มใต้ปุ่มพอดี */
+    '.bk-mro-hrow{display:flex;align-items:center;min-height:28px;padding-right:96px}',
     '.bk-mro-tabs{display:flex;align-items:center;gap:8px}',
     '.bk-mro-tabs .seg{flex:1;min-width:0;display:flex;background:#E9ECF3;border-radius:12px;padding:3px}',
     '.bk-mro-tabs .seg button{flex:1;min-width:0;height:38px;border:0;border-radius:9px;background:transparent;font:inherit;font-size:13.5px;font-weight:700;color:#4A5672;cursor:pointer}',
@@ -80144,21 +80148,28 @@ function pc2CSS3(S){
     '.bk-mro-cd .hd b{font-size:14px;color:#0F1B3D}',
     '.bk-mro-cd .hd .ct{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:#4A5672;background:#EEF0F4;border-radius:8px;padding:2px 8px}',
     '.bk-mro-cd .hd .ov{font-size:10.5px;font-weight:800;color:#A32D2D;background:#FDECEC;border-radius:8px;padding:2px 8px}',
-    '.bk-mro-chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 0 8px;padding-bottom:1px}',
+    '.bk-mro-cd.bk-mro-pg{padding:10px 10px 6px}',
+    '.bk-mro-pg .hd{margin-bottom:6px}',
+    '.bk-mro-chips{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 0 4px;padding-bottom:1px}',
     '.bk-mro-chips::-webkit-scrollbar{display:none}',
-    '.bk-mro-chips button{flex:none;height:30px;padding:0 12px;border:1px solid #E3E6EE;border-radius:15px;background:#fff;font:inherit;font-size:12px;font-weight:700;color:#4A5672;cursor:pointer;white-space:nowrap}',
+    '.bk-mro-chips button{flex:none;height:26px;padding:0 10px;border:1px solid #E3E6EE;border-radius:13px;background:#fff;font:inherit;font-size:11.5px;font-weight:700;color:#4A5672;cursor:pointer;white-space:nowrap}',
     '.bk-mro-chips button.on{background:#0F1B3D;border-color:#0F1B3D;color:#fff}',
-    '.bk-mro-pf{display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;border:0;border-left:3px solid var(--c,#94A3B8);border-radius:8px;background:var(--bg,#F6F8FB);padding:7px 10px;margin-top:6px;font:inherit;text-align:left;cursor:pointer;color:#1A2A44}',
-    '.bk-mro-pf.on{box-shadow:inset 0 0 0 2px var(--c,#94A3B8)}',
-    '.bk-mro-pf .r1,.bk-mro-pv .r1{display:flex;align-items:center;gap:6px;min-width:0}',
-    '.bk-mro-pf .r1 i{width:8px;height:8px;border-radius:4px;background:var(--c,#94A3B8);flex:none}',
-    '.bk-mro-pf .r1 .nm{flex:1;min-width:0;font-size:13.5px;font-weight:800;color:var(--c,#0F1B3D);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.bk-mro-pf .r1 .ld,.bk-mro-pv .r1 .ld{flex:none;font-family:"DM Mono",monospace;font-size:13px;font-weight:700;color:#0F1B3D}',
-    '.bk-mro-pv{display:flex;flex-direction:column;gap:1px;width:100%;box-sizing:border-box;border:0;border-radius:8px;background:transparent;padding:5px 10px 5px 21px;font:inherit;text-align:left;cursor:pointer;color:#1A2A44}',
-    '.bk-mro-pv.on{background:#F1F4FA}',
-    '.bk-mro-pv.off{opacity:.5;cursor:default}',
-    '.bk-mro-pv .r1 .nm{flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.bk-mro-pv .r2,.bk-mro-pf .r2{font-size:11.5px;color:#6B7390;display:flex;gap:6px;flex-wrap:wrap;align-items:center}',
+    /* §bkMro2 · owner "ตัวโปรแกรม ปรับให้กระชับ" · แถวละบรรทัดเดียว: จุดสี · ชื่อ (variant สีจาง) · เวลา · ยอด · ว่าง */
+    '.bk-mro-pr{display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;min-height:32px;border:0;border-top:1px solid #F0F2F6;border-radius:0;background:transparent;padding:4px 4px;font:inherit;text-align:left;cursor:pointer;color:#1A2A44}',
+    '.bk-mro-pr:first-of-type{border-top:0}',
+    /* แอปตั้งปุ่มมือถือสูงขั้นต่ำ 40px ทั้งแอป (.main .view button) · การ์ดนี้ขอแถวเตี้ยกว่า ตามที่ owner ขอให้กระชับ */
+    'body.bk-mro .main .view .bk-mro-pr{min-height:32px!important} body.bk-mro .main .view .bk-mro-pr.sub{min-height:28px!important} body.bk-mro .main .view .bk-mro-chips button{min-height:0!important;height:28px}',
+    '.bk-mro-pr.on{background:#F1F4FA;border-radius:8px}',
+    '.bk-mro-pr.off{opacity:.5;cursor:default}',
+    '.bk-mro-pr i{width:8px;height:8px;border-radius:4px;background:var(--c,#94A3B8);flex:none}',
+    '.bk-mro-pr.sub{padding-left:19px;min-height:28px;border-top:0}',
+    '.bk-mro-pr.sub i{display:none}',
+    '.bk-mro-pr .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:800;color:var(--c,#0F1B3D)}',
+    '.bk-mro-pr .nm small{font-size:11.5px;font-weight:600;color:#6B7390;margin-left:5px}',
+    '.bk-mro-pr.sub .nm{font-size:12px;font-weight:700;color:#3A3F5C}',
+    '.bk-mro-pr .tm{flex:none;font-family:"DM Mono",monospace;font-size:11.5px;color:#6B7390}',
+    '.bk-mro-pr .ld{flex:none;font-family:"DM Mono",monospace;font-size:12.5px;font-weight:700;color:#0F1B3D;min-width:38px;text-align:right}',
+    '.bk-mro-pr .bk-mro-fr{flex:none;min-width:44px;text-align:center}',
     '.bk-mro-fr{font-size:10.5px;font-weight:800;border-radius:7px;padding:0 6px;background:#E9F8F0;color:#0B6B47;white-space:nowrap}',
     '.bk-mro-fr.low{background:#FFF4DB;color:#7A4A00} .bk-mro-fr.full{background:#FDECEC;color:#A32D2D} .bk-mro-fr.none{background:#EEF0F4;color:#6B7390}',
     '.bk-mro-tp{border-left:3px solid var(--c,#94A3B8);border-radius:8px;background:#FAFBFD;padding:8px 10px;margin-top:8px;display:flex;flex-direction:column;gap:6px;min-width:0}',
@@ -80305,10 +80316,11 @@ function pc2CSS3(S){
 
   /* ── หัว · แท็บ + ป้าย (+ แถบวันที่ใน By trip) ── */
   function buildTop(tab){
-    var h = '<div class="bk-mro-tabs"><div class="seg" role="tablist">'
+    var h = '<div class="bk-mro-hrow"><span class="bk-mro-ro">&#128065; ดูอย่างเดียว</span></div>'
+      + '<div class="bk-mro-tabs"><div class="seg" role="tablist">'
       + '<button type="button" class="' + (tab === 'cal' ? 'on' : '') + '" onclick="bkV2SwitchTab(\'cal\')">Calendar</button>'
       + '<button type="button" class="' + (tab === 'bytrip' ? 'on' : '') + '" onclick="bkV2SwitchTab(\'bytrip\')">By trip</button>'
-      + '</div><span class="bk-mro-ro">&#128065; ดูอย่างเดียว</span></div>';
+      + '</div></div>';
     if(tab === 'bytrip'){
       var d = activeDate(); var dt = d ? new Date(d + 'T00:00') : new Date();
       if(isNaN(dt)) dt = new Date();
@@ -80354,33 +80366,32 @@ function pc2CSS3(S){
       var isOff = function(v){ return /\boff\b/.test(v.className || ''); };
       var vInfo = function(v){ return txt(v.children[1]).replace(/\s*·\s*not running$/i, ''); };
       var vFree = function(v){ if(isOff(v)) return '<span class="bk-mro-fr none">ไม่วิ่ง</span>'; var f = v.querySelector('.bt-free'); return f ? ('<span class="bk-mro-fr ' + freeCls(f) + '">' + esc(freeTh(txt(f))) + '</span>') : ''; };
+      var tmOf = function(v){ var m = /\d{1,2}[:.]\d{2}/.exec(vInfo(v)); return m ? m[0] : ''; };
+      var pr = function(cls, oc, c, nm, sub, tm, lod, fr){
+        return '<button type="button" class="bk-mro-pr' + cls + '" style="--c:' + esc(c) + '"' + (oc ? (' onclick="' + esc(oc) + '"') : ' disabled') + '>'
+          + '<i></i><span class="nm">' + esc(nm) + (sub ? ('<small>' + esc(sub) + '</small>') : '') + '</span>'
+          + (tm ? ('<span class="tm">' + esc(tm) + '</span>') : '') + '<span class="ld">' + esc(lod) + '</span>' + fr + '</button>';
+      };
       fams.forEach(function(F){
         var el = F.el, one = F.vars.length === 1 ? F.vars[0] : null;
         var c = el ? (el.className || '') : '';
-        var fc = el ? (cssVar(el, '--e') || '#94A3B8') : '#94A3B8', fbg = (el && el.style && el.style.background) || '#F6F8FB';
+        var fc = el ? (cssVar(el, '--e') || '#94A3B8') : '#94A3B8';
         var fs = el ? el.querySelector('.bt-fsum') : null, fr = fs ? fs.querySelector('.bt-free') : null;
         var tt = fs ? ld(txt(fs.querySelector('.tt')).replace(/^(รวม|total)\s*/i, '')) : '';
-        var lk = fs ? txt(fs.querySelector('.lk')) : '';
         var pax = el ? txt(el.querySelector('.n')) : '';
         var nm = el ? txt(el.querySelector('.nm')) : (one ? txt(one.querySelector('.vn')) : '');
         var on = /\bon\b/.test(c) || !!(one && /\bon\b/.test(one.className));
-        var r2, lod;
-        if(one){
-          r2 = '<span>' + esc([txt(one.querySelector('.vn')), vInfo(one)].filter(Boolean).join(' · ')) + '</span>' + (lk ? ('<span>' + esc(lk) + '</span>') : '') + vFree(one);
-          lod = isOff(one) ? '' : ld(txt(one.querySelector('.bt-seat')));
-        } else {
-          r2 = (pax ? ('<span>' + esc(pax) + ' pax</span>') : '') + (lk ? ('<span>' + esc(lk) + '</span>') : '') + (fr ? ('<span class="bk-mro-fr ' + freeCls(fr) + '">' + esc(freeTh(txt(fr))) + '</span>') : '');
-          lod = tt || pax;
-        }
         var oc = (el ? el.getAttribute('onclick') : '') || (one && !isOff(one) ? one.getAttribute('onclick') : '') || '';
-        if(el || one) ph += '<button type="button" class="bk-mro-pf' + (on ? ' on' : '') + '" style="--c:' + esc(fc) + ';--bg:' + esc(fbg) + '"' + (oc ? (' onclick="' + esc(oc) + '"') : '') + '>'
-          + '<span class="r1"><i></i><span class="nm">' + esc(nm) + '</span><span class="ld">' + esc(lod) + '</span></span>'
-          + '<span class="r2">' + r2 + '</span></button>';
-        if(!one) F.vars.forEach(function(v){
+        if(one){
+          ph += pr((on ? ' on' : '') + (isOff(one) ? ' off' : ''), isOff(one) ? '' : oc, fc, nm, el ? txt(one.querySelector('.vn')) : '', tmOf(one),
+                   isOff(one) ? '' : ld(txt(one.querySelector('.bt-seat'))), vFree(one));
+          return;
+        }
+        if(el) ph += pr(on ? ' on' : '', oc, fc, nm, '', '', tt || pax, fr ? ('<span class="bk-mro-fr ' + freeCls(fr) + '">' + esc(freeTh(txt(fr))) + '</span>') : '');
+        F.vars.forEach(function(v){
           var off = isOff(v);
-          ph += '<button type="button" class="bk-mro-pv' + (/\bon\b/.test(v.className) ? ' on' : '') + (off ? ' off' : '') + '"' + (off ? ' disabled' : (' onclick="' + esc(v.getAttribute('onclick') || '') + '"')) + '>'
-            + '<span class="r1"><span class="nm">' + esc(txt(v.querySelector('.vn'))) + '</span><span class="ld">' + esc(off ? '' : ld(txt(v.querySelector('.bt-seat')))) + '</span></span>'
-            + '<span class="r2"><span>' + esc(vInfo(v)) + '</span>' + vFree(v) + '</span></button>';
+          ph += pr(' sub' + (/\bon\b/.test(v.className) ? ' on' : '') + (off ? ' off' : ''), off ? '' : (v.getAttribute('onclick') || ''), fc, txt(v.querySelector('.vn')), '', tmOf(v),
+                   off ? '' : ld(txt(v.querySelector('.bt-seat'))), vFree(v));
         });
       });
       if(!fams.length) ph += '<div class="bk-mro-none2">ไม่มีโปรแกรมในวันนี้</div>';
@@ -80646,4 +80657,5 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+
 
