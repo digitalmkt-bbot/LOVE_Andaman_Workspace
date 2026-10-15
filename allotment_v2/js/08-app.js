@@ -68969,6 +68969,14 @@ function pkbCopy(btn){
   var txt=ta.value.split('\n').map(function(l,i){ var r=R[i]; return (r&&(r.k==='val'||r.k==='sum'))?(l+'  = '+pkCalcFmt(r.v)):l; }).join('\n');
   try{ navigator.clipboard.writeText(txt); if(typeof flShowToast==='function') flShowToast('คัดลอกบอร์ดแล้ว'); }catch(_){ }
 }
+/* §pkbTools (2026-10-15) · owner "ขอให้สามารถซ่อนอันนี้ได้" (ชิปตัวเลข · ราคา/ใบ · ปุ่มกด) · สลับในที่เดียว ไม่วาดหน้าใหม่ (เคอร์เซอร์ไม่หลุด) · จำต่อเครื่อง */
+function pkbToolsOn(){ try{ return localStorage.getItem('la_pk_board_tools')!=='0'; }catch(_){ return true; } }
+function pkbTools(btn){
+  var host=btn.closest('.pkb'); if(!host) return;
+  var off=!host.classList.contains('pkb-off'); host.classList.toggle('pkb-off', off);
+  try{ localStorage.setItem('la_pk_board_tools', off?'0':'1'); }catch(_){}
+  btn.innerHTML=off?'&#9660; แสดงตัวช่วย':'&#9650; ซ่อนตัวช่วย';
+}
 function pkbClear(){ if(!pkbGet() || confirm('ล้างบอร์ดของวันนี้?')){ pkbPut(''); renderPierPark(); } }
 function pkbSw(){
   var m=pkbMode();
@@ -68998,7 +69006,8 @@ function pkBoard(flat, TY){
     else res+='<div class="'+(r.k==='sum'?'sm':'')+'">'+pkCalcFmt(r.v)+'</div>'; }
   var K=function(s,c,lbl){ return '<button type="button" class="'+(c||'')+'" onclick="pkbIns(this,'+e(JSON.stringify(s))+')">'+(lbl||e(s))+'</button>'; };
   var dLbl=(typeof _poDate!=='undefined'&&_poDate)?(+_poDate.slice(8,10)+'/'+(+_poDate.slice(5,7))):'';
-  return '<div class="pc2-card pk3-calc pkb"><div class="ch"><b>ตารางคำนวณ</b><span>พิมพ์อิสระ · + − × ÷</span>'+pkbSw()+'</div>'
+  var _tOn=pkbToolsOn();
+  return '<div class="pc2-card pk3-calc pkb'+(_tOn?'':' pkb-off')+'"><div class="ch"><b>ตารางคำนวณ</b><span>พิมพ์อิสระ · + − × ÷</span>'+pkbSw()+'</div>'
     +'<div class="pkb-box" style="height:'+(n*PKB_LH+12)+'px"><div class="pkb-num">'+num+'</div>'
     +'<div class="pkb-cur" style="top:6px"></div>'
     +'<pre class="pkb-hi" aria-hidden="true">'+pkbHi(v)+'</pre>'
@@ -69011,6 +69020,7 @@ function pkBoard(flat, TY){
       +K('1')+K('2')+K('3')+K('−','o')+K(',')+K('\b','w','&#9003;')
       +K('0')+K('.')+K('+','o')+K('\n','w3','&#8629; บรรทัดใหม่')+'</div>'
     +'<div class="pkb-ft"><span>จำไว้ในเครื่องนี้ · '+e(dLbl)+' · # โน้ต · รวม = ผลรวมข้างบน</span><span style="flex:1"></span>'
+    +'<button type="button" class="ol" onclick="pkbTools(this)" title="ซ่อน/แสดง ชิปตัวเลข · ราคา/ใบ · ปุ่มกด">'+(_tOn?'&#9650; ซ่อนตัวช่วย':'&#9660; แสดงตัวช่วย')+'</button>'
     +'<button type="button" class="ol" onclick="pkbCopy(this)">&#10697; คัดลอก</button><button type="button" class="ol" onclick="pkbClear()">ล้างบอร์ด</button></div>'
     +'<style>'
     +'.pkb .ch{display:flex;align-items:center}'
@@ -69039,7 +69049,8 @@ function pkBoard(flat, TY){
     +'.pkb-kp button.o{color:#C2410C}.pkb-kp button.w{font:700 12px inherit;font-family:inherit;background:#EEF2FB}'
     +'.pkb-kp button.w3{grid-column:span 3;font:700 12px inherit;font-family:inherit;background:#0B1E5B;color:#fff;border-color:#0B1E5B}'
     +'.pkb-ft{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:10.5px;color:#6B7693;border-top:1px solid #ECEFF4}'
-    +'.pkb-ft span{min-width:0}.pkb-ft button{white-space:nowrap;flex:none;height:26px;padding:0 9px;border:1px solid #DCE1EA;border-radius:8px;background:#fff;font:700 11px inherit;font-family:inherit;color:#3E4658;cursor:pointer}'
+    +'.pkb.pkb-off .pkb-chips,.pkb.pkb-off .pkb-kp{display:none}'
+    +'.pkb-ft{flex-wrap:wrap}.pkb-ft>span:first-child{flex:1 1 100%}.pkb-ft span{min-width:0}.pkb-ft button{white-space:nowrap;flex:none;height:26px;padding:0 9px;border:1px solid #DCE1EA;border-radius:8px;background:#fff;font:700 11px inherit;font-family:inherit;color:#3E4658;cursor:pointer}'
     +'</style></div>';
 }
 
