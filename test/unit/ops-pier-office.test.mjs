@@ -20,7 +20,7 @@ const MOVE = (o) => ({ id: 'pm_1', pier: PIER, date: DATE, item_id: 'pi_a', boat
   sheet_id: null, note: null, recorded_at: 't', recorded_by: 'GSA', edited_at: null, edited_by: null, fine_status: null, ...o });
 const LIC = { id: 'pl_1', staff_id: 'ps_1', class_id: 'deck1', licence_no: 'No1', issued_on: '2025-01-01', expires_on: '2027-01-01', issuer: 'Marine', note: null, state: 'ok', days_left: 400 };
 
-function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {} } = {}) {
+function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {}, over = null } = {}) {
   const calls = [], fails = [], wrote = [], legacy = [], listeners = [], confirms = [];
   const req = (method, path, body) => {
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
@@ -74,6 +74,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {} 
     SB_BOOKINGS: [{ id: 'B1', opsId: 'srv_B1' }],
     getBoat: (id) => ({ name: 'Boat ' + id }),
   };
+  if (over) Object.assign(win, over(win, legacy));
   const ctx = { window: win, console, Promise, Array, Object, Error, String, Number, JSON, Math, encodeURIComponent, isFinite, parseInt, URLSearchParams,
     document: { getElementById: (id) => dom[id] || null, activeElement: null }, setTimeout, clearTimeout, Date, confirm: () => true };
   const vmc = vm.createContext(ctx);
@@ -215,6 +216,27 @@ test('roster: multi-pier switching preserves cached rosters and paHasJob reflect
   rt.w._poPier = 'panwa';
   assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
   assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+});
+
+test('roster: the first draw of a session persists (one-time migrations) and the roster is still read', async () => {
+  // legacy renderPierAtt runs paEnsureWsLt / paEnsureLtSplit / paEnsureNoteMig / paSkinApply, which call poPersist
+  // once per session. That run sends nothing, so nothing draws again: the roster must be asked for once it settles.
+  const ROSTER = 'GET /v1/pier-office/panwa/roster?from=2026-09-26&to=2026-10-25';
+  let migrated = false;
+  const rt = runtime({
+    answers: { [ROSTER]: { pier: 'panwa', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: true }],
+      rows: [{ staff_id: 'ps_1', cells: [{ date: '2026-10-05', code: 'PP', layer: 'boat', boat_id: 'b1', at_pier: 'panwa' }] }] } },
+    over: (win, legacy) => ({ renderPierAtt: () => { legacy.push('renderPierAtt'); if (!migrated) { migrated = true; win.poPersist(); } } }),
+  });
+  await boot(rt);   // the pier office is already loaded (the person came from the job sheet or the office)
+  rt.w.renderPierAtt();
+  assert.equal(rt.w.laOps.pier.busy(), true, 'the migration persist is pending while the wrapper asks');
+  await new Promise((r) => setTimeout(r, 800)); await rt.flush();
+  assert.equal(rt.calls.filter((c) => c.method + ' ' + c.path === ROSTER).length, 1, 'the roster is read once the persist settles');
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+  assert.ok(rt.legacy.filter((x) => x === 'renderPierAtt').length >= 2, 'the roster is drawn again with the server cells');
+  assert.deepEqual(writes(rt), [], 'the migration persist sends nothing');
 });
 
 test('pay: the allowance comes from the server; a rate is a PUT; the rules go as the whole table', async () => {
