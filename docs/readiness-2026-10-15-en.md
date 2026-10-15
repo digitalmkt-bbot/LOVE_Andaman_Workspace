@@ -69,11 +69,14 @@ Both local databases restored fresh from the 13 Oct dumps; API built from backen
 - **Locked seats on 14/15 Oct (6 route-days)** → snapshot artifact: those locks carry an explicit
   `expiry` of 13/14 Oct; legacy expires them in the browser (`bookingV2LockExpireSweep`), so the
   frozen rows still read active, while operation-backend evaluates expiry today. Same rule.
-- **Real — master data created in legacy after rate types and boats moved here (9 Oct), which
-  the import deliberately does not carry:** 5 rate types (NYM-MONKEY "Monkey Dive Rate",
-  SILAN-KHAOLA, IRIS-IRISHO, SILAN-SILANK-2, PMAM-MAMKLB "Mam -KL Beim"); agent **Monkey Dive
-  Thailand** has *no* rate type here; agent **KL Beim** is still on its old rate; boat **BMP**
-  (speedboat, Tub Lamu) exists only in legacy. → operator check on production (below).
+- **Rate types, a boat and two agent bindings (first run) → runbook gap, now closed.** The first
+  run used the importers' defaults, which still treat rate types, boats, agents, markets and
+  salespeople as operation-backend's since 9 Oct, so it skipped 5 rate types legacy added later,
+  boat BMP, and two agents' rate bindings (Monkey Dive Thailand, KL Beim). The owner's decision is
+  **one full replacement on one day: legacy is master of everything until cutover**. Re-run with
+  `seed:boats --commit` and `import:legacy --commit --sales --rate-types`: BMP added, all 5 rate
+  types present, both agents bound as in legacy; rate types, deployments and boats-per-day verify
+  with 0 differences. What still differs is only the P13 lines above.
 
 **Cutover-day notes from the rehearsal:**
 - The guards refuse a re-import once staff have made bookings, invoices or payments on
@@ -82,8 +85,10 @@ Both local databases restored fresh from the 13 Oct dumps; API built from backen
   the dry run first on the day; it says which state production is in.
 - `import:all` (the pipeline) does **not** forward `--force-replace`, and runs neither
   `import:users` nor `import:addon-services` — run those two explicitly.
-- Rate types, boats, agents, markets and salespeople are mastered here since 9 Oct; anything staff
-  created in legacy since must be recreated here by hand (the import only inserts unknown agents).
+- **One-day cutover: carry the master data too.** The importers' defaults still assume some areas
+  moved here on 9 Oct (superseded). On the day run `seed:boats --commit` and `import:legacy --commit
+  --sales --rate-types`, or legacy's later rate types, boats and agent bindings stay behind.
+  Legacy-sync stays all-or-nothing (`LA_LEGACY_SYNC`); there is no per-area switch-over.
 
 ## Side-by-side results (2026-10-15, local stack, vs production lk-inbox `bb05572`)
 
@@ -131,13 +136,14 @@ slow, not broken.
 
 ## Operator actions (production — commands are in `HANDOFF-BACKEND.md` / the batch-9 report)
 
-1. **C3**: three agents → `proforma` (TOUR POINT PHUKET, Incom Asia/Banmee, CKP Tour) — three
-   `PATCH /v1/agents/:id {"pay_type":"proforma"}` with before/after reads.
+1. **C3** (three agents → `proforma`): **no production write needed** — legacy is master until
+   cutover, and `import:legacy --sales` brings them over as `proforma` (verified on the local copy).
+   The `PATCH` commands in `HANDOFF-BACKEND.md` stay as a fallback only.
 2. **C5**: the "cancelled due to weather" on Early Tratato 15 Oct is a stray
    `POST /v1/weather-closures` by `admin` on cutover day (`wx_c484dc1f…`, no bookings tagged) —
    read first, then `POST /v1/weather-closures/<id>/undo`.
-3. **Master data** from the rehearsal: check the 5 rate types, boat BMP, and the two agents'
-   bindings (Monkey Dive Thailand, KL Beim) on production; recreate / rebind if missing.
+3. **Master data** (5 rate types, boat BMP, two agent bindings): **carried by the cutover import**
+   (`seed:boats`, `import:legacy --sales --rate-types`) — nothing to recreate by hand.
 4. **Add-on catalogue**: `import:addon-services` (dry run, then `--commit`) with explicit
    SOURCE/TARGET — legacy never saved its catalogue, so the importer carries its literal
    (3 services, 6 variants, prices empty for sales to fill).
@@ -161,9 +167,12 @@ Open: **#6** delete the obsolete `handoff/b2-c-20261014` branch · **#10** guide
 (may numbers reset, pmap toggles shared or per user, guide list its own endpoints, …) ·
 **#11** stamp policy (run the deploy build vs stamp all 662 tags at once).
 
-## Cutover rule (unchanged)
+## Cutover rule
 
-Do not schedule the one-day cutover until every blocker above is resolved and the browser
-acceptance list passes. On the day: stop legacy writes, dry-run then run the importers
-(`import:attachments`, `import:legacy`, `import:day-money`, `import:pier-office`,
-`import:users`, `import:addon-services`), `verify:import`, then staff enter data only here.
+**One full replacement on one day, every area at once** (owner, 15 Oct; supersedes the 9 Oct
+per-area idea). Until that day legacy is master of everything and the importers mirror it. Do not
+schedule it until every blocker above is resolved and the browser acceptance list passes. On the
+day: stop legacy writes; dry-run, then run with `--commit`: `seed:boats`, `import:attachments`,
+`import:legacy --sales --rate-types`, `import:day-money`, `import:pier-office`, `import:users`,
+`import:addon-services`; `verify:import` (only the P13 lines may differ); then staff enter data only
+here. Rehearsed in full on the 13 Oct copy (15 Oct) with exactly this order.
