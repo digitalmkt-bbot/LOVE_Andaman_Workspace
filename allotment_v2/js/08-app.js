@@ -53228,10 +53228,13 @@ function bkV2RenderTab2(){
      รอบที่ออกเวลาเดียวกัน (Speedboat กับ Catamaran 08:30) เดิมไม่มีกฎ · ลำดับขึ้นกับว่าเจอใบจองของรอบไหนก่อนในข้อมูล
      จึงสลับไปมาวันต่อวัน · owner: "ให้รอบที่ออกเวลาเดียวกันเรียงตามลำดับที่ตั้งไว้" = ลำดับใน ROUTES (หน้าตั้งค่าเส้นทาง) */
   const _btRouteIdx = rid => { const i=(typeof ROUTES!=='undefined'?ROUTES:[]).findIndex(x=>x.id===rid); return i<0?9999:i; };
+  /* §btOrderCfg · "ลำดับที่ตั้งไว้" = ลำดับของหน้า Program Config (laRouteOrdCmp: ท่า · เลข sort · ตำแหน่งใน ROUTES)
+     ตัวเดียวกับที่เงินสดย่อยใช้ (§pcRouteOrd) · ของรอบแรกใช้ตำแหน่งใน ROUTES ดิบ ไม่สนเลข sort ที่ตั้งในหน้านั้น */
+  const _btOrdCmp = (a,b) => (typeof laRouteOrdCmp==='function') ? laRouteOrdCmp(a,b) : (_btRouteIdx(a)-_btRouteIdx(b));
   const routeIds = _allRids.sort((a,b)=>{
     const fa=_famOf(a), fb=_famOf(b);
     if(fa!==fb) return (_famMinTime[fa]||'99').localeCompare(_famMinTime[fb]||'99') || fa.localeCompare(fb);
-    return _timeOf(a).localeCompare(_timeOf(b)) || (_btRouteIdx(a)-_btRouteIdx(b));
+    return _timeOf(a).localeCompare(_timeOf(b)) || _btOrdCmp(a,b);
   });
 
   const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
@@ -53483,7 +53486,7 @@ function bkV2RenderTab2(){
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
         const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
-      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))) || (_btRouteIdx(x)-_btRouteIdx(y)));   /* §btOrder · เวลาเดียวกัน → ลำดับที่ตั้งไว้ */
+      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))) || _btOrdCmp(x,y));   /* §btOrder · เวลาเดียวกัน → ลำดับที่ตั้งไว้ (Program Config) */
     const nRun=rids.filter(r=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date)).length;
     /* §famSum (2026-10-13) · owner "ตัวผลรวมที่เป็น Variant เพิ่มจำนวนล็อคทั้งหมดด้วย และผลรวมจะเป็นเท่าไหร่"
        แถวหัวโปรแกรมรวมทุก variant ที่วิ่งวันนี้: 🔒 ล็อกทั้งหมด · รวม = จอง + ล็อก / ที่นั่งทั้งหมด · ว่าง
