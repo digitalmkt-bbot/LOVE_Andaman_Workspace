@@ -79392,7 +79392,9 @@ function pc2CSS3(S){
    - ถ้าโค้ดส่วนนี้พัง หน้าก็ยังเป็น Classic ตามเดิม (ทุกจุด try/catch) */
 (function(){
   var KEY = 'la_bt_view';
-  function on(){ try{ return localStorage.getItem(KEY) === 'compact'; }catch(e){ return false; } }
+  /* §bkMroBtc (2026-10-15) · ผิวมือถือดูอย่างเดียว (§bkMro · body.bk-mro) วาดการ์ดเองจากหน้า Classic
+     Compact เขียนการ์ด Boats running ทับเป็นตาราง ตัวอ่านของ §bkMro เลยหาทริปไม่เจอ ("Boat running ไม่ขึ้น") · ในผิวนั้นถือว่า Classic */
+  function on(){ try{ if(document.body && document.body.classList.contains('bk-mro')) return false; return localStorage.getItem(KEY) === 'compact'; }catch(e){ return false; } }
   function apply(){ try{ if(document.body) document.body.classList.toggle('btc', on()); }catch(e){} }
   window.btcIsOn = on;
   window.btcSet = function(v){
@@ -80600,10 +80602,17 @@ function pc2CSS3(S){
          ปล่อยค้างไว้ตอนไปหน้าอื่น = หน้าเช็คอิน (ตาราง 1420px ที่ต้องปัดข้าง) เลื่อนข้างไม่ได้ + ไม่เห็น toast */
       var on = isOn() && !!root && root.classList.contains('active');
       document.body.classList.toggle('bk-mro', on);
+      if(on) document.body.classList.remove('btc');   /* §bkMroBtc · ผิว Compact ปิดในผิวนี้ (§btCompact apply() ก็จะไม่ใส่กลับ) */
       document.documentElement.classList.toggle('bk-mro-x', on);
       if(!on){ document.body.classList.remove('bk-mro-list', 'bk-mro-bt'); if(root) drop(root, '.bk-mro-top,.bk-mro-sum,.bk-mro-l'); busy = false; return; }
       ensureCss();
       hookRender();
+      /* §bkMroBtc · มุมมอง Compact (§btCompact · เลือกไว้ในเครื่อง la_bt_view) เขียนการ์ด Boats running ทับเป็นตาราง (.btc-bt)
+         ตัวอ่านของเราจึงไม่เจอทริป · owner "Boat running ไม่ขึ้น" · ผิวมือถือนี้ปิด Compact ไว้ (§btCompact on() เช็ค body.bk-mro)
+         ถ้าหน้าที่วาดไว้ก่อนผิวนี้เปิดโดน Compact แปลงไปแล้ว วาดใหม่หนึ่งรอบให้ได้หน้า Classic สด ๆ */
+      if(root.querySelector('.bt-tgl[data-btc], .btc-bt') && Date.now() - lastClean > 2000 && typeof bkV2Render === 'function'){
+        lastClean = Date.now(); busy = false; bkV2Render(); return;
+      }
       var B = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2 : null;
       try{
         if(B && /^(locks|approvals|cancel|all)$/.test(B.tab || '')){ B.tab = 'bytrip'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; }
@@ -80668,6 +80677,7 @@ function pc2CSS3(S){
     w.__bkMro = true; w.__bkMroOrig = o;
     window.bkV2Render = w;
   }
+  var lastClean = 0;
   var cxOpen = false;   /* กล่องใบยกเลิก · จำว่ากางไว้ ข้ามการวาดใหม่ */
   var queued = false;
   function queue(){ if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(function(){ queued = false; pass(); }); }
@@ -80696,6 +80706,7 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+
 
 
 

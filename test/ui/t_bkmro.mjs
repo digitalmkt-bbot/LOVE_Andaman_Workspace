@@ -20,6 +20,9 @@
 // รอบ 5 (owner: "ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น · ตัวที่เป็น Card Notice ตัดทิ้ง")
 //  15 ป้ายลอย (ดูอย่างเดียว · มีข้อมูลใหม่ · toast · B2C เช็ค) ไม่ขึ้น · การ์ด B2C ใบใหม่ไม่วาด ไม่ส่งเสียง · ป้ายเซฟไม่สำเร็จยังขึ้น
 //  16 ไปหน้าอื่น → ผิวมือถือปิด (หน้าเช็คอินยังปัดข้างได้ ป้ายลอยกลับมา) · กลับมา Booking → เปิดอีก
+// รอบ 6 (owner: "Boat running ไม่ขึ้น" · เครื่องนั้นเลือกมุมมอง Compact ไว้ · Compact เขียนการ์ดเรือทับเป็นตาราง)
+//  17 เลือก Compact ไว้ → ผิวมือถือยังมี Boats running ครบทุกทริป (Compact ปิดในผิวนี้) · หน้าที่ Compact แปลงไปแล้วก่อนผิวเปิด → วาดใหม่ให้เอง
+//     · จอคอมยังเป็น Compact ตามที่เลือก
 import { open, goView } from './_harness.mjs';
 import fs from 'node:fs';
 let bad = 0;
@@ -179,6 +182,21 @@ const c16b = await page.evaluate(() => ({ on: document.body.classList.contains('
 ['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => page.evaluate(i => document.getElementById(i)?.remove(), id));
 if (!c16a.on && c16a.ox !== 'hidden' && c16a.vo !== 'none' && c16b.on && c16b.list) ok('16 ไปหน้าอื่น → ผิวมือถือปิด (.main ปัดข้างได้ · ป้ายลอยกลับมา) · กลับ Booking → เปิดอีก');
 else fail('16 ' + JSON.stringify({ c16a, c16b }));
+// 17 Compact saved on this device
+await page.evaluate(() => { localStorage.setItem('la_bt_view', 'compact'); _bkV2.filterDate = '2026-09-16'; bkV2Render(); }); await page.waitForTimeout(900);
+const S17 = () => page.evaluate(() => ({ btc: document.body.classList.contains('btc'), tps: document.querySelectorAll('#view-booking .bt-boat .bt-tgp').length,
+  mtp: document.querySelectorAll('#view-booking .bk-mro-bc .bk-mro-tp').length, none: !!document.querySelector('#view-booking .bk-mro-bc .bk-mro-none2'), btcTbl: !!document.querySelector('#view-booking .btc-bt') }));
+const c17a = await S17();
+await page.evaluate(() => { window.__bkMroForce = false; window.bkMroPass(); bkV2Render(); }); await page.waitForTimeout(900);
+const c17pre = await S17();                                  // ผิวปิด · Compact แปลงหน้าแล้ว
+await page.evaluate(() => { window.__bkMroForce = true; window.bkMroPass(); }); await page.waitForTimeout(1200);
+const c17b = await S17();
+await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(900);
+const c17d = await S17();
+await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => { localStorage.removeItem('la_bt_view'); bkV2Render(); }); await page.waitForTimeout(900);
+if (!c17a.btc && c17a.mtp > 0 && c17a.mtp === c17a.tps && !c17a.none && !c17a.btcTbl && c17pre.btcTbl && !c17b.btc && c17b.mtp === c17a.mtp && !c17b.btcTbl && c17d.btc && c17d.btcTbl)
+  ok(`17 เลือก Compact ไว้ → ผิวมือถือยังมี Boats running ${c17a.mtp} ทริป · หน้าที่ Compact แปลงแล้วก่อนเปิดผิว → วาดใหม่ได้ครบ · จอคอมยังเป็น Compact`);
+else fail('17 ' + JSON.stringify({ c17a, c17pre, c17b, c17d }));
 // 4 desktop / editor
 await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(600); const d4 = await S();
 await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => { window.__bkMroForce = false; bkV2Render(); }); await page.waitForTimeout(600); const e4 = await S();
