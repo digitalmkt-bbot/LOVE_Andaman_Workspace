@@ -79361,3 +79361,259 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §btCompact END ══════
+// ══════ §bkMro BEGIN ══════
+/* §bkMro (2026-10-15) · Booking · By trip บนมือถือ สำหรับผู้ใช้ที่ "ดูได้อย่างเดียว"
+   owner: "กรณีที่เป็น User ที่ดูได้อย่างเดียว น่าจะต้องปรับให้โชว์บางรายการ · โหมดจัดรถเรือไม่ต้องขึ้น · ชื่อ Agent ไม่ต้องแสดง"
+          + "หมายถึงกรณีที่ขึ้นในหน้าโทรศัพท์" + mockup ที่ owner ดูแล้วสั่ง "ทำเลย" (การ์ด Programmes + Boats running อยู่ด้วย)
+   เปิดเมื่อ: บัญชีแก้ฝ่าย operations ไม่ได้ (laCanEditArea('operations') = false) และจอกว้าง ≤ 760px
+   ทำแบบเดียวกับ §btCompact · เป็นผิวหน้าทับหน้า Classic ที่วาดเสร็จแล้ว ไม่คำนวณใหม่
+     · ซ่อน: แท็บ Seat Locks / รออนุมัติ / Cancellations / All bookings · + New booking · ตัวสลับ Classic/Compact
+             การ์ดโหมด Van / Boat / Re-confirm · การ์ด Seat Lock · ตาราง (คอลัมน์ Agency / Pay / Total / ปุ่มในแถวไปด้วย)
+     · แทนตารางด้วยการ์ดต่อใบ อ่านจากแถวของตารางเดิม (เวลา · จุดรับ · ห้อง · โซน · Add-on · Special request · เรือ)
+       ใบที่แยกรับหลายจุดได้หลายการ์ดเหมือนในตาราง · ไม่มีชื่อเอเจนต์ ไม่มีเงิน ไม่มีปุ่มแก้
+     · แตะการ์ด = แผ่นรายละเอียดอ่านอย่างเดียว (ไม่ใช่หน้า booking detail ที่มีปุ่มแก้)
+   ⚠ นี่คือ UX ไม่ใช่สิทธิ์ · สิทธิ์จริงอยู่ที่ /api/save (view-only เซฟไม่ได้อยู่แล้ว) */
+(function(){
+  var MQ = '(max-width: 760px)';
+  function viewOnly(){
+    try{
+      if(window.__bkMroForce) return true;                     /* เทส */
+      if(typeof window.laCanEditArea === 'function') return !window.laCanEditArea('operations');
+      if(typeof window.laCanEdit === 'function') return !window.laCanEdit();
+    }catch(e){}
+    return false;
+  }
+  function narrow(){ try{ return window.matchMedia ? window.matchMedia(MQ).matches : (window.innerWidth <= 760); }catch(e){ return false; } }
+  function isOn(){ return viewOnly() && narrow(); }
+  window.bkMroIsOn = isOn;
+
+  var CSS = [
+    'body.bk-mro #view-booking .bkv2-utab[onclick*="\'locks\'"],body.bk-mro #view-booking .bkv2-utab[onclick*="\'approvals\'"],body.bk-mro #view-booking .bkv2-utab[onclick*="\'cancel\'"],body.bk-mro #view-booking .bkv2-utab[onclick*="\'all\'"]{display:none!important}',
+    'body.bk-mro #view-booking .bkv2-newbtn,body.bk-mro #view-booking .bkv2-newbtn2,body.bk-mro #view-booking .btc-tg{display:none!important}',
+    'body.bk-mro #view-booking .bt-c.bk-mro-hide,body.bk-mro #view-booking .bt-lockc{display:none!important}',
+    'body.bk-mro #view-booking .bt-pair,body.bk-mro #view-booking .bt-pair2{grid-template-columns:minmax(0,1fr)!important}',   /* คู่การ์ดที่อีกใบถูกซ่อน · ให้ใบที่เหลือเต็มแถว */
+    'body.bk-mro.bk-mro-list #view-booking .t2-wrap{display:none!important}',
+    '.bk-mro-ro{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;background:#FFD36A;color:#5A3A00;font-size:11.5px;font-weight:800;margin:6px 0 0}',
+    '.bk-mro-l{display:flex;flex-direction:column;gap:10px;margin-top:10px}',
+    '.bk-mro-rt{background:#fff;border-radius:14px;overflow:hidden;border-top:4px solid var(--rc,#94A3B8);box-shadow:0 1px 2px rgba(15,27,61,.06)}',
+    '.bk-mro-rh{padding:11px 14px 9px;display:flex;flex-direction:column;gap:5px;background:#FBF8F7}',
+    '.bk-mro-rh .n{font-size:15px;font-weight:800;color:var(--rc,#0F1B3D)}',
+    '.bk-mro-rh .s{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:#4A5672}',
+    '.bk-mro-rh .s b{font-family:"DM Mono",monospace;color:#0F1B3D}',
+    '.bk-mro-rh .s em{font-style:normal;font-size:11px;font-weight:700;color:#0B6B47;background:#E9F8F0;border-radius:8px;padding:1px 7px}',
+    '.bk-mro-zh{padding:6px 14px;font-size:11.5px;font-weight:700;color:#0C447C;background:#F6F8FB;border-top:1px solid #EEF0F4}',
+    '.bk-mro-c{display:flex;gap:12px;width:100%;box-sizing:border-box;padding:11px 14px;border:0;border-top:1px solid #EEF0F4;background:#fff;text-align:left;font:inherit;color:#1A2A44;cursor:pointer}',
+    '.bk-mro-c:active{background:#F3F6FB}',
+    '.bk-mro-c.cx{opacity:.5}',
+    '.bk-mro-c .tm{width:58px;flex:none;display:flex;flex-direction:column;gap:2px;font-family:"DM Mono",monospace;font-size:13px;font-weight:700;color:#0F1B3D;line-height:1.25;word-break:break-word}',
+    '.bk-mro-c .tm small{font-family:inherit;font-size:10.5px;font-weight:500;color:#6B7390}',
+    '.bk-mro-c .bd{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}',
+    '.bk-mro-c .nm{display:flex;align-items:center;gap:6px}',
+    '.bk-mro-c .nm b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.bk-mro-c .px{margin-left:auto;flex:none;font-family:"DM Mono",monospace;font-size:12px;font-weight:700;background:#0F1B3D;color:#fff;border-radius:7px;padding:1px 7px}',
+    '.bk-mro-c .ht{font-size:12.5px;color:#3A3F5C}',
+    '.bk-mro-c .mt{display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:11px;font-weight:700;color:#3A3F5C}',
+    '.bk-mro-c .zt{border-radius:5px;padding:0 6px;background:#E6F1FB;color:#0C447C}',
+    '.bk-mro-c .zt.kl{background:#E9F8F0;color:#0B6B47} .bk-mro-c .zt.own{background:#F1EDFC;color:#5B289A}',
+    '.bk-mro-c .bt{color:#5B289A}',
+    '.bk-mro-c .tg{display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:11px}',
+    '.bk-mro-c .tg *{max-width:100%}',
+    '.bk-mro-c .tg .t2-note{font-size:11.5px;color:#3A3F5C;white-space:normal}',
+    '.bk-mro-none{padding:24px;text-align:center;color:#6B7390;font-size:13px;background:#fff;border-radius:14px}',
+    /* แผ่นรายละเอียด */
+    '#bk-mro-sh{position:fixed;inset:0;z-index:10050;background:rgba(15,27,61,.55);display:flex;flex-direction:column;justify-content:flex-end}',
+    '#bk-mro-sh .p{background:#fff;border-radius:20px 20px 0 0;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;font-family:"DM Sans","Sarabun",sans-serif;color:#1A2A44}',
+    '#bk-mro-sh .hd{padding:14px 16px 12px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #EEF0F4}',
+    '#bk-mro-sh .hd .vc{font-family:"DM Mono",monospace;font-size:12px;color:#6B7390}',
+    '#bk-mro-sh .hd b{display:block;font-size:19px;color:#0F1B3D}',
+    '#bk-mro-sh .hd .rt{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 8px;background:#F1F3F8}',
+    '#bk-mro-sh .x{margin-left:auto;width:44px;height:44px;flex:none;border-radius:22px;border:0;background:#F1F3F8;color:#3A3F5C;font-size:18px;cursor:pointer}',
+    '#bk-mro-sh .bd{padding:14px 16px 24px;display:flex;flex-direction:column;gap:14px;overflow:auto}',
+    '#bk-mro-sh .px4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;text-align:center}',
+    '#bk-mro-sh .px4 div{background:#F6F8FB;border-radius:10px;padding:8px 0}',
+    '#bk-mro-sh .px4 b{display:block;font-family:"DM Mono",monospace;font-size:18px}',
+    '#bk-mro-sh .px4 span{font-size:10.5px;color:#6B7390}',
+    '#bk-mro-sh .k{font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#6B7390;margin-bottom:3px}',
+    '#bk-mro-sh .v{font-size:14px;line-height:1.55}',
+    '#bk-mro-sh .tg{display:flex;gap:5px;flex-wrap:wrap;align-items:center}',
+    '#bk-mro-sh .ro{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#7A4A00;background:#FFF4DB;border-radius:10px;padding:9px 11px}'
+  ].join('\n');
+  function ensureCss(){
+    if(document.getElementById('bk-mro-css')) return;
+    var st = document.createElement('style'); st.id = 'bk-mro-css'; st.textContent = CSS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  /* ข้อความของ element โดยเว้นวรรคระหว่างชิ้น (textContent เอาคำมาชนกัน) */
+  function txt(el){
+    if(!el) return '';
+    var out = [], w = document.createTreeWalker(el, 4 /* SHOW_TEXT */, null), n;
+    while((n = w.nextNode())){ var p = n.parentNode; if(p && /^(BUTTON|SCRIPT|STYLE)$/.test(p.tagName)) continue; var t = n.nodeValue.replace(/\s+/g, ' ').trim(); if(t) out.push(t); }
+    return out.join(' ');
+  }
+  /* สำเนาของช่องในตาราง · เอาปุ่ม ช่องกรอก และ onclick ออก · คงสี/ป้ายเดิมไว้ */
+  function cleanHtml(el){
+    if(!el) return '';
+    var c = el.cloneNode(true);
+    [].slice.call(c.querySelectorAll('button,input,select,textarea,.t2-addoncell-acts')).forEach(function(x){ x.remove(); });
+    [c].concat([].slice.call(c.querySelectorAll('*'))).forEach(function(x){
+      [].slice.call(x.attributes || []).forEach(function(a){ if(/^on/i.test(a.name) || a.name === 'title') x.removeAttribute(a.name); });
+      if(x.style){ x.style.cursor = ''; }
+    });
+    return c.innerHTML.trim();
+  }
+  function bookingOf(id){ try{ return (typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []).find(function(b){ return b && b.id === id; }) || null; }catch(e){ return null; } }
+  function activeDate(){ try{ return (typeof bkV2Tab2ActiveDate === 'function') ? bkV2Tab2ActiveDate() : ''; }catch(e){ return ''; } }
+  function zoneKey(b, t){
+    try{ if(typeof tsManZoneKey === 'function') return tsManZoneKey(b, t) || ''; }catch(e){}
+    return '';
+  }
+
+  var ROWS = [];   /* ข้อมูลของการ์ดล่าสุด · แผ่นรายละเอียดอ่านจากนี่ */
+  function build(root){
+    var tbls = [].slice.call(root.querySelectorAll('table.t2-mtbl')); if(!tbls.length) return null;
+    var date = activeDate();
+    ROWS = [];
+    var html = [], open = false, rc = '#94A3B8';
+    var closeRt = function(){ if(open){ html.push('</div>'); open = false; } };
+    /* ตารางแยกต่อกลุ่ม (เส้นทางเรือ · เหมาลำ ฯลฯ) · อ่านทุกตารางตามลำดับบนจอ */
+    tbls.forEach(function(tbl){
+    var heads = [].slice.call(tbl.querySelectorAll('thead th')).map(function(th){ return txt(th).toLowerCase(); });
+    var col = function(re){ for(var i = 0; i < heads.length; i++){ if(re.test(heads[i])) return i; } return -1; };
+    var C = { vc: col(/^voucher/), cu: col(/^customer/), ad: col(/^ad$/), chd: col(/^chd$/), inf: col(/^inf$/), foc: col(/^foc$/),
+              tm: col(/^time/), pk: col(/^pickup/), rm: col(/^room/), zn: col(/^zone/), ao: col(/^add-?on/), sq: col(/^special/), bt: col(/boat/) };
+    [].slice.call(tbl.querySelectorAll('tbody > tr')).forEach(function(tr){
+      var cls = tr.className || '';
+      if(/\bt2-pband\b/.test(cls)){
+        closeRt(); open = true;
+        rc = (tr.getAttribute('style') || '').replace(/^.*--pc:\s*([^;]+).*$/, '$1') || '#94A3B8';
+        var pn = txt(tr.querySelector('.pn')), pt = txt(tr.querySelector('.pt')), ps = tr.querySelector('.ps'), pb = txt(tr.querySelector('.pb'));
+        var psb = ps ? txt(ps.querySelector('b')) : '', psem = ps ? txt(ps.querySelector('em')) : '';
+        var psall = ps ? txt(ps).replace(psem, '').replace(/\s+/g, '') : '';
+        html.push('<div class="bk-mro-rt" style="--rc:' + esc(rc) + '"><div class="bk-mro-rh"><span class="n">' + esc(pn) + '</span>'
+          + '<span class="s">' + esc(pt) + (psall ? (' · <b>' + esc(psall) + '</b>') : '') + (psem ? ('<em>' + esc(psem) + '</em>') : '') + (pb ? (' · ' + esc(pb)) : '') + '</span></div>');
+        return;
+      }
+      if(/\bt2-zband\b/.test(cls)){
+        if(!open){ open = true; html.push('<div class="bk-mro-rt">'); }
+        html.push('<div class="bk-mro-zh">' + esc(txt(tr)) + '</div>');
+        return;
+      }
+      var id = tr.getAttribute('data-al');
+      if(!/\bt2-row\b/.test(cls) || !id) return;
+      var td = tr.children, cell = function(i){ return (i >= 0 && td[i]) ? td[i] : null; };
+      var b = bookingOf(id) || {};
+      var t = (typeof ckTripOn === 'function') ? ckTripOn(b, date) : null;
+      var num = function(i){ var c = cell(i); if(!c) return 0; var f = c.childNodes[0]; var v = parseInt(String(f ? f.textContent : c.textContent).replace(/[^0-9]/g, ''), 10); return isNaN(v) ? 0 : v; };
+      var px = { ad: num(C.ad), chd: num(C.chd), inf: num(C.inf), foc: num(C.foc) };
+      var tot = px.ad + px.chd + px.inf + px.foc;
+      var tmT = txt(cell(C.tm)), tmM = tmT.match(/\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?/);
+      var tm = tmM ? tmM[0].replace(/\s+/g, '') : tmT;
+      var t1 = tm, t2 = '';
+      var mm = /^(\d{1,2}[:.]\d{2})[-–](\d{1,2}[:.]\d{2})$/.exec(tm); if(mm){ t1 = mm[1]; t2 = '–' + mm[2]; }
+      var pk = txt(cell(C.pk)).replace(/^⚠\s*no pickup$/i, '');
+      var rm = txt(cell(C.rm)).replace(/^[—-]$/, '');
+      var zn = txt(cell(C.zn)).replace(/^[—-]$/, '');
+      var zk = zoneKey(b, t), zc = zk === 'KL' ? ' kl' : (zk === 'OWN' ? ' own' : '');
+      /* ช่องเรือมีป้ายย่อ (OC) นำหน้าชื่อ · ชื่อเต็มอยู่ใน title "Oceanus · เรือที่ขึ้น" */
+      var btEl = cell(C.bt) ? cell(C.bt).querySelector('[title$="เรือที่ขึ้น"]') : null;
+      var bt = (btEl ? String(btEl.getAttribute('title') || '').split(' · ')[0].trim() : '') || txt(cell(C.bt)).replace(/^[—-]$/, '');
+      var O = (typeof bkOpsRead === 'function') ? (bkOpsRead(b, date) || {}) : (b.ops || {});
+      var vid = O.vanId || '', van = '';
+      if(vid){ var v = (typeof vehGet === 'function') ? vehGet(vid) : null; van = (v && v.name) || vid; }
+      var aoEl = cell(C.ao) ? cell(C.ao).querySelector('.t2-addoncell-badges') : null;
+      var ao = cleanHtml(aoEl || cell(C.ao)), sq = cleanHtml(cell(C.sq));
+      var row = { id: id, i: ROWS.length, vc: txt(cell(C.vc)) || b.voucherRef || '', name: b.leadPax || txt(cell(C.cu)), px: px, tot: tot, tm: tmT, t1: t1, t2: t2,
+                  pk: pk, rm: rm, zn: zn, zk: zk, bt: bt, van: van, vid: vid, ao: ao, sq: sq, cx: /\bt2-cxl\b/.test(cls), rc: rc, route: '', date: date };
+      try{ var rr = (t && typeof getRoute === 'function') ? getRoute(t.routeId) : null; row.route = (rr && rr.name) || ''; }catch(e){}
+      ROWS.push(row);
+      var pxTxt = px.chd || px.inf ? (px.ad + '+' + (px.chd + px.inf)) : String(tot);
+      if(!open){ open = true; html.push('<div class="bk-mro-rt">'); }
+      html.push('<button type="button" class="bk-mro-c' + (row.cx ? ' cx' : '') + '" onclick="bkMroOpen(' + row.i + ')">'
+        + '<span class="tm">' + esc(t1 || '—') + (t2 ? ('<small>' + esc(t2) + '</small>') : '') + '</span>'
+        + '<span class="bd"><span class="nm"><b>' + esc(row.name || '—') + '</b>' + (row.cx ? '<span style="font-size:10.5px;font-weight:800;color:#A32D2D">ยกเลิก</span>' : '') + '<span class="px">' + esc(pxTxt) + '</span></span>'
+        + '<span class="ht">' + esc(pk || (zk === 'OWN' ? 'มาเอง · ไม่มีรถรับ' : 'ยังไม่มีจุดรับ')) + (rm ? (' · <b>ห้อง ' + esc(rm) + '</b>') : '') + '</span>'
+        + '<span class="mt">' + (zk ? ('<span class="zt' + zc + '">' + (zk === 'OWN' ? 'Own' : esc(zk)) + '</span>') : '') + (zn ? ('<span>' + esc(zn) + '</span>') : '')
+          + ((van || bt) ? '<span style="color:#9AA3B8">·</span>' : '') + (van ? ('<span>' + esc(van) + '</span>') : '') + (bt ? ('<span class="bt">→ ' + esc(bt) + '</span>') : '') + '</span>'
+        + ((ao || sq) ? ('<span class="tg">' + ao + sq + '</span>') : '')
+        + '</span></button>');
+    });
+    });
+    closeRt();
+    return html.length ? html.join('') : '<div class="bk-mro-none">ไม่มี booking ในวันนี้</div>';
+  }
+
+  window.bkMroOpen = function(i){
+    var r = ROWS[i]; if(!r) return;
+    var b = bookingOf(r.id) || {};
+    var drv = '';
+    try{ if(r.vid && typeof vanJobsDriverInfo === 'function'){ var d = vanJobsDriverInfo(r.vid, r.date) || {}; drv = [d.driver, d.plate && d.plate !== '-' ? d.plate : ''].filter(Boolean).join(' · '); } }catch(e){}
+    var pax = (b.passengers || []).filter(function(p){ return p && (p.name || '').trim(); });
+    var lead = String(b.leadPax || '').trim();
+    if(lead && !pax.some(function(p){ return String(p.name).trim().toLowerCase() === lead.toLowerCase(); })) pax.unshift({ name: lead, nationality: b.leadNationality || '' });
+    var cell = function(n, k){ return '<div><b' + (n ? '' : ' style="color:#C3C9D8"') + '>' + n + '</b><span>' + k + '</span></div>'; };
+    var h = '<div class="p" role="dialog" aria-modal="true" aria-label="รายละเอียด booking">'
+      + '<div class="hd"><div style="flex:1;min-width:0"><div class="vc">' + esc(r.vc) + '</div><b>' + esc(r.name) + '</b>'
+        + (r.route ? ('<span class="rt" style="color:' + esc(r.rc) + '">' + esc(r.route) + '</span>') : '') + '</div>'
+        + '<button type="button" class="x" aria-label="ปิด" onclick="bkMroClose()">&#10005;</button></div>'
+      + '<div class="bd">'
+        + '<div class="px4">' + cell(r.px.ad, 'ผู้ใหญ่') + cell(r.px.chd, 'เด็ก') + cell(r.px.inf, 'เด็กเล็ก') + cell(r.px.foc, 'FOC') + '</div>'
+        + '<div><div class="k">รับ</div><div class="v"><b style="font-family:\'DM Mono\',monospace">' + esc(r.tm || '—') + '</b>'
+          + (r.zk ? (' · ' + (r.zk === 'OWN' ? 'Own' : esc(r.zk))) : '') + (r.zn ? (' · ' + esc(r.zn)) : '') + '</div>'
+          + '<div class="v">' + esc(r.pk || (r.zk === 'OWN' ? 'มาเองที่ท่า' : '—')) + (r.rm ? (' · ห้อง ' + esc(r.rm)) : '') + '</div>'
+          + ((r.van || drv) ? ('<div class="v" style="color:#4A5672;font-size:13px">' + esc([r.van, drv].filter(Boolean).join(' · ')) + '</div>') : '') + '</div>'
+        + (r.bt ? ('<div><div class="k">เรือ</div><div class="v"><b>' + esc(r.bt) + '</b></div></div>') : '')
+        + ((r.ao || r.sq) ? ('<div><div class="k">Add-on · คำขอพิเศษ</div><div class="tg">' + r.ao + r.sq + '</div></div>') : '')
+        + (pax.length ? ('<div><div class="k">รายชื่อ · ' + pax.length + '</div><div class="v">' + pax.map(function(p){ return esc(p.name) + (p.nationality ? (' · ' + esc(p.nationality)) : ''); }).join('<br>') + '</div></div>') : '')
+        + '<div class="ro">&#128065; บัญชีนี้ดูได้อย่างเดียว · แก้ไข จัดรถ จัดเรือ ทำที่ออฟฟิศ</div>'
+      + '</div></div>';
+    var sh = document.getElementById('bk-mro-sh');
+    if(!sh){ sh = document.createElement('div'); sh.id = 'bk-mro-sh'; sh.addEventListener('click', function(e){ if(e.target === sh) window.bkMroClose(); }); document.body.appendChild(sh); }
+    sh.innerHTML = h;
+  };
+  window.bkMroClose = function(){ var sh = document.getElementById('bk-mro-sh'); if(sh) sh.remove(); };
+
+  var busy = false;
+  function pass(){
+    if(busy) return; busy = true;
+    try{
+      var root = document.getElementById('view-booking');
+      var on = isOn() && !!root;
+      document.body.classList.toggle('bk-mro', on);
+      if(!on){ document.body.classList.remove('bk-mro-list'); busy = false; return; }
+      ensureCss();
+      try{ if(typeof _bkV2 !== 'undefined' && _bkV2 && /^(locks|approvals|cancel|all)$/.test(_bkV2.tab || '')){ _bkV2.tab = 'bytrip'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; } }catch(e){}
+      try{ if(typeof _bkV2 !== 'undefined' && _bkV2){ _bkV2.boatAssignMode = false; _bkV2.vanAssignMode = false; _bkV2.reconfirmMode = false; } }catch(e){}
+      [].slice.call(root.querySelectorAll('.bt-c')).forEach(function(c){ if(c.querySelector('.bt-mrow')) c.classList.add('bk-mro-hide'); });
+      var top = root.querySelector('.bkv2-topcard');
+      if(top && !top.querySelector('.bk-mro-ro')){
+        var tag = document.createElement('span'); tag.className = 'bk-mro-ro'; tag.textContent = '\u{1F441} ดูอย่างเดียว'; top.appendChild(tag);
+      }
+      var wrap = root.querySelector('.t2-wrap');
+      var list = root.querySelector('.bk-mro-l');
+      if(wrap && root.querySelector('table.t2-mtbl')){
+        var h = build(root);
+        if(!list){ list = document.createElement('div'); list.className = 'bk-mro-l'; wrap.parentNode.insertBefore(list, wrap.nextSibling); }
+        if(list._bkMroH !== h){ list.innerHTML = h; list._bkMroH = h; }   /* เทียบกับสตริงที่เราสร้าง ไม่ใช่ innerHTML (เบราว์เซอร์เขียนใหม่ไม่ตรงตัว → วนไม่จบ) */
+        document.body.classList.add('bk-mro-list');
+      } else {
+        if(list) list.remove();
+        document.body.classList.remove('bk-mro-list');
+      }
+    }catch(e){ try{ console.error('[bkMro] pass', e); }catch(_){} }
+    busy = false;
+  }
+  window.bkMroPass = pass;
+  var queued = false;
+  function queue(){ if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(function(){ queued = false; pass(); }); }
+  function boot(){
+    var root = document.getElementById('view-booking');
+    if(!root || !document.body){ setTimeout(boot, 500); return; }
+    try{ new MutationObserver(function(){ if(!busy) queue(); }).observe(root, { childList: true, subtree: true }); }catch(e){}
+    try{ var mq = window.matchMedia && window.matchMedia(MQ); if(mq){ (mq.addEventListener ? mq.addEventListener('change', queue) : mq.addListener(queue)); } }catch(e){}
+    window.addEventListener('resize', queue);
+    pass();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+// ══════ §bkMro END ══════
