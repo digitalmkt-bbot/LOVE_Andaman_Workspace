@@ -21,7 +21,7 @@ function shift(ds, n) {
 }
 
 /* ── the adapter ── */
-function loadAdapter({ enabled = true, daily, created, range, view = 'bookingflow' } = {}) {
+function loadAdapter({ enabled = true, daily, created, range, get, view = 'bookingflow' } = {}) {
   const host = { innerHTML: '', firstChild: null };
   const calls = [];
   const ctx = {
@@ -39,6 +39,7 @@ function loadAdapter({ enabled = true, daily, created, range, view = 'bookingflo
     today: () => '2026-10-14',
     ymd, shift,
     activeView: () => view,
+    ...(get ? { get } : {}),
     loadingHtml: (label) => 'SPIN:' + label,
   };
   vm.createContext(ctx);
@@ -170,4 +171,47 @@ test('bfSrvMk: every bar is split by the server\'s market counts and the legend 
   const gray = rects.filter((r) => r.fill === '#94A3B8' && r.h > 0);
   assert.equal(gray.length, 0, 'no bar has a gray "other" remainder: the split is complete for every month');
   assert.ok(rects.some((r) => r.fill === '#0F6E56' && r.h > 0), 'Hotel Phuket is drawn on the older bars');
+});
+
+/* ── §bfSrvLead: Lead-Time Distribution ── */
+const LEAD = { total: 100, buckets: [10, 40, 20, 10, 10, 10].map((count, i) => ({ key: 'k' + i, count })) };
+
+test('bfSrvLead: the adapter reads /v1/bookings/lead-times before drawing and hands the buckets to the render', async () => {
+  const reads = [];
+  const { ctx, host, calls } = loadAdapter({ get: (p) => { reads.push(p); return Promise.resolve(LEAD); } });
+  await ctx.renderBookingFlow();
+  assert.deepEqual(reads, ['/v1/bookings/lead-times']);
+  assert.equal(ctx._opsBfLead, LEAD);
+  assert.equal(calls.filter((c) => c.render).length, 1);
+  assert.equal(host.innerHTML, 'FLOW');
+});
+
+test('bfSrvLead: a failed lead-times read draws anyway from the loaded bookings', async () => {
+  const { ctx, calls } = loadAdapter({ get: () => Promise.reject(new Error('boom')) });
+  await ctx.renderBookingFlow();
+  assert.equal(ctx._opsBfLead, null);
+  assert.equal(calls.filter((c) => c.render).length, 1);
+});
+
+test('bfSrvLead: the histogram is drawn from the server counts, not the loaded slice', () => {
+  const host = { innerHTML: '' };
+  const now = new Date();
+  const ds = ymd(now);
+  const mk = (d) => ({ status: 'confirmed', bookingDate: d, trips: [{ routeId: 'r1', date: d, pax: { ad_fr: 2 } }] });   // loaded: all same-day
+  const ctx = {
+    console, Promise, Date, String, Error, Math, Object, Array, JSON, isNaN, Number,
+    document: { getElementById: (id) => (id === 'bookingflow-host' ? host : null) },
+    SB_BOOKINGS: [mk(ds), mk(ds), mk(ds)],
+    bookingV2LocalYMD: ymd,
+    bookingV2PaxAllTot: (p) => Object.values(p || {}).reduce((s, x) => s + (+x || 0), 0),
+    laMonAbbrTH: () => ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'],
+    _opsBfLead: LEAD,
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(sliceRender(), ctx);
+  ctx.renderBookingFlow();
+  const svg = host.innerHTML.slice(host.innerHTML.indexOf('max-width:560px'));
+  const pcts = [...svg.matchAll(/font-weight="700" fill="#39404b">(\d+)%</g)].map((m) => +m[1]);
+  assert.deepEqual(pcts, [10, 40, 20, 10, 10, 10]);
 });

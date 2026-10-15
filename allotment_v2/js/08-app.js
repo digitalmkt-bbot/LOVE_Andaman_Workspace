@@ -4043,7 +4043,11 @@ function renderBookingFlow(){
   function leadHistSVG(){
     const bk=[['same day',0,0],['1–2',1,2],['3–7',3,7],['8–14',8,14],['15–30',15,30],['30+',31,100000]];
     const cnt=bk.map(()=>0); let tot=0;
-    B.forEach(b=>{ const ft=firstTrip(b); const bd=bkDate(b); if(!ft||!bd) return; const ld=Math.round((new Date(ft.date+'T00:00:00')-new Date(bd+'T00:00:00'))/86400000); if(ld<0||ld>1200) return; tot++; for(let i=0;i<bk.length;i++){ if(ld>=bk[i][1]&&ld<=bk[i][2]){ cnt[i]++; break; } } });
+    /* §bfSrvLead · all-time bucket counts from the server (GET /v1/bookings/lead-times via js/ops/53-ops-booking-flow.js):
+       SB_BOOKINGS holds only the loaded date ranges, so counting it skewed every bar. Same rule: sale day -> first trip, 0..1200 days. */
+    const _bfLd=window._opsBfLead;
+    if(_bfLd&&Array.isArray(_bfLd.buckets)&&_bfLd.buckets.length===bk.length){ _bfLd.buckets.forEach((x,i)=>{ cnt[i]=+x.count||0; tot+=cnt[i]; }); }
+    else B.forEach(b=>{ const ft=firstTrip(b); const bd=bkDate(b); if(!ft||!bd) return; const ld=Math.round((new Date(ft.date+'T00:00:00')-new Date(bd+'T00:00:00'))/86400000); if(ld<0||ld>1200) return; tot++; for(let i=0;i<bk.length;i++){ if(ld>=bk[i][1]&&ld<=bk[i][2]){ cnt[i]++; break; } } });
     const W=520,H=160,padL=22,padB=26,padT=14,iw=W-padL-14,ih=H-padT-padB; const pct=cnt.map(c=>tot?c/tot*100:0); const mx=Math.max(1,Math.max.apply(null,pct))*1.12; const bw=iw/bk.length; let g='';
     bk.forEach((d,i)=>{ const h=ih*pct[i]/mx, x=padL+bw*i+bw*0.16, w=bw*0.68, y=padT+ih-h; g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" rx="4" fill="'+(i>=2&&i<=3?'#1683C7':'#9DC7E6')+'"/>'; g+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#39404b">'+Math.round(pct[i])+'%</text>'; g+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-9)+'" text-anchor="middle" font-size="9" fill="#8a919c">'+d[0]+'</text>'; });
     return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:560px;height:auto;display:block">'+g+'</svg>';

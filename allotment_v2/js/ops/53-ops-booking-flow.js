@@ -63,6 +63,24 @@
     };
   }
 
+  /* Lead-Time Distribution: the server's all-time bucket counts (GET /v1/bookings/lead-times), read by
+     leadHistSVG (§bfSrvLead in 08-app.js) in place of the loaded slice. Cached a minute, dropped by a write. */
+  var leadAt = 0;
+  if(O.onWrite) O.onWrite(function(){ leadAt = 0; });
+  function loadLead(){
+    if(typeof O.get !== 'function') return null;
+    if(window._opsBfLead && Date.now() - leadAt < 60000) return null;
+    return O.get('/v1/bookings/lead-times').then(function(r){
+      window._opsBfLead = (r && Array.isArray(r.buckets) && r.buckets.length === 6) ? r : null;
+      leadAt = Date.now();
+      return r || true;
+    }, function(e){
+      window._opsBfLead = null;
+      console.warn('[ops] Booking Flow: lead-time counts did not load; using loaded bookings', e && e.message);
+      return true;
+    });
+  }
+
   wrap('renderBookingFlow', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     var W = windows();
@@ -75,6 +93,7 @@
       loads.push(window.bookingV2OpsEnsureCreated(W.created.from, W.created.to));
     if(typeof window.bookingV2EnsureOpsRange === 'function')
       loads.push(window.bookingV2EnsureOpsRange({ from: W.trips.from, to: W.trips.to, limit: 500 }));
+    loads.push(loadLead());
     loads = loads.filter(Boolean);
     if(!loads.length) return orig.apply(self, args);
     var host = document.getElementById('bookingflow-host');
