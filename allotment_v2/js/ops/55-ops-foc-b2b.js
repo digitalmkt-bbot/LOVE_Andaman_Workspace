@@ -20,7 +20,8 @@
    stacked trends on By staff/trip/market. A two-window subset gave lk a
    different reference date, a 3-point sparkline and comparison figures that
    depended on stray cached bookings. It now runs over a private snapshot of
-   GET /v1/bookings?status=confirmed (all pages) — see the section below.
+   GET /v1/bookings/b2b-lines (§b2bLines: the server's trip lines, all time)
+   — see the section below.
 
    Both renders run the legacy function against a swapped SB_BOOKINGS (for
    the synchronous render only, then restored), so the numbers never depend
@@ -101,57 +102,69 @@
      · its default reference date is the newest booking (or travel) date in the data (b2dLatestDate);
      · the KPI sparklines are one point per month over all history (b2dMonthlySeries);
      · By staff / By trip / By market draw a monthly stacked trend over all history (b2dMonthlyHtml).
-     So the screen reads GET /v1/bookings?status=confirmed (all pages) into its own snapshot and runs
-     the legacy render over exactly that snapshot — never over SB_BOOKINGS, whose contents depend on
-     which screens were opened first. The snapshot is not merged into SB_BOOKINGS (other screens keep
-     their own ranges). In-session edits: a cached booking with a newer opsVersion replaces its
-     snapshot copy; the snapshot is refetched in the background after a write or after 5 minutes.
-     NEEDS-SERVER-WORK: a compact B2B trip-line read would replace the full booking payloads. */
-  var B2D_PAGE = 1000, B2D_TTL = 5 * 60 * 1000;
+     So the screen reads the server's B2B trip lines into its own snapshot and runs the legacy render
+     over exactly that snapshot — never over SB_BOOKINGS, whose contents depend on which screens were
+     opened first. The snapshot is not merged into SB_BOOKINGS (other screens keep their own ranges).
+     In-session edits: a cached booking with a newer opsVersion replaces its snapshot lines; the
+     snapshot is refetched in the background after a write or after 5 minutes.
+
+     §b2bLines (2026-10-15) · GET /v1/bookings/b2b-lines answers every confirmed B2B booking as one
+     line per trip, with legacy's rules already applied on the server (operation-backend
+     src/domain/b2b-lines.ts): which bookings, the sale day and its fallback, the tiered adult+child
+     pax, the total split across trips by pax share (unrounded), and lk-inbox's order (booking id,
+     then trip). It replaces paging every confirmed booking (~23 MB, ~12 s on first open). Each line
+     becomes a one-trip booking whose total IS the line's revenue, so b2dLines gives back exactly the
+     server's line: rev = total (one trip), pax = ad_fr, bkid = the booking id (b2dSum/b2dAgents
+     count distinct bkid, so a 2-trip booking still counts once). */
+  var B2D_TTL = 5 * 60 * 1000;
   var B2D_RETRY = 30 * 1000;   // after a failed load, no automatic refetch for 30 s (the Retry button skips the wait)
   var b2dSnap = { rows: null, at: 0, stale: false, load: null, err: null, errAt: 0 };
-  function b2dFetchAll(){
-    var all = [], pages = 0;
-    function page(cursor){
-      return O.get('/v1/bookings', { status: 'confirmed', limit: B2D_PAGE, cursor: cursor }).then(function(j){
-        if(!j || !Array.isArray(j.bookings)) throw new Error('booking list did not return bookings');
-        Array.prototype.push.apply(all, j.bookings);
-        if(j.next_cursor && ++pages < 200) return page(j.next_cursor);
-        return all;
-      });
-    }
-    return page(null);
+  /* one server line → the booking fields b2dLines reads (status, agentId, bookingDate, marketSnapshot,
+     priceBreakdown.total, trips[].{date,routeId,pax}, id) · a booking with no trips arrives as one line
+     with no date/route, which b2dLines treats as legacy's [{}] trip */
+  function b2dFromLines(j){
+    if(!j || !Array.isArray(j.fields) || !Array.isArray(j.lines)) throw new Error('b2b-lines did not return lines');
+    var at = {}; j.fields.forEach(function(f, i){ at[f] = i; });
+    ['booking_id', 'version', 'agent_id', 'booking_date', 'market', 'service_date', 'route_id', 'pax', 'revenue'].forEach(function(f){
+      if(at[f] == null) throw new Error('b2b-lines has no ' + f);
+    });
+    return j.lines.map(function(l){
+      var b = { id: l[at.booking_id], opsVersion: l[at.version], status: 'confirmed', agentId: l[at.agent_id],
+                bookingDate: l[at.booking_date] || '', priceBreakdown: { total: l[at.revenue] },
+                trips: [{ date: l[at.service_date], routeId: l[at.route_id], pax: { ad_fr: l[at.pax] } }] };
+      if(l[at.market]) b.marketSnapshot = { market: l[at.market] };
+      return b;
+    });
   }
   function b2dEnsure(){
     if(b2dSnap.load) return b2dSnap.load;
     var fresh = b2dSnap.rows && !b2dSnap.stale && (Date.now() - b2dSnap.at) < B2D_TTL;
     if(fresh) return null;
     if(b2dSnap.err && Date.now() - b2dSnap.errAt < B2D_RETRY) return null;   // never a fetch → fail → redraw loop
-    b2dSnap.load = b2dFetchAll().then(function(list){
-      /* lk-inbox's store is in booking-id order; the legacy tables break revenue ties by first
-         appearance, so the same order gives the same row order */
-      b2dSnap.rows = list.map(bookingV2FromOpsBooking).sort(function(a, b){
-        var x = String(a.id), y = String(b.id); return x < y ? -1 : (x > y ? 1 : 0);
-      });
+    b2dSnap.load = O.get('/v1/bookings/b2b-lines').then(function(j){
+      b2dSnap.rows = b2dFromLines(j);   // in the server's order: lk-inbox's booking-id order, then trip
       b2dSnap.at = Date.now(); b2dSnap.stale = false; b2dSnap.err = null; b2dSnap.load = null;
-      try{ console.log('[opsSync] B2B dashboard: ' + b2dSnap.rows.length + ' confirmed booking(s) from operation-backend'); }catch(_){}
+      try{ console.log('[opsSync] B2B dashboard: ' + b2dSnap.rows.length + ' B2B trip line(s) from operation-backend'); }catch(_){}
       return true;
     }, function(e){
       b2dSnap.load = null; b2dSnap.err = e; b2dSnap.errAt = Date.now();
-      try{ console.warn('[opsSync] B2B dashboard: confirmed bookings did not load · ' + ((e && e.message) || e)); }catch(_){}
+      try{ console.warn('[opsSync] B2B dashboard: B2B lines did not load · ' + ((e && e.message) || e)); }catch(_){}
       return false;
     });
     return b2dSnap.load;
   }
   if(typeof O.onWrite === 'function') O.onWrite(function(){ b2dSnap.stale = true; });
-  /* the snapshot, with any cached booking the browser holds in a newer version swapped in */
+  /* the snapshot, with any cached booking the browser holds in a newer version swapped in for all
+     of its lines (once, where its first line was) · keyed by booking id = the lines' booking_id */
   function b2dData(){
-    var rows = b2dSnap.rows || [], cached = allBookings() || [], newer = {};
-    cached.forEach(function(b){ if(b && b.opsId && b.opsVersion != null) newer[b.opsId] = b; });
-    return rows.map(function(s){
-      var c = s && newer[s.opsId];
-      return (c && s.opsVersion != null && +c.opsVersion > +s.opsVersion) ? c : s;
+    var rows = b2dSnap.rows || [], cached = allBookings() || [], newer = {}, used = {}, out = [];
+    cached.forEach(function(b){ if(b && b.opsId && b.opsVersion != null) newer[b.id] = b; });
+    rows.forEach(function(s){
+      var c = newer[s.id];
+      if(!(c && s.opsVersion != null && +c.opsVersion > +s.opsVersion)){ out.push(s); return; }
+      if(!used[s.id]){ used[s.id] = 1; out.push(c); }
     });
+    return out;
   }
   /* one redraw per load, however many renders ran while it was in flight */
   var redrawFor = null;

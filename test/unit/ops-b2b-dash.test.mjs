@@ -52,7 +52,34 @@ function dataset() {
   // not confirmed / B2C: the legacy filter drops them; the server filter must not resurrect them
   add('2026-10-01', '2026-10-02', 'ag1', 99999, 9, { status: 'cancelled' });
   add('2026-10-01', '2026-10-02', 'a_b2c', 77777, 9);
+  // §b2bLines: two trips, total shared 1 : 2 by tiered adult+child pax (infants and FOC not counted)
+  add('2026-07-08', '2026-07-15', 'ag2', 10000, 1, { trips: [{ service_date: '2026-07-15', route_id: 'r1', pax: { ad_fr: 1 } },
+    { service_date: '2026-07-16', route_id: 'r7', pax: { ad_th: 1, chd_fr: 1, inf_fr: 1, foc_fr: 2 } }] });
+  // two trips and no counted pax: shared equally
+  add('2026-06-03', '2026-06-10', 'ag1', 7001, 0, { trips: [{ service_date: '2026-06-10', route_id: 'r1', pax: { inf_fr: 1 } },
+    { service_date: '2026-06-11', route_id: 'r1', pax: { foc_th: 1 } }] });
+  // untiered pax is not legacy's pax; no booking date: the created date
+  add('2026-05-04', '2026-05-09', 'ag3', 5100, 0, { trips: [{ service_date: '2026-05-09', route_id: 'r12', pax: { ad: 3 } }] });
+  add('', '2026-05-20', 'ag3', 4321, 2, { created_at: '2026-05-01T20:00:00.000Z' });
   return out;
+}
+
+// §b2bLines · what GET /v1/bookings/b2b-lines answers (operation-backend src/domain/b2b-lines.ts): confirmed,
+// non-B2C, one line per trip, legacy's sale day / tiered pax / pax-share split, in booking-id then trip order
+const LINE_FIELDS = ['booking_id', 'version', 'agent_id', 'booking_date', 'market', 'service_date', 'route_id', 'pax', 'revenue'];
+function b2bLines(rows) {
+  const day = (s) => { if (!s) return null; s = String(s).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
+  const pax = (p) => ['ad_th', 'ad_fr', 'chd_th', 'chd_fr'].reduce((n, k) => n + ((p || {})[k] || 0), 0);
+  const lines = [];
+  rows.filter((b) => b.status === 'confirmed' && b.agent_id !== 'a_b2c')
+    .map((b) => ({ key: b.external_id || b.id, b })).sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0))
+    .forEach(({ key, b }) => {
+      const trips = b.trips.length ? b.trips : [{ service_date: null, route_id: null, pax: {} }];
+      const total = b.total ?? 0, paxT = trips.reduce((n, t) => n + pax(t.pax), 0);
+      trips.forEach((t) => lines.push([key, b.version, b.agent_id ?? null, day(b.booking_date) ?? day(b.booked_at) ?? day(b.created_at), b.market || null,
+        t.service_date, t.route_id, pax(t.pax), trips.length === 1 ? total : (paxT > 0 ? total * pax(t.pax) / paxT : total / trips.length)]));
+    });
+  return { fields: LINE_FIELDS, lines };
 }
 
 function fakeServer(rows, requests) {
@@ -61,6 +88,10 @@ function fakeServer(rows, requests) {
     const [p, q] = path.split('?');
     const qs = new URLSearchParams(q || '');
     let list = rows.slice();
+    if (p === '/v1/bookings/b2b-lines') {
+      const body = b2bLines(list);
+      return { status: 200, ok: true, json: async () => body, text: async () => JSON.stringify(body) };
+    }
     if (p === '/v1/bookings') {
       if (qs.get('status')) list = list.filter((b) => qs.get('status').split(',').includes(b.status));
       if (qs.get('from')) list = list.filter((b) => b.trips.some((t) => t.service_date >= qs.get('from') && t.service_date <= qs.get('to')));
@@ -152,7 +183,7 @@ test('previous period does not depend on what the browser loaded before', async 
 test('sparklines: one point per month over the whole history, as lk-inbox', async () => {
   const rt = runtime();
   await rt.open();
-  const months = new Set(dataset().filter((b) => b.status === 'confirmed' && b.agent_id !== 'a_b2c').map((b) => b.booking_date.slice(0, 7))).size;
+  const months = new Set(dataset().filter((b) => b.status === 'confirmed' && b.agent_id !== 'a_b2c').map((b) => (b.booking_date || b.created_at).slice(0, 7))).size;
   assert.equal(months, 14);
   assert.deepEqual(sparkPoints(rt.wrapEl.innerHTML), [14, 14, 14, 14], 'four KPI cards, 14 monthly points each');
   assert.deepEqual(sparkPoints(rt.wrapEl.innerHTML), sparkPoints(lkView().html));
@@ -175,17 +206,31 @@ test('every tab and a chosen date match lk-inbox', async () => {
   assert.equal(rt.snap().html, lkView({ basis: 'bd', mode: 'mom', ref: '2026-08-20', T: 10, tab: 'overview', trip: null, stack: [], screen: null }).html);
 });
 
-test('one paged read of confirmed bookings; no refetch while fresh', async () => {
+test('§b2bLines: one read of the B2B lines, never the full booking list; no refetch while fresh', async () => {
   const rows = dataset();
   for (let i = 0; i < 1500; i++) rows.push({ ...rows[0], id: 'pad' + String(i).padStart(4, '0'), external_id: 'PAD-' + String(i).padStart(4, '0'), status: 'cancelled' });
   for (let i = 0; i < 1200; i++) rows.push({ ...rows[0], id: 'old' + String(i).padStart(4, '0'), external_id: 'OLD-' + String(i).padStart(4, '0'), booking_date: '2025-01-01', created_at: '2025-01-01T00:00:00Z', trips: [{ service_date: '2025-01-02', route_id: 'r1', pax: { ad_fr: 1 } }] });
   const rt = runtime({ rows });
   await rt.open();
-  assert.ok(rt.requests.length === 2 && rt.requests.every((p) => p.startsWith('/v1/bookings?status=confirmed&limit=1000')), rt.requests.join(' '));
-  assert.ok(rt.requests[1].endsWith('&cursor=1000'), 'second page follows the cursor');
+  assert.deepEqual(rt.requests, ['/v1/bookings/b2b-lines'], 'one request, for the lines');
+  assert.ok(!rt.requests.some((p) => p.startsWith('/v1/bookings?') || p.startsWith('/v1/bookings/recent')), 'the full confirmed-bookings fetch is gone');
+  assert.equal(rt.ctx._b2dL.filter((l) => l.bkid.startsWith('OLD-')).length, 1200, 'the whole history, from the one read');
   rt.ctx.renderB2BDash(); rt.ctx.b2dTab('staff');
   await rt.settle();
-  assert.equal(rt.requests.length, 2, 'cached snapshot: no further reads');
+  assert.equal(rt.requests.length, 1, 'cached snapshot: no further reads');
+});
+
+test('§b2bLines: split bookings, untiered pax and a missing booking date give lk-inbox\'s lines', async () => {
+  const rt = runtime();
+  await rt.open();
+  const lk = runtime({ adapter: false, bookings: dataset().map(fromServer).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) });
+  lk.ctx.renderB2BDash();
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.ctx._b2dL)), JSON.parse(JSON.stringify(lk.ctx._b2dL)), 'every line, in order, field for field');
+  const split = rt.ctx._b2dL.filter((l) => l.rev === 10000 / 3 || l.rev === 20000 / 3);
+  assert.equal(split.length, 2, 'the 1 : 2 pax share, unrounded');
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.ctx._b2dL.filter((l) => l.rev === 3500.5).map((l) => l.pax))), [0, 0], 'no counted pax: shared equally');
+  assert.ok(rt.ctx._b2dL.some((l) => l.bd === '2026-05-01' && l.rev === 4321), 'no booking date: the created date');
+  assert.equal(rt.ctx.b2dSum(rt.ctx._b2dL, '2026-07-01', '2026-07-31').bookings, lk.ctx.b2dSum(lk.ctx._b2dL, '2026-07-01', '2026-07-31').bookings, 'a two-trip booking counts once');
 });
 
 test('a booking edited in this browser (newer opsVersion) replaces its snapshot copy', async () => {
