@@ -68529,6 +68529,22 @@ var PK_LINE_MAIN=[['adTH','ผญท'],['chTH','ดท'],['adFR','ผญตช']
    ต่อเกาะ (โปรแกรม): รายการซื้อ · n ลำ · n คน / บรรทัดแยกประเภท / ว่าง / ลำละบรรทัด (เวลา เรือ รวม · ประเภท)
                      รายการทั้งหมด · ทุกลำของเกาะในหน้า · นับคนบนเรือจริง (ไม่นับ over) · รูปแบบเดียวกัน
    เลือกเกาะอยู่ = เกาะเดียว (ชื่อเกาะอยู่หัว) · ทั้งหมด = แยกช่วงต่อเกาะ · ประเภท 0 / หัวข้อว่าง / ลำที่ไม่มีคน ไม่ขึ้น */
+/* §pkLine7 (2026-10-15) · owner "แบบ 2 ทำให้ตรงกัน" · แต่ละประเภทมีช่องของตัวเอง (ลำดับเดียวกันทุกบรรทัด)
+   วัดความกว้างจริงของข้อความด้วยฟอนต์ระบบของเครื่องที่กดคัดลอก (canvas measureText) แล้วเติมช่องว่างปกติ + ช่องว่างบาง (U+200A)
+   ให้ทุกช่องกว้างเท่าช่องที่ยาวสุด · เครื่องที่อ่านใช้ฟอนต์เดียวกัน = ตรงเป๊ะ · ฟอนต์ต่างกัน (iPhone/Android/PC) เพี้ยนเล็กน้อย
+   ข้อจำกัด: บรรทัดยาวเกินจอมือถือจะตัดบรรทัด แล้วไม่ตรง */
+var PK_LINE_FONT='14px -apple-system,BlinkMacSystemFont,"Sukhumvit Set",Thonburi,"Leelawadee UI","Noto Sans Thai","Segoe UI",sans-serif';
+function pkLineAlign(rows){
+  var c=null; try{ c=document.createElement('canvas').getContext('2d'); c.font=PK_LINE_FONT; }catch(_){ c=null; }
+  if(!c) return rows.map(function(r){ return r.filter(Boolean).join(' '); });
+  var W=function(t){ return c.measureText(t).width; }, SP=W(' '), HS='\u200A', HW=W(HS)||1, GAP=W('  ');
+  var pad=function(t,w){ var d=w-W(t), n=Math.max(0,Math.floor(d/SP)); t+=new Array(n+1).join(' '); d-=n*SP; var h=Math.max(0,Math.round(d/HW)); return t+new Array(h+1).join(HS); };
+  var nc=rows.reduce(function(m,r){ return Math.max(m,r.length); },0), cw=[];
+  for(var i=0;i<nc;i++) cw[i]=rows.reduce(function(m,r){ return Math.max(m, r[i]?W(r[i]):0); },0);
+  /* ช่องท้ายที่ว่างทุกแถวไม่ต้องจองที่ · ตัดช่องว่างท้ายบรรทัด */
+  return rows.map(function(r){ var last=-1; r.forEach(function(t,i){ if(t) last=i; });
+    var o=''; for(var i=0;i<=last;i++){ o+=(i===last)?r[i]:pad(r[i]||'', cw[i]+GAP); } return o; });
+}
 function pkLineText(){
   var date=_poDate, flat=pk3Flat(), TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
   var famF=_pkSetFamF||'all', bx={}, FAM=[], FM={};
@@ -68546,7 +68562,13 @@ function pkLineText(){
   var sect=function(L, title, rows){ if(!rows.length) return; var tc={}, tn=0; rows.forEach(function(r){ add(tc,r.c); tn+=r.n; });
     /* §pkLine5 (2026-10-15) · owner "ในเรือแต่ละลำไม่ต้องมีผลรวม และไม่ต้องห่างกันมาก" · ประเภทคั่นด้วยเว้นวรรคเดียว · บรรทัดเรือไม่มียอดรวม */
     L.push(''); L.push(title+' · '+rows.length+' ลำ · '+tn+' คน'); L.push(parts(tc).join(' ')); L.push('');
-    rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).forEach(function(r){ var ps=parts(r.c); L.push((dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)+(ps.length?(' '+ps.join(' ')):'')); }); };
+    /* §pkLine7 · ช่องประเภทเรียงตาม PK_LINE_MAIN แล้วตามด้วยประเภทอื่น · เอาเฉพาะประเภทที่มีในหัวข้อนี้ */
+    var keys=PK_LINE_MAIN.map(function(m){ return m[0]; }).filter(function(k){ return tc[k]; });
+    Object.keys(tc).forEach(function(k){ if(tc[k] && keys.indexOf(k)<0) keys.push(k); });
+    var lab=function(k){ var m=PK_LINE_MAIN.filter(function(x){ return x[0]===k; })[0]; return m?m[1]:String((TYM[k]||{}).s||k).replace(/\s+/g,''); };
+    var cells=rows.sort(function(a,b){ return byDep(a.bid,b.bid); }).map(function(r){
+      return [(dep(r.bid)?(dep(r.bid)+' '):'')+nm(r.bid)].concat(keys.map(function(k){ return r.c[k]?(r.c[k]+' '+lab(k)):''; })); });
+    pkLineAlign(cells).forEach(function(t){ L.push(t); }); };
   var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'], MO=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   var d=new Date(date+'T12:00:00'), dS=WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+String(d.getFullYear()+543).slice(-2);
   var one=(FAM.length===1), L=[];
@@ -69229,7 +69251,7 @@ function pk3CSS(S){
   S+' .pk3-calc tfoot td.pk3-ct{font-family:"DM Mono",monospace;font-size:16px}',
   S+' .pk3-cn{padding:8px 14px 12px;font-size:10.5px;color:'+M+'}',
   S+' .pk3-line .ch span{margin-left:auto;font-size:12px;color:'+M+'}',   /* §pkLine */
-  S+' .pk3-lt{margin:0 14px;padding:10px 12px;background:#F7F8FB;border:1px solid #ECEFF4;border-radius:10px;font-family:"Sarabun","DM Sans",sans-serif;font-size:12px;line-height:1.6;color:#1A2A44;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto}',
+  S+' .pk3-lt{margin:0 14px;padding:10px 12px;background:#F7F8FB;border:1px solid #ECEFF4;border-radius:10px;font:'+PK_LINE_FONT+';font-size:12.5px;line-height:1.6;color:#1A2A44;white-space:pre;max-height:340px;overflow:auto}',   /* §pkLine7 · ฟอนต์เดียวกับที่ใช้วัด · ไม่ตัดบรรทัด (ตัดแล้วไม่ตรง) */
   S+' .pk3-line .f{display:flex;align-items:center;gap:10px;padding:10px 14px 12px}',
   S+' .pk3-line .f span{font-size:10.5px;color:'+M+'}',
   S+' .pk3-line .f .pri{height:32px;padding:0 14px;border-radius:8px;border:none;background:'+N+';color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
