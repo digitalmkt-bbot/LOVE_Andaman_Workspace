@@ -8,10 +8,12 @@
   passenger and money difference traces to the 22 B2C lines the owner accepted (P13). Side by side,
   bookings match lk-inbox **100% field by field** (305 bookings over 14–17 Oct). Every endpoint the
   frontend needs exists and is live.
-- **Screens — not ready.** On the same data, 17 of 70 screens are identical, 18 close, 34 different
-  (after the lk-inbox sync below). Most remaining differences are data drift or degraded server
-  views with a visible note, but the main day-of-operations screen (By-Trip) still renders
-  differently, and none of the 13–15 Oct work has had a live click-through.
+- **Screens — not ready, but close.** After the lk-inbox sync and a full import of every area
+  (13 importers, the one-day cutover order), **31 of 70 screens are identical, 20 close (≥90%), 18
+  different**. Of those 18: 2 are a test-timing artifact (Accounting, Booking Flow fill after ~4 s),
+  3 are the agreed server-row redesigns (Travel Summary, Daily Report, Van Bill) and 1 is the dev
+  log (not migrated) — leaving **12 screens to trace**, starting with By-Trip's day view and Van
+  Jobs. None of the 13–15 Oct work has had a live click-through yet.
 
 The earlier docs measured *wiring* (does each function reach the server?). That is essentially
 done. What decides replacement is *sameness* (does staff see the same thing and can they do the
@@ -100,13 +102,27 @@ Every test browser blocks production hosts (0 requests escaped).
 transfer lines (LOV-6882506_3/_4). Boot: main is ready in 1.6 s vs lk-inbox 8.6 s (but 18 MB vs 6 MB
 transferred — the deploy build would cut that).
 
-**Screen identity (`allviews.mjs`, 70 menu screens).** 17 identical · 18 close (≥90%) · 34
-different · 1 not compared (lk-inbox freezes on Market Data, known). Against 14 Oct: Action Board
-54→93%, Pickup Setup 74→100%, Add-on Services 24→100% (the catalogue import), Pickup Map 88→99.5%,
-FOC detail 5→52%; and the sync below took Staff 28→100%, Pier Office Ranong 82→100%, Fleet
-Calendar 48→81%, Pier Office Panwa 75→91%, PR/PO 88→99%. Accounting and Booking Flow showed 0% in
-one run because they fill after ~4 s (one server call each) and the capture window closed first —
-slow, not broken.
+**Screen identity (`allviews.mjs`, 70 menu screens).** Three runs on 15 Oct, each on the same lk-inbox:
+
+| Run | Identical | Close (≥90%) | Different |
+| --- | --- | --- | --- |
+| Shipped main, bookings-only import | 15 | 16 | 38 |
+| + lk-inbox sync | 17 | 18 | 34 |
+| + full import of every area (one-day cutover order, 13 importers) | **31** | **20** | **18** |
+
+(1 not compared: lk-inbox freezes on Market Data, known.) The "fleet data drift" of earlier runs was
+the two systems holding different fleet data: with fleet, fleet-stock and costing imported, Fleet
+Maintenance, Incidents, Work, Boat Status, Consumables and Daily Report are 100%, Fleet Calendar
+99.7%, Fleet Cost 99%, Insights 98.9%, Deployment 98.4%; Rate Admin 100%, Trip P&L 99.9%. Earlier
+wins kept: Action Board 54→94%, Pickup Setup 74→100%, Add-on Services 24→100%, Staff 28→100%.
+
+Still different (18): Accounting and Booking Flow (fill after ~4 s, past the capture window —
+slow, not broken); Travel Summary, Daily Report, Van Bill (agreed server-row redesigns); Dev log (not
+migrated); and **12 to trace**: Pier Office Tub Lamu 42%, FOC detail 52%, B2B dashboard 54% (prior
+period depends on what the browser loaded), Pier Activity Panwa 60% (roster over-count), Rate Types
+65%, Contract template 67%, Fleet Fuel 74%, Fleet Projects 80%, Van Jobs 83%, Daily availability
+85% (was 95% before the full import — check), Calendar 85%, Dashboard 88%. Plus By-Trip's day
+view, which the per-date booking comparison scores 85–90%.
 
 **Traced so far:**
 - **By-Trip (day view, 85–90%)** — seat counts match (14/38, 66/66, 24 free). Different: lk-inbox
