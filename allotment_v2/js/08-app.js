@@ -68794,7 +68794,203 @@ function pkCalcFill(mode){
   _pkCalc.q=q; renderPierPark();
 }
 function pkCalcClear(){ _pkCalc={q:{}, free:[{n:'',q:'',p:''},{n:'',q:'',p:''},{n:'',q:'',p:''}]}; renderPierPark(); }
+/* ══ §pkBoard (2026-10-15) · owner "ตรงตารางคำนวณ เพิ่มแถบไว้สลับเป็นเหมือนบอร์ด ที่ User พิมพ์เขียนแบบอิสระ
+   สามารถคำนวณ บวก ลบ คูณ หาร ได้ด้วย" · ดีไซน์ TKB-TicketCalcBoard (อนุมัติ "ทำ")
+   ปุ่ม ▦ ตาราง / ✎ บอร์ด ที่หัวการ์ด · บอร์ด = กระดาษทด พิมพ์ทีละบรรทัด ผลขึ้นชิดขวาทันที
+   · ตัวหนังสือในบรรทัดเป็นแค่ป้าย (ผญ ไทย 72 × 100 = 7,200) · ตัวเลขที่เป็นป้ายหน้าสูตรถูกข้าม (แบ่ง 2 ลำ (a+b)÷2)
+   · # = โน้ต · บรรทัด "รวม" = ผลรวมของบรรทัดเหนือมันจนถึงบรรทัดรวมก่อนหน้า · คำว่า รวม ในสูตร = ยอดรวมล่าสุด
+   · + - − * x × / ÷ ( ) %  · 50,000 · 12.5
+   ไม่มี eval · แยก token เองแล้ว parse ทีละตำแหน่ง
+   จำไว้ในเครื่องนี้ ต่อวัน (localStorage 'la_pk_board_<วัน>') · ไม่ขึ้นเซิร์ฟเวอร์ (เหมือนจำนวนในโหมดตาราง)
+   ไม่มี "รวมทุกบรรทัด" ท้ายบอร์ด · บอร์ดปนทั้งบวกและส่วนต่าง ยอดรวมทุกบรรทัดไม่มีความหมาย ใช้ "รวม" แทน */
+var PKB_LH=32;
+function pkbMode(){ try{ return localStorage.getItem('la_pk_calc_mode')==='b'?'b':'t'; }catch(_){ return 't'; } }
+function pkbSetMode(m){ try{ localStorage.setItem('la_pk_calc_mode', m==='b'?'b':'t'); }catch(_){} renderPierPark(); }
+function pkbKey(){ return 'la_pk_board_'+((typeof _poDate!=='undefined'&&_poDate)||''); }
+function pkbGet(){ try{ return localStorage.getItem(pkbKey())||''; }catch(_){ return ''; } }
+function pkbPut(v){ try{ if(v) localStorage.setItem(pkbKey(), v); else localStorage.removeItem(pkbKey()); }catch(_){} }
+/* token: {t:'n',v} | {t:'o',v:'+-*\/'} | {t:'(' } | {t:')'} | {t:'%'} | {t:'S'} (รวม) */
+function pkbTok(s){
+  s=String(s||'').replace(/รวม/g,' \u0001 ').replace(/[×xX✕]/g,function(c,i,str){
+    /* x เป็นตัวคูณเฉพาะเมื่ออยู่ระหว่างตัวเลข/วงเล็บ · ในคำอย่าง Taxi ไม่ใช่ */
+    if(c==='×'||c==='✕') return '*';
+    var a=str.slice(0,i).replace(/\s+$/,''), b=str.slice(i+1).replace(/^\s+/,'');
+    return (/[\d)%\u0001]$/.test(a) && /^[\d(\u0001]/.test(b)) ? '*' : ' ';
+  }).replace(/÷/g,'/').replace(/[−–—]/g,'-');
+  var T=[], m, re=/(\d[\d,]*(?:\.\d+)?|\.\d+)|([+\-*/])|(\()|(\))|(%)|(\u0001)|(\s+)|(.)/g;
+  while((m=re.exec(s))){
+    if(m[1]){ var raw=m[1]; if(/,/.test(raw) && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw)){ raw.split(',').forEach(function(p){ if(p) T.push({t:'n',v:parseFloat(p)}); else T.push({t:'x'}); }); }
+              else T.push({t:'n',v:parseFloat(raw.replace(/,/g,''))}); }
+    else if(m[2]) T.push({t:'o',v:m[2]});
+    else if(m[3]) T.push({t:'('}); else if(m[4]) T.push({t:')'}); else if(m[5]) T.push({t:'%'});
+    else if(m[6]) T.push({t:'S'});
+    else if(m[8]) T.push({t:'x'});   /* ตัวหนังสือ = ตัวคั่น ไม่ใช่ส่วนของสูตร */
+  }
+  return T;
+}
+/* parse ตั้งแต่ตำแหน่ง i จนจบ · ต้องกินหมดทุก token ถึงนับว่าเป็นสูตร */
+function pkbParse(T, i, S){
+  var p=i;
+  function peek(){ return T[p]; }
+  function prim(){
+    var t=T[p]; if(!t) throw 1;
+    if(t.t==='o' && (t.v==='-'||t.v==='+')){ p++; var v=prim(); return t.v==='-'?-v:v; }
+    if(t.t==='n'){ p++; var n=t.v; if(T[p]&&T[p].t==='%'){ p++; n=n/100; } return n; }
+    if(t.t==='S'){ if(S==null) throw 2; p++; return S; }
+    if(t.t==='('){ p++; var x=add(); if(!T[p]||T[p].t!==')') throw 1; p++; if(T[p]&&T[p].t==='%'){ p++; x=x/100; } return x; }
+    throw 1;
+  }
+  function mul(){ var v=prim(); while(peek()&&peek().t==='o'&&(peek().v==='*'||peek().v==='/')){ var o=T[p++].v, r=prim(); if(o==='/'){ if(r===0) throw 3; v=v/r; } else v=v*r; } return v; }
+  function add(){ var v=mul(); while(peek()&&peek().t==='o'&&(peek().v==='+'||peek().v==='-')){ var o=T[p++].v, r=mul(); v=(o==='+')?v+r:v-r; } return v; }
+  var v=add(); if(p!==T.length) throw 1; return v;
+}
+/* คืน {k:'note'|'blank'|'sum'|'val'|'err'|'txt', v, msg} ต่อบรรทัด */
+function pkbEval(text){
+  var L=String(text||'').split('\n'), out=[], acc=0, lastSum=null, accN=0;
+  L.forEach(function(raw){
+    var s=raw.trim();
+    if(!s){ out.push({k:'blank'}); return; }
+    if(s.charAt(0)==='#'){ out.push({k:'note'}); return; }
+    if(/^รวม\s*[:=]?\s*$/.test(s)){ var v0=acc; out.push({k:'sum', v:v0}); lastSum=v0; acc=0; accN=0; return; }
+    var T=pkbTok(s).filter(function(t){ return t.t!=='x' || true; });
+    /* ตัดเป็นช่วงที่ไม่มีตัวหนังสือคั่น แล้วเอาช่วงท้ายสุดที่มีของ · ตัวหนังสือ = ป้าย */
+    var segs=[[]]; T.forEach(function(t){ if(t.t==='x'){ if(segs[segs.length-1].length) segs.push([]); } else segs[segs.length-1].push(t); });
+    var all=[]; segs.forEach(function(g){ all=all.concat(g); });
+    var hasNum=all.some(function(t){ return t.t==='n'||t.t==='S'; });
+    if(!hasNum){ out.push({k:'txt'}); return; }
+    var Sref=(lastSum!=null && accN===0)?lastSum:(accN?acc:(lastSum!=null?lastSum:null));
+    var hasOp=all.some(function(t){ return t.t==='o'||t.t==='('||t.t==='S'||t.t==='%'; });
+    /* หาจุดเริ่มเร็วที่สุดที่ parse ได้จนจบ · ลองทั้งแบบรวมทุกช่วง และช่วงท้าย */
+    var cands=[all, segs[segs.length-1].length?segs[segs.length-1]:all], got=null, why=1;
+    /* หารศูนย์ / ยังไม่มีรวม = ตอบเลย ไม่ไปลองตำแหน่งถัดไป (ไม่งั้น 10/0 กลายเป็น 0) */
+    for(var c=0;c<cands.length && got==null;c++){ var A=cands[c];
+      for(var i=0;i<A.length;i++){ try{ got=pkbParse(A, i, Sref); break; }catch(er){ why=er; if(er===3||er===2) break; } } if(why===3||why===2) break; }
+    if(got==null || !isFinite(got)){ out.push({k:'err', msg:(why===3?'หารด้วยศูนย์':(why===2?'ยังไม่มีรวม':(hasOp?'ยังไม่ครบ':'—')))}); return; }
+    out.push({k:'val', v:got}); acc+=got; accN++;
+  });
+  return out;
+}
+function pkbHi(text){
+  var e=poE;
+  return String(text||'').split('\n').map(function(ln){
+    if(ln.trim().charAt(0)==='#') return '<span class="nt">'+e(ln)+'</span>';
+    var out='', last=0, re=/(รวม)|(\d[\d,]*(?:\.\d+)?)|([+\-−–*×÷\/%()])|([xX])/g, m;
+    while((m=re.exec(ln))){ out+=e(ln.slice(last, m.index));
+      if(m[4]){ var _xo=/\d\s*$/.test(ln.slice(0,m.index)) && /^\s*\d/.test(ln.slice(m.index+1)); out+=_xo?('<span class="op">'+m[4]+'</span>'):e(m[4]); last=re.lastIndex; continue; }   /* x ระหว่างตัวเลข = คูณ */
+      out+=m[1]?('<span class="kw">'+m[1]+'</span>'):(m[2]?('<span class="nu">'+m[2]+'</span>'):('<span class="op">'+e(m[3])+'</span>'));
+      last=re.lastIndex; }
+    return out+e(ln.slice(last));
+  }).join('\n')+'\n';
+}
+function pkbRefresh(ta){
+  var host=ta.closest('.pkb'); if(!host) return;
+  var v=ta.value, R=pkbEval(v), n=Math.max(R.length+2, 12);
+  var hi=host.querySelector('.pkb-hi'); if(hi) hi.innerHTML=pkbHi(v);
+  var res=host.querySelector('.pkb-res'), num=host.querySelector('.pkb-num');
+  var h='', g='';
+  for(var i=0;i<n;i++){ var r=R[i];
+    g+='<div>'+(i+1)+'</div>';
+    if(!r||r.k==='blank'||r.k==='note'||r.k==='txt') h+='<div></div>';
+    else if(r.k==='err') h+='<div class="er">'+r.msg+'</div>';
+    else h+='<div class="'+(r.k==='sum'?'sm':'')+'">'+pkCalcFmt(r.v)+'</div>'; }
+  if(res) res.innerHTML=h; if(num) num.innerHTML=g;
+  var box=host.querySelector('.pkb-box'); if(box) box.style.height=(n*PKB_LH+12)+'px';
+  var cur=v.slice(0, ta.selectionStart||0).split('\n').length-1;
+  var hl=host.querySelector('.pkb-cur'); if(hl) hl.style.top=(6+cur*PKB_LH)+'px';
+}
+function pkbIn(ta){ pkbPut(ta.value); pkbRefresh(ta); }
+function pkbIns(btn, s){
+  var host=btn.closest('.pkb'), ta=host&&host.querySelector('textarea'); if(!ta) return;
+  var a=ta.selectionStart, b=ta.selectionEnd, v=ta.value;
+  if(s==='\b'){ if(a===b && a>0) a--; ta.value=v.slice(0,a)+v.slice(b); ta.selectionStart=ta.selectionEnd=a; }
+  else { var pre=v.slice(0,a);
+    /* ชิปป้าย+ตัวเลข ใส่ช่องว่างคั่นให้ ถ้าก่อนหน้าเป็นตัวอักษร */
+    if(s.length>1 && s.charAt(0)!=='\n' && pre && !/[\s(+\-*\/×÷−]$/.test(pre)) s=' '+s;
+    ta.value=pre+s+v.slice(b); ta.selectionStart=ta.selectionEnd=a+s.length; }
+  ta.focus(); pkbIn(ta);
+}
+function pkbCopy(btn){
+  var host=btn.closest('.pkb'), ta=host&&host.querySelector('textarea'); if(!ta) return;
+  var R=pkbEval(ta.value);
+  var txt=ta.value.split('\n').map(function(l,i){ var r=R[i]; return (r&&(r.k==='val'||r.k==='sum'))?(l+'  = '+pkCalcFmt(r.v)):l; }).join('\n');
+  try{ navigator.clipboard.writeText(txt); if(typeof flShowToast==='function') flShowToast('คัดลอกบอร์ดแล้ว'); }catch(_){ }
+}
+function pkbClear(){ if(!pkbGet() || confirm('ล้างบอร์ดของวันนี้?')){ pkbPut(''); renderPierPark(); } }
+function pkbSw(){
+  var m=pkbMode();
+  return '<span class="pkb-sw"><button type="button" class="'+(m==='t'?'on':'')+'" onclick="pkbSetMode(\'t\')">&#9638; ตาราง</button>'
+    +'<button type="button" class="'+(m==='b'?'on':'')+'" onclick="pkbSetMode(\'b\')">&#9998; บอร์ด</button></span>';
+}
+function pkBoard(flat, TY){
+  var e=poE, D=pkSetDraft(), v=pkbGet(), R=pkbEval(v), n=Math.max(R.length+2, 12);
+  /* ชิปตัวเลข · ชุดที่เปิดอยู่ก่อน · ไม่มีชุด = ยอดบนเรือของเส้นทางที่เลือก */
+  var q={}, src='';
+  if(D){ Object.keys(D.cnt||{}).forEach(function(c){ if(+D.cnt[c]) q[c]=+D.cnt[c]; }); src='ชุดที่เปิดอยู่'; }
+  else { flat.forEach(function(x){ if(_pkSetFamF!=='all' && pk2FamOf(x.g.rid).id!==_pkSetFamF) return;
+      (x.B.people||[]).forEach(function(p){ if(p.over) return; q[p.cat]=(+q[p.cat]||0)+1; }); });
+    src=(_pkSetFamF==='all')?'ทุกเส้นทาง':'เส้นทางที่เลือก'; }
+  var tot=0, chips='';
+  TY.forEach(function(T){ var k=+q[T.k]||0; if(!k) return; tot+=k;
+    var lb=String(T.s||T.n||T.k)+' '+k;
+    chips+='<button type="button" onclick="pkbIns(this,'+e(JSON.stringify(lb))+')" title="'+e(T.n||'')+'">'+e(T.s||T.n||T.k)+' <b>'+k+'</b></button>'; });
+  if(tot) chips+='<button type="button" class="t" onclick="pkbIns(this,'+e(JSON.stringify('รวมคน '+tot))+')">รวม <b>'+tot+'</b></button>';
+  var PR=pkPrice(), pchips='';
+  TY.forEach(function(T){ var p=PR[T.k]; if(!p) return;
+    pchips+='<button type="button" class="p" onclick="pkbIns(this,'+e(JSON.stringify(String(p)))+')" title="ราคา/ใบ '+e(T.n||'')+'">'+e(T.s||T.n||T.k)+' <b>฿'+e(p)+'</b></button>'; });
+  var res='', num='';
+  for(var i=0;i<n;i++){ var r=R[i]; num+='<div>'+(i+1)+'</div>';
+    if(!r||r.k==='blank'||r.k==='note'||r.k==='txt') res+='<div></div>';
+    else if(r.k==='err') res+='<div class="er">'+r.msg+'</div>';
+    else res+='<div class="'+(r.k==='sum'?'sm':'')+'">'+pkCalcFmt(r.v)+'</div>'; }
+  var K=function(s,c,lbl){ return '<button type="button" class="'+(c||'')+'" onclick="pkbIns(this,'+e(JSON.stringify(s))+')">'+(lbl||e(s))+'</button>'; };
+  var dLbl=(typeof _poDate!=='undefined'&&_poDate)?(+_poDate.slice(8,10)+'/'+(+_poDate.slice(5,7))):'';
+  return '<div class="pc2-card pk3-calc pkb"><div class="ch"><b>ตารางคำนวณ</b><span>พิมพ์อิสระ · + − × ÷</span>'+pkbSw()+'</div>'
+    +'<div class="pkb-box" style="height:'+(n*PKB_LH+12)+'px"><div class="pkb-num">'+num+'</div>'
+    +'<div class="pkb-cur" style="top:6px"></div>'
+    +'<pre class="pkb-hi" aria-hidden="true">'+pkbHi(v)+'</pre>'
+    +'<textarea class="pkb-ta" spellcheck="false" wrap="off" placeholder="พิมพ์ได้เลย เช่น  ผญ ไทย 72 × 100" oninput="pkbIn(this)" onclick="pkbRefresh(this)" onkeyup="pkbRefresh(this)" onscroll="var h=this.parentNode.querySelector(\'.pkb-hi\');h.scrollLeft=this.scrollLeft">'+e(v)+'</textarea>'
+    +'<div class="pkb-res">'+res+'</div></div>'
+    +(chips?('<div class="pkb-chips"><i>แตะเพื่อใส่ตัวเลข · '+e(src)+'</i>'+chips+'</div>'):'')
+    +(pchips?('<div class="pkb-chips"><i>ราคา/ใบ</i>'+pchips+'</div>'):'')
+    +'<div class="pkb-kp">'+K('7')+K('8')+K('9')+K('÷','o')+K('(')+K(')')
+      +K('4')+K('5')+K('6')+K('×','o')+K('%','o')+K('\nรวม\n','w','รวม')
+      +K('1')+K('2')+K('3')+K('−','o')+K(',')+K('\b','w','&#9003;')
+      +K('0')+K('.')+K('+','o')+K('\n','w3','&#8629; บรรทัดใหม่')+'</div>'
+    +'<div class="pkb-ft"><span>จำไว้ในเครื่องนี้ · '+e(dLbl)+' · # โน้ต · รวม = ผลรวมข้างบน</span><span style="flex:1"></span>'
+    +'<button type="button" class="ol" onclick="pkbCopy(this)">&#10697; คัดลอก</button><button type="button" class="ol" onclick="pkbClear()">ล้างบอร์ด</button></div>'
+    +'<style>'
+    +'.pkb .ch{display:flex;align-items:center}'
+    +'.pkb-sw{margin-left:auto;display:inline-flex;background:#EEF1F6;border-radius:10px;padding:3px;gap:2px}'
+    +'.pkb-sw button{height:26px;padding:0 10px;border:0;border-radius:8px;background:transparent;font:700 12px inherit;font-family:inherit;color:#5B6170;cursor:pointer}'
+    +'.pkb-sw button.on{background:#0B1E5B;color:#fff}'
+    +'.pkb-box{position:relative;margin:0 0 0;background:#FFFDF6;background-image:repeating-linear-gradient(#FFFDF6 0 '+(PKB_LH-1)+'px,#EFE9D6 '+(PKB_LH-1)+'px '+PKB_LH+'px);background-position:0 6px;border-top:1px solid #ECEFF4;overflow:hidden}'
+    +'.pkb-num{position:absolute;left:0;top:6px;width:24px;font:500 10px "DM Mono",monospace;color:#C3BBA2;text-align:right}'
+    +'.pkb-num div,.pkb-res div{height:'+PKB_LH+'px;line-height:'+PKB_LH+'px}'
+    +'.pkb-cur{position:absolute;left:0;right:0;height:'+PKB_LH+'px;background:rgba(26,115,232,.06);box-shadow:inset 3px 0 0 #1A73E8;pointer-events:none;display:none}'
+    +'.pkb-box:focus-within .pkb-cur{display:block}'
+    +'.pkb-hi,.pkb-ta{position:absolute;left:30px;right:96px;top:6px;bottom:0;margin:0;padding:0;border:0;font:500 13.5px/'+PKB_LH+'px "DM Mono","IBM Plex Sans Thai",monospace;white-space:pre;overflow:hidden;tab-size:4}'
+    +'.pkb-hi{color:#1F2937;pointer-events:none}'
+    +'.pkb-hi .nu{color:#1D4ED8;font-weight:600}.pkb-hi .op{color:#C2410C;font-weight:700}.pkb-hi .kw{background:#E0E7FF;color:#3730A3;border-radius:3px}.pkb-hi .nt{color:#8A7F5F;font-style:italic}'
+    +'.pkb-ta{background:transparent;color:transparent;caret-color:#1A73E8;resize:none;outline:none;overflow-x:auto;overflow-y:hidden}'
+    +'.pkb-ta::placeholder{color:#B9B39E}'
+    +'.pkb-ta::selection{background:rgba(26,115,232,.25);color:transparent}'
+    +'.pkb-res{position:absolute;right:10px;top:6px;width:86px;text-align:right;font:700 13.5px "DM Mono",monospace;color:#0B1E5B;pointer-events:none}'
+    +'.pkb-res .sm{color:#0F7A4E}.pkb-res .er{color:#B42318;font-size:10.5px;font-weight:700}'
+    +'.pkb-chips{display:flex;flex-wrap:wrap;gap:4px;padding:7px 12px 8px;border-top:1px solid #ECEFF4}'
+    +'.pkb-chips i{font-style:normal;width:100%;font-size:10px;font-weight:800;letter-spacing:.08em;color:#6B7693}'
+    +'.pkb-chips button{height:24px;padding:0 8px;border:0;border-radius:12px;background:#EEF4FB;color:#1D4ED8;font:700 11px inherit;font-family:inherit;cursor:pointer}'
+    +'.pkb-chips button b{font-family:"DM Mono",monospace}.pkb-chips button.t{background:#F1ECFB;color:#5B289A}.pkb-chips button.p{background:#FDF3E3;color:#9A5B00}'
+    +'.pkb-kp{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:8px 10px;background:#F7F8FA;border-top:1px solid #ECEFF4}'
+    +'.pkb-kp button{height:30px;border-radius:7px;border:1px solid #DCE1EA;background:#fff;font:700 14px "DM Mono",monospace;color:#0B1E5B;cursor:pointer}'
+    +'.pkb-kp button.o{color:#C2410C}.pkb-kp button.w{font:700 12px inherit;font-family:inherit;background:#EEF2FB}'
+    +'.pkb-kp button.w3{grid-column:span 3;font:700 12px inherit;font-family:inherit;background:#0B1E5B;color:#fff;border-color:#0B1E5B}'
+    +'.pkb-ft{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:10.5px;color:#6B7693;border-top:1px solid #ECEFF4}'
+    +'.pkb-ft span{min-width:0}.pkb-ft button{white-space:nowrap;flex:none;height:26px;padding:0 9px;border:1px solid #DCE1EA;border-radius:8px;background:#fff;font:700 11px inherit;font-family:inherit;color:#3E4658;cursor:pointer}'
+    +'</style></div>';
+}
+
 function pk3Calc(flat, TY, TYM, ro){
+  if(pkbMode()==='b') return pkBoard(flat, TY);   /* §pkBoard */
   var e=poE, PR=pkPrice(), D=pkSetDraft();
   var fam=(_pkSetFamF==='all')?'ทุกเส้นทาง':((flat.map(function(x){ return pk2FamOf(x.g.rid); }).filter(function(f){ return f.id===_pkSetFamF; })[0]||{}).n||'');
   var inp=function(k,f,v,ph,cls){ return '<input class="pk3-ci'+(cls?(' '+cls):'')+'" data-f="'+f+'" value="'+e(v)+'" placeholder="'+e(ph||'')+'" inputmode="decimal" autocomplete="off" oninput="pkCalcIn(this)"'+(ro&&f==='p'?' readonly':'')+'>'; };
@@ -68805,7 +69001,7 @@ function pk3Calc(flat, TY, TYM, ro){
     return '<tr data-k="free'+i+'"><td class="l">'+inp('free'+i,'n',F.n||'','พิมพ์รายการ','nm')+'</td>'
       +'<td>'+inp('free'+i,'q',F.q||'','0')+'</td><td class="x">×</td><td>'+inp('free'+i,'p',F.p||'','ราคา')+'</td><td class="pk3-cr'+(r?'':' z')+'">'+(r?pkCalcFmt(r):'—')+'</td></tr>'; }).join('');
   var tot=0; TY.forEach(function(T){ tot+=pkCalcNum(_pkCalc.q[T.k])*pkCalcNum(PR[T.k]); }); _pkCalc.free.forEach(function(F){ tot+=pkCalcNum(F.q)*pkCalcNum(F.p); });
-  return '<div class="pc2-card pk3-calc"><div class="ch"><b>ตารางคำนวณ</b><span>จำนวน × ราคา</span></div>'
+  return '<div class="pc2-card pk3-calc"><div class="ch"><b>ตารางคำนวณ</b><span>จำนวน × ราคา</span>'+pkbSw()+'</div>'   /* §pkBoard · ปุ่มสลับ */
     +'<div class="pk3-cb"><button type="button" class="ol" onclick="pkCalcFill(\'draft\')" title="เอาจำนวนจากชุดที่เปิดอยู่">ดึงจากชุดนี้'+(D?'':' ·')+'</button>'
     +'<button type="button" class="ol" onclick="pkCalcFill(\'fam\')" title="จำนวนบนเรือของเส้นทางที่เลือก แยกประเภทตั๋ว">ดึงจาก '+e(fam)+'</button>'
     +'<button type="button" class="ol" onclick="pkCalcClear()">ล้าง</button></div>'
@@ -68929,6 +69125,7 @@ function pk3CSS(S){
   S+' .pk2-side .pk2-tyd b.z{color:#CBD5E1}',
   S+' .pk3-calc{border-top:4px solid '+N+'}',
   S+' .pk3-calc .ch{padding-bottom:8px} '+S+' .pk3-calc .ch span{margin-left:auto;font-size:12px;color:'+M+'}',
+  S+' .pk3-calc .ch{display:flex;align-items:center;gap:8px} '+S+' .pk3-calc .ch>span:not(.pkb-sw){display:none} '+S+' .pk3-calc .ch .pkb-sw{margin-left:auto;flex:none;display:inline-flex;background:#EEF1F6;border-radius:10px;padding:3px;gap:2px} '+S+' .pk3-calc .ch .pkb-sw button{height:24px;padding:0 9px;border:0;border-radius:8px;background:transparent;font:700 11.5px inherit;font-family:inherit;color:#5B6170;cursor:pointer} '+S+' .pk3-calc .ch .pkb-sw button.on{background:#0B1E5B;color:#fff}',   /* §pkBoard */
   S+' .pk3-cb{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}',
   S+' .pk3-cb .ol{height:28px;padding:0 10px;border-radius:7px;border:1px solid #D9DEE9;background:#fff;font-family:inherit;font-size:11.5px;font-weight:700;color:#1A2A44;cursor:pointer}',
   /* §pkCalc2 (2026-10-15) · owner ส่งภาพ: คอลัมน์ ราคา/ใบ กับ รวม ตกขอบการ์ด (ชื่อประเภทยาวดันตารางกว้างเกิน 360px) → ตารางคอลัมน์คงที่ ชื่อยาวตัดด้วย … (ชื่อเต็มใน title) */
