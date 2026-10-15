@@ -25505,6 +25505,7 @@ function tsCSSDoc(){
 & .ts-man thead th:nth-child(16){ width:9.5% !important } & .ts-man thead th:nth-child(17){ width:6.5% !important } & .ts-man thead th:nth-child(18){ width:5.8% !important } & .ts-man thead th:nth-child(19){ width:7.2% !important }
 & .ts-man td:nth-child(19) .ts-chip{ white-space:nowrap }
 & .ts-man td.ts-zone .ts-zarea{ font-weight:700 } & .ts-man td.ts-zone .ts-tel{ font-size:6pt }
+& .ts-man .ts-ztag{ display:inline-block; font:800 6pt/1.4 'DM Mono',ui-monospace,monospace; border:1px solid var(--grid); border-radius:2px; padding:0 3px }
 & .ts-man td:nth-child(9){ white-space:nowrap; text-align:center; font-weight:800; background:#F6F7FB !important }
 & .ts-vch{ font:700 7.4pt/1.3 'DM Mono',ui-monospace,monospace; color:var(--ink) }
 & .ts-lead{ font-weight:700; color:var(--ink); white-space:normal; max-width:none }
@@ -25647,6 +25648,13 @@ var TS_HEAD_COL={
    ของใหม่ทุกชิ้นติด ts-scr → หน้าต่างพิมพ์/PDF ไม่เห็น ตารางพิมพ์เท่าเดิม
    สถานะค้นหา/กรองอยู่นอก render จะได้ไม่หายตอนกดชิปท่าเรือแล้ววาดใหม่ */
 var _tsManQ='', _tsManF='';
+/* §tsManZone2 · กลุ่มโซนของใบ · PK / KL / OWN (มาเอง · ไม่มีจุดรับ · โซน NoTransfer) · กติกาเดียวกับหน้าเช็คอิน (pckArrivalOf) แต่ไม่ดูว่าจัดรถแล้วหรือยัง */
+function tsManZoneKey(b, t){
+  if(!b) return '';
+  var z=''; try{ z=(typeof bkV2EffZone==='function')?(bkV2EffZone(b,t)||''):((t&&t.zone)||b.pickupZone||''); }catch(_){ z=''; }
+  if(b.pickupSelf || !(b.hotelName||b.pickup) || z==='NoTransfer' || z==='NT' || !z) return 'OWN';
+  return z==='KL'?'KL':(z==='PK'?'PK':z);
+}
 /* §tsManCols · คอลัมน์ที่ซ่อน · จำไว้ในเครื่องนี้แยกตามผู้ใช้ (localStorage) · # กับ Voucher ซ่อนไม่ได้ */
 /* §tsManZone (2026-10-15) · owner "เพิ่ม Zone ให้หน่อย" · คอลัมน์ที่ 10 ถัดจาก Pickup · โซนรับ (ชื่อพื้นที่ · PK/KL ตัวเล็ก)
    คอลัมน์หลังจากนั้นขยับไป 1 · ที่ซ่อนไว้ของเดิม (คีย์เก่า) แปลงเลขให้แล้วเก็บคีย์ใหม่ · ตารางมี 18 คอลัมน์ */
@@ -28830,6 +28838,8 @@ function tsCSSv6(){
 & .ts-man thead th:nth-child(17){width:92px}& .ts-man thead th:nth-child(19){width:98px}
 & .ts-man td:nth-child(19) .ts-chip,& .ts-man td:nth-child(9){white-space:nowrap}
 & .ts-man .ts-zarea{font-weight:700;color:#1a2332}
+& .ts-man .ts-ztag{display:inline-block;font:800 10px/1.5 'DM Mono',ui-monospace,monospace;border-radius:5px;padding:0 6px;margin-bottom:2px;background:#E6F1FB;color:#0C447C}
+& .ts-man .ts-ztag.z-kl{background:#E9F8F0;color:#0B6B47} & .ts-man .ts-ztag.z-own{background:#F1EDFC;color:#5B289A}
 & .ts-man thead th{white-space:normal;overflow-wrap:anywhere}
 & .ts-man thead th:nth-child(2){width:7%}& .ts-man thead th:nth-child(3){width:7%}& .ts-man thead th:nth-child(4){width:9.5%}
 & .ts-man thead th:nth-child(10){width:10%}& .ts-man thead th:nth-child(13){width:7%}& .ts-man thead th:nth-child(15){width:8%}& .ts-man thead th:nth-child(16){width:11%}& .ts-man thead th:nth-child(18){width:8%}
@@ -29319,12 +29329,17 @@ function renderTravelSum(){
   mvAll=mvAll.filter(function(x){ return tsScopeKeep(x.routeId); });
   if(_tsVatF)  mvAll=mvAll.filter(_vatKeep);
   var _azM=function(a,b){ return String(a||'').localeCompare(String(b||''),'en',{numeric:true,sensitivity:'base'}); };
+  /* §tsManZone2 (2026-10-15) · owner "ในแต่ละเอเจนต์ที่เรียง ให้แยก PK KL Own ให้ด้วย"
+     ในเส้นทาง → เอเจนต์ A-Z → PK · KL · Own (มาเอง/ไม่มีรถรับ) → voucher · tsManZoneKey ใช้ร่วมกับช่อง Zone */
+  var _zo={PK:0,KL:1,OWN:2};
   var mrows=rows.concat(cxlAll).concat(mvAll).sort(function(x,y){
     var rx=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId;
     var ry=((typeof getRoute==='function'?getRoute(y.routeId):null)||{}).name||y.routeId;
+    var zx=tsManZoneKey(x.b,x.t), zy=tsManZoneKey(y.b,y.t);
     return _azM(rx,ry)
       || ((x.cxlRow?1:0)-(y.cxlRow?1:0))
       || _azM(tsAgName(x.b), tsAgName(y.b))
+      || (((zx in _zo)?_zo[zx]:1.5)-((zy in _zo)?_zo[zy]:1.5))
       || _azM(x.b.voucherRef||x.b.code||'', y.b.voucherRef||y.b.code||'');
   });
   var body='', prevRoute=null;
@@ -29428,8 +29443,10 @@ function renderTravelSum(){
           var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
           var zk=''; try{ zk=(typeof bkV2EffZone==='function')?(bkV2EffZone(b,r.t)||''):((r.t&&r.t.zone)||b.pickupZone||''); }catch(_){ zk=''; }   /* โซนเดียวกับหน้าเช็คอิน (pckArrivalOf) */
           var zl=(zk&&typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(zk):zk;
-          if(!(b.hotelName||b.pickup)) return '<td class="ts-zone"><span style="color:var(--zn400)">—</span></td>';
-          return '<td class="ts-zone">'+(area?('<div class="ts-zarea">'+e(area)+'</div>'):'')+(zl&&zl!==area?('<div class="ts-tel">'+e(zl)+'</div>'):(area?'':'<span style="color:var(--zn400)">—</span>'))+'</td>';
+          /* §tsManZone2 · ป้าย PK / KL / Own ให้เห็นกลุ่มที่เรียงอยู่ */
+          var zg=tsManZoneKey(b,r.t), tag='<span class="ts-ztag z-'+e(String(zg).toLowerCase())+'">'+(zg==='OWN'?'Own':e(zg))+'</span>';
+          if(zg==='OWN') return '<td class="ts-zone">'+tag+(area&&(b.hotelName||b.pickup)?('<div class="ts-tel">'+e(area)+'</div>'):'')+'</td>';
+          return '<td class="ts-zone" title="'+e(zl||zg)+'">'+tag+(area?('<div class="ts-zarea">'+e(area)+'</div>'):'')+'</td>';   /* ป้าย PK/KL แทนชื่อกลุ่มโซน (Phuket/Khao Lak อยู่ใน title) */
         })()
       +'<td style="max-width:150px">'+(sb?('<div class="ts-sbk">'+e(sb.t)+'</div><span class="ts-chip '+sb.cls+'">'+e(sb.tag)+'</span>')
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
