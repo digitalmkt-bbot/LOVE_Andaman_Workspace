@@ -23,6 +23,9 @@
 // รอบ 6 (owner: "Boat running ไม่ขึ้น" · เครื่องนั้นเลือกมุมมอง Compact ไว้ · Compact เขียนการ์ดเรือทับเป็นตาราง)
 //  17 เลือก Compact ไว้ → ผิวมือถือยังมี Boats running ครบทุกทริป (Compact ปิดในผิวนี้) · หน้าที่ Compact แปลงไปแล้วก่อนผิวเปิด → วาดใหม่ให้เอง
 //     · จอคอมยังเป็น Compact ตามที่เลือก
+// รอบ 7 (owner: "ถ้ามีเรือออก 2 ลำ Prep แยกเรือไหม · อยากให้แยก")
+//  18 Boats running แยก PREP ตามเรือ · ทุกทริป ผลรวมทุกลำ (รวมแถว "ยังไม่ลงเรือ") = PREP รวมของรอบในการ์ดหน้าคอม ทุกตัว (ภาษา/อาหาร/แพ้/Longtail)
+//     · 16 ก.ย. Phi Phi Bamboo 2 ลำ (Artemis / Oceanus) · 15 ก.ย. 3 ทริป (รอบที่ไม่เหลือใบใช้ PREP รวมเดิม)
 import { open, goView } from './_harness.mjs';
 import fs from 'node:fs';
 let bad = 0;
@@ -182,6 +185,28 @@ const c16b = await page.evaluate(() => ({ on: document.body.classList.contains('
 ['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => page.evaluate(i => document.getElementById(i)?.remove(), id));
 if (!c16a.on && c16a.ox !== 'hidden' && c16a.vo !== 'none' && c16b.on && c16b.list) ok('16 ไปหน้าอื่น → ผิวมือถือปิด (.main ปัดข้างได้ · ป้ายลอยกลับมา) · กลับ Booking → เปิดอีก');
 else fail('16 ' + JSON.stringify({ c16a, c16b }));
+// 18 per-boat PREP
+const P18 = () => page.evaluate(() => {
+  const parse = el => { const o = {}; (el ? [...el.querySelectorAll('.bt-pc')] : []).forEach(c => { const t = c.textContent.replace(/\s+/g, ' ').trim(); let m;
+    if ((m = /^(.+?) · (\d+)$/.exec(t))) o[m[1]] = (o[m[1]] || 0) + +m[2]; else if ((m = /^⚠ (\d+) allergy$/.exec(t))) o.allergy = (o.allergy || 0) + +m[1]; else if ((m = /^(\d+) (\w+)$/.exec(t))) o[m[2]] = (o[m[2]] || 0) + +m[1]; }); return o; };
+  const tps = [...document.querySelectorAll('#view-booking .bt-boat .bt-tgp')], mtp = [...document.querySelectorAll('#view-booking .bk-mro-bc .bk-mro-tp')];
+  return tps.map((tp, i) => { const want = parse(tp.querySelector('.bt-prep')); const got = {}; const bx = mtp[i] ? [...mtp[i].querySelectorAll('.bx')] : [];
+    bx.forEach(b => { const o = parse(b); Object.keys(o).forEach(k => got[k] = (got[k] || 0) + o[k]); });
+    const keys = [...new Set(Object.keys(want).concat(Object.keys(got)))]; return { n: bx.length, un: mtp[i] ? !!mtp[i].querySelector('.bn.un') : false, ok: keys.every(k => want[k] === got[k]), want, got }; }); });
+await page.evaluate(() => { _bkV2.filterDate = '2026-09-16'; bkV2Render(); }); await page.waitForTimeout(900);
+const p18a = await P18();
+/* ใบหนึ่งยังไม่ลงเรือ (แก้ในหน่วยความจำ ไม่เซฟ) → ต้องมีแถว "ยังไม่ลงเรือ" และผลรวมยังตรง */
+const unId = await page.evaluate(() => { const id = [...document.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')].map(t => t.getAttribute('data-al')).find(i => { const bb = SB_BOOKINGS.find(x => x.id === i); return bb && !(bb.trips || []).some(t => t.bookingMode === 'charter'); }); const b = SB_BOOKINGS.find(x => x.id === id);
+  const o = bkOpsFor(b, '2026-09-16'); window.__t18 = { id, was: o.boatId }; o.boatId = null; bkV2Render(); return id; });
+await page.waitForTimeout(900);
+const p18u = await P18();
+await page.evaluate(() => { const b = SB_BOOKINGS.find(x => x.id === window.__t18.id); bkOpsFor(b, '2026-09-16').boatId = window.__t18.was; bkV2Render(); }); await page.waitForTimeout(600);
+await page.evaluate(() => { _bkV2.filterDate = '2026-09-15'; bkV2Render(); }); await page.waitForTimeout(900);
+const p18b = await P18();
+const all18 = p18a.concat(p18b, p18u);
+if (all18.length && all18.every(x => x.ok && (x.n >= 1 || !Object.keys(x.want).length)) && p18a.some(x => x.n >= 2) && Object.keys(p18a[0].want).length && p18u.some(x => x.un))
+  ok(`18 PREP แยกตามเรือ · ${all18.length} ทริป · ผลรวมทุกลำ = PREP รวมของรอบ · มีรอบ 2 ลำ (${p18a.map(x => x.n).join('/')} ลำ) · ใบที่ยังไม่ลงเรือขึ้นแถว "ยังไม่ลงเรือ" และยอดยังตรง`);
+else fail('18 ' + JSON.stringify({ p18a, p18b, p18u }));
 // 17 Compact saved on this device
 await page.evaluate(() => { localStorage.setItem('la_bt_view', 'compact'); _bkV2.filterDate = '2026-09-16'; bkV2Render(); }); await page.waitForTimeout(900);
 const S17 = () => page.evaluate(() => ({ btc: document.body.classList.contains('btc'), tps: document.querySelectorAll('#view-booking .bt-boat .bt-tgp').length,

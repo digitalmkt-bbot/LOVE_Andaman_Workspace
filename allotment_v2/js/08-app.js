@@ -80189,6 +80189,16 @@ function pc2CSS3(S){
     '.bk-mro-tp .pp{display:flex;gap:4px;flex-wrap:wrap;align-items:center}',
     '.bk-mro-tp .pp .l{font-size:10px;font-weight:800;letter-spacing:.06em;color:#6B7390;margin-right:2px}',
     '.bk-mro-tp .pp .bt-pc{font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;white-space:nowrap}',
+    '.bk-mro-tp .bxs{display:flex;flex-direction:column}',
+    '.bk-mro-tp .bx{display:flex;flex-direction:column;gap:4px;padding:6px 0;border-top:1px dashed #E3E6EE}',
+    '.bk-mro-tp .bx:first-child{border-top:0;padding-top:2px}',
+    '.bk-mro-tp .bn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:#0F1B3D}',
+    '.bk-mro-tp .bn i{width:8px;height:8px;border-radius:4px;flex:none}',
+    '.bk-mro-tp .bn s{text-decoration:none;font-family:"DM Mono",monospace;font-weight:500;color:#6B7390}',
+    '.bk-mro-tp .bn.over s{color:#A32D2D;font-weight:700}',
+    '.bk-mro-tp .bn.un{color:#9A5B00}',
+    '.bk-mro-tp .bx .pp{display:flex;gap:4px;flex-wrap:wrap;padding-left:14px}',
+    '.bk-mro-tp .bx .pp .bt-pc{font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;white-space:nowrap}',
     '.bk-mro-none2{font-size:12.5px;color:#6B7390;padding:6px 2px}',
     /* ── ใบต่อเส้นทาง ── */
     '.bk-mro-l{display:flex;flex-direction:column;gap:10px;margin-top:10px}',
@@ -80412,18 +80422,76 @@ function pc2CSS3(S){
         var p = el.querySelector('.bt-prep'); if(!p) return '';
         return '<div class="pp"><span class="l">PREP</span>' + [].slice.call(p.querySelectorAll('.bt-pc')).map(function(x){ var w = document.createElement('div'); w.appendChild(x.cloneNode(true)); return cleanHtml(w); }).join('') + '</div>';
       };
+      /* §bkMroPrep (2026-10-15) · owner "ถ้ามีเรือออก 2 ลำ Prep แยกเรือไหม · อยากให้แยก"
+         PREP ของการ์ดหน้าคอม (_btPrep) รวมทั้งรอบ · ที่นี่แยกตามเรือที่ใบนั้นขึ้น (ช่องเรือในตาราง = bkOpsRead().boatId)
+         นับแบบเดียวกับ _btPrep ทุกตัว: ภาษาไกด์ = จำนวนคนในแถว · อาหาร = specialMeals · แพ้ = bkV2AllergyCount
+         Longtail join = คนในแถว (หรือ + คนเสริม) · charter = จำนวนลำ · B2C ที่เป็นบริการเสริมของใบเอเจนต์ไม่นับซ้ำ
+         แถวเดียวกับตาราง (หลังกรองท่า/โปรแกรม/คำค้น) · ผลรวมทุกลำ = PREP ของรอบในหน้าคอมเสมอ */
+      var prepOf = function(rows, rid){
+        var p = { lang: {}, veg: 0, vegan: 0, halal: 0, allerg: 0, ltJ: 0, ltC: 0, pax: 0 };
+        rows.forEach(function(r){
+          var b = bookingOf(r.id) || {}, t = r.tot, gd = b.guides || {}, mm = b.specialMeals || {};
+          p.pax += t;
+          if(gd.english) p.lang.EN = (p.lang.EN || 0) + t;
+          if(gd.russian) p.lang.RU = (p.lang.RU || 0) + t;
+          if(gd.chinese) p.lang.CN = (p.lang.CN || 0) + t;
+          var ol = String(gd.otherLang || '').trim(); if(ol) p.lang[ol] = (p.lang[ol] || 0) + t;
+          p.veg += +mm.veg || 0; p.vegan += +mm.vegan || 0; p.halal += +mm.halal || 0;
+          try{ p.allerg += (typeof bkV2AllergyCount === 'function') ? (bkV2AllergyCount(mm) || 0) : (String(mm.allergies || '').trim() ? 1 : 0); }catch(e){}
+          try{
+            var af = (typeof bkV2AddOnFlags === 'function' && !(typeof bkB2CAddonTo === 'function' && bkB2CAddonTo(b))) ? bkV2AddOnFlags(b, rid) : null;
+            if(af){ if(af.charter) p.ltC += (af.charterQty || 1); else if(af.join) p.ltJ += t; }
+            if(typeof bkV2LongtailExtraPax === 'function') p.ltJ += (bkV2LongtailExtraPax(b.id, r.date) || 0);
+            if(typeof bkV2LongtailCharterExtraBoats === 'function') p.ltC += (bkV2LongtailCharterExtraBoats(b.id, r.date) || 0);
+          }catch(e){}
+        });
+        return p;
+      };
+      var prepChips = function(p){
+        var out = [];
+        Object.keys(p.lang).sort(function(a, b){ return p.lang[b] - p.lang[a]; }).forEach(function(k){
+          var c = (typeof bkV2LangColors === 'function') ? bkV2LangColors(k) : ['#EEF2F7', '#3a4150'];
+          out.push('<span class="bt-pc" style="background:' + esc(c[0]) + ';color:' + esc(c[1]) + '">' + esc(k) + ' · ' + p.lang[k] + '</span>');
+        });
+        if(p.veg) out.push('<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">' + p.veg + ' veg</span>');
+        if(p.vegan) out.push('<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">' + p.vegan + ' vegan</span>');
+        if(p.halal) out.push('<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">' + p.halal + ' halal</span>');
+        if(p.allerg) out.push('<span class="bt-pc" style="background:#FBEAE7;color:#A32D2D">&#9888; ' + p.allerg + ' allergy</span>');
+        if(p.ltJ) out.push('<span class="bt-pc" style="background:#F1EFE8;color:#3C3B37">Longtail join · ' + p.ltJ + '</span>');
+        if(p.ltC) out.push('<span class="bt-pc" style="background:#EFEAFB;color:#5B289A">Longtail charter · ' + p.ltC + '</span>');
+        return out.join('');
+      };
+      /* boats = ชิปเรือจากการ์ดหน้าคอม [{nm, col, ld, over}] · คืน null ถ้าไม่มีแถวในตารางให้แยก (ใช้ PREP รวมแทน) */
+      var perBoat = function(rid, boats){
+        var rows = ROWS.filter(function(r){ return !r.cx && r.rid === rid; });
+        if(!rid || !rows.length) return null;
+        var by = {}, order = [];
+        boats.forEach(function(x){ by[x.nm] = { x: x, rows: [] }; order.push(x.nm); });
+        rows.forEach(function(r){
+          var k = r.bt || '';
+          if(!by[k]){ by[k] = { x: k ? { nm: k, col: '#94A3B8', ld: '' } : null, rows: [] }; order.push(k); }
+          by[k].rows.push(r);
+        });
+        if(by[''] && order.indexOf('') !== order.length - 1){ order.splice(order.indexOf(''), 1); order.push(''); }   /* ยังไม่ลงเรือ ไว้ท้ายสุด */
+        return '<div class="bxs">' + order.map(function(k){
+          var g = by[k], p = prepOf(g.rows, rid), x = g.x, ch = prepChips(p);
+          var head = x ? ('<span class="bn' + (x.over ? ' over' : '') + '"><i style="background:' + esc(x.col) + '"></i>' + esc(x.nm) + (x.ld ? (' <s>' + esc(x.ld) + '</s>') : (' <s>' + p.pax + ' คน</s>')) + '</span>')
+                       : ('<span class="bn un">&#9888; ยังไม่ลงเรือ <s>' + p.pax + ' คน</s></span>');
+          return '<div class="bx">' + head + (ch ? ('<span class="pp">' + ch + '</span>') : '') + '</div>';
+        }).join('') + '</div>';
+      };
+      var ridOf = function(el){ var m = /bkV2Tab2SetRoute\('([^']*)'\)/.exec((el && el.getAttribute('onclick')) || ''); return m ? m[1] : ''; };
       var tps = [].slice.call(bc.querySelectorAll('.bt-tgp'));
       if(tps.length){
         tps.forEach(function(tp){
           var sm = tp.querySelector('.bt-tgh .sm'), em = sm ? sm.querySelector('em') : null;
           bh += '<div class="bk-mro-tp" style="--c:' + esc(cssVar(tp, '--tc') || '#94A3B8') + '">'
             + '<div class="r1"><span class="nm">' + esc(txt(tp.querySelector('.bt-tgh .nm'))) + '</span><span class="ld">' + esc(txtBut(sm, 'em')) + (em ? ('<span class="bk-mro-fr ' + freeCls(em) + '">' + esc(freeTh(txt(em))) + '</span>') : '') + '</span></div>'
-            + '<div class="r2">' + esc(txt(tp.querySelector('.bt-tgh .tm'))) + '</div>'
-            + '<div class="bts">' + [].slice.call(tp.querySelectorAll('.bt-tbc')).map(function(b){
-                var i = b.querySelector('i');
-                return '<span class="' + (/\bover\b/.test(b.className) ? 'over' : '') + '"><i style="background:' + esc(i ? i.style.background : '#94A3B8') + '"></i>' + esc(txtBut(b, 's')) + ' <s>' + esc(txt(b.querySelector('s'))) + '</s></span>';
-              }).join('') + '</div>'
-            + prep(tp) + '</div>';
+            + '<div class="r2">' + esc(txt(tp.querySelector('.bt-tgh .tm'))) + '</div>';
+          var boats = [].slice.call(tp.querySelectorAll('.bt-tbc')).map(function(b){ var i = b.querySelector('i'); return { nm: txtBut(b, 's'), col: (i && i.style.background) || '#94A3B8', ld: txt(b.querySelector('s')), over: /\bover\b/.test(b.className) }; });
+          var pb = perBoat(ridOf(tp), boats);
+          bh += pb ? pb : ('<div class="bts">' + boats.map(function(x){ return '<span class="' + (x.over ? 'over' : '') + '"><i style="background:' + esc(x.col) + '"></i>' + esc(x.nm) + ' <s>' + esc(x.ld) + '</s></span>'; }).join('') + '</div>' + prep(tp));
+          bh += '</div>';
         });
       } else if(bc.querySelector('.bt-bnm')){
         /* เลือกโปรแกรมไว้ · การ์ดเป็นแบบทริปเดียว */
@@ -80431,12 +80499,11 @@ function pc2CSS3(S){
         var avv = function(k){ var a = av.find(function(x){ return new RegExp('^' + k, 'i').test(txt(x.querySelector('.k'))); }); return a ? txt(a.querySelector('.v')) : ''; };
         bh += '<div class="bk-mro-tp" style="--c:' + esc(cssVar(bc, '--c') || '#94A3B8') + '">'
           + '<div class="r1"><span class="nm">' + esc(txtBut(bn, 'span')) + '</span><span class="ld">' + esc(avv('booked')) + '/' + esc(avv('capacity')) + '<span class="bk-mro-fr">ว่าง ' + esc(avv('free')) + '</span></span></div>'
-          + '<div class="r2">' + esc(txt(bn.querySelector('span'))) + '</div>'
-          + '<div class="bts">' + [].slice.call(bc.querySelectorAll('.bt-brow')).map(function(b){
-              var d = b.querySelector('.d');
-              return '<span class="' + (/\bover\b/.test(b.className) ? 'over' : '') + '"><i style="background:' + esc(d ? d.style.background : '#94A3B8') + '"></i>' + esc(txt(b.querySelector('.nm'))) + ' <s>' + esc(txt(b.querySelector('.ld'))) + '</s></span>';
-            }).join('') + '</div>'
-          + prep(bc) + '</div>';
+          + '<div class="r2">' + esc(txt(bn.querySelector('span'))) + '</div>';
+        var boats2 = [].slice.call(bc.querySelectorAll('.bt-brow')).map(function(b){ var d = b.querySelector('.d'); return { nm: txt(b.querySelector('.nm')), col: (d && d.style.background) || '#94A3B8', ld: txt(b.querySelector('.ld')), over: /\bover\b/.test(b.className) }; });
+        var pb2 = perBoat((typeof _bkV2 !== 'undefined' && _bkV2 && _bkV2.filterRoute) || '', boats2);
+        bh += pb2 ? pb2 : ('<div class="bts">' + boats2.map(function(x){ return '<span class="' + (x.over ? 'over' : '') + '"><i style="background:' + esc(x.col) + '"></i>' + esc(x.nm) + ' <s>' + esc(x.ld) + '</s></span>'; }).join('') + '</div>' + prep(bc));
+        bh += '</div>';
       } else {
         bh += '<div class="bk-mro-none2">ไม่มีเรือออกวันนี้</div>';
       }
@@ -80519,7 +80586,7 @@ function pc2CSS3(S){
       var aoEl = cell(C.ao) ? cell(C.ao).querySelector('.t2-addoncell-badges') : null;
       var ao = cleanHtml(aoEl || cell(C.ao)), sq = cleanHtml(cell(C.sq));
       var row = { id: id, i: ROWS.length, vc: txt(cell(C.vc)) || b.voucherRef || '', name: b.leadPax || txt(cell(C.cu)), px: px, tot: tot, tm: tmT, t1: t1, t2: t2,
-                  pk: pk, rm: rm, zn: zn, zk: zk, bt: bt, van: van, vid: vid, ao: ao, sq: sq, cx: /\bt2-cxl\b/.test(cls), rc: rc, route: '', date: date };
+                  pk: pk, rm: rm, zn: zn, zk: zk, bt: bt, van: van, vid: vid, ao: ao, sq: sq, cx: /\bt2-cxl\b/.test(cls), rc: rc, route: '', date: date, rid: (t && t.routeId) || '' };
       try{ var rr = (t && typeof getRoute === 'function') ? getRoute(t.routeId) : null; row.route = (rr && rr.name) || ''; }catch(e){}
       ROWS.push(row);
       var pxTxt = px.chd || px.inf ? (px.ad + '+' + (px.chd + px.inf)) : String(tot);
@@ -80627,14 +80694,17 @@ function pc2CSS3(S){
       [].slice.call(root.querySelectorAll('.bt-c')).forEach(function(c){ if(c.querySelector('.bt-mrow')) c.classList.add('bk-mro-hide'); });
       var hg = root.querySelector('.bt-hgrid');
       var wrap = root.querySelector('.t2-wrap');
-      var nBoat = 0;
+      var bc0 = root.querySelector('.bt-boat .bt-ct .bt-cnt'), nBoat = bc0 ? (nums(txt(bc0))[0] || 0) : 0;
+      /* §bkMroPrep · วาดรายการใบก่อน (ROWS) · การ์ด Boats running ใช้แถวพวกนี้แยก PREP ตามเรือ */
+      var hasTbl = tab === 'bytrip' && wrap && root.querySelector('table.t2-mtbl');
+      if(!hasTbl) ROWS = [];
+      var listH = hasTbl ? build(root, nBoat) : '';
       if(tab === 'bytrip' && hg){
         place('bk-mro-sum', hg, hg.firstChild, buildSum(root));
-        var bc = root.querySelector('.bt-boat .bt-ct .bt-cnt'); nBoat = bc ? (nums(txt(bc))[0] || 0) : 0;
         var q = root.querySelector('#bt-q'); if(q && q.getAttribute('placeholder') !== 'ค้นหา · ชื่อ · voucher · โรงแรม') q.setAttribute('placeholder', 'ค้นหา · ชื่อ · voucher · โรงแรม');
       } else drop(root, '.bk-mro-sum');
-      if(tab === 'bytrip' && wrap && root.querySelector('table.t2-mtbl')){
-        place('bk-mro-l', wrap.parentNode, wrap.nextSibling, build(root, nBoat));
+      if(hasTbl){
+        place('bk-mro-l', wrap.parentNode, wrap.nextSibling, listH);
         document.body.classList.add('bk-mro-list');
       } else if(tab === 'bytrip' && wrap){
         place('bk-mro-l', wrap.parentNode, wrap.nextSibling, '<div class="bk-mro-none">ไม่มี booking ในวันนี้</div>');
@@ -80706,6 +80776,7 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+
 
 
 
