@@ -744,6 +744,19 @@ body.ts-printing .view{padding-bottom:0}
 @keyframes laOpsSpin{to{transform:rotate(360deg)}}
 @keyframes laOpsLoadIn{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.la-ops-loading-ring{animation-duration:2.4s}.la-ops-loading{animation:none}}
+/* §skel (2026-10-15) · grey shimmer placeholders shaped like the screen that is loading
+   (laOps.skeletonHtml for Accounting, the booking calendar's first month load) */
+.la-skel{display:block;position:relative;overflow:hidden;background:#E6EAF0;border-radius:6px;flex:none}
+.la-skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:laSkelShine 1.4s ease-in-out infinite}
+@keyframes laSkelShine{to{transform:translateX(100%)}}
+.la-skel-wrap{animation:laOpsLoadIn .25s ease-out both}
+.la-skel-kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.la-skel-card{flex:1;min-width:150px;background:#fff;border:0.5px solid var(--fd-line-soft,#E5E7EB);border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:9px}
+.la-skel-table{background:#fff;border:0.5px solid var(--fd-line-soft,#E5E7EB);border-radius:12px;overflow:hidden}
+.la-skel-tr{display:flex;align-items:center;gap:18px;padding:11px 15px;border-top:0.5px solid var(--fd-line-soft,#EEF0F3)}
+.la-skel-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.la-skel::after{animation:none}.la-skel-wrap{animation:none}}
 body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
 @media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues{display:none!important}}
 /* §b2cCheck (2026-10-03) · ใบ B2C ที่ต้องเช็ค · อยู่เลนเดียวกับ #la-refresh (คอลัมน์ sidebar ก้นซ้าย = "เรื่องของระบบ")

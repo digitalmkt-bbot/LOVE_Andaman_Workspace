@@ -1,6 +1,9 @@
 // Operation-backend booking query cache. Booking pages load only their visible
 // date/month; they never bootstrap a broad operational window.
 var _opsBookingRanges = Object.create(null), _opsBookingRangeLoads = Object.create(null);
+// §calSkel · _opsBookingSeen survives a write's cache drop (its bookings stay in SB_BOOKINGS), so
+// only a range that has never loaded shows a skeleton; _opsBookingFailed = its last load failed.
+var _opsBookingSeen = Object.create(null), _opsBookingFailed = Object.create(null);
 function _opsBookingYMD(d){
   if(typeof bookingV2LocalYMD==='function') return bookingV2LocalYMD(d);
   var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
@@ -26,6 +29,7 @@ function _opsBookingMerge(mapped){
 }
 function bookingV2OpsResetCache(){
   _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null); _opsDailyCounts=Object.create(null);
+  _opsBookingSeen=Object.create(null); _opsBookingFailed=Object.create(null);
   delete window._opsAllStats; delete window._opsAllMonthCounts;
   if(typeof SB_BOOKINGS!=='undefined') SB_BOOKINGS.length=0;
 }
@@ -56,11 +60,12 @@ function bookingV2EnsureOpsRange(options){
       if(j.next_cursor && ++pages<MAX_PAGES) return page(j.next_cursor);
       if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' is incomplete');
       var mapped=all.map(bookingV2FromOpsBooking); _opsBookingMerge(mapped); _opsBookingRanges[key]=true;
+      _opsBookingSeen[key]=true; delete _opsBookingFailed[key];
       console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' from operation-backend');
       return {bookings:all};
     });
   }
-  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); return null; });
+  var load=page(null).catch(function(e){ _opsBookingFailed[key]=true; console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); return null; });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
   return _opsBookingRangeLoads[key];
 }
@@ -68,6 +73,18 @@ function bookingV2OpsEnsureMonth(month){
   var r=_opsBookingMonthRange(month); return bookingV2EnsureOpsRange(r);
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
+/* §calSkel · 'loading' = in flight and never loaded this session (draw a skeleton, not zeros);
+   'failed' = the last load failed (callers stop auto-retrying until bookingV2OpsRetryMonth). */
+function bookingV2OpsMonthStatus(month){
+  var r=_opsBookingMonthRange(month), key=_opsBookingRangeKey({from:r.from,to:r.to,limit:100});
+  if(_opsBookingRangeLoads[key] && !_opsBookingSeen[key]) return 'loading';
+  return _opsBookingFailed[key] ? 'failed' : '';
+}
+function bookingV2OpsRetryMonth(month){
+  var r=_opsBookingMonthRange(month);
+  delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to,limit:100})];
+  bookingV2Render();
+}
 function bookingV2OpsEnsureSummary(){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   var key='summary';

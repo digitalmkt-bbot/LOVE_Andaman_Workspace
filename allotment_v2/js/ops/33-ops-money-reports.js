@@ -177,7 +177,18 @@
   wrap('renderAccounting',function(orig){
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var self=this; var host=document.getElementById('acct-body');
-    if(!reports.accounting){ if(host) host.innerHTML=O.loadingHtml('Loading accounting…'); return loadAccounting().then(function(){ renderAccountingFromServer.call(self); },function(e){ fail('Accounting report did not load',e); hostError('acct-body','Accounting report did not load from operation-backend.'); }); }
+    /* §acctSkel (2026-10-15) · the report and the invoice list (30-ops-money) load together and the
+       page draws once. Before, legacyAccounting ran while invoices were still loading: the server KPIs
+       replaced that spinner, then the invoice load redrew the page with the browser-summed KPIs. */
+    var money=O.money&&O.money.loaded&&!O.money.loaded()?O.money:null;
+    if(!reports.accounting || money){
+      if(host) host.innerHTML=O.skeletonHtml({kpis:6,panels:3,rows:8,cols:8,label:'Loading accounting…'});
+      var report=loadAccounting().catch(function(e){ fail('Accounting report did not load',e); throw 'report'; });
+      var invoices=money?money.ensureLoaded().catch(function(){ throw 'invoices'; }):null;   // 30-ops-money toasts its own failure
+      return Promise.all([report, invoices]).then(function(){ renderAccountingFromServer.call(self); },function(which){
+        hostError('acct-body', which==='invoices' ? 'Invoices did not load from operation-backend.' : 'Accounting report did not load from operation-backend.');
+      });
+    }
     return renderAccountingFromServer.call(self);
   });
   wrap('acctDashboardHtml',function(orig){
@@ -188,7 +199,7 @@
     if(!enabled()) return orig.apply(this,[].slice.call(arguments,1));
     var id=text(agentId); if(!id) return;
     if(reports.statements[id]) return modal(statementHtml(reports.statements[id]));
-    modal(O.loadingHtml('Loading statement…'));
+    modal('<div style="padding:18px 20px">'+O.skeletonHtml({kpis:4,rows:5,cols:6,label:'Loading statement…'})+'</div>');
     return loadStatement(id).then(function(d){ modal(statementHtml(d)); },function(e){ fail('Agent statement did not load',e); modal('<div style="padding:32px;color:#A32D2D">Agent statement did not load from operation-backend.</div>'); });
   });
   wrap('renderTravelSum',function(orig){
