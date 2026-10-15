@@ -53212,10 +53212,14 @@ function bkV2RenderTab2(){
   const _allRids = _allRidsAll.filter(rid => !_isLandRid(rid));
   const _famMinTime = {};
   _allRids.forEach(rid => { const fid=_famOf(rid), t=_timeOf(rid); if(!(fid in _famMinTime) || t < _famMinTime[fid]) _famMinTime[fid]=t; });
+  /* §btOrder (2026-10-15) · owner ถามว่าทำไม 19 กับ 20 ต.ค. เรียงไม่เหมือนกัน
+     รอบที่ออกเวลาเดียวกัน (Speedboat กับ Catamaran 08:30) เดิมไม่มีกฎ · ลำดับขึ้นกับว่าเจอใบจองของรอบไหนก่อนในข้อมูล
+     จึงสลับไปมาวันต่อวัน · owner: "ให้รอบที่ออกเวลาเดียวกันเรียงตามลำดับที่ตั้งไว้" = ลำดับใน ROUTES (หน้าตั้งค่าเส้นทาง) */
+  const _btRouteIdx = rid => { const i=(typeof ROUTES!=='undefined'?ROUTES:[]).findIndex(x=>x.id===rid); return i<0?9999:i; };
   const routeIds = _allRids.sort((a,b)=>{
     const fa=_famOf(a), fb=_famOf(b);
     if(fa!==fb) return (_famMinTime[fa]||'99').localeCompare(_famMinTime[fb]||'99') || fa.localeCompare(fb);
-    return _timeOf(a).localeCompare(_timeOf(b));
+    return _timeOf(a).localeCompare(_timeOf(b)) || (_btRouteIdx(a)-_btRouteIdx(b));
   });
 
   const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
@@ -53279,7 +53283,11 @@ function bkV2RenderTab2(){
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
   Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bkV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
-  const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
+  /* §btOrder (2026-10-15) · การ์ด Programmes เดิมเรียงโปรแกรมตาม pax มากไปน้อย (ไม่นับล็อก) · ลำดับเลยเปลี่ยนทุกวัน
+     (19 ต.ค. Surin 29 > Phi Phi 15 · 20 ต.ค. Phi Phi 35 > Surin 12) · owner: "ตายตัวทุกวัน (Similan → Surin → Phi Phi → …)"
+     = ลำดับใน _BKV2_FAMILIES: Similan · Surin · Phi Phi · Krabi + Phang Nga · Whale Shark · Se La Va · Nyaung Oo Phee · Transfer · City Tour · Activities */
+  const _btFamIdx = a => { const i=_BKV2_FAMILIES.findIndex(f=>f.id===(a&&a.fam&&a.fam.id)); return i<0?999:i; };
+  const _famList = Object.values(_famAgg).sort((a,b)=> _btFamIdx(a)-_btFamIdx(b));
   const _dayLocked = (typeof bkV2DayLockedTotal==='function') ? bkV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
   const _isToday = date === (typeof bkV2LocalYMD==='function' ? bkV2LocalYMD(new Date()) : '');
@@ -53463,7 +53471,7 @@ function bkV2RenderTab2(){
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
         const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
-      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))));
+      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))) || (_btRouteIdx(x)-_btRouteIdx(y)));   /* §btOrder · เวลาเดียวกัน → ลำดับที่ตั้งไว้ */
     const nRun=rids.filter(r=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date)).length;
     /* §famSum (2026-10-13) · owner "ตัวผลรวมที่เป็น Variant เพิ่มจำนวนล็อคทั้งหมดด้วย และผลรวมจะเป็นเท่าไหร่"
        แถวหัวโปรแกรมรวมทุก variant ที่วิ่งวันนี้: 🔒 ล็อกทั้งหมด · รวม = จอง + ล็อก / ที่นั่งทั้งหมด · ว่าง
