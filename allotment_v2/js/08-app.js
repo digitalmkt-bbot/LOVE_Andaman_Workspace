@@ -67667,12 +67667,14 @@ function pkSetXls(which){
     sum.push(['รวม','','','',group.reduce(function(a,S){ return a+(S.people||[]).length; },0),'',gt]);
     var ws2=XLSX.utils.aoa_to_sheet(sum); ws2['!cols']=[{wch:24},{wch:14},{wch:30},{wch:12},{wch:8},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws2, 'สรุปรหัส');
-    XLSX.writeFile(wb, 'park_sets_'+_poDate+'_'+((P&&P.k)||_poPier)+(tag?('_'+tag):'')+'.xlsx');
+    /* §pkSets10 (2026-10-15) · owner "ไฟล์ Excel ใช้ชื่อเป็น ชื่อเรือ วันที่ แล้วก็เวลาที่กด" · เช่น Artemis_2026-10-15_0932.xlsx */
+    var now=new Date(), hm=('0'+now.getHours()).slice(-2)+('0'+now.getMinutes()).slice(-2);
+    XLSX.writeFile(wb, (tag||'park_sets')+'_'+_poDate+'_'+hm+'.xlsx');
   };
   if(which==='all'){   /* ไฟล์ละลำ · ตามลำดับที่บันทึก */
     var order=[], byB={}; sets.forEach(function(S){ if(!byB[S.bid]){ byB[S.bid]=[]; order.push(S.bid); } byB[S.bid].push(S); });
     order.forEach(function(bid){ one(byB[bid], safe(boatNm(bid))); });
-  } else one(sets, safe(sets[0].name||''));
+  } else one(sets, safe(boatNm(sets[0].bid)));   /* §pkSets10 · ชุดเดียวก็ชื่อเรือ */
 }
 /* ── การ์ดซ้าย · ชิป + เลือกเรือ + ตาราง + รายชื่อ ── */
 /* §pkSets6 · owner "คอลัมน์ ชุดนี้ เรียงให้เหมือนกับ บนเรือ" · ไทย (ผญ · เด็ก · ต่ำกว่า 3) | ต่างชาติ (ผญ · เด็ก) | ประเภทที่เพิ่มเอง
