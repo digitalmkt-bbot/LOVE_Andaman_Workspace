@@ -5,10 +5,17 @@ function bookingV2RenderCalendar(){
   const month = cur.getMonth();
   const monthKey = `${year}-${String(month+1).padStart(2,'0')}`;
   // Page-owned data: only the month currently on screen is requested.
-  const monthLoad=typeof bookingV2OpsEnsureMonth==='function' ? bookingV2OpsEnsureMonth(monthKey) : null;
+  /* §calSkel (2026-10-15) · a month that has never loaded draws as shimmer, not as "0 pax":
+     SB_BOOKINGS only holds what other pages happened to load. A failed month stops auto-retrying
+     (every redraw would refetch) and shows a Retry bar over whatever is cached. */
+  const monthStatus = typeof bookingV2OpsMonthStatus==='function' ? bookingV2OpsMonthStatus : function(){ return ''; };
+  const monthFailed = monthStatus(monthKey)==='failed';
+  const monthLoad=(!monthFailed && typeof bookingV2OpsEnsureMonth==='function') ? bookingV2OpsEnsureMonth(monthKey) : null;
+  const skel = !!monthLoad && monthStatus(monthKey)==='loading';
   if(monthLoad) monthLoad.then(function(j){
-    if(j && _bkV2.tab==='cal' && !_bkV2.newBooking) bookingV2Render();
+    if((j || skel) && _bkV2.tab==='cal' && !_bkV2.newBooking) bookingV2Render();
   });
+  const sk = (w, h, more) => `<span class="la-skel" style="width:${w};height:${h}px${more?';'+more:''}"></span>`;
   const agg = bookingV2Aggregate();
   const first = new Date(year, month, 1);
   // Sun-first grid (matches sidebar Calendar): Sun=0 ... Sat=6
@@ -45,6 +52,11 @@ function bookingV2RenderCalendar(){
     // §bkCalPast · อดีต = ก่อนวันนี้ · วันนี้ยังรับจองได้ ไม่นับ
     const isPast = dateKey < todayKey;
     const cls = ['bkv2-cal-cell', sel?'sel':'', weekend?'weekend':'', isToday?'today':'', isPast?'past':''].filter(Boolean).join(' ');
+    if(skel){
+      const bars = (d % 3 === 0 ? ['80%'] : ['82%', d % 2 ? '58%' : '68%']).map(w => sk(w, 15, 'margin-bottom:3px;border-radius:3px')).join('');
+      cells.push(`<div class="${cls}" onclick="bookingV2SelectDay('${dateKey}')"><div class="bkv2-cal-daynum"><span>${String(d).padStart(2,'0')}</span></div>${bars}</div>`);
+      continue;
+    }
 
     // Build chips for ALL families that are OPEN on this day (any sub-route open)
     // Chip shows family name + total pax (sum across sub-variants) · "empty" if no bookings
@@ -96,11 +108,22 @@ function bookingV2RenderCalendar(){
     cells.push(`<div class="${cls}" onclick="bookingV2SelectDay('${dateKey}')" ondblclick="bookingV2OpenFiltered('','${dateKey}')" title="Click to preview · double-click to open By trip date"><div class="bkv2-cal-daynum"><span>${String(d).padStart(2,'0')}</span>${showFocDot?'<span class="bkv2-cal-foc"></span>':''}${dayTotBadge}</div>${chipsHtml}${lockBadge}</div>`);
   }
 
+  // §calSkel · the stats row, avg cards and a selected day's breakdown all sum this month's bookings too
+  const skStats = () => `<div class="bkv2-stats" role="status" aria-label="Loading bookings">${[0,1,2,3].map(() =>
+    `<div class="bkv2-stat">${sk('44%', 9)}${sk('58%', 24, 'margin-top:10px')}${sk('70%', 9, 'margin-top:auto')}</div>`).join('')}</div>`;
+  const skRoutes = () => `<div class="bkv2-routes"><div class="bkv2-routes-hd">${sk('160px', 12)}</div><div class="bkv2-routes-grid">${
+    activeFams.slice(0, 6).map(f => `<div class="bkv2-route-card" style="border-left-color:${f.color};gap:8px">${sk('62%', 11)}${sk('80%', 9)}${sk('40%', 18)}</div>`).join('')}</div></div>`;
+  const skSelDay = () => `<div class="bkv2-selday"><div class="bkv2-selday-lab">Selected Day<button class="bkv2-selhide" onclick="bookingV2TogglePanel()" title="พับแผงนี้">&rsaquo;&rsaquo;</button></div>${
+    sk('60%', 18, 'margin:6px 0 16px')}${[0,1,2,3,4].map(i => sk(i % 2 ? '72%' : '88%', 12, 'margin-bottom:10px')).join('')}</div>`;
+  const monthLbl = cur.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  const failBar = monthFailed ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 8px;padding:8px 12px;border:1px solid #F1C9C9;background:#FDF3F3;border-radius:8px;color:#A32D2D;font-size:12px">Bookings for ${monthLbl} did not load from operation-backend · the numbers below may be incomplete<button onclick="bookingV2OpsRetryMonth('${monthKey}')" style="border:1px solid #E3AFAF;background:#fff;color:#A32D2D;border-radius:6px;padding:3px 10px;font:600 11px inherit;cursor:pointer">Retry</button></div>` : '';
+
   return `
-    ${bookingV2RenderStats()}
-    ${bookingV2RenderRouteAvgs()}
+    ${skel ? skStats() : bookingV2RenderStats()}
+    ${skel ? skRoutes() : bookingV2RenderRouteAvgs()}
     <div class="bkv2-split">
       <div class="bkv2-cal">
+        ${failBar}
         <div class="bkv2-cal-filter">
           <span class="bkv2-cal-filter-lab">Programs</span>
           <button class="bkv2-cal-fpill${!calSel?' on':''}" onclick="bookingV2CalAllFamilies()">All</button>
@@ -114,7 +137,7 @@ function bookingV2RenderCalendar(){
         </div>
         <div class="bkv2-cal-grid">${cells.join('')}</div>
       </div>
-      ${bookingV2RenderSelDay()}
+      ${skel && _bkV2.selected ? skSelDay() : bookingV2RenderSelDay()}
     </div>
     ${bookingV2RenderFooterHints('cal')}
   `;
