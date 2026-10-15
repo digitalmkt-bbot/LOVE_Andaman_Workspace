@@ -1013,6 +1013,10 @@
     document.head.appendChild(st);
   }
   function _laB2CAlert(list){ if(!list||!list.length) return;
+    /* §bkMroQuiet (2026-10-15) · owner "หน้าของ Version ดูอย่างเดียว ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น"
+       body.bk-mro = มือถือ + บัญชีแก้ operations ไม่ได้ + อยู่หน้า Booking (08-app.js §bkMro ตั้งให้)
+       การ์ด B2C ใบใหม่มีแต่ปุ่มพาไปจัดงาน · ไม่วาดการ์ด ไม่ส่งเสียง · ใบจะขึ้นในรายการเองหลังดึงข้อมูลรอบนั้น */
+    try{ if(document.body && document.body.classList.contains('bk-mro')) return; }catch(e){}
     var n=list.length, show=list.slice(0,3), rest=n-show.length, one=list[0];
     var tPax=0, tAmt=0, dates=[];
     list.forEach(function(x){ tPax+=(+x.pax||0); tAmt+=(+x.total||0); if(x.date) dates.push(x.date); });

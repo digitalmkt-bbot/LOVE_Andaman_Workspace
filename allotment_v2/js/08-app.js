@@ -80113,9 +80113,11 @@ function pc2CSS3(S){
     V + '.bt-col3,' + V + '.bt-pair,' + V + '.bt-pair2{display:flex!important;flex-direction:column;gap:10px;grid-template-columns:none!important;min-width:0}',
     V + '.bt-pkh{padding:0!important;margin:0!important;background:transparent!important;box-shadow:none!important}',
     V + '.bt-sbox input{font-size:16px!important;min-width:0}',                 /* iOS ไม่ซูมเมื่อแตะช่อง 16px */
-    V + '.bt-notice .bt-ncb,' + V + '.bt-notice .bt-nc{flex-wrap:wrap!important;min-width:0;max-width:100%}',
-    V + '.bt-notice *{max-width:100%;white-space:normal!important}',
-    V + '.bt-notice button{display:none!important}',
+    /* §bkMroQuiet (2026-10-15) · owner "ตัวที่เป็น Card Notice ตัดทิ้ง" + "ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น"
+       การ์ด Notice เป็นงานค้างของคนจัดงาน (ยังไม่จัดรถ / รออนุมัติ / เช็คอิน) · ป้ายลอยของระบบ (ดูอย่างเดียว ·
+       มีข้อมูลใหม่ · toast) ไม่มีอะไรให้บัญชีดูอย่างเดียวกด · ป้ายแจ้งเซฟไม่สำเร็จ (#la-saveerr) ไม่ซ่อน */
+    V + '.bt-notice{display:none!important}',
+    'body.bk-mro #la-viewonly,body.bk-mro #la-refresh,body.bk-mro #la-toast,body.bk-mro #la-savetoast-wrap,body.bk-mro #la-b2c-issues{display:none!important}',
     'body.bk-mro.bk-mro-list #view-booking .t2-wrap{display:none!important}',
     /* ── แท็บ + ป้าย ── */
     '.bk-mro-top{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}',
@@ -80594,7 +80596,9 @@ function pc2CSS3(S){
     if(busy) return; busy = true;
     try{
       var root = document.getElementById('view-booking');
-      var on = isOn() && !!root;
+      /* เฉพาะตอนหน้า Booking เปิดอยู่ · คลาสนี้ซ่อนป้ายลอยของทั้งแอปและล็อกการเลื่อนข้างของ .main
+         ปล่อยค้างไว้ตอนไปหน้าอื่น = หน้าเช็คอิน (ตาราง 1420px ที่ต้องปัดข้าง) เลื่อนข้างไม่ได้ + ไม่เห็น toast */
+      var on = isOn() && !!root && root.classList.contains('active');
       document.body.classList.toggle('bk-mro', on);
       document.documentElement.classList.toggle('bk-mro-x', on);
       if(!on){ document.body.classList.remove('bk-mro-list', 'bk-mro-bt'); if(root) drop(root, '.bk-mro-top,.bk-mro-sum,.bk-mro-l'); busy = false; return; }
@@ -80683,6 +80687,7 @@ function pc2CSS3(S){
     var root = document.getElementById('view-booking');
     if(!root || !document.body){ setTimeout(boot, 500); return; }
     try{ new MutationObserver(function(){ if(!busy) queue(); }).observe(root, { childList: true, subtree: true }); }catch(e){}
+    try{ new MutationObserver(queue).observe(root, { attributes: true, attributeFilter: ['class'] }); }catch(e){}   /* สลับหน้า (nav) */
     try{ var mq = window.matchMedia && window.matchMedia(MQ); if(mq){ (mq.addEventListener ? mq.addEventListener('change', queue) : mq.addListener(queue)); } }catch(e){}
     window.addEventListener('resize', queue);
     document.addEventListener('click', calTap, true);
@@ -80691,6 +80696,7 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+
 
 
 

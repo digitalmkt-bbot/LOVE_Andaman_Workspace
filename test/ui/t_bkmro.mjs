@@ -17,6 +17,9 @@
 // รอบ 4 (owner: "หน้าจอในโทรศัพท์ เลื่อน ๆ อยู่แล้วเด้ง")
 //  14 เลื่อน .main ลงไปแล้ววาดใหม่ (bkV2Render · bkV2RenderKeep = ที่ sync / กดกรองเรียก) → ตำแหน่งเลื่อนไม่เปลี่ยน ไม่มี scroll event · กล่องใบยกเลิกที่กางไว้ยังกางอยู่
 //     (ก่อนแก้: เลื่อนไว้ 2000 → วาดใหม่ → 0)
+// รอบ 5 (owner: "ตัวที่มี Notice เด้งเตือนไม่ต้องขึ้นให้เห็น · ตัวที่เป็น Card Notice ตัดทิ้ง")
+//  15 ป้ายลอย (ดูอย่างเดียว · มีข้อมูลใหม่ · toast · B2C เช็ค) ไม่ขึ้น · การ์ด B2C ใบใหม่ไม่วาด ไม่ส่งเสียง · ป้ายเซฟไม่สำเร็จยังขึ้น
+//  16 ไปหน้าอื่น → ผิวมือถือปิด (หน้าเช็คอินยังปัดข้างได้ ป้ายลอยกลับมา) · กลับมา Booking → เปิดอีก
 import { open, goView } from './_harness.mjs';
 import fs from 'node:fs';
 let bad = 0;
@@ -43,8 +46,8 @@ const S = () => page.evaluate((visSrc) => { const vis = eval(visSrc); const h = 
     cards: list ? list.querySelectorAll('.bk-mro-c').length : 0, rows: rows.length, agHit: agOnly.filter(n => lt.includes(n)), nAg: agOnly.length, agEl: list ? list.querySelectorAll('.t2-ag,[onclick*="AgentColor"]').length : -1, baht: /฿/.test(lt), otherBtns: list ? [...list.querySelectorAll('button')].filter(b => !b.classList.contains('bk-mro-c')).length : -1, tab: _bkV2.tab };
 }, vis);
 let a = await S();
-if (a.on && a.tabs.cal && a.tabs.bytrip && !a.tabs.all && !a.tabs.locks && !a.tabs.appr && !a.tabs.cancel && !a.newbtn && !a.mode && !a.lock && !a.table && !a.prog && !a.boat && a.mprog && a.mboat && a.search && a.notice && a.ro)
-  ok('1 มือถือ+ดูอย่างเดียว · เหลือแท็บ Calendar/By trip · ไม่มี New booking · ไม่มีการ์ดโหมด Van/Boat/Re-confirm · ไม่มี Seat Lock · ไม่มีตาราง · Programmes/Boats running (วาดใหม่)/ค้นหา/Notice อยู่ · ป้ายดูอย่างเดียว');
+if (a.on && a.tabs.cal && a.tabs.bytrip && !a.tabs.all && !a.tabs.locks && !a.tabs.appr && !a.tabs.cancel && !a.newbtn && !a.mode && !a.lock && !a.table && !a.prog && !a.boat && a.mprog && a.mboat && a.search && !a.notice && a.ro)
+  ok('1 มือถือ+ดูอย่างเดียว · เหลือแท็บ Calendar/By trip · ไม่มี New booking · ไม่มีการ์ดโหมด Van/Boat/Re-confirm · ไม่มี Seat Lock · ไม่มีตาราง · Programmes/Boats running (วาดใหม่)/ค้นหา อยู่ · การ์ด Notice ตัดทิ้ง · ป้ายดูอย่างเดียว');
 else fail('1 ' + JSON.stringify(a));
 const chk = await page.evaluate(() => { const rows = [...document.querySelectorAll('table.t2-mtbl tr.t2-row[data-al]')]; const cards = [...document.querySelectorAll('.bk-mro-c')];
   const ths = [...document.querySelector('table.t2-mtbl').querySelectorAll('thead th')].map(t => t.textContent.trim().toLowerCase()); const iT = ths.findIndex(x => /^time/.test(x));
@@ -154,6 +157,28 @@ const c13 = await page.evaluate(() => { const real = window.laCanEditArea; const
 if (!c13.ro && c13.ed && !c13.ro2) ok('13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีดูอย่างเดียว · บัญชีที่แก้ได้ยังเห็น'); else fail('13 ' + JSON.stringify(c13));
 // 5 tab all → back to bytrip
 await page.evaluate(() => { _bkV2.tab = 'all'; bkV2Render(); }); await page.waitForTimeout(700); const t5 = await page.evaluate(() => _bkV2.tab);
+// 15 floating notices
+const ALERT_SRC = (() => { const f = fs.readFileSync(new URL('../../allotment_v2/js/01-auth-sync.js', import.meta.url), 'utf8');
+  const i = f.indexOf('function _laB2CAlert(list){'), e = '}); _laBeep(); }', j = f.indexOf(e, i); if (i < 0 || j < i) throw new Error('_laB2CAlert not found'); return f.slice(i, j + e.length); })();
+const c15 = await page.evaluate(src => { const out = {}; let drawn = 0, beep = 0;
+  const A = new Function('onReady', '_laBeep', src + ' return _laB2CAlert;')(() => drawn++, () => beep++);
+  ['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => { const d = document.createElement('div'); d.id = id; d.textContent = 'x'; d.style.position = 'fixed'; document.body.appendChild(d); });
+  const vis = id => getComputedStyle(document.getElementById(id)).display !== 'none';
+  out.on = { viewonly: vis('la-viewonly'), refresh: vis('la-refresh'), toast: vis('la-toast'), stw: vis('la-savetoast-wrap'), err: vis('la-saveerr') };
+  A([{ pax: 2, total: 1, date: '2026-09-16' }]); out.drawnOn = drawn; out.beepOn = beep;
+  document.body.classList.remove('bk-mro'); A([{ pax: 2, total: 1, date: '2026-09-16' }]); out.drawnOff = drawn; document.body.classList.add('bk-mro');
+  return out; }, ALERT_SRC);
+if (!c15.on.viewonly && !c15.on.refresh && !c15.on.toast && !c15.on.stw && c15.on.err && c15.drawnOn === 0 && c15.beepOn === 0 && c15.drawnOff === 1)
+  ok('15 ป้ายลอย (ดูอย่างเดียว / มีข้อมูลใหม่ / toast) ไม่ขึ้น · การ์ด B2C ใบใหม่ไม่วาด ไม่ส่งเสียง · ป้ายเซฟไม่สำเร็จยังขึ้น · นอกผิวนี้การ์ด B2C ยังวาด');
+else fail('15 ' + JSON.stringify(c15));
+// 16 other page → off · back → on
+await goView(page, 'dashboard', 700);
+const c16a = await page.evaluate(() => ({ on: document.body.classList.contains('bk-mro'), ox: getComputedStyle(document.querySelector('.main')).overflowX, vo: getComputedStyle(document.getElementById('la-viewonly')).display }));
+await goView(page, 'booking', 900);
+const c16b = await page.evaluate(() => ({ on: document.body.classList.contains('bk-mro'), list: !!document.querySelector('#view-booking .bk-mro-l, #view-booking .bk-mro-top') }));
+['la-viewonly', 'la-refresh', 'la-toast', 'la-savetoast-wrap', 'la-saveerr'].forEach(id => page.evaluate(i => document.getElementById(i)?.remove(), id));
+if (!c16a.on && c16a.ox !== 'hidden' && c16a.vo !== 'none' && c16b.on && c16b.list) ok('16 ไปหน้าอื่น → ผิวมือถือปิด (.main ปัดข้างได้ · ป้ายลอยกลับมา) · กลับ Booking → เปิดอีก');
+else fail('16 ' + JSON.stringify({ c16a, c16b }));
 // 4 desktop / editor
 await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(600); const d4 = await S();
 await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => { window.__bkMroForce = false; bkV2Render(); }); await page.waitForTimeout(600); const e4 = await S();
