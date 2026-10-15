@@ -16852,7 +16852,12 @@ function pcTotals(pier,ds){
   (D.in||[]).forEach(function(x){ vin+=(+x.amt||0); });
   (D.out||[]).forEach(function(x){ vot+=(+x.amt||0); });
   Object.keys(D.lt||{}).forEach(function(k){ vlt+=(+D.lt[k].amt||0); });
-  Object.keys(D.pk||{}).forEach(function(k){ vpk+=(+D.pk[k].amt||0); vdk+=(+D.pk[k].dock||0); });
+  /* §pkDockIn (2026-10-15) · owner "รวมไปเลย ตอนที่เอารายการเข้า สำหรับเรือลำนั้นๆ"
+     เงินที่จ่าย (amt) ของลำหนึ่ง = ก้อนที่จ่ายที่ด่านทั้งหมด รวมค่าจอดของลำนั้นแล้ว · ค่าจอด (dock) เป็นส่วนหนึ่งของก้อนนั้น
+     สมุดยังแยกสองหมวดเหมือนเดิม: ค่าอุทยาน = amt − dock · ค่าจอดเรือ = dock · สองหมวดรวมกัน = เงินที่จ่ายจริงพอดี
+     ของเดิมดึงค่าอุทยาน = amt ทั้งก้อน แล้วดึงค่าจอดอีกรอบ · คนหน้าท่าคีย์ amt รวมค่าจอด (15 ต.ค. ทุกลำ: ต่าง = ค่าจอดพอดี)
+     ค่าจอดจึงเข้าสมุดสองครั้ง (15 ต.ค. ปุ่มดึง ฿55,750 = 54,950 + 800) */
+  Object.keys(D.pk||{}).forEach(function(k){ var Q=pcPkParts(D.pk[k]); vpk+=Q.park; vdk+=Q.dock; });
   /* §pcSum · หางยาว/อุทยาน/ค่าจอด ไม่เข้าสมุดเอง · เป็นแค่ยอดอ้างอิงจากอีกสองชีท
      สมุดเดินบัญชีนับเฉพาะรายการที่คนหน้าท่าบันทึกเอง จะได้ตรงกับเงินในลิ้นชักจริง
      อยากให้เข้าสมุดค่อยกดปุ่ม "ดึงเข้าสมุด" ทีละวัน */
@@ -16862,6 +16867,13 @@ function pcTotals(pier,ds){
   return { in:vin, lt:vlt, pk:vpk, dock:vdk, ref:ref, pulled:pulled,
            other:vot, out:vot, net:vin-vot };
 }
+/* §pkDockIn · แยกเงินที่จ่ายของลำหนึ่งเป็นค่าอุทยาน + ค่าจอด · ยังไม่กรอกเงิน = มีแต่ค่าจอด (ถ้ากรอกไว้) */
+function pcPkParts(C){
+  C=C||{}; var amt=+C.amt||0, dock=+C.dock||0;
+  return { amt:amt, dock:dock, park:(amt>0?Math.max(0,amt-dock):0) };
+}
+/* §pkDockIn · ยอดที่ควรจ่ายที่ด่านของลำหนึ่ง = ค่าอุทยานที่คำนวณ + ค่าจอดที่กรอก · ไม่มีราคาอุทยาน = null */
+function pcPkDue(exp,C){ return (exp==null)?null:(exp+(+(C&&C.dock)||0)); }
 /* §pcSum · ดึงยอดจากสองชีทเข้ามาเป็นรายการจ่ายจริงในสมุด · หมวดไหนดึงแล้วไม่ดึงซ้ำ */
 function pcPull(ds){
   if(!pcGuard()) return;
@@ -17549,7 +17561,7 @@ function pcSheetPK(pier, opt){
       /* §pcCalc · คีย์แล้วคิดตามที่คีย์ · ยังไม่คีย์คิดตามใบจองไปก่อน จะได้เห็นตัวเลขตั้งแต่ก่อนออกเรือ */
       var R=pcParkRate(B.rid);
       var basis=hasK?C:XN;
-      var exp=pcParkAmt(R,basis);
+      var exp=pcPkDue(pcParkAmt(R,basis), C);   /* §pkDockIn · + ค่าจอด */
       if(exp!=null){ dex+=exp; anyx=true; }
       var HF=PC_PK.length/2;   /* ครึ่งแรก = คนไทย ครึ่งหลัง = ต่างชาติ */
       var cells=PC_PK.map(function(k,i){
@@ -17634,8 +17646,8 @@ function pcSheetPK(pier, opt){
        +'<th class="g key gs" colspan="4">คนไทย</th><th class="g key gs" colspan="4">ต่างชาติ</th>'
        +'<th class="r key gs" rowspan="2" style="width:100px;vertical-align:bottom">ค่าจอด</th>'
        +'<th class="c key" rowspan="2" style="width:50px;vertical-align:bottom">รวม</th>'
-       +'<th class="r gs" rowspan="2" style="width:118px;vertical-align:bottom;background:#F0F7F2;color:#0F6E56">ยอดคำนวณ</th>'
-       +'<th class="r key" rowspan="2" style="width:110px;vertical-align:bottom">เงินที่จ่าย</th>'
+       +'<th class="r gs" rowspan="2" style="width:118px;vertical-align:bottom;background:#F0F7F2;color:#0F6E56">ยอดคำนวณ<br>(รวมจอด)</th>'
+       +'<th class="r key" rowspan="2" style="width:110px;vertical-align:bottom">เงินที่จ่าย<br>(รวมจอด)</th>'
        +'<th class="c" rowspan="2" style="width:86px;vertical-align:bottom">ต่าง</th></tr>'
      +'<tr><th class="c th2" style="width:42px">ผญ</th><th class="c th2" style="width:42px">เด็ก</th>'
        +'<th class="c th2" style="width:42px">INF</th><th class="c th2" style="width:42px">FOC</th>'
@@ -78646,7 +78658,7 @@ function pc2StatPK(pier,ds){
     if(!(X.n.tot>0)) return;
     if(!(+C.amt>0)){ o.miss++; o.missNames.push(B.name); return; }
     var hasK=PC_PK.some(function(k){ return +C[k]>0; });
-    var exp=pcParkAmt(pcParkRate(B.rid), hasK?C:X.n);
+    var exp=pcPkDue(pcParkAmt(pcParkRate(B.rid), hasK?C:X.n), C);   /* §pkDockIn · + ค่าจอด */
     if(exp!=null){ o.diff+=(+C.amt||0)-exp; o.keyed++; }
   });
   return o;
@@ -78910,7 +78922,8 @@ function pc2PKDay(pier, ds){
       var kt=0; PC_PK.forEach(function(k,i){ GT[i]+=XN[k]; GK[i]+=(+C[k]||0); kt+=(+C[k]||0); });
       if(hasK||+C.amt>0) gk=true;
       gtot+=XN.tot; gkt+=kt; gdk+=(+C.dock||0); gm+=(+C.amt||0);
-      var exp=pcParkAmt(R, hasK?C:XN); if(exp!=null){ gex+=exp; gx=true; if(+C.amt>0){ gexP+=exp; gP=true; } }
+      var expPk=pcParkAmt(R, hasK?C:XN), exp=pcPkDue(expPk, C);   /* §pkDockIn · คำนวณ = อุทยาน + ค่าจอดของลำ */
+      if(exp!=null){ gex+=exp; gx=true; if(+C.amt>0){ gexP+=exp; gP=true; } }
       var nat='';
       if(X.natDiff){ var an=pcParkAmt(R,XN), ap=pcParkAmt(R,X), gap=(an!=null&&ap!=null)?(ap-an):null;
         var pn=function(c){ return 'ไทย '+pcN(c.ad_th+c.chd_th+c.inf_th+c.foc_th)+' · ตปท '+pcN(c.ad_fr+c.chd_fr+c.inf_fr+c.foc_fr); };
@@ -78936,7 +78949,7 @@ function pc2PKDay(pier, ds){
         +nums(PC_PK.map(function(k){ return XN[k]; }))
         +'<span class="c cl gl tt">'+XN.tot+'</span>'
         +keyed
-        +'<span class="mn ex" title="'+(exp==null?pcE(R.why||'ไม่มีราคา'):(hasK?'คิดตามที่คีย์':'คิดตามใบจอง (ยังไม่ได้คีย์)'))+'">'+(exp==null?'—':pcN(exp))+'<small>'+(exp==null?'ไม่มีราคา':(hasK?'ตามที่คีย์':'ตามใบจอง'))+'</small></span>'
+        +'<span class="mn ex" title="'+(exp==null?pcE(R.why||'ไม่มีราคา'):((hasK?'คิดตามที่คีย์':'คิดตามใบจอง (ยังไม่ได้คีย์)')+' · ค่าอุทยาน '+pcN(expPk)+(+C.dock>0?(' + ค่าจอด '+pcN(+C.dock)):'')))+'">'+(exp==null?'—':pcN(exp))+'<small>'+(exp==null?'ไม่มีราคา':((hasK?'ตามที่คีย์':'ตามใบจอง')+(+C.dock>0?' + จอด':'')))+'</small></span>'
         +'<span class="k cl"><input class="pc2-in r" inputmode="numeric" placeholder="—" value="'+(C.amt?pcN(C.amt):'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></span>'
         +'<span class="mn cl ctr">'+diff+'</span>'
       +'</div>';
@@ -78957,9 +78970,10 @@ function pc2PKDay(pier, ds){
   var dd=(dP&&dm>0)?Math.round(dm-dexP):null;
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   var pulledPk=false, pPk=0, pDk=0, hasPk=false, hasDk=false; (D2.out||[]).forEach(function(x){ if(!x) return; if(x.src==='pk'){ pulledPk=true; hasPk=true; pPk+=(+x.amt||0); } if(x.src==='dock'){ pulledPk=true; hasDk=true; pDk+=(+x.amt||0); } });
-  var pkOff=(hasPk&&Math.round(pPk)!==Math.round(dm))||(hasDk&&Math.round(pDk)!==Math.round(ddk));
+  /* §pkDockIn · ค่าอุทยานที่ดึงต้องเท่ากับ เงินที่จ่าย − ค่าจอด (T.pk) · วันที่ดึงไว้ก่อนแก้ (ดึงเงินที่จ่ายทั้งก้อน) จะขึ้นเตือนตรงนี้ */
+  var pkOff=(hasPk&&Math.round(pPk)!==Math.round(T.pk))||(hasDk&&Math.round(pDk)!==Math.round(ddk));
   var waiting=Math.max(0,T.ref-T.pulled), s=pc2StatPK(pier,ds);
-  var bar='<div class="pc2-sum"><b>รวม '+pcE(pc2D(ds))+'</b><span>คำนวณ</span><em>'+(anyx?pcMoney(dex):'—')+'</em><span>จ่ายจริง</span><em>'+pcMoney(dm)+'</em><span>ค่าจอด</span><em>'+pcMoney(ddk)+'</em>'
+  var bar='<div class="pc2-sum"><b>รวม '+pcE(pc2D(ds))+'</b><span>คำนวณ</span><em>'+(anyx?pcMoney(dex):'—')+'</em><span>จ่ายจริง (รวมจอด)</span><em>'+pcMoney(dm)+'</em><span>ในนั้นค่าจอด</span><em>'+pcMoney(ddk)+'</em>'
     +(pkOff?'<i class="wn" title="ปุ่มดึงไม่ดึงซ้ำ · แก้หรือลบรายการในสมุดของวันนี้ (หน้าหลัก) แล้วดึงใหม่">⚠ ดึงไว้ '+pcMoney(pPk+pDk)+' · ไม่ตรงกับชีท</i>':'')
     +((dm>0||ddk>0)&&!pkOff?(pulledPk?'<i class="ok">✓ ดึงเข้าสมุดแล้ว</i>':('<button onclick="pcPull(\''+ds+'\')" title="ดึงทุกหมวดของวันนี้ที่ยังไม่ได้ดึง (หางยาว อุทยาน ค่าจอด)">⤓ ดึง '+pcMoney(waiting)+' เข้าสมุด</button>')):'')
     +'</div>';
@@ -78973,7 +78987,7 @@ function pc2PKDay(pier, ds){
         +'<span class="g span3" style="--gc:#2C4F8A;color:#2C4F8A">เงิน</span>'
       +'<span class="g2 span4" style="color:#0B5A43">คนไทย</span><span class="g2 span4 tf" style="color:#1D5FA8">ต่างชาติ</span><span class="g2 cl gl rs2">รวม</span>'
         +'<span class="g2 span4" style="color:#7A4300">คนไทย</span><span class="g2 span4 tf" style="color:#7A4300">ต่างชาติ</span><span class="g2 cl rs2" style="color:#7A4300">ค่าจอด</span><span class="g2 cl gl rs2" style="color:#7A4300">รวม</span>'
-        +'<span class="g2 rs2 r">คำนวณ</span><span class="g2 cl rs2 r">เงินที่จ่าย</span><span class="g2 cl rs2">ต่าง</span>'
+        +'<span class="g2 rs2 r" title="ค่าอุทยานที่คำนวณ + ค่าจอดที่กรอก">คำนวณ+จอด</span><span class="g2 cl rs2 r" title="ยอดที่จ่ายที่ด่านทั้งก้อน รวมค่าจอดของลำนั้นแล้ว">จ่าย (รวมจอด)</span><span class="g2 cl rs2">ต่าง</span>'
       +['ผญ','เด็ก','INF','FOC','ผญ','เด็ก','INF','FOC'].map(function(t,i){ return '<span class="g3'+bl(i)+'">'+t+'</span>'; }).join('')
         +['ผญ','เด็ก','INF','FOC','ผญ','เด็ก','INF','FOC'].map(function(t,i){ return '<span class="g3'+bl(i)+'">'+t+'</span>'; }).join('')+'</div>'
       +html
@@ -78992,7 +79006,7 @@ function pc2PK(pier){
     pcBoats(ds,pier).forEach(function(B){
       nB++; var X=pcPax(ds,B.bid,pier), C=(D.pk||{})[B.bid]||{}, R=pcParkRate(B.rid);
       var hasK=PC_PK.some(function(k){ return +C[k]>0; });
-      var e=pcParkAmt(R, hasK?C:X.n); pax+=X.n.tot; if(e!=null){ ex+=e; anyx=true; }
+      var e=pcPkDue(pcParkAmt(R, hasK?C:X.n), C); pax+=X.n.tot; if(e!=null){ ex+=e; anyx=true; }   /* §pkDockIn */
       m+=(+C.amt||0); dk+=(+C.dock||0);
       if(+C.amt>0){ nK++; if(e!=null) diff+=(+C.amt)-e; }
     });
@@ -79000,10 +79014,10 @@ function pc2PK(pier){
   var lab=_pc2All?pcE(pc2MonthName(_pcYM)):pcE(pc2D(_pcDate));
   diff=Math.round(diff);
   return pc2Kpi([{h:'คนเดินทาง · '+lab,v:pcN(pax),s:nB+' ลำ'},
-                 {h:'ยอดคำนวณ',v:anyx?pcMoney(ex):'—',s:'ราคา × จำนวนคน'},
-                 {h:'จ่ายจริงที่ด่าน',v:pcMoney(m),s:nK+' จาก '+nB+' ลำ'},
+                 {h:'ยอดคำนวณ',v:anyx?pcMoney(ex):'—',s:'ราคา × จำนวนคน + ค่าจอด'},
+                 {h:'จ่ายจริงที่ด่าน',v:pcMoney(m),s:nK+' จาก '+nB+' ลำ · รวมค่าจอด'},
                  {h:'ต่าง',v:(diff>0?'+':(diff<0?'−':''))+pcMoney(Math.abs(diff)),s:nK?(diff===0?'ตรงกับที่คำนวณ':(diff>0?'จ่ายมากกว่าที่คำนวณ':'จ่ายน้อยกว่าที่คำนวณ')):'ยังไม่มีลำที่กรอก',cls:diff!==0?'warn':''},
-                 {h:'ค่าจอดเรือ',v:pcMoney(dk),s:'แยกจากค่าอุทยาน'}])
+                 {h:'ค่าจอดเรือ',v:pcMoney(dk),s:'อยู่ในจ่ายจริงแล้ว · ลงสมุดแยกหมวด'}])
     +'<div class="pc2-body">'+pc2DayList(pier,'pk')
       +'<div class="pc2-col"><div class="pc2-tool">'+pc2Seg()+'</div>'+days.map(function(ds){ return pc2PKDay(pier,ds); }).join('')
       +'<div class="pc2-legend"><span><i class="in"></i> คนหน้าท่ากรอก</span><span><i class="mm"></i> จำนวนไม่ตรงใบจอง</span>'
