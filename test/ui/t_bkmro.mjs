@@ -14,6 +14,9 @@
 // รอบ 3 (owner: "B2C เช็ค ไม่ต้องขึ้นของที่เป็นดูอย่างเดียว · Header กับ Card ซ้อนกันอยู่ · ตัวโปรแกรม ปรับให้กระชับ")
 //  11 ป้าย/แท็บไม่อยู่ใต้ปุ่มลอยมุมขวาบน · .main (ตัวเลื่อนของแอปบนมือถือ) ไม่เลื่อนข้าง
 //  12 Programmes แถวละบรรทัดเดียว (≤ 34px) · 13 กล่อง "B2C เช็ค" ไม่ขึ้นกับบัญชีที่แก้ operations ไม่ได้ (คนแก้ได้ยังเห็น)
+// รอบ 4 (owner: "หน้าจอในโทรศัพท์ เลื่อน ๆ อยู่แล้วเด้ง")
+//  14 เลื่อน .main ลงไปแล้ววาดใหม่ (bkV2Render · bkV2RenderKeep = ที่ sync / กดกรองเรียก) → ตำแหน่งเลื่อนไม่เปลี่ยน ไม่มี scroll event · กล่องใบยกเลิกที่กางไว้ยังกางอยู่
+//     (ก่อนแก้: เลื่อนไว้ 2000 → วาดใหม่ → 0)
 import { open, goView } from './_harness.mjs';
 import fs from 'node:fs';
 let bad = 0;
@@ -117,6 +120,18 @@ const c9 = await page.evaluate(() => { const h = document.getElementById('view-b
 if (c9.cx > 0 && c9.inDet === c9.cx && !c9.outCx && c9.open === false && !c9.leak.length && !c9.baht && c9.n && c9.n[1] === c9.dt[1] && c9.gsum === c9.dt[1] && c9.rf >= 1 && c9.rf <= c9.bands)
   ok(`9 15 ก.ย. ใบยกเลิก/ย้ายวัน ${c9.cx} ใบพับไว้ท้ายหน้า (ไม่มีชื่อเอเจนต์ ${c9.agN} เจ้า · ไม่มีค่าปรับ ฿) · รวมทั้งวัน ${c9.n[0]} ใบ ${c9.n[1]} คน = หน้าคอม · รวมท้ายเส้นทาง ${c9.rf}`);
 else fail('9 ' + JSON.stringify(c9));
+// 14 scroll jump (ยังอยู่ 15 ก.ย. ที่มีกล่องใบยกเลิก)
+const c14 = await page.evaluate(async () => { const m = document.querySelector('.main'), out = {};
+  const det = document.querySelector('.bk-mro-cx'); if (det) { det.open = true; await new Promise(r => setTimeout(r, 50)); }
+  m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight - 300); await new Promise(r => setTimeout(r, 150)); out.before = m.scrollTop;
+  let ev = 0; const on = () => ev++; m.addEventListener('scroll', on);
+  bkV2Render(); out.r1 = m.scrollTop; await new Promise(r => setTimeout(r, 300)); out.r1b = m.scrollTop;
+  bkV2RenderKeep(); out.r2 = m.scrollTop; await new Promise(r => setTimeout(r, 400)); out.r2b = m.scrollTop;
+  m.removeEventListener('scroll', on); out.ev = ev; out.open = !!(document.querySelector('.bk-mro-cx') || {}).open; out.hadDet = !!det;
+  m.scrollTop = 0; return out; });
+if (c14.before > 500 && [c14.r1, c14.r1b, c14.r2, c14.r2b].every(v => Math.abs(v - c14.before) <= 1) && !c14.ev && c14.hadDet && c14.open)
+  ok(`14 เลื่อนไว้ที่ ${c14.before}px แล้ววาดใหม่ 2 แบบ → ยังอยู่ที่เดิม · ไม่มี scroll event · กล่องใบยกเลิกยังกางอยู่`);
+else fail('14 ' + JSON.stringify(c14));
 await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
 // 11 header vs floating buttons · 12 compact programmes
 const c11 = await page.evaluate(() => { const tb = document.querySelector('.topbar').getBoundingClientRect(), mn = document.querySelector('.main');

@@ -80542,7 +80542,7 @@ function pc2CSS3(S){
     });
     var nCx = Object.keys(cxIds).length;
     if(!nB && !nCx) return '<div class="bk-mro-none">ไม่มี booking ในวันนี้</div>';
-    if(nCx) html.push('<details class="bk-mro-cx"><summary>ยกเลิก / เลื่อนวัน <span>' + nCx + ' ใบ · ' + cxPax + ' คน</span><em>ดู</em></summary>' + cxHtml.join('') + '</details>');
+    if(nCx) html.push('<details class="bk-mro-cx"' + (cxOpen ? ' open' : '') + '><summary>ยกเลิก / เลื่อนวัน <span>' + nCx + ' ใบ · ' + cxPax + ' คน</span><em>ดู</em></summary>' + cxHtml.join('') + '</details>');
     html.push('<div class="bk-mro-dt"><b>รวมทั้งวัน</b><div class="g">'
       + '<div><b>' + D.ad + '</b><span>ผู้ใหญ่</span></div><div><b>' + D.chd + '</b><span>เด็ก</span></div><div><b>' + D.inf + '</b><span>เด็กเล็ก</span></div><div><b>' + D.foc + '</b><span>FOC</span></div></div>'
       + '<div class="f">' + nB + ' ใบ · ' + nP + ' คน · PK ' + D.PK + ' · KL ' + D.KL + ' · Own ' + D.OWN + (nBoat ? (' · ' + nBoat + ' ลำ') : '') + ' · ' + nRt + ' เส้นทาง</div></div>');
@@ -80599,6 +80599,7 @@ function pc2CSS3(S){
       document.documentElement.classList.toggle('bk-mro-x', on);
       if(!on){ document.body.classList.remove('bk-mro-list', 'bk-mro-bt'); if(root) drop(root, '.bk-mro-top,.bk-mro-sum,.bk-mro-l'); busy = false; return; }
       ensureCss();
+      hookRender();
       var B = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2 : null;
       try{
         if(B && /^(locks|approvals|cancel|all)$/.test(B.tab || '')){ B.tab = 'bytrip'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; }
@@ -80633,6 +80634,37 @@ function pc2CSS3(S){
     busy = false;
   }
   window.bkMroPass = pass;
+
+  /* §bkMroJump (2026-10-15) · owner "หน้าจอในโทรศัพท์ เลื่อน ๆ อยู่แล้วเด้ง"
+     มือถือ .main คือตัวเลื่อน · bkV2Render เขียน #bkv2-host ใหม่ทั้งก้อน ตอนนั้นการ์ดของเราหายไป
+     ส่วนตารางของหน้าคอมซ่อนอยู่ หน้าจึงเตี้ยลงชั่วขณะ และโค้ดวาดอ่าน layout ระหว่างนั้น
+     → เบราว์เซอร์ตัด scrollTop ของ .main เหลือ 0 (วัดได้: เลื่อนไว้ 2000 → วาดใหม่ → 0)
+     bkV2KeepScroll จำแค่ window.scrollY กับกล่องตาราง ไม่ได้จำ .main · ทุกครั้งที่ sync ดึงข้อมูลใหม่ / กดกรอง จึงเด้งกลับหัว
+     แก้: ห่อ bkV2Render · ล็อกความสูงหน้าไว้ก่อนวาด → วาด → วางการ์ดของเราทันที (ไม่รอ rAF) → ปลดล็อก
+     ความสูงไม่เคยหด scrollTop จึงไม่ถูกตัด และไม่ไปขัดการปัดที่กำลังไหลอยู่ · ถ้ายังเพี้ยนก็คืนค่าเดิมให้ */
+  function hookRender(){
+    var o = window.bkV2Render;
+    if(typeof o !== 'function' || o.__bkMro) return;
+    var w = function(){
+      var on = !!(document.body && document.body.classList.contains('bk-mro'));
+      var m = on ? document.querySelector('.main') : null, v = on ? document.getElementById('view-booking') : null;
+      var top = m ? m.scrollTop : 0, mh = v ? v.style.minHeight : '';
+      if(v) v.style.minHeight = v.offsetHeight + 'px';
+      var r;
+      try{ r = o.apply(this, arguments); }
+      finally{
+        if(on){
+          try{ pass(); }catch(e){}
+          if(v) v.style.minHeight = mh;
+          if(m && Math.abs(m.scrollTop - top) > 1) m.scrollTop = top;
+        }
+      }
+      return r;
+    };
+    w.__bkMro = true; w.__bkMroOrig = o;
+    window.bkV2Render = w;
+  }
+  var cxOpen = false;   /* กล่องใบยกเลิก · จำว่ากางไว้ ข้ามการวาดใหม่ */
   var queued = false;
   function queue(){ if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(function(){ queued = false; pass(); }); }
   /* ปฏิทิน · แตะวัน = เปิด By trip ของวันนั้น (หน้าคอมแตะ = พรีวิวในแผงขวา ซึ่งมือถือไม่มีที่) */
@@ -80646,6 +80678,8 @@ function pc2CSS3(S){
     }catch(_){}
   }
   function boot(){
+    hookRender();
+    document.addEventListener('toggle', function(e){ if(e.target && e.target.classList && e.target.classList.contains('bk-mro-cx')) cxOpen = !!e.target.open; }, true);
     var root = document.getElementById('view-booking');
     if(!root || !document.body){ setTimeout(boot, 500); return; }
     try{ new MutationObserver(function(){ if(!busy) queue(); }).observe(root, { childList: true, subtree: true }); }catch(e){}
@@ -80657,5 +80691,6 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+
 
 
