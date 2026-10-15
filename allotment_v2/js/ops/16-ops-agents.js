@@ -66,7 +66,7 @@
       id:s.id, code:s.code==null ? null : s.code, name:s.name||'', active:s.active!==false, house:!!s.house,
       market:s.market_id==null ? null : s.market_id, sub:s.sub_market==null ? null : s.sub_market,
       sales:s.sales_id==null ? null : s.sales_id, color:s.color==null ? null : s.color,
-      payType:payIn(s.pay_type), vatMode:s.vat_mode||'none', creditDays:s.credit_days==null ? null : s.credit_days,
+      payType:payIn(s.pay_type), vatMode:s.vat_mode||'', creditDays:s.credit_days==null ? null : s.credit_days,
       creditLimit:s.credit_limit==null ? null : s.credit_limit, contact:s.contact==null ? null : s.contact,
       email:s.email==null ? null : s.email, phone:s.phone==null ? null : s.phone, note:s.note==null ? null : s.note,
       rateTypeId:s.rate_type_id==null ? null : s.rate_type_id, contractTemplateId:s.contract_template_id==null ? null : s.contract_template_id,
