@@ -68537,8 +68537,9 @@ function pkLineText(){
   var nm=function(bid){ var x=bx[bid]; if(x&&x.B.boat&&x.B.boat.name) return x.B.boat.name; try{ var b=getBoat(bid); if(b&&b.name) return b.name; }catch(_){} return bid; };
   var dep=function(bid){ var x=bx[bid]; return (x&&x.B.dep)||''; };
   var byDep=function(a,b){ return String(dep(a)).localeCompare(String(dep(b))) || String(nm(a)).localeCompare(String(nm(b))); };
-  var parts=function(c){ var o=[]; PK_LINE_MAIN.forEach(function(m){ if(c[m[0]]) o.push(m[1]+' '+c[m[0]]); });
-    Object.keys(c).forEach(function(k){ if(!c[k] || PK_LINE_MAIN.some(function(m){ return m[0]===k; })) return; o.push(String((TYM[k]||{}).s||k).replace(/\s+/g,'')+' '+c[k]); });
+  /* §pkLine6 (2026-10-15) · owner "สลับตัวเลขไปอยู่ข้างหน้า เช่น 11 ผญท" */
+  var parts=function(c){ var o=[]; PK_LINE_MAIN.forEach(function(m){ if(c[m[0]]) o.push(c[m[0]]+' '+m[1]); });
+    Object.keys(c).forEach(function(k){ if(!c[k] || PK_LINE_MAIN.some(function(m){ return m[0]===k; })) return; o.push(c[k]+' '+String((TYM[k]||{}).s||k).replace(/\s+/g,'')); });
     return o; };
   var add=function(o,c){ Object.keys(c).forEach(function(k){ o[k]=(o[k]||0)+c[k]; }); };
   /* หนึ่งหัวข้อ · rows = [{bid,c,n}] */
