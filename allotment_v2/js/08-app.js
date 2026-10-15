@@ -2719,8 +2719,10 @@ window.laRebuildDerived=function(why){
   return !bad.length;
 };
 // ── Seamless refresh: reload all in-memory data from localStorage (NO page reload · NO side-effect loaders) ──
-window._laReloadData=function(){
-  var d; try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; }
+window._laReloadData=function(pre){
+  /* §lazyBase · _laSoftRefresh ส่งก้อนที่ parse แล้วมาให้ (ตัวเดียวกับสตริงที่เพิ่งเขียนลง LS) · ไม่ parse 34 MB ซ้ำ */
+  var d=(pre && typeof pre==='object') ? pre : null;
+  if(!d){ try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; } }
   try{
     if(Array.isArray(d.sb_bookings)) SB_BOOKINGS=d.sb_bookings;
     if(Array.isArray(d.sb_invoices)) SB_INVOICES=d.sb_invoices;

@@ -92,6 +92,13 @@
 
   // 2) LOAD from cloud (sync gate) · BASE = snapshot we loaded (used to diff our changes)
   var BASE={}, _refreshShown=false, _dirty=false, _recoverPush=false;
+  /* §lazyBase (2026-10-15) · BASE ใช้แค่ตอนคิด diff ก่อนเซฟ · ไม่ต้อง parse ทุกครั้งที่ดึงก้อนใหม่
+     วัดบน prod วันนี้ ก้อน 34.6 MB · parse หนึ่งรอบ ~150ms บนเครื่องแรง ๆ · ของเดิมดึงหนึ่งครั้ง parse สามรอบ
+     และดึงทุกครั้งที่ใครก็ตามเซฟ (วัดได้ 2 รอบใน 30 วิ) → จอค้างครั้งละ 1.5 วิขึ้นไป
+     ตอนนี้เก็บสตริงไว้ก่อน (_baseStr) แล้ว parse ตอนมีคนต้องใช้จริง · ส่วนใหญ่ก้อนใหม่มาทับก่อนจะมีใครเซฟ
+     ⚠ อ่าน BASE ผ่าน _base() เสมอ · เขียน BASE ตรง ๆ ต้องล้าง _baseStr ด้วย ไม่งั้นสตริงเก่ามาทับทีหลัง */
+  var _baseStr=null;
+  function _base(){ if(_baseStr!==null){ var s=_baseStr; _baseStr=null; try{ BASE=JSON.parse(s); }catch(e){ BASE={}; } } return BASE; }
   function _laMark(v){ try{ localStorage.setItem(LS+'__v', String(v)); }catch(e){} }   // remember which server version the local data is synced to (survives reload)
   // Graft LOCAL-ONLY records (ids the server doesn't have) into the server blob · additive only, never overwrites a server record → no revert
   function _laGraftLocalOnly(srv, loc){ var g=0; Object.keys(loc||{}).forEach(function(k){ var lv=loc[k], sv=srv[k];
@@ -175,7 +182,7 @@
         var j=JSON.parse(x.responseText);
         if(typeof j.data!=='string' || j.data.length<2){ fail('ข้อมูลว่าง'); return; }
         VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):''; _laStamp(j);
-        try{ BASE=JSON.parse(j.data); }catch(e){ BASE={}; }
+        _baseStr=j.data;                                   /* §lazyBase */
         _orig(LS, j.data); _laMark(VER);
         _syncReady=true; _dirty=false; try{ clearTimeout(_t); }catch(e){}   // §syncGate · ข้อมูลจริงถึงแล้วค่อยเปิดเซฟ · ทิ้งงานค้างที่เกิดตอน state ยังว่าง
         var ov=el('la-bootload'); if(ov) ov.remove();
@@ -195,7 +202,7 @@
     try{ if(_loc && _loc.length>2) _locObj=JSON.parse(_loc); }catch(e){}
     try{ if(_srvStr) _srvObj=JSON.parse(_srvStr); }catch(e){}
     if(_srvObj){
-      try{BASE=JSON.parse(_srvStr);}catch(e){BASE={};}                                   // BASE = pure server snapshot → a recover-push diffs against this
+      _baseStr=_srvStr;                                   // BASE = pure server snapshot → a recover-push diffs against this · §lazyBase · _srvObj gets grafted below, so BASE must be its own parse
       if(_locObj){
         var _lv=parseInt(localStorage.getItem(LS+'__v')||'-1',10);
         var _keepLocal=false;
@@ -245,7 +252,7 @@
     if(!ok){ try{ console.warn('[sync] diff has a key the REST index does not know -> legacy /api/save (run the mapping drift check)'); }catch(e){} }
     return ok?ops:null;
   }
-  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
+  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _baseStr=null; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   var _laSaveErrShown=false;
   function _laSaveErr(msg,color){ _laSaveErrShown=true; onReady(function(){ var d=document.getElementById('la-saveerr'); if(!d){ d=document.createElement('div'); d.id='la-saveerr'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100001;color:#fff;border-radius:22px;padding:9px 18px;font:13px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:82vw;text-align:center'; document.body.appendChild(d);} d.style.background=color||'#A32D2D'; d.innerHTML='⚠ '+msg; }); }
   function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); _laRetryN=0; }
@@ -295,7 +302,7 @@
   function _laBlobUsable(cur){ return !!(cur && typeof cur==='object' && Object.keys(cur).length>0); }
   function save(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
-    var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
+    var d=computeDiff(_base(),cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     /* ══ §ckSaveSeq (2026-10-15) · owner "เช็คอิน กดแล้วเด้ง ต้องกดใหม่" (สองเครื่องกดสลับกัน) ═════
        จำลองได้ใน t_cklive2.mjs (NET=400): ติ๊กที่กด "ระหว่างที่การเซฟก่อนหน้ายังไม่ได้คำตอบ" หายถาวร
@@ -311,7 +318,7 @@
             จะเห็นของที่รอว่าเป็นเสียงสะท้อนของตัวเอง (§selfEcho) แล้วทิ้ง ทั้งที่ยังไม่เคยดึงของอีกเครื่องมาเลย */
     var seqS=_laEditSeq;
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=(_laEditSeq!==seqS); _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind) _laCatchup=true; if(_laCatchup){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _baseStr=null; _laMark(VER); _dirty=(_laEditSeq!==seqS); _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind) _laCatchup=true; if(_laCatchup){ _laSetPending(r); _laTryRefresh(); } else _laDropEcho(); }
       else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
@@ -322,12 +329,12 @@
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
     if(!_laBlobUsable(cur)){ _dirty=false; return; }   // §emptyBlobGuard · ปิดหน้าตอน blob ว่าง = ไม่มีอะไรให้เซฟ ไม่ใช่คำสั่งลบ
-    var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
+    var d=computeDiff(_base(),cur); if(!d._changed){ _dirty=false; return; }
     var ops=laDiffToOps(d,cur);
     var url = ops ? '/api/v1/_batch' : '/api/save';
     var payload = JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:_legacyDiff(d,cur)});   /* §smerge */
     // SYNCHRONOUS save so it commits to cloud BEFORE the page reloads (otherwise the reload reloads stale data → reverts the edit)
-    try{ var x=new XMLHttpRequest(); x.open('POST',url,false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); } }
+    try{ var x=new XMLHttpRequest(); x.open('POST',url,false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _baseStr=null; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); } }
     catch(e){ if(navigator.sendBeacon) navigator.sendBeacon(url, new Blob([payload],{type:'application/json'})); }
   }catch(e){} }
   window.addEventListener('beforeunload', _laFlush);
@@ -529,18 +536,21 @@
       if(_laEditSeq!==seq0) return;
       if((j.version||0) < VER) return;                             /* เวอร์ชันถอยหลัง · ไม่เอา */
       if(_laBusy()) return;                                        // user resumed during fetch → defer
+      /* §lazyBase · parse ก้อนนี้ครั้งเดียว ส่งต่อให้ _laReloadData ใช้ตัวเดียวกัน · BASE parse เองทีหลังตอนจะเซฟ
+         ห้ามใช้ live เป็น BASE · ตัวแปรในแอปชี้เข้า live แล้วแก้ในที่ → BASE ขยับตาม → diff เป็นศูนย์ → ไม่เซฟ (ดู §ckOwn) */
+      var live; try{ live=JSON.parse(j.data); }catch(e){ _laReload(); return; }
       _orig(LS, j.data);                                           // write WITHOUT triggering a save
-      VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};} _laMark(VER);
-      /* §b2cPop · เทียบจาก BASE ที่เพิ่ง parse ไปแล้ว · ไม่ parse เพิ่มสักรอบ
+      VER=j.version||VER; _baseStr=j.data; _laMark(VER);
+      /* §b2cPop · เทียบจากก้อนที่เพิ่ง parse ไปแล้ว · ไม่ parse เพิ่มสักรอบ · สแกนก่อน _laReloadData (ตัวนั้นแก้บางอาร์เรย์ในที่)
          และไม่เช็ค updated_by อีกแล้ว · ของเดิมเช็คแล้วใบจองหลุดเงียบ
          เวลามีคนอื่นกดบันทึกคั่นระหว่างที่ผู้ใช้ยุ่งอยู่ */
-      var _b2cNew=[]; try{ _b2cNew=_laB2CScan(BASE); }catch(e){}
+      var _b2cNew=[]; try{ _b2cNew=_laB2CScan(live); }catch(e){}
       /* §sseCatchup · มีคนเซฟเพิ่มระหว่างที่ก้อนนี้โหลดอยู่ = ของที่รอใหม่กว่าที่ได้มา · อย่าล้าง
          ไม่งั้นเวอร์ชันนั้นหายเงียบจนกว่า poll 10 วิจะเจอ */
       if(!_laPending || (_laPending.version||0) <= VER) _laClearPending();
       _laCkFullAt=Date.now();                         /* §ckDay · นับคิวก้อนเต็มรอบใหม่ */
       _laCatchup=false;                                            /* §ckSaveSeq */
-      var ok = window._laReloadData ? window._laReloadData() : false;
+      var ok = window._laReloadData ? window._laReloadData(live) : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
       if(window._laRerender) window._laRerender();
       LASTBY = j.updated_by ? (j.updated_by+' · '+fmt(j.updated_at)) : LASTBY; _laStamp(j);
@@ -626,10 +636,11 @@
          สำเนาลึกแก้ไขเรื่องนี้จบ · ที่ตั้งใจคือ BASE ต้องไม่ขยับเมื่อมีคนแก้ของในเครื่อง
          ซึ่งยังคงเดิมทุกอย่าง (เทสข้อ 10 ยังกันข้อนั้นอยู่) */
       try{
-        if(BASE && Array.isArray(BASE.sb_bookings)){
-          var at={}; BASE.sb_bookings.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
+        var _B=_base();                              /* §lazyBase */
+        if(_B && Array.isArray(_B.sb_bookings)){
+          var at={}; _B.sb_bookings.forEach(function(b,i){ if(b&&b.id) at[b.id]=i; });
           j.bookings.forEach(function(b){ if(b&&b.id&&at[b.id]!=null)
-            BASE.sb_bookings[at[b.id]]=JSON.parse(JSON.stringify(b)); });
+            _B.sb_bookings[at[b.id]]=JSON.parse(JSON.stringify(b)); });
         }
       }catch(e){ return fin(false); }
       var okApplied=false;
@@ -659,6 +670,10 @@
   }
   function _laTryRefresh(){
     if(!_laPending) return;
+    /* §hiddenDefer (2026-10-15) · แท็บที่ซ่อนอยู่ไม่ต้องดึงก้อนเต็ม 35 MB ทุกครั้งที่มีคนเซฟ · ไม่มีใครดูอยู่
+       ของเดิมรอบ 10 วิ/SSE เรียกตรงนี้โดยไม่ดู hidden → แท็บพื้นหลังโหลด+parse+วาดใหม่ทั้งวัน
+       _laPending ค้างไว้ · กลับมาดูจอ visibilitychange เรียก _laCheckVersion(0) → ดึงทันที */
+    if(document.hidden) return;
     if(_dirty) return;                       /* §selfEcho · การเซฟของเรายังไม่ได้คำตอบ · รอคำตอบก่อน (ตัวจับเวลา 3 วิ/คำตอบจะมาเรียกต่อ) */
     if((_laPending.version||0)<=_laCkSeen) return;   /* หน้าเช็คอินตามทันเวอร์ชันนี้แล้ว */
     if(_laBusy()){ showRefresh(_laPending); return; }
@@ -852,7 +867,7 @@
   /* §b2cPop · จำ id ของใบ b2c ที่รู้จักแล้วไว้ในหน่วยความจำ
      ของเดิมเทียบด้วยการ JSON.parse สตริงบล็อบทั้งเก่าและใหม่
      วัดของจริงบล็อบ 15.2 MB · เท่ากับ parse 15 MB สองรอบทุกครั้งที่มีของเข้า
-     ตอนนี้รับ object ที่ _laSoftRefresh parse ไว้แล้ว (BASE) · parse เพิ่ม 0 รอบ
+     ตอนนี้รับ object ที่ _laSoftRefresh parse ไว้แล้ว (live · §lazyBase) · parse เพิ่ม 0 รอบ
      จึงเทียบได้ทุกรอบโดยไม่ต้องเดาจาก updated_by
 
      รอบแรกที่เห็นข้อมูล จำเฉย ๆ ไม่เด้ง
