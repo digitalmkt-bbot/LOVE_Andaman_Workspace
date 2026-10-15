@@ -98,7 +98,16 @@
       };
     }
     var cmp = function(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || ((x.cxlRow ? 1 : 0) - (y.cxlRow ? 1 : 0)) || sortAZ(agName(x.b), agName(y.b)) || sortAZ(x.b.voucher_ref || '', y.b.voucher_ref || ''); };
-    return { all: V.inScope.map(function(r){ return mk(r, false); }).sort(cmp), cxl: V.cancelled.map(function(r){ return mk(r, true); }), cmp: cmp, clean: clean };
+    /* Legacy tsMvRows: a booking moved off the day, as it left (route, pax). Counts nothing; its money went with it. */
+    function mv(m){
+      var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone };
+      var why = [m.to_date ? 'เลื่อนไป ' + call('ckDayShortTh', [m.to_date], m.to_date) : 'ย้ายวันออกไป', call('ckShortDay', [m.at], ''), m.by || ''].filter(Boolean).join(' · ');
+      return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {} }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
+        a: null, c: null, dec: null, ns: null, ev: [], cxlRow: true, mvRow: true, booked: n(m.pax_total), trav: 0, pb: paxBreak(m.pax), clean: clean,
+        amount: null, isCase: false, pend: false, due: false, cotOpen: false, mvTo: m.to_date || '', mvWhy: why };
+    }
+    return { all: V.inScope.map(function(r){ return mk(r, false); }).sort(cmp), cxl: V.cancelled.map(function(r){ return mk(r, true); }),
+      mv: (V.moved || []).map(mv), movedListed: !!V.movedListed, cmp: cmp, clean: clean };
   }
 
   /* ── the figures of the selection: the server's own when the whole day is shown,
@@ -231,9 +240,20 @@
             + '<div class="ts-tel" style="margin-top:3px">' + e(dec.by || '') + (dec.at ? ' · ' + e(text(dec.at).slice(0, 16).replace('T', ' ')) : '') + '</div>'
           : '<span class="ts-chip r">รอตัดสิน</span>') + '</td></tr>';
     });
-    // Moved-out bookings: the server counts them (whole day) but does not list them yet.
-    var nMoved = n(S.moved_trips);
-    if(nMoved) body += '<tr class="ts-moved" data-ops-ts-needs="moved"><td colspan="8" style="color:var(--zn700)"><span class="ts-chip p">&#10007; เลื่อนวัน ' + nMoved + ' ใบ</span> '
+    // Moved-out bookings (server moved_rows, legacy §tsStrand): appended faded, in the same pier/route/VAT scope.
+    var nMoved = R.movedListed ? R.mv.length : n(S.moved_trips);
+    R.mv.forEach(function(r){
+      body += '<tr class="ts-moved" data-ops-ts-moved="' + e(r.id) + '">'
+        + '<td><span class="ts-vch">' + e(r.voucher) + '</span></td>'
+        + '<td>' + agChip(r.b) + '</td>'
+        + '<td><div class="ts-lead">' + e(r.b.lead_pax || '—') + '</div><div class="ts-tel">' + e(r.b.lead_phone || '') + '</div></td>'
+        + '<td><span class="ts-chip p">&#10007; เลื่อนวัน ' + r.booked + '</span></td>'
+        + '<td style="max-width:230px;color:var(--zn700)">' + e(r.mvWhy) + (r.routeId ? '<div class="ts-tel">' + e(routeName(r.routeId)) + '</div>' : '') + '</td>'
+        + '<td class="r ts-mono" style="font-weight:800">&mdash;<div class="ts-tel" style="font-weight:400;margin-top:3px">ยอดเงินไปอยู่กับวันใหม่แล้ว</div></td>'
+        + '<td class="ts-noprint"></td>'
+        + '<td class="c"><span class="ts-chip p">เลื่อนวันแล้ว</span></td></tr>';
+    });
+    if(!R.movedListed && nMoved) body += '<tr class="ts-moved" data-ops-ts-needs="moved"><td colspan="8" style="color:var(--zn700)"><span class="ts-chip p">&#10007; เลื่อนวัน ' + nMoved + ' ใบ</span> '
       + 'ทั้งวัน &middot; รายชื่อใบที่เลื่อนออกไปยังไม่มีจากเซิร์ฟเวอร์</td></tr>';
     var pendList = (F.cases > cases.length) ? '<tr data-ops-ts-needs="cases"><td colspan="8" style="color:var(--am700)">เซิร์ฟเวอร์นับ ' + F.cases + ' เคส · ระบุใบได้ ' + cases.length + ' ใบ</td></tr>' : '';
     return '<div class="ts-sec ts-s02"><div class="ts-sech"><div>'
@@ -412,7 +432,7 @@
     return '<div class="ts-sbk">' + e(drop) + '</div><span class="ts-chip ' + tag[1] + '">' + e(tag[0]) + '</span>';
   }
   function s04Html(R, F, date, onlyIssue){
-    var e = esc, rows = (onlyIssue ? R.all.filter(function(r){ return r.isCase; }) : R.all).concat(R.cxl).sort(R.cmp);
+    var e = esc, rows = (onlyIssue ? R.all.filter(function(r){ return r.isCase; }) : R.all).concat(R.cxl).concat(R.mv).sort(R.cmp);
     var body = '', prev = null, mn = 0, gS = null, dS = { ad: 0, chd: 0, inf: 0, foc: 0, t: 0, b: 0, m: 0, n: 0, unk: false }, mc = { pier: 0, addon: 0, sq: 0, warn: 0, cxl: 0 };
     var pxTd = function(v, col){ return '<td data-col="' + col + '" class="c ts-px' + (v ? '' : ' zero') + '">' + (v || '·') + '</td>'; };
     var sumRow = function(cls, label, S){
@@ -426,7 +446,7 @@
       var b = r.b, t = r.t;
       if(r.routeId !== prev){
         prev = r.routeId;
-        var grp = rows.filter(function(x){ return x.routeId === r.routeId && !x.cxlRow; }), gX = rows.filter(function(x){ return x.routeId === r.routeId && x.cxlRow; });
+        var grp = rows.filter(function(x){ return x.routeId === r.routeId && !x.cxlRow; }), gX = rows.filter(function(x){ return x.routeId === r.routeId && x.cxlRow && !x.mvRow; }), gM = rows.filter(function(x){ return x.routeId === r.routeId && x.mvRow; });
         var gB = grp.reduce(function(a, x){ return a + x.booked; }, 0), gT = R.clean ? gB : null, col = routeColor(r.routeId);
         var boats = []; grp.forEach(function(x){ var nm = boatName(boatOf(x.t)); if(nm && boats.indexOf(nm) < 0) boats.push(nm); });
         gClose();
@@ -435,17 +455,19 @@
           + '<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:' + e(col) + '"><i class="ts-dot" style="border-radius:50%;background:' + e(col) + '"></i>' + e(routeName(r.routeId)) + '</span>'
           + (boats.length ? '<span class="ts-scr ts-noprint ts-gboat">' + e(boats.join(' · ')) + '</span>' : '')
           + '<span style="float:right" class="ts-tel">' + grp.length + ' booking · จอง ' + gB + ' → เดินทางจริง ' + (gT == null ? '?' : gT) + (gT != null && gB - gT > 0 ? ' · หาย ' + (gB - gT) : '')
-          + (gX.length ? ' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ ' + gX.length + ' ใบ</b>' : '') + '</span></div></td></tr>';
+          + (gX.length ? ' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ ' + gX.length + ' ใบ</b>' : '')
+          + (gM.length ? ' · <b style="color:var(--pu700)">เลื่อนวันไปแล้ว ' + gM.length + ' ใบ</b>' : '') + '</span></div></td></tr>';
       }
       var c = r.c, van = vanOf(t), boat = boatOf(t), pb = r.pb;
       var total = r.amount == null ? null : r.amount + n(c && c.sales && c.sales.total), site = n(c && c.sales && c.sales.total);
-      if(r.cxlRow) total = n(b.total);
+      if(r.cxlRow) total = r.mvRow ? null : n(b.total);
       if(!r.cxlRow && gS){
         ['ad','chd','inf','foc'].forEach(function(k){ gS[k] += pb[k]; dS[k] += pb[k]; });
         gS.t += r.booked; gS.b += r.booked; gS.m += n(total); gS.n++; dS.t += r.booked; dS.b += r.booked; dS.m += n(total); dS.n++;
         if(!R.clean) dS.unk = true;
       }
-      var payH = payCell(r), aoH = addonCell(r), sq = sreqOf(b, t), tags = [];
+      // §tsManMv · the money moved with the booking to its new day: shown here it would read as today's.
+      var payH = r.mvRow ? '<span style="color:var(--zn400);font-size:10.5px">ยอดเงินไปอยู่กับวันใหม่แล้ว</span>' : payCell(r), aoH = addonCell(r), sq = sreqOf(b, t), tags = [];
       if(r.cxlRow) tags.push('cxl');
       if(!r.cxlRow && c && (n(c.target) > 0 || n(c.paid) > 0)) tags.push('pier');
       if(aoH.indexOf('ts-ao ') >= 0) tags.push('addon');
@@ -456,16 +478,18 @@
       var px = function(k){
         var v = pb[k];
         if(!v) return '<td class="c ts-px zero">·</td>';
-        if(r.cxlRow) return '<td class="c ts-px zero" title="ยกเลิกทั้งใบ · จอง ' + v + '">' + v + '</td>';
+        if(r.cxlRow) return '<td class="c ts-px zero" title="' + (r.mvRow ? 'เลื่อนวันออกไปแล้ว' : 'ยกเลิกทั้งใบ') + ' · จอง ' + v + '">' + v + '</td>';
         return '<td class="c ts-px"' + (R.clean ? '' : ' title="จอง ' + v + ' · ไปจริงแยกประเภทยังไม่มีจากเซิร์ฟเวอร์"') + '>' + v + '</td>';
       };
-      var stat = r.cxlRow ? '<span class="ts-chip r">CXL &middot; ยกเลิก</span>'
+      var stat = r.mvRow ? '<span class="ts-chip p">&#10007; เลื่อนวัน</span>' + (r.mvTo ? '<div class="ts-tel" style="margin-top:3px">ไป ' + e(call('ckDayShortTh', [r.mvTo], r.mvTo)) + '</div>' : '')
+        : r.cxlRow ? '<span class="ts-chip r">CXL &middot; ยกเลิก</span>'
         : r.isCase ? (r.ns ? '<span class="ts-chip ' + (DEC[r.ns.decision] || DEC.none)[1] + '">' + (DEC[r.ns.decision] || DEC.none)[0] + (r.ns.decision === 'postpone' ? '' : ' · ' + money(r.ns.amount)) + '</span>' : '<span class="ts-chip r">รอตัดสิน</span>')
         : (c && !c.not_counted && n(c.due) > 0 ? '<span class="ts-chip a">รอเก็บ ' + money(c.due) + '</span>' : '<span class="ts-chip g">&#10003; เรียบร้อย</span>');
       var cxlCell;
-      if(r.cxlRow){
+      if(r.mvRow) cxlCell = '<span class="ts-chip p">เลื่อนวันแล้ว</span>' + (r.mvWhy ? '<div class="ts-tel" style="margin-top:3px">' + e(r.mvWhy) + '</div>' : '');
+      else if(r.cxlRow){
         var cc = b.cancellation || {}, ct = cc.charge_type || cc.chargeType;
-        var lbl = ct === 'full' ? 'เก็บเต็ม ' + money(cc.charge_amount) : ct === 'partial' ? 'เก็บบางส่วน ' + money(cc.charge_amount) : (b.status === 'cancelled_weather' && !b.cancellation ? 'ยกเลิกเพราะอากาศ' : 'ไม่ชาร์จ');
+        var lbl = ct === 'full' ? 'เก็บเต็ม ' + money(cc.charge_amount) : ct === 'partial' ? 'เก็บบางส่วน ' + money(cc.charge_amount) : b.cancellation ? 'ไม่ชาร์จ' : (b.status === 'cancelled_weather' ? 'ยกเลิกเพราะอากาศ' : 'ยกเลิก');   // legacy tsCxlCell: no cancel record = the status
         var why = text(b.cancellation_reason).trim() || text(cc.note).trim();
         cxlCell = '<div class="ts-dcell"><span class="ts-chip r">ยกเลิกทั้งใบ</span><span class="ts-cxc">' + e(lbl) + '</span>' + (why ? '<span class="ts-cxr" title="' + e(why) + '">' + e(why) + '</span>' : '') + '</div>';
       } else if(r.isCase){
@@ -476,7 +500,7 @@
             : '<span class="ts-cxr">รอตัดสินค่าปรับ</span>') + '</div>';
       } else cxlCell = '<span style="color:var(--zn400)">—</span>';
       var room = text(b.room_number);
-      body += '<tr data-tsman="' + tags.join(' ') + '"' + (r.cxlRow ? ' class="ts-cxlrow"' : '') + ' data-ops-ts-man="' + e(r.id) + '">'
+      body += '<tr data-tsman="' + tags.join(' ') + '"' + (r.mvRow ? ' class="ts-cxlrow ts-mvrow"' : r.cxlRow ? ' class="ts-cxlrow"' : '') + ' data-ops-ts-man="' + e(r.id) + '">'
         + '<td class="ts-rn ts-scr ts-noprint">' + mn + '</td>'
         + '<td><span class="ts-vch">' + e(r.voucher) + '</span></td>'
         + '<td>' + agChip(b) + '</td>'
@@ -484,7 +508,7 @@
         + px('ad') + px('chd') + px('inf') + px('foc')
         + '<td class="c ts-mono" style="font-weight:800">' + (r.cxlRow ? '<span style="color:var(--rs700)">0</span> / ' + r.booked : ((r.trav == null ? '?' : r.trav) + ' / ' + r.booked)) + '</td>'
         + '<td style="max-width:168px">' + (t.ovn_leg ? '<div><span class="ts-chip" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน">&#8617; OVN ขากลับ</span></div>' : '')
-          + (b.hotel_name ? e(b.hotel_name) + (room ? '<span class="ts-room">ห้อง ' + e(room) + '</span>' : '')
+          + (r.mvRow && !b.hotel_name ? '<span style="color:var(--zn400)">&mdash;</span>' : b.hotel_name ? e(b.hotel_name) + (room ? '<span class="ts-room">ห้อง ' + e(room) + '</span>' : '')
             : '<span class="ts-chip n" title="ใบนี้ไม่มีจุดรับ · ลูกค้ามาเองที่ท่า">No pickup</span>') + '</td>'
         + '<td style="max-width:150px">' + (r.cxlRow ? '<span style="color:var(--zn400)">จุดเดิม</span>' : dropCell(r)) + '</td>'
         + '<td class="ts-aocol">' + aoH + '</td>'
@@ -493,7 +517,7 @@
           + (r.cxlRow && !van && !boat ? '<span style="color:var(--zn400)">—</span>' : '') + '</td>'
         + '<td class="ts-sqcol">' + (sq ? '<span class="ts-sqtx" title="' + e(sq) + '">' + e(sq) + '</span>' : '<span style="color:var(--zn400)">&mdash;</span>') + '</td>'
         + '<td class="ts-paycol">' + payH + '</td>'
-        + '<td class="r ts-mono ts-totc" style="font-weight:800">' + (total == null ? '—' : money(total)) + (site > 0 && !r.cxlRow ? '<span class="ts-totb">' + money(r.amount) + '<em>+' + money(site) + '</em></span>' : '') + '</td>'
+        + '<td class="r ts-mono ts-totc" style="font-weight:800' + (r.mvRow ? ';color:var(--zn400)' : '') + '">' + (total == null ? '&mdash;' : money(total)) + (site > 0 && !r.cxlRow ? '<span class="ts-totb">' + money(r.amount) + '<em>+' + money(site) + '</em></span>' : '') + '</td>'
         + '<td style="max-width:170px">' + cxlCell + '</td>'
         + '<td class="c">' + stat + '</td></tr>';
     });
@@ -531,14 +555,14 @@
     if(!V){
       // No roster (its read failed): the day's own totals and money rows still show; scope and manifest wait for it.
       V = { state: { pier: '', route: '', vat: '' }, scoped: false, docNo: TR ? TR.docNo(date, { pier: '', route: '', vat: '' }) : '', keep: {}, inScope: [], kept: [], cancelled: [],
-        nVat: 0, nNoVat: 0, vatGap: [], after: null, ref: [], nRefFiles: 0, slips: [], nSlipFiles: 0, slipPending: 0, noSlipRows: 0, noRoster: true };
+        nVat: 0, nNoVat: 0, vatGap: [], after: null, moved: d.moved_rows || [], movedListed: Array.isArray(d.moved_rows), ref: [], nRefFiles: 0, slips: [], nSlipFiles: 0, slipPending: 0, noSlipRows: 0, noRoster: true };
       (d.collect_rows || []).forEach(function(c){ V.inScope.push({ id: c.booking_id, voucher: c.voucher_ref || c.booking_id, agentId: '', routeId: c.route_id, b: { id: c.booking_id, voucher_ref: c.voucher_ref || c.booking_id }, t: { pax_total: 0 } }); });
       V.kept = V.inScope;
     }
     V.hasVat = TR && TR.hasVat ? TR.hasVat : function(){ return false; };
     VANS = V.vans || {};
     var allRows = d._roster ? d._roster.rows : V.inScope;
-    var R = rowsOf(d, { after: V.after, inScope: V.kept, cancelled: V.cancelled });
+    var R = rowsOf(d, { after: V.after, inScope: V.kept, cancelled: V.cancelled, moved: V.moved, movedListed: V.movedListed });
     var F = figures(d, R.all, V.scoped, R.clean);
     var onlyIssue = !!window._tsOnlyIssue;
     var empty = (!n(d.bookings) && !(d.collect_rows || []).length)

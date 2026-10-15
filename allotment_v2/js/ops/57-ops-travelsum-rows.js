@@ -315,6 +315,9 @@
     return {
       state: st, scoped: !!(st.pier || st.route || st.vat), docNo: no, keep: keep, inScope: inScope, kept: kept,
       cancelled: (roster.cancelled || []).filter(function(r){ return scopeKeep(st, r.routeId) && vatKeep(st, r); }),
+      // Bookings moved off the day (server moved_rows, legacy tsMvRows): the same pier/route/VAT scope.
+      moved: (d.moved_rows || []).filter(function(m){ return scopeKeep(st, text(m.route_id)) && vatKeep(st, { agentId: m.agent_id || '' }); }),
+      movedListed: Array.isArray(d.moved_rows),
       nVat: nVat, nNoVat: inScope.length - nVat, vatGap: vatGap(inScope), after: roster.after || null, vans: roster.vans || {},
       ref: ref, nRefFiles: ref.reduce(function(s, r){ return s + (r.b.attachments || []).length; }, 0),
       slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows
