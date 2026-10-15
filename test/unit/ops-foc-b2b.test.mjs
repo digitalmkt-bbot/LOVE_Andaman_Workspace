@@ -36,16 +36,6 @@ function runtime({ enabled = true, handlers = {}, bookings = [], view = 'focdeta
     },
     setTimeout, clearTimeout,
     bookingV2FromOpsBooking: fromServer,
-    // same window arithmetic as 08-app.js b2dWin for mode 'mom'
-    b2dWin() {
-      const ref = ctx._b2d.ref || TODAY;
-      if (ctx._b2d.mode === 'mly') {
-        const y = +ref.slice(0, 4), mo = ref.slice(5, 7);
-        const eom = (yy, mm) => String(new Date(yy, +mm, 0).getDate()).padStart(2, '0');
-        return { cs: y + '-' + mo + '-01', ce: y + '-' + mo + '-' + eom(y, mo), ps: (y - 1) + '-' + mo + '-01', pe: (y - 1) + '-' + mo + '-' + eom(y - 1, mo), ref };
-      }
-      return { cs: shift(ref, -29), ce: ref, ps: shift(ref, -59), pe: shift(ref, -30), ref };
-    },
   };
   ctx.window = ctx;
   // the legacy renders under test: snapshot what SB_BOOKINGS holds when they run
@@ -112,63 +102,7 @@ test('FOC Detail does not refetch a cached window and does not loop', async () =
   assert.equal(hits, 1, 'the window is fetched once');
 });
 
-// ── B2B Dashboard ────────────────────────────────────────────────────────────
-
-test('B2B Dashboard (booking-date basis) loads the shown + comparison window by created date', async () => {
-  const ps = shift(TODAY, -59);
-  const rt = runtime({
-    view: 'b2b-dash',
-    bookings: [
-      sb('bdIn', { bookingDate: shift(TODAY, -3) }),
-      sb('bdOut', { bookingDate: '2025-01-01' }),
-    ],
-    handlers: { 'GET /v1/bookings/recent': { body: { bookings: [
-      srv('R1', { booking_date: shift(TODAY, -20) }),
-    ] } } },
-  });
-  rt.ctx.renderB2BDash();
-  await rt.settle();
-
-  assert.equal(rt.ctx._b2d.ref, TODAY, 'the reference date defaults to today, not to whatever is cached');
-  assert.deepEqual(rt.requests.map((r) => r.path),
-    ['/v1/bookings/recent?created_from=' + ps + '&created_to=' + TODAY + '&source=all&limit=200'],
-    'one contiguous created-date load covers both windows (end capped at today)');
-  assert.equal(rt.renders.renderB2BDash.length, 2, 'renders once now, once when the window arrives');
-  assert.deepEqual(rt.renders.renderB2BDash[1].sort(), ['R1', 'bdIn'],
-    'the dashboard aggregates only bookings dated inside the two windows');
-  assert.deepEqual(rt.ctx.SB_BOOKINGS.map((b) => b.id).sort(), ['R1', 'bdIn', 'bdOut'], 'SB_BOOKINGS is restored');
-});
-
-test('B2B Dashboard (travel-date basis) loads both service-date windows', async () => {
-  const ref = TODAY, cs = shift(ref, -29), ps = shift(ref, -59), pe = shift(ref, -30);
-  const rt = runtime({
-    view: 'b2b-dash',
-    b2d: { basis: 'td', mode: 'mom', ref: null, T: 10, stack: [], screen: null },
-    bookings: [sb('tdOut', { trips: [{ date: '2025-01-05' }] })],
-    handlers: { 'GET /v1/bookings': { body: { bookings: [srv('T1', { trips: [{ service_date: cs }] })] } } },
-  });
-  rt.ctx.renderB2BDash();
-  await rt.settle();
-  assert.deepEqual(rt.requests.map((r) => r.path).sort(), [
-    '/v1/bookings?from=' + ps + '&to=' + pe + '&limit=100',
-    '/v1/bookings?from=' + cs + '&to=' + ref + '&limit=100',
-  ].sort(), 'current and comparison travel windows are each loaded');
-  assert.deepEqual(rt.renders.renderB2BDash.at(-1), ['T1'], 'only trips inside the windows are aggregated');
-});
-
-test('B2B Dashboard (same month last year) loads two separate created windows', async () => {
-  const rt = runtime({
-    view: 'b2b-dash',
-    b2d: { basis: 'bd', mode: 'mly', ref: '2026-10-14', T: 10, stack: [], screen: null },
-    handlers: { 'GET /v1/bookings/recent': { body: { bookings: [] } } },
-  });
-  rt.ctx.renderB2BDash();
-  await rt.settle();
-  assert.deepEqual(rt.requests.map((r) => r.path).sort(), [
-    '/v1/bookings/recent?created_from=2025-10-01&created_to=2025-12-30&source=all&limit=200',
-    '/v1/bookings/recent?created_from=2026-10-01&created_to=' + (shift('2026-10-31', 60) > TODAY ? TODAY : shift('2026-10-31', 60)) + '&source=all&limit=200',
-  ], 'disjoint windows load separately, each with backdating slack, never the year between');
-});
+// ── B2B Dashboard ── see ops-b2b-dash.test.mjs (§b2dParity: whole confirmed history, real legacy render)
 
 // ── legacy mode ──────────────────────────────────────────────────────────────
 

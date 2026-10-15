@@ -13,22 +13,18 @@
    travel date) — loaded with bookingV2EnsureOpsRange and shown with a
    period banner.
 
-   B2B Dashboard (renderB2BDash, 08-app.js) already has explicit period
-   windows (b2dWin: current + comparison); this adapter loads exactly those
-   before the aggregate runs:
-   · basis 'td' (travel date)  → GET /v1/bookings?from=&to=  (service-date range)
-   · basis 'bd' (booking date) → GET /v1/bookings/recent?created_from=&created_to=
-     A booking can be backdated, so booking_date ≤ created date (observed up
-     to −51 days in production); each window loads created dates from the
-     window start to 60 days past its end, capped at today.
-   _b2d.ref defaults to today: on lk-inbox the "latest booking date" default
-   was effectively today, and on the server it must not depend on the cache.
+   B2B Dashboard (renderB2BDash, 08-app.js) · §b2dParity (2026-10-15): the
+   legacy render reads the WHOLE confirmed history — default reference date
+   = newest booking/travel date in the data (b2dLatestDate), KPI sparklines
+   = one point per month over all history (b2dMonthlySeries), monthly
+   stacked trends on By staff/trip/market. A two-window subset gave lk a
+   different reference date, a 3-point sparkline and comparison figures that
+   depended on stray cached bookings. It now runs over a private snapshot of
+   GET /v1/bookings?status=confirmed (all pages) — see the section below.
 
-   Both renders run the legacy function against only the window's bookings
-   (SB_BOOKINGS is swapped for the synchronous render, then restored), so
-   the numbers never depend on what another screen loaded. Loads dedupe in
-   the booking cache; the screen redraws once per completed load (at most
-   one redraw subscription per window per 5 s).
+   Both renders run the legacy function against a swapped SB_BOOKINGS (for
+   the synchronous render only, then restored), so the numbers never depend
+   on what another screen loaded.
    Legacy mode (!O.enabled()): both renders delegate to the original.
    Classic script · loads after 08-app.js and js/booking/.
    ════════════════════════════════════════════════════════════════════════ */
@@ -100,39 +96,89 @@
     return r;
   });
 
-  /* ════ B2B Dashboard · the two windows b2dWin shows ════ */
-  var BD_SLACK = 60;   // booking_date runs behind created_at by up to ~51 days in production
-  function capToday(d){ var t = O.today(); return d > t ? t : d; }
-  function basisOf(){ return (window._b2d && window._b2d.basis) === 'td' ? 'td' : 'bd'; }
-  function b2bWindows(){
-    if(window._b2d && typeof window._b2d === 'object' && !window._b2d.ref) window._b2d.ref = O.today();
-    if(typeof window.b2dWin !== 'function') return null;
-    return window.b2dWin([]);   // with _b2d.ref set, b2dWin ignores the lines argument
-  }
-  function b2bLoads(w){
-    if(basisOf() === 'td'){
-      if(typeof bookingV2EnsureOpsRange !== 'function') return [];
-      return [bookingV2EnsureOpsRange({ from: w.ps, to: w.pe }), bookingV2EnsureOpsRange({ from: w.cs, to: w.ce })];
+  /* ════ B2B Dashboard · every confirmed booking, as lk-inbox sees it ════
+     The legacy render needs the whole confirmed history, not two windows:
+     · its default reference date is the newest booking (or travel) date in the data (b2dLatestDate);
+     · the KPI sparklines are one point per month over all history (b2dMonthlySeries);
+     · By staff / By trip / By market draw a monthly stacked trend over all history (b2dMonthlyHtml).
+     So the screen reads GET /v1/bookings?status=confirmed (all pages) into its own snapshot and runs
+     the legacy render over exactly that snapshot — never over SB_BOOKINGS, whose contents depend on
+     which screens were opened first. The snapshot is not merged into SB_BOOKINGS (other screens keep
+     their own ranges). In-session edits: a cached booking with a newer opsVersion replaces its
+     snapshot copy; the snapshot is refetched in the background after a write or after 5 minutes.
+     NEEDS-SERVER-WORK: a compact B2B trip-line read would replace the full booking payloads. */
+  var B2D_PAGE = 1000, B2D_TTL = 5 * 60 * 1000;
+  var B2D_RETRY = 30 * 1000;   // after a failed load, no automatic refetch for 30 s (the Retry button skips the wait)
+  var b2dSnap = { rows: null, at: 0, stale: false, load: null, err: null, errAt: 0 };
+  function b2dFetchAll(){
+    var all = [], pages = 0;
+    function page(cursor){
+      return O.get('/v1/bookings', { status: 'confirmed', limit: B2D_PAGE, cursor: cursor }).then(function(j){
+        if(!j || !Array.isArray(j.bookings)) throw new Error('booking list did not return bookings');
+        Array.prototype.push.apply(all, j.bookings);
+        if(j.next_cursor && ++pages < 200) return page(j.next_cursor);
+        return all;
+      });
     }
-    if(typeof bookingV2OpsEnsureCreated !== 'function') return [];
-    if(O.shift(w.pe, 1) === w.cs) return [bookingV2OpsEnsureCreated(w.ps, capToday(O.shift(w.ce, BD_SLACK)))];
-    return [bookingV2OpsEnsureCreated(w.ps, capToday(O.shift(w.pe, BD_SLACK))),
-            bookingV2OpsEnsureCreated(w.cs, capToday(O.shift(w.ce, BD_SLACK)))];
+    return page(null);
   }
-  function bdOf(b){ return iso(b.bookingDate) || iso(b.bookedAt) || iso(b.createdAt); }
-  function inWin(d, w){ return !!d && ((d >= w.cs && d <= w.ce) || (d >= w.ps && d <= w.pe)); }
-  wrap('renderB2BDash', function(){
-    var w = b2bWindows();
-    if(!w) return originals.renderB2BDash ? originals.renderB2BDash() : undefined;
-    var basis = basisOf();
-    var subset = (allBookings() || []).filter(function(b){
-      if(!b) return false;
-      if(basis === 'td') return (b.trips || []).some(function(t){ return inWin(t && iso(t.date), w); });
-      return inWin(bdOf(b), w);
+  function b2dEnsure(){
+    if(b2dSnap.load) return b2dSnap.load;
+    var fresh = b2dSnap.rows && !b2dSnap.stale && (Date.now() - b2dSnap.at) < B2D_TTL;
+    if(fresh) return null;
+    if(b2dSnap.err && Date.now() - b2dSnap.errAt < B2D_RETRY) return null;   // never a fetch → fail → redraw loop
+    b2dSnap.load = b2dFetchAll().then(function(list){
+      /* lk-inbox's store is in booking-id order; the legacy tables break revenue ties by first
+         appearance, so the same order gives the same row order */
+      b2dSnap.rows = list.map(bookingV2FromOpsBooking).sort(function(a, b){
+        var x = String(a.id), y = String(b.id); return x < y ? -1 : (x > y ? 1 : 0);
+      });
+      b2dSnap.at = Date.now(); b2dSnap.stale = false; b2dSnap.err = null; b2dSnap.load = null;
+      try{ console.log('[opsSync] B2B dashboard: ' + b2dSnap.rows.length + ' confirmed booking(s) from operation-backend'); }catch(_){}
+      return true;
+    }, function(e){
+      b2dSnap.load = null; b2dSnap.err = e; b2dSnap.errAt = Date.now();
+      try{ console.warn('[opsSync] B2B dashboard: confirmed bookings did not load · ' + ((e && e.message) || e)); }catch(_){}
+      return false;
     });
-    var loads = b2bLoads(w);
-    var r = withBookings(subset, function(){ return originals.renderB2BDash ? originals.renderB2BDash() : undefined; });
-    kick('b2b|' + basis + '|' + w.ps + '|' + w.ce, loads, function(){ if(viewIs('b2b-dash')) window.renderB2BDash(); });
-    return r;
+    return b2dSnap.load;
+  }
+  if(typeof O.onWrite === 'function') O.onWrite(function(){ b2dSnap.stale = true; });
+  /* the snapshot, with any cached booking the browser holds in a newer version swapped in */
+  function b2dData(){
+    var rows = b2dSnap.rows || [], cached = allBookings() || [], newer = {};
+    cached.forEach(function(b){ if(b && b.opsId && b.opsVersion != null) newer[b.opsId] = b; });
+    return rows.map(function(s){
+      var c = s && newer[s.opsId];
+      return (c && s.opsVersion != null && +c.opsVersion > +s.opsVersion) ? c : s;
+    });
+  }
+  /* one redraw per load, however many renders ran while it was in flight */
+  var redrawFor = null;
+  function redrawAfter(load, quiet){
+    if(redrawFor === load) return;
+    redrawFor = load;
+    load.then(function(ok){
+      if(!viewIs('b2b-dash')) return;
+      if(quiet && (!ok || O.busy())) return;   // a background refresh never redraws under the user
+      window.renderB2BDash();
+    });
+  }
+  window.b2dOpsRetry = function(){ b2dSnap.err = null; window.renderB2BDash(); };
+  function b2dHost(html){ var h = document.getElementById('b2bdash-wrap'); if(h) h.innerHTML = html; }
+  wrap('renderB2BDash', function(){
+    var load = b2dEnsure();
+    if(!b2dSnap.rows){
+      if(load){
+        b2dHost(O.loadingHtml('Loading B2B bookings from operation-backend…'));
+        redrawAfter(load, false);
+        return;
+      }
+      b2dHost('<div style="padding:24px;color:#B91C1C;font-size:13px">B2B bookings did not load from operation-backend'
+        + ' <button onclick="b2dOpsRetry()" style="margin-left:8px;cursor:pointer">Retry</button></div>');
+      return;
+    }
+    if(load) redrawAfter(load, true);
+    return withBookings(b2dData(), function(){ return originals.renderB2BDash ? originals.renderB2BDash() : undefined; });
   });
 })();
