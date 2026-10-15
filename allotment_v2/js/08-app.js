@@ -68778,24 +68778,30 @@ function pk3Body(flat, TY, TYM, ro){
 function pk3Side(flat, TY, TYM, ro, part){
   var e=poE, date=_poDate, sets=pkSets(date), D=pkSetDraft();
   var bn=function(bid){ var x=pkSetBoatX(flat,bid); return e((x&&x.B.boat&&x.B.boat.name)||bid); };
-  var live={}; flat.forEach(function(x){ (x.B.people||[]).forEach(function(p){ if(!p.over) live[pkSetKey(p)]=1; }); });
+  var live={}; flat.forEach(function(x){ (x.B.people||[]).forEach(function(p){ if(!p.over) live[pkSetKey(p)]=p; }); });
+  /* §pkSetWait (2026-10-15) · owner "อันนี้ ถ้ารายชื่อไม่ครบ ต้องเตือน" · คนในชุดที่ยังเป็นช่องรอชื่อ (ph · ยังไม่ได้พิมพ์ชื่อ)
+     = ยังซื้อตั๋วไม่ได้ · ป้ายเปลี่ยนจาก "พร้อมซื้อ" เป็น "รอชื่อ N" สีส้ม · แถวมีขอบส้ม · ท้ายการ์ดบอกรวมว่ากี่คนกี่ชุด */
+  var waitAll=0, waitSets=0;
+  var waitOf=function(S){ return (S.people||[]).filter(function(q){ var L=live[q.k]; return L && L.ph && !L.typed; }).length; };
   /* §pkSets9 · ยอดเงินต่อชุด (จำนวน × ราคา/ใบ จากตารางคำนวณ) · ลำที่มีหลายชุดมีบรรทัดรวมของลำ · ท้ายการ์ดรวมทุกชุด */
   var fmtB=function(n){ return '฿ '+pkCalcFmt(n); };
   var missAll={}, grand=0, grandN=0;
   var setRow=function(S){ var n=(S.people||[]).length, gone=(S.people||[]).filter(function(q){ return !live[q.k]; }).length, on=!!(D&&D.id===S.id);
+    var wait=waitOf(S); if(wait){ waitAll+=wait; waitSets++; }   /* §pkSetWait */
     var A=pkSetAmt(S); A.miss.forEach(function(c){ missAll[c]=1; }); grand+=A.amt; grandN+=n;
     var what=Object.keys(A.by).map(function(c){ return e((TYM[c]||{}).s||c)+' '+A.by[c]; }).join(' · ');
-    return '<button type="button" class="pk3-set'+(on?' on':'')+'" onclick="pkSetOpen(\''+e(S.id)+'\')">'
+    return '<button type="button" class="pk3-set'+(on?' on':'')+(wait&&!gone?' wt':'')+'" onclick="pkSetOpen(\''+e(S.id)+'\')"'+(wait?(' title="ยังรอชื่อ '+wait+' คน · เปิดชุดแล้วเติมชื่อให้ครบก่อนยื่นด่าน"'):'')+'>'
       +'<span class="bn" style="background:'+pk2BoatCol(S.bid)+'">'+bn(S.bid)+'</span>'
       +'<span class="t"><b>'+e(S.name||'')+'</b><small>'+what+(S.by?(' · '+e(S.by)):'')+'</small></span>'
       +'<span class="v"><b>'+n+'</b><em class="amt'+(A.miss.length?' pt':'')+'" title="'+(A.miss.length?('ยังไม่ตั้งราคา: '+A.miss.map(function(c){ return e((TYM[c]||{}).s||c); }).join(', ')):'จำนวน × ราคา/ใบ จากตารางคำนวณ')+'">'+(A.amt||!A.miss.length?fmtB(A.amt):'ยังไม่ตั้งราคา')+(A.miss.length&&A.amt?' +':'')+'</em>'
-      +'<small class="'+(gone?'bad':(S.bought?'ok':'rd'))+'">'+(gone?('หาย '+gone):(S.bought?'ซื้อแล้ว':'พร้อมซื้อ'))+'</small></span></button>'; };
+      +'<small class="'+(gone?'bad':(wait?'wt':(S.bought?'ok':'rd')))+'">'+(gone?('หาย '+gone):(wait?('&#9888; รอชื่อ '+wait):(S.bought?'ซื้อแล้ว':'พร้อมซื้อ')))+'</small></span></button>'; };
   var order=[], byB={}; sets.forEach(function(S){ if(!byB[S.bid]){ byB[S.bid]=[]; order.push(S.bid); } byB[S.bid].push(S); });
   var rows=order.map(function(bid){ var G=byB[bid], h=G.map(setRow).join('');
     if(G.length>1){ var bt=0, bnn=0; G.forEach(function(S){ bt+=pkSetAmt(S).amt; bnn+=(S.people||[]).length; });
       h+='<div class="pk3-bsum"><span>รวม '+bn(bid)+' · '+G.length+' ชุด · '+bnn+' คน</span><b>'+fmtB(bt)+'</b></div>'; }
     return h; }).join('');
   var missK=Object.keys(missAll);
+  if(waitAll) rows+='<div class="pk3-wsum">&#9888; รายชื่อยังไม่ครบ · รอชื่อ '+waitAll+' คน ใน '+waitSets+' ชุด · เติมชื่อให้ครบก่อนยื่นด่าน</div>';   /* §pkSetWait */
   if(sets.length) rows+='<div class="pk3-gsum"><span>รวมทุกชุด · '+sets.length+' ชุด · '+grandN+' คน'+(missK.length?('<small>ยังไม่ตั้งราคา: '+missK.map(function(c){ return e((TYM[c]||{}).s||c); }).join(', ')+' · ตั้งได้ที่ตารางคำนวณ</small>'):'<small>ราคา/ใบ จากตารางคำนวณ</small>')+'</span><b>'+fmtB(grand)+'</b></div>';
   var card1='<div class="pc2-card pc2-pend pk3-sets"><div class="ch"><b>ชุดที่บันทึกแล้ว · '+sets.length+'</b><span>'+e(pc2D(date))+'</span></div>'
     +(rows||'<div class="pc2-mut">ยังไม่มีชุด · กดแถวเรือในตาราง ใส่จำนวน แล้วบันทึก</div>')
@@ -69176,6 +69182,8 @@ function pk3CSS(S){
   S+' .pk3-sets .pk3-set .v b{display:block;font-family:"DM Mono",monospace;font-size:15px;color:'+N+'}',
   S+' .pk3-sets .pk3-set .v small{font-size:10px;font-weight:700}',
   S+' .pk3-sets .pk3-set .v small.ok{color:#0B6B47} '+S+' .pk3-sets .pk3-set .v small.rd{color:#0C5E8E} '+S+' .pk3-sets .pk3-set .v small.bad{color:#A32D2D}',
+  S+' .pk3-sets .pk3-set .v small.wt{color:#fff;background:#C2410C;border-radius:6px;padding:0 6px;line-height:16px;display:inline-block;margin-top:1px} '+S+' .pk3-sets .pk3-set.wt{box-shadow:inset 3px 0 0 #C2410C;background:#FFF8F1}',   /* §pkSetWait */
+  S+' .pk3-sets .pk3-wsum{padding:8px 14px;font-size:11.5px;font-weight:700;color:#9A3412;background:#FFF1E6;border-top:1px solid #F7D3B5}',
   S+' .pk3-sets .pk3-set .v em.amt{display:block;font-style:normal;font-family:"DM Mono",monospace;font-size:11.5px;font-weight:700;color:#0C5E8E;white-space:nowrap}',   /* §pkSets9 */
   S+' .pk3-sets .pk3-set .v em.amt.pt{color:#B45309}',
   S+' .pk3-sets .pk3-bsum{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 14px 7px;font-size:11px;font-weight:700;color:'+M+';background:#FAFBFD;border-bottom:1px solid #EEF0F4}',
