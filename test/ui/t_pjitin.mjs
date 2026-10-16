@@ -7,7 +7,7 @@
 //   3 pjItinColor: สีถูกเก็บ · ค่าไม่ใช่ hex ไม่ถูกเก็บ · '' = ไม่แต้มสี
 //   4 พิมพ์ ≤5 ลำ: ป้ายโปรแกรมทุกแถวกว้างเท่ากัน มีสีเส้นทาง · แถวไม่มีพื้นสี · เส้นทางเกาะเป็นชิป 3 อันสีตามที่แต้ม
 //     ลำที่ไม่กรอกโชว์เกาะของเส้นทาง (dflt)
-//   5 พิมพ์ ≥6 ลำ: สองตาราง · ป้ายกว้างเท่ากันในตาราง · เกาะตั้งต้นซ่อน · ที่กรอกเองยังขึ้น · 6 ไม่มี error
+//   5 พิมพ์ ≥6 ลำ: สองตาราง · ป้ายกว้างเท่ากันในตาราง · ชื่อโปรแกรมบรรทัดเดียว (§pjItin1L · owner "ชื่อโปรแกรมควรอยู่บรรทัดเดียว") · เกาะตั้งต้นซ่อน · ที่กรอกเองยังขึ้น · 6 ไม่มี error
 import { open } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -83,9 +83,10 @@ const r5 = await inSheet(h5, () => { const T = [...document.querySelectorAll('.b
   const w = T.map(t => [...t.querySelectorAll('td.c-p .pnm')].map(p => Math.round(p.getBoundingClientRect().width)));
   const dflt = [...document.querySelectorAll('.itn.dflt')].filter(e => getComputedStyle(e).display !== 'none').length;
   const own = [...document.querySelectorAll('td.c-i .itn:not(.dflt)')].filter(e => getComputedStyle(e).display !== 'none').length;
-  return { nT: T.length, w, dflt, own }; });
+  const multi = [...document.querySelectorAll('.brd2 td.c-p .pnm')].filter(p => p.getBoundingClientRect().height > parseFloat(getComputedStyle(p).fontSize) * 1.9).map(p => p.textContent);
+  return { nT: T.length, w, dflt, own, multi }; });
 const same5 = r5.w.every(a => a.every(x => Math.abs(x - a[0]) <= 1));
-if (r5.nT === 2 && same5 && r5.dflt === 0 && r5.own === 1) ok('5 ≥6 ลำ: สองตาราง · ป้ายกว้างเท่ากันในแต่ละตาราง · เกาะตั้งต้นซ่อน · ที่กรอกเองยังขึ้น');
+if (r5.nT === 2 && same5 && r5.dflt === 0 && r5.own === 1 && !r5.multi.length) ok('5 ≥6 ลำ: สองตาราง · ป้ายกว้างเท่ากันในแต่ละตาราง · ชื่อโปรแกรมบรรทัดเดียว · เกาะตั้งต้นซ่อน · ที่กรอกเองยังขึ้น');
 else fail('5 ' + JSON.stringify(r5));
 
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));

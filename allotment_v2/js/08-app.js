@@ -76509,16 +76509,18 @@ function pjPrint(){
    +'.brd .c-x .fl span{display:block;height:100%;background:var(--rc)}'
    +'.brd .c-x.over .fl span{background:#A32D2D}'
    /* ≥6 ลำ สองตารางข้างกัน · ชื่อโปรแกรมตกบรรทัดได้ (คอลัมน์ 156px) แถวจะได้ไม่สูงกว่าเดิม (§pjFit) */
-   +'.brd2 .brd td.c-p{white-space:normal}'
-   +'.brd2 .brd{table-layout:fixed}'
-   +'.brd2 .brd td.c-p{width:auto}'
-   +'.brd2 .brd td.c-p .pnm{font-size:'+(fs-2.5)+'px;line-height:1.1;padding:2px 8px}'
+   /* §pjItin1L (2026-10-17) · owner "ชื่อโปรแกรมควรอยู่บรรทัดเดียว" (Tub Lamu 7 ลำ · ชื่อตกสองบรรทัดในคอลัมน์ 156px)
+      สองตารางก็ใช้กติกาเดียวกับตารางเดียว · คอลัมน์โปรแกรมกว้างเท่าชื่อที่ยาวที่สุด ไม่ตัดบรรทัด
+      ป้ายทุกแถวยังกว้างเท่ากัน · ที่ที่เหลือให้คอลัมน์เส้นทางเกาะ */
+   +'.brd2 .brd td.c-p{white-space:nowrap;width:1%}'
+   +'.brd2 .brd td.c-p .pnm{font-size:'+(fs-2.5)+'px;line-height:1.2;padding:2px 8px}'
+   +'.brd2 .brd th{white-space:nowrap}'
    /* สองตารางที่ไม่ได้กรอกเส้นทางเกาะเอง ไม่ต้องโชว์ "เกาะ" ตั้งต้นของเส้นทาง · ที่แคบ ใส่แล้วแถวสูงขึ้นเปล่า ๆ */
    +'.brd2 .brd td.c-i .itn.dflt{display:none}'
    +'.brd2 .brd td.c-i .itn i{white-space:normal;overflow-wrap:anywhere}'
    +'.brd th.h-i{white-space:nowrap;overflow:hidden}'
    +'.brd2 .brd td.c-i .itn i{font-size:'+(fs-4.5)+'px;padding:0 4px}'
-   +'@media (max-width:1180px){.brd2 .brd{table-layout:auto}.brd2 .brd td.c-p{white-space:nowrap;width:1%}.brd2 .brd td.c-i .itn.dflt{display:flex}}'
+   +'@media (max-width:1180px){.brd2 .brd td.c-i .itn.dflt{display:flex}}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
    +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52;white-space:nowrap}'   /* §pjOneLine */
    /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw = ความกว้างช่อง · .pn1 = ชื่อ ขนาดตัวอักษรสคริปต์ใส่ให้ */
@@ -76973,7 +76975,7 @@ function pjPrint(){
     var tbl=function(rs){
       return '<table class="brd">'
       +(two
-        ? '<colgroup><col style="width:54px"><col style="width:118px"><col class="cg-p" style="width:156px"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
+        ? '<colgroup><col style="width:54px"><col style="width:118px"><col class="cg-p"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
         : '<colgroup><col style="width:78px"><col style="width:158px"><col class="cg-p"><col><col style="width:82px"><col style="width:118px"></colgroup>')
       +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th class="h-i">Itinerary</th><th>Pax</th><th>Band</th></tr></thead>'
       +'<tbody>'+rs.map(function(r){ return r.html; }).join('')+'</tbody></table>'; };
