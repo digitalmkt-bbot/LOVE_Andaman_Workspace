@@ -11,7 +11,7 @@
 //   5 เงินคืน 17 ต.ค.: ชื่อในข้อความ → "↩ รถตู้ชุดแรก · ตรง" · ไม่ระบุ 4,000 → รายการที่ 2 ตรง · "15/10" → วัน 15 ต.ค. ตรง (ก่อนเริ่มใช้ยังจับเป็นวัน)
 //      การ์ดรายการตั้งเบิก: ทั้งสองรายการ "คืนครบ"
 //   6 โหลดใหม่ (สร้าง view จากตาราง) แล้วชิป/รายการยังอยู่ · เซฟซ้ำไม่มีอะไรเปลี่ยน
-//   7 พิมพ์ใบตั้งเบิก (โครงเดียวกับใบรับรองแทนใบเสร็จฯ): ชื่อรายการ · เฉพาะแถวของใบนี้ · ยอดเป็นตัวอักษร · สถานะคืนแล้วครบ · ลายเซ็น 3 ช่อง
+//   7 พิมพ์ใบตั้งเบิก (โครงเดียวกับใบรับรองแทนใบเสร็จฯ · ไม่มีคอลัมน์จ่ายให้): ชื่อรายการ · เฉพาะแถวของใบนี้ · ยอดเป็นตัวอักษร · สถานะคืนแล้วครบ · ลายเซ็น 3 ช่อง
 //   8 เอาแถว a ออกจากรายการ → รายการแรกเหลือ 2,000 · ลบรายการที่ 2 → c ไม่มีชิป ติ๊กตั้งเบิกใหม่ได้ · 9 ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -104,13 +104,13 @@ const r7 = await page.evaluate(id => { let html = ''; const o = window.open; win
   const rows = [...d.querySelectorAll('.cf-tb tbody tr')].filter(t => t.querySelector('td.t').textContent.trim());
   return { h1: (d.querySelector('.pcp-hd .h1') || {}).textContent, ttl: (d.querySelector('.cf-t') || {}).textContent, name: (d.querySelector('.cf-co .fill') || {}).textContent,
     n: rows.length, txt: rows.map(t => t.querySelector('td.t').textContent), sum: (d.querySelector('.cf-tb tr.sum') || {}).textContent,
-    ft: (d.querySelector('.cf-ft') || {}).textContent, sg: [...d.querySelectorAll('.cf-sg > div')].map(e => e.textContent) }; }, c1);
+    ft: (d.querySelector('.cf-ft') || {}).textContent, th: [...d.querySelectorAll('.cf-tb thead th')].map(e => e.textContent).join('|'), sg: [...d.querySelectorAll('.cf-sg > div')].map(e => e.textContent) }; }, c1);
 if (r7.h1 === 'เงินสดย่อย · ใบตั้งเบิก' && r7.ttl === 'ใบตั้งเบิกเงินสดย่อย' && r7.name === 'รถตู้ชุดแรก' && r7.n === 2 && r7.txt.join('|') === 'ค่ารถตู้ นายA|ค่ารถตู้ นายB'
-  && /สามพันบาทถ้วน/.test(r7.sum) && /3,000/.test(r7.sum) && /คืนแล้ว 3,000 บาท .* · ครบ/.test(r7.ft) && r7.sg.length === 3 && /\(ผู้ขอเบิก\)/.test(r7.sg[0]))
-  ok('7 พิมพ์ใบตั้งเบิก: แบบใบรับรองฯ · ชื่อ "รถตู้ชุดแรก" · เฉพาะ 2 แถวของใบนี้ · สามพันบาทถ้วน · คืนแล้วครบ · ลายเซ็น 3 ช่อง');
+  && /สามพันบาทถ้วน/.test(r7.sum) && /3,000/.test(r7.sum) && /คืนแล้ว 3,000 บาท .* · ครบ/.test(r7.ft) && r7.th === 'วัน เดือน ปี|รายละเอียดรายจ่าย|จำนวนเงิน|หมายเหตุ' && r7.sg.length === 3 && /\(ผู้ขอเบิก\)/.test(r7.sg[0]))
+  ok('7 พิมพ์ใบตั้งเบิก: แบบใบรับรองฯ · ไม่มีคอลัมน์จ่ายให้ · ชื่อ "รถตู้ชุดแรก" · เฉพาะ 2 แถวของใบนี้ · สามพันบาทถ้วน · คืนแล้วครบ · ลายเซ็น 3 ช่อง');
 else fail('7 ' + JSON.stringify(r7));
-const r7b = await page.evaluate(() => { const x = { txt: 'ค่าตั๋วอุทยานสิมิลัน 8/5/2026', amt: 1 }; const g = pcGrpOf(x, 'out'); return { g: g && g.k, p: pcPayee(x), p2: pcPayee({ txt: 'ซื้อน้ำแข็ง' }) }; });
-if (r7b.g === 'park_sm' && r7b.p === 'อุทยานแห่งชาติหมู่เกาะสิมิลัน' && r7b.p2 === '') ok('7b "ค่าตั๋วอุทยานสิมิลัน" = กลุ่มอุทยานสิมิลัน · จ่ายให้ อุทยานแห่งชาติหมู่เกาะสิมิลัน');
+const r7b = await page.evaluate(() => { const g = pcGrpOf({ txt: 'ค่าตั๋วอุทยานสิมิลัน 8/5/2026', amt: 1 }, 'out'); return { g: g && g.k }; });
+if (r7b.g === 'park_sm') ok('7b "ค่าตั๋วอุทยานสิมิลัน" = กลุ่มอุทยานสิมิลัน');
 else fail('7b ' + JSON.stringify(r7b));
 
 // 8

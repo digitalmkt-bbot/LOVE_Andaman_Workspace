@@ -80065,17 +80065,9 @@ function pcPrintClaim(cid){   /* §pcClm · cid = พิมพ์รายกา
    owner "เอาแค่รายการ ที่เป็นรายการตั้งเบิกของรายการนั้น ๆ" · ในใบมีแต่แถวของรายการตั้งเบิกนี้
    owner ส่งใบรับรองแทนใบเสร็จฯ ของหน้านี้มา "ออกแบบให้คล้าย ๆ ใบนี้" · ใช้โครงเดียวกับ pcPrintCert
    หัวเรื่องกลาง · ชื่อรายการตั้งเบิกบนเส้นประ · ตาราง วัน เดือน ปี · รายละเอียดรายจ่าย · จ่ายให้ · จำนวนเงิน · หมายเหตุ
+   §pcClmNoPayee owner "เอาแค่รายละเอียดจ่ายพอ ไม่ต้องเขียนว่าจ่ายให้ใคร" · ไม่มีคอลัมน์จ่ายให้
    แถวรวมมีตัวอักษรบาท · ช่วงวันที่ · ผู้บันทึก · สถานะเงินคืน · ลายเซ็น ผู้ขอเบิก / ผู้ตรวจสอบ / ผู้อนุมัติ
    */
-var PC_PAYEE={ park_sm:'อุทยานแห่งชาติหมู่เกาะสิมิลัน', park_sr:'อุทยานแห่งชาติหมู่เกาะสุรินทร์',
-  park_pp:'อุทยานแห่งชาติหาดนพรัตน์ธารา-หมู่เกาะพีพี', park_pn:'อุทยานแห่งชาติอ่าวพังงา' };
-/* ผู้รับเงิน · กลุ่มอุทยานจาก §pcGrp · หรือข้อความมีคำว่าอุทยาน + ชื่ออุทยาน (เช่น "ค่าตั๋วอุทยานสิมิลัน") */
-function pcPayee(x){
-  var g=pcGrpOf(x,'out'); if(g && PC_PAYEE[g.k]) return PC_PAYEE[g.k];
-  var t=String((x&&x.txt)||''); if(!/อุทยาน/.test(t)) return '';
-  for(var i=0;i<PC_GRP_PARK.length;i++){ if(PC_GRP_PARK[i].re.test(t)) return PC_PAYEE[PC_GRP_PARK[i].k]||''; }
-  return '';
-}
 function pcDmy(ds,y2){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds||'')); if(!m) return String(ds||'');
   return (+m[3])+'/'+(+m[2])+'/'+(y2?m[1].slice(2):m[1]); }
 function pcPrintClaimForm(C){
@@ -80089,8 +80081,8 @@ function pcPrintClaimForm(C){
   lines.forEach(function(r){ var x=r.x, a=+x.amt||0, d=r._ds||ds; tot+=a;
     if(!d0 || d<d0) d0=d; if(!d1 || d>d1) d1=d;
     body+='<tr><td class="d">'+pcE(pcThDate(d))+'</td><td class="t">'+pcE(x.txt||CAT[x.src]||'—')+'</td>'
-      +'<td class="p">'+pcE(pcPayee(x))+'</td><td class="m">'+pcN(a)+'</td><td class="n"></td></tr>'; });
-  for(var i=lines.length;i<10;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="p"></td><td class="m"></td><td class="n"></td></tr>';
+      +'<td class="m">'+pcN(a)+'</td><td class="n"></td></tr>'; });
+  for(var i=lines.length;i<10;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="m"></td><td class="n"></td></tr>';
   var M=pcRefundMatch(pier), uk='c:'+cid, left=(M.urem[uk]!=null)?M.urem[uk]:tot, back=tot-left, by=M.uby[uk]||[];
   var st=back>0?('คืนแล้ว '+pcN(back)+' บาท ('+by.map(function(b){ return 'รับวันที่ '+pcThDate(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+')'+(left>0?(' · ค้างอีก '+pcN(left)+' บาท'):' · ครบ'))
     :'ยังไม่ได้รับคืน';
@@ -80103,7 +80095,6 @@ function pcPrintClaimForm(C){
     +'#sheet .cf-tb th,#sheet .cf-tb td{border:1px solid #16265C;padding:5px 8px}'
     +'#sheet .cf-tb th{background:#EEF1F6;font-size:11px;font-weight:800;color:#16265C;text-align:center}'
     +'#sheet .cf-tb td.d{width:92px;text-align:center;white-space:nowrap}'
-    +'#sheet .cf-tb td.p{width:150px;font-size:11px;color:#3E4A6B}'
     +'#sheet .cf-tb td.m{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
     +'#sheet .cf-tb td.n{width:90px}'
     +'#sheet .cf-tb tr.sum td{background:#EEF1F6;font-weight:800}'
@@ -80117,8 +80108,8 @@ function pcPrintClaimForm(C){
   var sheet=pcPrintHead('เงินสดย่อย · ใบตั้งเบิก',lines.length+' รายการจ่ายที่บันทึกเป็นรายการตั้งเบิกนี้ในสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
     +'<div class="cf-t">ใบตั้งเบิกเงินสดย่อย</div>'
     +'<div class="cf-co"><span>รายการตั้งเบิก</span><span class="fill">'+pcE(C.name||'')+'</span><span>('+pcE(pcPierName())+')</span></div>'
-    +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th><th>จ่ายให้</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
-    +'<tfoot><tr class="sum"><td class="w" colspan="3">'+pcE(pcBahtText(tot))+'</td><td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
+    +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
+    +'<tfoot><tr class="sum"><td class="w" colspan="2">'+pcE(pcBahtText(tot))+'</td><td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
     +'<div class="cf-ft">'
       +(co?('ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น เพื่อใช้ในงานของ '+pcE(co)+'<br>'):'ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น<br>')
       +'รายจ่ายตั้งแต่วันที่ <span class="u s">'+pcE(pcThDate(d0||ds))+'</span> ถึงวันที่ <span class="u s">'+pcE(pcThDate(d1||ds))+'</span>'
