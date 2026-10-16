@@ -64519,21 +64519,66 @@ function pjDepOf(date, bid, fallback){
 function pjItinNorm(v){
   return String(v||'').replace(/\s*(?:-+>|=+>|➜|➔|→|>)\s*/g,' \u2192 ').replace(/\s+/g,' ').trim();
 }
-function pjItinOf(date, bid, rt){
+/* ══ §pjItinCarry (2026-10-17) · owner "รายละเอียดที่เขียน พร้อมกับกำหนดสี ขอให้วันถัดไปเหมือนกับวันนี้ได้ไหม
+   User จะได้ไม่พิมพ์กับเลือกสีบ่อย"
+   แบบเดียวกับสีสายรัด (§pjWbCarry) · วันที่ยังไม่ได้แตะ ยืมของวันก่อนหน้าที่ใกล้สุดของ "ลำเดียวกัน · โปรแกรมเดียวกัน"
+   ย้อนได้ไกลสุด PJ_ITIN_BACK วัน · ทั้งข้อความและสีมาจากวันเดียวกัน
+   ⚠ ต้องโปรแกรมเดียวกัน · เส้นทางเกาะของสิมิลันใช้กับสุรินทร์ไม่ได้
+      วันที่ลำนี้วิ่งโปรแกรมอื่น (หรือไม่ได้ออก) ข้ามไป ไม่หยุด · กลับมาวิ่งโปรแกรมเดิมก็ได้ของเดิมคืน
+   ⚠ ยืมเฉย ๆ ไม่เขียนลงใบวันใหม่ · เหตุผลเดียวกับ §pjWbCarry (ใบที่ถูกเขียน pjIsIdle จะมองไม่เห็นว่าเป็นใบเปล่า)
+   ⚠ itinx=1 = "วันนี้ตัดสินเองแล้ว" · ตั้งทุกครั้งที่แก้ข้อความหรือสี
+      ล้างข้อความ / ไม่แต้มสี จึงแปลว่าวันนี้ไม่เอาจริง ๆ ไม่ใช่ไปยืมเมื่อวานกลับมา · และวันถัดไปก็ได้ค่าว่างนั้นต่อ
+   ⚠ แก้อย่างเดียวในวันที่กำลังยืมอยู่ · อีกอย่างที่ยืมมาถูกเขียนลงวันนี้ด้วย
+      ไม่งั้นแต้มสีแล้วข้อความหาย (หรือแก้ข้อความแล้วสีหาย) */
+var PJ_ITIN_BACK=14;
+function pjItinOwnDay(o){ return !!(o && (o.itinx || String(o.itin||'').trim() || String(o.itinc||'').trim())); }
+function pjItinRid(date, bid){
+  try{ var d=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date][bid]:null; return (d&&d.route)?String(d.route):''; }catch(_){ return ''; }
+}
+function pjItinSrc(date, bid, rid){
   var o=null; try{ o=(typeof pjRaw==='function')?pjRaw(date,bid):null; }catch(_){}
+  if(pjItinOwnDay(o)) return {o:o, from:''};
+  rid=String(rid||'')||pjItinRid(date,bid);
+  if(!rid) return {o:null, from:''};
+  try{
+    var d=new Date(date+'T12:00:00');
+    for(var i=0;i<PJ_ITIN_BACK;i++){
+      d.setDate(d.getDate()-1);
+      var ds=poYMD(d); if(pjItinRid(ds,bid)!==rid) continue;
+      var q=(typeof pjRaw==='function')?pjRaw(ds,bid):null;
+      if(pjItinOwnDay(q)) return {o:q, from:ds};
+    }
+  }catch(_){}
+  return {o:null, from:''};
+}
+function pjItinOf(date, bid, rt){
+  var S=pjItinSrc(date, bid, rt&&rt.id), o=S.o;
   var v=o&&String(o.itin||'').trim();
   var c=o&&String(o.itinc||'');
-  return { t:(v||String((rt&&rt.islands)||'').trim()), own:!!v, c:(/^#[0-9a-fA-F]{6}$/.test(c||'')?c:'') };
+  return { t:(v||String((rt&&rt.islands)||'').trim()), own:!!v, c:(/^#[0-9a-fA-F]{6}$/.test(c||'')?c:''), from:(S.o?S.from:'') };
+}
+/* โปรแกรมของลำนี้วันนี้ · TRIPS ก่อน · ลำที่มีแต่ booking ผูกไว้ (ไม่มีแถวใน Boat Operation) หาจากรายการเรือของหน้า */
+function pjItinRidNow(bid){
+  var r=pjItinRid(_poDate,bid); if(r) return r;
+  try{ (pjAllBoats(_poDate,_poPier)||[]).forEach(function(x){ if(!r && x && x.bid===bid && x.rid) r=String(x.rid); }); }catch(_){}
+  return r;
+}
+function pjItinPatch(bid, patch){
+  var S=pjItinSrc(_poDate, bid, pjItinRidNow(bid));
+  var out=(S.o && S.from)?{itin:String(S.o.itin||''), itinc:String(S.o.itinc||'')}:{};
+  Object.keys(patch).forEach(function(k){ out[k]=patch[k]; });
+  out.itinx=1;
+  pjSet(_poDate, bid, out);
 }
 function pjItinColor(bid, hex){
   if(!poGuard()) return;
   var c=String(hex||''); if(c && !/^#[0-9a-fA-F]{6}$/.test(c)) return;
-  pjSet(_poDate, bid, {itinc:c});
+  pjItinPatch(bid, {itinc:c});
   renderPierJob();
 }
 function pjItinSet(bid, val){
   if(!poGuard()) return;
-  pjSet(_poDate, bid, {itin:pjItinNorm(val)});
+  pjItinPatch(bid, {itin:pjItinNorm(val)});
   renderPierJob();
 }
 function pjDepSet(bid, val){
@@ -73915,11 +73960,11 @@ function pjOf(d,b){
   /* §pjLbScope · lb (ชื่อช่องที่ตั้งเองของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย
      ด้วยเหตุผลเดียวกับ lock/mv/wc — ตกหล่นเมื่อไหร่ ชื่อที่ตั้งไว้หลุดทุกครั้งที่บันทึกช่องอื่น */
   /* §pjDep · dep = เวลาออกเรือของลำนี้วันนี้ที่คนแก้เอง ('' = ตามโปรแกรม) · อยู่ในรายการนี้ด้วยเหตุผลเดียวกับ lock/mv */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', itin:'', itinc:'', _std:true};
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', itin:'', itinc:'', itinx:0, _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
           lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''),
-          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), itin:String(o.itin||''), itinc:String(o.itinc||''), _std:false};   /* §pjItin */
+          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), itin:String(o.itin||''), itinc:String(o.itinc||''), itinx:(o.itinx?1:0), _std:false};   /* §pjItin · §pjItinCarry itinx */
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -75656,15 +75701,16 @@ function pjCard(B, pier, ro){
                  :poE(B.boat.name||bid)))+'</div>'
      +'<div class="pr">'+(rt.id?(function(){ var I=pjItinOf(_poDate,bid,rt);   /* §pjItin · แก้ได้ตรงนี้ */
          if(lro) return poE(I.t);
-         return '<input class="pj-itin'+(I.own?' own':'')+'" value="'+poE(I.own?I.t:'')+'" placeholder="'+poE(I.t||'เส้นทางเกาะวันนี้ เช่น เกาะ 4 → เกาะ 8')+'"'
-           +' title="เส้นทางเกาะของลำนี้วันนี้ · ขึ้นใน Section A ของใบงาน · พิมพ์ -> ได้ · ล้างว่าง = ตามเส้นทาง" onchange="pjItinSet(\''+poE(bid)+'\',this.value)">'
+         var _fr=I.from?(' · ติดมาจากใบวันที่ '+I.from.split('-').reverse().slice(0,2).join('/')+' (แก้ทับได้)'):'';   /* §pjItinCarry */
+         return '<input class="pj-itin'+(I.own?' own':'')+(I.from?' inh':'')+'" value="'+poE(I.own?I.t:'')+'" placeholder="'+poE(I.t||'เส้นทางเกาะวันนี้ เช่น เกาะ 4 → เกาะ 8')+'"'
+           +' title="'+poE('เส้นทางเกาะของลำนี้ · ขึ้นใน Section A ของใบงาน · ใช้ต่อวันถัดไปของลำนี้ (โปรแกรมเดียวกัน) · พิมพ์ -> ได้ · ล้างว่าง = ตามเส้นทาง'+_fr)+'" onchange="pjItinSet(\''+poE(bid)+'\',this.value)">'
            +(function(){ var iid='pjitc-'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
              return '<button type="button" class="pj-itc'+(I.c?' on':'')+'" style="'+(I.c?('background:'+I.c):'')+'" title="แต้มสีเส้นทางเกาะ (ขึ้นใน Section A)" onclick="pjPopToggle(\''+iid+'\')"></button>'
-               +'<div class="pj-pop pj-itp" id="'+iid+'"><div class="ph">สีของเส้นทางเกาะ · ลำนี้วันนี้</div><div class="pj-sws">'
+               +'<div class="pj-pop pj-itp" id="'+iid+'"><div class="ph">สีของเส้นทางเกาะ · ลำนี้</div><div class="pj-sws">'
                +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c.toLowerCase()===I.c.toLowerCase()?' on':'')+'" style="background:'+c+'" onclick="pjItinColor(\''+poE(bid)+'\',\''+c+'\')"></div>'; }).join('')
                +'</div><label class="pj-cus">เลือกสีเอง<input type="color" value="'+poE(I.c||'#185FA5')+'" onchange="pjItinColor(\''+poE(bid)+'\',this.value)" onclick="event.stopPropagation()"></label>'
                +(I.c?('<button class="pj-rst" onclick="pjItinColor(\''+poE(bid)+'\',\'\')">ไม่แต้มสี</button>'):'')
-               +'<div class="pf">ขึ้นเป็นสีของเส้นทางเกาะใน Section A · เฉพาะลำนี้วันนี้</div></div>'; })(); })()
+               +'<div class="pf">ขึ้นเป็นสีของเส้นทางเกาะใน Section A · ใช้ต่อวันถัดไปของลำนี้ (โปรแกรมเดียวกัน) จนกว่าจะแก้</div></div>'; })(); })()
         :(B._away?poE(B._away.route.name||'')
                  :poE([SM.t, ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 '))))+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="'+(rt.id?'แต้มสีโปรแกรมนี้':'แต้มสีสถานะนี้')+'">&#9998;</button>')
@@ -75963,6 +76009,12 @@ function renderPierJob(pier){
   var DW=pjDateWords(_poDate);
   /* §pjHd2 · หัวหน้ากับการ์ดวันที่รวมเป็นแถบเดียว · ข้อมูลเท่าเดิม (ชื่อท่า · คำอธิบาย · วันที่ไทย/อังกฤษ · 4 แท็บ · เลือกวัน)
      ใช้ class ใหม่ทั้งชุด · pj-nh / pj-dcard เดิมยังอยู่ใน pjCSS() ให้หน้าอื่นที่ใช้ร่วมกัน */
+  /* §pjKeepX (2026-10-17) · owner "พอเลื่อนไปทางขวา เลือกสีแล้วเด้ง"
+     แถบการ์ดเลื่อนแนวนอน · ทุกปุ่มบนการ์ดบันทึกแล้ววาดใหม่ทั้งหน้า แถบจึงเด้งกลับซ้ายสุด
+     §pjLock แก้ไว้เฉพาะปุ่มล็อก (pjKeep) · ที่นี่จำให้ทุกปุ่ม · เฉพาะวาดซ้ำท่าเดิมวันเดิม (เปลี่ยนวัน/ท่า เริ่มซ้ายสุดตามเดิม) */
+  var _kAt=_poPier+'|'+_poDate, _kSame=(host.__pjAt===_kAt), _kS=host.querySelector('.pj-strip');
+  var _kX=(_kSame&&_kS)?_kS.scrollLeft:0, _kY=window.scrollY;
+  host.__pjAt=_kAt;
   host.innerHTML='<style id="pj-style">'+pjCSS()+(typeof plCSS==='function'?plCSS():'')+'</style>'
     +'<div class="pj-hd2">'
       /* §pjHd3 · ป้ายท่าใช้สีเดียวกับหัวใบงานที่พิมพ์ (PJ_SKIN) · VP navy · TL ฟ้า */
@@ -76044,6 +76096,10 @@ function renderPierJob(pier){
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
   pjAlignSecs();   /* §pjAlign */
+  if(_kSame){                                         /* §pjKeepX */
+    try{ var _kS2=host.querySelector('.pj-strip'); if(_kS2 && _kX) _kS2.scrollLeft=_kX; }catch(_){}
+    try{ if(Math.abs((window.scrollY||0)-_kY)>1) window.scrollTo(window.scrollX||0,_kY); }catch(_){}
+  }
 }
 /* §pjAlign · การ์ดวางเรียงกันเป็นแถบ · หัวข้อของแต่ละใบต้องอยู่ระดับเดียวกัน
    ถึงจำนวนแถวข้างในจะไม่เท่ากัน · ไม่งั้นสายตาต้องไล่หาหัวข้อใหม่ทุกใบ
