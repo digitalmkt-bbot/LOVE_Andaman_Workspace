@@ -64407,6 +64407,33 @@ function pjDepOf(date, bid, fallback){
        if(v && /^\d{1,2}:\d{2}$/.test(v)) return v.length===4?('0'+v):v; }catch(_){}
   return fallback;
 }
+/* ══ §pjItin (2026-10-16) · owner "อยากให้ User เพิ่มรายละเอียดของเส้นทางนั้น ๆ ใน Section A เช่น เกาะ 4 → เกาะ 8"
+   เส้นทางเกาะของลำนี้วันนี้ · เก็บในใบงาน (pier_job · ค่าเป็น JSON ทั้งก้อน จึงไม่ต้องแตะฐานข้อมูล)
+   ไม่ได้ใส่ = ใช้ "เกาะ" ของเส้นทาง (route.islands) แบบเดิม · พิมพ์ -> หรือ > ได้ เปลี่ยนเป็น → ให้
+   แก้ที่แถบชื่อโปรแกรมบนการ์ดเรือ · ไปโชว์ใน Section A ของใบงานที่พิมพ์
+   owner รอบสอง "สีเอาเฉพาะแค่ชื่อโปรแกรม ให้เท่ากันทั้งหมดก็พอ · ถัดไปเป็นรายละเอียดที่เราเพิ่ม แต่อยากให้แต้มสีได้ด้วย"
+   → สีเส้นทางอยู่ที่ป้ายชื่อโปรแกรมเท่านั้น (กว้างเท่ากันทุกแถว) · แถวไม่มีพื้นสี
+   → เส้นทางเกาะแต้มสีเองได้ (itinc · ต่อเรือ ต่อวัน) · ไม่แต้ม = เทาเรียบ */
+function pjItinNorm(v){
+  return String(v||'').replace(/\s*(?:-+>|=+>|➜|➔|→|>)\s*/g,' \u2192 ').replace(/\s+/g,' ').trim();
+}
+function pjItinOf(date, bid, rt){
+  var o=null; try{ o=(typeof pjRaw==='function')?pjRaw(date,bid):null; }catch(_){}
+  var v=o&&String(o.itin||'').trim();
+  var c=o&&String(o.itinc||'');
+  return { t:(v||String((rt&&rt.islands)||'').trim()), own:!!v, c:(/^#[0-9a-fA-F]{6}$/.test(c||'')?c:'') };
+}
+function pjItinColor(bid, hex){
+  if(!poGuard()) return;
+  var c=String(hex||''); if(c && !/^#[0-9a-fA-F]{6}$/.test(c)) return;
+  pjSet(_poDate, bid, {itinc:c});
+  renderPierJob();
+}
+function pjItinSet(bid, val){
+  if(!poGuard()) return;
+  pjSet(_poDate, bid, {itin:pjItinNorm(val)});
+  renderPierJob();
+}
 function pjDepSet(bid, val){
   if(!poGuard()) return;
   var v=String(val||'').trim();
@@ -73786,11 +73813,11 @@ function pjOf(d,b){
   /* §pjLbScope · lb (ชื่อช่องที่ตั้งเองของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย
      ด้วยเหตุผลเดียวกับ lock/mv/wc — ตกหล่นเมื่อไหร่ ชื่อที่ตั้งไว้หลุดทุกครั้งที่บันทึกช่องอื่น */
   /* §pjDep · dep = เวลาออกเรือของลำนี้วันนี้ที่คนแก้เอง ('' = ตามโปรแกรม) · อยู่ในรายการนี้ด้วยเหตุผลเดียวกับ lock/mv */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', _std:true};
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', itin:'', itinc:'', _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
           lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''),
-          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), _std:false};
+          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), itin:String(o.itin||''), itinc:String(o.itinc||''), _std:false};   /* §pjItin */
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -74443,6 +74470,14 @@ function pjCSS(){
   +H+' .bc .pg{height:58px;display:flex;flex-direction:column;justify-content:center}'
   +H+' .bc .pg .pn{font-size:15px;font-weight:800;line-height:1.2;padding-right:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .bc .pg .pr{font-size:11.5px;font-weight:500;opacity:.93;margin-top:3px}'
+  /* §pjItin · ช่องเส้นทางเกาะบนแถบโปรแกรม · ดูเหมือนตัวหนังสือเดิม แตะแล้วเป็นช่องกรอก */
+  +H+' .bc .pg .pj-itin{width:calc(100% - 60px);font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dashed rgba(255,255,255,.45);padding:0 0 1px;outline:none}'
+  +H+' .bc .pg .pj-itin::placeholder{color:inherit;opacity:.9}'
+  +H+' .bc .pg .pj-itin.own{font-weight:700}'
+  +H+' .bc .pg .pj-itin:focus{background:rgba(255,255,255,.18);border-bottom-style:solid;border-radius:4px 4px 0 0;padding:0 4px 1px}'
+  +H+' .bc .pg .pj-itc{width:16px;height:16px;border-radius:8px;border:1.5px dashed rgba(255,255,255,.75);background:transparent;margin-left:8px;vertical-align:-3px;cursor:pointer;padding:0}'
+  +H+' .bc .pg .pj-itc.on{border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}'
+  +H+' .pj-pop.pj-itp{top:56px;right:auto;left:10px}'
   +H+' .pj-pen{position:absolute;top:9px;right:11px;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.16);color:#fff;font-size:12px;cursor:pointer}'
   +H+' .pj-pen:hover{background:rgba(255,255,255,.3)}'
   +H+' .pj-pop{position:absolute;top:42px;right:10px;z-index:30;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.18);padding:12px;width:236px;display:none}'
@@ -75517,7 +75552,17 @@ function pjCard(B, pier, ro){
      +'<div class="pn">'+(rt.id?poE(rt.name||B.rid)
         :(B._away?('วันนี้ไปวิ่งที่ '+poE(((PO_PIERS.filter(function(x){ return x.k===(B._away.route.pier||''); })[0])||{}).n||B._away.route.pier||'ท่าอื่น'))
                  :poE(B.boat.name||bid)))+'</div>'
-     +'<div class="pr">'+(rt.id?poE(rt.islands||'')
+     +'<div class="pr">'+(rt.id?(function(){ var I=pjItinOf(_poDate,bid,rt);   /* §pjItin · แก้ได้ตรงนี้ */
+         if(lro) return poE(I.t);
+         return '<input class="pj-itin'+(I.own?' own':'')+'" value="'+poE(I.own?I.t:'')+'" placeholder="'+poE(I.t||'เส้นทางเกาะวันนี้ เช่น เกาะ 4 → เกาะ 8')+'"'
+           +' title="เส้นทางเกาะของลำนี้วันนี้ · ขึ้นใน Section A ของใบงาน · พิมพ์ -> ได้ · ล้างว่าง = ตามเส้นทาง" onchange="pjItinSet(\''+poE(bid)+'\',this.value)">'
+           +(function(){ var iid='pjitc-'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+             return '<button type="button" class="pj-itc'+(I.c?' on':'')+'" style="'+(I.c?('background:'+I.c):'')+'" title="แต้มสีเส้นทางเกาะ (ขึ้นใน Section A)" onclick="pjPopToggle(\''+iid+'\')"></button>'
+               +'<div class="pj-pop pj-itp" id="'+iid+'"><div class="ph">สีของเส้นทางเกาะ · ลำนี้วันนี้</div><div class="pj-sws">'
+               +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c.toLowerCase()===I.c.toLowerCase()?' on':'')+'" style="background:'+c+'" onclick="pjItinColor(\''+poE(bid)+'\',\''+c+'\')"></div>'; }).join('')
+               +'</div><label class="pj-cus">เลือกสีเอง<input type="color" value="'+poE(I.c||'#185FA5')+'" onchange="pjItinColor(\''+poE(bid)+'\',this.value)" onclick="event.stopPropagation()"></label>'
+               +(I.c?('<button class="pj-rst" onclick="pjItinColor(\''+poE(bid)+'\',\'\')">ไม่แต้มสี</button>'):'')
+               +'<div class="pf">ขึ้นเป็นสีของเส้นทางเกาะใน Section A · เฉพาะลำนี้วันนี้</div></div>'; })(); })()
         :(B._away?poE(B._away.route.name||'')
                  :poE([SM.t, ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 '))))+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="'+(rt.id?'แต้มสีโปรแกรมนี้':'แต้มสีสถานะนี้')+'">&#9998;</button>')
@@ -76445,6 +76490,35 @@ function pjPrint(){
    +'.brd .c-x.over b{color:#A32D2D}'
    +".brd .c-x.over em{display:block;font-style:normal;font-family:'Sarabun',sans-serif;"
      +'font-size:'+(fs-5)+'px;font-weight:800;color:#A32D2D}'
+   /* §pjItin · Section A ใหม่ · แถวพื้นขาว · สีเส้นทางอยู่ที่ป้ายชื่อโปรแกรมอย่างเดียว กว้างเท่ากันทุกแถว
+      ถัดไปเป็นเส้นทางเกาะ (ชิปคั่นลูกศร) สีตามที่แต้มบนการ์ดเรือ · ยอดคนมีแถบเติมเทียบความจุ */
+   +'.brd tbody tr.br td{padding-top:3px;padding-bottom:3px}'
+   /* โปรแกรมกับเส้นทางเกาะเป็นคนละคอลัมน์ · คอลัมน์โปรแกรมกว้างเท่าชื่อที่ยาวที่สุด → ป้ายทุกแถวกว้างเท่ากัน */
+   +'.brd{table-layout:auto}'
+   +'.brd th.h-p,.brd td.c-p,.brd th.h-i,.brd td.c-i{text-align:left}'
+   +'.brd td.c-p{width:1%;white-space:nowrap;padding-right:4px}'
+   +'.brd td.c-p .pnm{display:block;box-sizing:border-box;background:var(--rt);border-left:4px solid var(--rc);border-radius:6px;'
+     +'padding:3px 10px;font-size:'+(fs-.5)+'px;font-weight:800;color:#16265C;line-height:1.2}'
+   +'.brd td.c-i{white-space:normal}'
+   +'.brd td.c-i .itn{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px}'
+   +'.brd td.c-i .itn i{font-style:normal;font-size:'+(fs-3)+'px;font-weight:700;color:#1F2A3D;background:var(--it,#fff);border:1px solid var(--ib,#D5DBE6);border-radius:5px;padding:0 6px;line-height:1.5;white-space:nowrap}'
+   +'.brd td.c-i .itn i.one{background:var(--it,transparent);border-color:var(--ib,transparent);font-weight:600;color:#334155;white-space:normal}'
+   +'.brd td.c-i .itn i.one:not([style]){padding:0}'
+   +'.brd td.c-i .itn u{text-decoration:none;font-size:'+(fs-3)+'px;font-weight:800;color:var(--ic,#94A3B8)}'
+   +'.brd .c-x .fl{display:block;height:4px;border-radius:2px;background:rgba(15,27,61,.10);margin-top:3px;overflow:hidden}'
+   +'.brd .c-x .fl span{display:block;height:100%;background:var(--rc)}'
+   +'.brd .c-x.over .fl span{background:#A32D2D}'
+   /* ≥6 ลำ สองตารางข้างกัน · ชื่อโปรแกรมตกบรรทัดได้ (คอลัมน์ 156px) แถวจะได้ไม่สูงกว่าเดิม (§pjFit) */
+   +'.brd2 .brd td.c-p{white-space:normal}'
+   +'.brd2 .brd{table-layout:fixed}'
+   +'.brd2 .brd td.c-p{width:auto}'
+   +'.brd2 .brd td.c-p .pnm{font-size:'+(fs-2.5)+'px;line-height:1.1;padding:2px 8px}'
+   /* สองตารางที่ไม่ได้กรอกเส้นทางเกาะเอง ไม่ต้องโชว์ "เกาะ" ตั้งต้นของเส้นทาง · ที่แคบ ใส่แล้วแถวสูงขึ้นเปล่า ๆ */
+   +'.brd2 .brd td.c-i .itn.dflt{display:none}'
+   +'.brd2 .brd td.c-i .itn i{white-space:normal;overflow-wrap:anywhere}'
+   +'.brd th.h-i{white-space:nowrap;overflow:hidden}'
+   +'.brd2 .brd td.c-i .itn i{font-size:'+(fs-4.5)+'px;padding:0 4px}'
+   +'@media (max-width:1180px){.brd2 .brd{table-layout:auto}.brd2 .brd td.c-p{white-space:nowrap;width:1%}.brd2 .brd td.c-i .itn.dflt{display:flex}}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
    +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52;white-space:nowrap}'   /* §pjOneLine */
    /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw = ความกว้างช่อง · .pn1 = ชื่อ ขนาดตัวอักษรสคริปต์ใส่ให้ */
@@ -76863,8 +76937,16 @@ function pjPrint(){
       var wbc=_wb2.c||'', wbn=_wb2.t||'';
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
+      /* §pjItin · ป้ายชื่อโปรแกรมสีเส้นทางอ่อน (กว้างเท่ากันทุกแถว) · ถัดไปคือเส้นทางเกาะ สีตามที่แต้มไว้ */
+      var _rc=/^#[0-9a-fA-F]{6}$/.test(String(rt.color||''))?rt.color:'#5A6270';
+      var _it=pjItinOf(_poDate,B.bid,rt), _st=_it.t?_it.t.split(/\s*\u2192\s*/).filter(Boolean):[];
+      var _itH=!_it.t?'':(_st.length>1
+        ? ('<span class="itn'+(_it.own?'':' dflt')+'">'+_st.map(function(x){ return '<i>'+e(x)+'</i>'; }).join('<u>\u2192</u>')+'</span>')
+        : ('<span class="itn'+(_it.own?'':' dflt')+'"><i class="one">'+e(_it.t)+'</i></span>'));
+      var _fill=cap>0?Math.min(100,Math.round(pax*100/cap)):0;
       return { dep:(dep||'~'), html:
-        '<tr class="br">'
+        '<tr class="br" style="--rc:'+_rc+';--rt:'+pjTint2(_rc,0.84)
+          +(_it.c?(';--ic:'+_it.c+';--it:'+pjTint2(_it.c,0.86)+';--ib:'+pjTint2(_it.c,0.6)):'')+'">'
         +'<td class="c-t">'+e(dep||'--:--')+'</td>'
         /* §pjInk (2026-10-14) · owner "ตัวหนังสือเรือ เป็นสีดำ" (ทั้งป้ายนี้และหัวตาราง Section B)
            ของเดิมตัวขาวบนพื้นสีเรือทึบ · สีเรือสด/อ่อน (ฟ้า เขียวอ่อน) ตัวขาวจางหาย
@@ -76873,9 +76955,11 @@ function pjPrint(){
         +'<td class="c-b"><span class="bpill" style="background:'+pjTint2(_pjC6(B.bid),0.68)
           +';border-left:5px solid '+e(_pjC6(B.bid))+'">'
           +e(B.boat.name||B.bid)+'</span></td>'
-        +'<td class="c-p">'+e(rt.name||'\u2014')+'</td>'
+        +'<td class="c-p"><span class="pnm">'+e(rt.name||'\u2014')+'</span></td>'
+        +'<td class="c-i">'+_itH+'</td>'
         +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
-          +(over?('<em>เกิน '+over+'</em>'):'')+'</td>'
+          +(over?('<em>เกิน '+over+'</em>'):'')
+          +(cap>0?('<span class="fl"><span style="width:'+_fill+'%"></span></span>'):'')+'</td>'
         /* §pjBand · สีสายรัดข้อมือ · ของที่ต้องหยิบมาเตรียมก่อนแขกมาถึง
            คนที่ท่าเทียบ "สี" กับข้อมือแขก จึงต้องเห็นสีจริง ไม่ใช่อ่านชื่อสี */
         +'<td class="c-w">'+(wbn
@@ -76889,9 +76973,9 @@ function pjPrint(){
     var tbl=function(rs){
       return '<table class="brd">'
       +(two
-        ? '<colgroup><col style="width:54px"><col style="width:132px"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
-        : '<colgroup><col style="width:78px"><col style="width:158px"><col><col style="width:82px"><col style="width:118px"></colgroup>')
-      +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th>Pax</th><th>Band</th></tr></thead>'
+        ? '<colgroup><col style="width:54px"><col style="width:118px"><col class="cg-p" style="width:156px"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
+        : '<colgroup><col style="width:78px"><col style="width:158px"><col class="cg-p"><col><col style="width:82px"><col style="width:118px"></colgroup>')
+      +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th class="h-i">Itinerary</th><th>Pax</th><th>Band</th></tr></thead>'
       +'<tbody>'+rs.map(function(r){ return r.html; }).join('')+'</tbody></table>'; };
     var half=Math.ceil(rows.length/2);
     return '<div class="fb pg"><div class="fb-h">Departures<b>'+GO.length+'</b></div>'
