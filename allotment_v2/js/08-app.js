@@ -20812,7 +20812,7 @@ function pckHeadCSS(){
      ดูเหมือนหัวหลุดการตรึง ทั้งที่มันตรึงอยู่ แค่ตรึงไว้เหนือขอบจอ
      -22 มีไว้ชดเชย margin ติดลบตอนยังไม่ตรึง ซึ่งไม่เกี่ยวกับตำแหน่งตอนตรึงเลย
      ตรึงที่ 0 · ตอนยังไม่เลื่อนตำแหน่งเท่าเดิมทุกพิกเซล (วัดแล้ว pkhTop=0 เหมือนกัน) */
-  +H+' .pkh{position:sticky;top:0;left:0;z-index:60;background:#E4E7EC;'
+  +H+' .pkh{position:sticky;top:-22px;left:0;z-index:60;background:#E4E7EC;'
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:11px 22px 11px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
@@ -21032,15 +21032,15 @@ function pckSheetCSS(){
   +S+' td{padding:5px 8px}'
   +S+' thead th{background:#EDF0F5;color:#3C4A63;font-weight:800;font-size:9.5px;letter-spacing:.04em;'
     +'text-align:center;border-bottom:2px solid #A9B2C2;box-shadow:none;padding:0 7px;height:32px;'
-    +'position:sticky;top:var(--pck-pkh,0px) !important;z-index:30}'
+    +'position:sticky;top:calc(var(--pck-pkh,0px) - 22px) !important;z-index:30}'
   /* ตรึงสองคอลัมน์ซ้าย · Voucher+Agency กับ ลูกค้า */
   +S+' tr.ck-row>td{background:#fff}'
   +S+' tr.ck-row>td:nth-child(-n+2),'+S+' thead th:nth-child(-n+2){position:sticky;z-index:12}'
   +S+' thead th:nth-child(-n+2){z-index:34}'
-  +S+' tr.ck-row>td:nth-child(1),'+S+' thead th:nth-child(1){left:14px;width:150px;min-width:150px;max-width:150px}'
-  +S+' tr.ck-row>td:nth-child(2),'+S+' thead th:nth-child(2){left:164px;width:128px;min-width:128px;'
+  +S+' tr.ck-row>td:nth-child(1),'+S+' thead th:nth-child(1){left:0;width:150px;min-width:150px;max-width:150px}'
+  +S+' tr.ck-row>td:nth-child(2),'+S+' thead th:nth-child(2){left:150px;width:128px;min-width:128px;'
     +'max-width:128px;padding:0 !important}'
-  +S+' tr.ck-row>td:nth-child(3),'+S+' thead th:nth-child(3){left:292px;width:300px;min-width:300px;'
+  +S+' tr.ck-row>td:nth-child(3),'+S+' thead th:nth-child(3){left:278px;width:300px;min-width:300px;'
     +'max-width:300px;border-right:2px solid #A9B2C2}'
   +S+' tr.ck-row>td:nth-child(-n+3),'+S+' thead th:nth-child(-n+3){position:sticky;z-index:12}'
   +S+' thead th:nth-child(-n+3){z-index:34}'
@@ -21097,7 +21097,7 @@ function pckSheetCSS(){
   +S+' thead th{overflow:hidden;text-overflow:ellipsis}'
   +S+' tr.pcs-g1.pcs-ovn>td{border-top-width:3px}'
   /* แถบชื่อเรือตรึงใต้หัวตาราง · เลื่อนลงไปกลางลำยาว ๆ ต้องยังรู้ว่ากำลังดูลำไหนอยู่ */
-  +S+' tr.pcs-g1>td{position:sticky;top:calc(var(--pck-pkh,0px) + 32px);z-index:20}'
+  +S+' tr.pcs-g1>td{position:sticky;top:calc(var(--pck-pkh,0px) + 10px);z-index:20}'
   /* ── ช่องที่มีทั้งป้ายข้อมูลและปุ่ม · ล้นแล้วให้ตกบรรทัดสอง ไม่ตัดทิ้ง
         Add-on กับ Special request เป็นของที่หน้าท่าต้องอ่านครบ ── */
   +S+' td.pcs-ao,'+S+' td.pcs-sq{white-space:normal;line-height:1.3}'
@@ -21222,7 +21222,7 @@ function pckSheetCSS(){
   +S+' tr.pcs-g1:hover>td>div,'+S+' tr.pcs-g2:hover>td>div{filter:none;opacity:1}'
   /* ช่องหัวกลุ่มกว้างเท่าตารางทั้งใบ ตรึงตัว td เองไม่ได้ ต้องตรึงกล่องข้างใน */
   +S+' tr.pcs-g1>td .pcs-w,'+S+' tr.pcs-g2>td .pcs-w{display:flex;align-items:center;gap:10px;'
-    +'position:sticky;left:14px;width:-moz-fit-content;width:fit-content;max-width:100%}'
+    +'position:sticky;left:0;width:-moz-fit-content;width:fit-content;max-width:100%}'
   /* §gvanJob2 · กล่องนอกเต็มแถว · มีไว้ให้ปุ่มขวามีที่ยืน */
   +S+' tr.pcs-g1>td>.pcs-row{display:flex;align-items:center;width:100%;gap:10px}'
   +'.pck-host .pcs-kind{font-size:9px;font-weight:800;letter-spacing:.06em;'
