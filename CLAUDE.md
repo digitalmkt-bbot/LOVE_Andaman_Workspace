@@ -46,7 +46,7 @@ LOVE_Andaman_Workspace/
 │   ├── js/booking/            ← bookingV2* functions, one per file
 │   ├── js/ops/                ← operation-backend adapters (§1)
 │   ├── css/01-base.css · 02-skins.css (14 re-skin layers)
-│   ├── docs/workflows/        ← per-domain legacy behaviour docs (see ARCHITECTURE.md)
+│   ├── docs/workflows/        ← per-domain legacy behaviour docs
 │   └── assets/
 ├── b2c-map.js · b2c-changelog.js  ← legacy B2C import rules, kept as reference for porting
 ├── test/unit/                 ← `node --test test/unit/` (ops-* adapter tests)
@@ -120,4 +120,4 @@ Booking v2 (`#view-booking` → `bookingV2Render`, tabs cal/bytrip/all/locks/app
 
 Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job Orders / ใบงานรถ (`renderVanJobs`), Pickup Setup (`renderPickupSetup`), Maintenance / Incidents / Engines / Gearboxes / Propellers / Projects.
 
-Per-domain legacy behaviour: `allotment_v2/docs/workflows/` (map in `ARCHITECTURE.md`). These describe how the legacy browser behaves, not how operation-backend works.
+Per-domain legacy behaviour: `allotment_v2/docs/workflows/`. These describe how the legacy browser behaves, not how operation-backend works.

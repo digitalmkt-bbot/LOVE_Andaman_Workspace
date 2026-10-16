@@ -73,7 +73,7 @@ renaming it was out of scope.
   ritual of extracting the main `<script>` out of the HTML before checking it is gone.
 - `node tools/check-persist-gates.mjs` defaults to this directory.
 - `node tools/js-split-linemap.mjs 69054` translates a pre-split `allotment_v2.html` line number
-  (as cited throughout `CLAUDE.md`, `docs/workflows/**`, `BACKLOG.md`) into `js/<file>:<line>`.
+  (as cited throughout `CLAUDE.md`, `docs/workflows/**`) into `js/<file>:<line>`.
   Those citations all carry the function name too, so `grep -rn <fnName> allotment_v2/js/` works
   just as well — for a `bkV2*` name from a citation older than 2026-09-16, grep for the renamed
   `bookingV2*` form instead (or drop the `bkV2`/`bookingV2` prefix and grep the rest of the name).
