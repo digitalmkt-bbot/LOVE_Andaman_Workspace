@@ -1109,7 +1109,7 @@ html[data-sb-theme="dark"] .sb-pill:hover{ background:rgba(255,255,255,.24); }
 .sidebar.sb-collapsed .sb-pill{ display:none; }
 
 /* §sbSearch · ค้นหาเมนู · ซ่อนเฉพาะรายการที่ไม่ตรงคำค้น ไม่แตะสิทธิ์หรือการนำทาง */
-.sb-menu-search{ position:relative; display:flex; align-items:center; gap:6px; margin:8px 5px 6px; padding:0 8px; height:42px; border-radius:11px; background:rgba(255,255,255,.64); border:1px solid rgba(0,15,76,.12); }
+.sb-menu-search{ position:relative; display:flex; align-items:center; gap:6px; margin:8px 5px 6px; padding:0 8px; height:42px; min-height:42px; flex:none; border-radius:11px; background:rgba(255,255,255,.64); border:1px solid rgba(0,15,76,.12); }
 .sb-menu-search svg{ width:15px; height:15px; flex:none; fill:none; stroke:#5A6685; stroke-width:2; }
 .sb-menu-search input{ width:100%; min-width:0; border:0; outline:0; background:transparent; color:#233055; font:13px/1 DM Sans,Arial,sans-serif; }
 .sb-menu-search input::placeholder{ color:#71809c; }

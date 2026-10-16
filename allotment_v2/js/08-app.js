@@ -20657,7 +20657,10 @@ function pckFitPane(){
        วัดเอาแทนการเดาตัวเลข เพราะ padding ของ view เปลี่ยนได้ตามขนาดจอ */
     var de=document.documentElement;
     var over=de.scrollHeight-de.clientHeight;
-    if(over>0){ h=Math.max(260,h-over); w.style.maxHeight=h+'px'; }
+    /* หักส่วนล้นได้ แต่ไม่ให้เตี้ยกว่า 75% ของจอ · เดิมเหลือ 260px จนกล่องเตี้ย
+       ส่วนที่เหลือให้หน้าเว็บเลื่อนเอง */
+    var floorH=Math.max(320,Math.round((window.innerHeight||800)*0.75));
+    if(over>0){ h=Math.max(floorH,h-over); w.style.maxHeight=h+'px'; }
     w._ph=h;
   });
 }
@@ -21000,7 +21003,7 @@ function pckSheetCSS(){
     +'padding:4px 14px;cursor:pointer;color:#6b6a64}'
   +'.pck-host .pcs-seg.on{background:#15201a;color:#fff}'
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
-  +'.pck-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
+  +'.pck-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:max(340px,70vh);'
     +'border-radius:13px;contain:paint;overscroll-behavior:contain;'
     /* เว้นไว้ในตัวกล่อง · เลื่อนสุดแล้วแถวสุดท้ายยังพ้นป้ายมุมซ้ายล่าง (250x65 ห่างก้นจอ 10) */
     +'padding-bottom:78px}'
