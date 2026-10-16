@@ -657,6 +657,8 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .sidebar.sb-collapsed .nav-item{font-size:13.5px !important;justify-content:flex-start !important;padding:11px 12px !important;gap:9px !important}
   .sidebar.sb-collapsed .nav-item svg{width:17px !important;height:17px !important}
   .sidebar.sb-collapsed .nav-section{font-size:10px !important;height:auto;background:none;margin:0;padding:12px 10px 4px !important}
+  .sidebar.sb-collapsed .nav-item.po-sub:not(.po-hide){display:flex !important}   /* §poNavMob · ลิ้นชักมือถือต้องเห็นรายการย่อยของท่า (กลุ่มที่พับไว้ยังซ่อนตาม .po-hide) */
+  .sidebar .nav-item.po-sub{padding-left:34px !important}
   body.la-nav-open .sidebar{transform:translateX(0)}
   body.la-nav-open .la-navdim{display:block}
   body.la-nav-open{overflow:hidden}
