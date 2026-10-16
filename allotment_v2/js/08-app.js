@@ -16945,7 +16945,7 @@ var PC_GRP=[
   {k:'van',   t:'รถตู้',   re:/^\s*ค่ารถ/,                     c:'#C2410C', bg:'#FFF4EC'},
   {k:'guide', t:'ไกด์',    re:/^\s*ค่า(แรง)?ไกด์/,               c:'#7C3AED', bg:'#F6F1FF'},
   {k:'food',  t:'อาหาร',   re:/^\s*ค่าอาหาร/,                   c:'#BE185D', bg:'#FDF0F6'},
-  {k:'park',  t:'อุทยาน',  re:/^\s*ค่าอุทยาน/,      src:'pk',   c:'#4D7C0F', bg:'#F3FAEA'},
+  {k:'park',  t:'อุทยาน',  re:/^\s*ค่า(ตั๋ว|บัตร)?อุทยาน/, src:'pk',   c:'#4D7C0F', bg:'#F3FAEA'},
   {k:'lt',    t:'หางยาว',  re:/^\s*ค่าเรือหางยาว/,  src:'lt',   c:'#0E7490', bg:'#ECF8FB'},
   {k:'dock',  t:'ค่าจอด',  re:/^\s*ค่าจอด/,         src:'dock', c:'#475569', bg:'#F2F4F7'},
   {k:'fuel',  t:'น้ำมัน',  re:/^\s*ค่าน้ำมัน/,                  c:'#A16207', bg:'#FEF8E7'}
@@ -80026,6 +80026,7 @@ function pcClaimCard(pier,ds){
 /* ใบสรุปตั้งเบิกของวัน · แยกตามกลุ่ม (§pcGrp) · รายการ + ยอด · รวมกลุ่ม · รวมทั้งวัน · สถานะเงินคืน */
 function pcPrintClaim(cid){   /* §pcClm · cid = พิมพ์รายการตั้งเบิกที่บันทึกไว้ · ไม่ใส่ = ทั้งวัน */
   var C=cid?pcClmGet(cid):null; if(cid && !C){ alert('This claim no longer exists.'); return; }
+  if(C) return pcPrintClaimForm(C);   /* §pcClmForm · รายการตั้งเบิกที่บันทึกไว้ พิมพ์เป็นแบบฟอร์ม Petty Cash */
   var ds=C?String(C.date||_pcDate):_pcDate, D=pcDay(_pcPier,ds,false)||{out:[]};
   if(C) D={out:pcClmRows(_pcPier,cid).map(function(o){ return o.x; })};
   var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
@@ -80057,6 +80058,75 @@ function pcPrintClaim(cid){   /* §pcClm · cid = พิมพ์รายกา
       +(left>0?(' · ค้างอีก '+pcN(left)+' บาท'):' · ครบ')):'ยังไม่ได้รับคืน')+'</div>';
   _pcDate=_sv;
   pcPrintWin((C?('ตั้งเบิก · '+String(C.name||'')):'สรุปตั้งเบิก')+' · '+pcPierName()+' · '+ds, ('pettycash_claim_'+_pcPier+'_'+ds+(C?('_'+cid):'')).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+}
+/* ══ §pcClmForm (2026-10-16) · ใบตั้งเบิก ═══════════════════════════════════════════════════════
+   owner ส่งใบ Petty Cash กระดาษ (Period 8/5/26) มา · "เอาไปประยุกต์ ไม่ใช่ให้ทำให้เหมือน"
+   หยิบแนวคิดมา ไม่ลอกหน้าตา · หัวกระดาษ/ตาราง/ลายเซ็นใช้แบบเดียวกับใบพิมพ์อื่นของหน้าเงินสดย่อย
+   owner "เอาแค่รายการ ที่เป็นรายการตั้งเบิกของรายการนั้น ๆ" · ในใบมีแต่แถวของรายการตั้งเบิกนี้
+   owner ส่งใบรับรองแทนใบเสร็จฯ ของหน้านี้มา "ออกแบบให้คล้าย ๆ ใบนี้" · ใช้โครงเดียวกับ pcPrintCert
+   หัวเรื่องกลาง · ชื่อรายการตั้งเบิกบนเส้นประ · ตาราง วัน เดือน ปี · รายละเอียดรายจ่าย · จ่ายให้ · จำนวนเงิน · หมายเหตุ
+   แถวรวมมีตัวอักษรบาท · ช่วงวันที่ · ผู้บันทึก · สถานะเงินคืน · ลายเซ็น ผู้ขอเบิก / ผู้ตรวจสอบ / ผู้อนุมัติ
+   */
+var PC_PAYEE={ park_sm:'อุทยานแห่งชาติหมู่เกาะสิมิลัน', park_sr:'อุทยานแห่งชาติหมู่เกาะสุรินทร์',
+  park_pp:'อุทยานแห่งชาติหาดนพรัตน์ธารา-หมู่เกาะพีพี', park_pn:'อุทยานแห่งชาติอ่าวพังงา' };
+/* ผู้รับเงิน · กลุ่มอุทยานจาก §pcGrp · หรือข้อความมีคำว่าอุทยาน + ชื่ออุทยาน (เช่น "ค่าตั๋วอุทยานสิมิลัน") */
+function pcPayee(x){
+  var g=pcGrpOf(x,'out'); if(g && PC_PAYEE[g.k]) return PC_PAYEE[g.k];
+  var t=String((x&&x.txt)||''); if(!/อุทยาน/.test(t)) return '';
+  for(var i=0;i<PC_GRP_PARK.length;i++){ if(PC_GRP_PARK[i].re.test(t)) return PC_PAYEE[PC_GRP_PARK[i].k]||''; }
+  return '';
+}
+function pcDmy(ds,y2){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds||'')); if(!m) return String(ds||'');
+  return (+m[3])+'/'+(+m[2])+'/'+(y2?m[1].slice(2):m[1]); }
+function pcPrintClaimForm(C){
+  var pier=C.pier||_pcPier, ds=String(C.date||_pcDate), cid=C.id;
+  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
+  var mine=pcClmRows(pier,cid);
+  if(!mine.length){ alert('This claim has no lines.'); return; }
+  var lines=pcLedgerSort(mine.map(function(o){ return {t:rk(o.x.at),k:'out',x:o.x,_ds:o.ds}; }),pier,ds);
+  var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
+  var tot=0, body='', d0='', d1='';
+  lines.forEach(function(r){ var x=r.x, a=+x.amt||0, d=r._ds||ds; tot+=a;
+    if(!d0 || d<d0) d0=d; if(!d1 || d>d1) d1=d;
+    body+='<tr><td class="d">'+pcE(pcThDate(d))+'</td><td class="t">'+pcE(x.txt||CAT[x.src]||'—')+'</td>'
+      +'<td class="p">'+pcE(pcPayee(x))+'</td><td class="m">'+pcN(a)+'</td><td class="n"></td></tr>'; });
+  for(var i=lines.length;i<10;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="p"></td><td class="m"></td><td class="n"></td></tr>';
+  var M=pcRefundMatch(pier), uk='c:'+cid, left=(M.urem[uk]!=null)?M.urem[uk]:tot, back=tot-left, by=M.uby[uk]||[];
+  var st=back>0?('คืนแล้ว '+pcN(back)+' บาท ('+by.map(function(b){ return 'รับวันที่ '+pcThDate(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+')'+(left>0?(' · ค้างอีก '+pcN(left)+' บาท'):' · ครบ'))
+    :'ยังไม่ได้รับคืน';
+  var co=pcCoName(), at=String(C.ts||'');
+  var css=PC_PRINT_HEAD_CSS
+    +'#sheet .cf-t{font-size:16px;font-weight:800;text-align:center;color:#16265C;margin:2px 0 16px}'
+    +'#sheet .cf-co{display:flex;align-items:flex-end;gap:8px;font-size:12.5px;margin-bottom:10px}'
+    +'#sheet .cf-co .fill{flex:1;border-bottom:1px dotted #6b7280;font-weight:700;text-align:center;padding-bottom:2px}'
+    +'#sheet .cf-tb{width:100%;border-collapse:collapse;font-size:12px}'
+    +'#sheet .cf-tb th,#sheet .cf-tb td{border:1px solid #16265C;padding:5px 8px}'
+    +'#sheet .cf-tb th{background:#EEF1F6;font-size:11px;font-weight:800;color:#16265C;text-align:center}'
+    +'#sheet .cf-tb td.d{width:92px;text-align:center;white-space:nowrap}'
+    +'#sheet .cf-tb td.p{width:150px;font-size:11px;color:#3E4A6B}'
+    +'#sheet .cf-tb td.m{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
+    +'#sheet .cf-tb td.n{width:90px}'
+    +'#sheet .cf-tb tr.sum td{background:#EEF1F6;font-weight:800}'
+    +'#sheet .cf-tb tr.sum .w{text-align:center;font-weight:700}'
+    +'#sheet .cf-ft{font-size:12px;line-height:2.3;margin-top:16px}'
+    +'#sheet .cf-ft .u{display:inline-block;border-bottom:1px dotted #6b7280;min-width:170px;text-align:center}'
+    +'#sheet .cf-ft .u.s{min-width:96px}'
+    +'#sheet .cf-sg{display:flex;justify-content:flex-end;gap:48px;margin-top:26px;text-align:center;font-size:12px}'
+    +'#sheet .cf-sg .l{border-bottom:1px dotted #6b7280;min-width:160px;margin-bottom:4px;min-height:18px;padding-bottom:2px}';
+  var _sv=_pcDate, _sp=_pcPier; _pcDate=ds; _pcPier=pier;
+  var sheet=pcPrintHead('เงินสดย่อย · ใบตั้งเบิก',lines.length+' รายการจ่ายที่บันทึกเป็นรายการตั้งเบิกนี้ในสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
+    +'<div class="cf-t">ใบตั้งเบิกเงินสดย่อย</div>'
+    +'<div class="cf-co"><span>รายการตั้งเบิก</span><span class="fill">'+pcE(C.name||'')+'</span><span>('+pcE(pcPierName())+')</span></div>'
+    +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th><th>จ่ายให้</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
+    +'<tfoot><tr class="sum"><td class="w" colspan="3">'+pcE(pcBahtText(tot))+'</td><td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
+    +'<div class="cf-ft">'
+      +(co?('ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น เพื่อใช้ในงานของ '+pcE(co)+'<br>'):'ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น<br>')
+      +'รายจ่ายตั้งแต่วันที่ <span class="u s">'+pcE(pcThDate(d0||ds))+'</span> ถึงวันที่ <span class="u s">'+pcE(pcThDate(d1||ds))+'</span>'
+      +' &nbsp; บันทึกตั้งเบิกโดย <span class="u s">'+pcE(C.by||'')+'</span>'+(/^\d{4}-\d{2}-\d{2}/.test(at)?(' วันที่ <span class="u s">'+pcE(pcThDate(at.slice(0,10)))+'</span>'):'')+'<br>'
+      +'สถานะเงินคืน <span class="u">'+pcE(st)+'</span></div>'
+    +'<div class="cf-sg"><div><div class="l">'+pcE(C.by||'')+'</div>(ผู้ขอเบิก)</div><div><div class="l"></div>(ผู้ตรวจสอบ)</div><div><div class="l"></div>(ผู้อนุมัติ)</div></div>';
+  _pcDate=_sv; _pcPier=_sp;
+  pcPrintWin('ใบตั้งเบิก · '+String(C.name||'')+' · '+ds, ('pettycash_claim_'+pier+'_'+ds+'_'+cid).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
 }
 /* ══ §pcClm (2026-10-16) · รายการตั้งเบิก ═══════════════════════════════════════════════════════
    owner "สรุปตั้งเบิก ควรเป็น ติ๊ก ๆ รายการ แล้วกดสรุปตั้งเบิก มีให้เขียนชื่อ รายการอัพเดทข้างล่าง
