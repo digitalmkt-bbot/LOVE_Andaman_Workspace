@@ -67,7 +67,7 @@
   function patchSheet(kind,ds,bid,body){ var p=window._pcPier; return O.queue(function(){ return call('PATCH',dayPath(p,ds)+'/'+kind+'/'+enc(bid),body); }).then(function(){ delete cache.month[p+'|'+ds.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+p+'|'+ds.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); return loadCurrent(p,ds,true).then(function(){ O.wrote('pier'); return true; }); },function(e){ fail('Petty cash sheet not saved',e); return loadCurrent(p,ds,true).then(function(){ return false; }); }); }
   window.pcSetLT=function(ds,bid,fld,val){ if(!on()) return L.pcSetLT.apply(this,arguments); var b={}; b[{nj:'join_boats',nc:'charter_boats',amt:'amount'}[fld]||fld]=val===''?null:+val||0; return patchSheet('longtail',ds,bid,b); };
   window.pcSetLTNote=function(ds,bid,val){ if(!on()) return L.pcSetLTNote.apply(this,arguments); return patchSheet('longtail',ds,bid,{note:String(val||'').trim()||null}); };
-  window.pcSetPK=function(ds,bid,fld,val){ if(!on()) return L.pcSetPK.apply(this,arguments); var b={}; b[fld]=val===''?null:+val||0; return patchSheet('park',ds,bid,b); };
+  window.pcSetPK=function(ds,bid,fld,val){ if(!on()) return L.pcSetPK.apply(this,arguments); var b={}; b[fld==='amt'?'amount':fld]=val===''?null:+val||0; return patchSheet('park',ds,bid,b); };
   // Fill is a complete cell write: never populate the browser cache before the server accepts it.
   window.pcFillPK=function(ds,bid,pier,src){
     if(!on()) return L.pcFillPK.apply(this,arguments); if(typeof window.pcGuard==='function'&&!window.pcGuard()) return;

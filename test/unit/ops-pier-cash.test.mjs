@@ -34,9 +34,9 @@ test('manual row, delete, pull, sheets and company name write server-first',asyn
   ['POST '+base+'/pull']:{day:{pier:P,date:D,rows:[],in:0,out:20,net:-20,opening:0,closing:-20,reference:{longtail:20,park:0,dock:0,total:20},pulled:20,waiting:0}},
   ['PATCH '+base+'/longtail/b1']:{},['PATCH '+base+'/park/b1']:{},['PUT /v1/pier-cash/settings']:{company_name:'New Co'} }});
  rt.els['pc-r-txt']={value:'float'};rt.els['pc-r-amt']={value:'30'};rt.els['pc-r-at']={value:'10:30'};
- await rt.w.pcRowSave('in'); await rt.w.pcRowDel('out','pc_1'); await rt.w.pcPull(D); await rt.w.pcSetLT(D,'b1','nj','2'); await rt.w.pcSetPK(D,'b1','dock','10'); await rt.w.pcCoNameSet('New Co');
+ await rt.w.pcRowSave('in'); await rt.w.pcRowDel('out','pc_1'); await rt.w.pcPull(D); await rt.w.pcSetLT(D,'b1','nj','2'); await rt.w.pcSetPK(D,'b1','dock','10'); await rt.w.pcSetPK(D,'b1','amt','25'); await rt.w.pcCoNameSet('New Co');
  const writes=rt.calls.filter(x=>x.method!=='GET').map(x=>[x.method,x.path,x.body]);
- assert.deepEqual(JSON.parse(JSON.stringify(writes)),[['POST',base+'/rows',{kind:'in',description:'float',amount:'30',time:'10:30'}],['DELETE','/v1/pier-cash/rows/pc_1',null],['POST',base+'/pull',{}],['PATCH',base+'/longtail/b1',{join_boats:2}],['PATCH',base+'/park/b1',{dock:10}],['PUT','/v1/pier-cash/settings',{company_name:'New Co'}]]);
+ assert.deepEqual(JSON.parse(JSON.stringify(writes)),[['POST',base+'/rows',{kind:'in',description:'float',amount:'30',time:'10:30'}],['DELETE','/v1/pier-cash/rows/pc_1',null],['POST',base+'/pull',{}],['PATCH',base+'/longtail/b1',{join_boats:2}],['PATCH',base+'/park/b1',{dock:10}],['PATCH',base+'/park/b1',{amount:25}],['PUT','/v1/pier-cash/settings',{company_name:'New Co'}]]);
  assert.equal(rt.w.pcCoName(),'New Co');
 });
 test('pcFillPK patches the complete park cell before changing the displayed source',async()=>{
