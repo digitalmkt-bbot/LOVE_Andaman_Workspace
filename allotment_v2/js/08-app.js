@@ -16978,10 +16978,11 @@ function pcGrpBar(D){
   (D.out||[]).forEach(function(x){ var g=pcGrpOf(x,'out'); if(!g) return; if(!agg[g.k]){ agg[g.k]={g:g,n:0,amt:0}; } agg[g.k].n++; agg[g.k].amt+=(+x.amt||0); });
   pcGrpList().forEach(function(g){ if(agg[g.k]) order.push(agg[g.k]); });   /* §pcGrpPark */
   if(!order.length) return '';
-  return '<div class="pc2-grps"><span class="l">พิมพ์ตามกลุ่ม</span>'+order.map(function(a){
-    return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+'">'
-      +'<i></i><b>'+pcE(a.g.t)+'</b><span>'+a.n+' รายการ · '+pcN(a.amt)+'</span><em>&#128424;</em></button>'; }).join('')
-    +'<span class="h">จัดกลุ่มจากคำขึ้นต้นของรายการ (ค่ารถ… · ค่าแรงไกด์… · ค่าอาหาร… · ค่าอุทยาน…)</span></div>';
+  /* §pcFtCmp · ชิปเล็กอยู่ในแถวปุ่มเดียวกับ ＋รับ/＋จ่าย · คำอธิบายย้ายไปเป็น tooltip */
+  return '<span class="pc2-grps"><i class="dv"></i><span class="l" title="พิมพ์ใบรับรองแทนใบเสร็จแยกตามกลุ่ม · จัดกลุ่มจากคำขึ้นต้นของรายการ (ค่ารถ… · ค่าแรงไกด์… · ค่าอาหาร… · ค่าอุทยาน…)">พิมพ์กลุ่ม</span>'+order.map(function(a){
+    return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+' · '+a.n+' รายการ">'
+      +'<i></i><b>'+pcE(a.g.t)+'</b><span>'+a.n+' · '+pcN(a.amt)+'</span><em>&#128424;</em></button>'; }).join('')
+    +'</span>';
 }
 /* เรียงแถวของสมุด · เวลาก่อน (ของเดิม) · บรรทัดค่าอุทยานที่เวลาเดียวกันรวมเป็นก้อนเดียวตรงที่บรรทัดแรกของก้อนอยู่ แล้วเรียงตามอุทยาน + ลำ
    rows = [{t, k, x}] · คืน array ใหม่ · แถวอื่นลำดับเดิม */
@@ -17236,9 +17237,7 @@ function pcSelBarHtml(){
   var S=pcSelSum();
   if(!S.tot) return '';
   if(_pcClmForm) return pcClmFormHtml();   /* §pcClm */
-  if(!S.n) return '<span class="hint">ติ๊กช่องหน้าแถว เพื่อรวมยอดเฉพาะรายการที่เลือก</span>'
-    +'<span class="sp"></span>'
-    +'<button class="pc-btn" onclick="pcSelOnlyOut()">เลือกรายการจ่ายทั้งหมด</button>';
+  if(!S.n) return '';   /* §pcFtCmp · ยังไม่ติ๊ก = ไม่มีแถบ · ปุ่มเลือกรายจ่ายทั้งหมดย้ายไปอยู่แถวปุ่มใต้สมุด */
   var net=S['in']-S.out;
   return '<b>เลือกไว้ '+S.n+' รายการ</b>'
    +'<span class="big">จ่ายรวม '+pcMoney(S.out)+'</span>'
@@ -79139,6 +79138,13 @@ function pc2Kpi(items){
       +(k.u?('<small>'+k.u+'</small>'):'')+'</div><div class="s">'+(k.s||'&nbsp;')+'</div></div>'; }).join('')+'</div>';
 }
 /* ── หน้าหลัก ───────────────────────────────────────────────────────── */
+/* §pcFtCmp · วิธีใช้ใต้สมุด พับไว้เป็นค่าเริ่มต้น · จำต่อเครื่อง */
+function pc2HelpOn(){ try{ return localStorage.getItem('la_pc_help')==='1'; }catch(_){ return false; } }
+function pc2Help(btn){
+  var on=!pc2HelpOn(); try{ localStorage.setItem('la_pc_help',on?'1':'0'); }catch(_){}
+  var card=btn&&btn.closest?btn.closest('.pc2-led'):null; var n=card?card.querySelector('.pc2-note'):null;
+  if(n) n.classList.toggle('off',!on); if(btn) btn.classList.toggle('on',on);
+}
 function pc2Main(pier){
   var ds=_pcDate, D=pcDay(pier,ds,false)||{'in':[],out:[],lt:{},pk:{}};
   var T=pcTotals(pier,ds), op=pcOpening(pier,ds), bal=op+T.net;
@@ -79249,9 +79255,15 @@ function pc2Main(pier){
         +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
         +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
-        +pcGrpBar(D)   /* §pcGrp */
-        +'<div class="pc2-add"><button class="i" onclick="pc2EdNew(\'in\')">＋ เพิ่มบรรทัดรับเงิน</button><button class="o" onclick="pc2EdNew(\'out\')">＋ เพิ่มบรรทัดจ่ายเงิน</button></div>'
-        +'<div class="pc2-note"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก · ติ๊กแล้วกด <b>สรุปตั้งเบิก</b> = ตั้งชื่อแล้วบันทึกเป็นรายการตั้งเบิก (ดูด้านล่าง)</div>'
+        +'<div class="pc2-ft">'   /* §pcFtCmp (2026-10-16) · owner: "ส่วนนี้ทำ ดีไซน์ให้กระชับหน่อย" · แถบเลือก/ชิปกลุ่ม/ปุ่มเพิ่ม/คำอธิบาย เดิมสี่ชั้น → แถวปุ่มเดียว + วิธีใช้พับได้ */
+          +'<button class="ad i" onclick="pc2EdNew(\'in\')" title="เพิ่มบรรทัดรับเงิน">＋ รับเงิน</button>'
+          +'<button class="ad o" onclick="pc2EdNew(\'out\')" title="เพิ่มบรรทัดจ่ายเงิน">＋ จ่ายเงิน</button>'
+          +(rows.length?'<button class="gh" onclick="pcSelOnlyOut()" title="ติ๊กช่องหน้าแถว เพื่อรวมยอดเฉพาะรายการที่เลือก · ปุ่มนี้ติ๊กรายจ่ายทั้งหมดให้">&#9745; เลือกรายจ่าย</button>':'')
+          +pcGrpBar(D)   /* §pcGrp */
+          +'<span class="sp"></span>'
+          +'<button class="hl'+(pc2HelpOn()?' on':'')+'" onclick="pc2Help(this)" title="วิธีใช้ · แสดง/ซ่อน">&#9432;</button>'
+        +'</div>'
+        +'<div class="pc2-note'+(pc2HelpOn()?'':' off')+'"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก · ติ๊กแล้วกด <b>สรุปตั้งเบิก</b> = ตั้งชื่อแล้วบันทึกเป็นรายการตั้งเบิก (ดูด้านล่าง)</div>'
       +'</div>'
       +pcClmList(pier)   /* §pcClm */
     +'</div>'
@@ -79527,6 +79539,23 @@ function pc2CSS(S){
   S+' em.cat.in{background:#DDF1EA;color:#0B5A43} '+S+' em.cat.lt{background:#E3F6FB;color:#0E5E80} '+S+' em.cat.pk{background:#EAF4E2;color:#3F6212} '+S+' em.cat.dk{background:#EEF2F8;color:'+SUB+'} '+S+' em.cat.ot{background:#F4F1EA;color:#5F5E5A}',
   S+' .pc2-led .pc-selbar{margin:10px 14px 0;border-radius:10px;border:none;background:#EEF2F8}',
   S+' .pc2-add{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}',
+  /* §pcFtCmp · แถวปุ่มเดียวใต้สมุด */
+  S+' .pc2-ft{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:9px 14px;border-top:1px solid #EEF1F6}',
+  S+' .pc2-ft button{height:30px;padding:0 11px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
+  S+' .pc2-ft .ad.i{border:1.5px dashed #9FD3BE;background:#F3FBF7;color:#0B5A43}',
+  S+' .pc2-ft .ad.o{border:1.5px dashed #E8B4AE;background:#FDF5F4;color:#8E2019}',
+  S+' .pc2-ft .ad:hover{filter:brightness(.97)}',
+  S+' .pc2-ft .gh,'+S+' .pc2-ft .hl{border:1px solid #DDE3EC;background:#fff;color:#4A5672;font-weight:600}',
+  S+' .pc2-ft .gh:hover,'+S+' .pc2-ft .hl:hover{background:#F5F7FB}',
+  S+' .pc2-ft .hl{width:30px;padding:0;font-size:14px} '+S+' .pc2-ft .hl.on{background:#EEF2F8;border-color:#C9D3E3;color:#16265C}',
+  S+' .pc2-ft .sp{flex:1}',
+  S+' .pc2-ft .pc2-grps{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0}',
+  S+' .pc2-ft .pc2-grps .dv{width:1px;height:18px;background:#DDE3EC;margin:0 4px}',
+  S+' .pc2-ft .pc2-grps .l{font-size:11.5px;font-weight:700;color:#7C8091;cursor:help}',
+  S+' .pc2-ft .pc2-grps .g{height:28px;padding:0 9px;gap:6px;border-radius:8px;font-size:12px}',
+  S+' .pc2-ft .pc2-grps .g i{width:7px;height:7px}',
+  S+' .pc2-ft .pc2-grps .g em{font-style:normal;font-size:12px;opacity:.75}',
+  S+' .pc2-note.off{display:none}',
   S+' .pc2-add button{height:44px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer}',
   S+' .pc2-add .i{border:1.5px dashed #9FD3BE;background:#F3FBF7;color:#0B5A43}',
   S+' .pc2-add .o{border:1.5px dashed #E8B4AE;background:#FDF5F4;color:#8E2019}',
@@ -80348,7 +80377,7 @@ function pc2CSS3(S){
   L+' .pc2-lr.ed .act .ok{border:none;background:'+N+';color:#fff} '+L+' .pc2-lr.ed .act .no{border:1px solid #D5DBE6;background:#fff;color:'+M+'}',
   L+' .pc2-add button{height:42px;border-radius:10px}',
   '@media (max-width:1380px){'+S+' .pc2-main{grid-template-columns:minmax(0,1fr)} '+S+' .pc2-r{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start} '+S+' .pc2-r .pc2-card{margin-bottom:0}}',
-  '@media (max-width:900px){'+S+' .pc2-r{grid-template-columns:1fr}}'
+  '@media (max-width:900px){'+S+' .pc2-r{grid-template-columns:1fr} '+S+' .pc2-ft .ad{height:36px;flex:1 1 120px}}'   /* §pcFtCmp · มือถือ ปุ่มเพิ่มกดง่าย */
   ].join('\n');
 }
 
