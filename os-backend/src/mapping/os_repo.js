@@ -194,6 +194,48 @@ function tripsDecompose(blob, out) {
   }
 }
 
+// ---------- sb_rate_types__ptroutes special-case (2026-10-16) ----------
+// Rate Type private transfer lives in addOns.privateTransfer = { unit, <routeId>: { PK:{sedan,van}, KL:{…} }, … }.
+// The route ids sit directly beside `unit`, an open-ended map the generated mapping flattened into one
+// fixed child table per route that happened to exist when it was written (sb_rate_types__addons__r4,
+// r5, r6, r10, r11, r12). Any other route — r1/r2/r3/r7/r8/r9 and every route added since — had
+// nowhere to land, so decomposeBlob dropped it on every save: the price showed on screen, then vanished
+// after a refresh (2026-10-16, Russian DMC Special Rate Sayama).
+// Same fix as trips__boat: one row per (rate type, route) with the whole zone map as JSON — lossless for
+// any route and any zone/field, past or future. The old r* tables are LEFT IN PLACE and still written;
+// when a route has a row here, that row wins (it carries the complete zone map).
+// The mapping declares the table as a map child under a field name the app never uses (`ptRoutes`), so
+// the generic engine wires load/delete/cascade for it; these two functions move it to the real place.
+const PT_ROUTES = 'sb_rate_types__ptroutes';
+function ptRoutesAssembleFix(blob) {
+  const arr = blob.sb_rate_types; if (!Array.isArray(arr)) return;
+  for (const rt of arr) {
+    if (!rt || typeof rt !== 'object' || !('ptRoutes' in rt)) continue;
+    const m = rt.ptRoutes; delete rt.ptRoutes;
+    if (!m || typeof m !== 'object') continue;
+    for (const [route, zones] of Object.entries(m)) {
+      if (route === 'unit' || !zones || typeof zones !== 'object') continue;
+      const ao = (rt.addOns && typeof rt.addOns === 'object') ? rt.addOns : (rt.addOns = {});
+      const pt = (ao.privateTransfer && typeof ao.privateTransfer === 'object') ? ao.privateTransfer : (ao.privateTransfer = {});
+      pt[route] = zones;
+    }
+  }
+}
+function ptRoutesDecompose(blob, out) {
+  if (!PLAN[PT_ROUTES]) return;
+  const rows = (out[PT_ROUTES] = []);
+  const arr = blob.sb_rate_types; if (!Array.isArray(arr)) return;
+  for (const rt of arr) {
+    if (!rt || rt.id == null) continue;
+    const pt = rt.addOns && rt.addOns.privateTransfer;
+    if (!pt || typeof pt !== 'object') continue;
+    for (const [route, zones] of Object.entries(pt)) {
+      if (route === 'unit' || !zones || typeof zones !== 'object' || Array.isArray(zones)) continue;
+      rows.push({ sb_rate_types_id: rt.id, key: route, value: JSON.stringify(zones), row_pk: rowPk(PT_ROUTES) });
+    }
+  }
+}
+
 // ---------- ASSEMBLE: rows -> blob ----------
 function buildElement(p, row) {
   if (p.elementScalar) return row[p.elementScalar];         // array-of-scalars element
@@ -299,6 +341,7 @@ function assembleBlob(tablesData) {
   }
   fleetDailyAssembleFix(blob, tablesData);   // rebuild the boat dimension the mapping dropped
   tripsAssembleFix(blob, tablesData);        // §openMap · เรือที่เพิ่มมาทีหลัง ไม่มีคอลัมน์ b*_ ของตัวเอง
+  ptRoutesAssembleFix(blob);                 // §ptRoutes · private transfer ทุกเส้นทาง ไม่ใช่แค่ r4/r5/r6/r10/r11/r12
   return blob;
 }
 
@@ -379,6 +422,7 @@ function decomposeBlob(blob) {
   }
   fleetDailyDecompose(blob, out);   // emit one row per (day, boat, trip) — overrides the generic (which can't see boats)
   tripsDecompose(blob, out);        // one row per (date, boat) — carries boats the b*_ columns can't
+  ptRoutesDecompose(blob, out);     // §ptRoutes · one row per (rate type, route) — every route, not just the six with tables
   return out;
 }
 

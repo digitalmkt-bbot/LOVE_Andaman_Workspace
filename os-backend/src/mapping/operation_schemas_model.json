@@ -2731,6 +2731,34 @@
     ],
     "rows": 3
   },
+  "sb_rate_types__ptroutes": {
+    "columns": [
+      {
+        "name": "sb_rate_types_id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "row_pk",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "row_pk",
+    "foreign_keys": [
+      {
+        "column": "sb_rate_types_id",
+        "references": "sb_rate_types.id"
+      }
+    ],
+    "rows": 0
+  },
   "sb_agents_rate_bindings": {
     "columns": [
       {

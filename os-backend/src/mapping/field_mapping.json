@@ -2935,6 +2935,30 @@
       "db_type": "bigint"
     }
   },
+  "sb_rate_types__ptroutes": {
+    "sb_rate_types_id": {
+      "source": "(link) sb_rate_types.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "(map key of ptRoutes)",
+      "kind": "map_key",
+      "db_type": "text",
+      "note": "route id of addOns.privateTransfer · os_repo moves it between ptRoutes and addOns.privateTransfer (ptRoutesAssembleFix / ptRoutesDecompose)"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "addOns.privateTransfer.<route> whole zone map as JSON",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "every route, not only the six with an sb_rate_types__addons__r* table (those dropped any other route on save)"
+    }
+  },
   "sb_agents_rate_bindings": {
     "id": {
       "source": "sb_agents_rate_bindings[].id (record id; generated if absent)",
