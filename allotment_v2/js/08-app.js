@@ -78510,6 +78510,12 @@ function bkNbfCSS2(){
   +S+' .bkv2-nb-h1{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding-left:0;text-indent:.30em}'
   +S+' .bkv2-nb-h1 i{text-indent:.34em}'
   +'@media(max-width:1180px){'+S+' .bkv2-nb-h1{display:none}}'
+  /* §nbRvFlow (2026-10-16) · owner "หน้า New booking รายการที่กด Addon เด้ง กดไม่ได้"
+     ที่ <=820px §mobile2 (02-skins.css) ยุบกริดฟอร์มเหลือคอลัมน์เดียว แต่แผง Booking Review ยัง position:fixed
+     (top:74px · สูงเกือบเต็มจอ) จึงลอยทับฟอร์ม · แตะ add-on แล้วโดนแผงแทน (เจอที่ 390px: ทับทั้งจอ · 800px: ทับครึ่งซ้าย)
+     จอแคบให้แผงอยู่ในลำดับปกติใต้ฟอร์ม · จอใหญ่ยังลอยตามเดิม */
+  +'@media(max-width:820px){'+S+' .bkv2-review-cell{width:auto}'
+    +S+' .bkv2-review-sticky{position:static !important;width:auto !important;max-height:none !important;overflow:visible !important}}'
   +S+' .nbf-steps{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}'
   +S+' .bkv2-nb-topbar{row-gap:10px}'
   +S+' .nbf-st{height:26px;padding:0 9px 0 5px;border-radius:13px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;font-family:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}'
