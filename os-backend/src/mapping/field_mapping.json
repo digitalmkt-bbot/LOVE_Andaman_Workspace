@@ -7647,6 +7647,12 @@
       "source": "po_cash_rows[].src",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "claim": {
+      "source": "po_cash_rows[].claim",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "id of the po_cash_claims record this expense was claimed under · empty = not claimed"
     }
   },
   "po_cash_lt": {
@@ -7791,6 +7797,39 @@
     },
     "src": {
       "source": "po_cash_pk[].src",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "po_cash_claims": {
+    "id": {
+      "source": "po_cash_claims[].id (record id)",
+      "kind": "pk",
+      "db_type": "text",
+      "note": "petty cash claim (ตั้งเบิก) · staff tick ledger expenses and name the set · lines link back via po_cash_rows.claim · the amount is never stored, always summed from the linked lines"
+    },
+    "pier": {
+      "source": "po_cash_claims[].pier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "date": {
+      "source": "po_cash_claims[].date",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "name": {
+      "source": "po_cash_claims[].name",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "po_cash_claims[].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ts": {
+      "source": "po_cash_claims[].ts",
       "kind": "scalar",
       "db_type": "text"
     }
