@@ -7719,7 +7719,11 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
   var trips=Object.keys(byRoute).length;
   var dObj=new Date(date+'T00:00:00'), dLabel=dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
   var refCode='RC-'+date.replace(/-/g,'').slice(2)+'-'+(((ag&&ag.code)||agName.replace(/[^A-Za-z]/g,'').slice(0,4).toUpperCase())||'B2C');
-  var body='';
+  var body='', mbody='';   /* §rcMob · mbody = the same rows laid out for a phone */
+  /* §rcMob · วันที่บรรทัดเดียว "FRIDAY 16 Oct 2026" บนสีเอเย่นต์ ไม่มีกล่องขาว */
+  var dWk=dObj.toLocaleDateString('en-GB',{weekday:'long'}), dDt=dObj.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var _gn=new Date(), _p2=function(n){ return (n<10?'0':'')+n; };
+  var genTxt='Generated '+_gn.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' '+_p2(_gn.getHours())+':'+_p2(_gn.getMinutes())+' &middot; LOVE Andaman';
   Object.keys(byRoute).forEach(function(rid){ var grp=byRoute[rid].slice().sort(function(a,b){ return String(a.d.time).localeCompare(String(b.d.time)); });
     var route=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===rid;}):null; var nm=(route&&route.name)||rid;
     var tpax=grp.reduce(function(s,r){return s+r.d.pax;},0);
@@ -7745,13 +7749,61 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
       +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
       +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
+    /* §rcMob (2026-10-17) · owner: "ขอมีแบบ 2 version Desktop กับ Mobile" · "เรียงข้อมูลให้เหมือน Version Desktop" · "จำนวนก็ต่อชื่อ ลค ไปเลย"
+       ลำดับเดียวกับคอลัมน์ Desktop: # · Booking # · Customer (+คน) · Phone → Pick-up · Hotel → Room · Zone → Plate · Add-on → Special request · Payment
+       ช่องว่างขึ้น — เหมือน Desktop · คนประเภทที่เป็น 0 ไม่ต่อท้ายชื่อ */
+    mbody+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
+      +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
+      +grp.map(function(r,i){ var d=r.d, M='<span class="mut">&mdash;</span>';
+        var px=[['AD',d.ad],['CHD',d.chd],['INF',d.inf],['FOC',d.foc]].filter(function(x){ return +x[1]>0; }).map(function(x){ return x[0]+' '+x[1]; }).join(' &middot; ');
+        var cell=function(k,v,c,w){ return '<div'+(w?' class="w"':'')+'><dt>'+k+'</dt><dd'+(c?(' class="'+c+'"'):'')+'>'+v+'</dd></div>'; };
+        return '<div class="mk"><div class="r1"><span class="n">'+(i+1)+'</span><span class="v">'+esc(d.voucher)+'</span>'
+          +'<b>'+esc(d.lead)+(px?(' <span class="pxi">&middot; '+px+'</span>'):'')+'</b></div>'
+          +'<div class="ph2">'+(d.phone?esc(d.phone):'<span class="mut">Phone &mdash;</span>')+'</div>'
+          +'<dl>'
+            +cell('Pick-up',esc(d.time),'t')
+            +cell('Hotel',(esc(d.hotel)||M)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
+            +cell('Room',d.room?esc(d.room):M,'m')
+            +cell('Zone',d.zone?esc(d.zone):M)
+            +cell('Plate',_rcVanSheet(d.van, esc))
+            +cell('Add-on',d.addon?'<span class="ao">'+esc(d.addon)+'</span>':M)
+            +cell('Special request',d.special?esc(d.special):M,'',1)
+            +cell('Payment',d.cot?'<span class="cot">'+esc(d.cot)+'</span>':M)
+          +'</dl></div>';
+      }).join('');
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
     +'<style>*{box-sizing:border-box}body{margin:0;font-family:\'DM Sans\',Arial,sans-serif;color:#2C2C2A;background:#EDECE7}'
     +'.pg{max-width:1440px;margin:18px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.08)}'
-    +'.hd{background:'+_hdBg+';color:'+_hdInk+';padding:18px 24px;display:flex;justify-content:space-between;align-items:flex-start}'
+    +'.hd{background:'+_hdBg+';color:'+_hdInk+';padding:18px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px}'
     +'.brand{font-size:17px;font-weight:700;letter-spacing:.03em}.sub{font-size:12px;opacity:.9;margin-top:2px}'
     +'.meta{text-align:right;font-size:12px;line-height:1.5}.meta b{font-size:13px}'
+    /* §rcMob · วันที่บรรทัดเดียว ไม่มีพื้นขาว */
+    +'.dl1{display:flex;align-items:baseline;justify-content:flex-end;gap:9px;white-space:nowrap;line-height:1}'
+    +'.dl1 i{font-style:normal;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85}'
+    +'.dl1 b{font-size:23px;font-weight:800;letter-spacing:-.01em}'
+    +'.meta .rf{font-size:11.5px;opacity:.85;margin-top:7px}'
+    +'.wm{font-size:10px;color:#B4B2A9;margin-top:5px}'
+    /* §rcMob · ใบมือถือ 390px · ชุดเดียวกับ Desktop */
+    +'.pgm{display:none;width:390px;margin:14px auto 24px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.08)}'
+    +'body.vm .pg{display:none}body.vm .pgm{display:block}body.vm .bar{max-width:390px}'
+    +'.pgm .hd{padding:16px 18px}.pgm .brand{font-size:15px}.pgm .sub{font-size:11px}'
+    +'.pgm .dl1 i{font-size:11px}.pgm .dl1 b{font-size:19px}.pgm .meta .rf{font-size:10px;margin-top:5px}'
+    +'.pgm .agb{padding:12px 18px;display:block}.pgm .agn{font-size:15px;line-height:1.3}'
+    +'.pgm .kpis{justify-content:flex-start;gap:6px 12px;margin-top:9px}'
+    +'.pgm .kpis .kv b{font-size:15px}.pgm .kpis .kv.tt b{font-size:17px}.pgm .kpis .kv i{font-size:9.5px}.pgm .kpis .br{flex-basis:100%;height:0}'
+    +'.pgm .bd{padding:2px 18px 10px}.pgm .sec{font-size:14px;margin:14px 0 2px;padding:8px 12px;border-left-width:5px}.pgm .secpax{font-size:11.5px}'
+    +'.mk{padding:12px 0;border-bottom:1px solid #EEECE6}.mk:last-child{border-bottom:none}'
+    +'.mk .r1{display:flex;align-items:baseline;gap:8px}.mk .n{font-size:11px;color:#9a988f;width:14px;flex:none}'
+    +'.mk .v{font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;flex:none}'
+    +'.mk b{font-size:14px;font-weight:700;flex:1;min-width:0}.mk .pxi{color:#5F5E5A;font-size:13px;white-space:nowrap}'
+    +'.mk .ph2{margin:3px 0 0 22px;font-family:\'DM Mono\',monospace;font-size:11.5px;color:#5F5E5A}'
+    +'.mk dl{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:9px 0 0 22px}'
+    +'.mk dl .w{grid-column:1/-1}'
+    +'.mk dt{font-size:9px;font-weight:600;color:#9a988f;letter-spacing:.04em;text-transform:uppercase}'
+    +'.mk dd{margin:2px 0 0;font-size:12.5px}.mk dd.t{font-family:\'DM Mono\',monospace;font-size:15px;font-weight:700}.mk dd.m{font-variant-numeric:tabular-nums}'
+    +'.mk .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px}'
+    +'.pgm .ft{padding:12px 18px;font-size:11px}'
     +'.agb{padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #EEECE6;flex-wrap:wrap;gap:8px}'
     +'.agl{font-size:11px;color:#9a988f;text-transform:uppercase;letter-spacing:.05em}.agn{font-size:16px;font-weight:700}'
     /* §rcKpi · ยอดสรุปบรรทัดเดียว · ป้ายเล็กนำหน้า เลขใหญ่ตาม อ่านซ้ายไปขวารวดเดียว */
@@ -7772,12 +7824,21 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
     +'.gt .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px;white-space:nowrap}'   /* §rcDrop */
     +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
-    +'.bar{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:8px;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
-    +'@media print{body{background:#fff}.bar{display:none}.pg{box-shadow:none;margin:0;max-width:100%;border-radius:0}@page{size:A4 landscape;margin:9mm}}'
+    +'.bar{max-width:1440px;margin:10px auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 8px}.bar .sp{flex:1}'
+    +'.seg{display:inline-flex;background:#fff;border:1px solid #d8d6cf;border-radius:9px;padding:3px;gap:2px}'
+    +'.bar .seg button{border:none;margin:0;padding:6px 14px;border-radius:7px;background:transparent;color:#5F5E5A}.bar .seg button.on{background:#2C2C2A;color:#fff}'
+    +'.bar .cp{background:#0F6E56;color:#fff;border-color:#0F6E56}'
+    +'.tst{display:none;align-items:center;background:#16265C;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600}'
+    +'.bar-x{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:0;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
+    +'@media print{body{background:#fff}.bar{display:none}.pg,.pgm{box-shadow:none;margin:0 auto;border-radius:0}.pg{max-width:100%}@page{size:A4 landscape;margin:9mm}}'
     +'</style></head><body>'
-    +'<div class="bar"><button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
-    +'<div class="pg">'
-    +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><b>'+esc(dLabel)+'</b><div>Ref '+esc(refCode)+'</div></div></div>'
+    +'<div class="bar"><span class="seg"><button id="bD" onclick="vw(\'d\')">Desktop</button><button id="bM" onclick="vw(\'m\')">Mobile</button></span>'
+      +'<span class="tst" id="tst"></span><span class="sp"></span>'
+      +'<button class="cp" onclick="cpy()" title="Copy the sheet as a sharp image (3x) to paste into LINE / WhatsApp / email">Copy image</button>'
+      +'<button onclick="png()">Save PNG</button>'
+      +'<button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
+    +'<div class="pg" id="sheet-d">'
+    +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><div class="dl1"><i>'+esc(dWk)+'</i><b>'+esc(dDt)+'</b></div><div class="rf">Ref '+esc(refCode)+'</div></div></div>'
     /* §rcAgbFix · ปิด .agn แล้วปิดกล่องซ้ายให้ครบก่อนขึ้น .kpis
        ตอนใส่ป้ายใบบางส่วนใน §rcPick ผมทำ </div> หายไปหนึ่งตัว
        .kpis เลยกลายเป็นลูกของกล่องซ้าย แถบชื่อเอเย่นต์ที่เคยกางเต็มความกว้าง
@@ -7802,8 +7863,49 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<span class="kv"><i>Trips</i><b>'+trips+'</b></span>'
       +'</div></div>'
     +'<div class="bd">'+body+'</div>'
-    +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.</div>'
-    +'</div></body></html>';
+    +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.<div class="wm">'+genTxt+'</div></div>'
+    +'</div>'
+    /* §rcMob · ใบมือถือ · หัว/แถบเอเย่นต์/แถบทริป/ท้ายใบชุดเดียวกับ Desktop */
+    +'<div class="pgm" id="sheet-m">'
+      +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><div class="dl1"><i>'+esc(dWk)+'</i><b>'+esc(dDt)+'</b></div><div class="rf">Ref '+esc(refCode)+'</div></div></div>'
+      +'<div class="agb"><div class="agl">Agent</div><div class="agn">'+esc(agName)+'</div>'
+        +(_partial?('<div style="margin-top:5px;display:inline-block;background:#FDF3E3;color:#8A5A00;border:1px solid #F0DFBD;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700">'
+          +'Selected bookings only &middot; '+rows.length+' of '+_nAll+'</div>'):'')
+        +'<div class="kpis">'
+          +'<span class="kv'+(tAD?'':' z')+'"><i>AD</i><b>'+tAD+'</b></span>'
+          +'<span class="kv'+(tCH?'':' z')+'"><i>CHD</i><b>'+tCH+'</b></span>'
+          +'<span class="kv'+(tIN?'':' z')+'"><i>INF</i><b>'+tIN+'</b></span>'
+          +'<span class="kv'+(tFO?' foc':' z')+'"><i>FOC</i><b>'+tFO+'</b></span>'
+          +'<span class="kv tt"><i>Total pax</i><b>'+pax+'</b></span><span class="br"></span>'
+          +'<span class="kv"><i>Booking</i><b>'+rows.length+'</b></span>'
+          +'<span class="kv"><i>Trips</i><b>'+trips+'</b></span>'
+        +'</div></div>'
+      +'<div class="bd">'+mbody+'</div>'
+      +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.<div class="wm">'+genTxt+'</div></div>'
+    +'</div>'
+    /* §rcMob · Copy image = html2canvas 3x ของใบที่เปิดอยู่ → คลิปบอร์ด · copy ไม่ได้ = ดาวน์โหลด PNG แทน */
+    +'<script>'
+    +'var FN='+JSON.stringify(refCode)+';'
+    +'function vw(m){document.body.classList.toggle("vm",m==="m");document.getElementById("bD").classList.toggle("on",m!=="m");document.getElementById("bM").classList.toggle("on",m==="m");try{localStorage.setItem("la_rc_view",m);}catch(_){}}'
+    +'(function(){var m="d";try{m=localStorage.getItem("la_rc_view")==="m"?"m":"d";}catch(_){}vw(m);})();'
+    +'function cur(){return document.getElementById(document.body.classList.contains("vm")?"sheet-m":"sheet-d");}'
+    +'function tst(t){var x=document.getElementById("tst");x.textContent=t||"";x.style.display=t?"inline-flex":"none";}'
+    +'function h2c(){return new Promise(function(ok,bad){if(window.html2canvas)return ok();var s=document.createElement("script");'
+      +'s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";s.onload=function(){ok();};s.onerror=function(){bad(new Error("load"));};document.head.appendChild(s);});}'
+    +'var SZ="";'
+    +'function blob(){var e=cur();return h2c().then(function(){return (document.fonts&&document.fonts.ready)?document.fonts.ready:null;})'
+      +'.then(function(){return html2canvas(e,{scale:3,backgroundColor:"#ffffff",logging:false,useCORS:true});})'
+      +'.then(function(c){SZ=c.width+" x "+c.height+" px";return new Promise(function(ok,bad){c.toBlob(function(b){b?ok(b):bad(new Error("empty"));},"image/png");});});}'
+    +'function dl(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=FN+(document.body.classList.contains("vm")?"-mobile":"")+".png";'
+      +'document.body.appendChild(a);a.click();a.remove();setTimeout(function(){try{URL.revokeObjectURL(u);}catch(_){}},5000);}'
+    +'function fail(){tst("");alert("Could not make the image. Please use Print / Save PDF.");}'
+    +'function cpy(){tst("Making image...");var p=blob();'
+      +'if(navigator.clipboard&&window.ClipboardItem){try{navigator.clipboard.write([new ClipboardItem({"image/png":p})]).then(function(){tst("Copied \\u00b7 "+SZ+" \\u00b7 paste into LINE / email");setTimeout(function(){tst("");},6000);},'
+        +'function(){p.then(function(b){dl(b);tst("Clipboard blocked \\u00b7 saved as PNG");}).catch(fail);});return;}catch(_){}}'
+      +'p.then(function(b){dl(b);tst("Saved as PNG \\u00b7 "+SZ);}).catch(fail);}'
+    +'function png(){tst("Making image...");blob().then(function(b){dl(b);tst("Saved PNG \\u00b7 "+SZ);setTimeout(function(){tst("");},6000);}).catch(fail);}'
+    +'<\/script>'
+    +'</body></html>';
   var w=window.open('','_blank'); if(!w){ alert('Popup blocked — please allow popups to open the sheet'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
