@@ -1028,7 +1028,11 @@ function poNavGroup(el){
   var g=el.dataset.pogrp; if(!g) return;
   var sb=document.querySelector('.sidebar');
   var kids=poNavGroupKids(g).filter(function(k){ return k.style.display!=='none'; });
-  if(sb && sb.classList.contains('sb-collapsed')){ if(kids[0]) kids[0].click(); return; }
+  /* §poNavMob (2026-10-16) · owner "ในโทรศัพท์ tab Phuket / Tub Lamu ไม่มีรายการย่อยขึ้น กดแล้วเด้งไปหน้าใบงาน"
+     ค่า sb-collapsed จำไว้ในเครื่อง · บนมือถือเมนูเป็นลิ้นชักเต็มความกว้าง (02-skins ≤820px) แต่คลาสยังติดอยู่
+     ของเดิมเห็นคลาสแล้วถือว่าเป็นรางไอคอน → ข้ามไปหน้าแรกของท่า · ตอนนี้ดูความกว้างจริงของเมนูแทน */
+  var rail=sb && sb.classList.contains('sb-collapsed') && sb.getBoundingClientRect().width<140;
+  if(rail){ if(kids[0]) kids[0].click(); return; }
   var col=el.classList.toggle('po-collapsed');
   kids.forEach(function(k){ if(col) k.classList.add('po-hide'); else k.classList.remove('po-hide'); });
   try{ var st=JSON.parse(localStorage.getItem('la_pogrp')||'{}'); st[g]=col?1:0; localStorage.setItem('la_pogrp',JSON.stringify(st)); }catch(_){}

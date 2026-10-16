@@ -5301,7 +5301,11 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
   var trips=Object.keys(byRoute).length;
   var dObj=new Date(date+'T00:00:00'), dLabel=dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
   var refCode='RC-'+date.replace(/-/g,'').slice(2)+'-'+(((ag&&ag.code)||agName.replace(/[^A-Za-z]/g,'').slice(0,4).toUpperCase())||'B2C');
-  var body='';
+  var body='', mbody='';   /* §rcMob · mbody = the same rows laid out for a phone */
+  /* §rcMob · วันที่บรรทัดเดียว "FRIDAY 16 Oct 2026" บนสีเอเย่นต์ ไม่มีกล่องขาว */
+  var dWk=dObj.toLocaleDateString('en-GB',{weekday:'long'}), dDt=dObj.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var _gn=new Date(), _p2=function(n){ return (n<10?'0':'')+n; };
+  var genTxt='Generated '+_gn.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' '+_p2(_gn.getHours())+':'+_p2(_gn.getMinutes())+' &middot; LOVE Andaman';
   Object.keys(byRoute).forEach(function(rid){ var grp=byRoute[rid].slice().sort(function(a,b){ return String(a.d.time).localeCompare(String(b.d.time)); });
     var route=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===rid;}):null; var nm=(route&&route.name)||rid;
     var tpax=grp.reduce(function(s,r){return s+r.d.pax;},0);
@@ -5327,13 +5331,61 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
       +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
       +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Plate</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
+    /* §rcMob (2026-10-17) · owner: "ขอมีแบบ 2 version Desktop กับ Mobile" · "เรียงข้อมูลให้เหมือน Version Desktop" · "จำนวนก็ต่อชื่อ ลค ไปเลย"
+       ลำดับเดียวกับคอลัมน์ Desktop: # · Booking # · Customer (+คน) · Phone → Pick-up · Hotel → Room · Zone → Plate · Add-on → Special request · Payment
+       ช่องว่างขึ้น — เหมือน Desktop · คนประเภทที่เป็น 0 ไม่ต่อท้ายชื่อ */
+    mbody+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
+      +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
+      +grp.map(function(r,i){ var d=r.d, M='<span class="mut">&mdash;</span>';
+        var px=[['AD',d.ad],['CHD',d.chd],['INF',d.inf],['FOC',d.foc]].filter(function(x){ return +x[1]>0; }).map(function(x){ return x[0]+' '+x[1]; }).join(' &middot; ');
+        var cell=function(k,v,c,w){ return '<div'+(w?' class="w"':'')+'><dt>'+k+'</dt><dd'+(c?(' class="'+c+'"'):'')+'>'+v+'</dd></div>'; };
+        return '<div class="mk"><div class="r1"><span class="n">'+(i+1)+'</span><span class="v">'+esc(d.voucher)+'</span>'
+          +'<b>'+esc(d.lead)+(px?(' <span class="pxi">&middot; '+px+'</span>'):'')+'</b></div>'
+          +'<div class="ph2">'+(d.phone?esc(d.phone):'<span class="mut">Phone &mdash;</span>')+'</div>'
+          +'<dl>'
+            +cell('Pick-up',esc(d.time),'t')
+            +cell('Hotel',(esc(d.hotel)||M)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
+            +cell('Room',d.room?esc(d.room):M,'m')
+            +cell('Zone',d.zone?esc(d.zone):M)
+            +cell('Plate',_rcVanSheet(d.van, esc))
+            +cell('Add-on',d.addon?'<span class="ao">'+esc(d.addon)+'</span>':M)
+            +cell('Special request',d.special?esc(d.special):M,'',1)
+            +cell('Payment',d.cot?'<span class="cot">'+esc(d.cot)+'</span>':M)
+          +'</dl></div>';
+      }).join('');
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
     +'<style>*{box-sizing:border-box}body{margin:0;font-family:\'DM Sans\',Arial,sans-serif;color:#2C2C2A;background:#EDECE7}'
     +'.pg{max-width:1440px;margin:18px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.08)}'
-    +'.hd{background:'+_hdBg+';color:'+_hdInk+';padding:18px 24px;display:flex;justify-content:space-between;align-items:flex-start}'
+    +'.hd{background:'+_hdBg+';color:'+_hdInk+';padding:18px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px}'
     +'.brand{font-size:17px;font-weight:700;letter-spacing:.03em}.sub{font-size:12px;opacity:.9;margin-top:2px}'
     +'.meta{text-align:right;font-size:12px;line-height:1.5}.meta b{font-size:13px}'
+    /* §rcMob · วันที่บรรทัดเดียว ไม่มีพื้นขาว */
+    +'.dl1{display:flex;align-items:baseline;justify-content:flex-end;gap:9px;white-space:nowrap;line-height:1}'
+    +'.dl1 i{font-style:normal;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85}'
+    +'.dl1 b{font-size:23px;font-weight:800;letter-spacing:-.01em}'
+    +'.meta .rf{font-size:11.5px;opacity:.85;margin-top:7px}'
+    +'.wm{font-size:10px;color:#B4B2A9;margin-top:5px}'
+    /* §rcMob · ใบมือถือ 390px · ชุดเดียวกับ Desktop */
+    +'.pgm{display:none;width:390px;margin:14px auto 24px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.08)}'
+    +'body.vm .pg{display:none}body.vm .pgm{display:block}body.vm .bar{max-width:390px}'
+    +'.pgm .hd{padding:16px 18px}.pgm .brand{font-size:15px}.pgm .sub{font-size:11px}'
+    +'.pgm .dl1 i{font-size:11px}.pgm .dl1 b{font-size:19px}.pgm .meta .rf{font-size:10px;margin-top:5px}'
+    +'.pgm .agb{padding:12px 18px;display:block}.pgm .agn{font-size:15px;line-height:1.3}'
+    +'.pgm .kpis{justify-content:flex-start;gap:6px 12px;margin-top:9px}'
+    +'.pgm .kpis .kv b{font-size:15px}.pgm .kpis .kv.tt b{font-size:17px}.pgm .kpis .kv i{font-size:9.5px}.pgm .kpis .br{flex-basis:100%;height:0}'
+    +'.pgm .bd{padding:2px 18px 10px}.pgm .sec{font-size:14px;margin:14px 0 2px;padding:8px 12px;border-left-width:5px}.pgm .secpax{font-size:11.5px}'
+    +'.mk{padding:12px 0;border-bottom:1px solid #EEECE6}.mk:last-child{border-bottom:none}'
+    +'.mk .r1{display:flex;align-items:baseline;gap:8px}.mk .n{font-size:11px;color:#9a988f;width:14px;flex:none}'
+    +'.mk .v{font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;flex:none}'
+    +'.mk b{font-size:14px;font-weight:700;flex:1;min-width:0}.mk .pxi{color:#5F5E5A;font-size:13px;white-space:nowrap}'
+    +'.mk .ph2{margin:3px 0 0 22px;font-family:\'DM Mono\',monospace;font-size:11.5px;color:#5F5E5A}'
+    +'.mk dl{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:9px 0 0 22px}'
+    +'.mk dl .w{grid-column:1/-1}'
+    +'.mk dt{font-size:9px;font-weight:600;color:#9a988f;letter-spacing:.04em;text-transform:uppercase}'
+    +'.mk dd{margin:2px 0 0;font-size:12.5px}.mk dd.t{font-family:\'DM Mono\',monospace;font-size:15px;font-weight:700}.mk dd.m{font-variant-numeric:tabular-nums}'
+    +'.mk .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px}'
+    +'.pgm .ft{padding:12px 18px;font-size:11px}'
     +'.agb{padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #EEECE6;flex-wrap:wrap;gap:8px}'
     +'.agl{font-size:11px;color:#9a988f;text-transform:uppercase;letter-spacing:.05em}.agn{font-size:16px;font-weight:700}'
     /* §rcKpi · ยอดสรุปบรรทัดเดียว · ป้ายเล็กนำหน้า เลขใหญ่ตาม อ่านซ้ายไปขวารวดเดียว */
@@ -5354,12 +5406,21 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
     +'.gt .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px;white-space:nowrap}'   /* §rcDrop */
     +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
-    +'.bar{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:8px;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
-    +'@media print{body{background:#fff}.bar{display:none}.pg{box-shadow:none;margin:0;max-width:100%;border-radius:0}@page{size:A4 landscape;margin:9mm}}'
+    +'.bar{max-width:1440px;margin:10px auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 8px}.bar .sp{flex:1}'
+    +'.seg{display:inline-flex;background:#fff;border:1px solid #d8d6cf;border-radius:9px;padding:3px;gap:2px}'
+    +'.bar .seg button{border:none;margin:0;padding:6px 14px;border-radius:7px;background:transparent;color:#5F5E5A}.bar .seg button.on{background:#2C2C2A;color:#fff}'
+    +'.bar .cp{background:#0F6E56;color:#fff;border-color:#0F6E56}'
+    +'.tst{display:none;align-items:center;background:#16265C;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600}'
+    +'.bar-x{max-width:1440px;margin:10px auto;text-align:right}.bar button{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid #d8d6cf;background:#fff;cursor:pointer;margin-left:0;font-family:inherit}.bar .pr{background:#1683C7;color:#fff;border-color:#1683C7}'
+    +'@media print{body{background:#fff}.bar{display:none}.pg,.pgm{box-shadow:none;margin:0 auto;border-radius:0}.pg{max-width:100%}@page{size:A4 landscape;margin:9mm}}'
     +'</style></head><body>'
-    +'<div class="bar"><button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
-    +'<div class="pg">'
-    +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><b>'+esc(dLabel)+'</b><div>Ref '+esc(refCode)+'</div></div></div>'
+    +'<div class="bar"><span class="seg"><button id="bD" onclick="vw(\'d\')">Desktop</button><button id="bM" onclick="vw(\'m\')">Mobile</button></span>'
+      +'<span class="tst" id="tst"></span><span class="sp"></span>'
+      +'<button class="cp" onclick="cpy()" title="Copy the sheet as a sharp image (3x) to paste into LINE / WhatsApp / email">Copy image</button>'
+      +'<button onclick="png()">Save PNG</button>'
+      +'<button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
+    +'<div class="pg" id="sheet-d">'
+    +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><div class="dl1"><i>'+esc(dWk)+'</i><b>'+esc(dDt)+'</b></div><div class="rf">Ref '+esc(refCode)+'</div></div></div>'
     /* §rcAgbFix · ปิด .agn แล้วปิดกล่องซ้ายให้ครบก่อนขึ้น .kpis
        ตอนใส่ป้ายใบบางส่วนใน §rcPick ผมทำ </div> หายไปหนึ่งตัว
        .kpis เลยกลายเป็นลูกของกล่องซ้าย แถบชื่อเอเย่นต์ที่เคยกางเต็มความกว้าง
@@ -5384,8 +5445,49 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<span class="kv"><i>Trips</i><b>'+trips+'</b></span>'
       +'</div></div>'
     +'<div class="bd">'+body+'</div>'
-    +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.</div>'
-    +'</div></body></html>';
+    +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.<div class="wm">'+genTxt+'</div></div>'
+    +'</div>'
+    /* §rcMob · ใบมือถือ · หัว/แถบเอเย่นต์/แถบทริป/ท้ายใบชุดเดียวกับ Desktop */
+    +'<div class="pgm" id="sheet-m">'
+      +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><div class="dl1"><i>'+esc(dWk)+'</i><b>'+esc(dDt)+'</b></div><div class="rf">Ref '+esc(refCode)+'</div></div></div>'
+      +'<div class="agb"><div class="agl">Agent</div><div class="agn">'+esc(agName)+'</div>'
+        +(_partial?('<div style="margin-top:5px;display:inline-block;background:#FDF3E3;color:#8A5A00;border:1px solid #F0DFBD;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700">'
+          +'Selected bookings only &middot; '+rows.length+' of '+_nAll+'</div>'):'')
+        +'<div class="kpis">'
+          +'<span class="kv'+(tAD?'':' z')+'"><i>AD</i><b>'+tAD+'</b></span>'
+          +'<span class="kv'+(tCH?'':' z')+'"><i>CHD</i><b>'+tCH+'</b></span>'
+          +'<span class="kv'+(tIN?'':' z')+'"><i>INF</i><b>'+tIN+'</b></span>'
+          +'<span class="kv'+(tFO?' foc':' z')+'"><i>FOC</i><b>'+tFO+'</b></span>'
+          +'<span class="kv tt"><i>Total pax</i><b>'+pax+'</b></span><span class="br"></span>'
+          +'<span class="kv"><i>Booking</i><b>'+rows.length+'</b></span>'
+          +'<span class="kv"><i>Trips</i><b>'+trips+'</b></span>'
+        +'</div></div>'
+      +'<div class="bd">'+mbody+'</div>'
+      +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.<div class="wm">'+genTxt+'</div></div>'
+    +'</div>'
+    /* §rcMob · Copy image = html2canvas 3x ของใบที่เปิดอยู่ → คลิปบอร์ด · copy ไม่ได้ = ดาวน์โหลด PNG แทน */
+    +'<script>'
+    +'var FN='+JSON.stringify(refCode)+';'
+    +'function vw(m){document.body.classList.toggle("vm",m==="m");document.getElementById("bD").classList.toggle("on",m!=="m");document.getElementById("bM").classList.toggle("on",m==="m");try{localStorage.setItem("la_rc_view",m);}catch(_){}}'
+    +'(function(){var m="d";try{m=localStorage.getItem("la_rc_view")==="m"?"m":"d";}catch(_){}vw(m);})();'
+    +'function cur(){return document.getElementById(document.body.classList.contains("vm")?"sheet-m":"sheet-d");}'
+    +'function tst(t){var x=document.getElementById("tst");x.textContent=t||"";x.style.display=t?"inline-flex":"none";}'
+    +'function h2c(){return new Promise(function(ok,bad){if(window.html2canvas)return ok();var s=document.createElement("script");'
+      +'s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";s.onload=function(){ok();};s.onerror=function(){bad(new Error("load"));};document.head.appendChild(s);});}'
+    +'var SZ="";'
+    +'function blob(){var e=cur();return h2c().then(function(){return (document.fonts&&document.fonts.ready)?document.fonts.ready:null;})'
+      +'.then(function(){return html2canvas(e,{scale:3,backgroundColor:"#ffffff",logging:false,useCORS:true});})'
+      +'.then(function(c){SZ=c.width+" x "+c.height+" px";return new Promise(function(ok,bad){c.toBlob(function(b){b?ok(b):bad(new Error("empty"));},"image/png");});});}'
+    +'function dl(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=FN+(document.body.classList.contains("vm")?"-mobile":"")+".png";'
+      +'document.body.appendChild(a);a.click();a.remove();setTimeout(function(){try{URL.revokeObjectURL(u);}catch(_){}},5000);}'
+    +'function fail(){tst("");alert("Could not make the image. Please use Print / Save PDF.");}'
+    +'function cpy(){tst("Making image...");var p=blob();'
+      +'if(navigator.clipboard&&window.ClipboardItem){try{navigator.clipboard.write([new ClipboardItem({"image/png":p})]).then(function(){tst("Copied \\u00b7 "+SZ+" \\u00b7 paste into LINE / email");setTimeout(function(){tst("");},6000);},'
+        +'function(){p.then(function(b){dl(b);tst("Clipboard blocked \\u00b7 saved as PNG");}).catch(fail);});return;}catch(_){}}'
+      +'p.then(function(b){dl(b);tst("Saved as PNG \\u00b7 "+SZ);}).catch(fail);}'
+    +'function png(){tst("Making image...");blob().then(function(b){dl(b);tst("Saved PNG \\u00b7 "+SZ);setTimeout(function(){tst("");},6000);}).catch(fail);}'
+    +'<\/script>'
+    +'</body></html>';
   var w=window.open('','_blank'); if(!w){ alert('Popup blocked — please allow popups to open the sheet'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
@@ -12782,6 +12884,7 @@ function pcBuildViews(){
     var D = day(x.pier, x.date), r = { id:x.id, amt:Math.round(+x.amt || 0) };
     pcPut(r, 'txt', x.txt); pcPut(r, 'at', x.at); pcPut(r, 'by', x.by);
     pcPut(r, 'ts', x.ts);   pcPut(r, 'src', x.src);
+    pcPut(r, 'claim', x.claim);   /* §pcClm */
     D[x.kind === 'in' ? 'in' : 'out'].push(r);
   });
   pcLtArr().forEach(function(x){
@@ -12843,6 +12946,7 @@ function pcFlatten(V){
           R[r.id] = { id:String(r.id), pier:p, date:ds, kind:kind, txt:String(r.txt || ''),
                       amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
                       ts:String(r.ts || ''), src:String(r.src || '') };
+          if(r.claim != null) R[r.id].claim = String(r.claim);   /* §pcClm */
         });
       });
       Object.keys(D.lt || {}).forEach(function(bid){
@@ -12865,6 +12969,11 @@ function pcFlatten(V){
 }
 /* เขียนส่วนต่างลงอาเรย์ · แตะเฉพาะ id ที่เราเพิ่ม แก้ หรือลบจริง
    id ที่ไม่ได้อยู่ในภาพทั้งสองฝั่ง = ของคนอื่นที่โผล่มาระหว่างทาง · ปล่อยไว้ ห้ามแตะ */
+/* §pcClm · claim ว่าง = ไม่มี claim · แถวที่โหลดมาก่อนมีคอลัมน์นี้ต้องไม่ถูกนับว่าเปลี่ยนทั้งหมด */
+function pcRecN(o){
+  if(!o || typeof o !== 'object' || !('claim' in o) || o.claim) return o;
+  var c = {}; Object.keys(o).forEach(function(k){ if(k !== 'claim') c[k] = o[k]; }); return c;
+}
 function pcApplyDelta(arr, now, was){
   var byId = {}, i;
   for(i = 0; i < arr.length; i++) if(arr[i] && arr[i].id != null) byId[arr[i].id] = i;
@@ -12872,7 +12981,8 @@ function pcApplyDelta(arr, now, was){
   Object.keys(now).forEach(function(id){
     var rec = now[id], at = byId[id];
     if(at === undefined){ arr.push(rec); byId[id] = arr.length - 1; n++; return; }
-    if(JSON.stringify(arr[at]) !== JSON.stringify(rec)){ arr[at] = rec; n++; }
+    if(arr[at] && rec.claim === undefined && arr[at].claim != null) rec.claim = arr[at].claim;   /* §pcClm */
+    if(JSON.stringify(pcRecN(arr[at])) !== JSON.stringify(pcRecN(rec))){ arr[at] = rec; n++; }
   });
   var del = Object.keys(was).filter(function(id){ return !now[id] && byId[id] !== undefined; });
   if(del.length){
@@ -12924,6 +13034,7 @@ function pcArr(k){
 function pcRowsArr(){ return pcArr('po_cash_rows'); }
 function pcLtArr(){   return pcArr('po_cash_lt'); }
 function pcPkArr(){   return pcArr('po_cash_pk'); }
+function pcClmArr(){  return pcArr('po_cash_claims'); }   /* §pcClm */
 function pcCellId(pier, ds, bid){ return pier + '|' + ds + '|' + bid; }
 /* แปลงก้อนของท่าหนึ่งเป็นแถว · คืนจำนวนที่เพิ่มจริง */
 function pcRowsFromPier(pier, P){
@@ -13380,7 +13491,7 @@ var PC_GRP=[
   {k:'van',   t:'รถตู้',   re:/^\s*ค่ารถ/,                     c:'#C2410C', bg:'#FFF4EC'},
   {k:'guide', t:'ไกด์',    re:/^\s*ค่า(แรง)?ไกด์/,               c:'#7C3AED', bg:'#F6F1FF'},
   {k:'food',  t:'อาหาร',   re:/^\s*ค่าอาหาร/,                   c:'#BE185D', bg:'#FDF0F6'},
-  {k:'park',  t:'อุทยาน',  re:/^\s*ค่าอุทยาน/,      src:'pk',   c:'#4D7C0F', bg:'#F3FAEA'},
+  {k:'park',  t:'อุทยาน',  re:/^\s*ค่า(ตั๋ว|บัตร)?อุทยาน/, src:'pk',   c:'#4D7C0F', bg:'#F3FAEA'},
   {k:'lt',    t:'หางยาว',  re:/^\s*ค่าเรือหางยาว/,  src:'lt',   c:'#0E7490', bg:'#ECF8FB'},
   {k:'dock',  t:'ค่าจอด',  re:/^\s*ค่าจอด/,         src:'dock', c:'#475569', bg:'#F2F4F7'},
   {k:'fuel',  t:'น้ำมัน',  re:/^\s*ค่าน้ำมัน/,                  c:'#A16207', bg:'#FEF8E7'}
@@ -13413,10 +13524,11 @@ function pcGrpBar(D){
   (D.out||[]).forEach(function(x){ var g=pcGrpOf(x,'out'); if(!g) return; if(!agg[g.k]){ agg[g.k]={g:g,n:0,amt:0}; } agg[g.k].n++; agg[g.k].amt+=(+x.amt||0); });
   pcGrpList().forEach(function(g){ if(agg[g.k]) order.push(agg[g.k]); });   /* §pcGrpPark */
   if(!order.length) return '';
-  return '<div class="pc2-grps"><span class="l">พิมพ์ตามกลุ่ม</span>'+order.map(function(a){
-    return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+'">'
-      +'<i></i><b>'+pcE(a.g.t)+'</b><span>'+a.n+' รายการ · '+pcN(a.amt)+'</span><em>&#128424;</em></button>'; }).join('')
-    +'<span class="h">จัดกลุ่มจากคำขึ้นต้นของรายการ (ค่ารถ… · ค่าแรงไกด์… · ค่าอาหาร… · ค่าอุทยาน…)</span></div>';
+  /* §pcFtCmp · ชิปเล็กอยู่ในแถวปุ่มเดียวกับ ＋รับ/＋จ่าย · คำอธิบายย้ายไปเป็น tooltip */
+  return '<span class="pc2-grps"><i class="dv"></i><span class="l" title="พิมพ์ใบรับรองแทนใบเสร็จแยกตามกลุ่ม · จัดกลุ่มจากคำขึ้นต้นของรายการ (ค่ารถ… · ค่าแรงไกด์… · ค่าอาหาร… · ค่าอุทยาน…)">พิมพ์กลุ่ม</span>'+order.map(function(a){
+    return '<button type="button" class="g" style="--gc:'+a.g.c+';--gb:'+a.g.bg+'" onclick="pcPrintCert({grp:\''+a.g.k+'\'})" title="ใบรับรองแทนใบเสร็จ · เฉพาะกลุ่ม '+pcE(a.g.t)+' · '+a.n+' รายการ">'
+      +'<i></i><b>'+pcE(a.g.t)+'</b><span>'+a.n+' · '+pcN(a.amt)+'</span><em>&#128424;</em></button>'; }).join('')
+    +'</span>';
 }
 /* เรียงแถวของสมุด · เวลาก่อน (ของเดิม) · บรรทัดค่าอุทยานที่เวลาเดียวกันรวมเป็นก้อนเดียวตรงที่บรรทัดแรกของก้อนอยู่ แล้วเรียงตามอุทยาน + ลำ
    rows = [{t, k, x}] · คืน array ใหม่ · แถวอื่นลำดับเดิม */
@@ -13602,7 +13714,7 @@ function pcRowDel(kind,id){
    อย่างเดียว ไม่แตะ blob ไม่เรียก pcSave() · จะได้ไม่ไปชนกับคนอื่นที่เปิดหน้าเดียวกัน
    ผูกกับ ท่า+วัน · เปลี่ยนวันหรือสลับท่าแล้วล้างเอง ยอดของวันเก่าจะได้ไม่ค้างมาหลอก */
 var _pcSel={}, _pcSelK='';
-function pcSelSync(){ var k=_pcPier+'|'+_pcDate; if(_pcSelK!==k){ _pcSelK=k; _pcSel={}; } }
+function pcSelSync(){ var k=_pcPier+'|'+_pcDate; if(_pcSelK!==k){ _pcSelK=k; _pcSel={}; _pcClmForm=null; } }
 function pcSelHas(kind,id){ return _pcSel[kind+':'+id]===1; }
 function pcSelRowId(kind,id){ return 'pcr-'+_pcPier+'-'+kind+'-'+id; }
 function pcSelRows(){
@@ -13647,7 +13759,7 @@ function pcSelOnlyOut(){
   pcSelRows().out.forEach(function(x){ _pcSel['out:'+x.id]=1; });
   pcSelPaint();
 }
-function pcSelClear(){ pcSelSync(); _pcSel={}; pcSelPaint(); }
+function pcSelClear(){ pcSelSync(); _pcSel={}; _pcClmForm=null; pcSelPaint(); }
 /* วาดใหม่แค่ช่องติ๊กกับแถบสรุป · ไม่เรียก renderPierCash เพราะการเปลี่ยน innerHTML
    ทั้งก้อนตอนที่โฟกัสยังอยู่ในตาราง ทำให้จอเด้งกลับไปหัวตาราง (เจอมาแล้วหลายหน้า) */
 function pcSelPaint(){
@@ -13670,9 +13782,8 @@ function pcSelBarSync(){
 function pcSelBarHtml(){
   var S=pcSelSum();
   if(!S.tot) return '';
-  if(!S.n) return '<span class="hint">ติ๊กช่องหน้าแถว เพื่อรวมยอดเฉพาะรายการที่เลือก</span>'
-    +'<span class="sp"></span>'
-    +'<button class="pc-btn" onclick="pcSelOnlyOut()">เลือกรายการจ่ายทั้งหมด</button>';
+  if(_pcClmForm) return pcClmFormHtml();   /* §pcClm */
+  if(!S.n) return '';   /* §pcFtCmp · ยังไม่ติ๊ก = ไม่มีแถบ · ปุ่มเลือกรายจ่ายทั้งหมดย้ายไปอยู่แถวปุ่มใต้สมุด */
   var net=S['in']-S.out;
   return '<b>เลือกไว้ '+S.n+' รายการ</b>'
    +'<span class="big">จ่ายรวม '+pcMoney(S.out)+'</span>'
@@ -13683,6 +13794,7 @@ function pcSelBarHtml(){
    +(S.nOut?('<button class="pc-btn pri" onclick="pcPrintCert({only:1})" '
        +'title="ลงใบรับรองแทนใบเสร็จรับเงิน เฉพาะ '+S.nOut+' รายการจ่ายที่ติ๊กไว้">'
        +'&#128424; ใบรับรองฯ เฉพาะที่เลือก</button>'):'')
+   +pcClmBtnHtml()   /* §pcClm */
    +'<button class="pc-btn" onclick="pcSelClear()">ล้างที่เลือก</button>';
 }
 /* ── CSS ─────────────────────────────────────────────────────────────── */
@@ -48221,6 +48333,33 @@ function pjDepOf(date, bid, fallback){
        if(v && /^\d{1,2}:\d{2}$/.test(v)) return v.length===4?('0'+v):v; }catch(_){}
   return fallback;
 }
+/* ══ §pjItin (2026-10-16) · owner "อยากให้ User เพิ่มรายละเอียดของเส้นทางนั้น ๆ ใน Section A เช่น เกาะ 4 → เกาะ 8"
+   เส้นทางเกาะของลำนี้วันนี้ · เก็บในใบงาน (pier_job · ค่าเป็น JSON ทั้งก้อน จึงไม่ต้องแตะฐานข้อมูล)
+   ไม่ได้ใส่ = ใช้ "เกาะ" ของเส้นทาง (route.islands) แบบเดิม · พิมพ์ -> หรือ > ได้ เปลี่ยนเป็น → ให้
+   แก้ที่แถบชื่อโปรแกรมบนการ์ดเรือ · ไปโชว์ใน Section A ของใบงานที่พิมพ์
+   owner รอบสอง "สีเอาเฉพาะแค่ชื่อโปรแกรม ให้เท่ากันทั้งหมดก็พอ · ถัดไปเป็นรายละเอียดที่เราเพิ่ม แต่อยากให้แต้มสีได้ด้วย"
+   → สีเส้นทางอยู่ที่ป้ายชื่อโปรแกรมเท่านั้น (กว้างเท่ากันทุกแถว) · แถวไม่มีพื้นสี
+   → เส้นทางเกาะแต้มสีเองได้ (itinc · ต่อเรือ ต่อวัน) · ไม่แต้ม = เทาเรียบ */
+function pjItinNorm(v){
+  return String(v||'').replace(/\s*(?:-+>|=+>|➜|➔|→|>)\s*/g,' \u2192 ').replace(/\s+/g,' ').trim();
+}
+function pjItinOf(date, bid, rt){
+  var o=null; try{ o=(typeof pjRaw==='function')?pjRaw(date,bid):null; }catch(_){}
+  var v=o&&String(o.itin||'').trim();
+  var c=o&&String(o.itinc||'');
+  return { t:(v||String((rt&&rt.islands)||'').trim()), own:!!v, c:(/^#[0-9a-fA-F]{6}$/.test(c||'')?c:'') };
+}
+function pjItinColor(bid, hex){
+  if(!poGuard()) return;
+  var c=String(hex||''); if(c && !/^#[0-9a-fA-F]{6}$/.test(c)) return;
+  pjSet(_poDate, bid, {itinc:c});
+  renderPierJob();
+}
+function pjItinSet(bid, val){
+  if(!poGuard()) return;
+  pjSet(_poDate, bid, {itin:pjItinNorm(val)});
+  renderPierJob();
+}
 function pjDepSet(bid, val){
   if(!poGuard()) return;
   var v=String(val||'').trim();
@@ -57600,11 +57739,11 @@ function pjOf(d,b){
   /* §pjLbScope · lb (ชื่อช่องที่ตั้งเองของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย
      ด้วยเหตุผลเดียวกับ lock/mv/wc — ตกหล่นเมื่อไหร่ ชื่อที่ตั้งไว้หลุดทุกครั้งที่บันทึกช่องอื่น */
   /* §pjDep · dep = เวลาออกเรือของลำนี้วันนี้ที่คนแก้เอง ('' = ตามโปรแกรม) · อยู่ในรายการนี้ด้วยเหตุผลเดียวกับ lock/mv */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', _std:true};
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, dep:'', itin:'', itinc:'', _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
           lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''),
-          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), _std:false};
+          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, dep:String(o.dep||''), itin:String(o.itin||''), itinc:String(o.itinc||''), _std:false};   /* §pjItin */
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -58257,6 +58396,14 @@ function pjCSS(){
   +H+' .bc .pg{height:58px;display:flex;flex-direction:column;justify-content:center}'
   +H+' .bc .pg .pn{font-size:15px;font-weight:800;line-height:1.2;padding-right:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .bc .pg .pr{font-size:11.5px;font-weight:500;opacity:.93;margin-top:3px}'
+  /* §pjItin · ช่องเส้นทางเกาะบนแถบโปรแกรม · ดูเหมือนตัวหนังสือเดิม แตะแล้วเป็นช่องกรอก */
+  +H+' .bc .pg .pj-itin{width:calc(100% - 60px);font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dashed rgba(255,255,255,.45);padding:0 0 1px;outline:none}'
+  +H+' .bc .pg .pj-itin::placeholder{color:inherit;opacity:.9}'
+  +H+' .bc .pg .pj-itin.own{font-weight:700}'
+  +H+' .bc .pg .pj-itin:focus{background:rgba(255,255,255,.18);border-bottom-style:solid;border-radius:4px 4px 0 0;padding:0 4px 1px}'
+  +H+' .bc .pg .pj-itc{width:16px;height:16px;border-radius:8px;border:1.5px dashed rgba(255,255,255,.75);background:transparent;margin-left:8px;vertical-align:-3px;cursor:pointer;padding:0}'
+  +H+' .bc .pg .pj-itc.on{border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}'
+  +H+' .pj-pop.pj-itp{top:56px;right:auto;left:10px}'
   +H+' .pj-pen{position:absolute;top:9px;right:11px;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.16);color:#fff;font-size:12px;cursor:pointer}'
   +H+' .pj-pen:hover{background:rgba(255,255,255,.3)}'
   +H+' .pj-pop{position:absolute;top:42px;right:10px;z-index:30;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.18);padding:12px;width:236px;display:none}'
@@ -59331,7 +59478,17 @@ function pjCard(B, pier, ro){
      +'<div class="pn">'+(rt.id?poE(rt.name||B.rid)
         :(B._away?('วันนี้ไปวิ่งที่ '+poE(((PO_PIERS.filter(function(x){ return x.k===(B._away.route.pier||''); })[0])||{}).n||B._away.route.pier||'ท่าอื่น'))
                  :poE(B.boat.name||bid)))+'</div>'
-     +'<div class="pr">'+(rt.id?poE(rt.islands||'')
+     +'<div class="pr">'+(rt.id?(function(){ var I=pjItinOf(_poDate,bid,rt);   /* §pjItin · แก้ได้ตรงนี้ */
+         if(lro) return poE(I.t);
+         return '<input class="pj-itin'+(I.own?' own':'')+'" value="'+poE(I.own?I.t:'')+'" placeholder="'+poE(I.t||'เส้นทางเกาะวันนี้ เช่น เกาะ 4 → เกาะ 8')+'"'
+           +' title="เส้นทางเกาะของลำนี้วันนี้ · ขึ้นใน Section A ของใบงาน · พิมพ์ -> ได้ · ล้างว่าง = ตามเส้นทาง" onchange="pjItinSet(\''+poE(bid)+'\',this.value)">'
+           +(function(){ var iid='pjitc-'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+             return '<button type="button" class="pj-itc'+(I.c?' on':'')+'" style="'+(I.c?('background:'+I.c):'')+'" title="แต้มสีเส้นทางเกาะ (ขึ้นใน Section A)" onclick="pjPopToggle(\''+iid+'\')"></button>'
+               +'<div class="pj-pop pj-itp" id="'+iid+'"><div class="ph">สีของเส้นทางเกาะ · ลำนี้วันนี้</div><div class="pj-sws">'
+               +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c.toLowerCase()===I.c.toLowerCase()?' on':'')+'" style="background:'+c+'" onclick="pjItinColor(\''+poE(bid)+'\',\''+c+'\')"></div>'; }).join('')
+               +'</div><label class="pj-cus">เลือกสีเอง<input type="color" value="'+poE(I.c||'#185FA5')+'" onchange="pjItinColor(\''+poE(bid)+'\',this.value)" onclick="event.stopPropagation()"></label>'
+               +(I.c?('<button class="pj-rst" onclick="pjItinColor(\''+poE(bid)+'\',\'\')">ไม่แต้มสี</button>'):'')
+               +'<div class="pf">ขึ้นเป็นสีของเส้นทางเกาะใน Section A · เฉพาะลำนี้วันนี้</div></div>'; })(); })()
         :(B._away?poE(B._away.route.name||'')
                  :poE([SM.t, ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 '))))+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="'+(rt.id?'แต้มสีโปรแกรมนี้':'แต้มสีสถานะนี้')+'">&#9998;</button>')
@@ -60259,6 +60416,37 @@ function pjPrint(){
    +'.brd .c-x.over b{color:#A32D2D}'
    +".brd .c-x.over em{display:block;font-style:normal;font-family:'Sarabun',sans-serif;"
      +'font-size:'+(fs-5)+'px;font-weight:800;color:#A32D2D}'
+   /* §pjItin · Section A ใหม่ · แถวพื้นขาว · สีเส้นทางอยู่ที่ป้ายชื่อโปรแกรมอย่างเดียว กว้างเท่ากันทุกแถว
+      ถัดไปเป็นเส้นทางเกาะ (ชิปคั่นลูกศร) สีตามที่แต้มบนการ์ดเรือ · ยอดคนมีแถบเติมเทียบความจุ */
+   +'.brd tbody tr.br td{padding-top:3px;padding-bottom:3px}'
+   /* โปรแกรมกับเส้นทางเกาะเป็นคนละคอลัมน์ · คอลัมน์โปรแกรมกว้างเท่าชื่อที่ยาวที่สุด → ป้ายทุกแถวกว้างเท่ากัน */
+   +'.brd{table-layout:auto}'
+   +'.brd th.h-p,.brd td.c-p,.brd th.h-i,.brd td.c-i{text-align:left}'
+   +'.brd td.c-p{width:1%;white-space:nowrap;padding-right:4px}'
+   +'.brd td.c-p .pnm{display:block;box-sizing:border-box;background:var(--rt);border-left:4px solid var(--rc);border-radius:6px;'
+     +'padding:3px 10px;font-size:'+(fs-.5)+'px;font-weight:800;color:#16265C;line-height:1.2}'
+   +'.brd td.c-i{white-space:normal}'
+   +'.brd td.c-i .itn{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px}'
+   +'.brd td.c-i .itn i{font-style:normal;font-size:'+(fs-3)+'px;font-weight:700;color:#1F2A3D;background:var(--it,#fff);border:1px solid var(--ib,#D5DBE6);border-radius:5px;padding:0 6px;line-height:1.5;white-space:nowrap}'
+   +'.brd td.c-i .itn i.one{background:var(--it,transparent);border-color:var(--ib,transparent);font-weight:600;color:#334155;white-space:normal}'
+   +'.brd td.c-i .itn i.one:not([style]){padding:0}'
+   +'.brd td.c-i .itn u{text-decoration:none;font-size:'+(fs-3)+'px;font-weight:800;color:var(--ic,#94A3B8)}'
+   +'.brd .c-x .fl{display:block;height:4px;border-radius:2px;background:rgba(15,27,61,.10);margin-top:3px;overflow:hidden}'
+   +'.brd .c-x .fl span{display:block;height:100%;background:var(--rc)}'
+   +'.brd .c-x.over .fl span{background:#A32D2D}'
+   /* ≥6 ลำ สองตารางข้างกัน · ชื่อโปรแกรมตกบรรทัดได้ (คอลัมน์ 156px) แถวจะได้ไม่สูงกว่าเดิม (§pjFit) */
+   /* §pjItin1L (2026-10-17) · owner "ชื่อโปรแกรมควรอยู่บรรทัดเดียว" (Tub Lamu 7 ลำ · ชื่อตกสองบรรทัดในคอลัมน์ 156px)
+      สองตารางก็ใช้กติกาเดียวกับตารางเดียว · คอลัมน์โปรแกรมกว้างเท่าชื่อที่ยาวที่สุด ไม่ตัดบรรทัด
+      ป้ายทุกแถวยังกว้างเท่ากัน · ที่ที่เหลือให้คอลัมน์เส้นทางเกาะ */
+   +'.brd2 .brd td.c-p{white-space:nowrap;width:1%}'
+   +'.brd2 .brd td.c-p .pnm{font-size:'+(fs-2.5)+'px;line-height:1.2;padding:2px 8px}'
+   +'.brd2 .brd th{white-space:nowrap}'
+   /* สองตารางที่ไม่ได้กรอกเส้นทางเกาะเอง ไม่ต้องโชว์ "เกาะ" ตั้งต้นของเส้นทาง · ที่แคบ ใส่แล้วแถวสูงขึ้นเปล่า ๆ */
+   +'.brd2 .brd td.c-i .itn.dflt{display:none}'
+   +'.brd2 .brd td.c-i .itn i{white-space:normal;overflow-wrap:anywhere}'
+   +'.brd th.h-i{white-space:nowrap;overflow:hidden}'
+   +'.brd2 .brd td.c-i .itn i{font-size:'+(fs-4.5)+'px;padding:0 4px}'
+   +'@media (max-width:1180px){.brd2 .brd td.c-i .itn.dflt{display:flex}}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
    +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52;white-space:nowrap}'   /* §pjOneLine */
    /* §pjOneLine · ชื่อคนบรรทัดเดียว · .nmw = ความกว้างช่อง · .pn1 = ชื่อ ขนาดตัวอักษรสคริปต์ใส่ให้ */
@@ -60677,8 +60865,16 @@ function pjPrint(){
       var wbc=_wb2.c||'', wbn=_wb2.t||'';
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
+      /* §pjItin · ป้ายชื่อโปรแกรมสีเส้นทางอ่อน (กว้างเท่ากันทุกแถว) · ถัดไปคือเส้นทางเกาะ สีตามที่แต้มไว้ */
+      var _rc=/^#[0-9a-fA-F]{6}$/.test(String(rt.color||''))?rt.color:'#5A6270';
+      var _it=pjItinOf(_poDate,B.bid,rt), _st=_it.t?_it.t.split(/\s*\u2192\s*/).filter(Boolean):[];
+      var _itH=!_it.t?'':(_st.length>1
+        ? ('<span class="itn'+(_it.own?'':' dflt')+'">'+_st.map(function(x){ return '<i>'+e(x)+'</i>'; }).join('<u>\u2192</u>')+'</span>')
+        : ('<span class="itn'+(_it.own?'':' dflt')+'"><i class="one">'+e(_it.t)+'</i></span>'));
+      var _fill=cap>0?Math.min(100,Math.round(pax*100/cap)):0;
       return { dep:(dep||'~'), html:
-        '<tr class="br">'
+        '<tr class="br" style="--rc:'+_rc+';--rt:'+pjTint2(_rc,0.84)
+          +(_it.c?(';--ic:'+_it.c+';--it:'+pjTint2(_it.c,0.86)+';--ib:'+pjTint2(_it.c,0.6)):'')+'">'
         +'<td class="c-t">'+e(dep||'--:--')+'</td>'
         /* §pjInk (2026-10-14) · owner "ตัวหนังสือเรือ เป็นสีดำ" (ทั้งป้ายนี้และหัวตาราง Section B)
            ของเดิมตัวขาวบนพื้นสีเรือทึบ · สีเรือสด/อ่อน (ฟ้า เขียวอ่อน) ตัวขาวจางหาย
@@ -60687,9 +60883,11 @@ function pjPrint(){
         +'<td class="c-b"><span class="bpill" style="background:'+pjTint2(_pjC6(B.bid),0.68)
           +';border-left:5px solid '+e(_pjC6(B.bid))+'">'
           +e(B.boat.name||B.bid)+'</span></td>'
-        +'<td class="c-p">'+e(rt.name||'\u2014')+'</td>'
+        +'<td class="c-p"><span class="pnm">'+e(rt.name||'\u2014')+'</span></td>'
+        +'<td class="c-i">'+_itH+'</td>'
         +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
-          +(over?('<em>เกิน '+over+'</em>'):'')+'</td>'
+          +(over?('<em>เกิน '+over+'</em>'):'')
+          +(cap>0?('<span class="fl"><span style="width:'+_fill+'%"></span></span>'):'')+'</td>'
         /* §pjBand · สีสายรัดข้อมือ · ของที่ต้องหยิบมาเตรียมก่อนแขกมาถึง
            คนที่ท่าเทียบ "สี" กับข้อมือแขก จึงต้องเห็นสีจริง ไม่ใช่อ่านชื่อสี */
         +'<td class="c-w">'+(wbn
@@ -60703,9 +60901,9 @@ function pjPrint(){
     var tbl=function(rs){
       return '<table class="brd">'
       +(two
-        ? '<colgroup><col style="width:54px"><col style="width:132px"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
-        : '<colgroup><col style="width:78px"><col style="width:158px"><col><col style="width:82px"><col style="width:118px"></colgroup>')
-      +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th>Pax</th><th>Band</th></tr></thead>'
+        ? '<colgroup><col style="width:54px"><col style="width:118px"><col class="cg-p"><col><col style="width:56px"><col style="width:86px"></colgroup>'   /* §pjOneLine · 62 → 86 ชื่อสีไม่ตกบรรทัด */
+        : '<colgroup><col style="width:78px"><col style="width:158px"><col class="cg-p"><col><col style="width:82px"><col style="width:118px"></colgroup>')
+      +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th class="h-i">Itinerary</th><th>Pax</th><th>Band</th></tr></thead>'
       +'<tbody>'+rs.map(function(r){ return r.html; }).join('')+'</tbody></table>'; };
     var half=Math.ceil(rows.length/2);
     return '<div class="fb pg"><div class="fb-h">Departures<b>'+GO.length+'</b></div>'
@@ -62331,6 +62529,12 @@ function bkNbfCSS2(){
   +S+' .bkv2-nb-h1{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding-left:0;text-indent:.30em}'
   +S+' .bkv2-nb-h1 i{text-indent:.34em}'
   +'@media(max-width:1180px){'+S+' .bkv2-nb-h1{display:none}}'
+  /* §nbRvFlow (2026-10-16) · owner "หน้า New booking รายการที่กด Addon เด้ง กดไม่ได้"
+     ที่ <=820px §mobile2 (02-skins.css) ยุบกริดฟอร์มเหลือคอลัมน์เดียว แต่แผง Booking Review ยัง position:fixed
+     (top:74px · สูงเกือบเต็มจอ) จึงลอยทับฟอร์ม · แตะ add-on แล้วโดนแผงแทน (เจอที่ 390px: ทับทั้งจอ · 800px: ทับครึ่งซ้าย)
+     จอแคบให้แผงอยู่ในลำดับปกติใต้ฟอร์ม · จอใหญ่ยังลอยตามเดิม */
+  +'@media(max-width:820px){'+S+' .bkv2-review-cell{width:auto}'
+    +S+' .bkv2-review-sticky{position:static !important;width:auto !important;max-height:none !important;overflow:visible !important}}'
   +S+' .nbf-steps{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}'
   +S+' .bkv2-nb-topbar{row-gap:10px}'
   +S+' .nbf-st{height:26px;padding:0 9px 0 5px;border-radius:13px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;font-family:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}'
@@ -62959,6 +63163,13 @@ function pc2Kpi(items){
       +(k.u?('<small>'+k.u+'</small>'):'')+'</div><div class="s">'+(k.s||'&nbsp;')+'</div></div>'; }).join('')+'</div>';
 }
 /* ── หน้าหลัก ───────────────────────────────────────────────────────── */
+/* §pcFtCmp · วิธีใช้ใต้สมุด พับไว้เป็นค่าเริ่มต้น · จำต่อเครื่อง */
+function pc2HelpOn(){ try{ return localStorage.getItem('la_pc_help')==='1'; }catch(_){ return false; } }
+function pc2Help(btn){
+  var on=!pc2HelpOn(); try{ localStorage.setItem('la_pc_help',on?'1':'0'); }catch(_){}
+  var card=btn&&btn.closest?btn.closest('.pc2-led'):null; var n=card?card.querySelector('.pc2-note'):null;
+  if(n) n.classList.toggle('off',!on); if(btn) btn.classList.toggle('on',on);
+}
 function pc2Main(pier){
   var ds=_pcDate, D=pcDay(pier,ds,false)||{'in':[],out:[],lt:{},pk:{}};
   var T=pcTotals(pier,ds), op=pcOpening(pier,ds), bal=op+T.net;
@@ -62980,12 +63191,12 @@ function pc2Main(pier){
     if(ED && ED.id && ED.id===String(r.x.id) && ED.ok===r.k){ edHit=true; body+=pc2EdRow(ED,run,no); run += isIn ? amt : -amt; return; }
     run += isIn ? amt : -amt;
     var _g=pcGrpOf(r.x,r.k);   /* §pcGrp · สีทั้งบรรทัดตามกลุ่ม */
-    body+='<div class="pc2-lr rw'+(_g?(' pcg-'+_g.k):'')+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
+    body+='<div class="pc2-lr rw'+(_g?(' pcg-'+_g.k):'')+((r.k==='out'&&pcClmOn(r.x))?' clm':'')+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
       +'<span class="sc" onclick="pcSelCellHit(this,event)"><input type="checkbox" class="pc-cb"'+(pcSelHas(r.k,r.x.id)?' checked':'')
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
       +'<span class="no">'+no+'</span>'
       +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
-      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+'</span>'
+      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+pcClmChip(r.k,r.x)+'</span>'
       +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+(_g?(' style="color:'+_g.c+';background:#fff;border-color:'+_g.c+'"'):'')+'>'+(_g?pcE(_g.t):((r.k==='in'&&pcIsRefund(r.x))?'เงินคืน':CAT[ck][0]))+'</em></span>'
       +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
@@ -63059,7 +63270,7 @@ function pc2Main(pier){
         +'<div class="ch"><div><b>สมุดเดินบัญชี · '+pcE(pc2D(ds))+'</b><div class="cs">นับเฉพาะเงินที่ผ่านลิ้นชักจริง · '+rows.length+' รายการ</div></div>'
           +'<span class="sp"></span>'
           +'<button class="ol" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button>'
-          +'<button class="ol" onclick="pcPrintClaim()" title="สรุปตั้งเบิกของวันที่เลือก · แยกตามกลุ่ม">สรุปตั้งเบิก</button>'   /* §pcRefund */
+          +'<button class="ol" onclick="pcClmStart()" title="ติ๊กรายการจ่าย แล้วตั้งชื่อ บันทึกเป็นรายการตั้งเบิก (ไม่ติ๊ก = เลือกรายจ่ายที่ยังไม่ได้ตั้งเบิกทั้งหมดให้)">สรุปตั้งเบิก</button>'   /* §pcClm */   /* §pcRefund */
           +'<button class="ol" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก">พิมพ์สมุดวันนี้</button>'
           +'<button class="pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">ใบรับรองแทนใบเสร็จ</button></div>'
         +'<div class="pc2-ltw"><div class="pc2-ltb">'
@@ -63069,10 +63280,17 @@ function pc2Main(pier){
         +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
         +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
-        +pcGrpBar(D)   /* §pcGrp */
-        +'<div class="pc2-add"><button class="i" onclick="pc2EdNew(\'in\')">＋ เพิ่มบรรทัดรับเงิน</button><button class="o" onclick="pc2EdNew(\'out\')">＋ เพิ่มบรรทัดจ่ายเงิน</button></div>'
-        +'<div class="pc2-note"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก (ไม่ถูกบันทึก)</div>'
+        +'<div class="pc2-ft">'   /* §pcFtCmp (2026-10-16) · owner: "ส่วนนี้ทำ ดีไซน์ให้กระชับหน่อย" · แถบเลือก/ชิปกลุ่ม/ปุ่มเพิ่ม/คำอธิบาย เดิมสี่ชั้น → แถวปุ่มเดียว + วิธีใช้พับได้ */
+          +'<button class="ad i" onclick="pc2EdNew(\'in\')" title="เพิ่มบรรทัดรับเงิน">＋ รับเงิน</button>'
+          +'<button class="ad o" onclick="pc2EdNew(\'out\')" title="เพิ่มบรรทัดจ่ายเงิน">＋ จ่ายเงิน</button>'
+          +(rows.length?'<button class="gh" onclick="pcSelOnlyOut()" title="ติ๊กช่องหน้าแถว เพื่อรวมยอดเฉพาะรายการที่เลือก · ปุ่มนี้ติ๊กรายจ่ายทั้งหมดให้">&#9745; เลือกรายจ่าย</button>':'')
+          +pcGrpBar(D)   /* §pcGrp */
+          +'<span class="sp"></span>'
+          +'<button class="hl'+(pc2HelpOn()?' on':'')+'" onclick="pc2Help(this)" title="วิธีใช้ · แสดง/ซ่อน">&#9432;</button>'
+        +'</div>'
+        +'<div class="pc2-note'+(pc2HelpOn()?'':' off')+'"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก · ติ๊กแล้วกด <b>สรุปตั้งเบิก</b> = ตั้งชื่อแล้วบันทึกเป็นรายการตั้งเบิก (ดูด้านล่าง)</div>'
       +'</div>'
+      +pcClmList(pier)   /* §pcClm */
     +'</div>'
     +'<div class="pc2-r">'+pendCard+pcClaimCard(pier,ds)+monthCard+'</div>'   /* §pcRefund */
   +'</div>';
@@ -63346,11 +63564,49 @@ function pc2CSS(S){
   S+' em.cat.in{background:#DDF1EA;color:#0B5A43} '+S+' em.cat.lt{background:#E3F6FB;color:#0E5E80} '+S+' em.cat.pk{background:#EAF4E2;color:#3F6212} '+S+' em.cat.dk{background:#EEF2F8;color:'+SUB+'} '+S+' em.cat.ot{background:#F4F1EA;color:#5F5E5A}',
   S+' .pc2-led .pc-selbar{margin:10px 14px 0;border-radius:10px;border:none;background:#EEF2F8}',
   S+' .pc2-add{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}',
+  /* §pcFtCmp · แถวปุ่มเดียวใต้สมุด */
+  S+' .pc2-ft{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:9px 14px;border-top:1px solid #EEF1F6}',
+  S+' .pc2-ft button{height:30px;padding:0 11px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
+  S+' .pc2-ft .ad.i{border:1.5px dashed #9FD3BE;background:#F3FBF7;color:#0B5A43}',
+  S+' .pc2-ft .ad.o{border:1.5px dashed #E8B4AE;background:#FDF5F4;color:#8E2019}',
+  S+' .pc2-ft .ad:hover{filter:brightness(.97)}',
+  S+' .pc2-ft .gh,'+S+' .pc2-ft .hl{border:1px solid #DDE3EC;background:#fff;color:#4A5672;font-weight:600}',
+  S+' .pc2-ft .gh:hover,'+S+' .pc2-ft .hl:hover{background:#F5F7FB}',
+  S+' .pc2-ft .hl{width:30px;padding:0;font-size:14px} '+S+' .pc2-ft .hl.on{background:#EEF2F8;border-color:#C9D3E3;color:#16265C}',
+  S+' .pc2-ft .sp{flex:1}',
+  S+' .pc2-ft .pc2-grps{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0}',
+  S+' .pc2-ft .pc2-grps .dv{width:1px;height:18px;background:#DDE3EC;margin:0 4px}',
+  S+' .pc2-ft .pc2-grps .l{font-size:11.5px;font-weight:700;color:#7C8091;cursor:help}',
+  S+' .pc2-ft .pc2-grps .g{height:28px;padding:0 9px;gap:6px;border-radius:8px;font-size:12px}',
+  S+' .pc2-ft .pc2-grps .g i{width:7px;height:7px}',
+  S+' .pc2-ft .pc2-grps .g em{font-style:normal;font-size:12px;opacity:.75}',
+  S+' .pc2-note.off{display:none}',
   S+' .pc2-add button{height:44px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer}',
   S+' .pc2-add .i{border:1.5px dashed #9FD3BE;background:#F3FBF7;color:#0B5A43}',
   S+' .pc2-add .o{border:1.5px dashed #E8B4AE;background:#FDF5F4;color:#8E2019}',
   S+' .pc2-pend{border-top:4px solid #D9952B;padding:0 0 14px}',
   S+' .pc2-claim{border-top-color:#0E7490;margin-top:14px}',   /* §pcRefund */
+  /* §pcClm · ชิปในสมุด · แถวที่ตั้งเบิกแล้ว · การ์ดรายการตั้งเบิก */
+  S+' .pc2-lr .tx em.pc-cl{flex:0 1 auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;margin-left:8px;font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap;background:#E0F2F7;color:#0E5E80;border:1px solid #9CCFE0;cursor:pointer}',
+  S+' .pc2-lr.rw.clm .m.out{color:#0E5E80}',
+  S+' .pc-selbar input.pc-clm-in{flex:1 1 220px;min-width:160px;height:32px;border:1.5px solid #0E7490;border-radius:8px;padding:0 10px;font:inherit;font-size:13.5px}',
+  S+' .pc-selbar input.pc-clm-in.bad{border-color:#A32D2D;background:#FDF0EF}',
+  S+' .pc2-clms{border-top:4px solid #0E7490}',
+  S+' .pc2-cl{border-top:1px solid #ECEFF4} '+S+' .pc2-cl.cur{background:#F5FAFC} '+S+' .pc2-cl.fl{animation:pcClmFl 1.6s ease}',
+  '@keyframes pcClmFl{0%,40%{background:#FFF3C4}100%{background:transparent}}',
+  S+' .pc2-cl .r{display:flex;align-items:center;gap:10px;padding:9px 14px}',
+  S+' .pc2-cl .tg{width:26px;height:26px;border:none;background:#EEF2F8;border-radius:7px;cursor:pointer;color:'+SUB+';flex:none}',
+  S+' .pc2-cl .nm{flex:1;min-width:0} '+S+' .pc2-cl .nm b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  S+' .pc2-cl .nm small{font-size:12px;color:'+M+'} '+S+' .pc2-cl .nm small a{color:#0C5E8E}',
+  S+' .pc2-cl .st em{font-style:normal;font-size:12px;font-weight:700;padding:2px 8px;border-radius:7px;background:#FBEBD3;color:#7A4300;white-space:nowrap}',
+  S+' .pc2-cl .st em.ok{background:#E3F4EC;color:#0B6B47} '+S+' .pc2-cl .st em.wn{background:#FBE3E0;color:#A32D2D} '+S+' .pc2-cl .st em.z{background:#EEF2F8;color:'+M+'}',
+  S+' .pc2-cl .am{font-family:"DM Mono",monospace;font-weight:500;min-width:96px;text-align:right}',
+  S+' .pc2-cl .ac{display:flex;gap:4px;flex:none} '+S+' .pc2-cl .ac .ol{height:30px;padding:0 9px}',
+  S+' .pc2-cl .ln{padding:0 14px 10px 50px}',
+  S+' .pc2-cl .l{display:grid;grid-template-columns:62px minmax(0,1fr) 90px 28px;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #E3E7EF;font-size:13px}',
+  S+' .pc2-cl .l .d{color:'+M+';font-family:"DM Mono",monospace;font-size:12px} '+S+' .pc2-cl .l .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  S+' .pc2-cl .l .m{text-align:right;font-family:"DM Mono",monospace}',
+  '@media (max-width:760px){'+S+' .pc2-cl .r{flex-wrap:wrap} '+S+' .pc2-cl .st{order:5;flex-basis:100%;padding-left:36px} '+S+' .pc2-cl .ln{padding-left:14px}}',
   S+' .pc2-lnk{border:0;background:none;padding:0;color:#0C5E8E;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer}',
   S+' .pc2-lr .tx em.pc-rf{flex:none;margin-left:8px;font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap}',
   S+' .pc2-lr .tx em.pc-rf.ok{background:#E3F4EC;color:#0B6B47} '+S+' .pc2-lr .tx em.pc-rf.wn{background:#FBE3E0;color:#A32D2D}',
@@ -63609,6 +63865,7 @@ function pc2EdSave(next){
     if(i<0){ alert('This row no longer exists (deleted on another screen). Nothing was saved.'); _pc2Ed=null; pcKeep(); return; }
     var hit=arr[i]; hit.txt=txt; hit.amt=amt; hit.at=at;
     if(!hit.src && E.kind!==E.ok){
+      if(hit.claim) hit.claim='';   /* §pcClm · รายรับไม่อยู่ในตั้งเบิก */
       arr.splice(i,1); D[E.kind].push(hit);
       try{ delete _pcSel[E.ok+':'+E.id]; }catch(_){}
     }
@@ -63726,72 +63983,109 @@ function pcDaysLabel(L){
     if(r.length===1) return f(a,lastOfMonth);
     return f(a,a.getMonth()!==b.getMonth())+'–'+f(b,lastOfMonth); }).join(', ');
 }
+/* §pcClm · หน่วยที่ใช้จับคู่เงินคืน
+     รายการตั้งเบิกที่บันทึกไว้ = 1 หน่วย (ยอด = รายจ่ายที่ผูกกับมัน)
+     วันก่อนรายการตั้งเบิกแรกของท่า = รายจ่ายทั้งวันเป็น 1 หน่วย เหมือนเดิม (ข้อมูลเก่ายังจับคู่ได้)
+     ตั้งแต่วันที่เริ่มใช้ตั้งเบิก รายจ่ายที่ไม่ได้ตั้งเบิกไม่ถูกนับว่ารอเงินคืน
+   ลำดับการจับคู่: ชื่อรายการตั้งเบิกอยู่ในข้อความเงินคืน → วันที่ในข้อความ → ชุดติดกันที่ยอดพอดี → ชุดใดก็ได้ที่พอดี → เก่าสุดก่อน
+   ผลรวมรายวัน (claim/rem/list/by) ยังคืนรูปเดิม · ตัวเรียกเดิมไม่ต้องแก้ */
 function pcRefundMatch(pier,upto){   /* upto = นับเฉพาะเงินคืนที่รับถึงวันนั้น (การ์ด ณ วันที่เลือก) */
-  var A=pcPier(pier)||{}, days=Object.keys(A).sort(), claim={}, list=[], rem={}, by={};
+  var A=pcPier(pier)||{}, days=Object.keys(A).sort();
+  var CL={}, c0=''; pcClmAll(pier).forEach(function(c){ CL[c.id]=c; if(c.date && (!c0 || c.date<c0)) c0=c.date; });
+  var U={}, keys=[];
   var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
-  days.forEach(function(ds){ var o=0; ((A[ds]||{}).out||[]).forEach(function(x){ o+=(+(x&&x.amt)||0); }); o=Math.round(o);
-    if(o>0){ claim[ds]=o; rem[ds]=o; list.push(ds); } });
+  days.forEach(function(ds){ var o=0;
+    ((A[ds]||{}).out||[]).forEach(function(x){ if(!x) return; var a=+x.amt||0;
+      if(x.claim && CL[x.claim]){ var k='c:'+x.claim, c=CL[x.claim];
+        if(!U[k]) U[k]={k:k, ds:String(c.date||ds), amt:0, name:String(c.name||''), cid:c.id, ts:String(c.ts||'')};
+        U[k].amt+=a; }
+      else if(!c0 || ds<c0) o+=a; });
+    if(o>0) U[ds]={k:ds, ds:ds, amt:o, name:'', cid:'', ts:''}; });
+  Object.keys(U).forEach(function(k){ U[k].amt=Math.round(U[k].amt); if(U[k].amt>0) keys.push(k); });
+  keys.sort(function(a,b){ return U[a].ds.localeCompare(U[b].ds) || U[a].ts.localeCompare(U[b].ts) || a.localeCompare(b); });
+  var urem={}, uby={}; keys.forEach(function(k){ urem[k]=U[k].amt; });
   var refs=[]; days.forEach(function(ds){ if(upto && ds>upto) return; ((A[ds]||{})['in']||[]).forEach(function(x){ if(pcIsRefund(x)) refs.push({ds:ds, x:x, t:rk(x.at)}); }); });
   refs.sort(function(a,b){ return a.ds.localeCompare(b.ds) || (a.t-b.t); });
   var res={};
   refs.forEach(function(R){
-    var amt=Math.round(+R.x.amt||0), from=pcDsAdd(R.ds,-45);
-    var cand=list.filter(function(d){ return d<R.ds && d>=from && rem[d]>0; });
+    var amt=Math.round(+R.x.amt||0), from=pcDsAdd(R.ds,-45), tx=String(R.x.txt||'');
+    var cand=keys.filter(function(k){ var u=U[k]; return (u.cid?(u.ds<=R.ds):(u.ds<R.ds)) && u.ds>=from && urem[k]>0; });
     var T=null, how='';
-    var td=pcRefundTxtDays(R.x.txt,R.ds);
-    if(td.length){ var tt=cand.filter(function(d){ return td.indexOf(d)>=0; }); if(tt.length){ T=tt; how='text'; } }
-    for(var i=0; !T && i<cand.length; i++){ var sm=0; for(var j=i;j<cand.length;j++){ sm+=rem[cand[j]]; if(sm===amt){ T=cand.slice(i,j+1); how='run'; break; } if(sm>amt) break; } }
+    var nm=cand.filter(function(k){ var n=U[k].name.trim(); return n.length>=3 && tx.indexOf(n)>=0; });
+    if(nm.length){ T=nm; how='name'; }
+    if(!T){ var td=pcRefundTxtDays(R.x.txt,R.ds); if(td.length){ var tt=cand.filter(function(k){ return td.indexOf(U[k].ds)>=0; }); if(tt.length){ T=tt; how='text'; } } }
+    for(var i=0; !T && i<cand.length; i++){ var sm=0; for(var j=i;j<cand.length;j++){ sm+=urem[cand[j]]; if(sm===amt){ T=cand.slice(i,j+1); how='run'; break; } if(sm>amt) break; } }
     if(!T && cand.length && cand.length<=16){
       var best=-1, bestMax=1e9;
-      for(var mk=1; mk<(1<<cand.length); mk++){ var su=0, mx=-1; for(var b=0;b<cand.length;b++){ if(mk&(1<<b)){ su+=rem[cand[b]]; mx=b; } } if(su===amt && mx<bestMax){ best=mk; bestMax=mx; } }
+      for(var mk=1; mk<(1<<cand.length); mk++){ var su=0, mx=-1; for(var b=0;b<cand.length;b++){ if(mk&(1<<b)){ su+=urem[cand[b]]; mx=b; } } if(su===amt && mx<bestMax){ best=mk; bestMax=mx; } }
       if(best>0){ T=cand.filter(function(d,b){ return best&(1<<b); }); how='subset'; }
     }
     if(!T){ T=cand.slice(); how='fifo'; }
     var left=amt, cov=[], S=0;
-    T.forEach(function(d){ if(left<=0) return; var before=rem[d], tk=Math.min(before,left); S+=before; rem[d]-=tk; left-=tk;
-      cov.push({ds:d, amt:tk, full:rem[d]===0}); (by[d]=by[d]||[]).push({ref:R.ds, id:R.x.id, amt:tk}); });
-    var diff=amt-S;
-    res[R.x.id]={ ds:R.ds, amt:amt, days:cov.map(function(c){ return c.ds; }), cov:cov, how:how, diff:diff, exact:(diff===0 && cov.length>0) };
+    T.forEach(function(k){ if(left<=0) return; var before=urem[k], tk=Math.min(before,left); S+=before; urem[k]-=tk; left-=tk;
+      cov.push({k:k, ds:U[k].ds, name:U[k].name, amt:tk, full:urem[k]===0}); (uby[k]=uby[k]||[]).push({ref:R.ds, id:R.x.id, amt:tk}); });
+    var diff=amt-S, dd=[];
+    cov.forEach(function(c){ if(dd.indexOf(c.ds)<0) dd.push(c.ds); });
+    res[R.x.id]={ ds:R.ds, amt:amt, days:dd, units:cov.map(function(c){ return c.k; }), cov:cov, how:how, diff:diff, exact:(diff===0 && cov.length>0) };
   });
-  return { claim:claim, rem:rem, list:list, res:res, by:by };
+  var claim={}, rem={}, list=[], by={};
+  keys.forEach(function(k){ var d=U[k].ds; if(claim[d]==null){ claim[d]=0; rem[d]=0; list.push(d); }
+    claim[d]+=U[k].amt; rem[d]+=urem[k]; if(uby[k]) by[d]=(by[d]||[]).concat(uby[k]); });
+  return { claim:claim, rem:rem, list:list, res:res, by:by, U:U, keys:keys, urem:urem, uby:uby, c0:c0 };
 }
+/* ชื่อของชุดหน่วย · วันที่แบบเดิม + ชื่อรายการตั้งเบิก */
+function pcUnitsLab(U,keys){
+  var dd=[], nm=[];
+  (keys||[]).forEach(function(k){ var u=U[k]; if(!u) return; if(u.cid){ if(nm.indexOf(u.name)<0) nm.push(u.name||'ตั้งเบิก'); } else dd.push(u.ds); });
+  return [pcDaysLabel(dd)].concat(nm).filter(function(t){ return t; }).join(', ');
+}
+function pcRefundLab(M,r){ return pcUnitsLab(M.U,(r.cov||[]).map(function(c){ return c.k; })); }
 /* ชิปท้ายบรรทัดเงินคืนในสมุด */
 function pcRefundChip(M,x){
   var r=M && M.res[x.id]; if(!r) return '';
   if(!r.days.length) return '<em class="pc-rf wn" title="ไม่พบวันที่ตั้งเบิกที่ยังค้างคืนใน 45 วันก่อนหน้า">↩ ไม่พบวันที่ตั้งเบิก</em>';
-  var lab=pcDaysLabel(r.days);
+  var lab=pcRefundLab(M,r);   /* §pcClm */
   if(r.exact) return '<em class="pc-rf ok" title="คืนของวันที่ตั้งเบิก '+pcE(lab)+' · ยอดตรง">↩ '+pcE(lab)+' · ตรง</em>';
-  return '<em class="pc-rf wn" title="'+(r.how==='fifo'?'ไม่พบชุดวันที่ยอดรวมพอดี · หักวันเก่าสุดก่อน':'วันที่ระบุในข้อความ')+'">↩ '+pcE(lab)+' · '+(r.diff>0?('เกิน '+pcN(r.diff)):('ขาด '+pcN(-r.diff)))+'</em>';
+  return '<em class="pc-rf wn" title="'+(r.how==='fifo'?'ไม่พบชุดวันที่ยอดรวมพอดี · หักวันเก่าสุดก่อน':(r.how==='name'?'ชื่อรายการตั้งเบิกในข้อความ':'วันที่ระบุในข้อความ'))+'">↩ '+pcE(lab)+' · '+(r.diff>0?('เกิน '+pcN(r.diff)):('ขาด '+pcN(-r.diff)))+'</em>';
 }
-/* การ์ดขวา · ตั้งเบิก / รับคืน ณ วันที่เลือก */
+/* การ์ดขวา · ตั้งเบิก / รับคืน ณ วันที่เลือก · §pcClm หน่วย = รายการตั้งเบิก (ก่อนเริ่มใช้ = ทั้งวัน) */
 function pcClaimCard(pier,ds){
   var M=pcRefundMatch(pier,ds), from=pcDsAdd(ds,-45);
-  var open=M.list.filter(function(d){ return d<=ds && d>=from && M.rem[d]>0; });
-  var tot=open.reduce(function(a,d){ return a+M.rem[d]; },0);
-  var today=M.claim[ds]||0, todayBy=M.by[ds]||[];
+  var open=M.keys.filter(function(k){ var u=M.U[k]; return u.ds<=ds && u.ds>=from && M.urem[k]>0; });
+  var tot=open.reduce(function(a,k){ return a+M.urem[k]; },0), allDays=open.every(function(k){ return !M.U[k].cid; });
+  var tk=M.keys.filter(function(k){ return M.U[k].ds===ds; });
+  var today=tk.reduce(function(a,k){ return a+M.U[k].amt; },0), back=tk.reduce(function(a,k){ return a+M.U[k].amt-M.urem[k]; },0);
+  var refDs=[]; tk.forEach(function(k){ (M.uby[k]||[]).forEach(function(b){ if(refDs.indexOf(b.ref)<0) refDs.push(b.ref); }); });
+  var D=pcDay(pier,ds,false)||{out:[]};
+  var unc=(M.c0 && ds>=M.c0)?(D.out||[]).filter(function(x){ return x && !pcClmOn(x); }):[];
+  var uncAmt=unc.reduce(function(a,x){ return a+(+x.amt||0); },0);
   var refs=Object.keys(M.res).map(function(k){ var r=M.res[k]; r.id=k; return r; }).filter(function(r){ return r.ds<=ds && r.ds>=from; })
     .sort(function(a,b){ return b.ds.localeCompare(a.ds); }).slice(0,4);
-  var D=pcDay(pier,ds,false)||{'in':[]};
   return '<div class="pc2-card pc2-pend pc2-claim"><div class="ch"><b>ตั้งเบิก · รับคืน</b><span>'+pcE(pc2D(ds))+'</span></div>'
-    +'<div class="cs">ตั้งเบิก = รายจ่ายทั้งวันในสมุด · เงินคืน = รายรับที่ขึ้นต้น "รับเงินคืน…" หรือ "เงินเบิกคืน…"</div>'
+    +'<div class="cs">ตั้งเบิก = รายการที่ติ๊กแล้วกด "สรุปตั้งเบิก" (ก่อนเริ่มใช้ = รายจ่ายทั้งวัน) · เงินคืน = รายรับที่ขึ้นต้น "รับเงินคืน…" หรือ "เงินเบิกคืน…" · ใส่ชื่อรายการตั้งเบิกในข้อความเงินคืน = จับคู่ตรงตัว</div>'
     +'<div class="pr"><i style="background:#0E7490"></i><span class="t">ตั้งเบิกวันนี้<small>'
-      +(today?(todayBy.length?('คืนแล้ว '+pcN(today-(M.rem[ds]||0))+' · '+todayBy.map(function(b){ return pcDS(b.ref); }).join(', ')):'ยังไม่ได้รับคืน'):'ไม่มีรายจ่าย')+'</small></span>'
-      +'<span class="v">'+(today?pcMoney(today):'—')+'<em><button type="button" class="pc2-lnk" onclick="pcPrintClaim()">&#128424; สรุปตั้งเบิก</button></em></span></div>'
-    +'<div class="pr"><i style="background:#D9952B"></i><span class="t">ค้างรับคืน · '+open.length+' วัน<small>'+(open.length?pcE(pcDaysLabel(open)):'คืนครบทุกวัน')+'</small></span>'
+      +(today?(back>0?('คืนแล้ว '+pcN(back)+' · '+refDs.map(pcDS).join(', ')):'ยังไม่ได้รับคืน'):(unc.length?'ยังไม่ได้สรุปตั้งเบิก':'ไม่มีรายจ่าย'))+'</small></span>'
+      +'<span class="v">'+(today?pcMoney(today):'—')+'<em><button type="button" class="pc2-lnk" onclick="pcPrintClaim()">&#128424; สรุปทั้งวัน</button></em></span></div>'
+    +(unc.length?('<div class="pr"><i style="background:#94A3B8"></i><span class="t">ยังไม่ได้ตั้งเบิก · '+unc.length+' รายการ<small>ติ๊กในสมุดแล้วกด สรุปตั้งเบิก</small></span>'
+      +'<span class="v">'+pcMoney(uncAmt)+'</span></div>'):'')
+    +'<div class="pr"><i style="background:#D9952B"></i><span class="t">ค้างรับคืน · '+open.length+(allDays?' วัน':' รายการ')+'<small>'+(open.length?pcE(pcUnitsLab(M.U,open)):'คืนครบทุกรายการ')+'</small></span>'
       +'<span class="v">'+(tot?pcMoney(tot):'—')+'</span></div>'
     +(refs.length?refs.map(function(r){ var x=((pcDay(pier,r.ds,false)||{})['in']||[]).filter(function(y){ return y.id===r.id; })[0]||{};
         return '<div class="pr"><i style="background:'+(r.exact?'#0B7A4B':'#A32D2D')+'"></i><span class="t">'+pcE(pcDS(r.ds))+' · '+pcE(String(x.txt||'เงินคืน'))+'<small>'
-          +(r.days.length?('คืนของ '+pcE(pcDaysLabel(r.days))):'ไม่พบวันที่ตั้งเบิก')+'</small></span>'
+          +(r.cov.length?('คืนของ '+pcE(pcRefundLab(M,r))):'ไม่พบรายการตั้งเบิก')+'</small></span>'
           +'<span class="v">'+pcMoney(r.amt)+'<em class="'+(r.exact?'ok':'wn')+'">'+(r.exact?'ตรง':(r.diff>0?('เกิน '+pcN(r.diff)):('ขาด '+pcN(-r.diff))))+'</em></span></div>'; }).join('')
       :'<div class="pc2-mut" style="padding:4px 18px 0">ยังไม่มีเงินคืนใน 45 วันนี้</div>')
     +'</div>';
 }
 /* ใบสรุปตั้งเบิกของวัน · แยกตามกลุ่ม (§pcGrp) · รายการ + ยอด · รวมกลุ่ม · รวมทั้งวัน · สถานะเงินคืน */
-function pcPrintClaim(){
-  var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{out:[]};
+function pcPrintClaim(cid){   /* §pcClm · cid = พิมพ์รายการตั้งเบิกที่บันทึกไว้ · ไม่ใส่ = ทั้งวัน */
+  var C=cid?pcClmGet(cid):null; if(cid && !C){ alert('This claim no longer exists.'); return; }
+  if(C) return pcPrintClaimForm(C);   /* §pcClmForm · รายการตั้งเบิกที่บันทึกไว้ พิมพ์เป็นแบบฟอร์ม Petty Cash */
+  var ds=C?String(C.date||_pcDate):_pcDate, D=pcDay(_pcPier,ds,false)||{out:[]};
+  if(C) D={out:pcClmRows(_pcPier,cid).map(function(o){ return o.x; })};
   var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
   var rows=pcLedgerSort((D.out||[]).map(function(x){ return {t:rk(x.at),k:'out',x:x}; }),_pcPier,ds).map(function(r){ return r.x; });
-  if(!rows.length){ alert('No expenses on this day.'); return; }
+  if(!rows.length){ alert(C?'This claim has no lines.':'No expenses on this day.'); return; }
   var G={}, order=[];
   rows.forEach(function(x){ var g=pcGrpOf(x,'out'), k=g?g.k:'_'; if(!G[k]){ G[k]={g:g, rows:[], amt:0}; order.push(k); } G[k].rows.push(x); G[k].amt+=(+x.amt||0); });
   var L=pcGrpList().map(function(g){ return g.k; }); order.sort(function(a,b){ var ia=L.indexOf(a), ib=L.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
@@ -63800,7 +64094,8 @@ function pcPrintClaim(){
     body+='<tr class="gh"><td colspan="2" style="color:'+c+'">'+pcE(nm)+' · '+o.rows.length+' รายการ</td><td class="m" style="color:'+c+'">'+pcN(o.amt)+'</td></tr>';
     o.rows.forEach(function(x){ body+='<tr><td class="i"></td><td>'+pcE(x.txt||'—')+'</td><td class="m">'+pcN(+x.amt||0)+'</td></tr>'; });
     tot+=o.amt; });
-  var M=pcRefundMatch(_pcPier), back=(M.claim[ds]||0)-(M.rem[ds]||0), by=M.by[ds]||[];
+  var M=pcRefundMatch(_pcPier), back=(M.claim[ds]||0)-(M.rem[ds]||0), by=M.by[ds]||[], left=(M.rem[ds]||0);
+  if(C){ var uk='c:'+cid; back=(M.U[uk]?M.U[uk].amt:0)-(M.urem[uk]||0); by=M.uby[uk]||[]; left=(M.urem[uk]||0); }
   var css=PC_PRINT_HEAD_CSS
     +'#sheet .cl-tb{width:100%;border-collapse:collapse;font-size:12px}'
     +'#sheet .cl-tb td{border-bottom:1px solid #E3E7EF;padding:5px 8px}'
@@ -63809,11 +64104,233 @@ function pcPrintClaim(){
     +'#sheet .cl-tb td.m{width:110px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}'
     +'#sheet .cl-tb tr.sum td{border-top:2px solid #16265C;font-weight:800;font-size:13px}'
     +'#sheet .cl-st{margin-top:12px;font-size:12px;color:#3E4A6B}';
-  var sheet=pcPrintHead('สรุปตั้งเบิกเงินสดย่อย','รายจ่ายของวันจากสมุดเดินบัญชี แยกตามกลุ่ม · ไม่ได้คีย์ใหม่')
-    +'<table class="cl-tb"><tbody>'+body+'</tbody><tfoot><tr class="sum"><td colspan="2">ยอดตั้งเบิกวันที่ '+pcE(pcThDate(ds))+'</td><td class="m">'+pcN(tot)+'</td></tr></tfoot></table>'
+  var _sv=_pcDate; _pcDate=ds;
+  var sheet=pcPrintHead(C?('ตั้งเบิก · '+String(C.name||'')):'สรุปตั้งเบิกเงินสดย่อย',
+      C?(rows.length+' รายการ · บันทึกโดย '+String(C.by||'—')+' · จากสมุดเดินบัญชี แยกตามกลุ่ม'):'รายจ่ายของวันจากสมุดเดินบัญชี แยกตามกลุ่ม · ไม่ได้คีย์ใหม่')
+    +'<table class="cl-tb"><tbody>'+body+'</tbody><tfoot><tr class="sum"><td colspan="2">'+(C?('ยอดตั้งเบิก '+pcE(String(C.name||''))):('ยอดตั้งเบิกวันที่ '+pcE(pcThDate(ds))))+'</td><td class="m">'+pcN(tot)+'</td></tr></tfoot></table>'
     +'<div class="cl-st">สถานะเงินคืน: '+(back>0?('คืนแล้ว '+pcN(back)+' บาท ('+by.map(function(b){ return 'รับวันที่ '+pcThDate(b.ref); }).join(', ')+')'
-      +((M.rem[ds]||0)>0?(' · ค้างอีก '+pcN(M.rem[ds])+' บาท'):' · ครบ')):'ยังไม่ได้รับคืน')+'</div>';
-  pcPrintWin('สรุปตั้งเบิก · '+pcPierName()+' · '+ds, ('pettycash_claim_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+      +(left>0?(' · ค้างอีก '+pcN(left)+' บาท'):' · ครบ')):'ยังไม่ได้รับคืน')+'</div>';
+  _pcDate=_sv;
+  pcPrintWin((C?('ตั้งเบิก · '+String(C.name||'')):'สรุปตั้งเบิก')+' · '+pcPierName()+' · '+ds, ('pettycash_claim_'+_pcPier+'_'+ds+(C?('_'+cid):'')).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+}
+/* ══ §pcClmForm (2026-10-16) · ใบตั้งเบิก ═══════════════════════════════════════════════════════
+   owner ส่งใบ Petty Cash กระดาษ (Period 8/5/26) มา · "เอาไปประยุกต์ ไม่ใช่ให้ทำให้เหมือน"
+   หยิบแนวคิดมา ไม่ลอกหน้าตา · หัวกระดาษ/ตาราง/ลายเซ็นใช้แบบเดียวกับใบพิมพ์อื่นของหน้าเงินสดย่อย
+   owner "เอาแค่รายการ ที่เป็นรายการตั้งเบิกของรายการนั้น ๆ" · ในใบมีแต่แถวของรายการตั้งเบิกนี้
+   owner ส่งใบรับรองแทนใบเสร็จฯ ของหน้านี้มา "ออกแบบให้คล้าย ๆ ใบนี้" · ใช้โครงเดียวกับ pcPrintCert
+   หัวเรื่องกลาง · ชื่อรายการตั้งเบิกบนเส้นประ · ตาราง วัน เดือน ปี · รายละเอียดรายจ่าย · จ่ายให้ · จำนวนเงิน · หมายเหตุ
+   §pcClmNoPayee owner "เอาแค่รายละเอียดจ่ายพอ ไม่ต้องเขียนว่าจ่ายให้ใคร" · ไม่มีคอลัมน์จ่ายให้
+   แถวรวมมีตัวอักษรบาท · ช่วงวันที่ · ผู้บันทึก · สถานะเงินคืน · ลายเซ็น ผู้ขอเบิก / ผู้ตรวจสอบ / ผู้อนุมัติ
+   */
+function pcDmy(ds,y2){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds||'')); if(!m) return String(ds||'');
+  return (+m[3])+'/'+(+m[2])+'/'+(y2?m[1].slice(2):m[1]); }
+function pcPrintClaimForm(C){
+  var pier=C.pier||_pcPier, ds=String(C.date||_pcDate), cid=C.id;
+  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
+  var mine=pcClmRows(pier,cid);
+  if(!mine.length){ alert('This claim has no lines.'); return; }
+  var lines=pcLedgerSort(mine.map(function(o){ return {t:rk(o.x.at),k:'out',x:o.x,_ds:o.ds}; }),pier,ds);
+  var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
+  var tot=0, body='', d0='', d1='';
+  lines.forEach(function(r){ var x=r.x, a=+x.amt||0, d=r._ds||ds; tot+=a;
+    if(!d0 || d<d0) d0=d; if(!d1 || d>d1) d1=d;
+    body+='<tr><td class="d">'+pcE(pcThDate(d))+'</td><td class="t">'+pcE(x.txt||CAT[x.src]||'—')+'</td>'
+      +'<td class="m">'+pcN(a)+'</td><td class="n"></td></tr>'; });
+  for(var i=lines.length;i<10;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="m"></td><td class="n"></td></tr>';
+  var M=pcRefundMatch(pier), uk='c:'+cid, left=(M.urem[uk]!=null)?M.urem[uk]:tot, back=tot-left, by=M.uby[uk]||[];
+  var st=back>0?('คืนแล้ว '+pcN(back)+' บาท ('+by.map(function(b){ return 'รับวันที่ '+pcThDate(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+')'+(left>0?(' · ค้างอีก '+pcN(left)+' บาท'):' · ครบ'))
+    :'ยังไม่ได้รับคืน';
+  var co=pcCoName(), at=String(C.ts||'');
+  var css=PC_PRINT_HEAD_CSS
+    +'#sheet .cf-t{font-size:16px;font-weight:800;text-align:center;color:#16265C;margin:2px 0 16px}'
+    +'#sheet .cf-co{display:flex;align-items:flex-end;gap:8px;font-size:12.5px;margin-bottom:10px}'
+    +'#sheet .cf-co .fill{flex:1;border-bottom:1px dotted #6b7280;font-weight:700;text-align:center;padding-bottom:2px}'
+    +'#sheet .cf-tb{width:100%;border-collapse:collapse;font-size:12px}'
+    +'#sheet .cf-tb th,#sheet .cf-tb td{border:1px solid #16265C;padding:5px 8px}'
+    +'#sheet .cf-tb th{background:#EEF1F6;font-size:11px;font-weight:800;color:#16265C;text-align:center}'
+    +'#sheet .cf-tb td.d{width:92px;text-align:center;white-space:nowrap}'
+    +'#sheet .cf-tb td.m{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
+    +'#sheet .cf-tb td.n{width:90px}'
+    +'#sheet .cf-tb tr.sum td{background:#EEF1F6;font-weight:800}'
+    +'#sheet .cf-tb tr.sum .w{text-align:center;font-weight:700}'
+    +'#sheet .cf-ft{font-size:12px;line-height:2.3;margin-top:16px}'
+    +'#sheet .cf-ft .u{display:inline-block;border-bottom:1px dotted #6b7280;min-width:170px;text-align:center}'
+    +'#sheet .cf-ft .u.s{min-width:96px}'
+    +'#sheet .cf-sg{display:flex;justify-content:flex-end;gap:48px;margin-top:26px;text-align:center;font-size:12px}'
+    +'#sheet .cf-sg .l{border-bottom:1px dotted #6b7280;min-width:160px;margin-bottom:4px;min-height:18px;padding-bottom:2px}';
+  var _sv=_pcDate, _sp=_pcPier; _pcDate=ds; _pcPier=pier;
+  var sheet=pcPrintHead('เงินสดย่อย · ใบตั้งเบิก',lines.length+' รายการจ่ายที่บันทึกเป็นรายการตั้งเบิกนี้ในสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
+    +'<div class="cf-t">ใบตั้งเบิกเงินสดย่อย</div>'
+    +'<div class="cf-co"><span>รายการตั้งเบิก</span><span class="fill">'+pcE(C.name||'')+'</span><span>('+pcE(pcPierName())+')</span></div>'
+    +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
+    +'<tfoot><tr class="sum"><td class="w" colspan="2">'+pcE(pcBahtText(tot))+'</td><td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
+    +'<div class="cf-ft">'
+      +(co?('ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น เพื่อใช้ในงานของ '+pcE(co)+'<br>'):'ขอเบิกเงินสดย่อยคืนตามรายการข้างต้น<br>')
+      +'รายจ่ายตั้งแต่วันที่ <span class="u s">'+pcE(pcThDate(d0||ds))+'</span> ถึงวันที่ <span class="u s">'+pcE(pcThDate(d1||ds))+'</span>'
+      +' &nbsp; บันทึกตั้งเบิกโดย <span class="u s">'+pcE(C.by||'')+'</span>'+(/^\d{4}-\d{2}-\d{2}/.test(at)?(' วันที่ <span class="u s">'+pcE(pcThDate(at.slice(0,10)))+'</span>'):'')+'<br>'
+      +'สถานะเงินคืน <span class="u">'+pcE(st)+'</span></div>'
+    +'<div class="cf-sg"><div><div class="l">'+pcE(C.by||'')+'</div>(ผู้ขอเบิก)</div><div><div class="l"></div>(ผู้ตรวจสอบ)</div><div><div class="l"></div>(ผู้อนุมัติ)</div></div>';
+  _pcDate=_sv; _pcPier=_sp;
+  pcPrintWin('ใบตั้งเบิก · '+String(C.name||'')+' · '+ds, ('pettycash_claim_'+pier+'_'+ds+'_'+cid).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+}
+/* ══ §pcClm (2026-10-16) · รายการตั้งเบิก ═══════════════════════════════════════════════════════
+   owner "สรุปตั้งเบิก ควรเป็น ติ๊ก ๆ รายการ แล้วกดสรุปตั้งเบิก มีให้เขียนชื่อ รายการอัพเดทข้างล่าง
+          และเมื่อบันทึกรายการตั้งเบิกแล้ว ควรทำให้รู้ว่ารายการนี้ตั้งเบิกแล้ว อยู่ในรายการล่าง"
+   ติ๊กรายจ่ายในสมุด → กด สรุปตั้งเบิก → ตั้งชื่อ → บันทึก
+   เก็บ 2 ที่ · ตาราง po_cash_claims (ชื่อ ท่า วันที่ ใคร เมื่อไร) + po_cash_rows.claim (แถวไหนอยู่ในรายการไหน)
+   ยอดของรายการไม่ได้เก็บซ้ำ · คิดจากแถวที่ผูกไว้ทุกครั้ง แก้ยอดในสมุดแล้วรายการตามเอง
+   แถวที่ตั้งเบิกแล้วมีชิป "ตั้งเบิก · ชื่อ" และติ๊กเข้ารายการอื่นไม่ได้ (ต้องเอาออกจากรายการเดิมก่อน)
+   claim ที่ชี้ไปหารายการที่ไม่มีแล้ว (ลบจากอีกเครื่อง) = ไม่ได้ตั้งเบิก · ตั้งใหม่ได้
+   ⚠ alert/confirm/prompt เป็นภาษาอังกฤษตามกฎของไฟล์ · ชื่อที่ผู้ใช้พิมพ์เป็นไทยได้ */
+var _pcClmForm=null, _pcClmOpen={};
+function pcClmAll(pier){ return pcClmArr().filter(function(c){ return c && c.id && (!pier || c.pier===pier); }); }
+function pcClmGet(id){ var L=pcClmArr(); for(var i=0;i<L.length;i++) if(L[i] && L[i].id===id) return L[i]; return null; }
+function pcClmOn(x){ return !!(x && x.claim && pcClmGet(x.claim)); }
+/* แถวของรายการ · ทุกวันของท่า (ปกติอยู่วันเดียว) */
+function pcClmRows(pier,id){
+  var P=pcPier(pier)||{}, out=[];
+  Object.keys(P).sort().forEach(function(ds){ ((P[ds]||{}).out||[]).forEach(function(x){ if(x && x.claim===id) out.push({ds:ds, x:x}); }); });
+  return out;
+}
+function pcClmChip(k,x){
+  if(k!=='out' || !x || !x.claim) return '';
+  var c=pcClmGet(x.claim); if(!c) return '';
+  return '<em class="pc-cl" title="ตั้งเบิกแล้ว · '+pcE(c.name||'')+' · กดเพื่อดูรายการ" onclick="event.stopPropagation();pcClmFocus(\''+pcE(c.id)+'\')">ตั้งเบิก · '+pcE(c.name||'')+'</em>';
+}
+/* ที่ติ๊กไว้ · แยกเป็นตั้งเบิกได้ / ตั้งเบิกแล้ว */
+function pcClmPick(){
+  var R=pcSelRows(), o={ok:[], amt:0, had:0};
+  (R.out||[]).forEach(function(x){ if(!pcSelHas('out',x.id)) return; if(pcClmOn(x)){ o.had++; return; } o.ok.push(x); o.amt+=(+x.amt||0); });
+  return o;
+}
+function pcClmBtnHtml(){
+  var P=pcClmPick();
+  if(!P.ok.length) return P.had?'<span class="sm">ตั้งเบิกแล้ว '+P.had+' รายการ</span>':'';
+  return '<button class="pc-btn pri" onclick="pcClmStart()" title="ตั้งชื่อแล้วบันทึก '+P.ok.length+' รายการจ่ายที่ติ๊กไว้เป็นรายการตั้งเบิก">'
+    +'สรุปตั้งเบิก '+P.ok.length+' รายการ</button>'
+    +(P.had?'<span class="sm">(ตั้งเบิกแล้ว '+P.had+' · ไม่นับ)</span>':'');
+}
+function pcClmFormHtml(){
+  var P=pcClmPick();
+  return '<b>ตั้งเบิก '+P.ok.length+' รายการ</b><span class="big">'+pcMoney(P.amt)+'</span>'
+    +(P.had?'<span class="sm">ตั้งเบิกแล้ว '+P.had+' · ไม่นับ</span>':'')
+    +'<input id="pc-clm-name" class="pc-clm-in" placeholder="ชื่อรายการตั้งเบิก" value="'+pcE(_pcClmForm.name||'')+'"'
+      +' oninput="if(_pcClmForm)_pcClmForm.name=this.value"'
+      +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();pcClmSave();}else if(event.key===\'Escape\'){pcClmCancel();}">'
+    +'<span class="sp"></span>'
+    +'<button class="pc-btn pri" onclick="pcClmSave()"'+(P.ok.length?'':' disabled')+'>บันทึกตั้งเบิก</button>'
+    +'<button class="pc-btn" onclick="pcClmCancel()">ยกเลิก</button>';
+}
+/* ชื่อตั้งต้น · กลุ่มของแถวที่เลือก (§pcGrp) + วันที่ · เช่น "รถตู้ + ไกด์ 16 ต.ค." · ซ้ำกับที่มีแล้วต่อ #2 */
+function pcClmName(ds,rows){
+  var G=[]; (rows||[]).forEach(function(x){ var g=(typeof pcGrpOf==='function')?pcGrpOf(x,'out'):null, t=g?g.t:'จ่ายอื่น'; if(G.indexOf(t)<0) G.push(t); });
+  var base=(G.length?(G.length>2?(G.slice(0,2).join(' + ')+' ฯลฯ'):G.join(' + '))+' ':'')+pcDS(ds);
+  var have=pcClmAll(_pcPier).map(function(c){ return c.name; }), nm=base, n=1;
+  while(have.indexOf(nm)>=0){ n++; nm=base+' #'+n; }
+  return nm;
+}
+function pcClmStart(){
+  if(!pcGuard()) return;
+  pcSelSync();
+  if(!pcClmPick().ok.length){
+    var R=pcSelRows(), any=false;
+    (R.out||[]).forEach(function(x){ if(!pcClmOn(x)){ _pcSel['out:'+x.id]=1; any=true; } });
+    if(!any){ alert('No expenses left to claim on this day. Lines already in a claim show a chip.'); return; }
+  }
+  _pcClmForm={ name:(_pcClmForm && _pcClmForm.name) || pcClmName(_pcDate, pcClmPick().ok) };
+  pcSelPaint();
+  setTimeout(function(){ var i=document.getElementById('pc-clm-name'); if(i){ i.focus(); try{ i.select(); }catch(_){} } },0);
+}
+function pcClmCancel(){ _pcClmForm=null; pcSelBarSync(); }
+function pcClmSave(){
+  if(!pcGuard() || !_pcClmForm) return;
+  var inp=document.getElementById('pc-clm-name');
+  var name=String(inp?inp.value:(_pcClmForm.name||'')).replace(/\s+/g,' ').trim();
+  if(!name){ if(inp){ inp.classList.add('bad'); inp.focus(); } return; }
+  var D=pcDay(_pcPier,_pcDate,false); if(!D) return;
+  var ids={}; pcClmPick().ok.forEach(function(x){ ids[x.id]=1; });
+  var rows=(D.out||[]).filter(function(x){ return x && ids[x.id] && !pcClmOn(x); });
+  if(!rows.length){ alert('Nothing to claim: the ticked lines are gone or already claimed.'); return; }
+  var id='clm'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  pcClmArr().push({ id:id, pier:_pcPier, date:_pcDate, name:name, by:pcWho(), ts:new Date().toISOString() });
+  rows.forEach(function(x){ x.claim=id; });
+  pcSave();
+  try{ laBlobSave(); }catch(_){}
+  _pcClmForm=null; _pcSel={}; _pcClmOpen[id]=1;
+  pcKeep();
+}
+function pcClmDel(id){
+  if(!pcGuard()) return;
+  var c=pcClmGet(id); if(!c) return;
+  if(!confirm('Remove this claim?\nThe lines stay in the ledger; only the claim is removed.')) return;
+  pcClmRows(c.pier,id).forEach(function(o){ o.x.claim=''; });
+  var L=pcClmArr(); for(var i=L.length-1;i>=0;i--) if(L[i] && L[i].id===id) L.splice(i,1);
+  pcSave();
+  try{ laBlobSave(); }catch(_){}
+  delete _pcClmOpen[id]; pcKeep();
+}
+function pcClmRename(id){
+  if(!pcGuard()) return;
+  var c=pcClmGet(id); if(!c) return;
+  var v=prompt('Claim name:', c.name||''); if(v==null) return;
+  v=String(v).replace(/\s+/g,' ').trim(); if(!v || v===c.name) return;
+  c.name=v; c.ts=new Date().toISOString();
+  try{ laBlobSave(); }catch(_){}
+  pcKeep();
+}
+/* เอาแถวเดียวออกจากรายการ · แถวยังอยู่ในสมุด */
+function pcClmUnline(id,rowId){
+  if(!pcGuard()) return;
+  var c=pcClmGet(id); if(!c) return;
+  var hit=pcClmRows(c.pier,id).filter(function(o){ return String(o.x.id)===String(rowId); })[0]; if(!hit) return;
+  hit.x.claim=''; pcSave(); pcKeep();
+}
+function pcClmToggle(id){ if(_pcClmOpen[id]) delete _pcClmOpen[id]; else _pcClmOpen[id]=1; pcKeep(); }
+/* ชิปในสมุด → เปิดรายการนั้นข้างล่างแล้วเลื่อนไปหา */
+function pcClmFocus(id){
+  var c=pcClmGet(id); if(!c) return;
+  _pcClmOpen[id]=1;
+  if(c.date && String(c.date).slice(0,7)!==_pcYM) _pcYM=String(c.date).slice(0,7);
+  pcKeep();
+  setTimeout(function(){ var el=document.getElementById('pc-clm-'+id); if(el){ try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){ el.scrollIntoView(); } el.classList.add('fl'); setTimeout(function(){ el.classList.remove('fl'); },1600); } },30);
+}
+/* การ์ดใต้สมุด · รายการตั้งเบิกของเดือนที่ดูอยู่ · ใหม่สุดก่อน */
+function pcClmList(pier){
+  var ym=_pcYM||String(_pcDate||'').slice(0,7);
+  var L=pcClmAll(pier).filter(function(c){ return String(c.date||'').slice(0,7)===ym; })
+    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(b.ts||'').localeCompare(String(a.ts||'')); });
+  var M=pcRefundMatch(pier), body='', sum=0, sumLeft=0;
+  L.forEach(function(c){
+    var R=pcClmRows(pier,c.id), amt=0; R.forEach(function(o){ amt+=(+o.x.amt||0); }); amt=Math.round(amt);
+    var k='c:'+c.id, left=(M.urem[k]!=null)?M.urem[k]:amt, back=amt-left, by=M.uby[k]||[];
+    sum+=amt; sumLeft+=left;
+    var st=!amt?'<em class="z">ไม่มีรายการ</em>'
+      :(left<=0?('<em class="ok">คืนครบ · '+pcE(by.map(function(b){ return pcDS(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', '))+'</em>')
+      :(back>0?('<em class="wn">คืนแล้ว '+pcN(back)+' · ค้าง '+pcN(left)+'</em>'):'<em>รอรับคืน</em>'));
+    var op=!!_pcClmOpen[c.id], cur=(c.date===_pcDate);
+    body+='<div class="pc2-cl'+(op?' op':'')+(cur?' cur':'')+'" id="pc-clm-'+pcE(c.id)+'">'
+      +'<div class="r">'
+        +'<button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนรายการ':'ดูรายการ')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
+        +'<span class="nm"><b>'+pcE(c.name||'—')+'</b><small>'
+          +(cur?pcE(pc2D(c.date)):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(c.date)+'\')">'+pcE(pc2D(c.date))+'</a>'))
+          +' · '+R.length+' รายการ · '+pcE(c.by||'—')+'</small></span>'
+        +'<span class="st">'+st+'</span>'
+        +'<span class="am">'+pcMoney(amt)+'</span>'
+        +'<span class="ac"><button type="button" class="ol" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
+          +'<button type="button" class="ol" onclick="pcClmRename(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ">&#9998;</button>'
+          +'<button type="button" class="pc2-x" onclick="pcClmDel(\''+pcE(c.id)+'\')" title="ยกเลิกรายการตั้งเบิก (แถวในสมุดยังอยู่)">&times;</button></span>'
+      +'</div>'
+      +(op?('<div class="ln">'+(R.length?R.map(function(o){
+          return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
+            +'<span class="m">'+pcN(+o.x.amt||0)+'</span>'
+            +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
+        :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div>'):'')
+      +'</div>';
+  });
+  return '<div class="pc2-card pc2-clms"><div class="ch"><div><b>รายการตั้งเบิก · '+pcE(pc2MonthName(ym))+'</b>'
+      +'<div class="cs">'+(L.length?(L.length+' รายการ · รวม '+pcMoney(sum)+(sumLeft>0?(' · ค้างรับคืน '+pcMoney(sumLeft)):' · คืนครบ')):'ติ๊กรายการจ่ายในสมุด แล้วกด สรุปตั้งเบิก เพื่อเริ่ม')+'</div></div></div>'
+    +(body||'<div class="pc2-empty">ยังไม่มีรายการตั้งเบิกในเดือนนี้</div>')
+    +'</div>';
 }
 /* บรรทัดที่กำลังกรอก · base = คงเหลือก่อนบรรทัดนี้ (ไว้คำนวณยอดจาง ๆ ระหว่างพิมพ์) */
 function pc2EdRow(E,base,no){
@@ -63885,7 +64402,7 @@ function pc2CSS3(S){
   L+' .pc2-lr.ed .act .ok{border:none;background:'+N+';color:#fff} '+L+' .pc2-lr.ed .act .no{border:1px solid #D5DBE6;background:#fff;color:'+M+'}',
   L+' .pc2-add button{height:42px;border-radius:10px}',
   '@media (max-width:1380px){'+S+' .pc2-main{grid-template-columns:minmax(0,1fr)} '+S+' .pc2-r{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start} '+S+' .pc2-r .pc2-card{margin-bottom:0}}',
-  '@media (max-width:900px){'+S+' .pc2-r{grid-template-columns:1fr}}'
+  '@media (max-width:900px){'+S+' .pc2-r{grid-template-columns:1fr} '+S+' .pc2-ft .ad{height:36px;flex:1 1 120px}}'   /* §pcFtCmp · มือถือ ปุ่มเพิ่มกดง่าย */
   ].join('\n');
 }
 
