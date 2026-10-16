@@ -68793,7 +68793,9 @@ function pk3Line(){
 function pkSetAmt(S){
   var PR=pkPrice(), by={}, amt=0, miss=[];
   (S.people||[]).forEach(function(q){ by[q.cat]=(by[q.cat]||0)+1; });
-  Object.keys(by).forEach(function(c){ var pr=pkCalcNum(PR[c]); if(!PR[c]||!pr){ miss.push(c); return; } amt+=by[c]*pr; });
+  /* §pkSetZero (2026-10-17) · owner "แต่เราตั้งครบล่ะนะ" · ราคา 0 (เช่น ต่ำกว่า 3 เข้าฟรี) = ตั้งแล้ว ไม่ใช่ยังไม่ตั้ง
+     ของเดิมเช็ค !pr ทำให้ราคา 0 ถูกนับเป็น "ยังไม่ตั้งราคา" แล้วยอดขึ้น + ทั้งที่ครบ · ยังไม่ตั้ง = ช่องว่างเท่านั้น */
+  Object.keys(by).forEach(function(c){ var raw=PR[c], pr=pkCalcNum(raw); if(raw==null||String(raw).trim()===''){ miss.push(c); return; } amt+=by[c]*pr; });
   return {amt:amt, by:by, miss:miss};
 }
 /* Excel · ชีทต่อชุด 3 คอลัมน์แบบเดียวกับชีทตั๋วอุทยาน + ชีทสรุปรหัส · which = id ของชุด | 'draft' | 'all'
