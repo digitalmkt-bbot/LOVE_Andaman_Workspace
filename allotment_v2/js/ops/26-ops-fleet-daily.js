@@ -652,6 +652,14 @@
 
   // ── Projects wrappers (do NOT recreate server side effects in browser) ──
 
+  /* flRenderProjects ran flProjMigrate(false) on every draw: the legacy sweeps that auto-link scheduled jobs to a
+     project on the same boat, auto-CREATE a project for any still-unlinked scheduled job or dry-dock boat-log entry,
+     and unlink/back-fill one-shot fields.  In ops mode they edited FL_MAINT / FL_PROJECTS in memory only (flSave is a
+     no-op), so the screen showed phantom projects with browser-made ids that the server never had and that vanished
+     on reload.  The server owns parent_project_id (PATCH /v1/fleet/jobs/:id links and unlinks, both logs written),
+     and the projects themselves come from GET /v1/fleet/projects.  The re-scan button reaches the same function. */
+  wrap('flProjMigrate', function(){ return { created: 0, linked: 0, skipped: 'operation-backend owns project links' }; });
+
   wrap('flProjSaveModal', function(){
     var d = function(id){ return document.getElementById(id); };
     var editId = typeof _projEditId !== 'undefined' ? _projEditId : null;

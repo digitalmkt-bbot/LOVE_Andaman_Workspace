@@ -64,6 +64,28 @@
     var out = {}; Object.keys(p || {}).forEach(function(k){ var n = Math.round(+p[k] || 0); if(n > 0) out[k] = n; }); return out;
   }
 
+  /* §thaiPax (2026-10-15) · t.nat {ad,chd,inf,foc} (really-Thai heads, changes no price) <-> the server's
+     trips[].thai_passengers {adults,children,infants,free_of_charge} (migration 241).  Unset (no key
+     typed) is null, which tells the server "nobody checked" so park tickets read the grid's _th count;
+     all zeros is a real answer.  The server refuses a count above its category's heads on the trip
+     sent, so clamp like legacy bkNatTH does (the pax can be lowered after the count was typed). */
+  var THAI_FIELDS = [['ad', 'adults'], ['chd', 'children'], ['inf', 'infants'], ['foc', 'free_of_charge']];
+  function thaiOut(t){
+    var n = t && t.nat;
+    if(!(n && typeof n === 'object' && THAI_FIELDS.some(function(f){ return n[f[0]] != null && n[f[0]] !== ''; }))) return null;
+    var px = t.pax || {}, out = {};
+    THAI_FIELDS.forEach(function(f){
+      var all = (+px[f[0] + '_th'] || 0) + (+px[f[0] + '_fr'] || 0) + (+px[f[0]] || 0);
+      out[f[1]] = Math.max(0, Math.min(Math.round(all), Math.round(+n[f[0]] || 0)));
+    });
+    return out;
+  }
+  function thaiIn(th){
+    if(!th || typeof th !== 'object') return undefined;
+    var nat = {}; THAI_FIELDS.forEach(function(f){ nat[f[0]] = Math.max(0, Math.round(+th[f[1]] || 0)); });
+    return nat;
+  }
+
   /* §opsAuthority (2026-10-08) · the server decides who made a booking, when, and its status.
      · bookedAt / createdBy / confirmedAt / confirmedBy are stamped by the server from the login and
        never sent: a create naming them is 400, and a PATCH changing them is 400.
@@ -131,8 +153,16 @@
     if(Array.isArray(bk.adjustments)) b.adjustments = bk.adjustments.filter(function(a){
       return a && Number(a.value) > 0;
     }).map(function(a){ return { kind: a.kind, mode: a.mode, value: Number(a.value), label: a.label || undefined, note: a.note || undefined }; });
+    /* The server replaces the whole list and defaults whatever is missing (heads 0, who/area/zone/place
+       null), so every field it stores goes every time. Legacy's qty-only entries count as adults. */
     if(Array.isArray(bk.altPickups)) b.altPickups = bk.altPickups.map(function(a){
-      return { areaId: a.areaId || a.area_id || null, dropSame: a.dropSame != null ? !!a.dropSame : !!a.drop_same,
+      var head = function(k){ var n = Number(a[k]); return Number.isInteger(n) && n >= 0 ? n : 0; };
+      var counted = ['ad','chd','inf','foc'].some(function(k){ return a[k] != null && a[k] !== ''; });
+      var qty = Number(a.qty);
+      return { who: a.who || null, ad: counted ? head('ad') : (Number.isInteger(qty) && qty > 0 ? qty : 0),
+        chd: counted ? head('chd') : 0, inf: counted ? head('inf') : 0, foc: counted ? head('foc') : 0,
+        areaId: a.areaId || a.area_id || null, area: a.area || null, zone: a.zone || null, place: a.place || null,
+        dropSame: a.dropSame != null ? !!a.dropSame : !!a.drop_same,
         dropAreaId: a.dropAreaId || a.drop_area_id || null, dropArea: a.dropArea || a.drop_area || '',
         dropZone: a.dropZone || a.drop_zone || '', dropPlace: a.dropPlace || a.drop_place || '' };
     });
@@ -169,6 +199,7 @@
         });
         if(Object.keys(draws).length) o.lockDraws = draws;
       }
+      o.thai_passengers = thaiOut(t);                   // §thaiPax · null = not set (a trip is sent whole)
       if(t.zone) o.zone = t.zone;
       var pk = pickupSplit(t.pickupTime);            // §opsPickup · a trip is sent whole: a field left out is cleared
       if(!pk) throw new Error('Pickup time "' + t.pickupTime + '" on ' + t.date + ' is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
@@ -231,12 +262,15 @@
 
   function operationsFrom(x){
     x = x || {};
-    return { boatId: x.boat_id || x.boatId || null,
+    var r = { boatId: x.boat_id || x.boatId || null,
       boatSplits: (x.boat_splits || x.boatSplits || []).map(function(s){ return { boatId: s.boat_id || s.boatId, ad: +s.ad || 0, chd: +s.chd || 0, inf: +s.inf || 0, foc: +s.foc || 0 }; }),
       boatPulled: !!(x.boat_pulled != null ? x.boat_pulled : x.boatPulled),
       pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
       returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
       pierNote: x.pier_note || x.pierNote || null, checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
+    /* check-in state: same mapping as the write path (36-ops-day-actions applyServerCheckins) -> pierCheckin / vanCheckin */
+    if(O.applyCheckins) O.applyCheckins(r, x);
+    return r;
   }
   function tripFrom(t){
     var g = function(c, s){ return t[c] !== undefined ? t[c] : t[s]; };
@@ -258,6 +292,7 @@
               rtRef: g('rateTypeId', 'rate_type_id') || null, promoId: g('promoId', 'promo_id') || null,
               subtotal: t.subtotal != null ? +t.subtotal || 0 : 0,
               ops: operationsFrom(t.operations) };
+    var nat = thaiIn(t.thai_passengers); if(nat) o.nat = nat;       // §thaiPax
     return o;
   }
 
@@ -358,8 +393,10 @@
     bk.ops.reconfirm = ob.reconfirm ? { status: ob.reconfirm.status || '', via: ob.reconfirm.via || 'reconfirm', at: ob.reconfirm.at || '', by: ob.reconfirm.by || '', sent: !!ob.reconfirm.sent, sentAt: ob.reconfirm.sent_at || '', sentBy: ob.reconfirm.sent_by || '' } : null;
     bk.docCheck = ob.doc_check || null;
     bk.jobNote = ob.job_note != null ? ob.job_note : null;   // the van job order's special request override (35-ops-van-jobs.js)
+    /* §bookingSlips: payment slips on the booking itself (a direct/B2C booking has no invoice payment); server-owned, shown by 38-ops-attachments.js */
+    bk.slips = (ob.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id:s.id, attachmentId:s.attachment_id || s.attachmentId || '', addedAt:s.added_at || s.addedAt || '', addedBy:s.added_by || s.addedBy || '' }; });
     bk.attachments = (ob.attachments || []).map(function(a){ return { id:a.id, name:a.name || '', mime:a.mime || '', size:+a.size || 0, kind:a.kind || '', by:a.by || '', at:a.at || '' }; });
-    bk.altPickups = (ob.alt_pickups || []).map(function(a){ return { areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
+    bk.altPickups = (ob.alt_pickups || []).map(function(a){ var ad = +a.ad || 0, chd = +a.chd || 0, inf = +a.inf || 0, foc = +a.foc || 0; return { who:a.who || '', ad:ad, chd:chd, inf:inf, foc:foc, qty:ad + chd + inf + foc, area:a.area || '', zone:a.zone || '', place:a.place || '', areaId:a.area_id || a.areaId || null, dropSame:a.drop_same != null ? !!a.drop_same : !!a.dropSame, dropAreaId:a.drop_area_id || a.dropAreaId || null, dropArea:a.drop_area || a.dropArea || '', dropZone:a.drop_zone || a.dropZone || '', dropPlace:a.drop_place || a.dropPlace || '' }; });
     bk.adjustments = (ob.adjustments || []).map(function(a){ return { seq:a.seq, kind:a.kind, mode:a.mode, value:+a.value || 0, label:a.label || '', note:a.note || '' }; });
     if(Array.isArray(ob.allergy_list)) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyList = ob.allergy_list; }
     if(ob.allergy_count != null) { bk.specialMeals = bk.specialMeals || {}; bk.specialMeals.allergyCount = +ob.allergy_count || 0; }
@@ -388,8 +425,10 @@
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
+    if(vans) O.vans.put(bk, vans);
     // §opsApprovals · the local copy stays only where the server has no entry of that kind
     approvalsInto(bk, ob, { approval: keep.approval, focApproval: keep.focApproval });
     focPlaceholder(bk);

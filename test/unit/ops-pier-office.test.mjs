@@ -20,7 +20,7 @@ const MOVE = (o) => ({ id: 'pm_1', pier: PIER, date: DATE, item_id: 'pi_a', boat
   sheet_id: null, note: null, recorded_at: 't', recorded_by: 'GSA', edited_at: null, edited_by: null, fine_status: null, ...o });
 const LIC = { id: 'pl_1', staff_id: 'ps_1', class_id: 'deck1', licence_no: 'No1', issued_on: '2025-01-01', expires_on: '2027-01-01', issuer: 'Marine', note: null, state: 'ok', days_left: 400 };
 
-function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
+function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {}, over = null } = {}) {
   const calls = [], fails = [], wrote = [], legacy = [], listeners = [], confirms = [];
   const req = (method, path, body) => {
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
@@ -66,7 +66,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
     poBal: () => ({ ready: -1, onboat: 0, onship: 0, dirty: 0, laundry: 0, repair: 0, gone: 0, inhand: -1 }),
     poBoatStage: () => ({ k: 'legacy' }),
     poBoatSum: () => ({ pi_a: { iss: -1, ret: 0, rep: 0, wo: 0, lost: 0, ob: 0 }, pi_t: { iss: 0, ret: 0, rep: 0, wo: 0, lost: 0, ob: 0 } }), poBoatCarry: () => ({ legacy: 1 }),
-    poCloseOpen: (b) => { legacy.push('poCloseOpen:' + b); }, poSheetPending: () => 'legacy', plCheckBoat: () => [{ lv: 'bad', t: 'legacy' }],
+    poCloseOpen: (b) => { legacy.push('poCloseOpen:' + b); }, poCloseSave: (b) => { legacy.push('poCloseSave:' + b); }, poSheetPending: () => 'legacy', plCheckBoat: () => [{ lv: 'bad', t: 'legacy' }],
     poIssueOpen: (b) => { legacy.push('poIssueOpen:' + b); }, poIssueDraft: () => { legacy.push('poIssueDraft'); }, poIssueSave: () => { legacy.push('poIssueSave'); },
     poIsPrint: () => { legacy.push('poIsPrint'); }, poSignSheet: (b) => { legacy.push('poSignSheet:' + b); }, poDayGuard: () => true, poIsRead: () => {},
     poIsPax: (r) => (+r.ad || 0), paPayCan: () => true,
@@ -74,8 +74,9 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
     SB_BOOKINGS: [{ id: 'B1', opsId: 'srv_B1' }],
     getBoat: (id) => ({ name: 'Boat ' + id }),
   };
+  if (over) Object.assign(win, over(win, legacy));
   const ctx = { window: win, console, Promise, Array, Object, Error, String, Number, JSON, Math, encodeURIComponent, isFinite, parseInt, URLSearchParams,
-    document: { getElementById: () => null, activeElement: null }, setTimeout, clearTimeout, Date, confirm: () => true };
+    document: { getElementById: (id) => dom[id] || null, activeElement: null }, setTimeout, clearTimeout, Date, confirm: () => true };
   const vmc = vm.createContext(ctx);
   SOURCES.forEach((s) => vm.runInContext(s, vmc));
   const flush = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setTimeout(r, 3)); await new Promise((r) => setImmediate(r)); } };
@@ -191,6 +192,51 @@ test('a staff member who is not in a loaded range is never written', async () =>
   rt.w.renderPierAtt(); await rt.flush();
   await save(rt);
   assert.deepEqual(writes(rt), []);
+});
+
+test('roster: multi-pier switching preserves cached rosters and paHasJob reflects server days', async () => {
+  const ROSTER_PANWA = '/v1/pier-office/panwa/roster?from=2026-09-26&to=2026-10-25';
+  const ROSTER_TUBLAMU = '/v1/pier-office/tublamu/roster?from=2026-09-26&to=2026-10-25';
+  const rt = runtime({ answers: {
+    ['GET ' + ROSTER_PANWA]: { pier: 'panwa', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: true }, { date: '2026-10-06', has_job: false }], rows: [{ staff_id: 'ps_1', cells: [{ date: '2026-10-05', code: 'PP', layer: 'boat', boat_id: 'b1', at_pier: 'panwa' }] }] },
+    ['GET ' + ROSTER_TUBLAMU]: { pier: 'tublamu', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: false }], rows: [{ staff_id: 'ps_2', cells: [{ date: '2026-10-05', code: 'TB', layer: 'boat', boat_id: 'b2', at_pier: 'tublamu' }] }] },
+  } });
+  await boot(rt);
+  rt.w._poPier = 'panwa';
+  rt.w.renderPierAtt(); await rt.flush();
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+  assert.equal(rt.w.paHasJob('2026-10-06', 'panwa'), false);
+
+  rt.w._poPier = 'tublamu';
+  rt.w.renderPierAtt(); await rt.flush();
+  assert.equal(rt.w.paCell('2026-10-05', 'tublamu', { id: 'ps_2' }).c, 'TB');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'tublamu'), false);
+
+  rt.w._poPier = 'panwa';
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+});
+
+test('roster: the first draw of a session persists (one-time migrations) and the roster is still read', async () => {
+  // legacy renderPierAtt runs paEnsureWsLt / paEnsureLtSplit / paEnsureNoteMig / paSkinApply, which call poPersist
+  // once per session. That run sends nothing, so nothing draws again: the roster must be asked for once it settles.
+  const ROSTER = 'GET /v1/pier-office/panwa/roster?from=2026-09-26&to=2026-10-25';
+  let migrated = false;
+  const rt = runtime({
+    answers: { [ROSTER]: { pier: 'panwa', from: '2026-09-26', to: '2026-10-25', days: [{ date: '2026-10-05', has_job: true }],
+      rows: [{ staff_id: 'ps_1', cells: [{ date: '2026-10-05', code: 'PP', layer: 'boat', boat_id: 'b1', at_pier: 'panwa' }] }] } },
+    over: (win, legacy) => ({ renderPierAtt: () => { legacy.push('renderPierAtt'); if (!migrated) { migrated = true; win.poPersist(); } } }),
+  });
+  await boot(rt);   // the pier office is already loaded (the person came from the job sheet or the office)
+  rt.w.renderPierAtt();
+  assert.equal(rt.w.laOps.pier.busy(), true, 'the migration persist is pending while the wrapper asks');
+  await new Promise((r) => setTimeout(r, 800)); await rt.flush();
+  assert.equal(rt.calls.filter((c) => c.method + ' ' + c.path === ROSTER).length, 1, 'the roster is read once the persist settles');
+  assert.equal(rt.w.paCell('2026-10-05', 'panwa', { id: 'ps_1' }).c, 'PP');
+  assert.equal(rt.w.paHasJob('2026-10-05', 'panwa'), true);
+  assert.ok(rt.legacy.filter((x) => x === 'renderPierAtt').length >= 2, 'the roster is drawn again with the server cells');
+  assert.deepEqual(writes(rt), [], 'the migration persist sends nothing');
 });
 
 test('pay: the allowance comes from the server; a rate is a PUT; the rules go as the whole table', async () => {
@@ -347,6 +393,89 @@ test('close dialog, legacy mode: nothing is read', async () => {
   assert.deepEqual(rt.calls, []);
   assert.deepEqual(rt.legacy, ['poCloseOpen:b1']);
   assert.deepEqual(J(rt.w.poBoatCarry(DATE, 'b1')), { legacy: 1 });
+});
+
+/* poCloseSave · server first: the dialog's numbers are the close command; nothing changes before the answer */
+const CLOSE = '/v1/pier-office/panwa/days/' + DATE + '/boats/b1/close';
+const OUTST = '/v1/pier-office/panwa/days/' + DATE + '/boats/b1/outstanding';
+const MISS = [{ k: 'repair' }, { k: 'writeoff' }, { k: 'lost' }, { k: 'onboard' }];
+const closeDom = () => ({
+  pocwmsg: { textContent: 'old' }, poret_pi_a: { value: '2' }, pom_repair_pi_a: { value: '1' }, pom_writeoff_pi_a: { value: '0' },
+  pom_lost_pi_a: { value: '2' }, pom_onboard_pi_a: { value: '0' }, pofine_pi_a: { value: '300' },
+  poret_pi_t: { value: '0' },   // on the dialog, but nothing of it is out: never sent
+});
+const closeOpen = async (rt) => {
+  rt.w.PO_MISS = MISS;
+  await boot(rt);
+  await rt.w.poCloseOpen('b1');
+};
+const OUTST_ANSWER = { pier: PIER, date: DATE, boat_id: 'b1', stage: { k: 'open' }, items: [
+  { item_id: 'pi_a', label: 'Fin M', carry: 0, issued: 5, returned: 0, repair: 0, writeoff: 0, lost: 0, onboard: 0, outstanding: 5 }] };
+
+test('boat close (server first): one close command from the dialog; moves, balances and stage come from the answer', async () => {
+  const dom = closeDom();
+  let seenAtSend = null;
+  const held = [];   // what the server holds: the office reads its ledger again after the write
+  const LEDGER = 'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000';
+  let bal = [], stage = 'open';
+  const rt = runtime({ dom, answers: { [LEDGER]: () => ({ pier: PIER, from: '2000-01-01', to: null, total: held.length, moves: held.slice().reverse() }),
+    'GET /v1/pier-office/panwa/stock': () => ({ pier: PIER, items: bal.map((b) => ({ id: b.item_id, ...b })) }),
+    ['GET /v1/pier-office/panwa/days/' + DATE + '/boats']: () => ({ boats: [{ boat_id: 'b1', stage, left: 0, issued: 5, carry: 0, onboard: 0, sheet_status: null }], closed: null, reopens: [] }),
+    ['GET ' + OUTST]: OUTST_ANSWER, ['POST ' + CLOSE]: () => {
+    bal = [{ item_id: 'pi_a', ...BAL({ ready: 37, repair: 1, gone: 2 }) }]; stage = 'closed';
+    seenAtSend = { moves: rt.w.PIER_MOVES.length, legacy: rt.legacy.slice() };
+    held.push(MOVE({ id: 'pm_r', type: 'return', boat_id: 'b1', qty: 2, source: null }), MOVE({ id: 'pm_p', type: 'repair', boat_id: 'b1', qty: 1, source: null }),
+              MOVE({ id: 'pm_l', type: 'lost', boat_id: 'b1', qty: 2, source: null, fine_baht: 300, fine_status: 'open' }));
+    return { boat_id: 'b1', date: DATE,
+      moves: held.slice(),
+      balances: [{ item_id: 'pi_a', ...BAL({ ready: 37, repair: 1, gone: 2 }) }], stage: { k: 'closed', left: 0, issued: 5, done: 5, carry: 0, onboard: 0 } };
+  } } });
+  await closeOpen(rt);
+  const ok = await rt.w.poCloseSave('b1');
+  assert.equal(ok, true);
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['POST', CLOSE,
+    { lines: [{ item_id: 'pi_a', returned: 2, repair: 1, writeoff: 0, lost: 2, onboard: 0, fine_baht: 300 }] }]], 'one command; pi_t (nothing out) is not sent');
+  assert.deepEqual(seenAtSend, { moves: 0, legacy: ['poCloseOpen:b1'] }, 'nothing added, closed or drawn before the server answers');
+  assert.deepEqual(rt.w.PIER_MOVES.map((m) => [m.id, m.type, m.qty, !!m.srv]), [['pm_r', 'return', 2, true], ['pm_p', 'repair', 1, true], ['pm_l', 'lost', 2, true]]);
+  const lost = rt.w.PIER_MOVES.find((m) => m.type === 'lost');
+  assert.equal(lost.fine, 300); assert.equal(lost.finePaid, false);
+  assert.equal(rt.w.poBal('pi_a').ready, 37, 'balance from the answer');
+  assert.equal(rt.w.poBoatStage(DATE, 'b1', PIER).k, 'closed', 'stage from the answer');
+  assert.ok(rt.legacy.includes('modalClose') && rt.legacy.includes('renderPierOffice'));
+  assert.ok(!rt.legacy.includes('poPersist') && !rt.legacy.includes('poCloseSave:b1'), 'not legacy\'s local save');
+  assert.ok(rt.wrote.includes('pier'));
+  assert.deepEqual(rt.fails, []);
+  // the moves came from the server: the next save sends nothing again
+  await save(rt);
+  assert.equal(writes(rt).length, 1);
+});
+
+test('boat close (server first): a refusal keeps the dialog open with the server\'s reason; nothing changes', async () => {
+  const dom = closeDom();
+  const no = Object.assign(new Error('Fin M: the 3 missing must be accounted for; accounted for 1 of 3'), { status: 400, code: 'shortfall_unaccounted' });
+  const rt = runtime({ dom, answers: { ['GET ' + OUTST]: OUTST_ANSWER, ['POST ' + CLOSE]: no } });
+  await closeOpen(rt);
+  const ok = await rt.w.poCloseSave('b1');
+  assert.equal(ok, false);
+  assert.deepEqual(rt.w.PIER_MOVES, [], 'no local move');
+  assert.ok(!rt.legacy.includes('modalClose'), 'the dialog stays open');
+  assert.equal(dom.pocwmsg.textContent, no.message, 'the reason is in the dialog');
+  assert.deepEqual(rt.fails.map((f) => [f.title, f.code]), [['Boat not closed', 'shortfall_unaccounted']]);
+  assert.ok(!rt.wrote.includes('pier'));
+});
+
+test('boat close (server first): nothing outstanding sends nothing; legacy mode is legacy\'s save', async () => {
+  const dom = { pocwmsg: { textContent: '' }, poret_pi_a: { value: '0' } };
+  const rt = runtime({ dom, answers: { ['GET ' + OUTST]: { ...OUTST_ANSWER, items: [{ ...OUTST_ANSWER.items[0], issued: 0, outstanding: 0 }] } } });
+  await closeOpen(rt);
+  rt.w.poCloseSave('b1');
+  await rt.flush();
+  assert.deepEqual(writes(rt), []);
+  assert.equal(dom.pocwmsg.textContent, 'Nothing outstanding on this boat');
+  const off = runtime({ enabled: false });
+  off.w.poCloseSave('b1');
+  assert.deepEqual(off.legacy, ['poCloseSave:b1']);
+  assert.deepEqual(off.calls, []);
 });
 
 test('boat close: the returns and the misses of one boat are one close command, with the fine on the lost line', async () => {

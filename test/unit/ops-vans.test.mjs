@@ -439,3 +439,37 @@ test('same van: PATCHes return_same_van, and turning it on clears the return van
   assert.equal(byId(rt.bks, 'b1').ops.returnSameVan, true);
   assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, null);
 });
+
+// ── §vanKeep: a booking refresh keeps the van fields the groups put on ────────
+
+test('take/put carry van fields across a booking refresh that rebuilds ops and trips', async () => {
+  const rt = runtime({ handlers: { 'GET /operations/van-groups': { body: { groups: [group()] } } } });
+  await rt.O.vans.load(D, R);
+  const b1 = byId(rt.bks, 'b1');
+  const kept = rt.O.vans.take(b1);
+  // what the booking API answers: fresh ops and trips with no van fields
+  b1.ops = { boatId: 'boat1', pickupTimeFinal: '06:40' };
+  b1.trips = [trip(1)];
+  rt.O.vans.put(b1, kept);
+  assert.deepEqual(plain({ vanGroup: b1.ops.vanGroup, vanId: b1.ops.vanId, vanSeq: b1.ops.vanSeq, vanReturnId: b1.ops.vanReturnId, boatId: b1.ops.boatId }),
+    { vanGroup: 3, vanId: 'veh07', vanSeq: 1, vanReturnId: null, boatId: 'boat1' });
+});
+
+test('take/put never moves vans to another day, and never overwrites a value the fresh copy has', async () => {
+  const rt = runtime();
+  const b = { id: 'm', opsId: 'lg_m', trips: [trip('m1'), trip('m2', 'PK', { date: '2026-10-03', ops: { vanGroup: 4, vanId: 'veh04' } })],
+    ops: { vanGroup: 2, vanId: 'veh02', vanSeq: 3 } };
+  const kept = rt.O.vans.take(b);
+  // rescheduled: the first day moved to 10-05, the second day stays
+  b.ops = {}; b.trips = [trip('m1', 'PK', { date: '2026-10-05' }), trip('m2', 'PK', { date: '2026-10-03', ops: {} })];
+  rt.O.vans.put(b, kept);
+  assert.equal(b.ops.vanGroup, undefined, 'a moved first day gets no van');
+  assert.deepEqual(plain({ g: b.trips[1].ops.vanGroup, v: b.trips[1].ops.vanId }), { g: 4, v: 'veh04' }, 'the unchanged day keeps its van');
+  // a fresh copy that carries its own van wins
+  const c = { id: 'n', trips: [trip('n1')], ops: { vanGroup: 1, vanId: 'veh01' } };
+  const k2 = rt.O.vans.take(c);
+  c.ops = { vanGroup: 6, vanId: 'veh06' };
+  rt.O.vans.put(c, k2);
+  assert.deepEqual(plain({ g: c.ops.vanGroup, v: c.ops.vanId }), { g: 6, v: 'veh06' });
+  assert.equal(rt.O.vans.take({ id: 'x', trips: [trip('x')], ops: { vanGroup: 0, vanId: null } }), null, 'nothing to keep');
+});

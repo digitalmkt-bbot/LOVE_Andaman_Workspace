@@ -106,17 +106,51 @@
 
   // Full-screen post-login progress. It is intentionally separate from the
   // legacy /api/load overlay: this deployment boots from operation-backend.
+  // §bootSkel (2026-10-15) · drawn as the app's own shell (floating sidebar card, header, stat
+  //   cards, a table) in grey shimmer, with the step name in a pill at the bottom. It still covers
+  //   the whole screen: the real app underneath holds seed data until the boot redraw. Styles live
+  //   here, not in 01-base.css · this file loads before the stylesheet.
   window.laOpsBootScreen=(function(){
     var ID='la-ops-boot-screen';
+    var CSS='#la-ops-boot-screen{position:fixed;inset:0;z-index:100060;background:#F6F7F9;font-family:"DM Sans",sans-serif;overflow:hidden}'
+      +'#la-ops-boot-screen .lb-sk{background:#E4E8EE;border-radius:8px;position:relative;overflow:hidden;flex:none}'
+      +'#la-ops-boot-screen .lb-sk::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:laBootShine 1.4s ease-in-out infinite}'
+      +'#la-ops-boot-screen .lb-side{position:absolute;top:6px;left:14px;bottom:10px;width:250px;border-radius:24px;background:rgba(255,255,255,.62);border:1px solid #E9ECF1;padding:20px 18px;display:flex;flex-direction:column;gap:11px}'
+      +'#la-ops-boot-screen .lb-main{position:absolute;top:0;right:0;bottom:0;left:278px;padding:22px 24px;display:flex;flex-direction:column;gap:16px}'
+      +'#la-ops-boot-screen .lb-row{display:flex;align-items:center;gap:10px}'
+      +'#la-ops-boot-screen .lb-stats{display:grid;grid-template-columns:1.4fr 1fr 1fr .9fr;gap:10px}'
+      +'#la-ops-boot-screen .lb-card{background:#fff;border:1px solid #E9ECF1;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}'
+      +'#la-ops-boot-screen .lb-pill{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E1E6ED;border-radius:99px;padding:9px 16px;box-shadow:0 10px 28px rgba(20,40,80,.12);color:#3B4250;font-size:13px;font-weight:600;white-space:nowrap;max-width:calc(100vw - 32px)}'
+      +'#la-ops-boot-screen .lb-ring{width:15px;height:15px;border-radius:50%;border:2px solid rgba(22,131,199,.18);border-top-color:#1683C7;animation:laBootSpin .8s linear infinite;flex:none}'
+      +'#la-ops-boot-reload{display:none;border:1px solid #CBD3DE;border-radius:99px;background:#fff;color:#1683C7;padding:3px 11px;font:600 12px "DM Sans",sans-serif;cursor:pointer}'
+      +'@keyframes laBootShine{to{transform:translateX(100%)}}@keyframes laBootSpin{to{transform:rotate(360deg)}}'
+      +'@media (max-width:820px){#la-ops-boot-screen .lb-side{display:none}#la-ops-boot-screen .lb-main{left:0;padding:16px}#la-ops-boot-screen .lb-stats{grid-template-columns:1fr 1fr}}'
+      +'@media (prefers-reduced-motion:reduce){#la-ops-boot-screen .lb-sk::after{animation:none}#la-ops-boot-screen .lb-ring{animation-duration:2.4s}}';
+    function sk(w,h,more){ return '<div class="lb-sk" style="width:'+w+';height:'+h+'px'+(more?';'+more:'')+'"></div>'; }
+    function shell(){
+      var side='<div class="lb-row" style="margin-bottom:10px">'+sk('36px',36,'border-radius:12px')+'<div style="flex:1;display:flex;flex-direction:column;gap:7px">'+sk('70%',12)+sk('45%',9)+'</div></div>';
+      [[4,'52%'],[5,'60%'],[3,'48%']].forEach(function(g){
+        side+=sk('34%',8,'margin-top:12px;opacity:.7');
+        for(var i=0;i<g[0];i++) side+='<div class="lb-row">'+sk('18px',18,'border-radius:6px')+sk((i%2?'64%':g[1]),12)+'</div>';
+      });
+      var stats='';
+      for(var s=0;s<4;s++) stats+='<div class="lb-card" style="min-height:84px">'+sk('42%',9)+sk('58%',24)+sk('72%',9,'margin-top:auto')+'</div>';
+      var rows='', W=['14%','22%','12%','16%','10%'];
+      for(var r=0;r<7;r++){ rows+='<div class="lb-row" style="gap:18px;padding:9px 0;border-top:1px solid #F0F2F5">'; W.forEach(function(w,i){ rows+=sk(w,11,i===W.length-1?'margin-left:auto':''); }); rows+='</div>'; }
+      return '<div class="lb-side">'+side+'</div>'
+        +'<div class="lb-main"><div class="lb-row" style="justify-content:space-between">'+sk('min(240px,45%)',22)+'<div class="lb-row">'+sk('88px',30,'border-radius:11px')+sk('30px',30,'border-radius:11px')+'</div></div>'
+        +'<div class="lb-stats">'+stats+'</div>'
+        +'<div class="lb-card" style="flex:1;min-height:0;overflow:hidden">'+sk('28%',14)+'<div>'+rows+'</div></div></div>'
+        +'<div class="lb-pill"><span class="lb-ring"></span><span id="la-ops-boot-message" style="overflow:hidden;text-overflow:ellipsis">Loading…</span><button id="la-ops-boot-reload" onclick="location.reload()">Reload</button></div>';
+    }
     function ready(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn,{once:true}); }
     function show(message){ ready(function(){
       var el=document.getElementById(ID);
       if(!el){
+        if(!document.getElementById(ID+'-style')){ var st=document.createElement('style'); st.id=ID+'-style'; st.textContent=CSS; document.head.appendChild(st); }
         el=document.createElement('div'); el.id=ID;
-        el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
-        el.style.cssText='position:fixed;inset:0;z-index:100060;background:linear-gradient(135deg,#0e2235,#14506e 55%,#1f7ea3);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif;text-align:center;padding:24px';
-        el.innerHTML='<div style="max-width:330px"><div style="font-size:42px;margin-bottom:14px">🌊</div><div style="font-size:21px;font-weight:800;letter-spacing:.01em">LOVE Andaman</div><div style="font-size:13px;opacity:.72;margin-top:3px">Allotment Manager</div><div style="width:220px;height:4px;background:rgba(255,255,255,.18);border-radius:99px;overflow:hidden;margin:26px auto 14px"><div style="width:42%;height:100%;background:#8ee5ff;border-radius:inherit;animation:laOpsBootPulse 1.25s ease-in-out infinite"></div></div><div id="la-ops-boot-message" style="font-size:14px;font-weight:600">Loading…</div><button id="la-ops-boot-reload" onclick="location.reload()" style="display:none;margin-top:18px;border:1px solid rgba(255,255,255,.45);border-radius:8px;background:transparent;color:#fff;padding:7px 13px;font:600 12px inherit;cursor:pointer">Reload</button></div>';
-        var st=document.createElement('style'); st.textContent='@keyframes laOpsBootPulse{0%,100%{transform:translateX(-85%)}50%{transform:translateX(200%)}}'; document.head.appendChild(st);
+        el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); el.setAttribute('aria-label','Loading LOVE Andaman');
+        el.innerHTML=shell();
         document.body.appendChild(el);
         setTimeout(function(){ var b=document.getElementById('la-ops-boot-reload'); if(b) b.style.display='inline-block'; },15000);
       }

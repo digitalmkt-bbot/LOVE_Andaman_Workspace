@@ -2898,7 +2898,7 @@ window._laRerender=function(){
   if(SB_BOOKINGS.length !== before){ const o=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(LS_KEY, JSON.stringify(o)); }
 }catch(e){ console.warn('dummy booking cleanup failed', e); } })();
 // auto-calc total for legacy v1 seed bookings only (v2 has explicit total)
-SB_BOOKINGS.forEach(bk=>{ if(bk.schemaVer!==2) bk.total = sbCalcBookingTotal(bk); });
+SB_BOOKINGS.forEach(bk=>{ if(bk.schemaVer!==2 && !bk._fromOpsBackend) bk.total = sbCalcBookingTotal(bk); }); /* §srvTotal · a booking from operation-backend keeps the server total (no programId: the mock tables would zero it) */
 
 // ════════ SEAT LOCKS (Step 3a · hold seats on a trip · draw before general pool) ════════
 // Pool-level hold on route+date · holderType: 'agent' | 'office' | 'global' · stored in LS d.sb_seat_locks
@@ -3935,8 +3935,30 @@ function renderBookingFlow(){
   const findBucket=ds=>{ for(let i=0;i<buckets.length;i++){ if(ds>=buckets[i].from && ds<=buckets[i].to) return buckets[i]; } return null; };
   // top markets overall
   const mkCountAll={}; B.forEach(b=>{ const c=mkOf(b).code; mkCountAll[c]=(mkCountAll[c]||0)+1; });
-  const topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
+  let topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
   B.forEach(b=>{ const bd=bkDate(b); if(!bd) return; const bk=findBucket(bd); if(!bk) return; bk.total++; bk.list.push(b); const c=mkOf(b).code; bk.mk[c]=(bk.mk[c]||0)+1; });
+  /* §bfSrvTot · bucket totals from the server's daily-counts (live bookings per sale day,
+     GET /v1/bookings/daily-counts via js/ops/53-ops-booking-flow.js). SB_BOOKINGS holds only
+     the date ranges some view loaded, so counting it undercounts any bucket outside them —
+     last month read 789 of 1171 and the MoM delta compared against an unloaded month.
+     The unloaded remainder of a bucket lands in the gray "other" segment below. */
+  const _bfDcw=window._opsBfDaily;
+  const _bfDc=(_bfDcw&&typeof bookingV2OpsDailyCounts==='function')?bookingV2OpsDailyCounts(_bfDcw.from,_bfDcw.to):null;
+  if(_bfDc){ buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return;
+    let t=0; Object.keys(_bfDc).forEach(ds=>{ if(ds>=bk.from&&ds<=bk.to) t+=(_bfDc[ds].bk||0); });
+    bk.total=t; });
+    /* §bfSrvMk · the by-market split comes from the same server answer (daily-counts?markets=1: stamped
+       market, else the agent's, else b2c/unassigned = pmMarket). Without it every bar older than the
+       two loaded KPI buckets fell into gray "other", and the legend order was ranked over only the
+       loaded bookings. Legend = top 4 markets over the whole window, as legacy ranks them. */
+    const _bfAllMk={}; let _bfHasMk=false;
+    Object.keys(_bfDc).forEach(ds=>{ const mk=_bfDc[ds].mk; if(!mk) return; _bfHasMk=true; Object.keys(mk).forEach(c=>{ _bfAllMk[c]=(_bfAllMk[c]||0)+mk[c]; }); });
+    if(_bfHasMk){
+      topN=Object.keys(_bfAllMk).sort((a,b)=>_bfAllMk[b]-_bfAllMk[a]).slice(0,4);
+      buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return; bk.mk={};
+        Object.keys(_bfDc).forEach(ds=>{ if(ds<bk.from||ds>bk.to) return; const mk=_bfDc[ds].mk||{}; Object.keys(mk).forEach(c=>{ bk.mk[c]=(bk.mk[c]||0)+mk[c]; }); }); });
+    }
+  }
   buckets.forEach(bk=>{ let s=0; topN.forEach(c=>s+=bk.mk[c]||0); bk.mk.__other=Math.max(0,bk.total-s); });
   const mkOrder=topN.map((c,i)=>{ const m=(typeof sbGetMarket==='function')?sbGetMarket(c):null; return {code:c, name:m?(m.name||m.code||c):(c==='b2c'?'B2C':c==='unassigned'?'ไม่ระบุ':c), color:(m&&m.color)||FALL[i%FALL.length]}; }).concat([{code:'__other',name:'อื่นๆ',color:'#94A3B8'}]);
 
@@ -4023,7 +4045,11 @@ function renderBookingFlow(){
   function leadHistSVG(){
     const bk=[['same day',0,0],['1–2',1,2],['3–7',3,7],['8–14',8,14],['15–30',15,30],['30+',31,100000]];
     const cnt=bk.map(()=>0); let tot=0;
-    B.forEach(b=>{ const ft=firstTrip(b); const bd=bkDate(b); if(!ft||!bd) return; const ld=Math.round((new Date(ft.date+'T00:00:00')-new Date(bd+'T00:00:00'))/86400000); if(ld<0||ld>1200) return; tot++; for(let i=0;i<bk.length;i++){ if(ld>=bk[i][1]&&ld<=bk[i][2]){ cnt[i]++; break; } } });
+    /* §bfSrvLead · all-time bucket counts from the server (GET /v1/bookings/lead-times via js/ops/53-ops-booking-flow.js):
+       SB_BOOKINGS holds only the loaded date ranges, so counting it skewed every bar. Same rule: sale day -> first trip, 0..1200 days. */
+    const _bfLd=window._opsBfLead;
+    if(_bfLd&&Array.isArray(_bfLd.buckets)&&_bfLd.buckets.length===bk.length){ _bfLd.buckets.forEach((x,i)=>{ cnt[i]=+x.count||0; tot+=cnt[i]; }); }
+    else B.forEach(b=>{ const ft=firstTrip(b); const bd=bkDate(b); if(!ft||!bd) return; const ld=Math.round((new Date(ft.date+'T00:00:00')-new Date(bd+'T00:00:00'))/86400000); if(ld<0||ld>1200) return; tot++; for(let i=0;i<bk.length;i++){ if(ld>=bk[i][1]&&ld<=bk[i][2]){ cnt[i]++; break; } } });
     const W=520,H=160,padL=22,padB=26,padT=14,iw=W-padL-14,ih=H-padT-padB; const pct=cnt.map(c=>tot?c/tot*100:0); const mx=Math.max(1,Math.max.apply(null,pct))*1.12; const bw=iw/bk.length; let g='';
     bk.forEach((d,i)=>{ const h=ih*pct[i]/mx, x=padL+bw*i+bw*0.16, w=bw*0.68, y=padT+ih-h; g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" rx="4" fill="'+(i>=2&&i<=3?'#1683C7':'#9DC7E6')+'"/>'; g+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#39404b">'+Math.round(pct[i])+'%</text>'; g+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-9)+'" text-anchor="middle" font-size="9" fill="#8a919c">'+d[0]+'</text>'; });
     return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:560px;height:auto;display:block">'+g+'</svg>';
@@ -19178,8 +19204,9 @@ function goComboCss(){ return '<style>'
   +'}'
   +'</style>'; }
 // bid = รหัสเรือ หรือ 'all'
-function goPrint(bid){
-  var date=_pckDate, e=ckEsc;
+/* goPrint is three steps so ops/62 can fetch the order numbers between the question and the sheet:
+   goPrintIds (which boats) -> goPrintAsk (the "no guide yet" question) -> goPrintOpen (numbers + sheets + window) */
+function goPrintIds(bid,date){
   var ids=[];
   if(bid && bid!=='all') ids=[bid];
   else {
@@ -19192,9 +19219,22 @@ function goPrint(bid){
       var k=O.boatId||t.charterBoatId||''; if(k && !seen[k]){ seen[k]=1; ids.push(k); }
     });
   }
-  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้'+pckPierTag()+' — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  return ids;
+}
+function goPrintAsk(date,ids){
   var miss=ids.filter(function(k){ return !goAsn(date,k).g.length; });
-  if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ'+pckPierTag()+' ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
+  return !(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ'+pckPierTag()+' ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม'));
+}
+function goPrint(bid){
+  var date=_pckDate;
+  var ids=goPrintIds(bid,date);
+  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้'+pckPierTag()+' — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  if(!goPrintAsk(date,ids)) return;
+  goPrintOpen(bid,date,ids);
+}
+// w0 = หน้าต่างที่เปิดไว้ก่อนแล้ว (ops/62 เปิดก่อนรอเลขที่จากเซิร์ฟเวอร์ เพื่อไม่ให้ pop-up ถูกบล็อก)
+function goPrintOpen(bid,date,ids,w0){
+  var e=ckEsc;
   /* §goCombo · เจ้าท่ารับใบสั่งงานกับทะเบียนรายชื่อพร้อมกันอยู่แล้ว
      แยกพิมพ์คนละหน้าต่างทำให้ต้องมาจับคู่ว่าใบไหนของลำไหนเอง · ออกต่อกันเป็นชุดเดียว
      ลำละ 2 หน้า เรียงใบสั่งงานก่อน แล้วทะเบียนของลำเดียวกันตามทันที */
@@ -19218,7 +19258,7 @@ function goPrint(bid){
         +'if(x){x.className="cb"+(o?" on":"");x.innerHTML=o?"&#10003;":"&nbsp;";}'
         +'if(y){y.className="cb"+(o?"":" on");y.innerHTML=o?"&nbsp;":"&#10003;";}});}<' + '/script>'
     +'</body></html>';
-  var w=window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
+  var w=w0||window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
 // ── หน้าต่างจ่ายไกด์ / ทะเบียน · acctModal อยู่ระดับ body สไตล์เลยต้องพกไปเอง ──
@@ -25061,15 +25101,6 @@ function drmPngDonut(D){
   c.fillText('TOTAL PAX', cx, cy+21);
   return cv.toDataURL('image/png');
 }
-function drmUpload(dataUrl, name){
-  var b64=String(dataUrl||'').split(',')[1]||'';
-  if(!b64) return Promise.reject(new Error('no image'));
-  return fetch('/api/mailimg',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({filename:name,dataB64:b64})})
-    .then(function(r){ return r.json(); })
-    .then(function(j){ if(!j||!j.url) throw new Error((j&&j.error)||'upload failed');
-      return location.origin+j.url; });
-}
 // เตรียมรูปกราฟไว้ก่อนเขียนจดหมาย · ทำครั้งเดียวต่อวัน/โหมด แล้วจำไว้
 function drmEnsureImgs(D, done){
   // Chart images for the report email are disabled: they were hosted by the removed /api/mailimg, and
@@ -25077,22 +25108,6 @@ function drmEnsureImgs(D, done){
   _drImg={ key:drImgKey(D), trend:'', donut:'', state:'' };
   if(done) done();
   return;
-  var key=drImgKey(D);
-  if(_drImg.key===key && (_drImg.state==='ok'||_drImg.state==='run')){ if(done&&_drImg.state==='ok') done(); return; }
-  _drImg={ key:key, trend:'', donut:'', state:'run' };
-  if(done) drMailPaint();
-  var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
-  var jobs=[];
-  try{ jobs.push(drmUpload(drmPngTrend(T),'trend-'+D.date+'.png').then(function(u){ _drImg.trend=u; })); }catch(_){}
-  try{ if(D.mOrder.length) jobs.push(drmUpload(drmPngDonut(D),'donut-'+D.date+'.png').then(function(u){ _drImg.donut=u; })); }catch(_){}
-  Promise.all(jobs).then(function(){
-    if(_drImg.key!==key) return;
-    _drImg.state='ok'; if(done) done(); drMailPaint();
-  }).catch(function(err){
-    if(_drImg.key!==key) return;
-    _drImg.state='err'; console.warn('[dailyreport] chart upload failed', err);
-    if(done) done(); drMailPaint();
-  });
 }
 function drMailHTML(D){
   var e=ckEsc, C=drMailCfg(), I=C.inc, o='';
@@ -43121,7 +43136,7 @@ function renderSalesBoard(){
     const rank = sales.findIndex(x=>x.s.id===who.id)+1;
     const myAgents = (SB_AGENTS||[]).filter(a=>a.sales===who.id);
     const nHave = myAgents.filter(a=>(agg.byAgent[a.id]||0)>0).length;
-    const nBk = (SB_BOOKINGS||[]).filter(b=>!_SB_CXL.includes(b.status)&&b.agentId&&(sbGetAgent(b.agentId)||{}).sales===who.id&&(b.trips||[]).some(t=>_ymOf(t.date)===ym)).length;
+    const nBk = (salesBookingCounts(ym)||{})[who.id]||0;   /* §salesBk */
     const prevRank = {}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
     const rankMove = (prevRank[who.id]&&rank) ? (prevRank[who.id]-rank) : 0;
     const streak = salesStreak(who.id, ym);
@@ -43191,19 +43206,13 @@ function renderSalesBoard(){
         </div>
       </div>`;
     /* ── RIGHT detail: KPI + donuts (pax by route / guest type) + follow-up header ── */
-    const _routePax={}, _routeVal={}; let _valTotal=0;
-    (SB_BOOKINGS||[]).forEach(b=>{ if(_SB_CXL.includes(b.status)||!b.agentId||(sbGetAgent(b.agentId)||{}).sales!==who.id)return;
-      const _mt=(b.trips||[]).filter(t=>_ymOf(t.date)===ym); if(!_mt.length)return;
-      const _tot=+((b.priceBreakdown||{}).total)||0; _valTotal+=_tot;   /* §มูลค่าที่ขายได้ · priceBreakdown.total (ยอดหลังส่วนลด) */
-      const _bpax=_mt.reduce((s,t)=>s+(getTripPaxTotal(t)||0),0)||1;    /* กระจายมูลค่าลงเส้นทางตามสัดส่วน pax */
-      _mt.forEach(t=>{ const px=getTripPaxTotal(t)||0; const rid=t.routeId||'?';
-        if(px)_routePax[rid]=(_routePax[rid]||0)+px;
-        if(_tot)_routeVal[rid]=(_routeVal[rid]||0)+_tot*(px/_bpax); }); });
+    /* §salesBk · route mix + sold value (04-data-core.js salesPersonMix · value null = not available) */
+    const _mix = salesPersonMix(who.id, ym) || {}; const _routePax=_mix.routePax||{}, _routeVal=_mix.routeVal||{}, _valTotal=_mix.value;
     const _rNm = rid => ((ROUTES||[]).find(r=>r.id===rid)||{}).name || rid || '—';
     const _routeArr = Object.entries(_routePax).map(([rid,px])=>({rid,px})).sort((a,b)=>b.px-a.px);
     const _rPal = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#888780'];
     const _vPal = ['#3B6D11','#639922','#97C459','#C0DD97','#27500A','#888780'];
-    const _fB = v => { v=Math.round(v||0); return v>=1000 ? '฿'+Math.round(v/1000)+'k' : '฿'+v; };
+    const _fB = v => { if(v==null) return '—'; v=Math.round(v||0); return v>=1000 ? '฿'+Math.round(v/1000)+'k' : '฿'+v; };
     const _routeValArr = Object.entries(_routeVal).map(([rid,v])=>({rid,v})).sort((a,b)=>b.v-a.v);
     const _v5 = _routeValArr.slice(0,5); const _vOther = _routeValArr.slice(5).reduce((s,x)=>s+x.v,0);
     const _vSeg = _v5.map((x,i)=>({val:x.v,color:_vPal[i]})).concat(_vOther?[{val:_vOther,color:_vPal[5]}]:[]);
@@ -43338,7 +43347,7 @@ function renderSalesBoard(){
 
   /* ══════════ VIEW: LEADERBOARD ══════════ */
   const agCount={}; (SB_AGENTS||[]).forEach(a=>{ if(a.sales) agCount[a.sales]=(agCount[a.sales]||0)+1; });
-  const bkBySales={}; (SB_BOOKINGS||[]).forEach(b=>{ if(_SB_CXL.includes(b.status)||!b.agentId)return; const sid=(sbGetAgent(b.agentId)||{}).sales; if(!sid)return; if((b.trips||[]).some(t=>_ymOf(t.date)===ym)) bkBySales[sid]=(bkBySales[sid]||0)+1; });
+  const bkBySales=salesBookingCounts(ym)||{};   /* §salesBk */
   const curRank={}; sales.forEach((x,i)=>{ curRank[x.s.id]=i+1; });
   const prevRank={}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
   let topGrow=null; Object.keys(agg.byAgent).forEach(aid=>{ const t=agentTrend(agg.byAgent[aid]||0, aggPrev.byAgent[aid]||0); if(t.cat==='up' && (!topGrow||t.pct>topGrow.pct)) topGrow={aid,pct:t.pct}; });
@@ -45007,44 +45016,71 @@ function _bkNatClean(name){ name=String(name||'').trim(); name=name.replace(/\s*
 function _bkNatNorm(s){ return String(s||'').toLowerCase().replace(/[^a-z฀-๿]/g,''); }
 // Cheap heuristic · returns nationality code based on name keywords / scripts
 // ─── Nationality learning system · token-frequency from past bookings ───
+// §natBoot (2026-09-23) · loveandaman_v2 is the whole state blob (~23 MB). Every load used to
+//   JSON.parse it and every save parsed + stringified it again, once PER PASSENGER. On a browser that
+//   had never run the bootstrap that froze the main thread for minutes (the cs embed hung for good).
+//   Now: the parsed table is cached against the exact blob string (the Storage shim hands back the
+//   same _mem string until someone writes, so an unchanged blob is an O(1) identity check and any
+//   write, cloud refresh included, invalidates it), and records are batched into ONE save.
+let _natRaw = null, _natCache = null;
 function _natLearnLoad(){
-  try { const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); return d.nat_learn || {}; }
-  catch(e){ return {}; }
+  try {
+    const raw = localStorage.getItem('loveandaman_v2');
+    if(_natCache && raw === _natRaw) return _natCache;
+    const d = JSON.parse(raw||'{}');
+    _natRaw = raw; _natCache = (d && d.nat_learn) || {};
+    return _natCache;
+  } catch(e){ return {}; }
 }
 function _natLearnSave(data){
   try {
     const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}');
     d.nat_learn = data;
     localStorage.setItem('loveandaman_v2', JSON.stringify(d));
-  } catch(e){ console.warn('nat learn save failed', e); }
+    _natRaw = localStorage.getItem('loveandaman_v2'); _natCache = data;
+  } catch(e){ _natRaw = null; _natCache = null; console.warn('nat learn save failed', e); }
 }
 function _natTokenize(name){
   if(!name) return [];
   return String(name).toUpperCase().split(/[\s\-_,\.]+/).map(t => t.trim()).filter(t => t.length >= 2 && !/^(MR|MS|MRS|DR|JR|SR)$/.test(t));
 }
-function natLearnRecord(name, code){
-  if(!name || !code || code === 'OTHER') return;
-  const tokens = _natTokenize(name);
-  if(tokens.length === 0) return;
-  const data = _natLearnLoad();
-  tokens.forEach(t => {
-    if(!data[t]) data[t] = {};
-    data[t][code] = (data[t][code] || 0) + 1;
+// §natBoot · pairs = [[name, code], ...] · one load, one save, however many passengers
+function natLearnRecordMany(pairs){
+  let data = null, n = 0;
+  (pairs || []).forEach(pr => {
+    const name = pr && pr[0], code = pr && pr[1];
+    if(!name || !code || code === 'OTHER') return;
+    const tokens = _natTokenize(name);
+    if(tokens.length === 0) return;
+    if(!data) data = _natLearnLoad();
+    tokens.forEach(t => {
+      if(!data[t]) data[t] = {};
+      data[t][code] = (data[t][code] || 0) + 1;
+    });
+    n++;
   });
-  _natLearnSave(data);
+  if(data) _natLearnSave(data);
+  return n;
+}
+function natLearnRecord(name, code){ natLearnRecordMany([[name, code]]); }
+// §natBoot · a booking's lead + passengers as record pairs
+function _natLearnPairs(lead, leadNat, passengers){
+  const out = [];
+  if(lead && leadNat) out.push([lead, leadNat]);
+  (passengers || []).forEach(p => { if(p && p.name && p.nationality) out.push([p.name, p.nationality]); });
+  return out;
 }
 // One-time bootstrap · scan all existing SB_BOOKINGS to seed the learning table
 function natLearnBootstrap(){
   if(localStorage.getItem('_nat_bootstrap_done') === '1') return;
+  // §natBoot · embed / view-only sessions never sync the result, so there is nothing to seed
+  if(window.__laEmbed || (typeof laCanEdit === 'function' && !laCanEdit())) return;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return;
-  let recorded = 0;
-  SB_BOOKINGS.forEach(bk => {
-    if(bk.leadPax && bk.leadNationality){ natLearnRecord(bk.leadPax, bk.leadNationality); recorded++; }
-    (bk.passengers || []).forEach(p => {
-      if(p.name && p.nationality){ natLearnRecord(p.name, p.nationality); recorded++; }
-    });
-  });
+  // §natBoot · mark done BEFORE the work: a tab closed mid-run must not start over on every load
   localStorage.setItem('_nat_bootstrap_done', '1');
+  const pairs = [];
+  SB_BOOKINGS.forEach(bk => { if(bk) Array.prototype.push.apply(pairs, _natLearnPairs(bk.leadPax, bk.leadNationality, bk.passengers)); });
+  const recorded = natLearnRecordMany(pairs);
   if(recorded > 0) console.log('Nationality learning · bootstrap recorded ' + recorded + ' name-nationality pairs');
 }
 // Trigger bootstrap once DOM is ready
@@ -45104,9 +45140,6 @@ let _bkV2AreaDDActive = -1;
 // ─── Custom calendar widget · per trip date input with closed-date visualization ───
 let _bkV2CalIdx = null;
 let _bkV2CalMonth = null; // 'YYYY-MM' string
-
-
-
 /* §pkNat · ตั้งจำนวนคนไทยจริงของทริป · ไม่แตะ pax และไม่แตะราคาเลย
    ครั้งแรกที่แตะ ต้องหล่อทั้งสี่ช่องจากแถว TH ก่อน แล้วค่อยบวก/ลบ
    ถ้าปล่อยให้มีแค่ช่องเดียว อีกสามช่องจะกลายเป็น 0 ทันที (bkNatHas เป็นจริงแล้ว)

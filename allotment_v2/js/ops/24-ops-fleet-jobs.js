@@ -751,6 +751,40 @@
     }).catch(function(e){ O.fail('Could not add job log', e); return null; });
   });
 
+  /* "Repair location" on a job (flMaintSetRepairLoc).  Legacy set m.location, moved the job's spare/fixing engines
+     (e.spareLocation) and added a log line, then flSave (a no-op here): none of it survived a reload.  Server first:
+     PATCH the job's location, PATCH each such engine's spare_location (only a filled-in place moves engines, as in
+     legacy), add the log line, then re-read the chain; a refusal at any step is a red toast and the screen is re-read
+     so it shows what the server holds. */
+  wrap('flMaintSetRepairLoc', function(orig, jobId){
+    var m = listJobs().find(function(x){ return x && x.id === jobId; });
+    if(!m) return null;
+    var inp = document.getElementById('fl-maint-reploc-' + jobId);
+    var val = inp ? inp.value.trim() : '';
+    var engs = !val ? [] : (m.assets || []).filter(function(a){ return a && a.engId; }).map(function(a){
+      return typeof window.flGetEng === 'function' ? window.flGetEng(a.engId) : null;
+    }).filter(function(e){ return e && (!e.boatId || e.status === 'fixing'); });
+    var chain = O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(jobId), { location: val }); }).then(upsertJob);
+    engs.forEach(function(e){
+      chain = chain.then(function(){ return O.queue(function(){ return O.patch('/v1/fleet/engines/' + enc(e.id), { spare_location: val }); }); });
+    });
+    return chain.then(function(){
+      return O.queue(function(){
+        return O.post('/v1/fleet/jobs/' + enc(jobId) + '/log', { text: '📍 ตั้งสถานที่ซ่อม: ' + (val || '-') + (engs.length ? ' (อัปเดตเครื่อง ' + engs.length + ' ตัว)' : ''), by: 'ระบบ' });
+      });
+    }).then(function(res){
+      if(res) upsertJob(res);
+      return engs.length && O.fleetAssets && O.fleetAssets.refetchChain ? O.fleetAssets.refetchChain() : null;
+    }).then(function(){
+      O.wrote('fleet-job-location');
+      redrawJobs();
+      if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(jobId);
+    }).catch(function(e){
+      O.fail('Could not set repair location', e);
+      return refetchAll(m.boatId).then(function(){ redrawJobs(); }, function(){});
+    });
+  });
+
   wrap('flMaintTogglePin', function(orig, id, ev){
     if(ev && ev.stopPropagation) ev.stopPropagation();
     var m = listJobs().find(function(x){ return x && x.id === id; });

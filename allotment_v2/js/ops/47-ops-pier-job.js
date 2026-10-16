@@ -9,7 +9,9 @@
    PUT   /v1/trip-actuals/{date}/{boat}/venue                         → the day's restaurant (pjMvSet)
 
      legacy PIER_JOB['date::boat']            server job
-       cap / asst / crew[] / island[]         captain_id / assistant_id / crew / island ('' is a blank slot = null)
+       cap / asst / crew[] / island[]         captain_id|captain_name / assistant_id|assistant_name / crew + crew_names / island + island_names
+                                              ('' is a blank slot = null). Legacy keeps a slot as the staff id OR the text typed (pjFreePick,
+                                              pjStaffName shows the text as it is): an id the staff list knows goes as *_id, any other text as *_name
        note / wb / wbc / wc                   note / wristband_text / wristband_colour / work_code
        lock                                   completed_at (complete / reopen are the server's commands)
        mv ('' route's, '-' no meal, id)       restaurant_id (effective: the day's venue, else the route's)
@@ -40,9 +42,32 @@
   var st = { views: {}, keys: {}, bids: {}, base: { job: {}, team: {}, duty: {} }, loaded: '', loading: '', seq: 0 };
 
   /* ── legacy <-> server ──────────────────────────────────────────────── */
-  function slots(a){
-    var out = (Array.isArray(a) ? a : []).map(function(x){ return x ? String(x) : null; });
-    while(out.length && out[out.length - 1] === null) out.pop();
+  // A slot value is a staff id or typed text (legacy's one string). An id is one the staff list holds or one the server
+  // has already sent as an id; anything else is a typed name and goes to *_name (the server refuses an unknown *_id).
+  var seenIds = {};
+  function staffIdSet(){
+    var m = {};
+    (Array.isArray(window.PIER_STAFF) ? window.PIER_STAFF : []).forEach(function(x){ if(x && x.id) m[x.id] = 1; });
+    return m;
+  }
+  function sayIds(a){ (a || []).forEach(function(x){ if(x) seenIds[x] = 1; }); }
+  function split1(v, ids){
+    var t = v == null ? '' : String(v);
+    if(!t) return { id: null, name: null };
+    if(ids[t] || seenIds[t]) return { id: t, name: null };
+    t = t.replace(/\s+/g, ' ').trim();
+    return { id: null, name: t || null };
+  }
+  // two parallel lists (staff ids, typed names), same length, trailing blanks dropped
+  function slots(a, ids){
+    var ids2 = ids || staffIdSet(), idList = [], nameList = [];
+    (Array.isArray(a) ? a : []).forEach(function(x){ var o = split1(x, ids2); idList.push(o.id); nameList.push(o.name); });
+    while(idList.length && idList[idList.length - 1] === null && nameList[nameList.length - 1] === null){ idList.pop(); nameList.pop(); }
+    return { ids: idList, names: nameList };
+  }
+  function pick(ids, names){
+    var out = [], n = Math.max((ids || []).length, (names || []).length);
+    for(var i = 0; i < n; i++) out.push((ids && ids[i]) || (names && names[i]) || '');
     return out;
   }
   function labels(o){
@@ -57,31 +82,45 @@
     return m.mode === 'none' ? '-' : (m.mode === 'day' ? (m.venue_id || '') : '');
   }
   function proj(J){
-    return { captain_id: nul(J.cap), assistant_id: nul(J.asst), crew: slots(J.crew), island: slots(J.island), note: nul(J.note),
+    var ids = staffIdSet(), cap = split1(J.cap, ids), asst = split1(J.asst, ids), crew = slots(J.crew, ids), island = slots(J.island, ids);
+    return { captain_id: cap.id, captain_name: cap.name, assistant_id: asst.id, assistant_name: asst.name,
+             crew: crew.ids, crew_names: crew.names, island: island.ids, island_names: island.names, note: nul(J.note),
              wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc),
              slot_labels: labels(J.lb), maintenance_job_id: nul(J.mj) };
   }
+  // a slot is one setting on the server: naming either half replaces it, so a change to one half sends both
+  var PAIRS = [['captain_id', 'captain_name'], ['assistant_id', 'assistant_name'], ['crew', 'crew_names'], ['island', 'island_names']];
+  function whole(diff, now){
+    PAIRS.forEach(function(p){ if(diff[p[0]] !== undefined || diff[p[1]] !== undefined){ diff[p[0]] = now[p[0]]; diff[p[1]] = now[p[1]]; } });
+    return diff;
+  }
   function fromView(v, prev){
-    var J = { cap: v.captain_id || '', asst: v.assistant_id || '', crew: (v.crew || []).map(function(x){ return x || ''; }),
-              island: (v.island || []).map(function(x){ return x || ''; }), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
+    sayIds([v.captain_id, v.assistant_id].concat(v.crew || [], v.island || [], v.duty_staff_ids || []));
+    var J = { cap: v.captain_id || v.captain_name || '', asst: v.assistant_id || v.assistant_name || '', crew: pick(v.crew, v.crew_names),
+              island: pick(v.island, v.island_names), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
               lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels) };
     if(v.maintenance_job_id) J.mj = v.maintenance_job_id;
     return J;
   }
   function teamFromView(v){
-    var T = { cap: v.captain_id || '', asst: v.assistant_id || '', crew: (v.crew || []).filter(Boolean) };
+    var T = { cap: v.captain_id || v.captain_name || '', asst: v.assistant_id || v.assistant_name || '', crew: pick(v.crew, v.crew_names).filter(Boolean) };
     if(v.recorded){
-      var crew = (v.crew || []).map(function(x){ return x || ''; });
+      var crew = pick(v.crew, v.crew_names);
       (v.substitutes || []).forEach(function(s){
-        if(s.role === 'captain') T.cap = s.team_id;
-        else if(s.role === 'assistant') T.asst = s.team_id;
-        else if(s.role === 'crew') crew[s.position] = s.team_id;
+        var who = s.team_id || s.team_name || '';
+        if(s.role === 'captain') T.cap = who;
+        else if(s.role === 'assistant') T.asst = who;
+        else if(s.role === 'crew') crew[s.position] = who;
       });
       T.crew = crew.filter(Boolean);
     }
     return T;
   }
-  function projTeam(T){ T = T || {}; return { captain_id: nul(T.cap), assistant_id: nul(T.asst), crew_ids: (T.crew || []).filter(Boolean) }; }
+  function projTeam(T){
+    T = T || {};
+    var ids = staffIdSet(), cap = split1(T.cap, ids), asst = split1(T.asst, ids), crew = slots((T.crew || []).filter(Boolean), ids);
+    return { captain_id: cap.id, captain_name: cap.name, assistant_id: asst.id, assistant_name: asst.name, crew_ids: crew.ids, crew_names: crew.names };
+  }
   function jkey(date, bid){ return date + '::' + bid; }
 
   /* ── what the server said, put into the legacy globals ──────────────── */
@@ -91,7 +130,7 @@
     if(v.recorded) JOB[key] = fromView(v, JOB[key]); else delete JOB[key];
     TEAM[bid] = teamFromView(v);
     if((v.duty_staff_ids || []).length) DUTY[key] = v.duty_staff_ids.slice(); else delete DUTY[key];
-    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id, asst: v.assistant_id, crew: v.crew, island: v.island, note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id }),
+    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id || v.captain_name, asst: v.assistant_id || v.assistant_name, crew: pick(v.crew, v.crew_names), island: pick(v.island, v.island_names), note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id }),
                          lock: v.completed_at ? 1 : 0, mv: mvOf(v) };
     st.base.team[bid] = clone(TEAM[bid]);
     st.base.duty[key] = (v.duty_staff_ids || []).slice();
@@ -186,9 +225,10 @@
     var v = st.views[jkey(date, bid)]; if(!v) return L.pjSubList.apply(this, arguments);
     var out = {};
     (v.substitutes || []).forEach(function(s){
-      if(s.role === 'captain') out.cap = s.team_id;
-      else if(s.role === 'assistant') out.asst = s.team_id;
-      else out['crew' + s.position] = s.team_id;
+      var who = s.team_id || s.team_name || '';
+      if(s.role === 'captain') out.cap = who;
+      else if(s.role === 'assistant') out.asst = who;
+      else out['crew' + s.position] = who;
     });
     return out;
   };
@@ -205,6 +245,22 @@
   };
 
   /* ── writes ──────────────────────────────────────────────────────────── */
+  // 409 guide_double_booked lists who is on another boat (body.busy); OK resends with guide_anyway (legacy's pjGdBusy marker, but asked first).
+  // O.anyway fits: the flag goes in the body next to the diff. Cancel = declined, the card is put back, nothing was saved.
+  function boatName(id){
+    try{ var l = window.boats || window.DEFAULT_BOATS || []; for(var i = 0; i < l.length; i++) if(l[i] && l[i].id === id && l[i].name) return l[i].name; }catch(_){}
+    return id;
+  }
+  function patchJob(base, diff){
+    if(typeof O.anyway !== 'function') return O.call('PATCH', base, diff);
+    return O.anyway(function(extra){ return O.call('PATCH', base, Object.assign({}, diff, extra)); }, {
+      guide_double_booked: { flag: 'guide_anyway', ask: function(e){
+        var busy = (e && e.body && e.body.busy) || [];
+        if(!busy.length) return '';
+        return busy.map(function(b){ return (b.name || b.staff_id) + ' อยู่ ' + boatName(b.boat_id); }).join('\n') + '\n\nAssign anyway?';
+      } }
+    });
+  }
   function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
   P.register({
     name: 'jobs', order: 95,
@@ -222,6 +278,7 @@
         if(cur && b){
           var a = proj(cur), diff = {}, any = false;
           Object.keys(a).forEach(function(k){ if(!same(a[k], b.proj[k])){ diff[k] = a[k]; any = true; } });
+          if(any) whole(diff, a);
           var lockWas = b.lock, lockNow = cur.lock ? 1 : 0, mvNow = cur.mv || '', mvChanged = mvNow !== b.mv;
           if(any || lockWas !== lockNow || mvChanged){
             touched.push(key);
@@ -231,7 +288,7 @@
               if(mvChanged) chain = chain.then(function(){
                 return O.call('PUT', '/v1/trip-actuals/' + enc(date) + '/' + enc(bid) + '/venue', { venue: mvNow === '-' ? 'none' : (mvNow || null) });
               });
-              if(any) chain = chain.then(function(){ return O.call('PATCH', base, diff); });
+              if(any) chain = chain.then(function(){ return patchJob(base, diff); });
               if(!lockWas && lockNow) chain = chain.then(function(){ return O.call('POST', base + '/complete', {}); });
               return chain;
             } });

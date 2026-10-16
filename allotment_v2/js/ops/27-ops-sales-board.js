@@ -388,6 +388,15 @@
     var a = b ? (b.agents || []).find(function(x){ return x.agent_id === agentId && x.sales_id === salesId; }) : null;
     return !!(a && (kind === 'foc' ? a.feedback_collected : a.followed));
   });
+  // SB_BOOKINGS is a partial cache here, so the board's booking counts come from the server row;
+  // the route mix and sold value are not in /v1/sales-board yet, so the person view shows none
+  // rather than a sum of whatever bookings happen to be loaded.
+  wrap('salesBookingCounts', function(orig, ym){
+    var out = {}, b = boardFor(ym);
+    ((b && b.sales) || []).forEach(function(r){ if(r.bookings) out[r.sales_id] = r.bookings; });
+    return out;
+  });
+  wrap('salesPersonMix', function(){ return { routePax: {}, routeVal: {}, value: null }; });
   wrap('salesSetTarget', function(orig, salesId, ym, pax){
     if(!salesId || !ym) return undefined;
     return setTargetServer(salesId, ym, pax).catch(function(){ return null; });

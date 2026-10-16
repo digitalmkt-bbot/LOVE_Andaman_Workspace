@@ -749,7 +749,7 @@
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){
       var host = document.getElementById('acct-body');
-      if(host && !state.loading) host.innerHTML = O.loadingHtml('Loading invoices…');
+      if(host && !state.loading) host.innerHTML = O.skeletonHtml({ kpis: 6, panels: 3, rows: 8, cols: 8, label: 'Loading invoices…' });
       return loadAll(false).then(function(){
         return orig.apply(self, args);
       }, function(){
@@ -943,6 +943,7 @@
   var api = {
     load: function(){ return loadAll(true); },
     ensureLoaded: function(){ return loadAll(false); },
+    loaded: function(){ return !!state.loaded; },
     createInvoice: createInvoiceServer,
     recordPayment: recordPaymentServer,
     voidInvoice: voidInvoiceServer,

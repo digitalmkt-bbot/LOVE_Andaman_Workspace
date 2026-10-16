@@ -302,3 +302,20 @@ test('a refused check-in leaves the stop as it was', async () => {
   assert.equal(rt.ctx.VAN_STOPS[`${D}::${R}::vs_1`].ck, null);
   assert.equal(rt.toasts.at(-1).kind, 'error');
 });
+
+// ── §vanKeep: groups are fetched after the day's bookings are in ──────────────
+
+test('the day load waits for the day\'s bookings before applying van groups', async () => {
+  const late = { id: 'b3', opsId: 'lg_3', status: 'confirmed', trips: [{ date: D, routeId: R, opsTripId: 't3' }], ops: {} };
+  const order = [];
+  const g1 = { ...group('vgrp_1', 1, 'veh01'), members: [{ trip_id: 't3', booking_id: 'lg_3', idx: 0, sequence: 1, return_van_id: null }] };
+  const rt = runtime({ handlers: handlersBase({ 'GET /operations/van-groups': () => { order.push('groups'); return { body: { groups: [g1] } }; } }) });
+  rt.ctx.bookingV2OpsEnsureDay = (date) => new Promise((resolve) => {
+    setTimeout(() => { order.push('bookings ' + date); rt.ctx.SB_BOOKINGS.push(late); resolve({ bookings: [] }); }, 5);
+  });
+  rt.ctx.renderVanJobs();
+  for (let i = 0; i < 10; i++) { await new Promise((r) => setTimeout(r, 5)); await rt.settle(); }
+  assert.deepEqual(order, ['bookings ' + D, 'groups']);
+  const b3 = rt.ctx.SB_BOOKINGS.find((b) => b.id === 'b3');
+  assert.deepEqual(plain({ g: b3.ops.vanGroup, v: b3.ops.vanId }), { g: 1, v: 'veh01' });
+});

@@ -711,6 +711,28 @@
     }).catch(function(e){ O.fail('Could not void consumable draw', e); return null; });
   });
 
+  /* Inventory "duplicate scan" merge (invDupMerge): legacy re-pointed memos/jobs and spliced the dropped items out of
+     FL_INVENTORY in the browser (flSave is a no-op here), so a merge came back after a reload.  Same keep rule as legacy
+     (most history, then most stock); the server moves stock, history and memo/job references (POST .../merge). */
+  wrap('invDupMerge', function(orig, keyEnc){
+    if(typeof laGuardEdit === 'function' && !laGuardEdit('fleet')) return null;
+    var key = decodeURIComponent(keyEnc || '');
+    var all = (typeof _invAll === 'function') ? _invAll() : [];
+    var L = all.filter(function(x){ return _invKeyOf(x.name, x.partNo) === key; });
+    if(L.length < 2){ if(typeof invDupOpen === 'function') invDupOpen(); return null; }
+    var qty = function(x){ return x.totalQty != null ? x.totalQty : (x.qty || 0); };
+    L = L.slice().sort(function(a, b){ return ((b.history || []).length - (a.history || []).length) || (qty(b) - qty(a)); });
+    var keep = L[0], drop = L.slice(1);
+    var totQ = L.reduce(function(a, x){ return a + qty(x); }, 0);
+    if(!confirm('รวม "' + keep.name + '" ' + L.length + ' รายการเป็นรายการเดียว?\n\nยอดรวมหลังรวม ' + totQ + ' ' + (keep.unit || 'ชิ้น') + ' (เท่าเดิม ไม่มีของหาย)')) return null;
+    return api.mergeStock(keep.id, drop.map(function(d){ return d.id; })).then(function(){
+      O.wrote('fleet-stock-merge');
+      if(typeof flShowToast === 'function') flShowToast('รวมแล้ว · ' + keep.name);
+      redrawStock();
+      if(typeof invDupOpen === 'function') invDupOpen();
+    }).catch(function(e){ O.fail('Could not merge stock items', e); return null; });
+  });
+
   wrap('flSaveApprove', function(){
     var d = function(id){ return document.getElementById(id); };
     var id = typeof _approveMemoId !== 'undefined' ? _approveMemoId : null;

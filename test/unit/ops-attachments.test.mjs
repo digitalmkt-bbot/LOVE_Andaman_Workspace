@@ -126,14 +126,17 @@ test('fleet project document wrappers post attachment_id after the upload', asyn
   assert.equal(JSON.stringify(posted[2].slice(0, 3)), JSON.stringify(['DELETE', 'p1', 'dc_1']));
 });
 
-function slipBoot({ enabled = true, addSlips, inv } = {}) {
-  const alerts = [], legacy = [], removed = [];
+function slipBoot({ enabled = true, addSlips, inv, post, del, slips = [], opsId = 'ob_1' } = {}) {
+  const alerts = [], legacy = [], removed = [], order = [];
   const invoice = inv === undefined ? { id: 'inv_1', payments: [{ id: 'pay_old', method: 'cash', amount: 5, slips: [] }, { id: 'pay_1', method: 'transfer', amount: 10, slips: [{ id: 'att_old', name: 'o.jpg', mime: 'image/jpeg' }], recordedAt: 't' }, { id: 'pay_cr', method: 'credit', amount: 1, slips: [] }] } : inv;
   const money = { addPaymentSlips: (...a) => addSlips ? addSlips(...a) : Promise.resolve({}), removePaymentSlip: (...a) => { removed.push(a); return Promise.resolve({}); } };
+  const bk = { id: 'B1', opsId, slips };
   const t = boot({
     enabled,
     setup(w, ctx) {
       w.laOps.money = money;
+      w.laOps.post = (p, b) => { order.push(['post', p, b]); return post ? post(p, b) : Promise.resolve({ id: 'bs_1', attachment_id: b.attachment_id, added_at: 'T', added_by: 'u' }); };
+      w.laOps.del = (p) => { order.push(['del', p]); return del ? del(p) : Promise.resolve(null); };
       w.pfmSlipsAttach = (...a) => legacy.push(a);
       w.pfmSlipDelete = (...a) => legacy.push(['del', ...a]);
       w.pfmViewSlips = () => {};
@@ -142,44 +145,66 @@ function slipBoot({ enabled = true, addSlips, inv } = {}) {
       ctx.alert = (m) => alerts.push(m);
       ctx.confirm = () => true;
       ctx._pfmSlipBk = 'B1';
-      ctx.SB_BOOKINGS = [{ id: 'B1' }];
+      ctx.SB_BOOKINGS = [bk];
       ctx.FileReader = class { readAsDataURL() { this.result = 'data:image/png;base64,QUJD'; setTimeout(() => this.onload(), 0); } };
     },
   });
-  return { ...t, alerts, legacy, removed, invoice };
+  return { ...t, alerts, legacy, removed, invoice, bk, order };
 }
 const slipFile = { type: 'application/pdf', name: 'a.pdf', size: 3 };
 const tick = () => new Promise((r) => setTimeout(r, 10));
+const failed = (t) => t.calls.filter((c) => c[0] === 'fail');
 
-test('pfmSlipsAttach uploads then adds the slip to the latest non-credit payment', async () => {
-  const added = [];
-  const t = slipBoot({ addSlips: (...a) => { added.push(a); return Promise.resolve({}); } });
-  t.replies.push(new Response(JSON.stringify({ id: 'att_new', name: 'a.pdf' }), { status: 201 }));
+test('pfmSlipsAttach uploads the file, THEN links it to the booking, and shows the server row', async () => {
+  const t = slipBoot();
+  t.replies.push(new Response(JSON.stringify({ id: 'att_new', name: 'a.pdf', mime: 'application/pdf', size: 3 }), { status: 201 }));
   t.window.pfmSlipsAttach(slipFile, 'upload');
   await tick();
   assert.equal(t.calls[0][0], '/v1/attachments');
-  assert.equal(JSON.stringify(added), JSON.stringify([['inv_1', 'pay_1', ['att_new']]]));
+  assert.equal(JSON.stringify(t.order), JSON.stringify([['post', '/v1/bookings/ob_1/slips', { attachment_id: 'att_new' }]]));
   assert.equal(t.calls.filter((c) => c[1] && c[1].method === 'DELETE').length, 0);
+  assert.equal(JSON.stringify(t.bk.slips), JSON.stringify([{ id: 'bs_1', attachmentId: 'att_new', addedAt: 'T', addedBy: 'u' }]));
+  const row = t.bk.paymentSlips.find((x) => x.kind === 'booking');
+  assert.equal(t.bk.paymentSlips.length, 2);   // + the invoice-payment slip already there
+  assert.equal(row.id, 'att_new');
+  assert.equal(row.mime, 'application/pdf');
+  assert.equal(row.amount, 0);
   assert.ok(t.alerts.includes('render'));
 });
 
-test('pfmSlipsAttach deletes the uploaded file when the server refuses the attach', async () => {
-  const t = slipBoot({ addSlips: () => Promise.reject(new Error('refused')) });
+test('pfmSlipsAttach: a refused link toasts, removes the uploaded file and leaves the booking alone', async () => {
+  const t = slipBoot({ post: () => Promise.reject(Object.assign(new Error('attachment_id is unknown'), { status: 400 })) });
   t.replies.push(new Response(JSON.stringify({ id: 'att_new', name: 'a.pdf' }), { status: 201 }));
   t.replies.push(new Response(null, { status: 204 }));
   t.window.pfmSlipsAttach(slipFile, 'upload');
   await tick();
   const del = t.calls.find((c) => c[1] && c[1].method === 'DELETE');
   assert.equal(del[0], '/v1/attachments/att_new');
+  assert.equal(failed(t).length, 1);
+  assert.equal(t.bk.slips.length, 0);
   assert.ok(!t.alerts.includes('render'));
 });
 
-test('pfmSlipsAttach with no recorded payment uploads nothing', async () => {
-  const t = slipBoot({ inv: { id: 'inv_1', payments: [] } });
+test('pfmSlipsAttach: a refused upload never reaches the link step', async () => {
+  const t = slipBoot();
+  t.replies.push(new Response(JSON.stringify({ statusCode: 400, message: 'mime not allowed' }), { status: 400 }));
   t.window.pfmSlipsAttach(slipFile, 'upload');
   await tick();
-  assert.equal(t.calls.length, 0);
-  assert.match(t.alerts[0], /Record a payment/);
+  assert.equal(t.order.length, 0);
+  assert.equal(failed(t).length, 1);
+});
+
+test('pfmSlipsAttach needs a server booking but not a recorded payment', async () => {
+  const none = slipBoot({ opsId: '' });
+  none.window.pfmSlipsAttach(slipFile, 'upload');
+  await tick();
+  assert.equal(none.calls.length, 0);
+  assert.match(none.alerts[0], /not on the server/);
+  const nopay = slipBoot({ inv: { id: 'inv_1', payments: [] } });
+  nopay.replies.push(new Response(JSON.stringify({ id: 'att_new', name: 'a.pdf' }), { status: 201 }));
+  nopay.window.pfmSlipsAttach(slipFile, 'upload');
+  await tick();
+  assert.equal(nopay.order.length, 1);
 });
 
 test('pfmSlipsAttach and pfmSlipDelete fall back to legacy when operations mode is off', async () => {
@@ -188,12 +213,37 @@ test('pfmSlipsAttach and pfmSlipDelete fall back to legacy when operations mode 
   t.window.pfmSlipDelete('att_old');
   assert.equal(t.legacy.length, 2);
   assert.equal(t.calls.length, 0);
+  assert.equal(t.order.length, 0);
 });
 
-test('pfmSlipDelete takes the slip off its payment first, then deletes the file', async () => {
+test('pfmSlipDelete of a booking slip: DELETE the slip, then drop it locally, then remove the file', async () => {
+  const t = slipBoot({ slips: [{ id: 'bs_9', attachmentId: 'att_9', addedAt: 'T', addedBy: 'u' }] });
+  t.replies.push(new Response(null, { status: 204 }));
+  await t.window.pfmSlipDelete('att_9');
+  assert.equal(JSON.stringify(t.order), JSON.stringify([['del', '/v1/bookings/ob_1/slips/bs_9']]));
+  assert.equal(t.bk.slips.length, 0);
+  assert.equal(t.calls[0][0], '/v1/attachments/att_9');
+  assert.ok(t.alerts.includes('render'));
+});
+
+test('pfmSlipDelete: a refused delete keeps the slip on screen and toasts; a 404 shows what the server has', async () => {
+  const keep = slipBoot({ slips: [{ id: 'bs_9', attachmentId: 'att_9' }], del: () => Promise.reject(Object.assign(new Error('boom'), { status: 500 })) });
+  await keep.window.pfmSlipDelete('att_9');
+  assert.equal(keep.bk.slips.length, 1);
+  assert.equal(failed(keep).length, 1);
+  assert.equal(keep.calls.filter((c) => c[0] === '/v1/attachments/att_9').length, 0);
+  const gone = slipBoot({ slips: [{ id: 'bs_9', attachmentId: 'att_9' }], del: () => Promise.reject(Object.assign(new Error('not found'), { status: 404 })) });
+  gone.replies.push(new Response(null, { status: 204 }));
+  await gone.window.pfmSlipDelete('att_9');
+  assert.equal(gone.bk.slips.length, 0);
+  assert.equal(failed(gone).length, 0);
+});
+
+test('pfmSlipDelete of an invoice-payment slip still takes it off its payment first, then deletes the file', async () => {
   const t = slipBoot();
   t.replies.push(new Response(null, { status: 204 }));
   await t.window.pfmSlipDelete('att_old');
   assert.equal(JSON.stringify(t.removed), JSON.stringify([['inv_1', 'pay_1', 'att_old']]));
   assert.equal(t.calls[0][0], '/v1/attachments/att_old');
+  assert.equal(t.order.length, 0);
 });

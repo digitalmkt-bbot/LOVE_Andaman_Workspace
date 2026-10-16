@@ -93,7 +93,7 @@
   function payTypeIn(v){ return v === 'bt' ? 'bank' : v; }
   function mapAgentSummary(s){
     var o = { id: s.id, name: s.name, active: s.active !== false, house: !!s.house,
-              vatMode: s.vat_mode || 'none', incomplete: (s.incomplete || []).slice() };
+              vatMode: s.vat_mode || '', incomplete: (s.incomplete || []).slice() };
     put(o, 'code', s.code); put(o, 'market', s.market_id); put(o, 'sub', s.sub_market); put(o, 'sales', s.sales_id);
     put(o, 'color', s.color); put(o, 'payType', payTypeIn(s.pay_type)); put(o, 'creditLimit', s.credit_limit);
     put(o, 'rateTypeId', s.rate_type_id); put(o, 'contractStatus', s.contract_status); put(o, 'contractEnd', s.contract_end);

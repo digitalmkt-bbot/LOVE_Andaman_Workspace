@@ -179,29 +179,44 @@
       return F.projectDoc('DELETE',projId,docId).catch(fail('Document was not deleted'));
     }; });
   }
-  /* Payment slips on an already-recorded invoice/PFM payment (POST/DELETE
-     /v1/invoices/:id/payments/:pid/slips). The slip list on screen is derived from the
-     invoice's live payments; nothing is written to bk.paymentSlips for persistence. */
+  /* Payment slips. Two homes on the server:
+       - a slip on a recorded invoice payment: POST/DELETE /v1/invoices/:id/payments/:pid/slips
+       - a slip on the booking itself (the legacy "amount 0, not tied to a payment" slip, the
+         only kind pfmSlipsAttach adds): POST /v1/bookings/:id/slips {attachment_id} and
+         DELETE /v1/bookings/:id/slips/:slip_id. No If-Match: the server treats it as evidence added
+         after the fact.
+     The slip list on screen is rebuilt from both; nothing is written to bk.paymentSlips for
+     persistence. A booking carries them as bk.slips = [{id, attachmentId, addedAt, addedBy}]
+     (mapped in 40-ops-bookings.js). The server holds no name/mime for a booking slip, so the
+     upload's own metadata is remembered here for the session. */
+  var slipMeta={};
   function slipInvoice(bkId){ return typeof window.acctBookingInvoice==='function' ? window.acctBookingInvoice(bkId) : null; }
   function livePayments(inv){ return ((inv&&inv.payments)||[]).filter(function(p){ return p&&!p.deletedAt; }); }
-  function slipTarget(inv){ var l=livePayments(inv), cash=l.filter(function(p){ return p.method!=='credit'; }); return (cash.length?cash:l).slice(-1)[0]||null; }
+  function bkOf(bkId){ return (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).find(function(x){ return x&&x.id===bkId; }); }
   function syncSlipView(bkId){
-    var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).find(function(x){ return x&&x.id===bkId; }), inv=slipInvoice(bkId); if(!b) return;
+    var b=bkOf(bkId), inv=slipInvoice(bkId); if(!b) return;
     var out=[]; livePayments(inv).forEach(function(p){ (p.slips||[]).forEach(function(s){ if(s&&s.id) out.push({id:s.id,name:s.name,mime:s.mime,size:s.size,kind:'payment',amount:p.amount,at:p.recordedAt,by:p.recordedBy,paymentId:p.id}); }); });
+    (b.slips||[]).forEach(function(s){ if(!s||!s.attachmentId) return; var m=slipMeta[s.attachmentId]||{}; out.push({id:s.attachmentId,slipId:s.id,name:m.name||'',mime:m.mime||'',size:m.size||0,kind:'booking',amount:0,at:s.addedAt,by:s.addedBy}); });
     b.paymentSlips=out;
   }
   function rerenderSlips(bkId){ syncSlipView(bkId); if(typeof window.pfmSlipsRender==='function') window.pfmSlipsRender(); }
   wrapGlobal('pfmViewSlips',function(orig){ return function(bkId){ if(on()) syncSlipView(bkId); return orig.apply(this,arguments); }; });
+  function slipFrom(r){ return { id:r.id, attachmentId:r.attachment_id||r.attachmentId, addedAt:r.added_at||r.addedAt||'', addedBy:r.added_by||r.addedBy||'' }; }
+  /* upload, then link to the booking; a refused link removes the upload again */
   function attachSlip(bkId, blobData, mime, name){
-    var M=O.money, inv=slipInvoice(bkId), pay=slipTarget(inv);
-    if(!M||!M.addPaymentSlips){ alert('Payment slips are unavailable'); return; }
-    if(!inv||!pay){ alert('Record a payment before adding a slip.'); return; }
+    var b=bkOf(bkId);
+    if(!b||!b.opsId){ alert('This booking is not on the server yet, so a slip cannot be attached.'); return; }
     var fr=new FileReader();
     fr.onload=function(){
       var b64=String(fr.result).split(',')[1]||'';
       upload({filename:name,mime:mime,dataB64:b64}).then(function(meta){
-        /* Server first: if the attach is refused, the upload must not stay behind. */
-        return M.addPaymentSlips(inv.id,pay.id,[meta.id]).then(function(){ rerenderSlips(bkId); },function(){
+        return O.post('/v1/bookings/'+encodeURIComponent(b.opsId)+'/slips',{attachment_id:meta.id}).then(function(row){
+          slipMeta[meta.id]={name:meta.filename||meta.name||name,mime:meta.mime||mime,size:meta.size||0};
+          var s=slipFrom(row||{}); if(!s.attachmentId) s.attachmentId=meta.id;
+          b.slips=(b.slips||[]).filter(function(x){ return x.id!==s.id&&x.attachmentId!==s.attachmentId; }).concat([s]);
+          rerenderSlips(bkId);
+        },function(e){
+          O.fail('Slip was not attached',e);
           return remove(meta.id).then(null,function(){});
         });
       },function(e){ O.fail('Slip upload failed',e); });
@@ -223,8 +238,20 @@
   wrapGlobal('pfmSlipDelete',function(orig){ return function(id){
     if(!on()) return orig.apply(this,arguments);
     var bkId=(typeof _pfmSlipBk!=='undefined'?_pfmSlipBk:null); if(!bkId) return;
+    var b=bkOf(bkId), direct=b&&(b.slips||[]).find(function(s){ return s&&s.attachmentId===id; });
+    if(direct){
+      if(!confirm('Delete this slip permanently?')) return;
+      var gone=function(){ b.slips=(b.slips||[]).filter(function(s){ return s.id!==direct.id; }); rerenderSlips(bkId); };
+      return O.del('/v1/bookings/'+encodeURIComponent(b.opsId)+'/slips/'+encodeURIComponent(direct.id)).then(function(){
+        gone();
+        return remove(id).then(null,function(e){ O.fail('Slip file was not deleted',e); });
+      },function(e){
+        if(e&&e.status===404){ gone(); return remove(id).then(null,function(){}); }   /* the server no longer has it: show what it has */
+        O.fail('Slip was not deleted',e);
+      });
+    }
     var inv=slipInvoice(bkId), pay=livePayments(inv).find(function(p){ return (p.slips||[]).some(function(s){ return s&&s.id===id; }); });
-    if(!pay){ alert('This slip is not on an invoice payment, so it cannot be removed here.'); return; }
+    if(!pay){ alert('This slip is not on the booking or an invoice payment, so it cannot be removed here.'); return; }
     if(!confirm('Delete this slip permanently?')) return;
     return O.money.removePaymentSlip(inv.id,pay.id,id).then(function(){
       rerenderSlips(bkId);

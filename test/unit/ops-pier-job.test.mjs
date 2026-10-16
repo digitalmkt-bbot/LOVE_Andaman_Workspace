@@ -7,7 +7,8 @@ const SOURCES = ['42-ops-pier-core.js', '43-ops-pier-lists.js', '47-ops-pier-job
 const J = (x) => JSON.parse(JSON.stringify(x === undefined ? null : x));
 const PIER = 'panwa', DATE = '2026-10-12';
 const JOB = (b) => `/v1/pier-office/${PIER}/days/${DATE}/boats/${b}/job`;
-const LISTS = { item_kinds: [], items: [], attendance_codes: [], sections: [], staff: [], license_types: [], license_classes: [] };
+const STAFF = ['ps_cap', 'ps_new', 'ps_t', 'ps_t1', 'ps_a', 'ps_x', 'ps_g', 'ps_old', 'ps_c1', 'ps_c3'].map((id, i) => ({ id, pier: PIER, nick: id, name: id, role: null, phone: null, active: true, default_code: null, section_id: null, note: null, sort: i }));
+const LISTS = { item_kinds: [], items: [], attendance_codes: [], sections: [], staff: STAFF, license_types: [], license_classes: [] };
 
 const view = (o) => ({
   pier: PIER, date: DATE, boat_id: 'b1', recorded: true, captain_id: 'ps_cap', assistant_id: null, crew: ['ps_c1', null, 'ps_c3'], island: [],
@@ -17,8 +18,12 @@ const view = (o) => ({
 });
 const UNREC = view({ boat_id: 'b2', recorded: false, captain_id: 'ps_t', crew: ['ps_t1'], note: null, duty_staff_ids: [], substitutes: [], missing: [{ key: 'wristband', label: 'WB' }], wristband_carried: null, restaurant_id: null });
 
-function runtime({ enabled = true, answers = {} } = {}) {
-  const calls = [], fails = [], wrote = [], legacy = [];
+// the real O.anyway, cut out of 00-ops-core.js so the test runs the shipped helper
+const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
+const ANYWAY_SRC = CORE.slice(CORE.indexOf('function anyway(send, rules, preset){'), CORE.indexOf('/* one write at a time'));
+
+function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
+  const calls = [], fails = [], wrote = [], legacy = [], asked = [];
   const req = (method, path, body) => {
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
     const a = answers[method + ' ' + path];
@@ -37,6 +42,8 @@ function runtime({ enabled = true, answers = {} } = {}) {
   const win = {
     laOps: {
       enabled: () => enabled, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
+      anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
+      anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       wrote: (k) => wrote.push(k), fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message, body: e && e.body }), toast: () => {},
     },
     _poPier: PIER, _poDate: DATE,
@@ -55,7 +62,7 @@ function runtime({ enabled = true, answers = {} } = {}) {
   const vmc = vm.createContext(ctx);
   SOURCES.forEach((s) => vm.runInContext(s, vmc));
   const flush = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setTimeout(r, 3)); await new Promise((r) => setImmediate(r)); } };
-  return { w: win, calls, fails, wrote, legacy, flush, state };
+  return { w: win, asked, calls, fails, wrote, legacy, flush, state };
 }
 const writes = (rt) => rt.calls.filter((c) => c.method !== 'GET');
 const open = async (rt) => { rt.w.renderPierJob(); await rt.flush(); };
@@ -92,7 +99,7 @@ test('a save: only the changed facts are PATCHed, then the card is read back', a
   await open(rt);
   rt.w.PIER_JOB[K1].cap = 'ps_new';
   rt.w.poPersist(); await rt.flush();
-  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b1'), { captain_id: 'ps_new' }]]);
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b1'), { captain_id: 'ps_new', captain_name: null }]]);
   assert.equal(rt.calls.filter((c) => c.path === JOB('b1') && c.method === 'GET').length, 2);
   assert.equal(rt.w.PIER_JOB[K1].cap, 'ps_new');
   assert.deepEqual(rt.wrote, ['pier']);
@@ -175,7 +182,7 @@ test('duty and the usual team: PUT whole, only when changed', async () => {
   rt.w.poPersist(); await rt.flush();
   const w = writes(rt);
   assert.deepEqual(w.map((c) => [c.method, c.path, c.body]).sort((a, b) => a[1].localeCompare(b[1])), [
-    ['PUT', '/v1/pier-office/boats/b1/team', { captain_id: 'ps_cap', assistant_id: 'ps_a', crew_ids: ['ps_c1', 'ps_c3'] }],
+    ['PUT', '/v1/pier-office/boats/b1/team', { captain_id: 'ps_cap', captain_name: null, assistant_id: 'ps_a', assistant_name: null, crew_ids: ['ps_c1', 'ps_c3'], crew_names: [null, null] }],
     ['PUT', '/v1/pier-office/' + PIER + '/days/' + DATE + '/boats/b1/duty', { staff_ids: ['ps_cap', 'ps_x'] }],
   ]);
 });
@@ -189,4 +196,87 @@ test('a refusal: duty of a closed day is the server\'s 409 day_closed and the li
   rt.w.poPersist(); await rt.flush();
   assert.deepEqual(J(rt.w.PIER_DUTY[K1]), ['ps_cap']);
   assert.equal(rt.fails[0].code, 'day_closed');
+});
+
+const BUSY_409 = () => Object.assign(new Error('Ann is already on boat b2'), { code: 'guide_double_booked', status: 409, body: { busy: [{ staff_id: 'ps_g', name: 'Ann', boat_id: 'b2' }] } });
+
+test('guide_double_booked: the confirm names who is where, OK resends the same PATCH with guide_anyway', async () => {
+  let n = 0;
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: (body) => { if (!body.guide_anyway && ++n) throw BUSY_409(); return view({ island: ['ps_g'] }); } } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].island = ['ps_g'];
+  rt.w.poPersist(); await rt.flush();
+  const patches = writes(rt).filter((c) => c.method === 'PATCH');
+  assert.equal(patches.length, 2);
+  assert.deepEqual(patches[0].body, { island: ['ps_g'], island_names: [null] });
+  assert.deepEqual(patches[1].body, { island: ['ps_g'], island_names: [null], guide_anyway: true });
+  assert.equal(rt.asked.length, 1);
+  assert.match(rt.asked[0], /Ann .* b2/);
+  assert.equal(rt.fails.length, 0);
+});
+
+test('guide_double_booked: Cancel sends nothing more, the card goes back, no red toast', async () => {
+  const rt = runtime({ confirmAnswer: false, answers: { ['PATCH ' + JOB('b1')]: () => { throw BUSY_409(); } } });
+  await open(rt);
+  rt.w.PIER_JOB[K1].island = ['ps_g'];
+  rt.w.poPersist(); await rt.flush();
+  assert.equal(writes(rt).filter((c) => c.method === 'PATCH').length, 1);
+  assert.equal(rt.asked.length, 1);
+  assert.deepEqual(J(rt.w.PIER_JOB[K1].island), []);
+  assert.equal(rt.fails.length, 0);
+});
+
+// ── typed names (backend migration 256): legacy keeps a slot as the staff id OR the text typed ──
+
+const NAMED = (o) => view({ captain_id: null, captain_name: 'นายอนิวรรต หาญทะเล', assistant_id: null, assistant_name: 'นายราชู หาญทะเล',
+  crew: [null, 'ps_c1', null], crew_names: ['นายธนงค์ชัย ดำรงเกษตร', null, 'นายยะ ประมงกิจ'], island: [null], island_names: ['นางสาวสุกัญญา ทาสี'],
+  substitutes: [{ role: 'captain', position: null, team_id: null, team_name: 'Old Captain' }, { role: 'crew', position: 2, team_id: 'ps_old', team_name: null }], ...o });
+
+test('typed names: the card gets the text legacy shows, in the slots legacy keeps it (a staff id or the name as typed)', async () => {
+  const rt = runtime();
+  rt.state.b1 = NAMED({});
+  await open(rt);
+  const job = J(rt.w.PIER_JOB[K1]);
+  assert.deepEqual([job.cap, job.asst, job.crew, job.island], ['นายอนิวรรต หาญทะเล', 'นายราชู หาญทะเล', ['นายธนงค์ชัย ดำรงเกษตร', 'ps_c1', 'นายยะ ประมงกิจ'], ['นางสาวสุกัญญา ทาสี']]);
+  assert.deepEqual(J(rt.w.PIER_TEAM.b1), { cap: 'Old Captain', asst: 'นายราชู หาญทะเล', crew: ['นายธนงค์ชัย ดำรงเกษตร', 'ps_c1', 'ps_old'] }, 'the substitutes put the team back, name or id');
+  assert.deepEqual(J(rt.w.pjSubList(DATE, 'b1')), { cap: 'Old Captain', crew2: 'ps_old' });
+  assert.deepEqual(rt.w.pjLockMiss(DATE, 'b1'), []);
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt), [], 'reading typed names back changes nothing');
+});
+
+test('typed names: typing a name sends *_name, picking a person *_id; both halves of a slot go together', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: {} } });
+  rt.state.b1 = NAMED({});
+  await open(rt);
+  const J1 = rt.w.PIER_JOB[K1];
+  J1.cap = 'ps_new';                                   // a person picked from the list replaces the typed captain
+  J1.crew = ['นายธนงค์ชัย ดำรงเกษตร', 'ps_c1', 'Somchai  New'];   // one typed name changed, blanks squeezed
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', JOB('b1'), {
+    captain_id: 'ps_new', captain_name: null,
+    crew: [null, 'ps_c1', null], crew_names: ['นายธนงค์ชัย ดำรงเกษตร', null, 'Somchai New'],
+  }]]);
+});
+
+test('typed names: clearing a slot sends the pair empty; a card with no job yet records a typed captain', async () => {
+  const rt = runtime({ answers: { ['PATCH ' + JOB('b1')]: {}, ['PATCH ' + JOB('b2')]: {} } });
+  rt.state.b1 = NAMED({});
+  await open(rt);
+  rt.w.PIER_JOB[K1].asst = '';
+  rt.w.PIER_JOB[K2] = { cap: 'Typed Captain', asst: '', crew: ['ps_t1'], island: [], note: '', wb: '', wbc: '', lock: 0, mv: '', wc: '', lb: {} };
+  rt.w.poPersist(); await rt.flush();
+  const w = Object.fromEntries(writes(rt).map((c) => [c.path, c.body]));
+  assert.deepEqual(w[JOB('b1')], { assistant_id: null, assistant_name: null });
+  assert.deepEqual(w[JOB('b2')], { captain_id: null, captain_name: 'Typed Captain' });
+});
+
+test('typed names: the usual team is PUT with typed names beside the staff ids', async () => {
+  const rt = runtime({ answers: { ['PUT /v1/pier-office/boats/b1/team']: {} } });
+  await open(rt);
+  rt.w.PIER_TEAM.b1 = { cap: 'Typed Captain', asst: 'ps_a', crew: ['ps_c1', 'Typed Crew'] };
+  rt.w.poPersist(); await rt.flush();
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PUT', '/v1/pier-office/boats/b1/team', {
+    captain_id: null, captain_name: 'Typed Captain', assistant_id: 'ps_a', assistant_name: null, crew_ids: ['ps_c1', null], crew_names: [null, 'Typed Crew'],
+  }]]);
 });

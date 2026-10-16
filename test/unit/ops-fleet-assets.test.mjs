@@ -69,7 +69,7 @@ test('drivetrain mappers normalize Starboard/Stbd to Std and PATCH bodies exclud
   assert.deepEqual(JSON.parse(JSON.stringify(c.toServiceBody(210.5))), { hours: 210.5 });
 });
 
-function createRuntime(){
+function createRuntime(opts = {}){
   const calls = [];
   let nextResolver = null;
   let serverEngines = [{ id: 'e1', brand: 'Honda', model: 'BF250', serial: 'E-1', boat_id: 'b1', pos: 'Port', status: 'ready', base_hours: 100, hours: 140 }];
@@ -124,11 +124,14 @@ function createRuntime(){
   window.flGbMarkService = () => 'legacy';
   window.flGbSetInterval = () => 'legacy';
   window.flRenderEquip = () => {};
+  if(opts.reopen) window.flOpenAddEngineModal = opts.reopen;
+  if(opts.close) window.closeModal = opts.close;
 
   const context = {
     window,
     document: {
       getElementById: id => {
+        if(opts.elements && opts.elements[id]) return opts.elements[id];
         if(id === 'fl-assign-eng-sel') return { value: 'e1' };
         if(id === 'fl-assign-eng-pos') return { value: 'Starboard' };
         if(id === 'fl-move-note') return { value: 'To Panwa' };
@@ -157,7 +160,10 @@ function createRuntime(){
     _assignBoatId: 'b2',
     _replaceEngId: null,
     _flSwap: { type: 'eng', id: 'e1' },
-    flMoveCtx: { assetType: 'gearbox', assetId: 'g1' }
+    flMoveCtx: { assetType: 'gearbox', assetId: 'g1' },
+    flEditEngId: opts.editEngId || null,
+    flStValues: ['ready','spare','fixing'],
+    flSelSts: { eng: 0 }
   };
   vm.runInNewContext(SOURCE, context);
   return {
@@ -242,4 +248,70 @@ test('legacy mode delegates to original asset functions without API calls', () =
   assert.equal(window.flSaveEngine(), 'legacy');
   assert.equal(window.flEquipSwapDo('e2'), 'legacy');
   assert.equal(calls.includes('api'), false);
+});
+
+function engineEditRuntime(onReopen){
+  const el = v => ({ value: v });
+  const rt = createRuntime({
+    editEngId: 'e1',
+    elements: {
+      'fl-eng-brand': el('Honda'), 'fl-eng-model': el('BF250'), 'fl-eng-serial': el('E-1'),
+      'fl-eng-boat-sel': el('b2'), 'fl-eng-pos-sel': el('Port')
+    },
+    reopen: id => onReopen(id),
+    close: id => rt.calls.push({ closed: id })
+  });
+  return rt;
+}
+
+test('engine edit A->B: install 409 after the facts PATCH saved -> refetch, say what saved, modal stays open on server values', async () => {
+  const reopened = [];
+  const rt = engineEditRuntime(id => reopened.push(id));
+  await rt.tick(); await rt.tick();
+  assert.equal(rt.FL_ENGINES[0].boatId, 'b1');
+
+  const p = rt.window.flSaveEngine();
+  await rt.tick();
+  const patch = rt.calls.find(x => x.method === 'PATCH' && x.path === '/v1/fleet/engines/e1');
+  assert.ok(patch, 'facts PATCH sent');
+  const getsBefore = rt.calls.filter(x => x.method === 'GET' && x.path === '/v1/fleet/engines').length;
+  rt.resolveNext({ id: 'e1' });
+  await rt.tick();
+  const inst = rt.calls.find(x => x.method === 'POST' && x.path === '/v1/fleet/engines/e1/install');
+  assert.ok(inst, 'install attempted after facts');
+  // server state after the facts PATCH: still on b1, brand-new model saved
+  rt.setServerEngines([{ id: 'e1', brand: 'Honda', model: 'BF250-NEW', serial: 'E-1', boat_id: 'b1', pos: 'Port', status: 'ready', base_hours: 100, hours: 140 }]);
+  const err = new Error('engine_already_installed'); err.status = 409; err.code = 'engine_already_installed';
+  rt.rejectNext(err);
+  await p;
+
+  const getsAfter = rt.calls.filter(x => x.method === 'GET' && x.path === '/v1/fleet/engines').length;
+  assert.equal(getsAfter, getsBefore + 1, 'engine list refetched after the refusal');
+  assert.equal(rt.FL_ENGINES[0].model, 'BF250-NEW', 'local list equals the refetched server state');
+  assert.equal(rt.FL_ENGINES[0].boatId, 'b1', 'not the draft boat, not the failed install');
+  const f = rt.calls.find(x => x.fail === 'Could not update engine');
+  assert.ok(f, 'failure surfaced');
+  assert.match(f.message, /engine_already_installed/, 'server message kept');
+  assert.match(f.message, /Already saved: details/, 'says what saved');
+  assert.match(f.message, /Refused: install/, 'says what was refused');
+  assert.deepEqual(reopened, ['e1'], 'modal re-filled from server values');
+  assert.ok(!rt.calls.some(x => x.closed), 'modal not closed');
+  assert.ok(!rt.calls.some(x => x.wrote), 'no success signal');
+});
+
+test('engine edit happy path: every step lands, modal closes, no failure message', async () => {
+  const reopened = [];
+  const rt = engineEditRuntime(id => reopened.push(id));
+  await rt.tick(); await rt.tick();
+  const p = rt.window.flSaveEngine();
+  await rt.tick(); rt.resolveNext({ id: 'e1' });
+  await rt.tick(); assert.ok(rt.calls.find(x => x.path === '/v1/fleet/engines/e1/install'));
+  rt.setServerEngines([{ id: 'e1', brand: 'Honda', model: 'BF250', serial: 'E-1', boat_id: 'b2', pos: 'Port', status: 'ready', base_hours: 100, hours: 140 }]);
+  rt.resolveNext({ id: 'e1' });
+  await p;
+  assert.equal(rt.FL_ENGINES[0].boatId, 'b2');
+  assert.ok(rt.calls.some(x => x.closed === 'fl-modal-engine'));
+  assert.ok(rt.calls.some(x => x.wrote === 'fleet-engine-update'));
+  assert.ok(!rt.calls.some(x => x.fail));
+  assert.deepEqual(reopened, []);
 });

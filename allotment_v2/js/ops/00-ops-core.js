@@ -163,6 +163,28 @@
     var t = String(label == null ? 'Loading…' : label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
     return '<div class="la-ops-loading" role="status" aria-live="polite"><span class="la-ops-loading-ring"></span><span>' + t + '</span></div>';
   }
+  /* §skel · shimmer placeholder shaped like a page: o.kpis KPI cards, o.panels wide cards, then a
+     table of o.rows × o.cols. The label is read out to screen readers only (css .la-skel* in 01-base.css). */
+  function skeletonHtml(o){
+    o = o || {};
+    var t = String(o.label == null ? 'Loading…' : o.label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
+    function sk(w, h, more){ return '<span class="la-skel" style="width:' + w + ';height:' + h + 'px' + (more ? ';' + more : '') + '"></span>'; }
+    function cards(n, tall){
+      var h = '';
+      for(var i = 0; i < n; i++) h += '<div class="la-skel-card"' + (tall ? ' style="min-width:250px;min-height:150px"' : '') + '>' + sk('46%', 9) + sk(tall ? '80%' : '58%', tall ? 12 : 20) + (tall ? sk('64%', 12) + sk('72%', 12) : '') + '</div>';
+      return '<div class="la-skel-kpis">' + h + '</div>';
+    }
+    var cols = o.cols || 6, W = ['13%', '20%', '11%', '12%', '12%', '10%', '9%', '8%'], rows = '';
+    for(var r = 0; r < (o.rows == null ? 8 : o.rows); r++){
+      rows += '<div class="la-skel-tr">';
+      for(var c = 0; c < cols; c++) rows += sk(W[c % W.length], 11, c === cols - 1 ? 'margin-left:auto' : '');
+      rows += '</div>';
+    }
+    return '<div class="la-skel-wrap" role="status" aria-live="polite"><span class="la-skel-sr">' + t + '</span>'
+      + (o.kpis ? cards(o.kpis) : '') + (o.panels ? cards(o.panels, true) : '')
+      + (o.rows === 0 ? '' : '<div class="la-skel-table"><div style="padding:13px 15px">' + sk('22%', 13) + '</div>' + rows + '</div>')
+      + '</div>';
+  }
   function activeView(){ var el = document.querySelector('.nav-item.active[data-view]'); return el ? el.dataset.view : ''; }
 
   function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -186,7 +208,7 @@
     del: function(p){ return call('DELETE', p); },
     queue: queue, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
-    busy: busy, activeView: activeView, loadingHtml: loadingHtml,
+    busy: busy, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }

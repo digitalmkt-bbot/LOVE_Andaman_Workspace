@@ -1,6 +1,9 @@
 // Operation-backend booking query cache. Booking pages load only their visible
 // date/month; they never bootstrap a broad operational window.
 var _opsBookingRanges = Object.create(null), _opsBookingRangeLoads = Object.create(null);
+// §calSkel · _opsBookingSeen survives a write's cache drop (its bookings stay in SB_BOOKINGS), so
+// only a range that has never loaded shows a skeleton; _opsBookingFailed = its last load failed.
+var _opsBookingSeen = Object.create(null), _opsBookingFailed = Object.create(null);
 function _opsBookingYMD(d){
   if(typeof bookingV2LocalYMD==='function') return bookingV2LocalYMD(d);
   var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
@@ -11,18 +14,22 @@ function _opsBookingMonthRange(month){
   d.setMonth(d.getMonth()+1); d.setDate(0);
   return {from:from,to:_opsBookingYMD(d)};
 }
-function _opsBookingRangeKey(o){ return [o.routeId||'',o.from||'',o.to||'',o.limit||100].join('|'); }
+function _opsBookingRangeKey(o){ var k=[o.routeId||'',o.from||'',o.to||'',o.limit||100]; if(o.agentId) k.push(o.agentId); return k.join('|'); }
 function _opsBookingMerge(mapped){
   var at=Object.create(null);
   SB_BOOKINGS.forEach(function(b,i){ at[b.opsId||b.id]=i; });
   mapped.forEach(function(b){
     var k=b.opsId||b.id, i=at[k];
-    if(i===undefined){ at[k]=SB_BOOKINGS.length; SB_BOOKINGS.push(b); }
-    else Object.assign(SB_BOOKINGS[i],b);
+    if(i===undefined){ at[k]=SB_BOOKINGS.length; SB_BOOKINGS.push(b); return; }
+    // §vanKeep · the booking API has no van fields; keep the ones the van-groups load put on
+    var V=window.laOps&&window.laOps.vans, kept=V&&V.take?V.take(SB_BOOKINGS[i]):null;
+    Object.assign(SB_BOOKINGS[i],b);
+    if(kept) V.put(SB_BOOKINGS[i],kept);
   });
 }
 function bookingV2OpsResetCache(){
   _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null); _opsDailyCounts=Object.create(null);
+  _opsBookingSeen=Object.create(null); _opsBookingFailed=Object.create(null);
   delete window._opsAllStats; delete window._opsAllMonthCounts;
   if(typeof SB_BOOKINGS!=='undefined') SB_BOOKINGS.length=0;
 }
@@ -33,28 +40,32 @@ function bookingV2EnsureOpsRange(options){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   options=options||{};
   var from=options.from, to=options.to;
-  if(!from || !to) return null;
-  var q={routeId:options.routeId,from:from,to:to,limit:options.limit||100};
+  /* agentId: one agent's bookings; from/to may then be left out (all of that agent's trips).
+     The server wants from and to together or neither. refresh: forget a cached load first. */
+  if(!options.agentId && (!from || !to)) return null;
+  var q={routeId:options.routeId,from:from,to:to,limit:options.limit||100,agentId:options.agentId};
   var key=_opsBookingRangeKey(q);
+  if(options.refresh && !_opsBookingRangeLoads[key]) delete _opsBookingRanges[key];
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
   var params=[];
-  [['route_id',q.routeId],['from',from],['to',to],['limit',q.limit]].forEach(function(pair){
+  [['agent_id',q.agentId],['route_id',q.routeId],['from',from],['to',to],['limit',q.limit]].forEach(function(pair){
     if(pair[1]!==undefined && pair[1]!==null && pair[1]!=='') params.push(encodeURIComponent(pair[0])+'='+encodeURIComponent(pair[1]));
   });
-  var base='/v1/bookings?'+params.join('&'), all=[], pages=0, MAX_PAGES=200;
+  var base='/v1/bookings?'+params.join('&'), all=[], pages=0, MAX_PAGES=options.maxPages||200;
   function page(cursor){
     return window.laOpsFetch(base+(cursor?'&cursor='+encodeURIComponent(cursor):'')).then(function(r){ return r.ok?r.json():null; }).then(function(j){
       if(!j || !Array.isArray(j.bookings)) throw new Error('booking list did not return bookings');
       Array.prototype.push.apply(all,j.bookings);
       if(j.next_cursor && ++pages<MAX_PAGES) return page(j.next_cursor);
-      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+from+' → '+to+' is incomplete');
+      if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' is incomplete');
       var mapped=all.map(bookingV2FromOpsBooking); _opsBookingMerge(mapped); _opsBookingRanges[key]=true;
-      console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+from+' → '+to+' from operation-backend');
+      _opsBookingSeen[key]=true; delete _opsBookingFailed[key];
+      console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' from operation-backend');
       return {bookings:all};
     });
   }
-  var load=page(null).catch(function(e){ console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); return null; });
+  var load=page(null).catch(function(e){ _opsBookingFailed[key]=true; console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); return null; });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; },function(e){ delete _opsBookingRangeLoads[key]; throw e; });
   return _opsBookingRangeLoads[key];
 }
@@ -62,6 +73,18 @@ function bookingV2OpsEnsureMonth(month){
   var r=_opsBookingMonthRange(month); return bookingV2EnsureOpsRange(r);
 }
 function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,to:date}); }
+/* §calSkel · 'loading' = in flight and never loaded this session (draw a skeleton, not zeros);
+   'failed' = the last load failed (callers stop auto-retrying until bookingV2OpsRetryMonth). */
+function bookingV2OpsMonthStatus(month){
+  var r=_opsBookingMonthRange(month), key=_opsBookingRangeKey({from:r.from,to:r.to,limit:100});
+  if(_opsBookingRangeLoads[key] && !_opsBookingSeen[key]) return 'loading';
+  return _opsBookingFailed[key] ? 'failed' : '';
+}
+function bookingV2OpsRetryMonth(month){
+  var r=_opsBookingMonthRange(month);
+  delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to,limit:100})];
+  bookingV2Render();
+}
 function bookingV2OpsEnsureSummary(){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   var key='summary';
@@ -176,26 +199,28 @@ function bookingV2OpsEnsureCreated(fromYMD, toYMD, opts){
 }
 /* Bookings + first-trip pax per sale day, counted by the server
    (GET /v1/bookings/daily-counts). bookingV2OpsDailyCounts() reads the cached
-   answer as {YYYY-MM-DD:{bk,pax}}, or null before it has arrived. */
+   answer as {YYYY-MM-DD:{bk,pax}}, or null before it has arrived. withMarkets
+   (Booking Flow) also asks the server for each day's bookings per market id and
+   adds it as mk. */
 var _opsDailyCounts = Object.create(null);
-function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD){
+function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD, withMarkets){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
-  var key='daily|'+fromYMD+'|'+toYMD;
+  var key='daily|'+fromYMD+'|'+toYMD+(withMarkets?'|mk':'');
   if(_opsDailyCounts[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
-  var load=window.laOpsFetch('/v1/bookings/daily-counts?from='+encodeURIComponent(fromYMD)+'&to='+encodeURIComponent(toYMD)).then(function(r){
+  var load=window.laOpsFetch('/v1/bookings/daily-counts?'+(withMarkets?'markets=1&':'')+'from='+encodeURIComponent(fromYMD)+'&to='+encodeURIComponent(toYMD)).then(function(r){
     if(!r.ok) throw new Error('daily-counts HTTP '+r.status);
     return r.json();
   }).then(function(j){
     if(!j || !Array.isArray(j.days)) throw new Error('daily-counts did not return days');
-    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]={bk:+d.bookings||0, pax:+d.pax||0}; });
+    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]=withMarkets?{bk:+d.bookings||0, pax:+d.pax||0, mk:d.markets||null}:{bk:+d.bookings||0, pax:+d.pax||0}; });
     _opsDailyCounts[key]=m;
     return j;
   }).catch(function(e){ console.warn('[opsSync] failed to load daily booking counts: '+((e&&e.message)||e)); return null; });
   _opsBookingRangeLoads[key]=load.then(function(result){ delete _opsBookingRangeLoads[key]; return result; });
   return _opsBookingRangeLoads[key];
 }
-function bookingV2OpsDailyCounts(fromYMD, toYMD){ return _opsDailyCounts['daily|'+fromYMD+'|'+toYMD]||null; }
+function bookingV2OpsDailyCounts(fromYMD, toYMD){ return _opsDailyCounts['daily|'+fromYMD+'|'+toYMD+'|mk']||_opsDailyCounts['daily|'+fromYMD+'|'+toYMD]||null; }
 /* Everything the Dashboard reads for selected day ds, in parallel, one or two
    requests each: the newest page of bookings (Live feed rows), every booking
    created on ds (the feed's day summary), and 60 days of daily counts ending

@@ -194,8 +194,42 @@
     });
   }
 
+  /* §vanKeep (2026-10-14) · the booking API carries no van fields: they come from the groups above
+     (applyGroup). A booking refresh rebuilds bk.ops and each trip's ops from the booking API, so a
+     refresh that landed after the groups blanked the day's vans (Van Jobs showed 0 jobs on a day the
+     server had 6). take() reads them off a booking before the merge, put() writes them back after,
+     onto the same service day only, and never over a value the fresh copy does carry. */
+  var VAN_KEYS = ['vanGroup', 'vanId', 'vanSeq', 'vanReturnId'];
+  function vanFields(o){
+    if(!o || !(+o.vanGroup > 0 || o.vanId)) return null;
+    var out = {};
+    VAN_KEYS.forEach(function(k){ if(o[k] !== undefined) out[k] = o[k]; });
+    return out;
+  }
+  function firstDate(b){
+    var ds = (b.trips || []).map(function(t){ return t && t.date; }).filter(Boolean).sort();
+    return ds[0] || '';
+  }
+  function take(b){
+    if(!b) return null;
+    var kept = { first: firstDate(b), ops: vanFields(b.ops), trips: {} }, any = !!kept.ops;
+    (b.trips || []).forEach(function(t){
+      var f = t && t.date !== kept.first ? vanFields(t.ops) : null;
+      if(f){ kept.trips[t.date] = f; any = true; }
+    });
+    return any ? kept : null;
+  }
+  function putFields(o, f){ Object.keys(f).forEach(function(k){ if(o[k] === undefined) o[k] = f[k]; }); }
+  function put(b, kept){
+    if(!b || !kept) return;
+    if(kept.ops && firstDate(b) === kept.first) putFields(b.ops = b.ops || {}, kept.ops);
+    (b.trips || []).forEach(function(t){
+      if(t && t.date !== kept.first && kept.trips[t.date]) putFields(t.ops = t.ops || {}, kept.trips[t.date]);
+    });
+  }
+
   /* ── loader ── */
-  O.vans = { load: load, serverIdOf: serverIdOf, groupInfo: function(id){ return groupInfo[id] || null; } };
+  O.vans = { load: load, serverIdOf: serverIdOf, groupInfo: function(id){ return groupInfo[id] || null; }, take: take, put: put };
 
   /* ── writes ── */
   wrap('bookingV2VanGroupSetVan', function(date, routeId, zone, gid, vanId){

@@ -10851,6 +10851,32 @@ function salesToggleFollow(salesId, ym, agentId, kind){
   if(typeof sbSalesPersist==='function') sbSalesPersist();
   if(typeof renderSalesBoard==='function'){ _sbSig=null; renderSalesBoard(); }
 }
+/* §salesBk · Sales Board "bookings" per salesperson in trip month ym ({salesId: n}) and one
+   salesperson's pax / sold value by route (person view donuts: {routePax, routeVal, value}).
+   Summed from SB_BOOKINGS here; ops/27-ops-sales-board.js replaces both (SB_BOOKINGS is only a
+   partial cache on operation-backend, so a browser sum would undercount). */
+function salesBookingCounts(ym){
+  const out = {};
+  (typeof SB_BOOKINGS!=='undefined' ? SB_BOOKINGS : []).forEach(b=>{
+    if(_SB_CXL.includes(b.status) || !b.agentId) return;
+    const sid = ((typeof sbGetAgent==='function' ? sbGetAgent(b.agentId) : null) || {}).sales; if(!sid) return;
+    if((b.trips||[]).some(t=>_ymOf(t.date)===ym)) out[sid] = (out[sid]||0) + 1;
+  });
+  return out;
+}
+function salesPersonMix(salesId, ym){
+  const routePax = {}, routeVal = {}; let value = 0;
+  (typeof SB_BOOKINGS!=='undefined' ? SB_BOOKINGS : []).forEach(b=>{
+    if(_SB_CXL.includes(b.status) || !b.agentId || ((typeof sbGetAgent==='function' ? sbGetAgent(b.agentId) : null) || {}).sales !== salesId) return;
+    const mt = (b.trips||[]).filter(t=>_ymOf(t.date)===ym); if(!mt.length) return;
+    const tot = +((b.priceBreakdown||{}).total)||0; value += tot;   /* §มูลค่าที่ขายได้ · priceBreakdown.total (ยอดหลังส่วนลด) */
+    const bpax = mt.reduce((s,t)=>s+(getTripPaxTotal(t)||0),0)||1;    /* กระจายมูลค่าลงเส้นทางตามสัดส่วน pax */
+    mt.forEach(t=>{ const px=getTripPaxTotal(t)||0, rid=t.routeId||'?';
+      if(px) routePax[rid]=(routePax[rid]||0)+px;
+      if(tot) routeVal[rid]=(routeVal[rid]||0)+tot*(px/bpax); });
+  });
+  return { routePax, routeVal, value };
+}
 /* prev-month helper สำหรับ trend (โต/ตกลง) */
 function _ymShift(ym, n){ const p=ym.split('-').map(Number); const d=new Date(p[0], p[1]-1+n, 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 

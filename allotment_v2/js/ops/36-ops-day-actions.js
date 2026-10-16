@@ -314,14 +314,11 @@
     };
   }
 
-  function mergeTripOperations(bk, date, serverTrip){
-    if(!bk || !serverTrip || !serverTrip.operations) return;
-    var ops = serverTrip.operations;
-    var trips = Array.isArray(bk.trips) ? bk.trips : [];
-    var trip = trips.find(function(t){ return t && (t.opsTripId === serverTrip.id || t.date === date); });
-    var firstDate = trips[0] ? trips[0].date : '';
-    var targetOps = (trip && trip.date !== firstDate) ? (trip.ops = trip.ops || {}) : (bk.ops = bk.ops || {});
-
+  /* Server trip.operations.checkins {van:[],pier:[]} -> the local fields legacy screens read:
+     targetOps.checkins (raw), targetOps.pierCheckin / vanCheckin (slot 0 + _s{slot>0}).
+     Shared by the write path (mergeTripOperations) and the booking LOAD (40-ops-bookings operationsFrom). */
+  function applyServerCheckins(targetOps, ops){
+    ops = ops || {};
     targetOps.checkins = clone(ops.checkins || { van: [], pier: [] });
     ['van', 'pier'].forEach(function(k){
       var list = (ops.checkins && Array.isArray(ops.checkins[k])) ? ops.checkins[k] : [];
@@ -341,6 +338,17 @@
         targetOps[prop] = null;
       }
     });
+  }
+
+  function mergeTripOperations(bk, date, serverTrip){
+    if(!bk || !serverTrip || !serverTrip.operations) return;
+    var ops = serverTrip.operations;
+    var trips = Array.isArray(bk.trips) ? bk.trips : [];
+    var trip = trips.find(function(t){ return t && (t.opsTripId === serverTrip.id || t.date === date); });
+    var firstDate = trips[0] ? trips[0].date : '';
+    var targetOps = (trip && trip.date !== firstDate) ? (trip.ops = trip.ops || {}) : (bk.ops = bk.ops || {});
+
+    applyServerCheckins(targetOps, ops);
   }
 
   function writeCheckinServer(b, date, kind, val){
@@ -638,10 +646,26 @@
     }).catch(function(){ return null; });
   });
 
+  /* Two check-in writes in one tick (vckStatus: ckToggle un-checks the row, then vckSetFlow writes its flow) both
+     build their value from the SAME local record, because local state changes only when the server answers.  The
+     second PUT would carry the stale `at` the first one just cleared, and since a PUT is the whole record the server
+     would check the row in again.  So a write issued while another for the same row is in flight takes over what
+     that write changed: a field the earlier write changed and this one left at the old value gets the earlier value. */
+  var ckFlight = {};
+  function sameVal(x, y){ return JSON.stringify(x === undefined ? null : x) === JSON.stringify(y === undefined ? null : y); }
   wrap('ckWrite', function(orig, b, date, kind, val){
     // Server-first check-in write: do not mutate local ops until server responds,
     // except return a pending promise while keeping UI responsive
-    writeCheckinServer(b, date, kind, val).catch(function(){});
+    var key = (b && b.id) + '|' + date + '|' + kind, prior = ckFlight[key];
+    var base = (typeof window.ckRead === 'function' ? window.ckRead(b, date, kind) : null) || {};
+    if(prior && val && typeof val === 'object'){
+      Object.keys(prior.sent).forEach(function(k){
+        if(k === 'events' || k === '_s') return;
+        if(!sameVal(prior.sent[k], prior.base[k]) && sameVal(val[k], prior.base[k])) val[k] = prior.sent[k];
+      });
+    }
+    var mine = ckFlight[key] = { sent: clone(val || {}), base: clone(base) };
+    writeCheckinServer(b, date, kind, val).catch(function(){}).then(function(){ if(ckFlight[key] === mine) delete ckFlight[key]; });
     return val;
   });
 
@@ -715,6 +739,7 @@
     collectUpgrade: collectUpgradeServer
   };
 
+  O.applyCheckins = applyServerCheckins;
   O.dayActions = api;
   window.laOpsDayActions = api;
   window.__laOpsDayActionsCompat = {
@@ -723,6 +748,7 @@
     parseCheckinKindAndSlot: parseCheckinKindAndSlot,
     toCheckinBody: toCheckinBody,
     fromServerCheckinRecord: fromServerCheckinRecord,
+    mergeTripOperations: mergeTripOperations,
     fromServerTourSale: fromServerTourSale,
     toTourSaleBody: toTourSaleBody,
     toCollectBody: toCollectBody
