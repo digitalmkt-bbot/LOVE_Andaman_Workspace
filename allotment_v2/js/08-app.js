@@ -20641,27 +20641,17 @@ function pckViewBar(){
     +'</div>';
 }
 
-/* ก้นกล่องตารางต้องพอดีขอบล่างจอ · ถ้าตั้งความสูงตายตัว กล่องจะยาวเลยจอ
-   แล้วหัวตารางที่ตรึงไว้จะหลุดขึ้นไปเหนือจอตอนเลื่อนหน้า กลายเป็นไม่มีหัวตาราง */
+/* กล่องตารางไม่จำกัดความสูงแล้ว (§pckFullH) · ฟังก์ชันนี้แค่ล้างค่าความสูงที่ค้างจากรอบก่อน */
 var _pckFitRaf=0;
 function pckFitPane(){
   if(_pckFitRaf) return;
   _pckFitRaf=requestAnimationFrame(function(){
     _pckFitRaf=0;
     var w=document.querySelector('.pck-host .pcs-tw'); if(!w) return;
-    var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-8);
-    w.style.maxHeight=h+'px';
-    /* §pckHead9 · ก่อนหน้านี้หน้าเว็บล้นออกนอกจอ 73px (มาจาก padding ใต้ view)
-       เลยมีแถบเลื่อนสองอัน · หน้าเว็บหนึ่ง กล่องตารางหนึ่ง เลื่อนแล้วงงว่าอันไหนขยับ
-       หักส่วนที่ยังล้นออกจากความสูงกล่อง จนหน้าเว็บไม่เลื่อน เหลือแถบเลื่อนแค่ในกล่อง
-       วัดเอาแทนการเดาตัวเลข เพราะ padding ของ view เปลี่ยนได้ตามขนาดจอ */
-    var de=document.documentElement;
-    var over=de.scrollHeight-de.clientHeight;
-    /* หักส่วนล้นได้ แต่ไม่ให้เตี้ยกว่า 75% ของจอ · เดิมเหลือ 260px จนกล่องเตี้ย
-       ส่วนที่เหลือให้หน้าเว็บเลื่อนเอง */
-    var floorH=Math.max(320,Math.round((window.innerHeight||800)*0.75));
-    if(over>0){ h=Math.max(floorH,h-over); w.style.maxHeight=h+'px'; }
-    w._ph=h;
+    /* §pckFullH · ตารางสูงเต็มแถว ไม่มีแถบเลื่อนแนวตั้งในกล่อง · หน้าเว็บเลื่อนเอง
+       กล่องยังเลื่อนแนวนอนได้ (ตารางกว้างกว่าจอ) · หัวตารางแนวตั้งจึงไม่ตรึงกับหน้าเว็บแล้ว */
+    w.style.maxHeight='none';
+    w._ph=0;
   });
 }
 if(!window._pckFitBound){
@@ -21003,7 +20993,7 @@ function pckSheetCSS(){
     +'padding:4px 14px;cursor:pointer;color:#6b6a64}'
   +'.pck-host .pcs-seg.on{background:#15201a;color:#fff}'
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
-  +'.pck-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:max(340px,70vh);'
+  +'.pck-host .pcs-tw{overflow:auto;max-height:none;min-height:340px;'
     +'border-radius:13px;contain:paint;overscroll-behavior:contain;'
     /* เว้นไว้ในตัวกล่อง · เลื่อนสุดแล้วแถวสุดท้ายยังพ้นป้ายมุมซ้ายล่าง (250x65 ห่างก้นจอ 10) */
     +'padding-bottom:78px}'
