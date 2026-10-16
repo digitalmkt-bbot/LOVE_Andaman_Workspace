@@ -5,6 +5,9 @@
 //   1 จุดกลางแถว add-on แรก (และช่องติ๊ก) เป็นของ add-on ไม่ใช่แผงอื่น
 //   2 แตะแล้วติ๊กจริง (Longtail Join เข้า addOns) · แตะ Private Van แล้วเข้าเหมือนกัน
 //   3 จอแคบ: แผง Review อยู่ใต้ฟอร์ม (ไม่ fixed) · จอใหญ่: ยัง fixed ลอยด้านขวาตามเดิม · 4 ไม่มี error
+// §nbVanKeep (owner "ใน Rate type ก็มี ตอนเลือกก็มี แต่พอกดเพิ่ม เด้งหาย") · เส้นที่ไม่มีหางยาว (r5 ของเรท a01)
+//   5 ติ๊ก Private Van · Khao Lak → การ์ด Add-ons ยังอยู่ · ติ๊กค้าง · ที่นั่งย้ายไป No-Transfer · เอาติ๊กออกได้ (addOns ว่าง)
+//   6 ที่นั่งเป็น No-Transfer ตั้งแต่แรก ก็ยังเห็นเหมารถ
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -30,6 +33,30 @@ for (const W of [390, 800, 1389]) {
   if (want) ok(W + 'px · 3 แผง Review ' + (W <= 820 ? 'อยู่ใต้ฟอร์ม' : 'ลอยด้านขวาตามเดิม')); else fail(W + 'px · 3 ' + JSON.stringify(rv));
   const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));
   if (!e1.length) ok(W + 'px · 4 ไม่มี error'); else fail(W + 'px · 4 ' + e1.slice(0, 3).join(' | '));
+  await close();
+}
+{
+  const { page, errors, close } = await open({ blob: process.env.LAD, width: 1389, height: 860 });
+  await goView(page, 'booking', 1000);
+  await page.evaluate(() => { window.laGuardEdit = () => true; bkV2NewBooking(); const d = _bkV2.newBooking; d.agentId = 'a01';
+    d.trips[0].routeId = 'r5'; d.trips[0].pax.ad_fr = 2; bkV2Render(); });
+  await page.waitForTimeout(700);
+  const st = () => page.evaluate(() => { const L = [...document.querySelectorAll('.bkv2-nb-addon')];
+    return { n: L.length, on: L.filter(l => l.querySelector('input').checked).map(l => l.innerText.split('\n')[0].trim()), ao: _bkV2.newBooking.addOns.map(a => a.type), zone: _bkV2.newBooking.trips[0].zone }; });
+  const s0 = await st();
+  const kl = page.locator('.bkv2-nb-addon', { hasText: 'Khao Lak' }).first();
+  await kl.scrollIntoViewIfNeeded(); await kl.click(); await page.waitForTimeout(500);
+  const s1 = await st();
+  const kl2 = page.locator('.bkv2-nb-addon', { hasText: 'Khao Lak' }).first();
+  let s2 = { n: -1 };
+  if (await kl2.count()) { await kl2.click(); await page.waitForTimeout(500); s2 = await st(); }
+  if (s0.n === 2 && s1.n === 2 && s1.on.length === 1 && /Khao Lak/.test(s1.on[0]) && s1.zone === 'NoTransfer' && s1.ao.length === 1 && s2.ao && s2.ao.length === 0 && s2.n === 2)
+    ok('5 r5 (ไม่มีหางยาว) · ติ๊ก Private Van KL แล้วการ์ดยังอยู่ · ที่นั่ง No-Transfer · เอาออกได้');
+  else fail('5 ' + JSON.stringify({ s0, s1, s2 }));
+  const s3 = await page.evaluate(() => { const d = _bkV2.newBooking; d.addOns = []; d.trips[0].zone = 'NoTransfer'; bkV2Render(); return document.querySelectorAll('.bkv2-nb-addon').length; });
+  if (s3 === 2) ok('6 ที่นั่ง No-Transfer ตั้งแต่แรก · ยังเห็นเหมารถ 2 แบบ'); else fail('6 ' + s3);
+  const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));
+  if (e1.length) fail('5/6 error ' + e1.slice(0, 3).join(' | '));
   await close();
 }
 console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);

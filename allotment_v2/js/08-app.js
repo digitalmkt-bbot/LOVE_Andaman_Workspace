@@ -50809,13 +50809,20 @@ function bkV2HasAvailableAddOns(){
       if(ok) return true;
     }
   }
-  // Private transfer · check if any trip route has matching zone+vehicle
+  /* §nbVanKeep (2026-10-16) · owner "ใน Rate type ก็มี ตอนเลือกก็มี แต่พอกดเพิ่ม เด้งหาย"
+     เดิมเช็คเหมารถเฉพาะโซนของที่นั่ง และไม่นับที่นั่ง No-Transfer · แต่ bkV2RenderAddOnsSection เสนอเหมารถ
+     "ทุกโซนที่เรทตั้งราคาไว้ ไม่ขึ้นกับโซนที่นั่ง" และ bkV2ToggleAddOn ย้ายที่นั่งไป No-Transfer ทันทีที่ติ๊กเหมารถ
+     ผล: ติ๊กปุ๊บ ตัวนี้ตอบ false · การ์ด Add-ons หายทั้งการ์ด · เอาติ๊กออกก็ไม่ได้ (ราคาเหมารถยังค้างในใบ)
+     เส้นทางที่ไม่มีหางยาวโดนเต็ม ๆ (เช่น Similan Catamaran) · เส้นที่มีหางยาวรอดเพราะคืน true ตั้งแต่ข้างบน
+     ตอนนี้ใช้เงื่อนไขเดียวกับตัววาด: เส้นทางนั้นมีราคาเหมารถโซนไหนก็ได้ · และมี add-on ติ๊กค้างอยู่ก็ต้องโชว์ให้เอาออกได้ */
   const ptMap = rt.addOns?.privateTransfer || {};
-  return d.trips.some(t => {
-    if(!t.routeId || !t.zone || t.zone === 'NoTransfer') return false;
-    const zoneOpts = ptMap[t.routeId]?.[t.zone];
-    return zoneOpts && Object.values(zoneOpts).some(v => v);
+  const vanOk = d.trips.some(t => {
+    if(!t.routeId) return false;
+    const routePt = ptMap[t.routeId];
+    if(!routePt || typeof routePt !== 'object') return false;
+    return Object.values(routePt).some(z => z && typeof z === 'object' && Object.values(z).some(v => v));
   });
+  return vanOk || (Array.isArray(d.addOns) && d.addOns.length > 0);
 }
 
 // Right-column live Review · summarizes what's been filled
