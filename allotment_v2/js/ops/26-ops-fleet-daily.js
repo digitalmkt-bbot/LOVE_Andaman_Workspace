@@ -923,6 +923,22 @@
     }).catch(function(e){ O.fail('Could not replace safety item', e); return null; });
   });
 
+  /* legacy flSafetyDelete (06-engine-assign.js): the same confirm, then DELETE; the list is redrawn from the answer */
+  wrap('flSafetyDelete', function(orig, id){
+    var it = listSafety().find(function(x){ return x && x.id === id; });
+    if(!it) return undefined;
+    if(!confirm('Delete "' + it.name + '"?\nThis cannot be undone.')) return undefined;
+    return O.queue(function(){
+      return O.del('/v1/fleet/safety/' + enc(id));
+    }).then(function(){
+      removeSafetyLocal(id);
+      if(typeof flSelSafetyId !== 'undefined') flSelSafetyId = null;
+      O.wrote('fleet-safety-delete');
+      redrawDailyAndProjects();
+      return null;
+    }).catch(function(e){ O.fail('Could not delete safety item', e); return null; });
+  });
+
   wrap('fuelSetBudget', function(orig, val){
     var month = typeof _fuelMonth !== 'undefined' && _fuelMonth ? _fuelMonth : O.today().slice(0, 7);
     var v = parseFloat(val);
