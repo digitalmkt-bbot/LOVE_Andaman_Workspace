@@ -304,6 +304,29 @@
   }
   if(typeof legacyPickerApply==='function'){ var pa=function(){ return enabled()?pickerApply.apply(this,arguments):legacyPickerApply.apply(this,arguments); }; pa.__ops=true; pa.__opsAgents=true; window.rtAgentPickerApply=pa; }
 
+  /* Rate Types screen · the X that unbinds one agent from a rate type (rtUnbindAgent).
+     Legacy set a.rateTypeId=null and called rtPersist, a no-op in ops mode, so the agent was bound again on reload.
+     Here: same confirm, then PUT /v1/agents/:id/rate-type {rate_type_id:null}; the agent changes only from the row
+     the server answered with, and a refusal is shown as the server worded it. */
+  var legacyUnbind=window.rtUnbindAgent;
+  if(typeof legacyUnbind==='function'){
+    window.rtUnbindAgent=function(agentId,rtId,ev){
+      if(!enabled()) return legacyUnbind.apply(this,arguments);
+      if(ev && ev.stopPropagation) ev.stopPropagation();
+      var a=current(agentId); if(!a) return;
+      if(!confirm('ปลด '+(a.name||a.code)+' ออกจาก rate type นี้?')) return;
+      return write('PUT','/v1/agents/'+enc(agentId)+'/rate-type',{rate_type_id:null}).then(function(row){
+        if(row && row.id===agentId) putProjection(row,a); else a.rateTypeId=null;
+        if(O.wrote) O.wrote('agents');
+        if(typeof rtRenderCards==='function') rtRenderCards();
+        if(typeof rtRenderDetail==='function') rtRenderDetail(rtId);
+        try{ if(typeof _rtViewMode!=='undefined' && _rtViewMode==='agents' && typeof rtRenderAgentColumn==='function') rtRenderAgentColumn(rtId); }catch(_){}
+        try{ if(typeof agRenderDetail==='function' && typeof _agSelected!=='undefined' && _agSelected===agentId) agRenderDetail(agentId); }catch(_){}
+        redraw();
+      },function(e){ return fail('Could not unbind agent',e); });
+    };
+  }
+
   function deleteSelected(){
     if(!enabled()) return legacyTblDeleteSelected.apply(this,arguments);
     if(!(typeof window.laIsAdmin==='function' && window.laIsAdmin())){ alert('Only an admin can delete agent profiles.'); return; }

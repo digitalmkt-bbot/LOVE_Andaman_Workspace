@@ -118,6 +118,13 @@
     if(longtailApplies.length){
       out.addOns.longtail = { applies:longtailApplies, byRoute:longtailByRoute, unit:'per pax' };
     }
+    /* Custom add-on prices (detail only): { key: { applies, adult, child } | { applies, price } }, the legacy rt.addOns[key] shape. */
+    Object.keys(s.addons || {}).forEach(function(key){
+      var a = s.addons[key] || {}, o = { applies:Array.isArray(a.applies) ? a.applies.slice() : [] };
+      if(a.price !== undefined && a.price !== null) o.price = Number(a.price);
+      else { o.adult = Number(a.adult || 0); o.child = Number(a.child || 0); }
+      out.addOns[key] = o;
+    });
     return out;
   }
 
@@ -202,8 +209,30 @@
       valid_from:d.validFrom || null, valid_to:d.validTo || null, active:d.active !== false,
       nationality_scope:d.nationalityScope || null, transfer_unit:d.transferUnit || null };
   }
-  function unsupportedAddOns(d){
+  /* Custom add-on keys on a draft (anything but the two built-ins, which travel in the route blocks). */
+  function customAddOns(d){
     return Object.keys(d.addOns || {}).filter(function(key){ return key !== 'longtail' && key !== 'privateTransfer' && d.addOns[key]; });
+  }
+  /* PUT body for one custom add-on: perPax { adult, child, applies } or flat { price, applies } (README "Custom add-on prices").
+     The model comes from the add-on type; the value's own shape decides when the type is not loaded. */
+  function addonBody(key, v){
+    var t = (typeof SB_ADDON_TYPES !== 'undefined' ? SB_ADDON_TYPES : []).find(function(x){ return x && x.key === key; });
+    var flat = t ? t.model === 'flat' : (v.price !== undefined && v.adult === undefined);
+    var body = { applies:Array.isArray(v.applies) ? v.applies.slice() : [] };
+    if(flat) body.price = finiteNumber(v.price) || 0;
+    else { body.adult = finiteNumber(v.adult) || 0; body.child = finiteNumber(v.child) || 0; }
+    return body;
+  }
+  /* Bring the server's custom add-on prices to the draft's: PUT each one on, DELETE each one turned off. */
+  function syncAddOns(id, draft, serverKeys){
+    var base = '/v1/rate-types/' + encodeURIComponent(id) + '/addons/', want = customAddOns(draft);
+    return want.reduce(function(p, key){
+      return p.then(function(){ return O.call('PUT', base + encodeURIComponent(key), addonBody(key, draft.addOns[key])); });
+    }, Promise.resolve()).then(function(){
+      return (serverKeys || []).filter(function(key){ return want.indexOf(key) < 0; }).reduce(function(p, key){
+        return p.then(function(){ return O.del(base + encodeURIComponent(key)); });
+      }, Promise.resolve());
+    });
   }
 
   function replaceRate(server){
@@ -285,8 +314,8 @@
   }
   if(typeof originals.rtAddonTypesOpen === 'function'){
     window.rtAddonTypesOpen = function(){
-      if(!O.enabled()) return originals.rtAddonTypesOpen.apply(this, arguments);
-      O.fail('Custom add-on types are not available', new Error('S2 only supports operation-backend longtail and private-transfer pricing')); return;
+      /* Manage add-on types is served by ops/29 (GET/POST/DELETE /v1/addon-types); the prices on a rate type are saved by rtSaveDraft above. */
+      return originals.rtAddonTypesOpen.apply(this, arguments);
     };
   }
   if(typeof originals.rtPersist === 'function'){
@@ -318,21 +347,26 @@
       if(!draft) return;
       if(!draft.name || !String(draft.name).trim()){ alert('Please enter a Name'); return; }
       if(draft.validFrom && draft.validTo && draft.validFrom > draft.validTo){ alert('Valid from must be earlier than Valid to'); return; }
-      var unsupported = unsupportedAddOns(draft);
-      if(unsupported.length){ O.fail('Cannot save rate type', new Error('Custom add-on pricing is not supported by operation-backend yet: ' + unsupported.join(', '))); return; }
       draft.routes = Array.isArray(draft.routes) ? draft.routes.slice() : [];
       Object.keys(draft.seatRates || {}).forEach(function(id){ if(!draft.routes.includes(id)) delete draft.seatRates[id]; });
       Object.keys(draft.charterRates || {}).forEach(function(id){ if(!draft.routes.includes(id)) delete draft.charterRates[id]; });
       var isNew = !!(typeof _rtDraftIsNew !== 'undefined' && _rtDraftIsNew), id = draft.id;
       return O.queue(function(){
         if(isNew){
-          return O.post('/v1/rate-types', toCreateBody(draft));
+          return O.post('/v1/rate-types', toCreateBody(draft)).then(function(created){
+            /* custom add-on prices have their own endpoint; the create body carries routes only */
+            if(!customAddOns(draft).length) return created;
+            return syncAddOns(created.id, draft, []).then(function(){ return O.get('/v1/rate-types/' + encodeURIComponent(created.id)); });
+          });
         }
         if(!id) throw new Error('Rate type id is missing');
         return O.get('/v1/rate-types/' + encodeURIComponent(id)).then(function(current){
           var currentIds = (current.routes || []).map(function(r){ return r.route_id; });
           return O.patch('/v1/rate-types/' + encodeURIComponent(id), toPatch(draft)).then(function(){
             return draft.routes.reduce(function(p, routeId){ return p.then(function(){ return O.call('PUT', '/v1/rate-types/' + encodeURIComponent(id) + '/routes/' + encodeURIComponent(routeId), blockFor(draft, routeId)); }); }, Promise.resolve()).then(function(){
+              /* custom add-ons after the route PUTs (applies must name routes on the rate) and before the route DELETEs (409 in_use otherwise) */
+              return syncAddOns(id, draft, Object.keys(current.addons || {}));
+            }).then(function(){
               return currentIds.filter(function(routeId){ return !draft.routes.includes(routeId); }).reduce(function(p, routeId){ return p.then(function(){ return O.del('/v1/rate-types/' + encodeURIComponent(id) + '/routes/' + encodeURIComponent(routeId)); }); }, Promise.resolve());
             });
           });
