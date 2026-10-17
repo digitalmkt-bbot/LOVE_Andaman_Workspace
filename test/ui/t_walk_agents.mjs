@@ -394,8 +394,8 @@ await settle(900);
 const srvRen = await api('/v1/users/' + uRen.id);
 const renPost = bodies.filter((x) => x.m === 'POST' && x.p === '/v1/users/' + uRen.id + '/rename');
 ok('rename dialog: Save enabled; POST /v1/users/{id}/rename {username, name}; server holds the new names and the old one in previous_usernames', goEnabled && renPost.length === 1 && renPost[0].b.username === 'zz_renamed' && srvRen.username === 'zz_renamed' && srvRen.name === 'ZZ Renamed Person' && (srvRen.previous_usernames || []).includes('zz_ren'), { goEnabled, renPost, srvRen });
-const rowOnScreen = await ev(() => document.getElementById('la-uwin').innerText);
-ok('screen: the user list now shows the new username and display name; the dialog is closed', rowOnScreen.includes('zz_renamed') && rowOnScreen.includes('ZZ Renamed Person') && !/zz_ren(?!amed)/.test(rowOnScreen) && !(await ev(() => !!document.getElementById('la-rmask'))), rowOnScreen);
+const rowOnScreen = (await ev(() => document.getElementById('la-uwin').innerText)).toLowerCase();
+ok('screen: the user list shows the new username and display name, legacy toast "เปลี่ยน … แล้ว", dialog closed', rowOnScreen.includes('zz_renamed') && rowOnScreen.includes('zz renamed person') && /เปลี่ยน zz_ren เป็น zz_renamed แล้ว/.test(rowOnScreen) && !(await ev(() => !!document.getElementById('la-rmask'))), { zz: rowOnScreen.split(String.fromCharCode(10)).filter((l) => /zz/.test(l)), mask: await ev(() => !!document.getElementById('la-rmask')) });
 // taken name → the server's refusal shown as legacy's text
 await ev((id) => __laRename(id), uRen.id);
 await page.fill('#la-r1', 'ZZ_WIDE'); await settle(200);
