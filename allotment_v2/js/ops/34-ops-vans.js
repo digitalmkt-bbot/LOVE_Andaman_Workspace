@@ -37,7 +37,7 @@
   var originals = {};
   var WRAPPED = ['bookingV2VanGroupSetVan', 'bookingV2AssignVan', 'bookingV2VanGroupSetTime', 'bookingV2VanGroupDisband',
     'bookingV2VanGroupSelected', 'bookingV2VanGroupSave', 'bookingV2VanGroupClearSeq', 'bookingV2VanGroupSetReturn',
-    'bookingV2AssignVanReturn', 'bookingV2AssignVanReturnSplit', 'bookingV2SetReturnSameVan', 'bookingV2VanSplit',
+    'bookingV2AssignVanReturn', 'bookingV2AssignVanReturnSplit', 'bookingV2SetSplitPickTime', 'bookingV2SetReturnSameVan', 'bookingV2VanSplit',
     'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal',
     'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
@@ -451,30 +451,37 @@
     var t = (b.trips || []).find(function(x){ return x && (x.date || '') === date && x.opsTripId; });
     return t || null;
   }
-  function tripPatch(b, date, body, onDone){
+  function tripPatch(b, date, body, onDone, title){
+    title = title || 'Return van not set';
     var t = tripOpsOf(b, date);
-    if(!b.opsId || !t) return refuse('Return van not set', 'This booking has no operation-backend trip for ' + date);
+    if(!b.opsId || !t) return refuse(title, 'This booking has no operation-backend trip for ' + date);
     var tid = t.opsTripId;
     return O.queue(function(){
       if(body.van_parts === undefined) return O.call('PATCH', '/operations/trip-ops/' + enc(tid), body);
       var changes = {};
-      body.van_parts.forEach(function(x){ changes[+x.idx] = x.return_van_id || null; });
+      var picks = {};
+      body.van_parts.forEach(function(x){
+        if(Object.prototype.hasOwnProperty.call(x, 'pick_time')) picks[+x.idx] = x.pick_time;
+        else changes[+x.idx] = x.return_van_id || null;
+      });
       return O.get('/v1/bookings/' + enc(b.opsId)).then(function(bk){
         var trip = ((bk && bk.trips) || []).find(function(x){ return x && x.id === tid; });
         var parts = (trip && trip.operations && trip.operations.van_parts) || [];
         var seen = {};
         var full = parts.map(function(p){
           var idx = +p.idx; seen[idx] = true;
-          return { idx: idx, ad: p.ad, chd: p.chd, inf: p.inf, foc: p.foc,
+          var row = { idx: idx, ad: p.ad, chd: p.chd, inf: p.inf, foc: p.foc,
             group_id: p.group ? p.group.id : null, sequence: p.sequence == null ? null : p.sequence,
             return_van_id: Object.prototype.hasOwnProperty.call(changes, idx) ? changes[idx] : (p.return_van_id || null) };
+          if(Object.prototype.hasOwnProperty.call(picks, idx)) row.pick_time = picks[idx];   // only the part being timed; the server refuses a part with no pickup of its own
+          return row;
         });
-        if(Object.keys(changes).some(function(idx){ return !seen[idx]; })){ var e = new Error('The selected split part no longer exists'); e.code = 'part_missing'; throw e; }
+        if(Object.keys(changes).concat(Object.keys(picks)).some(function(idx){ return !seen[idx]; })){ var e = new Error('The selected split part no longer exists'); e.code = 'part_missing'; throw e; }
         return O.call('PATCH', '/operations/trip-ops/' + enc(tid), { van_parts: full });
       });
     }).then(function(j){ onDone(j); redraw(); return j; }, function(e){
-      if(e && e.code === 'part_missing') return refuse('Return van not set', e.message);
-      O.fail('Return van not set · ' + failCode(e), e);
+      if(e && e.code === 'part_missing') return refuse(title, e.message);
+      O.fail(title + ' · ' + failCode(e), e);
       return null;
     });
   }
@@ -502,6 +509,22 @@
       o.vanSplits[ai].vanReturnId = p.return_van_id || null;
       if(vanId) o.returnSameVan = false;
     });
+  });
+  // bookingV2SetSplitPickTime (booking/bookingV2SetSplitPickTime.js): the pickup time of a part picked up somewhere of its own.
+  // Saved as that part's pick_time through trip-ops van_parts; a part with no pickup of its own takes the trip's final time (legacy).
+  wrap('bookingV2SetSplitPickTime', function(bkId, idx, val, date){
+    var b = byClientId(bkId); if(!b) return null;
+    var d = date || (b.trips && b.trips[0] && b.trips[0].date) || '';
+    var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, d) : b.ops) || {};
+    var sp = Array.isArray(o.vanSplits) ? o.vanSplits[+idx] : null;
+    if(typeof bkSplitOwnPick === 'function' && !bkSplitOwnPick(sp)) return window.bookingV2SetPickupFinal(bkId, val, date);
+    if(isClosed(b)) return refuse('Pickup time not saved', 'This booking is ' + b.status);
+    var t = String(val == null ? '' : val).trim();
+    return tripPatch(b, d, { van_parts: [{ idx: +idx, pick_time: t || null }] }, function(j){
+      var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];
+      var p = parts.find(function(x){ return +x.idx === +idx; });
+      if(sp) sp.pickTime = p && p.alt && p.alt.pick_time != null ? p.alt.pick_time : t;
+    }, 'Pickup time not saved');
   });
   wrap('bookingV2SetReturnSameVan', function(bkId, val, date){
     var b = byClientId(bkId); if(!b) return null;
