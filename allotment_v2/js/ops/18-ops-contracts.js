@@ -253,11 +253,50 @@
     return (typeof agRenew==='function'?agRenew(id,body):O.post('/v1/agents/'+enc(id)+'/renew',body)).then(function(){if(typeof ctCloseRenewal==='function')ctCloseRenewal();return loadContracts();}).then(function(){alert('Contract renewal saved on operation-backend.');}).catch(function(e){O.fail('Could not renew contract',e);});
   };
   if(typeof originals.ctDocOpen==='function')window.ctDocOpen=function(agentId,opts){if(!enabled())return originals.ctDocOpen.apply(this,arguments);return openDocuments(agentId,opts);};
-  if(typeof originals.ctArtifactsFor==='function')window.ctArtifactsFor=function(agentId){if(!enabled())return originals.ctArtifactsFor.apply(this,arguments);return [];};
-  if(typeof originals.ctArtifactSave==='function')window.ctArtifactSave=function(){if(!enabled())return originals.ctArtifactSave.apply(this,arguments);O.fail('Contract document generation is read-only in operations mode',new Error('Legacy artifact upload mapping is blocked'));return null;};
+  /* §ctArtifacts · the issued-document history is the server's (POST/GET /v1/agents/:id/documents, DELETE /v1/contract-documents/:id).
+     The server keeps the render in `content`; the summary rows give the Generated Contracts tab its columns. */
+  function artifactFromDoc(d){return {id:d.id,version:d.version,generatedAt:d.generated_at,lang:d.lang,pageCount:d.page_count==null?0:d.page_count,rateTypeRef:d.rate_type_ref,rateTypeName:d.rate_type_name,templateId:d.template_id,templateName:d.template_name,contractId:d.contract_id,customClauses:[]};}
+  function rerenderAgent(agentId){try{if(typeof _agSelected!=='undefined'&&_agSelected===agentId&&typeof agRenderDetail==='function')agRenderDetail(agentId);}catch(_){}}
+  var docsAsked={};
+  if(typeof originals.ctArtifactsFor==='function')window.ctArtifactsFor=function(agentId){
+    if(!enabled())return originals.ctArtifactsFor.apply(this,arguments);
+    if(!state.documents[agentId]&&!docsAsked[agentId]){docsAsked[agentId]=true;loadDocuments(agentId).then(function(){rerenderAgent(agentId);}).catch(function(){});}
+    return (state.documents[agentId]||[]).map(artifactFromDoc);
+  };
+  if(typeof originals.ctArtifactSave==='function')window.ctArtifactSave=function(){
+    if(!enabled())return originals.ctArtifactSave.apply(this,arguments);
+    if(typeof _ctDoc==='undefined'||!_ctDoc)return null;
+    var rt=typeof _ctDocAgentRT==='function'?_ctDocAgentRT():{},a=rt&&rt.a;if(!a)return null;
+    var sections=Object.keys(_ctDoc.sections).filter(function(k){return _ctDoc.sections[k];});
+    var pages=typeof ctDocCountPages==='function'?ctDocCountPages(sections):null;
+    var content={sections:clone(_ctDoc.sections),templateId:_ctDoc.templateId||null,templateName:_ctDoc.templateName||null,form:_ctDoc.form||'ocean',accent:_ctDoc.accent||'navy',accentHex:_ctDoc.accentHex||'',font:_ctDoc.font||'manrope',tmplText:clone(_ctDoc.tmplText||{en:{},th:{}}),overrides:clone(_ctDoc.overrides||{}),customClauses:clone(_ctDoc.customClauses||[])};
+    var body={lang:_ctDoc.lang==='th'?'th':'en',contract_id:_ctDoc.contractId||null,template_id:_ctDoc.templateId||null,page_count:pages,content:content};
+    O.queue(function(){return O.post('/v1/agents/'+enc(a.id)+'/documents',body);}).then(function(doc){
+      if(!state.documents[a.id])state.documents[a.id]=[];state.documents[a.id].unshift(doc);
+      if(body.contract_id){var c=listContracts().find(function(x){return x&&x.id===body.contract_id;});if(c)c.docId=doc.id;}
+      rerenderAgent(a.id);
+    }).catch(function(e){O.fail('Could not save contract document',e);});
+    /* the PDF flow only needs a truthy answer to show "saved to history"; the server's row replaces it on success */
+    return {id:'pending',version:a.contractVersion||'draft',lang:body.lang,pageCount:pages};
+  };
   if(typeof originals.ctArtifactPersist==='function')window.ctArtifactsPersist=function(){if(!enabled())return originals.ctArtifactPersist.apply(this,arguments);};
-  if(typeof originals.ctArtifactRemove==='function')window.ctArtifactRemove=function(){if(!enabled())return originals.ctArtifactRemove.apply(this,arguments);O.fail('Contract document history is read-only in operations mode',new Error('Legacy artifact metadata mapping is blocked'));return null;};
-  if(typeof originals.ctArtifactReopen==='function')window.ctArtifactReopen=function(){if(!enabled())return originals.ctArtifactReopen.apply(this,arguments);O.fail('Contract artifact reopen is unavailable in operations mode',new Error('Legacy artifact metadata mapping is blocked'));return null;};
+  if(typeof originals.ctArtifactRemove==='function')window.ctArtifactRemove=function(agentId,artifactId){
+    if(!enabled())return originals.ctArtifactRemove.apply(this,arguments);
+    return O.queue(function(){return O.del('/v1/contract-documents/'+enc(artifactId));}).then(function(){
+      state.documents[agentId]=(state.documents[agentId]||[]).filter(function(x){return x.id!==artifactId;});
+      var c=listContracts().find(function(x){return x&&x.docId===artifactId;});if(c)c.docId=null;
+      rerenderAgent(agentId);
+    }).catch(function(e){O.fail('Could not remove contract document',e);});
+  };
+  if(typeof originals.ctArtifactReopen==='function')window.ctArtifactReopen=function(agentId,artifactId){
+    if(!enabled())return originals.ctArtifactReopen.apply(this,arguments);
+    var self=this;
+    return documentDetail(artifactId).then(function(doc){
+      /* legacy reopen reads the artifact from its in-memory map; hand it the server's frozen render (ctArtifactsPersist is a no-op here) */
+      var map=ctArtifactsLoad();map[agentId]=[Object.assign({},doc.content||{},{id:doc.id,lang:doc.lang})];
+      return originals.ctArtifactReopen.call(self,agentId,artifactId);
+    }).catch(function(e){O.fail('Could not open contract document',e);});
+  };
 
   /* §ctplSample · the preview's sample agent and the per-template agent counts.
      The preview draws the contract for cttSampleAgent(), but SB_AGENTS holds the /v1/agents list rows,

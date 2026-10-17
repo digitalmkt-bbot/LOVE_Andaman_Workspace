@@ -29,7 +29,14 @@
     rows.forEach(function(r){ SB_CUSTOM_NATIONALITIES.push(r); });
   }
   function load(){
-    return O.get('/v1/nationalities').then(function(j){ setList(customRows(j)); return j; });
+    return O.get('/v1/nationalities').then(function(j){
+      /* the built-ins are the server's too (BKV2_NATIONALITIES is a const array: replaced in place, OTHER last as in legacy) */
+      var built = ((j && j.nationalities) || []).filter(function(n){ return n && !n.custom && n.code; }).map(function(n){ return { code: n.code, name: n.name }; });
+      if(built.length > 1 && typeof BKV2_NATIONALITIES !== 'undefined' && Array.isArray(BKV2_NATIONALITIES)){
+        BKV2_NATIONALITIES.length = 0; built.forEach(function(n){ BKV2_NATIONALITIES.push(n); });
+      }
+      setList(customRows(j)); return j;
+    });
   }
 
   // The server's folds, applied to the in-memory bookings and list. Mirrors the server's rewrite.
@@ -159,6 +166,51 @@
       return mix;
     };
     wm.__ops = true; window.mdBkMix = wm;
+  }
+
+  /* ── add a nationality · POST /v1/nationalities decides (legacy bkV2AddCustomNat) ──
+     The server cleans the name, refuses fewer than 2 letters (400), answers an existing match with created:false,
+     folds a typed country code into its built-in, and numbers a clash. The list changes only from its answer. */
+  function addToList(row){
+    if(!row || !row.code || typeof SB_CUSTOM_NATIONALITIES === 'undefined' || !Array.isArray(SB_CUSTOM_NATIONALITIES)) return;
+    if(!row.custom) return;
+    var at = -1;
+    SB_CUSTOM_NATIONALITIES.forEach(function(n, i){ if(n && n.code === row.code) at = i; });
+    var next = { code: row.code, name: row.name, custom: true, version: row.version };
+    if(at >= 0) SB_CUSTOM_NATIONALITIES[at] = next; else SB_CUSTOM_NATIONALITIES.push(next);
+  }
+  function postNat(name){
+    return O.queue(function(){ return O.post('/v1/nationalities', { name: name }); }).then(function(row){ addToList(row); return row; });
+  }
+  var legacyAddNew = window.bookingV2NatDDAddNew;
+  if(typeof legacyAddNew === 'function'){
+    window.bookingV2NatDDAddNew = function(key){
+      if(!O.enabled()) return legacyAddNew.apply(this, arguments);
+      var inp = document.getElementById(bookingV2NatDDIds(key).inp);
+      if(!inp) return;
+      var name = String(inp.value || '').trim();
+      return postNat(name).then(function(row){
+        if(row && row.code) bookingV2NatDDPick(key, row.code);
+      }).catch(function(e){
+        if(e && e.status === 400) { try{ alert('Nationality name too short - type at least 2 letters'); }catch(_){} return; }
+        O.fail('Could not add nationality', e);
+      });
+    };
+  }
+  /* any other caller needs the code at once: keep legacy's answer, then let the server confirm (its row replaces the local one) */
+  var legacyAddCustom = window.bookingV2AddCustomNat;
+  if(typeof legacyAddCustom === 'function'){
+    window.bookingV2AddCustomNat = function(name){
+      var code = legacyAddCustom.apply(this, arguments);
+      if(!O.enabled() || !code) return code;
+      postNat(String(name || '').trim()).catch(function(e){ O.fail('Could not add nationality', e); });
+      return code;
+    };
+  }
+  /* the custom list is the server's: no blob write in ops mode */
+  var legacyNatPersist = window.sbNationalitiesPersist;
+  if(typeof legacyNatPersist === 'function'){
+    window.sbNationalitiesPersist = function(){ if(!O.enabled()) return legacyNatPersist.apply(this, arguments); };
   }
 
   O.nationalities = { load: load, applyFolds: applyFolds };
