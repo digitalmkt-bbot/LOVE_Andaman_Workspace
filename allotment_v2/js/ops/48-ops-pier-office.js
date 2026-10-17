@@ -164,7 +164,7 @@
     deletePath: function(w){ return '/v1/pier-office/licences/' + enc(w.id); },
     fromServer: function(l){
       return { id: l.id, staffId: l.staff_id, classId: l.class_id, no: l.licence_no || '', exp: l.expires_on || '', issuedAt: l.issued_on || '',
-               issuer: l.issuer || '', note: l.note || '' };
+               issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left } };
     },
     toServer: function(r){
       return { class_id: r.classId, licence_no: text(r.no), issued_on: nul(r.issuedAt), expires_on: nul(r.exp), issuer: nul(r.issuer), note: nul(r.note) };
@@ -181,7 +181,7 @@
     })).then(function(parts){
       licSpec.setRows([].concat.apply([], parts).map(function(l){
         return { id: l.id, staffId: l.staff_id, classId: l.class_id, no: l.licence_no || '', exp: l.expires_on || '', issuedAt: l.issued_on || '',
-                 issuer: l.issuer || '', note: l.note || '' };
+                 issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left } };
       }));
     });
   });
@@ -189,6 +189,16 @@
   /* the licence check of a boat's crew (plCheckBoat) is the server's; the screen draws the old answer
      until the new one arrives, then draws again */
   var licCache = {};
+  /* plState(l): ok | soon | bad | noexp. The server works it out for today in Asia/Bangkok (licence `state`, `days_left`,
+     GET …/licences) with the pier's warning days; the browser used its own clock. Used only while the row's expiry is still the
+     one the server judged (a date being edited uses the legacy test). */
+  if(typeof window.plState === 'function'){
+    var legacyPlState = window.plState;
+    window.plState = function(l){
+      if(!ready() || !l || !l.srv || l.srv.exp !== (l.exp || '') || !/^(ok|soon|bad|noexp)$/.test(l.srv.state)) return legacyPlState.apply(this, arguments);
+      return l.srv.state;
+    };
+  }
   window.plCheckBoat = function(boatId, crewIds){
     if(!ready()) return L.plCheckBoat ? L.plCheckBoat.apply(this, arguments) : [];
     var ids = (crewIds || []).filter(Boolean), key = boatId + '|' + ids.slice().sort().join(',');
