@@ -67470,6 +67470,47 @@ function pkTkCatOf(p){
    §pkTk5 · ของเดิมนับ "หัวที่ยังไม่มีชื่อ" รวมทั้งลำ ทำให้ไม่รู้ว่าหัวไหนของใบไหน
    จึงกรอกชื่อลงไปไม่ได้ · ตอนนี้ไล่ทีละใบ หัวที่ขาดชื่อจึงมีเจ้าของ (bkId) และ
    มีเลขลำดับในใบ (seq) ที่คงที่ ใช้เป็นกุญแจเก็บชื่อที่กรอกเองได้ */
+/* ══ §pkCx (2026-10-17) · owner: "กรณีที่มียกเลิกจาก ลค ในวันเดินทาง ... อยากได้แค่จำนวนที่ยกเลิกไป" · "ยกเลิกให้ระบุได้ไหม แยกประเภท"
+   ตัวเลขทุกช่องของหน้าตั๋วอุทยานหักคนยกเลิก/ไม่มา (ที่หน้าเช็คอินบันทึก) ออกแล้ว · ตัวนี้นับ "ส่วนที่หักไป" ให้เห็น
+   ใบเดียวกับ pcPax (สถานะ · เส้นทาง/ท่า · ลำ) · หาย = จองไว้ − ขึ้นเรือจริง (pckOnBoard) · ทั้งใบยกเลิก (pckVoidInfo) = หายทั้งใบ
+   แยกประเภทตามที่หน้าท่าบันทึก (ckLostByType) · ส่วนที่ไม่รู้ประเภทเฉลี่ยตามหัวที่เหลือ · สัญชาติตามสัดส่วนในประเภทนั้น
+   ยกเลิกล่วงหน้า (สถานะ cancelled) ไม่นับ · นั่นไม่ใช่ยกเลิกวันเดินทาง ══ */
+var PK_CX_LB={ad_th:'ผญ ไทย',chd_th:'ดญ ไทย',inf_th:'ต่ำกว่า 3 ไทย',foc_th:'FOC ไทย',ad_fr:'ผญ ตปท',chd_fr:'ดญ ตปท',inf_fr:'ต่ำกว่า 3 ตปท',foc_fr:'FOC ตปท'};
+function pkCxPax(date,bid,pier){
+  var o={}; PC_PK.forEach(function(k){ o[k]=0; });
+  var tot=0, cxl=0, ns=0, K=['ad','chd','inf','foc'];
+  (typeof ckBksOn==='function'?ckBksOn(date):[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+    var rt=(typeof getRoute==='function')?getRoute(t.routeId):null;
+    if(!rt || (rt.pier||'')!==pier) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId||'')!==bid) return;
+    if(typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)) return;
+    var px=t.pax||{}, booked=(typeof ckBookedPax==='function')?ckBookedPax(t):0; if(!booked) return;
+    var vd=(typeof pckVoidInfo==='function')?pckVoidInfo(b,date,t):null;
+    var real=vd?0:((typeof pckOnBoard==='function')?pckOnBoard(b,date,booked):booked);
+    var lost=Math.max(0,booked-real); if(!lost) return;
+    var LT=(typeof ckLostByType==='function')?(ckLostByType(b,date)||{}):{};
+    var allK={}, lk={}, left=lost, rem={}, pool=0;
+    K.forEach(function(k){ allK[k]=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
+      var q=Math.min(allK[k], Math.max(0,+LT[k]||0), left); lk[k]=q; left-=q; });
+    if(left>0){ K.forEach(function(k){ rem[k]=allK[k]-lk[k]; pool+=rem[k]; });
+      K.forEach(function(k){ if(pool>0) lk[k]+=left*rem[k]/pool; }); }
+    K.forEach(function(k){ if(!lk[k] || !allK[k]) return; var all=allK[k];
+      var th=(typeof bkNatTHb==='function')?bkNatTHb(b,t,k):(+px[k+'_th']||0); th=Math.max(0,Math.min(th,all));
+      o[k+'_th']+=lk[k]*th/all; o[k+'_fr']+=lk[k]*(all-th)/all; });
+    tot+=lost; var c=Math.min(lost, Math.max(0,+LT.cxl||0)); cxl+=c; ns+=lost-c;
+  });
+  var sum=0; PC_PK.forEach(function(k){ o[k]=Math.round(o[k]); sum+=o[k]; });
+  if(tot-sum) o.ad_fr=Math.max(0,o.ad_fr+(tot-sum));
+  return {p8:o, tot:tot, cxl:cxl, ns:ns};
+}
+function pkCxAdd(dst,C){ if(!dst || !C || !C.tot) return; var D=dst.cx||(dst.cx={p8:{},tot:0,cxl:0,ns:0});
+  PC_PK.forEach(function(k){ D.p8[k]=(D.p8[k]||0)+(+C.p8[k]||0); }); D.tot+=C.tot; D.cxl+=C.cxl; D.ns+=C.ns; }
+function pkCxTxt(C){ if(!C || !C.tot) return ''; return PC_PK.filter(function(k){ return C.p8[k]>0; }).map(function(k){ return PK_CX_LB[k]+' '+C.p8[k]; }).join(' \u00b7 '); }
+function pkCxChip(C){ if(!C || !C.tot) return '';
+  return '<b class="cxc" title="ยกเลิก/ไม่มาในวันเดินทาง \u00b7 หักออกจากยอดแล้ว \u00b7 ยกเลิกหน้างาน '+C.cxl+' \u00b7 ไม่มา '+C.ns+'">ยกเลิก '+C.tot+'<span> \u00b7 '+pkCxTxt(C)+'</span></b>'; }
 function pkTkData(date, pier){
   var boats=(typeof poBoats==='function')?poBoats(date,pier):[];
   var byRid={}, order=[];
@@ -67610,6 +67651,7 @@ function pkTkData(date, pier){
                    /* §pkOv2 · หัวคนที่ไปจริง แยกสัญชาติ×ประเภท · ชุดเดียวกับที่ cntPc ใช้
                       เอามาจาก pcPax ตัวเดียวกับหน้าเงินสดย่อย · ไม่นับซ้ำ */
                    pax8:((P&&P.hasNat)?P.n:(P||{})),
+                   cx:pkCxPax(date,B.bid,pier),   /* §pkCx · หักออกไปแล้วกี่หัว แยกประเภท */
                    booked:(+B.pax||0),
                    people:people, miss:miss, missTot:missTot,
                    orphan:orphan,          /* §pkTk9 · ชื่อที่เกินหัวหลังยกเลิก */
@@ -67908,6 +67950,10 @@ function pk2FamChips(flat, fid){
     return '<button class="pk2-fc'+(fid===id?' on':'')+'" onclick="pkSetFam(\''+id+'\')"><i style="background:'+c+'"></i>'+poE(n)
       +'<em>'+cnt+'</em>'+(miss?('<u>รอชื่อ '+miss+'</u>'):'')+'</button>'; };
   var nSets=pkSets(_poDate).length;
+  /* §pkCx · ชิปเส้นทางต่อท้ายจำนวนยกเลิก/ไม่มา + ประเภท (เฉพาะเส้นที่มี) */
+  var cxF={}, cxA={}; flat.forEach(function(x){ var C=x.B.cx; if(!C||!C.tot) return; var id=pk2FamOf(x.g.rid).id; pkCxAdd(cxF[id]||(cxF[id]={}),C); pkCxAdd(cxA,C); });
+  var _chip0=chip; chip=function(id,n,c,cnt,miss){ var h=_chip0(id,n,c,cnt,miss), C=(id==='all')?cxA.cx:(cxF[id]&&cxF[id].cx);
+    return C?h.replace(/<\/button>$/, pkCxChip(C)+'</button>'):h; };
   return chip('all','ทั้งหมด','#0B1E5B',allN,allM)
     +fams.map(function(F){ return chip(F.f.id,F.f.n,F.f.c,F.n,F.miss); }).join('')
     +'<button class="pk2-fc pk3-tab'+(fid==='sets'?' on':'')+'" onclick="pkSetFam(\'sets\')" title="จัดชุดตั๋ว · เลือกลำ กำหนดจำนวน สุ่มรายชื่อ เซฟเป็นชุด">'
@@ -68303,6 +68349,8 @@ function renderPierPark(pier){
     if(todo.length>6){ var more=todo.length-6; todo=todo.slice(0,6); todo.push('<span class="ok" style="background:transparent">และอีก '+more+' วัน</span>'); }
   } else {
     if(nDup) todo.push('<button class="r" onclick="pkHelp()"><i></i>ชื่อซ้ำ '+nDup+' · แก้ก่อนยื่นด่าน</button>');
+    var _nCx=0, _cxl=0, _cns=0; flat.forEach(function(x){ var C=x.B.cx; if(C&&C.tot){ _nCx+=C.tot; _cxl+=C.cxl; _cns+=C.ns; } });   /* §pkCx */
+    if(_nCx) todo.push('<button class="r" title="หักออกจากยอดแล้ว \u00b7 ยกเลิกหน้างาน '+_cxl+' \u00b7 ไม่มา '+_cns+'"><i></i>ยกเลิก/ไม่มา '+_nCx+' คน</button>');
     if(nOver) todo.push('<button class="r"><i></i>รายชื่อเกินหัว '+nOver+'</button>');
     if(nNoCode) todo.push('<button class="r" onclick="pkTyModal()"><i></i>'+nNoCode+' ประเภทยังไม่ใส่รหัส</button>');
     if(gMiss) todo.push('<button class="a" onclick="pk2GoWait(\''+waitList[0].x.g.rid+'\',\''+waitList[0].x.B.bid+'\')"><i></i>รอชื่อ '+gMiss+' คน · '+waitList.length+' ลำ</button>');
@@ -68857,19 +68905,24 @@ function pk3Body(flat, TY, TYM, ro){
   /* §pkSets2 · owner "ต้องแยกแบบนี้ ผญไทย เด็กไทย เด็กไทยต่ำกว่า 3 ปี FOC ไทย ต้องมียอดรวมของกลุ่มนั้น ๆ ด้วย"
      บนเรือ = ไทย (ผญ · เด็ก · ต่ำกว่า 3 · FOC · รวมไทย) + ต่างชาติ (ชุดเดียวกัน · รวม ตช) + รวมทั้งลำ */
   var GO=['ad_th','chd_th','inf_th','foc_th','_th','ad_fr','chd_fr','inf_fr','foc_fr','_fr'];
+  /* §pkCx · แถวแดงใต้เส้นทาง/ลำที่มีคนยกเลิก · ตัวเลขตรงคอลัมน์ประเภทเดิม (−4 = หักไป 4) · ท้ายแถวแยกยกเลิกหน้างาน/ไม่มา */
+  var cxRow=function(C,lbl){ if(!C||!C.tot) return ''; var c8=g8(C.p8||{});
+    return '<tr class="pk3-cx"><td class="rt"><span class="cxl">ยกเลิก/ไม่มา <i>'+lbl+'</i></span></td>'
+      +GO.map(function(k,i){ var v=c8[k]; return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+(v?('&#8722;'+v):'')+'</td>'; }).join('')
+      +'<td class="n sum">&#8722;'+C.tot+'</td><td class="cxw" colspan="'+(TY.length+3)+'">ยกเลิกหน้างาน '+C.cxl+' &middot; ไม่มา '+C.ns+'</td></tr>'; };
   var g8=function(p8){ var o={}; GO.forEach(function(k){ o[k]=+p8[k]||0; }); o._th=o.ad_th+o.chd_th+o.inf_th+o.foc_th; o._fr=o.ad_fr+o.chd_fr+o.inf_fr+o.foc_fr; return o; };
   /* §pkSets3 · ยอดจริงของทั้งวัน แยกตามโปรแกรม · นับทุกลำของวัน ไม่ใช่แค่ลำที่เลือก */
   var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0}; FL.push(F); }
-    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.t+=(+x.B.totPc||0); F.n++;
+    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.t+=(+x.B.totPc||0); F.n++; pkCxAdd(F,x.B.cx);
     F.u+=(x.B.people||[]).filter(function(p){ return !p.over && usedAll[pkSetKey(p)]; }).length; F.l+=pkSetAvail(x.B,usedAll).length; });
-  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; });
+  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; pkCxAdd(FA,F.cx); });
   if(_pkSetFamF!=='all' && !FM[_pkSetFamF]) _pkSetFamF='all';
   var FSEL=(_pkSetFamF==='all')?FA:FM[_pkSetFamF];
   /* §pkSets4 · owner "ตรงที่เลือกเรือ ให้เลือกเส้นทางก่อน แล้วจำนวนรวมก็ขึ้น และค่อยเลือกเรือทีหลัง"
      บรรทัด 1 = เส้นทาง (ชิปโปรแกรม + ยอดของโปรแกรมนั้น) · บรรทัด 2 = เรือ (ขึ้นหลังเลือกเส้นทาง) */
   var famChip=function(F){ var on=(_pkSetFamF===F.f.id);
     return '<button type="button" class="pk3-fm'+(on?' on':'')+'" onclick="pkSetFamF(\''+e(F.f.id)+'\')"><i style="background:'+F.f.c+'"></i>'+e(F.f.n)
-      +'<em>'+F.t+'</em><small>'+F.n+' ลำ</small></button>'; };
+      +'<em>'+F.t+'</em><small>'+F.n+' ลำ</small>'+pkCxChip(F.cx)+'</button>'; };
   var rtRow='<div class="pk3-bp pk3-rt"><span class="lb">1 · เส้นทาง</span>'+famChip(FA)+FL.map(famChip).join('')
     +'<span class="cs">'+(_pkSetFamF==='all'?'เลือกเส้นทางก่อน · ยอดจริงของเส้นทางนั้นจะขึ้นในตาราง':('<b>'+e(FSEL.f.n)+'</b> · บนเรือ '+FSEL.t+' · ไทย '+(FSEL.s._th||0)+' · ต่างชาติ '+(FSEL.s._fr||0)+' · ยังไม่เข้าชุด '+FSEL.l))+'</span></div>';
   /* แถวเลือกเรือ */
@@ -68916,7 +68969,7 @@ function pk3Body(flat, TY, TYM, ro){
     return '<tr class="bt'+(on?' sel':'')+'" style="--rc:'+((x.g.route&&x.g.route.color)||'#94A3B8')+'" onclick="pkSetTab(\''+B.bid+'\',\''+x.g.rid+'\')" title="กดเพื่อกำหนดจำนวนตั๋วของลำนี้">'
       +'<td class="rt"><span class="rg"><span class="rn"><i class="d"></i>'+e(rn)+'</span><span class="bn" style="background:'+pk2BoatCol(B.bid)+'">'+bn(B)+'</span><span class="tm">'+e(B.dep||'')+'</span></span></td>'
       +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(p8[k])+'</td>'; }).join('')+'<td class="n sum">'+(+B.totPc||0)+'</td>'
-      +tk+'<td class="n">'+n0(nU)+'</td><td class="n'+(nL?' left':'')+'">'+n0(nL)+'</td></tr>';
+      +tk+'<td class="n">'+n0(nU)+'</td><td class="n'+(nL?' left':'')+'">'+n0(nL)+'</td></tr>'+cxRow(B.cx,'ลำนี้');
   }).join('');
   /* §pkSets8 (2026-10-15) · owner "ผลรวมที่ทำ จำนวนแต่ละชุด โชว์ในแถวนี้ ใต้แต่ละคอลัมน์"
      ใต้คอลัมน์ "ชุดนี้" ของแถวเส้นทางและแถววัน = รวมคนในชุดที่บันทึกแล้ว แยกตามประเภท (นับจากรายชื่อจริงในชุด ไม่ใช่ตัวเลขที่ตั้ง)
@@ -68931,7 +68984,7 @@ function pk3Body(flat, TY, TYM, ro){
       +'<td class="rt"><span class="fn"><i style="background:'+F.f.c+'"></i>'+e(F.f.n)+'<em>'+F.n+' ลำ</em>'+(on&&F.f.id!=='all'?'<u>กรองอยู่</u>':'')+'</span></td>'
       +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(F.s[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
       +setTds(setBy(function(S){ return F.f.id==='all' || famOfSet(S)===F.f.id; }))   /* §pkSets8 */
-      +'<td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'; };
+      +'<td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'+cxRow(F.cx, F.f.id==='all'?'ทั้งวัน':'ทั้งเส้น'); };
   var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+(pkSets(date).length?' · ใต้ "ชุดนี้" = รวมในชุดที่บันทึกแล้ว':'')+'</td></tr>'
     +(_pkSetFamF==='all'?(famRow(FA)+FL.map(famRow).join('')):FL.filter(function(F){ return F.f.id===_pkSetFamF; }).map(famRow).join(''))   /* §pkSets5 · owner "โฟกัสแค่บางเกาะ" · เลือกแล้วเหลือแถวเดียว ไม่มีแถวรวม */
     +'<tr class="fh"><td colspan="'+(TY.length+15)+'">ลำที่เลือกมาทำชุด</td></tr>';
@@ -69317,6 +69370,14 @@ function pk3CSS(S){
   S+' .pk3-fm:hover{background:#F6F8FB}',
   S+' .pk3-fm i{width:8px;height:8px;border-radius:4px}',
   S+' .pk3-fm em{font-style:normal;font-family:"DM Mono",monospace;font-size:12.5px;font-weight:700}',
+  /* §pkCx */
+  S+' .pk2-fc .cxc,'+S+' .pk3-fm .cxc{font-size:11.5px;font-weight:700;color:#C0392B;white-space:nowrap}',
+  S+' .pk2-fc .cxc span,'+S+' .pk3-fm .cxc span{font-weight:600}',
+  S+' .pk2-fc.on .cxc,'+S+' .pk3-fm.on .cxc{color:#FFB4AB}',
+  S+' .pk3-mx tr.pk3-cx td{background:#FFF6F5;color:#C0392B;font-size:12px;font-weight:700;padding-top:3px;padding-bottom:4px;cursor:default}',
+  S+' .pk3-mx tr.pk3-cx td.cxw{color:#B9817B;font-weight:600;text-align:left;font-size:11px}',
+  S+' .pk3-cx .cxl{display:block;padding-left:20px;font-size:11.5px;font-weight:700;color:#C0392B}',
+  S+' .pk3-cx .cxl i{font-style:normal;color:#B9817B;font-weight:600;margin-left:4px}',
   S+' .pk3-fm small{font-size:10.5px;font-weight:600;color:'+M+'}',
   S+' .pk3-fm.on{background:'+N+';border-color:'+N+';color:#fff} '+S+' .pk3-fm.on small{color:#C2CCE8}',
   S+' .pk3-bp .cs b{color:'+N+'}',
