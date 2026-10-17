@@ -1222,7 +1222,133 @@ window.dashTodoToggle=function(){
   el.style.display = (el.style.display==='block') ? 'none' : 'block';
 };
 // ── Center-card seat-availability calendar (Dashboard) ──
+/* ══ §dashProg (2026-10-17) · owner "เห็นหน้าต่างของ Seats available ไหม อยากได้อันนี้ (Programmes) ไปโชว์ด้วย
+   อาจจะเป็นกดสลับกับปฏิทิน" · mock DSP → "โอเคทำ"
+   การ์ด Seats available มีปุ่มสลับ 📅 ปฏิทิน / ☰ โปรแกรมรายวัน · จำโหมดต่อเครื่อง (localStorage la_dash_calview) · ตั้งต้น = ปฏิทินเหมือนเดิม
+   โปรแกรมรายวัน = แบบเดียวกับการ์ด Programmes ของหน้า By trip: ตระกูลโปรแกรม → รอบ (เวลา · ท่า) · A/C/I/F · ล็อก · จอง/ความจุ · ว่าง/เต็ม
+   ตัวเลขจากชุดเดียวกัน (getAllotment · getSeatsConsumed · bkV2LockedTotal · bkV2PaxTot) · ยอดท้ายการ์ดคิดแบบเดียวกับปฏิทิน (dayAgg)
+   กดวันในปฏิทิน = สลับมาโปรแกรมของวันนั้น · ‹ › เลื่อนทีละวัน · ชิปเส้นทางใช้ร่วมกับปฏิทิน · ตัวกรองท่า
+   ตระกูลที่มีมากกว่า 1 รอบกางไว้ · ที่เหลือพับ (กดหัวเพื่อกาง/พับ) · กดแถวรอบ = เปิดหน้า By trip ของรอบนั้น ══ */
+function _dashCalView(){ var v=window._dashCalViewMode; if(!v){ try{ v=localStorage.getItem('la_dash_calview')||''; }catch(_){ v=''; } } return v==='prog'?'prog':'cal'; }
+window.dashCalSetView=function(v){ window._dashCalViewMode=(v==='prog'?'prog':'cal'); try{ localStorage.setItem('la_dash_calview',window._dashCalViewMode); }catch(_){}
+  if(typeof renderDash==='function') renderDash(); };
+window.dashProgOpen=function(ds){ window._dashProgDate=ds||window._dashDate||TODAY_STR; window.dashCalSetView('prog'); };
+window.dashProgShift=function(delta){ var d=new Date((window._dashProgDate||window._dashDate||TODAY_STR)+'T12:00:00'); d.setDate(d.getDate()+(+delta||0));
+  var p=function(n){ return String(n).padStart(2,'0'); }; window._dashProgDate=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); if(typeof renderDash==='function') renderDash(); };
+window.dashProgSetPier=function(v){ window._dashProgPier=v||'all'; if(typeof renderDash==='function') renderDash(); };
+window.dashProgTog=function(fid){ var O=window._dashProgOpen||(window._dashProgOpen={}); O[fid]=!(window._dashProgCur||{})[fid]; if(typeof renderDash==='function') renderDash(); };
+var _DP_LOCK='<svg width="11" height="12" viewBox="0 0 12 13" aria-hidden="true"><rect x="1.5" y="5.5" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 5.5V3.8a2.5 2.5 0 0 1 5 0v1.7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+function _dashProgHtml(dx,F){
+  var esc=function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var date=window._dashProgDate||window._dashDate||TODAY_STR, pierF=window._dashProgPier||'all', famFilter=window._dashCalFam||'';
+  var allRoutes=(typeof ROUTES!=='undefined'?ROUTES:[]);
+  var famOf=function(rid){ return (typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null; };
+  var fams={}; allRoutes.forEach(function(r){ var f=famOf(r.id); if(f&&!fams[f.id]) fams[f.id]=f.name; });
+  var inF=function(r){ if(!r) return false; if(famFilter && ((famOf(r.id)||{}).id!==famFilter)) return false; if(pierF!=='all' && (r.pier||'')!==pierF) return false; return true; };
+  var PT=function(px,k){ return (typeof bkV2PaxTot==='function')?(+bkV2PaxTot(px||{},k)||0):0; };
+  /* ใบจองของวัน · ทริปละแถว · ไม่นับใบยกเลิก (แบบเดียวกับ rows ของหน้า By trip) */
+  var BD={}, nBk={}, dayBk=0, dayBd={ad:0,chd:0,inf:0,foc:0};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var hit=false, add=function(rid,px){ var r=allRoutes.find(function(x){ return x.id===rid; }); if(!inF(r)) return;
+      var o=BD[rid]||(BD[rid]={ad:0,chd:0,inf:0,foc:0}); ['ad','chd','inf','foc'].forEach(function(k){ var v=PT(px,k); o[k]+=v; dayBd[k]+=v; }); hit=true; };
+    if(b.schemaVer===2) (b.trips||[]).forEach(function(t){ if(t && t.date===date) add(t.routeId,t.pax); });
+    else if(b.travelDate===date) add(b.programId,{ad:(b.pax&&b.pax.adult)||0,chd:(b.pax&&b.pax.child)||0,inf:(b.pax&&b.pax.infant)||0,foc:0});
+    if(hit) dayBk++;
+  });
+  var paxOf=function(o){ return o?(o.ad+o.chd+o.inf+o.foc):0; };
+  var bdHtml=function(o){ o=o||{}; var ks=[['ad','A'],['chd','C'],['inf','I'],['foc','F']].filter(function(x){ return (+o[x[0]]||0)>0; });
+    return ks.map(function(x){ return '<span class="q'+(x[0]==='foc'?' f':'')+'">'+(+o[x[0]])+'<s>'+x[1]+'</s></span>'; }).join(''); };
+  var lkHtml=function(n){ return n>0?('<span class="dp-lk" title="'+laT('ล็อก')+' '+n+'">'+_DP_LOCK+'<b>'+n+'</b></span>'):''; };
+  var frHtml=function(cap,av,bk){ if(!(cap>0)) return '<span class="dp-fr none">'+(bk>0?laT('ไม่จำกัด'):'&mdash;')+'</span>';
+    return av<=0?'<span class="dp-fr full">'+laT('เต็ม')+'</span>':('<span class="dp-fr'+(av/cap<0.2?' low':'')+'">'+laT('ว่าง')+' '+av+'</span>'); };
+  var pierAb=function(p){ return p==='tublamu'?'TL':p==='panwa'?'VP':p==='ranong'?'RN':(p||''); };
+  var subOf=function(r,f){ var x=String(r.name||r.id).replace((f&&f.name)||'','').replace(/^[\s·\-]*by[\s·\-]*/i,'').replace(/^[\s·\-]+/,'').trim();
+    return x||((typeof bkV2RouteShort==='function'&&bkV2RouteShort(r.id))||r.name||r.id); };
+  /* รอบที่ขึ้นกระดาน: เปิดวันนั้นและมีที่นั่ง/คนจอง/ล็อก · หรือปิดแต่ยังมีคนจองค้าง */
+  var G={}, tFree=0, tCap=0, tBkd=0;
+  allRoutes.forEach(function(r){
+    if(!inF(r)) return;
+    var open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r.id,date);
+    var wx=(typeof bkV2IsWeatherClosed==='function')&&bkV2IsWeatherClosed(r.id,date);
+    var al=(typeof getAllotment==='function')?getAllotment(r.id,date):null, has=!!(al&&al.hasAllotment);
+    var bk=has?(al.seatsConsumed||0):((typeof getSeatsConsumed==='function')?(+getSeatsConsumed(r.id,date)||0):0);
+    var cap=has?(al.availableCapacity||0):0, av=has?Math.max(0,al.seatsAvailable||0):0;
+    var lk=(typeof bkV2LockedTotal==='function')?(+bkV2LockedTotal(r.id,date)||0):0;
+    var px=paxOf(BD[r.id]);
+    if(open && !wx && has){ tCap+=cap; tFree+=av; tBkd+=(al.seatsConsumed||0); }   /* = dayAgg ของปฏิทิน */
+    var run=open && !wx;
+    if(!(run && (cap>0||bk>0||lk>0||px>0)) && !(px>0)) return;
+    var f=famOf(r.id)||{id:'_',name:laT('อื่น ๆ'),color:'#8b909c'};
+    var g=G[f.id]||(G[f.id]={f:f,rs:[],pax:0,bd:{ad:0,chd:0,inf:0,foc:0},bk:0,lk:0,cap:0,av:0,capN:0,run:0});
+    g.rs.push({r:r,run:run,wx:wx,bk:bk,cap:cap,av:av,lk:lk,has:has,bd:BD[r.id],dep:((r.times||[])[0]||'')});
+    g.pax+=px; ['ad','chd','inf','foc'].forEach(function(k){ g.bd[k]+=((BD[r.id]||{})[k]||0); });
+    if(run){ g.run++; g.bk+=bk; g.lk+=lk; if(has){ g.cap+=cap; g.av+=av; g.capN++; } }
+  });
+  var FAM=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES:[];
+  var fi=function(id){ var i=FAM.findIndex(function(x){ return x.id===id; }); return i<0?999:i; };
+  var list=Object.keys(G).map(function(k){ return G[k]; }).sort(function(a,b){ return fi(a.f.id)-fi(b.f.id); });
+  var O=window._dashProgOpen||{};
+  var body=list.map(function(g){
+    var col=g.f.color||'#8b909c', fid=g.f.id, open=Object.prototype.hasOwnProperty.call(O,fid)?!!O[fid]:(g.rs.length>1);
+    (window._dashProgCur||(window._dashProgCur={}))[fid]=open;
+    var rs=g.rs.slice().sort(function(a,b){ return String(a.dep).localeCompare(String(b.dep)) || ((typeof laRouteOrdCmp==='function')?laRouteOrdCmp(a.r.id,b.r.id):0); });
+    var tot=g.bk+g.lk;
+    var h='<div class="dp-fm" style="--c:'+col+'">'
+      +'<div class="dp-r dp-h" onclick="dashProgTog(\''+esc(fid)+'\')" title="'+(open?laT('พับ'):laT('กางดูรอบ'))+'">'
+        +'<span class="ar">'+(open?'&#9662;':'&#9656;')+'</span>'
+        +'<span class="nm"><i></i>'+esc(g.f.name)+'</span>'
+        +'<span class="px"><b>'+g.pax+'</b> pax</span>'
+        +'<span class="bd">'+bdHtml(g.bd)+'</span>'
+        +'<span class="lkc">'+lkHtml(g.lk)+'</span>'
+        +'<span class="tt">'+(g.capN?('Total <b>'+tot+'</b>/'+g.cap):(tot?('<b>'+tot+'</b> booked'):''))+'</span>'
+        +'<span class="frc">'+(g.capN?frHtml(g.cap,g.av,tot):'')+'</span>'
+        +'<span class="rn">'+g.run+' running'+(g.rs.length-g.run>0?(' &middot; '+(g.rs.length-g.run)+' off'):'')+'</span>'
+      +'</div>';
+    if(open) h+=rs.map(function(x){
+      var tm=esc(x.dep)+(x.r.pier?(' &middot; '+pierAb(x.r.pier)):'');
+      if(!x.run) return '<div class="dp-r dp-v off"><span class="ar"></span><span class="nm">'+esc(subOf(x.r,g.f))+'</span><span class="tm">'+tm+'</span>'
+        +'<span class="bd">'+bdHtml(x.bd)+'</span><span class="lkc"></span><span class="tt">'+paxOf(x.bd)+' pax</span>'
+        +'<span class="frc"><span class="dp-fr off">'+(x.wx?laT('ยกเลิก (อากาศ)'):laT('ไม่วิ่ง'))+'</span></span><span class="rn"></span></div>';
+      return '<div class="dp-r dp-v" onclick="if(typeof bkV2OpenFiltered===\'function\')bkV2OpenFiltered(\''+esc(x.r.id)+'\',\''+date+'\')" title="'+laT('เปิดหน้า By trip ของรอบนี้')+'">'
+        +'<span class="ar"></span><span class="nm">'+esc(subOf(x.r,g.f))+'</span><span class="tm">'+tm+'</span>'
+        +'<span class="bd">'+bdHtml(x.bd)+'</span><span class="lkc">'+lkHtml(x.lk)+'</span>'
+        +'<span class="tt">'+(x.has?('<b>'+x.bk+'</b>/'+x.cap):('<b>'+x.bk+'</b> booked'))+'</span>'
+        +'<span class="frc">'+frHtml(x.has?x.cap:0,x.av,x.bk)+'</span><span class="rn"></span></div>'; }).join('');
+    return h+'</div>';
+  }).join('') || '<div class="dp-none">'+laT('ไม่มีโปรแกรมในวันนี้')+'</div>';
+  var chip=function(id,label){ var on=(famFilter===id); return '<span'+(on?' class="on"':'')+' onclick="dashCalSetFam(\''+id+'\')">'+label+'</span>'; };
+  var chips=chip('','All'); Object.keys(fams).forEach(function(fid){ chips+=chip(fid,fams[fid]); });
+  var pb=function(v,l){ return '<span'+(pierF===v?' class="on"':'')+' onclick="dashProgSetPier(\''+v+'\')">'+l+'</span>'; };
+  var d=new Date(date+'T12:00:00'), dl=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+  var dayPax=paxOf(dayBd), isT=(date===TODAY_STR);
+  return '<div class="dv-cal dv-prog" style="'+F+'">'
+    +'<div class="dv-ct"><span class="big">Seats available</span>'
+      +'<span class="dv-calnav"><span class="dv-calarw" onclick="dashProgShift(-1)">&#8249;</span>'
+        +'<b>'+esc(dl)+(isT?' &middot; <span style="color:#0B6B47">'+laT('วันนี้')+'</span>':'')+'</b>'
+        +'<span class="dv-calarw" onclick="dashProgShift(1)">&#8250;</span></span>'
+      +_dashCalSeg('prog')
+      +'<span class="sp"></span>'
+      +'<span class="dv-cnt">'+laT('ที่ว่าง / ความจุ')+'</span>'
+    +'</div>'
+    +'<div class="dv-chips">'+chips+'</div>'
+    +'<div class="dp-top"><span class="dp-pier">'+pb('all','All')+pb('panwa','Panwa')+pb('tublamu','Tub Lamu')+pb('ranong','Ranong')+'</span>'
+      +(isT?'':'<span class="dp-today" onclick="window._dashProgDate=TODAY_STR;renderDash()">'+laT('วันนี้')+'</span>')
+      +'<span class="dp-sum"><b>'+dayBk+'</b> booking &middot; <b>'+dayPax+'</b> pax<i>'+dayBd.ad+'A &middot; '+dayBd.chd+'C &middot; '+dayBd.inf+'I &middot; '+dayBd.foc+'F</i></span></div>'
+    +'<div class="dp-body">'+body+'</div>'
+    +'<div class="dv-calft">'
+      +'<span class="t">'+esc(dl)+' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace" title="'+laT('ที่นั่งที่ใช้ไป · ตัวเดียวกับปฏิทิน')+'">'+tBkd+' pax</span></span>'
+      +'<span class="r"><b>'+tFree+'</b> / '+tCap+' '+laT('ที่นั่งว่าง')+'</span>'
+      +'<button onclick="bkV2OpenFiltered(\'\',\''+date+'\')">'+(isT?laT('เปิดวันนี้'):(laT('เปิด')+' '+esc(dl)))+'</button>'
+    +'</div>'
+  +'</div>';
+}
+function _dashCalSeg(mode){
+  return '<span class="dv-vseg"><span class="'+(mode==='cal'?'on':'')+'" onclick="dashCalSetView(\'cal\')">&#128197; '+laT('ปฏิทิน')+'</span>'
+    +'<span class="'+(mode==='prog'?'on':'')+'" onclick="dashCalSetView(\'prog\')">&#9776; '+laT('โปรแกรมรายวัน')+'</span></span>';
+}
 function _dashSeatCalHtml(dx,F){
+  if(_dashCalView()==='prog') return _dashProgHtml(dx,F);   /* §dashProg */
   var pad=function(n){return String(n).padStart(2,'0');};
   var famFilter=window._dashCalFam||'';
   var month=window._dashCalMonth||(window._dashDate||TODAY_STR).slice(0,7);
@@ -1256,11 +1382,11 @@ function _dashSeatCalHtml(dx,F){
     var num=(state==='wx')?'&#9928;':((state==='none')?'&mdash;':a.free);
     var sub=(state==='wx')?'Cancelled':((state==='none')?'Closed':('/'+a.cap+' free'));
     var extraLine='';
-    if(!closedLike){ extraLine='<span class="p">'+a.booked+' pax'
+    if(!closedLike){ extraLine='<span class="p">'+a.booked+'<i> pax</i>'
         +(a.wxN>0?' &middot; &#9928;'+a.wxN:'')+'</span>'; }
-    var click=closedLike?'':(' onclick="bkV2OpenFiltered(\'\',\''+ds+'\')"');
+    var click=closedLike?'':(' onclick="dashProgOpen(\''+ds+'\')" title="'+laT('ดูโปรแกรมของวันนี้')+'"');   /* §dashProg */
     cells+='<div class="dv-cell"'+click+' style="'+ring+'background:'+col[0]+';'+(closedLike?'':'cursor:pointer')+'">'
-      +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; '+laT('วันนี้'):'')+'</span>'
+      +'<span class="d" style="color:'+col[1]+'">'+day+(today?'<i class="tdl"> &middot; '+laT('วันนี้')+'</i>':'')+'</span>'
       +'<span class="big"><span class="n" style="color:'+col[1]+'">'+num+'</span>'
       +'<span class="s" style="color:'+col[1]+'">'+sub+'</span></span>'
       +extraLine+'</div>';
@@ -1276,6 +1402,7 @@ function _dashSeatCalHtml(dx,F){
         +'<b>'+monthLbl+'</b>'
         +'<span class="dv-calarw" onclick="dashCalMonthShift(1)">&#8250;</span>'
       +'</span>'
+      +_dashCalSeg('cal')   /* §dashProg */
       +'<span class="sp"></span>'
       +'<span class="dv-cnt">'+laT('ที่ว่าง / ความจุ')+'</span>'
     +'</div>'
@@ -1293,7 +1420,7 @@ function _dashSeatCalHtml(dx,F){
     +'<div class="dv-calft">'
       +'<span class="t">'+laT('วันนี้')+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
       +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' '+laT('ที่นั่งว่าง')+'</span>'
-      +'<button onclick="bkV2OpenFiltered(\'\',\''+TODAY_STR+'\')">'+laT('เปิดวันนี้')+'</button>'
+      +'<button onclick="dashProgOpen(TODAY_STR)">'+laT('ดูโปรแกรมวันนี้')+' &rsaquo;</button>'
     +'</div>'
   +'</div>';
 }
@@ -2773,6 +2900,69 @@ const DV_CSS=`<style>
   .dv-calft .r b{font-family:'DM Mono',ui-monospace,monospace;font-size:19px;font-weight:800;color:#2c2c2a}
   .dv-calft button{background:#15382B;color:#fff;border:none;border-radius:9px;padding:6px 13px;
     font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+  /* ── §dashProg · ปุ่มสลับ ปฏิทิน / โปรแกรมรายวัน + การ์ดโปรแกรมรายวัน ── */
+  .dv-vseg{display:inline-flex;background:#EEF1F6;border-radius:9px;padding:2px;gap:2px;margin-left:8px;letter-spacing:0;text-transform:none}
+  .dv-vseg span{cursor:pointer;height:24px;padding:0 10px;border-radius:7px;font-size:11px;font-weight:700;color:#5B6683;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .dv-vseg span.on{background:#16265C;color:#fff}
+  .dv-cell .p i,.dv-cell .d i{font-style:normal}
+  .dp-top{display:flex;align-items:center;gap:8px;padding:0 0 8px;flex-wrap:wrap}
+  .dp-pier{display:inline-flex;border:1px solid #E4E0D8;border-radius:999px;overflow:hidden}
+  .dp-pier span{cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 10px;color:#6b675f}
+  .dp-pier span.on{background:#22262e;color:#fff;border-radius:999px}
+  .dp-today{cursor:pointer;font-size:10.5px;font-weight:700;color:#0B6B47;border:1px solid #BFE3D2;background:#EFF9F4;border-radius:999px;padding:3px 10px}
+  .dp-sum{margin-left:auto;text-align:right;font-size:11.5px;color:#4a4a46}
+  .dp-sum b{font-size:14px;color:#22262e}
+  .dp-sum i{display:block;font-style:normal;font-family:'DM Mono',ui-monospace,monospace;font-size:10px;color:#8a857d}
+  .dp-body{max-height:470px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#DAD5CC transparent;padding-right:2px}
+  .dp-fm{border:1px solid #E6E9F0;border-radius:10px;margin-bottom:7px;overflow:hidden}
+  .dp-r{display:grid;grid-template-columns:14px minmax(0,1.4fr) 92px minmax(0,1.5fr) 44px 98px 70px 86px;align-items:center;gap:8px;padding:6px 10px;font-size:12.5px;color:#22262e}
+  .dp-h{background:#F7F8FB;border-left:4px solid var(--c);cursor:pointer;padding:8px 10px}
+  .dp-h:hover{background:#F0F3F8}
+  .dp-r .ar{color:#9AA0AE;font-size:10px}
+  .dp-h .nm{font-weight:800;font-size:13.5px;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dp-h .nm i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:1px}
+  .dp-h .px{grid-column:3;font-size:10.5px;color:#8a857d;white-space:nowrap}
+  .dp-h .px b{font-size:14px;color:#22262e}
+  .dp-v{border-top:1px solid #EEF1F6;cursor:pointer;padding-left:14px}
+  .dp-v:hover{background:#FAFBFD}
+  .dp-v .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dp-v .tm{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;color:#6b675f;white-space:nowrap}
+  .dp-v.off{cursor:default;opacity:.62}
+  .dp-r .bd{white-space:nowrap;overflow:hidden}
+  .dp-r .q{font-weight:800;margin-right:7px;font-size:12.5px}
+  .dp-r .q s{text-decoration:none;font-weight:600;color:#9AA0AE;font-size:10px;margin-left:1px}
+  .dp-r .q.f{color:#A32D2D} .dp-r .q.f s{color:#C97A74}
+  .dp-lk{display:inline-flex;align-items:center;gap:3px;color:#7C3AED;font-weight:800;font-size:12px}
+  .dp-r .tt{text-align:right;font-size:11px;color:#6b675f;white-space:nowrap}
+  .dp-r .tt b{font-size:13.5px;color:#22262e;font-family:'DM Mono',ui-monospace,monospace}
+  .dp-r .frc{justify-self:end}
+  .dp-fr{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 8px;background:#E3F4EC;color:#0B6B47;white-space:nowrap}
+  .dp-fr.low{background:#FFF1DC;color:#9A5B00} .dp-fr.full{background:#FBE3E0;color:#A32D2D}
+  .dp-fr.none{background:#F1F2F5;color:#8a857d} .dp-fr.off{background:#F1F2F5;color:#8a857d}
+  .dp-r .rn{font-size:10.5px;color:#8a857d;text-align:right;white-space:nowrap}
+  .dp-none{padding:26px 8px;text-align:center;color:#a8a29a;font-size:12px}
+  @media (max-width:820px){
+    .dv-vseg{display:flex;width:100%;margin:8px 0 0;order:9}
+    .dv-vseg span{flex:1;justify-content:center;height:32px;font-size:12.5px}
+    .dv-cal .dv-ct{flex-wrap:wrap}
+    .dv-cal .dv-ct .dv-cnt{display:none}
+    /* ปฏิทินมือถือ · ย่อให้ครบ 7 วันในจอ · ตัวใหญ่ = ที่ว่าง · ตัวเล็ก = pax */
+    .dv-calsc .dv-calg{min-width:0 !important;gap:3px}
+    .dv-cell{min-height:50px;padding:4px 3px;text-align:center}
+    .dv-cell .big{justify-content:center}
+    .dv-cell .big .s,.dv-cell .p i,.dv-cell .d .tdl{display:none}
+    .dv-cell .big .n{font-size:15px}
+    .dv-cell .p{align-self:center;font-size:8.5px;padding:0 3px}
+    .dp-body{max-height:none;overflow:visible}
+  }
+  /* การ์ดแคบ (มือถือ · จอโน้ตบุ๊กที่คอลัมน์กลางแคบ) · แถวละ 2 บรรทัด: ชื่อ · pax/เวลา · ว่าง  /  A C I F · ล็อก · จอง/ความจุ */
+  .dv-prog{container:dprog/inline-size}
+  @container dprog (max-width:720px){
+    .dp-r{grid-template-columns:12px minmax(0,1fr) auto auto;grid-template-areas:"ar nm px fr" ". bd lk tt";row-gap:3px}
+    .dp-v{grid-template-areas:"ar nm tm fr" ". bd lk tt"}
+    .dp-r .ar{grid-area:ar} .dp-r .nm{grid-area:nm} .dp-h .px{grid-area:px;grid-column:auto} .dp-v .tm{grid-area:tm}
+    .dp-r .bd{grid-area:bd} .dp-r .lkc{grid-area:lk} .dp-r .tt{grid-area:tt} .dp-r .frc{grid-area:fr} .dp-r .rn{display:none}
+  }
 
   /* ── Bookings overview ── */
   .dv-ov{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
