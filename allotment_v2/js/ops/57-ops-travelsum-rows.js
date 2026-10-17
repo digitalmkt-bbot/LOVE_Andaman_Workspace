@@ -73,7 +73,21 @@
     Object.keys(after).forEach(function(id){
       var k = _tsKey(id, date), dec = after[id] && after[id].cot && after[id].cot.decision;
       if(dec) TS_COT[k] = dec; else delete TS_COT[k];
+      if(after[id] && after[id].trip_amount != null) tripAmt[k] = n(after[id].trip_amount);
     });
+  }
+  /* Legacy tsTripAmount (booking, by-trip and pier-stats screens) priced the trip in the browser. Once the
+     server has answered trip_amount for that booking and day (GET /v1/after-trip), show its number. */
+  var tripAmt = {};
+  var origTripAmount = window.tsTripAmount;
+  if(typeof origTripAmount === 'function'){
+    window.tsTripAmount = function(b, t){
+      if(O.enabled && O.enabled() && b && t && t.date && typeof _tsKey === 'function'){
+        var k = _tsKey(b.id, t.date);
+        if(Object.prototype.hasOwnProperty.call(tripAmt, k)) return tripAmt[k];
+      }
+      return origTripAmount.apply(this, arguments);
+    };
   }
   function load(date){
     if(cache[date]) return Promise.resolve(cache[date]);
@@ -335,7 +349,7 @@
     };
   }
 
-  O.onWrite(function(){ cache = {}; slipCache = {}; });
+  O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; });
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
     whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack,
