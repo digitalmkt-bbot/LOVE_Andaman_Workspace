@@ -296,4 +296,55 @@ await page.locator(`#view-booking button[onclick*="bookingV2VanGroupDisband('${D
 await idle(); await settle(1000);
 G = await grpsOf(DAY2);
 ok('"ยกเลิกกรุ๊ป" group 2 -> DELETE van-groups/{id}: server keeps group 1 only; c3 back to unassigned on screen', callsSince(n3).some((c) => c.startsWith('DELETE /operations/van-groups/')) && G.length === 1 && (await scr('zz-c3', DAY2)).grp === 0, { n: G.length, c3: await scr('zz-c3', DAY2) });
-process.exit(0);
+// K · van stops (a guide riding along): save, edit, check-in on Van Check-in, delete
+const stopsOf = async (d) => (await api(`/operations/van-stops?service_date=${d}`)).stops;
+const g1id = (await grpsOf(DAY2)).find((g) => g.number === 1);
+n3 = calls.length;
+await ev((a) => vsOpen(a.d, 'r5', { vanId: a.v, vanGroup: 1 }), { d: DAY2, v: g1id.van_id });
+await page.fill('#vs-label', 'Guide Nok'); await page.fill('#vs-pax', '1'); await page.fill('#vs-time', '06:20'); await page.fill('#vs-place', 'Office');
+await page.click('#vanstop-modal button[onclick="vsSubmit()"]');
+await idle(); await settle(1200);
+let ST = await stopsOf(DAY2);
+let stopScr = await ev(() => Object.keys(VAN_STOPS).map((k) => ({ k, label: VAN_STOPS[k].label, id: VAN_STOPS[k].opsId || VAN_STOPS[k].id, grp: VAN_STOPS[k].vanGroup, van: VAN_STOPS[k].vanId })));
+ok('new stop -> POST van-stops: server holds it on group 1 (label, place, time, 1 seat), modal closed', callsSince(n3).some((c) => c.startsWith('POST /operations/van-stops')) && ST.length === 1 && ST[0].label === 'Guide Nok' && ST[0].place === 'Office' && ST[0].time === '06:20' && ST[0].pax === 1 && ST[0].group_id === g1id.id && !(await ev(() => document.getElementById('vanstop-modal').classList.contains('open') || document.getElementById('vanstop-modal').classList.contains('show'))), { ST, calls: callsSince(n3).filter((c) => !c.startsWith('GET')), dialogs: dialogs.slice(-2) });
+ok('screen: VAN_STOPS holds the stop with the server id', stopScr.length === 1 && stopScr[0].label === 'Guide Nok', stopScr);
+ok('group seats count the guide: pax = customers + 1 (server)', (await grpsOf(DAY2)).find((g) => g.number === 1).stop_seats === 1, (await grpsOf(DAY2)).find((g) => g.number === 1));
+// edit
+n3 = calls.length;
+await ev((k) => vsEditOpen(k), stopScr[0].k);
+await page.fill('#vs-label', 'Guide Nok 2'); await page.fill('#vs-time', '06:25');
+await page.click('#vanstop-modal button[onclick="vsSubmit()"]');
+await idle(); await settle(1200);
+ST = await stopsOf(DAY2);
+ok('edit stop -> PATCH van-stops/{id}: server label + time changed', callsSince(n3).some((c) => c.startsWith('PATCH /operations/van-stops/')) && ST.length === 1 && ST[0].label === 'Guide Nok 2' && ST[0].time === '06:25', { ST, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+// check-in from the Van Check-in screen
+await openVanCk(DAY2); await settle(800);
+n3 = calls.length;
+const stopBtn = page.locator('#vancheckin-host button.vsckb', { hasText: 'ขึ้นรถแล้ว' }).first();
+const hadBtn = await stopBtn.count();
+if (hadBtn) { await stopBtn.click(); await idle(); await settle(1000); }
+ST = await stopsOf(DAY2);
+ok('Van Check-in: stop "ขึ้นรถแล้ว" -> PUT van-stops/{id}/check-in: server checked_in set (by the login, 1 seat), row shows done', hadBtn > 0 && callsSince(n3).some((c) => c.startsWith('PUT /operations/van-stops/') && /check-in/.test(c)) && ST[0].checked_in && ST[0].checked_in.seats === 1 && (await ev(() => /vsdone/.test(document.querySelector('#vancheckin-host').innerHTML))), { hadBtn, ci: ST[0].checked_in, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+n3 = calls.length;
+const undoBtn = page.locator('#vancheckin-host button.vsckb', { hasText: 'ยกเลิก' }).first();
+if (await undoBtn.count()) { await undoBtn.click(); await idle(); await settle(1000); }
+ST = await stopsOf(DAY2);
+ok('un-check -> DELETE van-stops/{id}/check-in: server checked_in null', callsSince(n3).some((c) => c.startsWith('DELETE /operations/van-stops/') && /check-in/.test(c)) && ST[0].checked_in === null, { ci: ST[0].checked_in, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+// delete
+n3 = calls.length;
+await ev((k) => vsEditOpen(k), stopScr[0].k);
+await page.click('#vs-del'); await idle(); await settle(1000);
+ST = await stopsOf(DAY2);
+ok('delete stop -> confirm -> DELETE van-stops/{id}: gone on the server and from VAN_STOPS', callsSince(n3).some((c) => c.startsWith('DELETE /operations/van-stops/')) && ST.length === 0 && (await ev(() => Object.keys(VAN_STOPS).length)) === 0, { ST, vs: await ev(() => Object.keys(VAN_STOPS)) });
+// L · split pickup time (the alternate-pickup part of c5 has a pickup of its own)
+await showBytrip(DAY2); await settle(800);
+const spIn = page.locator(`#view-booking input[oninput*="bookingV2SetSplitPickTime('zz-c5',1"]`);
+const spN = await spIn.count();
+n3 = calls.length;
+if (spN) { await spIn.first().fill('08:10'); await idle(); await settle(1200); }
+const c5Srv = await api('/v1/bookings/' + bk2.c5.id);
+const part1 = c5Srv.trips[0].operations.van_parts.find((p) => p.idx === 1);
+const spScr = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c5'); const o = bkOpsRead(b, '2026-11-11') || {}; return (o.vanSplits || []).map((s) => ({ own: bkSplitOwnPick(s), t: s.pickTime })); });
+ok('split time 08:10 -> PATCH trip-ops van_parts[1].pick_time: server part 1 holds 08:10, main part untouched', spN > 0 && callsSince(n3).some((c) => c.startsWith('PATCH /operations/trip-ops/')) && part1 && part1.alt && part1.alt.pick_time === '08:10', { spN, part1, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+ok('screen: the split part keeps 08:10 and the input shows it after the redraw', spScr[1] && spScr[1].t === '08:10' && (await spIn.first().inputValue()) === '08:10', { spScr, v: spN ? await spIn.first().inputValue() : null });
+process.exit(fails.length ? 1 : 0);
