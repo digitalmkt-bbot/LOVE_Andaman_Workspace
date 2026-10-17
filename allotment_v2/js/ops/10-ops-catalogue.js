@@ -331,6 +331,60 @@
     });
   }
 
+  /* ── route delete and route order ── legacy changed ROUTES and called save('config') (browser only).
+     Server first: DELETE /v1/routes/{id} (409 route_in_use is shown as the server says it), and
+     POST /v1/routes/order {pier, route_ids}. The screen is changed once the server has taken the write. */
+  function routeIndex(rid){
+    var list = (typeof ROUTES !== 'undefined' ? ROUTES : []);
+    for(var i = 0; i < list.length; i++){ if(list[i] && list[i].id === rid) return i; }
+    return -1;
+  }
+
+  calWrap('delRoute', function(orig, rid){
+    var r = routeOf(rid); if(!r) return;
+    var seasonCount = (r.seasons || []).length;
+    var msg = 'ลบโปรแกรมนี้?\n\n' + r.name + '\n' + (r.islands || '')
+      + (seasonCount ? '\n\n⚠️ มี ' + seasonCount + ' season ที่จะถูกลบไปด้วย' : '')
+      + '\n\nการลบนี้ไม่สามารถยกเลิกได้';
+    if(!confirm(msg)) return;
+    return O.queue(function(){ return O.del(RT(rid)); }).then(function(){
+      var i = routeIndex(rid); if(i >= 0) ROUTES.splice(i, 1);
+      if(typeof selProgId !== 'undefined' && selProgId === rid) selProgId = null;
+      O.wrote('route');
+      redrawSettings();
+    }, function(e){
+      O.fail('Program not deleted', e);
+      redrawSettings();
+    });
+  });
+
+  calWrap('stApplyRouteOrder', function(orig, ids, pier){
+    if(!Array.isArray(ids) || !ids.length || !pier) return;
+    var list = (typeof ROUTES !== 'undefined' ? ROUTES : []);
+    var byId = {}; list.forEach(function(r){ byId[r.id] = r; });
+    var ordered = ids.map(function(id){ return byId[id]; }).filter(function(r){ return r && r.pier === pier; });
+    var inPier = list.filter(function(r){ return r.pier === pier; });
+    if(ordered.length !== inPier.length) return;     // legacy's safety: bail rather than lose a route
+    return O.queue(function(){
+      return O.post('/v1/routes/order', { pier: pier, route_ids: ids });
+    }).then(function(res){
+      // the server renumbers sort; the order is then laid in ROUTES as legacy did it
+      var sorts = {};
+      ((res && res.routes) || []).forEach(function(x){ sorts[x.id] = x.sort; });
+      var k = 0;
+      var next = list.map(function(r){ return r.pier === pier ? ordered[k++] : r; });
+      list.length = 0; next.forEach(function(r){ list.push(r); });
+      list.forEach(function(r, i){ r.sort = sorts[r.id] != null ? sorts[r.id] : i; });
+      O.wrote('route-order');
+      redrawSettings();
+      var pn = pier === 'panwa' ? 'VISIT PANWA' : pier === 'tublamu' ? 'TUB LAMU' : String(pier).toUpperCase();
+      O.toast({ kind: 'success', title: 'บันทึกลำดับ Program แล้ว', status: pn, sub: ordered.length + ' โปรแกรม', dur: 2600 });
+    }, function(e){
+      O.fail('Program order not saved', e);
+      redrawSettings();
+    });
+  });
+
   wrapDayStatus();
   lockAgentEdits();
   wrapAgentDetail();

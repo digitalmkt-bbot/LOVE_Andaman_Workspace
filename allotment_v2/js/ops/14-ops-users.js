@@ -10,6 +10,7 @@
    POST   /api/users                  -> POST  /v1/users                 (201)
    POST   /api/users/perms            -> PATCH /v1/users/:id
    POST   /api/users/password         -> POST  /v1/users/:id/password
+   POST   /api/users/rename           -> POST  /v1/users/:id/rename      ({username, name})
    DELETE /api/users?id=N             -> PATCH /v1/users/:id {disabled:true}
                                          (the server never deletes a login; a disabled one is
                                           hidden from the list and cannot sign in)
@@ -83,6 +84,11 @@
     }
     if(method==='POST' && path==='/api/users/perms')
       return answer(xhr('PATCH','/v1/users/'+encodeURIComponent(b.id),patchBody(b)), toRow);
+    /* legacy's __laRenSave sends {id, username, name}; the server takes {username, name?}. A blank name
+       becomes the username (legacy's rule). The answer keeps ok:true, which the window checks. */
+    if(method==='POST' && path==='/api/users/rename')
+      return answer(xhr('POST','/v1/users/'+encodeURIComponent(b.id)+'/rename',{username:b.username, name:b.name}),
+        function(j){ return Object.assign({ok:true}, j); });
     if(method==='POST' && path==='/api/users/password')
       return answer(xhr('POST','/v1/users/'+encodeURIComponent(b.id)+'/password',{password:b.password}));
     if(method==='DELETE' && path==='/api/users'){

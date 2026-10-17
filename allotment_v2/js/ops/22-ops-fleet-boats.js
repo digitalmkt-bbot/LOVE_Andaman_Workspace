@@ -383,6 +383,129 @@
     }).catch(function(){ return null; });
   });
 
+  /* ── boat colour, retire-undo, status timeline ── legacy wrote b.color / b.log into the browser blob
+     (save('config')) and flSave() was a no-op here, so none of it reached the server. Server first: the
+     screen changes only when the server has taken the write, then the boat is read again. */
+  function boatNamed(id){ return listBoats().find(function(x){ return x && x.id === id; }) || null; }
+  function renderTimelineFor(id){
+    try{ var b = boatNamed(id); if(b && typeof window.renderTimeline === 'function') window.renderTimeline(b); }catch(_){}
+  }
+
+  wrap('flSetBoatColor', function(orig, id, hex){
+    if(!boatNamed(id)) return null;
+    if(!/^#[0-9a-fA-F]{6}$/.test(String(hex || ''))) return null;
+    return O.queue(function(){
+      return O.patch('/v1/boats/' + enc(id), { color: hex });
+    }).then(function(res){
+      return fetchBoatDetail(id).then(function(){
+        O.wrote('boat-color');
+        try{ if(typeof window.flRenderBoatList === 'function') window.flRenderBoatList(); }catch(_){}
+        redrawBoats();
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not change boat colour', e); return null; });
+  });
+
+  wrap('flUnretireBoat', function(orig, boatId){
+    var b = boatNamed(boatId);
+    if(!b) return null;
+    if(!confirm('กู้คืนเรือ ' + b.name + ' กลับมาใช้งาน?')) return null;
+    return O.queue(function(){
+      return O.post('/v1/boats/' + enc(boatId) + '/restore', {});
+    }).then(function(res){
+      return fetchBoatDetail(boatId).then(function(){
+        O.wrote('boat-restore');
+        redrawBoats();
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not restore boat', e); return null; });
+  });
+
+  wrap('delStatus', function(orig, bid, slid){
+    if(!confirm('ลบ Status นี้?')) return null;
+    if(!boatNamed(bid)) return null;
+    return O.queue(function(){
+      return O.del('/v1/boats/' + enc(bid) + '/status-log/' + enc(slid));
+    }).then(function(){
+      return fetchBoatDetail(bid).then(function(){
+        O.wrote('boat-status-delete');
+        renderTimelineFor(bid);
+        redrawBoats();
+        return null;
+      });
+    }).catch(function(e){ O.fail('Could not delete status', e); return null; });
+  });
+
+  /* legacy saveStatus: the same checks and alerts, in the same order, then the entry goes to the server.
+     POST a new entry, PATCH the one being edited (editingSlId). An available entry that would sit on a
+     started job's days is 409 open_work: the person is asked (legacy's question, with the job numbers),
+     and a yes sends plan_ahead: true, as legacy's "วางล่วงหน้า" did. The server adds the planned-over
+     mark to the note, so the browser does not. */
+  wrap('saveStatus', function(orig){
+    var b = boatNamed(typeof selBoatId !== 'undefined' ? selBoatId : null);
+    if(!b) return null;
+    var d = function(id){ return document.getElementById(id); };
+    var from = d('fm-st-from').value;
+    var to = d('fm-st-to').value;
+    if(!from){ alert('กรุณาระบุวันที่เริ่ม'); return null; }
+    if(!to){ alert('กรุณาระบุวันที่สิ้นสุด'); return null; }
+    if(to < from){ alert('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่ม'); return null; }
+    var province = d('fm-st-province').value;
+    var locType = d('fm-st-loctype').value;
+    var detail = d('fm-st-locdetail').value.trim();
+    if(!province){ alert('กรุณาเลือกจังหวัด'); return null; }
+    if(!locType){ alert('กรุณาเลือกประเภทสถานที่'); return null; }
+    var reason = '';
+    if(selSt === 'unavailable'){
+      reason = d('fm-st-reason') ? d('fm-st-reason').value : '';
+      if(!reason){ alert('กรุณาเลือกเหตุผลที่ไม่พร้อมใช้งาน'); return null; }
+    }
+    var note = d('fm-st-note').value.trim();
+    var entry = {
+      status: selSt,
+      from_date: from,
+      to_date: to,
+      loc: typeof fmtLoc === 'function' ? fmtLoc(province, locType, detail) : detail,
+      province: province,
+      loc_type: locType,
+      detail: detail || null,
+      note: note || null,
+      reason: reason || null
+    };
+    var editing = (typeof editingSlId !== 'undefined' && editingSlId) ? editingSlId : null;
+    function send(extra){
+      var body = Object.assign({}, entry, extra || {});
+      return O.queue(function(){
+        if(editing) return O.patch('/v1/boats/' + enc(b.id) + '/status-log/' + enc(editing), body);
+        return O.post('/v1/boats/' + enc(b.id) + '/status-log', body);
+      });
+    }
+    function askPlanAhead(){
+      var blk = (typeof boatJobBlock === 'function') ? boatJobBlock(b.id, from, true) : null;
+      var nos = blk ? blk.nos : '';
+      return 'เรือลำนี้ยังมีใบงานที่ไม่ถูกปิด\n\n    ' + nos
+        + '\n\nถ้าเรือกลับมาวิ่งได้จริงแล้ว ควรไปปิดที่ใบงาน (Maintenance / Project)'
+        + '\nต้นทุนจะได้เข้าใบงานครบ และเรือจะกลับมาเองโดยไม่ต้องมาแก้ตรงนี้'
+        + '\n\nถ้าบันทึกต่อ = วางเรือล่วงหน้า · ช่วง ' + from + ' ถึง ' + (to || 'ไม่กำหนด')
+        + '\nเรือจะรับงานได้ในช่วงนี้ โดยไม่ต้องรอปิดใบข้างบน'
+        + '\nใบที่เปิดใหม่หลังจากนี้ ยังกันเรือตามปกติ'
+        + '\n\nยืนยันบันทึก?';
+    }
+    return O.anyway(send, { open_work: { flag: 'plan_ahead', ask: askPlanAhead } }, {}).then(function(){
+      return fetchBoatDetail(b.id).then(function(){
+        O.wrote('boat-status-log');
+        if(typeof window.closeModal === 'function') window.closeModal('status-modal');
+        renderTimelineFor(b.id);
+        redrawBoats();
+        return null;
+      });
+    }).catch(function(e){
+      if(e && e.declined) return null;
+      O.fail('Could not save status', e);
+      return null;
+    });
+  });
+
   wrap('flRenderDocsList', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){
