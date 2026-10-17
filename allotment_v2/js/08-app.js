@@ -14290,7 +14290,7 @@ function boatCapModalOpen(boatId, date, afterFn, suggest){
    +'    <div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">เหตุผล</div>'
    +'    <input id="bcap-reason" type="text" value="'+e(i.reason||'')+'" placeholder="เช่น เสริมเก้าอี้ 4 ตัว · เครื่องซ้ายมีปัญหา รับได้น้อยลง" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;box-sizing:border-box;font-family:inherit"></div>'
    +'    <div style="font-size:11px;color:#8a8a82;margin-top:11px;line-height:1.5">มีผลกับ <b>ที่นั่งว่างของเส้นทางวันนั้น</b> · <b>เพดานตอนจัด booking</b> · และ <b>การ์ดเรือในเช็คอินหน้าท่า</b> · ใช้เฉพาะวันนี้ วันอื่นยังเป็น cap ปกติ</div>'
-   +(i.overridden?('    <div style="font-size:11px;color:#8a8a82;margin-top:6px">ตั้งไว้โดย <b>'+e(i.by)+'</b>'+(i.at?(' · '+e(String(i.at).slice(0,16).replace('T',' '))):'')+'</div>'):'')
+   +(i.overridden?('    <div style="font-size:11px;color:#8a8a82;margin-top:6px">ตั้งไว้โดย <b>'+e(i.by)+'</b>'+(i.at?(' · '+e(laAtLocal(i.at,16))):'')+'</div>'):'')
    +'  </div>'
    +'  <div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
    +(i.overridden?'<button onclick="_bcapClear(\''+boatId+'\',\''+date+'\')" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:auto">คืนค่าปกติ ('+i.base+')</button>':'')
@@ -20680,7 +20680,7 @@ function pckDetailOpen(bkId){
       +(over?('<span style="margin-left:8px;font-size:10.5px;font-weight:700;color:#0F6E56;background:#E1F5EE;'
               +'border:1px solid #B7E2D2;border-radius:7px;padding:1px 7px" '
               +'title="ไม่ได้ขึ้นรถมา แต่มาถึงท่าเอง">&#8617; ตามมาเอง +'+over+'</span>'):'')
-      +'<div style="font-size:10px;color:#a5a49d;margin-top:2px">'+e((c.by||'')+(c.at?(' · '+String(c.at).slice(0,16).replace('T',' ')):''))+'</div>'
+      +'<div style="font-size:10px;color:#a5a49d;margin-top:2px">'+e((c.by||'')+(c.at?(' · '+laAtLocal(c.at,16)):''))+'</div>'
       +((c.events||[]).map(function(x){ var T=(CK_EVENT_TYPES[x.type]||CK_EVENT_TYPES.no_show);
           /* §ckBack · รายการที่รับกลับแล้วยังต้องเห็น · ขีดฆ่าไว้พร้อมบอกว่าเพราะอะไร */
           var U=x.undone||null;
@@ -25354,6 +25354,16 @@ function tsPaxWho(pb){
     .filter(function(k){ return (+pb[k[0]]||0)>0; })
     .map(function(k){ return (+pb[k[0]])+' '+k[1]; }).join(' \u00b7 ');
 }
+/* §atLocal (2026-10-17) · owner: "เวลาที่ขึ้นไม่ตรง" (Travel Summary · admin 2026-10-17 02:52 ทั้งที่กดตอน 09:52)
+   ค่า at เก็บเป็น ISO เวลา UTC (toISOString · ลงท้าย Z) · ของเดิมตัดสตริงไปโชว์ตรง ๆ จึงช้าไป 7 ชม.
+   แปลงเป็นเวลาเครื่องก่อนโชว์ · ค่าที่ไม่ใช่ ISO มีโซนเวลา (ของเก่าที่เก็บเป็นเวลาท้องถิ่นอยู่แล้ว) โชว์ตามเดิม */
+function laAtLocal(s,f){
+  var v=String(s==null?'':s), raw=(f==='md')?v.slice(5,10):v.slice(0,16).replace('T',' ');
+  if(!/T\d\d:\d\d/.test(v) || !/(Z|[+-]\d\d:?\d\d)$/.test(v)) return raw;
+  var d=new Date(v); if(isNaN(d.getTime())) return raw;
+  var p=function(n){ return (n<10?'0':'')+n; }, md=p(d.getMonth()+1)+'-'+p(d.getDate());
+  return (f==='md')?md:(d.getFullYear()+'-'+md+' '+p(d.getHours())+':'+p(d.getMinutes()));
+}
 function tsTripAmount(b, t){
   // §ovnBack · ขากลับค้างคืนไม่มีราคาของตัวเอง (ค่าใช้จ่ายอยู่ที่ขาไปแล้ว)
   //   ห้ามปล่อยให้ตกไปถึง priceBreakdown.total เพราะนั่นคือยอดเต็มของทั้งบุ๊กกิ้ง = นับซ้ำ
@@ -25568,7 +25578,7 @@ function tsCotCell(b, M, date, money, e, r){
       +(c.ref
          ? (' <span style="color:var(--zn700)">&middot; '+e(c.ref)+'</span>')
          : ' <span style="color:var(--am700);font-weight:700">&middot; ยังไม่ระบุเหตุผล</span>')
-      +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(String(c.at).slice(5,10))):'')+'</span>'
+      +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(laAtLocal(c.at,'md'))):'')+'</span>'
       +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>'
       +'</div>';
     h+=tsCotSlipRow(id,date,c,e);   // §cotSlip · เก็บไม่ได้ก็ยังแนบหลักฐานได้ (รูปหน้างาน / แชทลูกค้า)
@@ -25584,7 +25594,7 @@ function tsCotCell(b, M, date, money, e, r){
     h+='<div class="ts-cotsum">'+(over
         ? '<span style="color:var(--rs700);font-weight:800">&#9888; หัก+โอนออก เกินยอด COT</span>'
         : (L.join(' &middot; ')||'ไม่หักจากบิล')
-          +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(String(c.at).slice(5,10))):'')+'</span>'
+          +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(laAtLocal(c.at,'md'))):'')+'</span>'
           +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>')
       +'</div>';
     h+=tsCotSlipRow(id,date,c,e);   // §cotSlip · สลิปโอน / หลักฐานการหักบิล
@@ -30091,7 +30101,7 @@ function renderTravelSum(){
         +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')"></td>'
       +'<td class="c">'+(dec
         ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+DEC[dec.decision][0]+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
-           +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(String(dec.at).slice(0,16).replace('T',' '))):'')+'</div>')
+           +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(laAtLocal(dec.at,16))):'')+'</div>')
         : '<span class="ts-chip r">รอตัดสิน</span>')+'</td>'
       +'</tr>';
   });
@@ -30131,7 +30141,7 @@ function renderTravelSum(){
           +'title="เอารายการนี้ออกจากใบปิดวัน · ใบจองกับการจัดรถของวันใหม่ไม่ถูกแตะ">ล้างออกจากใบนี้</button></td>'
         +'<td class="c"><span class="ts-chip p">เลื่อนวันแล้ว</span>'
           +(dec&&dec.by?('<div class="ts-tel" style="margin-top:3px">'+e(dec.by)
-             +(dec.at?(' &middot; '+e(String(dec.at).slice(0,16).replace('T',' '))):'')+'</div>'):'')
+             +(dec.at?(' &middot; '+e(laAtLocal(dec.at,16))):'')+'</div>'):'')
           +'</td></tr>';
     });
   })();
@@ -59891,7 +59901,7 @@ function _docCheckDrawer(bkId, e, rName){
             <button onclick="docCheckSetStatus('${e(bkId)}','verified')" style="flex:1;background:${allTicked?'#1B7F4B':'#9fd3b3'};color:#fff;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">✅ ถูกต้อง</button>
             <button onclick="docCheckSetStatus('${e(bkId)}','issue')" style="flex:1;background:#fff;color:#B5271F;border:1.5px solid #E7B3AE;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⚠ มีปัญหา</button>
           </div>
-          ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(String(dc.at).slice(0,16).replace('T',' '))):''}</div>`:''}
+          ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(laAtLocal(dc.at,16))):''}</div>`:''}
       </div>
       <!-- RIGHT · documents (scrolls) -->
       <div id="dc-panel-docs" style="overflow-y:auto;padding:16px">
