@@ -525,4 +525,40 @@ await callsUndo; await idle(); await settle(1200);
 ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
 ok('ckEventUndo called by name: last live event marked undone (mistake), none removed (server keeps 2 events)', ck3[0].events.length === 2 && ck3[0].events[1].undone && ck3[0].events[1].undone.why === 'mistake' && ck3[0].actual_pax === 2, ck3[0]);
 ok('ckEventUndo has no button on the screen (UI callers: ' + (await ev(() => document.documentElement.innerHTML.includes('ckEventUndo'))) + ')', !(await ev(() => document.documentElement.innerHTML.includes('ckEventUndo(')))); 
+
+// ════════════ 6. Travel Summary ════════════
+curItem = '6'; console.log('\n[6] Travel Summary: trip amount, cash-on-tour decision -> booking page');
+await ev((d) => { _tsDate = d; const el = document.querySelector('.nav-item[data-view="travelsum"]'); if (el) nav(el); renderTravelSum(); }, DAY3);
+await waitFor(() => !!document.querySelector('[data-ops-ts-view]'), null, 20000);
+await idle(); await settle(2000);
+const after0 = (await api('/v1/after-trip?date=' + DAY3)).rows;
+const aE1 = after0.find((r) => r.booking_id === bk3.e1.id);
+console.log('  note  after-trip e1: ' + JSON.stringify({ trip_amount: aE1.trip_amount, cot: aE1.cot && aE1.cot.amount, dec: aE1.cot && aE1.cot.decision }));
+// a clean load of the day (a write empties the caches), then the amount checks straight away
+await ev((d) => { laOps.wrote('walk'); _tsDate = d; renderTravelSum(); }, DAY3);
+await waitFor(() => !!document.querySelector('[data-ops-ts-view]') && !document.body.innerText.includes('Loading Travel Summary'), null, 20000);
+await idle();
+// the booking in the browser (booking page copy)
+const tsAmt = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e1'); if (!b) return { err: 'booking not loaded', n: SB_BOOKINGS.length }; const t = b.trips.find((x) => x.date === _tsDate); return { id: b.id, opsId: b.opsId, amt: tsTripAmount(b, t), sub: t.subtotal, total: b.total, cot: b.cashOnTour }; });
+ok('tsTripAmount on the booking page = the server\'s trip_amount (' + aE1.trip_amount + ')', tsAmt.amt === aE1.trip_amount, { tsAmt, srv: aE1.trip_amount });
+// prove it is the server's number and not the browser formula: wreck what the formula reads, the answer must not move
+const wrecked = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e1'); const t = b.trips.find((x) => x.date === _tsDate); const s0 = [t.subtotal, b.total]; const pb = b.priceBreakdown ? b.priceBreakdown.total : null; t.subtotal = 1; b.total = 1; if (b.priceBreakdown) b.priceBreakdown.total = 1; const r = tsTripAmount(b, t); t.subtotal = s0[0]; b.total = s0[1]; if (b.priceBreakdown) b.priceBreakdown.total = pb; return r; });
+ok('tsTripAmount keeps the server\'s number although the booking\'s own subtotal/total in the browser say 1', wrecked === aE1.trip_amount, { wrecked, srv: aE1.trip_amount });
+await ev(() => laOps.wrote('remote:booking'));
+const wreckedFn = () => ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e1'); const t = b.trips.find((x) => x.date === _tsDate); const s0 = [t.subtotal, b.total]; const pb = b.priceBreakdown ? b.priceBreakdown.total : null; t.subtotal = 1; b.total = 1; if (b.priceBreakdown) b.priceBreakdown.total = 1; const r = tsTripAmount(b, t); t.subtotal = s0[0]; b.total = s0[1]; if (b.priceBreakdown) b.priceBreakdown.total = pb; return r; });
+const wreckedAfterWrite = await wreckedFn();
+console.log('  note  after a remote change (any write) the number is the browser formula again until the Travel Summary of that day is opened: ' + wreckedAfterWrite + ' (server ' + aE1.trip_amount + ')');
+const tsRow = await ev((id) => { const b = document.querySelector('[data-ops-ts-view]'); return b ? b.innerText.replace(/\s+/g, ' ').slice(0, 20) : null; }, bk3.e1.id);
+// COT decision from the Travel Summary buttons: full deduct
+n3 = calls.length;
+await ev(() => laOps.wrote('remote:booking'));     // somebody else saved a booking: the change feed empties the caches while this screen stays open
+const fullBtn = page.locator(`button[onclick*="cotPick('${bk3.e1.id}','full')"]`).first();
+const hasBtn = await fullBtn.count();
+if (hasBtn) { await fullBtn.click(); await idle(); await settle(2000); }
+const aE1b = ((await api('/v1/after-trip?date=' + DAY3)).rows).find((r) => r.booking_id === bk3.e1.id);
+ok('COT "หักทั้งก้อน" -> PUT cot-decisions/{date}: server decision full, deduct 3000, by the login', hasBtn > 0 && callsSince(n3).some((c) => /^PUT \/v1\/bookings\/.+\/cot-decisions\/2026-11-12 200/.test(c)) && aE1b.cot.decision && aE1b.cot.decision.mode === 'full' && aE1b.cot.decision.deduct === 3000, { hasBtn, dec: aE1b.cot.decision, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+const picked = await ev((id) => { const bt = document.querySelector('button[data-ops-ts-cotmode="full"][onclick*="' + id + '"]'); return bt ? bt.className : null; }, bk3.e1.id);
+ok('screen: the "หักทั้งก้อน" button of that row is the picked one', /pick/.test(picked || ''), picked);
+const cotOf = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e1'); const c = bookingV2CotOf(b); return { amt: c.amt, use: c.use, deduct: c.deduct, mode: c.mode, settled: !!c.settled }; });
+ok('booking page: bookingV2CotOf(booking) shows the decision made on the Travel Summary (deduct 3000, mode full)', cotOf.settled && cotOf.deduct === 3000 && cotOf.mode === 'full', cotOf);
 process.exit(0);

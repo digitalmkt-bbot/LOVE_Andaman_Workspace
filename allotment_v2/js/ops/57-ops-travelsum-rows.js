@@ -68,12 +68,20 @@
   /* Legacy tsCotGet reads TS_COT, which nothing filled here, so the booking page's COT figure (bookingV2CotOf)
      ignored decisions saved from this screen. Put the server's decisions for the day into TS_COT in memory
      (never saved: tsCotPersist is not called) so tsCotGet answers with what the server holds. */
-  function mirrorCot(date, after){
+  function mirrorCot(date, after, bookings){
     if(!after || typeof TS_COT === 'undefined' || typeof _tsKey !== 'function') return;
+    // The pages key a booking by its client id (the external_id a new booking was saved with), the server by its own
+    // id: put each decision and trip amount under both, or a booking made in the new frontend is never found.
+    var clientId = {};
+    (bookings || []).forEach(function(b){ if(b && b.id && b.external_id) clientId[b.id] = b.external_id; });
     Object.keys(after).forEach(function(id){
-      var k = _tsKey(id, date), dec = after[id] && after[id].cot && after[id].cot.decision;
-      if(dec) TS_COT[k] = dec; else delete TS_COT[k];
-      if(after[id] && after[id].trip_amount != null) tripAmt[k] = n(after[id].trip_amount);
+      var dec = after[id] && after[id].cot && after[id].cot.decision;
+      [id, clientId[id]].forEach(function(bid){
+        if(!bid) return;
+        var k = _tsKey(bid, date);
+        if(dec) TS_COT[k] = dec; else delete TS_COT[k];
+        if(after[id] && after[id].trip_amount != null) tripAmt[k] = n(after[id].trip_amount);
+      });
     });
   }
   /* Legacy tsTripAmount (booking, by-trip and pier-stats screens) priced the trip in the browser. Once the
@@ -101,7 +109,7 @@
       var m = {}; ((res && res.vans) || []).forEach(function(v){ if(v && v.id) m[v.id] = v.name || v.plate || v.id; }); return m;
     }, function(){ return {}; });
     var p = Promise.all([fetchAll(date), decisions, vans]).then(function(x){
-      mirrorCot(date, x[1]);
+      mirrorCot(date, x[1], x[0]);
       var r = { date: date, rows: rosterOf(date, x[0]), cancelled: cancelledOf(date, x[0]), after: x[1], vans: x[2] || {} };
       cache[date] = r; delete loading[date]; return r;
     }, function(e){ delete loading[date]; throw e; });
@@ -246,10 +254,15 @@
   function guard(){ return !(g('laGuardEdit') && !window.laGuardEdit('operations')); }
   function afterWrite(title, kind, bookingId, method, path, body){
     var date = lastView && lastView.date; if(!date) return Promise.resolve();
-    var row = afterRow(date, bookingId);
-    var bk = { id: bookingId, opsId: bookingId, opsVersion: row && row.version != null ? row.version : null };
-    return O.queue(function(){ return O.bookingWrite(method, path, bk, body); })
-      .then(function(){ O.wrote(kind); rerender(); }, function(e){
+    // Any write (ours or, through the change feed, someone else's) empties the roster cache while the screen stays
+    // open. The decision needs the booking's version, so read the day again first instead of sending it without one
+    // (428 version_required).
+    var ready = cache[date] ? Promise.resolve() : load(date);
+    return ready.then(function(){
+      var row = afterRow(date, bookingId);
+      var bk = { id: bookingId, opsId: bookingId, opsVersion: row && row.version != null ? row.version : null };
+      return O.queue(function(){ return O.bookingWrite(method, path, bk, body); });
+    }).then(function(){ O.wrote(kind); rerender(); }, function(e){
         O.fail(title, e);
         // A stale version stays cached otherwise and every later save resends it: drop the roster and the
         // summary so the next render reads /v1/after-trip again and gets the booking's fresh version.
