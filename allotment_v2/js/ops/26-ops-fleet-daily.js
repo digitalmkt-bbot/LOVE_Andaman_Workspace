@@ -371,7 +371,7 @@
 
   function redrawDailyAndProjects(){
     try{ if(typeof window.flRenderProjects === 'function' && document.getElementById('fl-proj-wrap')) window.flRenderProjects(); }catch(_){}
-    try{ if(typeof window.flRenderDR === 'function' && document.getElementById('fl-dr-wrap')) window.flRenderDR(); }catch(_){}
+    try{ if(typeof window.flRenderDR === 'function' && document.getElementById('fl-dr-body')) window.flRenderDR(); }catch(_){}
     try{ if(typeof window.flRenderSafetyList === 'function' && document.getElementById('fl-safety-pink-wrap')) window.flRenderSafetyList(); }catch(_){}
     try{ if(typeof window.renderBoats === 'function') window.renderBoats(); }catch(_){}
   }

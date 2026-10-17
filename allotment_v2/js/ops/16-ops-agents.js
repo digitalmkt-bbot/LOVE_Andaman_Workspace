@@ -491,6 +491,9 @@
           d.style.cssText='font-size:10px;font-weight:700;color:'+fg+';background:'+bg+';border-radius:6px;padding:2px 8px;margin-top:3px;display:block';
           d.textContent=txt; td.appendChild(d);
         }
+        /* §impRefusedBadge (Q28) · a refused row has no verdict from legacy's own rule: its "มีแล้ว · ไม่มีอะไรเปลี่ยน" badge would
+           say the row is fine, so the badge cell is emptied and only the server's red message is left */
+        if(row.serverError && trs[i].children[3]) trs[i].children[3].textContent='';
         if(row.serverError) note(row.serverError,'#A32D2D','#FCEBEB');
         if(row.serverRateNote) note(row.serverRateNote,'#8A5410','#FDF3E4');
       });

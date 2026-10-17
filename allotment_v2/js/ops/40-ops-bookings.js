@@ -427,6 +427,13 @@
        so a field dropped here would be wiped on the server. to_company is an amount, not a flag. */
     bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, label:u.label || 'Upgrade', sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:+(u.to_company != null ? u.to_company : u.toCompany) || 0, commission:+u.commission || 0, seller:u.seller || '', note:u.note || '', collected:!!u.collected, settle:u.settle || 'pending', method:u.method || null, feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, fee:+u.fee || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, at:u.at || null, slips:u.slips || [] }; });
     if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
+    /* §opsRowFlags (2026-10-17) · the server's reading of the booking row (GET /v1/bookings, /{id}, /recent only; the POST and PATCH
+       answers do not carry them). Read-only, never sent (toServer). 66-ops-row-flags.js wraps laIsB2C, laIsInternalBk, laIsCompanyBk,
+       laIsInternalFree, laBkMoney and laB2CChannel to read this object when it is here; without it the legacy browser rule runs. */
+    if(ob.is_b2c_legacy !== undefined || ob.owed !== undefined){
+      bk.srvFlags = { isB2C: !!ob.is_b2c_legacy, isInternal: !!ob.is_internal, isCompany: !!ob.is_company,
+                      internalFree: !!ob.internal_free, owed: +ob.owed || 0, b2cChannel: ob.b2c_channel != null ? String(ob.b2c_channel) : '' };
+    }
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
@@ -449,6 +456,7 @@
        local operations/price/adjustment copy over the server response. */
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
+    delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     if(vans) O.vans.put(bk, vans);
