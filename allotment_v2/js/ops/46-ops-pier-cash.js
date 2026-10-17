@@ -3,7 +3,7 @@
   'use strict';
   var O=window.laOps; if(!O) return;
   var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={};
-  ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates'].forEach(function(n){ L[n]=window[n]; });
+  ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates','pcPkPullState'].forEach(function(n){ L[n]=window[n]; });
   function on(){ return !!(O.enabled&&O.enabled()); }
   function key(p,d){ return p+'|'+d; }
   function call(m,path,body){ return O.call(m,path,body); }
@@ -62,6 +62,11 @@
   window.pcDates=function(p,ym){ if(!on()) return L.pcDates.apply(this,arguments); var seen={}, have=false;
     ['longtail','park'].forEach(function(kind){ var j=cache.sheet[kind+'|'+p+'|'+ym]; if(!j||j===true) return; have=true; (j.days||[]).forEach(function(day){ if((day.boats||[]).some(function(b){ return b.route_id; })) seen[day.date]=1; }); });
     return have?Object.keys(seen).sort():L.pcDates.apply(this,arguments); };
+  // Park pull state per boat is the server's day `park_pull` (old / off / waiting / boats); the cell (C) for a line is the sheet cell already in the browser.
+  window.pcPkPullState=function(p,d){ var q=cache.day[key(p,d)], pp=q&&q.park_pull; if(!on()||!pp) return L.pcPkPullState.apply(this,arguments);
+    var D=(typeof window.pcDay==='function'&&window.pcDay(p,d,false))||{}, pk=D.pk||{};
+    return {old:!!pp.old, off:!!pp.off, waiting:+pp.waiting||0, total:+pp.total||0, pulledAmt:+pp.pulled_amount||0, nPulled:+pp.pulled_boats||0, nWait:+pp.waiting_boats||0,
+      lines:(pp.boats||[]).map(function(b){ return {B:{bid:b.boat_id,rid:b.route_id||'',name:b.boat_name||b.boat_id}, C:pk[b.boat_id]||{}, v:+b.amount||0, pulled:b.pulled_amount==null?null:(+b.pulled_amount||0)}; })}; };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){
