@@ -35097,6 +35097,149 @@ function vanRateSet(gk, routeId, field, val){
   }
   vanRatesSave(R);
 }
+/* ══ §vanTpl (2026-10-17) · ชุดเรตรถ · owner "ช่วยปรับวิธีการกรอกให้ง่ายกว่านี้ได้ไหม" · mock VRT → "โอเค"
+   เดิม 20 กลุ่ม × 16 เส้นทาง × 3 ช่อง ≈ 960 ช่อง ทั้งที่เรตจริงมี 3–4 แบบ
+   ชุดเรต = ก้อน {rt:{routeId:{base,PK,KL}}, base} เหมือนของกลุ่ม · เก็บเป็นสตริงใน blob key van_rate_tpl (กฎ §pcFix)
+   "ใช้ชุดกับกลุ่ม" = คัดลอกค่าของชุดลงใน van_rates ของกลุ่มนั้น + จำว่ามาจากชุดไหน (G.tpl) · Trip P&L / Van Bill อ่าน van_rates เหมือนเดิม ไม่ต้องรู้จักชุด
+   แก้รายเส้นหลังใช้ชุด = ยังอยู่ในชุด แต่ขึ้นป้าย "ชุด + แก้ N เส้น" (เทียบค่าปัจจุบันกับชุด)
+   ติ๊กหลายกลุ่มแล้วใช้ชุดเดียวกัน / คัดลอกจากกลุ่มที่ตั้งแล้ว · ตารางเต็มแบบเดิมกดดูได้ (_ct.vfull)
+   ชุดตั้งต้นสร้างจากที่ตั้งไว้แล้วตอนเปิดครั้งแรก (ภูเก็ต 1,700 · ทับละมุ 3,000/1,600 · TAXI 1,200) · ไม่เดาเรตที่ยังไม่มี
+   ⚠ alert/confirm/prompt ภาษาอังกฤษตามกฎไฟล์ ══ */
+function vanTpls(){ var r = ctRead('van_rate_tpl'); return (r && typeof r === 'object') ? r : {}; }
+function vanTplsSave(r){ ctWrite('van_rate_tpl', r); }
+function vanTplMatch(gk){
+  var G = vanRates()[gk] || {}, T = vanTpls(), grt = G.rt || {};
+  var ids = Object.keys(T).filter(function(id){ var t = T[id]; if(!Object.keys(t.rt || {}).length && t.base == null) return false;
+    if(Object.keys(t.rt || {}).length !== Object.keys(grt).length) return false;
+    if((t.base == null ? null : +t.base) !== (G.base == null ? null : +G.base)) return false;
+    return Object.keys(t.rt || {}).every(function(rid){ var a = t.rt[rid] || {}, b = grt[rid] || {};
+      return ['base','PK','KL'].every(function(f){ return (a[f] == null ? null : +a[f]) === (b[f] == null ? null : +b[f]); }); }); });
+  return ids[0] || '';
+}
+function vanTplAutoLink(){
+  var R = vanRates(), ch = false;
+  Object.keys(R).forEach(function(gk){ var G = R[gk]; if(!G || G.tpl) return; var m = vanTplMatch(gk); if(m){ G.tpl = m; ch = true; } });
+  if(ch) vanRatesSave(R);
+}
+function vanTplSeed(){
+  var T = vanTpls(); if(Object.keys(T).length){ vanTplAutoLink(); return T; }
+  var R = vanRates(), own = R.own || {}, rt = own.rt || {};
+  var pk = {}, tl = {};
+  (typeof ROUTES !== 'undefined' ? ROUTES : []).forEach(function(r){
+    var x = rt[r.id]; if(!x) return;
+    if(r.pier === 'panwa') pk[r.id] = JSON.parse(JSON.stringify(x));
+    else if(r.pier === 'tublamu') tl[r.id] = JSON.parse(JSON.stringify(x));
+  });
+  if(Object.keys(pk).length) T['t_pk'] = { name:'ภูเก็ต 1,700', rt:pk };
+  if(Object.keys(tl).length) T['t_tl'] = { name:'ทับละมุ 3,000 / 1,600', rt:tl };
+  var tx = R['p:TAXI นอก']; if(tx && tx.base != null) T['t_taxi'] = { name:'TAXI ' + tx.base, base:tx.base, rt:{} };
+  if(Object.keys(T).length){ vanTplsSave(T); vanTplAutoLink(); }
+  return T;
+}
+/* สรุปชุดเป็นข้อความสั้น · "Phi Phi/Whale Shark/Krabi: PK 1,700 · Similan/Surin: PK 3,000 · KL 1,600" */
+function vanTplDesc(t){
+  if(!t) return '';
+  var byPier = {}, PN = {panwa:'ภูเก็ต', tublamu:'ทับละมุ', ranong:'ระนอง'};
+  (typeof ROUTES !== 'undefined' ? ROUTES : []).forEach(function(r){
+    var x = (t.rt || {})[r.id]; if(!x) return;
+    var k = PN[r.pier] || 'อื่น', sig = ['base','PK','KL'].filter(function(f){ return x[f] != null; }).map(function(f){ return (f === 'base' ? 'ทุกโซน ' : (f + ' ')) + (+x[f]).toLocaleString(); }).join(' · ');
+    byPier[k] = byPier[k] || {}; byPier[k][sig] = (byPier[k][sig] || 0) + 1;
+  });
+  var out = Object.keys(byPier).map(function(k){ return k + ': ' + Object.keys(byPier[k]).join(' / '); });
+  if(t.base != null) out.push('ฐาน ' + (+t.base).toLocaleString());
+  return out.join(' · ') || 'ว่าง';
+}
+/* ค่าของกลุ่มตรงกับชุดไหม · คืนจำนวนเส้นที่ต่าง (เทียบเฉพาะเส้นที่ชุดกำหนด + ฐาน) */
+function vanTplDiff(gk){
+  var G = vanRates()[gk] || {}, t = G.tpl && vanTpls()[G.tpl]; if(!t) return null;
+  var n = 0, grt = G.rt || {};
+  Object.keys(t.rt || {}).forEach(function(rid){ var a = t.rt[rid] || {}, b = grt[rid] || {};
+    if(['base','PK','KL'].some(function(f){ return (a[f] == null ? null : +a[f]) !== (b[f] == null ? null : +b[f]); })) n++; });
+  if((t.base == null ? null : +t.base) !== (G.base == null ? null : +G.base)) n++;
+  return n;
+}
+function vanTplApply(gk, tid){
+  var T = vanTpls(), t = T[tid]; var R = vanRates(); var G = R[gk] = R[gk] || {};
+  if(!t){ delete G.tpl; vanRatesSave(R); return; }
+  G.rt = JSON.parse(JSON.stringify(t.rt || {}));
+  if(t.base != null) G.base = +t.base; else delete G.base;
+  G.tpl = tid; vanRatesSave(R);
+}
+function vanTplPick(gk, tid){ vanTplApply(gk, tid); ctRender(); }
+function vanTplSel(gk){ _ct.vsel = _ct.vsel || {}; if(_ct.vsel[gk]) delete _ct.vsel[gk]; else _ct.vsel[gk] = 1; ctRender(); }
+function vanTplSelAllMissing(){ var had = Object.keys(_ct.vsel || {}).length; _ct.vsel = {}; if(!had) vanGroups().forEach(function(g){ if(vanGroupState(g.key).k === 'def') _ct.vsel[g.key] = 1; }); ctRender(); }
+function vanTplBulk(){
+  var sel = Object.keys(_ct.vsel || {}); if(!sel.length){ alert('Tick at least one group first.'); return; }
+  var el = document.getElementById('ct-vtpl-bulk'), tid = el ? el.value : '';
+  if(!tid){ alert('Choose a rate set first.'); return; }
+  if(!confirm('Apply this rate set to ' + sel.length + ' group(s)? Their current route rates will be replaced.')) return;
+  sel.forEach(function(gk){ vanTplApply(gk, tid); }); _ct.vsel = {}; ctRender();
+}
+function vanTplCopy(){
+  var sel = Object.keys(_ct.vsel || {}); if(!sel.length){ alert('Tick at least one group first.'); return; }
+  var el = document.getElementById('ct-vcopy'), src = el ? el.value : ''; if(!src){ alert('Choose a group to copy from.'); return; }
+  if(!confirm('Copy rates from that group to ' + sel.length + ' group(s)?')) return;
+  var R = vanRates(), S = R[src] || {};
+  sel.forEach(function(gk){ if(gk === src) return; var G = R[gk] = R[gk] || {}; G.rt = JSON.parse(JSON.stringify(S.rt || {})); if(S.base != null) G.base = +S.base; else delete G.base; if(S.tpl) G.tpl = S.tpl; else delete G.tpl; });
+  vanRatesSave(R); _ct.vsel = {}; ctRender();
+}
+function vanTplNew(){
+  var nm = prompt('Name of the new rate set (e.g. Khao Lak partners 1,800):'); if(nm == null) return; nm = String(nm).trim(); if(!nm) return;
+  var T = vanTpls(), id = 't' + Date.now().toString(36); T[id] = { name:nm, rt:{} }; vanTplsSave(T); _ct.vtplEdit = id; ctRender();
+}
+function vanTplEdit(id){ _ct.vtplEdit = (_ct.vtplEdit === id) ? '' : id; ctRender(); }
+function vanTplDel(id){
+  var n = 0, R = vanRates(); Object.keys(R).forEach(function(gk){ if(R[gk] && R[gk].tpl === id) n++; });
+  if(!confirm('Delete this rate set?' + (n ? ('\n' + n + ' group(s) keep their current numbers but will no longer be linked to it.') : ''))) return;
+  var T = vanTpls(); delete T[id]; vanTplsSave(T);
+  Object.keys(R).forEach(function(gk){ if(R[gk] && R[gk].tpl === id) delete R[gk].tpl; }); vanRatesSave(R);
+  if(_ct.vtplEdit === id) _ct.vtplEdit = ''; ctRender();
+}
+function vanTplSet(id, routeId, field, val){
+  var T = vanTpls(), t = T[id]; if(!t) return;
+  var v = (String(val).trim() === '') ? null : (+val || 0);
+  if(!routeId){ if(v == null) delete t.base; else t.base = v; }
+  else { t.rt = t.rt || {}; var X = t.rt[routeId] = t.rt[routeId] || {}; if(v == null) delete X[field]; else X[field] = v; if(!Object.keys(X).length) delete t.rt[routeId]; }
+  vanTplsSave(T);
+}
+function vanTplRaw(id, routeId, field){ var t = vanTpls()[id] || {}; if(!routeId) return t.base == null ? '' : t.base; var X = (t.rt || {})[routeId] || {}; return X[field] == null ? '' : X[field]; }
+/* กรอกทีเดียวทั้งท่า · ใส่ PK/KL ให้ทุกเส้นของท่านั้น (ชุด หรือ กลุ่ม) */
+function vanPierFill(kind, id, pier){
+  var pk = (document.getElementById('ct-pf-pk-' + pier) || {}).value, kl = (document.getElementById('ct-pf-kl-' + pier) || {}).value;
+  if(String(pk || '').trim() === '' && String(kl || '').trim() === ''){ alert('Enter PK and/or KL first.'); return; }
+  var rs = (typeof ROUTES !== 'undefined' ? ROUTES : []).filter(function(r){ return (r.pier || '') === pier && !(typeof laIsLandRoute === 'function' && laIsLandRoute(r.id)); });
+  rs.forEach(function(r){
+    if(String(pk || '').trim() !== '') (kind === 'tpl' ? vanTplSet : vanRateSet)(id, r.id, 'PK', pk);
+    if(String(kl || '').trim() !== '') (kind === 'tpl' ? vanTplSet : vanRateSet)(id, r.id, 'KL', kl);
+  });
+  ctRender();
+}
+/* สถานะกลุ่ม · ครบ / ใช้ชุด (+แก้) / ตั้งเอง / ยังใช้ default */
+function vanGroupState(gk){
+  var G = vanRates()[gk] || {}, nRt = Object.keys(G.rt || {}).length;
+  if(G.tpl && vanTpls()[G.tpl]){ var d = vanTplDiff(gk); return { k:'tpl', t:vanTpls()[G.tpl].name + (d ? (' + แก้ ' + d + ' เส้น') : ''), d:d }; }
+  if(nRt || G.base != null) return { k:'own', t:'ตั้งเอง · ' + (nRt ? (nRt + ' เส้น') : '') + (G.base != null ? (' ฐาน ' + (+G.base).toLocaleString()) : '') };
+  return { k:'def', t:'' };
+}
+function ctVanFull(){ _ct.vfull = !_ct.vfull; ctRender(); }
+/* ตารางรายเส้นของ ชุด หรือ กลุ่ม · มีช่อง "กรอกทีเดียวทั้งท่า" ต่อท่า */
+function vanRouteTable(kind, id, e){
+  var PR = ctRoutesByPier(), getR = (kind === 'tpl') ? vanTplRaw : vanRateRaw, fn = (kind === 'tpl') ? 'vanTplSet' : 'vanRateSet';
+  var body = PR.map(function(pg){
+    var pier = (pg.routes[0] || {}).pier || '';
+    var fill = pier ? ('<span class="ct-u" style="margin-left:14px">กรอกทั้งท่า: PK</span> <input class="ct-in" id="ct-pf-pk-' + e(pier) + '" style="width:62px" placeholder="PK">'
+      + ' <span class="ct-u">KL</span> <input class="ct-in" id="ct-pf-kl-' + e(pier) + '" style="width:62px" placeholder="KL">'
+      + ' <button class="ct-mini" onclick="vanPierFill(\'' + kind + '\',\'' + e(id) + '\',\'' + e(pier) + '\')">ใส่ทุกเส้น</button>') : '';
+    return '<tr class="ct-pierh"><td colspan="3">' + e(pg.name) + fill + '</td></tr>'
+      + pg.routes.map(function(r){
+          var F = function(fld, w){ return ctNum(getR(id, r.id, fld), 'v' + kind + id + r.id + fld, fn + '(\'' + e(id) + '\',\'' + e(r.id) + '\',\'' + fld + '\',this.value)', w || 68); };
+          return '<tr><td class="ct-nm" style="padding-left:26px"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>' + e(r.name || r.id) + '</td>'
+            + '<td>' + F('base') + '<span class="ct-u" style="margin-left:5px">ทั้งเส้นทาง</span></td>'
+            + '<td><span class="ct-u">PK</span> ' + F('PK') + '<span class="ct-u" style="margin-left:10px">KL</span> ' + F('KL') + '</td></tr>'; }).join('');
+  }).join('');
+  return '<table class="ct-mtbl"><colgroup><col><col style="width:210px"><col style="width:300px"></colgroup><tbody>' + body + '</tbody></table>'
+    + '<div class="ct-hint" style="padding:8px 4px 2px">เว้นว่าง = ใช้ราคาฐาน' + (kind === 'tpl' ? 'ของชุด' : 'ของกลุ่ม') + ' · <b>ทั้งเส้นทาง</b> = ราคาเดียวไม่แยกโซน · <b>PK / KL</b> = รับภูเก็ต / รับเขาหลักคิดไม่เท่ากัน</div>';
+}
 function vanRateRaw(gk, routeId, field){
   var G = vanRates()[gk] || {};
   if(!routeId) return (G.base == null) ? '' : G.base;
@@ -36412,6 +36555,39 @@ function ctRealHtml(){
   /* ── รถ · คิดตามกลุ่ม ไม่ใช่ตามคัน ── */
   var GS = vanGroups(), PR = ctRoutesByPier();
   _ct.vg = _ct.vg || {};
+  /* §vanTpl · โหมดชุดเรต */
+  var TP = vanTplSeed(), tplIds = Object.keys(TP), vsel = _ct.vsel || {};
+  var nDef = GS.filter(function(g){ return vanGroupState(g.key).k === 'def'; }).length;
+  var tplOpt = function(cur){ return '<option value="">— เลือกชุดเรต —</option>' + tplIds.map(function(id){ return '<option value="' + e(id) + '"' + (cur === id ? ' selected' : '') + '>' + e(TP[id].name) + '</option>'; }).join(''); };
+  var tplCards = tplIds.map(function(id){ var on = _ct.vtplEdit === id;
+      return '<div class="ct-vtc' + (on ? ' on' : '') + '"><div class="ct-vtch"><b>' + e(TP[id].name) + '</b>'
+        + '<button class="ct-mini" onclick="vanTplEdit(\'' + e(id) + '\')" title="แก้ตัวเลขของชุด">' + (on ? 'ปิด' : 'แก้') + '</button>'
+        + '<button class="ct-mini" onclick="vanTplDel(\'' + e(id) + '\')" title="ลบชุด">&times;</button></div>'
+        + '<small>' + e(vanTplDesc(TP[id])) + '</small></div>'; }).join('')
+    + '<div class="ct-vtc add" onclick="vanTplNew()">+ เพิ่มชุดเรต</div>';
+  var tplEdit = (_ct.vtplEdit && TP[_ct.vtplEdit]) ? ('<div class="ct-vtedit"><div class="ct-u" style="margin-bottom:6px">แก้ชุด <b>' + e(TP[_ct.vtplEdit].name) + '</b> · ราคาฐาน '
+      + ctNum(vanTplRaw(_ct.vtplEdit, '', ''), 'vtb' + _ct.vtplEdit, 'vanTplSet(\'' + e(_ct.vtplEdit) + '\',\'\',\'\',this.value)', 76)
+      + ' <span class="ct-u">· กลุ่มที่ใช้ชุดนี้อยู่จะไม่เปลี่ยนเอง กด "ใช้กับที่เลือก" ซ้ำเพื่ออัปเดต</span></div>' + vanRouteTable('tpl', _ct.vtplEdit, e) + '</div>') : '';
+  var nSel = Object.keys(vsel).length;
+  var bulk = '<div class="ct-vbulk"><label class="ct-u"><input type="checkbox" onchange="vanTplSelAllMissing()"' + (nSel && nSel === nDef ? ' checked' : '') + '> เลือกกลุ่มที่ยังใช้ default ทั้งหมด</label>'
+    + '<b>เลือกไว้ ' + nSel + ' กลุ่ม</b> &rarr; <select class="ct-in" id="ct-vtpl-bulk" style="width:auto;min-width:170px">' + tplOpt('') + '</select>'
+    + '<button class="ct-btn" onclick="vanTplBulk()">ใช้กับที่เลือก</button><span class="ct-u">หรือ คัดลอกจาก</span>'
+    + '<select class="ct-in" id="ct-vcopy" style="width:auto;min-width:150px"><option value="">— กลุ่ม —</option>' + GS.filter(function(g){ return vanGroupState(g.key).k !== 'def'; }).map(function(g){ return '<option value="' + e(g.key) + '">' + e(g.name) + '</option>'; }).join('') + '</select>'
+    + '<button class="ct-btn" onclick="vanTplCopy()">คัดลอก</button></div>';
+  var vanRowsT = GS.map(function(g){
+    var st = vanGroupState(g.key), G = vanRates()[g.key] || {}, opened = !!_ct.vg[g.key];
+    var badge = st.k === 'def' ? ('<span class="ct-vst def">ใช้ default ฿' + (g.own ? MV_VAN_DEF.own : MV_VAN_DEF.partner) + '</span>')
+              : st.k === 'tpl' ? ('<span class="ct-vst ok">' + (st.d ? 'ชุด + แก้' : 'ครบ') + '</span>') : '<span class="ct-vst ok">ตั้งเอง</span>';
+    var head = '<tr class="ct-vgh' + (st.k === 'def' ? ' def' : '') + '"><td class="ct-nm"><input type="checkbox" class="ct-vck"' + (vsel[g.key] ? ' checked' : '') + ' onchange="vanTplSel(\'' + e(g.key) + '\')">'
+      + '<b>' + e(g.name) + '</b><div class="ct-nmsub" style="margin-left:24px">' + g.vans.length + ' คัน · ' + e(g.vans.slice(0, 4).map(function(v){ return v.name || v.id; }).join(' · ')) + (g.vans.length > 4 ? (' +' + (g.vans.length - 4)) : '')
+      + ' <span class="ct-tag ' + (g.own ? 'fix' : 'step') + '" style="margin-left:6px">' + (g.own ? 'ของบริษัท' : 'รถร่วม') + '</span></div></td>'
+      + '<td><select class="ct-in' + (st.k === 'def' ? ' ct-vdef' : '') + '" style="width:auto;min-width:190px" onchange="vanTplPick(\'' + e(g.key) + '\',this.value)">' + tplOpt(G.tpl || '') + '</select>'
+        + (st.k !== 'def' ? ('<div class="ct-nmsub">' + e(st.t) + '</div>') : '') + '</td>'
+      + '<td>' + badge + '</td>'
+      + '<td style="text-align:right"><button class="ct-mini" onclick="ctVanOpen(\'' + e(g.key) + '\')">' + (opened ? 'ซ่อน' : 'ปรับรายเส้น &#9656;') + '</button></td></tr>';
+    if(!opened) return head;
+    return head + '<tr class="ct-vgb"><td colspan="4">' + vanRouteTable('grp', g.key, e) + '</td></tr>';
+  }).join('');
   var vanRows = GS.map(function(g){
     var opened = !!_ct.vg[g.key];
     var nOvr = 0;
@@ -36478,9 +36654,15 @@ function ctRealHtml(){
 
     + '</div>'   /* /ct-rgrid */
     + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ค่ารถ · คิดตามกลุ่ม</b></span>'
-      + '<span class="ct-cnt">' + GS.length + ' กลุ่ม · ' + GS.reduce(function(a, g){ return a + g.vans.length; }, 0) + ' คัน</span></div>'
-      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:26%"><col style="width:330px"></colgroup>'
-      + '<tbody>' + vanRows + '</tbody></table></div>'
+      + '<span class="ct-cnt">' + GS.length + ' กลุ่ม · ' + GS.reduce(function(a, g){ return a + g.vans.length; }, 0) + ' คัน</span>'
+      + (nDef ? ('<span class="ct-vst def" style="margin-left:8px">' + nDef + ' กลุ่มยังใช้ default</span>') : '<span class="ct-vst ok" style="margin-left:8px">ตั้งครบทุกกลุ่ม</span>')
+      + '<button class="ct-mini" style="margin-left:auto" onclick="ctVanFull()">' + (_ct.vfull ? 'กลับไปแบบชุดเรต' : 'แสดงแบบตารางเต็ม') + '</button></div>'
+      + (_ct.vfull
+          ? ('<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:26%"><col style="width:330px"></colgroup><tbody>' + vanRows + '</tbody></table></div>')
+          : ('<div class="ct-vtpls"><div class="ct-u" style="margin:2px 0 6px"><b>ชุดเรต</b> · ตั้งครั้งเดียว ใช้กับหลายกลุ่ม</div><div class="ct-vtcs">' + tplCards + '</div>' + tplEdit + '</div>'
+             + bulk
+             + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:30%"><col style="width:150px"><col style="width:120px"></colgroup>'
+             + '<thead><tr><th>กลุ่มรถ</th><th>ชุดเรตที่ใช้</th><th>สถานะ</th><th></th></tr></thead><tbody>' + vanRowsT + '</tbody></table></div>'))
       + '<div class="ct-hint">รถของเจ้าเดียวกันราคาเดียวกัน จึงตั้งเป็นกลุ่ม ไม่ต้องกรอกทีละคัน · '
       + 'ที่ต่างกันจริงคือ<b>ไปท่าไหน</b>และ<b>ไปรับโซนไหน</b> — กดสามเหลี่ยมหน้ากลุ่มเพื่อตั้งแยกรายเส้นทาง<br>'
       + 'เดิมระบบคิดทุกคันเท่ากันที่ ฿1,200 · ไม่ได้ตั้งอะไรเลยจะใช้ ฿' + MV_VAN_DEF.own + ' (ของบริษัท) / ฿'
@@ -36506,6 +36688,23 @@ function mvRouteSet(rid, vid){
 }
 function ctOdFold(){ _ct.odOpen = !_ct.odOpen; ctRender(); }
 function ctVanOpen(k){ _ct.vg = _ct.vg || {}; if(_ct.vg[k]) delete _ct.vg[k]; else _ct.vg[k] = 1; ctRender(); }
+/* §vanTpl · CSS */
+(function(){ if(document.getElementById('ct-vantpl-css')) return; var st = document.createElement('style'); st.id = 'ct-vantpl-css';
+  st.textContent = '#view-costing .ct-vtcs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}'
+    + '#view-costing .ct-vtc{border:1.5px solid #D5DAE5;border-radius:10px;padding:8px 11px;min-width:200px;max-width:300px;background:#fff}'
+    + '#view-costing .ct-vtc.on{border-color:#16265C;background:#F5F7FC}'
+    + '#view-costing .ct-vtc.add{border-style:dashed;display:flex;align-items:center;justify-content:center;color:#185FA5;font-weight:700;cursor:pointer;min-width:140px}'
+    + '#view-costing .ct-vtch{display:flex;align-items:center;gap:6px}#view-costing .ct-vtch b{flex:1;font-size:13px}'
+    + '#view-costing .ct-vtc small{display:block;color:#6B7489;font-size:11px;line-height:1.5;margin-top:3px}'
+    + '#view-costing .ct-vtedit{border:1px solid #E6E9F0;border-radius:10px;padding:10px;margin-bottom:10px;background:#FAFBFD}'
+    + '#view-costing .ct-vbulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#F6F7FA;border:1px solid #E6E9F0;border-radius:10px 10px 0 0;font-size:12.5px}'
+    + '#view-costing .ct-vbulk label{display:inline-flex;align-items:center;gap:5px;margin-right:6px}'
+    + '#view-costing .ct-vst{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;font-size:10.5px;font-weight:700;white-space:nowrap}'
+    + '#view-costing .ct-vst.ok{background:#E3F4EC;color:#0B6B47}#view-costing .ct-vst.def{background:#FBE3E0;color:#A32D2D}'
+    + '#view-costing .ct-vck{margin-right:8px;vertical-align:-1px}'
+    + '#view-costing .ct-vdef{border-color:#E08A1E;background:#FFFBEB}'
+    + '#view-costing tr.ct-vgh.def td{background:#FFF9F8}';
+  (document.head || document.documentElement).appendChild(st); })();
 function vanCostSet(vid, v){
   var x = (typeof vehGet === 'function') ? vehGet(vid) : null; if(!x) return;
   x.costPerDay = (String(v).trim() === '') ? null : (+v || 0);
