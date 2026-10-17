@@ -216,5 +216,28 @@
     };
   }
 
+  /* §opsNoRate · "NO RATE" trips (bkV2NoRateTrips) from the server's quote: its warnings no_rate / not_offered are the same
+     test as the 409 no_rate a save would meet (pricing.ts assertPriced). Until the quote for this draft has answered, legacy's list stands. */
+  var legacyNoRate = window.bookingV2NoRateTrips;
+  if(typeof legacyNoRate === 'function') window.bookingV2NoRateTrips = function(){
+    var legacy = legacyNoRate.apply(this, arguments);
+    if(!O.enabled()) return legacy;
+    var d = window._bkV2 && _bkV2.newBooking;
+    if(!d || d.priceMode === 'manual' || !Array.isArray(d.trips)) return legacy;
+    var cur = current(), e = cur && cache[cur.key];
+    if(!(fresh(e) && e.ok && e.quote)) return legacy;
+    var bad = {};
+    (e.quote.warnings || []).forEach(function(w){
+      if(w && (w.code === 'no_rate' || w.code === 'not_offered') && typeof w.trip === 'number' && e.map[w.trip] != null) bad[e.map[w.trip]] = w.message;
+    });
+    var out = [];
+    d.trips.forEach(function(t, i){
+      if(!t || !t.routeId || !t.zone || !(i in bad) || t.bookingMode === 'charter' || t.ovnLeg) return;
+      var was = legacy.find(function(x){ return x.idx === i; });
+      out.push({ idx: i, trip: t, reason: was ? was.reason : bad[i] });
+    });
+    return out;
+  };
+
   window.laOpsQuote = { buildRequest: buildRequest, overlay: overlay, _cache: cache, _legacy: legacyCalc };
 })();
