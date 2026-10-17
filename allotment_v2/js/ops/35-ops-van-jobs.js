@@ -360,7 +360,9 @@
   /* ════ Driver arrived at the first pickup (Van Check-in) · vck_arrive ⇄ /operations/van-arrivals ════
      Legacy kept one mark per "date::van~route" in the blob. vckArrAll answers from a cache the day's GET
      fills; the toggle asks the server first (PUT = mark: the time and the login are the server's; DELETE =
-     unmark), then flows the van's untouched rows to Standby / back to Wait as legacy does (vckArrFlow). */
+     unmark). The server flows the van's untouched rows to Standby (PUT, answers moved_to_standby) / back to Wait
+     (DELETE) in the same transaction, so the browser rule vckArrFlow is not run here; the day's bookings are
+     re-read when rows moved, so the rows show their new status. */
   var arrMap = {}, arrDays = {};
   function arrKey(date, van, route){ return date + '::' + van + '~' + route; }
   function arrPut(date, a){
@@ -389,9 +391,13 @@
     var path = '/operations/van-arrivals/' + enc(date) + '/' + enc(m[1]) + '/' + enc(m[2]);
     O.queue(function(){ return on ? O.call('PUT', path) : O.call('DELETE', path); }).then(function(a){
       if(on && a) arrPut(date, a); else delete arrMap[key];
-      if(typeof window.vckArrFlow === 'function') window.vckArrFlow(date, gk, on);
-      if(typeof window.ckPersist === 'function') window.ckPersist();
-      if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+      // PUT answers how many rows went to Standby; DELETE (204) answers nothing and sends Standby rows back to Wait
+      var moved = on ? (a && +a.moved_to_standby || 0) : 1;
+      var again = moved && typeof window.bookingV2EnsureOpsRange === 'function'
+        ? window.bookingV2EnsureOpsRange({ from: date, to: date, refresh: true }) : null;
+      var done = function(){ if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin(); };
+      done();
+      if(again) again.then(done, function(){});
     }, function(e){
       if(!on && e && e.status === 404){ delete arrMap[key]; redraw(); return; }
       O.fail('Arrival not saved · ' + failCode(e), e);
