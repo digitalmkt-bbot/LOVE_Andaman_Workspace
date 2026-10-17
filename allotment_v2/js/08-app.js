@@ -30087,6 +30087,14 @@ function renderTravelSum(){
     var _lostW=_part?((typeof tsPaxWho==='function'?tsPaxWho(_Lp):'')||(_lostN+' คน')):'';
     var _est=_part?Math.round(r.amount*_lostN/_bkN):r.amount;
     if(_part) half=Math.round(_est/2);
+    /* §tsLostPart2 (2026-10-17) · owner "ควรอธิบายให้เข้าใจว่า ไม่ชาร์จ คนที่ยกเลิกหรืออะไร"
+       บอกใต้ปุ่มว่าตัดสินเฉพาะคนที่ไม่ได้ไป · คนที่เดินทางจ่ายตามปกติ · ผลก็เขียนว่าเป็นของคนที่ไม่ได้ไป */
+    var _goW='';
+    if(_part){ var _bkB=(typeof ckPaxBreak==='function')?(ckPaxBreak((r.t||{}).pax)||{}):{}, _go={};
+      ['ad','chd','inf','foc'].forEach(function(k){ _go[k]=Math.max(0,(+_bkB[k]||0)-(+_Lp[k]||0)); });
+      _goW=(typeof tsPaxWho==='function'?tsPaxWho(_go):'')||(Math.max(0,_bkN-_lostN)+' คน'); }
+    var _decLbl=function(dc){ if(!_part || !dc) return DEC[dc.decision][0];
+      return ({full:'เก็บเต็ม · คนที่ไม่ไป '+_lostW, partial:'เก็บบางส่วน · คนที่ไม่ไป '+_lostW, none:'ไม่ชาร์จคนที่ยกเลิก '+_lostW, postpone:'เลื่อนวัน'})[dc.decision]||DEC[dc.decision][0]; };
     var btn=function(k,lbl,amt,fn,cls){ var on=dec&&dec.decision===k;
       return '<button class="ts-db '+(cls||'')+(on?' on':'')+'" onclick="'+(fn||("tsPick('"+id+"','"+date+"','"+k+"',"+amt+")"))+'">'+lbl+'</button>'; };
     abody+='<tr class="'+(dec?'':'need')+'">'
@@ -30120,9 +30128,9 @@ function renderTravelSum(){
       +'</td>'
       +'<td class="ts-noprint"><div style="display:flex;flex-wrap:wrap;max-width:310px">'
         +(_part
-          ? (btn('full','เก็บเต็ม · '+_lostW,_est,"tsFullLost('"+id+"','"+date+"',"+_est+")")
+          ? (btn('full','เก็บเต็ม · '+_lostW,_est,"tsFullLost('"+id+"','"+date+"',"+_est+")").replace('<button ','<button title="เก็บเต็มราคาของคนที่ไม่ได้ไป '+e(_lostW)+' · ใส่ยอดเอง (เติมยอดประมาณให้)" ')
              +btn('partial','50% · '+money(half),half,null,'warn')
-             +btn('none','ไม่ชาร์จ · '+_lostW,0,null,'mut'))
+             +btn('none','ไม่ชาร์จ · '+_lostW,0,null,'mut').replace('<button ','<button title="ไม่เก็บเงินคนที่ยกเลิก/ไม่มา '+e(_lostW)+' · คนที่เดินทางจ่ายตามปกติ" '))
           : (btn('full','เก็บเต็ม '+money(r.amount),r.amount)
              +btn('partial','50%',half,null,'warn')
              +btn('none','ไม่ชาร์จ',0,null,'mut')))
@@ -30130,10 +30138,11 @@ function renderTravelSum(){
         +btn('postpone','เลื่อนวัน',0,"tsPostpone('"+id+"','"+date+"')",'pp')
         +(dec?('<button class="ts-db del" onclick="tsClear(\''+id+'\',\''+date+'\')">ล้าง</button>'):'')
         +'</div>'
+        +(_part?('<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป '+e(_lostW)+'</b> &middot; อีก <b>'+e(_goW)+'</b> ที่เดินทางจ่ายตามปกติ</div>'):'')   /* §tsLostPart2 */
         +'<input id="ts-note-'+id+'" class="ts-note" type="text" value="'+e(dec?dec.note:'')+'" placeholder="หมายเหตุ / เลขอ้างอิง"'
         +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')"></td>'
       +'<td class="c">'+(dec
-        ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+DEC[dec.decision][0]+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
+        ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+e(_decLbl(dec))+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
            +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(laAtLocal(dec.at,16))):'')+'</div>')
         : '<span class="ts-chip r">รอตัดสิน</span>')+'</td>'
       +'</tr>';
