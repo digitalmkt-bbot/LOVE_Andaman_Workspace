@@ -52,7 +52,16 @@
     o.pendQty = +r.pending_pax || 0;
     o.status = legacyStatus(r.state || r.status);
     o.opsIds = {}; o.opsIds[d] = r.id; o.opsVers = {}; o.opsVers[d] = r.version; o.opsVersion = r.version;
+    srvOf(o, d, r);
     return o;
+  }
+  /* the server's own numbers for one departure, kept per date (remaining_pax, pending_pax, sub_group_room,
+     release_at, overdue): the bookingV2Lock* wrappers below answer from these instead of re-deriving */
+  function srvOf(o, d, r){
+    if(!o.srv) o.srv = { at: Date.now(), rem: {}, pend: {}, room: {}, relAt: {}, overdue: {} };
+    o.srv.rem[d] = +r.remaining_pax || 0; o.srv.pend[d] = +r.pending_pax || 0; o.srv.room[d] = +r.sub_group_room || 0;
+    if(r.release_at) o.srv.relAt[d] = r.release_at;
+    o.srv.overdue[d] = !!r.overdue;
   }
   function build(rows, groups){
     var depsOf = {}, subsOf = {}, out = [];
@@ -79,12 +88,13 @@
       var G = common(g);
       G.id = g.id; G.scope = 'bulk'; G.date = ''; G.dateFrom = g.date_from; G.dateTo = g.date_to;
       G.dow = (g.weekdays || []).slice(); G.releaseDaysBefore = g.release_days_before; G.releaseTime = g.release_time || '';
+      G.departures = g.departures; G.departuresPast = g.departures_past;
       G.isGroup = true; G.opsVersion = g.version; G.opsIds = {}; G.opsVers = {}; G.usedBy = {}; G.pendBy = {}; G.releasedDates = [];
       G.used = 0; G.expiry = '';
       var open = null, anyLeft = false;
       deps.forEach(function(r){
         var d = r.service_date, drawn = +r.drawn_pax || 0;
-        G.opsIds[d] = r.id; G.opsVers[d] = r.version;
+        G.opsIds[d] = r.id; G.opsVers[d] = r.version; srvOf(G, d, r);
         if(drawn){ G.usedBy[d] = drawn; G.used += drawn; }
         if(+r.pending_pax) G.pendBy[d] = +r.pending_pax;
         if(r.status === 'released') G.releasedDates.push(d);
@@ -107,7 +117,7 @@
           K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {};
           K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
         }
-        var drawn = +c.drawn_pax || 0; K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version;
+        var drawn = +c.drawn_pax || 0; K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
         if(drawn){ K.usedBy[c.service_date] = drawn; K.used += drawn; }
       }); });
     });
@@ -434,6 +444,91 @@
   /* what the server works out on every read · the browser's own sweeps would only fight it */
   ['bookingV2LockExpireSweep', 'bookingV2LockFixTree', 'bookingV2LockFixUsed', 'bookingV2LockSweepFixAll', 'bookingV2LockHealRange'].forEach(function(n){
     def(n, function(){ return 0; });
+  });
+
+  /* ── legacy's lock rules answered from the server's numbers ────────────────
+     A rule is replaced only where the server sent its answer for that lock and date (remaining_pax,
+     pending_pax, sub_group_room, release_at, overdue, departures); anywhere else the legacy function runs. */
+  function defO(name, fn){
+    var o0 = window[name];
+    def(name, function(){ return fn.apply(this, [o0].concat([].slice.call(arguments))); });
+  }
+  function srvAt(l, key, date){ return (l && l.srv && date && l.srv[key] && l.srv[key][date] !== undefined) ? l.srv[key][date] : undefined; }
+
+  /* release cutoff: the server's instant (Asia/Bangkok), not the browser's local clock · CutoffPassed and Overdue derive from it */
+  defO('bookingV2LockReleaseCutoff', function(orig, l, tripDate){
+    var at = srvAt(l, 'relAt', tripDate);
+    return at ? new Date(at) : orig(l, tripDate);
+  });
+  /* overdue = cutoff passed and still holding: the server's flag; the browser only notices a cutoff that passed after the last read */
+  defO('bookingV2LockOverdue', function(orig, l, tripDate){
+    var od = srvAt(l, 'overdue', tripDate);
+    if(od === undefined) return orig(l, tripDate);
+    if(od) return true;
+    var rel = Date.parse(srvAt(l, 'relAt', tripDate) || '');
+    return (rel && l.srv.at < rel && Date.now() >= rel) ? orig(l, tripDate) : false;
+  });
+  /* a whole-boat hold: overdue is the server's flag (past its expiry, Asia/Bangkok) */
+  defO('bookingV2BoatLockOverdue', function(orig, l, today){
+    var od = l && l.scope === 'boat' ? srvAt(l, 'overdue', l.date) : undefined;
+    return od === undefined ? orig(l, today) : od;
+  });
+  /* which bulk locks cover a day: the ones the server made a departure for (route runs, weekday ticked, in range) */
+  defO('bookingV2LocksFor', function(orig, routeId, date){
+    return orig(routeId, date).filter(function(l){ return !(l.isGroup && l.opsIds && Object.keys(l.opsIds).length && !l.opsIds[date]); });
+  });
+  /* seats a booking may draw: the server's remaining_pax (a parent's = its seats in no sub-group, pending-aware) */
+  ['bookingV2LockRemaining', 'bookingV2LockUnallocDrawable', 'bookingV2LockDrawable'].forEach(function(n){
+    defO(n, function(orig, l, date){
+      var r = srvAt(l, 'rem', date);
+      return r === undefined ? orig(l, date) : r;
+    });
+  });
+  /* a sub-group's own pending seats (its parent holds fewer seats than it was asked for) */
+  defO('bookingV2LockSubPend', function(orig, c, date){
+    var p = srvAt(c, 'pend', date);
+    return (c && c.parentId && p !== undefined) ? p : orig(c, date);
+  });
+  /* who gets the held seats first: the server's split per sub-group and for the unsplit rest */
+  defO('bookingV2LockSubShares', function(orig, p, date){
+    var kids = SB_SEAT_LOCKS.filter(function(x){ return x.parentId === p.id; });
+    var ok = srvAt(p, 'rem', date) !== undefined && kids.every(function(c){ return srvAt(c, 'rem', date) !== undefined; });
+    if(!ok) return orig(p, date);
+    var by = {};
+    kids.forEach(function(c){
+      var rem = Math.max(0, (c.qty || 0) - bookingV2LockUsedOn(c, date)), held = srvAt(c, 'rem', date);
+      by[c.id] = { rem: rem, held: held, pend: Math.max(0, rem - held) };
+    });
+    var urem = Math.max(0, bookingV2LockUnalloc(p) - bookingV2LockUsedOn(p, date)), uh = srvAt(p, 'rem', date);
+    return { by: by, un: { rem: urem, held: uh, pend: Math.max(0, urem - uh) } };
+  });
+  /* room left for a new sub-group: the server's sub_group_room (a bulk lock: the tightest day still ahead) */
+  defO('bookingV2LockSubRoom', function(orig, p){
+    if(!p || !p.srv) return orig(p);
+    var today = O.today(), v = Object.keys(p.srv.room).filter(function(d){ return d >= today; }).map(function(d){ return p.srv.room[d]; });
+    if(!v.length) v = Object.keys(p.srv.room).map(function(d){ return p.srv.room[d]; });
+    return v.length ? Math.min.apply(null, v) : orig(p);
+  });
+  /* "x of y rounds gone": the group's departures and departures_past */
+  defO('bookingV2LockRounds', function(orig, l){
+    var G = l && (l.isGroup ? l : (l.parentId ? find(l.parentId) : null));
+    return (G && G.isGroup && G.departures != null) ? { total: +G.departures || 0, past: +G.departuresPast || 0 } : orig(l);
+  });
+  /* the server works out drawn_pax from live draws: nothing drifts, so nothing is audited or swept here */
+  defO('bookingV2LockAudit', function(orig, l){
+    var a = orig(l); if(a){ a.live = a.used; a.diff = 0; } return a;
+  });
+  defO('bookingV2LockAuditTree', function(orig, p){
+    var a = orig(p); if(a){ a.live = a.used; a.diff = 0; a.bad = 0; } return a;
+  });
+  defO('bookingV2LockSweep', function(orig){
+    return { rows: [], over: [], locks: (locks() || []).length, nBad: 0, nOver: 0, seats: 0, seatsMoved: 0, seatsDead: 0, seatsOver: 0 };
+  });
+  /* seats held off sale on a route-day: locked_pax from GET /v1/availability when that day is in hand */
+  defO('bookingV2LockedTotal', function(orig, routeId, date){
+    var s = O.availability && O.availability.get ? O.availability.get(routeId, date) : null;
+    if(O.availability && O.availability.ensure && /^\d{4}-\d{2}-\d{2}$/.test(date || '')) O.availability.ensure(date);
+    return (s && s.locked_pax != null) ? (+s.locked_pax || 0) : orig(routeId, date);
   });
 
   /* ── what the booking code asks of this file ──────────────────────────── */
