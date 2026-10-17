@@ -1266,6 +1266,87 @@
     return orig.apply(this, args);
   });
 
+  /* Fuel Intelligence (view fl-fuel). Legacy summed FL_DAILY and SB_BOOKINGS in the browser, and FL_DAILY holds only
+     the last 14 days, so a month total was incomplete. The month's figures are the server's: GET /v1/fleet/reports/fuel?month=
+     (days that ran, the price of the boat or of its pier that day, anomalies at 1.3x, weekly cost, revenue by family,
+     the six months of each boat). The report is read for the month shown; _fuelAgg and _fuelWkAgg then give the screen the
+     same shapes it always read. Shown from the last read at once, and drawn again if the server's answer differs. */
+  state.fuelReports = {};
+
+  function fuelAggFromReport(r){
+    var out = { fuel: num(r.fuel), cost: num(r.cost), pax: num(r.pax), tripDays: num(r.trip_days), byBoat: {}, byFam: {}, missing: [], anomalies: [], weekly: {}, priceMissing: !!r.price_missing };
+    (r.boats || []).forEach(function(b){
+      var routes = {};
+      (b.routes || []).forEach(function(x){
+        routes[x.route_id || '_none'] = { name: x.name, fuel: num(x.fuel), cost: num(x.cost), pax: num(x.pax), days: num(x.days) };
+      });
+      out.byBoat[b.boat_id] = { id: b.boat_id, name: b.name, fuel: num(b.fuel), cost: num(b.cost), pax: num(b.pax), runH: num(b.run_hours), days: num(b.days), missing: num(b.missing), fdays: [], routes: routes };
+    });
+    (r.families || []).forEach(function(f){ out.byFam[f.family_id] = { name: f.name, fuel: num(f.fuel), cost: num(f.cost), pax: num(f.pax), rev: num(f.revenue) }; });
+    (r.missing || []).forEach(function(m){ out.missing.push({ name: m.name, ds: m.date, route: m.route || '' }); });
+    (r.anomalies || []).forEach(function(x){ out.anomalies.push({ name: x.name, ds: x.date, fuel: x.fuel, avg: x.average, pct: x.pct }); });
+    // a week is listed when a boat ran in it (legacy), even when its fuel had no price
+    (r.weekly || []).forEach(function(w, i){
+      var ran = (r.trend || []).some(function(t){ return t.weeks && t.weeks[i] && t.weeks[i].days > 0; });
+      if(ran || num(w.cost) > 0) out.weekly[w.week] = num(w.cost);
+    });
+    return out;
+  }
+
+  function accOf(m){ return m && m.days ? { fuel: num(m.fuel), cost: num(m.cost), pax: num(m.pax), days: num(m.days), runH: num(m.run_hours) } : null; }
+
+  function fuelWkFromReport(r){
+    var out = {};
+    (r.trend || []).forEach(function(t){
+      var tot = accOf((r.boats || []).find(function(b){ return b.boat_id === t.boat_id; }));
+      if(!tot) return;
+      out[t.boat_id] = { id: t.boat_id, name: t.name, w: (t.weeks || []).map(accOf), tot: tot };
+    });
+    return out;
+  }
+
+  // a month that has no report of its own is read from the six-month series of one that has
+  function fuelWkFromSeries(month){
+    var out = null;
+    Object.keys(state.fuelReports).forEach(function(k){
+      ((state.fuelReports[k] || {}).trend || []).forEach(function(t){
+        var m = (t.months || []).find(function(x){ return x.month === month; });
+        var tot = accOf(m);
+        if(!tot) return;
+        out = out || {};
+        out[t.boat_id] = { id: t.boat_id, name: t.name, w: [null, null, null, null, null], tot: tot };
+      });
+    });
+    return out || {};
+  }
+
+  wrap('_fuelAgg', function(orig, month){
+    var r = state.fuelReports[month];
+    if(r) return fuelAggFromReport(r);
+    // the month before the one shown: only its cost and pax are read (cost per pax, the change against it)
+    var next = Object.keys(state.fuelReports).map(function(k){ return state.fuelReports[k]; }).find(function(x){ return x && x.previous && x.previous.month === month; });
+    if(next) return { fuel: 0, cost: num(next.previous.cost), pax: num(next.previous.pax), tripDays: 0, byBoat: {}, byFam: {}, missing: [], anomalies: [], weekly: {}, priceMissing: false };
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('_fuelWkAgg', function(orig, month){
+    var r = state.fuelReports[month];
+    if(r) return fuelWkFromReport(r);
+    return fuelWkFromSeries(month);
+  });
+
+  wrap('renderFuelIntel', function(orig){
+    var month = typeof _fuelMonth !== 'undefined' && _fuelMonth ? _fuelMonth : O.today().slice(0, 7);
+    var had = state.fuelReports[month] || null;
+    if(had) orig.apply(this, [].slice.call(arguments, 1));
+    return O.get('/v1/fleet/reports/fuel', { month: month }).then(function(rep){
+      state.fuelReports[month] = rep;
+      var still = typeof _fuelMonth !== 'undefined' ? _fuelMonth === month : true;
+      if(still && (!had || JSON.stringify(had) !== JSON.stringify(rep))) orig.call(window);
+      return rep;
+    }).catch(function(e){ O.fail('Could not load the fuel report', e); return null; });
+  });
+
   O.onChange(function(change){
     if(!change) return;
     dropUpkeep();
