@@ -89,6 +89,12 @@ const bkC = await post('/v1/bookings', { external_id: 'zz-credit', intent: 'conf
 await api('/operations/trip-ops/' + bkC.trips[0].id, { method: 'PATCH', body: JSON.stringify({ boat_id: 'b6' }) });
 const invC = await post('/v1/invoices', { agent_id: 'a01', booking_ids: [bkC.id], kind: 'prepay' });
 await post('/v1/invoices/' + invC.id + '/payments', { method: 'cash', amount: 1000 });
+// the Daily Fleet Log reads today and the days before it: one booking today, on b6
+const TODAY = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);       // Asia/Bangkok
+await post('/operations/deployments', { boat_id: 'b6', route_id: 'r5', service_date: TODAY, capacity: 40 });
+const bkD = await post('/v1/bookings', { external_id: 'zz-daily', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ DAILY', pickupSelf: true, trips: [{ routeId: 'r5', date: TODAY, pax: { ad_fr: 2, chd_fr: 1 }, zone: 'NoTransfer' }] });
+if (bkD.__status) console.log('seed: ZZ DAILY refused', bkD.__status, JSON.stringify(bkD).slice(0, 200));
+else await api('/operations/trip-ops/' + bkD.trips[0].id, { method: 'PATCH', body: JSON.stringify({ boat_id: 'b6' }) });
 await put(`/v1/routes/r10/days/${CLOSED}`, { kind: 'closed' });
 for (const d of SRC) await post('/operations/deployments', { boat_id: 'b13', route_id: 'r10', service_date: d, capacity: 38 });
 console.log('seed: bulk', bulk.id, bulk.__status || '', '| day', dayLock.id, dayLock.__status || '', '| sub', sub && sub.id, sub && sub.__status || '', '| pend', pendLock.id, pendLock.__status || '', pendLock.pending_pax);
@@ -235,9 +241,9 @@ await ev(() => { agCreditState('a01'); });           // asks the server in the b
 await settle(1200);
 const credit = (await api('/v1/agents/a01')).credit;
 s = await ev(() => ({ c: agCreditState('a01'), pay: sbGetAgent('a01').payType, limit: sbGetAgent('a01').creditLimit }));
-ok('agCreditState(a01) = the server\'s credit (limit 200000, used 2400, available, pct)', s.c.limit === credit.limit && s.c.used === credit.used && s.c.available === credit.available && s.c.pct === credit.pct && credit.used === 2400 && s.c.over === credit.over, { screen: s.c, server: credit, pay: s.pay });
+ok('agCreditState(a01) = the server\'s credit (limit, used = the two open bookings, available, pct)', s.c.limit === credit.limit && s.c.used === credit.used && s.c.available === credit.available && s.c.pct === credit.pct && credit.used === bkC.total + bkD.total && s.c.over === credit.over, { screen: s.c, server: credit, pay: s.pay });
 s = await ev(() => { const saved = SB_BOOKINGS.splice(0); const c = agCreditState('a01'); SB_BOOKINGS.push(...saved); return c; });
-ok('with the browser\'s own booking rows taken away the figure stays the server\'s (legacy sum would be 0)', s.used === 2400, s);
+ok('with the browser\'s own booking rows taken away the figure stays the server\'s (legacy sum would be 0)', s.used === credit.used, s);
 // PFM: open the screen for the booking's travel day
 await ev((d) => { const el = document.querySelector('.nav-item[data-view="dailypfm"]'); _pfmDate = d; _pfmMode = 'daily'; el.click(); }, T0);
 await waitScreen(() => window.laOpsPfm && document.getElementById('dailypfm-host') && document.getElementById('dailypfm-host').innerText.length > 50, null, 8000);
@@ -349,6 +355,52 @@ const ovr6 = (await api('/v1/boats/b13/capacity-overrides?from=2026-10-26&to=202
 const av6 = await api('/v1/availability?route_id=r10&date=2026-10-26');
 s = await ev(() => ({ cap: boatCapFor('b13', '2026-10-26'), modal: !!document.querySelector('#bcap-ov') }));
 ok('capacity override 30 on b13 (normal 38) → override row on the server · day sells 30 · the deployment keeps 38', ovr6.length === 1 && ovr6[0].capacity === 30 && (await depsOf('2026-10-26', '2026-10-26'))[0].capacity === 38 && av6.deployed_capacity === 30 && s.cap === 30 && !s.modal, { ovr6, av6: av6.deployed_capacity, s });
+
+console.log('\n[7] Fleet daily log pax_booked · boat assignment panels');
+await ev(() => { document.querySelector('.nav-item[data-view="dailyreport"]').click(); });
+await waitScreen(() => document.getElementById('fl-dr-date'), null, 6000);
+await settle(2000);
+const dl = await api(`/v1/fleet/daily-log?from=${TODAY}&to=${TODAY}`);
+const srvBooked = ((dl.days[0] || {}).boats || []).map((b) => [b.boat_id, b.pax_booked]);
+await ev(() => { document.getElementById('fl-dr-date').value = ''; flRenderDR(); });
+await settle(500);
+await waitScreen((a) => { const sv = SB_BOOKINGS.splice(0); const v = flBoatBookingsFor('b6', a.TODAY).pax; SB_BOOKINGS.push(...sv); return v === 3; }, { TODAY }, 8000);
+s = await ev((a) => ({ b6: flBoatBookingsFor('b6', a.TODAY), b7: flBoatBookingsFor('b7', a.TODAY), ds: document.getElementById('fl-dr-date').value }), { TODAY });
+ok('server daily log says b6 carries 3 booked pax today', (srvBooked.find((x) => x[0] === 'b6') || [])[1] === 3, srvBooked);
+ok('flBoatBookingsFor(b6, today).pax = the server\'s pax_booked (3)', s.b6.pax === 3, { s, srvBooked });
+s = await ev((a) => { const saved = SB_BOOKINGS.splice(0); const v = flBoatBookingsFor('b6', a.TODAY).pax; SB_BOOKINGS.push(...saved); return v; }, { TODAY });
+ok('with the browser\'s booking rows taken away the count stays the server\'s (legacy would say 0)', s === 3, s);
+
+const rowTxt = await ev(() => { const h = document.getElementById('view-dailyreport').innerText.replace(/\s+/g, ' '); const i = h.indexOf('Zeus'); return i < 0 ? null : h.slice(i, i + 140); });
+console.log('   Daily Fleet Log row: ' + JSON.stringify(rowTxt));
+ok('the Daily Fleet Log screen draws the Zeus row', rowTxt && /Zeus/.test(rowTxt), rowTxt);
+
+// assignment panels, driven through the real assignment dialog
+const asnSave = async (boatId, o) => {
+  await ev((id) => flOpenNewAssignment(id), boatId);
+  await page.selectOption('#asn-to', o.to);
+  await page.fill('#asn-start', o.start);
+  if (o.open) { await page.check('#asn-open'); } else await page.fill('#asn-end', o.end);
+  await page.fill('#asn-reason', 'walk');
+  const n = calls.length;
+  await page.click('#fl-modal-assignment button[onclick="flSaveAssignment()"]');
+  await idle(); await settle(1500);
+  return lastCalls(n);
+};
+const dayT = TODAY;
+const c1 = await asnSave('b1', { to: 'panwa', start: TODAY, end: '2026-10-19' });
+const c2 = await asnSave('b7', { to: 'panwa', start: '2026-10-25', end: '2026-10-26' });
+const c3 = await asnSave('b13', { to: 'tublamu', start: TODAY, open: true });
+const asn = {}; for (const b of ['b1', 'b7', 'b13']) asn[b] = await api(`/v1/boats/${b}/assignments`);
+console.log('   server b13 panels:', JSON.stringify({ active: asn.b13.active, open: (asn.b13.assignments || []).map((x) => [x.id, x.start_date, x.end_date, x.open_end, x.status]) }));
+console.log('   calls b13:', JSON.stringify(c3.filter((c) => /assign/.test(c))));
+s = await ev((a) => { const out = {}; ['b1', 'b7', 'b13'].forEach((id) => { const b = BOATS.find((x) => x.id === id);
+  out[id] = { active: (getActiveAssignment(b) || {}).id || null, planned: getPlannedAssignments(b).map((x) => x.id), past: getPastAssignments(b).map((x) => x.id), ends: (b.assignments || []).map((x) => [x.id, asnEndOf(x), asnIsOpen(x)]) }; }); return out; }, {});
+ok('b1 (today → 19 Oct): POST /v1/boats/b1/assignments · screen active = server active', c1.some((c) => /^POST \/v1\/boats\/b1\/assignments/.test(c)) && asn.b1.active && s.b1.active === asn.b1.active.id, { c1, srv: asn.b1.active, scr: s.b1 });
+ok('b7 (25 → 26 Oct): screen planned = server planned, nothing active', asn.b7.planned.length === 1 && JSON.stringify(s.b7.planned) === JSON.stringify(asn.b7.planned.map((x) => x.id)) && s.b7.active === null, { srv: asn.b7.planned, scr: s.b7 });
+const openSrv = (asn.b13.assignments || []).find((x) => x.open_end);
+ok('b13 with "return date not known" ticked: the server holds an open-ended assignment', !!openSrv, { c3, asn: asn.b13.assignments });
+if (openSrv) ok('asnEndOf / asnIsOpen: open end is 9999-12-31 and open on screen', s.b13.ends.some((e) => e[0] === openSrv.id && e[1] === '9999-12-31' && e[2] === true), s.b13);
 
 //PROBE
 
