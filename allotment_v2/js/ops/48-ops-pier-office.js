@@ -89,6 +89,15 @@
   /* ════ settings · PIER_CFG scalars ═══════════════════════════════════ */
   var SET_KEYS = [['cycleStart', 'cycle_start', 'int'], ['onBoatCode', 'on_boat_code', 'str'], ['mtCode', 'mt_code', 'str'],
                   ['ddCode', 'dd_code', 'nstr'], ['defCode', 'def_code', 'str'], ['nightCode', 'night_code', 'str'], ['licWarnDays', 'lic_warn_days', 'int']];
+  /* settings.display · the screens' own preferences (legacy PIER_CFG.stBand, slotLb, signAgentColors, whoSects, cycNote).
+     The server stores the object as sent (never reads it, 8 KB at most) and PATCH replaces it whole. The legacy setters
+     (pjStColor, poSignColorSet, poWhoSectSave, paNote ...) write PIER_CFG and call poPersist, which sends the change here. */
+  var DISPLAY_KEYS = ['stBand', 'slotLb', 'signAgentColors', 'whoSects', 'cycNote'];
+  function displayView(){
+    var c = cfg(), d = {};
+    DISPLAY_KEYS.forEach(function(k){ var v = c[k]; if(v && typeof v === 'object' && Object.keys(v).length) d[k] = clone(v); });
+    return d;
+  }
   var setBase = null, setSrv = null;
   function setView(){
     var c = cfg(), o = {};
@@ -103,12 +112,15 @@
       if(num(m.cap) !== null) o.pay_ws_min_cap = +m.cap;
       if(num(m.crew) !== null) o.pay_ws_min_crew = +m.crew;
     }
+    o.display = displayView();
     return o;
   }
   function applySettings(s){
     setSrv = s; var c = cfg();
     SET_KEYS.forEach(function(k){ c[k[0]] = s[k[1]] == null ? '' : s[k[1]]; });
     c.payWsMin = { cap: s.pay_ws_min_cap, crew: s.pay_ws_min_crew };
+    var dsp = (s.display && typeof s.display === 'object') ? s.display : {};
+    DISPLAY_KEYS.forEach(function(k){ if(dsp[k] && typeof dsp[k] === 'object') c[k] = clone(dsp[k]); else delete c[k]; });
     setBase = setView();
   }
   P.register({
