@@ -83,8 +83,8 @@ const kinds = (await api('/v1/pier-office')).item_kinds;
 const itemFin = (await seed('POST', '/v1/pier-office/items', { pier: PIER, kind_id: kinds[0].id, label: 'Fin M', total: 30 })).id;
 for (const [b, r] of [['b6', 'r5'], ['b7', 'r4']]) for (const d of [D, D2]) await seed('POST', '/operations/deployments', { boat_id: b, route_id: r, service_date: d, capacity: 40, deploy_anyway: true });
 let nb = 0;
-const book = async (date, boat, route, pax, zone = 'PK') => {
-  const b = await seed('POST', '/v1/bookings', { external_id: `b2c_walk_${Date.now().toString(36)}_${nb++}`, total: 3000, trips: [{ route_id: route, date, pax, zone }] });
+const book = async (date, boat, route, pax, zone = 'PK', add_ons = undefined) => {
+  const b = await seed('POST', '/v1/bookings', { external_id: `b2c_walk_${Date.now().toString(36)}_${nb++}`, total: 3000, trips: [{ route_id: route, date, pax, zone }], add_ons });
   const v = (await api(`/v1/bookings/${b.id}`)).version;
   await seed('PATCH', `/operations/trip-ops/${b.trips[0].id}`, { boat_id: boat, version: v });
   return b;
@@ -92,6 +92,7 @@ const book = async (date, boat, route, pax, zone = 'PK') => {
 const bk1 = await book(D, 'b6', 'r5', { ad_fr: 2, chd_fr: 1 });
 const bk2 = await book(D, 'b6', 'r5', { ad_th: 2, chd_th: 1 });
 const bk3 = await book(D, 'b7', 'r4', { ad_fr: 3 });
+const bk4 = await book(D2, 'b6', 'r5', { ad_fr: 2 }, 'PK', [{ type: 'longtail-join', label: 'Longtail join', join_adults: 2, join_children: 0 }]);
 
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -167,6 +168,58 @@ section('1', async () => {
   ok('day close stored recorded_staff_id', dayRow.closed && dayRow.closed.recorded_staff_id === staff.Somchai, dayRow.closed);
   const scr = await ev(() => !!poDayClosed(_poDate, _poPier));
   ok('the screen shows the day closed (ปิดวันแล้ว)', scr, scr);
+});
+
+// ═══ 2 · petty cash sheets ═══
+section('2', async () => {
+  console.log('\n[2] petty cash · boats and dates, park pull state, refunds, day numbers');
+  const P = (p) => `/v1/pier-cash/${PIER}${p}`;
+  await seed('PATCH', P(`/days/${D}/park/b6`), { ad_fr: 2, chd_fr: 1, amount: 600, dock: 0 });
+  const out1 = await seed('POST', P(`/days/${D}/rows`), { kind: 'out', amount: 500, description: 'ค่าน้ำมันเรือ' });
+  await seed('POST', P(`/days/${D}/claims`), { name: 'walk claim', row_ids: [out1.row.id] });
+  await seed('POST', P(`/days/${D}/rows`), { kind: 'in', amount: 500, description: 'รับเงินคืน ตั้งเบิก walk' });
+  await seed('POST', P(`/days/${D}/rows`), { kind: 'in', amount: 70, description: 'รับเงินจากลูกค้า' });
+  await openView('pop-' + PIER, D);
+  await page.locator(`button[onclick="pcPickDay('${D}')"]`).click(); await settle(1500);
+  const day = await api(P(`/days/${D}`));
+  const monthPark = await api(P('/months/2026-10/park'));
+  const srvBoats = (monthPark.days.find((d) => d.date === D).boats || []).filter((b) => b.route_id).map((b) => b.boat_id);
+  const srvDates = [...new Set(monthPark.days.filter((d) => (d.boats || []).some((b) => b.route_id)).map((d) => d.date))].sort();
+  const s = await ev((a) => ({
+    boats: pcBoats(a.D, a.P).map((b) => b.bid), dates: pcDates(a.P, '2026-10'),
+    st: pcPkPullState(a.P, a.D), pcDate: _pcDate,
+    refunds: pcRowsArr().filter((r) => r.pier === a.P && r.date === a.D && r.kind === 'in').map((r) => [r.txt, pcIsRefund(r), r.srvRefund]),
+  }), { D, P: PIER });
+  ok('pcBoats = the server sheet\'s boats of the day (route order)', JSON.stringify(s.boats) === JSON.stringify(srvBoats) && srvBoats.length === 2, { screen: s.boats, server: srvBoats });
+  ok('pcDates = the days the server sheet lists', JSON.stringify(s.dates) === JSON.stringify(srvDates) && srvDates.includes(D), { screen: s.dates, server: srvDates });
+  const pp = day.park_pull;
+  ok('pcPkPullState before the pull = server park_pull (1 boat waiting, 600, boats in the server order)', s.st.waiting === 600 && s.st.nWait === 1 && s.st.nPulled === 0 && pp.waiting === 600 && JSON.stringify(s.st.lines.map((l) => l.B.bid)) === JSON.stringify(pp.boats.map((b) => b.boat_id)), { screen: s.st, server: pp });
+  const refund = s.refunds.find((r) => /รับเงินคืน/.test(r[0])), plain = s.refunds.find((r) => /ลูกค้า/.test(r[0]));
+  const srvRows = day.rows.filter((r) => r.kind === 'in');
+  ok('pcIsRefund: the "รับเงินคืน" line is a refund and the customer line is not, as the server says', refund && refund[1] === true && refund[2] === true && plain && plain[1] === false && srvRows.find((r) => /รับเงินคืน/.test(r.description)).refund && !srvRows.find((r) => /ลูกค้า/.test(r.description)).refund, { screen: s.refunds, server: srvRows.map((r) => [r.description, r.refund && 'match']) });
+  // pull through the real button
+  await page.locator('button[onclick^="pcPull("]').first().click(); await idle(); await settle(1200);
+  const day2 = await api(P(`/days/${D}`));
+  const pulled = day2.rows.filter((r) => r.boat_id === 'b6' && r.source === 'park');
+  const s2 = await ev((a) => ({ st: pcPkPullState(a.P, a.D), src: pcRowsArr().filter((r) => r.pier === a.P && r.date === a.D && /ค่าอุทยาน/.test(r.txt)).map((r) => [r.txt, r.src, r.bid]) }), { D, P: PIER });
+  ok('the pull made one park line for b6 on the server', pulled.length === 1 && +pulled[0].amount === 600, day2.rows.map((r) => [r.description, r.source, r.boat_id]));
+  ok('pcPkPullState after the pull = server (nothing waiting, 1 pulled)', s2.st.waiting === 0 && s2.st.nPulled === 1 && day2.park_pull.pulled_boats === 1, { screen: s2.st, server: day2.park_pull });
+  ok('the pulled line reaches the legacy row as a park line (src pk, boat b6)', s2.src.length === 1 && s2.src[0][1] === 'pk' && s2.src[0][2] === 'b6', s2.src);
+  // numbers of the day on screen: park (pc2StatPK) and longtail (pc2StatLT)
+  const boatsDay = await api(`/v1/pier-office/${PIER}/days/${D}/boats`);
+  const tot = Object.fromEntries(boatsDay.boats.map((b) => [b.boat_id, b.booked.nationality.tot]));
+  const pk = await ev((a) => pc2StatPK(a.P, a.D), { D, P: PIER });
+  const missSrv = ['b6', 'b7'].filter((b) => tot[b] > 0 && !(+((day2.rows.find((r) => r.boat_id === b && r.source === 'park') || {}).amount) > 0)).length;
+  ok('pc2StatPK numbers: heads and boats missing a fee come from the server', pk.pax === tot.b6 + tot.b7 && pk.n === 2 && pk.miss === missSrv && pk.missNames.length === missSrv, { screen: pk, server: tot });
+  await page.locator(`button[onclick="pcPickDay('${D2}')"]`).click(); await settle(1500);
+  const boatsD2 = await api(`/v1/pier-office/${PIER}/days/${D2}/boats`);
+  const bk = boatsD2.boats.find((b) => b.boat_id === 'b6').booked;
+  const lt = await ev((a) => pc2StatLT(a.P, a.D), { D: D2, P: PIER });
+  ok('pc2StatLT: 1 boat needs a longtail entry (server join_heads) and it is missing', bk.join_heads === 2 && lt.need === 1 && lt.miss === 1 && lt.missNames.length === 1, { screen: lt, join: bk.join_heads });
+  await ev((a) => pcSetLT(a.D, 'b6', 'amt', 800), { D: D2 }); await idle(); await settle(800);
+  const lt2 = await ev((a) => pc2StatLT(a.P, a.D), { D: D2, P: PIER });
+  const cell = (await api(P('/months/2026-10/longtail'))).days.find((d) => d.date === D2).boats.find((b) => b.boat_id === 'b6').cell;
+  ok('after keying the longtail amount the missing count drops to 0 and the server holds it', lt2.miss === 0 && cell && +cell.amount === 800, { screen: lt2, cell });
 });
 
 // @@SECTIONS
