@@ -888,6 +888,102 @@
     }).catch(function(e){ O.fail('Could not save the memo lines', e); return null; });
   });
 
+  /* legacy flSaveMemo (05-fleet.js): the "create memo" / "edit memo" form. The old code built the memo in
+     FL_MEMOS and flSave() (a no-op in ops), so a new memo or an edit was lost on reload; it also worked out the
+     totals and auto-registered stock items in the browser. Now POST /v1/fleet/memos (or PATCH for an edit):
+     the totals, the status (pending_approval, step 1), the stock auto-register and the job / project log lines are the
+     server's; the boat of a memo made from a job or project is the server's too when none is sent. Same checks and
+     toasts as legacy; the form stays open when the server refuses (for example a memo number already used). */
+  wrap('flSaveMemo', function(){
+    var el = function(id){ return document.getElementById(id); };
+    var val = function(id){ var e = el(id); return e ? e.value : ''; };
+    var subject = val('memo-subject').trim();
+    if(!subject){ alert('กรุณากรอกเรื่อง'); return null; }
+    var memoDate = val('memo-date') || O.today();
+    var editId = typeof _memoEditId !== 'undefined' ? _memoEditId : null;
+    var maintId = typeof _memoMaintId !== 'undefined' ? _memoMaintId : null;
+    var projectId = typeof _memoProjectId !== 'undefined' ? _memoProjectId : null;
+    var scope = (typeof _memoScope !== 'undefined' && _memoScope) || 'vessel';
+    var memoType = (typeof _memoType !== 'undefined' && _memoType) || 'parts';
+    var items = typeof _memoItems !== 'undefined' && Array.isArray(_memoItems) ? _memoItems.slice() : [];
+    var vatBox = el('memo-vat-enabled');
+    var vatEnabled = !vatBox || vatBox.checked !== false;
+    var vatRate = vatEnabled ? (parseFloat(val('memo-vat-rate')) || 0) : 0;
+    var memos = listMemos();
+    var ex = editId ? memos.find(function(x){ return x && x.id === editId; }) : null;
+    var jobs = typeof FL_MAINT !== 'undefined' && Array.isArray(FL_MAINT) ? FL_MAINT : [];
+    var projs = typeof FL_PROJECTS !== 'undefined' && Array.isArray(FL_PROJECTS) ? FL_PROJECTS : [];
+    var job = maintId ? jobs.find(function(x){ return x && x.id === maintId; }) : null;
+    var proj = projectId ? projs.find(function(x){ return x && x.id === projectId; }) : null;
+    var d = {
+      title: subject,
+      memoType: memoType,
+      scope: ex ? (scope || ex.scope) : scope,
+      generalCategory: scope === 'general' ? val('memo-general-cat') : null,
+      to: val('memo-to'), from: val('memo-from'), proposer: val('memo-proposer'),
+      supplier: val('memo-supplier').trim(), note: val('memo-note').trim(),
+      memoDate: memoDate,
+      vatEnabled: vatEnabled, vatRate: vatRate,
+      discountPct: parseFloat(val('memo-discount-pct')) || 0,
+      discountAmt: parseFloat(val('memo-discount-amt')) || 0,
+      items: items
+    };
+    if(ex){
+      d.boatId = ex.boatId;
+      d.maintId = ex.maintId;
+      d.projectId = ex.projectId;
+      d.cc = ex.cc; d.refNote = ex.refNote;
+    } else {
+      d.boatId = scope === 'general' ? null : ((job && job.boatId) || (proj && proj.boatId) || null);
+      d.maintId = maintId;
+      d.projectId = projectId || null;
+      // the next number, as legacy (highest MO-n + 1); the server refuses a number already used
+      var top = 0;
+      memos.forEach(function(m){ var n = parseInt(String(m && m.no || '').replace(/^MO-/, ''), 10) || 0; if(n > top) top = n; });
+      d.no = 'MO-' + String(top + 1).padStart(3, '0');
+    }
+    var body = toMemoBody(d, !!ex);
+    return O.queue(function(){
+      return ex ? O.patch('/v1/fleet/memos/' + enc(ex.id), body) : O.post('/v1/fleet/memos', body);
+    }).then(function(res){
+      var saved = upsertMemo(res);
+      // stock items auto-registered by the server, and the job / project log lines it wrote
+      var tasks = [refetchStockAndMemos()];
+      if(O.fleetJobs && typeof O.fleetJobs.load === 'function') tasks.push(O.fleetJobs.load().catch(function(){}));
+      if(O.fleetDaily && typeof O.fleetDaily.load === 'function') tasks.push(O.fleetDaily.load().catch(function(){}));
+      return Promise.all(tasks).then(function(){ return saved; });
+    }).then(function(saved){
+      O.wrote(ex ? 'fleet-memo-edit' : 'fleet-memo-create');
+      var mid = saved.maintId, pid = saved.projectId;
+      var total = Number(saved.amount || 0);
+      if(ex){
+        _memoEditId = null; _memoProjectId = null;
+        var t = el('memo-modal-title'); if(t) t.textContent = 'สร้าง Memo';
+        var sb = el('memo-save-btn'); if(sb) sb.textContent = 'สร้าง Memo';
+        if(typeof window.closeModal === 'function') window.closeModal('fl-modal-memo');
+        if(mid && typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(mid);
+        if(pid && typeof window.flRenderProjects === 'function'){ _selProjId = pid; window.flRenderProjects(); }
+        if(typeof window.flShowToast === 'function') window.flShowToast('บันทึกการแก้ไข Memo แล้ว');
+        if(typeof window.flViewMemo === 'function') window.flViewMemo(saved.id);
+        return saved;
+      }
+      _memoProjectId = null;
+      if(typeof window.closeModal === 'function') window.closeModal('fl-modal-memo');
+      if(maintId && typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(maintId);
+      if(pid && typeof window.flRenderProjects === 'function'){
+        _selProjId = pid;
+        window.flRenderProjects();
+        if(typeof window.flShowToast === 'function') window.flShowToast('Memo ' + saved.no + ' added to project');
+      }
+      var memoTab = document.querySelector('.inv-tab:nth-child(2)');
+      var stockTab = el('inv-tab-stock');
+      if(memoTab && stockTab && stockTab.style.display !== 'none' && typeof window.invSwitchTab === 'function') window.invSwitchTab('memo', memoTab);
+      if(typeof window.flRenderInventory === 'function') window.flRenderInventory();
+      if(typeof window.flShowToast === 'function') window.flShowToast('สร้าง ' + saved.no + ' เรียบร้อย · ฿' + total.toLocaleString());
+      return saved;
+    }).catch(function(e){ O.fail(ex ? 'Could not save the memo' : 'Could not create the memo', e); return null; });
+  });
+
   O.onChange(function(change){
     if(!change) return;
     if(['fleet_stock', 'fleet_memo', 'fleet_consumable', 'fleet_job'].indexOf(change.entity_type) >= 0){
