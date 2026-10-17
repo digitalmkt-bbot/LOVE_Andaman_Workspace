@@ -43,7 +43,7 @@ process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
 const calls = [], refusals = [];
-await ctx.route(PROD, async (route) => {
+const proxy = async (route) => {
   const req = route.request(), u = new URL(req.url());
   calls.push(req.method() + ' ' + u.pathname + (u.search || ''));
   const hd = req.headers(), fwd = {};
@@ -52,7 +52,8 @@ await ctx.route(PROD, async (route) => {
   const buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
   if (r.status >= 400) refusals.push(req.method() + ' ' + u.pathname + ' → ' + r.status + ' ' + buf.toString().slice(0, 220));
   await route.fulfill({ status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'access-control-allow-origin': '*' }, body: buf });
-});
+};
+await ctx.route(PROD, proxy);
 const page = await ctx.newPage();
 const errors = [], dialogs = [];
 const NOISE = /Failed to load resource|\/allotment_v2\/assets\//;
@@ -259,6 +260,21 @@ ok('pfmIsCreditPrepaid(booking) true from the row\'s kind · pfmInScope follows'
 const fake = await ev(() => ({ asProforma: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'proforma', note: 'prepay', status: 'issued' }), asPrepay: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'prepay', note: '', status: 'issued' }), voided: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'prepay', status: 'void' }) }));
 ok('pfmIsPrepayInv(invoice) follows the server invoice kind (not the note): prepay true, proforma false even with the note, void false', s.inv && s.inv.kind === 'prepay' && s.isPrepayInv === true && fake.asPrepay === true && fake.asProforma === false && fake.voided === false, { inv: s.inv, fake });
 console.log('   Daily PFM on screen: ' + JSON.stringify(s.text.replace(/\s+/g, ' ').slice(0, 1000)));
+// the cutoff is an instant the server names: a browser in another time zone must show the same one (legacy built it from the browser's clock)
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1200, height: 800 }, timezoneId: 'America/Los_Angeles' });
+  await ctx2.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
+  await ctx2.route(PROD, proxy);
+  const p2 = await ctx2.newPage();
+  p2.on('dialog', (d) => d.accept());
+  await p2.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
+  await p2.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
+  await p2.waitForTimeout(1500);
+  await p2.evaluate((d) => laOpsPfm.load(d, d), T0);
+  const tz2 = await p2.evaluate((d) => ({ tz: Intl.DateTimeFormat().resolvedOptions().timeZone, shown: pfmCutoff(d).toISOString(), legacy: (function () { const c = new Date(d + 'T18:00:00'); c.setDate(c.getDate() - 1); return c.toISOString(); })() }), T0);
+  ok('pfmCutoff in a Los Angeles browser = the server\'s instant (18:00 Bangkok), not 18:00 on that browser\'s clock', tz2.tz === 'America/Los_Angeles' && tz2.shown === prow.cutoff_at && tz2.legacy !== prow.cutoff_at, { tz2, server: prow.cutoff_at });
+  await ctx2.close();
+}
 
 console.log('\n[5] Dashboard · Seats available month grid · pier ticker');
 const MONTH = T0.slice(0, 7);
