@@ -116,6 +116,8 @@
       costBreakdown: p.cost_breakdown ? clone(p.cost_breakdown) : null,
       billGate: p.bill_gate ? clone(p.bill_gate) : null,
       health: p.health ? clone(p.health) : null,
+      billDays: p.bill_days != null ? num(p.bill_days) : null,
+      requiredDocuments: Array.isArray(p.required_documents) ? p.required_documents.slice() : null,
       plan: (Array.isArray(p.plan) ? p.plan : []).map(function(it){
         return { id: it.id, text: it.text || '', done: !!it.done, addedAt: it.added_at || null, doneDate: it.done_date || null };
       }),
@@ -880,12 +882,94 @@
     return runProjectCmd(id, 'bill-back', {}, 'Could not return project to work');
   });
 
+  /* The bill gate is the server's (bill_gate on the project). Legacy asked first: with no invoice document or no
+     cost it opened the "close how?" dialog (flProjBillAsk: wait for the bill, or close at ฿0 with a reason) and only
+     otherwise confirmed and closed. The project is read again first, so the gate is the server's answer of now. */
+  function freshProject(id){
+    return O.get('/v1/fleet/projects/' + enc(id)).then(function(res){ return upsertProject(res); });
+  }
+
   wrap('flProjMarkComplete', function(orig, id){
-    return runProjectCmd(id, 'complete', {}, 'Could not complete project');
+    return freshProject(id).then(function(p){
+      if(p.status === 'completed'){ if(typeof window.flShowToast === 'function') window.flShowToast('Already completed'); return null; }
+      if(p.billGate && !p.billGate.ok && typeof window.flProjBillAsk === 'function'){ window.flProjBillAsk(id); return null; }
+      var kids = typeof window.flProjChildMJs === 'function' ? window.flProjChildMJs(id).filter(function(m){ return m.status !== 'done'; }) : [];
+      var msg = kids.length
+        ? 'Mark project complete?\n\nThis will:\n- Close ' + kids.length + ' open child MJ(s)\n- Set boat status → available\n- Set project status → completed\n\nContinue?'
+        : 'Mark project complete?\n\nThis will set boat status → available and project status → completed.';
+      if(!confirm(msg)) return null;
+      return runProjectCmd(id, 'complete', {}, 'Could not complete project');
+    }).catch(function(e){ O.fail('Could not complete project', e); return null; });
   });
 
   wrap('flProjBillClose', function(orig, id){
-    return runProjectCmd(id, 'complete', {}, 'Could not close project bill');
+    return freshProject(id).then(function(p){
+      if(p.billGate && !p.billGate.ok && typeof window.flProjBillAsk === 'function'){ window.flProjBillAsk(id); return null; }
+      var cost = p.billGate && p.billGate.cost != null ? p.billGate.cost : p.cost;
+      if(!confirm('ปิดโปรเจค ' + p.no + '?\n\nต้นทุนที่จะบันทึก ฿' + (cost || 0).toLocaleString() + '\nใบนี้จะเข้า YTD Spend และย้ายไปคลังงานที่ปิดแล้ว')) return null;
+      return runProjectCmd(id, 'complete', {}, 'Could not close project bill');
+    }).catch(function(e){ O.fail('Could not close project bill', e); return null; });
+  });
+
+  /* what the project screens show of a project comes from the server's view of it: its phases and the current
+     one, health score, bill gate, days waiting for the bill, cost. Legacy worked each one out from the local
+     jobs and memos. Without a server project (not loaded) the legacy function runs. */
+  function serverProject(p){ return p && p._fromOpsBackend ? p : null; }
+  var HEALTH_COLORS = {
+    completed: { color: '#0E7A5C', bg: '#E6F7F1' }, cancelled: { color: '#A32D2D', bg: '#FCEBEB' },
+    ontrack: { color: '#0E7A5C', bg: '#E6F7F1' }, atrisk: { color: '#996A14', bg: '#FFF4E1' }, critical: { color: '#A32D2D', bg: '#FCEBEB' }
+  };
+
+  wrap('flProjPhasesFor', function(orig, p){
+    if(serverProject(p) && p.phases && p.phases.length) return p.phases;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flProjCurrentPhaseIdx', function(orig, p){
+    if(serverProject(p) && p.phases && p.phases.length) return p.phaseIndex;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flProjHealth', function(orig, p){
+    var h = serverProject(p) && p.health;
+    if(h && h.key){
+      var c = HEALTH_COLORS[h.key] || HEALTH_COLORS.ontrack;
+      return { key: h.key, label: h.label, color: c.color, bg: c.bg, score: h.score, budgetPct: h.budget_pct, schedOver: h.sched_over, openRatio: h.open_ratio };
+    }
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flProjBillGate', function(orig, p){
+    var g = serverProject(p) && p.billGate;
+    if(g) return { ok: !!g.ok, miss: Array.isArray(g.missing) ? g.missing.slice() : [], cost: g.cost != null ? g.cost : 0 };
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flProjBillDays', function(orig, p){
+    if(serverProject(p) && p.billDays != null) return p.billDays;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flProjCalcCost', function(orig, projId){
+    var p = listProjects().find(function(x){ return x && x.id === projId; });
+    if(serverProject(p) && p.cost != null) return p.cost;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* a project's cost, bill gate and health depend on its jobs and memos: when one of those is written the
+     projects are read again (one read, after the writes of the moment settle) */
+  var projRefreshTimer = null;
+  O.onWrite(function(kind){
+    if(!enabled() || !state.loaded) return;
+    kind = String(kind || '');
+    if(kind.indexOf('fleet-job') !== 0 && kind.indexOf('fleet-memo') !== 0 && kind.indexOf('fleet-incident') !== 0) return;
+    clearTimeout(projRefreshTimer);
+    projRefreshTimer = setTimeout(function(){
+      O.get('/v1/fleet/projects').then(function(r){
+        replaceProjects((r && r.projects) || []);
+        redrawDailyAndProjects();
+      }).catch(function(){});
+    }, 400);
   });
 
   wrap('flProjSetPhase', function(orig, projId, phaseKey){

@@ -16469,7 +16469,7 @@ function flProjRenderDocsTab(p){
   const photos = allDocs.filter(d=>d.type==='photo');
   const docs = allDocs.filter(d=>d.type!=='photo');
   // Suggest required docs based on type
-  const required = (function(){
+  const required = (p._fromOpsBackend && Array.isArray(p.requiredDocuments)) ? p.requiredDocuments : (function(){   // ops: the server's required_documents
     if(p.type==='drydock') return ['ใบเสนอราคา (Quotation)','Work Order','Hull Survey Report','ใบรับรอง Anode','Paint Certificate','Sea Trial Report','Final Invoice'];
     if(p.type==='overhaul') return ['ใบเสนอราคา','Work Order','Engine Pre-test Report','Engine Post-install Report','Sea Trial Report','Final Invoice'];
     return ['ใบเสนอราคา','Work Order','Completion Report','Final Invoice'];
