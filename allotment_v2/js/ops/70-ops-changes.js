@@ -38,6 +38,23 @@
     if(!act || !act.dataset || act.dataset.view !== view) return;
     if(typeof window._laRerender === 'function') window._laRerender();
   }
+  /* §opsCheckinLive (Q34a) · Van Check-in shows bookings (check-in marks, arrivals), vans, groups and stops, so a change
+     of those kinds on the open day redraws it. Runs AFTER O.wrote (the booking and van caches are dropped by then) and
+     forgets the van day's 5 s throttle, so the redraw's reload really asks the server. _laRerender keeps the scroll
+     position and puts the cursor back in the field being typed in; while someone is typing in a field the redraw waits
+     (retry every 1.5 s, up to 8 times), so a note is never cut off. */
+  var CHECKIN_KINDS = { booking:1, van:1, van_day:1, van_stop:1, van_group:1, deployment:1 };
+  function repaintCheckin(change, tries){
+    if(!change || !CHECKIN_KINDS[change.kind]) return;
+    var act = document.querySelector('.nav-item.active');
+    if(!act || !act.dataset || act.dataset.view !== 'vancheckin') return;
+    var day = (typeof window._vanCkDate === 'string') ? window._vanCkDate : '';
+    if(day && Array.isArray(change.route_days) && change.route_days.length &&
+       !change.route_days.some(function(d){ return d && d.service_date === day; })) return;
+    if(O.busy && O.busy()){ if((tries || 0) < 8) setTimeout(function(){ repaintCheckin(change, (tries || 0) + 1); }, 1500); return; }
+    if(O.vanJobs && O.vanJobs.dropDay) O.vanJobs.dropDay(day);
+    if(typeof window._laRerender === 'function') window._laRerender();
+  }
   function apply(change){
     if(!change || !Number.isInteger(+change.version)) return;
     cursor = +change.version;
@@ -46,6 +63,7 @@
     if(O.changed) O.changed(change);
     repaintFor(change);
     if(O.wrote) O.wrote('remote:' + (change.kind || 'change'));
+    repaintCheckin(change);
     bookingToast(change);
   }
   function baseline(){
