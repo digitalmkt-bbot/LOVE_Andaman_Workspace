@@ -682,6 +682,35 @@
     return val;
   });
 
+  // ckEventUndo (08-app.js): legacy pops the last CXL / No-show event. The server keeps check-in events
+  // (409 events_append_only on a shorter list), so the same click marks the last live event undone ("mistake")
+  // and gives its people back, exactly as the "รับกลับ" path does. Same confirm, same counts.
+  wrap('ckEventUndo', function(orig, bkId, date, kind){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return undefined;
+    var b = findBooking(bkId); if(!b) return undefined;
+    var cur = window.ckRead(b, date, kind) || {};
+    var ev = Array.isArray(cur.events) ? cur.events.map(function(x){ return Object.assign({}, x); }) : [];
+    var ix = -1;
+    for(var i = ev.length - 1; i >= 0; i--){ if(ev[i] && !ev[i].undone){ ix = i; break; } }
+    if(ix < 0){ alert('ไม่มีรายการให้ถอน'); return undefined; }
+    var last = ev[ix];
+    if(!confirm('ถอนรายการล่าสุด?\n' + ((last.type === 'cxl') ? 'CXL' : 'No-show') + ' ' + (last.pax || 0) + ' คน · ' + ((last.at || '') + ' ' + (last.by || '')))) return undefined;
+    ev[ix] = Object.assign({}, last, { undone: { why: 'mistake', at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } });
+    var live = ev.slice(0, ix).filter(function(x){ return x && !x.undone; });
+    var prev = live.length ? live[live.length - 1] : null;
+    var t = window.ckTripOn(b, date) || {}, booked = window.ckBookedPax(t);
+    var cap = (typeof window.ckCap === 'function') ? window.ckCap(b, date, kind, booked) : booked;
+    var ceil = (typeof window.ckCeil === 'function' && window._ckBase(kind) === 'pier') ? window.ckCeil(b, date, kind, booked) : cap;
+    var back = Math.min(ceil, ((cur.actualPax != null) ? cur.actualPax : 0) + Math.max(0, +last.pax || 0));
+    window.ckWrite(b, date, kind, { actualPax: back, noShow: Math.max(0, cap - back), expected: cap,
+      selfAdd: (back > cap) ? { pax: back - cap, at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } : null,
+      at: cur.at || null, by: cur.by || null, events: ev,
+      reasonCode: prev ? (prev.reasonCode || prev.reason_code || '') : '', reasonNote: prev ? (prev.note || '') : '', reasonAt: prev ? (prev.at || '') : '' });
+    if(typeof window.ckPersist === 'function') window.ckPersist();
+    if(typeof window.ckAfter === 'function') window.ckAfter(kind);
+    return undefined;
+  });
+
   wrap('bookingV2ExtraAdd', function(orig, bkId){
     var args = [].slice.call(arguments, 1);
     var self = this;
