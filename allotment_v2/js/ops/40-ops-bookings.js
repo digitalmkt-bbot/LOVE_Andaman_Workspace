@@ -388,6 +388,14 @@
       Object.keys(STRUCTS[s]).forEach(function(k){ var v = ob[STRUCTS[s][k][0]]; if(v !== undefined){ o[k] = v; any = true; } });
       if(any || s === 'guides' || s === 'specialMeals' || s === 'priceBreakdown') bk[s] = o;
     });
+    /* B2C money the order carried (read only, never sent back): bookingV2PaidSplit reads paymentSnapshot.paid */
+    if(ob.payment_paid != null || ob.payment_balance != null || ob.payment_deposit != null){
+      bk.paymentSnapshot = Object.assign(bk.paymentSnapshot || {}, {});
+      if(ob.payment_paid != null) bk.paymentSnapshot.paid = +ob.payment_paid || 0;
+      if(ob.payment_balance != null) bk.paymentSnapshot.balance = +ob.payment_balance || 0;
+      if(ob.payment_deposit != null) bk.paymentSnapshot.deposit = +ob.payment_deposit || 0;
+      if(ob.payment_paid_status) bk.paymentSnapshot.paidStatus = String(ob.payment_paid_status);
+    }
     if(bk.priceBreakdown) bk.priceBreakdown.total = (ob.total != null) ? +ob.total : (bk.priceBreakdown.total || 0);
     if(bk.total == null) bk.total = bk.priceBreakdown ? bk.priceBreakdown.total : 0;
     if(!bk.cashOnTour) bk.cashOnTour = null;

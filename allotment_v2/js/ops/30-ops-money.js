@@ -779,6 +779,42 @@
     }).catch(function(e){ O.fail('Could not load fee invoice', e); return null; });
   });
 
+  /* New invoice dialog (acctNewInvoiceRender): legacy lists the chosen agent's un-invoiced bookings from the pages
+     this browser has opened, so unloaded ones were missing. The list is the server's (GET /v1/invoices/candidates):
+     it replaces the legacy list once it answers. The agent drop-down stays legacy's (no server list of agents
+     with something to invoice). Each row carries the total the invoice would carry (invoice_total). */
+  var candSeq = 0;
+  function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }); }
+  function candRow(c){
+    var amt = num(c.invoice_total != null ? c.invoice_total : c.total);
+    var fmt = typeof window.acctFmt === 'function' ? window.acctFmt(amt) : String(amt);
+    return '<label style="display:flex;align-items:center;gap:9px;padding:8px 10px;border:0.5px solid var(--fd-line-soft);border-radius:9px;margin-bottom:6px;cursor:pointer">'
+      + '<input type="checkbox" class="acct-bk-cb" value="' + escHtml(c.booking_id) + '" data-amt="' + amt + '" checked onchange="acctNewInvoiceSum()" style="width:16px;height:16px;margin:0">'
+      + '<div style="flex:1"><div style="font-size:12px;font-weight:500">' + escHtml(c.code || c.voucher_ref || c.booking_id) + ' · ' + escHtml(c.lead_pax || '—') + '</div>'
+      + '<div style="font-size:10px;color:var(--fd-ink-soft)">' + escHtml(c.service_date || '') + ' · ' + escHtml(c.status || '') + '</div></div>'
+      + '<div style="font-size:12px;font-variant-numeric:tabular-nums;font-weight:600">' + escHtml(fmt) + '</div></label>';
+  }
+  wrap('acctNewInvoiceRender', function(orig){
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    var agentId = typeof _acctNewInvAgent !== 'undefined' ? _acctNewInvAgent : '';
+    if(!agentId) return r;
+    var mine = ++candSeq;
+    O.get('/v1/invoices/candidates', { agent_id: agentId, kind: 'booking' }).then(function(res){
+      var sum = document.getElementById('acct-inv-sum');
+      if(mine !== candSeq || !sum || (typeof _acctNewInvAgent !== 'undefined' && _acctNewInvAgent !== agentId)) return;
+      var row = sum.parentNode && sum.parentNode.parentNode;          // the "total + issue" row
+      var box = row && row.parentNode; if(!box) return;
+      while(row.previousElementSibling && !/Booking/.test(row.previousElementSibling.textContent.slice(0, 20)) ){
+        box.removeChild(row.previousElementSibling);
+      }
+      var list = (res && res.candidates) || [];
+      row.insertAdjacentHTML('beforebegin', list.length ? list.map(candRow).join('')
+        : '<div style="font-size:11.5px;color:var(--fd-ink-soft);font-style:italic;padding:8px">ไม่มี booking ค้างออกใบแจ้งหนี้สำหรับ agent นี้</div>');
+      if(typeof window.acctNewInvoiceSum === 'function') window.acctNewInvoiceSum();
+    }, function(e){ O.fail('Bookings to invoice not loaded', e); });
+    return r;
+  });
+
   wrap('acctNewInvoiceCreate', function(){
     var ids = [].slice.call(document.querySelectorAll('.acct-bk-cb:checked')).map(function(cb){ return cb.value; });
     if(!ids.length){ alert('Select at least one booking'); return; }

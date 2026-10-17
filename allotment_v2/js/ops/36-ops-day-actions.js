@@ -628,6 +628,19 @@
     return updateInsuranceServer(bkId, pk, { reviewed: nextRev }).catch(function(){ return null; });
   });
 
+  // insRevertRow (08-app.js): the Revert button drops the typed age as well as the local first/last name and nationality.
+  // The age lives on the server (PUT /v1/bookings/:id/insurance, age: null clears it); the other overrides stay in this browser.
+  wrap('insRevertRow', function(orig, bkId, pk){
+    var bk = findBooking(bkId);
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    if(bk && bk._fromOpsBackend){
+      var idx = parseInt(pk, 10);
+      var has = pk === 'lead' ? bk.leadAge != null : (Number.isFinite(idx) && bk.passengers && bk.passengers[idx] && bk.passengers[idx].age != null);
+      if(has) updateInsuranceServer(bkId, pk, { age: null }).catch(function(){ return null; });
+    }
+    return r;
+  });
+
   wrap('pckMealSave', function(){
     var st = typeof _pckMeal !== 'undefined' ? _pckMeal : null;
     if(!st || !st.bkId){
