@@ -1327,6 +1327,79 @@
     }).catch(function(e){ O.fail('Could not split job', e); return null; });
   });
 
+  /* Quick swap (flConfirmSwap) and the propeller cascade (flConfirmPropCascade) are ONE server command:
+     POST /v1/fleet/incidents/:id/swap { asset_type, asset_id, spare_id, propellers:[{id, action, location?}] }.
+     The server checks the spare (409 spare_not_compatible), moves both parts, logs and marks the incident.
+     A gearbox swap with propellers on it waits for the cascade dialog, then sends everything at once. */
+  var pendingSwap = null;
+
+  function sendSwap(incId, body){
+    return O.queue(function(){
+      return O.post('/v1/fleet/incidents/' + enc(incId) + '/swap', body);
+    }).then(function(res){
+      upsertIncident(res);
+      return refetchAll(res && res.boat_id).then(function(){
+        if(typeof window.closeModal === 'function'){ window.closeModal('fl-modal-swap'); window.closeModal('fl-modal-prop-cascade'); }
+        O.wrote('fleet-incident-swap');
+        if(typeof window.flShowInc === 'function') window.flShowInc(incId);
+        else redrawJobs();
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not swap the spare', e); return null; });
+  }
+
+  wrap('flConfirmSwap', function(orig, spareId){
+    var ctx = typeof flSwapCtx !== 'undefined' ? flSwapCtx : null;
+    if(!ctx || !ctx.incId) return null;
+    var arr = ctx.assetType === 'gearbox' ? FL_GEARBOXES : FL_PROPELLERS;
+    var damaged = arr.find(function(x){ return x.id === ctx.assetId; });
+    var spare = arr.find(function(x){ return x.id === spareId; });
+    if(!damaged || !spare){ alert('error'); return null; }
+    if(!confirm('ยืนยันเปลี่ยน ' + damaged.serial + ' → ' + spare.serial + '?')) return null;
+    var body = { asset_type: ctx.assetType, asset_id: ctx.assetId, spare_id: spareId };
+    if(ctx.assetType === 'gearbox'){
+      var attached = FL_PROPELLERS.filter(function(p){ return p.gearboxId === damaged.id; });
+      if(attached.length){
+        pendingSwap = { incId: ctx.incId, body: body };
+        if(typeof window.closeModal === 'function') window.closeModal('fl-modal-swap');
+        window.flOpenPropCascadeModal(ctx.incId, damaged.id, spare.id, attached.map(function(p){ return p.id; }), null);
+        return null;
+      }
+    }
+    pendingSwap = null;
+    return sendSwap(ctx.incId, body);
+  });
+
+  wrap('flConfirmPropCascade', function(orig){
+    var ctx = typeof flPropCascadeCtx !== 'undefined' ? flPropCascadeCtx : null;
+    if(!ctx || !ctx.incId || !pendingSwap){ return orig.apply(this, [].slice.call(arguments, 1)); }
+    var body = Object.assign({}, pendingSwap.body);
+    body.propellers = (ctx.propIds || []).map(function(pid){
+      var radio = document.querySelector('input[name="cascade-' + pid + '"]:checked');
+      var action = (radio && radio.value) || 'keep';
+      var row = { id: pid, action: action };
+      if(action === 'stock'){
+        var sel = document.querySelector('select[data-stock-pier="' + pid + '"]');
+        row.location = (sel && sel.value) || 'pier:tublamu';
+      }
+      return row;
+    });
+    var incId = pendingSwap.incId;
+    pendingSwap = null;
+    if(typeof flPropCascadeCtx !== 'undefined') flPropCascadeCtx = { incId: null, damagedGbId: null, spareGbId: null, propIds: [], engHours: null };
+    return sendSwap(incId, body);
+  });
+
+  /* "Skip" in the cascade dialog: the swap itself was already chosen, so it is sent now; the server keeps
+     every propeller on the new gearbox (its default for a propeller not named). */
+  wrap('flCancelPropCascade', function(orig){
+    if(!pendingSwap) return orig.apply(this, [].slice.call(arguments, 1));
+    var p = pendingSwap;
+    pendingSwap = null;
+    if(typeof flPropCascadeCtx !== 'undefined') flPropCascadeCtx = { incId: null, damagedGbId: null, spareGbId: null, propIds: [], engHours: null };
+    return sendSwap(p.incId, p.body);
+  });
+
   O.onChange(function(change){
     if(!change) return;
     if(['fleet_incident', 'fleet_job', 'boat', 'fleet_engine', 'fleet_gearbox', 'fleet_propeller'].indexOf(change.entity_type) >= 0){
