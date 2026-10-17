@@ -48,7 +48,8 @@
       Object.keys(T[d] || {}).forEach(function(b){
         var cell = T[d][b]; if(!cell || !cell.route) return;
         var cap = capFor(b, d); if(!(cap > 0)) return;           // server wants a positive capacity
-        out[key(d, b)] = { route: cell.route, capacity: cap, date: d, boat: b };
+        out[key(d, b)] = { route: cell.route, capacity: cap, date: d, boat: b,
+          type: (cell.type === 'early' || cell.type === 'normal') ? cell.type : null };   // the Early / Normal pick (a client fact); a charter cell is not one
       });
     });
     return out;
@@ -81,6 +82,7 @@
   function postDep(x){
     var b = (typeof getBoat === 'function') ? getBoat(x.boat) : null;
     var body = { boat_id: x.boat, route_id: x.route, service_date: x.date, capacity: x.capacity };
+    if(x.sendType) body.trip_type = x.sendType;      // only when the person picked it: otherwise the server keeps the stored type or takes the route name's default
     if(b && +b.totalcap > 0) body.registered_persons = +b.totalcap;
     return O.anyway(function(f){ return O.post('/operations/deployments', Object.assign({}, body, f)); }, DEP_RULES);
   }
@@ -116,7 +118,9 @@
     var mid = between.splice(0);
     Object.keys(want).forEach(function(k){
       var w = want[k], had = synced[k];
-      if(had && had.route === w.route && had.capacity === w.capacity) return;
+      // trip_type goes when the person changed it from what the server holds (or picked Early for a new deployment)
+      w.sendType = w.type && ((had && had.type && had.type !== w.type) || (!had && w.type === 'early')) ? w.type : null;
+      if(had && had.route === w.route && had.capacity === w.capacity && !w.sendType) return;
       ops.push({ label: 'deploy ' + w.boat + ' → ' + w.route + ' on ' + w.date,
         run: function(){
           return postDep(w).catch(function(e){
@@ -125,7 +129,7 @@
             return null;
           });
         },
-        undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity }) : delDep(w.date, w.boat); } });
+        undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity, sendType: w.sendType ? had.type : null }) : delDep(w.date, w.boat); } });
     });
     Object.keys(synced).forEach(function(k){
       if(want[k]) return;
@@ -141,7 +145,7 @@
       var before = synced;
       synced = {}; Object.keys(want).forEach(function(k){
         if(skipped[k]){ if(before[k]) synced[k] = before[k]; return; }
-        synced[k] = { route: want[k].route, capacity: want[k].capacity };
+        synced[k] = { route: want[k].route, capacity: want[k].capacity, type: want[k].type || (before[k] && before[k].type) || null };
       });
       snapshot();
       O.wrote('deployments');
@@ -174,6 +178,18 @@
   }
   wrap('save', function(a){ return a[0] === 'operations'; });          // save() bare = seed/migration/load · not a user change
   wrap('boatCapPersist', function(){ return true; });
+  /* legacy getCellType: a cell is charter, early or normal. Here the Early / Normal answer is the deployment's
+     stored trip_type (GET /operations/deployments, set with POST /operations/deployments {trip_type}); the server
+     takes the route name's "Early" as the default for a new deployment. Charter still comes from the booking. */
+  (function(){
+    var orig = window.getCellType;
+    if(typeof orig !== 'function' || orig.__ops) return;
+    var w = function(op, route){
+      if(O.enabled() && op && !op.charterBookingId && (op.type === 'early' || op.type === 'normal')) return op.type;
+      return orig.apply(this, arguments);
+    };
+    w.__ops = true; window.getCellType = w;
+  })();
 
   function load(){
     var from = O.shift(O.today(), -BACK), to = O.shift(O.today(), AHEAD);
@@ -185,10 +201,10 @@
       synced = {};
       rows.forEach(function(r){
         if(!T) return;
-        (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = { route: r.route_id, type: 'normal', booked: 0 };
+        (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
         var b = (typeof getBoat === 'function') ? getBoat(r.boat_id) : null;
         if(C && b && +b.cap !== +r.capacity) C[r.service_date + '::' + r.boat_id] = { cap: r.capacity, reason: 'operation-backend', by: '', at: '' };
-        synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity };
+        synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
       });
       ready = true;
       snapshot();
