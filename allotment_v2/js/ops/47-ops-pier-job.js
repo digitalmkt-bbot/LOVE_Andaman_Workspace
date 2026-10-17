@@ -407,9 +407,17 @@
     window.pjBoatSt = function(date, boat, op){
       var out = L.pjBoatSt.apply(this, arguments), h = enabled() && boat ? fleetOf(date, boat.id) : null;
       if(!h || out.k === 'ovn') return out;             // ovn (charter kept overnight) is not built on the server: legacy's answer stands
-      out.k = h.f.state; out.stale = !!h.f.stale;
+      out.k = h.f.state; out.stale = !!h.f.stale; out.srvOpenJobs = +h.f.open_jobs || 0;
       if(!!h.f.no_charter !== !!out.noCharter){ out.noCharter = !!h.f.no_charter; out.note = h.f.note || ''; }
       return out;
+    };
+  }
+  // pjWcAuto(ST): the "auto" work code is MT when the boat has an open repair job; the server counted them (fleet[].open_jobs)
+  if(typeof window.pjWcAuto === 'function'){
+    L.pjWcAuto = window.pjWcAuto;
+    window.pjWcAuto = function(ST){
+      if(!enabled() || !ST || typeof ST.srvOpenJobs !== 'number') return L.pjWcAuto.apply(this, arguments);
+      return ST.srvOpenJobs > 0 && typeof window.paMtCode === 'function' ? window.paMtCode() : '';
     };
   }
   // the pier that has a boat on a date: the pier whose fleet lists it; a pier whose fleet is loaded and does not list it does not have it
