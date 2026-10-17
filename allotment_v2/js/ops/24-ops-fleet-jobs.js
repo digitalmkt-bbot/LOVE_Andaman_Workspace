@@ -627,6 +627,12 @@
     }).catch(function(e){ O.fail('Could not start maintenance job', e); return null; });
   });
 
+  // the part of the parts cost paid through an approved memo: the server's parts_covered on the job
+  wrap('flMaintPartsCoveredByMemo', function(orig, m){
+    if(m && m._fromOpsBackend && m.partsCovered != null) return m.partsCovered;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   wrap('flMaintClose', function(orig, id, outcome, note, awaitInvoice){
     var m = listJobs().find(function(x){ return x && x.id === id; });
     if(!m) return null;

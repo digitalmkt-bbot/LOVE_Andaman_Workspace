@@ -21585,6 +21585,7 @@ function flRenderIncident(){
 
   // Effective status from linked maint
   const effStatus=(inc)=>{
+    if(inc._fromOpsBackend && inc.shownStatus) return inc.shownStatus;   // ops: the server's shown_status (same rule)
     // Direct status override — for Quick Fix or any INC manually marked resolved without an MJ
     if(inc.status==='resolved') return 'resolved';
     const mj=inc.maintId?FL_MAINT.find(m=>m.id===inc.maintId):null;
