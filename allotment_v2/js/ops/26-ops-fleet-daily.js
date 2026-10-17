@@ -57,6 +57,7 @@
     issuesByKey: {},
     extrasByKey: {},
     requestsByKey: {},
+    prevMeterByKey: {},
     issueItems: [],
     fuelBudgets: {},
     safetyCategories: [],
@@ -168,6 +169,7 @@
     Object.keys(state.issuesByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.issuesByKey[k]; });
     Object.keys(state.extrasByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.extrasByKey[k]; });
     Object.keys(state.requestsByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.requestsByKey[k]; });
+    Object.keys(state.prevMeterByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.prevMeterByKey[k]; });
 
     (Array.isArray(day.boats) ? day.boats : []).forEach(function(b){
       if(!b || !b.boat_id) return;
@@ -186,8 +188,19 @@
       };
       if(b.pax_booked != null) state.bookedByKey[ds + '|' + bid] = num(b.pax_booked);
       if(b.water){
-        state.waterByKey[ds + '|' + bid] = { o: b.water.open, c: b.water.close, by: b.water.by, at: b.water.at };
+        // used = the server's close minus open (a negative one also comes as the water_negative flag)
+        state.waterByKey[ds + '|' + bid] = { o: b.water.open, c: b.water.close, by: b.water.by, at: b.water.at, used: b.water.used != null ? b.water.used : null };
       }
+      // the engine's earlier reading, worked out by the server (meter_deltas = reading minus the latest earlier reading above 0)
+      var deltas = b.meter_deltas || {};
+      Object.keys(deltas).forEach(function(tType){
+        Object.keys(deltas[tType] || {}).forEach(function(engId){
+          var reading = meters[tType] ? meters[tType][engId] : null;
+          var d = deltas[tType][engId];
+          if(reading == null) return;
+          state.prevMeterByKey[ds + '|' + engId] = d == null ? null : Math.round((Number(reading) - Number(d)) * 100) / 100;
+        });
+      });
       if(b.issues && typeof b.issues === 'object'){
         state.issuesByKey[ds + '|' + bid] = Object.assign({}, b.issues);
       }
@@ -662,6 +675,65 @@
       return day;
     }).catch(function(e){ O.fail('Could not delete pier request', e); return null; });
   });
+
+  /* Raw readers of the browser blob (fl_water, fl_issue, fl_extra, fl_req). In ops the blob is empty, so the
+     screens that read them directly (flDRRan, _flIssueUseDays, flExtraNames) saw nothing. They now read the
+     daily-log rows the server sent, in the same shapes. */
+  wrap('flWaterAll', function(){ return state.waterByKey; });
+  wrap('flIssueAll', function(){ return state.issuesByKey; });
+  wrap('flExtraAll', function(){ return state.extrasByKey; });
+  wrap('flReqAll', function(){ return state.requestsByKey; });
+
+  /* water used = the server's close minus open (a negative one is its water_negative flag) */
+  wrap('flWaterUsed', function(orig, ds, bid){
+    var w = state.waterByKey[String(ds || '') + '|' + String(bid || '')];
+    if(w && w.used !== undefined) return w.used;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* the engine's previous reading: the server's latest earlier reading above 0 (the window of 14 days
+     loaded here would miss an older one) = reading minus meter_deltas */
+  wrap('flPrevMeter', function(orig, engId, dateStr){
+    var k = String(dateStr || '') + '|' + String(engId || '');
+    if(Object.prototype.hasOwnProperty.call(state.prevMeterByKey, k)) return state.prevMeterByKey[k];
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* the price the boat's fuel costs that day: the server's boat, pier, sibling, back-30-days chain */
+  wrap('flFuelPriceEff', function(orig, ds, boat){
+    var day = boat && mapDaily()[ds];
+    var bd = day && day[boat.id];
+    if(bd && bd.fuelPriceEff && bd.fuelPriceEff.price != null) return clone(bd.fuelPriceEff);
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* strict price (no fallback): the server marks a litre with no price of its own as price_missing */
+  wrap('flFuelPriceForBoat', function(orig, ds, boat){
+    var day = boat && mapDaily()[ds];
+    var bd = day && day[boat.id];
+    if(bd && Array.isArray(bd.flags) && bd.flags.indexOf('price_missing') >= 0) return null;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* issue items: add / switch on again by name. POST /v1/fleet/issue-items turns a same-name item back on
+     (planIssueItemAdd); the list comes back with the daily log, so it is read again. The old code kept the
+     item in the browser blob only, and the wrapped flIssueItems then showed the server list without it. */
+  wrap('flIssueAddItem', function(orig, name, unit, pierKey){
+    name = String(name || '').trim(); if(!name) return null;
+    var body = { name: name, unit: String(unit || '').trim(), pier: pierKey || '' };
+    return O.queue(function(){
+      return O.post('/v1/fleet/issue-items', body);
+    }).then(function(item){
+      return loadDailyWindow().then(function(){
+        O.wrote('fleet-issue-items');
+        redrawDailyAndProjects();
+        return item && item.id;
+      });
+    }).catch(function(e){ O.fail('Could not add the issue item', e); return null; });
+  });
+
+  // the item list is the server's: never written to the browser blob (flIssueSetItem and flIssueAddItem send it)
+  wrap('flIssueItemsSave', function(){ return undefined; });
 
   // ── Projects wrappers (do NOT recreate server side effects in browser) ──
 
