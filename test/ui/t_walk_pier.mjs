@@ -222,6 +222,35 @@ section('2', async () => {
   ok('after keying the longtail amount the missing count drops to 0 and the server holds it', lt2.miss === 0 && cell && +cell.amount === 800, { screen: lt2, cell });
 });
 
+// ═══ 3 · park tickets: matrix columns and park sets ═══
+section('3', async () => {
+  console.log('\n[3] park tickets · Thai / foreign / FOC columns, park sets');
+  await seed('POST', `/v1/pier-office/${PIER}/days/${D}/park-sets`, { boat_id: 'b6', counts: { adFR: 2, chFR: 1 } });
+  await openView('pok-' + PIER, D); await settle(1500);
+  const boatsDay = await api(`/v1/pier-office/${PIER}/days/${D}/boats`);
+  const nat = Object.fromEntries(boatsDay.boats.map((b) => [b.boat_id, b.booked.nationality]));
+  const names = { b6: 'Zeus', b7: 'Verona' };
+  const cells = await ev((nm) => Object.fromEntries(Object.keys(nm).map((id) => {
+    const tr = [...document.querySelectorAll('#pk-host-tublamu tr')].find((r) => r.textContent.includes(nm[id]) && r.querySelector('td.n'));
+    return [id, tr ? [...tr.querySelectorAll('td.n')].slice(0, 4).map((c) => +c.textContent.trim() || 0) : null];
+  })), names);
+  const want = (n) => [n.ad_th + n.chd_th + n.inf_th, n.ad_fr + n.chd_fr + n.inf_fr, n.foc_th + n.foc_fr, n.tot];
+  ok('Zeus row: Thai / foreign / FOC / total are the server heads (3, 3, 0, 6)', JSON.stringify(cells.b6) === JSON.stringify(want(nat.b6)) && want(nat.b6).join() === '3,3,0,6', { screen: cells.b6, server: want(nat.b6) });
+  ok('Verona row: 0 / 3 / 0 / 3', JSON.stringify(cells.b7) === JSON.stringify(want(nat.b7)) && want(nat.b7).join() === '0,3,0,3', { screen: cells.b7, server: want(nat.b7) });
+  // park sets (Ticket Management tab)
+  const srv = (await api(`/v1/pier-office/${PIER}/days/${D}/park-sets`)).sets;
+  await ev(() => pkSetFam('sets')); await settle(1000);
+  const scr = await ev(() => ({ sets: pkSets(_poDate).map((x) => ({ id: x.id, name: x.name, bid: x.bid, cnt: x.cnt, n: (x.people || []).length, bought: !!x.bought })), btns: [].map.call(document.querySelectorAll('#pk-host-tublamu button'), (b) => (b.getAttribute('onclick') || '').slice(0, 44)).filter((t) => /pkSet(Bought|Open|Del)/.test(t)) }));
+  ok('pkSets(D) shows the server set (name, boat, counts, 3 people)', srv.length === 1 && scr.sets.length === 1 && scr.sets[0].id === srv[0].id && scr.sets[0].name === srv[0].name && scr.sets[0].bid === 'b6' && JSON.stringify(scr.sets[0].cnt) === JSON.stringify(srv[0].counts) && scr.sets[0].n === 3, { screen: scr.sets, server: srv.map((s) => [s.id, s.name, s.counts, s.people.length]) });
+  console.log('   set buttons:', JSON.stringify(scr.btns));
+  await page.locator('button[onclick^="pkSetOpen("]').first().click(); await settle(800);
+  console.log('   after open:', JSON.stringify(await ev(() => [].map.call(document.querySelectorAll('#pk-host-tublamu button'), (b) => (b.getAttribute('onclick') || '').slice(0, 30)).filter((t) => /pkSet/.test(t)))));
+  await page.locator('button[onclick^="pkSetBought("]').first().click({ timeout: 5000 }); await idle(); await settle(1000);
+  const after = (await api(`/v1/pier-office/${PIER}/days/${D}/park-sets`)).sets[0];
+  const scr2 = await ev(() => pkSets(_poDate)[0] && !!pkSets(_poDate)[0].bought);
+  ok('the Bought button locks the set on the server and on the screen', after.bought === true && after.bought_by === 'tester' && scr2 === true, { server: after.bought, by: after.bought_by, screen: scr2 });
+});
+
 // @@SECTIONS
 
 for (const [name, fn] of todo) {
