@@ -732,6 +732,139 @@
     }).catch(function(e){ O.fail('Could not remove asset from job', e); return null; });
   });
 
+  /* ── board lane, board log, work-board note, asset prompt ──
+     Legacy changed m.boardLane and m.progressLog in the browser only (flSave was a no-op here). Server first:
+     PATCH …/jobs/{id} {board_lane}, POST …/jobs/{id}/log {text, by}. The log line also goes onto the linked
+     incident on the server, as legacy's flPushLog did. */
+  wrap('flBoardLog', function(orig, m, text){
+    if(!m || !m.id) return null;
+    return O.queue(function(){
+      return O.post('/v1/fleet/jobs/' + enc(m.id) + '/log', { text: String(text || ''), by: 'บอร์ดงานเรือ' });
+    }).then(function(res){
+      upsertJob(res);
+      O.wrote('fleet-job-log');
+      return res;
+    }).catch(function(e){ O.fail('Could not add job log', e); return null; });
+  });
+
+  /* moves each job to the lane (one PATCH each), then writes its log line through the wrapped flBoardLog
+     (its own queue entry: a queued fn must not queue again) */
+  function moveJobsToLane(list, to, label, suffix){
+    return O.queue(function(){
+      return list.reduce(function(p, m){
+        return p.then(function(){
+          return O.patch('/v1/fleet/jobs/' + enc(m.id), { board_lane: to }).then(function(res){ upsertJob(res); });
+        });
+      }, Promise.resolve());
+    }).then(function(){
+      return list.reduce(function(p, m){
+        return p.then(function(){ return window.flBoardLog(m, 'ย้ายไปเลน "' + label + '"' + suffix); });
+      }, Promise.resolve());
+    }).then(function(){
+      O.wrote('fleet-job-lane');
+      redrawJobs();
+      return null;
+    }, function(e){
+      O.fail('Could not move the job on the board', e);
+      redrawJobs();
+      return null;
+    });
+  }
+
+  wrap('flBoardDrop', function(orig, ev, el){
+    ev.preventDefault(); el.classList.remove('drop');
+    if(!flBoardCanEdit()) return null;
+    var to = el.getAttribute('data-lane'); if(!to) return null;
+    var L = FL_BOARD_LANES.filter(function(x){ return x.id === to; })[0];
+    var label = L ? L.t : to;
+    if(_flBoardGrpDrag){
+      var bid = _flBoardGrpDrag; _flBoardGrpDrag = '';
+      var mv = flBoardJobs().filter(function(x){ return x.boatId === bid && flBoardLane(x) !== to; });
+      if(!mv.length) return null;
+      return moveJobsToLane(mv, to, label, ' · ยกทั้งลำ').then(function(){
+        var bt = (typeof getBoat === 'function') ? getBoat(bid) : null;
+        if(typeof window.flShowToast === 'function') window.flShowToast(((bt && bt.name) || bid) + ' · ย้าย ' + mv.length + ' ใบ → ' + label);
+        return null;
+      });
+    }
+    var id = _flBoardDrag || (ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '');
+    var m = listJobs().filter(function(x){ return x && x.id === id; })[0];
+    if(!m) return null;
+    if(flBoardLane(m) === to) return null;
+    return moveJobsToLane([m], to, label, '').then(function(){
+      if(typeof window.flShowToast === 'function') window.flShowToast((m.no || '') + ' → ' + label);
+      return null;
+    });
+  });
+
+  /* the work board's note box (flw-note): a job's line, or an incident's when the item is "inc:…" */
+  wrap('flwAct', function(orig, a, id, x){
+    if(a !== 'note') return orig.apply(this, [].slice.call(arguments, 1));
+    if(typeof window.flBoardCanEdit === 'function' && !window.flBoardCanEdit()) return null;
+    var el = document.getElementById('flw-note');
+    var t = el ? String(el.value || '').trim() : '';
+    if(!t){ if(el) el.focus(); return null; }
+    var by = (typeof window.flBoardWho === 'function' ? window.flBoardWho() : '') || '';
+    var isInc = String((typeof FLW !== 'undefined' && FLW.item) || '').indexOf('inc:') === 0;
+    var path, body = { text: t };
+    if(isInc){ path = '/v1/fleet/incidents/' + enc(id) + '/log'; body.by = by || 'Fleet Work'; }
+    else { path = '/v1/fleet/jobs/' + enc(id) + '/log'; if(by) body.by = by; }
+    return O.queue(function(){
+      return O.post(path, body);
+    }).then(function(res){
+      if(isInc) upsertIncident(res); else upsertJob(res);
+      O.wrote(isInc ? 'fleet-incident-log' : 'fleet-job-log');
+      if(typeof window.flwAfter === 'function') window.flwAfter();
+      return res;
+    }).catch(function(e){ O.fail('Could not add note', e); return null; });
+  });
+
+  /* legacy's three prompts (kind, then the list or the hull label) are kept as they were. An engine,
+     gearbox or propeller is sent by its id; a hull item by its label. */
+  wrap('flMaintAddAssetPrompt', function(orig, jobId){
+    var m = listJobs().find(function(x){ return x && x.id === jobId; });
+    if(!m) return null;
+    var choice = prompt('เพิ่ม asset ประเภทไหน?\n\n  e = engine (เครื่องยนต์)\n  g = gearbox (เกียร์)\n  p = propeller (ใบจักร)\n  h = hull (ตัวเรือ)', 'e');
+    if(!choice) return null;
+    var c = choice.toLowerCase().trim();
+    var type = c.startsWith('e') ? 'engine' : c.startsWith('g') ? 'gearbox' : c.startsWith('p') ? 'propeller' : c.startsWith('h') ? 'hull' : null;
+    if(!type){ alert('ประเภทไม่ถูกต้อง'); return null; }
+    var body;
+    if(type === 'hull'){
+      var lbl = prompt('รายการซ่อมตัวเรือ:', '');
+      if(!lbl) return null;
+      body = { type: 'hull', label: lbl };
+    } else {
+      var engines = typeof FL_ENGINES !== 'undefined' ? FL_ENGINES : [];
+      var gearboxes = typeof FL_GEARBOXES !== 'undefined' ? FL_GEARBOXES : [];
+      var propellers = typeof FL_PROPELLERS !== 'undefined' ? FL_PROPELLERS : [];
+      var list = type === 'engine' ? engines.filter(function(e){ return e.boatId === m.boatId; })
+        : type === 'gearbox' ? gearboxes.filter(function(g){ return g.boatId === m.boatId; })
+        : propellers.filter(function(p){
+            var gb = gearboxes.find(function(g){ return g.id === p.gearboxId; });
+            return gb && gb.boatId === m.boatId;
+          });
+      if(!list.length){ alert('ไม่มี ' + type + ' ในเรือนี้'); return null; }
+      var opts = list.map(function(x, i){ return (i + 1) + '. ' + x.serial + (x.pos ? ' (' + x.pos + ')' : ''); }).join('\n');
+      var pickStr = prompt('เลือก ' + type + ':\n' + opts + '\n\n(พิมพ์เลข):', '1');
+      if(!pickStr) return null;
+      var idx = parseInt(pickStr, 10) - 1;
+      if(isNaN(idx) || idx < 0 || idx >= list.length){ alert('เลือกไม่ถูกต้อง'); return null; }
+      body = { type: type, asset_id: list[idx].id };
+    }
+    return O.queue(function(){
+      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/assets', body);
+    }).then(function(res){
+      upsertJob(res);
+      return refetchAll(m.boatId).then(function(){
+        O.wrote('fleet-job-asset-add');
+        if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(jobId);
+        redrawJobs();
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not add asset to job', e); return null; });
+  });
+
   wrap('flMaintAddLog', function(orig, jobId){
     var inp = document.getElementById('maint-log-text-' + jobId);
     var dateInp = document.getElementById('maint-log-date-' + jobId);
