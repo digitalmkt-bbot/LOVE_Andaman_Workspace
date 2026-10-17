@@ -533,6 +533,43 @@
     });
   });
 
+  /* legacy bsCleanupLog edited b.log in memory and called save() (browser only), so the clean-up was lost on reload.
+     The same question and the same clean-up still run (orig); then what it changed is sent to the server: an entry it
+     removed is DELETE …/status-log/{id}, an entry whose end date it moved is PATCH {to_date}. Removals go first. The
+     boat is read again afterwards, so the screen shows what the server holds; a refusal is the server's message
+     (for example an entry with no province or no end date cannot be edited). */
+  wrap('bsCleanupLog', function(orig, bid){
+    var b = boatNamed(bid);
+    if(!b || !Array.isArray(b.log)) return null;
+    var before = {};
+    b.log.forEach(function(e){ if(e && e.id) before[e.id] = e.to == null ? null : e.to; });
+    var res = orig.apply(this, [].slice.call(arguments, 1));
+    var after = {};
+    (b.log || []).forEach(function(e){ if(e && e.id) after[e.id] = e; });
+    var gone = [], moved = [];
+    Object.keys(before).forEach(function(id){
+      if(!after[id]) gone.push(id);
+      else if((after[id].to == null ? null : after[id].to) !== before[id] && after[id].to != null) moved.push(after[id]);
+    });
+    if(!gone.length && !moved.length) return res;
+    return O.queue(function(){
+      var chain = Promise.resolve();
+      gone.forEach(function(id){ chain = chain.then(function(){ return O.del('/v1/boats/' + enc(bid) + '/status-log/' + enc(id)); }); });
+      moved.forEach(function(e){ chain = chain.then(function(){ return O.patch('/v1/boats/' + enc(bid) + '/status-log/' + enc(e.id), { to_date: e.to }); }); });
+      return chain;
+    }).then(function(){
+      O.wrote('boat-status-cleanup');
+    }).catch(function(e){
+      O.fail('Could not clean up the status log', e);
+    }).then(function(){
+      return fetchBoatDetail(bid).then(function(){
+        renderTimelineFor(bid);
+        redrawBoats();
+        return null;
+      });
+    }).catch(function(){ return null; });
+  });
+
   /* legacy confirmType / confirmName (04-data-core.js): the boat's type or name is a client fact, sent with
      PATCH /v1/boats/{id}. The edit box closes only when the server has said yes; a refusal keeps it open. */
   function saveBoatFact(boatId, body, title){
