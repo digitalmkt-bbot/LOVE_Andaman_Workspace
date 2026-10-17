@@ -9551,7 +9551,9 @@ function renderVanJobs(){
   const _addUn=(rid,pax)=>{ unTot+=pax; const k=rid||'_'; unByRoute[k]=(unByRoute[k]||0)+pax; };
   const _VJRA=(typeof vjRoundAll==='function')?vjRoundAll(date):{};   /* §vjRound · เดินข้อมูลรอบเดียว แล้วใช้ซ้ำทั้งหน้า */
   let _sxTot=0;
-  (SB_BOOKINGS||[]).forEach(b=>{
+  /* [w4-f5 small edit] in ops mode the server's job list (ops/77-ops-van-job-list.js) replaces the booking walk below */
+  const _OPSVJ=(typeof window.opsVanJobsList==='function')?window.opsVanJobsList(date):null;
+  (_OPSVJ?[]:(SB_BOOKINGS||[])).forEach(b=>{
     /* §strandVj · ยกเลิกแล้วแต่จัดรถไว้แล้ว = ใบงานที่ส่งคนขับไปแล้วยังมีชื่อคนนี้
        ต้องขึ้นให้เห็นว่ามีของค้าง ไม่ใช่หายไปเฉย ๆ แล้วไม่มีใครสั่งพิมพ์ใบใหม่ */
     let _sx=false;
@@ -9604,7 +9606,7 @@ function renderVanJobs(){
     if(!_ovnRet && typeof bookingV2RetInfo==='function'){ const _ri=bookingV2RetInfo(b,date); if(_ri&&_ri.alert){ unRet+=full||1; unRetList.push({name:(b.leadPax||b.voucherRef||b.id||'-'), drop:(_ri.drop||'?'), route:t.routeId||''}); const k=t.routeId||'_'; unRetByRoute[k]=(unRetByRoute[k]||0)+(full||1); } }
   });
   /* §strandMove · คันที่เคยมีงานในวันนี้ แต่ใบถูกเลื่อนวันออกไปแล้ว */
-  if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(r=>{
+  if(!_OPSVJ && typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(r=>{
     if(!r.vanId) return;
     /* §vjRound · ของค้างต้องไปเกาะใบของรอบตัวเอง ไม่ใช่ไปกองที่ใบแรกเสมอ */
     const _mg=+((r.O&&r.O.vanGroup)||0);
@@ -9619,6 +9621,8 @@ function renderVanJobs(){
     if(ms>0 && ms<E.seq) E.seq=ms;
     E.sx++; _sxTot++;
   });
+  /* [w4-f5 small edit] the server's rows and warnings (jobs, hero numbers, self-arrive) stand in for what the walk above counted */
+  if(_OPSVJ){ Object.assign(agg,_OPSVJ.agg); Object.assign(aggRet,_OPSVJ.aggRet); Object.assign(unByRoute,_OPSVJ.unByRoute); unTot=_OPSVJ.unTot; unRet=_OPSVJ.unRet; _OPSVJ.unRetList.forEach(x=>unRetList.push(x)); _OPSVJ.selfWarn.forEach(x=>selfWarn.push(x)); _sxTot=_OPSVJ.sxTot; }
   const allIds=Object.keys(agg);   // each id = "van~route" job key
   // route options (distinct routeIds across all jobs that day)
   const routeIdSet={}; allIds.forEach(k=>{ if(agg[k].routeId) routeIdSet[agg[k].routeId]=1; });
@@ -9664,7 +9668,8 @@ function renderVanJobs(){
      เรียงชุดเดียวกับ By-trip / เช็คอินรถ / ใบงานหน้าท่า:
        เวลาเรือออก → โปรแกรม → โซน → เลขกลุ่ม → ลำดับรับในกลุ่ม → ชื่อรถ
      คันที่ยังไม่ได้จัดกลุ่ม (gno=0) ไปท้ายโปรแกรมนั้น ไม่แทรกกลางลำดับที่จัดไว้ */
-  jobList.sort((J1,J2)=>{
+  /* [w4-f5 small edit] the server's job order stands */
+  (_OPSVJ?{sort:function(){}}:jobList).sort((J1,J2)=>{
     const rc=_rtCmp(J1.routeId,J2.routeId); if(rc) return rc;
     const za=_zOrd(J1.g), zb=_zOrd(J2.g); if(za!==zb) return za-zb;
     const ga=(J1.g&&J1.g.gno)||9999, gb=(J2.g&&J2.g.gno)||9999; if(ga!==gb) return ga-gb;

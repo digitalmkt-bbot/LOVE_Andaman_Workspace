@@ -64,8 +64,6 @@ export async function seedVanJobs(send) {
   const fourNow = need(await send('GET', '/v1/bookings/' + bk.four.id), 'read four');
   need(await send('POST', `/v1/bookings/${bk.four.id}/cancel`, { version: fourNow.version, reason: 'Guest changed plans' }), 'cancel four');
   // WALK SIX did not come: the van check-in says so (the return sheet then tags it)
-  need(await send('PUT', `/operations/trip-ops/${bk.six.trips[0].id}/checkins/van/0`, {
-    expected: 2, actual_pax: 0, no_show: 2,
-    events: [{ type: 'no_show', pax: 2, ad: 2, chd: 0, inf: 0, foc: 0, reason_code: 'not_down', note: 'lobby empty', at: '06:40', by: 'Walk', ts: new Date().toISOString() }] }), 'checkin six');
+  need(await send('POST', `/operations/trip-ops/${bk.six.trips[0].id}/checkins/van/0/events`, { type: 'no_show', reason_code: 'not_down', ad: 2, chd: 0, inf: 0, foc: 0, note: 'lobby empty', at: '06:40' }), 'checkin six');   // w4-f5: the command (PUT of events is the server's now)
   return { vanAlpha, vanBravo, bk, g1, g2, g3, g4 };
 }

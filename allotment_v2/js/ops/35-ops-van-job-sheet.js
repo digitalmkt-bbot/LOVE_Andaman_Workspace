@@ -301,18 +301,21 @@
 
   function note(text){ return '<div style="text-align:center;padding:24px;color:#888">' + e(text) + '</div>'; }
 
+  /* Decision w4-f5 (Q2 of docs/walk/vanjobs-sheet.md): until the server's first answer lands, and when it cannot be reached,
+     the sheet is legacy's own (built from the bookings in the browser); the server's answer replaces it as soon as it is in. */
+  function legacyOr(orig, args, text){ return orig ? orig.apply(null, [].slice.call(args, 1)) : note(text); }
   wrap('vanJobsOrderInner', function(orig, date, vanId, routeId, legIgnored, grp){
     if(!routeId) return orig ? orig(date, vanId, routeId, legIgnored, grp) : '';   // the server's sheets are one programme each
     var sk = serverKeyFor(date, vanId, routeId, grp);
     if(!sk){
-      if(!V.dayRead(date)){ V.loadJobs(date).then(function(){ V.redraw(); }, function(){}); return note('Loading the job order from the server…'); }
+      if(!V.dayRead(date)){ V.loadJobs(date).then(function(){ V.redraw(); }, function(){}); return legacyOr(orig, arguments, 'Loading the job order from the server…'); }
       return note('The server has no job order for this van and programme on ' + date + ' (nothing to carry, or the van group changed): reload the day.');
     }
     var c = slot(date, sk);
     if(c.gone) return note('The server no longer has this job order: reload the day.');
     if(!c.s){
       if(!c.busy && (!c.err || Date.now() - c.at > 5000)) fetchSheet(date, sk).then(function(changed){ if(changed) V.redraw(); });
-      return note(c.err ? ('The job order did not load (' + c.err + '): it is asked for again.') : 'Loading the job order from the server…');
+      return legacyOr(orig, arguments, c.err ? ('The job order did not load (' + c.err + '): it is asked for again.') : 'Loading the job order from the server…');
     }
     if(!c.busy && Date.now() - c.at > STALE_MS) fetchSheet(date, sk).then(function(changed){ if(changed) V.redraw(); });
     return sheetHtml(date, c.s, V.dayRead(date));
