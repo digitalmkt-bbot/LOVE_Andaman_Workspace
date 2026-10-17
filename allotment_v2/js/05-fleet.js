@@ -29004,9 +29004,9 @@ function faFixView(flags){
 FA.spv='ov';
 function faSpv(k){ FA.spv=k; flRenderOverview(); }
 function faInvRows(){ var out=[]; (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
-  if(Array.isArray(it.stocks)&&it.stocks.length) it.stocks.forEach(function(s){ out.push({it:it, loc:String(s.location||''), qty:+s.qty||0, min:+(s.minQty!=null?s.minQty:it.minQty)||0}); });
+  if(Array.isArray(it.stocks)&&it.stocks.length) it.stocks.forEach(function(s){ out.push({it:it, wh:s.warehouse||'', loc:String(s.location||''), qty:+s.qty||0, min:+(s.minQty!=null?s.minQty:it.minQty)||0}); });
   else out.push({it:it, loc:String(it.location||''), qty:+it.qty||0, min:+it.minQty||0}); }); return out; }
-function faInvAt(pier){ var re=pier==='pier:panwa'?/panwa|พันวา/i:pier==='pier:tublamu'?/tub|ตับ|lamu/i:/กลาง|central/i; return faInvRows().filter(function(r){ return re.test(r.loc); }); }
+function faInvAt(pier){ var re=pier==='pier:panwa'?/panwa|พันวา/i:pier==='pier:tublamu'?/tub|ตับ|lamu/i:/กลาง|central/i; return faInvRows().filter(function(r){ return r.wh?(r.wh===String(pier).replace(/^pier:/,'')):re.test(r.loc); }); }   /* ops mode: stock lines carry the server's warehouse key (tublamu, panwa, ranong) */
 function faLogDays(o){ var l=(o.log||[]).slice().reverse().find(function(x){ return x.date; }); return l?{d:-faDays(l.date),date:l.date}:null; }
 function faSpKey(r){ if(r.onBoat) return 'onboat'; if(!r.loc||r.loc.type==='unknown') return 'unk'; if(r.loc.type==='pier'||r.loc.type==='shop'||r.loc.type==='boat') return 'loc:'+r.loc.key; return 'other'; }
 function faBoatHasSp(b){ if(flGetBoatSpares(b.id).total) return true; var n=String(b.name||'').toLowerCase(); return faInvRows().some(function(r){ return r.qty>0 && r.loc && r.loc.toLowerCase().indexOf(n)>=0; }); }
