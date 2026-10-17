@@ -1,0 +1,111 @@
+LOVE ANDAMAN · Van Job Order
+ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว
+Van Alpha 31-1111
+คนขับ Somchai · 081-111-1111
+รถบริษัท · PK
+Friday, 20 November 2026
+ขาไป 8 คน · ขากลับ 7 คน
+↻ รอบ 1 / 2
+ROUTE / โปรแกรม
+Similan Islands by Speedboat
+·
+Friday, 20 November 2026
+·
+↻ รอบ 1 / 2 · ออก 07:00
+↻ ใบนี้คือรอบ 1 / 2 ของรถคันนี้ในโปรแกรมนี้ · ออก 07:00
+วันนี้รถคันนี้วิ่งโปรแกรมนี้ 2 รอบ คนละเวลา — อีก 1 รอบอยู่คนละใบ ดูใบของรอบนั้นแยกต่างหาก
+⚠ เส้นทางนี้ยังมี 1 booking (2 คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้
+Similan Islands by Speedboat 2 คน · ไปจัดรถที่ By trip date → โหมด Van แล้วพิมพ์ใบงานใหม่
+① ขาไป · OUTBOUND
+รับจากโรงแรม → ส่งท่าเรือ
+#	VOUCHER
+VC
+	LEAD NAME
+ชื่อลูกค้า
+	PAX
+จำนวน (คน)
+	PICK-UP TIME
+เวลารับ
+	PICK-UP LOCATION
+จุดรับ
+	ROOM
+ห้อง
+	ZONE
+โซน
+	DROP-OFF
+จุดส่ง (ถ้าเปลี่ยน)
+	BAGS
+กระเป๋า
+	SPECIAL REQUEST
+คำขอพิเศษ
+
+AD	CHD	INF	FOC
+1	แวะ	👤 Guide Nok
+คนติดรถ · 1 ที่นั่ง
+	-	-	-	-	06:30	Walk Office	-	
+Patong
+ป่าตอง
+	-	-	
+2	VJ-TWO	WALK TWO
+🚌 จุดหลัก · เดียวกัน VJ-TWO
+🚌 รับจุดเดียวกัน 2 กลุ่ม · ขากลับแยกส่ง
+	3	0	0	0	07:00	Walk Hotel Bravo
+🚌 1 คน · Mr Drop @ ?
+	210	-	→ ท่าเรือ	-	-
+3	VJ-OVN	WALK OVN
+🌕 OVN
+	2	0	0	0	07:00	Walk Hotel Hotel	-	-	
+🌕 ค้างคืนบนเกาะ
+ไม่ต้องรอส่งกลับวันนี้
+กลับ 2026-11-22
+	-	-
+4	VJ-ONE	WALK ONE
+Mrs One
+Kid One
++1 more
+	2	1	0	0	07:00	Walk Hotel Alpha
+วอล์ค โฮเทล อัลฟา
+	512	-	→ ท่าเรือ
+↩ ขากลับ โดย Van Bravo
+	🧳 2	Wait in the lobby
+รวม / Total	7	1	0	0	8 pax · 3 booking · จุดแวะ 1 · ลูกค้า 8 + ติดรถ 1 = 9 ที่นั่ง
+② ขากลับ · RETURN
+รับจากท่าเรือ → ส่งจุดหมาย
+#	VOUCHER
+VC
+	LEAD NAME
+ชื่อลูกค้า
+	PAX
+จำนวน (คน)
+	PICK-UP TIME
+เวลารับ
+	PICK-UP LOCATION
+จุดรับ
+	ROOM
+ห้อง
+	ZONE
+โซน
+	DROP-OFF
+จุดส่ง (ถ้าเปลี่ยน)
+	BAGS
+กระเป๋า
+	SPECIAL REQUEST
+คำขอพิเศษ
+
+AD	CHD	INF	FOC
+1	VJ-THREE	WALK THREE	2	0	0	0	—	Tub Lamu Pier	-	-	Walk Hotel Charlie · กลับคันเดิม	-	-
+✗	VJ-FOUR	WALK FOUR
+✗ ยกเลิกแล้ว · ไม่ต้องไปรับล้างออก
+	1	0	0	0	—	Tub Lamu Pier	-	-	Walk Hotel Delta · กลับคันเดิม	-	-
+2	VJ-TWO	WALK TWO
+🚌 จุดหลัก · เดียวกัน VJ-TWO
+	2	0	0	0	—	Tub Lamu Pier	210	-	Walk Hotel Bravo · กลับคันเดิม	-	-
+3	VJ-TWO	WALK TWO
+✂ แยกส่ง · Mr Drop · เดียวกัน VJ-TWO
+	1	0	0	0	—	Tub Lamu Pier	210	-	Kata Palm Resort · กลับคันเดิม
+✂ แยกส่ง · Mr Drop
+	-	-
+4	VJ-FIVE	WALK FIVE	2	0	0	0	—	Tub Lamu Pier	-	-	Walk Hotel Echo · มาจากรถอื่น (ขาไป Van Bravo)	-	-
+รวม / Total	7	0	0	0	7 pax · 3 booking · แยกส่ง 1 จุด · ค้างจัดการ 1 (ยกเลิก/เลื่อนวัน · ไม่นับ)
+หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)
+☎ หาลูกค้าไม่เจอ ให้รอไม่เกิน 5 นาที · มีปัญหาในการรับลูกค้า ติดต่อ 088-765-4678 · 081-970-9977 · 093-583-7962

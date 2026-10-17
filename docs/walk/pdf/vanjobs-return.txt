@@ -1,0 +1,44 @@
+LOVE ANDAMAN · Van Job Order
+ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว
+Van Bravo 32-2222
+คนขับ Boon · 082-222-2222
+รถร่วม WalkPartner · PK
+Sunday, 22 November 2026
+ขาไป 0 คน · ขากลับ 2 คน
+ROUTE / โปรแกรม
+Similan Islands by Speedboat
+·
+Sunday, 22 November 2026
+② ขากลับ · RETURN
+รับจากท่าเรือ → ส่งจุดหมาย
+#	VOUCHER
+VC
+	LEAD NAME
+ชื่อลูกค้า
+	PAX
+จำนวน (คน)
+	PICK-UP TIME
+เวลารับ
+	PICK-UP LOCATION
+จุดรับ
+	ROOM
+ห้อง
+	ZONE
+โซน
+	DROP-OFF
+จุดส่ง (ถ้าเปลี่ยน)
+	BAGS
+กระเป๋า
+	SPECIAL REQUEST
+คำขอพิเศษ
+
+AD	CHD	INF	FOC
+1	VJ-OVN	WALK OVN
+↩ OVN
+	2	0	0	0	—	Tub Lamu Pier	-	-	
+Walk Hotel Hotel
+↩ ส่งกลับ · มาจากเกาะ
+	-	-
+รวม / Total	2	0	0	0	2 pax · 1 booking
+หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)
+☎ หาลูกค้าไม่เจอ ให้รอไม่เกิน 5 นาที · มีปัญหาในการรับลูกค้า ติดต่อ 088-765-4678 · 081-970-9977 · 093-583-7962
