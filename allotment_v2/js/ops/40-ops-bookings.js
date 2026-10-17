@@ -567,6 +567,9 @@
     }).then(function(j){
       // the PATCH moved the version on · bookingWrite kept the new one, so /confirm sends it
       if(j && j.id && submit && NOT_YET_CONFIRMED.indexOf(j.status) >= 0) return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(j.id) + '/confirm', bk, {});
+      /* §opsSaveDraft · "Save Draft" on a live booking (bkV2SaveDraft asked "downgrade to quote?" and the user said yes):
+         a PATCH carries no status, so the server turns it back into a quote with its own command */
+      if(j && j.id && !submit && ['confirmed', 'pending_foc', 'pending_approval'].indexOf(j.status) >= 0) return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(j.id) + '/unconfirm', bk, {});
       return j;
     }).then(function(j){
       if(j && j.id){
