@@ -479,10 +479,11 @@
   });
 
   wrap('flAddIncLog', function(orig, incId){
-    var inp = document.getElementById('inc-log-input-' + incId);
+    var inp = document.getElementById('log-text-' + incId);
+    var byInp = document.getElementById('log-by-' + incId);
     var txt = inp ? inp.value.trim() : '';
     if(!txt) return null;
-    var by = typeof window.laBy === 'function' ? window.laBy() : '';
+    var by = byInp ? byInp.value.trim() : '';
     return O.queue(function(){
       return O.post('/v1/fleet/incidents/' + enc(incId) + '/log', { text: txt, by: by });
     }).then(function(res){
@@ -659,14 +660,15 @@
   });
 
   wrap('flSaveEditBoatStatus', function(){
-    var jobId = typeof _editBoatStatusJobId !== 'undefined' ? _editBoatStatusJobId : null;
+    var jobId = typeof _ebsJobId !== 'undefined' ? _ebsJobId : null;
     var m = jobId ? listJobs().find(function(x){ return x && x.id === jobId; }) : null;
     if(!m) return null;
     var d = function(id){ return document.getElementById(id); };
-    var status = typeof _editBoatStatusVal !== 'undefined' ? _editBoatStatusVal : 'fixing';
-    var effDate = d('edit-bs-date') ? d('edit-bs-date').value : O.today();
-    var reason = status === 'unavailable' && d('edit-bs-reason') ? d('edit-bs-reason').value : null;
-    var note = d('edit-bs-note') ? d('edit-bs-note').value.trim() : '';
+    var status = typeof _ebsNewStatus !== 'undefined' ? _ebsNewStatus : null;
+    if(!status) return null;
+    var effDate = d('ebs-date') ? d('ebs-date').value : O.today();
+    var reason = status === 'unavailable' && d('ebs-reason') ? d('ebs-reason').value : null;
+    var note = d('ebs-note') ? d('ebs-note').value.trim() : '';
     var body = { status: status, effective_date: effDate };
     if(reason) body.reason = reason;
     if(note) body.note = note;
@@ -731,7 +733,7 @@
   });
 
   wrap('flMaintAddLog', function(orig, jobId){
-    var inp = document.getElementById('maint-log-input-' + jobId);
+    var inp = document.getElementById('maint-log-text-' + jobId);
     var dateInp = document.getElementById('maint-log-date-' + jobId);
     var byInp = document.getElementById('maint-log-by-' + jobId);
     var txt = inp ? inp.value.trim() : '';

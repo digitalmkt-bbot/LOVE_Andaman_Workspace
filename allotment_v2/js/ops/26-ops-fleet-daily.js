@@ -662,9 +662,9 @@
 
   wrap('flProjSaveModal', function(){
     var d = function(id){ return document.getElementById(id); };
-    var editId = typeof _projEditId !== 'undefined' ? _projEditId : null;
-    var name = d('proj-f-name') ? d('proj-f-name').value.trim() : '';
-    var planFrom = d('proj-f-from') ? d('proj-f-from').value : '';
+    var editId = d('fl-proj-edit-id') ? (d('fl-proj-edit-id').value || null) : null;
+    var name = d('fl-proj-name') ? d('fl-proj-name').value.trim() : '';
+    var planFrom = d('fl-proj-from') ? d('fl-proj-from').value : '';
     if(!name){ alert('Project name is required'); return null; }
     if(!planFrom){ alert('Planned start is required'); return null; }
     var projects = listProjects();
@@ -675,13 +675,13 @@
     var input = {
       no: editId ? undefined : ('PRJ-' + String(maxNo + 1).padStart(3, '0')),
       name: name,
-      boatId: d('proj-f-boat') ? (d('proj-f-boat').value || null) : null,
-      type: d('proj-f-type') ? d('proj-f-type').value : 'drydock',
-      vendor: d('proj-f-vendor') ? d('proj-f-vendor').value.trim() : '',
+      boatId: d('fl-proj-boat') ? (d('fl-proj-boat').value || null) : null,
+      type: d('fl-proj-type') ? d('fl-proj-type').value : 'drydock',
+      vendor: d('fl-proj-vendor') ? d('fl-proj-vendor').value.trim() : '',
       planFrom: planFrom,
-      planTo: d('proj-f-to') ? (d('proj-f-to').value || null) : null,
-      plannedBudget: d('proj-f-budget') ? (parseFloat(d('proj-f-budget').value) || 0) : 0,
-      notes: d('proj-f-notes') ? d('proj-f-notes').value.trim() : ''
+      planTo: d('fl-proj-to') ? (d('fl-proj-to').value || null) : null,
+      plannedBudget: d('fl-proj-budget') ? (parseFloat(d('fl-proj-budget').value) || 0) : 0,
+      notes: d('fl-proj-notes') ? d('fl-proj-notes').value.trim() : ''
     };
     return O.queue(function(){
       if(editId) return O.patch('/v1/fleet/projects/' + enc(editId), toProjectBody(input, true));
@@ -807,26 +807,26 @@
 
   wrap('flSaveSafety', function(){
     var d = function(id){ return document.getElementById(id); };
-    var editId = typeof flEditSafetyId !== 'undefined' ? flEditSafetyId : null;
-    var boatId = d('fl-saf-boat') ? d('fl-saf-boat').value : '';
-    var cat = d('fl-saf-cat') ? d('fl-saf-cat').value : '';
-    var name = d('fl-saf-name') ? d('fl-saf-name').value.trim() : '';
+    var editId = typeof _flEditingSafetyId !== 'undefined' ? _flEditingSafetyId : null;
+    var boatId = d('fl-sf-boat') ? d('fl-sf-boat').value : '';
+    var cat = d('fl-sf-category') ? d('fl-sf-category').value : '';
+    var name = d('fl-sf-name') ? d('fl-sf-name').value.trim() : '';
     if(!boatId || !cat || !name){ alert('กรุณากรอกข้อมูลให้ครบ'); return null; }
     var body = toSafetyBody({
       boatId: boatId,
       category: cat,
       name: name,
-      brand: d('fl-saf-brand') ? d('fl-saf-brand').value.trim() : '',
-      model: d('fl-saf-model') ? d('fl-saf-model').value.trim() : '',
-      serial: d('fl-saf-serial') ? d('fl-saf-serial').value.trim() : '',
-      qty: d('fl-saf-qty') ? (parseInt(d('fl-saf-qty').value, 10) || 1) : 1,
-      installDate: d('fl-saf-install') ? d('fl-saf-install').value : null,
-      expiryDate: d('fl-saf-expiry') ? d('fl-saf-expiry').value : null,
-      nextPM: d('fl-saf-pm') ? d('fl-saf-pm').value : null,
-      lastInspect: d('fl-saf-inspect') ? d('fl-saf-inspect').value : null,
-      status: d('fl-saf-status') ? d('fl-saf-status').value : 'active',
-      location: d('fl-saf-loc') ? d('fl-saf-loc').value.trim() : '',
-      note: d('fl-saf-note') ? d('fl-saf-note').value.trim() : ''
+      brand: d('fl-sf-brand') ? d('fl-sf-brand').value.trim() : '',
+      model: d('fl-sf-model') ? d('fl-sf-model').value.trim() : '',
+      serial: d('fl-sf-serial') ? d('fl-sf-serial').value.trim() : '',
+      qty: d('fl-sf-qty') ? (parseInt(d('fl-sf-qty').value, 10) || 1) : 1,
+      installDate: d('fl-sf-install') ? d('fl-sf-install').value : null,
+      expiryDate: d('fl-sf-expiry') ? d('fl-sf-expiry').value : null,
+      nextPM: d('fl-sf-nextpm') ? d('fl-sf-nextpm').value : null,
+      lastInspect: d('fl-sf-lastinspect') ? d('fl-sf-lastinspect').value : null,
+      status: d('fl-sf-status') ? d('fl-sf-status').value : 'active',
+      location: d('fl-sf-location') ? d('fl-sf-location').value.trim() : '',
+      note: d('fl-sf-note') ? d('fl-sf-note').value.trim() : ''
     });
     return O.queue(function(){
       if(editId) return O.patch('/v1/fleet/safety/' + enc(editId), body);
@@ -842,15 +842,15 @@
 
   wrap('flSaveInspection', function(){
     var d = function(id){ return document.getElementById(id); };
-    var itemId = typeof _inspSafetyId !== 'undefined' ? _inspSafetyId : null;
+    var itemId = typeof _flInspItemId !== 'undefined' ? _flInspItemId : null;
     if(!itemId) return null;
-    var editInspId = typeof _editInspId !== 'undefined' ? _editInspId : null;
+    var editInspId = typeof _flEditingInspId !== 'undefined' ? _flEditingInspId : null;
     var body = {
-      date: d('insp-date') ? d('insp-date').value : O.today(),
-      inspector: d('insp-by') ? nullable(d('insp-by').value) : null,
-      result: d('insp-result') ? d('insp-result').value : 'pass',
-      findings: d('insp-findings') ? nullable(d('insp-findings').value) : null,
-      next_due: d('insp-next-due') ? nullable(d('insp-next-due').value) : null
+      date: d('fl-insp-date') ? d('fl-insp-date').value : O.today(),
+      inspector: d('fl-insp-inspector') ? nullable(d('fl-insp-inspector').value) : null,
+      result: typeof _flInspResult !== 'undefined' ? (_flInspResult || 'pass') : 'pass',
+      findings: d('fl-insp-findings') ? nullable(d('fl-insp-findings').value) : null,
+      next_due: d('fl-insp-nextdue') ? nullable(d('fl-insp-nextdue').value) : null
     };
     return O.queue(function(){
       if(editInspId) return O.patch('/v1/fleet/safety/' + enc(itemId) + '/inspections/' + enc(editInspId), body);

@@ -462,19 +462,19 @@
 
   wrap('flSaveAddStock', function(){
     var d = function(id){ return document.getElementById(id); };
-    var name = d('add-stock-name') ? d('add-stock-name').value.trim() : '';
+    var name = d('add-inv-name') ? d('add-inv-name').value.trim() : '';
     if(!name){ alert('กรุณากรอกชื่ออะไหล่'); return null; }
     var body = toStockCreateBody({
       name: name,
-      partNo: d('add-stock-partno') ? d('add-stock-partno').value.trim() : '',
-      category: d('add-stock-cat') ? d('add-stock-cat').value : 'general',
-      supplier: d('add-stock-supplier') ? d('add-stock-supplier').value.trim() : '',
-      location: d('add-stock-loc') ? d('add-stock-loc').value : 'คลัง Tub Lamu',
-      qty: d('add-stock-qty') ? (parseFloat(d('add-stock-qty').value) || 0) : 0,
-      minQty: d('add-stock-min') ? (parseInt(d('add-stock-min').value, 10) || 0) : 0,
-      unit: d('add-stock-unit') ? d('add-stock-unit').value.trim() : 'ชิ้น',
-      cost: d('add-stock-cost') ? (parseFloat(d('add-stock-cost').value) || 0) : 0,
-      note: d('add-stock-note') ? d('add-stock-note').value.trim() : ''
+      partNo: d('add-inv-partno') ? d('add-inv-partno').value.trim() : '',
+      category: d('add-inv-cat') ? d('add-inv-cat').value : 'general',
+      supplier: d('add-inv-supplier') ? d('add-inv-supplier').value.trim() : '',
+      location: d('add-inv-location') ? d('add-inv-location').value : 'คลัง Tub Lamu',
+      qty: d('add-inv-qty') ? (parseFloat(d('add-inv-qty').value) || 0) : 0,
+      minQty: d('add-inv-min') ? (parseInt(d('add-inv-min').value, 10) || 0) : 0,
+      unit: d('add-inv-unit') ? d('add-inv-unit').value.trim() : 'ชิ้น',
+      cost: d('add-inv-cost') ? (parseFloat(d('add-inv-cost').value) || 0) : 0,
+      note: d('add-inv-note-extra') ? d('add-inv-note-extra').value.trim() : ''
     });
     return O.queue(function(){
       return O.post('/v1/fleet/stock-items', body);
@@ -488,7 +488,8 @@
   });
 
   wrap('flSaveInvEdit', function(){
-    var id = typeof _editInvId !== 'undefined' ? _editInvId : null;
+    var idEl = document.getElementById('inv-edit-id');
+    var id = idEl ? (idEl.value || null) : null;
     var item = id ? listInventory().find(function(x){ return x && x.id === id; }) : null;
     if(!item) return null;
     var d = function(elId){ return document.getElementById(elId); };
@@ -612,10 +613,11 @@
   });
 
   wrap('flMaintAddPart', function(orig, jobId){
-    var sel = document.getElementById('part-sel-' + jobId);
-    var qtyEl = document.getElementById('part-qty-' + jobId);
-    var whEl = document.getElementById('part-wh-' + jobId);
-    var invId = sel ? sel.value : '';
+    var sel = document.getElementById('maint-inv-sel-' + jobId);
+    var qtyEl = document.getElementById('maint-inv-qty-' + jobId);
+    var whEl = document.getElementById('maint-inv-loc-' + jobId);
+    // The picker shows a part label ("name · part no"); the screen maps it to the item id.
+    var invId = sel ? ((window._maintInvLabelMap || {})[sel.value] || '') : '';
     var qty = qtyEl ? (parseInt(qtyEl.value, 10) || 1) : 1;
     var wh = whEl ? normalizeWarehouse(whEl.value) : 'tublamu';
     if(!invId){ alert('กรุณาเลือกอะไหล่'); return null; }
