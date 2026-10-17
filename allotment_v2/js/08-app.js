@@ -79966,12 +79966,28 @@ function pc2CSS(S){
   S+' .pc2-cl .l .py em.pc-py{max-width:none;margin:0}',
   S+' .pc2-cl .nm small b.rcw{color:#A3541B;font-weight:700}',
   S+' .pc2-cl .ac .ol.rc{font-size:12.5px;font-weight:700;white-space:nowrap}',
-  '.pc-py-ls{margin-top:8px;max-height:46vh;overflow:auto;border:1px solid #E3E7EF;border-radius:10px}',
+  '.pc-py-ls{margin-top:8px;max-height:52vh;overflow:auto;border:1px solid #E3E7EF;border-radius:10px}',
   '.pc-py-ls .o{display:flex;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid #EEF1F6}',
   '.pc-py-ls .o:first-child{border-top:none} .pc-py-ls .o.on{background:#EEF4FD}',
   '.pc-py-ls .o .n{flex:1;min-width:0;cursor:pointer;font-size:14px} .pc-py-ls .o .n small{color:#6B7693}',
   '.pc-py-ls .o .f{font-size:11.5px;color:#0B6B47;white-space:nowrap} .pc-py-ls .o .f.z{color:#9AA3B8}',
   '.pc-py-ls .o .e{border:none;background:#EEF2F8;border-radius:7px;width:28px;height:28px;cursor:pointer}',
+  /* §pcPyCat */
+  '.pc-py-ctx{margin-top:9px;background:#F6F8FB;border-radius:9px;padding:6px 10px;font-size:12.5px;color:#3E4A6B;display:flex;gap:8px;align-items:center}',
+  '.pc-py-ctx span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pc-py-ctx b{font-family:"DM Mono",monospace}',
+  '.pc-py-ctx em{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;border:1px solid;flex:none}',
+  '.pc-py-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}',
+  '.pc-py-tabs button,.pc-py-cats button{height:30px;padding:0 11px;border-radius:15px;border:1px solid #D5DAE5;background:#fff;color:#3E4A6B;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}',
+  '.pc-py-tabs button i{font-style:normal;font-size:11px;color:#8A8F9C;font-weight:600}',
+  '.pc-py-tabs button.on{background:#16265C;color:#fff;border-color:#16265C} .pc-py-tabs button.on i{color:#C9D3EA}',
+  '.pc-py-cats{display:flex;gap:6px;flex-wrap:wrap} .pc-py-cats button{border-radius:9px}',
+  '.pc-py-cats button.on{background:#16265C;color:#fff;border-color:#16265C}',
+  '.pc-py-ls .sec{font-size:10.5px;font-weight:800;letter-spacing:.1em;color:#8A8F9C;padding:7px 12px 4px;background:#FAFBFD;border-top:1px solid #EEF1F6}',
+  '.pc-py-ls .sec:first-child{border-top:none}',
+  '.pc-py-ls .o.sug{background:#FFFBEB}',
+  '.pc-py-ls .o .bd{font-style:normal;font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 6px;background:#FEF3C7;color:#92400E;margin-left:6px}',
+  '.pc-py-ls .o .ct{font-style:normal;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:#EEF2F8;color:#3E4A6B;margin-left:6px}',
+  '.pc-py-ls .o .u{color:#8A8F9C;font-size:11px;margin-left:6px}',
   '.pc-py-img img{max-width:220px;max-height:140px;border-radius:8px;border:1px solid #DCE3EC;display:block}',
   '.ck-inp.bad{border-color:#A32D2D;background:#FDF0EF}',
   S+' .pc-selbar input.pc-clm-in{flex:1 1 220px;min-width:160px;height:32px;border:1.5px solid #0E7490;border-radius:8px;padding:0 10px;font:inherit;font-size:13.5px}',
@@ -80604,49 +80620,105 @@ function pcPyChip(k,x){
 }
 var _pcPyRow=null, _pcPyQ='';
 function pcPyHost(){ var h=document.getElementById('ck-reason-host'); if(!h){ h=document.createElement('div'); h.id='ck-reason-host'; document.body.appendChild(h); } return h; }
+/* ══ §pcPyCat (2026-10-17) · owner "ต่อไปมันน่าจะเริ่มเยอะ อาจจะต้องมีแยกประเภทด้วย" · mock PCY → "โอเค"
+   ประเภทคนรับเงิน: รถตู้ · ไกด์ · หางยาว · อื่น ๆ (ชุดเดียวกับกลุ่มสีในสมุด §pcGrp) · คนเดียวมีได้หลายประเภท (p.cats)
+   เปิด "จ่ายให้" จากรายการไหน แท็บเปิดตามกลุ่มของรายการนั้น · ชื่อในทะเบียนอยู่ในข้อความรายการ = ขึ้น "แนะนำ" บนสุด (ไม่ผูกเอง)
+   ในแท็บเรียงใช้บ่อยก่อน · ค้นหาข้ามทุกแท็บ · คนเก่าที่ยังไม่มีประเภท เดาจากรายการที่เคยผูก ══ */
+var PC_PY_CAT=[{k:'van',t:'รถตู้'},{k:'guide',t:'ไกด์'},{k:'lt',t:'หางยาว'},{k:'oth',t:'อื่น ๆ'}];
+var _pcPyTab='all';
+function pcPyCatOfRow(x){ var g=(x && typeof pcGrpOf==='function')?pcGrpOf(x,'out'):null, k=g?g.k:''; return (k==='van'||k==='guide'||k==='lt')?k:'oth'; }
+function pcRowById(id){
+  id=String(id||''); var hit=null;
+  try{ PC_PIERS.forEach(function(pr){ if(hit) return; var P=pcPier(pr)||{};
+    Object.keys(P).forEach(function(ds){ if(hit) return; ((P[ds]||{}).out||[]).forEach(function(x){ if(!hit && x && String(x.id)===id) hit={x:x,ds:ds,pier:pr}; }); }); }); }catch(_){}
+  return hit;
+}
+/* ประเภท + จำนวนครั้งที่ใช้ ของทุกคน · คนที่ไม่ได้ตั้งประเภท ใช้ประเภทของรายการที่เคยผูกมากที่สุด */
+function pcPyStats(D){
+  var use={}, guess={}, need=Object.keys(D.of).length?{}:null;
+  Object.keys(D.of).forEach(function(r){ var pid=D.of[r]; use[pid]=(use[pid]||0)+1; if(need) need[r]=pid; });
+  if(need){ try{ PC_PIERS.forEach(function(pr){ var P=pcPier(pr)||{};
+    Object.keys(P).forEach(function(ds){ ((P[ds]||{}).out||[]).forEach(function(x){ var pid=x&&need[String(x.id)]; if(!pid) return;
+      var c=pcPyCatOfRow(x), G=guess[pid]||(guess[pid]={}); G[c]=(G[c]||0)+1; }); }); }); }catch(_){} }
+  var cats={};
+  Object.keys(D.p).forEach(function(pid){ var p=D.p[pid]; if(!p) return;
+    if(Array.isArray(p.cats) && p.cats.length){ cats[pid]=p.cats.slice(); return; }
+    var G=guess[pid]; if(G){ var best=Object.keys(G).sort(function(a,b){ return G[b]-G[a]; })[0]; cats[pid]=[best]; } else cats[pid]=['oth']; });
+  return {use:use, cats:cats};
+}
+function pcPyNorm(t){ return String(t||'').replace(/\s+/g,'').replace(/^(นางสาว|นาย|นาง|น\.ส\.|ด\.ช\.|ด\.ญ\.)/,'').toLowerCase(); }
 function pcPyPick(rowId){
   if(!pcGuard()) return;
   _pcPyRow=String(rowId); _pcPyQ='';
-  pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:480px">'
-   +'<div class="ck-dh"><div><div class="t1">จ่ายให้ใคร</div><div class="t2">เลือกจากทะเบียนคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงินของรายการนี้</div></div>'
+  var R=pcRowById(_pcPyRow), x=R?R.x:null, ck=x?pcPyCatOfRow(x):'oth';
+  var D=pcPyDB(), ST=pcPyStats(D), has=Object.keys(D.p).some(function(pid){ return (ST.cats[pid]||[]).indexOf(ck)>=0; });
+  _pcPyTab=has?ck:'all';
+  var g=(x && typeof pcGrpOf==='function')?pcGrpOf(x,'out'):null;
+  pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:520px">'
+   +'<div class="ck-dh"><div style="min-width:0;flex:1"><div class="t1">จ่ายให้ใคร</div><div class="t2">เลือกจากทะเบียนคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงินของรายการนี้</div>'
+     +(x?('<div class="pc-py-ctx">'+(g?('<em style="color:'+g.c+';background:'+(g.bg||'#fff')+';border-color:'+g.c+'">'+pcE(g.t)+'</em>'):'')
+       +'<span>'+pcE(x.txt||'—')+'</span><b>'+pcN(+x.amt||0)+'</b></div>'):'')+'</div>'
    +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
-   +'<div class="ck-db"><input id="pc-py-q" class="ck-inp" type="text" placeholder="ค้นชื่อ / ทะเบียนรถ" oninput="_pcPyQ=this.value;pcPyList()" autocomplete="off">'
+   +'<div class="ck-db"><input id="pc-py-q" class="ck-inp" type="text" placeholder="ค้นชื่อ / ทะเบียนรถ (ค้นทุกประเภท)" oninput="_pcPyQ=this.value;pcPyList()" autocomplete="off">'
+   +'<div id="pc-py-tabs" class="pc-py-tabs"></div>'
    +'<div id="pc-py-ls" class="pc-py-ls"></div></div>'
-   +'<div class="ck-df"><button class="c" onclick="pcPySet(\'\')">ไม่ระบุ</button><button class="k" onclick="pcPyEdit(\'\')">+ เพิ่มคนรับเงินใหม่</button></div>'
+   +'<div class="ck-df"><button class="c" onclick="pcPySet(\'\')">ไม่ระบุ</button><button class="k" id="pc-py-add" onclick="pcPyEdit(\'\')">+ เพิ่มคนรับเงินใหม่</button></div>'
    +'</div></div>';
   pcPyList();
   setTimeout(function(){ var i=document.getElementById('pc-py-q'); if(i) i.focus(); },0);
 }
+function pcPyTabSet(k){ _pcPyTab=k; pcPyList(); }
+function pcPyCatT(k){ for(var i=0;i<PC_PY_CAT.length;i++) if(PC_PY_CAT[i].k===k) return PC_PY_CAT[i].t; return ''; }
 function pcPyList(){
   var el=document.getElementById('pc-py-ls'); if(!el) return;
-  var D=pcPyDB(), cur=D.of[_pcPyRow]||'', q=String(_pcPyQ||'').trim().toLowerCase();
-  var L=Object.keys(D.p).map(function(k){ return D.p[k]; }).filter(function(p){ return p && p.id; })
-    .filter(function(p){ return !q || (String(p.name||'')+' '+String(p.veh||'')).toLowerCase().indexOf(q)>=0; })
-    .sort(function(a,b){ return (a.id===cur?-1:0)-(b.id===cur?-1:0) || String(a.name||'').localeCompare(String(b.name||''),'th'); });
-  var acc=pcPyAcc();
-  el.innerHTML=L.length?L.map(function(p){ var id=pcE(p.id);
-      return '<div class="o'+(p.id===cur?' on':'')+'"><span class="n" onclick="pcPySet(\''+id+'\')"><b>'+pcE(p.name||'—')+'</b>'
-        +(p.veh?(' <small>· '+pcE(p.veh)+'</small>'):'')+'</span>'
-        +(acc?('<small class="f'+(p.idNo?'':' z')+'">'+(p.idNo?'เลขบัตร ✓':'ไม่มีเลขบัตร')+(p.img?' · รูปบัตร ✓':'')+'</small>'):'')
-        +'<button type="button" class="e" title="แก้ข้อมูล" onclick="pcPyEdit(\''+id+'\')">&#9998;</button></div>'; }).join('')
-    :'<div class="pc2-mut" style="padding:10px 2px">'+(q?'ไม่พบชื่อนี้ · กด "+ เพิ่มคนรับเงินใหม่"':'ยังไม่มีในทะเบียน · กด "+ เพิ่มคนรับเงินใหม่"')+'</div>';
+  var D=pcPyDB(), ST=pcPyStats(D), cur=D.of[_pcPyRow]||'', q=String(_pcPyQ||'').trim().toLowerCase(), acc=pcPyAcc();
+  var all=Object.keys(D.p).map(function(k){ return D.p[k]; }).filter(function(p){ return p && p.id; });
+  var R=pcRowById(_pcPyRow), tx=pcPyNorm(R&&R.x?R.x.txt:'');
+  var cnt={all:all.length}; PC_PY_CAT.forEach(function(c){ cnt[c.k]=all.filter(function(p){ return (ST.cats[p.id]||[]).indexOf(c.k)>=0; }).length; });
+  var tb=document.getElementById('pc-py-tabs');
+  if(tb) tb.innerHTML=[{k:'all',t:'ทั้งหมด'}].concat(PC_PY_CAT).map(function(c){
+      return '<button type="button" class="'+((!q && _pcPyTab===c.k)?'on':'')+'" onclick="pcPyTabSet(\''+c.k+'\')">'+c.t+' <i>'+(cnt[c.k]||0)+'</i></button>'; }).join('');
+  var ad=document.getElementById('pc-py-add'); if(ad) ad.textContent='+ เพิ่มคนรับเงินใหม่'+((_pcPyTab!=='all' && !q)?(' ('+pcPyCatT(_pcPyTab)+')'):'');
+  var sug=function(p){ var n=pcPyNorm(p.name); return n.length>=4 && tx && tx.indexOf(n)>=0; };
+  var L=all.filter(function(p){ return q ? ((String(p.name||'')+' '+String(p.veh||'')).toLowerCase().indexOf(q)>=0)
+                                          : (_pcPyTab==='all' || (ST.cats[p.id]||[]).indexOf(_pcPyTab)>=0 || sug(p)); })
+    .sort(function(a,b){ return (ST.use[b.id]||0)-(ST.use[a.id]||0) || String(a.name||'').localeCompare(String(b.name||''),'th'); });
+  var S=L.filter(sug), O=L.filter(function(p){ return !sug(p); });
+  var one=function(p,isS){ var id=pcE(p.id), u=ST.use[p.id]||0, cs=(ST.cats[p.id]||[]);
+    return '<div class="o'+(p.id===cur?' on':'')+(isS?' sug':'')+'"><span class="n" onclick="pcPySet(\''+id+'\')"><b>'+pcE(p.name||'—')+'</b>'
+      +(p.veh?(' <small>· '+pcE(p.veh)+'</small>'):'')
+      +(isS?'<em class="bd">ชื่อตรงกับรายการ</em>':'')
+      +((_pcPyTab==='all'||q)?cs.map(function(c){ return '<em class="ct">'+pcPyCatT(c)+'</em>'; }).join(''):'')
+      +(u?('<small class="u">ใช้ '+u+' ครั้ง</small>'):'')+'</span>'
+      +(acc?('<small class="f'+(p.idNo?'':' z')+'">'+(p.idNo?'เลขบัตร ✓':'ไม่มีเลขบัตร')+(p.img?' · รูปบัตร ✓':'')+'</small>'):'')
+      +'<button type="button" class="e" title="แก้ข้อมูล" onclick="pcPyEdit(\''+id+'\')">&#9998;</button></div>'; };
+  el.innerHTML=(S.length?('<div class="sec">แนะนำ</div>'+S.map(function(p){ return one(p,true); }).join('')):'')
+    +(O.length?((S.length?'<div class="sec">'+(q?'ผลค้นหา':(_pcPyTab==='all'?'ทั้งหมด':pcPyCatT(_pcPyTab)))+' · ใช้บ่อยก่อน</div>':'')+O.map(function(p){ return one(p,false); }).join('')):'')
+    +((!S.length && !O.length)?('<div class="pc2-mut" style="padding:10px 12px">'+(q?'ไม่พบชื่อนี้ · กด "+ เพิ่มคนรับเงินใหม่"':(all.length?'ยังไม่มีคนในประเภทนี้ · ดูแท็บ "ทั้งหมด" หรือเพิ่มใหม่':'ยังไม่มีในทะเบียน · กด "+ เพิ่มคนรับเงินใหม่"'))+'</div>'):'');
 }
 function pcPySet(pid){
   if(!pcGuard() || !_pcPyRow) return;
   var D=pcPyDB(); if(pid && D.p[pid]) D.of[_pcPyRow]=pid; else delete D.of[_pcPyRow];
   pcPyPut(D); ckReasonClose(); pcKeep();
 }
-var _pcPyImg=null;
+var _pcPyImg=null, _pcPyCats=[];
+function pcPyCatTog(k){ var i=_pcPyCats.indexOf(k); if(i>=0) _pcPyCats.splice(i,1); else _pcPyCats.push(k); pcPyCatPaint(); }
+function pcPyCatPaint(){ var el=document.getElementById('pc-py-cats'); if(!el) return;
+  el.innerHTML=PC_PY_CAT.map(function(c){ return '<button type="button" class="'+(_pcPyCats.indexOf(c.k)>=0?'on':'')+'" onclick="pcPyCatTog(\''+c.k+'\')">'+c.t+'</button>'; }).join(''); }
 function pcPyEdit(pid){
   if(!pcGuard()) return;
   var D=pcPyDB(), p=(pid && D.p[pid])?D.p[pid]:{name:String(_pcPyQ||'').trim()}, a=p.addr||{}, acc=pcPyAcc();
   _pcPyImg=p.img||null; _pcPyUp=0;
+  /* §pcPyCat · ประเภท · คนเก่าใช้ที่เดาไว้ · คนใหม่ใช้แท็บที่เปิดอยู่ ไม่งั้นใช้ประเภทของรายการ */
+  if(pid && D.p[pid]){ _pcPyCats=(pcPyStats(D).cats[pid]||[]).slice(); }
+  else { var _R=pcRowById(_pcPyRow); _pcPyCats=[(_pcPyTab && _pcPyTab!=='all')?_pcPyTab:(_R?pcPyCatOfRow(_R.x):'oth')]; }
   var f=function(id,lb,v,ph,cls){ return '<div><div class="lb">'+lb+'</div><input id="pc-py-'+id+'" class="ck-inp'+(cls?' '+cls:'')+'" type="text" value="'+pcE(v||'')+'" placeholder="'+(ph||'')+'"></div>'; };
   var g2=function(x,y){ return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">'+x+y+'</div>'; };
   pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:520px">'
    +'<div class="ck-dh"><div><div class="t1">'+(pid?'แก้ข้อมูลคนรับเงิน':'เพิ่มคนรับเงิน')+'</div><div class="t2">กรอกครั้งเดียว ใช้ซ้ำทุกใบเสร็จ</div></div>'
    +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
    +'<div class="ck-db" style="max-height:64vh;overflow:auto">'
+   +'<div class="lb">ประเภท (เลือกได้มากกว่า 1)</div><div id="pc-py-cats" class="pc-py-cats"></div>'
    +f('name','ชื่อ-สกุล (ตามบัตร)',p.name,'เช่น นายสมชาย ใจดี')
    +f('veh','ผูกกับรถ / หมายเหตุ',p.veh,'เช่น ลาภู · รถร่วม')
    +(acc?(f('idno','เลขบัตรประชาชน',p.idNo,'13 หลัก')
@@ -80662,7 +80734,7 @@ function pcPyEdit(pid){
    +'<button class="c" onclick="'+(_pcPyRow?'pcPyPick(_pcPyRow)':'ckReasonClose()')+'">ย้อนกลับ</button>'
    +'<button class="k" onclick="pcPySave(\''+pcE(pid||'')+'\')">บันทึก'+(_pcPyRow?' และเลือก':'')+'</button></div>'
    +'</div></div>';
-  pcPyImgShow();
+  pcPyImgShow(); pcPyCatPaint();
 }
 function pcPyImgShow(){
   var el=document.getElementById('pc-py-imgv'); if(!el) return;
@@ -80717,6 +80789,7 @@ function pcPySave(pid){
   var D=pcPyDB(), acc=pcPyAcc(), id=(pid && D.p[pid])?pid:('py'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
   var p=D.p[id]||{id:id};
   p.name=name; p.veh=v('veh')||'';
+  p.cats=_pcPyCats.length?_pcPyCats.slice():['oth'];   /* §pcPyCat */
   if(acc){ p.idNo=v('idno')||''; p.addr={no:v('no')||'',moo:v('moo')||'',road:v('road')||'',sub:v('sub')||'',dist:v('dist')||'',prov:v('prov')||''}; p.img=_pcPyImg||null; }
   p.by=pcWho(); p.at=new Date().toISOString();
   D.p[id]=p; if(_pcPyRow) D.of[_pcPyRow]=id;
