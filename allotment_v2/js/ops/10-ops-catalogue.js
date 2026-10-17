@@ -398,6 +398,13 @@
     return out;
   });
 
+  /* pickLoc (04-data-core.js) shows the same row again when a land option is picked: hide it after every pick too. */
+  calWrap('pickLoc', function(orig){
+    var out = orig.apply(this, [].slice.call(arguments, 1));
+    var cr = document.getElementById('fm-route-cap-row'); if(cr) cr.style.display = 'none';
+    return out;
+  });
+
   calWrap('stApplyRouteOrder', function(orig, ids, pier){
     if(!Array.isArray(ids) || !ids.length || !pier) return;
     var list = (typeof ROUTES !== 'undefined' ? ROUTES : []);
