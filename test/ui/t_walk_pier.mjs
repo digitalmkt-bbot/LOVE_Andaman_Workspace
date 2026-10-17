@@ -251,6 +251,42 @@ section('3', async () => {
   ok('the Bought button locks the set on the server and on the screen', after.bought === true && after.bought_by === 'tester' && scr2 === true, { server: after.bought, by: after.bought_by, screen: scr2 });
 });
 
+// ═══ 4 · duty from the Office screen, unassigned heads, route codes, job kind, default pay table ═══
+section('4', async () => {
+  console.log('\n[4] poDutySave, poUnassigned, route codes, job kind, PA_PAY_DEF');
+  await seed('POST', '/v1/bookings', { external_id: `b2c_walk_un_${Date.now().toString(36)}`, total: 3000, trips: [{ route_id: 'r5', date: D2, pax: { ad_fr: 4, chd_fr: 1 }, zone: 'PK' }] });
+  await openView('po-' + PIER, D2);
+  await page.selectOption('#po-who', staff.Somchai); await settle(300);
+  const dayD2 = await api(`/v1/pier-office/${PIER}/days/${D2}/boats`);
+  const scrUn = await ev((a) => poUnassigned(a.D, a.P), { D: D2, P: PIER });
+  ok('poUnassigned = the server\'s unassigned heads (5)', dayD2.unassigned.pax === 5 && scrUn === 5, { screen: scrUn, server: dayD2.unassigned });
+  // the duty dialog on the Office screen: the day's jobs are NOT loaded yet
+  const loadedBefore = await ev((a) => Object.keys(laOps.pierJob.state.keys).filter((k) => k.startsWith(a.D)).length, { D: D2 });
+  await ev(() => poDutyOpen('b6')); await page.waitForSelector('#podu_' + staff.Somchai, { timeout: 8000 });
+  await page.check('#podu_' + staff.Somchai); await page.check('#podu_' + staff.Nok);
+  await clickModal('บันทึก'); await flush(); await settle(500);
+  const job = await api(`/v1/pier-office/${PIER}/days/${D2}/boats/b6/job`);
+  const scrDuty = await ev((a) => (PIER_DUTY[a.D + '::b6'] || []).slice().sort(), { D: D2 });
+  ok('poDutySave from the Office screen reaches the server (both staff on duty)', JSON.stringify((job.duty_staff_ids || []).slice().sort()) === JSON.stringify([staff.Somchai, staff.Nok].sort()) && JSON.stringify(scrDuty) === JSON.stringify([staff.Somchai, staff.Nok].sort()), { loadedBefore, server: job.duty_staff_ids, screen: scrDuty });
+  // job kind for a sailing boat, a boat with no trip: the server's `kind`
+  await openView('poj-' + PIER, D2); await settle(2500);
+  const kinds = {};
+  for (const b of ['b6', 'b7', 'b1']) kinds[b] = [await ev((a) => paJobKind(a.D, a.b), { D: D2, b }), (await api(`/v1/pier-office/${PIER}/days/${D2}/boats/${b}/job`)).kind];
+  ok('paJobKind = the server job kind for each boat (b6, b7, and b1 which has no trip)', Object.values(kinds).every(([s, v]) => s === v) && kinds.b6[1] === 'boat', kinds);
+  // route codes (attendance screen reads the roster)
+  await openView('poa-' + PIER, D2); await settle(2500);
+  const roster = await api(`/v1/pier-office/${PIER}/roster?from=2026-10-01&to=2026-10-31`);
+  const rc = await ev(() => ({ r4: paRouteCode('r4'), r5: paRouteCode('r5'), r10: paRouteCode('r10'), by: ROUTES.map((r) => r.id).map((id) => [id, paRoutesByCode(paRouteCode(id)).map((x) => x.id)]) }));
+  const srvCode = (id) => ((roster.route_codes || []).find((e) => e.routes.some((r) => r.id === id)) || {}).code;
+  ok('paRouteCode = the roster route_codes of the server (r4, r5)', rc.r4 === srvCode('r4') && rc.r5 === srvCode('r5') && !!rc.r4 && !!rc.r5, { screen: rc, server: roster.route_codes });
+  ok('paRoutesByCode(code) finds the routes holding that code', rc.by.every(([id, ids]) => ids.includes(id)), rc.by);
+  // PA_PAY_DEF
+  const rules = await api('/v1/pier-office/pay-rules');
+  const def = await ev(() => JSON.parse(JSON.stringify(PA_PAY_DEF)));
+  const srvDef = Object.fromEntries((rules.rules || []).map((r) => [r.code, { x: r.multiplier, d: r.per_day, f: r.flat }]));
+  ok('PA_PAY_DEF equals the server default pay table (nothing saved: defaulted)', rules.defaulted === true && JSON.stringify(def) === JSON.stringify(srvDef), { screen: def, server: srvDef });
+});
+
 // @@SECTIONS
 
 for (const [name, fn] of todo) {
