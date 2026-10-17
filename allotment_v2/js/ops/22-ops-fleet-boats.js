@@ -556,6 +556,37 @@
     });
   });
 
+  /* legacy confirmCap (04-data-core.js): a whole number above 0 sets the boat's seats, anything else is dropped.
+     Server first: PATCH /v1/boats/{id} {capacity}. A day that would carry more passengers than the new seats is
+     409 seats_sold: the person is asked with the server's own text, and a yes sends capacity_anyway: true. The
+     edit box stays open when the server refuses. */
+  wrap('confirmCap', function(orig){
+    var boatId = selectedBoatId();
+    var inp = document.getElementById('bdp-cap-inp');
+    if(!boatId || !inp) return undefined;
+    var v = parseInt(inp.value, 10);
+    if(!(v > 0)){
+      if(typeof window.cancelCap === 'function') window.cancelCap();
+      return undefined;
+    }
+    function send(extra){
+      return O.queue(function(){ return O.patch('/v1/boats/' + enc(boatId), Object.assign({ capacity: v }, extra || {})); });
+    }
+    return O.anyway(send, { seats_sold: { flag: 'capacity_anyway' } }, {}).then(function(){
+      return fetchBoatDetail(boatId);
+    }).then(function(b){
+      O.wrote('boat');
+      var cv = document.getElementById('bdp-cap-val'); if(cv) cv.textContent = v;
+      if(typeof window.cancelCap === 'function') window.cancelCap();
+      redrawBoats();
+      return b;
+    }).catch(function(e){
+      if(e && e.declined) return null;
+      O.fail('Could not save boat seats', e);
+      return null;
+    });
+  });
+
   wrap('flRenderDocsList', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){
