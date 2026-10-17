@@ -735,6 +735,18 @@
     }).catch(function(e){ O.fail('Could not merge stock items', e); return null; });
   });
 
+  /* Receive state and labour-only are the server's (fleet-memos.ts receiveState / laborOnly), served on the memo
+     as receive_state and labor_only. A memo that did not come from the server keeps the legacy calculation. */
+  wrap('memoRecvState', function(orig, m){
+    if(m && m._fromOpsBackend && m.receiveState) return clone(m.receiveState);
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flwMemoLabour', function(orig, mo){
+    if(mo && mo._fromOpsBackend && mo.receiveState) return !!mo.laborOnly;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   wrap('flSaveApprove', function(){
     var d = function(id){ return document.getElementById(id); };
     var id = typeof _approveMemoId !== 'undefined' ? _approveMemoId : null;
