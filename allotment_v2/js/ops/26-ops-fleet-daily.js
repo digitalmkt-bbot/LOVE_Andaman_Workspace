@@ -1083,15 +1083,29 @@
   /* legacy flBoatBookingsFor (Daily Fleet Log auto-PAX): the passengers booked on a boat that day. The server's
      answer is pax_booked on GET /v1/fleet/daily-log (fleet-daily.ts bookedOn); it is read for every day loaded.
      The routes / trips count of the same call stays the browser's (the server row has the number only). */
+  /* A write drops every pax_booked (dropUpkeep below), and nothing else reads the day again when the Daily Fleet Log is
+     opened: the browser's own count would answer for the rest of the session. So a day with no server figure is read once
+     (since the last write) and the log is drawn again when it lands. */
+  var bookedAsked = {};
+  function readBookedDay(ds){
+    if(bookedAsked[ds] || !enabled() || !state.loaded || !/^\d{4}-\d{2}-\d{2}$/.test(ds || '')) return;
+    bookedAsked[ds] = true;
+    O.get('/v1/fleet/daily-log', { from: ds, to: ds }).then(function(res){
+      applyDailyRange(res);
+      var el = document.getElementById('fl-dr-date');
+      if(el && el.value === ds && O.activeView() === 'dailyreport' && !O.busy() && typeof window.flRenderDR === 'function') window.flRenderDR();
+    }).catch(function(){});
+  }
   wrap('flBoatBookingsFor', function(orig, boatId, ds){
     var out = orig.apply(this, [].slice.call(arguments, 1));
     var v = state.bookedByKey[ds + '|' + boatId];
     if(v != null && out) out.pax = v;
+    else if(v == null) readBookedDay(ds);
     return out;
   });
 
   var upkeep = {};   // ym → { rows: {boatId: repairs} } | 'loading' | 'failed'
-  function dropUpkeep(){ upkeep = {}; state.bookedByKey = {}; }   // a write may change bookings: the browser's own count answers until the day is read again
+  function dropUpkeep(){ upkeep = {}; state.bookedByKey = {}; bookedAsked = {}; }   // a write may change bookings: the browser's own count answers until the day is read again
   O.onWrite(dropUpkeep);
   wrap('flBoatRepairCostMonth', function(orig, boatId, ym){
     var args = [].slice.call(arguments, 1);
