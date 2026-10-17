@@ -79,6 +79,7 @@
       toPier: a.to_pier || a.toPier || '',
       startDate: a.start_date || a.startDate || '',
       endDate: a.end_date || a.endDate || '',
+      openEnd: a.open_end != null ? !!a.open_end : null,      // the server's word for "no return date yet" (asnEndOf / asnIsOpen)
       reason: a.reason || '',
       cost: num(a.cost),
       status: a.status || (a.cancelled ? 'cancelled' : 'planned'),
@@ -153,6 +154,11 @@
     var rows = Array.isArray(res.assignments) ? res.assignments.map(mapAssignment) : [];
     // Legacy keeps assignments in oldest-first order
     b.assignments = rows.slice().reverse();
+    // the server's three panels (active / planned / past) for the day it was read, by assignment id
+    if(res.active !== undefined || Array.isArray(res.planned) || Array.isArray(res.past)){
+      var ids = function(l){ return Array.isArray(l) ? l.map(function(x){ return x && x.id; }) : []; };
+      b._asnPanels = { day: O.today(), active: res.active && res.active.id ? res.active.id : null, planned: ids(res.planned), past: ids(res.past) };
+    }
     if(res.pier_today !== undefined) b.pierToday = res.pier_today;
     // IMPORTANT: pier_today must never overwrite home pier (b.pier)
     return b.assignments;
@@ -339,6 +345,43 @@
       if(b.atShop && b.statusEffective && b.statusEffective !== 'available') return 'shop';
       if(b.pierToday && (!Array.isArray(b.assignments) || !b.assignments.length)) return b.pierToday;
     }
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* legacy asnEndOf / asnIsOpen / getActiveAssignment / getPlannedAssignments / getPastAssignments: which move
+     covers today, which are planned, which are past, and whether a move has no return date. The server decides
+     (GET /v1/boats/{id}/assignments: active, planned, past, open_end; fleet-assignments.ts assignmentPanels).
+     The panels are the server's for the day they were read; on another day, or for a boat the server has not
+     answered for, the browser's own rule stays. */
+  function panelRows(b, key){
+    var P = b && b._asnPanels;
+    if(!P || P.day !== O.today() || !Array.isArray(b.assignments)) return null;
+    var byId = {}; b.assignments.forEach(function(a){ if(a) byId[a.id] = a; });
+    var want = key === 'active' ? (P.active ? [P.active] : []) : P[key];
+    var rows = want.map(function(id){ return byId[id]; });
+    return rows.every(Boolean) ? rows : null;
+  }
+  wrap('getActiveAssignment', function(orig, b){
+    var r = panelRows(b, 'active');
+    if(r) return r[0];
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('getPlannedAssignments', function(orig, b){
+    var r = panelRows(b, 'planned');
+    if(r) return r;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('getPastAssignments', function(orig, b){
+    var r = panelRows(b, 'past');
+    if(r) return r;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('asnEndOf', function(orig, a){
+    if(a && a.openEnd === true) return '9999-12-31';
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('asnIsOpen', function(orig, a){
+    if(a && a.openEnd != null) return !!a.openEnd && a.status !== 'cancelled';
     return orig.apply(this, [].slice.call(arguments, 1));
   });
 
@@ -710,10 +753,9 @@
       note: g('fm-boat-note') || null, documents: docs,
       status: stMap[typeof fmBoatSt !== 'undefined' ? fmBoatSt : 0] || 'available'
     };
-    // the total persons: a new boat gets it from the server unless the form carries one; an edit sends the form's
-    var total = wholeOrNull('fm-boat-totalcap');
-    if(total != null) body.registered_persons = total;
-    else if(editId) body.registered_persons = null;
+    // the total persons (a read-only box, fmCalcTotal shows it while typing): a new boat gets licence + crew +
+    // fishing crew from the server; an edit sends the box, as the server only works it out on create
+    if(editId) body.registered_persons = wholeOrNull('fm-boat-totalcap');
     function send(extra){
       return O.queue(function(){
         if(editId) return O.patch('/v1/boats/' + enc(editId), Object.assign({}, body, extra || {}));
