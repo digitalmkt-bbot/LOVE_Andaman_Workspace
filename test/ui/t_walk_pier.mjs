@@ -331,6 +331,23 @@ section('5', async () => {
   ok('programme colour saved on the server (PATCH /v1/routes/r5) and shown', String(route.color).toLowerCase() === pick.toLowerCase() && String(scr).toLowerCase() === pick.toLowerCase(), { picked: pick, server: route.color, screen: scr });
 });
 
+// ═══ 6 · licence days left ═══
+section('6', async () => {
+  console.log('\n[6] licences · plDaysTo');
+  const classes = (await api('/v1/pier-office')).license_classes;
+  const exp = '2026-11-10', exp2 = '2026-10-19';
+  const l1 = await seed('POST', `/v1/pier-office/staff/${staff.Somchai}/licences`, { class_id: classes[0].id, licence_no: 'WALK-1', expires_on: exp });
+  const l2 = await seed('POST', `/v1/pier-office/staff/${staff.Nok}/licences`, { class_id: classes[0].id, licence_no: 'WALK-2', expires_on: exp2 });
+  await openView('poa-' + PIER, D2); await ev(() => laOps.pier.load()); await settle(2000);
+  await ev(() => { _paTab = 'lic'; renderPierAtt(); }); await settle(1500);
+  const srv = (await api(`/v1/pier-office/${PIER}/licences`)).licences;
+  const s1 = srv.find((l) => l.id === l1.id), s2 = srv.find((l) => l.id === l2.id);
+  const scr = await ev((a) => ({ d1: plDaysTo(a.e1), d2: plDaysTo(a.e2), body: document.getElementById('pa-host-tublamu').textContent.replace(/\s+/g, ' ') }), { e1: exp, e2: exp2 });
+  ok('plDaysTo = the server days_left (licence expiring 2026-11-10)', typeof s1.days_left === 'number' && scr.d1 === s1.days_left, { screen: scr.d1, server: s1.days_left });
+  ok('plDaysTo = the server days_left (licence expiring in 2 days)', scr.d2 === s2.days_left, { screen: scr.d2, server: s2.days_left });
+  ok('the licences tab shows those days (เหลือ N วัน)', scr.body.includes('เหลือ ' + s2.days_left + ' วัน'), scr.body.slice(0, 400));
+});
+
 // @@SECTIONS
 
 for (const [name, fn] of todo) {
