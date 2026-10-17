@@ -463,7 +463,7 @@
         r.rateAmb=null;
         if(s.action==='error') r.checked=false;
       });
-      legacyImpRender();
+      window.agImportRender();   // the wrapped render (irn), so the refused row's message and the rate note are drawn
     },function(e){ fail('Could not check the agent import',e); });
   }
   if(typeof legacyImpFile==='function'){

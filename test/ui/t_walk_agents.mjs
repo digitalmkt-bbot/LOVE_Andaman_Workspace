@@ -60,10 +60,12 @@ process.on('SIGINT', () => { cleanup(); process.exit(1); });
 process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
-const calls = [], refusals = [];
+const calls = [], refusals = [], bodies = [];          // bodies: every non-GET the app sent (method, path, JSON body)
+const sentTo = (m, re) => bodies.filter((x) => x.m === m && re.test(x.p));
 await ctx.route(PROD, async (route) => {
   const req = route.request(), u = new URL(req.url());
   calls.push(req.method() + ' ' + u.pathname);
+  if (req.method() !== 'GET') { try { bodies.push({ m: req.method(), p: u.pathname, b: req.postData() ? JSON.parse(req.postData()) : null }); } catch (_) { bodies.push({ m: req.method(), p: u.pathname, b: req.postData() }); } }
   const hd = req.headers(), fwd = {};
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
   const r = await fetch(OPS + u.pathname + u.search, { method: req.method(), headers: fwd, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : (req.postData() || undefined) });
@@ -149,6 +151,54 @@ const kpi = await ev(() => ({ need: (document.querySelector('#ag-kpi .ag-chip.wa
   rows: [...document.querySelectorAll('#ag-hd-pop .ag-hd-pr:not(.dim)')].reduce((o, r) => { o[r.querySelector('.t b').textContent] = r.querySelector('.n').textContent; return o; }, {}) }));
 ok('list KPI popup counts = server alerts (norate / orph / drift)', kpi.rows['No rate bound'] == (srvCodes.no_rate_bound || 0) && kpi.rows['Route with no price'] == (srvCodes.route_no_price || 0) && kpi.rows['Contract ≠ bound rate'] == (srvCodes.contract_rate_differs || 0), { kpi, srvCodes });
 ok('list KPI "Needs action" chip = agents selling with an alert', Number(kpi.need) === srvNeed, { kpi, srvNeed });
+}
+if (want(2)) {
+console.log('\n[2] Agent Excel import · dry run preview, refused row, Import with the ticked lines');
+item = 2;
+await nav('agents'); await settle(500);
+const hasXlsx = await ev(() => typeof XLSX !== 'undefined');
+ok('SheetJS (XLSX) is loaded in the page (CDN)', hasXlsx, hasXlsx);
+if (hasXlsx) {
+  const n0 = bodies.length;
+  const sheet = [
+    { name: 'ZZ Import New', code: 'ZZIMPNEW', market: 'ru', sales: 'Tata', payType: 'invoice', creditDays: 15, creditLimit: 50000, vatMode: 'exclude', programs: 'r5', rateType: 'RT001', email: 'new@imp.test', legalName: 'ZZ Import New Co', address: '9 Import Rd' },
+    { name: 'ZZ Clean Agent', code: 'ZZCLEAN', phone: '+66 800 111 222' },
+    { name: 'ZZ Import Bad', code: 'ZZIMPBAD', market: 'ru', sales: 'Tata', payType: 'bogus', vatMode: 'exclude', rateType: 'RT001', legalName: 'ZZ Bad Co', address: '1 Bad Rd' },
+    { name: 'ZZ Import Skipped', code: 'ZZIMPSKIP', market: 'ru', sales: 'Tata', payType: 'invoice', vatMode: 'exclude', rateType: 'RT001', legalName: 'ZZ Skip Co', address: '2 Skip Rd' }
+  ];
+  await ev((rows) => {
+    const cols = AGIMP_COLS;
+    const ws = XLSX.utils.json_to_sheet(rows, { header: cols });
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Agents');
+    const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    agImportFile(new File([bytes], 'zz-agents.xlsx'));
+  }, sheet);
+  const shown = await waitFor(() => !!document.getElementById('agimp-modal') && !!_agImp && _agImp.rows.every((r) => r.serverError !== undefined), null, 15000);
+  await settle(500);
+  const dry = sentTo('POST', /\/v1\/agents\/import$/).slice(-1)[0];
+  ok('preview opened from the server dry run (POST /v1/agents/import dry_run:true, sheet rows as typed)', shown && dry && dry.b.dry_run === true && dry.b.rows.length === 4 && dry.b.rows[0].name === 'ZZ Import New', { shown, dry: dry && dry.b });
+  const view = await ev(() => ({ rows: _agImp.rows.map((r) => ({ n: r.n, name: r.src.name, action: r.action, checked: r.checked, err: r.serverError, writes: r.writes, match: r.match && r.match.id })),
+    html: [...document.querySelectorAll('#agimp-modal tbody tr')].map((tr) => ({ text: tr.innerText, box: tr.querySelector('input[type=checkbox]').checked })) }));
+  const dryServer = await send('POST', '/v1/agents/import', { rows: dry.b.rows, overwrite: false, dry_run: true });
+  const srvRow = (n) => dryServer.json.rows.find((r) => r.row === n);
+  ok('rows 2 (new) and 3 (existing, phone filled) are what the server says: create / update', srvRow(2).action === 'create' && srvRow(3).action === 'update' && view.rows[0].action === 'create' && view.rows[1].action === 'update' && view.rows[1].match === agClean.id && view.rows[1].writes.join() === srvRow(3).writes.join(), { view: view.rows, srv: dryServer.json.rows });
+  ok('refused row: server says error, screen shows the server\'s message and the row is unticked', srvRow(4).action === 'error' && !!srvRow(4).error && view.rows[2].err === srvRow(4).error && view.rows[2].checked === false && view.html[2].text.includes(srvRow(4).error) && view.html[2].box === false, { screen: view.rows[2], html: view.html[2] });
+  ok('nothing saved by the dry run (no ZZIMPNEW agent on the server)', !(await api('/v1/agents?active=all&q=ZZ%20Import')).agents.length, null);
+  // untick row 5 (valid) so only rows 2 and 3 are "the ticked lines"
+  await page.locator('#agimp-modal tbody tr').nth(3).locator('input[type=checkbox]').uncheck();
+  await settle(400);
+  const sel = await ev(() => _agImp.rows.filter((r) => r.checked).map((r) => r.n));
+  ok('screen: ticked lines are 2 and 3 (4 refused, 5 unticked by hand)', sel.join() === '2,3', sel);
+  await page.locator('#agimp-modal button[onclick="agImportApply()"]').click();
+  await idle(); await waitFor(() => !document.getElementById('agimp-modal'), null, 10000); await settle(600);
+  const real = sentTo('POST', /\/v1\/agents\/import$/).slice(-1)[0];
+  ok('Import sends dry_run:false with select = the ticked lines [2,3]', real && real.b.dry_run === false && JSON.stringify(real.b.select) === '[2,3]' && real.b !== dry.b, real && real.b && { dry_run: real.b.dry_run, select: real.b.select });
+  const made = (await api('/v1/agents?active=all&q=ZZ%20Import')).agents.map((a) => a.name);
+  const cleanNow = await api('/v1/agents/' + agClean.id);
+  ok('server: ZZ Import New created, ZZ Clean got the phone, refused + unticked rows NOT created', made.join() === 'ZZ Import New' && cleanNow.phone === '+66 800 111 222', { made, phone: cleanNow.phone });
+  const scr = await ev(() => ({ names: SB_AGENTS.filter((a) => /^ZZ Import/.test(a.name)).map((a) => a.name), phone: SB_AGENTS.find((a) => a.code === 'ZZCLEAN').phone, modal: !!document.getElementById('agimp-modal') }));
+  ok('screen: the new agent is in the list, the modal is closed', scr.names.join() === 'ZZ Import New' && scr.phone === '+66 800 111 222' && !scr.modal, scr);
+}
 }
 //@@STEPS@@
 
