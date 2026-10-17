@@ -351,6 +351,20 @@
     applyServerCheckins(targetOps, ops);
   }
 
+  /* The check-in screens are drawn once, at once, by legacy's ckAfter, but in ops mode local state changes only when
+     the server answers (see ckWrite below): that first draw shows the old state. Draw the open screen again with the
+     server's answer, keeping the scroll position (ckAfter's job, minus its blur, which would cut off a note being typed). */
+  function checkinRedraw(kind){
+    var base = typeof window._ckBase === 'function' ? window._ckBase(kind) : (kind === 'pier' ? 'pier' : 'van');
+    var pier = base === 'pier';
+    var host = document.getElementById(pier ? 'piercheckin-host' : 'vancheckin-host');
+    if(!host || !host.offsetParent) return;
+    var sy = window.scrollY || window.pageYOffset || 0;
+    if(pier && typeof window.renderPierCheckin === 'function') window.renderPierCheckin();
+    else if(!pier && typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+    try{ window.scrollTo(0, sy); }catch(_){}
+  }
+
   function writeCheckinServer(b, date, kind, val){
     if(!b) return Promise.resolve(null);
     var trips = Array.isArray(b.trips) ? b.trips : [];
@@ -377,6 +391,7 @@
         mergeTripOperations(b, date, res.trip);
       }
       O.wrote('trip-checkin');
+      checkinRedraw(kind);
       return res;
     }, function(e){
       O.fail('Could not save check-in', e);
