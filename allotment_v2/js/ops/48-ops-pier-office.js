@@ -395,6 +395,12 @@
     var rules = O.get('/v1/pier-office/pay-rules').then(function(a){
       pay.rules = rulesMap(a.rules);
       if(!a.defaulted) cfg().payRules = clone(pay.rules);
+      /* PA_PAY_DEF (paPayRules with nothing saved, and the "reset" button) is the server's starting table:
+         while no rule is saved GET pay-rules answers it with defaulted: true. Saved rules never touch it. */
+      else if(window.PA_PAY_DEF && typeof window.PA_PAY_DEF === 'object' && (a.rules || []).length){
+        Object.keys(window.PA_PAY_DEF).forEach(function(k){ delete window.PA_PAY_DEF[k]; });
+        Object.assign(window.PA_PAY_DEF, clone(pay.rules));
+      }
     });
     var piers = ['tublamu', 'panwa', 'ranong'].map(function(p){
       return O.get('/v1/pier-office/' + p + '/pay', { cycle: cyc }).then(applyPay);
