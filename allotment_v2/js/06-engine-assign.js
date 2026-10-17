@@ -44,8 +44,9 @@ function flUpdateAssignEngInfo(){
   if(!engId){infoEl.style.display='none';return;}
   const e=flGetEng(engId);if(!e){infoEl.style.display='none';return;}
   const curH=flEngHours(e.id);
-  const next=e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null;
-  const left=next?+(next-curH).toFixed(1):null;
+  const _sv=(e._fromOpsBackend&&typeof flEngServiceState==='function')?flEngServiceState(e):null;   /* ops mode: next service and hours left are the server's (engine service) */
+  const next=_sv?_sv.next:(e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null);
+  const left=_sv?_sv.left:(next?+(next-curH).toFixed(1):null);
   const gb=FL_GEARBOXES.find(g=>g.engineId===e.id);
   infoEl.style.display='flex';
   infoEl.innerHTML=`
