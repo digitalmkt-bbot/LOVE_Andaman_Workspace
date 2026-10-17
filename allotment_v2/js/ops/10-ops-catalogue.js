@@ -364,6 +364,32 @@
     });
   });
 
+  /* legacy saveRoute: the Programs form. Legacy changed ROUTES and called save('config') (browser only), so a new
+     or edited route vanished on reload. Server first: POST /v1/routes for a new one, PATCH /v1/routes/{id} for an
+     edit (editRouteId). The form's facts go as typed (name, islands, times, pier, kind, family; "no group" is
+     family_id null). The id, the colour and the place in the list of a new route are the server's. The modal
+     closes only when the server has said yes; its refusal (ext_id, family, pier) is shown as it says it.
+     The daily quota (daily_cap) is not kept by the server (decided 2026-10-09), so it is not sent. */
+  calWrap('saveRoute', function(orig){
+    var name = (document.getElementById('fm-route-name').value || '').trim(); if(!name) return;
+    var islands = (document.getElementById('fm-route-islands').value || '').trim();
+    var times = (typeof timeRows !== 'undefined' ? timeRows : []).filter(function(t){ return t; });
+    var famId = (document.getElementById('fm-route-family') || {}).value || '';
+    var isLand = selKind === KIND_LAND;
+    var body = { name: name, islands: islands || null, times: times, kind: isLand ? KIND_LAND : KIND_MARINE,
+                 pier: isLand ? null : selLoc, family_id: famId || null };
+    var rid = editRouteId || null;
+    return O.queue(function(){ return rid ? O.patch(RT(rid), body) : O.post('/v1/routes', body); }).then(function(){
+      return load().catch(function(){});
+    }).then(function(){
+      O.wrote('route');
+      if(typeof closeModal === 'function') closeModal('route-modal');
+      redrawSettings();
+    }, function(e){
+      O.fail('Program not saved', e);
+    });
+  });
+
   calWrap('stApplyRouteOrder', function(orig, ids, pier){
     if(!Array.isArray(ids) || !ids.length || !pier) return;
     var list = (typeof ROUTES !== 'undefined' ? ROUTES : []);
