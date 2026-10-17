@@ -1073,8 +1073,33 @@
     }).catch(function(e){ O.fail('Could not save fuel budget', e); return null; });
   });
 
+  /* legacy flBoatRepairCostMonth (Consumables screen): the month's repair cost per boat. The server's answer is
+     GET /v1/fleet/reports/upkeep?month=YYYY-MM, boats[].repairs (jobs closed that month; the server dates a
+     repair by its close date). The screen draws at once from the browser's own figure; when the month's report
+     arrives it is drawn again from the server's. Any write or change clears the saved months. */
+  var upkeep = {};   // ym → { rows: {boatId: repairs} } | 'loading' | 'failed'
+  function dropUpkeep(){ upkeep = {}; }
+  O.onWrite(dropUpkeep);
+  wrap('flBoatRepairCostMonth', function(orig, boatId, ym){
+    var args = [].slice.call(arguments, 1);
+    if(!ym) return orig.apply(this, args);
+    var c = upkeep[ym];
+    if(c && c.rows) return Math.round(+c.rows[boatId] || 0);
+    if(!c){
+      upkeep[ym] = 'loading';
+      O.get('/v1/fleet/reports/upkeep', { month: ym }).then(function(res){
+        var rows = {};
+        ((res && res.boats) || []).forEach(function(r){ if(r && r.boat_id) rows[r.boat_id] = +r.repairs || 0; });
+        upkeep[ym] = { rows: rows };
+        try{ if(typeof window.renderConsumables === 'function' && document.getElementById('fl-consume-wrap')) window.renderConsumables(); }catch(_){}
+      }).catch(function(e){ upkeep[ym] = 'failed'; O.fail('Could not load the month\'s repair cost', e); });
+    }
+    return orig.apply(this, args);
+  });
+
   O.onChange(function(change){
     if(!change) return;
+    dropUpkeep();
     if(['fleet_project', 'fleet_daily', 'fleet_safety', 'fleet_fuel_budget'].indexOf(change.entity_type) >= 0){
       state.loaded = false;
     }
