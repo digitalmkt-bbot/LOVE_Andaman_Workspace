@@ -3692,6 +3692,10 @@ function renderDash(){
   // Operating boats — keep top 2 for compact list + count remaining for "+N more" chip
   // per-route consumed seats (real sales) · allocated across that route's boats (fill first → overflow)
   const _routePool={};
+  /* §opsDashBoats (Q11, 2026-10-17) · ops mode: a boat's booked seats are the server's real placement (GET /v1/dashboard boats[].booked_pax,
+     what the bookings assign to that boat), not the route total spread boat by boat. Charter boats keep their own count; a boat the server
+     does not list, or no answer yet, falls back to the legacy spread. */
+  const _srvBoats=(_opsDash && Array.isArray(_opsDash.boats) && window.laOps && window.laOps.enabled && window.laOps.enabled())?_opsDash.boats.reduce((m,x)=>{ m[x.boat_id]=x; return m; },{}):null;
   const opBoatsAll=Object.entries(ops).filter(([bid,op])=>{
     if(!op.route) return false;
     const b=getBoat(bid); if(!b) return false;
@@ -3705,12 +3709,13 @@ function renderDash(){
     const _isCharter = op.type==='charter' || op.charterBookingId;
     let bk;
     if(_isCharter){ bk=op.booked||0; }
+    else if(_srvBoats && _srvBoats[bid]){ bk=+_srvBoats[bid].booked_pax||0; }
     else {
       if(_routePool[op.route]==null) _routePool[op.route]=(typeof getSeatsConsumed==='function')?getSeatsConsumed(op.route,_ds):0;
       bk=Math.min(b.cap, _routePool[op.route]); _routePool[op.route]-=bk;   // allocate this boat's share
     }
-    const free=b.cap-bk;
-    const pct=b.cap>0?Math.round(bk/b.cap*100):0;
+    const free=Math.max(0,b.cap-bk);
+    const pct=b.cap>0?Math.min(100,Math.round(bk/b.cap*100)):0;
     return {bid,b,r,booked:bk,cap:b.cap,free,pct};
   }).sort((a,b)=>b.pct-a.pct);
   const opBoats=opBoatsAll;
