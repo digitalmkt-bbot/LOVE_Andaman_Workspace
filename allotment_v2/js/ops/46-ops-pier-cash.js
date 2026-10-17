@@ -57,6 +57,22 @@
   window.pcMonthDays=function(p,ym){ if(!on()) return L.pcMonthDays.apply(this,arguments); var m=cache.month[p+'|'+ym]; return m?(m.days||[]).map(function(x){return x.date;}):L.pcMonthDays.apply(this,arguments); };
   window.pcOpening=function(p,d){ if(!on()) return L.pcOpening.apply(this,arguments); var m=cache.month[p+'|'+d.slice(0,7)], x=m&&(m.days||[]).filter(function(v){return v.date===d;})[0], q=cache.day[key(p,d)]; return x?x.opening:(q?q.opening:L.pcOpening.apply(this,arguments)); };
   window.pcTotals=function(p,d){ if(!on()) return L.pcTotals.apply(this,arguments); var m=cache.month[p+'|'+d.slice(0,7)], x=m&&(m.days||[]).filter(function(v){return v.date===d;})[0], q=cache.day[key(p,d)], v=x||q; if(!v) return L.pcTotals.apply(this,arguments); return {in:v.in,out:v.out,other:v.out,net:v.net,lt:v.reference.longtail,pk:v.reference.park,dock:v.reference.dock,ref:v.reference.total,pulled:v.pulled}; };
+  /* pc2StatLT(pier,ds): which boats need a long-tail entry and which are missing it. "Needs" is the server's booked side of the
+     boat (join_heads / charter_boats, GET /v1/pier-office/{pier}/days/{date}/boats, read by 47-ops-pier-job.js) instead of
+     pxLongtail from the browser's bookings; the boat list, the keyed amounts and the result shape stay legacy's. */
+  var statLTLegacy=window.pc2StatLT;
+  if(typeof statLTLegacy==='function') window.pc2StatLT=function(pier,ds){
+    /* only the day on screen asks the server: the month list calls this for every day, and each answer reads that day's bookings */
+    var DB=on()&&O.pier&&O.pier.dayBoats; if(!DB||!pier||ds!==window._pcDate) return statLTLegacy.apply(this,arguments);
+    DB.want(pier,ds,function(){ redraw(); });
+    var BS=window.pcBoats(ds,pier), D=(window.pcDay&&window.pcDay(pier,ds,false))||{lt:{}}, o={n:BS.length,need:0,miss:0,missNames:[]}, any=false;
+    BS.forEach(function(B){
+      var sb=DB.boat(pier,ds,B.bid), bk=sb&&sb.booked, C=(D.lt||{})[B.bid]||{};
+      if(!bk){ any=true; return; }
+      if((+bk.join_heads||0)>0||(+bk.charter_boats||0)>0){ o.need++; if(!(+C.amt>0)){ o.miss++; o.missNames.push(B.name); } }
+    });
+    return any?statLTLegacy.apply(this,arguments):o;      // a boat the server did not list: the whole answer stays legacy's
+  };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){

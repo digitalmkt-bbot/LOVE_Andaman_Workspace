@@ -330,5 +330,100 @@
     }
   });
 
+  /* ── the pier's boats of a day, as the server works them out ─────────────────────────────────────────
+     GET /v1/pier-office/{pier}/days/{date}/boats → boats[].booked.prep (legacy pjPax, pjPrep) and fleet[] (legacy PJ_ST /
+     pjBoatSt / pjAllBoats: state, stale, no_charter). Read once per pier and day, kept while it is current: a write marks it
+     old, the old answer stays on screen until the new one arrives, then the screen is drawn again. Until the first answer, and
+     for a boat the server does not list, the legacy functions answer from the browser as before.
+     Not the server's yet: the long-tail head count of pjPrep (lt), the overnight-hold state (ovn), the guide languages of
+     pjPax are the server's spelling (EN, RU, CN, the typed one) without pckLangNorm's tidying. */
+  var day = { by: {}, cbs: {} };
+  function dkey(pier, date){ return pier + '|' + date; }
+  O.onWrite(function(){ Object.keys(day.by).forEach(function(k){ day.by[k].old = true; }); });
+  function wantBoats(pier, date, redraw){
+    if(!enabled() || !P.loaded || !pier || !date) return;
+    var k = dkey(pier, date), e = day.by[k];
+    if(e && !e.loading && !e.old) return;             // current: nothing to ask, nothing to draw again
+    // who draws again when the answer comes (once): the caller's screen, else the job page
+    var cb = redraw || function(){ if(typeof window.renderPierJob === 'function') window.renderPierJob(); };
+    var q = day.cbs[k] || (day.cbs[k] = []); if(q.indexOf(cb) < 0 && (redraw || !q.length)) q.push(cb);
+    if(e && e.loading) return;
+    if(!e) e = day.by[k] = { boats: {}, fleet: {}, old: true };
+    e.loading = true;
+    O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
+      e.boats = {}; e.fleet = {};
+      ((j && j.boats) || []).forEach(function(b){ if(b && b.boat_id) e.boats[b.boat_id] = b; });
+      ((j && j.fleet) || []).forEach(function(f){ if(f && f.boat_id) e.fleet[f.boat_id] = f; });
+      e.old = false; e.loading = false; e.loaded = true;
+      var q2 = day.cbs[k] || []; day.cbs[k] = [];
+      if(!P.busy()) q2.forEach(function(fn){ try{ fn(); }catch(_){} });
+    }, function(err){
+      e.loading = false;                 // keep what we had; the next render asks again only after another write
+      e.old = false; day.cbs[k] = [];
+      try{ console.warn('[ops] boats of the day ' + k + ' · ' + err.message); }catch(_){}
+    });
+  }
+  function boatOf(pier, date, bid){ var e = day.by[dkey(pier, date)]; return e && e.loaded ? e.boats[bid] : null; }
+  // the fleet entry of a boat on a date, from whichever pier lists it
+  function fleetOf(date, bid){
+    var ks = Object.keys(day.by);
+    for(var i = 0; i < ks.length; i++){
+      if(ks[i].split('|')[1] !== date || !day.by[ks[i]].loaded) continue;
+      var f = day.by[ks[i]].fleet[bid]; if(f) return { pier: ks[i].split('|')[0], f: f };
+    }
+    return null;
+  }
+  var wrapRender = window.renderPierJob;
+  window.renderPierJob = function(){
+    var r = wrapRender.apply(this, arguments);
+    if(enabled()) wantBoats(window._poPier, window._poDate);
+    return r;
+  };
+  if(typeof window.pjPax === 'function'){
+    L.pjPax = window.pjPax;
+    window.pjPax = function(date, boatId, pier){
+      var b = enabled() ? boatOf(pier, date, boatId) : null, p = b && b.booked && b.booked.prep;
+      if(!p) return L.pjPax.apply(this, arguments);
+      var langs = {}; Object.keys(p.languages || {}).forEach(function(c){ langs[c] = 1; });
+      return { ad: p.pax.ad, chd: p.pax.chd, inf: p.pax.inf, foc: p.pax.foc, n: p.pax.bookings, langs: langs };
+    };
+  }
+  if(typeof window.pjPrep === 'function'){
+    L.pjPrep = window.pjPrep;
+    window.pjPrep = function(date, boatId, pier){
+      var out = L.pjPrep.apply(this, arguments);       // keeps lt (long-tail heads), which the server does not send per boat
+      var b = enabled() ? boatOf(pier, date, boatId) : null, p = b && b.booked && b.booked.prep;
+      if(!p) return out;
+      out.lang = {}; Object.keys(p.languages || {}).forEach(function(c){ out.lang[c] = p.languages[c]; });
+      out.halal = p.halal; out.veg = p.veg; out.vegan = p.vegan; out.allerg = p.allergy;
+      out.booked = p.booked; out.arrived = p.arrived; out.noShow = p.no_show; out.ckAny = !!p.check_in_started;
+      out.firstPick = p.first_pickup || ''; out.lastPick = p.last_pickup || '';
+      return out;
+    };
+  }
+  // the card's state (PJ_ST key), the stale-programme flag and "not hired today" come from the server's fleet; the log, jobs and note stay legacy's
+  if(typeof window.pjBoatSt === 'function'){
+    L.pjBoatSt = window.pjBoatSt;
+    window.pjBoatSt = function(date, boat, op){
+      var out = L.pjBoatSt.apply(this, arguments), h = enabled() && boat ? fleetOf(date, boat.id) : null;
+      if(!h || out.k === 'ovn') return out;             // ovn (charter kept overnight) is not built on the server: legacy's answer stands
+      out.k = h.f.state; out.stale = !!h.f.stale;
+      if(!!h.f.no_charter !== !!out.noCharter){ out.noCharter = !!h.f.no_charter; out.note = h.f.note || ''; }
+      return out;
+    };
+  }
+  // the pier that has a boat on a date: the pier whose fleet lists it; a pier whose fleet is loaded and does not list it does not have it
+  if(typeof window.pjPierOf === 'function'){
+    L.pjPierOf = window.pjPierOf;
+    window.pjPierOf = function(boat, date){
+      var out = L.pjPierOf.apply(this, arguments);
+      if(!enabled() || !boat) return out;
+      var h = fleetOf(date, boat.id); if(h) return h.pier;
+      var e = out && day.by[dkey(out, date)];
+      return e && e.loaded ? '' : out;
+    };
+  }
+  O.pier.dayBoats = { want: wantBoats, boat: boatOf };
+
   O.pierJob = { state: st, loadDay: loadDay };
 })();
