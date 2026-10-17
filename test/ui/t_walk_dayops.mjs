@@ -102,6 +102,14 @@ for (const [k, lead, pax, extra] of [['c1', 'WALK C ONE', 2, {}], ['c2', 'WALK C
   bk2[k] = { id: r.body.id, trip: r.body.trips[0].id, parts: r.body.trips[0].operations.van_parts };
 }
 console.log('c5 parts', JSON.stringify(bk2.c5.parts));
+const agR = await send('POST', '/v1/agents', { name: 'Cot Agent', market_id: 'ru', pay_type: 'cot', vat_mode: 'none', rate_type_id: 'rt001', company: { legal_name: 'Cot Agent Co', address: '1 Test Rd' } });
+if (agR.status !== 201) { console.log('agent failed', agR.status, JSON.stringify(agR.body)); process.exit(2); }
+const cotAgent = agR.body.id;
+const bk3 = {};
+for (const [k, lead, pax, cot] of [['e1', 'WALK E ONE', 2, 3000], ['e2', 'WALK E TWO', 1, 1500], ['e3', 'WALK E THREE', 2, 0]]) {
+  const r = await mkBk('zz-' + k, lead, DAY3, pax, { agentId: cotAgent, ...(cot ? { cash_on_tour_amount: cot, cash_on_tour_currency: 'THB' } : {}) });
+  bk3[k] = { id: r.body.id, trip: r.body.trips && r.body.trips[0].id, version: r.body.version };
+}
 const vck = async (d) => api('/v1/van-checkin?date=' + d);
 
 // ── boot the app ──
@@ -196,6 +204,8 @@ await send('DELETE', `/operations/van-arrivals/${TODAY}/veh01/r5`);
 await send('DELETE', `/operations/van-arrivals/${DAY}/veh02/r5`);
 }
 // ════════════ 3. van groups ════════════
+let n3 = 0, G = [];
+if (want('3')) {
 curItem = '3'; console.log('\n[3] van groups (By-trip · Van mode)');
 const showBytrip = async (date) => {
   await ev((d) => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; _bkV2.vanAssignMode = true; _bkV2.detailId = null; _bkV2.newBooking = null; _bkV2.filterRoute = null; const el = document.querySelector('.nav-item[data-view="booking"]'); if (el) nav(el); bookingV2Render(); }, date);
@@ -209,10 +219,10 @@ const toasts = () => ev(() => [...document.querySelectorAll('[class*="toast"], .
 await showBytrip(DAY2);
 // A · group c1 + c2 from the ticked rows
 await tick('zz-c1'); await tick('zz-c2');
-let n3 = calls.length;
+n3 = calls.length;
 await page.locator('#view-booking button[onclick*="bookingV2VanGroupSelected"][onclick*="\'new\'"]').click();
 await idle(); await settle(1000);
-let G = await grpsOf(DAY2);
+G = await grpsOf(DAY2);
 ok('tick c1+c2 → "จับเป็นกรุ๊ปใหม่" → POST van-groups → server group 1 holds both, in tick order', G.length === 1 && G[0].number === 1 && G[0].members.map((m) => m.booking_id).join() === [bk2.c1.id, bk2.c2.id].join() && callsSince(n3).some((c) => c.startsWith('POST /operations/van-groups ')), { G: G.map((g) => g.members.length), calls: callsSince(n3).filter((c) => !c.startsWith('GET')) });
 let sc1 = await scr('zz-c1', DAY2), sc2 = await scr('zz-c2', DAY2);
 ok('screen: both rows now in group 1', sc1.grp === 1 && sc2.grp === 1 && sc2.seq === 2, { sc1, sc2 });
@@ -349,6 +359,8 @@ const spScr = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c5
 ok('split time 08:10 -> PATCH trip-ops van_parts[1].pick_time: server part 1 holds 08:10, main part untouched', spN > 0 && callsSince(n3).some((c) => c.startsWith('PATCH /operations/trip-ops/')) && part1 && part1.alt && part1.alt.pick_time === '08:10', { spN, part1, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
 ok('screen: the split part keeps 08:10 and the input shows it after the redraw', spScr[1] && spScr[1].t === '08:10' && (await spIn.first().inputValue()) === '08:10', { spScr, v: spN ? await spIn.first().inputValue() : null });
 
+}
+if (want('4')) {
 // ════════════ 4. ckStrandClear · moved to another day / cancelled but still in a van ════════════
 curItem = '4'; console.log('\n[4] ckStrandClear both paths');
 // path 1 · b1 (in van group 1 on DAY) is rescheduled to DAY3 through the app's own reschedule command
@@ -430,4 +442,87 @@ ok('van history on screen = the server log (same lines, oldest first on screen),
 ok('the history list is drawn in the Transfer Fleet panel', /Somchai Walk/.test(logDom), logDom.slice(0, 200));
 await ev((id) => vehLog(id, 'edit', 'LOCAL ONLY LINE'), vanA.id);
 ok('vehLog pushes nothing locally in ops mode', !(await ev((id) => SB_VEHICLES.find((x) => x.id === id).log.some((l) => /LOCAL ONLY/.test(l.text)), vanA.id)));
+}
+// ════════════ 5. Pier check-in ════════════
+curItem = '5'; console.log('\n[5] Pier check-in: payments, fees, no-slip, cot unset, check-in undo');
+const openPier = async (date) => {
+  await ev((d) => { _pckDate = d; const el = document.querySelector('.nav-item[data-view="piercheckin"]'); if (el) nav(el); renderPierCheckin(); }, date);
+  await waitFor(() => !!document.querySelector('#piercheckin-host'), null, 10000);
+  await idle(); await settle(1500);
+};
+const pierRow = (lead) => ev((l) => { const rows = [...document.querySelectorAll('#piercheckin-host tr')].filter((tr) => tr.innerText.includes(l)); const r = rows[rows.length - 1]; return r ? r.innerText.replace(/\s+/g, ' ') : null; }, lead);
+const moneyOf = (id, d) => ev((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.id); const M = pckMoney(b, a.d); return { paid: pckPaidSum(b, a.d), fees: pckFeeSum(b, a.d), noSlip: pckNoSlip(b, a.d), cotUnset: pckCotUnset(M), due: M.due, gross: M.gross, term: M.term }; }, { id, d });
+await openPier(DAY3);
+await ev(() => laOpsPierMoney.loadDay(_pckDate, true)); await settle(600);
+let mE1 = await moneyOf('zz-e1', DAY3), srvE1 = await api(`/v1/bookings/${bk3.e1.id}/pier-money?date=${DAY3}`);
+ok('before paying: screen due 3000 = server due 3000, term cot', mE1.due === 3000 && srvE1.due === 3000 && mE1.term === 'cot' && srvE1.term === 'cot', { mE1, srv: { due: srvE1.due, term: srvE1.term } });
+ok('pckCotUnset true for the cot booking, false for a bank-transfer one', mE1.cotUnset === true && (await moneyOf('zz-c1', DAY2)).cotUnset === false, { e1: mE1.cotUnset });
+ok('row without cot amount (e3, term cot, nothing owed) says "COT · ยังไม่ระบุยอด"', /ยังไม่ระบุยอด/.test((await pierRow('WALK E THREE')) || ''), await pierRow('WALK E THREE'));
+// pay through the real modal: cash 1000 + transfer 1000 (no slip) + card 1000 at 5%
+n3 = calls.length;
+await ev(() => pckPayOpen('zz-e1'));
+await settle(600);
+await page.fill('[data-pck="amt0"]', '1000');
+await ev(() => pckLineAdd()); await settle(300);
+await page.click('button[onclick="pckLineSetM(1,\'transfer\')"]');
+await page.fill('[data-pck="amt1"]', '1000');
+await ev(() => pckLineAdd()); await settle(300);
+await page.click('button[onclick="pckLineSetM(2,\'card\')"]');
+await page.fill('[data-pck="amt2"]', '1000');
+await page.click('button[onclick="pckLineSet(2,\'feePct\',5)"]');
+await settle(300);
+await page.click('button[onclick="pckPaySave()"]');
+await idle(); await settle(1500);
+mE1 = await moneyOf('zz-e1', DAY3); srvE1 = await api(`/v1/bookings/${bk3.e1.id}/pier-money?date=${DAY3}`);
+const payCalls = callsSince(n3).filter((c) => !c.startsWith('GET'));
+ok('3 lines -> POST pier-payments: server paid 3000, fees 50 (5% of the card line), no_slip 2, due 0', payCalls.some((c) => c.startsWith('POST') && /pier-payments/.test(c)) && srvE1.paid === 3000 && srvE1.fees === 50 && srvE1.no_slip === 2 && srvE1.due === 0, { srv: { paid: srvE1.paid, fees: srvE1.fees, no_slip: srvE1.no_slip, due: srvE1.due }, payCalls });
+ok('screen: pckPaidSum 3000, pckFeeSum 50, pckNoSlip 2 (the server\'s numbers) and due 0', mE1.paid === 3000 && mE1.fees === 50 && mE1.noSlip === 2 && mE1.due === 0, mE1);
+const rowTxt = (await pierRow('WALK E ONE')) || '';
+ok('row text: "เก็บครบ ฿3,000", split in 3 methods, "รอสลิป 2"', /เก็บครบ ฿3,000/.test(rowTxt) && /แบ่งจ่าย 3 วิธี/.test(rowTxt) && /รอสลิป 2/.test(rowTxt), rowTxt.slice(0, 400));
+// the sums are the day's live payments from the server: a payment made by another session shows after a re-read
+await send('POST', `/v1/bookings/${bk3.e2.id}/pier-payments`, { service_date: DAY3, version: (await api('/v1/bookings/' + bk3.e2.id)).version, lines: [{ method: 'transfer', amount: 400 }] });
+await ev(() => laOpsPierMoney.loadDay(_pckDate, true)); await settle(600);
+const mE2 = await moneyOf('zz-e2', DAY3);
+ok('another session paid 400 by transfer on e2: after the re-read pckPaidSum 400, pckNoSlip 1, due 1100', mE2.paid === 400 && mE2.noSlip === 1 && mE2.due === 1100, mE2);
+// check-in event and its undo ("รับกลับ" is what the Pier Check-in screen draws; ckEventUndo has no button)
+const pierCk = async (bid, trip) => ((await api('/v1/bookings/' + bid)).trips.find((t) => t.id === trip).operations.checkins.pier);
+const rowHtml = (lead) => ev((l) => { const rows = [...document.querySelectorAll('#piercheckin-host tr')].filter((tr) => tr.innerText.includes(l)); const r = rows[rows.length - 1]; return r ? r.outerHTML : null; }, lead);
+const e1Before = await rowHtml('WALK E ONE');
+await ev(() => ckToggle('zz-e1', _pckDate, 'pier')); await idle(); await settle(1500);
+const e1After = await rowHtml('WALK E ONE');
+const e1Ck = await pierCk(bk3.e1.id, bk3.e1.trip);
+ok('check-in tick: server holds checked_in_at and the row is redrawn from the server answer (no other action needed)', !!(e1Ck[0] && e1Ck[0].checked_in_at) && e1Before !== e1After, { ck: e1Ck[0] && e1Ck[0].checked_in_at, redrawn: e1Before !== e1After });
+n3 = calls.length;
+await ev(() => { window.__rp = 0; window.__rpAt = []; const o = window.renderPierCheckin; window.renderPierCheckin = function () { window.__rp++; window.__rpAt.push(Date.now()); return o.apply(this, arguments); }; });
+await ev(() => ckEventOpen('zz-e3', _pckDate, 'pier', 'no_show'));
+await settle(500);
+await ev(() => ckEvPick('no_contact'));
+await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]'); await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]');
+await page.fill('#ck-reason-note', 'called 3 times');
+await page.click('button[onclick="ckEvSave()"]');
+await idle(); await settle(1200);
+let ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
+ok('no-show saved: the row is drawn again after the server answer (2 draws: at the click, then at the answer) and shows "ไม่มาทั้งใบ" + the รับกลับ button without any other action', (await ev(() => window.__rp)) >= 2 && /ไม่มาทั้งใบ/.test(await pierRow('WALK E THREE')) && (await page.locator('#piercheckin-host button.pck-undo[onclick*="zz-e3"]').count()) > 0, { renders: await ev(() => window.__rp), row: (await pierRow('WALK E THREE')).slice(-120) });
+const ev0 = ck3[0] && ck3[0].events;
+ok('no-show event -> PUT trip-ops checkins/pier/0: server holds 1 event, reason no_contact, 2 pax, actual_pax 0', ck3.length === 1 && ev0.length === 1 && ev0[0].type === 'no_show' && ev0[0].reason_code === 'no_contact' && ev0[0].pax === 2 && ck3[0].actual_pax === 0 && !ev0[0].undone, ck3);
+ok('screen: ckRead shows the event live and the booked/actual counts', await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e3'); const c = ckRead(b, _pckDate, 'pier'); return c.events.length === 1 && !c.events[0].undone && c.actualPax === 0; }));
+// "รับกลับ" button on the row
+n3 = calls.length;
+const undoBtn = page.locator('#piercheckin-host button.pck-undo[onclick*="zz-e3"]').first();
+const nUndo = await undoBtn.count();
+await ev(() => ckToggle('zz-e3', _pckDate, 'pier')); await idle(); await settle(1500);
+await ev(() => renderPierCheckin()); await settle(1000);
+if (nUndo) { await undoBtn.click(); await settle(500); await page.click('button[onclick="ckBackSave()"]'); await idle(); await settle(1200); }
+ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
+ok('"รับกลับ" -> PUT checkins/pier/0: the event is kept and marked undone (found), people given back (actual_pax 2, no_show 0)', nUndo > 0 && ck3[0].events.length === 1 && ck3[0].events[0].undone && ck3[0].events[0].undone.why === 'found' && ck3[0].actual_pax === 2 && ck3[0].no_show === 0, { nUndo, ck: ck3[0] });
+ok('screen: same event kept with undone, counts back to 2', await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e3'); const c = ckRead(b, _pckDate, 'pier'); return c.events.length === 1 && !!c.events[0].undone && c.actualPax === 2; }));
+ok('a shorter events list is refused by the server (events_append_only), which is why undo must mark, not remove', (await send('PUT', `/operations/trip-ops/${bk3.e3.trip}/checkins/pier/0`, { expected: 2, actual_pax: 2, events: [] })).status === 409, null);
+// ckEventUndo (the older "pop the last event" path): no button calls it on this screen; run by name
+await ev(() => ckEventOpen('zz-e3', _pckDate, 'pier', 'no_show'));
+await settle(400); await ev(() => ckEvPick('late')); await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]'); await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]'); await page.click('button[onclick="ckEvSave()"]'); await idle(); await settle(1000);
+const callsUndo = ev(() => ckEventUndo('zz-e3', _pckDate, 'pier'));
+await callsUndo; await idle(); await settle(1200);
+ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
+ok('ckEventUndo called by name: last live event marked undone (mistake), none removed (server keeps 2 events)', ck3[0].events.length === 2 && ck3[0].events[1].undone && ck3[0].events[1].undone.why === 'mistake' && ck3[0].actual_pax === 2, ck3[0]);
+ok('ckEventUndo has no button on the screen (UI callers: ' + (await ev(() => document.documentElement.innerHTML.includes('ckEventUndo'))) + ')', !(await ev(() => document.documentElement.innerHTML.includes('ckEventUndo(')))); 
 process.exit(0);
