@@ -728,6 +728,71 @@
     return collectUpgradeServer(upgradeId, bkId, opt);
   };
 
+  // ── 5. Trip dispatch notes and times (`PATCH /operations/trip-ops/:trip_id`) ──
+  // Server first: the local ops block changes only when the server has said yes. The PATCH is unversioned
+  // (a day-of write), refused with a message for a cancelled booking.
+
+  function tripOnDate(b, date){
+    var trips = Array.isArray(b && b.trips) ? b.trips : [];
+    return trips.find(function(t){ return t && t.opsTripId && (t.date || '') === date; }) || null;
+  }
+  function patchTripOps(b, date, body){
+    var t = tripOnDate(b, date);
+    if(!t) return Promise.reject(new Error('This booking has no operation-backend trip on ' + date + ': save the booking first'));
+    return O.queue(function(){ return O.call('PATCH', '/operations/trip-ops/' + enc(t.opsTripId), body); });
+  }
+  function opsBlock(b, date){
+    return typeof bkOpsFor === 'function' ? bkOpsFor(b, typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date) : (b.ops = b.ops || {});
+  }
+  function pickupJoinText(start, end, atPier){
+    if(atPier && end) return 'Before ' + end + ' at pier';
+    if(start && end) return start + '-' + end;
+    return start || '';
+  }
+
+  // bookingV2SetPickupFinal (booking/bookingV2SetPickupFinal.js): the final pickup time typed on the By-trip row
+  wrap('bookingV2SetPickupFinal', function(orig, bkId, val, date){
+    var b = findBooking(bkId); if(!b) return null;
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
+    var split = O.bookings && O.bookings.pickupSplit ? O.bookings.pickupSplit(val) : {};
+    if(split === null){
+      alert('Pickup time "' + text(val) + '" is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
+      if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+      return null;
+    }
+    var body = { pickup_time_final: split.pickupTime || null, pickup_time_final_end: split.pickupTimeEnd || null, pickup_final_at_pier: !!split.pickupAtPier };
+    return patchTripOps(b, d, body).then(function(res){
+      var op = res && res.trip && res.trip.operations;
+      opsBlock(b, d).pickupTimeFinal = op ? pickupJoinText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier) : pickupJoinText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier);
+      O.wrote('trip-ops');
+      return res;
+    }, function(e){
+      O.fail('Pickup time not saved', e);
+      if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+      return null;
+    });
+  });
+
+  // pckNoteSet (08-app.js): the pier note of one day; the server stamps who and when. An empty text clears it.
+  wrap('pckNoteSet', function(orig, b, date, txt){
+    if(!b) return null;
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
+    var note = text(txt);
+    return patchTripOps(b, d, { pier_note: note || null }).then(function(res){
+      var n = res && res.trip && res.trip.operations && res.trip.operations.pier_note;
+      var op = opsBlock(b, d);
+      op.pierNote = n ? { t: String(n.text != null ? n.text : (n.t || '')), at: n.at || '', by: n.by || '' } : null;
+      delete op.pierNoteAt; delete op.pierNoteBy;
+      if(typeof window.bookingV2AddHistory === 'function') window.bookingV2AddHistory(b, 'note', (note ? ('โน้ตหน้างาน: ' + note) : 'ลบโน้ตหน้างาน'), 'Pier');
+      O.wrote('trip-ops');
+      if(typeof window.renderPierCheckin === 'function' && O.activeView && O.activeView() === 'piercheckin') window.renderPierCheckin();
+      return res;
+    }, function(e){
+      O.fail('Pier note not saved', e);
+      return null;
+    });
+  });
+
   var api = {
     updateInsurance: updateInsuranceServer,
     updateMeals: updateMealsServer,
