@@ -42,6 +42,7 @@
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
     .then(step('weather closures', function(){ return O.weather && O.weather.load(); }))
     .then(step('market data', function(){ return O.marketData && O.marketData.load(); }))
+    .then(step('meal venues and trip actuals', function(){ return O.meals && O.meals.load(); }))
     .then(function(){
       // Booking records are page-owned: Calendar loads its visible month and
       // By-trip its selected day. Never download a 120-day booking blob at boot.
