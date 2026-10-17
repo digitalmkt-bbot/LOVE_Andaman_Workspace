@@ -245,7 +245,7 @@
 
   function toAssignmentBody(input){
     input = input || {};
-    return {
+    var o = {
       type: text(input.type) || 'temporary',
       from_pier: text(input.from_pier != null ? input.from_pier : input.fromPier),
       to_pier: text(input.to_pier != null ? input.to_pier : input.toPier),
@@ -254,6 +254,8 @@
       reason: nullable(input.reason),
       cost: Math.max(0, Math.round(num(input.cost) * 100) / 100)
     };
+    if(input.open_end === true){ o.open_end = true; delete o.end_date; }      // "return date not known yet": the server takes open_end or end_date, never both
+    return o;
   }
 
   function toRenewDocBody(name, docState, expiresOn){
@@ -396,9 +398,12 @@
     if(fromPier === toPier){ alert('From และ To ต้องต่างกัน'); return null; }
     var type = d('asn-type') ? d('asn-type').value : 'temporary';
     var startDate = d('asn-start') ? d('asn-start').value : '';
-    var endDate = d('asn-end') ? d('asn-end').value : '';
-    if(!startDate || !endDate){ alert('กรุณาระบุวันเริ่ม-วันจบ'); return null; }
-    if(endDate < startDate){ alert('วันจบต้องหลังวันเริ่ม'); return null; }
+    /* legacy §asnOpen: the tick "return date not known yet" means no end date (the server's open_end); a permanent move needs none */
+    var openEnd = !!(d('asn-open') && d('asn-open').checked);
+    var endDate = openEnd ? '' : (d('asn-end') ? d('asn-end').value : '');
+    if(!startDate){ alert('Please set the start date'); return null; }
+    if(!endDate && !openEnd && type !== 'permanent'){ alert('Please set the end date, or tick "return date not known yet"'); return null; }
+    if(endDate && endDate < startDate){ alert('วันจบต้องหลังวันเริ่ม'); return null; }
     var reason = d('asn-reason') ? d('asn-reason').value.trim() : '';
     var cost = d('asn-cost') ? (parseFloat(d('asn-cost').value) || 0) : 0;
 
@@ -408,6 +413,7 @@
       to_pier: toPier,
       start_date: startDate,
       end_date: endDate,
+      open_end: openEnd,
       reason: reason,
       cost: cost
     }).then(function(res){
