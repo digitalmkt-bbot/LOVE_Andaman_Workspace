@@ -623,4 +623,14 @@ ok('pier note on a cancelled booking -> PATCH trip-ops 409 cancelled, server mes
 const c4note = (await api('/v1/bookings/' + bk2.c4.id)).trips[0].operations.pier_note;
 ok('server: no pier note stored; no history line "โน้ตหน้างาน" added on the screen', c4note === null && !(await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c4'); return (b.history || []).some((h) => /โน้ตหน้างาน/.test(h.text || h.note || JSON.stringify(h))); })), { c4note });
 console.log('  note  message: ' + JSON.stringify(msg7));
+
+
+// ── summary ──
+const byItem = {};
+results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
+console.log('\nchecks per item: ' + Object.keys(byItem).sort().map((k) => k + ' -> ' + byItem[k].pass + ' ok / ' + byItem[k].fail + ' failed').join(' | '));
+console.log('\nserver refusals the app received (' + refusals.length + '):\n  ' + refusals.map((r) => r.slice(0, 200)).join('\n  '));
+console.log('\npage errors: ' + (errors.length ? '\n  ' + errors.join('\n  ') : 'none'));
+console.log(fails.length ? '\nFAILED: ' + fails.length + '\n  ' + fails.join('\n  ') : '\nall passed');
+await browser.close(); srv.close(); backend.kill();
 process.exit(fails.length ? 1 : 0);

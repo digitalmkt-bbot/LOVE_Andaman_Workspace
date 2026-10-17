@@ -1,0 +1,38 @@
+# Day Operations browser walk (branch walk/dayops)
+
+Test: `node test/ui/t_walk_dayops.mjs` (about 2m20s). Real UI in Chrome against the seeded in-process operation-backend; every check reads
+the screen state and asks the server directly. 97 checks ran, 96 pass, 1 fails (item 4, a finding, kept red on purpose).
+`ONLY=3 node test/ui/t_walk_dayops.mjs` runs one item (comma list allowed).
+
+| # | Function | Result | Evidence |
+|---|---|---|---|
+| 1 | Van Check-in "driver arrived" toggle | PASS | PUT van-arrivals answered `moved_to_standby: 2`; server rows standby, screen selects show Standby, other van untouched; un-toggle asks legacy's confirm, DELETE 204, rows back to Wait on both sides; `vckArrFlow` call counter stayed 0; an already ticked-in row is left alone (`moved_to_standby: 1`). |
+| 2 | Arrivals read on the day, waited minutes, wait rule | PASS (one note) | A mark made by another session (direct API) shows on the next render of that day with the server's time and login; `vckArrWait` = server `waited_minutes` today, null on a past day; `VCK_WAIT_RULE` = server `wait_rule_minutes` (15); with the browser clock moved on 20 minutes the chip turns "ครบ 15 นาที". Note: the rows that session moved to Standby show only after the screen is opened again (22 s and one change-feed poll did not redraw them; the feed repaints only `vanjobs`). |
+| 3 | Van groups, stops, split pickup time | PASS (1 fix, 1 note) | Through the By-trip Van mode: tick + "จับเป็นกรุ๊ปใหม่" (POST), van select (PATCH), pickup time 07:15 (PATCH, members get it), group order (PUT order, display_order 1/2, screen order follows, reset clears), pickup order + Save / ล้างลำดับ, row return van (PATCH trip-ops van_parts), clear route (confirm, POST clear), disband (DELETE). Stops: save, edit, check-in and un-check on Van Check-in, delete, all on the server (stop adds 1 seat to the group). Split part time 08:10 reaches `van_parts[1].alt.pick_time`. **Fixed:** the group's return van was saved but the header select went blank (see fixes). Note: no button draws auto-assign in By-trip Van mode, it was called by name (POST auto-assign works, both groups got a van); its toast reads `r.unassigned`, which the server does not send, so it always says DONE. |
+| 4 | ckStrandClear, vehLog | path 2 PASS, vehLog PASS, path 1 FAIL on a second machine | Path 2 (cancelled, still in a van): row with the clear button, PATCH trip-ops `van_parts: null`, server part has no group, booking still cancelled, row gone. Path 1 (moved to another day): in the browser that did the reschedule, confirm text is legacy's, DELETE van-strands 200, row gone, server `struck` 2 to 0, second DELETE 404. **FAIL:** a fresh browser (another machine) opening that day sees no moved-away row on Van Check-in or Van Jobs although the server still holds the strand; the row exists only in the browser blob (`ops_stranded`). vehLog: the history list on Transfer Fleet equals `GET /operations/vans/{id}/log` (driver change included); `vehLog` pushes nothing locally. |
+| 5 | Pier check-in money, cot unset, event undo | PASS (1 fix) | Pay modal with cash 1000 + transfer 1000 + card 1000 at 5%: server paid 3000, fees 50, no_slip 2, due 0; screen `pckPaidSum` 3000, `pckFeeSum` 50, `pckNoSlip` 2, row "เก็บครบ", "แบ่งจ่าย 3 วิธี", "รอสลิป 2"; another session's payment shows after the re-read. `pckCotUnset` true for term cot, false for bank transfer, row says "COT · ยังไม่ระบุยอด". No-show event then "รับกลับ": server keeps the event and sets `undone` (found), people given back; shorter events list is refused 409 by the server. `ckEventUndo` works when called (marks `mistake`) but no button on the screen calls it. **Fixed:** the row was not redrawn after the server answered a check-in write. |
+| 6 | Travel Summary trip amount, COT to booking page | PASS (2 fixes, 1 note) | `tsTripAmount` returns the server's `trip_amount` even with the booking's own subtotal/total wrecked in the browser; "หักทั้งก้อน" PUT cot-decisions, server decision full/3000, button picked; `bookingV2CotOf` on the booking page shows deduct 3000, mode full. **Fixed:** (a) decision after a write had emptied the cache went out with no version, server 428; (b) decisions and trip amounts were filed under the server id only, the booking page asks by the client id, so it never found them. Note: after any later write (including another user's, via the change feed) `tsTripAmount` falls back to the browser formula until that day's Travel Summary is opened again. |
+| 7 | `total_locked` message, 409 cancelled | PASS | Item total edited after another machine received stock: PATCH answered 409 `total_locked`, server total unchanged, the server's message shown in the toast, `PIER_ITEMS` total put back. Cancelled booking: pickup time and pier note both PATCH trip-ops 409 `cancelled`, the server's message shown ("Pier note not saved" title for the note), nothing stored, no history line added. |
+
+Item 8 (petty cash, recorded_staff_id) not walked, as instructed.
+
+## Commits on walk/dayops
+
+Fixes (each with the test that proves it; I saw each test fail without the fix):
+- `1478b96c` fix(ops): group return van shows on the header select and rows. `applyGroup` (34-ops-vans.js) read only the part's own `return_van_id`, not the group's.
+- `2b420021` fix(ops): check-in screens are drawn again when the server answers a check-in write (36-ops-day-actions.js `checkinRedraw`). Legacy's `ckAfter` drew the old state first and nothing redrew after the answer, so a tick or a no-show stayed invisible until the next render.
+- `1aaf658d` fix(ops): Travel Summary (57-ops-travelsum-rows.js) COT/no-show writes reload the day when a write emptied its cache (was 428 `version_required`), and decisions/trip amounts are also filed under the booking's client id (`external_id`).
+
+Tests / report: `ec62742d` (items 1-2), `1b740896` (3), `94b7cca0` and `9579a27f` (4), the items 5-7 commit, and the final one with this report.
+
+Nothing outside `allotment_v2/js/ops/` and `test/ui/` was touched. Backend untouched.
+
+## For the developer to decide
+
+1. **Moved-away rows on other machines (item 4 path 1).** The row and its clear button come from the browser's own blob (`ops_stranded`), written when that browser rescheduled. The server keeps the strand (van-jobs `struck`) but no screen draws it. Either build the rows from the server's strands (needs a read the Van Check-in screen can use) or accept that only the rescheduling browser shows them.
+2. **Confirm text of the cancelled path.** It says "ล้างการจัดรถ/เรือ" and that the row leaves Van Jobs, Van Check-in and Pier Check-in (legacy's words). The server only clears van parts for a cancelled booking (README: its dispatch cannot change otherwise), so a boat, final pickup or check-in stays and the row can stay on Pier Check-in. Not exercised with a boat assigned. Text change or accept?
+3. **`tsTripAmount` on the booking, by-trip and pier-stats screens** uses the server number only after the Travel Summary of that day was loaded and until the next write; those screens never fetch `after-trip` themselves.
+4. **Van Check-in does not repaint on other people's changes** (the change feed repaints `vanjobs` only): arrival marks of another session show on the next render, the rows they moved only after the screen is reopened.
+5. **Auto-assign** has no button in By-trip Van mode, and its toast expects an `unassigned` list the server does not send.
+6. `test/unit/ops-vans.test.mjs` "out-of-scope actions in ops mode" fails (expects 6 NOT YET toasts, gets 2) because return van, clear route, order and save are wired now. It failed before my changes; its expectation is stale.
+7. `node test/ui/t_ops.mjs` still has its known step [4] failures (not mine).
