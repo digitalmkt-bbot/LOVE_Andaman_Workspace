@@ -169,6 +169,25 @@
     });
   }
 
+  /* GET /v1/fleet/certificates serves, for each boat, the current document per type with doc_type, status and days_left
+     (idx = its place in the boat's documents). Copy them onto the boat's docs so flDocStatus / flDocCurrent can use them. */
+  function overlayCertificates(){
+    var rows = (state.certificates && state.certificates.boats) || [];
+    rows.forEach(function(r){
+      var b = listBoats().find(function(x){ return x && x.id === r.boat_id; });
+      if(!b || !Array.isArray(b.docs)) return;
+      var cells = Object.keys(r.cells || {}).map(function(k){ return r.cells[k]; }).concat(r.others || []);
+      cells.forEach(function(c){
+        var d = c && b.docs[c.idx];
+        if(!d || d.name !== c.name) return;
+        d.docType = c.doc_type || null;
+        d.status = c.status || null;
+        d.daysLeft = c.days_left != null ? c.days_left : null;
+        d.current = !!c.current;
+      });
+    });
+  }
+
   function loadAll(force){
     if(!enabled()) return Promise.resolve(false);
     if(state.loaded && !force) return Promise.resolve(true);
@@ -184,7 +203,7 @@
       var next = serverBoats.map(function(s){ return mapBoat(s, byId[s.id] || null); });
       existing.length = 0;
       Array.prototype.push.apply(existing, next);
-      if(res[1]) state.certificates = res[1];
+      if(res[1]){ state.certificates = res[1]; overlayCertificates(); }
       return Promise.all(next.map(function(b){
         return O.get('/v1/boats/' + enc(b.id) + '/assignments').then(function(asnRes){
           applyAssignments(b.id, asnRes);
@@ -287,6 +306,7 @@
         fetchBoatDetail(boatId),
         O.get('/v1/fleet/certificates').then(function(c){ state.certificates = c; }).catch(function(){})
       ]).then(function(){
+        overlayCertificates();
         O.wrote('boat-document-renew');
         redrawBoats();
         return res;
@@ -657,6 +677,26 @@
       return loadAll(false).then(function(){ return orig.apply(self, args); }).catch(function(){});
     }
     return orig.apply(self, args);
+  });
+
+  /* Document type, status and "which copy is current" are the server's (GET /v1/boats/:id/documents, fleet-certificates.ts):
+     doc_type, status (processing/na/exp/warn30/warn90/ok), days_left, current. mapDocEntry keeps them as
+     docType / status / daysLeft / current. A document without them keeps the legacy calculation. */
+  wrap('flDocStatus', function(orig, doc){
+    if(doc && typeof doc === 'object' && doc.status) return doc.status;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  wrap('flDocCurrent', function(orig, boat, typeId){
+    var docs = (boat && boat.docs) || [];
+    if(!docs.some(function(d){ return d && d.docType; }) || String(typeId).indexOf('other_') === 0){
+      return orig.apply(this, [].slice.call(arguments, 1));
+    }
+    var hit = null;
+    docs.forEach(function(d){
+      if(!hit && d && d.docType === typeId && d.current !== false) hit = d;
+    });
+    return hit;
   });
 
   O.onChange(function(change){
