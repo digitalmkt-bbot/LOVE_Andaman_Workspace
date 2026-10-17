@@ -24,7 +24,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var EB = window._eb = window._eb || { per:'today', pier:'', tab:'rev', sp:'week', off:0 };   /* §execSales · tab/sp/off */
+  var EB = window._eb = window._eb || { per:'today', pier:'', tab:'rev', sp:'week', off:0, gp:'h' };   /* §execSales · tab/sp/off · §execGap · gp */
   var CXL = ['cancelled','rejected','cancelled_weather'];
   var NOT_SALE = ['quote','draft'];
 
@@ -199,9 +199,9 @@
         var ta=((route(a)||{}).times||[])[0]||'', tb=((route(b)||{}).times||[])[0]||''; return String(ta).localeCompare(String(tb)); });
   }
   function alOf(rid, ds){ try{ return getAllotment(rid, ds)||null; }catch(_){ return null; } }
-  function rName(rid){ var r=route(rid)||{}, f=fam(rid); var n=r.name||rid;
-    if(f && f.name && n.indexOf(f.name)===0){ var s=n.slice(f.name.length).replace(/^\s*(by|·|-|—)\s*/i,'').trim(); return {f:f.name, v:s||''}; }
-    return {f:(f&&f.name)||n, v:(f&&f.name)?n:''}; }
+  function rName(rid){ var r=route(rid)||{}, f=fam(rid); var n=String(r.name||rid);
+    if(f && f.name){ var v=n.indexOf(f.name)>=0 ? n.replace(f.name,'') : n; v=v.replace(/^\s*(by|\u00b7|-|\u2014|\/)\s*/i,'').replace(/\s*(by|\u00b7|-|\u2014|\/)\s*$/i,'').replace(/\s+/g,' ').trim(); return {f:f.name, v:v}; }
+    return {f:n, v:''}; }
 
   /* ── ช่วงเวลา ──────────────────────────────────────────────────────── */
   function range(){
@@ -601,22 +601,225 @@
     return h;
   }
 
+  /* ══ §execGap (2026-10-17) · แท็บ Gap to Target ═════════════════════════
+     owner: "เห็นภาพรวมแล้วก็จริง แต่ยังไม่สามารถแก้ pain point ยอดลูกค้าที่ไม่เต็มได้ · ต้องมีแผน Monthly Weekly Daily
+             เพื่อให้ถึงเป้าที่วางเรือไว้" → ตกลงแนวแล้ว "ทำ" (แสดงอย่างเดียวก่อน · ยังไม่บันทึกการตัดสินใจ)
+     หลัก: เป้า = ที่นั่งที่วางเรือ (getAllotment.availableCapacity) × LF เป้า · ดูข้างหน้า ไม่ใช่ย้อนหลัง · ช่องว่างมีเจ้าของ (เซลส์)
+     เพซ: booking curve ต่อเส้นทาง วัดจากทริปที่ออกไปแล้วใน 90 วัน (สัดส่วนของ pax สุดท้ายที่จองแล้ว ณ L วันก่อนออก)
+          ทริปไม่พอ (<5) ใช้ curve รวมทั้งบริษัท · ไม่มีเลย ใช้ค่าตั้งต้นจากที่วัดได้ (40% ของ pax จองภายใน 7 วัน)
+     แบ่งเป้าให้เซลส์: สัดส่วน pax ของเซลส์ต่อกลุ่มเส้นทาง ในเดือนเดียวกันปีก่อน · ไม่มี → 90 วันล่าสุด
+     จุดคุ้มทุนต่อเที่ยว: pxDay(date) (Trip P&L) · ผิดพลาด/ไม่มีแผนต้นทุน → ไม่แสดงกรอบแดง
+     ⚠ LF เป้า 90% ทุกเส้นทาง (EB_LF_TARGET) · ยังไม่มีที่ตั้งค่าต่อเส้นทาง */
+  var EB_LF_TARGET=0.90, EB_HORIZON=14;
+  var CURVE_DEF=[[0,1],[1,.81],[2,.72],[3,.70],[5,.68],[7,.60],[14,.53],[21,.45],[30,.35],[60,.15],[90,.05],[120,0]];
+  function curveAt(C, L){ if(L<=0) return 1; for(var i=1;i<C.length;i++){ if(L<=C[i][0]){ var a=C[i-1], b=C[i]; return a[1]+(b[1]-a[1])*(L-a[0])/(b[0]-a[0]); } } return 0; }
+  var _gc=null, _gcAt=0;
+  /* booking curve · {rid:{pts,n}, all:{pts,n}} */
+  function curves(){
+    if(_gc && Date.now()-_gcAt<60000) return _gc;
+    var t0=today(), from=addDays(t0,-90), L=[0,1,2,3,5,7,14,21,30,60,90,120];
+    var byR={}, all={fin:0, at:L.map(function(){ return 0; }), n:0};
+    var trips={};
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(!isLive(b)) return; var d=bkDay(b); if(!d) return;
+      (b.trips||[]).forEach(function(t){ if(!t||!t.date||t.date<from||t.date>=t0) return;
+        var k=t.routeId+'|'+t.date, T=trips[k]=trips[k]||{rid:t.routeId, fin:0, at:L.map(function(){ return 0; })};
+        var p=pax(t), lead=nDays(d,t.date)-1; T.fin+=p; L.forEach(function(l,i){ if(lead>=l) T.at[i]+=p; }); });
+    });
+    Object.keys(trips).forEach(function(k){ var T=trips[k]; if(T.fin<5) return;
+      var R=byR[T.rid]=byR[T.rid]||{fin:0, at:L.map(function(){ return 0; }), n:0};
+      R.fin+=T.fin; R.n++; all.fin+=T.fin; all.n++; L.forEach(function(l,i){ R.at[i]+=T.at[i]; all.at[i]+=T.at[i]; }); });
+    var mk=function(R){ return R && R.n>=5 && R.fin>0 ? {pts:L.map(function(l,i){ return [l, R.at[i]/R.fin]; }), n:R.n} : null; };
+    var out={byR:{}, all:mk(all)||{pts:CURVE_DEF, n:0}, def:!mk(all)};
+    Object.keys(byR).forEach(function(r){ var c=mk(byR[r]); if(c) out.byR[r]=c; });
+    _gc=out; _gcAt=Date.now(); return out;
+  }
+  function curveOf(rid){ var C=curves(); return C.byR[rid]||C.all; }
+  /* เที่ยวหนึ่งในวันหนึ่ง */
+  function tripState(rid, ds){
+    var t0=today(), al=alOf(rid, ds); if(!al || !al.hasAllotment) return null;
+    var cap=+al.availableCapacity||0, bk=+al.seatsConsumed||0, free=Math.max(0,+al.seatsAvailable||0), lk=+al.lockedSeats||0;
+    var tgt=Math.round(cap*EB_LF_TARGET), lead=nDays(t0,ds)-1, c=curveAt(curveOf(rid).pts, lead);
+    var exp=tgt*c, proj=bk+tgt*(1-c), behind=Math.max(0,Math.round(exp-bk));
+    var st = (free<=3 || bk>=tgt) ? 'full' : (bk>=exp*0.9 ? 'g' : (proj>=tgt*0.8 ? 'y' : 'r'));
+    return {rid:rid, ds:ds, cap:cap, bk:bk, free:free, lk:lk, tgt:tgt, lead:lead, c:c, exp:exp, proj:proj, behind:behind, st:st, gap:Math.max(0,tgt-bk)};
+  }
+  var _beC={};
+  function beOf(rid, ds){
+    var k=ds+'|'+(EB.pier||'');
+    if(!_beC[k]){ var m={}; try{ (pxDay(ds, EB.pier||'')||[]).forEach(function(x){ if(x && x.rid && x.be) m[x.rid]=(m[x.rid]||0)+x.be; }); }catch(_){} _beC[k]=m; }
+    return _beC[k][rid]||0;
+  }
+  function gapRange(){
+    var t0=today();
+    if(EB.gp==='month') return {from:t0, to:monEnd(t0), lbl:'เดือนนี้', mFrom:monStart(t0), mTo:monEnd(t0)};
+    if(EB.gp==='next'){ var s=addMon(t0,1); return {from:s, to:monEnd(s), lbl:'เดือนหน้า', mFrom:s, mTo:monEnd(s)}; }
+    return {from:t0, to:addDays(t0,EB_HORIZON-1), lbl:EB_HORIZON+' วันข้างหน้า', mFrom:monStart(t0), mTo:monEnd(t0)};
+  }
+  /* สัดส่วนเซลส์ต่อกลุ่มเส้นทาง · ปีก่อนเดือนเดียวกัน หรือ 90 วันล่าสุด */
+  function salesShare(mFrom, mTo){
+    var t0=today(), tries=[[addYears(mFrom,-1), addYears(mTo,-1)], [addDays(t0,-90), addDays(t0,-1)]], out={fam:{}, src:''};
+    for(var i=0;i<tries.length;i++){
+      var S={}, tot=0;
+      eachTrip(tries[i][0], tries[i][1], function(b,t){ var f=(fam(t.routeId)||{}).id||t.routeId, sid=salesOf(sidOf(b)).id, p=pax(t);
+        var F=S[f]=S[f]||{tot:0, by:{}}; F.tot+=p; F.by[sid]=(F.by[sid]||0)+p; tot+=p; });
+      if(tot>=50){ out.fam=S; out.src=i===0?'เดือนเดียวกันปีก่อน':'90 วันล่าสุด'; return out; }
+    }
+    return out;
+  }
+  function viewGap(){
+    var t0=today(), R=gapRange(), SH=salesShare(R.mFrom, R.mTo), CV=curves();
+    /* เป้าเดือน / จองแล้ว · ทั้งเดือน (ที่ผ่านแล้ว = เดินทางจริงตามใบ) */
+    var mT=0, mB=0, mTrips=0, past=0, fut=0;
+    for(var ds=R.mFrom; ds<=R.mTo; ds=addDays(ds,1)){
+      routesOn(ds).forEach(function(rid){ var al=alOf(rid,ds); if(!al||!al.hasAllotment) return;
+        var cap=+al.availableCapacity||0, bk=+al.seatsConsumed||0; mT+=Math.round(cap*EB_LF_TARGET); mB+=Math.min(bk,cap); mTrips++;
+        if(ds<t0) past+=bk; else fut+=bk; });
+    }
+    var daysLeft=Math.max(1,nDays(t0,R.mTo)), mGap=Math.max(0,mT-mB), need=mGap/daysLeft;
+    /* เพซ · pax ที่เข้ามา 7 วันล่าสุด ต่อวัน · เทียบ 4 สัปดาห์ก่อน */
+    var s7=salesIn(addDays(t0,-7),addDays(t0,-1)), s28=salesIn(addDays(t0,-35),addDays(t0,-8));
+    var pace7=s7.pax/7, pace28=s28.pax/28;
+    /* ตาราง เส้นทาง × วัน */
+    var days=[]; for(ds=R.from; ds<=R.to; ds=addDays(ds,1)) days.push(ds);
+    var rids={}; days.forEach(function(d){ routesOn(d).forEach(function(r){ var al=alOf(r,d); if(al && al.hasAllotment) rids[r]=1; }); });
+    var fams={}; Object.keys(rids).forEach(function(rid){ var f=fam(rid)||{id:rid, name:(route(rid)||{}).name||rid, color:'#8b909c'}; (fams[f.id]=fams[f.id]||{f:f, rids:[]}).rids.push(rid); });
+    var famL=Object.keys(fams).map(function(k){ return fams[k]; }).sort(function(a,b){ return famIdx(a.f)-famIdx(b.f); });
+    var cells={}, risk=[], nRisk=0, nBe=0, gapV=0, horizonGap=0;
+    famL.forEach(function(F){ days.forEach(function(d){
+      var agg=null; F.rids.forEach(function(rid){ var s=tripState(rid,d); if(!s) return;
+        var be=beOf(rid,d), belowBe=be>0 && s.proj<be;
+        if(!agg) agg={cap:0,bk:0,free:0,tgt:0,exp:0,proj:0,behind:0,n:0,lead:s.lead,rids:[],worst:'full',belowBe:false,lk:0};
+        agg.cap+=s.cap; agg.bk+=s.bk; agg.free+=s.free; agg.tgt+=s.tgt; agg.exp+=s.exp; agg.proj+=s.proj; agg.behind+=s.behind; agg.n++; agg.lk+=s.lk;
+        agg.rids.push(Object.assign({be:be, belowBe:belowBe}, s));
+        var ord={full:0,g:1,y:2,r:3}; if(ord[s.st]>ord[agg.worst]) agg.worst=s.st; if(belowBe) agg.belowBe=true;
+        if(s.st==='r' || belowBe){ nRisk++; if(belowBe) nBe++; }
+        if(d>=t0) horizonGap+=s.gap;
+      });
+      if(agg) cells[F.f.id+'|'+d]=agg;
+    }); });
+    var rpp=(function(){ var a=agg(addDays(t0,-30), addDays(t0,-1)); return a.pax?a.rev/a.pax:0; })();
+    var h='<div class="eb-grid eb-kpis">'
+      + kpi('เป้าเดือนนี้ (จากเรือที่วาง)', num(mT)+'<small>pax</small>', 'ที่นั่งที่วาง '+num(Math.round(mT/EB_LF_TARGET))+' × LF เป้า '+Math.round(EB_LF_TARGET*100)+'% · '+num(mTrips)+' เที่ยว')
+      + kpi('จองแล้ว (เดินทาง + on the books)', num(mB)+'<small>'+pct(mB,mT)+'%</small>', 'เดินทางแล้ว '+num(past)+' · จองล่วงหน้า '+num(fut), '', pct(mB,mT))
+      + kpi('ช่องว่างที่ต้องหา', num(mGap)+'<small>pax</small>', 'เหลือ '+daysLeft+' วัน · <b>ต้องได้วันละ '+num(Math.ceil(need))+'</b> · เพซ 7 วันล่าสุด '+pace7.toFixed(0)+'/วัน', mGap>0&&pace7<need?'warn':'')
+      + kpi('เพซ vs ฐาน', chg(pace7, pace28), 'ใบที่เข้ามาต่อวัน 7 วันล่าสุด เทียบ 4 สัปดาห์ก่อน', pace28>0&&pace7<pace28*0.9?'bad':'')
+      + kpi('เที่ยวที่เสี่ยงไม่เต็ม', num(nRisk)+'<small>เที่ยว</small>', 'ใน'+E(R.lbl)+' · ต่ำกว่าจุดคุ้มทุน <b>'+num(nBe)+'</b>'+(nBe?' · ต้องตัดสินใจก่อน 3 วัน':''), nRisk?'bad':'')
+      + kpi('ถ้าเติมได้ครบ', '+'+baht(mGap*rpp), 'ช่องว่าง × รายได้/หัว 30 วันล่าสุด ฿'+num(rpp))
+      + '</div>';
+    /* ตาราง */
+    var dowS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+    var tbl='<table class="eb-gap"><thead><tr><th></th>'+days.map(function(d){ var w=dt(d).getDay(); return '<th class="'+(w===0||w===6?'we':'')+'">'+dowS[w]+' '+dt(d).getDate()+'</th>'; }).join('')+'<th class="r">'+E(R.lbl)+'</th></tr></thead><tbody>'
+      + famL.map(function(F){ var tF=0, tB=0, tFree=0;
+          var cs=days.map(function(d){ var c=cells[F.f.id+'|'+d]; if(!c) return '<td class="c off">—</td>';
+            tF+=c.tgt; tB+=c.bk; tFree+=c.free;
+            var tip=E(F.f.name+' · '+thDow(d)+' '+thD(d))+'\n'+c.n+' เที่ยว · จอง '+c.bk+'/'+c.cap+' · ว่าง '+c.free+(c.lk?' · ล็อก '+c.lk:'')+'\nเป้า '+c.tgt+' · ควรจองแล้ว '+Math.round(c.exp)+' · คาดสุดท้าย '+Math.round(c.proj)
+              + c.rids.map(function(s){ return '\n  '+rName(s.rid).v+' '+s.bk+'/'+s.cap+(s.be?' · คุ้มทุน '+s.be:''); }).join('');
+            return '<td class="c '+c.worst+(c.belowBe?' bk':'')+'" title="'+tip+'">'+num(c.free)+'<small>'+(c.worst==='full'?'เต็ม':(c.behind?'−'+num(c.behind):'ok'))+'</small></td>'; }).join('');
+          var curveN=(CV.byR[F.rids[0]]||{}).n;
+          return '<tr><td class="rn"><span class="eb-dot" style="background:'+E(F.f.color)+'"></span>'+E(F.f.name)+'<small>'+F.rids.length+' รอบ/วัน · curve จาก '+(curveN?curveN+' เที่ยว':(CV.def?'ค่าตั้งต้น':'ทั้งบริษัท '+CV.all.n+' เที่ยว'))+'</small></td>'+cs
+            +'<td class="tot">'+num(Math.max(0,tF-tB))+'<small>ว่าง '+num(tFree)+' · '+pct(tB,tF)+'% ของเป้า</small></td></tr>'; }).join('')
+      + (famL.length?'':'<tr><td colspan="'+(days.length+2)+'" class="eb-none">ยังไม่ได้วางเรือในช่วงนี้</td></tr>')
+      + '</tbody></table>'
+      + '<div class="eb-lgd"><i style="background:#DCE9F5"></i>เต็ม / ถึงเป้า <i style="background:#E6F4EC"></i>ตามเพซ <i style="background:#FDF1DC"></i>ช้ากว่าเพซ (ตัวเลขล่าง = ขาดกี่ที่จากที่ควรจองแล้ว) <i style="background:#FDE8E6"></i>คาดว่าไม่ถึง 80% ของเป้า <i style="box-shadow:inset 0 0 0 2px #B42318;background:#fff"></i>คาดต่ำกว่าจุดคุ้มทุน'
+      + '<span style="margin-left:auto">ตัวเลขบน = ที่ว่าง · เพซคิดจาก booking curve ของเส้นทางนั้น</span></div>';
+    h+='<div class="eb-sec">ช่องว่าง '+E(R.lbl)+' · เส้นทาง × วัน</div><div class="eb-card eb-scroll"><h2>เส้นทาง × วัน <span class="eb-tag">ชี้เมาส์ดูรายรอบ · เป้า · ควรจองแล้ว · คาดสุดท้าย</span>'+src('ที่มา: Boat Operation · Booking')+'</h2>'+tbl+'</div>';
+
+    /* การ์ดเซลส์ · เป้า/ช่องว่างแบ่งตามสัดส่วน */
+    var fT={}, fB={};
+    for(ds=R.mFrom; ds<=R.mTo; ds=addDays(ds,1)){ routesOn(ds).forEach(function(rid){ var al=alOf(rid,ds); if(!al||!al.hasAllotment) return; var f=(fam(rid)||{}).id||rid;
+      fT[f]=(fT[f]||0)+Math.round((+al.availableCapacity||0)*EB_LF_TARGET); fB[f]=(fB[f]||0)+Math.min(+al.seatsConsumed||0,+al.availableCapacity||0); }); }
+    var SL={}; var ensure=function(sid){ var so=salesOf(sid==='__none'?'':sid); return SL[sid]=SL[sid]||{s:so, tgt:0, bk:0, pace:0, ag:{}, calls:[]}; };
+    Object.keys(fT).forEach(function(f){ var sh=SH.fam[f]; if(!sh||!sh.tot){ var o=ensure('__none'); o.tgt+=fT[f]; o.bk+=fB[f]||0; return; }
+      Object.keys(sh.by).forEach(function(sid){ var w=sh.by[sid]/sh.tot, o=ensure(sid); o.tgt+=fT[f]*w; o.bk+=(fB[f]||0)*w; }); });
+    s7.list.forEach(function(b){ var o=ensure(salesOf(sidOf(b)).id); (b.trips||[]).forEach(function(t){ o.pace+=pax(t)/7; }); });
+    /* รายชื่อโทร */
+    var s14=salesIn(addDays(t0,-14), addDays(t0,-1)), s60=salesIn(addDays(t0,-60), addDays(t0,-15)), last={}, agSid={}, agRoutes={}, nm={}, v60={};
+    var mark=function(b, bucket){ var k=agKey(b); if(k==='__b2c'||k==='__none') return; var d=bkDay(b); if(!last[k]||d>last[k]) last[k]=d; agSid[k]=salesOf(sidOf(b)).id; nm[k]=agentName(b);
+      (b.trips||[]).forEach(function(t){ var f=(fam(t.routeId)||{}).id||t.routeId; (agRoutes[k]=agRoutes[k]||{})[f]=((agRoutes[k]||{})[f]||0)+pax(t); if(bucket==='60') v60[k]=(v60[k]||0)+pax(t); }); };
+    s14.list.forEach(function(b){ mark(b,'14'); }); s60.list.forEach(function(b){ mark(b,'60'); });
+    var port={}; (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).forEach(function(a){ if(a&&a.sales&&a.active!==false&&a.status!=='inactive') port[a.sales]=(port[a.sales]||0)+1; });
+    var sent14={}; s14.list.forEach(function(b){ var k=agKey(b); if(k!=='__b2c'&&k!=='__none') (sent14[salesOf(sidOf(b)).id]=sent14[salesOf(sidOf(b)).id]||{})[k]=1; });
+    var shortFams={}; famL.forEach(function(F){ days.forEach(function(d){ var c=cells[F.f.id+'|'+d]; if(c && (c.worst==='y'||c.worst==='r') && c.lead<=7) (shortFams[F.f.id]=shortFams[F.f.id]||[]).push(d); }); });
+    Object.keys(agSid).forEach(function(k){ var o=SL[agSid[k]]; if(!o) return; var gone=nDays(last[k],t0)-1;
+      if(gone>=7 && gone<=60 && (v60[k]||0)>=3) o.calls.push({k:k, name:nm[k], why:'เงียบ '+gone+' วัน', cls:'q', sub:'ส่ง '+num(v60[k])+' pax ใน 60 วันก่อน', w:2+Math.min(3,(v60[k]||0)/20)});
+      else if(gone<7){ var rs=Object.keys(agRoutes[k]||{}).filter(function(f){ return shortFams[f]; }).sort(function(a,b){ return agRoutes[k][b]-agRoutes[k][a]; })[0];
+        if(rs){ var d=shortFams[rs][0]; o.calls.push({k:k, name:nm[k], why:'ว่าง '+dowS[dt(d).getDay()]+' '+dt(d).getDate(), cls:'o', sub:'เคยส่ง '+E((fams[rs]||{}).f?fams[rs].f.name:rs)+' · '+num(agRoutes[k][rs])+' pax', w:1}); } }
+      try{ var cs=agCreditState(k); if(cs&&cs.limit>0&&cs.used>cs.limit) o.calls.push({k:k, name:nm[k], why:'เกินวงเงิน '+pct(cs.used,cs.limit)+'%', cls:'r', sub:'ใบใหม่จะติดวงเงิน', w:4}); }catch(_){}
+    });
+    /* ล็อกที่ยังไม่ใช้และใกล้วัน */
+    try{ (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).forEach(function(l){ if(!l||l.status!=='active'||!l.agentId||bkV2LockSpansDays(l)) return; if(!l.date||l.date<t0||l.date>addDays(t0,7)) return;
+      var rem=bkV2LockHeldRemaining(l,l.date); if(rem<=0) return; var a=sbGetAgent(l.agentId); if(!a) return; var o=SL[salesOf(a.sales).id]; if(!o) return;
+      o.calls.push({k:l.agentId, name:a.name||l.agentId, why:'ล็อก '+rem+' ที่ยังไม่ใช้', cls:'l', sub:E(rName(l.routeId).f)+' · '+thD(l.date), w:3}); }); }catch(_){}
+    var sl=Object.keys(SL).map(function(k){ return SL[k]; }).filter(function(o){ return o.tgt>0||o.pace>0||o.calls.length; }).sort(function(a,b){ return (a.s.none-b.s.none)||(b.tgt-a.tgt); });
+    h+='<div class="eb-sec">ช่องว่างแบ่งให้เซลส์ · ตามสัดส่วนที่แต่ละคนขายได้ต่อเส้นทาง ('+E(SH.src||'ยังไม่มีฐาน')+')</div><div class="eb-mv eb-sl">'
+      + (sl.length?sl.map(function(o){ var gap=Math.max(0,o.tgt-o.bk), nd=gap/daysLeft, pc=pct(o.bk,o.tgt), should=pct(nDays(R.mFrom,t0)-1,nDays(R.mFrom,R.mTo));
+          var act=Object.keys(sent14[o.s.id]||{}).length, all=port[o.s.id]||0;
+          var calls=o.calls.sort(function(a,b){ return b.w-a.w; }); var seen={}; calls=calls.filter(function(c){ var k=c.k+'|'+c.cls; if(seen[k]) return false; seen[k]=1; return true; }).slice(0,4);
+          return '<div class="eb-card"><h2><span class="eb-dot" style="background:'+E(o.s.color)+'"></span>'+E(o.s.name)+'</h2>'
+            + '<div class="eb-q"><div><div class="l">เป้าเดือน</div><div class="v">'+num(o.tgt)+'</div></div><div><div class="l">ช่องว่าง</div><div class="v" style="color:'+(gap<=0?'var(--eb-good)':(nd>o.pace*1.3?'var(--eb-bad)':'var(--eb-warn)'))+'">'+num(gap)+'</div></div>'
+            + '<div><div class="l">ต้องได้/วัน</div><div class="v">'+num(Math.ceil(nd))+'<small> (เพซ '+o.pace.toFixed(0)+')</small></div></div><div><div class="l">Activation 14 วัน</div><div class="v">'+num(act)+'<small>/'+num(all)+'</small></div></div></div>'
+            + '<div class="eb-prog"><i style="width:'+Math.min(100,pc)+'%;background:'+E(o.s.color)+'"></i><s style="left:'+should+'%"></s></div><div class="eb-foot" style="margin:0 0 6px">'+pc+'% ของเป้า · เส้นดำ = ควรถึงแล้ว ณ วันนี้ ('+should+'%)'+(o.pace>0&&nd>o.pace*1.3?' · <span class="eb-dn">เพซไม่ทัน</span>':'')+'</div>'
+            + (calls.length?'<ul class="eb-calls">'+calls.map(function(c){ return '<li><div><b>'+E(c.name)+'</b><span>'+c.sub+'</span></div><span class="eb-why '+c.cls+'">'+E(c.why)+'</span></li>'; }).join('')+'</ul>':'<div class="eb-foot">ไม่มีรายชื่อที่ต้องโทรวันนี้</div>')
+            + '</div>'; }).join('')
+        :'<div class="eb-card eb-none">ยังไม่มีเซลส์ที่ผูกกับใบจอง</div>')+'</div>';
+
+    /* ตัดสินใจสัปดาห์นี้ */
+    var dec=[]; famL.forEach(function(F){ days.forEach(function(d){ var c=cells[F.f.id+'|'+d]; if(!c||c.lead>7) return; c.rids.forEach(function(s){ if(s.st==='r'||s.belowBe||(s.st==='y'&&s.lead<=3)) dec.push(Object.assign({f:F.f}, s)); }); }); });
+    dec.sort(function(a,b){ return a.ds===b.ds ? (b.behind-a.behind) : (a.ds<b.ds?-1:1); });
+    var sug=function(s, sib){
+      if(s.be && s.proj>=s.be) return ['รอดู', 'คาดสุดท้าย '+Math.round(s.proj)+' ≥ คุ้มทุน '+s.be];
+      if(sib) return ['รวมกับ '+dowS[dt(sib.ds).getDay()]+' '+dt(sib.ds).getDate(), 'อีกเที่ยวว่าง '+sib.free+' ที่ รับได้ทั้ง '+s.bk+' คน'];
+      if(1-s.c>=0.35) return ['ขายเพิ่ม', 'ตลาดนี้ยังจองช้าได้ '+Math.round((1-s.c)*100)+'% ของยอด'];
+      return ['โปร B2C', 'ตลาดหลักจองล่วงหน้าแล้ว เหลือขายหน้างาน'];
+    };
+    h+='<div class="eb-sec">ตัดสินใจสัปดาห์นี้ · เที่ยวที่เพซไม่ทัน เรียงตามวันออก</div><div class="eb-grid eb-r3">'
+      + '<div class="eb-card"><h2>ขายเพิ่ม · โปรโมชั่น · หรือลดเรือ <span class="eb-tag">เส้นตาย 3 วันก่อนออก · ระบบเสนอ ผู้บริหารตัดสิน</span>'+src('ที่มา: ต้นทุน &amp; จุดคุ้มทุน')+'</h2>'
+      + (dec.length?'<ul class="eb-dec">'+dec.slice(0,8).map(function(s){ var n=rName(s.rid);
+          var sib=null; [-1,1].forEach(function(k){ var d2=addDays(s.ds,k); if(d2<t0||sib) return; var o=tripState(s.rid,d2); if(o && o.free>=s.bk && o.st!=='full') sib=o; });
+          var sg=sug(s,sib); var opts=['ขายเพิ่ม','โปร B2C',(sib?'รวมกับ '+dowS[dt(sib.ds).getDay()]+' '+dt(sib.ds).getDate():'ลดเรือ'),'รอดู'];
+          return '<li><div class="d1"><b>'+E(n.f+(n.v?' · '+n.v:''))+' · '+E(dowS[dt(s.ds).getDay()]+' '+thD(s.ds))+'</b><span>ออกใน '+s.lead+' วัน'+(s.lead<=3?' · <span class="eb-dn">ถึงเส้นตาย</span>':'')+'</span></div>'
+            + '<div class="d2">จอง <b>'+s.bk+'/'+s.cap+'</b>'+(s.be?' · คุ้มทุน '+s.be+' · ขาด <b>'+Math.max(0,s.be-s.bk)+'</b> ถึงคุ้มทุน':' · เป้า '+s.tgt)+' · คาดเพิ่มอีก ~'+Math.round(Math.max(0,s.proj-s.bk))+' · '+E(sg[1])+'</div>'
+            + '<span class="eb-opt">'+opts.map(function(x){ return '<b class="'+(x===sg[0]?'on':'')+'">'+E(x)+'</b>'; }).join('')+'</span></li>'; }).join('')+'</ul>'
+          + '<div class="eb-foot">ตัวเลือกที่ไฮไลต์เป็นข้อเสนอของระบบจาก booking curve และจุดคุ้มทุน · ยังไม่บันทึกการตัดสินใจ (แสดงอย่างเดียว)</div>'
+        : '<div class="eb-none">ไม่มีเที่ยวที่เพซไม่ทันใน 7 วันข้างหน้า</div>')+'</div>'
+      + '<div class="eb-card"><h2>Lead time ต่อตลาด <span class="eb-tag">จองก่อนเดินทางกี่วัน · 90 วันล่าสุด</span>'+src('ที่มา: Booking (เวลาที่ใบเข้าระบบ)')+'</h2>'+leadTable()+'</div></div>';
+    return h;
+  }
+  function leadTable(){
+    var t0=today(), from=addDays(t0,-90), M={}, tot=0, within7=0, all=0;
+    (SB_BOOKINGS||[]).forEach(function(b){ if(!isLive(b)) return; var d=bkDay(b); if(!d) return;
+      (b.trips||[]).forEach(function(t){ if(!t||!t.date||t.date<from) return; var lead=Math.max(0,nDays(d,t.date)-1), p=pax(t)||1;
+        var m=(typeof laIsB2C==='function'&&laIsB2C(b))?{id:'b2c',name:'B2C ออนไลน์'}:((typeof drMarket==='function')?(drMarket(b)||{}):{}); var k=m.id||'?';
+        var X=M[k]=M[k]||{name:m.name||'ไม่ระบุตลาด', ls:[], pax:0}; X.ls.push(lead); X.pax+=p; tot+=p; all+=p; if(lead<=7) within7+=p; }); });
+    var rows=Object.keys(M).map(function(k){ var ls=M[k].ls.sort(function(a,b){ return a-b; }), n=ls.length; return {name:M[k].name, pax:M[k].pax, n:n, med:ls[Math.floor(n/2)], p25:ls[Math.floor(n/4)], p75:ls[Math.floor(3*n/4)]}; })
+      .filter(function(r){ return r.n>=5; }).sort(function(a,b){ return b.pax-a.pax; }).slice(0,8);
+    if(!rows.length) return '<div class="eb-none">ยังมีข้อมูลไม่พอ</div>';
+    var mx=Math.max.apply(null,rows.map(function(r){ return r.med; }).concat([1]));
+    return '<table class="eb-tbl eb-l2"><thead><tr><th>#</th><th>ตลาด</th><th>มัธยฐาน</th><th>ครึ่งกลาง</th><th>ควรเตือนที่</th><th>ทริป</th></tr></thead><tbody>'
+      + rows.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td class="eb-l"><b>'+E(r.name)+'</b></td><td><i class="eb-lb" style="width:'+Math.max(3,Math.round(r.med*80/mx))+'px"></i>'+r.med+' วัน</td><td>'+r.p25+'–'+r.p75+'</td><td><b>'+Math.max(2,Math.round(r.p25*1.5))+' วัน</b></td><td>'+num(r.n)+'</td></tr>'; }).join('')
+      + '</tbody></table><div class="eb-foot">'+(all?pct(within7,all):0)+'% ของ pax จองภายใน 7 วันก่อนออก · ควรเตือน = เริ่มกังวลเมื่อเหลือวันน้อยกว่านี้ (1.5 × จุดที่ลูกค้า 25% แรกจองแล้ว)</div>';
+  }
+
   /* ── วาด ───────────────────────────────────────────────────────────── */
   function seg(key, items){ return '<span class="eb-seg">'+items.map(function(it){ return '<button class="'+(EB[key]===it[0]?'on':'')+'" onclick="ebSet(\''+key+'\',\''+it[0]+'\')">'+it[1]+'</button>'; }).join('')+'</span>'; }
   function render(){
     var w=document.getElementById('eb-wrap'); if(!w) return;
     ensureCss();
     var body='';
-    try{ body = EB.tab==='sales' ? viewSales() : (EB.per==='today' ? viewToday() : viewPeriod()); }
+    try{ body = EB.tab==='sales' ? viewSales() : (EB.tab==='gap' ? viewGap() : (EB.per==='today' ? viewToday() : viewPeriod())); }
     catch(e){ console.error('[execBoard] render', e); body='<div class="eb-card eb-none">Render error · '+E(e&&e.message)+'</div>'; }
     var t0=today();
     w.innerHTML='<div class="eb">'
       + '<div class="eb-top"><h1>Executive Board<small>OVERVIEW · รายได้และยอดจอง</small></h1>'
-      + seg('tab',[['rev','ภาพรวมรายได้'],['sales','Sales Performance']])
+      + seg('tab',[['rev','ภาพรวมรายได้'],['sales','Sales Performance'],['gap','Gap to Target']])
       + (EB.tab==='sales'
           ? (seg('sp',[['week','สัปดาห์'],['month','เดือน']])
              + '<span class="eb-nav"><button onclick="ebSet(\'off\','+((+EB.off||0)-1)+')" title="ช่วงก่อนหน้า">\u2039</button><b>'+E(spLabel(spRange(EB.sp||'week',+EB.off||0),EB.sp||'week'))+'</b>'
              + '<button onclick="ebSet(\'off\','+Math.min(0,(+EB.off||0)+1)+')"'+((+EB.off||0)>=0?' disabled':'')+' title="ช่วงถัดไป">\u203a</button></span>')
+          : EB.tab==='gap'
+          ? (seg('gp',[['h',EB_HORIZON+' วันข้างหน้า'],['month','เดือนนี้'],['next','เดือนหน้า']])
+             + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']]))
           : (seg('per',[['today','วันนี้'],['month','เดือนนี้'],['quarter','ไตรมาส'],['year','ปีนี้']])
              + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])))
       + '<span class="eb-sp"></span><span class="eb-upd">'+E(thDow(t0))+' '+E(thD(t0))+' '+t0.slice(0,4)+' · อัปเดต '+hhmm(Date.now())+' · วาดใหม่ทุก 1 นาที</span></div>'
@@ -628,7 +831,7 @@
     try{ if(m) m.scrollTop=y; window.scrollTo(window.scrollX||0, wy); }catch(_){}
   }
   window.ebRender = render;
-  window.ebSet = function(k, v){ if(k==='off') v=Math.min(0,+v||0); if(k==='sp' || k==='tab') EB.off=0; EB[k]=v; keepRender(); };
+  window.ebSet = function(k, v){ if(k==='off') v=Math.min(0,+v||0); if(k==='sp' || k==='tab') EB.off=0; if(k==='pier'||k==='gp'||k==='tab') _beC={}; EB[k]=v; keepRender(); };
   /* Live · วาดใหม่ทุก 60 วินาที เฉพาะตอนหน้านี้เปิดอยู่และแท็บไม่ได้ถูกซ่อน */
   if(!window.__ebTick){
     window.__ebTick = setInterval(function(){
@@ -745,7 +948,31 @@
       '.eb-mvl .rw{display:grid;grid-template-columns:minmax(0,1fr) 60px 34px;gap:8px;align-items:center;padding:3px 0;font-size:12px}',
       '.eb-mvl .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--eb-ink2)}',
       '.eb-mvl .mini{height:6px;background:#EDF0F4;border-radius:3px;overflow:hidden}.eb-mvl .mini i{display:block;height:100%;border-radius:3px}',
-      '.eb-mvl .vv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
+      '.eb-mvl .vv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}',
+      /* §execGap */
+      '.eb-gap{border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}',
+      '.eb-gap th{text-align:center;padding:0 2px 5px;font-weight:600;font-size:10.5px;color:var(--eb-mut)}.eb-gap th.we{color:var(--eb-ink2)}.eb-gap th.r{text-align:right}',
+      '.eb-gap td{padding:3px 2px;border:0}',
+      '.eb-gap td.c{min-width:44px;height:32px;border-radius:6px;text-align:center;font-size:11px;font-weight:700;color:var(--eb-ink);padding:0 2px;cursor:default}',
+      '.eb-gap td.c small{display:block;font-size:9px;font-weight:600;color:var(--eb-ink2);line-height:1.1}',
+      '.eb-gap td.c.g{background:#E6F4EC}.eb-gap td.c.y{background:#FDF1DC}.eb-gap td.c.r{background:#FDE8E6;color:var(--eb-bad)}.eb-gap td.c.r small{color:var(--eb-bad)}',
+      '.eb-gap td.c.full{background:#DCE9F5;color:var(--eb-ink2)}.eb-gap td.c.off{background:#F6F8FB;color:#C5CAD4}',
+      '.eb-gap td.c.bk{box-shadow:inset 0 0 0 2px #B42318}',
+      '.eb-gap .rn{padding-right:12px;font-weight:600;font-size:12px;white-space:nowrap;text-align:left}.eb-gap .rn small{display:block;font-size:10px;color:var(--eb-mut);font-weight:500}',
+      '.eb-gap td.tot{text-align:right;padding-left:10px;font-weight:700;white-space:nowrap}.eb-gap td.tot small{display:block;font-weight:500;color:var(--eb-mut);font-size:10px}',
+      '.eb-sl{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}',
+      '.eb-q{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 8px}',
+      '.eb-q>div{background:#F6F8FB;border-radius:8px;padding:6px 9px}.eb-q .l{font-size:10.5px;color:var(--eb-ink2);font-weight:600}.eb-q .v{font-size:17px;font-weight:700}.eb-q .v small{font-size:10.5px;color:var(--eb-mut);font-weight:600}',
+      '.eb-prog{height:7px;background:#EDF0F4;border-radius:4px;overflow:hidden;position:relative;margin:4px 0 2px}.eb-prog i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}.eb-prog s{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--eb-ink)}',
+      '.eb-calls{list-style:none;margin:6px 0 0;padding:0}.eb-calls li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--eb-line);font-size:11.5px;align-items:center}.eb-calls li:first-child{border-top:0}',
+      '.eb-calls b{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eb-calls span{color:var(--eb-mut);font-size:10.5px}',
+      '.eb-why{font-size:10px;font-weight:700;border-radius:5px;padding:1px 6px;white-space:nowrap;color:inherit}',
+      '.eb-why.q{background:var(--eb-warn-l);color:var(--eb-warn)}.eb-why.r{background:var(--eb-bad-l);color:var(--eb-bad)}.eb-why.l{background:#EFEAFB;color:#5B289A}.eb-why.o{background:#EAF3FB;color:var(--eb-blue-d)}',
+      '.eb-dec{list-style:none;margin:0;padding:0}.eb-dec li{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--eb-line)}.eb-dec li:first-child{border-top:0;padding-top:2px}',
+      '.eb-dec .d1 b{display:block;font-size:12.5px}.eb-dec .d1 span{font-size:11px;color:var(--eb-mut)}.eb-dec .d2{font-size:11.5px;color:var(--eb-ink2)}.eb-dec .d2 b{color:var(--eb-ink)}',
+      '.eb-opt{display:inline-flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.eb-opt b{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;background:#F1F3F7;color:var(--eb-ink2);white-space:nowrap}.eb-opt b.on{background:var(--eb-ink);color:#fff}',
+      '.eb-lb{display:inline-block;height:7px;background:var(--eb-s4);border-radius:3px;vertical-align:middle;margin-right:6px}',
+      '@media(max-width:900px){.eb-dec li{grid-template-columns:minmax(0,1fr)}}'
     ].join('\n');
     document.head.appendChild(s);
   }

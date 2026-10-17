@@ -15,6 +15,9 @@
 //     มุมมองเดือนมีคอลัมน์ Activation · ส่วนแนวโน้ม 7 ช่วง / Top 10 / เงียบไป / แยกตามเซลส์ ขึ้นครบ
 //   9 §execSalesNet (owner "โอเคทำ" · ให้ตรงกับวิธีคิดในไฟล์): ใบที่จองก่อนสัปดาห์นี้แล้วยกเลิกในสัปดาห์นี้ ถูกหักออก
 //     Pax ทีมลดลงเท่ากับ pax ของใบนั้น · คอลัมน์ "หักยกเลิก" ขึ้นตัวเลข · เอเยนต์นั้นขึ้นเลขติดลบ · จำนวนใบไม่ลด
+//  10 §execGap แท็บ Gap to Target (owner "ยังแก้ pain point ยอดไม่เต็มไม่ได้ · ต้องมีแผน Monthly Weekly Daily เพื่อให้ถึงเป้าที่วางเรือไว้"):
+//     เป้าเดือน = Σ ที่นั่งที่วางเรือ × 90% (ตรงกับ getAllotment) · ตารางขึ้นเฉพาะเส้นทางที่วางเรือ · ช่องว่างแถวรวมเป้าทุกเซลส์ = ช่องว่างเดือน
+//     ช่อง 14 วัน = ที่ว่างจาก getAllotment · เที่ยวที่ไม่มีใบจองเลยใน 3 วันข้างหน้า ต้องอยู่ในกล่องตัดสินใจ · ไม่เขียนอะไรลง store
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -162,5 +165,35 @@ const R9 = await page.evaluate(() => {
 if (R9.after.pax === R9.before.pax - 5 && R9.after.n === R9.before.n && /5/.test(R9.after.cx) && R9.neg)
   ok('9 ใบเก่ายกเลิกสัปดาห์นี้ 5 pax · ทีม ' + R9.before.pax + ' → ' + R9.after.pax + ' · หักยกเลิก "' + R9.after.cx + '" · จำนวนใบ ' + R9.after.n + ' เท่าเดิม · ' + R9.ag + ' ขึ้นเลขติดลบ');
 else fail('9 ' + JSON.stringify(R9));
+
+// 10
+const R10 = await page.evaluate(() => {
+  const ymd = d => bkV2LocalYMD(d), T = new Date(), t0 = ymd(T);
+  const add = n => { const d = new Date(T); d.setDate(d.getDate() + n); return ymd(d); };
+  const bs = (BOATS || []).filter(x => x && x.id && (x.pier === 'tublamu' || x.pier === 'panwa'));
+  const plan = [['r10', bs[0].id], ['r12', bs[1].id]];
+  for (let d = 0; d <= 20; d++) { const ds = add(d); TRIPS[ds] = TRIPS[ds] || {}; plan.forEach(([rid, bid]) => { TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 }; }); }
+  const before = JSON.stringify(SB_BOOKINGS);
+  ebSet('tab', 'gap'); ebSet('gp', 'h');
+  const w = document.getElementById('eb-wrap');
+  /* expected month target */
+  const mEnd = ymd(new Date(T.getFullYear(), T.getMonth() + 1, 0)); let tgt = 0, bk = 0;
+  for (let ds = t0.slice(0, 8) + '01'; ds <= mEnd; ds = (() => { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + 1); return ymd(d); })()) {
+    const seen = {}; Object.keys(TRIPS[ds] || {}).forEach(b => { const r = TRIPS[ds][b].route; if (seen[r]) return; seen[r] = 1; const al = getAllotment(r, ds); if (al && al.hasAllotment) { tgt += Math.round(al.availableCapacity * 0.9); bk += Math.min(al.seatsConsumed, al.availableCapacity); } }); }
+  const kv = [...w.querySelectorAll('.eb-k')].map(k => ({ l: k.querySelector('.l').textContent, v: +k.querySelector('.v').textContent.replace(/[^\d]/g, '') }));
+  const rows = [...w.querySelectorAll('.eb-gap tbody tr')].map(r => r.querySelector('.rn') ? r.querySelector('.rn').textContent.split('\n')[0].replace(/\d+ รอบ.*$/, '').trim() : r.textContent);
+  const firstCell = w.querySelector('.eb-gap td.c:not(.off)'); const free = firstCell ? +firstCell.firstChild.textContent.replace(/,/g, '') : null;
+  const al0 = getAllotment('r10', t0), al1 = getAllotment('r12', t0); const expFree = Math.max(0, al0.seatsAvailable);
+  const salesGap = [...w.querySelectorAll('.eb-sl .eb-q')].reduce((s, q) => s + (+q.children[1].querySelector('.v').textContent.replace(/,/g, '') || 0), 0);
+  const decTxt = w.querySelector('.eb-dec') ? w.querySelector('.eb-dec').textContent : '';
+  const after = JSON.stringify(SB_BOOKINGS);
+  ebSet('tab', 'rev');
+  return { tgt, bk, kv, rows, free, expFree, salesGap, hasDec: /Whale Shark|Phi Phi/.test(decTxt), same: before === after };
+});
+const kT = R10.kv.find(k => /เป้าเดือนนี้/.test(k.l)), kG = R10.kv.find(k => /ช่องว่างที่ต้องหา/.test(k.l));
+if (kT && kT.v === R10.tgt && kG && kG.v === Math.max(0, R10.tgt - R10.bk) && R10.rows.length === 2 && R10.rows.every(r => /Phi Phi|Whale Shark/.test(r))
+    && R10.free === R10.expFree && Math.abs(R10.salesGap - kG.v) <= R10.rows.length * 3 + 2 && R10.hasDec && R10.same)
+  ok('10 Gap to Target · เป้าเดือน ' + R10.tgt + ' = Σ ที่นั่งที่วางเรือ × 90% · ช่องว่าง ' + kG.v + ' = ผลรวมช่องว่างเซลส์ ' + R10.salesGap + ' · ตารางมี 2 เส้นทางที่วางเรือ · ที่ว่างวันนี้ ' + R10.free + ' ตรง getAllotment · กล่องตัดสินใจมีเที่ยวว่าง · ไม่แตะข้อมูล');
+else fail('10 ' + JSON.stringify(R10));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
