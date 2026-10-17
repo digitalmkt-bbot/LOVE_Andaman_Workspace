@@ -611,13 +611,25 @@
     }).catch(function(e){ O.fail('Could not create maintenance job', e); return null; });
   });
 
-  wrap('flMaintStart', function(orig, id, opt){
-    var m = listJobs().find(function(x){ return x && x.id === id; });
-    if(!m) return null;
-    var body = Object.assign({}, opt || {});
+  /* POST /v1/fleet/jobs/{id}/start. The plan-ahead warning (legacy flPlanWarn) comes from the server as a
+     409 plan_ahead_over whose message says the three ways out: it is shown as legacy's confirm, and "OK" starts the
+     job anyway (start_anyway: true). `gear` (keep / stash / swap) and `stash_location` are legacy's gear dialog. */
+  function postStart(id, body){
     return O.queue(function(){
-      return O.post('/v1/fleet/jobs/' + enc(id) + '/start', body);
-    }).then(function(res){
+      return O.post('/v1/fleet/jobs/' + enc(id) + '/start', body).catch(function(e){
+        if(e && e.code === 'plan_ahead_over' && !body.start_anyway){
+          if(!confirm(String(e.message || '') + '\n\nเริ่มงานเลย?')) return null;
+          return O.post('/v1/fleet/jobs/' + enc(id) + '/start', Object.assign({}, body, { start_anyway: true }));
+        }
+        throw e;
+      });
+    });
+  }
+  function startAndRefresh(id, body){
+    var m = listJobs().find(function(x){ return x && x.id === id; });
+    if(!m) return Promise.resolve(null);
+    return postStart(id, body).then(function(res){
+      if(!res) return null;   // the plan warning was declined
       upsertJob(res);
       return refetchAll(m.boatId).then(function(){
         O.wrote('fleet-job-start');
@@ -625,6 +637,154 @@
         return res;
       });
     }).catch(function(e){ O.fail('Could not start maintenance job', e); return null; });
+  }
+
+  /* Start: when an engine on the job still carries a gearbox / propeller, legacy asks first what to do with them
+     (keep, stash as spares, or swap the engine out): its dialog (flStartGearOpen) is opened again, and the choice
+     is sent as `gear`. Otherwise the job starts at once. */
+  wrap('flMaintStart', function(orig, id, opt){
+    var m = listJobs().find(function(x){ return x && x.id === id; });
+    if(!m) return null;
+    var body = Object.assign({}, opt || {});
+    if(body.gear === undefined && typeof window._flMountedGearProp === 'function' && typeof window.flStartGearOpen === 'function'){
+      var engAssets = (m.assets || []).filter(function(a){ return a.type === 'engine' && a.engId; });
+      var parts = window._flMountedGearProp(m);
+      if(engAssets.length && parts.length){ window.flStartGearOpen(id, parts); return null; }
+    }
+    return startAndRefresh(id, body);
+  });
+
+  // gear dialog: keep on the engine, or stash as spares at the chosen place
+  wrap('flStartGearChoice', function(orig, mode){
+    var ctx = window._flStartGear; window._flStartGear = null;
+    if(typeof window.closeModal === 'function') window.closeModal('fl-modal-start-gear');
+    if(!ctx) return null;
+    var body = { gear: mode === 'stash' ? 'stash' : 'keep' };
+    if(mode === 'stash'){
+      var sel = document.getElementById('fl-sg-loc');
+      body.stash_location = sel ? sel.value : 'pier:central';
+    }
+    return startAndRefresh(ctx.jobId, body);
+  });
+
+  /* gear dialog, swap: the job starts with gear: swap (the server takes the engine off, leaves the gearbox and
+     propeller waiting on the boat, writes the logs); then the replacement-engine picker of legacy is shown. From an
+     already started job (re-entry from an engine row) the server has no command, so the old browser-only path stays. */
+  wrap('flStartGearSwap', function(orig){
+    var ctx = window._flStartGear;
+    if(!ctx) return null;
+    if(ctx.reentry) return orig.apply(this, [].slice.call(arguments, 1));
+    var m = listJobs().find(function(x){ return x && x.id === ctx.jobId; });
+    if(!m) return null;
+    var oldEngines = (m.assets || []).filter(function(a){ return a.type === 'engine' && a.engId; }).map(function(a){
+      var e = typeof window.flGetEng === 'function' ? window.flGetEng(a.engId) : null;
+      return { oldEngId: a.engId, pos: e ? e.pos : '', filled: false };
+    });
+    return startAndRefresh(ctx.jobId, { gear: 'swap' }).then(function(res){
+      if(!res){ return null; }
+      ctx.swaps = oldEngines;
+      ctx.swap = true;
+      ctx.started = true;
+      if(typeof window.flStartSwapRenderPicker === 'function') window.flStartSwapRenderPicker();
+      return res;
+    });
+  });
+
+  // the replacement engine goes in through POST /v1/fleet/engines/{id}/install with the job (swapInstall); the pulled
+  // engine's place is its spare_location
+  wrap('flStartSwapInstall', function(orig){
+    var ctx = window._flStartGear;
+    if(!ctx || !ctx.started) return orig.apply(this, [].slice.call(arguments, 1));
+    var next = (ctx.swaps || []).find(function(s){ return !s.filled; });
+    if(!next) return null;
+    var sel = document.getElementById('fl-sg-neweng');
+    var engId = sel ? sel.value : null;
+    if(!engId){ alert('Please select an engine'); return null; }
+    var loc = (document.getElementById('fl-sg-engloc') || {}).value;
+    return Promise.resolve().then(function(){
+      return O.fleetAssets.installEngine(engId, ctx.boatId, next.pos, ctx.jobId);
+    }).then(function(){
+      return loc ? O.queue(function(){ return O.patch('/v1/fleet/engines/' + enc(next.oldEngId), { spare_location: loc }); }) : null;
+    }).then(function(){
+      return refetchAll(ctx.boatId);
+    }).then(function(){
+      next.filled = true;
+      O.wrote('fleet-job-swap-install');
+      redrawJobs();
+      if(typeof window.flStartSwapRenderPicker === 'function') window.flStartSwapRenderPicker();
+      return null;
+    }).catch(function(e){ O.fail('Could not install the replacement engine', e); return null; });
+  });
+
+  wrap('flStartSwapSkip', function(orig){
+    var ctx = window._flStartGear;
+    if(!ctx || !ctx.started) return orig.apply(this, [].slice.call(arguments, 1));
+    var loc = (document.getElementById('fl-sg-engloc') || {}).value;
+    var open = (ctx.swaps || []).filter(function(s){ return !s.filled; });
+    var chain = Promise.resolve();
+    if(loc) open.forEach(function(s){
+      chain = chain.then(function(){ return O.queue(function(){ return O.patch('/v1/fleet/engines/' + enc(s.oldEngId), { spare_location: loc }); }); });
+    });
+    return chain.then(function(){
+      open.forEach(function(s){ s.filled = 'skipped'; });
+      return refetchAll(ctx.boatId);
+    }).then(function(){
+      O.wrote('fleet-job-swap-skip');
+      if(typeof window.flStartSwapFinish === 'function') window.flStartSwapFinish();
+      return null;
+    }).catch(function(e){ O.fail('Could not set the engine place', e); return null; });
+  });
+
+  // the job is already started on the server: finishing the swap only closes the dialog and shows the job
+  wrap('flStartSwapFinish', function(orig){
+    var ctx = window._flStartGear;
+    if(!ctx || !ctx.started) return orig.apply(this, [].slice.call(arguments, 1));
+    window._flStartGear = null;
+    if(typeof window.closeModal === 'function') window.closeModal('fl-modal-start-gear');
+    if(typeof window.flRenderMaint === 'function') window.flRenderMaint();
+    if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(ctx.jobId);
+    return null;
+  });
+
+  /* stash a gearbox / propeller out of a job (the "ถอดเก็บ" button): the part is taken off its engine / gearbox and kept
+     as a spare at the chosen place, then removed from the job, then a line goes on the job log (the server writes none). Three
+     calls, not one transaction: if a later one fails the earlier ones stay and the error is shown. */
+  wrap('flMaintStashConfirm', function(orig){
+    var st = window._flStash; window._flStash = null;
+    if(!st){ if(typeof window.closeModal === 'function') window.closeModal('fl-modal-stash'); return null; }
+    var m = listJobs().find(function(x){ return x && x.id === st.jobId; });
+    var a = m && m.assets ? m.assets[st.idx] : null;
+    if(!a){ if(typeof window.closeModal === 'function') window.closeModal('fl-modal-stash'); return null; }
+    var sel = document.getElementById('fl-stash-loc');
+    var locKey = sel ? sel.value : 'pier:central';
+    var locLabel = ((window.FL_STASH_LOCS || (typeof FL_STASH_LOCS !== 'undefined' ? FL_STASH_LOCS : [])).find(function(l){ return l.key === locKey; }) || {}).label || locKey;
+    var noteEl = document.getElementById('fl-stash-note');
+    var note = noteEl ? noteEl.value.trim() : '';
+    var isGb = !!a.gbId;
+    var family = isGb ? 'gearboxes' : 'propellers';
+    var partId = isGb ? a.gbId : a.propId;
+    var rec = isGb ? (typeof FL_GEARBOXES !== 'undefined' ? FL_GEARBOXES : []).find(function(g){ return g.id === partId; })
+                   : (typeof FL_PROPELLERS !== 'undefined' ? FL_PROPELLERS : []).find(function(p){ return p.id === partId; });
+    if(!rec){ alert('ไม่พบข้อมูลชิ้นส่วน'); if(typeof window.closeModal === 'function') window.closeModal('fl-modal-stash'); return null; }
+    var mounted = isGb ? !!(rec.engineId || rec.onBoatId) : !!rec.gearboxId;
+    var lbl = a.label || rec.serial || '';
+    // mounted: take it off (remove, to the place); already a spare: move it to the place
+    var step = mounted ? O.fleetAssets.remove(family, partId, locKey, note) : O.fleetAssets.move(family, partId, locKey, note);
+    return step.then(function(){
+      return O.queue(function(){ return O.del('/v1/fleet/jobs/' + enc(m.id) + '/assets/' + st.idx); });
+    }).then(function(){
+      return O.queue(function(){
+        return O.post('/v1/fleet/jobs/' + enc(m.id) + '/log', { text: '📦 ถอด' + (isGb ? 'เกียร์' : 'ใบจักร') + ' ' + lbl + ' ไปเก็บที่ ' + locLabel + (note ? ' · ' + note : ''), by: 'ระบบ' });
+      });
+    }).then(function(){
+      return refetchAll(m.boatId);
+    }).then(function(){
+      O.wrote('fleet-job-stash');
+      if(typeof window.closeModal === 'function') window.closeModal('fl-modal-stash');
+      if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(st.jobId);
+      if(typeof window.flShowToast === 'function') window.flShowToast('ถอดเก็บ ' + lbl + ' → ' + locLabel);
+      return null;
+    }).catch(function(e){ O.fail('Could not stash the part', e); return null; });
   });
 
   // the part of the parts cost paid through an approved memo: the server's parts_covered on the job
