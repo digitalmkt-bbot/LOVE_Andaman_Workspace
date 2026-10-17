@@ -949,6 +949,66 @@
     return r;
   };
 
+  /* ── duplicate voucher · GET /v1/bookings?voucher_ref= (the whole reference, case and spaces ignored) ──
+     bkV2VoucherDupHtml and bkV2FindDuplicateBookings read the loaded SB_BOOKINGS (a month window), so a voucher booked on
+     another month was never found. Their logic stays legacy's; they run over the loaded list PLUS the server's hits for
+     this voucher, fetched while the user types (live check) and just before a save. The "same lead name on a shared trip"
+     test is not served by the API and stays over the loaded list. */
+  (function(){
+    var cache = {}, inflight = false;
+    function vkey(v){ return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' '); }
+    function fetchHits(v){
+      var k = vkey(v); if(!k) return Promise.resolve([]);
+      var c = cache[k]; if(c && Date.now() - c.at < 30000) return Promise.resolve(c.rows);
+      return O.get('/v1/bookings', { voucher_ref: String(v).trim(), limit: 100 }).then(function(j){
+        var rows = ((j && j.bookings) || []).map(function(ob){ return fromServer(ob); });
+        cache[k] = { at: Date.now(), rows: rows }; return rows;
+      });
+    }
+    function withHits(v, fn){
+      var c = cache[vkey(v)];
+      if(!O.enabled() || !c || !c.rows.length || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return fn();
+      var have = {}; SB_BOOKINGS.forEach(function(b){ if(b){ have[b.id] = 1; if(b.opsId) have[b.opsId] = 1; } });
+      var extra = c.rows.filter(function(r){ return r && !have[r.id] && !have[r.opsId]; });
+      if(!extra.length) return fn();
+      var saved = SB_BOOKINGS; SB_BOOKINGS = saved.concat(extra);
+      try{ return fn(); }finally{ SB_BOOKINGS = saved; }
+    }
+    var origHtml = window.bookingV2VoucherDupHtml;
+    if(typeof origHtml === 'function') window.bookingV2VoucherDupHtml = function(val){
+      if(!O.enabled()) return origHtml.apply(this, arguments);
+      var self = this, args = arguments;
+      return withHits(val, function(){ return origHtml.apply(self, args); });
+    };
+    var origLive = window.bookingV2VoucherLiveCheck;
+    if(typeof origLive === 'function') window.bookingV2VoucherLiveCheck = function(val){
+      var r = origLive.apply(this, arguments);
+      if(!O.enabled() || !vkey(val)) return r;
+      fetchHits(val).then(function(){ origLive.call(null, val); }).catch(function(e){ console.warn('[ops] voucher check failed', e); });
+      return r;
+    };
+    var origFind = window.bookingV2FindDuplicateBookings;
+    if(typeof origFind === 'function') window.bookingV2FindDuplicateBookings = function(d, excludeId, fresh){
+      if(!O.enabled() || !fresh) return origFind.apply(this, arguments);
+      var self = this, args = arguments;
+      return withHits(d && (d.voucherRef || d.code), function(){ return origFind.apply(self, args); });
+    };
+    /* the save asks the server first, so the duplicate warning sees every booking with this voucher */
+    var origCommit = window.bookingV2CommitBooking;
+    if(typeof origCommit === 'function') (function(){
+      var c2 = function(){
+        var self = this, args = arguments;
+        var d = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2.newBooking : null;
+        var v = d && (d.voucherRef || d.code);
+        if(!O.enabled() || !vkey(v)) return origCommit.apply(self, args);
+        if(inflight) return;
+        inflight = true;
+        return fetchHits(v).catch(function(e){ console.warn('[ops] voucher check failed', e); }).then(function(){ inflight = false; return origCommit.apply(self, args); }, function(){ inflight = false; });
+      };
+      c2.__ops = true; window.bookingV2CommitBooking = c2;
+    })();
+  })();
+
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
   O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
