@@ -94,6 +94,13 @@ const bk2 = await book(D, 'b6', 'r5', { ad_th: 2, chd_th: 1 });
 const bk3 = await book(D, 'b7', 'r4', { ad_fr: 3 });
 const bk4 = await book(D2, 'b6', 'r5', { ad_fr: 2 }, 'PK', [{ type: 'longtail-join', label: 'Longtail join', join_adults: 2, join_children: 0 }]);
 
+// a partner van that ran a panwa trip on VD = 2026-10-19 (period 11-20 of 2026-10): the van bill has one row
+const VD = '2026-10-19';
+const vanA = await seed('POST', '/operations/vans', { name: 'Walk Van', capacity: 12, ownership: 'partner', partner_name: 'WalkPartner' });
+await seed('PUT', `/operations/van-days/${VD}/${vanA.id}`, { route_ids: ['r10'] });
+await seed('POST', '/operations/deployments', { boat_id: 'b13', route_id: 'r10', service_date: VD, capacity: 38, deploy_anyway: true });
+const vbBk = await seed('POST', '/v1/bookings', { external_id: `b2c_walk_vb_${Date.now().toString(36)}`, lead_pax: 'Guest', pickup_area: 'Patong', total: 3000, trips: [{ route_id: 'r10', date: VD, pax: { ad_fr: 3 }, zone: 'PK' }] });
+await seed('POST', '/operations/van-groups', { service_date: VD, route_id: 'r10', zone: 'PK', members: [{ trip_id: vbBk.trips[0].id }], van_id: vanA.id, allow_second_round: true });
 // fleet facts for the job board: a boat licence on b6, an open repair job on b7
 await seed('PATCH', '/v1/boats/b6', { documents: [{ name: 'ใบอนุญาตใช้เรือ', expires_on: '2027-03-09', renew_status: null }] });
 await seed('POST', '/v1/fleet/jobs', { no: 'MJ-WALK-1', boat_id: 'b7', title: 'Walk repair', type: 'corrective' });
@@ -346,6 +353,48 @@ section('6', async () => {
   ok('plDaysTo = the server days_left (licence expiring 2026-11-10)', typeof s1.days_left === 'number' && scr.d1 === s1.days_left, { screen: scr.d1, server: s1.days_left });
   ok('plDaysTo = the server days_left (licence expiring in 2 days)', scr.d2 === s2.days_left, { screen: scr.d2, server: s2.days_left });
   ok('the licences tab shows those days (เหลือ N วัน)', scr.body.includes('เหลือ ' + s2.days_left + ' วัน'), scr.body.slice(0, 400));
+});
+
+// ═══ 7 · van bills: the print windows ═══
+section('7', async () => {
+  console.log('\n[7] van bills · vbPrint (overview summary, owner billing notes)');
+  // the staff inputs of the bill: a rate for the PP code, an extra and a deduction on the row, a sale price per person
+  await seed('PATCH', '/v1/van-bills/WalkPartner/2026-10/2', { per_pax: 200, route_rates: { PP: 1500 }, row_overrides: { [`${VD}~r10~${vanA.id}`]: { rate: null, ex: 300, cut: 100, per: null } } });
+  await goView('vanbill'); await settle(2500);
+  await ev(() => { _vb.ym = '2026-10'; _vb.per = 2; _vb.mode = 'ov'; _vb.pier = ''; renderVanBill(); }); await settle(2500);
+  const sum = await api('/v1/van-bills/summary?month=2026-10&period=2');
+  const note = await api('/v1/van-bills/WalkPartner/2026-10/2/billing-note?pier=panwa&copy=supplier');
+  const noteIn = await api('/v1/van-bills/WalkPartner/2026-10/2/billing-note?pier=panwa&copy=internal');
+  console.log('   server summary totals:', JSON.stringify(sum.totals), 'doc', sum.doc_no);
+  const fmt = (v) => Math.round(Number(v) || 0).toLocaleString('en-US');
+  const btns = await ev(() => [...document.querySelectorAll('#vanbill-host button')].map((b) => (b.getAttribute('onclick') || '') + '|' + b.textContent.trim().slice(0, 24)).filter((t) => /vbPrint|vbOpenSup/.test(t)));
+  console.log('   overview buttons:', JSON.stringify(btns));
+  const grab = async (click) => {
+    const before = popups.length;
+    await click();
+    const t0 = Date.now(); while (popups.length === before && Date.now() - t0 < 8000) await settle(100);
+    const w = popups[popups.length - 1]; await settle(1500);
+    const html = await w.content(); const txt = await w.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+    await w.close().catch(() => {});
+    return { html, txt };
+  };
+  // 1) the overview summary
+  const o = await grab(() => page.locator('#vanbill-host button[onclick="vbPrint()"]').first().click());
+  const T = sum.totals;
+  ok('summary window: has the server doc no, the totals (owners/trips/pax) and the grand total bill', sum.piers.length > 0 && T.bill > 0 && o.txt.includes(sum.doc_no) && o.txt.includes(`${T.owners} เจ้า · ${T.trips} เที่ยว · ${T.pax} คน`) && o.txt.includes(fmt(T.bill)), { text: o.txt.slice(0, 500), totals: T });
+  ok('summary window: lists the owner and the owner\'s bill', o.txt.includes('WalkPartner') && o.txt.includes(fmt(sum.piers[0].owners[0].bill)), o.txt.slice(0, 400));
+  // 2) one owner: open its bill, print the billing note (supplier copy)
+  await ev(() => vbOpenSup('WalkPartner')); await settle(2500);
+  await ev(() => { _vb.pier = 'panwa'; renderVanBill(); }); await settle(2000);
+  const btns2 = await ev(() => [...document.querySelectorAll('#vanbill-host button')].map((b) => (b.getAttribute('onclick') || '') + '|' + b.textContent.trim().slice(0, 24)).filter((t) => /vbPrint/.test(t)));
+  console.log('   owner buttons:', JSON.stringify(btns2));
+  const n1 = await grab(() => page.locator('#vanbill-host button[onclick="vbPrint()"]').first().click());
+  ok('billing note (supplier copy): server doc no, items, total bill; no sale/profit columns', n1.txt.includes(note.doc_no) && n1.txt.includes(`รวม ${note.totals.items} รายการ`) && n1.txt.includes(fmt(note.totals.bill)) && !n1.txt.includes('ราคาขาย') && note.totals.bill > 0, { text: n1.txt.slice(0, 600), totals: note.totals });
+  const intBtn = page.locator('#vanbill-host button[onclick="vbPrint(1)"]');
+  ok('the owner screen has the internal-copy button (legacy: ฉบับภายใน)', await intBtn.count() === 1, await intBtn.count());
+  const n2 = await grab(() => intBtn.first().click());
+  ok('billing note (internal copy): sale price and profit columns, the server doc no and total', n2.txt.includes(noteIn.doc_no) && n2.txt.includes('ราคาขาย') && n2.txt.includes('กำไร') && n2.txt.includes(fmt(noteIn.totals.bill)) && n2.txt.includes('ฉบับภายใน'), { text: n2.txt.slice(0, 500) });
+  ok('the print figures are the servers: sale ' + noteIn.totals.sale + ', cost ' + noteIn.totals.car_cost, n2.txt.includes(fmt(noteIn.totals.sale)) && n2.txt.includes(fmt(noteIn.totals.car_cost)), n2.txt.slice(0, 700));
 });
 
 // @@SECTIONS
