@@ -113,6 +113,15 @@
     return m;
   });
 
+  // paid / fees / no_slip of the day: the server row's (live pier payments), not b.pierPayments, which is only
+  // filled for bookings whose pay box was opened. Without a date or a row the legacy sum stays.
+  [['pckPaidSum', 'paid'], ['pckFeeSum', 'fees'], ['pckNoSlip', 'no_slip']].forEach(function(p){
+    wrap(p[0], function(orig, b, date){
+      var r = date ? rowFor(b, date) : null;
+      return r && r[p[1]] != null ? n(r[p[1]]) : orig.apply(this, [].slice.call(arguments, 1));
+    });
+  });
+
   wrap('pckPayOpen', function(orig, bkId, thenCk){
     var b = find(bkId), date = curDate();
     var args = [].slice.call(arguments, 1);
