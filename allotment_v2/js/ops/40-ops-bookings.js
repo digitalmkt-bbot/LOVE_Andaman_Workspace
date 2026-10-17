@@ -260,6 +260,12 @@
     return r;
   }
 
+  /* the server's pier note {text, at, by} → legacy's ops.pierNote {t, at, by} (pckNoteObj reads .t) */
+  function pierNoteFrom(n){
+    if(!n) return null;
+    if(typeof n === 'string') return { t: n, at: '', by: '' };
+    return { t: String(n.t != null ? n.t : (n.text || '')), at: n.at || '', by: n.by || '' };
+  }
   function operationsFrom(x){
     x = x || {};
     var r = { boatId: x.boat_id || x.boatId || null,
@@ -267,7 +273,7 @@
       boatPulled: !!(x.boat_pulled != null ? x.boat_pulled : x.boatPulled),
       pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
       returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
-      pierNote: x.pier_note || x.pierNote || null, checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
+      pierNote: pierNoteFrom(x.pier_note || x.pierNote), checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
     /* check-in state: same mapping as the write path (36-ops-day-actions applyServerCheckins) -> pierCheckin / vanCheckin */
     if(O.applyCheckins) O.applyCheckins(r, x);
     return r;
@@ -293,6 +299,12 @@
               subtotal: t.subtotal != null ? +t.subtotal || 0 : 0,
               ops: operationsFrom(t.operations) };
     var nat = thaiIn(t.thai_passengers); if(nat) o.nat = nat;       // §thaiPax
+    /* §opsUpgrade · the route upgrade in force (operations.upgrade) → legacy's trip.upg, so bkUpgActive and Undo
+       still see it after a reload */
+    var up = t.operations && t.operations.upgrade;
+    if(up && up.from_route_id && up.to_route_id) o.upg = { fromRouteId: up.from_route_id, toRouteId: up.to_route_id, date: up.to_date || o.date,
+      reason: up.reason || '', charge: +up.charge || 0, upgId: up.upgrade_id || '', by: up.by || '', at: up.at || '' };
+
     return o;
   }
 
@@ -839,8 +851,66 @@
     return loadPending();
   }
 
+  /* ── route upgrade undo · bookingV2UpgUndo (booking/bookingV2UpgUndo.js) → POST /v1/bookings/{id}/upgrade/undo ──
+     Legacy's checks and its confirm stay; the server checks again (route sailing, free seats on the old route) and
+     answers the whole booking: the trip is back on its route, the uncollected charge is gone, the boat is cleared. */
+  var origUpgUndo = window.bookingV2UpgUndo;
+  window.bookingV2UpgUndo = function(bkId, routeId, date){
+    if(!O.enabled() || typeof origUpgUndo !== 'function') return origUpgUndo ? origUpgUndo.apply(this, arguments) : undefined;
+    var b = find(bkId); if(!b) return;
+    var t = bkUpgTripOn(b, date, routeId); if(!t || !bkUpgActive(t)) return;
+    var u = t.upg, fromNm = bkUpgRouteName(u.fromRouteId), toNm = bkUpgRouteName(u.toRouteId);
+    var item = (u.upgId && Array.isArray(b.upgrades)) ? b.upgrades.find(function(x){ return x.id === u.upgId; }) : null;
+    var pax = (typeof bookingV2PaxAllTot === 'function') ? bookingV2PaxAllTot(t.pax || {}) : 0;
+    if(typeof bookingV2IsRouteOpenOn === 'function' && !bookingV2IsRouteOpenOn(u.fromRouteId, date)){
+      alert('Cannot undo: ' + fromNm + ' is not running on ' + date + '.'); return; }
+    var al = (typeof getAllotment === 'function') ? getAllotment(u.fromRouteId, date, null) : null;
+    if(al && al.hasAllotment && pax > al.seatsAvailable){
+      alert('Cannot undo: not enough free seats on ' + fromNm + ' (' + date + ').'+'\nNeeds ' + pax + ', free ' + al.seatsAvailable + '.'); return; }
+    if(!confirm('Undo the upgrade?\n' + toNm + ' > back to ' + fromNm + '\n' + (item ? (item.collected ? 'The extra charge was already collected - it stays on the booking.' : 'The uncollected extra charge (THB ' + (+item.sellPrice || 0).toLocaleString() + ') will be removed.') : '') + '\nThe boat must be assigned again.')) return;
+    if(!b.opsId || !t.opsTripId){ alert('Save this booking to operation-backend first.'); return; }
+    window.laOpsBookingAction(b.id, 'upgrade/undo', { trip_id: t.opsTripId }, function(){
+      if(item && !item.collected) b.upgrades = b.upgrades.filter(function(x){ return x.id !== u.upgId; });
+      t.routeId = u.fromRouteId; delete t.upg;
+      var op = bkOpsFor(b, date); op.boatId = null; if(op.boatSplits) delete op.boatSplits;
+      if(typeof bookingV2AddHistory === 'function') bookingV2AddHistory(b, 'edit', 'Upgrade undone · back to ' + fromNm, 'Edit');
+    }, 'Undo upgrade', true);
+  };
+
+  /* ── upgrade sale deleted · bookingV2UpgradeDelete → the shorter list goes with the booking (PATCH upgrades) ──
+     Same path as bookingV2UpgradeSave. A refusal puts the list back. */
+  var origUpgDel = window.bookingV2UpgradeDelete;
+  window.bookingV2UpgradeDelete = function(id, bkId){
+    if(!O.enabled() || typeof origUpgDel !== 'function') return origUpgDel ? origUpgDel.apply(this, arguments) : undefined;
+    var bk = find(bkId); if(!bk || !Array.isArray(bk.upgrades)) return;
+    var before = O.clone(bk.upgrades);
+    var r = origUpgDel.apply(this, arguments);
+    var sync = (typeof bookingV2SyncToOpsBackend === 'function') ? bookingV2SyncToOpsBackend(bk) : null;
+    if(sync && sync.catch) sync.catch(function(e){
+      bk.upgrades = before; O.fail('Upgrade not deleted', e);
+      try{ bookingV2Render(); bookingV2UpgradeRender(); }catch(_){}
+    });
+    return r;
+  };
+
+  /* ── pickup zone changed · bookingV2ZonePickConfirm (booking/bookingV2ZonePickConfirm.js) ──
+     Legacy changes pickupAreaId and (if ticked) each trip's pickup time, then "persists" (a no-op here).
+     The booking goes to the server with PATCH /v1/bookings/{id} (pickupAreaId + the trips' pickup times);
+     a refusal puts the booking back as it was. */
+  var origZonePick = window.bookingV2ZonePickConfirm;
+  window.bookingV2ZonePickConfirm = function(){
+    if(!O.enabled() || typeof origZonePick !== 'function') return origZonePick ? origZonePick.apply(this, arguments) : undefined;
+    var st = window._bkV2ZonePick, bk = st && st.sel ? find(st.bkId) : null;
+    if(!bk || !bk.opsId) return origZonePick.apply(this, arguments);
+    var s = snap(bk);
+    var r = origZonePick.apply(this, arguments);
+    if(JSON.stringify(O.clone(bk)) === JSON.stringify(s.bk)) return r;       // legacy refused or nothing changed
+    save(bk).then(function(){ O.wrote('booking'); }, function(e){ putBack(bk, s); O.fail('Pickup zone not saved · nothing changed', e); });
+    return r;
+  };
+
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
-  O.bookings = { save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
+  O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
                  reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
 })();
