@@ -675,7 +675,7 @@
     var input = {
       no: editId ? undefined : ('PRJ-' + String(maxNo + 1).padStart(3, '0')),
       name: name,
-      boatId: d('fl-proj-boat') ? (d('fl-proj-boat').value || null) : null,
+      boatId: d('fl-proj-boat') && d('fl-proj-boat').value !== '__none__' ? (d('fl-proj-boat').value || null) : null,
       type: d('fl-proj-type') ? d('fl-proj-type').value : 'drydock',
       vendor: d('fl-proj-vendor') ? d('fl-proj-vendor').value.trim() : '',
       planFrom: planFrom,
@@ -857,7 +857,7 @@
       return O.post('/v1/fleet/safety/' + enc(itemId) + '/inspections', body);
     }).then(function(res){
       upsertSafety(res);
-      if(typeof window.closeModal === 'function') window.closeModal('fl-modal-inspection');
+      if(typeof window.closeModal === 'function') window.closeModal('fl-modal-insp');
       O.wrote('fleet-safety-inspection');
       redrawDailyAndProjects();
       return res;
