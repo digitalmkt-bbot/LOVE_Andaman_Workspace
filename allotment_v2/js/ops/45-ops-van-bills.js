@@ -692,6 +692,159 @@
     return key === 'van_rates' ? vrWrite(val) : orig.apply(this, [].slice.call(arguments, 1));
   });
 
+  /* ── print (legacy vbPrint) ──
+     The paper is made by the server and only laid out here with legacy's print CSS:
+       GET /v1/van-bills/summary?month=&period=&pier=                         the round summary (internal)
+       GET /v1/van-bills/{partner}/{month}/{period}/billing-note?pier=&copy=  one owner's note, one pier
+     The supplier copy has no sale / profit. Nothing is added up here; the Thai words of the bill total stay
+     the client's (pcBahtText). The window opens first (a popup blocker only allows it inside the click). */
+  var VB_PRINT_CSS = '*{box-sizing:border-box}body{font-family:Sarabun,"IBM Plex Sans Thai","DM Sans",sans-serif;margin:0;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + '.ph{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16265C;padding-bottom:9px}'
+    + '.co b{display:block;font-size:15px;font-weight:800;color:#16265C}.co i{font-style:normal;display:block;font-size:10px;color:#4B5563;line-height:1.5}'
+    + '.doc{text-align:right}.doc b{display:block;font-size:20px;font-weight:800;color:#16265C}.doc i{font-style:normal;display:block;font-size:9px;letter-spacing:.2em;color:#6B7280;font-weight:700}'
+    + '.tag{display:inline-block;margin-top:4px;background:#B45309;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.08em;padding:2px 8px;border-radius:5px}'
+    + '.tag.in{background:#B42318}'
+    + '.meta{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid #D1D5DB;border-radius:6px;margin-top:9px}'
+    + '.meta div{padding:5px 9px;border-right:1px solid #E5E7EB;font-size:11px}.meta div:last-child{border-right:0}'
+    + '.meta i{font-style:normal;display:block;font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#6B7280}.meta b{font-size:12px}'
+    + 'table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:9px}'
+    + 'th{background:#16265C;color:#fff;font-size:8.5px;letter-spacing:.06em;font-weight:700;padding:5px 6px;text-align:right;white-space:nowrap}'
+    + 'th.l,td.l{text-align:left}td{padding:4px 6px;border-bottom:1px solid #E5E7EB;text-align:right;vertical-align:top}'
+    + 'tr.z td{background:#F9FAFB}tr.tot td{border-top:1.5px solid #16265C;border-bottom:1.5px solid #16265C;font-weight:800;font-size:11px}'
+    + 'tr.day td{background:#EEF1F6;font-weight:800;font-size:9.5px;color:#374151}'
+    + '.pier{margin-top:12px;font-size:12px;font-weight:800;padding:5px 9px;color:#fff;border-radius:5px}'
+    + '.cd{display:inline-block;font-size:8.5px;font-weight:800;color:#fff;border-radius:3px;padding:0 4px;margin-right:4px}'
+    + '.sub{font-size:9px;color:#6B7280}.neg{color:#B42318}.pos{color:#0F7A4E}'
+    + '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px;align-items:start}'
+    + '.words{margin-top:8px;padding:7px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:11px}'
+    + '.note{font-size:9.5px;color:#4B5563;line-height:1.6;margin-top:7px}'
+    + '.sig{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:30px;page-break-inside:avoid}'
+    + '.sig div{text-align:center;font-size:10.5px;color:#374151}.sig div:before{content:"";display:block;border-bottom:1px dotted #6B7280;height:30px;margin-bottom:6px}'
+    + '.sig i{font-style:normal;display:block;font-size:9px;color:#6B7280;margin-top:3px}'
+    + '.foot{margin-top:14px;display:flex;justify-content:space-between;font-size:8.5px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:5px}';
+  function printCodeCol(code){
+    if(code === '+') return '#5B6570';
+    var m = typeof VB_CODE !== 'undefined' ? VB_CODE : {}, k;
+    for(k in m) if(m[k] && m[k].c === code) return m[k].col;
+    return '#8B96A0';
+  }
+  function printHead(title, en, tag){
+    return '<div class="ph"><div class="co"><b>LOVE ANDAMAN</b><i>บริษัท เลิฟ ไอส์แลนด์ จำกัด (Love Island Co., Ltd.)<br>ภูเก็ต · ฝ่ายปฏิบัติการ</i></div>'
+      + '<div class="doc"><i>' + en + '</i><b>' + title + '</b>' + (tag || '') + '</div></div>';
+  }
+  function printSig(a, b, c){
+    return '<div class="sig"><div>' + a[0] + '<i>' + a[1] + ' · วันที่ ____/____/____</i></div><div>' + b[0] + '<i>' + b[1] + ' · วันที่ ____/____/____</i></div><div>' + c[0] + '<i>' + c[1] + 'วันที่ ____/____/____</i></div></div>';
+  }
+  function printStamp(doc){
+    var d = doc && doc.printed_at ? new Date(doc.printed_at) : new Date();
+    return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' · ' + text(doc && doc.printed_by);
+  }
+  function printWords(v){ return esc(typeof pcBahtText === 'function' ? pcBahtText(v) : ''); }
+  function printSummary(doc, stamp){
+    var rnd = vbPeriod().label + ' ' + vbMoLbl(), T = doc.totals || {};
+    var sec = (doc.piers || []).map(function(P){
+      var CL = (P.code_columns || []).slice(); if(P.extra_column) CL.push('+');
+      var S = P.totals || {}, cT = {};
+      (S.by_code || []).forEach(function(c){ cT[c.code] = c.bill; }); cT['+'] = S.extra_bill;
+      var spl = n(S.pl);
+      var body = (P.owners || []).map(function(g, i){
+        var vn = (g.van_ids || []).map(vanName);
+        var bc = {}; (g.by_code || []).forEach(function(c){ bc[c.code] = c.bill; });
+        return '<tr class="' + (i % 2 ? 'z' : '') + '"><td class="l">' + (i + 1) + '</td><td class="l"><b>' + esc(g.partner) + '</b><div class="sub">' + esc(vn.join(' · ')) + '</div></td>'
+          + '<td>' + n(g.trips) + '</td><td>' + n(g.pax) + '</td><td>' + (n(g.trips) ? n(g.avg_pax_per_trip).toFixed(2) : '—') + '</td>'
+          + CL.map(function(c){ var v = c === '+' ? g.extra_bill : bc[c]; return '<td>' + (v != null && (c !== '+' || n(v)) ? N(v) : '—') + '</td>'; }).join('')
+          + '<td>' + (n(g.ex) ? N(g.ex) : '—') + '</td><td>' + (n(g.cut) ? ('-' + N(g.cut)) : '—') + '</td><td><b>' + N(g.bill) + '</b>' + (n(g.missing_rate) ? '<div class="sub neg">ไม่มีเรต ' + n(g.missing_rate) + '</div>' : '') + '</td>'
+          + '<td>' + N(g.sale) + '</td><td class="' + (n(g.pl) < 0 ? 'neg' : 'pos') + '">' + (n(g.pl) < 0 ? '-' : '') + N(Math.abs(n(g.pl))) + '</td><td class="l">&#9744;</td></tr>';
+      }).join('');
+      return '<div class="pier" style="background:' + (VB_PIER_C[P.pier] || '#5B6570') + '">' + esc(VB_PIER_LBL[P.pier] || P.pier) + ' · ' + n(S.owners) + ' เจ้า · ' + n(S.trips) + ' เที่ยว · ' + n(S.pax) + ' คน</div>'
+        + '<table style="margin-top:4px"><tr><th class="l">#</th><th class="l">เจ้าของรถ / คัน</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th>'
+        + CL.map(function(c){ return '<th>' + (c === '+' ? 'รถนอก' : esc(c)) + '</th>'; }).join('')
+        + '<th>Extra</th><th>หัก</th><th>เรียกเก็บ</th><th>ราคาขาย</th><th>กำไร/ขาดทุน</th><th class="l">จ่าย</th></tr>' + body
+        + '<tr class="tot"><td></td><td class="l">รวม' + esc(VB_PIER_SH[P.pier] || P.pier) + '</td><td>' + n(S.trips) + '</td><td>' + n(S.pax) + '</td><td>' + (n(S.trips) ? n(S.avg_pax_per_trip).toFixed(2) : '—') + '</td>'
+        + CL.map(function(c){ return '<td>' + N(cT[c]) + '</td>'; }).join('')
+        + '<td>' + N(S.ex) + '</td><td>' + (n(S.cut) ? ('-' + N(S.cut)) : '0') + '</td><td>' + N(S.bill) + '</td><td>' + N(S.sale) + '</td><td class="' + (spl < 0 ? 'neg' : 'pos') + '">' + (spl < 0 ? '-' : '') + N(Math.abs(spl)) + '</td><td></td></tr></table>';
+    }).join('');
+    var gpl = n(T.pl);
+    return printHead('สรุปรอบบิลรถร่วม', 'VAN SUPPLIER BILLING SUMMARY', '<div class="tag in">เอกสารภายใน</div>')
+      + '<div class="meta"><div><i>รอบบิล</i><b>' + esc(rnd) + '</b></div><div><i>ท่า</i><b>' + esc(doc.pier ? (VB_PIER_LBL[doc.pier] || doc.pier) : 'ทุกท่า') + '</b></div>'
+      + '<div><i>เลขที่</i><b>' + esc(doc.doc_no) + '</b></div>'
+      + '<div><i>จำนวน</i><b>' + n(T.owners) + ' เจ้า · ' + n(T.trips) + ' เที่ยว · ' + n(T.pax) + ' คน</b></div><div><i>พิมพ์เมื่อ</i><b>' + esc(stamp) + '</b></div></div>'
+      + (sec || '<p style="margin:30px;text-align:center;color:#6B7280">ไม่มีงานรถร่วมในรอบบิลนี้</p>')
+      + '<div class="grid2"><div class="note"><b>หมายเหตุ</b><br>· คน = ลูกค้าที่ขึ้นรถจริง (ไม่ใช่ยอดจอง) · ขากลับคิดค่ารถ ไม่คิดราคาขาย<br>· รายละเอียดรายเที่ยวอยู่ในใบวางบิลของแต่ละเจ้า แยกตามท่า</div>'
+      + '<table style="margin:0"><tr><th class="l">สรุป' + ((doc.piers || []).length > 1 ? 'ทุกท่า' : '') + '</th><th>บาท</th></tr><tr><td class="l">ค่ารถ</td><td>' + N(T.car_cost) + '</td></tr>'
+      + '<tr><td class="l">+ Extra</td><td>' + N(T.ex) + '</td></tr><tr><td class="l">− หัก</td><td>' + N(T.cut) + '</td></tr>'
+      + '<tr class="tot"><td class="l">รวมเรียกเก็บ</td><td>' + N(T.bill) + '</td></tr>'
+      + '<tr><td class="l" colspan="2" class="sub">(' + printWords(T.bill) + ') · กำไร/ขาดทุน ' + (gpl < 0 ? '-' : '') + N(Math.abs(gpl)) + '</td></tr></table></div>'
+      + printSig(['ผู้จัดทำ', 'ฝ่ายปฏิบัติการ'], ['ผู้ตรวจสอบ', 'ฝ่ายบัญชี'], ['ผู้อนุมัติจ่าย', ''])
+      + '<div class="foot"><span>พิมพ์ ' + esc(stamp) + '</span><span>LOVE ANDAMAN · สรุปรอบบิลรถร่วม</span></div>';
+  }
+  function printNote(doc, stamp){
+    var IN2 = !!doc.internal, pier = doc.pier, rnd = vbPeriod().label + ' ' + vbMoLbl(), cols = IN2 ? 11 : 9, T = doc.totals || {};
+    var last = '', i = 0;
+    var body = (doc.rows || []).map(function(r){
+      var dh = '', ret = !!r.return_only;
+      if(r.date !== last){ last = r.date; dh = '<tr class="day"><td class="l" colspan="' + cols + '">' + esc(new Date(r.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })) + '</td></tr>'; }
+      i++;
+      var pk = (r.pickups || []).join(', ') || '—', dp = (r.drops || []).map(function(d){ return d.name; }).join(', ');
+      return dh + '<tr class="' + (i % 2 ? '' : 'z') + '"><td class="l">' + i + '</td><td class="l">' + esc(r.date.slice(8, 10) + '/' + r.date.slice(5, 7)) + '</td>'
+        + '<td class="l"><span class="cd" style="background:' + printCodeCol(r.code) + '">' + esc(r.code) + '</span><b>' + esc(r.route_name) + '</b>' + (ret ? ' <b style="color:#9A5B00">(ขากลับ)</b>' : '')
+        + '<div class="sub">รับ: ' + esc(ret ? '—' : pk) + (dp ? (' · ส่ง: ' + esc(dp)) : '') + ((!ret && n(r.return_bookings)) ? (' · รับกลับให้อีก ' + n(r.return_bookings) + ' ใบ') : '') + '</div></td>'
+        + '<td class="l">' + esc(r.van_name) + '</td><td>' + (ret ? (n(r.return_pax) + ' กลับ') : n(r.pax)) + '</td>'
+        + '<td>' + (n(r.rate) ? N(r.rate) : '<span class="neg">ไม่มีเรต</span>') + '</td><td>' + (n(r.ex) ? N(r.ex) : '—') + '</td><td>' + (n(r.cut) ? ('-' + N(r.cut)) : '—') + '</td><td><b>' + N(r.bill) + '</b></td>'
+        + (IN2 ? ('<td>' + (ret ? '—' : N(r.sale)) + '</td><td class="' + (n(r.pl) < 0 ? 'neg' : 'pos') + '">' + (n(r.pl) < 0 ? '-' : '') + N(Math.abs(n(r.pl))) + '</td>') : '') + '</tr>';
+    }).join('');
+    (doc.extra_lines || []).forEach(function(x){
+      i++;
+      body += '<tr class="' + (i % 2 ? '' : 'z') + '"><td class="l">' + i + '</td><td class="l">' + esc(x.date ? (x.date.slice(8, 10) + '/' + x.date.slice(5, 7)) : '—') + '</td>'
+        + '<td class="l"><span class="cd" style="background:#5B6570">นอก</span><b>' + esc(x.note || 'รถนอก') + '</b></td><td class="l">' + n(x.vans) + ' คัน</td><td>' + n(x.pax) + '</td>'
+        + '<td>' + N(x.rate) + (n(x.vans) > 1 ? (' ×' + n(x.vans)) : '') + '</td><td>' + (n(x.ex) ? N(x.ex) : '—') + '</td><td>' + (n(x.cut) ? ('-' + N(x.cut)) : '—') + '</td><td><b>' + N(x.bill) + '</b></td>'
+        + (IN2 ? ('<td>' + N(x.sale) + '</td><td class="' + (n(x.pl) < 0 ? 'neg' : 'pos') + '">' + (n(x.pl) < 0 ? '-' : '') + N(Math.abs(n(x.pl))) + '</td>') : '') + '</tr>';
+    });
+    var cards = (doc.by_code || []).slice();
+    if(doc.extra_totals) cards.push({ code: '+', vans: doc.extra_totals.vans, pax: doc.extra_totals.pax, bill: doc.extra_totals.bill, mix: doc.extra_totals.mix });
+    var pl = n(T.pl);
+    return printHead('ใบวางบิลค่ารถร่วม', 'BILLING NOTE · VAN SUPPLIER', IN2 ? '<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>' : '<div class="tag">ฉบับเจ้าของรถ</div>')
+      + '<div class="meta"><div style="grid-column:span 2"><i>ผู้วางบิล (เจ้าของรถ)</i><b>' + esc(doc.partner) + '</b><div class="sub">รถที่วิ่ง ' + esc((doc.van_names || []).join(' · ') || '—') + '</div></div>'
+      + '<div><i>ท่า</i><b>' + esc(VB_PIER_LBL[pier] || pier) + '</b></div><div><i>รอบบิล</i><b>' + esc(rnd) + '</b></div>'
+      + '<div><i>เลขที่</i><b>' + esc(doc.doc_no) + '</b></div></div>'
+      + '<table><tr><th class="l">#</th><th class="l">วันที่</th><th class="l">งาน · รับ → ส่ง</th><th class="l">รถ</th><th>คน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>รวม</th>'
+      + (IN2 ? '<th>ราคาขาย</th><th>กำไร</th>' : '') + '</tr>'
+      + (body || '<tr><td colspan="' + cols + '" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
+      + '<tr class="tot"><td></td><td class="l" colspan="3">รวม ' + n(T.items) + ' รายการ</td><td>' + n(T.pax) + '</td><td>' + N(T.car_cost) + '</td><td>' + N(T.ex) + '</td><td>' + (n(T.cut) ? ('-' + N(T.cut)) : '0') + '</td><td>' + N(T.bill) + '</td>'
+      + (IN2 ? ('<td>' + N(T.sale) + '</td><td class="' + (pl < 0 ? 'neg' : 'pos') + '">' + (pl < 0 ? '-' : '') + N(Math.abs(pl)) + '</td>') : '') + '</tr></table>'
+      + '<div class="grid2"><table style="margin:0"><tr><th class="l">ตามรหัส · ที่มาของยอด</th><th>คัน</th><th>บาท</th></tr>'
+      + cards.map(function(X){
+          return '<tr class="z"><td class="l"><span class="cd" style="background:' + printCodeCol(X.code) + '">' + (X.code === '+' ? 'นอก' : esc(X.code)) + '</span><b>' + esc(X.code === '+' ? 'รถนอก' : (VB_CODE_TH[X.code] || X.code)) + '</b>'
+            + ' <span class="sub">' + n(X.vans) + ' คัน · ' + n(X.pax) + ' คน</span></td><td></td><td><b>' + N(X.bill) + '</b></td></tr>'
+            + (X.mix || []).map(function(m){
+                var f = N(m.rate) + (n(m.ex) ? (' + ' + N(m.ex)) : '') + (n(m.cut) ? (' − ' + N(m.cut)) : '') + ((n(m.ex) || n(m.cut)) ? (' = ' + N(m.per_van)) : '');
+                return '<tr><td class="l" style="padding-left:18px;color:#4B5563">' + (n(m.rate) > 0 || n(m.ex) || n(m.cut) ? f : '<span class="neg">ยังไม่มีเรต</span>') + '</td>'
+                  + '<td style="color:#6B7280">× ' + n(m.vans) + '</td><td>' + N(m.amount) + '</td></tr>'; }).join('');
+        }).join('')
+      + '</table>'
+      + '<table style="margin:0"><tr><th class="l">สรุป</th><th>บาท</th></tr><tr><td class="l">ค่ารถ ' + n(T.items) + ' เที่ยว</td><td>' + N(T.car_cost) + '</td></tr><tr><td class="l">+ Extra</td><td>' + N(T.ex) + '</td></tr>'
+      + '<tr><td class="l">− หัก</td><td>' + N(T.cut) + '</td></tr><tr class="tot"><td class="l">ยอดวางบิล</td><td>' + N(T.bill) + '</td></tr></table></div>'
+      + '<div class="words"><b>จำนวนเงิน (ตัวอักษร)</b> &nbsp; ' + printWords(T.bill) + '</div>'
+      + '<div class="note">คน = ลูกค้าที่ขึ้นรถจริง · ขากลับ = เที่ยวรับกลับจากท่า · โปรดตรวจและเซ็นรับรองยอด แล้วส่งคืนฝ่ายปฏิบัติการ</div>'
+      + printSig(['ผู้วางบิล', 'เจ้าของรถ'], ['ผู้รับวางบิล', 'LOVE ANDAMAN'], ['ผู้อนุมัติจ่าย', ''])
+      + '<div class="foot"><span>พิมพ์ ' + esc(stamp) + '</span><span>' + esc(doc.partner) + ' · ' + esc(VB_PIER_LBL[pier] || pier) + ' · ' + esc(rnd) + '</span></div>';
+  }
+  wrap('vbPrint', function(orig, internal){
+    var ov = _vb.mode === 'ov', pier = _vb.pier || 'panwa';
+    var url = ov
+      ? '/v1/van-bills/summary?month=' + enc(_vb.ym) + '&period=' + enc(_vb.per) + (_vb.pier ? '&pier=' + enc(_vb.pier) : '')
+      : address() + '/billing-note?pier=' + enc(pier) + '&copy=' + (internal ? 'internal' : 'supplier');
+    var w = window.open('', '_blank'); if(!w) return;
+    return O.get(url).then(function(doc){
+      var stamp = printStamp(doc);
+      var css = '@page{size:A4 ' + (ov ? 'landscape' : 'portrait') + ';margin:11mm}' + VB_PRINT_CSS;
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (ov ? 'สรุปรอบบิลรถร่วม' : ('ใบวางบิล ' + esc(_vb.sup))) + '</title>'
+        + '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
+        + '<style>' + css + '</style></head><body>' + (ov ? printSummary(doc, stamp) : printNote(doc, stamp)) + '</body></html>');
+      w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 600);
+    }, function(e){ try{ w.close(); }catch(_){} O.fail('Van bill could not be printed', e); return null; });
+  });
+
   window.laOpsVanBills = { render: render, setRow: setRow, setCodeRate: setCodeRate, setRate: setRate, setPerPax: setPerPax,
     addExtra: addExtra, setExtra: setExtra, delExtra: delExtra, save: save, pullRates: pullRates, send: send, unsend: unsend,
     pay: pay, unpay: unpay, originals: originals };
