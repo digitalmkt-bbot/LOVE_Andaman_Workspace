@@ -31037,6 +31037,272 @@ function bkV2UpgUndo(bkId, routeId, date){
   acctPersistBookings();
   if(typeof bkV2Render==='function' && document.getElementById('bkv2-host')) bkV2Render(); else renderBoatAssign();
 }
+/* ══ §upgVan (2026-10-17) · Upgrade ทั้งคัน ═══════════════════════════════════════════════
+   owner: "พรุ่งนี้ Similan Cat กับ Similan Speed ว่าง · จะอัพเกรดบางคันขึ้นไป เพื่อปรับเรือ Speed เหลือ 3 เครื่อง ประหยัดต้นทุน"
+   ถาม "มันต้องย้ายทั้งคันไหม" → ไม่ · รถคันเดิม ลูกค้าชุดเดิม แค่ลงท่าแล้วขึ้นเรืออีกลำ (ท่าเดียวกัน)
+   ของเดิม (§upgRoute) ย้ายได้ทีละใบ · รถคันหนึ่ง 8-10 ใบ = 30-40 คลิก และเลขกรุ๊ปติดไปชนกรุ๊ปของปลายทาง
+   (กรุ๊ปรถนับเลขต่อเนื่องใน วัน+โปรแกรม · เลข 1 ของ Speed ไปโผล่เป็นเลข 1 ของ Cat ที่มีรถอีกคันถืออยู่ → "รถปนกันในกรุ๊ป")
+
+   ตัวนี้ = ทำแบบเดิมซ้ำทุกใบในกรุ๊ป (ข้อมูลชุดเดียวกันเป๊ะ: trip.routeId · trip.upg · ops.boatId · bk.upgrades · ประวัติ)
+   + จองเลขกรุ๊ปใหม่ใต้โปรแกรมปลายทางให้รถคันนี้ · vanId / vanSeq / vanReturnId ไม่แตะ
+   + จุดแวะ (VAN_STOPS) ของรถ+กรุ๊ปนี้ ย้ายคีย์ตามไป (คีย์ผูกกับโปรแกรม)
+   + เวลารับ: ไม่ได้คิดใหม่จากโปรแกรม (ops.pickupTimeFinal เป็นค่าที่คนจัดรถตั้ง) → ให้ตั้งใหม่ทั้งคันในหน้าต่างเดียวกัน
+     และเตือนเมื่อเวลาออกเรือสองโปรแกรมไม่เท่ากัน
+   ทุกหน้าที่เชื่อมกัน (ใบงานรถ · Van/Pier check-in · Boat running) อ่านจากสามค่านั้น จึงตามไปเองเหมือน upgrade รายใบ
+   กันไว้: ใบที่ย้ายไม่ได้ตามกติกาเดิม (ค้างคืน · ดึง seat lock · แยกจุดรับไปอยู่รถคันอื่นด้วย · upgrade อยู่แล้ว) → ไม่ย้ายครึ่งคัน
+   ย้อนกลับได้ทั้งคัน (ปุ่มเดียวกันที่หัวกรุ๊ปฝั่งปลายทาง) · trip.upg.van จำ กรุ๊ปเดิม/เวลารับเดิม ไว้คืน */
+var _bkUpgVan=null;
+/* สมาชิกของกรุ๊ปรถ (วัน · โปรแกรม · เลขกรุ๊ป) · ไม่กรองโซน เพราะเลขกรุ๊ปไม่ซ้ำกันทั้งวัน+โปรแกรมอยู่แล้ว
+   คืน [{b,t,o,s,pax,why}] · why = เหตุที่ย้ายไม่ได้ ('' = ย้ายได้) */
+function bkUpgVanMembers(date, rid, gid){
+  var out=[]; gid=+gid||0; if(!gid) return out;
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(!b || ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=bkUpgTripOn(b, date, rid); if(!t) return;
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}); if(!o) return;
+    var inG=false, otherG=false, sp=null;
+    if(Array.isArray(o.vanSplits) && o.vanSplits.length){
+      o.vanSplits.forEach(function(s){ if((+s.vanGroup||0)===gid){ inG=true; if(!sp) sp=s; } else if(s.vanGroup||s.vanId) otherG=true; });
+    } else inG=((+o.vanGroup||0)===gid);
+    if(!inG) return;
+    var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    var why='';
+    if(otherG) why=laT('แยกจุดรับไปอยู่รถคันอื่นด้วย');
+    else if(bkUpgActive(t)) why=laT('Upgrade อยู่แล้ว');
+    else if(t.ovnLeg||t.ovn) why=laT('ทริปค้างคืน');
+    else if((Number(t.lockUse)||0)>0 || (t.seatSource && Number(t.seatSource.locked)>0)) why=laT('ดึงที่นั่งจาก seat lock');
+    else if((b.trips||[]).filter(function(x){ return x && (x.date||'')===date && x.bookingMode!=='charter'; }).length>1) why=laT('มีสองทริปในวันเดียว');
+    out.push({ b:b, t:t, o:o, s:sp, pax:pax, why:why });
+  });
+  return out;
+}
+/* ข้อมูล upgrade ทั้งคันที่สมาชิกทุกใบของกรุ๊ปนี้ถืออยู่ (ฝั่งปลายทาง) · null = ไม่ใช่กรุ๊ปที่มาจาก upgrade ทั้งคัน */
+function bkUpgVanOf(date, rid, gid){
+  var m=bkUpgVanMembers(date, rid, gid); if(!m.length) return null;
+  var k=null;
+  for(var i=0;i<m.length;i++){ var t=m[i].t; if(!bkUpgActive(t) || !t.upg.van || t.upg.toRouteId!==rid) return null;
+    var kk=t.upg.van.key||''; if(k===null) k=kk; else if(k!==kk) return null; }
+  return { key:k, from:m[0].t.upg.fromRouteId, gid:m[0].t.upg.van.gid, n:m.length };
+}
+function bkUpgVanBtn(date, rid, zone, gid){
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var U=bkUpgVanOf(date, rid, gid);
+  if(U) return '<button type="button" data-upgvan="undo" onclick="event.stopPropagation();bkV2VanUpgUndo(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('ทั้งคันนี้ย้ายมาจาก')+' '+bkUpgRouteName(U.from)+' · '+laT('กดเพื่อย้ายกลับทั้งคัน'))+'" style="background:#F7F1FC;border:1px solid #D9CFFA;color:#6B289A;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; '+e(laT('ยกเลิก Upgrade ทั้งคัน'))+'</button>';
+  return '<button type="button" data-upgvan="go" onclick="event.stopPropagation();bkV2VanUpgrade(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('ย้ายทุกใบในกรุ๊ปนี้ไปโปรแกรมอื่น · รถคันเดิม ลำดับรับเดิม'))+'" style="background:#fff;border:1px solid #D9CFFA;color:#6B289A;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#10548; '+e(laT('Upgrade ทั้งคัน'))+'</button>';
+}
+function bkUpgVanDepart(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r && Array.isArray(r.times) && r.times[0]) ? String(r.times[0]) : ''; }
+/* เวลารับที่กรุ๊ปใช้อยู่ · ค่าแรกที่เจอ (เหมือนหัวกรุ๊ปในหน้า By trip) */
+function bkUpgVanPick(m){ for(var i=0;i<m.length;i++){ var x=m[i]; var v=(x.s?bkSplitPickTime(x.s):'')||x.o.pickupTimeFinal||x.t.pickupTime||''; if(v) return String(v).trim(); } return ''; }
+/* เรืออย่างน้อยกี่ลำ ถึงรับ pax เท่านี้ได้ · ลำใหญ่ก่อน · 0 = ไม่ต้องใช้ · -1 = วางเรือไม่พอ */
+function bkUpgVanBoatsNeed(date, rid, pax){
+  var caps=((typeof baBoatsForRoute==='function')?baBoatsForRoute(date, rid):[]).map(function(x){ return +(x.boat&&x.boat.cap)||0; }).sort(function(a,b){ return b-a; });
+  if(pax<=0) return 0; var n=0, s=0; for(var i=0;i<caps.length;i++){ s+=caps[i]; n++; if(s>=pax) return n; } return -1;
+}
+function bkV2VanUpgrade(date, rid, zone, gid){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var m=bkUpgVanMembers(date, rid, gid);
+  if(!m.length){ alert('No booking in this van group.'); return; }
+  var vid=null; m.forEach(function(x){ if(vid) return; var v=x.s?x.s.vanId:x.o.vanId; if(v) vid=v; });
+  _bkUpgVan={ date:date, from:rid, zone:zone||'', gid:+gid, vanId:vid||'', to:'', reason:'', charge:'0', pick:bkUpgVanPick(m), pick0:bkUpgVanPick(m) };
+  bkV2UpgVanModal();
+}
+function bkV2UpgVanClose(){ var h=document.getElementById('bkv2-upgvan-ov'); if(h) h.remove(); _bkUpgVan=null; }
+function bkV2UpgVanModal(){
+  var U=_bkUpgVan; if(!U) return;
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var m=bkUpgVanMembers(U.date, U.from, U.gid), okM=m.filter(function(x){ return !x.why; }), badM=m.filter(function(x){ return !!x.why; });
+  var pax=okM.reduce(function(s,x){ return s+x.pax; },0);
+  var T=bkV2UpgTargets(U.date, U.from, '');
+  var old=document.getElementById('bkv2-upgvan-ov');
+  var sc=(old && old.firstElementChild && !old.querySelector('[data-upg-confirm]'))?old.firstElementChild.scrollTop:0;
+  if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='bkv2-upgvan-ov'; ov.className='la-modal';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+  var fromPier=bkUpgPierOf(U.from), pnm=function(p){ return (typeof laPierName==='function')?laPierName(p):p; };
+  var vnm=U.vanId?(((typeof vehGet==='function'?vehGet(U.vanId):null)||{}).name||U.vanId):laT('ยังไม่เลือกรถ');
+  var dFrom=bkUpgVanDepart(U.from);
+  var piers=[]; T.forEach(function(x){ if(piers.indexOf(x.pier)<0) piers.push(x.pier); });
+  piers.sort(function(a,c){ return (a===fromPier?0:1)-(c===fromPier?0:1); });
+  var one=function(x){ var full=(x.free!=null && x.free<pax), on=(U.to===x.rid), dT=bkUpgVanDepart(x.rid);
+      return '<label data-upgvan-to="'+e(x.rid)+'" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid '+(on?'#6B289A':'#E4E1D9')+';background:'+(on?'#F7F1FC':(full?'#FAFAF8':'#fff'))+';border-radius:10px;cursor:'+(full?'not-allowed':'pointer')+';opacity:'+(full?'.6':'1')+'">'
+        +'<input type="radio" name="bkupgvan-to" value="'+e(x.rid)+'" '+(on?'checked':'')+(full?' disabled':'')+' onchange="_bkUpgVan.to=this.value;bkV2UpgVanModal()" style="accent-color:#6B289A">'
+        +'<span style="flex:1;min-width:0"><span style="font-weight:700;font-size:13px">'+e(x.name)+'</span>'+(dT?('<span style="margin-left:6px;font-size:10.5px;color:#8a8a82;font-family:\'DM Mono\',monospace">'+laT('ออก')+' '+e(dT)+'</span>'):'')+'</span>'
+        +'<span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+(full?'#A32D2D':'#0F6E56')+';white-space:nowrap">'+(x.free==null?'-':(x.free+' '+laT('ว่าง')+(on?(' &rarr; '+(x.free-pax)):'')))+'</span></label>'; };
+  var opts=T.length?piers.map(function(p){ var same=(p===fromPier);
+      return '<div data-upgvan-pier="'+e(p)+'" style="display:flex;flex-direction:column;gap:6px">'
+        +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span style="font-size:11.5px;font-weight:800;color:'+(same?'#0F6E56':'#8A5B00')+'">&#9875; '+e(pnm(p))+'</span>'
+        +'<span style="font-size:9.5px;font-weight:800;border-radius:6px;padding:1px 7px;background:'+(same?'#DCF4E8':'#FBF0DD')+';color:'+(same?'#0C6B47':'#7A4A00')+'">'+(same?laT('ท่าเดียวกัน · รถคันเดิมไปได้'):laT('ต่างท่า · รถต้องวิ่งอีกท่า เช็คเวลาก่อน'))+'</span></div>'
+        +T.filter(function(x){ return x.pier===p; }).map(one).join('')+'</div>'; }).join('')
+    : '<div style="padding:14px;text-align:center;color:#A32D2D;font-size:12.5px">'+laT('วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง')+'</div>';
+  /* ตัวเลขช่วยตัดสินใจ · โปรแกรมเดิมเหลือกี่คน ใช้เรืออย่างน้อยกี่ลำ */
+  var alF=(typeof getAllotment==='function')?getAllotment(U.from, U.date, null):null;
+  var bkF=(alF&&alF.hasAllotment)?(+alF.seatsConsumed||0):null;
+  var leftF=(bkF==null)?null:Math.max(0,bkF-pax);
+  var needNow=(bkF==null)?null:bkUpgVanBoatsNeed(U.date,U.from,bkF), needAfter=(leftF==null)?null:bkUpgVanBoatsNeed(U.date,U.from,leftF);
+  var nBoats=((typeof baBoatsForRoute==='function')?baBoatsForRoute(U.date,U.from):[]).length;
+  var fx=function(n){ return n==null?'-':(n<0?laT('เรือไม่พอ'):(n+' '+laT('ลำ'))); };
+  var math=(bkF==null)?'':('<div data-upgvan-math="1" style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px;border:1px solid #E4E1D9;border-radius:10px;padding:8px 11px;background:#FAFAF8"><div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8a8a82">'+e(bkUpgRouteName(U.from))+' &middot; '+laT('ตอนนี้')+'</div><div style="font-size:13px;font-weight:800;margin-top:2px">'+bkF+' '+laT('คน')+' <span style="font-weight:600;color:#8a8a82">&middot; '+laT('วางเรือ')+' '+nBoats+' '+laT('ลำ')+' &middot; '+laT('ใช้อย่างน้อย')+' '+fx(needNow)+'</span></div></div>'
+      +'<div style="flex:1;min-width:140px;border:1px solid #CDB4E6;border-radius:10px;padding:8px 11px;background:#F7F1FC"><div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#6B289A">'+laT('หลังย้ายคันนี้')+'</div><div style="font-size:13px;font-weight:800;margin-top:2px;color:#3E1563">'+leftF+' '+laT('คน')+' <span style="font-weight:600;color:#6B289A">&middot; '+laT('ใช้อย่างน้อย')+' <b data-upgvan-need="'+(needAfter==null?'':needAfter)+'">'+fx(needAfter)+'</b></span></div></div>'
+      +'</div>');
+  var dTo=U.to?bkUpgVanDepart(U.to):'';
+  var timeWarn=(U.to && dFrom && dTo && dFrom!==dTo)?('<div data-upgvan-timewarn="1" style="display:flex;gap:9px;align-items:flex-start;background:#FFF6E5;border:1px solid #F0D9A8;border-radius:10px;padding:9px 12px;font-size:12px;color:#6B4500;line-height:1.45"><span aria-hidden="true" style="font-size:15px">&#9888;</span><span><b>'+laT('เวลาออกเรือไม่เท่ากัน')+'</b> &middot; '+e(bkUpgRouteName(U.from))+' '+e(dFrom)+' &rarr; '+e(bkUpgRouteName(U.to))+' '+e(dTo)+'<br>'+laT('ตั้งเวลารับใหม่ให้ทั้งคันด้านล่าง แล้วแจ้งลูกค้า/คนขับ')+'</span></div>'):'';
+  var badHtml=badM.length?('<div data-upgvan-blocked="'+badM.length+'" style="background:#FCEBEB;border:1px solid #E6C9C3;border-radius:10px;padding:9px 12px;font-size:12px;color:#A32D2D;line-height:1.5"><b>'+laT('ย้ายทั้งคันไม่ได้')+' &middot; '+badM.length+' '+laT('ใบติดเงื่อนไข')+'</b><br>'
+      +badM.map(function(x){ return e((x.b.leadPax||x.b.customerName||x.b.voucherRef||x.b.id))+' &middot; '+e(x.why); }).join('<br>')+'<br><span style="font-weight:600;color:#7a3a3a">'+laT('แก้ใบพวกนี้ก่อน (หรือเอาออกจากกรุ๊ป) แล้วค่อยย้าย')+'</span></div>'):'';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;width:min(540px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4"><div style="font-size:15px;font-weight:800;color:#4A1D6E">&#10548; '+laT('Upgrade ทั้งคัน')+' &middot; '+laT('กรุ๊ป')+' '+U.gid+'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">&#128656; <b>'+e(vnm)+'</b> &middot; '+okM.length+' '+laT('ใบ')+' &middot; <b>'+pax+' pax</b> &middot; '+e(U.date)+' &middot; '+laT('จาก')+' <b>'+e(bkUpgRouteName(U.from))+'</b>'+(dFrom?(' '+e(dFrom)):'')+' &middot; &#9875; '+e(pnm(fromPier))+'</div></div>'
+    +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
+    +badHtml
+    +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('ไปโปรแกรม')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+opts+'</div></div>'
+    +math
+    +timeWarn
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เวลารับทั้งคัน')+'</div>'
+    +'<input id="bkupgvan-pick" type="text" value="'+e(U.pick)+'" oninput="_bkUpgVan.pick=this.value" placeholder="'+laT('เหมือนเดิม')+'" style="width:100%;border:1px solid '+((U.pick||'')!==(U.pick0||'')?'#6B289A':'#E4E1D9')+';border-radius:9px;padding:9px 11px;font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;box-sizing:border-box">'
+    +'<div style="font-size:10.5px;color:#8a8a82;margin-top:4px">'+laT('ตอนนี้')+' '+(U.pick0?e(U.pick0):'-')+' &middot; '+laT('เปลี่ยนแล้วใช้กับทุกใบในคัน')+'</div></div>'
+    +'<div style="width:150px"><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เก็บเพิ่ม/ใบ (บาท)')+'</div>'
+    +'<input id="bkupgvan-charge" type="number" min="0" value="'+e(U.charge)+'" oninput="_bkUpgVan.charge=this.value" placeholder="0" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:15px;font-weight:700;font-family:\'DM Mono\',monospace;box-sizing:border-box">'
+    +'<div style="font-size:10.5px;color:#8a8a82;margin-top:4px">'+laT('บริษัทย้ายเอง = 0')+'</div></div>'
+    +'</div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เหตุผล')+'</div>'
+    +'<input id="bkupgvan-reason" type="text" value="'+e(U.reason)+'" oninput="_bkUpgVan.reason=this.value" placeholder="'+laT('เช่น ลดเรือ Speed เหลือ 3 ลำ')+'" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;box-sizing:border-box;font-family:inherit"></div>'
+    +'<div style="font-size:11px;color:#8a8a82;line-height:1.5">'+laT('ราคาใบจองไม่เปลี่ยน ยึดราคาที่จองไว้ · รถคันเดิม ลำดับรับเดิม ไปเปิดเป็นกรุ๊ปใหม่ใต้โปรแกรมปลายทาง · เรือที่จัดไว้ถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง · ย้อนกลับได้ทั้งคันที่หัวกรุ๊ปฝั่งปลายทาง')+'</div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
+    +'<button type="button" onclick="bkV2UpgVanClose()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'+laT('ยกเลิก')+'</button>'
+    +'<button type="button" data-upgvan-go="1" onclick="bkV2UpgVanApply()" '+(badM.length?'disabled':'')+' style="border:none;background:'+(badM.length?'#C9BFD9':'#6B289A')+';color:#fff;border-radius:9px;padding:9px 20px;font-size:12.5px;font-weight:700;cursor:'+(badM.length?'not-allowed':'pointer')+';font-family:inherit">'+laT('Upgrade ทั้งคัน')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  if(sc && ov.firstElementChild) ov.firstElementChild.scrollTop=sc;
+}
+function bkV2UpgVanApply(go){
+  var U=_bkUpgVan; if(!U) return;
+  var m=bkUpgVanMembers(U.date, U.from, U.gid);
+  if(!m.length){ alert('No booking in this van group.'); bkV2UpgVanClose(); return; }
+  var bad=m.filter(function(x){ return !!x.why; });
+  if(bad.length){ alert(bad.length+' booking(s) in this group cannot be moved. See the red box.'); bkV2UpgVanModal(); return; }
+  if(!U.to){ alert('Pick the destination programme.'); return; }
+  var reason=String(U.reason||'').trim(); if(!reason){ alert('Enter a reason.'); var r0=document.getElementById('bkupgvan-reason'); if(r0) r0.focus(); return; }
+  var charge=Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g,''))||0)*100)/100);
+  var pax=m.reduce(function(s,x){ return s+x.pax; },0);
+  if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(U.to, U.date)){ alert(bkUpgRouteName(U.to)+' is not running on '+U.date+'.'); return; }
+  var al=(typeof getAllotment==='function')?getAllotment(U.to, U.date, null):null;
+  if(al && al.hasAllotment && pax>al.seatsAvailable){
+    alert('Not enough free seats on '+bkUpgRouteName(U.to)+' ('+U.date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
+  var pick=String(U.pick||'').trim(), pickChanged=(pick!==String(U.pick0||'').trim());
+  var fromNm=bkUpgRouteName(U.from), toNm=bkUpgRouteName(U.to);
+  if(go!==true){ bkV2UpgVanConfirmView({ m:m, pax:pax, fromNm:fromNm, toNm:toNm, pf:bkUpgPierOf(U.from), pt:bkUpgPierOf(U.to), charge:charge, reason:reason, pick:pick, pickChanged:pickChanged, dFrom:bkUpgVanDepart(U.from), dTo:bkUpgVanDepart(U.to) }); return; }
+  /* ลงมือ · เลขกรุ๊ปใหม่ใต้ปลายทาง จองก่อนแตะใบไหน (นับจากใบที่อยู่ปลายทางตอนนี้) */
+  var newGid=(typeof _bkV2VanNextGroup==='function')?_bkV2VanNextGroup(U.date, U.to, U.zone):1;
+  var key='uv_'+Date.now(), by=laBy(), at=new Date().toISOString();
+  m.forEach(function(x){
+    var b=x.b, t=x.t, O=bkOpsFor(b, U.date), upgId='';
+    if(charge>0){
+      if(!Array.isArray(b.upgrades)) b.upgrades=[];
+      upgId='up_'+Date.now()+'_'+Math.floor(Math.random()*1e4);
+      b.upgrades.push({ id:upgId, label:'Upgrade > '+toNm, sellPrice:charge, toCompany:charge, commission:0, collected:false,
+        note:reason, seller:'', settle:'pending', at:at, method:'cash', feePct:0, fee:0, customerPaid:charge, slips:[] });
+    }
+    var tgt=x.s||O;                                   /* แถวแยกรับ → ค่าอยู่ที่ตัว split */
+    var oldPick=x.s?String(x.s.pickTime||''):String(O.pickupTimeFinal||'');
+    t.upg={ fromRouteId:U.from, toRouteId:U.to, date:U.date, reason:reason, charge:charge, upgId:upgId, by:by, at:at,
+            van:{ key:key, gid:U.gid, newGid:newGid, vanId:U.vanId||'', pick:oldPick, pickChanged:pickChanged } };
+    t.routeId=U.to;
+    tgt.vanGroup=newGid;
+    if(pickChanged){ if(x.s && bkSplitOwnPick(x.s)) x.s.pickTime=pick; else O.pickupTimeFinal=pick; }
+    O.boatId=null; if(O.boatSplits) delete O.boatSplits;
+    if(b.ops && b.ops.upgrade) b.ops.upgrade=null;
+    if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade route (whole van) · '+fromNm+' > '+toNm+' · van group '+U.gid+' > '+newGid+' · '+reason+(charge>0?(' · +THB '+charge.toLocaleString()):' · no charge')+(pickChanged?(' · pickup '+(oldPick||'-')+' > '+(pick||'-')):''),'Edit');
+  });
+  /* จุดแวะของรถ+กรุ๊ปนี้ ย้ายคีย์ตามโปรแกรม */
+  bkUpgVanMoveStops(U.date, U.from, U.gid, U.to, newGid, U.vanId);
+  acctPersistBookings();
+  bkV2UpgVanClose();
+  if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else if(typeof bkV2Render==='function') bkV2Render();
+}
+function bkUpgVanMoveStops(date, fromRid, fromGid, toRid, toGid, vanId){
+  if(typeof VAN_STOPS==='undefined' || !VAN_STOPS) return 0;
+  var n=0;
+  Object.keys(VAN_STOPS).forEach(function(k){
+    var p=(typeof vsParse==='function')?vsParse(k):null; if(!p || p.date!==date || p.routeId!==fromRid) return;
+    var v=VAN_STOPS[k]; if(!v || typeof v!=='object') return;
+    if((+v.vanGroup||0)!==(+fromGid||0)) return;
+    if(vanId && v.vanId && v.vanId!==vanId) return;
+    var nk=vsKey(date, toRid, p.id); if(VAN_STOPS[nk]) return;
+    delete VAN_STOPS[k]; v.vanGroup=toGid; VAN_STOPS[nk]=v; n++;
+  });
+  if(n && typeof vsPersist==='function') vsPersist();
+  return n;
+}
+function bkV2UpgVanConfirmView(c){
+  var ov=document.getElementById('bkv2-upgvan-ov'); if(!ov) return;
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
+  var pnm=function(p){ return (typeof laPierName==='function')?laPierName(p):p; };
+  var diff=(c.pf!==c.pt);
+  var card=function(lbl, nm, pier, dep, on){
+    return '<div style="flex:1;min-width:0;border:1px solid '+(on?'#CDB4E6':'#E4E1D9')+';background:'+(on?'#F7F1FC':'#FAFAF8')+';border-radius:12px;padding:10px 12px">'
+      +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:'+(on?'#6B289A':'#8a8a82')+'">'+e(lbl)+'</div>'
+      +'<div style="font-size:14px;font-weight:800;line-height:1.3;margin-top:3px;color:'+(on?'#3E1563':'#5F5E5A')+'">'+e(nm)+(dep?(' <span style="font-size:11px;font-weight:600;color:#8a8a82;font-family:\'DM Mono\',monospace">'+e(dep)+'</span>'):'')+'</div>'
+      +'<div style="margin-top:6px"><span style="font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px;background:'+(on&&diff?'#FBF0DD':'#EEF2F1')+';color:'+(on&&diff?'#7A4A00':'#3F5B52')+'">&#9875; '+e(pnm(pier))+'</span></div></div>';
+  };
+  var row=function(k,v){ return '<div style="display:flex;gap:12px;padding:7px 0;border-top:1px solid #F1EFE9;font-size:13px"><span style="width:96px;flex-shrink:0;color:#8a8a82">'+e(k)+'</span><span style="flex:1;min-width:0;font-weight:700;color:#2C2C2A">'+v+'</span></div>'; };
+  var U=_bkUpgVan||{};
+  var vnm=U.vanId?(((typeof vehGet==='function'?vehGet(U.vanId):null)||{}).name||U.vanId):laT('ยังไม่เลือกรถ');
+  var names=c.m.map(function(x){ return '<span style="display:inline-block;background:#F3F1EB;border-radius:6px;padding:2px 7px;margin:2px 3px 0 0;font-size:11.5px;font-weight:600">'+e((x.b.leadPax||x.b.customerName||x.b.voucherRef||x.b.id))+' <span style="color:#8a8a82">'+x.pax+'</span></span>'; }).join('');
+  ov.innerHTML='<div data-upg-confirm="1" role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;width:min(540px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4"><div style="font-size:15px;font-weight:800;color:#4A1D6E">&#10548; '+e(laT('ยืนยัน Upgrade ทั้งคัน'))+'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e(laT('ตรวจอีกครั้งก่อนย้าย'))+'</div></div>'
+    +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
+    +'<div style="display:flex;align-items:stretch;gap:8px">'+card(laT('จากโปรแกรม'), c.fromNm, c.pf, c.dFrom, false)+'<div aria-hidden="true" style="align-self:center;font-size:18px;color:#6B289A;font-weight:800">&rarr;</div>'+card(laT('ไปโปรแกรม'), c.toNm, c.pt, c.dTo, true)+'</div>'
+    +(diff?('<div data-upg-diffpier="1" style="display:flex;gap:9px;align-items:flex-start;background:#FFF6E5;border:1px solid #F0D9A8;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#6B4500;line-height:1.45"><span aria-hidden="true" style="font-size:15px">&#9888;</span><span><b>'+e(laT('ต่างท่า · รถต้องวิ่งอีกท่า'))+'</b><br>'+e(laT('เช็คเวลารับกับคนขับก่อนยืนยัน'))+'</span></div>'):'')
+    +((c.dFrom && c.dTo && c.dFrom!==c.dTo && !c.pickChanged)?('<div data-upgvan-timewarn="1" style="display:flex;gap:9px;align-items:flex-start;background:#FFF6E5;border:1px solid #F0D9A8;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#6B4500;line-height:1.45"><span aria-hidden="true" style="font-size:15px">&#9888;</span><span><b>'+e(laT('เวลาออกเรือไม่เท่ากัน แต่ยังใช้เวลารับเดิม'))+'</b><br>'+e(laT('ถ้าต้องเลื่อน กดกลับไปแก้แล้วตั้งเวลารับใหม่'))+'</span></div>'):'')
+    +'<div>'
+      +row(laT('รถ'), '&#128656; '+e(vnm)+' <span style="font-weight:600;color:#8a8a82">&middot; '+laT('กรุ๊ป')+' '+(U.gid||'')+' &rarr; '+laT('กรุ๊ปใหม่ใต้')+' '+e(c.toNm)+'</span>')
+      +row(laT('ลูกค้า'), c.m.length+' '+laT('ใบ')+' <span style="font-weight:600;color:#8a8a82">&middot; '+c.pax+' pax</span><div style="margin-top:4px">'+names+'</div>')
+      +row(laT('วันที่เดินทาง'), e(U.date||''))
+      +row(laT('เวลารับ'), c.pickChanged?('<span style="color:#6B289A">'+e(c.pick||'-')+'</span> <span style="font-weight:600;color:#8a8a82">('+laT('เดิม')+' '+e(U.pick0||'-')+')</span>'):('<span style="font-weight:600;color:#8a8a82">'+laT('เหมือนเดิม')+' '+e(U.pick0||'-')+'</span>'))
+      +row(laT('เก็บเพิ่ม'), c.charge>0?('<span style="color:#7A4A00">&#3647;'+e(c.charge.toLocaleString())+' / '+laT('ใบ')+'</span>'):('<span style="font-weight:600;color:#8a8a82">'+e(laT('ไม่เก็บ'))+'</span>'))
+      +row(laT('เหตุผล'), e(c.reason))
+    +'</div>'
+    +'<div style="font-size:11.5px;color:#8a8a82;line-height:1.5">'+e(laT('กดยืนยันแล้ว ที่นั่งทุกใบย้ายไปโปรแกรมใหม่ทันที · รถคันเดิม ลำดับรับเดิม · เรือเดิมถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง'))+'</div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
+    +'<button type="button" data-upg-back="1" onclick="bkV2UpgVanModal()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:10px 16px;min-height:40px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&larr; '+e(laT('กลับไปแก้'))+'</button>'
+    +'<button type="button" data-upgvan-do="1" onclick="bkV2UpgVanApply(true)" style="border:none;background:#6B289A;color:#fff;border-radius:9px;padding:10px 20px;min-height:40px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit">'+e(laT('ยืนยัน Upgrade ทั้งคัน'))+'</button>'
+    +'</div></div>';
+  try{ var bt=ov.querySelector('[data-upgvan-do]'); if(bt) bt.focus(); }catch(_){}
+}
+/* ย้อนกลับทั้งคัน · เรียกจากหัวกรุ๊ปฝั่งปลายทาง · กลับไปกรุ๊ปเดิมถ้าเลขนั้นยังว่าง ไม่งั้นเปิดเลขใหม่ (เลขเดิมอาจถูกกรุ๊ปใหม่ใช้ไปแล้ว) */
+function bkV2VanUpgUndo(date, rid, zone, gid){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var U=bkUpgVanOf(date, rid, gid); if(!U){ alert('This van group did not come from a whole-van upgrade.'); return; }
+  var m=bkUpgVanMembers(date, rid, gid);
+  var from=U.from, fromNm=bkUpgRouteName(from), toNm=bkUpgRouteName(rid);
+  var pax=m.reduce(function(s,x){ return s+x.pax; },0);
+  if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(from, date)){ alert('Cannot undo: '+fromNm+' is not running on '+date+'.'); return; }
+  var al=(typeof getAllotment==='function')?getAllotment(from, date, null):null;
+  if(al && al.hasAllotment && pax>al.seatsAvailable){ alert('Cannot undo: not enough free seats on '+fromNm+' ('+date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
+  var uncol=0, col=0; m.forEach(function(x){ var u=x.t.upg; var it=(u.upgId && Array.isArray(x.b.upgrades))?x.b.upgrades.find(function(y){ return y.id===u.upgId; }):null; if(it){ if(it.collected) col+=(+it.sellPrice||0); else uncol+=(+it.sellPrice||0); } });
+  if(!confirm('Undo the whole-van upgrade? ('+m.length+' bookings, '+pax+' pax)\n'+toNm+' > back to '+fromNm+'\n'+(uncol?('Uncollected extra charges (THB '+uncol.toLocaleString()+') will be removed.\n'):'')+(col?('Collected charges (THB '+col.toLocaleString()+') stay on the bookings.\n'):'')+'Boats must be assigned again.')) return;
+  /* เลขกรุ๊ปเดิมยังว่างไหม · ถ้ามีคนใช้แล้ว เปิดเลขใหม่ */
+  var oldGid=+U.gid||0, used=false;
+  if(oldGid){ (SB_BOOKINGS||[]).forEach(function(b){ if(used||!b||['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return; if(!(b.trips||[]).some(function(t){ return t&&(t.date||'')===date&&(t.routeId||'')===from; })) return; var o=bkOpsRead(b,date)||{}; if(Array.isArray(o.vanSplits)){ if(o.vanSplits.some(function(s){ return (+s.vanGroup||0)===oldGid; })) used=true; } else if((+o.vanGroup||0)===oldGid) used=true; }); }
+  var backGid=(oldGid && !used)?oldGid:((typeof _bkV2VanNextGroup==='function')?_bkV2VanNextGroup(date, from, zone):1);
+  m.forEach(function(x){
+    var b=x.b, t=x.t, u=t.upg, O=bkOpsFor(b, date);
+    var it=(u.upgId && Array.isArray(b.upgrades))?b.upgrades.find(function(y){ return y.id===u.upgId; }):null;
+    if(it && !it.collected) b.upgrades=b.upgrades.filter(function(y){ return y.id!==u.upgId; });
+    var tgt=x.s||O; tgt.vanGroup=backGid;
+    if(u.van && u.van.pickChanged){ if(x.s && bkSplitOwnPick(x.s)) x.s.pickTime=u.van.pick||''; else O.pickupTimeFinal=u.van.pick||''; }
+    t.routeId=from; delete t.upg;
+    O.boatId=null; if(O.boatSplits) delete O.boatSplits;
+    if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade undone (whole van) · back to '+fromNm+' · van group '+gid+' > '+backGid,'Edit');
+  });
+  bkUpgVanMoveStops(date, rid, gid, from, backGid, '');
+  acctPersistBookings();
+  if(typeof bkV2RenderKeep==='function') bkV2RenderKeep(); else if(typeof bkV2Render==='function') bkV2Render();
+}
 function renderBoatAssign(){
   const host=document.getElementById('boatassign-host'); if(!host) return;
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -54492,7 +54758,8 @@ function bkV2RenderTab2(){
             ${vid?`<span onclick="event.stopPropagation()" title="คนขับวันนี้ของรถคันนี้ — เชื่อมกับใบงานรถ (แก้ที่ไหนก็อัปเดตอีกที่)" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#5a6b62">&#128100;<input value="${esc(_drvO.driver||'')}" oninput="vanJobsSetDriver('${date}','${vid}','driver',this)" placeholder="${esc(_drvV.driver||'คนขับ')}" style="width:86px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:inherit;color:#1B2A55"><input value="${esc(_drvO.phone||'')}" oninput="vanJobsSetDriver('${date}','${vid}','phone',this)" placeholder="${esc(_drvV.driverPhone||'เบอร์')}" style="width:96px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#1B2A55">${_drvV.ownership==='partner'?`<input value="${esc(_drvO.plate||'')}" oninput="vanJobsSetDriver('${date}','${vid}','plate',this)" placeholder="${esc((_drvV.plate&&_drvV.plate!=='-')?_drvV.plate:'ทะเบียน')}" title="ทะเบียนรถวันนี้ (รถร่วม)" style="width:84px;border:1px solid #E6C9A3;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#8a5500">`:''}${(_drvO.driver||_drvO.phone||_drvO.plate)?'<span style="font-size:9px" title="อัปเดตแล้ว">&#128204;</span>':''}</span>`:''}
             <button onclick="event.stopPropagation();bkV2VanGroupSave('${date}')" title="บันทึก · ถ้าติ๊กแถวไว้จะจัดลำดับตามที่ติ๊ก" style="background:#0F6E56;border:none;color:#fff;border-radius:6px;padding:3px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; Save</button>
             ${mem.some(a=>a.seq>0)?`<button onclick="event.stopPropagation();bkV2VanGroupClearSeq('${date}','${rid}','${z}','${g}')" title="ล้างลำดับที่ตั้งเอง → กลับไปเรียงตามเวลา" style="background:transparent;border:1px solid #d7dbe2;color:#6a6a64;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">&#8635; เรียงตามเวลา</button>`:''}
-            <button onclick="event.stopPropagation();bkV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)" style="margin-left:auto;background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิกกรุ๊ป</button>
+            <span style="margin-left:auto"></span>${(typeof bkUpgVanBtn==='function')?bkUpgVanBtn(date,rid,z,g):''}
+            <button onclick="event.stopPropagation();bkV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิกกรุ๊ป</button>
           </div></td></tr>`;
       };
       /* ══ §vanStop · แถวจุดแวะในกรุ๊ปรถ ═══════════════════════════════════════
