@@ -18176,6 +18176,7 @@ function pcPrintWin(title, fname, css, sheet, land){
   var w=window.open('','_blank','width='+_W+',height='+_H+',left=0,top=0');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
+  try{ window._pcLastPrintWin=w; }catch(_){}   /* §pcRcpt2 */
   setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
 }
 /* หัวกระดาษที่ทุกใบใช้ร่วมกัน */
@@ -80639,7 +80640,7 @@ var _pcPyImg=null;
 function pcPyEdit(pid){
   if(!pcGuard()) return;
   var D=pcPyDB(), p=(pid && D.p[pid])?D.p[pid]:{name:String(_pcPyQ||'').trim()}, a=p.addr||{}, acc=pcPyAcc();
-  _pcPyImg=p.img||null;
+  _pcPyImg=p.img||null; _pcPyUp=0;
   var f=function(id,lb,v,ph,cls){ return '<div><div class="lb">'+lb+'</div><input id="pc-py-'+id+'" class="ck-inp'+(cls?' '+cls:'')+'" type="text" value="'+pcE(v||'')+'" placeholder="'+(ph||'')+'"></div>'; };
   var g2=function(x,y){ return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">'+x+y+'</div>'; };
   pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:520px">'
@@ -80653,7 +80654,7 @@ function pcPyEdit(pid){
      +g2(f('road','ถนน',a.road),f('sub','แขวง / ตำบล',a.sub))
      +g2(f('dist','เขต / อำเภอ',a.dist),f('prov','จังหวัด',a.prov))
      +'<div class="lb">รูปบัตรประชาชน</div><div id="pc-py-imgv" class="pc-py-img"></div>'
-     +'<input type="file" accept="image/*,application/pdf" onchange="pcPyImgUp(this)" style="margin-top:6px;font-size:13px">'
+     +'<input type="file" accept="image/*,application/pdf,.pdf" onchange="pcPyImgUp(this)" style="margin-top:6px;font-size:13px">'
      +'<div class="ck-fn">&#128274; เลขบัตร / ที่อยู่ / รูปบัตร เห็นเฉพาะสิทธิ์บัญชีและแอดมิน</div>')
     :'<div class="ck-fn">&#128274; เลขบัตร / ที่อยู่ / รูปบัตร กรอกได้เฉพาะสิทธิ์บัญชี · ใบเสร็จจะเว้นช่องไว้ให้เขียนมือ</div>')
    +'</div>'
@@ -80670,9 +80671,22 @@ function pcPyImgShow(){
     :(/^image\//.test(m.mime||'')?('<img src="/api/attach/'+encodeURIComponent(m.id)+'" alt="">'):('<a href="/api/attach/'+encodeURIComponent(m.id)+'" target="_blank">'+pcE(m.name||'ไฟล์')+'</a>'))
      +' <button type="button" style="margin-top:6px;border:0;background:none;padding:0;color:#A32D2D;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer" onclick="_pcPyImg=null;pcPyImgShow()">เอาออก</button>';
 }
+var _pcPyUp=0;
+/* PDF → หน้าแรกเป็น JPG · cb(blob|null) */
+function pcPdfToJpg(src,cb){
+  if(typeof _docPdfLib!=='function'){ cb(null); return; }
+  _docPdfLib().then(function(lib){ return lib.getDocument(src).promise; })
+    .then(function(pdf){ return pdf.getPage(1); })
+    .then(function(pg){ var vp=pg.getViewport({scale:2}), c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+      return pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise.then(function(){ c.toBlob(function(b){ cb(b); },'image/jpeg',0.88); }); })
+    .catch(function(e){ try{ console.warn('[pcRcpt] pdf->jpg', e&&e.message); }catch(_){} cb(null); });
+}
 function pcPyImgUp(inp){
   var file=inp && inp.files && inp.files[0]; if(!file) return;
+  if(inp) inp.value='';
   var el=document.getElementById('pc-py-imgv'); if(el) el.innerHTML='<span class="pc2-mut">กำลังอัปโหลด…</span>';
+  _pcPyUp++;
+  var _done=function(){ _pcPyUp=Math.max(0,_pcPyUp-1); };
   var post=function(blob,mime,name){
     if(blob && blob.size>6*1024*1024){ alert('File is larger than 6MB. Please shrink it first.'); pcPyImgShow(); return; }
     var fr=new FileReader();
@@ -80680,17 +80694,24 @@ function pcPyImgUp(inp){
       var b64=String(fr.result).split(',')[1]||'';
       fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:'__pcpayee__',filename:name,mime:mime,dataB64:b64})})
         .then(function(r){ return r.json(); })
-        .then(function(j){ if(j&&j.error){ alert('Upload failed: '+j.error); pcPyImgShow(); return; } _pcPyImg={id:j.id,name:j.filename,mime:j.mime}; pcPyImgShow(); })
-        .catch(function(e){ alert('Upload failed: '+e.message); pcPyImgShow(); });
+        .then(function(j){ _done(); if(j&&j.error){ alert('Upload failed: '+j.error); pcPyImgShow(); return; } _pcPyImg={id:j.id,name:j.filename,mime:j.mime}; pcPyImgShow(); })
+        .catch(function(e){ _done(); alert('Upload failed: '+e.message); pcPyImgShow(); });
     };
     fr.readAsDataURL(blob);
   };
-  if(/^image\//.test(file.type||'') && typeof _bkV2DownscaleImage==='function')
-    _bkV2DownscaleImage(file,1600,function(bl,mi){ if(bl) post(bl,mi,'idcard.jpg'); else post(file,file.type,file.name||'idcard'); });
-  else post(file,file.type||'application/octet-stream',file.name||'idcard');
+  var isPdf=/pdf/i.test(file.type||'') || /\.pdf$/i.test(file.name||'');
+  if(isPdf){
+    file.arrayBuffer().then(function(buf){ pcPdfToJpg({data:new Uint8Array(buf)}, function(b){
+      if(b) post(b,'image/jpeg','idcard.jpg');
+      else { _done(); alert('Could not read this PDF. Please attach a photo (JPG/PNG) of the ID card instead.'); pcPyImgShow(); } }); });
+  } else if(/^image\//.test(file.type||'') && typeof _bkV2DownscaleImage==='function')
+    _bkV2DownscaleImage(file,1600,function(bl,mi){ if(bl) post(bl,mi||'image/jpeg','idcard.jpg');
+      else { _done(); alert('This image type cannot be read by the browser (e.g. HEIC). Please attach a JPG or PNG.'); pcPyImgShow(); } });
+  else { _done(); alert('Please attach a photo (JPG/PNG) or a PDF of the ID card.'); pcPyImgShow(); }
 }
 function pcPySave(pid){
   if(!pcGuard()) return;
+  if(_pcPyUp>0){ alert('The ID card image is still uploading. Please wait a moment, then press Save again.'); return; }
   var v=function(id){ var e=document.getElementById('pc-py-'+id); return e?String(e.value).replace(/\s+/g,' ').trim():null; };
   var name=v('name'); if(!name){ var ne=document.getElementById('pc-py-name'); if(ne){ ne.classList.add('bad'); ne.focus(); } return; }
   var D=pcPyDB(), acc=pcPyAcc(), id=(pid && D.p[pid])?pid:('py'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
@@ -80728,7 +80749,10 @@ function pcPrintReceipts(cid){
   if(go.length<lines.length && !confirm((lines.length-go.length)+' of '+lines.length+' lines have no payee and will be skipped.\nPrint the other '+go.length+'?')) return;
   var F=function(v,w){ v=String(v==null?'':v).trim(); return '<span class="dt'+(v?' f':'')+'"'+(w?(' style="min-width:'+w+'px"'):'')+'>'+(v?pcE(v):'&nbsp;')+'</span>'; };
   var pages=go.map(function(r){ var x=r.x, p=pcPyOf(x)||{}, a=(acc&&p.addr)||{}, d=r._ds||ds, amt=+x.amt||0;
-    var img=(acc && p.img && /^image\//.test(p.img.mime||''))?('<img class="idc" src="'+org+'/api/attach/'+encodeURIComponent(p.img.id)+'" alt="">'):'<div class="idb">แนบสำเนาบัตรประชาชน</div>';
+    var _im=acc?p.img:null, _isI=_im && /^image\//.test(_im.mime||''), _isP=_im && (/pdf/i.test(_im.mime||'') || /\.pdf$/i.test(_im.name||''));
+    var img=_isI?('<img class="idc" src="'+org+'/api/attach/'+encodeURIComponent(_im.id)+'" alt="" onerror="this.outerHTML=\'<div class=idb>เปิดรูปบัตรไม่ได้ · แนบใหม่เป็น JPG/PNG</div>\'">')
+      :_isP?('<img class="idc" data-pdf="'+org+'/api/attach/'+encodeURIComponent(_im.id)+'" alt=""><div class="idb pdfw">กำลังเปิดรูปบัตร (PDF)…</div>')
+      :('<div class="idb">'+(!acc?'แนบสำเนาบัตรประชาชน':(_im?'รูปบัตรเป็นไฟล์ที่เปิดไม่ได้ · แนบใหม่เป็นรูป':'ยังไม่ได้แนบรูปบัตรในทะเบียน · แนบสำเนาบัตรประชาชน'))+'</div>');
     return '<div class="pg"><div class="rc">'
       +'<div class="top">'+((typeof LA_LOGO_FULL!=='undefined')?('<img src="'+LA_LOGO_FULL+'" alt="">'):'')+'<div class="t">ใบเสร็จรับเงิน</div></div>'
       +'<div class="dd">วันที่ '+F(pcRcDate(d),110)+'</div>'
@@ -80756,9 +80780,20 @@ function pcPrintReceipts(cid){
     +'#sheet .rc .sg{margin-top:20px;text-align:right;line-height:2.2}'
     +'#sheet .rc .sg .ln{display:inline-block;width:220px;border-bottom:1px dotted #555;height:20px;vertical-align:bottom}'
     +'#sheet .idc{display:block;margin:18px auto 0;max-width:86mm;max-height:60mm;border:1px solid #ccc;border-radius:6px}'
+    +'#sheet img.idc[data-pdf]:not([src]){display:none}'
     +'#sheet .idb{margin:18px auto 0;width:86mm;height:54mm;border:1.5px dashed #9AA3B8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9AA3B8;font-size:13px}'
     +'@media print{#sheet .pg{box-shadow:none;margin:0;padding:0 2px;page-break-after:always;break-after:page}#sheet .pg:last-child{page-break-after:auto;break-after:auto}}';
   pcPrintWin('ใบเสร็จรับเงิน · '+String(C.name||'')+' · '+ds, ('pettycash_receipts_'+pier+'_'+ds+'_'+cid).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, pages, false);
+  /* §pcRcpt2 · ทะเบียนที่แนบเป็น PDF · วาดหน้าแรกเป็นรูปลงหน้าต่างพิมพ์ */
+  if(pages.indexOf('data-pdf=')>=0) setTimeout(function(){
+    var W=null; try{ var ws=window._pcLastPrintWin; W=ws; }catch(_){}
+    var doc=W&&W.document; if(!doc) return;
+    [].slice.call(doc.querySelectorAll('img[data-pdf]')).forEach(function(im){
+      pcPdfToJpg(im.getAttribute('data-pdf'), function(b){ var w=im.nextSibling;
+        if(b){ im.src=URL.createObjectURL(b); if(w && w.className && String(w.className).indexOf('pdfw')>=0) w.parentNode.removeChild(w); }
+        else { im.parentNode.removeChild(im); if(w) w.textContent='เปิดรูปบัตร (PDF) ไม่ได้ · แนบใหม่เป็นรูป JPG/PNG'; } });
+    });
+  },400);
 }
 function pcClmChip(k,x){
   if(k!=='out' || !x || !x.claim) return '';
