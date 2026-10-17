@@ -25473,13 +25473,17 @@ function tsCotWhySug(r){
 function _tsCotNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'':v).replace(/[^0-9.]/g,''))||0)); }
 function _tsCotInp(id,w){ var el=document.getElementById('ts-cot'+w+'-'+id); return el?_tsCotNum(el.value):0; }
 function _tsCotRefVal(id){ var el=document.getElementById('ts-cotr-'+id); return el?String(el.value||''):''; }
-function tsCotPick(bkId,date,mode,cot,why){
+function tsCotPick(bkId,date,mode,cot,why,paid){
   if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   // §tsCotSave
   var k=_tsKey(bkId,date), cur=TS_COT[k]||{}, d=0, p=0;
   cot=+cot||0;
   if(mode==='full'){ d=cot; }
   else if(mode==='payout'){ p=cot; }
   else if(mode==='part'){ d=(cur.mode==='part')?_tsCotInp(bkId,'d'):cot; p=(cur.mode==='part')?_tsCotInp(bkId,'p'):0; }
+  /* §cotPart (2026-10-17) · owner: "ให้เก็บเงิน 5100 แต่ 1 CXL ... เหลือเก็บได้แค่ 3400 ... ที่เหลือ 1700 ต้องระบุยังไง" · "บางทีก็ไม่ได้หารแบบลงตัวเป๊ะ"
+     เก็บไม่ได้ = เก็บไม่ได้บางส่วนก็ได้ · ใช้ช่อง deduct เดิม (ไม่ต้องเพิ่มช่องใน ts_cot) = ยอดที่เก็บได้/หักบิล · เก็บไม่ได้ = COT − deduct
+     กดเข้าโหมดนี้ครั้งแรกเติม deduct ให้ = เงินที่หน้าท่าเก็บมาจริง (ไม่เกิน COT) · ใบที่ไม่มีใครไปเลยไม่ได้เงิน = 0 = เก็บไม่ได้ทั้งก้อนเหมือนเดิม */
+  else if(mode==='nocol'){ d=(cur.mode==='nocol')?(+cur.deduct||0):Math.min(cot, Math.max(0, Math.round(+paid||0))); }
   /* §cotNoCol · เก็บไม่ได้ = ไม่มีเงินให้หักหรือโอน · เหลือแค่เหตุผล
      เหตุผลเก็บลงช่อง ref ที่ map ไว้แล้ว (โหมดนี้ไม่มีเลขโอนให้อ้างอิง ช่องจึงว่าง)
      เติมจากที่หน้างานกดไว้ให้เลย ถ้าคนกดยังไม่ได้พิมพ์อะไร จะได้ไม่ต้องพิมพ์ซ้ำ */
@@ -25562,7 +25566,7 @@ function tsCotCell(b, M, date, money, e, r){
   var h=MODES.map(function(mm){
     var on=(mode===mm[0]), isSug=(!mode && mm[0]===sug);
     return '<button class="ts-db'+(on?' pick':'')+(isSug?' sug':'')+(mm[0]==='nocol'?' nocol':'')+'"'
-      +' onclick="tsCotPick(\''+id+'\',\''+date+'\',\''+mm[0]+'\','+cot+',\''+_wq+'\')">'+mm[1]+'</button>';
+      +' onclick="tsCotPick(\''+id+'\',\''+date+'\',\''+mm[0]+'\','+cot+',\''+_wq+'\','+(Math.round(+((M&&M.pierPaid)||0)))+')">'+mm[1]+'</button>';
   }).join('');
   if(mode==='part'){
     h+='<div class="ts-cotp"><span>หัก</span>'
@@ -25572,9 +25576,14 @@ function tsCotCell(b, M, date, money, e, r){
   }
   /* §cotNoCol · เก็บไม่ได้ · ไม่มีเงินให้อ้างอิงเลขโอน มีแต่เหตุผลที่ต้องบันทึก */
   if(mode==='nocol'){
+    var _ncd=Math.min(cot,ded), _nca=Math.max(0,cot-_ncd);   /* §cotPart */
+    h+='<div class="ts-cotp"><span>เก็บได้/หักบิล</span>'
+      +'<input id="ts-cotd-'+id+'" class="ts-cotamt" value="'+_ncd+'" title="ยอดที่เก็บได้จริง (หักบิล agent) · ที่เหลือของ COT = เก็บไม่ได้" onchange="tsCotAmt(\''+id+'\',\''+date+'\')">'
+      +'<span>เก็บไม่ได้</span><b style="color:var(--rs700);font-family:\'DM Mono\',monospace">'+money(_nca)+'</b></div>';
     h+='<input id="ts-cotr-'+id+'" class="ts-note" type="text" value="'+e(c.ref||'')+'"'
       +' placeholder="เก็บไม่ได้เพราะอะไร" onchange="tsCotRefSave(\''+id+'\',\''+date+'\')">';
-    h+='<div class="ts-cotsum"><b style="color:var(--rs700)">&#10007; เก็บไม่ได้ '+money(cot)+'</b>'
+    h+='<div class="ts-cotsum">'+(_ncd>0?('<b style="color:var(--bl700)">หักบิล '+money(_ncd)+'</b> &middot; '):'')
+      +'<b style="color:var(--rs700)">&#10007; เก็บไม่ได้ '+money(_nca)+'</b>'
       +(c.ref
          ? (' <span style="color:var(--zn700)">&middot; '+e(c.ref)+'</span>')
          : ' <span style="color:var(--am700);font-weight:700">&middot; ยังไม่ระบุเหตุผล</span>')
@@ -25612,6 +25621,15 @@ function tsPick(bkId,date,kind,amt){
   tsAfter();
 }
 function tsClear(bkId,date){ tsSet(bkId,date,null); tsAfter(); }
+/* §tsLostPart · เก็บเต็มของคนที่ไม่ได้ไป (บางคน) · ราคาต่อคนไม่ได้หารลงตัวเสมอ จึงให้ยืนยัน/แก้ยอดเอง */
+function tsFullLost(bkId,date,est){
+  const cur=tsGet(bkId,date);
+  const v=prompt('Full charge for the guests who did not travel (THB). Suggested from booking price x guests missing / guests booked; edit if the real price differs.',
+                 String((cur&&cur.decision==='full')?cur.amount:(+est||0)));
+  if(v==null) return;
+  const n=Math.max(0,Math.round(parseFloat(String(v).replace(/[^0-9.]/g,''))||0));
+  tsPick(bkId,date,'full',n);
+}
 function tsCustom(bkId,date){
   const cur=tsGet(bkId,date);
   const v=prompt('ยอดที่จะเก็บ (บาท)', cur?String(cur.amount):'0');
@@ -27069,7 +27087,8 @@ function tsCotNoCol(b, date, m){
   var v=+((m&&m.M&&m.M.cot)||0); if(!(v>0)) return null;
   var c=(typeof tsCotGet==='function')?tsCotGet(b.id,date):null;
   if(!c || c.mode!=='nocol') return null;
-  return { amt:v, why:String(c.ref||'').trim(), dueLeft:Math.max(0, (+m.due||0)-v) };
+  var a=Math.max(0, v-Math.min(v,+c.deduct||0)); if(!(a>0)) return null;   /* §cotPart · เก็บไม่ได้บางส่วน = COT − ยอดที่เก็บได้ */
+  return { amt:a, why:String(c.ref||'').trim(), dueLeft:Math.max(0, (+m.due||0)-a) };
 }
 /* ══ §tsPaySlip · ชิปวิธีรับเงินในตารางหลัก กดเปิดดูสลิปได้ ══════════════════
    ชิปตัวนี้เป็น "ยอดรวมต่อวิธีรับเงิน" ไม่ใช่เงินก้อนเดียว · ยอดหนึ่งชิปมาจาก
@@ -27177,7 +27196,7 @@ function tsPayCell(r, date){
       var _dd=+_cd.deduct||0, _pp=+_cd.payout||0, _kk=(+M.cot||0)-_dd-_pp, _PP=[];
       if(_dd>0) _PP.push('หักบิล '+m(_dd));
       if(_pp>0) _PP.push('โอนออก '+m(_pp));
-      if(_kk>0) _PP.push('บริษัทรับไว้ '+m(_kk));
+      if(_kk>0) _PP.push((_cd.mode==='nocol'?'เก็บไม่ได้ ':'บริษัทรับไว้ ')+m(_kk));   /* §cotPart */
       _lb=_PP.join(' &middot; ')||'ไม่หักบิล';
       _cls=(_pp>0)?'p':(_dd>0?'b':'e');
       _tip='ตัดสินไว้ในส่วนเงินหน้างาน'+(_cd.by?(' โดย '+_cd.by):'')+(_cd.ref?(' · '+_cd.ref):'');
@@ -30005,7 +30024,7 @@ function renderTravelSum(){
     /* §cotNoCol · ใบที่ไม่มีใครเดินทางเคยถูกข้ามไปเลย · ยอดจึงหายไปจากสรุป
        ทั้งที่ในระบบยังค้างอยู่ · ตอนนี้เข้ายอดรวม แล้วแยกไปกอง "เก็บไม่ได้" */
     if(!c){ nCotLeft++; return; }
-    if(c.mode==='nocol'){ sumCotNo+=v; nCotNo++; return; }
+    if(c.mode==='nocol'){ var _nd=Math.min(v,+c.deduct||0); sumCotNo+=v-_nd; sumDeduct+=_nd; nCotNo++; return; }   /* §cotPart */
     var d=+c.deduct||0, p=+c.payout||0;
     if(d+p>v){ nCotLeft++; return; }     // หัก+โอนออก เกินยอด · ยังถือว่าตัวเลขไม่นิ่ง
     sumDeduct+=d; sumPayout+=p;
@@ -30058,6 +30077,16 @@ function renderTravelSum(){
         + T.label+' '+x.pax+(_w?(' \u00b7 '+e(_w)):'')+'</span>';
     }).join('') || '<span class="ts-chip r">หาย '+r.noShow+' · ไม่ระบุเหตุ</span>';
     var why=r.events.map(function(x){ return ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''); }).filter(Boolean).join(' · ');
+    /* §tsLostPart (2026-10-17) · owner: "กดไม่ชาร์จ นี่หมายถึงไม่ชาร์จกี่คน" · "บางทีก็ไม่ได้หารแบบลงตัวเป๊ะ"
+       ราคาเต็มเป็นของทั้งใบ · ใบที่ไม่ได้ไปแค่บางคน ปุ่มต้องพูดถึงเฉพาะคนที่ไม่ได้ไป
+       เก็บเต็ม = ใส่ยอดของคนที่ไม่ได้ไปเอง (เติมยอดประมาณ ราคาใบ × คนไม่ไป ÷ คนจอง ให้ก่อน แก้ได้) · 50% = ครึ่งของยอดประมาณ
+       ไม่ชาร์จ = ไม่เก็บค่าปรับคนที่ไม่ได้ไป (บอกจำนวนบนปุ่ม) · ใบที่ไม่ได้ไปทั้งใบ = เหมือนเดิม */
+    var _Lp=(typeof ckLostByType==='function')?(ckLostByType(b,date)||{}):{};
+    var _lostN=Math.max(+_Lp.total||0, +r.noShow||0), _bkN=+r.booked||0;
+    var _part=(_lostN>0 && _bkN>0 && _lostN<_bkN);
+    var _lostW=_part?((typeof tsPaxWho==='function'?tsPaxWho(_Lp):'')||(_lostN+' คน')):'';
+    var _est=_part?Math.round(r.amount*_lostN/_bkN):r.amount;
+    if(_part) half=Math.round(_est/2);
     var btn=function(k,lbl,amt,fn,cls){ var on=dec&&dec.decision===k;
       return '<button class="ts-db '+(cls||'')+(on?' on':'')+'" onclick="'+(fn||("tsPick('"+id+"','"+date+"','"+k+"',"+amt+")"))+'">'+lbl+'</button>'; };
     abody+='<tr class="'+(dec?'':'need')+'">'
@@ -30090,9 +30119,13 @@ function renderTravelSum(){
           })()
       +'</td>'
       +'<td class="ts-noprint"><div style="display:flex;flex-wrap:wrap;max-width:310px">'
-        +btn('full','เก็บเต็ม '+money(r.amount),r.amount)
-        +btn('partial','50%',half,null,'warn')
-        +btn('none','ไม่ชาร์จ',0,null,'mut')
+        +(_part
+          ? (btn('full','เก็บเต็ม · '+_lostW,_est,"tsFullLost('"+id+"','"+date+"',"+_est+")")
+             +btn('partial','50% · '+money(half),half,null,'warn')
+             +btn('none','ไม่ชาร์จ · '+_lostW,0,null,'mut'))
+          : (btn('full','เก็บเต็ม '+money(r.amount),r.amount)
+             +btn('partial','50%',half,null,'warn')
+             +btn('none','ไม่ชาร์จ',0,null,'mut')))
         +btn('partial','ระบุเอง',0,"tsCustom('"+id+"','"+date+"')",'warn')
         +btn('postpone','เลื่อนวัน',0,"tsPostpone('"+id+"','"+date+"')",'pp')
         +(dec?('<button class="ts-db del" onclick="tsClear(\''+id+'\',\''+date+'\')">ล้าง</button>'):'')
