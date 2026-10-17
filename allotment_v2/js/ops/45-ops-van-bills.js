@@ -269,6 +269,7 @@
           : (v.sent ? '<button class="vb-btn" onclick="laOpsVanBills.unsend()">ดึงกลับเป็นร่าง</button><button class="vb-btn ok" onclick="laOpsVanBills.pay()">บันทึกว่าจ่ายแล้ว</button>'
             : '<button class="vb-btn" onclick="laOpsVanBills.send()">ส่งให้เจ้าของรถ</button>')
             + '<button class="vb-btn" onclick="vbEdit()">&#9998; แก้ไข</button>')
+        + '<button class="vb-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
         + '<button class="vb-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล</button>';
     }
     var sub = ro ? '<b style="color:#0F6E56">บิลนี้จ่ายแล้ว · แก้ไม่ได้จนกว่าจะยกเลิกการจ่าย</b>'
