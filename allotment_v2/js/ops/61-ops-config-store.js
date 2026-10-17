@@ -100,6 +100,7 @@
     pmap_agpanel: { title: 'Pickup map panel', wait: 0 },
     pmap_zonebg: { title: 'Pickup map zones', wait: 0 },
     guides: { title: 'Guide register', wait: DEBOUNCE_MS },
+    cal_route_sets: { title: 'Calendar route sets', wait: DEBOUNCE_MS },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -175,6 +176,22 @@
     return h.write(val);
   });
 
+  /* ── cal_route_sets · the calendar's route sets (legacy CAL_ROUTE_SETS, 04-data-core.js) ──
+     Legacy kept them in the browser blob (_calSetsPersist). Now the config store holds them: the saved
+     list fills CAL_ROUTE_SETS in place once the settings have loaded, and every save of the list goes
+     through cfgWrite (PUT /v1/config/cal_route_sets). calSetApply's hidden-route choice stays local. */
+  function fillCalRouteSets(){
+    var e = ents.cal_route_sets;
+    if(!e || typeof CAL_ROUTE_SETS === 'undefined' || !Array.isArray(CAL_ROUTE_SETS)) return;
+    var next = Array.isArray(e.value) ? O.clone(e.value) : [];
+    CAL_ROUTE_SETS.length = 0;
+    Array.prototype.push.apply(CAL_ROUTE_SETS, next);
+  }
+  wrap('_calSetsPersist', function(orig){
+    if(typeof CAL_ROUTE_SETS === 'undefined' || !Array.isArray(CAL_ROUTE_SETS)) return null;
+    return cfgWrite('cal_route_sets', CAL_ROUTE_SETS);
+  });
+
   /* start the loads at once, so most first reads find the answer already there */
   if(active()){
     var seen = [];
@@ -182,6 +199,7 @@
       var c = H[k].cell; if(seen.indexOf(c) >= 0) return; seen.push(c);
       c.load().catch(function(e){ O.fail(c.title + ' did not load', e); });
     });
+    cfgCell.load().then(fillCalRouteSets).catch(noop);
   }
 
   window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw, flush: flush, ents: ents };
