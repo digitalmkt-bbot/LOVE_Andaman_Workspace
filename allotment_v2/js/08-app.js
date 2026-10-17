@@ -18057,6 +18057,8 @@ function pcCoEdit(next){
    +'    <input id="pc-co-inp" class="ck-inp" type="text" value="'+pcE(pcCoName())+'" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด">'
    +'    <div class="ck-fn">ชื่อนี้จะไปอยู่หัวฟอร์มตรงช่อง บจ./หจก. และในประโยครับรองท้ายฟอร์ม<br>'
    +'      ช่องผู้เบิกจ่าย ตำแหน่ง และลายเซ็น เว้นว่างไว้ให้เขียนมือตามเดิม</div>'
+   +'    <div class="lb" style="margin-top:10px">ที่อยู่บริษัท (ช่อง "ได้รับเงินจาก" ในใบเสร็จรับเงิน)</div>'   /* §pcRcpt */
+   +'    <input id="pc-co-addr" class="ck-inp" type="text" value="'+pcE((typeof pcCoAddr==='function'&&pcCoAddr())||'')+'" placeholder="'+pcE(typeof PC_RC_ADDR_DEF!=='undefined'?PC_RC_ADDR_DEF:'')+'">'
    +'  </div>'
    +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
    +'    <button class="k" onclick="pcCoSave()">บันทึก</button></div>'
@@ -18065,6 +18067,8 @@ function pcCoEdit(next){
 function pcCoSave(){
   var el=document.getElementById('pc-co-inp');
   pcCoNameSet(el?el.value:'');
+  var _ea=document.getElementById('pc-co-addr');   /* §pcRcpt */
+  if(_ea){ try{ var _b=laBlob(), _v=String(_ea.value||'').replace(/\s+/g,' ').trim(); if(_v) _b.po_cash_co_addr=_v; else delete _b.po_cash_co_addr; laBlobSave(); }catch(_){} }
   if(typeof ckReasonClose==='function') ckReasonClose();
   var n=_pcCoNext; _pcCoNext=null;
   if(n && pcCoName()) setTimeout(n,0); else pcKeep();
@@ -79955,6 +79959,20 @@ function pc2CSS(S){
   /* §pcClm · ชิปในสมุด · แถวที่ตั้งเบิกแล้ว · การ์ดรายการตั้งเบิก */
   S+' .pc2-lr .tx em.pc-cl{flex:0 1 auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;margin-left:8px;font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap;background:#E0F2F7;color:#0E5E80;border:1px solid #9CCFE0;cursor:pointer}',
   S+' .pc2-lr.rw.clm .m.out{color:#0E5E80}',
+  /* §pcRcpt */
+  S+' em.pc-py{flex:0 1 auto;max-width:40%;overflow:hidden;text-overflow:ellipsis;margin-left:6px;font-style:normal;font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;white-space:nowrap;background:#EEF4FD;color:#16265C;border:1px solid #C6D4EC;cursor:pointer}',
+  S+' em.pc-py.no{background:#fff;color:#A3541B;border:1px dashed #E2B48C}',
+  S+' .pc2-cl .l .py em.pc-py{max-width:none;margin:0}',
+  S+' .pc2-cl .nm small b.rcw{color:#A3541B;font-weight:700}',
+  S+' .pc2-cl .ac .ol.rc{font-size:12.5px;font-weight:700;white-space:nowrap}',
+  '.pc-py-ls{margin-top:8px;max-height:46vh;overflow:auto;border:1px solid #E3E7EF;border-radius:10px}',
+  '.pc-py-ls .o{display:flex;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid #EEF1F6}',
+  '.pc-py-ls .o:first-child{border-top:none} .pc-py-ls .o.on{background:#EEF4FD}',
+  '.pc-py-ls .o .n{flex:1;min-width:0;cursor:pointer;font-size:14px} .pc-py-ls .o .n small{color:#6B7693}',
+  '.pc-py-ls .o .f{font-size:11.5px;color:#0B6B47;white-space:nowrap} .pc-py-ls .o .f.z{color:#9AA3B8}',
+  '.pc-py-ls .o .e{border:none;background:#EEF2F8;border-radius:7px;width:28px;height:28px;cursor:pointer}',
+  '.pc-py-img img{max-width:220px;max-height:140px;border-radius:8px;border:1px solid #DCE3EC;display:block}',
+  '.ck-inp.bad{border-color:#A32D2D;background:#FDF0EF}',
   S+' .pc-selbar input.pc-clm-in{flex:1 1 220px;min-width:160px;height:32px;border:1.5px solid #0E7490;border-radius:8px;padding:0 10px;font:inherit;font-size:13.5px}',
   S+' .pc-selbar input.pc-clm-in.bad{border-color:#A32D2D;background:#FDF0EF}',
   S+' .pc2-clms{border-top:4px solid #0E7490}',
@@ -79969,7 +79987,7 @@ function pc2CSS(S){
   S+' .pc2-cl .am{font-family:"DM Mono",monospace;font-weight:500;min-width:96px;text-align:right}',
   S+' .pc2-cl .ac{display:flex;gap:4px;flex:none} '+S+' .pc2-cl .ac .ol{height:30px;padding:0 9px}',
   S+' .pc2-cl .ln{padding:0 14px 10px 50px}',
-  S+' .pc2-cl .l{display:grid;grid-template-columns:62px minmax(0,1fr) 90px 28px;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #E3E7EF;font-size:13px}',
+  S+' .pc2-cl .l{display:grid;grid-template-columns:62px minmax(0,1fr) auto 90px 28px;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #E3E7EF;font-size:13px}',
   S+' .pc2-cl .l .d{color:'+M+';font-family:"DM Mono",monospace;font-size:12px} '+S+' .pc2-cl .l .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   S+' .pc2-cl .l .m{text-align:right;font-family:"DM Mono",monospace}',
   '@media (max-width:760px){'+S+' .pc2-cl .r{flex-wrap:wrap} '+S+' .pc2-cl .st{order:5;flex-basis:100%;padding-left:36px} '+S+' .pc2-cl .ln{padding-left:14px}}',
@@ -80558,6 +80576,190 @@ function pcClmRows(pier,id){
   Object.keys(P).sort().forEach(function(ds){ ((P[ds]||{}).out||[]).forEach(function(x){ if(x && x.claim===id) out.push({ds:ds, x:x}); }); });
   return out;
 }
+/* ══ §pcRcpt (2026-10-17) · ใบเสร็จรับเงินต่อรายการ (แนบท้ายใบตั้งเบิก) ══════════════════════════════
+   owner ส่ง Petty_Cash 2-5-26 · "ใบปะหน้าตั้งเบิกเรามีแล้ว · อยากได้หน้านี้ที่แมทกับรายการ ... รายละเอียดข้างในต้องตรงกัน"
+   1 รายการจ่ายในรายการตั้งเบิก = 1 หน้า A4 · วันที่ (พ.ศ.) = วันของรายการ · ชำระค่า = ข้อความรายการ · จำนวนเงิน + ตัวอักษร = ยอดรายการ
+   ชื่อ / เลขบัตร / ที่อยู่ / รูปบัตร มาจาก "ทะเบียนคนรับเงิน" (กรอกครั้งเดียว ใช้ซ้ำ) · รายการไหนจ่ายให้ใคร เลือกที่ชิป "จ่ายให้"
+   เก็บใน blob key po_cash_payees เป็น "สตริง JSON" (กฎ §pcFix · key ที่ไม่มีตารางต้องเป็นสตริง) · ไม่เพิ่มคอลัมน์ DB
+     {p:{id:{id,name,idNo,addr:{no,moo,road,sub,dist,prov},veh,img:{id,name,mime},by,at}}, of:{rowId:payeeId}}
+   รูปบัตรอัปโหลดผ่าน /api/attach เดิม (booking_id = '__pcpayee__')
+   เลขบัตร / ที่อยู่ / รูปบัตร แสดงและแก้ได้เฉพาะสิทธิ์บัญชี (laCanEditArea('accounting') · admin ผ่านเสมอ) · คนอื่นเห็นแค่ชื่อ
+   ⚠ alert/confirm เป็นภาษาอังกฤษตามกฎของไฟล์ ══ */
+var PC_RC_CO_DEF='บริษัท เลิฟ ไอแลนด์ จำกัด', PC_RC_ADDR_DEF='9/239-240 ถ.ศักดิเดช ต.ตลาดเหนือ อ.เมือง จ.ภูเก็ต 83000';
+function pcCoAddr(){ try{ var b=laBlob(); return (typeof b.po_cash_co_addr==='string')?b.po_cash_co_addr:''; }catch(_){ return ''; } }
+function pcPyAcc(){ return (typeof window.laCanEditArea!=='function') || !!window.laCanEditArea('accounting'); }
+function pcPyDB(){
+  var o=null; try{ var b=laBlob(), raw=(typeof b.po_cash_payees==='string')?b.po_cash_payees:''; if(raw) o=JSON.parse(raw); }catch(_){ o=null; }
+  if(!o || typeof o!=='object') o={}; if(!o.p || typeof o.p!=='object') o.p={}; if(!o.of || typeof o.of!=='object') o.of={};
+  return o;
+}
+function pcPyPut(o){ try{ var b=laBlob(); b.po_cash_payees=JSON.stringify(o); laBlobSave(); }catch(e){ alert('Save failed: '+(e&&e.message)); } }
+function pcPyOf(x){ if(!x || !x.id) return null; var D=pcPyDB(), id=D.of[String(x.id)]; return (id && D.p[id])?D.p[id]:null; }
+function pcPyChip(k,x){
+  if(k!=='out' || !x || !pcClmOn(x)) return '';
+  var p=pcPyOf(x), id=pcE(String(x.id));
+  return p?('<em class="pc-py" title="จ่ายให้ · กดเพื่อเปลี่ยน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">&#128100; '+pcE(p.name||'')+'</em>')
+          :('<em class="pc-py no" title="เลือกคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงิน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">+ จ่ายให้</em>');
+}
+var _pcPyRow=null, _pcPyQ='';
+function pcPyHost(){ var h=document.getElementById('ck-reason-host'); if(!h){ h=document.createElement('div'); h.id='ck-reason-host'; document.body.appendChild(h); } return h; }
+function pcPyPick(rowId){
+  if(!pcGuard()) return;
+  _pcPyRow=String(rowId); _pcPyQ='';
+  pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:480px">'
+   +'<div class="ck-dh"><div><div class="t1">จ่ายให้ใคร</div><div class="t2">เลือกจากทะเบียนคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงินของรายการนี้</div></div>'
+   +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'<div class="ck-db"><input id="pc-py-q" class="ck-inp" type="text" placeholder="ค้นชื่อ / ทะเบียนรถ" oninput="_pcPyQ=this.value;pcPyList()" autocomplete="off">'
+   +'<div id="pc-py-ls" class="pc-py-ls"></div></div>'
+   +'<div class="ck-df"><button class="c" onclick="pcPySet(\'\')">ไม่ระบุ</button><button class="k" onclick="pcPyEdit(\'\')">+ เพิ่มคนรับเงินใหม่</button></div>'
+   +'</div></div>';
+  pcPyList();
+  setTimeout(function(){ var i=document.getElementById('pc-py-q'); if(i) i.focus(); },0);
+}
+function pcPyList(){
+  var el=document.getElementById('pc-py-ls'); if(!el) return;
+  var D=pcPyDB(), cur=D.of[_pcPyRow]||'', q=String(_pcPyQ||'').trim().toLowerCase();
+  var L=Object.keys(D.p).map(function(k){ return D.p[k]; }).filter(function(p){ return p && p.id; })
+    .filter(function(p){ return !q || (String(p.name||'')+' '+String(p.veh||'')).toLowerCase().indexOf(q)>=0; })
+    .sort(function(a,b){ return (a.id===cur?-1:0)-(b.id===cur?-1:0) || String(a.name||'').localeCompare(String(b.name||''),'th'); });
+  var acc=pcPyAcc();
+  el.innerHTML=L.length?L.map(function(p){ var id=pcE(p.id);
+      return '<div class="o'+(p.id===cur?' on':'')+'"><span class="n" onclick="pcPySet(\''+id+'\')"><b>'+pcE(p.name||'—')+'</b>'
+        +(p.veh?(' <small>· '+pcE(p.veh)+'</small>'):'')+'</span>'
+        +(acc?('<small class="f'+(p.idNo?'':' z')+'">'+(p.idNo?'เลขบัตร ✓':'ไม่มีเลขบัตร')+(p.img?' · รูปบัตร ✓':'')+'</small>'):'')
+        +'<button type="button" class="e" title="แก้ข้อมูล" onclick="pcPyEdit(\''+id+'\')">&#9998;</button></div>'; }).join('')
+    :'<div class="pc2-mut" style="padding:10px 2px">'+(q?'ไม่พบชื่อนี้ · กด "+ เพิ่มคนรับเงินใหม่"':'ยังไม่มีในทะเบียน · กด "+ เพิ่มคนรับเงินใหม่"')+'</div>';
+}
+function pcPySet(pid){
+  if(!pcGuard() || !_pcPyRow) return;
+  var D=pcPyDB(); if(pid && D.p[pid]) D.of[_pcPyRow]=pid; else delete D.of[_pcPyRow];
+  pcPyPut(D); ckReasonClose(); pcKeep();
+}
+var _pcPyImg=null;
+function pcPyEdit(pid){
+  if(!pcGuard()) return;
+  var D=pcPyDB(), p=(pid && D.p[pid])?D.p[pid]:{name:String(_pcPyQ||'').trim()}, a=p.addr||{}, acc=pcPyAcc();
+  _pcPyImg=p.img||null;
+  var f=function(id,lb,v,ph,cls){ return '<div><div class="lb">'+lb+'</div><input id="pc-py-'+id+'" class="ck-inp'+(cls?' '+cls:'')+'" type="text" value="'+pcE(v||'')+'" placeholder="'+(ph||'')+'"></div>'; };
+  var g2=function(x,y){ return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">'+x+y+'</div>'; };
+  pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:520px">'
+   +'<div class="ck-dh"><div><div class="t1">'+(pid?'แก้ข้อมูลคนรับเงิน':'เพิ่มคนรับเงิน')+'</div><div class="t2">กรอกครั้งเดียว ใช้ซ้ำทุกใบเสร็จ</div></div>'
+   +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'<div class="ck-db" style="max-height:64vh;overflow:auto">'
+   +f('name','ชื่อ-สกุล (ตามบัตร)',p.name,'เช่น นายสมชาย ใจดี')
+   +f('veh','ผูกกับรถ / หมายเหตุ',p.veh,'เช่น ลาภู · รถร่วม')
+   +(acc?(f('idno','เลขบัตรประชาชน',p.idNo,'13 หลัก')
+     +g2(f('no','บ้านเลขที่',a.no),f('moo','หมู่ที่',a.moo))
+     +g2(f('road','ถนน',a.road),f('sub','แขวง / ตำบล',a.sub))
+     +g2(f('dist','เขต / อำเภอ',a.dist),f('prov','จังหวัด',a.prov))
+     +'<div class="lb">รูปบัตรประชาชน</div><div id="pc-py-imgv" class="pc-py-img"></div>'
+     +'<input type="file" accept="image/*,application/pdf" onchange="pcPyImgUp(this)" style="margin-top:6px;font-size:13px">'
+     +'<div class="ck-fn">&#128274; เลขบัตร / ที่อยู่ / รูปบัตร เห็นเฉพาะสิทธิ์บัญชีและแอดมิน</div>')
+    :'<div class="ck-fn">&#128274; เลขบัตร / ที่อยู่ / รูปบัตร กรอกได้เฉพาะสิทธิ์บัญชี · ใบเสร็จจะเว้นช่องไว้ให้เขียนมือ</div>')
+   +'</div>'
+   +'<div class="ck-df">'+(pid?'<button class="c" style="margin-right:auto;color:#A32D2D" onclick="pcPyDel(\''+pcE(pid)+'\')">ลบออกจากทะเบียน</button>':'')
+   +'<button class="c" onclick="'+(_pcPyRow?'pcPyPick(_pcPyRow)':'ckReasonClose()')+'">ย้อนกลับ</button>'
+   +'<button class="k" onclick="pcPySave(\''+pcE(pid||'')+'\')">บันทึก'+(_pcPyRow?' และเลือก':'')+'</button></div>'
+   +'</div></div>';
+  pcPyImgShow();
+}
+function pcPyImgShow(){
+  var el=document.getElementById('pc-py-imgv'); if(!el) return;
+  var m=_pcPyImg;
+  el.innerHTML=!m?'<span class="pc2-mut">ยังไม่ได้แนบ</span>'
+    :(/^image\//.test(m.mime||'')?('<img src="/api/attach/'+encodeURIComponent(m.id)+'" alt="">'):('<a href="/api/attach/'+encodeURIComponent(m.id)+'" target="_blank">'+pcE(m.name||'ไฟล์')+'</a>'))
+     +' <button type="button" style="margin-top:6px;border:0;background:none;padding:0;color:#A32D2D;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer" onclick="_pcPyImg=null;pcPyImgShow()">เอาออก</button>';
+}
+function pcPyImgUp(inp){
+  var file=inp && inp.files && inp.files[0]; if(!file) return;
+  var el=document.getElementById('pc-py-imgv'); if(el) el.innerHTML='<span class="pc2-mut">กำลังอัปโหลด…</span>';
+  var post=function(blob,mime,name){
+    if(blob && blob.size>6*1024*1024){ alert('File is larger than 6MB. Please shrink it first.'); pcPyImgShow(); return; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var b64=String(fr.result).split(',')[1]||'';
+      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:'__pcpayee__',filename:name,mime:mime,dataB64:b64})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if(j&&j.error){ alert('Upload failed: '+j.error); pcPyImgShow(); return; } _pcPyImg={id:j.id,name:j.filename,mime:j.mime}; pcPyImgShow(); })
+        .catch(function(e){ alert('Upload failed: '+e.message); pcPyImgShow(); });
+    };
+    fr.readAsDataURL(blob);
+  };
+  if(/^image\//.test(file.type||'') && typeof _bkV2DownscaleImage==='function')
+    _bkV2DownscaleImage(file,1600,function(bl,mi){ if(bl) post(bl,mi,'idcard.jpg'); else post(file,file.type,file.name||'idcard'); });
+  else post(file,file.type||'application/octet-stream',file.name||'idcard');
+}
+function pcPySave(pid){
+  if(!pcGuard()) return;
+  var v=function(id){ var e=document.getElementById('pc-py-'+id); return e?String(e.value).replace(/\s+/g,' ').trim():null; };
+  var name=v('name'); if(!name){ var ne=document.getElementById('pc-py-name'); if(ne){ ne.classList.add('bad'); ne.focus(); } return; }
+  var D=pcPyDB(), acc=pcPyAcc(), id=(pid && D.p[pid])?pid:('py'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+  var p=D.p[id]||{id:id};
+  p.name=name; p.veh=v('veh')||'';
+  if(acc){ p.idNo=v('idno')||''; p.addr={no:v('no')||'',moo:v('moo')||'',road:v('road')||'',sub:v('sub')||'',dist:v('dist')||'',prov:v('prov')||''}; p.img=_pcPyImg||null; }
+  p.by=pcWho(); p.at=new Date().toISOString();
+  D.p[id]=p; if(_pcPyRow) D.of[_pcPyRow]=id;
+  pcPyPut(D); ckReasonClose(); pcKeep();
+}
+function pcPyDel(pid){
+  if(!pcGuard()) return;
+  var D=pcPyDB(); if(!D.p[pid]) return;
+  var n=Object.keys(D.of).filter(function(r){ return D.of[r]===pid; }).length;
+  if(!confirm('Remove this person from the payee list?'+(n?('\n'+n+' ledger line(s) will lose their payee.'):''))) return;
+  delete D.p[pid]; Object.keys(D.of).forEach(function(r){ if(D.of[r]===pid) delete D.of[r]; });
+  pcPyPut(D); ckReasonClose(); pcKeep();
+}
+/* นับใบเสร็จของรายการตั้งเบิก · n = มีคนรับเงินแล้ว / all = ทุกรายการ */
+function pcRcptCount(pier,cid){ var R=pcClmRows(pier,cid), n=0; R.forEach(function(o){ if(pcPyOf(o.x)) n++; }); return {n:n, all:R.length}; }
+function pcRcDate(ds){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds||'')); return m?((+m[3])+'/'+(+m[2])+'/'+(+m[1]+543)):String(ds||''); }
+function pcRcMoney(n){ return (Math.round((+n||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function pcPrintReceipts(cid){
+  var C=pcClmGet(cid); if(!C){ alert('This claim no longer exists.'); return; }
+  var pier=C.pier||_pcPier, ds=String(C.date||_pcDate);
+  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
+  var mine=pcClmRows(pier,cid); if(!mine.length){ alert('This claim has no lines.'); return; }
+  var lines=pcLedgerSort(mine.map(function(o){ return {t:rk(o.x.at),k:'out',x:o.x,_ds:o.ds}; }),pier,ds);
+  var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
+  /* ชื่อในตั้งค่าเป็นชื่อสั้นสำหรับช่อง บจ./หจก. ของใบรับรอง · ใบเสร็จต้องเป็นชื่อเต็ม · ยังไม่มีคำนำหน้า/ท้าย = เติม บริษัท ... จำกัด */
+  var co0=String(pcCoName()||'').trim(), co=!co0?PC_RC_CO_DEF:(/บริษัท|ห้าง|จำกัด|บจ|หจก/.test(co0)?co0:('บริษัท '+co0+' จำกัด'));
+  var acc=pcPyAcc(), ad=pcCoAddr()||PC_RC_ADDR_DEF, org=location.origin||'';
+  var go=lines.filter(function(r){ return pcPyOf(r.x); });
+  if(!go.length){ alert('No line in this claim has a payee yet.\nPick "+ จ่ายให้" on each line first.'); return; }
+  if(go.length<lines.length && !confirm((lines.length-go.length)+' of '+lines.length+' lines have no payee and will be skipped.\nPrint the other '+go.length+'?')) return;
+  var F=function(v,w){ v=String(v==null?'':v).trim(); return '<span class="dt'+(v?' f':'')+'"'+(w?(' style="min-width:'+w+'px"'):'')+'>'+(v?pcE(v):'&nbsp;')+'</span>'; };
+  var pages=go.map(function(r){ var x=r.x, p=pcPyOf(x)||{}, a=(acc&&p.addr)||{}, d=r._ds||ds, amt=+x.amt||0;
+    var img=(acc && p.img && /^image\//.test(p.img.mime||''))?('<img class="idc" src="'+org+'/api/attach/'+encodeURIComponent(p.img.id)+'" alt="">'):'<div class="idb">แนบสำเนาบัตรประชาชน</div>';
+    return '<div class="pg"><div class="rc">'
+      +'<div class="top">'+((typeof LA_LOGO_FULL!=='undefined')?('<img src="'+LA_LOGO_FULL+'" alt="">'):'')+'<div class="t">ใบเสร็จรับเงิน</div></div>'
+      +'<div class="dd">วันที่ '+F(pcRcDate(d),110)+'</div>'
+      +'<div class="row"><div>ข้าพเจ้า '+F(p.name,230)+'</div><div>บัตรประชาชนเลขที่ '+F(acc?p.idNo:'',170)+'</div></div>'
+      +'<div class="row"><div>อยู่บ้านเลขที่ '+F(a.no,120)+'</div><div>หมู่ที่ '+F(a.moo,50)+' ถนน '+F(a.road,140)+'</div></div>'
+      +'<div class="row"><div>แขวง / ตำบล '+F(a.sub,170)+'</div><div>เขต / อำเภอ '+F(a.dist,170)+'</div></div>'
+      +'<div>จังหวัด '+F(a.prov,170)+'</div>'
+      +'<div class="gr"><span>ได้รับเงินจาก</span><span class="f">'+pcE(co)+'<br>'+pcE(ad)+'</span></div>'
+      +'<div class="gr"><span>ชำระค่า</span><span>'+F(x.txt||CAT[x.src]||'—')+'</span>'
+      +'<span>เป็นจำนวนเงิน</span><span>'+F(pcRcMoney(amt),110)+' บาท &nbsp;('+F(pcBahtText(amt))+')</span></div>'
+      +'<div style="margin-top:6px">ไว้เรียบร้อยแล้ว</div>'
+      +'<div class="sg">ลงชื่อ <span class="ln"></span> ผู้รับเงิน<br>( '+F(p.name,200)+' )</div>'
+      +'</div>'+img+'</div>'; }).join('');
+  var css='#sheet{padding:0 !important;background:transparent !important;box-shadow:none !important}'
+    +'#sheet .pg{background:#fff;padding:12mm 12mm 14mm;box-shadow:0 4px 18px rgba(0,0,0,.14);margin-bottom:14px;font-family:Sarabun,sans-serif;color:#111}'
+    +'#sheet .rc{border:1.5px solid #111;padding:16px 22px 18px;font-size:14px;line-height:2}'
+    +'#sheet .rc .top{display:flex;align-items:flex-start}#sheet .rc .top img{height:40px}'
+    +'#sheet .rc .top .t{flex:1;text-align:center;font-size:20px;font-weight:700;margin-left:-80px;padding-top:8px}'
+    +'#sheet .rc .dd{text-align:right;margin-top:4px}'
+    +'#sheet .rc .row{display:flex;gap:12px}#sheet .rc .row>div{flex:1}'
+    +'#sheet .rc .dt{display:inline-block;border-bottom:1px dotted #555;padding:0 6px;line-height:1.5;text-align:center}'
+    +'#sheet .rc .f{color:#0B3D91;font-weight:600}'
+    +'#sheet .rc .gr{margin-top:8px;display:grid;grid-template-columns:104px 1fr;line-height:1.8}'
+    +'#sheet .rc .gr .dt{text-align:left}'
+    +'#sheet .rc .sg{margin-top:20px;text-align:right;line-height:2.2}'
+    +'#sheet .rc .sg .ln{display:inline-block;width:220px;border-bottom:1px dotted #555;height:20px;vertical-align:bottom}'
+    +'#sheet .idc{display:block;margin:18px auto 0;max-width:86mm;max-height:60mm;border:1px solid #ccc;border-radius:6px}'
+    +'#sheet .idb{margin:18px auto 0;width:86mm;height:54mm;border:1.5px dashed #9AA3B8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9AA3B8;font-size:13px}'
+    +'@media print{#sheet .pg{box-shadow:none;margin:0;padding:0 2px;page-break-after:always;break-after:page}#sheet .pg:last-child{page-break-after:auto;break-after:auto}}';
+  pcPrintWin('ใบเสร็จรับเงิน · '+String(C.name||'')+' · '+ds, ('pettycash_receipts_'+pier+'_'+ds+'_'+cid).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, pages, false);
+}
 function pcClmChip(k,x){
   if(k!=='out' || !x || !x.claim) return '';
   var c=pcClmGet(x.claim); if(!c) return '';
@@ -80673,22 +80875,24 @@ function pcClmList(pier){
     var st=!amt?'<em class="z">ไม่มีรายการ</em>'
       :(left<=0?('<em class="ok">คืนครบ · '+pcE(by.map(function(b){ return pcDS(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', '))+'</em>')
       :(back>0?('<em class="wn">คืนแล้ว '+pcN(back)+' · ค้าง '+pcN(left)+'</em>'):'<em>รอรับคืน</em>'));
-    var op=!!_pcClmOpen[c.id], cur=(c.date===_pcDate);
+    var op=!!_pcClmOpen[c.id], cur=(c.date===_pcDate), _rc=pcRcptCount(pier,c.id);   /* §pcRcpt */
     body+='<div class="pc2-cl'+(op?' op':'')+(cur?' cur':'')+'" id="pc-clm-'+pcE(c.id)+'">'
       +'<div class="r">'
         +'<button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนรายการ':'ดูรายการ')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
         +'<span class="nm"><b>'+pcE(c.name||'—')+'</b><small>'
           +(cur?pcE(pc2D(c.date)):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(c.date)+'\')">'+pcE(pc2D(c.date))+'</a>'))
-          +' · '+R.length+' รายการ · '+pcE(c.by||'—')+'</small></span>'
+          +' · '+R.length+' รายการ · '+pcE(c.by||'—')
+          +(R.length?(_rc.n<R.length?(' · <b class="rcw">ยังไม่เลือกคนรับเงิน '+(R.length-_rc.n)+'</b>'):' · ใบเสร็จครบ'):'')+'</small></span>'
         +'<span class="st">'+st+'</span>'
         +'<span class="am">'+pcMoney(amt)+'</span>'
         +'<span class="ac"><button type="button" class="ol" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
+          +'<button type="button" class="ol rc" onclick="pcPrintReceipts(\''+pcE(c.id)+'\')" title="พิมพ์ใบเสร็จรับเงิน 1 หน้าต่อรายการ (เฉพาะรายการที่เลือกคนรับเงินแล้ว)">&#129534; ใบเสร็จ '+_rc.n+'</button>'   /* §pcRcpt */
           +'<button type="button" class="ol" onclick="pcClmRename(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ">&#9998;</button>'
           +'<button type="button" class="pc2-x" onclick="pcClmDel(\''+pcE(c.id)+'\')" title="ยกเลิกรายการตั้งเบิก (แถวในสมุดยังอยู่)">&times;</button></span>'
       +'</div>'
       +(op?('<div class="ln">'+(R.length?R.map(function(o){
           return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
-            +'<span class="m">'+pcN(+o.x.amt||0)+'</span>'
+            +'<span class="py">'+pcPyChip('out',o.x)+'</span>'+'<span class="m">'+pcN(+o.x.amt||0)+'</span>'
             +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
         :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div>'):'')
       +'</div>';
