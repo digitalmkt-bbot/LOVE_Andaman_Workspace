@@ -13,6 +13,9 @@
    pmap_agpanel           GET|PUT /v1/config/pmap_agpanel      (pickup map: agent panel open, 0|1)
    pmap_zonebg            GET|PUT /v1/config/pmap_zonebg       (pickup map: zone background, 0|1)
    guides                 GET|PUT /v1/config/guides            (the guide register, whole list)
+   rc_status_colors       GET|PUT /v1/config/rc_status_colors  (re-confirm page colours; rcStatusColors, rcSaveStatusColor)
+   vanjob_tpl             GET|PUT /v1/config/vanjob_tpl        (van job sheet template; vjTpl, vjTplSave)
+   vanjob_rowhl           GET|PUT /v1/config/vanjob_rowhl      (van job sheet line highlights; vjHlAll, vjHlPersist)
    (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
@@ -100,6 +103,9 @@
     pmap_agpanel: { title: 'Pickup map panel', wait: 0 },
     pmap_zonebg: { title: 'Pickup map zones', wait: 0 },
     guides: { title: 'Guide register', wait: DEBOUNCE_MS },
+    rc_status_colors: { title: 'Re-confirm colours', wait: 0 },
+    vanjob_tpl: { title: 'Van job sheet', wait: 0 },
+    vanjob_rowhl: { title: 'Van job row highlights', wait: DEBOUNCE_MS },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -173,6 +179,65 @@
   wrap('ctWrite', function(orig, key, val){
     var h = H[key]; if(!h) return orig.apply(this, [].slice.call(arguments, 1));
     return h.write(val);
+  });
+
+  /* ── the shared screen settings (legacy kept them in the blob, laBlob()) ──
+     Synchronous legacy readers answer from the cache; writers send the whole value (a PUT replaces it). */
+  function liveOf(key){
+    if(!cfgCell.loaded){ cfgCell.miss(); return {}; }
+    var v = ent(key).value; return (v && typeof v === 'object') ? v : {};
+  }
+
+  /* rc_status_colors · rcStatusColors (08) and rcSaveStatusColor (08): a falsy hex deletes that status */
+  wrap('rcStatusColors', function(orig){ return O.clone(liveOf('rc_status_colors')); });
+  wrap('rcSaveStatusColor', function(orig, v, hex){
+    var c = O.clone(liveOf('rc_status_colors'));
+    if(hex) c[v] = hex; else delete c[v];
+    cfgWrite('rc_status_colors', c);
+    if(typeof window.renderReconfirm === 'function') window.renderReconfirm();
+  });
+
+  /* vanjob_tpl · vjTpl (08): the open draft wins, else the saved value over VJT_DEF, clamped as legacy clamps */
+  var vjtMemo = { src: null, out: null };
+  wrap('vjTpl', function(orig){
+    if(window._VJT_DRAFT) return window._VJT_DRAFT;
+    var o = liveOf('vanjob_tpl'), src = JSON.stringify(o);
+    if(vjtMemo.out && vjtMemo.src === src) return vjtMemo.out;
+    var out = {};
+    for(var k in VJT_DEF){ out[k] = (o[k] === undefined || o[k] === null || o[k] === '') ? VJT_DEF[k] : o[k]; }
+    for(var n in VJT_NUM){ var v = +out[n]; if(!isFinite(v)) v = VJT_DEF[n]; out[n] = Math.max(VJT_NUM[n][0], Math.min(VJT_NUM[n][1], v)); }
+    vjtMemo = { src: src, out: out };
+    return out;
+  });
+  /* vjTplSave (08) returns true when the save is sent (vjTplApply then clears the draft), false when refused */
+  wrap('vjTplSave', function(orig, T){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return false; }
+    if(!cfgCell.loaded){ O.fail(CFG.vanjob_tpl.title + ' not saved', new Error('The settings are still loading, try again')); return false; }
+    var keep = {};
+    Object.keys(VJT_DEF).forEach(function(k){
+      if(T[k] === undefined || T[k] === null || String(T[k]) === String(VJT_DEF[k])) return;
+      if(k === 'useVanColor' || k === 'showTh') keep[k] = Number(T[k]) ? 1 : 0;
+      else if(k === 'rowH' || k === 'lineW') keep[k] = String(T[k]);
+      else if(VJT_NUM[k]){
+        var v = +T[k]; if(!isFinite(v)) v = VJT_DEF[k];
+        keep[k] = Math.max(VJT_NUM[k][0], Math.min(VJT_NUM[k][1], v));
+      }
+      else keep[k] = String(T[k]);
+    });
+    cfgWrite('vanjob_tpl', keep);
+    return true;
+  });
+
+  /* vanjob_rowhl · vjHlAll (08) returns the live cache: vjHlClick and vjHlClearSheet edit it, then vjHlPersist sends it */
+  wrap('vjHlAll', function(orig){ return liveOf('vanjob_rowhl'); });
+  wrap('vjHlPersist', function(orig, justSet){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')) return;
+    var A = liveOf('vanjob_rowhl');
+    var cut = new Date(); cut.setDate(cut.getDate() - 45);     // legacy: lines older than 45 days go, the one just set stays
+    var cutS = (typeof window.bookingV2LocalYMD === 'function') ? window.bookingV2LocalYMD(cut) : cut.toISOString().slice(0, 10);
+    var keep = {};
+    Object.keys(A).forEach(function(k){ if(!A[k]) return; if(k === justSet || String(k).slice(0, 10) >= cutS) keep[k] = A[k]; });
+    cfgWrite('vanjob_rowhl', keep);
   });
 
   /* start the loads at once, so most first reads find the answer already there */
