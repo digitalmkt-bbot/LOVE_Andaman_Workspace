@@ -9204,6 +9204,10 @@ function flRenderDR(){
     const operated = avail || ranDespite;
     const eff = !operated ? 0 : (actual!=null ? actual : binfo.pax);
     boatPax[b.id]={ booked:binfo.pax, actual, eff, routes:binfo.routes, trips:binfo.trips, avail, ranDespite };
+    /* ops mode: the boat's status that day, whether it operated, whether it ran despite a down status and its effective
+       PAX are the server's (daily-log boat row: status, operated, ran_despite, pax_effective) */
+    const _sv=(typeof flDrServerBoat==='function')?flDrServerBoat(ds,b.id):null;
+    if(_sv){ boatPax[b.id].eff=_sv.paxEffective; boatPax[b.id].avail=(_sv.status==='available'); boatPax[b.id].ranDespite=!!_sv.ranDespite; }
   });
 
   let totalPAX=0,totalFuel=0,totalTrips=0,operatingBoats=0,topBoatId=null,topBoatPAX=0;
@@ -9319,6 +9323,8 @@ function flRenderDR(){
 
   // Helper: Program-closed check per pier · ต้องประกาศก่อนแถวชิป (ชิปบอกสถานะปิดด้วย)
   const _drPierClosed=(pierKey)=>{
+    const _sc=(typeof flDrPierClosed==='function')?flDrPierClosed(ds,pierKey):null;   /* ops mode: the server's closed_piers */
+    if(_sc!=null) return _sc;
     const rts=ROUTES.filter(rt=>rt.pier===pierKey);
     return rts.length>0 && rts.every(rt=>{
       const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
@@ -9650,10 +9656,13 @@ function flRenderDR(){
       if(r.pax) pPAX+=r.pax;
       if(r.fuel){ pFuel+=r.fuel; if(r.price!=null) pCost+=r.fuel*r.price; else pCostMissing=true; }
     });
-    const operating=boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
+    let operating=boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
     const locked=flDRLocked(ds, pierKey);   // saved → read-only until Edit
     // Fuel cost = Σ (each boat's L × that boat's ฿/L) · price is entered PER BOAT in each row (no pier-level price box)
-    const _fcost=(pCost>0)?Math.round(pCost):null;
+    let _fcost=(pCost>0)?Math.round(pCost):null;
+    /* ops mode: the pier's passengers, trips, boats operating, litres and fuel cost are the server's (daily-log day.piers) */
+    const _sp=(typeof flDrServerPier==='function')?flDrServerPier(ds,pierKey):null;
+    if(_sp){ pPAX=_sp.pax; pTrips=_sp.trips; pFuel=_sp.fuelLitres; operating=_sp.operating; _fcost=_sp.fuelCost; pCostMissing=!!_sp.fuelCostMissing; }
     const _priceCtrl='';
 
     // Find max engine count in this section (for column alignment)

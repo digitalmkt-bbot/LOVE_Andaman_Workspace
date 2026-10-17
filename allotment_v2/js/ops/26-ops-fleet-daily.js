@@ -61,7 +61,10 @@
     issueItems: [],
     fuelBudgets: {},
     safetyCategories: [],
-    reports: {}
+    reports: {},
+    drBoat: {},               // 'date|boat' → the server's status / operated / ran_despite / pax_effective / fuel_cost for that boat-day (flRenderDR)
+    drPier: {},               // 'date|pier' → the server's pier totals of the day (piers[])
+    drClosed: {}              // date → { pier: true } the piers the server says are closed (closed_piers)
   };
   var originals = {};
 
@@ -172,6 +175,8 @@
     Object.keys(state.extrasByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.extrasByKey[k]; });
     Object.keys(state.requestsByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.requestsByKey[k]; });
     Object.keys(state.prevMeterByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.prevMeterByKey[k]; });
+    Object.keys(state.drBoat).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drBoat[k]; });
+    Object.keys(state.drPier).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drPier[k]; });
 
     (Array.isArray(day.boats) ? day.boats : []).forEach(function(b){
       if(!b || !b.boat_id) return;
@@ -189,6 +194,10 @@
         flags: Array.isArray(b.flags) ? b.flags.slice() : []
       };
       if(b.pax_booked != null) state.bookedByKey[ds + '|' + bid] = num(b.pax_booked);
+      if(b.pax_effective != null) state.drBoat[ds + '|' + bid] = {
+        status: b.status || 'available', operated: !!b.operated, ranDespite: !!b.ran_despite,
+        paxEffective: num(b.pax_effective), fuelCost: b.fuel_cost != null ? num(b.fuel_cost) : null
+      };
       if(b.water){
         // used = the server's close minus open (a negative one also comes as the water_negative flag)
         state.waterByKey[ds + '|' + bid] = { o: b.water.open, c: b.water.close, by: b.water.by, at: b.water.at, used: b.water.used != null ? b.water.used : null };
@@ -215,6 +224,13 @@
 
     daily[ds] = dayBoats;
     fp[ds] = Object.assign({}, day.fuel_prices || {});
+    (Array.isArray(day.piers) ? day.piers : []).forEach(function(p){
+      if(!p || !p.pier) return;
+      state.drPier[ds + '|' + p.pier] = {
+        closed: !!p.closed, operating: num(p.operating), pax: num(p.pax), trips: num(p.trips), fuelLitres: num(p.fuel_litres),
+        fuelCost: p.fuel_cost != null ? num(p.fuel_cost) : null, fuelCostMissing: !!p.fuel_cost_missing
+      };
+    });
 
     var dayLocks = {};
     var srvLocks = day.locks || {};
@@ -246,6 +262,13 @@
 
   function applyDailyRange(res){
     res = res || {};
+    if(res.closed_piers && typeof res.closed_piers === 'object'){
+      (Array.isArray(res.days) ? res.days : []).forEach(function(d){
+        if(!d || !d.date) return;
+        var m = {}; (res.closed_piers[d.date] || []).forEach(function(p){ m[p] = true; });
+        state.drClosed[d.date] = m;
+      });
+    }
     if(Array.isArray(res.issue_items)) state.issueItems = clone(res.issue_items);
     (Array.isArray(res.days) ? res.days : []).forEach(applyDailyDay);
     return res;
@@ -950,6 +973,25 @@
     return orig.apply(this, [].slice.call(arguments, 1));
   });
 
+  /* flProjCostBreakdown / flProjMJCostBreakdown (project cost card): parts, labour, other memos and total are the
+     server's cost_breakdown on the project; a job's own split is its child_jobs line. A job outside any server project
+     keeps legacy's sum. */
+  wrap('flProjCostBreakdown', function(orig, projId){
+    var p = listProjects().find(function(x){ return x && x.id === projId; });
+    var b = serverProject(p) && p.costBreakdown;
+    if(b && b.total != null) return { parts: num(b.parts), labour: num(b.labour), memos: num(b.memos), total: num(b.total) };
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('flProjMJCostBreakdown', function(orig, mjId){
+    var hit = null;
+    listProjects().forEach(function(p){
+      var b = serverProject(p) && p.costBreakdown;
+      if(b && Array.isArray(b.child_jobs)) b.child_jobs.forEach(function(c){ if(c && c.job_id === mjId) hit = c; });
+    });
+    if(hit) return { parts: num(hit.parts), labour: num(hit.labour), memos: num(hit.memos), total: num(hit.total) };
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   wrap('flProjCalcCost', function(orig, projId){
     var p = listProjects().find(function(x){ return x && x.id === projId; });
     if(serverProject(p) && p.cost != null) return p.cost;
@@ -1236,6 +1278,15 @@
      GET /v1/fleet/reports/upkeep?month=YYYY-MM, boats[].repairs (jobs closed that month; the server dates a
      repair by its close date). The screen draws at once from the browser's own figure; when the month's report
      arrives it is drawn again from the server's. Any write or change clears the saved months. */
+  /* flRenderDR (Daily Fleet Log): what the server worked out for a boat-day and a pier-day. Legacy's render asks these
+     (not wraps: flRenderDR is one long function) and keeps its own sums for a day the server did not send. */
+  window.flDrServerBoat = function(ds, boatId){ return enabled() ? (state.drBoat[ds + '|' + boatId] || null) : null; };
+  window.flDrServerPier = function(ds, pier){ return enabled() ? (state.drPier[ds + '|' + pier] || null) : null; };
+  window.flDrPierClosed = function(ds, pier){
+    if(!enabled() || !state.drClosed[ds]) return null;     // day not read: legacy's own check
+    return !!state.drClosed[ds][pier];
+  };
+
   /* legacy flBoatBookingsFor (Daily Fleet Log auto-PAX): the passengers booked on a boat that day. The server's
      answer is pax_booked on GET /v1/fleet/daily-log (fleet-daily.ts bookedOn); it is read for every day loaded.
      The routes / trips count of the same call stays the browser's (the server row has the number only). */
