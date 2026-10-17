@@ -94,6 +94,10 @@ const bk2 = await book(D, 'b6', 'r5', { ad_th: 2, chd_th: 1 });
 const bk3 = await book(D, 'b7', 'r4', { ad_fr: 3 });
 const bk4 = await book(D2, 'b6', 'r5', { ad_fr: 2 }, 'PK', [{ type: 'longtail-join', label: 'Longtail join', join_adults: 2, join_children: 0 }]);
 
+// fleet facts for the job board: a boat licence on b6, an open repair job on b7
+await seed('PATCH', '/v1/boats/b6', { documents: [{ name: 'ใบอนุญาตใช้เรือ', expires_on: '2027-03-09', renew_status: null }] });
+await seed('POST', '/v1/fleet/jobs', { no: 'MJ-WALK-1', boat_id: 'b7', title: 'Walk repair', type: 'corrective' });
+
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
 await settle(1200);
@@ -285,6 +289,46 @@ section('4', async () => {
   const def = await ev(() => JSON.parse(JSON.stringify(PA_PAY_DEF)));
   const srvDef = Object.fromEntries((rules.rules || []).map((r) => [r.code, { x: r.multiplier, d: r.per_day, f: r.flat }]));
   ok('PA_PAY_DEF equals the server default pay table (nothing saved: defaulted)', rules.defaulted === true && JSON.stringify(def) === JSON.stringify(srvDef), { screen: def, server: srvDef });
+});
+
+// ═══ 5 · pier job board ═══
+section('5', async () => {
+  console.log('\n[5] pier job board · pax, prep, boat state, pier of a boat, boat list, work code, documents, programme colour');
+  await openView('poj-' + PIER, D); await settle(3000);
+  const day = await api(`/v1/pier-office/${PIER}/days/${D}/boats`);
+  const sb = (id) => day.boats.find((b) => b.boat_id === id);
+  const fl = (id) => day.fleet.find((f) => f.boat_id === id);
+  const s = await ev((a) => {
+    const b6 = getBoat('b6'), b7 = getBoat('b7'), b1 = getBoat('b1'), b13 = getBoat('b13');
+    return {
+      pax: pjPax(a.D, 'b6', a.P), prep: pjPrep(a.D, 'b6', a.P),
+      st6: pjBoatSt(a.D, b6, true), st7: pjBoatSt(a.D, b7, true), st1: pjBoatSt(a.D, b1, false),
+      pier6: pjPierOf(b6, a.D), pier1: pjPierOf(b1, a.D), pier13: pjPierOf(b13, a.D),
+      all: pjAllBoats(a.D, a.P).map((x) => x.boat.id),
+      wc7: pjWcAuto(pjBoatSt(a.D, b7, true)), wc6: pjWcAuto(pjBoatSt(a.D, b6, true)), mt: typeof paMtCode === 'function' ? paMtCode() : null,
+      doc: pjDocFind(b6, 'lic'), docNone: pjDocFind(b6, 'similan'), docB7: pjDocFind(b7, 'lic'),
+    };
+  }, { D, P: PIER });
+  const pr = sb('b6').booked.prep;
+  ok('pjPax = the server heads of the boat (ad, chd, inf, foc, bookings)', s.pax.ad === pr.pax.ad && s.pax.chd === pr.pax.chd && s.pax.inf === pr.pax.inf && s.pax.foc === pr.pax.foc && s.pax.n === pr.pax.bookings && pr.pax.total === 6, { screen: s.pax, server: pr.pax });
+  // discriminator: blank the browser's own bookings; the board must still show the server's heads
+  const tampered = await ev((a) => { const save = SB_BOOKINGS.map((b) => b.status); SB_BOOKINGS.forEach((b) => { b.status = 'cancelled'; }); const r = pjPax(a.D, 'b6', a.P); SB_BOOKINGS.forEach((b, i) => { b.status = save[i]; }); return r; }, { D, P: PIER });
+  ok('pjPax does not read the browser bookings (all cancelled locally, still the server heads)', tampered.ad === pr.pax.ad && tampered.chd === pr.pax.chd, tampered);
+  ok('pjPrep = the server prep (booked, arrived, no-show)', s.prep.booked === pr.booked && s.prep.arrived === pr.arrived && s.prep.noShow === pr.no_show, { screen: s.prep, server: pr });
+  ok('pjBoatSt = the server fleet state for b6 (run), b7 (run, 1 open job), b1 (idle)', s.st6.k === fl('b6').state && s.st7.k === fl('b7').state && s.st1.k === fl('b1').state && s.st7.srvOpenJobs === 1 && fl('b7').open_jobs === 1, { screen: [s.st6.k, s.st7.k, s.st7.srvOpenJobs, s.st1.k], server: day.fleet.map((f) => [f.boat_id, f.state, f.open_jobs]) });
+  ok('pjPierOf: b6 and b1 are at tublamu (the pier whose fleet lists them)', s.pier6 === PIER && s.pier1 === PIER, { b6: s.pier6, b1: s.pier1, b13: s.pier13 });
+  ok('pjAllBoats lists the boats of the pier\'s fleet (b6, b7, b1)', ['b6', 'b7', 'b1'].every((id) => s.all.includes(id)), { screen: s.all, server: day.fleet.map((f) => f.boat_id) });
+  ok('pjWcAuto: MT code for b7 (server counts 1 open repair job), none for b6', !!s.mt && s.wc7 === s.mt && s.wc6 === '', { wc7: s.wc7, wc6: s.wc6, mt: s.mt });
+  const cert = (await api('/v1/fleet/certificates')).boats.find((b) => b.boat_id === 'b6').cells;
+  ok('pjDocFind: b6 licence is the matrix cell of the server; a missing type is null', s.doc && s.doc.exp === cert.lic.expires_on && s.doc.name === cert.lic.name && s.docNone === null && s.docB7 === null, { screen: [s.doc, s.docNone, s.docB7], server: cert.lic });
+  // programme colour: the swatch on the job page → PATCH /v1/routes/{id} {color}
+  const pick = await ev(() => PJ_PAL.filter((c) => c.toLowerCase() !== String(getRoute('r5').color || '').toLowerCase())[2]);
+  await ev((c) => { const sw = [...document.querySelectorAll('.pj-sw')].find((e) => /pjProgColor\('r5'/.test(e.getAttribute('onclick')) && e.getAttribute('onclick').includes(c)); if (!sw) throw new Error('no swatch ' + c); sw.click(); }, pick);
+  await idle(); await settle(800);
+  const rt = (await api('/v1/routes/r5'));
+  const route = rt.route || rt;
+  const scr = await ev(() => getRoute('r5').color);
+  ok('programme colour saved on the server (PATCH /v1/routes/r5) and shown', String(route.color).toLowerCase() === pick.toLowerCase() && String(scr).toLowerCase() === pick.toLowerCase(), { picked: pick, server: route.color, screen: scr });
 });
 
 // @@SECTIONS
