@@ -1286,6 +1286,7 @@
     {v:'rep-ops',t:'Operations Report',a:'operations'},{v:'rep-fleet',t:'Fleet Report',a:'fleet'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
+  window.laNavPages=function(){ return LA_NAV.map(function(n){ return {v:n.v,a:n.a}; }); };   /* §opsUsers · the page list the server counts menus against (ops/14-ops-users.js -> PUT /v1/config/nav_pages) */
   /* §permExplicit · หมุดบอกว่า "รายการนี้ admin ระบุมาครบแล้ว"
      ตัวยกสิทธิ์ทั้งหมดข้างล่างมีไว้กู้ข้อมูลเก่าที่เก็บเป็นชื่อกลุ่ม
      ถ้ายังวิ่งกับรายการที่ admin เพิ่งติ๊กมาเอง จะกลายเป็นเติมสิทธิ์ที่เขาตั้งใจตัดออก
@@ -1928,6 +1929,7 @@
         if(odd.length) al.push(['amb','<b>ถือสิทธิ์มากกว่าคนอื่นในแผนก</b> — '+odd.map(function(a){ var L=lauLvl(u.role,D.perms,D.edit,a.k);
           return esc(lauAT(a.k))+' ('+(L==='edit'?'แก้ไข':'ดู')+')'; }).join(' · ')+' ที่คนอื่นในแผนก '+esc(lauDeptT(u.dept))+' ส่วนใหญ่ไม่มี']); } }
     if(!adm && !mn) al.push(['amb','ยังไม่มีสิทธิ์เข้าหน้าไหนเลย']);
+    if(window.laOpsUserAlerts){ var _oa=window.laOpsUserAlerts(u.id,al); if(_oa) al=_oa; }   /* §opsUsers · the server's warnings (ops/14-ops-users.js) */
     h+=al.map(function(x){ return '<div class="al3 '+x[0]+'"><b>!</b><span>'+x[1]+'</span></div>'; }).join('');
     var T=function(k,v,s,c){ return '<div><div class="kick">'+k+'</div><b style="color:'+(c||'#0F1B3D')+'">'+v+'</b><i>'+s+'</i></div>'; };
     h+='<div class="tl3">'+T('เมนูที่เข้าได้',mn,'จาก '+LA_NAV.length)+T('พื้นที่แก้ไขได้',en,'จาก '+LA_AREAS.length,'#0F6E56')+T('ดูอย่างเดียว',vw,'พื้นที่')
@@ -2295,6 +2297,7 @@
     if(none.length) iss.push('<b>'+none.length+' บัญชีเข้าไม่ได้เลย</b> — '
       +esc(none.map(function(u){return u.username;}).join(' · '))+' ล็อกอินได้แต่ไม่มีหน้าให้เปิด');
     if(adm.length>2) iss.push('<b>admin '+adm.length+' บัญชี</b> — '+esc(adm.map(function(u){return u.username;}).join(' · ')));
+    if(window.laOpsUserOverview){ var _oi=window.laOpsUserOverview(); if(_oi) iss=_oi; }   /* §opsUsers */
     return '<div class="ov"><div class="card"><h3>สิทธิ์แยกตามพื้นที่</h3><div class="bars">'+bars+'</div></div>'
       +'<div class="note"><div class="bl"></div><div><span class="kk">ตรวจสิทธิ์</span>'
         +'<h3>'+(iss.length?('พบ '+iss.length+' เรื่องที่ควรทบทวน'):'ไม่พบสิทธิ์ที่เกินงาน')+'</h3>'
