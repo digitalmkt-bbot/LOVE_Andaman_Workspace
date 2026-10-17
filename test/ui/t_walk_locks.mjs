@@ -254,6 +254,49 @@ const fake = await ev(() => ({ asProforma: pfmIsPrepayInv({ _fromOpsBackend: tru
 ok('pfmIsPrepayInv(invoice) follows the server invoice kind (not the note): prepay true, proforma false even with the note, void false', s.inv && s.inv.kind === 'prepay' && s.isPrepayInv === true && fake.asPrepay === true && fake.asProforma === false && fake.voided === false, { inv: s.inv, fake });
 console.log('   Daily PFM on screen: ' + JSON.stringify(s.text.replace(/\s+/g, ' ').slice(0, 1000)));
 
+console.log('\n[5] Dashboard · Seats available month grid · pier ticker');
+const MONTH = T0.slice(0, 7);
+const cellsOf = () => ev(() => [...document.querySelectorAll('.dv-calg .dv-cell')].map((c) => ({ day: parseInt(c.querySelector('.d').innerText, 10), big: c.querySelector('.n').innerText.trim(), sub: c.querySelector('.s').innerText.trim(), pax: (c.querySelector('.p') || {}).innerText || '' })));
+const expectCell = (d) => {
+  const day = +d.date.slice(8);
+  if (d.state === 'none') return { day, big: '—', sub: 'Closed' };
+  if (d.state === 'wx') return { day, big: '⛈', sub: 'Cancelled' };
+  return { day, big: String(d.free), sub: '/' + d.cap + ' free', pax: d.booked + ' pax' + (d.weather_closed > 0 ? ' · ⛈' + d.weather_closed : '') };
+};
+const sameCells = (scr, days) => days.every((d) => { const e = expectCell(d), c = scr.find((x) => x.day === e.day); return c && c.big === e.big && c.sub === e.sub && (e.pax === undefined || c.pax.replace(/\s+/g, ' ') === e.pax); });
+await ev((d) => { window._dashDate = d; window._dashCalFam = ''; window._dashCalMonth = ''; document.querySelector('.nav-item[data-view="dashboard"]').click(); }, T0);
+await waitScreen(() => document.querySelectorAll('.dv-calg .dv-cell').length > 20 && laOps.dashboard.get(document.querySelector('.dv-calg') && window._dashDate.slice(0, 7) + '-01', 'month'), null, 10000);
+await settle(600);
+const nDash = calls.length;
+let srvMonthAll = await api(`/v1/dashboard?date=${MONTH}-01&mode=month`);
+let scr5 = await cellsOf();
+ok(`month grid: all ${srvMonthAll.days.length} days on screen = GET /v1/dashboard?mode=month days[] (free / cap / booked / closed)`, scr5.length === srvMonthAll.days.length && sameCells(scr5, srvMonthAll.days), { scr: scr5.slice(18, 24), srv: srvMonthAll.days.slice(18, 24) });
+const d20 = srvMonthAll.days.find((d) => d.date === T0), d21 = srvMonthAll.days.find((d) => d.date === T1);
+ok('month grid numbers: T0 cap 74 (b6 40 + b7 34) with 2 booked · T1 cap 40', d20.cap === 74 && d20.booked === 2 && d21.cap === 40, { d20, d21 });
+// the same days asked the other way: GET /v1/availability per route (what getAllotment shows, lock-aware)
+const availFree = async (d) => { let f = 0; for (const r of ['r4', 'r5']) f += Math.max(0, (await api(`/v1/availability?route_id=${r}&date=${d}`)).available_seats || 0); return f; };
+const [a20, a21] = [await availFree(T0), await availFree(T1)];
+console.log(`   free seats T0: month grid ${d20.free} · availability sum ${a20} | T1: month grid ${d21.free} · availability sum ${a21}  (T0's bulk departure was released in [3]; T1 holds 8 + 10)`);
+ok('month grid free seats = what the booking screen sells (availability, locks held back)', d20.free === a20 && d21.free === a21, { grid: [d20.free, d21.free], availability: [a20, a21] });
+// family chip
+const nFam = calls.length;
+await page.locator('[onclick="dashCalSetFam(\'phiphi\')"]').click();
+await waitScreen(() => laOps.dashboard.get(window._dashCalMonth ? window._dashCalMonth + '-01' : window._dashDate.slice(0, 7) + '-01', 'month', 'phiphi'), null, 8000);
+await settle(600);
+const famCalls = lastCalls(nFam).filter((c) => /dashboard/.test(c));
+const srvPhi = await api(`/v1/dashboard?date=${MONTH}-01&mode=month&family=phiphi`);
+scr5 = await cellsOf();
+const phi26 = srvPhi.days.find((d) => d.date === SRC[0]);
+ok('family chip Phi Phi → GET /v1/dashboard?mode=month&family=phiphi · the grid shows that answer (T0 closed for the family, 26 Oct cap 38)', famCalls.some((c) => /mode=month/.test(c) && /family=phiphi/.test(c)) && sameCells(scr5, srvPhi.days) && phi26.cap === 38 && srvPhi.days.find((d) => d.date === T0).state === 'none', { famCalls, scr: scr5.slice(19, 27), srv: srvPhi.days.slice(19, 27) });
+await page.locator('[onclick="dashCalSetFam(\'\')"]').click(); await settle(600);
+// pier ticker: the sums feed tickerCells, which nothing draws
+const fs5 = await import('node:fs');
+const core = fs5.readFileSync(path.join(HERE, '../../allotment_v2/js/04-data-core.js'), 'utf8');
+const uses = (core.match(/tickerCells/g) || []).length;
+const dashTxt = await ev(() => document.getElementById('dash-wrap').innerText);
+console.log(`   ticker: 'tickerCells' appears ${uses}x in 04-data-core.js (declaration only) · dashboard text has a TL/VP/RN ticker: ${/\bVP\b.*\bRN\b/s.test(dashTxt)}`);
+ok('pier ticker (TL / VP / RN, today vs yesterday) is NOT-REACHABLE: tickerCells is declared and never read, so nothing on screen shows it', uses === 1, { uses });
+
 //PROBE
 
 await browser.close(); srv.close(); backend.kill();
