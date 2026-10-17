@@ -73,6 +73,27 @@
     });
     return any?statLTLegacy.apply(this,arguments):o;      // a boat the server did not list: the whole answer stays legacy's
   };
+  /* pc2StatPK(pier,ds): the heads on the boat and the park fee it should have paid come from the server's booked side
+     (booked.nationality.tot, booked.park_fee.expected: pier-park-fee.ts) instead of pcPax / pcParkAmt over the browser's bookings.
+     Counts the pier keyed by hand are a client fact: when there are any, they are priced as legacy prices them. */
+  var statPKLegacy=window.pc2StatPK;
+  if(typeof statPKLegacy==='function') window.pc2StatPK=function(pier,ds){
+    var DB=on()&&O.pier&&O.pier.dayBoats; if(!DB||!pier||ds!==window._pcDate) return statPKLegacy.apply(this,arguments);
+    DB.want(pier,ds,function(){ redraw(); });
+    var BS=window.pcBoats(ds,pier), D=(window.pcDay&&window.pcDay(pier,ds,false))||{pk:{}}, o={n:BS.length,miss:0,missNames:[],diff:0,keyed:0,pax:0}, any=false;
+    BS.forEach(function(B){
+      var sb=DB.boat(pier,ds,B.bid), bk=sb&&sb.booked;
+      if(!bk||!bk.nationality||!bk.park_fee){ any=true; return; }
+      var C=(D.pk||{})[B.bid]||{}, tot=+bk.nationality.tot||0;
+      o.pax+=tot;
+      if(!(tot>0)) return;
+      if(!(+C.amt>0)){ o.miss++; o.missNames.push(B.name); return; }
+      var hasK=(window.PC_PK||[]).some(function(k){ return +C[k]>0; });
+      var exp=hasK?window.pcPkDue(window.pcParkAmt(window.pcParkRate(B.rid),C),C):window.pcPkDue(bk.park_fee.expected==null?null:+bk.park_fee.expected,C);
+      if(exp!=null){ o.diff+=(+C.amt||0)-exp; o.keyed++; }
+    });
+    return any?statPKLegacy.apply(this,arguments):o;
+  };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){
