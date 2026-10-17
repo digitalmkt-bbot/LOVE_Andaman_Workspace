@@ -96,7 +96,12 @@
       retiredOn: e.retired_on || null,
       retiredReason: e.retired_reason || null,
       hours: e.hours != null ? num(e.hours) : num(e.base_hours),
-      service: e.service ? clone(e.service) : null,
+      service: e.service ? clone(e.service) : null,                 // the list screens' rule (next multiple of the interval)
+      serviceLast: e.service_last ? clone(e.service_last) : null,   // the detail panel's rule (counted from the last service)
+      flags: Array.isArray(e.flags) ? e.flags.slice() : null,
+      repairCost: e.repair_cost != null ? num(e.repair_cost) : null,
+      repairJobsDone: e.repair_jobs_done != null ? num(e.repair_jobs_done) : null,
+      repairJobsTotal: e.repair_jobs_total != null ? num(e.repair_jobs_total) : null,
       log: Array.isArray(e.log) ? e.log.map(mapLogEntry) : (Array.isArray(old.log) ? old.log : []),
       _fromOpsBackend: true
     };
@@ -129,6 +134,10 @@
       oilCapacity: g.oil_capacity || '',
       lifetimeHours: g.lifetime_hours != null ? num(g.lifetime_hours) : 0,
       service: g.service ? clone(g.service) : null,
+      flags: Array.isArray(g.flags) ? g.flags.slice() : null,
+      repairCost: g.repair_cost != null ? num(g.repair_cost) : null,
+      repairJobsDone: g.repair_jobs_done != null ? num(g.repair_jobs_done) : null,
+      repairJobsTotal: g.repair_jobs_total != null ? num(g.repair_jobs_total) : null,
       log: Array.isArray(g.log) ? g.log.map(mapLogEntry) : (Array.isArray(old.log) ? old.log : []),
       _fromOpsBackend: true
     };
@@ -158,6 +167,10 @@
       buyDate: p.buy_date || null,
       note: p.note || '',
       spareLocation: p.spare_location || null,
+      flags: Array.isArray(p.flags) ? p.flags.slice() : null,
+      repairCost: p.repair_cost != null ? num(p.repair_cost) : null,
+      repairJobsDone: p.repair_jobs_done != null ? num(p.repair_jobs_done) : null,
+      repairJobsTotal: p.repair_jobs_total != null ? num(p.repair_jobs_total) : null,
       log: Array.isArray(p.log) ? p.log.map(mapLogEntry) : (Array.isArray(old.log) ? old.log : []),
       _fromOpsBackend: true
     };
@@ -374,9 +387,12 @@
     return orig.apply(this, [].slice.call(arguments, 1));
   });
 
+  /* flEngServiceState (engine detail panel, Fleet Assets rows, Insights "Upcoming"): counted from the LAST service.
+     Since 2026-10-17 that is the engine's service_last; engine.service is the list screens' rule (next multiple of
+     the interval) and carries no base / since. */
   wrap('flEngServiceState', function(orig, e){
-    if(e && e._fromOpsBackend && e.service){
-      var s = e.service;
+    if(e && e._fromOpsBackend && e.serviceLast){
+      var s = e.serviceLast;
       return {
         curH: num(s.current_hours),
         interval: num(s.interval),
@@ -389,6 +405,26 @@
       };
     }
     return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
+  /* renderFleetTab, the engine list rows and flUpdateAssignEngInfo ask this for "next service, hours left, % of the
+     interval, due": the server's engine.service. Not a wrap (legacy has no function of this name): the legacy callers
+     test typeof first and keep their own sum when it answers null (non-ops mode, an engine the server did not send). */
+  window.flEngListService = function(e){
+    if(!enabled() || !e || !e._fromOpsBackend || !e.service) return null;
+    var s = e.service;
+    return {
+      interval: num(s.interval), next: s.next != null ? s.next : null, left: s.left != null ? s.left : null,
+      pct: num(s.pct), due: !!s.due, level: s.level || null, overdue: !!s.overdue
+    };
+  };
+
+  /* faPart: the data-to-fix flags of a Fleet Assets row are the server's (nohours, noeng, spareonboat, spareatshop,
+     nogb, double, noloc, retired). fixing_no_job is a detail alert in legacy, not a row flag. */
+  wrap('faPart', function(orig, kind, o){
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    if(r && o && o._fromOpsBackend && Array.isArray(o.flags)) r.flags = o.flags.filter(function(f){ return f !== 'fixing_no_job'; });
+    return r;
   });
 
   wrap('flGbLifetimeHours', function(orig, g){

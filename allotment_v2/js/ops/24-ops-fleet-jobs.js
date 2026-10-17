@@ -178,6 +178,8 @@
       lane: j.lane || null,
       silentDays: j.silent_days != null ? num(j.silent_days) : null,      // null = the server did not say: flBoardSilent / flBoardBlocks fall back to the browser rule
       blocksBoat: j.blocks_boat != null ? !!j.blocks_boat : null,
+      daysBlocked: j.days_blocked != null ? num(j.days_blocked) : null,     // days since start_date while the boat is held today, else 0 (flBoardBoatDown)
+      parkedReason: j.parked_reason ? { key: j.parked_reason.key, label: j.parked_reason.label, source: j.parked_reason.source } : (j.parked_reason === null ? false : undefined),   // false = the server says "not parked on purpose"; undefined = it did not say (flwParked)
       owner: j.owner || '',
       due: j.due_date || '',
       dueDate: j.due_date || null,
@@ -404,6 +406,23 @@
   });
   wrap('flBoardBlocks', function(orig, m){
     if(m && m._fromOpsBackend && m.blocksBoat != null) return !!m.blocksBoat;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  /* flBoardBoatDown (Fleet Work boat rows, board group headers): how many days the boat has been held = the largest
+     days_blocked of its jobs (the server gives 0 for a job that does not hold its boat today). */
+  wrap('flBoardBoatDown', function(orig, list){
+    var rows = list || [];
+    if(rows.length && rows.every(function(m){ return m && m._fromOpsBackend && m.daysBlocked != null; })){
+      var d = 0;
+      rows.forEach(function(m){ if(m.daysBlocked > d) d = m.daysBlocked; });
+      return d;
+    }
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  /* flwParked: why a job is laid up on purpose (donor, off season, documents expired, charter, parked on the board)
+     = the server's parked_reason label on the job. */
+  wrap('flwParked', function(orig, m){
+    if(m && m._fromOpsBackend && m.parkedReason !== undefined) return m.parkedReason ? m.parkedReason.label : '';
     return orig.apply(this, [].slice.call(arguments, 1));
   });
   wrap('flBoardLane', function(orig, m){

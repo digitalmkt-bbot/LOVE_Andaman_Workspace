@@ -8488,7 +8488,8 @@ function flRenderDashboard(){
 
   // ── B · Service Due ── engines approaching/exceeding service interval (every 500h)
   const SERVICE_INTERVAL=500;
-  const engineDue=FL_ENGINES.map(e=>{
+  /* ops mode: the server's service_due (fixed 500 h, next multiple, from 70 %) · flDashServiceDue answers null elsewhere */
+  const engineDue=(typeof flDashServiceDue==='function'&&flDashServiceDue(ds))||FL_ENGINES.map(e=>{
     const h=(typeof flEngHours==='function'?flEngHours(e.id):e.baseHours||0)||0;
     const cyclesDone=Math.floor(h/SERVICE_INTERVAL);
     const nextServiceAt=(cyclesDone+1)*SERVICE_INTERVAL;
@@ -8544,6 +8545,9 @@ function flRenderDashboard(){
     const bucket=monthBuckets.find(b=>b.key===k);
     if(bucket){bucket.cost+=m.cost||0;bucket.count++;}
   });
+  /* ops mode: the month's cost and job count are the server's cost_trend (jobs by the month they started, any status) */
+  const _ct=(typeof flDashCostTrend==='function')?flDashCostTrend(ds):null;
+  if(_ct) monthBuckets.forEach(b=>{ const r=_ct[b.key]; b.cost=r?r.cost:0; b.count=r?r.jobs:0; });
   const maxCost=Math.max(...monthBuckets.map(b=>b.cost),1);
 
   // Track which boats had work each month for marker avatars
@@ -9204,6 +9208,10 @@ function flRenderDR(){
     const operated = avail || ranDespite;
     const eff = !operated ? 0 : (actual!=null ? actual : binfo.pax);
     boatPax[b.id]={ booked:binfo.pax, actual, eff, routes:binfo.routes, trips:binfo.trips, avail, ranDespite };
+    /* ops mode: the boat's status that day, whether it operated, whether it ran despite a down status and its effective
+       PAX are the server's (daily-log boat row: status, operated, ran_despite, pax_effective) */
+    const _sv=(typeof flDrServerBoat==='function')?flDrServerBoat(ds,b.id):null;
+    if(_sv){ boatPax[b.id].eff=_sv.paxEffective; boatPax[b.id].avail=(_sv.status==='available'); boatPax[b.id].ranDespite=!!_sv.ranDespite; }
   });
 
   let totalPAX=0,totalFuel=0,totalTrips=0,operatingBoats=0,topBoatId=null,topBoatPAX=0;
@@ -9319,6 +9327,8 @@ function flRenderDR(){
 
   // Helper: Program-closed check per pier · ต้องประกาศก่อนแถวชิป (ชิปบอกสถานะปิดด้วย)
   const _drPierClosed=(pierKey)=>{
+    const _sc=(typeof flDrPierClosed==='function')?flDrPierClosed(ds,pierKey):null;   /* ops mode: the server's closed_piers */
+    if(_sc!=null) return _sc;
     const rts=ROUTES.filter(rt=>rt.pier===pierKey);
     return rts.length>0 && rts.every(rt=>{
       const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
@@ -9650,10 +9660,13 @@ function flRenderDR(){
       if(r.pax) pPAX+=r.pax;
       if(r.fuel){ pFuel+=r.fuel; if(r.price!=null) pCost+=r.fuel*r.price; else pCostMissing=true; }
     });
-    const operating=boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
+    let operating=boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
     const locked=flDRLocked(ds, pierKey);   // saved → read-only until Edit
     // Fuel cost = Σ (each boat's L × that boat's ฿/L) · price is entered PER BOAT in each row (no pier-level price box)
-    const _fcost=(pCost>0)?Math.round(pCost):null;
+    let _fcost=(pCost>0)?Math.round(pCost):null;
+    /* ops mode: the pier's passengers, trips, boats operating, litres and fuel cost are the server's (daily-log day.piers) */
+    const _sp=(typeof flDrServerPier==='function')?flDrServerPier(ds,pierKey):null;
+    if(_sp){ pPAX=_sp.pax; pTrips=_sp.trips; pFuel=_sp.fuelLitres; operating=_sp.operating; _fcost=_sp.fuelCost; pCostMissing=!!_sp.fuelCostMissing; }
     const _priceCtrl='';
 
     // Find max engine count in this section (for column alignment)
@@ -11519,6 +11532,8 @@ function flRenderEngList(){
 
   // Service due: engines >=80% interval
   const dueEngs=all.filter(e=>{
+    const _ls=(typeof flEngListService==='function')?flEngListService(e):null;   /* ops mode: "due" (80 % of the interval) is the server's */
+    if(_ls) return !!(_ls.interval&&_ls.due);
     if(!e.serviceInterval)return false;
     const curH=typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0);
     const cyc=curH%e.serviceInterval;
@@ -11619,8 +11634,9 @@ function flRenderEngList(){
     const posBg=e.boatId?(isSuzuki?'#A32D2D':'#185FA5'):'#999';
     const posLbl=e.boatId?flPosLabel(e.pos||'EN'):'SPARE';
     const curH=typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0);
-    const next=e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null;
-    const left=next?+(next-curH).toFixed(0):null;
+    const _ls=(typeof flEngListService==='function')?flEngListService(e):null;   /* ops mode: the server's engine service */
+    const next=_ls?_ls.next:(e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null);
+    const left=_ls?_ls.left:(next?+(next-curH).toFixed(0):null);
     const svcLbl=left==null?'':(left<0?`over ${Math.abs(left)}h`:`${left}h to svc`);
     const svcColor=left==null?dim.ink3:(left<30?'#A32D2D':left<100?'#854F0B':dim.ink3);
     const locText=b?`${b.name} · ${flPosLabel(e.pos)}`:(e.spareLocation||'Workshop');
@@ -18431,9 +18447,9 @@ function flRenderInsights(){
   const allJobs = FL_MAINT||[];
   const allIncs = FL_INCIDENTS||[];
   const allMemos = FL_MEMOS||[];
-  const periodJobs = allJobs.filter(j=>inPeriod(j.startDate));
+  let periodJobs = allJobs.filter(j=>inPeriod(j.startDate));
   const periodIncs = allIncs.filter(i=>inPeriod(i.date));
-  const periodSpent = periodJobs.reduce((s,j)=>s+calcCost(j),0);
+  let periodSpent = periodJobs.reduce((s,j)=>s+calcCost(j),0);
   const activeJobs = allJobs.filter(j=>j.status==='inprogress' || j.status==='pending');
   const boats = BOATS || [];
   const companyBoats = boats.filter(b=>b.ownership!=='charter' && !b.retired);
@@ -18470,6 +18486,14 @@ function flRenderInsights(){
     const s = boatStats[i.boatId]; if(!s) return;
     s.incidents++;
   });
+  /* ops mode: the period's jobs (every job that started in it, any status), their cost so far and each boat's jobs / cost
+     are the server's (insights kpis, boats). Only the number of jobs is read from periodJobs after this point. */
+  const _si=(typeof flInsightsServer==='function')?flInsightsServer(_insightsTimeFilter):null;
+  if(_si && _si.kpis){
+    periodSpent=+_si.kpis.spent||0; periodJobs=new Array(+_si.kpis.jobs||0);
+    (_si.boats||[]).forEach(sb=>{ const s=boatStats[sb.boat_id]; if(!s) return;
+      s.jobs=sb.jobs; s.jobsActive=sb.jobs_active; s.cost=sb.cost; s.incidents=sb.incidents; });
+  }
 
   const getHealth = (s) => {
     if(s.jobs >= 3 || s.cost >= 100000) return {level:'critical', icon:'critical', text:'Critical', color:'#A32D2D', bg:'#FBE9E9'};
@@ -28668,6 +28692,8 @@ function faPartDetail(r){
   // KPI row
   var jobs=faAllJobs(r.kind,o.id), done=jobs.filter(function(m){ return m.status==='done'; });
   var cost=done.reduce(function(s,m){ return s+((typeof flMaintCostShare==='function')?flMaintCostShare(m,r.kind):(m.cost||0)); },0);
+  var nDoneJ=done.length, nAllJ=jobs.length;
+  if(o._fromOpsBackend && o.repairCost!=null){ cost=o.repairCost; nDoneJ=o.repairJobsDone; nAllJ=o.repairJobsTotal; }   /* ops mode: the server's repair_cost and job counts */
   var k1='';
   if(r.kind!=='prop'){ var ss=r.ss||{};
     if(ss.interval && ss.left!=null && (r.kind!=='eng'||r.hours>0) && (r.kind!=='gb'||o.engineId)){ var lc=ss.left<0?'#A32D2D':ss.left<30?'#A32D2D':ss.left<100?'#854F0B':'#1D9E75';
@@ -28684,7 +28710,7 @@ function faPartDetail(r){
       +'<div class="fa-tile" style="flex:1"><div class="fa-kick">'+(r.kind==='gb'?'ถ่ายน้ำมันเกียร์':'เซอร์วิสล่าสุด')+'</div><b>'+(lastSvc?faFmtD(lastSvc.date):'—')+'</b><i>'+(lastSvc&&lastSvc.hours!=null?('ที่ '+faH(lastSvc.hours)):'ยังไม่มีบันทึก')+'</i></div>')
     :('<div class="fa-tile" style="flex:1"><div class="fa-kick">ขนาด</div><b>'+faE(r.size||'—')+'</b><i>'+faE(r.blades||'')+'</i></div>'
       +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ราคา</div><b>'+(o.cost?faMoney(o.cost):'—')+'</b><i>ต่อใบ</i></div>'))
-    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ค่าซ่อมสะสม</div><b>'+faMoney(cost)+'</b><i>'+done.length+' งานที่ปิดแล้ว · '+jobs.length+' ทั้งหมด</i></div>';
+    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ค่าซ่อมสะสม</div><b>'+faMoney(cost)+'</b><i>'+nDoneJ+' งานที่ปิดแล้ว · '+nAllJ+' ทั้งหมด</i></div>';
   var kpi='<div style="display:flex;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">'+k1+tiles+'</div>';
   // history (item log, newest first)
   var TYC={service:'#1D9E75',repair:'#185FA5',install:'#1D9E75','service-start':'#BA7517',remove:'#BA7517',detach:'#BA7517',transfer:'#8A8F9C',status:'#8A8F9C',swap:'#185FA5',rename:'#8A8F9C',edit:'#8A8F9C',add:'#1D9E75'};
@@ -29005,7 +29031,7 @@ function faFixView(flags){
 FA.spv='ov';
 function faSpv(k){ FA.spv=k; flRenderOverview(); }
 function faInvRows(){ var out=[]; (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
-  if(Array.isArray(it.stocks)&&it.stocks.length) it.stocks.forEach(function(s){ out.push({it:it, wh:s.warehouse||'', loc:String(s.location||''), qty:+s.qty||0, min:+(s.minQty!=null?s.minQty:it.minQty)||0}); });
+  if(Array.isArray(it.stocks)&&it.stocks.length) it.stocks.forEach(function(s){ out.push({it:it, wh:s.warehouse||'', loc:String(s.location||''), qty:+s.qty||0, min:+(s.minQty!=null?s.minQty:it.minQty)||0, below:(s.belowMin!=null?!!s.belowMin:null)}); });
   else out.push({it:it, loc:String(it.location||''), qty:+it.qty||0, min:+it.minQty||0}); }); return out; }
 function faInvAt(pier){ var re=pier==='pier:panwa'?/panwa|พันวา/i:pier==='pier:tublamu'?/tub|ตับ|lamu/i:/กลาง|central/i; return faInvRows().filter(function(r){ return r.wh?(r.wh===String(pier).replace(/^pier:/,'')):re.test(r.loc); }); }   /* ops mode: stock lines carry the server's warehouse key (tublamu, panwa, ranong) */
 function faLogDays(o){ var l=(o.log||[]).slice().reverse().find(function(x){ return x.date; }); return l?{d:-faDays(l.date),date:l.date}:null; }
@@ -29071,7 +29097,7 @@ function faSpOnBoat(boats,bp){
 }
 function faSpChips(list,keyf,colf){ var m={}; list.forEach(function(r){ var k=keyf(r); if(!m[k]) m[k]={n:0,bad:0,r:r}; m[k].n++; if(r.st==='damaged'||r.st==='broken'||r.st==='fixing') m[k].bad++; });
   return Object.keys(m).sort().map(function(k){ var x=m[k], c=colf(x.r); return '<span style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:7px;font-size:11.5px;font-weight:600;background:'+c[0]+';color:'+c[1]+';border:1px '+(x.bad===x.n?'dashed':'solid')+' '+c[2]+'">'+faE(k)+' '+x.n+(x.bad?(' · เสีย '+x.bad):'')+'</span>'; }).join(' '); }
-function faSpInvBlock(inv,wide){ var below=inv.filter(function(r){ return r.min>0 && r.qty<r.min; }).length; var cat={}; inv.forEach(function(r){ var c=r.it.category||'general'; cat[c]=(cat[c]||0)+1; });
+function faSpInvBlock(inv,wide){ var below=inv.filter(function(r){ return r.below!=null?r.below:(r.min>0 && r.qty<r.min); }).length;   /* ops mode: the stock line's below_min */ var cat={}; inv.forEach(function(r){ var c=r.it.category||'general'; cat[c]=(cat[c]||0)+1; });
   var CN={engine:'เครื่องยนต์',gearbox:'เกียร์',propeller:'ใบจักร',hull:'ตัวเรือ',general:'ทั่วไป'};
   return '<div style="padding:10px 18px;border-top:1px solid #ECEBE6"><div style="display:flex;align-items:center;gap:8px"><span class="fa-kick">ของใช้ · อะไหล่สิ้นเปลือง</span><span style="margin-left:auto;font-size:11.5px;font-weight:700;color:'+(below?'#A32D2D':'#5B6170')+'">'+(below?(below+' ต่ำกว่าขั้นต่ำ'):'')+'</span><b class="mono" style="font-size:16px;font-weight:500">'+inv.length+'</b></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+Object.keys(cat).map(function(k){ return '<span style="height:24px;padding:0 9px;border-radius:7px;border:1px solid #DCDFE6;font-size:11.5px;display:inline-flex;align-items:center">'+faE(CN[k]||k)+' '+cat[k]+'</span>'; }).join('')

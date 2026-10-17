@@ -720,6 +720,71 @@
     });
   });
 
+  /* legacy saveCharterBoat (07-charter.js): the charter-boat form (a boat chartered in, with its rental window).
+     Legacy pushed the boat and its window into BOATS in the browser. Server first:
+       add   POST /v1/boats { ownership: charter, name, type, pier, capacity, period: { from_date, to_date, note } }
+             (the first window is part of the create; a charter boat has no province or location type, nor a licence)
+       edit  PATCH /v1/boats/{id} { name, type, pier, capacity } and, for a charter boat, its window: PATCH
+             …/status-log/{entry} { from_date, to_date, note } (a window the form had none for: POST …/status-log)
+     A window that would overlap another of the boat is 409 charter_overlap; the server's text is legacy's "Save anyway?"
+     and a yes sends overlap_anyway: true. A PATCH of the pier moves the place of the window being edited (server). The
+     form's own checks and messages are legacy's; the modal stays open when the server refuses. */
+  wrap('saveCharterBoat', function(orig){
+    var d = function(id){ return document.getElementById(id); };
+    var name = d('ch-name').value.trim(); if(!name){ alert('กรุณาระบุชื่อเรือ'); return null; }
+    var pier = d('ch-pier').value, type = d('ch-type').value;
+    var cap = parseInt(d('ch-cap').value, 10) || 0;
+    if(!(cap > 0)){ alert('กรุณาระบุจำนวนที่นั่ง'); return null; }
+    var editId = window._chEditId || '', logId = window._chEditLogId || '';
+    var b = editId && typeof getBoat === 'function' ? getBoat(editId) : null;
+    if(editId && !b){ alert('Boat not found'); return null; }
+    var isCharter = editId ? b.ownership === 'charter' : true;
+    var from = '', to = '', note = '';
+    if(isCharter){
+      from = d('ch-from').value; to = d('ch-to').value; note = d('ch-note').value.trim();
+      if(!from){ alert('กรุณาระบุวันที่เริ่ม'); return null; }
+      if(!to){ alert('กรุณาระบุวันที่สิ้นสุด'); return null; }
+      if(to < from){ alert('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่ม'); return null; }
+    }
+    function finish(id){
+      return fetchBoatDetail(id).then(function(){
+        window._chEditId = ''; window._chEditLogId = '';
+        O.wrote('boat');
+        if(typeof window.closeModal === 'function') window.closeModal('charter-modal');
+        if(typeof window.renderBoats === 'function') window.renderBoats();
+        redrawBoats();
+        return id;
+      });
+    }
+    if(!editId){
+      var createBody = { name: name, type: type, pier: pier, capacity: cap, ownership: 'charter', period: { from_date: from, to_date: to } };
+      if(note) createBody.period.note = note;
+      return O.queue(function(){ return O.post('/v1/boats', createBody); }).then(function(saved){
+        return finish(saved && saved.id);
+      }).catch(function(e){ O.fail('Could not save the charter boat', e); return null; });
+    }
+    function sendEntry(extra){
+      return O.queue(function(){
+        if(logId) return O.patch('/v1/boats/' + enc(editId) + '/status-log/' + enc(logId), Object.assign({ from_date: from, to_date: to, note: note || null }, extra || {}));
+        var loc = (typeof CH_PIER_LOC !== 'undefined' && CH_PIER_LOC[pier]) || pier;
+        return O.post('/v1/boats/' + enc(editId) + '/status-log', { status: 'available', from_date: from, to_date: to, note: note || null, loc: loc });
+      });
+    }
+    function sendBoat(extra){
+      return O.queue(function(){ return O.patch('/v1/boats/' + enc(editId), Object.assign({ name: name, type: type, pier: pier, capacity: cap }, extra || {})); });
+    }
+    var step = isCharter ? O.anyway(sendEntry, { charter_overlap: { flag: 'overlap_anyway' } }, {}) : Promise.resolve(null);
+    return step.then(function(){
+      return O.anyway(sendBoat, { seats_sold: { flag: 'capacity_anyway' } }, {});
+    }).then(function(){
+      return finish(editId);
+    }).catch(function(e){
+      if(e && e.declined) return null;
+      O.fail('Could not save the boat', e);
+      return null;
+    });
+  });
+
   /* legacy saveBoat (04-data-core.js): the boat form. Legacy pushed the boat into BOATS and called save('config')
      (browser only, flSave is a no-op here), so a new or edited boat was lost on reload. Server first:
      POST /v1/boats for a new boat, PATCH /v1/boats/{id} for an edit (window._editBoatId). The form's facts go as
