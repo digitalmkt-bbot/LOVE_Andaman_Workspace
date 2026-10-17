@@ -872,7 +872,7 @@
     }
     if(typeof window.ckHasArrange === 'function' && !window.ckHasArrange(b, date)) return orig(bkId, date);   // legacy's "nothing arranged" alert
     if(!confirm('ล้างการจัดรถ/เรือของ ' + nm + ' ออกจากวันที่ ' + date + ' ?\n\n'
-      + 'รายการจะหายจากใบงานรถ · เช็คอินรถ · เช็คอินหน้าท่า\n'
+      + 'จะล้างเฉพาะการจัดรถ (รถ/ลำดับรับ) · เรือ เวลารับสุดท้าย และเช็คอินไม่ถูกแตะ\n'
       + 'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
     var trips = (Array.isArray(b.trips) ? b.trips : []).filter(function(t){ return t && t.opsTripId && (t.date || '') === date; });
     if(!trips.length){ O.fail('Van arrangement not cleared', new Error('This booking has no operation-backend trip on ' + date + ': reload the day')); return; }
