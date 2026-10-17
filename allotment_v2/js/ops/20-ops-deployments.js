@@ -139,6 +139,7 @@
         undo: function(){ return postDep({ boat: p[1], date: p[0], route: had.route, capacity: had.capacity }); } });
     });
     mid.forEach(function(m){ ops = ops.concat(m.ops || []); });
+    var deployN = ops.length;
     ops = ops.concat(removes);
     if(!ops.length) return Promise.resolve(false);
     return O.runBatch(ops).then(function(){
@@ -149,6 +150,7 @@
       });
       snapshot();
       O.wrote('deployments');
+      lastResult = { deployed: deployN - Object.keys(skipped).length, skipped: Object.keys(skipped).length };   // §copyWeekCount
       if(skippedMsg.length){
         O.toast({ kind: 'error', title: 'Boat Operation: ' + skippedMsg.length + ' day' + (skippedMsg.length === 1 ? '' : 's') + ' not saved', status: 'HTTP 409', sub: skippedMsg.join(' · '), dur: 12000 });
         rerender();
@@ -160,6 +162,7 @@
       throw err;
     });
   }
+  var lastResult = null;   // §copyWeekCount · what the last sync that wrote anything did: {deployed (saved on the server), skipped (days the server left out)}
   function sync(){ return O.queue(syncNow).catch(function(e){ O.fail('Boat Operation not saved', e); return false; }); }
 
   var timer = null;
@@ -230,6 +233,35 @@
     });
     snapshot();
   }
+
+  /* §copyWeekCount (Q27, 2026-10-17) · Boat Operation "Copy view -> next week/month" told the person "Copied N assignments" with the
+     browser's own count, before anything was sent. A closed day is refused by the server and left out (isClosed), so N could be too high.
+     In ops mode the alert now waits for the sync and reports the server-saved count: N less the days the server left out. If the sync
+     failed, the red toast already says so and the success alert is not shown. Legacy mode: untouched. */
+  (function(){
+    var orig = window.bop2CopyWeekToNext;
+    if(typeof orig !== 'function' || orig.__opsCopy) return;
+    var w = function(){
+      if(!O.enabled() || !ready) return orig.apply(this, arguments);
+      var realAlert = window.alert, msg = null;
+      window.alert = function(m){ msg = String(m); };
+      var ret;
+      try{ ret = orig.apply(this, arguments); } finally { window.alert = realAlert; }
+      if(msg === null) return ret;                       // cancelled at the confirm
+      var m = /^Copied (d+) assignments/.exec(msg), copied = m ? +m[1] : 0;
+      clearTimeout(timer); lastResult = null;
+      sync().then(function(){
+        var r = lastResult;
+        if(!r){ if(copied === 0) realAlert.call(window, msg); return; }   // nothing sent: a failed sync already toasted
+        var saved = Math.max(0, copied - r.skipped);
+        realAlert.call(window, r.skipped
+          ? msg.replace(/^Copied d+ assignments/, 'Copied ' + saved + ' assignments') + ' Not saved ' + r.skipped + ' (closed day).'
+          : msg);
+      });
+      return ret;
+    };
+    w.__opsCopy = true; window.bop2CopyWeekToNext = w;
+  })();
 
   O.deployments = { load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
 })();
