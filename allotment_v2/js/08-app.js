@@ -75171,6 +75171,23 @@ function pjCSS(){
   +H+' .pj-ov{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;'
      +'cursor:pointer;font:inherit;border:none;padding:0;margin:0}'
   +H+' .pj-ov:disabled{cursor:default}'
+  /* §pjFind · กล่องค้นหาคน · ลอยอยู่นอก host (ติด body) จึงไม่ใส่ H */
+  +'#pj-find{position:fixed;z-index:9500;width:min(360px,calc(100vw - 16px));background:#fff;border:1px solid #D9DDE4;border-radius:12px;'
+     +'box-shadow:0 14px 40px rgba(15,23,42,.22);font-family:inherit;display:flex;flex-direction:column;overflow:hidden}'
+  +'#pj-find .pjf-q{margin:8px;border:1.5px solid #16265C;border-radius:9px;padding:8px 11px;font:600 13px inherit;color:#242730;outline:none;background:#fff}'
+  +'#pj-find .pjf-list{max-height:min(420px,60vh);overflow:auto;padding:0 6px 6px;overscroll-behavior:contain}'
+  +'#pj-find .pjf-g{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8B93A1;padding:9px 8px 4px;position:sticky;top:0;background:#fff}'
+  +'#pj-find .pjf-g.busy{color:#A32D2D}'
+  +'#pj-find .pjf-it{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;color:#242730;line-height:1.3}'
+  +'#pj-find .pjf-it:hover,#pj-find .pjf-it.on{background:#EEF3FB}'
+  +'#pj-find .pjf-it.cur{font-weight:800}'
+  +'#pj-find .pjf-it .nm{flex:1;min-width:0;font-weight:700}'
+  +'#pj-find .pjf-it .nm b{font-weight:800;color:#16265C;background:#FFF2B8;border-radius:3px;padding:0 1px}'
+  +'#pj-find .pjf-it .sb{font-size:10.5px;color:#8B93A1;white-space:nowrap}'
+  +'#pj-find .pjf-it .bz{font-size:10.5px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:1px 7px;white-space:nowrap}'
+  +'#pj-find .pjf-it.e{color:#8B93A1;font-weight:400}'
+  +'#pj-find .pjf-none{padding:16px;text-align:center;color:#9BA3B0;font-size:12px}'
+  +'#pj-find .pjf-ft{border-top:1px solid #EEF0F3;padding:5px 10px;font-size:10px;color:#A3AAB5;display:flex;gap:10px}'
   +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;'
      +'padding:3px 22px 3px 7px;font:600 12px inherit;color:#242730;cursor:pointer;text-overflow:ellipsis}'
   +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
@@ -75426,13 +75443,19 @@ function pjOpts(pier, sel, roles, busy, bid){
   var mine=all.filter(function(s){ return s.pier===pier; });
   var other=all.filter(function(s){ return s.pier!==pier; });
   var hit=function(s){ return pjRoleHit(s.role, roles); };
+  /* §pjFind (2026-10-17) · owner "เวลาเลื่อน ขอขึ้นชื่อคนที่ไม่ลงงานก่อน คนที่ลงงานแล้วไปอยู่ล่าง"
+     คนที่อยู่ลำอื่นแล้ววันนี้ ออกจากกลุ่มของตัวเอง ไปรวมกันเป็นกลุ่มท้ายสุด (ยังเลือกได้ · §pjDupCrew)
+     กลุ่มบนจึงเหลือแต่คนว่าง เลื่อนหาสั้นลง · ลำดับเดิมในกลุ่มคงไว้ */
+  var free=function(s){ return !where(s); }, busyL=[];
+  var pick=function(list){ list.forEach(function(s){ if(!free(s)) busyL.push(s); }); return list.filter(free); };
   // §pierBlob · แยกกลุ่มตามหน้าที่ · คนตรงตำแหน่งอยู่กลุ่มแรก
   //   ไม่ตัดคนนอกตำแหน่งทิ้ง เพราะบางวันต้องหยิบคนอื่นมาลงจริง · แค่ย้ายไปกลุ่มล่าง
   var out='<option value="">— ว่าง —</option>';
-  out+= grp(mine.filter(hit),  want?('ท่านี้ · '+want):'ท่านี้', null);
-  if(want) out+= grp(mine.filter(function(s){ return !hit(s); }), 'ท่านี้ · ตำแหน่งอื่น', null);
-  out+= grp(other.filter(hit), want?('ท่าอื่น · '+want+' · มาช่วย'):'ท่าอื่น · มาช่วย', pierTag);
-  if(want) out+= grp(other.filter(function(s){ return !hit(s); }), 'ท่าอื่น · ตำแหน่งอื่น', pierTag);
+  out+= grp(pick(mine.filter(hit)),  want?('ท่านี้ · '+want):'ท่านี้', null);
+  if(want) out+= grp(pick(mine.filter(function(s){ return !hit(s); })), 'ท่านี้ · ตำแหน่งอื่น', null);
+  out+= grp(pick(other.filter(hit)), want?('ท่าอื่น · '+want+' · มาช่วย'):'ท่าอื่น · มาช่วย', pierTag);
+  if(want) out+= grp(pick(other.filter(function(s){ return !hit(s); })), 'ท่าอื่น · ตำแหน่งอื่น', pierTag);
+  out+= grp(busyL, '⚠ ลงงานแล้ววันนี้ · อยู่ลำอื่น', function(s){ return s.pier!==pier?pierTag(s):''; });
   if(sel && !all.some(function(s){ return s.id===sel; }))
     out+='<option value="'+poE(sel)+'" selected>'+poE(pjStaffName(sel))+' (ไม่อยู่ในทะเบียนแล้ว)</option>';
   return out;
@@ -75521,8 +75544,108 @@ function pjPickBox(nmTxt, optsHtml, onchangeJs, ro){
     +(ro?''
       :('<span class="pj-cv" aria-hidden="true">&#9662;</span>'
         +'<select class="pj-ov" title="'+poE(nmTxt||'ยังไม่ได้เลือก')+'"'
+        +' onmousedown="return pjFindOpen(event,this)" ontouchend="return pjFindOpen(event,this)"'   /* §pjFind · เมาส์/นิ้ว → กล่องค้นหา · คีย์บอร์ดยังเป็นเมนูเดิม */
         +' onchange="'+onchangeJs+'">'+optsHtml+'</select>'))
   +'</span>';
+}
+/* ══ §pjFind (2026-10-17) · กล่องค้นหาคนในช่องจ่ายงาน ══════════════════════════════════
+   owner (ภาพเมนูเลือกเด็กเรือยาวสองหน้าจอ): "จัดงานแบบยาก · ขอเพิ่ม พิมพ์ชื่อได้ · แล้วก็เวลาเลื่อน
+   ขอขึ้นชื่อคนที่ไม่ลงงานก่อน คนที่ลงงานแล้วไปอยู่ล่าง"
+   ของเดิม (§pjName) คือ <select> โปร่งใสทับชื่อ · เมนูของเบราว์เซอร์พิมพ์ค้นไม่ได้ ได้แค่กระโดดตัวแรก
+   ไม่เขียน dropdown แทน select · select ยังอยู่ (คีย์บอร์ด/เทสเดิม/ค่าที่เลือกยังผ่านมันเหมือนเดิม)
+   แค่ตอนเมาส์กด (mousedown) กันเมนูของเบราว์เซอร์ แล้วเปิดกล่องนี้แทน · เลือกแล้วเซ็ตค่าลง select
+   และยิง change ให้ onchange เดิมทำงาน · รายชื่อ/กลุ่ม/ป้าย "อยู่ลำไหน" อ่านจาก option ของ select นั้นเอง
+   จึงเหมือนเมนูเดิมเป๊ะ ไม่มีรายชื่อชุดที่สอง · ลำดับ "คนว่างก่อน · ลงงานแล้วอยู่ล่าง" ทำที่ pjOpts */
+var _pjFind=null;
+function pjFindOpen(ev, sel){
+  if(ev){ ev.preventDefault(); if(ev.stopPropagation) ev.stopPropagation(); }
+  if(!sel || sel.disabled) return false;
+  if(_pjFind && _pjFind.sel===sel){ pjFindClose(); return false; }
+  pjFindClose();
+  var items=[], gi=-1;
+  var add=function(o, g){ var t=String(o.textContent||''), parts=t.split(' · '), busy=/^⚠ อยู่/.test(parts.slice(1).join(' · ')) || parts.some(function(x){ return /^⚠ อยู่/.test(x); });
+    items.push({ v:o.value, t:t, nm:parts[0]||t, tags:parts.slice(1).filter(function(x){ return !/^⚠ อยู่/.test(x); }), bz:(parts.filter(function(x){ return /^⚠ อยู่/.test(x); })[0]||'').replace(/^⚠ /,''), cur:o.selected, g:g, k:t.toLowerCase().replace(/\s+/g,'') }); };
+  var groups=[];
+  Array.prototype.forEach.call(sel.children, function(c){
+    if(c.tagName==='OPTGROUP'){ groups.push({ label:c.label||'', busy:/^⚠/.test(c.label||'') }); gi=groups.length-1;
+      Array.prototype.forEach.call(c.children, function(o){ add(o, gi); }); }
+    else if(c.tagName==='OPTION'){ add(c, -1); }
+  });
+  var box=document.createElement('div'); box.id='pj-find'; box.setAttribute('role','listbox');
+  box.innerHTML='<input class="pjf-q" type="text" placeholder="พิมพ์ชื่อ · ชื่อเล่น · ตำแหน่ง" autocomplete="off" spellcheck="false">'
+    +'<div class="pjf-list"></div>'
+    +'<div class="pjf-ft"><span>&#8597; เลื่อน</span><span>Enter เลือก</span><span>Esc ปิด</span></div>';
+  document.body.appendChild(box);
+  _pjFind={ sel:sel, box:box, items:items, groups:groups, act:-1, q:'' };
+  var q=box.querySelector('.pjf-q');
+  q.addEventListener('input', function(){ _pjFind.q=q.value; _pjFind.act=-1; pjFindRender(); });
+  q.addEventListener('keydown', pjFindKey);
+  box.addEventListener('mousedown', function(e){ if(e.target!==q) e.preventDefault(); });   /* ไม่ให้ช่องพิมพ์หลุดโฟกัสตอนคลิกรายชื่อ */
+  pjFindRender();
+  pjFindPlace();
+  setTimeout(function(){ try{ q.focus(); }catch(_){} }, 0);
+  setTimeout(function(){ document.addEventListener('mousedown', pjFindOutside, true); window.addEventListener('resize', pjFindClose); window.addEventListener('scroll', pjFindScroll, true); }, 0);
+  return false;
+}
+function pjFindOutside(e){ if(_pjFind && !_pjFind.box.contains(e.target) && e.target!==_pjFind.sel) pjFindClose(); }
+function pjFindScroll(e){ if(_pjFind && !(e && e.target && _pjFind.box.contains(e.target))) pjFindClose(); }
+function pjFindClose(){
+  if(!_pjFind) return;
+  try{ _pjFind.box.remove(); }catch(_){}
+  document.removeEventListener('mousedown', pjFindOutside, true); window.removeEventListener('resize', pjFindClose); window.removeEventListener('scroll', pjFindScroll, true);
+  _pjFind=null;
+}
+function pjFindPlace(){
+  var F=_pjFind; if(!F) return;
+  var a=(F.sel.parentElement||F.sel).getBoundingClientRect(), b=F.box.getBoundingClientRect();
+  var w=b.width||360, h=b.height||300, vw=window.innerWidth, vh=window.innerHeight;
+  var left=Math.max(8, Math.min(a.left, vw-w-8));
+  var top=a.bottom+4;
+  if(top+h>vh-8 && a.top-4-h>=8) top=a.top-4-h;          /* ไม่พอด้านล่าง → เปิดขึ้นบน */
+  else if(top+h>vh-8) top=Math.max(8, vh-8-h);
+  F.box.style.left=left+'px'; F.box.style.top=top+'px';
+}
+function pjFindVisible(){
+  var F=_pjFind; if(!F) return [];
+  var q=String(F.q||'').toLowerCase().replace(/\s+/g,'');
+  return F.items.filter(function(it){ return !q || it.k.indexOf(q)>=0; });
+}
+function pjFindRender(){
+  var F=_pjFind; if(!F) return;
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var q=String(F.q||'').trim(), vis=pjFindVisible();
+  var hi=function(nm){ if(!q) return e(nm); var i=nm.toLowerCase().indexOf(q.toLowerCase()); if(i<0) return e(nm); return e(nm.slice(0,i))+'<b>'+e(nm.slice(i,i+q.length))+'</b>'+e(nm.slice(i+q.length)); };
+  var html='', lastG=null;
+  vis.forEach(function(it, i){
+    if(it.g!==lastG){ lastG=it.g; var G=F.groups[it.g]; if(G) html+='<div class="pjf-g'+(G.busy?' busy':'')+'">'+e(G.label)+'</div>'; }
+    var blank=(it.v==='');
+    html+='<div class="pjf-it'+(it.cur?' cur':'')+(i===F.act?' on':'')+(blank?' e':'')+'" data-i="'+i+'" data-v="'+e(it.v)+'" onclick="pjFindChoose('+i+')" onmousemove="pjFindHover('+i+')">'
+      +(it.cur?'<span style="color:#0F6E56">&#10003;</span>':'<span style="width:12px"></span>')
+      +'<span class="nm">'+hi(it.nm)+'</span>'
+      +(it.tags.length?('<span class="sb">'+e(it.tags.join(' · '))+'</span>'):'')
+      +(it.bz?('<span class="bz">&#9888; '+e(it.bz)+'</span>'):'')
+      +'</div>';
+  });
+  if(!vis.length) html='<div class="pjf-none">ไม่พบ "'+e(q)+'"</div>';
+  F.box.querySelector('.pjf-list').innerHTML=html;
+  var on=F.box.querySelector('.pjf-it.on'); if(on && on.scrollIntoView) try{ on.scrollIntoView({block:'nearest'}); }catch(_){}
+}
+function pjFindHover(i){ var F=_pjFind; if(!F || F.act===i) return; F.act=i; var L=F.box.querySelectorAll('.pjf-it'); Array.prototype.forEach.call(L, function(el){ el.classList.toggle('on', +el.getAttribute('data-i')===i); }); }
+function pjFindKey(ev){
+  var F=_pjFind; if(!F) return;
+  var vis=pjFindVisible();
+  if(ev.key==='Escape'){ ev.preventDefault(); pjFindClose(); return; }
+  if(ev.key==='ArrowDown' || ev.key==='ArrowUp'){ ev.preventDefault(); if(!vis.length) return;
+    var d=(ev.key==='ArrowDown')?1:-1; F.act=(F.act<0)?(d>0?0:vis.length-1):((F.act+d+vis.length)%vis.length); pjFindRender(); return; }
+  if(ev.key==='Enter'){ ev.preventDefault(); if(!vis.length) return;
+    /* ยังไม่ได้เลื่อน · พิมพ์แล้วกด Enter = เอาคนแรกที่ตรง (ข้ามช่อง "ว่าง" ถ้ามีคนตรงอยู่) */
+    var i=F.act>=0?F.act:(vis.length>1 && vis[0].v==='' && F.q ? 1 : 0); pjFindChoose(i); }
+}
+function pjFindChoose(i){
+  var F=_pjFind; if(!F) return;
+  var vis=pjFindVisible(), it=vis[i]; if(!it) return;
+  var sel=F.sel; pjFindClose();
+  if(sel.value!==it.v){ sel.value=it.v; try{ sel.dispatchEvent(new Event('change',{bubbles:true})); }catch(_){ var ev=document.createEvent('Event'); ev.initEvent('change',true,true); sel.dispatchEvent(ev); } }
 }
 function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var lb=pjSlotLb(kind,slot,defLb,bid);
