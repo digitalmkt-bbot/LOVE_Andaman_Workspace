@@ -70,6 +70,14 @@ const RATE_TYPES = [{
   ],
 }];
 
+const WALK_RATE_TYPE = { id: 'rt002', code: 'RT002', name: 'ZZ second rate',
+  routes: [{ route_id: 'r5', zones: { NoTransfer: { net: { ad_fr: 1250, chd_fr: 950, ad_th: 1050, chd_th: 750 } } } },
+           { route_id: 'r4', zones: { NoTransfer: { net: { ad_fr: 1850, chd_fr: 1350, ad_th: 1550, chd_th: 1050 } } } }] };
+const WALK_MAIN_CONTRACT = { id: 'ct_a01_main', agent_id: 'a01', kind: 'main', status: 'active', rate_type_id: 'rt002',
+  active_from: '2026-01-01', active_to: '2027-12-31', priority: 0, version: 'v2026-1', price_mode: 'rate', discount: null, bonus: null,
+  book_window: false, created_date: '2026-01-01', created_by: 'seed', note: null, doc_id: null, voided_at: null, voided_by: null,
+  program_periods: [{ route_id: 'r5', book_from: '2026-01-01', book_to: '2027-12-31', travel_from: '2026-01-01', travel_to: '2027-12-31', note: null }], seat_prices: [] };
+
 const proto = OperationsStore.prototype;
 const SEEDED = Symbol('seeded');
 for (const name of Object.getOwnPropertyNames(proto)) {
@@ -83,6 +91,12 @@ for (const name of Object.getOwnPropertyNames(proto)) {
       this.seedCatalogue(SEED);
       this.seedAgents(AGENTS);
       for (const rt of RATE_TYPES) this.createRateType(parseRateTypeCreate(rt));
+      // WALK_AGENTS=1 (t_walk_agents.mjs): a second rate type and a live MAIN contract for a01 that names it, so a01's
+      // bound rate (rt001) and its contract differ (alert contract_rate_differs). This API creates no main contract.
+      if (process.env.WALK_AGENTS) {
+        this.createRateType(parseRateTypeCreate(WALK_RATE_TYPE));
+        this.seedContracts([WALK_MAIN_CONTRACT]);
+      }
       // Auth now reads users from the operations store (not AUTH_PASSWORD_USERS).
       // Seed the staff account that t_ops uses before the first request reaches it.
       this.createUser({ username: 'tester', pass_hash: hashPassword('pw'), name: 'Tester', role: 'admin',
