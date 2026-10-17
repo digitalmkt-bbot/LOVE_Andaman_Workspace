@@ -485,9 +485,22 @@
       if(!isLive(b)) return; var d=bkDay(b); if(!d || d<from || d>to) return;
       var so=salesOf(sidOf(b)), k=agKey(b), p=0, f=0, v=money(b);
       (b.trips||[]).forEach(function(t){ if(!t) return; p+=pax(t); f+=paxK(t,'foc'); });
-      var X=S[so.id]=S[so.id]||{s:so, pax:0, val:0, n:0, foc:0, ag:{}};
+      var X=S[so.id]=S[so.id]||{s:so, pax:0, val:0, n:0, foc:0, cx:0, cxV:0, ag:{}};
       [X, tot].forEach(function(o){ o.pax+=p; o.val+=v; o.n++; o.foc+=f;
-        var A=o.ag[k]=o.ag[k]||{k:k, name:agentName(b), sid:so.id, pax:0, val:0, n:0}; A.pax+=p; A.val+=v; A.n++; });
+        var A=o.ag[k]=o.ag[k]||{k:k, name:agentName(b), sid:so.id, pax:0, val:0, n:0, cx:0}; A.pax+=p; A.val+=v; A.n++; });
+    });
+    /* §execSalesNet (2026-10-17) · owner ตอบ "โอเคทำ" ต่อข้อเสนอให้ตรงกับวิธีคิดในไฟล์ WEEKLY REPORT
+       ใบที่จองไว้ก่อนช่วงนี้ แล้วถูกยกเลิกภายในช่วงนี้ → หักออกจากยอดของช่วงนี้ (ไฟล์ขึ้นเป็นเลขติดลบ เช่น ODEON −1)
+       ใบที่จองและยกเลิกในช่วงเดียวกันไม่ได้ถูกนับตั้งแต่แรก จึงไม่หักซ้ำ · จำนวนใบไม่ลด (นับเฉพาะใบที่เข้ามา) */
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(!b || CXL.indexOf(b.status)<0) return;
+      if(typeof laIsInternalFree==='function' && laIsInternalFree(b)) return;
+      var c=cxlDay(b), d=bkDay(b); if(!c || c<from || c>to || !d || d>=from) return;
+      var so=salesOf(sidOf(b)), k=agKey(b), p=0, f=0, v=money(b);
+      (b.trips||[]).forEach(function(t){ if(!t) return; p+=pax(t); f+=paxK(t,'foc'); });
+      var X=S[so.id]=S[so.id]||{s:so, pax:0, val:0, n:0, foc:0, cx:0, cxV:0, ag:{}};
+      [X, tot].forEach(function(o){ o.pax-=p; o.val-=v; o.foc-=f; o.cx=(o.cx||0)+p; o.cxV=(o.cxV||0)+v;
+        var A=o.ag[k]=o.ag[k]||{k:k, name:agentName(b), sid:so.id, pax:0, val:0, n:0, cx:0}; A.pax-=p; A.val-=v; A.cx+=p; });
     });
     return {S:S, tot:tot};
   }
@@ -501,11 +514,11 @@
     if(kind==='month'){ qFrom=addMon(R.from,-1); qLbl='ส่งยอดเดือนก่อน แต่เดือนนี้ยังเงียบ'; }
     else { qFrom=monStart(R.to); if(qFrom>qTo){ qFrom=addDays(R.from,-28); qLbl='ส่งยอดใน 4 สัปดาห์ก่อน แต่สัปดาห์นี้เงียบ'; } else qLbl='ส่งยอดเดือนนี้แล้ว แต่สัปดาห์นี้เงียบ'; }
     var Q=qFrom<=qTo?spAgg(qFrom,qTo):{tot:{ag:{}}};
-    var quiet=Object.keys(Q.tot.ag).filter(function(k){ return k!=='__b2c' && k!=='__none' && !T.ag[k]; }).map(function(k){ return Q.tot.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; });
+    var quiet=Object.keys(Q.tot.ag).filter(function(k){ return k!=='__b2c' && k!=='__none' && Q.tot.ag[k].n>0 && Q.tot.ag[k].pax>0 && !(T.ag[k] && T.ag[k].n>0); }).map(function(k){ return Q.tot.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; });
     var rows=spOrder(A.S), isNew=function(k){ return k!=='__b2c' && first[k] && first[k]>=R.from && first[k]<=R.to; };
-    var newN=Object.keys(T.ag).filter(isNew).length, sentN=Object.keys(T.ag).filter(function(k){ return k!=='__b2c' && k!=='__none'; }).length;
+    var newN=Object.keys(T.ag).filter(isNew).length, sentN=Object.keys(T.ag).filter(function(k){ return k!=='__b2c' && k!=='__none' && T.ag[k].n>0; }).length;
     var h='<div class="eb-grid eb-kpis">'
-      + kpi('Pax ที่ขายได้', num(T.pax), perD(T.pax).toFixed(1)+' / วัน · '+chg(perD(T.pax), Tp.pax/R.days)+' vs ช่วงก่อน')
+      + kpi('Pax ที่ขายได้ (สุทธิ)', num(T.pax), (T.cx?'หักยกเลิก '+num(T.cx)+' · ':'')+perD(T.pax).toFixed(1)+' / วัน · '+chg(perD(T.pax), Tp.pax/R.days)+' vs ช่วงก่อน')
       + kpi('ยอดขาย (Value sold)', baht(T.val), baht(perD(T.val))+' / วัน · '+chg(T.val, Tp.val))
       + kpi('ใบจอง', num(T.n), (T.n?(T.pax/T.n).toFixed(2):'0')+' pax / ใบ · '+chg(T.n, Tp.n))
       + kpi('FOC', num(T.foc)+'<small>pax</small>', (T.pax?(T.foc*100/T.pax).toFixed(1):'0')+'% ของ pax'+(Tp.pax?(' · ช่วงก่อน '+(Tp.foc*100/Tp.pax).toFixed(1)+'%'):''), (T.pax && T.foc/T.pax>0.1)?'warn':'')
@@ -516,11 +529,11 @@
     /* ตารางอันดับเซลส์ */
     var M = kind==='month';
     var agAll=function(sid){ return (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).filter(function(a){ return a && a.sales===sid && a.active!==false && a.status!=='inactive'; }).length; };
-    var head='<tr><th>#</th><th>เซลส์</th><th>Pax</th><th>ยอดขาย</th><th>% ยอดขาย</th><th>ใบ</th><th>FOC</th><th>FOC %</th><th>THB / Pax</th><th>Pax / วัน</th><th>vs ช่วงก่อน</th><th>เอเยนต์ส่ง</th><th>★ ใหม่</th><th>เงียบไป</th>'
+    var head='<tr><th>#</th><th>เซลส์</th><th>Pax</th><th>ยอดขาย</th><th>% ยอดขาย</th><th>ใบ</th><th title="Pax ของใบที่จองไว้ก่อนช่วงนี้ แล้วยกเลิกในช่วงนี้ · หักออกจาก Pax / ยอดขายแล้ว">หักยกเลิก</th><th>FOC</th><th>FOC %</th><th>THB / Pax</th><th>Pax / วัน</th><th>vs ช่วงก่อน</th><th>เอเยนต์ส่ง</th><th>★ ใหม่</th><th>เงียบไป</th>'
       +(M?'<th>เอเยนต์ทั้งหมด</th><th>Activation</th><th>Pax / เอเยนต์</th>':'<th>เอเยนต์อันดับ 1</th>')+'</tr>';
     var rank=0;
     var body=rows.map(function(x){
-      var aks=Object.keys(x.ag).filter(function(k){ return k!=='__b2c' && k!=='__none'; }), nNew=aks.filter(isNew).length;
+      var aks=Object.keys(x.ag).filter(function(k){ return k!=='__b2c' && k!=='__none' && x.ag[k].n>0; }), nNew=aks.filter(isNew).length;
       var nq=quiet.filter(function(q){ return q.sid===x.s.id; }).length;
       var topA=Object.keys(x.ag).map(function(k){ return x.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; })[0];
       var pv=B.S[x.s.id], all=x.s.none?0:agAll(x.s.id);
@@ -528,7 +541,7 @@
       return '<tr'+(x.s.none?' class="eb-dim"':'')+'><td>'+(x.s.none?'':rank)+'</td><td><span class="eb-dot" style="background:'+E(x.s.color)+'"></span><b>'+E(x.s.name)+'</b></td>'
         +'<td><b>'+num(x.pax)+'</b></td><td><b>'+baht(x.val)+'</b></td>'
         +'<td><div class="eb-pct"><span><i style="width:'+pct(x.val,T.val)+'%;background:'+E(x.s.color)+'"></i></span>'+pct(x.val,T.val)+'%</div></td>'
-        +'<td>'+num(x.n)+'</td><td>'+num(x.foc)+'</td><td>'+(x.pax?(x.foc*100/x.pax>10?'<span class="eb-st w">'+(x.foc*100/x.pax).toFixed(1)+'%</span>':(x.foc*100/x.pax).toFixed(1)+'%'):'—')+'</td>'
+        +'<td>'+num(x.n)+'</td><td>'+(x.cx?'<span class="eb-dn">−'+num(x.cx)+'</span>':'<span class="eb-mut">0</span>')+'</td><td>'+num(x.foc)+'</td><td>'+(x.pax?(x.foc*100/x.pax>10?'<span class="eb-st w">'+(x.foc*100/x.pax).toFixed(1)+'%</span>':(x.foc*100/x.pax).toFixed(1)+'%'):'—')+'</td>'
         +'<td>฿'+num(x.pax?x.val/x.pax:0)+'</td><td>'+(x.pax/R.days).toFixed(1)+'</td><td>'+chg(x.pax/R.days, pv?pv.pax/R.days:0)+'</td>'
         +'<td>'+num(aks.length)+'</td><td>'+(nNew?'<span class="eb-up">'+nNew+'</span>':'<span class="eb-mut">0</span>')+'</td><td>'+(nq?num(nq):'<span class="eb-mut">0</span>')+'</td>'
         +(M ? '<td>'+(all||'—')+'</td><td>'+(all?pct(aks.length,all)+'%':'—')+'</td><td>'+(aks.length?(x.pax/aks.length).toFixed(1):'—')+'</td>'
@@ -536,11 +549,11 @@
         +'</tr>';
     }).join('');
     var allTeam=M?(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).filter(function(a){ return a && a.sales && a.active!==false && a.status!=='inactive'; }).length:0;
-    var foot='<tr class="eb-tot"><td></td><td><b>รวมทั้งทีม</b></td><td><b>'+num(T.pax)+'</b></td><td><b>'+baht(T.val)+'</b></td><td>100%</td><td>'+num(T.n)+'</td><td>'+num(T.foc)+'</td><td>'+(T.pax?(T.foc*100/T.pax).toFixed(1)+'%':'—')+'</td>'
+    var foot='<tr class="eb-tot"><td></td><td><b>รวมทั้งทีม</b></td><td><b>'+num(T.pax)+'</b></td><td><b>'+baht(T.val)+'</b></td><td>100%</td><td>'+num(T.n)+'</td><td>'+(T.cx?'<span class="eb-dn">−'+num(T.cx)+'</span>':'0')+'</td><td>'+num(T.foc)+'</td><td>'+(T.pax?(T.foc*100/T.pax).toFixed(1)+'%':'—')+'</td>'
       +'<td>฿'+num(T.pax?T.val/T.pax:0)+'</td><td>'+(T.pax/R.days).toFixed(1)+'</td><td>'+chg(T.pax, Tp.pax)+'</td><td>'+num(sentN)+'</td><td>'+num(newN)+'</td><td>'+num(quiet.length)+'</td>'
       +(M?'<td>'+num(allTeam)+'</td><td>'+(allTeam?pct(sentN,allTeam)+'%':'—')+'</td><td>'+(sentN?(T.pax/sentN).toFixed(1):'—')+'</td>':'<td></td>')+'</tr>';
-    h+='<div class="eb-sec">อันดับเซลส์ · '+E(spLabel(R,kind))+'</div><div class="eb-card eb-scroll"><h2>ยอดขายตามเซลส์ <span class="eb-tag">นับตามวันที่ใบเข้าระบบ · ไม่นับใบยกเลิก / quote</span>'+src('ที่มา: Booking · Sales')+'</h2>'
-      +'<table class="eb-tbl eb-sp">'+'<thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="16" class="eb-none">ยังไม่มีใบจองในช่วงนี้</td></tr>')+foot+'</tbody></table>'
+    h+='<div class="eb-sec">อันดับเซลส์ · '+E(spLabel(R,kind))+'</div><div class="eb-card eb-scroll"><h2>ยอดขายตามเซลส์ <span class="eb-tag">นับตามวันที่ใบเข้าระบบ · หักใบเก่าที่ยกเลิกในช่วงนี้ · ไม่นับ quote</span>'+src('ที่มา: Booking · Sales')+'</h2>'
+      +'<table class="eb-tbl eb-sp">'+'<thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="17" class="eb-none">ยังไม่มีใบจองในช่วงนี้</td></tr>')+foot+'</tbody></table>'
       +'<div class="eb-foot">vs ช่วงก่อน = Pax ต่อวันเทียบ'+(kind==='month'?'เดือนก่อน (จำนวนวันเท่ากัน)':'สัปดาห์ก่อน')+' · ★ ใหม่ = เอเยนต์ที่ส่งใบแรกในระบบภายในช่วงนี้ · เงียบไป = '+E(qLbl)+'</div></div>';
 
     /* แนวโน้ม 7 ช่วง · ต่อวัน */
@@ -564,7 +577,7 @@
       + '<div class="eb-card"><h2>ยอดขายต่อวัน</h2>'+trendTbl('val', baht)+'</div></div>';
 
     /* Top 10 · เงียบไป */
-    var top=Object.keys(T.ag).filter(function(k){ return k!=='__none'; }).map(function(k){ return T.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; }).slice(0,10);
+    var top=Object.keys(T.ag).filter(function(k){ return k!=='__none' && T.ag[k].n>0; }).map(function(k){ return T.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; }).slice(0,10);
     h+='<div class="eb-sec">เอเยนต์</div><div class="eb-grid eb-r4h">'
       + '<div class="eb-card"><h2>Top 10 เอเยนต์ <span class="eb-tag">'+E(spLabel(R,kind))+'</span></h2><table class="eb-tbl eb-l2"><thead><tr><th>#</th><th>เอเยนต์</th><th>เซลส์</th><th>Pax</th><th>ยอดขาย</th></tr></thead><tbody>'
       + (top.length?top.map(function(a,i){ var so=salesOf(a.sid==='__none'?'':a.sid);
@@ -581,8 +594,8 @@
           var L=Object.keys(x.ag).map(function(k){ return x.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; });
           var nNew=L.filter(function(a){ return isNew(a.k); }).length, mx=Math.max.apply(null,[1].concat(L.map(function(a){ return a.pax; })));
           return '<div class="eb-card"><h2><span class="eb-dot" style="background:'+E(x.s.color)+'"></span>'+(x.s.none?'':'#'+(i+1)+' ')+E(x.s.name)+'</h2>'
-            + '<div class="eb-foot" style="margin:-6px 0 8px">'+num(L.length)+' ราย · ★ ใหม่ '+num(nNew)+' · '+num(x.pax)+' pax · '+baht(x.val)+'</div>'
-            + '<div class="eb-mvl">'+L.slice(0,12).map(function(a){ return '<div class="rw" title="'+E(a.name+' · '+a.pax+' pax · '+baht(a.val)+' · '+a.n+' ใบ')+'"><span class="lb">'+E(a.name)+(isNew(a.k)?' <span class="eb-new">★</span>':'')+'</span><span class="mini"><i style="width:'+Math.round(a.pax*100/mx)+'%;background:'+E(x.s.color)+'"></i></span><span class="vv">'+num(a.pax)+'</span></div>'; }).join('')
+            + '<div class="eb-foot" style="margin:-6px 0 8px">'+num(L.filter(function(a){ return a.n>0; }).length)+' ราย · ★ ใหม่ '+num(nNew)+' · '+num(x.pax)+' pax · '+baht(x.val)+'</div>'
+            + '<div class="eb-mvl">'+L.slice(0,12).map(function(a){ return '<div class="rw" title="'+E(a.name+' · '+a.pax+' pax · '+baht(a.val)+' · '+a.n+' ใบ')+'"><span class="lb">'+E(a.name)+(isNew(a.k)?' <span class="eb-new">★</span>':'')+'</span><span class="mini"><i style="width:'+Math.max(0,Math.round(a.pax*100/mx))+'%;background:'+E(x.s.color)+'"></i></span><span class="vv"'+(a.pax<0?' style="color:var(--eb-bad)" title="ยกเลิกใบเก่า"':'')+'>'+num(a.pax)+'</span></div>'; }).join('')
             + (L.length>12?'<div class="eb-foot">+ อีก '+(L.length-12)+' ราย</div>':'')+'</div></div>';
         }).join('')+'</div>';
     return h;

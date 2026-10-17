@@ -13,6 +13,8 @@
 //   8 §execSales แท็บ Sales Performance (owner ส่งไฟล์ WEEKLY REPORT แล้ว "เพิ่มอีกแท็บนึง"):
 //     สัปดาห์นี้ (อาทิตย์–เสาร์) · Pax ทั้งทีม = ใบที่เข้าระบบสัปดาห์นี้ · แถวเซลส์รวมกันได้เท่าทีม · ‹ ย้อนสัปดาห์ได้ › ไปอนาคตไม่ได้
 //     มุมมองเดือนมีคอลัมน์ Activation · ส่วนแนวโน้ม 7 ช่วง / Top 10 / เงียบไป / แยกตามเซลส์ ขึ้นครบ
+//   9 §execSalesNet (owner "โอเคทำ" · ให้ตรงกับวิธีคิดในไฟล์): ใบที่จองก่อนสัปดาห์นี้แล้วยกเลิกในสัปดาห์นี้ ถูกหักออก
+//     Pax ทีมลดลงเท่ากับ pax ของใบนั้น · คอลัมน์ "หักยกเลิก" ขึ้นตัวเลข · เอเยนต์นั้นขึ้นเลขติดลบ · จำนวนใบไม่ลด
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -139,5 +141,26 @@ if (R8.kp === R8.pax && R8.tot === R8.pax && sumRows === R8.pax && R8.lbl0 !== R
     && R8.mh.includes('Activation') && R8.secs.some(x => /แนวโน้ม 7/.test(x)) && R8.secs.some(x => /แยกตามเซลส์/.test(x)) && R8.mv >= 1)
   ok('8 Sales Performance · สัปดาห์นี้ ' + R8.pax + ' pax จาก ' + R8.n + ' ใบ = รวมทีม = ผลรวมแถวเซลส์ · ย้อนไป "' + R8.lbl1 + '" ได้ · เดือนมี Activation · แนวโน้ม/เอเยนต์ขึ้นครบ');
 else fail('8 ' + JSON.stringify(R8));
+
+// 9
+const R9 = await page.evaluate(() => {
+  const readTot = () => { ebSet('tab', 'sales'); ebSet('sp', 'week'); const t = document.querySelector('table.eb-sp tr.eb-tot').children;
+    return { pax: +t[2].textContent.replace(/,/g, ''), n: +t[5].textContent.replace(/,/g, ''), cx: t[6].textContent }; };
+  const before = readTot();
+  const ag = SB_AGENTS.find(a => a.sales);
+  const src = SB_BOOKINGS.find(b => b.status === 'confirmed' && (b.trips || []).length === 1);
+  const b = JSON.parse(JSON.stringify(src)); b.id = 'ZZCX1'; b.agentId = ag.id; delete b.soldBy; delete b.channelType; delete b.b2cChannel;
+  const old = new Date(); old.setDate(old.getDate() - 20);
+  b.history = [{ at: old.toISOString(), kind: 'create', tag: 'Created', text: 'x' }]; b.bookingDate = bkV2LocalYMD(old); b.createdAt = b.bookingDate;
+  b.trips[0].pax = { ad_fr: 5 }; b.status = 'cancelled'; b.cancelledAt = new Date().toISOString();
+  SB_BOOKINGS.push(b);
+  const after = readTot();
+  const neg = [...document.querySelectorAll('.eb-mv .eb-mvl .rw')].some(r => r.querySelector('.lb').textContent.indexOf(ag.name) === 0 && /^-\d/.test(r.querySelector('.vv').textContent));
+  SB_BOOKINGS.pop(); ebSet('tab', 'rev');
+  return { before, after, neg, ag: ag.name };
+});
+if (R9.after.pax === R9.before.pax - 5 && R9.after.n === R9.before.n && /5/.test(R9.after.cx) && R9.neg)
+  ok('9 ใบเก่ายกเลิกสัปดาห์นี้ 5 pax · ทีม ' + R9.before.pax + ' → ' + R9.after.pax + ' · หักยกเลิก "' + R9.after.cx + '" · จำนวนใบ ' + R9.after.n + ' เท่าเดิม · ' + R9.ag + ' ขึ้นเลขติดลบ');
+else fail('9 ' + JSON.stringify(R9));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
