@@ -80937,6 +80937,14 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-ft.due{background:#FEE4E2;color:#B42318;box-shadow:0 1px 3px rgba(180,35,24,.18)}',
     'body.btc #view-booking .btc-ft.bk{top:-7px;right:2px;font-size:9px!important;line-height:13px!important;padding:0 5px;background:#EEF0F3;color:#8A8F9C!important;text-decoration:none!important;box-shadow:none}',
     'body.btc #view-booking .btc-ft.bk::before{content:"จอง "}',
+    /* §btcJongRed (2026-10-17) · owner "ลอย แต่ขยับไปอยู่หลังเลข 0 พร้อมทั้งเป็นสีแดง"
+       ของเดิมป้ายเทาลอยคร่อมเส้นบนของช่อง · ดูเหมือนเป็นของแถวข้างบน
+       ตอนนี้ป้ายเกาะท้ายตัวเลข (.btc-lnum) ระดับเดียวกัน สีแดง · ตัวเลขยังอยู่กลางช่องเหมือนแถวอื่น
+       ช่อง AD/CHD/INF/FOC แคบ (~37px) ป้ายจึงลอยล้นไปทางขวาทับช่องถัดไปได้ · ปกติช่องถัดไปว่าง (จุด ·)
+       ถ้าช่องถัดไปมีตัวเลข ย่อเป็น "/3" (.tight) ไม่ให้ทับเลขของช่องนั้น · ชี้เมาส์ยังขึ้น "จองมา 3" */
+    'body.btc #view-booking .btc-lnum{position:relative;display:inline-block}',
+    'body.btc #view-booking .btc-lnum>.btc-ft.bk,body.btc #view-booking .btc-lnum>.btc-ft.bk:hover{position:absolute;top:50%;left:100%;right:auto;margin-left:4px;transform:translateY(-50%);z-index:6;font-size:9px!important;line-height:14px!important;padding:0 4px;border-radius:7px;background:#FEE4E2;color:#B42318!important;font-weight:700;box-shadow:0 1px 3px rgba(180,35,24,.22);text-decoration:none!important}',
+    'body.btc #view-booking .btc-lnum.tight>.btc-ft.bk::before{content:"/"}',
 
     /* header cards: lists run to the bottom edge (round 8) · contain:size so a long list scrolls instead of growing the header */
     'body.btc #view-booking .bt-boat .bt-tgl{max-height:none;flex:1 1 auto;min-height:0;contain:size;padding-bottom:4px}',
@@ -81303,7 +81311,14 @@ function pc2CSS3(S){
         dw.parentNode.closest('td').classList.add('btc-fcs');
       }
       var lost = tr.querySelectorAll(':scope > td.t2-c > div[style*="line-through"]');
-      for(var q = 0; q < lost.length; q++){ lost[q].classList.add('btc-ft', 'bk'); lost[q].parentNode.classList.add('btc-fc'); if(!lost[q].title) lost[q].title = 'จองมา ' + lost[q].textContent.trim(); }
+      for(var q = 0; q < lost.length; q++){ lost[q].classList.add('btc-ft', 'bk'); lost[q].parentNode.classList.add('btc-fc'); if(!lost[q].title) lost[q].title = 'จองมา ' + lost[q].textContent.trim();
+        /* §btcJongRed · ตัวเลขกับป้ายเข้ากล่องเดียวกัน ป้ายจะได้ต่อท้ายตัวเลข */
+        var num = lost[q].previousElementSibling;
+        if(num && num.tagName === 'SPAN' && !num.parentNode.classList.contains('btc-lnum')){
+          var wr = document.createElement('span'); wr.className = 'btc-lnum';
+          num.parentNode.insertBefore(wr, num); wr.appendChild(num); wr.appendChild(lost[q]);
+        }
+      }
       var pk = tr.querySelector(':scope > td.t2-pk'); if(pk && !pk.title){ var pt = pk.innerText.replace(/\s+/g, ' ').trim(); if(pt) pk.title = pt; }
       var tot = tr.querySelector(':scope > td.t2-r');
       if(tot){
@@ -81361,6 +81376,32 @@ function pc2CSS3(S){
     }catch(e){}
   }
 
+  /* §btcJongRed · ป้ายลอยไปทางขวา · ช่องถัดไปมีตัวเลข → ย่อเป็น "/3" ไม่ให้ทับ · วัดหลังวาด และวัดใหม่เมื่อหน้าต่างเปลี่ยนขนาด */
+  function lnumFit(root){
+    var ws = (root || document).querySelectorAll('.btc-lnum');
+    for(var i = 0; i < ws.length; i++){
+      var w = ws[i], td = w.closest('td'), b = w.querySelector('.btc-ft.bk');
+      if(!td || !b || !td.clientWidth) continue;              // ซ่อนอยู่ · วัดไม่ได้ ข้ามไปก่อน
+      w.classList.remove('tight');
+      var rb = b.getBoundingClientRect(), nb = td.nextElementSibling, tight = false;
+      if(!nb) tight = rb.right > td.getBoundingClientRect().right;
+      else{
+        var rn = nb.getBoundingClientRect();
+        var empty = !nb.textContent.trim() || (nb.children.length === 1 && nb.firstElementChild.classList.contains('t2-dim'));
+        if(rb.right > rn.right - 2) tight = true;              // ล้นเลยช่องถัดไปทั้งช่อง
+        else if(!empty){
+          var rg = document.createRange(); rg.selectNodeContents(nb);
+          var rc = rg.getBoundingClientRect();
+          if(rc.width && rb.right + 3 > rc.left) tight = true;  // จะทับเลขของช่องถัดไป
+        }
+      }
+      if(tight) w.classList.add('tight');
+    }
+  }
+  window.btcLnumFit = lnumFit;
+  var _lnT = 0;
+  try{ window.addEventListener('resize', function(){ clearTimeout(_lnT); _lnT = setTimeout(function(){ try{ lnumFit(document.getElementById('view-booking')); }catch(e){} }, 150); }); }catch(e){}
+
   var busy = false;
   function pass(){
     if(busy) return; busy = true;
@@ -81370,7 +81411,7 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); }
+        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); lnumFit(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
