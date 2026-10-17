@@ -51,7 +51,7 @@
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
   ['paCell', 'paHasJob', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
-   'renderPierOffice', 'renderPierAtt'].forEach(function(n){ L[n] = window[n]; });
+   'renderPierOffice', 'renderPierAtt', 'paRoutesByCode', 'paRouteCode', 'poUnassigned'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
   function cfg(){ var c = window.PIER_CFG; if(!c || typeof c !== 'object'){ c = window.PIER_CFG = {}; } return c; }
@@ -65,6 +65,11 @@
   var fresh = {}, inflight = {}, later = {};
   function invalidate(){ fresh = {}; }
   O.onWrite(function(kind){ if(kind === 'pier') invalidate(); });
+  // The day's unassigned heads (poUnassigned) move when a booking or its boat changes: ask for the day again.
+  O.onWrite(function(kind){
+    if(kind !== 'booking' && kind !== 'trip-boat') return;
+    Object.keys(fresh).forEach(function(k){ if(k.indexOf('day|') === 0) delete fresh[k]; });
+  });
   P.afterLoad(function(){ invalidate(); stampLegacyMoves(); return Promise.resolve(); });
   function ensure(key, load, view){
     if(!ready() || fresh[key] || inflight[key]) return;
@@ -216,7 +221,7 @@
   };
 
   /* ════ roster · PIER_SHIFT ═══════════════════════════════════════════ */
-  var rbase = {}, rcover = {}, cells = {}, rosters = {}, lastRoster = null;
+  var rbase = {}, rcover = {}, cells = {}, rosters = {}, lastRoster = null, routeCodes = null;
   function sKey(date, sid){ return String(date) + '::' + String(sid); }
   function rsig(rec){ return rec ? (rec.c || '') + '|' + (rec.c && rec.plan ? 1 : 0) + '|' + (rec.n || '') : ''; }
   function staffPier(sid){
@@ -243,6 +248,7 @@
           } else { delete S[k]; delete rbase[k]; }
         });
       });
+      if(Array.isArray(j.route_codes)) routeCodes = j.route_codes;   // [{ code, routes: [{ id, name }] }]
       rosters[pier] = { pier: pier, from: j.from, to: j.to, days: daysMap, key: 'roster|' + pier + '|' + j.from + '|' + j.to };
       lastRoster = rosters[pier];
       return j;
@@ -262,6 +268,29 @@
       }
     }
     return L.paCell ? L.paCell.apply(this, arguments) : { c:'', src:'none', boat:'', atPier:'' };
+  };
+  /* Route codes (paRouteCode / paRoutesByCode, hence paCodeMeta): the code each route holds is the server's
+     (GET …/roster route_codes, routeCodeIndex); the roster cell of a sailed boat already carries it. Until a roster has
+     been read, or for a route the index does not list, legacy's own guess answers (same table). */
+  window.paRoutesByCode = function(code){
+    if(!ready() || !routeCodes || !code) return L.paRoutesByCode.apply(this, arguments);
+    var hit = routeCodes.filter(function(e){ return e.code === code; })[0];
+    if(!hit) return L.paRoutesByCode.apply(this, arguments);   // not a code the server gives a route
+    var ids = {};
+    hit.routes.forEach(function(r){ ids[r.id] = 1; });
+    var all = Array.isArray(window.ROUTES) ? window.ROUTES : [];
+    return all.filter(function(r){ return ids[r.id]; });
+  };
+  window.paRouteCode = function(rid){
+    if(ready() && routeCodes && rid){
+      var rt = guarded(function(){ return typeof window.getRoute === 'function' ? window.getRoute(rid) : null; });
+      if(rt && !String(rt.code || '').trim()){
+        for(var i = 0; i < routeCodes.length; i++){
+          if(routeCodes[i].routes.some(function(r){ return r.id === rid; })) return routeCodes[i].code;
+        }
+      }
+    }
+    return L.paRouteCode.apply(this, arguments);
   };
   window.paHasJob = function(date, pier, E){
     var r = ready() && rosters[pier];
@@ -444,10 +473,16 @@
   };
 
   /* the day: lock, reopen trail, each boat's stage */
-  var dayBase = {};
+  var dayBase = {}, unassigned = {};
+  window.poUnassigned = function(date, pier){
+    var n = unassigned[pier + '|' + date];
+    if(ready() && n !== undefined) return n;
+    return L.poUnassigned.apply(this, arguments);
+  };
   function dayKey(pier, date){ return pier + '::' + date; }
   function loadDay(pier, date){
     return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
+      if(j.unassigned) unassigned[pier + '|' + date] = +j.unassigned.pax || 0;   // heads at the pier with no boat yet (poUnassigned)
       (j.boats || []).forEach(function(b){
         stages[pier + '|' + date + '|' + b.boat_id] = { k: b.stage, left: b.left, issued: b.issued, carry: b.carry, onboard: b.onboard, sheet_status: b.sheet_status };
       });

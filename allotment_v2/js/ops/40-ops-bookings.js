@@ -1013,4 +1013,17 @@
   window.laOpsFromServer = fromServer;
   O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
                  reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
+
+  /* The cancel dialog's reasons (BKV2_CANCEL_REASONS) are the server's list: GET /v1/cancel-categories
+     { categories: [{ code, en, th, group, default_charge }] }. Replaced in place (the list is a const), same fields as legacy's
+     (default_charge is legacy's `def`, the charge the dialog pre-selects). Legacy mode keeps its built-in list. */
+  O.cancelCategories = { load: function(){
+    return O.get('/v1/cancel-categories').then(function(j){
+      var rows = (j && j.categories) || [];
+      if(!rows.length || typeof BKV2_CANCEL_REASONS === 'undefined') return j;
+      BKV2_CANCEL_REASONS.length = 0;
+      rows.forEach(function(c){ BKV2_CANCEL_REASONS.push({ code: c.code, en: c.en, th: c.th, group: c.group, def: c.default_charge }); });
+      return j;
+    });
+  } };
 })();

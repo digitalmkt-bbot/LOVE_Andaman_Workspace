@@ -330,5 +330,25 @@
     }
   });
 
+  /* What kind of work a boat's day is (dd | mt | boat | none) is the server's: GET …/job `kind` (jobKindOf). Until the day's
+     job has been read, legacy's own decision (pjBoatSt and TRIPS) answers. */
+  var paJobKind0 = window.paJobKind;
+  window.paJobKind = function(date, bid){
+    var v = enabled() && st.views[jkey(date, bid)];
+    if(v && /^(dd|mt|boat|none)$/.test(v.kind)) return v.kind;
+    return paJobKind0.apply(this, arguments);
+  };
+
+  /* The Office screen's duty dialog (poDutySave) never loads the day's jobs, so the duty spec above would not know the boat
+     and the list would stay in the browser. Load the day first (once), then let legacy set PIER_DUTY and poPersist. */
+  var poDutySave0 = window.poDutySave;
+  window.poDutySave = function(bid){
+    var self = this, args = arguments, pier = window._poPier, date = window._poDate;
+    if(!enabled() || !pier || !date || st.keys[jkey(date, bid)]) return poDutySave0.apply(self, args);
+    return loadDay(pier, date).then(function(ok){
+      if(ok) return poDutySave0.apply(self, args);   // on a failed load the toast says so and the dialog stays open
+    });
+  };
+
   O.pierJob = { state: st, loadDay: loadDay };
 })();
