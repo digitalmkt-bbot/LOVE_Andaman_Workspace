@@ -71,7 +71,7 @@
   }
   function piers(){
     var out = PIERS.slice();
-    try{ (window.ROUTES || []).forEach(function(r){ if(r && r.pier && out.indexOf(r.pier) < 0) out.push(r.pier); }); }catch(_){}
+    try{ (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES) ? ROUTES : []).forEach(function(r){ if(r && r.pier && out.indexOf(r.pier) < 0) out.push(r.pier); }); }catch(_){}
     return out;
   }
   function boatsRaw(date){

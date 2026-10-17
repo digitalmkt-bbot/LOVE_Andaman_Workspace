@@ -617,7 +617,7 @@
       // The new date is set through the booking's own reschedule flow (client ids are the server's external id).
       var row = (last[dateOf()] && last[dateOf()]._roster && last[dateOf()]._roster.rows || []).filter(function(r){ return r.id === bkId; })[0];
       var cid = row ? (row.b.external_id || row.id) : bkId;
-      var have = (window.SB_BOOKINGS || []).some(function(b){ return b && (b.id === cid || b.opsId === bkId); });
+      var have = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS) ? SB_BOOKINGS : []).some(function(b){ return b && (b.id === cid || b.opsId === bkId); });
       if(have && g('bookingV2RescheduleModal')) window.bookingV2RescheduleModal(cid);
       else if(O.toast) O.toast({ kind: 'info', title: 'Saved as postponed', sub: 'Set the new date on the booking page.', dur: 6000 });
     });
