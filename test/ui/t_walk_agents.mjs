@@ -228,6 +228,73 @@ await waitFor((id) => SB_AGENTS.some((a) => a.id === id), victim, 15000);
 const afterReload = await ev((id) => (SB_AGENTS.find((a) => a.id === id) || {}).rateTypeId, victim);
 ok("after reload the agent is still unbound (screen: no rate type, server: null)", !afterReload && (await api('/v1/agents/' + victim)).rate_type_id === null, afterReload);
 }
+if (want(4)) {
+console.log('\n[4] rate type: add-on types dialog, custom add-on prices (PUT/DELETE .../addons/{key}), Active switch');
+item = 4;
+await nav('rate-types'); await waitFor(() => window.laOps.rateTypes && window.laOps.rateTypes.state.loaded, null, 15000); await settle(600);
+// --- the add-on types dialog (rtAddonTypesOpen) and a custom type created through it (ops/29) ---
+await page.click('button[onclick="rtAddonTypesOpen()"]');
+const dlg = await waitFor(() => !!document.getElementById('rt-addon-types-modal') && !!document.getElementById('rtat-en'), null, 5000);
+ok('the "ชนิด Add-on" button opens the add-on types dialog (rtAddonTypesOpen)', dlg, dlg);
+const mkType = async (en, th, model, unit) => {
+  await page.fill('#rtat-en', en); await page.fill('#rtat-th', th); await page.selectOption('#rtat-model', model); await page.fill('#rtat-unit', unit);
+  const n = bodies.length;
+  await page.click('#rt-addon-types-modal button[onclick="rtAddonTypeCreate()"]');
+  await idle(); await settle(500);
+  return bodies.slice(n).filter((x) => x.m === 'POST' && x.p === '/v1/addon-types');
+};
+const post1 = await mkType('ZZ Park Fee', 'ค่าอุทยาน ZZ', 'perPax', 'per pax');
+const post2 = await mkType('ZZ Towel Hire', 'ผ้าเช็ดตัว ZZ', 'flat', 'per trip');
+const post3 = await mkType('ZZ Temp Type', 'ชั่วคราว ZZ', 'perPax', 'per pax');
+const types = (await api('/v1/addon-types')).addon_types;
+const t1 = types.find((t) => t.name === 'ZZ Park Fee'), t2 = types.find((t) => t.name === 'ZZ Towel Hire'), t3 = types.find((t) => t.name === 'ZZ Temp Type');
+ok('three custom types created: one POST /v1/addon-types each; server holds them with the models chosen', post1.length === 1 && post2.length === 1 && post3.length === 1 && t1 && t1.model === 'perPax' && t2 && t2.model === 'flat' && t3, { posts: [post1.length, post2.length, post3.length], types });
+const dlgText = await ev(() => document.getElementById('rt-addon-types-body').innerText);
+ok('dialog lists the new types (screen)', dlgText.includes('ZZ Park Fee') && dlgText.includes('ZZ Towel Hire'), dlgText.slice(0, 300));
+await page.locator(`#rt-addon-types-modal button[onclick="rtAddonTypeDelete('${t3.key}')"]`).click();
+await idle(); await settle(500);
+ok('delete of a custom type (✕) → DELETE /v1/addon-types/{key}; gone on the server and in the dialog', !(await api('/v1/addon-types')).addon_types.some((t) => t.key === t3.key) && !(await ev(() => document.getElementById('rt-addon-types-body').innerText)).includes('ZZ Temp Type') && sentTo('DELETE', /\/v1\/addon-types\//).length === 1, null);
+await page.click('#rt-addon-types-modal button[onclick="rtAddonTypesClose()"]');
+// --- custom add-on prices on rt002 through the edit modal ---
+const editRt = async (id) => { await ev((i) => rtOpenEdit(i), id); await waitFor(() => !!document.querySelector('button[onclick="rtSaveDraft()"]'), null, 8000); await settle(500); };
+const priceCall = (m, key) => bodies.filter((x) => x.m === m && x.p === `/v1/rate-types/rt002/addons/${key}`);
+await editRt('rt002');
+await page.locator(`input[onchange="rtToggleAddOn('${t1.key}',this.checked)"]`).check();
+await page.locator(`input[oninput*="addOns.${t1.key}.adult"]`).fill('300');
+await page.locator(`input[oninput*="addOns.${t1.key}.child"]`).fill('150');
+await page.locator(`span[onclick="rtToggleAddOnRoute('${t1.key}','r5')"]`).click();
+await page.locator(`input[onchange="rtToggleAddOn('${t2.key}',this.checked)"]`).check();
+await page.locator(`input[oninput*="addOns.${t2.key}.price"]`).fill('900');
+await page.click('button[onclick="rtSaveDraft()"]');
+await idle(); await settle(900);
+const rt2 = await api('/v1/rate-types/rt002');
+const a1 = priceCall('PUT', t1.key), a2 = priceCall('PUT', t2.key);
+ok('save sent PUT .../addons/{key}: per-pax {adult:300, child:150, applies:[r5]} and flat {price:900, applies:[]}', a1.length === 1 && a1[0].b.adult === 300 && a1[0].b.child === 150 && JSON.stringify(a1[0].b.applies) === '["r5"]' && a2.length === 1 && a2[0].b.price === 900 && a2[0].b.adult === undefined, { a1, a2 });
+ok('server holds both prices on rt002', rt2.addons && rt2.addons[t1.key] && rt2.addons[t1.key].adult === 300 && rt2.addons[t1.key].child === 150 && JSON.stringify(rt2.addons[t1.key].applies) === '["r5"]' && rt2.addons[t2.key] && rt2.addons[t2.key].price === 900, rt2.addons);
+const scr4 = await ev((k) => { const r = SB_RATE_TYPES.find((x) => x.id === 'rt002'); return { p: r.addOns[k[0]], f: r.addOns[k[1]], modal: document.getElementById('rt-modal').style.display !== 'none' }; }, [t1.key, t2.key]);
+ok('screen: rt002 carries the add-on prices (adult 300 / child 150 / flat 900) and the editor closed', scr4.p && scr4.p.adult === 300 && scr4.p.child === 150 && scr4.f && scr4.f.price === 900 && !scr4.modal, scr4);
+// turn the flat one off → DELETE
+await editRt('rt002');
+const on = await ev((k) => ({ p: _rtDraft.addOns[k[0]], f: _rtDraft.addOns[k[1]] }), [t1.key, t2.key]);
+ok('re-opened editor shows the saved prices', on.p && on.p.adult === 300 && on.f && on.f.price === 900, on);
+await page.locator(`input[onchange="rtToggleAddOn('${t2.key}',this.checked)"]`).uncheck();
+await page.click('button[onclick="rtSaveDraft()"]');
+await idle(); await settle(900);
+const rt2b = await api('/v1/rate-types/rt002');
+ok('switch off + save → DELETE .../addons/{key}; server keeps only the per-pax one', priceCall('DELETE', t2.key).length === 1 && rt2b.addons && !rt2b.addons[t2.key] && rt2b.addons[t1.key] && rt2b.addons[t1.key].adult === 300, rt2b.addons);
+// --- Active switch ---
+await ev(() => { _rtSelected = 'rt002'; rtRenderCards(); rtRenderDetail('rt002'); });
+await settle(400);
+const nA = bodies.length;
+await page.locator('button[onclick^="rtToggleActive(\'rt002\'"]').first().click();
+await idle(); await settle(600);
+const patch1 = bodies.slice(nA).filter((x) => x.m === 'PATCH' && x.p === '/v1/rate-types/rt002');
+const off = await ev(() => SB_RATE_TYPES.find((x) => x.id === 'rt002').active);
+ok('Deactivate → PATCH /v1/rate-types/rt002 {active:false}; server inactive; screen inactive', patch1.length === 1 && patch1[0].b.active === false && (await api('/v1/rate-types/rt002')).active === false && off === false, { patch1, off });
+await page.locator('button[onclick^="rtToggleActive(\'rt002\'"]').first().click();
+await idle(); await settle(600);
+ok('Activate again → server active true; screen active', (await api('/v1/rate-types/rt002')).active === true && (await ev(() => SB_RATE_TYPES.find((x) => x.id === 'rt002').active)) === true, null);
+}
 //@@STEPS@@
 
 await browser.close(); srv.close(); backend.kill();
