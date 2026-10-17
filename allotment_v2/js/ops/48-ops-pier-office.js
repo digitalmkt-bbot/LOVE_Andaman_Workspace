@@ -500,7 +500,8 @@
   function dayKey(pier, date){ return pier + '::' + date; }
   function loadDay(pier, date){
     return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
-      if(j.unassigned) unassigned[pier + '|' + date] = +j.unassigned.pax || 0;   // heads at the pier with no boat yet (poUnassigned)
+      if(j.unassigned) unassigned[pier + '|' + date] = +j.unassigned.pax || 0;
+      var byBoat = {}; (j.boats || []).forEach(function(b){ if(b && b.boat_id) byBoat[b.boat_id] = b; }); srvDay[pier + '|' + date] = byBoat;   // bookings[] of each boat (poBoats, poPaxLeft)   // heads at the pier with no boat yet (poUnassigned)
       (j.boats || []).forEach(function(b){
         stages[pier + '|' + date + '|' + b.boat_id] = { k: b.stage, left: b.left, issued: b.issued, carry: b.carry, onboard: b.onboard, sheet_status: b.sheet_status };
       });
@@ -886,7 +887,10 @@
     var pier = window._poPier, date = window._poDate, args = arguments, self = this;
     if(opening[bid]) return undefined;
     opening[bid] = 1;
-    return O.get(sheetPath(pier, date, bid)).then(function(v){ applySheet(pier, date, bid, v); }, function(e){ O.fail('Sign-out sheet not read', e); })
+    // the starting rows (poIsBuild) are read beside the sheet; a failed read leaves legacy's build
+    var sk = startKey(pier, date, bid); delete startRead[sk];
+    var startP = O.get(sheetPath(pier, date, bid) + '/start').then(function(st){ startRead[sk] = st; }, function(){});
+    return Promise.all([O.get(sheetPath(pier, date, bid)).then(function(v){ applySheet(pier, date, bid, v); }, function(e){ O.fail('Sign-out sheet not read', e); }), startP])
       .then(function(){ delete opening[bid]; return L.poIssueOpen.apply(self, args); });
   };
   window.poIssueDraft = function(bid){
@@ -929,6 +933,165 @@
           });
         }, 'renderPierAtt');
       }
+    }
+    return r;
+  };
+
+  /* ════ reads the browser used to compute (todo/pier-reads-model.md) ══════
+     poPaxLeft, poBoats, poIsPax   GET …/days/{date}/boats  (boats[].bookings[])
+     poIsBuild                     GET …/days/{date}/sheets/{boat}/start  (read when the dialog opens, with the sheet)
+     poShipAll, poShipByBoat       GET …/ship
+     poShipBoatDiff                GET …/boats/{boat}/stock/check
+     poLedgerOpen summary          GET …/moves  (summary), copied in by poLedgerSrv, which 08-app.js calls inside poLedgerOpen
+     Each answers the server's number once the read is here and while nothing of the pier waits to be sent; until then, and for a
+     boat or booking the server did not list, the legacy function answers as before. */
+  var srvDay = {}, shipRead = {}, sumRead = {}, startRead = {}, ledgerNode = null;
+  var RL = {};
+  ['poPaxLeft', 'poBoats', 'poIsPax', 'poIsBuild', 'poShipAll', 'poShipByBoat', 'poShipBoatDiff', 'poLedgerOpen'].forEach(function(n){ RL[n] = window[n]; });
+  O.onWrite(function(){
+    srvDay = {}; shipRead = {}; sumRead = {};
+    Object.keys(fresh).forEach(function(k){ if(k.indexOf('day|') === 0 || k.indexOf('ship|') === 0) delete fresh[k]; });
+  });
+  function unsentPier(pier){ return moves().some(function(m){ return m && !m.srv && m.pier === pier; }); }
+  // the boat of a day: this file's own read of the day, else the one the job and cash pages keep (47-ops-pier-job.js)
+  function srvBoat(pier, date, bid){
+    if(!pier || !date || !bid) return null;
+    var e = srvDay[pier + '|' + date];
+    if(e) return e[bid] || null;
+    var DB = P.dayBoats; return DB ? DB.boat(pier, date, bid) : null;
+  }
+  function tripBoat(b, date, t){
+    var rt = typeof window.getRoute === 'function' ? window.getRoute(t && t.routeId) : null;
+    var op = typeof window.bkOpsRead === 'function' ? window.bkOpsRead(b, date) : (b.ops || {});
+    return { pier: (rt && rt.pier) || '', bid: (op && op.boatId) || (t && t.charterBoatId) || '' };
+  }
+  function srvBooking(b, date, t){
+    if(!ready() || !b || !t) return null;
+    var tb = tripBoat(b, date, t), sb = srvBoat(tb.pier, date, tb.bid); if(!sb) return null;
+    var id = b.opsId || b.id, list = sb.bookings || [];
+    for(var i = 0; i < list.length; i++) if(list[i].booking_id === id && list[i].route_id === t.routeId) return list[i];
+    return null;
+  }
+  // poPaxLeft(b,date,t): what is left of a booking after those lost = bookings[].left of the boat's day
+  window.poPaxLeft = function(b, date, t){
+    var k = srvBooking(b, date, t);
+    if(k && k.left) return { ad: k.left.ad, chd: k.left.chd, inf: k.left.inf, foc: k.left.foc, tot: k.left.total };
+    return RL.poPaxLeft.apply(this, arguments);
+  };
+  // poBoats(date,pier): the list of boats stays legacy's (deployments); the heads of each row are the server's bookings[] (pax, pax_real, by share)
+  window.poBoats = function(date, pier){
+    var rows = RL.poBoats.apply(this, arguments);
+    if(!ready()) return rows;
+    rows.forEach(function(row){
+      var sb = srvBoat(pier, date, row.bid); if(!sb || !sb.bookings) return;
+      var pax = 0, real = 0;
+      sb.bookings.forEach(function(k){ var w = k.share == null ? 1 : +k.share; pax += (+k.pax || 0) * w; real += (+k.pax_real || 0) * w; });
+      row.pax = Math.round(pax); row.paxReal = Math.round(real);
+      (row.bks || []).forEach(function(x){
+        var k = srvBooking(x.b, date, x.t); if(!k) return;
+        x.pax = +k.pax || 0; x.paxReal = +k.pax_real || 0;
+      });
+    });
+    return rows;
+  };
+  // poIsPax(r): the heads that use gear (ad + chd + foc) of a booking row = start rows[].heads (kept on the row as srvHeads)
+  window.poIsPax = function(r){
+    if(ready() && r && !r.extra && typeof r.srvHeads === 'number') return r.srvHeads;
+    return RL.poIsPax.apply(this, arguments);
+  };
+  // poIsBuild(bid): the rows, the carried row and the starting split are the server's …/sheets/{boat}/start
+  function startKey(pier, date, bid){ return pier + '|' + date + '|' + bid; }
+  window.poIsBuild = function(bid){
+    var IS = RL.poIsBuild.apply(this, arguments);
+    var st = ready() && IS && startRead[startKey(window._poPier, window._poDate, bid)];
+    if(!st || !Array.isArray(st.rows)) return IS;
+    var KS = IS.KS || [];
+    function kmap(m){ var o = {}; KS.forEach(function(k){ o[k] = +((m || {})[k]) || 0; }); return o; }
+    IS.rows = st.rows.map(function(r){
+      var ag = typeof window.sbGetAgent === 'function' && r.agent_id ? window.sbGetAgent(r.agent_id) : null;
+      var R = { id: r.id, bkId: r.booking_id ? bkLocal(r.booking_id) : '', extra: !!r.extra, car: r.car || '', booked: +r.booked || 0,
+                agN: r.agent_name, agC: (typeof window.poSignColor === 'function' && window.poSignColor(r.agent_id)) || (ag && ag.color) || '',
+                names: (r.names && r.names.length) ? r.names.slice() : [''], sub: r.sub || '',
+                ad: +r.ad || 0, chd: +r.chd || 0, inf: +r.inf || 0, foc: +r.foc || 0, srvHeads: +r.heads || 0,
+                iss: kmap(r.issued), ret: kmap(r.returned), dep: +r.deposit_baht || 0, back: +r.deposit_returned_baht || 0,
+                cut: +r.deduction_a || 0, cutB: +r.deduction_b || 0, note: r.note || '' };
+      // legacy's own words for the rows the server names in English (a booking_gone row keeps the server's text)
+      if(r.carried){ R.agN = 'ยกมา'; R.names = ['ยอดเดิมในบัญชีสต็อก']; R.sub = 'ยังไม่ได้ระบุว่าเป็นของใบจองไหน'; R.note = 'ยกมาจากยอดที่บันทึกไว้ก่อนใช้ตารางนี้'; }
+      else if(R.extra){ R.sub = 'ไม่ผูกกับใบจอง'; if(r.agent_name === 'Staff') R.agN = 'พนักงาน'; }
+      return R;
+    });
+    var sp = st.split || {};
+    KS.forEach(function(k){
+      (IS.items[k] || []).forEach(function(it){
+        IS.size[k][it.id] = +(((sp.issued || {})[k] || {})[it.id]) || 0;
+        IS.rsz[k][it.id] = +(((sp.returned || {})[k] || {})[it.id]) || 0;
+      });
+    });
+    return IS;
+  };
+  // ship: what each boat holds
+  function loadShip(pier){
+    return O.get('/v1/pier-office/' + enc(pier) + '/ship').then(function(j){ shipRead[pier] = j; });
+  }
+  function shipOf(pier){
+    if(!ready() || !pier || unsentPier(pier)) return null;
+    var j = shipRead[pier];
+    if(!j){ ensure('ship|' + pier, function(){ return loadShip(pier); }, 'renderPierOffice'); return null; }
+    return j;
+  }
+  window.poShipAll = function(pier){
+    var j = shipOf(pier); if(!j) return RL.poShipAll.apply(this, arguments);
+    return (j.boats || []).map(function(b){ return { bid: b.boat_id, tot: b.total, items: (b.items || []).map(function(i){ return { itemId: i.item_id, q: i.qty }; }) }; });
+  };
+  // poShipByBoat(itemId): the boats that hold the item, taken from the same …/ship read (boats[].items)
+  window.poShipByBoat = function(itemId){
+    var it = itemOf(itemId), j = shipOf(it && it.pier); if(!j) return RL.poShipByBoat.apply(this, arguments);
+    var out = [];
+    (j.boats || []).forEach(function(b){ (b.items || []).forEach(function(i){ if(i.item_id === itemId && i.qty > 0) out.push({ bid: b.boat_id, q: i.qty }); }); });
+    return out.sort(function(a, b){ return b.q - a.q; });
+  };
+  // poShipBoatDiff(bid,id): legacy's line shows at once; the server's line (…/stock/check) replaces it when it arrives
+  var diffTimer = {};
+  window.poShipBoatDiff = function(bid, id){
+    var r = RL.poShipBoatDiff.apply(this, arguments);
+    var inp = document.getElementById('psc_' + id), raw = inp ? String(inp.value || '').trim() : '';
+    if(!ready() || !/^\d+$/.test(raw)) return r;
+    var pier = window._poPier; clearTimeout(diffTimer[id]);
+    diffTimer[id] = setTimeout(function(){
+      O.get('/v1/pier-office/' + enc(pier) + '/boats/' + enc(bid) + '/stock/check', { item_id: id, counted: raw }).then(function(c){
+        var el = document.getElementById('psd_' + id), sel = document.getElementById('psr_' + id), now = document.getElementById('psc_' + id);
+        if(!el || !now || String(now.value || '').trim() !== raw || !c || !c.state) return;
+        el.textContent = c.state === 'ok' ? 'ครบ' : (c.state === 'short' ? 'ขาด ' + c.short : '+' + c.diff + ' ?');
+        el.style.color = c.state === 'ok' ? '#047857' : '#B91C1C';
+        if(sel){ sel.disabled = !c.needs_reason; if(!c.needs_reason) sel.value = ''; if(typeof window.poShipFineTgl === 'function') window.poShipFineTgl(id); }
+      }, function(){});   // a failed check leaves legacy's line; the save is still judged by the server
+    }, 200);
+    return r;
+  };
+  // poLedgerOpen(): the summary boxes come from …/moves `summary` (the whole pier, whatever the filters)
+  window.poLedgerSrv = function(pier, S){
+    var s = ready() && !unsentPier(pier) && sumRead[pier] && sumRead[pier].s; if(!s) return;
+    S.srvMoves = s.moves; S.srvDays = s.days; S.d0 = s.from || ''; S.d1 = s.to || '';
+    S.issue = s.issued; S.ret = s.returned; S.lost = s.lost.qty; S.fine = s.lost.fines_baht; S.fineN = s.lost.fines_count;
+    S.nfN = s.lost_without_fine.count; S.nfQ = s.lost_without_fine.qty;
+    S.nf = (s.lost_without_fine.first || []).map(function(x){ return { d: x.date, l: x.label, q: x.qty }; });
+    S.lout = s.laundry_out; S.lin = s.laundry_in;
+    S.out = {}; (s.still_out.by_item || []).forEach(function(x){ S.out[x.item_id] = x.qty; });
+    S.boat = {}; (s.by_boat_all || []).forEach(function(x){ S.boat[x.boat_id || ''] = x.qty; });
+    S.kind = {}; (s.by_kind || []).forEach(function(x){ S.kind[x.kind_id] = x.moves; });
+  };
+  window.poLedgerOpen = function(){
+    var r = RL.poLedgerOpen.apply(this, arguments);
+    if(!ready()) return r;
+    var pier = window._poPier; ledgerNode = document.getElementById('po-modal');
+    if(!sumRead[pier]){
+      var e = sumRead[pier] = { s: null };
+      O.get('/v1/pier-office/' + enc(pier) + '/moves', { limit: 1 }).then(function(j){
+        e.s = (j && j.summary) || null;
+        var f = document.activeElement;
+        // draw the ledger again only if it is still the dialog on screen and nobody is typing in it
+        if(e.s && sumRead[pier] === e && ledgerNode && document.getElementById('po-modal') === ledgerNode && !(f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName))) window.poLedgerOpen();
+      }, function(err){ try{ console.warn('[ops] ledger summary · ' + err.message); }catch(_){} });
     }
     return r;
   };
