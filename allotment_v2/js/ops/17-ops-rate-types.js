@@ -374,6 +374,16 @@
     };
   }
 
+  /* _rtBackfillOwners: legacy's one-time seed of rate-type owners from a map of production ids, set in memory only (rtPersist is a
+     no-op here). The server stores each rate type's owner and checks it itself, and fromServer sets owner ('' = shared), so a local
+     guess would only make the screen disagree with the server. Does nothing in ops mode. */
+  if(typeof window._rtBackfillOwners === 'function'){
+    var legacyBackfill = window._rtBackfillOwners;
+    window._rtBackfillOwners = function(){
+      if(!O.enabled()) return legacyBackfill.apply(this, arguments);
+    };
+  }
+
   /* Load before the ops boot redraws the active view. */
   if(O.enabled()) load();
 })();
