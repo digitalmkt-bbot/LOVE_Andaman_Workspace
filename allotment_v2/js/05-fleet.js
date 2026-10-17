@@ -11519,6 +11519,8 @@ function flRenderEngList(){
 
   // Service due: engines >=80% interval
   const dueEngs=all.filter(e=>{
+    const _ls=(typeof flEngListService==='function')?flEngListService(e):null;   /* ops mode: "due" (80 % of the interval) is the server's */
+    if(_ls) return !!(_ls.interval&&_ls.due);
     if(!e.serviceInterval)return false;
     const curH=typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0);
     const cyc=curH%e.serviceInterval;
@@ -11619,8 +11621,9 @@ function flRenderEngList(){
     const posBg=e.boatId?(isSuzuki?'#A32D2D':'#185FA5'):'#999';
     const posLbl=e.boatId?flPosLabel(e.pos||'EN'):'SPARE';
     const curH=typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0);
-    const next=e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null;
-    const left=next?+(next-curH).toFixed(0):null;
+    const _ls=(typeof flEngListService==='function')?flEngListService(e):null;   /* ops mode: the server's engine service */
+    const next=_ls?_ls.next:(e.serviceInterval?Math.ceil(curH/e.serviceInterval)*e.serviceInterval:null);
+    const left=_ls?_ls.left:(next?+(next-curH).toFixed(0):null);
     const svcLbl=left==null?'':(left<0?`over ${Math.abs(left)}h`:`${left}h to svc`);
     const svcColor=left==null?dim.ink3:(left<30?'#A32D2D':left<100?'#854F0B':dim.ink3);
     const locText=b?`${b.name} · ${flPosLabel(e.pos)}`:(e.spareLocation||'Workshop');
@@ -28668,6 +28671,8 @@ function faPartDetail(r){
   // KPI row
   var jobs=faAllJobs(r.kind,o.id), done=jobs.filter(function(m){ return m.status==='done'; });
   var cost=done.reduce(function(s,m){ return s+((typeof flMaintCostShare==='function')?flMaintCostShare(m,r.kind):(m.cost||0)); },0);
+  var nDoneJ=done.length, nAllJ=jobs.length;
+  if(o._fromOpsBackend && o.repairCost!=null){ cost=o.repairCost; nDoneJ=o.repairJobsDone; nAllJ=o.repairJobsTotal; }   /* ops mode: the server's repair_cost and job counts */
   var k1='';
   if(r.kind!=='prop'){ var ss=r.ss||{};
     if(ss.interval && ss.left!=null && (r.kind!=='eng'||r.hours>0) && (r.kind!=='gb'||o.engineId)){ var lc=ss.left<0?'#A32D2D':ss.left<30?'#A32D2D':ss.left<100?'#854F0B':'#1D9E75';
@@ -28684,7 +28689,7 @@ function faPartDetail(r){
       +'<div class="fa-tile" style="flex:1"><div class="fa-kick">'+(r.kind==='gb'?'ถ่ายน้ำมันเกียร์':'เซอร์วิสล่าสุด')+'</div><b>'+(lastSvc?faFmtD(lastSvc.date):'—')+'</b><i>'+(lastSvc&&lastSvc.hours!=null?('ที่ '+faH(lastSvc.hours)):'ยังไม่มีบันทึก')+'</i></div>')
     :('<div class="fa-tile" style="flex:1"><div class="fa-kick">ขนาด</div><b>'+faE(r.size||'—')+'</b><i>'+faE(r.blades||'')+'</i></div>'
       +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ราคา</div><b>'+(o.cost?faMoney(o.cost):'—')+'</b><i>ต่อใบ</i></div>'))
-    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ค่าซ่อมสะสม</div><b>'+faMoney(cost)+'</b><i>'+done.length+' งานที่ปิดแล้ว · '+jobs.length+' ทั้งหมด</i></div>';
+    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ค่าซ่อมสะสม</div><b>'+faMoney(cost)+'</b><i>'+nDoneJ+' งานที่ปิดแล้ว · '+nAllJ+' ทั้งหมด</i></div>';
   var kpi='<div style="display:flex;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">'+k1+tiles+'</div>';
   // history (item log, newest first)
   var TYC={service:'#1D9E75',repair:'#185FA5',install:'#1D9E75','service-start':'#BA7517',remove:'#BA7517',detach:'#BA7517',transfer:'#8A8F9C',status:'#8A8F9C',swap:'#185FA5',rename:'#8A8F9C',edit:'#8A8F9C',add:'#1D9E75'};

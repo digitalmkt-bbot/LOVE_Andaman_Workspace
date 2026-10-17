@@ -7070,9 +7070,10 @@ function renderFleetTab(b){
 
   const engsHtml=engs.length?engs.map(eng=>{
     const curH=flEngHours(eng.id);
-    const next=eng.serviceInterval?Math.ceil(curH/eng.serviceInterval)*eng.serviceInterval:null;
-    const left=next?+(next-curH).toFixed(1):null;
-    const pct=next?(curH%eng.serviceInterval)/eng.serviceInterval*100:0;
+    const _ls=(typeof flEngListService==='function')?flEngListService(eng):null;   /* ops mode: next service, hours left and % are the server's (engine service) */
+    const next=_ls?_ls.next:(eng.serviceInterval?Math.ceil(curH/eng.serviceInterval)*eng.serviceInterval:null);
+    const left=_ls?_ls.left:(next?+(next-curH).toFixed(1):null);
+    const pct=_ls?_ls.pct:(next?(curH%eng.serviceInterval)/eng.serviceInterval*100:0);
     const gb=FL_GEARBOXES.find(g=>g.engineId===eng.id);
     const props=gb?FL_PROPELLERS.filter(p=>p.gearboxId===gb.id):[];
     return`<div style="background:var(--sand);border-radius:8px;padding:10px 12px;margin-bottom:6px">
