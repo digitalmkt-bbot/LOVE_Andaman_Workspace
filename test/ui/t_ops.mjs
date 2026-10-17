@@ -219,6 +219,8 @@ const mk = async (o) => ev((o) => {
 }, o);
 await mk({ lead: 'ZZ TEST ONE', date: D1, pax: 2, lock: dayLock.id });
 await settle(1200); await idle();
+// the save now waits for a quote / voucher check before it queues the POST, so it can finish after 1.2 s
+await waitScreen(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ TEST ONE'); return b && b.opsId; }, null, 15000); await idle();
 let bk = await ev(() => SB_BOOKINGS.find((b) => b.leadPax === 'ZZ TEST ONE'));
 let sb = bk && bk.opsId ? await api('/v1/bookings/' + bk.opsId) : null;
 ok('saved → POST /v1/bookings · opsId + trip id stored', bk && bk.opsId && bk.trips[0].opsTripId && sb && sb.external_id === bk.id, { bk: bk && { id: bk.id, opsId: bk.opsId, t: bk.trips }, dialogs: dialogs.slice(-4) });

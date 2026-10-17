@@ -181,6 +181,7 @@
     if(bk.companyPurpose || bk.company_purpose) b.companyPurpose = bk.companyPurpose || bk.company_purpose;
     if(bk.priceBreakdown && bk.priceBreakdown.total != null && bk.total == null) b.total = coerce(bk.priceBreakdown.total, 'num');
     Object.keys(STRUCTS).forEach(function(s){
+      if(s === 'marketSnapshot') return;   /* the server freezes the agent's market at create and refuses it from a client (booking-actions.ts MARKET_SNAPSHOT_FIELDS, fe2df48) · read back only */
       var src = bk[s]; if(!src || typeof src !== 'object') return;
       var o = {}; Object.keys(STRUCTS[s]).forEach(function(k){ var v = coerce(src[k], STRUCTS[s][k][1]); if(v !== undefined) o[k] = v; });
       b[s] = o;
