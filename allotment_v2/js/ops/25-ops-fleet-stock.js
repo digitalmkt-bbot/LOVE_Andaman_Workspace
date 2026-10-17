@@ -95,7 +95,9 @@
         warehouse: st.warehouse,
         location: st.warehouse_name || warehouseLabel(st.warehouse),
         qty: num(st.qty),
-        minQty: null // the server keeps one min per item (min_qty), not per line: null lets faInvRows fall back to the item's min
+        minQty: st.min_qty != null ? num(st.min_qty) : null,   // the line's minimum (its own, else the item's): min_qty on the stock line
+        minOwn: !!st.min_own,
+        belowMin: st.below_min != null ? !!st.below_min : null  // min > 0 and qty < min, the server's word (faInvRows / faSpInvBlock)
       };
     });
     var totalQty = s.total_qty != null ? num(s.total_qty) : stocks.reduce(function(sum, x){ return sum + x.qty; }, 0);
@@ -118,6 +120,8 @@
       primaryLocation: primaryLoc,
       primaryWarehouse: s.primary_warehouse || null,
       belowMin: !!s.below_min,
+      linesBelowMin: s.lines_below_min != null ? num(s.lines_below_min) : null,
+      lineMins: s.line_mins ? clone(s.line_mins) : null,
       stocks: stocks,
       history: Array.isArray(s.movements) ? s.movements.map(mapMovement) : (Array.isArray(old.history) ? old.history : []),
       _fromOpsBackend: true

@@ -1122,6 +1122,23 @@
     }).catch(function(e){ O.fail('Could not save safety item', e); return null; });
   });
 
+  /* flOpenLogInspectionModal: a NEW inspection's next-due date is prefilled for the eye (date + the cadence, legacy's
+     look) but marked as not entered by a person; flSaveInspection then leaves it to the server. Typing in the field
+     makes it the person's date. Editing an inspection shows its stored date as it was. */
+  wrap('flOpenLogInspectionModal', function(orig, itemId, editInspId){
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    var el = document.getElementById('fl-insp-nextdue');
+    if(el){
+      el.dataset.auto = editInspId ? '0' : '1';
+      if(!el.__opsAuto){
+        el.__opsAuto = true;
+        var touched = function(){ el.dataset.auto = '0'; };
+        el.addEventListener('input', touched); el.addEventListener('change', touched);
+      }
+    }
+    return r;
+  });
+
   wrap('flSaveInspection', function(){
     var d = function(id){ return document.getElementById(id); };
     var itemId = typeof _flInspItemId !== 'undefined' ? _flInspItemId : null;
@@ -1132,7 +1149,9 @@
       inspector: d('fl-insp-inspector') ? nullable(d('fl-insp-inspector').value) : null,
       result: typeof _flInspResult !== 'undefined' ? (_flInspResult || 'pass') : 'pass',
       findings: d('fl-insp-findings') ? nullable(d('fl-insp-findings').value) : null,
-      next_due: d('fl-insp-nextdue') ? nullable(d('fl-insp-nextdue').value) : null
+      /* a date the person did not touch (the modal's prefill is only a hint) is not sent: the server fills it
+         (date + the category's pmMonths, fleet-safety.ts parseInspection) */
+      next_due: (d('fl-insp-nextdue') && d('fl-insp-nextdue').dataset.auto !== '1') ? nullable(d('fl-insp-nextdue').value) : null
     };
     return O.queue(function(){
       if(editInspId) return O.patch('/v1/fleet/safety/' + enc(itemId) + '/inspections/' + enc(editInspId), body);
@@ -1275,8 +1294,8 @@
   });
 
   /* legacy flBoatRepairCostMonth (Consumables screen): the month's repair cost per boat. The server's answer is
-     GET /v1/fleet/reports/upkeep?month=YYYY-MM, boats[].repairs (jobs closed that month; the server dates a
-     repair by its close date). The screen draws at once from the browser's own figure; when the month's report
+     GET /v1/fleet/reports/upkeep?month=YYYY-MM, boats[].repairs (every job of the boat, any status, that STARTED that
+     month, at its cost so far; rule Q2 of 2026-10-17, it was the close date before). The screen draws at once from the browser's own figure; when the month's report
      arrives it is drawn again from the server's. Any write or change clears the saved months. */
   /* flRenderDR (Daily Fleet Log): what the server worked out for a boat-day and a pier-day. Legacy's render asks these
      (not wraps: flRenderDR is one long function) and keeps its own sums for a day the server did not send. */
