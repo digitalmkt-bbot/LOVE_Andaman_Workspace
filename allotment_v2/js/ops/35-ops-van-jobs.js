@@ -36,7 +36,7 @@
   var originals = {};
   var WRAPPED = ['renderVanJobs', 'renderVanCheckin', 'bookingV2OpsVansDay', 'vanJobsGetPickupTh',
     'vanJobsSetDriver', 'vanJobsResetDriver', 'vanJobsToggleSent', 'vanJobsSetSreq', 'vanJobsResetSreq',
-    'vanJobsSetPickupTh', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck', 'vckArrAll', 'vckArrSave', 'vckArrToggle'];
+    'vanJobsSetPickupTh', 'vckArrWait', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck', 'vckArrAll', 'vckArrSave', 'vckArrToggle'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
   function wrap(name, opsFn){
     var orig = originals[name];
@@ -366,17 +366,27 @@
   var arrMap = {}, arrDays = {};
   function arrKey(date, van, route){ return date + '::' + van + '~' + route; }
   function arrPut(date, a){
-    arrMap[arrKey(date, a.van_id, a.route_id)] = { at: a.arrived_hm || '', by: a.arrived_by || '', ts: a.arrived_at || '' };
+    arrMap[arrKey(date, a.van_id, a.route_id)] = { at: a.arrived_hm || '', by: a.arrived_by || '', ts: a.arrived_at || '',
+      waited: (a.waited_minutes == null ? null : +a.waited_minutes), readAt: Date.now() };
   }
   function loadArrivals(date){
     return O.get('/operations/van-arrivals', { date: date }).then(function(j){
       Object.keys(arrMap).forEach(function(k){ if(k.indexOf(date + '::') === 0) delete arrMap[k]; });
       ((j && j.arrivals) || []).forEach(function(a){ arrPut(date, a); });
       arrDays[date] = true;
+      // the server's rule (a warning, nothing blocked) · legacy's VCK_WAIT_RULE is a top-level var, so a window property
+      if(j && +j.wait_rule_minutes > 0) window.VCK_WAIT_RULE = +j.wait_rule_minutes;
       return j;
     });
   }
   wrap('vckArrAll', function(){ return arrMap; });
+  /* minutes waited: the server's `waited_minutes` (today only, else null) as of the read, moved on by the
+     minutes since that read so an open screen keeps counting; the rule and the "today" test are the server's */
+  wrap('vckArrWait', function(date, gk){
+    var m = /^([^~]+)~(.+)$/.exec(str(gk)); if(!m) return null;
+    var a = arrMap[arrKey(date, m[1], m[2])]; if(!a || !a.at || a.waited == null) return null;
+    return a.waited + Math.floor((Date.now() - a.readAt) / 60000);
+  });
   wrap('vckArrSave', function(){ return null; });          // nothing is kept in the blob any more
   wrap('vckArrToggle', function(date, gk, vanName){
     if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
@@ -423,7 +433,8 @@
     ]).then(function(){
       return Promise.all([
         loadStops(date).catch(function(e){ console.warn('[ops] van stops did not load · ' + (e && e.message)); }),
-        loadJobs(date).catch(function(e){ console.warn('[ops] van jobs did not load · ' + (e && e.message)); })
+        loadJobs(date).catch(function(e){ console.warn('[ops] van jobs did not load · ' + (e && e.message)); }),
+        loadArrivals(date).catch(function(e){ console.warn('[ops] van arrivals did not load · ' + (e && e.message)); })
       ]);
     }).then(function(){ syncSreq(); redraw(); });
     return dayLoading[date];
