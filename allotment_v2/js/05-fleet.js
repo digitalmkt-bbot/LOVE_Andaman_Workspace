@@ -27669,6 +27669,176 @@ function flwPanel(it, E){
         +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b>'+mBtn(l[5])+'</div>'; }).join('')):'')
     +'</div>';
 }
+/* ══ §flwOil (2026-10-17) · owner "มันควรมีตารางภาพรวม ที่บอกว่าลำไหนใช้ไปกี่ ชม. แล้ว เหลืออีกกี่ ชม. ที่จะต้องถ่ายน้ำมันเครื่อง" · mock OSV → "ทำ"
+   อยู่ในหน้า Fleet Work · ป้ายบนหัว "🛢 รอบถ่ายน้ำมัน" → กดแล้วเปิดตารางภาพรวมแทนกระดานงาน (กดกลับได้)
+   ลำละ 1 แถว · เรียงใกล้ถึงรอบก่อน · ลำหลายเครื่องใช้เครื่องที่ใกล้ที่สุดเป็นตัวแทน · กด ▸ ดูทีละเครื่อง
+   ตัวเลขชุดเดียวกับหน้าเครื่องยนต์ (flEngServiceState · flGbServiceState) · ถ่ายแล้วกดรีเซ็ตรอบ ตารางขยับทันที
+   เลยรอบ = เหลือ < 0 · ใกล้ถึง = เหลือ ≤ 30 ชม. · ชม.ต่อวัน = มิเตอร์ Daily-Log 14 วันล่าสุด (ไม่มีข้อมูล = ไม่คาดวัน)
+   เครื่องที่ยังไม่มีชั่วโมง / ไม่ได้ตั้งรอบ = กลุ่ม "ต้องกรอกข้อมูล"
+   ปุ่ม "เปิดงานถ่ายน้ำมัน" = ฟอร์ม Add work แบบ Planned job · Preventive · Available · ชื่องานมีคำว่า "ถ่ายน้ำมัน" (ให้ระบบถามรีเซ็ตรอบตอนปิดงาน) · ติ๊กทุกเครื่องให้
+   ลำที่มีงานถ่ายน้ำมันเปิดอยู่ (MJ ที่ชื่อมี น้ำมัน/ถ่าย/service) ขึ้นป้ายเลขงานแทนปุ่ม ══ */
+var FLW_OIL_SOON=30;
+function flwOilRate(engId){
+  var t0=new Date((typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10))+'T12:00:00'), lo=null, loD='', hi=null, hiD='';
+  var from=new Date(t0.getTime()-14*864e5).toISOString().slice(0,10);
+  try{ Object.keys(FL_DAILY||{}).forEach(function(ds){ if(ds<from) return; var day=FL_DAILY[ds]||{};
+    Object.keys(day).forEach(function(bk){ var trips=(day[bk]||{}).trips||{}; Object.keys(trips).forEach(function(tk){ var v=+(((trips[tk]||{}).engines||{})[engId]); if(!(v>0)) return;
+      if(lo===null || ds<loD || (ds===loD && v<lo)){ lo=v; loD=ds; } if(hi===null || ds>hiD || (ds===hiD && v>hi)){ hi=v; hiD=ds; } }); }); }); }catch(_){}
+  if(lo===null || hi===null || hi<=lo) return null;
+  var days=Math.max(1, Math.round((t0-new Date(loD+'T12:00:00'))/864e5));
+  return +(((hi-lo)/days)).toFixed(1);
+}
+function flwOilRows(){
+  var boats=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired && b.ownership!=='charter'; });
+  var items=[]; try{ items=flwItems(); }catch(_){}
+  var re=/น้ำมัน|ถ่าย|เซอร์วิส|service|\boil\b|svc/i;
+  var rows=[];
+  boats.forEach(function(b){
+    var engs=(FL_ENGINES||[]).filter(function(e){ return e && e.boatId===b.id && e.retired!==true && e.status!=='retired'; });
+    if(!engs.length) return;
+    var E=engs.map(function(e){ var ss=flEngServiceState(e)||{}; var noData=!(ss.curH>0) || !ss.interval;
+      return {e:e, ss:ss, noData:noData, rate:flwOilRate(e.id)}; });
+    var ok=E.filter(function(x){ return !x.noData; });
+    var worst=ok.slice().sort(function(a,b){ return a.ss.left-b.ss.left; })[0]||null;
+    var gbs=(FL_GEARBOXES||[]).filter(function(g){ return g && g.engineId && engs.some(function(e){ return e.id===g.engineId; }); })
+      .map(function(g){ return {g:g, ss:flGbServiceState(g)}; }).filter(function(x){ return x.ss; });
+    var gw=gbs.slice().sort(function(a,b){ return a.ss.left-b.ss.left; })[0]||null;
+    var st=!worst?'nodata':(worst.ss.left<0?'over':(worst.ss.left<=FLW_OIL_SOON?'soon':'ok'));
+    var rates=ok.map(function(x){ return x.rate; }).filter(function(v){ return v>0; });
+    var rate=rates.length?Math.max.apply(null,rates):null;
+    var mj=items.filter(function(it){ return it.kind==='mj' && it.boatId===b.id && it.stage<5 && !it.park && re.test(it.title||''); })[0]||null;
+    var pier=''; try{ pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); }catch(_){ pier=b.pier||''; }
+    rows.push({b:b, engs:E, worst:worst, st:st, rate:rate, gb:gw, mj:mj, pier:pier||'', nNo:E.length-ok.length});
+  });
+  var ord={over:0,soon:1,ok:2,nodata:3};
+  rows.sort(function(a,b){ return (ord[a.st]-ord[b.st]) || ((a.worst?a.worst.ss.left:1e9)-(b.worst?b.worst.ss.left:1e9)) || String(a.b.name).localeCompare(String(b.b.name)); });
+  return rows;
+}
+function flwOilCounts(rows){ var c={over:0,soon:0,ok:0,nodata:0}; (rows||[]).forEach(function(r){ c[r.st]++; }); return c; }
+function flwOilChip(){
+  var c; try{ c=flwOilCounts(flwOilRows()); }catch(_){ return ''; }
+  var red=c.over>0, amb=!red && c.soon>0;
+  return '<button type="button" class="flw-chip flw-oilchip'+(red?' red':amb?' amb':'')+'" onclick="flwOilOpen()" title="ตารางรอบเปลี่ยนถ่ายน้ำมันเครื่อง ทุกลำ">&#128738; รอบถ่ายน้ำมัน'
+    +(c.over?(' &middot; <b>เลยรอบ '+c.over+'</b>'):'')+(c.soon?(' &middot; <b>ใกล้ถึง '+c.soon+'</b>'):'')+((!c.over&&!c.soon)?' &middot; ปกติ':'')+' <u>ดูตาราง &rsaquo;</u></button>';
+}
+function flwOilOpen(){ FLW.oil=true; flRenderWork(); try{ window.scrollTo(0,0); }catch(_){} }
+function flwOilClose(){ FLW.oil=false; flRenderWork(); }
+function flwOilF(k){ FLW.oilF=k; flRenderWork(); }
+function flwOilP(k){ FLW.oilP=k; flRenderWork(); }
+function flwOilTog(id){ var O=FLW.oilOpen||(FLW.oilOpen={}); O[id]=!O[id]; flRenderWork(); }
+function flwOilJob(bid){
+  if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
+  var r=flwOilRows().filter(function(x){ return x.b.id===bid; })[0]; if(!r) return;
+  FLW.boat=bid;
+  flnOpen(); if(!FLN) return;
+  var gbDue=r.gb && r.gb.ss && r.gb.ss.left<=FLW_OIL_SOON;
+  FLN.boat=bid; FLN.kind='job'; FLN.jtype='preventive'; FLN.jstatus='available'; FLN.reason=''; FLN.assets={};
+  r.engs.forEach(function(x){ FLN.assets['engine|'+x.e.id]=1; });
+  if(gbDue){ (FL_GEARBOXES||[]).forEach(function(g){ if(g && g.engineId && r.engs.some(function(x){ return x.e.id===g.engineId; })) FLN.assets['gearbox|'+g.id]=1; }); }
+  FLN.title='เปลี่ยนถ่ายน้ำมันเครื่อง '+((r.worst&&r.worst.ss.interval)||100)+' ชม. · ทุกเครื่อง'+(gbDue?' + น้ำมันเกียร์':'');
+  flnRender();
+}
+function flwOilHtml(E){
+  var all=flwOilRows(), c=flwOilCounts(all), F=FLW.oilF||'all', PF=FLW.oilP||'all', O=FLW.oilOpen||{};
+  var piers={}; all.forEach(function(r){ if(r.pier) piers[r.pier]=1; });
+  var PN={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong',shop:'In shop'};
+  var rows=all.filter(function(r){ return (F==='all'||r.st===F) && (PF==='all'||r.pier===PF); });
+  var col={over:'#C0392B',soon:'#E08A1E',ok:'#2E9B6A',nodata:'#9AA3B8'};
+  var lt=function(ss){ return ss.left<0?('over '+Math.abs(Math.round(ss.left))):(Math.round(ss.left)+' h'); };
+  var cls=function(ss){ return ss.left<0?'over':(ss.left<=FLW_OIL_SOON?'soon':'ok'); };
+  var bar=function(ss,w){ var pc=Math.max(0,Math.min(100,ss.interval?(ss.since/ss.interval*100):0)), k=cls(ss);
+    return '<span class="flo-bar" style="width:'+(w||130)+'px"><i style="width:'+pc+'%;background:'+col[k]+'"></i></span><span class="flo-bx">'+Math.round(ss.since)+'/'+ss.interval+'</span>'; };
+  var fh=function(n){ return (Math.round((+n||0)*10)/10).toLocaleString('en-US'); };
+  var eta=function(r){ if(!r.worst) return '<span class="flo-mut">—</span>'; var L=r.worst.ss.left;
+    if(L<0) return '<b style="color:#A32D2D">เลยรอบ '+Math.abs(Math.round(L))+' ชม.</b><small>ควรถ่ายโดยเร็ว</small>';
+    if(!(r.rate>0)) return '<span class="flo-mut">ยังคาดไม่ได้</span><small>ไม่มีมิเตอร์ 14 วันล่าสุด</small>';
+    var d=Math.max(1,Math.round(L/r.rate)); return '<b>อีก ~'+d+' วัน</b><small>ใช้เฉลี่ย '+r.rate+' ชม./วัน</small>'; };
+  var tab=function(k,t,n){ return '<button type="button" class="'+(F===k?'on':'')+'" onclick="flwOilF(\''+k+'\')">'+t+' <i>'+n+'</i></button>'; };
+  var pb=function(k,t){ return '<button type="button" class="'+(PF===k?'on':'')+'" onclick="flwOilP(\''+k+'\')">'+t+'</button>'; };
+  var canEd=(typeof flBoardCanEdit==='function')?flBoardCanEdit():true;
+  var body=rows.map(function(r){
+    var b=r.b, w=r.worst, open=!!O[b.id], gb=r.gb;
+    var act=r.mj?('<button type="button" class="flo-mj" onclick="flwOilGoJob(\''+E(r.mj.key)+'\',\''+E(b.id)+'\')" title="'+E(r.mj.title)+'">&#128295; '+E(r.mj.no)+' &middot; เปิดอยู่</button>')
+      :(canEd && r.st!=='nodata'?('<button type="button" class="flw-btn'+(r.st==='ok'?'':' pri')+' flo-go" onclick="flwOilJob(\''+E(b.id)+'\')">เปิดงานถ่ายน้ำมัน</button>'):'');
+    var h='<div class="flo-r flo-'+r.st+'" style="--c:'+col[r.st]+'">'
+      +'<span class="nm" onclick="flwOilTog(\''+E(b.id)+'\')"><i class="ar">'+(open?'&#9662;':'&#9656;')+'</i><span><b>'+E(b.name)+'</b><small>'+E(PN[r.pier]||r.pier||'—')+' &middot; '+r.engs.length+' เครื่อง'+(r.nNo?(' &middot; <em>ไม่มีข้อมูล '+r.nNo+'</em>'):'')+'</small></span></span>'
+      +'<span class="hr mono">'+(w?fh(w.ss.curH):'—')+'</span>'
+      +'<span class="la">'+(w?('<span class="mono">'+fh(w.ss.base)+' h</span>'+(w.e.lastServiceDate?('<small>'+E(flwD(w.e.lastServiceDate))+'</small>'):'<small>ยังไม่เคยบันทึกถ่าย</small>')):'—')+'</span>'
+      +'<span class="us">'+(w?bar(w.ss):'<span class="flo-mut">ต้องกรอกชั่วโมงเครื่อง / รอบเซอร์วิส</span>')+'</span>'
+      +'<span class="lf'+(w?(' '+cls(w.ss)):'')+'">'+(w?lt(w.ss):'—')+'</span>'
+      +'<span class="et">'+eta(r)+'</span>'
+      +'<span class="gb">'+(gb?('<span class="mono'+(gb.ss.left<=FLW_OIL_SOON?(' '+cls(gb.ss)):'')+'">'+Math.round(gb.ss.since)+'/'+gb.ss.interval+'</span>'+(gb.ss.left<0?'<small style="color:#A32D2D">เลยรอบ</small>':(gb.ss.left<=FLW_OIL_SOON?'<small style="color:#9A5B00">ใกล้ถึง</small>':''))):'<span class="flo-mut">—</span>')+'</span>'
+      +'<span class="ac">'+act+'</span></div>';
+    if(open) h+=r.engs.map(function(x){ var ss=x.ss, e=x.e;
+      return '<div class="flo-e"><span class="nm">'+E((e.pos||'')+' · '+(e.serial||e.id))+'</span>'
+        +'<span class="hr mono">'+(x.noData?'—':fh(ss.curH))+'</span>'
+        +'<span class="la">'+(x.noData?'':('<span class="mono">'+fh(ss.base)+' h</span>'+(e.lastServiceDate?('<small>'+E(flwD(e.lastServiceDate))+'</small>'):'')))+'</span>'
+        +'<span class="us">'+(x.noData?'<span class="flo-mut">'+(!(ss.curH>0)?'ไม่มีชั่วโมงเครื่อง':'ยังไม่ได้ตั้งรอบเซอร์วิส')+'</span>':bar(ss,110))+'</span>'
+        +'<span class="lf'+(x.noData?'':(' '+cls(ss)))+'">'+(x.noData?'—':lt(ss))+'</span>'
+        +'<span class="et">'+(x.rate>0?('<small>'+x.rate+' ชม./วัน</small>'):'')+'</span><span class="gb"></span><span class="ac"></span></div>'; }).join('');
+    return h; }).join('') || '<div class="flw-empty">ไม่มีลำในกลุ่มนี้</div>';
+  return '<div class="flw-card flo-card">'
+    +'<div class="flo-top"><button type="button" class="flw-btn" onclick="flwOilClose()">&lsaquo; Fleet Work</button>'
+      +'<b class="flo-h">รอบเปลี่ยนถ่ายน้ำมันเครื่อง</b>'
+      +'<span class="flo-sum"><span class="r">&#9679; เลยรอบ '+c.over+' ลำ</span><span class="a">&#9679; ใกล้ถึง '+c.soon+' ลำ</span><span class="g">&#9679; ปกติ '+c.ok+' ลำ</span>'+(c.nodata?('<span class="n">&#9679; ต้องกรอกข้อมูล '+c.nodata+'</span>'):'')+'</span></div>'
+    +'<div class="flo-fl"><span class="flo-tabs">'+tab('all','ทั้งหมด',all.length)+tab('over','เลยรอบ',c.over)+tab('soon','ใกล้ถึง',c.soon)+tab('ok','ปกติ',c.ok)+(c.nodata?tab('nodata','ต้องกรอกข้อมูล',c.nodata):'')+'</span>'
+      +(Object.keys(piers).length>1?('<span class="flo-seg">'+pb('all','All')+Object.keys(piers).map(function(k){ return pb(k,PN[k]||k); }).join('')+'</span>'):'')
+      +'<span class="flo-note">รอบน้ำมันเครื่องตามที่ตั้งในเครื่อง (ส่วนใหญ่ 100 ชม.) &middot; เกียร์ 200 ชม. &middot; ใกล้ถึง = เหลือ &le; '+FLW_OIL_SOON+' ชม.</span></div>'
+    +'<div class="flo-hd"><span>ลำ</span><span class="hr">ชม. สะสม</span><span>ถ่ายล่าสุด</span><span>ใช้ไปรอบนี้</span><span class="lf">เหลือ</span><span>คาดว่าจะถึงรอบ</span><span>น้ำมันเกียร์</span><span></span></div>'
+    +'<div class="flo-body">'+body+'</div>'
+    +'<div class="flo-ft">ลำที่มีหลายเครื่อง = ใช้เครื่องที่ใกล้ถึงรอบที่สุดเป็นตัวแทน &middot; กด ▸ ดูทีละเครื่อง &middot; ตัวเลขชุดเดียวกับหน้าเครื่องยนต์ (นับจากครั้งล่าสุดที่บันทึกถ่าย) &middot; ปิดงานถ่ายน้ำมันแล้วกด OK รีเซ็ตรอบ ตารางนี้จะขยับเอง</div>'
+  +'</div>';
+}
+function flwOilGoJob(key,bid){ FLW.oil=false; FLW.boat=bid; FLW.item=key; FLW.stage=-1; FLW.bf='work'; flRenderWork(); }
+function flwOilCSS(){
+  var V='#view-fl-work';
+  return '<style>'
+    +V+' .flw-oilchip{cursor:pointer;border:1px solid #DDE3EC;font-family:inherit}'+V+' .flw-oilchip u{text-decoration:none;color:#0F6CA6;font-weight:700;margin-left:4px}'
+    +V+' .flo-card{padding:0;overflow:hidden}'
+    +V+' .flo-top{display:flex;align-items:center;gap:12px;padding:14px 18px 10px;flex-wrap:wrap}'
+    +V+' .flo-h{font-size:19px;font-weight:700;color:#0F1B3D}'
+    +V+' .flo-sum{display:flex;gap:6px;flex-wrap:wrap}'+V+' .flo-sum span{height:28px;padding:0 11px;border-radius:14px;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;gap:5px}'
+    +V+' .flo-sum .r{background:#FBE3E0;color:#A32D2D}'+V+' .flo-sum .a{background:#FFF1DC;color:#9A5B00}'+V+' .flo-sum .g{background:#E3F4EC;color:#0B6B47}'+V+' .flo-sum .n{background:#F1F2F5;color:#5B6170}'
+    +V+' .flo-fl{display:flex;align-items:center;gap:10px;padding:0 18px 10px;flex-wrap:wrap}'
+    +V+' .flo-tabs,'+V+' .flo-seg{display:flex;gap:6px;flex-wrap:wrap}'
+    +V+' .flo-tabs button,'+V+' .flo-seg button{height:30px;padding:0 12px;border-radius:15px;border:1px solid #D5DAE5;background:#fff;color:#3E4A6B;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}'
+    +V+' .flo-tabs button i{font-style:normal;font-size:11px;opacity:.7}'
+    +V+' .flo-tabs button.on,'+V+' .flo-seg button.on{background:#16265C;color:#fff;border-color:#16265C}'
+    +V+' .flo-note{margin-left:auto;font-size:11.5px;color:#6B7489}'
+    +V+' .flo-hd,'+V+' .flo-r,'+V+' .flo-e{display:grid;grid-template-columns:minmax(170px,1.3fr) 90px 130px minmax(190px,1.2fr) 80px minmax(140px,1fr) 100px 170px;gap:10px;align-items:center;padding:9px 18px}'
+    +V+' .flo-hd{font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#6B7489;background:#F6F7FA;border-top:1px solid #ECEBE6;border-bottom:1.5px solid #16265C;padding-top:8px;padding-bottom:8px}'
+    +V+' .flo-hd .hr,'+V+' .flo-hd .lf{text-align:right}'
+    +V+' .flo-r{border-bottom:1px solid #EEF1F6;box-shadow:inset 4px 0 0 var(--c);font-size:13px;color:#0F1B3D}'
+    +V+' .flo-r .nm{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}'+V+' .flo-r .nm .ar{font-style:normal;color:#9AA3B8;font-size:11px}'
+    +V+' .flo-r .nm b{display:block;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +V+' .flo-r .nm small,'+V+' .flo-r small,'+V+' .flo-e small{display:block;font-size:11px;color:#8A8F9C;font-weight:500}'
+    +V+' .flo-r .nm em{font-style:normal;color:#A32D2D}'
+    +V+' .flo-r .hr,'+V+' .flo-e .hr{text-align:right;font-size:13px}'
+    +V+' .flo-bar{position:relative;display:inline-block;height:10px;border-radius:6px;background:#E6E9F0;overflow:hidden;vertical-align:middle}'+V+' .flo-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}'
+    +V+' .flo-bx{font-family:"DM Mono",monospace;font-size:11.5px;color:#3E4A6B;margin-left:6px}'
+    +V+' .flo-r .lf,'+V+' .flo-e .lf{text-align:right;font-family:"DM Mono",monospace;font-weight:800;font-size:14px}'
+    +V+' .lf.over,'+V+' .gb .over{color:#A32D2D}'+V+' .lf.soon,'+V+' .gb .soon{color:#9A5B00}'+V+' .lf.ok{color:#0B6B47}'
+    +V+' .flo-r .et{font-size:12px}'+V+' .flo-r .et b{font-weight:800}'
+    +V+' .flo-r .gb{font-size:11.5px}'+V+' .flo-r .ac{text-align:right}'
+    +V+' .flo-go{height:30px;font-size:12px;white-space:nowrap}'
+    +V+' .flo-mj{height:28px;padding:0 10px;border-radius:8px;font:inherit;font-size:11.5px;font-weight:800;background:#EEF3FB;color:#185FA5;border:1px solid #C6D4EC;cursor:pointer;white-space:nowrap}'
+    +V+' .flo-mut{color:#9AA3B8;font-size:12px}'
+    +V+' .flo-e{background:#FAFBFD;border-bottom:1px solid #EEF1F6;font-size:12px;padding-top:6px;padding-bottom:6px}'+V+' .flo-e .nm{padding-left:22px;color:#5B6170;font-family:"DM Mono",monospace;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +V+' .flo-e .lf{font-size:12.5px}'
+    +V+' .flo-ft{padding:10px 18px 14px;font-size:11.5px;color:#8A8F9C}'
+    +'@media (max-width:980px){'
+      +V+' .flo-hd{display:none}'
+      +V+' .flo-r{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm lf" "us et" "la ac" "gb ac";row-gap:5px;padding:12px 14px}'
+      +V+' .flo-r .nm{grid-area:nm}'+V+' .flo-r .lf{grid-area:lf}'+V+' .flo-r .us{grid-area:us}'+V+' .flo-r .et{grid-area:et;text-align:right}'
+      +V+' .flo-r .la{grid-area:la;font-size:12px}'+V+' .flo-r .gb{grid-area:gb}'+V+' .flo-r .ac{grid-area:ac;align-self:end}'+V+' .flo-r .hr{display:none}'
+      +V+' .flo-r .gb:not(:empty)::before{content:"เกียร์ ";color:#8A8F9C;font-size:11px}'
+      +V+' .flo-e{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm lf" "us et";padding:7px 14px}'
+      +V+' .flo-e .nm{grid-area:nm;padding-left:10px}'+V+' .flo-e .lf{grid-area:lf}'+V+' .flo-e .us{grid-area:us}'+V+' .flo-e .et{grid-area:et;text-align:right}'
+      +V+' .flo-e .hr,'+V+' .flo-e .la,'+V+' .flo-e .gb,'+V+' .flo-e .ac{display:none}'
+      +V+' .flo-note{margin-left:0}'
+    +'}'
+    +'</style>';
+}
 function flRenderWork(){
   var wrap=document.getElementById('fl-work-wrap'); if(!wrap) return;
   var E=(typeof flBoardEsc==='function')?flBoardEsc:function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
@@ -27693,6 +27863,7 @@ function flRenderWork(){
     +'<div class="flw-chips"><span class="flw-chip"><b>'+flwMoney(scan.money)+'</b>tied up</span>'
       +(nSilent?('<span class="flw-chip red"><b>'+nSilent+'</b>silent over 60 days</span>'):'')
       +(nNoOwner?('<span class="flw-chip amb"><b>'+nNoOwner+'</b>no owner</span>'):'')
+      +flwOilChip()   /* §flwOil */
       +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn" style="height:32px;border-radius:16px;border:0;font-weight:700;font-size:12.5px" onclick="flnOpen()">+ Add work</button>':'')
       +'</div></div>';
   var stages='<div class="flw-stages">'+S.map(function(s,i){
@@ -27773,7 +27944,10 @@ function flRenderWork(){
   var tabsH=''; try{ var G=(typeof FL_NAV_GROUPS!=='undefined'?FL_NAV_GROUPS:[]).filter(function(g){ return g.k==='work'; })[0];
     if(G){ var okv=G.views.filter(function(v){ return (typeof flNavOk==='function')?flNavOk(v):true; });
       if(okv.length>1) tabsH='<div class="flw-tabs">'+okv.map(function(v){ return '<button type="button" class="'+(v==='fl-work'?'on':'')+'" data-v="'+v+'" onclick="flNavGo(this.dataset.v)">'+G.tabs[G.views.indexOf(v)]+'</button>'; }).join('')+'</div>'; } }catch(_){}
-  wrap.innerHTML=flwCSS()+top+tabsH+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
+  /* §flwOil · ตารางรอบถ่ายน้ำมันแทนกระดานงาน */
+  if(FLW.oil){ var _oh=''; try{ _oh=flwOilHtml(E); }catch(err){ _oh='<div class="flw-card"><div class="flw-empty">Could not build the oil-change table: '+E(err&&err.message)+'</div></div>'; try{ console.error('[flwOil]', err); }catch(_){} }
+    wrap.innerHTML=flwCSS()+flwOilCSS()+top+tabsH+_oh; return; }
+  wrap.innerHTML=flwCSS()+flwOilCSS()+top+tabsH+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
   flwFit();
   ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e && keep[id]) e.scrollTop=keep[id]; });
 }
