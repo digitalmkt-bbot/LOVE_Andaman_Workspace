@@ -297,6 +297,59 @@ const dashTxt = await ev(() => document.getElementById('dash-wrap').innerText);
 console.log(`   ticker: 'tickerCells' appears ${uses}x in 04-data-core.js (declaration only) · dashboard text has a TL/VP/RN ticker: ${/\bVP\b.*\bRN\b/s.test(dashTxt)}`);
 ok('pier ticker (TL / VP / RN, today vs yesterday) is NOT-REACHABLE: tickerCells is declared and never read, so nothing on screen shows it', uses === 1, { uses });
 
+console.log('\n[6] Boat Operation · Early / Normal · bulk copy with a closed day · capacity override');
+const depsOf = async (from, to) => (await api(`/operations/deployments?from=${from}&to=${to}`)).deployments;
+// Early / Normal: the pick sits on the cell (TRIPS[date][boat].type) and ends in save('operations'); the portal that offered it
+// (openPortal 'type' on #matrix-tbl) is not drawn by any screen any more, so the pick is set on the cell, as t_ops does for assign.
+const E1 = '2026-10-30', E2 = '2026-10-31';
+await ev((a) => { TRIPS[a.E1] = TRIPS[a.E1] || {}; TRIPS[a.E1].b7 = { route: 'r5', type: 'early', booked: 0 }; TRIPS[a.E2] = TRIPS[a.E2] || {}; TRIPS[a.E2].b7 = { route: 'r5', type: 'normal', booked: 0 }; save('operations'); }, { E1, E2 });
+await settle(); await idle();
+let dd = await depsOf(E1, E2);
+ok('new deployment picked Early → trip_type early on the server · a Normal one is stored as normal (or the route default)', dd.find((x) => x.service_date === E1).trip_type === 'early' && ['normal', null, undefined].includes(dd.find((x) => x.service_date === E2).trip_type), dd.map((x) => [x.service_date, x.trip_type]));
+// change Normal → Early on the stored one: one POST carrying trip_type
+const nT = calls.length;
+await ev((a) => { TRIPS[a.E2].b7.type = 'early'; save('operations'); }, { E2 });
+await settle(); await idle();
+dd = await depsOf(E1, E2);
+const posts6 = lastCalls(nT).filter((c) => /^POST \/operations\/deployments/.test(c));
+ok('Normal → Early on a stored cell → one POST /operations/deployments · server now early', posts6.length === 1 && dd.find((x) => x.service_date === E2).trip_type === 'early', { posts6, dd: dd.map((x) => [x.service_date, x.trip_type]) });
+// read side: reload the app, the cells come back with the server's type, and Daily Announcement shows the Early chip
+await page.reload(); await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 }); await settle(1200);
+s = await ev((a) => ({ e1: TRIPS[a.E1] && TRIPS[a.E1].b7, e2: TRIPS[a.E2] && TRIPS[a.E2].b7 }), { E1, E2 });
+ok('after a reload the cells read trip_type from the server (both early)', s.e1 && s.e1.type === 'early' && s.e2 && s.e2.type === 'early', s);
+await ev((d) => { daDate = new Date(d + 'T12:00:00'); document.querySelector('.nav-item[data-view="daily"]').click(); }, E1);
+await settle(1500);
+const daTxt = await ev(() => document.getElementById('view-daily').innerText.replace(/\s+/g, ' '));
+ok('Daily Announcement for that day lists the trip with the Early chip', /Early/.test(daTxt) && /Similan Islands by Speedboat/.test(daTxt), daTxt.slice(0, 500));
+
+// bulk form: "Copy view → next week" with the closed day among the targets (r10 closed on CLOSED = SRC[1] + 7)
+await ev((a) => { document.querySelector('.nav-item[data-view="operation"]').click(); _bop2.viewMode = 'week'; _bop2.anchor = new Date(2026, 9, 26); renderOp(); }, {});
+await settle(800);
+const before6 = await depsOf('2026-11-01', '2026-11-07');
+const nB = calls.length;
+await page.locator('.bo-pier-pill', { hasText: 'Bulk actions' }).first().click();
+await page.locator('text=Copy view').first().click();
+await settle(); await idle(); await settle(1200);
+const after6 = await depsOf('2026-11-01', '2026-11-07');
+const T = (d) => after6.filter((x) => x.service_date === d).map((x) => x.boat_id + '>' + x.route_id);
+s = await ev((a) => ({ n2: !!(TRIPS['2026-11-02'] || {}).b13, n3: !!(TRIPS[a.CLOSED] || {}).b13, n4: !!(TRIPS['2026-11-04'] || {}).b13,
+  toasts: [...document.querySelectorAll('#la-savetoast-wrap > *')].map((t) => t.innerText.replace(/\s+/g, ' ')) }), { CLOSED });
+const refused409 = refusals.filter((r) => /route_closed/.test(r));
+console.log('   dialogs:', JSON.stringify(dialogs.slice(-3)), '\n   toasts:', JSON.stringify(s.toasts), '\n   after:', JSON.stringify(after6.map((x) => [x.service_date, x.boat_id, x.route_id])));
+ok('copy week: server has b13>r10 on Nov 2 and Nov 4, nothing on the closed Nov 3', before6.length === 0 && T('2026-11-02').join() === 'b13>r10' && T('2026-11-04').join() === 'b13>r10' && T(CLOSED).length === 0, { before6, after6 });
+ok('copy week: the screen keeps Nov 2 and Nov 4, leaves the closed day out (no rollback of the rest)', s.n2 && s.n4 && !s.n3, s);
+ok('exactly one toast, "1 day not saved", with the server\'s closed-day message · one 409 route_closed received', s.toasts.length === 1 && /1 day not saved/.test(s.toasts[0]) && refused409.length === 1, { toasts: s.toasts, refused409 });
+
+// capacity override through the real modal
+await ev(() => boatCapModalOpen('b13', '2026-10-26', null), {});
+await page.fill('#bcap-val', '30'); await page.fill('#bcap-reason', 'walk');
+await page.click('#bcap-host button[onclick^="_bcapSave"]');
+await settle(); await idle();
+const ovr6 = (await api('/v1/boats/b13/capacity-overrides?from=2026-10-26&to=2026-10-26')).overrides;
+const av6 = await api('/v1/availability?route_id=r10&date=2026-10-26');
+s = await ev(() => ({ cap: boatCapFor('b13', '2026-10-26'), modal: !!document.querySelector('#bcap-ov') }));
+ok('capacity override 30 on b13 (normal 38) → override row on the server · day sells 30 · the deployment keeps 38', ovr6.length === 1 && ovr6[0].capacity === 30 && (await depsOf('2026-10-26', '2026-10-26'))[0].capacity === 38 && av6.deployed_capacity === 30 && s.cap === 30 && !s.modal, { ovr6, av6: av6.deployed_capacity, s });
+
 //PROBE
 
 await browser.close(); srv.close(); backend.kill();
