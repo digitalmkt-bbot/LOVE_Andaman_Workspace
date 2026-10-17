@@ -847,11 +847,11 @@
       lines: (IS.rows || []).map(function(r){
         var line = {
           agent_code: nul(String(r.agN || '').slice(0, 20)),
-          adults: r.extra ? (parseInt(r.ad, 10) || 0) : (typeof window.poIsPax === 'function' ? window.poIsPax(r) : 0),
           deposit_baht: +r.dep || 0, deposit_returned_baht: +r.back || 0, deduction_a: +r.cut || 0, deduction_b: +r.cutB || 0,
           note: nul(r.note), qty: { issued: kmap(r.iss), returned: kmap(r.ret) }
         };
-        if(r.extra) line.label = text((r.names && r.names[0]) || r.label) || '-';
+        // a booking line's adults is the server's heads (a sent value is 400); only an extra line keeps the client's number
+        if(r.extra){ line.adults = parseInt(r.ad, 10) || 0; line.label = text((r.names && r.names[0]) || r.label) || '-'; }
         else line.booking_id = bkSrv(r.bkId);
         return line;
       }),
