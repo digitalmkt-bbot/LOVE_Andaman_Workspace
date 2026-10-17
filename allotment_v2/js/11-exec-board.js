@@ -15,7 +15,7 @@
      ที่นั่ง             getAllotment(rid,date)
      B2C / ตลาด         laIsB2C(b) · drMarket(b)
      เซลส์ผู้ดูแล         pfmSalesName(b)
-     ลูกหนี้             SB_INVOICES + acctInvoiceBalance · วงเงิน agCreditState
+   §execNoAR (2026-10-17) · owner "ตัดเรื่องยอดเงินค้างออกก่อน" · ลูกหนี้ / อายุหนี้ / ค้างชำระ / วงเงินเครดิต ไม่แสดงในหน้านี้ (ดูที่ Accounting)
 
    ⚠ ยังไม่มีในระบบ จึงไม่แสดง (ไม่เดาตัวเลขขึ้นมาเอง):
      เป้ารายได้เป็นเงิน (ที่มีคือเป้า pax ของเซลส์) · เวลาออกเรือจริง (มีแต่เวลาตามโปรแกรม)
@@ -149,25 +149,6 @@
       o.val+=money(b); o.n++; ts.forEach(function(t){ o.pax+=pax(t); });
     }); });
     return o;
-  }
-  /* ลูกหนี้ · ทั้งบริษัท (ใบแจ้งหนี้ไม่ได้แยกท่า) */
-  function arState(){
-    var o={tot:0, cur:0, b30:0, b60:0, b90:0, over:0, byAg:{}}, now=new Date();
-    (typeof SB_INVOICES!=='undefined'?SB_INVOICES:[]).forEach(function(i){
-      if(!i || i.status==='void') return;
-      var bal=0; try{ bal=acctInvoiceBalance(i); }catch(_){} if(!(bal>0)) return;
-      var due=i.dueAt?new Date(i.dueAt):now, days=Math.floor((now-due)/86400000);
-      o.tot+=bal; if(days<=0) o.cur+=bal; else { o.over+=bal; if(days<=30) o.b30+=bal; else if(days<=60) o.b60+=bal; else o.b90+=bal; }
-      o.byAg[i.agentId]=(o.byAg[i.agentId]||0)+bal;
-    });
-    return o;
-  }
-  function overLimit(){
-    var out=[];
-    (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).forEach(function(a){
-      try{ var s=agCreditState(a.id); if(s && s.limit>0 && s.used>s.limit) out.push({name:a.name, pct:Math.round(s.used*100/s.limit)}); }catch(_){}
-    });
-    return out.sort(function(x,y){ return y.pct-x.pct; });
   }
   function paymentsOn(ds){
     var v=0, n=0, ag={};
@@ -400,7 +381,7 @@
     var Fut=agg(addDays(t0,1)>R.from?addDays(t0,1):R.from, R.to);
     var S=salesIn(R.from, toD), Sl=salesIn(addYears(R.from,-1), addYears(toD,-1));
     var B30=agg(addDays(t0,1), addDays(t0,30)), B30l=agg(addYears(addDays(t0,1),-1), addYears(addDays(t0,30),-1));
-    var AR=arState(), Lk=leakage(R.from, R.to), Lmt=overLimit();
+    var Lk=leakage(R.from, R.to), Cx=cxlIn(R.from, toD);
     var rpp=A.pax?A.rev/A.pax:0, rppL=Al.pax?Al.rev/Al.pax:0;
     var h='<div class="eb-grid eb-kpis">'
       + kpi('รายได้'+R.lbl+' (วันเดินทาง)', baht(A.rev), chg(A.rev,Al.rev)+' vs ปีก่อน · '+num(A.pax)+' pax')
@@ -408,7 +389,7 @@
       + kpi('ยอดขายที่เข้ามา (วันจอง)', baht(S.val), num(S.n)+' ใบ · '+chg(S.val,Sl.val)+' vs ปีก่อน')
       + kpi('รายได้เฉลี่ยต่อหัว', '฿'+num(rpp), chg(rpp,rppL)+' vs ปีก่อน')
       + kpi('จองล่วงหน้า 30 วัน', baht(B30.rev), num(B30.pax)+' pax · '+chg(B30.rev,B30l.rev)+' vs ช่วงเดียวกันปีก่อน')
-      + kpi('ลูกหนี้ค้างรับ', baht(AR.tot), AR.over>0?('<span class="eb-st b">● เกินกำหนด '+baht(AR.over)+'</span>'):'<span class="eb-st g">✓ ไม่มีเกินกำหนด</span>', AR.over>0?'bad':'')
+      + kpi('ยกเลิก'+R.lbl+' (วันที่ยกเลิก)', Cx.val?('<span style="color:var(--eb-bad)">'+baht(-Cx.val)+'</span>'):baht(0), num(Cx.n)+' ใบ · '+num(Cx.pax)+' pax · สุทธิที่เข้ามา <b>'+baht(S.val-Cx.val)+'</b>', Cx.val>S.val*0.15?'warn':'')
       + '</div>';
     h+='<div class="eb-sec">Live booking · พรุ่งนี้</div>'+tomorrowCard(true);
 
@@ -436,16 +417,14 @@
       + (fams.length?fams.map(function(x){ return '<tr><td><span class="eb-dot" style="background:'+E(x.f.color||'#8b909c')+'"></span><b>'+E(x.f.name)+'</b></td><td><b>'+baht(x.rev)+'</b></td><td>'+pct(x.rev,A.rev)+'%</td><td>'+chg(x.rev,x.ly)+'</td><td>'+num(x.pax)+'</td><td>'+(x.pax?'฿'+num(x.rev/x.pax):'—')+'</td></tr>'; }).join('')
         :'<tr><td colspan="6" class="eb-none">ยังไม่มีรายได้ในช่วงนี้</td></tr>')
       + '</tbody></table></div>'
-      + '<div class="eb-card"><h2>เอเย่นต์ · Top 5 ตามรายได้'+src('ที่มา: Booking · Accounting')+'</h2><table class="eb-tbl"><thead><tr><th>เอเย่นต์</th><th>รายได้</th><th>vs ปีก่อน</th><th>รายได้/หัว</th><th>ค้างชำระ</th></tr></thead><tbody>'
-      + (top5.length?top5.map(function(a){ var bal=AR.byAg[a.agentId]||0, cs=null; try{ cs=a.k!=='__b2c'?agCreditState(a.agentId):null; }catch(_){}
-          var over=cs&&cs.limit>0&&cs.used>cs.limit;
-          return '<tr><td><b>'+E(a.name)+'</b></td><td><b>'+baht(a.rev)+'</b></td><td>'+chg(a.rev,a.ly)+'</td><td>'+(a.pax?'฿'+num(a.rev/a.pax):'—')+'</td><td>'+(a.k==='__b2c'?'—':(baht(bal)+(over?' <span class="eb-st b" title="เกินวงเงินเครดิต">● '+pct(cs.used,cs.limit)+'%</span>':'')))+'</td></tr>'; }).join('')
+      + '<div class="eb-card"><h2>เอเย่นต์ · Top 5 ตามรายได้'+src('ที่มา: Booking')+'</h2><table class="eb-tbl"><thead><tr><th>เอเย่นต์</th><th>รายได้</th><th>vs ปีก่อน</th><th>รายได้/หัว</th><th>Pax</th></tr></thead><tbody>'
+      + (top5.length?top5.map(function(a){
+          return '<tr><td><b>'+E(a.name)+'</b></td><td><b>'+baht(a.rev)+'</b></td><td>'+chg(a.rev,a.ly)+'</td><td>'+(a.pax?'฿'+num(a.rev/a.pax):'—')+'</td><td>'+num(a.pax)+'</td></tr>'; }).join('')
         :'<tr><td colspan="5" class="eb-none">—</td></tr>')
       + '</tbody></table><div class="eb-foot">Top 5 = '+pct(top5v,A.rev)+'% ของรายได้'+(drop.length?(' · ยอดตกเกิน 20% vs ปีก่อน: '+drop.map(function(a){ return E(a.name); }).join(', ')):'')+'</div></div></div>';
 
-    /* ส่วนลด · หลุดมือ · เก็บเงิน */
-    var arTot=Math.max(1,AR.tot);
-    h+='<div class="eb-sec">ส่วนลด · รายได้ที่หลุดมือ · การเก็บเงิน</div><div class="eb-grid eb-r4">'
+    /* ส่วนลด · หลุดมือ */
+    h+='<div class="eb-sec">ส่วนลด · รายได้ที่หลุดมือ</div><div class="eb-grid eb-r4h">'
       + '<div class="eb-card"><h2>ส่วนลดที่ให้ไป <span class="eb-tag">'+E(R.lbl)+'</span>'+src('ที่มา: Booking')+'</h2>'
       + hbar([{l:'FOC',v:Lk.foc},{l:'ส่วนลด',v:Lk.disc}], baht)
       + '<div class="eb-foot">รวม '+baht(Lk.foc+Lk.disc)+' · '+(A.rev?((Lk.foc+Lk.disc)*100/(A.rev+Fut.rev||1)).toFixed(1):'0')+'% ของรายได้ทั้งช่วง</div></div>'
@@ -454,11 +433,6 @@
       + '<div class="rw"><span class="lb">ยกเลิกหน้างาน · '+num(Lk.cx)+' pax</span><span class="vv">'+baht(Lk.cxV)+'</span></div>'
       + '<div class="rw"><span class="lb">ยกเลิกเพราะอากาศ · '+num(Lk.wx)+' pax</span><span class="vv">'+baht(Lk.wxV)+'</span></div>'
       + '</div><div class="eb-foot">มูลค่าประมาณจากราคาต่อหัวของใบนั้น · รายละเอียดค่าปรับดูที่ Travel Summary</div></div>'
-      + '<div class="eb-card"><h2>การเก็บเงิน'+src('ที่มา: Accounting')+'</h2><div style="font-size:11.5px;color:var(--eb-ink2);font-weight:600">ค้างรับ '+baht(AR.tot)+' <span class="eb-mut">(ทั้งบริษัท)</span></div>'
-      + '<div class="eb-hstack"><i style="width:'+(AR.cur*100/arTot)+'%;background:var(--eb-s3)"></i><i style="width:'+(AR.b30*100/arTot)+'%;background:var(--eb-s4)"></i><i style="width:'+(AR.b60*100/arTot)+'%;background:#E9A23B"></i><i style="width:'+(AR.b90*100/arTot)+'%;background:#D9483B"></i></div>'
-      + '<div class="eb-rows two"><div class="rw"><span class="lb">ยังไม่ถึงกำหนด</span><span class="vv">'+baht(AR.cur)+'</span></div><div class="rw"><span class="lb">เกิน 1–30 วัน</span><span class="vv">'+baht(AR.b30)+'</span></div>'
-      + '<div class="rw"><span class="lb">เกิน 31–60 วัน</span><span class="vv" style="color:var(--eb-warn)">'+baht(AR.b60)+'</span></div><div class="rw"><span class="lb">เกิน 60 วัน</span><span class="vv" style="color:var(--eb-bad)">'+baht(AR.b90)+'</span></div>'
-      + '<div class="rw"><span class="lb">เกินวงเงินเครดิต</span><span class="vv">'+(Lmt.length?('<span class="eb-st b" title="'+E(Lmt.map(function(x){ return x.name+' '+x.pct+'%'; }).join(' · '))+'">● '+Lmt.length+' เอเย่นต์</span>'):'<span class="eb-st g">✓ 0</span>')+'</span></div></div></div>'
       + '</div>';
     return h;
   }
@@ -817,7 +791,6 @@
       if(gone>=7 && gone<=60 && (v60[k]||0)>=3) o.calls.push({k:k, name:nm[k], why:'เงียบ '+gone+' วัน', cls:'q', sub:'ส่ง '+num(v60[k])+' pax ใน 60 วันก่อน'+(topF?' · '+E(famName(topF)):''), w:2+Math.min(3,(v60[k]||0)/20)});
       else if(gone<7){ var rs=Object.keys(agRoutes[k]||{}).filter(function(f){ return shortFams[f]; }).sort(function(a,b){ return agRoutes[k][b]-agRoutes[k][a]; })[0];
         if(rs){ var d=shortFams[rs][0]; o.calls.push({k:k, name:nm[k], why:'ว่าง '+dowS[dt(d).getDay()]+' '+dt(d).getDate(), cls:'o', sub:'เคยส่ง '+E((fams[rs]||{}).f?fams[rs].f.name:rs)+' · '+num(agRoutes[k][rs])+' pax', w:1}); } }
-      try{ var cs=agCreditState(k); if(cs&&cs.limit>0&&cs.used>cs.limit) o.calls.push({k:k, name:nm[k], why:'เกินวงเงิน '+pct(cs.used,cs.limit)+'%', cls:'r', sub:'ใบใหม่จะติดวงเงิน', w:4}); }catch(_){}
     });
     /* ล็อกที่ยังไม่ใช้และใกล้วัน */
     try{ (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).forEach(function(l){ if(!l||l.status!=='active'||!l.agentId||bkV2LockSpansDays(l)) return; if(!l.date||l.date<t0||l.date>addDays(t0,7)) return;

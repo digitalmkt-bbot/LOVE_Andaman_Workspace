@@ -21,6 +21,7 @@
 //  11 §execPerf (owner "เวลาคลิกแถบด้านบน ช้ามาก"): กดแถบแล้วขึ้น "กำลังคำนวณ…" ทันที วาดเสร็จแล้วหาย
 //     ใบจอง 6,000 ใบ: สลับแท็บ/ช่วงแต่ละครั้ง (หลังรอบแรก) ไม่เกิน 600ms บนเครื่องทดสอบ · ตัวเลขเท่ากับคิดสด (ดัชนีไม่ทำให้ผลเพี้ยน)
 //     เทสนี้ใช้ ebSetNow (วาดทันที) · ปุ่มจริงใช้ ebSet ที่วาดในเฟรมถัดไป
+//  13 §execNoAR (owner "ตัดเรื่องยอดเงินค้างออกก่อน"): ไม่มีคำว่า ลูกหนี้ / ค้างชำระ / การเก็บเงิน / เกินวงเงิน ในทุกมุมมอง
 //  12 §execAlloc (owner "ผู้บริหารแก้ไขได้ · กำหนดเป้าแล้วดู progress ยังไง"):
 //     การ์ดเซลส์แสดงช่องว่างแยกเส้นทาง · ตารางความคืบหน้ามีแถวเซลส์และแถวย่อยเส้นทาง
 //     เปิดตัวแก้ → ใส่ 100% ของเส้นทางหนึ่งให้เซลส์คนเดียว → บันทึก → เป้าของเขาในเส้นทางนั้น = เป้าเส้นทางทั้งหมด · หัวข้อบอกว่ากำหนดโดยใคร
@@ -264,5 +265,12 @@ if (R12.chips >= 4 && R12.subRows >= 2 && R12.mainRows >= 2 && /ตามสั�
     && R12.famTgt != null && Math.abs(R12.famTgt - R12.expTgt) <= 2 && R12.denied && R12.reset && R12.hdr2)
   ok('12 การ์ดมีช่องว่างแยกเส้นทาง (' + R12.chips + ' ชิป) · ตารางความคืบหน้า ' + R12.mainRows + ' เซลส์ / ' + R12.subRows + ' แถวเส้นทาง · กำหนด 100% + LF 80% → เป้าเส้นทางของเซลส์ ' + R12.famTgt + ' = ' + R12.seats + '×80% · เก็บเป็น JSON string · ไม่มีสิทธิ์บันทึกไม่ได้ · กลับไปใช้ค่าคำนวณได้');
 else fail('12 ' + JSON.stringify(R12));
+
+// 13
+const R13 = await page.evaluate(() => { const out = {}; const chk = (k) => { out[k] = /ลูกหนี้|ค้างชำระ|การเก็บเงิน|เกินวงเงิน|ค้างรับ/.test(document.getElementById('eb-wrap').textContent); };
+  ebSetNow('tab', 'rev'); ebSetNow('per', 'today'); chk('today'); ebSetNow('per', 'month'); chk('month'); ebSetNow('tab', 'sales'); chk('sales'); ebSetNow('tab', 'gap'); chk('gap');
+  const k6 = [...document.querySelectorAll('#eb-wrap .eb-k .l')].map(x => x.textContent); ebSetNow('tab', 'rev'); ebSetNow('per', 'month'); const kpis = [...document.querySelectorAll('#eb-wrap .eb-k .l')].map(x => x.textContent); ebSetNow('per', 'today'); return { out, kpis }; });
+if (Object.values(R13.out).every(v => !v) && R13.kpis.some(k => /ยกเลิก/.test(k))) ok('13 ไม่มีเรื่องยอดเงินค้างในทุกมุมมอง · ตัวเลขหลักที่ 6 ของเดือนเป็น "' + R13.kpis.find(k => /ยกเลิก/.test(k)) + '"');
+else fail('13 ' + JSON.stringify(R13));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
