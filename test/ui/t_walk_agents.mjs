@@ -345,6 +345,77 @@ if (wiz.modal === 'flex' && wiz.doc) {
   ok('✕ remove → DELETE /v1/contract-documents/{id}; server list empty; history empty on screen', rm.length === 1 && (await docsOf()).length === 0 && (await histRows()).length === 0, { rm: rm.length });
 }
 }
+if (want(6)) {
+console.log('\n[6] user window: server warnings, nav_pages once per session, rename; agent colour');
+item = 6;
+await nav('agents'); await settle(500);
+const pages = await ev(() => laNavPages());
+const mkUser = async (username, extra) => must('user ' + username, send('POST', '/v1/users', { username, password: 'secret1', name: username.toUpperCase(), role: 'staff', ...extra }));
+const uWide = await mkUser('zz_wide', { view_perms: pages.map((p) => p.v) });
+const uNone = await mkUser('zz_none', { view_perms: [] });
+const uRen = await mkUser('zz_ren', { view_perms: [pages[0].v] });
+await mkUser('zz_adm2', { role: 'admin' }); await mkUser('zz_adm3', { role: 'admin' });
+ok('before the window opens the server holds no page list (nav_pages empty)', ((await api('/v1/config/nav_pages')).value || []).length === 0, await api('/v1/config/nav_pages'));
+const navCalls = () => ({ get: calls.filter((c) => c === 'GET /v1/config/nav_pages').length, put: calls.filter((c) => c === 'PUT /v1/config/nav_pages').length });
+const nav0 = navCalls();
+await ev(() => __laUsers());
+await waitFor(() => !!document.getElementById('la-uwin') && document.getElementById('la-uwin').innerText.includes('zz_none'), null, 10000);
+await settle(600);
+const navAfter1 = navCalls();
+const stored = (await api('/v1/config/nav_pages')).value || [];
+ok('first list read: GET then PUT /v1/config/nav_pages (once) with the window\'s page list', navAfter1.get - nav0.get === 1 && navAfter1.put - nav0.put === 1 && stored.length === pages.length && stored.every((n) => pages.some((p) => p.v === n.v && p.a === n.a)), { navAfter1, nav0, stored: stored.length, pages: pages.length });
+const order = calls.filter((c) => /nav_pages|GET \/v1\/users$/.test(c));
+const iGet = order.indexOf('GET /v1/config/nav_pages'), iPut = order.indexOf('PUT /v1/config/nav_pages'), iUsers = order.indexOf('GET /v1/users');
+ok('order: GET nav_pages → PUT nav_pages → GET /v1/users (warnings are counted against the stored list)', iGet >= 0 && iGet < iPut && iPut < iUsers, order);
+// reload the list a few times in the same session: no more nav_pages traffic
+await ev(() => __laLoadUsers()); await settle(500); await ev(() => __laLoadUsers()); await settle(500);
+ok('re-reading the user list in the same session does not touch nav_pages again', JSON.stringify(navCalls()) === JSON.stringify(navAfter1), { navCalls: navCalls(), navAfter1 });
+// warnings from the server
+const srvWide = await api('/v1/users/' + uWide.id), srvNone = await api('/v1/users/' + uNone.id), srvAll = await api('/v1/users');
+const wcodes = (srvWide.warnings || []).map((w) => w.code), ncodes = (srvNone.warnings || []).map((w) => w.code);
+ok('server warnings: zz_wide → wide; zz_none → no_menus; overview → many_admins', wcodes.includes('wide') && ncodes.includes('no_menus') && (srvAll.warnings || []).some((w) => w.code === 'many_admins'), { wcodes, ncodes, overview: (srvAll.warnings || []).map((w) => w.code) });
+const alertHtml = async (u) => { await ev((id) => __laPick(id), u.id); await settle(500); return ev(() => [...document.querySelectorAll('#la-uwin .al3')].map((x) => ({ cls: x.className, text: x.innerText.replace(/^!\s*/, '').trim() }))); };
+const norm = (s) => String(s).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+const wideRows = await alertHtml(uWide);
+ok('user detail (zz_wide): the red "wide" row shows the server\'s message', srvWide.warnings.filter((w) => w.code === 'wide').every((w) => wideRows.some((r) => r.cls.includes('red') && norm(r.text) === norm(w.message))), { wideRows, srv: srvWide.warnings });
+const noneRows = await alertHtml(uNone);
+ok('user detail (zz_none): the amber "no menus" row shows the server\'s message', srvNone.warnings.filter((w) => w.code === 'no_menus').every((w) => noneRows.some((r) => r.cls.includes('amb') && norm(r.text) === norm(w.message))), { noneRows, srv: srvNone.warnings });
+await ev(() => __laSetTab('ov')); await settle(600);
+const ovText = await ev(() => document.querySelector('#la-uwin .ov .note p').innerText);
+ok('overview tab (laOpsUserOverview): every server overview warning is shown as sent', (srvAll.warnings || []).length > 0 && srvAll.warnings.every((w) => norm(ovText).includes(norm(w.message))), { ovText, srv: (srvAll.warnings || []).map((w) => w.message) });
+await ev(() => __laSetTab('list')); await settle(300);
+// rename through the real dialog
+await ev((id) => __laRename(id), uRen.id);
+await page.fill('#la-r1', 'zz_renamed'); await page.fill('#la-r2', 'ZZ Renamed Person');
+await settle(300);
+const goEnabled = await ev(() => !document.getElementById('la-rgo').disabled);
+await page.click('#la-rgo');
+await settle(900);
+const srvRen = await api('/v1/users/' + uRen.id);
+const renPost = bodies.filter((x) => x.m === 'POST' && x.p === '/v1/users/' + uRen.id + '/rename');
+ok('rename dialog: Save enabled; POST /v1/users/{id}/rename {username, name}; server holds the new names and the old one in previous_usernames', goEnabled && renPost.length === 1 && renPost[0].b.username === 'zz_renamed' && srvRen.username === 'zz_renamed' && srvRen.name === 'ZZ Renamed Person' && (srvRen.previous_usernames || []).includes('zz_ren'), { goEnabled, renPost, srvRen });
+const rowOnScreen = await ev(() => document.getElementById('la-uwin').innerText);
+ok('screen: the user list now shows the new username and display name; the dialog is closed', rowOnScreen.includes('zz_renamed') && rowOnScreen.includes('ZZ Renamed Person') && !/zz_ren(?!amed)/.test(rowOnScreen) && !(await ev(() => !!document.getElementById('la-rmask'))), rowOnScreen);
+// taken name → the server's refusal shown as legacy's text
+await ev((id) => __laRename(id), uRen.id);
+await page.fill('#la-r1', 'ZZ_WIDE'); await settle(200);
+const hint = await ev(() => document.getElementById('la-rmsg').innerText);
+ok('rename to a taken name (any case): the dialog hint refuses before sending', /มีคนใช้อยู่แล้ว/.test(hint), hint);
+await ev(() => document.getElementById('la-rmask').remove());
+await ev(() => __laClose());
+// agent colour (PATCH)
+await ev(() => { bookingV2AgentColorEdit('a01', {}); });
+const sw = page.locator('#bkv2-agcol-pop button[onclick^="bookingV2AgentColorSet(\'a01\'"]').first();
+const swCol = await sw.getAttribute('title');
+const nC = bodies.length;
+await sw.click();
+await idle(); await settle(500);
+const cp = bodies.slice(nC).filter((x) => x.m === 'PATCH' && x.p === '/v1/agents/a01');
+ok('agent colour swatch → PATCH /v1/agents/a01 {color}; server and screen hold it; popover closed', cp.length === 1 && cp[0].b.color === swCol && (await api('/v1/agents/a01')).color === swCol && (await ev(() => SB_AGENTS.find((a) => a.id === 'a01').color)) === swCol && !(await ev(() => !!document.getElementById('bkv2-agcol-pop'))), { cp, swCol });
+await ev(() => bookingV2AgentColorEdit('a01', { altKey: true }));
+await idle(); await settle(500);
+ok('Alt-click reset → PATCH {color:null}; server colour null', (await api('/v1/agents/a01')).color === null, await api('/v1/agents/a01'));
+}
 //@@STEPS@@
 
 await browser.close(); srv.close(); backend.kill();
