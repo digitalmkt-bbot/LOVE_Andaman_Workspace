@@ -531,6 +531,43 @@
     return (s && s.locked_pax != null) ? (+s.locked_pax || 0) : orig(routeId, date);
   });
 
+  /* ── the boat list of a whole-boat hold: GET /v1/seat-locks/boat-options ─────
+     The form asks synchronously, the server answers later: the first ask starts the read and the legacy list
+     shows; when the answer lands the form is drawn again with the server's ok / why per boat, and CanTake
+     answers from it. A write (or 30 seconds) drops what was read. */
+  var boatOpt = {}, BOAT_OPT_TTL = 30000;
+  function boatOptKey(date, routeId, exceptId){ return [date || '', routeId || '', exceptId || ''].join('|'); }
+  function boatOptFresh(date, routeId, exceptId){
+    var e = boatOpt[boatOptKey(date, routeId, exceptId)];
+    return (e && e.rows && Date.now() - e.at < BOAT_OPT_TTL) ? e : null;
+  }
+  O.onWrite(function(){ boatOpt = {}; });
+  defO('bookingV2BoatLockPickList', function(orig, date, routeId, exceptId){
+    var out = orig(date, routeId, exceptId), e = boatOptFresh(date, routeId, exceptId);
+    if(e){
+      out.forEach(function(b){
+        var s = e.rows[b.id]; if(!s) return;
+        b.ok = !!s.ok; b.why = s.why ? (s.why.message || s.why.code || '') : '';
+      });
+      return out;
+    }
+    var k = boatOptKey(date, routeId, exceptId);
+    if(routeId && date && !(boatOpt[k] && boatOpt[k].busy)){
+      boatOpt[k] = { busy: true };
+      var q = { route_id: routeId, service_date: date }; if(exceptId) q.lock_id = exceptId;
+      O.get('/v1/seat-locks/boat-options', q).then(function(j){
+        var rows = {}; ((j && (j.boats || j.options || j.rows)) || (Array.isArray(j) ? j : [])).forEach(function(x){ if(x && x.boat_id) rows[x.boat_id] = x; });
+        boatOpt[k] = { rows: rows, at: Date.now() };
+        render();
+      }, function(){ boatOpt[k] = { busy: false, at: Date.now() }; });
+    }
+    return out;
+  });
+  defO('bookingV2BoatLockCanTake', function(orig, date, boatId, routeId, exceptId){
+    var e = boatOptFresh(date, routeId, exceptId), s = e && e.rows[boatId];
+    return s ? !!s.ok : orig(date, boatId, routeId, exceptId);
+  });
+
   /* ── what the booking code asks of this file ──────────────────────────── */
   /* a draw names the server lock of that day · a sub-group has its own */
   function serverIdFor(lockId, date){
