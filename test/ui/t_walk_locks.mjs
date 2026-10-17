@@ -83,6 +83,12 @@ const dayLock = await post('/v1/seat-locks', { route_id: 'r5', service_date: T1,
 const sub = await api(`/v1/seat-locks/${dayLock.id}/sub-groups`, { method: 'POST', headers: { 'if-match': '"' + dayLock.version + '"' }, body: JSON.stringify({ sub_name: 'A', pax: 3 }) });
 // a lock bigger than the free seats of T2: 'split' keeps what is free, the rest is pending
 const pendLock = await post('/v1/seat-locks', { route_id: 'r5', service_date: T2, pax: 45, holder_type: 'office', pending: 'split' });
+// a credit agent (pay type invoice) with a confirmed booking on a boat, a prepay invoice, 1,000 of it paid
+await api('/v1/agents/a01', { method: 'PATCH', body: JSON.stringify({ pay_type: 'invoice' }) });
+const bkC = await post('/v1/bookings', { external_id: 'zz-credit', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ CREDIT', pickupSelf: true, trips: [{ routeId: 'r5', date: T0, pax: { ad_fr: 2 }, zone: 'NoTransfer' }] });
+await api('/operations/trip-ops/' + bkC.trips[0].id, { method: 'PATCH', body: JSON.stringify({ boat_id: 'b6' }) });
+const invC = await post('/v1/invoices', { agent_id: 'a01', booking_ids: [bkC.id], kind: 'prepay' });
+await post('/v1/invoices/' + invC.id + '/payments', { method: 'cash', amount: 1000 });
 await put(`/v1/routes/r10/days/${CLOSED}`, { kind: 'closed' });
 for (const d of SRC) await post('/operations/deployments', { boat_id: 'b13', route_id: 'r10', service_date: d, capacity: 38 });
 console.log('seed: bulk', bulk.id, bulk.__status || '', '| day', dayLock.id, dayLock.__status || '', '| sub', sub && sub.id, sub && sub.__status || '', '| pend', pendLock.id, pendLock.__status || '', pendLock.pending_pax);
@@ -94,6 +100,11 @@ const s0 = await ev(() => ({ failed: laOps.state.failed, locks: SB_SEAT_LOCKS.le
 ok('boot: nothing failed, locks loaded', s0.failed.length === 0 && s0.locks >= 4, s0);
 console.log('   browser tz', s0.tz);
 
+if (process.env.PROBEJS) {      // debugging aid: run a JS expression (file) in the page after boot and print it
+  const fs = await import('node:fs');
+  console.log(await page.evaluate(fs.readFileSync(process.env.PROBEJS, 'utf8')));
+  await browser.close(); srv.close(); backend.kill(); process.exit(0);
+}
 let s, L;
 const iso = (x) => (x ? new Date(x).toISOString() : null);
 
@@ -198,7 +209,7 @@ console.log('   server:', JSON.stringify(opts.map((b) => [b.boat_id, b.ok, b.why
 console.log('   screen:', JSON.stringify(rows.map((b) => [b.id, b.ok, b.text])));
 ok('the form asked GET /v1/seat-locks/boat-options once for route+date', optCalls.length >= 1 && optCalls.every((c) => c.includes('route_id=r5') && c.includes('service_date=' + T0)), optCalls);
 ok('pick list: every boat the server lists is on screen with the server ok flag', opts.filter((b) => rows.some((r) => r.id === b.boat_id)).length === rows.length && rows.every((r) => r.ok === opts.find((b) => b.boat_id === r.id).ok) && rows.length >= 2, { rows, opts: opts.map((b) => [b.boat_id, b.ok]) });
-ok('only b7 (placed on r4 that day) cannot be held · its row carries the server\'s own message', rows.filter((r) => !r.ok).map((r) => r.id).join() === 'b7' && rows.filter((r) => !r.ok).every((r) => { const w = opts.find((b) => b.boat_id === r.id).why; return w && r.text.replace(/\s+/g, ' ').includes(w.message.replace(/\s+/g, ' ')); }), { rows });
+ok('b7 (placed on r4) and b6 (2 pax already booked on it) cannot be held, b1 can · each row carries the server\'s own message', rows.filter((r) => !r.ok).map((r) => r.id).join() === 'b6,b7' && rows.find((r) => r.id === 'b1').ok &&rows.filter((r) => !r.ok).every((r) => { const w = opts.find((b) => b.boat_id === r.id).why; return w && r.text.replace(/\s+/g, ' ').includes(w.message.replace(/\s+/g, ' ')); }), { rows });
 ok('CanTake = server ok for every boat', can.every(([b, v]) => { const o = opts.find((x) => x.boat_id === b); return !o || v === o.ok; }), { can, opts: opts.map((b) => [b.boat_id, b.ok]) });
 // hold b1 through the form: pick the row, seats, expiry (already past: the server flags it overdue)
 const EXP = '2026-10-16';
@@ -219,10 +230,31 @@ ok('after the hold: server boat-options says b1 taken · the form row and CanTak
 ok('hold with a past expiry: screen overdue = server overdue flag', s.h && s.h.od === holds[0].overdue && holds[0].overdue === true, { s, srvOverdue: holds[0] && holds[0].overdue });
 await ev(() => { _bkBoatForm = null; bookingV2Render(); });
 
+console.log('\n[4] agent credit · PFM cutoff and prepay kind');
+await ev(() => { agCreditState('a01'); });           // asks the server in the background
+await settle(1200);
+const credit = (await api('/v1/agents/a01')).credit;
+s = await ev(() => ({ c: agCreditState('a01'), pay: sbGetAgent('a01').payType, limit: sbGetAgent('a01').creditLimit }));
+ok('agCreditState(a01) = the server\'s credit (limit 200000, used 2400, available, pct)', s.c.limit === credit.limit && s.c.used === credit.used && s.c.available === credit.available && s.c.pct === credit.pct && credit.used === 2400 && s.c.over === credit.over, { screen: s.c, server: credit, pay: s.pay });
+s = await ev(() => { const saved = SB_BOOKINGS.splice(0); const c = agCreditState('a01'); SB_BOOKINGS.push(...saved); return c; });
+ok('with the browser\'s own booking rows taken away the figure stays the server\'s (legacy sum would be 0)', s.used === 2400, s);
+// PFM: open the screen for the booking's travel day
+await ev((d) => { const el = document.querySelector('.nav-item[data-view="dailypfm"]'); _pfmDate = d; _pfmMode = 'daily'; el.click(); }, T0);
+await waitScreen(() => window.laOpsPfm && document.getElementById('dailypfm-host') && document.getElementById('dailypfm-host').innerText.length > 50, null, 8000);
+await settle(1500);
+const pfm = await api(`/v1/pfm?from=${T0}&to=${T0}`);
+const prow = pfm.rows.find((r) => r.booking_id === bkC.id);
+s = await ev((a) => { const bk = SB_BOOKINGS.find((b) => b.leadPax === 'ZZ CREDIT'); const inv = bk && acctBookingInvoice(bk.id);
+  return { bk: !!bk, cutoff: pfmCutoff(a.d).toISOString(), prepaid: bk && pfmIsCreditPrepaid(bk), inv: inv && { kind: inv.kind, note: inv.note, fromOps: !!inv._fromOpsBackend }, isPrepayInv: inv && pfmIsPrepayInv(inv),
+    inScope: bk && pfmInScope(bk), text: document.getElementById('dailypfm-host').innerText.slice(0, 1500) }; }, { d: T0 });
+ok('server PFM row is kind prepay with a cutoff (18:00 Bangkok the day before)', prow && prow.kind === 'prepay' && prow.cutoff_at === '2026-10-19T11:00:00.000Z', prow);
+ok('pfmCutoff(T0) = the row\'s cutoff_at', s.cutoff === prow.cutoff_at, { screen: s.cutoff, server: prow.cutoff_at });
+ok('pfmIsCreditPrepaid(booking) true from the row\'s kind · pfmInScope follows', s.bk && s.prepaid === true && s.inScope === true, s);
+const fake = await ev(() => ({ asProforma: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'proforma', note: 'prepay', status: 'issued' }), asPrepay: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'prepay', note: '', status: 'issued' }), voided: pfmIsPrepayInv({ _fromOpsBackend: true, kind: 'prepay', status: 'void' }) }));
+ok('pfmIsPrepayInv(invoice) follows the server invoice kind (not the note): prepay true, proforma false even with the note, void false', s.inv && s.inv.kind === 'prepay' && s.isPrepayInv === true && fake.asPrepay === true && fake.asProforma === false && fake.voided === false, { inv: s.inv, fake });
+console.log('   Daily PFM on screen: ' + JSON.stringify(s.text.replace(/\s+/g, ' ').slice(0, 1000)));
+
 //PROBE
-if (process.env.PROBE) {
-  console.log(JSON.stringify(await ev(() => SB_SEAT_LOCKS.map((l) => ({ id: l.id, scope: l.scope, status: l.status })))));
-}
 
 await browser.close(); srv.close(); backend.kill();
 console.log(fails.length ? `\n✖ ${fails.length} failed` : '\n✓ all passed');
