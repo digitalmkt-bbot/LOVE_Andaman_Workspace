@@ -84,7 +84,7 @@ const fails = [];
 const results = {};                                       // item -> [pass, fail]
 let item = 0;
 const ok = (name, cond, got) => {
-  console.log((cond ? '  ✓ ' : '  ✖ ') + name + (cond ? '' : '  → ' + JSON.stringify(got).slice(0, 500)));
+  console.log((cond ? '  ✓ ' : '  ✖ ') + name + (cond ? '' : '  → ' + String(JSON.stringify(got)).slice(0, 500)));
   if (!cond) fails.push(item + ': ' + name);
   (results[item] = results[item] || [0, 0])[cond ? 0 : 1]++;
 };
@@ -199,6 +199,34 @@ if (hasXlsx) {
   const scr = await ev(() => ({ names: SB_AGENTS.filter((a) => /^ZZ Import/.test(a.name)).map((a) => a.name), phone: SB_AGENTS.find((a) => a.code === 'ZZCLEAN').phone, modal: !!document.getElementById('agimp-modal') }));
   ok('screen: the new agent is in the list, the modal is closed', scr.names.join() === 'ZZ Import New' && scr.phone === '+66 800 111 222' && !scr.modal, scr);
 }
+}
+if (want(3)) {
+console.log('\n[3] rtUnbindAgent → PUT /v1/agents/{id}/rate-type {rate_type_id:null}, stays unbound after reload');
+item = 3;
+await nav('rate-types'); await waitFor(() => window.laOps.rateTypes && window.laOps.rateTypes.state.loaded, null, 15000); await settle(600);
+const victim = agClean.id;
+ok('before: the agent is bound to rt001 on the server', (await api('/v1/agents/' + victim)).rate_type_id === 'rt001', null);
+await ev(() => { _rtSelected = 'rt001'; rtRenderCards(); rtRenderDetail('rt001'); });
+await settle(600);
+await page.locator('#rt-detail details summary').first().click();      // the agents chips are folded: "AGENTS · 4 (click to show / hide)"
+await settle(300);
+const btn = page.locator(`button[onclick^="rtUnbindAgent('${victim}'"]:visible`).first();   // the other copy sits in the hidden agents column
+const btnShown = await btn.count();
+ok('the ✕ button for that agent is on the Rate Types screen', btnShown > 0, btnShown);
+const n3 = bodies.length;
+if (btnShown) await btn.click({ timeout: 5000 });   // a real mouse click on the visible ✕
+await idle(); await settle(600);
+const put = bodies.slice(n3).filter((x) => x.m === 'PUT' && x.p === '/v1/agents/' + victim + '/rate-type');
+ok('app sent PUT /v1/agents/{id}/rate-type {rate_type_id:null}', put.length === 1 && put[0].b && put[0].b.rate_type_id === null, put);
+const srvA = await api('/v1/agents/' + victim);
+ok('server: rate_type_id is null, alert no_rate_bound now raised', srvA.rate_type_id === null && srvA.alerts.some((x) => x.code === 'no_rate_bound'), { rt: srvA.rate_type_id, alerts: srvA.alerts });
+const scrA = await ev((id) => ({ rt: SB_AGENTS.find((a) => a.id === id).rateTypeId, onDetail: document.body.innerHTML.includes("rtUnbindAgent('" + id + "'") }), victim);
+ok('screen: agent unbound in memory and its ✕ row is gone', scrA.rt === null && !scrA.onDetail, scrA);
+await page.reload();
+await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 }); await settle(1200);
+await waitFor((id) => SB_AGENTS.some((a) => a.id === id), victim, 15000);
+const afterReload = await ev((id) => (SB_AGENTS.find((a) => a.id === id) || {}).rateTypeId, victim);
+ok("after reload the agent is still unbound (screen: no rate type, server: null)", !afterReload && (await api('/v1/agents/' + victim)).rate_type_id === null, afterReload);
 }
 //@@STEPS@@
 
