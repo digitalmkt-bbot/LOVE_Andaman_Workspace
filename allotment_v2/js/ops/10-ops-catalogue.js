@@ -62,7 +62,9 @@
   function mapRoute(s, local){
     var o = { id: s.id, name: s.name };
     put(o, 'kind', s.kind);                       // §opsCalendar (2026-10-08) · laRouteKind prefers it over the pier guess
-    put(o, 'pier', s.pier); put(o, 'familyId', s.family_id); put(o, 'color', s.color);
+    put(o, 'pier', s.pier); put(o, 'color', s.color);
+    // the server's null family = "no family" (hidden from the booking calendar). '' tells bookingV2RouteFamily not to guess one from the name
+    o.familyId = s.family_id == null ? '' : s.family_id;
     put(o, 'islands', s.islands); put(o, 'sort', s.sort);
     if(Array.isArray(s.times)) o.times = s.times.slice();
     // §opsCalendar · the calendar is edited on the server only · its seasons/overrides replace the local ones
@@ -98,6 +100,9 @@
     put(o, 'color', s.color); put(o, 'payType', payTypeIn(s.pay_type)); put(o, 'creditLimit', s.credit_limit);
     put(o, 'rateTypeId', s.rate_type_id); put(o, 'contractStatus', s.contract_status); put(o, 'contractEnd', s.contract_end);
     if(Array.isArray(s.program_route_ids)) o.programs = s.program_route_ids.slice();
+    /* the list carries each agent's whole season table (triage #35), so the rate-expiry scans (rtExpScan, agHdIssues, agAlerts)
+       judge every agent, not only the ones opened. Legacy's spelling: {rt, from, to:''} */
+    if(Array.isArray(s.rate_seasons)) o.rateSeasons = s.rate_seasons.map(function(x){ return { rt: x.rate_type_id, from: x.from, to: x.to || '' }; });
     return o;
   }
   function mapAgentDetail(s, local){

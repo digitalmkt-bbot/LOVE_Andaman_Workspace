@@ -258,6 +258,80 @@
       return remove(id).then(null,function(e){ O.fail('Slip file was not deleted',e); });
     },function(){});
   }; });
+  /* §opsDocCheck · Doc Check page (docCheckToggleItem / SetStatus / SetNote and the Pre-Check save) -> the
+     document-check commands. Legacy changed bk.docCheck and called _docCheckPersist (-> acctPersistBookings, a no-op
+     here), so ticks, verdicts and notes never reached the server. Server first: the local record changes only from the
+     booking the server answers with. Day-of writes: no If-Match, so laOps.call through the queue.
+       PUT /v1/bookings/{id}/doc-check/items/{item}  {checked}
+       PUT /v1/bookings/{id}/doc-check/status        {status:'verified'|'issue', note}  (server stamps by/at + history line)
+       PUT /v1/bookings/{id}/doc-check/note          {note}   (typing: debounced, the box is not redrawn)
+       PUT /v1/bookings/{id}/doc-check/pre           {at, lang, text, results, auto_tick}  (from docCheckRunPre's save)
+     The server spells a pre-check result {result, evidence, detail}; the screen reads {s, ev, detail}: both are kept. */
+  (function(){
+    function bookingOf(id){ var l=(typeof SB_BOOKINGS!=='undefined'&&Array.isArray(SB_BOOKINGS))?SB_BOOKINGS:[]; return l.find(function(b){ return b&&(b.id===id||b.opsId===id); })||null; }
+    function sid(bk){ return encodeURIComponent(bk.opsId||bk.id); }
+    function norm(dc){
+      if(!dc) return dc;
+      var c=JSON.parse(JSON.stringify(dc));
+      if(c.pre&&c.pre.results) Object.keys(c.pre.results).forEach(function(k){
+        var r=c.pre.results[k]||{}; r.s=r.s||r.result; r.ev=r.ev!=null?r.ev:r.evidence; c.pre.results[k]=r;
+      });
+      return c;
+    }
+    function apply(bk,ob){ if(ob&&ob.doc_check) bk.docCheck=norm(ob.doc_check); }
+    function redraw(){ try{ if(typeof renderDocCheck==='function') renderDocCheck(); }catch(_){} }
+    function guarded(){ return !(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')); }
+    function put(bk,tail,body,title){
+      return O.queue(function(){ return O.call('PUT','/v1/bookings/'+sid(bk)+'/doc-check'+tail,body); }).then(function(ob){
+        apply(bk,ob); if(O.wrote) O.wrote('doc-check'); return ob;
+      },function(e){ O.fail(title,e); throw e; });
+    }
+    wrapGlobal('docCheckToggleItem',function(orig){ return function(bkId,k){
+      if(!on()) return orig.apply(this,arguments);
+      if(!guarded()) return;
+      var bk=bookingOf(bkId); if(!bk) return;
+      var cur=!!(bk.docCheck&&bk.docCheck.items&&bk.docCheck.items[k]);
+      return put(bk,'/items/'+encodeURIComponent(k),{checked:!cur},'Could not save document check').then(redraw,function(){});
+    }; });
+    wrapGlobal('docCheckSetStatus',function(orig){ return function(bkId,status){
+      if(!on()) return orig.apply(this,arguments);
+      if(!guarded()) return;
+      var bk=bookingOf(bkId); if(!bk) return;
+      var note=bk.docCheck&&bk.docCheck.note; if(typeof note!=='string'||note==='') note=null;
+      return put(bk,'/status',{status:status,note:note},'Could not save document check').then(function(){
+        if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(bk,'edit','Document check · '+(status==='verified'?'✅ verified':status==='issue'?'⚠ issue':status)+(bk.docCheck&&bk.docCheck.note?(' · '+bk.docCheck.note):''),'DocCheck');
+        redraw();
+      },function(){});
+    }; });
+    var noteTimer={};
+    wrapGlobal('docCheckSetNote',function(orig){ return function(bkId,val){
+      if(!on()) return orig.apply(this,arguments);
+      var bk=bookingOf(bkId); if(!bk) return;
+      bk.docCheck=bk.docCheck||{status:'pending',items:{}}; bk.docCheck.note=val;      // the box keeps what is typed
+      clearTimeout(noteTimer[bk.id]);
+      noteTimer[bk.id]=setTimeout(function(){
+        var text=bk.docCheck&&typeof bk.docCheck.note==='string'?bk.docCheck.note:'';
+        O.queue(function(){ return O.call('PUT','/v1/bookings/'+sid(bk)+'/doc-check/note',{note:text===''?null:text}); }).then(function(){ if(O.wrote) O.wrote('doc-check'); },function(e){ O.fail('Could not save document check note',e); });
+      },700);
+    }; });
+    /* docCheckRunPre ends its OCR in _docCheckPersist() (only when the login may edit Operations); _docPre.activeId is
+       still the booking then. Send that booking's fresh pre-check once. Any other caller finds nothing to send. */
+    var ITEMS=['route','date','lead','pax','voucher','payment','cot'], RESULTS=['match','maybe','mismatch','none'];
+    wrapGlobal('_docCheckPersist',function(orig){ return function(){
+      if(!on()) return orig.apply(this,arguments);
+      var id=(typeof _docPre!=='undefined'&&_docPre)?_docPre.activeId:null, bk=id?bookingOf(id):null;
+      var pre=bk&&bk.docCheck&&bk.docCheck.pre;
+      if(!pre||pre.__sent||!pre.results||pre.error) return;
+      pre.__sent=true;
+      var results={};
+      Object.keys(pre.results).forEach(function(k){
+        var r=pre.results[k]||{}; if(ITEMS.indexOf(k)<0||RESULTS.indexOf(r.s||r.result)<0) return;
+        results[k]={s:r.s||r.result,ev:r.ev!=null?r.ev:(r.evidence!=null?r.evidence:null),detail:r.detail!=null?r.detail:null};
+      });
+      var body={at:pre.at,lang:pre.lang||null,text:pre.text||null,results:results,auto_tick:pre.autoTick!==false};
+      put(bk,'/pre',body,'Could not save the Pre-Check').then(redraw,function(){ pre.__sent=false; });
+    }; });
+  })();
   installPrint(); installFleetDocs();
   window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
 })();

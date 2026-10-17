@@ -85,7 +85,7 @@
     var ids = staffIdSet(), cap = split1(J.cap, ids), asst = split1(J.asst, ids), crew = slots(J.crew, ids), island = slots(J.island, ids);
     return { captain_id: cap.id, captain_name: cap.name, assistant_id: asst.id, assistant_name: asst.name,
              crew: crew.ids, crew_names: crew.names, island: island.ids, island_names: island.names, note: nul(J.note),
-             wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc),
+             wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc), departure_time: nul(J.dep),
              slot_labels: labels(J.lb), maintenance_job_id: nul(J.mj) };
   }
   // a slot is one setting on the server: naming either half replaces it, so a change to one half sends both
@@ -98,7 +98,7 @@
     sayIds([v.captain_id, v.assistant_id].concat(v.crew || [], v.island || [], v.duty_staff_ids || []));
     var J = { cap: v.captain_id || v.captain_name || '', asst: v.assistant_id || v.assistant_name || '', crew: pick(v.crew, v.crew_names),
               island: pick(v.island, v.island_names), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
-              lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels) };
+              lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels), dep: v.departure_time || '' };
     if(v.maintenance_job_id) J.mj = v.maintenance_job_id;
     return J;
   }
@@ -127,10 +127,11 @@
   function apply(date, bid, v){
     var key = jkey(date, bid), JOB = obj('PIER_JOB'), TEAM = obj('PIER_TEAM'), DUTY = obj('PIER_DUTY');
     st.views[key] = v; st.keys[key] = 1; st.bids[bid] = 1;
+    P.dep = P.dep || {}; P.dep[date + '|' + bid] = { departure: v.departure || null, source: v.departure_source || null };   // §pjDep
     if(v.recorded) JOB[key] = fromView(v, JOB[key]); else delete JOB[key];
     TEAM[bid] = teamFromView(v);
     if((v.duty_staff_ids || []).length) DUTY[key] = v.duty_staff_ids.slice(); else delete DUTY[key];
-    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id || v.captain_name, asst: v.assistant_id || v.assistant_name, crew: pick(v.crew, v.crew_names), island: pick(v.island, v.island_names), note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id }),
+    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id || v.captain_name, asst: v.assistant_id || v.assistant_name, crew: pick(v.crew, v.crew_names), island: pick(v.island, v.island_names), note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id, dep: v.departure_time }),
                          lock: v.completed_at ? 1 : 0, mv: mvOf(v) };
     st.base.team[bid] = clone(TEAM[bid]);
     st.base.duty[key] = (v.duty_staff_ids || []).slice();
@@ -232,6 +233,20 @@
     });
     return out;
   };
+  /* pjDepOf(date, bid, fallback): the time a boat leaves. A time on the card (J.dep, filled from the server's
+     departure_time) wins as in legacy; otherwise the server's `departure` (the job's own, else the route's first time
+     on that day's deployment) read with the job; otherwise legacy's fallback. A typed time is sent by the 'jobs' plan
+     as PATCH …/job {departure_time} (pjDepSet -> pjSet -> poPersist). */
+  if(typeof window.pjDepOf === 'function'){
+    L.pjDepOf = window.pjDepOf;
+    window.pjDepOf = function(date, bid, fallback){
+      if(!enabled()) return L.pjDepOf.apply(this, arguments);
+      var own = L.pjDepOf.call(this, date, bid, null);
+      if(own) return own;
+      var d = P.dep && P.dep[date + '|' + bid];
+      return d && d.departure ? d.departure : fallback;
+    };
+  }
   // yesterday's cards are read first: legacy copies them from the browser's copy
   window.pjCopyYday = function(pier){
     if(!enabled()) return L.pjCopyYday.apply(this, arguments);

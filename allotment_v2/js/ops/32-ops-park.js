@@ -105,7 +105,7 @@
       adTH: b.counts.adTH || 0, chTH: b.counts.chTH || 0, adFR: b.counts.adFR || 0, chFR: b.counts.chFR || 0, inf: b.counts.inf || 0
     };
     return {
-      bid: b.boat_id, boat: { id: b.boat_id, name: b.boat_name }, dep: '',
+      bid: b.boat_id, boat: { id: b.boat_id, name: b.boat_name }, dep: b.departure || '',   // the job's own time, else the route's first (server)
       cnt: cnt, tot: b.tot, cntPc: cnt, totPc: b.tot, pcDiff: false, pax8: cnt,
       booked: b.booked, people: (b.people || []).map(convPerson), miss: b.miss || {}, missTot: b.miss_total || 0,
       orphan: (b.orphans || []).map(function(o){ return { full: o.full, cat: o.cat, seq: o.seq, bkId: o.booking_id, vc: '', lead: '' }; }),
@@ -121,6 +121,7 @@
       var g = byRid[b.route_id];
       if(!g){ g = byRid[b.route_id] = { rid: b.route_id, route: { name: b.route_name, color: routeColor(b.route_id) }, boats: [] }; order.push(g); }
       g.boats.push(convBoat(b));
+      if(b.departure && O.pier){ O.pier.dep = O.pier.dep || {}; O.pier.dep[st.key.split('|')[1] + '|' + b.boat_id] = { departure: b.departure, source: b.departure_source || null }; }   // read by pjDepOf (47)
     });
     return order;
   };

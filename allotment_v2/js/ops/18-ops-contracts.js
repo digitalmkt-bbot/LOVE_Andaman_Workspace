@@ -319,6 +319,36 @@
     return typeof t.agents==='number'?t.agents:originals.cttUse.apply(this,arguments);
   };
 
+  /* §contractState · the promo badge (_ctContractStatus) and the bonus counter (laPromoStat) used the browser's own date
+     test and its own count over whatever bookings were loaded. The server answers both on every contract read:
+     `state` (void | expired | scheduled | active, as legacy's badge) and `bonus_progress` (sold, bookings, earned, used,
+     left, over, to_next, pct). Same labels and colours as legacy. A row without them (not from the server) and a void
+     promo's counter (the server gives null for a void one) keep the legacy function. */
+  var BADGE={
+    void:{key:'void',label:'ยกเลิก',bg:'#FCEBEB',color:'#A32D2D'},
+    expired:{key:'expired',label:'หมดอายุ',bg:'#F1EFE8',color:'#777'},
+    scheduled:{key:'scheduled',label:'รอเริ่ม',bg:'#EEEDF8',color:'#534AB7'},
+    active:{key:'active',label:'ใช้งาน',bg:'#E7F5EE',color:'#0F6E56'}
+  };
+  if(typeof window._ctContractStatus==='function'){
+    var legacyStatus=window._ctContractStatus;
+    window._ctContractStatus=function(c){
+      if(!enabled()||!c||!BADGE[c.serverState]) return legacyStatus.apply(this,arguments);
+      return Object.assign({},BADGE[c.serverState]);
+    };
+  }
+  if(typeof window.laPromoStat==='function'){
+    var legacyPromoStat=window.laPromoStat;
+    window.laPromoStat=function(c){
+      var p=c&&c.bonusProgress;
+      if(!enabled()||!p) return legacyPromoStat.apply(this,arguments);
+      var basis=p.basis||'adchd';
+      return {buy:+p.buy||0,basis:basis,basisTxt:(typeof LA_PROMO_BASIS!=='undefined'&&LA_PROMO_BASIS[basis])||basis,
+        sold:+p.sold||0,bookings:+p.bookings||0,earned:+p.earned||0,used:+p.used||0,left:+p.left||0,over:+p.over||0,
+        toNext:+p.to_next||0,pct:+p.pct||0};
+    };
+  }
+
   window.__laOpsContractsCompat={fromServerContract:fromServerContract,toPromoBody:toPromoBody,promoWriteBody:promoWriteBody,fromServerTemplate:fromServerTemplate,templateBody:templateBody,seatPrices:seatPrices};
   window.laOpsContracts={state:state,load:loadContracts,loadTemplates:loadTemplates,loadDocuments:loadDocuments,documents:state.documents,fromServerContract:fromServerContract,toPromoBody:toPromoBody};
   if(enabled()){listContracts().length=0;var tm=listTemplates();Object.keys(tm).forEach(function(k){delete tm[k];});loadContracts();loadTemplates();}

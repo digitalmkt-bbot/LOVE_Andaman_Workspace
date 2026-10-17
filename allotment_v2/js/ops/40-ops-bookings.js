@@ -522,23 +522,30 @@
   window.laOpsEditAgreed = function(id, yes){ if(yes) editAgreed[id] = true; else delete editAgreed[id]; };
   var SAVE_RULES = {
     booking_closed: { flag: 'edit_anyway' },
+    /* 409 route_not_in_programme: the agent's programme does not hold that route. The commit's own confirm ("เส้นทางนอกสัญญา…")
+       already asked; an OK there is sent up front (progAgreed), otherwise the server's message is asked here */
+    route_not_in_programme: { flag: 'programme_anyway' },
     no_charter_price: { flag: 'free_anyway', ask: function(e){
       return 'WARNING - charter trip will be saved at 0 THB\n\n' + e.message.replace(/\. Send the agreed price.*$/, '') +
         '\n\nPress Cancel to go back and enter the agreed charter price in the red box.\nPress OK only if this charter is really free.'; } },
     charter_displaces_seats: { flag: 'displace_anyway', ask: function(e){
       return e.message.replace(/\. Send displace_anyway.*$/, '') + '\n\nConfirm anyway · Notify dispatcher?'; } }
   };
-  function saveNow(bk){
+  function saveNow(bk, progAgreed, rateNow){
     var pre = Promise.resolve();
     if(O.deployments) pre = pre.then(O.deployments.syncNow);     // a new charter cell must be a deployment first
     var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
       var body = toServer(bk, !bk.opsId);
+      /* §rtKeep · "use today's rate" chosen on the edit form (bookingV2RtKeepUse 'now'): the server re-prices at the agent's current
+         rate only when told (`rate: "agent"`, PATCH); without it each unchanged trip keeps the rate it was sold at */
+      if(rateNow && bk.opsId) body.rate = 'agent';
       /* §opsAnyway · legacy's confirms, answered after the server refuses: "Edit anyway?" on a closed
          booking, "Press OK only if this charter is really free", "Confirm anyway · Notify dispatcher".
          A confirm already given on screen (edit opened on a closed booking, charter modal) goes first. */
       var agreed = {};
       if(editAgreed[bk.id]) agreed.edit_anyway = true;
+      if(progAgreed) agreed.programme_anyway = true;
       if((bk.trips || []).some(function(t){ return t && t.charterDisplacementAck; })) agreed.displace_anyway = true;
       return O.anyway(function(f){
         var b = Object.assign({}, body, f);
@@ -585,7 +592,10 @@
   }
   function save(bk){
     hold(bk.id);
-    return O.queue(function(){ return saveNow(bk); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; });
+    var progAgreed = !!window._laOpsProgAgreed;      // set by the commit wrapper below while its own confirm ran
+    var nb = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2.newBooking : null;       // the form's draft is still open here (the commit closes it after)
+    var rateNow = !!(nb && nb._rtKeep && nb._rtKeep.mode === 'now');
+    return O.queue(function(){ return saveNow(bk, progAgreed, rateNow); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; });
   }
 
   /* ── server-first actions · cancel / partial-cancel / reschedule ──
@@ -723,7 +733,14 @@
         ui: { newBooking: O.clone(st.newBooking), editingId: st.editingId, detailId: st.detailId, tab: st.tab, filterDate: st.filterDate, filterRoute: st.filterRoute }
       };
       window._laOpsCommitSync = null;
-      var ret = orig.apply(this, arguments);
+      /* the commit confirms a route outside the agent's contract ("เส้นทางนอกสัญญา…"); an OK is passed on to the server
+         as programme_anyway so the person is not asked twice */
+      var realConfirm = window.confirm;
+      window.confirm = function(m){ var r = realConfirm.apply(this, arguments); if(r && /^เส้นทางนอกสัญญา/.test(String(m || ''))) window._laOpsProgAgreed = true; return r; };
+      window._laOpsProgAgreed = false;
+      var ret;
+      try{ ret = orig.apply(this, arguments); }
+      finally{ window.confirm = realConfirm; window._laOpsProgAgreed = false; }     // save() has already taken it
       var p = window._laOpsCommitSync; window._laOpsCommitSync = null;
       if(p && typeof p.then === 'function'){
         p.catch(function(e){

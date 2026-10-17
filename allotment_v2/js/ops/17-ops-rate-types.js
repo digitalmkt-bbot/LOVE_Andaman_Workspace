@@ -352,6 +352,38 @@
     };
   }
 
+  /* rtToggleActive (the Active switch on a rate card): legacy flipped rt.active and called rtPersist, a no-op here,
+     so the rate stayed active on the server. Now PATCH /v1/rate-types/{id} {active}; the card is redrawn from the
+     server's row. Server first: nothing changes on screen if the server refuses. */
+  if(typeof window.rtToggleActive === 'function'){
+    var legacyToggle = window.rtToggleActive;
+    window.rtToggleActive = function(rtId, ev){
+      if(!O.enabled()) return legacyToggle.apply(this, arguments);
+      if(ev && ev.stopPropagation) ev.stopPropagation();
+      if(!canWrite()){ failNotReady(); return; }
+      var rt = (typeof getRateType === 'function') ? getRateType(rtId) : null;
+      if(!rt) return;
+      var next = !(rt.active !== false);
+      return O.queue(function(){
+        return O.patch('/v1/rate-types/' + encodeURIComponent(rtId), { active:next }).then(function(){ return refreshOne(rtId); });
+      }).then(function(){
+        try{ if(typeof rtRenderCards === 'function') rtRenderCards(); }catch(_){ }
+        try{ if(typeof _rtSelected !== 'undefined' && _rtSelected === rtId && typeof rtRenderDetail === 'function') rtRenderDetail(rtId); }catch(_){ }
+        O.wrote('rate-type-save');
+      }).catch(function(error){ O.fail('Could not ' + (next ? 'activate' : 'deactivate') + ' rate type', error); });
+    };
+  }
+
+  /* _rtBackfillOwners: legacy's one-time seed of rate-type owners from a map of production ids, set in memory only (rtPersist is a
+     no-op here). The server stores each rate type's owner and checks it itself, and fromServer sets owner ('' = shared), so a local
+     guess would only make the screen disagree with the server. Does nothing in ops mode. */
+  if(typeof window._rtBackfillOwners === 'function'){
+    var legacyBackfill = window._rtBackfillOwners;
+    window._rtBackfillOwners = function(){
+      if(!O.enabled()) return legacyBackfill.apply(this, arguments);
+    };
+  }
+
   /* Load before the ops boot redraws the active view. */
   if(O.enabled()) load();
 })();
