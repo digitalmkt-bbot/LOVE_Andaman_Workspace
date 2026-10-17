@@ -807,7 +807,8 @@
 
   /* ════ sign-out sheets ═══════════════════════════════════════════════ */
   function sheetPath(pier, date, bid){ return '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/sheets/' + enc(bid); }
-  function bookings(){ return Array.isArray(window.SB_BOOKINGS) ? window.SB_BOOKINGS : []; }
+  // SB_BOOKINGS is a top-level `let` in 08-app.js: it is NOT a property of window, so window.SB_BOOKINGS is undefined
+  function bookings(){ return typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS) ? SB_BOOKINGS : []; }
   function bkSrv(id){ var b = bookings().filter(function(x){ return x && x.id === id; })[0]; return b && b.opsId ? b.opsId : id; }
   function bkLocal(id){ var b = bookings().filter(function(x){ return x && x.opsId === id; })[0]; return b ? b.id : id; }
   function kindOfItem(id){ var it = itemOf(id); return it ? it.kind : ''; }
