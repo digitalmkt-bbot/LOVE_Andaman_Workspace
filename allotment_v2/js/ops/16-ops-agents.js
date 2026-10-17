@@ -82,6 +82,7 @@
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
+    if(s.credit && typeof s.credit.limit==='number') o.serverCredit=Object.assign({ at:Date.now() }, s.credit);   // worked out by the server (agCreditState below)
     return o;
   }
 
@@ -716,5 +717,29 @@
       return legacyHist.apply(this,arguments);
     };
     hist.__ops=true; hist.__opsAgents=true; window.agTabHist=hist;
+  }
+
+  /* ════ The agent's credit (legacy agCreditState) · GET /v1/agents/{id} `credit`, worked out by the server ════
+     The list does not carry it, the detail does. agCreditState is synchronous, so it answers from the server's
+     credit when this agent's is in hand and fresh (any write drops it), and asks for it in the background
+     otherwise; until it lands the legacy sum answers. */
+  var CREDIT_TTL=60000, creditAsk=Object.create(null);
+  function dropCredit(){ list().forEach(function(a){ if(a) delete a.serverCredit; }); creditAsk=Object.create(null); }
+  O.onWrite(dropCredit);
+  if(typeof agCreditState==='function'){
+    var legacyCredit=agCreditState;
+    var credit=function(agentId){
+      if(!enabled()) return legacyCredit.apply(this,arguments);
+      var a=current(agentId), c=a && a.serverCredit;
+      if(c && Date.now()-c.at<CREDIT_TTL) return { limit:c.limit, used:c.used, available:c.available, pct:c.pct, mode:a.payType||null, over:c.over };
+      if(a && !creditAsk[agentId]){
+        creditAsk[agentId]=true;
+        O.get('/v1/agents/'+enc(agentId)).then(function(s){
+          var m=current(agentId); if(m && s && s.credit) m.serverCredit=Object.assign({ at:Date.now() }, s.credit);
+        },function(){}).then(function(){ setTimeout(function(){ delete creditAsk[agentId]; }, CREDIT_TTL); });
+      }
+      return legacyCredit.apply(this,arguments);
+    };
+    credit.__ops=true; credit.__opsAgents=true; window.agCreditState=credit;
   }
 })();

@@ -161,6 +161,7 @@
       issuedAt: v.issued_at || '',
       dueAt: v.due_at || '',
       createdBy: v.created_by || null,
+      kind: v.kind || null,
       note: v.note != null ? v.note : (v.kind === 'prepay' ? 'prepay' : null),
       ref: v.ref || null,
       dear: v.dear || null,

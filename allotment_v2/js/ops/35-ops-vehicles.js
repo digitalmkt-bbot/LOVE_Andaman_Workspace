@@ -14,8 +14,8 @@
 
    Server first: nothing changes on screen until the server has answered; a refusal is a red toast
    and the screen is redrawn from the unchanged local state. The van id is the server's (vehNN).
-   Not on the server (still local): a van's per-day cost (vanCostSet) and its history list `log`
-   (the server keeps its own at GET /operations/vans/{id}/log).
+   Not on the server (still local): a van's per-day cost (vanCostSet). The history list `log` is the
+   server's (GET /operations/vans/{id}/log, read when a van is opened; vehLog pushes nothing locally).
    Legacy mode (!O.enabled()): every wrapped function delegates to the original.
    Classic script · loads right after 35-ops-van-jobs.js.
    ════════════════════════════════════════════════════════════════════════ */
@@ -28,7 +28,7 @@
   var originals = {};
   var WRAPPED = ['renderVehicles', 'vehAdd', 'vehFormSave', 'vehSetField', 'vehDelete', 'vehSetColor', 'vehSetColorLive',
     'vehDaySetZone', 'vehDaySetRoute', 'vehDayToggleRoute', 'vehDayClearRoutes', 'vehDaySetStatus', 'vehStatusCycleDay',
-    'vehStatusAdd', 'vehStatusSet', 'vehStatusDel', 'vehZoneAdd', 'vehZoneSet', 'vehZoneDel'];
+    'vehStatusAdd', 'vehStatusSet', 'vehStatusDel', 'vehZoneAdd', 'vehZoneSet', 'vehZoneDel', 'vehLog', 'vehSelect'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
   function wrap(name, opsFn){
     var orig = originals[name];
@@ -103,7 +103,29 @@
       for(var i = 0; i < MODALS.length; i++){ if(elById(MODALS[i])) return; }
       if(O.activeView && O.activeView() && O.activeView() !== 'vehicles') return;
       if(originals.renderVehicles) originals.renderVehicles();
+      var sel = null; try{ sel = typeof _vehSel !== 'undefined' ? _vehSel : null; }catch(_){}
+      if(sel) loadLog(sel);
     }).catch(function(e){ console.warn('[ops] vans did not load · ' + (e && e.message)); });
+    return r;
+  });
+
+  /* ════ The history list: the server writes it (GET /operations/vans/{id}/log, newest first) ════ */
+  wrap('vehLog', function(){ /* the server logs each change it accepts; nothing is pushed locally */ });
+  var logAt = {};
+  function loadLog(id){
+    var v = vehOf(id); if(!v || logAt[id]) return;
+    logAt[id] = true;
+    O.call('GET', '/operations/vans/' + enc(id) + '/log').then(function(j){
+      var mine = vehOf(id); if(!mine) return;
+      mine.log = ((j && j.log) || []).map(function(x){ return { at: x.at, kind: x.kind || 'edit', text: x.text }; }).reverse();
+      if(originals.renderVehicles && elById('vehicles-host')) originals.renderVehicles();
+    }, function(e){ console.warn('[ops] van log did not load · ' + (e && e.message)); })
+      .then(function(){ setTimeout(function(){ delete logAt[id]; }, 1500); });
+  }
+  wrap('vehSelect', function(id){
+    var r = originals.vehSelect ? originals.vehSelect.apply(this, arguments) : undefined;
+    var sel = null; try{ sel = typeof _vehSel !== 'undefined' ? _vehSel : null; }catch(_){}
+    if(sel) loadLog(sel);
     return r;
   });
 

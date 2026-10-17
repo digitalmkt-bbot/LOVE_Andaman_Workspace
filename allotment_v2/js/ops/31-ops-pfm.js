@@ -261,6 +261,26 @@
     return orig.apply(this, [].slice.call(arguments, 1));
   });
 
+  /* a credit agent's booking paid ahead on its own prepay invoice: the row's kind, else the invoice's kind (server's) */
+  wrap('pfmIsCreditPrepaid', function(orig, bk){
+    var row = bk && (state.byClientId[bk.id] || state.byServerId[bk.opsId || bk.id]);
+    if(row) return row.kind === 'prepay';
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('pfmIsPrepayInv', function(orig, inv){
+    if(inv && inv._fromOpsBackend && inv.kind) return inv.status !== 'void' && inv.kind === 'prepay';
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  /* 18:00 Asia/Bangkok the day before the first trip: the server's cutoff_at on a row with that travel date */
+  wrap('pfmCutoff', function(orig, date){
+    var keys = Object.keys(state.byClientId);
+    for(var i = 0; i < keys.length; i++){
+      var r = state.byClientId[keys[i]];
+      if(r && r.travel_date === date && r.cutoff_at){ var d = new Date(r.cutoff_at); if(!isNaN(d.getTime())) return d; }
+    }
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   wrap('pfmSalesName', function(orig, bk){
     var row = bk && (state.byClientId[bk.id] || state.byServerId[bk.opsId || bk.id]);
     if(row && row.sales_name) return row.sales_name;
