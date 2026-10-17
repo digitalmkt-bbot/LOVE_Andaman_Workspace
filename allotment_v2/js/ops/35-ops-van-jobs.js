@@ -36,7 +36,7 @@
   var originals = {};
   var WRAPPED = ['renderVanJobs', 'renderVanCheckin', 'bookingV2OpsVansDay', 'vanJobsGetPickupTh',
     'vanJobsSetDriver', 'vanJobsResetDriver', 'vanJobsToggleSent', 'vanJobsSetSreq', 'vanJobsResetSreq',
-    'vanJobsSetPickupTh', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck'];
+    'vanJobsSetPickupTh', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck', 'vckArrAll', 'vckArrSave', 'vckArrToggle'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
   function wrap(name, opsFn){
     var orig = originals[name];
@@ -355,6 +355,47 @@
     O.queue(function(){ return O.call(on === false ? 'DELETE' : 'PUT', '/operations/van-stops/' + enc(id) + '/check-in'); }).then(function(s){
       putStop(s); redraw();
     }, function(e){ O.fail('Stop check-in not saved · ' + failCode(e), e); });
+  });
+
+  /* ════ Driver arrived at the first pickup (Van Check-in) · vck_arrive ⇄ /operations/van-arrivals ════
+     Legacy kept one mark per "date::van~route" in the blob. vckArrAll answers from a cache the day's GET
+     fills; the toggle asks the server first (PUT = mark: the time and the login are the server's; DELETE =
+     unmark), then flows the van's untouched rows to Standby / back to Wait as legacy does (vckArrFlow). */
+  var arrMap = {}, arrDays = {};
+  function arrKey(date, van, route){ return date + '::' + van + '~' + route; }
+  function arrPut(date, a){
+    arrMap[arrKey(date, a.van_id, a.route_id)] = { at: a.arrived_hm || '', by: a.arrived_by || '', ts: a.arrived_at || '' };
+  }
+  function loadArrivals(date){
+    return O.get('/operations/van-arrivals', { date: date }).then(function(j){
+      Object.keys(arrMap).forEach(function(k){ if(k.indexOf(date + '::') === 0) delete arrMap[k]; });
+      ((j && j.arrivals) || []).forEach(function(a){ arrPut(date, a); });
+      arrDays[date] = true;
+      return j;
+    });
+  }
+  wrap('vckArrAll', function(){ return arrMap; });
+  wrap('vckArrSave', function(){ return null; });          // nothing is kept in the blob any more
+  wrap('vckArrToggle', function(date, gk, vanName){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
+    var m = /^([^~]+)~(.+)$/.exec(str(gk)); if(!m || !date) return;
+    var key = arrKey(date, m[1], m[2]), cur = arrMap[key], on = !cur;
+    if(cur){
+      if(!confirm('ยกเลิกการบันทึก "ถึงจุดรับแล้ว"?' + String.fromCharCode(10)
+         + (vanName || '') + ' · บันทึกไว้ ' + (cur.at || '') + ' โดย ' + (cur.by || '')
+         + String.fromCharCode(10, 10)
+         + 'นาฬิการอลูกค้าจะหยุดนับ · แถวที่เป็น Standby อยู่จะกลับเป็น "รอ"')) return;
+    }
+    var path = '/operations/van-arrivals/' + enc(date) + '/' + enc(m[1]) + '/' + enc(m[2]);
+    O.queue(function(){ return on ? O.call('PUT', path) : O.call('DELETE', path); }).then(function(a){
+      if(on && a) arrPut(date, a); else delete arrMap[key];
+      if(typeof window.vckArrFlow === 'function') window.vckArrFlow(date, gk, on);
+      if(typeof window.ckPersist === 'function') window.ckPersist();
+      if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+    }, function(e){
+      if(!on && e && e.status === 404){ delete arrMap[key]; redraw(); return; }
+      O.fail('Arrival not saved · ' + failCode(e), e);
+    });
   });
 
   /* ════ The day's load, behind each screen's render ════ */

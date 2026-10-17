@@ -15,7 +15,8 @@
    Warnings on an answer (van_in_other_group) are an info toast, not a failure.
 
    Out of scope in ops mode (refused with a toast, no request, nothing local changes):
-   creating/changing split parts, pickup order, clearing a program's vans. Return vans on an
+   creating/changing split parts. Pickup order, return van, auto-assign, clear route and the group drag order
+   are wired below. Return vans on an
    already-split trip are saved per part through `/operations/trip-ops/:trip_id`.
    Legacy mode (!O.enabled()): every wrapped function delegates to the original.
 
@@ -30,12 +31,15 @@
   var BASE = '/operations/van-groups';
   var CLOSED = ['cancelled', 'cancelled_weather', 'rejected'];
   var serverIds = {};     // 'date|routeId|number' -> server group id
+  var groupMembers = {};  // server group id -> members as the server lists them (pickup order)
+  var groupOrderMap = {}; // 'date::routeId::zone' -> group numbers in the order staff dragged them (display_order)
   var groupInfo = {};     // server group id -> {date, routeId, number, vanId} · read by 35-ops-van-jobs.js
   var originals = {};
   var WRAPPED = ['bookingV2VanGroupSetVan', 'bookingV2AssignVan', 'bookingV2VanGroupSetTime', 'bookingV2VanGroupDisband',
     'bookingV2VanGroupSelected', 'bookingV2VanGroupSave', 'bookingV2VanGroupClearSeq', 'bookingV2VanGroupSetReturn',
     'bookingV2AssignVanReturn', 'bookingV2AssignVanReturnSplit', 'bookingV2SetReturnSameVan', 'bookingV2VanSplit',
-    'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal'];
+    'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal',
+    'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
 
   function wrap(name, opsFn){
@@ -161,7 +165,13 @@
         if(!b || !routeOn(b, date, routeId)) return;
         clearVan(bkOpsRead(b, date) || {}, false);
       });
-      groups.forEach(function(g){ applyGroup(date, routeId, g); });
+      groups.forEach(function(g){ applyGroup(date, routeId, g); groupMembers[g.id] = g.members || []; });
+      /* display_order: the zone's dragged groups, in order; the rest follow by number (client side, as legacy) */
+      Object.keys(groupOrderMap).forEach(function(k){ if(k.indexOf(date + '::' + routeId + '::') === 0) delete groupOrderMap[k]; });
+      groups.filter(function(g){ return g.display_order != null; })
+        .sort(function(a, b){ return a.display_order - b.display_order; })
+        .forEach(function(g){ var k = date + '::' + routeId + '::' + g.zone; (groupOrderMap[k] = groupOrderMap[k] || []).push(+g.number); });
+
       return groups;
     });
   }
@@ -333,6 +343,105 @@
     });
   });
 
+  /* ── commands on a whole group or route-day · each asks the server, then reads the day again ── */
+  function dayCmd(title, date, routeId, send){
+    return O.queue(function(){ return send().then(function(){ return fetchDay(date, routeId); }); }).then(function(){
+      redraw();
+    }, function(e){
+      O.fail(title + ' · ' + failCode(e), e);
+      redraw();
+      return null;
+    });
+  }
+  function groupSid(title, date, routeId, gid){
+    var sid = serverIdOf(date, routeId, +gid);
+    if(!sid) refuse(title, 'This group is not on operation-backend yet');
+    return sid;
+  }
+  wrap('bookingV2VanAutoAssign', function(date, routeId){
+    return dayCmd('Auto-assign not done', date, routeId, function(){
+      return O.post('/operations/van-days/' + enc(date) + '/auto-assign', { route_id: routeId }).then(function(r){
+        var n = r && r.assigned ? r.assigned.length : 0, un = r && r.unassigned ? r.unassigned.length : 0;
+        O.toast({ kind: 'neutral', title: 'Auto-assign: ' + n + ' group(s) got a van', status: un ? 'PARTIAL' : 'DONE', sub: un ? (un + ' still without a van') : '', dur: 6000 });
+      });
+    });
+  });
+  wrap('bookingV2VanClearRoute', function(date, routeId){
+    var rows = (typeof baSeatBookingsForRoute === 'function') ? baSeatBookingsForRoute(date, routeId).filter(function(r){
+      var o = bkOpsRead(r.b, date) || {}; return o.vanId; }) : [];
+    if(!rows.length) return null;
+    if(!confirm('Clear van assignments for this program on ' + date + '? (' + rows.length + ' booking(s))')) return null;
+    return dayCmd('Vans not cleared', date, routeId, function(){ return O.post(BASE + '/clear', { service_date: date, route_id: routeId }); });
+  });
+  wrap('bookingV2VanGroupSetReturn', function(date, routeId, zone, gid, vanId){
+    var sid = groupSid('Return van not set', date, routeId, gid); if(!sid) return null;
+    return dayCmd('Return van not set', date, routeId, function(){ return O.patch(BASE + '/' + enc(sid), { return_van_id: vanId || null }); });
+  });
+  wrap('bookingV2VanGroupClearSeq', function(date, routeId, zone, gid){
+    var sid = groupSid('Pickup order not cleared', date, routeId, gid); if(!sid) return null;
+    return dayCmd('Pickup order not cleared', date, routeId, function(){ return O.call('PUT', BASE + '/' + enc(sid) + '/order', { clear: true }); });
+  });
+  /* the rows ticked in the group, in tick order, take places 1..k; the group's other members follow in the order they had */
+  wrap('bookingV2VanGroupSave', function(date){
+    var sel = window._bkV2VanSel || {};
+    var keys = Object.keys(sel).filter(function(k){ return sel[k]; });
+    if(!keys.length) return null;   // nothing ticked: legacy only persisted, and ops mode persists nothing locally
+    keys.sort(function(a, b){ return (sel[a] || 0) - (sel[b] || 0); });
+    var perGroup = {}, routeOf = {}, bad = null;
+    keys.forEach(function(key){
+      var p = String(key).split('@'), b = byClientId(p[0]);
+      if(!b) return;
+      if(p.length > 1){ bad = 'A split part cannot be ordered here: split parts are not on operation-backend yet'; return; }
+      var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, date) : b.ops) || {};
+      var t = tripOpsOf(b, date);
+      var num = +o.vanGroup || 0;
+      if(!num || !t){ bad = 'Pick the rows of a van group that is saved to operation-backend'; return; }
+      (perGroup[num] = perGroup[num] || []).push({ trip_id: t.opsTripId, idx: 0 });
+      routeOf[num] = t.routeId;
+    });
+    if(bad) return refuse('Pickup order not saved', bad);
+    var jobs = Object.keys(perGroup).map(function(n){
+      var sid = serverIdOf(date, routeOf[n], +n);
+      if(!sid) return null;
+      var seen = {};
+      perGroup[n].forEach(function(r){ seen[r.trip_id + '#' + r.idx] = true; });
+      var rest = (groupMembers[sid] || []).filter(function(m){ return !seen[m.trip_id + '#' + m.idx]; }).map(function(m){ return { trip_id: m.trip_id, idx: +m.idx }; });
+      return { routeId: routeOf[n], sid: sid, members: perGroup[n].concat(rest) };
+    });
+    if(jobs.some(function(j){ return !j; })) return refuse('Pickup order not saved', 'A group here is not on operation-backend yet');
+    window._bkV2VanSel = {};
+    return O.queue(function(){
+      return jobs.reduce(function(p, j){ return p.then(function(){ return O.call('PUT', BASE + '/' + enc(j.sid) + '/order', { members: j.members }); }); }, Promise.resolve())
+        .then(function(){ return Promise.all(jobs.map(function(j){ return fetchDay(date, j.routeId); })); });
+    }).then(function(){ redraw(); }, function(e){ O.fail('Pickup order not saved · ' + failCode(e), e); redraw(); });
+  });
+
+  /* ── group drag order · bookingV2GrpOrderGet/Set/All read and write the groups' display_order ──
+     PUT /operations/van-groups/order {service_date, route_id, zone, group_ids | clear:true}. The screen redraws at
+     once from the cache; a refused save puts the old order back. */
+  function ordKey(date, routeId, zone){ return String(date || '') + '::' + String(routeId || '') + '::' + String(zone || ''); }
+  wrap('bookingV2GrpOrderAll', function(){ return groupOrderMap; });
+  wrap('bookingV2GrpOrderGet', function(date, routeId, zone){
+    var a = groupOrderMap[ordKey(date, routeId, zone)];
+    return Array.isArray(a) ? a.slice() : [];
+  });
+  wrap('bookingV2GrpOrderSet', function(date, routeId, zone, arr){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')) return false;
+    var list = (arr || []).map(Number).filter(function(n){ return n > 0; });
+    var ids = list.map(function(n){ return serverIdOf(date, routeId, n); });
+    if(ids.some(function(x){ return !x; })){ refuse('Group order not saved', 'A group here is not on operation-backend yet'); return true; }
+    var k = ordKey(date, routeId, zone), before = groupOrderMap[k];
+    if(list.length) groupOrderMap[k] = list; else delete groupOrderMap[k];
+    var body = { service_date: date, route_id: routeId, zone: zone };
+    if(list.length) body.group_ids = ids; else body.clear = true;
+    O.queue(function(){ return O.call('PUT', BASE + '/order', body); }).then(function(){}, function(e){
+      if(before) groupOrderMap[k] = before; else delete groupOrderMap[k];
+      O.fail('Group order not saved · ' + failCode(e), e);
+      redraw();
+    });
+    return true;
+  });
+
   /* ── refused in ops mode: not on operation-backend yet ── */
   /* ── return vans (per booking, legacy design) ──
      A booking's return van is its trip part's return_van_id: PATCH /operations/trip-ops/{trip_id} with van_parts.
@@ -404,21 +513,12 @@
       if(val) o.vanReturnId = null;   // the server drops every part's own return van when the group comes back on its van
     });
   });
-  wrap('bookingV2VanGroupSetReturn', function(){ return notYet('Return van is not on operation-backend yet'); });
   wrap('bookingV2VanSplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
   wrap('bookingV2VanUnsplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
-  wrap('bookingV2VanGroupClearSeq', function(){ return notYet('Pickup order is not on operation-backend yet'); });
-  wrap('bookingV2VanGroupSave', function(){
-    var sel = window._bkV2VanSel || {};
-    if(Object.keys(sel).some(function(k){ return sel[k]; })) return notYet('Pickup order is not on operation-backend yet');
-    return null;   // nothing ticked: legacy only persisted, and ops mode persists nothing locally
-  });
-  wrap('bookingV2VanClearRoute', function(){ return notYet('Clearing a program\'s vans is not on operation-backend yet'); });
   // The heal keeps a group's vanId in step with local data. In ops mode the server's groups are the truth
   // (the loader applies them), so the heal does nothing rather than write local-only van fields.
   wrap('bookingV2VanGroupHeal', function(){ return null; });
   // Auto-assign picks vans by itself, which the rules forbid; no screen calls it, but refuse if it is ever wired.
-  wrap('bookingV2VanAutoAssign', function(){ return notYet('Auto-assign is not on operation-backend yet · assign vans by hand'); });
 
   /* Render hook · the by-trip screen calls this in Van mode. Loads every route's groups for the day once per
      5 seconds (a render inside the window does not re-fetch), then redraws once. Answers the load's promise

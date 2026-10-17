@@ -628,6 +628,19 @@
     return updateInsuranceServer(bkId, pk, { reviewed: nextRev }).catch(function(){ return null; });
   });
 
+  // insRevertRow (08-app.js): the Revert button drops the typed age as well as the local first/last name and nationality.
+  // The age lives on the server (PUT /v1/bookings/:id/insurance, age: null clears it); the other overrides stay in this browser.
+  wrap('insRevertRow', function(orig, bkId, pk){
+    var bk = findBooking(bkId);
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    if(bk && bk._fromOpsBackend){
+      var idx = parseInt(pk, 10);
+      var has = pk === 'lead' ? bk.leadAge != null : (Number.isFinite(idx) && bk.passengers && bk.passengers[idx] && bk.passengers[idx].age != null);
+      if(has) updateInsuranceServer(bkId, pk, { age: null }).catch(function(){ return null; });
+    }
+    return r;
+  });
+
   wrap('pckMealSave', function(){
     var st = typeof _pckMeal !== 'undefined' ? _pckMeal : null;
     if(!st || !st.bkId){
@@ -667,6 +680,35 @@
     var mine = ckFlight[key] = { sent: clone(val || {}), base: clone(base) };
     writeCheckinServer(b, date, kind, val).catch(function(){}).then(function(){ if(ckFlight[key] === mine) delete ckFlight[key]; });
     return val;
+  });
+
+  // ckEventUndo (08-app.js): legacy pops the last CXL / No-show event. The server keeps check-in events
+  // (409 events_append_only on a shorter list), so the same click marks the last live event undone ("mistake")
+  // and gives its people back, exactly as the "รับกลับ" path does. Same confirm, same counts.
+  wrap('ckEventUndo', function(orig, bkId, date, kind){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return undefined;
+    var b = findBooking(bkId); if(!b) return undefined;
+    var cur = window.ckRead(b, date, kind) || {};
+    var ev = Array.isArray(cur.events) ? cur.events.map(function(x){ return Object.assign({}, x); }) : [];
+    var ix = -1;
+    for(var i = ev.length - 1; i >= 0; i--){ if(ev[i] && !ev[i].undone){ ix = i; break; } }
+    if(ix < 0){ alert('ไม่มีรายการให้ถอน'); return undefined; }
+    var last = ev[ix];
+    if(!confirm('ถอนรายการล่าสุด?\n' + ((last.type === 'cxl') ? 'CXL' : 'No-show') + ' ' + (last.pax || 0) + ' คน · ' + ((last.at || '') + ' ' + (last.by || '')))) return undefined;
+    ev[ix] = Object.assign({}, last, { undone: { why: 'mistake', at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } });
+    var live = ev.slice(0, ix).filter(function(x){ return x && !x.undone; });
+    var prev = live.length ? live[live.length - 1] : null;
+    var t = window.ckTripOn(b, date) || {}, booked = window.ckBookedPax(t);
+    var cap = (typeof window.ckCap === 'function') ? window.ckCap(b, date, kind, booked) : booked;
+    var ceil = (typeof window.ckCeil === 'function' && window._ckBase(kind) === 'pier') ? window.ckCeil(b, date, kind, booked) : cap;
+    var back = Math.min(ceil, ((cur.actualPax != null) ? cur.actualPax : 0) + Math.max(0, +last.pax || 0));
+    window.ckWrite(b, date, kind, { actualPax: back, noShow: Math.max(0, cap - back), expected: cap,
+      selfAdd: (back > cap) ? { pax: back - cap, at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } : null,
+      at: cur.at || null, by: cur.by || null, events: ev,
+      reasonCode: prev ? (prev.reasonCode || prev.reason_code || '') : '', reasonNote: prev ? (prev.note || '') : '', reasonAt: prev ? (prev.at || '') : '' });
+    if(typeof window.ckPersist === 'function') window.ckPersist();
+    if(typeof window.ckAfter === 'function') window.ckAfter(kind);
+    return undefined;
   });
 
   wrap('bookingV2ExtraAdd', function(orig, bkId){
@@ -727,6 +769,71 @@
     if(!enabled()) return null;
     return collectUpgradeServer(upgradeId, bkId, opt);
   };
+
+  // ── 5. Trip dispatch notes and times (`PATCH /operations/trip-ops/:trip_id`) ──
+  // Server first: the local ops block changes only when the server has said yes. The PATCH is unversioned
+  // (a day-of write), refused with a message for a cancelled booking.
+
+  function tripOnDate(b, date){
+    var trips = Array.isArray(b && b.trips) ? b.trips : [];
+    return trips.find(function(t){ return t && t.opsTripId && (t.date || '') === date; }) || null;
+  }
+  function patchTripOps(b, date, body){
+    var t = tripOnDate(b, date);
+    if(!t) return Promise.reject(new Error('This booking has no operation-backend trip on ' + date + ': save the booking first'));
+    return O.queue(function(){ return O.call('PATCH', '/operations/trip-ops/' + enc(t.opsTripId), body); });
+  }
+  function opsBlock(b, date){
+    return typeof bkOpsFor === 'function' ? bkOpsFor(b, typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date) : (b.ops = b.ops || {});
+  }
+  function pickupJoinText(start, end, atPier){
+    if(atPier && end) return 'Before ' + end + ' at pier';
+    if(start && end) return start + '-' + end;
+    return start || '';
+  }
+
+  // bookingV2SetPickupFinal (booking/bookingV2SetPickupFinal.js): the final pickup time typed on the By-trip row
+  wrap('bookingV2SetPickupFinal', function(orig, bkId, val, date){
+    var b = findBooking(bkId); if(!b) return null;
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
+    var split = O.bookings && O.bookings.pickupSplit ? O.bookings.pickupSplit(val) : {};
+    if(split === null){
+      alert('Pickup time "' + text(val) + '" is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
+      if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+      return null;
+    }
+    var body = { pickup_time_final: split.pickupTime || null, pickup_time_final_end: split.pickupTimeEnd || null, pickup_final_at_pier: !!split.pickupAtPier };
+    return patchTripOps(b, d, body).then(function(res){
+      var op = res && res.trip && res.trip.operations;
+      opsBlock(b, d).pickupTimeFinal = op ? pickupJoinText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier) : pickupJoinText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier);
+      O.wrote('trip-ops');
+      return res;
+    }, function(e){
+      O.fail('Pickup time not saved', e);
+      if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+      return null;
+    });
+  });
+
+  // pckNoteSet (08-app.js): the pier note of one day; the server stamps who and when. An empty text clears it.
+  wrap('pckNoteSet', function(orig, b, date, txt){
+    if(!b) return null;
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
+    var note = text(txt);
+    return patchTripOps(b, d, { pier_note: note || null }).then(function(res){
+      var n = res && res.trip && res.trip.operations && res.trip.operations.pier_note;
+      var op = opsBlock(b, d);
+      op.pierNote = n ? { t: String(n.text != null ? n.text : (n.t || '')), at: n.at || '', by: n.by || '' } : null;
+      delete op.pierNoteAt; delete op.pierNoteBy;
+      if(typeof window.bookingV2AddHistory === 'function') window.bookingV2AddHistory(b, 'note', (note ? ('โน้ตหน้างาน: ' + note) : 'ลบโน้ตหน้างาน'), 'Pier');
+      O.wrote('trip-ops');
+      if(typeof window.renderPierCheckin === 'function' && O.activeView && O.activeView() === 'piercheckin') window.renderPierCheckin();
+      return res;
+    }, function(e){
+      O.fail('Pier note not saved', e);
+      return null;
+    });
+  });
 
   var api = {
     updateInsurance: updateInsuranceServer,
