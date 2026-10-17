@@ -829,6 +829,20 @@
   };
 
   O.fleetBoats = api;
+  /* pjDocFind(boat, typeId): the boat's current document of a type. The Documents matrix (GET /v1/fleet/certificates, cells[type])
+     holds the row the server shows for the type (a processing row, else one not done, else the later expiry), so the browser's pick
+     (flDocCurrent) is used only for a boat the matrix does not list (charter or retired) or before the matrix has arrived. */
+  if(typeof window.pjDocFind === 'function'){
+    originals.pjDocFind = window.pjDocFind;
+    window.pjDocFind = function(boat, typeId){
+      var m = enabled() && boat && state.certificates && Array.isArray(state.certificates.boats) ? state.certificates : null;
+      var row = m && m.boats.filter(function(x){ return x && x.boat_id === boat.id; })[0];
+      if(!row || !row.cells || !(typeId in row.cells)) return originals.pjDocFind.apply(this, arguments);
+      var c = row.cells[typeId];
+      return c ? { name: c.name || '', exp: c.expires_on != null ? c.expires_on : null, renewStatus: c.renew_status != null ? c.renew_status : null } : null;
+    };
+  }
+
   window.laOpsFleetBoats = api;
   window.__laOpsFleetBoatsCompat = {
     mapBoat: mapBoat,

@@ -391,6 +391,25 @@
     });
   });
 
+  /* ── programme colour on the pier job page (pjProgColor) ── legacy wrote ROUTES[].color and laBlobSave()
+     (this browser only), so the colour came back on reload. A login with the config area now saves it with
+     PATCH /v1/routes/{id} {color}; the swatch changes once the server took it. Pier staff without config
+     keep legacy's local write: the server refuses PATCH /v1/routes for them (decision in the report). */
+  calWrap('pjProgColor', function(orig, rid, hex){
+    var okCfg = (typeof laCanEditArea === 'function') ? laCanEditArea('config') : true;
+    if(!okCfg) return orig.apply(this, [].slice.call(arguments, 1));
+    var r = routeOf(rid); if(!r) return;
+    if(window.event) window.event.stopPropagation();
+    return O.queue(function(){ return O.patch(RT(rid), { color: hex }); }).then(function(s){
+      r.color = (s && s.color) || hex;
+      O.wrote('route');
+      if(typeof renderPierJob === 'function') renderPierJob();
+    }, function(e){
+      O.fail('Colour not saved', e);
+      if(typeof renderPierJob === 'function') renderPierJob();
+    });
+  });
+
   wrapDayStatus();
   lockAgentEdits();
   wrapAgentDetail();

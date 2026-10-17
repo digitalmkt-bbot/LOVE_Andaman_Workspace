@@ -13,7 +13,10 @@
   function refresh(){ try{ window._PC_ARR=null; if(typeof window.pcSync==='function') window.pcSync(); }catch(_){} }
   function redraw(){ try{ L.renderPierCash(window._pcPier); }catch(_){} }
   function put(a, match, add){ for(var i=a.length-1;i>=0;i--) if(match(a[i])) a.splice(i,1); (add||[]).forEach(function(x){ a.push(x); }); }
-  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||'',claim:(r.claim&&r.claim.id)||''}; }   /* claim: the claim the line is in (pcClmOn) */
+  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||'',claim:(r.claim&&r.claim.id)||'',srvRefund:r.refund===undefined?undefined:!!r.refund}; }   /* claim: the claim the line is in (pcClmOn) · srvRefund: the server matched it as a refund (money back from the office) */
+  /* pcIsRefund: the server says which in-rows are refunds (isRefund in pier-cash-claims.ts); the browser regex is only the answer for a row the server has not sent yet */
+  var isRefundLegacy=window.pcIsRefund;
+  if(typeof isRefundLegacy==='function') window.pcIsRefund=function(x){ if(on()&&x&&typeof x.srvRefund==='boolean') return x.srvRefund; return isRefundLegacy.apply(this,arguments); };
   function applyDay(j){
     if(!j) return; var p=j.pier,d=j.date;
     put(rows(),function(x){ return x&&x.pier===p&&x.date===d; },(j.rows||[]).map(legacyRow));
@@ -67,6 +70,43 @@
     var D=(typeof window.pcDay==='function'&&window.pcDay(p,d,false))||{}, pk=D.pk||{};
     return {old:!!pp.old, off:!!pp.off, waiting:+pp.waiting||0, total:+pp.total||0, pulledAmt:+pp.pulled_amount||0, nPulled:+pp.pulled_boats||0, nWait:+pp.waiting_boats||0,
       lines:(pp.boats||[]).map(function(b){ return {B:{bid:b.boat_id,rid:b.route_id||'',name:b.boat_name||b.boat_id}, C:pk[b.boat_id]||{}, v:+b.amount||0, pulled:b.pulled_amount==null?null:(+b.pulled_amount||0)}; })}; };
+  /* pc2StatLT(pier,ds): which boats need a long-tail entry and which are missing it. "Needs" is the server's booked side of the
+     boat (join_heads / charter_boats, GET /v1/pier-office/{pier}/days/{date}/boats, read by 47-ops-pier-job.js) instead of
+     pxLongtail from the browser's bookings; the boat list, the keyed amounts and the result shape stay legacy's. */
+  var statLTLegacy=window.pc2StatLT;
+  if(typeof statLTLegacy==='function') window.pc2StatLT=function(pier,ds){
+    /* only the day on screen asks the server: the month list calls this for every day, and each answer reads that day's bookings */
+    var DB=on()&&O.pier&&O.pier.dayBoats; if(!DB||!pier||ds!==window._pcDate) return statLTLegacy.apply(this,arguments);
+    DB.want(pier,ds,function(){ redraw(); });
+    var BS=window.pcBoats(ds,pier), D=(window.pcDay&&window.pcDay(pier,ds,false))||{lt:{}}, o={n:BS.length,need:0,miss:0,missNames:[]}, any=false;
+    BS.forEach(function(B){
+      var sb=DB.boat(pier,ds,B.bid), bk=sb&&sb.booked, C=(D.lt||{})[B.bid]||{};
+      if(!bk){ any=true; return; }
+      if((+bk.join_heads||0)>0||(+bk.charter_boats||0)>0){ o.need++; if(!(+C.amt>0)){ o.miss++; o.missNames.push(B.name); } }
+    });
+    return any?statLTLegacy.apply(this,arguments):o;      // a boat the server did not list: the whole answer stays legacy's
+  };
+  /* pc2StatPK(pier,ds): the heads on the boat and the park fee it should have paid come from the server's booked side
+     (booked.nationality.tot, booked.park_fee.expected: pier-park-fee.ts) instead of pcPax / pcParkAmt over the browser's bookings.
+     Counts the pier keyed by hand are a client fact: when there are any, they are priced as legacy prices them. */
+  var statPKLegacy=window.pc2StatPK;
+  if(typeof statPKLegacy==='function') window.pc2StatPK=function(pier,ds){
+    var DB=on()&&O.pier&&O.pier.dayBoats; if(!DB||!pier||ds!==window._pcDate) return statPKLegacy.apply(this,arguments);
+    DB.want(pier,ds,function(){ redraw(); });
+    var BS=window.pcBoats(ds,pier), D=(window.pcDay&&window.pcDay(pier,ds,false))||{pk:{}}, o={n:BS.length,miss:0,missNames:[],diff:0,keyed:0,pax:0}, any=false;
+    BS.forEach(function(B){
+      var sb=DB.boat(pier,ds,B.bid), bk=sb&&sb.booked;
+      if(!bk||!bk.nationality||!bk.park_fee){ any=true; return; }
+      var C=(D.pk||{})[B.bid]||{}, tot=+bk.nationality.tot||0;
+      o.pax+=tot;
+      if(!(tot>0)) return;
+      if(!(+C.amt>0)){ o.miss++; o.missNames.push(B.name); return; }
+      var hasK=(window.PC_PK||[]).some(function(k){ return +C[k]>0; });
+      var exp=hasK?window.pcPkDue(window.pcParkAmt(window.pcParkRate(B.rid),C),C):window.pcPkDue(bk.park_fee.expected==null?null:+bk.park_fee.expected,C);
+      if(exp!=null){ o.diff+=(+C.amt||0)-exp; o.keyed++; }
+    });
+    return any?statPKLegacy.apply(this,arguments):o;
+  };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){
