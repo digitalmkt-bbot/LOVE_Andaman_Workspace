@@ -1149,10 +1149,11 @@
       inspector: d('fl-insp-inspector') ? nullable(d('fl-insp-inspector').value) : null,
       result: typeof _flInspResult !== 'undefined' ? (_flInspResult || 'pass') : 'pass',
       findings: d('fl-insp-findings') ? nullable(d('fl-insp-findings').value) : null,
-      /* a date the person did not touch (the modal's prefill is only a hint) is not sent: the server fills it
-         (date + the category's pmMonths, fleet-safety.ts parseInspection) */
-      next_due: (d('fl-insp-nextdue') && d('fl-insp-nextdue').dataset.auto !== '1') ? nullable(d('fl-insp-nextdue').value) : null
+      next_due: d('fl-insp-nextdue') ? nullable(d('fl-insp-nextdue').value) : null
     };
+    /* a date the person did not touch (the modal's prefill is only a hint) is left OUT of the body, not sent as null:
+       the server fills a missing next_due (date + the category's pmMonths, fleet-safety.ts parseInspection) */
+    if(!editInspId && d('fl-insp-nextdue') && d('fl-insp-nextdue').dataset.auto === '1') delete body.next_due;
     return O.queue(function(){
       if(editInspId) return O.patch('/v1/fleet/safety/' + enc(itemId) + '/inspections/' + enc(editInspId), body);
       return O.post('/v1/fleet/safety/' + enc(itemId) + '/inspections', body);
