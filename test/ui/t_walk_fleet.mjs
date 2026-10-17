@@ -407,7 +407,7 @@ console.log('   docs server:', JSON.stringify(srvSt), ' screen:', JSON.stringify
 chk('boat documents: screen status per document = the server\'s (warn / exp / ok)', dlist.length >= 3 && Object.keys(srvSt).every((k) => scrSt[k] === srvSt[k]) && srvSt['Walk cert gone'] === 'exp', { srvSt, scrSt });
 // inventory by pier warehouse (wiring commit ac6c596b) and assign-engine info (547529ff): are they on this build?
 const invMark = await ev(() => String(window.faInvAt || '').indexOf('s.warehouse') >= 0 || String(window.faInvRows || '').indexOf('warehouse') >= 0);
-const asnMark = await ev(() => String(window.flAssignEngInfo || window.flOpenAssignEng || '').indexOf('_fromOpsBackend') >= 0);
+const asnMark = await ev(() => String(window.flUpdateAssignEngInfo || '').indexOf('_fromOpsBackend') >= 0);
 console.log('   inventory-by-pier wiring present:', invMark, ' assign-engine wiring present:', asnMark);
 chk('inventory by pier uses the server warehouse key (faInvRows / faInvAt)', invMark, { invMark });
 chk('assign-engine info shows the server\'s next service (flEngServiceState)', asnMark, { asnMark });
