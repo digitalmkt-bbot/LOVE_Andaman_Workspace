@@ -13,10 +13,13 @@
   function refresh(){ try{ window._PC_ARR=null; if(typeof window.pcSync==='function') window.pcSync(); }catch(_){} }
   function redraw(){ try{ L.renderPierCash(window._pcPier); }catch(_){} }
   function put(a, match, add){ for(var i=a.length-1;i>=0;i--) if(match(a[i])) a.splice(i,1); (add||[]).forEach(function(x){ a.push(x); }); }
-  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||''}; }
+  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||'',claim:(r.claim&&r.claim.id)||''}; }   /* claim: the claim the line is in (pcClmOn) */
   function applyDay(j){
     if(!j) return; var p=j.pier,d=j.date;
     put(rows(),function(x){ return x&&x.pier===p&&x.date===d; },(j.rows||[]).map(legacyRow));
+    /* a line's claim must be in the claims list for its chip to show (pcClmOn) before the month list arrives */
+    try{ var CA=typeof window.pcClmArr==='function'?window.pcClmArr():null;
+      if(CA) (j.rows||[]).forEach(function(r){ var c=r.claim; if(c&&c.id&&!CA.some(function(x){ return x&&x.id===c.id; })) CA.push({id:c.id,pier:p,date:d,name:c.name||'',by:'',ts:''}); }); }catch(_){}
     cache.day[key(p,d)]=j; refresh();
   }
   function applySheet(kind,j){
