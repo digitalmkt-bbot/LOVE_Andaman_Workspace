@@ -65,6 +65,30 @@
     }
     return page(null);
   }
+  /* Legacy tsCotGet reads TS_COT, which nothing filled here, so the booking page's COT figure (bookingV2CotOf)
+     ignored decisions saved from this screen. Put the server's decisions for the day into TS_COT in memory
+     (never saved: tsCotPersist is not called) so tsCotGet answers with what the server holds. */
+  function mirrorCot(date, after){
+    if(!after || typeof TS_COT === 'undefined' || typeof _tsKey !== 'function') return;
+    Object.keys(after).forEach(function(id){
+      var k = _tsKey(id, date), dec = after[id] && after[id].cot && after[id].cot.decision;
+      if(dec) TS_COT[k] = dec; else delete TS_COT[k];
+      if(after[id] && after[id].trip_amount != null) tripAmt[k] = n(after[id].trip_amount);
+    });
+  }
+  /* Legacy tsTripAmount (booking, by-trip and pier-stats screens) priced the trip in the browser. Once the
+     server has answered trip_amount for that booking and day (GET /v1/after-trip), show its number. */
+  var tripAmt = {};
+  var origTripAmount = window.tsTripAmount;
+  if(typeof origTripAmount === 'function'){
+    window.tsTripAmount = function(b, t){
+      if(O.enabled && O.enabled() && b && t && t.date && typeof _tsKey === 'function'){
+        var k = _tsKey(b.id, t.date);
+        if(Object.prototype.hasOwnProperty.call(tripAmt, k)) return tripAmt[k];
+      }
+      return origTripAmount.apply(this, arguments);
+    };
+  }
   function load(date){
     if(cache[date]) return Promise.resolve(cache[date]);
     if(loading[date]) return loading[date];
@@ -77,6 +101,7 @@
       var m = {}; ((res && res.vans) || []).forEach(function(v){ if(v && v.id) m[v.id] = v.name || v.plate || v.id; }); return m;
     }, function(){ return {}; });
     var p = Promise.all([fetchAll(date), decisions, vans]).then(function(x){
+      mirrorCot(date, x[1]);
       var r = { date: date, rows: rosterOf(date, x[0]), cancelled: cancelledOf(date, x[0]), after: x[1], vans: x[2] || {} };
       cache[date] = r; delete loading[date]; return r;
     }, function(e){ delete loading[date]; throw e; });
@@ -324,7 +349,7 @@
     };
   }
 
-  O.onWrite(function(){ cache = {}; slipCache = {}; });
+  O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; });
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
     whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack,

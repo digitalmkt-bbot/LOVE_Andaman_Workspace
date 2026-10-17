@@ -109,8 +109,21 @@
     m.upDue = n(r.upgrades_due); m.upGot = n(r.upgrades_got); m.balance = n(r.b2c_balance);
     m.exDue = n(r.tour_sales_due); m.exGot = n(r.tour_sales_got); m.extrasTot = m.exGot + m.exDue + exCov;
     m.gross = n(r.gross); m.pierPaid = n(r.paid); m.pierFee = n(r.fees); m.due = n(r.due); m.got = n(r.got);
-    m.noSlip = n(r.no_slip); m.ovnSettled = !!r.overnight_return;
+    m.noSlip = n(r.no_slip);
+    // payment terms and the B2C paid state as the server states them (feeds pckCotUnset and the pay chips)
+    if(r.term != null) m.term = String(r.term);
+    m.paidState = r.paid_status ? String(r.paid_status) : '';
+    m.ovnSettled = !!r.overnight_return;
     return m;
+  });
+
+  // paid / fees / no_slip of the day: the server row's (live pier payments), not b.pierPayments, which is only
+  // filled for bookings whose pay box was opened. Without a date or a row the legacy sum stays.
+  [['pckPaidSum', 'paid'], ['pckFeeSum', 'fees'], ['pckNoSlip', 'no_slip']].forEach(function(p){
+    wrap(p[0], function(orig, b, date){
+      var r = date ? rowFor(b, date) : null;
+      return r && r[p[1]] != null ? n(r[p[1]]) : orig.apply(this, [].slice.call(arguments, 1));
+    });
   });
 
   wrap('pckPayOpen', function(orig, bkId, thenCk){
