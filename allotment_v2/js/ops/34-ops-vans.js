@@ -361,8 +361,21 @@
   wrap('bookingV2VanAutoAssign', function(date, routeId){
     return dayCmd('Auto-assign not done', date, routeId, function(){
       return O.post('/operations/van-days/' + enc(date) + '/auto-assign', { route_id: routeId }).then(function(r){
-        var n = r && r.assigned ? r.assigned.length : 0, un = r && r.unassigned ? r.unassigned.length : 0;
-        O.toast({ kind: 'neutral', title: 'Auto-assign: ' + n + ' group(s) got a van', status: un ? 'PARTIAL' : 'DONE', sub: un ? (un + ' still without a van') : '', dur: 6000 });
+        /* §autoAssignToast (Q34b) · the server answers {assigned:[{group_id, number, van_id, pax, second_round, over_capacity}], groups:[the day's groups]}
+           and has no "unassigned" list. Groups left without a van are counted from its own groups: a transfer group
+           (not self-arrive, not charter) with riders and no van_id. */
+        var list = (r && Array.isArray(r.assigned)) ? r.assigned : [];
+        var n = list.length;
+        var over = list.filter(function(x){ return x && x.over_capacity; }).length;
+        var second = list.filter(function(x){ return x && x.second_round; }).length;
+        var un = ((r && Array.isArray(r.groups)) ? r.groups : []).filter(function(g){
+          return g && !g.van_id && g.zone !== 'NoTransfer' && g.zone !== 'NT' && g.zone !== '__CHARTER__' && (+g.pax || 0) > 0;
+        }).length;
+        var sub = [];
+        if(un) sub.push(un + ' still without a van');
+        if(over) sub.push(over + ' over the seats of the van');
+        if(second) sub.push(second + ' on a van that runs another group (second round)');
+        O.toast({ kind: (un || over) ? 'error' : 'neutral', title: 'Auto-assign: ' + n + ' group(s) got a van', status: un ? 'PARTIAL' : over ? 'CHECK' : 'DONE', sub: sub.join(' · '), dur: 6000 });
       });
     });
   });
