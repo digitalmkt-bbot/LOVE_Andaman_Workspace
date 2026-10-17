@@ -472,7 +472,7 @@
         var base = '/v1/pier-office/' + enc(pier) + '/days/' + enc(date);
         if(now){
           jobs.push({ phase: 5, label: 'day close', run: function(){
-            return O.call('POST', base + '/close').then(function(row){
+            return O.call('POST', base + '/close', who(pier)).then(function(row){
               dayBase[k] = { closed: true, entry: { at: row.closed_at, by: row.closed_by || '', reopen: ((D[k] || {}).reopen || []) } };
             });
           } });
@@ -493,6 +493,13 @@
     },
     commit: function(){}
   });
+
+  /* who is recording · the pier's "ผู้บันทึก" pick (poWhoSet keeps the staff id under po_who::<pier>). Sent as the optional
+     recorded_staff_id on every pier write; nothing is sent when nobody is picked (the server does not require it). */
+  function who(pier){
+    var id = ''; try{ id = localStorage.getItem('po_who::' + pier) || ''; }catch(_){}
+    return id ? { recorded_staff_id: id } : {};
+  }
 
   /* moves · every move the screens add (poAdd) goes to its command; the server's moves replace them */
   var CMD = { receive: 'receive', count: 'count', adjust: 'adjust', laundry_out: 'laundry-out', laundry_in: 'laundry-in', fixed: 'mark-fixed' };
@@ -554,7 +561,7 @@
             if(m.type === 'lost' && m.fine > 0) o.fine_baht = (o.fine_baht || 0) + (+m.fine || 0);
           });
           url = '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/close';
-          body = { lines: Object.keys(by).map(function(k){ return by[k]; }) };
+          body = Object.assign({ lines: Object.keys(by).map(function(k){ return by[k]; }) }, who(pier));
         } else {
           var cmd = g.kind === 'wo' ? 'write-off' : g.kind === 'boat' ? BOATCMD[t] : CMD[t];
           live.forEach(function(m){
@@ -564,7 +571,7 @@
               sum(m, books + (+m.qty || 0));
             } else sum(m, +m.qty || 0);
           });
-          body = { date: date, lines: Object.keys(lines).map(function(id){ return { item_id: id, qty: lines[id] }; }) };
+          body = Object.assign({ date: date, lines: Object.keys(lines).map(function(id){ return { item_id: id, qty: lines[id] }; }) }, who(pier));
           var note = t === 'count' ? noteOf(first) : text(first.note);
           if(note) body.note = note;
           if(t === 'receive') body.source = first.from || 'buy';
@@ -695,7 +702,7 @@
     if(!lines.length){ closeMsg('Nothing outstanding on this boat'); return undefined; }
     closing[bid] = 1; closeMsg('');
     var url = '/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats/' + enc(bid) + '/close';
-    return O.queue(function(){ return O.call('POST', url, { lines: lines }); }).then(function(out){
+    return O.queue(function(){ return O.call('POST', url, Object.assign({ lines: lines }, who(pier))); }).then(function(out){
       delete closing[bid];
       (out.moves || []).forEach(function(m){ moves().push(fromServerMove(m)); });
       putBalances(pier, out.balances);
@@ -726,7 +733,7 @@
           var e = (cfg().finePay || {})[id], m = moves().filter(function(x){ return x && x.id === id; })[0];
           if(!e) return null;
           if(!m || !m.srv) throw new Error('The fine can be settled once its movement is saved on the server');
-          return O.call('POST', '/v1/pier-office/moves/' + enc(id) + '/fine-payment', { status: e.st === 'waived' ? 'waived' : 'paid', how: nul(e.how), note: nul(e.note) }).then(function(){
+          return O.call('POST', '/v1/pier-office/moves/' + enc(id) + '/fine-payment', Object.assign({ status: e.st === 'waived' ? 'waived' : 'paid', how: nul(e.how), note: nul(e.note) }, who(m.pier))).then(function(){
             fineBase[id] = clone(e);
           });
         } });
@@ -803,10 +810,10 @@
     if(typeof window.poIsRead === 'function') window.poIsRead();
     var pier = window._poPier, date = window._poDate, body = sheetBody(IS);
     return O.queue(function(){
-      return O.call('PUT', sheetPath(pier, date, bid), body).then(function(v){
+      return O.call('PUT', sheetPath(pier, date, bid), Object.assign(body, who(pier))).then(function(v){
         applySheet(pier, date, bid, v);
         if(!commit) return true;
-        return O.anyway(function(extra){ return O.call('POST', sheetPath(pier, date, bid) + '/commit', extra); }, {
+        return O.anyway(function(extra){ return O.call('POST', sheetPath(pier, date, bid) + '/commit', Object.assign({}, who(pier), extra)); }, {
           confirm_decrease: { flag: 'confirm_decrease', ask: function(e){ return (e && e.message ? e.message : 'This lowers what was written') + '\n\nSave anyway?'; } }
         }).then(function(out){
           applySheet(pier, date, bid, out.sheet);
