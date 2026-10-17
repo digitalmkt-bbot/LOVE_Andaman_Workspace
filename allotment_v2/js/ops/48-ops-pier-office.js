@@ -164,7 +164,7 @@
     deletePath: function(w){ return '/v1/pier-office/licences/' + enc(w.id); },
     fromServer: function(l){
       return { id: l.id, staffId: l.staff_id, classId: l.class_id, no: l.licence_no || '', exp: l.expires_on || '', issuedAt: l.issued_on || '',
-               issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left } };
+               issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left, at: O.today() } };
     },
     toServer: function(r){
       return { class_id: r.classId, licence_no: text(r.no), issued_on: nul(r.issuedAt), expires_on: nul(r.exp), issuer: nul(r.issuer), note: nul(r.note) };
@@ -181,7 +181,7 @@
     })).then(function(parts){
       licSpec.setRows([].concat.apply([], parts).map(function(l){
         return { id: l.id, staffId: l.staff_id, classId: l.class_id, no: l.licence_no || '', exp: l.expires_on || '', issuedAt: l.issued_on || '',
-                 issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left } };
+                 issuer: l.issuer || '', note: l.note || '', srv: { exp: l.expires_on || '', state: l.state || '', days: l.days_left, at: O.today() } };
       }));
     });
   });
@@ -197,6 +197,18 @@
     window.plState = function(l){
       if(!ready() || !l || !l.srv || l.srv.exp !== (l.exp || '') || !/^(ok|soon|bad|noexp)$/.test(l.srv.state)) return legacyPlState.apply(this, arguments);
       return l.srv.state;
+    };
+  }
+  /* plDaysTo(date): the "เหลือ N วัน" text. The server's `days_left` (Bangkok, as of the load) answers when a licence the
+     server judged has this expiry and the answer is from today; else the legacy count from the browser clock. */
+  if(typeof window.plDaysTo === 'function'){
+    var legacyPlDaysTo = window.plDaysTo;
+    window.plDaysTo = function(d){
+      if(ready() && d){
+        var today = O.today(), hit = arr('PIER_LICENSES').filter(function(l){ return l && l.srv && l.srv.exp === d && l.srv.at === today && typeof l.srv.days === 'number'; })[0];
+        if(hit) return hit.srv.days;
+      }
+      return legacyPlDaysTo.apply(this, arguments);
     };
   }
   window.plCheckBoat = function(boatId, crewIds){
