@@ -95,7 +95,7 @@
         warehouse: st.warehouse,
         location: st.warehouse_name || warehouseLabel(st.warehouse),
         qty: num(st.qty),
-        minQty: 0
+        minQty: null // the server keeps one min per item (min_qty), not per line: null lets faInvRows fall back to the item's min
       };
     });
     var totalQty = s.total_qty != null ? num(s.total_qty) : stocks.reduce(function(sum, x){ return sum + x.qty; }, 0);
