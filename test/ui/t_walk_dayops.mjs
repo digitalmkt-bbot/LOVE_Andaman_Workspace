@@ -92,6 +92,15 @@ for (const [k, lead, date, pax] of [['b1', 'WALK ONE', DAY, 2], ['b2', 'WALK TWO
 const mkGroup = async (date, members, van_id) => (await send('POST', '/operations/van-groups', { service_date: date, route_id: 'r5', zone: 'PK', members: members.map((m) => ({ trip_id: bk[m].trip })), van_id })).body;
 const gA = await mkGroup(DAY, ['b1', 'b2'], vanA.id), gB = await mkGroup(DAY, ['b3'], vanB.id), gT = await mkGroup(TODAY, ['t1', 't2'], vanA.id);
 
+// DAY2: fresh bookings for the van-group walk (no groups yet) + one with an alternate pickup (a split part of its own)
+const bk2 = {};
+for (const [k, lead, pax, extra] of [['c1', 'WALK C ONE', 2, {}], ['c2', 'WALK C TWO', 2, {}], ['c3', 'WALK C THREE', 3, {}], ['c4', 'WALK C FOUR', 1, {}],
+  ['c5', 'WALK C FIVE', 3, { alt_pickups: [{ who: 'Mr Alt', ad: 1, chd: 0, inf: 0, foc: 0, zone: 'PK', place: 'Kata Palm Resort', area: 'Kata', drop_same: true }] }]]) {
+  const r = await mkBk('zz-' + k, lead, DAY2, pax, extra);
+  if (r.status !== 201) { console.log('seed failed', k, r.status, JSON.stringify(r.body)); process.exit(2); }
+  bk2[k] = { id: r.body.id, trip: r.body.trips[0].id, parts: r.body.trips[0].operations.van_parts };
+}
+console.log('c5 parts', JSON.stringify(bk2.c5.parts));
 const vck = async (d) => api('/v1/van-checkin?date=' + d);
 
 // ── boot the app ──
@@ -109,6 +118,9 @@ const sel = (id) => ev((i) => { const s = [...document.querySelectorAll('#vanche
 const chip = (gk) => ev((k) => { const b = document.querySelector('#vancheckin-host button.vck-arr[onclick*="' + k + '"]'); return b ? { cls: b.className, text: b.innerText.replace(/\s+/g, ' ') } : null; }, gk);
 const statusOf = async (d, bookingId) => ((await vck(d)).rows.find((r) => r.booking_id === bookingId) || {}).status;
 
+const ONLY = process.env.ONLY || "";
+const want = (n) => !ONLY || ONLY.split(",").includes(n);
+if (want("1") || want("2")) {
 // ════════════ 1. driver arrived toggle ════════════
 curItem = '1'; console.log('\n[1] driver arrived toggle (Van Check-in)');
 await openVanCk(DAY);
@@ -158,7 +170,7 @@ const c2 = await chip('veh02~r5');
 const arr2 = await ev((k) => vckArrGet(k.d, k.gk), { d: DAY, gk: 'veh02~r5' });
 ok('re-render on the day reads the mark: chip on, time and login are the server\'s', c2 && /คนขับสแตนบายแล้ว/.test(c2.text) && arr2 && arr2.at === other.body.arrived_hm && arr2.by === other.body.arrived_by, { c2, arr2, srv: other.body });
 const rowsNow = await sel('zz-b3');
-await settle(22000);                          // one change-feed poll (20 s)
+if (want("2")) await settle(22000);                          // one change-feed poll (20 s)
 const rowsPoll = await sel('zz-b3');
 await openVanCk(DAY); await settle(1500);
 const rowsReopen = await sel('zz-b3');
@@ -181,4 +193,107 @@ ok('20 minutes later the count is 20+ and the chip is the "ครบ 15 นา�
 await ev(() => { Date.now = window.__realNow; });
 await send('DELETE', `/operations/van-arrivals/${TODAY}/veh01/r5`);
 await send('DELETE', `/operations/van-arrivals/${DAY}/veh02/r5`);
-process.exit(fails.length ? 1 : 0);
+}
+// ════════════ 3. van groups ════════════
+curItem = '3'; console.log('\n[3] van groups (By-trip · Van mode)');
+const showBytrip = async (date) => {
+  await ev((d) => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; _bkV2.vanAssignMode = true; _bkV2.detailId = null; _bkV2.newBooking = null; _bkV2.filterRoute = null; const el = document.querySelector('.nav-item[data-view="booking"]'); if (el) nav(el); bookingV2Render(); }, date);
+  await waitFor((d) => SB_BOOKINGS.filter((b) => b.trips.some((t) => t.date === d)).length >= 4, date, 15000);
+  await idle(); await settle(1200);
+};
+const grpsOf = async (date) => (await api(`/operations/van-groups?service_date=${date}&route_id=r5`)).groups;
+const scr = (id, date) => ev((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.id); if (!b) return null; const o = bkOpsRead(b, a.date) || {}; return { grp: +o.vanGroup || 0, van: o.vanId || '', ret: o.vanReturnId || '', seq: +o.vanSeq || 0, fin: o.pickupTimeFinal || '' }; }, { id, date });
+const tick = async (id) => { await page.locator(`#view-booking span[onclick*="bookingV2VanSelToggle('${id}')"]`).first().click(); await settle(300); };
+const toasts = () => ev(() => [...document.querySelectorAll('[class*="toast"], .la-toast, .ops-toast')].map((t) => t.innerText.replace(/\s+/g, ' ').slice(0, 160)));
+await showBytrip(DAY2);
+// A · group c1 + c2 from the ticked rows
+await tick('zz-c1'); await tick('zz-c2');
+let n3 = calls.length;
+await page.locator('#view-booking button[onclick*="bookingV2VanGroupSelected"][onclick*="\'new\'"]').click();
+await idle(); await settle(1000);
+let G = await grpsOf(DAY2);
+ok('tick c1+c2 → "จับเป็นกรุ๊ปใหม่" → POST van-groups → server group 1 holds both, in tick order', G.length === 1 && G[0].number === 1 && G[0].members.map((m) => m.booking_id).join() === [bk2.c1.id, bk2.c2.id].join() && callsSince(n3).some((c) => c.startsWith('POST /operations/van-groups ')), { G: G.map((g) => g.members.length), calls: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+let sc1 = await scr('zz-c1', DAY2), sc2 = await scr('zz-c2', DAY2);
+ok('screen: both rows now in group 1', sc1.grp === 1 && sc2.grp === 1 && sc2.seq === 2, { sc1, sc2 });
+await tick('zz-c3');
+await page.locator('#view-booking button[onclick*="bookingV2VanGroupSelected"][onclick*="\'new\'"]').click();
+await idle(); await settle(1000);
+G = await grpsOf(DAY2);
+ok('c3 alone → group 2; c4 stays unassigned', G.length === 2 && G[1].number === 2 && (await scr('zz-c3', DAY2)).grp === 2 && (await scr('zz-c4', DAY2)).grp === 0, G.map((g) => g.number));
+// B · vans from the group header selects
+const vanSel = (g) => page.locator(`#view-booking select[onchange*="bookingV2VanGroupSetVan('${DAY2}','r5','PK','${g}'"]`);
+n3 = calls.length;
+await vanSel(1).selectOption(vanA.id); await idle(); await settle(900);
+await vanSel(2).selectOption(vanB.id); await idle(); await settle(900);
+G = await grpsOf(DAY2);
+ok('group selects → PATCH van-groups: group 1 on Van Alpha, group 2 on Van Bravo (server)', G[0].van_id === vanA.id && G[1].van_id === vanB.id && callsSince(n3).filter((c) => c.startsWith('PATCH /operations/van-groups/')).length === 2, { v: G.map((g) => g.van_id), c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+ok('screen: rows carry the van; select shows it', (await scr('zz-c1', DAY2)).van === vanA.id && (await scr('zz-c3', DAY2)).van === vanB.id && (await vanSel(1).inputValue()) === vanA.id, [await scr('zz-c1', DAY2), await vanSel(1).inputValue()]);
+// C · return van on the group
+const retSel = (g) => page.locator(`#view-booking select[onchange*="bookingV2VanGroupSetReturn('${DAY2}','r5','PK','${g}'"]`);
+await retSel(1).selectOption(vanB.id); await idle(); await settle(900);
+G = await grpsOf(DAY2);
+ok('return van of group 1 → PATCH return_van_id (server)', G[0].return_van_id === vanB.id, G[0].return_van_id);
+ok('return van of group 1: the header select still shows the server value after the redraw', (await retSel(1).inputValue()) === vanB.id, { select: await retSel(1).inputValue(), srv: G[0].return_van_id });
+ok('return van of group 1: the rows carry it (ops.vanReturnId)', (await scr('zz-c1', DAY2)).ret === vanB.id, await scr('zz-c1', DAY2));
+await retSel(1).selectOption(''); await idle(); await settle(700);
+ok('return van cleared ("กลับคันเดิม") → null on the server', (await grpsOf(DAY2))[0].return_van_id === null);
+// D · pickup time of the group
+n3 = calls.length;
+await page.locator(`#view-booking input[oninput*="bookingV2VanGroupSetTime('${DAY2}','r5','PK','1'"]`).fill('07:15');
+await idle(); await settle(900);
+G = await grpsOf(DAY2);
+const bkSrv = await api('/v1/bookings/' + bk2.c1.id);
+ok('group pickup time 07:15 → PATCH (server group + every member final pickup)', G[0].pickup_time === '07:15' && bkSrv.trips[0].operations.pickup_time_final === '07:15' && (await scr('zz-c2', DAY2)).fin === '07:15', { g: G[0].pickup_time, fin: bkSrv.trips[0].operations.pickup_time_final, s: await scr('zz-c2', DAY2) });
+// E · order of the groups (drag order) 
+const key = `${DAY2}::r5::PK`;
+n3 = calls.length;
+await ev((k) => bookingV2GrpMove(k, 2, 1), key);
+await idle(); await settle(900);
+G = await grpsOf(DAY2);
+const domOrder = await ev(() => [...document.querySelectorAll('#view-booking tr[data-grp]')].map((t) => +t.getAttribute('data-grp')));
+ok('move group 2 above group 1 → PUT van-groups/order (server display_order 2→1, 1→2)', callsSince(n3).some((c) => c.startsWith('PUT /operations/van-groups/order')) && G.find((g) => g.number === 2).display_order === 1 && G.find((g) => g.number === 1).display_order === 2 && G[0].number === 2, { g: G.map((g) => [g.number, g.display_order]), calls: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+ok('screen: group 2 is drawn first', domOrder[0] === 2 && (await ev((k) => bookingV2GrpOrderGet(...k.split('::')), key)).join() === '2,1', domOrder);
+await ev((k) => bookingV2GrpOrderSet(...k.split('::'), []), key);
+await idle(); await settle(700);
+ok('reset order → clear:true, display_order back to null', (await grpsOf(DAY2)).every((g) => g.display_order === null), (await grpsOf(DAY2)).map((g) => g.display_order));
+// F · pickup order inside the group: tick c2, Save → c2 first
+await showBytrip(DAY2);
+await tick('zz-c2');
+n3 = calls.length;
+await page.locator(`#view-booking button[onclick*="bookingV2VanGroupSave('${DAY2}')"]`).first().click();
+await idle(); await settle(1000);
+G = await grpsOf(DAY2);
+const g1 = G.find((g) => g.number === 1);
+ok('tick c2 + Save → PUT group order: c2 is now first (sequence 1), c1 second', g1.members[0].booking_id === bk2.c2.id && g1.members[0].sequence === 1 && g1.members[1].sequence === 2, g1.members.map((m) => [m.booking_id.slice(-4), m.sequence]));
+ok('screen row sequence follows the server', (await scr('zz-c2', DAY2)).seq === 1 && (await scr('zz-c1', DAY2)).seq === 2, [await scr('zz-c2', DAY2), await scr('zz-c1', DAY2)]);
+await page.locator(`#view-booking button[onclick*="bookingV2VanGroupClearSeq('${DAY2}','r5','PK','1')"]`).click();
+await idle(); await settle(900);
+ok('"ล้างลำดับ" → PUT order clear:true: sequences back to null on the server', (await grpsOf(DAY2)).find((g) => g.number === 1).members.every((m) => m.sequence === null || m.sequence === undefined), (await grpsOf(DAY2)).find((g) => g.number === 1).members.map((m) => m.sequence));
+// G · one booking's own return van (the small select in the row)
+n3 = calls.length;
+await page.locator(`#view-booking select[onchange*="bookingV2AssignVanReturn('zz-c3'"]`).selectOption(vanA.id);
+await idle(); await settle(900);
+const c3Srv = await api('/v1/bookings/' + bk2.c3.id);
+ok('row return van on c3 -> PATCH trip-ops van_parts: server part return_van_id = Van Alpha', c3Srv.trips[0].operations.van_parts[0].return_van_id === vanA.id && (await scr('zz-c3', DAY2)).ret === vanA.id, { srv: c3Srv.trips[0].operations.van_parts[0].return_van_id, scr: await scr('zz-c3', DAY2), calls: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+// H · clear route (vans leave, groups stay)
+n3 = calls.length;
+const dlg3 = dialogs.length;
+await page.locator(`#view-booking button[onclick*="bookingV2VanClearRoute('${DAY2}','r5')"]`).first().click();
+await idle(); await settle(1000);
+G = await grpsOf(DAY2);
+ok('"ล้าง" (clear route) -> confirm shown -> POST van-groups/clear -> every group lost its van, groups kept', /Clear van assignments/.test(dialogs[dlg3] || '') && callsSince(n3).some((c) => c.startsWith('POST /operations/van-groups/clear')) && G.length === 2 && G.every((g) => g.van_id === null), { d: dialogs.slice(dlg3), v: G.map((g) => g.van_id) });
+ok('screen: group headers say "ยังไม่เลือกรถ", rows carry no van', (await ev(() => document.body.innerText.includes('ยังไม่เลือกรถ'))) && (await scr('zz-c1', DAY2)).van === '', await scr('zz-c1', DAY2));
+// I · auto-assign (the server picks the vans). Called by name: see whether a button draws it.
+const btn = await ev(() => !!document.querySelector('#view-booking [onclick*="bookingV2VanAutoAssign"]'));
+n3 = calls.length;
+await ev((d) => bookingV2VanAutoAssign(d, 'r5'), DAY2);
+await idle(); await settle(1000);
+G = await grpsOf(DAY2);
+ok('auto-assign (called by name, button on screen: ' + btn + ') -> POST van-days/auto-assign: both groups got a van from the server, screen shows them', callsSince(n3).some((c) => c.startsWith('POST /operations/van-days/' + DAY2 + '/auto-assign')) && G.every((g) => g.van_id) && (await scr('zz-c1', DAY2)).van === G.find((g) => g.number === 1).van_id, { v: G.map((g) => g.van_id), c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
+// J · disband group 2
+n3 = calls.length;
+await page.locator(`#view-booking button[onclick*="bookingV2VanGroupDisband('${DAY2}','r5','PK','2')"]`).click();
+await idle(); await settle(1000);
+G = await grpsOf(DAY2);
+ok('"ยกเลิกกรุ๊ป" group 2 -> DELETE van-groups/{id}: server keeps group 1 only; c3 back to unassigned on screen', callsSince(n3).some((c) => c.startsWith('DELETE /operations/van-groups/')) && G.length === 1 && (await scr('zz-c3', DAY2)).grp === 0, { n: G.length, c3: await scr('zz-c3', DAY2) });
+process.exit(0);

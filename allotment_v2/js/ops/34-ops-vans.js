@@ -150,7 +150,7 @@
       o.vanGroup = num;
       o.vanId = g.van_id || null;
       o.vanSeq = +m.sequence || 0;
-      o.vanReturnId = m.return_van_id || null;
+      o.vanReturnId = m.return_van_id || g.return_van_id || null;   // the part's own return van, else the group's (PATCH van-groups return_van_id sets the group's)
       o.pickupTimeFinal = g.pickup_time || '';
     });
   }
