@@ -3,7 +3,7 @@
   'use strict';
   var O=window.laOps; if(!O) return;
   var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={};
-  ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals'].forEach(function(n){ L[n]=window[n]; });
+  ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates'].forEach(function(n){ L[n]=window[n]; });
   function on(){ return !!(O.enabled&&O.enabled()); }
   function key(p,d){ return p+'|'+d; }
   function call(m,path,body){ return O.call(m,path,body); }
@@ -54,6 +54,14 @@
   window.pcMonthDays=function(p,ym){ if(!on()) return L.pcMonthDays.apply(this,arguments); var m=cache.month[p+'|'+ym]; return m?(m.days||[]).map(function(x){return x.date;}):L.pcMonthDays.apply(this,arguments); };
   window.pcOpening=function(p,d){ if(!on()) return L.pcOpening.apply(this,arguments); var m=cache.month[p+'|'+d.slice(0,7)], x=m&&(m.days||[]).filter(function(v){return v.date===d;})[0], q=cache.day[key(p,d)]; return x?x.opening:(q?q.opening:L.pcOpening.apply(this,arguments)); };
   window.pcTotals=function(p,d){ if(!on()) return L.pcTotals.apply(this,arguments); var m=cache.month[p+'|'+d.slice(0,7)], x=m&&(m.days||[]).filter(function(v){return v.date===d;})[0], q=cache.day[key(p,d)], v=x||q; if(!v) return L.pcTotals.apply(this,arguments); return {in:v.in,out:v.out,other:v.out,net:v.net,lt:v.reference.longtail,pk:v.reference.park,dock:v.reference.dock,ref:v.reference.total,pulled:v.pulled}; };
+  // The sheets' boats and dates are the server's (sheetBoats / sheetDates: deployed boats by Program Config order). Legacy lists only boats
+  // with a program that day, so cell-only boats (no route_id) are left out; until the sheet has been read the legacy helpers answer.
+  function sheetDay(p,d){ var ym=d.slice(0,7), hit=null; Object.keys(cache.sheet).forEach(function(k){ var j=cache.sheet[k]; if(!hit&&j&&j!==true&&j.pier===p&&j.month===ym&&(k.indexOf('longtail|')===0||k.indexOf('park|')===0)){ var day=(j.days||[]).filter(function(x){ return x.date===d; })[0]; if(day) hit=day; } }); return hit; }
+  window.pcBoats=function(d,p){ if(!on()) return L.pcBoats.apply(this,arguments); var day=sheetDay(p,d); if(!day) return L.pcBoats.apply(this,arguments);
+    return (day.boats||[]).filter(function(b){ return b.route_id; }).map(function(b){ return {bid:b.boat_id,name:b.boat_name||b.boat_id,rid:b.route_id||'',route:b.route_name||b.route_id||''}; }); };
+  window.pcDates=function(p,ym){ if(!on()) return L.pcDates.apply(this,arguments); var seen={}, have=false;
+    ['longtail','park'].forEach(function(kind){ var j=cache.sheet[kind+'|'+p+'|'+ym]; if(!j||j===true) return; have=true; (j.days||[]).forEach(function(day){ if((day.boats||[]).some(function(b){ return b.route_id; })) seen[day.date]=1; }); });
+    return have?Object.keys(seen).sort():L.pcDates.apply(this,arguments); };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){
