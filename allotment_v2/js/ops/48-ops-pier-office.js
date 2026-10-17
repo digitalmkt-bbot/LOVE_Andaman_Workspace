@@ -290,7 +290,7 @@
     if(!hit) return L.paRoutesByCode.apply(this, arguments);   // not a code the server gives a route
     var ids = {};
     hit.routes.forEach(function(r){ ids[r.id] = 1; });
-    var all = Array.isArray(window.ROUTES) ? window.ROUTES : [];
+    var all = typeof ROUTES !== 'undefined' && Array.isArray(ROUTES) ? ROUTES : [];   // ROUTES is a top-level let: not on window
     return all.filter(function(r){ return ids[r.id]; });
   };
   window.paRouteCode = function(rid){
