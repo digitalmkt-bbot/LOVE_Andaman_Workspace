@@ -87,15 +87,35 @@
   /* Legacy tsTripAmount (booking, by-trip and pier-stats screens) priced the trip in the browser. Once the
      server has answered trip_amount for that booking and day (GET /v1/after-trip), show its number. */
   var tripAmt = {};
+  /* §tripAmountOwn (Q34d, decided) · the booking, by-trip and pier-stats screens do not wait for Travel Summary: the
+     first time one of them asks for a day's amount, this fetches GET /v1/after-trip?date= itself (one read per day,
+     kept in dayAmt as {server booking id: trip_amount}) and draws the screen again when it arrives. Until then, and when the
+     read fails, the browser formula (the original tsTripAmount) answers. A write drops dayAmt, so the next draw reads again. */
+  var dayAmt = {};     // date -> { loaded:true, by:{ bookingId: amount } } | { loading:true } | { failed:true }
+  function fetchDayAmounts(date){
+    if(dayAmt[date]) return;
+    var mine = dayAmt[date] = { loading: true };
+    O.get('/v1/after-trip', { date: date }).then(function(res){
+      if(dayAmt[date] !== mine) return;             // a write dropped it while the read was out: the next draw asks again
+      var by = {}; ((res && res.rows) || []).forEach(function(x){ if(x && x.booking_id && x.trip_amount != null) by[x.booking_id] = n(x.trip_amount); });
+      dayAmt[date] = { loaded: true, by: by };
+      var v = O.activeView ? O.activeView() : '';
+      if(v !== 'travelsum' && !(O.busy && O.busy()) && typeof window._laRerender === 'function') window._laRerender();
+    }, function(){ if(dayAmt[date] === mine) dayAmt[date] = { failed: true }; });
+  }
   var origTripAmount = window.tsTripAmount;
   if(typeof origTripAmount === 'function'){
     window.tsTripAmount = function(b, t){
       if(O.enabled && O.enabled() && b && t && t.date && typeof _tsKey === 'function'){
         var k = _tsKey(b.id, t.date);
         if(Object.prototype.hasOwnProperty.call(tripAmt, k)) return tripAmt[k];
+        var d = dayAmt[t.date];
+        if(!d) fetchDayAmounts(t.date);
+        else if(d.by){ var sid = b.opsId || b.id; if(Object.prototype.hasOwnProperty.call(d.by, sid)) return d.by[sid]; }
       }
       return origTripAmount.apply(this, arguments);
     };
+    window.tsTripAmount.__ownRead = true;
   }
   function load(date){
     if(cache[date]) return Promise.resolve(cache[date]);
@@ -362,7 +382,7 @@
     };
   }
 
-  O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; });
+  O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; dayAmt = {}; });
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
     whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack,
