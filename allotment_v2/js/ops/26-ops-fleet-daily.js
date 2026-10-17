@@ -982,7 +982,7 @@
       newSerial: sd.newSerial,
       installDate: sd.installDate || sd.date || O.today(),
       installer: sd.installer,
-      labour: sd.labour,
+      labour: sd.newLabour != null ? sd.newLabour : sd.labour, // the screen keeps the labour cost in _swapDoc.newLabour
       incNo: nextNo(incList, 'INC'),
       mjNo: nextNo(mjList, 'MJ'),
       moNo: sd.source === 'buy' ? nextNo(moList, 'MO') : null,
