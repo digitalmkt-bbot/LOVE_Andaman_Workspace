@@ -111,6 +111,9 @@
     vanjob_tpl: { title: 'Van job sheet', wait: 0 },
     vanjob_rowhl: { title: 'Van job row highlights', wait: DEBOUNCE_MS },
     cal_route_sets: { title: 'Calendar route sets', wait: DEBOUNCE_MS },
+    cal_route_names: { title: 'Calendar route labels', wait: 0 },
+    da_template: { title: 'Daily availability message', wait: 0 },
+    da_route_names: { title: 'Daily availability route names', wait: 0 },
     bk_cfg: { title: 'Voucher payment strip', wait: 0 },
     pck_svc_colors: { title: 'Pier check-in colours', wait: DEBOUNCE_MS },
     pck_svc_rules: { title: 'Pier check-in rules', wait: DEBOUNCE_MS },
@@ -128,6 +131,7 @@
     return O.get('/v1/config').then(function(r){ ((r && r.entries) || []).forEach(applyEntry); });
   });
   function cfgRepaint(){
+    syncLabelVars();
     var reg = document.querySelector('#acct-modal .go-reg');
     if(reg && typeof window.goRegOpen === 'function'){ try{ window.goRegOpen(); }catch(_){} return; }
     redraw();
@@ -265,6 +269,69 @@
     return cfgWrite('cal_route_sets', CAL_ROUTE_SETS);
   });
 
+  /* ── cal_route_names · da_route_names · da_template (04-data-core.js) ──
+     Legacy kept the calendar labels, the LINE route names and the availability message in the browser blob,
+     written straight to localStorage inside calEditRouteName, daEditRouteName, daSaveTemplate and daResetTemplate.
+     The globals CAL_ROUTE_NAMES, DA_ROUTE_NAMES and DA_TEMPLATE stay what the screens read; they are filled from
+     the saved value once the settings have loaded (and again after a refused save puts the last saved one back),
+     and the four functions save through cfgWrite (PUT /v1/config/{key}). The server answers an empty message
+     as the built-in text, which the browser holds as '' as legacy did. */
+  function syncLabelVars(){
+    if(!cfgCell.loaded) return;
+    try{
+      var cn = ents.cal_route_names, dn = ents.da_route_names, dt = ents.da_template;
+      if(cn && typeof CAL_ROUTE_NAMES !== 'undefined'){ CAL_ROUTE_NAMES = (cn.value && typeof cn.value === 'object') ? O.clone(cn.value) : {}; }
+      if(dn && typeof DA_ROUTE_NAMES !== 'undefined'){ DA_ROUTE_NAMES = (dn.value && typeof dn.value === 'object') ? O.clone(dn.value) : {}; }
+      if(dt && typeof DA_TEMPLATE !== 'undefined'){
+        var t = typeof dt.value === 'string' ? dt.value : '';
+        DA_TEMPLATE = (typeof DA_DEFAULT_TEMPLATE !== 'undefined' && t === DA_DEFAULT_TEMPLATE) ? '' : t;
+      }
+    }catch(_){}
+  }
+  function labelEditable(){
+    if(!cfgCell.loaded){ O.fail('Settings not saved', new Error('The settings are still loading, try again')); return false; }
+    return true;
+  }
+  wrap('calEditRouteName', function(orig, rid){
+    var r = (typeof getRoute === 'function') ? getRoute(rid) : null; if(!r) return;
+    if(!labelEditable()) return;
+    var v = prompt('Calendar label\nRoute: ' + r.name + '\n(leave blank to use the default short name)', CAL_ROUTE_NAMES[rid] || '');
+    if(v === null) return;
+    var nv = v.trim(), next = Object.assign({}, CAL_ROUTE_NAMES);
+    if(nv) next[rid] = nv; else delete next[rid];
+    CAL_ROUTE_NAMES = next;
+    cfgWrite('cal_route_names', next);
+    if(typeof renderCal === 'function') renderCal();
+  });
+  wrap('daEditRouteName', function(orig, rid){
+    var r = (typeof getRoute === 'function') ? getRoute(rid) : null; if(!r) return;
+    if(!labelEditable()) return;
+    var v = prompt('ชื่อย่อสำหรับข้อความ LINE\nเส้นทาง: ' + r.name + '\n(เว้นว่าง = ใช้ชื่อเต็ม)', DA_ROUTE_NAMES[rid] || '');
+    if(v === null) return;
+    var nv = v.trim(), next = Object.assign({}, DA_ROUTE_NAMES);
+    if(nv) next[rid] = nv; else delete next[rid];
+    DA_ROUTE_NAMES = next;
+    cfgWrite('da_route_names', next);
+    if(typeof renderDA === 'function') renderDA();
+  });
+  wrap('daSaveTemplate', function(orig){
+    var el = document.getElementById('da-tmpl-input'); if(!el) return;
+    if(!labelEditable()) return;
+    DA_TEMPLATE = el.value || '';
+    cfgWrite('da_template', DA_TEMPLATE);
+    if(typeof renderDA === 'function') renderDA();
+    var btn = document.getElementById('da-tmpl-save');
+    if(btn){ var t0 = btn.innerHTML; btn.innerHTML = '&#10003; บันทึกแล้ว'; setTimeout(function(){ var b = document.getElementById('da-tmpl-save'); if(b) b.innerHTML = t0; }, 1800); }
+  });
+  wrap('daResetTemplate', function(orig){
+    if(!confirm('คืนค่าข้อความเป็นแบบเริ่มต้น? (ข้อความที่แก้ไว้จะหาย)')) return;
+    if(!labelEditable()) return;
+    DA_TEMPLATE = '';
+    cfgWrite('da_template', '');
+    var el = document.getElementById('da-tmpl-input'); if(el) el.value = DA_DEFAULT_TEMPLATE;
+    if(typeof renderDA === 'function') renderDA();
+  });
+
   /* legacy _pckSvcRead / _pckSvcWrite (08-app.js) kept the Pier check-in keys in each browser's blob; they are
      in CFG now, so they read and save through the cache like ctRead / ctWrite */
   wrap('_pckSvcRead', function(orig, key){
@@ -299,7 +366,7 @@
       var c = H[k].cell; if(seen.indexOf(c) >= 0) return; seen.push(c);
       c.load().catch(function(e){ O.fail(c.title + ' did not load', e); });
     });
-    cfgCell.load().then(fillCalRouteSets).catch(noop);
+    cfgCell.load().then(function(){ fillCalRouteSets(); syncLabelVars(); }).catch(noop);
   }
 
   window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw, flush: flush, ents: ents };
