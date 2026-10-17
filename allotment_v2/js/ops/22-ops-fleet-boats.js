@@ -506,6 +506,56 @@
     });
   });
 
+  /* legacy confirmType / confirmName (04-data-core.js): the boat's type or name is a client fact, sent with
+     PATCH /v1/boats/{id}. The edit box closes only when the server has said yes; a refusal keeps it open. */
+  function saveBoatFact(boatId, body, title){
+    return O.queue(function(){
+      return O.patch('/v1/boats/' + enc(boatId), body);
+    }).then(function(){
+      return fetchBoatDetail(boatId);
+    }).then(function(b){
+      O.wrote('boat');
+      redrawBoats();
+      return b;
+    }).catch(function(e){
+      O.fail(title, e);
+      return null;
+    });
+  }
+  function selectedBoatId(){ return typeof selBoatId !== 'undefined' ? selBoatId : null; }
+
+  wrap('confirmType', function(orig){
+    var boatId = selectedBoatId();
+    var sel = document.getElementById('bdp-type-sel');
+    if(!boatId || !sel) return undefined;
+    var type = sel.value;
+    return saveBoatFact(boatId, { type: type }, 'Could not save boat type').then(function(b){
+      if(!b) return b;
+      var mt = document.getElementById('bdp-meta-type'); if(mt) mt.textContent = type;
+      if(typeof window.cancelType === 'function') window.cancelType();
+      return b;
+    });
+  });
+
+  wrap('confirmName', function(orig){
+    var boatId = selectedBoatId();
+    var inp = document.getElementById('bdp-name-inp');
+    if(!boatId || !inp) return undefined;
+    var v = inp.value.trim();
+    // legacy: an empty name keeps the old one, nothing is sent
+    if(!v){
+      if(typeof window.cancelName === 'function') window.cancelName();
+      redrawBoats();
+      return undefined;
+    }
+    return saveBoatFact(boatId, { name: v }, 'Could not save boat name').then(function(b){
+      if(!b) return b;
+      var nt = document.getElementById('bdp-name-text'); if(nt) nt.textContent = v;
+      if(typeof window.cancelName === 'function') window.cancelName();
+      return b;
+    });
+  });
+
   wrap('flRenderDocsList', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){

@@ -16,6 +16,10 @@
    rc_status_colors       GET|PUT /v1/config/rc_status_colors  (re-confirm page colours; rcStatusColors, rcSaveStatusColor)
    vanjob_tpl             GET|PUT /v1/config/vanjob_tpl        (van job sheet template; vjTpl, vjTplSave)
    vanjob_rowhl           GET|PUT /v1/config/vanjob_rowhl      (van job sheet line highlights; vjHlAll, vjHlPersist)
+   bk_cfg                 GET|PUT /v1/config/bk_cfg            (voucher money strip: vcPay 0|1)
+   pck_svc_colors         GET|PUT /v1/config/pck_svc_colors    (Pier check-in service colours)
+   pck_svc_rules          GET|PUT /v1/config/pck_svc_rules     (Pier check-in service rules)
+   pck_guide_colors       GET|PUT /v1/config/pck_guide_colors  (Pier check-in guide colours)
    (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
@@ -107,6 +111,10 @@
     vanjob_tpl: { title: 'Van job sheet', wait: 0 },
     vanjob_rowhl: { title: 'Van job row highlights', wait: DEBOUNCE_MS },
     cal_route_sets: { title: 'Calendar route sets', wait: DEBOUNCE_MS },
+    bk_cfg: { title: 'Voucher payment strip', wait: 0 },
+    pck_svc_colors: { title: 'Pier check-in colours', wait: DEBOUNCE_MS },
+    pck_svc_rules: { title: 'Pier check-in rules', wait: DEBOUNCE_MS },
+    pck_guide_colors: { title: 'Pier check-in guide colours', wait: DEBOUNCE_MS },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -255,6 +263,33 @@
   wrap('_calSetsPersist', function(orig){
     if(typeof CAL_ROUTE_SETS === 'undefined' || !Array.isArray(CAL_ROUTE_SETS)) return null;
     return cfgWrite('cal_route_sets', CAL_ROUTE_SETS);
+  });
+
+  /* legacy _pckSvcRead / _pckSvcWrite (08-app.js) kept the Pier check-in keys in each browser's blob; they are
+     in CFG now, so they read and save through the cache like ctRead / ctWrite */
+  wrap('_pckSvcRead', function(orig, key){
+    var h = H[key]; if(!h) return orig.apply(this, [].slice.call(arguments, 1));
+    return h.read();
+  });
+  wrap('_pckSvcWrite', function(orig, key, val){
+    var h = H[key]; if(!h) return orig.apply(this, [].slice.call(arguments, 1));
+    return h.write(val);
+  });
+
+  /* legacy bookingV2PayShow / bookingV2PayToggle (booking/bookingV2PayShow.js, bookingV2PayToggle.js): the voucher's
+     money strip is the company-wide bk_cfg.vcPay (default on). The toggle saves through the cache. */
+  wrap('bookingV2PayShow', function(){
+    var c = cfgRead('bk_cfg') || {};
+    return !(c.vcPay === 0 || c.vcPay === false);
+  });
+  wrap('bookingV2PayToggle', function(orig){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')){
+      alert('เปิด/ปิดแถบเงินเป็นค่าของทั้งระบบ · ต้องมีสิทธิ์แก้ไข Operations');
+      return;
+    }
+    var show = window.bookingV2PayShow();
+    cfgWrite('bk_cfg', Object.assign({}, cfgRead('bk_cfg') || {}, { vcPay: show ? 0 : 1 }));
+    try{ if(typeof window.bookingV2Render === 'function') window.bookingV2Render(); }catch(_){}
   });
 
   /* start the loads at once, so most first reads find the answer already there */

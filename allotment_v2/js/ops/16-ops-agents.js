@@ -323,6 +323,31 @@
   window.agDeactivate=function(id){ return lifecycle(id,'deactivate'); };
   window.agRenew=function(id,body){ return lifecycle(id,'renew',body); };
 
+  /* legacy bookingV2AgentColorSet and bookingV2AgentColorEdit's Alt-click reset (booking/*.js): the colour is a
+     client fact, sent with PATCH /v1/agents/{id}. The popover closes once the server has saved it. */
+  function setColour(id, colour){
+    return write('PATCH','/v1/agents/'+enc(id),{color:colour||null}).then(function(r){
+      refreshAfter(id,r);
+      var p=document.getElementById('bkv2-agcol-pop'); if(p) p.remove();
+      if(typeof window.bookingV2Render==='function') window.bookingV2Render();
+      return r;
+    },function(e){ return fail('Could not save agent colour',e); });
+  }
+  if(typeof window.bookingV2AgentColorSet==='function'){
+    var legacyColourSet=window.bookingV2AgentColorSet;
+    var acs=function(agentId,c){ if(!enabled()) return legacyColourSet.apply(this,arguments); if(!current(agentId)) return; return setColour(agentId,c); };
+    acs.__opsAgents=true; window.bookingV2AgentColorSet=acs;
+  }
+  if(typeof window.bookingV2AgentColorEdit==='function'){
+    var legacyColourEdit=window.bookingV2AgentColorEdit;
+    var ace=function(agentId,ev){
+      if(!enabled() || !(ev && ev.altKey)) return legacyColourEdit.apply(this,arguments);
+      if(!current(agentId)) return;
+      return setColour(agentId,null);
+    };
+    ace.__opsAgents=true; window.bookingV2AgentColorEdit=ace;
+  }
+
   /* Agent page "Sync to bound rate" (legacy agAlertSyncRate): the server moves the agent's active
      MAIN contracts onto the rate the agent is bound to. Server first: nothing local changes until
      the 2xx. 409 no_rate_type = the agent has no bound rate; the server's message is shown. */
