@@ -56,7 +56,8 @@
 
   window.rtAddonTypeDelete = function(key){
     if(!O.enabled()) return legacyDelete ? legacyDelete.apply(this, arguments) : undefined;
-    if(!confirm('Delete this add-on type? Existing prices in rate types are kept but hidden.')) return null;
+    /* Q29 · legacy kept a deleted type's prices "hidden"; the server refuses the delete while a rate type uses it (409 in_use) */
+    if(!confirm('Delete this add-on type? It cannot be deleted while a rate type uses it.')) return null;
     return O.queue(function(){ return O.del('/v1/addon-types/' + encodeURIComponent(key)); }).then(function(){
       setList((typeof SB_ADDON_TYPES !== 'undefined' ? SB_ADDON_TYPES : []).filter(function(c){ return c.key !== key; }));
       O.wrote('addon-types');
