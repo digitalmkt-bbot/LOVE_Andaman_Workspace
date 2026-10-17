@@ -21,6 +21,8 @@
 //  11 §execPerf (owner "เวลาคลิกแถบด้านบน ช้ามาก"): กดแถบแล้วขึ้น "กำลังคำนวณ…" ทันที วาดเสร็จแล้วหาย
 //     ใบจอง 6,000 ใบ: สลับแท็บ/ช่วงแต่ละครั้ง (หลังรอบแรก) ไม่เกิน 600ms บนเครื่องทดสอบ · ตัวเลขเท่ากับคิดสด (ดัชนีไม่ทำให้ผลเพี้ยน)
 //     เทสนี้ใช้ ebSetNow (วาดทันที) · ปุ่มจริงใช้ ebSet ที่วาดในเฟรมถัดไป
+//  14 §execAllocDraft (owner "แก้สัดส่วนแล้วมันไม่บันทึก"): เปิดตัวแก้ พิมพ์ค่า แล้วตัวจับเวลา Live (1 นาที) ยิง → ไม่วาดทับ ค่าที่พิมพ์ยังอยู่
+//     แม้ถูกวาดใหม่ (เช่นกดปุ่มอื่น) ช่องยังขึ้นค่าที่พิมพ์ไว้ · บันทึกแล้วขึ้นข้อความยืนยัน · ค่าถึง blob จริง
 //  13 §execNoAR (owner "ตัดเรื่องยอดเงินค้างออกก่อน"): ไม่มีคำว่า ลูกหนี้ / ค้างชำระ / การเก็บเงิน / เกินวงเงิน ในทุกมุมมอง
 //  12 §execAlloc (owner "ผู้บริหารแก้ไขได้ · กำหนดเป้าแล้วดู progress ยังไง"):
 //     การ์ดเซลส์แสดงช่องว่างแยกเส้นทาง · ตารางความคืบหน้ามีแถวเซลส์และแถวย่อยเส้นทาง
@@ -272,5 +274,25 @@ const R13 = await page.evaluate(() => { const out = {}; const chk = (k) => { out
   const k6 = [...document.querySelectorAll('#eb-wrap .eb-k .l')].map(x => x.textContent); ebSetNow('tab', 'rev'); ebSetNow('per', 'month'); const kpis = [...document.querySelectorAll('#eb-wrap .eb-k .l')].map(x => x.textContent); ebSetNow('per', 'today'); return { out, kpis }; });
 if (Object.values(R13.out).every(v => !v) && R13.kpis.some(k => /ยกเลิก/.test(k))) ok('13 ไม่มีเรื่องยอดเงินค้างในทุกมุมมอง · ตัวเลขหลักที่ 6 ของเดือนเป็น "' + R13.kpis.find(k => /ยกเลิก/.test(k)) + '"');
 else fail('13 ' + JSON.stringify(R13));
+
+// 14
+const R14 = await page.evaluate(async () => {
+  const ym = bkV2LocalYMD(new Date()).slice(0, 7);
+  ebSetNow('tab', 'gap'); ebSetNow('gp', 'h'); ebAllocEdit(true);
+  const box = document.getElementById('eb-alloc'); const inp = box.querySelector('input[data-f][data-s]'); const f = inp.dataset.f, sid = inp.dataset.s;
+  box.querySelectorAll('input[data-f="' + f + '"]').forEach(i => { i.value = 0; });
+  inp.value = 77; inp.dispatchEvent(new Event('input', { bubbles: true }));
+  const ticked = ebTick();                       // ตัวจับเวลา Live ระหว่างแก้ → ต้องไม่วาด
+  const still = document.getElementById('eb-alloc') === box && box.querySelector('input[data-f="' + f + '"][data-s="' + sid + '"]').value === '77';
+  ebSetNow('gp', 'month');                       // วาดใหม่จริง (ผู้ใช้กดปุ่มช่วง) → ช่องต้องยังเป็น 77
+  const box2 = document.getElementById('eb-alloc'); const kept = !!box2 && box2 !== box && box2.querySelector('input[data-f="' + f + '"][data-s="' + sid + '"]').value === '77';
+  ebAllocSave(ym); await new Promise(r => setTimeout(r, 50));
+  const toast = document.getElementById('eb-toast'); const toastOn = !!toast && toast.style.display !== 'none' && /บันทึก/.test(toast.textContent);
+  const stored = JSON.parse(laBlob().exec_alloc || '{}')[ym]; const saved = !!stored && stored.by[f] && stored.by[f][sid] === 77;
+  window.confirm = () => true; ebAllocReset(ym); ebSetNow('tab', 'rev'); ebSetNow('per', 'today');
+  return { ticked, still, kept, toastOn, saved, editorClosed: !document.getElementById('eb-alloc') };
+});
+if (!R14.ticked && R14.still && R14.kept && R14.toastOn && R14.saved) ok('14 ตัวจับเวลา Live ไม่วาดทับขณะแก้ · วาดใหม่แล้วค่าที่พิมพ์ (77) ยังอยู่ · บันทึกแล้วขึ้นข้อความยืนยัน และค่าถึง blob');
+else fail('14 ' + JSON.stringify(R14));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);

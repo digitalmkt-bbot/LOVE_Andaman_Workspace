@@ -683,27 +683,33 @@
     return {fam:fam2, src:'กำหนดโดย '+(A.who||'ผู้บริหาร')+' · '+(A.at?thD(String(A.at).slice(0,10)):''), calc:SH, manual:true, ym:ym, rec:A};
   }
   function canAlloc(){ try{ return (typeof laCanEditArea!=='function') || laCanEditArea('sales'); }catch(_){ return false; } }
-  window.ebAllocEdit=function(on){ EB.allocEdit=!!on; keepRender(true); };
-  window.ebAllocReset=function(ym){ if(!confirm('Use the computed shares for this month? The manual allocation will be removed.')) return; if(allocSave(ym, null)){ EB.allocEdit=false; keepRender(true); } };
+  window.ebAllocEdit=function(on){ EB.allocEdit=!!on; if(!on) EB.draft=null; keepRender(true); };
+  function toast(msg){ try{ var t=document.getElementById('eb-toast'); if(!t){ t=document.createElement('div'); t.id='eb-toast'; document.body.appendChild(t); } t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, 2600); }catch(_){} }
+  window.ebAllocReset=function(ym){ if(!confirm('Use the computed shares for this month? The manual allocation will be removed.')) return; if(allocSave(ym, null)){ EB.allocEdit=false; EB.draft=null; keepRender(true); toast('กลับไปใช้ค่าคำนวณของ '+ym+' แล้ว'); } };
   window.ebAllocSave=function(ym){
     var box=document.getElementById('eb-alloc'); if(!box) return;
     var rec={by:{}, lf:{}, who:(typeof laBy==='function'?laBy():'')||'', at:new Date().toISOString()};
     box.querySelectorAll('input[data-f][data-s]').forEach(function(i){ var v=+i.value||0; if(v>0){ (rec.by[i.dataset.f]=rec.by[i.dataset.f]||{})[i.dataset.s]=Math.round(v*10)/10; } });
     box.querySelectorAll('input[data-lf]').forEach(function(i){ var v=+i.value||0; if(v>0&&v<=100) rec.lf[i.dataset.lf]=Math.round(v); });
     Object.keys(rec.by).forEach(function(f){ var t=0; Object.keys(rec.by[f]).forEach(function(k){ t+=rec.by[f][k]; }); if(t>100.5){ alert('Route total is over 100% - please fix before saving.'); throw new Error('alloc>100'); } });
-    if(allocSave(ym, rec)){ EB.allocEdit=false; keepRender(true); }
+    if(allocSave(ym, rec)){ EB.allocEdit=false; EB.draft=null; keepRender(true); toast('บันทึกสัดส่วน '+ym+' แล้ว · กำลังส่งขึ้นระบบ'); }
+    else toast('บันทึกไม่ได้ · ต้องมีสิทธิ์แก้ไขส่วน Sales');
   };
-  window.ebAllocTot=function(f){ var box=document.getElementById('eb-alloc'); if(!box) return; var t=0; box.querySelectorAll('input[data-f="'+f+'"]').forEach(function(i){ t+=(+i.value||0); });
+  window.ebAllocTot=function(f){ var box=document.getElementById('eb-alloc'); if(!box) return; var t=0;
+    EB.draft=EB.draft||{}; box.querySelectorAll('input[data-f],input[data-lf]').forEach(function(i){ EB.draft[i.dataset.lf?('lf|'+i.dataset.lf):(i.dataset.f+'|'+i.dataset.s)]=i.value; });   /* §execAllocDraft · จำค่าที่พิมพ์ไว้ ถึงหน้าถูกวาดใหม่ก็ไม่หาย */
+    box.querySelectorAll('input[data-f="'+f+'"]').forEach(function(i){ t+=(+i.value||0); });
     var el=box.querySelector('[data-tot="'+f+'"]'); if(el){ el.textContent=Math.round(t*10)/10+'%'; el.className='eb-atot '+(t>100.5?'over':(t<98.5?'under':'ok')); } };
   function allocEditor(R, SH, fT, salesList){
     var ym=R.mFrom.slice(0,7), fams=Object.keys(fT).sort(function(a,b){ return fT[b]-fT[a]; });
     var sl=salesList.filter(function(x){ return !x.none; });
-    var cur=function(f,sid){ var sh=SH.fam[f]; if(!sh||!sh.tot) return 0; return Math.round((sh.by[sid]||0)*1000/sh.tot)/10; };
+    var D=EB.draft||{};
+    var cur=function(f,sid){ if((f+'|'+sid) in D) return D[f+'|'+sid]; var sh=SH.fam[f]; if(!sh||!sh.tot) return 0; return Math.round((sh.by[sid]||0)*1000/sh.tot)/10; };
+    var curLf=function(f){ return ('lf|'+f) in D ? D['lf|'+f] : Math.round(lfOf(ym,f)*100); };
     var h='<div class="eb-card" id="eb-alloc"><h2>กำหนดสัดส่วนเอง · '+E(ym)+' <span class="eb-tag">% ของเป้าแต่ละเส้นทางที่เซลส์แต่ละคนรับ · ช่องว่าง = ใช้ค่าที่คำนวณให้</span></h2>'
       + '<div class="eb-scroll"><table class="eb-tbl eb-al"><thead><tr><th>เส้นทาง</th><th>ที่นั่งที่วาง</th><th>LF เป้า %</th>'+sl.map(function(x){ return '<th><span class="eb-dot" style="background:'+E(x.color)+'"></span>'+E(x.name)+'</th>'; }).join('')+'<th>รวม</th></tr></thead><tbody>'
       + fams.map(function(f){ var fn=(fams.length&&(typeof _BKV2_FAMILIES!=='undefined'))?((_BKV2_FAMILIES.filter(function(x){ return x.id===f; })[0]||{}).name||f):f; var tot=0;
           var cells=sl.map(function(x){ var v=cur(f,x.id); tot+=v; return '<td><input type="number" min="0" max="100" step="1" data-f="'+E(f)+'" data-s="'+E(x.id)+'" value="'+(v||'')+'" placeholder="0" oninput="ebAllocTot(\''+E(f)+'\')"></td>'; }).join('');
-          return '<tr><td class="eb-l"><b>'+E(fn)+'</b></td><td>'+num(Math.round(fT[f]/lfOf(ym,f)))+'</td><td><input type="number" min="1" max="100" step="1" data-lf="'+E(f)+'" value="'+Math.round(lfOf(ym,f)*100)+'"></td>'+cells+'<td><span class="eb-atot '+(tot>100.5?'over':(tot<98.5?'under':'ok'))+'" data-tot="'+E(f)+'">'+Math.round(tot*10)/10+'%</span></td></tr>'; }).join('')
+          return '<tr><td class="eb-l"><b>'+E(fn)+'</b></td><td>'+num(Math.round(fT[f]/lfOf(ym,f)))+'</td><td><input type="number" min="1" max="100" step="1" data-lf="'+E(f)+'" value="'+E(curLf(f))+'" oninput="ebAllocTot(\''+E(f)+'\')"></td>'+cells+'<td><span class="eb-atot '+(tot>100.5?'over':(tot<98.5?'under':'ok'))+'" data-tot="'+E(f)+'">'+Math.round(tot*10)/10+'%</span></td></tr>'; }).join('')
       + '</tbody></table></div>'
       + '<div class="eb-foot">ค่าเริ่มต้นในช่องคือสัดส่วนที่คำนวณจาก '+E(SH.calc.src||'ยังไม่มีฐาน')+' · รวมไม่ถึง 100% = ส่วนที่ยังไม่มอบหมาย (ขึ้นในการ์ด "ยังไม่มอบหมาย") · เกิน 100% บันทึกไม่ได้</div>'
       + '<div class="eb-btns"><button class="eb-btn p" onclick="ebAllocSave(\''+E(ym)+'\')">บันทึก</button>'+(SH.manual?'<button class="eb-btn" onclick="ebAllocReset(\''+E(ym)+'\')">กลับไปใช้ค่าคำนวณ</button>':'')+'<button class="eb-btn" onclick="ebAllocEdit(false)">ยกเลิก</button></div></div>';
@@ -915,8 +921,12 @@
   /* Live · วาดใหม่ทุก 60 วินาที เฉพาะตอนหน้านี้เปิดอยู่และแท็บไม่ได้ถูกซ่อน */
   if(!window.__ebTick){
     window.__ebTick = setInterval(function(){
-      try{ var v=document.getElementById('view-execboard'); if(!v || !v.classList.contains('active') || document.hidden) return; keepRender(true); }catch(_){}
+      try{ var v=document.getElementById('view-execboard'); if(!v || !v.classList.contains('active') || document.hidden) return;
+        /* §execAllocDraft · owner "แก้สัดส่วนแล้วมันไม่บันทึก" · ตัวจับเวลาวาดใหม่ทุกนาทีทับช่องที่กำลังพิมพ์อยู่ · ระหว่างแก้ไม่วาดใหม่ */
+        if(EB.allocEdit) return; var ae=document.activeElement; if(ae && ae.closest && ae.closest('#eb-wrap') && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+        keepRender(true); }catch(_){}
     }, 60000);
+  window.ebTick=function(){ try{ if(EB.allocEdit) return false; keepRender(true); return true; }catch(_){ return false; } };
   }
 
   function ensureCss(){
@@ -1004,6 +1014,7 @@
       '.eb-rows .mini{height:7px;background:#EDF0F4;border-radius:4px;overflow:hidden}.eb-rows .mini i{display:block;height:100%;border-radius:4px;background:var(--eb-blue)}',
       '.eb-foot{font-size:11px;color:var(--eb-mut);margin-top:8px}',
       '.eb-none{color:var(--eb-mut);text-align:center !important;padding:14px 0 !important}',
+      '#eb-toast{position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:100000;background:#0F7B4F;color:#fff;font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:9px;box-shadow:0 4px 14px rgba(15,27,61,.25);display:none}',
       '#eb-busy{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:var(--eb-ink);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:9px;box-shadow:0 4px 14px rgba(15,27,61,.25)}',
       /* §execSales */
       '.eb-nav{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--eb-line);border-radius:9px;padding:2px 4px}',
