@@ -62,7 +62,9 @@
   function mapRoute(s, local){
     var o = { id: s.id, name: s.name };
     put(o, 'kind', s.kind);                       // §opsCalendar (2026-10-08) · laRouteKind prefers it over the pier guess
-    put(o, 'pier', s.pier); put(o, 'familyId', s.family_id); put(o, 'color', s.color);
+    put(o, 'pier', s.pier); put(o, 'color', s.color);
+    // the server's null family = "no family" (hidden from the booking calendar). '' tells bookingV2RouteFamily not to guess one from the name
+    o.familyId = s.family_id == null ? '' : s.family_id;
     put(o, 'islands', s.islands); put(o, 'sort', s.sort);
     if(Array.isArray(s.times)) o.times = s.times.slice();
     // §opsCalendar · the calendar is edited on the server only · its seasons/overrides replace the local ones
