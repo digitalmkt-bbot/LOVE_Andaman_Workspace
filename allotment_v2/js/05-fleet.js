@@ -28788,7 +28788,7 @@ function faSfDetail(it){
   if(x.k==='over') A.push({k:'red',h:'<b>ต้องจัดการ:</b> เลยกำหนด'+(s.type==='expiry'?'หมดอายุ':'ตรวจ (PM)')+' '+Math.abs(s.days)+' วัน ('+faFmtD(s.type==='expiry'?it.expiryDate:it.nextPM,1)+')',b:'<button type="button" class="fa-btn" onclick="flOpenLogInspectionModal(\''+it.id+'\')">บันทึกตรวจ</button>'});
   if(x.k==='due') A.push({k:'amb',h:'ถึงกำหนด'+(s.type==='expiry'?'หมดอายุ':'ตรวจ')+'ใน '+s.days+' วัน ('+faFmtD(s.type==='expiry'?it.expiryDate:it.nextPM,1)+')',b:''});
   if(x.k==='miss') A.push({k:'red',h:'<b>ของหาย / ไม่ครบ</b>',b:''});
-  if(it.category==='life_jacket' && b && it.status!=='replaced'){ var need=(+b.licensePax||0)+(+b.crew||0);
+  if(it.category==='life_jacket' && b && it.status!=='replaced'){ var sf=it.state?(it.lifeJacketShortfall||null):undefined, need=sf===undefined?(+b.licensePax||0)+(+b.crew||0):(sf?sf.need:0);   /* ops mode: the server's life_jacket_shortfall decides */
     if(need && (+it.qty||0)<need) A.push({k:'red',h:'<b>เสื้อชูชีพ '+(it.qty||0)+' ตัว น้อยกว่าคนตามใบอนุญาต '+need+'</b> ('+b.licensePax+' ผู้โดยสาร + ลูกเรือ '+(b.crew||0)+') — ขาด '+(need-(+it.qty||0))+' ตัว',b:''}); }
   if(!it.serial && it.status!=='replaced' && A.length<2) A.push({k:'amb',h:'ยังไม่ได้กรอก serial',b:''});
   var alerts=A.slice(0,2).map(function(a){ return '<div class="fa-alert '+a.k+'" style="border-top:1px solid '+(a.k==='red'?'#F2C9C3':'#EBD3A6')+'"><b>!</b><span style="flex:1">'+a.h+'</span>'+(a.b||'')+'</div>'; }).join('');

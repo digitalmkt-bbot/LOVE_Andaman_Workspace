@@ -252,6 +252,7 @@
       location: s.location || '',
       note: s.note || '',
       state: s.state ? clone(s.state) : null,
+      lifeJacketShortfall: s.life_jacket_shortfall ? clone(s.life_jacket_shortfall) : null,
       inspections: (Array.isArray(s.inspections) ? s.inspections : []).map(function(i){
         return {
           id: i.id,
@@ -315,6 +316,15 @@
       state.fuelBudgets = {};
       budgets.forEach(function(b){ if(b && b.month && b.amount != null) state.fuelBudgets[b.month] = num(b.amount); });
       state.safetyCategories = (res[3] && res[3].categories) || [];
+      // inspection cadence per category is the server's (pm_months); the screens read pmMonths / pmYears
+      if(typeof FL_SAFETY_CATEGORIES !== 'undefined' && FL_SAFETY_CATEGORIES){
+        state.safetyCategories.forEach(function(c){
+          if(c && c.id && c.pm_months > 0 && FL_SAFETY_CATEGORIES[c.id]){
+            FL_SAFETY_CATEGORIES[c.id].pmMonths = num(c.pm_months);
+            FL_SAFETY_CATEGORIES[c.id].pmYears = num(c.pm_months) / 12;
+          }
+        });
+      }
       state.loaded = true;
       state.failed = false;
       return true;
@@ -953,6 +963,24 @@
       redrawDailyAndProjects();
       return res;
     }).catch(function(e){ O.fail('Could not delete safety inspection', e); return null; });
+  });
+
+  /* legacy _flSafetyStatus: the state is the server's (safetyState: REPLACED, MISSING, EXPIRED, DUE <= 30, SOON <= 90, OK, OK_NO_PM);
+     the label text, colours and background stay as the screens had them */
+  wrap('_flSafetyStatus', function(orig, item){
+    var st = item && item.state;
+    if(!st || !st.label) return orig.apply(this, [].slice.call(arguments, 1));
+    var days = st.days != null ? st.days : null, type = st.type;
+    var red = { color: '#A32D2D', bg: '#FCEBEB' }, amber = { color: '#854F0B', bg: '#FFF5EB' }, soon = { color: '#854F0B', bg: '#FFFAF5' }, green = { color: '#0F6E56', bg: '#E1F5EE' };
+    switch(st.label){
+      case 'REPLACED': return { label: 'REPLACED', color: '#5F5E5A', bg: '#F1EFE8', days: null };
+      case 'MISSING': return { label: 'MISSING', color: red.color, bg: red.bg, days: null };
+      case 'OK_NO_PM': return { label: 'OK · no PM', color: green.color, bg: green.bg, days: null };
+      case 'EXPIRED': return { label: 'EXPIRED', color: red.color, bg: red.bg, days: days, type: type };
+      case 'DUE': return { label: 'DUE · ' + days + 'd', color: amber.color, bg: amber.bg, days: days, type: type };
+      case 'SOON': return { label: 'SOON · ' + days + 'd', color: soon.color, bg: soon.bg, days: days, type: type };
+      default: return { label: 'OK', color: green.color, bg: green.bg, days: days, type: type };
+    }
   });
 
   wrap('swapDocExecute', function(){
