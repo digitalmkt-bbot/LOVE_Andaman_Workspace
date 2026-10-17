@@ -169,6 +169,33 @@
     }
     return dueLegacy.apply(this,arguments);
   };
+  /* pcParkRate(rid): the price of one head of each ticket category is the server's, from the cost plan (park sheet boat `rate`:
+     { ok, plan, rates, miss, borrowed_from } or { ok:false, plan, why }), turned into legacy's object { ok, ad_th.., plan, how, miss } with
+     legacy's Thai texts. A route no loaded park sheet lists (or non-ops mode) answers from the browser's cost plan as before. */
+  var MISS_TH={'Thai adult price':'ราคาคนไทย','child price':'ราคาเด็ก'};
+  function whyTh(r){
+    var w=String(r.why||'');
+    if(w==='the route has no cost plan') return 'เส้นทางนี้ยังไม่มีแผนต้นทุน';
+    if(w==='the cost template has no park line') return 'สูตรกลางไม่มีบรรทัดค่าเข้าอุทยาน';
+    if(/^the plan ".*" turns the park line off$/.test(w)) return 'แผน «'+(r.plan||'')+'» ปิดบรรทัดค่าอุทยานไว้';
+    return w;
+  }
+  function srvRate(rid){
+    var ks=Object.keys(cache.sheet), hit=null;
+    for(var i=0;i<ks.length&&!hit;i++){
+      var j=cache.sheet[ks[i]]; if(ks[i].indexOf('park|')!==0||!j||j===true) continue;
+      (j.days||[]).forEach(function(d){ (d.boats||[]).forEach(function(b){ if(!hit&&b&&b.route_id===rid&&b.rate&&typeof b.rate==='object') hit=b.rate; }); });
+    }
+    return hit;
+  }
+  var rateLegacy=window.pcParkRate;
+  if(typeof rateLegacy==='function') window.pcParkRate=function(rid){
+    var r=on()&&rid?srvRate(rid):null; if(!r) return rateLegacy.apply(this,arguments);
+    if(!r.ok) return {ok:false,why:whyTh(r),plan:r.plan||undefined};
+    var o={ok:true}; ['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'].forEach(function(k){ o[k]=+(r.rates||{})[k]||0; });
+    o.plan=r.plan||''; o.how=r.borrowed_from?'ยืมจาก '+r.borrowed_from:''; o.miss=(r.miss||[]).map(function(m){ return MISS_TH[m]||m; });
+    return o;
+  };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){

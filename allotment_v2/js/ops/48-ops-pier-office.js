@@ -979,6 +979,14 @@
     if(k && k.left) return { ad: k.left.ad, chd: k.left.chd, inf: k.left.inf, foc: k.left.foc, tot: k.left.total };
     return RL.poPaxLeft.apply(this, arguments);
   };
+  // bkNatTHb(b,t,k): a booking's real Thai heads of a category = bookings[].thai of the boat's day (the heads booked, the
+  // free-of-charge heads inferred from the lead). A trip whose boat-day has not been read, or no boat yet, is legacy's count.
+  var natLegacy = window.bkNatTHb;
+  if(typeof natLegacy === 'function') window.bkNatTHb = function(b, t, k){
+    var s = ready() && t && t.date ? srvBooking(b, t.date, t) : null;
+    if(s && s.thai && typeof s.thai[k] === 'number') return s.thai[k];
+    return natLegacy.apply(this, arguments);
+  };
   // poBoats(date,pier): the list of boats stays legacy's (deployments); the heads of each row are the server's bookings[] (pax, pax_real, by share)
   window.poBoats = function(date, pier){
     var rows = RL.poBoats.apply(this, arguments);
