@@ -53,6 +53,7 @@
     failed: false,
     loading: null,
     waterByKey: {},
+    bookedByKey: {},          // 'date|boat' → the server's pax_booked for that boat-day (flBoatBookingsFor)
     issuesByKey: {},
     extrasByKey: {},
     requestsByKey: {},
@@ -163,6 +164,7 @@
     var dayBoats = {};
     // Clear previous subresource caches for this date only
     Object.keys(state.waterByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.waterByKey[k]; });
+    Object.keys(state.bookedByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.bookedByKey[k]; });
     Object.keys(state.issuesByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.issuesByKey[k]; });
     Object.keys(state.extrasByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.extrasByKey[k]; });
     Object.keys(state.requestsByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.requestsByKey[k]; });
@@ -182,6 +184,7 @@
         fuelPriceEff: b.fuel_price || null,
         flags: Array.isArray(b.flags) ? b.flags.slice() : []
       };
+      if(b.pax_booked != null) state.bookedByKey[ds + '|' + bid] = num(b.pax_booked);
       if(b.water){
         state.waterByKey[ds + '|' + bid] = { o: b.water.open, c: b.water.close, by: b.water.by, at: b.water.at };
       }
@@ -1077,8 +1080,18 @@
      GET /v1/fleet/reports/upkeep?month=YYYY-MM, boats[].repairs (jobs closed that month; the server dates a
      repair by its close date). The screen draws at once from the browser's own figure; when the month's report
      arrives it is drawn again from the server's. Any write or change clears the saved months. */
+  /* legacy flBoatBookingsFor (Daily Fleet Log auto-PAX): the passengers booked on a boat that day. The server's
+     answer is pax_booked on GET /v1/fleet/daily-log (fleet-daily.ts bookedOn); it is read for every day loaded.
+     The routes / trips count of the same call stays the browser's (the server row has the number only). */
+  wrap('flBoatBookingsFor', function(orig, boatId, ds){
+    var out = orig.apply(this, [].slice.call(arguments, 1));
+    var v = state.bookedByKey[ds + '|' + boatId];
+    if(v != null && out) out.pax = v;
+    return out;
+  });
+
   var upkeep = {};   // ym → { rows: {boatId: repairs} } | 'loading' | 'failed'
-  function dropUpkeep(){ upkeep = {}; }
+  function dropUpkeep(){ upkeep = {}; state.bookedByKey = {}; }   // a write may change bookings: the browser's own count answers until the day is read again
   O.onWrite(dropUpkeep);
   wrap('flBoatRepairCostMonth', function(orig, boatId, ym){
     var args = [].slice.call(arguments, 1);
