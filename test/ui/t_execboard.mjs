@@ -18,6 +18,9 @@
 //  10 §execGap แท็บ Gap to Target (owner "ยังแก้ pain point ยอดไม่เต็มไม่ได้ · ต้องมีแผน Monthly Weekly Daily เพื่อให้ถึงเป้าที่วางเรือไว้"):
 //     เป้าเดือน = Σ ที่นั่งที่วางเรือ × 90% (ตรงกับ getAllotment) · ตารางขึ้นเฉพาะเส้นทางที่วางเรือ · ช่องว่างแถวรวมเป้าทุกเซลส์ = ช่องว่างเดือน
 //     ช่อง 14 วัน = ที่ว่างจาก getAllotment · เที่ยวที่ไม่มีใบจองเลยใน 3 วันข้างหน้า ต้องอยู่ในกล่องตัดสินใจ · ไม่เขียนอะไรลง store
+//  11 §execPerf (owner "เวลาคลิกแถบด้านบน ช้ามาก"): กดแถบแล้วขึ้น "กำลังคำนวณ…" ทันที วาดเสร็จแล้วหาย
+//     ใบจอง 6,000 ใบ: สลับแท็บ/ช่วงแต่ละครั้ง (หลังรอบแรก) ไม่เกิน 600ms บนเครื่องทดสอบ · ตัวเลขเท่ากับคิดสด (ดัชนีไม่ทำให้ผลเพี้ยน)
+//     เทสนี้ใช้ ebSetNow (วาดทันที) · ปุ่มจริงใช้ ebSet ที่วาดในเฟรมถัดไป
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -47,11 +50,11 @@ await goView(page, 'execboard', 700);
 const R1 = await page.evaluate(async () => {
   const nav = !!document.querySelector('.nav-item[data-view="execboard"]'), out = [];
   for (const per of ['today', 'month', 'quarter', 'year']) for (const pier of ['', 'tublamu', 'panwa', 'ranong']) {
-    ebSet('pier', pier); ebSet('per', per);
+    ebSetNow('pier', pier); ebSetNow('per', per);
     const w = document.getElementById('eb-wrap');
     out.push({ per, pier, k: w.querySelectorAll('.eb-k').length, err: /Render error/.test(w.textContent) });
   }
-  ebSet('pier', ''); ebSet('per', 'today');
+  ebSetNow('pier', ''); ebSetNow('per', 'today');
   return { nav, active: document.getElementById('view-execboard').classList.contains('active'), out };
 });
 const e1 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load resource/.test(e));
@@ -68,10 +71,10 @@ const R2 = await page.evaluate(() => {
   const madeToday = SB_BOOKINGS.filter(b => live(b) && _dashBkDay(b) === t0).length;
   const addTm = SB_BOOKINGS.filter(b => live(b) && _dashBkDay(b) === t0 && (b.trips || []).some(t => t.date === tm)).reduce((s, b) => s + b.trips.filter(t => t.date === tm).reduce((x, t) => x + bkV2PaxAllTot(t.pax), 0), 0);
   const kv = () => [...document.querySelectorAll('#eb-wrap .eb-k')].map(k => ({ l: k.querySelector('.l').textContent, v: k.querySelector('.v').textContent, d: k.querySelector('.d').textContent }));
-  ebSet('per', 'today'); const K = kv();
+  ebSetNow('per', 'today'); const K = kv();
   const tmw = document.getElementById('eb-tmw'); const tiles = [...tmw.querySelectorAll('.eb-tm > div')].map(d => d.querySelector('.v').textContent);
-  ebSet('per', 'month'); const feedT = [...document.querySelectorAll('#eb-tmw .eb-feed li .t')].map(x => x.textContent);
-  ebSet('pier', 'tublamu'); ebSet('per', 'today'); const Kt = kv(); ebSet('pier', '');
+  ebSetNow('per', 'month'); const feedT = [...document.querySelectorAll('#eb-tmw .eb-feed li .t')].map(x => x.textContent);
+  ebSetNow('pier', 'tublamu'); ebSetNow('per', 'today'); const Kt = kv(); ebSetNow('pier', '');
   return { exp: sumOn(t0), expTL: sumOn(t0, 'tublamu'), expTm: sumOn(tm), madeToday, addTm, K, tiles, feedT, Kt };
 });
 const parseB = s => { const m = String(s).replace(/,/g, '').match(/(-|−)?฿([\d.]+)([KM]?)/); if (!m) return NaN; let v = +m[2]; if (m[3] === 'K') v *= 1e3; if (m[3] === 'M') v *= 1e6; return m[1] ? -v : v; };
@@ -97,7 +100,7 @@ const R6 = await page.evaluate(() => {
   let done = 0, fut = 0;
   SB_BOOKINGS.forEach(b => { if (NS.includes(b.status) || CX.includes(b.status) || laIsInternalFree(b)) return;
     (b.trips || []).forEach(t => { if (t.date >= m0 && t.date <= t0) done += tsTripAmount(b, t); else if (t.date > t0 && t.date <= mE) fut += tsTripAmount(b, t); }); });
-  ebSet('per', 'month');
+  ebSetNow('per', 'month');
   const K = [...document.querySelectorAll('#eb-wrap .eb-k')].map(k => ({ l: k.querySelector('.l').textContent, v: k.querySelector('.v').textContent }));
   return { done, fut, K };
 });
@@ -108,10 +111,10 @@ else fail('6 ' + JSON.stringify(R6));
 // 7
 const R7 = await page.evaluate(async () => {
   const before = JSON.stringify(SB_BOOKINGS), ls = (() => { try { return localStorage.getItem(LS_KEY); } catch (_) { return null; } })();
-  for (const per of ['today', 'month', 'quarter', 'year']) ebSet('per', per);
-  ebSet('per', 'today');
+  for (const per of ['today', 'month', 'quarter', 'year']) ebSetNow('per', per);
+  ebSetNow('per', 'today');
   const m = document.querySelector('.main'); const sc = m && m.scrollHeight > m.clientHeight ? m : document.scrollingElement;
-  sc.scrollTop = 500; const y0 = sc.scrollTop; ebSet('per', 'today'); const y1 = sc.scrollTop;
+  sc.scrollTop = 500; const y0 = sc.scrollTop; ebSetNow('per', 'today'); const y1 = sc.scrollTop;
   const after = JSON.stringify(SB_BOOKINGS), ls2 = (() => { try { return localStorage.getItem(LS_KEY); } catch (_) { return null; } })();
   return { same: before === after, lsSame: ls === ls2, y0, y1 };
 });
@@ -125,18 +128,18 @@ const R8 = await page.evaluate(() => {
   let pax = 0, n = 0;
   SB_BOOKINGS.forEach(b => { if (NS.includes(b.status) || CX.includes(b.status) || laIsInternalFree(b)) return; const dd = _dashBkDay(b); if (!dd || dd < ws || dd > t0) return;
     n++; (b.trips || []).forEach(t => { pax += bkV2PaxAllTot(t.pax); }); });
-  ebSet('tab', 'sales'); ebSet('sp', 'week');
+  ebSetNow('tab', 'sales'); ebSetNow('sp', 'week');
   const w = document.getElementById('eb-wrap'), tbl = w.querySelector('table.eb-sp');
   const rows = [...tbl.querySelectorAll('tbody tr:not(.eb-tot)')].filter(r => r.children.length > 3).map(r => +r.children[2].textContent.replace(/,/g, ''));
   const tot = +tbl.querySelector('tr.eb-tot').children[2].textContent.replace(/,/g, '');
   const kp = +w.querySelector('.eb-k .v').textContent.replace(/,/g, '');
   const lbl0 = w.querySelector('.eb-nav b').textContent;
-  ebSet('off', -1); const lbl1 = w.querySelector('.eb-nav b').textContent; const nextOn = !w.querySelector('.eb-nav button:last-child').disabled;
-  ebSet('off', 1); const back = (window._eb.off === 0);
-  ebSet('sp', 'month'); const mh = [...w.querySelectorAll('table.eb-sp thead th')].map(x => x.textContent);
+  ebSetNow('off', -1); const lbl1 = w.querySelector('.eb-nav b').textContent; const nextOn = !w.querySelector('.eb-nav button:last-child').disabled;
+  ebSetNow('off', 1); const back = (window._eb.off === 0);
+  ebSetNow('sp', 'month'); const mh = [...w.querySelectorAll('table.eb-sp thead th')].map(x => x.textContent);
   const secs = [...w.querySelectorAll('.eb-sec')].map(x => x.textContent);
   const mv = w.querySelectorAll('.eb-mv .eb-card').length;
-  ebSet('tab', 'rev');
+  ebSetNow('tab', 'rev');
   return { pax, n, rows, tot, kp, lbl0, lbl1, nextOn, back, mh, secs, mv };
 });
 const sumRows = R8.rows.reduce((s, x) => s + x, 0);
@@ -147,7 +150,7 @@ else fail('8 ' + JSON.stringify(R8));
 
 // 9
 const R9 = await page.evaluate(() => {
-  const readTot = () => { ebSet('tab', 'sales'); ebSet('sp', 'week'); const t = document.querySelector('table.eb-sp tr.eb-tot').children;
+  const readTot = () => { ebSetNow('tab', 'sales'); ebSetNow('sp', 'week'); const t = document.querySelector('table.eb-sp tr.eb-tot').children;
     return { pax: +t[2].textContent.replace(/,/g, ''), n: +t[5].textContent.replace(/,/g, ''), cx: t[6].textContent }; };
   const before = readTot();
   const ag = SB_AGENTS.find(a => a.sales);
@@ -159,7 +162,7 @@ const R9 = await page.evaluate(() => {
   SB_BOOKINGS.push(b);
   const after = readTot();
   const neg = [...document.querySelectorAll('.eb-mv .eb-mvl .rw')].some(r => r.querySelector('.lb').textContent.indexOf(ag.name) === 0 && /^-\d/.test(r.querySelector('.vv').textContent));
-  SB_BOOKINGS.pop(); ebSet('tab', 'rev');
+  SB_BOOKINGS.pop(); ebSetNow('tab', 'rev');
   return { before, after, neg, ag: ag.name };
 });
 if (R9.after.pax === R9.before.pax - 5 && R9.after.n === R9.before.n && /5/.test(R9.after.cx) && R9.neg)
@@ -174,7 +177,7 @@ const R10 = await page.evaluate(() => {
   const plan = [['r10', bs[0].id], ['r12', bs[1].id]];
   for (let d = 0; d <= 20; d++) { const ds = add(d); TRIPS[ds] = TRIPS[ds] || {}; plan.forEach(([rid, bid]) => { TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 }; }); }
   const before = JSON.stringify(SB_BOOKINGS);
-  ebSet('tab', 'gap'); ebSet('gp', 'h');
+  ebSetNow('tab', 'gap'); ebSetNow('gp', 'h');
   const w = document.getElementById('eb-wrap');
   /* expected month target */
   const mEnd = ymd(new Date(T.getFullYear(), T.getMonth() + 1, 0)); let tgt = 0, bk = 0;
@@ -187,7 +190,7 @@ const R10 = await page.evaluate(() => {
   const salesGap = [...w.querySelectorAll('.eb-sl .eb-q')].reduce((s, q) => s + (+q.children[1].querySelector('.v').textContent.replace(/,/g, '') || 0), 0);
   const decTxt = w.querySelector('.eb-dec') ? w.querySelector('.eb-dec').textContent : '';
   const after = JSON.stringify(SB_BOOKINGS);
-  ebSet('tab', 'rev');
+  ebSetNow('tab', 'rev');
   return { tgt, bk, kv, rows, free, expFree, salesGap, hasDec: /Whale Shark|Phi Phi/.test(decTxt), same: before === after };
 });
 const kT = R10.kv.find(k => /เป้าเดือนนี้/.test(k.l)), kG = R10.kv.find(k => /ช่องว่างที่ต้องหา/.test(k.l));
@@ -195,5 +198,33 @@ if (kT && kT.v === R10.tgt && kG && kG.v === Math.max(0, R10.tgt - R10.bk) && R1
     && R10.free === R10.expFree && Math.abs(R10.salesGap - kG.v) <= R10.rows.length * 3 + 2 && R10.hasDec && R10.same)
   ok('10 Gap to Target · เป้าเดือน ' + R10.tgt + ' = Σ ที่นั่งที่วางเรือ × 90% · ช่องว่าง ' + kG.v + ' = ผลรวมช่องว่างเซลส์ ' + R10.salesGap + ' · ตารางมี 2 เส้นทางที่วางเรือ · ที่ว่างวันนี้ ' + R10.free + ' ตรง getAllotment · กล่องตัดสินใจมีเที่ยวว่าง · ไม่แตะข้อมูล');
 else fail('10 ' + JSON.stringify(R10));
+
+// 11
+const R11 = await page.evaluate(async () => {
+  const ymd = d => bkV2LocalYMD(d), T = new Date();
+  const add = n => { const d = new Date(T); d.setDate(d.getDate() + n); return ymd(d); };
+  const src = SB_BOOKINGS.filter(b => b.status === 'confirmed' && (b.trips || []).length === 1).slice(0, 40);
+  const ags = SB_AGENTS.filter(a => a.sales).slice(0, 60); const rts = ['r10', 'r12'];
+  for (let n = 0; n < 6000; n++) { const b = JSON.parse(JSON.stringify(src[n % src.length])); b.id = 'ZZPF' + n; b.agentId = ags[n % ags.length].id; delete b.soldBy; b.ops = {};
+    const travel = add(-200 + (n % 215)); const md = new Date(travel + 'T12:00:00'); md.setDate(md.getDate() - (n % 20)); md.setHours(9 + n % 9, 1, 0, 0);
+    b.history = [{ at: md.toISOString(), kind: 'create', tag: 'Created', text: 'x' }]; b.bookingDate = ymd(md); b.createdAt = ymd(md);
+    b.trips[0].date = travel; b.trips[0].routeId = rts[n % 2]; b.trips[0].pax = { ad_fr: 1 + n % 3 }; SB_BOOKINGS.push(b); }
+  try { if (typeof ckBksOnReset === 'function') ckBksOnReset(); } catch (_) {}
+  ebSetNow('tab', 'rev'); ebSetNow('per', 'today');
+  const tm = (f) => { const a = performance.now(); f(); return Math.round(performance.now() - a); };
+  const first = tm(() => ebSetNow('tab', 'gap'));
+  const times = { month: tm(() => ebSetNow('gp', 'month')), h: tm(() => ebSetNow('gp', 'h')), sales: tm(() => ebSetNow('tab', 'sales')), rev: tm(() => ebSetNow('tab', 'rev')), year: tm(() => ebSetNow('per', 'year')), today: tm(() => ebSetNow('per', 'today')) };
+  /* ค่าจากดัชนี = ค่าคิดสด */
+  const t0 = ymd(T); const CX = ['cancelled', 'rejected', 'cancelled_weather'], NS = ['quote', 'draft'];
+  let live = 0; SB_BOOKINGS.forEach(b => { if (NS.includes(b.status) || CX.includes(b.status) || laIsInternalFree(b)) return; (b.trips || []).forEach(tt => { if (tt.date === t0) live += tsTripAmount(b, tt); }); });
+  const shown = document.querySelector('#eb-wrap .eb-k .v').textContent;
+  ebSet('tab', 'gap'); const busy0 = !!document.getElementById('eb-busy'); await new Promise(r => setTimeout(r, 1500)); const busy1 = !!document.getElementById('eb-busy');
+  ebSetNow('tab', 'rev'); ebSetNow('per', 'today');
+  return { n: SB_BOOKINGS.length, first, times, live, shown, busy0, busy1 };
+});
+const slow = Object.keys(R11.times).filter(k => R11.times[k] > 600);
+if (!slow.length && R11.busy0 && !R11.busy1 && near(parseB(R11.shown), R11.live))
+  ok('11 ' + R11.n.toLocaleString() + ' ใบ · เปิด Gap รอบแรก ' + R11.first + 'ms · สลับแท็บ ' + JSON.stringify(R11.times).replace(/"/g, '') + ' · ขึ้น "กำลังคำนวณ…" แล้วหาย · รายได้วันนี้ ' + R11.shown + ' = คิดสด');
+else fail('11 ' + JSON.stringify(R11) + ' slow=' + slow.join(','));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);

@@ -84,17 +84,41 @@
   function paxTxt(t){ var o=[]; [['ad','A'],['chd','C'],['inf','I'],['foc','F']].forEach(function(k){ var n=paxK(t,k[0]); if(n) o.push(n+k[1]); }); return o.join(' ')||'0'; }
   function famColor(rid){ var f=fam(rid); var r=route(rid); return (f&&f.color)||(r&&r.color)||'#8b909c'; }
 
+  /* ══ §execPerf (2026-10-17) · owner "เวลาคลิกแถบด้านบน ช้ามาก"
+     ของเดิมทุกฟังก์ชันกวาด SB_BOOKINGS ทั้งก้อนเอง · หน้า Gap กวาดเป็นสิบ ๆ รอบ (routesOn ต่อวัน · salesShare · curve)
+     แล้วยังเรียก getAllotment ซ้ำช่องเดิม และ pxDay (Trip P&L ทั้งวัน) ทุกวันในช่วง
+     ตอนนี้: ดัชนีจากการกวาดครั้งเดียว (ใบต่อวันเดินทาง · ต่อวันที่เข้าระบบ · ต่อวันยกเลิก) · getAllotment จำผลไว้
+     · pxDay เรียกเฉพาะเที่ยวใน 7 วันข้างหน้า · ทั้งหมดผูกกับตราประทับข้อมูล (บันทึกเมื่อไหร่ · จำนวนใบ · จำนวนวันที่วางเรือ) + 20 วิ
+     · คลิกแถบแล้วขึ้นข้อความรอก่อน ค่อยคำนวณในเฟรมถัดไป ปุ่มจึงตอบทันที */
+  var _ix=null;
+  function stamp(){ var tk=0; try{ tk=Object.keys(TRIPS||{}).length; }catch(_){} return String(window.__savedAt||0)+'|'+((SB_BOOKINGS||[]).length)+'|'+tk+'|'+((typeof SB_SEAT_LOCKS!=='undefined'&&SB_SEAT_LOCKS)?SB_SEAT_LOCKS.length:0); }
+  function idx(){
+    var st=stamp(), now=Date.now();
+    if(_ix && _ix.st===st && now-_ix.at<20000) return _ix;
+    var I={st:st, at:now, byDate:{}, dates:[], made:{}, cxl:{}, al:{}, be:{}};
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(!b) return;
+      var sale=isSale(b), live=sale && CXL.indexOf(b.status)<0;
+      if(sale){ (b.trips||[]).forEach(function(t){ if(!t||!t.date) return; var L=I.byDate[t.date]; if(!L){ L=I.byDate[t.date]=[]; I.dates.push(t.date); } L.push({b:b, t:t, live:live}); }); }
+      if(live){ var d=bkDay(b); if(d){ (I.made[d]=I.made[d]||[]).push(b); } }
+      if(CXL.indexOf(b.status)>=0 && sale){ var c=cxlDay(b); if(c){ (I.cxl[c]=I.cxl[c]||[]).push(b); } }
+    });
+    I.dates.sort();
+    _ix=I; return I;
+  }
+  function datesIn(I, from, to){ var out=[], D=I.dates; for(var i=0;i<D.length;i++){ if(D[i]<from) continue; if(D[i]>to) break; out.push(D[i]); } return out; }
   /* ทุกทริปของใบที่ยังไม่ยกเลิก ภายใต้ตัวกรองท่า · fn(b,t,r) */
   function eachTrip(from, to, fn, withCxl){
-    (SB_BOOKINGS||[]).forEach(function(b){
-      if(!b || !(withCxl ? isSale(b) : isLive(b))) return;
-      (b.trips||[]).forEach(function(t){
-        if(!t || !t.date || t.date<from || t.date>to) return;
-        var r=route(t.routeId); if(!pierOk(r)) return;
-        fn(b,t,r);
+    var I=idx();
+    datesIn(I, from, to).forEach(function(ds){
+      I.byDate[ds].forEach(function(x){
+        if(!withCxl && !x.live) return;
+        var r=route(x.t.routeId); if(!pierOk(r)) return;
+        fn(x.b, x.t, r);
       });
     });
   }
+  function eachMade(from, to, fn){ var I=idx(); Object.keys(I.made).forEach(function(d){ if(d<from||d>to) return; I.made[d].forEach(fn); }); }
   function agg(from, to){
     var o={rev:0, pax:0, byFam:{}, byAg:{}, byChan:{b2b:0,b2c:0,ctr:0}, byNat:{}, byDay:{}};
     eachTrip(from, to, function(b,t,r){
@@ -112,22 +136,18 @@
   /* ยอดขายตามวันจอง (ใบที่เข้าระบบในช่วง) · มูลค่าทั้งใบ */
   function salesIn(from, to){
     var o={val:0, n:0, pax:0, list:[]};
-    (SB_BOOKINGS||[]).forEach(function(b){
-      if(!isSale(b) || CXL.indexOf(b.status)>=0) return;
-      var d=bkDay(b); if(!d || d<from || d>to) return;
+    eachMade(from, to, function(b){
       var ts=(b.trips||[]).filter(function(t){ return t && pierOk(route(t.routeId)); }); if(!ts.length) return;
       o.val+=money(b); o.n++; ts.forEach(function(t){ o.pax+=pax(t); }); o.list.push(b);
     });
     return o;
   }
   function cxlIn(from, to){
-    var o={val:0, n:0, pax:0};
-    (SB_BOOKINGS||[]).forEach(function(b){
-      if(!b || CXL.indexOf(b.status)<0) return;
-      var d=cxlDay(b); if(!d || d<from || d>to) return;
+    var o={val:0, n:0, pax:0}, I=idx();
+    Object.keys(I.cxl).forEach(function(d){ if(d<from||d>to) return; I.cxl[d].forEach(function(b){
       var ts=(b.trips||[]).filter(function(t){ return t && pierOk(route(t.routeId)); }); if(!ts.length) return;
       o.val+=money(b); o.n++; ts.forEach(function(t){ o.pax+=pax(t); });
-    });
+    }); });
     return o;
   }
   /* ลูกหนี้ · ทั้งบริษัท (ใบแจ้งหนี้ไม่ได้แยกท่า) */
@@ -198,7 +218,7 @@
       .sort(function(a,b){ var fa=famIdx(fam(a)), fb=famIdx(fam(b)); if(fa!==fb) return fa-fb;
         var ta=((route(a)||{}).times||[])[0]||'', tb=((route(b)||{}).times||[])[0]||''; return String(ta).localeCompare(String(tb)); });
   }
-  function alOf(rid, ds){ try{ return getAllotment(rid, ds)||null; }catch(_){ return null; } }
+  function alOf(rid, ds){ var I=idx(), k=rid+'|'+ds; if(k in I.al) return I.al[k]; var v=null; try{ v=getAllotment(rid, ds)||null; }catch(_){} I.al[k]=v; return v; }
   function rName(rid){ var r=route(rid)||{}, f=fam(rid); var n=String(r.name||rid);
     if(f && f.name){ var v=n.indexOf(f.name)>=0 ? n.replace(f.name,'') : n; v=v.replace(/^\s*(by|\u00b7|-|\u2014|\/)\s*/i,'').replace(/\s*(by|\u00b7|-|\u2014|\/)\s*$/i,'').replace(/\s+/g,' ').trim(); return {f:f.name, v:v}; }
     return {f:n, v:''}; }
@@ -620,12 +640,10 @@
     var t0=today(), from=addDays(t0,-90), L=[0,1,2,3,5,7,14,21,30,60,90,120];
     var byR={}, all={fin:0, at:L.map(function(){ return 0; }), n:0};
     var trips={};
-    (SB_BOOKINGS||[]).forEach(function(b){
-      if(!isLive(b)) return; var d=bkDay(b); if(!d) return;
-      (b.trips||[]).forEach(function(t){ if(!t||!t.date||t.date<from||t.date>=t0) return;
+    var I=idx();
+    datesIn(I, from, addDays(t0,-1)).forEach(function(ds){ I.byDate[ds].forEach(function(x){ if(!x.live) return; var d=bkDay(x.b); if(!d) return; var t=x.t;
         var k=t.routeId+'|'+t.date, T=trips[k]=trips[k]||{rid:t.routeId, fin:0, at:L.map(function(){ return 0; })};
-        var p=pax(t), lead=nDays(d,t.date)-1; T.fin+=p; L.forEach(function(l,i){ if(lead>=l) T.at[i]+=p; }); });
-    });
+        var p=pax(t), lead=nDays(d,t.date)-1; T.fin+=p; L.forEach(function(l,i){ if(lead>=l) T.at[i]+=p; }); }); });
     Object.keys(trips).forEach(function(k){ var T=trips[k]; if(T.fin<5) return;
       var R=byR[T.rid]=byR[T.rid]||{fin:0, at:L.map(function(){ return 0; }), n:0};
       R.fin+=T.fin; R.n++; all.fin+=T.fin; all.n++; L.forEach(function(l,i){ R.at[i]+=T.at[i]; all.at[i]+=T.at[i]; }); });
@@ -644,11 +662,12 @@
     var st = (free<=3 || bk>=tgt) ? 'full' : (bk>=exp*0.9 ? 'g' : (proj>=tgt*0.8 ? 'y' : 'r'));
     return {rid:rid, ds:ds, cap:cap, bk:bk, free:free, lk:lk, tgt:tgt, lead:lead, c:c, exp:exp, proj:proj, behind:behind, st:st, gap:Math.max(0,tgt-bk)};
   }
-  var _beC={};
   function beOf(rid, ds){
-    var k=ds+'|'+(EB.pier||'');
-    if(!_beC[k]){ var m={}; try{ (pxDay(ds, EB.pier||'')||[]).forEach(function(x){ if(x && x.rid && x.be) m[x.rid]=(m[x.rid]||0)+x.be; }); }catch(_){} _beC[k]=m; }
-    return _beC[k][rid]||0;
+    if(nDays(today(),ds)-1>7) return 0;                    /* §execPerf · Trip P&L ทั้งวันแพง · คิดเฉพาะที่ต้องตัดสินใจใน 7 วัน */
+    var I=idx(), k=ds+'|'+rid;
+    if(!(k in I.be)){ var v=0; try{ var day=(typeof TRIPS!=='undefined'&&TRIPS[ds])||{};
+      Object.keys(day).forEach(function(bid){ var op=day[bid]; if(!op||op.route!==rid) return; var x=pxTrip(ds,bid); if(x && x.be) v+=x.be; }); }catch(_){} I.be[k]=v; }
+    return I.be[k];
   }
   function gapRange(){
     var t0=today();
@@ -688,7 +707,7 @@
     var cells={}, risk=[], nRisk=0, nBe=0, gapV=0, horizonGap=0;
     famL.forEach(function(F){ days.forEach(function(d){
       var agg=null; F.rids.forEach(function(rid){ var s=tripState(rid,d); if(!s) return;
-        var be=beOf(rid,d), belowBe=be>0 && s.proj<be;
+        var be=(s.st==='full'||s.st==='g')?0:beOf(rid,d), belowBe=be>0 && s.proj<be;   /* §execPerf · ตามเพซอยู่แล้ว ไม่ต้องคิดจุดคุ้มทุน */
         if(!agg) agg={cap:0,bk:0,free:0,tgt:0,exp:0,proj:0,behind:0,n:0,lead:s.lead,rids:[],worst:'full',belowBe:false,lk:0};
         agg.cap+=s.cap; agg.bk+=s.bk; agg.free+=s.free; agg.tgt+=s.tgt; agg.exp+=s.exp; agg.proj+=s.proj; agg.behind+=s.behind; agg.n++; agg.lk+=s.lk;
         agg.rids.push(Object.assign({be:be, belowBe:belowBe}, s));
@@ -825,17 +844,24 @@
       + '<span class="eb-sp"></span><span class="eb-upd">'+E(thDow(t0))+' '+E(thD(t0))+' '+t0.slice(0,4)+' · อัปเดต '+hhmm(Date.now())+' · วาดใหม่ทุก 1 นาที</span></div>'
       + body + '</div>';
   }
-  function keepRender(){
+  var _pending=false;
+  function keepRender(sync){
     var m=document.querySelector('.main'), y=m?m.scrollTop:0, wy=window.scrollY;
-    render();
-    try{ if(m) m.scrollTop=y; window.scrollTo(window.scrollX||0, wy); }catch(_){}
+    var go=function(){ _pending=false; render(); try{ if(m) m.scrollTop=y; window.scrollTo(window.scrollX||0, wy); }catch(_){} };
+    if(sync){ go(); return; }
+    if(_pending) return; _pending=true;
+    /* §execPerf · บอกว่ากำลังคิดก่อน แล้วค่อยคำนวณในเฟรมถัดไป · ปุ่มจึงตอบทันทีแม้ข้อมูลใหญ่ */
+    try{ var w=document.getElementById('eb-wrap'); if(w && !document.getElementById('eb-busy')){ var b=document.createElement('div'); b.id='eb-busy'; b.textContent='กำลังคำนวณ…'; w.appendChild(b); } }catch(_){}
+    setTimeout(go, 20);
   }
   window.ebRender = render;
-  window.ebSet = function(k, v){ if(k==='off') v=Math.min(0,+v||0); if(k==='sp' || k==='tab') EB.off=0; if(k==='pier'||k==='gp'||k==='tab') _beC={}; EB[k]=v; keepRender(); };
+  function ebApply(k, v){ if(k==='off') v=Math.min(0,+v||0); if(k==='sp' || k==='tab') EB.off=0; EB[k]=v; }
+  window.ebSet = function(k, v){ ebApply(k, v); keepRender(); };
+  window.ebSetNow = function(k, v){ ebApply(k, v); keepRender(true); };   /* ใช้ในเทส · วาดทันที */
   /* Live · วาดใหม่ทุก 60 วินาที เฉพาะตอนหน้านี้เปิดอยู่และแท็บไม่ได้ถูกซ่อน */
   if(!window.__ebTick){
     window.__ebTick = setInterval(function(){
-      try{ var v=document.getElementById('view-execboard'); if(!v || !v.classList.contains('active') || document.hidden) return; keepRender(); }catch(_){}
+      try{ var v=document.getElementById('view-execboard'); if(!v || !v.classList.contains('active') || document.hidden) return; keepRender(true); }catch(_){}
     }, 60000);
   }
 
@@ -924,6 +950,7 @@
       '.eb-rows .mini{height:7px;background:#EDF0F4;border-radius:4px;overflow:hidden}.eb-rows .mini i{display:block;height:100%;border-radius:4px;background:var(--eb-blue)}',
       '.eb-foot{font-size:11px;color:var(--eb-mut);margin-top:8px}',
       '.eb-none{color:var(--eb-mut);text-align:center !important;padding:14px 0 !important}',
+      '#eb-busy{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:var(--eb-ink);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:9px;box-shadow:0 4px 14px rgba(15,27,61,.25)}',
       /* §execSales */
       '.eb-nav{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--eb-line);border-radius:9px;padding:2px 4px}',
       '.eb-nav b{font-size:12px;font-weight:600;padding:0 4px;white-space:nowrap}',
