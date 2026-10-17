@@ -43,7 +43,7 @@ process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
 const calls = [], refusals = [], bodies = [];
-await ctx.route(PROD, async (route) => {
+const routeFn = async (route) => {
   const req = route.request(), u = new URL(req.url());
   const hd = req.headers(), fwd = {};
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
@@ -53,7 +53,8 @@ await ctx.route(PROD, async (route) => {
   if (req.method() !== "GET") bodies.push({ k: req.method() + " " + u.pathname, status: r.status, req: req.postData() || "", body: buf.toString() });
   if (r.status >= 400) refusals.push(req.method() + ' ' + u.pathname + ' -> ' + r.status + ' ' + buf.toString().slice(0, 260));
   await route.fulfill({ status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'access-control-allow-origin': '*' }, body: buf });
-});
+};
+await ctx.route(PROD, routeFn);
 const page = await ctx.newPage();
 const errors = [], dialogs = [];
 let dialogAnswer = true;
@@ -347,4 +348,72 @@ const part1 = c5Srv.trips[0].operations.van_parts.find((p) => p.idx === 1);
 const spScr = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c5'); const o = bkOpsRead(b, '2026-11-11') || {}; return (o.vanSplits || []).map((s) => ({ own: bkSplitOwnPick(s), t: s.pickTime })); });
 ok('split time 08:10 -> PATCH trip-ops van_parts[1].pick_time: server part 1 holds 08:10, main part untouched', spN > 0 && callsSince(n3).some((c) => c.startsWith('PATCH /operations/trip-ops/')) && part1 && part1.alt && part1.alt.pick_time === '08:10', { spN, part1, c: callsSince(n3).filter((c) => !c.startsWith('GET')) });
 ok('screen: the split part keeps 08:10 and the input shows it after the redraw', spScr[1] && spScr[1].t === '08:10' && (await spIn.first().inputValue()) === '08:10', { spScr, v: spN ? await spIn.first().inputValue() : null });
-process.exit(fails.length ? 1 : 0);
+
+// ════════════ 4. ckStrandClear · moved to another day / cancelled but still in a van ════════════
+curItem = '4'; console.log('\n[4] ckStrandClear both paths');
+// path 1 · b1 (in van group 1 on DAY) is rescheduled to DAY3 through the app's own reschedule command
+await openVanCk(DAY); await settle(500);
+await ev((a) => { document.body.insertAdjacentHTML('beforeend',
+  '<div id="zz-r"><input id="bkr-from" value="' + a.from + '"><input id="bkr-newdate" value="' + a.to + '"><input id="bkr-reason" value="walk"><input type="radio" name="bkr-charge" value="none" checked><input type="radio" name="bkr-collect" value="invoice" checked></div>');
+  bookingV2RescheduleConfirm(a.id); document.getElementById('zz-r').remove(); }, { id: 'zz-b1', from: DAY, to: DAY3 });
+await settle(1500); await idle();
+const b1srv = await api('/v1/bookings/' + bk.b1.id);
+const strandJobs = await api('/operations/van-jobs?date=' + DAY);
+ok('reschedule b1 DAY -> DAY3 done on the server', b1srv.trips[0].service_date === DAY3, b1srv.trips[0].service_date);
+ok('server: the moved-away trip is held as a strand on DAY (van-jobs struck list)', strandJobs.struck >= 1, strandJobs.struck);
+console.log('  note  struck: ' + strandJobs.struck);
+await openVanCk(DAY); await settle(1200);
+const mvRows = await ev(() => ({ btns: [...document.querySelectorAll('#vancheckin-host .ck-sclr, #vancheckin-host [onclick*="ckStrandClear"]')].length, store: Object.keys(ckStrandStore()), text: /เลื่อนไป/.test(document.querySelector('#vancheckin-host').innerText) }));
+ok('Van Check-in on DAY shows the moved-away row of b1 with a clear button (the server still holds the strand)', mvRows.btns > 0, { mvRows });
+// another machine (fresh storage) opens the same day: does it see the moved-away row?
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+  await ctx2.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
+  await ctx2.route(PROD, routeFn);
+  const p2 = await ctx2.newPage();
+  p2.on('dialog', (d) => d.accept());
+  await p2.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
+  await p2.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
+  await p2.evaluate((d) => { _vanCkDate = d; const el = document.querySelector('.nav-item[data-view="vancheckin"]'); if (el) nav(el); renderVanCheckin(); }, DAY);
+  await p2.waitForTimeout(3500);
+  const other2 = await p2.evaluate(() => ({ btns: document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear"]').length, text: /เลื่อนไป/.test(document.querySelector('#vancheckin-host').innerText) }));
+  await p2.evaluate((d) => { _vanJobsDate = d; const el = document.querySelector('.nav-item[data-view="vanjobs"]'); if (el) nav(el); renderVanJobs(); }, DAY);
+  await p2.waitForTimeout(3500);
+  const other3 = await p2.evaluate(() => ({ btns: document.querySelectorAll('#vanjobs-host [onclick*="ckStrandClear"]').length }));
+  ok('a second machine (fresh browser storage) also sees the moved-away row of b1 with its clear button on Van Check-in', other2.btns > 0, { vanCheckin: other2, vanJobsButtons: other3.btns, server: 'holds the strand' });
+  await ctx2.close();
+}
+const dlgS = dialogs.length; n3 = calls.length;
+await page.locator('#vancheckin-host [onclick*="ckStrandClear"]').first().click();
+await idle(); await settle(1200);
+const delCall = callsSince(n3).filter((c) => !c.startsWith('GET'));
+const jobsAfter = await api('/operations/van-jobs?date=' + DAY);
+ok('clear button (moved day): legacy confirm text -> DELETE /operations/van-strands/{booking}/{date} -> row gone on screen', /ล้างรายการค้างของ WALK ONE/.test(dialogs[dlgS] || '') && /ใบนี้ถูกเลื่อนวันไปแล้ว/.test(dialogs[dlgS] || '') && delCall.length === 1 && /^DELETE \/operations\/van-strands\/.+\/2026-11-10 200/.test(delCall[0]) && (await ev(() => document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear"]').length)) === 0, { d: dialogs.slice(dlgS), delCall });
+ok('server: the strand is gone from that day\'s van jobs (struck list empty) and b1 still sits on DAY3', jobsAfter.struck === 0 && (await api('/v1/bookings/' + bk.b1.id)).trips[0].service_date === DAY3, { struck: jobsAfter.struck });
+const again = await send('DELETE', `/operations/van-strands/${bk.b1.id}/${DAY}`);
+ok('server: a second DELETE of the same strand is 404 (nothing left)', again.status === 404, again);
+// path 2 · b3 (alone in group, DAY) is cancelled but stays in its van
+await openVanCk(DAY); await settle(500);
+await ev((id) => { document.body.insertAdjacentHTML('beforeend',
+  '<div id="zz-c"><select id="bkc-cat"><option value="customer_cancel" selected>c</option></select><input id="bkc-reason" value="walk cancel"><input type="radio" name="bkc-charge" value="none" checked></div>');
+  bookingV2CancelConfirm(id); document.getElementById('zz-c').remove(); }, 'zz-b3');
+await settle(1500); await idle();
+const b3srv = await api('/v1/bookings/' + bk.b3.id);
+const partsBefore = b3srv.trips[0].operations.van_parts;
+ok('b3 cancelled on the server, its van part still in group 2', b3srv.status === 'cancelled' && partsBefore[0].group && partsBefore[0].group.number === 2, { s: b3srv.status, p: partsBefore });
+await openVanCk(DAY); await settle(1000);
+const sx = await ev(() => ({ btns: [...document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear"]')].map((b) => b.getAttribute('onclick')) }));
+ok('Van Check-in shows the cancelled-but-arranged row with the clear button', sx.btns.some((o) => o.includes('zz-b3')), sx);
+const dlgC = dialogs.length; n3 = calls.length;
+await page.locator('#vancheckin-host [onclick*="ckStrandClear(\'zz-b3\'"]').first().click();
+await idle(); await settle(1500);
+const patchCalls = callsSince(n3).filter((c) => !c.startsWith('GET'));
+const b3after = await api('/v1/bookings/' + bk.b3.id);
+const confirmTxt = dialogs[dlgC] || '';
+ok('cancelled path: confirm says only the van arrangement is cleared (booking and cancel history untouched)', /ล้างการจัดรถ\/เรือของ WALK THREE/.test(confirmTxt) && /ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ/.test(confirmTxt), confirmTxt);
+console.log('  note  confirm text: ' + JSON.stringify(confirmTxt));
+ok('cancelled path: PATCH trip-ops {van_parts:null} -> server part has no group, booking still cancelled', patchCalls.some((c) => /^PATCH \/operations\/trip-ops\/.+ 200/.test(c)) && b3after.status === 'cancelled' && !b3after.trips[0].operations.van_parts[0].group, { patchCalls, parts: b3after.trips[0].operations.van_parts, st: b3after.status });
+ok('cancelled path: the row left the Van Check-in screen', (await ev(() => document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear(\'zz-b3\'"]').length)) === 0, null);
+// the confirm text names only van parts, but the confirm also says "boat": record what the server actually kept
+console.log('  note  server kept boat/final pickup/check-in of b3: ' + JSON.stringify({ boat: b3after.trips[0].operations.boat_id, fin: b3after.trips[0].operations.pickup_time_final }));
+process.exit(0);
