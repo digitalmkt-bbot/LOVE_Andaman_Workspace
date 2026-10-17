@@ -451,7 +451,7 @@ console.log('\n[9] programme_anyway question · route_closed refusal');
 
 console.log('\n[10] nationality_effective → Market Data code / mix');
 {
-  const mk = await apiBook({ leadPax: 'ZZ NATEFF', leadNationality: 'RU', trip: { date: F2, pax: { ad_fr: 3 } },
+  const mk = await apiBook({ leadPax: 'ZZ NATEFF', leadNationality: 'RU', intent: 'quote', trip: { date: F2, pax: { ad_fr: 3 } },
     passengers: [{ name: 'Wang Li', nationality: 'US' }, { name: 'Zhang Wei' }] });
   ok('setup: booking with a lead RU, one passenger US, one with no nationality (named like a Chinese guest)', mk.status === 201, mk.body);
   const sb10 = mk.body;

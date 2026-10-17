@@ -145,6 +145,12 @@ section('1', async () => {
   await clickModal('บันทึกร่าง'); await idle(); await settle(400);
   let sh = await api(`/v1/pier-office/${PIER}/days/${D}/sheets/b6`);
   ok('sheet draft stored recorded_staff_id', sh.status === 'draft' && sh.recorded_staff_id === staff.Somchai, { status: sh.status, who: sh.recorded_staff_id });
+  // a second save of the same sheet must not fail: a booking line sends no `adults` (the server stores its heads; a sent value is 400)
+  const sh1 = (sh.lines || []).filter((l) => l.booking_id).map((l) => l.adults);
+  await ev(() => poIssueOpen('b6')); await page.waitForSelector('#pois_0_fin', { timeout: 8000 });
+  await clickModal('บันทึกร่าง'); await idle(); await settle(400);
+  sh = await api(`/v1/pier-office/${PIER}/days/${D}/sheets/b6`);
+  ok('sheet saved twice: second save accepted, booking lines keep the server heads', sh.status === 'draft' && JSON.stringify((sh.lines || []).filter((l) => l.booking_id).map((l) => l.adults)) === JSON.stringify(sh1) && sh1.length > 0, { first: sh1, second: (sh.lines || []).map((l) => l.adults) });
   await page.selectOption('#po-who', staff.Nok); await settle(300);
   await ev(() => poIssueOpen('b6')); await page.waitForSelector('#pois_0_fin', { timeout: 8000 });
   await clickModal('ยืนยัน'); await idle(); await settle(500);

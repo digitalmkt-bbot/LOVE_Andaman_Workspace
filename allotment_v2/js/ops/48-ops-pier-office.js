@@ -847,11 +847,11 @@
       lines: (IS.rows || []).map(function(r){
         var line = {
           agent_code: nul(String(r.agN || '').slice(0, 20)),
-          adults: r.extra ? (parseInt(r.ad, 10) || 0) : (typeof window.poIsPax === 'function' ? window.poIsPax(r) : 0),
           deposit_baht: +r.dep || 0, deposit_returned_baht: +r.back || 0, deduction_a: +r.cut || 0, deduction_b: +r.cutB || 0,
           note: nul(r.note), qty: { issued: kmap(r.iss), returned: kmap(r.ret) }
         };
-        if(r.extra) line.label = text((r.names && r.names[0]) || r.label) || '-';
+        // a booking line's adults is the server's heads (a sent value is 400); only an extra line keeps the client's number
+        if(r.extra){ line.adults = parseInt(r.ad, 10) || 0; line.label = text((r.names && r.names[0]) || r.label) || '-'; }
         else line.booking_id = bkSrv(r.bkId);
         return line;
       }),
@@ -978,6 +978,14 @@
     var k = srvBooking(b, date, t);
     if(k && k.left) return { ad: k.left.ad, chd: k.left.chd, inf: k.left.inf, foc: k.left.foc, tot: k.left.total };
     return RL.poPaxLeft.apply(this, arguments);
+  };
+  // bkNatTHb(b,t,k): a booking's real Thai heads of a category = bookings[].thai of the boat's day (the heads booked, the
+  // free-of-charge heads inferred from the lead). A trip whose boat-day has not been read, or no boat yet, is legacy's count.
+  var natLegacy = window.bkNatTHb;
+  if(typeof natLegacy === 'function') window.bkNatTHb = function(b, t, k){
+    var s = ready() && t && t.date ? srvBooking(b, t.date, t) : null;
+    if(s && s.thai && typeof s.thai[k] === 'number') return s.thai[k];
+    return natLegacy.apply(this, arguments);
   };
   // poBoats(date,pier): the list of boats stays legacy's (deployments); the heads of each row are the server's bookings[] (pax, pax_real, by share)
   window.poBoats = function(date, pier){
