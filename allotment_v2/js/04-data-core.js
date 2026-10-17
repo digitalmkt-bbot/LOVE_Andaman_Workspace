@@ -3670,6 +3670,18 @@ function renderDash(){
     if(_s && _s.type==='closed') return;
     if(pierBookedY[r.pier]!=null) pierBookedY[r.pier]+=(op.booked||0);
   });
+  /* §opsDashTicker · op.booked of an ops cell is always 0, so the two sums above are 0 and the ticker never moved.
+     With the server dashboard (GET /v1/dashboard · routes[].booked_pax) for the day and for yesterday, each route's
+     booked pax is added to its pier, as the legacy sums did. Until both answers are in, the legacy sums stay. */
+  if(_opsDashApi && _opsDash && Array.isArray(_opsDash.routes) && window.laOps.enabled && window.laOps.enabled()){
+    _opsDashApi.ensure(yDs,'day');
+    const _yDash=_opsDashApi.get(yDs,'day');
+    if(_yDash && Array.isArray(_yDash.routes)){
+      const _sumPier=(routes,into)=>{ Object.keys(into).forEach(k=>into[k]=0);
+        routes.forEach(rt=>{ const r=getRoute(rt.route_id); if(r && into[r.pier]!=null) into[r.pier]+=(+rt.booked_pax||0); }); };
+      _sumPier(_opsDash.routes,pierBookedToday); _sumPier(_yDash.routes,pierBookedY);
+    }
+  }
   const tickerCells=[
     {lbl:'TL',d:(()=>{const y=pierBookedY.tublamu||0;return y>0?Math.round((pierBookedToday.tublamu-y)/y*100):(pierBookedToday.tublamu>0?100:0);})(),unit:'%'},
     {lbl:'VP',d:(()=>{const y=pierBookedY.panwa||0;return y>0?Math.round((pierBookedToday.panwa-y)/y*100):(pierBookedToday.panwa>0?100:0);})(),unit:'%'},
