@@ -139,7 +139,7 @@ console.log('\n[1] confirm a booking that lacks required fields → 400 booking_
   s = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { status: b.status, form: !!_bkV2.newBooking, inc: b.incomplete || null }; }, bid);
   ok('server answered 400 booking_incomplete on the confirm', refusals.slice(nRef).some((x) => /\/confirm → 400/.test(x) && /booking_incomplete/.test(x)), refusals.slice(nRef));
   ok('screen alert lists the server\'s message (pickup)', !!al && /Hotel \/ pickup location: needed before confirming/.test(al), dialogs.slice(nDlg));
-  ok('server still holds a quote · the screen booking was reloaded (quote, form reopened)', sb1.status === 'quote' && s.status === 'quote', { sb1: sb1.status, s });
+  ok('server still holds a quote · the screen booking is a quote again · the form is back as it was left', sb1.status === 'quote' && s.status === 'quote' && s.form, { sb1: sb1.status, s });
 }
 
 
@@ -404,6 +404,78 @@ console.log('\n[8] 409 cancelled: pickup time / pier note of a cancelled booking
   ok('pier note: nothing stored on the screen', !note, note);
 }
 
+
+console.log('\n[9] programme_anyway question · route_closed refusal');
+{
+  // (a) r4 is not in agent a01's programme (r5 only). The commit's own question is asked once and its OK goes up as programme_anyway.
+  answer.confirm = false;
+  let nD = dialogs.length;
+  await form({ lead: 'ZZ PROG NO', date: F1, trips: [{ routeId: 'r4', zone: 'NoTransfer' }] });
+  await settle(1500); await idle();
+  ok('(a) answered No to "เส้นทางนอกสัญญา" → nothing saved', dialogs.slice(nD).some((d) => /^confirm: เส้นทางนอกสัญญาของ Sun Tour/.test(d)) && (await srvBy('ZZ PROG NO')) === null, { dialogs: dialogs.slice(nD), srv: await srvBy('ZZ PROG NO') });
+  answer.confirm = true;
+  nD = dialogs.length;
+  const nR = refusals.length;
+  await form({ lead: 'ZZ PROG YES', date: F1, trips: [{ routeId: 'r4', zone: 'NoTransfer' }] });
+  await waitScreen(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ PROG YES'); return b && b.opsId; }, null, 15000); await idle();
+  const py = await srvBy('ZZ PROG YES');
+  ok('(a) answered Yes → saved on r4 · asked once (not again by the server) · no refusal', py && py.trips[0].route_id === 'r4' && dlg(/เส้นทางนอกสัญญา/).length === 2 && dialogs.slice(nD).filter((d) => /นอกสัญญา|anyway/i.test(d)).length === 1 && refusals.length === nR, { py: py && py.trips.map((t) => t.route_id), q: dialogs.slice(nD), refusals: refusals.slice(nR) });
+  // (b) the screen's copy of the programme is out of date (it lists r4) but the server's is not: the server's 409 is asked
+  await ev(() => { const a = sbGetAgent('a01'); a.programs = ['r5', 'r4']; });
+  nD = dialogs.length;
+  const nR2 = refusals.length;
+  await form({ lead: 'ZZ PROG SRV', date: F2, trips: [{ routeId: 'r4', zone: 'NoTransfer' }] });
+  await waitScreen(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ PROG SRV'); return b && b.opsId; }, null, 15000); await idle();
+  const ps = await srvBy('ZZ PROG SRV');
+  const q9 = dialogs.slice(nD).find((d) => /Confirm to save anyway\?/.test(d));
+  ok('(b) the server\'s 409 route_not_in_programme is asked with its own message · OK sends programme_anyway · saved', !!q9 && refusals.slice(nR2).some((x) => /→ 409/.test(x) && /route_not_in_programme/.test(x)) && ps && ps.trips[0].route_id === 'r4', { q9, refusals: refusals.slice(nR2), ps: ps && ps.trips.map((t) => t.route_id) });
+  console.log('    server question:', JSON.stringify(q9).slice(0, 300));
+  await ev(() => { const a = sbGetAgent('a01'); a.programs = ['r5']; });
+
+  // (c) the day is closed on the server after the app loaded its calendar
+  const close = await raw('/v1/routes/r5/days/' + F3, { method: 'PUT', body: JSON.stringify({ kind: 'closed', close_anyway: true }) });
+  ok('setup: r5 closed on ' + F3 + ' (after the app loaded)', close.status === 200, close);
+  const open0 = await ev((d) => bookingV2IsRouteOpenOn('r5', d), F3);
+  const w0 = warns.length, nR3 = refusals.length;
+  await form({ lead: 'ZZ CLOSED', date: F3 });
+  for (let i = 0; i < 30 && warns.length === w0; i++) await settle(250);
+  await idle(); await settle(600);
+  s = await ev(() => ({ n: SB_BOOKINGS.filter((b) => b.leadPax === 'ZZ CLOSED').length, form: !!_bkV2.newBooking && _bkV2.newBooking.leadPax === 'ZZ CLOSED' }));
+  const refused = refusals.slice(nR3).find((x) => /POST \/v1\/bookings → 409/.test(x) && /route_closed/.test(x));
+  console.log('    refusal:', (refused || '').slice(0, 300), '\n    warn:', warns.slice(w0).join(' | ').slice(0, 300));
+  ok('(c) the screen did not know the day was closed (client rule passed) · the server refused 409 route_closed', open0 === true && !!refused, { open0, refusals: refusals.slice(nR3) });
+  ok('(c) the server\'s message was shown · nothing saved · booking off the screen · form reopened with what was typed', !!refused && warns.slice(w0).some((x) => /Booking not saved/.test(x) && x.includes(JSON.parse(refused.slice(refused.indexOf('{'))).message)) && (await srvBy('ZZ CLOSED')) === null && s.n === 0 && s.form, { warns: warns.slice(w0), s });
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+  await raw('/v1/routes/r5/days/' + F3, { method: 'DELETE' });
+}
+
+console.log('\n[10] nationality_effective → Market Data code / mix');
+{
+  const mk = await apiBook({ leadPax: 'ZZ NATEFF', leadNationality: 'RU', trip: { date: F2, pax: { ad_fr: 3 } },
+    passengers: [{ name: 'Wang Li', nationality: 'US' }, { name: 'Zhang Wei' }] });
+  ok('setup: booking with a lead RU, one passenger US, one with no nationality (named like a Chinese guest)', mk.status === 201, mk.body);
+  const sb10 = mk.body;
+  const eff = (sb10.passengers || []).map((p) => [p.name, p.nationality || '', p.nationality_effective]);
+  console.log('    server passengers:', JSON.stringify(eff));
+  await ev((id) => laOps.bookings.reload ? laOps.bookings.reload(id) : null, sb10.id);
+  await waitScreen((id) => SB_BOOKINGS.some((b) => b.opsId === id), sb10.id, 8000);
+  const scr10 = await ev((id) => {
+    const b = SB_BOOKINGS.find((x) => x.opsId === id); if (!b) return null;
+    return { pax: (b.passengers || []).map((p) => [p.name, p.nationality || '', p.nationalityEffective]), code: mdBkCode(b), mix: mdBkMix(b), guess: bookingV2GuessNationality('Zhang Wei') };
+  }, sb10.id);
+  const blank = (sb10.passengers || []).find((p) => p.name === 'Zhang Wei');
+  ok('the screen\'s passengers carry the server\'s nationality_effective (blank one = the lead\'s RU)', scr10 && JSON.stringify(scr10.pax) === JSON.stringify(eff) && blank && blank.nationality_effective === 'RU', { scr10, eff });
+  ok('mdBkCode = the lead\'s code · mdBkMix counts the blank passenger as RU, not as the name\'s guess', scr10 && scr10.code === 'RU' && scr10.mix && scr10.mix.RU === 2 && scr10.mix.US === 1 && !scr10.mix[scr10.guess], { scr10 });
+  console.log('    legacy would guess for "Zhang Wei":', scr10 && scr10.guess);
+  // and the Market Data screen draws without error
+  const e0 = errors.length;
+  await ev(() => { const el = document.querySelector('.nav-item[data-view="marketdata"], .nav-item[data-view="market-data"]'); if (el) el.click(); else if (typeof renderMarketData === 'function') renderMarketData(); });
+  await settle(800);
+  ok('Market Data renders without an error', errors.length === e0, errors.slice(e0));
+}
+
+ok('no page errors', errors.length === 0, errors);
+if (notes.length) console.log('\nnotes:\n  ' + notes.join('\n  '));
 console.log('\nserver refusals the app received (' + refusals.length + '):\n  ' + refusals.join('\n  '));
 await browser.close(); srv.close(); backend.kill();
 console.log(fails.length ? `\n✖ ${fails.length} failed` : '\n✓ all passed');
