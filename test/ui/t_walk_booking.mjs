@@ -51,7 +51,7 @@ process.on('SIGINT', () => { cleanup(); process.exit(1); });
 process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
-const calls = [], refusals = [];
+const calls = [], refusals = [], quotes = [];
 await ctx.route(PROD, async (route) => {
   const req = route.request(), u = new URL(req.url());
   calls.push(req.method() + ' ' + u.pathname + u.search);
@@ -59,6 +59,7 @@ await ctx.route(PROD, async (route) => {
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
   const r = await fetch(OPS + u.pathname + u.search, { method: req.method(), headers: fwd, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : (req.postData() || undefined) });
   const buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
+  if (u.pathname === '/v1/quote') quotes.push({ status: r.status, res: (() => { try { return JSON.parse(buf.toString()); } catch (_) { return null; } })() });
   if (r.status >= 400) refusals.push(req.method() + ' ' + u.pathname + ' → ' + r.status + ' ' + buf.toString().slice(0, 300));
   await route.fulfill({ status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'access-control-allow-origin': '*' }, body: buf });
 });
@@ -212,6 +213,195 @@ console.log('\n[4] a custom nationality from the dropdown');
   await page.reload(); await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 }); await settle(1200);
   s = await ev((c) => ({ has: SB_CUSTOM_NATIONALITIES.some((n) => n.code === c), label: typeof bookingV2NatDDLabel === 'function' ? bookingV2NatDDLabel(c) : null, all: bookingV2AllNats().some((n) => n.code === c) }), row && row.code);
   ok('after a reload it is still in the list and in the dropdown', s.has && s.all && /zzlandic/i.test(s.label || ''), s);
+}
+
+
+console.log('\n[5] NO RATE trips follow the server quote (POST /v1/quote warnings)');
+{
+  const probe = async (label, trip, agent = 'a01') => {
+    await ev(() => { _bkV2.newBooking = null; });
+    const nQ = quotes.length;
+    await form({ lead: 'ZZ NORATE', date: trip.date, agent, trips: [trip], commit: false });
+    await ev(() => bookingV2Render());
+    const got = await waitScreen((n) => window.laOpsQuote && Object.keys(window.laOpsQuote._cache).length > 0 && document.getElementById('nbf-submit-slot'), null, 8000);
+    for (let i = 0; i < 40 && quotes.length === nQ; i++) await settle(150);
+    await settle(600);
+    const q = quotes[quotes.length - 1];
+    const w = ((q && q.res && q.res.warnings) || []).filter((x) => x.code === 'no_rate' || x.code === 'not_offered');
+    const screen = await ev(() => ({ nr: bookingV2NoRateTrips().map((x) => ({ idx: x.idx, reason: x.reason })), btn: (document.querySelector('#nbf-submit-slot') || {}).innerText || '', band: /NO RATE/i.test((document.getElementById('bkv2-nb-body') || document.body).innerText) }));
+    console.log('    ' + label + ': server warnings=' + JSON.stringify(w.map((x) => [x.code, x.trip, x.message])).slice(0, 300) + ' · screen=' + JSON.stringify(screen).slice(0, 300) + ' · quote total=' + (q && q.res && q.res.total));
+    return { w, screen, q };
+  };
+  const a = await probe('r10 not in the agent\'s rate', { routeId: 'r10', date: F4, zone: 'NoTransfer' });
+  ok('unrated route: the server warns no_rate / not_offered', a.w.length === 1, a.q && a.q.res);
+  ok('screen lists that trip (reason = legacy\'s text when legacy flags it too) · submit button says "No rate · cannot save"', a.screen.nr.length === 1 && /No rate/i.test(a.screen.btn), { screen: a.screen, w: a.w });
+  const b = await probe('r4 zone PK (r4 has NoTransfer only)', { routeId: 'r4', date: F1, zone: 'PK' });
+  ok('route rated in another zone only: server and screen agree', (b.w.length === 1) === (b.screen.nr.length === 1), { w: b.w, screen: b.screen });
+  const c = await probe('r5 NoTransfer (rated)', { routeId: 'r5', date: F1, zone: 'NoTransfer' });
+  ok('rated trip: no server warning · no NO RATE · button is the normal Confirm', c.w.length === 0 && c.screen.nr.length === 0 && /Confirm Booking/i.test(c.screen.btn), c);
+  // the server is the judge: its rate for r5 loses the PK zone AFTER the app loaded rates. Legacy's own list (the app's copy)
+  // still prices PK, the server's quote says not_offered, and the screen must follow the server.
+  const rb = await raw('/v1/rate-types/rt001'); const r5 = (rb.body.routes || []).find((x) => x.route_id === 'r5');
+  const noPK = { zones: { NoTransfer: r5.zones.NoTransfer } };
+  const put = await raw('/v1/rate-types/rt001/routes/r5', { method: 'PUT', body: JSON.stringify(noPK) });
+  ok('setup: server rate for r5 now has NoTransfer only', put.status === 200, put);
+  const legacyKnows = await ev(() => { const rt = SB_RATE_TYPES.find((x) => x.id === 'rt001'); return JSON.stringify(rt).includes('PK'); });
+  const d = await probe('r5 PK after the server dropped it', { routeId: 'r5', date: F1, zone: 'PK' });
+  ok('app still holds the old rate (legacy would price PK)', legacyKnows, null);
+  ok('server warns · screen flags the trip with the server\'s message · button "No rate"', d.w.length === 1 && d.screen.nr.length === 1 && d.screen.nr[0].reason === d.w[0].message && /No rate/i.test(d.screen.btn), d);
+  await raw('/v1/rate-types/rt001/routes/r5', { method: 'PUT', body: JSON.stringify({ zones: r5.zones }) });
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+}
+
+
+console.log('\n[6] cancel reasons from the server · partial cancel · cancel');
+let cx = null;
+{
+  await form({ lead: 'ZZ CXL', date: F2, pax: 3 });
+  await waitScreen(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ CXL'); return b && b.opsId; }, null, 15000); await idle();
+  cx = await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ CXL'); return { id: b.id, opsId: b.opsId }; });
+  const cats = (await api('/v1/cancel-categories')).categories;
+  await ev((id) => bookingV2CancelModal(id), cx.id);
+  const opts = await page.$$eval('#bkc-cat option', (os) => os.map((o) => ({ v: o.value, t: o.textContent })).filter((o) => o.v));
+  ok('the cancel dialog lists the server\'s reasons, in its order (' + cats.length + ')', JSON.stringify(opts.map((o) => o.v)) === JSON.stringify(cats.map((c) => c.code)) && opts.every((o, i) => o.t.includes(cats[i].en)), { opts: opts.map((o) => o.v), cats: cats.map((c) => c.code) });
+  // the reason with a suggested charge pre-selects that charge (legacy `def`)
+  const withDef = cats.find((c) => c.default_charge && c.default_charge !== 'none');
+  if (withDef) {
+    await page.selectOption('#bkc-cat', withDef.code);
+    const picked = await ev(() => (document.querySelector('input[name=bkc-charge]:checked') || {}).value);
+    ok('picking "' + withDef.code + '" pre-selects its suggested charge "' + withDef.default_charge + '"', picked === withDef.default_charge, { picked, withDef });
+  }
+  await ev(() => acctModalClose());
+  const cancelCat = (cats.find((c) => c.code === 'customer_cancel') || cats[0]).code;
+
+  // partial cancel through the dialog: take 1 of 3 off
+  await ev((id) => bookingV2PartialModal(id, 0), cx.id);
+  await page.selectOption('#bkp-cat', cancelCat);
+  await page.fill('#bkp-note', 'one guest ill');
+  await page.fill('#bkp-rm-ad_fr', '1');
+  const nC = calls.length;
+  await page.click('button[onclick^="bookingV2PartialConfirm"]');
+  await waitScreen((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return b && (b.partialCancels || []).length === 1; }, cx.id, 15000); await idle();
+  let sb6 = await api('/v1/bookings/' + cx.opsId);
+  let h6 = (await api('/v1/bookings/' + cx.opsId + '/history')).history;
+  s = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { pax: b.trips[0].pax, n: (b.partialCancels || []).length, total: b.total }; }, cx.id);
+  ok('partial cancel → POST partial-cancel · server pax 2 · one partial_cancels row · screen agrees', calls.slice(nC).some((c) => /POST \/v1\/bookings\/[^/]+\/partial-cancel/.test(c)) && sb6.trips[0].pax_total === 2 && sb6.partial_cancels.length === 1 && s.pax.ad_fr === 2 && s.n === 1, { calls: calls.slice(nC), sb: sb6.trips[0].pax_total, s });
+  ok('server history has a line for it', h6.some((h) => /partial/i.test((h.tag || '') + ' ' + (h.kind || '') + ' ' + (h.text || ''))), h6.map((h) => [h.kind, h.tag, h.text]));
+
+  // full cancel through the dialog, partial charge 700
+  await ev((id) => bookingV2CancelModal(id), cx.id);
+  await page.selectOption('#bkc-cat', cancelCat);
+  await page.fill('#bkc-reason', 'changed plan');
+  await page.check('input[name=bkc-charge][value=partial]');
+  await page.fill('#bkc-amt', '700');
+  await page.click('button[onclick^="bookingV2CancelConfirm"]');
+  await waitScreen((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return b && b.status === 'cancelled'; }, cx.id, 15000); await idle();
+  sb6 = await api('/v1/bookings/' + cx.opsId);
+  h6 = (await api('/v1/bookings/' + cx.opsId + '/history')).history;
+  s = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { status: b.status, cat: b.cancellation && b.cancellation.category, amt: b.cancellation && b.cancellation.chargeAmount }; }, cx.id);
+  ok('cancel → server cancelled with the category, note and 700 charge · screen agrees', sb6.status === 'cancelled' && sb6.cancellation.category === cancelCat && sb6.cancellation.charge_amount === 700 && s.status === 'cancelled' && s.cat === cancelCat && s.amt === 700, { cancellation: sb6.cancellation, s });
+  ok('server history has the cancel line (and the partial one before it)', h6.some((h) => /cancel/i.test((h.kind || '') + (h.tag || ''))) && h6.length >= 3, h6.map((h) => [h.kind, h.tag, h.text]));
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+}
+
+console.log('\n[7] B2C review: polled list, "Reviewed", "Mark all"');
+{
+  const mkUser = await post('/v1/users', { username: 'lkpush', password: 'Passw0rd-lk-9-x', name: 'LK push', agent_id: 'a_b2c', edit_areas: ['operations'] });
+  ok('setup: a Love Kingdom login (agent a_b2c)', mkUser.status === 201, mkUser);
+  const lk = await loginAs('lkpush', 'Passw0rd-lk-9-x');
+  const lkBook = (n, date) => post('/v1/bookings', { external_id: 'b2c_walk_' + n, intent: 'confirm', agentId: 'a_b2c', leadPax: 'ZZ B2C ' + n, leadNationality: 'US', pickupSelf: true,
+    priceMode: 'manual', manualTotal: 2500, total: 2500, hotelName: 'Hotel A', trips: [{ routeId: 'r5', date, pax: { ad_fr: 2 }, zone: 'NoTransfer' }] }, lk);
+  const b1 = await lkBook(1, F3), b2 = await lkBook(2, F3);
+  ok('setup: two B2C orders pushed', b1.status === 201 && b2.status === 201, [b1.body, b2.body]);
+  const id1 = b1.body && b1.body.id, id2 = b2.body && b2.body.id;
+  // `b2c` (changed) lines come from a push that changes an order (a "new" order counts only within 2 days of travel, which depends on the clock)
+  const c1 = await raw('/v1/bookings/' + id1);
+  const p1 = await raw('/v1/bookings/' + id1, { method: 'PATCH', headers: { 'if-match': '"' + c1.body.version + '"' }, body: JSON.stringify({ hotelName: 'Hotel B' }) }, lk);
+  const c2 = await raw('/v1/bookings/' + id2);
+  const p2 = await raw('/v1/bookings/' + id2, { method: 'PATCH', headers: { 'if-match': '"' + c2.body.version + '"' }, body: JSON.stringify({ hotelName: 'Hotel C' }) }, lk);
+  const un0 = await api('/v1/bookings/b2c-unreviewed');
+  ok('setup: both orders changed by the push → server lists 2 to review', p1.status === 200 && p2.status === 200 && un0.count === 2, { p1: p1.body, p2: p2.body, un0 });
+  // the app polls GET /v1/bookings/b2c-unreviewed every 60 s; ask it once now instead of waiting
+  const nC = calls.length;
+  await ev(() => laOps.b2cReview.refresh());
+  await waitScreen(() => window.bookingV2B2CList().length === 2, null, 8000);
+  s = await ev(() => bookingV2B2CList().map((x) => ({ lead: x.bk.leadPax, segs: x.p.segs.map((g) => g.label + ': ' + g.vals.join(' → ')) })));
+  ok('the app read the list (GET b2c-unreviewed) → 2 changed orders with the server\'s fields', calls.slice(nC).includes('GET /v1/bookings/b2c-unreviewed') && s.length === 2 && s.every((x) => x.segs.some((g) => /^Hotel: Hotel A → Hotel [BC]$/.test(g))), { calls: calls.slice(nC), s });
+  // open the drawer from the head chip on the By-trip view
+  await ev((d) => { _bkV2.newBooking = null; _bkV2.detailId = null; _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; bookingV2Render(); }, F3);
+  await settle(600);
+  const chip = page.locator('.bt-b2cbtn');
+  ok('head chip "B2C changes" shows with the count', (await chip.count()) === 1 && /2/.test(await chip.innerText()), await chip.allInnerTexts());
+  await chip.click(); await settle(400);
+  const nC2 = calls.length;
+  await page.locator('button.ok[onclick^="bookingV2B2CSeen("]').first().click();
+  await waitScreen(() => window.bookingV2B2CList().length === 1, null, 8000); await idle();
+  const un1 = await api('/v1/bookings/b2c-unreviewed');
+  const seen = calls.slice(nC2).filter((c) => /b2c-seen/.test(c));
+  ok('"Reviewed" on one → POST /v1/bookings/{id}/b2c-seen · server lists 1 · screen lists 1', seen.length === 1 && /^POST \/v1\/bookings\/[^/]+\/b2c-seen$/.test(seen[0]) && un1.count === 1, { seen, un1: un1.count });
+  const gone = [id1, id2].find((i) => i !== un1.items[0].booking_id);
+  const hist = (await api('/v1/bookings/' + gone + '/history')).history;
+  ok('the reviewed order has a b2c_seen line from the staff login', hist.some((h) => h.kind === 'b2c_seen' && h.by === 'tester'), hist.map((h) => [h.kind, h.by]));
+  const nC3 = calls.length;
+  await page.locator('.b2cd-f button').click();
+  await waitScreen(() => window.bookingV2B2CList().length === 0, null, 8000); await idle();
+  const un2 = await api('/v1/bookings/b2c-unreviewed');
+  ok('"Mark all" → POST /v1/bookings/b2c-seen (the confirm answered) · server lists 0 · screen lists 0', calls.slice(nC3).includes('POST /v1/bookings/b2c-seen') && dlg(/Mark all 1 B2C changes as seen\?/).length === 1 && un2.count === 0, { calls: calls.slice(nC3).filter((c) => /seen/.test(c)), un2: un2.count, dialogs: dlg(/Mark all/) });
+  await ev(() => { if (document.getElementById('acct-modal')) acctModalClose(); });
+}
+
+console.log('\n[8] 409 cancelled: pickup time / pier note of a cancelled booking');
+{
+  // the booking cancelled in [6]; the dispatch fields are a day-of write the server refuses for a cancelled booking
+  const bk8 = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { status: b.status, trip: b.trips[0].opsTripId, date: b.trips[0].date, fin: (b.ops && b.ops.pickupTimeFinal) || '' }; }, cx.id);
+  // pickup time: the By-trip row's time box
+  await ev((d) => { _bkV2.newBooking = null; _bkV2.detailId = null; _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; bookingV2Render(); }, bk8.date);
+  await settle(800);
+  const boxOf = (id) => page.locator(`input[onchange*="bookingV2SetPickupFinal('${id}'"]`);
+  ok('a cancelled booking\'s row on By-trip (folded list) has no time box · the box cannot be typed into', (await boxOf(cx.id).count()) === 0, await boxOf(cx.id).count());
+  // The 409 is reachable when the booking is cancelled elsewhere after this screen loaded it: the row is still live here.
+  await form({ lead: 'ZZ STALE', date: F2 });
+  await waitScreen(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ STALE'); return b && b.opsId; }, null, 15000); await idle();
+  const st = await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ STALE'); return { id: b.id, opsId: b.opsId, trip: b.trips[0].opsTripId }; });
+  await ev((d) => { _bkV2.newBooking = null; _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; bookingV2Render(); }, F2);
+  await settle(800);
+  const cats8 = (await api('/v1/cancel-categories')).categories;
+  const ver8 = (await api('/v1/bookings/' + st.opsId)).version;
+  const cxlApi = await raw('/v1/bookings/' + st.opsId + '/cancel', { method: 'POST', headers: { 'if-match': '"' + ver8 + '"' }, body: JSON.stringify({ category: cats8[0].code, note: 'cancelled by another client', charge_type: 'none' }) });
+  ok('setup: cancelled through the API (another client)', cxlApi.status === 200, cxlApi);
+  if ((await boxOf(st.id).count()) === 0) {
+    notes.push('[8] stale row: the screen already dropped the time box (feed refreshed the booking)');
+    // the change feed had already told the screen: the row is gone, so the box cannot be typed into. The handler the box calls
+    // (onchange) is driven directly to see what the wiring does with the server's 409.
+    const w0 = warns.length, nR = refusals.length;
+    await ev((a) => bookingV2SetPickupFinal(a.id, '07:45', a.date), { id: st.id, date: F2 });
+    for (let i = 0; i < 24 && warns.length === w0; i++) await settle(250);
+    await idle(); await settle(400);
+    const after = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { status: b.status, fin: (b.ops && b.ops.pickupTimeFinal) || '' }; }, st.id);
+    ok('pickup time (handler called directly: no box on a cancelled row): server refused 409 cancelled', refusals.slice(nR).some((x) => /trip-ops.* → 409/.test(x) && /"code":"cancelled"/.test(x)), refusals.slice(nR));
+    ok('pickup time: the screen showed the server\'s message · nothing kept on the screen', warns.slice(w0).some((x) => /Pickup time not saved/.test(x) && /is cancelled: its dispatch cannot change/.test(x)) && after.fin === '', { warns: warns.slice(w0), after });
+  } else {
+    const w0 = warns.length, nR = refusals.length;
+    await boxOf(st.id).first().fill('07:45'); await boxOf(st.id).first().blur();
+    for (let i = 0; i < 24 && warns.length === w0; i++) await settle(250);
+    await idle(); await settle(600);
+    const after = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return (b.ops && b.ops.pickupTimeFinal) || ''; }, st.id);
+    const boxNow = await boxOf(st.id).first().inputValue().catch(() => null);
+    ok('pickup time: server refused (409 cancelled)', refusals.slice(nR).some((x) => /trip-ops.* → 409/.test(x) && /"code":"cancelled"/.test(x)), refusals.slice(nR));
+    ok('pickup time: the screen showed the server\'s message', warns.slice(w0).some((x) => /Pickup time not saved/.test(x) && /is cancelled: its dispatch cannot change/.test(x)), warns.slice(w0));
+    ok('pickup time: the box is back to the stored value (empty) · the screen kept nothing', (boxNow === null || boxNow === '') && after === '', { boxNow, after });
+  }
+  // pier note: the note dialog of the pier check-in
+  const w1 = warns.length, nR1 = refusals.length;
+  await ev((a) => pckNoteOpen(a.id, a.date), { id: cx.id, date: bk8.date });
+  await page.fill('#pck-note-tx', 'window seat please');
+  await page.click('.pn-b1');
+  for (let i = 0; i < 20 && warns.length === w1; i++) await settle(250);
+  await idle(); await settle(500);
+  const note = await ev((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.id); const o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, a.date) : b.ops) || {}; return o.pierNote || null; }, { id: cx.id, date: bk8.date });
+  ok('pier note: server refused (409)', refusals.slice(nR1).some((x) => /trip-ops.* → 409/.test(x)), refusals.slice(nR1));
+  ok('pier note: the screen showed the server\'s message', warns.slice(w1).some((x) => /Pier note not saved/.test(x) && /cancel/i.test(x)), warns.slice(w1));
+  ok('pier note: nothing stored on the screen', !note, note);
 }
 
 console.log('\nserver refusals the app received (' + refusals.length + '):\n  ' + refusals.join('\n  '));
