@@ -126,5 +126,40 @@
   }
   window.mdBackfillNat = backfill;
 
+  /* ── nationality_effective · the server's reading of each passenger (own, else the lead's), never guessed from a name ──
+     Market Data's per-booking code (mdBkCode) and mix (mdBkMix) guessed from names (bookingV2GuessNationality) for a blank
+     passenger. A booking from the server carries p.nationalityEffective (40-ops-bookings.js), so both read that instead. A booking
+     without it (not from the server) keeps legacy's function. */
+  function vn(c){ return typeof mdValidNat === 'function' ? mdValidNat(c) : ''; }
+  function fromServerPax(b){
+    var ps = b && b.passengers;
+    return Array.isArray(ps) && ps.length > 0 && ps.every(function(p){ return p && 'nationalityEffective' in p; });
+  }
+  var legacyBkCode = window.mdBkCode, legacyBkMix = window.mdBkMix;
+  if(typeof legacyBkCode === 'function' && !legacyBkCode.__ops){
+    var wc = function(b){
+      if(!O.enabled() || !fromServerPax(b)) return legacyBkCode.apply(this, arguments);
+      var c = vn(b.leadNationality); if(c) return c;
+      for(var i = 0; i < b.passengers.length; i++){ c = vn(b.passengers[i].nationalityEffective); if(c) return c; }
+      return '';
+    };
+    wc.__ops = true; window.mdBkCode = wc;
+  }
+  if(typeof legacyBkMix === 'function' && !legacyBkMix.__ops){
+    var wm = function(b){
+      if(!O.enabled() || !fromServerPax(b)) return legacyBkMix.apply(this, arguments);
+      var mix = {}, counted = 0;
+      function add(code, n){ var c = vn(code); if(!c || n <= 0) return; mix[c] = (mix[c] || 0) + n; }
+      var tot = (b.trips || []).reduce(function(s, t){ return s + ((typeof bookingV2PaxAllTot === 'function') ? bookingV2PaxAllTot(t.pax || {}) : 0); }, 0);
+      var lead = vn(b.leadNationality);
+      b.passengers.forEach(function(p){ var pc = vn(p.nationalityEffective); if(pc){ add(pc, 1); counted++; } });
+      if(lead){ add(lead, 1); counted++; }
+      var rem = tot - counted;
+      if(rem > 0){ var fb = lead || (Object.keys(mix).sort(function(x, y){ return mix[y] - mix[x]; })[0] || ''); add(fb, rem); }
+      return mix;
+    };
+    wm.__ops = true; window.mdBkMix = wm;
+  }
+
   O.nationalities = { load: load, applyFolds: applyFolds };
 })();
