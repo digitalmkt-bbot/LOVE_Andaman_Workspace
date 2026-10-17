@@ -176,8 +176,8 @@
       partsCovered: j.parts_covered != null ? num(j.parts_covered) : 0,
       boardLane: j.board_lane || null,
       lane: j.lane || null,
-      silentDays: j.silent_days != null ? num(j.silent_days) : 0,
-      blocksBoat: !!j.blocks_boat,
+      silentDays: j.silent_days != null ? num(j.silent_days) : null,      // null = the server did not say: flBoardSilent / flBoardBlocks fall back to the browser rule
+      blocksBoat: j.blocks_boat != null ? !!j.blocks_boat : null,
       owner: j.owner || '',
       due: j.due_date || '',
       dueDate: j.due_date || null,
@@ -393,6 +393,23 @@
     w.__opsFleetJobs = true;
     window[name] = w;
   }
+
+  /* Job board (legacy flBoardSilent / flBoardBlocks / flBoardLane): the days since the last log line, whether the
+     job holds its boat, and the board lane are the server's answers on each job (silent_days, blocks_boat, lane;
+     fleet-jobs.ts silentDays / jobLane), read with the job list. The browser rule stays for a job the server
+     did not send (a draft not saved yet). flBoardScan's header counts are built from these, so they follow. */
+  wrap('flBoardSilent', function(orig, m){
+    if(m && m._fromOpsBackend && m.silentDays != null) return m.silentDays;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('flBoardBlocks', function(orig, m){
+    if(m && m._fromOpsBackend && m.blocksBoat != null) return !!m.blocksBoat;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  wrap('flBoardLane', function(orig, m){
+    if(m && m._fromOpsBackend && m.lane) return m.lane;
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
 
   wrap('flMaintCalcCost', function(orig, id){
     var m = listJobs().find(function(x){ return x && x.id === id; });

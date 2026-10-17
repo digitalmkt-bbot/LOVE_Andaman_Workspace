@@ -460,6 +460,14 @@
     window[name] = w;
   }
 
+  /* legacy flConsumeCostOf: qty × unit cost worked out again in the browser. The server computes `cost` on each
+     consumable (POST /v1/fleet/consumables), mapped above; a row from the server shows that cost, rounded to
+     the baht as legacy's figure was. */
+  wrap('flConsumeCostOf', function(orig, rec){
+    if(rec && rec._fromOpsBackend && rec.cost != null && isFinite(rec.cost)) return Math.round(+rec.cost);
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   wrap('flSaveAddStock', function(){
     var d = function(id){ return document.getElementById(id); };
     var name = d('add-inv-name') ? d('add-inv-name').value.trim() : '';
