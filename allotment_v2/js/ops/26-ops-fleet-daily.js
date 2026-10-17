@@ -852,7 +852,29 @@
     }).catch(function(e){ O.fail('Could not delete plan item', e); return null; });
   });
 
+  /* legacy flProjDeleteVendorVisit: the same confirm, then DELETE …/projects/{id}/vendor-visits/{visit_id};
+     the server answers the whole project. */
+  wrap('flProjDeleteVendorVisit', function(orig, projId, vvId){
+    var p = listProjects().find(function(x){ return x && x.id === projId; });
+    var v = p && (p.vendorVisits || []).find(function(x){ return x && x.id === vvId; });
+    if(!v) return null;
+    if(!confirm('Delete vendor visit: ' + v.vendor + '?')) return null;
+    return O.queue(function(){
+      return O.del('/v1/fleet/projects/' + enc(projId) + '/vendor-visits/' + enc(vvId));
+    }).then(function(res){
+      upsertProject(res);
+      O.wrote('fleet-project-vendor-visit-delete');
+      redrawDailyAndProjects();
+      return res;
+    }).catch(function(e){ O.fail('Could not delete vendor visit', e); return null; });
+  });
+
   // ── Safety & Fuel Budget wrappers ──
+
+  /* the fuel budget screen reads {month: amount}: the server's budgets, not the browser's localStorage */
+  wrap('_fuelBudgetGet', function(){
+    return Object.assign({}, state.fuelBudgets);
+  });
 
   wrap('flSaveSafety', function(){
     var d = function(id){ return document.getElementById(id); };
@@ -911,6 +933,26 @@
       redrawDailyAndProjects();
       return res;
     }).catch(function(e){ O.fail('Could not save safety inspection', e); return null; });
+  });
+
+  /* legacy flDeleteInspection (06-engine-assign.js): the same confirm, then DELETE …/safety/{id}/inspections/{insp_id};
+     the server recomputes the last inspection and next PM and answers the whole item. */
+  wrap('flDeleteInspection', function(orig, itemId, inspId){
+    var it = (typeof FL_SAFETY !== 'undefined' && Array.isArray(FL_SAFETY) ? FL_SAFETY : []).find(function(x){ return x && x.id === itemId; });
+    if(!it || !it.inspections) return null;
+    var insp = it.inspections.find(function(i){ return i && i.id === inspId; });
+    if(!insp) return null;
+    var style = typeof INSP_RESULT_STYLE !== 'undefined' ? INSP_RESULT_STYLE[insp.result] : null;
+    if(!confirm('Delete this inspection record (' + insp.date + ' · ' + ((style && style.label) || insp.result) + ')?')) return null;
+    return O.queue(function(){
+      return O.del('/v1/fleet/safety/' + enc(itemId) + '/inspections/' + enc(inspId));
+    }).then(function(res){
+      upsertSafety(res);
+      O.wrote('fleet-safety-inspection-delete');
+      if(typeof window.flRenderSafetyList === 'function') window.flRenderSafetyList();
+      redrawDailyAndProjects();
+      return res;
+    }).catch(function(e){ O.fail('Could not delete safety inspection', e); return null; });
   });
 
   wrap('swapDocExecute', function(){
