@@ -100,16 +100,32 @@
     between.push(entry); schedule();
   }
 
+  /* 409 route_closed (a land route, or a day the programme is closed; no override, as legacy): the server judges each day on its own, so
+     in a bulk form (copy week, templates, ranges, swaps) that repeats the write the closed days are left out and the rest goes through,
+     as the server's own range form does. The closed cell goes back to what the server holds, and the server's message is shown. */
+  function isClosed(e){ return !!(e && e.status === 409 && e.code === 'route_closed'); }
+  function leaveCell(k, d, b){
+    var T = trips(), had = synced[k];
+    if(!T || !T[d]) return;
+    if(had && T[d][b]) T[d][b].route = had.route; else delete T[d][b];
+  }
+
   function syncNow(){
     if(!ready || !O.enabled()) return Promise.resolve(false);
-    var want = desired(), ops = [], removes = [];
+    var want = desired(), ops = [], removes = [], skipped = {}, skippedMsg = [];
     var mid = between.splice(0);
     Object.keys(want).forEach(function(k){
       var w = want[k], had = synced[k];
       if(had && had.route === w.route && had.capacity === w.capacity) return;
       ops.push({ label: 'deploy ' + w.boat + ' → ' + w.route + ' on ' + w.date,
-        run: function(){ return postDep(w); },
-        undo: function(){ return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity }) : delDep(w.date, w.boat); } });
+        run: function(){
+          return postDep(w).catch(function(e){
+            if(!isClosed(e)) throw e;
+            skipped[k] = true; skippedMsg.push(e.message); leaveCell(k, w.date, w.boat);
+            return null;
+          });
+        },
+        undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity }) : delDep(w.date, w.boat); } });
     });
     Object.keys(synced).forEach(function(k){
       if(want[k]) return;
@@ -122,9 +138,17 @@
     ops = ops.concat(removes);
     if(!ops.length) return Promise.resolve(false);
     return O.runBatch(ops).then(function(){
-      synced = {}; Object.keys(want).forEach(function(k){ synced[k] = { route: want[k].route, capacity: want[k].capacity }; });
+      var before = synced;
+      synced = {}; Object.keys(want).forEach(function(k){
+        if(skipped[k]){ if(before[k]) synced[k] = before[k]; return; }
+        synced[k] = { route: want[k].route, capacity: want[k].capacity };
+      });
       snapshot();
       O.wrote('deployments');
+      if(skippedMsg.length){
+        O.toast({ kind: 'error', title: 'Boat Operation: ' + skippedMsg.length + ' day' + (skippedMsg.length === 1 ? '' : 's') + ' not saved', status: 'HTTP 409', sub: skippedMsg.join(' · '), dur: 12000 });
+        rerender();
+      }
       return true;
     }, function(err){
       mid.forEach(function(m){ try{ m.onFail && m.onFail(err); }catch(_){} });   // bookings back first, so rollback's redraw shows them
