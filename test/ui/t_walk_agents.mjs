@@ -295,6 +295,56 @@ await page.locator('button[onclick^="rtToggleActive(\'rt002\'"]').first().click(
 await idle(); await settle(600);
 ok('Activate again → server active true; screen active', (await api('/v1/rate-types/rt002')).active === true && (await ev(() => SB_RATE_TYPES.find((x) => x.id === 'rt002').active)) === true, null);
 }
+if (want(5)) {
+console.log('\n[5] contract documents: issue (POST), history, remove (DELETE), reopen');
+item = 5;
+await nav('agents'); await settle(500);
+// window.print() opens a native dialog that a headless run cannot answer: stand in for "the user closed it" by firing
+// afterprint, which is what the app's own _ctDocPrintFlow waits for before it records the document.
+await ev(() => { window.print = () => setTimeout(() => window.dispatchEvent(new Event('afterprint')), 20); });
+const docsOf = async () => (await api('/v1/agents/a01/documents')).documents;
+const histRows = () => ev(() => [...document.querySelectorAll('#ag-tabbody button[onclick^="ctArtifactRemove("]')].map((b) => b.getAttribute('onclick')));
+ok('before: the server holds no document for a01', (await docsOf()).length === 0, await docsOf());
+await ev(() => { _agSelected = 'a01'; agRenderDetail('a01'); });
+await settle(900);
+await ev(() => agSwitchTab('contracts', 'a01'));
+await settle(700);
+// -- Generate New (opens the wizard) --
+await page.locator('#ag-tabbody button[onclick="ctDocOpen(\'a01\')"]').first().click();
+await settle(600);
+const wiz = await ev(() => ({ modal: document.getElementById('ct-doc-modal').style.display, doc: typeof _ctDoc !== 'undefined' && !!_ctDoc, viewer: !!document.getElementById('la-ops-contract-doc'), dialogs: 0 }));
+ok('"Generate New" opens the contract wizard (#ct-doc-modal, _ctDoc set)', wiz.modal === 'flex' && wiz.doc, { wiz, dialogs: dialogs.slice(-2) });
+if (wiz.modal === 'flex' && wiz.doc) {
+  await ev(() => { _ctDoc.lang = 'th'; ctDocRender(); });
+  const n5 = bodies.length;
+  await ev(() => ctDocExportPDF());
+  await settle(900); await idle(); await settle(500);
+  const posts = bodies.slice(n5).filter((x) => x.m === 'POST' && x.p === '/v1/agents/a01/documents');
+  const sdocs = await docsOf();
+  ok('Export PDF recorded it: one POST /v1/agents/a01/documents {lang:th, content…}', posts.length === 1 && posts[0].b.lang === 'th' && posts[0].b.content && posts[0].b.content.sections && typeof posts[0].b.page_count === 'number', posts.map((p) => p.b && Object.keys(p.b)));
+  ok('server: one document, version/lang/generated_by stamped by the server, activity line written', sdocs.length === 1 && sdocs[0].lang === 'th' && !!sdocs[0].generated_by && /^gc_/.test(sdocs[0].id), sdocs);
+  const act = (await api('/v1/agents/a01/activity?limit=10')).activity;
+  ok('server activity has "Contract generated"', act.some((x) => /Contract generated/.test(x.text)), act.slice(0, 3));
+  await ev(() => ctDocClose && ctDocClose());
+  await ev(() => agSwitchTab('contracts', 'a01')); await settle(700);
+  const rows = await histRows();
+  const hist = await ev(() => document.getElementById('ag-tabbody').innerText);
+  ok('history on screen lists it (1 document, Thai) with the server id', rows.length === 1 && rows[0].includes(sdocs[0].id) && /1 document/.test(hist) && /Thai/.test(hist), { rows, hist: hist.slice(0, 200) });
+  // -- reopen --
+  const d0 = dialogs.length;
+  await page.locator(`#ag-tabbody button[onclick="ctArtifactReopen('a01','${sdocs[0].id}')"]`).click();
+  await settle(900);
+  const re = await ev(() => ({ modal: document.getElementById('ct-doc-modal').style.display, lang: typeof _ctDoc !== 'undefined' && _ctDoc && _ctDoc.lang, tmpl: typeof _ctDoc !== 'undefined' && _ctDoc && _ctDoc.templateName }));
+  ok('View / Edit reopens the wizard with the saved state (lang th) · GET /v1/contract-documents/{id}', re.modal === 'flex' && re.lang === 'th' && calls.includes('GET /v1/contract-documents/' + sdocs[0].id), { re, dialogs: dialogs.slice(d0) });
+  await ev(() => ctDocClose && ctDocClose());
+  // -- remove --
+  await ev(() => agSwitchTab('contracts', 'a01')); await settle(500);
+  await page.locator(`#ag-tabbody button[onclick="ctArtifactRemove('a01','${sdocs[0].id}')"]`).click();
+  await idle(); await settle(700);
+  const rm = bodies.filter((x) => x.m === 'DELETE' && x.p === '/v1/contract-documents/' + sdocs[0].id);
+  ok('✕ remove → DELETE /v1/contract-documents/{id}; server list empty; history empty on screen', rm.length === 1 && (await docsOf()).length === 0 && (await histRows()).length === 0, { rm: rm.length });
+}
+}
 //@@STEPS@@
 
 await browser.close(); srv.close(); backend.kill();

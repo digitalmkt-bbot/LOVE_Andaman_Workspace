@@ -252,7 +252,8 @@
     var body={version:d.newVersion,start:d.newStart,end:d.newEnd,rate_type_id:d.newRateTypeId||null,carry:{programs:!!d.carry.programs,prices:!!d.carry.prices,addons:!!d.carry.addons,booking:!!d.carry.booking,signatory:!!d.carry.signatory,company:!!d.carry.company}};
     return (typeof agRenew==='function'?agRenew(id,body):O.post('/v1/agents/'+enc(id)+'/renew',body)).then(function(){if(typeof ctCloseRenewal==='function')ctCloseRenewal();return loadContracts();}).then(function(){alert('Contract renewal saved on operation-backend.');}).catch(function(e){O.fail('Could not renew contract',e);});
   };
-  if(typeof originals.ctDocOpen==='function')window.ctDocOpen=function(agentId,opts){if(!enabled())return originals.ctDocOpen.apply(this,arguments);return openDocuments(agentId,opts);};
+  /* ctDocOpen is NOT replaced: it opens the contract wizard (Generate New, View / Edit, a contract card), whose Export PDF is recorded by ctArtifactSave below.
+     It used to be swapped for the read-only viewer (openDocuments), which made the wizard unreachable ("No contract documents have been issued") and broke ctArtifactReopen, which calls ctDocOpen. The viewer stays available as laOpsContracts.openDocuments. */
   /* §ctArtifacts · the issued-document history is the server's (POST/GET /v1/agents/:id/documents, DELETE /v1/contract-documents/:id).
      The server keeps the render in `content`; the summary rows give the Generated Contracts tab its columns. */
   function artifactFromDoc(d){return {id:d.id,version:d.version,generatedAt:d.generated_at,lang:d.lang,pageCount:d.page_count==null?0:d.page_count,rateTypeRef:d.rate_type_ref,rateTypeName:d.rate_type_name,templateId:d.template_id,templateName:d.template_name,contractId:d.contract_id,customClauses:[]};}
@@ -389,6 +390,6 @@
   }
 
   window.__laOpsContractsCompat={fromServerContract:fromServerContract,toPromoBody:toPromoBody,promoWriteBody:promoWriteBody,fromServerTemplate:fromServerTemplate,templateBody:templateBody,seatPrices:seatPrices};
-  window.laOpsContracts={state:state,load:loadContracts,loadTemplates:loadTemplates,loadDocuments:loadDocuments,documents:state.documents,fromServerContract:fromServerContract,toPromoBody:toPromoBody};
+  window.laOpsContracts={state:state,openDocuments:openDocuments,load:loadContracts,loadTemplates:loadTemplates,loadDocuments:loadDocuments,documents:state.documents,fromServerContract:fromServerContract,toPromoBody:toPromoBody};
   if(enabled()){listContracts().length=0;var tm=listTemplates();Object.keys(tm).forEach(function(k){delete tm[k];});loadContracts();loadTemplates();}
 })();
