@@ -416,6 +416,67 @@ await ev(() => bookingV2AgentColorEdit('a01', { altKey: true }));
 await idle(); await settle(500);
 ok('Alt-click reset → PATCH {color:null}; server colour null', (await api('/v1/agents/a01')).color === null, await api('/v1/agents/a01'));
 }
+if (want(7)) {
+console.log('\n[7] promo badge + bonus counter from the server state; agIncompleteFields from the server list');
+item = 7;
+// ---- seed: a booking with 4 adults for a01 on r5 inside the promo window, and four promos ----
+const D = '2026-11-10';
+await must('deployment', send('POST', '/operations/deployments', { boat_id: 'b6', route_id: 'r5', service_date: D, capacity: 40 }));
+await must('booking', send('POST', '/v1/bookings', { external_id: 'zz-promo-bk', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ PROMO PAX', pickupSelf: true, trips: [{ routeId: 'r5', date: D, pax: { ad_fr: 4 }, zone: 'NoTransfer' }] }));
+const promo = (note, from, to, extra = {}) => ({ agent_id: 'a01', price_mode: 'discount', discount: { mode: 'pct', value: 10 }, active_from: from, active_to: to, route_ids: ['r5'], priority: 10, note, ...extra });
+const pA = await must('promo active', send('POST', '/v1/contracts', promo('ZZ PROMO ACTIVE', '2026-10-01', '2027-03-31', { bonus: { buy: 2, free: 1, basis: 'adchd' } })));
+const pS = await must('promo scheduled', send('POST', '/v1/contracts', promo('ZZ PROMO SCHEDULED', '2027-06-01', '2027-09-30')));
+const pV0 = await must('promo to void', send('POST', '/v1/contracts', promo('ZZ PROMO VOID', '2026-10-01', '2027-03-31', { bonus: { buy: 3, free: 1, basis: 'ad' } })));
+const pV = await must('void', send('POST', '/v1/contracts/' + pV0.id + '/void', {}));
+const pE = await send('POST', '/v1/contracts', promo('ZZ PROMO EXPIRED', '2026-01-01', '2026-03-31'));
+const srvC = (await api('/v1/contracts?agent_id=a01')).contracts;
+const byNote = (n) => srvC.find((c) => c.note === n);
+const srvStates = Object.fromEntries(['ZZ PROMO ACTIVE', 'ZZ PROMO SCHEDULED', 'ZZ PROMO VOID', 'ZZ PROMO EXPIRED'].map((n) => [n, (byNote(n) || {}).state]));
+console.log('  server states:', JSON.stringify(srvStates), '· expired promo create → ' + pE.status);
+await ev(() => laOpsContracts.load()); await settle(800);
+await nav('agents');
+await ev(() => { _agSelected = 'a01'; agRenderDetail('a01'); }); await settle(900);
+await ev(() => agSwitchTab('prices', 'a01')); await settle(900);
+const LABEL = { void: 'ยกเลิก', expired: 'หมดอายุ', scheduled: 'รอเริ่ม', active: 'ใช้งาน' };
+const rowText = (note) => ev((n) => { const r = [...document.querySelectorAll('#ag-tabbody div')].filter((d) => d.style.borderRadius === '10px' && d.innerText.includes(n)); return r.length ? r[r.length - 1].innerText : null; }, note);
+for (const [note, state] of Object.entries(srvStates)) {
+  if (!state) continue;
+  const t = await rowText(note);
+  ok(`promo "${note}": server state "${state}" → badge "${LABEL[state]}" on the pricing tab`, t && t.includes(LABEL[state]), { t, state });
+}
+ok('the main contract (server state active) shows "ใช้งาน" on the same tab', await ev(() => { const r = [...document.querySelectorAll('#ag-tabbody div')].filter((d) => d.style.borderRadius === '10px' && d.innerText.includes('MAIN')); return r.length > 0 && r[r.length - 1].innerText.includes('ใช้งาน'); }), null);
+// the function itself, for the four server states (_ctContractStatus is what the badge calls)
+const fnStates = await ev(() => Object.fromEntries(SB_CONTRACTS.filter((c) => c.agentId === 'a01' && c.kind === 'promo').map((c) => [c.note, { key: _ctContractStatus(c).key, ss: c.serverState }])));
+ok('_ctContractStatus answers the server\'s state, not the browser date test', Object.entries(fnStates).every(([n, v]) => v.key === v.ss && v.ss === srvStates[n]), fnStates);
+// bonus counter
+const bp = byNote('ZZ PROMO ACTIVE').bonus_progress;
+ok('server counted the booking: sold 4, 1 booking, earned 2 (buy 2)', bp && bp.sold === 4 && bp.bookings === 1 && bp.earned === 2, bp);
+const at = await rowText('ZZ PROMO ACTIVE');
+ok('bonus counter on screen = server bonus_progress (ขายแล้ว 4 หัว · 1 ใบ · ได้สิทธิ์ 2 · ใช้ไปแล้ว 0 · คงเหลือ 2)', at && at.includes('ซื้อ 2 แถม 1') && at.includes('ขายแล้ว ' + bp.sold) && at.includes(bp.sold + ' หัว · ' + bp.bookings + ' ใบ') && new RegExp('ได้สิทธิ์\\s*' + bp.earned + '\\s*ที่').test(at) && new RegExp('คงเหลือ\\s*' + bp.left + '\\s*ที่').test(at), { at, bp });
+const ps = await ev(() => laPromoStat(SB_CONTRACTS.find((c) => c.note === 'ZZ PROMO ACTIVE')));
+ok('laPromoStat (function) = server bonus_progress', ps.sold === bp.sold && ps.earned === bp.earned && ps.used === bp.used && ps.left === bp.left && ps.toNext === bp.to_next && ps.pct === bp.pct, { ps, bp });
+ok('a void promo shows no counter (server gives null)', byNote('ZZ PROMO VOID').bonus_progress === null && !(await rowText('ZZ PROMO VOID') || '').includes('ซื้อ'), byNote('ZZ PROMO VOID').bonus_progress);
+// ---- agIncompleteFields ----
+const agInc = await send('POST', '/v1/agents', { ...AGENT_BASE, name: 'ZZ Incomplete Agent', code: 'ZZINC', rate_type_id: 'rt001', email: null, phone: null, contact: null });
+const incId = agInc.json && agInc.json.id;
+const srvInc = incId ? await api('/v1/agents/' + incId) : null;
+const srvListInc = (await api('/v1/agents?active=all')).agents;
+console.log('  incomplete (server): ' + JSON.stringify(srvListInc.map((a) => [a.name, a.incomplete])));
+await ev(() => laOps.catalogue.load()); await settle(1000);
+const screenInc = await ev(() => Object.fromEntries(SB_AGENTS.map((a) => [a.name, agIncompleteFields(a)])));
+const LAB = { market: 'Market', sales: 'Sales owner', pay_type: 'Payment', rate_type: 'Rate Type', programs: 'Programs', contact: 'Contact' };
+const expect = Object.fromEntries(srvListInc.map((a) => [a.name, a.incomplete.map((k) => LAB[k])]));
+ok('agIncompleteFields on every list row = the server\'s `incomplete` list (same labels, same order)', Object.keys(expect).every((n) => JSON.stringify(screenInc[n]) === JSON.stringify(expect[n])), { screenInc, expect });
+ok('sanity: the server list is not trivially empty (an agent without a rate type / contact is flagged)', expect['ZZ NoRate Agent'].includes('Rate Type') && (!incId || expect['ZZ Incomplete Agent'].length > 0), expect);
+ok('a01 has an email: the server says complete and the screen shows no "Contact" gap (a local count over list rows would)', expect['Sun Tour'].length === 0 && screenInc['Sun Tour'].length === 0, { server: expect['Sun Tour'], screen: screenInc['Sun Tour'] });
+// the list badge + agent page row
+await ev(() => { agRenderList(); }); await settle(500);
+const badge = await ev(() => { const out = {}; document.querySelectorAll('#ag-list .sb-ag-row').forEach((r) => { const nm = r.querySelector('.sb-ag-row-name-wrap span'); const b = r.querySelector('span[title^="ข้อมูลไม่ครบ"]'); if (nm) out[nm.textContent] = b ? b.getAttribute('title') : null; }); return out; });
+ok('list badge "ข้อมูลไม่ครบ — ขาด: …" appears exactly for the agents the server flags, with its labels', Object.keys(expect).every((n) => badge[n] !== undefined && (expect[n].length ? badge[n] === 'ข้อมูลไม่ครบ — ขาด: ' + expect[n].join(', ') : badge[n] === null)), { badge, expect });
+await ev((i) => { _agSelected = i; agRenderDetail(i); }, agNoRate.id); await settle(900);
+const inc7 = await ev(() => [...document.querySelectorAll('#ag-main .ag-als .ag-al')].filter((r) => r.querySelector('.t').textContent === 'Incomplete profile').map((r) => r.querySelector('.d').textContent));
+ok('agent page "Incomplete profile" row says missing Rate Type (server list)', inc7.length === 1 && /Rate Type/.test(inc7[0]), inc7);
+}
 //@@STEPS@@
 
 await browser.close(); srv.close(); backend.kill();
