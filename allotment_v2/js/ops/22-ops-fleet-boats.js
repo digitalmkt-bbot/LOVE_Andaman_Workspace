@@ -671,6 +671,75 @@
     });
   });
 
+  /* legacy saveBoat (04-data-core.js): the boat form. Legacy pushed the boat into BOATS and called save('config')
+     (browser only, flSave is a no-op here), so a new or edited boat was lost on reload. Server first:
+     POST /v1/boats for a new boat, PATCH /v1/boats/{id} for an edit (window._editBoatId). The form's facts go as
+     typed; the id, the total persons on a new boat (licence + crew + fishing crew, legacy fmCalcTotal), the
+     status entry from the status pick and the capacity-on-deployments rule are the server's. A seat count that
+     would leave a day over-sold is 409 seats_sold: the person is asked with the server's text, a yes sends
+     capacity_anyway: true. The modal stays open (and the edit id kept) when the server refuses. */
+  wrap('saveBoat', function(orig){
+    var d = function(id){ return document.getElementById(id); };
+    var g = function(id){ var el = d(id); return el && el.value != null ? String(el.value).trim() : ''; };
+    var name = g('fm-boat-name'); if(!name) return null;
+    var wholeOrNull = function(id){ var v = parseInt(d(id) && d(id).value, 10); return isNaN(v) ? null : v; };
+    var measure = function(id){ var v = parseFloat(d(id) && d(id).value); return isNaN(v) ? null : v; };
+    var editId = window._editBoatId || null;
+    var stMap = ['available', 'fixing', 'unavailable'];
+    var docs = (typeof fmBoatDocs !== 'undefined' && Array.isArray(fmBoatDocs) ? fmBoatDocs : []).map(function(x){
+      var o = { name: x.name, expires_on: x.exp || null };
+      if(x.renewStatus === 'processing' || x.renewStatus === 'done') o.renew_status = x.renewStatus;
+      return o;
+    });
+    var body = {
+      name: name, name_th: g('fm-boat-nameth') || null, type: d('fm-boat-type') ? d('fm-boat-type').value : null,
+      engine_count: parseInt(g('fm-boat-engcount'), 10) || 4,
+      vessel_use: d('fm-boat-use') ? d('fm-boat-use').value : null,
+      pier: g('fm-boat-pier'),
+      capacity: parseInt(g('fm-boat-cap'), 10) || 40,
+      license_pax: wholeOrNull('fm-boat-licensepax'), crew: wholeOrNull('fm-boat-crew'), fish_crew: wholeOrNull('fm-boat-fishcrew'),
+      brand: g('fm-boat-brand') || null, model: g('fm-boat-model') || null,
+      reg: g('fm-boat-reg') || null, callsign: g('fm-boat-callsign') || null, imo: g('fm-boat-imo') || null,
+      build_year: g('fm-boat-year') || null, material: d('fm-boat-material') ? (d('fm-boat-material').value || null) : null,
+      homeport_city: g('fm-boat-port') || null,
+      gt: measure('fm-boat-gt'), nt: measure('fm-boat-nt'), dwt: measure('fm-boat-dwt'),
+      loa: measure('fm-boat-loa'), beam: measure('fm-boat-beam'), depth: measure('fm-boat-depth'),
+      draft: measure('fm-boat-draft'), lbp: measure('fm-boat-lbp'), bhp: measure('fm-boat-bhp'),
+      owner: g('fm-boat-owner') || null, homeport: g('fm-boat-homeport') || null, owner_addr: g('fm-boat-owneraddr') || null,
+      ownership: (typeof fmBoatOwn !== 'undefined' && fmBoatOwn === 1) ? 'charter' : 'own',
+      note: g('fm-boat-note') || null, documents: docs,
+      status: stMap[typeof fmBoatSt !== 'undefined' ? fmBoatSt : 0] || 'available'
+    };
+    // the total persons: a new boat gets it from the server unless the form carries one; an edit sends the form's
+    var total = wholeOrNull('fm-boat-totalcap');
+    if(total != null) body.registered_persons = total;
+    else if(editId) body.registered_persons = null;
+    function send(extra){
+      return O.queue(function(){
+        if(editId) return O.patch('/v1/boats/' + enc(editId), Object.assign({}, body, extra || {}));
+        return O.post('/v1/boats', body);
+      });
+    }
+    return O.anyway(send, { seats_sold: { flag: 'capacity_anyway' } }, {}).then(function(saved){
+      var id = (saved && saved.id) || editId;
+      return (id ? fetchBoatDetail(id) : Promise.resolve(null)).then(function(){
+        window._editBoatId = null;
+        O.wrote('boat');
+        if(typeof window.closeModal === 'function') window.closeModal('boat-modal');
+        if(typeof window.renderBoats === 'function') window.renderBoats();
+        if(typeof window.flRenderBoatList === 'function'){
+          window.flRenderBoatList();
+          if(editId && typeof window.flSelBoat === 'function') window.flSelBoat(editId);
+        }
+        return saved;
+      });
+    }).catch(function(e){
+      if(e && e.declined) return null;
+      O.fail('Could not save the boat', e);
+      return null;
+    });
+  });
+
   wrap('flRenderDocsList', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
     if(!state.loaded){
