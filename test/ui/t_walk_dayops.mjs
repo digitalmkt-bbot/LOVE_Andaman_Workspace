@@ -82,7 +82,7 @@ for (const d of [DAY, DAY2, DAY3, TODAY]) await send('POST', '/operations/deploy
 const mkVan = async (name, cap, extra = {}) => (await send('POST', '/operations/vans', { name, capacity: cap, ...extra })).body;
 const vanA = await mkVan('Van Alpha', 9), vanB = await mkVan('Van Bravo', 12);
 for (const d of [DAY, DAY2, DAY3, TODAY]) for (const v of [vanA, vanB]) await send('PUT', `/operations/van-days/${d}/${v.id}`, { route_ids: ['r5'] });
-const mkBk = async (id, lead, date, pax, extra = {}) => send('POST', '/v1/bookings', { external_id: id, intent: 'confirm', agentId: 'a01', leadPax: lead, leadNationality: 'RU', leadPhone: '+7 900 1',
+const mkBk = async (id, lead, date, pax, extra = {}) => send('POST', '/v1/bookings', { external_id: id, intent: 'confirm', guides: { english: true }, agentId: 'a01', leadPax: lead, leadNationality: 'RU', leadPhone: '+7 900 1',
   pickupSelf: false, hotelName: 'Test Hotel', pickupZone: 'PK', trips: [{ routeId: 'r5', date, pax: { ad_fr: pax }, zone: 'PK' }], ...extra });
 const bk = {};
 for (const [k, lead, date, pax] of [['b1', 'WALK ONE', DAY, 2], ['b2', 'WALK TWO', DAY, 3], ['b3', 'WALK THREE', DAY, 1], ['b4', 'WALK FOUR', DAY, 2], ['t1', 'WALK TODAY', TODAY, 2], ['t2', 'WALK TODAY2', TODAY, 1]]) {

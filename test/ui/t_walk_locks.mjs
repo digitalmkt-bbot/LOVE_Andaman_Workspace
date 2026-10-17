@@ -86,14 +86,15 @@ const sub = await api(`/v1/seat-locks/${dayLock.id}/sub-groups`, { method: 'POST
 const pendLock = await post('/v1/seat-locks', { route_id: 'r5', service_date: T2, pax: 45, holder_type: 'office', pending: 'split' });
 // a credit agent (pay type invoice) with a confirmed booking on a boat, a prepay invoice, 1,000 of it paid
 await api('/v1/agents/a01', { method: 'PATCH', body: JSON.stringify({ pay_type: 'invoice' }) });
-const bkC = await post('/v1/bookings', { external_id: 'zz-credit', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ CREDIT', pickupSelf: true, trips: [{ routeId: 'r5', date: T0, pax: { ad_fr: 2 }, zone: 'NoTransfer' }] });
+const bkC = await post('/v1/bookings', { external_id: 'zz-credit', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ CREDIT', pickupSelf: true, trips: [{ routeId: 'r5', date: T0, pax: { ad_fr: 2 }, zone: 'NoTransfer' }] });
+if (!bkC.trips) { console.log("seed: credit booking refused", JSON.stringify(bkC).slice(0, 300)); process.exit(2); }
 await api('/operations/trip-ops/' + bkC.trips[0].id, { method: 'PATCH', body: JSON.stringify({ boat_id: 'b6' }) });
 const invC = await post('/v1/invoices', { agent_id: 'a01', booking_ids: [bkC.id], kind: 'prepay' });
 await post('/v1/invoices/' + invC.id + '/payments', { method: 'cash', amount: 1000 });
 // the Daily Fleet Log reads today and the days before it: one booking today, on b6
 const TODAY = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);       // Asia/Bangkok
 await post('/operations/deployments', { boat_id: 'b6', route_id: 'r5', service_date: TODAY, capacity: 40 });
-const bkD = await post('/v1/bookings', { external_id: 'zz-daily', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ DAILY', pickupSelf: true, trips: [{ routeId: 'r5', date: TODAY, pax: { ad_fr: 2, chd_fr: 1 }, zone: 'NoTransfer' }] });
+const bkD = await post('/v1/bookings', { external_id: 'zz-daily', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ DAILY', pickupSelf: true, trips: [{ routeId: 'r5', date: TODAY, pax: { ad_fr: 2, chd_fr: 1 }, zone: 'NoTransfer' }] });
 if (bkD.__status) console.log('seed: ZZ DAILY refused', bkD.__status, JSON.stringify(bkD).slice(0, 200));
 else await api('/operations/trip-ops/' + bkD.trips[0].id, { method: 'PATCH', body: JSON.stringify({ boat_id: 'b6' }) });
 await put(`/v1/routes/r10/days/${CLOSED}`, { kind: 'closed' });
