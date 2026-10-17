@@ -80845,19 +80845,19 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-bt .x .bt-ghost,body.btc #view-booking .btc-bt .x .bt-prep{padding:0;margin:0;border:0;background:none}',
 
     /* notice → table */
-    'body.btc #view-booking .btc-nt{width:100%;font-size:12px}',
-    'body.btc #view-booking .btc-nt .h,body.btc #view-booking .btc-nt .r{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--nc),58px);gap:4px;align-items:center}',
-    'body.btc #view-booking .btc-nt .h{height:20px;font-size:9.5px;font-weight:700;color:#8A8F9C;border-bottom:1px solid #EEF0F3}',
-    'body.btc #view-booking .btc-nt .h span{text-align:center}',
-    'body.btc #view-booking .btc-nt .h span:first-child{text-align:left}',
-    'body.btc #view-booking .btc-nt .r{height:24px;border-bottom:1px solid #F5F6F8}',
-    'body.btc #view-booking .btc-nt .r.tot{border-bottom:0;font-weight:800}',
-    'body.btc #view-booking .btc-nt .p{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    'body.btc #view-booking .btc-nt .c{text-align:center;font-weight:800;cursor:pointer;border-radius:6px;padding:1px 0}',
-    'body.btc #view-booking .btc-nt .c:hover{filter:brightness(.95)}',
-    'body.btc #view-booking .btc-nt .c.z{color:#D5D9E0;font-weight:400;cursor:default}',
-    'body.btc #view-booking .btc-nt .x{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}',
-    'body.btc #view-booking .bt-ncb .t2-hd-warn.btc-done{display:block;background:none;border:0;padding:0}',
+    '#view-booking .btc-nt{width:100%;font-size:12px}',
+    '#view-booking .btc-nt .h,#view-booking .btc-nt .r{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--nc),58px);gap:4px;align-items:center}',
+    '#view-booking .btc-nt .h{height:20px;font-size:9.5px;font-weight:700;color:#8A8F9C;border-bottom:1px solid #EEF0F3}',
+    '#view-booking .btc-nt .h span{text-align:center}',
+    '#view-booking .btc-nt .h span:first-child{text-align:left}',
+    '#view-booking .btc-nt .r{height:24px;border-bottom:1px solid #F5F6F8}',
+    '#view-booking .btc-nt .r.tot{border-bottom:0;font-weight:800}',
+    '#view-booking .btc-nt .p{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#view-booking .btc-nt .c{text-align:center;font-weight:800;cursor:pointer;border-radius:6px;padding:1px 0}',
+    '#view-booking .btc-nt .c:hover{filter:brightness(.95)}',
+    '#view-booking .btc-nt .c.z{color:#D5D9E0;font-weight:400;cursor:default}',
+    '#view-booking .btc-nt .x{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}',
+    '#view-booking .bt-ncb .t2-hd-warn.btc-done{display:block;background:none;border:0;padding:0}',
     /* van mode: vans panel + group editor bar */
     'body.btc #view-booking .bt-vans .bt-vgrid>div{border-radius:9px!important;border-color:#DDE3EA!important}',
     
@@ -81454,7 +81454,8 @@ function pc2CSS3(S){
       if(root && root.querySelector('.bt-pkh')){
         ensureCss();
         toggle(root);
-        if(on()){ boatsTable(root); progBars(root); noticeTable(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); lnumFit(root); }
+        noticeTable(root);   /* §ntClassic (2026-10-17) · owner "Notice ของ Classic ปรับให้เหมือนของ Compact" · ตาราง Notice ใช้ทั้งสองผิว */
+        if(on()){ boatsTable(root); progBars(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); lnumFit(root); }
       }
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
