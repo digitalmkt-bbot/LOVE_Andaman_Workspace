@@ -80,6 +80,7 @@
     });
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
+    if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
     return o;
   }
@@ -395,8 +396,104 @@
   if(typeof legacyBulkApply==='function'){ var ba=function(){ return enabled()?bulkApply.apply(this,arguments):legacyBulkApply.apply(this,arguments); }; ba.__ops=true; ba.__opsAgents=true; window.agBulkApply=ba; }
   if(typeof legacyFillDown==='function'){ var fd=function(){ return enabled()?fillDown.apply(this,arguments):legacyFillDown.apply(this,arguments); }; fd.__ops=true; fd.__opsAgents=true; window.agFillDown=fd; }
   if(typeof legacyTblDeleteSelected==='function'){ var td=function(){ return enabled()?deleteSelected.apply(this,arguments):legacyTblDeleteSelected.apply(this,arguments); }; td.__ops=true; td.__opsAgents=true; window.agTblDeleteSelected=td; }
+  /* Agent Excel import (legacy agImportFile ... agImportApply). The sheet is still parsed in the browser (SheetJS, the
+     legacy _agImpRow), and the preview modal is legacy's own. What changes is who decides: the sheet's rows go to
+     POST /v1/agents/import {rows, overwrite, dry_run, select}. A dry run (saves nothing) fills the preview, so which agent
+     a row matches, the action (create / update / nothing), the fields it would write, the owner conflict and the rate note
+     are the server's. The Import button sends the same rows with dry_run:false and `select` = the ticked sheet lines.
+     Rows are sent as the sheet has them (headers with a trailing '*' lose it), blank lines included, so the server's row
+     number (first data row = 2) is the preview's row number (r.n). Until the dry run lands the preview shows legacy's own
+     local match. A server `error` row is shown unticked with the server's message; the others in the file still import. */
+  var legacyImpRow=window._agImpRow, legacyImpFile=window.agImportFile, legacyImpCompute=window.agImportComputeWrites, legacyImpRender=window.agImportRender;
+  var impSeq=0;
+  function rawKeys(o){ var out={}; Object.keys(o||{}).forEach(function(k){ out[String(k).replace(/\*$/,'').trim()]=o[k]; }); return out; }
+  function impRows(){
+    var R=_agImp.rows, last=0, out=[];
+    R.forEach(function(r){ if(r.n>last) last=r.n; });
+    for(var n=2;n<=last;n++) out.push({});
+    R.forEach(function(r){ var raw=r.src && r.src.__raw; if(raw) out[r.n-2]=rawKeys(raw); });
+    return out;
+  }
+  if(typeof legacyImpRow==='function'){
+    var ir=function(o,note){
+      var src=legacyImpRow.apply(this,arguments);
+      if(enabled() && src && typeof src==='object') Object.defineProperty(src,'__raw',{value:o,enumerable:false});
+      return src;
+    };
+    ir.__ops=true; ir.__opsAgents=true; window._agImpRow=ir;
+  }
+  function impDryRun(){
+    var imp=_agImp, seq=++impSeq;
+    return write('POST','/v1/agents/import',{rows:impRows(), overwrite:!!imp.overwrite, dry_run:true}).then(function(j){
+      if(_agImp!==imp || seq!==impSeq) return;
+      var by={}; ((j&&j.rows)||[]).forEach(function(x){ by[x.row]=x; });
+      imp.rows.forEach(function(r){
+        var s=by[r.n]; if(!s) return;
+        r.serverError=s.action==='error' ? (s.error||'This row was refused') : '';
+        r.serverRateNote=s.rate_note||'';
+        r.action=s.action==='create' ? 'create' : 'update';
+        r.writes=s.action==='create' ? Object.keys(r.src) : (s.action==='update' ? (s.writes||[]).slice() : []);
+        if(s.action==='create' && (s.writes||[]).length) r.writes=s.writes.slice();
+        r.match=s.matched_agent_id ? {id:s.matched_agent_id, name:s.matched_agent_name||s.matched_agent_id, market:(current(s.matched_agent_id)||{}).market||''} : null;
+        r.ownerConflict=!!s.owner_conflict; r.ownerSalesId=s.owner_sales_id||'';
+        r.rateAmb=null;
+        if(s.action==='error') r.checked=false;
+      });
+      legacyImpRender();
+    },function(e){ fail('Could not check the agent import',e); });
+  }
+  if(typeof legacyImpFile==='function'){
+    var iff=function(){ return legacyImpFile.apply(this,arguments); };
+    iff.__ops=true; iff.__opsAgents=true; window.agImportFile=iff;
+  }
+  if(typeof legacyImpCompute==='function'){
+    var ic=function(){
+      var r=legacyImpCompute.apply(this,arguments);
+      if(enabled() && _agImp && _agImp.rows && _agImp.rows.length) impDryRun();
+      return r;
+    };
+    ic.__ops=true; ic.__opsAgents=true; window.agImportComputeWrites=ic;
+  }
+  /* after the legacy modal is drawn, add what it has no place for: a refused row's message and the server's rate note */
+  if(typeof legacyImpRender==='function'){
+    var irn=function(){
+      var r=legacyImpRender.apply(this,arguments);
+      if(!enabled() || !_agImp) return r;
+      var trs=document.querySelectorAll('#agimp-modal tbody tr');
+      _agImp.rows.forEach(function(row,i){
+        var td=trs[i] && trs[i].children[2]; if(!td) return;
+        function note(txt,fg,bg){
+          var d=document.createElement('div');
+          d.style.cssText='font-size:10px;font-weight:700;color:'+fg+';background:'+bg+';border-radius:6px;padding:2px 8px;margin-top:3px;display:block';
+          d.textContent=txt; td.appendChild(d);
+        }
+        if(row.serverError) note(row.serverError,'#A32D2D','#FCEBEB');
+        if(row.serverRateNote) note(row.serverRateNote,'#8A5410','#FDF3E4');
+      });
+      return r;
+    };
+    irn.__ops=true; irn.__opsAgents=true; window.agImportRender=irn;
+  }
   if(typeof legacyImportApply==='function'){
-    var ia=function(){ if(!enabled()) return legacyImportApply.apply(this,arguments); return fail('Agent import unavailable',{message:'Use single-agent create or edit in operation-backend mode.'}); };
+    var ia=function(){
+      if(!enabled()) return legacyImportApply.apply(this,arguments);
+      var imp=_agImp; if(!imp) return;
+      var pick=imp.rows.filter(function(r){ return r.checked && !r.serverError && (r.action==='create' || (r.writes||[]).length); });
+      if(!pick.length) return;
+      return write('POST','/v1/agents/import',{rows:impRows(), overwrite:!!imp.overwrite, dry_run:false, select:pick.map(function(r){ return r.n; })}).then(function(j){
+        var ap=(j&&j.applied)||{created:0,updated:0,fields:0,agent_ids:[]};
+        return Promise.all((ap.agent_ids||[]).map(function(id){ return fetchAgent(id).catch(function(){ return null; }); })).then(function(){
+          if(typeof agImportClose==='function') agImportClose();
+          redraw();
+          if(O.wrote) O.wrote('agents');
+          if(typeof renderAgents==='function') renderAgents();
+          if(typeof laSaveToast==='function')
+            laSaveToast({kind:'success', title:'นำเข้า Agent สำเร็จ', status:((+ap.created||0)+(+ap.updated||0))+' รายการ',
+              sub:'สร้างใหม่ '+(ap.created||0)+' · อัปเดต '+(ap.updated||0)+' · เขียนข้อมูล '+(ap.fields||0)+' ช่อง', dur:5200});
+          else alert('นำเข้าสำเร็จ · สร้าง '+(ap.created||0)+' · อัปเดต '+(ap.updated||0));
+        });
+      },function(e){ return fail('Agent import refused',e); });
+    };
     ia.__ops=true; ia.__opsAgents=true; window.agImportApply=ia;
   }
   /* Rate seasons (PUT /v1/agents/:id/rate-seasons replaces the agent's whole table and writes the activity line).
@@ -499,6 +596,57 @@
       return a.incomplete.map(function(k){ return INC_LABEL[k]||k; });
     };
     inc.__ops=true; inc.__opsAgents=true; window.agIncompleteFields=inc;
+  }
+
+  /* agAlerts / agHdIssues (the agent page's "Needs action" rows and the list's KPI counts): the server works out the three
+     pricing alerts (GET /v1/agents[/id] `alerts`: no_rate_bound, route_no_price, contract_rate_differs; same rules as
+     legacy). The browser used to judge them from the rate and contract rows it happened to hold. Same titles, buttons and
+     order as legacy; the row text is the server's message as sent. The other alerts (credit, contract expiry, rate expiry,
+     rate not started, incomplete profile) stay local: the server has no list for them. An agent row that did not come from
+     the server (no `serverAlerts` array) still uses the legacy function. */
+  var legacyAlerts=window.agAlerts, legacyHdIssues=window.agHdIssues;
+  var AL_BY_CODE={
+    no_rate_bound:{rank:3, t:'No rate bound', go:'Pick a rate', tip:'ไม่มีเรท = ไม่มีราคาให้คิด จองไม่ได้ทุกเส้น',
+      on:function(id){ return "agEditOpen('ratetype','"+id+"')"; }},
+    route_no_price:{rank:4, t:'Route with no price', go:'Open Pricing Matrix', tip:'เรทที่ผูกอยู่ไม่มีราคาของเส้นเหล่านี้ · ปุ่มบันทึกในหน้าจองถูกล็อก (noRate)',
+      on:function(id){ return "agSwitchTab('prices','"+id+"')"; }},
+    contract_rate_differs:{rank:7, t:'Contract ≠ bound rate', go:'Sync to bound rate', tip:'เอกสารสัญญาจะพิมพ์ราคาชุดที่ระบุในสัญญา ไม่ใช่ชุดที่ระบบคิดจริง',
+      on:function(id){ return "agAlertSyncRate('"+id+"')"; }}
+  };
+  var AL_LEGACY_RANK={'Credit over limit':1,'Credit near limit':1,'Contract expired':2,'Contract expiring':2,'Rate expired':5,'Rate expiring':5,'Rate not started':6,'Incomplete profile':8};
+  function escText(v){ return String(v==null?'':v).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  if(typeof legacyAlerts==='function'){
+    var al=function(a){
+      var out=legacyAlerts.apply(this,arguments);
+      if(!enabled() || !a || !Array.isArray(a.serverAlerts)) return out;
+      var kept=out.filter(function(x){ return !Object.keys(AL_BY_CODE).some(function(k){ return AL_BY_CODE[k].t===x.t; }); })
+        .map(function(x){ return {rank:AL_LEGACY_RANK[x.t]||8, item:x}; });
+      a.serverAlerts.forEach(function(s){
+        var m=AL_BY_CODE[s.code]; if(!m) return;
+        var item={tone:s.tone, t:m.t, d:escText(s.message), go:m.go, on:m.on(a.id)};
+        if(s.severity==='blocked') item.sev='Blocked';
+        if(m.tip) item.tip=m.tip;
+        kept.push({rank:m.rank, item:item});
+      });
+      /* stable by rank: the sort key is (rank, position) so equal ranks keep their legacy order */
+      return kept.map(function(x,i){ return {rank:x.rank,i:i,item:x.item}; })
+        .sort(function(x,y){ return x.rank-y.rank || x.i-y.i; }).map(function(x){ return x.item; });
+    };
+    al.__ops=true; al.__opsAgents=true; window.agAlerts=al;
+  }
+  if(typeof legacyHdIssues==='function'){
+    var hi=function(a){
+      var out=legacyHdIssues.apply(this,arguments);
+      if(!enabled() || !a || !Array.isArray(a.serverAlerts) || !(a.programs||[]).length) return out;
+      delete out.norate; delete out.orph; delete out.drift;
+      a.serverAlerts.forEach(function(s){
+        if(s.code==='no_rate_bound') out.norate=1;
+        else if(s.code==='route_no_price') out.orph=1;
+        else if(s.code==='contract_rate_differs') out.drift=1;
+      });
+      return out;
+    };
+    hi.__ops=true; hi.__opsAgents=true; window.agHdIssues=hi;
   }
 
   if(typeof legacyPersist==='function'){
