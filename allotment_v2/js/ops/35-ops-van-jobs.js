@@ -465,6 +465,7 @@
       Object.keys(cells).forEach(function(k){ if(k.indexOf(vanId + '|') === 0) delete cells[k]; });
       [statusRanges, zoneRanges].forEach(function(m){ Object.keys(m).forEach(function(k){ if(m[k].van_id === vanId) delete m[k]; }); });
     },
-    invalidate: function(){ vansWindow = null; }
+    invalidate: function(){ vansWindow = null; },
+    dropDay: function(d){ if(d) delete dayAt[d]; }   // §opsCheckinLive · the next render of that day asks the server again
   };
 })();

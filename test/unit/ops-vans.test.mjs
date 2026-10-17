@@ -325,7 +325,9 @@ test('create from ticked rows refuses rows from two zones, with no request', asy
 
 // ── out of scope in ops mode ────────────────────────────────────────────────
 
-test('out-of-scope actions in ops mode: refused with a toast, no request, no legacy write', async () => {
+test('actions the server cannot do yet or cannot do on this data: a toast, no request, no legacy write', async () => {
+  // Split / Unsplit are still out of scope (NOT YET). Return van, clear order and pickup-order save are wired now, but
+  // here no van group exists on the server, so each is refused locally with no request. Clear route has nothing assigned: silent.
   const rt = runtime({ sel: { b1: 1 } });
   rt.ctx.bookingV2VanGroupSetReturn(D, R, 'PK', 3, 'veh02');
   rt.ctx.bookingV2VanSplit('b1', D);
@@ -338,9 +340,32 @@ test('out-of-scope actions in ops mode: refused with a toast, no request, no leg
   assert.equal(rt.legacyCalls.length, 0);
   assert.equal(rt.bks.find((b) => b.id === 'b1').ops.vanId, undefined);
   const notYet = rt.toasts.filter((t) => t.kind === 'pending');
-  assert.equal(notYet.length, 6);
-  assert.ok(notYet.every((t) => /not on operation-backend yet|vans is not/.test(t.title)), JSON.stringify(notYet));
+  assert.equal(notYet.length, 2);
+  assert.ok(notYet.every((t) => /Split parts are not on operation-backend yet/.test(t.title) && t.status === 'NOT YET'), JSON.stringify(notYet));
+  const refused = rt.toasts.filter((t) => t.kind === 'error');
+  assert.deepEqual(refused.map((t) => t.title), ['Return van not set', 'Pickup order not cleared', 'Pickup order not saved']);
+  assert.ok(refused.every((t) => t.status === 'REFUSED'));
+  assert.equal(rt.toasts.length, 5);
   assert.equal(rt.alerts.length, 0);
+});
+
+test('auto-assign toast tells what the server did: assigned, over capacity, second round, groups left without a van', async () => {
+  const mk = async (assigned, groups) => {
+    const rt = runtime({ handlers: { ['POST /operations/van-days/' + D + '/auto-assign']: { body: { service_date: D, route_id: R, assigned, groups } }, 'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [] } } } });
+    rt.ctx.bookingV2VanAutoAssign(D, R);
+    await rt.flush(); await rt.flush();
+    return rt.toasts.filter((t) => /^Auto-assign/.test(t.title))[0];
+  };
+  const ok = await mk([{ group_id: 'g1', number: 1, van_id: 'veh01', pax: 4, second_round: false, over_capacity: false }], [{ id: 'g1', zone: 'PK', van_id: 'veh01', pax: 4 }, { id: 'g2', zone: 'NoTransfer', van_id: null, pax: 3 }, { id: 'g3', zone: '__CHARTER__', van_id: null, pax: 5 }]);
+  assert.equal(ok.title, 'Auto-assign: 1 group(s) got a van');
+  assert.equal(ok.status, 'DONE');
+  assert.equal(ok.sub, '');
+  const bad = await mk([{ group_id: 'g1', number: 1, van_id: 'veh01', pax: 9, second_round: true, over_capacity: true }], [{ id: 'g1', zone: 'PK', van_id: 'veh01', pax: 9 }, { id: 'g4', zone: 'KL', van_id: null, pax: 2 }]);
+  assert.equal(bad.status, 'PARTIAL');
+  assert.equal(bad.kind, 'error');
+  assert.match(bad.sub, /1 still without a van/);
+  assert.match(bad.sub, /1 over the seats of the van/);
+  assert.match(bad.sub, /1 on a van that runs another group/);
 });
 
 test('ticks on a pickup-order save are refused, but a save with nothing ticked is silent', async () => {

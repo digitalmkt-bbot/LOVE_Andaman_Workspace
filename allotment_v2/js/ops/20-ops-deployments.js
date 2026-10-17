@@ -194,6 +194,27 @@
     w.__ops = true; window.getCellType = w;
   })();
 
+  /* §opsPastDay · Q49 (decided) · server rule (POST/DELETE /operations/deployments): a date before today (Asia/Bangkok)
+     is 409 past_date for everyone except an admin correcting history. So in ops mode an admin passes the legacy
+     past-day guard (the screen is editable, the server still judges); everyone else stays blocked, with the server's text. */
+  (function(){
+    var isPast = window.bop2IsPast, guard = window.bop2GuardPast;
+    if(typeof isPast !== 'function' || isPast.__ops) return;
+    function admin(){ return O.enabled() && typeof window.laIsAdmin === 'function' && window.laIsAdmin(); }
+    var wi = function(ds){ return admin() ? false : isPast.apply(this, arguments); };
+    wi.__ops = true; window.bop2IsPast = wi;
+    if(typeof guard === 'function'){
+      var wg = function(ds, silent){
+        if(O.enabled() && !admin() && isPast.call(this, ds)){
+          if(!silent) alert(ds + ' is in the past: a deployment can\'t change. Past days are closed and reported; ask an admin to correct it');
+          return true;
+        }
+        return guard.apply(this, arguments);
+      };
+      wg.__ops = true; window.bop2GuardPast = wg;
+    }
+  })();
+
   function load(){
     var from = O.shift(O.today(), -BACK), to = O.shift(O.today(), AHEAD);
     return O.get('/operations/deployments', { from: from, to: to }).then(function(j){
