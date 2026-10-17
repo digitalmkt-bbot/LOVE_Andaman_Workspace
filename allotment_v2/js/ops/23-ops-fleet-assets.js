@@ -611,6 +611,47 @@
     }).catch(function(e){ O.fail('Could not update propeller', e); return null; });
   });
 
+  /* "Add new spare" (flSaveAddSpare, 05-fleet.js): a gearbox or propeller with a serial, brand, note and a place.
+     Legacy invented the id and the other fields in the browser; now POST /v1/fleet/{gearboxes,propellers} with the
+     same defaults legacy used (Honda, BF250D Gearbox, 15.5×17, Stainless, 3 blades, hub 4.75, cupping no, cost 8500). */
+  wrap('flSaveAddSpare', function(){
+    var d = function(id){ return document.getElementById(id); };
+    var type = d('fl-add-spare-type') ? d('fl-add-spare-type').value : '';
+    var serial = d('fl-add-spare-serial') ? d('fl-add-spare-serial').value.trim() : '';
+    if(!serial){ alert('กรุณากรอก serial'); return null; }
+    var brand = (d('fl-add-spare-brand') ? d('fl-add-spare-brand').value.trim() : '') || 'Honda';
+    var note = d('fl-add-spare-note') ? d('fl-add-spare-note').value.trim() : '';
+    var loc = d('fl-add-spare-loc') ? d('fl-add-spare-loc').value : '';
+    var status = String(loc).indexOf('shop:') === 0 ? 'fixing' : 'spare';
+    var today = O.today();
+    var path, body, title;
+    if(type === 'gearbox'){
+      path = '/v1/fleet/gearboxes'; title = 'Could not add spare gearbox';
+      body = toGearboxFactsBody({
+        brand: brand, model: (d('fl-add-spare-model') ? d('fl-add-spare-model').value.trim() : '') || 'BF250D Gearbox',
+        serial: serial, buyDate: today, baseHours: 0, note: note, status: status, spareLocation: loc
+      }, true);
+    } else {
+      path = '/v1/fleet/propellers'; title = 'Could not add spare propeller';
+      var size = (d('fl-add-spare-size') ? d('fl-add-spare-size').value.trim() : '') || '15.5×17';
+      var m = size.match(/^([\d.]+)[×x]([\d.]+)$/);
+      body = toPropellerFactsBody({
+        brand: brand, serial: serial, diameter: m ? parseFloat(m[1]) : 15.5, pitch: m ? parseFloat(m[2]) : 17,
+        blades: '3', material: 'Stainless', rotation: d('fl-add-spare-rotation') ? d('fl-add-spare-rotation').value : 'Standard',
+        hubSize: '4.75', cupping: 'no', cost: 8500, buyDate: today, note: note, status: status, spareLocation: loc
+      }, true);
+    }
+    return O.queue(function(){
+      return O.post(path, body);
+    }).then(function(){
+      return refetchChain().then(function(){
+        if(typeof window.closeModal === 'function') window.closeModal('fl-modal-add-spare');
+        O.wrote(type === 'gearbox' ? 'fleet-gearbox-create' : 'fleet-propeller-create');
+        redrawAssets();
+      });
+    }).catch(function(e){ O.fail(title, e); return null; });
+  });
+
   wrap('flSaveAssignEng', function(){
     var selEl = document.getElementById('fl-assign-eng-sel');
     var posEl = document.getElementById('fl-assign-eng-pos');

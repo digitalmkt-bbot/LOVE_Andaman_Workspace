@@ -366,6 +366,33 @@
     }).catch(function(){ return null; });
   });
 
+  /* legacy flAsnSetEnd: the same prompt and the same format / start-date alerts, then POST …/assignments/{id}/set-end
+     {end_date}. The server's status (active / completed / planned) comes back with the boat read again. A refusal
+     (permanent move, already ended, cancelled) is the server's message as a red toast. */
+  wrap('flAsnSetEnd', function(orig, boatId, asnId){
+    var b = boatNamed(boatId);
+    if(!b || !b.assignments) return null;
+    var a = b.assignments.find(function(x){ return x && x.id === asnId; });
+    if(!a) return null;
+    var today = O.today();
+    var v = prompt('Return date (YYYY-MM-DD): last day ' + b.name + ' stays at ' + ((typeof PIER_LABELS !== 'undefined' && PIER_LABELS[a.toPier]) || a.toPier) + ', then back to ' + ((typeof PIER_LABELS !== 'undefined' && PIER_LABELS[a.fromPier]) || a.fromPier), today);
+    if(v == null) return null;
+    var d = String(v).trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(new Date(d + 'T00:00'))){ alert('Date format must be YYYY-MM-DD'); return null; }
+    if(d < a.startDate){ alert('Return date must be on or after the start date (' + a.startDate + ')'); return null; }
+    return O.queue(function(){
+      return O.post('/v1/boats/' + enc(boatId) + '/assignments/' + enc(asnId) + '/set-end', { end_date: d });
+    }).then(function(res){
+      return fetchBoatDetail(boatId).then(function(){
+        O.wrote('boat-assignment-set-end');
+        try{ if(typeof window.flRenderBoatDetailPink === 'function') window.flRenderBoatDetailPink(); }catch(_){}
+        redrawBoats();
+        if(typeof window.flShowToast === 'function') window.flShowToast('ตั้งวันกลับ ' + d + ' · ' + b.name);
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not set the return date', e); return null; });
+  });
+
   wrap('depSave', function(){
     var boatId = typeof _depBoatId !== 'undefined' ? _depBoatId : null;
     var docName = typeof _depDocName !== 'undefined' ? _depDocName : '';
@@ -553,6 +580,37 @@
       var nt = document.getElementById('bdp-name-text'); if(nt) nt.textContent = v;
       if(typeof window.cancelName === 'function') window.cancelName();
       return b;
+    });
+  });
+
+  /* legacy confirmCap (04-data-core.js): a whole number above 0 sets the boat's seats, anything else is dropped.
+     Server first: PATCH /v1/boats/{id} {capacity}. A day that would carry more passengers than the new seats is
+     409 seats_sold: the person is asked with the server's own text, and a yes sends capacity_anyway: true. The
+     edit box stays open when the server refuses. */
+  wrap('confirmCap', function(orig){
+    var boatId = selectedBoatId();
+    var inp = document.getElementById('bdp-cap-inp');
+    if(!boatId || !inp) return undefined;
+    var v = parseInt(inp.value, 10);
+    if(!(v > 0)){
+      if(typeof window.cancelCap === 'function') window.cancelCap();
+      return undefined;
+    }
+    function send(extra){
+      return O.queue(function(){ return O.patch('/v1/boats/' + enc(boatId), Object.assign({ capacity: v }, extra || {})); });
+    }
+    return O.anyway(send, { seats_sold: { flag: 'capacity_anyway' } }, {}).then(function(){
+      return fetchBoatDetail(boatId);
+    }).then(function(b){
+      O.wrote('boat');
+      var cv = document.getElementById('bdp-cap-val'); if(cv) cv.textContent = v;
+      if(typeof window.cancelCap === 'function') window.cancelCap();
+      redrawBoats();
+      return b;
+    }).catch(function(e){
+      if(e && e.declined) return null;
+      O.fail('Could not save boat seats', e);
+      return null;
     });
   });
 

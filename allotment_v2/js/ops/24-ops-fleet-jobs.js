@@ -797,6 +797,304 @@
     });
   });
 
+  /* the board card's Save (owner, due date, note) and Park. Legacy set m.owner / m.dueDate / m.parked in the browser.
+     Server first: PATCH …/jobs/{id} {owner, due_date} for what changed (the server writes the change line itself), then the
+     note through the wrapped flBoardLog (POST …/log; the server frees a lane dragged to decide or wait). The card closes
+     when the server has said yes. */
+  wrap('flBoardSaveCard', function(orig){
+    var m = window._flBoardCur ? window._flBoardCur() : null;
+    if(!m || !window.flBoardCanEdit()) return null;
+    var own = (document.getElementById('fl-bd-own') || {}).value || '';
+    var due = (document.getElementById('fl-bd-due') || {}).value || '';
+    var nt = ((document.getElementById('fl-bd-note') || {}).value || '').trim();
+    var patch = {};
+    if(String(m.owner || '') !== String(own)) patch.owner = own.trim();
+    if(String(m.dueDate || '') !== String(due)) patch.due_date = due || null;
+    if(!nt && !Object.keys(patch).length){ window.flBoardPopClose(); return null; }
+    var step = Object.keys(patch).length
+      ? O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(m.id), patch); }).then(function(res){ upsertJob(res); })
+      : Promise.resolve();
+    return step.then(function(){
+      return nt ? window.flBoardLog(m, nt) : null;
+    }).then(function(){
+      O.wrote('fleet-job-board-card');
+      window.flBoardPopClose(); redrawJobs();
+      if(typeof window.flShowToast === 'function') window.flShowToast(nt ? ((m.no || '') + ' · บันทึกแล้ว') : ((m.no || '') + ' · อัปเดตแล้ว'));
+      return null;
+    }).catch(function(e){ O.fail('Could not save the board card', e); redrawJobs(); return null; });
+  });
+
+  wrap('flBoardPark', function(orig){
+    var m = window._flBoardCur ? window._flBoardCur() : null;
+    if(!m || !window.flBoardCanEdit()) return null;
+    return O.queue(function(){
+      return O.patch('/v1/fleet/jobs/' + enc(m.id), { parked: true });
+    }).then(function(res){
+      upsertJob(res);
+      O.wrote('fleet-job-park');
+      window.flBoardPopClose(); redrawJobs();
+      if(typeof window.flShowToast === 'function') window.flShowToast((m.no || '') + ' · พักไว้แล้ว · ไม่นับในบอร์ด');
+      return res;
+    }).catch(function(e){ O.fail('Could not park the job', e); return null; });
+  });
+
+  /* link / unlink a Scheduled job to a Project: legacy's checks and prompts are kept, the link is PATCH …/jobs/{id}
+     {parent_project_id}. The server writes the job's line and the project's line. */
+  wrap('flMaintLinkProjectPick', function(orig, mjId){
+    var m = listJobs().find(function(x){ return x && x.id === mjId; });
+    if(!m){ alert('MJ not found'); return null; }
+    if(m.type !== 'scheduled'){
+      alert('Only Scheduled MJs can be linked to a Project.\n\nCorrective / Preventive jobs are independent.');
+      return null;
+    }
+    var projects = typeof FL_PROJECTS !== 'undefined' && Array.isArray(FL_PROJECTS) ? FL_PROJECTS : [];
+    var candidates = projects.filter(function(p){ return p.boatId === m.boatId && p.status !== 'completed'; });
+    if(!candidates.length){ alert('No open projects for this boat. Create one from the Projects page first.'); return null; }
+    var list = candidates.map(function(p, i){ return (i + 1) + '. ' + p.no + ' · ' + p.name + ' (' + p.status + ')'; }).join('\n');
+    var pick = prompt('Link ' + (m.no || m.id) + ' to which project?\n\n' + list + '\n\nEnter number:');
+    if(!pick) return null;
+    var proj = candidates[parseInt(pick, 10) - 1];
+    if(!proj){ alert('Invalid choice'); return null; }
+    return O.queue(function(){
+      return O.patch('/v1/fleet/jobs/' + enc(mjId), { parent_project_id: proj.id });
+    }).then(function(res){
+      upsertJob(res);
+      O.wrote('fleet-job-project-link');
+      if(O.fleetDaily && typeof O.fleetDaily.load === 'function') return O.fleetDaily.load().catch(function(){});
+    }).then(function(){
+      if(typeof window.flRenderMaintDetailPink === 'function') window.flRenderMaintDetailPink();
+      redrawJobs();
+      if(typeof window.flShowToast === 'function') window.flShowToast('Linked to ' + proj.no);
+      return null;
+    }).catch(function(e){ O.fail('Could not link the job to the project', e); return null; });
+  });
+
+  wrap('flMaintUnlinkProject', function(orig, mjId){
+    var m = listJobs().find(function(x){ return x && x.id === mjId; });
+    if(!m || !m.parentProjectId) return null;
+    var projects = typeof FL_PROJECTS !== 'undefined' && Array.isArray(FL_PROJECTS) ? FL_PROJECTS : [];
+    var proj = projects.find(function(p){ return p.id === m.parentProjectId; });
+    if(!confirm('Unlink ' + (m.no || m.id) + ' from project ' + (proj ? proj.no : '') + '?')) return null;
+    var projNo = proj ? proj.no : m.parentProjectId;
+    return O.queue(function(){
+      return O.patch('/v1/fleet/jobs/' + enc(mjId), { parent_project_id: null });
+    }).then(function(res){
+      upsertJob(res);
+      O.wrote('fleet-job-project-unlink');
+      if(typeof window.flRenderMaintDetailPink === 'function') window.flRenderMaintDetailPink();
+      redrawJobs();
+      if(typeof window.flShowToast === 'function') window.flShowToast('Unlinked from ' + projNo);
+      return res;
+    }).catch(function(e){ O.fail('Could not unlink the job from the project', e); return null; });
+  });
+
+  /* "add every engine of the boat to this job" (flEngAddAllToJob) and "one job per engine" (flEngSplitIntoJobs).
+     The engines still to add are the boat's engines that are not on the job (engines come from the server, FL_ENGINES). */
+  function enginesToAdd(m){
+    var all = typeof FL_ENGINES !== 'undefined' && Array.isArray(FL_ENGINES) ? FL_ENGINES : [];
+    var onJob = {};
+    (m.assets || []).forEach(function(a){ if(a && (a.engId || (a.type === 'engine' && a.assetId))) onJob[a.engId || a.assetId] = true; });
+    return all.filter(function(e){ return e && e.boatId === m.boatId && !onJob[e.id]; });
+  }
+
+  /* no bulk endpoint: one POST …/assets per engine, in order, then the chain is read again. A refusal stops the rest. */
+  wrap('flEngAddAllToJob', function(orig, jobId){
+    var m = listJobs().find(function(x){ return x && x.id === jobId; });
+    if(!m) return null;
+    var toAdd = enginesToAdd(m);
+    if(!toAdd.length){ alert('เครื่องยนต์ทั้งหมดอยู่ในรายการแล้ว'); return null; }
+    return O.queue(function(){
+      return toAdd.reduce(function(p, e){
+        return p.then(function(){ return O.post('/v1/fleet/jobs/' + enc(jobId) + '/assets', { type: 'engine', asset_id: e.id }); });
+      }, Promise.resolve());
+    }).then(function(){
+      return refetchAll(m.boatId);
+    }).then(function(){
+      O.wrote('fleet-job-asset-add');
+      if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(jobId);
+      redrawJobs();
+      return null;
+    }).catch(function(e){
+      O.fail('Could not add the engines to the job', e);
+      return refetchAll(m.boatId).then(function(){ redrawJobs(); }, function(){});
+    });
+  });
+
+  /* POST …/split {by:'boat_engines', nos}: the server needs one MJ number per NEW job (the first engine joins this job
+     when it has no engine yet), numbered after the highest MJ number the browser holds, as flSplitExistingJob does. */
+  wrap('flEngSplitIntoJobs', function(orig, jobId){
+    var m = listJobs().find(function(x){ return x && x.id === jobId; });
+    if(!m) return null;
+    var toAdd = enginesToAdd(m);
+    if(!toAdd.length){ alert('เครื่องยนต์ทั้งหมดอยู่ในรายการแล้ว'); return null; }
+    var hasOwnEngine = (m.assets || []).some(function(a){ return a && (a.engId || (a.type === 'engine' && a.assetId)); });
+    var fresh = toAdd.length - (hasOwnEngine ? 0 : 1);
+    var maxNo = listJobs().reduce(function(mx, item){
+      var n = parseInt(String((item && item.no) || '').replace(/^MJ-/, ''), 10) || 0;
+      return Math.max(mx, n);
+    }, 0);
+    var nos = [];
+    for(var i = 0; i < fresh; i++) nos.push('MJ-' + String(maxNo + i + 1).padStart(3, '0'));
+    return O.queue(function(){
+      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/split', { by: 'boat_engines', nos: nos });
+    }).then(function(res){
+      return refetchAll(m.boatId).then(function(){
+        O.wrote('fleet-job-split');
+        if(typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(jobId);
+        redrawJobs();
+        if(typeof window.flShowToast === 'function') window.flShowToast('แยกเป็น ' + toAdd.length + ' งาน (1 งาน/เครื่อง)');
+        return res;
+      });
+    }).catch(function(e){ O.fail('Could not split the job', e); return null; });
+  });
+
+  /* "Add work" form (flnSave / flnSaveJob). Legacy drove the report and job forms and read the lists at once; in ops
+     flSaveIncident / flSaveCreateJob answer a promise, so it saw nothing and stopped with "not saved". The same steps
+     now wait for each answer: report, then job, then owner / due (PATCH …/jobs/{id}), then start, then the parts memo.
+     The new rows are found by the id the server answered. A step that fails stops the rest and says what was saved. */
+  function flnHide(id, on){ var el = document.getElementById(id); if(el) el.style.display = on ? 'none' : ''; }
+  function flnSet(id, v){ var el = document.getElementById(id); if(el) el.value = v; }
+  function flnPatchOwnerDue(F, jobs){
+    if(!F.owner && !F.due) return Promise.resolve();
+    var body = {};
+    if(F.owner) body.owner = F.owner;
+    if(F.due) body.due_date = F.due;
+    return jobs.reduce(function(p, m){
+      return p.then(function(){ return O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(m.id), body); }).then(upsertJob); });
+    }, Promise.resolve());
+  }
+  function flnFinish(F, inc, jobs, note){
+    var boat = F.boat;
+    var key = jobs.length ? ('mj:' + jobs[0].id) : (F.next === 'quick' ? '' : (inc ? 'inc:' + inc.id : ''));
+    window.flnClose();
+    FLW.boat = boat; FLW.stage = -1; FLW.bf = (FLW.bf === 'down') ? 'work' : FLW.bf; FLW.item = key;
+    try{ window.flRenderWork(); }catch(_){}
+    var label = inc ? (inc.no || 'the report') : (jobs[0] && jobs[0].no) || 'the job';
+    if(typeof window.flShowToast === 'function') window.flShowToast('Saved ' + label + (inc && jobs.length ? (' and ' + (jobs[0].no || 'the job')) : '') + '.' + note);
+  }
+  function flnStopped(F, inc, jobs, err){
+    try{ console.error('[flnForm] save failed', err); }catch(_){}
+    F.busy = false;
+    var made = inc || jobs[0];
+    alert('Saving stopped part-way. ' + (made
+      ? ((inc ? ('The report ' + (inc.no || '') + ' was saved' + (jobs.length ? (' and the job ' + (jobs[0].no || '') + ' was created') : '')) : ('The job ' + (jobs[0].no || '') + ' was created')) + '. Check it on Fleet Work before trying again.')
+      : 'Nothing was saved.'));
+    if(made){ window.flnClose(); try{ window.flRenderWork(); }catch(_){} }
+    return null;
+  }
+
+  wrap('flnSave', function(){
+    var F = typeof FLN !== 'undefined' ? FLN : null; if(!F || F.busy) return null;
+    window.flnSync();
+    if(F.kind === 'job'){ window.flnSaveJob(); return null; }
+    if(!F.boat || !F.date || !F.title){ alert('Please fill in the boat, the date and what is wrong.'); return null; }
+    if(F.next === 'job' && F.jstatus === 'unavailable' && !F.reason){ alert('Please choose why the boat is unavailable.'); return null; }
+    F.busy = true;
+    var nA = window.flnAssetList().length, inc = null, jobs = [], note = '';
+    flnHide('fl-modal-incident', 1);
+    var step1;
+    try{
+      window.flOpenAddIncidentModal(null, { boatId: F.boat, quickFix: F.next === 'quick' });
+      flnSet('fl-inc-boat', F.boat); window.flIncUpdateDmgDropdowns(F.boat);
+      flnSet('fl-inc-date', F.date); flnSet('fl-inc-time', F.time); flnSet('fl-inc-title', F.title); flnSet('fl-inc-detail-input', F.detail);
+      flnSet('fl-inc-remark', F.by); flnSet('fl-inc-priority', String(F.prio)); flnSet('fl-inc-dmg-hull', F.hull); flnSet('fl-inc-cause', F.cause);
+      Object.keys(F.assets).forEach(function(k){ var p = k.split('|'), cb = document.querySelector('.dmg-' + p[0] + '-cb[value="' + p[1] + '"]'); if(cb) cb.checked = true; });
+      step1 = Promise.resolve(window.flSaveIncident());
+    }catch(err){ step1 = Promise.reject(err); }
+    return step1.then(function(res){
+      try{ window.closeModal('fl-modal-incident'); }catch(_){}
+      flnHide('fl-modal-incident', 0);
+      if(!res || !res.id){ F.busy = false; alert('The report was not saved. Check the form and try again.'); return null; }
+      inc = (typeof FL_INCIDENTS !== 'undefined' ? FL_INCIDENTS : []).find(function(x){ return x && x.id === res.id; }) || fromServerIncident(res);
+      if(F.next !== 'job') return flnFinish(F, inc, jobs, note);
+      flnHide('fl-modal-create-job', 1);
+      var step2;
+      try{
+        try{ _projCreateForId = null; }catch(_){}
+        window.flOpenCreateJobModal(inc.id);
+        flnSet('job-title', F.jtitle || F.title); flnSet('job-location', F.loc);
+        if(typeof window.selectJobStatusByValue === 'function') window.selectJobStatusByValue(F.jstatus);
+        flnSet('job-status-reason', F.jstatus === 'unavailable' ? F.reason : '');
+        if(nA > 1) window._flJobMode = 'single';
+        step2 = Promise.resolve(window.flSaveCreateJob());
+      }catch(err){ step2 = Promise.reject(err); }
+      return step2.then(function(){
+        window._flJobMode = null;
+        try{ window.closeModal('fl-modal-create-job'); window.closeModal('fl-modal-job-choice'); }catch(_){}
+        flnHide('fl-modal-create-job', 0);
+        jobs = listJobs().filter(function(m){ return m && m.incidentId === inc.id; });
+        if(!jobs.length){ note = ' The job was not created, so the report waits at stage Reported.'; return flnFinish(F, inc, jobs, note); }
+        return flnPatchOwnerDue(F, jobs).then(function(){
+          return F.start ? window.flMaintStart(jobs[0].id) : null;
+        }).then(function(){
+          if(F.parts){
+            if(window._flStartGear) note = ' Finish the start dialog first, then request parts from the job.';
+            else window.flMaintCreateMemo(jobs[0].id, true);
+          }
+          return flnFinish(F, inc, jobs, note);
+        });
+      }, function(err){
+        window._flJobMode = null;
+        try{ window.closeModal('fl-modal-create-job'); window.closeModal('fl-modal-job-choice'); }catch(_){}
+        flnHide('fl-modal-create-job', 0);
+        throw err;
+      });
+    }, function(err){
+      try{ window.closeModal('fl-modal-incident'); }catch(_){}
+      flnHide('fl-modal-incident', 0);
+      throw err;
+    }).catch(function(err){ return flnStopped(F, inc, jobs, err); });
+  });
+
+  wrap('flnSaveJob', function(){
+    var F = typeof FLN !== 'undefined' ? FLN : null; if(!F || F.busy) return null;
+    if(!F.boat || !F.title){ alert('Please fill in the boat and the job title.'); return null; }
+    if(F.jstatus === 'unavailable' && !F.reason){ alert('Please choose why the boat is unavailable.'); return null; }
+    F.busy = true;
+    var jobs = [], note = '', CB = { engine: 'job-asset-eng-cb', gearbox: 'job-asset-gb-cb', propeller: 'job-asset-prop-cb' };
+    var n0 = listJobs().map(function(m){ return m && m.id; });
+    flnHide('fl-modal-create-job', 1);
+    var step1;
+    try{
+      try{ _projCreateForId = null; }catch(_){}
+      window.flOpenCreateJobModal();
+      flnSet('job-boat', F.boat);
+      var card = document.querySelector('.job-type-card[data-type="' + F.jtype + '"]'); if(card) window.selectJobType(F.jtype, card);
+      if(F.jtype === 'preventive'){
+        Object.keys(F.assets).forEach(function(k){ var p = k.split('|'), cb = document.querySelector('.' + CB[p[0]] + '[value="' + p[1] + '"]'); if(cb) cb.checked = true; });
+        flnSet('job-asset-hull', F.hull);
+      }
+      flnSet('job-title', F.title); flnSet('job-detail', F.detail); flnSet('job-location', F.loc); flnSet('job-start-date', F.date || O.today());
+      if(typeof window.selectJobStatusByValue === 'function') window.selectJobStatusByValue(F.jstatus);
+      flnSet('job-status-reason', F.jstatus === 'unavailable' ? F.reason : '');
+      step1 = Promise.resolve(window.flSaveCreateJob());
+    }catch(err){ step1 = Promise.reject(err); }
+    return step1.then(function(created){
+      try{ window.closeModal('fl-modal-create-job'); }catch(_){}
+      flnHide('fl-modal-create-job', 0);
+      var first = created && created[0];
+      var job = first ? listJobs().find(function(m){ return m && m.id === first.id; }) : null;
+      if(!job) job = listJobs().find(function(m){ return m && n0.indexOf(m.id) < 0; }) || null;
+      if(!job){ F.busy = false; alert('The job was not saved. Check the form and try again.'); return null; }
+      jobs = [job];
+      return flnPatchOwnerDue(F, jobs).then(function(){
+        return F.start ? window.flMaintStart(job.id) : null;
+      }).then(function(){
+        if(F.parts){ if(window._flStartGear) note = ' Finish the start dialog first, then request parts from the job.'; else window.flMaintCreateMemo(job.id, true); }
+        var boat = F.boat;
+        window.flnClose();
+        FLW.boat = boat; FLW.stage = -1; FLW.bf = (FLW.bf === 'down') ? 'work' : FLW.bf; FLW.item = 'mj:' + job.id;
+        try{ window.flRenderWork(); }catch(_){}
+        if(typeof window.flShowToast === 'function') window.flShowToast('Saved ' + (job.no || 'the job') + '.' + note);
+        return null;
+      });
+    }, function(err){
+      try{ window.closeModal('fl-modal-create-job'); }catch(_){}
+      flnHide('fl-modal-create-job', 0);
+      throw err;
+    }).catch(function(err){ return flnStopped(F, null, jobs, err); });
+  });
+
   /* the work board's note box (flw-note): a job's line, or an incident's when the item is "inc:…" */
   wrap('flwAct', function(orig, a, id, x){
     if(a !== 'note') return orig.apply(this, [].slice.call(arguments, 1));

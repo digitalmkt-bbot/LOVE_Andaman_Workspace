@@ -834,6 +834,40 @@
     }).catch(function(e){ O.fail('Could not cancel memo', e); return null; });
   });
 
+  /* legacy moLiveSave (05-fleet.js): the memo detail's live edit of its lines. Same checks and toasts, then
+     PATCH /v1/fleet/memos/{id} {lines}. The totals, discount and VAT are the server's (computed from the lines), so the
+     browser's own sum is not sent. The edit stays open when the server refuses (for example a line with stock received). */
+  wrap('moLiveSave', function(){
+    var memos = listMemos();
+    var liveId = typeof _moLiveId !== 'undefined' ? _moLiveId : null;
+    var mo = memos.find(function(x){ return x && x.id === liveId; });
+    if(!mo) return null;
+    if(mo.status === 'paid' || mo.status === 'cancelled'){
+      if(typeof window.flShowToast === 'function') window.flShowToast('MO สถานะนี้แก้ไม่ได้', 'error');
+      _moLiveId = null; return null;
+    }
+    var live = typeof _moLiveItems !== 'undefined' && Array.isArray(_moLiveItems) ? _moLiveItems : [];
+    var clean = live.filter(function(it){ return String(it.name || '').trim(); });
+    if(!clean.length){
+      if(typeof window.flShowToast === 'function') window.flShowToast('ต้องมีอย่างน้อย 1 รายการ', 'error');
+      return null;
+    }
+    var lines = toMemoBody({ items: clean, memoType: mo.memoType }, true).lines;
+    return O.queue(function(){
+      return O.patch('/v1/fleet/memos/' + enc(mo.id), { lines: lines });
+    }).then(function(res){
+      upsertMemo(res);
+      var id = mo.id;
+      _moLiveId = null; _moLiveItems = [];
+      O.wrote('fleet-memo-edit');
+      if(typeof window.flShowToast === 'function') window.flShowToast('บันทึกรายการแล้ว');
+      try{ if(mo.maintId && typeof window.flRenderMaintDetail === 'function') window.flRenderMaintDetail(mo.maintId); }catch(_){}
+      try{ if(typeof window.flRenderMemos === 'function') window.flRenderMemos(); }catch(_){}
+      if(typeof window.flViewMemo === 'function') window.flViewMemo(id);
+      return res;
+    }).catch(function(e){ O.fail('Could not save the memo lines', e); return null; });
+  });
+
   O.onChange(function(change){
     if(!change) return;
     if(['fleet_stock', 'fleet_memo', 'fleet_consumable', 'fleet_job'].indexOf(change.entity_type) >= 0){
