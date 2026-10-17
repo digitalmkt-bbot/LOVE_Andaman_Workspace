@@ -686,16 +686,65 @@
     }
     return out;
   }
+  /* ══ §execAlloc (2026-10-17) · owner "ทำแบบที่คุณคำนวณให้ก่อนด้วย และผู้บริหารแก้ไขได้ · ถ้ากำหนดเป้าแล้วจะดู progress ยังไง"
+     เก็บที่ blob key 'exec_alloc' เป็น JSON string → ไปอยู่ app_meta ของเซิร์ฟเวอร์เอง (แบบเดียวกับ cost_plans ของหน้าต้นทุน) ไม่ต้องแตะฐานข้อมูล
+     รูป: { "2026-10": { by:{famId:{salesId:pct}}, lf:{famId:pct}, who, at } } · เดือนที่ไม่มีค่า = ใช้สัดส่วนที่คำนวณ
+     แก้ได้เมื่อมีสิทธิ์แก้ส่วน sales (laCanEditArea) · เปอร์เซ็นต์ที่ไม่ครบ 100 ของเส้นทาง = "ยังไม่มอบหมาย" ไม่หายไปไหน */
+  function allocAll(){ var v=null; try{ v=laBlob().exec_alloc; if(typeof v==='string') v=JSON.parse(v); }catch(_){ v=null; } return (v&&typeof v==='object')?v:{}; }
+  function allocOf(ym){ var a=allocAll()[ym]; return (a&&typeof a==='object'&&a.by)?a:null; }
+  function allocSave(ym, rec){
+    if(typeof laGuardEdit==='function' && !laGuardEdit('sales')) return false;
+    try{ var all=allocAll(); if(rec) all[ym]=rec; else delete all[ym]; var d=laBlob(); d.exec_alloc=JSON.stringify(all); laBlobSave(); return true; }catch(e){ console.warn('[execAlloc] save failed', e); return false; }
+  }
+  function lfOf(ym, famId){ var a=allocOf(ym); var v=a&&a.lf&&+a.lf[famId]; return (v>0&&v<=100)?v/100:EB_LF_TARGET; }
+  /* สัดส่วนที่ใช้จริง · ของผู้บริหารก่อน ไม่มีค่อยคำนวณ · คืนรูปเดียวกับ salesShare */
+  function shareUsed(R){
+    var ym=R.mFrom.slice(0,7), A=allocOf(ym), SH=salesShare(R.mFrom, R.mTo);
+    if(!A) return {fam:SH.fam, src:SH.src, calc:SH, manual:false, ym:ym};
+    var fam2={}; Object.keys(A.by).forEach(function(f){ var by=A.by[f]||{}, tot=0, o={tot:100, by:{}};
+      Object.keys(by).forEach(function(sid){ var v=Math.max(0,+by[sid]||0); if(v>0){ o.by[sid]=v; tot+=v; } });
+      if(tot>100){ Object.keys(o.by).forEach(function(sid){ o.by[sid]=o.by[sid]*100/tot; }); tot=100; }
+      if(tot<100) o.by.__none=(o.by.__none||0)+(100-tot);
+      fam2[f]=o; });
+    return {fam:fam2, src:'กำหนดโดย '+(A.who||'ผู้บริหาร')+' · '+(A.at?thD(String(A.at).slice(0,10)):''), calc:SH, manual:true, ym:ym, rec:A};
+  }
+  function canAlloc(){ try{ return (typeof laCanEditArea!=='function') || laCanEditArea('sales'); }catch(_){ return false; } }
+  window.ebAllocEdit=function(on){ EB.allocEdit=!!on; keepRender(true); };
+  window.ebAllocReset=function(ym){ if(!confirm('Use the computed shares for this month? The manual allocation will be removed.')) return; if(allocSave(ym, null)){ EB.allocEdit=false; keepRender(true); } };
+  window.ebAllocSave=function(ym){
+    var box=document.getElementById('eb-alloc'); if(!box) return;
+    var rec={by:{}, lf:{}, who:(typeof laBy==='function'?laBy():'')||'', at:new Date().toISOString()};
+    box.querySelectorAll('input[data-f][data-s]').forEach(function(i){ var v=+i.value||0; if(v>0){ (rec.by[i.dataset.f]=rec.by[i.dataset.f]||{})[i.dataset.s]=Math.round(v*10)/10; } });
+    box.querySelectorAll('input[data-lf]').forEach(function(i){ var v=+i.value||0; if(v>0&&v<=100) rec.lf[i.dataset.lf]=Math.round(v); });
+    Object.keys(rec.by).forEach(function(f){ var t=0; Object.keys(rec.by[f]).forEach(function(k){ t+=rec.by[f][k]; }); if(t>100.5){ alert('Route total is over 100% - please fix before saving.'); throw new Error('alloc>100'); } });
+    if(allocSave(ym, rec)){ EB.allocEdit=false; keepRender(true); }
+  };
+  window.ebAllocTot=function(f){ var box=document.getElementById('eb-alloc'); if(!box) return; var t=0; box.querySelectorAll('input[data-f="'+f+'"]').forEach(function(i){ t+=(+i.value||0); });
+    var el=box.querySelector('[data-tot="'+f+'"]'); if(el){ el.textContent=Math.round(t*10)/10+'%'; el.className='eb-atot '+(t>100.5?'over':(t<98.5?'under':'ok')); } };
+  function allocEditor(R, SH, fT, salesList){
+    var ym=R.mFrom.slice(0,7), fams=Object.keys(fT).sort(function(a,b){ return fT[b]-fT[a]; });
+    var sl=salesList.filter(function(x){ return !x.none; });
+    var cur=function(f,sid){ var sh=SH.fam[f]; if(!sh||!sh.tot) return 0; return Math.round((sh.by[sid]||0)*1000/sh.tot)/10; };
+    var h='<div class="eb-card" id="eb-alloc"><h2>กำหนดสัดส่วนเอง · '+E(ym)+' <span class="eb-tag">% ของเป้าแต่ละเส้นทางที่เซลส์แต่ละคนรับ · ช่องว่าง = ใช้ค่าที่คำนวณให้</span></h2>'
+      + '<div class="eb-scroll"><table class="eb-tbl eb-al"><thead><tr><th>เส้นทาง</th><th>ที่นั่งที่วาง</th><th>LF เป้า %</th>'+sl.map(function(x){ return '<th><span class="eb-dot" style="background:'+E(x.color)+'"></span>'+E(x.name)+'</th>'; }).join('')+'<th>รวม</th></tr></thead><tbody>'
+      + fams.map(function(f){ var fn=(fams.length&&(typeof _BKV2_FAMILIES!=='undefined'))?((_BKV2_FAMILIES.filter(function(x){ return x.id===f; })[0]||{}).name||f):f; var tot=0;
+          var cells=sl.map(function(x){ var v=cur(f,x.id); tot+=v; return '<td><input type="number" min="0" max="100" step="1" data-f="'+E(f)+'" data-s="'+E(x.id)+'" value="'+(v||'')+'" placeholder="0" oninput="ebAllocTot(\''+E(f)+'\')"></td>'; }).join('');
+          return '<tr><td class="eb-l"><b>'+E(fn)+'</b></td><td>'+num(Math.round(fT[f]/lfOf(ym,f)))+'</td><td><input type="number" min="1" max="100" step="1" data-lf="'+E(f)+'" value="'+Math.round(lfOf(ym,f)*100)+'"></td>'+cells+'<td><span class="eb-atot '+(tot>100.5?'over':(tot<98.5?'under':'ok'))+'" data-tot="'+E(f)+'">'+Math.round(tot*10)/10+'%</span></td></tr>'; }).join('')
+      + '</tbody></table></div>'
+      + '<div class="eb-foot">ค่าเริ่มต้นในช่องคือสัดส่วนที่คำนวณจาก '+E(SH.calc.src||'ยังไม่มีฐาน')+' · รวมไม่ถึง 100% = ส่วนที่ยังไม่มอบหมาย (ขึ้นในการ์ด "ยังไม่มอบหมาย") · เกิน 100% บันทึกไม่ได้</div>'
+      + '<div class="eb-btns"><button class="eb-btn p" onclick="ebAllocSave(\''+E(ym)+'\')">บันทึก</button>'+(SH.manual?'<button class="eb-btn" onclick="ebAllocReset(\''+E(ym)+'\')">กลับไปใช้ค่าคำนวณ</button>':'')+'<button class="eb-btn" onclick="ebAllocEdit(false)">ยกเลิก</button></div></div>';
+    return h;
+  }
   function viewGap(){
-    var t0=today(), R=gapRange(), SH=salesShare(R.mFrom, R.mTo), CV=curves();
+    var t0=today(), R=gapRange(), SH=shareUsed(R), CV=curves(), ymG=R.mFrom.slice(0,7);
     /* เป้าเดือน / จองแล้ว · ทั้งเดือน (ที่ผ่านแล้ว = เดินทางจริงตามใบ) */
     var mT=0, mB=0, mTrips=0, past=0, fut=0;
     for(var ds=R.mFrom; ds<=R.mTo; ds=addDays(ds,1)){
       routesOn(ds).forEach(function(rid){ var al=alOf(rid,ds); if(!al||!al.hasAllotment) return;
-        var cap=+al.availableCapacity||0, bk=+al.seatsConsumed||0; mT+=Math.round(cap*EB_LF_TARGET); mB+=Math.min(bk,cap); mTrips++;
+        var cap=+al.availableCapacity||0, bk=+al.seatsConsumed||0, fid=(fam(rid)||{}).id||rid; mT+=cap*lfOf(ymG,fid); mB+=Math.min(bk,cap); mTrips++;
         if(ds<t0) past+=bk; else fut+=bk; });
     }
-    var daysLeft=Math.max(1,nDays(t0,R.mTo)), mGap=Math.max(0,mT-mB), need=mGap/daysLeft;
+    mT=Math.round(mT); var daysLeft=Math.max(1,nDays(t0,R.mTo)), mGap=Math.max(0,mT-mB), need=mGap/daysLeft;
     /* เพซ · pax ที่เข้ามา 7 วันล่าสุด ต่อวัน · เทียบ 4 สัปดาห์ก่อน */
     var s7=salesIn(addDays(t0,-7),addDays(t0,-1)), s28=salesIn(addDays(t0,-35),addDays(t0,-8));
     var pace7=s7.pax/7, pace28=s28.pax/28;
@@ -747,11 +796,14 @@
     /* การ์ดเซลส์ · เป้า/ช่องว่างแบ่งตามสัดส่วน */
     var fT={}, fB={};
     for(ds=R.mFrom; ds<=R.mTo; ds=addDays(ds,1)){ routesOn(ds).forEach(function(rid){ var al=alOf(rid,ds); if(!al||!al.hasAllotment) return; var f=(fam(rid)||{}).id||rid;
-      fT[f]=(fT[f]||0)+Math.round((+al.availableCapacity||0)*EB_LF_TARGET); fB[f]=(fB[f]||0)+Math.min(+al.seatsConsumed||0,+al.availableCapacity||0); }); }
-    var SL={}; var ensure=function(sid){ var so=salesOf(sid==='__none'?'':sid); return SL[sid]=SL[sid]||{s:so, tgt:0, bk:0, pace:0, ag:{}, calls:[]}; };
-    Object.keys(fT).forEach(function(f){ var sh=SH.fam[f]; if(!sh||!sh.tot){ var o=ensure('__none'); o.tgt+=fT[f]; o.bk+=fB[f]||0; return; }
-      Object.keys(sh.by).forEach(function(sid){ var w=sh.by[sid]/sh.tot, o=ensure(sid); o.tgt+=fT[f]*w; o.bk+=(fB[f]||0)*w; }); });
-    s7.list.forEach(function(b){ var o=ensure(salesOf(sidOf(b)).id); (b.trips||[]).forEach(function(t){ o.pace+=pax(t)/7; }); });
+      fT[f]=(fT[f]||0)+(+al.availableCapacity||0)*lfOf(ymG,f); fB[f]=(fB[f]||0)+Math.min(+al.seatsConsumed||0,+al.availableCapacity||0); }); }
+    var famName=function(f){ var x=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES.filter(function(y){ return y.id===f; })[0]:null; return (x&&x.name)||((fams[f]||{}).f||{}).name||(route(f)||{}).name||f; };
+    var SL={}; var ensure=function(sid){ var so=salesOf(sid==='__none'?'':sid); if(sid==='__none' && SH.manual) so=Object.assign({}, so, {name:'ยังไม่มอบหมาย'}); return SL[sid]=SL[sid]||{s:so, tgt:0, bk:0, own:0, pace:0, ag:{}, calls:[], byF:{}, paceF:{}}; };
+    /* §execAlloc · เป้า/จองแล้ว แยกเส้นทางต่อเซลส์ · bk = ตามสัดส่วน (ที่นั่งของเส้นทางที่ถือว่าเป็นของเขา) · own = ใบของเขาเองที่เดินทางในเดือนนี้ */
+    Object.keys(fT).forEach(function(f){ var sh=SH.fam[f]; if(!sh||!sh.tot){ var o=ensure('__none'); o.tgt+=fT[f]; o.bk+=fB[f]||0; o.byF[f]={tgt:fT[f], bk:fB[f]||0, w:1, own:0}; return; }
+      Object.keys(sh.by).forEach(function(sid){ var w=sh.by[sid]/sh.tot, o=ensure(sid); o.tgt+=fT[f]*w; o.bk+=(fB[f]||0)*w; o.byF[f]={tgt:fT[f]*w, bk:(fB[f]||0)*w, w:w, own:0}; }); });
+    eachTrip(R.mFrom, R.mTo, function(b,t){ var sid=salesOf(sidOf(b)).id, f=(fam(t.routeId)||{}).id||t.routeId, o=SL[sid]; if(!o) return; o.own+=pax(t); if(o.byF[f]) o.byF[f].own+=pax(t); });
+    s7.list.forEach(function(b){ var o=ensure(salesOf(sidOf(b)).id); (b.trips||[]).forEach(function(t){ var p=pax(t)/7, f=(fam(t.routeId)||{}).id||t.routeId; o.pace+=p; if(t.date>=R.mFrom && t.date<=R.mTo) o.paceF[f]=(o.paceF[f]||0)+p; }); });
     /* รายชื่อโทร */
     var s14=salesIn(addDays(t0,-14), addDays(t0,-1)), s60=salesIn(addDays(t0,-60), addDays(t0,-15)), last={}, agSid={}, agRoutes={}, nm={}, v60={};
     var mark=function(b, bucket){ var k=agKey(b); if(k==='__b2c'||k==='__none') return; var d=bkDay(b); if(!last[k]||d>last[k]) last[k]=d; agSid[k]=salesOf(sidOf(b)).id; nm[k]=agentName(b);
@@ -761,7 +813,8 @@
     var sent14={}; s14.list.forEach(function(b){ var k=agKey(b); if(k!=='__b2c'&&k!=='__none') (sent14[salesOf(sidOf(b)).id]=sent14[salesOf(sidOf(b)).id]||{})[k]=1; });
     var shortFams={}; famL.forEach(function(F){ days.forEach(function(d){ var c=cells[F.f.id+'|'+d]; if(c && (c.worst==='y'||c.worst==='r') && c.lead<=7) (shortFams[F.f.id]=shortFams[F.f.id]||[]).push(d); }); });
     Object.keys(agSid).forEach(function(k){ var o=SL[agSid[k]]; if(!o) return; var gone=nDays(last[k],t0)-1;
-      if(gone>=7 && gone<=60 && (v60[k]||0)>=3) o.calls.push({k:k, name:nm[k], why:'เงียบ '+gone+' วัน', cls:'q', sub:'ส่ง '+num(v60[k])+' pax ใน 60 วันก่อน', w:2+Math.min(3,(v60[k]||0)/20)});
+      var topF=Object.keys(agRoutes[k]||{}).sort(function(a,b){ return agRoutes[k][b]-agRoutes[k][a]; })[0];
+      if(gone>=7 && gone<=60 && (v60[k]||0)>=3) o.calls.push({k:k, name:nm[k], why:'เงียบ '+gone+' วัน', cls:'q', sub:'ส่ง '+num(v60[k])+' pax ใน 60 วันก่อน'+(topF?' · '+E(famName(topF)):''), w:2+Math.min(3,(v60[k]||0)/20)});
       else if(gone<7){ var rs=Object.keys(agRoutes[k]||{}).filter(function(f){ return shortFams[f]; }).sort(function(a,b){ return agRoutes[k][b]-agRoutes[k][a]; })[0];
         if(rs){ var d=shortFams[rs][0]; o.calls.push({k:k, name:nm[k], why:'ว่าง '+dowS[dt(d).getDay()]+' '+dt(d).getDate(), cls:'o', sub:'เคยส่ง '+E((fams[rs]||{}).f?fams[rs].f.name:rs)+' · '+num(agRoutes[k][rs])+' pax', w:1}); } }
       try{ var cs=agCreditState(k); if(cs&&cs.limit>0&&cs.used>cs.limit) o.calls.push({k:k, name:nm[k], why:'เกินวงเงิน '+pct(cs.used,cs.limit)+'%', cls:'r', sub:'ใบใหม่จะติดวงเงิน', w:4}); }catch(_){}
@@ -771,7 +824,11 @@
       var rem=bkV2LockHeldRemaining(l,l.date); if(rem<=0) return; var a=sbGetAgent(l.agentId); if(!a) return; var o=SL[salesOf(a.sales).id]; if(!o) return;
       o.calls.push({k:l.agentId, name:a.name||l.agentId, why:'ล็อก '+rem+' ที่ยังไม่ใช้', cls:'l', sub:E(rName(l.routeId).f)+' · '+thD(l.date), w:3}); }); }catch(_){}
     var sl=Object.keys(SL).map(function(k){ return SL[k]; }).filter(function(o){ return o.tgt>0||o.pace>0||o.calls.length; }).sort(function(a,b){ return (a.s.none-b.s.none)||(b.tgt-a.tgt); });
-    h+='<div class="eb-sec">ช่องว่างแบ่งให้เซลส์ · ตามสัดส่วนที่แต่ละคนขายได้ต่อเส้นทาง ('+E(SH.src||'ยังไม่มีฐาน')+')</div><div class="eb-mv eb-sl">'
+    var allSales=Object.keys(SL).map(function(k){ return SL[k].s; }); (typeof sbSalesActive==='function'?sbSalesActive():[]).forEach(function(x){ if(!allSales.some(function(y){ return y.id===x.id; })) allSales.push(salesOf(x.id)); });
+    h+='<div class="eb-sec">ช่องว่างแบ่งให้เซลส์ · '+(SH.manual?'สัดส่วนที่ผู้บริหารกำหนด ('+E(SH.src)+')':'ตามสัดส่วนที่แต่ละคนขายได้ต่อเส้นทาง ('+E(SH.src||'ยังไม่มีฐาน')+')')
+      + (canAlloc()&&!EB.allocEdit?' <button class="eb-btn s" onclick="ebAllocEdit(true)">'+(SH.manual?'แก้สัดส่วน':'กำหนดสัดส่วนเอง')+'</button>':'')+'</div>'
+      + (EB.allocEdit&&canAlloc()?allocEditor(R, SH, fT, allSales):'')
+      + '<div class="eb-mv eb-sl">'
       + (sl.length?sl.map(function(o){ var gap=Math.max(0,o.tgt-o.bk), nd=gap/daysLeft, pc=pct(o.bk,o.tgt), should=pct(nDays(R.mFrom,t0)-1,nDays(R.mFrom,R.mTo));
           var act=Object.keys(sent14[o.s.id]||{}).length, all=port[o.s.id]||0;
           var calls=o.calls.sort(function(a,b){ return b.w-a.w; }); var seen={}; calls=calls.filter(function(c){ var k=c.k+'|'+c.cls; if(seen[k]) return false; seen[k]=1; return true; }).slice(0,4);
@@ -779,9 +836,33 @@
             + '<div class="eb-q"><div><div class="l">เป้าเดือน</div><div class="v">'+num(o.tgt)+'</div></div><div><div class="l">ช่องว่าง</div><div class="v" style="color:'+(gap<=0?'var(--eb-good)':(nd>o.pace*1.3?'var(--eb-bad)':'var(--eb-warn)'))+'">'+num(gap)+'</div></div>'
             + '<div><div class="l">ต้องได้/วัน</div><div class="v">'+num(Math.ceil(nd))+'<small> (เพซ '+o.pace.toFixed(0)+')</small></div></div><div><div class="l">Activation 14 วัน</div><div class="v">'+num(act)+'<small>/'+num(all)+'</small></div></div></div>'
             + '<div class="eb-prog"><i style="width:'+Math.min(100,pc)+'%;background:'+E(o.s.color)+'"></i><s style="left:'+should+'%"></s></div><div class="eb-foot" style="margin:0 0 6px">'+pc+'% ของเป้า · เส้นดำ = ควรถึงแล้ว ณ วันนี้ ('+should+'%)'+(o.pace>0&&nd>o.pace*1.3?' · <span class="eb-dn">เพซไม่ทัน</span>':'')+'</div>'
+            /* §execAlloc · ช่องว่างแยกเส้นทาง · บอกว่าต้องไปขายอะไร */
+            + (function(){ var L=Object.keys(o.byF).map(function(f){ var x=o.byF[f]; return {f:f, gap:Math.max(0,x.tgt-x.bk), tgt:x.tgt, w:x.w, nd:Math.max(0,x.tgt-x.bk)/daysLeft}; }).filter(function(x){ return x.tgt>0; }).sort(function(a,b){ return b.gap-a.gap; });
+                if(!L.length) return ''; return '<div class="eb-rf">'+L.map(function(x){ return '<span class="'+(x.gap<=0?'ok':'')+'" title="'+E(famName(x.f))+' · เป้า '+num(x.tgt)+' · รับ '+Math.round(x.w*100)+'% ของเส้นทาง · ต้องได้วันละ '+num(Math.ceil(x.nd))+'"><b>'+E(famName(x.f))+'</b> '+(x.gap<=0?'✓':num(x.gap))+'<small>'+Math.round(x.w*100)+'%</small></span>'; }).join('')+'</div>'; })()
             + (calls.length?'<ul class="eb-calls">'+calls.map(function(c){ return '<li><div><b>'+E(c.name)+'</b><span>'+c.sub+'</span></div><span class="eb-why '+c.cls+'">'+E(c.why)+'</span></li>'; }).join('')+'</ul>':'<div class="eb-foot">ไม่มีรายชื่อที่ต้องโทรวันนี้</div>')
             + '</div>'; }).join('')
         :'<div class="eb-card eb-none">ยังไม่มีเซลส์ที่ผูกกับใบจอง</div>')+'</div>';
+
+    /* §execAlloc · ความคืบหน้าเทียบเป้า · ต่อเซลส์ แยกเส้นทาง */
+    var elapsed=Math.max(1,nDays(R.mFrom,t0)), shouldPc=pct(elapsed-1, nDays(R.mFrom,R.mTo));
+    var wk=[]; for(var w=4; w>=0; w--){ var a=addDays(t0,-7*w-6), bb=addDays(t0,-7*w); wk.push({from:a, to:bb, lbl:thD(a).split(' ')[0]+'–'+thD(bb)}); }
+    var wkPax={}; wk.forEach(function(W,i){ eachMade(W.from, W.to, function(b){ var sid=salesOf(sidOf(b)).id; (b.trips||[]).forEach(function(t){ if(t.date<R.mFrom||t.date>R.mTo) return; var r=route(t.routeId); if(!pierOk(r)) return; var f=(fam(t.routeId)||{}).id||t.routeId; var key=sid+'|'+f; (wkPax[key]=wkPax[key]||[0,0,0,0,0])[i]+=pax(t); (wkPax[sid+'|*']=wkPax[sid+'|*']||[0,0,0,0,0])[i]+=pax(t); }); }); });
+    var prow=function(name, color, tgt, bk, pace, weeks, sub){
+      var gap=Math.max(0,tgt-bk), nd=gap/daysLeft, fc=bk+pace*daysLeft, pc=pct(bk,tgt), mx=Math.max.apply(null,[1].concat(weeks));
+      var st = tgt<=0?'' : (gap<=0?'<span class="eb-st g">✓ ถึงเป้า</span>':(pace>=nd?'<span class="eb-st g">ตามแผน</span>':(fc>=tgt*0.9?'<span class="eb-st w">▲ ใกล้เคียง</span>':'<span class="eb-st b">● ไม่ทัน</span>')));
+      return '<tr'+(sub?' class="eb-sub"':'')+'><td class="eb-l">'+(sub?'<span class="eb-mut">└</span> ':'<span class="eb-dot" style="background:'+E(color)+'"></span>')+'<b>'+E(name)+'</b></td><td>'+num(tgt)+'</td><td><b>'+num(bk)+'</b></td>'
+        + '<td><div class="eb-pct"><span><i style="width:'+Math.min(100,pc)+'%;background:'+E(color)+'"></i></span>'+pc+'%</div></td><td>'+(gap?num(gap):'<span class="eb-mut">0</span>')+'</td><td>'+(gap?num(Math.ceil(nd)):'<span class="eb-mut">—</span>')+'</td><td>'+pace.toFixed(1)+'</td>'
+        + '<td><div class="eb-spark eb-wk">'+weeks.map(function(v,i){ return '<i title="'+E(wk[i].lbl)+' · '+num(v)+' pax" style="height:'+Math.max(2,Math.round(v*100/mx))+'%;background:'+(i===4?E(color):'var(--eb-s2)')+'"></i>'; }).join('')+'</div></td>'
+        + '<td>'+num(Math.round(fc))+'<small class="eb-mut"> ('+pct(fc,tgt)+'%)</small></td><td>'+st+'</td></tr>'; };
+    var prog=sl.filter(function(o){ return o.tgt>0; }).map(function(o){
+      var rows=prow(o.s.name, o.s.color, o.tgt, o.bk, o.pace, wkPax[o.s.id+'|*']||[0,0,0,0,0], false);
+      Object.keys(o.byF).sort(function(a,b){ return o.byF[b].tgt-o.byF[a].tgt; }).forEach(function(f){ var x=o.byF[f]; if(x.tgt<=0) return; rows+=prow(famName(f), o.s.color, x.tgt, x.bk, o.paceF[f]||0, wkPax[o.s.id+'|'+f]||[0,0,0,0,0], true); });
+      return rows; }).join('');
+    h+='<div class="eb-sec">ความคืบหน้าเทียบเป้า · '+E(ymG)+' · วันที่ '+elapsed+'/'+nDays(R.mFrom,R.mTo)+' ของเดือน (ควรถึง '+shouldPc+'%)</div>'
+      + '<div class="eb-card eb-scroll"><h2>เซลส์ × เส้นทาง <span class="eb-tag">จองแล้ว = ที่นั่งของเดือนนี้ตามสัดส่วนที่รับ · เข้ามา/วัน = ใบของเขาที่เดินทางเดือนนี้ 7 วันล่าสุด · คาดสิ้นเดือน = จองแล้ว + เข้ามา/วัน × วันที่เหลือ</span>'+src('ที่มา: Booking · Boat Operation')+'</h2>'
+      + '<table class="eb-tbl eb-pg"><thead><tr><th>เซลส์ / เส้นทาง</th><th>เป้า</th><th>จองแล้ว</th><th>% ของเป้า</th><th>ขาด</th><th>ต้องได้/วัน</th><th>เข้ามา/วัน</th><th>5 สัปดาห์</th><th>คาดสิ้นเดือน</th><th>สถานะ</th></tr></thead><tbody>'
+      + (prog||'<tr><td colspan="10" class="eb-none">ยังไม่มีเป้า</td></tr>')+'</tbody></table>'
+      + '<div class="eb-foot">แผน Monthly = เป้าและสัดส่วน · Weekly = แท่ง 5 สัปดาห์ต้องสูงขึ้นเมื่อ "ต้องได้/วัน" สูงกว่า "เข้ามา/วัน" · Daily = ขาดต้องลดลงทุกวัน · สถานะคิดจากเพซ 7 วันล่าสุดไปถึงสิ้นเดือน</div></div>';
 
     /* ตัดสินใจสัปดาห์นี้ */
     var dec=[]; famL.forEach(function(F){ days.forEach(function(d){ var c=cells[F.f.id+'|'+d]; if(!c||c.lead>7) return; c.rids.forEach(function(s){ if(s.st==='r'||s.belowBe||(s.st==='y'&&s.lead<=3)) dec.push(Object.assign({f:F.f}, s)); }); }); });
@@ -999,6 +1080,17 @@
       '.eb-dec .d1 b{display:block;font-size:12.5px}.eb-dec .d1 span{font-size:11px;color:var(--eb-mut)}.eb-dec .d2{font-size:11.5px;color:var(--eb-ink2)}.eb-dec .d2 b{color:var(--eb-ink)}',
       '.eb-opt{display:inline-flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.eb-opt b{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;background:#F1F3F7;color:var(--eb-ink2);white-space:nowrap}.eb-opt b.on{background:var(--eb-ink);color:#fff}',
       '.eb-lb{display:inline-block;height:7px;background:var(--eb-s4);border-radius:3px;vertical-align:middle;margin-right:6px}',
+      /* §execAlloc */
+      '.eb-btn{font:600 12px inherit;font-family:inherit;padding:5px 12px;border-radius:8px;border:1px solid var(--eb-line);background:#fff;color:var(--eb-ink);cursor:pointer;margin-right:6px}',
+      '.eb-btn.p{background:var(--eb-ink);color:#fff;border-color:var(--eb-ink)}.eb-btn.s{font-size:11px;padding:2px 9px;margin-left:8px;text-transform:none;letter-spacing:0;vertical-align:middle}',
+      '.eb-btns{margin-top:10px}',
+      '.eb-tbl.eb-al input{width:58px;font:600 12px inherit;font-family:inherit;padding:3px 5px;border:1px solid var(--eb-line);border-radius:6px;text-align:right}',
+      '.eb-atot{font-weight:700}.eb-atot.over{color:var(--eb-bad)}.eb-atot.under{color:var(--eb-warn)}.eb-atot.ok{color:var(--eb-good)}',
+      '.eb-rf{display:flex;flex-wrap:wrap;gap:4px 6px;margin:0 0 8px}',
+      '.eb-rf span{font-size:11px;font-weight:700;background:#F1F3F7;border-radius:6px;padding:2px 7px;white-space:nowrap}.eb-rf span.ok{background:var(--eb-good-l);color:var(--eb-good)}',
+      '.eb-rf span b{font-weight:600;color:var(--eb-ink2);margin-right:3px}.eb-rf span small{font-weight:600;color:var(--eb-mut);margin-left:3px}',
+      '.eb-tbl.eb-pg tr.eb-sub td{padding-top:3px;padding-bottom:3px;font-size:11.5px;color:var(--eb-ink2);border-top:0}.eb-tbl.eb-pg tr.eb-sub td b{font-weight:600}',
+      '.eb-spark.eb-wk{width:70px;height:20px;margin-left:auto}',
       '@media(max-width:900px){.eb-dec li{grid-template-columns:minmax(0,1fr)}}'
     ].join('\n');
     document.head.appendChild(s);

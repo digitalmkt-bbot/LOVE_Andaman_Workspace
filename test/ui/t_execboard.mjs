@@ -21,6 +21,10 @@
 //  11 §execPerf (owner "เวลาคลิกแถบด้านบน ช้ามาก"): กดแถบแล้วขึ้น "กำลังคำนวณ…" ทันที วาดเสร็จแล้วหาย
 //     ใบจอง 6,000 ใบ: สลับแท็บ/ช่วงแต่ละครั้ง (หลังรอบแรก) ไม่เกิน 600ms บนเครื่องทดสอบ · ตัวเลขเท่ากับคิดสด (ดัชนีไม่ทำให้ผลเพี้ยน)
 //     เทสนี้ใช้ ebSetNow (วาดทันที) · ปุ่มจริงใช้ ebSet ที่วาดในเฟรมถัดไป
+//  12 §execAlloc (owner "ผู้บริหารแก้ไขได้ · กำหนดเป้าแล้วดู progress ยังไง"):
+//     การ์ดเซลส์แสดงช่องว่างแยกเส้นทาง · ตารางความคืบหน้ามีแถวเซลส์และแถวย่อยเส้นทาง
+//     เปิดตัวแก้ → ใส่ 100% ของเส้นทางหนึ่งให้เซลส์คนเดียว → บันทึก → เป้าของเขาในเส้นทางนั้น = เป้าเส้นทางทั้งหมด · หัวข้อบอกว่ากำหนดโดยใคร
+//     ค่าถูกเก็บเป็น JSON string ใน blob (exec_alloc → app_meta) · กลับไปใช้ค่าคำนวณได้ · ไม่มีสิทธิ์ sales บันทึกไม่ได้
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -182,7 +186,8 @@ const R10 = await page.evaluate(() => {
   /* expected month target */
   const mEnd = ymd(new Date(T.getFullYear(), T.getMonth() + 1, 0)); let tgt = 0, bk = 0;
   for (let ds = t0.slice(0, 8) + '01'; ds <= mEnd; ds = (() => { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + 1); return ymd(d); })()) {
-    const seen = {}; Object.keys(TRIPS[ds] || {}).forEach(b => { const r = TRIPS[ds][b].route; if (seen[r]) return; seen[r] = 1; const al = getAllotment(r, ds); if (al && al.hasAllotment) { tgt += Math.round(al.availableCapacity * 0.9); bk += Math.min(al.seatsConsumed, al.availableCapacity); } }); }
+    const seen = {}; Object.keys(TRIPS[ds] || {}).forEach(b => { const r = TRIPS[ds][b].route; if (seen[r]) return; seen[r] = 1; const al = getAllotment(r, ds); if (al && al.hasAllotment) { tgt += al.availableCapacity * 0.9; bk += Math.min(al.seatsConsumed, al.availableCapacity); } }); }
+  tgt = Math.round(tgt);
   const kv = [...w.querySelectorAll('.eb-k')].map(k => ({ l: k.querySelector('.l').textContent, v: +k.querySelector('.v').textContent.replace(/[^\d]/g, '') }));
   const rows = [...w.querySelectorAll('.eb-gap tbody tr')].map(r => r.querySelector('.rn') ? r.querySelector('.rn').textContent.split('\n')[0].replace(/\d+ รอบ.*$/, '').trim() : r.textContent);
   const firstCell = w.querySelector('.eb-gap td.c:not(.off)'); const free = firstCell ? +firstCell.firstChild.textContent.replace(/,/g, '') : null;
@@ -226,5 +231,38 @@ const slow = Object.keys(R11.times).filter(k => R11.times[k] > 600);
 if (!slow.length && R11.busy0 && !R11.busy1 && near(parseB(R11.shown), R11.live))
   ok('11 ' + R11.n.toLocaleString() + ' ใบ · เปิด Gap รอบแรก ' + R11.first + 'ms · สลับแท็บ ' + JSON.stringify(R11.times).replace(/"/g, '') + ' · ขึ้น "กำลังคำนวณ…" แล้วหาย · รายได้วันนี้ ' + R11.shown + ' = คิดสด');
 else fail('11 ' + JSON.stringify(R11) + ' slow=' + slow.join(','));
+
+// 12
+const R12 = await page.evaluate(() => {
+  ebSetNow('tab', 'gap'); ebSetNow('gp', 'h');
+  const w = document.getElementById('eb-wrap');
+  const chips = w.querySelectorAll('.eb-sl .eb-rf span').length, subRows = w.querySelectorAll('table.eb-pg tr.eb-sub').length, mainRows = w.querySelectorAll('table.eb-pg tbody tr:not(.eb-sub)').length;
+  const hdr0 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  ebAllocEdit(true);
+  const box = document.getElementById('eb-alloc'); if (!box) return { noBox: true };
+  const inputs = [...box.querySelectorAll('input[data-f][data-s]')]; const f0 = inputs[0].dataset.f, s0 = inputs[0].dataset.s;
+  inputs.forEach(i => { if (i.dataset.f === f0) i.value = (i.dataset.s === s0) ? 100 : 0; });
+  const seatsCell = box.querySelector('tbody tr').children[1].textContent.replace(/,/g, '');
+  const lfIn = box.querySelector('input[data-lf="' + f0 + '"]'); lfIn.value = 80;
+  const salesName = sbGetSales(s0).name;
+  ebAllocSave(''+ (bkV2LocalYMD(new Date()).slice(0, 7)));
+  const stored = laBlob().exec_alloc; let parsed = null; try { parsed = JSON.parse(stored); } catch (_) {}
+  const hdr1 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  const card = [...w.querySelectorAll('.eb-sl .eb-card')].find(c => c.querySelector('h2').textContent.trim() === salesName);
+  const chip = card ? [...card.querySelectorAll('.eb-rf span')].find(x => x.querySelector('small') && x.querySelector('small').textContent === '100%') : null;
+  const famRow = [...w.querySelectorAll('table.eb-pg tr.eb-sub')].find(r => r.querySelector('td b').textContent === (chip ? chip.querySelector('b').textContent : '')) ;
+  const famTgt = famRow ? +famRow.children[1].textContent.replace(/,/g, '') : null;
+  /* no permission → save refused */
+  const oG = window.laGuardEdit; window.laGuardEdit = () => false; let refused = false; try { refused = !(function(){ const all = laBlob(); return true; })() ; } catch (_) {}
+  const before = laBlob().exec_alloc; ebAllocReset.toString(); window.confirm = () => true; ebAllocReset(bkV2LocalYMD(new Date()).slice(0, 7)); const afterDenied = laBlob().exec_alloc; window.laGuardEdit = oG;
+  ebAllocReset(bkV2LocalYMD(new Date()).slice(0, 7)); const afterReset = laBlob().exec_alloc; const hdr2 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  ebSetNow('tab', 'rev');
+  return { chips, subRows, mainRows, hdr0: hdr0.slice(0, 60), hdr1: hdr1.slice(0, 80), parsedOk: !!(parsed && parsed[bkV2LocalYMD(new Date()).slice(0, 7)] && parsed[bkV2LocalYMD(new Date()).slice(0, 7)].by[f0][s0] === 100 && parsed[bkV2LocalYMD(new Date()).slice(0, 7)].lf[f0] === 80),
+    typeStr: typeof stored === 'string', seats: +seatsCell, famTgt, expTgt: Math.round(+seatsCell * 0.8), chip: !!chip, denied: before === afterDenied && !!before, reset: !JSON.parse(afterReset || '{}')[bkV2LocalYMD(new Date()).slice(0, 7)], hdr2: /ตามสัดส่วนที่แต่ละคนขายได้/.test(hdr2) };
+});
+if (R12.chips >= 4 && R12.subRows >= 2 && R12.mainRows >= 2 && /ตามสัดส่วนที่แต่ละคนขายได้/.test(R12.hdr0) && /กำหนดโดย/.test(R12.hdr1) && R12.parsedOk && R12.typeStr && R12.chip
+    && R12.famTgt != null && Math.abs(R12.famTgt - R12.expTgt) <= 2 && R12.denied && R12.reset && R12.hdr2)
+  ok('12 การ์ดมีช่องว่างแยกเส้นทาง (' + R12.chips + ' ชิป) · ตารางความคืบหน้า ' + R12.mainRows + ' เซลส์ / ' + R12.subRows + ' แถวเส้นทาง · กำหนด 100% + LF 80% → เป้าเส้นทางของเซลส์ ' + R12.famTgt + ' = ' + R12.seats + '×80% · เก็บเป็น JSON string · ไม่มีสิทธิ์บันทึกไม่ได้ · กลับไปใช้ค่าคำนวณได้');
+else fail('12 ' + JSON.stringify(R12));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
