@@ -511,12 +511,15 @@
     charter_displaces_seats: { flag: 'displace_anyway', ask: function(e){
       return e.message.replace(/\. Send displace_anyway.*$/, '') + '\n\nConfirm anyway · Notify dispatcher?'; } }
   };
-  function saveNow(bk, progAgreed){
+  function saveNow(bk, progAgreed, rateNow){
     var pre = Promise.resolve();
     if(O.deployments) pre = pre.then(O.deployments.syncNow);     // a new charter cell must be a deployment first
     var submit = intentOf(bk) === 'confirm';
     return pre.then(function(){
       var body = toServer(bk, !bk.opsId);
+      /* §rtKeep · "use today's rate" chosen on the edit form (bookingV2RtKeepUse 'now'): the server re-prices at the agent's current
+         rate only when told (`rate: "agent"`, PATCH); without it each unchanged trip keeps the rate it was sold at */
+      if(rateNow && bk.opsId) body.rate = 'agent';
       /* §opsAnyway · legacy's confirms, answered after the server refuses: "Edit anyway?" on a closed
          booking, "Press OK only if this charter is really free", "Confirm anyway · Notify dispatcher".
          A confirm already given on screen (edit opened on a closed booking, charter modal) goes first. */
@@ -570,7 +573,9 @@
   function save(bk){
     hold(bk.id);
     var progAgreed = !!window._laOpsProgAgreed;      // set by the commit wrapper below while its own confirm ran
-    return O.queue(function(){ return saveNow(bk, progAgreed); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; });
+    var nb = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2.newBooking : null;       // the form's draft is still open here (the commit closes it after)
+    var rateNow = !!(nb && nb._rtKeep && nb._rtKeep.mode === 'now');
+    return O.queue(function(){ return saveNow(bk, progAgreed, rateNow); }).then(function(j){ free(bk.id); return j; }, function(e){ free(bk.id); throw e; });
   }
 
   /* ── server-first actions · cancel / partial-cancel / reschedule ──
