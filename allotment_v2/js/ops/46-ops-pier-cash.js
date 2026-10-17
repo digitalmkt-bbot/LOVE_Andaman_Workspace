@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   var O=window.laOps; if(!O) return;
-  var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={};
+  var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={}, catById={};
   ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates','pcPkPullState'].forEach(function(n){ L[n]=window[n]; });
   function on(){ return !!(O.enabled&&O.enabled()); }
   function key(p,d){ return p+'|'+d; }
@@ -23,6 +23,7 @@
     /* a line's claim must be in the claims list for its chip to show (pcClmOn) before the month list arrives */
     try{ var CA=typeof window.pcClmArr==='function'?window.pcClmArr():null;
       if(CA) (j.rows||[]).forEach(function(r){ var c=r.claim; if(c&&c.id&&!CA.some(function(x){ return x&&x.id===c.id; })) CA.push({id:c.id,pier:p,date:d,name:c.name||'',by:'',ts:''}); }); }catch(_){}
+    (j.rows||[]).forEach(function(r){ if(r&&r.id!=null&&r.category!==undefined) catById[r.id]=r.category; });   /* the server's expense group of each row (pcGrpOf) */
     cache.day[key(p,d)]=j; refresh();
   }
   function applySheet(kind,j){
@@ -107,6 +108,67 @@
     });
     return any?statPKLegacy.apply(this,arguments):o;
   };
+  /* pcGrpOf(x,kind): the expense group of a ledger row is the server's (rows[].category { key, title, color, background } or null)
+     instead of the browser's text matching. A row the server has not sent yet (a typed one not saved) is legacy's. */
+  var grpLegacy=window.pcGrpOf;
+  if(typeof grpLegacy==='function') window.pcGrpOf=function(x,kind){
+    if(on()&&kind!=='in'&&x&&x.id!=null&&Object.prototype.hasOwnProperty.call(catById,x.id)){
+      var c=catById[x.id]; return c?{k:c.key,t:c.title,c:c.color,bg:c.background}:null;
+    }
+    return grpLegacy.apply(this,arguments);
+  };
+  /* One boat of one day in the park sheet of the month (GET …/months/{ym}/park), with its fill block
+     { price, real, expected_price, expected_real, saving, nat_diff } and check { expected, due, ... }. */
+  function parkBoat(p,ds,bid){
+    var ks=Object.keys(cache.sheet);
+    for(var i=0;i<ks.length;i++){
+      var j=cache.sheet[ks[i]]; if(ks[i].indexOf('park|'+p+'|')!==0||!j||j===true||j.month!==String(ds).slice(0,7)) continue;
+      var days=j.days||[]; for(var a=0;a<days.length;a++){ if(days[a].date!==ds) continue;
+        var bs=days[a].boats||[]; for(var b=0;b<bs.length;b++) if(bs[b].boat_id===bid) return bs[b]; }
+    }
+    return null;
+  }
+  /* pcPax(date,bid,pier): the heads on a boat by ticket category (the object) and by real nationality (.n) are the server's:
+     booked.nationality / booked.nationality_real of the day's boats, else the park sheet's fill { price, real }. Each carries the
+     park fee the server priced for it, which pcParkAmt below returns. A boat the server did not list: legacy's count. */
+  function srvCount(src,exp){
+    var o={}; ['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr','tot'].forEach(function(k){ o[k]=+src[k]||0; });
+    Object.defineProperty(o,'_srvExp',{value:exp==null?null:+exp,enumerable:false}); return o;
+  }
+  var paxLegacy=window.pcPax;
+  if(typeof paxLegacy==='function') window.pcPax=function(date,bid,pier){
+    var DB=on()&&O.pier&&O.pier.dayBoats, p=pier||window._pcPier; if(!DB||!p||!date) return paxLegacy.apply(this,arguments);
+    if(date===window._pcDate) DB.want(p,date,function(){ redraw(); });
+    var sb=DB.boat(p,date,bid), bk=sb&&sb.booked, pf=(bk&&bk.park_fee)||{}, X=null;
+    if(bk&&bk.nationality&&bk.nationality_real){
+      X=srvCount(bk.nationality,pf.expected_price); X.n=srvCount(bk.nationality_real,pf.expected_real!==undefined?pf.expected_real:pf.expected);
+      X.hasNat=!!bk.has_thai_passengers; X.natDiff=!!bk.nationality.nat_diff;
+    } else { var f=parkBoat(p,date,bid); f=f&&f.fill;
+      if(f&&f.price&&f.real){ X=srvCount(f.price,f.expected_price); X.n=srvCount(f.real,f.expected_real); X.hasNat=!!f.nat_diff; X.natDiff=!!f.nat_diff; } }
+    return X||paxLegacy.apply(this,arguments);
+  };
+  /* pcParkAmt(R,cnt): for a count that came from pcPax the park fee is the server's (expected_price / expected_real; null = no rate).
+     Counts the pier keyed by hand are priced as legacy prices them, with the route's rate R. */
+  var amtLegacy=window.pcParkAmt;
+  if(typeof amtLegacy==='function') window.pcParkAmt=function(R,cnt){
+    if(on()&&cnt&&cnt._srvExp!==undefined) return cnt._srvExp;
+    return amtLegacy.apply(this,arguments);
+  };
+  /* pcPkDue(exp,C): the amount due for the boat's cell is the server's check.due when the server's own expected agrees with exp
+     (the cell is found by identity in the park sheet); otherwise exp + dock as legacy. */
+  var dueLegacy=window.pcPkDue;
+  if(typeof dueLegacy==='function') window.pcPkDue=function(exp,C){
+    if(on()&&exp!=null&&C&&typeof C==='object'&&typeof window.pcDay==='function'){
+      var ks=Object.keys(cache.sheet);
+      for(var i=0;i<ks.length;i++){
+        var j=cache.sheet[ks[i]]; if(ks[i].indexOf('park|')!==0||!j||j===true) continue;
+        var days=j.days||[]; for(var a=0;a<days.length;a++){ var D=window.pcDay(j.pier,days[a].date,false); if(!D||!D.pk) continue;
+          var bs=days[a].boats||[]; for(var b=0;b<bs.length;b++){ if(D.pk[bs[b].boat_id]!==C) continue;
+            var ck=bs[b].check; if(ck&&ck.due!=null&&ck.expected!=null&&+ck.expected===+exp) return +ck.due; return dueLegacy.apply(this,arguments); } }
+      }
+    }
+    return dueLegacy.apply(this,arguments);
+  };
   function current(){ return {p:window._pcPier,d:window._pcDate}; }
   function accepted(j){ var d=(j&&j.day)||j; if(d&&d.pier&&d.date){ delete cache.month[d.pier+'|'+d.date.slice(0,7)]; Object.keys(cache.sheet).forEach(function(k){ if(k.indexOf('|'+d.pier+'|'+d.date.slice(0,7)+'|')>=0) delete cache.sheet[k]; }); } if(j&&j.day) applyDay(j.day); else if(j) applyDay(j); O.wrote('pier'); redraw(); }
   window.pcRowSave=function(kind){
@@ -127,7 +189,8 @@
   // Fill is a complete cell write: never populate the browser cache before the server accepts it.
   window.pcFillPK=function(ds,bid,pier,src){
     if(!on()) return L.pcFillPK.apply(this,arguments); if(typeof window.pcGuard==='function'&&!window.pcGuard()) return;
-    var x=window.pcPax(ds,bid,pier||window._pcPier), picked=src==='price'?x:x.n, old=pks().filter(function(v){ return v&&v.pier===window._pcPier&&v.date===ds&&v.bid===bid; })[0]||{};
+    var fb=parkBoat(pier||window._pcPier,ds,bid), fl=fb&&fb.fill&&fb.fill.price&&fb.fill.real?fb.fill:null;   /* the server's two sets (park sheet fill) */
+    var x=fl?null:window.pcPax(ds,bid,pier||window._pcPier), picked=fl?(src==='price'?fl.price:fl.real):(src==='price'?x:x.n), old=pks().filter(function(v){ return v&&v.pier===window._pcPier&&v.date===ds&&v.bid===bid; })[0]||{};
     var body={}; ['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'].forEach(function(k){ body[k]=+picked[k]||0; });
     body.amount=old.amt==null?null:+old.amt||0; body.dock=old.dock==null?null:+old.dock||0; body.filled_from=src==='price'?'price':'nat';
     return patchSheet('park',ds,bid,body).then(function(ok){ if(ok) window._pcFillAsk=''; });
