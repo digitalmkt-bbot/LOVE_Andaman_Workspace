@@ -13,7 +13,10 @@
   function refresh(){ try{ window._PC_ARR=null; if(typeof window.pcSync==='function') window.pcSync(); }catch(_){} }
   function redraw(){ try{ L.renderPierCash(window._pcPier); }catch(_){} }
   function put(a, match, add){ for(var i=a.length-1;i>=0;i--) if(match(a[i])) a.splice(i,1); (add||[]).forEach(function(x){ a.push(x); }); }
-  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||'',claim:(r.claim&&r.claim.id)||''}; }   /* claim: the claim the line is in (pcClmOn) */
+  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:r.source||'',claim:(r.claim&&r.claim.id)||'',srvRefund:r.refund===undefined?undefined:!!r.refund}; }   /* claim: the claim the line is in (pcClmOn) · srvRefund: the server matched it as a refund (money back from the office) */
+  /* pcIsRefund: the server says which in-rows are refunds (isRefund in pier-cash-claims.ts); the browser regex is only the answer for a row the server has not sent yet */
+  var isRefundLegacy=window.pcIsRefund;
+  if(typeof isRefundLegacy==='function') window.pcIsRefund=function(x){ if(on()&&x&&typeof x.srvRefund==='boolean') return x.srvRefund; return isRefundLegacy.apply(this,arguments); };
   function applyDay(j){
     if(!j) return; var p=j.pier,d=j.date;
     put(rows(),function(x){ return x&&x.pier===p&&x.date===d; },(j.rows||[]).map(legacyRow));
