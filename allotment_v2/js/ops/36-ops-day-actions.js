@@ -837,6 +837,56 @@
     });
   });
 
+  // ckStrandClear (08-app.js): "ล้างรายการค้าง" / "ล้างการจัดรถ/เรือ" on a struck-through row. Server first; the dialogs are legacy's.
+  //   moved to another day  → DELETE /operations/van-strands/{booking_id}/{service_date} (404 = nothing left on the server: fine)
+  //   cancelled, still in a van → PATCH /operations/trip-ops/{trip_id} {van_parts: null} for the booking's trips of that day
+  //   (the one dispatch change a cancelled booking takes; the server does not clear boat/final pickup/check-in or write a history line)
+  function strandRedraw(){
+    ['vancheckin-host', 'piercheckin-host', 'landcheckin-host', 'vanjobs-host'].forEach(function(h){
+      var el = document.getElementById(h); if(!el || !el.offsetParent) return;
+      if(h === 'vancheckin-host' && typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+      if(h === 'piercheckin-host' && typeof window.renderPierCheckin === 'function') window.renderPierCheckin();
+      if(h === 'landcheckin-host' && typeof window.renderLandCheckin === 'function') window.renderLandCheckin();
+      if(h === 'vanjobs-host' && typeof window.renderVanJobs === 'function') window.renderVanJobs();
+    });
+  }
+  function strandToast(bkId, nm, date, title){
+    if(typeof window.laSaveToast === 'function') window.laSaveToast({ kind: 'neutral', title: title, id: bkId, status: 'CLEARED', sub: nm + ' · ' + date });
+  }
+  wrap('ckStrandClear', function(orig, bkId, date){
+    var b = findBooking(bkId);
+    if(!b) return orig(bkId, date);                                        // legacy's "not found on this machine" alert
+    var nm = b.leadPax || b.voucherRef || b.code || bkId;
+    var mk = bkId + '|' + date;
+    var moved = typeof window.ckStrandStore === 'function' && (mk in window.ckStrandStore());
+    if(moved){
+      if(!confirm('ล้างรายการค้างของ ' + nm + ' ออกจากวันที่ ' + date + ' ?\n\n'
+        + 'ใบนี้ถูกเลื่อนวันไปแล้ว · การจัดรถ/เรือของวันใหม่ไม่ถูกแตะ')) return;
+      return O.queue(function(){ return O.call('DELETE', '/operations/van-strands/' + enc(toServerBookingId(bkId)) + '/' + enc(date)); }).then(null, function(e){
+        if(e && e.status === 404) return null;
+        throw e;
+      }).then(function(){
+        if(typeof window.ckStrandMvDrop === 'function') window.ckStrandMvDrop(mk);
+        strandToast(bkId, nm, date, 'ล้างรายการค้างแล้ว'); strandRedraw();
+      }, function(e){ O.fail('Leftover row not cleared', e); });
+    }
+    if(typeof window.ckHasArrange === 'function' && !window.ckHasArrange(b, date)) return orig(bkId, date);   // legacy's "nothing arranged" alert
+    if(!confirm('ล้างการจัดรถ/เรือของ ' + nm + ' ออกจากวันที่ ' + date + ' ?\n\n'
+      + 'รายการจะหายจากใบงานรถ · เช็คอินรถ · เช็คอินหน้าท่า\n'
+      + 'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
+    var trips = (Array.isArray(b.trips) ? b.trips : []).filter(function(t){ return t && t.opsTripId && (t.date || '') === date; });
+    if(!trips.length){ O.fail('Van arrangement not cleared', new Error('This booking has no operation-backend trip on ' + date + ': reload the day')); return; }
+    return trips.reduce(function(p, t){
+      return p.then(function(){ return O.queue(function(){ return O.call('PATCH', '/operations/trip-ops/' + enc(t.opsTripId), { van_parts: null }); }); });
+    }, Promise.resolve()).then(function(){
+      O.wrote('trip-ops');
+      // the server's trip is the truth: re-read the day so the row shows what the server kept
+      var again = typeof window.bookingV2EnsureOpsRange === 'function' ? window.bookingV2EnsureOpsRange({ from: date, to: date, refresh: true }) : null;
+      var done = function(){ strandToast(bkId, nm, date, 'ล้างการจัดรถ/เรือแล้ว'); strandRedraw(); };
+      if(again && again.then) again.then(done, done); else done();
+    }, function(e){ O.fail('Van arrangement not cleared', e); });   // 409 cancelled etc.: the server's message as it is
+  });
+
   var api = {
     updateInsurance: updateInsuranceServer,
     updateMeals: updateMealsServer,
