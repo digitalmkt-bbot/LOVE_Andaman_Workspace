@@ -426,7 +426,9 @@
        so a field dropped here would be wiped on the server. to_company is an amount, not a flag. */
     bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, label:u.label || 'Upgrade', sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:+(u.to_company != null ? u.to_company : u.toCompany) || 0, commission:+u.commission || 0, seller:u.seller || '', note:u.note || '', collected:!!u.collected, settle:u.settle || 'pending', method:u.method || null, feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, fee:+u.fee || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, at:u.at || null, slips:u.slips || [] }; });
     if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
-    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', type: p.type || 'AD', foc: !!p.foc }; });
+    /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
+       else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
+    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
     bk.addOns = (ob.add_ons || []).map(function(a){
       var o = { type: a.type, label: a.label || '', amount: +a.amount || 0, qty: a.qty != null ? a.qty : 1, note: a.note || '' };
       if(a.join_adults !== undefined) o.jAd = a.join_adults; if(a.join_children !== undefined) o.jChd = a.join_children;
@@ -524,7 +526,8 @@
     booking_closed: { flag: 'edit_anyway' },
     /* 409 route_not_in_programme: the agent's programme does not hold that route. The commit's own confirm ("เส้นทางนอกสัญญา…")
        already asked; an OK there is sent up front (progAgreed), otherwise the server's message is asked here */
-    route_not_in_programme: { flag: 'programme_anyway' },
+    route_not_in_programme: { flag: 'programme_anyway', ask: function(e){
+      return e.message.replace(/\. Add it to the agent's programme first, or send programme_anyway.*$/, '') + '\n\nConfirm to save anyway?'; } },
     no_charter_price: { flag: 'free_anyway', ask: function(e){
       return 'WARNING - charter trip will be saved at 0 THB\n\n' + e.message.replace(/\. Send the agreed price.*$/, '') +
         '\n\nPress Cancel to go back and enter the agreed charter price in the red box.\nPress OK only if this charter is really free.'; } },
@@ -758,6 +761,15 @@
           // reopen the form with what was typed, so it can be fixed and saved again
           Object.assign(st, before.ui);
           persist(); render();
+          /* 400 booking_incomplete (the confirm step): legacy's "Cannot save — please complete" alert with the server's own list, one
+             line each. The booking itself was saved (as a quote) and its version moved on, so it is reloaded; only the confirm was refused. */
+          if(e && e.code === 'booking_incomplete'){
+            var miss = ((e.body && e.body.incomplete) || []).map(function(i){ return i && i.message; }).filter(Boolean);
+            try{ alert(miss.length ? 'Cannot confirm — please complete:\n\n· ' + miss.join('\n· ') : e.message); }catch(_){}
+            var rid = st.editingId || (st.newBooking && st.newBooking.id);
+            if(rid) reload(rid);
+            return;
+          }
           O.fail('Booking not saved · the form is back as you left it', e);
         });
       }

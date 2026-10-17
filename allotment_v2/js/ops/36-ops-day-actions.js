@@ -809,7 +809,7 @@
       O.wrote('trip-ops');
       return res;
     }, function(e){
-      O.fail('Pickup time not saved', e);
+      O.fail('Pickup time not saved', e);          // 409 cancelled arrives here with the server's message
       if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
       return null;
     });
@@ -830,7 +830,9 @@
       if(typeof window.renderPierCheckin === 'function' && O.activeView && O.activeView() === 'piercheckin') window.renderPierCheckin();
       return res;
     }, function(e){
+      // 409 cancelled (a cancelled or rejected booking's dispatch cannot change): the server's message is shown as it is
       O.fail('Pier note not saved', e);
+      if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
       return null;
     });
   });
