@@ -18,6 +18,14 @@
    Mapping: server view_perms + actions <-> legacy perms (act-* keys live inside perms in the
    browser, in their own list on the server); edit_areas <-> editAreas; sales_id <-> salesId.
    Returns null when operation mode is off, so sx() falls back to its old path.
+
+   Warnings (§opsUserWarn): the server computes the permission warnings the user window used to work out in the browser
+   (lauDetail: wide / unusual for the department / no menus; lauOverview: wide, no menus, many admins). Each user read
+   carries `warnings`, the list read a top-level `warnings` too; they are read-only (never sent back). The window asks
+   for them through window.laOpsUserAlerts(id, legacyList) and window.laOpsUserOverview() (hooks in 01-auth-sync.js); the
+   text is the server's message as sent. They count menus against the page list in config `nav_pages`, which this file
+   writes once per session, on the first list read: GET it, and PUT {value:[{v,a}]} (the window's LA_NAV, window.laNavPages)
+   only when the server's list differs. A refusal is logged, not shown: the warnings then rest on what the server has.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -52,8 +60,39 @@
     if(!Array.isArray(perms)) return {view:null, acts:[]};
     return { view:perms.filter(function(k){ return !isAct(k); }), acts:perms.filter(isAct) };
   }
+  var warnById={}, overview=null, navDone=false;
+  function remember(u){ if(u && u.id!=null && Array.isArray(u.warnings)) warnById[u.id]=u.warnings; }
+
+  /* nav_pages, once: the server holds no page list of its own (it is the frontend's LA_NAV), so a stale or empty one
+     means no 'wide' / 'unusual_for_department' warnings. A network failure (status 0) may try again on the next read. */
+  function syncNav(){
+    if(navDone || typeof window.laNavPages!=='function') return;
+    var mine=window.laNavPages(), got=xhr('GET','/v1/config/nav_pages');
+    if(got.status===0) return;
+    navDone=true;
+    if(got.status<200 || got.status>=300) return;
+    function key(list){ return (list||[]).map(function(n){ return n.v+'|'+n.a; }).sort().join(','); }
+    var cur=(got.json&&got.json.value)||[];
+    if(key(cur)===key(mine)) return;
+    var put=xhr('PUT','/v1/config/nav_pages',{value:mine});
+    if(put.status<200 || put.status>=300){
+      try{ console.warn('[ops] nav_pages not saved · '+((put.json&&(put.json.message||put.json.error))||put.status)); }catch(_){}
+    }
+  }
+  function tone(w){ return w && w.level==='red' ? 'red' : 'amb'; }
+  window.laOpsUserAlerts=function(id){
+    if(!O.enabled() || !Array.isArray(warnById[id])) return null;
+    return warnById[id].map(function(w){ return [tone(w), esc(w.message)]; });
+  };
+  window.laOpsUserOverview=function(){
+    if(!O.enabled() || !Array.isArray(overview)) return null;
+    return overview.map(function(w){ return esc(w.message); });
+  };
+  function esc(v){ return String(v==null?'':v).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
   function toRow(u){
     var perms=Array.isArray(u.view_perms)?u.view_perms.concat(u.actions||[]):null;
+    remember(u);
     return { id:u.id, username:u.username, name:u.name||'', role:u.role||'staff', dept:u.dept||'',
       salesId:u.sales_id||'', agentId:u.agent_id||'', perms:perms,
       editAreas:Array.isArray(u.edit_areas)?u.edit_areas.slice():null };
@@ -73,9 +112,12 @@
   function users(method, url, body){
     if(!O.enabled()) return null;
     var u=String(url).split('?'), path=u[0], b=parse(body), id;
-    if(method==='GET' && path==='/api/users')
+    if(method==='GET' && path==='/api/users'){
+      syncNav();
       return answer(xhr('GET','/v1/users'), function(j){
+        overview=Array.isArray(j&&j.warnings)?j.warnings:null;
         return {users:((j&&j.users)||[]).filter(function(x){ return !x.disabled_at; }).map(toRow)}; });
+    }
     if(method==='POST' && path==='/api/users'){
       var nb=patchBody(b);
       nb.username=b.username; nb.name=b.name||b.username; nb.password=b.password;
@@ -100,5 +142,5 @@
   }
 
   window.laOpsUsersSx=users;
-  O.users={sx:users, toRow:toRow, splitPerms:splitPerms};
+  O.users={sx:users, toRow:toRow, splitPerms:splitPerms, warnings:function(id){ return warnById[id]||null; }};
 })();
