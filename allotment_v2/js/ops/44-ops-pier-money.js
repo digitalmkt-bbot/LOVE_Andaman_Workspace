@@ -109,7 +109,11 @@
     m.upDue = n(r.upgrades_due); m.upGot = n(r.upgrades_got); m.balance = n(r.b2c_balance);
     m.exDue = n(r.tour_sales_due); m.exGot = n(r.tour_sales_got); m.extrasTot = m.exGot + m.exDue + exCov;
     m.gross = n(r.gross); m.pierPaid = n(r.paid); m.pierFee = n(r.fees); m.due = n(r.due); m.got = n(r.got);
-    m.noSlip = n(r.no_slip); m.ovnSettled = !!r.overnight_return;
+    m.noSlip = n(r.no_slip);
+    // payment terms and the B2C paid state as the server states them (feeds pckCotUnset and the pay chips)
+    if(r.term != null) m.term = String(r.term);
+    m.paidState = r.paid_status ? String(r.paid_status) : '';
+    m.ovnSettled = !!r.overnight_return;
     return m;
   });
 
