@@ -24,7 +24,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var EB = window._eb = window._eb || { per:'today', pier:'' };
+  var EB = window._eb = window._eb || { per:'today', pier:'', tab:'rev', sp:'week', off:0 };   /* §execSales · tab/sp/off */
   var CXL = ['cancelled','rejected','cancelled_weather'];
   var NOT_SALE = ['quote','draft'];
 
@@ -443,19 +443,169 @@
     return h;
   }
 
+  /* ══ §execSales (2026-10-17) · แท็บ Sales Performance ═══════════════════
+     owner ส่งไฟล์ "SALES PERFORMANCE 11-17 October 2026 · WEEKLY REPORT.xlsx" แล้วบอก "ดูอันนี้ แล้วเพิ่มอีกแท็บนึง"
+     ไฟล์นั้นทำมือจากการเทียบยอดสะสมสองช่วง (จึงมีเลขติดลบ และเซลส์คนใหม่ "ยังไม่มีฐานให้หัก")
+     แท็บนี้คิดจากใบจองตรง ๆ ตามวันที่ใบเข้าระบบ (_dashBkDay) · เปิดดูได้ทุกเมื่อ ไม่ต้องรอสิ้นสัปดาห์
+     ชุดตัวเลขเดียวกับไฟล์: ตารางอันดับเซลส์ · แนวโน้ม 7 ช่วง (ต่อวัน) · MTD + Activation
+       · เอเยนต์ที่ส่งยอดของแต่ละเซลส์ (★ใหม่) · Top 10 เอเยนต์ · เอเยนต์ที่เงียบไป
+     นับ: ใบที่เข้าระบบในช่วงและยังไม่ยกเลิก (ไม่นับ quote / ใบภายในที่ไม่มีมูลค่า)
+     เซลส์ = bk.soldBy ถ้ามี ไม่งั้นเซลส์ที่ดูแลเอเยนต์ (กติกาเดียวกับ Sales Board / Daily PFM)
+     สัปดาห์ = อาทิตย์–เสาร์ (11–17 ต.ค. ในไฟล์ตรงกับแบบนี้) · ใช้ทั้งบริษัท ไม่กรองท่า */
+  function sidOf(b){ return b.soldBy || (((typeof sbGetAgent==='function') && sbGetAgent(b.agentId))||{}).sales || ''; }
+  function salesOf(sid){ var s=(sid && typeof sbGetSales==='function')?sbGetSales(sid):null;
+    return {id:sid||'__none', name:s?(s.name||sid):'ไม่มีเซลส์ดูแล', color:s?(s.color||'#185FA5'):'#B8B3C8', none:!s}; }
+  function agKey(b){ return (typeof laIsB2C==='function' && laIsB2C(b)) ? '__b2c' : (b.agentId||'__none'); }
+  function weekStart(ds){ var d=dt(ds); d.setDate(d.getDate()-d.getDay()); return ymd(d); }
+  function monStart(ds){ return ds.slice(0,8)+'01'; }
+  function monEnd(ds){ var d=dt(ds); return ymd(new Date(d.getFullYear(), d.getMonth()+1, 0)); }
+  function addMon(ds,n){ var d=dt(monStart(ds)); return ymd(new Date(d.getFullYear(), d.getMonth()+n, 1)); }
+  function nDays(a,b){ return Math.round((dt(b)-dt(a))/86400000)+1; }
+  function spRange(kind, off){
+    var t0=today(), s, e;
+    if(kind==='month'){ s=addMon(t0,off); e=monEnd(s); }
+    else { s=addDays(weekStart(t0),7*off); e=addDays(s,6); }
+    var to=e<t0?e:t0;
+    return {from:s, end:e, to:to, days:Math.max(1,nDays(s,to)), full:e<=t0};
+  }
+  function spLabel(r, kind){
+    if(kind==='month'){ var d=dt(r.from), M=(typeof laMonAbbrTH==='function')?laMonAbbrTH():[]; return (M[d.getMonth()]||'')+' '+d.getFullYear()+(r.full?'':' · ถึง '+thD(r.to)+' ('+r.days+' วัน)'); }
+    return thD(r.from)+' – '+thD(r.end)+(r.full?'':' · ถึงวันนี้ '+r.days+' วัน');
+  }
+  var _spFirst=null, _spFirstAt=0;
+  function agentFirstDay(){
+    if(_spFirst && Date.now()-_spFirstAt<30000) return _spFirst;
+    var m={}; (SB_BOOKINGS||[]).forEach(function(b){ if(!isSale(b)) return; var k=agKey(b), d=bkDay(b); if(!d || k==='__b2c') return; if(!m[k] || d<m[k]) m[k]=d; });
+    _spFirst=m; _spFirstAt=Date.now(); return m;
+  }
+  /* ใบที่เข้าระบบในช่วง · รวมต่อเซลส์ / ต่อเอเยนต์ */
+  function spAgg(from, to){
+    var S={}, tot={pax:0, val:0, n:0, foc:0, ag:{}};
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(!isLive(b)) return; var d=bkDay(b); if(!d || d<from || d>to) return;
+      var so=salesOf(sidOf(b)), k=agKey(b), p=0, f=0, v=money(b);
+      (b.trips||[]).forEach(function(t){ if(!t) return; p+=pax(t); f+=paxK(t,'foc'); });
+      var X=S[so.id]=S[so.id]||{s:so, pax:0, val:0, n:0, foc:0, ag:{}};
+      [X, tot].forEach(function(o){ o.pax+=p; o.val+=v; o.n++; o.foc+=f;
+        var A=o.ag[k]=o.ag[k]||{k:k, name:agentName(b), sid:so.id, pax:0, val:0, n:0}; A.pax+=p; A.val+=v; A.n++; });
+    });
+    return {S:S, tot:tot};
+  }
+  function spOrder(S){ return Object.keys(S).map(function(k){ return S[k]; }).sort(function(a,b){ return (a.s.none-b.s.none) || (b.val-a.val); }); }
+  function viewSales(){
+    var kind=EB.sp||'week', off=+EB.off||0, R=spRange(kind, off), P=spRange(kind, off-1);
+    var A=spAgg(R.from, R.to), B=spAgg(P.from, (kind==='month'?addDays(P.from,R.days-1):P.to));
+    var first=agentFirstDay(), T=A.tot, Tp=B.tot, perD=function(x){ return x/R.days; };
+    /* เงียบไป · สัปดาห์: ส่งในเดือนนี้ก่อนสัปดาห์นี้ (ต้นเดือน = 4 สัปดาห์ก่อนหน้า) · เดือน: ส่งเดือนก่อนแต่เดือนนี้ยังไม่ส่ง */
+    var qFrom, qTo=addDays(R.from,-1), qLbl;
+    if(kind==='month'){ qFrom=addMon(R.from,-1); qLbl='ส่งยอดเดือนก่อน แต่เดือนนี้ยังเงียบ'; }
+    else { qFrom=monStart(R.to); if(qFrom>qTo){ qFrom=addDays(R.from,-28); qLbl='ส่งยอดใน 4 สัปดาห์ก่อน แต่สัปดาห์นี้เงียบ'; } else qLbl='ส่งยอดเดือนนี้แล้ว แต่สัปดาห์นี้เงียบ'; }
+    var Q=qFrom<=qTo?spAgg(qFrom,qTo):{tot:{ag:{}}};
+    var quiet=Object.keys(Q.tot.ag).filter(function(k){ return k!=='__b2c' && k!=='__none' && !T.ag[k]; }).map(function(k){ return Q.tot.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; });
+    var rows=spOrder(A.S), isNew=function(k){ return k!=='__b2c' && first[k] && first[k]>=R.from && first[k]<=R.to; };
+    var newN=Object.keys(T.ag).filter(isNew).length, sentN=Object.keys(T.ag).filter(function(k){ return k!=='__b2c' && k!=='__none'; }).length;
+    var h='<div class="eb-grid eb-kpis">'
+      + kpi('Pax ที่ขายได้', num(T.pax), perD(T.pax).toFixed(1)+' / วัน · '+chg(perD(T.pax), Tp.pax/R.days)+' vs ช่วงก่อน')
+      + kpi('ยอดขาย (Value sold)', baht(T.val), baht(perD(T.val))+' / วัน · '+chg(T.val, Tp.val))
+      + kpi('ใบจอง', num(T.n), (T.n?(T.pax/T.n).toFixed(2):'0')+' pax / ใบ · '+chg(T.n, Tp.n))
+      + kpi('FOC', num(T.foc)+'<small>pax</small>', (T.pax?(T.foc*100/T.pax).toFixed(1):'0')+'% ของ pax'+(Tp.pax?(' · ช่วงก่อน '+(Tp.foc*100/Tp.pax).toFixed(1)+'%'):''), (T.pax && T.foc/T.pax>0.1)?'warn':'')
+      + kpi('THB / Pax', '฿'+num(T.pax?T.val/T.pax:0), chg(T.pax?T.val/T.pax:0, Tp.pax?Tp.val/Tp.pax:0)+' vs ช่วงก่อน')
+      + kpi('เอเยนต์ที่ส่งยอด', num(sentN), '<span class="eb-up">★ ใหม่ '+num(newN)+'</span> · เงียบไป '+num(quiet.length))
+      + '</div>';
+
+    /* ตารางอันดับเซลส์ */
+    var M = kind==='month';
+    var agAll=function(sid){ return (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).filter(function(a){ return a && a.sales===sid && a.active!==false && a.status!=='inactive'; }).length; };
+    var head='<tr><th>#</th><th>เซลส์</th><th>Pax</th><th>ยอดขาย</th><th>% ยอดขาย</th><th>ใบ</th><th>FOC</th><th>FOC %</th><th>THB / Pax</th><th>Pax / วัน</th><th>vs ช่วงก่อน</th><th>เอเยนต์ส่ง</th><th>★ ใหม่</th><th>เงียบไป</th>'
+      +(M?'<th>เอเยนต์ทั้งหมด</th><th>Activation</th><th>Pax / เอเยนต์</th>':'<th>เอเยนต์อันดับ 1</th>')+'</tr>';
+    var rank=0;
+    var body=rows.map(function(x){
+      var aks=Object.keys(x.ag).filter(function(k){ return k!=='__b2c' && k!=='__none'; }), nNew=aks.filter(isNew).length;
+      var nq=quiet.filter(function(q){ return q.sid===x.s.id; }).length;
+      var topA=Object.keys(x.ag).map(function(k){ return x.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; })[0];
+      var pv=B.S[x.s.id], all=x.s.none?0:agAll(x.s.id);
+      if(!x.s.none) rank++;
+      return '<tr'+(x.s.none?' class="eb-dim"':'')+'><td>'+(x.s.none?'':rank)+'</td><td><span class="eb-dot" style="background:'+E(x.s.color)+'"></span><b>'+E(x.s.name)+'</b></td>'
+        +'<td><b>'+num(x.pax)+'</b></td><td><b>'+baht(x.val)+'</b></td>'
+        +'<td><div class="eb-pct"><span><i style="width:'+pct(x.val,T.val)+'%;background:'+E(x.s.color)+'"></i></span>'+pct(x.val,T.val)+'%</div></td>'
+        +'<td>'+num(x.n)+'</td><td>'+num(x.foc)+'</td><td>'+(x.pax?(x.foc*100/x.pax>10?'<span class="eb-st w">'+(x.foc*100/x.pax).toFixed(1)+'%</span>':(x.foc*100/x.pax).toFixed(1)+'%'):'—')+'</td>'
+        +'<td>฿'+num(x.pax?x.val/x.pax:0)+'</td><td>'+(x.pax/R.days).toFixed(1)+'</td><td>'+chg(x.pax/R.days, pv?pv.pax/R.days:0)+'</td>'
+        +'<td>'+num(aks.length)+'</td><td>'+(nNew?'<span class="eb-up">'+nNew+'</span>':'<span class="eb-mut">0</span>')+'</td><td>'+(nq?num(nq):'<span class="eb-mut">0</span>')+'</td>'
+        +(M ? '<td>'+(all||'—')+'</td><td>'+(all?pct(aks.length,all)+'%':'—')+'</td><td>'+(aks.length?(x.pax/aks.length).toFixed(1):'—')+'</td>'
+            : '<td class="eb-l" title="'+E(topA?topA.name:'')+'">'+(topA?E(topA.name)+' <span class="eb-mut">'+pct(topA.pax,x.pax)+'%</span>':'—')+'</td>')
+        +'</tr>';
+    }).join('');
+    var allTeam=M?(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).filter(function(a){ return a && a.sales && a.active!==false && a.status!=='inactive'; }).length:0;
+    var foot='<tr class="eb-tot"><td></td><td><b>รวมทั้งทีม</b></td><td><b>'+num(T.pax)+'</b></td><td><b>'+baht(T.val)+'</b></td><td>100%</td><td>'+num(T.n)+'</td><td>'+num(T.foc)+'</td><td>'+(T.pax?(T.foc*100/T.pax).toFixed(1)+'%':'—')+'</td>'
+      +'<td>฿'+num(T.pax?T.val/T.pax:0)+'</td><td>'+(T.pax/R.days).toFixed(1)+'</td><td>'+chg(T.pax, Tp.pax)+'</td><td>'+num(sentN)+'</td><td>'+num(newN)+'</td><td>'+num(quiet.length)+'</td>'
+      +(M?'<td>'+num(allTeam)+'</td><td>'+(allTeam?pct(sentN,allTeam)+'%':'—')+'</td><td>'+(sentN?(T.pax/sentN).toFixed(1):'—')+'</td>':'<td></td>')+'</tr>';
+    h+='<div class="eb-sec">อันดับเซลส์ · '+E(spLabel(R,kind))+'</div><div class="eb-card eb-scroll"><h2>ยอดขายตามเซลส์ <span class="eb-tag">นับตามวันที่ใบเข้าระบบ · ไม่นับใบยกเลิก / quote</span>'+src('ที่มา: Booking · Sales')+'</h2>'
+      +'<table class="eb-tbl eb-sp">'+'<thead>'+head+'</thead><tbody>'+(body||'<tr><td colspan="16" class="eb-none">ยังไม่มีใบจองในช่วงนี้</td></tr>')+foot+'</tbody></table>'
+      +'<div class="eb-foot">vs ช่วงก่อน = Pax ต่อวันเทียบ'+(kind==='month'?'เดือนก่อน (จำนวนวันเท่ากัน)':'สัปดาห์ก่อน')+' · ★ ใหม่ = เอเยนต์ที่ส่งใบแรกในระบบภายในช่วงนี้ · เงียบไป = '+E(qLbl)+'</div></div>';
+
+    /* แนวโน้ม 7 ช่วง · ต่อวัน */
+    var per=[]; for(var i=6;i>=0;i--){ var r=spRange(kind, off-i); var a=spAgg(r.from, r.to); per.push({r:r, a:a}); }
+    var sids=rows.filter(function(x){ return !x.s.none; }).map(function(x){ return x.s; });
+    per.forEach(function(p){ Object.keys(p.a.S).forEach(function(k){ var so=p.a.S[k].s; if(!so.none && !sids.some(function(s){ return s.id===so.id; })) sids.push(so); }); });
+    var trendTbl=function(key, fmt){
+      var mx=1; per.forEach(function(p){ sids.forEach(function(s){ var v=(p.a.S[s.id]||{})[key]||0; v/=p.r.days; if(v>mx) mx=v; }); });
+      var tmx=Math.max.apply(null,[1].concat(per.map(function(p){ return p.a.tot[key]/p.r.days; })));
+      var line=function(name, color, vals, m){ var last=vals[vals.length-1], prev=vals[vals.length-2];
+        return '<tr><td><span class="eb-dot" style="background:'+E(color)+'"></span><b>'+E(name)+'</b></td><td><div class="eb-spark">'
+          + vals.map(function(v,j){ return '<i title="'+E(spLabel(per[j].r,kind))+' · '+fmt(v)+' / วัน" style="height:'+Math.max(2,Math.round(v*100/m))+'%;background:'+(j===vals.length-1?E(color):'var(--eb-s2)')+'"></i>'; }).join('')
+          + '</div></td><td><b>'+fmt(last)+'</b></td><td>'+chg(last, prev)+'</td></tr>'; };
+      return '<table class="eb-tbl eb-tr"><thead><tr><th>เซลส์</th><th>7 '+(kind==='month'?'เดือน':'สัปดาห์')+' (ต่อวัน)</th><th>ล่าสุด</th><th>vs ก่อนหน้า</th></tr></thead><tbody>'
+        + sids.map(function(s){ return line(s.name, s.color, per.map(function(p){ return ((p.a.S[s.id]||{})[key]||0)/p.r.days; }), mx); }).join('')
+        + line('ทั้งทีม', '#0F1B3D', per.map(function(p){ return p.a.tot[key]/p.r.days; }), tmx)
+        + '</tbody></table>';
+    };
+    h+='<div class="eb-sec">แนวโน้ม 7 '+(kind==='month'?'เดือน':'สัปดาห์')+' · '+E(spLabel(per[0].r,kind).split(' · ')[0])+' ถึง '+E(spLabel(R,kind).split(' · ')[0])+'</div><div class="eb-grid eb-r4h">'
+      + '<div class="eb-card"><h2>Pax ต่อวัน</h2>'+trendTbl('pax', function(v){ return v.toFixed(1); })+'</div>'
+      + '<div class="eb-card"><h2>ยอดขายต่อวัน</h2>'+trendTbl('val', baht)+'</div></div>';
+
+    /* Top 10 · เงียบไป */
+    var top=Object.keys(T.ag).filter(function(k){ return k!=='__none'; }).map(function(k){ return T.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; }).slice(0,10);
+    h+='<div class="eb-sec">เอเยนต์</div><div class="eb-grid eb-r4h">'
+      + '<div class="eb-card"><h2>Top 10 เอเยนต์ <span class="eb-tag">'+E(spLabel(R,kind))+'</span></h2><table class="eb-tbl eb-l2"><thead><tr><th>#</th><th>เอเยนต์</th><th>เซลส์</th><th>Pax</th><th>ยอดขาย</th></tr></thead><tbody>'
+      + (top.length?top.map(function(a,i){ var so=salesOf(a.sid==='__none'?'':a.sid);
+          return '<tr><td>'+(i+1)+'</td><td class="eb-l"><b>'+E(a.name)+'</b>'+(isNew(a.k)?' <span class="eb-new">★ ใหม่</span>':'')+'</td><td><span class="eb-dot" style="background:'+E(so.color)+'"></span>'+E(so.name)+'</td><td><b>'+num(a.pax)+'</b></td><td>'+baht(a.val)+'</td></tr>'; }).join('')
+        :'<tr><td colspan="5" class="eb-none">—</td></tr>')+'</tbody></table></div>'
+      + '<div class="eb-card"><h2>เอเยนต์ที่เงียบไป <span class="eb-tag">'+E(qLbl)+' · '+num(quiet.length)+' ราย</span></h2>'
+      + (quiet.length?'<div class="eb-qscroll"><table class="eb-tbl eb-l2"><thead><tr><th>#</th><th>เอเยนต์</th><th>เซลส์</th><th>Pax ช่วงก่อน</th></tr></thead><tbody>'
+          + quiet.map(function(a,i){ var so=salesOf(a.sid==='__none'?'':a.sid); return '<tr><td>'+(i+1)+'</td><td class="eb-l">'+E(a.name)+'</td><td><span class="eb-dot" style="background:'+E(so.color)+'"></span>'+E(so.name)+'</td><td>'+num(a.pax)+'</td></tr>'; }).join('')
+          + '</tbody></table></div>':'<div class="eb-none">ไม่มีเอเยนต์ที่เงียบไป</div>')+'</div></div>';
+
+    /* เอเยนต์ที่ส่งยอด แยกตามเซลส์ */
+    h+='<div class="eb-sec">เอเยนต์ที่ส่งยอดเข้ามา · แยกตามเซลส์</div><div class="eb-mv">'
+      + rows.map(function(x, i){
+          var L=Object.keys(x.ag).map(function(k){ return x.ag[k]; }).sort(function(a,b){ return b.pax-a.pax; });
+          var nNew=L.filter(function(a){ return isNew(a.k); }).length, mx=Math.max.apply(null,[1].concat(L.map(function(a){ return a.pax; })));
+          return '<div class="eb-card"><h2><span class="eb-dot" style="background:'+E(x.s.color)+'"></span>'+(x.s.none?'':'#'+(i+1)+' ')+E(x.s.name)+'</h2>'
+            + '<div class="eb-foot" style="margin:-6px 0 8px">'+num(L.length)+' ราย · ★ ใหม่ '+num(nNew)+' · '+num(x.pax)+' pax · '+baht(x.val)+'</div>'
+            + '<div class="eb-mvl">'+L.slice(0,12).map(function(a){ return '<div class="rw" title="'+E(a.name+' · '+a.pax+' pax · '+baht(a.val)+' · '+a.n+' ใบ')+'"><span class="lb">'+E(a.name)+(isNew(a.k)?' <span class="eb-new">★</span>':'')+'</span><span class="mini"><i style="width:'+Math.round(a.pax*100/mx)+'%;background:'+E(x.s.color)+'"></i></span><span class="vv">'+num(a.pax)+'</span></div>'; }).join('')
+            + (L.length>12?'<div class="eb-foot">+ อีก '+(L.length-12)+' ราย</div>':'')+'</div></div>';
+        }).join('')+'</div>';
+    return h;
+  }
+
   /* ── วาด ───────────────────────────────────────────────────────────── */
   function seg(key, items){ return '<span class="eb-seg">'+items.map(function(it){ return '<button class="'+(EB[key]===it[0]?'on':'')+'" onclick="ebSet(\''+key+'\',\''+it[0]+'\')">'+it[1]+'</button>'; }).join('')+'</span>'; }
   function render(){
     var w=document.getElementById('eb-wrap'); if(!w) return;
     ensureCss();
     var body='';
-    try{ body = EB.per==='today' ? viewToday() : viewPeriod(); }
+    try{ body = EB.tab==='sales' ? viewSales() : (EB.per==='today' ? viewToday() : viewPeriod()); }
     catch(e){ console.error('[execBoard] render', e); body='<div class="eb-card eb-none">Render error · '+E(e&&e.message)+'</div>'; }
     var t0=today();
     w.innerHTML='<div class="eb">'
       + '<div class="eb-top"><h1>Executive Board<small>OVERVIEW · รายได้และยอดจอง</small></h1>'
-      + seg('per',[['today','วันนี้'],['month','เดือนนี้'],['quarter','ไตรมาส'],['year','ปีนี้']])
-      + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])
+      + seg('tab',[['rev','ภาพรวมรายได้'],['sales','Sales Performance']])
+      + (EB.tab==='sales'
+          ? (seg('sp',[['week','สัปดาห์'],['month','เดือน']])
+             + '<span class="eb-nav"><button onclick="ebSet(\'off\','+((+EB.off||0)-1)+')" title="ช่วงก่อนหน้า">\u2039</button><b>'+E(spLabel(spRange(EB.sp||'week',+EB.off||0),EB.sp||'week'))+'</b>'
+             + '<button onclick="ebSet(\'off\','+Math.min(0,(+EB.off||0)+1)+')"'+((+EB.off||0)>=0?' disabled':'')+' title="ช่วงถัดไป">\u203a</button></span>')
+          : (seg('per',[['today','วันนี้'],['month','เดือนนี้'],['quarter','ไตรมาส'],['year','ปีนี้']])
+             + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])))
       + '<span class="eb-sp"></span><span class="eb-upd">'+E(thDow(t0))+' '+E(thD(t0))+' '+t0.slice(0,4)+' · อัปเดต '+hhmm(Date.now())+' · วาดใหม่ทุก 1 นาที</span></div>'
       + body + '</div>';
   }
@@ -465,7 +615,7 @@
     try{ if(m) m.scrollTop=y; window.scrollTo(window.scrollX||0, wy); }catch(_){}
   }
   window.ebRender = render;
-  window.ebSet = function(k, v){ EB[k]=v; keepRender(); };
+  window.ebSet = function(k, v){ if(k==='off') v=Math.min(0,+v||0); if(k==='sp' || k==='tab') EB.off=0; EB[k]=v; keepRender(); };
   /* Live · วาดใหม่ทุก 60 วินาที เฉพาะตอนหน้านี้เปิดอยู่และแท็บไม่ได้ถูกซ่อน */
   if(!window.__ebTick){
     window.__ebTick = setInterval(function(){
@@ -557,7 +707,32 @@
       '.eb-rows .vv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}',
       '.eb-rows .mini{height:7px;background:#EDF0F4;border-radius:4px;overflow:hidden}.eb-rows .mini i{display:block;height:100%;border-radius:4px;background:var(--eb-blue)}',
       '.eb-foot{font-size:11px;color:var(--eb-mut);margin-top:8px}',
-      '.eb-none{color:var(--eb-mut);text-align:center !important;padding:14px 0 !important}'
+      '.eb-none{color:var(--eb-mut);text-align:center !important;padding:14px 0 !important}',
+      /* §execSales */
+      '.eb-nav{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--eb-line);border-radius:9px;padding:2px 4px}',
+      '.eb-nav b{font-size:12px;font-weight:600;padding:0 4px;white-space:nowrap}',
+      '.eb-nav button{border:0;background:transparent;font-size:17px;line-height:1;padding:2px 7px;border-radius:6px;cursor:pointer;color:var(--eb-ink)}',
+      '.eb-nav button:disabled{opacity:.3;cursor:default}',
+      '.eb-scroll{overflow-x:auto}',
+      '.eb-tbl.eb-sp td,.eb-tbl.eb-sp th{padding-left:7px;padding-right:7px}',
+      '.eb-tbl.eb-sp td:nth-child(2),.eb-tbl.eb-sp th:nth-child(2),.eb-tbl.eb-l2 td:nth-child(2),.eb-tbl.eb-l2 th:nth-child(2){text-align:left}',
+      '.eb-tbl td.eb-l{text-align:left;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.eb-tbl tr.eb-dim td{color:var(--eb-mut)}',
+      '.eb-tbl tr.eb-tot td{border-top:2px solid var(--eb-ink);background:#F6F8FB}',
+      '.eb-pct{display:flex;align-items:center;gap:6px;justify-content:flex-end}',
+      '.eb-pct span{width:60px;height:6px;background:#EDF0F4;border-radius:3px;overflow:hidden}.eb-pct i{display:block;height:100%;border-radius:3px}',
+      '.eb-r4h{grid-template-columns:repeat(2,minmax(0,1fr))}',
+      '@media(max-width:1180px){.eb-r4h{grid-template-columns:minmax(0,1fr)}}',
+      '.eb-spark{display:flex;align-items:flex-end;gap:3px;height:26px;width:150px;margin-left:auto}',
+      '.eb-spark i{flex:1;border-radius:2px 2px 0 0;min-height:2px}',
+      '.eb-tbl.eb-tr td{padding-top:4px;padding-bottom:4px}',
+      '.eb-new{font-size:10px;font-weight:700;color:#A35F00;background:#FDF1DC;border-radius:5px;padding:0 5px;margin-left:3px;white-space:nowrap}',
+      '.eb-qscroll{max-height:330px;overflow:auto}',
+      '.eb-mv{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}',
+      '.eb-mvl .rw{display:grid;grid-template-columns:minmax(0,1fr) 60px 34px;gap:8px;align-items:center;padding:3px 0;font-size:12px}',
+      '.eb-mvl .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--eb-ink2)}',
+      '.eb-mvl .mini{height:6px;background:#EDF0F4;border-radius:3px;overflow:hidden}.eb-mvl .mini i{display:block;height:100%;border-radius:3px}',
+      '.eb-mvl .vv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
     ].join('\n');
     document.head.appendChild(s);
   }

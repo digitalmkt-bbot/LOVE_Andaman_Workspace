@@ -10,6 +10,9 @@
 //   5 กรองท่า: รายได้วันนี้ของ Tub Lamu = นับเฉพาะเส้นทางของท่านั้น
 //   6 เดือนนี้: รายได้ (วันเดินทาง) = ผลรวมของวันที่ 1 ถึงวันนี้ · คาดการณ์ = ได้แล้ว + จองไว้ถึงสิ้นเดือน
 //   7 ใช้ดูอย่างเดียว: วาดซ้ำทุกมุมมองแล้ว SB_BOOKINGS และ localStorage ไม่เปลี่ยน · วาดซ้ำ (Live) หน้าไม่เด้ง
+//   8 §execSales แท็บ Sales Performance (owner ส่งไฟล์ WEEKLY REPORT แล้ว "เพิ่มอีกแท็บนึง"):
+//     สัปดาห์นี้ (อาทิตย์–เสาร์) · Pax ทั้งทีม = ใบที่เข้าระบบสัปดาห์นี้ · แถวเซลส์รวมกันได้เท่าทีม · ‹ ย้อนสัปดาห์ได้ › ไปอนาคตไม่ได้
+//     มุมมองเดือนมีคอลัมน์ Activation · ส่วนแนวโน้ม 7 ช่วง / Top 10 / เงียบไป / แยกตามเซลส์ ขึ้นครบ
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -109,5 +112,32 @@ const R7 = await page.evaluate(async () => {
 });
 if (R7.same && R7.lsSame && R7.y0 > 0 && Math.abs(R7.y1 - R7.y0) <= 2) ok('7 ใช้ดูอย่างเดียว · ข้อมูลและ localStorage ไม่เปลี่ยน · วาดซ้ำแล้วหน้าอยู่ที่ ' + R7.y1 + 'px เท่าเดิม');
 else fail('7 ' + JSON.stringify(R7));
+
+// 8
+const R8 = await page.evaluate(() => {
+  const t0 = bkV2LocalYMD(new Date()), d = new Date(t0 + 'T12:00:00'); d.setDate(d.getDate() - d.getDay()); const ws = bkV2LocalYMD(d);
+  const CX = ['cancelled', 'rejected', 'cancelled_weather'], NS = ['quote', 'draft'];
+  let pax = 0, n = 0;
+  SB_BOOKINGS.forEach(b => { if (NS.includes(b.status) || CX.includes(b.status) || laIsInternalFree(b)) return; const dd = _dashBkDay(b); if (!dd || dd < ws || dd > t0) return;
+    n++; (b.trips || []).forEach(t => { pax += bkV2PaxAllTot(t.pax); }); });
+  ebSet('tab', 'sales'); ebSet('sp', 'week');
+  const w = document.getElementById('eb-wrap'), tbl = w.querySelector('table.eb-sp');
+  const rows = [...tbl.querySelectorAll('tbody tr:not(.eb-tot)')].filter(r => r.children.length > 3).map(r => +r.children[2].textContent.replace(/,/g, ''));
+  const tot = +tbl.querySelector('tr.eb-tot').children[2].textContent.replace(/,/g, '');
+  const kp = +w.querySelector('.eb-k .v').textContent.replace(/,/g, '');
+  const lbl0 = w.querySelector('.eb-nav b').textContent;
+  ebSet('off', -1); const lbl1 = w.querySelector('.eb-nav b').textContent; const nextOn = !w.querySelector('.eb-nav button:last-child').disabled;
+  ebSet('off', 1); const back = (window._eb.off === 0);
+  ebSet('sp', 'month'); const mh = [...w.querySelectorAll('table.eb-sp thead th')].map(x => x.textContent);
+  const secs = [...w.querySelectorAll('.eb-sec')].map(x => x.textContent);
+  const mv = w.querySelectorAll('.eb-mv .eb-card').length;
+  ebSet('tab', 'rev');
+  return { pax, n, rows, tot, kp, lbl0, lbl1, nextOn, back, mh, secs, mv };
+});
+const sumRows = R8.rows.reduce((s, x) => s + x, 0);
+if (R8.kp === R8.pax && R8.tot === R8.pax && sumRows === R8.pax && R8.lbl0 !== R8.lbl1 && R8.nextOn && R8.back
+    && R8.mh.includes('Activation') && R8.secs.some(x => /แนวโน้ม 7/.test(x)) && R8.secs.some(x => /แยกตามเซลส์/.test(x)) && R8.mv >= 1)
+  ok('8 Sales Performance · สัปดาห์นี้ ' + R8.pax + ' pax จาก ' + R8.n + ' ใบ = รวมทีม = ผลรวมแถวเซลส์ · ย้อนไป "' + R8.lbl1 + '" ได้ · เดือนมี Activation · แนวโน้ม/เอเยนต์ขึ้นครบ');
+else fail('8 ' + JSON.stringify(R8));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
