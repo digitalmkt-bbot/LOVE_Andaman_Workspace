@@ -35,7 +35,7 @@
   };
 
   // Server cache for the loaded day, plus the type catalogue. Filled only from server answers.
-  var st = { key: '', pending: '', boats: [], tickets: [], types: null, seq: 0 };
+  var st = { key: '', pending: '', boats: [], tickets: [], types: null, seq: 0, nat: {} };
   var enc = encodeURIComponent;
   function dayBase(pier, date){ return '/v1/pier-office/' + enc(pier) + '/park-tickets/' + enc(date); }
   function curPier(){ return window._poPier || ''; }
@@ -54,9 +54,15 @@
     if(!pier || !date) return Promise.resolve(null);
     var key = pier + '|' + date, my = ++st.seq;
     st.pending = key;
-    return O.get('/v1/pier-office/' + enc(pier) + '/park-tickets', { date: date }).then(function(j){
+    // The going heads by nationality (pk2BoatS's pax8) are the server's booked.nationality of the pier day's boats.
+    return Promise.all([
+      O.get('/v1/pier-office/' + enc(pier) + '/park-tickets', { date: date }),
+      O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats')
+    ]).then(function(r){
+      var j = r[0], nat = {};
+      ((r[1] && r[1].boats) || []).forEach(function(b){ if(b.booked && b.booked.nationality) nat[b.boat_id] = b.booked.nationality; });
       if(my !== st.seq) return j;                      // a later request for another day won
-      st.pending = ''; st.key = key;
+      st.pending = ''; st.key = key; st.nat = nat;
       st.boats = (j && j.boats) || []; st.tickets = (j && j.tickets) || [];
       if(j && Array.isArray(j.types)) st.types = j.types;
       redraw();
@@ -106,7 +112,7 @@
     };
     return {
       bid: b.boat_id, boat: { id: b.boat_id, name: b.boat_name }, dep: b.departure || '',   // the job's own time, else the route's first (server)
-      cnt: cnt, tot: b.tot, cntPc: cnt, totPc: b.tot, pcDiff: false, pax8: cnt,
+      cnt: cnt, tot: b.tot, cntPc: cnt, totPc: b.tot, pcDiff: false, pax8: st.nat[b.boat_id] || {},
       booked: b.booked, people: (b.people || []).map(convPerson), miss: b.miss || {}, missTot: b.miss_total || 0,
       orphan: (b.orphans || []).map(function(o){ return { full: o.full, cat: o.cat, seq: o.seq, bkId: o.booking_id, vc: '', lead: '' }; }),
       byNat: false
