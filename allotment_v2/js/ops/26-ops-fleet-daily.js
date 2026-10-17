@@ -738,6 +738,55 @@
     return runProjectCmd(id, 'reopen', {}, 'Could not reopen project');
   });
 
+  /* vendor visit: the project answers (the server computes its cost and log line) */
+  wrap('flProjAddVendorVisit', function(orig, projId){
+    var p = listProjects().find(function(x){ return x && x.id === projId; });
+    if(!p) return null;
+    var vendor = prompt('Vendor / contractor name:', p.vendor || '');
+    if(!vendor) return null;
+    var role = prompt('Role / purpose (e.g. inspection · paint quote · sea trial):', '') || '';
+    var body = { vendor: vendor.trim() };
+    if(role.trim()) body.role = role.trim();
+    return runProjectCmd(projId, 'vendor-visits', body, 'Could not add vendor visit');
+  });
+
+  /* "Close at ฿0" (the no-cost choice): the reason in the note is the server's no_cost_reason. Legacy set
+     p.noCost in the browser and then posted complete with nothing, so the reason was lost. */
+  wrap('flProjBillGo', function(orig){
+    var id = typeof _prjBillId !== 'undefined' ? _prjBillId : null;
+    var pick = typeof _prjBillPick !== 'undefined' ? _prjBillPick : 'wait';
+    var known = id && listProjects().some(function(x){ return x && x.id === id; });
+    if(!known || pick === 'wait') return orig.apply(this, [].slice.call(arguments, 1));
+    var note = (document.getElementById('prj-bill-note') || {}).value || '';
+    var reason = String(note).trim();
+    if(!reason){
+      alert('ปิดแบบไม่มีค่าใช้จ่าย ต้องเขียนเหตุผลไว้ในหมายเหตุ\n\nเช่น "งานในประกัน" · "ช่างบริษัททำเอง" · "อู่ไม่คิดเงิน"');
+      return null;
+    }
+    if(typeof window.flProjBillClose_ === 'function') window.flProjBillClose_();
+    return runProjectCmd(id, 'complete', { no_cost_reason: reason }, 'Could not complete project');
+  });
+
+  /* issue items (the list of things issued to boats): name, unit, pier, off. The list is read from the daily
+     log, so after a save the daily window is read again. "off" is sent as true/false (the switch-off
+     flag the screen sends as 1/0). */
+  wrap('flIssueSetItem', function(orig, id, field, val){
+    var body = null;
+    if(field === 'off') body = { off: !!val };
+    else if(field === 'name' || field === 'unit' || field === 'pier'){ body = {}; body[field] = String(val || '').trim(); }
+    if(!body) return orig.apply(this, [].slice.call(arguments, 1));
+    return O.queue(function(){
+      return O.patch('/v1/fleet/issue-items/' + enc(id), body);
+    }).then(function(){
+      return loadDailyWindow().then(function(){
+        O.wrote('fleet-issue-items');
+        redrawDailyAndProjects();
+        if(typeof window.flRenderDR === 'function') window.flRenderDR();
+        return null;
+      });
+    }).catch(function(e){ O.fail('Could not save the issue item', e); return null; });
+  });
+
   wrap('flProjWorkDone', function(orig, id, note){
     return runProjectCmd(id, 'work-done', note ? { note: text(note) } : {}, 'Could not mark project work done');
   });
