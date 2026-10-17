@@ -79,6 +79,7 @@
       programPeriods:programs.map(function(p){ return { routeId:p.route_id, bookFrom:p.book_from||'', bookTo:p.book_to||'', note:p.note||'' }; })
     });
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
+    if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
     return o;
   }
@@ -485,6 +486,20 @@
     },function(e){ return fail('Could not read the agents\' programmes',e); });
   }
   if(typeof legacyProgBulkApply==='function'){ bulkPrograms.__ops=true; bulkPrograms.__opsAgents=true; window.agProgBulkApply=bulkPrograms; }
+
+  /* agIncompleteFields (the "incomplete data" warning on the list and the agent page): the server works the gaps out
+     (GET /v1/agents[/id] `incomplete`: market, sales, pay_type, rate_type, programs, contact; same rule and order as
+     legacy) and the browser used to recompute them from list rows that carry no contact. Same labels as legacy. An
+     agent row that did not come from the server (no `incomplete` array) still uses the legacy function. */
+  var legacyIncomplete=window.agIncompleteFields;
+  if(typeof legacyIncomplete==='function'){
+    var INC_LABEL={market:'Market',sales:'Sales owner',pay_type:'Payment',rate_type:'Rate Type',programs:'Programs',contact:'Contact'};
+    var inc=function(a){
+      if(!enabled() || !a || !Array.isArray(a.incomplete)) return legacyIncomplete.apply(this,arguments);
+      return a.incomplete.map(function(k){ return INC_LABEL[k]||k; });
+    };
+    inc.__ops=true; inc.__opsAgents=true; window.agIncompleteFields=inc;
+  }
 
   if(typeof legacyPersist==='function'){
     window.sbAgentsPersist=function(){ if(enabled()) return; return legacyPersist.apply(this,arguments); };
