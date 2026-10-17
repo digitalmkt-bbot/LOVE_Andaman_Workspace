@@ -51,7 +51,7 @@
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
   ['paCell', 'paHasJob', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
-   'renderPierOffice', 'renderPierAtt', 'paRoutesByCode', 'paRouteCode'].forEach(function(n){ L[n] = window[n]; });
+   'renderPierOffice', 'renderPierAtt', 'paRoutesByCode', 'paRouteCode', 'poUnassigned'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
   function cfg(){ var c = window.PIER_CFG; if(!c || typeof c !== 'object'){ c = window.PIER_CFG = {}; } return c; }
@@ -65,6 +65,11 @@
   var fresh = {}, inflight = {}, later = {};
   function invalidate(){ fresh = {}; }
   O.onWrite(function(kind){ if(kind === 'pier') invalidate(); });
+  // The day's unassigned heads (poUnassigned) move when a booking or its boat changes: ask for the day again.
+  O.onWrite(function(kind){
+    if(kind !== 'booking' && kind !== 'trip-boat') return;
+    Object.keys(fresh).forEach(function(k){ if(k.indexOf('day|') === 0) delete fresh[k]; });
+  });
   P.afterLoad(function(){ invalidate(); stampLegacyMoves(); return Promise.resolve(); });
   function ensure(key, load, view){
     if(!ready() || fresh[key] || inflight[key]) return;
@@ -468,10 +473,16 @@
   };
 
   /* the day: lock, reopen trail, each boat's stage */
-  var dayBase = {};
+  var dayBase = {}, unassigned = {};
+  window.poUnassigned = function(date, pier){
+    var n = unassigned[pier + '|' + date];
+    if(ready() && n !== undefined) return n;
+    return L.poUnassigned.apply(this, arguments);
+  };
   function dayKey(pier, date){ return pier + '::' + date; }
   function loadDay(pier, date){
     return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
+      if(j.unassigned) unassigned[pier + '|' + date] = +j.unassigned.pax || 0;   // heads at the pier with no boat yet (poUnassigned)
       (j.boats || []).forEach(function(b){
         stages[pier + '|' + date + '|' + b.boat_id] = { k: b.stage, left: b.left, issued: b.issued, carry: b.carry, onboard: b.onboard, sheet_status: b.sheet_status };
       });
