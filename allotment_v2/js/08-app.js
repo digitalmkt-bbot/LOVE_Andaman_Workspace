@@ -55572,7 +55572,8 @@ function poLedgerOpen(){
     /* §poShip3 · หาย/ตัดทิ้งจากของประจำเรือ · นับในยอดหาย แต่ไม่ใช่ของค้างคืน และไม่มีลูกค้าให้ปรับ */
     else if(t==='ship_lost'||t==='ship_writeoff') S.lost+=q;
   });
-  var nDay=Object.keys(dset).length;
+  if(typeof poLedgerSrv==='function') poLedgerSrv(_poPier,S);   /* ops mode: the summary is the server's (GET …/moves summary) */
+  var nDay=(S.srvDays!=null)?S.srvDays:Object.keys(dset).length;
   var OUT=Object.keys(S.out).map(function(id){ return {id:id,v:S.out[id]}; })
     .filter(function(x){ return x.v>0; }).sort(function(a,b){ return b.v-a.v; });
   var outTot=OUT.reduce(function(s2,x){ return s2+x.v; },0);
@@ -55585,7 +55586,7 @@ function poLedgerOpen(){
     sum='<div style="font:700 11px/1 inherit;letter-spacing:.06em;color:#94A3B8;margin:0 0 8px">'
        +'สรุป · '+poE(S.d0)+(S.d1&&S.d1!==S.d0?(' – '+poE(S.d1)):'')+'</div>'
       +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-bottom:11px">'
-      +poLdgCard('เคลื่อนไหวทั้งหมด', all.length, 'รายการ · '+nDay+' วัน','')
+      +poLdgCard('เคลื่อนไหวทั้งหมด', (S.srvMoves!=null?S.srvMoves:all.length), 'รายการ · '+nDay+' วัน','')
       +poLdgCard('เบิก / คืน', S.issue+' <span style="color:#CBD5E1;font-weight:600">/</span> '+S.ret, 'ชิ้น','')
       +poLdgCard('ยังไม่ได้คืน', outTot,
           outTot?('ชิ้น · '+OUT.length+' รายการ · '+boOut.length+' ลำ'):'คืนครบทุกรายการ',
