@@ -83,8 +83,8 @@ const kinds = (await api('/v1/pier-office')).item_kinds;
 const itemFin = (await seed('POST', '/v1/pier-office/items', { pier: PIER, kind_id: kinds[0].id, label: 'Fin M', total: 30 })).id;
 for (const [b, r] of [['b6', 'r5'], ['b7', 'r4']]) for (const d of [D, D2]) await seed('POST', '/operations/deployments', { boat_id: b, route_id: r, service_date: d, capacity: 40, deploy_anyway: true });
 let nb = 0;
-const book = async (date, boat, route, pax, zone = 'PK', add_ons = undefined) => {
-  const b = await seed('POST', '/v1/bookings', { external_id: `b2c_walk_${Date.now().toString(36)}_${nb++}`, total: 3000, trips: [{ route_id: route, date, pax, zone }], add_ons });
+const book = async (date, boat, route, pax, zone = 'PK', add_ons = undefined, extra = {}) => {
+  const b = await seed('POST', '/v1/bookings', { external_id: `b2c_walk_${Date.now().toString(36)}_${nb++}`, total: 3000, trips: [{ route_id: route, date, pax, zone }], add_ons, ...extra });
   const v = (await api(`/v1/bookings/${b.id}`)).version;
   await seed('PATCH', `/operations/trip-ops/${b.trips[0].id}`, { boat_id: boat, version: v });
   return b;
@@ -92,6 +92,9 @@ const book = async (date, boat, route, pax, zone = 'PK', add_ons = undefined) =>
 const bk1 = await book(D, 'b6', 'r5', { ad_fr: 2, chd_fr: 1 });
 const bk2 = await book(D, 'b6', 'r5', { ad_th: 2, chd_th: 1 });
 const bk3 = await book(D, 'b7', 'r4', { ad_fr: 3 });
+// cash on tour: one unpaid, one marked paid (Love Kingdom's payment state)
+const bkCot = await book(D, 'b7', 'r4', { ad_fr: 1 }, 'PK', undefined, { agent_id: 'a_b2c', payment_method: 'cot' });
+const bkCotPaid = await book(D, 'b7', 'r4', { ad_fr: 1 }, 'PK', undefined, { agent_id: 'a_b2c', payment_method: 'cot', payment_paid_status: 'paid' });
 const bk4 = await book(D2, 'b6', 'r5', { ad_fr: 2 }, 'PK', [{ type: 'longtail-join', label: 'Longtail join', join_adults: 2, join_children: 0 }]);
 
 // a partner van that ran a panwa trip on VD = 2026-10-19 (period 11-20 of 2026-10): the van bill has one row
@@ -247,7 +250,7 @@ section('3', async () => {
   })), names);
   const want = (n) => [n.ad_th + n.chd_th + n.inf_th, n.ad_fr + n.chd_fr + n.inf_fr, n.foc_th + n.foc_fr, n.tot];
   ok('Zeus row: Thai / foreign / FOC / total are the server heads (3, 3, 0, 6)', JSON.stringify(cells.b6) === JSON.stringify(want(nat.b6)) && want(nat.b6).join() === '3,3,0,6', { screen: cells.b6, server: want(nat.b6) });
-  ok('Verona row: 0 / 3 / 0 / 3', JSON.stringify(cells.b7) === JSON.stringify(want(nat.b7)) && want(nat.b7).join() === '0,3,0,3', { screen: cells.b7, server: want(nat.b7) });
+  ok('Verona row: 0 / 5 / 0 / 5', JSON.stringify(cells.b7) === JSON.stringify(want(nat.b7)) && want(nat.b7).join() === '0,5,0,5', { screen: cells.b7, server: want(nat.b7) });
   // park sets (Ticket Management tab)
   const srv = (await api(`/v1/pier-office/${PIER}/days/${D}/park-sets`)).sets;
   await ev(() => pkSetFam('sets')); await settle(1000);
@@ -395,6 +398,38 @@ section('7', async () => {
   const n2 = await grab(() => intBtn.first().click());
   ok('billing note (internal copy): sale price and profit columns, the server doc no and total', n2.txt.includes(noteIn.doc_no) && n2.txt.includes('ราคาขาย') && n2.txt.includes('กำไร') && n2.txt.includes(fmt(noteIn.totals.bill)) && n2.txt.includes('ฉบับภายใน'), { text: n2.txt.slice(0, 500) });
   ok('the print figures are the servers: sale ' + noteIn.totals.sale + ', cost ' + noteIn.totals.car_cost, n2.txt.includes(fmt(noteIn.totals.sale)) && n2.txt.includes(fmt(noteIn.totals.car_cost)), n2.txt.slice(0, 700));
+});
+
+// ═══ 8 · pier check-in money ═══
+section('8', async () => {
+  console.log('\n[8] pier check-in money · pckPaidSum / pckFeeSum / pckNoSlip / pckCotUnset');
+  // payments taken at the pier on D: bk1 card 1000 (fee 30) + transfer 500 with no slip; bk2 cash 400
+  const pay = async (bk, lines) => {
+    const v = (await api(`/v1/bookings/${bk.id}`)).version;
+    await seed('POST', `/v1/bookings/${bk.id}/pier-payments`, { service_date: D, lines, version: v, overpay_anyway: true });
+  };
+  await pay(bk1, [{ method: 'card', amount: 1000, fee: 30 }, { method: 'transfer', amount: 500 }]);
+  await pay(bk2, [{ method: 'cash', amount: 400 }]);
+  await goView('piercheckin'); await settle(500);
+  await ev((a) => { _pckDate = a.D; if (typeof pckSetPier === 'function') { try { pckSetPier(a.P); } catch (_) {} } renderPierCheckin(); }, { D, P: PIER });
+  await settle(3000); await ev(() => renderPierCheckin()); await settle(1000);
+  const money = (await api(`/v1/pier-money?date=${D}`)).rows;
+  const byId = Object.fromEntries(money.map((r) => [r.booking_id, r]));
+  const scr = await ev((a) => SB_BOOKINGS.filter((b) => b.opsId).map((b) => {
+    const M = pckMoney(b, a.D);
+    return { opsId: b.opsId, id: b.id, paid: pckPaidSum(b, a.D), fee: pckFeeSum(b, a.D), noSlip: pckNoSlip(b, a.D), cotUnset: !!pckCotUnset(M), term: M && M.term, paidState: M && M.paidState, local: (b.pierPayments || []).length };
+  }), { D });
+  const row = (id) => scr.find((x) => x.opsId === id);
+  const r1 = byId[bk1.id], r2 = byId[bk2.id];
+  ok('server row of bk1: paid 1500, fees 30, no_slip 2 (a card and a transfer without a slip)', r1 && r1.paid === 1500 && r1.fees === 30 && r1.no_slip === 2, r1 && [r1.paid, r1.fees, r1.no_slip]);
+  ok('pckPaidSum / pckFeeSum / pckNoSlip of bk1 on the screen = the server row (the screen had never opened its pay box)', row(bk1.id).paid === r1.paid && row(bk1.id).fee === r1.fees && row(bk1.id).noSlip === r1.no_slip && row(bk1.id).local === 0, { screen: row(bk1.id), server: [r1.paid, r1.fees, r1.no_slip] });
+  ok('bk2 (cash 400): paid 400, fee 0, no slip needed', row(bk2.id).paid === 400 && row(bk2.id).fee === 0 && row(bk2.id).noSlip === 0 && r2.paid === 400, { screen: row(bk2.id), server: r2 && [r2.paid, r2.fees, r2.no_slip] });
+  const c1 = byId[bkCot.id], c2 = byId[bkCotPaid.id];
+  ok('server: bkCot is cash-on-tour and not paid; bkCotPaid is cash-on-tour and paid', c1 && c1.term === 'cot' && c1.paid_status !== 'paid' && c2 && c2.term === 'cot' && c2.paid_status === 'paid', { c1: c1 && [c1.term, c1.paid_status], c2: c2 && [c2.term, c2.paid_status] });
+  ok('pckCotUnset: true for the unpaid cot booking, false for the paid one and for an invoice booking', row(bkCot.id).cotUnset === true && row(bkCotPaid.id).cotUnset === false && row(bk1.id).cotUnset === false, { cot: row(bkCot.id), paid: row(bkCotPaid.id), plain: row(bk1.id) });
+  // the row on the sheet (what the clerk reads): the DOM must show the card fee
+  const dom = await ev(() => document.getElementById('piercheckin-host').innerText.replace(/\s+/g, ' '));
+  ok('the check-in sheet text shows the booking money of the server (1,500 paid)', /1,500/.test(dom), dom.slice(0, 300));
 });
 
 // @@SECTIONS
