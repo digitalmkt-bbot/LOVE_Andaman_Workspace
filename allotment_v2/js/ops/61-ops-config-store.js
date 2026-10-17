@@ -115,6 +115,8 @@
     pck_svc_colors: { title: 'Pier check-in colours', wait: DEBOUNCE_MS },
     pck_svc_rules: { title: 'Pier check-in rules', wait: DEBOUNCE_MS },
     pck_guide_colors: { title: 'Pier check-in guide colours', wait: DEBOUNCE_MS },
+    vck_status_colors: { title: 'Van check-in colours', wait: 0 },
+    vck_bar_style: { title: 'Van check-in row style', wait: 0 },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -274,6 +276,36 @@
   wrap('_pckSvcWrite', function(orig, key, val){
     var h = H[key]; if(!h) return orig.apply(this, [].slice.call(arguments, 1));
     return h.write(val);
+  });
+
+  /* vck_status_colors / vck_bar_style · Van check-in colours and row style (08: vckColors, vckBarStyle, vckBarStyleSet,
+     vckColorSet, vckColorsReset). Legacy kept them in the blob. The map holds only the colours that differ from the
+     default (a reset writes {}); the style is "a" (pale) or "c" (dark). Repaint stays with the legacy callers. */
+  wrap('vckColors', function(orig){
+    var o = liveOf('vck_status_colors'), out = {};
+    VCK_STATES.forEach(function(s){ out[s.k] = (typeof o[s.k] === 'string' && /^#[0-9a-fA-F]{6}$/.test(o[s.k])) ? o[s.k] : s.c; });
+    return out;
+  });
+  wrap('vckBarStyle', function(orig){ return cfgRead('vck_bar_style') === 'c' ? 'c' : 'a'; });
+  wrap('vckBarStyleSet', function(orig, v){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
+    cfgWrite('vck_bar_style', v === 'c' ? 'c' : 'a');
+    if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+  });
+  wrap('vckColorSet', function(orig, k, hex){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
+    if(!/^#[0-9a-fA-F]{6}$/.test(String(hex || ''))) return;
+    var C = window.vckColors(), keep = {};
+    C[k] = hex;
+    VCK_STATES.forEach(function(s){ if(C[s.k] && C[s.k].toLowerCase() !== s.c.toLowerCase()) keep[s.k] = C[s.k]; });
+    cfgWrite('vck_status_colors', keep);
+  });
+  wrap('vckColorsReset', function(orig){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
+    if(!confirm('คืนค่าสีของทุกสถานะกลับเป็นค่าเริ่มต้น?')) return;
+    cfgWrite('vck_status_colors', {});
+    if(typeof window.vckColorClose === 'function') window.vckColorClose();
+    if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
   });
 
   /* legacy bookingV2PayShow / bookingV2PayToggle (booking/bookingV2PayShow.js, bookingV2PayToggle.js): the voucher's
