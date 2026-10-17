@@ -416,4 +416,18 @@ ok('cancelled path: PATCH trip-ops {van_parts:null} -> server part has no group,
 ok('cancelled path: the row left the Van Check-in screen', (await ev(() => document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear(\'zz-b3\'"]').length)) === 0, null);
 // the confirm text names only van parts, but the confirm also says "boat": record what the server actually kept
 console.log('  note  server kept boat/final pickup/check-in of b3: ' + JSON.stringify({ boat: b3after.trips[0].operations.boat_id, fin: b3after.trips[0].operations.pickup_time_final }));
+// vehLog · the van history list comes from the server
+await send('PATCH', `/operations/vans/${vanA.id}`, { driver: 'Somchai Walk' });
+await ev(() => { const el = document.querySelector('.nav-item[data-view="vehicles"]'); if (el) nav(el); });
+await settle(1500); await idle();
+await ev((id) => { if (_vehSel === id) _vehSel = null; vehSelect(id); }, vanA.id);
+await waitFor((id) => { const v = SB_VEHICLES.find((x) => x.id === id); return v && Array.isArray(v.log) && v.log.some((l) => /Somchai Walk/.test(l.text)); }, vanA.id, 8000);
+await settle(800);
+const logSrv = (await api(`/operations/vans/${vanA.id}/log`)).log;
+const logScr = await ev((id) => SB_VEHICLES.find((x) => x.id === id).log.map((l) => l.text), vanA.id);
+const logDom = await ev(() => document.querySelector('#vehicles-host').innerText);
+ok('van history on screen = the server log (same lines, oldest first on screen), the new driver line included', logSrv.length >= 2 && JSON.stringify(logScr) === JSON.stringify(logSrv.map((l) => l.text).reverse()) && logScr.some((t) => /Somchai Walk/.test(t)), { logSrv: logSrv.map((l) => l.text), logScr });
+ok('the history list is drawn in the Transfer Fleet panel', /Somchai Walk/.test(logDom), logDom.slice(0, 200));
+await ev((id) => vehLog(id, 'edit', 'LOCAL ONLY LINE'), vanA.id);
+ok('vehLog pushes nothing locally in ops mode', !(await ev((id) => SB_VEHICLES.find((x) => x.id === id).log.some((l) => /LOCAL ONLY/.test(l.text)), vanA.id)));
 process.exit(0);
