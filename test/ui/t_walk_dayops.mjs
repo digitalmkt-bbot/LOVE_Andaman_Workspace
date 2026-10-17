@@ -205,13 +205,13 @@ await send('DELETE', `/operations/van-arrivals/${DAY}/veh02/r5`);
 }
 // ════════════ 3. van groups ════════════
 let n3 = 0, G = [];
-if (want('3')) {
-curItem = '3'; console.log('\n[3] van groups (By-trip · Van mode)');
 const showBytrip = async (date) => {
   await ev((d) => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; _bkV2.vanAssignMode = true; _bkV2.detailId = null; _bkV2.newBooking = null; _bkV2.filterRoute = null; const el = document.querySelector('.nav-item[data-view="booking"]'); if (el) nav(el); bookingV2Render(); }, date);
   await waitFor((d) => SB_BOOKINGS.filter((b) => b.trips.some((t) => t.date === d)).length >= 4, date, 15000);
   await idle(); await settle(1200);
 };
+if (want('3')) {
+curItem = '3'; console.log('\n[3] van groups (By-trip · Van mode)');
 const grpsOf = async (date) => (await api(`/operations/van-groups?service_date=${date}&route_id=r5`)).groups;
 const scr = (id, date) => ev((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.id); if (!b) return null; const o = bkOpsRead(b, a.date) || {}; return { grp: +o.vanGroup || 0, van: o.vanId || '', ret: o.vanReturnId || '', seq: +o.vanSeq || 0, fin: o.pickupTimeFinal || '' }; }, { id, date });
 const tick = async (id) => { await page.locator(`#view-booking span[onclick*="bookingV2VanSelToggle('${id}')"]`).first().click(); await settle(300); };
@@ -561,4 +561,66 @@ const picked = await ev((id) => { const bt = document.querySelector('button[data
 ok('screen: the "หักทั้งก้อน" button of that row is the picked one', /pick/.test(picked || ''), picked);
 const cotOf = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e1'); const c = bookingV2CotOf(b); return { amt: c.amt, use: c.use, deduct: c.deduct, mode: c.mode, settled: !!c.settled }; });
 ok('booking page: bookingV2CotOf(booking) shows the decision made on the Travel Summary (deduct 3000, mode full)', cotOf.settled && cotOf.deduct === 3000 && cotOf.mode === 'full', cotOf);
-process.exit(0);
+
+// ════════════ 7. total_locked message · 409 cancelled on a cancelled booking's edits ════════════
+curItem = '7'; console.log('\n[7] pier office item total locked · cancelled booking edits');
+const itemsSrv0 = (await api('/v1/pier-office?pier=tublamu')).items;
+const itemId = itemsSrv0[0].id, total0 = itemsSrv0[0].total;
+console.log('  note  item ' + itemId + ' total ' + total0);
+await ev(() => { window._poPier = 'tublamu'; const el = document.querySelector('.nav-item[data-view="pieroffice"]'); if (el) nav(el); });
+await settle(2500); await idle();
+await ev(() => { _poPier = 'tublamu'; renderPierOffice(); });
+await settle(2500); await idle();
+const hasItem = await waitFor((id) => (window.PIER_ITEMS || []).some((i) => i.id === id), itemId, 15000);
+ok('the item made on the server is on the Pier Office screen (PIER_ITEMS)', hasItem, await ev(() => (window.PIER_ITEMS || []).map((i) => i.id)));
+await ev(() => poItemsOpen());
+await settle(600);
+const inputThere = await page.locator('#poitt_' + itemId).count();
+ok('before any move the starting stock is an editable box', inputThere === 1, inputThere);
+// another machine receives stock: the item now has a move on the server, this browser has not heard
+const rec = await send('POST', '/v1/pier-office/tublamu/stock/receive', { date: DAY3, source: 'buy', lines: [{ item_id: itemId, qty: 5 }] });
+ok('other machine received 5 (server move recorded)', rec.status === 201, rec);
+await page.fill('#poitt_' + itemId, '20');
+n3 = calls.length; const rl = refusals.length;
+await page.click('button[onclick="poItemsSave()"]');
+await idle(); await settle(1500);
+const patchRef = refusals.slice(rl).filter((r) => /pier-office\/items/.test(r));
+const itemSrv = ((await api('/v1/pier-office?pier=tublamu')).items || []).find((i) => i.id === itemId);
+const toastTxt = await ev(() => document.body.innerText);
+ok('save -> PATCH pier-office/items/{id} answered 409 total_locked', patchRef.length === 1 && /409/.test(patchRef[0]) && /total_locked/.test(patchRef[0]), patchRef);
+ok('server total unchanged (' + total0 + ')', itemSrv && itemSrv.total === total0, itemSrv);
+const srvMsg = (() => { try { return JSON.parse(patchRef[0].replace(/^[^{]*/, '')).message; } catch (_) { return null; } })();
+console.log('  note  server message: ' + JSON.stringify(srvMsg));
+ok('the refusal message is shown to the user (toast carries the server\'s words)', srvMsg && toastTxt.includes(srvMsg.slice(0, 40)), { srvMsg, toast: toastTxt.slice(-300) });
+ok('screen: PIER_ITEMS total put back to ' + total0, (await ev((id) => (PIER_ITEMS.find((i) => i.id === id) || {}).total, itemId)) === total0, await ev((id) => (PIER_ITEMS.find((i) => i.id === id) || {}).total, itemId));
+// cancelled booking: pickup time and pier note refused with 409 cancelled, the server's message shown
+await ev((d) => bookingV2OpsEnsureDay(d), DAY2); await settle(2000);
+await ev((id) => { document.body.insertAdjacentHTML('beforeend',
+  '<div id="zz-c"><select id="bkc-cat"><option value="customer_cancel" selected>c</option></select><input id="bkc-reason" value="walk cancel"><input type="radio" name="bkc-charge" value="none" checked></div>');
+  bookingV2CancelConfirm(id); document.getElementById('zz-c').remove(); }, 'zz-c4');
+await settle(1500); await idle();
+const c4srv = await api('/v1/bookings/' + bk2.c4.id);
+ok('c4 cancelled on the server', c4srv.status === 'cancelled', c4srv.status);
+// the By-trip row of a cancelled booking: is there a pickup box?
+await showBytrip(DAY2).catch(() => {}); 
+const pickIn = page.locator(`#view-booking input[oninput*="bookingV2SetPickupFinal('zz-c4'"]`);
+const nPick = await pickIn.count();
+let rl7 = refusals.length;
+if (nPick) { await pickIn.first().fill('07:05'); await idle(); await settle(1200); } else { await ev((d) => bookingV2SetPickupFinal('zz-c4', '07:05', d), DAY2); await idle(); await settle(1200); }
+let ref7 = refusals.slice(rl7).filter((r) => /trip-ops/.test(r));
+let msg7 = (() => { try { return JSON.parse(ref7[0].replace(/^[^{]*/, '')).message; } catch (_) { return null; } })();
+let txt7 = await ev(() => document.body.innerText);
+ok('pickup time on a cancelled booking (' + (nPick ? 'typed in the By-trip row' : 'no box on the row, called by name') + ') -> PATCH trip-ops 409 cancelled, server message shown', ref7.length === 1 && /409/.test(ref7[0]) && /cancelled/.test(ref7[0]) && msg7 && txt7.includes(msg7.slice(0, 30)), { ref7, msg7 });
+const c4trip = (await api('/v1/bookings/' + bk2.c4.id)).trips[0].operations;
+ok('server: no pickup time stored; screen row keeps no time either', c4trip.pickup_time_final === null && !(await ev((d) => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c4'); return (bkOpsRead(b, d) || {}).pickupTimeFinal; }, DAY2)), { c4trip: c4trip.pickup_time_final });
+rl7 = refusals.length;
+await ev((d) => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c4'); pckNoteSet(b, d, 'late guest'); }, DAY2);
+await idle(); await settle(1200);
+ref7 = refusals.slice(rl7).filter((r) => /trip-ops/.test(r));
+msg7 = (() => { try { return JSON.parse(ref7[0].replace(/^[^{]*/, '')).message; } catch (_) { return null; } })();
+txt7 = await ev(() => document.body.innerText);
+ok('pier note on a cancelled booking -> PATCH trip-ops 409 cancelled, server message shown ("Pier note not saved")', ref7.length === 1 && /409/.test(ref7[0]) && msg7 && txt7.includes(msg7.slice(0, 30)) && /Pier note not saved/.test(txt7), { ref7, msg7 });
+const c4note = (await api('/v1/bookings/' + bk2.c4.id)).trips[0].operations.pier_note;
+ok('server: no pier note stored; no history line "โน้ตหน้างาน" added on the screen', c4note === null && !(await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-c4'); return (b.history || []).some((h) => /โน้ตหน้างาน/.test(h.text || h.note || JSON.stringify(h))); })), { c4note });
+console.log('  note  message: ' + JSON.stringify(msg7));
+process.exit(fails.length ? 1 : 0);
