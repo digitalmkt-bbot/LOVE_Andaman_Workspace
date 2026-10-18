@@ -349,6 +349,11 @@
     var targetOps = (trip && trip.date !== firstDate) ? (trip.ops = trip.ops || {}) : (bk.ops = bk.ops || {});
 
     applyServerCheckins(targetOps, ops);
+    /* §opsAboard · the answer carries the trip's check-in figures: keep them with the record they were computed from */
+    if(trip){
+      if(serverTrip.aboard && typeof serverTrip.aboard === 'object'){ trip.aboard = serverTrip.aboard; trip.aboardDate = serverTrip.service_date || trip.date; }
+      else { delete trip.aboard; delete trip.aboardDate; }
+    }
   }
 
   /* The check-in screens are drawn once, at once, by legacy's ckAfter, but in ops mode local state changes only when
