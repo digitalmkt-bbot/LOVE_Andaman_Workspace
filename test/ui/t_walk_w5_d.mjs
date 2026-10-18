@@ -109,15 +109,16 @@ const vanA = await mkVan('W5 Van Alpha', 12), vanB = await mkVan('W5 Van Bravo',
 for (const v of [vanA, vanB, vanC]) await seed('PUT', `/operations/van-days/${DAY}/${v.id}`, { route_ids: ['r5', 'r10'] });
 await mk('p1', 'W5 ONE', 2); await mk('p2', 'W5 TWO', 3, { pickupSelf: true, hotelName: '', pickupZone: 'NoTransfer' }, { zone: 'NoTransfer' });
 await mk('p3', 'W5 THREE', 2); await mk('p4', 'W5 FOUR', 2);
-await mk('p5', 'W5 FIVE', 4); await mk('p6', 'W5 SIX', 4); await mk('p8', 'W5 EIGHT', 2, { agentId: 'a_b2c', total: 2400, price_mode: 'manual', b2c_channel: 'Line OA' }, { subtotal: 2400 }, 'r10');
+await mk('p5', 'W5 FIVE', 4); await mk('p9', 'W5 NINE', 2); await mk('p6', 'W5 SIX', 4); await mk('p8', 'W5 EIGHT', 2, { agentId: 'a_b2c', total: 2400, price_mode: 'manual', b2c_channel: 'Line OA' }, { subtotal: 2400 }, 'r10');
 const mkGroup = async (members, van_id, route = 'r5', zone = 'PK') => seed('POST', '/operations/van-groups', { service_date: DAY, route_id: route, zone, members: members.map((m) => ({ trip_id: bk[m].trip })), van_id });
-await mkGroup(['p1', 'p5'], vanA.id); await mkGroup(['p4'], vanB.id); await mkGroup(['p8'], vanC.id, 'r10');
+await mkGroup(['p1', 'p5', 'p9'], vanA.id); await mkGroup(['p4'], vanB.id); await mkGroup(['p8'], vanC.id, 'r10');
 await seed('PATCH', `/operations/trip-ops/${bk.p5.trip}`, { boat_splits: [{ boat_id: 'b6', ad: 2, chd: 0, inf: 0, foc: 0 }, { boat_id: 'b7', ad: 2, chd: 0, inf: 0, foc: 0 }] });
 await seed('POST', `/operations/trip-ops/${bk.p6.trip}/van-split`, { ad: 1 });
 await cmd('p1', 'pier', 'stage', { stage: 'arrived', on: true });
 await cmd('p2', 'pier', 'stage', { stage: 'arrived', on: true }); await cmd('p2', 'pier', 'stage', { stage: 'cleared', on: true });
 await cmd('p3', 'pier', 'check-in');
 await cmd('p8', 'pier', 'stage', { stage: 'arrived', on: true });
+await cmd('p1', 'van', 'check-in'); await cmd('p4', 'van', 'events', { type: 'no_show', reason_code: 'no_contact', ad: 1 });
 
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
@@ -220,6 +221,49 @@ section('1', async () => {
   ok('tampered pier answer lists r5: pckInPier says r5 is in Panwa (the server decides which pier a trip belongs to)', inP2.r5 === true, inP2);
   tamper = [];
   await ev(() => pckSetPier(null)); await settle(500);
+});
+
+// ═══ 2 · Van Check-in rows: status and order <- GET /v1/van-checkin ═══
+section('2', async () => {
+  console.log('\n[2] Van Check-in: vckRowSt (row status) and ckRowCmp (row order in a van) <- GET /v1/van-checkin');
+  const openVan = async () => {
+    await ev((d) => { _vanCkDate = d; const el = document.querySelector('.nav-item[data-view="vancheckin"]'); if (el) nav(el); renderVanCheckin(); }, DAY);
+    await waitFor(() => !!document.querySelector('#vancheckin-host .vck-arr'), null, 15000);
+    await waitFor(() => !!document.querySelector('#vancheckin-host[data-ops-vck]'), null, 15000);
+    await idle(); await settle(1000);
+  };
+  const n0 = calls.length;
+  await openVan();
+  ok('Van Check-in asked GET /v1/van-checkin?date=…', callsSince(n0).some((c) => /^GET \/v1\/van-checkin\?date=2026-12-08 200/.test(c)), callsSince(n0).filter((c) => /van-checkin/.test(c)));
+  const V = await api('/v1/van-checkin?date=' + DAY);
+  const st = (k, slot = 0) => ev((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.ext); const ck = ckRead(b, a.date, 'van'); return ck ? vckRowSt(ck) : 'none'; }, { ext: 'zz-' + k, date: DAY });
+  const srvSt = (k) => (V.rows.find((r) => r.booking_id === bk[k].id) || {}).status;
+  ok('vckRowSt p1 = checkin, p4 = noshow: the server rows\' status', (await st('p1')) === 'checkin' && srvSt('p1') === 'checkin' && (await st('p4')) === 'noshow' && srvSt('p4') === 'noshow', [await st('p1'), srvSt('p1'), await st('p4'), srvSt('p4')]);
+  tamper = [{ re: /\/v1\/van-checkin\?date=2026-12-08$/, fn: (j) => { for (const r of j.rows) { if (r.booking_id === bk.p4.id) r.status = 'pier'; if (r.booking_id === bk.p1.id) r.status = 'pending'; } } }];
+  await ev(() => laOps.vanCheckin.clear()); await ev(() => renderVanCheckin()); await waitFor((id) => { const e = document.querySelector('#vancheckin-host'); return !!e; }, null, 5000); await settle(1500);
+  ok('tampered answer (p1 pending, p4 pier): vckRowSt gives the server\'s status, not what the record says', (await st('p1')) === 'pending' && (await st('p4')) === 'pier', [await st('p1'), await st('p4')]);
+  const sty = await ev(() => Array.from(document.querySelectorAll('#vancheckin-host tr.ck-row')).map((tr) => ({ lead: (tr.querySelector('.ck-lead') || {}).innerText, style: tr.getAttribute('style') || '' })));
+  const want4 = await ev(() => vckStVars('pier')), want1 = await ev(() => vckStVars('pending'));
+  ok('...and the drawn rows carry the colours of the server\'s status (p4 row = pier colours, p1 row = pending colours)', sty.some((r) => /W5 FOUR/.test(r.lead) && r.style.includes(want4)) && sty.some((r) => /W5 ONE/.test(r.lead) && r.style.includes(want1)), sty);
+  tamper = [];
+  // order of the rows in a van: the server's position
+  const leads = () => ev(() => Array.from(document.querySelectorAll('#vancheckin-host tr.ck-row')).map((tr) => ((tr.querySelector('.ck-lead') || {}).innerText || '').trim()));
+  await ev(() => laOps.vanCheckin.clear()); await ev(() => renderVanCheckin()); await settle(1500);
+  const l0 = await leads();
+  const A = V.rows.filter((r) => r.van_id === V.vans.find((v) => v.rows >= 3).van_id);
+  ok('seed: a van holds three rows (W5 ONE, W5 FIVE, W5 NINE)', A.length === 3, A.map((r) => r.lead_pax));
+  const srvOrder = A.map((r) => r.lead_pax);
+  const slice = (arr) => arr.filter((x) => srvOrder.includes(x));
+  ok('rows inside the van are drawn in the server\'s order', JSON.stringify(slice(l0)) === JSON.stringify(srvOrder), { drawn: slice(l0), srv: srvOrder });
+  tamper = [{ re: /\/v1\/van-checkin\?date=2026-12-08$/, fn: (j) => { const ids = A.map((r) => r.trip_id); const idxs = j.rows.map((r, i) => ids.includes(r.trip_id) ? i : -1).filter((i) => i >= 0); const pick = idxs.map((i) => j.rows[i]).reverse(); idxs.forEach((i, n) => { j.rows[i] = pick[n]; }); } }];
+  await ev(() => laOps.vanCheckin.clear()); await ev(() => renderVanCheckin()); await settle(1800);
+  const l1 = await leads();
+  ok('tampered answer (the three rows in the opposite order): the van draws them in the server\'s order', JSON.stringify(slice(l1)) === JSON.stringify(srvOrder.slice().reverse()), { drawn: slice(l1) });
+  tamper = [];
+  // the Pier sheet sorts with the same function but keeps its own order (the van answer's order is not applied there)
+  await ev(() => laOps.vanCheckin.clear()); await ev(() => renderVanCheckin()); await settle(1200);
+  const cmpOutside = await ev((a) => { const f = (e) => { const b = SB_BOOKINGS.find((x) => x.id === e); return { b, t: b.trips[0], O: bkOpsRead(b, a.date) }; }; return [ckRowCmp(f('zz-p1'), f('zz-p9')) < 0, ckRowCmp(f('zz-p9'), f('zz-p1')) > 0]; }, { date: DAY });
+  ok('outside the Van sheet ckRowCmp is legacy\'s (sequence, time, voucher): p1 before p9', cmpOutside[0] && cmpOutside[1], cmpOutside);
 });
 
 //@@SECTIONS

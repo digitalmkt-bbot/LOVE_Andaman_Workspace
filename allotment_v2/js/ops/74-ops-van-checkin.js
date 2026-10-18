@@ -185,6 +185,7 @@
     var s = scope(); if(s.q) return;                       // text search is the client's: legacy's counts stay
     patchKpi(h, c.data); patchVans(h, c.data); patchUnassigned(h, c.data);
     c.patched = true; h.setAttribute('data-ops-vck', c.sig ? String(c.sig.length) : '1');
+    if(O.vanRows && O.vanRows.sync) O.vanRows.sync();                 // w5-d: row status and order are the answer's too (83-ops-van-rows.js)
   }
   function applyIfOpen(){
     if(!enabled() || !visible()) return;
