@@ -137,15 +137,20 @@
     if(!name){ alert('Profile name is required'); return; }
     if(!d.from || !d.to){ alert('Validity period is required'); return; }
     if(d.from > d.to){ alert('Start date must be before end date'); return; }
-    if(d.isNew){
-      var overlap = (profiles() || []).find(function(p){ return p.from && p.to && p.from <= d.to && p.to >= d.from; });
-      if(overlap && !confirm('Validity overlaps with "' + overlap.name + '" (' + overlap.from + ' to ' + overlap.to + ').\nContinue?')) return;
-    }
+    /* w6-b: whether a NEW profile overlaps another is the server's call: the first save is refused 409 profile_overlap with the
+       warnings; legacy's "Continue?" confirm is asked from them and OK sends the same save with overlap_anyway: true. An edit is never refused. */
     var body = { name:name, from_date:d.from, to_date:d.to, notes:String(d.notes || '') };
     if(d.isNew && d.startFrom === 'clone' && d.cloneSourceId) body.clone_from = d.cloneSourceId;
     return O.queue(function(){
-      return d.isNew ? O.post('/v1/pickup-time-profiles', body) : O.patch('/v1/pickup-time-profiles/' + encodeURIComponent(d.id), body);
+      if(!d.isNew) return O.patch('/v1/pickup-time-profiles/' + encodeURIComponent(d.id), body);
+      return O.post('/v1/pickup-time-profiles', body).catch(function(e){
+        var w = e && e.status === 409 && e.code === 'profile_overlap' && e.body && Array.isArray(e.body.warnings) ? e.body.warnings[0] : null;
+        if(!w) throw e;
+        if(!confirm('Validity overlaps with "' + w.name + '" (' + w.from_date + ' to ' + w.to_date + ').\nContinue?')) return null;
+        return O.post('/v1/pickup-time-profiles', Object.assign({}, body, { overlap_anyway: true }));
+      });
     }).then(function(result){
+      if(d.isNew && !result) return null;        // the overlap confirm was declined: the dialog stays open
       return refresh().then(function(){
         if(d.isNew){
           var p = result && result.id;
