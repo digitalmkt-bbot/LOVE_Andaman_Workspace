@@ -63,7 +63,9 @@
     if(/^b2c_/.test(String(id || (booking && (booking.id || booking.code)) || ''))) return trip.zone;
     if(trip.bookingMode === 'charter' || trip.ovnLeg) return trip.zone;
     var van = (typeof window.bookingV2TripPrivateVan === 'function' && booking) ? window.bookingV2TripPrivateVan(booking, trip) : null;
-    return van ? 'NoTransfer' : trip.zone;
+    /* w5-e · the zone of a private-van seat is the server's (Q44: "a trip sent with no zone gets NoTransfer"): it is left out of the request
+       instead of being sent as a value the browser worked out. The form still shows NoTransfer on screen (bkV2ToggleAddOn). */
+    return van ? undefined : trip.zone;
   };
 
   /* ══ Q45 · booking code ══════════════════════════════════════════════════ */

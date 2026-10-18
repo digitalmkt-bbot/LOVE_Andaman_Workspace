@@ -58,7 +58,7 @@
   var DEBOUNCE_MS = 300, FAIL_MS = 15000, KEEP = 24, OK_MS = 120000;
   var cache = {};            // key -> { ok, quote, map, at }
   var order = [];            // keys, oldest first
-  var timer = null, seq = 0, pending = null;
+  var timer = null, seq = 0, pending = null, listeners = [];
 
   function num(v){ var n = Number(v); return isFinite(n) ? n : 0; }
   function paxClean(p){
@@ -176,6 +176,7 @@
     var mine = ++seq; pending = key;
     O.post('/v1/quote', req.body).then(function(q){
       remember(key, { ok: true, quote: q, map: req.map, at: Date.now() });
+      try{ listeners.forEach(function(fn){ fn(key, req, q); }); }catch(_){}      // w5-e: ops/84 reads the answer (rate drift prompt)
       if(mine !== seq) return;                       // a newer request is out: let it redraw
       pending = null;
       var cur = current();
@@ -240,5 +241,13 @@
     return out;
   };
 
-  window.laOpsQuote = { buildRequest: buildRequest, overlay: overlay, _cache: cache, _legacy: legacyCalc };
+  /* w5-e: the cached answer for the draft on screen, so TripSubtotal / AddOnInfo (ops/84) read the server's numbers
+     instead of working them out: { key, req: {body, map}, quote } or null while there is none. */
+  function answered(){
+    var cur = current(); if(!cur) return null;
+    var e = cache[cur.key];
+    return (fresh(e) && e.ok && e.quote) ? { key: cur.key, req: cur.req, quote: e.quote } : null;
+  }
+  window.laOpsQuote = { buildRequest: buildRequest, overlay: overlay, _cache: cache, _legacy: legacyCalc, answered: answered,
+    onAnswer: function(fn){ listeners.push(fn); } };
 })();
