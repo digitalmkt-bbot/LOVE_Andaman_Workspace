@@ -40,6 +40,8 @@
     var orig = window[name];
     if(typeof orig !== 'function' || orig.__w5f) return;
     var w = function(pier){
+      // the pier office lists are read by the pier screens; petty cash can be the first screen opened: read them now (the sheet is drawn again)
+      if(O.enabled() && !O.pier.loaded && typeof O.pier.ensure === 'function') O.pier.ensure('renderPierCash');
       var prev = ctx; ctx = { pier: pier };
       try{ return orig.apply(this, arguments); } finally { ctx = prev; }
     };
