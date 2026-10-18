@@ -246,7 +246,7 @@
       if(!t || !t.opsTripId) return;
       var st = ob.trips.find(function(x){ return x && x.id === t.opsTripId; });
       if(!st) return;
-      if(st.aboard && typeof st.aboard === 'object'){ t.aboard = st.aboard; t.aboardDate = st.service_date || t.date; }
+      if(st.aboard && typeof st.aboard === 'object'){ t.aboard = st.aboard; t.aboardDate = st.service_date || t.date; if(O.aboardTag) O.aboardTag(t); }
       else { delete t.aboard; delete t.aboardDate; }
     });
   }
@@ -341,7 +341,7 @@
     var nat = thaiIn(t.thai_passengers); if(nat) o.nat = nat;       // §thaiPax
     /* §opsAboard · the server's check-in figures for this trip (computed, read only, never sent: toServer builds a trip field by field).
        aboardDate is the service day it was read for: 71-ops-aboard.js ignores it once the trip has moved to another day. */
-    if(t.aboard && typeof t.aboard === 'object'){ o.aboard = t.aboard; o.aboardDate = o.date; }
+    if(t.aboard && typeof t.aboard === 'object'){ o.aboard = t.aboard; o.aboardDate = o.date; if(O.aboardTag) O.aboardTag(o); }   // w4-f2: ckPaxBreak(t.pax) finds the trip's block
     /* §opsUpgrade · the route upgrade in force (operations.upgrade) → legacy's trip.upg, so bkUpgActive and Undo
        still see it after a reload */
     var up = t.operations && t.operations.upgrade;

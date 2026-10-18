@@ -15,8 +15,11 @@
      pckStageSet     POST …/stage (+ …/check-in for the boarding step)
      vckSetFlow      POST …/stage {flow, note}
 
+   ckEventUndo (w4-f2) takes the last live event back with POST …/events/{i}/undo {why:"mistake"}: no adapter
+   uses the whole-record PUT any more (the server refuses actual_pax, self_add, reinstate and events there with 400 use_command).
+
    Kept as they are: ckCap / ckCeil (display only; the server works its own out), ckWrite
-   (still the whole-record PUT, used by ckEventUndo which has no command: Q34c), and the
+   (the whole-record PUT, no caller reaches it any more), and the
    dialogs (ckEventOpen, ckSelfOpen, ckReasonOpen, ckBackOpen, ckTryOpen) with their
    legacy texts. A refusal or warning is shown with the server's own message.
    Legacy mode (!O.enabled()): every wrapped function runs the original.
@@ -103,9 +106,52 @@
       skipPay = !!(window._pckPaySkip && window._pckPaySkip[date + '::' + bkId]);
       if(window.pckPayGuard(bkId, date)) return undefined;
     }
+    var wasTicked = !!cur.at;
     return send(b, date, kind, 'POST', 'check-in', {}).then(function(r){
+      var owed = !wasTicked && isPier && !skipPay && (r.warnings || []).filter(function(w){ return w.code === 'pay_owed'; })[0];
+      if(owed) return payOwedAsk(b, bkId, date, kind, r);
       redraw(kind); warn(bkId, date, kind, r.warnings, { skipPay: skipPay }); return r.res;
     }, function(e){ return refuse('Could not save check-in', e); });
+  });
+
+  // ── pay_owed · the server says money is still to collect on a pier tick the screen did not know about (w4-f2) ──
+  // The server ticks and warns. Legacy's rule is that boarding with a debt is a decision, not an oversight (pckPayGuard): so the tick is
+  // taken back (a second press), the money rows are read again and legacy's own dialog (pckPayWarn, with "ขึ้นเรือก่อน · ยังไม่เก็บ" and
+  // "เก็บเงินเลย") opens. "ขึ้นเรือก่อน" then ticks again (the skip mark is set) and the boarding time is the time of that decision.
+  // If the fresh money rows still show nothing due, the tick stays and the server's message is shown (toast), as before.
+  function payOwedAsk(b, bkId, date, kind, r){
+    var PM = window.laOpsPierMoney;
+    var fresh = (PM && PM.loadDay) ? PM.loadDay(date, true) : Promise.resolve(null);
+    return Promise.resolve(fresh).then(function(){
+      var M = typeof window.pckMoney === 'function' ? window.pckMoney(b, date) : null;
+      if(!(M && M.due > 0)){ redraw(kind); warn(bkId, date, kind, r.warnings, {}); return r.res; }
+      return send(b, date, kind, 'POST', 'check-in', {}).then(function(u){      // take the tick back
+        redraw(kind);
+        if(typeof window.pckPayWarn === 'function') window.pckPayWarn(bkId, date);
+        return u.res;
+      });
+    }, function(){ redraw(kind); warn(bkId, date, kind, r.warnings, {}); return r.res; }).then(null, function(e){ return refuse('Could not save check-in', e); });
+  }
+
+  // ── ckEventUndo · "ถอนรายการล่าสุด": takes the last live CXL / No-show back ── same confirm as legacy, then the undo command (w4-f2)
+  // Legacy popped the event and wrote the whole record. The server keeps events append-only, so the same click marks the last live
+  // event undone ("mistake") and gives its people back: POST …/events/{i}/undo {why:"mistake"}. The server works out the count.
+  wrap('ckEventUndo', function(orig, bkId, date, kind){
+    if(!guard()) return undefined;
+    var b = ctx(bkId); if(!b) return undefined;
+    var cur = (typeof window.ckRead === 'function' ? window.ckRead(b, date, kind) : null) || {};
+    var evs = Array.isArray(cur.events) ? cur.events : [], ix = -1;
+    for(var i = evs.length - 1; i >= 0; i--){ if(evs[i] && !evs[i].undone){ ix = i; break; } }
+    if(ix < 0){ alert('ไม่มีรายการให้ถอน'); return undefined; }
+    var last = evs[ix];
+    if(!confirm('ถอนรายการล่าสุด?\n' + ((last.type === 'cxl') ? 'CXL' : 'No-show') + ' ' + (last.pax || 0) + ' คน · ' + ((last.at || '') + ' ' + (last.by || '')))) return undefined;
+    return send(b, date, kind, 'POST', 'events/' + ix + '/undo', { why: 'mistake' }).then(function(r){
+      redraw(kind); warn(bkId, date, kind, r.warnings); return r.res;
+    }, function(e){
+      redraw(kind);
+      if(e && e.code === 'already_handled'){ alert('รายการนี้ถูกจัดการไปแล้ว'); return null; }
+      return refuse('Could not take the event back', e);
+    });
   });
 
   // ── ckStep · the +/- counter ── 409 needs_self_add opens the self-add dialog, as legacy did past the expected count

@@ -351,7 +351,7 @@
     applyServerCheckins(targetOps, ops);
     /* §opsAboard · the answer carries the trip's check-in figures: keep them with the record they were computed from */
     if(trip){
-      if(serverTrip.aboard && typeof serverTrip.aboard === 'object'){ trip.aboard = serverTrip.aboard; trip.aboardDate = serverTrip.service_date || trip.date; }
+      if(serverTrip.aboard && typeof serverTrip.aboard === 'object'){ trip.aboard = serverTrip.aboard; trip.aboardDate = serverTrip.service_date || trip.date; if(O.aboardTag) O.aboardTag(trip, targetOps); }   // w4-f2: ckEventTally / ckPaxBreak read the block
       else { delete trip.aboard; delete trip.aboardDate; }
     }
   }
@@ -702,34 +702,8 @@
     return val;
   });
 
-  // ckEventUndo (08-app.js): legacy pops the last CXL / No-show event. The server keeps check-in events
-  // (409 events_append_only on a shorter list), so the same click marks the last live event undone ("mistake")
-  // and gives its people back, exactly as the "รับกลับ" path does. Same confirm, same counts.
-  wrap('ckEventUndo', function(orig, bkId, date, kind){
-    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return undefined;
-    var b = findBooking(bkId); if(!b) return undefined;
-    var cur = window.ckRead(b, date, kind) || {};
-    var ev = Array.isArray(cur.events) ? cur.events.map(function(x){ return Object.assign({}, x); }) : [];
-    var ix = -1;
-    for(var i = ev.length - 1; i >= 0; i--){ if(ev[i] && !ev[i].undone){ ix = i; break; } }
-    if(ix < 0){ alert('ไม่มีรายการให้ถอน'); return undefined; }
-    var last = ev[ix];
-    if(!confirm('ถอนรายการล่าสุด?\n' + ((last.type === 'cxl') ? 'CXL' : 'No-show') + ' ' + (last.pax || 0) + ' คน · ' + ((last.at || '') + ' ' + (last.by || '')))) return undefined;
-    ev[ix] = Object.assign({}, last, { undone: { why: 'mistake', at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } });
-    var live = ev.slice(0, ix).filter(function(x){ return x && !x.undone; });
-    var prev = live.length ? live[live.length - 1] : null;
-    var t = window.ckTripOn(b, date) || {}, booked = window.ckBookedPax(t);
-    var cap = (typeof window.ckCap === 'function') ? window.ckCap(b, date, kind, booked) : booked;
-    var ceil = (typeof window.ckCeil === 'function' && window._ckBase(kind) === 'pier') ? window.ckCeil(b, date, kind, booked) : cap;
-    var back = Math.min(ceil, ((cur.actualPax != null) ? cur.actualPax : 0) + Math.max(0, +last.pax || 0));
-    window.ckWrite(b, date, kind, { actualPax: back, noShow: Math.max(0, cap - back), expected: cap,
-      selfAdd: (back > cap) ? { pax: back - cap, at: window.ckNowHM(), by: window.ckMe(), ts: new Date().toISOString() } : null,
-      at: cur.at || null, by: cur.by || null, events: ev,
-      reasonCode: prev ? (prev.reasonCode || prev.reason_code || '') : '', reasonNote: prev ? (prev.note || '') : '', reasonAt: prev ? (prev.at || '') : '' });
-    if(typeof window.ckPersist === 'function') window.ckPersist();
-    if(typeof window.ckAfter === 'function') window.ckAfter(kind);
-    return undefined;
-  });
+  // ckEventUndo (08-app.js) moved to 36-ops-checkin-cmds.js (w4-f2): it takes the last live event back with
+  // POST …/events/{i}/undo {why:"mistake"}; no adapter writes the whole check-in record with PUT for it any more.
 
   wrap('bookingV2ExtraAdd', function(orig, bkId){
     var args = [].slice.call(arguments, 1);
@@ -890,21 +864,28 @@
         strandToast(bkId, nm, date, 'ล้างรายการค้างแล้ว'); strandRedraw();
       }, function(e){ O.fail('Leftover row not cleared', e); });
     }
-    if(typeof window.ckHasArrange === 'function' && !window.ckHasArrange(b, date)) return orig(bkId, date);   // legacy's "nothing arranged" alert
+    // w4-f2: no local "nothing arranged" pre-check any more. The server decides what is left to clear (a final pickup time, a
+    // return-van mark or a check-in record count too): 409 nothing_to_clear and 409 not_cancelled are shown as it words them.
     if(!confirm('ล้างการจัดรถ/เรือของ ' + nm + ' ออกจากวันที่ ' + date + ' ?\n\n'
       + 'จะล้างเฉพาะการจัดรถ (รถ/ลำดับรับ) · เรือ เวลารับสุดท้าย และเช็คอินไม่ถูกแตะ\n'
       + 'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
     var trips = (Array.isArray(b.trips) ? b.trips : []).filter(function(t){ return t && t.opsTripId && (t.date || '') === date; });
     if(!trips.length){ O.fail('Van arrangement not cleared', new Error('This booking has no operation-backend trip on ' + date + ': reload the day')); return; }
+    // POST /operations/trip-ops/{trip}/clear-arrangement (no body): one command per trip of that day clears the van parts, boat,
+    // final pickup, return-van mark and both check-in sides, and writes the booking's history line (w4-f2; was PATCH van_parts: null).
     return trips.reduce(function(p, t){
-      return p.then(function(){ return O.queue(function(){ return O.call('PATCH', '/operations/trip-ops/' + enc(t.opsTripId), { van_parts: null }); }); });
+      return p.then(function(){ return O.queue(function(){ return O.call('POST', '/operations/trip-ops/' + enc(t.opsTripId) + '/clear-arrangement'); }); });
     }, Promise.resolve()).then(function(){
       O.wrote('trip-ops');
       // the server's trip is the truth: re-read the day so the row shows what the server kept
       var again = typeof window.bookingV2EnsureOpsRange === 'function' ? window.bookingV2EnsureOpsRange({ from: date, to: date, refresh: true }) : null;
       var done = function(){ strandToast(bkId, nm, date, 'ล้างการจัดรถ/เรือแล้ว'); strandRedraw(); };
       if(again && again.then) again.then(done, done); else done();
-    }, function(e){ O.fail('Van arrangement not cleared', e); });   // 409 cancelled etc.: the server's message as it is
+    }, function(e){
+      // legacy showed "nothing arranged" as an alert: keep the alert, with the server's own words
+      if(e && e.status === 409 && e.code === 'nothing_to_clear'){ alert(e.message || 'Nothing to clear'); return; }
+      O.fail('Van arrangement not cleared', e);   // 409 not_cancelled etc.: the server's message as it is
+    });
   });
 
   var api = {

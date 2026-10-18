@@ -363,6 +363,15 @@
     inScope.forEach(function(r){ if(vatKeep(st, r)) keep[r.id] = true; });
     var kept = inScope.filter(function(r){ return keep[r.id]; });
     var nVat = 0; inScope.forEach(function(r){ if(hasVat(r)) nVat++; });
+    /* w4-f2 · a pier / route / VAT choice is the server's to judge (GET /v1/reports/travel-summary with the scope): once it has answered,
+       its rows are the selection, its counts the VAT chips and its cancelled list the cancelled rows. Until then (and when it fails)
+       the browser's own cut above stays, so the screen is never empty while waiting. */
+    var TSV = O.travelServer, sv = null;
+    if(TSV && (st.pier || st.route || st.vat)){
+      if(!TSV.get(date, st)) TSV.load(date, st).catch(function(){});
+      sv = TSV.scopeFor(roster, st, date);
+      if(sv){ keep = sv.keep; kept = sv.kept; nVat = sv.nVat; }
+    }
     var collect = d.collect_rows || [];
     var ref = refPack(kept), pendingRows = needsSlipRead(collect, keep);
     var pendingIds = pendingRows.filter(function(c){ return !slipCache[date + '|' + c.booking_id]; }).map(function(c){ return c.booking_id; });
@@ -371,12 +380,12 @@
     var no = docNo(date, st);
     lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds };
     return {
-      state: st, scoped: !!(st.pier || st.route || st.vat), docNo: no, keep: keep, inScope: inScope, kept: kept,
-      cancelled: (roster.cancelled || []).filter(function(r){ return scopeKeep(st, r.routeId) && vatKeep(st, r); }),
+      state: st, scoped: !!(st.pier || st.route || st.vat), docNo: no, keep: keep, inScope: inScope, kept: kept, serverScope: sv ? sv.SC : null, nAllServer: sv ? sv.nAll : null,
+      cancelled: sv && sv.cancelled ? sv.cancelled : (roster.cancelled || []).filter(function(r){ return scopeKeep(st, r.routeId) && vatKeep(st, r); }),
       // Bookings moved off the day (server moved_rows, legacy tsMvRows): the same pier/route/VAT scope.
       moved: (d.moved_rows || []).filter(function(m){ return scopeKeep(st, text(m.route_id)) && vatKeep(st, { agentId: m.agent_id || '' }); }),
       movedListed: Array.isArray(d.moved_rows),
-      nVat: nVat, nNoVat: inScope.length - nVat, vatGap: vatGap(inScope), after: roster.after || null, vans: roster.vans || {},
+      nVat: nVat, nNoVat: sv ? sv.nNoVat : inScope.length - nVat, vatGap: sv && sv.vatGap ? sv.vatGap : vatGap(inScope), after: roster.after || null, vans: roster.vans || {},
       ref: ref, nRefFiles: ref.reduce(function(s, r){ return s + (r.b.attachments || []).length; }, 0),
       slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows
     };
