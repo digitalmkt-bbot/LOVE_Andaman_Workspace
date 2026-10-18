@@ -25,7 +25,9 @@
   var O = window.laOps; if(!O) return;
 
   var TTL = 20000;
-  var days = {};        // date -> { at, loading, sig, by: { 'bookingId|routeId': service }, anyRoute: { bookingId: service } }
+  var days = {};        // date -> { at, loading, sig, by: { 'bookingId|routeId': service }, anyRoute: { bookingId: service }, raw, rawEpoch }
+  var piers = {};       // 'date|pier' -> { loading, raw, rawEpoch }   (w5-d: the sheet's own answer for one pier)
+  var epoch = 0;        // bumped by every write that can change the sheet; an answer read before it is "stale" (day() gives null)
   var originals = {};
 
   function enabled(){ return !!(O.enabled && O.enabled()); }
@@ -69,13 +71,36 @@
     if(d && d.loading) return d.loading;
     if(d && d.by && !force && Date.now() - d.at < TTL) return Promise.resolve(d);
     var cur = days[date] = d || { at: 0, by: null, anyRoute: null, sig: '' };
+    var ep = epoch;
     cur.loading = O.get('/v1/pier-checkin', { date: date }).then(function(res){
-      var p = put(date, res && res.rows), changed = p.sig !== cur.sig;
-      cur.by = p.by; cur.anyRoute = p.anyRoute; cur.sig = p.sig; cur.at = Date.now(); cur.loading = null;
-      if(changed) rerender();
+      var p = put(date, res && res.rows), sig = p.sig + '#' + JSON.stringify(res || {}), changed = sig !== cur.sig;
+      cur.by = p.by; cur.anyRoute = p.anyRoute; cur.sig = sig; cur.at = Date.now(); cur.loading = null;
+      cur.raw = res || null; cur.rawEpoch = ep;
+      if(changed || ep !== epoch) rerender();
+      if(ep !== epoch){ cur.at = 0; setTimeout(function(){ if(enabled() && !(days[date] && days[date].loading)) ensure(date, true); }, 0); }   // a write came in while the read was out: read again
       return cur;
     }, function(){ cur.at = Date.now(); cur.loading = null; return cur; });   // a failing read leaves legacy's rule in charge, and is not hammered
     return cur.loading;
+  }
+
+  /* w5-d: the whole answer (rows, totals, programmes) for the day, or for one pier; null while a write has made it stale, or before the first answer.
+     The screen's functions (pckArrivalOf, pckProgData, pckAgg ...) read it; null means legacy's own arithmetic answers. */
+  function day(date){
+    var d = days[date]; if(!d || !d.raw || d.rawEpoch !== epoch) return null;
+    return d.raw;
+  }
+  function pierDay(date, pier){
+    if(!pier) return day(date);
+    var k = date + '|' + pier, c = piers[k];
+    if(c && c.raw && c.rawEpoch === epoch) return c.raw;
+    if(!enabled() || !date || (c && c.loading)) return null;
+    c = piers[k] = c || { raw: null, rawEpoch: -1, loading: null };
+    var ep = epoch;
+    c.loading = O.get('/v1/pier-checkin', { date: date, pier: pier }).then(function(res){
+      c.raw = res || null; c.rawEpoch = ep; c.loading = null;
+      rerender();
+    }, function(){ c.loading = null; });
+    return null;
   }
 
   /* the service the server gave this booking (and route), most relevant day first; null = ask legacy */
@@ -142,11 +167,19 @@
   /* a booking, a sale on tour, an upgrade, a rate type or an add-on changed (or another machine wrote): forget the answers, read the open day again.
      A check-in tap, a seat-lock reload, a dispatch or a fleet write cannot change a service, and the pier taps all day: they keep the answer. */
   O.onWrite(function(kind){
-    if(!/^(booking|remote|rate-type|addon|agents|contract)/i.test(String(kind || ''))) return;
+    var k = String(kind || '');
+    // w5-d: the sheet's figures (stages, expected, money, totals) are the server's now: any write that can move one makes the held answer stale,
+    //   legacy's arithmetic answers until the fresh one lands (the same number unless two machines disagree)
+    if(!/^(weather|market|devlog|daily-report|fleet|costing|trip-pl|config|addon-types)/i.test(k)){
+      epoch++;
+      var open0 = pckDate();
+      if(open0 && O.activeView && O.activeView() === 'piercheckin') setTimeout(function(){ ensure(open0, true); }, 0);
+    }
+    if(!/^(booking|remote|rate-type|addon|agents|contract)/i.test(k)) return;
     var open = pckDate();
     Object.keys(days).forEach(function(k){ if(!days[k].loading) delete days[k]; else days[k].at = 0; });
     if(open && O.activeView && O.activeView() === 'piercheckin') ensure(open, true);
   });
 
-  O.pierService = { ensure: ensure, serviceOf: serviceOf, loaded: function(date){ return !!(days[date] && days[date].by); }, clear: function(){ days = {}; } };
+  O.pierService = { ensure: ensure, day: day, pierDay: pierDay, idsOf: idsOf, serviceOf: serviceOf, loaded: function(date){ return !!(days[date] && days[date].by); }, clear: function(){ days = {}; piers = {}; } };
 })();
