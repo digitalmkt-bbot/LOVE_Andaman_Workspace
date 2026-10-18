@@ -251,6 +251,56 @@ console.log('\n== ' + curItem);
   ok('only reads went out for the board', nonGet(n0).length === 0, nonGet(n0));
 }
 
+// ═══ 4 · Booking calendar: chips, cards, averages, matrix (bookingV2FamilyAggregate, RenderStats, RenderRouteAvgs, RenderMatrix) ═══
+curItem = '4 booking calendar';
+console.log('\n== ' + curItem);
+{
+  const CM = DAYS[0].slice(0, 7);
+  n0 = calls.length;
+  await openView('booking', '', 2500);
+  await ev((m) => { _bkV2CityTourOnly = false; _bkV2.tab = 'cal'; _bkV2.view = 'cal'; _bkV2.cursor = new Date(+m.slice(0, 4), +m.slice(5, 7) - 1, 1, 12); _bkV2.selected = null; bookingV2Render(); }, CM);
+  await sleep(2500); await idle(); await sleep(500);
+  const cal = await api('/v1/bookings/calendar?month=' + CM + '&kind=marine');
+  ok('asked the server: GET /v1/bookings/calendar?month=&kind=marine', callsSince(n0).some((c) => c.startsWith('GET /v1/bookings/calendar 200')), callsSince(n0).filter((c) => /calendar/.test(c)));
+  // the browser's own month sum has nothing to add up: no booking in memory, the screen is still the server's
+  await ev(() => { SB_BOOKINGS.length = 0; bookingV2Render(); });
+  await sleep(800);
+  const stat = await ev(() => [...document.querySelectorAll('.bkv2-stats .bkv2-stat')].map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+  const s = cal.stats;
+  ok('hero card = server month pax and bookings (browser holds no booking)', s.pax > 0 && stat[0] && stat[0].includes(String(s.pax)) && stat[0].includes(s.bookings + ' ใบจอง'), [stat, s]);
+  ok('"not confirmed" / "all confirmed" card = server stats', stat[1] && stat[1].includes(String(s.unconfirmed > 0 ? s.unconfirmed : s.confirmed)), [stat[1], s]);
+  ok('busiest / quietest card = server busiest and quietest day', stat[2] && stat[2].includes(String(s.busiest.pax)) && stat[2].includes(String(s.quietest.pax)), [stat[2], s.busiest, s.quietest]);
+  const chipOf = (date) => ev((d) => { const cell = [...document.querySelectorAll('.bkv2-cal-cell')].find((c) => (c.getAttribute('onclick') || '').includes("bookingV2SelectDay('" + d + "')")); return cell ? [...cell.querySelectorAll('.bkv2-cal-chip')].map((c) => c.innerText.replace(/\s+/g, ' ').trim()) : null; }, date);
+  const day0 = cal.days.find((d) => d.date === DAYS[0]), famPax = (day0.families.find((f) => f.family_id === 'similan') || {}).total;
+  const chips = await chipOf(DAYS[0]);
+  ok('calendar chip for a busy day shows the server family pax', famPax > 0 && chips && chips.some((c) => c.includes('Similan') && c.includes(String(famPax))), [chips, famPax]);
+  const badge = await ev((d) => { const cell = [...document.querySelectorAll('.bkv2-cal-cell')].find((c) => (c.getAttribute('onclick') || '').includes("bookingV2SelectDay('" + d + "')")); const b = cell && cell.querySelector('.bkv2-cal-daytot'); return b ? b.textContent : null; }, DAYS[0]);
+  ok('the day badge equals the server badge_total', String(day0.badge_total) === badge, [badge, day0.badge_total]);
+  const rc = await ev(() => [...document.querySelectorAll('.bkv2-route-card')].map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+  const ra = cal.route_avgs.find((r) => r.family_id === 'similan');
+  ok('"Avg pax per program" card = server route_avgs (bookings, days ran, per week)', rc.some((t) => t.includes('Similan Islands') && t.includes(ra.bookings + ' bookings') && t.includes(ra.days_ran + ' days ran') && t.endsWith(String(ra.per_week))), [rc, ra]);
+  await ev(() => bookingV2SetAvgMode('total')); await sleep(600);
+  const rc2 = await ev(() => [...document.querySelectorAll('.bkv2-route-card')].map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+  ok('Total mode shows the server pax', rc2.some((t) => t.includes('Similan Islands') && t.endsWith(String(ra.pax))), rc2);
+  await ev(() => bookingV2SetAvgMode('week'));
+  // matrix
+  await ev(() => { _bkV2.view = 'mx'; _bkV2.expanded = new Set(); bookingV2Render(); });
+  await sleep(1000);
+  const F = cal.matrix.families.find((f) => f.family_id === 'similan');
+  const row = await ev(() => { const tr = [...document.querySelectorAll('.bkv2-mx tr.fam')].find((r) => r.innerText.includes('Similan')); return tr ? [...tr.querySelectorAll('td')].map((t) => t.innerText.replace(/\s+/g, ' ').trim()) : null; });
+  const dayCells = row && row.slice(1, 1 + F.cells.length);
+  ok('matrix family row: every day cell = the server cell total', row && F.cells.every((c, i) => dayCells[i] === (c.total ? String(c.total) : (c.open ? '—' : '×'))), [dayCells, F.cells.map((c) => c.total)]);
+  ok('matrix family row: month sum and AD/CHD/INF/FOC columns = the server', row && row[1 + F.cells.length].startsWith(String(F.sum)) && row[2 + F.cells.length] === String(F.ad), [row && row.slice(F.cells.length), F.sum, F.ad]);
+  const tot = await ev(() => { const tr = document.querySelector('.bkv2-mx tr.tot'); return tr ? [...tr.querySelectorAll('td')].map((t) => t.innerText.replace(/\s+/g, ' ').trim()) : null; });
+  ok('matrix "all days" row = the server day totals', tot && cal.matrix.day_totals.every((t, i) => tot[1 + i] === (t.total ? String(t.total) : '·')), [tot && tot.slice(0, 32), cal.matrix.day_totals.map((t) => t.total)]);
+  await ev(() => bookingV2ToggleFamily('similan')); await sleep(600);
+  const subs = await ev(() => [...document.querySelectorAll('.bkv2-mx tr.sub')].map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
+  const V = F.variants.find((v) => v.live_days > 0);
+  ok('expanded family: the variant with bookings is listed with the server sum', subs.some((t) => t.includes(V.name) && t.includes(V.live_days + ' วัน')), [subs, V.name]);
+  ok('the Cancel/Approvals-free calendar read only used GET', nonGet(n0).length === 0, nonGet(n0));
+  await ev(() => { _bkV2.view = 'cal'; _bkV2.expanded = new Set(); });
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
