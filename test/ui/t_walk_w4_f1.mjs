@@ -331,6 +331,56 @@ console.log('\n== ' + curItem);
   await ev(() => { _bkV2.tab = 'cal'; });
 }
 
+// ═══ 6 · B2B Sales Dashboard (b2dAgents, b2dSum, b2dBridge, b2dShiftSignal, b2dMonthlySeries, b2dTabsScreen) ═══
+curItem = '6 b2b dashboard';
+console.log('\n== ' + curItem);
+{
+  // sales made 40 days ago: one agent that kept selling, one that stopped (churn)
+  const agC = (await send('POST', '/v1/agents', { name: 'Churn Agent', market_id: 'ru', sales_id: 's1', pay_type: 'bt', vat_mode: 'none', rate_type_id: 'rt001', company: { legal_name: 'Churn Agent Co', address: '1 Test Rd' } })).body;
+  for (const [id, agent, pax] of [['f6a', 'a01', 3], ['f6b', agC.id, 4]]) {
+    const r = await mkBk(id, DAYS[2], pax, { agentId: agent, booking_date: bkk(-40) });
+    if (r.status !== 201) { console.log('seed failed', id, r.status, JSON.stringify(r.body)); process.exit(2); }
+  }
+  n0 = calls.length;
+  await ev(() => { _b2d.mode = 'mom'; _b2d.basis = 'bd'; _b2d.ref = null; _b2d.T = 10; _b2d.tab = 'overview'; _b2d.screen = null; _b2d.stack = []; });
+  await openView('b2b-dash', 'renderB2BDash()', 4000);
+  await sleep(2500); await idle();
+  const w = await ev(() => ({ ..._b2dW }));
+  const rep = await api('/v1/reports/b2b?from=' + w.cs + '&to=' + w.ce + '&basis=bd&compare=previous&threshold=10');
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/reports/b2b for the screen\'s window', mine.some((c) => c.startsWith('GET /v1/reports/b2b 200')), mine.filter((c) => /b2b/.test(c)));
+  ok('seed: Sun Tour grew, Churn Agent churned', rep.agents.some((a) => a.agent_id === 'a01' && (a.class === 'growth' || a.class === 'stable' || a.class === 'loss')) && rep.agents.some((a) => a.name === 'Churn Agent' && a.class === 'churn'), rep.agents.map((a) => [a.name, a.class, a.current, a.previous]));
+  const body = async () => (await text('#b2bdash-wrap')).replace(/\s+/g, ' ');
+  const kfmt = (v) => ev((x) => b2dK(x), v);
+  let t = await body();
+  ok('revenue KPI card = the server revenue (current, and "vs previous")', t.includes(await kfmt(rep.kpis.revenue.current)) && t.includes('vs ' + await kfmt(rep.kpis.revenue.previous) + ' last period'), t.slice(0, 500));
+  ok('active agents KPI = the server', t.includes('vs ' + rep.kpis.active_agents.previous + ' last period'), t.slice(0, 500));
+  ok('tab counts = the server (Growth, Loss, Stable)', t.includes('Growth (' + (rep.agents.filter((a) => a.class === 'growth' || a.class === 'new').length) + ')') && t.includes('Loss (' + (rep.agents.filter((a) => a.class === 'loss' || a.class === 'churn').length) + ')') && t.includes('Stable (' + rep.tabs.stable + ')'), t.slice(500, 900));
+  const wf = rep.bridge;
+  ok('revenue bridge: the waterfall steps show the server bridge (prev, growth, new, loss, churn, now)', t.includes(await kfmt(wf.previous)) && t.includes(await kfmt(wf.current)) && t.includes(await kfmt(wf.churn)), [wf, t.slice(800, 1300)]);
+  ok('summary line: Gained / Lost / Net = the server', t.includes('Gained ' + await kfmt(rep.gained)) && t.includes('Net ' + await kfmt(rep.net)), t.slice(1200, 1500));
+  const watch = rep.watchlist.map((x) => x.name || x.agent);
+  ok('watch-list names the server\'s churned agent', rep.watchlist.length > 0 && t.includes('Churn Agent'), rep.watchlist);
+  // legacy's own arithmetic differs: take away the lines it adds up. The screen still shows the server's agents.
+  await ev(() => { window.__b2dl = window.b2dLines; window.b2dLines = function () { return []; }; renderB2BDash(); });
+  await sleep(800);
+  t = await body();
+  ok('trip lines emptied (legacy would show no agent): the watch-list and KPIs are still the server\'s', t.includes('Churn Agent') && t.includes(await kfmt(rep.kpis.revenue.current)), t.slice(0, 300));
+  await ev(() => { window.b2dLines = window.__b2dl; });
+  // By trip: Similan is one server family -> the server's agents and signal
+  await ev(() => { b2dTab('trip'); b2dSelTrip('Similan'); });
+  await sleep(1800); await idle();
+  const rep2 = await api('/v1/reports/b2b?from=' + w.cs + '&to=' + w.ce + '&basis=bd&compare=previous&threshold=10');
+  const fam = rep2.by_trip.find((x) => x.family === 'Similan Islands');
+  t = await body();
+  ok('By trip (Similan): header shows the server revenue, pax and bookings of the route', fam && t.includes('Revenue ' + (await ev((x) => b2dB(x), fam.revenue))) && t.includes('Pax ' + fam.pax) && t.includes('booking ' + fam.bookings), [fam && [fam.revenue, fam.pax, fam.bookings], t.slice(0, 600)]);
+  ok('By trip (Similan): every server agent is listed with its route class', fam && fam.agents.every((a) => t.includes(a.name)), t.slice(0, 600));
+  const sigs = fam ? fam.agents.filter((a) => a.signal).map((a) => a.signal.text) : [];
+  ok('By trip: each route-shift signal shown is the server\'s text', sigs.every((s) => t.includes(s)), [sigs, t.slice(0, 500)]);
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+  await ev(() => { b2dTab('overview'); });
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
