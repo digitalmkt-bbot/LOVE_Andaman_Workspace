@@ -37,7 +37,8 @@ function bookingV2RenderTab3(){
   const kCount = _opsAllLoadingDisplay ? _opsAllLoadingDisplay : (_Stats ? _Stats.total : all.length);
   const kConfirmed = _Stats ? ((_Stats.by_status||{}).confirmed||0) : all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
-  const isPendingFoc = b => b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status);
+  /* w6-a: the list row's own flag from the server (GET /v1/bookings pending_foc) wins; a row without it keeps the browser's test */
+  const isPendingFoc = b => { const _pf=window.laOpsRowPendingFoc?window.laOpsRowPendingFoc(b.id):null; return _pf!=null ? _pf : (b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status)); };
   const kPendingFoc = (_Stats && _Stats.pending_foc_count != null) ? _Stats.pending_foc_count : (_Stats ? ((_Stats.by_status||{}).pending_foc||0) : all.filter(isPendingFoc).length);   /* §opsBookingList · the server's own count of the rule (quote/pending/pending_foc with FOC seats not yet approved), not the status count */
   const kQuote = _Stats ? ((_Stats.by_status||{}).quote||0) : all.filter(b=>b.status==='quote').length;
   const kConfirmedRev = _Stats ? (_Stats.confirmed_revenue||0) : all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);

@@ -157,6 +157,7 @@
     if(!e.snap) return Promise.resolve();
     return O.queue(function(){
       if(!e.snap) return null;                                    // an earlier save of this key was refused: nothing left to send
+      e.lastErr = null;
       var mine = e.seq, body = { value: O.clone(e.value) };
       if(e.version != null) body.version = e.version;
       return O.call('PUT', '/v1/config/' + encodeURIComponent(key), body).then(function(r){
@@ -165,14 +166,16 @@
         else e.snap = { value: O.clone(r.value), version: r.version };   // typed on since: its own save follows
       });
     }).then(noop, function(err){
-      clearTimeout(e.timer); e.timer = null;
+      clearTimeout(e.timer); e.timer = null; e.lastErr = err;   // w6-a: save() hands the refusal back to a dialog
       var snap = e.snap; e.snap = null; e.seq++;
       if(snap){ e.value = snap.value; e.version = snap.version; }
       if(err && err.code === 'stale_version'){
         return O.get('/v1/config/' + encodeURIComponent(key)).then(applyEntry, noop).then(function(){
+          if(e.quiet) return;                                   // w6-a: the caller (a dialog) shows the refusal itself
           O.fail(CFG[key].title + ' not saved: it was changed by someone else, the saved version is shown', err); cfgRepaint();
         });
       }
+      if(e.quiet) return;
       O.fail(CFG[key].title + ' not saved', err); cfgRepaint();
     });
   }
@@ -416,5 +419,11 @@
     cfgCell.load().then(function(){ fillCalRouteSets(); syncLabelVars(); }).catch(noop);
   }
 
-  window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw, flush: flush, ents: ents };
+  /* w6-a: save one key now and answer with the refusal (the server's error) or null, so a dialog can show the server's sentence in place */
+  function save(key, val){
+    var e = ent(key); e.quiet = true;                       // no toast and no repaint under the dialog: the answer goes back to the caller
+    cfgWrite(key, val);
+    return flush(key).then(function(){ e.quiet = false; return e.lastErr || null; }, function(x){ e.quiet = false; throw x; });
+  }
+  window.laOps.configStore = { H: H, active: active, cell: cell, wrap: wrap, redraw: redraw, flush: flush, ents: ents, save: save, loaded: function(){ return cfgCell.loaded; } };
 })();

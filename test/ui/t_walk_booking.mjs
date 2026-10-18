@@ -156,7 +156,7 @@ console.log('\n[2] "Save Draft" on a live booking → POST /unconfirm');
   await page.locator('button[onclick="bookingV2SaveDraft()"]').click();      // the real button
   await waitScreen((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return b && b.status === 'quote'; }, bid, 15000); await idle();
   sb2 = await srvBy('ZZ DRAFT');
-  const c2 = calls.slice(nC).filter((c) => !/^GET /.test(c)).map((c) => c.replace(/booking_[0-9a-f-]+/, '{id}'));
+  const c2 = calls.slice(nC).filter((c) => !/^GET /.test(c) && !c.includes('/v1/bookings/check')).map((c) => c.replace(/booking_[0-9a-f-]+/, '{id}'));
   s = await ev((id) => { const b = SB_BOOKINGS.find((x) => x.id === id); return { status: b.status }; }, bid);
   ok('legacy\'s "downgrade to quote?" confirm was asked', dialogs.slice(nD).some((d) => /^confirm: booking นี้สถานะ "confirmed"/.test(d)), dialogs.slice(nD));
   ok('writes: PATCH then POST /unconfirm', c2.includes('POST /v1/bookings/{id}/unconfirm') && c2[0] === 'PATCH /v1/bookings/{id}', c2);

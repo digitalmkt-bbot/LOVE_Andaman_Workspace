@@ -3634,25 +3634,33 @@ function renderDash(){
   bkBuckets.forEach(bt=>Object.entries(bt.routeBooked).forEach(([rid,v])=>routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+v));
   const topRouteIds=Object.entries(routeWeekTotals).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
   const otherRouteIds=Object.keys(routeWeekTotals).filter(id=>!topRouteIds.includes(id));
-  const otherWeekTotal=otherRouteIds.reduce((s,id)=>s+routeWeekTotals[id],0);
-  const charterWeekTotal=bkBuckets.reduce((s,d)=>s+(d.charter||0),0);
-  const wxWeekTotal=bkBuckets.reduce((s,d)=>s+(d.wx||0),0);
+  let otherWeekTotal=otherRouteIds.reduce((s,id)=>s+routeWeekTotals[id],0);
+  let charterWeekTotal=bkBuckets.reduce((s,d)=>s+(d.charter||0),0);
+  let wxWeekTotal=bkBuckets.reduce((s,d)=>s+(d.wx||0),0);
   // Fixed palette so segments stay readable on forest green
   /* §dashV3 · จานสีเดิมเลือกไว้ให้อ่านออกบน "พื้นเขียวเข้ม" — สีอ่อนหมด
      พอการ์ดเป็นพื้นขาว สีอ่อนพวกนี้จะจมหายไปกับพื้น ต้องเข้มขึ้นทั้งชุด */
   const segPalette=['#5AA86E','#D9A520','#C86A3E','#8A93A8'];
-  const topRoutes=topRouteIds.map((id,i)=>({id,r:getRoute(id),total:routeWeekTotals[id],color:segPalette[i]}));
+  let topRoutes=topRouteIds.map((id,i)=>({id,r:getRoute(id),total:routeWeekTotals[id],color:segPalette[i]}));
   const trendMax=Math.max(...bkBuckets.map(d=>Math.max(d.capacity,d.tot)),1);
-  const totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.tot,0);
-  const totalCapWeek=bkBuckets.reduce((s,d)=>s+d.capacity,0);
-  const fillWeekPct=totalCapWeek>0?Math.round(totalBookedWeek/totalCapWeek*100):0;
+  let totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.tot,0);
+  let totalCapWeek=bkBuckets.reduce((s,d)=>s+d.capacity,0);
+  let fillWeekPct=totalCapWeek>0?Math.round(totalBookedWeek/totalCapWeek*100):0;
   // Peak / slow bucket by fill % (month/year only) + avg per bucket
   const bktFills=bkBuckets.map(d=>({dt:d.dt,booked:d.tot,cap:d.capacity,pct:d.capacity>0?Math.round(d.tot/d.capacity*100):0}));
   const bktsWithCap=bktFills.filter(d=>d.cap>0);
-  const bestDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct>b.pct?c:b,bktsWithCap[0]):null;
-  const slowDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct<b.pct?c:b,bktsWithCap[0]):null;
-  const avgPerDay=Math.round(totalBookedWeek/Math.max(1,bkBuckets.length));
-  const topRouteWeek=topRoutes[0]||null;
+  let bestDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct>b.pct?c:b,bktsWithCap[0]):null;
+  let slowDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct<b.pct?c:b,bktsWithCap[0]):null;
+  let avgPerDay=Math.round(totalBookedWeek/Math.max(1,bkBuckets.length));
+  let topRouteWeek=topRoutes[0]||null;
+  /* w6-a MARKED EDIT (§opsDashWindow · ops/91-ops-dash-window.js): the figures under the month / year bars (top 3 routes, Other, charter, weather,
+     total, capacity, fill, best / slowest bar, average) are the server's, for the same window as the bars (GET /v1/dashboard?window=rolling).
+     The sums above stay for offline and until the answer lands. */
+  if(typeof window.laOpsDashStats==='function' && _bkMode!=='day'){ const _ws=window.laOpsDashStats(_bkMode,_ds);
+    if(_ws){ topRoutes=_ws.top.map((t,i)=>({id:t.route_id,r:getRoute(t.route_id)||{name:t.name},total:t.pax,color:segPalette[i]}));
+      otherWeekTotal=_ws.other; charterWeekTotal=_ws.charter; wxWeekTotal=_ws.weather; totalBookedWeek=_ws.total; totalCapWeek=_ws.capacity; fillWeekPct=_ws.fill;
+      const _bk=(b)=>{ if(!b) return null; const k=bkBuckets.find(x=>(_bkMode==='year'?(x.dt.getFullYear()+'-'+String(x.dt.getMonth()+1).padStart(2,'0')):x.ds)===b.bucket); return k?{dt:k.dt,booked:k.tot,cap:k.capacity,pct:b.fill_percent}:null; };
+      bestDay=_bk(_ws.best); slowDay=_bk(_ws.slowest); avgPerDay=_ws.average; topRouteWeek=topRoutes[0]||null; } }
 
   // Ticker per pier (today vs yesterday)
   const pierBookedToday={tublamu:0,panwa:0,ranong:0};
@@ -4955,8 +4963,20 @@ function renderCal(){
       });
     });
   }
-  const numWeeks=Math.ceil((firstDay+daysInMonth)/7);
-  const weeklyAvg=numWeeks>0?Math.round(monthFree/numWeeks):0;
+  let numWeeks=Math.ceil((firstDay+daysInMonth)/7);
+  let weeklyAvg=numWeeks>0?Math.round(monthFree/numWeeks):0;
+  /* w6-a MARKED EDIT (§opsCalSummary · ops/91-ops-cal-summary.js): the month's trips, free seats, weekly average, each route's totals and
+     each day's sums are the server's (GET /v1/availability/summary); the sums above stay for offline and until the answer lands. */
+  if(typeof window.laOpsCalSummary==='function'){ const _cs=window.laOpsCalSummary(calYear,calMonth,calPier);
+    if(_cs){ monthTrips=_cs.month_trips; monthFree=_cs.month_free; weeklyAvg=_cs.weekly_average; numWeeks=_cs.num_weeks;
+      _cs.days.forEach(d=>{ if(dayStat[d.service_date]){ dayStat[d.service_date].trips=d.trips; dayStat[d.service_date].free=d.free_seats; } });
+      Object.keys(routeStat).forEach(k=>delete routeStat[k]);
+      Object.keys(routeDay).forEach(rid=>Object.keys(routeDay[rid]).forEach(ds=>{ routeDay[rid][ds].srvPct=null; }));
+      _cs.routes.forEach(sr=>{ const r=getRoute(sr.route_id); if(!r) return;
+        if(!(sr.month_trips>0 || sr.off_season_trips>0)) return;
+        routeStat[sr.route_id]={r,trips:sr.month_trips,free:sr.month_free,days:new Set(sr.days.filter(x=>x.trips>0&&!x.closed&&!x.off_season&&x.tier!=='wx').map(x=>x.service_date)),offTrips:sr.off_season_trips,offFree:sr.off_season_free,srv:sr};
+        sr.days.forEach(x=>{ const rd=routeDay[sr.route_id]&&routeDay[sr.route_id][x.service_date]; if(rd&&x.sold_percent!=null) rd.srvPct=x.sold_percent; });
+      }); } }
 
   // Boats per pier — separate ready (available TODAY) from total fleet at that pier
   const _pierBoatsAll = (pier)=>BOATS.filter(b=>!b.retired && (typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)===pier);
@@ -5114,12 +5134,13 @@ function renderCal(){
     if(avgMode==='week'){ value=Math.round(st.free/weeksActive); valLabel='/week'; }
     else if(avgMode==='day'){ value=Math.round(st.free/(st.days.size||1)); valLabel='/day'; }
     else { value=st.free; valLabel='total'; }
+    if(st.srv && st.srv.average_free && st.srv.average_free[avgMode]!=null) value=st.srv.average_free[avgMode];   // w6-a: the server's figure for the toggle
     // Pick tier — thresholds tuned for each mode
     let T;
     if(avgMode==='total'){ T = value>=80?TIER.high : value>=30?TIER.mid : TIER.low; }
     else if(avgMode==='day'){ T = value>=20?TIER.high : value>=10?TIER.mid : TIER.low; }
     else { T = value>=80?TIER.high : value>=20?TIER.mid : TIER.low; }
-    const tripsPerWeek=(st.trips/numWeeks).toFixed(1);
+    const tripsPerWeek=(st.srv?st.srv.trips_per_week:st.trips/numWeeks).toFixed(1);   // w6-a: server's when it answered
     return `<div style="display:flex;align-items:center;gap:8px;padding:9px 11px;background:${T.bg};border-radius:10px;border:1px solid ${T.border}">
       <div style="width:4px;height:28px;background:${rt.color};border-radius:2px"></div>
       <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:${ink[1]};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_calShortName(rt.name)}</div><div style="font-size:9px;color:${T.subColor};font-weight:500">${PIER_LBL[rt.pier]} · ${tripsPerWeek} trips/week</div></div>
@@ -5158,9 +5179,9 @@ function renderCal(){
   });
   const routeStrip2=`<div class="cal2-routes">`+_rtSorted.map(rt=>{
     const st=routeStat[rt.id];
-    const dd=st?st.days.size:0;
+    const dd=st?(st.srv?st.srv.days_active:st.days.size):0;   // w6-a: the server's days and free-per-day when it answered
     const dead=!dd;
-    const per=dd?Math.round(st.free/dd):0;
+    const per=dd?(st.srv&&st.srv.average_free?st.srv.average_free.day:Math.round(st.free/dd)):0;
     const col=dead?'#8a8a82':_calDk(rt.color,.45);
     const dep=((rt.times||[])[0]||'').trim();
     /* §calRcCol · ส่งสีของเส้นทางออกมาเป็นตัวแปร ให้ชั้นสกินหยิบไปใช้ได้
@@ -5734,7 +5755,7 @@ function renderCal(){
         } else {
           const free = rd.free;
           const cap = rd.cap;
-          const pct = cap>0 ? Math.round((cap-free)/cap*100) : 0;
+          const pct = rd.srvPct!=null ? rd.srvPct : (cap>0 ? Math.round((cap-free)/cap*100) : 0);   // w6-a: the server's sold %
           const isFull = free<=0 && cap>0;
           // Off-season trip: amber warning style (not gray — gray was confusing with "closed")
           const c = rd.routeClosed ? '#A05A1A' : (isFull ? FOREST : colorFor(pct));

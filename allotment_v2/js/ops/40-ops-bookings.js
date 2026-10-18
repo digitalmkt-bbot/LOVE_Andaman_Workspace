@@ -492,7 +492,8 @@
        possible duplicates. Read-only, never sent; 75-ops-booking-list.js hands them to the All-bookings screen. */
     if(ob.last_activity !== undefined){
       bk.srvList = { lastActivity: ob.last_activity || null, isNew: !!ob.is_new, isSoon: !!ob.is_soon, isToday: !!ob.is_today,
-                     possibleDuplicate: !!ob.possible_duplicate, duplicates: Array.isArray(ob.duplicates) ? ob.duplicates : [] };
+                     possibleDuplicate: !!ob.possible_duplicate, duplicates: Array.isArray(ob.duplicates) ? ob.duplicates : [],
+                     pendingFoc: ob.pending_foc === undefined || ob.pending_foc === null ? null : !!ob.pending_foc };   // w6-a: the server's Pending-FOC flag of the row
     }
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */

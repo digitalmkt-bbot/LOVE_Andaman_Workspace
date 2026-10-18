@@ -233,7 +233,16 @@
      known range and this browser can list what is on it, else the server's own list in a confirm.
      ask: { key, rid, from?, to?, day?, resend } */
   function askCloseAnyway(e, ask){
-    var imp = (ask.from && typeof progCountBookingImpact === 'function') ? progCountBookingImpact(ask.rid, ask.from, ask.to) : null;
+    /* w6-a: the server's list (409 details: every booking and boat the change strands, whatever this browser has loaded) fills the impact modal;
+       progCountBookingImpact (the browser's own scan) is only the fallback for an answer without details */
+    var det = e && e.body && e.body.details, imp = null;
+    if(det && Array.isArray(det.bookings)){
+      imp = { bookings: det.bookings.map(function(b){ return { bookingId: b.booking_id, ref: b.ref, date: b.service_date, pax: +b.pax || 0, leadName: b.lead_name || '—' }; }),
+              totalPax: det.bookings.reduce(function(n, b){ return n + (+b.pax || 0); }, 0),
+              trips: (det.boats || []).map(function(x){
+                var b = (typeof BOATS !== 'undefined' ? BOATS : []).find(function(y){ return y.id === x.boat_id; }), op = (typeof TRIPS !== 'undefined' && TRIPS[x.service_date] || {})[x.boat_id];
+                return { date: x.service_date, boatId: x.boat_id, boatName: (b && b.name) || x.boat_id, isCharter: !!(op && op.charterBookingId) }; }) };
+    } else imp = (ask.from && typeof progCountBookingImpact === 'function') ? progCountBookingImpact(ask.rid, ask.from, ask.to) : null;
     var r = routeOf(ask.rid), name = (r && r.name) || ask.rid;
     if(imp && (imp.bookings.length || imp.trips.length)){
       if(ask.day && typeof progShowImpactModalForDay === 'function'){ progShowImpactModalForDay(ask.rid, ask.from, name, imp); armed = { key: ask.key, resend: ask.resend }; return; }

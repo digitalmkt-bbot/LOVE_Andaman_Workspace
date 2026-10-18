@@ -176,6 +176,7 @@
       partsCovered: j.parts_covered != null ? num(j.parts_covered) : 0,
       boardLane: j.board_lane || null,
       lane: j.lane || null,
+      costShare: (j.cost_share && typeof j.cost_share === 'object') ? { engine: num(j.cost_share.engine), gearbox: num(j.cost_share.gearbox), propeller: num(j.cost_share.propeller) } : null,   // w6-a: the job's cost per asset of a kind (flMaintCostShare)
       silentDays: j.silent_days != null ? num(j.silent_days) : null,      // null = the server did not say: flBoardSilent / flBoardBlocks fall back to the browser rule
       blocksBoat: j.blocks_boat != null ? !!j.blocks_boat : null,
       daysBlocked: j.days_blocked != null ? num(j.days_blocked) : null,     // days since start_date while the boat is held today, else 0 (flBoardBoatDown)

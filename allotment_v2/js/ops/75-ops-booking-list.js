@@ -51,6 +51,18 @@
 
   /* ── the row's server fields ─────────────────────────────────────────── */
   window.laOpsListFlags = function(raw){ return (enabled() && raw && raw.srvList) ? raw.srvList : null; };
+  /* w6-a · the row's Pending-FOC flag (GET /v1/bookings row `pending_foc`): true / false, or null when the row has none (just saved, offline).
+     The pill's own filter uses it for loaded rows in place of the browser's focCount test; the server's set (laOpsListSet) still adds the months not loaded. */
+  var pfMemo = null;
+  window.laOpsRowPendingFoc = function(id){
+    if(!enabled() || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return null;
+    if(!pfMemo || pfMemo.src !== SB_BOOKINGS || pfMemo.n !== SB_BOOKINGS.length){
+      var m = new Map(); SB_BOOKINGS.forEach(function(b){ if(b && b.srvList && b.srvList.pendingFoc != null) m.set(b.id, b.srvList.pendingFoc); });
+      pfMemo = { src: SB_BOOKINGS, n: SB_BOOKINGS.length, m: m };
+      Promise.resolve().then(function(){ pfMemo = null; });
+    }
+    return pfMemo.m.has(id) ? pfMemo.m.get(id) : null;
+  };
 
   wrap('bookingV2LastAct', function(orig, raw, b){
     var s = raw && raw.srvList, a = s && s.lastActivity;
