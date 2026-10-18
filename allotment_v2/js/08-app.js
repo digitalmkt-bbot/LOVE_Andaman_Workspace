@@ -67810,6 +67810,11 @@ function pkTypeDel(k){
    เก็บแยกจากใบจอง ไม่ไปแก้ยอดที่ขาย · แต่พอต่างจากใบจองจะขึ้นเตือนให้เห็น
    ไม่งั้นหน้านี้กับหน้าเงินสดย่อยจะเงียบ ๆ ไม่ตรงกัน */
 function pkFixKey(date,bkId,idx){ return date+'|'+bkId+'|'+idx; }
+/* §pkFixKey (2026-10-18) · เจ้าของ: "รายการที่ 10 … กดเปลี่ยนประเภท แล้วตอนนี้แก้คืนไม่ได้"
+   ช่องที่ยังไม่มีชื่อ (ph) เก็บข้อมูลไว้ใต้ "ประเภทเดิม" (C.k ตอนสร้างแถว): parkFix 'ph|<เดิม>|<ลำดับ>' และ parkName
+   แต่ตัวเลือกประเภทกับช่องชื่อในแถวส่งคีย์ด้วย p.cat = ประเภท "หลังแก้" · แก้ประเภทครั้งแรกจึงได้ (คีย์ยังตรง)
+   แต่ครั้งถัดไปทุกอย่างไปลงคีย์อื่น: เลือกกลับเป็นประเภทเดิม → ลบคีย์ที่ไม่มีอยู่ (แก้คืนไม่ได้)
+   พิมพ์ชื่อ → เก็บใต้คีย์ใหม่ที่ไม่มีใครอ่าน (ชื่อหาย) · แก้ให้ทั้งสองส่งคีย์ด้วยประเภทเดิม (p.auto) */
 /* ── ชื่อที่กรอกเองหน้าท่า ─────────────────────────────────────────────────
    ปัญหาจริงของบริษัท: เอเย่นต์/ลูกค้าบางเจ้าไม่ส่งรายชื่อมาให้ แต่ด่านขอเป็นรายชื่อ
    ที่นี่จึงให้ "พิมพ์ชื่อลงไปเอง" ได้ · เก็บแยกจากใบจอง ไม่ไปแก้ของฝ่ายขาย
@@ -67870,7 +67875,7 @@ function pkNmEdit(el,date,bkId,cat,seq){
     var D=pkTkData(date,_poPier), me=date+'|'+bkId+'|'+cat+'|'+seq, hit=null;
     (D||[]).forEach(function(g){ (g.boats||[]).forEach(function(B){
       (B.people||[]).forEach(function(p){
-        if(p.ph && p.bkId===bkId && p.cat===cat && p.seq===seq) return;   /* ช่องตัวเอง */
+        if(p.ph && p.bkId===bkId && (p.auto||p.cat)===cat && p.seq===seq) return;   /* ช่องตัวเอง · §pkFixKey เทียบประเภทเดิม */
         if(pkNmNorm(p.full)===pkNmNorm(v)) hit=p;
       });
     }); });
@@ -68180,7 +68185,7 @@ function pkTkData(date, pier){
       PK_CATS.forEach(function(C){
         for(var q=1;q<=(slot[C.k]||0);q++){
           var typed=pkNmGet(date,b.id,C.k,q);
-          var pfix=pkFixGet(date,b.id,'ph|'+C.k+'|'+q);
+          var pfix=pkFixGet(date,b.id,'ph|'+C.k+'|'+q); if(pfix===C.k) pfix='';   /* §pkFixKey · แก้เป็นประเภทเดิม = ไม่ได้แก้ */
           var nm=typed?pkTkName(typed):{f:'',l:''};
           people.push({ ph:true, typed:!!typed, seq:q, cat:(pfix||C.k), auto:C.k, fixed:!!pfix,
                         f:nm.f, l:nm.l, full:typed,
@@ -68747,7 +68752,7 @@ function renderPierPark(pier){
         ? (ro ? ('<span class="'+(p.typed?'tp':'nn')+'">'+poE(p.full||'ยังไม่มีรายชื่อ')+'</span>')
               : ('<input class="nmin'+(p.typed?' has':'')+(isDup?' dup':'')+'" value="'+poE(p.full)+'" '
                  +'placeholder="พิมพ์ชื่อ-นามสกุล" spellcheck="false" '
-                 +'onchange="pkNmEdit(this,\''+_poDate+'\',\''+p.bkId+'\',\''+p.cat+'\','+p.seq+')">'))
+                 +'onchange="pkNmEdit(this,\''+_poDate+'\',\''+p.bkId+'\',\''+(p.auto||p.cat)+'\','+p.seq+')">'))   /* §pkFixKey · คีย์ตามประเภทเดิม ไม่ใช่ประเภทที่แก้แล้ว */
         : ('<span class="fx">'+poE(p.full)+'</span>');
       rows+='<tr'+(cls.length?(' class="'+cls.join(' ')+'"'):'')+'>'
         +'<td class="n">'+no+'</td>'
@@ -68771,7 +68776,7 @@ function renderPierPark(pier){
         +'<td class="cd">'
           +(ro?('<span class="ro">'+poE(T.code||'—')+'</span>')
               :('<select onchange="pkFixSet(\''+_poDate+'\',\''+p.bkId+'\',\''
-                +(p.ph?('ph|'+p.cat+'|'+p.seq):p.ix)+'\',this.value===\''+p.auto+'\'?\'\':this.value)">'
+                +(p.ph?('ph|'+(p.auto||p.cat)+'|'+p.seq):p.ix)+'\',this.value===\''+p.auto+'\'?\'\':this.value)">'
                 +optsFor(p.cat)+'</select><span class="cv">'+poE(T.code||'—')+'</span>'))
         +'</td>'
       +'</tr>';
