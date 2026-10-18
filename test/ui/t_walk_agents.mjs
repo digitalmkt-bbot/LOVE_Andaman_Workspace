@@ -422,7 +422,7 @@ item = 7;
 // ---- seed: a booking with 4 adults for a01 on r5 inside the promo window, and four promos ----
 const D = '2026-11-10';
 await must('deployment', send('POST', '/operations/deployments', { boat_id: 'b6', route_id: 'r5', service_date: D, capacity: 40 }));
-await must('booking', send('POST', '/v1/bookings', { external_id: 'zz-promo-bk', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ PROMO PAX', pickupSelf: true, trips: [{ routeId: 'r5', date: D, pax: { ad_fr: 4 }, zone: 'NoTransfer' }] }));
+await must('booking', send('POST', '/v1/bookings', { external_id: 'zz-promo-bk', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ PROMO PAX', pickupSelf: true, trips: [{ routeId: 'r5', date: D, pax: { ad_fr: 4 }, zone: 'NoTransfer' }] }));
 const promo = (note, from, to, extra = {}) => ({ agent_id: 'a01', price_mode: 'discount', discount: { mode: 'pct', value: 10 }, active_from: from, active_to: to, route_ids: ['r5'], priority: 10, note, ...extra });
 const pA = await must('promo active', send('POST', '/v1/contracts', promo('ZZ PROMO ACTIVE', '2026-10-01', '2027-03-31', { bonus: { buy: 2, free: 1, basis: 'adchd' } })));
 const pS = await must('promo scheduled', send('POST', '/v1/contracts', promo('ZZ PROMO SCHEDULED', '2027-06-01', '2027-09-30')));

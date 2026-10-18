@@ -105,7 +105,7 @@ chk('survives reload (name + cap)', s && s.name === 'Walk Boat 2' && s.cap === 1
 // oversell: deploy Walk Boat on D5 r5, book 14 pax, then edit seats to 8 → 409 seats_sold → asks → capacity_anyway
 const D5 = D(5);
 await post('/operations/deployments', { boat_id: wid, route_id: 'r5', service_date: D5, capacity: 16 });
-const bkr = await post('/v1/bookings', { external_id: 'zz-walk-1', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ WALK', pickupSelf: true, trips: [{ routeId: 'r5', date: D5, pax: { ad_fr: 14 }, zone: 'NoTransfer' }] });
+const bkr = await post('/v1/bookings', { external_id: 'zz-walk-1', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ WALK', pickupSelf: true, trips: [{ routeId: 'r5', date: D5, pax: { ad_fr: 14 }, zone: 'NoTransfer' }] });
 const aa = await post('/operations/deployments/' + D5 + '/auto-assign', { route_id: 'r5' });
 await ev((id) => flOpenEditBoatModal(id), wid);
 await page.fill('#fm-boat-cap', '8');
@@ -447,7 +447,7 @@ console.log('   upkeep b7:', JSON.stringify(upRow && { repairs: upRow.repairs })
 chk('repair cost for the month on screen = the server\'s upkeep report (b7 repairs)', upRow && rc7 === Math.round(upRow.repairs), { upRow: upRow && upRow.repairs, rc7 });
 // pax booked on a boat that day
 const dep2 = await post('/operations/deployments', { boat_id: wid, route_id: 'r5', service_date: TD, capacity: 8 }); console.log('   deployment today:', JSON.stringify(dep2).slice(0, 250));
-const bk2 = await post('/v1/bookings', { external_id: 'zz-walk-2', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ WALK PAX', pickupSelf: true, trips: [{ routeId: 'r5', date: TD, pax: { ad_fr: 3 }, zone: 'NoTransfer' }] });
+const bk2 = await post('/v1/bookings', { external_id: 'zz-walk-2', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ WALK PAX', pickupSelf: true, trips: [{ routeId: 'r5', date: TD, pax: { ad_fr: 3 }, zone: 'NoTransfer' }] });
 const aa2 = await post('/operations/deployments/' + TD + '/auto-assign', { route_id: 'r5' }); console.log('   auto-assign:', JSON.stringify(aa2).slice(0, 300));
 await ev(() => { if (laOps.fleetDaily && laOps.fleetDaily.loadWindow) return laOps.fleetDaily.loadWindow(); return laOps.fleetDaily.load(true); }); await reloadFleet();
 const dlg2 = await api('/v1/fleet/daily-log?from=' + TD + '&to=' + TD);
