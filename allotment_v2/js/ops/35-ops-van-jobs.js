@@ -464,6 +464,7 @@
     dayRead: function(date){ return dayRead[date] || null; },
     loadVans: loadVans, vehicleOf: vehicleOf,
     putCell: function(c){ if(c && c.van_id) cells[c.van_id + '|' + c.service_date] = c; },
+    cellOf: function(vanId, date){ return cells[vanId + '|' + date] || null; },      // w5-d: status_on / zone_on / usable of the day (83-ops-fleet-server.js)
     putRange: function(kind, r){ (kind === 'zone' ? zoneRanges : statusRanges)[r.id] = r; },
     dropRange: function(kind, id){ delete (kind === 'zone' ? zoneRanges : statusRanges)[id]; },
     dropVan: function(vanId){

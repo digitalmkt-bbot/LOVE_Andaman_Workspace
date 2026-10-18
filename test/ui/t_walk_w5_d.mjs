@@ -154,6 +154,13 @@ await mk('cx1', 'W5 CANCELLED', 2);
 await seed('PATCH', `/operations/trip-ops/${bk.cx1.trip}`, { boat_id: 'b6' });
 await seedV('POST', `/v1/bookings/${bk.cx1.id}/cancel`, bk.cx1.id, { category: 'sick', charge_type: 'none' });
 
+// ── 8 · auto assign (DAY_A) and the fleet matrix (DAY_F) ──
+const DAY_A = '2026-12-20', DAY_F = '2026-12-09';
+for (const [b, r, cap] of [['b6', 'r5', 40], ['b7', 'r5', 34]]) await seed('POST', '/operations/deployments', { boat_id: b, route_id: r, service_date: DAY_A, capacity: cap, deploy_anyway: true });
+await mk('au1', 'W5 AUTO ONE', 20, {}, {}, 'r5', DAY_A); await mk('au2', 'W5 AUTO TWO', 15, {}, {}, 'r5', DAY_A); await mk('au3', 'W5 AUTO THREE', 10, {}, {}, 'r5', DAY_A);
+await seed('POST', `/operations/vans/${vanB.id}/status-ranges`, { status: 'maintenance', from_date: DAY_F, to_date: addDays(DAY_F, 1), note: 'w5 gearbox' });
+await seed('PUT', `/operations/van-days/${DAY_F}/${vanC.id}`, { status: 'off' });
+
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -519,6 +526,58 @@ section('7', async () => {
   // (the Travel Summary page itself draws the day's roster read from /v1/bookings; tsCxlRows serves the callers that still ask it, such as drData)
   tamper = [];
   await reset(); await open();
+});
+
+// ═══ 8 · Auto assign boats (baAutoAssign) and Transfer Fleet (vehStatusOn, vehJobsFor) ═══
+section('8', async () => {
+  console.log('\n[8a] baAutoAssign <- POST /operations/deployments/{date}/auto-assign');
+  await goView('boatassign'); await settle(800);
+  const boatOf = (k) => ev((e) => bkOpsRead(SB_BOOKINGS.find((x) => x.id === e), '2026-12-20').boatId || '', 'zz-' + k);
+  const srvBoat = async (k) => (await api('/v1/bookings/' + bk[k].id)).trips[0].operations.boat_id || '';
+  ok('seed: three seat bookings, no boat yet', (await boatOf('au1')) === '' && (await srvBoat('au1')) === '', [await boatOf('au1'), await srvBoat('au1')]);
+  const b0 = bodies.length;
+  await ev(() => baAutoAssign('2026-12-20', 'r5')); await idle(); await settle(1500);
+  const post = lastBody(/POST \/operations\/deployments\/2026-12-20\/auto-assign$/);
+  ok('POST …/auto-assign with exactly {route_id} (the server picks the boats)', post && post.status === 200 && JSON.stringify(post.req) === '{"route_id":"r5"}', post);
+  const S = {}; for (const k of ['au1', 'au2', 'au3']) S[k] = await srvBoat(k);
+  ok('the server placed every trip (au1 and au2 on the first boat with room, au3 where it still fits)', Object.values(S).every(Boolean) && post.json.assigned.length === 3 && post.json.unassigned.length === 0, { S, post: post.json });
+  const scr = { au1: await boatOf('au1'), au2: await boatOf('au2'), au3: await boatOf('au3') };
+  ok('screen: each booking shows the boat the server gave it', JSON.stringify(scr) === JSON.stringify(S), { scr, S });
+  ok('legacy\'s "NOT YET" toast is gone', !(await ev(() => document.body.innerText)).includes('Auto-assign is not on operation-backend'), '');
+  // no boat deployed on the route: the server's message is the alert
+  const d0 = dialogs.length;
+  await ev(() => baAutoAssign('2026-12-21', 'r5')); await idle(); await settle(800);
+  ok('409 no_boats: the server\'s own words are the alert', refusals.some((r) => /auto-assign -> 409.*no_boats/.test(r)) && dialogs.slice(d0).some((x) => /alert:/.test(x) && /boat/i.test(x)), { d: dialogs.slice(d0), r: refusals.slice(-1) });
+
+  console.log('\n[8b] Transfer Fleet: vehStatusOn <- van-days status_on · vehJobsFor <- van-jobs');
+  await ev((d) => { _vehDate = d; _vehMonth = d.slice(0, 7); _vehCalMonth = d.slice(0, 7); const el = document.querySelector('.nav-item[data-view="vehicles"]'); if (el) nav(el); renderVehicles(); }, DAY_F);
+  await waitFor((a) => !!laOps.vanJobs.cellOf(a.v, a.d), { v: vanB.id, d: DAY_F }, 15000); await idle(); await settle(1200);
+  const stOf = (vid, d) => ev((a) => vehStatusOn(vehGet(a.v), a.d), { v: vid, d });
+  const days = await api(`/operations/van-days?from=${DAY_F}&to=${DAY_F}`);
+  const cell = (vid) => days.days.find((c) => c.van_id === vid);
+  ok('vehStatusOn = status_on: Bravo maintenance (range), Charlie off (the day\'s own mark), Alpha none', (await stOf(vanB.id, DAY_F)) === 'maintenance' && cell(vanB.id).status_on === 'maintenance' && (await stOf(vanC.id, DAY_F)) === 'off' && (await stOf(vanA.id, DAY_F)) === '' && cell(vanA.id).status_on === null, [await stOf(vanB.id, DAY_F), await stOf(vanC.id, DAY_F), await stOf(vanA.id, DAY_F)]);
+  tamper = [{ re: /operations\/van-days\?/, fn: (j) => { for (const c of j.days) { if (c.van_id === vanA.id && c.service_date === DAY_F) c.status_on = 'off'; if (c.van_id === vanB.id && c.service_date === DAY_F) c.status_on = null; } } }];
+  await ev(() => laOps.fleetServer.refresh('2026-12-09')); await settle(600);
+  ok('tampered answer (Alpha off, Bravo none): vehStatusOn gives the server\'s status, not what the ranges say', (await stOf(vanA.id, DAY_F)) === 'off' && (await stOf(vanB.id, DAY_F)) === '', [await stOf(vanA.id, DAY_F), await stOf(vanB.id, DAY_F)]);
+  const cellTxt = await ev((a) => _vehDayCellInner(vehGet(a.v), a.d), { v: vanA.id, d: DAY_F });
+  ok('...and the matrix cell of Alpha is drawn as off (the stop sign)', cellTxt.includes('9941'), cellTxt.slice(0, 160));
+  tamper = [];
+  // a range write makes the days stale: the cells are read again
+  const n0 = calls.length;
+  await ev((id) => vehStatusAdd(id), vanA.id); await idle(); await settle(1500);
+  ok('a status-range write is followed by GET /operations/van-days (the days it covers changed)', callsSince(n0).some((c) => /^POST \/operations\/vans\/.*\/status-ranges 201/.test(c)) && callsSince(n0).some((c) => /^GET \/operations\/van-days\?/.test(c)), callsSince(n0).filter((c) => /van-days|status-ranges/.test(c)));
+  // jobs of the day
+  const J = await api('/operations/van-jobs?date=' + DAY);
+  const mine = J.jobs.filter((j) => j.van_id === vanA.id);
+  const jobsFn = () => ev((a) => { const j = vehJobsFor(a.d)[a.v]; return j ? { bk: j.bk, pax: j.pax, n: j.list.length } : null; }, { d: DAY, v: vanA.id });
+  await ev((d) => { vehJobsFor(d); }, DAY); await waitFor((d) => !!laOps.fleetServer.jobs(d), DAY, 8000); await settle(500);
+  const j0 = await jobsFn();
+  ok('vehJobsFor: Alpha\'s "N job · M pax" = the server\'s jobs (bookings and pax)', mine.length >= 1 && j0.bk === mine.reduce((s, j) => s + j.bookings, 0) && j0.pax === mine.reduce((s, j) => s + (j.pax != null ? j.pax : j.out_pax), 0), { j0, mine: mine.map((j) => [j.bookings, j.pax]) });
+  tamper = [{ re: /operations\/van-jobs\?date=2026-12-08$/, fn: (j) => { for (const x of j.jobs) if (x.van_id === vanA.id) { x.bookings = 9; x.pax = 77; } } }];
+  await ev(() => laOps.fleetServer.clear()); await ev((d) => { vehJobsFor(d); }, DAY); await waitFor((d) => !!laOps.fleetServer.jobs(d), DAY, 8000); await settle(500);
+  const j1 = await jobsFn();
+  ok('tampered answer (9 bookings, 77 pax per Alpha job): vehJobsFor shows the server\'s', mine.length === 1 ? (j1.bk === 9 && j1.pax === 77) : (j1.bk >= 9 && j1.pax >= 77), { j1, n: mine.length });
+  tamper = [];
 });
 
 //@@SECTIONS
