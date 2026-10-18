@@ -10,6 +10,8 @@ function bookingV2RenderTab2(){
   const vanMode = !!_bkV2.vanAssignMode;     // Van Assign mode → extra Van column + pickup time + job order
   const rcMode = !!_bkV2.reconfirmMode;      // Re-Confirm mode → extra Re-confirm column
   const date = bookingV2Tab2ActiveDate();
+  /* §opsByTrip (Q47) · the day's counts, prep and not-yet-arranged boat/van figures come from the server (js/ops/72-ops-by-trip.js); null = legacy counts them */
+  const _srv = (typeof window.laOpsByTripFor==='function') ? window.laOpsByTripFor(date, !!_bkV2CityTourOnly) : null;
   // By-trip owns exactly one operational date; it must not trigger a broad
   // booking-window preload merely to populate this manifest.
   const dayLoad=typeof bookingV2OpsEnsureDay==='function' ? bookingV2OpsEnsureDay(date) : null;
@@ -277,10 +279,10 @@ function bookingV2RenderTab2(){
     </aside>`;
 
   // ── Day-level aggregates (whole day · all programs · independent of filters) ──
-  const _dAD = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'ad')),0);
-  const _dCHD = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'chd')),0);
-  const _dINF = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'inf')),0);
-  const _dFOC = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'foc')),0);
+  const _dAD = _srv ? _srv.day.pax.ad : rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'ad')),0);   /* §opsByTrip */
+  const _dCHD = _srv ? _srv.day.pax.chd : rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'chd')),0);
+  const _dINF = _srv ? _srv.day.pax.inf : rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'inf')),0);
+  const _dFOC = _srv ? _srv.day.pax.foc : rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'foc')),0);
   const _dPax = _dAD+_dCHD+_dINF+_dFOC;
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
@@ -293,6 +295,8 @@ function bookingV2RenderTab2(){
      (19 ต.ค. Surin 29 > Phi Phi 15 · 20 ต.ค. Phi Phi 35 > Surin 12) · owner: "ตายตัวทุกวัน (Similan → Surin → Phi Phi → …)"
      = ลำดับใน _BKV2_FAMILIES: Similan · Surin · Phi Phi · Krabi + Phang Nga · Whale Shark · Se La Va · Nyaung Oo Phee · Transfer · City Tour · Activities */
   const _btFamIdx = a => { const i=_BKV2_FAMILIES.findIndex(f=>f.id===(a&&a.fam&&a.fam.id)); return i<0?999:i; };
+  /* §opsByTrip (Q47) · a programme's head count is the sum of its routes' counts from the server (a booking waiting for approval is not in them) */
+  if(_srv) Object.values(_famAgg).forEach(a=>{ a.pax=0; a.rids.forEach(rid=>{ const sr=_srv.routes.find(x=>x.route_id===rid); if(sr) a.pax+=sr.pax.total; }); });
   const _famList = Object.values(_famAgg).sort((a,b)=> _btFamIdx(a)-_btFamIdx(b));
   const _dayLocked = (typeof bookingV2DayLockedTotal==='function') ? bookingV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -321,6 +325,13 @@ function bookingV2RenderTab2(){
     if(typeof bookingV2RetInfo==='function'){ const _ri=bookingV2RetInfo(b,date); if(_ri.alert){ _unRetN++; _unRetPax+=pax; _unRetR[_lbl]=(_unRetR[_lbl]||0)+pax; } }
     if(!(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')){ _unRcN++; _unRcPax+=pax; _unRcR[_lbl]=(_unRcR[_lbl]||0)+pax; }   // re-confirm not yet done
   });
+  if(_srv){   /* §opsByTrip (Q47) · Boat and Van 'not yet arranged' are the server's (pending_approval is out of them); return-van and re-confirm stay legacy */
+    const _w=_srv.warnings||{};
+    _unBoatN=(_w.boat&&_w.boat.bookings)||0; _unBoatPax=(_w.boat&&_w.boat.pax)||0; Object.keys(_unBoatR).forEach(k=>delete _unBoatR[k]);
+    ((_w.boat&&_w.boat.by_route)||[]).forEach(x=>{ const l=_unRn(x.route_id); _unBoatR[l]=(_unBoatR[l]||0)+x.pax; });
+    _unVanN=(_w.van&&_w.van.bookings)||0; _unVanPax=(_w.van&&_w.van.pax)||0; Object.keys(_unVanR).forEach(k=>delete _unVanR[k]);
+    ((_w.van&&_w.van.by_route)||[]).forEach(x=>{ const l=_unRn(x.route_id); _unVanR[l]=(_unVanR[l]||0)+x.pax; });
+  }
   /* §btUnit · ตัวเลขในแถบนี้เป็น "pax" ส่วนเลขบนการ์ดโหมดเป็น "booking"
      ของเดิมสองอันอยู่คนละที่จึงไม่ชนกัน · ตอนนี้อยู่ในหัวเดียวกันแล้ว
      ไม่บอกหน่วยจะอ่านเป็น Re-confirm 4 กับ Phi Phi Bamboo 8 ขัดกันเอง */
@@ -532,12 +543,16 @@ function bookingV2RenderTab2(){
       <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
       ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bookingV2Tab2ClearFilters()">Clear</button>`:''}
       <span class="sp"></span>
-      <span class="bt-daytot"><b>${rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
+      <span class="bt-daytot"><b>${_srv ? _srv.day.bookings : rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
 
   /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
      การ์ดเรือมีที่ว่างอยู่แล้ว และสามอย่างนี้คือของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่แรก */
   const _btPrep = rid => {
+    if(_srv){   /* §opsByTrip (Q47) · prep tallies are the server's */
+      const sr=_srv.routes.find(x=>x.route_id===rid), q=(sr&&sr.prep)||{};
+      return {lang:Object.assign({},q.languages||{}), veg:q.veg||0, vegan:q.vegan||0, halal:q.halal||0, allerg:q.allergy||0, ltJoin:q.longtail_join||0, ltChtr:q.longtail_charter||0};
+    }
     const lang={}; let veg=0,vegan=0,halal=0,allerg=0,ltJoin=0,ltChtr=0;
     (groups[rid]||[]).forEach(r=>{ if(r.cxl) return;
       const t=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
@@ -675,7 +690,7 @@ function bookingV2RenderTab2(){
     }).join(''):(_blCard.length?'':'<span class="bt-none2">No seat lock on this day</span>')}${_blCardHtml}</div>
     ${_lkList.length?`<div class="bt-lkfoot"><b>${_lkTot}</b> held &middot; <b>${_lkTot-_lkLeft}</b> used &middot; <b>${_lkList.length}</b> holder${_lkList.length===1?'':'s'} &middot; <b>${_lkN}</b> lock${_lkN===1?'':'s'}${_lkList.length>3?`<span class="scr">&#9662; ${_lkList.length-3} more</span>`:''}<span class="hint">${_btLkSel?'Click again to clear highlight':'Click a row to highlight its bookings &middot; &#9881; to manage'}</span></div>`:''}</div>`;
 
-  const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
+  const _btPendN = (_srv && _srv.day && _srv.day.pending_approval) ? _srv.day.pending_approval.bookings : Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);   /* §opsByTrip (Q47) */
   const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">today</span></div>
     <div class="bt-ncb">
       ${_unassignBar}
