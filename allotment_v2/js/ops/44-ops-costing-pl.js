@@ -534,8 +534,185 @@
     });
   });
 
+  /* ══ Q37 · the design sheet's live preview is the server's answer ═══════════════════════════════
+     The sheet's maths (ctCalc, ctProfitAt, ctBreakEven ...) is called synchronously from many render paths, so
+     it cannot wait for a request. How it works:
+       1. a stored plan the sheet shows is turned into the body of POST /v1/costing/calc (plan + the template as it
+          is now + the heads); the call is debounced (250 ms after the last ask) and sent behind pending writes;
+       2. the answer is cached under that plan + template; the same plan edited again is a new key;
+       3. the wrapped functions below read the cached answer and put the server's figures into legacy's own result
+          (same shape, so the markup is untouched); with no answer yet they return legacy's own arithmetic, so the
+          sheet never blanks;
+       4. when the answers arrive the screen is drawn again once (ctRender).
+     Nothing is stored by the call. Plans copied and edited only to try a price (the price levels, the tiers) are not
+     stored plans: they are not asked for and keep legacy's arithmetic. */
+  var calc = { ans:{}, order:[], byTpl:{}, wants:{}, busy:{}, failed:{}, timer:null, renderT:null, memo:null };
+  var CALC_WAIT = 250, CALC_KEEP = 300;
+
+  function ctVisible(){ var h = document.getElementById('ct-body'); return !!(h && h.offsetParent !== null); }
+  function sameTick(){
+    if(!calc.memo){ calc.memo = { pl:new Map(), tpl:new Map() }; Promise.resolve().then(function(){ calc.memo = null; }); }
+    return calc.memo;
+  }
+  /* the plan as the server is asked about it: what the sheet prices (the name, note, route key, tiers and itinerary do not move a figure) */
+  function calcBody(pl){
+    var b = planToServer(pl);
+    delete b.name; delete b.note; delete b.route_key; delete b.tiers; delete b.itinerary;
+    return b;
+  }
+  function planPart(pl){
+    var m = sameTick(), hit = m.pl.get(pl); if(hit) return hit;
+    var body = calcBody(pl), bt = pl.boatId, boat = null;
+    try{ boat = bt && typeof window.getBoat === 'function' ? window.getBoat(bt) : null; }catch(_){}
+    var part = { body:body, json:JSON.stringify(body) + '|' + (bt ? JSON.stringify(cost.rents[bt] || null) + '|' + (boat ? boat.cap : '') : '') };
+    m.pl.set(pl, part); return part;
+  }
+  function tplPart(T){
+    var src = T || cost.template; if(!src || !Array.isArray(src.lines)) return null;
+    var m = sameTick(), hit = m.tpl.get(src); if(hit) return hit;
+    var body = templateToServer(src), part = { body:body, json:JSON.stringify(body) };
+    m.tpl.set(src, part); return part;
+  }
+  function isStored(pl, part){
+    if(!pl.id) return false;
+    var s = cost.plans.filter(function(x){ return x.id === pl.id; })[0];
+    return !!s && JSON.stringify(calcBody(s)) === JSON.stringify(part.body);
+  }
+  /* the cached answer for this plan under this template (null: none yet); ask = true also puts the plan on the list to ask for */
+  function answer(pl, T, ask){
+    if(!enabled() || !cost.loaded || !pl || typeof pl !== 'object' || pl._asOf) return null;
+    var pp, tp;
+    try{ pp = planPart(pl); tp = tplPart(T); }catch(_){ return null; }
+    if(!tp) return null;
+    var key = pp.json + '#' + tp.json, a = calc.ans[key];
+    if(a) return a;
+    if(ask && !calc.busy[key] && !calc.failed[key] && !calc.wants[key] && ctVisible() && isStored(pl, pp)){
+      calc.wants[key] = { body:pp.body, tpl:tp.body, tplJson:tp.json, pax:Math.max(1, pp.body.pax || 0) };
+      clearTimeout(calc.timer); calc.timer = setTimeout(sendWants, CALC_WAIT);
+    }
+    return null;
+  }
+  function sendWants(){
+    var todo = calc.wants; calc.wants = {}; calc.timer = null;
+    Object.keys(todo).forEach(function(key){
+      var w = todo[key]; calc.busy[key] = 1;
+      O.queue(function(){ return O.call('POST', '/v1/costing/calc', { plan:w.body, template:w.tpl, pax:w.pax }); }).then(function(res){
+        delete calc.busy[key];
+        if(!res || !res.calc || !res.sheet){ calc.failed[key] = 1; return; }
+        calc.ans[key] = res; calc.byTpl[w.tplJson] = res; calc.order.push(key);
+        while(calc.order.length > CALC_KEEP) delete calc.ans[calc.order.shift()];
+        calcRender();
+      }, function(){ delete calc.busy[key]; calc.failed[key] = 1; });   /* legacy's own figures stay on screen */
+    });
+  }
+  /* one draw when the last answer is in; ctRender keeps the focus and the scroll */
+  function calcRender(){
+    clearTimeout(calc.renderT);
+    calc.renderT = setTimeout(function(){
+      if(Object.keys(calc.busy).length || Object.keys(calc.wants).length) return calcRender();
+      if(typeof window.ctRender === 'function' && ctVisible()) window.ctRender();
+    }, 120);
+  }
+  calcApi.render = calcRender;
+  function forgetCalc(){ calc.ans = {}; calc.order = []; calc.byTpl = {}; calc.failed = {}; }
+
+  function legacyRows(rows){
+    return (rows || []).map(function(r){ return { id:r.id, g:r.group, l:r.label, vat:!!r.vat, amt:n(r.amount), vatAmt:n(r.vat_amount), net:n(r.net), fix:n(r.fixed), varr:n(r.variable) }; });
+  }
+  function wrapCalc(name, replacement){
+    var orig = window[name]; if(typeof orig !== 'function' || orig.__opsCostingCalc) return;
+    var w = function(){ var args = [].slice.call(arguments); if(!enabled() || !cost.loaded) return orig.apply(this, args); return replacement.apply(this, [orig].concat(args)); };
+    w.__opsCostingCalc = true; window[name] = w;
+  }
+
+  /* ctCalc · the rows and the totals; only for the sheet's own context (the heads, engines, boats, fuel and boat of the plan) */
+  wrapCalc('ctCalc', function(orig, pl, ctx, tpl){
+    var out = orig(pl, ctx, tpl);
+    if(!ctx || ctx.odQty || typeof window.ctCtxAt !== 'function') return out;
+    var a = answer(pl, tpl, false);
+    if(!a || +ctx.pax !== +a.calc.pax || JSON.stringify(window.ctCtxAt(pl, ctx.pax)) !== JSON.stringify(ctx)) return out;
+    var c = a.calc;
+    out.gross = n(c.gross); out.vin = n(c.vat_in); out.net = n(c.net); out.fixNet = n(c.fixed_net); out.varNet = n(c.var_net); out.rows = legacyRows(c.rows);
+    return out;
+  });
+  /* ctProfitAt · profit, revenue and the children split at the plan's heads; the other head counts the server priced for its curve */
+  wrapCalc('ctProfitAt', function(orig, pl, nn, tpl){
+    var out = orig(pl, nn, tpl), a = answer(pl, tpl, true);
+    if(!a) return out;
+    var c = a.calc;
+    if(+nn === +c.pax){
+      out.p = n(c.profit); out.rev = n(c.revenue); out.revTour = n(c.revenue_tour); out.revOd = n(c.revenue_on_demand); out.ad = c.adults; out.ch = c.children;
+      return out;
+    }
+    var k = ((a.sheet || {}).curve || []).filter(function(x){ return +x.pax === +nn; })[0];
+    if(k){ out.p = n(k.profit); out.rev = n(k.revenue); }
+    return out;
+  });
+  /* ctBreakEven · the first head count with a profit, walked up to the boats' seats */
+  wrapCalc('ctBreakEven', function(orig, pl, cap, tpl){
+    var a = answer(pl, tpl, true), s = a && a.sheet;
+    if(s && +cap === +s.capacity) return s.key_figures.break_even;
+    return orig(pl, cap, tpl);
+  });
+  wrapCalc('ctChdAt', function(orig, pl, nn){
+    var a = answer(pl, undefined, false);
+    if(a && +nn === +a.calc.pax) return a.sheet.children;
+    return orig(pl, nn);
+  });
+  wrapCalc('ctStepCount', function(orig, pl, nn, tpl){
+    var a = answer(pl, tpl, false);
+    if(a && +nn === +a.sheet.pax) return a.sheet.step_count;
+    return orig(pl, nn, tpl);
+  });
+  wrapCalc('ctPlanSeats', function(orig, pl){
+    var a = answer(pl, undefined, true);
+    return a ? a.seats : orig(pl);
+  });
+  wrapCalc('ctVatR', function(orig, t){
+    var tp = tplPart(t), a = tp && calc.byTpl[tp.json];
+    return a ? a.sheet.vat_share : orig(t);
+  });
+  wrapCalc('ctCostPerHead', function(orig, plan){
+    var a = plan ? answer(plan, undefined, true) : null;
+    return a ? a.sheet.cost_per_head.amount : orig(plan);
+  });
+  wrapCalc('ctOdQty', function(orig, pl, ln, ctx){
+    var a = (ctx && !ctx.odQty) ? answer(pl, undefined, false) : null, od = a && a.sheet.on_demand;
+    if(od && +ctx.pax === +a.sheet.pax){
+      var l = od.lines.filter(function(x){ return x.id === ln.id; })[0];
+      if(l) return l.expected_qty;
+    }
+    return orig(pl, ln, ctx);
+  });
+  /* ctV2OvrTot · the "total per trip" row of the adjust tab: one cell per plan, from the server's override_total */
+  wrapCalc('ctV2OvrTot', function(orig, P, G, T){
+    var cells = P.map(function(pl, i){
+      var a = answer(pl, T, true), o = a && a.sheet.override_total;
+      if(!o) return (/<td class="ct-gtd ct-tot" data-col="0">[\s\S]*?<\/td>/.exec(orig([pl], G, T)) || [''])[0].replace('data-col="0"', 'data-col="' + i + '"');
+      return '<td class="ct-gtd ct-tot" data-col="' + i + '"><b>' + window.ctB(o.gross) + '</b><span class="ct-u">' + o.pax + ' คน · ' + window.ctB(o.per_head) + '/หัว</span></td>';
+    }).join('');
+    return orig([], G, T).replace('</tr>', cells + '</tr>');
+  });
+  /* ctFactSheet · asks for the plan; its key figures, cost table and curve come through ctProfitAt / ctCalc / ctBreakEven above */
+  wrapCalc('ctFactSheet', function(orig, pl){ answer(pl, undefined, true); return orig(pl); });
+
+  /* ctRentOf / _ctRentOfCalc · the rent's seats, total, running days and per-trip figure are the server's (they come with the boat-rent record) */
+  wrapCalc('_ctRentOfCalc', function(orig, boatId){
+    var r = orig(boatId), s = r && cost.rentSrv[boatId];
+    if(!s) return r;
+    var mine; try{ mine = JSON.stringify(rentFromServer(rentToServer(cost.rents[boatId] || {}))); }catch(_){ return r; }
+    if(mine !== s.sig) return r;
+    r.seats = s.seats; r.amt = n(s.total); r.runDays = s.run_days; r.perDay = n(s.per_day); r.perTrip = n(s.per_trip); r.perCalDay = n(s.per_calendar_day);
+    return r;
+  });
+  /* ctTplFill / ctTplOdSeed · the server hands the template over already filled with the default lines and the on-demand seed */
+  wrapCalc('ctTplFill', function(orig, t){ return t; });
+  wrapCalc('ctTplOdSeed', function(orig, t){ return 0; });
+
+  O.onWrite(function(kind){ if(kind !== 'costing') forgetCalc(); else calc.failed = {}; });
+
   O.onWrite(function(){ clearAll(); });
-  window.laOps.costingPL = { loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
+  window.laOps.costingPL = { calcState:calc, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
   window.__laOpsCostingCompat = {
     legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisHtml:analysisHtml,
     templateFromServer:templateFromServer, templateToServer:templateToServer, planFromServer:planFromServer, planToServer:planToServer,
