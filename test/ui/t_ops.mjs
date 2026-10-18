@@ -78,7 +78,7 @@ page.on('console', (m) => { if (m.type() === 'error' && !NOISE.test(m.text())) e
 page.on('dialog', (d) => { dialogs.push(d.type() + ': ' + d.message().slice(0, 160)); d.type() === 'prompt' ? d.accept('Tester') : d.accept(); });
 
 const fails = [];
-const ok = (name, cond, got) => { console.log((cond ? '  ✓ ' : '  ✖ ') + name + (cond ? '' : '  → ' + JSON.stringify(got).slice(0, 400))); if (!cond) fails.push(name); };
+const ok = (name, cond, got) => { console.log((cond ? '  ✓ ' : '  ✖ ') + name + (cond ? '' : '  → ' + (JSON.stringify(got) || "").slice(0, 400))); if (!cond) fails.push(name); };
 const settle = (ms = 700) => page.waitForTimeout(ms);
 const idle = () => page.evaluate(() => window.laOps.queue(() => null));      // every queued write has finished
 const ev = (fn, arg) => page.evaluate(fn, arg);
