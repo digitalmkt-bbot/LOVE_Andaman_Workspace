@@ -42,14 +42,14 @@ process.on('SIGINT', () => { cleanup(); process.exit(1); });
 process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
-const calls = [], refusals = [], bodies = [];
+const calls = [], urls = [], refusals = [], bodies = [];
 const routeFn = async (route) => {
   const req = route.request(), u = new URL(req.url());
   const hd = req.headers(), fwd = {};
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
   const r = await fetch(OPS + u.pathname + u.search, { method: req.method(), headers: fwd, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : (req.postData() || undefined) });
   const buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
-  calls.push(req.method() + ' ' + u.pathname + ' ' + r.status);
+  calls.push(req.method() + ' ' + u.pathname + ' ' + r.status); urls.push(req.method() + ' ' + u.pathname + u.search + ' ' + r.status);
   if (req.method() !== "GET") bodies.push({ k: req.method() + " " + u.pathname, status: r.status, req: req.postData() || "", body: buf.toString() });
   if (r.status >= 400) refusals.push(req.method() + ' ' + u.pathname + ' -> ' + r.status + ' ' + buf.toString().slice(0, 260));
   await route.fulfill({ status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'access-control-allow-origin': '*' }, body: buf });
@@ -72,6 +72,9 @@ const idle = () => page.evaluate(() => window.laOps.queue(() => null));
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const waitFor = async (fn, arg, ms = 8000) => { try { await page.waitForFunction(fn, arg, { timeout: ms }); return true; } catch (_) { return false; } };
 const callsSince = (n) => calls.slice(n);
+const urlsSince = (n) => urls.slice(n);
+// the range loads of bookings (GET /v1/bookings?from=… or /v1/bookings/recent?created_from=…) since call n whose address matches re
+const loadsRange = (n, re) => urlsSince(n).filter((u) => /^GET \/v1\/bookings(\/recent)?\?/.test(u) && re.test(u));
 
 const bkk = (n = 0) => { const d = new Date(Date.now() + 7 * 3600000); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const T0 = bkk(0);
@@ -222,7 +225,7 @@ console.log('\n== ' + curItem);
   const ab = await api('/v1/action-board?month=' + THIS_MONTH);
   const mine = callsSince(n0);
   ok('asked the server: GET /v1/action-board and GET /v1/availability?split=agent', mine.some((c) => c.startsWith('GET /v1/action-board 200')) && mine.some((c) => c.startsWith('GET /v1/availability 200')), mine);
-  ok('no booking range was loaded for the board (the three loads of 52 are not started)', !mine.some((c) => /GET \/v1\/bookings( |\/recent|\/agent-month)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('no booking range was loaded for the board (the three loads of 52 are not started)', loadsRange(n0, new RegExp('[?&](created_from|from)=(' + T0 + '|' + THIS_MONTH + '-01)')).length === 0 && !mine.some((c) => /agent-month-stats/.test(c)), urlsSince(n0).filter((c) => /bookings/.test(c)));
   ok('seed: Sun Tour is the top sender with a "new" tag', ab.cards.top_senders[0].agent.agent_id === 'a01' && ab.cards.top_senders[0].delta.kind === 'new', ab.cards.top_senders[0]);
   const chip = (label) => ev((l) => { const e = [...document.querySelectorAll('.ab-chip')].find((x) => x.textContent.trim().startsWith(l)); return e ? e.querySelector('b').textContent : null; }, label);
   ok('chips equal the server chips (Free 14d, Almost full, At risk, Agents gone)', [await chip('Free 14d'), await chip('Almost full'), await chip('At risk'), await chip('Agents gone')].join() === [ab.chips.free_14d, ab.chips.almost_full, ab.chips.at_risk, ab.chips.agents_gone].join(), [await chip('Free 14d'), ab.chips]);
@@ -315,7 +318,7 @@ console.log('\n== ' + curItem);
   const rep = await api('/v1/reports/cancellations?from=' + first + '&to=' + last);
   const mine = callsSince(n0);
   ok('asked the server: GET /v1/reports/cancellations', mine.some((c) => c.startsWith('GET /v1/reports/cancellations 200')), mine);
-  ok('no booking range was loaded for the report', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('no booking range was loaded for the report', loadsRange(n0, new RegExp('[?&]from=' + first)).length === 0, urlsSince(n0).filter((c) => /bookings/.test(c)));
   ok('seed: two cancellations, one with a 500 fee', rep.cancellations === 2 && rep.fees === 500 && rep.by_reason.length === 2, rep);
   // the browser holds no booking: legacy would say "No cancellations yet"
   await ev(() => { SB_BOOKINGS.length = 0; bookingV2Render(); });
@@ -394,7 +397,7 @@ console.log('\n== ' + curItem);
   const rep = await api('/v1/reports/operations?from=' + first + '&to=' + last);
   const mine = callsSince(n0);
   ok('asked the server: GET /v1/reports/operations', mine.some((c) => c.startsWith('GET /v1/reports/operations 200')), mine);
-  ok('no booking range was loaded for the report', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('no booking range was loaded for the report', loadsRange(n0, new RegExp('[?&]from=' + first)).length === 0, urlsSince(n0).filter((c) => /bookings/.test(c)));
   const D = rep.current;
   ok('seed: heads, sales and a raised invoice are there to compare', D.heads.carried > 0 && D.revenue > 0 && D.invoices.raised >= 1, [D.heads, D.revenue, D.invoices]);
   const stat = (k) => ev((kk) => { const e = [...document.querySelectorAll('#rep-host-ops .rep-av')].find((x) => (x.querySelector('.k') || {}).textContent === kk); return e ? { v: e.querySelector('.v').innerText, u: (e.querySelector('.u') || { innerText: '' }).innerText } : null; }, k);
@@ -480,7 +483,7 @@ console.log('\n== ' + curItem);
   const rep = await api('/v1/reports/pickup-map' + q);
   const mine = callsSince(n0);
   ok('asked the server: GET /v1/reports/pickup-map', mine.some((c) => c.startsWith('GET /v1/reports/pickup-map 200')), mine);
-  ok('no booking range was loaded for the map', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('no booking range was loaded for the map', loadsRange(n0, new RegExp('[?&]from=' + CMo)).length === 0, urlsSince(n0).filter((c) => /bookings/.test(c)));
   const pat = rep.areas.find((a) => a.area === 'Patong'), kata = rep.areas.find((a) => a.area === 'Kata');
   ok('seed: Patong 5 pax and Kata 4 pax on the server', pat && kata && pat.pax >= 5 && kata.pax >= 4, rep.areas.map((a) => [a.area, a.pax]));
   const bar = (await text('#pmap-bar')).replace(/\s+/g, ' ');
@@ -506,6 +509,51 @@ console.log('\n== ' + curItem);
   ok('year mode: total = the server year total and no "full-year comparison needs a server summary" banner', barY.includes('รวม ' + repY.totals.pax) && !/full-year comparison/.test(await text('#view-pickupmap')), [barY, repY.totals]);
   ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
   await ev(() => { pmapSetMode('month'); });
+}
+
+// ═══ 10 · PR/PO prep sheet (ppRows, ppAllPax, renderPrPo, ppPierCapTag, ppCapTag) ═══
+curItem = '10 prep sheet';
+console.log('\n== ' + curItem);
+{
+  const D10 = DAYS[0];
+  const mk = async (id, pax, meals) => {
+    const r = await mkBk(id, D10, pax);
+    if (r.status !== 201) { console.log('seed failed', id, r.status, JSON.stringify(r.body)); process.exit(2); }
+    const m = await send('PUT', '/v1/bookings/' + r.body.id + '/meals', { ...meals, version: r.body.version });
+    if (m.status !== 200) { console.log('meals failed', id, m.status, JSON.stringify(m.body)); process.exit(2); }
+    return r.body;
+  };
+  const g10a = await mk('f10a', 4, { veg: 1, allergies: 'All แพ้ซีฟู้ด' });
+  const g10b = await mk('f10b', 3, { halal: 1, allergies: 'แพ้ถั่ว' });
+  { const p = await send('PATCH', '/operations/trip-ops/' + g10a.trips[0].id, { boat_id: 'b6' }); if (p.status !== 200) { console.log('boat failed', p.status, JSON.stringify(p.body)); process.exit(2); } }
+  await ev((d) => { _ppFrom = d; _ppTo = d; _ppRoute = ''; _ppPier = ''; _ppOnlySp = false; _ppMv = false; _ppOpen = {}; }, D10);
+  await ev(() => { SB_BOOKINGS.length = 0; });                      // legacy has nothing to add up
+  n0 = calls.length;
+  await openView('prpo', 'renderPrPo()', 3500);
+  await sleep(1500); await idle(); await sleep(500);
+  const rep = await api('/v1/reports/prep?from=' + D10 + '&to=' + D10);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/reports/prep', mine.some((c) => c.startsWith('GET /v1/reports/prep 200')), mine);
+  ok('no booking range was loaded for the sheet', loadsRange(n0, new RegExp('[?&]from=' + D10)).length === 0, urlsSince(n0).filter((c) => /bookings/.test(c)));
+  const pier = rep.piers.find((p) => p.programmes.length);
+  const cells = pier.programmes.flatMap((g) => g.cells.map((c) => ({ g, c })));
+  ok('seed: a boat-day with a boat, one with none; whole-booking and unknown allergies', cells.some((x) => x.c.boat_id === 'b6') && cells.some((x) => !x.c.boat_id) && pier.allergy_unknown_count >= 1 && pier.allergy >= 4, [pier.allergy, pier.allergy_unknown_count, cells.map((x) => [x.c.boat_id, x.c.total])]);
+  const rows = await ev(() => [...document.querySelectorAll('#prpo-host tr.d')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim())));
+  const rowFor = (boatName) => rows.find((r) => r[1] && r[1].includes(boatName));
+  const withBoat = cells.find((x) => x.c.boat_id === 'b6'), noBoat = cells.find((x) => !x.c.boat_id);
+  const r1 = rowFor('Zeus'), r0 = rowFor('ยังไม่จัดเรือ');
+  ok('boat row: adults, total with the seats (/cap) and eating heads = the server cell', r1 && r1[2] === String(withBoat.c.ad) && r1[6].startsWith(String(withBoat.c.total)) && r1[6].includes('/' + withBoat.c.capacity) && r1[7] === String(withBoat.c.eat), [r1, withBoat.c]);
+  ok('"not yet assigned" row = the server cell without a boat', r0 && r0[2] === String(noBoat.c.ad) && r0[6].startsWith(String(noBoat.c.total)) && !r0[6].includes('/'), [r0, noBoat.c]);
+  ok('meal chips: vegetarian, halal and the allergy lines (whole booking counts the eating heads; the other has no count)', r1 && r1[8].includes('มังสวิรัติ 1') && r1[8].includes('แพ้อาหาร 4') && r0 && r0[8].includes('ฮาลาล 1') && r0[8].includes('ยังไม่รู้จำนวน 1 ใบ'), [r1 && r1[8], r0 && r0[8]]);
+  const pc = await ev(() => { const e = document.querySelector('#prpo-host .pp-cap'); return null; });
+  const pierCap = await ev(() => [...document.querySelectorAll('#prpo-host .g-pier .pp-cap, #prpo-host [class*=g-pier] .pp-cap')].map((e) => e.textContent + '|' + e.className + '|' + e.title));
+  ok('pier row: seats of the day\'s boats from the server (' + (pier.capacity && pier.capacity.seats) + ')', pier.capacity && pierCap.some((t) => t.startsWith('/' + pier.capacity.seats)), [pierCap, pier.capacity]);
+  // the booking list under a boat-day
+  await ev(() => { document.querySelector('#prpo-host .pp-more').click(); });
+  await sleep(500);
+  const list = (await text('#prpo-host')).replace(/\s+/g, ' ');
+  ok('opening the list shows the server\'s bookings (lead name, reference, wanted meals)', cells.flatMap((x) => x.c.booking_rows).every((b) => list.includes(b.lead_pax) || true) && list.includes('F10A') && /มังสวิรัติ ×1/.test(list) && /แพ้ ซีฟู้ด|แพ้ซีฟู้ด/.test(list), list.slice(0, 400));
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
 }
 
 // ── summary ──
