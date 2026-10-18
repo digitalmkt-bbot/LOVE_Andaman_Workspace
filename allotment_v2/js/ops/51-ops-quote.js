@@ -81,7 +81,8 @@
       var o = { routeId: ctx.soldRoute ? ctx.soldRoute(t) : t.routeId, date: t.date, pax: paxClean(t.pax) };
       if(t.opsTripId) o.id = t.opsTripId;
       if(charter){ o.bookingMode = 'charter'; o.charterBoatId = t.charterBoatId; }
-      if(t.zone) o.zone = t.zone;
+      var zone = O.vanZone ? O.vanZone(d, t, d.id || d.code) : t.zone;      // §opsVan (Q44) · a private van makes the seat No-Transfer
+      if(zone) o.zone = zone;
       if(t.ovn){ o.ovn = t.ovn; if(t.ovn === 'return' && t.ovnReturnDate) o.ovnReturnDate = t.ovnReturnDate; }
       if(t.ovnLeg){ o.ovnLeg = true; if(t.ovnOf != null) o.ovnOf = +t.ovnOf; }
       if(t.ovnCharge != null && t.ovnCharge !== '') o.ovnCharge = Math.max(0, num(t.ovnCharge));

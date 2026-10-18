@@ -143,6 +143,7 @@
   /* ── client booking → request body · `create` for POST, else PATCH ── */
   function toServer(bk, create){
     var b = { external_id: bk.id };
+    if(create && O.reservedCode && O.reservedCode(bk.id)) b.code = bk.id;      // §opsCode (Q45) · only a code the server reserved for this login; a local code is never sent as one
     if(create) b.intent = intentOf(bk);           // a PATCH sends no status: a change goes through a command (saveNow)
     HEADER.forEach(function(h){ if(SERVER_STAMPED[h[0]]) return; var v = coerce(bk[h[0]], h[1]); if(v !== undefined) b[h[0]] = v; });
     var focReason = (bk.focApproval && bk.focApproval.reason) || bk.focReason;
@@ -201,7 +202,9 @@
         if(Object.keys(draws).length) o.lockDraws = draws;
       }
       o.thai_passengers = thaiOut(t);                   // §thaiPax · null = not set (a trip is sent whole)
-      if(t.zone) o.zone = t.zone;
+      /* §opsVan (Q44) · a seat trip on a route with a private van is a No-Transfer seat; sending the old zone back is 400 private_van_transfer */
+      var zone = O.vanZone ? O.vanZone(bk, t, bk.id) : t.zone;
+      if(zone) o.zone = zone;
       var pk = pickupSplit(t.pickupTime);            // §opsPickup · a trip is sent whole: a field left out is cleared
       if(!pk) throw new Error('Pickup time "' + t.pickupTime + '" on ' + t.date + ' is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
       Object.assign(o, pk);
