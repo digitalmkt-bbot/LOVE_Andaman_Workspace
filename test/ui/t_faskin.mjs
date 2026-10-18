@@ -52,6 +52,25 @@ if (b.r1.dh && b.r1.steps === 6 && b.r1.now && b.r1.next && b.r1.parts && b.r1.m
 if (b.r2.pill === 'Done' && b.r2.allDone === 6 && b.r2.photos && b.r2.doneTag && b.r2.noClose) ok('8 Maintenance · งานที่ปิดแล้ว: ป้าย Done · 6 ขั้นเสร็จ · การ์ดรูป "photos can still be added" · ไม่มีปุ่ม Close'); else fail('8 ' + JSON.stringify(b.r2));
 if (b.r3.view === 'view-fl-work' && b.r3.item === 'dn:' + b.dnId && b.r3.boat === b.dnBoat) ok('9 Open in Fleet Work → ไปหน้า Fleet Work พร้อมเลือกเรือและงานนั้น'); else fail('9 ' + JSON.stringify(b.r3));
 function FLW_ST_T(p){ return ['Reported','Job open','Waiting','Repairing','To close','Billing'].indexOf(p) >= 0 ? p : null; }
+
+// §jaBoat · ตัวกรองเรือในหน้า Job Assignment
+await goView(page, 'fl-incident', 800);
+const c = await page.evaluate(async () => {
+  const zz = ms => new Promise(f => setTimeout(f, ms));
+  const V = document.getElementById('view-fl-incident');
+  incResetFilters(); await zz(300);
+  const btn = V.querySelector('button[onclick="incToggleFilterPanel()"]'); btn.click(); await zz(300);
+  const chips = [...V.querySelectorAll('button[onclick^="incSetBoat("]')].filter(b => !/incSetBoat\('all'\)/.test(b.getAttribute('onclick')));
+  const pick = chips[0]; const bid = pick.getAttribute('onclick').match(/'([^']+)'/)[1]; const n = +pick.querySelector('i').textContent;
+  pick.click(); await zz(300);
+  const rows = [...document.querySelectorAll('#view-fl-incident .fj-row')];
+  const okBoat = rows.every(r => { const id = (r.getAttribute('onclick').match(/'([^']+)'/) || [])[1]; const inc = FL_INCIDENTS.find(x => x.id === id); return inc && inc.boatId === bid; });
+  const clear = !!V.querySelector('a[onclick="incResetFilters()"]');
+  incResetFilters(); await zz(300);
+  return { chips: chips.length, n, rows: rows.length, okBoat, clear, after: document.querySelectorAll('#view-fl-incident .fj-row').length };
+});
+if (c.chips > 1 && c.rows === c.n && c.okBoat && c.clear && c.after > c.rows) ok(`11 JA · Boat ▾ กาง ${c.chips} ลำ · เลือก 1 ลำ เหลือ ${c.rows} แถว (ตรงตัวนับ) ทุกแถวเป็นเรือนั้น · Clear คืนค่า`); else fail('11 ' + JSON.stringify(c));
+
 const errs = errors.filter(e => !/404/.test(e));
 if (errs.length) fail('errors: ' + errs.join(' | ')); else ok('10 ไม่มี error');
 await close(); console.log(bad ? `FAIL ${bad}` : 'PASS'); process.exit(bad ? 1 : 0);

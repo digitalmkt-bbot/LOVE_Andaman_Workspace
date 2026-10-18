@@ -21611,6 +21611,11 @@ function flSaveCreateJob(){
 // ── INCIDENT ──
 let _incStFilter='all', _selIncId=null, _incArchiveTab='active';
 var _incQ='';   /* §faSkin · ช่องค้นหา (เลข · ชื่อ · เรือ) */
+/* §jaBoat (2026-10-18) · เจ้าของ: "JOB ASSIGNMENT ขอ Filter กรองเรือ" · แบบเดียวกับหน้า Maintenance · ปุ่ม Filter ▾ กางเม็ดเรือ (นับจากแท็บที่ดูอยู่) */
+var _incBoatFilter='all', _incFilterExpand=false;
+function incSetBoat(v){ _incBoatFilter=v||'all'; flRenderIncident(); }
+function incToggleFilterPanel(){ _incFilterExpand=!_incFilterExpand; flRenderIncident(); }
+function incResetFilters(){ _incStFilter='all'; _incBoatFilter='all'; _incQ=''; flRenderIncident(); }
 function incSetQ(v){ _incQ=String(v||''); clearTimeout(window._incQT); window._incQT=setTimeout(function(){ flRenderIncident(); var q=document.getElementById('fj-inc-q'); if(q){ q.focus(); try{ q.setSelectionRange(q.value.length,q.value.length); }catch(_){} } },160); }
 function incTile(k){ if(k==='resolved'){ _incArchiveTab='archive'; _incStFilter='all'; } else { _incArchiveTab='active'; _incStFilter=(_incStFilter===k)?'all':k; } flRenderIncident(); }
 
@@ -21729,6 +21734,7 @@ function flRenderIncident(){
   else if(_incStFilter==='resolved')incs=incs.filter(x=>effStatus(x)==='resolved');
   else if(_incStFilter==='unlinked')incs=incs.filter(x=>!x.maintId);   /* §faSkin · แถบ "Unlinked" */
   if(_incQ.trim()){ const q=_incQ.trim().toLowerCase(); incs=incs.filter(x=>{ const b=getBoat(x.boatId); return [x.no,x.title,x.detail,b&&b.name].filter(Boolean).join(' ').toLowerCase().indexOf(q)>=0; }); }
+  if(_incBoatFilter!=='all') incs=incs.filter(x=>String(x.boatId||'')===_incBoatFilter);   /* §jaBoat */
   incs.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const SEV_STYLE={
@@ -21824,6 +21830,13 @@ function flRenderIncident(){
     listHtml=(o.length?grp('Open · no job yet','decide: open a job, quick fix, or dismiss',o.length)+o.map(fjRow).join(''):'')+(r.length?grp('In progress','a job is open for it',r.length)+r.map(fjRow).join(''):'');
   } else listHtml=grp('Resolved','closed · newest first',incs.length)+incs.map(fjRow).join('');
   const fc=(val,label,n)=>`<button type="button" class="fj-fc${_incStFilter===val?' on':''}" onclick="incFilterSt('${val}')">${label}${n!=null?` <i>${n}</i>`:''}</button>`;
+  /* §jaBoat · เรือที่มีรายการในแท็บนี้ (ก่อนกรองเรือ) · เรียงตามจำนวน · สีประจำลำตอนเลือก */
+  const _baseInc=(_incArchiveTab==='archive')?allArchiveInc:allActiveInc, _bCnt={};
+  _baseInc.forEach(x=>{ if(x.boatId) _bCnt[x.boatId]=(_bCnt[x.boatId]||0)+1; });
+  const _boats=Object.keys(_bCnt).map(bid=>{ const bb=getBoat(bid); return {id:bid,name:bb?bb.name:bid,n:_bCnt[bid]}; }).sort((a,b)=>b.n-a.n);
+  const _advN=(_incBoatFilter!=='all')?1:0, _anyF=_incStFilter!=='all'||_advN>0||!!_incQ.trim();
+  const _boatFa=_boats.map(bb=>{ const c=(typeof getBoatColor==='function')?getBoatColor(bb.id):null; const on=_incBoatFilter===bb.id; return `<button type="button" class="fj-fc${on?' on':''}" style="${on&&c?'background:'+c.text+';border-color:'+c.text:''}" onclick="incSetBoat('${fjE(bb.id)}')">${fjE(bb.name)} <i>${bb.n}</i></button>`; }).join('');
+  const _advFa=_incFilterExpand?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 14px;border-bottom:1px solid #ECEBE6;background:#F7F7F5"><span class="fj-kick" style="font-size:10px;width:34px">Boat</span><button type="button" class="fj-fc${_incBoatFilter==='all'?' on':''}" onclick="incSetBoat('all')">All <i>${_baseInc.length}</i></button>${_boatFa}</div>`:'';
   const subFilterFa=(_incArchiveTab==='active')
     ? fc('all','All',allActiveInc.length)+fc('open','Open',cntOpen)+fc('inprogress','In progress',cntPending+cntInProgress)+fc('unlinked','Unlinked',allActiveInc.filter(x=>!x.maintId).length)
     : fc('all','All',allArchiveInc.length)+fc('resolved','Resolved',allArchiveInc.length);
@@ -21831,7 +21844,8 @@ function flRenderIncident(){
     <div style="display:flex;align-items:center;gap:8px;padding:12px 14px 10px;border-bottom:1px solid #ECEBE6"><span class="fj-kick">Incidents</span><span class="mono" style="font-size:11px;color:#5B6170">${incs.length} / ${totalInc}</span>
       <label class="fj-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="fj-inc-q" aria-label="Search incidents" placeholder="Search · no · boat" value="${fjE(_incQ)}" oninput="incSetQ(this.value)"></label></div>
     <div class="fj-seg"><button type="button" class="${_incArchiveTab==='active'?'on':''}" onclick="incSetArchive('active')">Active <i>${allActiveInc.length}</i></button><button type="button" class="${_incArchiveTab==='archive'?'on':''}" onclick="incSetArchive('archive')">Archive <i>${allArchiveInc.length}</i></button></div>
-    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">${subFilterFa}</div>
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid #ECEBE6;flex-wrap:wrap;align-items:center">${subFilterFa}<button type="button" class="fj-fc${(_incFilterExpand||_advN)?' on':''}" style="margin-left:auto" onclick="incToggleFilterPanel()">Boat${_advN?` <i>1</i>`:''} ${_incFilterExpand?'▴':'▾'}</button>${_anyF?`<a style="font-size:11.5px;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="incResetFilters()">Clear</a>`:''}</div>
+    ${_advFa}
     <div class="fj-list">${listHtml}</div>
     <div class="fj-foot"><span><b class="mono" style="font-weight:500;color:#0F1B3D">${cntActive}</b> active</span><span><b class="mono" style="font-weight:500;color:${cntUnlinked?'#8E2019':'#0F1B3D'}">${allActiveInc.filter(x=>!x.maintId).length}</b> without a job</span><a onclick="flNavGo('fl-work')">Fleet Work ›</a></div>
   </div>`;
