@@ -450,7 +450,7 @@
       return e && e.loaded ? '' : out;
     };
   }
-  O.pier.dayBoats = { want: wantBoats, boat: boatOf };
+  O.pier.dayBoats = { want: wantBoats, boat: boatOf, fleet: fleetOf };   // w4-f2: fleet (permits on the card) is read by 74-ops-permits.js
 
   O.pierJob = { state: st, loadDay: loadDay };
 })();
