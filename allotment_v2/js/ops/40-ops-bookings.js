@@ -277,7 +277,30 @@
       pierNote: pierNoteFrom(x.pier_note || x.pierNote), checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
     /* check-in state: same mapping as the write path (36-ops-day-actions applyServerCheckins) -> pierCheckin / vanCheckin */
     if(O.applyCheckins) O.applyCheckins(r, x);
+    var vs = vanSplitsFrom(r.vanParts);
+    if(vs) r.vanSplits = vs;
     return r;
+  }
+  /* §opsVanSplits (Q40) · the server's van_parts → legacy's ops.vanSplits, only when the trip is split (more than one part,
+     or the one part is not the main one). opsIdx is the server's part idx: the array position may differ from it, so every
+     write to a part sends opsIdx. The browser no longer builds or heals the splits (34-ops-vans.js stops those in ops mode). */
+  function vanSplitsFrom(parts){
+    if(!Array.isArray(parts) || !parts.length) return null;
+    if(parts.length === 1 && (parts[0].source || 'main') === 'main') return null;
+    return parts.map(function(p){
+      var ad = +p.ad || 0, chd = +p.chd || 0, inf = +p.inf || 0, foc = +p.foc || 0, g = p.group || null, a = p.alt || {};
+      var s = { opsIdx: +p.idx || 0, pax: ad + chd + inf + foc, ad: ad, chd: chd, inf: inf, foc: foc,
+        vanGroup: g ? (+g.number || 0) : 0, vanId: g ? (g.van_id || null) : null, vanSeq: +p.sequence || 0,
+        vanReturnId: p.return_van_id || (g && g.return_van_id) || null };
+      if(p.source === 'main') s.main = true;
+      if(p.source === 'alt_pickup'){
+        s.fromAlt = true;
+        s.pickAreaId = a.pick_area_id || ''; s.pickHotel = a.pick_hotel || ''; s.pickZone = a.pick_zone || '';
+        s.dropAreaId = a.drop_area_id || ''; s.dropHotel = a.drop_hotel || ''; s.dropZone = a.drop_zone || '';
+        s.pickTime = a.pick_time || ''; s.altWho = a.alt_who || '';
+      }
+      return s;
+    });
   }
   function tripFrom(t){
     var g = function(c, s){ return t[c] !== undefined ? t[c] : t[s]; };
