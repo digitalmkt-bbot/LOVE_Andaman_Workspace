@@ -1486,7 +1486,7 @@
     if(/^GSA|^DOS/i.test(n)) return 'sales';
     if(/^CRS|^ACC/i.test(n)) return 'acct';
     return 'other'; }
-  function laDeptOf(u){ return u.dept || laGuessDept(u); }
+  function laDeptOf(u){ return u.deptEffective || u.dept || laGuessDept(u); }   // w5-a: deptEffective = the server's dept_effective (GET /v1/users); the guess stays for the add-user hint and offline
   // Per-area state: 0 = ไม่มีสิทธิ์ · 1 = ดูอย่างเดียว · 2 = แก้ไขได้
   function laAreaState(u, area){
     if(u.role==='admin') return 2;

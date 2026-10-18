@@ -93,7 +93,7 @@
   function toRow(u){
     var perms=Array.isArray(u.view_perms)?u.view_perms.concat(u.actions||[]):null;
     remember(u);
-    return { id:u.id, username:u.username, name:u.name||'', role:u.role||'staff', dept:u.dept||'',
+    return { id:u.id, username:u.username, name:u.name||'', role:u.role||'staff', dept:u.dept||'', deptEffective:u.dept_effective||'',   // w5-a: the server's department (stored dept, else its guess from the name)
       salesId:u.sales_id||'', agentId:u.agent_id||'', perms:perms,
       editAreas:Array.isArray(u.edit_areas)?u.edit_areas.slice():null };
   }
