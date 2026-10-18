@@ -497,6 +497,232 @@ section('5', async () => {
   ok('a staff trip the server says is free (internal_free true): the label stays, though the local total is 500', s2.text === 'FOC · Welfare' && s2.legacy !== 'FOC · Welfare', s2);
 });
 
+// ═══ 6 · agents: Recent Bookings summary, promo coverage, bulk programme fill ═══
+section('6', async () => {
+  console.log('\n[6] agSumRows / agSumBlock <- booking-summary · agTabPrices <- promo-coverage · agProgBulkPlan / agProgBulkApply <- programs-fill-plan, programs-fill');
+  await goView('agents'); await settle(600);
+  await ev(() => laOps.srv.clear());
+  // ── Recent Bookings
+  const histOf = () => ev(() => { const a = sbGetAgent('a01'); return agTabHist(a); });
+  const n0 = calls.length;
+  await histOf();
+  ok('the Recent Bookings tab asks GET /v1/agents/{id}/booking-summary?by=travel', await waitCalls(/^GET \/v1\/agents\/a01\/booking-summary\?by=travel 200/, 8000), callsMatch(/booking-summary/, n0));
+  await settle(400);
+  const srvS = await api('/v1/agents/a01/booking-summary?by=travel');
+  const h1 = await histOf();
+  const cells = (h) => Array.from(h.matchAll(/<td class="n sum"><b>(\d+)<\/b><i>&#3647;([\d,]+)<\/i><\/td>/g)).map((m) => [+m[1], +m[2].replace(/,/g, '')]);
+  const foot = cells(h1).pop();
+  ok('the totals row of the month x programme table = the server\'s live totals (heads and baht)', foot && foot[0] === srvS.totals.live.pax && foot[1] === srvS.totals.live.baht, { foot, totals: srvS.totals });
+  ok('...one month row per server month', srvS.months.every((m) => h1.includes('<td class="m">' + m.month + '</td>')), srvS.months.map((m) => m.month));
+  tamper = [{ re: /\/booking-summary/, fn: (j) => { j.months = [{ month: '2031-01', live: {}, cancelled: {}, routes: [{ route_id: 'r5', live: { bookings: 4, pax: 123, baht: 45600 }, cancelled: { bookings: 1, pax: 9, baht: 800 } }, { route_id: 'r4', live: { bookings: 1, pax: 7, baht: 700 }, cancelled: { bookings: 0, pax: 0, baht: 0 } }] }]; j.totals = {}; } }];
+  await ev(() => laOps.srv.clear()); await histOf(); await settle(1500);
+  const h2 = await histOf();
+  ok('tampered summary (2031-01: r5 123 heads / 45,600 baht, r4 7 heads, 9 cancelled): the table shows the server\'s month and figures', h2.includes('<td class="m">2031-01</td>') && /<b>123<\/b><i>&#3647;45,600<\/i>/.test(h2) && /<b>130<\/b><i>&#3647;46,300<\/i>/.test(h2) && /<b>9<\/b><i>&#3647;800<\/i>/.test(h2), cells(h2));
+  ok('...the view switch "วันที่จอง" stays enabled (the server answers the other view on request)', /onclick="agSumSetMode\('a01','booked'\)"/.test(h2), null);
+  tamper = [];
+  await ev(() => laOps.srv.clear());
+  const nB = calls.length;
+  await ev(() => { _agSumMode = 'booked'; agTabHist(sbGetAgent('a01')); });
+  ok('the "booked" view asks by=booked', await waitCalls(/booking-summary\?by=booked 200/, 8000), callsMatch(/booking-summary/, nB));
+  await ev(() => { _agSumMode = 'travel'; });
+
+  // ── Pricing Matrix: promotions over the standard rate
+  const pricesOf = () => ev(() => agTabPrices(sbGetAgent('a01')));
+  const n1 = calls.length;
+  await pricesOf();
+  ok('the Pricing Matrix tab asks GET /v1/agents/{id}/promo-coverage', await waitCalls(/^GET \/v1\/agents\/a01\/promo-coverage 200/, 8000), callsMatch(/promo-coverage/, n1));
+  await settle(400);
+  const p1 = await pricesOf();
+  ok('(no promotion in the seed) the block says 0 ใบ and lists no route row', /โปรโมชั่นที่ทับเรทมาตรฐาน<span[^>]*>0 ใบ<\/span>/.test(p1) && !/border-radius:6px[^>]*>PROMO /.test(p1), p1.match(/โปรโมชั่นที่ทับ[^]{0,200}/));
+  tamper = [{ re: /\/promo-coverage/, fn: (j) => {
+    j.promos = 2; j.covered_routes = 1; j.skipped_routes = 1;
+    j.routes = [{ route_id: 'r5', route_name: 'Similan Islands by Speedboat', status: 'promo', mismatch: false, contract_id: 'c1', discounted_price_by_zone: null,
+      covered: [{ contract_id: 'c1', version: 'W6-PROMO', price_mode: 'rate', rate_type_id: 'rt002', rate_type_code: 'RT002', book_from: '2031-01-01', book_to: '2031-02-01', travel_from: '2031-03-01', travel_to: '2031-04-01', has_rate: true, prices_by_zone: {} }],
+      skipped: [{ contract_id: 'c2', version: 'W6-DEAD', price_mode: 'rate', rate_type_id: 'rt009', rate_type_code: 'RT009', book_from: null, book_to: null, travel_from: '2031-05-01', travel_to: '2031-06-01', has_rate: false, prices_by_zone: {} }] }];
+  } }];
+  await ev(() => laOps.srv.clear()); await pricesOf(); await settle(1500);
+  const p2 = await pricesOf();
+  ok('tampered coverage: the covering promo shows as a PROMO tag with its dates, and the skipped one as the red warning naming its rate', /PROMO W6-PROMO/.test(p2) && /2 ใบ/.test(p2) && /1 route โปรไม่มีราคา/.test(p2) && /RT009/.test(p2) && /ไม่มีราคาของ route นี้/.test(p2), p2.match(/โปรโมชั่นที่ทับ[^]{0,600}/));
+  ok('...and the rest of the page is untouched (the rate type table still follows)', /Pricing Matrix/.test(p2) && p2.length > p1.length - 3000, [p1.length, p2.length]);
+  tamper = [];
+  await ev(() => laOps.srv.clear());
+
+  // ── bulk programme fill
+  const planOf = () => ev(() => { const P = agProgBulkPlan(); return { empty: P.empty.map((x) => [x.a.id, x.add.join('+')]), partial: P.partial.map((x) => [x.a.id, x.add.join('+')]), mismatch: P.mismatch.map((x) => [x.a.id, x.drop.join('+')]), nEmpty: P.nEmpty, nPartial: P.nPartial }; });
+  const n2 = calls.length;
+  await planOf();
+  ok('the rate admin panel asks GET /v1/agents/programs-fill-plan', await waitCalls(/^GET \/v1\/agents\/programs-fill-plan 200/, 8000), callsMatch(/programs-fill-plan/, n2));
+  await settle(400);
+  const srvP = await api('/v1/agents/programs-fill-plan');
+  const pl1 = await planOf();
+  ok('agProgBulkPlan = the server\'s heaps: empty, partial (agent + routes to add), mismatch, and the route totals', JSON.stringify(pl1.partial) === JSON.stringify(srvP.partial.map((r) => [r.agent_id, r.add.join('+')])) && JSON.stringify(pl1.empty) === JSON.stringify(srvP.empty.map((r) => [r.agent_id, r.add.join('+')])) && pl1.nPartial === srvP.totals.partial.routes && pl1.nEmpty === srvP.totals.empty.routes, { pl1, srvP });
+  tamper = [{ re: /\/programs-fill-plan/, fn: (j) => { j.empty = [{ agent_id: 'a01', code: 'SUNTOUR', name: 'Sun Tour', rate_type_id: 'rt001', add: ['r4', 'r10', 'r5'] }]; j.partial = []; j.mismatch = [{ agent_id: 'a_b2c', code: 'B2C', name: 'B2C Website', drop: ['r10'] }]; j.totals = { empty: { agents: 1, routes: 3 }, partial: { agents: 0, routes: 0 }, mismatch: { agents: 1 } }; } }];
+  await ev(() => laOps.srv.clear()); await planOf(); await settle(1500);
+  const pl2 = await planOf();
+  ok('tampered plan (a01 empty, +3 routes; b2c has a route the rate does not price): the heaps and totals follow it', JSON.stringify(pl2.empty) === '[["a01","r4+r10+r5"]]' && pl2.partial.length === 0 && JSON.stringify(pl2.mismatch) === '[["a_b2c","r10"]]' && pl2.nEmpty === 3 && pl2.nPartial === 0, pl2);
+  tamper = [];
+  await ev(() => laOps.srv.clear());
+  await planOf(); await settle(1200);
+  const n3 = bodies.length;
+  await ev(() => { _agProgBulkScope = 'partial'; agProgBulkApply(); });
+  await waitCalls(/^POST \/v1\/agents\/programs-fill 200/, 8000); await idle(); await settle(800);
+  const ap = reqOf(/POST \/v1\/agents\/programs-fill/, n3).pop();
+  ok('"fill" is one command: POST /v1/agents/programs-fill { scope } (no agent or route lists sent)', ap && ap.status === 200 && JSON.stringify(ap.req) === '{"scope":"partial"}', ap);
+  const a01 = await api('/v1/agents/a01');
+  const scr = await ev(() => sbGetAgent('a01').programs.slice().sort());
+  ok('server: a01 now has the priced routes; the screen\'s agent holds the same programmes', a01.programs.map((p) => p.route_id || p).sort().join() === scr.join() && scr.includes('r4'), { srv: a01.programs, scr });
+  const after = await api('/v1/agents/programs-fill-plan');
+  ok('server: nothing is left to fill', after.partial.length === 0 && after.empty.length === 0, after);
+});
+
+// ═══ 7 · booking form and lists: charter figures, private-van zone, lock badge, No-Transfer area, fee add-ons, add-on links, hotel names ═══
+section('7', async () => {
+  console.log('\n[7] charter confirmation <- quote warnings · private van zone <- quote trips[].zone · locked_exact · no-transfer area · add_ons[].fee · addon_of / addon_lines · hotel names');
+  await goView('booking'); await settle(500);
+  await ev((d) => bookingV2EnsureOpsRange({ from: d, to: d, refresh: true }), DAY); await idle(); await settle(800);
+  const form = (o) => ev((o) => {
+    bookingV2NewBooking();
+    const d = _bkV2.newBooking;
+    bookingV2SetBookingField('agentId', 'a01');
+    Object.assign(d, { leadPax: 'ZZ W6 FORM', leadNationality: 'RU', leadPhone: '+7 900 000', hotelName: '', voucherRef: '' });
+    d.pickupZoneFilter = 'NoTransfer'; d.pickupSelf = true; d.guides = { english: true, russian: false, chinese: false, otherLang: '' };
+    d.trips = [Object.assign(bookingV2NewTrip(), Object.assign({ routeId: 'r5', date: o.date, pax: { ad_fr: 2 }, zone: 'PK' }, o.trip || {}))];
+    bookingV2Render();
+  }, o);
+  // ── charter displacement
+  await form({ date: DAY, trip: { bookingMode: 'charter' } });
+  const n0 = bodies.length;
+  await ev(() => bookingV2SetTripCharterBoat(0, 'b6'));
+  const seats = await ev(() => ({ confirm: typeof _bkV2CharterConfirm !== 'undefined' && !!_bkV2CharterConfirm, c: typeof _bkV2CharterConfirm !== 'undefined' && _bkV2CharterConfirm ? { seats: _bkV2CharterConfirm.seatsConsumed, oversold: _bkV2CharterConfirm.oversold } : null }));
+  ok('picking a charter boat on a day with seats sold opens legacy\'s confirmation (seed: seats are sold on r5)', seats.confirm, seats);
+  ok('...and asks POST /v1/quote with the boat on the trip', await waitCalls(/^POST \/v1\/quote/, 8000) && reqOf(/POST \/v1\/quote/, n0).some((q) => q.req.trips && q.req.trips[0] && q.req.trips[0].charterBoatId === 'b6'), reqOf(/POST \/v1\/quote/, n0));
+  await settle(900);
+  const c1 = await ev(() => _bkV2CharterConfirm && { seats: _bkV2CharterConfirm.seatsConsumed, after: _bkV2CharterConfirm.availAfter, oversold: _bkV2CharterConfirm.oversold });
+  const srvQ = (await api('/v1/quote', { method: 'POST', body: JSON.stringify({ agentId: 'a01', trips: [{ routeId: 'r5', date: DAY, pax: { ad_fr: 2 }, zone: 'PK', bookingMode: 'charter', charterBoatId: 'b6' }] }) }));
+  const w = (srvQ.warnings || []).find((x) => x.code === 'charter_displaces_seats');
+  ok('the confirmation follows the server: with a displacement its seats sold / left / oversold, without one "still ok" (oversold 0)', w ? (c1.seats === w.seats_sold && c1.after === w.available_after && c1.oversold === w.oversold_by) : (c1.oversold === 0), { c1, w });
+  await ev(() => bookingV2CancelCharterConfirm());
+  tamper = [{ method: 'POST', re: /\/v1\/quote$/, fn: (j) => { j.warnings = [...(j.warnings || []).filter((x) => x.code !== 'charter_displaces_seats'), { code: 'charter_displaces_seats', trip: 0, route_id: 'r5', service_date: '2026-12-08', boat_ids: ['b6'], seats_sold: 55, available_after: 3, oversold_by: 11, message: 'W6 displaces' }]; } }];
+  await ev(() => bookingV2SetTripCharterBoat(0, 'b6')); await settle(1500);
+  const c2 = await ev(() => ({ c: _bkV2CharterConfirm && { seats: _bkV2CharterConfirm.seatsConsumed, after: _bkV2CharterConfirm.availAfter, oversold: _bkV2CharterConfirm.oversold }, busy: laOps.busy(), modal: document.body.innerHTML.includes('CHARTER CONFIRMATION'), tab: _bkV2.tab, nb: !!_bkV2.newBooking, text: (document.body.innerHTML.match(/OVERSOLD by \d+|Capacity oversold by \d+ seats?/g) || []) }));
+  ok('tampered warning (55 sold, 3 left, oversold by 11): the dialog says OVERSOLD by 11 with those figures', c2.c && c2.c.seats === 55 && c2.c.after === 3 && c2.c.oversold === 11 && c2.text.some((t) => /by 11/.test(t)), c2);
+  tamper = [];
+  await ev(() => { bookingV2CancelCharterConfirm(); _bkV2.newBooking = null; bookingV2Render(); });
+
+  // ── private van: the zone the quote priced
+  await form({ date: DAY, trip: { zone: 'PK' } });
+  const z0 = await ev(() => { bookingV2ToggleAddOn('transfer-r5-PK-van'); return _bkV2.newBooking.trips[0].zone; });
+  ok('toggling a private van does not write NoTransfer into the trip itself any more (legacy did)', z0 === 'PK', z0);
+  ok('...the quote asked leaves the zone out of the trip, and its answer puts the server\'s zone in the form (NoTransfer)', await waitFor(() => _bkV2.newBooking && _bkV2.newBooking.trips[0].zone === 'NoTransfer', null, 12000), await ev(() => _bkV2.newBooking.trips[0].zone));
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+  await form({ date: DAY, trip: { zone: 'PK', pax: { ad_fr: 3 } } });
+  tamper = [{ method: 'POST', re: /\/v1\/quote$/, fn: (j) => { for (const t of j.trips || []) t.zone = 'KL'; } }];
+  await ev(() => { _bkV2.newBooking.addOns = [{ type: 'transfer-r5-PK-van', qty: 1 }]; bookingV2Render(); });
+  ok('tampered quote zone (KL): the form shows the zone the server priced', await waitFor(() => _bkV2.newBooking && _bkV2.newBooking.trips[0].zone === 'KL', null, 12000), await ev(() => _bkV2.newBooking.trips[0].zone));
+  tamper = [];
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+
+  // ── lock badge
+  const lockOf = () => ev((d) => ({ shown: bookingV2DayLockedExact(d), legacy: bookingV2DayLockedExact.__orig(d) }), DAY);
+  await ev(() => laOps.srv.clear());
+  await lockOf(); await settle(1200);
+  const l0 = await lockOf();
+  const cal = await api('/v1/bookings/calendar?month=' + DAY.slice(0, 7) + '&kind=marine');
+  ok('bookingV2DayLockedExact = the calendar answer\'s locked_exact (seed: no lock)', l0.shown === cal.days.find((d) => d.date === DAY).locked_exact, { l0, cal: cal.days.find((d) => d.date === DAY) });
+  tamper = [{ re: /\/v1\/bookings\/calendar/, fn: (j) => { for (const d of j.days) if (d.date === '2026-12-08') d.locked_exact = 77; } }];
+  await ev(() => laOps.srv.clear()); await lockOf(); await settle(1200);
+  const l1 = await lockOf();
+  ok('tampered day (77 seats locked): the badge number is 77 where the locks the browser holds give 0', l1.shown === 77 && l1.legacy === 0, l1);
+  tamper = [];
+  await ev(() => laOps.srv.clear());
+
+  // ── No-Transfer pickup area
+  await form({ date: DAY, trip: { zone: 'PK' } });
+  const n1 = calls.length;
+  await ev(() => bookingV2SetPickupZone('NoTransfer'));
+  ok('choosing the No-Transfer zone asks GET /v1/pickup-areas/no-transfer?route_id=r5', await waitCalls(/^GET \/v1\/pickup-areas\/no-transfer\?route_id=r5 200/, 8000), callsMatch(/no-transfer/, n1));
+  await ev(() => { _bkV2.newBooking.pickupAreaId = null; _bkV2.newBooking.pickupZoneFilter = 'PK'; });
+  tamper = [{ re: /\/v1\/pickup-areas\/no-transfer/, fn: (j) => { j.area = { id: 'w6_nt_area', name: 'W6 Pier NT', zone: 'NoTransfer', no_transfer: true, pier: 'tublamu' }; } }];
+  await page.evaluate(() => { try { laOps.wrote('pickup'); } catch (_) {} });
+  await ev(() => bookingV2SetPickupZone('NoTransfer'));
+  ok('tampered area: the form picks the server\'s area (W6 Pier NT) for the route\'s pier', await waitFor(() => _bkV2.newBooking && _bkV2.newBooking.pickupAreaId === 'w6_nt_area', null, 8000), await ev(() => _bkV2.newBooking.pickupAreaId));
+  tamper = [];
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
+
+  // ── fee add-ons and the add-on link, kept from the booking read
+  tamper = [{ re: new RegExp('/v1/bookings/' + bk.p1.id + '$'), fn: (j) => { j.add_ons = [{ type: 'foo-plain', label: 'Foo', amount: 10, qty: 1, fee: true }, { type: 'b2c-ad-x', label: 'Fee line', amount: 5, qty: 1, fee: false }]; j.addon_lines = [{ booking_id: bk.p8.id, code: 'W6L', lead_pax: 'W5 EIGHT', voucher_ref: 'V-1', add_ons: [] }]; } },
+            { re: new RegExp('/v1/bookings/' + bk.p8.id + '$'), fn: (j) => { j.addon_of = bk.p1.id; } }];
+  await ev(() => Promise.all([laOps.bookings.reload('zz-p1'), laOps.bookings.reload('zz-p8')])); await settle(900);
+  const fa = await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-p1'); return { adds: b.addOns.map((a) => [a.type, a.fee, bookingV2IsB2CFeeAddOn(a), bookingV2IsB2CFeeAddOn.__orig(a)]) }; });
+  ok('the fee flag of each add-on line is the server\'s: a plain type flagged fee is a fee line, a b2c-ad line the server says is not, is not (legacy\'s name test says the opposite)', JSON.stringify(fa.adds) === JSON.stringify([['foo-plain', true, true, false], ['b2c-ad-x', false, false, true]]), fa);
+  const lk = await ev(() => { const p8 = SB_BOOKINGS.find((x) => x.id === 'zz-p8'), p1 = SB_BOOKINGS.find((x) => x.id === 'zz-p1'); const to = bkB2CAddonTo(p8), of = bkB2CAddonsOf('zz-p1'); return { to: to && to.bk.id, ofIds: of.map((x) => x.id), legacyTo: bkB2CAddonTo.__orig(p8) && 1 }; });
+  ok('bkB2CAddonTo / bkB2CAddonsOf follow addon_of / addon_lines of the booking reads (legacy matches voucher numbers in notes and finds nothing)', lk.to === 'zz-p1' && JSON.stringify(lk.ofIds) === '["zz-p8"]' && !lk.legacyTo, lk);
+  tamper = [];
+  await ev(() => Promise.all([laOps.bookings.reload('zz-p1'), laOps.bookings.reload('zz-p8')])); await settle(600);
+
+  // ── hotel names: zone tier, the near match, the canonical spelling
+  await form({ date: DAY, trip: { zone: 'PK' } });
+  const hn0 = calls.length;
+  await ev(() => bookingV2HotelNameList('PK'));
+  ok('the zone tier asks GET /v1/hotel-names?zone=PK', await waitCalls(/^GET \/v1\/hotel-names\?zone=PK 200/, 8000), callsMatch(/hotel-names/, hn0));
+  tamper = [{ re: /\/v1\/hotel-names\?zone=PK/, fn: (j) => { j.names = [{ name: 'W6 Hotel B', count: 2 }, { name: 'W6 Hotel A', count: 1 }]; } }];
+  await ev(() => laOps.srv.clear()); await ev(() => bookingV2HotelNameList('PK')); await settle(1200);
+  const l = await ev(() => ({ zone: bookingV2HotelNameList('PK'), legacy: bookingV2HotelNameList.__orig('PK') }));
+  ok('tampered zone list: the two names, sorted (legacy lists the hotels of the bookings the browser holds)', JSON.stringify(l.zone) === '["W6 Hotel A","W6 Hotel B"]' && JSON.stringify(l.legacy) !== JSON.stringify(l.zone), l);
+  tamper = [{ re: /\/v1\/hotel-names\?near=/, fn: (j) => { j.near_match = { name: 'W6 Match Hotel', score: 0.91 }; j.canonical = 'W6 Canon Hotel'; } }];
+  await ev(() => laOps.srv.clear());
+  await ev(() => { bookingV2HotelNear('W6 Hotal Xyz', null, '', 'PK'); bookingV2CanonicalHotel('w6  hotal xyz'); }); await settle(1500);
+  const nr = await ev(() => ({ near: bookingV2HotelNear('W6 Hotal Xyz', null, '', 'PK'), canon: bookingV2CanonicalHotel('w6  hotal xyz') }));
+  ok('tampered near match (91% to "W6 Match Hotel") and canonical spelling: the commit\'s duplicate question and snap use them', nr.near && nr.near.name === 'W6 Match Hotel' && nr.near.score === 0.91 && nr.canon === 'W6 Canon Hotel', nr);
+  const reqNear = callsMatch(/hotel-names\?near=/, hn0);
+  ok('...the near question carries the typed name and the zone only', reqNear.some((c) => /near=W6(%20|\+)Hotal(%20|\+)Xyz/.test(c) && /zone=PK/.test(c)), reqNear);
+  tamper = [];
+  await ev(() => { _bkV2.newBooking = null; bookingV2Render(); laOps.srv.clear(); });
+});
+
+// ═══ 8 · reports: the City Tour cancellation page, By-trip boat figures ═══
+section('8', async () => {
+  console.log('\n[8] bookingV2RenderCancelReport (land) <- cancellations?land · bookingV2RenderTab2 boats <- by-trip routes[].boats');
+  await goView('booking'); await settle(500);
+  const month = DAY.slice(0, 7);
+  const repOf = () => ev((m) => { _bkV2.tab = 'cancel'; _bkV2.month = m; _bkV2.newBooking = null; return bookingV2RenderCancelReport(); }, month);
+  await ev(() => laOps.srv.clear());
+  const n0 = calls.length;
+  await ev(() => { _bkV2CityTourOnly = true; });
+  await repOf();
+  ok('the City Tour page asks GET /v1/reports/cancellations?…&land=true', await waitCalls(/^GET \/v1\/reports\/cancellations\?[^ ]*land=true 200/, 8000), callsMatch(/cancellations/, n0));
+  await ev(() => { _bkV2CityTourOnly = false; });
+  await repOf();
+  ok('the marine page asks land=false', await waitCalls(/^GET \/v1\/reports\/cancellations\?[^ ]*land=false 200/, 8000), callsMatch(/cancellations/, n0));
+  const srvLand = await api(`/v1/reports/cancellations?from=${month}-01&to=${month}-31&land=true`);
+  const srvSea = await api(`/v1/reports/cancellations?from=${month}-01&to=${month}-31&land=false`);
+  tamper = [{ re: /\/v1\/reports\/cancellations\?[^ ]*land=true/, fn: (j) => { j.empty = false; j.cancellations = 321; j.cancel_rate_pct = 12.5; j.bookings_in_period = 40; j.partial_cancels = 0; j.pax_cancelled = 654; j.pax_full = 654; j.pax_partial = 0; j.fees = 9876; j.no_shows = 3; j.no_show_rate_pct = 1.1;
+    j.by_reason = [{ code: 'weather', label: 'Weather', group: 'operator', count: 321, pax: 654, fees: 0 }]; j.by_agent = []; j.by_month = [{ month: month, count: 321 }]; j.fault = { customer_pct: 0, operator_pct: 100, other_pct: 0, customer: 0, operator: 321, other: 0 }; } }];
+  await ev(() => laOps.srv.clear());
+  await ev(() => { _bkV2CityTourOnly = true; });
+  await repOf(); await settle(1500);
+  const html = await repOf();
+  ok('tampered City Tour answer (321 cancellations, 654 heads, 9,876 fees): the page shows them', /321/.test(html) && /654/.test(html) && /9,876/.test(html), html.slice(0, 300));
+  ok('...and the marine page is a separate answer (its own count, not 321)', !/>321</.test(await (async () => { await ev(() => { _bkV2CityTourOnly = false; }); await repOf(); await settle(800); return repOf(); })()), { sea: srvSea.cancellations, land: srvLand.cancellations });
+  tamper = [];
+  await ev(() => { _bkV2CityTourOnly = false; _bkV2.tab = 'cal'; laOps.srv.clear(); });
+
+  // ── By-trip boat figures
+  const openDay = async (d) => { await ev((d) => { _bkV2.tab = 'bytrip'; _bkV2.filterDate = d; _bkV2.newBooking = null; try { bookingV2Tab2PickDay(d); } catch (_) {} bookingV2Render(); }, d); await settle(1500); };
+  await openDay(DAY);
+  const chips = () => ev(() => Array.from(document.querySelectorAll('.bt-tbc, .bt-brow')).map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+  const srvBt = await api('/operations/by-trip?date=' + DAY);
+  const r5 = srvBt.routes.find((r) => r.route_id === 'r5');
+  const c0 = await chips();
+  ok('the boat chips show each boat\'s pax / capacity as the by-trip answer gives them', r5.boats.every((b) => c0.some((t) => t.includes(b.boat_name) && t.includes(b.pax + '/' + b.capacity))), { c0, boats: r5.boats });
+  tamper = [{ re: /\/operations\/by-trip\?date=2026-12-08/, fn: (j) => { const r = j.routes.find((x) => x.route_id === 'r5'); r.boats[0].pax = 77; r.boats[0].over = true; r.boats[0].over_by = 5; r.boats[0].capacity = 72; } }];
+  await ev(() => { Object.keys(laOps.byTrip || {}).length; laOps.wrote('w6bytrip'); }); await openDay(DAY); await settle(1200);
+  const c1 = await chips();
+  ok('tampered boat (77 heads on 72 seats, over by 5): the chip says 77/72 +5 and the card counts it as over', c1.some((t) => t.includes(r5.boats[0].boat_name) && t.includes('77/72') && t.includes('+5')) && (await ev(() => !!document.querySelector('.bt-tbc.over, .bt-brow.over'))), c1);
+  tamper = [];
+  await ev(() => { laOps.wrote('w6bytrip'); });
+});
+
 //@@SECTIONS
 
 for (const [name, fn] of todo) {

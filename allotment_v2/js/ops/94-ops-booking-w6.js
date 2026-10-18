@@ -98,7 +98,7 @@
         c.oversold = 0;
         if(c.availAfter < c.seatsConsumed) c.availAfter = c.seatsConsumed;
       }
-      if(typeof window.bookingV2Render === 'function' && !(O.busy && O.busy())) window.bookingV2Render();
+      if(typeof window.bookingV2Render === 'function' && draft() === d) window.bookingV2Render();      // legacy redraws on the pick itself, so the dialog's own redraw does not wait for the focus to leave
     }, function(){});
     return r === undefined ? null : r;
   });
@@ -112,20 +112,25 @@
     /* legacy wrote NoTransfer into the trips itself: the browser no longer decides it. The zone shown is the one it had; the quote's answer
        (trips[].zone) puts the server's zone in, and the form is drawn once more. */
     (d.trips || []).forEach(function(t, i){ if(t && i < zones.length && t.zone !== zones[i]) t.zone = zones[i]; });
+    applyQuotedZones(d);                                  // an answer already held for this draft (a toggle back to an earlier state) puts the zone in at once
     return r === undefined ? null : r;
   });
+  function applyQuotedZones(d){
+    var Q = window.laOpsQuote, cur = Q && Q.answered && Q.answered(), changed = false;
+    if(!cur || !d || !cur.quote || !Array.isArray(cur.quote.trips) || !cur.req || !cur.req.map) return false;
+    cur.req.map.forEach(function(di, ri){
+      var t = d.trips[di], s = cur.quote.trips[ri];
+      if(!t || !s || !s.zone || t.bookingMode === 'charter' || t.ovnLeg) return;
+      if(t.zone !== s.zone){ t.zone = s.zone; changed = true; }
+    });
+    return changed;
+  }
   if(window.laOpsQuote && typeof window.laOpsQuote.onAnswer === 'function'){
     window.laOpsQuote.onAnswer(function(key, req, q){
       try{
         var d = draft(); if(!d || !on() || !q || !Array.isArray(q.trips) || !req || !req.map) return;
         var cur = window.laOpsQuote.answered && window.laOpsQuote.answered(); if(!cur || cur.key !== key) return;
-        var changed = false;
-        req.map.forEach(function(di, ri){
-          var t = d.trips[di], s = q.trips[ri];
-          if(!t || !s || !s.zone || t.bookingMode === 'charter' || t.ovnLeg) return;
-          if(t.zone !== s.zone){ t.zone = s.zone; changed = true; }
-        });
-        if(changed) redrawForm(d);
+        if(applyQuotedZones(d)) redrawForm(d);
       }catch(_){}
     });
   }
