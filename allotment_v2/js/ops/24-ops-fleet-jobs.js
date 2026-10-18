@@ -681,6 +681,7 @@
     var ctx = window._flStartGear; window._flStartGear = null;
     if(typeof window.closeModal === 'function') window.closeModal('fl-modal-start-gear');
     if(!ctx) return null;
+    if(ctx.reentry) return null;       // w5-b: the job is already started (engine row): there is no start to send; the dialog only closes
     var body = { gear: mode === 'stash' ? 'stash' : 'keep' };
     if(mode === 'stash'){
       var sel = document.getElementById('fl-sg-loc');
