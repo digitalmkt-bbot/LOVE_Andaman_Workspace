@@ -119,6 +119,7 @@
       location: primaryLoc,
       primaryLocation: primaryLoc,
       primaryWarehouse: s.primary_warehouse || null,
+      value: s.value != null ? num(s.value) : null,   // F4: quantity x cost, the server's
       belowMin: !!s.below_min,
       linesBelowMin: s.lines_below_min != null ? num(s.lines_below_min) : null,
       lineMins: s.line_mins ? clone(s.line_mins) : null,
@@ -290,6 +291,7 @@
       O.get('/v1/fleet/consumables')
     ]).then(function(res){
       replaceInventory((res[0] && res[0].items) || []);
+      if(O.fleetKpis && res[0]) O.fleetKpis.put('stock', res[0].kpis);   // F4: the strip (its memos block too)
       replaceMemos((res[1] && res[1].memos) || []);
       replaceConsumables((res[2] && res[2].consumables) || []);
       state.loaded = true;
@@ -985,7 +987,11 @@
       if(typeof window.flRenderInventory === 'function') window.flRenderInventory();
       if(typeof window.flShowToast === 'function') window.flShowToast('สร้าง ' + saved.no + ' เรียบร้อย · ฿' + total.toLocaleString());
       return saved;
-    }).catch(function(e){ O.fail(ex ? 'Could not save the memo' : 'Could not create the memo', e); return null; });
+    }).catch(function(e){
+      // F4: 409 part_no_required · the server's own text, then the person picks the part number (76-ops-fleet-kpis.js)
+      if(e && e.code === 'part_no_required' && typeof window.flMemoPartNoPick === 'function'){ window.flMemoPartNoPick(e); return null; }
+      O.fail(ex ? 'Could not save the memo' : 'Could not create the memo', e); return null;
+    });
   });
 
   O.onChange(function(change){

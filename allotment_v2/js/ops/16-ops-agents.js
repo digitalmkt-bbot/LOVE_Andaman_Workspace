@@ -78,6 +78,7 @@
       programs:programs.map(function(p){ return typeof p==='string' ? p : p.route_id; }),
       programPeriods:programs.map(function(p){ return { routeId:p.route_id, bookFrom:p.book_from||'', bookTo:p.book_to||'', note:p.note||'' }; })
     });
+    if('contract_days_left' in s){ o.contractDaysLeft=s.contract_days_left; o.contractExpiring=!!s.contract_expiring; o.contractExpired=!!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)

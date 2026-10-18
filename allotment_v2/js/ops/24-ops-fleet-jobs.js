@@ -245,10 +245,12 @@
     var tasks = [
       O.get('/v1/fleet/incidents').then(function(r){
         replaceIncidents((r && r.incidents) || []);
+        if(O.fleetKpis && r) O.fleetKpis.put('incidents', r.kpis);   // F4: the strip on top of the screen
         if(r && r.next_no) state.nextIncNo = r.next_no;
       }),
       O.get('/v1/fleet/jobs').then(function(r){
         replaceJobs((r && r.jobs) || []);
+        if(O.fleetKpis && r) O.fleetKpis.put('jobs', r.kpis);
         if(r && r.next_no) state.nextJobNo = r.next_no;
       })
     ];
@@ -272,6 +274,7 @@
       O.get('/v1/fleet/jobs')
     ]).then(function(res){
       replaceIncidents((res[0] && res[0].incidents) || []);
+      if(O.fleetKpis){ O.fleetKpis.put('incidents', res[0] && res[0].kpis); O.fleetKpis.put('jobs', res[1] && res[1].kpis); }
       if(res[0] && res[0].next_no) state.nextIncNo = res[0].next_no;
       replaceJobs((res[1] && res[1].jobs) || []);
       if(res[1] && res[1].next_no) state.nextJobNo = res[1].next_no;

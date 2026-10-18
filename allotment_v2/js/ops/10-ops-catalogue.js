@@ -100,6 +100,7 @@
     put(o, 'color', s.color); put(o, 'payType', payTypeIn(s.pay_type)); put(o, 'creditLimit', s.credit_limit);
     put(o, 'rateTypeId', s.rate_type_id); put(o, 'contractStatus', s.contract_status); put(o, 'contractEnd', s.contract_end);
     if(Array.isArray(s.program_route_ids)) o.programs = s.program_route_ids.slice();
+    if('contract_days_left' in s){ o.contractDaysLeft = s.contract_days_left; o.contractExpiring = !!s.contract_expiring; o.contractExpired = !!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.alerts)) o.serverAlerts = s.alerts;      // the server's pricing alerts (16-ops-agents.js: agAlerts, agHdIssues)
     /* the list carries each agent's whole season table (triage #35), so the rate-expiry scans (rtExpScan, agHdIssues, agAlerts)
        judge every agent, not only the ones opened. Legacy's spelling: {rt, from, to:''} */
@@ -201,6 +202,7 @@
       if(typeof SB_MARKETS !== 'undefined') replaceWith(SB_MARKETS, (r[2] && r[2].markets) || [], mapMarket);
       if(typeof SB_SALES !== 'undefined') replaceWith(SB_SALES, (r[3] && r[3].sales) || [], mapSales);
       if(typeof SB_AGENTS !== 'undefined') replaceWith(SB_AGENTS, (r[4] && r[4].agents) || [], mapAgentSummary, agentDefaults);
+      if(O.contractClock && r[4]) O.contractClock.put(r[4].expiring_count);   // F4: the nav badge number
       try{ console.log('[ops] catalogue · ' + routes.length + ' routes · ' + boats.length + ' boats · ' + ((r[4] && r[4].agents) || []).length + ' agents'); }catch(_){}
     });
   }
