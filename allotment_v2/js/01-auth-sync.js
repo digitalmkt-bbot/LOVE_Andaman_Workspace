@@ -435,6 +435,7 @@
   }
   function _laBusy(skipIdle){
     if(_dirty) return true;                                                             // local changes not yet synced → never overwrite
+    if(window._flpUploading) return true;                                               // §flpMulti · photos uploading to a fleet job · a reload mid-way drops them
     if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
     /* §vbFocus · โหมดแก้ไขของใบวางบิลรถร่วม · ที่แก้ไว้อยู่ในหน่วยความจำอย่างเดียวจนกว่าจะกดบันทึก
        (vbPersist ตั้งใจไม่เขียนระหว่างแก้ ปุ่มยกเลิกจะได้มีความหมาย) _dirty จึงเป็น false ตลอด

@@ -27400,15 +27400,29 @@ function flpPush(kind,rec,meta,cap){
 /* เพิ่มรูปจากเครื่อง/กล้อง · note = ข้อความจากช่องโน้ต (ถ้ามี) จะลง timeline พร้อมกัน */
 function flpAdd(kind,id,note){
   if(!flpCan()) return;
-  var rec=flpRec(kind,id); if(!rec) return;
+  if(!flpRec(kind,id)) return;
   if(typeof _flProjPickFiles!=='function' || typeof _flProjUploadAll!=='function'){ alert('Photo upload is not available on this page.'); return; }
   _flProjPickFiles('image/*', true, function(files){
-    var n=0;
+    /* §flpMulti (2026-10-18) · เจ้าของ: "add หลายๆ รูปพร้อมกันไม่เข้า"
+       อัปหลายรูปกินเวลาหลายวินาที · ระหว่างนั้นถ้ามีคนอื่นเซฟอะไรในระบบ ตัวซิงก์จะดึงข้อมูลใหม่มาทับ
+       (_laReloadData) · FL_MAINT กลายเป็นอ็อบเจ็กต์ชุดใหม่ · ของเดิมถือ rec ตัวเก่าไว้ใน closure
+       รูปจึงถูกยัดลงอ็อบเจ็กต์ที่ไม่มีใครอ่านแล้ว แล้ว flSave ตอนจบก็เขียนชุดใหม่ที่ไม่มีรูป = หายเงียบ
+       แก้ 3 ชั้น: (1) หา rec ใหม่ทุกครั้งที่จะเขียน (2) เซฟทันทีทีละรูป ไม่รอจบ
+       (3) บอกตัวซิงก์ว่ากำลังอัปอยู่ (_flpUploading) ให้เลื่อนการดึงข้อมูลใหม่ไปก่อน · และตอนจบเช็กซ้ำว่ารูปทุกใบยังอยู่ */
+    var n=0, added=[], t=String(note||'').trim();
+    window._flpUploading=(window._flpUploading||0)+1;
     _flProjUploadAll(files, kind+'_'+id, function(meta){
-      n++; flpPush(kind, rec, { attId:meta.id, url:'/api/attach/'+encodeURIComponent(meta.id), mime:meta.mime, size:meta.size, name:meta.name }, (n===1?String(note||'').trim():''));
+      var rec=flpRec(kind,id); if(!rec) return;
+      n++; flpPush(kind, rec, { attId:meta.id, url:'/api/attach/'+encodeURIComponent(meta.id), mime:meta.mime, size:meta.size, name:meta.name }, (n===1?t:''));
+      var L=flpList(kind,rec); added.push(L[L.length-1]);
+      try{ flSave(); }catch(_){}
     }, function(ok){
+      window._flpUploading=Math.max(0,(window._flpUploading||1)-1);
+      var rec=flpRec(kind,id); if(!rec) return;
       if(!ok) return;
-      var t=String(note||'').trim();
+      /* รูปที่ถูกข้อมูลใหม่ทับไปแล้ว เติมกลับ */
+      var have={}; flpList(kind,rec).forEach(function(p){ have[p.id]=1; });
+      added.forEach(function(p){ if(p && !have[p.id]){ if(kind==='prj'){ if(!rec.docs) rec.docs=[]; rec.docs.push(p._doc||p); } else { if(!Array.isArray(rec.photos)) rec.photos=[]; rec.photos.push(p); } } });
       flpLog(kind, rec, (t?(t+' · '):'')+'Photo added · '+ok+' file'+(ok>1?'s':''));
       flSave(); flpRefresh(kind,id,true);
     });
