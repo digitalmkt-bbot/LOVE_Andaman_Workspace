@@ -326,8 +326,9 @@ test('create from ticked rows refuses rows from two zones, with no request', asy
 // ── out of scope in ops mode ────────────────────────────────────────────────
 
 test('actions the server cannot do yet or cannot do on this data: a toast, no request, no legacy write', async () => {
-  // Split / Unsplit are still out of scope (NOT YET). Return van, clear order and pickup-order save are wired now, but
-  // here no van group exists on the server, so each is refused locally with no request. Clear route has nothing assigned: silent.
+  // Return van, clear order and pickup-order save are wired, but here no van group exists on the server, so each is refused
+  // locally with no request. Clear route has nothing assigned: silent. Split opens legacy's dialog (one legacy call, no request);
+  // Unsplit of a booking with no parts does nothing.
   const rt = runtime({ sel: { b1: 1 } });
   rt.ctx.bookingV2VanGroupSetReturn(D, R, 'PK', 3, 'veh02');
   rt.ctx.bookingV2VanSplit('b1', D);
@@ -337,15 +338,13 @@ test('actions the server cannot do yet or cannot do on this data: a toast, no re
   rt.ctx.bookingV2VanClearRoute(D, R);
   await rt.flush();
   assert.equal(rt.requests.length, 0);
-  assert.equal(rt.legacyCalls.length, 0);
+  assert.deepEqual(plain(rt.legacyCalls.map((c) => c[0])), ['bookingV2VanSplit']);
   assert.equal(rt.bks.find((b) => b.id === 'b1').ops.vanId, undefined);
-  const notYet = rt.toasts.filter((t) => t.kind === 'pending');
-  assert.equal(notYet.length, 2);
-  assert.ok(notYet.every((t) => /Split parts are not on operation-backend yet/.test(t.title) && t.status === 'NOT YET'), JSON.stringify(notYet));
+  assert.equal(rt.toasts.filter((t) => t.kind === 'pending').length, 0);
   const refused = rt.toasts.filter((t) => t.kind === 'error');
   assert.deepEqual(refused.map((t) => t.title), ['Return van not set', 'Pickup order not cleared', 'Pickup order not saved']);
   assert.ok(refused.every((t) => t.status === 'REFUSED'));
-  assert.equal(rt.toasts.length, 5);
+  assert.equal(rt.toasts.length, 3);
   assert.equal(rt.alerts.length, 0);
 });
 
@@ -497,4 +496,102 @@ test('take/put never moves vans to another day, and never overwrites a value the
   rt.O.vans.put(c, k2);
   assert.deepEqual(plain({ g: c.ops.vanGroup, v: c.ops.vanId }), { g: 6, v: 'veh06' });
   assert.equal(rt.O.vans.take({ id: 'x', trips: [trip('x')], ops: { vanGroup: 0, vanId: null } }), null, 'nothing to keep');
+});
+
+// ── split van rows (Q40): parts are the server's; a part joins a group by its idx ──
+
+const split2 = () => [
+  { opsIdx: 0, pax: 1, ad: 1, vanGroup: 0, vanId: null, vanSeq: 0, vanReturnId: null, main: true },
+  { opsIdx: 4, pax: 1, ad: 1, vanGroup: 0, vanId: null, vanSeq: 0, vanReturnId: null },
+];
+const withSplit = () => bookings().map((b) => (b.id === 'b1' ? { ...b, ops: { vanSplits: split2() } } : b));
+const groupWithPart = (over = {}) => group({ members: [
+  { trip_id: 'trip_1', booking_id: 'lg_1', idx: 4, sequence: 1, return_van_id: null },
+  { trip_id: 'trip_2', booking_id: 'lg_2', idx: 0, sequence: 2, return_van_id: null }], ...over });
+
+test('split rows: a ticked bkId@i row joins a group as {trip_id, idx: opsIdx}, not the array position', async () => {
+  const rt = runtime({ bks: withSplit(), sel: { 'b1@1': 1, b2: 2 }, handlers: {
+    'POST /operations/van-groups': { body: groupWithPart() },
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [groupWithPart()] } },
+  } });
+  rt.ctx.bookingV2VanGroupSelected(D, R, 'PK', 'new');
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests[0].body.members), [{ trip_id: 'trip_1', idx: 4 }, { trip_id: 'trip_2', idx: 0 }]);
+  const sp = byId(rt.bks, 'b1').ops.vanSplits;
+  assert.equal(sp[1].vanGroup, 3);
+  assert.equal(sp[1].vanId, 'veh07');
+  assert.equal(sp[0].vanGroup, 0);
+  assert.ok(!byId(rt.bks, 'b1').ops.vanGroup);
+});
+
+test('split rows: set time and disband of a group with a split part are sent, not refused', async () => {
+  const bks = bookings().map((b) => (b.id === 'b1' ? { ...b, ops: { vanSplits: [split2()[0], { ...split2()[1], vanGroup: 3 }] } } : b));
+  const rt = runtime({ bks, handlers: {
+    'PATCH /operations/van-groups/vgrp_3': { body: groupWithPart({ pickup_time: '07:10' }) },
+    'DELETE /operations/van-groups/vgrp_3': { status: 204 },
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [groupWithPart()] } },
+  } });
+  await rt.O.vans.load(D, R);
+  rt.requests.length = 0;
+  rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, '07:10');
+  await rt.flush();
+  assert.equal(rt.requests[0].method, 'PATCH');
+  rt.ctx.bookingV2VanGroupDisband(D, R, 'PK', 3);
+  await rt.flush();
+  assert.equal(rt.requests[1].method, 'DELETE');
+  assert.equal(rt.toasts.filter((t) => t.status === 'REFUSED').length, 0);
+  assert.equal(byId(rt.bks, 'b1').ops.vanSplits[1].vanGroup, 0);
+});
+
+test('split: Apply POSTs van-split with the heads, re-reads the booking and the groups, closes the dialog', async () => {
+  const rt = runtime({ handlers: {
+    'POST /operations/trip-ops/trip_1/van-split': { body: { trip: { id: 'trip_1' }, warnings: ['child_without_adult'], new_idx: 1 } },
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [] } },
+  } });
+  const closed = [];
+  rt.ctx.bookingV2SplitClose = () => closed.push(1);
+  rt.ctx.laOps.bookings = { reload: async () => null };
+  rt.ctx._bkSplitM = { bkId: 'b1', date: D, pool: { ad: 2, chd: 1, inf: 0, foc: 0 }, ad: 0, chd: 1, inf: 0, foc: 0 };
+  rt.ctx.bookingV2SplitApply();
+  await rt.flush(); await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests[0]), { method: 'POST', path: '/operations/trip-ops/trip_1/van-split', body: { ad: 0, chd: 1, inf: 0, foc: 0 } });
+  assert.equal(rt.requests[1].path.startsWith('/operations/van-groups'), true);
+  assert.equal(closed.length, 1);
+  assert.equal(rt.toasts.filter((t) => t.kind === 'neutral').length, 0);
+});
+
+test('split: a refusal shows the server text and keeps the dialog open', async () => {
+  const rt = runtime({ handlers: {
+    'POST /operations/trip-ops/trip_1/van-split': { status: 400, body: { code: 'part_too_small', message: 'part too small' } },
+  } });
+  const closed = [];
+  rt.ctx.bookingV2SplitClose = () => closed.push(1);
+  rt.ctx._bkSplitM = { bkId: 'b1', date: D, pool: { ad: 2, chd: 0, inf: 0, foc: 0 }, ad: 1, chd: 0, inf: 0, foc: 0 };
+  rt.ctx.bookingV2SplitApply();
+  await rt.flush(); await rt.flush();
+  assert.equal(closed.length, 0);
+  const err = rt.toasts.filter((t) => t.kind === 'error');
+  assert.equal(err.length, 1);
+  assert.match(err[0].sub, /part too small/);
+});
+
+test('unsplit: POSTs van-unsplit with no fields; a booking with no parts sends nothing', async () => {
+  const rt = runtime({ bks: withSplit(), handlers: {
+    'POST /operations/trip-ops/trip_1/van-unsplit': { body: { trip: { id: 'trip_1' }, warnings: [] } },
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [] } },
+  } });
+  rt.ctx.laOps.bookings = { reload: async () => null };
+  rt.ctx.bookingV2VanUnsplit('b2', D);
+  rt.ctx.bookingV2VanUnsplit('b1', D);
+  await rt.flush(); await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests[0]), { method: 'POST', path: '/operations/trip-ops/trip_1/van-unsplit', body: {} });
+  assert.equal(rt.requests.filter((r) => r.method === 'POST').length, 1);
+});
+
+test('ops mode: the browser does not build or heal splits; legacy mode reaches the original', async () => {
+  const names = ['bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs'];
+  const on = runtime({ enabled: true });
+  names.forEach((n) => assert.equal(on.ctx[n](), false));
+  const off = runtime({ enabled: false });
+  names.forEach((n) => assert.equal(off.ctx[n](), undefined));
 });

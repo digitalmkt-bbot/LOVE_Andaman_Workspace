@@ -14,10 +14,13 @@
    group the server answered with. A refused write (409/400) shows its code and changes nothing.
    Warnings on an answer (van_in_other_group) are an info toast, not a failure.
 
-   Out of scope in ops mode (refused with a toast, no request, nothing local changes):
-   creating/changing split parts. Pickup order, return van, auto-assign, clear route and the group drag order
-   are wired below. Return vans on an
-   already-split trip are saved per part through `/operations/trip-ops/:trip_id`.
+   Split van rows (Q40, 2026-10-18): the server's van_parts are the truth. 40-ops-bookings.js builds legacy's ops.vanSplits from
+   them (each split carries opsIdx, the server's part idx). A ticked `bkId@i` row joins a group as {trip_id, idx: opsIdx}.
+   The Split dialog is legacy's; its Apply sends POST /operations/trip-ops/{trip_id}/van-split {ad,chd,inf,foc}, and
+   bookingV2VanUnsplit sends POST .../van-unsplit. The browser no longer builds or heals splits in ops mode
+   (bookingV2SyncAltPickupSplits, bookingV2HealAltSplits, bookingV2HealSplitPax, bookingV2HealOvnLegs do nothing): the server does it on every booking write.
+   Pickup order, return van, auto-assign, clear route and the group drag order are wired below. Return vans on a
+   split trip are saved per part through `/operations/trip-ops/:trip_id`.
    Legacy mode (!O.enabled()): every wrapped function delegates to the original.
 
    Group identity: date | routeId | number. Server group ids are kept in memory per that key.
@@ -39,7 +42,8 @@
     'bookingV2VanGroupSelected', 'bookingV2VanGroupSave', 'bookingV2VanGroupClearSeq', 'bookingV2VanGroupSetReturn',
     'bookingV2AssignVanReturn', 'bookingV2AssignVanReturnSplit', 'bookingV2SetSplitPickTime', 'bookingV2SetReturnSameVan', 'bookingV2VanSplit',
     'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal',
-    'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet'];
+    'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet',
+    'bookingV2SplitApply', 'bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
 
   function wrap(name, opsFn){
@@ -56,10 +60,6 @@
   function failCode(e){ return (e && (e.code || e.status)) || 'error'; }
   function redraw(){ if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep(); }
 
-  function notYet(msg){
-    O.toast({ kind: 'pending', title: msg, status: 'NOT YET', sub: 'Nothing was changed.', dur: 6000 });
-    return null;
-  }
   function refuse(title, sub){
     O.toast({ kind: 'error', title: title, status: 'REFUSED', sub: sub || '', dur: 7000 });
     return null;
@@ -92,39 +92,54 @@
     if(!keepTime) o.pickupTimeFinal = '';
   }
 
-  /* the bookings in one group on this route, day and zone · split parts are flagged, not written */
+  /* split parts · ops.vanSplits is built from the server's van_parts (40-ops-bookings.js); a part's server idx is opsIdx,
+     which may differ from its array position (a part with no opsIdx is a local one: its position is the best guess) */
+  function splitsOf(b, date){
+    var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, date) : b.ops) || {};
+    return Array.isArray(o.vanSplits) && o.vanSplits.length ? o.vanSplits : null;
+  }
+  function idxOfSplit(sp, pos){ return sp && sp.opsIdx != null ? +sp.opsIdx : +pos || 0; }
+  function splitByIdx(list, idx){
+    for(var i = 0; i < list.length; i++) if(list[i] && idxOfSplit(list[i], i) === +idx) return list[i];
+    return null;
+  }
+
+  /* the bookings in one group on this route, day and zone · a booking with split parts in the group comes with those parts */
   function groupRows(date, routeId, zone, num){
     var rows = [];
     allBookings().forEach(function(b){
       if(!b || !tripOn(b, date, routeId, zone)) return;
       var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, date) : b.ops) || {};
-      var split = Array.isArray(o.vanSplits) && o.vanSplits.some(function(s){ return s && +s.vanGroup === num; });
-      if(split) rows.push({ b: b, split: true });
-      else if(+o.vanGroup === num) rows.push({ b: b, split: false });
+      var sps = splitsOf(b, date), parts = [];
+      if(sps) sps.forEach(function(s, i){ if(s && +s.vanGroup === num) parts.push(idxOfSplit(s, i)); });
+      if(parts.length) rows.push({ b: b, split: true, idxs: parts });
+      else if(!sps && +o.vanGroup === num) rows.push({ b: b, split: false });
     });
     return rows;
   }
 
-  /* one booking as a server member · {member} or {error} */
-  function memberOf(b, date, routeId, zone){
+  /* one booking (or one split part of it, by server idx) as a server member · {member} or {error} */
+  function memberOf(b, date, routeId, zone, idx){
     if(isClosed(b)) return { error: 'Cancelled bookings cannot be grouped' };
     if(b.pickupSelf === true) return { error: 'Self-arrive bookings cannot be grouped on operation-backend' };
     if(!zone || zone === 'NoTransfer' || zone === 'NT') return { error: 'NoTransfer bookings cannot be grouped on operation-backend' };
     var t = tripOn(b, date, routeId, zone);
     if(!t || !b.opsId) return { error: 'Booking is not saved to operation-backend yet' };
     if(!t.opsTripId) return { error: 'Trip is not saved to operation-backend yet' };
-    return { member: { trip_id: t.opsTripId, idx: 0 } };
+    return { member: { trip_id: t.opsTripId, idx: +idx || 0 } };
   }
 
   /* members for a group's rows · cancelled rows take no part · {members, bks} or {error} */
   function planMembers(rows, date, routeId, zone){
     var members = [], bks = [];
     for(var i = 0; i < rows.length; i++){
-      if(rows[i].split) return { error: 'Split parts are not on operation-backend yet' };
       if(isClosed(rows[i].b)) continue;
-      var m = memberOf(rows[i].b, date, routeId, zone);
-      if(m.error) return { error: m.error };
-      members.push(m.member); bks.push(rows[i].b);
+      var idxs = rows[i].split ? rows[i].idxs : [0];
+      for(var k = 0; k < idxs.length; k++){
+        var m = memberOf(rows[i].b, date, routeId, zone, idxs[k]);
+        if(m.error) return { error: m.error };
+        members.push(m.member); bks.push(rows[i].b);
+      }
     }
     return { members: members, bks: bks };
   }
@@ -136,16 +151,25 @@
     serverIds[keyOf(date, routeId, num)] = g.id;
     groupInfo[g.id] = { date: date, routeId: routeId, number: num, vanId: g.van_id || null };
     var listed = {};
-    (g.members || []).forEach(function(m){ if(m && (+m.idx || 0) === 0) listed[m.booking_id] = true; });
+    (g.members || []).forEach(function(m){ if(m) listed[m.booking_id + '#' + (+m.idx || 0)] = true; });
     allBookings().forEach(function(b){
       if(!b || !b.opsId || !routeOn(b, date, routeId)) return;
       var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, date) : b.ops) || {};
-      if(+o.vanGroup === num && !listed[b.opsId]) clearVan(o, true);
+      if(+o.vanGroup === num && !listed[b.opsId + '#0']) clearVan(o, true);
+      var sps = splitsOf(b, date);
+      if(sps) sps.forEach(function(s, i){ if(s && +s.vanGroup === num && !listed[b.opsId + '#' + idxOfSplit(s, i)]) clearVan(s, true); });
     });
     (g.members || []).forEach(function(m){
-      if(!m || (+m.idx || 0) !== 0) return;
+      if(!m) return;
+      var idx = +m.idx || 0;
       var b = byOpsId(m.booking_id);
       if(!b || !routeOn(b, date, routeId)) return;
+      var sps = splitsOf(b, date), sp = sps ? splitByIdx(sps, idx) : null;
+      if(sp){
+        sp.vanGroup = num; sp.vanId = g.van_id || null; sp.vanSeq = +m.sequence || 0;
+        sp.vanReturnId = m.return_van_id || g.return_van_id || null;
+      }
+      if(idx !== 0) return;
       var o = bkOpsFor(b, date);
       o.vanGroup = num;
       o.vanId = g.van_id || null;
@@ -164,6 +188,8 @@
       allBookings().forEach(function(b){
         if(!b || !routeOn(b, date, routeId)) return;
         clearVan(bkOpsRead(b, date) || {}, false);
+        var sps = splitsOf(b, date);   // the parts: group, van and order come back with the groups; a part's own return van stays as the booking read gave it
+        if(sps) sps.forEach(function(s){ if(s){ var rv = s.vanReturnId; clearVan(s, true); s.vanReturnId = rv || null; } });
       });
       groups.forEach(function(g){ applyGroup(date, routeId, g); groupMembers[g.id] = g.members || []; });
       /* display_order: the zone's dragged groups, in order; the rest follow by number (client side, as legacy) */
@@ -260,14 +286,14 @@
     if(!t) return refuse('Van not assigned', 'Booking has no trip on ' + d);
     var routeId = t.routeId, zone = zoneOf(b, t);
     var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, d) : b.ops) || {};
-    if(Array.isArray(o.vanSplits) && o.vanSplits.length) return refuse('Split parts are not on operation-backend yet');
-    var num = +o.vanGroup || 0;
+    var sps = splitsOf(b, d);
+    var num = sps ? (+(sps[0] || {}).vanGroup || 0) : (+o.vanGroup || 0);   // a split booking: the main part's group
     if(num){
       var plan = planMembers(groupRows(d, routeId, zone, num), d, routeId, zone);
       if(plan.error) return refuse('Van not assigned', plan.error);
       return saveVan(d, routeId, zone, num, plan.members, vanId || null);
     }
-    var m = memberOf(b, d, routeId, zone);
+    var m = memberOf(b, d, routeId, zone, sps ? idxOfSplit(sps[0], 0) : 0);
     if(m.error) return refuse('Van not assigned', m.error);
     if(!vanId) return null;
     return saveVan(d, routeId, zone, 0, [m.member], vanId);
@@ -277,7 +303,6 @@
     var num = +gid;
     var sid = serverIdOf(date, routeId, num);
     if(!sid) return refuse('Pickup time not saved', 'The van group is not on operation-backend yet · reload the day');
-    if(groupRows(date, routeId, zone, num).some(function(r){ return r.split; })) return refuse('Split parts are not on operation-backend yet');
     var t = (val || '').trim();
     return O.queue(function(){ return O.patch(BASE + '/' + enc(sid), { pickup_time: t || null }); }).then(function(g){
       applyGroup(date, routeId, g); warn(g);
@@ -293,10 +318,13 @@
     var sid = serverIdOf(date, routeId, num);
     if(!sid) return refuse('Disband not done', 'The van group is not on operation-backend yet · reload the day');
     var rows = groupRows(date, routeId, zone, num);
-    if(rows.some(function(r){ return r.split; })) return refuse('Split parts are not on operation-backend yet');
     return O.queue(function(){ return O.del(BASE + '/' + enc(sid)); }).then(function(){
       delete serverIds[keyOf(date, routeId, num)];
-      rows.forEach(function(r){ clearVan(bkOpsRead(r.b, date) || {}, true); });
+      rows.forEach(function(r){
+        if(!r.split){ clearVan(bkOpsRead(r.b, date) || {}, true); return; }
+        (splitsOf(r.b, date) || []).forEach(function(s){ if(s && +s.vanGroup === num) clearVan(s, true); });
+        var o = bkOpsRead(r.b, date) || {}; if(+o.vanGroup === num) clearVan(o, true);
+      });
       redraw();
       return true;
     }, function(e){
@@ -310,13 +338,19 @@
     var sel = window._bkV2VanSel || {};
     var keys = Object.keys(sel).filter(function(k){ return sel[k]; });
     if(!keys.length) return null;
-    if(keys.some(function(k){ return String(k).indexOf('@') >= 0; })) return refuse('Split parts are not on operation-backend yet');
     var ordered = keys.slice().sort(function(a, b){ return (sel[a] || 0) - (sel[b] || 0); });
     var members = [];
     for(var i = 0; i < ordered.length; i++){
-      var b = byClientId(ordered[i]);
+      var kp = String(ordered[i]).split('@');   // 'bkId' or 'bkId@i' (i = position of the split part)
+      var b = byClientId(kp[0]);
       if(!b || !tripOn(b, date, routeId, zone)) return refuse('Group not created', 'Tick rows of one zone and one route, then group them');
-      var m = memberOf(b, date, routeId, zone);
+      var idx = 0;
+      if(kp.length > 1){
+        var sps = splitsOf(b, date), sp = sps ? sps[+kp[1]] : null;
+        if(!sp) return refuse('Group not created', 'This split part no longer exists · reload the day');
+        idx = idxOfSplit(sp, +kp[1]);
+      }
+      var m = memberOf(b, date, routeId, zone, idx);
       if(m.error) return refuse('Group not created', m.error);
       members.push(m.member);
     }
@@ -404,12 +438,16 @@
     keys.forEach(function(key){
       var p = String(key).split('@'), b = byClientId(p[0]);
       if(!b) return;
-      if(p.length > 1){ bad = 'A split part cannot be ordered here: split parts are not on operation-backend yet'; return; }
       var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, date) : b.ops) || {};
       var t = tripOpsOf(b, date);
-      var num = +o.vanGroup || 0;
+      var num = +o.vanGroup || 0, idx = 0;
+      if(p.length > 1){
+        var sps = splitsOf(b, date), sp = sps ? sps[+p[1]] : null;
+        if(!sp){ bad = 'This split part no longer exists · reload the day'; return; }
+        num = +sp.vanGroup || 0; idx = idxOfSplit(sp, +p[1]);
+      }
       if(!num || !t){ bad = 'Pick the rows of a van group that is saved to operation-backend'; return; }
-      (perGroup[num] = perGroup[num] || []).push({ trip_id: t.opsTripId, idx: 0 });
+      (perGroup[num] = perGroup[num] || []).push({ trip_id: t.opsTripId, idx: idx });
       routeOf[num] = t.routeId;
     });
     if(bad) return refuse('Pickup order not saved', bad);
@@ -515,9 +553,10 @@
     var d = date || (b.trips && b.trips[0] && b.trips[0].date) || '';
     var o = (typeof bkOpsRead === 'function' ? bkOpsRead(b, d) : b.ops) || {};
     if(!Array.isArray(o.vanSplits) || !o.vanSplits[ai]) return refuse('Return van not set', 'This split part no longer exists');
-    return tripPatch(b, d, { van_parts: [{ idx: +ai, return_van_id: vanId || null }] }, function(j){
+    var pidx = idxOfSplit(o.vanSplits[ai], ai);
+    return tripPatch(b, d, { van_parts: [{ idx: pidx, return_van_id: vanId || null }] }, function(j){
       var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];
-      var p = parts.find(function(x){ return +x.idx === +ai; });
+      var p = parts.find(function(x){ return +x.idx === pidx; });
       if(!p) return;
       o.vanSplits[ai].vanReturnId = p.return_van_id || null;
       if(vanId) o.returnSameVan = false;
@@ -533,9 +572,10 @@
     if(typeof bkSplitOwnPick === 'function' && !bkSplitOwnPick(sp)) return window.bookingV2SetPickupFinal(bkId, val, date);
     if(isClosed(b)) return refuse('Pickup time not saved', 'This booking is ' + b.status);
     var t = String(val == null ? '' : val).trim();
-    return tripPatch(b, d, { van_parts: [{ idx: +idx, pick_time: t || null }] }, function(j){
+    var pidx = idxOfSplit(sp, idx);
+    return tripPatch(b, d, { van_parts: [{ idx: pidx, pick_time: t || null }] }, function(j){
       var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];
-      var p = parts.find(function(x){ return +x.idx === +idx; });
+      var p = parts.find(function(x){ return +x.idx === pidx; });
       if(sp) sp.pickTime = p && p.alt && p.alt.pick_time != null ? p.alt.pick_time : t;
     }, 'Pickup time not saved');
   });
@@ -549,8 +589,58 @@
       if(val) o.vanReturnId = null;   // the server drops every part's own return van when the group comes back on its van
     });
   });
-  wrap('bookingV2VanSplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
-  wrap('bookingV2VanUnsplit', function(){ return notYet('Split parts are not on operation-backend yet'); });
+  /* ── split van rows (Q40) · the server judges and builds the parts; the screen only asks ──
+     The Split dialog (bookingV2VanSplit -> bookingV2SplitRender) is legacy's and only reads the local parts, so it opens as it is.
+     Apply sends the heads to move off the main part. Both commands answer {trip, warnings}; then the booking and the day's
+     groups are read again, so the parts, their idx and their groups are the server's. A refusal (part_too_small, bad_split_size,
+     alt_pickup_split, cancelled) shows the server's own text and changes nothing. */
+  function afterParts(b, date, routeId){
+    var re = (O.bookings && typeof O.bookings.reload === 'function') ? O.bookings.reload(b.id) : Promise.resolve(null);
+    return Promise.resolve(re).then(function(){ return routeId ? fetchDay(date, routeId) : null; }).catch(function(e){
+      try{ console.warn('[ops] split re-read failed · ' + (e && e.message)); }catch(_){}
+    }).then(function(){ redraw(); });
+  }
+  function partsCommand(b, date, path, body, title, okToast){
+    var t = tripOpsOf(b, date);
+    if(!b.opsId || !t) return refuse(title, 'This booking has no operation-backend trip for ' + date);
+    return O.queue(function(){ return O.post('/operations/trip-ops/' + enc(t.opsTripId) + path, body); }).then(function(j){
+      ((j && j.warnings) || []).forEach(function(w){
+        var code = (w && (w.code || w.message)) || w;
+        if(code === 'child_without_adult') return;   // legacy's amber note is already in the dialog
+        O.toast({ kind: 'neutral', title: title, status: 'INFO', sub: String((w && w.message) || code), dur: 8000 });
+      });
+      return afterParts(b, date, t.routeId).then(function(){ if(okToast) okToast(j); return j; });
+    }, function(e){
+      O.fail(title + ' · ' + failCode(e), e);
+      return null;
+    });
+  }
+  wrap('bookingV2VanSplit', function(bkId, date){
+    var b = byClientId(bkId); if(!b) return null;
+    if(isClosed(b)) return refuse('Split not done', 'This booking is ' + b.status);
+    if(typeof originals.bookingV2VanSplit === 'function') return originals.bookingV2VanSplit.call(this, bkId, date);   // legacy's dialog
+    return null;
+  });
+  wrap('bookingV2SplitApply', function(){
+    var m = (typeof _bkSplitM !== 'undefined') ? _bkSplitM : null; if(!m) return null;
+    var b = byClientId(m.bkId); if(!b) return null;
+    var mv = {}, n = 0, tot = 0;
+    ['ad', 'chd', 'inf', 'foc'].forEach(function(k){ mv[k] = +m[k] || 0; n += mv[k]; tot += +(m.pool && m.pool[k]) || 0; });
+    if(n < 1 || n >= tot) return null;   // the dialog's own courtesy check; the server decides
+    return partsCommand(b, m.date, '/van-split', mv, 'Split not done', function(){
+      if(typeof laSaveToast === 'function') laSaveToast({ kind: 'success', title: 'แยกคนแล้ว', msg: n + ' คนไปอีกคัน · เหลือ ' + (tot - n) + ' คนคันเดิม' });
+    }).then(function(j){ if(j && typeof bookingV2SplitClose === 'function') bookingV2SplitClose(); return j; });
+  });
+  wrap('bookingV2VanUnsplit', function(bkId, date){
+    var b = byClientId(bkId); if(!b) return null;
+    var d = date || ((b.trips || [])[0] || {}).date || '';
+    if(!splitsOf(b, d)) return null;   // nothing to merge (legacy: nothing happens)
+    return partsCommand(b, d, '/van-unsplit', {}, 'Merge not done', null);
+  });
+  /* the server builds, rebalances and heals the parts on every booking write: the browser's copies of those rules do nothing here */
+  ['bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs'].forEach(function(n){
+    wrap(n, function(){ return false; });
+  });
   // The heal keeps a group's vanId in step with local data. In ops mode the server's groups are the truth
   // (the loader applies them), so the heal does nothing rather than write local-only van fields.
   wrap('bookingV2VanGroupHeal', function(){ return null; });
