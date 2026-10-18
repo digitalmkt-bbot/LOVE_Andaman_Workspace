@@ -476,6 +476,12 @@
       bk.srvFlags = { isB2C: !!ob.is_b2c_legacy, isInternal: !!ob.is_internal, isCompany: !!ob.is_company,
                       internalFree: !!ob.internal_free, owed: +ob.owed || 0, b2cChannel: ob.b2c_channel != null ? String(ob.b2c_channel) : '' };
     }
+    /* §opsBookingList (w4-f3) · the list row's computed fields (GET /v1/bookings rows only): last activity, new / soon / today chips,
+       possible duplicates. Read-only, never sent; 75-ops-booking-list.js hands them to the All-bookings screen. */
+    if(ob.last_activity !== undefined){
+      bk.srvList = { lastActivity: ob.last_activity || null, isNew: !!ob.is_new, isSoon: !!ob.is_soon, isToday: !!ob.is_today,
+                     possibleDuplicate: !!ob.possible_duplicate, duplicates: Array.isArray(ob.duplicates) ? ob.duplicates : [] };
+    }
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
@@ -499,6 +505,7 @@
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
+    delete bk.srvList;       // §opsBookingList · same for the list row's fields (last activity, chips, duplicates)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     if(vans) O.vans.put(bk, vans);
@@ -638,6 +645,8 @@
         mergeInto(bk, j);
         Object.assign(bk, records(j, bk.trips));
         persist();
+        /* §opsBookingList · the save answer's warnings[] (possible_duplicate, passenger_types) are shown with the server's own text */
+        try{ if(O.saveWarnings && Array.isArray(j.warnings)) O.saveWarnings(bk, j.warnings); }catch(_){}
       }
       if(j && Array.isArray(j.price_warnings) && j.price_warnings.length){
       O.toast({ kind:'pending', title:'Server adjusted the booking price', id:bk.id, status:'PRICE',

@@ -38,7 +38,7 @@ function bookingV2RenderTab3(){
   const kConfirmed = _Stats ? ((_Stats.by_status||{}).confirmed||0) : all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
   const isPendingFoc = b => b.focCount>0 && !b.focApproved && ['quote','pending','pending_foc'].includes(b.status);
-  const kPendingFoc = _Stats ? ((_Stats.by_status||{}).pending_foc||0) : all.filter(isPendingFoc).length;
+  const kPendingFoc = (_Stats && _Stats.pending_foc_count != null) ? _Stats.pending_foc_count : (_Stats ? ((_Stats.by_status||{}).pending_foc||0) : all.filter(isPendingFoc).length);   /* §opsBookingList · the server's own count of the rule (quote/pending/pending_foc with FOC seats not yet approved), not the status count */
   const kQuote = _Stats ? ((_Stats.by_status||{}).quote||0) : all.filter(b=>b.status==='quote').length;
   const kConfirmedRev = _Stats ? (_Stats.confirmed_revenue||0) : all.filter(b=>b.status==='confirmed').reduce((s,b)=>s+b.total,0);
   const q = (_bkV2.search||'').toLowerCase().trim();
@@ -50,11 +50,15 @@ function bookingV2RenderTab3(){
 
   // §bkMonthPage · everything EXCEPT the month cut · the month chips count these, so their numbers always
   // reflect the status pill you are actually on rather than an all-time total.
+  /* §opsBookingList · who matches the Pending-FOC pill and the search is the server's answer (GET /v1/bookings?pending_foc=true / ?q=); null = not here yet, legacy's own test runs */
+  const _srvPF = (_bkV2.statusFilter === 'pending_foc' && window.laOpsListSet) ? window.laOpsListSet('pending_foc') : null;
+  const _srvQ = (q && window.laOpsListSet) ? window.laOpsListSet('q', q) : null;
   const preMonth = all.filter(b => {
-    if(_bkV2.statusFilter === 'pending_foc'){ if(!isPendingFoc(b)) return false; }
+    if(_bkV2.statusFilter === 'pending_foc'){ if(_srvPF ? !_srvPF.has(b.id) : !isPendingFoc(b)) return false; }
     else if(_bkV2.statusFilter === 'b2c'){ if(!b.id.startsWith('b2c_')) return false; }
     else if(_bkV2.statusFilter !== 'all' && b.status !== _bkV2.statusFilter) return false;
-    if(q){
+    if(q && _srvQ){ if(!_srvQ.has(b.id)) return false; }
+    else if(q){
       const blob = `${b.id} ${b.voucherRef} ${b.leadPax} ${b.leadPhone} ${b.agentName} ${b.agentSub} ${b.tripSummary}`.toLowerCase();
       if(!blob.includes(q)) return false;
     }
@@ -127,7 +131,8 @@ function bookingV2RenderTab3(){
     const act = actOf.get(b.id) || {};
     const dk = _dayKeyOf(b), pk = i ? _dayKeyOf(pageRows[i-1]) : null;
     const dayRow = dk !== pk ? `<tr class="bkv2-day"><td colspan="8">${sortMode==='travel'?'เดินทาง ':''}${bookingV2DayLabel(dk, sortMode!=='travel')}</td></tr>` : '';
-    const fresh = !!b.createdAt && (Date.now() - new Date(b.createdAt).getTime()) < 86400000 && !_CXL.includes(b.status);
+    const _sl = window.laOpsListFlags ? window.laOpsListFlags(rawById.get(b.id)) : null;   /* §opsBookingList · the server's chips for this row, or null */
+    const fresh = _sl ? _sl.isNew : (!!b.createdAt && (Date.now() - new Date(b.createdAt).getTime()) < 86400000 && !_CXL.includes(b.status));
     const isCxl = _CXL.includes(b.status);
     const edited = !!act.kind && act.kind !== 'create';
     const tags = (fresh ? '<span class="bkv2-tag new">ใหม่</span>' : '')
@@ -137,19 +142,20 @@ function bookingV2RenderTab3(){
       + (b.id.startsWith('b2c_') ? '<span class="bkv2-tag b2c">'+bookingV2B2CMark(10)+'B2C</span>' : '')
       + (function(){ /* ป้าย "อาจซ้ำ" ของเดิม · คงไว้ */
           const _o=rawById.get(b.id); if(!_o||_CXL.includes(_o.status)||typeof bookingV2FindDuplicateBookings!=='function') return '';
-          const _dd=bookingV2FindDuplicateBookings(_o,_o.id); if(!_dd.length) return '';
+          /* §opsBookingList · ops mode: the server's duplicates for this row (same rule, its reasons in legacy's Thai) */
+          const _dd=_sl ? (_sl.duplicates||[]).map(x=>({bk:{voucherRef:x.voucher_ref,code:x.code,id:x.booking_id},reasons:x.reasons||[]})) : bookingV2FindDuplicateBookings(_o,_o.id); if(!_dd.length) return '';
           const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', ');
           const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · ');
           return `<span class="bkv2-tag dup" title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})">&#9888; อาจซ้ำ</span>`; })();
     const tvK = String(b.travelDate||'').slice(0,10);
-    const soon = !isCxl && tvK >= _todayK && tvK <= _soonK;
+    const soon = _sl ? _sl.isSoon : (!isCxl && tvK >= _todayK && tvK <= _soonK);   /* §opsBookingList */
     const actTxt = act.kind === 'create' ? 'สร้างใบจอง' : (act.text || bookingV2ActKindLabel(act.kind));
     return dayRow + `
             <tr class="bkr ${b.status}${fresh?' fresh':''}" data-id="${escapeHTML(b.id)}" onclick="bookingV2OpenDetail('${b.id}')">
               <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bookingV2DisplayCode(b)) : b.id}</div><div class="bk-sub">${tags}</div></td>
               <td><div class="agent-name">${escapeHTML(b.agentName)}</div><div class="agent-rt">${escapeHTML(b.agentSub)}</div></td>
               <td><div class="trip-name">${escapeHTML(b.tripSummary)}</div><div class="trip-pax">${b.paxBreak}</div></td>
-              <td><div class="tv-date${soon?' soon':''}">${bookingV2FmtDate(b.travelDate)}<span class="dow">${bookingV2Dow(b.travelDate)}</span></div>${soon?`<div class="tv-soon">${tvK===_todayK?'วันนี้':'ใกล้ถึง'}</div>`:''}</td>
+              <td><div class="tv-date${soon?' soon':''}">${bookingV2FmtDate(b.travelDate)}<span class="dow">${bookingV2Dow(b.travelDate)}</span></div>${soon?`<div class="tv-soon">${(_sl ? _sl.isToday : tvK===_todayK)?'วันนี้':'ใกล้ถึง'}</div>`:''}</td>
               <td class="num"><div class="pax-total">${b.paxTotal}</div></td>
               <td class="num"><div class="price${b.total?'':' zero'}">&#3647;${bookingV2FmtTHB(b.total)}</div></td>
               <td><span class="bkv2-chip ${b.status}"><span class="dot"></span>${bookingV2StatusLabel(b.status)}</span>${b.focCount > 0 ? `<span class="bkv2-foc-flag">FOC ${b.focCount}</span>` : ''}</td>

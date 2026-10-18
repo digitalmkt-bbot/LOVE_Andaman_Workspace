@@ -487,10 +487,9 @@
     /* Q38 · the server keeps pax >= 1 and pax_th <= pax and gives a route key to one plan only: what it answers is what the screen shows */
     function adopt(id, res, body){
       var p = cost.plans.filter(function(x){ return x.id === id; })[0]; if(!p || !res) return;
-      var a = document.activeElement, fk = a && a.getAttribute ? a.getAttribute('data-fk') : '';
-      var typing = fk === 'pl.pax' || fk === 'pl.paxTH';        /* the plan tab's own fields do not clamp in legacy: leave the number being typed */
-      if(res.pax != null && +res.pax !== +p.pax && !typing){ p.pax = res.pax; shown = true; }
-      if(res.pax_th != null && +res.pax_th !== +p.paxTH && !typing){ p.paxTH = res.pax_th; shown = true; }
+      /* w4-f3 · the plan tab's pax / paxTH are clamped while typing (75-ops-costing-sheet.js ctPlanSet), as the column header does, so the server's number is shown at once */
+      if(res.pax != null && +res.pax !== +p.pax){ p.pax = res.pax; shown = true; }
+      if(res.pax_th != null && +res.pax_th !== +p.paxTH){ p.paxTH = res.pax_th; shown = true; }
       if(body && body.route_key){ cost.plans.forEach(function(x){ if(x.id !== id && x.famId === body.route_key){ x.famId = ''; cost.known[x.id] = JSON.stringify(x); shown = true; } }); }
       cost.known[id] = JSON.stringify(p);
     }
@@ -557,7 +556,7 @@
   /* the plan as the server is asked about it: what the sheet prices (the name, note, route key, tiers and itinerary do not move a figure) */
   function calcBody(pl){
     var b = planToServer(pl);
-    delete b.name; delete b.note; delete b.route_key; delete b.tiers; delete b.itinerary;
+    delete b.name; delete b.note; delete b.tiers;      /* w4-f3 · route_key (the sheet's route name) and itinerary (its kilometres) go too: the Fact Sheet prints both from the answer */
     return b;
   }
   function planPart(pl){
@@ -790,7 +789,21 @@
   O.onWrite(function(kind){ if(kind !== 'costing') forgetCalc(); else calc.failed = {}; });
 
   O.onWrite(function(){ clearAll(); });
-  window.laOps.costingPL = { calcState:calc, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
+  /* §opsCostingSheet (w4-f3) · for 75-ops-costing-sheet.js: the cached answer of a plan (no ask), and a direct ask that does not wait for the screen */
+  function askNow(pl){
+    var have = answer(pl, undefined, false); if(have) return Promise.resolve(have);
+    if(!enabled() || !cost.loaded || !pl || typeof pl !== 'object') return Promise.resolve(null);
+    var pp, tp; try{ pp = planPart(pl); tp = tplPart(undefined); }catch(_){ return Promise.resolve(null); }
+    if(!tp) return Promise.resolve(null);
+    var key = pp.json + '#' + tp.json;
+    return O.queue(function(){ return O.call('POST', '/v1/costing/calc', { plan:pp.body, template:tp.body, pax:Math.max(1, pp.body.pax || 0) }); }).then(function(res){
+      if(!res || !res.calc || !res.sheet) return null;
+      calc.ans[key] = res; calc.byTpl[tp.json] = res; calc.order.push(key);
+      while(calc.order.length > CALC_KEEP) delete calc.ans[calc.order.shift()];
+      return res;
+    }, function(){ return null; });
+  }
+  window.laOps.costingPL = { calcState:calc, answer:function(pl){ return answer(pl, undefined, false); }, askNow:askNow, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
   window.__laOpsCostingCompat = {
     legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisHtml:analysisHtml,
     templateFromServer:templateFromServer, templateToServer:templateToServer, planFromServer:planFromServer, planToServer:planToServer,

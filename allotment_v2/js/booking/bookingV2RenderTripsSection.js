@@ -201,6 +201,7 @@ function bookingV2RenderTripsSection(){
         const drawnTot = srcs.reduce((s,x)=> s + Math.min(Number(sel[x.lockId])||0, x.remaining), 0);
         const general = Math.max(0, pax - drawnTot);
         const undrawn = pax>0 && drawnTot===0;   // has lock but hasn't used it → LOUD reminder
+        const _lkw = (undrawn && typeof window.laOpsLockWarning==='function') ? window.laOpsLockWarning(t.routeId, t.date) : null;   /* §opsBookingForm · the server's warning (text, free seats, seats it would draw) once it has answered */
         const accent = undrawn ? '#7A4300' : '#16265C';
         const stepBtn = `width:30px;height:30px;border:1.5px solid ${undrawn?'#E3C48E':'#C9D6EE'};background:#fff;border-radius:8px;cursor:pointer;color:${accent};font-weight:700;font-size:15px;font-family:inherit;padding:0`;
         const srcRows = srcs.map(x=>{
@@ -218,8 +219,8 @@ function bookingV2RenderTripsSection(){
           <div style="margin-top:10px;padding:10px 12px;background:#FBF1DF;border:1.5px solid #E0A93B;border-radius:12px;box-shadow:0 0 0 3px rgba(224,169,59,.15)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:14px">⚠</span>
-              <span style="font-size:13px;font-weight:700;color:#7A4300;flex:1;min-width:150px">อย่าลืมใช้ seat lock · มี <b>${remTotal}</b> ที่ว่างของเอเจนต์นี้</span>
-              <button onclick="bookingV2AutoDrawLocks(${idx})" style="font-size:12.5px;font-weight:700;color:#fff;background:#7A4300;border:none;border-radius:8px;height:32px;padding:0 12px;cursor:pointer;font-family:inherit;white-space:nowrap">⚡ ใช้ lock ก่อน (ดึง ${Math.min(remTotal,pax)})</button>
+              <span style="font-size:13px;font-weight:700;color:#7A4300;flex:1;min-width:150px">${_lkw ? window.laOpsLockBannerHtml(_lkw) : `อย่าลืมใช้ seat lock · มี <b>${remTotal}</b> ที่ว่างของเอเจนต์นี้`}</span>
+              <button onclick="bookingV2AutoDrawLocks(${idx})" style="font-size:12.5px;font-weight:700;color:#fff;background:#7A4300;border:none;border-radius:8px;height:32px;padding:0 12px;cursor:pointer;font-family:inherit;white-space:nowrap">⚡ ใช้ lock ก่อน (ดึง ${_lkw && _lkw.would_draw!=null ? _lkw.would_draw : Math.min(remTotal,pax)})</button>
             </div>
             <div style="margin-top:3px;font-size:12px;color:#7A4300">กด "ใช้ lock ก่อน" เพื่อดึงอัตโนมัติ หรือเลือกกรุ๊ปเองด้านล่าง</div>
             ${srcRows}
