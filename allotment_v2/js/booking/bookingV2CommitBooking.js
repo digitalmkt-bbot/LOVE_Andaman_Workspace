@@ -205,7 +205,7 @@ function bookingV2CommitBooking(status){
       const drew = Object.values(t.lockDrawSel||{}).reduce((a,b)=>a+(Number(b)||0),0);
       if(drew>0) return;                                   // already using the lock → fine
       const rem = bookingV2DrawSources(t.routeId, t.date, d.agentId).reduce((s,x)=>s+x.remaining,0);
-      if(rem>0){ const rn=((typeof getRoute==='function'?(getRoute(t.routeId)||{}).name:'')||t.routeId); missed.push('• '+rn+' · '+t.date+' — มี lock ว่าง '+rem+' ที่'); }
+      if(rem>0){ const rn=((typeof getRoute==='function'?(getRoute(t.routeId)||{}).name:'')||t.routeId); missed.push((typeof window.laOpsLockSaveLine==='function' && window.laOpsLockSaveLine(t.routeId,t.date)) || ('• '+rn+' · '+t.date+' — มี lock ว่าง '+rem+' ที่')); }   /* §opsBookingForm · the line is the server's warning.save_line when it has answered */
     });
     if(missed.length){
       if(!confirm('⚠ เอเจนต์นี้มี seat lock ที่ยังไม่ได้ใช้:\n\n'+missed.join('\n')+'\n\nจะจองจาก pool ทั่วไปโดยไม่ใช้ lock ใช่ไหม?\n(กด Cancel เพื่อกลับไปกด "ใช้ lock ก่อน")')) return;

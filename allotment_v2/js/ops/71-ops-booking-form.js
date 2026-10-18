@@ -9,8 +9,8 @@
         bookingV2AutoDrawLocks ("ใช้ lock ก่อน"). Both stay synchronous like the quote: the answer is
         cached per draft (agent + trips + booking id); a miss returns legacy's list and asks once
         (300 ms), then the form is drawn again. The staff's choices stay in t.lockDrawSel and go to
-        the save as lock_draws, as before. The Thai warning texts are legacy's own and the server's
-        (same words): the banner and the save-time confirm are drawn from the server's sources.
+        the save as lock_draws, as before. The banner's text and the save-time confirm's line are the server's
+        warning (warning.message, warning.save_line) once it has answered, legacy's own words before that (w4-f3).
    Q44 · PRIVATE VAN  40-ops-bookings.js toServer / 51-ops-quote.js buildRequest send zone NoTransfer for
         a seat trip on a route with a transfer-<route>-… add-on (laOps.vanZone below). The server
         refuses a contradicting zone with 400 private_van_transfer; its message is shown by the save.
@@ -208,7 +208,25 @@
     if(ldFresh(e) && apply(e)) return;
     ldAsk(req).then(function(ans){ if(!apply(ans)) orig.call(self, idx); });
   });
-  O.lockDraws = { _cache: cache, request: ldRequest };
+  /* the server's "locks free but none drawn" warning for a trip of the open draft (warning.message, warning.save_line,
+     free, would_draw), or null before the answer / when the server has none. The banner and the save-time confirm print its text. */
+  function lockWarning(routeId, date){
+    if(!enabled()) return null;
+    var d = draft(); if(!d) return null;
+    var req = ldRequest(d), e = req && cache[req.key];
+    if(!(e && e.ok && ldFresh(e))) return null;
+    var hit = e.by[routeId + '|' + date];
+    return (hit && hit.warning) || null;
+  }
+  function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  window.laOpsLockWarning = lockWarning;
+  /* the banner line: the server's message, escaped, the free-seat number in bold as legacy drew it */
+  window.laOpsLockBannerHtml = function(w){
+    var m = escHtml(w && w.message);
+    return m.replace(/(มี )(d+)( ที่)/, '$1<b>$2</b>$3');
+  };
+  window.laOpsLockSaveLine = function(routeId, date){ var w = lockWarning(routeId, date); return (w && w.save_line) || null; };
+  O.lockDraws = { _cache: cache, request: ldRequest, warning: lockWarning };
 
   /* ══ Q51 · partial cancel ════════════════════════════════════════════════ */
   var ctx = null, pSeq = 0, pTimer = null, lastProposal = null;
