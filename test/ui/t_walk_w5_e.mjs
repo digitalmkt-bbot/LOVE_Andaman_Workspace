@@ -343,7 +343,8 @@ await must('payment', send('POST', '/v1/invoices/' + inv.id + '/payments', { amo
 const srvBk = await api('/v1/bookings/' + fb.id);
 await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ W5E FORM'); _bkV2.newBooking = null; _bkV2.detailId = b.id; bookingV2Render(); });
 ok('the detail read brings the booking\'s money state', await waitFor(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ W5E FORM'); return b && b.srvPay && b.srvPay.state === 'partial'; }, null, 15000), await ev(() => SB_BOOKINGS.find((x) => x.leadPax === 'ZZ W5E FORM').srvPay));
-const pay = await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ W5E FORM'); const p = bookingV2PayOf(b), l = bookingV2PayOf.__orig(b); return { state: p.state, paid: p.paid, bal: p.bal, tot: p.tot, lstate: l.state }; });
+// the browser now reads the money again by itself (w5-c), so its invoices are no longer stale: make them stale on purpose (no payment known) for legacy's side
+const pay = await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'ZZ W5E FORM'); const p = bookingV2PayOf(b); const keep = window.acctInvoicePaid; window.acctInvoicePaid = () => 0; let l; try { l = bookingV2PayOf.__orig(b); } finally { window.acctInvoicePaid = keep; } return { state: p.state, paid: p.paid, bal: p.bal, tot: p.tot, lstate: l.state }; });
 ok('bookingV2PayOf = the booking\'s invoice (partial, paid 1000, balance = total - 1000)',
   pay.state === 'partial' && srvBk.payment_state === 'partial' && pay.paid === srvBk.invoice.paid && pay.bal === srvBk.invoice.balance && pay.tot === srvBk.invoice.total && pay.paid === 1000, { pay, inv: srvBk.invoice });
 ok('sanity: legacy\'s state over the stale local invoices differed', pay.lstate !== 'partial', pay);

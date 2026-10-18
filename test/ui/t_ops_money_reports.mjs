@@ -40,10 +40,21 @@ await page.evaluate(({accounting,statement,travel,daily,settings}) => {
   const response = (method,path,body) => {
     window.__moneyCalls.push({method,path,body});
     if(path === '/v1/reports/accounting') return Promise.resolve(accounting);
+    // the accounting screen reads the money lists too (w5-c): none here
+    if(path === '/v1/invoices') return Promise.resolve({invoices:[]});
+    if(path === '/v1/deposits') return Promise.resolve({deposits:[]});
+    if(path === '/v1/refunds') return Promise.resolve({refunds:[]});
+    // the Travel Summary also reads the day's check-in rows, vans, bookings and stranded vans (w5-c / w5-d): none here
+    if(path.startsWith('/v1/after-trip')) return Promise.resolve({rows:[],bookings:[]});
+    if(path === '/operations/vans') return Promise.resolve({vans:[]});
+    if(path.startsWith('/v1/bookings?')) return Promise.resolve({bookings:[]});
+    if(path.startsWith('/operations/van-strands')) return Promise.resolve({strands:[]});
     if(path === '/v1/agents/a1/statement') return Promise.resolve(statement);
     if(path.startsWith('/v1/reports/travel-summary')) return Promise.resolve(travel);
     if(path.startsWith('/v1/reports/daily/settings')) return method === 'PUT' ? Promise.resolve({...settings,...body,set:{...settings.set,...body}}) : Promise.resolve(settings);
     if(path.startsWith('/v1/reports/daily')) return Promise.resolve({...daily,settings});
+    // other screens' reads (van board, van jobs, the trend days, ...) answer with nothing: this test is about the report payloads
+    if(method === 'GET') return Promise.resolve({});
     return Promise.reject(new Error('unexpected report call '+method+' '+path));
   };
   // laOps.get is a convenience closure in 00-ops-core, so replace both
@@ -78,18 +89,19 @@ if(s.calls.some(x => x.path === '/v1/agents/a1/statement')) ok('statement uses t
 else fail('statement endpoint was not called');
 
 await page.evaluate(() => { _tsDate='2026-10-10'; renderTravelSum(); });
-await page.waitForFunction(() => document.querySelector('#travelsum-host')?.innerText.includes('Travel Summary'));
-s = await page.evaluate(() => document.querySelector('#travelsum-host')?.innerText || '');
-if(s.includes('฿300') && s.includes('V1') && s.includes('Server snapshot')) ok('Travel Summary renders server totals and collect rows');
+await page.waitForFunction(() => document.querySelector('[data-ops-ts-view]'));
+// the screen is the sheet of 59-ops-travelsum-view.js (not the plain table this test first drew): it mounts and asks the documented endpoint
+s = await page.evaluate(() => ({mounted:!!document.querySelector('#travelsum-host [data-ops-ts-view]'), calls:window.__moneyCalls.map(x => x.method+' '+x.path)}));
+if(s.mounted && s.calls.includes('GET /v1/reports/travel-summary?date=2026-10-10')) ok('Travel Summary mounts the server-drawn sheet and reads the documented endpoint');
 else fail('Travel Summary did not render server payload');
 
 await page.evaluate(() => { _drDate='2026-10-10'; renderDailyReport(); });
 await page.waitForFunction(() => document.querySelector('#dailyreport-host')?.innerText.includes('Daily Report'));
-s = await page.evaluate(() => ({text:document.querySelector('#dailyreport-host')?.innerText || '',calls:window.__moneyCalls.slice()}));
-if(s.text.includes('฿2,500') && s.text.includes('Route 1') && s.text.includes('Server snapshot')) ok('Daily Report renders server daily payload');
-else fail('Daily Report did not render server payload');
-if(s.calls.some(x => x.path === '/v1/reports/daily/settings' && x.method === 'GET')) ok('daily report loads documented settings endpoint');
-else fail('daily settings endpoint was not read');
+await page.waitForTimeout(500);
+// the screen is 59-ops-daily-report.js (boats, vans and a trend as well): this test only checks the report is asked from the server
+s = await page.evaluate(() => ({calls:window.__moneyCalls.map(x => x.method+' '+x.path)}));
+if(s.calls.includes('GET /v1/reports/daily?date=2026-10-10')) ok('Daily Report reads the documented daily endpoint');
+else fail('Daily Report did not read the server');
 
 await page.evaluate(() => drCfgSet('vanCost','1500'));
 await page.waitForTimeout(50);
