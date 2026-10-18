@@ -81,6 +81,42 @@
      (CLAUDE.md §6 · ห้าม hardcode 52) · ตั้งเป็น 0 ที่นี่ที่เดียว แล้วหัวตาราง
      ที่ sticky ทุกตัวเลื่อนตามเองหมด ไม่ต้องไล่แก้ทีละที่
      :root มีน้ำหนัก (0,1,0) · html.la-embed:not(...) มี (0,2,1) จึงทับได้ */
+  /* §embedTicket (w5-a, 2026-10-18) · ตั๋วของ CS แลกเป็น Bearer แบบอ่านอย่างเดียวที่ operation-backend
+     เดิม server.js (embedTokenOk / embedSessionCookie) ตรวจตั๋วแล้วตั้งคุกกี้ · ตอนนี้ไม่มีคุกกี้ ไม่มี server.js
+     ตั๋วมากับ URL เป็น ?t=<ticket> (ชื่อเดิมของ server.js) หรือ ?ticket= · แลกที่ POST /v1/embed/token ครั้งเดียว
+     ก่อน 01-auth-sync บูต (ไฟล์นี้เป็น <script> ตัวแรก) แล้วเก็บ token ไว้ใน sessionStorage ของแท็บนี้เท่านั้น
+     ตั๋วถูกลบออกจาก URL ทันที (ไม่ค้างใน history/referrer) · กฎเดิม: มี session อยู่แล้ว = ใช้ของเขา ตั๋วไม่ทับ
+     ตั๋วเสีย/หมดอายุ = ไม่ล็อกอิน · การ์ด "ยังไม่ได้เข้าสู่ระบบ" ขึ้นพร้อมข้อความของ server ตามเดิม
+     ⚠ token นี้อ่านได้เฉพาะรายการที่ server อนุญาต (ปฏิทิน / By trip) และเขียนไม่ได้เลย · จึงบังคับ RO ไม่ว่า edit=1 หรือไม่ */
+  var EMB_TOKEN_KEY = 'la_ops_token', EMB_FLAG_KEY = 'la_ops_embed', TICKET_ERR = '';
+  (function(){
+    var tk = qs.get('t') || qs.get('ticket');
+    try{
+      if(tk){
+        var u = new URL(location.href); u.searchParams.delete('t'); u.searchParams.delete('ticket');
+        history.replaceState(null, '', u.pathname + (u.search || '') + (u.hash || ''));
+      }
+    }catch(_){}
+    try{
+      if(tk && !sessionStorage.getItem(EMB_TOKEN_KEY)){
+        var base = (window.LA_CONFIG && window.LA_CONFIG.opsBackend) || 'https://operationbackend-production.up.railway.app';
+        var x = new XMLHttpRequest(), j = null;
+        x.open('POST', base + '/v1/embed/token', false);
+        x.setRequestHeader('Content-Type', 'application/json');
+        x.send(JSON.stringify({ ticket: String(tk) }));
+        try{ j = JSON.parse(x.responseText); }catch(_){}
+        if(x.status === 200 && j && j.access_token){
+          sessionStorage.setItem(EMB_TOKEN_KEY, j.access_token);
+          sessionStorage.setItem(EMB_FLAG_KEY, '1');
+        } else {
+          TICKET_ERR = (j && (j.message || j.error)) || ('HTTP ' + x.status);
+          try{ console.warn('[embed] ticket refused · ' + TICKET_ERR); }catch(_){}
+        }
+      }
+      if(sessionStorage.getItem(EMB_FLAG_KEY) === '1') RO = true;
+    }catch(_){}
+  })();
+
   var de = document.documentElement;
   de.classList.add('la-embed');
   if(CHROME) de.classList.add('la-embed-chrome');
@@ -146,7 +182,9 @@
     msg('ยังไม่ได้เข้าสู่ระบบ',
         'เปิดระบบจองในแท็บใหม่เพื่อเข้าสู่ระบบก่อน แล้วกลับมากดโหลดใหม่',
         '<a href="' + location.pathname + '" target="_blank" rel="noopener">เข้าสู่ระบบ</a>'
-        + '<button onclick="location.reload()">โหลดใหม่</button>');
+        + '<button onclick="location.reload()">โหลดใหม่</button>'
+        + (TICKET_ERR ? '<p style="margin:14px 0 0;font-size:12px;color:#A32D2D" id="la-embed-why"></p>' : ''));
+    if(TICKET_ERR){ var _w = document.getElementById('la-embed-why'); if(_w) _w.textContent = TICKET_ERR; }   // ข้อความของ server ตามที่ส่งมา
     return true;
   }
 
