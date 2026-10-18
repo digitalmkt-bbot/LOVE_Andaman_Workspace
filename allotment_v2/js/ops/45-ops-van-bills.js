@@ -25,6 +25,10 @@
    is read-only until ✎ แก้ไข. Every change is saved on the server as it is made; ✓ บันทึก marks the
    rows seen (§vbSeen); ยกเลิก puts back the inputs as they were when ✎ แก้ไข was pressed.
 
+   w5c (2026-10-18): the screens are legacy's current ones (lk-inbox 9882365, §vbx): the overview by pier (vbRenderOv2) and the owner's
+   spreadsheet of one pier (vbRenderSheet), drawn from the server's pier answers (piers[] / tabs[] / idle_partners[], ?pier=). A write
+   builds its body from the WHOLE bill read just before, never from the part on screen. See docs/walk/w5-c.md.
+
    The period/partner controls reuse the legacy vbShiftMonth / vbPick / vbMode / vbOpenSup, which
    only set _vb and call renderVanBill(). Load order: after 34-ops-vans.js, before 90-ops-boot.js.
    ══════════════════════════════════════════════════════════════════════════ */
@@ -507,7 +511,7 @@
 
   /* ── writes · server first: the screen shows the server's answer, or goes back ── */
   function current(){ var h = cache[viewKey()]; return h ? h.view : null; }
-  function drop2(){ Object.keys(cache).forEach(function(k){ if(k.indexOf('/v1/van-bills?') === 0) delete cache[k]; }); }   // overview is stale now
+  function drop2(){ Object.keys(cache).forEach(function(k){ if(k.indexOf('/v1/van-bills?') === 0) cache[k].at = 0; }); }   // the overviews are old now: kept on screen until the new ones land
   /* The answer of a write is the WHOLE bill of that address. What is on screen may be one pier's (or one van's) part of it, so the screen's
      own read is asked again (kept on screen until it lands, so a field being typed in does not lose its place) and only then drawn. */
   function answered(addr, onOk){
@@ -518,7 +522,8 @@
       var key = viewKey();
       var go = (key === addr) ? (put(addr, v), Promise.resolve()) : load(key).catch(function(){});
       var sib = (_vb.mode !== 'ov' && _vb.van) ? load(address() + '?pier=' + enc(_vb.pier)).catch(function(){}) : null;
-      return Promise.all([go, sib]).then(function(){ if(onOk) onOk(v); render(); return v; });
+      var ovp = (_vb.mode !== 'ov') ? load(overviewKey()).catch(function(){}) : null;      // the owner chips of the sheet show the overview's figures
+      return Promise.all([go, sib, ovp]).then(function(){ if(onOk) onOk(v); render(); return v; });
     };
   }
   function refused(title){ return function(e){ O.fail(title, e); render(); return null; }; }

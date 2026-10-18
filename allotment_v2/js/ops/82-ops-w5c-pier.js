@@ -14,6 +14,7 @@
      pc2Main / pcPrintLedger running balance    each row's `balance` (srvBal, 46-ops-pier-cash.js legacyRow)
      pcLtUsed(C).tot                            the cell's used_boats (join + charter, the server's)
      pcPkDiff(pier, ds, bid, legacy)            the park cell's check.diff
+     pcSheetTot(kind, pier, ds)                 the longtail / park sheet's keyed sums of a day (or the month): the sheet's `totals`
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -78,7 +79,7 @@
     var at = stamp, drawn = sigOf(fam, rst), clone = null;
     try{ clone = { fam: JSON.parse(JSON.stringify(fam)), rst: JSON.parse(JSON.stringify(rst)) }; }catch(_){}
     PG[date] = { stamp: -1, programmes: null, busy: true };
-    O.get('/v1/pier-checkin', { date: date }).then(function(j){
+    O.get('/v1/pier-checkin', { date: date, programmes: 1 })   /* the marker is ignored by the server; it tells this read from the Service column's (74-ops-pier-service.js) */.then(function(j){
       var progs = (j && j.programmes) || [];
       PG[date] = { stamp: at, programmes: progs, busy: false };
       // draw the page again only if the server's figures are not the ones it was drawn with
@@ -129,6 +130,19 @@
     }
     return null;
   }
+  /* what the pier keyed, added up by the server: a day's `totals`, or the month's when ds is null (the sheet read without ?date=) */
+  wrapGlobal('pcSheetTot', function(orig, self, kind, pier, ds){
+    var c = PC(); if(!c || !pier) return undefined;
+    var ks = Object.keys(c.sheet), ym = ds ? String(ds).slice(0, 7) : (typeof _pcYM !== 'undefined' ? _pcYM : '');
+    for(var i = 0; i < ks.length; i++){
+      var j = c.sheet[ks[i]]; if(ks[i].indexOf(kind + '|' + pier + '|') !== 0 || !j || j === true || j.month !== ym) continue;
+      if(ds){
+        var d = (j.days || []).filter(function(x){ return x.date === ds; })[0];
+        if(d && d.totals) return d.totals;
+      } else if(!j.date && j.totals) return j.totals;           // the month's sheet
+    }
+    return undefined;
+  });
   wrapGlobal('pcPkDiff', function(orig, self, pier, ds, bid){
     var b = parkBoat(pier, ds, bid);
     if(!b || !b.check) return undefined;
