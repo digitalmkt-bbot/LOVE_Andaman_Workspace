@@ -210,6 +210,47 @@ console.log('\n== ' + curItem);
   await sleep(500);
 }
 
+// ═══ 3 · Action Board (_abAgentSplit, _abAgentStats, _abDelta, abRender cards and chips) ═══
+curItem = '3 action board';
+console.log('\n== ' + curItem);
+{
+  // legacy's own arithmetic has nothing to add up: the browser holds no booking at all
+  await ev(() => { SB_BOOKINGS.length = 0; });
+  n0 = calls.length;
+  await openView('actionboard', 'abRender()', 3000);
+  await sleep(1500); await idle();
+  const ab = await api('/v1/action-board?month=' + THIS_MONTH);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/action-board and GET /v1/availability?split=agent', mine.some((c) => c.startsWith('GET /v1/action-board 200')) && mine.some((c) => c.startsWith('GET /v1/availability 200')), mine);
+  ok('no booking range was loaded for the board (the three loads of 52 are not started)', !mine.some((c) => /GET \/v1\/bookings( |\/recent|\/agent-month)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('seed: Sun Tour is the top sender with a "new" tag', ab.cards.top_senders[0].agent.agent_id === 'a01' && ab.cards.top_senders[0].delta.kind === 'new', ab.cards.top_senders[0]);
+  const chip = (label) => ev((l) => { const e = [...document.querySelectorAll('.ab-chip')].find((x) => x.textContent.trim().startsWith(l)); return e ? e.querySelector('b').textContent : null; }, label);
+  ok('chips equal the server chips (Free 14d, Almost full, At risk, Agents gone)', [await chip('Free 14d'), await chip('Almost full'), await chip('At risk'), await chip('Agents gone')].join() === [ab.chips.free_14d, ab.chips.almost_full, ab.chips.at_risk, ab.chips.agents_gone].join(), [await chip('Free 14d'), ab.chips]);
+  const card = (title) => ev((t) => { const c = [...document.querySelectorAll('.ab-c')].find((x) => { const b = x.querySelector('.ab-ct .big'); return b && b.textContent.trim() === t; }); return c ? { cnt: (c.querySelector('.ab-ct .cnt') || {}).textContent, rows: [...c.querySelectorAll('.ab-ar')].map((r) => r.innerText.replace(/\s+/g, ' ').trim()), trips: [...c.querySelectorAll('.ab-tr')].map((r) => r.innerText.replace(/\s+/g, ' ').trim()) } : null; }, title);
+  const top = await card('Top senders this month');
+  ok('Top senders card = the server list (rank, name, pax, bookings, new tag)', top && top.rows.length === ab.cards.top_senders.length && ab.cards.top_senders.every((x, i) => top.rows[i].includes(x.agent.name) && top.rows[i].includes(String(x.value)) && top.rows[i].includes(x.detail.bookings + ' bkgs')) && /new/.test(top.rows[0]), [top, ab.cards.top_senders.length]);
+  const risk = await card('At risk');
+  ok('At risk card lists the server cells (count and dates)', risk && risk.trips.length === ab.cards.at_risk.length && String(ab.cards.at_risk.length) === risk.cnt && ab.cards.at_risk.every((x, i) => risk.trips[i].includes(x.fill_percent + '%')), [risk, ab.cards.at_risk.length]);
+  // by sales: the cell tooltip names the salesperson with the server's pax for the day
+  const sold = await api('/v1/availability?from=' + DAYS[0] + '&to=' + DAYS[0] + '&split=sales');
+  const r5 = sold.days.find((d) => d.route_id === 'r5');
+  const tip = await ev(([rid, ds]) => { const e = [...document.querySelectorAll('.ab-mc')].find((x) => (x.getAttribute('onclick') || '').includes("abGoTrip('" + rid + "','" + ds + "')")); return e ? e.getAttribute('title') : null; }, ['r5', DAYS[0]]);
+  ok('seat cell tooltip names who sold the seats with the server sold_by pax (by sales)', r5.sold_by.length > 0 && tip && r5.sold_by.every((x) => tip.includes(' ' + x.pax)), [tip, r5.sold_by]);
+  await ev(() => abSetBy('agent')); await sleep(600);
+  const sold2 = await api('/v1/availability?from=' + DAYS[0] + '&to=' + DAYS[0] + '&split=agent');
+  const r5a = sold2.days.find((d) => d.route_id === 'r5');
+  const tip2 = await ev(([rid, ds]) => { const e = [...document.querySelectorAll('.ab-mc')].find((x) => (x.getAttribute('onclick') || '').includes("abGoTrip('" + rid + "','" + ds + "')")); return e ? e.getAttribute('title') : null; }, ['r5', DAYS[0]]);
+  ok('by agent: the tooltip lists each agent with the server pax (Sun Tour, B2C Website)', r5a.sold_by.length === 2 && /Sun Tour 3/.test(tip2 || '') && /B2C Website 2/.test(tip2 || ''), [tip2, r5a.sold_by]);
+  await ev(() => abSetBy('sales'));
+  // a sales filter goes to the server as sales_id; this salesperson owns every seeded agent, a made-up one owns none
+  n0 = calls.length;
+  await ev(() => abSetSales('s1')); await sleep(1500); await idle();
+  ok('sales chip: the board asks with sales_id', callsSince(n0).some((c) => /GET \/v1\/action-board 200/.test(c)), callsSince(n0));
+  await ev(() => abSetSales(''));
+  await sleep(500);
+  ok('only reads went out for the board', nonGet(n0).length === 0, nonGet(n0));
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });

@@ -12,6 +12,7 @@
         A stale answer (a write happened) stays on screen until the new one lands. A failed read is shown to the
         person once (laOps.fail) and not repeated until the next write.
      laOps.srv.peek(key)    the cached answer, no read
+     laOps.srv.status(key)  'loading' | 'failed' | 'ready' | 'idle'
      laOps.srv.clear()      forget everything
 
    Nothing here computes a figure. Load order: before the other 73-ops-*.js files. Classic script.
@@ -51,6 +52,8 @@
   /* a write (here or from another machine) makes every answer old; the old one stays until the new lands */
   O.onWrite(function(){ Object.keys(cache).forEach(function(k){ stale[k] = true; }); failed = {}; });
 
-  O.srv = { read: read, peek: peek, clear: clear, __w4f1: true,
+  function status(key){ return loading[key] ? 'loading' : failed[key] ? 'failed' : cache[key] ? 'ready' : 'idle'; }
+
+  O.srv = { read: read, peek: peek, clear: clear, status: status, __w4f1: true,
             fresh: function(key){ return !!cache[key] && !stale[key]; } };
 })();
