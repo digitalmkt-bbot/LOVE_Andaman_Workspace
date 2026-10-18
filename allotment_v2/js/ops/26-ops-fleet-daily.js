@@ -1233,14 +1233,14 @@
       return prefix + '-' + String(mx + 1).padStart(3, '0');
     };
 
-    /* w5-b: the incident and job numbers are the server's next_no (GET /v1/fleet/incidents, /jobs), read just before the send,
-       not the browser's highest + 1. The memo list carries no next_no yet (MISSING-SERVER-FIELD in docs/walk/w5-b.md), so a bought
-       part's memo number is still worked out here, from the memos the screen holds. */
+    /* w5-b / w6-b: the incident, job and memo numbers are the server's next_no (GET /v1/fleet/incidents, /jobs, /memos), read just
+       before the send, not the browser's highest + 1. The browser's own count is only the fallback for a read that failed. */
     var nosP = Promise.all([
       O.get('/v1/fleet/incidents', { boat_id: '-none-' }).catch(function(){ return null; }),
-      O.get('/v1/fleet/jobs', { boat_id: '-none-' }).catch(function(){ return null; })
+      O.get('/v1/fleet/jobs', { boat_id: '-none-' }).catch(function(){ return null; }),
+      O.get('/v1/fleet/memos', { boat_id: '-none-' }).catch(function(){ return null; })
     ]).then(function(r){
-      return { inc: (r[0] && r[0].next_no) || nextNo(incList, 'INC'), mj: (r[1] && r[1].next_no) || nextNo(mjList, 'MJ') };
+      return { inc: (r[0] && r[0].next_no) || nextNo(incList, 'INC'), mj: (r[1] && r[1].next_no) || nextNo(mjList, 'MJ'), mo: (r[2] && r[2].next_no) || nextNo(moList, 'MO') };
     });
     var body = null;
     function buildBody(nos){
@@ -1260,7 +1260,7 @@
         labour: sd.newLabour != null ? sd.newLabour : sd.labour, // the screen keeps the labour cost in _swapDoc.newLabour
         incNo: nos.inc,
         mjNo: nos.mj,
-        moNo: sd.source === 'buy' ? nextNo(moList, 'MO') : null,
+        moNo: sd.source === 'buy' ? nos.mo : null,
         serialAnyway: !sd.newSerial
       });
     }

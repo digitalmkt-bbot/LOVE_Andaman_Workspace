@@ -159,7 +159,7 @@
 
   /* ── Replace wizard, step 3: the numbers the records will get are the server's next_no ───────────────────────
      The preview used to count the browser's lists + 1. Now it asks GET /v1/fleet/incidents and /jobs (next_no), draws legacy's
-     numbers until they arrive, then draws the step again. (Memos carry no next_no: the MO number stays the browser's.) */
+     numbers until they arrive, then draws the step again. (w6-b: the memo list carries next_no too, so the MO number is the server's.) */
   var nos = null, nosAt = 0, nosBusy = false;
   O.onWrite(function(){ nos = null; });
   function askNos(){
@@ -167,9 +167,10 @@
     nosBusy = true;
     Promise.all([
       O.get('/v1/fleet/incidents', { boat_id: '-none-' }),
-      O.get('/v1/fleet/jobs', { boat_id: '-none-' })
+      O.get('/v1/fleet/jobs', { boat_id: '-none-' }),
+      O.get('/v1/fleet/memos', { boat_id: '-none-' }).catch(function(){ return null; })
     ]).then(function(r){
-      nos = { inc: r[0] && r[0].next_no, mj: r[1] && r[1].next_no }; nosAt = Date.now(); nosBusy = false;
+      nos = { inc: r[0] && r[0].next_no, mj: r[1] && r[1].next_no, mo: r[2] && r[2].next_no }; nosAt = Date.now(); nosBusy = false;
       if(typeof _swapDoc !== 'undefined' && _swapDoc && _swapDoc.step === 3 && typeof window.swapDocRender === 'function') window.swapDocRender();
     }, function(){ nosBusy = false; nosAt = Date.now(); });
   }
@@ -180,6 +181,8 @@
     var pad = function(p, n){ return p + '-' + String(n + 1).padStart(3, '0'); };
     var li = pad('INC', (typeof FL_INCIDENTS !== 'undefined' ? (FL_INCIDENTS || []).length : 0));
     var lj = pad('MJ', (typeof FL_MAINT !== 'undefined' ? (FL_MAINT || []).length : 0));
-    return html.split(li).join(nos.inc).split(lj).join(nos.mj);
+    var lm = pad('MO', (typeof FL_MEMOS !== 'undefined' ? (FL_MEMOS || []).length : 0));
+    html = html.split(li).join(nos.inc).split(lj).join(nos.mj);
+    return nos.mo ? html.split(lm).join(nos.mo) : html;     // w6-b: the memo number is the server's too (GET /v1/fleet/memos next_no)
   });
 })();
