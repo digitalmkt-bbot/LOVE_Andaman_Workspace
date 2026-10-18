@@ -163,6 +163,53 @@ const rec2 = await api('/v1/bookings/recent?created_from=' + T0 + '&created_to='
 ok('Live bookings header (B2B): count, pax, money, agents = the server summary', fh.some((h) => h[0] && h[0].startsWith(String(rec.summary.bookings)) && h[1].startsWith(String(rec.summary.pax)) && h[3] && h[3].startsWith(String(rec.summary.agents))), [fh, rec.summary]);
 ok('Live bookings header (B2C): count and average = the server summary', rec2.summary.bookings === 1 && fh.some((h) => h[0] && h[0].startsWith(String(rec2.summary.bookings)) && h[1].startsWith(String(rec2.summary.pax))), [fh, rec2.summary]);
 
+// ═══ 2 · Dashboard Bookings overview: 30-day and 12-month bars (renderDash buckets) ═══
+curItem = '2 dashboard bars';
+console.log('\n== ' + curItem);
+{
+  const SEL = DAYS[1];
+  const addDays = (ds, n) => { const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  // what the server holds for the 30 days ending on SEL (two calendar-month answers put together by the test itself)
+  const win = []; for (let i = -29; i <= 0; i++) win.push(addDays(SEL, i));
+  const monthsNeeded = [...new Set(win.map((d) => d.slice(0, 7)))];
+  const bucketBy = {};
+  for (const m of monthsNeeded) { const a = await api('/v1/dashboard?date=' + m + '-01&mode=month'); a.series.forEach((b) => { bucketBy[b.bucket] = b; }); }
+  const expect = win.map((d) => bucketBy[d]);
+  ok('server month answers cover the 30-day window', expect.every(Boolean), win.filter((d) => !bucketBy[d]));
+  n0 = calls.length;
+  // legacy's own arithmetic cannot see these bookings: take its seat counter away
+  await ev((s) => { window.__gsc = window.getSeatsConsumed; window.getSeatsConsumed = () => 0; window._dashDate = s; window._dashBkMode = 'month'; renderDash(); }, SEL);
+  await sleep(2500); await idle(); await sleep(800);
+  const plot = await ev(() => {
+    const cols = [...document.querySelectorAll('.dv-plot > div > div')];
+    return cols.map((c) => ({ lab: (c.lastElementChild && c.lastElementChild.innerText) || '', segs: [...c.querySelectorAll('.dv-barbox [title]')].map((e) => e.getAttribute('title')), top: (c.querySelector('.dv-barbox div[style*="top:-20px"]') || { innerText: '' }).innerText }));
+  });
+  ok('month mode asked the server: GET /v1/dashboard?mode=month for the months of the window', callsSince(n0).some((c) => /GET \/v1\/dashboard 200/.test(c)) && nonGet(n0).length === 0, callsSince(n0));
+  ok('30 bars drawn', plot.length === 30, plot.length);
+  const iSel = 29, iD0 = win.indexOf(DAYS[0]);
+  ok('selected day label = the server bucket total', plot[iSel].top === String(expect[iSel].total), [plot[iSel].top, expect[iSel].total]);
+  const segSum = (c) => c.segs.reduce((a, t) => a + (+(/:\s*(\d+)\s*$/.exec(t) || [0, 0])[1]), 0);
+  ok('every bar holds the server pax (route segments + charter)', plot.every((c, i) => segSum(c) === expect[i].total || (expect[i].capacity === 0 && expect[i].total > 0)), plot.map((c, i) => [i, segSum(c), expect[i].total]).filter((x) => x[1] !== x[2]));
+  ok('a bar with bookings the browser cannot see (seat counter stubbed to 0) still shows them', expect[iD0].total > 0 && segSum(plot[iD0]) === expect[iD0].total, [expect[iD0].total, plot[iD0]]);
+  const avg = await ev(() => [...document.querySelectorAll('.dv-av')].map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+  const totWin = expect.reduce((a, b) => a + b.total, 0);
+  ok('"average per day" card = the server totals over the window / 30', avg.some((t) => t.includes(String(Math.round(totWin / 30)))), [avg, totWin]);
+  // 12 months
+  const anchor = new Date(SEL + 'T12:00:00Z');
+  const ymA = anchor.getUTCFullYear();
+  const yb = {}; for (const y of [ymA, ymA - 1]) { const a = await api('/v1/dashboard?date=' + y + '-01-01&mode=year'); a.series.forEach((b) => { yb[b.bucket] = b; }); }
+  const months = []; for (let o = -11; o <= 0; o++) { const d = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + o, 1)); months.push(d.toISOString().slice(0, 7)); }
+  n0 = calls.length;
+  await ev(() => { window._dashBkMode = 'year'; renderDash(); });
+  await sleep(2500); await idle(); await sleep(800);
+  const plotY = await ev(() => [...document.querySelectorAll('.dv-plot > div > div')].map((c) => ({ segs: [...c.querySelectorAll('.dv-barbox [title]')].map((e) => e.getAttribute('title')), top: (c.querySelector('.dv-barbox div[style*="top:-20px"]') || { innerText: '' }).innerText })));
+  ok('year mode: 12 bars, the selected month shows the server bucket total', plotY.length === 12 && plotY[11].top === String(yb[months[11]].total), [plotY.length, plotY[11], yb[months[11]]]);
+  ok('year mode: every month holds the server pax', plotY.every((c, i) => segSum(c) === yb[months[i]].total || (yb[months[i]].capacity === 0 && yb[months[i]].total > 0)), plotY.map((c, i) => [months[i], segSum(c), yb[months[i]].total]));
+  ok('year mode asked the server for the year answers', callsSince(n0).some((c) => /GET \/v1\/dashboard 200/.test(c)), callsSince(n0));
+  await ev(() => { window.getSeatsConsumed = window.__gsc; window._dashBkMode = 'day'; window._dashDate = ''; renderDash(); });
+  await sleep(500);
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
