@@ -3624,6 +3624,9 @@ function renderDash(){
                       isToday:(y+'-'+String(mo+1).padStart(2,'0'))===TODAY_STR.slice(0,7)});
     }
   }
+  /* w4-f1 MARKED EDIT (§opsDashSeries · ops/73-ops-dash-series.js): in operation mode the month and year bars are the server's
+     (GET /v1/dashboard series); the closure above is legacy's own sum, kept for offline and until the first answer lands. */
+  if(typeof window.laOpsDashSeries==='function'){ const _srvB=window.laOpsDashSeries(_bkMode,_ds,TODAY_STR); if(_srvB && _srvB.length){ bkBuckets.length=0; _srvB.forEach(b=>bkBuckets.push(b)); } }
   // total pax per bucket = seat booked + charter
   bkBuckets.forEach(b=>{ b.tot=(b.booked||0)+(b.charter||0); });
   // Route totals over the active period → top 3 + Other
