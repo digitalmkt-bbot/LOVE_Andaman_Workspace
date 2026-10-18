@@ -1037,9 +1037,9 @@
       rows.push(o);
     });
     (I.cxl[t0]||[]).forEach(function(b){ (b.trips||[]).forEach(function(t){ if(t.date!==ds) return; var r=route(t.routeId); if(!pierOk(r)) return; tot.cxl+=pax(t); tot.cxlN++; }); });
-    /* ยังว่างก่อน · ต่ำกว่าคุ้มทุนบนสุด · เต็มแล้วไปอยู่ล่าง · ในกลุ่มเรียงตามเวลาออก */
-    var ord={be:0, open:1, na:2, full:3};
-    rows.sort(function(a,b){ return (ord[a.st]-ord[b.st]) || String(a.dep).localeCompare(String(b.dep)); });
+    /* เรียงตามลำดับโปรแกรม (รายการเส้นทางของระบบ · แบบเดียวกับหน้าอื่น) · owner 2026-10-19 "ขอปรับการเรียง อิงจากโปรแกรม" · ไม่ย้ายลำเต็มลงล่างแล้ว */
+    var rix=function(rid){ var i=-1; try{ i=(typeof ROUTES!=='undefined'?ROUTES:[]).findIndex(function(r){ return r && r.id===rid; }); }catch(_){} return i<0?999:i; };
+    rows.sort(function(a,b){ return (rix(a.rid)-rix(b.rid)) || String(a.dep).localeCompare(String(b.dep)); });
     return {ds:ds, rows:rows, tot:tot, pct:pct(tot.bk,tot.cap), pct24:pct(tot.bk24,tot.cap24)};
   }
   function mvMade(ds){

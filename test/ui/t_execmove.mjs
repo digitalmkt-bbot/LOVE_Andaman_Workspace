@@ -9,7 +9,7 @@
 // กัน
 //   1 เปิดหน้าแล้วแท็บแรกคือ มูฟเมนต์ · วันที่ในหัวการ์ด = พรุ่งนี้ · มี LIVE · ไม่มีอิโมจิในหน้า
 //   2 % ขายได้ในวงแหวน = Σ seatsConsumed / Σ availableCapacity ของโปรแกรมพรุ่งนี้ (getAllotment) · N/M ลำเต็ม ตรงกับแถว
-//   3 แถว = โปรแกรมที่มีเรือ/ใบจองพรุ่งนี้ · ที่นั่งในแถวตรง getAllotment · แถวที่ยังว่างมีลายวิ่ง (.ebm-live) · แถวเต็มไม่มี · เต็มแล้วอยู่ล่างกว่าแถวที่ยังว่าง
+//   3 แถว = โปรแกรมที่มีเรือ/ใบจองพรุ่งนี้ · ที่นั่งในแถวตรง getAllotment · เรียงตามลำดับโปรแกรม (2026-10-19) · แถวที่ยังว่างมีลายวิ่ง (.ebm-live) · แถวเต็มไม่มี · เต็มแล้วอยู่ล่างกว่าแถวที่ยังว่าง
 //   4 โซนรับใต้ชื่อโปรแกรม = Σ pax แยก Phuket / Khao Lak / Own transport ของใบในโปรแกรมนั้น
 //   5 "ล่าสุด": โปรแกรมที่มีใบเข้าวันนี้ขึ้นชิป +pax · เวลา (ภายใน 60 นาที = ชิปเขียวกะพริบ) · โปรแกรมที่ไม่มีใบเลยขึ้น "ยังไม่มีใบจอง"
 //   6 เข้ามาวันนี้ (สำหรับพรุ่งนี้) = Σ pax ของใบพรุ่งนี้ที่เข้าระบบวันนี้ · แยกโซนรวมเท่ากัน · ยกเลิกวันนี้ = pax ของใบที่ยกเลิกวันนี้
@@ -34,8 +34,8 @@ const S = await page.evaluate(() => {
   let n = 0;
   const mk = (travel, rid, madeOff, hour, paxN, zone) => { const b = JSON.parse(JSON.stringify(src[n % src.length])); n++; b.id = 'ZZMV' + n;
     b.trips[0].date = travel; b.trips[0].routeId = rid; b.trips[0].zone = zone; b.pickupZone = zone; b.trips[0].pax = { ad: paxN, chd:0, inf:0, foc:0 }; b.trips[0].lockUse = 0; delete b.trips[0].seatSource; delete b.trips[0].upg;
-    const md = new Date(T); md.setDate(md.getDate() + madeOff); if (madeOff === 0) hour = Math.min(hour, T.getHours());   /* วันนี้ต้องไม่สร้างอนาคต (รันกลางคืนก็ผ่าน) */
-    md.setHours(hour, madeOff === 0 && hour === T.getHours() ? Math.min((n * 7) % 60, Math.max(0, T.getMinutes() - 6)) : (n * 7) % 60, 0, 0);
+    const md = new Date(T); md.setDate(md.getDate() + madeOff); md.setHours(hour, (n * 7) % 60, 0, 0);
+    if (madeOff === 0 && md.getTime() > T.getTime() - 10 * 60000) md.setTime(T.getTime() - 10 * 60000);   /* วันนี้ต้องไม่สร้างอนาคต และต้องเก่ากว่าใบ "5 นาทีก่อน" (รันกลางคืนก็ผ่าน) */
     b.history = [{ at: md.toISOString(), kind: 'create', tag: 'Created', text: 'x' }]; b.bookingDate = ymd(md); b.createdAt = ymd(md); b.ops = {}; b.status='confirmed'; delete b.cancelledAt; delete b.cancellation; SB_BOOKINGS.push(b); return b; };
   for (let i = 0; i < 12; i++) mk(tm, 'r5', -2, 10 + (i % 6), 3, i%3?'PK':'KL');
   for (let i = 0; i < 5; i++) mk(tm, 'r5', 0, 9 + i, 2, 'KL');
@@ -95,13 +95,14 @@ const A = await page.evaluate((S) => {
   const rowIds = R1.rows.map(r => r.rid).sort().join(','), want = A.rids.sort().join(',');
   const liveBad = R1.rows.filter(r => (r.st === 'open' || r.st === 'be') ? !(r.live && r.scan) : r.live);
   const pierOf = await page.evaluate(ids => Object.fromEntries(ids.map(id => [id, (getRoute(id) || {}).pier || ''])), R1.rows.map(r => r.rid));
-  const groups = {}; R1.rows.forEach(r => { (groups[pierOf[r.rid]] = groups[pierOf[r.rid]] || []).push(r.st === 'full' ? 1 : 0); });
-  const order = Object.values(groups).every(g => g.join('') === g.slice().sort().join(''));   /* ในแต่ละท่า: เต็มอยู่ล่าง */
+  const rix = await page.evaluate(ids => Object.fromEntries(ids.map(id => [id, ROUTES.findIndex(r => r && r.id === id)])), R1.rows.map(r => r.rid));
+  const groups = {}; R1.rows.forEach(r => { (groups[pierOf[r.rid]] = groups[pierOf[r.rid]] || []).push(rix[r.rid]); });
+  const order = Object.values(groups).every(g => g.every((v, i) => i === 0 || v >= g[i - 1]));   /* ในแต่ละท่า: เรียงตามลำดับโปรแกรม (ROUTES) · ลำเต็มอยู่ที่เดิม */
   if (rowIds !== want) fail('3 แถวไม่ตรงโปรแกรมพรุ่งนี้ · ' + rowIds + ' vs ' + want);
   else if (badRow) fail('3 ที่นั่งในแถวไม่ตรง getAllotment · ' + JSON.stringify(badRow) + ' vs ' + JSON.stringify(A.per[badRow.rid]));
   else if (liveBad.length) fail('3 ลายวิ่งผิดแถว · ' + JSON.stringify(liveBad.map(r => [r.rid, r.st, r.live])));
-  else if (!order) fail('3 แถวเต็มไม่ได้อยู่ล่างแถวที่ยังว่าง · ' + R1.rows.map(r => r.st).join(','));
-  else ok('3 ' + R1.rows.length + ' แถว · ที่นั่งตรง getAllotment · ลายวิ่งเฉพาะแถวที่ยังรับจอง · เต็มอยู่ล่าง');
+  else if (!order) fail('3 แถวไม่ได้เรียงตามลำดับโปรแกรม · ' + R1.rows.map(r => r.rid + ':' + rix[r.rid]).join(','));
+  else ok('3 ' + R1.rows.length + ' แถว · ที่นั่งตรง getAllotment · ลายวิ่งเฉพาะแถวที่ยังรับจอง · เรียงตามลำดับโปรแกรม');
 }
 
 /* ══ 4 · โซนรับ ══════════════════════════════════════════════════════ */
