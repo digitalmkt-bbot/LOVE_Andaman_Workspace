@@ -149,7 +149,7 @@
     if(!g || g.number == null) return;
     var num = +g.number;
     serverIds[keyOf(date, routeId, num)] = g.id;
-    groupInfo[g.id] = { date: date, routeId: routeId, number: num, vanId: g.van_id || null, stopSeats: +g.stop_seats || 0 };   // w5c: stop_seats = the guides riding along (outbound), the server's count
+    groupInfo[g.id] = { date: date, routeId: routeId, number: num, vanId: g.van_id || null, stopSeats: +g.stop_seats || 0, stopSeatsRet: g.stop_seats_return != null ? (+g.stop_seats_return || 0) : null };   // w5c: stop_seats = the guides riding along (outbound), the server's count
     var listed = {};
     (g.members || []).forEach(function(m){ if(m) listed[m.booking_id + '#' + (+m.idx || 0)] = true; });
     allBookings().forEach(function(b){

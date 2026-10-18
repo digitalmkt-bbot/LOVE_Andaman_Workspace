@@ -12556,6 +12556,8 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   /* §w5cPills · pier page, ops mode: the heads that arrived / cleared / boarded, the zone boxes and the money still to collect are
      GET /v1/pier-checkin programmes[] (the booked heads and the booking counts of the hover texts stay what the walk above found) */
   if(kind==='pier' && !_pckLand && typeof window.laOpsPierProg==='function'){ try{ window.laOpsPierProg(date, fam, rst); }catch(_e){} }
+  /* §w6cPills · Van Check-in page, ops mode: the same pills from GET /v1/van-checkin programmes[] (pax, booked heads per zone, ticked heads) */
+  if(kind==='van' && typeof window.laOpsVanProg==='function'){ try{ window.laOpsVanProg(date, fam, rst); }catch(_e){} }
   var list=Object.keys(fam).map(function(k){ return fam[k]; }).sort(function(a,b){ return b.pax-a.pax||(b.locked-a.locked); });
   var none=(!famSel && !routeSel);
   var html=(list.length>1?'<button onclick="'+famFn+'(null)" title="แสดงทุกโปรแกรม" style="font-size:12px;border:1px solid '+(none?'#185FA5':'#E7E4DC')+';background:'+(none?'#E6F1FB':'#fff')+';color:'+(none?'#0C447C':'#5F5E5A')+';border-radius:999px;padding:6px 13px;font-weight:'+(none?'700':'600')+';white-space:nowrap;cursor:pointer;font-family:inherit">ทั้งหมด <span style="font-family:\'DM Mono\',monospace">'+(dA+dC+dI+dF)+'</span></button>':'');
@@ -13382,6 +13384,17 @@ function pcFillPanel(ds,bid,pier,X,R){
 function pcPkDiff(pier,ds,bid,legacy){ return legacy; }
 /* §w5cSheet · what the pier keyed on the longtail ('lt') or park ('pk') sheet, added up: one day, or the month when ds is null (ops mode: the sheet's totals, 82-ops-w5c-pier.js); null = add it up here as before */
 function pcSheetTot(kind,pier,ds){ return null; }
+/* §w6cCheck · paid − due over the boats that have both, of a park-sheet day (ds) or of the month's sheet (ds null): legacy's own figure here, the sheet's check.diff_paid in ops mode (93-ops-w6c-pier.js; null there = no boat has both) */
+function pcPkDiffPaid(pier,ds,legacy){ return legacy; }
+/* the print layout's difference cell: the same figure when the server sent one */
+function pcDiffCellPaid(pier,ds,paid,exp){
+  var s=pcPkDiffPaid(pier,ds,undefined);
+  if(s===undefined) return pcDiffCell(paid,exp);
+  if(s===null) return '<td class="pc-df">—</td>';
+  if(s===0) return '<td class="pc-df ok">✓ ตรง</td>';
+  if(s>0) return '<td class="pc-df over" title="จ่ายมากกว่าที่คำนวณ">+'+pcN(s)+'</td>';
+  return '<td class="pc-df under" title="จ่ายน้อยกว่าที่คำนวณ">−'+pcN(-s)+'</td>';
+}
 /* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
 function pcDiffCell(paid,exp){
   if(exp==null||!(paid>0)) return '<td class="pc-df">—</td>';
@@ -14338,7 +14351,7 @@ function pcSheetPK(pier, opt){
       +'<td class="v">'+(anyk?dktot:'—')+'</td>'
       +'<td class="pc-ex gs"><b>'+(anyx?pcN(dex):'—')+'</b></td>'
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
-      +pcDiffCell(dm, anyx?dex:null)+'</tr>';
+      +pcDiffCellPaid(pier,ds,dm, anyx?dex:null)+'</tr>';
   });
   if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">'
     +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
@@ -14383,7 +14396,7 @@ function pcSheetPK(pier, opt){
        +'<td class="v">'+gktot+'</td>'
        +'<td class="pc-ex gs"><b>'+pcMoney(gex)+'</b></td>'
        +'<td class="r">'+pcMoney(gm)+'</td>'
-       +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
+       +pcDiffCellPaid(pier,opt.only||null,gm, gex)+'</tr></tfoot></table></div>'
    +(PR?'':('<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
      +'<b>ฝั่งขวาเหลือง = จ่ายจริงที่ด่าน</b> คีย์จำนวนคนเองได้ครบทั้ง 8 ช่อง แล้วค่อยใส่ค่าจอดกับเงินที่จ่าย<br>'
      +'ที่ต้องคีย์เองเพราะหน้าด่านมักไม่ตรงกับใบจอง — เด็กต่ำกว่า 3 ขวบไม่เก็บ · บางคนไม่ขึ้นเกาะ · '
@@ -63462,6 +63475,7 @@ function pc2PKDay(pier, ds){
         +'<span class="mn cl ctr">'+(gd===null?'':(gd===0?'<em class="df ok">ตรง</em>':'<em class="df w">'+(gd>0?'+':'−')+pcN(Math.abs(gd))+'</em>'))+'</span></div>'):'');
   });
   var dd=(dP&&dm>0)?Math.round(dm-dexP):null;
+  dd=pcPkDiffPaid(pier,ds,dd);   /* §w6cCheck · the day's check.diff_paid in ops mode */
   var _stP=pcSheetTot('pk',pier,ds); if(_stP){ dm=_stP.amount; ddk=_stP.dock; dkt=_stP.heads; PC_PK.forEach(function(k,i){ DK[i]=_stP[k]; }); }   /* §w5cSheet · what the pier keyed, summed by the server */
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   /* §pkPullBoat · ดึงรายลำ · ปุ่มดึงขึ้นตราบใดที่ยังมีลำที่ยังไม่ได้ดึง · ยอดที่ดึงไว้ไม่ตรงชีท (แก้ทีหลัง / ดึงแบบเดิมที่นับค่าจอดซ้ำ) ขึ้นเตือน */
@@ -63507,6 +63521,7 @@ function pc2PK(pier){
   });
   var lab=_pc2All?pcE(pc2MonthName(_pcYM)):pcE(pc2D(_pcDate));
   diff=Math.round(diff);
+  diff=pcPkDiffPaid(pier,_pc2All?null:_pcDate,diff)||0;   /* §w6cCheck · the day's / month's check.diff_paid in ops mode */
   var _stK=pcSheetTot('pk',pier,_pc2All?null:_pcDate); if(_stK){ m=_stK.amount; dk=_stK.dock; }   /* §w5cSheet */
   return pc2Kpi([{h:'คนเดินทาง · '+lab,v:pcN(pax),s:nB+' ลำ'},
                  {h:'ยอดคำนวณ',v:anyx?pcMoney(ex):'—',s:'ราคา × จำนวนคน + ค่าจอด'},
