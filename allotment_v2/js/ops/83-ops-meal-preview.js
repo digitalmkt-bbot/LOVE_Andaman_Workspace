@@ -15,6 +15,7 @@
      mvLunchRows(date, bid)     the lunch slip's lines               <- requests
      pckMealOvnRows(date, bid)  the overnight returns of the boat    <- overnight (the booking / trip objects are the local ones)
      pckMealOvnNeed(date, bid)  the ones still to decide             <- undecided_overnight
+     mvCost(venue, ad, chd)     the amount of a card                  <- amount (when the heads are the preview's)
    pckMealCount and pckAllergyList take a list of rows, not a boat: the boat is read from the rows, and only while the sheet has no
    filter on (a filtered sheet counts what it shows, as legacy does). The answer is read per boat and day when first needed; a write
    makes it stale and legacy's counting answers until the fresh one lands (the open sheet draws again then).
@@ -127,6 +128,17 @@
     var ids = {}; P.undecided_overnight.forEach(function(x){ ids[x.booking_id] = 1; });
     var rows = window.pckMealOvnRows(date, bid) || [];
     return rows.filter(function(x){ return ids[x.b.opsId] || ids[x.b.id]; });
+  });
+
+  /* mvCost(venue, adults, children) · the amount of a card: the preview that was counted for these heads at this venue says it (amount) */
+  wrap('mvCost', function(orig, a){
+    var V = a[0], ad = +a[1] || 0, chd = +a[2] || 0; if(!V || !V.id) return undefined;
+    var ks = Object.keys(store);
+    for(var i = 0; i < ks.length; i++){
+      var c = store[ks[i]], P = c && c.data && c.epoch === epoch ? c.data : null;
+      if(P && P.venue && P.venue.id === V.id && +P.adults === ad && +P.children === chd && P.amount != null) return +P.amount;
+    }
+    return undefined;
   });
 
   O.onWrite(function(kind){

@@ -161,6 +161,12 @@ await mk('au1', 'W5 AUTO ONE', 20, {}, {}, 'r5', DAY_A); await mk('au2', 'W5 AUT
 await seed('POST', `/operations/vans/${vanB.id}/status-ranges`, { status: 'maintenance', from_date: DAY_F, to_date: addDays(DAY_F, 1), note: 'w5 gearbox' });
 await seed('PUT', `/operations/van-days/${DAY_F}/${vanC.id}`, { status: 'off' });
 
+// ── 9 · costing: two plans, a rented boat for the month's idle rent ──
+const planA = await seed('POST', '/v1/costing/plans', { name: 'W5 Plan A', route_key: 'r4', engines: '3EN', boats: 1, capacity: 64, pax: 30, pax_th: 5, price: 2500, child_pct: 10, price_child: 1500, commission_pct: 5, fuel_price: 38 });
+const planB = await seed('POST', '/v1/costing/plans', { name: 'W5 Plan B', engines: '4EN', boats: 2, capacity: 40, pax: 22, price: 3100, fuel_price: 40 });
+const RENT_FROM = '2026-10-01', RENT_TO = '2026-10-30';
+await seed('PUT', '/v1/costing/boat-rents/b7', { rented: true, mode: 'lump', amount: 300000, days: 30, days_off: 4, trips_per_day: 1, vat: false, from: RENT_FROM, to: RENT_TO });
+
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -506,6 +512,7 @@ section('6', async () => {
 // ═══ 7 · Travel Summary cancelled rows <- cancelled_rows ═══
 section('7', async () => {
   console.log('\n[7] Travel Summary: tsCxlRows draws the server\'s cancelled_rows, also for a booking this browser does not hold');
+  await settle(3500);      // let the change feed echo the earlier sections' writes first (each one empties the Travel Summary's held answer)
   const open = async () => {
     await ev((d) => { _tsDate = d; _tsPier = ''; _tsRoute = ''; _tsVatF = ''; const el = document.querySelector('.nav-item[data-view="travelsum"]'); if (el) nav(el); renderTravelSum(); }, DAY);
     await waitFor(() => !!document.querySelector('[data-ops-ts-view]') && document.querySelectorAll('[data-ops-ts-man]').length > 0, null, 25000);
@@ -520,6 +527,7 @@ section('7', async () => {
   ok('tsCxlRows lists the server\'s cancelled rows (cx1), from the held booking', r0.length === Sx.cancelled_rows.length && r0.some((r) => r.lead === 'W5 CANCELLED' && !r.stub), r0);
   tamper = [{ re: /travel-summary\?date=2026-12-08$/, fn: (j) => { j.cancelled_rows.push({ booking_id: 'ghost-booking-1', code: 'GH-1', voucher_ref: 'GHOST-V1', lead_pax: 'GHOST LEAD', agent_id: null, status: 'cancelled', route_id: 'r5', zone_group: 'PK', booked: 5, travelled: 0, ovn_back: false, ovn_out: null, boat_id: 'b6', van_ids: [], trip_amount: 4321 }); } }];
   await reset(); await open();
+  await waitFor((d) => tsCxlRows(d).some((r) => r.b.id === 'ghost-booking-1'), DAY, 10000);
   r0 = await rowsFn();
   const ghost = r0.find((r) => r.id === 'ghost-booking-1');
   ok('tampered answer (a cancelled booking this browser has never loaded): tsCxlRows still lists it, from the server\'s row (lead, 5 booked, 4,321)', ghost && ghost.lead === 'GHOST LEAD' && ghost.stub && ghost.booked === 5 && ghost.amount === 4321 && r0.length === Sx.cancelled_rows.length + 1, r0);
@@ -577,6 +585,88 @@ section('8', async () => {
   await ev(() => laOps.fleetServer.clear()); await ev((d) => { vehJobsFor(d); }, DAY); await waitFor((d) => !!laOps.fleetServer.jobs(d), DAY, 8000); await settle(500);
   const j1 = await jobsFn();
   ok('tampered answer (9 bookings, 77 pax per Alpha job): vehJobsFor shows the server\'s', mine.length === 1 ? (j1.bk === 9 && j1.pax === 77) : (j1.bk >= 9 && j1.pax >= 77), { j1, n: mine.length });
+  tamper = [];
+});
+
+// ═══ 9 · costing and Trip P&L: break-even for a smaller cap, price tiers, new plans, idle rent ═══
+section('9', async () => {
+  console.log('\n[9a] ctBreakEven (cap below the seats), ctTiers / ctTierSpread <- the plan answer');
+  await goView('costing'); await settle(1200);
+  await ev(() => laOps.costingPL.loadCosting());
+  await ev((id) => { _ct.pid = id; ctSetTab('plan'); }, planA.id);
+  await settle(500);
+  await ev(() => ctRender());
+  await waitFor(() => Object.keys(laOps.costingPL.calcState.ans).length > 0 && !Object.keys(laOps.costingPL.calcState.busy).length, null, 10000); await settle(400);
+  const srvA = await api('/v1/costing/plans/' + planA.id);
+  const be = srvA.sheet.key_figures.break_even, seats = srvA.sheet.capacity;
+  ok('seed: the server finds a break-even head count for plan A', be != null && be > 1 && be < seats, { be, seats });
+  const beAt = (cap) => ev((a) => { const pl = ctPlan(a.id); return ctBreakEven(pl, a.cap, ctTpl()); }, { id: planA.id, cap });
+  ok('ctBreakEven at the full seats = the server\'s break_even', (await beAt(seats)) === be, [await beAt(seats), be]);
+  ok('ctBreakEven at a cap above the break-even (but below the seats) = the same head count', (await beAt(be + 1)) === be, [await beAt(be + 1), be]);
+  ok('ctBreakEven at a cap below the break-even = none (the server never found a profit up to there)', (await beAt(be - 1)) === null, await beAt(be - 1));
+  // tamper the held answer: the screen follows it
+  const tweak = await ev((id) => { const st = laOps.costingPL.calcState, pl = ctPlan(id); const key = Object.keys(st.ans).find((k) => JSON.parse(k.split('#')[0].split('|')[0]).price === pl.price && JSON.parse(k.split('#')[0].split('|')[0]).pax === pl.pax); const a = st.ans[key];
+    a.sheet.key_figures.break_even = 12; a.tiers_effective = a.tiers_effective.map((t, i) => ({ n: 'W5 tier ' + i, p: 7000 + i })); a.tiers_spread = a.tiers_spread.map((t, i) => ({ n: t.n, p: 8000 + i }));
+    return { cap20: ctBreakEven(pl, 20, ctTpl()), cap11: ctBreakEven(pl, 11, ctTpl()), tiers: ctTiers(pl) }; }, planA.id);
+  ok('tampered answer (break-even 12): a cap of 20 gives 12, a cap of 11 gives none', tweak.cap20 === 12 && tweak.cap11 === null, tweak);
+  ok('ctTiers = the server\'s tiers_effective (names and prices)', tweak.tiers.length === 5 && tweak.tiers[0].n === 'W5 tier 0' && tweak.tiers[4].p === 7004, tweak.tiers);
+  const c0 = calls.length;
+  await ev(() => { ctTierSpread(); }); await idle(); await settle(800);
+  const spread = await ev((id) => ctPlan(id).tiers, planA.id);
+  ok('ctTierSpread puts the server\'s tiers_spread on the plan (8000 ...), the names kept', spread.length === 5 && spread[0].p === 8000 && spread[4].p === 8004, spread);
+  ok('...and the plan is PATCHed with those tiers', calls.slice(c0).some((c) => c.startsWith('PATCH /v1/costing/plans/' + planA.id)), calls.slice(c0).filter((c) => /costing/.test(c)));
+  await ev(() => { laOps.costingPL.calcState.ans = {}; laOps.costingPL.calcState.byTpl = {}; laOps.costingPL.calcState.order = []; });
+
+  console.log('\n[9b] a new plan is made by the server: ctAddPlan, ctDupPlan, ctFamNewPlan');
+  const before = (await api('/v1/costing/plans')).plans.length;
+  const b0 = bodies.length;
+  await ev(() => ctAddPlan()); await idle(); await settle(900);
+  let post = bodies.slice(b0).filter((x) => x.k === 'POST /v1/costing/plans').pop();
+  ok('ctAddPlan: POST /v1/costing/plans with only the name', post && post.status === 201 && JSON.stringify(JSON.parse(post.req)) === JSON.stringify({ name: 'เส้นทางที่ ' + (before + 1) }), post);
+  const made = JSON.parse(post.body);
+  ok('the server\'s plan has legacy\'s defaults (3EN, 1 boat, 65 seats, 20 pax, 2,500 baht)', made.engines === '3EN' && made.boats === 1 && made.capacity === 65 && made.pax === 20 && made.price === 2500, made);
+  ok('screen: the plan is on the list with the server\'s id and is the open one', await ev((id) => !!ctPlan(id) && _ct.pid === id, made.id), made.id);
+  const b1 = bodies.length;
+  await ev(() => ctDupPlan()); await idle(); await settle(900);
+  post = bodies.slice(b1).filter((x) => x.k === 'POST /v1/costing/plans').pop();
+  ok('ctDupPlan: POST with only {copy_of: the open plan}', post && post.status === 201 && JSON.stringify(JSON.parse(post.req)) === JSON.stringify({ copy_of: made.id }), post);
+  const dup = JSON.parse(post.body);
+  ok('the copy is named "<name> (คัดลอก)" by the server and is open on screen', dup.name === made.name + ' (คัดลอก)' && (await ev((id) => _ct.pid === id && ctPlan(id).name.endsWith('(คัดลอก)'), dup.id)), dup.name);
+  const b2 = bodies.length;
+  await ev(() => ctFamNewPlan('r4')); await idle(); await settle(900);
+  post = bodies.slice(b2).filter((x) => x.k === 'POST /v1/costing/plans').pop();
+  ok('ctFamNewPlan: POST with the route\'s name and route_key r4 only', post && post.status === 201 && JSON.parse(post.req).route_key === 'r4' && Object.keys(JSON.parse(post.req)).sort().join() === 'name,route_key', post);
+  const fam = JSON.parse(post.body), plans = (await api('/v1/costing/plans')).plans;
+  ok('server: the new plan holds r4 and plan A lost it (one plan per route key)', fam.route_key === 'r4' && plans.find((p) => p.id === planA.id).route_key === null, plans.map((p) => [p.name, p.route_key]));
+  ok('screen: the same (new plan on r4, plan A free), tab = adjust', await ev((a) => ctPlan(a.f).famId === 'r4' && !ctPlan(a.a).famId && _ct.tab === 'ovr', { f: fam.id, a: planA.id }), 0);
+
+  console.log('\n[9c] pxRentIdle <- GET /v1/reports/trip-pl/month rent_idle');
+  await goView('trippl'); await settle(600);
+  await ev(() => { _px.tab = 'm'; _px.mon = '2026-10'; _px.date = '2026-10-18'; _px.pier = ''; laOps.costingPL.clear(); renderTripPL(); });
+  await waitFor(() => !!laOps.costingPL.rentIdleOf('2026-10'), null, 15000); await settle(800);
+  const M = await api('/v1/reports/trip-pl/month?month=2026-10');
+  const row = M.rent_idle.rows.find((r) => r.boat_id === 'b7');
+  ok('seed: the server lists the rented boat b7 with rent due and a gap', row && row.due > 0 && row.gap > 0, M.rent_idle);
+  // each draw of the month page loads the rent_idle first (monthNeeds); a write elsewhere empties the held answers, so the test draws again before it reads
+  const idleRows = async (want) => {
+    for (let i = 0; i < 6; i++) {
+      await ev(() => { renderTripPL(); });
+      await waitFor((w) => { const r = laOps.costingPL.rentIdleOf('2026-10'); return !!r && (w == null || (r.rows[0] && r.rows[0].gap === w)); }, want == null ? null : want, 20000);
+      const got = await ev(() => { const held = laOps.costingPL.rentIdleOf('2026-10'); return { held: !!held, rows: held ? pxRentIdle(pxDaysOf('2026-10')).map((r) => ({ bid: r.bid, name: r.name, due: r.due, booked: r.booked, gap: r.gap, ran: r.daysRan, plan: r.opPlan, from: r.SP.from, to: r.SP.to })) : null }; });   // one turn: no write can empty the answer between the check and the read
+      if (got.held && (want == null || (got.rows[0] && got.rows[0].gap === want))) return got.rows;
+    }
+    return [];
+  };
+  let I = await idleRows();
+  ok('pxRentIdle = the server rows (boat, due, booked, gap, days ran / planned, period)', I.length === M.rent_idle.rows.length && I.some((r) => r.bid === 'b7' && r.due === row.due && r.gap === row.gap && r.booked === row.booked && r.ran === row.days_ran && r.plan === row.days_plan && r.from === row.from && r.to === row.to), { I, srv: M.rent_idle.rows });
+  const txt = await ev(() => document.getElementById('trippl-host').innerText);
+  ok('the month page shows the idle-rent band with the boat and its gap', txt.includes(row.name) && txt.includes(Math.round(row.gap).toLocaleString()), txt.slice(0, 300));
+  tamper = [{ re: /trip-pl\/month\?month=2026-10/, fn: (j) => { j.rent_idle.rows[0].gap = 4321; j.rent_idle.rows[0].due = 9999; j.rent_idle.rows[0].booked = 5678; } }];
+  await ev(() => { laOps.costingPL.clear(); renderTripPL(); });
+  I = await idleRows(4321);
+  ok('tampered answer (gap 4,321, due 9,999): pxRentIdle gives the server\'s, not the rent record\'s arithmetic', I[0].gap === 4321 && I[0].due === 9999, I);
+  await waitFor(() => document.getElementById('trippl-host').innerText.includes('4,321'), null, 30000);
+  ok('...and the page shows 4,321', (await ev(() => document.getElementById('trippl-host').innerText)).includes('4,321'), (await ev(() => document.getElementById('trippl-host').innerText)).slice(0, 200));
   tamper = [];
 });
 
