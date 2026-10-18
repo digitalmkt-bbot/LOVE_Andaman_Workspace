@@ -137,6 +137,11 @@ for (const d of OV) await seed('POST', '/operations/deployments', { boat_id: 'b1
   bk.ov = { id: r.body.id, ext: 'b2c_w5_ovn', body: r.body };
 }
 
+// ── 5 · on-tour sales: one covered by the pier's cash, one still to collect ──
+await mk('cs1', 'W5 COVERED', 2); await mk('cs2', 'W5 OPEN', 2);
+for (const k of ['cs1', 'cs2']) await seedV('POST', `/v1/bookings/${bk[k].id}/tour-sales`, bk[k].id, { service: 'Longtail Join', qty: 2, unit_price: 500, method: 'cot' });
+await seedV('POST', `/v1/bookings/${bk.cs1.id}/pier-payments`, bk.cs1.id, { service_date: DAY, lines: [{ method: 'cash', amount: 1000 }], overpay_anyway: true });
+
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -406,6 +411,28 @@ section('4', async () => {
   await ev(() => { _pckMeal = { bkId: 'zz-mm1', date: '2026-12-08', veg: 9, vegan: 0, halal: 0, allergies: '' }; });
   await ev(() => { pckMealSave(); }); await idle(); await settle(1000);
   ok('more meals than heads: the server refuses (4xx), its message is the toast', refusals.slice(d0).some((x) => /PUT \/v1\/bookings\/.*\/meals -> 4\d\d/.test(x)), refusals.slice(d0));
+});
+
+// ═══ 5 · on-tour sales covered by the pier cash <- tour-sales covered_by_pier ═══
+section('5', async () => {
+  console.log('\n[5] bkxExCovered / bkxExGot <- GET /v1/bookings/{id}/tour-sales covered_by_pier');
+  await openPier(DAY);
+  const srv = async (k) => (await api(`/v1/bookings/${bk[k].id}/tour-sales`)).tour_sales[0];
+  const s1 = await srv('cs1'), s2 = await srv('cs2');
+  ok('seed: the server says the sale of cs1 is covered by the pier cash (settle done), the sale of cs2 is not', s1.covered_by_pier === true && s1.settle === 'done' && s2.covered_by_pier === false && s2.settle !== 'done', { s1: [s1.covered_by_pier, s1.settle], s2: [s2.covered_by_pier, s2.settle] });
+  const read = (ext) => ev(async (a) => { await laOpsDayActions.loadTourSales(a.ext); const x = bookingV2ExtrasFor(a.ext)[0]; return x ? { cov: bkxExCovered(x), got: bkxExGot(x), cover: x.coveredByPier, settle: x.settle } : null; }, { ext });
+  const r1 = await read('zz-cs1'), r2 = await read('zz-cs2');
+  ok('bkxExCovered / bkxExGot: cs1 covered and got, cs2 neither = the server\'s flag', r1 && r1.cov === true && r1.got === true && r2 && r2.cov === false && r2.got === false, { r1, r2 });
+  tamper = [{ re: /tour-sales$/, fn: (j) => { for (const s of j.tour_sales) { s.covered_by_pier = !s.covered_by_pier; s.settle = s.covered_by_pier ? 'done' : 'pending'; } } }];
+  const t1 = await read('zz-cs1'), t2 = await read('zz-cs2');
+  ok('tampered answer (flags flipped): cs1 is not covered and not got, cs2 is covered and got - the screen follows the server, not the pier sums legacy would redo', t1.cov === false && t1.got === false && t2.cov === true && t2.got === true, { t1, t2 });
+  tamper = [];
+  // a pier payment re-reads the sales that are held
+  await read('zz-cs1');
+  const n0 = calls.length;
+  await ev(() => laOps.wrote('pier'));
+  await settle(1500);
+  ok('a pier write reads the sales that are held again (GET …/tour-sales)', callsSince(n0).some((c) => /GET \/v1\/bookings\/.*\/tour-sales 200/.test(c)), callsSince(n0).filter((c) => /tour-sales/.test(c)));
 });
 
 //@@SECTIONS

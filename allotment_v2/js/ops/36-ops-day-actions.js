@@ -426,6 +426,7 @@
       fee: num(s.fee),
       customerPaid: num(s.customer_paid),
       settle: s.settle || (s.method === 'cot' ? 'pending' : 'done'),
+      coveredByPier: s.covered_by_pier === true,        // w5-d: the server's bkxExCovered (README "Pier money"): the pier's cash already holds this sale's money
       collectedAt: s.collected_at || '',
       collectedBy: s.collected_by || '',
       date: s.sold_at || '',
@@ -889,6 +890,7 @@
   });
 
   var api = {
+    loadedSales: function(){ return Object.keys(state.salesLoadedFor); },   // w5-d: 83-ops-pier-extras.js reads the sales again after a pier payment
     updateInsurance: updateInsuranceServer,
     updateMeals: updateMealsServer,
     writeCheckin: writeCheckinServer,
