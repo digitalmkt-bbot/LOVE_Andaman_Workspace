@@ -17201,35 +17201,42 @@ function flRenderMaint(){
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
   const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
 
+  const K=(typeof flKpi==='function')?flKpi('jobs'):null; // [ops F4] the server's strip (GET /v1/fleet/jobs kpis) when it has answered
   const all=FL_MAINT;
-  const totalJobs=all.length;
-  const cntPending=all.filter(m=>m.status==='pending').length;
-  const cntInProgress=all.filter(m=>m.status==='inprogress').length;
-  const cntDone=all.filter(m=>m.status==='done').length;
-  const cntActive=cntInProgress;
+  let totalJobs=all.length;
+  let cntPending=all.filter(m=>m.status==='pending').length;
+  let cntInProgress=all.filter(m=>m.status==='inprogress').length;
+  let cntDone=all.filter(m=>m.status==='done').length;
+  let cntActive=cntInProgress;
 
   const yr=new Date(TODAY_STR).getFullYear();
   const ytdJobs=all.filter(m=>m.startDate&&new Date(m.startDate).getFullYear()===yr);
-  const ytdSpend=ytdJobs.filter(m=>m.status==='done').reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):0),0);
-  const avgCost=cntDone?Math.round(ytdSpend/cntDone):0;
-  const boatsServiced=new Set(all.map(m=>m.boatId).filter(Boolean)).size;
+  let ytdSpend=ytdJobs.filter(m=>m.status==='done').reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):0),0);
+  let avgCost=cntDone?Math.round(ytdSpend/cntDone):0;
+  let boatsServiced=new Set(all.map(m=>m.boatId).filter(Boolean)).size;
 
-  const cntCorrective=all.filter(m=>m.type==='corrective').length;
-  const cntPreventive=all.filter(m=>m.type==='preventive').length;
-  const cntScheduled=all.filter(m=>m.type==='scheduled').length;
+  let cntCorrective=all.filter(m=>m.type==='corrective').length;
+  let cntPreventive=all.filter(m=>m.type==='preventive').length;
+  let cntScheduled=all.filter(m=>m.type==='scheduled').length;
 
   const thisMonth=TODAY_STR.slice(0,7);
   const doneMonth=all.filter(m=>m.status==='done'&&(m.endDate||m.startDate||'').startsWith(thisMonth));
-  const doneMonthCount=doneMonth.length;
-  const doneMonthSpend=doneMonth.reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):0),0);
+  let doneMonthCount=doneMonth.length;
+  let doneMonthSpend=doneMonth.reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):0),0);
 
   const todayD=new Date(TODAY_STR);
   const inProgJobs=all.filter(m=>m.status==='inprogress');
-  const avgDaysOpen=inProgJobs.length?Math.round(inProgJobs.reduce((s,m)=>{
+  let avgDaysOpen=inProgJobs.length?Math.round(inProgJobs.reduce((s,m)=>{
     if(!m.startDate)return s;
     return s+Math.max(0,Math.ceil((todayD-new Date(m.startDate))/86400000));
   },0)/inProgJobs.length):0;
 
+  if(K){ /* [ops F4] */
+    totalJobs=K.total; cntPending=K.pending; cntInProgress=K.in_progress; cntDone=K.done; cntActive=K.active;
+    ytdSpend=K.ytd_spend; avgCost=K.avg_cost; boatsServiced=K.boats_serviced;
+    cntCorrective=K.by_type.corrective; cntPreventive=K.by_type.preventive; cntScheduled=K.by_type.scheduled;
+    doneMonthCount=K.done_this_month.count; doneMonthSpend=K.done_this_month.spend; avgDaysOpen=K.avg_days_open;
+  }
   const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
     <div style="display:flex;align-items:center;gap:6px">
       <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${dim.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:#A32D2D;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">CR</div><span style="font-size:12px;font-weight:500">Corrective · ${cntCorrective}</span></div>
@@ -17283,7 +17290,7 @@ function flRenderMaint(){
   // Split jobs by tab: Active = pending/inprogress · Awaiting = done with awaitingInvoice flag · Archive = done
   const allActiveJobs = all.filter(m => m.status === 'pending' || m.status === 'inprogress');
   const allArchiveJobs = all.filter(m => m.status === 'done');
-  const allAwaitingJobs = all.filter(m => {
+  const allAwaitingJobs = (K && Array.isArray(K.awaiting_invoice_job_ids)) ? all.filter(m => K.awaiting_invoice_job_ids.indexOf(m.id) >= 0) : all.filter(m => {   // [ops F4] the server says which closed jobs still wait for the supplier's invoice
     if(m.status !== 'done') return false;
     if(!m.awaitingInvoice) return false;  // ต้องติ๊ก "รอใบวางบิล" ตอนปิดงานเท่านั้น
     // Auto-clear ONLY when the supplier bill is settled = all linked memos are PAID.
@@ -17364,9 +17371,9 @@ function flRenderMaint(){
   };
 
   const tabBar=`<div style="display:flex;border-bottom:1px solid ${dim.line};margin-bottom:8px;gap:0">
-    ${archBtn('active','Active',allActiveJobs.length)}
-    ${allAwaitingJobs.length > 0 ? archBtn('awaiting','📋 Awaiting Invoice',allAwaitingJobs.length,'#BA7517') : ''}
-    ${archBtn('archive','Archive',allArchiveJobs.length)}
+    ${archBtn('active','Active',K?K.tabs.active:allActiveJobs.length)}
+    ${(K?K.tabs.awaiting:allAwaitingJobs.length) > 0 ? archBtn('awaiting','📋 Awaiting Invoice',K?K.tabs.awaiting:allAwaitingJobs.length,'#BA7517') : ''}
+    ${archBtn('archive','Archive',K?K.tabs.archive:allArchiveJobs.length)}
   </div>`;
 
   // Sub-status filter adapts to tab
@@ -21604,8 +21611,9 @@ function flRenderIncident(){
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
   const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
 
+  const K=(typeof flKpi==='function')?flKpi('incidents'):null; // [ops F4] the server's strip (GET /v1/fleet/incidents kpis) when it has answered
   const all=FL_INCIDENTS||[];
-  const totalInc=all.length;
+  let totalInc=all.length;
 
   // Effective status from linked maint
   const effStatus=(inc)=>{
@@ -21619,22 +21627,22 @@ function flRenderIncident(){
     return 'resolved';
   };
 
-  const cntOpen=all.filter(x=>effStatus(x)==='open').length;
-  const cntPending=all.filter(x=>effStatus(x)==='pending').length;
-  const cntInProgress=all.filter(x=>effStatus(x)==='inprogress').length;
-  const cntResolved=all.filter(x=>effStatus(x)==='resolved').length;
-  const cntActive=cntOpen+cntPending+cntInProgress;
-  const cntUnlinked=all.filter(x=>!x.maintId).length;
+  let cntOpen=all.filter(x=>effStatus(x)==='open').length;
+  let cntPending=all.filter(x=>effStatus(x)==='pending').length;
+  let cntInProgress=all.filter(x=>effStatus(x)==='inprogress').length;
+  let cntResolved=all.filter(x=>effStatus(x)==='resolved').length;
+  let cntActive=cntOpen+cntPending+cntInProgress;
+  let cntUnlinked=all.filter(x=>!x.maintId).length;
 
   // Severity counts
-  const cntCritical=all.filter(x=>x.severity==='critical').length;
-  const cntMajor=all.filter(x=>x.severity==='major').length;
-  const cntMinor=all.filter(x=>x.severity==='minor'||(!x.severity)).length;
+  let cntCritical=all.filter(x=>x.severity==='critical').length;
+  let cntMajor=all.filter(x=>x.severity==='major').length;
+  let cntMinor=all.filter(x=>x.severity==='minor'||(!x.severity)).length;
 
   // Boats affected, jobs created, damage total
-  const boatsAffected=new Set(all.map(x=>x.boatId).filter(Boolean)).size;
-  const jobsCreated=all.filter(x=>x.maintId).length;
-  const damageTotal=all.reduce((s,x)=>s+(x.damageCharge||0),0);
+  let boatsAffected=new Set(all.map(x=>x.boatId).filter(Boolean)).size;
+  let jobsCreated=all.filter(x=>x.maintId).length;
+  let damageTotal=all.reduce((s,x)=>s+(x.damageCharge||0),0);
 
   // Avg fix days for resolved
   const todayD=new Date(TODAY_STR);
@@ -21642,12 +21650,17 @@ function flRenderIncident(){
     const mj=x.maintId?FL_MAINT.find(m=>m.id===x.maintId):null;
     return mj&&mj.status==='done';
   });
-  const avgFixDays=resolvedIncs.length?Math.round(resolvedIncs.reduce((s,x)=>{
+  let avgFixDays=resolvedIncs.length?Math.round(resolvedIncs.reduce((s,x)=>{
     const mj=FL_MAINT.find(m=>m.id===x.maintId);
     if(!mj?.endDate||!x.date)return s;
     return s+Math.max(1,Math.ceil((new Date(mj.endDate)-new Date(x.date))/86400000));
   },0)/resolvedIncs.length):0;
 
+  if(K){ /* [ops F4] */
+    totalInc=K.total; cntOpen=K.open; cntPending=K.pending; cntInProgress=K.in_progress; cntResolved=K.resolved; cntActive=K.active; cntUnlinked=K.unlinked;
+    cntCritical=K.by_severity.critical; cntMajor=K.by_severity.major; cntMinor=K.by_severity.minor;
+    boatsAffected=K.boats_affected; jobsCreated=K.jobs_created; damageTotal=K.damage_total; avgFixDays=K.avg_fix_days;
+  }
   // Header bar
   const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
     <div style="display:flex;align-items:center;gap:6px">
@@ -22924,27 +22937,35 @@ function flRenderInventory(){
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
   const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
 
+  const K=(typeof flKpi==='function')?flKpi('stock'):null; // [ops F4] the server's strip (GET /v1/fleet/stock-items kpis, with its memos block) when it has answered
   const all=FL_INVENTORY||[];
-  const totalItems=all.length;
-  const totalValue=all.reduce((s,x)=>s+(x.qty||0)*(x.cost||0),0);
+  let totalItems=all.length;
+  let totalValue=all.reduce((s,x)=>s+(x.qty||0)*(x.cost||0),0);
   const lowStock=all.filter(x=>x.qty<=(x.minQty||0));
-  const cntLow=lowStock.length;
+  let cntLow=lowStock.length;
 
-  const catCounts={engine:0,gearbox:0,propeller:0,hull:0,general:0};
+  let catCounts={engine:0,gearbox:0,propeller:0,hull:0,general:0};
   all.forEach(x=>{const c=x.category||'general';if(catCounts[c]!=null)catCounts[c]++;});
 
-  const tubCount=all.filter(x=>(x.location||'').toLowerCase().includes('tub')).length;
-  const panwaCount=all.filter(x=>(x.location||'').toLowerCase().includes('panwa')).length;
+  let tubCount=all.filter(x=>(x.location||'').toLowerCase().includes('tub')).length;
+  let panwaCount=all.filter(x=>(x.location||'').toLowerCase().includes('panwa')).length;
 
   const memos=FL_MEMOS||[];
-  const cntPendingMemo=memos.filter(m=>m.status==='pending_approval').length;
-  const cntApprovedMemo=memos.filter(m=>m.status==='approved'||m.status==='ordered').length;
-  const cntReceivedMemo=memos.filter(m=>m.status==='received').length;
-  const cntPaidMemo=memos.filter(m=>m.status==='paid').length;
-  const pendingAmount=memos.filter(m=>m.status==='pending_approval').reduce((s,m)=>s+(m.amount||0),0);
+  let cntPendingMemo=memos.filter(m=>m.status==='pending_approval').length;
+  let cntApprovedMemo=memos.filter(m=>m.status==='approved'||m.status==='ordered').length;
+  let cntReceivedMemo=memos.filter(m=>m.status==='received').length;
+  let cntPaidMemo=memos.filter(m=>m.status==='paid').length;
+  let pendingAmount=memos.filter(m=>m.status==='pending_approval').reduce((s,m)=>s+(m.amount||0),0);
   const thisMonth=TODAY_STR.slice(0,7);
   const paidThisMonth=memos.filter(m=>m.status==='paid'&&(m.paidDate||m.createdDate||'').startsWith(thisMonth));
-  const paidAmount=paidThisMonth.reduce((s,m)=>s+(m.amount||0),0);
+  let paidAmount=paidThisMonth.reduce((s,m)=>s+(m.amount||0),0);
+  let paidMonthCount=paidThisMonth.length, memosTotal=memos.length;
+  if(K){ /* [ops F4] */
+    totalItems=K.total_items; totalValue=K.total_value; cntLow=K.low_stock; catCounts=Object.assign({engine:0,gearbox:0,propeller:0,hull:0,general:0},K.by_category);
+    tubCount=K.by_warehouse.tublamu; panwaCount=K.by_warehouse.panwa;
+    if(K.memos){ memosTotal=K.memos.total; cntPendingMemo=K.memos.pending; pendingAmount=K.memos.pending_amount; cntApprovedMemo=K.memos.approved; cntReceivedMemo=K.memos.received; cntPaidMemo=K.memos.paid;
+      paidMonthCount=K.memos.paid_this_month.count; paidAmount=K.memos.paid_this_month.amount; }
+  }
 
   const topCats=Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).filter(function(x){return x[1]>0});
 
@@ -22955,10 +22976,10 @@ function flRenderInventory(){
 
   const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="invDupOpen()" title="ตรวจรายการที่ชื่อซ้ำกัน · ของชิ้นเดียวกันแตกเป็นหลายรายการทำให้ยอดคงเหลือกระจาย" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">&#9888; ตรวจคลัง</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
 
-  const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidThisMonth.length+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
+  const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidMonthCount+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
 
   const tabBtn=function(val,label,count){var isOn=_invTab===val;return '<button onclick="invSwitchTab(\''+val+'\')" style="background:'+(isOn?dim.ink:'transparent')+';color:'+(isOn?'white':dim.ink2)+';border:none;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:'+(isOn?600:500)+';cursor:pointer">'+label+' <span style="background:'+(isOn?'rgba(255,255,255,.2)':'rgba(0,0,0,.06)')+';padding:0 6px;border-radius:8px;margin-left:4px;font-size:10px">'+count+'</span></button>'};
-  const tabToggle='<div style="background:white;border-radius:14px;padding:4px;display:flex;gap:2px;margin-bottom:12px;width:fit-content;border:1px solid '+dim.line+'">'+tabBtn('stock','Stock items',totalItems)+tabBtn('memo','Memorandum',memos.length)+'</div>';
+  const tabToggle='<div style="background:white;border-radius:14px;padding:4px;display:flex;gap:2px;margin-bottom:12px;width:fit-content;border:1px solid '+dim.line+'">'+tabBtn('stock','Stock items',totalItems)+tabBtn('memo','Memorandum',memosTotal)+'</div>';
 
   let content='';
   if(_invTab==='stock'){content=buildStockTab();}else{content=buildMemoTab();}
