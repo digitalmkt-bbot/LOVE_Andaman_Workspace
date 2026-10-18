@@ -270,8 +270,14 @@ ok('"ขึ้นเรือก่อน": POST …/check-in ticks; the answer 
 await ev(() => ckToggle('zz-kc', '2026-11-10', 'pier')); await idle(); await settle(800);     // untick
 await ev(() => { window.__g = window.pckPayGuard; window.pckPayGuard = () => false; ckToggle('zz-kc', '2026-11-10', 'pier'); });
 await idle(); await settle(1500);
-ok('when the screen did not know about the debt, the server\'s pay_owed message is shown', /Money still to collect/.test(await pageText()) && /3000 still to collect/.test(await pageText()), (await pageText()).slice(0, 200));
-await ev(() => { window.pckPayGuard = window.__g; });
+// w4-f2: the server's pay_owed warning offers legacy's own skip dialog (pckPayWarn): the tick is taken back, the money is read again, the dialog opens
+const owedTxt = await pageText(), kcAfter = await rec('kc', 'pier');
+ok('when the screen did not know about the debt, the server\'s pay_owed warning opens legacy\'s "ยังเก็บเงินไม่ครบ" dialog with both buttons', /ยังเก็บเงินไม่ครบ/.test(owedTxt) && /ขึ้นเรือก่อน · ยังไม่เก็บ/.test(owedTxt) && /เก็บเงินเลย/.test(owedTxt) && /3,?000/.test(owedTxt), owedTxt.slice(0, 200));
+ok('...and the row is not left ticked behind the dialog (the tick was taken back with a second press)', kcAfter && !kcAfter.checked_in_at, kcAfter);
+await ev(() => { window.pckPayGuard = window.__g; pckPaySkipOn('zz-kc', '2026-11-10'); });
+await idle(); await settle(1500);
+const kcSkip = await rec('kc', 'pier');
+ok('"ขึ้นเรือก่อน · ยังไม่เก็บ" after the warning: ticked on the server again, and no second dialog', kcSkip && kcSkip.checked_in_at && !/ยังเก็บเงินไม่ครบ/.test(await pageText()), kcSkip);
 
 // ════════════ 7. Q33: moved-away rows from the server on a fresh browser ════════════
 curItem = '7'; console.log('\n[7] GET /operations/van-strands: a fresh browser sees the struck row on Van Check-in, Van Jobs and Pier Check-in');
