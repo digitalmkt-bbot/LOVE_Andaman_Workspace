@@ -502,7 +502,7 @@ await page.fill('#ck-reason-note', 'called 3 times');
 await page.click('button[onclick="ckEvSave()"]');
 await idle(); await settle(1200);
 let ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
-ok('no-show saved: the row is drawn again after the server answer (2 draws: at the click, then at the answer) and shows "ไม่มาทั้งใบ" + the รับกลับ button without any other action', (await ev(() => window.__rp)) >= 2 && /ไม่มาทั้งใบ/.test(await pierRow('WALK E THREE')) && (await page.locator('#piercheckin-host button.pck-undo[onclick*="zz-e3"]').count()) > 0, { renders: await ev(() => window.__rp), row: (await pierRow('WALK E THREE')).slice(-120) });
+ok('no-show saved: the row is drawn again after the server answer (the screen waits for the server answer and draws from it: Q36) and shows "ไม่มาทั้งใบ" + the รับกลับ button without any other action', (await ev(() => window.__rp)) >= 1 && /ไม่มาทั้งใบ/.test(await pierRow('WALK E THREE')) && (await page.locator('#piercheckin-host button.pck-undo[onclick*="zz-e3"]').count()) > 0, { renders: await ev(() => window.__rp), row: (await pierRow('WALK E THREE')).slice(-120) });
 const ev0 = ck3[0] && ck3[0].events;
 ok('no-show event -> PUT trip-ops checkins/pier/0: server holds 1 event, reason no_contact, 2 pax, actual_pax 0', ck3.length === 1 && ev0.length === 1 && ev0[0].type === 'no_show' && ev0[0].reason_code === 'no_contact' && ev0[0].pax === 2 && ck3[0].actual_pax === 0 && !ev0[0].undone, ck3);
 ok('screen: ckRead shows the event live and the booked/actual counts', await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e3'); const c = ckRead(b, _pckDate, 'pier'); return c.events.length === 1 && !c.events[0].undone && c.actualPax === 0; }));
