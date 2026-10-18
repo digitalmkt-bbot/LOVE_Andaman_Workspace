@@ -43,12 +43,15 @@ process.on('SIGTERM', () => { cleanup(); process.exit(1); });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 900 } });
 await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, token);
 const calls = [], urls = [], refusals = [], bodies = [];
+// a test may rewrite one answer on its way to the page (path -> fn(json) -> json); used where the in-process store cannot be seeded to the state under test
+const overrides = {};
 const routeFn = async (route) => {
   const req = route.request(), u = new URL(req.url());
   const hd = req.headers(), fwd = {};
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
   const r = await fetch(OPS + u.pathname + u.search, { method: req.method(), headers: fwd, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : (req.postData() || undefined) });
-  const buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
+  let buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
+  if (overrides[u.pathname] && r.status === 200) { try { buf = Buffer.from(JSON.stringify(overrides[u.pathname](JSON.parse(buf.toString()), u))); } catch (_) {} }
   calls.push(req.method() + ' ' + u.pathname + ' ' + r.status); urls.push(req.method() + ' ' + u.pathname + u.search + ' ' + r.status);
   if (req.method() !== "GET") bodies.push({ k: req.method() + " " + u.pathname, status: r.status, req: req.postData() || "", body: buf.toString() });
   if (r.status >= 400) refusals.push(req.method() + ' ' + u.pathname + ' -> ' + r.status + ' ' + buf.toString().slice(0, 260));
@@ -554,6 +557,42 @@ console.log('\n== ' + curItem);
   const list = (await text('#prpo-host')).replace(/\s+/g, ' ');
   ok('opening the list shows the server\'s bookings (lead name, reference, wanted meals)', cells.flatMap((x) => x.c.booking_rows).every((b) => list.includes(b.lead_pax) || true) && list.includes('F10A') && /มังสวิรัติ ×1/.test(list) && /แพ้ ซีฟู้ด|แพ้ซีฟู้ด/.test(list), list.slice(0, 400));
   ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+}
+
+// ═══ 11 · Analysis tab: Agent x route with the rate card and the reason (pxMxWhy) ═══
+// The in-process store has no sailed trips to analyse (a sailing needs check-ins and costs), so the real answer is taken
+// and the agent rows of the report are filled in on its way to the page, in the shape and with the reasons the server's
+// analysis-reports.ts produces (backend test: test/b2-reports.test.ts). The page code under test is the same.
+curItem = '11 analysis why';
+console.log('\n== ' + curItem);
+{
+  const CELL = (route_id, route_name, heads, revenue, cost, expected, taken, why) => ({ route_id, route_name, bookings: 2, heads, revenue, cost, net: revenue - cost, net_per_pax: Math.round((revenue - cost) / heads * 100) / 100,
+    expected_per_pax: expected, taken_per_pax: taken, expected_heads: expected == null ? 0 : heads, unmatched_bookings: expected == null ? 1 : 0, rate_card: expected == null ? null : 'Sun Tour net', zone: expected == null ? null : 'PK', why });
+  const WHY = { tag: 'under contract', class: 'dq', text: 'Its own rate card (Sun Tour net · zone PK) prices these heads at 1,500 ฿, but only 1,100 ฿ was taken — a gap of 400 ฿ per head, 4,000 ฿ on this cell. That is money not collected, not a pricing decision.' };
+  overrides['/v1/reports/analysis'] = (j) => {
+    j.window = j.window || { from: bkk(-46), to: T0, days: 47 };
+    j.totals = { ...(j.totals || {}), trips: Math.max(2, j.totals && j.totals.trips || 0), sailed_trips: 2, did_not_sail: 0, pax: 20 };
+    j.routes = [{ route_id: 'r5', name: 'Similan Islands by Speedboat', color: '#185fa5', trips: 2, did_not_sail: 0, avg_pax: 10, avg_capacity: 40, revenue: 24000, cost: 30000, net: -6000, revenue_per_pax: 1200, cost_per_pax: 1500, net_per_pax: -300, margin_pct: -25, load_factor: 0.25, break_even_plan: 30, break_even_fit: null, fit: null, below_cost: true },
+                 { route_id: 'r4', name: 'Similan Islands by Catamaran', color: '#185fa5', trips: 1, did_not_sail: 0, avg_pax: 10, avg_capacity: 64, revenue: 20000, cost: 15000, net: 5000, revenue_per_pax: 2000, cost_per_pax: 1500, net_per_pax: 500, margin_pct: 25, load_factor: 0.16, break_even_plan: 9, break_even_fit: null, fit: null, below_cost: false }];
+    j.agents = [{ key: 'a01', name: 'Sun Tour', market_id: 'ru', market_name: 'Russia', bookings: 4, heads: 20, revenue: 44000, cost: 45000, net: -1000, revenue_per_pax: 2200, cost_per_pax: 2250, net_per_pax: -50, below_cost: true,
+      routes: [CELL('r4', 'Similan Islands by Catamaran', 10, 20000, 15000, 2000, 2000, null), CELL('r5', 'Similan Islands by Speedboat', 10, 24000, 30000, 1500, 1100, WHY)] },
+      { key: '_b2c', name: 'B2C Website', market_id: 'th', market_name: 'Thailand', bookings: 1, heads: 2, revenue: 2400, cost: 1000, net: 1400, revenue_per_pax: 1200, cost_per_pax: 500, net_per_pax: 700, below_cost: false,
+      routes: [CELL('r5', 'Similan Islands by Speedboat', 2, 2400, 1000, null, null, null)] }];
+    return j;
+  };
+  await ev(() => { _px.tab = 'a'; _px.an = 47; _px.pier = ''; });
+  n0 = calls.length;
+  await openView('trippl', 'renderTripPL()', 5000);
+  await sleep(3000); await idle(); await sleep(800);
+  const an = await ev(() => { const el = document.querySelector('#w4-agent-route'); return el ? { text: el.innerText.replace(/\s+/g, ' '), cells: [...el.querySelectorAll('td.mx')].map((td) => ({ cls: td.className, title: td.getAttribute('title') || '', text: td.innerText.replace(/\s+/g, ' ').trim() })) } : null; });
+  ok('asked the server once for the analysis (44 reads it, the matrix reuses that answer)', callsSince(n0).filter((c) => c.startsWith('GET /v1/reports/analysis')).length === 1, callsSince(n0).filter((c) => /analysis/.test(c)));
+  ok('the Agent x route matrix is on the Analysis tab', !!an && an.text.includes('Sun Tour') && an.text.includes('B2C Website') && an.text.includes('Similan Islands by Speedboat'), an && an.text.slice(0, 200));
+  const cell = an && an.cells.find((c) => /under contract/.test(c.text));
+  ok('a losing cell shows the server\'s reason tag and −net per pax', cell && /−600/.test(cell.text) && /d1n|d2n|d3n/.test(cell.cls), an && an.cells.map((c) => [c.cls, c.text]));
+  ok('hover text carries the server\'s rate card against what was taken, and the reason text', cell && cell.title.includes('Rate card 1,500 ฿/pax · taken 1,100 ฿/pax') && cell.title.includes('Sun Tour net') && cell.title.includes('Why: Its own rate card'), cell && cell.title);
+  ok('a profitable cell has no reason tag; a cell without a rate card has no rate-card line', an.cells.some((c) => /^\+500/.test(c.text) && !/under|FOC|thin/.test(c.text)) && an.cells.some((c) => !c.title.includes('Rate card') && /\+700/.test(c.text)), an.cells.map((c) => c.text));
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+  delete overrides['/v1/reports/analysis'];
 }
 
 // ── summary ──
