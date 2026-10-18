@@ -670,6 +670,56 @@ section('9', async () => {
   tamper = [];
 });
 
+// ═══ 10 · meal card amount, booking payment chip, Analysis "why" ═══
+section('10', async () => {
+  await settle(3000);      // the earlier sections' writes echo back through the change feed; let them land first
+  console.log('\n[10a] mvCost <- meal_preview.amount');
+  await openPier(DAY);
+  const held = (d, b) => waitFor((a) => !!laOps.mealPreview.of(a.d, a.b), { d, b }, 9000);
+  await ev(() => laOps.mealPreview.clear()); await ev((d) => laOps.mealPreview.of(d, 'b6'), DAY); await held(DAY, 'b6');
+  const P = (await api(`/v1/trip-actuals/${DAY}/b6`)).meal_preview;
+  ok('seed: the server priced the card (venue W5 Venue, amount)', P.venue && P.amount != null && P.adults > 0, P);
+  const cost = (ad, chd) => ev((a) => { const V = MEAL_VENUES.find((v) => v.id === a.vid); return V ? mvCost(V, a.ad, a.chd) : 'no venue'; }, { vid: P.venue.id, ad, chd });
+  ok('mvCost for the previewed heads = the server\'s amount', (await cost(P.adults, P.children)) === P.amount, [await cost(P.adults, P.children), P.amount]);
+  ok('mvCost for other heads is legacy\'s price x heads (280 / 180)', (await cost(2, 1)) === 2 * 280 + 180, await cost(2, 1));
+  tamper = [{ re: /trip-actuals\/2026-12-08\/b6$/, fn: (j) => { j.meal_preview.amount = 12345; } }];
+  await ev(() => laOps.mealPreview.clear()); await ev((d) => laOps.mealPreview.of(d, 'b6'), DAY);
+  await waitFor((a) => { const p = laOps.mealPreview.of(a.d, 'b6'); return !!p && p.amount === 12345; }, { d: DAY }, 9000);
+  ok('tampered preview (amount 12,345): mvCost gives the server\'s amount, not the price x heads', (await cost(P.adults, P.children)) === 12345, await cost(P.adults, P.children));
+  tamper = [];
+
+  console.log('\n[10b] the By-trip payment chip and the paid split <- the booking\'s own invoice and payment_state');
+  const chip = () => ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-p1'); return { chip: bookingV2PayChip(b).replace(/<[^>]+>/g, '').trim(), split: bookingV2PaidSplit(b), inv: acctBookingInvoice(b.id) && acctBookingInvoice(b.id).status, own: b.opsInvoice && b.opsInvoice.status }; });
+  const c0 = await chip();
+  ok('seed: p1 has no invoice (the chip shows the billing term, not a state)', c0.own == null && !/Awaiting|Partial|Paid/.test(c0.chip), c0);
+  tamper = [{ re: /\/v1\/bookings(\?|\/booking_)/, fn: (j) => { const list = j.bookings || (j.trips ? [j] : []); for (const b of list) if (b.id === bk.p1.id) { b.invoice = { id: 'inv_w5', number: 'INV-W5-1', kind: 'booking', fee_type: null, status: 'partial', total: b.total, paid: 400, balance: b.total - 400, received: 400 }; b.payment_state = 'partial'; } } }];
+  await ev(() => bookingV2EnsureOpsRange({ from: '2026-12-08', to: '2026-12-08', refresh: true })); await idle(); await settle(1500);
+  const c1 = await chip();
+  ok('tampered booking read (invoice partial, paid 400): the chip says Partial', c1.inv === 'partial' && /Partial/.test(c1.chip), c1);
+  ok('...and the paid split is the invoice\'s: paid 400, balance = total - 400', c1.split && c1.split.paid === 400 && c1.split.bal > 0, c1.split);
+  tamper = [{ re: /\/v1\/bookings(\?|\/booking_)/, fn: (j) => { const list = j.bookings || (j.trips ? [j] : []); for (const b of list) if (b.id === bk.p1.id) { b.invoice = { id: 'inv_w5', number: 'INV-W5-1', kind: 'booking', fee_type: null, status: 'paid', total: b.total, paid: b.total, balance: 0, received: b.total }; b.payment_state = 'paid'; } } }];
+  await ev(() => bookingV2EnsureOpsRange({ from: '2026-12-08', to: '2026-12-08', refresh: true })); await idle(); await settle(1500);
+  const c2 = await chip();
+  ok('invoice paid: the chip says Paid, balance 0', c2.inv === 'paid' && /Paid/.test(c2.chip) && c2.split && c2.split.bal === 0, c2);
+  tamper = [];
+
+  console.log('\n[10c] Analysis: the reason of a losing cell is the server\'s (pxMxWhy is not run)');
+  await goView('trippl'); await settle(500);
+  tamper = [{ re: /\/v1\/reports\/analysis/, fn: (j) => {
+    j.target_per_pax = 130;
+    j.routes = [{ route_id: 'r5', name: 'W5 Route', color: '#123456', trips: 3, did_not_sail: 0 }];
+    j.agents = [{ key: 'a-w5', name: 'W5 AGENT', heads: 5, bookings: 2, net_per_pax: -50, net: -250, routes: [{ route_id: 'r5', route_name: 'W5 Route', heads: 5, revenue: 100, cost: 350, net: -250, expected_per_pax: 200, taken_per_pax: 20, expected_heads: 5, rate_card: 'W5 card', zone: 'PK', why: { tag: 'W5 TAG', class: 'dq', text: 'W5 why text from the server' } }] }];
+  } }];
+  await ev(() => { laOps.costingPL.clear(); _px.tab = 'a'; renderTripPL(); });
+  await waitFor(() => (document.getElementById('trippl-host') || {}).innerHTML && document.getElementById('trippl-host').innerHTML.includes('W5 TAG'), null, 30000);
+  const html = await ev(() => document.getElementById('trippl-host').innerHTML);
+  ok('the matrix shows the server\'s tag and its text in the hover', html.includes('W5 TAG') && html.includes('W5 why text from the server') && html.includes('W5 card'), html.slice(0, 200));
+  const legacyHit = await ev(() => { let called = 0; const o = window.pxMxWhy; return typeof o; });
+  ok('pxMxWhy is a nested function of legacy\'s pxAnalysis: in operation mode pxAnalysis is the server\'s drawing and never runs it', legacyHit === 'undefined', legacyHit);
+  tamper = [];
+  await ev(() => { _px.tab = 'd'; });
+});
+
 //@@SECTIONS
 
 for (const [name, fn] of todo) {
