@@ -324,6 +324,16 @@ await ev((a) => { bop2OpenModal('replaceRange'); document.getElementById('bop2rp
 await idle(); await settle(1500);
 ok('a second run over days with nothing left to move says legacy\'s "Nothing to change in this range."', dialogs.slice(d0).includes('alert: Nothing to change in this range.'), dialogs.slice(d0));
 await ev(() => bop2CloseModal());
+// no replacement boat: the broken boat is only taken off (the server drops every day it may; bookings placed on it are flagged)
+d0 = dialogs.length; nb0 = bodies.length;
+await ev((a) => { bop2OpenModal('replaceRange'); document.getElementById('bop2rp-from').value = 'b1'; document.getElementById('bop2rp-to').value = ''; document.getElementById('bop2rp-d1').value = a.d1; document.getElementById('bop2rp-d2').value = a.d2; bop2ReplacePreview(); bop2ApplyReplace(); }, { d1: DAY, d2: D2 });
+await idle(); await settle(2000);
+const noTo = bodies.slice(nb0).filter((b) => /boat-replacements/.test(b.k));
+ok('no replacement boat: plan reads and one POST, none with to_boat_id; the POST sends drop_unplaceable true', noTo.length >= 2 && noTo.filter((b) => JSON.parse(b.req).dry_run !== true).length === 1 && JSON.parse(noTo.find((b) => JSON.parse(b.req).dry_run !== true).req).drop_unplaceable === true && noTo.every((b) => !('to_boat_id' in JSON.parse(b.req))), noTo.map((b) => b.req));
+ok('legacy confirm "Remove Aluminous1 from 2 day(s) (no replacement)." and the "Done." text', dialogs.slice(d0).some((t) => /^confirm: Remove Aluminous1 from 2 day\(s\) \(no replacement\)\./.test(t)) && dialogs.slice(d0).includes('alert: Done. 2 day(s) removed - see the list of trips that need a boat.'), dialogs.slice(d0));
+const bk1b = await api('/v1/bookings/' + b1.body.id);
+ok('server: Aluminous1 is off both days and booking one shows boat_pulled (needs a boat again)', !(await api(`/operations/deployments?from=${DAY}&to=${D3}`)).deployments.some((x) => x.boat_id === 'b1') && bk1b.trips[0].operations.boat_pulled === true, bk1b.trips[0].operations);
+await ev(() => bop2CloseModal());
 
 // ── 14. LA_UID · no client-minted id reaches the server ──
 item('LA_UID · browser-minted ids');
@@ -352,7 +362,7 @@ ok('the Bearer is kept for this tab; the ticket is gone from the address bar', e
 ok('read-only is forced although edit=1 was asked', emb.ro && emb.flag === '1', emb);
 const meCall = calls.slice(ncE).find((c) => /GET \/v1\/me[ ?]/.test(c));
 ok('the app asked GET /v1/me with it (the embed identity), no staff login form', !!meCall && !emb.msg, { meCall, msg: emb.msg });
-const embData = await pe.evaluate((d) => ({ ready: !!(window.laOps && window.laOps.state.loaded), r5: (typeof getRoute === 'function' && getRoute('r5') || {}).name, trip: !!(typeof TRIPS !== 'undefined' && TRIPS[d] && TRIPS[d].b1), failed: (window.laOps && window.laOps.state.failed) || [] }), DAY);
+const embData = await pe.evaluate((d) => ({ ready: !!(window.laOps && window.laOps.state.loaded), r5: (typeof getRoute === 'function' && getRoute('r5') || {}).name, trip: !!(typeof TRIPS !== 'undefined' && TRIPS[d] && TRIPS[d].b6), failed: (window.laOps && window.laOps.state.failed) || [] }), D3);
 ok('the embed boot loads only what the token may read (catalogue with the server routes, deployments); nothing fails', embData.ready && embData.r5 === 'Similan Islands by Speedboat' && embData.trip && embData.failed.length === 0, embData);
 ok('and nothing was written from the embed page', !bodies.slice(nbE).some((b) => !/embed\/token/.test(b.k)), bodies.slice(nbE).map((b) => b.k));
 await ce.close();
