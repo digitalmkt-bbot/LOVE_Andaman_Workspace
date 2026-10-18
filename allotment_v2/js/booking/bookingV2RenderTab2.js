@@ -36,6 +36,7 @@ function bookingV2RenderTab2(){
          pax เป็นศูนย์ตั้งใจ · วันนั้นไม่มีใครขึ้นเรือ ถ้าใส่ 12 ยอดคนของวันจะเกินจริง
          จำนวนคนที่อยู่บนเกาะไปอยู่บนป้ายของแถวแทน */
       (bk.trips||[]).forEach(t=>{
+        if(_srv && Array.isArray(_srv.ovn_holds)) return;   /* §opsByTripExtras · the server lists the held nights (ovn_holds) · rows are added after this loop */
         if(!t || t.bookingMode!=='charter' || t.ovn!=='return') return;
         { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
         if(t.date===date || !t.ovnReturnDate || t.ovnReturnDate<=t.date) return;
@@ -62,6 +63,11 @@ function bookingV2RenderTab2(){
     }
   });
 
+  /* §opsByTripExtras · overnight holding rows from GET /operations/by-trip ovn_holds[] (live bookings; day / days / island heads are the server's) */
+  if(_srv && Array.isArray(_srv.ovn_holds) && typeof window.laOpsOvnRows==='function') window.laOpsOvnRows(_srv).forEach(x=>{
+    rows.push({bk:x.bk, t:x.t, routeId:x.t.routeId, zone:'__CHARTER__', pax:{}, charter:true, charterBoatId:x.h.charter_boat_id||x.t.charterBoatId||null, pickupTime:'', subtotal:0, cxl:false,
+      ovnHoldRow:{from:x.h.from, to:x.h.to, day:x.h.day, days:x.h.days, pax:x.h.island_pax}});
+  });
   // ── Filters: pier + program family (+ optional route from calendar drill) ──
   const pierF = _bkV2T2Pier || 'all';
   const famF = _bkV2T2Family || '';
@@ -331,6 +337,17 @@ function bookingV2RenderTab2(){
     ((_w.boat&&_w.boat.by_route)||[]).forEach(x=>{ const l=_unRn(x.route_id); _unBoatR[l]=(_unBoatR[l]||0)+x.pax; });
     _unVanN=(_w.van&&_w.van.bookings)||0; _unVanPax=(_w.van&&_w.van.pax)||0; Object.keys(_unVanR).forEach(k=>delete _unVanR[k]);
     ((_w.van&&_w.van.by_route)||[]).forEach(x=>{ const l=_unRn(x.route_id); _unVanR[l]=(_unVanR[l]||0)+x.pax; });
+    if(_w.reconfirm){   /* §opsByTripExtras · the Re-confirm chip: warnings.reconfirm {bookings, pax, by_route} */
+      _unRcN=_w.reconfirm.bookings||0; _unRcPax=_w.reconfirm.pax||0; Object.keys(_unRcR).forEach(k=>delete _unRcR[k]);
+      (_w.reconfirm.by_route||[]).forEach(x=>{ const l=_unRn(x.route_id); _unRcR[l]=(_unRcR[l]||0)+x.pax; });
+    }
+  }
+  /* §opsByTripExtras · the return-van chip: the van board's routes[].return_unarranged (this page's marine / land routes only) */
+  const _vboard = (typeof window.laOpsVanBoardFor==='function') ? window.laOpsVanBoardFor(date) : null;
+  if(_vboard && Array.isArray(_vboard.routes)){
+    _unRetN=0; _unRetPax=0; Object.keys(_unRetR).forEach(k=>delete _unRetR[k]);
+    _vboard.routes.forEach(r=>{ if((typeof laIsLandRoute==='function' && laIsLandRoute(r.route_id))!==_bkV2CityTourOnly) return;
+      (r.return_unarranged||[]).forEach(x=>{ _unRetN++; _unRetPax+=(+x.pax||0); const l=_unRn(r.route_id); _unRetR[l]=(_unRetR[l]||0)+(+x.pax||0); }); });
   }
   /* §btUnit · ตัวเลขในแถบนี้เป็น "pax" ส่วนเลขบนการ์ดโหมดเป็น "booking"
      ของเดิมสองอันอยู่คนละที่จึงไม่ชนกัน · ตอนนี้อยู่ในหัวเดียวกันแล้ว
