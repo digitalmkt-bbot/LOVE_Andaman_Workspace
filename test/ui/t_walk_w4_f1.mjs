@@ -381,6 +381,39 @@ console.log('\n== ' + curItem);
   await ev(() => { b2dTab('overview'); });
 }
 
+// ═══ 7 · Operations Report (repOpsGather, repOpsSlides, _repOpsHeadline) ═══
+curItem = '7 operations report';
+console.log('\n== ' + curItem);
+{
+  const CM = T0.slice(0, 7), first = CM + '-01', last = new Date(Date.UTC(+CM.slice(0, 4), +CM.slice(5, 7), 0)).toISOString().slice(0, 10);
+  await ev(([f, l]) => { const s = repSt('ops'); s.from = f; s.to = l; }, [first, last]);
+  await ev(() => { SB_BOOKINGS.length = 0; });
+  n0 = calls.length;
+  await openView('rep-ops', "renderReport('ops')", 3500);
+  await sleep(2500); await idle(); await sleep(800);
+  const rep = await api('/v1/reports/operations?from=' + first + '&to=' + last);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/reports/operations', mine.some((c) => c.startsWith('GET /v1/reports/operations 200')), mine);
+  ok('no booking range was loaded for the report', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  const D = rep.current;
+  ok('seed: heads, sales and a raised invoice are there to compare', D.heads.carried > 0 && D.revenue > 0 && D.invoices.raised >= 1, [D.heads, D.revenue, D.invoices]);
+  const stat = (k) => ev((kk) => { const e = [...document.querySelectorAll('#rep-host-ops .rep-av')].find((x) => (x.querySelector('.k') || {}).textContent === kk); return e ? { v: e.querySelector('.v').innerText, u: (e.querySelector('.u') || { innerText: '' }).innerText } : null; }, k);
+  const money = (v) => ev((x) => repMoney(x), v);
+  const sp = await stat('Passengers carried'), sf = await stat('Seat fill rate'), sv = await stat('Sales value'), so = await stat('Sailings operated');
+  ok('"Passengers carried" = server heads carried, "seats booked" = heads booked', sp && sp.v === String(D.heads.carried) && sp.u.startsWith(String(D.heads.booked)), [sp, D.heads]);
+  ok('"Seat fill rate" and seats offered = the server', sf && sf.v === D.fill_pct + '%' && sf.u.includes(String(D.seats_offered)), [sf, D.fill_pct, D.seats_offered]);
+  ok('"Sales value" and bookings = the server', sv && sv.v === await money(D.revenue) && sv.u.startsWith(String(D.bookings)), [sv, D.revenue, D.bookings]);
+  ok('"Sailings operated" and operating days = the server', so && so.v === String(D.sailings) && so.u.includes(String(D.operating_days)), [so, D.sailings, D.operating_days]);
+  const inv = await stat('Invoiced'), unp = await stat('Still unpaid');
+  ok('finance slide: Invoiced and Still unpaid = the server invoices', inv && unp && inv.v === await money(D.invoices.raised_total) && inv.u.startsWith(String(D.invoices.raised)) && unp.v === await money(D.invoices.unpaid_total) && unp.u.startsWith(String(D.invoices.unpaid)), [inv, unp, D.invoices]);
+  const foot = (await ev(() => [...document.querySelectorAll('#rep-host-ops .rep-cfoot, #rep-host-ops .foot, #rep-host-ops [class*=foot]')].map((e) => e.innerText).join(' | '))).replace(/\s+/g, ' ');
+  ok('the headline sentence on the first card is the server headline', foot.includes(rep.headline.replace(/\s+/g, ' ')), [foot.slice(0, 300), rep.headline]);
+  const prog = (await text('#rep-host-ops')).replace(/\s+/g, ' ');
+  ok('programme slides name the server routes with their pax', D.by_route.every((r) => prog.includes(r.name)), prog.slice(0, 200));
+  ok('the invoice list was put back after the slides (nothing synthetic is left)', await ev(() => SB_INVOICES.every((v) => v.issuedAt !== (repSt('ops').from) || v.id)), null);
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
