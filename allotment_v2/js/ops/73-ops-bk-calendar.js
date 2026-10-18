@@ -54,6 +54,13 @@
     return { total: n(f.total), ad: n(f.ad), chd: n(f.chd), inf: n(f.inf), foc: n(f.foc), pk: n(f.pk), kl: n(f.kl), nt: n(f.nt), hasFocPending: !!f.foc_pending, subCount: n(f.sub_count) };
   });
 
+  /* the little line in the top bar: pax and bookings of the month on screen */
+  wrap('bookingV2TopbarMeta', function(orig){
+    if(!window._bkV2 || window._bkV2.tab !== 'cal') return orig.apply(this, [].slice.call(arguments, 1));
+    var j = month(cursorYm()), s = j && j.stats;
+    return s ? (s.pax + ' pax &middot; ' + s.bookings + ' bookings') : orig.apply(this, [].slice.call(arguments, 1));
+  });
+
   /* ── the four cards on top ──────────────────────────────────────────────── */
   wrap('bookingV2RenderStats', function(orig){
     var ym = cursorYm(), j = month(ym), s = j && j.stats;

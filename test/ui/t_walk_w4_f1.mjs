@@ -297,8 +297,38 @@ console.log('\n== ' + curItem);
   const subs = await ev(() => [...document.querySelectorAll('.bkv2-mx tr.sub')].map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
   const V = F.variants.find((v) => v.live_days > 0);
   ok('expanded family: the variant with bookings is listed with the server sum', subs.some((t) => t.includes(V.name) && t.includes(V.live_days + ' วัน')), [subs, V.name]);
-  ok('the Cancel/Approvals-free calendar read only used GET', nonGet(n0).length === 0, nonGet(n0));
+  ok('the calendar page only read (no write went out)', nonGet(n0).length === 0, nonGet(n0));
   await ev(() => { _bkV2.view = 'cal'; _bkV2.expanded = new Set(); });
+}
+
+// ═══ 5 · Cancellation report (bookingV2RenderCancelReport) ═══
+curItem = '5 cancellations';
+console.log('\n== ' + curItem);
+{
+  // a second cancellation with a fee and another reason, so the cards have more than one row
+  { const g = await api('/v1/bookings/' + bk.f1d.id); const c = await send('POST', '/v1/bookings/' + bk.f1d.id + '/cancel', { category: 'no_show', charge_type: 'partial', charge_amount: 500, version: g.version }); if (c.status !== 200) { console.log('cancel failed', c.status, JSON.stringify(c.body)); process.exit(2); } }
+  const CM = T0.slice(0, 7), first = CM + '-01', last = new Date(Date.UTC(+CM.slice(0, 4), +CM.slice(5, 7), 0)).toISOString().slice(0, 10);
+  n0 = calls.length;
+  await openView('booking', '', 1500);
+  await ev((m) => { _bkV2CityTourOnly = false; _bkV2.month = m; _bkV2.tab = 'cancel'; bookingV2Render(); }, CM);
+  await sleep(2500); await idle(); await sleep(500);
+  const rep = await api('/v1/reports/cancellations?from=' + first + '&to=' + last);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/reports/cancellations', mine.some((c) => c.startsWith('GET /v1/reports/cancellations 200')), mine);
+  ok('no booking range was loaded for the report', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  ok('seed: two cancellations, one with a 500 fee', rep.cancellations === 2 && rep.fees === 500 && rep.by_reason.length === 2, rep);
+  // the browser holds no booking: legacy would say "No cancellations yet"
+  await ev(() => { SB_BOOKINGS.length = 0; bookingV2Render(); });
+  await sleep(600);
+  const t = (await ev(() => [...document.querySelectorAll('.bkv2')].map((e) => e.innerText).join(' '))).replace(/\s+/g, ' ');
+  ok('four KPI cards = the server (cancellations, rate, pax, no-show rate, fees)', t.includes(String(rep.cancellations)) && t.includes(rep.cancel_rate_pct + '% of ' + rep.bookings_in_period) && t.includes(String(rep.pax_cancelled)) && t.includes(rep.no_show_rate_pct + '%') && t.includes('฿' + rep.fees), t.slice(0, 400));
+  ok('by-reason rows show the server reason, count, pax and fee', rep.by_reason.every((r) => t.includes(r.count + ' · ' + r.pax + ' pax · ฿' + r.fee)), t.slice(0, 600));
+  ok('fault side = the server split', t.includes('Customer ' + rep.fault.customer + ' (' + rep.fault.customer_pct + '%)') && t.includes('Operator ' + rep.fault.operator), t.slice(0, 700));
+  ok('top cancelling agents and months = the server', rep.by_agent.every((a) => t.includes(a.name)) && rep.by_month.every((m) => t.includes(m.month)), t.slice(-300));
+  ok('the period line says what the window is (cancelled in)', t.includes('Cancelled in: ' + first + ' → ' + last), t.slice(0, 120));
+  ok('the count in the top bar is the server\x27s', t.includes(rep.cancellations + ' cancellations'), t.slice(0, 200));
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+  await ev(() => { _bkV2.tab = 'cal'; });
 }
 
 // ── summary ──
