@@ -297,6 +297,7 @@
       vanId: g ? g.vanId : null, vanGroup: g ? g.number : 0, vanSeq: +s.sequence || 0,
       ck: s.checked_in ? { at: s.checked_in.at, by: s.checked_in.by || '', n: +s.checked_in.seats || 0 } : null,
       by: s.created_by || '', at: s.created_at || '', editBy: s.updated_by || '', editAt: s.updated_at || '',
+      srvSeats: s.seats != null ? (+s.seats || 0) : null,      // w6-c · the seats the stop takes (server-computed, never sent; vsSeats in 93-ops-w6c-vans.js)
       _opsId: s.id
     };
   }

@@ -486,7 +486,8 @@
     if(ob.payment_state !== undefined){ bk.srvPay = { state: ob.payment_state, invoice: ob.invoice || null }; }
     if(ob.is_b2c_legacy !== undefined || ob.owed !== undefined){
       bk.srvFlags = { isB2C: !!ob.is_b2c_legacy, isInternal: !!ob.is_internal, isCompany: !!ob.is_company,
-                      internalFree: !!ob.internal_free, owed: +ob.owed || 0, b2cChannel: ob.b2c_channel != null ? String(ob.b2c_channel) : '' };
+                      internalFree: !!ob.internal_free, owed: +ob.owed || 0, b2cChannel: ob.b2c_channel != null ? String(ob.b2c_channel) : '',
+                      reportMarket: ob.report_market != null ? String(ob.report_market) : '' };   // w6-c · the market a report puts the booking in (pmMarket, 93-ops-w6c-market.js)
     }
     /* §opsBookingList (w4-f3) · the list row's computed fields (GET /v1/bookings rows only): last activity, new / soon / today chips,
        possible duplicates. Read-only, never sent; 75-ops-booking-list.js hands them to the All-bookings screen. */

@@ -170,7 +170,7 @@ section('1', async () => {
   const day = (await api(`/v1/boats/b6/capacity-overrides?from=${DB}&to=${DB}`)).overrides[0];
   const ci = await ev((a) => {
     const b = getBoat('b6'); const was = b.cap; b.cap = 99;       // the browser's boat record says 99 seats: legacy's base would be 99
-    const now = boatCapInfo('b6', a.d), legacy = window.boatCapInfo.__orig('b6', a.d), cf = boatCapFor('b6', a.d); b.cap = was; return { now, legacy, cf };
+    const now = boatCapInfo('b6', a.d), legacy = (() => { let f = window.boatCapInfo; while (f.__orig) f = f.__orig; return f; })()('b6', a.d), cf = boatCapFor('b6', a.d); b.cap = was; return { now, legacy, cf };
   }, { d: DB });
   ok('server: the day object (capacity 44, normal 40, ceiling 47)', day && day.capacity === 44 && day.normal === 40 && day.ceiling === 47 && day.overridden, day);
   ok('boatCapInfo: cap / base / licence / delta are the server\'s day object (legacy, from the boat record, said 99)', ci.now.cap === 44 && ci.now.base === 40 && ci.now.license === 47 && ci.now.delta === 4 && ci.now.overridden === true && ci.legacy.base === 99 && ci.cf === 44, ci);
@@ -264,8 +264,8 @@ section('2', async () => {
   }, { d: D, r: ROUTE });
   ok('vsFor keeps the order the server sent (pickup order)', eq(vs.now, stops.filter((s) => s.route_id === ROUTE).map((s) => s.label)) && vs.now.length >= 2, { vs, stops: stops.map((s) => [s.label, s.time, s.sequence]) });
   const gs = (await api(`/operations/van-groups?service_date=${D}&route_id=${ROUTE}`)).groups.find((g) => g.id === g1.id);
-  const seats = await ev((a) => { const S = VAN_STOPS; const ks = Object.keys(S).filter((k) => k.startsWith(a.d + '::')); const keep = ks.map((k) => [k, S[k].pax]); ks.forEach((k) => { S[k].pax = 7; });
-    const now = vsSeatsOfVan(a.d, a.r, a.v, a.n, false), legacy = window.vsSeatsOfVan.__orig(a.d, a.r, a.v, a.n, false); keep.forEach(([k, v]) => { S[k].pax = v; }); return { now, legacy }; }, { d: D, r: ROUTE, v: vanAlpha.id, n: gs.number });
+  const seats = await ev((a) => { const S = VAN_STOPS; const ks = Object.keys(S).filter((k) => k.startsWith(a.d + '::')); const keep = ks.map((k) => [k, S[k].pax, S[k].srvSeats]); ks.forEach((k) => { S[k].pax = 7; S[k].srvSeats = 7; });    /* w6-c: vsSeats reads the server's seats of a saved stop, so the browser's copy of them is changed too */
+    const now = vsSeatsOfVan(a.d, a.r, a.v, a.n, false), legacy = (() => { let f = window.vsSeatsOfVan; while (f.__orig) f = f.__orig; return f; })()(a.d, a.r, a.v, a.n, false); keep.forEach(([k, v, q]) => { S[k].pax = v; S[k].srvSeats = q; }); return { now, legacy }; }, { d: D, r: ROUTE, v: vanAlpha.id, n: gs.number });
   ok('vsSeatsOfVan = the group\'s stop_seats (2 guides) although the browser\'s stop rows say 7 each', gs.stop_seats === 2 && seats.now === 2 && seats.legacy === 14, { gs: gs.stop_seats, seats });
   // the stop form: no browser seat sum; the server's 409 asks "Add anyway?" and the answer goes back with seats_anyway
   const room = gs.capacity - gs.pax;

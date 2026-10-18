@@ -48,13 +48,14 @@
   }
   O.onWrite(function(){ stamp++; });
   O.onChange(function(){ stamp++; });
+  O.w5cPierStamp = function(){ return stamp; };       // w6-c · the Van Check-in pills (93-ops-w6c-pills.js) share the write counter
 
   /* ── programmes of a day ── */
   var PG = {};                      // date -> { stamp, at, programmes, busy }
   function sigOf(fam, rst){
     var o = {};
-    Object.keys(fam).forEach(function(k){ var a = fam[k]; o['f' + k] = [a.pax, a.booked, a.rows, a.rowsP, a.arrP, a.clrP, a.onP, a.due].join(','); });
-    Object.keys(rst).forEach(function(k){ var R = rst[k]; o['r' + k] = ['PK', 'KL', 'OWN'].map(function(z){ return R[z].tot + '/' + R[z].done; }).join(','); });
+    Object.keys(fam).forEach(function(k){ var a = fam[k]; o['f' + k] = [a.pax, a.booked, a.rows, a.rowsP, a.arrP, a.clrP, a.onP, a.due, a.arr, a.clr, a.on].join(','); });
+    Object.keys(rst).forEach(function(k){ var R = rst[k]; o['r' + k] = ['PK', 'KL', 'OWN'].map(function(z){ return R[z].tot + '/' + R[z].done + '/' + R[z].bk; }).join(','); });
     return JSON.stringify(o);
   }
   function applyTo(programmes, fam, rst){
@@ -66,10 +67,14 @@
         R.PK.tot = +v.zones.PK.total || 0; R.PK.done = +v.zones.PK.done || 0;
         R.KL.tot = +v.zones.KL.total || 0; R.KL.done = +v.zones.KL.done || 0;
         R.OWN.tot = +v.zones.OWN.total || 0;
+        // w6-c · the heads booked before any loss, per zone (the struck-through figures on the pill)
+        R.PK.bk = +v.zones.PK.booked || 0; R.KL.bk = +v.zones.KL.booked || 0; R.OWN.bk = +v.zones.OWN.booked || 0;
         rowsP += R.PK.tot + R.KL.tot + R.OWN.tot;
       });
       a.pax = +p.pax || 0; a.booked = +p.booked || 0; a.rows = +p.rows || 0; a.rowsP = rowsP;
       a.arrP = +p.arr || 0; a.clrP = +p.clr || 0; a.onP = +p.brd || 0; a.due = +p.due || 0;
+      // w6-c · the bookings (rows) that reached each stage, for the hover texts
+      a.arr = +p.arr_rows || 0; a.clr = +p.clr_rows || 0; a.on = +p.brd_rows || 0;
     });
   }
   function ask(date, fam, rst){
