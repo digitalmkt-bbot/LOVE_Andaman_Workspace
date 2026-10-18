@@ -172,7 +172,7 @@ ok('a6: after the booking is read again the screen shows the no-show (lost 1, st
 
 // ── the screen's own check-in write (PUT) carries the answer: aboard refreshed from it ──
 await ev((e) => ckToggle(e, '2026-11-10', 'pier'), B.a6.ext); await idle(); await settle(1500);
-const srv6 = await srvAboard('a6'), put6 = lastBody(/^PUT \/operations\/trip-ops\/.*\/checkins\/pier\//);
+const srv6 = await srvAboard('a6'), put6 = lastBody(/^(PUT|POST) \/operations\/trip-ops\/.*\/checkins\/pier\//);
 ok('pier tick on the screen: the PUT answered with aboard on the trip', put6 && put6.status === 200 && put6.json && put6.json.trip && put6.json.trip.aboard && put6.json.trip.aboard.summary, put6 && put6.json && Object.keys(put6.json));
 const scr6 = await screenOf(B.a6.ext);
 ok('a6 after the tick: the screen figures = the server aboard read afresh', same(scr6, expectOf(srv6)), { scr6, want: expectOf(srv6) });
