@@ -44,6 +44,7 @@
       validFrom:s.valid_from || '', validTo:s.valid_to || '', active:s.active !== false,
       owner:s.owner || '', nationalityScope:s.nationality_scope || 'both',
       transferUnit:s.transfer_unit || '', routes:[], seatRates:{}, priceTiers:{}, routeValidity:{},
+      pricedRoutes:Array.isArray(s.priced_routes) ? s.priced_routes.slice() : null,   // w5-e: the server's own list of routes the rate can price (agRtRoutes)
       routeBundles:{}, charterRates:{}, addOns:{}
     };
     var longtailApplies = [];

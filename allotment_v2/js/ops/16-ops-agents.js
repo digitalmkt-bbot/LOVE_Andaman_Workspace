@@ -80,6 +80,7 @@
     });
     if('contract_days_left' in s){ o.contractDaysLeft=s.contract_days_left; o.contractExpiring=!!s.contract_expiring; o.contractExpired=!!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
+    if('contract_template_effective_id' in s) o.contractTemplateEffectiveId=s.contract_template_effective_id;   // w5-e: ctTmplForAgent
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
@@ -113,6 +114,7 @@
       return mapped;
     });
   }
+  window.laOpsAgentFetch=fetchAgent;      // w5-e: ops/84 reloads the agents a server command changed
   function applyResponse(id, response){
     var old=current(id), mapped=putProjection(response,old);
     if(response && response.id===id) return mapped;
@@ -173,6 +175,12 @@
     }).then(function(row){ refreshAfter(id,row); if(typeof agEditClose==='function') agEditClose(); },function(e){ return fail('Could not save agent',e); });
   }
 
+  /* w5-e: legacy's own Thai confirm (agCreateSubmit), filled from the server's 409 message ('An agent with a similar name exists: NAME (CODE). Send create_anyway…') */
+  function dupAsk(e){
+    var m=/similar name exists: (.*?)(?: \(([^()]*)\))?\. Send create_anyway/.exec((e&&e.message)||'');
+    var nm=m?m[1]:'', cd=m&&m[2]?m[2]:'';
+    return 'มีเอเยนต์ที่ชื่อ/โค้ดใกล้เคียงกันอยู่แล้ว:\n\n  “'+nm+'”'+(cd?(' ('+cd+')'):'')+'\n\nยืนยันสร้างเป็นเอเยนต์ใหม่แยกอีกตัว?';
+  }
   function createAgent(){
     if(!enabled()) return legacyCreateSubmit.apply(this,arguments);
     var d=_agNewDraft; if(!d) return;
@@ -182,7 +190,7 @@
     var body=createBody(d,false);
     function send(payload){ return write('POST','/v1/agents',payload); }
     return send(body).catch(function(e){
-      if(e.code==='possible_duplicate' && confirm('A similar agent exists. Create a separate agent anyway?')) return send(createBody(d,true));
+      if(e.code==='possible_duplicate' && confirm(dupAsk(e))) return send(createBody(d,true));
       throw e;
     }).then(function(row){
       var a=refreshAfter(row.id,row); if(typeof agEditClose==='function') agEditClose(); redraw(a.id);
