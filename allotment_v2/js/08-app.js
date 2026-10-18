@@ -56671,6 +56671,16 @@ function renderPierAtt(pier){
       /* §paLtSplit · ทุกวันที่ลงเรือ WS มีหางยาวด้วย · WS-LT = วัน WS + ช่องที่ลง WS-LT เอง (ถ้ามี) */
       var _wsd=cnt[PA_WS_CODE]||0;
       if(_wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+_wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+_wsd; }
+      /* [w5-f small edit] ops mode: this person's counts, work days, TOTAL and nights are the server's roster `totals` (ops/85-ops-pier-roster-w5.js);
+         the grand totals follow. Not asked (legacy mode, a hand edit not sent yet, roster not read): the counts above stand. */
+      var _SV=(typeof window.opsPierAttTotals==='function')?window.opsPierAttTotals(P.k,st.id,CY.from,CY.to):null;
+      if(_SV){
+        var _u={}; Object.keys(cnt).forEach(function(c){ _u[c]=1; }); Object.keys(_SV.cnt).forEach(function(c){ _u[c]=1; });
+        Object.keys(_u).forEach(function(c){ gTot[c]=(gTot[c]||0)-(cnt[c]||0)+(_SV.cnt[c]||0); });
+        cnt=_SV.cnt; w=_SV.w; o=0; l=0;
+        Object.keys(cnt).forEach(function(c){ if(c==='WS-LT') return; var _k=paKindOf(c); if(_k==='off') o+=cnt[c]; else if(_k==='leave') l+=cnt[c]; });
+        nTot+=(_SV.nights-(nCnt[st.id]||0)); nCnt[st.id]=_SV.nights;
+      }
       totW+=w; totO+=o; totL+=l; totAway+=aw;
       var _nc=nCnt[st.id]||0;
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
