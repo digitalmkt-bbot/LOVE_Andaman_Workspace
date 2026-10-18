@@ -42,7 +42,7 @@
   function applyDay(day){
     var C = cache(); if(!C || !day) return;
     var k = key(day.boat_id, day.service_date);
-    if(day.overridden) C[k] = { cap: day.capacity, reason: day.reason || '', by: day.set_by || '', at: day.set_at || '', srv: 1 };
+    if(day.overridden) C[k] = { cap: day.capacity, reason: day.reason || '', by: day.set_by || '', at: day.set_at || '', srv: 1, normal: day.normal, ceiling: day.ceiling };   // w5c: the server's normal / ceiling too (82-ops-w5c-boats.js boatCapInfo)
     else delete C[k];
   }
   function forget(boatId, date){ var C = cache(); if(C) delete C[key(boatId, date)]; }
