@@ -423,9 +423,13 @@
         from_inventory: !!(l.from_inventory != null ? l.from_inventory : l.fromInventory)
       };
       if(isPatch && l.id) line.id = l.id;
+      /* w5-b: a new line the form linked by its NAME (memoAddItem's _invPickByName: no item picked from the list, so no
+         inventorySnapshot) goes without item_id: the server links it by name and part number (409 part_no_required when
+         several items share the name). auto_register tells the server to link by name (or register a new part). A line picked from the list, or one already saved, keeps its item_id. */
       if(l.auto_register !== undefined || l.autoRegister !== undefined){
         line.auto_register = !!(l.auto_register != null ? l.auto_register : l.autoRegister);
       }
+      if(line.item_id && !l.id && l.inventorySnapshot === undefined && l.fromInventory){ delete line.item_id; line.auto_register = true; }
       return line;
     });
     var scope = text(d.scope) || 'vessel';
@@ -490,6 +494,9 @@
       cost: d('add-inv-cost') ? (parseFloat(d('add-inv-cost').value) || 0) : 0,
       note: d('add-inv-note-extra') ? d('add-inv-note-extra').value.trim() : ''
     });
+    /* w5-b: a blank (or 0) minimum is not sent: the server gives a new stock item its default minimum (5, STOCK_DEFAULT_MIN_QTY),
+       as legacy's `parseFloat(...) || 5`. The wrapper used to send 0. */
+    if(!(parseFloat(d('add-inv-min') ? d('add-inv-min').value : '') > 0)) delete body.min_qty;
     return O.queue(function(){
       return O.post('/v1/fleet/stock-items', body);
     }).then(function(res){
@@ -789,7 +796,10 @@
       if(typeof window.flOpenApproveModal === 'function') window.flOpenApproveModal(id);
       return null;
     }
-    var isLaborOnly = m.memoType === 'labor' || (m.memoType === 'mixed' && !(m.items || []).some(function(it){ return (it.category || 'parts') === 'parts'; }));
+    /* w5-b: which way the memo goes (paid straight after approval, or ordered and received first) is the server's `labor_only`
+       on the memo; legacy's own test only runs for a memo that did not come from the server. */
+    var isLaborOnly = (m._fromOpsBackend && m.receiveState) ? !!m.laborOnly
+      : (m.memoType === 'labor' || (m.memoType === 'mixed' && !(m.items || []).some(function(it){ return (it.category || 'parts') === 'parts'; })));
     if(m.status === 'approved'){
       if(isLaborOnly){
         return O.queue(function(){ return O.post('/v1/fleet/memos/' + enc(id) + '/pay', { paid_date: O.today() }); }).then(function(res){

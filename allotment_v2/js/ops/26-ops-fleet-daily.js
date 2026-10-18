@@ -836,12 +836,27 @@
     return runProjectCmd(id, 'resume', {}, 'Could not resume project');
   });
 
+  /* Cancel: legacy's prompt, then, when the project has open child jobs, its confirm "Unlink them so they continue as
+     standalone jobs?". OK sends unlink_jobs: true (they go on alone), Cancel sends unlink_jobs: false (they stay linked);
+     the wrapper used to send true without asking. The server judges completed / cancelled projects; the two toasts are
+     legacy's hint before the prompt. */
   wrap('flProjCancel', function(orig, id){
-    var reason = prompt('Reason for cancelling project:');
+    var p = listProjects().find(function(x){ return x && x.id === id; });
+    if(!p) return null;
+    var toast = function(m){ if(typeof window.flShowToast === 'function') window.flShowToast(m); };
+    if(p.status === 'completed'){ toast('Completed projects cannot be cancelled'); return null; }
+    if(p.status === 'cancelled'){ toast('Already cancelled'); return null; }
+    var reason = prompt('Reason for cancelling:', '');
     if(reason === null) return null;
     reason = text(reason);
     if(!reason){ alert('Reason required'); return null; }
-    return runProjectCmd(id, 'cancel', { reason: reason, unlink_jobs: true }, 'Could not cancel project');
+    var kids = typeof window.flProjChildMJs === 'function' ? window.flProjChildMJs(p.id) : [];
+    var open = (kids || []).filter(function(m){ return m && m.status !== 'done'; });
+    var body = { reason: reason };
+    if(open.length){
+      body.unlink_jobs = !!confirm('This project has ' + open.length + ' open child MJ(s).\n\nUnlink them so they continue as standalone jobs?\n\n(OK = unlink · Cancel = keep linked but project will be cancelled)');
+    }
+    return runProjectCmd(id, 'cancel', body, 'Could not cancel project');
   });
 
   wrap('flProjReopen', function(orig, id){
@@ -1218,28 +1233,40 @@
       return prefix + '-' + String(mx + 1).padStart(3, '0');
     };
 
-    var body = toSafetyReplaceBody({
-      reason: sd.reason || 'broken',
-      description: sd.description,
-      date: sd.date || O.today(),
-      source: sd.source || 'inventory',
-      newInventoryId: sd.newInventoryId,
-      newBrand: sd.newBrand,
-      newModel: sd.newModel,
-      supplier: sd.supplier,
-      newPrice: sd.newPrice,
-      newSerial: sd.newSerial,
-      installDate: sd.installDate || sd.date || O.today(),
-      installer: sd.installer,
-      labour: sd.newLabour != null ? sd.newLabour : sd.labour, // the screen keeps the labour cost in _swapDoc.newLabour
-      incNo: nextNo(incList, 'INC'),
-      mjNo: nextNo(mjList, 'MJ'),
-      moNo: sd.source === 'buy' ? nextNo(moList, 'MO') : null,
-      serialAnyway: !sd.newSerial
+    /* w5-b: the incident and job numbers are the server's next_no (GET /v1/fleet/incidents, /jobs), read just before the send,
+       not the browser's highest + 1. The memo list carries no next_no yet (MISSING-SERVER-FIELD in docs/walk/w5-b.md), so a bought
+       part's memo number is still worked out here, from the memos the screen holds. */
+    var nosP = Promise.all([
+      O.get('/v1/fleet/incidents', { boat_id: '-none-' }).catch(function(){ return null; }),
+      O.get('/v1/fleet/jobs', { boat_id: '-none-' }).catch(function(){ return null; })
+    ]).then(function(r){
+      return { inc: (r[0] && r[0].next_no) || nextNo(incList, 'INC'), mj: (r[1] && r[1].next_no) || nextNo(mjList, 'MJ') };
     });
+    var body = null;
+    function buildBody(nos){
+      return toSafetyReplaceBody({
+        reason: sd.reason || 'broken',
+        description: sd.description,
+        date: sd.date || O.today(),
+        source: sd.source || 'inventory',
+        newInventoryId: sd.newInventoryId,
+        newBrand: sd.newBrand,
+        newModel: sd.newModel,
+        supplier: sd.supplier,
+        newPrice: sd.newPrice,
+        newSerial: sd.newSerial,
+        installDate: sd.installDate || sd.date || O.today(),
+        installer: sd.installer,
+        labour: sd.newLabour != null ? sd.newLabour : sd.labour, // the screen keeps the labour cost in _swapDoc.newLabour
+        incNo: nos.inc,
+        mjNo: nos.mj,
+        moNo: sd.source === 'buy' ? nextNo(moList, 'MO') : null,
+        serialAnyway: !sd.newSerial
+      });
+    }
 
     // Server handles all side effects (incident, job, memo, stock withdrawal, old/new safety items)
-    return O.queue(function(){
+    return nosP.then(function(nos){ body = buildBody(nos); return O.queue(function(){
       return O.post('/v1/fleet/safety/' + enc(it.id) + '/replace', body).catch(function(e){
         if(e && e.code === 'stock_short'){
           if(!confirm(e.message)) throw e;
@@ -1260,7 +1287,7 @@
         redrawDailyAndProjects();
         return res;
       });
-    }).catch(function(e){ O.fail('Could not replace safety item', e); return null; });
+    }).catch(function(e){ O.fail('Could not replace safety item', e); return null; }); });
   });
 
   /* legacy flSafetyDelete (06-engine-assign.js): the same confirm, then DELETE; the list is redrawn from the answer */

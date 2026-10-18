@@ -209,7 +209,7 @@
       var next = serverBoats.map(function(s){ return mapBoat(s, byId[s.id] || null); });
       existing.length = 0;
       Array.prototype.push.apply(existing, next);
-      if(res[1]){ state.certificates = res[1]; overlayCertificates(); }
+      if(res[1]){ state.certificates = res[1]; state.certAt = Date.now(); overlayCertificates(); }
       return Promise.all(next.map(function(b){
         return O.get('/v1/boats/' + enc(b.id) + '/assignments').then(function(asnRes){
           applyAssignments(b.id, asnRes);
@@ -312,7 +312,7 @@
     }).then(function(res){
       return Promise.all([
         fetchBoatDetail(boatId),
-        O.get('/v1/fleet/certificates').then(function(c){ state.certificates = c; }).catch(function(){})
+        O.get('/v1/fleet/certificates').then(function(c){ state.certificates = c; state.certAt = Date.now(); }).catch(function(){})
       ]).then(function(){
         overlayCertificates();
         O.wrote('boat-document-renew');
@@ -896,7 +896,10 @@
     createAssignment: createAssignmentServer,
     cancelAssignment: cancelAssignmentServer,
     renewDocument: renewDocumentServer,
-    certificates: function(){ return state.certificates; }
+    certificates: function(){ return state.certificates; },
+    certificatesAt: function(){ return state.certAt || 0; },
+    /* w5-b: read the Documents matrix again (the counts of the tiles and the tab badge are its counts) */
+    refreshCertificates: function(){ return O.get('/v1/fleet/certificates').then(function(c){ state.certificates = c; state.certAt = Date.now(); overlayCertificates(); return c; }); }
   };
 
   O.fleetBoats = api;
