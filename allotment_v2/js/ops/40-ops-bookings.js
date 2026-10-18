@@ -238,7 +238,20 @@
 
   /* ── action records · shared by the full mapping and by merges after an action ── */
   function catLabel(c){ try{ if(typeof bookingV2CancelLabel === 'function') return bookingV2CancelLabel(c); }catch(_){} return c || ''; }
+  /* §opsAboard · a booking answer carries aboard on every trip: put it on the browser's trip of the same id, so a save,
+     a partial cancel or a reschedule never leaves the figures of the day before. A server trip without it takes the old one off. */
+  function aboardInto(trips, ob){
+    if(!Array.isArray(trips) || !ob || !Array.isArray(ob.trips)) return;
+    trips.forEach(function(t){
+      if(!t || !t.opsTripId) return;
+      var st = ob.trips.find(function(x){ return x && x.id === t.opsTripId; });
+      if(!st) return;
+      if(st.aboard && typeof st.aboard === 'object'){ t.aboard = st.aboard; t.aboardDate = st.service_date || t.date; }
+      else { delete t.aboard; delete t.aboardDate; }
+    });
+  }
   function records(ob, trips){
+    aboardInto(trips, ob);
     var r = {};
     var c = ob.cancellation;
     if(c){
@@ -303,6 +316,9 @@
               subtotal: t.subtotal != null ? +t.subtotal || 0 : 0,
               ops: operationsFrom(t.operations) };
     var nat = thaiIn(t.thai_passengers); if(nat) o.nat = nat;       // §thaiPax
+    /* §opsAboard · the server's check-in figures for this trip (computed, read only, never sent: toServer builds a trip field by field).
+       aboardDate is the service day it was read for: 71-ops-aboard.js ignores it once the trip has moved to another day. */
+    if(t.aboard && typeof t.aboard === 'object'){ o.aboard = t.aboard; o.aboardDate = o.date; }
     /* §opsUpgrade · the route upgrade in force (operations.upgrade) → legacy's trip.upg, so bkUpgActive and Undo
        still see it after a reload */
     var up = t.operations && t.operations.upgrade;

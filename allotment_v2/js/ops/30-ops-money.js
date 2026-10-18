@@ -528,7 +528,10 @@
       redrawAccounting();
       return mapped;
     }, function(e){
-      O.fail('Could not void invoice', e);
+      /* Q53 · 409 invoice_has_payments: the server's message is the screen's refusal (legacy's PFM void refuses with an alert too);
+         nothing changed on the server, so there is no failure toast */
+      if(e && e.code === 'invoice_has_payments') alert(e.message);
+      else O.fail('Could not void invoice', e);
       throw e;
     });
   }

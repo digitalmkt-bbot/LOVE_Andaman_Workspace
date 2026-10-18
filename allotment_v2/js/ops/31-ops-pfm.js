@@ -92,6 +92,7 @@
       past_cutoff: !!r.past_cutoff,
       total: num(r.total),
       paid: num(r.paid),
+      received: num(r.received),      // Q24 · what was actually received on the invoice (payments less returns)
       balance: num(r.balance),
       invoice: r.invoice ? { id: r.invoice.id, number: r.invoice.number, status: r.invoice.status } : null,
       status: r.status || 'no_invoice',
@@ -254,6 +255,19 @@
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });
+
+  /* Q24 · the header cards ('Total PFM value', 'Paid', 'Collected', progress) sum the amount actually received: the server's totals.total
+     and totals.received for the period on screen (the sum of the rows' total / received when an older answer has no totals).
+     null = not loaded: renderDailyPFM keeps the sums it worked out from the rows. */
+  window.pfmServerTotals = function(date, mode){
+    if(!enabled()) return null;
+    var r = typeof window.pfmPeriodRange === 'function' ? window.pfmPeriodRange(date, mode || 'daily') : { from: date, to: date };
+    var entry = state.cache[String(r.from) + '..' + String(r.to)];
+    if(!entry || !Array.isArray(entry.rows)) return null;
+    var t = entry.totals || {};
+    var sum = function(k){ return entry.rows.reduce(function(a, x){ return a + num(x[k]); }, 0); };
+    return { total: t.total != null ? num(t.total) : sum('total'), received: t.received != null ? num(t.received) : sum('received') };
+  };
 
   wrap('pfmIsProforma', function(orig, bk){
     var row = bk && (state.byClientId[bk.id] || state.byServerId[bk.opsId || bk.id]);
