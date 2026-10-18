@@ -34,7 +34,7 @@
   var DEBOUNCE_MS = 600;            // typing in a settings field saves once it pauses
   var H = {};                       // ctRead / ctWrite key -> { read(), write(val), load() }
 
-  function active(){ var me = window.LA_ME; return !!O.enabled() && !(me && me.agentId); }
+  function active(){ var me = window.LA_ME; return !!O.enabled() && !(me && me.agentId) && !window.__laEmbedToken; }   // w5-a: the embed token may not read /v1/config
   function noop(){}
 
   /* A cache miss answers null (the legacy reader then uses its own defaults) and the screen is drawn
@@ -120,6 +120,7 @@
     pck_guide_colors: { title: 'Pier check-in guide colours', wait: DEBOUNCE_MS },
     vck_status_colors: { title: 'Van check-in colours', wait: 0 },
     vck_bar_style: { title: 'Van check-in row style', wait: 0 },
+    bop2_templates: { title: 'Boat Operation templates', wait: 0 },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -373,6 +374,20 @@
     cfgWrite('vck_status_colors', {});
     if(typeof window.vckColorClose === 'function') window.vckColorClose();
     if(typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+  });
+
+  /* bop2_templates · Boat Operation's weekday templates (w5-a). Legacy kept the list in each browser's blob
+     (bop2LoadTemplates / bop2SaveTemplates, localStorage); now the shared config store holds it, so every
+     machine sees the same templates. The list is the server's value: [{id, name, createdAt, pattern:{0..6:{boat:{route,type}}}}].
+     Applying one is still a run of deployment writes (ops/20 sends only the changed cells, each judged by the server). */
+  wrap('bop2LoadTemplates', function(orig){
+    var v = cfgRead('bop2_templates');
+    if(Array.isArray(v)) return v;
+    return cfgCell.loaded ? [] : orig();          // before the settings arrive legacy's list shows; the screen redraws on arrival
+  });
+  wrap('bop2SaveTemplates', function(orig, arr){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+    cfgWrite('bop2_templates', Array.isArray(arr) ? arr : []);
   });
 
   /* legacy bookingV2PayShow / bookingV2PayToggle (booking/bookingV2PayShow.js, bookingV2PayToggle.js): the voucher's

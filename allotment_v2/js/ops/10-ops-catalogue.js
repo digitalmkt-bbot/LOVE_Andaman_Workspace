@@ -189,8 +189,8 @@
     return Promise.all([
       O.get('/v1/routes', { from: from, to: to }),
       O.get('/v1/boats'),
-      O.get('/v1/markets'),
-      O.get('/v1/sales'),
+      window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/markets'),   // w5-a: CS's embed token reads the calendar and By-trip pages only (no markets, no sales)
+      window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/sales'),
       O.get('/v1/agents', { active: 'all' })
     ]).then(function(r){
       var routes = (r[0] && r[0].routes) || [];
@@ -199,8 +199,8 @@
       if(routes.length && typeof ROUTES !== 'undefined') mergeInto(ROUTES, routes, mapRoute);
       var boats = (r[1] && r[1].boats) || [];
       if(boats.length && typeof BOATS !== 'undefined') mergeInto(BOATS, boats, mapBoat);
-      if(typeof SB_MARKETS !== 'undefined') replaceWith(SB_MARKETS, (r[2] && r[2].markets) || [], mapMarket);
-      if(typeof SB_SALES !== 'undefined') replaceWith(SB_SALES, (r[3] && r[3].sales) || [], mapSales);
+      if(typeof SB_MARKETS !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_MARKETS, (r[2] && r[2].markets) || [], mapMarket);
+      if(typeof SB_SALES !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_SALES, (r[3] && r[3].sales) || [], mapSales);
       if(typeof SB_AGENTS !== 'undefined') replaceWith(SB_AGENTS, (r[4] && r[4].agents) || [], mapAgentSummary, agentDefaults);
       if(O.contractClock && r[4]) O.contractClock.put(r[4].expiring_count);   // F4: the nav badge number
       try{ console.log('[ops] catalogue · ' + routes.length + ' routes · ' + boats.length + ' boats · ' + ((r[4] && r[4].agents) || []).length + ' agents'); }catch(_){}

@@ -43275,7 +43275,7 @@ function renderSalesBoard(){
     const prevRank = {}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
     const rankMove = (prevRank[who.id]&&rank) ? (prevRank[who.id]-rank) : 0;
     const streak = salesStreak(who.id, ym);
-    const rows = myAgents.map(a=>{ const p=agg.byAgent[a.id]||0, pp=aggPrev.byAgent[a.id]||0; return {a,p,pp,foc:agg.focByAgent[a.id]||0,t:agentTrend(p,pp)}; }).filter(x=>x.p>0||x.pp>0);
+    const rows = myAgents.map(a=>{ const p=agg.byAgent[a.id]||0, pp=aggPrev.byAgent[a.id]||0; return {a,p,pp,foc:agg.focByAgent[a.id]||0,t:agentTrend(p,pp,a.id,ym)}; }).filter(x=>x.p>0||x.pp>0);
     const buckets = { down:[], up:[], new:[], gone:[], flat:[] };
     rows.forEach(x=>{ buckets[x.t.cat].push(x); });
     buckets.down.sort((a,b)=>(a.t.pct||0)-(b.t.pct||0));
@@ -43485,7 +43485,7 @@ function renderSalesBoard(){
   const bkBySales=salesBookingCounts(ym)||{};   /* §salesBk */
   const curRank={}; sales.forEach((x,i)=>{ curRank[x.s.id]=i+1; });
   const prevRank={}; sbSalesActive().map(s=>({id:s.id,pax:aggPrev.bySales[s.id]||0})).sort((a,b)=>b.pax-a.pax).forEach((x,i)=>{ prevRank[x.id]=i+1; });
-  let topGrow=null; Object.keys(agg.byAgent).forEach(aid=>{ const t=agentTrend(agg.byAgent[aid]||0, aggPrev.byAgent[aid]||0); if(t.cat==='up' && (!topGrow||t.pct>topGrow.pct)) topGrow={aid,pct:t.pct}; });
+  let topGrow=null; Object.keys(agg.byAgent).forEach(aid=>{ const t=agentTrend(agg.byAgent[aid]||0, aggPrev.byAgent[aid]||0, aid, ym); if(t.cat==='up' && (!topGrow||t.pct>topGrow.pct)) topGrow={aid,pct:t.pct}; });
   let topBk=null; Object.keys(bkBySales).forEach(sid=>{ if(!topBk||bkBySales[sid]>topBk.n) topBk={sid,n:bkBySales[sid]}; });
   let topStreak=null; sbSalesActive().forEach(s=>{ const st=salesStreak(s.id,ym); if(st>0 && (!topStreak||st>topStreak.n)) topStreak={sid:s.id,n:st}; });
   let topUp=null; sales.forEach(x=>{ const pr=prevRank[x.s.id],cr=curRank[x.s.id]; if(pr&&cr&&pr>cr){ const d=pr-cr; if(!topUp||d>topUp.d) topUp={sid:x.s.id,d}; } });

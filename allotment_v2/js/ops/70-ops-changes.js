@@ -9,7 +9,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var O = window.laOps; if(!O || !window.LA_LEGACY_UNAVAILABLE) return;
+  var O = window.laOps; if(!O || !window.LA_LEGACY_UNAVAILABLE || window.__laEmbedToken) return;   // w5-a: the embed token may not read /v1/changes
   var cursor = null, loading = false, started = false, warned = false;
   var POLL_MS = 20000, PAGE = 500;
 

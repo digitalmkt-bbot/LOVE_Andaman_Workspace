@@ -34,16 +34,17 @@
   var t0 = Date.now();
   Promise.resolve()
     .then(step('catalogue', function(){ return O.catalogue && O.catalogue.load(); }))
-    .then(step('staff & welfare', function(){ return O.staff && O.staff.load(); }))
-    .then(step('nationalities', function(){ return O.nationalities && O.nationalities.load(); }))
-    .then(step('cancel reasons', function(){ return O.cancelCategories && O.cancelCategories.load(); }))
-    .then(step('park tickets', function(){ return O.park && O.park.load(); }))
-    .then(step('add-on types', function(){ return O.addonTypes && O.addonTypes.load(); }))
+    // w5-a · CS's embed token (POST /v1/embed/token) reads the calendar and By-trip pages only: the loads those pages do not need would all be 403
+    .then(step('staff & welfare', function(){ return !window.__laEmbedToken && O.staff && O.staff.load(); }))
+    .then(step('nationalities', function(){ return !window.__laEmbedToken && O.nationalities && O.nationalities.load(); }))
+    .then(step('cancel reasons', function(){ return !window.__laEmbedToken && O.cancelCategories && O.cancelCategories.load(); }))
+    .then(step('park tickets', function(){ return !window.__laEmbedToken && O.park && O.park.load(); }))
+    .then(step('add-on types', function(){ return !window.__laEmbedToken && O.addonTypes && O.addonTypes.load(); }))
     .then(step('deployments', function(){ return O.deployments && O.deployments.load(); }))
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
     .then(step('weather closures', function(){ return O.weather && O.weather.load(); }))
-    .then(step('market data', function(){ return O.marketData && O.marketData.load(); }))
-    .then(step('meal venues and trip actuals', function(){ return O.meals && O.meals.load(); }))
+    .then(step('market data', function(){ return !window.__laEmbedToken && O.marketData && O.marketData.load(); }))
+    .then(step('meal venues and trip actuals', function(){ return !window.__laEmbedToken && O.meals && O.meals.load(); }))
     .then(function(){
       // Booking records are page-owned: Calendar loads its visible month and
       // By-trip its selected day. Never download a 120-day booking blob at boot.

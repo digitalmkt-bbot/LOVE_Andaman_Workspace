@@ -118,7 +118,8 @@
   /* boot calls deployments.load(); the overrides ride on it so TRIPS names the boats first */
   if(O.deployments && typeof O.deployments.load === 'function' && !O.deployments.load.__cap){
     var baseLoad = O.deployments.load;
-    var chained = function(){ return baseLoad.apply(this, arguments).then(function(r){ return load().then(function(){ return r; }); }); };
+    // w5-a: CS's embed token may not read /v1/boats/{id}/capacity-overrides: the deployments still load, the day overrides are left out
+    var chained = function(){ return baseLoad.apply(this, arguments).then(function(r){ if(window.__laEmbedToken) return r; return load().then(function(){ return r; }); }); };
     chained.__cap = true;
     O.deployments.load = chained;
   }

@@ -113,7 +113,7 @@
           try{ console.warn('[embed] ticket refused · ' + TICKET_ERR); }catch(_){}
         }
       }
-      if(sessionStorage.getItem(EMB_FLAG_KEY) === '1') RO = true;
+      if(sessionStorage.getItem(EMB_FLAG_KEY) === '1'){ RO = true; window.__laEmbedToken = true; }   // the other ops files read this: no loads the token may not make
     }catch(_){}
   })();
 

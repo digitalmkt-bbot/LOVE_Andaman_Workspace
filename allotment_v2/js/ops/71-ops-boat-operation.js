@@ -249,6 +249,6 @@
   wrapGlobal('bop2RenderHeatmapRow', function(orig, self){ return sc(orig, self, [].slice.call(arguments, 2)); });
   wrapGlobal('bop2RouteDaysNeedingBoats', function(orig, self){ return sc(orig, self, [].slice.call(arguments, 2)); });
 
-  O.boatOperation = { ensure: ensure, day: dayOf, row: rowOf, isFresh: function(ds){ return !!fresh(ds); },
+  O.boatOperation = { run: function(fn, self, args){ return sc(fn, self, args || []); }, ensure: ensure, day: dayOf, row: rowOf, isFresh: function(ds){ return !!fresh(ds); },
     rows: function(ds){ var r = fresh(ds); return r && r.avail ? r.avail : null; } };   // w4-f5: rows = every boat's availability row of the date (ops/77-ops-ovn-hold.js reads ovn_hold from them)
 })();

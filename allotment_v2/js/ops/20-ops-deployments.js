@@ -284,5 +284,23 @@
     w.__opsCopy = true; window.bop2CopyWeekToNext = w;
   })();
 
-  O.deployments = { load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
+  /* §opsAdopt (w5-a) · the server wrote these deployments itself (POST /operations/deployments/swap, POST /operations/boat-replacements):
+     take its answer into TRIPS and into what is "confirmed", so the next sync diffs against it and sends nothing for them.
+     changes: [{date, boat, remove: true} | {date, boat, route, capacity, type}] */
+  function adopt(changes){
+    var T = trips(); if(!T) return;
+    (changes || []).forEach(function(c){
+      var k = key(c.date, c.boat);
+      if(c.remove){
+        if(T[c.date]){ delete T[c.date][c.boat]; if(!Object.keys(T[c.date]).length) delete T[c.date]; }
+        delete synced[k];
+      } else {
+        (T[c.date] = T[c.date] || {})[c.boat] = { route: c.route, type: (c.type === 'early' || c.type === 'normal') ? c.type : 'normal', booked: 0 };
+        synced[k] = { route: c.route, capacity: +c.capacity || capFor(c.boat, c.date), type: c.type || null };
+      }
+    });
+    snapshot();
+  }
+
+  O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
 })();

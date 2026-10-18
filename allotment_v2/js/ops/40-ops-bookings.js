@@ -469,6 +469,9 @@
        so a field dropped here would be wiped on the server. to_company is an amount, not a flag. */
     bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, label:u.label || 'Upgrade', sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:+(u.to_company != null ? u.to_company : u.toCompany) || 0, commission:+u.commission || 0, seller:u.seller || '', note:u.note || '', collected:!!u.collected, settle:u.settle || 'pending', method:u.method || null, feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, fee:+u.fee || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, at:u.at || null, slips:u.slips || [] }; });
     if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
+    /* w5-a · the seats this booking holds right now (computed by the server, top level of every booking answer): a booking waiting for
+       an over-allotment approval holds none. Read-only, never sent; bkPendHoldsSeat (80-ops-w5a-reads.js) reads it. */
+    if(ob.allocated_pax !== undefined) bk.srvAllocatedPax = +ob.allocated_pax || 0;
     /* §opsRowFlags (2026-10-17) · the server's reading of the booking row (GET /v1/bookings, /{id}, /recent only; the POST and PATCH
        answers do not carry them). Read-only, never sent (toServer). 66-ops-row-flags.js wraps laIsB2C, laIsInternalBk, laIsCompanyBk,
        laIsInternalFree, laBkMoney and laB2CChannel to read this object when it is here; without it the legacy browser rule runs. */
@@ -505,6 +508,7 @@
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
+    delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
     delete bk.srvList;       // §opsBookingList · same for the list row's fields (last activity, chips, duplicates)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);

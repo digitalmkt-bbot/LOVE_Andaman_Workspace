@@ -127,7 +127,8 @@
   /* ── read ─────────────────────────────────────────────────────────────── */
   function load(){
     if(loading){ again = true; return loading; }
-    loading = Promise.all([O.get('/v1/seat-locks'), O.get('/v1/seat-lock-groups')]).then(function(a){
+    // w5-a: CS's embed token may read /v1/seat-locks but not the groups; the page then shows single locks only
+    loading = Promise.all([O.get('/v1/seat-locks'), window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/seat-lock-groups')]).then(function(a){
       var A = locks(); if(!A) return;
       var next = build((a[0] && a[0].seat_locks) || [], (a[1] && a[1].seat_lock_groups) || []);
       A.length = 0; Array.prototype.push.apply(A, next);

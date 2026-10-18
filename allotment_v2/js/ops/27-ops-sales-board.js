@@ -440,6 +440,7 @@
     loadBoard: fetchBoard
   };
   O.salesMarkets = api;
+  O.salesBoardFor = boardFor;      // w5-a: agentTrend (80-ops-w5a-reads.js) reads the board's trend of an agent
   window.laOpsSalesMarkets = api;
   window.__laOpsSalesMarketsCompat = {
     marketBody: marketBody, salesBody: salesBody,
