@@ -226,7 +226,22 @@
     return m.replace(/(มี )(d+)( ที่)/, '$1<b>$2</b>$3');
   };
   window.laOpsLockSaveLine = function(routeId, date){ var w = lockWarning(routeId, date); return (w && w.save_line) || null; };
-  O.lockDraws = { _cache: cache, request: ldRequest, warning: lockWarning };
+  /* w5-b: the server's draw sources for a trip of the open draft ([{lock_id (client id), label, remaining}]), or null before the answer.
+     ops/81-ops-locks-w5.js answers "which locks may this booking draw" (bookingV2LocksForAgent) and the ceiling of the
+     "use locks" box (bookingV2SetTripLockUse) from it. */
+  function lockSources(routeId, date){
+    if(!enabled()) return null;
+    var d = draft(); if(!d) return null;
+    var req = ldRequest(d); if(!req) return null;
+    var e = cache[req.key];
+    if(ldFresh(e) && e.ok){
+      var hit = e.by[routeId + '|' + date];
+      return hit ? (hit.sources || []).map(function(s){ return { lockId: clientLockId(s.lock_id), label: s.label, remaining: s.remaining }; }) : null;
+    }
+    ldSchedule(req, d);
+    return null;
+  }
+  O.lockDraws = { _cache: cache, request: ldRequest, warning: lockWarning, sources: lockSources };
 
   /* ══ Q51 · partial cancel ════════════════════════════════════════════════ */
   var ctx = null, pSeq = 0, pTimer = null, lastProposal = null;
