@@ -274,7 +274,7 @@ section('3', async () => {
   const colTxt = await ev(() => document.querySelector('#piercheckin-host').innerText);
   ok('the sheet\'s Add-on column shows the server\'s add-ons (Longtail Charter, Kayak)', /Longtail Charter/.test(colTxt) && /Kayak/.test(colTxt), colTxt.slice(0, 300));
   // the server answers something legacy\'s arithmetic would never say: the screen shows the server\'s
-  tamper = [{ re: /\/v1\/pier-checkin/, fn: (j) => { for (const r of j.rows) if (r.booking_id === bk.sA.id) { r.service.boats = 7; r.service.add_ons = [{ kind: 'longtail', label: 'Longtail Charter', note: 'server says' }]; } } }];
+  tamper = [{ re: /\/v1\/pier-checkin/, fn: (j) => { for (const r of j.rows) if (r.booking_id === bk.sA.id) { r.service.boats = 7; r.service.lines = [{ kind: 'longtail', label: 'Longtail Charter · 7 ลำ' }]; r.service.add_ons = [{ kind: 'longtail', label: 'Longtail Charter', note: 'server says' }]; } } }];
   await ev(() => laOps.pierService.clear()); await ev(() => laOps.pierService.ensure('2026-11-10', true)); await settle(500);
   const A2 = await scr('sA');
   ok('tampered answer (7 boats): bkLtState.boats = 7, pckJobService "Longtail Charter · 7 ลำ", ckAddonList = the server\'s one add-on (Kayak gone)', A2.st.boats === 7 && A2.job.some((t) => /^Longtail Charter · 7 ลำ/.test(t)) && A2.add.length === 1 && A2.add[0].note === 'server says' && !A2.job.some((t) => /Kayak/.test(t)), A2);
