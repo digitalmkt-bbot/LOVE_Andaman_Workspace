@@ -52,6 +52,7 @@ await page.evaluate(() => {
   try { if (typeof ckBksOnReset === 'function') ckBksOnReset(); } catch (_) {}
 });
 await goView(page, 'execboard', 700);
+await page.evaluate(() => ebSetNow('tab', 'rev'));   /* §execMove · แท็บแรกเป็นมูฟเมนต์แล้ว · เทสชุดนี้วัดแท็บรายได้ */
 
 // 1
 const R1 = await page.evaluate(async () => {
