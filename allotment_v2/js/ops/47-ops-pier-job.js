@@ -354,7 +354,7 @@
      pjBoatSt / pjAllBoats: state, stale, no_charter). Read once per pier and day, kept while it is current: a write marks it
      old, the old answer stays on screen until the new one arrives, then the screen is drawn again. Until the first answer, and
      for a boat the server does not list, the legacy functions answer from the browser as before.
-     Not the server's yet: the long-tail head count of pjPrep (lt), the overnight-hold state (ovn), the guide languages of
+     Not the server's yet: the long-tail head count of pjPrep (lt), the guide languages of
      pjPax are the server's spelling (EN, RU, CN, the typed one) without pckLangNorm's tidying. */
   var day = { by: {}, cbs: {} };
   function dkey(pier, date){ return pier + '|' + date; }
@@ -425,7 +425,7 @@
     L.pjBoatSt = window.pjBoatSt;
     window.pjBoatSt = function(date, boat, op){
       var out = L.pjBoatSt.apply(this, arguments), h = enabled() && boat ? fleetOf(date, boat.id) : null;
-      if(!h || out.k === 'ovn') return out;             // ovn (charter kept overnight) is not built on the server: legacy's answer stands
+      if(!h) return out;                                 // w4-f5: the server's state wins for every state, 'ovn' (charter kept overnight, Q39) included
       out.k = h.f.state; out.stale = !!h.f.stale; out.srvOpenJobs = +h.f.open_jobs || 0;
       if(!!h.f.no_charter !== !!out.noCharter){ out.noCharter = !!h.f.no_charter; out.note = h.f.note || ''; }
       return out;
