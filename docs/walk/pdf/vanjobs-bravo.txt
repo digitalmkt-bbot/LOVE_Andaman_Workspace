@@ -1,0 +1,77 @@
+LOVE ANDAMAN · Van Job Order
+ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว
+Van Bravo 32-2222
+คนขับ Boon · 082-222-2222
+รถร่วม WalkPartner · PK
+Friday, 20 November 2026
+ขาไป 4 คน · ขากลับ 5 คน
+ROUTE / โปรแกรม
+Similan Islands by Speedboat
+·
+Friday, 20 November 2026
+⚠ เส้นทางนี้ยังมี 1 booking (2 คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้
+Similan Islands by Speedboat 2 คน · ไปจัดรถที่ By trip date → โหมด Van แล้วพิมพ์ใบงานใหม่
+① ขาไป · OUTBOUND
+รับจากโรงแรม → ส่งท่าเรือ
+#	VOUCHER
+VC
+	LEAD NAME
+ชื่อลูกค้า
+	PAX
+จำนวน (คน)
+	PICK-UP TIME
+เวลารับ
+	PICK-UP LOCATION
+จุดรับ
+	ROOM
+ห้อง
+	ZONE
+โซน
+	DROP-OFF
+จุดส่ง (ถ้าเปลี่ยน)
+	BAGS
+กระเป๋า
+	SPECIAL REQUEST
+คำขอพิเศษ
+
+AD	CHD	INF	FOC
+1	VJ-SIX	WALK SIX	2	0	0	0	07:30	Walk Hotel Foxtrot	-	-	→ ท่าเรือ	-	-
+2	VJ-FIVE	WALK FIVE	2	0	0	0	07:30	Walk Hotel Echo	-	-	→ ท่าเรือ
+↩ ขากลับ โดย Van Alpha
+	-	-
+รวม / Total	4	0	0	0	4 pax · 2 booking
+② ขากลับ · RETURN
+รับจากท่าเรือ → ส่งจุดหมาย
+#	VOUCHER
+VC
+	LEAD NAME
+ชื่อลูกค้า
+	PAX
+จำนวน (คน)
+	PICK-UP TIME
+เวลารับ
+	PICK-UP LOCATION
+จุดรับ
+	ROOM
+ห้อง
+	ZONE
+โซน
+	DROP-OFF
+จุดส่ง (ถ้าเปลี่ยน)
+	BAGS
+กระเป๋า
+	SPECIAL REQUEST
+คำขอพิเศษ
+
+AD	CHD	INF	FOC
+1	VJ-SIX	WALK SIX
+✗ ไม่ได้เดินทาง · ไม่ต้องรอ
+	2	0	0	0	—	Tub Lamu Pier	-	-	Walk Hotel Foxtrot · กลับคันเดิม	-	-
+2	VJ-ONE	WALK ONE
+Mrs One
+Kid One
++1 more
+	2	1	0	0	—	Tub Lamu Pier	512	-	Walk Hotel Alpha · มาจากรถอื่น (ขาไป Van Alpha)	🧳 2	Wait in the lobby
+รวม / Total	4	1	0	0	5 pax · 2 booking
+หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)
+☎ หาลูกค้าไม่เจอ ให้รอไม่เกิน 5 นาที · มีปัญหาในการรับลูกค้า ติดต่อ 088-765-4678 · 081-970-9977 · 093-583-7962

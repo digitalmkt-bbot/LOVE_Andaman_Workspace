@@ -22,7 +22,7 @@
      self_pier_note       pckSelfPierNote
      on_board             pckOnBoard          (only when the caller's `booked` is the trip's own)
      expected             pckExpected         (same)
-     has_arrange          ckHasArrange
+     has_arrange          ckHasArrange        (true from the server, else legacy's local answer: w4-f5)
      self_add             ckSelfOf            (ckSelfK, ckSelfUnalloc call it; at/by/note stay from the local record)
      reinstated           ckReinstateOf       (at/by stay from the local record)
      van_ns_pax           ckVanNsPax
@@ -96,7 +96,9 @@
   wrap('pckExpected', function(ab, a){ return sameBooked(ab, a[2]) ? num(ab.expected) : undefined; });
 
   /* ckHasArrange(b, date) */
-  wrap('ckHasArrange', function(ab){ return !!ab.has_arrange; });
+  /* w4-f5 (decision): the server's yes is final; its no is not, because a van or boat assigned in the browser after the block was
+     read shows in has_arrange only after the next read. So: aboard.has_arrange || legacy's local answer. */
+  wrap('ckHasArrange', function(ab){ return ab.has_arrange ? true : undefined; });
 
   /* ckSelfOf(b, date) -> the pier's self-add {ad chd inf foc pax at by note} or null.  The server sends who came, not
      who confirmed it: at/by/note are the local record's (the check-in answer rewrites it). ckSelfK / ckSelfUnalloc call this. */

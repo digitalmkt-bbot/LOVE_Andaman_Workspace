@@ -218,6 +218,7 @@
 
   /* ════ "Sent to the driver" → /operations/van-jobs/{date}/{key}/sent ════ */
   var jobKeys = {};        // 'date::legacyKey' -> server job key
+  var dayRead = {};        // date -> the day read (jobs, warnings); the sheet renderer (35-ops-van-job-sheet.js) takes rounds from it
   function legacyKeysOf(job){
     var base = job.van_id + '~' + job.route_id;
     if(!job.group_id) return [base];
@@ -226,6 +227,7 @@
     return keys;
   }
   function applyJobs(date, j){
+    dayRead[date] = j || { date: date, jobs: [] };
     var sent = store('VANJOB_SENT');
     var prefix = date + '::';
     Object.keys(jobKeys).forEach(function(k){ if(k.indexOf(prefix) === 0) delete jobKeys[k]; });
@@ -457,6 +459,9 @@
   /* the Transfer Fleet adapter (35-ops-vehicles.js) keeps these caches in step with what it writes */
   O.vanJobs = {
     loadDay: loadDay, legacyKeysOf: legacyKeysOf,
+    loadJobs: loadJobs, redraw: redraw,
+    jobKey: function(date, legacyKey){ return jobKeys[date + '::' + legacyKey] || null; },
+    dayRead: function(date){ return dayRead[date] || null; },
     loadVans: loadVans, vehicleOf: vehicleOf,
     putCell: function(c){ if(c && c.van_id) cells[c.van_id + '|' + c.service_date] = c; },
     putRange: function(kind, r){ (kind === 'zone' ? zoneRanges : statusRanges)[r.id] = r; },
