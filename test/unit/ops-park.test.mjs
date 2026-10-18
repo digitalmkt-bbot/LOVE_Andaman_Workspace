@@ -283,16 +283,13 @@ test('drop over and clear boat: a confirm that is cancelled sends nothing', asyn
   assert.deepEqual(rt.calls.map((c) => c.method), ['GET']);
 });
 
-test('lead-based fills are not on operation-backend: a notice, no write, no legacy persist', async () => {
+test('lead-based fills moved to 85-ops-pier-park-w5.js (w5-f): this file leaves the two functions alone', async () => {
   const rt = runtime();
+  const fill = rt.w.pkNmFillLead, drop = rt.w.pkNmDropLeadDup;
   rt.w.renderPierPark(); await rt.flush();
-  rt.w.pkNmFillLead(DATE, 'b1', 'tublamu');
-  rt.w.pkNmDropLeadDup(DATE, 'b1', 'tublamu');
-  await rt.flush();
+  assert.equal(rt.w.pkNmFillLead, fill);
+  assert.equal(rt.w.pkNmDropLeadDup, drop);
   assert.equal(rt.calls.filter((c) => c.method !== 'GET').length, 0);
-  assert.equal(rt.toasts.length, 2);
-  assert.equal(rt.legacy.includes('pkNmFillLead'), false);
-  assert.equal(rt.persists.length, 0);
 });
 
 test('types: the catalogue is read from the server and shown in the legacy shape', async () => {

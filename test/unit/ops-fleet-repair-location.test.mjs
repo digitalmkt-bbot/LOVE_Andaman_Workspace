@@ -20,7 +20,7 @@ function runtime({ enabled = true, value = 'shop:honda-phuket', refuseEngine = f
     queue: (fn) => Promise.resolve().then(fn),
     patch: async (path, body) => {
       calls.push('PATCH ' + path + ' ' + JSON.stringify(body));
-      if (refuseEngine && path.includes('/engines/')) { const e = new Error('engine is installed'); throw e; }
+      if (refuseEngine && path.includes('/jobs/')) { const e = new Error('engine is installed'); throw e; }
       return path.includes('/jobs/') ? jobRow(body.location) : {};
     },
     post: async (path, body) => { calls.push('POST ' + path + ' ' + JSON.stringify(body)); return jobRow(value); },
@@ -40,10 +40,7 @@ test('PATCHes the job, each spare/shop engine, logs a line, re-reads the chain, 
   const rt = runtime();
   await rt.window.flMaintSetRepairLoc('job_1');
   assert.deepEqual(rt.calls, [
-    'PATCH /v1/fleet/jobs/job_1 {"location":"shop:honda-phuket"}',
-    'PATCH /v1/fleet/engines/e_spare {"spare_location":"shop:honda-phuket"}',
-    'PATCH /v1/fleet/engines/e_fixing {"spare_location":"shop:honda-phuket"}',
-    'POST /v1/fleet/jobs/job_1/log ' + JSON.stringify({ text: '📍 ตั้งสถานที่ซ่อม: shop:honda-phuket (อัปเดตเครื่อง 2 ตัว)', by: 'ระบบ' }),
+    'PATCH /v1/fleet/jobs/job_1 {"location":"shop:honda-phuket"}',   // w5-b: the server moves the engines and writes the log line
     'refetchChain',
   ]);                                              // e_onboat is installed: untouched, as in legacy
   assert.deepEqual(rt.redraws, ['detail:job_1']);
@@ -63,7 +60,7 @@ test('an engine refused by the server: red toast, and the screen is re-read, not
   await rt.window.flMaintSetRepairLoc('job_1');
   assert.equal(rt.failures.length, 1);
   assert.equal(rt.failures[0].message, 'engine is installed');
-  assert.ok(!rt.calls.some((c) => c.startsWith('POST')), 'no log line for a move that did not happen');
+  assert.ok(!rt.calls.some((c) => c.startsWith('POST')), 'no log line from the client');
   assert.deepEqual(rt.redraws, []);
 });
 

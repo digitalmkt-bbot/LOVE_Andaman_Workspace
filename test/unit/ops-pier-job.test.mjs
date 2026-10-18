@@ -37,6 +37,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
     'GET /v1/pier-office': LISTS,
     ['GET ' + JOB('b1')]: () => state.b1,
     ['GET ' + JOB('b2')]: () => state.b2,
+    ['GET /v1/pier-office/' + PIER + '/days/' + DATE + '/boats']: { boats: [], fleet: [] },   // w5-f: the day's boats read by the job page
   };
   Object.keys(defaults).forEach((k) => { if (answers[k] === undefined) answers[k] = defaults[k]; });
   const win = {
@@ -81,7 +82,7 @@ test('load: a job per boat; a recorded one fills PIER_JOB, an unrecorded one onl
   const rt = runtime();
   await open(rt);
   assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path).sort(), [JOB('b1'), JOB('b2')]);
-  assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {}, dep: '' });
+  assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {}, dep: '', itin: '', itinc: '' });
   assert.equal(rt.w.PIER_JOB[K2], undefined);
   assert.deepEqual(J(rt.w.PIER_TEAM.b2), { cap: 'ps_t', asst: '', crew: ['ps_t1'] }, 'no job: the team is what the card shows');
   assert.deepEqual(J(rt.w.PIER_TEAM.b1), { cap: 'ps_cap', asst: '', crew: ['ps_old', 'ps_c3'] }, 'a recorded job: the team is the job with the substitutes put back');

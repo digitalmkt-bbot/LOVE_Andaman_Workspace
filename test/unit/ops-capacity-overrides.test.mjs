@@ -51,7 +51,7 @@ test('save PUTs capacity + trimmed reason, then caches the server day and closes
   rt.ctx._bcapSave('boatA', D);
   await settle();
   assert.deepEqual(rt.requests, [{ method: 'PUT', path: P + '/' + D, body: { capacity: 34, reason: 'extra chairs' } }]);
-  assert.deepEqual(JSON.parse(JSON.stringify(rt.C[D + '::boatA'])), { cap: 34, reason: 'extra chairs', by: 'tata', at: '2026-10-13T01:00:00Z', srv: 1 });
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.C[D + '::boatA'])), { cap: 34, reason: 'extra chairs', by: 'tata', at: '2026-10-13T01:00:00Z', srv: 1, normal: 30, ceiling: 36 });
   assert.equal(rt.closed.n, 1);
   assert.equal(rt.after.n, 1);
   assert.equal(rt.legacy.length, 0);

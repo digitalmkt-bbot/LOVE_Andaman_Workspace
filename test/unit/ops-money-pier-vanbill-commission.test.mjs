@@ -146,67 +146,70 @@ test('pier: a refused save shows the server message; delete goes to the server f
 
 // ── van bills ───────────────────────────────────────────────
 
-const bill = (over = {}) => ({ partner: 'Co A', month: '2026-10', period: 2, from: '2026-10-11', to: '2026-10-20', label: '11–20', saved: true,
+const bill = (over = {}) => ({ partner: 'Co A', month: '2026-10', period: 2, pier: null, from: '2026-10-11', to: '2026-10-20', label: '11–20', saved: true,
   van_id: null, vans: [{ id: 'veh1', name: 'VAN1', plate: null, capacity: 13, zone_base: 'PK', driver: null, driver_phone: null, active: true }],
-  per_pax: 100, rate: 0, route_rates: { PP: 1700 }, row_overrides: { 'K1': { rate: 1500, ex: null, cut: null, per: null } },
+  per_pax: 100, per_pax_by_pier: { panwa: 100 }, by_pier: [{ pier: 'panwa', trips: 1 }], rate: 0, route_rates: { PP: 1700 }, row_overrides: { 'K1': { rate: 1500, ex: null, cut: null, per: null } },
   codes: [{ code: 'PP', rows: 1, rate: 1700 }],
   rows: [{ key: '2026-10-12~r10~veh1', date: '2026-10-12', route_id: 'r10', code: 'PP', van_id: 'veh1', return_only: false, ad: 7, chd: 0, inf: 0, foc: 0, pax: 7, booked_pax: 7,
-    bookings: 1, return_pax: 0, return_bookings: 0, return_same_van: 0, pickups: ['Patong'], drops: [], rate: 1700, ex: 0, cut: 0, per_pax: 100, bill: 1700, sale: 700, pl: -1000, new: false }],
+    bookings: 1, return_pax: 0, return_bookings: 0, return_same_van: 0, pickups: ['Patong'], drops: [], rate: 1700, ex: 0, cut: 0, per_pax: 100, bill: 1700, sale: 700, pl: -1000, new: false, override: { rate: 1700 } }],
   extra_lines: [], totals: { ad: 7, chd: 0, inf: 0, foc: 0, vans: 1, outbound_vans: 1, avg_pax_per_van: 7, booked_pax: 7, pax: 7, bill: 1700, sale: 700, pl: -1000, ex: 0, cut: 0 },
   by_code: [], missing_rate: 0, new_rows: [], seen: null,
   updated_at: null, updated_by: null, state: 'draft', sent: null, paid: null, ...over });
 const VANS = { 'GET /operations/vans': { body: { vans: [{ id: 'veh1', name: 'VAN1' }, { id: 'veh2', name: 'VAN (KL)' }] } } };
-const tagOf = (html, attr) => (html.match(new RegExp('<[^>]*' + attr + '[^>]*>')) || [''])[0];
+// w5-c: the overview is drawn by pier (piers[] with their partners, tabs[], totals, idle_partners[])
+const pierBlock = (partners, totals = {}) => ({ pier: 'panwa', totals: { owners: partners.length, trips: 0, pax: 0, vans: 0, bill: 0, sale: 0, pl: 0, ex: 0, cut: 0, missing_rate: 0, avg_pax_per_trip: 0, ...totals }, partners });
+const partnerRow = (partner, over = {}) => ({ partner, van_ids: ['veh1'], vans: [{ id: 'veh1', name: 'VAN1' }], trips: 1, pax: 7, booked_pax: 7, avg_pax_per_trip: 7, by_code: [], bill: 0, sale: 0, pl: 0, ex: 0, cut: 0, missing_rate: 0, state: 'draft', ...over });
+const overview = (names, over = {}) => ({ body: { month: '2026-10', period: 2,
+  tabs: [{ pier: null, owners: names.length, bill: 0 }, { pier: 'panwa', owners: names.length, bill: 0 }],
+  totals: { trips: names.length, pax: 7, bill: 0, sale: 0, pl: 0, missing_rate: 0, avg_pax_per_trip: 7 },
+  partners: names.map((p) => partnerRow(p)),   // the flat list stays on the server; the owner picker reads it
+  piers: [pierBlock(names.map((p) => partnerRow(p)))], idle_partners: [], ...over } });
+const WHOLE = 'GET /v1/van-bills/Co%20A/2026-10/2';
+const PATCHA = 'PATCH /v1/van-bills/Co%20A/2026-10/2';
 
 test('van bills: overview is drawn from the server, nothing computed locally', async () => {
-  const rt = runtime({ handlers: { ...VANS, 'GET /v1/van-bills': { body: { month: '2026-10', period: 2, partners: [
-    { partner: 'Co A', van_ids: ['veh1', 'veh2'], trips: 3, pax: 20, booked_pax: 23, bill: 5100, sale: 2000, pl: -3100, missing_rate: 1, state: 'sent' }],
+  const rt = runtime({ handlers: { ...VANS, 'GET /v1/van-bills': overview(['Co A'], {
+    piers: [pierBlock([partnerRow('Co A', { van_ids: ['veh1', 'veh2'], vans: [{ id: 'veh1', name: 'VAN1' }, { id: 'veh2', name: 'VAN (KL)' }], trips: 3, pax: 20, booked_pax: 23, bill: 5100, sale: 2000, pl: -3100, missing_rate: 1, state: 'sent' })],
+      { trips: 3, pax: 20, bill: 5100 })],
     // totals deliberately unlike the line: the screen must show the server's, not a sum of its own
-    totals: { trips: 4, pax: 21, bill: 9999, sale: 2001, pl: -7998 } } } } });
+    totals: { trips: 4, pax: 21, bill: 9999, sale: 2001, pl: -7998, missing_rate: 0, avg_pax_per_trip: 5.25 }, idle_partners: [{ partner: 'Co Z' }] }) } });
   rt.ctx._vb.ym = '2026-10';
   rt.ctx.renderVanBill();
   await rt.settle();
   const html = rt.hosts['vanbill-host'].innerHTML;
-  assert.match(html, /วางบิลรถร่วม · Van Supplier Billing/);
-  assert.match(html, /class="vb-seg on">11–20</, 'period 2 is the 11–20 cycle');
+  assert.match(html, /VAN SUPPLIER BILLING/);
   assert.match(html, /ตุลาคม 2569/, 'Thai month');
   assert.match(html, /onclick="vbPrint\(\)">&#128424; พิมพ์สรุปรอบบิล/);
   assert.match(html, /Co A/); assert.match(html, /5,100/);
   assert.match(html, /฿9,999/, 'billed total is the server total'); assert.match(html, /−฿7,998/);
-  assert.match(html, /ขาด 1 รายการ/); assert.match(html, /ส่งแล้ว/);
-  assert.match(html, /VAN1 · VAN \(KL\)/, 'vehicle names from GET /operations/vans');
-  assert.match(html, /<td><b>2<\/b><\/td><td><b>3<\/b><\/td>/, '2 vans, 3 trips');
+  assert.match(html, /2\/3 แถว/, 'rate fill of the owner: 2 of 3 rows'); assert.match(html, /ส่งแล้ว/);
+  assert.match(html, /VAN1 · VAN \(KL\)/, 'vehicle names from the server\'s partner row');
   assert.match(html, /จอง 23 · −3/);
-  assert.match(tagOf(html, 'data-kpi="missing"') + html.split('data-kpi="missing"')[1].slice(0, 220), /not send this total yet/, 'rows without a rate: no total from the server, none made up');
-  assert.doesNotMatch(html, /data-code=/, 'no per-code cards without server totals');
-  assert.doesNotMatch(html, /EXTRA − หัก/, 'no extra card without server totals');
+  assert.match(html, /อีก 1 เจ้าไม่มีงานรอบนี้ · Co Z/, 'idle owners are the server\'s list');
+  assert.match(html, /onclick="vbOpenSupP\(this\.dataset\.sup,'panwa'\)"/);
   assert.equal(rt.requests[0].path, '/v1/van-bills?month=2026-10&period=2');
   assert.equal(rt.legacy.filter((l) => l[0] === 'renderVanBill').length, 0, 'the legacy renderer is not used');
   rt.ctx.vbPersist();
   assert.equal(rt.legacy.filter((l) => l[0] === 'vbPersist').length, 0, 'the blob writer is silenced');
 });
 
-test('van bills: overview shows the totals the server sends for vans, booked pax, missing rows, codes and extra', async () => {
-  const rt = runtime({ handlers: { ...VANS, 'GET /v1/van-bills': { body: { month: '2026-10', period: 1, partners: [
-    { partner: 'Co A', van_ids: ['veh1'], trips: 3, pax: 20, booked_pax: 20, bill: 0, sale: 0, pl: 0, missing_rate: 3, state: 'draft' }],
-    totals: { trips: 3, pax: 20, bill: 4321, sale: 0, pl: 0, vans: 17, booked_pax: 334, missing_rate: 40, ex: 300, cut: 100,
-      by_code: [{ code: 'PP', vans: 38, pax: 273, bill: 7500, ex: 0, cut: 0, mix: [{ rate: 1500, ex: 0, cut: 0, per_van: 1500, vans: 5, amount: 7500 }, { rate: 0, ex: 0, cut: 0, per_van: 0, vans: 33, amount: 0 }] }] } } } } });
+test('van bills: overview shows the missing-rate rows, the pier block and the codes the server sends', async () => {
+  const rt = runtime({ handlers: { ...VANS, 'GET /v1/van-bills': overview(['Co A'], {
+    piers: [pierBlock([partnerRow('Co A', { trips: 3, pax: 20, booked_pax: 20, missing_rate: 3, by_code: [{ code: 'PP', bill: 4000 }], extra_totals: { vans: 1, bill: 321 } })],
+      { trips: 3, pax: 20, bill: 4321, vans: 17, missing_rate: 3 })],
+    totals: { trips: 3, pax: 20, bill: 4321, sale: 0, pl: 0, missing_rate: 40, avg_pax_per_trip: 6.67 } }) } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 1 });
   rt.ctx.renderVanBill(); await rt.settle();
   const html = rt.hosts['vanbill-host'].innerHTML;
-  assert.match(html, /40 <s>รายการ<\/s>/); assert.match(html, /<td>17<\/td>/); assert.match(html, /จอง 334 · −314/);
-  assert.match(html, /ยังไม่เริ่ม · 3 รายการ/);
-  assert.match(html, /data-code="PP"/); assert.match(html, /1,500<\/span><span class="x">× 5<\/span><span class="a">฿7,500/);
-  assert.match(html, /ยังไม่ใส่เรต<\/span><span class="x">× 33/);
-  assert.match(html, /38 คัน · 273 คน/);
-  assert.match(html, /EXTRA − หัก/);
+  assert.match(html, /<b>40<small>แถว<\/small>/, 'rows without a rate: the server\'s number');
+  assert.match(html, /<td>17<\/td>/, 'vans of the pier block');
+  assert.match(html, /ยังไม่ใส่เรต · 3 แถว/, 'an owner with no rate at all');
+  assert.match(html, /vbx-cd" style="background:#C0392B">PP<\/span><span class="vbx-cdv">4,000/);
+  assert.match(html, />นอก<\/span><span class="vbx-cdv">321/, 'typed (outside) vans');
+  assert.match(html, /6\.67/, 'average of the server');
 });
 
-// The partner view takes its owner list from the server's overview of the period.
-const overview = (names) => ({ body: { month: '2026-10', period: 2, totals: {},
-  partners: names.map((partner) => ({ partner, van_ids: ['veh1'], trips: 1, pax: 7, bill: 0, sale: 0, pl: 0, missing_rate: 0, state: 'draft' })) } });
-
-test('van bills: a row click opens that owner\'s bill, not a demo vehicle\'s partner', async () => {
+test('van bills: a row click opens that owner\'s bill of that pier, not a demo vehicle\'s partner', async () => {
   // vbSuppliers() reads SB_VEHICLES, which in ops mode still holds 08-app.js's demo vehicles ('Co A', 'Co B' here)
   const rt = runtime({ handlers: { ...VANS,
     'GET /v1/van-bills': overview(['ภูเก็ตล่ำซำ', 'Queen']),
@@ -214,15 +217,13 @@ test('van bills: a row click opens that owner\'s bill, not a demo vehicle\'s par
   } });
   rt.ctx._vb.ym = '2026-10';
   rt.ctx.renderVanBill(); await rt.settle();
-  assert.match(rt.hosts['vanbill-host'].innerHTML, /<th style="width:70px">เที่ยว<\/th>/);
-  assert.match(rt.hosts['vanbill-host'].innerHTML, /data-p="ภูเก็ตล่ำซำ" onclick="vbOpenSup\(this.getAttribute\('data-p'\)\)"/);
-  // what the row's onclick does: vbOpenSup(data-p) sets the owner and mode, then renders
-  Object.assign(rt.ctx._vb, { sup: 'ภูเก็ตล่ำซำ', mode: 'one' });
-  rt.ctx.renderVanBill(); await rt.settle();
+  assert.match(rt.hosts['vanbill-host'].innerHTML, /data-sup="ภูเก็ตล่ำซำ" onclick="vbOpenSupP\(this\.dataset\.sup,'panwa'\)"/);
+  rt.ctx.vbOpenSupP('ภูเก็ตล่ำซำ', 'panwa'); await rt.settle();   // what the row's onclick does
   assert.equal(rt.ctx._vb.sup, 'ภูเก็ตล่ำซำ', 'the clicked owner is kept');
-  assert.ok(rt.requests.some((r) => r.path.startsWith('/v1/van-bills/%E0%B8%A0')), 'that owner\'s bill is fetched');
+  assert.equal(rt.ctx._vb.pier, 'panwa');
+  assert.ok(rt.requests.some((r) => r.path.startsWith('/v1/van-bills/%E0%B8%A0') && r.path.endsWith('?pier=panwa')), 'that owner\'s sheet of the pier is fetched');
   const html = rt.hosts['vanbill-host'].innerHTML;
-  assert.match(html, /<option value="ภูเก็ตล่ำซำ" selected>/);
+  assert.match(html, /<option value="Queen"/, 'the picker lists the period\'s owners from the server');
   assert.doesNotMatch(html, /Co A|Co B/, 'no demo partners in the picker');
 });
 
@@ -234,18 +235,20 @@ test('van bills: opening "By partner" with no owner picked loads the period\'s o
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: '' });
   rt.ctx.renderVanBill(); await rt.settle();
   assert.equal(rt.ctx._vb.sup, 'Queen');
+  assert.equal(rt.ctx._vb.pier, 'panwa', 'the first pier this owner works at');
   assert.equal(rt.requests[0].path, '/v1/van-bills?month=2026-10&period=2');
-  assert.equal(rt.requests[1].path, '/v1/van-bills/Queen/2026-10/2');
+  assert.equal(rt.requests[1].path, '/v1/van-bills/Queen/2026-10/2', 'the whole bill tells which piers');
+  assert.equal(rt.requests[2].path, '/v1/van-bills/Queen/2026-10/2?pier=panwa');
 });
 
-test('van bills: the partner bill is laid out as legacy, every figure from the server', async () => {
+test('van bills: the owner\'s sheet is laid out as legacy, every figure from the server', async () => {
   const rows = [
     { ...bill().rows[0], ad: 9, chd: 2, inf: 1, foc: 0, pax: 12, booked_pax: 14, return_pax: 5, return_bookings: 1, drops: [{ name: 'Airport', changed: true }], new: true },
     { ...bill().rows[0], key: '2026-10-13~r10~veh1~R', date: '2026-10-13', return_only: true, ad: 0, pax: 0, booked_pax: 0, return_pax: 13, pickups: [], drops: [{ name: 'Karon', changed: false }], bill: 0, sale: 0, pl: 0 },
   ];
   const rt = runtime({ handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill({ rows, updated_by: 'AC.Tublamu', updated_at: '2026-10-09T07:22:18Z',
+    [WHOLE]: { body: bill({ rows, updated_by: 'AC.Tublamu', updated_at: '2026-10-09T07:22:18Z',
       // totals unlike the rows on purpose: the footer and cards show these, not sums of the rows
       totals: { ad: 90, chd: 20, inf: 10, foc: 3, vans: 2, outbound_vans: 1, avg_pax_per_van: 7.3, booked_pax: 181, pax: 168, bill: 7777, sale: 8888, pl: 1111, ex: 300, cut: 100 },
       by_code: [{ code: 'PP', vans: 3, pax: 12, bill: 5400, ex: 900, cut: 0, mix: [{ rate: 1500, ex: 300, cut: 0, per_van: 1800, vans: 3, amount: 5400 }] }] }) },
@@ -253,28 +256,28 @@ test('van bills: the partner bill is laid out as legacy, every figure from the s
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
   const html = rt.hosts['vanbill-host'].innerHTML;
-  assert.match(html, /<option value="">ทุกคันของเจ้านี้ \(1\)<\/option><option value="veh1">VAN1<\/option>/);
-  assert.match(html, /ทุกคันของ Co A/); assert.match(html, /11–20 ตุลาคม 2569/);
-  assert.match(html, /onclick="vbEdit\(\)">&#9998; แก้ไข/); assert.match(html, /onclick="vbPrint\(\)">&#128424; พิมพ์ใบวางบิล/);
+  assert.match(html, /<button class="on" onclick="vbPick\('van',''\)">ทุกคัน <em>2<\/em><\/button>/, 'van chips: all vans, with the pier\'s row count');
+  assert.match(html, /11–20/); assert.match(html, /ตุลาคม 2569/);
+  assert.match(html, /onclick="vbEdit\(\)">&#9998; แก้ไขช่องที่กรอกแล้ว/); assert.match(html, /onclick="vbPrint\(\)">&#128424; พิมพ์ใบวางบิล/);
   assert.match(html, /มี 1 แถวที่เพิ่งโผล่หลังจากกรอกบิลใบนี้ไปแล้ว/);
-  assert.match(html, /<span class="vb-code" style="background:#C0392B">PP<\/span>/);
-  assert.match(html, /<td><b>9<\/b><\/td><td>2<\/td><td>1<\/td><td><span class="vb-mut">·<\/span><\/td>/, 'AD / CHD / INF / FOC');
-  assert.match(html, /จอง 14 · −2/); assert.match(html, /รับกลับด้วย 5 คน/); assert.match(html, /vb-area alt/);
-  assert.match(html, /ขากลับ/); assert.match(html, /13 คนกลับ/); assert.match(html, /ค่ารถอย่างเดียว/);
-  assert.match(html, /7\.30 <s>คน\/คัน/, 'average is the server\'s');
-  assert.match(html, /<td>90<\/td><td>20<\/td><td>10<\/td><td>3<\/td>/, 'footer pax types from server totals');
+  assert.match(html, /<span class="vbx-cd" style="background:#C0392B"[^>]*>PP<\/span>/);
+  assert.match(html, /9 AD · 2 CHD · 1 INF/, 'pax types of a row');
+  assert.match(html, /จอง 14 · ไม่ขึ้น 2/); assert.match(html, /รับกลับให้อีก 1 ใบ · 5 คน/);
+  assert.match(html, /ขากลับอย่างเดียว · 13 คน/); assert.match(html, /ค่ารถอย่างเดียว/);
+  assert.match(html, /7\.30<small>คน\/คัน/, 'average is the server\'s');
+  assert.match(html, /90 AD · 20 CHD · 10 INF · 3 FOC/, 'footer pax types from server totals');
   assert.match(html, /฿7,777/); assert.match(html, /฿8,888/); assert.match(html, /฿1,111/);
   assert.match(html, /1,500 \+ 300 = 1,800<\/span><span class="x">× 3<\/span><span class="a">฿5,400/, 'code card mix from the server');
   assert.match(html, /แก้ล่าสุด AC\.Tublamu · 2026-10-09/);
-  assert.match(html, /EXTRA − หัก<\/div><div class="b">฿200/);
+  assert.match(html, /<span>\+ Extra<\/span><b>฿300<\/b><span>− หัก<\/span><b>฿100/);
 });
 
 test('van bills: an edit sends the whole override map and shows the server answer', async () => {
-  let patched;
+  let patched, cur = bill();
   const rt = runtime({ handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
-    'PATCH /v1/van-bills/Co%20A/2026-10/2': (body) => { patched = body; return { body: bill({ totals: { ...bill().totals, bill: 2100, pl: -1400 } }) }; },
+    [WHOLE]: () => ({ body: cur }),
+    [PATCHA]: (body) => { patched = body; cur = bill({ totals: { ...bill().totals, bill: 2100, pl: -1400 } }); return { body: cur }; },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
@@ -289,8 +292,8 @@ test('van bills: two quick edits both land (each is built from the latest answer
   let cur = bill();
   const rt = runtime({ handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
-    'PATCH /v1/van-bills/Co%20A/2026-10/2': (body) => { sent.push(body); cur = bill({ row_overrides: { ...cur.row_overrides, ...body.row_overrides } }); return { body: cur }; },
+    [WHOLE]: () => ({ body: cur }),
+    [PATCHA]: (body) => { sent.push(body); cur = bill({ row_overrides: { ...cur.row_overrides, ...body.row_overrides } }); return { body: cur }; },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
@@ -301,18 +304,18 @@ test('van bills: two quick edits both land (each is built from the latest answer
   assert.deepEqual(plain(sent[1].row_overrides['2026-10-12~r10~veh1']), { rate: null, ex: 300, cut: 100, per: null }, 'the second keeps the first; "-100" is a 100 deduction');
 });
 
-test('van bills: a filled field is locked until ✎ แก้ไข; save marks rows seen; cancel puts the figures back', async () => {
+test('van bills: a filled field is locked until the edit button; save marks rows seen; cancel puts the figures back', async () => {
   const sent = [];
   let cur = bill();
   const rt = runtime({ confirmAnswer: true, handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
-    'PATCH /v1/van-bills/Co%20A/2026-10/2': (body) => { sent.push(plain(body)); if (body.per_pax != null) cur = bill({ ...body }); return { body: cur }; },
+    [WHOLE]: () => ({ body: cur }),
+    [PATCHA]: (body) => { sent.push(plain(body)); if (body.per_pax != null) cur = bill({ ...body }); return { body: cur }; },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
   let html = rt.hosts['vanbill-host'].innerHTML;
-  assert.match(html, /<span class="vb-ro" style="min-width:58px">1700<\/span>/, 'a rate that is set is read-only');
+  assert.match(html, /<span class="vbx-ro" data-r="0" data-c="rate"[^>]*>1,700<\/span>/, 'a rate that is set is read-only');
   assert.match(html, /<input value="" onchange="laOpsVanBills.setRow\(this.getAttribute\('data-rk'\),'ex',this.value\)"/, 'an empty extra takes a value at once');
   rt.ctx.vbEdit(); await rt.settle();
   html = rt.hosts['vanbill-host'].innerHTML;
@@ -331,19 +334,32 @@ test('van bills: a filled field is locked until ✎ แก้ไข; save marks 
   assert.equal(rt.ctx.vbLeave(), true);
 });
 
+test('van bills: the sale price per person belongs to the pier on screen', async () => {
+  const sent = [];
+  const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['Co A']),
+    [WHOLE]: { body: bill({ per_pax_by_pier: { panwa: 100, tublamu: 80 } }) },
+    [PATCHA]: (body) => { sent.push(plain(body)); return { body: bill() }; },
+  } });
+  Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
+  rt.ctx.renderVanBill(); await rt.settle();
+  rt.ctx.vbSetPer('120'); await rt.settle();
+  assert.deepEqual(sent, [{ per_pax_by_pier: { panwa: 120, tublamu: 80 } }], 'one pier changed, the others kept');
+});
+
 test('van bills: an extra line is dated and noted like legacy; its date is sent as a date', async () => {
   const sent = [];
   let cur = bill();
   const rt = runtime({ handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
-    'PATCH /v1/van-bills/Co%20A/2026-10/2': (body) => { sent.push(plain(body));
+    [WHOLE]: () => ({ body: cur }),
+    [PATCHA]: (body) => { sent.push(plain(body));
       cur = bill({ extra_lines: body.extra_lines.map((x, i) => ({ id: x.id || 'x' + i, ...x, bill: 0, sale: 0 })) }); return { body: cur }; },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
   rt.ctx.laOpsVanBills.addExtra(); await rt.settle();
-  assert.deepEqual(sent[0].extra_lines, [{ date: '2026-10-11', note: 'รถนอก', vans: 1, pax: 0, rate: 0, ex: 0, cut: 0, per_pax: 0 }]);
+  assert.deepEqual(sent[0].extra_lines, [{ date: '2026-10-11', note: 'รถนอก', vans: 1, pax: 0, rate: 0, ex: 0, cut: 0, per_pax: 0, pier: 'panwa' }], 'the line belongs to the sheet it was added on');
   assert.match(rt.hosts['vanbill-host'].innerHTML, /<input type="date" value="2026-10-11"/, 'the new line is open to type in');
   rt.ctx.laOpsVanBills.setExtra('x0', 'date', '2026-10-15'); await rt.settle();
   assert.equal(sent[1].extra_lines[0].date, '2026-10-15');
@@ -352,8 +368,8 @@ test('van bills: an extra line is dated and noted like legacy; its date is sent 
 test('van bills: a refused edit shows the server message and the screen keeps the server figures', async () => {
   const rt = runtime({ handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill({ state: 'paid', paid: { at: 'x', by: 'u', on: '2026-10-13', via: 'cash', ref: null, amount: 1700 } }) },
-    'PATCH /v1/van-bills/Co%20A/2026-10/2': { status: 409, body: { statusCode: 409, code: 'bill_paid', message: 'The bill is paid: undo the payment first' } },
+    [WHOLE]: { body: bill({ state: 'paid', paid: { at: 'x', by: 'u', on: '2026-10-13', via: 'cash', ref: null, amount: 1700 } }) },
+    [PATCHA]: { status: 409, body: { statusCode: 409, code: 'bill_paid', message: 'The bill is paid: undo the payment first' } },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
@@ -367,11 +383,12 @@ test('van bills: a refused edit shows the server message and the screen keeps th
 });
 
 test('van bills: send, pay and pull-rates go to their endpoints', async () => {
+  let cur = bill();
   const rt = runtime({ promptAnswer: 'transfer', handlers: {
     'GET /v1/van-bills': overview(['Co A']),
-    'GET /v1/van-bills/Co%20A/2026-10/2': { body: bill() },
-    'POST /v1/van-bills/Co%20A/2026-10/2/send': { body: bill({ state: 'sent', sent: { at: '2026-10-13T00:00:00Z', by: 'u', bill: 1700, changed_since_sent: false } }) },
-    'POST /v1/van-bills/Co%20A/2026-10/2/pay': (body) => ({ body: bill({ state: 'paid', paid: { at: 'x', by: 'u', on: D, via: body.via, ref: body.ref, amount: 1700 } }) }),
+    [WHOLE]: () => ({ body: cur }),
+    'POST /v1/van-bills/Co%20A/2026-10/2/send': () => { cur = bill({ state: 'sent', sent: { at: '2026-10-13T00:00:00Z', by: 'u', bill: 1700, changed_since_sent: false } }); return { body: cur }; },
+    'POST /v1/van-bills/Co%20A/2026-10/2/pay': (body) => { cur = bill({ state: 'paid', paid: { at: 'x', by: 'u', on: D, via: body.via, ref: body.ref, amount: 1700 } }); return { body: cur }; },
     'POST /v1/van-bills/Co%20A/2026-10/2/pull-rates': { status: 409, body: { statusCode: 409, code: 'no_van_rates', message: 'No rates set' } },
   } });
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
