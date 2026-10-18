@@ -681,6 +681,7 @@
     var ctx = window._flStartGear; window._flStartGear = null;
     if(typeof window.closeModal === 'function') window.closeModal('fl-modal-start-gear');
     if(!ctx) return null;
+    if(ctx.reentry) return null;       // w5-b: the job is already started (engine row): there is no start to send; the dialog only closes
     var body = { gear: mode === 'stash' ? 'stash' : 'keep' };
     if(mode === 'stash'){
       var sel = document.getElementById('fl-sg-loc');
@@ -1389,30 +1390,18 @@
     }).catch(function(e){ O.fail('Could not add job log', e); return null; });
   });
 
-  /* "Repair location" on a job (flMaintSetRepairLoc).  Legacy set m.location, moved the job's spare/fixing engines
-     (e.spareLocation) and added a log line, then flSave (a no-op here): none of it survived a reload.  Server first:
-     PATCH the job's location, PATCH each such engine's spare_location (only a filled-in place moves engines, as in
-     legacy), add the log line, then re-read the chain; a refusal at any step is a red toast and the screen is re-read
-     so it shows what the server holds. */
+  /* "Repair location" on a job (flMaintSetRepairLoc). One command: PATCH the job's location. The server moves the engines
+     that are off a boat or being fixed to that place (a line on each engine) and writes the job's log line
+     "📍 ตั้งสถานที่ซ่อม: … (อัปเดตเครื่อง n ตัว)" (w5-b: this wrapper used to choose the engines and send the engine PATCHes and the log POST
+     itself). Then the engines are read again. A refusal is a red toast and the screen is re-read. */
   wrap('flMaintSetRepairLoc', function(orig, jobId){
     var m = listJobs().find(function(x){ return x && x.id === jobId; });
     if(!m) return null;
     var inp = document.getElementById('fl-maint-reploc-' + jobId);
     var val = inp ? inp.value.trim() : '';
-    var engs = !val ? [] : (m.assets || []).filter(function(a){ return a && a.engId; }).map(function(a){
-      return typeof window.flGetEng === 'function' ? window.flGetEng(a.engId) : null;
-    }).filter(function(e){ return e && (!e.boatId || e.status === 'fixing'); });
-    var chain = O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(jobId), { location: val }); }).then(upsertJob);
-    engs.forEach(function(e){
-      chain = chain.then(function(){ return O.queue(function(){ return O.patch('/v1/fleet/engines/' + enc(e.id), { spare_location: val }); }); });
-    });
-    return chain.then(function(){
-      return O.queue(function(){
-        return O.post('/v1/fleet/jobs/' + enc(jobId) + '/log', { text: '📍 ตั้งสถานที่ซ่อม: ' + (val || '-') + (engs.length ? ' (อัปเดตเครื่อง ' + engs.length + ' ตัว)' : ''), by: 'ระบบ' });
-      });
-    }).then(function(res){
+    return O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(jobId), { location: val }); }).then(function(res){
       if(res) upsertJob(res);
-      return engs.length && O.fleetAssets && O.fleetAssets.refetchChain ? O.fleetAssets.refetchChain() : null;
+      return val && O.fleetAssets && O.fleetAssets.refetchChain ? O.fleetAssets.refetchChain() : null;
     }).then(function(){
       O.wrote('fleet-job-location');
       redrawJobs();

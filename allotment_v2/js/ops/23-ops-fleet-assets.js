@@ -674,8 +674,11 @@
       body = toPropellerFactsBody({
         brand: brand, serial: serial, diameter: m ? parseFloat(m[1]) : 15.5, pitch: m ? parseFloat(m[2]) : 17,
         blades: '3', material: 'Stainless', rotation: d('fl-add-spare-rotation') ? d('fl-add-spare-rotation').value : 'Standard',
-        hubSize: '4.75', cupping: 'no', cost: 8500, buyDate: today, note: note, status: status, spareLocation: loc
+        hubSize: '4.75', cupping: 'no', buyDate: today, note: note, status: status, spareLocation: loc
       }, true);
+      /* w5-b: no cost is sent. The server prices a new spare propeller (PROPELLER_DEFAULT_COST, 8,500 baht) when `cost` is missing;
+         the wrapper used to send legacy's 8500 itself. */
+      delete body.cost;
     }
     return O.queue(function(){
       return O.post(path, body);

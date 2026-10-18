@@ -81,7 +81,11 @@
       it.cost = num(s.cost);
       if(it.kind === 'mj') it.park = s.parked ? s.parked.label : '';
     });
-    return items;
+    /* w5-b: WHICH items are on the page is the server's too (an open incident with no job, a job not cancelled, a closed job only while
+       it waits for its invoice, a project awaiting the bill). The legacy builder still supplies the objects the page draws from,
+       so an item the server does not list is dropped; an item only the server lists has nothing here to draw it from (see
+       docs/walk/w5-b.md). */
+    return items.filter(function(it){ return !!by[it.key]; });
   });
 
   wrap('flwBoats', function(orig, items){

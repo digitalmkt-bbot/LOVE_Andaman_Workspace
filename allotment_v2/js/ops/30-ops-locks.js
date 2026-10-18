@@ -58,8 +58,14 @@
   /* the server's own numbers for one departure, kept per date (remaining_pax, pending_pax, sub_group_room,
      release_at, overdue): the bookingV2Lock* wrappers below answer from these instead of re-deriving */
   function srvOf(o, d, r){
-    if(!o.srv) o.srv = { at: Date.now(), rem: {}, pend: {}, room: {}, relAt: {}, overdue: {} };
+    if(!o.srv) o.srv = { at: Date.now(), rem: {}, pend: {}, room: {}, relAt: {}, overdue: {}, held: {}, holding: {}, alloc: {}, drawn: {}, cap: {} };
     o.srv.rem[d] = +r.remaining_pax || 0; o.srv.pend[d] = +r.pending_pax || 0; o.srv.room[d] = +r.sub_group_room || 0;
+    /* w5-b: held_pax (what it keeps off sale; null on a sub-group's and a whole-boat hold's), holding, allocated_pax (seats in sub-groups),
+       drawn_pax (a parent's covers its sub-groups) and a boat hold's boat_capacity: ops/81-ops-locks-w5.js answers from them */
+    o.srv.held[d] = r.held_pax == null ? null : +r.held_pax;
+    o.srv.holding[d] = r.holding === undefined ? undefined : !!r.holding;
+    o.srv.alloc[d] = +r.allocated_pax || 0; o.srv.drawn[d] = +r.drawn_pax || 0;
+    if(r.boat_capacity != null) o.srv.cap[d] = +r.boat_capacity;
     if(r.release_at) o.srv.relAt[d] = r.release_at;
     o.srv.overdue[d] = !!r.overdue;
   }
@@ -134,6 +140,7 @@
       A.length = 0; Array.prototype.push.apply(A, next);
       ready = true;
       markHolds();
+      if(holdSig === null) holdSig = holdsSig();
       try{ console.log('[ops] seat locks · ' + next.length); }catch(_){}
     }).then(function(){ loading = null; if(again){ again = false; return load(); } }, function(e){ loading = null; again = false; throw e; });
     return loading;
@@ -148,7 +155,18 @@
       cell.type = 'charter'; cell.boatLockId = l.id;
     });
   }
-  function reload(){ return load().then(function(){ O.wrote('locks'); render(); }, function(e){ try{ console.warn('[ops] seat locks reload · ' + (e && e.message)); }catch(_){} }); }
+  /* w5-b: a whole-boat hold that was made, released, swapped or converted changes the board cell of its boat. Legacy cleared the cell
+     in the browser (bookingV2BoatLockCellClear); now the server's deployments are read again when the set of active holds changed. */
+  var holdSig = null;
+  function holdsSig(){ return (locks() || []).filter(function(l){ return l && l.scope === 'boat' && l.status === 'active'; }).map(function(l){ return l.id + '|' + l.boatId + '|' + l.date; }).sort().join(','); }
+  function refreshBoard(){
+    var sig = holdsSig(), first = holdSig === null;
+    if(sig === holdSig) return Promise.resolve();
+    holdSig = sig;
+    if(first || !O.deployments || !O.deployments.load) return Promise.resolve();
+    return Promise.resolve(O.deployments.syncNow ? O.deployments.syncNow() : null).catch(function(){}).then(function(){ return O.deployments.load(); }).then(function(){ markHolds(); }, function(){});
+  }
+  function reload(){ return load().then(refreshBoard).then(function(){ O.wrote('locks'); render(); }, function(e){ try{ console.warn('[ops] seat locks reload · ' + (e && e.message)); }catch(_){} }); }
   var soon = null;
   function reloadSoon(){ clearTimeout(soon); soon = setTimeout(function(){ if(O.enabled() && ready) reload(); }, 400); }
   // a booking saved or cancelled (a draw or a return) or another desk's change → the numbers moved
@@ -420,9 +438,16 @@
   (function(){
     var orig = window.bookingV2BoatLockOnConvert; if(typeof orig !== 'function' || orig.__ops) return;
     var w = function(lockId, newBk){
-      var r = orig.apply(this, arguments);
-      if(r && O.enabled() && newBk && newBk.id) holdFor[newBk.id] = lockId;
-      return r;
+      if(!O.enabled() || !ready) return orig.apply(this, arguments);
+      /* w5-b: legacy's local step (free the board cell, mark the hold converted, write its log line) is not run: the server's
+         convert does all of it and the lists are read again. Only the shape check stays: the booking must be the charter of
+         this hold's boat and day (the server judges it again). */
+      var l = find(lockId);
+      if(!l || l.status !== 'active' || !newBk || !newBk.id) return false;
+      var hit = (newBk.trips || []).some(function(t){ return t && t.bookingMode === 'charter' && t.charterBoatId === l.boatId && (t.date || '') === l.date; });
+      if(!hit) return false;
+      holdFor[newBk.id] = lockId;
+      return true;
     };
     w.__ops = true; window.bookingV2BoatLockOnConvert = w;
   })();
@@ -543,6 +568,23 @@
     return (e && e.rows && Date.now() - e.at < BOAT_OPT_TTL) ? e : null;
   }
   O.onWrite(function(){ boatOpt = {}; });
+  /* w5-b: the server's row for one boat (ok, why {code, message}, placed_route_id, blockers, capacity) from the list read above.
+     With start true a missing list is asked for (the form is drawn again when it lands). null while there is none. */
+  function boatOptRow(date, routeId, exceptId, boatId, start){
+    var e = boatOptFresh(date, routeId, exceptId);
+    if(e) return e.rows[boatId] || null;
+    var k = boatOptKey(date, routeId, exceptId);
+    if(start && routeId && date && !(boatOpt[k] && boatOpt[k].busy)){
+      boatOpt[k] = { busy: true };
+      var q = { route_id: routeId, service_date: date }; if(exceptId) q.lock_id = exceptId;
+      O.get('/v1/seat-locks/boat-options', q).then(function(j){
+        var rows = {}; ((j && (j.boats || j.options || j.rows)) || (Array.isArray(j) ? j : [])).forEach(function(x){ if(x && x.boat_id) rows[x.boat_id] = x; });
+        boatOpt[k] = { rows: rows, at: Date.now() };
+        render();
+      }, function(){ boatOpt[k] = { busy: false, at: Date.now() }; });
+    }
+    return null;
+  }
   defO('bookingV2BoatLockPickList', function(orig, date, routeId, exceptId){
     var out = orig(date, routeId, exceptId), e = boatOptFresh(date, routeId, exceptId);
     if(e){
@@ -586,7 +628,7 @@
     return L ? { id: id, version: L.opsVersion } : null;
   }
 
-  O.locks = { load: load, reload: reload, reloadSoon: reloadSoon, markHolds: markHolds,
+  O.locks = { load: load, reload: reload, reloadSoon: reloadSoon, markHolds: markHolds, boatOptRow: boatOptRow, find: find,
     syncNow: function(){ return Promise.resolve(false); }, sync: function(){ return Promise.resolve(false); },   // nothing to push: each click is a command
     serverIdFor: serverIdFor, clientIdFor: clientIdFor, holdFor: holdVersion, doneHold: function(bookingId){ delete holdFor[bookingId]; },
     isReady: function(){ return ready; } };
