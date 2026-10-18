@@ -117,6 +117,7 @@ await seed('POST', `/operations/trip-ops/${bk.p6.trip}/van-split`, { ad: 1 });
 await cmd('p1', 'pier', 'stage', { stage: 'arrived', on: true });
 await cmd('p2', 'pier', 'stage', { stage: 'arrived', on: true }); await cmd('p2', 'pier', 'stage', { stage: 'cleared', on: true });
 await cmd('p3', 'pier', 'check-in');
+await mk('m1', 'W5 MOVE', 3); await seed('PATCH', `/operations/trip-ops/${bk.m1.trip}`, { boat_id: 'b6' });
 await cmd('p8', 'pier', 'stage', { stage: 'arrived', on: true });
 await cmd('p1', 'van', 'check-in'); await cmd('p4', 'van', 'events', { type: 'no_show', reason_code: 'no_contact', ad: 1 });
 
@@ -264,6 +265,70 @@ section('2', async () => {
   await ev(() => laOps.vanCheckin.clear()); await ev(() => renderVanCheckin()); await settle(1200);
   const cmpOutside = await ev((a) => { const f = (e) => { const b = SB_BOOKINGS.find((x) => x.id === e); return { b, t: b.trips[0], O: bkOpsRead(b, a.date) }; }; return [ckRowCmp(f('zz-p1'), f('zz-p9')) < 0, ckRowCmp(f('zz-p9'), f('zz-p1')) > 0]; }, { date: DAY });
   ok('outside the Van sheet ckRowCmp is legacy\'s (sequence, time, voucher): p1 before p9', cmpOutside[0] && cmpOutside[1], cmpOutside);
+});
+
+// ═══ 3 · pier "ย้ายลำ" <- GET / POST /operations/trip-ops/{trip}/pier-move ═══
+section('3', async () => {
+  console.log('\n[3] Pier move boat: pckMoveCan, pckMoveCtx, pckMoveSave <- /operations/trip-ops/{trip}/pier-move');
+  await openPier(DAY);
+  const dlg = () => ev(() => { const o = document.getElementById('pck-move'); return o ? { text: o.innerText.replace(/\s+/g, ' '), opts: Array.from(o.querySelectorAll('.pmv-o')).map((l) => ({ name: l.querySelector('b').innerText, info: l.querySelector('.pmv-l').innerText.replace(/\s+/g, ' '), off: l.classList.contains('off') })), err: (document.getElementById('pmverr') || {}).textContent } : null; });
+  const closeDlg = () => ev(() => { if (document.getElementById('pck-move')) pckMoveClose(); });
+  const open = async (ext) => { const d0 = dialogs.length; await ev((e) => pckMoveOpen(e), ext); await waitFor(() => !!document.getElementById('pck-move'), null, 4000); await settle(300); return { dlg: await dlg(), alerts: dialogs.slice(d0) }; };
+  const G = await api(`/operations/trip-ops/${bk.m1.trip}/pier-move`);
+  ok('seed: the server lists b7 as the one other boat of r5 (m1 sits on b6)', G.may_move === true && G.options.length === 1 && G.options[0].boat_id === 'b7' && G.current_boat_id === 'b6', G);
+  const n0 = calls.length;
+  let r = await open('zz-m1');
+  ok('pckMoveOpen asks GET /operations/trip-ops/{trip}/pier-move before the dialog opens', callsSince(n0).some((c) => new RegExp(`GET /operations/trip-ops/${bk.m1.trip}/pier-move 200`).test(c)) && !!r.dlg, callsSince(n0).filter((c) => /pier-move/.test(c)));
+  const o = G.options[0];
+  ok('the dialog lists the server\'s boats with its numbers: "load → next / cap"', r.dlg.opts.length === 1 && r.dlg.opts[0].name === o.name && r.dlg.opts[0].info.startsWith(`${o.load} → ${o.next} / ${o.capacity}`) && r.dlg.opts[0].off === o.block, { dlg: r.dlg.opts, o });
+  await closeDlg();
+  // the server's numbers differ from what legacy would compute
+  tamper = [{ re: /pier-move$/, fn: (j) => { if (j.options) { j.options[0].load = 30; j.options[0].next = 33; j.options[0].capacity = 34; j.options[0].over = false; j.options[0].block = false; } } }];
+  await ev(() => { for (const k of Object.keys(window.__x || {})) delete window.__x[k]; });
+  r = await open('zz-m1');
+  ok('tampered answer (load 30, next 33, cap 34): the dialog shows "30 → 33 / 34"', r.dlg && r.dlg.opts[0] && r.dlg.opts[0].info.startsWith('30 → 33 / 34'), r.dlg);
+  await closeDlg();
+  // a refusal by the server is shown in the dialog as it words it
+  tamper = [{ re: /pier-move$/, fn: (j) => { if (j.options) j.options.push({ boat_id: 'b1', name: 'Aluminous1', capacity: 64, load: 0, next: 3, over: false, block: false }); } }];
+  r = await open('zz-m1');
+  await ev(() => { document.querySelector('#pck-move input[value="b1"]').checked = true; document.getElementById('pmvwhy').value = 'guest'; });
+  const n1 = calls.length, b1 = bodies.length;
+  await ev(() => pckMoveSave('zz-m1')); await idle(); await settle(800);
+  const refused = (await dlg());
+  ok('a boat the server does not accept (b1 does not run r5): 409 boat_not_deployed, its message in the dialog, nothing moved', refusals.some((x) => /pier-move -> 409.*boat_not_deployed/.test(x)) && refused && /does not run this route/.test(refused.err) && (await api(`/operations/trip-ops/${bk.m1.trip}/pier-move`)).current_boat_id === 'b6', { err: refused && refused.err, ref: refusals.slice(-1) });
+  tamper = [];
+  await closeDlg();
+  // legacy\'s pre-checks (same words), then the real move
+  r = await open('zz-m1');
+  await ev(() => pckMoveSave('zz-m1'));
+  ok('no boat picked: legacy\'s words "เลือกลำที่จะย้ายไป" at once, nothing sent', (await dlg()).err === 'เลือกลำที่จะย้ายไป' && !bodies.slice(b1).some((x) => /pier-move/.test(x.k) && x.status === 200), await dlg());
+  await ev(() => { document.querySelector('#pck-move input[name=pmvb]').checked = true; });
+  await ev(() => pckMoveSave('zz-m1'));
+  ok('no reason: "เลือกเหตุผล"', (await dlg()).err === 'เลือกเหตุผล', await dlg());
+  await ev(() => { document.getElementById('pmvwhy').value = 'other'; });
+  await ev(() => pckMoveSave('zz-m1'));
+  ok('"other" without a note: legacy\'s words', /ต้องพิมพ์รายละเอียด/.test((await dlg()).err), await dlg());
+  await ev(() => { document.getElementById('pmvwhy').value = 'breakdown'; });
+  const n2 = calls.length, b2 = bodies.length;
+  await ev(() => pckMoveSave('zz-m1')); await idle(); await settle(1500);
+  const post = lastBody(/POST \/operations\/trip-ops\/.*\/pier-move$/);
+  ok('Save: POST …/pier-move with exactly {boat_id, reason} (no history, no boat written by the browser)', post && post.status === 200 && JSON.stringify(post.req) === '{"boat_id":"b7","reason":"breakdown"}' && noComputed(post.req), post);
+  ok('the old PATCH of the trip\'s boat is not sent', !bodies.slice(b2).some((x) => /^PATCH \/operations\/trip-ops\//.test(x.k)), bodies.slice(b2).map((x) => x.k));
+  const G2 = await api(`/operations/trip-ops/${bk.m1.trip}/pier-move`);
+  const hist = (await api(`/v1/bookings/${bk.m1.id}/history`)).history || [];
+  ok('server: m1 is on b7 now, the history line is the server\'s ("ย้ายลำหน้าท่า … เรือเสีย")', G2.current_boat_id === 'b7' && hist.some((h) => /ย้ายลำหน้าท่า/.test(h.text) && /เรือเสีย/.test(h.text)), { cur: G2.current_boat_id, hist: hist.map((h) => h.text).slice(0, 3) });
+  const scr = await ev(() => ({ closed: !document.getElementById('pck-move'), boat: bkOpsRead(SB_BOOKINGS.find((x) => x.id === 'zz-m1'), '2026-12-08').boatId }));
+  ok('screen: the dialog closed and the booking shows b7', scr.closed && scr.boat === 'b7', scr);
+  // not movable: split across boats (p5) -> the server's alert
+  const d0 = dialogs.length;
+  await ev(() => pckMoveOpen('zz-p5')); await settle(1200);
+  ok('a booking split across boats: 409 not_movable, the server\'s message is the alert, no dialog', dialogs.slice(d0).some((x) => /split across boats/.test(x)) && !(await dlg()), { d: dialogs.slice(d0) });
+  // no right: may_move false -> legacy\'s alert text
+  tamper = [{ re: /pier-move$/, fn: (j) => { if (j.options) j.may_move = false; } }];
+  const d1 = dialogs.length;
+  await ev(() => pckMoveOpen('zz-m1')); await settle(1200);
+  ok('may_move false: legacy\'s alert "No permission to move boats here…", no dialog', dialogs.slice(d1).some((x) => /No permission to move boats here/.test(x)) && !(await dlg()), { d: dialogs.slice(d1) });
+  tamper = [];
 });
 
 //@@SECTIONS
