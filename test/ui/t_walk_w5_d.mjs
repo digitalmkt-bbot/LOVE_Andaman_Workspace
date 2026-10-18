@@ -659,6 +659,7 @@ section('9', async () => {
   };
   let I = await idleRows();
   ok('pxRentIdle = the server rows (boat, due, booked, gap, days ran / planned, period)', I.length === M.rent_idle.rows.length && I.some((r) => r.bid === 'b7' && r.due === row.due && r.gap === row.gap && r.booked === row.booked && r.ran === row.days_ran && r.plan === row.days_plan && r.from === row.from && r.to === row.to), { I, srv: M.rent_idle.rows });
+  await waitFor((n) => document.getElementById('trippl-host').innerText.includes(n), row.name, 40000);
   const txt = await ev(() => document.getElementById('trippl-host').innerText);
   ok('the month page shows the idle-rent band with the boat and its gap', txt.includes(row.name) && txt.includes(Math.round(row.gap).toLocaleString()), txt.slice(0, 300));
   tamper = [{ re: /trip-pl\/month\?month=2026-10/, fn: (j) => { j.rent_idle.rows[0].gap = 4321; j.rent_idle.rows[0].due = 9999; j.rent_idle.rows[0].booked = 5678; } }];

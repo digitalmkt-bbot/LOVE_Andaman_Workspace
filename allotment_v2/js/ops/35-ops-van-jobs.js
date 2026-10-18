@@ -403,6 +403,7 @@
     var path = '/operations/van-arrivals/' + enc(date) + '/' + enc(m[1]) + '/' + enc(m[2]);
     O.queue(function(){ return on ? O.call('PUT', path) : O.call('DELETE', path); }).then(function(a){
       if(on && a) arrPut(date, a); else delete arrMap[key];
+      O.wrote('van-arrival');       // w5-d: the rows it moved to Standby (or back to wait) are the server's; the held Van Check-in answer is stale
       // PUT answers how many rows went to Standby; DELETE (204) answers nothing and sends Standby rows back to Wait
       var moved = on ? (a && +a.moved_to_standby || 0) : 1;
       var again = moved && typeof window.bookingV2EnsureOpsRange === 'function'

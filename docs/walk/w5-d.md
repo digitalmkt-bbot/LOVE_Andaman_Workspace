@@ -94,7 +94,13 @@ Test: `test/ui/t_walk_w5_d.mjs` (10 sections, 120+ checks; every section has a "
 - Guide languages in `booked.prep.languages` are counted on **booked** heads, `pckTripStats` counts heads still travelling: not interchangeable, so not wired.
 - `pxRentIdle` reads the whole month's `rent_idle` from `trip-pl/month`; that read computes every day of the month on the server (heavier than a day read). The month page already loads each day; consider serving `rent_idle` from the days it has.
 - `bkxExCovered` depends on the sales being held; a sale never opened in the browser keeps legacy's rule.
-- `t_walk_w4_f2.mjs` section 3 asserts that a pier tick does not read `/v1/pier-checkin` again; this wave reads it again on purpose (decision 1).
+- `t_walk_w4_f2.mjs` section 3 asserted that a pier tick does not read `/v1/pier-checkin` again; this wave reads it again on purpose (decision 1), so that assertion now says so.
+- The van "driver arrived" mark (`vckArrToggle`) did not tell the other adapters it had written; it now calls `laOps.wrote('van-arrival')` (`35-ops-van-jobs.js`), otherwise the Van Check-in answer kept showing the rows as waiting after the server had moved them to Standby (found by `t_walk_dayops`).
+- `t_vckstay.mjs` fails on `wt-main` as well (it needs the real data blob), not a regression of this branch.
+
+## Tests run (one file at a time)
+
+`node --check` of every changed file. `t_ops`, `t_walk_cmds`, `t_walk_w4_f1..f5`, `t_walk_costing`, `t_walk_pier`, `t_walk_dayops`, `t_walk_vanjobs`, `t_walk_fleet`, `t_walk_fleet2`, `t_walk_days`, `t_walk_aboard`, `t_walk_daymisc`, `t_walk_booking`, `t_walk_booking2`, `t_walk_locks`, `t_walk_agents`: all pass. `t_walk_w5_d`: ALL PASSED (10 sections).
 - The Travel Summary page (59) draws the day's roster from `GET /v1/bookings`, so `tsCxlRows` serves the callers that still ask it (the Daily Report data builder).
 
 ## MISSING-SERVER-FIELD (what a backend agent should add next)
