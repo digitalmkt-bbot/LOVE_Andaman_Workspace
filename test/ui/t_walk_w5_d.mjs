@@ -351,18 +351,19 @@ section('3', async () => {
 section('4', async () => {
   console.log('\n[4] Pier meals: pckMealCount, pckAllergyList, mvLunchRows, pckMealOvnRows, pckMealOvnNeed <- GET /v1/trip-actuals/{date}/{boat} meal_preview');
   await openPier(DAY);
+  const held = (d, b) => waitFor((a) => !!laOps.mealPreview.of(a.d, a.b), { d, b }, 9000);
   const prev = async (date, bid) => (await api(`/v1/trip-actuals/${date}/${bid}`)).meal_preview;
   const P = await prev(DAY, 'b6');
   ok('seed: the server counts veg 1, vegan 1, halal 1 and the named allergies for b6', P.veg === 1 && P.vegan === 1 && P.halal === 1 && P.allergies.length === 2 && P.requests.length >= 2, { veg: P.veg, vegan: P.vegan, halal: P.halal, al: P.allergies, req: P.requests.length });
   const count = () => ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-mm1'); const rows = [{ b, t: b.trips[0], bid: 'b6', booked: 4, expect: 4, ck: null }]; return { c: pckMealCount(rows), al: pckAllergyList(rows) }; });
   const n0 = calls.length;
-  await ev(() => laOps.mealPreview.clear()); await count(); await settle(1200);
+  await ev(() => laOps.mealPreview.clear()); await count(); await held(DAY, 'b6'); await settle(300);
   ok('pckMealCount asks GET /v1/trip-actuals/{date}/b6 (meal_preview) the first time it is needed', callsSince(n0).some((c) => new RegExp(`GET /v1/trip-actuals/${DAY}/b6 200`).test(c)), callsSince(n0).filter((c) => /trip-actuals/.test(c)));
   let r = await count();
   ok('pckMealCount = the server\'s counts (ad, chd, inf, book, veg, vegan, halal, allergy)', r.c.ad === P.adults && r.c.chd === P.children && r.c.inf === P.infants && r.c.tot === P.adults + P.children + P.infants && r.c.book === P.booked && r.c.veg === P.veg && r.c.vegan === P.vegan && r.c.halal === P.halal && r.c.allergy === P.allergy, { c: r.c, P: { a: P.adults, c: P.children, i: P.infants, b: P.booked } });
   ok('pckAllergyList = the server\'s named list (Peanut ×3, Egg ×1)', JSON.stringify(r.al) === JSON.stringify(P.allergies) && r.al.some((x) => x.name === 'Peanut' && x.qty === 3), r.al);
   tamper = [{ re: /trip-actuals\/2026-12-08\/b6$/, fn: (j) => { const p = j.meal_preview; p.adults = 99; p.children = 3; p.infants = 2; p.booked = 105; p.veg = 7; p.allergy = 9; p.allergies = [{ name: 'Kiwi', qty: 4 }]; p.requests = [{ booking_id: 'x', lead: 'SERVER LEAD', adults: 5, children: 1, infants: 0, foc: 1, request: 'ฮาลาล 5', overnight: false, include: null }]; } }];
-  await ev(() => laOps.mealPreview.clear()); await count(); await settle(1200);
+  await ev(() => laOps.mealPreview.clear()); await count(); await held(DAY, 'b6'); await settle(300);
   r = await count();
   ok('tampered preview (99 adults, 3 children, veg 7, Kiwi ×4): the kitchen counts and the allergy list are the server\'s', r.c.ad === 99 && r.c.chd === 3 && r.c.inf === 2 && r.c.tot === 104 && r.c.veg === 7 && r.c.allergy === 9 && JSON.stringify(r.al) === JSON.stringify([{ name: 'Kiwi', qty: 4 }]), r);
   const lines = await ev((a) => mvLunchRows(a.d, 'b6'), { d: DAY });
@@ -372,7 +373,7 @@ section('4', async () => {
   ok('the kitchen pop-up shows the server\'s 99 adults', /99/.test(txt) && /W5 Venue|Zeus/.test(txt), txt.slice(0, 400));
   await ev(() => pckKitchenClose());
   tamper = [];
-  await ev(() => laOps.mealPreview.clear()); await count(); await settle(1200);
+  await ev(() => laOps.mealPreview.clear()); await count(); await held(DAY, 'b6'); await settle(300);
   const lines2 = await ev((a) => mvLunchRows(a.d, 'b6'), { d: DAY });
   ok('real answer: one line per booking with the merged Thai request (halal / veg / named allergies)', lines2.length === P.requests.length && lines2.some((x) => x.lead === 'W5 MEAL ONE' && /ฮาลาล 1/.test(x.sr) && /มังสวิรัติ 1/.test(x.sr) && /แพ้ Peanut ×2/.test(x.sr)) && JSON.stringify(lines2.map((x) => x.lead)) === JSON.stringify(P.requests.map((x) => x.lead)), { lines2, req: P.requests.map((x) => x.lead) });
 
@@ -387,12 +388,12 @@ section('4', async () => {
   ok('seed: the server lists the overnight return, undecided', OVP.overnight.length === 1 && OVP.undecided_overnight.length === 1 && OVP.overnight[0].include === null, OVP);
   await ev((d) => { _pckDate = d; }, OV[1]);
   await ev(() => laOps.mealPreview.clear());
-  await ev((a) => pckMealOvnRows(a.d, 'b13'), { d: OV[1] }); await settle(1200);
+  await ev((a) => pckMealOvnRows(a.d, 'b13'), { d: OV[1] }); await held(OV[1], 'b13'); await settle(300);
   const ovr = await ev((a) => ({ rows: pckMealOvnRows(a.d, 'b13').map((x) => [x.b.id, x.pax, x.inc]), need: pckMealOvnNeed(a.d, 'b13').map((x) => x.b.id) }), { d: OV[1] });
   ok('pckMealOvnRows / pckMealOvnNeed: the one return, 2 pax, undecided = the server\'s lists', ovr.rows.length === 1 && ovr.rows[0][1] === OVP.overnight[0].pax && ovr.rows[0][2] === '' && ovr.need.length === 1, ovr);
   tamper = [{ re: /trip-actuals\/2026-12-15\/b13$/, fn: (j) => { j.meal_preview.overnight[0].include = 'in'; j.meal_preview.overnight[0].pax = 7; j.meal_preview.undecided_overnight = []; } }];
   await ev(() => laOps.mealPreview.clear());
-  await ev((a) => pckMealOvnRows(a.d, 'b13'), { d: OV[1] }); await settle(1200);
+  await ev((a) => pckMealOvnRows(a.d, 'b13'), { d: OV[1] }); await held(OV[1], 'b13'); await settle(300);
   const ovr2 = await ev((a) => ({ rows: pckMealOvnRows(a.d, 'b13').map((x) => [x.b.id, x.pax, x.inc]), need: pckMealOvnNeed(a.d, 'b13').length }), { d: OV[1] });
   ok('tampered preview (decided "in", 7 pax, nothing undecided): rows show include in and 7 pax, nothing is left to decide', ovr2.rows[0][1] === 7 && ovr2.rows[0][2] === 'in' && ovr2.need === 0, ovr2);
   tamper = [];
