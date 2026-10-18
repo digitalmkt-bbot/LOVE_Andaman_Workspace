@@ -414,6 +414,50 @@ console.log('\n== ' + curItem);
   ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
 }
 
+// ═══ 8 · Market Data: our mix, coverage, missing nationality, lead time, on the books (mdOurMixByCode, mdOurNatCoverage, mdMissingNat, mdLeadByMarket, mdOnTheBooks) ═══
+curItem = '8 our mix';
+console.log('\n== ' + curItem);
+{
+  // one booking with no nationality at all (the server cannot count it in the mix)
+  { const r = await mkBk('f8x', DAYS[3], 2, { leadNationality: '', leadPax: 'ZZZ', intent: 'quote' }); if (r.status !== 201) { console.log('seed failed f8x', r.status, JSON.stringify(r.body)); process.exit(2); } bk.f8x = r.body; }
+  await send('PUT', '/v1/market-stats/' + T0 + '/in', { rows: { 'รัสเซีย': 200, 'เยอรมัน': 50 } });
+  await ev(() => { SB_BOOKINGS.length = 0; });                 // legacy has no booking to add up
+  n0 = calls.length;
+  await openView('marketdata', 'renderMarketData()', 3000);
+  await ev(() => { laOps.marketData.load(); });
+  await sleep(1500); await idle();
+  const mixA = await api('/v1/market-stats/our-mix');
+  ok('seed: Russian and German in our mix, one booking missing a nationality', mixA.mix.some((x) => x.code === 'RU') && mixA.missing_nationality.count >= 1, [mixA.mix, mixA.missing_nationality]);
+  await ev(() => mdSetTab('gap')); await sleep(900);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/market-stats/our-mix', mine.some((c) => c.startsWith('GET /v1/market-stats/our-mix 200')), mine);
+  const gap = await ev(() => [...document.querySelectorAll('#md-body table tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim())));
+  const rowOf = (code) => gap.find((r) => r[0] && r[0].endsWith(' ' + code));
+  const ru = rowOf('RU'), de = rowOf('DE');
+  const fmt = (v) => ev((x) => mdFmt(x), v);
+  ok('Market Gap table: "Our pax" for Russian and German = the server mix (the browser holds no booking)', ru && de && ru[3] === await fmt(mixA.mix.find((x) => x.code === 'RU').pax) && de[3] === await fmt(mixA.mix.find((x) => x.code === 'DE').pax), [ru, de, mixA.mix]);
+  const note = (await text('#md-body')).replace(/\s+/g, ' ');
+  ok('coverage line = the server (with / total bookings, pct)', note.includes(mixA.coverage.with_nationality + '/' + mixA.coverage.total + ' bookings (' + mixA.coverage.pct + '%)'), note.slice(0, 400));
+  ok('"Bookings missing nationality" card lists the server booking (reference, count)', mixA.missing_nationality.count >= 1 && note.includes('Bookings missing nationality') && mixA.missing_nationality.bookings.every((b) => note.includes(b.reference)) && note.includes(mixA.missing_nationality.count + ' booking'), note.slice(0, 600));
+  await ev(() => mdSetTab('forecast')); await sleep(900);
+  const fc = (await text('#md-body')).replace(/\s+/g, ' ');
+  ok('on-the-books pipeline total = the server total', fc.includes('On-the-books pipeline') && fc.includes(await fmt(mixA.on_the_books.total_pax) + ' pax'), fc.slice(fc.indexOf('On-the-books'), fc.indexOf('On-the-books') + 200));
+  const w0 = mixA.on_the_books.weeks[0].pax;
+  const wkRow = await ev(() => { const r = [...document.querySelectorAll('#md-body div')].find((d) => d.children.length >= 2 && /^Week \+0/.test(d.innerText.trim())); return r ? r.innerText.replace(/\s+/g, ' ').trim() : null; });
+  ok('week +0 row shows the server week pax', wkRow && wkRow.includes(await fmt(w0)), [wkRow, w0]);
+  await ev(() => mdSetTab('season')); await sleep(900);
+  const lead = (await text('#md-body')).replace(/\s+/g, ' ');
+  ok('lead-time by market lists the server markets', mixA.lead_time.markets.every((m) => lead.includes(m.market)), lead.slice(lead.indexOf('Lead-time'), lead.indexOf('Lead-time') + 300));
+  // the "Fix" button reads the booking from the server first, then opens it
+  const miss = mixA.missing_nationality.bookings[0];
+  await ev(() => mdSetTab('gap')); await sleep(500);
+  n0 = calls.length;
+  await ev((id) => mdOpenBk(id), miss.booking_id); await sleep(1800); await idle();
+  ok('"Fix" reads the booking from the server (GET /v1/bookings/{id}) and opens it', callsSince(n0).some((c) => c.startsWith('GET /v1/bookings/' + miss.booking_id) || /^GET \/v1\/bookings\/[^ ]+ 200/.test(c)) && await ev(() => !!document.querySelector('.bkv2') && !!(window._bkV2 && _bkV2.detailId)), callsSince(n0));
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+  await ev(() => { _bkV2.detailId = null; });
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
