@@ -52,7 +52,8 @@
                  gno: +job.group_number || 0, seq: 1e9, sx: sx, grp: (rnd ? (+job.group_number || 0) : 0), rnd: rnd };
       };
       if(job.has_out || !job.has_ret){
-        agg[k] = base(job.out_pax || 0, job.bookings || 0, job.struck || 0);
+        /* job.pax = the outbound load: customers plus guides riding along (the server's over_capacity compares it with the seats) */
+        agg[k] = base(job.pax != null ? job.pax : (job.out_pax || 0), job.bookings || 0, job.struck || 0);
         /* the "↩ ขากลับ N" badge counts people who go back on this van but went out on another: the server's job has no
            count for them (MISSING-SERVER-FIELD ret_extra_*), so it is read off the sheet when the sheet is in hand */
         var S = sheetOf(date, job), rows = S && S.ret && S.ret.rows;
