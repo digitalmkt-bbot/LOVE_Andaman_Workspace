@@ -34,7 +34,8 @@ const S = await page.evaluate(() => {
   let n = 0;
   const mk = (travel, rid, madeOff, hour, paxN, zone) => { const b = JSON.parse(JSON.stringify(src[n % src.length])); n++; b.id = 'ZZMV' + n;
     b.trips[0].date = travel; b.trips[0].routeId = rid; b.trips[0].zone = zone; b.pickupZone = zone; b.trips[0].pax = { ad: paxN, chd:0, inf:0, foc:0 }; b.trips[0].lockUse = 0; delete b.trips[0].seatSource; delete b.trips[0].upg;
-    const md = new Date(T); md.setDate(md.getDate() + madeOff); md.setHours(hour, (n * 7) % 60, 0, 0);
+    const md = new Date(T); md.setDate(md.getDate() + madeOff); if (madeOff === 0) hour = Math.min(hour, T.getHours());   /* วันนี้ต้องไม่สร้างอนาคต (รันกลางคืนก็ผ่าน) */
+    md.setHours(hour, madeOff === 0 && hour === T.getHours() ? Math.min((n * 7) % 60, Math.max(0, T.getMinutes() - 6)) : (n * 7) % 60, 0, 0);
     b.history = [{ at: md.toISOString(), kind: 'create', tag: 'Created', text: 'x' }]; b.bookingDate = ymd(md); b.createdAt = ymd(md); b.ops = {}; b.status='confirmed'; delete b.cancelledAt; delete b.cancellation; SB_BOOKINGS.push(b); return b; };
   for (let i = 0; i < 12; i++) mk(tm, 'r5', -2, 10 + (i % 6), 3, i%3?'PK':'KL');
   for (let i = 0; i < 5; i++) mk(tm, 'r5', 0, 9 + i, 2, 'KL');
@@ -164,12 +165,12 @@ const M6 = await page.evaluate((S) => {
 const M8 = await page.evaluate((S) => {
   const w = document.getElementById('ebm-move'), h2 = w.querySelector('h2').textContent.replace(/\s+/g, ' ');
   const zt = w.querySelector('.ebm-zt').textContent.replace(/\s+/g, ' ');
-  const bars = [...w.querySelectorAll('.ebm-hrs>div b')].reduce((s, b) => s + (+b.textContent || 0), 0);
+  const bars = [...w.querySelectorAll('.ebm-hrs>div b')].reduce((s, b) => s + (+b.textContent || 0), 0); let offChart = 0;   /* แท่งแสดง 06–22 · ใบที่เข้านอกช่วง (รันทดสอบกลางคืน) ไม่อยู่ในแท่ง */
   const rows = [...w.querySelectorAll('.ebm-feed .r')].map(r => { const c = r.cloneNode(true); c.querySelectorAll('.w b, .sl').forEach(x => x.remove());   /* ชื่อเอเยนต์/เซลส์เป็นข้อมูล ไม่ใช่ภาษาของการ์ด */
     return { t: c.textContent.replace(/\s+/g, ' '), sl: (r.querySelector('.sl') || {}).textContent || '', p: (r.querySelector('.p') || {}).textContent }; });
   let n = 0, pax = 0; const z = { PK: 0, KL: 0, NT: 0 };
-  SB_BOOKINGS.forEach(b => { if (['cancelled','rejected','cancelled_weather','quote','draft'].includes(b.status) || laIsInternalFree(b)) return; if (_dashBkDay(b) !== S.t0) return; const t = (b.trips || [])[0]; if (!t) return; n++; const p = (b.trips || []).reduce((s, x) => s + bkV2PaxAllTot(x.pax || {}), 0); pax += p; const zz = bkV2EffZone(b, t) || 'NoTransfer'; z[zz === 'PK' ? 'PK' : zz === 'KL' ? 'KL' : 'NT'] += p; });
-  return { h2, zt, bars, rows, n, pax, z, en: !/[\u0E01-\u0E3E\u0E40-\u0E5B]/.test(h2 + zt + rows.map(r => r.t).join(''))   /* ฿ อยู่ในบล็อกไทย ไม่นับ */ };
+  SB_BOOKINGS.forEach(b => { if (['cancelled','rejected','cancelled_weather','quote','draft'].includes(b.status) || laIsInternalFree(b)) return; if (_dashBkDay(b) !== S.t0) return; const t = (b.trips || [])[0]; if (!t) return; n++; const p = (b.trips || []).reduce((s, x) => s + bkV2PaxAllTot(x.pax || {}), 0); pax += p; const zz = bkV2EffZone(b, t) || 'NoTransfer'; z[zz === 'PK' ? 'PK' : zz === 'KL' ? 'KL' : 'NT'] += p; const hh = new Date((b.history || [])[0] ? b.history[0].at : 0).getHours(); if (hh < 6 || hh > 22) offChart += p; });
+  return { h2, zt, bars: bars + offChart, rows, n, pax, z, en: !/[\u0E01-\u0E3E\u0E40-\u0E5B]/.test(h2 + zt + rows.map(r => r.t).join(''))   /* ฿ อยู่ในบล็อกไทย ไม่นับ */ };
 }, S);
 {
   const zSum = /(\d+) Phuket/.exec(M8.zt), kSum = /(\d+) Khao Lak/.exec(M8.zt), oSum = /(\d+) Own transport/.exec(M8.zt);

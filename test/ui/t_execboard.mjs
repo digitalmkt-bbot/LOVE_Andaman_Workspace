@@ -177,7 +177,7 @@ if (R9.after.pax === R9.before.pax - 5 && R9.after.n === R9.before.n && /5/.test
   ok('9 ใบเก่ายกเลิกสัปดาห์นี้ 5 pax · ทีม ' + R9.before.pax + ' → ' + R9.after.pax + ' · หักยกเลิก "' + R9.after.cx + '" · จำนวนใบ ' + R9.after.n + ' เท่าเดิม · ' + R9.ag + ' ขึ้นเลขติดลบ');
 else fail('9 ' + JSON.stringify(R9));
 
-// 10
+// 10 · §execGap2 (2026-10-19) · Gap วาดใหม่: ประโยคเดียว "ต้องหาอีก N" · เส้นทาง × วัน แบบไม่เลื่อน · ตารางเซลส์บรรทัดเดียว
 const R10 = await page.evaluate(() => {
   const ymd = d => bkV2LocalYMD(d), T = new Date(), t0 = ymd(T);
   const add = n => { const d = new Date(T); d.setDate(d.getDate() + n); return ymd(d); };
@@ -187,25 +187,30 @@ const R10 = await page.evaluate(() => {
   const before = JSON.stringify(SB_BOOKINGS);
   ebSetNow('tab', 'gap'); ebSetNow('gp', 'h');
   const w = document.getElementById('eb-wrap');
-  /* expected month target */
-  const mEnd = ymd(new Date(T.getFullYear(), T.getMonth() + 1, 0)); let tgt = 0, bk = 0;
-  for (let ds = t0.slice(0, 8) + '01'; ds <= mEnd; ds = (() => { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + 1); return ymd(d); })()) {
+  /* เป้าเดือน (ที่นั่งที่วาง × 90%) · จองแล้ว · ช่องว่าง 14 วัน */
+  const mEnd = ymd(new Date(T.getFullYear(), T.getMonth() + 1, 0)); let tgt = 0, bk = 0, hT = 0, hB = 0, hG = 0;
+  const next = ds => { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + 1); return ymd(d); };
+  for (let ds = t0.slice(0, 8) + '01'; ds <= mEnd; ds = next(ds)) {
     const seen = {}; Object.keys(TRIPS[ds] || {}).forEach(b => { const r = TRIPS[ds][b].route; if (seen[r]) return; seen[r] = 1; const al = getAllotment(r, ds); if (al && al.hasAllotment) { tgt += al.availableCapacity * 0.9; bk += Math.min(al.seatsConsumed, al.availableCapacity); } }); }
+  for (let ds = t0, k = 0; k < 14; ds = next(ds), k++) {
+    const seen = {}; Object.keys(TRIPS[ds] || {}).forEach(b => { const r = TRIPS[ds][b].route; if (seen[r]) return; seen[r] = 1; const al = getAllotment(r, ds); if (al && al.hasAllotment) { const t = Math.round(al.availableCapacity * 0.9); hT += t; hB += al.seatsConsumed; hG += Math.max(0, t - al.seatsConsumed); } }); }
   tgt = Math.round(tgt);
-  const kv = [...w.querySelectorAll('.eb-k')].map(k => ({ l: k.querySelector('.l').textContent, v: +k.querySelector('.v').textContent.replace(/[^\d]/g, '') }));
-  const rows = [...w.querySelectorAll('.eb-gap tbody tr')].map(r => r.querySelector('.rn') ? r.querySelector('.rn').textContent.split('\n')[0].replace(/\d+ รอบ.*$/, '').trim() : r.textContent);
-  const firstCell = w.querySelector('.eb-gap td.c:not(.off)'); const free = firstCell ? +firstCell.firstChild.textContent.replace(/,/g, '') : null;
-  const al0 = getAllotment('r10', t0), al1 = getAllotment('r12', t0); const expFree = Math.max(0, al0.seatsAvailable);
-  const salesGap = [...w.querySelectorAll('.eb-sl .eb-q')].reduce((s, q) => s + (+q.children[1].querySelector('.v').textContent.replace(/,/g, '') || 0), 0);
-  const decTxt = w.querySelector('.eb-dec') ? w.querySelector('.eb-dec').textContent : '';
+  const big = +((w.querySelector('.eg-hl .big .n') || {}).textContent || '').replace(/[^\d]/g, '');
+  const scroll = !!w.querySelector('.eg-grid') && getComputedStyle(w.querySelector('.eg-grid').parentElement).overflowX !== 'auto' && w.querySelector('.eg-grid').scrollWidth <= w.querySelector('.eg-grid').clientWidth + 2;
+  const rows = [...w.querySelectorAll('.eg-rn b')].map(b => b.textContent);
+  const dayHeads = w.querySelectorAll('.eg-dh:not(.r)').length;
+  const pp = [...w.querySelectorAll('.eg-rn')].find(r => /Phi Phi/.test(r.textContent)); let free = null;
+  if (pp) { let el = pp.nextElementSibling; while (el && el.classList.contains('eg-c') && el.classList.contains('off')) el = el.nextElementSibling; if (el && el.classList.contains('eg-c')) free = el.querySelector('b').textContent === 'เต็ม' ? 0 : +el.querySelector('b').textContent.replace(/,/g, ''); }
+  const al0 = getAllotment('r10', t0); const expFree = Math.max(0, al0.seatsAvailable);
+  const salesGap = [...w.querySelectorAll('.eg-sr .gp')].reduce((s, g) => s + (+g.textContent.replace(/,/g, '') || 0), 0);
+  const decTxt = [...w.querySelectorAll('.eg-dec')].map(d => d.textContent).join(' ');
   const after = JSON.stringify(SB_BOOKINGS);
   ebSetNow('tab', 'rev');
-  return { tgt, bk, kv, rows, free, expFree, salesGap, hasDec: /Whale Shark|Phi Phi/.test(decTxt), same: before === after };
+  return { tgt, bk, hGap: hG, big, scroll, rows, dayHeads, free, expFree, salesGap, hasDec: /Whale Shark|Phi Phi/.test(decTxt), same: before === after };
 });
-const kT = R10.kv.find(k => /เป้าเดือนนี้/.test(k.l)), kG = R10.kv.find(k => /ช่องว่างที่ต้องหา/.test(k.l));
-if (kT && kT.v === R10.tgt && kG && kG.v === Math.max(0, R10.tgt - R10.bk) && R10.rows.length === 2 && R10.rows.every(r => /Phi Phi|Whale Shark/.test(r))
-    && R10.free === R10.expFree && Math.abs(R10.salesGap - kG.v) <= R10.rows.length * 3 + 2 && R10.hasDec && R10.same)
-  ok('10 Gap to Target · เป้าเดือน ' + R10.tgt + ' = Σ ที่นั่งที่วางเรือ × 90% · ช่องว่าง ' + kG.v + ' = ผลรวมช่องว่างเซลส์ ' + R10.salesGap + ' · ตารางมี 2 เส้นทางที่วางเรือ · ที่ว่างวันนี้ ' + R10.free + ' ตรง getAllotment · กล่องตัดสินใจมีเที่ยวว่าง · ไม่แตะข้อมูล');
+if (R10.big === R10.hGap && R10.scroll && R10.dayHeads === 14 && R10.rows.length === 2 && R10.rows.every(r => /Phi Phi|Whale Shark/.test(r))
+    && R10.free === R10.expFree && Math.abs(R10.salesGap - Math.max(0, R10.tgt - R10.bk)) <= R10.rows.length * 3 + 2 && R10.hasDec && R10.same)
+  ok('10 Gap to Target · ต้องหาอีก ' + R10.big + ' = Σ max(0, ที่นั่งที่วาง × 90% − จองแล้ว) รายเที่ยว 14 วัน · ตาราง 14 วันไม่มี scroll · 2 เส้นทาง · ที่ว่างวันนี้ ' + R10.free + ' ตรง getAllotment · ช่องว่างเซลส์รวม ' + R10.salesGap + ' ≈ ช่องว่างเดือน ' + Math.max(0, R10.tgt - R10.bk) + ' · มีรายการตัดสินใจ · ไม่แก้ข้อมูล');
 else fail('10 ' + JSON.stringify(R10));
 
 // 11
@@ -236,37 +241,39 @@ if (!slow.length && R11.busy0 && !R11.busy1 && near(parseB(R11.shown), R11.live)
   ok('11 ' + R11.n.toLocaleString() + ' ใบ · เปิด Gap รอบแรก ' + R11.first + 'ms · สลับแท็บ ' + JSON.stringify(R11.times).replace(/"/g, '') + ' · ขึ้น "กำลังคำนวณ…" แล้วหาย · รายได้วันนี้ ' + R11.shown + ' = คิดสด');
 else fail('11 ' + JSON.stringify(R11) + ' slow=' + slow.join(','));
 
-// 12
+// 12 · §execAlloc2 · หน้าต่างกำหนดสัดส่วน (modal) · % → ที่นั่ง · บันทึกเป็น JSON string ใน blob · ไม่มีสิทธิ์ = ปฏิเสธ · กลับไปค่าคำนวณ
 const R12 = await page.evaluate(() => {
+  const ym = bkV2LocalYMD(new Date()).slice(0, 7);
   ebSetNow('tab', 'gap'); ebSetNow('gp', 'h');
   const w = document.getElementById('eb-wrap');
-  const chips = w.querySelectorAll('.eb-sl .eb-rf span').length, subRows = w.querySelectorAll('table.eb-pg tr.eb-sub').length, mainRows = w.querySelectorAll('table.eb-pg tbody tr:not(.eb-sub)').length;
-  const hdr0 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  const hdr0 = w.querySelector('.eg-sh') ? [...w.querySelectorAll('h2')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent : '';
   ebAllocEdit(true);
-  const box = document.getElementById('eb-alloc'); if (!box) return { noBox: true };
+  const box = document.getElementById('eb-alloc'); if (!box || !document.getElementById('eb-alloc-ov')) return { noBox: true };
   const inputs = [...box.querySelectorAll('input[data-f][data-s]')]; const f0 = inputs[0].dataset.f, s0 = inputs[0].dataset.s;
   inputs.forEach(i => { if (i.dataset.f === f0) i.value = (i.dataset.s === s0) ? 100 : 0; });
-  const seatsCell = box.querySelector('tbody tr').children[1].textContent.replace(/,/g, '');
-  const lfIn = box.querySelector('input[data-lf="' + f0 + '"]'); lfIn.value = 80;
+  const lfIn = box.querySelector('input[data-lf="' + f0 + '"]'); lfIn.value = 80; lfIn.dispatchEvent(new Event('input', { bubbles: true }));
+  const fgap = +box.querySelector('[data-fgap="' + f0 + '"]').textContent.replace(/,/g, ''), seat = +box.querySelector('[data-seat="' + f0 + '|' + s0 + '"]').textContent.replace(/,/g, '');
+  const totTxt = box.querySelector('[data-totst="' + f0 + '"]').textContent, restTxt = box.querySelector('[data-rest="' + f0 + '"]').textContent;
   const salesName = sbGetSales(s0).name;
-  ebAllocSave(''+ (bkV2LocalYMD(new Date()).slice(0, 7)));
+  ebAllocSave(ym);
   const stored = laBlob().exec_alloc; let parsed = null; try { parsed = JSON.parse(stored); } catch (_) {}
-  const hdr1 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
-  const card = [...w.querySelectorAll('.eb-sl .eb-card')].find(c => c.querySelector('h2').textContent.trim() === salesName);
-  const chip = card ? [...card.querySelectorAll('.eb-rf span')].find(x => x.querySelector('small') && x.querySelector('small').textContent === '100%') : null;
-  const famRow = [...w.querySelectorAll('table.eb-pg tr.eb-sub')].find(r => r.querySelector('td b').textContent === (chip ? chip.querySelector('b').textContent : '')) ;
-  const famTgt = famRow ? +famRow.children[1].textContent.replace(/,/g, '') : null;
-  /* no permission → save refused */
-  const oG = window.laGuardEdit; window.laGuardEdit = () => false; let refused = false; try { refused = !(function(){ const all = laBlob(); return true; })() ; } catch (_) {}
-  const before = laBlob().exec_alloc; ebAllocReset.toString(); window.confirm = () => true; ebAllocReset(bkV2LocalYMD(new Date()).slice(0, 7)); const afterDenied = laBlob().exec_alloc; window.laGuardEdit = oG;
-  ebAllocReset(bkV2LocalYMD(new Date()).slice(0, 7)); const afterReset = laBlob().exec_alloc; const hdr2 = [...w.querySelectorAll('.eb-sec')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  const closed = !document.getElementById('eb-alloc-ov');
+  const hdr1 = [...w.querySelectorAll('h2')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
+  ebSetNow('gx', s0);
+  const row = w.querySelector('.eg-sr[data-sid="' + s0 + '"]'); const sx = row ? row.nextElementSibling : null;
+  const famRow = sx ? [...sx.querySelectorAll('.r')].find(r => r.querySelector('.f small') && /รับ 100%/.test(r.querySelector('.f small').textContent)) : null;
+  ebSetNow('gx', '');
+  /* no permission → reset refused */
+  const oG = window.laGuardEdit; window.laGuardEdit = () => false;
+  const before = laBlob().exec_alloc; window.confirm = () => true; ebAllocReset(ym); const afterDenied = laBlob().exec_alloc; window.laGuardEdit = oG;
+  ebAllocReset(ym); const afterReset = laBlob().exec_alloc; const hdr2 = [...w.querySelectorAll('h2')].find(x => /แบ่งให้เซลส์/.test(x.textContent)).textContent;
   ebSetNow('tab', 'rev');
-  return { chips, subRows, mainRows, hdr0: hdr0.slice(0, 60), hdr1: hdr1.slice(0, 80), parsedOk: !!(parsed && parsed[bkV2LocalYMD(new Date()).slice(0, 7)] && parsed[bkV2LocalYMD(new Date()).slice(0, 7)].by[f0][s0] === 100 && parsed[bkV2LocalYMD(new Date()).slice(0, 7)].lf[f0] === 80),
-    typeStr: typeof stored === 'string', seats: +seatsCell, famTgt, expTgt: Math.round(+seatsCell * 0.8), chip: !!chip, denied: before === afterDenied && !!before, reset: !JSON.parse(afterReset || '{}')[bkV2LocalYMD(new Date()).slice(0, 7)], hdr2: /ตามสัดส่วนที่แต่ละคนขายได้/.test(hdr2) };
+  return { hdr0: hdr0.slice(0, 60), hdr1: hdr1.slice(0, 80), parsedOk: !!(parsed && parsed[ym] && parsed[ym].by[f0][s0] === 100 && parsed[ym].lf[f0] === 80), typeStr: typeof stored === 'string',
+    fgap, seat, totTxt, restTxt, closed, famRow: !!famRow, salesName, denied: before === afterDenied && !!before, reset: !JSON.parse(afterReset || '{}')[ym], hdr2: /ตามสัดส่วนที่ขายได้/.test(hdr2) };
 });
-if (R12.chips >= 4 && R12.subRows >= 2 && R12.mainRows >= 2 && /ตามสัดส่วนที่แต่ละคนขายได้/.test(R12.hdr0) && /กำหนดโดย/.test(R12.hdr1) && R12.parsedOk && R12.typeStr && R12.chip
-    && R12.famTgt != null && Math.abs(R12.famTgt - R12.expTgt) <= 2 && R12.denied && R12.reset && R12.hdr2)
-  ok('12 การ์ดมีช่องว่างแยกเส้นทาง (' + R12.chips + ' ชิป) · ตารางความคืบหน้า ' + R12.mainRows + ' เซลส์ / ' + R12.subRows + ' แถวเส้นทาง · กำหนด 100% + LF 80% → เป้าเส้นทางของเซลส์ ' + R12.famTgt + ' = ' + R12.seats + '×80% · เก็บเป็น JSON string · ไม่มีสิทธิ์บันทึกไม่ได้ · กลับไปใช้ค่าคำนวณได้');
+if (!R12.noBox && /ตามสัดส่วนที่ขายได้/.test(R12.hdr0) && /ผู้บริหารกำหนด/.test(R12.hdr1) && R12.parsedOk && R12.typeStr && R12.closed && R12.seat === R12.fgap && R12.fgap > 0 && /ครบ/.test(R12.totTxt) && R12.restTxt === '0'
+    && R12.famRow && R12.denied && R12.reset && R12.hdr2)
+  ok('12 หน้าต่างกำหนดสัดส่วน · 100% ของ ' + R12.fgap + ' ที่ → เป้า ' + R12.seat + ' · รวม "ครบ" · B2C เหลือ 0 · LF 80 บันทึกเป็น JSON string · หน้าต่างปิด · แถว ' + R12.salesName + ' กางเห็น "รับ 100%" · ไม่มีสิทธิ์ = ปฏิเสธ · กลับไปค่าคำนวณได้');
 else fail('12 ' + JSON.stringify(R12));
 
 // 13
@@ -276,7 +283,7 @@ const R13 = await page.evaluate(() => { const out = {}; const chk = (k) => { out
 if (Object.values(R13.out).every(v => !v) && R13.kpis.some(k => /ยกเลิก/.test(k))) ok('13 ไม่มีเรื่องยอดเงินค้างในทุกมุมมอง · ตัวเลขหลักที่ 6 ของเดือนเป็น "' + R13.kpis.find(k => /ยกเลิก/.test(k)) + '"');
 else fail('13 ' + JSON.stringify(R13));
 
-// 14
+// 14 · §execAllocDraft + §execAlloc2 · หน้าต่างอยู่นอกบอร์ด · ตัวจับเวลา Live ไม่แตะ · วาดบอร์ดใหม่ก็ยังอยู่ · บันทึกแล้วขึ้นข้อความ
 const R14 = await page.evaluate(async () => {
   const ym = bkV2LocalYMD(new Date()).slice(0, 7);
   ebSetNow('tab', 'gap'); ebSetNow('gp', 'h'); ebAllocEdit(true);
@@ -285,15 +292,16 @@ const R14 = await page.evaluate(async () => {
   inp.value = 77; inp.dispatchEvent(new Event('input', { bubbles: true }));
   const ticked = ebTick();                       // ตัวจับเวลา Live ระหว่างแก้ → ต้องไม่วาด
   const still = document.getElementById('eb-alloc') === box && box.querySelector('input[data-f="' + f + '"][data-s="' + sid + '"]').value === '77';
-  ebSetNow('gp', 'month');                       // วาดใหม่จริง (ผู้ใช้กดปุ่มช่วง) → ช่องต้องยังเป็น 77
-  const box2 = document.getElementById('eb-alloc'); const kept = !!box2 && box2 !== box && box2.querySelector('input[data-f="' + f + '"][data-s="' + sid + '"]').value === '77';
+  ebSetNow('gp', 'month');                       // วาดบอร์ดใหม่จริง (ผู้ใช้กดปุ่มช่วง) → หน้าต่างยังอยู่ ค่า 77 ยังอยู่
+  const box2 = document.getElementById('eb-alloc'); const kept = !!box2 && box2.querySelector('input[data-f="' + f + '"][data-s="' + sid + '"]').value === '77';
+  const dirty = (document.getElementById('ea-dirty') || {}).textContent || '';
   ebAllocSave(ym); await new Promise(r => setTimeout(r, 50));
   const toast = document.getElementById('eb-toast'); const toastOn = !!toast && toast.style.display !== 'none' && /บันทึก/.test(toast.textContent);
   const stored = JSON.parse(laBlob().exec_alloc || '{}')[ym]; const saved = !!stored && stored.by[f] && stored.by[f][sid] === 77;
   window.confirm = () => true; ebAllocReset(ym); ebSetNow('tab', 'rev'); ebSetNow('per', 'today');
-  return { ticked, still, kept, toastOn, saved, editorClosed: !document.getElementById('eb-alloc') };
+  return { ticked, still, kept, dirty, toastOn, saved, editorClosed: !document.getElementById('eb-alloc') };
 });
-if (!R14.ticked && R14.still && R14.kept && R14.toastOn && R14.saved) ok('14 ตัวจับเวลา Live ไม่วาดทับขณะแก้ · วาดใหม่แล้วค่าที่พิมพ์ (77) ยังอยู่ · บันทึกแล้วขึ้นข้อความยืนยัน และค่าถึง blob');
+if (!R14.ticked && R14.still && R14.kept && /ยังไม่ได้บันทึก/.test(R14.dirty) && R14.toastOn && R14.saved && R14.editorClosed) ok('14 ตัวจับเวลา Live ไม่วาดทับขณะแก้ · วาดบอร์ดใหม่แล้วค่าที่พิมพ์ (77) ยังอยู่ · ป้าย "ยังไม่ได้บันทึก" · บันทึกแล้วขึ้นข้อความยืนยันและหน้าต่างปิด');
 else fail('14 ' + JSON.stringify(R14));
 
 await close(); console.log(bad ? `\n  ${bad} FAILED` : '\n  all passed'); process.exit(bad ? 1 : 0);
