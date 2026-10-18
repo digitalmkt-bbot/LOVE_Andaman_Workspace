@@ -86,7 +86,8 @@
     return { captain_id: cap.id, captain_name: cap.name, assistant_id: asst.id, assistant_name: asst.name,
              crew: crew.ids, crew_names: crew.names, island: island.ids, island_names: island.names, note: nul(J.note),
              wristband_text: nul(J.wb), wristband_colour: nul(J.wbc), work_code: nul(J.wc), departure_time: nul(J.dep),
-             slot_labels: labels(J.lb), maintenance_job_id: nul(J.mj) };
+             slot_labels: labels(J.lb), maintenance_job_id: nul(J.mj),
+             itinerary_text: nul(J.itin), itinerary_colour: nul(J.itinc) };   // w5-f: the day's own itinerary (pjItinSet / pjItinColor); the server normalises the arrows
   }
   // a slot is one setting on the server: naming either half replaces it, so a change to one half sends both
   var PAIRS = [['captain_id', 'captain_name'], ['assistant_id', 'assistant_name'], ['crew', 'crew_names'], ['island', 'island_names']];
@@ -98,7 +99,8 @@
     sayIds([v.captain_id, v.assistant_id].concat(v.crew || [], v.island || [], v.duty_staff_ids || []));
     var J = { cap: v.captain_id || v.captain_name || '', asst: v.assistant_id || v.assistant_name || '', crew: pick(v.crew, v.crew_names),
               island: pick(v.island, v.island_names), note: v.note || '', wb: v.wristband_text || '', wbc: v.wristband_colour || '',
-              lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels), dep: v.departure_time || '' };
+              lock: v.completed_at ? 1 : 0, mv: mvOf(v), wc: v.work_code || '', lb: labels(v.slot_labels), dep: v.departure_time || '',
+              itin: v.itinerary_text || '', itinc: v.itinerary_colour || '' };
     if(v.maintenance_job_id) J.mj = v.maintenance_job_id;
     return J;
   }
@@ -131,7 +133,7 @@
     if(v.recorded) JOB[key] = fromView(v, JOB[key]); else delete JOB[key];
     TEAM[bid] = teamFromView(v);
     if((v.duty_staff_ids || []).length) DUTY[key] = v.duty_staff_ids.slice(); else delete DUTY[key];
-    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id || v.captain_name, asst: v.assistant_id || v.assistant_name, crew: pick(v.crew, v.crew_names), island: pick(v.island, v.island_names), note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id, dep: v.departure_time }),
+    st.base.job[key] = { rec: !!v.recorded, J: v.recorded ? clone(JOB[key]) : null, proj: proj(v.recorded ? JOB[key] : { cap: v.captain_id || v.captain_name, asst: v.assistant_id || v.assistant_name, crew: pick(v.crew, v.crew_names), island: pick(v.island, v.island_names), note: v.note, wb: v.wristband_text, wbc: v.wristband_colour, wc: v.work_code, lb: v.slot_labels, mj: v.maintenance_job_id, dep: v.departure_time, itin: v.itinerary_text, itinc: v.itinerary_colour }),
                          lock: v.completed_at ? 1 : 0, mv: mvOf(v) };
     st.base.team[bid] = clone(TEAM[bid]);
     st.base.duty[key] = (v.duty_staff_ids || []).slice();
@@ -247,17 +249,7 @@
       return d && d.departure ? d.departure : fallback;
     };
   }
-  // yesterday's cards are read first: legacy copies them from the browser's copy
-  window.pjCopyYday = function(pier){
-    if(!enabled()) return L.pjCopyYday.apply(this, arguments);
-    var self = this, args = arguments;
-    var d = new Date(window._poDate + 'T12:00:00'); d.setDate(d.getDate() - 1);
-    var prev = typeof window.poYMD === 'function' ? window.poYMD(d) : d.toISOString().slice(0, 10);
-    var ids = boatIds(pier, window._poDate);
-    return pool(ids, function(bid){ return O.get(jobPath(pier, prev, bid)).then(function(v){ apply(prev, bid, v); }); }).then(function(){
-      return L.pjCopyYday.apply(self, args);
-    }, function(e){ O.fail('Yesterday\'s job sheets did not load', e); });
-  };
+  // pjCopyYday is the server's command now (POST …/jobs/copy-yesterday): 85-ops-pier-w5.js
 
   /* ── writes ──────────────────────────────────────────────────────────── */
   // 409 guide_double_booked lists who is on another boat (body.busy); OK resends with guide_anyway (legacy's pjGdBusy marker, but asked first).
@@ -354,7 +346,7 @@
      pjBoatSt / pjAllBoats: state, stale, no_charter). Read once per pier and day, kept while it is current: a write marks it
      old, the old answer stays on screen until the new one arrives, then the screen is drawn again. Until the first answer, and
      for a boat the server does not list, the legacy functions answer from the browser as before.
-     Not the server's yet: the long-tail head count of pjPrep (lt), the guide languages of
+     w5-f: the long-tail head count of pjPrep (lt) is booked.join_heads. Not the server's yet: the guide languages of
      pjPax are the server's spelling (EN, RU, CN, the typed one) without pckLangNorm's tidying. */
   var day = { by: {}, cbs: {} };
   function dkey(pier, date){ return pier + '|' + date; }
@@ -370,9 +362,9 @@
     if(!e) e = day.by[k] = { boats: {}, fleet: {}, old: true };
     e.loading = true;
     O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
-      e.boats = {}; e.fleet = {};
+      e.boats = {}; e.fleet = {}; e.order = [];
       ((j && j.boats) || []).forEach(function(b){ if(b && b.boat_id) e.boats[b.boat_id] = b; });
-      ((j && j.fleet) || []).forEach(function(f){ if(f && f.boat_id) e.fleet[f.boat_id] = f; });
+      ((j && j.fleet) || []).forEach(function(f){ if(f && f.boat_id){ e.fleet[f.boat_id] = f; e.order.push(f.boat_id); } });   // e.order: the server's order of the pier's boats (pjAllBoats)
       e.old = false; e.loading = false; e.loaded = true;
       var q2 = day.cbs[k] || []; day.cbs[k] = [];
       if(!P.busy()) q2.forEach(function(fn){ try{ fn(); }catch(_){} });
@@ -410,13 +402,14 @@
   if(typeof window.pjPrep === 'function'){
     L.pjPrep = window.pjPrep;
     window.pjPrep = function(date, boatId, pier){
-      var out = L.pjPrep.apply(this, arguments);       // keeps lt (long-tail heads), which the server does not send per boat
+      var out = L.pjPrep.apply(this, arguments);       // lt (long-tail heads) is the server's booked.join_heads, set below (w5-f)
       var b = enabled() ? boatOf(pier, date, boatId) : null, p = b && b.booked && b.booked.prep;
       if(!p) return out;
       out.lang = {}; Object.keys(p.languages || {}).forEach(function(c){ out.lang[c] = p.languages[c]; });
       out.halal = p.halal; out.veg = p.veg; out.vegan = p.vegan; out.allerg = p.allergy;
       out.booked = p.booked; out.arrived = p.arrived; out.noShow = p.no_show; out.ckAny = !!p.check_in_started;
       out.firstPick = p.first_pickup || ''; out.lastPick = p.last_pickup || '';
+      if(b.booked.join_heads != null) out.lt = +b.booked.join_heads || 0;   // w5-f: the join add-on's heads on the boat (legacy pxLongtail), the server's
       return out;
     };
   }
@@ -450,7 +443,7 @@
       return e && e.loaded ? '' : out;
     };
   }
-  O.pier.dayBoats = { want: wantBoats, boat: boatOf, fleet: fleetOf };   // w4-f2: fleet (permits on the card) is read by 74-ops-permits.js
+  O.pier.dayBoats = { want: wantBoats, boat: boatOf, fleet: fleetOf, entry: function(pier, date){ var e = day.by[dkey(pier, date)]; return e && e.loaded ? e : null; } };   // w4-f2: fleet (permits on the card) is read by 74-ops-permits.js
 
   O.pierJob = { state: st, loadDay: loadDay };
 })();

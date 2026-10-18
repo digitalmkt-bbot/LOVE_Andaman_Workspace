@@ -15,9 +15,9 @@
      · a refused write (409 duplicate_name / code_in_use, 400, 403) is a red toast and
        nothing on screen changes
      · no legacy PIER_CFG write (poPersist) in ops mode
-   Not wired (legacy-only in ops mode, no contract in the README): filling names from the
-   lead ("<lead> (2)"), dropping typed names that copy the lead (the server does not send
-   the lead name per seat), and the month overview (it reads the loaded day only).
+   w5-f (85-ops-pier-park-w5.js): filling names from the lead ("<lead> (2)") and dropping typed names that copy the
+   lead are the server's now (POST …/fill-lead, `lead_duplicates`). Not wired: the month overview (it reads the loaded
+   day only; the server's month read has no nationality split of the heads, see docs/walk/w5-f.md).
    Legacy mode: every wrapper delegates to the captured original when !enabled().
    Classic script · loads after 08-app.js, before 90-ops-boot.js.
    ════════════════════════════════════════════════════════════════════════ */
@@ -96,7 +96,7 @@
       f: p.first || '', l: p.last || '', full: p.full || '',
       nat2: nat, nat3: nat3(nat), natName: natName(nat), natFromLead: !!p.ph,
       mism: !!p.mismatch, over: !!p.over,
-      ix: p.slot, bkId: p.booking_id, vc: p.voucher || '', lead: ''
+      ix: p.slot, bkId: p.booking_id, vc: p.voucher || '', lead: p.lead || ''
     };
   }
   function routeColor(rid){
@@ -241,17 +241,7 @@
     return clearNames(date, list, 'Names not cleared');
   };
 
-  function notInOpsYet(what){
-    O.toast({ kind: 'neutral', title: what + ' is not on operation-backend yet', sub: 'Nothing was changed.', dur: 6000 });
-  }
-  window.pkNmFillLead = function(){
-    if(!O.enabled()) return L.pkNmFillLead.apply(this, arguments);
-    notInOpsYet('Filling names from the lead');
-  };
-  window.pkNmDropLeadDup = function(){
-    if(!O.enabled()) return L.pkNmDropLeadDup.apply(this, arguments);
-    notInOpsYet('Dropping lead-copy names');
-  };
+  // pkNmFillLead, pkNmLeadDup, pkNmDropLeadDup: the server's commands, see 85-ops-pier-park-w5.js (w5-f)
 
   /* ── type catalogue ─────────────────────────────────────────────────── */
   var FIELD = { n: 'name', grp: 'group', code: 'code' };
@@ -301,5 +291,7 @@
     return loadTypes();
   };
 
-  O.park = { load: load, loadTypes: loadTypes };
+  // w5-f: 85-ops-pier-park-w5.js asks for the day's raw boat (lead_duplicates) and writes through the same queue
+  O.park = { load: load, loadTypes: loadTypes, writeDay: writeDay, clearNames: clearNames, dayBase: dayBase, conv: convPerson,
+             rawBoat: function(date, pier, bid){ if(!fresh(date, pier)) return null; for(var i = 0; i < st.boats.length; i++) if(st.boats[i].boat_id === bid) return st.boats[i]; return null; } };
 })();

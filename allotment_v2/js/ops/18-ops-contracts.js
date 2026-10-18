@@ -181,7 +181,7 @@
 
   function fromServerTemplate(t){ return {id:t.id,code:t.code||'',name:t.name||'',active:t.active!==false,isDefault:!!t.is_default,
     createdDate:t.created_date||'',note:t.note||'',form:t.form||'ocean',accent:t.accent||'navy',accentHex:t.accent_hex||'',font:t.font||'manrope',
-    sections:clone(t.sections||{}),text:clone(t.text||{en:{},th:{}}),agents:Number(t.agents)||0,createdAt:t.created_at,updatedAt:t.updated_at}; }
+    sections:clone(t.sections_effective||t.sections||{}),text:clone(t.text||{en:{},th:{}}),agents:Number(t.agents)||0,createdAt:t.created_at,updatedAt:t.updated_at}; }   /* w5-f: sections_effective = the server's "required sections are always on" */
   function templateBody(t){
     var body={name:t.name||'',note:nullable(t.note),active:t.active!==false,form:t.form||null,accent:t.accent||null,
       accent_hex:nullable(t.accentHex),font:t.font||null,sections:clone(t.sections||{}),text:clone(t.text||{en:{},th:{}})};

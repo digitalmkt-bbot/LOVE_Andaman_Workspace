@@ -249,7 +249,9 @@
         rcover[d.date + '|' + pier] = 1;
         daysMap[d.date] = !!d.has_job;
       });
+      var totals = {};
       (j.rows || []).forEach(function(r){
+        if(r.totals) totals[r.staff_id] = r.totals;   // w5-f: by_code, work, row_total, nights per person (the server's counts)
         (r.cells || []).forEach(function(c){
           var k = sKey(c.date, r.staff_id); seen[k] = 1; cells[k] = c;
           if(c.hand_code != null || c.night_code){
@@ -261,11 +263,22 @@
         });
       });
       if(Array.isArray(j.route_codes)) routeCodes = j.route_codes;   // [{ code, routes: [{ id, name }] }]
-      rosters[pier] = { pier: pier, from: j.from, to: j.to, days: daysMap, key: 'roster|' + pier + '|' + j.from + '|' + j.to };
+      rosters[pier] = { pier: pier, from: j.from, to: j.to, days: daysMap, totals: totals, key: 'roster|' + pier + '|' + j.from + '|' + j.to };
       lastRoster = rosters[pier];
       return j;
     });
   }
+  /* w5-f: a person's totals for the range on screen (renderPierAtt, paRowTotal), the server's `totals`. null until the roster of this
+     range has been read, after any pier write (the read is asked again), and while the person has a hand edit not sent yet. */
+  P.rosterTotals = function(pier, sid, from, to){
+    var r = ready() && rosters[pier];
+    if(!r || r.from !== from || r.to !== to || !fresh[r.key] || !r.totals[sid]) return null;
+    var S = shifts(), dirty = false;
+    Object.keys(S).concat(Object.keys(rbase)).forEach(function(k){
+      var p = k.split('::'); if(p[1] === sid && p[0] >= from && p[0] <= to && rsig(S[k]) !== rsig(rbase[k])) dirty = true;
+    });
+    return dirty ? null : clone(r.totals[sid]);
+  };
   function boatName(id){
     if(!id) return '';
     var b = guarded(function(){ return typeof window.getBoat === 'function' ? window.getBoat(id) : null; });
@@ -456,14 +469,19 @@
   };
 
   /* ════ stock · balances, commands, boat close ═════════════════════════ */
-  var stock = {}, stages = {};
+  var stock = {}, stages = {}, towelsRaw = {};
   function balOf(r){ return { ready: r.ready, onboat: r.on_boat, onship: r.on_ship, dirty: r.dirty, laundry: r.laundry, repair: r.repair, gone: r.gone, inhand: r.inhand }; }
   function itemOf(id){ return arr('PIER_ITEMS').filter(function(i){ return i.id === id; })[0] || null; }
   function loadStock(pier){
     return O.get('/v1/pier-office/' + enc(pier) + '/stock').then(function(j){
       var m = {}; (j.items || []).forEach(function(r){ m[r.id] = balOf(r); }); stock[pier] = m;
+      var tw = { today: j.today || '', towels: j.towels || null, queue: {} };   // w5-f: the towel batches (legacy poTowelQ), per pier and per item
+      (j.items || []).forEach(function(r){ if(r.queue) tw.queue[r.id] = r.queue; });
+      towelsRaw[pier] = tw;
     });
   }
+  // w5-f: the pier's towel batches, only while the stock read is current (a pier write asks for it again; until then legacy's queue answers)
+  P.stockTowels = function(pier){ return ready() && fresh['stock|' + pier] && towelsRaw[pier] && towelsRaw[pier].towels ? towelsRaw[pier] : null; };
   function putBalances(pier, rows){
     var m = stock[pier] = stock[pier] || {};
     (rows || []).forEach(function(r){ m[r.item_id] = balOf(r); });

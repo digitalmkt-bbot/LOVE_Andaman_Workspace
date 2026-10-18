@@ -134,6 +134,9 @@
     return { t: s.text, c: c.c, bg: c.bg };
   });
 
+  // w5-f: 85-ops-b2b-group-w5.js reads the same answer for a route group made of several server families
+  O.b2bDash = { report: report, groupOfFilter: groupOfFilter, familiesOf: function(j, g){ return (j && j.__idx && j.__idx.groups[g]) || []; } };
+
   wrap('b2dMonthlySeries', function(orig, L){
     var j = lastWin && report(lastWin);
     if(!j || !Array.isArray(j.monthly) || !j.monthly.length) return orig.apply(this, [].slice.call(arguments, 1));
