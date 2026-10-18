@@ -57,6 +57,14 @@
     return e && e.ok && e.res ? e.res : null;
   };
 
+  /* w5c: the board only when it is current (nothing written since it was read); else null and the next read is asked for.
+     82-ops-w5c-vans.js reads the pools and the return-van alert from it. */
+  window.laOpsVanBoardFresh = function(date){
+    if(!enabled() || !date) return null;
+    var res = window.laOpsVanBoardFor(date), e = vb[date];
+    return (res && e && e.ok && !e.stale && !e.busy) ? res : null;
+  };
+
   /* ── bookings behind the overnight holding rows ──────────────────────── */
   var asked = {};
   function ensureHoldBookings(date, res){

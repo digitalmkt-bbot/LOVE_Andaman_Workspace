@@ -267,6 +267,7 @@
     if(!b.opsId) return Promise.reject(new Error('Booking is not saved to operation-backend yet'));
     return O.queue(function(){ return O.bookingWrite('PATCH', '/v1/bookings/' + enc(b.opsId), b, { job_note: note }); }).then(function(j){
       b.jobNote = (j && j.job_note !== undefined) ? j.job_note : note;
+      if(j && j.special_request !== undefined) b.specialRequest = j.special_request || '';   // w5c: the server's job_note-else-notes
       syncSreq();
       return j;
     });

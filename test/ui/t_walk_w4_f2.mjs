@@ -292,7 +292,7 @@ section('3', async () => {
   await ev(() => { window.__wk = []; laOps.onWrite((k) => window.__wk.push(k)); });
   await ev(() => ckToggle('zz-sA', '2026-11-10', 'pier')); await idle(); await settle(1500);
   const kinds = await ev(() => window.__wk);
-  ok('a check-in tap (and the seat-lock reload after it) does not drop the Service answer: no new /v1/pier-checkin unless a booking or another machine wrote meanwhile', !callsSince(tapBefore).some((c) => /GET \/v1\/pier-checkin/.test(c)) || kinds.some((k) => /^(booking|remote)/.test(k)), { calls: callsSince(tapBefore), kinds });
+  ok('a check-in tap (and the seat-lock reload after it) does not drop the Service answer: no new /v1/pier-checkin unless a booking or another machine wrote meanwhile', !callsSince(tapBefore).some((c) => /GET \/v1\/pier-checkin/.test(c) && !/programmes=1/.test(c)) || kinds.some((k) => /^(booking|remote)/.test(k)), { calls: callsSince(tapBefore), kinds });
 });
 
 // ═══ 4 · Van Check-in: KPI, order, unassigned from GET /v1/van-checkin ═══

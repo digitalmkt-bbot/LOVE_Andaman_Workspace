@@ -7792,7 +7792,9 @@ function vsSubmit(){
   /* §vanStop · กติกา "ที่นั่งไม่พอ" ถูกเช็คตอนเลือกรถ ซึ่งเกิดก่อนจุดแวะจะมีอยู่
      ถ้าไม่เช็คซ้ำตรงนี้ การเพิ่มคนติดรถทีหลังจะดันรถเกินความจุแบบเงียบ ๆ
      เตือนแล้วให้คนตัดสิน · บางทีไกด์นั่งหน้าคู่คนขับได้จริง ไม่ควรห้ามตาย */
-  if(kind==='staff' && rec.vanId && typeof vehGet==='function'){
+  /* §w5cStopSeats · ops mode: the server counts the seats (customers + guides riding along, per round) and answers 409 van_over_capacity with
+     the message; vsSave asks "Add anyway?" on that answer. The browser's own sum is legacy mode only. */
+  if(kind==='staff' && rec.vanId && typeof vehGet==='function' && !(window.laOps && window.laOps.enabled && window.laOps.enabled())){
     const v=vehGet(rec.vanId)||{}; const cap=+v.capacity||0;
     if(cap>0){
       let used=0;
@@ -12551,6 +12553,9 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
     if(!ckTripOn(b,date)) return;
     var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null; _lostAll+=((L&&L.total)||0);
   });
+  /* §w5cPills · pier page, ops mode: the heads that arrived / cleared / boarded, the zone boxes and the money still to collect are
+     GET /v1/pier-checkin programmes[] (the booked heads and the booking counts of the hover texts stay what the walk above found) */
+  if(kind==='pier' && !_pckLand && typeof window.laOpsPierProg==='function'){ try{ window.laOpsPierProg(date, fam, rst); }catch(_e){} }
   var list=Object.keys(fam).map(function(k){ return fam[k]; }).sort(function(a,b){ return b.pax-a.pax||(b.locked-a.locked); });
   var none=(!famSel && !routeSel);
   var html=(list.length>1?'<button onclick="'+famFn+'(null)" title="แสดงทุกโปรแกรม" style="font-size:12px;border:1px solid '+(none?'#185FA5':'#E7E4DC')+';background:'+(none?'#E6F1FB':'#fff')+';color:'+(none?'#0C447C':'#5F5E5A')+';border-radius:999px;padding:6px 13px;font-weight:'+(none?'700':'600')+';white-space:nowrap;cursor:pointer;font-family:inherit">ทั้งหมด <span style="font-family:\'DM Mono\',monospace">'+(dA+dC+dI+dF)+'</span></button>':'');
@@ -13373,6 +13378,10 @@ function pcFillPanel(ds,bid,pier,X,R){
    +'<button class="no" onclick="pcFillAskOff()">ยกเลิก</button>'
    +'</div>';
 }
+/* §w5cCheck · paid − due of one boat's park cell: legacy's subtraction here, the park sheet's check.diff in ops mode (82-ops-w5c-pier.js) */
+function pcPkDiff(pier,ds,bid,legacy){ return legacy; }
+/* §w5cSheet · what the pier keyed on the longtail ('lt') or park ('pk') sheet, added up: one day, or the month when ds is null (ops mode: the sheet's totals, 82-ops-w5c-pier.js); null = add it up here as before */
+function pcSheetTot(kind,pier,ds){ return null; }
 /* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
 function pcDiffCell(paid,exp){
   if(exp==null||!(paid>0)) return '<td class="pc-df">—</td>';
@@ -13606,6 +13615,10 @@ function pcOpening(pier,ds){
   Object.keys(A).forEach(function(k){ if(k<ds) sum+=pcTotals(pier,k).net; });
   return sum;
 }
+/* §w5cLedger · closing of a day = opening + in − out (ops mode: the server's `closing`, 82-ops-w5c-pier.js) */
+function pcClosing(pier,ds){ return pcOpening(pier,ds)+pcTotals(pier,ds).net; }
+/* the running balance after a ledger row: the server sends it on every row (srvBal); a row it has not sent yet adds up as before */
+function pcRunBal(run,r,isIn,amt){ return (r&&r.x&&typeof r.x.srvBal==='number')?r.x.srvBal:run+(isIn?amt:-amt); }
 /* ── สถานะหน้าจอ ─────────────────────────────────────────────────────── */
 var _pcPier='panwa', _pcTab=0;
 var _pcDate=(typeof poYMD==='function')?poYMD(new Date()):new Date().toISOString().slice(0,10);
@@ -14200,6 +14213,7 @@ function pcSheetLT(pier, opt){
           '<input value="'+pcE(C.note||'')+'" placeholder="—" '
           +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)">')+'</tr>';
     });
+    var _sd=pcSheetTot('lt',pier,ds); if(_sd){ duj=_sd.join_boats; duc=_sd.charter_boats; dm=_sd.amount; }   /* §w5cSheet · the day's keyed sums are the server's */
     gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
       +pcE(pcDL(ds))+(ds===pcNowDS()?'<span class="tdy">วันนี้</span>':'')
@@ -14719,7 +14733,7 @@ function pcPrintCert(opt){
 /* ── 2 · สมุดเดินบัญชีของวัน ─────────────────────────────────────────────── */
 function pcPrintLedger(){
   var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{in:[],out:[]};
-  var T=pcTotals(_pcPier,ds), op=pcOpening(_pcPier,ds), bal=op+T.net;
+  var T=pcTotals(_pcPier,ds), op=pcOpening(_pcPier,ds), bal=pcClosing(_pcPier,ds);   /* §w5cLedger */
   var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
   var rows=[];
   (D.in||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
@@ -14733,7 +14747,7 @@ function pcPrintLedger(){
     i++;
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
     var cat=isIn?'รับเงิน':(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น');
-    run += isIn ? amt : -amt;
+    run=pcRunBal(run,r,isIn,amt);   /* §w5cLedger */
     body+='<tr><td class="rn">'+i+'</td><td class="c">'+pcE(r.x.at||'—')+'</td>'
       +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
       +'<td class="r v">'+(isIn?pcN(amt):'')+'</td><td class="r v">'+(!isIn?pcN(amt):'')+'</td>'
@@ -63181,7 +63195,7 @@ function pc2Help(btn){
 }
 function pc2Main(pier){
   var ds=_pcDate, D=pcDay(pier,ds,false)||{'in':[],out:[],lt:{},pk:{}};
-  var T=pcTotals(pier,ds), op=pcOpening(pier,ds), bal=op+T.net;
+  var T=pcTotals(pier,ds), op=pcOpening(pier,ds), bal=pcClosing(pier,ds);   /* §w5cLedger · the server's closing in ops mode */
   var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
   var rows=[];
   (D['in']||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
@@ -63197,8 +63211,8 @@ function pc2Main(pier){
     var ck=isIn?'in':(r.x.src&&CAT[r.x.src]?r.x.src:'other');
     no++;
     /* §pc2d · บรรทัดที่กดแก้ · วาดเป็นช่องกรอกตรงตำแหน่งเดิม */
-    if(ED && ED.id && ED.id===String(r.x.id) && ED.ok===r.k){ edHit=true; body+=pc2EdRow(ED,run,no); run += isIn ? amt : -amt; return; }
-    run += isIn ? amt : -amt;
+    if(ED && ED.id && ED.id===String(r.x.id) && ED.ok===r.k){ edHit=true; body+=pc2EdRow(ED,run,no); run=pcRunBal(run,r,isIn,amt); return; }
+    run=pcRunBal(run,r,isIn,amt);   /* §w5cLedger · the row's balance after it, as the server worked it out */
     var _g=pcGrpOf(r.x,r.k);   /* §pcGrp · สีทั้งบรรทัดตามกลุ่ม */
     body+='<div class="pc2-lr rw'+(_g?(' pcg-'+_g.k):'')+((r.k==='out'&&pcClmOn(r.x))?' clm':'')+(pcSelHas(r.k,r.x.id)?' pcp-on':'')+'" id="'+pcSelRowId(r.k,r.x.id)+'" ondblclick="pc2EdOpen(\''+r.k+'\',\''+r.x.id+'\',event)" title="ดับเบิลคลิกเพื่อแก้">'
       +'<span class="sc" onclick="pcSelCellHit(this,event)"><input type="checkbox" class="pc-cb"'+(pcSelHas(r.k,r.x.id)?' checked':'')
@@ -63253,7 +63267,7 @@ function pc2Main(pier){
   var days=pcMonthDays(pier,_pcYM), mrun=null, mrows='', today=pcNowDS();
   days.forEach(function(d){
     var X=pcTotals(pier,d); if(mrun===null) mrun=pcOpening(pier,d);
-    var b=mrun+X.net; mrun=b;
+    var b=pcClosing(pier,d); mrun=b;   /* §w5cLedger · the day's closing is the server's (carried forward) */
     var w=Math.max(0,X.ref-X.pulled), st=w>0?'miss':(X.ref>0?'ok':'none');
     mrows+='<button class="pc2-mr'+(d===ds?' on':'')+'" onclick="pcPickDay(\''+d+'\')">'
       +'<b>'+pcE(pc2D(d))+(d===today?'<small>วันนี้</small>':'')+'</b>'
@@ -63331,6 +63345,7 @@ function pc2LTDay(pier, ds){
       +'<span><input class="pc2-in tx" placeholder="—" value="'+pcE(C.note||'')+'" onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)"></span>'
     +'</div>';
   });
+  var _stLT=pcSheetTot('lt',pier,ds); if(_stLT){ duj=_stLT.join_boats; duc=_stLT.charter_boats; dm=_stLT.amount; }   /* §w5cSheet · the day's keyed sums are the server's */
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   var pulledLt=false, pLt=0; (D2.out||[]).forEach(function(x){ if(x&&x.src==='lt'){ pulledLt=true; pLt+=(+x.amt||0); } });
   var s=pc2StatLT(pier,ds), waiting=Math.max(0,T.ref-T.pulled);
@@ -63358,6 +63373,7 @@ function pc2LT(pier){
       if(((+L.join||0)>0||(+L.chtr||0)>0) && !(+C.amt>0)){ miss++; if(missD.indexOf(ds)<0) missD.push(ds); }
     });
   });
+  var _stM=pcSheetTot('lt',pier,null); if(_stM){ guj=_stM.join_boats; guc=_stM.charter_boats; gm=_stM.amount; }   /* §w5cSheet · the month's keyed sums are the server's */
   var show=_pc2All?dates:[_pcDate];
   return pc2Kpi([{h:'จอย · '+pcE(pc2MonthName(_pcYM)),v:pcN(gj),u:'คน → '+pcN(guj)+' ลำ',s:guj?('เฉลี่ย '+(Math.round(gj/guj*10)/10)+' คนต่อลำ'):'ยังไม่ได้กรอกใช้จริง'},
                  {h:'เหมา · ทั้งเดือน',v:pcN(gc),u:'→ '+pcN(guc)+' ลำ',s:(guc&&guc!==gc)?('ใช้'+(guc<gc?'น้อย':'มาก')+'กว่าที่จอง '+Math.abs(gc-guc)+' ลำ'):'&nbsp;'},
@@ -63409,7 +63425,7 @@ function pc2PKDay(pier, ds){
           +'<button class="f" onclick="pcFillAsk(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')" title="คัดลอกยอดเดินทางจริงมาใส่ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง">⤓ เติมจากใบจอง</button>'
           +'<button class="o" onclick="pc2OpenKey(\''+ds+'\',\''+B.bid+'\')">กรอกเอง</button></span></span>';
       }
-      var d=(exp!=null && +C.amt>0)?((+C.amt)-exp):null;
+      var d=pcPkDiff(pier,ds,B.bid,(exp!=null && +C.amt>0)?((+C.amt)-exp):null);   /* §w5cCheck · the server's check.diff in ops mode */
       var diff=(+C.amt>0)?(d===null?'<em class="df">—</em>':(d===0?'<em class="df ok">ตรง</em>':(d>0?'<em class="df w" title="จ่ายมากกว่าที่คำนวณ">+'+pcN(d)+'</em>':'<em class="df w" title="จ่ายน้อยกว่าที่คำนวณ">−'+pcN(-d)+'</em>')))
         :(XN.tot>0?'<em class="df n">ยังไม่กรอก</em>':'<em class="df">—</em>');
       rows+='<div class="pc2-tr pk'+((XN.tot>0&&!(+C.amt>0))?' miss':'')+'">'
@@ -63436,6 +63452,7 @@ function pc2PKDay(pier, ds){
         +'<span class="mn cl ctr">'+(gd===null?'':(gd===0?'<em class="df ok">ตรง</em>':'<em class="df w">'+(gd>0?'+':'−')+pcN(Math.abs(gd))+'</em>'))+'</span></div>'):'');
   });
   var dd=(dP&&dm>0)?Math.round(dm-dexP):null;
+  var _stP=pcSheetTot('pk',pier,ds); if(_stP){ dm=_stP.amount; ddk=_stP.dock; dkt=_stP.heads; PC_PK.forEach(function(k,i){ DK[i]=_stP[k]; }); }   /* §w5cSheet · what the pier keyed, summed by the server */
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   /* §pkPullBoat · ดึงรายลำ · ปุ่มดึงขึ้นตราบใดที่ยังมีลำที่ยังไม่ได้ดึง · ยอดที่ดึงไว้ไม่ตรงชีท (แก้ทีหลัง / ดึงแบบเดิมที่นับค่าจอดซ้ำ) ขึ้นเตือน */
   var PS=pcPkPullState(pier,ds), pkOff=PS.off, pulledPk=PS.nPulled>0||PS.old, pPk=PS.pulledAmt, pDk=0;
@@ -63480,6 +63497,7 @@ function pc2PK(pier){
   });
   var lab=_pc2All?pcE(pc2MonthName(_pcYM)):pcE(pc2D(_pcDate));
   diff=Math.round(diff);
+  var _stK=pcSheetTot('pk',pier,_pc2All?null:_pcDate); if(_stK){ m=_stK.amount; dk=_stK.dock; }   /* §w5cSheet */
   return pc2Kpi([{h:'คนเดินทาง · '+lab,v:pcN(pax),s:nB+' ลำ'},
                  {h:'ยอดคำนวณ',v:anyx?pcMoney(ex):'—',s:'ราคา × จำนวนคน + ค่าจอด'},
                  {h:'จ่ายจริงที่ด่าน',v:pcMoney(m),s:nK+' จาก '+nB+' ลำ · รวมค่าจอด'},
