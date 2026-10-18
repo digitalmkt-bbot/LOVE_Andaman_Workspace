@@ -198,6 +198,13 @@
     });
     return out;
   }
+  /* w6-d · the caption under a slip of the server's pack: method, amount, fee and where the money came from (display of the server's fields) */
+  var SLIP_TITLE = { pier: 'pier payment', cot: 'Cash on tour decision', booking: 'Booking slip' };
+  function slipCap(s){
+    var title = s.source === 'sale' ? text(s.label) : s.source === 'upgrade' ? 'Upgrade ' + text(s.label) : s.source === 'invoice' ? 'Invoice ' + text(s.invoice_number) : (SLIP_TITLE[s.source] || text(s.source));
+    var head = s.method || s.amount != null ? ((METHOD[s.method] || text(s.method)) + (s.amount != null ? ' ' + money(s.amount) : '') + (n(s.fee) > 0 ? ' · fee ' + money(s.fee) : '') + ' · ') : '';
+    return head + title + (s.by ? ' · ' + text(s.by) : '') + (s.note ? ' · ' + text(s.note) : '');
+  }
   /* The money rows whose slips are not read yet: paid at the pier, or sold on tour. */
   function needsSlipRead(collect, keep){
     return collect.filter(function(c){ return keep[c.booking_id] && (n(c.paid) > 0 || (c.sales && n(c.sales.count) > 0)); });
@@ -376,6 +383,20 @@
     var ref = refPack(kept), pendingRows = needsSlipRead(collect, keep);
     var pendingIds = pendingRows.filter(function(c){ return !slipCache[date + '|' + c.booking_id]; }).map(function(c){ return c.booking_id; });
     var slips = slipPack(kept, date);
+    /* w6-d · the packs are the server's (README "Fields the new frontend asked for": reference_pack, slip_pack of the answer for this selection):
+       which bookings go behind the sheet, in the sheet's order, and every slip with its caption. The browser's own cut above stays
+       until that answer is held (a scoped choice) and when the answer has no pack (an older server). */
+    var PK = sv ? sv.SC : (!(st.pier || st.route || st.vat) ? d : null), packFromServer = false;
+    if(PK && Array.isArray(PK.reference_pack) && Array.isArray(PK.slip_pack)){
+      var byBk = {}; kept.forEach(function(r){ byBk[r.id] = r; });
+      ref = PK.reference_pack.slice().sort(function(x, y){ return n(x.ord) - n(y.ord); }).map(function(x){ return byBk[x.booking_id]; }).filter(Boolean);
+      slips = [];
+      PK.slip_pack.slice().sort(function(x, y){ return n(x.ord) - n(y.ord); }).forEach(function(x){
+        var r = byBk[x.booking_id]; if(!r || !Array.isArray(x.slips) || !x.slips.length) return;
+        slips.push({ r: r, files: x.slips.map(function(s){ return { id: s.attachment_id, name: s.attachment_id, mime: '', cap: slipCap(s), source: s.source }; }), missing: n(x.missing), paid: n(x.paid), invoicePaid: n(x.invoice_paid), invoiceNo: x.invoice_number || '' });
+      });
+      pendingIds = []; packFromServer = true;
+    }
     var noSlipRows = collect.filter(function(c){ return keep[c.booking_id] && n(c.no_slip) > 0; }).length;
     var no = docNo(date, st);
     lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds };
@@ -387,7 +408,7 @@
       movedListed: Array.isArray(d.moved_rows),
       nVat: nVat, nNoVat: sv ? sv.nNoVat : inScope.length - nVat, vatGap: sv && sv.vatGap ? sv.vatGap : vatGap(inScope), after: roster.after || null, vans: roster.vans || {},
       ref: ref, nRefFiles: ref.reduce(function(s, r){ return s + (r.b.attachments || []).length; }, 0),
-      slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows
+      slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows, packServer: packFromServer
     };
   }
 

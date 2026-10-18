@@ -78,19 +78,40 @@
       return fold(pts, mkt, order);
     });
   }
-  /* Booking date: the NDAYS sale days ending on the date; one series, since daily-counts has no market split (B18). */
+  /* Booking date: the NDAYS sale days ending on the date, by market (legacy drTrendBooked). w6-d: GET /v1/bookings/daily-counts?markets=1 answers
+     days[].markets {market_id: {bookings, pax}} (README "Fields the new frontend asked for"), so the stack is the server's. An older server
+     (no markets in the answer) keeps the one series. Heads are counted as the server counts them (the booking's first trip). */
+  function marketName(id){
+    var list = typeof SB_MARKETS !== 'undefined' && Array.isArray(SB_MARKETS) ? SB_MARKETS : [];
+    for(var i = 0; i < list.length; i++) if(list[i] && list[i].id === id) return list[i].name || id;
+    return id === 'b2c' ? 'B2C' : id === 'unassigned' ? 'Unassigned' : id;
+  }
   function bookedSeries(date){
-    var from = shift(date, -(NDAYS - 1)), key = from + '|' + date;
-    var p = countsCache[key] ? Promise.resolve(countsCache[key]) : O.get('/v1/bookings/daily-counts', { from: from, to: date }).then(function(r){ countsCache[key] = r; return r; });
+    var from = shift(date, -(NDAYS - 1)), key = from + '|' + date + '|m';
+    var p = countsCache[key] ? Promise.resolve(countsCache[key]) : O.get('/v1/bookings/daily-counts', { from: from, to: date, markets: 1 }).then(function(r){ countsCache[key] = r; return r; });
     return p.then(function(r){
       var got = {}; ((r && r.days) || []).forEach(function(d){ got[d.date] = d; });
-      var mkt = { _all: { id: '_all', name: 'ทุก Market', color: palette()[0], tot: 0 } }, pts = [];
-      for(var i = NDAYS - 1; i >= 0; i--){
-        var ds = shift(date, -i), d = got[ds] || {}, v = n(d.pax);
-        mkt._all.tot += v;
-        pts.push({ date: ds, by: { _all: v }, tot: v, today: ds === date, lb: label(ds, i === NDAYS - 1), bookings: n(d.bookings) });
+      var withMarkets = ((r && r.days) || []).some(function(d){ return d && d.markets; });
+      if(!withMarkets){
+        var m1 = { _all: { id: '_all', name: 'ทุก Market', color: palette()[0], tot: 0 } }, pts1 = [];
+        for(var k = NDAYS - 1; k >= 0; k--){
+          var ds1 = shift(date, -k), d1 = got[ds1] || {}, v1 = n(d1.pax);
+          m1._all.tot += v1;
+          pts1.push({ date: ds1, by: { _all: v1 }, tot: v1, today: ds1 === date, lb: label(ds1, k === NDAYS - 1), bookings: n(d1.bookings) });
+        }
+        return { pts: pts1, keys: ['_all'], mkt: m1, bookedOneSeries: true };
       }
-      return { pts: pts, keys: ['_all'], mkt: mkt, bookedOneSeries: true };
+      var mkt = {}, order = [], pts = [];
+      for(var i = NDAYS - 1; i >= 0; i--){
+        var ds = shift(date, -i), d = got[ds] || {}, by = {}, tot = 0;
+        Object.keys(d.markets || {}).forEach(function(id){
+          var px = n(d.markets[id] && d.markets[id].pax); if(!px) return;
+          if(!mkt[id]){ mkt[id] = { id: id, name: marketName(id), color: '', tot: 0 }; order.push(id); }
+          mkt[id].tot += px; by[id] = (by[id] || 0) + px; tot += px;
+        });
+        pts.push({ date: ds, by: by, tot: tot, today: ds === date, lb: label(ds, i === NDAYS - 1), bookings: n(d.bookings) });
+      }
+      return fold(pts, mkt, order);
     });
   }
   /* One day's report as the trend read it (59 reuses it for the day itself and for 7 days back). */

@@ -83,6 +83,7 @@
     if('contract_template_effective_id' in s) o.contractTemplateEffectiveId=s.contract_template_effective_id;   // w5-e: ctTmplForAgent
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)
+    if(Array.isArray(s.gaps)) o.gaps=s.gaps.slice();                     // w6-d: the list chips (programs / rate / vat / docs), 94-ops-agents-w6.js
     if(s.credit_balance && typeof s.credit_balance.available==='number') o.creditBalance=s.credit_balance.available;
     if(s.credit && typeof s.credit.limit==='number') o.serverCredit=Object.assign({ at:Date.now() }, s.credit);   // worked out by the server (agCreditState below)
     return o;
@@ -647,7 +648,10 @@
     route_no_price:{rank:4, t:'Route with no price', go:'Open Pricing Matrix', tip:'เรทที่ผูกอยู่ไม่มีราคาของเส้นเหล่านี้ · ปุ่มบันทึกในหน้าจองถูกล็อก (noRate)',
       on:function(id){ return "agSwitchTab('prices','"+id+"')"; }},
     contract_rate_differs:{rank:7, t:'Contract ≠ bound rate', go:'Sync to bound rate', tip:'เอกสารสัญญาจะพิมพ์ราคาชุดที่ระบุในสัญญา ไม่ใช่ชุดที่ระบบคิดจริง',
-      on:function(id){ return "agAlertSyncRate('"+id+"')"; }}
+      on:function(id){ return "agAlertSyncRate('"+id+"')"; }},
+    /* w6-d · "Rate not started" (the bound rate's valid-from is still ahead): the server's alert, with its own message and day count */
+    rate_not_started:{rank:6, t:'Rate not started', go:'Set season schedule', tip:'วันเดินทางก่อนหน้านั้นไม่มีฤดูคุม · ระบบคิดราคาชุดนี้ให้อยู่ดี',
+      on:function(id){ return "agSwitchTab('ratemgmt','"+id+"')"; }}
   };
   var AL_LEGACY_RANK={'Credit over limit':1,'Credit near limit':1,'Contract expired':2,'Contract expiring':2,'Rate expired':5,'Rate expiring':5,'Rate not started':6,'Incomplete profile':8};
   function escText(v){ return String(v==null?'':v).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -660,6 +664,7 @@
       a.serverAlerts.forEach(function(s){
         var m=AL_BY_CODE[s.code]; if(!m) return;
         var item={tone:s.tone, t:m.t, d:escText(s.message), go:m.go, on:m.on(a.id)};
+        if(s.code==='rate_not_started' && s.days!=null) item.day='in '+s.days+' days';
         if(s.severity==='blocked') item.sev='Blocked';
         if(m.tip) item.tip=m.tip;
         kept.push({rank:m.rank, item:item});

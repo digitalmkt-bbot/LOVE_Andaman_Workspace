@@ -70,7 +70,7 @@
     var fresh = V.vehicleOf(van, old);
     if(!old){ l.push(fresh); return fresh; }
     KEEP.forEach(function(k){ fresh[k] = old[k]; });
-    if(old.costPerDay !== undefined) fresh.costPerDay = old.costPerDay;
+    if(old.costPerDay !== undefined && fresh.costPerDay === undefined) fresh.costPerDay = old.costPerDay;   // w6-d · the server's cost_per_day wins when it sends one
     Object.keys(old).forEach(function(k){ delete old[k]; });
     Object.keys(fresh).forEach(function(k){ old[k] = fresh[k]; });
     return old;
