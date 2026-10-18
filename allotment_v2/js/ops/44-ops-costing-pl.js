@@ -709,6 +709,84 @@
   wrapCalc('ctTplFill', function(orig, t){ return t; });
   wrapCalc('ctTplOdSeed', function(orig, t){ return 0; });
 
+  /* ══ Q38 · plan rules and template commands are the server's ═══════════════════════════════════
+     Each command changes the template and the plans in ONE transaction at the server (all or nothing), so the
+     screen no longer saves the template and the plans separately. After a command the server's template is
+     taken as it is and the plans are read again (their overrides, groups and route keys may have moved). */
+  function guard(){ return !(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('accounting')); }
+  function afterCommand(res){
+    ++cost.seq;
+    if(res && Array.isArray(res.lines)) cost.template = templateFromServer(res);
+    O.wrote('costing');
+    return loadCosting(true).then(function(){ if(typeof window.ctRender === 'function') window.ctRender(); });
+  }
+  function realPlanId(id){ return cost.idMap[id] || id; }
+
+  /* ctFamSetPlan(route/family key, plan id | '') → PUT /v1/costing/route-plans/{key} {plan_id|null} */
+  wrap('ctFamSetPlan', function(orig, fid, pidRaw){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var pid = String(pidRaw || '');
+    cost.plans.forEach(function(p){                       /* legacy's own change, shown at once; the server's answer is read after */
+      if(p.famId === fid) p.famId = '';
+      if(pid && p.id === pid) p.famId = fid;
+      cost.known[p.id] = JSON.stringify(p);
+    });
+    if(typeof window.ctRender === 'function') window.ctRender();
+    return O.queue(function(){ return O.call('PUT', '/v1/costing/route-plans/' + encodeURIComponent(fid), { plan_id:pid ? realPlanId(pid) : null }); }).then(function(){
+      O.wrote('costing'); return loadCosting(true);
+    }).then(function(){ if(typeof window.ctRender === 'function') window.ctRender(); },
+      function(e){ return refreshAfterFail('Route plan was not saved', e); });
+  });
+
+  /* ctDelLine(index) → DELETE /v1/costing/template/lines/{id} (by the line's id) */
+  wrap('ctDelLine', function(orig, li){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var ln = (window.ctTpl().lines || [])[li]; if(!ln) return;
+    if(!confirm('ลบ "' + ln.l + '" ออกจากสูตรกลาง? · ค่าที่ตั้งไว้รายแผนของรายการนี้จะถูกลบด้วย')) return;
+    return O.queue(function(){ return O.del('/v1/costing/template/lines/' + encodeURIComponent(ln.id)); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Cost line was not deleted', e); });
+  });
+
+  /* ctRenameGroup(group) → POST /v1/costing/template/rename-group {from,to} */
+  wrap('ctRenameGroup', function(orig, g){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var nm = prompt('เปลี่ยนชื่อหมวด "' + g + '" เป็น', g);
+    if(!nm || !String(nm).trim() || String(nm).trim() === g) return;
+    nm = String(nm).trim();
+    return O.queue(function(){ return O.post('/v1/costing/template/rename-group', { from:g, to:nm }); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Group was not renamed', e); });
+  });
+
+  /* ctResetTpl() → POST /v1/costing/template/reset */
+  wrap('ctResetTpl', function(orig){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    if(!confirm('คืนสูตรกลางกลับเป็นค่าเริ่มต้นทั้งหมด? · ค่าที่ตั้งไว้รายแผนจะถูกล้างด้วย')) return;
+    return O.queue(function(){ return O.post('/v1/costing/template/reset'); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Cost template was not reset', e); });
+  });
+
+  /* ctDelPlan() → DELETE /v1/costing/plans/{id}; the last plan is refused by the server with its own message */
+  wrap('ctDelPlan', function(orig){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var P = window.ctPlans(), pl = window.ctPlan(window._ct.pid); if(!pl) return;
+    if(P.length > 1 && !confirm('ลบแผน "' + pl.name + '" ?')) return;   /* the last plan goes to the server without a question: its refusal is the answer */
+    return O.queue(function(){ return O.del('/v1/costing/plans/' + encodeURIComponent(realPlanId(pl.id))); }).then(function(){
+      cost.plans = cost.plans.filter(function(x){ return x.id !== pl.id; }); delete cost.known[pl.id];
+      if(cost.plans.length) window._ct.pid = cost.plans[0].id;
+      O.wrote('costing'); if(typeof window.ctRender === 'function') window.ctRender();
+    }, function(e){
+      if(e && e.status === 409 && e.code === 'last_plan'){ alert(e.message); return; }
+      return refreshAfterFail('Cost plan was not deleted', e);
+    });
+  });
+
+  /* ctPlanSetOn · the legacy clamp stays as the hint; the PATCH answer (writePlans → adopt) puts the server's pax and pax_th on screen */
+
   O.onWrite(function(kind){ if(kind !== 'costing') forgetCalc(); else calc.failed = {}; });
 
   O.onWrite(function(){ clearAll(); });
