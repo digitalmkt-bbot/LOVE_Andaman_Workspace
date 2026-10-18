@@ -251,5 +251,5 @@
     return list[0] || null;
   });
 
-  O.pickup = { load:load, refresh:refresh, resolve:resolve, isReady:function(){ return ready; } };
+  O.pickup = { load:load, refresh:refresh, resolve:resolve, cellText:cellText, isReady:function(){ return ready; } };
 })();
