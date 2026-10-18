@@ -292,7 +292,8 @@ section('3', async () => {
   await ev(() => { window.__wk = []; laOps.onWrite((k) => window.__wk.push(k)); });
   await ev(() => ckToggle('zz-sA', '2026-11-10', 'pier')); await idle(); await settle(1500);
   const kinds = await ev(() => window.__wk);
-  ok('a check-in tap (and the seat-lock reload after it) does not drop the Service answer: no new /v1/pier-checkin unless a booking or another machine wrote meanwhile', !callsSince(tapBefore).some((c) => /GET \/v1\/pier-checkin/.test(c) && !/programmes=1/.test(c)) || kinds.some((k) => /^(booking|remote)/.test(k)), { calls: callsSince(tapBefore), kinds });
+  // w5-d (decision 1): the sheet's figures are the server's now, so a tap makes the open sheet read the day again; the Service answer stays held meanwhile (bkLtState keeps answering)
+  ok('a check-in tap (and the seat-lock reload after it) makes the open sheet read GET /v1/pier-checkin again (w5-d), and the Service answers are still the server\'s', callsSince(tapBefore).some((c) => /GET \/v1\/pier-checkin/.test(c)) && kinds.some((k) => /^trip-checkin/.test(k)) && (await ev(() => !!laOps.pierService.serviceOf(SB_BOOKINGS.find((x) => x.id === 'zz-sA'), SB_BOOKINGS.find((x) => x.id === 'zz-sA').trips[0].routeId, '2026-11-10'))), { calls: callsSince(tapBefore), kinds });
 });
 
 // ═══ 4 · Van Check-in: KPI, order, unassigned from GET /v1/van-checkin ═══

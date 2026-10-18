@@ -39,6 +39,12 @@
         Object.defineProperty(rec, '_aboardTrip', { value: trip, configurable: true, writable: true });
         Object.defineProperty(rec, '_aboardKind', { value: p[0], configurable: true, writable: true });
       }catch(_){}
+      /* w5-d: the other parts of a split row (rec._s[slot]) know their trip and slot too (read by 83-ops-van-rows.js; not _aboardKind: the tally is per side) */
+      try{ Object.defineProperty(rec, '_slotKey', { value: { trip: trip, side: p[0], slot: 0 }, configurable: true, writable: true }); }catch(_){}
+      if(rec._s && typeof rec._s === 'object') Object.keys(rec._s).forEach(function(i){
+        var sub = rec._s[i]; if(!sub || typeof sub !== 'object') return;
+        try{ Object.defineProperty(sub, '_slotKey', { value: { trip: trip, side: p[0], slot: +i }, configurable: true, writable: true }); }catch(_){}
+      });
     });
   };
 

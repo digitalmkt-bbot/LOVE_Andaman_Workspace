@@ -26,7 +26,7 @@
   'use strict';
   var O = window.laOps; if(!O) return;
   var TTL = 60000;
-  var S = { day:{}, mday:{}, an:{}, loading:{} };
+  var S = { day:{}, mday:{}, an:{}, loading:{}, rent:{} };   // rent: month -> { at, data: trip-pl/month rent_idle } (w5-d)
   var cost = { loaded:false, template:null, plans:[], rents:{}, rentSrv:{}, known:{}, idMap:{}, seq:0, loading:null };
 
   function enabled(){ return O.enabled(); }
@@ -51,7 +51,7 @@
     var workers = []; for(var w = 0; w < Math.min(size, items.length); w++) workers.push(next());
     return Promise.all(workers).then(function(){ return out; });
   }
-  function clearAll(){ S.day = {}; S.mday = {}; S.an = {}; }
+  function clearAll(){ S.day = {}; S.mday = {}; S.an = {}; S.rent = {}; }
 
   /* ── server trip → the legacy trip object the renderers read ─────────────── */
   var SRC = { actual:'r', plan:'p', formula:'f', pending:'w' };
@@ -109,6 +109,7 @@
       return O.get('/v1/reports/trip-pl/month', { month:ym, pier:pier || '' }).then(function(d){
         if(!d || d.month !== ym || !Array.isArray(d.days)) throw new Error('invalid Trip P&L month response');
         d.days.forEach(function(x){ S.mday[dayKey(x.date, pier)] = { at:Date.now(), data:x }; });
+        if(d.rent_idle) S.rent[ym] = { at:Date.now(), data:d.rent_idle };   // w5-d: rent is paid for the whole boat, not by pier
         return d;
       });
     });
@@ -123,6 +124,7 @@
     var out = [];
     var miss = days.filter(function(d){ return !fresh(S.day[dayKey(d, '')]); });
     if(miss.length) out.push(function(){ return pool(miss, 5, function(d){ return loadDay(d, ''); }); });
+    if(days.length && !fresh(S.rent[ym])) out.push(function(){ return loadMonthTotals(ym, ''); });   // w5-d: pxRentIdle reads the server's rent_idle
     var pym = prevMonth(ym);
     var pmiss = days.some(function(d){ return !fresh(S.mday[dayKey(pym + '-' + d.slice(8, 10), pier)]); });
     if(days.length && pmiss) out.push(function(){ return loadMonthTotals(pym, pier); });
@@ -273,6 +275,16 @@
     if(trips) return aggFromTrips(date, trips);
     var m = S.mday[dayKey(date, pier || '')];
     return aggFromTotals(date, m && m.data);
+  });
+  /* pxRentIdle · rent paid for the days the boat did not sail: the server's rent_idle of the month (GET /v1/reports/trip-pl/month), in legacy's row shape (w5-d) */
+  wrap('pxRentIdle', function(orig, days){
+    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
+    var ym = days && days.length ? String(days[0]).slice(0, 7) : '', e = ym ? S.rent[ym] : null, R = e && e.data;
+    if(!R || !Array.isArray(R.rows)) return orig(days);
+    return R.rows.map(function(r){
+      return { bid:r.boat_id, name:r.name, RN:{ to:r.open_ended ? '' : r.to, name:r.name }, SP:{ from:r.from, to:r.to, due:n(r.due), opDays:n(r.days_plan) }, slots:n(r.slots), sail:n(r.sailed),
+               daysRan:n(r.days_ran), opPlan:n(r.days_plan), booked:n(r.booked), due:n(r.due), gap:n(r.gap) };
+    });
   });
   wrap('pxAnalysis', function(orig){
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
@@ -647,11 +659,29 @@
     if(k){ out.p = n(k.profit); out.rev = n(k.revenue); }
     return out;
   });
-  /* ctBreakEven · the first head count with a profit, walked up to the boats' seats */
+  /* ctBreakEven · the first head count with a profit, walked up to the boats' seats; a smaller cap asks the same question of fewer heads:
+     the server's first profitable head count if it is within the cap, none if it is not (w5-d) */
   wrapCalc('ctBreakEven', function(orig, pl, cap, tpl){
     var a = answer(pl, tpl, true), s = a && a.sheet;
     if(s && +cap === +s.capacity) return s.key_figures.break_even;
+    if(s && +cap > 0 && +cap < +s.capacity){
+      var be = s.key_figures.break_even;
+      return (be != null && +be <= +cap) ? be : null;
+    }
     return orig(pl, cap, tpl);
+  });
+  /* ctTiers · the five price tiers: the stored ones, else the price spread (the server's tiers_effective); ctTierSpread keeps the names
+     and spreads the price (tiers_spread) */
+  wrapCalc('ctTiers', function(orig, pl){
+    var a = pl && typeof pl === 'object' ? answer(pl, undefined, true) : null;
+    return a && Array.isArray(a.tiers_effective) && a.tiers_effective.length === 5 ? a.tiers_effective.map(function(x){ return { n:x.n, p:x.p }; }) : orig(pl);
+  });
+  wrapCalc('ctTierSpread', function(orig){
+    var pl = typeof window.ctPlan === 'function' && window._ct ? window.ctPlan(window._ct.pid) : null;
+    var a = pl ? answer(pl, undefined, false) : null;
+    if(!a || !Array.isArray(a.tiers_spread) || a.tiers_spread.length !== 5) return orig();
+    pl.tiers = a.tiers_spread.map(function(x){ return { n:x.n, p:x.p }; });
+    window.ctPlanPut(pl); window.ctRender();
   });
   wrapCalc('ctChdAt', function(orig, pl, nn){
     var a = answer(pl, undefined, false);
@@ -803,7 +833,16 @@
       return res;
     }, function(){ return null; });
   }
-  window.laOps.costingPL = { calcState:calc, answer:function(pl){ return answer(pl, undefined, false); }, askNow:askNow, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
+  /* w5-d · a plan the server made (POST /v1/costing/plans answered with it): put it on the list as it is, free its route key from the others */
+  function adoptPlan(res){
+    if(!res || !res.id) return null;
+    var p = planFromServer(res);
+    cost.plans = cost.plans.filter(function(x){ return x.id !== p.id; });
+    if(p.famId) cost.plans.forEach(function(x){ if(x.famId === p.famId){ x.famId = ''; cost.known[x.id] = JSON.stringify(x); } });
+    cost.plans.push(p); cost.known[p.id] = JSON.stringify(p);
+    return p;
+  }
+  window.laOps.costingPL = { adoptPlan:adoptPlan, realPlanId:function(id){ return cost.idMap[id] || id; }, rentIdleOf:function(ym){ var e = S.rent[ym]; return e && fresh(e) ? e.data : null; }, calcState:calc, answer:function(pl){ return answer(pl, undefined, false); }, askNow:askNow, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
   window.__laOpsCostingCompat = {
     legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisHtml:analysisHtml,
     templateFromServer:templateFromServer, templateToServer:templateToServer, planFromServer:planFromServer, planToServer:planToServer,

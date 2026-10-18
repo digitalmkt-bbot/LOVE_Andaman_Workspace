@@ -456,6 +456,8 @@
     bk.ops.reconfirm = ob.reconfirm ? { status: ob.reconfirm.status || '', via: ob.reconfirm.via || 'reconfirm', at: ob.reconfirm.at || '', by: ob.reconfirm.by || '', sent: !!ob.reconfirm.sent, sentAt: ob.reconfirm.sent_at || '', sentBy: ob.reconfirm.sent_by || '' } : null;
     bk.docCheck = ob.doc_check || null;
     bk.specialRequest = ob.special_request != null ? String(ob.special_request) : '';   // w5c: the server's job_note-else-notes (vanJobsSreqFinal, 82-ops-w5c-vans.js)
+    bk.opsInvoice = ob.invoice && ob.invoice.id ? ob.invoice : null;           // w5-d: the booking's live invoice as the server works it out (read only; 83-ops-pay-chip.js)
+    bk.paymentState = ob.payment_state || 'none';
     bk.jobNote = ob.job_note != null ? ob.job_note : null;   // the van job order's special request override (35-ops-van-jobs.js)
     /* §bookingSlips: payment slips on the booking itself (a direct/B2C booking has no invoice payment); server-owned, shown by 38-ops-attachments.js */
     bk.slips = (ob.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id:s.id, attachmentId:s.attachment_id || s.attachmentId || '', addedAt:s.added_at || s.addedAt || '', addedBy:s.added_by || s.addedBy || '' }; });
