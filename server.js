@@ -2178,6 +2178,17 @@ function buildLoadCache(version, m){
   promise.catch(()=>{}).then(()=>{ if(_loadBuild && _loadBuild.promise === promise) _loadBuild = null; });
   return promise;
 }
+// §attachRange · parse a single-range "bytes=a-b" / "bytes=a-" / "bytes=-n" header against a file of `len` bytes.
+//   returns undefined = no usable Range (send 200 whole) · null = unsatisfiable (416) · {start,end} inclusive (206)
+function attachRange(h, len){
+  if(!h || !len) return undefined;
+  const m=/^bytes=(\d*)-(\d*)$/.exec(String(h).trim()); if(!m) return undefined;
+  let start, end;
+  if(m[1]===''){ if(m[2]==='') return undefined; const n=Math.min(+m[2], len); start=len-n; end=len-1; }
+  else { start=+m[1]; end=(m[2]==='')?len-1:Math.min(+m[2], len-1); }
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start>end||start>=len) return null;
+  return {start, end};
+}
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // Plain-text reply + HTML escaping — the OIDC routes answer a browser navigation, not fetch(), so a
@@ -2746,7 +2757,14 @@ const server = http.createServer((req, res) => {
     pool.query('SELECT filename,mime,data FROM attachments WHERE id=$1',[id]).then(r=>{
       const row=r.rows[0]; if(!row){ res.writeHead(404); return res.end('not found'); }
       const buf = Buffer.isBuffer(row.data)?row.data:Buffer.from(row.data||'');
-      res.writeHead(200,{'Content-Type':row.mime||'application/octet-stream','Content-Length':buf.length,'Content-Disposition':'inline; filename="'+encodeURIComponent(row.filename||'file')+'"','Cache-Control':'private, max-age=86400'});
+      const head={'Content-Type':row.mime||'application/octet-stream','Content-Disposition':'inline; filename="'+encodeURIComponent(row.filename||'file')+'"','Cache-Control':'private, max-age=86400','Accept-Ranges':'bytes'};
+      // §attachRange (2026-10-18) · video clips on fleet jobs (§flpVideo). Safari / iOS refuse to play a <video>
+      // whose server ignores Range: they probe with "bytes=0-1" and expect 206. Images and old clients send no
+      // Range and still get the whole file with 200. Malformed or out-of-range → 416, as the RFC says.
+      const rng=attachRange(req.headers.range, buf.length);
+      if(rng===null){ res.writeHead(416,{'Content-Range':'bytes */'+buf.length}); return res.end(); }
+      if(rng){ head['Content-Range']='bytes '+rng.start+'-'+rng.end+'/'+buf.length; head['Content-Length']=rng.end-rng.start+1; res.writeHead(206,head); return res.end(buf.subarray(rng.start,rng.end+1)); }
+      head['Content-Length']=buf.length; res.writeHead(200,head);
       res.end(buf);
     }).catch(e=>{ res.writeHead(500); res.end(e.message); }); return;
   }

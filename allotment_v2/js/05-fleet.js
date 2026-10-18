@@ -17453,7 +17453,7 @@ function flRenderMaint(){
     const la=(typeof flwLast==='function')?flwLast(m.progressLog,m.startDate):{date:m.startDate};
     const sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(la.date)):0;
     const ph=(typeof flpChip==='function')?flpChip('mj',m,false):'';
-    const meta=[(typeof flwD==='function')?flwD(m.startDate):(m.startDate||''), m.location||m.owner||'', done?('closed '+((typeof flwD==='function')?flwD(m.endDate):(m.endDate||''))):(la.text?String(la.text).slice(0,40):('silent '+sil+' d'))].filter(Boolean);
+    const meta=[fjD(m.startDate), m.location||m.owner||'', done?('closed '+fjD(m.endDate)):(la.text?String(la.text).slice(0,40):('silent '+sil+' d'))].filter(Boolean);
     return `<div class="fj-row${isSel?' on':''}${done&&!isSel?' dim':''}" onclick="flSelMaint('${m.id}')"><div class="bar" style="background:${TY_BAR[m.type]||'#9AA3B8'}"></div>
       <div style="min-width:0"><div class="no">${fjE(m.no||'—')}<span class="fj-pill" style="background:${tp[0]};color:${tp[1]}">${tp[2]}</span>${b?`<span class="fj-boat" style="background:${bc?bc.text:'#5B6170'}">${fjE(b.name)}</span>`:''}${m.pinned&&!done?'<span title="Pinned" style="font-size:11px">📌</span>':''}</div>
         <div class="ttl">${fjE(m.title||'—')}${ph}</div>
@@ -21814,7 +21814,7 @@ function flRenderIncident(){
     const stage=(st==='resolved')?6:fjStageOf('inc',inc.id)>=0?fjStageOf('inc',inc.id):(mj?fjStageOf('mj',mj.id):0);
     const la=(typeof flwLast==='function')?flwLast(inc.progressLog,inc.date):{date:inc.date};
     const sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(la.date)):0;
-    const when=(typeof flwD==='function')?flwD(inc.date):(inc.date||'');
+    const when=fjD(inc.date);
     const ph=(typeof flpChip==='function')?flpChip('inc',inc,false):'';
     return `<div class="fj-row${isSel?' on':''}${st==='resolved'&&!isSel?' dim':''}" onclick="flShowInc('${inc.id}')"><div class="bar" style="background:${SEV_BAR[inc.severity||'minor']||'#9AA3B8'}"></div>
       <div style="min-width:0"><div class="no">${fjE(inc.no||'—')}<span class="fj-pill" style="background:${sv[0]};color:${sv[1]}">${sv[2]}</span>${mj?`<span class="fj-lk">→ ${fjE(mj.no)}${mj.status==='done'?' ✓':''}</span>`:''}${inc.quickFix?'<span class="fj-pill" style="background:#E4F3EC;color:#0F6E56">Quick fix</span>':''}</div>
@@ -27432,6 +27432,28 @@ function fdCSS(){
 var FLP_C={'Reported':'#5B6170','Job open':'#1272B3','Waiting':'#D9952B','Repairing':'#2E9C78','To close':'#16265C','Billing':'#8E3A6B','Done':'#0F6E56','Project':'#534AB7','Quick fix':'#0F6E56'};
 var FLP_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 function flpE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* ══ §flpVideo (2026-10-18) · คลิปวิดีโอเป็นหลักฐานได้ด้วย · เจ้าของส่งคลิป 5 วิ 1.3MB มาเป็นตัวอย่าง
+   ทางที่ 1 · คลิปสั้น ≤ 6MB อัปตรงท่อเดิม (เพดานของเซิร์ฟเวอร์ · ไฟล์อยู่ในตาราง attachments) · ใหญ่กว่านั้นบอกให้ใช้ลิงก์
+   ทางที่ 2 · แปะลิงก์ YouTube / Google Drive / ไฟล์ .mp4 จากที่อื่น · เก็บแค่ลิงก์
+   เก็บใน photos[] เดิม เพิ่ม kind:'video' · ไม่แตะฐานข้อมูล · การ์ดแสดงเป็นช่อง ▶ · ดูเต็มจอเล่นในหน้าต่างเดียวกัน
+   ⚠ iPhone เล่นวิดีโอได้ต่อเมื่อเซิร์ฟเวอร์รองรับ HTTP Range · /api/attach/<id> ถูกแก้ให้ตอบ 206 แล้ว (server.js §attachRange) */
+var FLP_VID_MAX=6*1024*1024;
+var FLP_PLAY='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+function flpIsVideo(p){ return !!(p && (p.kind==='video' || /^video\//i.test(String(p.mime||'')))); }
+/* ลิงก์วิดีโอจากที่อื่น → {embed, direct} · YouTube / Drive เล่นแบบฝัง · ไฟล์ .mp4/.mov/.webm เล่นตรง */
+function flpVidLink(url){
+  var u=String(url||'').trim(), m;
+  if((m=u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/))) return {embed:'https://www.youtube.com/embed/'+m[1], kind:'youtube'};
+  if((m=u.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/))) return {embed:'https://drive.google.com/file/d/'+m[1]+'/preview', kind:'drive'};
+  if((m=u.match(/drive\.google\.com\/open\?id=([A-Za-z0-9_-]+)/))) return {embed:'https://drive.google.com/file/d/'+m[1]+'/preview', kind:'drive'};
+  if(/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u)) return {direct:u, kind:'file'};
+  return null;
+}
+function flpVidHtml(p, full){
+  var lk=(p.attId||!p.url)?null:flpVidLink(p.url);
+  if(lk && lk.embed) return '<iframe src="'+flpE(lk.embed)+'" allow="autoplay; fullscreen" allowfullscreen style="width:min(92vw,960px);aspect-ratio:16/9;border:0;border-radius:8px;background:#000"></iframe>';
+  return '<video src="'+flpE(p.url)+'" controls autoplay playsinline preload="metadata" style="max-width:92vw;max-height:80vh;border-radius:8px;background:#000"></video>';
+}
 function flpRec(kind,id){
   try{
     if(kind==='mj')  return (FL_MAINT||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
@@ -27486,15 +27508,19 @@ function flpPush(kind,rec,meta,cap){
     return;
   }
   if(!Array.isArray(rec.photos)) rec.photos=[];
+  var isV=/^video\//i.test(String(meta.mime||'')) || meta.kind==='video';
   rec.photos.push({ id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), attId:meta.attId||'', url:meta.url, mime:meta.mime||'', size:meta.size||0,
-                    name:meta.name||'', cap:cap||'', stage:flpStageNow(kind,rec), addedAt:now, by:by });
+                    name:meta.name||'', cap:cap||'', stage:flpStageNow(kind,rec), addedAt:now, by:by, kind:isV?'video':'photo' });
 }
 /* เพิ่มรูปจากเครื่อง/กล้อง · note = ข้อความจากช่องโน้ต (ถ้ามี) จะลง timeline พร้อมกัน */
 function flpAdd(kind,id,note){
   if(!flpCan()) return;
   if(!flpRec(kind,id)) return;
   if(typeof _flProjPickFiles!=='function' || typeof _flProjUploadAll!=='function'){ alert('Photo upload is not available on this page.'); return; }
-  _flProjPickFiles('image/*', true, function(files){
+  _flProjPickFiles('image/*,video/*', true, function(files){
+    /* §flpVideo · คลิปเกิน 6MB ไม่ส่ง (เซิร์ฟเวอร์ปฏิเสธอยู่ดี) · บอกขนาดและทางออก · ไฟล์อื่นในชุดเดียวกันยังไปต่อ */
+    var big=files.filter(function(f){ return /^video\//i.test(f.type||'') && f.size>FLP_VID_MAX; });
+    if(big.length){ alert('Video too large: '+big.map(function(f){ return (f.name||'clip')+' ('+(f.size/1048576).toFixed(1)+' MB)'; }).join(', ')+'\nLimit 6 MB per clip. Trim it, or upload it to Drive and use "Paste link".'); files=files.filter(function(f){ return big.indexOf(f)<0; }); if(!files.length) return; }
     /* §flpMulti (2026-10-18) · เจ้าของ: "add หลายๆ รูปพร้อมกันไม่เข้า"
        อัปหลายรูปกินเวลาหลายวินาที · ระหว่างนั้นถ้ามีคนอื่นเซฟอะไรในระบบ ตัวซิงก์จะดึงข้อมูลใหม่มาทับ
        (_laReloadData) · FL_MAINT กลายเป็นอ็อบเจ็กต์ชุดใหม่ · ของเดิมถือ rec ตัวเก่าไว้ใน closure
@@ -27515,7 +27541,8 @@ function flpAdd(kind,id,note){
       /* รูปที่ถูกข้อมูลใหม่ทับไปแล้ว เติมกลับ */
       var have={}; flpList(kind,rec).forEach(function(p){ have[p.id]=1; });
       added.forEach(function(p){ if(p && !have[p.id]){ if(kind==='prj'){ if(!rec.docs) rec.docs=[]; rec.docs.push(p._doc||p); } else { if(!Array.isArray(rec.photos)) rec.photos=[]; rec.photos.push(p); } } });
-      flpLog(kind, rec, (t?(t+' · '):'')+'Photo added · '+ok+' file'+(ok>1?'s':''));
+      var nv=added.filter(flpIsVideo).length;
+      flpLog(kind, rec, (t?(t+' · '):'')+(nv===ok?'Video added · ':nv?'Photo/video added · ':'Photo added · ')+ok+' file'+(ok>1?'s':''));
       flSave(); flpRefresh(kind,id,true);
     });
   });
@@ -27524,10 +27551,11 @@ function flpAdd(kind,id,note){
 function flpAddUrl(kind,id){
   if(!flpCan()) return;
   var rec=flpRec(kind,id); if(!rec) return;
-  var url=prompt('Image URL (paste a link):',''); if(!url) return; url=String(url).trim(); if(!url) return;
+  var url=prompt('Image or video URL (YouTube · Google Drive · .jpg/.mp4):',''); if(!url) return; url=String(url).trim(); if(!url) return;
   var cap=prompt('Caption (optional):','')||'';
-  flpPush(kind, rec, { url:url, name:cap||('Photo · '+TODAY_STR) }, cap);
-  flpLog(kind, rec, 'Photo link added'+(cap?(': '+cap):''));
+  var vl=flpVidLink(url);   /* §flpVideo */
+  flpPush(kind, rec, { url:url, name:cap||((vl?'Video':'Photo')+' · '+TODAY_STR), kind:vl?'video':'photo' }, cap);
+  flpLog(kind, rec, (vl?'Video':'Photo')+' link added'+(cap?(': '+cap):''));
   flSave(); flpRefresh(kind,id,true);
 }
 function flpFind(kind,rec,pid){ return flpList(kind,rec).filter(function(p){ return p.id===pid; })[0]||null; }
@@ -27573,7 +27601,7 @@ function flpView(kind,id,pid){
   var box=document.createElement('div'); box.id='flp-lb';
   box.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(10,14,28,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-family:inherit';
   var draw=function(){ var p=L[i];
-    box.innerHTML='<img src="'+flpE(p.url)+'" style="max-width:92vw;max-height:80vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);object-fit:contain;background:#000">'
+    box.innerHTML=(flpIsVideo(p)?flpVidHtml(p,true):'<img src="'+flpE(p.url)+'" style="max-width:92vw;max-height:80vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);object-fit:contain;background:#000">')
       +'<div style="color:#E5E7EB;font-size:13px;display:flex;align-items:center;gap:10px;max-width:92vw"><span style="font-weight:700;color:#fff;background:'+(FLP_C[p.stage]||'#5B6170')+';border-radius:6px;padding:2px 8px;font-size:11px">'+flpE(p.stage||'')+'</span>'
       +'<span>'+flpE(p.cap||p.name||'')+'</span><span style="color:#9CA3AF">'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span><span style="color:#9CA3AF">'+(i+1)+' / '+L.length+'</span></div>'
       +(L.length>1?'<button type="button" data-d="-1" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8249;</button><button type="button" data-d="1" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8250;</button>':'')
@@ -27593,8 +27621,14 @@ function flpCard(kind,id,opts){
   var cols=+opts.cols||3, closed=(flpStageNow(kind,rec)==='Done');
   var A="'"+flpE(kind)+"','"+flpE(id)+"'";
   var tile=function(p,hid){
-    return '<div class="flp-t'+(hid?' hid':'')+'" title="'+flpE(p.cap||p.name||'')+'">'
-      +'<img src="'+flpE(p.url)+'" loading="lazy" alt="" onclick="flpView('+A+',\''+flpE(p.id)+'\')" onerror="this.style.opacity=.25">'
+    var isV=flpIsVideo(p), vl=(isV&&!p.attId)?flpVidLink(p.url):null;
+    return '<div class="flp-t'+(hid?' hid':'')+(isV?' vid':'')+'" title="'+flpE(p.cap||p.name||'')+'">'
+      +(isV
+        ? ((vl&&vl.embed)
+            ? '<div class="flp-vph" onclick="flpView('+A+',\''+flpE(p.id)+'\')"><span>'+flpE(vl.kind==='youtube'?'YouTube':'Google Drive')+'</span></div>'
+            : '<video src="'+flpE(p.url)+'#t=0.1" muted playsinline preload="metadata" onclick="flpView('+A+',\''+flpE(p.id)+'\')"></video>')
+          +'<i class="flp-play" onclick="flpView('+A+',\''+flpE(p.id)+'\')">'+FLP_PLAY+'</i>'
+        : '<img src="'+flpE(p.url)+'" loading="lazy" alt="" onclick="flpView('+A+',\''+flpE(p.id)+'\')" onerror="this.style.opacity=.25">')
       +'<span class="flp-s" style="background:'+(FLP_C[p.stage]||'#5B6170')+'">'+flpE(p.stage||'')+'</span>'
       +'<div class="flp-m" onclick="flpView('+A+',\''+flpE(p.id)+'\')"><b>'+(p.cap?flpE(p.cap):'<i>'+(can?'add caption':'')+'</i>')+'</b><span>'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span></div>'
       +(can?(hid
@@ -27605,12 +27639,12 @@ function flpCard(kind,id,opts){
   var h='<div class="flp" data-flp="'+flpE(kind+':'+id)+'" data-flpo="'+flpE(JSON.stringify(opts))+'">'
     +'<div class="flp-h"><span class="k">'+flpE(opts.title||'Photos')+'</span><span class="n">'+L.length+'</span>'
     +(closed&&kind!=='prj'?'<span class="flp-done">&#10003; Done · photos can still be added</span>':'')
-    +(can?('<div class="flp-b"><button type="button" class="pri" onclick="flpAdd('+A+')">'+FLP_SVG+' Add photo</button><button type="button" onclick="flpAddUrl('+A+')">Paste link</button></div>'):'')+'</div>'
+    +(can?('<div class="flp-b"><button type="button" class="pri" onclick="flpAdd('+A+')">'+FLP_SVG+' Add photo / video</button><button type="button" onclick="flpAddUrl('+A+')">Paste link</button></div>'):'')+'</div>'
     +'<div class="flp-g" style="grid-template-columns:repeat('+cols+',1fr)">'+L.map(function(p){ return tile(p,false); }).join('')
     +(can?('<div class="flp-add" onclick="flpAdd('+A+')">'+FLP_SVG+'<span>Add photo</span></div>'):(L.length?'':'<div class="flp-add" style="cursor:default">'+FLP_SVG+'<span>No photos</span></div>'))+'</div>'
     +(H.length?('<div class="flp-f"><a onclick="flpTogHidden('+A+')">'+(showH?'Hide':'Show')+' hidden · '+H.length+' photo'+(H.length>1?'s':'')+'</a></div>'
       +(showH?('<div class="flp-g hid" style="grid-template-columns:repeat('+cols+',1fr)">'+H.map(function(p){ return tile(p,true); }).join('')+'</div>'):'')):'')
-    +(opts.compact?'':'<div class="flp-f">Tagged with the stage the job was in when added · tap a photo to view full size · hidden photos stay on the server until deleted from the hidden list</div>')
+    +(opts.compact?'':'<div class="flp-f">Tagged with the stage the job was in when added · tap to view full size · video clips up to 6 MB, longer ones via a YouTube / Drive link · hidden items stay on the server until deleted from the hidden list</div>')
     +'</div>';
   return h;
 }
@@ -27638,6 +27672,11 @@ function flpCSS(){
    +'.flp-g.hid{margin-top:8px;opacity:.75}'
    +'.flp-t{position:relative;border-radius:8px;overflow:hidden;background:#F1F0EC;aspect-ratio:1;cursor:zoom-in}'
    +'.flp-t img{width:100%;height:100%;object-fit:cover;display:block}'
+   +'.flp-t video{width:100%;height:100%;object-fit:cover;display:block;background:#000}'
+   +'.flp-vph{width:100%;height:100%;background:linear-gradient(135deg,#1F2937,#0F1B3D);display:flex;align-items:flex-start;justify-content:flex-end;padding:6px;box-sizing:border-box}'
+   +'.flp-vph span{font-size:9.5px;font-weight:700;color:#E5E7EB;background:rgba(255,255,255,.14);border-radius:5px;padding:2px 6px}'
+   +'.flp-play{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:none}'
+   +'.flp-play svg{width:20px;height:20px;margin-left:2px}'
    +'.flp-t.hid img{filter:grayscale(1)}'
    +'.flp-s{position:absolute;left:6px;top:6px;font-size:9.5px;font-weight:700;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.02em;pointer-events:none}'
    +'.flp-m{position:absolute;left:0;right:0;bottom:0;padding:16px 7px 6px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:10.5px;line-height:1.3}'
@@ -27673,6 +27712,8 @@ function flpChip(kind,rec,warnEmpty){
      3. fjStand "Where it stands" + "Next step" ของงาน/รายงาน · ใช้ตัวคำนวณเดียวกับ Fleet Work (flwItems + flwPanel core)
      4. fjRow   แถวรายการ (แถบสีซ้าย · เลข mono · ป้าย · ชื่อ 2 บรรทัด · เมตา · ขวา: สเตจ/ตัวเลข/แถบ 6 สเตจ)
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* วันที่สั้น · ไม่พึ่ง FLW_MO (ประกาศทีหลังในไฟล์ · ตอน flLoad บูตยังเป็น undefined) */
+function fjD(s){ s=String(s||'').slice(0,10); var a=s.split('-'); if(a.length<3||!+a[0]) return s||'—'; var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (+a[2])+' '+(MO[(+a[1]||1)-1]||'')+(+a[0]!==new Date().getFullYear()?(' '+a[0]):''); }
 function fjE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fjCSS(){
   if(document.getElementById('fj-css')) return;
