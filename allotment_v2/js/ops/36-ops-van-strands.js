@@ -175,7 +175,7 @@
   });
 
   // A booking write (a reschedule, a cancel) may have moved a trip: the next draw asks again.
-  O.onWrite(function(kind){ if(/^booking/.test(String(kind || ''))) stale(); });
+  O.onWrite(function(kind){ if(/^(remote:)?booking/.test(String(kind || ''))) stale(); });
 
   O.vanStrands = { load: load, stale: stale, rows: rowsOf };
 })();
