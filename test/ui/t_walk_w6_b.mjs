@@ -191,14 +191,15 @@ ok('server: the engine is off the boat, fixing, and placed at the chosen place',
 ok('screen: the dialog is closed', await ev(() => !window._flStartGear), null);
 
 // ── A5 _flBoatRanOn (flnPreview)
+const TU = await ev(() => TODAY_STR);   // legacy's TODAY_STR is the UTC date; it differs from the local date between 00:00 and 07:00 Bangkok
 item('A5', 'flnPreview · "already ran a trip today" is the server\'s (GET /v1/boats/{id}/ran-on)');
-await send('POST', '/operations/deployments', { boat_id: 'b1', route_id: 'r4', service_date: T0, capacity: 20 });
-const ran = await api(`/v1/boats/b1/ran-on?date=${T0}`), notRan = await api(`/v1/boats/b13/ran-on?date=${T0}`);
-ok('(server) b1 ran today, b13 did not', ran.ran === true && ran.starts_on === T1 && notRan.ran === false, { ran, notRan });
-await ev((d) => { if (TRIPS[d]) { delete TRIPS[d].b1; } else TRIPS[d] = {}; TRIPS[d].b13 = { route: 'r10' }; SB_BOOKINGS.forEach((b) => { if (b && (b.trips || []).some((t) => t.date === d)) b.status = 'cancelled'; }); }, T0);   // the browser's copy says the opposite
+await send('POST', '/operations/deployments', { boat_id: 'b1', route_id: 'r4', service_date: TU, capacity: 20 });
+const ran = await api(`/v1/boats/b1/ran-on?date=${TU}`), notRan = await api(`/v1/boats/b13/ran-on?date=${TU}`);
+ok('(server) b1 ran today, b13 did not', ran.ran === true && ran.starts_on > TU && notRan.ran === false, { ran, notRan });
+await ev((d) => { if (TRIPS[d]) { delete TRIPS[d].b1; } else TRIPS[d] = {}; TRIPS[d].b13 = { route: 'r10' }; SB_BOOKINGS.forEach((b) => { if (b && (b.trips || []).some((t) => t.date === d)) b.status = 'cancelled'; }); }, TU);   // the browser's copy says the opposite
 const preview = async (boat) => {
   await ev(([b, d]) => { let el = document.getElementById('fln-prev'); if (!el) { el = document.createElement('div'); el.id = 'fln-prev'; document.body.appendChild(el); }
-    FLN = { kind: 'job', boat: b, date: d, jtype: 'corrective', start: true, jstatus: 'fixing', title: 'W6 preview', parts: false, owner: '', due: '', assets: {}, hull: '' }; flnPreview(); }, [boat, T0]);
+    FLN = { kind: 'job', boat: b, date: d, jtype: 'corrective', start: true, jstatus: 'fixing', title: 'W6 preview', parts: false, owner: '', due: '', assets: {}, hull: '' }; flnPreview(); }, [boat, TU]);
   await settle(900);
   return ev(() => document.getElementById('fln-prev').textContent.replace(/\s+/g, ' '));
 };

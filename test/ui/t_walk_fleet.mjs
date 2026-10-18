@@ -365,7 +365,7 @@ c1 = calls.length;
 await ev((a) => flOpenSwapModal(a.i, 'propeller', a.p), { i: inc2.id, p: RQ2.p.id }); await settle(400);
 await ev((id) => flConfirmSwap(id), sparePr.id); await idle(); await settle(1000);
 let pa = await api('/v1/fleet/propellers/' + sparePr.id), pb = await api('/v1/fleet/propellers/' + RQ2.p.id);
-chk('quick propeller swap: ONE POST .../swap; spare propeller now on the gearbox', calls.slice(c1).filter((c) => /incidents\/.*\/swap/.test(c)).length === 1 && pa.gearbox_id === RQ2.g.id && pb.gearbox_id !== RQ2.g.id, { calls: calls.slice(c1), pa: pa && pa.gearbox_id, pb: pb && pb.gearbox_id });
+chk('quick propeller swap: ONE POST .../swap; spare propeller now on the gearbox', calls.slice(c1).filter((c) => /^POST \/v1\/fleet\/incidents\/[^/]+\/swap( |$)/.test(c)).length === 1 && pa.gearbox_id === RQ2.g.id && pb.gearbox_id !== RQ2.g.id, { calls: calls.slice(c1), pa: pa && pa.gearbox_id, pb: pb && pb.gearbox_id });
 
 item(10, 'safety replace wizard (labour) · safety state / shortfall · boat documents · inventory by pier · assign-engine info');
 const cats = (await api('/v1/fleet/safety-categories')).categories.map((c) => c.id);

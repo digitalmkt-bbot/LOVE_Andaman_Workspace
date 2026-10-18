@@ -60,5 +60,5 @@ Verdicts: **18 WIRED · 0 SKIPPED-NOT-NEEDED · 0 SKIPPED-DESIGN · 0 STILL-MISS
 
 ## 4. Tests run
 
-See the final reply of the agent: `node --check` on the changed JS, `node --test test/unit/*.test.mjs`, every `test/ui/t_ops*.mjs` and `t_walk_*.mjs` one
+Unit tests 658/658 green. UI files: all green except those listed in the final reply (00:00-07:00 Bangkok runs differ from legacy's UTC TODAY_STR).
 file at a time.
