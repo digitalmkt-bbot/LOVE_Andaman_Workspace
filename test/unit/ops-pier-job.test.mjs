@@ -41,7 +41,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
   Object.keys(defaults).forEach((k) => { if (answers[k] === undefined) answers[k] = defaults[k]; });
   const win = {
     laOps: {
-      enabled: () => enabled, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
+      enabled: () => enabled, onWrite: () => {}, onChange: () => {}, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
       anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       wrote: (k) => wrote.push(k), fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message, body: e && e.body }), toast: () => {},
@@ -81,7 +81,7 @@ test('load: a job per boat; a recorded one fills PIER_JOB, an unrecorded one onl
   const rt = runtime();
   await open(rt);
   assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path).sort(), [JOB('b1'), JOB('b2')]);
-  assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {} });
+  assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {}, dep: '' });
   assert.equal(rt.w.PIER_JOB[K2], undefined);
   assert.deepEqual(J(rt.w.PIER_TEAM.b2), { cap: 'ps_t', asst: '', crew: ['ps_t1'] }, 'no job: the team is what the card shows');
   assert.deepEqual(J(rt.w.PIER_TEAM.b1), { cap: 'ps_cap', asst: '', crew: ['ps_old', 'ps_c3'] }, 'a recorded job: the team is the job with the substitutes put back');

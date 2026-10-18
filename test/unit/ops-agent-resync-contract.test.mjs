@@ -13,7 +13,7 @@ function runtime({ enabled = true, refuse = null, result } = {}) {
   const SB_AGENTS = [{ id: 'a1', name: 'One', rateTypeId: 'rt-1', contractVersion: 'old' }];
   const window = {
     laOps: {
-      enabled: () => enabled,
+      enabled: () => enabled, onWrite: () => {}, onChange: () => {},
       get: async (path) => {
         events.push('get:' + path);
         if (path.endsWith('/activity')) return { activity: [{ text: 'sync from agent page' }, { text: 'older' }] };

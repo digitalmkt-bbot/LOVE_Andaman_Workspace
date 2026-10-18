@@ -9,7 +9,7 @@ function compat(){
   const FL_DAILY = { '2026-10-10': { b1: { fuel: 50, trips: {} } } };
   const FL_FUEL_PRICE = { '2026-10-10': { tublamu: 32.5 } };
   const FL_DR_LOCK = { '2026-10-10': { tublamu: true } };
-  const window = { laOps: { enabled: () => false, today: () => '2026-10-12', shift: () => '2026-10-01', onChange: () => {} } };
+  const window = { laOps: { enabled: () => false, onWrite: () => {}, today: () => '2026-10-12', shift: () => '2026-10-01', onChange: () => {} } };
   vm.runInNewContext(SOURCE, {
     window, console, Number, String, Object, Array, JSON, Date, Promise, encodeURIComponent, parseFloat, parseInt, isNaN, Math,
     FL_DAILY, FL_FUEL_PRICE, FL_DR_LOCK
@@ -114,7 +114,7 @@ function createRuntime(){
 
   const window = {};
   const O = {
-    enabled: () => true,
+    enabled: () => true, onWrite: () => {},
     today: () => '2026-10-12',
     shift: () => '2026-10-01',
     clone: v => v == null ? v : JSON.parse(JSON.stringify(v)),
@@ -300,7 +300,7 @@ test('legacy mode delegates to original daily/project/safety functions without A
   const calls = [];
   const window = {
     laOps: {
-      enabled: () => false,
+      enabled: () => false, onWrite: () => {}, onChange: () => {},
       today: () => '2026-10-12',
       shift: () => '2026-10-01',
       get: () => { calls.push('api'); return Promise.resolve({}); },

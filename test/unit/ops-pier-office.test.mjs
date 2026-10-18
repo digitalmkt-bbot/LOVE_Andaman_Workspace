@@ -52,7 +52,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {},
   };
   const win = {
     laOps: {
-      enabled: () => enabled, get: (p, q) => req('GET', p + qs(q)), call: req, queue: (fn) => Promise.resolve().then(fn), anyway,
+      enabled: () => enabled, today: () => '2026-10-12', onChange: () => {}, get: (p, q) => req('GET', p + qs(q)), call: req, queue: (fn) => Promise.resolve().then(fn), anyway,
       wrote: (k) => { wrote.push(k); listeners.forEach((f) => f(k)); }, onWrite: (f) => listeners.push(f),
       fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message }), toast: () => {},
     },
@@ -75,7 +75,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true, dom = {},
     getBoat: (id) => ({ name: 'Boat ' + id }),
   };
   if (over) Object.assign(win, over(win, legacy));
-  const ctx = { window: win, console, Promise, Array, Object, Error, String, Number, JSON, Math, encodeURIComponent, isFinite, parseInt, URLSearchParams,
+  const ctx = { window: win, SB_BOOKINGS: win.SB_BOOKINGS, console, Promise, Array, Object, Error, String, Number, JSON, Math, encodeURIComponent, isFinite, parseInt, URLSearchParams,
     document: { getElementById: (id) => dom[id] || null, activeElement: null }, setTimeout, clearTimeout, Date, confirm: () => true };
   const vmc = vm.createContext(ctx);
   SOURCES.forEach((s) => vm.runInContext(s, vmc));
@@ -105,7 +105,7 @@ test('load: settings, licence types and classes, licences and pay are filled fro
   assert.deepEqual(J(c.payWsMin), { cap: 650, crew: 450 });
   assert.deepEqual(J(rt.w.PIER_LIC_TYPES), [{ id: 'deck', side: 'deck', short: 'Captain', formal: '', perBoat: 1, active: true }]);
   assert.deepEqual(J(rt.w.PIER_LIC_CLASSES), [{ id: 'deck1', typeId: 'deck', name: 'First', maxGt: 500, maxBhp: null, ord: 1 }]);
-  assert.deepEqual(J(rt.w.PIER_LICENSES), [{ id: 'pl_1', staffId: 'ps_1', classId: 'deck1', no: 'No1', exp: '2027-01-01', issuedAt: '2025-01-01', issuer: 'Marine', note: '' }]);
+  assert.deepEqual(J(rt.w.PIER_LICENSES), [{ id: 'pl_1', staffId: 'ps_1', classId: 'deck1', no: 'No1', exp: '2027-01-01', issuedAt: '2025-01-01', issuer: 'Marine', note: '', srv: { exp: '2027-01-01', state: 'ok', days: 400, at: '2026-10-12' } }]);
   assert.equal(c.payRate.ps_1, 800);
   assert.deepEqual(J(c.payRules), { PP: { x: 1, d: 0, f: 0 } });
   assert.deepEqual(writes(rt), [], 'a load writes nothing');
@@ -566,8 +566,10 @@ test('sheet: opening reads the saved sheet into PIER_SHEET; a draft is a PUT wit
   const put = writes(rt)[0];
   assert.equal(put.method, 'PUT');
   assert.deepEqual(put.body.split, { issued: { pi_a: 3 }, returned: { pi_a: 1 } });
-  assert.deepEqual(put.body.lines[0], { agent_code: 'AG', adults: 2, deposit_baht: 100, deposit_returned_baht: 50, deduction_a: 10, deduction_b: 0, note: null, qty: { issued: { pk_fin: 2 }, returned: { pk_fin: 1 } }, booking_id: 'srv_B1' });
+  assert.deepEqual(put.body.lines[0], { agent_code: 'AG', deposit_baht: 100, deposit_returned_baht: 50, deduction_a: 10, deduction_b: 0, note: null, qty: { issued: { pk_fin: 2 }, returned: { pk_fin: 1 } }, booking_id: 'srv_B1' });
   assert.equal(put.body.lines[1].label, 'Walk in');
+  assert.equal(put.body.lines[0].adults, undefined, 'a booking line adults are the server heads');
+  assert.equal(put.body.lines[1].adults, 1);
   assert.equal(put.body.lines[1].booking_id, undefined);
   assert.ok(rt.legacy.includes('modalClose') && rt.legacy.includes('renderPierOffice'));
 });
