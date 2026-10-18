@@ -458,6 +458,56 @@ console.log('\n== ' + curItem);
   await ev(() => { _bkV2.detailId = null; });
 }
 
+// ═══ 9 · Pickup Map (pmapAgg, pmapMoM, pmapAreaDetail, pmapAgHotels, pmapAgentZone) ═══
+curItem = '9 pickup map';
+console.log('\n== ' + curItem);
+{
+  // two pickup areas the map has pins for, and bookings picked up there
+  const mkArea = async (name, region) => (await send('POST', '/v1/pickup-areas', { name, zone: 'PK', time_group: 'A', region })).body;
+  const aPat = await mkArea('Patong', 'Patong'), aKata = await mkArea('Kata', 'South');
+  if (!aPat || !aPat.id) { console.log('area seed failed', JSON.stringify(aPat)); process.exit(2); }
+  for (const [id, date, pax, area, hotel] of [['f9a', DAYS[4], 3, aPat.id, 'Patong Beach Hotel'], ['f9b', DAYS[4], 2, aPat.id, 'Sea View Patong'], ['f9c', DAYS[5], 4, aKata.id, 'Kata Palm']]) {
+    const r = await mkBk(id, date, pax, { pickupAreaId: area, hotelName: hotel });
+    if (r.status !== 201) { console.log('seed failed', id, r.status, JSON.stringify(r.body)); process.exit(2); }
+  }
+  const CMo = DAYS[4].slice(0, 7);
+  await ev((a) => { _pmapMode = 'month'; _pmapAnchor = a + '-15'; _pmapMetric = 'pax'; _pmapMkFilter = null; _pmapAgFilter = null; _pmapSel = null; }, CMo);
+  await ev(() => { SB_BOOKINGS.length = 0; });                       // legacy has nothing to add up
+  n0 = calls.length;
+  await openView('pickupmap', 'renderPickupMap()', 4000);
+  await sleep(2500); await idle(); await sleep(800);
+  const q = '?period=month&anchor=' + CMo + '-15&metric=pax';
+  const rep = await api('/v1/reports/pickup-map' + q);
+  const mine = callsSince(n0);
+  ok('asked the server: GET /v1/reports/pickup-map', mine.some((c) => c.startsWith('GET /v1/reports/pickup-map 200')), mine);
+  ok('no booking range was loaded for the map', !mine.some((c) => /^GET \/v1\/bookings( |\/recent)/.test(c)), mine.filter((c) => /bookings/.test(c)));
+  const pat = rep.areas.find((a) => a.area === 'Patong'), kata = rep.areas.find((a) => a.area === 'Kata');
+  ok('seed: Patong 5 pax and Kata 4 pax on the server', pat && kata && pat.pax >= 5 && kata.pax >= 4, rep.areas.map((a) => [a.area, a.pax]));
+  const bar = (await text('#pmap-bar')).replace(/\s+/g, ' ');
+  ok('toolbar total = the server total pax', bar.includes('รวม ' + rep.totals.pax), bar);
+  const panel = (await text('#pmap-panel')).replace(/\s+/g, ' ');
+  ok('area list: Patong and Kata with the server pax (the browser holds no booking)', panel.includes('Patong') && panel.includes('Kata') && new RegExp('Patong\\s*' + pat.pax + '\\b').test(panel) || (panel.includes('Patong') && panel.includes(String(pat.pax))), panel.slice(0, 300));
+  // one area: its panel
+  await ev(() => pmapSelect('Patong')); await sleep(800);
+  const det = (await text('#pmap-panel')).replace(/\s+/g, ' ');
+  ok('area panel: top hotels with the server pax and the booking count', pat.top_hotels.every((h) => det.includes(h.name) && det.includes(String(h.pax))) && det.includes(pat.bookings + ' booking'), [det.slice(0, 400), pat.top_hotels]);
+  ok('area panel: top agents are the server\'s', pat.top_agents.every((a) => det.includes(a.name)), det.slice(0, 400));
+  ok('area panel: the change against the period before is the server\'s (none: nothing sold before)', pat.change_pct.pax === null && !/▲|▼/.test(det.split('vs ช่วงก่อน')[0].slice(-40)), [pat.change_pct, det.slice(0, 200)]);
+  // agent filter: the agent x zone card and the agent's hotels
+  await ev(() => { pmapSelect(null); pmapSetAg('a01'); }); await sleep(1500); await idle();
+  const repA = await api('/v1/reports/pickup-map' + q + '&agent=a01');
+  const zp = (await text('#pmap-zpanel')).replace(/\s+/g, ' ');
+  ok('Agent x zone card: the agent and its total = the server matrix', repA.agent_matrix.agents.every((a) => zp.includes(a.name) && zp.includes(String(repA.agent_matrix.total))), [zp.slice(0, 300), repA.agent_matrix]);
+  ok('the chosen agent\'s hotels are the server\'s list', repA.agent_hotels.length > 0 && repA.agent_hotels.slice(0, 3).every((h) => zp.includes(h.name)), [zp.slice(0, 500), repA.agent_hotels.slice(0, 3)]);
+  // year mode: the whole year in one answer, no "showing loaded bookings" banner
+  await ev(() => { pmapSetAg(null); pmapSetMode('year'); }); await sleep(1800); await idle();
+  const repY = await api('/v1/reports/pickup-map?period=year&anchor=' + CMo + '-15&metric=pax');
+  const barY = (await text('#pmap-bar')).replace(/\s+/g, ' ');
+  ok('year mode: total = the server year total and no "full-year comparison needs a server summary" banner', barY.includes('รวม ' + repY.totals.pax) && !/full-year comparison/.test(await text('#view-pickupmap')), [barY, repY.totals]);
+  ok('only reads went out', nonGet(n0).length === 0, nonGet(n0));
+  await ev(() => { pmapSetMode('month'); });
+}
+
 // ── summary ──
 const byItem = {};
 results.forEach((r) => { const x = byItem[r.item] = byItem[r.item] || { pass: 0, fail: 0 }; r.pass ? x.pass++ : x.fail++; });
