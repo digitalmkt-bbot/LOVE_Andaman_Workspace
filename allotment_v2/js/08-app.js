@@ -6550,6 +6550,9 @@ function renderDailyPFM(){
         routeName:esc(route?route.name:trip.routeId), pax });
     }
   });
+  /* Q24 · ops mode: the cards show the amount actually received (the server's totals.total / totals.received); the rows keep their own figures */
+  const _srvT=(typeof pfmServerTotals==='function')?pfmServerTotals(date, mode):null;
+  if(_srvT){ totAmt=_srvT.total; paidAmt=_srvT.received; }
   const collPct = totAmt>0 ? Math.round(paidAmt/totAmt*100) : 0;
   // group bookings into a CARD per date (newest date first)
   const _thd='padding:8px 10px;text-align:left;font-size:10px;color:#9a988f;font-weight:500;background:#fbfcfa';
