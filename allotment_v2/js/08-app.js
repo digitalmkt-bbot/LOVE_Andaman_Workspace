@@ -33264,7 +33264,7 @@ function pxCSS(){ return ''
    +'cursor:pointer;display:flex;align-items:center;justify-content:center}'
  +'#trippl-host .dnav button svg{width:14px!important;height:14px!important}'
  +'#trippl-host .dnav button:hover{background:#E2E8F0}'
- +'#trippl-host .dscroll{overflow-x:auto;padding:2px 4px 8px;scroll-behavior:smooth}'
+ +'#trippl-host .dscroll{overflow-x:auto;padding:2px 4px 8px}'   /* §pxScrollFix · ห้าม smooth ที่นี่ · ตอน sync คืนตำแหน่งต้องเป็นทันที */
  +'#trippl-host .dscroll::-webkit-scrollbar{height:8px}'
  +'#trippl-host .dscroll::-webkit-scrollbar-track{background:#EEF1F5;border-radius:999px}'
  +'#trippl-host .dscroll::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px}'
