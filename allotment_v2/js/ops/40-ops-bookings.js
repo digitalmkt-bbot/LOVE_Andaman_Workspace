@@ -172,7 +172,7 @@
     if(Array.isArray(bk.upgrades)) b.upgrades = bk.upgrades.filter(function(u){ return u && u.id; }).map(function(u){
       return { id: u.id, label: u.label || 'Upgrade', sell_price: Number(u.sellPrice) || 0,
         to_company: u.toCompany != null ? Number(u.toCompany) || 0 : null, seller: u.seller || null, note: u.note || null,
-        collected: u.collected != null ? !!u.collected : null, settle: u.settle || null, method: u.method || null,
+        collected: u.collected != null ? !!u.collected : null, settle: (u.settle && u.settle !== 'pending') ? u.settle : null,   /* w5e: a new sale starts 'pending' on the server */ method: u.method || null,
         fee_pct: u.feePct != null ? Number(u.feePct) || 0 : null,
         slips: (u.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id: s.id }; }) };
     });
@@ -233,6 +233,10 @@
       if(Number.isInteger(+a.jChd) && a.jChd !== null && +a.jChd >= 0) o.jChd = +a.jChd;
       return o;
     });
+    /* §w5e · what the server works out is never sent: the total, the price breakdown and the purpose (README Bookings: `total`, `price_*`,
+       `purpose` are computed by priceBooking / derivePurpose on every write). The one exception is a Love Kingdom booking (b2c_ id or
+       agent a_b2c): its price stays as the website sent it, so those fields go back unchanged. */
+    if(!(/^b2c_/.test(String(bk.id || '')) || bk.agentId === 'a_b2c')){ delete b.total; delete b.purpose; delete b.priceBreakdown; }
     return b;
   }
 
@@ -478,6 +482,8 @@
     /* §opsRowFlags (2026-10-17) · the server's reading of the booking row (GET /v1/bookings, /{id}, /recent only; the POST and PATCH
        answers do not carry them). Read-only, never sent (toServer). 66-ops-row-flags.js wraps laIsB2C, laIsInternalBk, laIsCompanyBk,
        laIsInternalFree, laBkMoney and laB2CChannel to read this object when it is here; without it the legacy browser rule runs. */
+    /* §w5e · the money the server works out for a booking (README Money, "On the booking"): bookingV2PayOf reads it (ops/84) */
+    if(ob.payment_state !== undefined){ bk.srvPay = { state: ob.payment_state, invoice: ob.invoice || null }; }
     if(ob.is_b2c_legacy !== undefined || ob.owed !== undefined){
       bk.srvFlags = { isB2C: !!ob.is_b2c_legacy, isInternal: !!ob.is_internal, isCompany: !!ob.is_company,
                       internalFree: !!ob.internal_free, owed: +ob.owed || 0, b2cChannel: ob.b2c_channel != null ? String(ob.b2c_channel) : '' };

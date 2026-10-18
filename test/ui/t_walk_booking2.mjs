@@ -197,15 +197,15 @@ console.log('\n[Q44] private van → No-Transfer seat · 400 private_van_transfe
   await openDraft({ lead: 'ZZ VAN', date: F2, pax: 2, zone: 'PK' });
   const added = await ev((t) => { bookingV2ToggleAddOn(t); const d = _bkV2.newBooking; return { add: d.addOns.map((a) => a.type), zone: d.trips[0].zone }; }, VAN);
   ok('ticking the private van puts the seat on NoTransfer (legacy)', added.add.includes(VAN) && added.zone === 'NoTransfer', added);
-  // a later step puts the old zone back (an edit of an imported booking, a pickup-area change): the send must still say NoTransfer
+  // a later step puts the old zone back (an edit of an imported booking, a pickup-area change): the send names no zone at all (w5-e: the server computes NoTransfer, a zone PK would be 400)
   const req = await ev(() => { _bkV2.newBooking.trips[0].zone = 'PK'; const r = laOpsQuote.buildRequest(_bkV2.newBooking, {}); return r && r.body.trips.map((t) => t.zone); });
-  ok('the quote request sends NoTransfer, not the old PK zone', JSON.stringify(req) === JSON.stringify(['NoTransfer']), req);
+  ok('the quote request sends no zone for the van trip (the server prices it NoTransfer), and not the old PK zone', JSON.stringify(req) === JSON.stringify([null]), req);
   const nPost = posted.length, nRef = refusals.length;
   await ev(() => { _bkV2.newBooking.trips[0].zone = 'PK'; bookingV2CommitBooking('quote'); });
   await onScreen('ZZ VAN'); await idle();
   const sb = await srvBy('ZZ VAN');
   const sent = posted.slice(nPost).find((p) => p.path === '/v1/bookings');
-  ok('the save sent zone NoTransfer for the van trip · no 400 · the server holds NoTransfer', !!sb && sent && sent.body.trips[0].zone === 'NoTransfer' && sb.trips[0].zone === 'NoTransfer' && !refusals.slice(nRef).some((x) => /private_van_transfer/.test(x)), { sent: sent && sent.body.trips, sb: sb && sb.trips[0].zone, ref: refusals.slice(nRef) });
+  ok('the save sent no zone for the van trip · no 400 · the server holds NoTransfer', !!sb && sent && sent.body.trips[0].zone === undefined && sb.trips[0].zone === 'NoTransfer' && !refusals.slice(nRef).some((x) => /private_van_transfer/.test(x)), { sent: sent && sent.body.trips, sb: sb && sb.trips[0].zone, ref: refusals.slice(nRef) });
 }
 
 console.log('\n[Q45] booking code · POST /v1/bookings/reserve-code');

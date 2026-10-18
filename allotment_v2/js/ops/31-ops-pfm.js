@@ -259,6 +259,11 @@
   /* Q24 · the header cards ('Total PFM value', 'Paid', 'Collected', progress) sum the amount actually received: the server's totals.total
      and totals.received for the period on screen (the sum of the rows' total / received when an older answer has no totals).
      null = not loaded: renderDailyPFM keeps the sums it worked out from the rows. */
+  /* w5-e · the server's row of one booking in the periods loaded (total, paid, received, balance, invoice): the printed report reads it (ops/84) */
+  window.pfmServerRow = function(bk){
+    if(!enabled() || !bk) return null;
+    return state.byClientId[bk.id] || state.byServerId[bk.opsId || bk.id] || null;
+  };
   window.pfmServerTotals = function(date, mode){
     if(!enabled()) return null;
     var r = typeof window.pfmPeriodRange === 'function' ? window.pfmPeriodRange(date, mode || 'daily') : { from: date, to: date };
