@@ -35263,6 +35263,77 @@ function vanDayCost(v, routeId, zone){
 }
 
 var _ct = { tab:'plan', pid:'' };   // สถานะหน้าจอ · แท็บที่เปิด + แผนที่เลือก
+/* §ctSkin · ตัวกรองท่าเรือ · '' = ทุกท่า · จำข้ามครั้ง */
+try{ _ct.pier = localStorage.getItem('la_ct_pier') || ''; }catch(_){ _ct.pier = ''; }
+function ctPierSet(k){ _ct.pier = k || ''; try{ localStorage.setItem('la_ct_pier', _ct.pier); }catch(_){ } ctRender(); }
+function ctPierCol(pk){ return { panwa:'#1272B3', tublamu:'#138A4E', ranong:'#D9952B' }[pk] || '#9AA3B8'; }
+function ctPierName(pk){ if(!pk) return 'ยังไม่ระบุท่า'; return (typeof PIER_LABELS !== 'undefined' && PIER_LABELS[pk]) || pk; }
+function ctPlanPier(p){
+  if(!p || !p.famId) return null;                      /* null = ยังไม่ผูกเส้นทาง */
+  var r = (typeof ROUTES !== 'undefined' ? ROUTES : []).filter(function(x){ return x.id === p.famId; })[0];
+  return r ? (r.pier || '') : null;
+}
+function ctPiersView(){ var g = ctRoutesByPier(); if(!_ct.pier) return g; return g.filter(function(x){ return x.pier === _ct.pier; }); }
+function ctPlansView(){ var P = ctPlans(); if(!_ct.pier) return P; return P.filter(function(p){ return ctPlanPier(p) === _ct.pier; }); }
+function ctPierSeg(){
+  var ord = (typeof PO_PIERS !== 'undefined') ? PO_PIERS.map(function(p){ return p.k; }) : ['panwa','tublamu','ranong'];
+  var b = function(k, t){ return '<button class="' + (_ct.pier === k ? 'on' : '') + '" onclick="ctPierSet(\'' + k + '\')"><i style="background:' + ctPierCol(k || 'all') + (k ? '' : ';background:#16265C') + '"></i>' + t + '</button>'; };
+  return b('', 'ทุกท่า') + ord.map(function(k){ return b(k, ctPierName(k)); }).join('');
+}
+/* กลุ่ม "ยังไม่ระบุท่า" = ทัวร์บก / รถ / โชว์ · พับไว้ก่อน */
+function ctXOpen(){ _ct.xopen = !_ct.xopen; ctRender(); }
+function ctPierHRow(g, n, span){
+  var x = (g.pier === '');
+  return '<tr class="ct-pierh' + (x ? ' x' : '') + '"><td colspan="' + span + '"><span class="ct-pierh-in"><i style="background:' + ctPierCol(g.pier) + '"></i>' + ctE(g.name) + ' · ' + n + ' เส้นทาง'
+    + (x ? ('<span class="ct-u" style="margin-left:8px">ทัวร์บก / รถ / โชว์</span><button class="ct-mini" style="margin-left:auto" onclick="ctXOpen()">' + (_ct.xopen ? 'พับ' : 'กางดู') + '</button>') : '') + '</span></td></tr>';
+}
+function ctSkinCSS(){
+  if(document.getElementById('ct-skin')) return;
+  var st = document.createElement('style'); st.id = 'ct-skin';
+  st.textContent = ''
+    + '#view-costing .ct-pierseg{display:inline-flex;gap:3px;padding:3px;background:#fff;border:1px solid #E2E6EE;border-radius:12px}'
+    + '#view-costing .ct-pierseg button{height:30px;padding:0 11px;border:0;border-radius:8px;background:transparent;font:600 12.5px inherit;font-family:inherit;color:#3E4658;display:inline-flex;align-items:center;gap:6px;cursor:pointer}'
+    + '#view-costing .ct-pierseg button i{width:8px;height:8px;border-radius:4px;display:inline-block}#view-costing .ct-pierseg button.on{background:#EAF3FB;color:#0B4F7A}'
+    /* แถบซ้าย · กลุ่มท่า + การ์ด 2 บรรทัด */
+    + '#view-costing .ct-side{width:262px;gap:4px}#view-costing .ct-side-h{display:flex;align-items:center;gap:8px;padding:0 2px 2px}'
+    + '#view-costing .ct-side-g{display:flex;align-items:center;gap:8px;padding:7px 4px 2px;font-size:10.5px;font-weight:800;letter-spacing:.1em;color:#3E4658;text-transform:uppercase}'
+    + '#view-costing .ct-side-g i{width:9px;height:9px;border-radius:5px;display:inline-block}#view-costing .ct-side-g u{text-decoration:none;margin-left:auto;font-weight:500;color:#8A8F9C;font-variant-numeric:tabular-nums}'
+    + '#view-costing .ct-side-e{border:1px dashed #D5DAE5;border-radius:10px;padding:7px 9px;font-size:11px;color:#8A8F9C;background:#FAFBFD;line-height:1.45}'
+    + '#view-costing .ct-rt{display:grid;grid-template-columns:1fr auto;gap:1px 8px;align-items:center;padding:6px 9px;border-radius:10px;border:1px solid #E6E8EE;background:#fff;text-align:left;width:100%;cursor:pointer}'
+    + '#view-costing .ct-rt.on{background:#fff;color:#0F1B3D;border:2px solid #16265C;box-shadow:0 2px 10px rgba(22,38,92,.12);padding:5px 8px}'
+    + '#view-costing .ct-rt-ic{display:none}#view-costing .ct-rt-body{display:contents}'
+    + '#view-costing .ct-rt-nm{font-size:12.5px;line-height:1.2;display:block}#view-costing .ct-rt-nm .ct-dot{display:none}'
+    + '#view-costing .ct-rt-sub{margin-top:0;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5B6170}#view-costing .ct-rt.on .ct-rt-sub{color:#5B6170}'
+    + '#view-costing .ct-rt-badge{grid-row:1/3;grid-column:2;margin-top:0;height:18px;line-height:16px;font-size:10px;padding:0 6px;white-space:nowrap}'
+    + '#view-costing .ct-rt.on .ct-rt-badge{background:var(--mt50);color:var(--mt700);border-color:var(--mt100)}#view-costing .ct-rt.on .ct-rt-badge.warn{background:#fffbeb;color:#a16207;border-color:#fde68a}'
+    + '#view-costing .ct-rt.dim{border-style:dashed;background:#FAFBFD}'
+    /* พารามิเตอร์ · 1 แถว */
+    + '#view-costing .ct-params .ct-card-h{padding:7px 14px}'
+    + '#view-costing .ct-grid8{grid-template-columns:96px repeat(9,minmax(64px,78px)) minmax(200px,260px);gap:6px;padding:8px 14px;align-items:end}'
+    + '#view-costing .ct-grid8 .ct-f>span{font-size:10px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '#view-costing .ct-grid8 .ct-in{height:30px;padding:0 7px;font-size:12.5px}'
+    + '#view-costing .ct-grid8 .ct-f.boat{border-left:1px solid #E6E8EE;padding-left:10px}'
+    + '#view-costing .ct-params .ct-hint{padding:0 14px 8px !important}'
+    /* สูตรกลาง · 2 คอลัมน์ · แถวกระชับ */
+    + '#view-costing .ct-tcols{display:block !important;column-count:1;column-gap:14px;padding:0 6px 6px}'
+    + '@media (min-width:1800px){#view-costing .ct-tcols{column-count:2}}#view-costing .ct-tcols .ct-tcat{break-inside:avoid;margin-bottom:6px}'
+    + '#view-costing .ct-tcols .ct-cath{padding:5px 10px}'
+    + '#view-costing .ct-tcols .ct-mtbl{min-width:0;table-layout:auto}#view-costing .ct-tcols .ct-scroll{overflow:visible}'
+    + '#view-costing .ct-tcols .ct-mtbl td{padding:3px 8px;vertical-align:middle}#view-costing .ct-tcols .ct-mtbl colgroup col:first-child{width:190px !important}'
+    + '#view-costing .ct-tcols .ct-nm{display:flex;align-items:center;gap:4px;flex-wrap:wrap}#view-costing .ct-tcols .ct-lname{width:auto;max-width:150px;padding:2px 5px;font-size:12px}'
+    + '#view-costing .ct-tcols .ct-nmsub{margin:0;gap:5px}#view-costing .ct-tcols .ct-catsel{display:none}#view-costing .ct-tcols .ct-vat{font-size:10.5px}'
+    + '#view-costing .ct-tcols .ct-part{gap:4px;padding:1px 0}#view-costing .ct-tcols .ct-part .ct-sel,#view-costing .ct-tcols .ct-part .ct-in{height:24px;font-size:11px;padding:0 5px}'
+    + '#view-costing .ct-tcols .ct-mini{height:22px;font-size:10.5px;padding:0 7px}#view-costing .ct-tcols .ct-mini.dash{padding:0 6px}'
+    + '#view-costing .ct-tcols .ct-tag{font-size:9.5px;padding:1px 5px}'
+    /* หัวกลุ่มท่าในตาราง */
+    + '#view-costing .ct-pierh-in{display:flex;align-items:center;gap:8px}#view-costing .ct-pierh-in i{width:8px;height:8px;border-radius:4px;display:inline-block;flex:none}'
+    + '#view-costing .ct-pierh.x td{color:#5B6170}'
+    /* ปรับ/ปิด · กระชับ */
+    + '#view-costing .ct-otbl td{padding:3px 10px;height:32px}#view-costing .ct-otbl th.ct-pcol{padding:6px 10px}'
+    + '#view-costing .ct-otbl .ct-pnm{font-size:12.5px}#view-costing .ct-otbl .ct-psub{font-size:10.5px}'
+    + '#view-costing .ct-otbl .ct-in.px{height:22px;width:40px;font-size:11.5px}';
+  document.head.appendChild(st);
+}
 function ctE(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ctB(n){ return '฿' + Math.round(n || 0).toLocaleString(); }
 // §ctHeat · ไล่สีทราย → ส้มแบรนด์ ตามสัดส่วน 0..1
@@ -35344,6 +35415,11 @@ function ctPaintTabs(){
     b.className = 'ct-tab' + ((b.getAttribute('data-t') === _ct.tab) ? ' on' : '');
   });
   try{ ctV2Head(bar); }catch(e){ console.warn('[ctV2] head', e); }
+  try{ ctSkinCSS();
+    var seg = document.getElementById('ct-pierseg');
+    if(!seg){ seg = document.createElement('div'); seg.id = 'ct-pierseg'; seg.className = 'ct-pierseg'; bar.insertAdjacentElement('afterend', seg); }
+    seg.innerHTML = ctPierSeg();
+  }catch(e){ console.warn('[ctSkin] pier seg', e); }
 }
 /* §ctV2 (2026-10-14) · หัวหน้าแบบใหม่ · ตัวเลขบนแท็บ + แถบ "สิ่งที่ค้าง" ใต้หัว
    นับจากฟังก์ชันเดิมของหน้า (ctBreakEven · ctPlanOfFam · mvList) · ไม่มีสูตรชุดที่สอง · อ่านอย่างเดียว */
@@ -35963,7 +36039,7 @@ function ctPlanHtml(){
   var bePct = be ? Math.min(100, Math.round(be / cap * 100)) : 100;
 
   // ── แถบซ้าย · รายการแผน ──
-  var items = P.map(function(x){
+  var items = function(x){
     var on = (x.id === _ct.pid);
     var xcap = Math.max(1, ctPlanSeats(x) * Math.max(1, +x.boats || 1));   /* §boatRent */
     var b = ctBreakEven(x, xcap, T);
@@ -35974,8 +36050,24 @@ function ctPlanHtml(){
       + (((ctRentOf(x.boatId) || {}).perTrip > 0)
           ? (x.rentOff ? ' · <b data-rentoff-tag="1" style="color:#64748B">คิดแบบเรือบริษัท</b>' : ' · <b style="color:#B45309">เรือเช่า</b>') : '') + '</span>'
       + '<span class="ct-rt-badge' + (b ? '' : ' warn') + '">' + (b ? ('คุ้มทุน ' + b + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</span></span></button>';
+  };
+  /* §ctSkin · จัดกลุ่มตามท่า · ท่าของแผน = ท่าของเส้นทางที่ผูก · ไม่ผูก = กลุ่มล่าง */
+  var ord = (typeof PO_PIERS !== 'undefined') ? PO_PIERS.map(function(p){ return p.k; }) : ['panwa','tublamu','ranong'];
+  var RS0 = (typeof ROUTES !== 'undefined' ? ROUTES : []);
+  var groups = ord.map(function(pk){ return { k:pk, name:ctPierName(pk), items:P.filter(function(x){ return ctPlanPier(x) === pk; }) }; });
+  var unspec = P.filter(function(x){ var pp = ctPlanPier(x); return pp === ''; });
+  var unlinked = P.filter(function(x){ return ctPlanPier(x) === null; });
+  if(unspec.length) groups.push({ k:'', name:'ยังไม่ระบุท่า', items:unspec });
+  groups.push({ k:null, name:'ยังไม่ผูกเส้นทาง', items:unlinked });
+  var listH = groups.filter(function(g){ return !_ct.pier || g.k === _ct.pier || g.k === null; }).map(function(g){
+    if(!g.items.length && g.k === null) return '';
+    var h = '<div class="ct-side-g"><i style="background:' + ctPierCol(g.k || '') + '"></i>' + ctE(g.name) + '<u>' + g.items.length + '</u></div>';
+    if(!g.items.length){ var nR = RS0.filter(function(r){ return (r.pier || '') === g.k; }).length;
+      return h + '<div class="ct-side-e">ยังไม่มีแผนของท่านี้' + (nR ? (' · ' + nR + ' เส้นทางยังใช้สูตรกลาง') : '') + '</div>'; }
+    return h + g.items.map(items).join('').replace(/class="ct-rt(?= |")/g, g.k === null ? 'class="ct-rt dim' : 'class="ct-rt')
+      + (g.k === null ? '<div class="ct-hint" style="padding:2px 4px">ผูกเส้นทางที่หัวแผน (ช่อง "ผูกกับเส้นทาง") แล้วแผนจะย้ายไปอยู่ใต้ท่าเอง</div>' : '');
   }).join('');
-  var side = '<aside class="ct-side"><div class="ct-side-h">แผนคำนวณ · ' + P.length + '</div>' + items
+  var side = '<aside class="ct-side"><div class="ct-side-h">แผนคำนวณ · ' + P.length + (_ct.pier ? (' · <span class="ct-u">กรอง ' + ctE(ctPierName(_ct.pier)) + '</span>') : '') + '</div>' + listH
     + '<button class="ct-addrt" onclick="ctAddPlan()">' + ctIcon('plus', 13) + ' เพิ่มเส้นทาง / แผนคำนวณ</button></aside>';
 
   // ── หัว · ชื่อแผน + ผูกเส้นทาง + ปุ่ม ──
@@ -36000,30 +36092,37 @@ function ctPlanHtml(){
   // ── พารามิเตอร์ ──
   var fld = function(t, inner, hot){ return '<label class="ct-f' + (hot ? ' hot' : '') + '"><span>' + t + '</span>' + inner + '</label>'; };
   var inp = function(k, hot){ return '<input class="ct-in wide' + (hot ? ' hot' : '') + '" data-fk="pl.' + k + '" value="' + ctE(pl[k]) + '" oninput="ctPlanSet(\'' + k + '\',this.value)">'; };
+  /* §ctSkin · ช่องเลือกเรือย้ายมาอยู่ท้ายแถวพารามิเตอร์ · การ์ดเรือ&ค่าเช่าโผล่เฉพาะตอนปักลำ */
+  var _BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){ return !b.retired; });
+  var boatPick = '<select class="ct-in wide" onchange="ctPlanSet(\'boatId\',this.value)">'
+      + '<option value="">— ไม่ปักลำ · ใช้ความจุที่พิมพ์เอง —</option>'
+      + _BL.map(function(b){ var rr = ctRentRaw(b.id);
+          return '<option value="' + ctE(b.id) + '"' + ((pl.boatId || '') === b.id ? ' selected' : '') + '>' + ctE(b.name) + ' · ' + (+b.cap || 0) + ' ที่นั่ง' + ((rr && rr.on) ? ' · เรือเช่า' : '') + '</option>'; }).join('')
+      + '</select>';
+  var _RN0 = ctRentOf(pl.boatId);
   var params = '<div class="ct-card ct-params"><div class="ct-card-h">' + ctIcon('sliders', 15)
-    + '<b>พารามิเตอร์การตั้งราคา &amp; กำลังการผลิต</b><span class="ct-hint">ปรับแล้วคำนวณจุดคุ้มทุนใหม่ทันที</span></div>'
+    + '<b>พารามิเตอร์ · ราคา &amp; กำลังการผลิต · เรือที่ใช้</b><span class="ct-hint">ปรับแล้วคำนวณใหม่ทันที · ราคาผู้ใหญ่/เด็ก = รวม VAT · ปักลำแล้วความจุดึงจากลำนั้น · เรือเช่า: ค่าเช่าเข้าสูตรเอง</span></div>'
     + '<div class="ct-grid8">'
     + fld('เครื่องยนต์', '<select class="ct-in wide" onchange="ctPlanSet(\'eng\',this.value)">'
         + ['3EN','4EN'].map(function(e){ return '<option' + (pl.eng === e ? ' selected' : '') + '>' + e + '</option>'; }).join('') + '</select>')
-    + fld('จำนวนลำ', inp('boats'))
+    + fld('ลำ', inp('boats'))
     /* §boatRent · ปักเรือไว้แล้ว ที่นั่งมาจากทะเบียนเรือ · ปล่อยให้พิมพ์ทับได้เมื่อไหร่
        จุดคุ้มทุนจะคิดบนความจุที่ไม่มีอยู่จริงทันที */
-    + fld(pl.boatId ? 'ความจุ/ลำ (จากทะเบียนเรือ)' : 'ความจุ/ลำ (คน)',
+    + fld(pl.boatId ? 'จุ/ลำ · ทะเบียนเรือ' : 'จุ/ลำ',
         pl.boatId
           ? ('<input class="ct-in wide" value="' + capPer + '" readonly'
              + ' title="มาจากทะเบียนเรือ ' + ctE((getBoat(pl.boatId) || {}).name || '') + ' · แก้ที่หน้าเรือ"'
              + ' style="background:var(--sd50);color:rgba(74,62,54,.55);cursor:not-allowed">')
           : inp('cap'))
-    + fld('จำนวนคนที่คาด', inp('pax', 1), 1) + fld('คนไทยกี่คน', inp('paxTH'))
+    + fld('คนที่คาด', inp('pax', 1), 1) + fld('คนไทย', inp('paxTH'))
     /* §ctChd · ราคาเด็กแยกจากผู้ใหญ่ · ว่าง = คิดเท่าผู้ใหญ่ ไม่ใช่ฟรี */
-    + fld('ราคาผู้ใหญ่', inp('price'))
-    + fld('ราคาเด็ก', '<input class="ct-in wide" data-fk="pl.priceCh" value="' + ctE(pl.priceCh == null ? '' : pl.priceCh)
+    + fld('ผู้ใหญ่ ฿', inp('price'))
+    + fld('เด็ก ฿', '<input class="ct-in wide" data-fk="pl.priceCh" value="' + ctE(pl.priceCh == null ? '' : pl.priceCh)
         + '" placeholder="' + (+pl.price || 0) + '" title="\u0e27\u0e48\u0e32\u0e07 = \u0e04\u0e34\u0e14\u0e40\u0e17\u0e48\u0e32\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48" oninput="ctPlanSet(\'priceCh\',this.value)">')
-    + fld('เด็กกี่ %', inp('chPct'))
-    + fld('คอมมิชชั่น %', inp('comm')) + fld('ราคาน้ำมัน ฿/ลิตร', inp('fuel'))
+    + fld('เด็ก %', inp('chPct'))
+    + fld('คอมฯ %', inp('comm')) + fld('น้ำมัน ฿/L', inp('fuel'))
+    + '<label class="ct-f boat"><span>' + ctIcon('anchor', 11) + ' เรือที่ใช้' + (_RN0 ? (_RN0.perTrip > 0 ? (pl.rentOff ? ' · <b style="color:#64748B">คิดแบบเรือบริษัท</b>' : ' · <b style="color:#B45309">เรือเช่า ' + ctB(_RN0.perTrip) + '/ทริป</b>') : ' · <b style="color:#B45309">เรือเช่า · ยังไม่มีค่าเช่า</b>') : (pl.boatId ? ' · เรือของบริษัท' : '')) + '</span>' + boatPick + '</label>'
     + '</div>'
-    + '<div class="ct-hint" style="padding:0 20px 4px">ราคาผู้ใหญ่ / ราคาเด็ก เป็นราคา<b>รวม VAT</b> เหมือนที่ขายจริง · '
-    + '<b>ราคาน้ำมัน</b> ในช่องนี้ P&amp;L จะหยิบไปใช้เมื่อวันนั้นไม่มีราคาจริงเลย (เป็นตัวสำรองชั้นสุดท้าย)</div>'
     + '<div class="ct-hint" style="padding:0 20px 14px">'
     + (+pl.chPct > 0
         ? ('\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19\u0e04\u0e34\u0e14\u0e42\u0e14\u0e22\u0e41\u0e15\u0e01\u0e17\u0e38\u0e01\u0e23\u0e2d\u0e1a\u0e40\u0e1b\u0e47\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48/\u0e40\u0e14\u0e47\u0e01\u0e01\u0e48\u0e2d\u0e19 \u00b7 \u0e17\u0e35\u0e48 '
@@ -36052,10 +36151,7 @@ function ctPlanHtml(){
     var head = '<div class="ct-cath"><span>' + ctIcon('anchor', 15) + '<b>เรือที่ใช้ &amp; ค่าเช่า</b>'
       + '<span class="ct-u" style="margin-left:8px">' + (RN ? (RN.perTrip > 0 ? (pl.rentOff ? 'เรือเช่า · แผนนี้คิดแบบเรือบริษัท' : ('เรือเช่า · ' + ctB(RN.perTrip) + '/ทริป')) : 'ติ๊กเป็นเรือเช่า · ยังไม่มีค่าเช่า') : 'เรือของบริษัท') + '</span></span></div>';
 
-    if(!bid) return '<div class="ct-card ct-catcard ct-rent">' + head
-      + '<div class="ct-rentbody"><div class="ct-rrow"><label class="ct-f grow"><span>ปักเรือลำที่ใช้</span>' + pick + '</label></div>'
-      + '<div class="ct-hint" style="padding:0">ปักลำไว้แล้วความจุจะอิงที่นั่งของลำนั้นเอง · '
-      + 'และถ้าลำนั้นเป็น<b>เรือเช่า</b> ค่าเช่าจะเข้าสูตรให้อัตโนมัติ พร้อมตัดบรรทัดที่เจ้าของเรือรับผิดชอบออก</div></div></div>';
+    if(!bid) return '';   /* §ctSkin · ไม่ปักลำ = ไม่มีอะไรให้ตั้ง · ช่องเลือกอยู่ท้ายแถวพารามิเตอร์แล้ว */
 
     var rr = ctRentRaw(bid) || ctRentBlank();
     var on = !!(rr.on && ctRentRaw(bid));
@@ -36543,9 +36639,10 @@ function ctRealHtml(){
   };
   var rf = _ct.rf || 'all', nNoMeal = 0;   /* §ctV2 · ตัวกรอง "ยังไม่เลือกร้าน" */
   (typeof ROUTES !== 'undefined' ? ROUTES : []).forEach(function(r){ if(!r.mealVenueId) nNoMeal++; });
-  var rRows = ctRoutesByPier().map(function(g){
+  var rRows = ctPiersView().map(function(g){
     var rs = g.routes.filter(function(r){ return rf !== 'un' || !r.mealVenueId; }); if(!rs.length) return '';
-    return '<tr class="ct-pierh"><td colspan="2">' + e(g.name) + ' · ' + rs.length + ' เส้นทาง</td></tr>'
+    if(g.pier === '' && !_ct.xopen) return ctPierHRow(g, rs.length, 2);   /* §ctSkin · เส้นทางบกพับไว้ */
+    return ctPierHRow(g, rs.length, 2)
       + rs.map(function(r){
           return '<tr><td class="ct-nm"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
             + '<b>' + e(r.name || r.id) + '</b><div class="ct-nmsub">' + e(r.islands || '') + '</div></td>'
@@ -36851,9 +36948,11 @@ function ctMatchHtml(){
     if(mq && String((r.name || '') + ' ' + r.id + ' ' + (r.islands || '')).toLowerCase().indexOf(mq) < 0) return false;
     return true; };
   var nShow = 0;
-  var rows = ctRoutesByPier().map(function(g){
+  var rows = ctPiersView().map(function(g){
     var rs = g.routes.filter(keep); if(!rs.length) return ''; nShow += rs.length;
-    return '<tr class="ct-pierh"><td colspan="5">' + e(g.name) + ' · ' + rs.length + ' เส้นทาง</td></tr>'
+    if(g.pier === '' && !_ct.xopen) return ctPierHRow(g, rs.length, 5);   /* §ctSkin · เส้นทางบกพับไว้ */
+    var nL = rs.filter(function(r){ return !!ctPlanOfFam(r.id); }).length;
+    return ctPierHRow(g, rs.length, 5).replace(' เส้นทาง</span>', ' เส้นทาง · จับคู่แล้ว ' + nL + '</span>')
       + rs.map(function(r){
     var pl = ctPlanOfFam(r.id), nT = ctRouteTrips(r.id);
     var fam = ctRouteFamId(r.id);
@@ -37132,7 +37231,7 @@ function ctTplHtml(){
     + '<button class="ct-btn ghost" onclick="ctResetTpl()">คืนค่าเริ่มต้น</button>'
     + '<button class="ct-btn" onclick="ctAddLine()">' + ctIcon('plus', 13) + ' เพิ่มรายการต้นทุน</button></div></div>'
     + '<div class="ct-card ct-tsheet"><div class="ct-tsh"><span>รายการ · หมวด · ขอคืน VAT</span><span>ส่วนประกอบ · ชนิด · คิดแบบ · จำนวน · ราคาแยก</span>'
-    + '<button class="ct-mini" onclick="ctV2TFoldAll()">หุบ / กาง ทุกหมวด</button></div>' + body + '</div>';
+    + '<button class="ct-mini" onclick="ctV2TFoldAll()">หุบ / กาง ทุกหมวด</button></div><div class="ct-tcols">' + body + '</div></div>';   /* §ctSkin · 2 คอลัมน์ */
 }
 function ctV2TFold(g){ _ct.tfold = _ct.tfold || {}; if(_ct.tfold[g]) delete _ct.tfold[g]; else _ct.tfold[g] = 1; ctRender(); }
 function ctV2TFoldAll(){
@@ -37433,7 +37532,8 @@ function ctV2OvrTot(P, G, T){
   return '<tr class="ct-totrow"><td class="ct-stick ct-tot">รวมต่อทริป<span class="ct-u" style="display:block;font-weight:500;font-size:11.5px">ก่อนหักภาษีซื้อคืน</span></td>' + cells + '</tr>';
 }
 function ctOvrHtml(){
-  var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
+  var T = ctTpl(), P = ctPlansView(), G = ctGroups(T);   /* §ctSkin · กรองท่าจากหัว · ตารางไม่ล้นจอ */
+  if(!P.length) return '<div class="ct-card ct-bar2"><div><b>ปรับ / ปิด รายการต้นทุนแยกตามแผน</b><span class="ct-sub">ยังไม่มีแผนของท่า ' + ctE(ctPierName(_ct.pier)) + ' · เลือก "ทุกท่า" บนหัว หรือผูกแผนกับเส้นทางของท่านี้ก่อน</span></div></div>';
   var pxf = function(pl, k, lb){
     return '<label class="ct-paxf" title="แก้ได้ที่นี่เลย · มีผลกับทุกยอดในคอลัมน์นี้"><span>' + lb + '</span>'
       + '<input class="ct-in px" data-fk="pp.' + pl.id + '.' + k + '" value="' + (+pl[k] || 0) + '"'
@@ -37599,7 +37699,7 @@ function ctOvrHtml(){
   return '<div class="ct-card ct-bar2"><div><b>ปรับ / ปิด รายการต้นทุนแยกตามแผน</b>'
     + '<span class="ct-sub">' + ctIcon('info', 12) + ' <em class="fix">แถวหัวหมวด</em> ปิดทั้งหมวด หรือใส่ ±% คูณทุกบรรทัดในหมวด · '
     + '<em class="var">คลิกชื่อรายการ</em> เพื่อกางค่าทั้งหมดของบรรทัดนั้น · ทุกค่าทับได้ แม้สูตรกลางยังไม่ได้ตั้ง · ว่าง = ใช้ค่าจากสูตรกลาง</span></div>'
-    + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ</span></div></div>'
+    + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ · ' + (_ct.pier ? ('โชว์ ' + P.length + ' แผนของ ' + ctE(ctPierName(_ct.pier))) : ('ทั้ง ' + P.length + ' แผน · กรองท่าบนหัวให้ตารางแคบลงได้')) + '</span></div></div>'
     + '<div class="ct-navbar" id="ct-navbar"><span class="ct-navref" id="ct-navref">คลิกช่องไหนก็ได้ แล้วใช้ลูกศรเดินต่อ</span>'
     + '<span class="ct-navval" id="ct-navval"></span><span class="ct-navsp"></span>'
     + '<span class="ct-navkeys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> ข้ามแถว <kbd>&larr;</kbd><kbd>&rarr;</kbd> ข้ามทริป <kbd>Enter</kbd> ลงแถวถัดไป</span></div>'
