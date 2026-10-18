@@ -241,7 +241,7 @@ ok('edit re-priced by the server · 3 × ฿1,200 = ฿3,600 on server and scree
 // An agent booking priced by hand is refused (400) since 8b1eeaa: operation-backend src/domain/pricing.ts:118
 // enforcedPriceMode → "price_mode must be rate: only walk-in, company and staff bookings may be priced by hand".
 const manualRes = await fetch(OPS + '/v1/bookings', { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
-  body: JSON.stringify({ external_id: 'zz-manual-api', intent: 'confirm', agentId: 'a01', leadPax: 'ZZ MANUAL API', pickupSelf: true, priceMode: 'manual', manualTotal: 3000,
+  body: JSON.stringify({ external_id: 'zz-manual-api', intent: 'confirm', guides: { english: true }, leadNationality: 'RU', agentId: 'a01', leadPax: 'ZZ MANUAL API', pickupSelf: true, priceMode: 'manual', manualTotal: 3000,
     trips: [{ routeId: 'r5', date: D2, pax: { ad_fr: 1 }, zone: 'NoTransfer' }] }) });
 const manualBody = await manualRes.json();
 ok('contract · manual-priced agent booking → 400 price_mode must be rate', manualRes.status === 400 && /price_mode must be rate: only walk-in, company and staff bookings may be priced by hand/.test(manualBody.message), { status: manualRes.status, body: manualBody });

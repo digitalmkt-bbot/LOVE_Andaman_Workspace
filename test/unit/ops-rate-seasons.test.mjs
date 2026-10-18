@@ -21,7 +21,7 @@ function runtime({ enabled = true, refuse = {}, server = {} } = {}) {
   ];
   const tables = Object.assign({ a1: [], a2: [{ rate_type_id: 'mid', from: '2026-03-01', to: null }], a3: [] }, server);
   const O = {
-    enabled: () => enabled,
+    enabled: () => enabled, onWrite: () => {}, onChange: () => {},
     get: async (path) => {
       const m = /^\/v1\/agents\/(\w+)(\/.*)?$/.exec(path);
       if (m[2] === '/rate-seasons') return { seasons: tables[m[1]] };

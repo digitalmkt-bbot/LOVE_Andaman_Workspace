@@ -51,6 +51,8 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true, modalOpen
   const state = { day: dayFixture(), types: J(TYPES) };
 
   const req = (method, path, body) => {
+    // the going heads by nationality come from the pier day's boats (read next to the park tickets); not part of what the tests count
+    if (method === 'GET' && path === '/v1/pier-office/tublamu/days/' + DATE + '/boats') return Promise.resolve(J({ boats: [] }));
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
     const key = method + ' ' + path;
     const a = answers[key];

@@ -18,7 +18,7 @@ function runtime({ enabled = true, refuse = {}, agents } = {}) {
   ];
   const window = {
     laOps: {
-      enabled: () => enabled,
+      enabled: () => enabled, onWrite: () => {}, onChange: () => {},
       get: async () => ({}),
       call: async (method, path, body) => {
         calls.push(method + ' ' + path + ' ' + JSON.stringify(body));

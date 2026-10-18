@@ -135,8 +135,7 @@ test('adapter uses shared ops plumbing and keeps the classic tag before boot', (
   assert.equal(source.includes('fetch('), false);
   assert.ok(source.includes("/v1/agents/"));
   assert.ok(source.includes("/v1/contract-documents/"));
-  assert.ok(source.includes('Legacy artifact metadata mapping is blocked'));
-  assert.equal(source.includes("rows.find(function(x){return x&&x.id===id;})"), false, 'blocked artifact reopen must not map legacy artifact ids to documents');
+  assert.ok(source.includes('window.ctArtifactReopen=function'), 'reopen is wired to the server document history');
   const html = fs.readFileSync(path.join(root, 'allotment_v2/allotment_v2.html'), 'utf8');
   assert.ok(html.indexOf('js/ops/18-ops-contracts.js') < html.indexOf('js/ops/90-ops-boot.js'));
 });
@@ -146,7 +145,7 @@ test('adapter uses shared ops plumbing and keeps the classic tag before boot', (
    16-ops-agents.js and runs both adapters against a legacy-shaped global scope. */
 function agentMap() {
   const src = fs.readFileSync(path.join(root, 'allotment_v2/js/ops/16-ops-agents.js'), 'utf8');
-  const window = { laOps: { enabled: () => true, get: async () => ({}), call: async () => ({}), queue: (fn) => Promise.resolve().then(fn), wrote: () => {}, fail: () => {} } };
+  const window = { laOps: { onWrite: () => {}, onChange: () => {}, enabled: () => true, get: async () => ({}), call: async () => ({}), queue: (fn) => Promise.resolve().then(fn), wrote: () => {}, fail: () => {} } };
   const noop = () => {};
   vm.runInNewContext(src, { window, SB_AGENTS: [], console, Promise, Array, Object, Error, String, Number, JSON, Set, encodeURIComponent, agRenderList: noop, renderAgKPI: noop, confirm: () => true, alert: noop });
   return window.laOpsAgentMap;

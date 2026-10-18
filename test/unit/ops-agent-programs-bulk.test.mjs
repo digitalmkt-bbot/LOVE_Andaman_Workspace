@@ -25,7 +25,7 @@ function runtime({ enabled = true, refuse = {} } = {}) {
     a2: { programs: [] }, a3: { programs: [] },
   };
   const O = {
-    enabled: () => enabled,
+    enabled: () => enabled, onWrite: () => {}, onChange: () => {},
     get: async (path) => {
       const m = /^\/v1\/agents\/(\w+)(\/activity)?$/.exec(path);
       if (m[2]) return { activity: [{ at: 'T', text: 'server line' }] };
