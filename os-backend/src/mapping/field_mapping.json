@@ -1503,6 +1503,11 @@
       "source": "closeNote",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "photos": {
+      "source": "photos",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "fleet_maintenance__assets": {
@@ -1730,6 +1735,11 @@
     "resolveddate": {
       "source": "resolvedDate",
       "kind": "scalar",
+      "db_type": "text"
+    },
+    "photos": {
+      "source": "photos",
+      "kind": "json_text",
       "db_type": "text"
     }
   },
@@ -3984,7 +3994,13 @@
       "kind": "json_text",
       "db_type": "text",
       "note": "agents this salesperson marked handled · {\"YYYY-MM::agentId\": true} · Sales Board follow-up"
-    }, "active": {"source": "active", "kind": "scalar", "db_type": "boolean", "note": "§salesActive · false = inactive · ไม่ขึ้นในตัวเลือก/ชิป/KPI · ไม่มีค่า = active"}
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean",
+      "note": "§salesActive · false = inactive · ไม่ขึ้นในตัวเลือก/ชิป/KPI · ไม่มีค่า = active"
+    }
   },
   "sb_agents": {
     "id": {
