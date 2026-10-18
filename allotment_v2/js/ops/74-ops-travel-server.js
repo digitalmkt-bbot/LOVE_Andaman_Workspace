@@ -192,6 +192,21 @@
     return out;
   });
 
+  /* w5-d · a cancelled booking that is not held here: a stand-in with what the server's row says (the screen reads a code, a voucher, a lead, an agent, a status, a route, a boat and a van) */
+  var stubs = {};
+  function stubOf(x, date){
+    var k = x.booking_id + '|' + date, s = stubs[k];
+    if(!s){
+      s = stubs[k] = { id: x.booking_id, opsId: x.booking_id, code: x.code || '', voucherRef: x.voucher_ref || '', leadPax: x.lead_pax || '', agentId: x.agent_id || '', status: x.status || 'cancelled',
+        passengers: [], history: [], adjustments: [], notes: '', ops: {}, _stub: true,
+        trips: [{ date: date, routeId: x.route_id || '', pax: {}, zone: x.zone_group || '', ops: {} }] };
+    }
+    s.status = x.status || s.status; s.leadPax = x.lead_pax || s.leadPax; s.voucherRef = x.voucher_ref || s.voucherRef;
+    s.ops = { boatId: x.boat_id || '', vanId: (x.van_ids || [])[0] || '' };
+    s.trips[0].routeId = x.route_id || s.trips[0].routeId;
+    return s;
+  }
+
   /* tsCxlRows(date) -> the cancelled bookings of the day, in legacy's row shape (only when every one is a booking this browser holds) */
   wrap('tsCxlRows', function(orig, a){
     var date = a[0], c = date ? dayCache(date) : null; if(!c) return undefined;
@@ -201,8 +216,8 @@
       var x = list[i];
       var b = bookings().filter(function(y){ return y && (y.opsId === x.booking_id || y.id === x.booking_id); })[0];
       var t = b ? ((b.trips || []).filter(function(tt){ return tt && (tt.date || '') === date; })[0]) : null;
-      if(!b || !t) return undefined;                   // a booking this browser does not hold: legacy lists what it can
-      out.push({ b: b, t: t, O: (typeof bkOpsRead === 'function') ? bkOpsRead(b, date) : (b.ops || {}), routeId: x.route_id || t.routeId || '', cxlRow: true,
+      if(!b || !t){ b = stubOf(x, date); t = b.trips[0]; }   // w5-d: a booking this browser does not hold is drawn from the server's own cancelled row (no fall back to legacy's list)
+      out.push({ b: b, t: t, O: (typeof bkOpsRead === 'function' && !b._stub) ? bkOpsRead(b, date) : (b.ops || {}), routeId: x.route_id || t.routeId || '', cxlRow: true,
         ovnBack: !!x.ovn_back, ovnOut: x.ovn_out || '', booked: num(x.booked), travelled: 0,
         ns: 0, cxl: 0, events: [], van: '', vanCk: null, vanDone: false, vanActual: null,
         boat: '', pierCk: null, pierDone: false, pierActual: null, pierExp: null,

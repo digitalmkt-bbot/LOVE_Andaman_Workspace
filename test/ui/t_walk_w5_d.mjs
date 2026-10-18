@@ -149,6 +149,11 @@ await seed('PATCH', `/v1/pier-office/tublamu/days/${DAY}/boats/b6/job`, { captai
 await mk('tg1', 'W5 REG ONE', 3, { passengers: [{ name: 'Ivan Petrov', nationality: 'RU' }, { name: 'Olga Petrova', nationality: 'RU' }] });
 await seed('PATCH', `/operations/trip-ops/${bk.tg1.trip}`, { boat_id: 'b6' });
 
+// ── 7 · a cancelled booking with a boat (listed in cancelled_rows) ──
+await mk('cx1', 'W5 CANCELLED', 2);
+await seed('PATCH', `/operations/trip-ops/${bk.cx1.trip}`, { boat_id: 'b6' });
+await seedV('POST', `/v1/bookings/${bk.cx1.id}/cancel`, bk.cx1.id, { category: 'sick', charge_type: 'none' });
+
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -489,6 +494,31 @@ section('6', async () => {
   const sub = await ev(() => (document.querySelector('#acct-modal .go-s') || {}).innerText || '');
   ok('goSetupOpen shows "ผู้ใหญ่ n · เด็กโต n · เด็กเล็ก n · กัปตัน/นายท้าย n" from the sheet', sub.includes(`ผู้ใหญ่ ${S.counts.ad} · เด็กโต ${S.counts.chd} · เด็กเล็ก ${S.counts.inf}`) && sub.includes(`กัปตัน/นายท้าย ${S.crew}`), sub);
   await ev(() => acctModalClose());
+});
+
+// ═══ 7 · Travel Summary cancelled rows <- cancelled_rows ═══
+section('7', async () => {
+  console.log('\n[7] Travel Summary: tsCxlRows draws the server\'s cancelled_rows, also for a booking this browser does not hold');
+  const open = async () => {
+    await ev((d) => { _tsDate = d; _tsPier = ''; _tsRoute = ''; _tsVatF = ''; const el = document.querySelector('.nav-item[data-view="travelsum"]'); if (el) nav(el); renderTravelSum(); }, DAY);
+    await waitFor(() => !!document.querySelector('[data-ops-ts-view]') && document.querySelectorAll('[data-ops-ts-man]').length > 0, null, 25000);
+    await idle(); await settle(1200);
+  };
+  const reset = () => ev(() => { laOps.moneyReports.clear(); laOps.travelRows.clear(); laOps.travelServer.clear(); laOps.travelView.clear(); });
+  await open();
+  const Sx = await api('/v1/reports/travel-summary?date=' + DAY);
+  ok('seed: the server lists the cancelled booking cx1 in cancelled_rows', Sx.cancelled_rows.some((r) => r.booking_id === bk.cx1.id), Sx.cancelled_rows.map((r) => r.booking_id));
+  const rowsFn = () => ev((d) => tsCxlRows(d).map((r) => ({ id: r.b.id, lead: r.b.leadPax, stub: !!r.b._stub, routeId: r.routeId, booked: r.booked, amount: r.amount })), DAY);
+  let r0 = await rowsFn();
+  ok('tsCxlRows lists the server\'s cancelled rows (cx1), from the held booking', r0.length === Sx.cancelled_rows.length && r0.some((r) => r.lead === 'W5 CANCELLED' && !r.stub), r0);
+  tamper = [{ re: /travel-summary\?date=2026-12-08$/, fn: (j) => { j.cancelled_rows.push({ booking_id: 'ghost-booking-1', code: 'GH-1', voucher_ref: 'GHOST-V1', lead_pax: 'GHOST LEAD', agent_id: null, status: 'cancelled', route_id: 'r5', zone_group: 'PK', booked: 5, travelled: 0, ovn_back: false, ovn_out: null, boat_id: 'b6', van_ids: [], trip_amount: 4321 }); } }];
+  await reset(); await open();
+  r0 = await rowsFn();
+  const ghost = r0.find((r) => r.id === 'ghost-booking-1');
+  ok('tampered answer (a cancelled booking this browser has never loaded): tsCxlRows still lists it, from the server\'s row (lead, 5 booked, 4,321)', ghost && ghost.lead === 'GHOST LEAD' && ghost.stub && ghost.booked === 5 && ghost.amount === 4321 && r0.length === Sx.cancelled_rows.length + 1, r0);
+  // (the Travel Summary page itself draws the day's roster read from /v1/bookings; tsCxlRows serves the callers that still ask it, such as drData)
+  tamper = [];
+  await reset(); await open();
 });
 
 //@@SECTIONS
