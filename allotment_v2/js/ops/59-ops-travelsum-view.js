@@ -84,20 +84,27 @@
     // Whole day travelled = booked with no no-show or on-site cancel: then every booking travelled in full.
     var clean = n(S.no_show) + n(S.cxl) === 0 && n(S.travelled) === n(S.booked);
     var anyCase = n(S.noshow && S.noshow.cases) > 0;
+    /* w4-f2 · the server's own row facts (GET /v1/reports/travel-summary rows[]): who travelled, who needs a decision, what is owed.
+       Without them (an older answer) the browser's reading below stays. */
+    var sMap = {}; (S.rows || []).forEach(function(x){ if(x && x.booking_id) sMap[x.booking_id] = x; });
+    var cMap2 = {}; (S.cancelled_rows || []).forEach(function(x){ if(x && x.booking_id) cMap2[x.booking_id] = x; });
     function mk(r, cxlRow){
       var a = V.after ? (V.after[r.id] || null) : null, cot = a && a.cot, dec = cot && cot.decision || null, ns = a && a.noshow || null;
       var c = cxlRow ? null : (cMap[r.id] || null), booked = n(r.t.pax_total), ev = cxlRow ? [] : liveEvents(r.t);
-      var isCase = !cxlRow && anyCase && (!!ns || ev.length > 0 || shortCount(r.t));
+      var sr = cxlRow ? null : (sMap[r.id] || null);
+      var isCase = sr ? !!sr.issue : (!cxlRow && anyCase && (!!ns || ev.length > 0 || shortCount(r.t)));
       return {
-        id: r.id, b: r.b, t: r.t, routeId: r.routeId, voucher: r.b.voucher_ref || '—', a: a, c: c, dec: dec, ns: ns, ev: ev, cxlRow: !!cxlRow,
-        booked: booked, trav: cxlRow ? 0 : (clean ? booked : null), pb: paxBreak(r.t.pax), clean: clean,
+        id: r.id, b: r.b, t: r.t, routeId: r.routeId, voucher: r.b.voucher_ref || '—', a: a, c: c, dec: dec, ns: ns, ev: ev, cxlRow: !!cxlRow, sr: sr, cxlSrv: cxlRow ? (cMap2[r.id] || null) : null,
+        booked: booked, trav: cxlRow ? 0 : (sr ? n(sr.travelled) : (clean ? booked : null)), pb: paxBreak(r.t.pax), clean: clean,
         amount: a ? n(a.trip_amount) : null, isCase: isCase,
-        pend: isCase && !ns,
-        due: !!(c && !c.not_counted && n(c.due) > 0),
-        cotOpen: !!(c && n(c.cot) > 0 && (!dec || dec.over))
+        pend: sr ? !!(sr.flags && sr.flags.pend) : (isCase && !ns),
+        due: sr ? !!(sr.flags && sr.flags.due) : !!(c && !c.not_counted && n(c.due) > 0),
+        cotOpen: sr ? !!(sr.flags && sr.flags.cot) : !!(c && n(c.cot) > 0 && (!dec || dec.over))
       };
     }
-    var cmp = function(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || ((x.cxlRow ? 1 : 0) - (y.cxlRow ? 1 : 0)) || sortAZ(agName(x.b), agName(y.b)) || sortAZ(x.b.voucher_ref || '', y.b.voucher_ref || ''); };
+    // legacy §tsManZone2: route, live before cancelled, agency A-Z, then PK / KL / Own (the server's zone_group), then voucher
+    var ZO = { PK: 0, KL: 1, OWN: 2 }, zoneOf = function(r){ var z = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || ''; return z in ZO ? ZO[z] : 1.5; };
+    var cmp = function(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || ((x.cxlRow ? 1 : 0) - (y.cxlRow ? 1 : 0)) || sortAZ(agName(x.b), agName(y.b)) || (zoneOf(x) - zoneOf(y)) || sortAZ(x.b.voucher_ref || '', y.b.voucher_ref || ''); };
     /* Legacy tsMvRows: a booking moved off the day, as it left (route, pax). Counts nothing; its money went with it. */
     function mv(m){
       var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone };
@@ -112,7 +119,10 @@
 
   /* ── the figures of the selection: the server's own when the whole day is shown,
         a count / sum of its rows when a pier, route or VAT is chosen ── */
-  function figures(S, rows, scoped, clean){
+  /* w4-f2 · SC = the server's answer for the chosen pier / route / VAT (GET /v1/reports/travel-summary with the scope): its totals
+     are the figures, nothing is added up here. Until it arrives (and when it fails) the rows below are summed, as before. */
+  function figures(S, rows, scoped, clean, SC){
+    if(scoped && SC){ S = SC; scoped = false; }
     var m = S.money || {}, cot = S.cot || {}, ns = S.noshow || {};
     if(!scoped) return {
       known: true, nBk: n(S.bookings), booked: n(S.booked), trav: n(S.travelled), ns: n(S.no_show), cxl: n(S.cxl),
@@ -140,35 +150,49 @@
       }
     });
     if(clean){ F.trav = F.booked; F.ns = 0; F.cxl = 0; }
+    else if(rows.length && rows.every(function(r){ return r.sr; })){      // the server's rows say who travelled
+      F.known = true; F.trav = 0; F.ns = 0; F.cxl = 0;
+      rows.forEach(function(r){ F.trav += n(r.sr.travelled); F.ns += n(r.sr.lost_no_show); F.cxl += n(r.sr.lost_cancelled); });
+    }
     F.tin = F.cash + F.tf + F.card; F.net = Math.max(0, F.tin - F.out);
     return F;
   }
 
+  /* The close-day badge counts the whole day, not the chips. w4-f2: the server's checks say which of the three blocking lines warn
+     (pend / due / cot) and its can_close / blocking agree with them; an answer without checks keeps the totals' own reading. */
+  function dayWOf(S){
+    var by = {}; (S.checks || []).forEach(function(c){ by[c.key] = c; });
+    if(by.pend && by.due && by.cot) return { pend: by.pend.warn && by.pend.blocks ? 1 : 0, due: by.due.warn && by.due.blocks ? 1 : 0, cot: by.cot.warn && by.cot.blocks ? 1 : 0 };
+    return { pend: n(S.noshow && S.noshow.pending), due: n(S.money && S.money.due) > 0 ? 1 : 0, cot: n(S.cot && S.cot.undecided_bookings) };
+  }
+
   /* ── the navy bar, the chips and the headline card: legacy tsV6Head on server numbers ── */
   function headHtml(S, V, R, F, date){
-    var st = V.state, pMap = {}, pOrder = [], rMap = {}, rOrder = [], clean = R.clean;
+    var st = V.state, pMap = {}, pOrder = [], rMap = {}, rOrder = [], unk = false;
     var dayRows = rowsOf(S, { after: V.after, inScope: V.allRows || V.inScope, cancelled: [] }).all;
     dayRows.forEach(function(r){
       var k = r.routeId || '', pk = pierOf(k);
       if(!rMap[k]){ rMap[k] = { n: 0, pax: 0, bk: 0, w: 0 }; rOrder.push(k); }
       if(!pMap[pk]){ pMap[pk] = { n: 0, pax: 0, rt: {}, w: 0 }; pOrder.push(pk); }
-      var hv = V.hasVat({ agentId: r.b.agent_id || '' });
+      var hv = r.sr ? r.sr.vat_mode !== 'none' : V.hasVat({ agentId: r.b.agent_id || '' });   // w4-f2: the server's VAT mode of the booking
       if(st.vat && !(st.vat === 'vat' ? hv : !hv)) return;
       var w = (r.pend || r.due || r.cotOpen) ? 1 : 0;
-      rMap[k].n++; rMap[k].bk += r.booked; rMap[k].pax += r.booked; rMap[k].w += w;
-      pMap[pk].n++; pMap[pk].pax += r.booked; pMap[pk].rt[k] = 1; pMap[pk].w += w;
+      // w4-f2: heads that travelled come from the server's rows; only a row it did not send falls back to the booked heads
+      var tv = r.trav; if(tv == null){ unk = true; tv = r.booked; }
+      rMap[k].n++; rMap[k].bk += r.booked; rMap[k].pax += tv; rMap[k].w += w;
+      pMap[pk].n++; pMap[pk].pax += tv; pMap[pk].rt[k] = 1; pMap[pk].w += w;
     });
-    // Travelled per pier / route is known only when the whole day travelled in full (B17 otherwise).
-    if(!clean){ Object.keys(pMap).forEach(function(p){ pMap[p].pax = 'จอง ' + pMap[p].pax; }); Object.keys(rMap).forEach(function(k){ rMap[k].pax = '?'; }); }
+    // Travelled per pier / route: the server's rows say it; without them it is known only when the whole day travelled in full (B17 otherwise).
+    if(unk){ Object.keys(pMap).forEach(function(p){ pMap[p].pax = 'จอง ' + pMap[p].pax; }); Object.keys(rMap).forEach(function(k){ rMap[k].pax = '?'; }); }
     var ORDER = ['panwa','tublamu','ranong'], ix = function(p){ var i = ORDER.indexOf(p); return i < 0 ? (p === 'other' ? 9 : 8) : i; };
     pOrder.sort(function(a, b){ return ix(a) - ix(b); });
     var rTotN = rOrder.reduce(function(a, k){ return a + rMap[k].n; }, 0);
     var doc = { verified: 0, issue: 0, pending: 0, nofiles: 0 };
     R.all.forEach(function(r){ var s = docSt(r.b); doc[s] = (doc[s] || 0) + 1; });
     var H = {
-      date: date, vat: st.vat, nAll: V.inScope.length, nVat: V.nVat, nNoVat: V.nNoVat, vgap: V.vatGap,
+      date: date, vat: st.vat, nAll: V.nAllServer != null ? V.nAllServer : V.inScope.length, nVat: V.nVat, nNoVat: V.nNoVat, vgap: V.vatGap,
       pOrder: pOrder, pMap: pMap, rOrder: rOrder, rMap: rMap, rTotN: rTotN,
-      dayW: { pend: n(S.noshow && S.noshow.pending), due: n(S.money && S.money.due) > 0 ? 1 : 0, cot: n(S.cot && S.cot.undecided_bookings) },
+      dayW: dayWOf(S),
       nBk: F.nBk, booked: F.booked, trav: F.known ? F.trav : F.booked, ns: F.known ? F.ns : 0, cxl: F.known ? F.cxl : 0,
       pend: F.pend, charge: F.charge, target: F.target, nCollect: F.nCollect, due: F.due,
       cotAll: F.cotAll, cotLeft: F.cotLeft, cotNo: F.cotNo, nCotNo: F.nCotNo, doc: doc,
@@ -402,7 +426,14 @@
     if(c){ var pc = payChips(c); if(pc) L.push('<span class="ts-pyms">' + pc + '</span>'); if(n(c.no_slip) > 0) L.push('<span class="ts-pyw">&#9888; รอสลิป ' + n(c.no_slip) + '</span>'); if(n(c.fees) > 0) L.push('<span class="ts-pyn2">ค่าธรรมเนียม ' + money(c.fees) + '</span>'); }
     return '<div class="ts-payc">' + L.join('') + '</div>';
   }
+  /* w4-f2 · the Add-on · Upsell cell is legacy's tsAddonCell (same markup, same colours) over tsAddonList, which 74-ops-travel-server.js
+     answers from the server's add_on_lines (booked ahead, sold on tour, upgrades, special meals). A booking the server sent no lines for
+     keeps the older drawing below. */
   function addonCell(r){
+    if(r.sr && Array.isArray(r.sr.add_on_lines) && g('tsAddonCell')) return call('tsAddonCell', [{ b: r.b, t: r.t }, dateOf()], '');
+    return addonCellOld(r);
+  }
+  function addonCellOld(r){
     var b = r.b, e = esc, L = [];
     var shaped = { id: b.external_id || b.id, agentId: b.agent_id || '', rateTypeRef: b.rate_type_ref || null,
       addOns: (b.add_ons || []).map(function(a){ return { type: a.type, label: a.label, note: a.note || '', jAd: a.join_adults, jChd: a.join_children }; }),
@@ -431,6 +462,30 @@
     var tag = ret ? ['\u21a9 ' + vanName(ret), 'g'] : ops.return_same_van ? ['\u21a9 กลับคันเดิม', 'e'] : ['\u26a0 ยังไม่จัดรถกลับ', 'r'];
     return '<div class="ts-sbk">' + e(drop) + '</div><span class="ts-chip ' + tag[1] + '">' + e(tag[0]) + '</span>';
   }
+  /* Zone (legacy §tsManZone): the group the server judged (OWN / PK / KL / the raw zone) and the pickup area under it */
+  function zoneCell(r){
+    var b = r.b, e = esc, zg = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || (r.mvRow ? '' : call('tsManZoneKey', [b, r.t && { date: dateOf() }], ''));
+    if(r.mvRow || !zg) return '<td class="ts-zone"><span style="color:var(--zn400)">&mdash;</span></td>';
+    var area = text(b.pickup_area || ''), zl = text(r.t && r.t.zone) && g('bookingV2ZoneLabel') ? window.bookingV2ZoneLabel(r.t.zone) : text(r.t && r.t.zone);
+    var tag = '<span class="ts-ztag z-' + e(String(zg).toLowerCase()) + '">' + (zg === 'OWN' ? 'Own' : e(zg)) + '</span>';
+    if(zg === 'OWN') return '<td class="ts-zone">' + tag + (area && b.hotel_name ? '<div class="ts-tel">' + e(area) + '</div>' : '') + '</td>';
+    return '<td class="ts-zone" title="' + e(zl || zg) + '">' + tag + (area ? '<div class="ts-zarea">' + e(area) + '</div>' : '') + '</td>';
+  }
+  /* Total (legacy tsTotalOf + tsNetOf): what the trip charged plus what was sold on tour, and in brackets what the rate type says
+     the trip should cost (the server's net, net_text, net_promo_id) */
+  function totalCell(r, total, site){
+    var e = esc, sr = r.sr;
+    if(r.mvRow) return '<td class="r ts-mono" style="font-weight:800;color:var(--zn400)">&mdash;</td>';
+    var nr = '', tip = '';
+    if(sr && !r.cxlRow && ('net' in sr)){
+      var pl = sr.net_promo_id ? text(call('laPromoLabel', [call('laPromoById', [sr.net_promo_id], null)], sr.net_promo_id)) : '';
+      nr = '<span class="ts-net" title="' + (sr.net != null ? ('ยอด Net ' + money(sr.net) + (pl ? (' · โปร: ' + e(pl)) : ' ตาม Rate Type')) : 'ไม่มีเรตใน Rate Type') + '">(' + (sr.net != null ? e(sr.net_text || '') : '&mdash;') + ')</span>'
+        + (pl ? '<span class="ts-net" style="color:#9A5410" title="' + e(pl) + '"> PROMO</span>' : '');
+      tip = ' title="booking ' + money(r.amount) + (site > 0 ? ' · ขายหน้างาน ' + money(site) : '') + (sr.net != null ? (' · Net ' + money(sr.net) + ' = ' + e(sr.net_text || '')) : ' · ไม่มีเรตใน Rate Type') + (pl ? (' · โปร: ' + e(pl)) : '') + '"';
+    }
+    return '<td class="r ts-mono ts-totc" style="font-weight:800"' + tip + '>' + (total == null ? '&mdash;' : money(total))
+      + (site > 0 && !r.cxlRow ? '<span class="ts-totb">' + money(r.amount) + '<em>+' + money(site) + '</em></span>' : '') + nr + '</td>';
+  }
   function s04Html(R, F, date, onlyIssue){
     var e = esc, rows = (onlyIssue ? R.all.filter(function(r){ return r.isCase; }) : R.all).concat(R.cxl).concat(R.mv).sort(R.cmp);
     var body = '', prev = null, mn = 0, gS = null, dS = { ad: 0, chd: 0, inf: 0, foc: 0, t: 0, b: 0, m: 0, n: 0, unk: false }, mc = { pier: 0, addon: 0, sq: 0, warn: 0, cxl: 0 };
@@ -438,8 +493,8 @@
     var sumRow = function(cls, label, S){
       return '<tr class="' + cls + ' ts-scr ts-noprint"><td class="ts-rn"></td><td colspan="3" data-span="1-3">' + label + '</td>'
         + pxTd(S.ad, 4) + pxTd(S.chd, 5) + pxTd(S.inf, 6) + pxTd(S.foc, 7)
-        + '<td class="c ts-mono" data-col="8" style="font-weight:800">' + (S.unk ? '?' : S.t) + ' / ' + S.b + '</td><td colspan="6" data-span="9-14"></td>'
-        + '<td class="r ts-mono ts-totc" data-col="15" style="font-weight:800">' + money(S.m) + '</td><td colspan="2" data-span="16-17"></td></tr>';
+        + '<td class="c ts-mono" data-col="8" style="font-weight:800">' + (S.unk ? '?' : S.t) + ' / ' + S.b + '</td><td colspan="7" data-span="9-15"></td>'
+        + '<td class="r ts-mono ts-totc" data-col="16" style="font-weight:800">' + money(S.m) + '</td><td colspan="2" data-span="17-18"></td></tr>';
     };
     var gClose = function(){ if(gS){ body += sumRow('ts-gsum', 'รวม ' + e(gS.name) + ' · ' + gS.n + ' ใบ', gS); gS = null; } };
     rows.forEach(function(r){
@@ -447,11 +502,11 @@
       if(r.routeId !== prev){
         prev = r.routeId;
         var grp = rows.filter(function(x){ return x.routeId === r.routeId && !x.cxlRow; }), gX = rows.filter(function(x){ return x.routeId === r.routeId && x.cxlRow && !x.mvRow; }), gM = rows.filter(function(x){ return x.routeId === r.routeId && x.mvRow; });
-        var gB = grp.reduce(function(a, x){ return a + x.booked; }, 0), gT = R.clean ? gB : null, col = routeColor(r.routeId);
+        var gB = grp.reduce(function(a, x){ return a + x.booked; }, 0), gT = grp.every(function(x){ return x.trav != null; }) ? grp.reduce(function(a, x){ return a + x.trav; }, 0) : null, col = routeColor(r.routeId);
         var boats = []; grp.forEach(function(x){ var nm = boatName(boatOf(x.t)); if(nm && boats.indexOf(nm) < 0) boats.push(nm); });
         gClose();
-        gS = { name: routeName(r.routeId), ad: 0, chd: 0, inf: 0, foc: 0, t: 0, b: 0, m: 0, n: 0, unk: !R.clean };
-        body += '<tr class="ts-grow" style="--rc:' + e(col) + '"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="17" data-span="1-17" style="padding:7px 11px"><div class="ts-gw">'
+        gS = { name: routeName(r.routeId), ad: 0, chd: 0, inf: 0, foc: 0, t: 0, b: 0, m: 0, n: 0, unk: false };
+        body += '<tr class="ts-grow" style="--rc:' + e(col) + '"><td class="ts-rn ts-scr ts-noprint"></td><td colspan="18" data-span="1-18" style="padding:7px 11px"><div class="ts-gw">'
           + '<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:' + e(col) + '"><i class="ts-dot" style="border-radius:50%;background:' + e(col) + '"></i>' + e(routeName(r.routeId)) + '</span>'
           + (boats.length ? '<span class="ts-scr ts-noprint ts-gboat">' + e(boats.join(' · ')) + '</span>' : '')
           + '<span style="float:right" class="ts-tel">' + grp.length + ' booking · จอง ' + gB + ' → เดินทางจริง ' + (gT == null ? '?' : gT) + (gT != null && gB - gT > 0 ? ' · หาย ' + (gB - gT) : '')
@@ -463,8 +518,9 @@
       if(r.cxlRow) total = r.mvRow ? null : n(b.total);
       if(!r.cxlRow && gS){
         ['ad','chd','inf','foc'].forEach(function(k){ gS[k] += pb[k]; dS[k] += pb[k]; });
-        gS.t += r.booked; gS.b += r.booked; gS.m += n(total); gS.n++; dS.t += r.booked; dS.b += r.booked; dS.m += n(total); dS.n++;
-        if(!R.clean) dS.unk = true;
+        var tv = r.trav != null ? r.trav : r.booked;
+        gS.t += tv; gS.b += r.booked; gS.m += n(total); gS.n++; dS.t += tv; dS.b += r.booked; dS.m += n(total); dS.n++;
+        if(r.trav == null){ gS.unk = true; dS.unk = true; }
       }
       // §tsManMv · the money moved with the booking to its new day: shown here it would read as today's.
       var payH = r.mvRow ? '<span style="color:var(--zn400);font-size:10.5px">ยอดเงินไปอยู่กับวันใหม่แล้ว</span>' : payCell(r), aoH = addonCell(r), sq = sreqOf(b, t), tags = [];
@@ -479,7 +535,7 @@
         var v = pb[k];
         if(!v) return '<td class="c ts-px zero">·</td>';
         if(r.cxlRow) return '<td class="c ts-px zero" title="' + (r.mvRow ? 'เลื่อนวันออกไปแล้ว' : 'ยกเลิกทั้งใบ') + ' · จอง ' + v + '">' + v + '</td>';
-        return '<td class="c ts-px"' + (R.clean ? '' : ' title="จอง ' + v + ' · ไปจริงแยกประเภทยังไม่มีจากเซิร์ฟเวอร์"') + '>' + v + '</td>';
+        return '<td class="c ts-px"' + (r.trav != null && r.trav === r.booked ? '' : ' title="จอง ' + v + ' · ไปจริงแยกประเภทยังไม่มีจากเซิร์ฟเวอร์"') + '>' + v + '</td>';
       };
       var stat = r.mvRow ? '<span class="ts-chip p">&#10007; เลื่อนวัน</span>' + (r.mvTo ? '<div class="ts-tel" style="margin-top:3px">ไป ' + e(call('ckDayShortTh', [r.mvTo], r.mvTo)) + '</div>' : '')
         : r.cxlRow ? '<span class="ts-chip r">CXL &middot; ยกเลิก</span>'
@@ -510,6 +566,7 @@
         + '<td style="max-width:168px">' + (t.ovn_leg ? '<div><span class="ts-chip" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน">&#8617; OVN ขากลับ</span></div>' : '')
           + (r.mvRow && !b.hotel_name ? '<span style="color:var(--zn400)">&mdash;</span>' : b.hotel_name ? e(b.hotel_name) + (room ? '<span class="ts-room">ห้อง ' + e(room) + '</span>' : '')
             : '<span class="ts-chip n" title="ใบนี้ไม่มีจุดรับ · ลูกค้ามาเองที่ท่า">No pickup</span>') + '</td>'
+        + zoneCell(r)
         + '<td style="max-width:150px">' + (r.cxlRow ? '<span style="color:var(--zn400)">จุดเดิม</span>' : dropCell(r)) + '</td>'
         + '<td class="ts-aocol">' + aoH + '</td>'
         + '<td>' + (van ? '<span class="ts-chip n">&#128656; ' + e(vanName(van)) + '</span>' : (r.cxlRow ? '' : '<span class="ts-chip p">มาเอง</span>'))
@@ -517,7 +574,7 @@
           + (r.cxlRow && !van && !boat ? '<span style="color:var(--zn400)">—</span>' : '') + '</td>'
         + '<td class="ts-sqcol">' + (sq ? '<span class="ts-sqtx" title="' + e(sq) + '">' + e(sq) + '</span>' : '<span style="color:var(--zn400)">&mdash;</span>') + '</td>'
         + '<td class="ts-paycol">' + payH + '</td>'
-        + '<td class="r ts-mono ts-totc" style="font-weight:800' + (r.mvRow ? ';color:var(--zn400)' : '') + '">' + (total == null ? '&mdash;' : money(total)) + (site > 0 && !r.cxlRow ? '<span class="ts-totb">' + money(r.amount) + '<em>+' + money(site) + '</em></span>' : '') + '</td>'
+        + totalCell(r, total, site)
         + '<td style="max-width:170px">' + cxlCell + '</td>'
         + '<td class="c">' + stat + '</td></tr>';
     });
@@ -537,10 +594,10 @@
       + '<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
       + '<th class="ts-rn ts-scr ts-noprint">#</th><th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
       + '<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
-      + '<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
+      + '<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Zone</th><th>Drop-off</th>'
       + '<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total</th>'
       + '<th>Cancel &middot; Charge</th><th class="c">Status</th></tr></thead><tbody>'
-      + (body || '<tr><td colspan="18" class="ts-empty">' + (onlyIssue ? 'ไม่มีเคสที่ต้องตัดสินในวันนี้' : 'ไม่มี booking ในวันนี้') + '</td></tr>')
+      + (body || '<tr><td colspan="19" class="ts-empty">' + (onlyIssue ? 'ไม่มีเคสที่ต้องตัดสินในวันนี้' : 'ไม่มี booking ในวันนี้') + '</td></tr>')
       + '</tbody></table></div><div class="ts-scr ts-noprint ts-mnone" data-tsman-none style="display:none">ไม่พบใบที่ตรงกับที่ค้นหา</div></div>'
       + '<div class="ts-sign"><div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
       + '<div class="ts-sg"><i></i><b>ผู้ตรวจสอบ · Finance</b><span>เจ้าหน้าที่การเงิน / แคชเชียร์</span></div>'
@@ -563,7 +620,7 @@
     VANS = V.vans || {};
     var allRows = d._roster ? d._roster.rows : V.inScope;
     var R = rowsOf(d, { after: V.after, inScope: V.kept, cancelled: V.cancelled, moved: V.moved, movedListed: V.movedListed });
-    var F = figures(d, R.all, V.scoped, R.clean);
+    var F = figures(d, R.all, V.scoped, R.clean, V.serverScope);
     var onlyIssue = !!window._tsOnlyIssue;
     var empty = (!n(d.bookings) && !(d.collect_rows || []).length)
       ? '<div data-ops-ts-empty="1" class="ts-scr ts-noprint" style="margin:12px 0;padding:12px 15px;background:#fdf8ee;border:0.5px solid #e8dcc0;border-radius:12px;font-size:12px;color:#8a6d1a">operation-backend reports no bookings for ' + esc(date) + '. The sheet below is genuinely empty, not still loading.</div>' : '';
@@ -588,7 +645,7 @@
   function load(date){
     var MR = O.moneyReports;
     if(!MR || !MR.loadTravel) return Promise.reject(new Error('travel summary loader missing'));
-    return MR.loadTravel(date).then(function(d){ last[date] = d; return d; });
+    return MR.loadTravel(date).then(function(d){ last[date] = d; if(O.travelServer) O.travelServer.seed(date, d); return d; });
   }
   wrap('renderTravelSum', function(){
     var host = document.getElementById('travelsum-host'), date = dateOf();
