@@ -20068,6 +20068,7 @@ function flRenderMaintDetailPink(){
     ${boatStatusSection}
     ${assetSection}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${timelineSection}${partsSection}</div>
+    ${(typeof flpCard==='function')?flpCard('mj', m.id, {cols:6}):''}
     ${memoSection}
     ${deleteSection}
   </div>`;
@@ -22049,6 +22050,7 @@ function flRenderIncDetailPink(){
     ${descSection}
     ${damagedSection}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${timelineSection}${assignmentSection}</div>
+    ${(typeof flpCard==='function')?flpCard('inc', inc.id, {cols:6}):''}
   </div>`;
 }
 
@@ -27322,6 +27324,240 @@ function fdCSS(){
   document.head.appendChild(s);
 }
 
+
+/* ══ §flPhoto (2026-10-18) · รูปในงาน · ใช้ร่วมกัน Fleet Work / Maintenance / Job Assignment / Project ═══════
+   เจ้าของ: "ตัว Fleet work ขอเพิ่มการเพิ่มรูปในงานหน่อย" · "ขอสามารถกลับไปแนบรูปตัวงานที่เสร็จไปแล้วด้วย"
+   · ลบ = ซ่อนก่อน (ตามหลัก) กู้คืนได้ · ลบถาวรเฉพาะจากรายการที่ซ่อน
+
+   เก็บที่ไหน:  งานซ่อม (MJ)  → m.photos[]        รายงานปัญหา (INC) → inc.photos[]
+                โปรเจค (PRJ)  → p.docs[] type='photo' ของเดิม (§projAttach) · ไม่ย้าย ไม่ซ้ำ
+   หนึ่งรูป = { id, attId, url, mime, size, name, cap, stage, addedAt, by, removed?, removedBy?, removedAt? }
+     stage = สเตจของงาน "ตอนที่เพิ่มรูป" (Reported / Repairing / To close / Done …) ระบบใส่ให้เอง
+     ⚠ เก็บแค่ ref · ไฟล์จริงอยู่ตาราง attachments (POST /api/attach · ท่อเดียวกับสลิปและ Project)
+       ไม่เคยเก็บ base64 ลง blob
+   ฐานข้อมูล: fleet_maintenance.photos / fleet_incidents.photos เป็น json_text (migration 038)
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var FLP_C={'Reported':'#5B6170','Job open':'#1272B3','Waiting':'#D9952B','Repairing':'#2E9C78','To close':'#16265C','Billing':'#8E3A6B','Done':'#0F6E56','Project':'#534AB7','Quick fix':'#0F6E56'};
+var FLP_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+function flpE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function flpRec(kind,id){
+  try{
+    if(kind==='mj')  return (FL_MAINT||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+    if(kind==='inc') return (FL_INCIDENTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+    if(kind==='prj') return (FL_PROJECTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+  }catch(_){}
+  return null;
+}
+/* รายการรูปในรูปแบบเดียวกันทุกชนิด · โปรเจคอ่านจาก docs[] (แปลง name→cap · phase→stage) */
+function flpList(kind,rec){
+  if(!rec) return [];
+  if(kind==='prj'){
+    return (rec.docs||[]).filter(function(d){ return d&&d.type==='photo'; }).map(function(d){
+      return { id:d.id, attId:d.attId||'', url:d.url||'', mime:d.mime||'', size:d.size||0, name:d.name||'', cap:d.name||'', stage:'Project',
+               addedAt:d.addedAt||'', by:d.by||'', removed:!!d.removed, removedBy:d.removedBy||'', removedAt:d.removedAt||'', _doc:d }; });
+  }
+  if(!Array.isArray(rec.photos)) return [];
+  return rec.photos.filter(Boolean);
+}
+function flpCount(kind,rec){ return flpList(kind,rec).filter(function(p){ return !p.removed; }).length; }
+/* สเตจของงานตอนนี้ · ใช้กติกาเดียวกับหน้า Fleet Work (flwItems) · งานที่ปิดแล้ว = Done */
+function flpStageNow(kind,rec){
+  if(!rec) return '';
+  if(kind==='prj') return 'Project';
+  if(kind==='mj'){
+    if(rec.status==='done' && !rec.awaitingInvoice) return 'Done';
+    try{ var it=flwItems().filter(function(x){ return x.key==='mj:'+rec.id; })[0]; if(it) return FLW_ST[it.stage].t; }catch(_){}
+    return rec.status==='done'?'Billing':(rec.status==='pending'?'Job open':'Repairing');
+  }
+  var st=String(rec.status||'open');
+  if(st==='resolved'||st==='closed') return rec.quickFix?'Quick fix':'Done';
+  if(rec.maintId){ var m=flpRec('mj',rec.maintId); if(m) return flpStageNow('mj',m); }
+  return 'Reported';
+}
+function flpBy(){ var w=''; try{ w=(typeof flBoardWho==='function'?flBoardWho():'')||''; }catch(_){} if(!w){ try{ w=(typeof laBy==='function'?laBy():'')||''; }catch(_){} } return w||'user'; }
+function flpCan(){ try{ return (typeof flBoardCanEdit==='function')?flBoardCanEdit():true; }catch(_){ return true; } }
+function flpLog(kind,rec,text){
+  try{
+    var by=flpBy();
+    if(kind==='prj'){ if(!rec.log) rec.log=[]; rec.log.push({date:TODAY_STR, text:text, by:by}); return; }
+    if(!rec.progressLog) rec.progressLog=[];
+    rec.progressLog.push({date:TODAY_STR, text:text, by:by});
+    if(kind==='mj' && typeof flPushLog==='function') flPushLog(rec.id, text, by, TODAY_STR);
+  }catch(_){}
+}
+function flpPush(kind,rec,meta,cap){
+  var now=new Date().toISOString(), by=flpBy();
+  if(kind==='prj'){
+    if(!rec.docs) rec.docs=[];
+    rec.docs.push({ id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), name:cap||meta.name||('Photo · '+TODAY_STR), url:meta.url, attId:meta.attId||'', mime:meta.mime||'', size:meta.size||0,
+                    note:cap||'', type:'photo', phase:rec.phase||'planning', status:'received', addedAt:TODAY_STR, by:by });
+    return;
+  }
+  if(!Array.isArray(rec.photos)) rec.photos=[];
+  rec.photos.push({ id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), attId:meta.attId||'', url:meta.url, mime:meta.mime||'', size:meta.size||0,
+                    name:meta.name||'', cap:cap||'', stage:flpStageNow(kind,rec), addedAt:now, by:by });
+}
+/* เพิ่มรูปจากเครื่อง/กล้อง · note = ข้อความจากช่องโน้ต (ถ้ามี) จะลง timeline พร้อมกัน */
+function flpAdd(kind,id,note){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id); if(!rec) return;
+  if(typeof _flProjPickFiles!=='function' || typeof _flProjUploadAll!=='function'){ alert('Photo upload is not available on this page.'); return; }
+  _flProjPickFiles('image/*', true, function(files){
+    var n=0;
+    _flProjUploadAll(files, kind+'_'+id, function(meta){
+      n++; flpPush(kind, rec, { attId:meta.id, url:'/api/attach/'+encodeURIComponent(meta.id), mime:meta.mime, size:meta.size, name:meta.name }, (n===1?String(note||'').trim():''));
+    }, function(ok){
+      if(!ok) return;
+      var t=String(note||'').trim();
+      flpLog(kind, rec, (t?(t+' · '):'')+'Photo added · '+ok+' file'+(ok>1?'s':''));
+      flSave(); flpRefresh(kind,id,true);
+    });
+  });
+}
+/* แปะลิงก์รูปจากที่อื่น (Drive ของอู่) · ทางเดิมของ Project */
+function flpAddUrl(kind,id){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id); if(!rec) return;
+  var url=prompt('Image URL (paste a link):',''); if(!url) return; url=String(url).trim(); if(!url) return;
+  var cap=prompt('Caption (optional):','')||'';
+  flpPush(kind, rec, { url:url, name:cap||('Photo · '+TODAY_STR) }, cap);
+  flpLog(kind, rec, 'Photo link added'+(cap?(': '+cap):''));
+  flSave(); flpRefresh(kind,id,true);
+}
+function flpFind(kind,rec,pid){ return flpList(kind,rec).filter(function(p){ return p.id===pid; })[0]||null; }
+function flpCap(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var v=prompt('Caption:', p.cap||''); if(v==null) return; v=String(v).trim();
+  if(p._doc){ p._doc.name=v||p._doc.name; p._doc.note=v; } else p.cap=v;
+  flSave(); flpRefresh(kind,id);
+}
+/* ลบ = ซ่อน · รูปยังอยู่บนเซิร์ฟเวอร์ · กู้คืนได้จาก "ซ่อนไว้ N รูป" */
+function flpHide(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var tgt=p._doc||p; tgt.removed=true; tgt.removedBy=flpBy(); tgt.removedAt=new Date().toISOString();
+  flpLog(kind, rec, 'Photo hidden'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+function flpRestore(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var tgt=p._doc||p; delete tgt.removed; delete tgt.removedBy; delete tgt.removedAt;
+  flpLog(kind, rec, 'Photo restored'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+/* ลบถาวร · เฉพาะรูปที่ซ่อนอยู่แล้ว · ไฟล์บนเซิร์ฟเวอร์ลบตาม (ลิงก์ที่แปะเองไม่มีไฟล์ ไม่ต้องยิง) */
+function flpPurge(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p||!p.removed) return;
+  if(!confirm('Delete this photo permanently? This cannot be undone.')) return;
+  if(p.attId) fetch('/api/attach/'+encodeURIComponent(p.attId),{method:'DELETE'}).catch(function(){});
+  if(kind==='prj') rec.docs=(rec.docs||[]).filter(function(d){ return d&&d.id!==pid; });
+  else rec.photos=(rec.photos||[]).filter(function(x){ return x&&x.id!==pid; });
+  flpLog(kind, rec, 'Photo deleted permanently'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+function flpTogHidden(kind,id){ var k=kind+':'+id; window._flpShowHidden=window._flpShowHidden||{}; window._flpShowHidden[k]=!window._flpShowHidden[k]; flpRefresh(kind,id); }
+/* ดูเต็มจอ · ← → เลื่อนรูป · Esc ปิด */
+function flpView(kind,id,pid){
+  var rec=flpRec(kind,id); if(!rec) return;
+  var L=flpList(kind,rec).filter(function(p){ return !p.removed; }); var i=L.findIndex(function(p){ return p.id===pid; }); if(i<0) return;
+  var old=document.getElementById('flp-lb'); if(old) old.remove();
+  var box=document.createElement('div'); box.id='flp-lb';
+  box.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(10,14,28,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-family:inherit';
+  var draw=function(){ var p=L[i];
+    box.innerHTML='<img src="'+flpE(p.url)+'" style="max-width:92vw;max-height:80vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);object-fit:contain;background:#000">'
+      +'<div style="color:#E5E7EB;font-size:13px;display:flex;align-items:center;gap:10px;max-width:92vw"><span style="font-weight:700;color:#fff;background:'+(FLP_C[p.stage]||'#5B6170')+';border-radius:6px;padding:2px 8px;font-size:11px">'+flpE(p.stage||'')+'</span>'
+      +'<span>'+flpE(p.cap||p.name||'')+'</span><span style="color:#9CA3AF">'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span><span style="color:#9CA3AF">'+(i+1)+' / '+L.length+'</span></div>'
+      +(L.length>1?'<button type="button" data-d="-1" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8249;</button><button type="button" data-d="1" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8250;</button>':'')
+      +'<button type="button" data-x="1" style="position:absolute;right:14px;top:12px;width:36px;height:36px;border-radius:18px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer">&times;</button>'; };
+  var key=function(e){ if(e.key==='Escape') close(); else if(e.key==='ArrowLeft'){ i=(i-1+L.length)%L.length; draw(); } else if(e.key==='ArrowRight'){ i=(i+1)%L.length; draw(); } };
+  var close=function(){ box.remove(); document.removeEventListener('keydown',key); };
+  box.addEventListener('click',function(e){ var b=e.target.closest('button'); if(b&&b.dataset.d){ i=(i+(+b.dataset.d)+L.length)%L.length; draw(); return; } if(b&&b.dataset.x){ close(); return; } if(e.target===box) close(); });
+  document.addEventListener('keydown',key);
+  draw(); document.body.appendChild(box);
+}
+function flpWhen(s){ s=String(s||''); if(!s) return ''; var d=s.slice(0,10).split('-'); if(d.length<3||!+d[0]) return s; var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (+d[2])+' '+MO[(+d[1]||1)-1]; }
+/* การ์ด PHOTOS · ใช้ได้ทุกหน้า · opts: {cols, title, compact} · data-flp ใช้ตอน refresh เฉพาะการ์ดไม่ต้อง render ทั้งหน้า */
+function flpCard(kind,id,opts){
+  opts=opts||{}; var rec=flpRec(kind,id); if(!rec) return '';
+  var can=flpCan(), all=flpList(kind,rec), L=all.filter(function(p){ return !p.removed; }), H=all.filter(function(p){ return p.removed; });
+  var showH=!!(window._flpShowHidden&&window._flpShowHidden[kind+':'+id]);
+  var cols=+opts.cols||3, closed=(flpStageNow(kind,rec)==='Done');
+  var A="'"+flpE(kind)+"','"+flpE(id)+"'";
+  var tile=function(p,hid){
+    return '<div class="flp-t'+(hid?' hid':'')+'" title="'+flpE(p.cap||p.name||'')+'">'
+      +'<img src="'+flpE(p.url)+'" loading="lazy" alt="" onclick="flpView('+A+',\''+flpE(p.id)+'\')" onerror="this.style.opacity=.25">'
+      +'<span class="flp-s" style="background:'+(FLP_C[p.stage]||'#5B6170')+'">'+flpE(p.stage||'')+'</span>'
+      +'<div class="flp-m" onclick="flpView('+A+',\''+flpE(p.id)+'\')"><b>'+(p.cap?flpE(p.cap):'<i>'+(can?'add caption':'')+'</i>')+'</b><span>'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span></div>'
+      +(can?(hid
+        ?('<div class="flp-hb"><button type="button" onclick="flpRestore('+A+',\''+flpE(p.id)+'\')">Restore</button><button type="button" class="dz" onclick="flpPurge('+A+',\''+flpE(p.id)+'\')">Delete</button></div>')
+        :('<button type="button" class="flp-x" title="Hide photo" onclick="event.stopPropagation();flpHide('+A+',\''+flpE(p.id)+'\')">&times;</button>'
+          +'<button type="button" class="flp-c" title="Edit caption" onclick="event.stopPropagation();flpCap('+A+',\''+flpE(p.id)+'\')">&#9998;</button>')):'')
+      +'</div>'; };
+  var h='<div class="flp" data-flp="'+flpE(kind+':'+id)+'" data-flpo="'+flpE(JSON.stringify(opts))+'">'
+    +'<div class="flp-h"><span class="k">'+flpE(opts.title||'Photos')+'</span><span class="n">'+L.length+'</span>'
+    +(closed&&kind!=='prj'?'<span class="flp-done">&#10003; Done · photos can still be added</span>':'')
+    +(can?('<div class="flp-b"><button type="button" class="pri" onclick="flpAdd('+A+')">'+FLP_SVG+' Add photo</button><button type="button" onclick="flpAddUrl('+A+')">Paste link</button></div>'):'')+'</div>'
+    +'<div class="flp-g" style="grid-template-columns:repeat('+cols+',1fr)">'+L.map(function(p){ return tile(p,false); }).join('')
+    +(can?('<div class="flp-add" onclick="flpAdd('+A+')">'+FLP_SVG+'<span>Add photo</span></div>'):(L.length?'':'<div class="flp-add" style="cursor:default">'+FLP_SVG+'<span>No photos</span></div>'))+'</div>'
+    +(H.length?('<div class="flp-f"><a onclick="flpTogHidden('+A+')">'+(showH?'Hide':'Show')+' hidden · '+H.length+' photo'+(H.length>1?'s':'')+'</a></div>'
+      +(showH?('<div class="flp-g hid" style="grid-template-columns:repeat('+cols+',1fr)">'+H.map(function(p){ return tile(p,true); }).join('')+'</div>'):'')):'')
+    +(opts.compact?'':'<div class="flp-f">Tagged with the stage the job was in when added · tap a photo to view full size · hidden photos stay on the server until deleted from the hidden list</div>')
+    +'</div>';
+  return h;
+}
+/* วาดการ์ดใหม่เฉพาะจุด · ไม่ render ทั้งหน้า (ไม่เสีย scroll / โฟกัส) · full=true ใช้ตอนจำนวนรูปเปลี่ยน ให้ตัวนับในรายการตามด้วย */
+function flpRefresh(kind,id,full){
+  var sel='[data-flp="'+kind+':'+id+'"]', done=false;
+  try{ [].slice.call(document.querySelectorAll(sel)).forEach(function(el){ var o={}; try{ o=JSON.parse(el.getAttribute('data-flpo')||'{}'); }catch(_){} var w=document.createElement('div'); w.innerHTML=flpCard(kind,id,o); if(w.firstChild){ el.replaceWith(w.firstChild); done=true; } }); }catch(_){}
+  if(full){ try{ if(typeof FLW!=='undefined' && document.getElementById('fl-work-wrap') && document.getElementById('view-fl-work') && document.getElementById('view-fl-work').classList.contains('active') && typeof flRenderWork==='function') flRenderWork(); }catch(_){} }
+  if(!done){ try{ if(kind==='prj' && typeof flRenderProjects==='function') flRenderProjects(); }catch(_){} }
+}
+function flpCSS(){
+  if(document.getElementById('flp-css')) return;
+  var s=document.createElement('style'); s.id='flp-css';
+  s.textContent=''
+   +'.flp{padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #ECEBE6;font-family:inherit}'
+   +'.flp-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}'
+   +'.flp-h .k{font-size:13px;font-weight:700;color:#0F1B3D}'
+   +'.flp-h .n{font-family:"DM Mono",monospace;font-size:11px;color:#5B6170;background:#F1F0EC;border-radius:6px;padding:1px 6px}'
+   +'.flp-done{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#0F6E56;background:#E4F3EC;border-radius:6px;padding:2px 8px;font-weight:600}'
+   +'.flp-b{margin-left:auto;display:flex;gap:6px;flex:none}'
+   +'.flp-b button{height:28px;padding:0 10px;border-radius:8px;border:1px solid #CFCFC8;background:#fff;font:600 12px/1 inherit;font-family:inherit;color:#0F1B3D;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
+   +'.flp-b button svg{width:14px;height:14px;flex:none}'
+   +'.flp-b button.pri{background:#16265C;border-color:#16265C;color:#fff}'
+   +'.flp-g{display:grid;gap:8px}'
+   +'.flp-g.hid{margin-top:8px;opacity:.75}'
+   +'.flp-t{position:relative;border-radius:8px;overflow:hidden;background:#F1F0EC;aspect-ratio:1;cursor:zoom-in}'
+   +'.flp-t img{width:100%;height:100%;object-fit:cover;display:block}'
+   +'.flp-t.hid img{filter:grayscale(1)}'
+   +'.flp-s{position:absolute;left:6px;top:6px;font-size:9.5px;font-weight:700;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.02em;pointer-events:none}'
+   +'.flp-m{position:absolute;left:0;right:0;bottom:0;padding:16px 7px 6px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:10.5px;line-height:1.3}'
+   +'.flp-m b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .flp-m i{color:#D1D5DB;font-weight:400;font-style:italic} .flp-m span{color:#D1D5DB;font-size:9.5px}'
+   +'.flp-x,.flp-c{position:absolute;top:5px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:14px;line-height:22px;padding:0;cursor:pointer;opacity:0;transition:opacity .12s}'
+   +'.flp-x{right:5px} .flp-c{right:31px;font-size:12px}'
+   +'.flp-t:hover .flp-x,.flp-t:hover .flp-c{opacity:1}'
+   +'@media (hover:none){.flp-x,.flp-c{opacity:.85}}'
+   +'.flp-hb{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(0,0,0,.35)}'
+   +'.flp-hb button{height:26px;padding:0 9px;border-radius:7px;border:0;background:#fff;color:#0F1B3D;font:600 11px/1 inherit;font-family:inherit;cursor:pointer}'
+   +'.flp-hb button.dz{background:#A32D2D;color:#fff}'
+   +'.flp-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed #CFCFC8;border-radius:8px;aspect-ratio:1;color:#5B6170;font-size:11px;font-weight:600;cursor:pointer;background:#FAFAF8}'
+   +'.flp-add svg{width:22px;height:22px}'
+   +'.flp-f{margin-top:8px;font-size:11px;color:#8A8F9B;line-height:1.4}'
+   +'.flp-f a{color:#0F6CA6;font-weight:600;cursor:pointer}'
+   +'.flp-cnt{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#5B6170;margin-left:6px;vertical-align:middle;border:1px solid #E3E6EA;border-radius:5px;padding:0 5px;line-height:16px;font-weight:600}'
+   +'.flp-cnt.z{color:#B45309;border-color:#F5D9A8;background:#FFF7E6}'
+   +'.flp-cnt svg{width:12px;height:12px}';
+  document.head.appendChild(s);
+}
+try{ flpCSS(); }catch(_){}
+function flpChip(kind,rec,warnEmpty){
+  var n=flpCount(kind,rec);
+  if(!n && !warnEmpty) return '';
+  return '<span class="flp-cnt'+(n?'':' z')+'" title="'+(n?(n+' photo'+(n>1?'s':'')):'no photo yet')+'">'+FLP_SVG+(n?n:'no photo')+'</span>';
+}
 /* ══ §flWork (2026-10-08) · Fleet Work · the whole repair flow on one page · PHASE 1 = read-only ═══
    Owner: "the work is scattered over many pages · bring the steps together on one page · by boat, with that boat's jobs".
    What this page does: reads FL_INCIDENTS / FL_MAINT / FL_MEMOS / FL_PROJECTS as they are and sorts every open
@@ -27568,7 +27804,37 @@ function flwFit(){
   }catch(_){ }
 }
 if(!window._flwFitOn){ window._flwFitOn=1; window.addEventListener('resize', function(){ flwFit(); }, {passive:true}); }
+/* §flPhoto · งานที่ปิดแล้ว (บล็อก "Done · last 30 days") · แผงขวาแสดงแค่ที่จำเป็น + การ์ดรูป · ไม่มีปุ่มเปลี่ยนสถานะ */
+function flwDoneItems(boatId){
+  var open={}; try{ flwItems().forEach(function(x){ open[x.key]=1; }); }catch(_){}
+  var cut=new Date(); cut.setDate(cut.getDate()-30); var lim=cut.toISOString().slice(0,10), out=[];
+  flwA('m').forEach(function(m){
+    if(!m || m.status!=='done' || open['mj:'+m.id]) return;
+    if(String(m.boatId||'')!==String(boatId||'')) return;
+    var d=String(m.endDate||'').slice(0,10); if(!d || d<lim) return;
+    var cost=0; try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=m.cost||0; }
+    out.push({key:'dn:'+m.id, kind:'mj', id:m.id, no:m.no||'MJ', title:m.title||'(no title)', boatId:m.boatId||'', stage:6, done:true,
+      owner:String(m.owner||'').trim(), silent:0, cost:cost, sub:'closed '+flwD(m.endDate)+(m.outcome?(' · '+m.outcome):'')+(m.closeNote?(' · '+m.closeNote):''), projId:m.parentProjectId||'', ref:m});
+  });
+  out.sort(function(a,b){ return String(b.ref.endDate||'').localeCompare(String(a.ref.endDate||'')); });
+  return out;
+}
+function flwDonePanel(it, E){
+  var m=it.ref, proj=it.projId?flwProj(it.projId):null;
+  return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span><span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>'
+        +(proj?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
+      +'<div style="margin-top:6px;font-size:16px;font-weight:700;line-height:1.3">'+E(it.title)+'</div>'
+      +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+E(it.sub)+(it.owner?(' · '+E(it.owner)):'')+'</div></div>'
+    +'<div class="flw-scroll" id="flw-rp">'
+      +'<div class="flw-next" style="margin-top:14px"><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Finished job</div>'
+        +'<div style="margin-top:2px">This job is closed. Photos of the finished work can still be added here; the job itself stays closed.</div>'
+        +'<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full job page</a></div></div>'
+      +'<div style="margin:14px 18px 0">'+flpCard('mj', it.id, {cols:3})+'</div>'
+    +'</div>';
+}
 function flwPanel(it, E){
+  if(it.done) return flwDonePanel(it, E);
   var S=FLW_ST, st=S[it.stage], m=it.ref, proj=it.projId?flwProj(it.projId):null;
   var pill=function(i){ return '<span class="flw-pill" style="background:'+S[i].pb+';color:'+S[i].pf+'">'+S[i].t+'</span>'; };
   var cut=function(s,n){ s=String(s||''); return s.length>n?(s.slice(0,n-1)+'…'):s; };
@@ -27640,9 +27906,12 @@ function flwPanel(it, E){
     if(can){ b1=act('close',it.id,'Close job'); b2=''; }
   }
   if(can && it.kind!=='prj' && it.stage<5)
-    noteH='<div style="display:flex;gap:8px;margin-top:8px"><input id="flw-note" type="text" placeholder="Add a note: what moved today" data-id="'+E(it.id)+'" '
-      +'style="flex:1;min-width:0;height:36px;border:1px solid #CFCFC8;border-radius:10px;padding:0 10px;font-family:inherit;font-size:13px;color:#0F1B3D;background:#fff" '
+    noteH='<div style="display:flex;gap:8px;margin-top:8px"><span style="flex:1;min-width:0;position:relative;display:flex"><input id="flw-note" type="text" placeholder="Add a note: what moved today" data-id="'+E(it.id)+'" '
+      +'style="flex:1;min-width:0;height:36px;border:1px solid #CFCFC8;border-radius:10px;padding:0 36px 0 10px;font-family:inherit;font-size:13px;color:#0F1B3D;background:#fff" '
       +'onkeydown="if(event.key===\'Enter\')flwAct(\'note\',this.dataset.id,\'\')">'
+      /* §flPhoto · กล้องในช่องโน้ต · ถ่ายรูปพร้อมโน้ตในครั้งเดียว · โน้ต (ถ้ามี) ลง timeline และเป็น caption ของรูปแรก */
+      +'<button type="button" title="Add a photo with this note" data-id="'+E(it.id)+'" onclick="flwAct(\'notephoto\',this.dataset.id,\'\')" '
+      +'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:26px;height:26px;border:0;background:transparent;color:#5B6170;cursor:pointer;padding:3px">'+FLP_SVG+'</button></span>'
       +'<button type="button" class="flw-btn" data-id="'+E(it.id)+'" onclick="flwAct(\'note\',this.dataset.id,\'\')">Add note</button></div>';
   if(it.kind!=='prj') noteH+='<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="'+it.kind+'" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full '+(it.kind==='inc'?'report':'job')+' page</a>'+(can?'':' · view only')+'</div>';
   /* §flwMemo2 · every memo of the job gets its own next-step button, so a second or third memo does not have to wait for the first */
@@ -27665,6 +27934,8 @@ function flwPanel(it, E){
       +'<div class="flw-next"'+(it.park?' style="margin-top:14px"':'')+'><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Next step</div>'
         +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+b1+b2+'</div>'
         +noteH+'</div>'
+      /* §flPhoto · การ์ดรูปของงาน / รายงานปัญหา · โปรเจคใช้การ์ดเดียวกันอ่านจาก docs[] */
+      +'<div style="margin:14px 18px 0">'+flpCard(it.kind, it.id, {cols:3})+'</div>'
       +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
         +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b>'+mBtn(l[5])+'</div>'; }).join('')):'')
     +'</div>';
@@ -27895,7 +28166,9 @@ function flRenderWork(){
             right='<div class="flw-card"><div class="flw-empty">Pick a boat, then a job.</div></div>'; }
   else {
     var list=(FLW.stage>=0)?cur.items.filter(function(x){ return x.stage===FLW.stage && !x.park; }):cur.items.slice();
-    if(!list.some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
+    /* §flPhoto · งานที่ปิดใน 30 วัน · อยู่ท้ายรายการ ไม่นับเป็นงานค้าง · เลือกได้เพื่อแนบรูปย้อนหลัง */
+    var doneL=[]; try{ doneL=(FLW.stage>=0)?[]:flwDoneItems(cur.id); }catch(_){ doneL=[]; }
+    if(!list.concat(doneL).some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
     var p=sp(cur.s), b=cur.b, pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong',shop:'In shop'}, bsub=[];
     if(b){ if(b.type) bsub.push(E(b.type)); if(b.capacity||b.cap) bsub.push((b.capacity||b.cap)+' PAX');
       try{ var pr=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); if(pr) bsub.push(E(pierEn[pr]||pr)); }catch(_){} }
@@ -27906,10 +28179,10 @@ function flRenderWork(){
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?'No owner':'—');
       return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
-        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3">'+E(it.title)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:#5B6170">'+E(it.sub)+'</i></span>'
-        +'<span>'+(it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
+        +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
         +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'||it.park?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
-        +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+it.silent+' d</span>'
+        +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park||it.done?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+(it.done?'&mdash;':(it.silent+' d'))+'</span>'
         +'<span class="mono x" style="text-align:right;font-size:12.5px">'+flwMoney(it.cost)+'</span></div>'; };
     var groups=[], seen={};
     var parkL=list.filter(function(x){ return x.park; }); list=list.filter(function(x){ return !x.park; });
@@ -27923,7 +28196,9 @@ function flRenderWork(){
           +(pj?('<a style="margin-left:12px" data-k="prj" data-id="'+E(pj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open project</a>'):'')+'</div>'+g.rows.map(rowH).join(''); }).join('')
       +(other.length?('<div class="flw-grp"><b>'+(groups.length?'Other jobs':'Jobs')+'</b><span>'+(groups.length?'not part of a project':'')+'</span><span class="mono" style="margin-left:auto;color:#3E4658">'+flwMoney(sum(other))+'</span></div>'+other.map(rowH).join('')):'')
       +(rep.length?('<div class="flw-grp"><b>Reported · no job yet</b><span>decide: open a job, quick fix, or dismiss</span></div>'+rep.map(rowH).join('')):'')
-      +(parkL.length?('<div class="flw-grp"><b>Parked on purpose</b><span>not repair work · not counted as silent</span></div>'+parkL.map(rowH).join('')):'');
+      +(parkL.length?('<div class="flw-grp"><b>Parked on purpose</b><span>not repair work · not counted as silent</span></div>'+parkL.map(rowH).join('')):'')
+      +(doneL.length?('<div class="flw-grp"><b>Done · last 30 days</b><span>finished jobs stay here a month so photos can still be added</span>'
+          +'<a style="margin-left:auto" data-v="fl-maintenance" onclick="flNavGo(this.dataset.v)">All finished jobs &rsaquo;</a></div>'+doneL.map(rowH).join('')):'');
     list=list.concat(parkL);
     mid='<div class="flw-card"><div style="display:flex;align-items:center;gap:12px;padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
         +flwAv(b,40)+'<div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:21px;font-weight:700">'+E(cur.name)+'</span>'
@@ -27934,10 +28209,10 @@ function flRenderWork(){
         +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn pri"'+(b?'':' style="margin-left:auto"')+' onclick="flnOpen()">+ Add work</button>':'')+'</div>'
       +blk
       +'<div class="flw-cols flw-hd"><span>No.</span><span>Work</span><span>Stage</span><span class="x o">Owner</span><span class="x" style="text-align:right">Silent</span><span class="x" style="text-align:right">Cost</span></div>'
-      +'<div class="flw-scroll" id="flw-ml">'+(list.length?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
+      +'<div class="flw-scroll" id="flw-ml">'+((list.length||doneL.length)?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
       +'<div style="flex:none;display:flex;gap:14px;padding:9px 18px 11px;border-top:1px solid #ECEBE6;font-size:12px;color:#5B6170"><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+list.length+'</b> open item'+(list.length===1?'':'s')+'</span><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+flwMoney(sum(list))+'</b> on this boat</span>'
         +(FLW.stage>=0?('<a style="margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="flwStage('+FLW.stage+')">Show all stages</a>'):'')+'</div></div>';
-    var sel=list.filter(function(x){ return x.key===FLW.item; })[0];
+    var sel=list.concat(doneL).filter(function(x){ return x.key===FLW.item; })[0];
     right='<div class="flw-card">'+(sel?flwPanel(sel,E):'<div class="flw-empty">Pick a job to see where it stands.</div>')+'</div>';
   }
   /* §flWork3 · tabs to the three old pages · same list the sidebar group uses (FL_NAV_GROUPS) */
@@ -27976,6 +28251,10 @@ function flwAct(a,id,x){
     else if(a==='newmemo'){ flMaintCreateMemo(id, x==='1'); }
     else if(a==='tick'){ flBoardSubTick(null,id,+x,true); }
     else if(a==='close'){ flMaintOpenCloseModal(id); }
+    else if(a==='notephoto'){
+      /* §flPhoto · รูป + โน้ตในครั้งเดียว · อัปเสร็จ flpRefresh(full) วาดหน้าใหม่ ช่องโน้ตว่างเอง */
+      var ne=document.getElementById('flw-note'), nt=ne?String(ne.value||'').trim():'';
+      flpAdd(String(FLW.item).indexOf('inc:')===0?'inc':'mj', id, nt); }
     else if(a==='note'){
       var el=document.getElementById('flw-note'), t=el?String(el.value||'').trim():'';
       if(!t){ if(el) el.focus(); return; }
