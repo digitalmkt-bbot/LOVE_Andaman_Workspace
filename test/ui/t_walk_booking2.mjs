@@ -196,7 +196,9 @@ console.log('\n[Q44] private van → No-Transfer seat · 400 private_van_transfe
   console.log('    server message:', direct.body && direct.body.message);
   await openDraft({ lead: 'ZZ VAN', date: F2, pax: 2, zone: 'PK' });
   const added = await ev((t) => { bookingV2ToggleAddOn(t); const d = _bkV2.newBooking; return { add: d.addOns.map((a) => a.type), zone: d.trips[0].zone }; }, VAN);
-  ok('ticking the private van puts the seat on NoTransfer (legacy)', added.add.includes(VAN) && added.zone === 'NoTransfer', added);
+  // w6-d: the browser no longer writes NoTransfer itself; the quote's answer (trips[].zone) puts the zone the server priced in the form
+  ok('ticking the private van adds it and leaves the zone to the server (legacy wrote NoTransfer at once)', added.add.includes(VAN) && added.zone === 'PK', added);
+  ok('...the quote answers NoTransfer and the form shows it', await waitScreen(() => _bkV2.newBooking && _bkV2.newBooking.trips[0].zone === 'NoTransfer', null, 12000), await ev(() => _bkV2.newBooking.trips[0].zone));
   // a later step puts the old zone back (an edit of an imported booking, a pickup-area change): the send names no zone at all (w5-e: the server computes NoTransfer, a zone PK would be 400)
   const req = await ev(() => { _bkV2.newBooking.trips[0].zone = 'PK'; const r = laOpsQuote.buildRequest(_bkV2.newBooking, {}); return r && r.body.trips.map((t) => t.zone); });
   ok('the quote request sends no zone for the van trip (the server prices it NoTransfer), and not the old PK zone', JSON.stringify(req) === JSON.stringify([null]), req);

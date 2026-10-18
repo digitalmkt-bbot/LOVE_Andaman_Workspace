@@ -122,8 +122,8 @@
     var ym = window._px.mon || String(window._px.date || '').slice(0, 7), pier = window._px.pier || '';
     var days = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(ym) : [];
     var out = [];
-    var miss = days.filter(function(d){ return !fresh(S.day[dayKey(d, '')]); });
-    if(miss.length) out.push(function(){ return pool(miss, 5, function(d){ return loadDay(d, ''); }); });
+    var miss = days.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });       /* w6-d · the day read for the pier on screen: its bands, best boat and agent sums are the server's */
+    if(miss.length) out.push(function(){ return pool(miss, 5, function(d){ return loadDay(d, pier); }); });
     if(days.length && !fresh(S.rent[ym])) out.push(function(){ return loadMonthTotals(ym, ''); });   // w5-d: pxRentIdle reads the server's rent_idle
     var pym = prevMonth(ym);
     var pmiss = days.some(function(d){ return !fresh(S.mday[dayKey(pym + '-' + d.slice(8, 10), pier)]); });
@@ -132,7 +132,31 @@
   }
 
   /* ── the aggregate pxMonth reads, built from server trips (no browser costing) ── */
-  function aggFromTrips(date, trips){
+  /* w6-d · the day's aggregates the server works out (README "Fields the new frontend asked for": bands, best, agents of GET /v1/reports/trip-pl):
+     the load-factor bands (under 40 / 60 / 80 / from 80), the best boat and each agent's sums with the rate-card total; the browser only lays them in legacy's shape */
+  var BAND_AT = { under_40:0, under_60:1, under_80:2, from_80:3 };
+  function agentCell(x){
+    return { n:n(x.bookings), pax:n(x.heads), rev:n(x.revenue), cost:n(x.cost), exp:n(x.expected), expAmt:n(x.expected_amount), expPax:n(x.expected_pax), expMiss:n(x.expected_missing),
+             zn:Object.assign({}, x.zones), rtn:Object.assign({}, x.rates) };
+  }
+  function addCell(to, from){
+    ['n', 'pax', 'rev', 'cost', 'exp', 'expAmt', 'expPax', 'expMiss'].forEach(function(k){ to[k] += from[k]; });
+    [['zn'], ['rtn']].forEach(function(m){ Object.keys(from[m[0]]).forEach(function(k){ to[m[0]][k] = (to[m[0]][k] || 0) + from[m[0]][k]; }); });
+  }
+  function serverAggregates(a, d){
+    if(Array.isArray(d.bands)) d.bands.forEach(function(b){ var i = BAND_AT[b.band]; if(i == null) return; a.bandN[i] = n(b.n); a.bandNet[i] = n(b.net); a.bandPax[i] = n(b.pax); });
+    if(d.best) a.best = { name:d.best.name, profit:n(d.best.profit) };
+    (d.agents || []).forEach(function(g){
+      var cell = agentCell(g), routes = {};
+      Object.keys(g.routes || {}).forEach(function(rid){ routes[rid] = agentCell(g.routes[rid]); });
+      var hit = a.agents[g.name];
+      if(!hit){ cell.name = g.name; cell.b2c = !!g.b2c; cell.mk = g.market_id || ''; cell.routes = routes; a.agents[g.name] = cell; return; }
+      addCell(hit, cell);
+      Object.keys(routes).forEach(function(rid){ if(hit.routes[rid]) addCell(hit.routes[rid], routes[rid]); else hit.routes[rid] = routes[rid]; });
+    });
+    return a;
+  }
+  function aggFromTrips(date, trips, dayData){
     var a = { date:date, trips:trips.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0, routes:{}, agents:{}, groups:{}, gdet:{},
               bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[] };
     trips.forEach(function(t){
@@ -148,7 +172,7 @@
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
       lt.rows.forEach(function(r){ a.groups[r.g] = (a.groups[r.g] || 0) + r.use; });
     });
-    return a;
+    return dayData ? serverAggregates(a, dayData) : a;
   }
   function aggFromTotals(date, x){
     x = x || {};
@@ -271,10 +295,25 @@
   });
   wrap('pxDayAgg', function(orig, date, pier){
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
-    var trips = dayTrips(date, pier || '');
-    if(trips) return aggFromTrips(date, trips);
+    var trips = dayTrips(date, pier || ''), own = S.day[dayKey(date, pier || '')];
+    if(trips) return aggFromTrips(date, trips, own && own.data && Array.isArray(own.data.bands) ? own.data : null);
     var m = S.mday[dayKey(date, pier || '')];
     return aggFromTotals(date, m && m.data);
+  });
+  /* pxAgents · the per-trip agent split of the day card: trips[].agents of the day answer (heads, children, amount, the rate-card total) */
+  wrap('pxAgents', function(orig, date, bid){
+    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
+    var keys = Object.keys(S.day), hit = null;
+    for(var i = 0; i < keys.length && !hit; i++){
+      if(keys[i].indexOf(date + '|') !== 0) continue;
+      hit = S.day[keys[i]].data.trips.filter(function(t){ return t.boat_id === bid; })[0] || null;
+    }
+    if(!hit || !Array.isArray(hit.agents)) return orig(date, bid);
+    return hit.agents.map(function(g){
+      var head = n(g.heads), chd = n(g.children);
+      return { key:g.key, name:g.name, b2c:!!g.b2c, mk:g.market_id || '', n:n(g.bookings), head:head, ad:Math.max(0, head - chd), chd:chd, amt:n(g.amount),
+               exp:n(g.expected_total), expAmt:n(g.expected_amount), expPax:n(g.expected_pax), expMiss:n(g.expected_missing), zn:Object.assign({}, g.zones), rtn:Object.assign({}, g.rates) };
+    }).sort(function(a, b){ return b.amt - a.amt; });
   });
   /* pxRentIdle · rent paid for the days the boat did not sail: the server's rent_idle of the month (GET /v1/reports/trip-pl/month), in legacy's row shape (w5-d) */
   wrap('pxRentIdle', function(orig, days){
@@ -722,6 +761,129 @@
     }).join('');
     return orig([], G, T).replace('</tr>', cells + '</tr>');
   });
+  /* ══ w6-d · what-ifs: POST /v1/costing/calc-batch ═══════════════════════════════════════════════
+     The answer above prices a STORED plan at its own heads (and the curve it sends). Every other question the sheet asks of the maths - a tier price,
+     a typed head count, a plan changed to try a figure - used to run legacy's arithmetic in the browser. They are the server's now:
+       ctProfitAt(pl, n) · ctCalc(pl, ctx) · ctChdAt(pl, n) · ctStepCount(pl, n) · ctBreakEven(pl, cap)
+     A question with no answer yet is collected for 250 ms, then sent as ONE request: the first plan is the base and every other plan travels as
+     the plan fields that differ from it (README "calc-batch": scenarios [{ pax?, <plan fields> }]); nothing is stored. Until the answer is in,
+     legacy's arithmetic shows, and the screen is drawn once when it lands. A refused or failed batch leaves legacy's figures. */
+  var scn = { ans:{}, order:[], wants:{}, busy:{}, failed:{}, timer:null, walk:0 };
+  var SCN_KEEP = 800, SCN_MAX = 150;
+  function scnKey(pl, T, nn){
+    var pp = planPart(pl), tp = tplPart(T); if(!tp) return null;
+    return { key:pp.json + '#' + tp.json + '#' + nn, body:pp.body, tpl:tp.body, tplJson:tp.json };
+  }
+  /* the scenario the server priced for this plan at nn heads (null: none yet); ask = true also puts the question on the list */
+  function scnOf(pl, T, nn, ask){
+    nn = Math.round(+nn);
+    if(!enabled() || !cost.loaded || !pl || typeof pl !== 'object' || pl._asOf || !(nn >= 1) || nn > 1000) return null;
+    var k; try{ k = scnKey(pl, T, nn); }catch(_){ return null; }
+    if(!k) return null;
+    var a = scn.ans[k.key]; if(a) return a;
+    if(ask && !scn.walk && !scn.busy[k.key] && !scn.failed[k.key] && !scn.wants[k.key] && ctVisible()){
+      scn.wants[k.key] = { body:k.body, tpl:k.tpl, tplJson:k.tplJson, pax:nn };
+      clearTimeout(scn.timer); scn.timer = setTimeout(sendScn, CALC_WAIT);
+    }
+    return null;
+  }
+  /* a stored plan the main answer already prices at nn heads (its own heads, or a point of its curve) needs no what-if */
+  function covered(pl, T, nn){
+    var a = answer(pl, T, false); if(!a) return false;
+    if(+nn === +a.calc.pax) return true;
+    return ((a.sheet || {}).curve || []).some(function(x){ return +x.pax === +nn; });
+  }
+  function sendScn(){
+    var todo = scn.wants; scn.wants = {}; scn.timer = null;
+    var groups = {};
+    Object.keys(todo).forEach(function(key){
+      var w = todo[key], gk = w.tplJson + '#' + Object.keys(w.body).sort().join(',');
+      (groups[gk] = groups[gk] || []).push({ key:key, w:w });
+    });
+    Object.keys(groups).forEach(function(gk){
+      var list = groups[gk];
+      for(var at = 0; at < list.length; at += SCN_MAX){
+        (function(chunk){
+          var base = chunk[0].w.body, keys = chunk.map(function(x){ return x.key; });
+          var scenarios = chunk.map(function(x){
+            var s = { pax:x.w.pax };
+            Object.keys(x.w.body).forEach(function(f){ if(JSON.stringify(x.w.body[f]) !== JSON.stringify(base[f])) s[f] = x.w.body[f]; });
+            return s;
+          });
+          keys.forEach(function(key){ scn.busy[key] = 1; });
+          O.queue(function(){ return O.call('POST', '/v1/costing/calc-batch', { plan:base, template:chunk[0].w.tpl, scenarios:scenarios }); }).then(function(res){
+            keys.forEach(function(key){ delete scn.busy[key]; });
+            var out = res && res.scenarios;
+            if(!Array.isArray(out) || out.length !== keys.length){ keys.forEach(function(key){ scn.failed[key] = 1; }); return; }
+            keys.forEach(function(key, i){ scn.ans[key] = out[i]; scn.order.push(key); });
+            while(scn.order.length > SCN_KEEP) delete scn.ans[scn.order.shift()];
+            calcRender();
+          }, function(){ keys.forEach(function(key){ delete scn.busy[key]; scn.failed[key] = 1; }); });   /* legacy's own figures stay on screen */
+        })(list.slice(at, at + SCN_MAX));
+      }
+    });
+  }
+  var forgetCalc0 = forgetCalc;
+  forgetCalc = function(){ forgetCalc0(); scn.ans = {}; scn.order = []; scn.failed = {}; };
+  function wrapScn(name, replacement){
+    var orig = window[name]; if(typeof orig !== 'function' || orig.__opsCostingScn) return;
+    var w = function(){ var args = [].slice.call(arguments); if(!enabled() || !cost.loaded) return orig.apply(this, args); return replacement.apply(this, [orig].concat(args)); };
+    w.__opsCostingScn = true; window[name] = w;
+  }
+  wrapScn('ctProfitAt', function(orig, pl, nn, tpl){
+    var out = orig(pl, nn, tpl);
+    if(pl && typeof pl === 'object' && covered(pl, tpl, nn)) return out;
+    var s = scnOf(pl, tpl, nn, true); if(!s) return out;
+    var c = s.calc;
+    out.p = n(c.profit); out.rev = n(c.revenue); out.revTour = n(c.revenue_tour); out.revOd = n(c.revenue_on_demand); out.ad = c.adults; out.ch = c.children;
+    return out;
+  });
+  wrapScn('ctCalc', function(orig, pl, ctx, tpl){
+    var out = orig(pl, ctx, tpl);
+    if(!ctx || ctx.odQty || typeof window.ctCtxAt !== 'function' || !pl || typeof pl !== 'object') return out;
+    if(JSON.stringify(window.ctCtxAt(pl, ctx.pax)) !== JSON.stringify(ctx)) return out;      /* only the sheet's own context (the plan's engines, boats, fuel, boat) */
+    if(covered(pl, tpl, ctx.pax)) return out;
+    var s = scnOf(pl, tpl, ctx.pax, true); if(!s) return out;
+    var c = s.calc;
+    out.gross = n(c.gross); out.vin = n(c.vat_in); out.net = n(c.net); out.fixNet = n(c.fixed_net); out.varNet = n(c.var_net); out.rows = legacyRows(c.rows);
+    return out;
+  });
+  wrapScn('ctChdAt', function(orig, pl, nn){
+    var out = orig(pl, nn);
+    if(pl && typeof pl === 'object' && covered(pl, undefined, nn)) return out;
+    var s = scnOf(pl, undefined, nn, true);
+    return s ? s.children : out;
+  });
+  wrapScn('ctStepCount', function(orig, pl, nn, tpl){
+    var out = orig(pl, nn, tpl);
+    if(pl && typeof pl === 'object' && covered(pl, tpl, nn)) return out;
+    var s = scnOf(pl, tpl, nn, true);
+    return s ? s.step_count : out;
+  });
+  /* ctBreakEven of a plan the main answer does not hold (a plan changed to try a figure): the server's first profitable head count over the plan's seats.
+     While the answer is out, legacy's walk (which calls ctProfitAt up to the seats) runs without asking a question per head count. */
+  wrapScn('ctBreakEven', function(orig, pl, cap, tpl){
+    if(pl && typeof pl === 'object' && !answer(pl, tpl, false)){
+      var s = scnOf(pl, tpl, Math.max(1, whole(pl.pax, 1)), true);
+      if(s && +s.capacity === +cap) return s.break_even;
+    }
+    scn.walk++;
+    try{ return orig(pl, cap, tpl); } finally { scn.walk--; }
+  });
+
+  /* ctEffLine · the override editor's placeholders: each part of the line as the plan prices it (the template part with the plan's override laid over it),
+     and whether the plan switches the line off - sheet.line_parts of the stored plan's answer */
+  wrapCalc('ctEffLine', function(orig, line, pl){
+    var out = orig(line, pl);
+    var a = pl && typeof pl === 'object' && line ? answer(pl, undefined, false) : null, lp = a && a.sheet && a.sheet.line_parts;
+    if(!Array.isArray(lp)) return out;
+    var hit = lp.filter(function(x){ return x.id === line.id; })[0];
+    if(!hit || !Array.isArray(hit.parts) || hit.parts.length !== out.parts.length || hit.parts.some(function(p){ return !p.effective; })) return out;
+    out.off = !!hit.line_off;
+    out.parts = hit.parts.map(function(p){ return partFromServer(p.effective); });
+    return out;
+  });
+
   /* ctFactSheet · asks for the plan; its key figures, cost table and curve come through ctProfitAt / ctCalc / ctBreakEven above */
   wrapCalc('ctFactSheet', function(orig, pl){ answer(pl, undefined, true); return orig(pl); });
 

@@ -462,6 +462,7 @@
     bk.specialRequest = ob.special_request != null ? String(ob.special_request) : '';   // w5c: the server's job_note-else-notes (vanJobsSreqFinal, 82-ops-w5c-vans.js)
     bk.opsInvoice = ob.invoice && ob.invoice.id ? ob.invoice : null;           // w5-d: the booking's live invoice as the server works it out (read only; 83-ops-pay-chip.js)
     bk.paymentState = ob.payment_state || 'none';
+    if('pfm_status' in ob){ bk.pfmStatus = ob.pfm_status || null; bk.pastCutoff = !!ob.past_cutoff; }   // w6-d: only the single read carries them: the Daily PFM status of a proforma booking (hold / approved / paid / alert / awaiting / no_invoice), read only (94-ops-money-w6.js)
     bk.jobNote = ob.job_note != null ? ob.job_note : null;   // the van job order's special request override (35-ops-van-jobs.js)
     /* §bookingSlips: payment slips on the booking itself (a direct/B2C booking has no invoice payment); server-owned, shown by 38-ops-attachments.js */
     bk.slips = (ob.slips || []).filter(function(s){ return s && s.id; }).map(function(s){ return { id:s.id, attachmentId:s.attachment_id || s.attachmentId || '', addedAt:s.added_at || s.addedAt || '', addedBy:s.added_by || s.addedBy || '' }; });
@@ -502,8 +503,12 @@
     bk.addOns = (ob.add_ons || []).map(function(a){
       var o = { type: a.type, label: a.label || '', amount: +a.amount || 0, qty: a.qty != null ? a.qty : 1, note: a.note || '' };
       if(a.join_adults !== undefined) o.jAd = a.join_adults; if(a.join_children !== undefined) o.jChd = a.join_children;
+      if(typeof a.fee === 'boolean') o.fee = a.fee;       // w6-d · the server's reading of a Love Kingdom fee line (b2c-ad-*), read only, never sent (toServer picks its fields) (94-ops-booking-w6.js)
       return o;
     });
+    /* w6-d · the add-on link of a Love Kingdom add-on-only line and its agent booking (the single read only): addon_of = the agent booking's id, addon_lines = the lines on it */
+    if('addon_of' in ob){ bk.addonOfRead = true; bk.addonOf = ob.addon_of || null; }
+    if(Array.isArray(ob.addon_lines)) bk.addonLines = ob.addon_lines.map(function(x){ return { booking_id: x.booking_id, code: x.code || '', lead_pax: x.lead_pax || '', voucher_ref: x.voucher_ref || '', add_ons: x.add_ons || [] }; });
     Object.assign(bk, records(ob, bk.trips));
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);

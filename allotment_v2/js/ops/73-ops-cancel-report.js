@@ -9,7 +9,8 @@
    Period: the screen's month. The server windows a cancellation by the day it was MADE (not by the trip's travel date,
    as legacy did) and counts as the base the bookings SOLD in the window; the line above the cards therefore says
    "Cancelled in:" where legacy said "Travel period:". Reversible: this one string.
-   The City Tour page (land) keeps legacy's own report: the server's answer has no marine/land split yet.
+   w6-d: the City Tour page and the marine page are the server's too: GET /v1/reports/cancellations?land=true|false (a booking with a land trip is on
+   the City Tour page, any other on the marine page; one that has both is on both, as legacy's own simplification).
    Classic script, after 73-ops-srv-reads.js.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -26,10 +27,11 @@
   var fmt = function(n){ return '฿' + Math.round(n || 0).toLocaleString(); };
 
   var w = function(){
-    if(!on() || window._bkV2CityTourOnly || typeof window._opsBookingMonthRange !== 'function') return orig.apply(this, arguments);
+    if(!on() || typeof window._opsBookingMonthRange !== 'function') return orig.apply(this, arguments);
     var month = (_bkV2.month && /^\d{4}-\d{2}$/.test(_bkV2.month)) ? _bkV2.month : window.bookingV2LocalYMD(new Date()).slice(0, 7);
-    var range = window._opsBookingMonthRange(month), key = 'cxl|' + range.from + '|' + range.to;
-    var j = O.srv.read(key, '/v1/reports/cancellations', { from: range.from, to: range.to }, repaint);
+    var land = !!window._bkV2CityTourOnly;
+    var range = window._opsBookingMonthRange(month), key = 'cxl|' + range.from + '|' + range.to + '|' + (land ? 'land' : 'marine');
+    var j = O.srv.read(key, '/v1/reports/cancellations', { from: range.from, to: range.to, land: land ? 'true' : 'false' }, repaint);
     var st = O.srv.status(key);
     if(!j){
       if(st === 'failed') return orig.apply(this, arguments);      // legacy's own report, with its booking loads
@@ -72,9 +74,9 @@
   var meta = window.bookingV2TopbarMeta;
   if(typeof meta === 'function' && !meta.__w4fc){
     var wm = function(){
-      if(on() && !window._bkV2CityTourOnly && window._bkV2 && window._bkV2.tab === 'cancel' && typeof window._opsBookingMonthRange === 'function'){
-        var month = (_bkV2.month && /^d{4}-d{2}$/.test(_bkV2.month)) ? _bkV2.month : window.bookingV2LocalYMD(new Date()).slice(0, 7), r = window._opsBookingMonthRange(month);
-        var j = O.srv.peek('cxl|' + r.from + '|' + r.to);
+      if(on() && window._bkV2 && window._bkV2.tab === 'cancel' && typeof window._opsBookingMonthRange === 'function'){
+        var month = (_bkV2.month && /^\d{4}-\d{2}$/.test(_bkV2.month)) ? _bkV2.month : window.bookingV2LocalYMD(new Date()).slice(0, 7), r = window._opsBookingMonthRange(month);
+        var j = O.srv.peek('cxl|' + r.from + '|' + r.to + '|' + (window._bkV2CityTourOnly ? 'land' : 'marine'));
         if(j) return j.cancellations + ' cancellation' + (j.cancellations === 1 ? '' : 's');
       }
       return meta.apply(this, arguments);

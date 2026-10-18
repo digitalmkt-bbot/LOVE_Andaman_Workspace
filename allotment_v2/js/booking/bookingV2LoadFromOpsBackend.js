@@ -203,6 +203,8 @@ function bookingV2OpsEnsureCreated(fromYMD, toYMD, opts){
    (Booking Flow) also asks the server for each day's bookings per market id and
    adds it as mk. */
 var _opsDailyCounts = Object.create(null);
+/* w6-d · daily-counts?markets=1 answers {market: {bookings, pax}} per day (it was a bare booking count); Booking Flow's bars count bookings */
+function _opsMkBookings(m){ if(!m) return null; var o={}; Object.keys(m).forEach(function(k){ var v=m[k]; o[k]=(v&&typeof v==='object')?(+v.bookings||0):(+v||0); }); return o; }
 function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD, withMarkets){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
   var key='daily|'+fromYMD+'|'+toYMD+(withMarkets?'|mk':'');
@@ -213,7 +215,7 @@ function bookingV2OpsEnsureDailyCounts(fromYMD, toYMD, withMarkets){
     return r.json();
   }).then(function(j){
     if(!j || !Array.isArray(j.days)) throw new Error('daily-counts did not return days');
-    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]=withMarkets?{bk:+d.bookings||0, pax:+d.pax||0, mk:d.markets||null}:{bk:+d.bookings||0, pax:+d.pax||0}; });
+    var m=Object.create(null); j.days.forEach(function(d){ m[d.date]=withMarkets?{bk:+d.bookings||0, pax:+d.pax||0, mk:_opsMkBookings(d.markets)}:{bk:+d.bookings||0, pax:+d.pax||0}; });
     _opsDailyCounts[key]=m;
     return j;
   }).catch(function(e){ console.warn('[opsSync] failed to load daily booking counts: '+((e&&e.message)||e)); return null; });

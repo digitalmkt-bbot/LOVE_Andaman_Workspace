@@ -146,6 +146,8 @@
   function cfgWrite(key, val){
     if(!cfgCell.loaded){ O.fail(CFG[key].title + ' not saved', new Error('The settings are still loading, try again')); return; }
     var e = ent(key);
+    /* w6-d: `licensed` on a guide is the server's (role guide or trainee): never sent back, and not kept stale after a role edit */
+    if(key === 'guides' && Array.isArray(val)) val = val.map(function(x){ if(!x || typeof x !== 'object' || !('licensed' in x)) return x; var y = Object.assign({}, x); delete y.licensed; return y; });
     if(!e.snap) e.snap = { value: e.value, version: e.version };   // the last saved state, before the first unsaved edit
     e.value = O.clone(val); e.seq++;
     clearTimeout(e.timer);

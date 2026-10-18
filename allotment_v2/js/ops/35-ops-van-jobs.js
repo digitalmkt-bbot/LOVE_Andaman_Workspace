@@ -101,6 +101,7 @@
       dayRoute: {}, dayStatus: {}, dayZone: {}, statusRanges: [], zoneOverrides: []
     };
     if(v.color) veh.color = v.color;
+    if(v.cost_per_day !== undefined) veh.costPerDay = v.cost_per_day == null ? null : +v.cost_per_day;   // w6-d · a client fact the server keeps (vans.cost_per_day)
     if(old && Array.isArray(old.log)) veh.log = old.log;
     return veh;
   }

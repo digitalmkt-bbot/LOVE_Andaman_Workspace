@@ -422,6 +422,8 @@ function bookingV2RenderTab2(){
   const _btPier= rid => { const p=(((typeof getRoute==='function'&&getRoute(rid))||{}).pier)||'';
     return p==='tublamu'?'Tub Lamu':p==='panwa'?'Visit Panwa':p==='ranong'?'Ranong':p; };
   /* เรือของทริปหนึ่ง · ลำที่ Boat Operation จัดไว้ + ลำที่มี booking เกาะอยู่จริง */
+  /* w6-d · the figures of a boat on a route that day are the server's (GET /operations/by-trip routes[].boats: pax, capacity, over, over_by) */
+  const _btSrvBoat = (rid,bid)=>{ const sr=(_srv&&Array.isArray(_srv.routes))?_srv.routes.find(x=>x.route_id===rid):null; return (sr&&Array.isArray(sr.boats))?(sr.boats.find(x=>x.boat_id===bid)||null):null; };
   const _btBoats = rid => {
     /* w6-a MARKED EDIT (§opsByTripBoats · ops/91-ops-by-trip-boats.js): the boats of a trip with their heads, seats and "over" are the server's (by-trip routes[].boats) */
     const _sb=(_srv && typeof window.laOpsByTripBoats==='function')?window.laOpsByTripBoats(_srv,rid):null;
@@ -454,6 +456,8 @@ function bookingV2RenderTab2(){
     return order.map(bid=>{ const a=acc[bid], bo=a.boat||{};
       const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
+      const _sb=_btSrvBoat(rid,bid);
+      if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null};
       return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null};
     });
   };
