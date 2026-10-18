@@ -156,7 +156,7 @@ ok('server: arrival gone, rows back to wait', vs.vans.find((v) => v.van_id === '
 const s1b = [await sel('zz-b1'), await sel('zz-b2')];
 ok('screen: rows back to Wait, chip is the tick box again', s1b.join() === ',' && /ติ๊กเมื่อคนขับ/.test((await chip('veh01~r5')).text) && (await ev(() => window.__flow)) === 0, { s1b, c: await chip('veh01~r5') });
 // a row the staff already ticked in is left alone by the mark
-const ckPut = await send('PUT', `/operations/trip-ops/${bk.b2.trip}/checkins/van/0`, { expected: 3, actual_pax: 3, checked_in_at: new Date().toISOString(), checked_in_by: 'Tester', events: [] });
+const ckPut = await send('POST', `/operations/trip-ops/${bk.b2.trip}/checkins/van/0/check-in`, {});   // w4-f2: the tick is the command
 await page.locator('button.vck-arr[onclick*="veh01~r5"]').click();
 await idle(); await settle(1500);
 put = lastBody(/^PUT \/operations\/van-arrivals\//); vs = await vck(DAY);
@@ -424,7 +424,7 @@ const b3after = await api('/v1/bookings/' + bk.b3.id);
 const confirmTxt = dialogs[dlgC] || '';
 ok('cancelled path: confirm says only the van arrangement is cleared (booking and cancel history untouched)', /ล้างการจัดรถ\/เรือของ WALK THREE/.test(confirmTxt) && /ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ/.test(confirmTxt), confirmTxt);
 console.log('  note  confirm text: ' + JSON.stringify(confirmTxt));
-ok('cancelled path: PATCH trip-ops {van_parts:null} -> server part has no group, booking still cancelled', patchCalls.some((c) => /^PATCH \/operations\/trip-ops\/.+ 200/.test(c)) && b3after.status === 'cancelled' && !b3after.trips[0].operations.van_parts[0].group, { patchCalls, parts: b3after.trips[0].operations.van_parts, st: b3after.status });
+ok('cancelled path: POST clear-arrangement -> server part has no group, booking still cancelled', patchCalls.some((c) => /^POST \/operations\/trip-ops\/.+\/clear-arrangement 200/.test(c)) && b3after.status === 'cancelled' && !b3after.trips[0].operations.van_parts[0].group, { patchCalls, parts: b3after.trips[0].operations.van_parts, st: b3after.status });
 ok('cancelled path: the row left the Van Check-in screen', (await ev(() => document.querySelectorAll('#vancheckin-host [onclick*="ckStrandClear(\'zz-b3\'"]').length)) === 0, null);
 // the confirm text names only van parts, but the confirm also says "boat": record what the server actually kept
 console.log('  note  server kept boat/final pickup/check-in of b3: ' + JSON.stringify({ boat: b3after.trips[0].operations.boat_id, fin: b3after.trips[0].operations.pickup_time_final }));
@@ -516,7 +516,7 @@ if (nUndo) { await undoBtn.click(); await settle(500); await page.click('button[
 ck3 = await pierCk(bk3.e3.id, bk3.e3.trip);
 ok('"รับกลับ" -> PUT checkins/pier/0: the event is kept and marked undone (found), people given back (actual_pax 2, no_show 0)', nUndo > 0 && ck3[0].events.length === 1 && ck3[0].events[0].undone && ck3[0].events[0].undone.why === 'found' && ck3[0].actual_pax === 2 && ck3[0].no_show === 0, { nUndo, ck: ck3[0] });
 ok('screen: same event kept with undone, counts back to 2', await ev(() => { const b = SB_BOOKINGS.find((x) => x.id === 'zz-e3'); const c = ckRead(b, _pckDate, 'pier'); return c.events.length === 1 && !!c.events[0].undone && c.actualPax === 2; }));
-ok('a shorter events list is refused by the server (events_append_only), which is why undo must mark, not remove', (await send('PUT', `/operations/trip-ops/${bk3.e3.trip}/checkins/pier/0`, { expected: 2, actual_pax: 2, events: [] })).status === 409, null);
+ok('a shorter events list is refused by the server (400 use_command), which is why undo marks, not removes', (await send('PUT', `/operations/trip-ops/${bk3.e3.trip}/checkins/pier/0`, { expected: 2, actual_pax: 2, events: [] })).status === 400, null);
 // ckEventUndo (the older "pop the last event" path): no button calls it on this screen; run by name
 await ev(() => ckEventOpen('zz-e3', _pckDate, 'pier', 'no_show'));
 await settle(400); await ev(() => ckEvPick('late')); await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]'); await page.click('button[onclick*="_ckEvBumpK(\'ad\',1)"]'); await page.click('button[onclick="ckEvSave()"]'); await idle(); await settle(1000);
