@@ -142,6 +142,13 @@ await mk('cs1', 'W5 COVERED', 2); await mk('cs2', 'W5 OPEN', 2);
 for (const k of ['cs1', 'cs2']) await seedV('POST', `/v1/bookings/${bk[k].id}/tour-sales`, bk[k].id, { service: 'Longtail Join', qty: 2, unit_price: 500, method: 'cot' });
 await seedV('POST', `/v1/bookings/${bk.cs1.id}/pier-payments`, bk.cs1.id, { service_date: DAY, lines: [{ method: 'cash', amount: 1000 }], overpay_anyway: true });
 
+// ── 6 · guide order and travel register of b6 ──
+await seed('PUT', '/v1/config/guides', { value: [{ id: 'g1', name: 'W5 Guide One', nick: 'One', license: '11-1111', lang: ['EN'], role: 'guide' }, { id: 'g2', name: 'W5 Intern Two', role: 'intern' }, { id: 'g3', name: 'W5 Guide Three', license: '33-3333', role: 'trainee' }] });
+await seed('PUT', `/v1/guide-orders/${DAY}/b6`, { guide_ids: ['g1', 'g2', 'g3'], other_count: 1 });
+await seed('PATCH', `/v1/pier-office/tublamu/days/${DAY}/boats/b6/job`, { captain_name: 'W5 Captain', assistant_name: 'W5 Engineer', crew: [], crew_names: ['W5 Deck'], island: [], island_names: ['W5 Island Guide'] });
+await mk('tg1', 'W5 REG ONE', 3, { passengers: [{ name: 'Ivan Petrov', nationality: 'RU' }, { name: 'Olga Petrova', nationality: 'RU' }] });
+await seed('PATCH', `/operations/trip-ops/${bk.tg1.trip}`, { boat_id: 'b6' });
+
 //@@SEED
 await page.goto(`http://127.0.0.1:${port}/allotment_v2.html#/booking`);
 await page.waitForFunction(() => window.laOps && window.laOps.state.loaded, null, { timeout: 30000 });
@@ -433,6 +440,55 @@ section('5', async () => {
   await ev(() => laOps.wrote('pier'));
   await settle(1500);
   ok('a pier write reads the sales that are held again (GET …/tour-sales)', callsSince(n0).some((c) => /GET \/v1\/bookings\/.*\/tour-sales 200/.test(c)), callsSince(n0).filter((c) => /tour-sales/.test(c)));
+});
+
+// ═══ 6 · guide order and travel register <- /v1/guide-orders/{date}/{boat}/sheet and /v1/travel-register ═══
+section('6', async () => {
+  console.log('\n[6] Guide order (goCounts, goCrewN, goRouteOf, goIsGuide, goSheet) and travel register (pckTravelCrew, pckTravelRows, pckTravelSheet)');
+  await openPier(DAY);
+  const S = await api(`/v1/guide-orders/${DAY}/b6/sheet`), R = await api(`/v1/travel-register/${DAY}/b6`);
+  ok('seed: the server counts 2 licensed guides (one + a trainee), 1 intern + 1 blank + 1 island guide = 3 others, a 3-person crew', S.guides.length === 2 && S.others === 3 && S.crew === 3 && S.total === S.counts.ad + S.counts.chd + S.counts.inf + 2 + 3 + 3, S);
+  const held = () => waitFor((a) => !!laOps.guidePapers.sheet(a.d, 'b6') && !!laOps.guidePapers.register(a.d, 'b6'), { d: DAY }, 9000);
+  const prefetch = async () => { await ev((d) => Promise.all([laOps.guidePapers.readSheet(d, 'b6'), laOps.guidePapers.readRegister(d, 'b6')]), DAY); await held(); };
+  const nums = (html) => { const out = []; String(html).replace(/<td class="n">(\d+)<\/td>/g, (m, n) => { out.push(+n); return m; }); return out; };
+  await ev(() => laOps.guidePapers.clear()); await prefetch();
+  const fn = () => ev((d) => ({ cnt: goCounts(d, 'b6'), crew: goCrewN(d, 'b6'), route: goRouteOf(d, 'b6').id || '', html: goSheet(d, 'b6', false) }), DAY);
+  let F = await fn();
+  ok('goCounts / goCrewN / goRouteOf = the sheet (counts, crew, route_id)', F.cnt.ad === S.counts.ad && F.cnt.chd === S.counts.chd && F.cnt.inf === S.counts.inf && F.crew === S.crew && F.route === S.route_id, { F: [F.cnt, F.crew, F.route], S: [S.counts, S.crew, S.route_id] });
+  ok('goSheet: the seven figures are adults, children, infants, guides, crew, others, total = the sheet\'s', JSON.stringify(nums(F.html)) === JSON.stringify([S.counts.ad, S.counts.chd, S.counts.inf, S.guides.length, S.crew, S.others, S.total]), { n: nums(F.html), S });
+  ok('goSheet: the lead guide is the server\'s (name and licence), the intern is in "others" not a guide', F.html.includes('W5 Guide One') && F.html.includes('11-1111') && /W5 Intern Two/.test(F.html), F.html.slice(0, 200));
+  tamper = [{ re: /guide-orders\/2026-12-08\/b6\/sheet$/, fn: (j) => { j.counts = { ad: 40, chd: 6, inf: 2 }; j.crew = 9; j.others = 4; j.guides = j.guides.slice(0, 1); j.total = 99; j.seats = 12; } }];
+  await ev(() => laOps.guidePapers.clear()); await prefetch();
+  F = await fn();
+  ok('tampered sheet (40 / 6 / 2, crew 9, others 4, 1 guide, total 99, 12 seats): the page prints the server\'s figures, not the sum of the bookings', JSON.stringify(nums(F.html)) === JSON.stringify([40, 6, 2, 1, 9, 4, 99]) && /12 ที่นั่ง/.test(F.html) && F.cnt.ad === 40 && F.crew === 9, { n: nums(F.html), cnt: F.cnt });
+  tamper = [];
+
+  // register
+  await ev(() => laOps.guidePapers.clear()); await prefetch();
+  const T = await ev((d) => { const c = pckTravelCrew('b6', d); return { crew: c.slice(), blank: c.blank, rows: pckTravelRows('b6', d), html: pckTravelSheet('b6', d) }; }, DAY);
+  ok('pckTravelCrew = the register\'s crew (captain, engineer, deck, island guide, guides, others) with the position words', JSON.stringify(T.crew.map((c) => [c.name, c.pos, c.grp])) === JSON.stringify(R.crew.map((c) => [c.name, c.position, c.group])) && T.blank === R.totals.unnamed_crew, { crew: T.crew, R: R.crew });
+  ok('pckTravelRows = the register\'s passengers and totals (pax, Thai, foreign, names over, no name)', T.rows.pax === R.totals.passengers && T.rows.th === R.totals.thai && T.rows.fr + R.totals.unspecified_nationality === R.totals.foreign && T.rows.over === R.totals.names_over && T.rows.noname === R.totals.unnamed && T.rows.people.length === R.passengers.length && T.rows.people.some((p) => p.name === 'Ivan Petrov' && p.nat === 'RUS'), { rows: T.rows, tot: R.totals });
+  const sumNums = (html) => { const tail = html.slice(html.indexOf('<div class="sum">')); return nums(tail).slice(0, 9); };
+  ok('pckTravelSheet: the summary figures are the register\'s totals (captain, engineer, crew, guides, staff, Thai, foreign, everyone)', JSON.stringify(sumNums(T.html)) === JSON.stringify([R.totals.captain, R.totals.engineer, R.totals.crew, R.totals.guides, R.totals.staff, R.totals.thai, R.totals.foreign, R.totals.people, R.totals.people]), { sum: sumNums(T.html), tot: R.totals });
+  tamper = [{ re: /travel-register\/2026-12-08\/b6$/, fn: (j) => { j.totals.captain = 2; j.totals.thai = 11; j.totals.foreign = 22; j.totals.people = 55; j.passengers = [{ name: 'Server Name', nationality: 'FRA', phone: '123' }]; j.crew = [{ name: 'Server Captain', position: 'กัปตัน', group: 'cap' }]; } }];
+  await ev(() => laOps.guidePapers.clear()); await prefetch();
+  const T2 = await ev((d) => ({ crew: pckTravelCrew('b6', d), rows: pckTravelRows('b6', d), html: pckTravelSheet('b6', d) }), DAY);
+  ok('tampered register (captain 2, Thai 11, foreign 22, people 55, one name): rows and crew are the server\'s and the summary prints its totals', T2.crew.length === 1 && T2.crew[0].name === 'Server Captain' && T2.rows.people[0].name === 'Server Name' && JSON.stringify(sumNums(T2.html).slice(0, 1).concat(sumNums(T2.html).slice(5, 8))) === JSON.stringify([2, 11, 22, 55]) && T2.html.includes('Server Name'), { sum: sumNums(T2.html), crew: T2.crew });
+  tamper = [];
+
+  // the print waits for the answers: the combined window gets the server's figures
+  tamper = [{ re: /guide-orders\/2026-12-08\/b6\/sheet$/, fn: (j) => { j.counts.ad = 31; j.total = j.counts.ad + j.counts.chd + j.counts.inf + j.guides.length + j.crew + j.others; } }];
+  await ev(() => laOps.guidePapers.clear());
+  const n0 = calls.length;
+  const printed = await ev(async (d) => { window.__w = { html: '', document: { write(h) { window.__w.html += h; }, close() { window.__w.done = true; } }, focus() {} }; goPrintOpen('b6', d, ['b6'], window.__w); for (let i = 0; i < 60 && !window.__w.done; i++) await new Promise((r) => setTimeout(r, 100)); return window.__w.html; }, DAY);
+  ok('goPrintOpen waits for GET …/sheet and GET /v1/travel-register, then writes the pages with the server\'s 31 adults', callsSince(n0).some((c) => /guide-orders\/2026-12-08\/b6\/sheet 200/.test(c)) && callsSince(n0).some((c) => /travel-register\/2026-12-08\/b6 200/.test(c)) && /<td class="n">31<\/td>/.test(printed), { calls: callsSince(n0).filter((c) => /sheet|register/.test(c)), has31: /<td class="n">31<\/td>/.test(printed), len: printed.length });
+  tamper = [];
+  // the dialog: counts line from the sheet
+  await ev(() => laOps.guidePapers.clear());
+  await ev((d) => { goSetupOpen('b6'); }, DAY); await waitFor(() => !!document.querySelector('#acct-modal .go-s'), null, 6000);
+  const sub = await ev(() => (document.querySelector('#acct-modal .go-s') || {}).innerText || '');
+  ok('goSetupOpen shows "ผู้ใหญ่ n · เด็กโต n · เด็กเล็ก n · กัปตัน/นายท้าย n" from the sheet', sub.includes(`ผู้ใหญ่ ${S.counts.ad} · เด็กโต ${S.counts.chd} · เด็กเล็ก ${S.counts.inf}`) && sub.includes(`กัปตัน/นายท้าย ${S.crew}`), sub);
+  await ev(() => acctModalClose());
 });
 
 //@@SECTIONS
