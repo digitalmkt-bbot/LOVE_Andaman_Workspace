@@ -9,7 +9,10 @@
 
    Costing (template / plans / rented boats): ctRead / ctWrite for the three
    keys cost_template, cost_plans and boat_rent go to the server. The design
-   sheet's live preview (ctCalc, ctBreakEven) still runs in the browser.
+   sheet's live preview is the server's answer (POST /v1/costing/calc, debounced,
+   cached per plan + template; legacy's own arithmetic until the first answer);
+   the plan and template commands (ctFamSetPlan, ctDelLine, ctRenameGroup,
+   ctResetTpl, ctDelPlan) go to the server. See the Q37 and Q38 sections.
 
    GET  /v1/reports/trip-pl?date=&pier=
    GET  /v1/reports/trip-pl/month?month=&pier=
@@ -24,7 +27,7 @@
   var O = window.laOps; if(!O) return;
   var TTL = 60000;
   var S = { day:{}, mday:{}, an:{}, loading:{} };
-  var cost = { loaded:false, template:null, plans:[], rents:{}, known:{}, idMap:{}, seq:0, loading:null };
+  var cost = { loaded:false, template:null, plans:[], rents:{}, rentSrv:{}, known:{}, idMap:{}, seq:0, loading:null };
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v == null ? '' : String(v); }
@@ -411,10 +414,16 @@
   }
   function rentsFromServer(list){ var o = {}; (list || []).forEach(function(r){ o[r.boat_id] = rentFromServer(r); }); return o; }
 
+  /* the rent numbers the server worked out (seats, total, run days, per day, per trip), kept with the record they belong to */
+  function rentSrvSet(list){
+    cost.rentSrv = {};
+    (list || []).forEach(function(r){ cost.rentSrv[r.boat_id] = { sig:JSON.stringify(rentFromServer(r)), seats:r.seats, total:r.total, run_days:r.run_days, per_day:r.per_day, per_trip:r.per_trip, per_calendar_day:r.per_calendar_day }; });
+  }
   function costApply(tpl, plans, rents){
     cost.template = templateFromServer(tpl);
     cost.plans = (plans.plans || []).map(planFromServer);
     cost.rents = rentsFromServer((rents || {}).rents);
+    rentSrvSet((rents || {}).rents);
     cost.known = {}; cost.plans.forEach(function(p){ cost.known[p.id] = JSON.stringify(p); });
     cost.knownRents = {}; Object.keys(cost.rents).forEach(function(k){ cost.knownRents[k] = JSON.stringify(cost.rents[k]); });
     cost.loaded = true;
@@ -433,6 +442,7 @@
     return loadCosting(true).then(function(){ if(typeof window.ctRender === 'function') window.ctRender(); }, function(){});
   }
 
+  var calcApi = { render:null };   /* filled by the Q37 section below */
   var COST_KEYS = { cost_template:1, cost_plans:1, boat_rent:1 };
   function costRead(key){
     if(!cost.loaded) return null;
@@ -454,10 +464,11 @@
     cost.rents = next;
     if(!jobs.length) return Promise.resolve();
     return O.queue(function(){
+      var last = null;
       return jobs.reduce(function(p, j){ return p.then(function(){
-        return j.del ? O.del('/v1/costing/boat-rents/' + encodeURIComponent(j.id)) : O.call('PUT', '/v1/costing/boat-rents/' + encodeURIComponent(j.id), j.body);
-      }); }, Promise.resolve());
-    }).then(function(){ O.wrote('costing'); }, function(e){ return refreshAfterFail('Boat rent was not saved', e); });
+        return j.del ? O.del('/v1/costing/boat-rents/' + encodeURIComponent(j.id)) : O.call('PUT', '/v1/costing/boat-rents/' + encodeURIComponent(j.id), j.body).then(function(r){ last = r; });
+      }); }, Promise.resolve()).then(function(){ if(last && last.rents) rentSrvSet(last.rents); });
+    }).then(function(){ O.wrote('costing'); if(typeof window.ctRentBust === 'function') window.ctRentBust(); if(calcApi.render) calcApi.render(); }, function(e){ return refreshAfterFail('Boat rent was not saved', e); });
   }
   function writePlans(val){
     var next = clone(val) || [], jobs = [], keep = {};
@@ -472,19 +483,31 @@
     cost.plans = next;
     if(!jobs.length) return Promise.resolve();
     function realId(id){ return cost.idMap[id] || id; }
+    var shown = false;
+    /* Q38 · the server keeps pax >= 1 and pax_th <= pax and gives a route key to one plan only: what it answers is what the screen shows */
+    function adopt(id, res, body){
+      var p = cost.plans.filter(function(x){ return x.id === id; })[0]; if(!p || !res) return;
+      var a = document.activeElement, fk = a && a.getAttribute ? a.getAttribute('data-fk') : '';
+      var typing = fk === 'pl.pax' || fk === 'pl.paxTH';        /* the plan tab's own fields do not clamp in legacy: leave the number being typed */
+      if(res.pax != null && +res.pax !== +p.pax && !typing){ p.pax = res.pax; shown = true; }
+      if(res.pax_th != null && +res.pax_th !== +p.paxTH && !typing){ p.paxTH = res.pax_th; shown = true; }
+      if(body && body.route_key){ cost.plans.forEach(function(x){ if(x.id !== id && x.famId === body.route_key){ x.famId = ''; cost.known[x.id] = JSON.stringify(x); shown = true; } }); }
+      cost.known[id] = JSON.stringify(p);
+    }
     return O.queue(function(){
       return jobs.reduce(function(p, j){ return p.then(function(){
         if(j.op === 'del') return O.del('/v1/costing/plans/' + encodeURIComponent(realId(j.id)));
-        if(j.op === 'patch') return O.patch('/v1/costing/plans/' + encodeURIComponent(realId(j.id)), j.body);
+        if(j.op === 'patch') return O.patch('/v1/costing/plans/' + encodeURIComponent(realId(j.id)), j.body).then(function(res){ adopt(j.id, res, j.body); });
         return O.post('/v1/costing/plans', planToServer(j.plan)).then(function(res){
           var oldId = j.plan.id; if(!res || !res.id) return;
           cost.idMap[oldId] = res.id;
           cost.plans.forEach(function(x){ if(x.id === oldId) x.id = res.id; });
           cost.known[res.id] = cost.known[oldId]; delete cost.known[oldId];
           if(typeof window._ct !== 'undefined' && window._ct && window._ct.pid === oldId) window._ct.pid = res.id;
+          adopt(res.id, res, planToServer(j.plan));
         });
       }); }, Promise.resolve());
-    }).then(function(){ O.wrote('costing'); if(Object.keys(cost.idMap).length && typeof window.ctRender === 'function') window.ctRender(); },
+    }).then(function(){ O.wrote('costing'); if((shown || Object.keys(cost.idMap).length) && typeof window.ctRender === 'function') window.ctRender(); },
       function(e){ return refreshAfterFail('Cost plan was not saved', e); });
   }
   function costWrite(key, val){
@@ -511,8 +534,263 @@
     });
   });
 
+  /* ══ Q37 · the design sheet's live preview is the server's answer ═══════════════════════════════
+     The sheet's maths (ctCalc, ctProfitAt, ctBreakEven ...) is called synchronously from many render paths, so
+     it cannot wait for a request. How it works:
+       1. a stored plan the sheet shows is turned into the body of POST /v1/costing/calc (plan + the template as it
+          is now + the heads); the call is debounced (250 ms after the last ask) and sent behind pending writes;
+       2. the answer is cached under that plan + template; the same plan edited again is a new key;
+       3. the wrapped functions below read the cached answer and put the server's figures into legacy's own result
+          (same shape, so the markup is untouched); with no answer yet they return legacy's own arithmetic, so the
+          sheet never blanks;
+       4. when the answers arrive the screen is drawn again once (ctRender).
+     Nothing is stored by the call. Plans copied and edited only to try a price (the price levels, the tiers) are not
+     stored plans: they are not asked for and keep legacy's arithmetic. */
+  var calc = { ans:{}, order:[], byTpl:{}, wants:{}, busy:{}, failed:{}, timer:null, renderT:null, memo:null };
+  var CALC_WAIT = 250, CALC_KEEP = 300;
+
+  function ctVisible(){ var h = document.getElementById('ct-body'); return !!(h && h.offsetParent !== null); }
+  function sameTick(){
+    if(!calc.memo){ calc.memo = { pl:new Map(), tpl:new Map() }; Promise.resolve().then(function(){ calc.memo = null; }); }
+    return calc.memo;
+  }
+  /* the plan as the server is asked about it: what the sheet prices (the name, note, route key, tiers and itinerary do not move a figure) */
+  function calcBody(pl){
+    var b = planToServer(pl);
+    delete b.name; delete b.note; delete b.route_key; delete b.tiers; delete b.itinerary;
+    return b;
+  }
+  function planPart(pl){
+    var m = sameTick(), hit = m.pl.get(pl); if(hit) return hit;
+    var body = calcBody(pl), bt = pl.boatId, boat = null;
+    try{ boat = bt && typeof window.getBoat === 'function' ? window.getBoat(bt) : null; }catch(_){}
+    var part = { body:body, json:JSON.stringify(body) + '|' + (bt ? JSON.stringify(cost.rents[bt] || null) + '|' + (boat ? boat.cap : '') : '') };
+    m.pl.set(pl, part); return part;
+  }
+  function tplPart(T){
+    var src = T || cost.template; if(!src || !Array.isArray(src.lines)) return null;
+    var m = sameTick(), hit = m.tpl.get(src); if(hit) return hit;
+    var body = templateToServer(src), part = { body:body, json:JSON.stringify(body) };
+    m.tpl.set(src, part); return part;
+  }
+  function isStored(pl, part){
+    if(!pl.id) return false;
+    var s = cost.plans.filter(function(x){ return x.id === pl.id; })[0];
+    return !!s && JSON.stringify(calcBody(s)) === JSON.stringify(part.body);
+  }
+  /* the cached answer for this plan under this template (null: none yet); ask = true also puts the plan on the list to ask for */
+  function answer(pl, T, ask){
+    if(!enabled() || !cost.loaded || !pl || typeof pl !== 'object' || pl._asOf) return null;
+    var pp, tp;
+    try{ pp = planPart(pl); tp = tplPart(T); }catch(_){ return null; }
+    if(!tp) return null;
+    var key = pp.json + '#' + tp.json, a = calc.ans[key];
+    if(a) return a;
+    if(ask && !calc.busy[key] && !calc.failed[key] && !calc.wants[key] && ctVisible() && isStored(pl, pp)){
+      calc.wants[key] = { body:pp.body, tpl:tp.body, tplJson:tp.json, pax:Math.max(1, pp.body.pax || 0) };
+      clearTimeout(calc.timer); calc.timer = setTimeout(sendWants, CALC_WAIT);
+    }
+    return null;
+  }
+  function sendWants(){
+    var todo = calc.wants; calc.wants = {}; calc.timer = null;
+    Object.keys(todo).forEach(function(key){
+      var w = todo[key]; calc.busy[key] = 1;
+      O.queue(function(){ return O.call('POST', '/v1/costing/calc', { plan:w.body, template:w.tpl, pax:w.pax }); }).then(function(res){
+        delete calc.busy[key];
+        if(!res || !res.calc || !res.sheet){ calc.failed[key] = 1; return; }
+        calc.ans[key] = res; calc.byTpl[w.tplJson] = res; calc.order.push(key);
+        while(calc.order.length > CALC_KEEP) delete calc.ans[calc.order.shift()];
+        calcRender();
+      }, function(){ delete calc.busy[key]; calc.failed[key] = 1; });   /* legacy's own figures stay on screen */
+    });
+  }
+  /* one draw when the last answer is in; ctRender keeps the focus and the scroll */
+  function calcRender(){
+    clearTimeout(calc.renderT);
+    calc.renderT = setTimeout(function(){
+      if(Object.keys(calc.busy).length || Object.keys(calc.wants).length) return calcRender();
+      if(typeof window.ctRender === 'function' && ctVisible()) window.ctRender();
+    }, 120);
+  }
+  calcApi.render = calcRender;
+  function forgetCalc(){ calc.ans = {}; calc.order = []; calc.byTpl = {}; calc.failed = {}; }
+
+  function legacyRows(rows){
+    return (rows || []).map(function(r){ return { id:r.id, g:r.group, l:r.label, vat:!!r.vat, amt:n(r.amount), vatAmt:n(r.vat_amount), net:n(r.net), fix:n(r.fixed), varr:n(r.variable) }; });
+  }
+  function wrapCalc(name, replacement){
+    var orig = window[name]; if(typeof orig !== 'function' || orig.__opsCostingCalc) return;
+    var w = function(){ var args = [].slice.call(arguments); if(!enabled() || !cost.loaded) return orig.apply(this, args); return replacement.apply(this, [orig].concat(args)); };
+    w.__opsCostingCalc = true; window[name] = w;
+  }
+
+  /* ctCalc · the rows and the totals; only for the sheet's own context (the heads, engines, boats, fuel and boat of the plan) */
+  wrapCalc('ctCalc', function(orig, pl, ctx, tpl){
+    var out = orig(pl, ctx, tpl);
+    if(!ctx || ctx.odQty || typeof window.ctCtxAt !== 'function') return out;
+    var a = answer(pl, tpl, false);
+    if(!a || +ctx.pax !== +a.calc.pax || JSON.stringify(window.ctCtxAt(pl, ctx.pax)) !== JSON.stringify(ctx)) return out;
+    var c = a.calc;
+    out.gross = n(c.gross); out.vin = n(c.vat_in); out.net = n(c.net); out.fixNet = n(c.fixed_net); out.varNet = n(c.var_net); out.rows = legacyRows(c.rows);
+    return out;
+  });
+  /* ctProfitAt · profit, revenue and the children split at the plan's heads; the other head counts the server priced for its curve */
+  wrapCalc('ctProfitAt', function(orig, pl, nn, tpl){
+    var out = orig(pl, nn, tpl), a = answer(pl, tpl, true);
+    if(!a) return out;
+    var c = a.calc;
+    if(+nn === +c.pax){
+      out.p = n(c.profit); out.rev = n(c.revenue); out.revTour = n(c.revenue_tour); out.revOd = n(c.revenue_on_demand); out.ad = c.adults; out.ch = c.children;
+      return out;
+    }
+    var k = ((a.sheet || {}).curve || []).filter(function(x){ return +x.pax === +nn; })[0];
+    if(k){ out.p = n(k.profit); out.rev = n(k.revenue); }
+    return out;
+  });
+  /* ctBreakEven · the first head count with a profit, walked up to the boats' seats */
+  wrapCalc('ctBreakEven', function(orig, pl, cap, tpl){
+    var a = answer(pl, tpl, true), s = a && a.sheet;
+    if(s && +cap === +s.capacity) return s.key_figures.break_even;
+    return orig(pl, cap, tpl);
+  });
+  wrapCalc('ctChdAt', function(orig, pl, nn){
+    var a = answer(pl, undefined, false);
+    if(a && +nn === +a.calc.pax) return a.sheet.children;
+    return orig(pl, nn);
+  });
+  wrapCalc('ctStepCount', function(orig, pl, nn, tpl){
+    var a = answer(pl, tpl, false);
+    if(a && +nn === +a.sheet.pax) return a.sheet.step_count;
+    return orig(pl, nn, tpl);
+  });
+  wrapCalc('ctPlanSeats', function(orig, pl){
+    var a = answer(pl, undefined, true);
+    return a ? a.seats : orig(pl);
+  });
+  wrapCalc('ctVatR', function(orig, t){
+    var tp = tplPart(t), a = tp && calc.byTpl[tp.json];
+    return a ? a.sheet.vat_share : orig(t);
+  });
+  wrapCalc('ctCostPerHead', function(orig, plan){
+    var a = plan ? answer(plan, undefined, true) : null;
+    return a ? a.sheet.cost_per_head.amount : orig(plan);
+  });
+  wrapCalc('ctOdQty', function(orig, pl, ln, ctx){
+    var a = (ctx && !ctx.odQty) ? answer(pl, undefined, false) : null, od = a && a.sheet.on_demand;
+    if(od && +ctx.pax === +a.sheet.pax){
+      var l = od.lines.filter(function(x){ return x.id === ln.id; })[0];
+      if(l) return l.expected_qty;
+    }
+    return orig(pl, ln, ctx);
+  });
+  /* ctV2OvrTot · the "total per trip" row of the adjust tab: one cell per plan, from the server's override_total */
+  wrapCalc('ctV2OvrTot', function(orig, P, G, T){
+    var cells = P.map(function(pl, i){
+      var a = answer(pl, T, true), o = a && a.sheet.override_total;
+      if(!o) return (/<td class="ct-gtd ct-tot" data-col="0">[\s\S]*?<\/td>/.exec(orig([pl], G, T)) || [''])[0].replace('data-col="0"', 'data-col="' + i + '"');
+      return '<td class="ct-gtd ct-tot" data-col="' + i + '"><b>' + window.ctB(o.gross) + '</b><span class="ct-u">' + o.pax + ' คน · ' + window.ctB(o.per_head) + '/หัว</span></td>';
+    }).join('');
+    return orig([], G, T).replace('</tr>', cells + '</tr>');
+  });
+  /* ctFactSheet · asks for the plan; its key figures, cost table and curve come through ctProfitAt / ctCalc / ctBreakEven above */
+  wrapCalc('ctFactSheet', function(orig, pl){ answer(pl, undefined, true); return orig(pl); });
+
+  /* ctRentOf / _ctRentOfCalc · the rent's seats, total, running days and per-trip figure are the server's (they come with the boat-rent record) */
+  wrapCalc('_ctRentOfCalc', function(orig, boatId){
+    var r = orig(boatId), s = r && cost.rentSrv[boatId];
+    if(!s) return r;
+    var mine; try{ mine = JSON.stringify(rentFromServer(rentToServer(cost.rents[boatId] || {}))); }catch(_){ return r; }
+    if(mine !== s.sig) return r;
+    r.seats = s.seats; r.amt = n(s.total); r.runDays = s.run_days; r.perDay = n(s.per_day); r.perTrip = n(s.per_trip); r.perCalDay = n(s.per_calendar_day);
+    return r;
+  });
+  /* ctTplFill / ctTplOdSeed · the server hands the template over already filled with the default lines and the on-demand seed */
+  wrapCalc('ctTplFill', function(orig, t){ return t; });
+  wrapCalc('ctTplOdSeed', function(orig, t){ return 0; });
+
+  /* ══ Q38 · plan rules and template commands are the server's ═══════════════════════════════════
+     Each command changes the template and the plans in ONE transaction at the server (all or nothing), so the
+     screen no longer saves the template and the plans separately. After a command the server's template is
+     taken as it is and the plans are read again (their overrides, groups and route keys may have moved). */
+  function guard(){ return !(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('accounting')); }
+  function afterCommand(res){
+    ++cost.seq;
+    if(res && Array.isArray(res.lines)) cost.template = templateFromServer(res);
+    O.wrote('costing');
+    return loadCosting(true).then(function(){ if(typeof window.ctRender === 'function') window.ctRender(); });
+  }
+  function realPlanId(id){ return cost.idMap[id] || id; }
+
+  /* ctFamSetPlan(route/family key, plan id | '') → PUT /v1/costing/route-plans/{key} {plan_id|null} */
+  wrap('ctFamSetPlan', function(orig, fid, pidRaw){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var pid = String(pidRaw || '');
+    cost.plans.forEach(function(p){                       /* legacy's own change, shown at once; the server's answer is read after */
+      if(p.famId === fid) p.famId = '';
+      if(pid && p.id === pid) p.famId = fid;
+      cost.known[p.id] = JSON.stringify(p);
+    });
+    if(typeof window.ctRender === 'function') window.ctRender();
+    return O.queue(function(){ return O.call('PUT', '/v1/costing/route-plans/' + encodeURIComponent(fid), { plan_id:pid ? realPlanId(pid) : null }); }).then(function(){
+      O.wrote('costing'); return loadCosting(true);
+    }).then(function(){ if(typeof window.ctRender === 'function') window.ctRender(); },
+      function(e){ return refreshAfterFail('Route plan was not saved', e); });
+  });
+
+  /* ctDelLine(index) → DELETE /v1/costing/template/lines/{id} (by the line's id) */
+  wrap('ctDelLine', function(orig, li){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var ln = (window.ctTpl().lines || [])[li]; if(!ln) return;
+    if(!confirm('ลบ "' + ln.l + '" ออกจากสูตรกลาง? · ค่าที่ตั้งไว้รายแผนของรายการนี้จะถูกลบด้วย')) return;
+    return O.queue(function(){ return O.del('/v1/costing/template/lines/' + encodeURIComponent(ln.id)); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Cost line was not deleted', e); });
+  });
+
+  /* ctRenameGroup(group) → POST /v1/costing/template/rename-group {from,to} */
+  wrap('ctRenameGroup', function(orig, g){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var nm = prompt('เปลี่ยนชื่อหมวด "' + g + '" เป็น', g);
+    if(!nm || !String(nm).trim() || String(nm).trim() === g) return;
+    nm = String(nm).trim();
+    return O.queue(function(){ return O.post('/v1/costing/template/rename-group', { from:g, to:nm }); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Group was not renamed', e); });
+  });
+
+  /* ctResetTpl() → POST /v1/costing/template/reset */
+  wrap('ctResetTpl', function(orig){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    if(!confirm('คืนสูตรกลางกลับเป็นค่าเริ่มต้นทั้งหมด? · ค่าที่ตั้งไว้รายแผนจะถูกล้างด้วย')) return;
+    return O.queue(function(){ return O.post('/v1/costing/template/reset'); }).then(afterCommand,
+      function(e){ return refreshAfterFail('Cost template was not reset', e); });
+  });
+
+  /* ctDelPlan() → DELETE /v1/costing/plans/{id}; the last plan is refused by the server with its own message */
+  wrap('ctDelPlan', function(orig){
+    if(!enabled() || !cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(!guard()) return;
+    var P = window.ctPlans(), pl = window.ctPlan(window._ct.pid); if(!pl) return;
+    if(P.length > 1 && !confirm('ลบแผน "' + pl.name + '" ?')) return;   /* the last plan goes to the server without a question: its refusal is the answer */
+    return O.queue(function(){ return O.del('/v1/costing/plans/' + encodeURIComponent(realPlanId(pl.id))); }).then(function(){
+      cost.plans = cost.plans.filter(function(x){ return x.id !== pl.id; }); delete cost.known[pl.id];
+      if(cost.plans.length) window._ct.pid = cost.plans[0].id;
+      O.wrote('costing'); if(typeof window.ctRender === 'function') window.ctRender();
+    }, function(e){
+      if(e && e.status === 409 && e.code === 'last_plan'){ alert(e.message); return; }
+      return refreshAfterFail('Cost plan was not deleted', e);
+    });
+  });
+
+  /* ctPlanSetOn · the legacy clamp stays as the hint; the PATCH answer (writePlans → adopt) puts the server's pax and pax_th on screen */
+
+  O.onWrite(function(kind){ if(kind !== 'costing') forgetCalc(); else calc.failed = {}; });
+
   O.onWrite(function(){ clearAll(); });
-  window.laOps.costingPL = { loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
+  window.laOps.costingPL = { calcState:calc, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
   window.__laOpsCostingCompat = {
     legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisHtml:analysisHtml,
     templateFromServer:templateFromServer, templateToServer:templateToServer, planFromServer:planFromServer, planToServer:planToServer,
