@@ -1161,7 +1161,7 @@
     /* ตารางโปรแกรม */
     var byPier={}, pierOrd=[]; D.rows.forEach(function(o){ var p=(route(o.rid)||{}).pier||'other'; if(!byPier[p]){ byPier[p]=[]; pierOrd.push(p); } byPier[p].push(o); });
     var pierNm=function(p){ try{ return (typeof laPierName==='function' && laPierName(p))||p; }catch(_){ return p; } };
-    var cols='<div class="ebm-cols"><div>เส้นทาง · ออก · โซนรับ</div><div>เรือ</div><div><span>ที่นั่ง (ขีด = จุดคุ้มทุน)</span><span class="ebm-livek"><i class="ebm-dot"></i>มีใบเข้าใน 1 ชม.</span></div><div>ล่าสุด</div><div>สถานะ</div><div>คุ้มทุน</div></div>';
+    var cols='<div class="ebm-cols"><div>เส้นทาง</div><div>เรือ</div><div><span>ที่นั่ง (ขีด = จุดคุ้มทุน)</span><span class="ebm-livek"><i class="ebm-dot"></i>มีใบเข้าใน 1 ชม.</span></div><div>ล่าสุด</div><div>สถานะ</div><div>คุ้มทุน</div></div>';
     var body=pierOrd.map(function(p){ var L=byPier[p], f=L.reduce(function(s,o){ return s+o.fB; },0), n=L.reduce(function(s,o){ return s+o.nB; },0);
       return '<div class="ebm-pier"><span>'+E(String(pierNm(p)).toUpperCase())+'</span><span class="eb-st '+(f===n?'g':'w')+'">เต็ม '+num(f)+'/'+num(n)+'</span></div>'
         +L.map(function(o){ return mvRow(o, ds, now); }).join(''); }).join('');
@@ -1221,7 +1221,7 @@
     var st = o.st==='ch' ? '<span class="eb-st g">เหมาลำ</span>' : o.st==='full' ? '<span class="eb-st g">เต็ม</span>' : (o.st==='be' ? '<span class="eb-st b">ต่ำกว่าคุ้มทุน</span>' : (o.st==='open' ? '<span class="eb-st w">ยังว่าง</span>' : '<span class="eb-st">ไม่จำกัด</span>'));
     var be = o.be>0 ? ('<span class="eb-num">'+num(o.be)+'</span> · '+(o.bk>=o.be?'ผ่านแล้ว ✓':'ขาดอีก <b style="color:var(--eb-bad)">'+num(o.be-o.bk)+'</b>')) : '<span class="eb-mut">—</span>';
     return '<div class="ebm-row'+(o.st==='be'?' be':'')+'" data-rid="'+E(o.rid)+'" data-st="'+o.st+'">'
-      +'<div class="rt"><b>'+E(n.f+(n.v?' '+n.v:''))+'</b><small title="'+E((o.dep||'')+' · '+String(zgChips(o.zg)).replace(/<[^>]+>/g,''))+'">'+E(o.dep||'—')+(zgChips(o.zg)?' · '+zgChips(o.zg):'')+'</small></div>'
+      +'<div class="rt" title="'+E((o.dep?o.dep+' · ':'')+String(zgChips(o.zg)).replace(/<[^>]+>/g,''))+'"><b>'+E(n.f+(n.v?' '+n.v:''))+'</b></div>'   /* §execMvSlim (2026-10-19) · owner "ดีเทล เวลา Phuket Khaolak own ตัดออก" · เหลือแต่ชื่อ (เวลา/โซนอยู่ใน tooltip · โซนรวมอยู่ในการ์ด Booking Movement) */
       +'<div class="bts">'+boats+'</div>'+bar+'<div class="lst">'+last+'</div><div>'+st+'</div><div class="bec">'+be+'</div></div>';
   }
   function seg(key, items){ return '<span class="eb-seg">'+items.map(function(it){ return '<button class="'+(EB[key]===it[0]?'on':'')+'" onclick="ebSet(\''+key+'\',\''+it[0]+'\')">'+it[1]+'</button>'; }).join('')+'</span>'; }
@@ -1455,7 +1455,7 @@
       '.ebm-vt tr.var td{border-bottom:1px solid #F1F3F6}.ebm-vt tr.var td:first-child{padding-left:29px;color:var(--eb-ink2);font-weight:500}',
       '.ebm-vt tr.var .dep{font-size:11px;color:#9CA3AF;margin-left:6px;font-variant-numeric:tabular-nums}.ebm-vt tr.var .tag{font-size:9.5px;font-weight:700;color:#047857;background:#DCFCE7;border-radius:5px;padding:0 5px;margin-left:5px}',
       '.ebm-vt tr.gap td{height:4px;padding:0;border:0}.ebm-vt tr.tot td{border-top:2px solid var(--eb-ink);font-weight:700;padding-top:7px;font-size:13px}.ebm-vt tr.tot td:first-child{padding-left:10px}',
-      '.ebm-cols,.ebm-row{display:grid;grid-template-columns:minmax(220px,300px) 120px minmax(0,1fr) 150px 104px 140px;gap:12px;align-items:center;padding:5px 26px}',
+      '.ebm-cols,.ebm-row{display:grid;grid-template-columns:minmax(220px,300px) 120px minmax(0,1fr) 150px 104px 140px;gap:12px;align-items:center;padding:6px 26px;min-height:40px}',
       '.ebm-cols{background:#F6F8FA;border-bottom:1px solid var(--eb-line);font-size:11px;font-weight:600;color:var(--eb-mut);letter-spacing:.04em;padding-top:7px;padding-bottom:7px}',
       '.ebm-cols>div{display:flex;align-items:center;gap:8px}',
       '.ebm-livek{display:inline-flex;align-items:center;gap:5px;color:#15803D;letter-spacing:.06em}',

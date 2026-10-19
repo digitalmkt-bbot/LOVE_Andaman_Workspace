@@ -10,7 +10,7 @@
 //   1 เปิดหน้าแล้วแท็บแรกคือ มูฟเมนต์ · วันที่ในหัวการ์ด = พรุ่งนี้ · มี LIVE · ไม่มีอิโมจิในหน้า
 //   2 % ขายได้ในวงแหวน = Σ seatsConsumed / Σ availableCapacity ของโปรแกรมพรุ่งนี้ (getAllotment) · N/M ลำเต็ม ตรงกับแถว
 //   3 แถว = โปรแกรมที่มีเรือ/ใบจองพรุ่งนี้ · ที่นั่งในแถวตรง getAllotment · เรียงตามลำดับโปรแกรม (2026-10-19) · แถวที่ยังว่างมีลายวิ่ง (.ebm-live) · แถวเต็มไม่มี · เต็มแล้วอยู่ล่างกว่าแถวที่ยังว่าง
-//   4 โซนรับใต้ชื่อโปรแกรม = Σ pax แยก Phuket / Khao Lak / Own transport ของใบในโปรแกรมนั้น
+//   4 (§execMvSlim) แถวเหลือแต่ชื่อโปรแกรม · เวลา/โซนรับ (Σ pax แยก Phuket / Khao Lak) ย้ายไป tooltip
 //   5 "ล่าสุด": โปรแกรมที่มีใบเข้าวันนี้ขึ้นชิป +pax · เวลา (ภายใน 60 นาที = ชิปเขียวกะพริบ) · โปรแกรมที่ไม่มีใบเลยขึ้น "ยังไม่มีใบจอง"
 //   6 เข้ามาวันนี้ (สำหรับพรุ่งนี้) = Σ pax ของใบพรุ่งนี้ที่เข้าระบบวันนี้ · แยกโซนรวมเท่ากัน · ยกเลิกวันนี้ = pax ของใบที่ยกเลิกวันนี้
 //   7 เลื่อนวัน ‹ › และปุ่ม "วันนี้" เปลี่ยนวันที่ในหัวการ์ด · กดช่องใน 7 วันข้างหน้าก็เปลี่ยน · กรองท่าแล้วแถวเหลือเฉพาะท่านั้น
@@ -116,9 +116,11 @@ const Z = await page.evaluate((S) => {
 }, S);
 {
   const r5 = R1.rows.find(r => r.rid === 'r5');
-  const okZ = r5 && (!Z.PK || r5.rt.includes('Phuket ' + Z.PK)) && (!Z.KL || r5.rt.includes('Khao Lak ' + Z.KL)) && (!Z.NT || r5.rt.includes('Own transport ' + Z.NT));
-  if (!okZ) fail('4 โซนรับไม่ตรง · "' + (r5 && r5.rt) + '" คาด ' + JSON.stringify(Z));
-  else ok('4 โซนรับใต้ชื่อโปรแกรม · Phuket ' + Z.PK + ' · Khao Lak ' + Z.KL);
+  /* §execMvSlim (2026-10-19) · ตัดบรรทัดเวลา/โซนใต้ชื่อโปรแกรมออก · เหลือใน tooltip ของชื่อ */
+  const tip = await page.evaluate(() => (document.querySelector('.ebm-row[data-rid="r5"] .rt') || {}).title || '');
+  const okZ = r5 && !/Phuket|Khao Lak|Own transport|\d\d:\d\d/.test(r5.rt) && (!Z.PK || tip.includes('Phuket ' + Z.PK)) && (!Z.KL || tip.includes('Khao Lak ' + Z.KL));
+  if (!okZ) fail('4 แถวยังมีบรรทัดเวลา/โซน หรือ tooltip ไม่ตรง · "' + (r5 && r5.rt) + '" · tip "' + tip + '" คาด ' + JSON.stringify(Z));
+  else ok('4 แถวเหลือแต่ชื่อโปรแกรม · เวลา/โซน (Phuket ' + Z.PK + ' · Khao Lak ' + Z.KL + ') อยู่ใน tooltip');
 }
 
 /* ══ 5 · ล่าสุด ══════════════════════════════════════════════════════ */
