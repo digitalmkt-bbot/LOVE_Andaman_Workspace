@@ -19599,6 +19599,20 @@ function pckPayWarn(bkId, date){
 
 // ── popup เก็บเงิน ──
 var _pckPay=null;
+/* §pckVat (2026-10-19) · เจ้าของ: "กด เก็บเงิน มันจะเด้งขึ้น ให้ระด้วยว่า Agent นี้ เป็น Vat or No Vat"
+   อ่านจาก agent.vatMode (ตั้งที่หน้า Agent) · include = ราคารวม VAT แล้ว · exclude = ราคา Net + 7%
+   ยังไม่ได้ตั้ง = ระบบอื่น (Travel Summary · บิล) นับเป็นไม่มี VAT · บอกตรง ๆ ให้ไปตั้ง · ไม่มี agent (walk-in) = No VAT */
+function pckVatTag(b){
+  var a=(b && b.agentId && typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  var m=(a && a.vatMode)||'', nm=a?(a.name||a.code||b.agentId):'ไม่มี Agent';
+  var t = m==='include' ? ['vat','VAT','ราคารวม VAT 7% แล้ว']
+        : m==='exclude' ? ['vat','VAT','ราคา Net + VAT 7%']
+        : (a && !m)     ? ['gap','No VAT','ยังไม่ได้ตั้งโหมด VAT ที่หน้า Agent · ระบบนับเป็นไม่มี VAT']
+        :                 ['nov','No VAT','ไม่มี VAT'];
+  return '<div class="pckp-vat"><span class="ag">Agent · <b>'+ckEsc(nm)+'</b></span>'
+    +'<span class="tg '+t[0]+'" title="'+ckEsc(t[2])+'">'+t[1]+'</span>'
+    +'<span class="ds">'+ckEsc(t[2])+'</span></div>';
+}
 // §autoCheckIn (2026-08-02) · เปิดกล่องนี้จากการกดเช็คอิน = ตั้งใจจะขึ้นเรืออยู่แล้ว
 //   เดิมพอเก็บเงินครบ กล่องปิดแล้วต้องกลับไปกดเช็คอินอีกรอบ ทั้งที่ไม่มีทางเลือกอื่นให้กด
 //   thenCk จำไว้ว่ามาจากทางไหน · เก็บครบเมื่อไรก็เช็คอินต่อให้เลย · เปิดจากปุ่ม "เก็บเงิน" ในคอลัมน์เงินไม่เช็คอินให้
@@ -19875,7 +19889,7 @@ function pckPayRender(){
 
   acctModal(''
     +'<div class="pckp-hd"><div><div class="pckp-tt">เก็บเงินหน้าท่า</div>'
-    +'<div class="pckp-sub">'+e(b.voucherRef||b.code||b.id)+' · '+e(b.leadPax||'')+'</div></div>'
+    +'<div class="pckp-sub">'+e(b.voucherRef||b.code||b.id)+' · '+e(b.leadPax||'')+'</div>'+pckVatTag(b)+'</div>'
     +'<button class="pckp-x" onclick="acctModalClose()">&#10005;</button></div>'
     +'<div class="pckp-bd">'+brk+form+hist+'</div>'
     +'<div class="pckp-ft"><button class="pckp-btn" onclick="acctModalClose()">ปิด</button>'
@@ -19922,6 +19936,13 @@ function pckPayCSS(){ return ''
   +'#acct-modal .pckp-hd{padding:15px 20px;border-bottom:1px solid #E7E4DC;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-family:\'DM Sans\',sans-serif}'
   +'#acct-modal .pckp-tt{font-size:15px;font-weight:800;color:#2f2f2b}'
   +'#acct-modal .pckp-sub{font-size:11px;color:#8a8a82;margin-top:2px}'
+  +'#acct-modal .pckp-vat{display:flex;flex-wrap:wrap;align-items:center;gap:4px 7px;margin-top:6px;font-size:11px}'
+  +'#acct-modal .pckp-vat .ag{color:#5f5e58}#acct-modal .pckp-vat .ag b{color:#1f1e1a;font-weight:700}'
+  +'#acct-modal .pckp-vat .tg{font-size:11px;font-weight:800;letter-spacing:.02em;border-radius:6px;padding:2px 8px;border:1px solid}'
+  +'#acct-modal .pckp-vat .tg.vat{background:#E1F5EE;color:#0F6E56;border-color:#9FD8C2}'
+  +'#acct-modal .pckp-vat .tg.nov{background:#F1EFE8;color:#5F5E5A;border-color:#D8D5CB}'
+  +'#acct-modal .pckp-vat .tg.gap{background:#FAEEDA;color:#854F0B;border-color:#EBC98C}'
+  +'#acct-modal .pckp-vat .ds{color:#8a8a82}'
   +'#acct-modal .pckp-x{background:transparent;border:none;font-size:18px;color:#a5a49d;cursor:pointer;line-height:1;font-family:inherit}'
   +'#acct-modal .pckp-bd{padding:16px 20px;font-family:\'DM Sans\',sans-serif;color:#2f2f2b}'
   +'#acct-modal .pckp-ft{padding:12px 20px;border-top:1px solid #E7E4DC;background:#FAF9F6;display:flex;gap:9px}'
