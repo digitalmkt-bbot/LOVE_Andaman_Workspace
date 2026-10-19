@@ -1008,12 +1008,24 @@
     if(!z||z==='NoTransfer'||z==='NT') return 'NT'; if(z==='PK'||z==='KL'||z==='RN') return z; return 'O'; }
   function mvDate(){ var d=EB.mvd; if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(String(d))) d=addDays(today(),1); return d; }
   function boatsOn(ds, rid){ var out=[]; try{ (baDayBoats(ds)||[]).forEach(function(x){ if(x.routeId===rid) out.push({id:x.boatId, name:(x.boat&&x.boat.name)||x.boatId, cap:+(x.boat&&x.boat.cap)||0}); }); }catch(_){} return out; }
+  function chBoatsOn(ds, rid){   /* §mvCharter · ลำเหมาของเส้นทางนี้ในวันนั้น */
+    var out=[], seen={};
+    eachTrip(ds, ds, function(b,t){ if(t.routeId!==rid || t.bookingMode!=='charter') return;
+      var ids=[]; try{ ids=(typeof bkBoatIdsOn==='function')?(bkBoatIdsOn(b,ds)||[]):[]; }catch(_){ ids=[]; }
+      if(!ids.length && t.charterBoatId) ids=[t.charterBoatId];
+      ids.forEach(function(id){ if(!id || seen[id]) return; seen[id]=1;
+        var bo=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(x){ return x && x.id===id; })[0]||{};
+        out.push({id:id, name:bo.name||id, cap:+bo.cap||0, ch:1}); });
+    });
+    return out;
+  }
+  function isBoatRoute(rid){ var p=((route(rid)||{}).pier)||''; return !!p && p!=='other'; }   /* §mvCharter · โปรแกรมบกไม่ขึ้นบอร์ดเรือ */
   function isFullRow(cap, bk, free){ return cap>0 && (free<=2 || bk>=cap*0.97); }
   function mvDay(ds){
     var t0=today(), now=Date.now(), ago24=now-86400000, I=idx(), rows=[];
     var tot={cap:0, bk:0, free:0, boats:0, full:0, below:0, rev:0, be:0, add:0, addN:0, addV:0, addZ:{PK:0,KL:0,RN:0,NT:0,O:0}, cxl:0, cxlN:0, bk24:0, cap24:0, open:0, freeOpen:0};
-    routesOn(ds).forEach(function(rid){
-      var r=route(rid)||{}, al=alOf(rid, ds), B=boatsOn(ds, rid);
+    routesOn(ds).filter(isBoatRoute).forEach(function(rid){
+      var r=route(rid)||{}, al=alOf(rid, ds), B=boatsOn(ds, rid), CH=chBoatsOn(ds, rid);
       var o={rid:rid, dep:((r.times||[])[0]||''), boats:B, cap:0, bk:0, free:null, zg:{PK:0,KL:0,RN:0,NT:0,O:0}, byBoat:{}, add:0, addAg:{}, last:null, lastAny:0, bk24:0, rev:0, be:beOf(rid, ds), n:0};
       if(al && al.hasAllotment){ o.cap=+al.availableCapacity||0; o.bk=+al.seatsConsumed||0; o.free=Math.max(0,+al.seatsAvailable||0); }
       eachTrip(ds, ds, function(b,t){ if(t.routeId!==rid) return;
@@ -1026,10 +1038,15 @@
       if(!o.cap){ o.bk=o.bk||Object.keys(o.zg).reduce(function(s,k){ return s+o.zg[k]; },0); }
       o.full=isFullRow(o.cap,o.bk,o.free==null?0:o.free);
       o.st = !o.cap ? 'na' : (o.full ? 'full' : ((o.be>0 && o.bk<o.be) ? 'be' : 'open'));
+      /* §mvCharter · ลำเหมาต่อท้ายรายชื่อเรือ · เส้นทางที่มีแต่ลำเหมา = เหมาลำทั้งโปรแกรม */
+      o.nCh=CH.length; o.boats=o.boats.concat(CH);
+      if(CH.length && !o.cap){ o.st='ch'; o.full=true; o.chCap=CH.reduce(function(s2,x){ return s2+(x.cap||0); },0); }
       /* ลำเต็มกี่ลำ */
-      var nB=B.length||1, fB=0, assigned=Object.keys(o.byBoat).length>0;
-      if(B.length>1 && assigned){ B.forEach(function(x){ var p=o.byBoat[x.id]||0; if(x.cap>0 && p>=x.cap*0.97) fB++; }); }
+      var nB=B.length||(CH.length?0:1), fB=0, assigned=Object.keys(o.byBoat).length>0;
+      if(o.st==='ch'){ fB=0; }
+      else if(B.length>1 && assigned){ B.forEach(function(x){ var p=o.byBoat[x.id]||0; if(x.cap>0 && p>=x.cap*0.97) fB++; }); }
       else fB = o.full ? nB : 0;
+      nB+=CH.length; fB+=CH.length;   /* §mvCharter · ลำเหมา = ขายแล้วทั้งลำ */
       o.nB=nB; o.fB=fB;
       tot.cap+=o.cap; tot.bk+=o.bk; if(o.free!=null) tot.free+=o.free; tot.boats+=nB; tot.full+=fB; tot.rev+=o.rev; tot.be+=o.be; tot.add+=o.add;
       if(o.st==='be') tot.below++; if(o.st==='open'){ tot.open++; tot.freeOpen+=o.free||0; }
@@ -1065,7 +1082,7 @@
   function mv7(){
     var t0=today(), out=[];
     for(var i=1;i<=7;i++){ var d=addDays(t0,i), cap=0, bk=0, nB=0, fB=0, nR=0;
-      routesOn(d).forEach(function(rid){ var al=alOf(rid,d); if(!al||!al.hasAllotment) return; nR++; var c=+al.availableCapacity||0, k=+al.seatsConsumed||0, f=Math.max(0,+al.seatsAvailable||0); cap+=c; bk+=k; var B=boatsOn(d,rid).length||1; nB+=B; if(isFullRow(c,k,f)) fB+=B; });
+      routesOn(d).filter(isBoatRoute).forEach(function(rid){ var nc=chBoatsOn(d,rid).length; nB+=nc; fB+=nc; var al=alOf(rid,d); if(!al||!al.hasAllotment) return; nR++; var c=+al.availableCapacity||0, k=+al.seatsConsumed||0, f=Math.max(0,+al.seatsAvailable||0); cap+=c; bk+=k; var B=boatsOn(d,rid).length||1; nB+=B; if(isFullRow(c,k,f)) fB+=B; });
       out.push({ds:d, cap:cap, bk:bk, nB:nB, fB:fB, nR:nR, pct:pct(bk,cap)}); }
     return out;
   }
@@ -1142,18 +1159,19 @@
   function mvRow(o, ds, now){
     var n=rName(o.rid), r=route(o.rid)||{};
     var fillPct = o.cap ? Math.min(100, o.bk*100/o.cap) : 0;
-    var col = o.st==='full' ? '#047857' : (o.st==='be' ? '#DC2626' : (o.st==='open' ? '#F59E0B' : '#9CA3AF'));
+    var col = (o.st==='full'||o.st==='ch') ? '#047857' : (o.st==='be' ? '#DC2626' : (o.st==='open' ? '#F59E0B' : '#9CA3AF'));
     var liveCls = (o.st==='open'||o.st==='be') ? ' ebm-live' : '';
-    var bar = !o.cap ? '<div class="ebm-fill na"><em>'+num(o.bk)+' · ไม่จำกัดที่นั่ง</em></div>'
+    var bar = o.st==='ch' ? '<div class="ebm-fill"><i style="width:100%;background:#047857"></i><em style="color:#fff">'+num(o.bk)+' คน · เหมาลำ '+num(o.nCh)+' ลำ</em><b style="color:#fff">'+(o.chCap?('จุ '+num(o.chCap)):'เหมา')+'</b></div>'
+      : !o.cap ? '<div class="ebm-fill na"><em>'+num(o.bk)+' · ไม่จำกัดที่นั่ง</em></div>'
       : '<div class="ebm-fill"><i class="'+liveCls.trim()+'" style="width:'+fillPct+'%;background:'+col+'"></i>'+(liveCls?'<span class="ebm-scan"></span>':'')+(o.be>0&&o.cap?'<s style="left:'+Math.min(100,o.be*100/o.cap)+'%"></s>':'')
         +'<em style="color:'+(fillPct>=30?'#fff':'#334155')+'">'+num(o.bk)+' / '+num(o.cap)+'</em><b style="color:'+(fillPct>88?'#fff':'#334155')+'">'+(o.full?'เต็ม':'ว่าง '+num(o.free))+'</b></div>';
-    var boats = o.boats.length ? o.boats.map(function(x){ var c=''; try{ c=(typeof bkV2BoatAvatarColor==='function')?bkV2BoatAvatarColor(x.id):''; }catch(_){} return '<span class="bt"><i style="background:'+(c||famColor(o.rid))+'"></i>'+E(x.name)+(o.boats.length>1&&o.byBoat[x.id]?' <small>'+num(o.byBoat[x.id])+'</small>':'')+'</span>'; }).join('') : '<span class="eb-mut">ยังไม่วางเรือ</span>';
+    var boats = o.boats.length ? o.boats.map(function(x){ var c=''; try{ c=(typeof bkV2BoatAvatarColor==='function')?bkV2BoatAvatarColor(x.id):''; }catch(_){} return '<span class="bt"><i style="background:'+(c||famColor(o.rid))+'"></i>'+E(x.name)+(x.ch?' <small>เหมา</small>':(o.boats.length>1&&o.byBoat[x.id]?' <small>'+num(o.byBoat[x.id])+'</small>':''))+'</span>'; }).join('') : '<span class="eb-mut">ยังไม่วางเรือ</span>';
     var last='';
     if(o.last && o.last.ts){ var fresh=(now-o.last.ts)<3600000;
       last='<span class="'+(fresh?'ebm-new':'ebm-old')+'" title="'+E(o.last.name)+'">'+(fresh?'<i class="ebm-dot"></i>':'')+'+'+num(o.last.pax)+' · '+hhmm(o.last.ts)+'</span><small>วันนี้ +'+num(o.add)+' · '+num(Object.keys(o.addAg).length)+' เอเยนต์</small>'; }
-    else if(o.st==='full') last='<span class="ebm-old">—</span><small>'+(o.lastAny?'เต็มแล้ว · ใบล่าสุด '+thD(ymd(new Date(o.lastAny))):'เต็มแล้ว')+'</small>';
+    else if(o.st==='full'||o.st==='ch') last='<span class="ebm-old">—</span><small>'+(o.lastAny?'เต็มแล้ว · ใบล่าสุด '+thD(ymd(new Date(o.lastAny))):'เต็มแล้ว')+'</small>';
     else last='<span class="ebm-old">—</span><small style="color:'+((o.st==='be'||o.st==='open')&&o.lastAny&&(now-o.lastAny)>4*3600000?'var(--eb-bad)':'var(--eb-mut)')+'">'+(o.lastAny?'เงียบมา '+tsAgo(o.lastAny):'ยังไม่มีใบจอง')+'</small>';
-    var st = o.st==='full' ? '<span class="eb-st g">เต็ม</span>' : (o.st==='be' ? '<span class="eb-st b">ต่ำกว่าคุ้มทุน</span>' : (o.st==='open' ? '<span class="eb-st w">ยังว่าง</span>' : '<span class="eb-st">ไม่จำกัด</span>'));
+    var st = o.st==='ch' ? '<span class="eb-st g">เหมาลำ</span>' : o.st==='full' ? '<span class="eb-st g">เต็ม</span>' : (o.st==='be' ? '<span class="eb-st b">ต่ำกว่าคุ้มทุน</span>' : (o.st==='open' ? '<span class="eb-st w">ยังว่าง</span>' : '<span class="eb-st">ไม่จำกัด</span>'));
     var be = o.be>0 ? ('<span class="eb-num">'+num(o.be)+'</span> · '+(o.bk>=o.be?'ผ่านแล้ว ✓':'ขาดอีก <b style="color:var(--eb-bad)">'+num(o.be-o.bk)+'</b>')) : '<span class="eb-mut">—</span>';
     return '<div class="ebm-row'+(o.st==='be'?' be':'')+'" data-rid="'+E(o.rid)+'" data-st="'+o.st+'">'
       +'<div class="rt"><b>'+E(n.f+(n.v?' '+n.v:''))+'</b><small>'+E(o.dep||'—')+(zgChips(o.zg)?' · '+zgChips(o.zg):'')+'</small></div>'
