@@ -28130,11 +28130,197 @@ function flwDoneItems(boatId){
   out.sort(function(a,b){ return String(b.ref.endDate||'').localeCompare(String(a.ref.endDate||'')); });
   return out;
 }
+/* ══ §flwSum (2026-10-19) · owner "สำหรับแต่ละงาน เพิ่มตัวที่เป็นสรุปรายการ ทั้งเหตุการณ์ และการซ่อม รายละเอียดครบ Copy ได้ และปุ่ม Save เหมือนใบสรุปงาน 1 งาน ถ้ามีรูปก็แนบรูปด้วย"
+   ปุ่ม "Summary" บนหัวการ์ดงานในหน้า Fleet Work (งานที่เปิดอยู่ + งานที่ปิดแล้ว + รายงานปัญหาที่ยังไม่เปิดงาน)
+   เปิดใบสรุป 1 ใบ: เรือ · เหตุการณ์ (INC) · งานซ่อม (MJ) · ขั้นตอนย่อย · อะไหล่ที่เบิก · memo · ค่าใช้จ่ายรวม · บันทึกความคืบหน้า · รูป
+   Copy text = ข้อความล้วนไว้วาง LINE · Copy image / Save image = รูป PNG ของทั้งใบ (มีรูปแนบ) · Print = พิมพ์ / บันทึก PDF
+   อ่านอย่างเดียว ไม่แก้ข้อมูล ══ */
+var FLWS=null;
+var FLWS_OUT={success:'Success',limited:'Limited use',rework:'Rework needed',decommission:'Decommissioned',cancelled:'Cancelled'};
+var FLWS_TYPE={corrective:'Corrective',preventive:'Preventive',scheduled:'Scheduled'};
+function flwsD(s,t){ s=String(s||'').slice(0,10); var a=s.split('-'); if(a.length<3||!+a[0]) return '';
+  return (+a[2])+' '+FLW_MO[(+a[1]||1)-1]+' '+a[0]+(t?(' '+t):''); }
+function flwsM(v){ v=+v||0; return '฿'+v.toLocaleString('en-US',{minimumFractionDigits:v%1?2:0,maximumFractionDigits:2}); }
+function flwsBtn(kind,id,auto){
+  if(kind!=='mj'&&kind!=='inc') return '';
+  return '<button type="button" class="flw-btn" title="Job summary · copy or save" data-k="'+kind+'" data-id="'+fjE(id)+'" onclick="flwsOpen(this.dataset.k,this.dataset.id)" '
+    +'style="flex:none;height:28px;padding:0 10px;font-size:12px;'+(auto?'margin-left:auto':'margin-left:8px')+'">&#128196; Summary</button>';
+}
+/* รวมข้อมูลของงาน 1 งาน (MJ + INC ที่ผูกกัน) */
+function flwsData(kind,id){
+  var M=flwA('m'), I=flwA('i'), m=null, inc=null;
+  if(kind==='mj'){ m=M.filter(function(x){ return x&&x.id===id; })[0]||null; if(!m) return null;
+    if(m.incidentId) inc=I.filter(function(x){ return x&&x.id===m.incidentId; })[0]||null; }
+  else { inc=I.filter(function(x){ return x&&x.id===id; })[0]||null; if(!inc) return null;
+    if(inc.maintId) m=M.filter(function(x){ return x&&x.id===inc.maintId; })[0]||null; }
+  var bid=(m&&m.boatId)||(inc&&inc.boatId)||'', b=bid&&typeof getBoat==='function'?getBoat(bid):null;
+  var memos=m?flwA('o').filter(function(mo){ return mo&&mo.maintId===m.id&&mo.status!=='cancelled'; }):[];
+  var parts=m?(m.parts||[]):[], pc=0; parts.forEach(function(p){ pc+=(+p.qty||0)*(+p.cost||0); });
+  var cost=0; if(m){ try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=+m.cost||0; } }
+  /* บันทึก: รวม INC + MJ · ตัดบรรทัดซ้ำ (INC สำเนาโน้ตของงานไว้) · บรรทัด 📦 เบิก ซ่อนเมื่อมีตารางอะไหล่แล้ว */
+  var seen={}, log=[], hidPk=0;
+  [[inc,'INC'],[m,'MJ']].forEach(function(z){ if(!z[0]) return; (z[0].progressLog||[]).forEach(function(l,i){ if(!l) return;
+    var tx=String(l.text||'').trim(); if(!tx) return;
+    var nt=tx.replace(/\s+/g,' '), sys=/^(ระบบ|system)$/i.test(String(l.by||'').trim());
+    var k=String(l.date||'')+'|'+(sys?nt.split(' · ')[0]:nt.slice(0,60)); if(seen[k]) return; seen[k]=1;
+    if(parts.length && /^📦/.test(tx)){ hidPk++; return; }
+    log.push({d:String(l.date||''), t:tx, by:String(l.by||''), o:(z[1]==='INC'?0:10000)+i}); }); });
+  log.sort(function(a,b){ return a.d<b.d?-1:a.d>b.d?1:a.o-b.o; });
+  var photos=[]; [[inc,'inc'],[m,'mj']].forEach(function(z){ if(!z[0]) return;
+    try{ flpList(z[1],z[0]).forEach(function(p){ if(p&&!p.removed&&p.url) photos.push(p); }); }catch(_){ } });
+  var proj=(m&&m.parentProjectId)?flwProj(m.parentProjectId):null;
+  return {kind:kind, m:m, inc:inc, b:b, memos:memos, parts:parts, pc:pc, cost:cost, log:log, hidPk:hidPk, photos:photos, proj:proj};
+}
+function flwsStatus(D){
+  var m=D.m, inc=D.inc;
+  if(m){ if(m.status==='done') return 'Done'+(m.outcome?(' · '+(FLWS_OUT[m.outcome]||m.outcome)):'')+(m.awaitingInvoice?' · invoice pending':'');
+    if(m.status==='cancelled') return 'Cancelled'; if(m.status==='pending') return 'Job open · not started'; return 'In progress'; }
+  var st=String(inc.status||'open'); return st==='open'?'Reported · no job yet':(st.charAt(0).toUpperCase()+st.slice(1));
+}
+function flwsTitle(D){ return (D.m&&D.m.title)||(D.inc&&D.inc.title)||'(no title)'; }
+function flwsNos(D){ return [D.inc&&D.inc.no, D.m&&D.m.no].filter(Boolean).join(' · '); }
+function flwsText(D){
+  var L=[], m=D.m, inc=D.inc, b=D.b, add=function(k,v){ if(v!=null&&String(v).trim()!=='') L.push(k+': '+v); };
+  L.push('📄 สรุปงาน · '+flwsNos(D)); L.push(flwsTitle(D));
+  add('เรือ', b?(b.name+(b.pier?(' · '+(faPier(b)||b.pier)):'')):''); add('สถานะ', flwsStatus(D));
+  if(D.proj) add('โปรเจกต์', (D.proj.no||'PRJ')+' '+(D.proj.name||''));
+  if(inc){ L.push(''); L.push('— เหตุการณ์ '+(inc.no||'INC')+' —');
+    add('วันที่', flwsD(inc.date, inc.time)); add('ความรุนแรง', inc.severity?String(inc.severity).toUpperCase():'');
+    add('หัวข้อ', inc.title); if(inc.detail&&inc.detail!==inc.title) add('รายละเอียด', inc.detail); add('หมายเหตุ', inc.remark);
+    var da=(inc.damagedAssets||[]).map(function(a){ return a&&a.label; }).filter(Boolean); if(da.length) add('ชิ้นที่เสียหาย', da.join(', '));
+    if(inc.quickFix) add('แก้ไขเบื้องต้น', typeof inc.quickFix==='string'?inc.quickFix:'Quick fix');
+    add('ปิดเมื่อ', flwsD(inc.closedDate||inc.resolvedDate)); }
+  if(m){ L.push(''); L.push('— งานซ่อม '+(m.no||'MJ')+' —');
+    add('ประเภท', FLWS_TYPE[m.type]||m.type); if(!inc||m.title!==inc.title) add('หัวข้อ', m.title); if(m.detail&&m.detail!==m.title&&(!inc||m.detail!==inc.detail)) add('รายละเอียด', m.detail);
+    add('สถานที่', m.location); add('ผู้รับผิดชอบ', m.owner); add('เริ่ม', flwsD(m.startDate)); add('ปิดงาน', flwsD(m.endDate)); add('กำหนดเสร็จ', flwsD(m.dueDate));
+    add('ผลการซ่อม', m.outcome?(FLWS_OUT[m.outcome]||m.outcome):''); add('หมายเหตุปิดงาน', m.closeNote);
+    var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean); if(as.length) add('อุปกรณ์ที่เกี่ยวข้อง', as.join(', '));
+    var sb=(m.subs||[]); if(sb.length){ L.push('ขั้นตอนย่อย:'); sb.forEach(function(s){ if(s) L.push('  '+(s.d?'✓':'○')+' '+(s.t||'')); }); }
+    if(D.parts.length){ L.push('อะไหล่ที่เบิก ('+D.parts.length+' รายการ · '+flwsM(D.pc)+'):'); D.parts.forEach(function(p){ L.push('  - '+p.name+' × '+(p.qty||0)+' '+(p.unit||'')+' · '+flwsM((+p.qty||0)*(+p.cost||0))); }); }
+    if(D.memos.length){ L.push('Memo:'); D.memos.forEach(function(mo){ L.push('  - '+(mo.no||'MO')+' '+(mo.title||'')+(mo.supplier?(' · '+mo.supplier):'')+' · '+flwsM(mo.amount)+' · '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status)); }); }
+    add('ค่าใช้จ่ายรวม', D.cost>0?flwsM(D.cost):''); }
+  if(D.log.length){ L.push(''); L.push('— บันทึกความคืบหน้า —'); D.log.forEach(function(l){ L.push(flwsD(l.d)+' · '+l.t+(l.by?(' ('+l.by+')'):'')); });
+    if(D.hidPk) L.push('(+ เบิกอะไหล่ '+D.hidPk+' ครั้ง ดูในรายการอะไหล่)'); }
+  if(D.photos.length) L.push('', '📷 รูป '+D.photos.length+' รูป (อยู่ในใบสรุปแบบรูปภาพ)');
+  return L.join('\n');
+}
+function flwsSheet(D){
+  var E=fjE, m=D.m, inc=D.inc, b=D.b;
+  var kv=function(k,v,wide){ if(v==null||String(v).trim()==='') return ''; return '<div class="kv'+(wide?' w':'')+'"><span>'+k+'</span><b>'+v+'</b></div>'; };
+  var h='<div class="hd"><div><div class="co">LOVE Andaman · Fleet job summary</div><div class="ti">'+E(flwsTitle(D))+'</div>'
+    +'<div class="no">'+E(flwsNos(D))+'</div></div>'
+    +'<div class="bt">'+(b?('<b>'+E(b.name)+'</b><span>'+E([b.type, faPier(b)].filter(Boolean).join(' · '))+'</span>'):'')+'<i>'+E(flwsStatus(D))+'</i></div></div>';
+  if(D.proj) h+='<div class="pj">Part of project '+E((D.proj.no||'PRJ')+' · '+(D.proj.name||''))+'</div>';
+  if(inc){ var da=(inc.damagedAssets||[]).map(function(a){ return a&&a.label; }).filter(Boolean);
+    h+='<div class="sec"><div class="sh"><u>Incident</u>'+E(inc.no||'INC')+(inc.severity?('<em class="sv '+E(inc.severity)+'">'+E(String(inc.severity).toUpperCase())+'</em>'):'')+'</div><div class="g">'
+      +kv('Reported', E(flwsD(inc.date, inc.time)))+kv('Status', E(inc.status||''))+kv('Closed', E(flwsD(inc.closedDate||inc.resolvedDate)))
+      +kv('Title', E(inc.title||''), 1)+(inc.detail&&inc.detail!==inc.title?kv('Detail', E(inc.detail), 1):'')+kv('Remark', E(inc.remark||''), 1)
+      +(da.length?kv('Damaged', E(da.join(' · ')), 1):'')+(inc.quickFix?kv('Quick fix', E(typeof inc.quickFix==='string'?inc.quickFix:'Yes'), 1):'')+'</div></div>'; }
+  if(m){ var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean), sb=(m.subs||[]).filter(Boolean);
+    h+='<div class="sec"><div class="sh"><u>Repair job</u>'+E(m.no||'MJ')+(m.type?('<em>'+E(FLWS_TYPE[m.type]||m.type)+'</em>'):'')+'</div><div class="g">'
+      +kv('Started', E(flwsD(m.startDate)))+kv('Closed', E(flwsD(m.endDate)))+kv('Due', E(flwsD(m.dueDate)))
+      +kv('Owner', E(m.owner||''))+kv('Location', E(m.location||''))+kv('Outcome', E(m.outcome?(FLWS_OUT[m.outcome]||m.outcome):''))
+      +((!inc||m.title!==inc.title)?kv('Title', E(m.title||''), 1):'')+(m.detail&&m.detail!==m.title&&(!inc||m.detail!==inc.detail)?kv('Detail', E(m.detail), 1):'')+(as.length?kv('Equipment', E(as.join(' · ')), 1):'')
+      +kv('Close note', E(m.closeNote||''), 1)+'</div>'
+      +(sb.length?('<div class="sub">'+sb.map(function(s){ return '<div class="'+(s.d?'ok':'')+'">'+(s.d?'✓':'○')+' '+E(s.t||'')+'</div>'; }).join('')+'</div>'):'')+'</div>';
+    if(D.parts.length||D.memos.length||D.cost>0){
+      h+='<div class="sec"><div class="sh"><u>Cost</u>'+(D.cost>0?('<em class="tot">'+flwsM(D.cost)+'</em>'):'')+'</div>';
+      if(D.parts.length) h+='<table><tr><th>Parts from stock</th><th>Qty</th><th class="r">Amount</th></tr>'
+        +D.parts.map(function(p){ return '<tr><td>'+E(p.name||'')+(p.location?('<i>'+E(p.location)+'</i>'):'')+'</td><td>'+E((p.qty||0)+' '+(p.unit||''))+'</td><td class="r">'+flwsM((+p.qty||0)*(+p.cost||0))+'</td></tr>'; }).join('')
+        +'<tr class="st"><td colspan="2">Parts total</td><td class="r">'+flwsM(D.pc)+'</td></tr></table>';
+      if(D.memos.length) h+='<table><tr><th>Memo</th><th>Status</th><th class="r">Amount</th></tr>'
+        +D.memos.map(function(mo){ return '<tr><td><b>'+E(mo.no||'MO')+'</b> '+E(mo.title||'')+(mo.supplier?('<i>'+E(mo.supplier)+'</i>'):'')+'</td><td>'+E(typeof flwMemoLabel==='function'?flwMemoLabel(mo):(mo.status||''))+'</td><td class="r">'+flwsM(mo.amount)+'</td></tr>'; }).join('')+'</table>';
+      h+='</div>'; } }
+  if(D.log.length) h+='<div class="sec"><div class="sh"><u>Progress log</u>'+D.log.length+' entries</div><div class="lg">'
+    +D.log.map(function(l){ return '<div><span>'+E(flwsD(l.d))+'</span><p>'+E(l.t)+(l.by?('<i>'+E(l.by)+'</i>'):'')+'</p></div>'; }).join('')
+    +(D.hidPk?('<div><span></span><p style="color:#8A8F9C">+ '+D.hidPk+' stock withdrawals · listed under Parts</p></div>'):'')+'</div></div>';
+  if(D.photos.length) h+='<div class="sec"><div class="sh"><u>Photos</u>'+D.photos.length+'</div><div class="ph">'
+    +D.photos.map(function(p){ var v=(typeof flpIsVideo==='function')&&flpIsVideo(p);
+      return '<figure>'+(v?('<div class="vd">Video<br><small>'+E(p.cap||p.name||'')+'</small></div>'):('<div class="im" data-src="'+E(p.url)+'" style="background-image:url(\''+E(String(p.url).replace(/'/g,'%27'))+'\')"></div>'))
+        +'<figcaption><b style="background:'+((typeof FLP_C!=='undefined'&&FLP_C[p.stage])||'#5B6170')+'">'+E(p.stage||'')+'</b>'+E(p.cap||'')+'<i>'+E(flwsD(p.addedAt))+(p.by?(' · '+E(p.by)):'')+'</i></figcaption></figure>'; }).join('')+'</div></div>';
+  h+='<div class="ft">Printed '+E(flwsD(typeof TODAY_STR!=='undefined'?TODAY_STR:''))+(typeof flpBy==='function'?(' · by '+E(flpBy())):'')+'</div>';
+  return h;
+}
+function flwsCSS(){
+  return '<style>#flws{position:fixed;inset:0;z-index:9500;background:rgba(10,18,48,.56);display:flex;flex-direction:column;align-items:center;padding:14px 12px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif}'
+  +'#flws .bar{position:sticky;top:0;z-index:2;display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:min(820px,100%);background:#0F1B3D;color:#fff;border-radius:12px;padding:8px 10px;margin-bottom:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}'
+  +'#flws .bar b{font-size:13px;flex:1;min-width:120px}#flws .bar button{height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;padding:0 12px;cursor:pointer}'
+  +'#flws .bar button.pri{background:#fff;color:#0F1B3D;border-color:#fff}#flws .bar .x{width:32px;padding:0;font-size:18px}'
+  +'#flws-sheet{width:min(820px,100%);background:#fff;color:#0F1B3D;border-radius:12px;padding:22px 24px 16px;box-sizing:border-box;font-size:12.5px;line-height:1.45}'
+  +'#flws-sheet .hd{display:flex;gap:16px;align-items:flex-start;border-bottom:2px solid #0F1B3D;padding-bottom:12px}#flws-sheet .hd>div:first-child{flex:1;min-width:0}'
+  +'#flws-sheet .co{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#5B6170;font-weight:700}#flws-sheet .ti{font-size:20px;font-weight:800;line-height:1.25;margin-top:3px}'
+  +'#flws-sheet .no{font-family:\'DM Mono\',monospace;font-size:12.5px;color:#3E4658;margin-top:3px}#flws-sheet .bt{text-align:right;display:flex;flex-direction:column;gap:2px;flex:none;max-width:42%}'
+  +'#flws-sheet .bt b{font-size:15px}#flws-sheet .bt span{font-size:11.5px;color:#5B6170}#flws-sheet .bt i{font-style:normal;font-size:11.5px;font-weight:700;background:#E4F3EC;color:#0F6E56;border-radius:6px;padding:2px 8px;align-self:flex-end;margin-top:3px}'
+  +'#flws-sheet .pj{margin-top:8px;font-size:11.5px;color:#534AB7;font-weight:600}'
+  +'#flws-sheet .sec{margin-top:14px;border:1px solid #E4E2DC;border-radius:10px;padding:10px 12px;break-inside:avoid}'
+  +'#flws-sheet .sh{display:flex;align-items:center;gap:8px;font-family:\'DM Mono\',monospace;font-size:12px;color:#3E4658;margin-bottom:8px}#flws-sheet .sh u{text-decoration:none;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#0F1B3D}'
+  +'#flws-sheet .sh em{font-style:normal;font-family:\'DM Sans\',sans-serif;font-size:10.5px;font-weight:700;background:#F1F0EC;color:#3E4658;border-radius:5px;padding:1px 7px}#flws-sheet .sh em.critical{background:#FCEBEB;color:#A32D2D}#flws-sheet .sh em.major{background:#FAEEDA;color:#854F0B}'
+  +'#flws-sheet .sh em.tot{margin-left:auto;background:#0F1B3D;color:#fff;font-family:\'DM Mono\',monospace;font-size:12.5px}'
+  +'#flws-sheet .g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px}#flws-sheet .kv{display:flex;flex-direction:column;min-width:0}#flws-sheet .kv.w{grid-column:1/-1}'
+  +'#flws-sheet .kv span{font-size:10px;color:#8A8F9C;text-transform:uppercase;letter-spacing:.06em;font-weight:700}#flws-sheet .kv b{font-weight:500;white-space:pre-wrap;word-break:break-word}'
+  +'#flws-sheet .sub{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;color:#5B6170}#flws-sheet .sub .ok{color:#0F6E56}'
+  +'#flws-sheet table{width:100%;border-collapse:collapse;margin-top:4px;font-size:12px}#flws-sheet th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#8A8F9C;border-bottom:1px solid #E4E2DC;padding:4px 6px}'
+  +'#flws-sheet td{border-bottom:1px solid #F1F0EC;padding:4px 6px;vertical-align:top}#flws-sheet td i{display:block;font-style:normal;font-size:10.5px;color:#8A8F9C}#flws-sheet .r{text-align:right;font-family:\'DM Mono\',monospace;white-space:nowrap}#flws-sheet tr.st td{font-weight:700;border-bottom:0}'
+  +'#flws-sheet .lg>div{display:flex;gap:10px;padding:3px 0;border-bottom:1px dashed #EEECE6}#flws-sheet .lg span{flex:none;width:86px;font-family:\'DM Mono\',monospace;font-size:11px;color:#5B6170}#flws-sheet .lg p{margin:0;flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}#flws-sheet .lg p i{font-style:normal;color:#8A8F9C;font-size:11px;margin-left:6px}'
+  +'#flws-sheet .ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#flws-sheet figure{margin:0;border:1px solid #E4E2DC;border-radius:8px;overflow:hidden;break-inside:avoid}#flws-sheet figure .im{width:100%;height:170px;background:#F4F2EE center/cover no-repeat}'
+  +'#flws-sheet .vd{height:170px;display:flex;align-items:center;justify-content:center;text-align:center;background:#1B2340;color:#fff;font-weight:700}#flws-sheet figcaption{padding:5px 7px;font-size:11px}#flws-sheet figcaption b{color:#fff;border-radius:4px;padding:0 5px;font-size:9.5px;margin-right:5px}#flws-sheet figcaption i{display:block;font-style:normal;color:#8A8F9C;font-size:10px}'
+  +'#flws-sheet .ft{margin-top:12px;font-size:10.5px;color:#8A8F9C;text-align:right}'
+  +'@media(max-width:640px){#flws-sheet{padding:16px 14px}#flws-sheet .hd{flex-direction:column}#flws-sheet .bt{text-align:left;max-width:none}#flws-sheet .bt i{align-self:flex-start}#flws-sheet .g{grid-template-columns:1fr 1fr}#flws-sheet .ph{grid-template-columns:1fr 1fr}#flws-sheet .sub{grid-template-columns:1fr}}'
+  +'@media print{body.flws-print>*:not(#flws){display:none!important}body.flws-print #flws{position:static;background:#fff;padding:0;overflow:visible}body.flws-print #flws .bar{display:none}body.flws-print #flws-sheet{width:100%;border-radius:0;padding:0}}'
+  +'</style>';
+}
+function flwsOpen(kind,id){
+  var D=flwsData(kind,id); if(!D) return;
+  flwsClose(); FLWS={kind:kind,id:id,D:D};
+  var o=document.createElement('div'); o.id='flws';
+  o.innerHTML=flwsCSS()+'<div class="bar"><b>Job summary · '+fjE(flwsNos(D))+'</b>'
+    +'<button type="button" onclick="flwsCopy()">Copy text</button><button type="button" onclick="flwsImg(\'copy\')">Copy image</button>'
+    +'<button type="button" class="pri" onclick="flwsImg(\'save\')">Save image</button><button type="button" onclick="flwsPrint()">Print / PDF</button>'
+    +'<button type="button" class="x" title="Close" onclick="flwsClose()">&times;</button></div><div id="flws-sheet">'+flwsSheet(D)+'</div>';
+  o.addEventListener('click',function(e){ if(e.target===o) flwsClose(); });
+  document.body.appendChild(o); document.addEventListener('keydown', flwsKey);
+}
+function flwsKey(e){ if(e.key==='Escape') flwsClose(); }
+function flwsClose(){ var o=document.getElementById('flws'); if(o) o.remove(); document.removeEventListener('keydown', flwsKey); FLWS=null; document.body.classList.remove('flws-print'); }
+function flwsToast(t){ try{ if(typeof showToast==='function'){ showToast(t); return; } }catch(_){ }
+  var b=document.querySelector('#flws .bar b'); if(b){ var o=b.textContent; b.textContent=t; setTimeout(function(){ if(b) b.textContent=o; },1600); } }
+function flwsCopy(){
+  if(!FLWS) return; var t=flwsText(FLWS.D);
+  var fb=function(){ var ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){ } ta.remove(); flwsToast('Copied text'); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ flwsToast('Copied text'); }, fb); return; } }catch(_){ }
+  fb();
+}
+function flwsH2C(cb){
+  if(window.html2canvas){ cb(); return; }
+  if(typeof _vjEnsureH2C==='function'){ _vjEnsureH2C(cb); return; }
+  var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=cb;
+  s.onerror=function(){ alert('Could not load the image tool. Check the internet connection and try again.'); }; document.head.appendChild(s);
+}
+function flwsImg(mode){
+  if(!FLWS) return; var el=document.getElementById('flws-sheet'); if(!el) return;
+  var name=(flwsNos(FLWS.D).replace(/[^A-Za-z0-9-]+/g,'_')||'job')+'_summary.png';
+  flwsToast('Making image…');
+  var srcs=[].slice.call(el.querySelectorAll('.im[data-src]')).map(function(d){ return d.getAttribute('data-src'); });
+  Promise.all(srcs.map(function(u){ return new Promise(function(ok){ var im=new Image(); im.onload=im.onerror=function(){ ok(); }; setTimeout(ok,6000); im.src=u; }); })).then(function(){
+    flwsH2C(function(){
+      var r0=el.style.borderRadius; el.style.borderRadius='0';
+      html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true}).then(function(cv){
+        el.style.borderRadius=r0;
+        var dl=function(){ var a=document.createElement('a'); a.download=name; a.href=cv.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove(); flwsToast('Saved '+name); };
+        if(mode==='copy' && navigator.clipboard && window.ClipboardItem){
+          cv.toBlob(function(bl){ navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).then(function(){ flwsToast('Copied image'); }, function(){ dl(); }); }, 'image/png');
+        } else dl();
+      }).catch(function(){ el.style.borderRadius=r0; alert('Could not make the image. Try Print / PDF instead.'); });
+    });
+  });
+}
+function flwsPrint(){ document.body.classList.add('flws-print'); var off=function(){ document.body.classList.remove('flws-print'); window.removeEventListener('afterprint',off); };
+  window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60); }
 function flwDonePanel(it, E){
   var m=it.ref, proj=it.projId?flwProj(it.projId):null;
   return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
       +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span><span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>'
-        +(proj?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
+        +(proj?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+flwsBtn('mj',it.id,!proj)+'</div>'
       +'<div style="margin-top:6px;font-size:16px;font-weight:700;line-height:1.3">'+E(it.title)+'</div>'
       +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+E(it.sub)+(it.owner?(' · '+E(it.owner)):'')+'</div></div>'
     +'<div class="flw-scroll" id="flw-rp">'
@@ -28238,7 +28424,7 @@ function flwPanel(it, E){
   if(it.due) meta.push('due '+flwD(it.due)); meta.push('silent '+it.silent+' day'+(it.silent===1?'':'s'));
   return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
       +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span>'+(it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))
-        +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
+        +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+flwsBtn(it.kind,it.id,!(proj&&it.kind!=='prj'))+'</div>'
       +'<div style="margin-top:4px;font-size:18px;font-weight:700;line-height:1.25">'+E(it.title)+'</div>'
       +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+meta.join(' · ')+'</div></div>'
     +'<div class="flw-scroll" id="flw-rp">'
