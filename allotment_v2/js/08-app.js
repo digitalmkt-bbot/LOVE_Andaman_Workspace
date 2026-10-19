@@ -26379,7 +26379,7 @@ function tsDocCompose(){
 
   var html = '<div class="dc">'
     + '<div class="pg">'
-    + '<div class="dc-h" style="--tsp:' + TH.bg + '"><div class="b"><div class="kick">LOVE ANDAMAN · OPERATIONS · DAILY MANIFEST</div>'
+    + '<div class="dc-h" style="--tsp:' + TH.bg + (TH.ink === 'dark' ? ';--cy:#000F4C' : '') + '"><div class="b"><div class="kick">LOVE ANDAMAN · OPERATIONS · DAILY MANIFEST</div>'
       + '<h1>สรุปการเดินทางประจำวัน <span class="dt">' + e(dateLabel) + '</span>' + (_tsRoute ? ('<span class="rt">' + e(routeName) + '</span>') : (_tsPier ? ('<span class="rt">' + e(pierName) + '</span>') : '')) + '</h1></div>'
       + '<div class="d"><div class="c"><div class="k">ท่าเรือ · เส้นทาง</div><div class="v">' + e(pierName) + '<br><small>' + e(routeName) + ' · ' + routes.length + ' เส้นทาง</small></div></div>'
       + '<div class="c"><div class="k">Booking · ผู้โดยสาร</div><div class="v">' + dN + ' ใบ<br><small>ไปจริง ' + dAb[0] + ' / จอง ' + dAb[1] + '</small></div></div></div>'
