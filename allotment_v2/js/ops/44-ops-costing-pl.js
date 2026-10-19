@@ -871,18 +871,7 @@
     try{ return orig(pl, cap, tpl); } finally { scn.walk--; }
   });
 
-  /* ctEffLine · the override editor's placeholders: each part of the line as the plan prices it (the template part with the plan's override laid over it),
-     and whether the plan switches the line off - sheet.line_parts of the stored plan's answer */
-  wrapCalc('ctEffLine', function(orig, line, pl){
-    var out = orig(line, pl);
-    var a = pl && typeof pl === 'object' && line ? answer(pl, undefined, false) : null, lp = a && a.sheet && a.sheet.line_parts;
-    if(!Array.isArray(lp)) return out;
-    var hit = lp.filter(function(x){ return x.id === line.id; })[0];
-    if(!hit || !Array.isArray(hit.parts) || hit.parts.length !== out.parts.length || hit.parts.some(function(p){ return !p.effective; })) return out;
-    out.off = !!hit.line_off;
-    out.parts = hit.parts.map(function(p){ return partFromServer(p.effective); });
-    return out;
-  });
+  /* ctEffLine (override editor placeholders, sheet.line_parts[].parts[].effective) is wrapped once, in 91-ops-costing-eff.js (w6-a), so ctEffLine.__orig is legacy's own merge */
 
   /* ctFactSheet · asks for the plan; its key figures, cost table and curve come through ctProfitAt / ctCalc / ctBreakEven above */
   wrapCalc('ctFactSheet', function(orig, pl){ answer(pl, undefined, true); return orig(pl); });

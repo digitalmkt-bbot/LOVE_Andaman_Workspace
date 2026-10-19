@@ -76,7 +76,7 @@
       var view = O.activeView ? O.activeView() : '';
       if(view === 'vanjobs' && originals.renderVanJobs) originals.renderVanJobs();
       else if(view === 'vancheckin' && originals.renderVanCheckin) originals.renderVanCheckin();
-      else if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep();
+      else if(view === 'booking' && typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep();   // w6: not from another screen - bookingV2RenderTab2 runs bkOvnHealSpans, which re-created a nightly charter cell just removed in Boat Operation before its DELETE was sent
     }catch(_){}
   }
 
