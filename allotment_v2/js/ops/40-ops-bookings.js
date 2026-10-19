@@ -515,7 +515,6 @@
     /* §w7a · computed read-only fields the booking form and lists read (never sent: toServer picks its fields):
        drop {separate,name,self_return} (every read and list row) -> bookingV2RetInfo; addon_only (list rows) -> bkB2CAddonOnly;
        order_lines[] (single read: the other lines of the order, full rows) -> _bkOrderLines. 95-ops-w7a-booking-form.js / -lists.js read them. */
-    if(ob.drop && typeof ob.drop === 'object') bk.srvDrop = { sep: !!ob.drop.separate, name: ob.drop.name || '', selfReturn: !!ob.drop.self_return };
     if(typeof ob.addon_only === 'boolean') bk.srvAddonOnly = ob.addon_only;
     if(Array.isArray(ob.order_lines)) bk.srvOrderLines = ob.order_lines.map(function(x){ return fromServer(x); });
     Object.assign(bk, records(ob, bk.trips));
@@ -536,7 +535,7 @@
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
     delete bk.srvDrop;       // §w7b · the drop-off the server reads on the row
     delete bk.srvList;       // §opsBookingList · same for the list row's fields (last activity, chips, duplicates)
-    delete bk.srvDrop; delete bk.srvAddonOnly;      // §w7a · same for the drop-off reading and the add-on-only flag (order lines stay: the siblings do not change with this booking)
+    delete bk.srvAddonOnly;      // §w7a · same for the drop-off reading and the add-on-only flag (order lines stay: the siblings do not change with this booking)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     if(vans) O.vans.put(bk, vans);

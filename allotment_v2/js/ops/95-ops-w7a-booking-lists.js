@@ -11,8 +11,6 @@
    _bkOrderLines(bk)        <- GET /v1/bookings/{id} order_lines[] (the other lines of the order, full rows). A booking this browser has
                                not read singly asks for it (Love Kingdom lines only, 4 at a time, kept 60 s); the By-trip chip
                                (bkOtherTrips) is drawn again when the answers land. Legacy's index answers meanwhile.
-   bookingV2RetInfo(bk,d)   <- drop {separate, name, self_return}: sep, drop, selfRet are the server's; alert stays the van board's
-                               (82-ops-w5c-vans.js) and is only taken down when the server says the customer returns on their own
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -84,19 +82,7 @@
     return Array.isArray(bk.srvOrderLines) ? bk.srvOrderLines : undefined;
   });
 
-  /* ── the drop-off reading ── */
-  var legacyRet = window.bookingV2RetInfo;
-  if(typeof legacyRet === 'function' && !legacyRet.__opsW7aL){
-    var wRet = function(bk, date){
-      var ri = legacyRet.apply(this, arguments);
-      if(!on() || !ri || !bk || !bk.srvDrop) return ri;
-      var s = bk.srvDrop, out = Object.assign({}, ri, { sep: s.sep, drop: s.sep ? s.name : '', selfRet: s.sep && s.selfReturn, server: true });
-      if(!s.sep || out.selfRet) out.alert = false;                                  // a return on their own, or no separate drop-off, needs no van
-      else if(!ri.sep) out.alert = !ri.arranged && !ri.sameVan;                     // the browser did not see the separate drop-off the server does
-      return out;
-    };
-    wRet.__opsW7aL = true; wRet.__orig = legacyRet; window.bookingV2RetInfo = wRet;
-  }
+  /* the drop-off reading (bookingV2RetInfo) is wrapped by 96-ops-w7b-drop.js */
 
   window.laOpsW7aLists = { _state: state };
 })();
