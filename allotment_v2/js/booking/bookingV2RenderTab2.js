@@ -812,11 +812,12 @@ function bookingV2RenderTab2(){
           const o=(bid&&ag[bid])?ag[bid]:null;
           const _exJoin=bookingV2LongtailExtraPax(r.bk.id, date);   // day-of "+ extra" longtail join (qty = people)
           const _exChtr=bookingV2LongtailCharterExtraBoats(r.bk.id, date);   // day-of "+ extra" private/charter longtail (qty = boats)
+          const _lt=(_srv&&typeof window.laOpsByTripRow==='function'&&window.laOpsByTripRow(_srv,rid2,r))||{j:(_af.charter?0:(_af.join?t:0))+_exJoin, c:(_af.charter?(_af.charterQty||1):0)+_exChtr, p:_af.transfer?t:0};   /* §w7b · server row (lt_join_pax, lt_charter_boats, transfer_pax) */
           if(o){ o.tot+=t; _famAddLang(o.lang,gd,t); o.veg+=mm.veg||0;o.vegan+=mm.vegan||0;o.halal+=mm.halal||0; o.allerg+=(typeof bookingV2AllergyCount==='function')?bookingV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
-            if(_af.charter) o.ltChtr+=(_af.charterQty||1); else if(_af.join) o.ltJoin+=t; if(_af.transfer) o.pt+=t; o.ltJoin+=_exJoin; o.ltChtr+=_exChtr; }
+            o.ltJoin+=_lt.j; o.ltChtr+=_lt.c; o.pt+=_lt.p; }
           else if(!bid){ uTot+=t; }
           _famAddLang(_famLang,gd,t); _fVeg+=mm.veg||0;_fVegan+=mm.vegan||0;_fHalal+=mm.halal||0; _fAllerg+=(typeof bookingV2AllergyCount==='function')?bookingV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
-          if(_af.charter) _fLtChtr+=(_af.charterQty||1); else if(_af.join) _fLtJoin+=t; if(_af.transfer) _fPt+=t; _fLtJoin+=_exJoin; _fLtChtr+=_exChtr;
+          _fLtJoin+=_lt.j; _fLtChtr+=_lt.c; _fPt+=_lt.p;   /* §w7b */
         });
         _famPax+=vPax; _famBoatN+=_bOrder.length;
         const dep2=route2?.times?.[0]||'';
@@ -881,11 +882,14 @@ function bookingV2RenderTab2(){
       const _ol=(g.otherLang||'').trim(); if(_ol) langCnt[esc(_ol)]=(langCnt[esc(_ol)]||0)+_rp;
       // ── add-on prep counts (shared detection · see bookingV2AddOnFlags) ──
       const _af=(typeof bkB2CAddonTo==='function' && bkB2CAddonTo(r.bk))?{}:bookingV2AddOnFlags(r.bk, r.routeId);   /* §b2cAddon */
+      const _sl=(_srv&&typeof window.laOpsByTripRow==='function')?window.laOpsByTripRow(_srv,r.routeId,r):null;   /* §w7b · server row: join heads, charter boats, transfer heads */
+      if(_sl){ ltJoinPax+=_sl.j; ltCharterBoats+=_sl.c; ptPax+=_sl.p; } else {
       if(_af.charter) ltCharterBoats += (_af.charterQty||1);          // charter = whole boat · count boats (× qty)
       else if(_af.join) ltJoinPax+=_rp;          // join = per-head · count heads riding the longtail
       if(_af.transfer) ptPax+=_rp;
       ltJoinPax += bookingV2LongtailExtraPax(r.bk.id, date);   // + day-of longtail join sold via "+ extra"
       ltCharterBoats += bookingV2LongtailCharterExtraBoats(r.bk.id, date);   // + day-of private/charter longtail (boats)
+      }
     });
     const recv = ad+chd+inf+foc;
     // Seat vs Charter split (per pax-type) + remaining sellable seats (for the trip-header summary)

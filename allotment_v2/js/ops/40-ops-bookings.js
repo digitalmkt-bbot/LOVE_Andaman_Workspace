@@ -497,6 +497,9 @@
                      possibleDuplicate: !!ob.possible_duplicate, duplicates: Array.isArray(ob.duplicates) ? ob.duplicates : [],
                      pendingFoc: ob.pending_foc === undefined || ob.pending_foc === null ? null : !!ob.pending_foc };   // w6-a: the server's Pending-FOC flag of the row
     }
+    /* §w7b · the separate drop-off the server reads on the row (drop {separate, name, self_return}); read only, never sent.
+       96-ops-w7b-drop.js hands it to bookingV2RetInfo (sep, drop, selfRet). */
+    if(ob.drop && typeof ob.drop === 'object') bk.srvDrop = { separate: !!ob.drop.separate, name: ob.drop.name || '', selfReturn: !!ob.drop.self_return };
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
@@ -525,6 +528,7 @@
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
+    delete bk.srvDrop;       // §w7b · the drop-off the server reads on the row
     delete bk.srvList;       // §opsBookingList · same for the list row's fields (last activity, chips, duplicates)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);

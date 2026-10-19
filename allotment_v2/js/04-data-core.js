@@ -5217,6 +5217,7 @@ function renderCal(){
   const _chSkin=(col)=>{ const v=_calVivid(col);
     return (_chip.st==='D') ? {bg:v, bd:v, c:'#fff'}
                             : {bg:_calRgba(v,.30), bd:_calRgba(v,.65), c:_calDk(v,.34)}; };
+  const _w7bGrid=(typeof window.laOpsCalGrid==='function')?window.laOpsCalGrid(calYear,calMonth,calPier):null;   /* §w7b */
   let cells2='';
   for(let i=0;i<firstDay;i++) cells2+='<div class="cal2-cell pad"></div>';
   for(let d=1;d<=daysInMonth;d++){
@@ -5239,21 +5240,27 @@ function renderCal(){
           if(t.boatDown){ g.dn++; if(g.dnB.indexOf(t.boatName)<0) g.dnB.push(t.boatName); }
         });
       });
+      /* §w7b MARKED EDIT (ops/96-ops-w7b-cal-grid.js): the day's chips are the server's (availability/summary routes[].days[].boats[]:
+         free seats, boats, weather, charter, boat-down, sold %); a pier closed today and a hidden route stay the browser's filters. */
+      if(_w7bGrid){ Object.keys(gmap).forEach(k=>delete gmap[k]);
+        piers.forEach(pier=>{ if(_calPierClosed(pier,ds)) return;
+          (_w7bGrid[ds]||[]).forEach(x=>{ if(x.r.pier!==pier || _hidRt.has(x.r.id)) return;
+            gmap[x.r.id]={r:x.r,free:x.free,cap:0,nb:x.nb,wx:x.wx,ch:x.ch,dn:x.dn,dnB:x.dnB,srv:true,pct:x.pct,full:x.full}; }); }); }
       // §เรียงตามเวลาเรือออก · เวลาเท่ากันเรียงตามชื่อ
       const list=Object.values(gmap).sort((a,b)=>{
         const dm=_calDepMin(a.r)-_calDepMin(b.r); if(dm) return dm;
         return String(a.r.name||'').localeCompare(String(b.r.name||''));
       });
       rowsHtml=list.map(g=>{
-        const pct=g.cap>0?Math.round((g.cap-g.free)/g.cap*100):0;
-        const full=(g.free<=0 && g.cap>0);
+        const pct=g.srv?(g.pct||0):(g.cap>0?Math.round((g.cap-g.free)/g.cap*100):0);   /* §w7b */
+        const full=g.srv?!!g.full:(g.free<=0 && g.cap>0);
         /* §calSkin · ในช่องวันโชว์แค่ที่นั่งว่างตัวเดียว เป็นวงกลมเขียวสด · หมดแล้วเป็นแดง
            ความจุกับ % ที่ขายไปอ่านได้จาก tooltip และจากแผงซ้าย */
         let vCls='cal2-v', vTxt=String(g.free);
         if(g.wx){ vCls='cal2-v wx'; vTxt='WX'; }
         else if(g.ch && g.free<=0){ vCls='cal2-v ch'; vTxt='CH'; }
         else if(full){ vCls='cal2-v full'; }
-        const tip=`${g.r.name} · ${g.free} of ${g.cap} seats free · ${pct}% sold`
+        const tip=`${g.r.name} · ${g.srv?(g.free+' seats free'):(g.free+' of '+g.cap+' seats free')} · ${pct}% sold`
           +(g.nb>1?` · ${g.nb} boats`:'')+(g.wx?' · weather cancelled':'')+(g.ch?' · charter':'')
           +(g.dn?` · ⚠ เรือยังไม่พร้อม ${g.dn===g.nb?'':'('+g.dn+' of '+g.nb+') '}· ${g.dnB.join(' · ')} — ที่นั่งขายได้แต่ต้องเปลี่ยนลำก่อนวันเดินทาง`:'');
         const sk=_chSkin(g.r.color);
