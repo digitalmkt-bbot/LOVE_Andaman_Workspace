@@ -10078,6 +10078,16 @@ function flEquipStartSwap(type,id){ _flSwap={type:type,id:id}; flRenderEquip(); 
 function flEquipCancelSwap(){ _flSwap=null; flRenderEquip(); }
 function _flEquipObj(type,id){ return type==='eng'?flGetEng(id):type==='gb'?flGetGb(id):(FL_PROPELLERS||[]).find(x=>x.id===id); }
 function _flEquipLog(obj,kind,desc){ if(!obj.log)obj.log=[]; obj.log.push({date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),type:kind,desc:desc,by:'Equip'}); }
+function _flEquipPropSync(p){   /* §eqProp */
+  if(!p) return; const st=p.status||'active';
+  if(p.gearboxId){ const g=flGetGb(p.gearboxId), e=g&&g.engineId?flGetEng(g.engineId):null; if(st==='spare') p.status='active'; if(p.status==='active') p.spareLocation=null; p.boatId=e?(e.boatId||null):(p.boatId||null); }
+  else { if(st==='active') p.status='spare'; p.boatId=null; }
+}
+function flEquipPropActive(id){   /* §eqProp · ซ่อมของเก่าที่ค้างสถานะ spare บนเกียร์ */
+  const p=(FL_PROPELLERS||[]).find(x=>x.id===id); if(!p||!p.gearboxId) return;
+  p.status='active'; _flEquipPropSync(p); _flEquipLog(p,'status','ตั้งเป็น Active (ติดอยู่บนเกียร์)');
+  if(typeof flSave==='function') flSave(); flRenderEquip();
+}
 function flEquipSwapDo(targetId){
   if(!_flSwap) return; const t=_flSwap.type, a=_flEquipObj(t,_flSwap.id), b=_flEquipObj(t,targetId);
   if(!a||!b||a.id===b.id){ _flSwap=null; return flRenderEquip(); }
@@ -10087,7 +10097,7 @@ function flEquipSwapDo(targetId){
     _flEquipLog(b,'swap',`สลับ → ${bn(b.boatId)}${b.boatId?(' · '+flPosLabel(b.pos)):''} (กับ ${a.serial})`); }
   else if(t==='gb'){ const _e=a.engineId; a.engineId=b.engineId; b.engineId=_e; if(a.engineId&&a.status==='spare')a.status='ready'; if(b.engineId&&b.status==='spare')b.status='ready'; if(!a.engineId)a.status='spare'; if(!b.engineId)b.status='spare';
     _flEquipLog(a,'swap',`สลับเกียร์ (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับเกียร์ (กับ ${a.serial})`); }
-  else { const _g=a.gearboxId; a.gearboxId=b.gearboxId; b.gearboxId=_g;
+  else { const _g=a.gearboxId; a.gearboxId=b.gearboxId; b.gearboxId=_g; _flEquipPropSync(a); _flEquipPropSync(b);
     _flEquipLog(a,'swap',`สลับใบจักร (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับใบจักร (กับ ${a.serial})`); }
   _flSwap=null; if(typeof flSave==='function') flSave(); flRenderEquip();
 }
@@ -10096,7 +10106,7 @@ function flEquipRemove(type,id){
   if(!confirm('ถอด '+o.serial+' เก็บเป็น Spare?')) return;
   if(type==='eng'){ const wb=o.boatId?(getBoat(o.boatId)||{}).name:''; _flEquipLog(o,'remove',`ถอดจาก ${wb} ${flPosLabel(o.pos)} → Spare`); o.boatId=null; }
   else if(type==='gb'){ _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.engineId=null; o.status='spare'; }
-  else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; }
+  else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; _flEquipPropSync(o); }
   if(typeof flSave==='function') flSave(); flRenderEquip();
 }
 function flEquipOpen(boatId){ _flEquipBoat=boatId||_flEquipBoat; _flSwap=null; flRenderEquip(); if(typeof openModal==='function') openModal('fl-modal-equip'); }
@@ -10118,7 +10128,8 @@ function flRenderEquip(){
     const stbg=st==='fixing'?'#FAEEDA':st==='spare'?'#F1EFE8':st==='broken'?'#FCEBEB':'#E1F5EE';
     let act='';
     if(sw){ if(isTarget) act=`<button onclick="flEquipSwapDo('${obj.id}')" style="border:1px solid #185FA5;background:#E6F1FB;color:#185FA5;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ใส่ที่นี่</button>`; else if(isSel) act=`<span style="font-size:10.5px;color:#854F0B;font-weight:600">เลือกอยู่</span>`; }
-    else { act=`<button onclick="flEquipStartSwap('${type}','${obj.id}')" title="สลับชิ้นนี้" style="border:1px solid #cfe0d8;background:#fff;color:#0F6E56;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">&#8596; สลับ</button><button onclick="flEquipRemove('${type}','${obj.id}')" title="ถอดเก็บเป็น Spare" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">ถอดเก็บ</button>`; }
+    else { act=`<button onclick="flEquipStartSwap('${type}','${obj.id}')" title="สลับชิ้นนี้" style="border:1px solid #cfe0d8;background:#fff;color:#0F6E56;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">&#8596; สลับ</button><button onclick="flEquipRemove('${type}','${obj.id}')" title="ถอดเก็บเป็น Spare" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">ถอดเก็บ</button>`;
+      if(type==='prop'&&obj.gearboxId&&st==='spare') act=`<button onclick="flEquipPropActive('${obj.id}')" title="ใบจักรติดอยู่บนเกียร์แต่สถานะยังเป็น Spare · หน้า Company Asset จะไม่นับว่าติดอยู่" style="border:1px solid #E0B25C;background:#FFF4DC;color:#854F0B;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ตั้งเป็น Active</button>`+act; }
     return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:0.5px solid ${line};${isSel?'background:#FFF8E1;border-radius:8px;padding-left:7px;padding-right:7px':''}">
       <span style="background:${tb[0]};color:${tb[1]};font-size:10px;font-weight:600;width:30px;text-align:center;padding:3px 0;border-radius:6px;flex:none">${tb[2]}</span>
       <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obj.serial}</div><div style="margin-top:2px"><span style="background:${stbg};color:${stc};font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:6px">${st}</span></div></div>
