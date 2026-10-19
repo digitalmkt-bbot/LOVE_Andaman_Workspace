@@ -99,6 +99,15 @@
     body.priceMode = d.priceMode === 'manual' ? 'manual' : 'rate';
     if(body.priceMode === 'manual') body.manualTotal = Math.max(0, num(d.manualTotal));
     if(d.staffPurpose) body.staffPurpose = d.staffPurpose;
+    /* §w7a · the nationalities the person typed (client facts), so the server can judge nat_mix (park-fee warning) for this draft;
+       the warning itself comes back in warnings[] and is drawn by 95-ops-w7a-booking-form.js. Named passengers only, as the save sends them. */
+    if(d.leadNationality) body.leadNationality = String(d.leadNationality);
+    var nats = (d.passengers || []).filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){
+      var o = { name: String(p.name).trim() };
+      if(p.nationality) o.nationality = String(p.nationality); if(p.type) o.type = String(p.type); if(p.foc != null) o.foc = !!p.foc;
+      return o;
+    });
+    if(nats.length) body.passengers = nats;
     var addOns = (d.addOns || []).filter(function(a){ return a && a.type; }).map(function(a){
       var x = { type: String(a.type) };
       if(Number.isInteger(+a.qty) && +a.qty >= 1) x.qty = +a.qty;

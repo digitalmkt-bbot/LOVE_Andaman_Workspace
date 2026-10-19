@@ -379,7 +379,7 @@ function bookingV2RenderTripsSection(){
               </tr>` : ''}
               ${(() => { const w = bookingV2NatWarn(t); if(!w) return '';
                  return w.bad
-                   ? `<tr><td colspan="5" style="padding:7px 12px 8px;font-size:12.5px;font-weight:600;color:#A32D2D;background:#FBE7E5;line-height:1.4">&#9888; ตั๋วอุทยาน: ${w.fr} ตปท &middot; ${w.th} ไทย ทั้งที่คีย์แถว TH ${w.thPrice} คน &middot; ถ้าทุกคนเป็นคนไทยจริง กดแถวไทยจริงให้เท่าแถว TH</td></tr>`
+                   ? `<tr><td colspan="5" style="padding:7px 12px 8px;font-size:12.5px;font-weight:600;color:#A32D2D;background:#FBE7E5;line-height:1.4">&#9888; ${w.message /* §w7a · the server's nat_mix sentence, escaped */ ? String(w.message).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]) : `ตั๋วอุทยาน: ${w.fr} ตปท &middot; ${w.th} ไทย ทั้งที่คีย์แถว TH ${w.thPrice} คน &middot; ถ้าทุกคนเป็นคนไทยจริง กดแถวไทยจริงให้เท่าแถว TH`}</td></tr>`
                    : `<tr><td colspan="5" style="padding:6px 12px 8px;font-size:12px;color:#0B5A43;background:#EAF5F0;line-height:1.4">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>`; })()}
             </tbody>
           </table>
