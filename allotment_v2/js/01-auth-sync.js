@@ -1142,7 +1142,13 @@
     /* §tripCxl (2026-10-19) · ยกเลิกรอบ (อากาศ / ไม่ถึงคุ้มทุน / เรือ) จาก Boat Operation · ถอนการยกเลิกได้ด้วย */
     {v:'act-tripcxl', t:'ยกเลิกรอบ (Cancel trip)', d:'ยกเลิกทั้งรอบของโปรแกรมในวันนั้น พร้อมเหตุผล (อากาศ · ไม่ถึงคุ้มทุน · เรือเสีย · อื่นๆ) และถอนการยกเลิก · การตัดสินใบจองใน By trip ใช้สิทธิ์ Operations เดิม'}
   ];
+  LA_ACTS.push(
+    /* §bkLim (2026-10-19) · ข้อจำกัดการมองเห็น (กลับด้านกับสิทธิ์พิเศษ: ติ๊ก = เห็นน้อยลง) · เจ้าของ: K.Tua
+       "ปรับสิทธิ์หน้า Booking คงเหลือแต่ Calendar กับ By trip date · By trip date ให้เหลือแค่ตารางโปรแกรม"
+       อยู่ในช่อง perms เดิม (ไม่มีคอลัมน์ใหม่) · ใช้ทางบันทึกเดียวกับ act-* ทุกจุด · lim:true = แสดงในกล่องแยก */
+    {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรม (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
   window.LA_ACTS=LA_ACTS;
+  window.laLimited=function(key){ if(!ME || ME.role==='admin') return false; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };   /* §bkLim */
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }
   window.laCanAct=function(key){ if(!ME || ME.role==='admin') return true; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };
   var LA_PERM_EXPLICIT='*explicit';
@@ -1210,7 +1216,9 @@
   /* §plMerge · หน้าที่ยุบเมนูมารวมกันต้องเช็คสิทธิ์ของเมนูที่ถูกยุบเองได้
      ไม่งั้นคนที่มีสิทธิ์หน้าหนึ่งจะเห็นอีกหน้าที่ admin ไม่ได้ให้สิทธิ์ไว้ */
   window.laAllowed=laAllowed;
-  function laApplyPerms(){ if(laFullAccess()) return;
+  function laApplyPerms(){
+    try{ document.body.classList.toggle('la-bkprog', !!window.laLimited('lim-bkprog')); }catch(e){}   /* §bkLim */
+    if(laFullAccess()) return;
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });
     try{ if(typeof flNavMergeSync==='function') flNavMergeSync(); }catch(e){}   /* §flNavMerge · pick the group head from the pages this user may see */
@@ -2171,11 +2179,20 @@
               +esc(m.t)+'</span>'; }).join('')+'</div></div>';
     }).join('')
     /* §actPerm · สิทธิ์พิเศษ · แยกจากพื้นที่ · ปุ่ม "ทุกพื้นที่"/ชุดลัด ไม่ติ๊กให้ ต้องกดเองทีละคน */
-    +'<div class="ar open '+((D.acts||[]).length?'has':'')+'" id="'+pfx+'-ar-acts" data-acts="1">'
+    +(function(){   /* §bkLim · ข้อจำกัดการมองเห็น · กล่องแยกจากสิทธิ์พิเศษ เพราะความหมายกลับด้าน */
+      var LL=LA_ACTS.filter(function(a){ return a.lim; }), on=LL.filter(function(a){ return (D.acts||[]).indexOf(a.v)>=0; }).length;
+      return '<div class="ar open '+(on?'has':'')+'" id="'+pfx+'-ar-lims" data-acts="1">'
+        +'<div class="top"><span class="dot" style="background:#1272B3"></span>'
+          +'<div class="nm"><b>ข้อจำกัดการมองเห็น</b><span>ติ๊ก = เห็นน้อยลงในหน้าที่มีสิทธิ์อยู่แล้ว · ใช้กับคนนอกฝ่ายจองที่ต้องดูยอด</span></div>'
+          +'<span class="fr2 '+(on?'all':'')+'">'+on+'/'+LL.length+'</span></div>'
+        +'<div class="mns">'+LL.map(function(a){
+            return '<span class="mn '+((D.acts||[]).indexOf(a.v)>=0?'on':'')+'" data-act="'+a.v+'" title="'+esc(a.d)+'" onclick="__laTogAct(\''+pfx+'\',\''+a.v+'\')">'
+              +esc(a.t)+'</span>'; }).join('')+'</div></div>'; })()
+    +'<div class="ar open '+((D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length?'has':'')+'" id="'+pfx+'-ar-acts" data-acts="1">'
       +'<div class="top"><span class="dot" style="background:#A32D2D"></span>'
         +'<div class="nm"><b>สิทธิ์พิเศษ</b><span>ไม่มากับชุดลัดหรือพื้นที่ · ให้เฉพาะคนที่ต้องตัดสินใจกรณีฉุกเฉิน</span></div>'
-        +'<span class="fr2 '+((D.acts||[]).length?'all':'')+'">'+(D.acts||[]).length+'/'+LA_ACTS.length+'</span></div>'
-      +'<div class="mns">'+LA_ACTS.map(function(a){
+        +'<span class="fr2 '+((D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length?'all':'')+'">'+(D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length+'/'+LA_ACTS.filter(function(a){ return !a.lim; }).length+'</span></div>'
+      +'<div class="mns">'+LA_ACTS.filter(function(a){ return !a.lim; }).map(function(a){
           return '<span class="mn '+((D.acts||[]).indexOf(a.v)>=0?'on':'')+'" data-act="'+a.v+'" title="'+esc(a.d)+'" onclick="__laTogAct(\''+pfx+'\',\''+a.v+'\')">'
             +esc(a.t)+'</span>'; }).join('')+'</div></div>';
   }

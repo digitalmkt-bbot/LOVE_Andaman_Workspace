@@ -50819,6 +50819,7 @@ function bkV2StatusLabel(st){
 function bkV2Render(){
   const host = document.getElementById('bkv2-host');
   if(!host) return;
+  if(bkLimProg()){ if(_bkV2.tab!=='cal' && _bkV2.tab!=='bytrip') _bkV2.tab='bytrip'; _bkV2.detailId=null; _bkV2.newBooking=null; }   /* §bkLim */
   try{
     // P3 · Detail view (read-only by default · Edit toggles into newBooking flow)
     if(_bkV2.detailId && !_bkV2.newBooking){
@@ -57994,7 +57995,11 @@ function bkV2DateKey(d){
 }
 
 // Event handlers
-function bkV2SwitchTab(t){ _bkV2.tab = t; bkV2Render(); }
+/* §bkLim (2026-10-19) · ผู้ใช้ที่ติดข้อจำกัด lim-bkprog · Booking เหลือ Calendar + By trip (เฉพาะการ์ดตารางโปรแกรม)
+   ซ่อนด้วย CSS (body.la-bkprog) + กันทางลัดใน JS: สลับแท็บ · New booking (ปุ่ม/คีย์ลัด C) · เปิดใบจอง
+   ⚠ เป็นการซ่อนหน้าจอ ไม่ใช่สิทธิ์ข้อมูล · ข้อมูลทั้งชุดยังโหลดมาที่เครื่องเหมือนผู้ใช้อื่น */
+function bkLimProg(){ try{ return typeof window.laLimited==='function' && window.laLimited('lim-bkprog'); }catch(_){ return false; } }
+function bkV2SwitchTab(t){ if(bkLimProg() && t!=='cal' && t!=='bytrip') t='bytrip'; _bkV2.tab = t; bkV2Render(); }
 function bkV2SwitchView(v){ _bkV2.view = v; bkV2Render(); }
 function bkV2NavMonth(delta){
   _bkV2.cursor = new Date(_bkV2.cursor.getFullYear(), _bkV2.cursor.getMonth() + delta, 1);
@@ -58090,6 +58095,7 @@ function bkV2SetMonth(m){
 }
 // P2 · New Booking form handlers
 function bkV2NewBooking(){
+  if(bkLimProg()) return;   /* §bkLim */
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   _bkV2.newBooking = {
     code: bkV2GenerateBookingCode(),
@@ -63037,6 +63043,7 @@ function bkV2SetAdjustment(i, field, val){
 // P3 · Booking Detail · view / FOC approval / cancel / edit
 // ═══════════════════════════════════════════════════════════════
 function bkV2OpenDetail(id){
+  if(bkLimProg()) return;   /* §bkLim */
   if(!id) return;
   _bkV2.detailId = id;
   bkV2Render();
@@ -83697,9 +83704,17 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
-
-
-
-
-
-
+/* §bkLim · หน้าตาของผู้ใช้ที่ติดข้อจำกัด lim-bkprog · การ์ดตารางโปรแกรมขยายเต็มความกว้าง */
+(function(){ try{
+  var s=document.createElement('style'); s.id='bklim-css';
+  var B='body.la-bkprog #view-booking ';
+  s.textContent=B+'.bkv2-utab:not([onclick*="\'cal\'"]):not([onclick*="\'bytrip\'"]){display:none!important}'
+    +B+'.bkv2-newbtn2{display:none!important}'
+    +B+'.bt-hgrid{grid-template-columns:minmax(0,1fr)!important}'
+    +B+'.bt-hgrid > :not(:first-child){display:none!important}'
+    +B+'.t2-wrap,'+B+'.btc-tg{display:none!important}'
+    +B+'.bt-pkh{position:static!important}'
+    +B+'.bt-c.bt-prog{max-width:none!important;height:auto!important;max-height:none!important}'
+    +B+'.bt-hgrid,'+B+'.bt-hgrid > :first-child,'+B+'.bt-pgbody{height:auto!important;max-height:none!important;overflow:visible!important}';
+  (document.head||document.documentElement).appendChild(s);
+}catch(_){ } })();
