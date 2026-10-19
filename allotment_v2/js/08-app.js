@@ -9397,6 +9397,7 @@ function bkOpsClear(b, date, opts){
   opts = opts || {};
   const o = bkOpsFor(b, date);
   if(!opts.keepBoat) o.boatId = null;
+  if(!opts.keepBoat && o.boatSplits) delete o.boatSplits;   /* §strandSplit · ลำที่แยกไว้ก็ต้องหายไปด้วย */
   o.vanId = null; o.vanReturnId = null; o.returnSameVan = false;
   o.vanGroup = 0;  o.vanSeq = 0;
   if(Array.isArray(o.vanSplits)) o.vanSplits = [];
@@ -14742,6 +14743,12 @@ function ckStrandClear(bkId, date){
     +'รายการจะหายจากใบงานรถ · เช็คอินรถ · เช็คอินหน้าท่า\n'
     +'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
   if(typeof bkOpsClear==='function') bkOpsClear(b, (typeof bkOpsDate==='function')?bkOpsDate(b,date):date);
+  /* §strandSplit · ล้างแล้วยังเหลือร่องรอยการจัด = แถวจะไม่หาย · บอกชื่อช่องที่ค้าง ไม่เงียบ */
+  if(typeof ckHasArrange==='function' && ckHasArrange(b, date)){
+    var _O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}), _left=[];
+    ['vanId','vanReturnId','boatId','vanGroup','vanSplits','boatSplits','vanCheckin','pierCheckin'].forEach(function(k){ var v=_O[k]; if(v && !(Array.isArray(v)&&!v.length)) _left.push(k); });
+    alert('Cleared, but this booking still has arrangement data on '+date+': '+(_left.join(', ')||'unknown')+'\nBooking '+bkId+' · please send this message to the developer.');
+  }
   if(typeof bkV2AddHistory==='function')
     bkV2AddHistory(b,'ops','ล้างการจัดรถ/เรือของวันที่ '+date+' (ใบจองถูกยกเลิกแล้ว)','Cleared');
   if(typeof acctPersistBookings==='function') acctPersistBookings();
