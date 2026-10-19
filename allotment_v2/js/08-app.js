@@ -13384,6 +13384,7 @@ function pcFillPanel(ds,bid,pier,X,R){
 function pcPkDiff(pier,ds,bid,legacy){ return legacy; }
 /* §w5cSheet · what the pier keyed on the longtail ('lt') or park ('pk') sheet, added up: one day, or the month when ds is null (ops mode: the sheet's totals, 82-ops-w5c-pier.js); null = add it up here as before */
 function pcSheetTot(kind,pier,ds){ return null; }
+function pcSheetBooked(kind,pier,ds){ return null; }   /* §w9 · the sheet's booked side of a day (ops mode: the server's `booked`) */
 /* §w6cCheck · paid − due over the boats that have both, of a park-sheet day (ds) or of the month's sheet (ds null): legacy's own figure here, the sheet's check.diff_paid in ops mode (93-ops-w6c-pier.js; null there = no boat has both) */
 function pcPkDiffPaid(pier,ds,legacy){ return legacy; }
 /* the print layout's difference cell: the same figure when the server sent one */
@@ -14227,6 +14228,7 @@ function pcSheetLT(pier, opt){
           +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)">')+'</tr>';
     });
     var _sd=pcSheetTot('lt',pier,ds); if(_sd){ duj=_sd.join_boats; duc=_sd.charter_boats; dm=_sd.amount; }   /* §w5cSheet · the day's keyed sums are the server's */
+    var _sb=pcSheetBooked('lt',pier,ds); if(_sb){ dj=_sb.join_heads; dc=_sb.charter_boats; }   /* §w9 · the booked columns' day sums are the server's (longtail sheet days[].booked) */
     gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
       +pcE(pcDL(ds))+(ds===pcNowDS()?'<span class="tdy">วันนี้</span>':'')
