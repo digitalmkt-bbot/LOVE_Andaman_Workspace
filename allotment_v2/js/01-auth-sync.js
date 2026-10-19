@@ -1146,6 +1146,8 @@
     /* §bkLim (2026-10-19) · ข้อจำกัดการมองเห็น (กลับด้านกับสิทธิ์พิเศษ: ติ๊ก = เห็นน้อยลง) · เจ้าของ: K.Tua
        "ปรับสิทธิ์หน้า Booking คงเหลือแต่ Calendar กับ By trip date · By trip date ให้เหลือแค่ตารางโปรแกรม"
        อยู่ในช่อง perms เดิม (ไม่มีคอลัมน์ใหม่) · ใช้ทางบันทึกเดียวกับ act-* ทุกจุด · lim:true = แสดงในกล่องแยก */
+    /* §pjLim (2026-10-19) · เจ้าของ: "ไปดูสิทธิ์หน้าใบงานเรือ ตัด Captain & Crew · Guides & Trainee ออก และไม่ต้องมีปุ่มปริ้น" */
+    {v:'lim-pjlite', lim:true, t:'ใบงานเรือ · ไม่เห็นทีมเรือ/ไกด์ · ไม่มีปุ่มพิมพ์', d:'หน้าใบงานเรือของทุกท่า · ซ่อนหัวข้อ Captain & Crew และ Guides & Trainee (รวมใบอนุญาต ปุ่มดึงทีม/จัดไกด์ ใบงานไกด์) · ไม่มีปุ่มพิมพ์ · ยังเห็นเรือ เส้นทาง ภาษา ครัว ลูกค้า โน้ต'},
     {v:'lim-bkct', lim:true, t:'ไม่เห็น Booking – Transfer / City Tour', d:'ซ่อนเมนู Booking – Transfer / City Tour (หน้าจองฝั่งรถ/ทัวร์บก) · เมนู Booking ฝั่งเรือยังเห็นตามสิทธิ์'},
     {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรม (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
   window.LA_ACTS=LA_ACTS;
@@ -1224,6 +1226,7 @@
   window.laAllowed=laAllowed;
   function laApplyPerms(){
     try{ document.body.classList.toggle('la-bkprog', !!window.laLimited('lim-bkprog')); }catch(e){}   /* §bkLim */
+    try{ document.body.classList.toggle('la-pjlite', !!window.laLimited('lim-pjlite')); }catch(e){}   /* §pjLim */
     if(laFullAccess()) return;
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });

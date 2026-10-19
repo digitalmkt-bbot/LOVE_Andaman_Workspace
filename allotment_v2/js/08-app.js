@@ -76851,7 +76851,9 @@ function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} 
    pckGuideJobOrder อ่านวันจาก _pckDate ของหน้าเช็คอิน · หน้านี้เดินวันด้วย _poDate
    ไม่สลับให้ = ได้ใบของวันที่หน้าเช็คอินค้างไว้ ไม่ใช่วันที่เห็นอยู่ตรงหน้า
    คืนค่าเดิมทุกครั้ง หน้าเช็คอินจะได้ไม่ถูกเลื่อนวันตามไปเงียบ ๆ */
+function pjLimLite(){ try{ return typeof window.laLimited==='function' && window.laLimited('lim-pjlite'); }catch(_){ return false; } }   /* §pjLim */
 function pjGuideJob(bid){
+  if(pjLimLite()) return;   /* §pjLim */
   var keep=_pckDate;
   try{ _pckDate=_poDate; pckGuideJobOrder(bid); }
   finally{ _pckDate=keep; }
@@ -77530,6 +77532,7 @@ var PJ_SKIN={ panwa:  {name:'Visit Panwa', bg:'linear-gradient(100deg,#16265C 0%
               ranong: {name:'Ranong',      bg:'linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)', ink:'#fff', sub:'#9FABCE', line:'#16265C', mo:'#16265C'} };
 function pjSkin(k){ return PJ_SKIN[k]||PJ_SKIN.panwa; }
 function pjPrint(){
+  if(pjLimLite()) return;   /* §pjLim */
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var SK=pjSkin(P.k);   /* §pjPierSkin */
   var e=poE;
@@ -83704,6 +83707,18 @@ function pc2CSS3(S){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 // ══════ §bkMro END ══════
+/* §pjLim · ใบงานเรือแบบไม่มีทีม · หัวข้อในการ์ดเป็นพี่น้องเรียงกัน (ไม่มีกล่องห่อ) จึงซ่อนเป็นช่วง:
+   ทุกอย่างก่อนหัวข้อ "ภาษาที่ลูกค้าขอ" ยกเว้นหัวการ์ด/เส้นทาง/แถบสถานะ · กันพลาดด้วยชื่อคลาสของสองหัวข้อนั้นอีกชั้น
+   (การ์ดลำที่ไม่ได้ออกบางใบไม่มีหัวข้อภาษา) · ปุ่มท้ายการ์ด (ดึงทีม/จัดไกด์) และใบงานไกด์ก็เป็นเรื่องทีม ซ่อนด้วย */
+(function(){ try{
+  var s=document.createElement('style'); s.id='pjlim-css';
+  var B='body.la-pjlite [id^="view-poj-"] ';
+  s.textContent=B+'.bc > :has(~ .pj-gh[data-sec="lang"]):not(.top):not(.pg):not(.stbar){display:none!important}'
+    +B+'.bc > .pj-gh[data-sec="crew"],'+B+'.bc > .pj-gh[data-sec="guide"],'+B+'.bc > .pj-slotn,'+B+'.bc > .pj-rw,'+B+'.bc > .pj-addw,'
+    +B+'.bc > .pj-licbox,'+B+'.bc > .pj-spx,'+B+'.bc > .pj-need,'+B+'.bc > .foot,'+B+'.bc > .gjrow{display:none!important}'
+    +B+'button[onclick^="pjPrint"],'+B+'button[onclick^="pjGuideJob"]{display:none!important}';
+  (document.head||document.documentElement).appendChild(s);
+}catch(_){ } })();
 /* §bkLim · หน้าตาของผู้ใช้ที่ติดข้อจำกัด lim-bkprog · การ์ดตารางโปรแกรมขยายเต็มความกว้าง */
 (function(){ try{
   var s=document.createElement('style'); s.id='bklim-css';

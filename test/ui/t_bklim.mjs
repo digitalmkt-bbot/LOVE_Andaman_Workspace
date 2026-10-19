@@ -18,8 +18,10 @@ async function run(me){
   });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); const page = await browser.newPage({ viewport: { width: 1700, height: 1000 } });
+  await page.addInitScript(() => { try { localStorage.setItem('_nat_bootstrap_done', '1'); } catch (_) {} });
   const errors = []; page.on('pageerror', e => errors.push(String(e)));
-  await page.goto(`http://127.0.0.1:${srv.address().port}/allotment_v2.html`);
+  await page.route(u => !/^http:\/\/127\.0\.0\.1/.test(String(u)), r => r.abort());
+  await page.goto(`http://127.0.0.1:${srv.address().port}/allotment_v2.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof window.nav === 'function' && document.querySelectorAll('.nav-item[data-view]').length > 0, null, { timeout: 25000 }); await page.waitForTimeout(1500);
   return { page, errors, close: async () => { await browser.close(); srv.close(); } };
 }
@@ -60,9 +62,42 @@ const probe = async (page) => page.evaluate(async () => {
 { const { page, errors, close } = await run({ username: 'admin', name: 'Admin', role: 'admin', perms: null, editAreas: [] });
   if (process.env.SHOT) { await page.evaluate(async () => { const z = ms => new Promise(f => setTimeout(f, ms)); const D = { perms: ['booking','calendar'], edit: [], acts: ['lim-bkprog'] }; const el = document.createElement('div'); el.id = 'shotperm'; el.style.cssText = 'position:fixed;left:0;top:0;width:760px;background:#fff;z-index:999999;padding:16px'; document.body.appendChild(el); window.__shotD = D; }); }
   const r = await page.evaluate(() => { const fn = Object.keys(window).find(k => /^__la/.test(k)); const LL = LA_ACTS.filter(a => a.lim).map(a => a.v), AA = LA_ACTS.filter(a => !a.lim).map(a => a.v); return { LL, AA, lim: laLimited('lim-bkprog'), body: document.body.classList.contains('la-bkprog') }; });
-  if (r.LL.join() === 'lim-bkprog' && r.AA.every(k => /^act-/.test(k)) && !r.lim && !r.body) ok('5 admin ไม่โดนข้อจำกัดแม้มีคีย์ · LA_ACTS แยก lim / act ถูก'); else fail('5 ' + JSON.stringify(r));
+  if (r.LL.join() === 'lim-pjlite,lim-bkct,lim-bkprog' && r.AA.every(k => /^act-/.test(k)) && !r.lim && !r.body) ok('5 admin ไม่โดนข้อจำกัดแม้มีคีย์ · LA_ACTS แยก lim / act ถูก'); else fail('5 ' + JSON.stringify(r));
   await close(); }
 
 const srvSrc = fs.readFileSync(process.env.SRV || path.resolve(ROOT, '../server.js'), 'utf8');
 if (/PERM_KEYS\.add\('lim-bkprog'\)/.test(srvSrc)) ok('6 server.js รู้จักคีย์ lim-bkprog (cleanPerms ไม่ตัดทิ้งตอนบันทึก)'); else fail('6 server.js ไม่มี PERM_KEYS.add(lim-bkprog)');
+
+// §navHole · Rate Expiry ต้องอยู่ใต้สิทธิ์ · City Tour ซ่อนได้ด้วย lim-bkct
+const navProbe = (page) => page.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none'; return { rate: vis(document.querySelector('.nav-item[data-view="rate-admin"]')), ct: vis(document.querySelector('.nav-item[data-citytour]')), bk: vis(document.querySelector('.nav-item[data-view="booking"]:not([data-citytour])')) }; });
+{ const { page, close } = await run({ username: 'tua', name: 'K.Tua', role: 'staff', perms: ['booking', 'calendar', '*explicit', 'lim-bkprog', 'lim-bkct'], editAreas: [] });
+  const r = await navProbe(page);
+  if (r.bk && !r.rate && !r.ct) ok('7 K.Tua (Booking+Calendar · ติ๊ก lim-bkct) · ไม่เห็น Rate Expiry และ City Tour · Booking ยังอยู่'); else fail('7 ' + JSON.stringify(r)); await close(); }
+{ const { page, close } = await run({ username: 'tua', name: 'K.Tua', role: 'staff', perms: ['booking', 'calendar', '*explicit'], editAreas: [] });
+  const r = await navProbe(page);
+  if (r.bk && !r.rate && r.ct) ok('8 ไม่ติ๊ก lim-bkct · City Tour ยังเห็นตามเดิม · Rate Expiry ไม่หลุดมาเอง'); else fail('8 ' + JSON.stringify(r)); await close(); }
+{ const { page, close } = await run({ username: 'sale', name: 'Sale', role: 'staff', perms: ['rate-types', 'agents', '*explicit'], editAreas: ['sales'] });
+  const r = await navProbe(page);
+  if (r.rate) ok('9 คนที่ถือ Rate Types อยู่แล้ว · ยังเห็น Rate Expiry โดยไม่ต้องติ๊กใหม่'); else fail('9 ' + JSON.stringify(r)); await close(); }
+if (/PERM_KEYS\.add\('lim-bkct'\)/.test(srvSrc) && /PERM_KEYS\.add\('rate-admin'\)/.test(srvSrc)) ok('10 server.js รู้จัก lim-bkct + rate-admin'); else fail('10 server keys');
+
+// §pjLim · ใบงานเรือ: ไม่เห็นทีมเรือ/ไกด์ · ไม่มีปุ่มพิมพ์
+const pjProbe = (page) => page.evaluate(async () => { const z = ms => new Promise(f => setTimeout(f, ms)); const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
+  const el = document.querySelector('.nav-item[data-view^="poj-"]'); if (!el) return { none: true }; nav(el); await z(1200);
+  const V = document.querySelector('.view.active'); const card = V.querySelector('.bc');
+  const sec = k => vis(V.querySelector('.bc > .pj-gh[data-sec="' + k + '"]'));
+  let printed = 0; const _o = window.open; window.open = () => { printed++; return null; }; try { pjPrint(); } catch (_) {} window.open = _o;
+  return { crew: sec('crew'), guide: sec('guide'), lang: sec('lang'), kit: sec('kit'), cust: sec('cust'), note: sec('note'), rows: [...V.querySelectorAll('.bc > .pj-rw')].filter(vis).length, top: vis(card && card.querySelector('.top')),
+    print: vis(V.querySelector('button[onclick^="pjPrint"]')), gj: [...V.querySelectorAll('button[onclick^="pjGuideJob"]')].filter(vis).length, lic: [...V.querySelectorAll('.pj-licbox')].filter(vis).length, foot: [...V.querySelectorAll('.bc > .foot')].filter(vis).length, printed }; });
+{ const { page, close } = await run({ username: 'tua', name: 'K.Tua', role: 'staff', perms: ['poj-panwa', 'poj-tublamu', 'poj-ranong', '*explicit', 'lim-pjlite'], editAreas: [] });
+  const r = await pjProbe(page);
+  if (process.env.SHOT) await page.screenshot({ path: '/mnt/user-data/outputs/pjlim.png' });
+  if (!r.crew && !r.guide && r.rows === 0 && r.lic === 0 && r.foot === 0 && r.top && r.lang && r.kit && r.cust && r.note) ok('11 ใบงานเรือ (lim-pjlite) · ไม่เห็น Captain & Crew / Guides & Trainee / ใบอนุญาต / ปุ่มทีม · ยังเห็นหัวเรือ ภาษา ครัว ลูกค้า โน้ต'); else fail('11 ' + JSON.stringify(r));
+  if (!r.print && r.gj === 0) ok('12 ใบงานเรือ (lim-pjlite) · ไม่มีปุ่มพิมพ์ และปุ่มใบงานไกด์'); else fail('12 ' + JSON.stringify(r));
+  await close(); }
+{ const { page, close } = await run({ username: 'po', name: 'Pier', role: 'staff', perms: ['poj-panwa', 'poj-tublamu', 'poj-ranong', '*explicit'], editAreas: ['pier'] });
+  const r = await pjProbe(page);
+  if (r.crew && r.guide && r.rows > 0 && r.print) ok('13 ใบงานเรือ ผู้ใช้ปกติ · ทีมเรือ ไกด์ ปุ่มพิมพ์ ครบเหมือนเดิม'); else fail('13 ' + JSON.stringify(r));
+  await close(); }
+if (/PERM_KEYS\.add\('lim-pjlite'\)/.test(srvSrc)) ok('14 server.js รู้จัก lim-pjlite'); else fail('14 server key');
 console.log(bad ? `FAIL ${bad}` : 'PASS'); process.exit(bad ? 1 : 0);
