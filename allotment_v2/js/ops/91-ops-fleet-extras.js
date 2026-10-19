@@ -39,25 +39,27 @@
     if(!it){ alert('ท่านี้ยังไม่มีคอลัมน์ชื่อ "' + nm + '"'); return; }
     var add = (row.q == null) ? 0 : row.q;
     if(!isFinite(add)){ alert('จำนวนในแถวนี้ไม่ใช่ตัวเลข · แก้ที่ปุ่ม "แก้ / ลบ" ก่อน'); return; }
-    var cur = window.flIssueGet(ds, bid, it.id); if(cur == null) cur = 0;
-    var ru = String(row.u || '').trim(), iu = String(it.unit || '').trim();
-    var warn = (ru && iu && ru !== iu)
-      ? ('\n\n\u26a0 หน่วยไม่ตรงกัน · แถวนี้เป็น "' + ru + '" แต่คอลัมน์เป็น "' + iu + '"\nถ้าไม่ใช่ของอย่างเดียวกัน ให้กดยกเลิกแล้วแก้ชื่อแทน')
-      : '';
     var bn = bid; try{ var b = (BOATS || []).filter(function(z){ return z.id === bid; })[0]; if(b) bn = b.name; }catch(_){}
-    if(!confirm('ย้ายเข้าคอลัมน์ "' + nm + '"\n' + bn + ' · ' + ds + '\n\n'
-      + 'ในคอลัมน์ตอนนี้ ' + cur + '  +  ' + add + '  =  ' + (cur + add) + (iu ? (' ' + iu) : '') + '\n'
-      + 'แล้วลบบรรทัดนี้ออกจากรายการอื่นๆ' + warn)) return;
+    var path = '/v1/fleet/daily-log/' + enc(ds) + '/boats/' + enc(bid) + '/extras/' + enc(xid) + '/to-issue';
     var compat = window.__laOpsFleetDailyCompat;
-    return O.queue(function(){
-      return O.call('POST', '/v1/fleet/daily-log/' + enc(ds) + '/boats/' + enc(bid) + '/extras/' + enc(xid) + '/to-issue', { item_id: it.id });
-    }).then(function(r){
-      if(compat && r && r.day) compat.applyDailyDay(r.day);
-      O.wrote('fleet-daily-extra-del');
-      try{ if(typeof window.flRenderDR === 'function' && document.getElementById('fl-dr-body')) window.flRenderDR(); }catch(_){}
-      if(r && typeof r.after === 'number' && r.after !== cur + add)
-        O.toast({ kind: 'info', title: 'Moved to the column', status: 'OK', sub: r.before + ' + ' + r.added + ' = ' + r.after, dur: 7000 });
-      return r;
+    /* §w9 · the confirm's figures and the unit warning are the server's dry run (before + added = after, unit_mismatch), not the browser's sum */
+    return O.call('POST', path, { item_id: it.id, dry_run: true }).then(function(d){
+      var warn = d.unit_mismatch
+      ? ('\n\n\u26a0 หน่วยไม่ตรงกัน · แถวนี้เป็น "' + d.unit_mismatch.extra_unit + '" แต่คอลัมน์เป็น "' + d.unit_mismatch.item_unit + '"\nถ้าไม่ใช่ของอย่างเดียวกัน ให้กดยกเลิกแล้วแก้ชื่อแทน')
+        : '';
+      if(!confirm('ย้ายเข้าคอลัมน์ "' + nm + '"\n' + bn + ' · ' + ds + '\n\n'
+        + 'ในคอลัมน์ตอนนี้ ' + d.before + '  +  ' + d.added + '  =  ' + d.after + (d.item_unit ? (' ' + d.item_unit) : '') + '\n'
+        + 'แล้วลบบรรทัดนี้ออกจากรายการอื่นๆ' + warn)) return;
+      return O.queue(function(){
+        return O.call('POST', path, { item_id: it.id });
+      }).then(function(r){
+        if(compat && r && r.day) compat.applyDailyDay(r.day);
+        O.wrote('fleet-daily-extra-del');
+        try{ if(typeof window.flRenderDR === 'function' && document.getElementById('fl-dr-body')) window.flRenderDR(); }catch(_){}
+        if(r && typeof r.after === 'number' && r.after !== d.after)
+          O.toast({ kind: 'info', title: 'Moved to the column', status: 'OK', sub: r.before + ' + ' + r.added + ' = ' + r.after, dur: 7000 });
+        return r;
+      });
     }).catch(function(e){ O.fail('Could not move the extra to the column', e); return null; });
   });
 })();
