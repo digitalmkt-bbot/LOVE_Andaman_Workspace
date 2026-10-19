@@ -2044,7 +2044,9 @@ PERM_KEYS.add(LA_PERM_EXPLICIT);
 PERM_KEYS.add('act-capunlock');
 PERM_KEYS.add('act-pckmove');   // §pckMove · ย้ายลำหน้าท่า · ตรงกับ LA_ACTS
 PERM_KEYS.add('act-tripcxl');
-PERM_KEYS.add('lim-bkprog');   // §bkLim · Booking เห็นแค่ Calendar + ตารางโปรแกรม · ตรงกับ LA_ACTS (lim:true)   // §tripCxl · ยกเลิกรอบ (Cancel trip) · ตรงกับ LA_ACTS
+PERM_KEYS.add('lim-bkprog');
+PERM_KEYS.add('lim-bkct');     // §navHole · ไม่เห็น Booking – Transfer / City Tour
+PERM_KEYS.add('rate-admin');   // §navHole · Rate Expiry · อยู่ใน LA_NAV แล้ว (laSyncPermKeys ก็เติมให้) · เขียนตรงไว้ไม่พึ่งจังหวะ deploy   // §bkLim · Booking เห็นแค่ Calendar + ตารางโปรแกรม · ตรงกับ LA_ACTS (lim:true)   // §tripCxl · ยกเลิกรอบ (Cancel trip) · ตรงกับ LA_ACTS
 function embedTokenOk(t){
   if(!EMBED_SECRET || !t) return false;
   try{
