@@ -8074,9 +8074,10 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
     + '</div>'
     + unavailHTML
     + (_bopPast ? '' : '<div style="padding:9px 12px;border-top:1px solid var(--border)">'   /* §bopPastLock */
-    + ((typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(routeId,dateStr))
-        ? '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; ยกเลิกแล้ว · แก้หมายเหตุ</button>'
-        : '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FCEBEB;color:#A32D2D;border:1px solid #F2C0C0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; Cancel trip (weather)</button>')
+    + ((typeof tcxCan==='function' && !tcxCan()) ? '<div style="font-size:11px;color:#8A8F9C;text-align:center">Cancel trip · needs permission</div>'   /* §tripCxl */
+      : (typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(routeId,dateStr))
+        ? '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">' + ((typeof TCX_R!=='undefined' && typeof tcxReason==='function') ? (TCX_R[tcxReason(routeId,dateStr)].ic + ' Cancelled · ' + TCX_R[tcxReason(routeId,dateStr)].en + ' · edit') : '&#9928; ยกเลิกแล้ว · แก้หมายเหตุ') + '</button>'
+        : '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FCEBEB;color:#A32D2D;border:1px solid #F2C0C0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#10005; Cancel trip · weather / below break-even / boat</button>')
     + '</div>');
 
   // Compute position
@@ -10280,6 +10281,7 @@ function bop2RenderShell(){
         <span class="bo-pier-pill ${!isMonth?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
         <span class="bo-pier-pill ${isMonth?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
         <span class="bo-pier-pill" onclick="bop2ShowBulkMenu(event)">+ Bulk actions</span>
+        ${typeof tcxHistOpen==='function'?'<span class="bo-pier-pill" onclick="tcxHistOpen()" title="Cancelled trips · reasons and history">Cancelled trips</span>':''}
       </div>
       <div class="bo-legend" style="margin:0 0 10px;padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.05)">
         <!-- §bop3col · legend ชุดเดียวกับปฏิทิน Seats available ในหน้า Dashboard -->
@@ -10292,9 +10294,11 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:#E4F2EB;border:1px dashed #8FCFB4"></span>${laT('เรือว่าง · ยังไม่จัด')}</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
+        ${typeof TCX_R!=='undefined'?Object.keys(TCX_R).map(k=>`<span class="bo-legend-chip"><span class="box" style="background:${TCX_R[k].bg};border:1px solid ${TCX_R[k].bd};color:${TCX_R[k].fg};display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">${TCX_R[k].ic}</span>CXL ${TCX_R[k].en.toLowerCase()}</span>`).join('')+'<span class="bo-legend-chip"><span class="box" style="background:#fff;border:1.5px dashed #C53A2E"></span>Below break-even (3 days)</span>':''}
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
       </div>
+      ${typeof tcxBelowBanner==='function'?tcxBelowBanner(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):''}
       <div style="overflow-x:auto">
       <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="position:relative;--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
         <div class="bop2-cell bop2-cell-h">Route</div>
@@ -10605,10 +10609,13 @@ function bop2RenderHeatmapRow(route, dates){
     }
 
     const _wxClosed=(typeof bkV2IsWeatherClosed==='function')&&bkV2IsWeatherClosed(route.id,d);
-    if(_wxClosed){ cellInner = '<div style="font-size:13px;line-height:1">&#9928;</div><div style="font-size:7px;color:#A32D2D;font-weight:700;line-height:1;margin-top:1px">CANCEL</div>'; }
+    let _tcx=null, _tcxLow=null;   /* §tripCxl */
+    if(_wxClosed){ _tcx=(typeof tcxCellHtml==='function')?tcxCellHtml(route.id,d):{bg:'#FBE4E0',bd:'#C44A36',inner:'<div style="font-size:13px;line-height:1">&#9928;</div><div style="font-size:7px;color:#A32D2D;font-weight:700;line-height:1;margin-top:1px">CANCEL</div>',title:''}; cellInner=_tcx.inner; }
+    else if(typeof tcxBelow==='function'){ _tcxLow=tcxBelow(route.id,d,al);
+      if(_tcxLow) cellInner = '<span style="position:absolute;top:-6px;right:-4px;font-size:8.5px;font-weight:800;background:#C53A2E;color:#fff;border-radius:7px;padding:0 4px;line-height:14px;white-space:nowrap">'+(_tcxLow.days===0?'today':(_tcxLow.days+'d'))+'</span>'+cellInner; }
     const minH = isMonth ? '32px' : '52px';
     const padding = isMonth ? '3px' : '5px 4px';
-    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${_wxClosed?'#FBE4E0':bg};${_wxClosed?'box-shadow:inset 0 0 0 1.5px #C44A36;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${escapeHTML(route.name)} · ${d}${al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned'}">${cellInner}</div>`;
+    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${_tcx?_tcx.bg:(_tcxLow?'#fff':bg)};${_tcx?('box-shadow:inset 0 0 0 1.5px '+_tcx.bd+';'):''}${_tcxLow?'box-shadow:inset 0 0 0 1.5px #C53A2E;outline:1.5px dashed #C53A2E;outline-offset:-1.5px;position:relative;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${_tcx&&_tcx.title?escapeHTML(_tcx.title):(escapeHTML(route.name)+' · '+d+(al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned')+(_tcxLow?(' · below break-even '+_tcxLow.bk+'/'+_tcxLow.be+' · decide in '+_tcxLow.days+' day(s)'):''))}">${cellInner}</div>`;
   });
   return row;
 }

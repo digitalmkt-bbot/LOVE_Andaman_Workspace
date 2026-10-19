@@ -2040,6 +2040,7 @@ PERM_KEYS.add(LA_PERM_EXPLICIT);
    ตรงกับ LA_ACTS ใน js/01-auth-sync.js · ไม่เพิ่มตรงนี้ cleanPerms จะตัดทิ้งตอน admin กดบันทึก ติ๊กแล้วหายเงียบ */
 PERM_KEYS.add('act-capunlock');
 PERM_KEYS.add('act-pckmove');   // §pckMove · ย้ายลำหน้าท่า · ตรงกับ LA_ACTS
+PERM_KEYS.add('act-tripcxl');   // §tripCxl · ยกเลิกรอบ (Cancel trip) · ตรงกับ LA_ACTS
 function embedTokenOk(t){
   if(!EMBED_SECRET || !t) return false;
   try{

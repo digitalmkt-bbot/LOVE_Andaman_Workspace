@@ -38931,28 +38931,64 @@ function bkV2WeatherBookingsFor(routeId,date){
 }
 function bkV2WeatherNote(routeId,date){ const c=SB_WEATHER_CLOSURES.find(x=>x.routeId===routeId&&x.date===date); return c?(c.note||''):''; }
 function bkV2WeatherMark(routeId,date){
+  if(!tcxCan()){ alert('You do not have permission to cancel a trip.\nAsk an admin to tick "Cancel trip" for you in Users.'); return; }
   const rname=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
   const closed=bkV2IsWeatherClosed(routeId,date);
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  window._tcxPick = closed ? tcxReason(routeId,date) : 'weather';
+  const S = (closed && tcxSnapOf(routeId,date)) || tcxSnapNow(routeId,date);
+  const ag = Object.keys(S.byAg||{}).map(k=>esc(k)+' '+S.byAg[k]).join(' · ') || '—';
+  const gap = S.be>0 ? Math.max(0,S.be-S.pax) : 0;
+  const chips = Object.keys(TCX_R).map(k=>{ const R=TCX_R[k];
+    return '<button type="button" class="tcx-rc'+(k===window._tcxPick?' on':'')+'" data-k="'+k+'" onclick="tcxPickR(\''+k+'\')"><b>'+R.ic+' '+R.th+'</b><small>'+R.sub+'</small></button>'; }).join('');
+  const cell=(k,v,d,c)=>'<div><div style="font-size:10.5px;font-weight:700;color:#6B7489">'+k+'</div><div style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;'+(c?('color:'+c):'')+'">'+v+'</div><div style="font-size:11px;color:#8A8F9C;line-height:1.4">'+d+'</div></div>';
   acctModal(`
-    <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700;color:#A32D2D">Cancel trip (weather)</div><div style="font-size:11px;color:var(--fd-ink-soft)">${rname} · ${date}</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>
-    <div style="padding:16px 20px">
-      <label style="font-size:11px;color:var(--fd-ink-soft);display:block;margin-bottom:5px">Note (e.g. high waves 3m · port closed · heavy rain)</label>
-      <textarea id="wx-note" placeholder="Reason..." style="width:100%;min-height:72px;font-size:12px;font-family:inherit;border:1px solid var(--fd-line);border-radius:8px;padding:8px;box-sizing:border-box">${closed?bkV2WeatherNote(routeId,date):''}</textarea>
+    <style>.tcx-rc{flex:1;text-align:left;border:1.5px solid #D5DAE5;border-radius:11px;padding:8px 10px;background:#fff;cursor:pointer;font-family:inherit;color:#0F1B3D}
+      .tcx-rc b{display:block;font-size:13px}.tcx-rc small{display:block;color:#6B7489;font-size:10.5px;margin-top:2px}.tcx-rc.on{border-color:#4F3EA3;background:#F4F1FD}</style>
+    <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#A32D2D">${closed?'TRIP CANCELLED':'CANCEL TRIP'}</div><div style="font-size:15px;font-weight:700;color:#0F1B3D">${esc(rname)} · ${esc(date)}</div></div><button onclick="acctModalClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--fd-ink-soft)">&times;</button></div>
+    <div style="padding:14px 20px">
+      <div style="font-size:11px;font-weight:700;color:var(--fd-ink-soft);margin-bottom:6px">Reason</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">${chips}</div>
+      <label style="font-size:11px;color:var(--fd-ink-soft);display:block;margin-bottom:5px">Note</label>
+      <textarea id="wx-note" placeholder="e.g. 8 pax only · merged into Speedboat 08:30 · high waves 3m" style="width:100%;min-height:58px;font-size:12px;font-family:inherit;border:1px solid var(--fd-line);border-radius:8px;padding:8px;box-sizing:border-box">${closed?esc(bkV2WeatherNote(routeId,date)):''}</textarea>
+      <div style="font-size:11px;font-weight:700;color:var(--fd-ink-soft);margin:12px 0 6px">${closed?'Snapshot when it was cancelled':'Snapshot (saved when you confirm)'}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;border:1px solid #E6E8EE;border-radius:12px;background:#FAFBFD;padding:10px 12px">
+        ${cell('Pax on trip', S.pax, S.bk+' booking'+(S.bk===1?'':'s')+' · AD '+S.ad+' · CHD '+S.chd)}
+        ${cell('Break-even', S.be>0?S.be:'—', S.be>0?(gap>0?('short '+gap):'reached'):'no plan in Trip P&L', S.be>0&&gap>0?'#A32D2D':'')}
+        <div><div style="font-size:10.5px;font-weight:700;color:#6B7489">Agents</div><div style="font-size:12px;line-height:1.55;margin-top:3px">${ag}</div></div>
+        <div><div style="font-size:10.5px;font-weight:700;color:#6B7489">${closed?'Cancelled by':'By'}</div><div style="font-size:12px;line-height:1.55;margin-top:3px"><b>${esc(S.by||laBy())}</b><br>${esc(String(S.at||new Date().toISOString()).slice(0,16).replace('T',' '))}${S.before!=null?(' · '+S.before+' day'+(S.before===1?'':'s')+' before'):''}</div></div>
+      </div>
+      <div style="margin-top:12px;padding:10px 12px;border-radius:12px;background:#F4F1FD;border:1px solid #CFC6F2;display:flex;align-items:center;gap:12px">
+        <div style="font-size:12px;line-height:1.5"><b style="color:#4F3EA3">Bookings · resolve on By trip</b><br>Every booking on this trip gets the cancel banner in By trip ${esc(date)} · pick the result row by row there (move program · reschedule · refund · credit · cancel).</div>
+        ${closed?`<button onclick="acctModalClose();tcxGoByTrip('${routeId}','${date}')" style="margin-left:auto;background:#fff;border:1px solid #4F3EA3;color:#4F3EA3;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap">Open By trip ›</button>`:''}
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px">
-        <div>${closed?`<button onclick="bkV2WeatherUncancel('${routeId}','${date}')" style="background:#fff;border:1px solid #0F7A5A;color:#0F7A5A;font-family:inherit;font-size:12px;font-weight:600;padding:9px 15px;border-radius:9px;cursor:pointer">&#8630; Undo cancel &middot; re-open trip</button>`:''}</div>
+        <div>${closed?`<button onclick="bkV2WeatherUncancel('${routeId}','${date}')" style="background:#fff;border:1px solid #0F7A5A;color:#0F7A5A;font-family:inherit;font-size:12px;font-weight:600;padding:9px 15px;border-radius:9px;cursor:pointer">&#8630; Undo cancellation</button>`:''}</div>
         <div style="display:flex;gap:8px">
-          <button onclick="acctModalClose()" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">Cancel</button>
-          <button onclick="bkV2WeatherMarkConfirm('${routeId}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 18px;border-radius:9px;cursor:pointer">${closed?'Update note':'Confirm cancel trip'}</button>
+          <button onclick="acctModalClose()" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">Back</button>
+          <button onclick="bkV2WeatherMarkConfirm('${routeId}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 18px;border-radius:9px;cursor:pointer">${closed?'Update':'Confirm cancel trip'}</button>
         </div>
       </div>
     </div>`);
 }
+function tcxPickR(k){ window._tcxPick=k; [].forEach.call(document.querySelectorAll('.tcx-rc'),function(el){ el.classList.toggle('on', el.getAttribute('data-k')===k); }); }
 function bkV2WeatherMarkConfirm(routeId,date){
+  if(!tcxCan()) return;
   const note=((document.getElementById('wx-note')||{}).value||'').trim();
+  const reason=TCX_R[window._tcxPick]?window._tcxPick:'weather';
   const c=SB_WEATHER_CLOSURES.find(x=>x.routeId===routeId&&x.date===date);
-  if(c){ c.note=note; } else { SB_WEATHER_CLOSURES.push({routeId,date,reason:'weather',note,at:new Date().toISOString()}); }
+  const snap=c?null:tcxSnapNow(routeId,date);   /* ภาพก่อนแตะอะไร */
+  if(c){
+    const was=c.reason||'weather';
+    c.note=note; c.reason=reason;
+    if(was!==reason){ const sn=tcxSnapOf(routeId,date); if(sn){ (sn.log=sn.log||[]).push({at:new Date().toISOString(), by:laBy(), from:was, to:reason}); tcxSnapPutLater(routeId+'|'+date, sn); }
+      bkV2WeatherEventBookings(routeId,date).forEach(bk=>bkV2AddHistory(bk,'weather','Cancel reason changed: '+TCX_R[was].en+' → '+TCX_R[reason].en,'Trip CXL')); }
+  } else { SB_WEATHER_CLOSURES.push({routeId,date,reason,note,at:new Date().toISOString()}); }
   if(typeof bkV2WeatherTagBookings==='function') bkV2WeatherTagBookings(routeId,date);
-  sbWeatherPersist(); acctModalClose();
+  sbWeatherPersist();
+  if(snap) tcxSnapPutLater(routeId+'|'+date, snap);
+  tcxSnapFlush();
+  acctModalClose();
   if(typeof renderOp==='function') renderOp();
   if(typeof bkV2Render==='function' && typeof _bkV2!=='undefined' && _bkV2 && _bkV2.tab==='bytrip') bkV2Render();
 }
@@ -38962,6 +38998,7 @@ function bkV2WeatherMarkConfirm(routeId,date){
 function bkV2WeatherUncancel(routeId,date){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('View only - no permission to edit operations'); return; }
   if(!bkV2IsWeatherClosed(routeId,date)) return;
+  if(!tcxCan()){ alert('You do not have permission to cancel or re-open a trip.'); return; }
   const rname=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
   const key=bkV2WeatherKey(routeId,date);
   const tagged=(SB_BOOKINGS||[]).filter(bk=>bk.weatherResolve && bk.weatherResolve.event===key);
@@ -38973,8 +39010,10 @@ function bkV2WeatherUncancel(routeId,date){
     +kept.map(bk=>(bk.code||bk.id)+' \u00B7 '+((bk.weatherResolve||{}).outcome||'resolved')).join('\n  ');
   if(!confirm(msg)) return;
   for(let i=SB_WEATHER_CLOSURES.length-1;i>=0;i--){ const c=SB_WEATHER_CLOSURES[i]; if(c&&c.routeId===routeId&&c.date===date) SB_WEATHER_CLOSURES.splice(i,1); }
-  back.forEach(bk=>{ delete bk.weatherResolve; bkV2AddHistory(bk,'weather','Trip '+rname+' \u00B7 '+date+' re-opened \u00B7 weather cancellation undone','Weather'); });
+  const _rk=TCX_R[tcxReason(routeId,date)]||TCX_R.weather;
+  back.forEach(bk=>{ delete bk.weatherResolve; bkV2AddHistory(bk,'weather','Trip '+rname+' \u00B7 '+date+' re-opened \u00B7 cancellation ('+_rk.en+') undone','Trip CXL'); });
   sbWeatherPersist();
+  { const sn=tcxSnapOf(routeId,date); if(sn){ sn.undone={at:new Date().toISOString(), by:laBy()}; tcxSnapPutLater(key, sn); tcxSnapFlush(); } }   /* §tripCxl · ประวัติไม่หาย */
   if(back.length && typeof acctPersistBookings==='function') acctPersistBookings();
   acctModalClose();
   if(typeof renderOp==='function') renderOp();
@@ -39219,12 +39258,13 @@ function bkV2WeatherTagBookings(routeId,date){
   (SB_BOOKINGS||[]).forEach(bk=>{
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
     const onTrip=(bk.trips||[]).some(t=>t.routeId===routeId && t.date===date && t.bookingMode!=='charter');
-    if(onTrip && !(bk.weatherResolve && bk.weatherResolve.event===key)){ bk.weatherResolve={event:key,status:'awaiting'}; bkV2AddHistory(bk,'weather','Trip '+rName+' · '+date+' cancelled due to weather','Weather'); tagged++; }
+    if(onTrip && !(bk.weatherResolve && bk.weatherResolve.event===key)){ bk.weatherResolve={event:key,status:'awaiting'}; const _R=TCX_R[tcxReason(routeId,date)]||TCX_R.weather; bkV2AddHistory(bk,'weather','Trip '+rName+' · '+date+' cancelled · reason: '+_R.en,_R===TCX_R.weather?'Weather':'Trip CXL'); tagged++; }
   });
   if(tagged && typeof acctPersistBookings==='function') acctPersistBookings();
 }
 function bkV2WeatherEventBookings(routeId,date){ const key=bkV2WeatherKey(routeId,date); return (SB_BOOKINGS||[]).filter(bk=>bk.weatherResolve && bk.weatherResolve.event===key); }
-function bkV2WeatherToggleDate(bkId,pfx){ pfx=pfx||'wx-'; const o=document.getElementById(pfx+'out-'+bkId); const d=document.getElementById(pfx+'date-'+bkId); if(o&&d) d.style.display=(o.value==='reschedule')?'':'none'; }
+function bkV2WeatherToggleDate(bkId,pfx){ pfx=pfx||'wx-'; const o=document.getElementById(pfx+'out-'+bkId); const d=document.getElementById(pfx+'date-'+bkId); if(o&&d) d.style.display=(o.value==='reschedule')?'':'none';
+  const m=document.getElementById(pfx+'mv-'+bkId); if(o&&m) m.style.display=(o.value==='move')?'':'none'; }   /* §tripCxl */
 function bkV2WeatherPanel(routeId,date){
   bkV2WeatherTagBookings(routeId,date);
   const rname=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
@@ -39232,7 +39272,7 @@ function bkV2WeatherPanel(routeId,date){
   const nd=new Date(date+'T00:00'); nd.setDate(nd.getDate()+1); const next=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(nd):date;
   const list=bkV2WeatherEventBookings(routeId,date);
   if(!list.length){ acctModal('<div style="padding:20px;font-size:13px">No bookings on this trip <div style="margin-top:14px;text-align:right"><button onclick="acctModalClose();bkV2Render()" style="background:var(--fd-coral);color:#fff;border:none;font-family:inherit;font-size:12px;padding:8px 16px;border-radius:9px;cursor:pointer">Close</button></div></div>'); return; }
-  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled'};
+  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
   const nAwait=list.filter(b=>b.weatherResolve.status==='awaiting').length;
   const nNotif=list.filter(b=>b.weatherResolve.status==='notified').length;
   const nDone=list.filter(b=>b.weatherResolve.status==='resolved').length;
@@ -39251,18 +39291,19 @@ function bkV2WeatherPanel(routeId,date){
       action='<button onclick="bkV2WeatherNotify(\''+bk.id+'\')" style="background:#185FA5;color:#fff;border:none;font-family:inherit;font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap">Notify agent</button>';
     } else if(st==='notified'){
       action='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
-        +'<select id="wx-out-'+bk.id+'" onchange="bkV2WeatherToggleDate(\''+bk.id+'\')" style="height:30px;font-size:11px;font-family:inherit;border:1px solid var(--fd-line);border-radius:7px;padding:2px 6px;background:#fff"><option value="reschedule">Reschedule</option><option value="refund">Refund</option><option value="credit" '+(paid>0?'':'disabled')+'>Credit</option><option value="cancel">Cancel</option></select>'
+        +'<select id="wx-out-'+bk.id+'" onchange="bkV2WeatherToggleDate(\''+bk.id+'\')" style="height:30px;font-size:11px;font-family:inherit;border:1px solid var(--fd-line);border-radius:7px;padding:2px 6px;background:#fff">'+tcxOutOpts(paid)+'</select>'
+        +tcxMoveSel('wx-',bk.id)
         +'<input type="date" id="wx-date-'+bk.id+'" value="'+next+'" style="height:30px;font-size:11px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 6px">'
         +'<button onclick="bkV2WeatherResolveOne(\''+bk.id+'\')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer">Resolve</button></div>';
     } else {
-      const extra=(wr.outcome==='reschedule'&&wr.newDate)?(' → '+wr.newDate):'';
+      const extra=(wr.outcome==='reschedule'&&wr.newDate)?(' → '+wr.newDate):(wr.outcome==='move'&&wr.newRoute)?(' → '+tcxRName(wr.newRoute)):'';
       action='<span style="font-size:11.5px;color:#0F6E56;font-weight:600">✓ '+(outLbl[wr.outcome]||wr.outcome)+extra+'</span>';
     }
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
       +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">'+(bk.code||bk.id)+' · '+(a?a.name:'B2C')+' '+stBadge+'</div><div style="font-size:10.5px;color:var(--fd-ink-soft);margin-top:1px">'+pax+' pax · '+paidLbl+'</div></div>'
       +'<div style="flex-shrink:0">'+action+'</div></div>';
   }).join('');
-  acctModal('<div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700;color:#A32D2D">Manage bookings · trip cancelled (weather)</div><div style="font-size:11px;color:var(--fd-ink-soft)">'+rname+' · '+date+' · Steps: notify agent → agent contacts customer → resolve</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>'
+  acctModal('<div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700;color:#A32D2D">Manage bookings · trip cancelled ('+(TCX_R[tcxReason(routeId,date)]||TCX_R.weather).en+')</div><div style="font-size:11px;color:var(--fd-ink-soft)">'+rname+' · '+date+' · Steps: notify agent → agent contacts customer → resolve</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>'
     +'<div style="padding:10px 20px;background:#fafaf8;border-bottom:1px solid var(--fd-line-soft);font-size:11px;color:var(--fd-ink-soft)">To notify <b style="color:#5F5E5A">'+nAwait+'</b> · Notified <b style="color:#7A4A00">'+nNotif+'</b> · Resolved <b style="color:#0F6E56">'+nDone+'</b></div>'
     +'<div style="padding:6px 20px 16px">'+rows+'<div style="margin-top:14px;text-align:right"><button onclick="acctModalClose();bkV2Render()" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 16px;border-radius:9px;cursor:pointer">Close</button></div></div>');
 }
@@ -39282,36 +39323,275 @@ function bkV2WeatherResolveOne(bkId,pfx){
   const rName=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
   const inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(bk.id):null;
   const paid=inv?acctInvoicePaid(inv):0;
-  if(out==='reschedule'){
+  const _rk=tcxReason(routeId,date), _R=TCX_R[_rk]||TCX_R.weather;   /* §tripCxl */
+  if(out==='move'){
+    const nr=(document.getElementById(pfx+'mv-'+bkId)||{}).value||'';
+    if(!tcxMoveOne(bk, routeId, date, nr, true)) return;
+  }
+  else if(out==='reschedule'){
     const ndv=(document.getElementById(pfx+'date-'+bkId)||{}).value||date;
     // New day → the OLD boat/van assignment no longer applies (matches bkV2RescheduleBooking / the edit-path
     // date change) · clear the OLD date's per-day ops block BEFORE moving the trip, using the shared
     // bkOpsRead/bkOpsFor-aware helper so it lands on bk.ops (day 1) or the right t.ops (later days).
     if(ndv!==date && typeof bkOpsClear==='function') bkOpsClear(bk, date);
     (bk.trips||[]).forEach(t=>{ if(t.routeId===routeId && t.date===date) t.date=ndv; });
-    bk.rebook={from:date,to:ndv,reason:'weather',at:new Date().toISOString()};
+    bk.rebook={from:date,to:ndv,reason:_rk,at:new Date().toISOString()};
     bk.weatherResolve.newDate=ndv;
-    bkV2AddHistory(bk,'weather','Rescheduled '+rName+' · '+date+' → '+ndv+' (weather)','Reschedule');
+    bkV2AddHistory(bk,'weather','Rescheduled '+rName+' · '+date+' → '+ndv+' ('+_R.en+')','Reschedule');
   } else {
-    bk.status='cancelled_weather'; bk.cancelReason='weather'; bk.cancelledAt=new Date().toISOString();
+    bk.status='cancelled_weather'; bk.cancelReason=_rk; bk.cancelledAt=new Date().toISOString();
     if(out==='refund'){ if(inv&&paid>0) SB_PAYMENTS.push({id:'pay_r'+Date.now()+Math.random().toString(36).slice(2,5),invoiceId:inv.id,agentId:bk.agentId,amount:-Math.abs(paid),method:'refund',date:new Date().toISOString(),type:'refund'}); if(inv&&typeof acctVoidInvoice==='function') acctVoidInvoice(inv.id); bk.refund={amount:paid,status:'due'}; }
     else if(out==='credit'){ if(bk.agentId&&paid>0&&typeof acctCreateDeposit==='function') acctCreateDeposit(bk.agentId,paid,'transfer','Weather-cancel '+(bk.code||bk.id)); if(inv&&typeof acctVoidInvoice==='function') acctVoidInvoice(inv.id); }
     else { if(inv&&typeof acctVoidInvoice==='function') acctVoidInvoice(inv.id); }
-    bkV2AddHistory(bk,'weather','Cancelled '+rName+' · '+date+' (weather) · '+(out==='refund'?('Refund ฿'+Math.round(paid).toLocaleString()):out==='credit'?('Kept as credit ฿'+Math.round(paid).toLocaleString()):'No refund'), (out==='refund'?'Refund':out==='credit'?'Credit':'Cancel'));
+    bkV2AddHistory(bk,'weather','Cancelled '+rName+' · '+date+' ('+_R.en+') · '+(out==='refund'?('Refund ฿'+Math.round(paid).toLocaleString()):out==='credit'?('Kept as credit ฿'+Math.round(paid).toLocaleString()):'No refund'), (out==='refund'?'Refund':out==='credit'?'Credit':'Cancel'));
   }
-  bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome=out; bk.weatherResolve.resolvedAt=new Date().toISOString();
+  bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome=out; bk.weatherResolve.resolvedAt=new Date().toISOString(); bk.weatherResolve.by=laBy();
   if(typeof sbPaymentsPersist==='function') sbPaymentsPersist();
   if(typeof acctPersistBookings==='function') acctPersistBookings();
   bkV2Render(); if(pfx!=='wxr-') bkV2WeatherPanel(routeId,date);
 }
+/* ══ §tripCxl · โค้ดหลัก ══════════════════════════════════════════════════════════════════════ */
+var TCX_R={
+  weather:{th:'อากาศ', en:'Weather', ic:'☁', sub:'คลื่นลม · ท่าปิด', bg:'#E6F1FB', fg:'#0B4F7A', bd:'#BBD7F0'},
+  minpax: {th:'ไม่ถึงคุ้มทุน', en:'Below break-even', ic:'⊘', sub:'คนไม่พอออกรอบ', bg:'#F1EFFB', fg:'#4F3EA3', bd:'#CFC6F2'},
+  boat:   {th:'เรือเสีย / ไม่มีเรือ', en:'No boat', ic:'⚙', sub:'ซ่อม · ติดงานอื่น', bg:'#F4F1EA', fg:'#6B5B3A', bd:'#E2D8C2'},
+  other:  {th:'อื่นๆ', en:'Other', ic:'✕', sub:'ระบุในหมายเหตุ', bg:'#FBE4E0', fg:'#A32D2D', bd:'#E89A92'}
+};
+var TCX_WARN_DAYS=3;
+function tcxRec(rid,ds){ return (SB_WEATHER_CLOSURES||[]).find(x=>x&&x.routeId===rid&&x.date===ds)||null; }
+function tcxReason(rid,ds){ const c=tcxRec(rid,ds); const k=(c&&c.reason)||'weather'; return TCX_R[k]?k:'other'; }
+function tcxCan(){ return (typeof window.laCanAct!=='function') || window.laCanAct('act-tripcxl'); }
+function tcxRName(rid){ return ((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===rid))||{}).name||rid; }
+function tcxPaxOf(bk, rid, ds){ return (bk.trips||[]).filter(t=>t.routeId===rid&&t.date===ds).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0); }
+/* ภาพ ณ ตอนยุบ · blob key trip_cxl_snap (JSON string) · { 'rid|ds': {pax,bk,ad,chd,byAg,be,by,at,before,reason,log,undone} } */
+var _tcxSnapPend=null;
+function tcxSnapAll(){ try{ const raw=laBlob().trip_cxl_snap; if(typeof raw==='string'&&raw){ const o=JSON.parse(raw); if(o&&typeof o==='object') return o; } }catch(_){} return {}; }
+function tcxSnapOf(rid,ds){ const k=rid+'|'+ds; if(_tcxSnapPend&&_tcxSnapPend[k]) return _tcxSnapPend[k]; return tcxSnapAll()[k]||null; }
+function tcxSnapPutLater(k, v){ _tcxSnapPend=_tcxSnapPend||{}; _tcxSnapPend[k]=v; }
+function tcxSnapFlush(){
+  if(!_tcxSnapPend) return;
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ _tcxSnapPend=null; return; }
+  try{ const all=tcxSnapAll(); Object.keys(_tcxSnapPend).forEach(k=>{ all[k]=_tcxSnapPend[k]; }); const d=laBlob(); d.trip_cxl_snap=JSON.stringify(all); laBlobSave(); }
+  catch(e){ console.warn('[tripCxl] snapshot save failed', e); }
+  _tcxSnapPend=null;
+}
+/* คุ้มทุน · ตัวเดียวกับ Trip P&L / Executive Board (pxTrip ต่อลำ · รวมทุกลำของโปรแกรมวันนั้น) */
+var _tcxBeMemo=null;
+function tcxBE(rid, ds){
+  if(!_tcxBeMemo){ _tcxBeMemo={}; Promise.resolve().then(()=>{ _tcxBeMemo=null; }); }
+  const k=rid+'|'+ds; if(k in _tcxBeMemo) return _tcxBeMemo[k];
+  let v=0; try{ const day=(typeof TRIPS!=='undefined'&&TRIPS[ds])||{};
+    Object.keys(day).forEach(bid=>{ const op=day[bid]; if(!op||op.route!==rid) return; const x=(typeof pxTrip==='function')?pxTrip(ds,bid):null; if(x&&x.be) v+=(+x.be||0); }); }catch(_){}
+  _tcxBeMemo[k]=v; return v;
+}
+function tcxSnapNow(rid, ds){
+  const S={pax:0,bk:0,ad:0,chd:0,byAg:{},be:0,by:laBy(),at:new Date().toISOString(),before:null};
+  (SB_BOOKINGS||[]).forEach(bk=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    let p=0, a=0, c=0;
+    (bk.trips||[]).forEach(t=>{ if(t.routeId!==rid||t.date!==ds||t.bookingMode==='charter') return;
+      const P=t.pax||{}; p+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(P):0;
+      a+=(typeof bkV2PaxTot==='function')?bkV2PaxTot(P,'ad'):0; c+=(typeof bkV2PaxTot==='function')?bkV2PaxTot(P,'chd'):0; });
+    if(!p) return;
+    S.pax+=p; S.ad+=a; S.chd+=c; S.bk++;
+    const ag=(typeof sbGetAgent==='function'&&bk.agentId)?((sbGetAgent(bk.agentId)||{}).name||'B2C'):'B2C';
+    S.byAg[ag]=(S.byAg[ag]||0)+p;
+  });
+  S.be=tcxBE(rid, ds);
+  try{ const t0=new Date((typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10))+'T12:00:00'), t1=new Date(ds+'T12:00:00'); S.before=Math.round((t1-t0)/86400000); }catch(_){}
+  return S;
+}
+/* ผลใบจอง · ตัวเลือก */
+function tcxOutOpts(paid){
+  return '<option value="reschedule">Reschedule</option><option value="move">Move program (same day)</option><option value="refund">Refund</option>'
+    +'<option value="credit" '+(paid>0?'':'disabled')+'>Credit</option><option value="cancel">Cancel</option>';
+}
+/* โปรแกรมปลายทาง · ท่าเดียวกัน วันเดียวกัน ยังเปิดอยู่ ไม่ถูกยกเลิก มีเรือขายที่นั่ง */
+function tcxMoveTargets(rid, ds){
+  const R=(typeof ROUTES!=='undefined'?ROUTES:[]), me=R.find(r=>r.id===rid)||{}, out=[];
+  R.forEach(r=>{
+    if(!r||r.id===rid) return;
+    if((r.pier||'')!==(me.pier||'')) return;
+    try{ const st=(typeof getDayStatus==='function')?getDayStatus(r,ds):null; if(st&&st.type==='closed') return; }catch(_){}
+    if(bkV2IsWeatherClosed(r.id,ds)) return;
+    let al=null; try{ al=(typeof getAllotment==='function')?getAllotment(r.id,ds):null; }catch(_){}
+    if(!al||!al.hasAllotment) return;
+    out.push({id:r.id, name:r.name||r.id, free:Math.max(0,+al.seatsAvailable||0), time:((r.times||[])[0]||'')});
+  });
+  return out;
+}
+function tcxMoveSel(pfx, bkId){
+  const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const wr=bk&&bk.weatherResolve; if(!wr) return '';
+  const p=String(wr.event||'').split('|'), T=tcxMoveTargets(p[0],p[1]), pax=tcxPaxOf(bk,p[0],p[1]);
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const small=(pfx==='wxr-');
+  return '<select id="'+pfx+'mv-'+bkId+'" style="display:none;height:'+(small?'24':'30')+'px;font-size:'+(small?'9.5':'11')+'px;font-family:inherit;border:1px solid #CFC6F2;border-radius:6px;padding:1px 4px;background:#F4F1FD;max-width:'+(small?'190':'260')+'px">'
+    +(T.length?T.map(t=>'<option value="'+esc(t.id)+'"'+(t.free<pax?' style="color:#A32D2D"':'')+'>'+esc((t.time?t.time+' · ':'')+t.name)+' · free '+t.free+'</option>').join(''):'<option value="">No other program running this day</option>')
+    +'</select>';
+}
+/* ย้ายโปรแกรม 1 ใบ · ใช้ทั้งกดทีละใบ และ "ใช้กับทั้งหมด" */
+function tcxMoveOne(bk, rid, ds, nr, ask){
+  if(!nr || nr===rid){ if(ask) alert('Pick the program to move this booking to.'); return false; }
+  const pax=tcxPaxOf(bk,rid,ds);
+  let al=null; try{ al=getAllotment(nr,ds); }catch(_){}
+  const free=al?Math.max(0,+al.seatsAvailable||0):0;
+  if(ask && al && al.hasAllotment && free<pax && !confirm('Only '+free+' seat(s) free on '+tcxRName(nr)+' for '+pax+' guest(s).\nMove anyway?')) return false;
+  const _R=TCX_R[tcxReason(rid,ds)]||TCX_R.weather;
+  if(typeof bkOpsClear==='function') bkOpsClear(bk, ds);   /* เรือ/รถ/เช็คอินของโปรแกรมเดิมไม่ใช้แล้ว */
+  let oldPt='', newPt='';
+  (bk.trips||[]).forEach(t=>{ if(t.routeId===rid && t.date===ds){ oldPt=t.pickupTime||''; t.routeId=nr;
+    try{ const pt=(typeof bkV2GetPickupTime==='function')?bkV2GetPickupTime(nr, bk.pickupAreaId, ds):''; if(pt){ t.pickupTime=pt; newPt=pt; } }catch(_){} } });
+  bk.weatherResolve=bk.weatherResolve||{event:rid+'|'+ds};
+  if(bk.weatherResolve.status==='awaiting'){ bk.weatherResolve.notifiedAt=new Date().toISOString(); }
+  bk.weatherResolve.newRoute=nr; bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome='move';
+  bk.weatherResolve.resolvedAt=new Date().toISOString(); bk.weatherResolve.by=laBy();
+  bkV2AddHistory(bk,'weather','Moved '+tcxRName(rid)+' → '+tcxRName(nr)+' · '+ds+' ('+_R.en+') · same day, same price'
+    +(newPt&&newPt!==oldPt?(' · pickup '+(oldPt||'—')+' → '+newPt):''),'Reschedule');
+  return true;
+}
+function tcxBulkMove(rid, ds){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const nr=(document.getElementById('tcxb-'+rid)||{}).value||'';
+  if(!nr){ alert('Pick the program to move the bookings to.'); return; }
+  const L=bkV2WeatherEventBookings(rid,ds).filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
+  if(!L.length) return;
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,rid,ds),0);
+  let al=null; try{ al=getAllotment(nr,ds); }catch(_){}
+  const free=al?Math.max(0,+al.seatsAvailable||0):0;
+  if(!confirm('Move '+L.length+' booking(s) · '+pax+' guest(s) to '+tcxRName(nr)+' on '+ds+'?'+(al&&al.hasAllotment&&free<pax?('\n\nOnly '+free+' seat(s) free there.'):''))) return;
+  L.forEach(b=>tcxMoveOne(b, rid, ds, nr, false));
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  if(typeof bkV2Render==='function') bkV2Render();
+}
+function tcxGoByTrip(rid, ds){
+  try{ const el=document.querySelector('.nav-item[data-view="booking"]'); if(el && typeof nav==='function' && !el.classList.contains('active')) nav(el); }catch(_){}
+  try{ _bkV2.tab='bytrip'; _bkV2.detailId=null; }catch(_){}
+  if(typeof bkV2Tab2PickDay==='function') bkV2Tab2PickDay(ds);
+}
+function tcxByTripBanner(rid, ds){
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const k=tcxReason(rid,ds), R=TCX_R[k], S=tcxSnapOf(rid,ds), note=bkV2WeatherNote(rid,ds);
+  const L=bkV2WeatherEventBookings(rid,ds), open=L.filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
+  const T=tcxMoveTargets(rid,ds);
+  const snapTxt = S ? (S.pax+(S.be>0?(' / '+S.be):'')+' pax · '+esc(S.by||'')+' '+esc(String(S.at||'').slice(5,16).replace('T',' '))) : '';
+  const bulk = (open.length && T.length) ? ('<select id="tcxb-'+esc(rid)+'" onclick="event.stopPropagation()" style="height:30px;font-size:11.5px;font-family:inherit;border:1px solid '+R.bd+';border-radius:8px;padding:2px 6px;background:#fff;max-width:240px">'
+      + T.map(t=>'<option value="'+esc(t.id)+'">'+esc((t.time?t.time+' · ':'')+t.name)+' · free '+t.free+'</option>').join('') + '</select>'
+      + '<button onclick="event.stopPropagation();tcxBulkMove(\''+rid+'\',\''+ds+'\')" style="background:#fff;border:1px solid '+R.fg+';color:'+R.fg+';font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap">Move all '+open.length+'</button>') : '';
+  return '<div style="background:'+R.bg+';border:1.5px solid '+R.bd+';border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    + '<span style="font-size:20px;color:'+R.fg+'">'+R.ic+'</span>'
+    + '<div style="flex:1;min-width:220px"><div style="font-size:13px;font-weight:700;color:'+R.fg+'">Trip cancelled · '+R.en+' <span style="font-weight:600">· '+R.th+'</span></div>'
+    + '<div style="font-size:11px;color:'+R.fg+';opacity:.85;margin-top:1px">'+(note?esc(note)+' · ':'')+(snapTxt?snapTxt+' · ':'')+'resolve booking by booking</div></div>'
+    + (open.length?('<span style="font-size:11px;font-weight:700;background:#FBF1DF;color:#7A4300;border-radius:8px;padding:3px 8px">To resolve '+open.length+' / '+L.length+'</span>'):'')
+    + bulk
+    + '<button onclick="event.stopPropagation();bkV2WeatherPanel(\''+rid+'\',\''+ds+'\')" style="background:'+R.fg+';color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>';
+}
+/* ตาราง Boat Operation · ช่องที่ยกเลิกรอบ */
+function tcxCellHtml(rid, ds){
+  const k=tcxReason(rid,ds), R=TCX_R[k], S=tcxSnapOf(rid,ds);
+  return {bg:R.bg, bd:R.bd, inner:'<div style="font-size:13px;line-height:1;color:'+R.fg+'">'+R.ic+(S?(' <b style="font-size:11px">'+S.pax+'</b>'):'')+'</div><div style="font-size:7px;color:'+R.fg+';font-weight:800;line-height:1;margin-top:2px;letter-spacing:.02em">'+(k==='minpax'?'BELOW B/E':R.en.toUpperCase())+'</div>',
+    title:'Trip cancelled · '+R.en+' ('+R.th+')'+(bkV2WeatherNote(rid,ds)?(' · '+bkV2WeatherNote(rid,ds)):'')+(S?(' · '+S.pax+' pax'+(S.be>0?(' / break-even '+S.be):'')+' · by '+(S.by||'')+' '+String(S.at||'').slice(0,16).replace('T',' ')):'')};
+}
+/* ยังไม่ถึงคุ้มทุน · เตือนภายใน 3 วัน · null = ไม่ต้องเตือน */
+function tcxBelow(rid, ds, al){
+  try{
+    const t0=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10));
+    if(ds<t0) return null;
+    const days=Math.round((new Date(ds+'T12:00:00')-new Date(t0+'T12:00:00'))/86400000);
+    if(days>TCX_WARN_DAYS) return null;
+    if(bkV2IsWeatherClosed(rid,ds)) return null;
+    al=al||((typeof getAllotment==='function')?getAllotment(rid,ds):null);
+    if(!al||!al.hasAllotment) return null;
+    const be=tcxBE(rid,ds); if(!(be>0)) return null;
+    const bk=+al.seatsConsumed||0; if(bk>=be) return null;
+    return {rid:rid, ds:ds, be:be, bk:bk, days:days};
+  }catch(_){ return null; }
+}
+function tcxBelowList(routes){
+  const out=[], t0=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10));
+  for(let i=0;i<=TCX_WARN_DAYS;i++){ const d=new Date(t0+'T12:00:00'); d.setDate(d.getDate()+i);
+    const ds=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10);
+    (routes||[]).forEach(r=>{ try{ const st=(typeof getDayStatus==='function')?getDayStatus(r,ds):null; if(st&&st.type==='closed') return; }catch(_){}
+      const x=tcxBelow(r.id,ds); if(x) out.push(x); }); }
+  return out;
+}
+function tcxBelowBanner(routes){
+  const L=tcxBelowList(routes); if(!L.length) return '';
+  const fmt=ds=>{ const d=new Date(ds+'T12:00:00'); return d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; };
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FDF3F2;border:1px solid #F3B7B2;border-radius:12px;padding:8px 12px;margin:0 0 10px;font-size:12px">'
+    +'<b style="color:#A32D2D;white-space:nowrap">&#9888; '+L.length+' trip'+(L.length===1?'':'s')+' below break-even · next '+TCX_WARN_DAYS+' days</b>'
+    + L.slice(0,6).map(x=>'<span style="cursor:pointer;white-space:nowrap" onclick="bop2SelectCell(\''+x.rid+'\',\''+x.ds+'\')">'+esc(tcxRName(x.rid))+' '+fmt(x.ds)+' · <b>'+x.bk+'/'+x.be+'</b></span>').join('<span style="color:#E2B5B0">·</span>')
+    + (L.length>6?('<span style="color:#8A8F9C">+'+(L.length-6)+' more</span>'):'')+'</div>';
+}
+/* ── ประวัติการยกเลิกรอบ ── */
+var _tcxH={ mon:'', r:'', p:'' };
+function tcxHistRows(){
+  const snaps=tcxSnapAll(), seen={}, rows=[];
+  const add=(k,c,S)=>{ if(seen[k]) return; seen[k]=1; const p=k.split('|'), rid=p[0], ds=p[1]; const r=((typeof ROUTES!=='undefined'&&ROUTES.find(x=>x.id===rid))||{});
+    const L=(SB_BOOKINGS||[]).filter(b=>b&&b.weatherResolve&&b.weatherResolve.event===k), oc={};
+    L.forEach(b=>{ const o=b.weatherResolve.status==='resolved'?(b.weatherResolve.outcome||'resolved'):'open'; oc[o]=(oc[o]||0)+1; });
+    rows.push({k:k, rid:rid, ds:ds, name:r.name||rid, pier:r.pier||'', reason:(c&&c.reason)||(S&&S.reason)||'weather', note:(c&&c.note)||'', S:S||null, live:!!c, oc:oc, n:L.length}); };
+  (SB_WEATHER_CLOSURES||[]).forEach(c=>{ if(c&&c.routeId&&c.date){ const k=c.routeId+'|'+c.date; add(k,c,snaps[k]); } });
+  Object.keys(snaps).forEach(k=>add(k,null,snaps[k]));
+  rows.forEach(x=>{ if(!TCX_R[x.reason]) x.reason='other'; });
+  return rows.sort((a,b)=>String(b.ds).localeCompare(String(a.ds)));
+}
+function tcxHistOpen(){ if(!_tcxH.mon) _tcxH.mon=String(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString()).slice(0,7); tcxHistRender(); }
+function tcxHistClose(){ const o=document.getElementById('tcx-hist'); if(o) o.remove(); }
+function tcxHistSet(k,v){ _tcxH[k]=v||''; tcxHistRender(); }
+function tcxHistFiltered(){ return tcxHistRows().filter(x=>(!_tcxH.mon||String(x.ds).slice(0,7)===_tcxH.mon)&&(!_tcxH.r||x.reason===_tcxH.r)&&(!_tcxH.p||x.pier===_tcxH.p)); }
+function tcxHistRender(){
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const L=tcxHistFiltered(), OL={reschedule:'rescheduled',move:'moved',refund:'refunded',credit:'credit',cancel:'cancelled',open:'to resolve',resolved:'resolved'};
+  const sum=(f)=>L.filter(f).reduce((s,x)=>s+((x.S&&x.S.pax)||0),0);
+  const byR={}; L.forEach(x=>{ byR[x.reason]=(byR[x.reason]||0)+1; });
+  const mp=L.filter(x=>x.reason==='minpax'), mpMoved=mp.reduce((s,x)=>s+(x.oc.move||0),0), mpN=mp.reduce((s,x)=>s+x.n,0);
+  const freq={}; mp.forEach(x=>{ freq[x.name]=(freq[x.name]||0)+1; }); const top=Object.keys(freq).sort((a,b)=>freq[b]-freq[a])[0]||'';
+  const pierNm=p=>{ try{ return (typeof laPierName==='function'&&laPierName(p))||p||'—'; }catch(_){ return p||'—'; } };
+  const sel=(k,opts)=>'<select onchange="tcxHistSet(\''+k+'\',this.value)" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;background:#fff">'+opts.map(o=>'<option value="'+esc(o[0])+'"'+(_tcxH[k]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+  const kp=(k,v,d,st)=>'<div style="border-radius:12px;padding:10px 13px;border:1px solid '+(st||'#E6E8EE')+';background:#fff"><div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#5F5F58;text-transform:uppercase">'+k+'</div><div style="font-family:\'DM Mono\',monospace;font-size:24px;font-weight:800">'+v+'</div><div style="font-size:11px;color:#6B7489">'+d+'</div></div>';
+  const rowsH=L.length?L.map(x=>{ const R=TCX_R[x.reason], S=x.S;
+      const oc=Object.keys(x.oc).map(o=>x.oc[o]+' '+(OL[o]||o)).join(' · ')||'—';
+      return '<tr><td style="font-family:\'DM Mono\',monospace">'+esc(x.ds)+'</td><td><b>'+esc(x.name)+'</b><div style="font-size:11px;color:#8A8F9C">'+esc(pierNm(x.pier))+(x.note?(' · '+esc(x.note)):'')+'</div></td>'
+        +'<td><span style="display:inline-block;background:'+R.bg+';color:'+R.fg+';border:1px solid '+R.bd+';border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap">'+R.ic+' '+esc(R.th)+'</span>'+(x.live?'':'<div style="font-size:10.5px;color:#0F7A5A;margin-top:2px">re-opened'+(S&&S.undone?(' · '+esc(S.undone.by||'')):'')+'</div>')+'</td>'
+        +'<td style="font-family:\'DM Mono\',monospace">'+(S?(S.pax+(S.be>0?(' / '+S.be):'')):'—')+'</td><td>'+esc(oc)+'</td>'
+        +'<td style="font-size:11.5px;color:#6B7489">'+(S?(esc(S.by||'')+' · '+esc(String(S.at||'').slice(0,16).replace('T',' '))+(S.before!=null?(' · '+S.before+'d before'):'')):'(before this log)')+'</td></tr>'; }).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#8A8F9C;padding:24px">No cancelled trips for this filter</td></tr>';
+  let o=document.getElementById('tcx-hist');
+  if(!o){ o=document.createElement('div'); o.id='tcx-hist'; o.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.5);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+    o.addEventListener('click',e=>{ if(e.target===o) tcxHistClose(); }); document.body.appendChild(o); }
+  const piers=(typeof PO_PIERS!=='undefined'?PO_PIERS.map(p=>p.k):['tublamu','panwa','ranong']);
+  const mons=[]; { const d=new Date(); for(let i=-12;i<=2;i++){ const x=new Date(d.getFullYear(), d.getMonth()+i, 1); mons.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')); } }
+  o.innerHTML='<div style="width:1180px;max-width:100%;background:#F6F7F9;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.4);color:#0F1B3D;overflow:hidden">'
+    +'<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;background:#fff;border-bottom:1px solid #E6E8EE;flex-wrap:wrap"><div style="font-size:17px;font-weight:800">Cancelled trips · history</div>'
+    + sel('mon',[['','All months']].concat(mons.reverse().map(m=>[m,m]))) + sel('r',[['','All reasons']].concat(Object.keys(TCX_R).map(k=>[k,TCX_R[k].en]))) + sel('p',[['','All piers']].concat(piers.map(p=>[p,pierNm(p)])))
+    +'<button onclick="tcxHistCsv()" style="margin-left:auto;height:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-family:inherit;font-weight:700;font-size:12.5px;padding:0 12px;cursor:pointer">Export CSV</button>'
+    +'<button onclick="tcxHistClose()" style="height:32px;width:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-size:16px;cursor:pointer">&times;</button></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 18px">'
+    + kp('Cancelled trips', L.length, sum(()=>true)+' pax affected')
+    + kp('Below break-even', byR.minpax||0, sum(x=>x.reason==='minpax')+' pax · moved '+mpMoved+' of '+mpN+' booking(s)', '#CFC6F2')
+    + kp('Weather · boat · other', (byR.weather||0)+(byR.boat||0)+(byR.other||0), 'weather '+(byR.weather||0)+' · boat '+(byR.boat||0)+' · other '+(byR.other||0))
+    + '<div style="border-radius:12px;padding:10px 13px;border:1px solid #E6E8EE;background:#fff"><div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#5F5F58;text-transform:uppercase">Most often below break-even</div><div style="font-weight:800;margin-top:6px">'+(top?esc(top):'—')+'</div><div style="font-size:11px;color:#6B7489">'+(top?(freq[top]+' time(s)'):'')+'</div></div></div>'
+    +'<div style="margin:0 18px 18px;background:#fff;border:1px solid #E6E8EE;border-radius:12px;overflow:hidden"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>'
+    + ['Trip date','Program','Reason','Pax / B-E','Bookings','Cancelled by'].map(h=>'<th style="text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#5F5F58;padding:8px 12px;background:#FAFBFC;border-bottom:1px solid #E6E8EE">'+h+'</th>').join('')
+    +'</tr></thead><tbody>'+rowsH.replace(/<td/g,'<td style="padding:8px 12px;border-bottom:1px solid #F0F1F4;vertical-align:top"').replace(/<td style="padding:8px 12px;border-bottom:1px solid #F0F1F4;vertical-align:top" style="/g,'<td style="padding:8px 12px;border-bottom:1px solid #F0F1F4;vertical-align:top;')+'</tbody></table></div></div>';
+}
+function tcxHistCsv(){
+  const L=tcxHistFiltered(), q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const lines=[['trip_date','program','pier','reason','note','pax','break_even','bookings','outcomes','cancelled_by','cancelled_at','days_before','reopened'].join(',')];
+  L.forEach(x=>{ const S=x.S||{}; lines.push([x.ds,x.name,x.pier,TCX_R[x.reason].en,x.note,S.pax,S.be,x.n,Object.keys(x.oc).map(o=>o+':'+x.oc[o]).join(' '),S.by,S.at,S.before,x.live?'':'yes'].map(q).join(',')); });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}), a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='cancelled_trips_'+(_tcxH.mon||'all')+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
 // Inline manifest cell (By-trip-date) — shown only when trip is weather-closed · mirrors the modal's per-booking workflow
 function bkV2WeatherInlineCell(bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const wr=bk&&bk.weatherResolve;
   if(!wr) return '<span class="t2-dim">&mdash;</span>';
   const st=wr.status;
   if(st==='resolved'){
-    const oL={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled'};
-    const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):'';
+    const oL={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
+    const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):(wr.outcome==='move'&&wr.newRoute)?(' &rarr; '+tcxRName(wr.newRoute)):'';
     return '<span style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap">&#10003; '+(oL[wr.outcome]||wr.outcome)+ex+'</span>';
   }
   if(st==='notified'){
@@ -39322,9 +39602,10 @@ function bkV2WeatherInlineCell(bkId){
     return '<div style="display:flex;flex-direction:column;gap:3px;min-width:128px">'
       +'<span style="font-size:8px;font-weight:700;color:#7A4A00;letter-spacing:.02em">Notified · awaiting</span>'
       +'<div style="display:flex;gap:3px;align-items:center">'
-      +'<select id="wxr-out-'+bkId+'" onchange="bkV2WeatherToggleDate(\''+bkId+'\',\'wxr-\')" style="height:24px;font-size:9.5px;font-family:inherit;border:1px solid var(--border);border-radius:5px;padding:1px 3px;background:#fff;flex:1;min-width:0"><option value="reschedule">Reschedule</option><option value="refund">Refund</option><option value="credit" '+(paid>0?'':'disabled')+'>Credit</option><option value="cancel">Cancel</option></select>'
+      +'<select id="wxr-out-'+bkId+'" onchange="bkV2WeatherToggleDate(\''+bkId+'\',\'wxr-\')" style="height:24px;font-size:9.5px;font-family:inherit;border:1px solid var(--border);border-radius:5px;padding:1px 3px;background:#fff;flex:1;min-width:0">'+tcxOutOpts(paid)+'</select>'
       +'<button onclick="bkV2WeatherResolveOne(\''+bkId+'\',\'wxr-\')" style="height:24px;background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:9.5px;font-weight:700;padding:0 8px;border-radius:5px;cursor:pointer;white-space:nowrap">Apply</button></div>'
       +'<input type="date" id="wxr-date-'+bkId+'" value="'+next+'" style="height:22px;font-size:9px;border:1px solid var(--border);border-radius:5px;padding:1px 4px">'
+      +tcxMoveSel('wxr-',bkId)
       +'</div>';
   }
   // awaiting
@@ -56007,7 +56288,7 @@ function bkV2RenderTab2(){
     return `
       <div class="t2-trip t2-trip-variant${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}${_notRun?' t2-trip-closed':''}" style="--fam:${famColor}">
         ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t"><span class="t2-notrun-nm" data-notrun-nm="1">${esc(route?.name||rid)}</span><span class="t2-notrun-tag">${laT('ไม่ออกวันนี้')}</span><span class="t2-notrun-why">${esc(_notRunWhy)}</span></div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
-        ${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?`<div style="background:#FCEBEB;border:1.5px solid #E89A92;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">&#9928;</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#A32D2D">This trip is cancelled due to weather</div><div style="font-size:11px;color:#8a3a30;margin-top:1px">${bkV2WeatherNote(rid,date)?esc(bkV2WeatherNote(rid,date)):'Cannot depart'} · resolve booking by booking</div></div><button onclick="event.stopPropagation();bkV2WeatherPanel('${rid}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>`:''}
+        ${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?tcxByTripBanner(rid,date):''}
         <div class="t2-tripcard">
         ${/* §btBand · ชื่อทริปย้ายลงไปเป็นแถบแรกของตารางแล้ว */''}
         <div class="t2-triphead" hidden>
