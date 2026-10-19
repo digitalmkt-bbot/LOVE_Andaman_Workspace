@@ -12,8 +12,9 @@
    bridge (b2dBridge) are the server's. The detail pages keep legacy's drawing; their period figures (b2dSum of one agent / owner / market, and of
    an agent on a route group) and the agent page's per-group revenue come from the entity's report. A page is drawn with legacy's lines until
    the answer is in (or when the server does not know the entity).
-   Still the browser's (docs/walk/w6-a.md): the stacked monthly chart (the report has monthly totals, not the split by route or by agent), the
-   agent page's bookings / pax per route group, "routes sent", and its list of recent bookings.
+   §w9: the stacked monthly chart (monthly[].by_family on the agent page, by_agent on the owner and market pages), the agent page's bookings / pax
+   per route group (by_family[].bookings / pax summed over the group's families: a booking on two families of one group counts twice), "routes sent"
+   (routes_sent) and the list of recent bookings (recent[]) are the server's too.
    Classic script, after 73-ops-b2b-dash.js and 85-ops-b2b-group-w5.js.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -128,7 +129,9 @@
       if(f && f.fam){
         var base = Object.assign({}, orig.apply(this, args)), cur = 0, prev = 0;
         (ctx.J.by_family || []).forEach(function(x){ if(groupOfFamilyName(x.family) === f.fam){ cur += n(x.current); prev += n(x.previous); } });
-        base.rev = isCur ? cur : prev;      // revenue of the union of its families: the server's; pax / bookings of the group stay the lines'
+        base.rev = isCur ? cur : prev;      // revenue of the union of its families: the server's
+        if(isCur){ var gp = 0, gb = 0, any = false; (ctx.J.by_family || []).forEach(function(x){ if(groupOfFamilyName(x.family) === f.fam && x.pax != null){ any = true; gp += n(x.pax); gb += n(x.bookings); } });
+          if(any){ base.pax = gp; base.bookings = gb; } }      // §w9 · pax / bookings of the group: the server's per-family figures added up
         return base;
       }
     }
@@ -143,6 +146,29 @@
       try{ return orig.apply(this, args); } finally { ctx = keep; }
     });
   }
+  /* §w9 · the stacked monthly chart: the server's month stacks drawn by legacy's own chart (it wants trip lines: one synthetic line per month and stack) */
+  wrap('b2dMonthlyHtml', function(orig, L, keyFn, colorFn){
+    var J = ctx && ctx.J, args = [].slice.call(arguments, 1), k = (typeof _b2d !== 'undefined' && _b2d) ? _b2d.basis : null;
+    if(!J || !k || !Array.isArray(J.monthly) || !J.monthly.length) return orig.apply(this, args);
+    var field = ctx.kind === 'agent' ? 'by_family' : 'by_agent';
+    if(!J.monthly.every(function(m){ return m && m[field] && typeof m[field] === 'object'; })) return orig.apply(this, args);
+    var names = {}; (J.agents || []).forEach(function(a){ names[a.agent_id] = a.name; });
+    var rec = (typeof SB_AGENTS !== 'undefined') ? SB_AGENTS : [];
+    function label(key){ if(field === 'by_family') return key; if(names[key]) return names[key]; var r = rec.filter(function(a){ return a.id === key; })[0]; return (r && r.name) || key; }
+    var lines = [];
+    J.monthly.forEach(function(m){ Object.keys(m[field]).forEach(function(key){ var l = { rev: n(m[field][key]), _s: label(key) }; l[k] = m.month + '-01'; lines.push(l); }); });
+    return orig.call(this, lines, function(l){ return l._s; }, colorFn);
+  });
+  /* §w9 · the agent page's "Routes sent" count and its latest booking lines (legacy's own shape: bd, td, fam, pax, rev) */
+  wrap('b2dRoutesSent', function(orig, count){
+    var J = ctx && ctx.kind === 'agent' && ctx.J;
+    return J && J.routes_sent != null ? n(J.routes_sent) : orig.call(this, count);
+  });
+  wrap('b2dRecentLines', function(orig, lines){
+    var J = ctx && ctx.kind === 'agent' && ctx.J;
+    if(!J || !Array.isArray(J.recent)) return orig.call(this, lines);
+    return J.recent.map(function(r){ return { bd: r.booking_date, td: r.travel_date, fam: r.family, pax: n(r.pax), rev: n(r.revenue) }; });
+  });
   detail('b2dAgentDetail', 'agent');
   detail('b2dStaffDetail', 'staff');
   detail('b2dMarketDetail', 'market');

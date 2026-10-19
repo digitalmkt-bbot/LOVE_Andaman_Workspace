@@ -48003,6 +48003,8 @@ function b2dTabClass(agAll,tab){
 function b2dBackBar(title,sub){ return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button onclick="b2dBack()" style="border:1px solid #E2E8F0;background:#fff;color:#475569;border-radius:12px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">‹ Back</button><div><div style="font-weight:800;font-size:17px;letter-spacing:-.01em;color:'+B2D_UI.ink+'">'+title+'</div>'+(sub?'<div style="font-size:11px;color:'+B2D_UI.mut+';margin-top:1px">'+sub+'</div>':'')+'</div></div>'; }
 function b2dKpiRow(items){ return '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">'+items.map(i=>'<div style="'+B2D_UI.card+'flex:1;min-width:140px;padding:14px 16px"><div style="font-size:10.5px;font-weight:600;color:'+B2D_UI.mut+'">'+i[0]+'</div><div style="font-size:18px;font-weight:800;letter-spacing:-.01em;margin-top:3px;color:'+B2D_UI.ink+';font-variant-numeric:tabular-nums">'+i[1]+'</div>'+(i[2]?'<div style="font-size:11px;margin-top:3px">'+i[2]+'</div>':'')+'</div>').join('')+'</div>'; }
 
+function b2dRoutesSent(n){ return n; }   /* §w9 · ops mode: the entity report's routes_sent */
+function b2dRecentLines(lines){ return lines; }   /* §w9 · ops mode: the entity report's recent[] (the latest 40 lines of the period) */
 function b2dAgentDetail(L,w,agAll,agid){
   const a=agAll.filter(x=>x.agid===agid)[0];
   const agRec=(typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).filter(x=>x.id===agid)[0];
@@ -48017,7 +48019,7 @@ function b2dAgentDetail(L,w,agAll,agid){
   const header=b2dBackBar(b2dEsc(name)+' '+b2dClsChip(a?a.cls:'stable'),
     (code?'code <b>'+b2dEsc(code)+'</b> · ':'')+'sales '+b2dOwnLink(ownId,own)+' · market '+b2dMktLink(mktCode,mkt)
     +' · <a onclick="b2dOpenAgentExt(\''+b2dEsc(agid)+'\',\''+b2dEsc(code)+'\')" style="color:#059669;cursor:pointer">↗ Open in sales system</a>');
-  const kpis=b2dKpiRow([['Revenue',b2dK(c.rev),b2dDeltaHtml(g)],['Pax',c.pax.toLocaleString()],['Bookings',c.bookings],['Routes sent',Object.keys(famsSent).length]]);
+  const kpis=b2dKpiRow([['Revenue',b2dK(c.rev),b2dDeltaHtml(g)],['Pax',c.pax.toLocaleString()],['Bookings',c.bookings],['Routes sent',b2dRoutesSent(Object.keys(famsSent).length)]]);
   const chart=b2dCard('Monthly revenue (stacked by route)',b2dMonthlyHtml(L.filter(mine),l=>l.fam,null));
   // routes table (§5.4) — per-route class reuses §4.6 at agent×route grain
   window._b2dCsvName='agent_'+(code||agid);
@@ -48032,8 +48034,8 @@ function b2dAgentDetail(L,w,agAll,agid){
   const routesCard=b2dCard('Routes sent (current period)',famRows?b2dTable([{t:'Route'},{t:'Bookings',r:1},{t:'Pax',r:1},{t:'Revenue',r:1},{t:'Δ',r:1},{t:'Class'}],famRows):'<div style="color:#999;font-size:12px">Nothing sent in this period</div>');
   // recent bookings — mockup parity: current-window trip-lines, newest first by active basis, top 40
   const k=_b2d.basis;
-  const recent=L.filter(l=>mine(l)&&l[k]&&l[k]>=w.cs&&l[k]<=w.ce)
-    .sort((x,y)=>String(y[k]||'').localeCompare(String(x[k]||''))).slice(0,40);
+  const recent=b2dRecentLines(L.filter(l=>mine(l)&&l[k]&&l[k]>=w.cs&&l[k]<=w.ce)
+    .sort((x,y)=>String(y[k]||'').localeCompare(String(x[k]||''))).slice(0,40));   /* §w9 · ops mode: the server's routes_sent / recent[] */
   const recRows=recent.map(r=>'<tr>'+b2dTd(r.bd?b2dThD(r.bd):'—')+b2dTd(r.td?b2dThD(r.td):'—')+b2dTd(b2dEsc(r.fam))+b2dTd(r.pax,1)+b2dTd(b2dB(r.rev),1)+'</tr>').join('');
   const recCard=b2dCard('Bookings in period (latest '+recent.length+')',recent.length?b2dTable([{t:'Booking date'},{t:'Travel date'},{t:'Route'},{t:'Pax',r:1},{t:'฿',r:1}],recRows):'<div style="color:#999;font-size:12px">No bookings in this period</div>');
   return header+kpis+chart+routesCard+recCard;
