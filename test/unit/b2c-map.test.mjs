@@ -266,3 +266,17 @@ test('§b2cCheck · add-on-only line: linked → info, not linked → addon_only
   assert.deepEqual(L.filter(i => i.sev === 'warn').map(i => i.code), []);
   assert.ok(L.some(i => i.code === 'addon_linked' && /VC 22433/.test(i.msg)));
 });
+
+test('v35 · LOV-9461107 · the B2C dropdown names resolve (Hong Konger was blank, so a Thai-led booking counted everyone Thai)', () => {
+  const f = map.b2cNatCode;
+  for (const [name, code] of [['Hong Konger','HK'],['Chilean','CL'],['Hungarian','HU'],['Icelandic','IS'],['New Zealander','NZ'],['Peruvian','PE'],['Scottish','GB'],['Welsh','GB']]) assert.equal(f(name), code, name);
+});
+test('v35 · LOV-9461107 · a later trip carries the traveller list, capped to its own head count minus the lead', () => {
+  const rows = [{ name: 'A', nationality: 'HK' }, { name: 'B', nationality: 'TH' }, { name: 'C', nationality: '' }];
+  const list = (pax, cap) => map.b2cPassengerList(rows, pax, cap);
+  assert.deepEqual(list({ ad_th: 2 }, true).map(p => p.name), ['A'], '2 pax = lead + 1 name');
+  assert.deepEqual(list({ ad_th: 1 }, true), [], 'lead only = no names');
+  assert.deepEqual(list({ ad_th: 4 }, true).map(p => p.name), ['A', 'B', 'C']);
+  assert.equal(list({ ad_th: 2 }, false).length, 3, 'line 0 is unchanged: the whole list');
+  assert.equal(list(null, true).length, 3, 'no counts (charter) = no cap');
+});

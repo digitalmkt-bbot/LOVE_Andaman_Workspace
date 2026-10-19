@@ -599,7 +599,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
            (dropoffSep && !dropAreaId)
              ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: isFirstLine ? b2cPassengerList(paxRows, trip.pax) : [],   /* §b2cPaxType */
+    passengers: (isFirstLine || !isTransfer) ? b2cPassengerList(paxRows, trip.pax, !isFirstLine) : [],   /* §b2cPaxType · §b2cPaxAllLines */
     addOns: addOnRows,
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
@@ -658,6 +658,8 @@ const B2C_NAT_ALIAS = {
   saudi:'SA', 'saudi arabia':'SA', irish:'IE', ireland:'IE', greek:'GR', greece:'GR',
   brazilian:'BR', brazil:'BR', mexican:'MX', mexico:'MX', 'south african':'ZA', 'south africa':'ZA',
   lao:'LA', laos:'LA', laotian:'LA', cambodian:'KH', cambodia:'KH',
+  // v35 · the B2C nationality dropdown offers these names; none of them resolved (LOV-9461107 'Hong Konger' → blank)
+  'hong konger':'HK', chilean:'CL', hungarian:'HU', icelandic:'IS', 'new zealander':'NZ', peruvian:'PE', scottish:'GB', welsh:'GB',
 };
 // ICU answers for withdrawn ISO-3166-3 codes too, and 15 country names therefore resolve to TWO
 // codes. Whichever the scan hit last used to win, which is how 'Serbia' became YU (Yugoslavia),
@@ -743,8 +745,8 @@ function b2cPassengersFromJson(itemRows) {
 }
 
 // The list is booking-level with no link back to a booking_item, so it cannot be split per trip.
-// Attach it to line 0 only — the same rule the order-level payment follows — instead of repeating
-// every traveller on each line of a multi-item order.
+// Line 0 takes the whole list. Later lines (v35, §b2cPaxAllLines) take it too, capped at their own
+// head count minus the lead, so a trip never shows more names than it has seats.
 //
 // Maps 1:1, no row dropped as "the lead": B2C's passengers[] already EXCLUDES the lead (that is
 // bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
@@ -757,12 +759,17 @@ function b2cPassengersFromJson(itemRows) {
 // Passengers: the lead takes one adult seat, then AD, CHD, INF, FOC in order) and showed CHD on
 // that same row — so the stored type now follows the same rule and the two agree. Names beyond
 // the head count stay AD, as before. No pax (charter line without counts) → AD, as before.
-function b2cPassengerList(rows, pax) {
+function b2cPassengerList(rows, pax, capToHeads) {
   if (!Array.isArray(rows) || !rows.length) return [];
   const P = pax || {};
   const n = k => Number(P[k]) || 0;
   const ad = n('ad_fr') + n('ad_th'), chd = n('chd_fr') + n('chd_th'), inf = n('inf_fr') + n('inf_th'), foc = n('foc') + n('foc_fr') + n('foc_th');
   const leadType = ad > 0 ? 'AD' : (foc > 0 ? 'FOC' : (chd > 0 ? 'CHD' : (inf > 0 ? 'INF' : 'AD')));
+  /* §b2cPaxAllLines (v35) · a later line of a multi-trip order carries the list too, but never more names than its
+     own head count leaves after the lead (a 2-pax trip takes 1 name). Without it LOV-9461107's second trip had
+     only the lead on its voucher. Line 0 is unchanged. */
+  const heads = ad + chd + inf + foc;
+  const maxNames = (capToHeads && heads > 0) ? Math.max(0, heads - 1) : Infinity;
   const queue = [];
   const push = (t, c) => { for (let i = 0; i < c; i++) queue.push(t); };
   push('AD', leadType === 'AD' ? Math.max(0, ad - 1) : ad);
@@ -772,6 +779,7 @@ function b2cPassengerList(rows, pax) {
   const out = [];
   for (const r of rows) {
     if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
+    if (out.length >= maxNames) break;
     const type = queue[out.length] || 'AD';
     out.push({ name: r.name, nationality: r.nationality, type, foc: type === 'FOC' });
   }
