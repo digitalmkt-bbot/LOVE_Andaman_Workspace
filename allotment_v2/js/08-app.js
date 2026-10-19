@@ -35024,7 +35024,18 @@ function renderTripPL(){
     try{ console.error('[P&L] render failed', err); }catch(_){}
     body='<div class="empty">Could not build this view — '+e(String(err&&err.message||err))+'</div>';
   }
+  /* §pxKeepScroll (2026-10-19) · owner "กดรายละเอียดแล้วเด้ง" · กดกางหมวดต้นทุน/ปุ่มใด ๆ แล้ววาดทั้งหน้าใหม่
+     ตำแหน่งเลื่อน (แนวตั้งของหน้า + แนวนอนของแถบ Boat detail) หายไปด้วย · จำไว้ก่อนวาดแล้ววางกลับ */
+  var _kp=[]; try{
+    var ds=document.getElementById('px-dscroll'); if(ds && ds.scrollLeft) _kp.push(['px-dscroll', ds.scrollLeft]);
+    var sc=host; while(sc && sc!==document.body && sc!==document.documentElement){ if(sc.scrollTop>0 && sc.scrollHeight>sc.clientHeight+2){ _kp.push([sc, sc.scrollTop]); break; } sc=sc.parentNode; }
+    _kp.push(['win', window.pageYOffset||document.documentElement.scrollTop||0]);
+  }catch(_){}
   host.innerHTML='<style id="pl-style">'+pxCSS()+'</style>'+pxBar(e)+body;
+  try{ _kp.forEach(function(k){
+    if(k[0]==='px-dscroll'){ var d2=document.getElementById('px-dscroll'); if(d2) d2.scrollLeft=k[1]; }
+    else if(k[0]==='win'){ if(k[1]) window.scrollTo(0,k[1]); }
+    else k[0].scrollTop=k[1]; }); }catch(_){}
 }
 
 /* §mealTrip · ของจริงรายทริป · 'YYYY-MM-DD::boatId'
