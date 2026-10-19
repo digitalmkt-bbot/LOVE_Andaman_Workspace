@@ -39326,7 +39326,8 @@ function bkV2WeatherResolveOne(bkId,pfx){
   const _rk=tcxReason(routeId,date), _R=TCX_R[_rk]||TCX_R.weather;   /* §tripCxl */
   if(out==='move'){
     const nr=(document.getElementById(pfx+'mv-'+bkId)||{}).value||'';
-    if(!tcxMoveOne(bk, routeId, date, nr, true)) return;
+    const nd=(document.getElementById(pfx+'mvd-'+bkId)||{}).value||date;
+    if(!tcxMoveOne(bk, routeId, date, nr, true, nd)) return;
   }
   else if(out==='reschedule'){
     const ndv=(document.getElementById(pfx+'date-'+bkId)||{}).value||date;
@@ -39348,7 +39349,7 @@ function bkV2WeatherResolveOne(bkId,pfx){
   bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome=out; bk.weatherResolve.resolvedAt=new Date().toISOString(); bk.weatherResolve.by=laBy();
   if(typeof sbPaymentsPersist==='function') sbPaymentsPersist();
   if(typeof acctPersistBookings==='function') acctPersistBookings();
-  bkV2Render(); if(pfx!=='wxr-') bkV2WeatherPanel(routeId,date);
+  bkV2Render(); if(pfx!=='wxr-' && pfx!=='wxd-') bkV2WeatherPanel(routeId,date);
 }
 /* ══ §tripCxl · โค้ดหลัก ══════════════════════════════════════════════════════════════════════ */
 var TCX_R={
@@ -39410,18 +39411,21 @@ function tcxOutOpts(paid){
     +'<option value="credit" '+(paid>0?'':'disabled')+'>Credit</option><option value="cancel">Cancel</option>';
 }
 /* โปรแกรมปลายทาง · ท่าเดียวกัน วันเดียวกัน ยังเปิดอยู่ ไม่ถูกยกเลิก มีเรือขายที่นั่ง */
-function tcxMoveTargets(rid, ds){
+function tcxMoveTargets(rid, ds, toDs, allPiers){
+  toDs=toDs||ds;
   const R=(typeof ROUTES!=='undefined'?ROUTES:[]), me=R.find(r=>r.id===rid)||{}, out=[];
   R.forEach(r=>{
-    if(!r||r.id===rid) return;
-    if((r.pier||'')!==(me.pier||'')) return;
-    try{ const st=(typeof getDayStatus==='function')?getDayStatus(r,ds):null; if(st&&st.type==='closed') return; }catch(_){}
-    if(bkV2IsWeatherClosed(r.id,ds)) return;
-    let al=null; try{ al=(typeof getAllotment==='function')?getAllotment(r.id,ds):null; }catch(_){}
-    if(!al||!al.hasAllotment) return;
-    out.push({id:r.id, name:r.name||r.id, free:Math.max(0,+al.seatsAvailable||0), time:((r.times||[])[0]||'')});
+    if(!r) return;
+    if(r.id===rid && toDs===ds) return;                        /* รอบเดิมวันเดิม = ที่ยกเลิกไป */
+    if(!r.pier || r.pier==='other') return;                     /* โปรแกรมบก/รถ ไม่ใช่ปลายทางของทริปเรือ */
+    if(!allPiers && (r.pier||'')!==(me.pier||'')) return;
+    try{ const st=(typeof getDayStatus==='function')?getDayStatus(r,toDs):null; if(st&&st.type==='closed') return; }catch(_){}
+    if(bkV2IsWeatherClosed(r.id,toDs)) return;
+    let al=null; try{ al=(typeof getAllotment==='function')?getAllotment(r.id,toDs):null; }catch(_){}
+    if(!al||!al.hasAllotment||!(+al.availableCapacity>0)) return;
+    out.push({id:r.id, name:r.name||r.id, pier:r.pier||'', free:Math.max(0,+al.seatsAvailable||0), time:((r.times||[])[0]||'')});
   });
-  return out;
+  return out.sort((a,b)=>(a.pier===me.pier?0:1)-(b.pier===me.pier?0:1) || String(a.time).localeCompare(String(b.time)));
 }
 function tcxMoveSel(pfx, bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const wr=bk&&bk.weatherResolve; if(!wr) return '';
@@ -39433,22 +39437,25 @@ function tcxMoveSel(pfx, bkId){
     +'</select>';
 }
 /* ย้ายโปรแกรม 1 ใบ · ใช้ทั้งกดทีละใบ และ "ใช้กับทั้งหมด" */
-function tcxMoveOne(bk, rid, ds, nr, ask){
-  if(!nr || nr===rid){ if(ask) alert('Pick the program to move this booking to.'); return false; }
+function tcxMoveOne(bk, rid, ds, nr, ask, nds){
+  nds=nds||ds;
+  if(!nr || (nr===rid && nds===ds)){ if(ask) alert('Pick the program to move this booking to.'); return false; }
   const pax=tcxPaxOf(bk,rid,ds);
-  let al=null; try{ al=getAllotment(nr,ds); }catch(_){}
+  let al=null; try{ al=getAllotment(nr,nds); }catch(_){}
   const free=al?Math.max(0,+al.seatsAvailable||0):0;
-  if(ask && al && al.hasAllotment && free<pax && !confirm('Only '+free+' seat(s) free on '+tcxRName(nr)+' for '+pax+' guest(s).\nMove anyway?')) return false;
-  const _R=TCX_R[tcxReason(rid,ds)]||TCX_R.weather;
-  if(typeof bkOpsClear==='function') bkOpsClear(bk, ds);   /* เรือ/รถ/เช็คอินของโปรแกรมเดิมไม่ใช้แล้ว */
+  if(ask && al && al.hasAllotment && free<pax && !confirm('Only '+free+' seat(s) free on '+tcxRName(nr)+' ('+nds+') for '+pax+' guest(s).\nMove anyway?')) return false;
+  const _rk=tcxReason(rid,ds), _R=TCX_R[_rk]||TCX_R.weather;
+  if(typeof bkOpsClear==='function') bkOpsClear(bk, ds);   /* เรือ/รถ/เช็คอินของรอบเดิมไม่ใช้แล้ว */
   let oldPt='', newPt='';
-  (bk.trips||[]).forEach(t=>{ if(t.routeId===rid && t.date===ds){ oldPt=t.pickupTime||''; t.routeId=nr;
-    try{ const pt=(typeof bkV2GetPickupTime==='function')?bkV2GetPickupTime(nr, bk.pickupAreaId, ds):''; if(pt){ t.pickupTime=pt; newPt=pt; } }catch(_){} } });
+  (bk.trips||[]).forEach(t=>{ if(t.routeId===rid && t.date===ds){ oldPt=t.pickupTime||''; t.routeId=nr; t.date=nds;
+    try{ const pt=(typeof bkV2GetPickupTime==='function')?bkV2GetPickupTime(nr, bk.pickupAreaId, nds):''; if(pt){ t.pickupTime=pt; newPt=pt; } }catch(_){} } });
+  if(nds!==ds) bk.rebook={from:ds, to:nds, reason:_rk, at:new Date().toISOString()};
   bk.weatherResolve=bk.weatherResolve||{event:rid+'|'+ds};
   if(bk.weatherResolve.status==='awaiting'){ bk.weatherResolve.notifiedAt=new Date().toISOString(); }
-  bk.weatherResolve.newRoute=nr; bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome='move';
+  bk.weatherResolve.newRoute=nr; if(nds!==ds) bk.weatherResolve.newDate=nds;
+  bk.weatherResolve.status='resolved'; bk.weatherResolve.outcome='move';
   bk.weatherResolve.resolvedAt=new Date().toISOString(); bk.weatherResolve.by=laBy();
-  bkV2AddHistory(bk,'weather','Moved '+tcxRName(rid)+' → '+tcxRName(nr)+' · '+ds+' ('+_R.en+') · same day, same price'
+  bkV2AddHistory(bk,'weather','Moved '+tcxRName(rid)+' ('+ds+') → '+tcxRName(nr)+' ('+nds+') · reason: '+_R.en+' · same price'
     +(newPt&&newPt!==oldPt?(' · pickup '+(oldPt||'—')+' → '+newPt):''),'Reschedule');
   return true;
 }
@@ -39466,6 +39473,91 @@ function tcxBulkMove(rid, ds){
   if(typeof acctPersistBookings==='function') acctPersistBookings();
   if(typeof bkV2Render==='function') bkV2Render();
 }
+/* หน้าต่างเลือกผล · 1 ใบ หรือทั้งรอบ (bulk) */
+var _tcxD=null;
+function tcxDlgOpen(bkId){
+  const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!bk.weatherResolve) return;
+  const p=String(bk.weatherResolve.event||'').split('|');
+  _tcxD={ids:[bkId], rid:p[0], ds:p[1], out:(tcxReason(p[0],p[1])==='minpax'?'move':'reschedule'), toDs:p[1], rsDs:'', all:false, nr:'', bulk:false};
+  try{ const nd=new Date(p[1]+'T12:00:00'); nd.setDate(nd.getDate()+1); _tcxD.rsDs=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(nd):p[1]; }catch(_){ _tcxD.rsDs=p[1]; }
+  tcxDlgRender();
+}
+function tcxDlgBulk(rid, ds){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const L=bkV2WeatherEventBookings(rid,ds).filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
+  if(!L.length) return;
+  _tcxD={ids:L.map(b=>b.id), rid:rid, ds:ds, out:'move', toDs:ds, rsDs:ds, all:false, nr:'', bulk:true};
+  tcxDlgRender();
+}
+function tcxDlgSet(k,v){ if(!_tcxD) return; _tcxD[k]=v; if(k==='toDs'||k==='all') _tcxD.nr=''; tcxDlgRender(); }
+function tcxDlgRender(){
+  const D=_tcxD; if(!D) return;
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const L=D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean);
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0);
+  const R=TCX_R[tcxReason(D.rid,D.ds)]||TCX_R.weather;
+  const pierNm=p=>{ try{ return (typeof laPierName==='function'&&laPierName(p))||p||'—'; }catch(_){ return p||'—'; } };
+  let paid=0; if(!D.bulk && L[0]){ const inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(L[0].id):null; paid=inv?acctInvoicePaid(inv):0; }
+  const ag=b=>(typeof sbGetAgent==='function'&&b.agentId)?((sbGetAgent(b.agentId)||{}).name||'B2C'):'B2C';
+  const title = D.bulk ? ('Move all '+L.length+' booking'+(L.length===1?'':'s')+' · '+pax+' pax') : (esc(L[0].voucherRef||L[0].code||L[0].id)+' · '+esc(ag(L[0]))+' · '+pax+' pax');
+  const seg = D.bulk ? '' : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+    + [['move','Move program'],['reschedule','Reschedule'],['refund','Refund'],['credit','Credit'],['cancel','Cancel']].map(o=>{
+        const dis=(o[0]==='credit'&&!(paid>0));
+        return '<button '+(dis?'disabled ':'')+'onclick="tcxDlgSet(\'out\',\''+o[0]+'\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:'+(dis?'default':'pointer')+';background:'+(D.out===o[0]?'#16265C':'transparent')+';color:'+(D.out===o[0]?'#fff':(dis?'#B9BFCC':'#3E4658'))+'">'+o[1]+'</button>'; }).join('') + '</div>');
+  let body='';
+  if(D.out==='move'){
+    const T=tcxMoveTargets(D.rid, D.ds, D.toDs, D.all);
+    if(!D.nr && T.length){ const fit=T.find(t=>t.free>=pax); D.nr=(fit||T[0]).id; }
+    body='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Date <input type="date" value="'+esc(D.toDs)+'" onchange="tcxDlgSet(\'toDs\',this.value)" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>'
+      +(D.toDs!==D.ds?'<span style="font-size:11px;font-weight:700;background:#FBF1DF;color:#7A4300;border-radius:8px;padding:2px 8px">date changes · '+esc(D.ds)+' → '+esc(D.toDs)+'</span>':'')
+      +'<div style="margin-left:auto;display:flex;gap:3px;padding:3px;background:#F2F4F8;border-radius:9px">'
+        +'<button onclick="tcxDlgSet(\'all\',false)" style="border:0;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(!D.all?'#fff':'transparent')+';color:#0F1B3D">This pier</button>'
+        +'<button onclick="tcxDlgSet(\'all\',true)" style="border:0;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(D.all?'#fff':'transparent')+';color:#0F1B3D">All piers</button></div></div>'
+      +'<div style="border:1px solid #E6E8EE;border-radius:12px;max-height:300px;overflow:auto">'
+      +(T.length ? T.map(t=>{ const on=D.nr===t.id, short=t.free<pax;
+          return '<label style="display:grid;grid-template-columns:20px 54px 1fr auto auto;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #F0F1F4;cursor:pointer;background:'+(on?'#F4F1FD':'#fff')+'">'
+            +'<input type="radio" name="tcxd-nr" '+(on?'checked ':'')+'onchange="tcxDlgSet(\'nr\',\''+esc(t.id)+'\')">'
+            +'<span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#3E4658">'+esc(t.time||'—')+'</span>'
+            +'<b style="font-size:12.5px">'+esc(t.name)+(t.id===D.rid?' <span style="font-weight:600;color:#8A8F9C">(same program)</span>':'')+'</b>'
+            +'<span style="font-size:11px;color:#6B7489">'+esc(pierNm(t.pier))+'</span>'
+            +'<span style="font-size:11.5px;font-weight:700;border-radius:8px;padding:2px 8px;background:'+(short?'#FBE3E0':'#E1F5EA')+';color:'+(short?'#A32D2D':'#136C3A')+'">free '+t.free+'</span></label>'; }).join('')
+        : '<div style="padding:18px;text-align:center;color:#8A8F9C;font-size:12.5px">No program with a boat on '+esc(D.toDs)+(D.all?'':' at this pier')+'. Try another date or All piers.</div>')
+      +'</div><div style="font-size:11px;color:#8A8F9C;margin-top:6px">Price stays the same · boat/van of the cancelled trip are cleared · pickup time is read again for the new program</div>';
+  } else if(D.out==='reschedule'){
+    body='<label style="font-size:11px;font-weight:700;color:#6B7489">New date (same program) <input type="date" value="'+esc(D.rsDs)+'" onchange="_tcxD.rsDs=this.value" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>';
+  } else {
+    body='<div style="font-size:12.5px;line-height:1.6;color:#3E4658">'+(D.out==='refund'?('Booking is cancelled and '+(paid>0?('฿'+Math.round(paid).toLocaleString()+' is refunded'):'nothing has been paid')+'.'):D.out==='credit'?('Booking is cancelled and ฿'+Math.round(paid).toLocaleString()+' stays as agent credit.'):'Booking is cancelled · invoice voided · no refund.')+'</div>';
+  }
+  const hid = D.bulk ? '' : ('<input type="hidden" id="wxd-out-'+esc(L[0].id)+'" value="'+esc(D.out)+'"><input type="hidden" id="wxd-date-'+esc(L[0].id)+'" value="'+esc(D.rsDs)+'">');
+  acctModal('<div style="padding:14px 18px;border-bottom:1px solid var(--fd-line);display:flex;align-items:flex-start;gap:10px"><div><div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:'+R.fg+'">'+R.ic+' TRIP CANCELLED · '+esc(R.en.toUpperCase())+' · '+esc(tcxRName(D.rid))+' · '+esc(D.ds)+'</div>'
+    +'<div style="font-size:15px;font-weight:700;color:#0F1B3D;margin-top:2px">'+title+'</div></div><button onclick="acctModalClose();_tcxD=null" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--fd-ink-soft)">&times;</button></div>'
+    +'<div style="padding:14px 18px;width:620px;max-width:100%;box-sizing:border-box">'+seg+body+hid
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button onclick="acctModalClose();_tcxD=null" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">Back</button>'
+    +'<button onclick="tcxDlgApply()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply'+(D.bulk?(' to '+L.length):'')+'</button></div></div>');
+}
+function tcxDlgApply(){
+  const D=_tcxD; if(!D) return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const L=D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean);
+  if(D.out==='move'){
+    if(!D.nr){ alert('Pick the program to move to.'); return; }
+    if(D.bulk){
+      const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0); let al=null; try{ al=getAllotment(D.nr,D.toDs); }catch(_){}
+      const free=al?Math.max(0,+al.seatsAvailable||0):0;
+      if(!confirm('Move '+L.length+' booking(s) · '+pax+' guest(s) to '+tcxRName(D.nr)+' on '+D.toDs+'?'+(al&&al.hasAllotment&&free<pax?('\n\nOnly '+free+' seat(s) free there.'):''))) return;
+      L.forEach(b=>tcxMoveOne(b, D.rid, D.ds, D.nr, false, D.toDs));
+    } else if(!tcxMoveOne(L[0], D.rid, D.ds, D.nr, true, D.toDs)) return;
+    if(typeof acctPersistBookings==='function') acctPersistBookings();
+    acctModalClose(); _tcxD=null;
+    if(typeof bkV2Render==='function') bkV2Render();
+    return;
+  }
+  if(D.bulk) return;
+  if(D.out==='reschedule' && (!D.rsDs || D.rsDs===D.ds)){ alert('Pick a new date.'); return; }
+  bkV2WeatherResolveOne(L[0].id,'wxd-');   /* อ่านผล/วันจากช่องซ่อนในหน้าต่างนี้ */
+  acctModalClose(); _tcxD=null;
+}
 function tcxGoByTrip(rid, ds){
   try{ const el=document.querySelector('.nav-item[data-view="booking"]'); if(el && typeof nav==='function' && !el.classList.contains('active')) nav(el); }catch(_){}
   try{ _bkV2.tab='bytrip'; _bkV2.detailId=null; }catch(_){}
@@ -39475,11 +39567,8 @@ function tcxByTripBanner(rid, ds){
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const k=tcxReason(rid,ds), R=TCX_R[k], S=tcxSnapOf(rid,ds), note=bkV2WeatherNote(rid,ds);
   const L=bkV2WeatherEventBookings(rid,ds), open=L.filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
-  const T=tcxMoveTargets(rid,ds);
   const snapTxt = S ? (S.pax+(S.be>0?(' / '+S.be):'')+' pax · '+esc(S.by||'')+' '+esc(String(S.at||'').slice(5,16).replace('T',' '))) : '';
-  const bulk = (open.length && T.length) ? ('<select id="tcxb-'+esc(rid)+'" onclick="event.stopPropagation()" style="height:30px;font-size:11.5px;font-family:inherit;border:1px solid '+R.bd+';border-radius:8px;padding:2px 6px;background:#fff;max-width:240px">'
-      + T.map(t=>'<option value="'+esc(t.id)+'">'+esc((t.time?t.time+' · ':'')+t.name)+' · free '+t.free+'</option>').join('') + '</select>'
-      + '<button onclick="event.stopPropagation();tcxBulkMove(\''+rid+'\',\''+ds+'\')" style="background:#fff;border:1px solid '+R.fg+';color:'+R.fg+';font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap">Move all '+open.length+'</button>') : '';
+  const bulk = open.length ? ('<button onclick="event.stopPropagation();tcxDlgBulk(\''+rid+'\',\''+ds+'\')" style="background:#fff;border:1px solid '+R.fg+';color:'+R.fg+';font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap">Move all '+open.length+'…</button>') : '';   /* §tcxDlg */
   return '<div style="background:'+R.bg+';border:1.5px solid '+R.bd+';border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     + '<span style="font-size:20px;color:'+R.fg+'">'+R.ic+'</span>'
     + '<div style="flex:1;min-width:220px"><div style="font-size:13px;font-weight:700;color:'+R.fg+'">Trip cancelled · '+R.en+' <span style="font-weight:600">· '+R.th+'</span></div>'
@@ -39595,7 +39684,7 @@ function bkV2WeatherInlineCell(bkId){
   const st=wr.status;
   if(st==='resolved'){
     const oL={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
-    const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):(wr.outcome==='move'&&wr.newRoute)?(' &rarr; '+tcxRName(wr.newRoute)):'';
+    const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):(wr.outcome==='move'&&wr.newRoute)?(' &rarr; '+tcxRName(wr.newRoute)+(wr.newDate?(' '+String(wr.newDate).slice(5)):'')):'';
     return '<span style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap">&#10003; '+(oL[wr.outcome]||wr.outcome)+ex+'</span>';
   }
   if(st==='notified'){
@@ -39605,11 +39694,7 @@ function bkV2WeatherInlineCell(bkId){
     try{ const nd=new Date(d0+'T00:00'); nd.setDate(nd.getDate()+1); next=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(nd):d0; }catch(e){}
     return '<div style="display:flex;flex-direction:column;gap:3px;min-width:128px">'
       +'<span style="font-size:8px;font-weight:700;color:#7A4A00;letter-spacing:.02em">Notified · awaiting</span>'
-      +'<div style="display:flex;gap:3px;align-items:center">'
-      +'<select id="wxr-out-'+bkId+'" onchange="bkV2WeatherToggleDate(\''+bkId+'\',\'wxr-\')" style="height:24px;font-size:9.5px;font-family:inherit;border:1px solid var(--border);border-radius:5px;padding:1px 3px;background:#fff;flex:1;min-width:0">'+tcxOutOpts(paid)+'</select>'
-      +'<button onclick="bkV2WeatherResolveOne(\''+bkId+'\',\'wxr-\')" style="height:24px;background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:9.5px;font-weight:700;padding:0 8px;border-radius:5px;cursor:pointer;white-space:nowrap">Apply</button></div>'
-      +'<input type="date" id="wxr-date-'+bkId+'" value="'+next+'" style="height:22px;font-size:9px;border:1px solid var(--border);border-radius:5px;padding:1px 4px">'
-      +tcxMoveSel('wxr-',bkId)
+      +'<button onclick="event.stopPropagation();tcxDlgOpen(\''+bkId+'\')" style="height:26px;background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:10px;font-weight:700;padding:0 10px;border-radius:6px;cursor:pointer;white-space:nowrap">Choose result…</button>'   /* §tcxDlg */
       +'</div>';
   }
   // awaiting
