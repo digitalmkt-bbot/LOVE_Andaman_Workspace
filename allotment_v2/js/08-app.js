@@ -63375,6 +63375,7 @@ function pc2LTDay(pier, ds){
     +'</div>';
   });
   var _stLT=pcSheetTot('lt',pier,ds); if(_stLT){ duj=_stLT.join_boats; duc=_stLT.charter_boats; dm=_stLT.amount; }   /* §w5cSheet · the day's keyed sums are the server's */
+  var _sbLT=pcSheetBooked('lt',pier,ds); if(_sbLT){ dj=_sbLT.join_heads; dc=_sbLT.charter_boats; }   /* §w9 · the booked columns' day sums are the server's (longtail sheet days[].booked) */
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   var pulledLt=false, pLt=0; (D2.out||[]).forEach(function(x){ if(x&&x.src==='lt'){ pulledLt=true; pLt+=(+x.amt||0); } });
   var s=pc2StatLT(pier,ds), waiting=Math.max(0,T.ref-T.pulled);
@@ -63403,6 +63404,7 @@ function pc2LT(pier){
     });
   });
   var _stM=pcSheetTot('lt',pier,null); if(_stM){ guj=_stM.join_boats; guc=_stM.charter_boats; gm=_stM.amount; }   /* §w5cSheet · the month's keyed sums are the server's */
+  var _sbM=pcSheetBooked('lt',pier,null); if(_sbM){ gj=_sbM.join_heads; gc=_sbM.charter_boats; }   /* §w9 · the month's booked join / charter are the server's (sheet-level booked) */
   var show=_pc2All?dates:[_pcDate];
   return pc2Kpi([{h:'จอย · '+pcE(pc2MonthName(_pcYM)),v:pcN(gj),u:'คน → '+pcN(guj)+' ลำ',s:guj?('เฉลี่ย '+(Math.round(gj/guj*10)/10)+' คนต่อลำ'):'ยังไม่ได้กรอกใช้จริง'},
                  {h:'เหมา · ทั้งเดือน',v:pcN(gc),u:'→ '+pcN(guc)+' ลำ',s:(guc&&guc!==gc)?('ใช้'+(guc<gc?'น้อย':'มาก')+'กว่าที่จอง '+Math.abs(gc-guc)+' ลำ'):'&nbsp;'},

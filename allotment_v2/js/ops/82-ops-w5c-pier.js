@@ -150,12 +150,14 @@
   });
   /* §w9 · the day's booked side from the sheet read (longtail: days[].booked {join_heads, charter_boats}); undefined = legacy's own sum */
   wrapGlobal('pcSheetBooked', function(orig, self, kind, pier, ds){
-    var c = PC(); if(!c || !pier || !ds) return undefined;
-    var ks = Object.keys(c.sheet), ym = String(ds).slice(0, 7);
+    var c = PC(); if(!c || !pier) return undefined;
+    var ks = Object.keys(c.sheet), ym = ds ? String(ds).slice(0, 7) : (typeof _pcYM !== 'undefined' ? _pcYM : '');
     for(var i = 0; i < ks.length; i++){
       var j = c.sheet[ks[i]]; if(ks[i].indexOf((kind === 'lt' ? 'longtail' : 'park') + '|' + pier + '|') !== 0 || !j || j === true || j.month !== ym) continue;
-      var d = (j.days || []).filter(function(x){ return x.date === ds; })[0];
-      if(d && d.booked) return d.booked;
+      if(ds){
+        var d = (j.days || []).filter(function(x){ return x.date === ds; })[0];
+        if(d && d.booked) return d.booked;
+      } else if(!j.date && j.booked) return j.booked;           // §w9 · the month's sheet (read without ?date=): sheet-level booked
     }
     return undefined;
   });
