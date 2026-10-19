@@ -50445,6 +50445,31 @@ function bkV2IsFamilyOpenOn(familyId, dateStr){
   return bkV2FamilyRoutes(familyId).some(r => bkV2IsRouteOpenOn(r.id, dateStr));
 }
 // Aggregate family pax for a specific date (sum across sub-routes)
+/* §calCxlSplit (2026-10-19) · owner "หน้านี้น่าจะอ่านค่าผิดนะ เพราะยกเลิกบางเส้นทาง เพราะไม่ถึงยอด"
+   ปฏิทิน Booking (ชิปในช่องวัน + แผงขวา) ขีดฆ่าทั้งโปรแกรมและเขียน "Cancelled (weather)" ทันทีที่ variant ใด variant หนึ่งถูกยกเลิก
+   ทั้งที่อีกหลายรอบยังออก (Similan 217 คน ขีดทั้งก้อนเพราะ Early 07.00 ยกเลิก 2 คน) และไม่สนเหตุผลที่บันทึกไว้ (§tripCxl · TCX_R)
+   ตอนนี้: ขีดทั้งโปรแกรมเฉพาะเมื่อทุกรอบที่มีของวันนั้นถูกยกเลิก · ไม่งั้นนับเฉพาะรอบที่ยังออก + ป้ายเล็ก "รอบที่ยกเลิก −N"
+   ป้ายใช้เหตุผลจริง (Weather / Below break-even / No boat / Other) · ยอดรวมของวันไม่รวมคนในรอบที่ยกเลิก */
+function bkV2CxlInfo(rid, ds){
+  if(typeof bkV2IsWeatherClosed!=='function' || !bkV2IsWeatherClosed(rid, ds)) return null;
+  const k=(typeof tcxReason==='function')?tcxReason(rid,ds):'weather';
+  const R=(typeof TCX_R!=='undefined' && TCX_R[k]) || {en:'Weather', th:'อากาศ', ic:'\u2601', fg:'#A32D2D', bg:'#FCEBEB', bd:'#E89A92'};
+  return {k, R, lbl:'Cancelled ('+R.en+')'};
+}
+function bkV2FamCxlSplit(famId, ds, agg){
+  const F=['total','ad','chd','inf','foc','pk','kl','nt'], out={closed:[], cut:{}, all:false, lbl:'', R:null};
+  F.forEach(k=>{ out.cut[k]=0; });
+  const day=agg && agg.byDate && agg.byDate[ds];
+  let boats={}; try{ const T=(typeof TRIPS!=='undefined' && TRIPS[ds])||{}; Object.keys(T).forEach(b=>{ const o=T[b]; if(o && o.route) boats[o.route]=1; }); }catch(_){}
+  let n=0, nC=0; const ks={};
+  (bkV2FamilyRoutes(famId)||[]).forEach(rd=>{ const rid=rd.id||rd, cell=day && day.routes && day.routes[rid], C=bkV2CxlInfo(rid, ds);
+    if(!cell && !boats[rid] && !C) return;   /* รอบที่วันนั้นไม่มีใคร ไม่มีเรือ = ไม่นับ */
+    n++; if(!C) return; nC++; out.closed.push(rid); ks[C.k]=C; if(cell) F.forEach(k=>{ out.cut[k]+=(+cell[k]||0); }); });
+  out.all = n>0 && nC===n;
+  const kk=Object.keys(ks);
+  if(kk.length){ out.R = kk.length===1 ? ks[kk[0]].R : ((typeof TCX_R!=='undefined' && TCX_R.other) || ks[kk[0]].R); out.lbl = kk.length===1 ? ks[kk[0]].lbl : 'Cancelled'; }
+  return out;
+}
 function bkV2FamilyAggregate(familyId, dateStr, agg){
   const day = agg.byDate[dateStr];
   if(!day) return { total:0, ad:0, chd:0, inf:0, foc:0, pk:0, kl:0, nt:0, hasFocPending:false, subCount:0 };
@@ -52829,34 +52854,34 @@ function bkV2RenderCalendar(){
        ต้องเห็นเสมอ ไม่สนตัวกรองโปรแกรม เพราะมันคือของที่ต้องไปจัดการ ไม่ใช่ของที่เลือกดู
        คิดสดทุกครั้งที่วาด · ย้าย/ยกเลิกเสร็จเมื่อไร ป้ายหายเอง ไม่ต้องมีใครมากดเคลียร์ */
     const famRows = activeFams
-      .map(fam => ({ fam, agg: bkV2FamilyAggregate(fam.id, dateKey, agg), open: bkV2IsFamilyOpenOn(fam.id, dateKey) }))
+      .map(fam => ({ fam, agg: bkV2FamilyAggregate(fam.id, dateKey, agg), open: bkV2IsFamilyOpenOn(fam.id, dateKey), cx: bkV2FamCxlSplit(fam.id, dateKey, agg) }))   /* §calCxlSplit */
       .map(o => ({ ...o, orphan: !o.open && (o.agg.total || 0) > 0 }));
     const openFams = famRows.filter(o => o.orphan || (o.open && (!calSel || calSel.has(o.fam.id))));
     /* ยอดรวมข้างเลขวันคือ "วันนี้มีคนออกกี่คน" · คนที่ค้างอยู่คือคนที่ตารางตอนนี้ไม่ได้พาออก
        เอามารวมกันแล้วเลขหัวเซลล์จะอ่านผิด · ตัวเลขของคนค้างอยู่บนชิปแดงของมันเอง */
-    const dayTotal = openFams.reduce((s, o) => s + (o.orphan ? 0 : (o.agg.total || 0)), 0);
+    const dayTotal = openFams.reduce((s, o) => s + (o.orphan ? 0 : Math.max(0, (o.agg.total || 0) - o.cx.cut.total)), 0);   /* §calCxlSplit · ไม่นับคนในรอบที่ยกเลิก */
     if(openFams.length){
       /* §bkCalOrphan · ของค้างขึ้นบนสุดเสมอ · ถ้าวันนั้นมีหลายโปรแกรมจนชิปล้น
          ตัวที่ต้องไปจัดการต้องไม่ใช่ตัวที่ถูกยุบไปอยู่ใน "+N more" */
       openFams.sort((a, b) => (b.orphan?1:0) - (a.orphan?1:0) || b.agg.total - a.agg.total);
       const visible = openFams.slice(0, 5);
       const overflow = openFams.length - visible.length;
-      chipsHtml = visible.map(({ fam, agg: famAgg, orphan }) => {
+      chipsHtml = visible.map(({ fam, agg: famAgg, orphan, cx }) => {
         const col = fam.color;
         /* §bkCalOrphan · ชิปแดงพร้อมจำนวน · ไม่ขีดฆ่าเหมือนชิปอากาศปิด
            เพราะคนกลุ่มนี้ยังไม่ถูกจัดการ ตัวเลขยังมีผลอยู่ ไม่ใช่ตัวเลขที่ตายแล้ว */
         if(orphan){
           return `<div class="bkv2-cal-chip orphan" style="border-left-color:#B4560A" title="${fam.name} · วันนี้ปิดไปแล้ว แต่ยังมี booking ค้างอยู่ ${famAgg.total} คน · ต้องย้ายวัน ย้ายโปรแกรม หรือยกเลิกก่อน"><span class="bkv2-cal-chip-name">&#9888; ${fam.name}</span><span class="bkv2-cal-chip-pax">${famAgg.total}</span></div>`;
         }
-        const pax = famAgg.total;
+        const pax = Math.max(0, famAgg.total - ((cx && !cx.all) ? cx.cut.total : 0));   /* §calCxlSplit · เฉพาะรอบที่ยังออก */
         const focCls = famAgg.hasFocPending ? ' foc' : '';
         const emptyCls = pax === 0 ? ' empty' : '';
         if(famAgg.hasFocPending) dayHasFoc = true;
-        const famWx = (typeof bkV2IsWeatherClosed==='function') && (bkV2FamilyRoutes(fam.id)||[]).some(rd => bkV2IsWeatherClosed((rd.id||rd), dateKey));
-        if(famWx){
-          return `<div class="bkv2-cal-chip${emptyCls}" style="border-left-color:#A32D2D" title="${fam.name} · Cancelled (weather)"><span class="bkv2-cal-chip-name" style="color:#A32D2D">&#9928; ${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:#A32D2D;text-decoration:line-through">${pax}</span>` : ''}</div>`;
+        if(cx && cx.all){   /* §calCxlSplit · ทุกรอบของโปรแกรมวันนั้นยกเลิก = ขีดทั้งชิป · ป้ายตามเหตุผลจริง */
+          return `<div class="bkv2-cal-chip${emptyCls}" style="border-left-color:${cx.R.fg}" title="${fam.name} · ${cx.lbl}"><span class="bkv2-cal-chip-name" style="color:${cx.R.fg}">${cx.R.ic} ${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${cx.R.fg};text-decoration:line-through">${pax}</span>` : ''}</div>`;
         }
-        return `<div class="bkv2-cal-chip${focCls}${emptyCls}" style="border-left-color:${col}" title="${fam.name}"><span class="bkv2-cal-chip-name" style="color:${col}">${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${col}">${pax}</span>` : ''}</div>`;
+        const cxTag = (cx && cx.closed.length) ? `<span title="${cx.closed.length} trip${cx.closed.length>1?'s':''} ${cx.lbl.toLowerCase()} · ${cx.cut.total} pax not counted" style="color:${cx.R.fg};font-size:10px;font-weight:700;margin-left:auto;margin-right:5px;white-space:nowrap">${cx.R.ic}&minus;${cx.cut.total}</span>` : '';
+        return `<div class="bkv2-cal-chip${focCls}${emptyCls}" style="border-left-color:${col}" title="${fam.name}"><span class="bkv2-cal-chip-name" style="color:${col}">${fam.name}</span>${cxTag}${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${col}">${pax}</span>` : ''}</div>`;
       }).join('');
       if(overflow > 0) chipsHtml += `<div class="bkv2-cal-more">+${overflow} more</div>`;
     }
@@ -53226,13 +53251,14 @@ function bkV2RenderSelDay(){
             : `<div style="padding:2px 12px 5px 22px;font-size:9px;color:#A05A1A;font-style:italic">⚠ no boat assigned</div>`;
         }
       }
+      const _sci = _swx ? bkV2CxlInfo(s.rd.id, sel.date) : null;   /* §calCxlSplit · เหตุผลจริง */
       if(_swx){
         const wc=(typeof bkV2WeatherCountsFor==='function')?bkV2WeatherCountsFor(s.rd.id,sel.date):{cancelled:0,rescheduled:0,pending:0};
-        capBarHtml = `<div style="padding:2px 12px 6px 22px;font-size:9px;font-weight:700;color:#A32D2D">&#9928; Cancelled (weather) · &#8635; ${wc.rescheduled} resched · &#10005; ${wc.cancelled} cxl${wc.pending>0?` · &#8230; ${wc.pending} pending`:''}</div>`;
+        capBarHtml = `<div style="padding:2px 12px 6px 22px;font-size:9px;font-weight:700;color:#A32D2D">${_sci?_sci.R.ic:'&#9928;'} ${_sci?_sci.lbl:'Cancelled'} · &#8635; ${wc.rescheduled} resched · &#10005; ${wc.cancelled} cxl${wc.pending>0?` · &#8230; ${wc.pending} pending`:''}</div>`;
       }
       return `
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 12px 1px 22px;border-bottom:0;font-size:11px;line-height:1.4">
-          <span style="font-family:'DM Sans',sans-serif;color:${_swx?'#A32D2D':'var(--ink-soft)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" title="${s.rd.full}">${_swx?'&#9928; ':''}${s.rd.full}</span>
+          <span style="font-family:'DM Sans',sans-serif;color:${_swx?'#A32D2D':'var(--ink-soft)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" title="${s.rd.full}">${_swx?((_sci?_sci.R.ic:'&#9928;')+' '):''}${s.rd.full}</span>
           <span style="font-family:'DM Mono',monospace;color:var(--ink-soft);font-size:10.5px;flex-shrink:0;letter-spacing:-.01em"><span style="color:${_swx?'#A32D2D':'var(--ink)'};font-weight:700;font-size:12px;${_swx?'text-decoration:line-through':''}">${r.total}</span>${breakdown?` <span style="color:var(--ink-soft)">&middot;</span> ${breakdown}`:''}${(typeof bkV2LockedTotal==='function' && bkV2LockedTotal(s.rd.id, sel.date)>0)?` <span style="color:#C0392B;font-weight:700">&#128274;${bkV2LockedTotal(s.rd.id, sel.date)}</span>`:''}</span>
         </div>
         ${capBarHtml}
@@ -53242,15 +53268,16 @@ function bkV2RenderSelDay(){
 
     // Weather-cancelled family → summary card (Original / Rescheduled / Cancelled / Pending) · like By-trip-date
     const famWxRoutes = subRoutes.filter(rd => (typeof bkV2IsWeatherClosed==='function') && bkV2IsWeatherClosed(rd.id, sel.date));
-    if(famWxRoutes.length){
+    const CX = bkV2FamCxlSplit(fam.id, sel.date, agg);   /* §calCxlSplit · การ์ดแดงทั้งใบเฉพาะเมื่อทุกรอบของวันนั้นยกเลิก */
+    if(famWxRoutes.length && CX.all){
       const wcF={cancelled:0,rescheduled:0,pending:0,total:0};
       famWxRoutes.forEach(rd=>{ const c=(typeof bkV2WeatherCountsFor==='function')?bkV2WeatherCountsFor(rd.id,sel.date):{cancelled:0,rescheduled:0,pending:0,total:0}; wcF.cancelled+=c.cancelled; wcF.rescheduled+=c.rescheduled; wcF.pending+=c.pending; wcF.total+=c.total; });
       return `
         <div style="border:1px solid #E89A92;border-left:3px solid #A32D2D;border-radius:var(--r-sm);margin-bottom:8px;overflow:hidden">
           <div style="background:#FDEEEC;padding:7px 12px;display:flex;align-items:baseline;justify-content:space-between;gap:8px">
             <div style="flex:1;min-width:0">
-              <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:#A32D2D;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${fam.name}">&#9928; ${fam.name}</div>
-              <div style="font-size:9.5px;color:#9a3b30;margin-top:1px">Cancelled (weather)</div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:#A32D2D;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${fam.name}">${CX.R?CX.R.ic:'&#9928;'} ${fam.name}</div>
+              <div style="font-size:9.5px;color:#9a3b30;margin-top:1px">${CX.lbl||'Cancelled'}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:18px;color:#A32D2D;letter-spacing:-.02em">${wcF.total}</div>
@@ -53266,14 +53293,17 @@ function bkV2RenderSelDay(){
         </div>
       `;
     }
+    const LA = Object.assign({}, famAgg); ['total','ad','chd','inf','foc','pk','kl','nt'].forEach(k => { LA[k] = Math.max(0, (famAgg[k]||0) - (CX.cut[k]||0)); });   /* §calCxlSplit · หัวการ์ด = รอบที่ยังออก */
+    const cxNote = CX.closed.length ? `<div style="font-size:9.5px;font-weight:700;color:${CX.R.fg};margin-top:2px">${CX.R.ic} ${CX.closed.length} trip${CX.closed.length>1?'s':''} ${CX.lbl.toLowerCase()} &middot; &minus;${CX.cut.total} pax not counted</div>` : '';
     return `
       <div style="border:1px solid var(--border);border-left:3px solid ${fam.color};border-radius:var(--r-sm);margin-bottom:8px;overflow:hidden">
         <div style="background:#f5f3ef;padding:7px 12px;display:flex;align-items:baseline;justify-content:space-between;gap:8px">
           <div style="flex:1;min-width:0">
-            <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${fam.name}">${fam.name}${famAgg.hasFocPending?` <span class="bkv2-rd-foc">FOC ${famAgg.foc}</span>`:''}</div>
-            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px;line-height:1.5">${fmtCompact(famAgg) || '<span style="font-style:italic">no pax</span>'}${famAgg.pk||famAgg.kl||famAgg.nt?' <span>&middot;</span> ':''}${famAgg.pk?`<span>PK ${famAgg.pk}</span>`:''}${famAgg.kl?` <span>KL ${famAgg.kl}</span>`:''}${famAgg.nt?` <span>NT ${famAgg.nt}</span>`:''}</div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${fam.name}">${fam.name}${famAgg.hasFocPending?` <span class="bkv2-rd-foc">FOC ${LA.foc}</span>`:''}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px;line-height:1.5">${fmtCompact(LA) || '<span style="font-style:italic">no pax</span>'}${LA.pk||LA.kl||LA.nt?' <span>&middot;</span> ':''}${LA.pk?`<span>PK ${LA.pk}</span>`:''}${LA.kl?` <span>KL ${LA.kl}</span>`:''}${LA.nt?` <span>NT ${LA.nt}</span>`:''}</div>
+            ${cxNote}
           </div>
-          <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:18px;color:var(--ink);flex-shrink:0;letter-spacing:-.02em">${famAgg.total}</div>
+          <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:18px;color:var(--ink);flex-shrink:0;letter-spacing:-.02em">${LA.total}</div>
         </div>
         ${subsHtml}
       </div>

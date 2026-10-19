@@ -5660,7 +5660,7 @@ function renderCal(){
             <div style="width:4px;height:30px;background:#A32D2D;border-radius:2px"></div>
             <div style="flex:1;min-width:0">
               <div style="font-size:12.5px;font-weight:700;color:#A32D2D;line-height:1.25">&#9928; ${r.name}</div>
-              <div style="font-size:10px;color:#9a3b30;margin-top:1px">Cancelled (weather) · ${boatNames}</div>
+              <div style="font-size:10px;color:#9a3b30;margin-top:1px">${(typeof bkV2CxlInfo==='function'&&bkV2CxlInfo(r.id,_sel))?bkV2CxlInfo(r.id,_sel).lbl:'Cancelled'} · ${boatNames}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:20px;font-weight:700;color:#A32D2D;line-height:1;font-family:'DM Mono',monospace">${wc.total}</div>
@@ -5835,7 +5835,7 @@ function renderCal(){
         if(wxClosedCell){
           // Weather-cancelled → red closed cell (overrides free-seat display)
           const bg = isSel ? '#FBE0DB' : '#FCEBEB';
-          cellHtml = `<td title="Cancelled (weather) · ${rt.name} · ${ds}" onclick="showCalDay('${ds}')" style="text-align:center;background:${bg};color:#A32D2D;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;border:0.5px solid #E89A92;cursor:pointer;padding:4px 2px">&#9928;</td>`;
+          cellHtml = `<td title="${(typeof bkV2CxlInfo==='function'&&bkV2CxlInfo(rt.id,ds))?bkV2CxlInfo(rt.id,ds).lbl:'Cancelled'} · ${rt.name} · ${ds}" onclick="showCalDay('${ds}')" style="text-align:center;background:${bg};color:#A32D2D;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;border:0.5px solid #E89A92;cursor:pointer;padding:4px 2px">&#9928;</td>`;
         } else if(!rd && (pierClosedDay || routeClosedByProgram)){
           // Closed: gray with "x"
           const bg = isSel ? '#F1EFE899' : '#F1EFE8';
