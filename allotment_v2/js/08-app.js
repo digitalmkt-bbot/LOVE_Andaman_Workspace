@@ -32857,6 +32857,26 @@ function pxAgents(date, bid){
 }
 /* รถที่วิ่งให้ลำนี้จริง · นับเป็นคัน ไม่ใช่เป็นใบจอง
    รถคันเดียวส่งขึ้นสองลำ → หารตามจำนวนหัวที่ส่งขึ้นแต่ละลำ ไม่ใช่หารครึ่ง */
+/* §pxNtVan (2026-10-19) · เจ้าของ: "Tadeo เป็น No transfer ทำไมถึงมีค่ารถรับส่ง"
+   บรรทัดค่ารถตอนยังไม่มีรถจริง (ไม่ได้จัดรถ) ใช้สูตร "บาท/หัว × หัวทั้งลำ" · ไม่เคยดูว่าใบไหนมาเอง
+   ตัวอย่าง · Tadeo 39 คน KL Beim ทั้งลำ No transfer · ขึ้นค่ารถ 200 × 39 = ฿7,800 (Plan)
+   นับเฉพาะคนที่ต้องใช้รถ · กติกาเดียวกับปุ่มจัดรถอัตโนมัติ (t.zone || b.pickupZone · NoTransfer/NT = มาเอง)
+   และนับหัวแบบเดียวกับ pxPax (คนที่ขึ้นเรือจริง · ตัดใบยกเลิก/โมฆะ) · ลำที่จัดรถแล้วยังใช้ราคารถจริงเหมือนเดิม */
+function pxTransferPax(date, bid){
+  var o={tr:0, nt:0};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    var tot=pckOnBoard(b,date,ckBookedPax(t)); if(!tot) return;
+    var z=t.zone||b.pickupZone||'NoTransfer';
+    var ar=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;   /* จุดรับที่เป็นท่าเรือ (มาเอง) ก็นับเป็นมาเอง */
+    if(z==='NoTransfer' || z==='NT' || (ar && (ar.zone==='NoTransfer' || ar.zone==='NT'))) o.nt+=tot; else o.tr+=tot;
+  });
+  return o;
+}
 function pxVanCost(date, bid, routeId){
   var mine={}, all={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
@@ -32924,6 +32944,7 @@ function pxTrip(date, bid){
               why:(A.meal.name||'')+' · ผู้ใหญ่ '+(A.meal.ad||0)+'×'+(A.meal.priceAd||0)
                   +(A.meal.chd?(' + เด็ก '+A.meal.chd+'×'+(A.meal.priceCh||0)):'')};
   var VN=pxVanCost(date,bid,rid);
+  var NTV=pxTransferPax(date,bid);   /* §pxNtVan */
   if(VN.vans.length)
     act.van={amt:VN.total, why:VN.vans.map(function(v){
       return v.name+' ฿'+Math.round(v.day)+(v.share<0.999?(' ×'+Math.round(v.share*100)+'%'):'')+' ('+v.zone+')'; }).join(' · ')};
@@ -32974,6 +32995,13 @@ function pxTrip(date, bid){
          +' = '+ctB(C.rent.perDay)+'/วัน'+(C.rent.trips>1?(' ÷ '+C.rent.trips+' รอบ'):'');
     }
     if(r.id==='ltj' && real==null){ src='r'; why='จอยจริง '+LT.join+' คน (ไม่ใช่ '+PX.tot+' หัวทั้งลำ)'; }
+    /* §pxNtVan · ยังไม่ได้จัดรถ · คิดค่ารถตามสัดส่วนคนที่ต้องใช้รถ · มาเองทั้งลำ = ฿0 */
+    if(r.id==='van' && real==null && NTV.nt>0 && PX.tot>0){
+      var _trN=Math.min(NTV.tr, PX.tot);
+      est=est*(_trN/PX.tot);
+      why=_trN ? ('ใช้รถ '+_trN+' คน · มาเอง (No transfer) '+NTV.nt+' คน · คิดเฉพาะคนที่ใช้รถ')
+               : ('No transfer ทั้งลำ ('+NTV.nt+' คน) · ไม่มีค่ารถ');
+    }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
     return { id:r.id, g:r.g, l:r.l, vat:!!r.vat, est:est, real:real, why:why, src:src,
