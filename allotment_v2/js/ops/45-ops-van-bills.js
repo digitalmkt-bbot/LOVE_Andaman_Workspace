@@ -167,7 +167,7 @@
   function periodLabel(){ try{ return vbPeriod().label; }catch(_){ return ''; } }
   function ovView(){ var h = cache[overviewKey()]; return h ? h.view : null; }
   function ovTabs(){ var v = ovView(); return v ? (v.tabs || []) : []; }
-  function carCost(x){ return n(x.bill) - n(x.ex) + n(x.cut); }
+  function carCost(x){ return x && x.car_cost != null ? n(x.car_cost) : n(x.bill) - n(x.ex) + n(x.cut); }   /* §w7c · the server's car_cost; the subtraction only for an answer without it */
   function shellV2(inner){ return css() + (function(){ try{ return typeof vbxCss === 'function' ? vbxCss() : ''; }catch(_){ return ''; } })() + '<div class="vbx" data-ops-van-bills="1">' + inner + '</div>'; }
 
   function tabHtml(t){
