@@ -26951,7 +26951,7 @@ function tsCxlCell(r, date, DEC, money){
   if(b.status==='cancelled'||b.status==='cancelled_weather'){
     var lbl=cc?((cc.chargeType==='full')?('เก็บเต็ม '+money(cc.chargeAmount||0))
              :(cc.chargeType==='partial')?('เก็บบางส่วน '+money(cc.chargeAmount||0)):'ไม่ชาร์จ')
-           :(b.status==='cancelled_weather'?'ยกเลิกเพราะอากาศ':'ยกเลิก');
+           :(b.status==='cancelled_weather'?('ยกเลิกรอบ · '+((typeof tcxBkReason==='function'&&TCX_R[tcxBkReason(b)])||{th:'อากาศ'}).th):'ยกเลิก');   /* §tcxBkWhy */
     L.push('<span class="ts-chip r">ยกเลิกทั้งใบ</span><span class="ts-cxc">'+e(lbl)+'</span>');
     if(cc&&cc.reason) L.push('<span class="ts-cxr" title="'+e(cc.reason)+'">'+e(cc.reason)+'</span>');
     return '<div class="ts-dcell">'+L.join('')+'</div>';
@@ -39361,6 +39361,17 @@ var TCX_R={
 var TCX_WARN_DAYS=3;
 function tcxRec(rid,ds){ return (SB_WEATHER_CLOSURES||[]).find(x=>x&&x.routeId===rid&&x.date===ds)||null; }
 function tcxReason(rid,ds){ const c=tcxRec(rid,ds); const k=(c&&c.reason)||'weather'; return TCX_R[k]?k:'other'; }
+/* §tcxBkWhy (2026-10-19) · owner "ไม่น่าจะเป็น Weather ต้องเป็นเหตุผลจริงๆ"
+   ใบที่ถูกยกเลิกจากการยกเลิกรอบ (สถานะ cancelled_weather · ใช้สถานะเดียวกันทุกเหตุผล) เคยขึ้น "Weather" ทุกใบ
+   อ่านเหตุผลจริงจากรอบที่ใบนี้ผูกอยู่ (weatherResolve.event = 'rid|date') · ไม่มีก็ดูรอบในใบที่ถูกยกเลิก · ไม่เจอ = ของเก่า = Weather */
+function tcxBkReason(bk){
+  if(!bk) return 'weather';
+  if(bk.status==='cancelled_weather' && bk.cancelReason && TCX_R[bk.cancelReason]) return bk.cancelReason;   /* บันทึกไว้ตอนยกเลิก (§tripCxl) */
+  const ev=bk.weatherResolve && bk.weatherResolve.event;
+  if(ev){ const i=String(ev).lastIndexOf('|'); if(i>0){ const rid=ev.slice(0,i), ds=ev.slice(i+1); if(tcxRec(rid,ds)) return tcxReason(rid,ds); } }
+  const t=(bk.trips||[]).find(x=>x && tcxRec(x.routeId,x.date));
+  return t ? tcxReason(t.routeId,t.date) : 'weather';
+}
 function tcxCan(){ return (typeof window.laCanAct!=='function') || window.laCanAct('act-tripcxl'); }
 function tcxRName(rid){ return ((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===rid))||{}).name||rid; }
 function tcxPaxOf(bk, rid, ds){ return (bk.trips||[]).filter(t=>t.routeId===rid&&t.date===ds).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0); }
@@ -52739,9 +52750,10 @@ function bkV2RenderCancelReport(){
   const denom=all.filter(b=>b.status!=='rejected' && b.status!=='draft').length || 1;  // confirmed+completed+cancelled
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
   const REASONS=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[];
-  const catLabel=code=> (typeof bkV2CancelLabel==='function')?bkV2CancelLabel(code):((REASONS.find(x=>x.code===code)?.en)||code||'—');
-  const catGroup=code=> code==='weather'?'operator':(REASONS.find(x=>x.code===code)?.group)||'other';
-  const codeOf=b=> b.status==='cancelled_weather'?'weather':(b.cancelCategory||(b.cancellation&&b.cancellation.category)||'unspecified');
+  /* §tcxBkWhy · ใบจากการยกเลิกรอบ แยกตามเหตุผลจริง (Weather / Below break-even / No boat / Other) */
+  const catLabel=code=> /^tcx_/.test(code) ? ('Trip cancelled · '+((TCX_R[code.slice(4)]||TCX_R.other).en)) : ((typeof bkV2CancelLabel==='function')?bkV2CancelLabel(code):((REASONS.find(x=>x.code===code)?.en)||code||'—'));
+  const catGroup=code=> (code==='weather'||/^tcx_/.test(code))?'operator':(REASONS.find(x=>x.code===code)?.group)||'other';
+  const codeOf=b=> b.status==='cancelled_weather'?(()=>{ const k=(typeof tcxBkReason==='function')?tcxBkReason(b):'weather'; return k==='weather'?'weather':('tcx_'+k); })():(b.cancelCategory||(b.cancellation&&b.cancellation.category)||'unspecified');
   const feeOf=b=> Number((b.cancellation&&b.cancellation.chargeAmount)||0);
   // aggregate
   const byCat={}, byGroup={customer:0,operator:0,other:0}, byMonth={}, byAgent={};
@@ -56191,7 +56203,7 @@ function bkV2RenderTab2(){
           const gpax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(mt.pax||{}):0;
           const lead=bk.leadPax||bk.customerName||'—';
           const nd=g.nd;
-          const why=g.wx?' · weather':(bk.reschedule&&bk.reschedule.reason?(' · '+bk.reschedule.reason):'');
+          const why=g.wx?(' · '+((TCX_R[tcxReason(rid,date)]||TCX_R.weather).en).toLowerCase()):(bk.reschedule&&bk.reschedule.reason?(' · '+bk.reschedule.reason):'');   /* §tcxBkWhy */
           let ndLbl=nd; try{ ndLbl=new Date(nd+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){}
           return `<div class="t2-ghost-row">
             <span class="t2-ghost-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
@@ -56221,7 +56233,7 @@ function bkV2RenderTab2(){
           const lead=bk.leadPax||bk.customerName||'—';
           const cpax=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
           const cc=bk.cancellation||null;
-          const chLbl = cc ? (cc.chargeType==='full'?('Full charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):cc.chargeType==='partial'?('Charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):'No charge') : (bk.status==='cancelled_weather'?'Weather':'—');
+          const chLbl = cc ? (cc.chargeType==='full'?('Full charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):cc.chargeType==='partial'?('Charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):'No charge') : (bk.status==='cancelled_weather'?((TCX_R[tcxBkReason(bk)]||TCX_R.weather).en):'—');   /* §tcxBkWhy */
           return `<div class="t2-cxl-row">
             <span class="t2-cxl-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
             <span class="t2-cxl-ag">${esc(norm.agentName)}</span>

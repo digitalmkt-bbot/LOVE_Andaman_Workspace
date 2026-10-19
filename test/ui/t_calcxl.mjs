@@ -12,6 +12,7 @@
 //   4 แผงขวา: การ์ด Similan เป็นการ์ดปกติ หัวการ์ด = รอบที่ยังออก + บรรทัด "1 trip cancelled (below break-even) · −N pax" · แถวรอบที่ยกเลิกขีด + ป้ายเหตุผล
 //     · การ์ด Krabi เป็นการ์ดแดง ป้าย "Cancelled (Below break-even)" · ไม่มีคำว่า weather ที่ไหน
 //   5 ไม่แก้ใบจอง · ไม่มี error
+//   6 (§tcxBkWhy) ใบที่ถูกยกเลิกจากการยกเลิกรอบ ขึ้นเหตุผลจริงของรอบ (Below break-even / No boat) ไม่ใช่ Weather ทุกใบ
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -69,5 +70,21 @@ else {
 const after = await page.evaluate(() => JSON.stringify(SB_BOOKINGS.filter(b => /^ZZCX/.test(b.id))));
 if (after === S.before && errors.length === 0) ok('5 ไม่แก้ใบจอง · ไม่มี error');
 else fail('5 ' + JSON.stringify(errors.slice(0, 3)));
+/* ══ 6 · §tcxBkWhy · ใบที่ยกเลิกจากการยกเลิกรอบ ขึ้นเหตุผลจริง ไม่ใช่ Weather ทุกใบ ═══ */
+const R6 = await page.evaluate(async (S) => {
+  const L = SB_BOOKINGS.filter(b => /^ZZCX/.test(b.id) && b.trips[0].routeId === S.K);   /* Krabi 3 ใบ · รอบยกเลิกเหตุผล minpax */
+  L[0].status = 'cancelled_weather'; L[0].weatherResolve = { event: S.K + '|' + S.D, status: 'resolved', outcome: 'cancel' };   /* ของเก่า · ไม่มี cancelReason */
+  L[1].status = 'cancelled_weather'; L[1].cancelReason = 'boat'; L[1].weatherResolve = { event: S.K + '|' + S.D, status: 'resolved', outcome: 'cancel' };
+  const old = JSON.parse(JSON.stringify(L[0])); old.id = 'ZZCXOLD'; delete old.weatherResolve; old.trips[0].date = '2025-01-05'; SB_BOOKINGS.push(old);   /* ไม่มีรอบที่ผูก = Weather */
+  const why = [tcxBkReason(L[0]), tcxBkReason(L[1]), tcxBkReason(old)];
+  bkV2OpenFiltered(S.K, S.D); await new Promise(r => setTimeout(r, 400));
+  document.querySelectorAll('.t2-cxl-sec').forEach(x => x.classList.add('open'));
+  const rows = [...document.querySelectorAll('.t2-cxl-row')].map(r => (r.querySelector('.t2-cxl-ch') || {}).textContent || '');
+  return { why, rows };
+}, S);
+if (R6.why.join() === 'minpax,boat,weather' && R6.rows.includes('Below break-even') && R6.rows.includes('No boat') && !R6.rows.includes('Weather'))
+  ok('6 ใบที่ยกเลิกจากการยกเลิกรอบ: ผูกรอบ minpax → "Below break-even" · บันทึก boat ไว้ → "No boat" · ของเก่าไม่มีรอบ → Weather · หน้า By trip ไม่ขึ้น Weather ผิด ๆ');
+else fail('6 ' + JSON.stringify(R6));
+
 await close();
 if (bad) { console.log(bad + ' FAILED'); process.exit(1); } console.log('ALL OK');
