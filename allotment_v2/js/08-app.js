@@ -39381,7 +39381,10 @@ function tcxBE(rid, ds){
   if(!_tcxBeMemo){ _tcxBeMemo={}; Promise.resolve().then(()=>{ _tcxBeMemo=null; }); }
   const k=rid+'|'+ds; if(k in _tcxBeMemo) return _tcxBeMemo[k];
   let v=0; try{ const day=(typeof TRIPS!=='undefined'&&TRIPS[ds])||{};
-    Object.keys(day).forEach(bid=>{ const op=day[bid]; if(!op||op.route!==rid) return; const x=(typeof pxTrip==='function')?pxTrip(ds,bid):null; if(x&&x.be) v+=(+x.be||0); }); }catch(_){}
+    const ch=(typeof baCharterBoatIds==='function')?baCharterBoatIds(ds):new Set();   /* §tcxCharter · ลำเหมาไม่นับ */
+    Object.keys(day).forEach(bid=>{ const op=day[bid]; if(!op||op.route!==rid) return;
+      if(ch.has(bid) || op.charterBookingId || (typeof opLocked==='function' && opLocked(op))) return;
+      const x=(typeof pxTrip==='function')?pxTrip(ds,bid):null; if(x&&x.be) v+=(+x.be||0); }); }catch(_){}
   _tcxBeMemo[k]=v; return v;
 }
 function tcxSnapNow(rid, ds){
@@ -39501,6 +39504,7 @@ function tcxBelow(rid, ds, al){
     if(bkV2IsWeatherClosed(rid,ds)) return null;
     al=al||((typeof getAllotment==='function')?getAllotment(rid,ds):null);
     if(!al||!al.hasAllotment) return null;
+    if(!(+al.availableCapacity>0)) return null;   /* §tcxCharter · มีแต่ลำเหมา = ไม่มีที่นั่งขาย */
     const be=tcxBE(rid,ds); if(!(be>0)) return null;
     const bk=+al.seatsConsumed||0; if(bk>=be) return null;
     return {rid:rid, ds:ds, be:be, bk:bk, days:days};
