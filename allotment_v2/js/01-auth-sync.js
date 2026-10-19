@@ -1149,7 +1149,7 @@
     /* §pjLim (2026-10-19) · เจ้าของ: "ไปดูสิทธิ์หน้าใบงานเรือ ตัด Captain & Crew · Guides & Trainee ออก และไม่ต้องมีปุ่มปริ้น" */
     {v:'lim-pjlite', lim:true, t:'ใบงานเรือ · ไม่เห็นทีมเรือ/ไกด์ · ไม่มีปุ่มพิมพ์', d:'หน้าใบงานเรือของทุกท่า · ซ่อนหัวข้อ Captain & Crew และ Guides & Trainee (รวมใบอนุญาต ปุ่มดึงทีม/จัดไกด์ ใบงานไกด์) · ไม่มีปุ่มพิมพ์ · ยังเห็นเรือ เส้นทาง ภาษา ครัว ลูกค้า โน้ต'},
     {v:'lim-bkct', lim:true, t:'ไม่เห็น Booking – Transfer / City Tour', d:'ซ่อนเมนู Booking – Transfer / City Tour (หน้าจองฝั่งรถ/ทัวร์บก) · เมนู Booking ฝั่งเรือยังเห็นตามสิทธิ์'},
-    {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรม (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
+    {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม + Boat Running', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรมกับ Boats running (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
   window.LA_ACTS=LA_ACTS;
   window.laLimited=function(key){ if(!ME || ME.role==='admin') return false; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };   /* §bkLim */
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }

@@ -83725,11 +83725,17 @@ function pc2CSS3(S){
   var B='body.la-bkprog #view-booking ';
   s.textContent=B+'.bkv2-utab:not([onclick*="\'cal\'"]):not([onclick*="\'bytrip\'"]){display:none!important}'
     +B+'.bkv2-newbtn2{display:none!important}'
-    +B+'.bt-hgrid{grid-template-columns:minmax(0,1fr)!important}'
-    +B+'.bt-hgrid > :not(:first-child){display:none!important}'
+    /* §bkBoatRun (2026-10-19) · เจ้าของ: "By trip date เพิ่ม Boat Running" · คอลัมน์ 2 (Boats running) กลับมาข้างตารางโปรแกรม
+       ซ่อนแค่คอลัมน์ 3 (โหมด/ค้นหา/ล็อก/Notice) · จอแคบ (≤1150px) เรียงลงเป็นแถวเดียวตามผิวเดิม */
+    +B+'.bt-hgrid{grid-template-columns:minmax(0,1.28fr) minmax(0,1fr)!important}'
+    +B+'.bt-hgrid.bt-hgrid-noboat{grid-template-columns:minmax(0,1fr)!important}'
+    +B+'.bt-hgrid > :nth-child(n+3){display:none!important}'
+    +'@media (max-width:1150px){'+B+'.bt-hgrid{grid-template-columns:minmax(0,1fr)!important}}'
     +B+'.t2-wrap,'+B+'.btc-tg{display:none!important}'
     +B+'.bt-pkh{position:static!important}'
     +B+'.bt-c.bt-prog{max-width:none!important;height:auto!important;max-height:none!important}'
-    +B+'.bt-hgrid,'+B+'.bt-hgrid > :first-child,'+B+'.bt-pgbody{height:auto!important;max-height:none!important;overflow:visible!important}';
+    +B+'.bt-hgrid,'+B+'.bt-hgrid > :first-child,'+B+'.bt-pgbody{height:auto!important;max-height:none!important;overflow:visible!important}'
+    +B+'.bt-hgrid{align-items:start!important}'   /* §bkBoatRun · การ์ดเรือไม่ยืดตามความสูงตารางโปรแกรม */
+    +B+'.bt-hgrid > :nth-child(2),'+B+'.bt-c.bt-boat,'+B+'.bt-boat .bt-tgl,'+B+'.bt-boat .bt-blist{height:auto!important;max-height:none!important;overflow:visible!important}';   /* เห็นทุกทริป ไม่ตัดที่ 2 ทริปแรก */
   (document.head||document.documentElement).appendChild(s);
 }catch(_){ } })();

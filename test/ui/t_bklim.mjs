@@ -37,10 +37,12 @@ const probe = async (page) => page.evaluate(async () => {
   const kids = H ? [...H.children].filter(vis).length : -1;
   const prog = vis(document.querySelector('#view-booking .bt-c.bt-prog')), boat = vis(document.querySelector('#view-booking .bt-c.bt-boat')), tbl = vis(document.querySelector('#view-booking .t2-wrap'));
   const progW = prog ? Math.round(document.querySelector('#view-booking .bt-c.bt-prog').getBoundingClientRect().width) : 0;
+  const boatW = boat ? Math.round(document.querySelector('#view-booking .bt-c.bt-boat').getBoundingClientRect().width) : 0;
+  const col3 = vis(document.querySelector('#view-booking .bt-col3'));
   bkV2NewBooking(); await z(300); const nbOpen = !!_bkV2.newBooking;
   const someId = (SB_BOOKINGS.find(b => b.status === 'confirmed') || {}).id; bkV2OpenDetail(someId); await z(300); const det = !!_bkV2.detailId;
   _bkV2.newBooking = null; _bkV2.detailId = null; bkV2SwitchTab('cal'); await z(500); const cal = _bkV2.tab === 'cal' && vis(document.querySelector('#view-booking .bkv2-cal-cell'));
-  return { tabAfterAll, tabs, nb, kids, prog, boat, tbl, progW, nbOpen, det, cal, body: document.body.classList.contains('la-bkprog') };
+  return { tabAfterAll, tabs, nb, kids, prog, boat, tbl, progW, boatW, col3, nbOpen, det, cal, body: document.body.classList.contains('la-bkprog') };
 });
 
 // 1 · ผู้ใช้ที่ติดข้อจำกัด
@@ -48,7 +50,7 @@ const probe = async (page) => page.evaluate(async () => {
   const r = await probe(page);
   if (process.env.SHOT) { await page.evaluate(async () => { bkV2SwitchTab('bytrip'); await new Promise(f => setTimeout(f, 900)); }); await page.screenshot({ path: '/mnt/user-data/outputs/bklim_bytrip.png' }); }
   if (r.body && r.tabs.join('|') === 'Calendar|By trip · date' && !r.nb && r.tabAfterAll === 'bytrip') ok('1 limited · แท็บเหลือ Calendar + By trip · ไม่มี New booking · กดแท็บอื่นเด้งกลับ By trip'); else fail('1 ' + JSON.stringify(r));
-  if (r.prog && !r.boat && !r.tbl && r.kids === 1 && r.progW > 1200) ok(`2 limited · By trip เห็นแค่การ์ดตารางโปรแกรม กว้างเต็ม (${r.progW}px) · ไม่มีการ์ดเรือ/รถ/ล็อก · ไม่มีตารางรายชื่อ`); else fail('2 ' + JSON.stringify(r));
+  if (r.prog && r.boat && !r.col3 && !r.tbl && r.kids === 2 && r.progW > 600 && r.boatW > 500) ok(`2 limited · By trip เห็นการ์ดตารางโปรแกรม (${r.progW}px) + Boats running (${r.boatW}px) · ไม่มีโหมด/ล็อก/Notice · ไม่มีตารางรายชื่อ`); else fail('2 ' + JSON.stringify(r));
   if (!r.nbOpen && !r.det && r.cal) ok('3 limited · New booking / เปิดใบจอง ทางลัดถูกกัน · Calendar ใช้ได้'); else fail('3 ' + JSON.stringify(r));
   if (errors.length) fail('errors(limited): ' + errors.join(' | ')); await close(); }
 
