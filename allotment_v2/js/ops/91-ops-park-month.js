@@ -63,22 +63,23 @@
       D.boats.forEach(function(B){
         var s = z();
         setNat(s, B.nationality);
-        TY.forEach(function(Ty){ s.ty[Ty.k] = n((B.tickets || {})[Ty.k]); s.pc[Ty.k] = n((B.counts || {})[Ty.k]); });
+        TY.forEach(function(Ty){ s.ty[Ty.k] = n((B.tickets || {})[Ty.k]); s.pc[Ty.k] = n(((B.pc || B.counts) || {})[Ty.k]); });   /* §w7c · pc = the server's per-boat should-be-issued */
         s.tyT = n(B.ticket_total);
         var rt = (typeof window.getRoute === 'function' && window.getRoute(B.route_id)) || {};
         boats.push({ s: s, rc: rt.color || '#94A3B8', rn: B.route_name || rt.name || B.route_id, bn: B.boat_name || B.boat_id, dep: B.departure || '' });
         routes[B.route_id] = 1;
-        addPcTy(ds_, s, true);
+        if(!D.by_type || !D.pc) addPcTy(ds_, s, true);   /* §w7c · only an older server without the day's by_type / pc is added up here */
       });
       setNat(ds_, D.nationality); ds_.tyT = n(D.tickets);
+      if(D.by_type && D.pc) TY.forEach(function(Ty){ ds_.ty[Ty.k] = n(D.by_type[Ty.k]); ds_.pc[Ty.k] = n(D.pc[Ty.k]); });   /* §w7c */
       days.push({ ds: ds, d: i, boats: boats.length, tot: ds_.tyT, miss: n(D.miss) });
-      addPcTy(T.s, ds_, false);
+      if(!(J.total && J.total.pc)) addPcTy(T.s, ds_, false);   /* §w7c */
       T.day++; T.boat += boats.length;
       rows.push({ ds: ds, d: i, wd: WD[dd.getDay()], sun: dd.getDay() === 0, boats: boats, nRoute: Object.keys(routes).length, s: ds_, miss: n(D.miss) });
     }
     var tot = J.total || {};
     setNat(T.s, tot.nationality); T.s.tyT = n(tot.tickets);
-    TY.forEach(function(Ty){ T.s.ty[Ty.k] = n((tot.by_type || {})[Ty.k]); });
+    TY.forEach(function(Ty){ T.s.ty[Ty.k] = n((tot.by_type || {})[Ty.k]); if(tot.pc) T.s.pc[Ty.k] = n(tot.pc[Ty.k]); });   /* §w7c */
     var rts = (J.routes || []).map(function(r){
       var rt = (typeof window.getRoute === 'function' && window.getRoute(r.route_id)) || {};
       return { rn: r.route_name || rt.name || r.route_id, rc: rt.color || '#94A3B8', trips: n(r.trips), days: n(r.days), tot: n(r.tickets) };
