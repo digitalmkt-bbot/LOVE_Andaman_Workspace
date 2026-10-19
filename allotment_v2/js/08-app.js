@@ -14338,6 +14338,8 @@ function pcSheetPK(pier, opt){
           +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
+    if(typeof pcPkSheetTotals==='function'){ var _sv=pcPkSheetTotals(pier,ds);   /* §w7c · the day's keyed sums and due from the server's park sheet (print) */
+      if(_sv){ PC_PK.forEach(function(k,i){ DK[i]=_sv[k]||0; }); dktot=_sv.heads; dm=_sv.amount; ddk=_sv.dock; if(_sv.due!==undefined) dex=_sv.due; } }
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
     gtot+=dtot; gktot+=dktot; gm+=dm; gex+=dex; gdk+=ddk;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="25">'
@@ -63465,6 +63467,7 @@ function pc2PKDay(pier, ds){
     dtot+=gtot; dkt+=gkt; ddk+=gdk; dm+=gm; if(gx){ dex+=gex; anyx=true; } if(gk) anyk=true; if(gP){ dexP+=gexP; dP=true; }
     /* ต่าง · เทียบเฉพาะลำที่กรอกเงินแล้ว · ลำที่ยังไม่กรอกไม่ใช่ส่วนต่าง */
     var gd=(gP&&gm>0)?Math.round(gm-gexP):null;
+    if(typeof pcPkGroupDiffPaid==='function') gd=pcPkGroupDiffPaid(pier,ds,G.rid,gd);   /* §w7c · the group's check.diff_paid in ops mode */
     html+='<div class="pc2-tr pk grp" style="--rc:'+pcE(pcRouteColor(G.rid)||'#C9D2E0')+'"><span class="span-all">'+pc2Route(G.rid,G.route)
         +'<span class="gn">'+G.boats.length+' ลำ · '+gtot+' คน</span>'+pcRateChip(R)+'</span></div>'
       +rows
