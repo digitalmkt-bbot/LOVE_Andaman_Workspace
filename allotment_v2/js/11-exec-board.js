@@ -1023,13 +1023,14 @@
   function isFullRow(cap, bk, free){ return cap>0 && (free<=2 || bk>=cap*0.97); }
   function mvDay(ds){
     var t0=today(), now=Date.now(), ago24=now-86400000, I=idx(), rows=[];
-    var tot={cap:0, bk:0, free:0, boats:0, full:0, below:0, rev:0, be:0, add:0, addN:0, addV:0, addZ:{PK:0,KL:0,RN:0,NT:0,O:0}, cxl:0, cxlN:0, bk24:0, cap24:0, open:0, freeOpen:0};
+    var tot={cap:0, bk:0, free:0, boats:0, full:0, below:0, rev:0, be:0, add:0, addN:0, addV:0, addZ:{PK:0,KL:0,RN:0,NT:0,O:0}, cxl:0, cxlN:0, bk24:0, cap24:0, open:0, freeOpen:0, px:{ad:0,chd:0,inf:0,foc:0}, addPx:{ad:0,chd:0,inf:0,foc:0}};   /* §execMvPax · แยก AD/CHD/INF/FOC */
     routesOn(ds).filter(isBoatRoute).forEach(function(rid){
       var r=route(rid)||{}, al=alOf(rid, ds), B=boatsOn(ds, rid), CH=chBoatsOn(ds, rid);
       var o={rid:rid, dep:((r.times||[])[0]||''), boats:B, cap:0, bk:0, free:null, zg:{PK:0,KL:0,RN:0,NT:0,O:0}, byBoat:{}, add:0, addAg:{}, last:null, lastAny:0, bk24:0, rev:0, be:beOf(rid, ds), n:0};
       if(al && al.hasAllotment){ o.cap=+al.availableCapacity||0; o.bk=+al.seatsConsumed||0; o.free=Math.max(0,+al.seatsAvailable||0); }
       eachTrip(ds, ds, function(b,t){ if(t.routeId!==rid) return;
         var p=pax(t), ts=bkTs(b); o.n++; o.rev+=amt(b,t); o.zg[zgOf(b,t)]+=p;
+        var isNew=bkDay(b)===t0; ['ad','chd','inf','foc'].forEach(function(k){ var v=(typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax||{},k):0; tot.px[k]+=v; if(isNew) tot.addPx[k]+=v; });   /* §execMvPax */
         var bid=''; try{ bid=(bkOpsRead(b,ds)||{}).boatId||''; }catch(_){} if(bid) o.byBoat[bid]=(o.byBoat[bid]||0)+p;
         if(ts>o.lastAny) o.lastAny=ts;
         if(ts && ts<=ago24) o.bk24+=p;
@@ -1096,6 +1097,10 @@
     if(!ks.length) return '';
     return ks.map(function(k){ return '<span style="color:'+(k==='NT'||k==='O'?'var(--eb-mut)':ZG_COL[k])+';font-weight:600">'+E(ZG_LBL[k])+' '+num(z[k])+'</span>'; }).join(' · ');
   }
+  /* §execMvPax (2026-10-19) · owner "Card บน ขอเพิ่มจำนวนแยกตาม Variant แยก AD CHD INF FOC" · นับจากใบจองของวันนั้น (ไม่ใช่ที่นั่งที่ล็อก) */
+  function mvPaxRow(P, lbl){ var t=P.ad+P.chd+P.inf+P.foc; if(!t) return '';
+    return '<div class="ebm-px">'+(lbl?'<span class="t">'+E(lbl)+' <b>'+num(t)+'</b></span>':'')
+      +[['ad','AD'],['chd','CHD'],['inf','INF'],['foc','FOC']].map(function(x){ return '<span class="'+(P[x[0]]?'':'z')+'"><small>'+x[1]+'</small><b>'+num(P[x[0]])+'</b></span>'; }).join('')+'</div>'; }
   function viewMove(){
     var t0=today(), ds=mvDate(), D=mvDay(ds), T=D.tot, now=Date.now();
     var piersN={}; D.rows.forEach(function(o){ piersN[(route(o.rid)||{}).pier||'']=1; });
@@ -1108,9 +1113,10 @@
       +'<div class="nav"><button onclick="ebSet(\'mvd\',\'prev\')" aria-label="วันก่อนหน้า">‹</button><button onclick="ebSet(\'mvd\',\'next\')" aria-label="วันถัดไป">›</button>'
       +(ds!==addDays(t0,1)?'<button onclick="ebSet(\'mvd\',\'tm\')">พรุ่งนี้</button>':'')+(ds!==t0?'<button onclick="ebSet(\'mvd\',\'td\')">วันนี้</button>':'')+'</div></div>'
       +'<div class="ebm-mood">'+ring+'<div><div class="n"><b>'+num(T.full)+'</b><span> / '+num(T.boats)+' ลำเต็ม</span></div><div class="s">'+E(mood)+(mood&&moodBe?' · ':'')+moodBe+'</div>'
-      +(T.cap24>0 && T.bk24>0 ? '<div class="c '+(D.pct>=D.pct24?'up':'dn')+'">'+(D.pct>=D.pct24?'▲':'▼')+' เมื่อวานเวลาเดียวกัน '+D.pct24+'%</div>' : '')+'</div></div>'
+      +(T.cap24>0 && T.bk24>0 ? '<div class="c '+(D.pct>=D.pct24?'up':'dn')+'">'+(D.pct>=D.pct24?'▲':'▼')+' เมื่อวานเวลาเดียวกัน '+D.pct24+'%</div>' : '')
+      +mvPaxRow(T.px, 'ผู้โดยสาร')+'</div></div>'
       +'<div class="ebm-stats">'
-        +'<div><div class="l">เข้ามาวันนี้</div><div class="v" style="color:#15803D">+'+num(T.add)+'</div><div class="d">'+num(T.addN)+' ใบ · '+baht(T.addV)+'</div><div class="d">'+(zgChips(T.addZ)||'<span class="eb-mut">ยังไม่มี</span>')+'</div></div>'
+        +'<div><div class="l">เข้ามาวันนี้</div><div class="v" style="color:#15803D">+'+num(T.add)+'</div><div class="d">'+num(T.addN)+' ใบ · '+baht(T.addV)+'</div><div class="d">'+(zgChips(T.addZ)||'<span class="eb-mut">ยังไม่มี</span>')+'</div>'+(T.add?mvPaxRow(T.addPx,''):'')+'</div>'
         +'<div><div class="l">ยกเลิก / เลื่อนออก</div><div class="v" style="color:'+(T.cxl?'var(--eb-bad)':'var(--eb-ink)')+'">'+(T.cxl?'−'+num(T.cxl):'0')+'</div><div class="d">'+num(T.cxlN)+' ใบ วันนี้</div></div>'
         +'<div><div class="l">รายได้ยืนยันแล้ว</div><div class="v">'+baht(T.rev)+'</div><div class="d">'+(T.addV?'<span style="color:#15803D;font-weight:600">▲ '+baht(T.addV)+'</span> วันนี้':'')+(T.be?' · คุ้มทุน '+baht(T.be):'')+'</div></div>'
       +'</div></div>';
@@ -1388,6 +1394,9 @@
       '.ebm-date .nav{display:flex;gap:8px;margin-top:8px}',
       '.ebm-date .nav button{min-width:32px;height:32px;border-radius:8px;border:1px solid #D6DBE3;background:#fff;color:var(--eb-ink);font:600 13px inherit;font-family:inherit;cursor:pointer;padding:0 10px}',
       '.ebm-mood{display:flex;align-items:center;gap:18px}',
+      '.ebm-px{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:12px}.ebm-px .t{color:var(--eb-ink2);margin-right:4px}.ebm-px .t b{color:var(--eb-ink);font-weight:700}',
+      '.ebm-px span:not(.t){display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:#F3F4F6;color:var(--eb-ink)}.ebm-px span:not(.t) small{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--eb-mut)}.ebm-px span:not(.t) b{font-weight:700}.ebm-px span.z{opacity:.45}',
+      '.ebm-stats .ebm-px{margin-top:5px;font-size:11px}.ebm-stats .ebm-px span:not(.t){padding:1px 6px}',
       '.ebm-ring{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}',
       '.ebm-ring>div{width:72px;height:72px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}',
       '.ebm-ring b{font-size:21px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}.ebm-ring small{font-size:10px;color:var(--eb-mut)}',

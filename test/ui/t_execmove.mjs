@@ -17,6 +17,7 @@
 //   8 Booking Movement · Today (อังกฤษ): จำนวนใบ/ที่นั่ง = ใบที่เข้าระบบวันนี้ทุกวันเดินทาง · Phuket+Khao Lak+Own = ที่นั่งรวม
 //     · แท่งรายชั่วโมงรวม = ที่นั่งรวม · ทุกแถวในรายการมีชิป Sales · ชื่อ (B2C = Online) · ใบยกเลิกขึ้น cancelled −pax
 //   9 7 วันข้างหน้า 7 ช่อง · % ของพรุ่งนี้ตรงกับวงแหวน · ลำที่ต้องช่วยมีโปรแกรมที่ยังว่าง · ปุ่มพาไป Gap to Target
+//  11 (§execMvPax 2026-10-19) การ์ดบนแยกจำนวน AD/CHD/INF/FOC = Σ bkV2PaxTot ของใบจองพรุ่งนี้ · ช่อง "เข้ามาวันนี้" แยกด้วย
 //  10 ใช้ดูอย่างเดียว: วาดซ้ำแล้ว SB_BOOKINGS/localStorage ไม่เปลี่ยน · ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -45,6 +46,7 @@ const S = await page.evaluate(() => {
   for (let i = 0; i < 9; i++) mk(tm, 'r12', 0, 8 + i, 3, i%2?'PK':'NoTransfer');
   for (let i = 0; i < 4; i++) mk(add(3), 'r5', 0, 16, 4, 'PK');
   const fresh = mk(tm, 'r12', 0, new Date().getHours(), 1, 'PK'); fresh.history[0].at = new Date(Date.now() - 5*60000).toISOString();
+  const mix = mk(tm, 'r5', -1, 12, 2, 'PK'); mix.trips[0].pax = { ad: 2, chd: 2, inf: 1, foc: 1 };   /* §execMvPax · ให้มีเด็ก/INF/FOC */
   const c = mk(tm, 'r4', -4, 10, 4, 'PK'); c.status='cancelled'; c.cancelledAt = new Date().toISOString();
   try { if (typeof ckBksOnReset === 'function') ckBksOnReset(); } catch (_) {}
   Object.assign(window._eb, { per:'today', pier:'', tab:'move', sp:'week', off:0, gp:'h', mvd:'' });
@@ -210,6 +212,23 @@ const e10 = errors.filter(e => !/favicon|fonts\.|cdnjs|net::ERR|Failed to load r
 if (!R10.same) fail('10 วาดซ้ำแล้วข้อมูลเปลี่ยน');
 else if (e10.length) fail('10 error · ' + e10.slice(0, 3).join(' | '));
 else ok('10 ดูอย่างเดียว · ไม่มี error');
+
+/* ══ 11 · §execMvPax · การ์ดบนแยก AD/CHD/INF/FOC ═════════════════════════ */
+const R11 = await page.evaluate((S) => {
+  ebSetNow('pier', ''); ebSetNow('mvd', 'tm');
+  const w = document.getElementById('eb-wrap');
+  const rd = el => Object.fromEntries([...el.querySelectorAll('span:not(.t)')].map(x => [x.querySelector('small').textContent, +x.querySelector('b').textContent.replace(/,/g, '')]));
+  const main = w.querySelector('.ebm-mood .ebm-px'), add = w.querySelector('.ebm-stats .ebm-px');
+  const exp = { AD: 0, CHD: 0, INF: 0, FOC: 0 }, expAdd = { AD: 0, CHD: 0, INF: 0, FOC: 0 };
+  SB_BOOKINGS.forEach(b => { if (['cancelled', 'rejected', 'cancelled_weather', 'quote', 'draft'].includes(b.status) || laIsInternalFree(b)) return; (b.trips || []).forEach(t => { if (t.date !== S.tm) return;
+    const isNew = _dashBkDay(b) === S.t0; [['ad', 'AD'], ['chd', 'CHD'], ['inf', 'INF'], ['foc', 'FOC']].forEach(([k, K]) => { const v = bkV2PaxTot(t.pax || {}, k); exp[K] += v; if (isNew) expAdd[K] += v; }); }); });
+  const tot = main ? +main.querySelector('.t b').textContent.replace(/,/g, '') : -1;
+  return { main: main ? rd(main) : null, add: add ? rd(add) : null, exp, expAdd, tot, sumExp: exp.AD + exp.CHD + exp.INF + exp.FOC };
+}, S);
+const same = (a, b) => a && ['AD', 'CHD', 'INF', 'FOC'].every(k => a[k] === b[k]);
+if (same(R11.main, R11.exp) && R11.tot === R11.sumExp && same(R11.add, R11.expAdd) && R11.sumExp > 0)
+  ok('11 การ์ดบน ผู้โดยสาร ' + R11.tot + ' · AD ' + R11.exp.AD + ' · CHD ' + R11.exp.CHD + ' · INF ' + R11.exp.INF + ' · FOC ' + R11.exp.FOC + ' ตรงใบจองพรุ่งนี้ · เข้ามาวันนี้แยกประเภทตรงด้วย');
+else fail('11 ' + JSON.stringify(R11));
 
 await close();
 console.log(bad ? ('FAILED ' + bad) : 'ALL OK');
