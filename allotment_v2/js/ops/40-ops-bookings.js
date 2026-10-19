@@ -509,6 +509,12 @@
     /* w6-d · the add-on link of a Love Kingdom add-on-only line and its agent booking (the single read only): addon_of = the agent booking's id, addon_lines = the lines on it */
     if('addon_of' in ob){ bk.addonOfRead = true; bk.addonOf = ob.addon_of || null; }
     if(Array.isArray(ob.addon_lines)) bk.addonLines = ob.addon_lines.map(function(x){ return { booking_id: x.booking_id, code: x.code || '', lead_pax: x.lead_pax || '', voucher_ref: x.voucher_ref || '', add_ons: x.add_ons || [] }; });
+    /* §w7a · computed read-only fields the booking form and lists read (never sent: toServer picks its fields):
+       drop {separate,name,self_return} (every read and list row) -> bookingV2RetInfo; addon_only (list rows) -> bkB2CAddonOnly;
+       order_lines[] (single read: the other lines of the order, full rows) -> _bkOrderLines. 95-ops-w7a-booking-form.js / -lists.js read them. */
+    if(ob.drop && typeof ob.drop === 'object') bk.srvDrop = { sep: !!ob.drop.separate, name: ob.drop.name || '', selfReturn: !!ob.drop.self_return };
+    if(typeof ob.addon_only === 'boolean') bk.srvAddonOnly = ob.addon_only;
+    if(Array.isArray(ob.order_lines)) bk.srvOrderLines = ob.order_lines.map(function(x){ return fromServer(x); });
     Object.assign(bk, records(ob, bk.trips));
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);
@@ -526,6 +532,7 @@
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
     delete bk.srvList;       // §opsBookingList · same for the list row's fields (last activity, chips, duplicates)
+    delete bk.srvDrop; delete bk.srvAddonOnly;      // §w7a · same for the drop-off reading and the add-on-only flag (order lines stay: the siblings do not change with this booking)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
     if(vans) O.vans.put(bk, vans);
