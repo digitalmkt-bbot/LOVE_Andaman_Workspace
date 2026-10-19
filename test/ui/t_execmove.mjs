@@ -17,7 +17,7 @@
 //   8 Booking Movement · Today (อังกฤษ): จำนวนใบ/ที่นั่ง = ใบที่เข้าระบบวันนี้ทุกวันเดินทาง · Phuket+Khao Lak+Own = ที่นั่งรวม
 //     · แท่งรายชั่วโมงรวม = ที่นั่งรวม · ทุกแถวในรายการมีชิป Sales · ชื่อ (B2C = Online) · ใบยกเลิกขึ้น cancelled −pax
 //   9 7 วันข้างหน้า 7 ช่อง · % ของพรุ่งนี้ตรงกับวงแหวน · ลำที่ต้องช่วยมีโปรแกรมที่ยังว่าง · ปุ่มพาไป Gap to Target
-//  11 (§execMvPax 2026-10-19) การ์ดบนแยกจำนวน AD/CHD/INF/FOC = Σ bkV2PaxTot ของใบจองพรุ่งนี้ · ช่อง "เข้ามาวันนี้" แยกด้วย
+//  11 (§execMvVar 2026-10-19) การ์ดบนมีตาราง โปรแกรม → variant × AD/CHD/INF/FOC · รวม/+วันนี้ ตรงใบจอง · กดหัวโปรแกรมยุบได้และจำไว้
 //  10 ใช้ดูอย่างเดียว: วาดซ้ำแล้ว SB_BOOKINGS/localStorage ไม่เปลี่ยน · ไม่มี error
 import { open, goView } from './_harness.mjs';
 let bad = 0;
@@ -213,22 +213,44 @@ if (!R10.same) fail('10 วาดซ้ำแล้วข้อมูลเป�
 else if (e10.length) fail('10 error · ' + e10.slice(0, 3).join(' | '));
 else ok('10 ดูอย่างเดียว · ไม่มี error');
 
-/* ══ 11 · §execMvPax · การ์ดบนแยก AD/CHD/INF/FOC ═════════════════════════ */
+/* ══ 11 · §execMvVar · การ์ดบน: ตารางโปรแกรม → variant × AD/CHD/INF/FOC · ยุบได้ ═══ */
 const R11 = await page.evaluate((S) => {
+  try { localStorage.removeItem('eb_mv_fold'); } catch (_) {} window._eb.mvc = null;
   ebSetNow('pier', ''); ebSetNow('mvd', 'tm');
-  const w = document.getElementById('eb-wrap');
-  const rd = el => Object.fromEntries([...el.querySelectorAll('span:not(.t)')].map(x => [x.querySelector('small').textContent, +x.querySelector('b').textContent.replace(/,/g, '')]));
-  const main = w.querySelector('.ebm-mood .ebm-px'), add = w.querySelector('.ebm-stats .ebm-px');
-  const exp = { AD: 0, CHD: 0, INF: 0, FOC: 0 }, expAdd = { AD: 0, CHD: 0, INF: 0, FOC: 0 };
+  const W = () => document.getElementById('eb-wrap');
+  const num = t => +String(t).replace(/[^\d]/g, '') || 0;
+  const rowv = tr => [...tr.querySelectorAll('td')].slice(1).map(td => num(td.textContent));
+  const exp = { tot: [0, 0, 0, 0], add: 0, byR: {} };
   SB_BOOKINGS.forEach(b => { if (['cancelled', 'rejected', 'cancelled_weather', 'quote', 'draft'].includes(b.status) || laIsInternalFree(b)) return; (b.trips || []).forEach(t => { if (t.date !== S.tm) return;
-    const isNew = _dashBkDay(b) === S.t0; [['ad', 'AD'], ['chd', 'CHD'], ['inf', 'INF'], ['foc', 'FOC']].forEach(([k, K]) => { const v = bkV2PaxTot(t.pax || {}, k); exp[K] += v; if (isNew) expAdd[K] += v; }); }); });
-  const tot = main ? +main.querySelector('.t b').textContent.replace(/,/g, '') : -1;
-  return { main: main ? rd(main) : null, add: add ? rd(add) : null, exp, expAdd, tot, sumExp: exp.AD + exp.CHD + exp.INF + exp.FOC };
+    const v = ['ad', 'chd', 'inf', 'foc'].map(k => bkV2PaxTot(t.pax || {}, k)); v.forEach((x, i) => exp.tot[i] += x);
+    const R = exp.byR[t.routeId] = exp.byR[t.routeId] || [0, 0, 0, 0]; v.forEach((x, i) => R[i] += x); if (_dashBkDay(b) === S.t0) exp.add += v.reduce((a, c) => a + c, 0); }); });
+  let w = W(); const vt = w.querySelector('.ebm-head .ebm-vt'); if (!vt) return { noTable: true };
+  const tot = rowv(vt.querySelector('tr.tot'));
+  const vr = [...vt.querySelectorAll('tr.var')].map(tr => ({ rid: tr.dataset.rid, v: rowv(tr) }));
+  const badVar = vr.filter(r => { const e = exp.byR[r.rid] || [0, 0, 0, 0]; return e.some((x, i) => x !== r.v[i]) || r.v[4] !== e.reduce((a, c) => a + c, 0); });
+  const famMulti = [...vt.querySelectorAll('tr.fam.tg')].map(tr => tr.dataset.fam);
+  const oldStats = w.querySelectorAll('.ebm-stats>div').length, pills = w.querySelectorAll('.ebm-px').length;
+  /* ยุบโปรแกรมแรกที่มีหลาย variant · วาดใหม่ (Live tick / เปลี่ยนวันไปกลับ) ยังยุบอยู่ */
+  const f0 = famMulti[0]; const nVar0 = w.querySelectorAll('tr.var').length;
+  w.querySelector('tr.fam.tg[data-fam="' + f0 + '"]').click();
+  w = W(); const nVar1 = w.querySelectorAll('tr.var').length; const folded = w.querySelector('tr.fam[data-fam="' + f0 + '"]').classList.contains('fold');
+  ebSetNow('mvd', 'next'); ebSetNow('mvd', 'tm'); w = W();
+  const kept = w.querySelector('tr.fam[data-fam="' + f0 + '"]').classList.contains('fold'), stored = JSON.parse(localStorage.getItem('eb_mv_fold') || '{}')[f0] === 1;
+  const totAfter = rowv(w.querySelector('.ebm-vt tr.tot'));
+  const btn0 = w.querySelector('.ebm-vt .hh button').textContent;   /* ยุบครบทุกโปรแกรมแล้ว → ปุ่มเป็น "กางทั้งหมด" */
+  w.querySelector('.ebm-vt .hh button').click(); w = W(); const nAllOpen = w.querySelectorAll('tr.var').length, btn1 = w.querySelector('.ebm-vt .hh button').textContent;
+  w.querySelector('.ebm-vt .hh button').click(); w = W(); const nAllFold = w.querySelectorAll('tr.var').length;
+  w.querySelector('.ebm-vt .hh button').click();
+  return { tot, exp, nVar: vr.length, badVar, famMulti, oldStats, pills, nVar0, nVar1, folded, kept, stored, sameTot: JSON.stringify(totAfter) === JSON.stringify(tot), btn0, btn1, nAllFold, nAllOpen };
 }, S);
-const same = (a, b) => a && ['AD', 'CHD', 'INF', 'FOC'].every(k => a[k] === b[k]);
-if (same(R11.main, R11.exp) && R11.tot === R11.sumExp && same(R11.add, R11.expAdd) && R11.sumExp > 0)
-  ok('11 การ์ดบน ผู้โดยสาร ' + R11.tot + ' · AD ' + R11.exp.AD + ' · CHD ' + R11.exp.CHD + ' · INF ' + R11.exp.INF + ' · FOC ' + R11.exp.FOC + ' ตรงใบจองพรุ่งนี้ · เข้ามาวันนี้แยกประเภทตรงด้วย');
-else fail('11 ' + JSON.stringify(R11));
+{
+  const T = R11.tot || [], E = R11.exp ? R11.exp.tot : [];
+  const totOk = !R11.noTable && T.slice(0, 4).every((x, i) => x === E[i]) && T[4] === E.reduce((a, c) => a + c, 0) && T[5] === R11.exp.add;
+  if (totOk && R11.nVar > 0 && !R11.badVar.length && R11.famMulti.length >= 1 && R11.oldStats === 3 && R11.pills === 0 && R11.nVar1 < R11.nVar0 && R11.folded && R11.kept && R11.stored && R11.sameTot
+      && /กางทั้งหมด/.test(R11.btn0) && /ยุบทั้งหมด/.test(R11.btn1) && R11.nAllFold === 0 && R11.nAllOpen === R11.nVar0)
+    ok('11 ตาราง variant · รวม AD ' + T[0] + ' CHD ' + T[1] + ' INF ' + T[2] + ' FOC ' + T[3] + ' = ' + T[4] + ' · +วันนี้ ' + T[5] + ' ตรงใบจอง · ' + R11.nVar + ' variant ตรงรายเส้นทาง · กดหัวโปรแกรมยุบได้ ' + R11.nVar0 + '→' + R11.nVar1 + ' แถว · เปลี่ยนวันไปกลับยังยุบอยู่ · ยุบ/กางทั้งหมดได้ · สามช่องเดิมยังอยู่');
+  else fail('11 ' + JSON.stringify(R11).slice(0, 1200));
+}
 
 await close();
 console.log(bad ? ('FAILED ' + bad) : 'ALL OK');
