@@ -68174,15 +68174,32 @@ function pkCxPax(date,bid,pier){
       o[k+'_th']+=lk[k]*th/all; o[k+'_fr']+=lk[k]*(all-th)/all; });
     tot+=lost; var c=Math.min(lost, Math.max(0,+LT.cxl||0)); cxl+=c; ns+=lost-c;
   });
+  /* §pkCxMv (2026-10-19) · owner "จำนวนขึ้นเรือวันนี้ มียกเลิก 1 กับย้ายวัน 2+1" (เด็กที่ย้ายวันไม่ขึ้นในแถวยกเลิก)
+     ใบที่ย้ายวันออกไปหลังจัดลำ/เช็คอินแล้ว หลุดจากยอดของวันไปเลย แถวยกเลิกจึงไม่เห็น ทั้งที่ชื่ออาจอยู่ในชุดตั๋วที่ซื้อไปแล้ว
+     อ่านจากภาพที่ §strandMove ถ่ายไว้ตอนเลื่อน (ลำ · เส้นทาง · pax เดิม) นับเป็น "ย้ายวัน" แยกประเภท/สัญชาติเหมือนยกเลิก */
+  var mv=0;
+  try{ (typeof ckStrandMovedRows==='function'?ckStrandMovedRows(date):[]).forEach(function(r){
+    if(!r || !r.b || (r.bid||'')!==bid) return;
+    var rt=(typeof getRoute==='function')?getRoute(r.t.routeId):null; if(!rt || (rt.pier||'')!==pier) return;
+    if(typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(r.b)) return;
+    var px=r.t.pax||{}, tNow=(r.b.trips||[]).filter(function(t){ return t && t.routeId===r.t.routeId && t.date===r.mvTo; })[0]
+        || (r.b.trips||[]).filter(function(t){ return t && t.routeId===r.t.routeId; })[0] || null;
+    var tx=Object.assign({}, tNow||{}, {pax:px}), n=0;   /* สัญชาติจากใบจริง (nat) · จำนวนจากภาพตอนเลื่อน */
+    K.forEach(function(k){ var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0); if(!all) return;
+      var th=(typeof bkNatTHb==='function')?bkNatTHb(r.b,tx,k):(+px[k+'_th']||0); th=Math.max(0,Math.min(th,all));
+      o[k+'_th']+=th; o[k+'_fr']+=all-th; n+=all; });
+    tot+=n; mv+=n;
+  }); }catch(_){}
   var sum=0; PC_PK.forEach(function(k){ o[k]=Math.round(o[k]); sum+=o[k]; });
   if(tot-sum) o.ad_fr=Math.max(0,o.ad_fr+(tot-sum));
-  return {p8:o, tot:tot, cxl:cxl, ns:ns};
+  return {p8:o, tot:tot, cxl:cxl, ns:ns, mv:mv};
 }
-function pkCxAdd(dst,C){ if(!dst || !C || !C.tot) return; var D=dst.cx||(dst.cx={p8:{},tot:0,cxl:0,ns:0});
-  PC_PK.forEach(function(k){ D.p8[k]=(D.p8[k]||0)+(+C.p8[k]||0); }); D.tot+=C.tot; D.cxl+=C.cxl; D.ns+=C.ns; }
+function pkCxAdd(dst,C){ if(!dst || !C || !C.tot) return; var D=dst.cx||(dst.cx={p8:{},tot:0,cxl:0,ns:0,mv:0});
+  PC_PK.forEach(function(k){ D.p8[k]=(D.p8[k]||0)+(+C.p8[k]||0); }); D.tot+=C.tot; D.cxl+=C.cxl; D.ns+=C.ns; D.mv=(D.mv||0)+(+C.mv||0); }
+function pkCxWhy(C){ return 'ยกเลิกหน้างาน '+(C.cxl||0)+' \u00b7 ไม่มา '+(C.ns||0)+((C.mv||0)?(' \u00b7 ย้ายวัน '+C.mv):''); }   /* §pkCxMv */
 function pkCxTxt(C){ if(!C || !C.tot) return ''; return PC_PK.filter(function(k){ return C.p8[k]>0; }).map(function(k){ return PK_CX_LB[k]+' '+C.p8[k]; }).join(' \u00b7 '); }
 function pkCxChip(C){ if(!C || !C.tot) return '';
-  return '<b class="cxc" title="ยกเลิก/ไม่มาในวันเดินทาง \u00b7 หักออกจากยอดแล้ว \u00b7 ยกเลิกหน้างาน '+C.cxl+' \u00b7 ไม่มา '+C.ns+'">ยกเลิก '+C.tot+'<span> \u00b7 '+pkCxTxt(C)+'</span></b>'; }
+  return '<b class="cxc" title="ยกเลิก/ไม่มา/ย้ายวันในวันเดินทาง \u00b7 หักออกจากยอดแล้ว \u00b7 '+pkCxWhy(C)+'">ยกเลิก '+C.tot+'<span> \u00b7 '+pkCxTxt(C)+'</span></b>'; }
 function pkTkData(date, pier){
   var boats=(typeof poBoats==='function')?poBoats(date,pier):[];
   var byRid={}, order=[];
@@ -69021,8 +69038,8 @@ function renderPierPark(pier){
     if(todo.length>6){ var more=todo.length-6; todo=todo.slice(0,6); todo.push('<span class="ok" style="background:transparent">และอีก '+more+' วัน</span>'); }
   } else {
     if(nDup) todo.push('<button class="r" onclick="pkHelp()"><i></i>ชื่อซ้ำ '+nDup+' · แก้ก่อนยื่นด่าน</button>');
-    var _nCx=0, _cxl=0, _cns=0; flat.forEach(function(x){ var C=x.B.cx; if(C&&C.tot){ _nCx+=C.tot; _cxl+=C.cxl; _cns+=C.ns; } });   /* §pkCx */
-    if(_nCx) todo.push('<button class="r" title="หักออกจากยอดแล้ว \u00b7 ยกเลิกหน้างาน '+_cxl+' \u00b7 ไม่มา '+_cns+'"><i></i>ยกเลิก/ไม่มา '+_nCx+' คน</button>');
+    var _cxA={}; flat.forEach(function(x){ pkCxAdd(_cxA,x.B.cx); }); var _nCx=_cxA.cx?_cxA.cx.tot:0;   /* §pkCx · §pkCxMv */
+    if(_nCx) todo.push('<button class="r" title="หักออกจากยอดแล้ว \u00b7 '+pkCxWhy(_cxA.cx)+'"><i></i>ยกเลิก/ไม่มา'+(_cxA.cx.mv?'/ย้ายวัน':'')+' '+_nCx+' คน</button>');
     if(nOver) todo.push('<button class="r"><i></i>รายชื่อเกินหัว '+nOver+'</button>');
     if(nNoCode) todo.push('<button class="r" onclick="pkTyModal()"><i></i>'+nNoCode+' ประเภทยังไม่ใส่รหัส</button>');
     if(gMiss) todo.push('<button class="a" onclick="pk2GoWait(\''+waitList[0].x.g.rid+'\',\''+waitList[0].x.B.bid+'\')"><i></i>รอชื่อ '+gMiss+' คน · '+waitList.length+' ลำ</button>');
@@ -69579,9 +69596,9 @@ function pk3Body(flat, TY, TYM, ro){
   var GO=['ad_th','chd_th','inf_th','foc_th','_th','ad_fr','chd_fr','inf_fr','foc_fr','_fr'];
   /* §pkCx · แถวแดงใต้เส้นทาง/ลำที่มีคนยกเลิก · ตัวเลขตรงคอลัมน์ประเภทเดิม (−4 = หักไป 4) · ท้ายแถวแยกยกเลิกหน้างาน/ไม่มา */
   var cxRow=function(C,lbl){ if(!C||!C.tot) return ''; var c8=g8(C.p8||{});
-    return '<tr class="pk3-cx"><td class="rt"><span class="cxl">ยกเลิก/ไม่มา <i>'+lbl+'</i></span></td>'
+    return '<tr class="pk3-cx"><td class="rt"><span class="cxl">ยกเลิก/ไม่มา'+(C.mv?'/ย้ายวัน':'')+' <i>'+lbl+'</i></span></td>'
       +GO.map(function(k,i){ var v=c8[k]; return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+(v?('&#8722;'+v):'')+'</td>'; }).join('')
-      +'<td class="n sum">&#8722;'+C.tot+'</td><td class="cxw" colspan="'+(TY.length+3)+'">ยกเลิกหน้างาน '+C.cxl+' &middot; ไม่มา '+C.ns+'</td></tr>'; };
+      +'<td class="n sum">&#8722;'+C.tot+'</td><td class="cxw" colspan="'+(TY.length+3)+'">'+pkCxWhy(C)+'</td></tr>'; };
   var g8=function(p8){ var o={}; GO.forEach(function(k){ o[k]=+p8[k]||0; }); o._th=o.ad_th+o.chd_th+o.inf_th+o.foc_th; o._fr=o.ad_fr+o.chd_fr+o.inf_fr+o.foc_fr; return o; };
   /* §pkSets3 · ยอดจริงของทั้งวัน แยกตามโปรแกรม · นับทุกลำของวัน ไม่ใช่แค่ลำที่เลือก */
   var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0}; FL.push(F); }
