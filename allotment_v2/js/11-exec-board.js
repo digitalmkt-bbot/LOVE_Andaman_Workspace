@@ -1161,12 +1161,12 @@
     /* ตารางโปรแกรม */
     var byPier={}, pierOrd=[]; D.rows.forEach(function(o){ var p=(route(o.rid)||{}).pier||'other'; if(!byPier[p]){ byPier[p]=[]; pierOrd.push(p); } byPier[p].push(o); });
     var pierNm=function(p){ try{ return (typeof laPierName==='function' && laPierName(p))||p; }catch(_){ return p; } };
-    var cols='<div class="ebm-cols"><div>เส้นทาง · ออก · โซนรับ</div><div>เรือ</div><div><span>ที่นั่ง (ขีด = จุดคุ้มทุน)</span><span class="ebm-livek"><i class="ebm-dot"></i>กำลังรับจอง</span></div><div>ล่าสุด</div><div>สถานะ</div><div>คุ้มทุน</div></div>';
+    var cols='<div class="ebm-cols"><div>เส้นทาง · ออก · โซนรับ</div><div>เรือ</div><div><span>ที่นั่ง (ขีด = จุดคุ้มทุน)</span><span class="ebm-livek"><i class="ebm-dot"></i>มีใบเข้าใน 1 ชม.</span></div><div>ล่าสุด</div><div>สถานะ</div><div>คุ้มทุน</div></div>';
     var body=pierOrd.map(function(p){ var L=byPier[p], f=L.reduce(function(s,o){ return s+o.fB; },0), n=L.reduce(function(s,o){ return s+o.nB; },0);
       return '<div class="ebm-pier"><span>'+E(String(pierNm(p)).toUpperCase())+'</span><span class="eb-st '+(f===n?'g':'w')+'">เต็ม '+num(f)+'/'+num(n)+'</span></div>'
         +L.map(function(o){ return mvRow(o, ds, now); }).join(''); }).join('');
     if(!D.rows.length) body='<div class="eb-none">ไม่มีเรือออกวันนี้'+(EB.pier?' ที่ท่านี้':'')+'</div>';
-    var legend='<div class="eb-foot" style="padding:8px 26px 14px">เขียว = เต็ม · เหลือง = ยังว่างแต่ผ่านคุ้มทุน · แดง = ยังไม่ถึงจุดคุ้มทุน · ลายวิ่ง = ยังรับจองอยู่ · ขีดดำในแถบ = จุดคุ้มทุนของโปรแกรม (จาก Trip P&amp;L · เฉพาะ 7 วันข้างหน้า)</div>';
+    var legend='<div class="eb-foot" style="padding:8px 26px 14px">เขียว = เต็ม · เหลือง = ยังว่างแต่ผ่านคุ้มทุน · แดง = ยังไม่ถึงจุดคุ้มทุน · ลายวิ่ง = มีใบจองเข้าภายใน 1 ชม. · ขีดดำในแถบ = จุดคุ้มทุนของโปรแกรม (จาก Trip P&amp;L · เฉพาะ 7 วันข้างหน้า)</div>';
     var boat='<div class="eb-card ebm-card" id="ebm-boats">'+head+cols+body+legend+'</div>';
     /* Booking Movement · Today (EN) */
     var M=mvToday();
@@ -1204,7 +1204,10 @@
     var n=rName(o.rid), r=route(o.rid)||{};
     var fillPct = o.cap ? Math.min(100, o.bk*100/o.cap) : 0;
     var col = (o.st==='full'||o.st==='ch') ? '#047857' : (o.st==='be' ? '#DC2626' : (o.st==='open' ? '#F59E0B' : '#9CA3AF'));
-    var liveCls = (o.st==='open'||o.st==='be') ? ' ebm-live' : '';
+    /* §execMvCompact (2026-10-19) · owner "ตัวที่เหมือนว่ากำลัง Loading ให้ขึ้นเฉพาะอันที่กำลังมีบุคกิ้งเข้าก็พอ อันไม่มีเข้าก็นิ่งๆ"
+       ลายวิ่ง + แสงกวาด = มีใบเข้าภายใน 1 ชม. (เกณฑ์เดียวกับชิปเขียวในช่องล่าสุด) และยังรับจองอยู่ */
+    var hot = !!(o.last && o.last.ts && (now-o.last.ts)<3600000);
+    var liveCls = ((o.st==='open'||o.st==='be') && hot) ? ' ebm-live' : '';
     var bar = o.st==='ch' ? '<div class="ebm-fill"><i style="width:100%;background:#047857"></i><em style="color:#fff">'+num(o.bk)+' คน · เหมาลำ '+num(o.nCh)+' ลำ</em><b style="color:#fff">'+(o.chCap?('จุ '+num(o.chCap)):'เหมา')+'</b></div>'
       : !o.cap ? '<div class="ebm-fill na"><em>'+num(o.bk)+' · ไม่จำกัดที่นั่ง</em></div>'
       : '<div class="ebm-fill"><i class="'+liveCls.trim()+'" style="width:'+fillPct+'%;background:'+col+'"></i>'+(liveCls?'<span class="ebm-scan"></span>':'')+(o.be>0&&o.cap?'<s style="left:'+Math.min(100,o.be*100/o.cap)+'%"></s>':'')
@@ -1218,7 +1221,7 @@
     var st = o.st==='ch' ? '<span class="eb-st g">เหมาลำ</span>' : o.st==='full' ? '<span class="eb-st g">เต็ม</span>' : (o.st==='be' ? '<span class="eb-st b">ต่ำกว่าคุ้มทุน</span>' : (o.st==='open' ? '<span class="eb-st w">ยังว่าง</span>' : '<span class="eb-st">ไม่จำกัด</span>'));
     var be = o.be>0 ? ('<span class="eb-num">'+num(o.be)+'</span> · '+(o.bk>=o.be?'ผ่านแล้ว ✓':'ขาดอีก <b style="color:var(--eb-bad)">'+num(o.be-o.bk)+'</b>')) : '<span class="eb-mut">—</span>';
     return '<div class="ebm-row'+(o.st==='be'?' be':'')+'" data-rid="'+E(o.rid)+'" data-st="'+o.st+'">'
-      +'<div class="rt"><b>'+E(n.f+(n.v?' '+n.v:''))+'</b><small>'+E(o.dep||'—')+(zgChips(o.zg)?' · '+zgChips(o.zg):'')+'</small></div>'
+      +'<div class="rt"><b>'+E(n.f+(n.v?' '+n.v:''))+'</b><small title="'+E((o.dep||'')+' · '+String(zgChips(o.zg)).replace(/<[^>]+>/g,''))+'">'+E(o.dep||'—')+(zgChips(o.zg)?' · '+zgChips(o.zg):'')+'</small></div>'
       +'<div class="bts">'+boats+'</div>'+bar+'<div class="lst">'+last+'</div><div>'+st+'</div><div class="bec">'+be+'</div></div>';
   }
   function seg(key, items){ return '<span class="eb-seg">'+items.map(function(it){ return '<button class="'+(EB[key]===it[0]?'on':'')+'" onclick="ebSet(\''+key+'\',\''+it[0]+'\')">'+it[1]+'</button>'; }).join('')+'</span>'; }
@@ -1452,15 +1455,15 @@
       '.ebm-vt tr.var td{border-bottom:1px solid #F1F3F6}.ebm-vt tr.var td:first-child{padding-left:29px;color:var(--eb-ink2);font-weight:500}',
       '.ebm-vt tr.var .dep{font-size:11px;color:#9CA3AF;margin-left:6px;font-variant-numeric:tabular-nums}.ebm-vt tr.var .tag{font-size:9.5px;font-weight:700;color:#047857;background:#DCFCE7;border-radius:5px;padding:0 5px;margin-left:5px}',
       '.ebm-vt tr.gap td{height:4px;padding:0;border:0}.ebm-vt tr.tot td{border-top:2px solid var(--eb-ink);font-weight:700;padding-top:7px;font-size:13px}.ebm-vt tr.tot td:first-child{padding-left:10px}',
-      '.ebm-cols,.ebm-row{display:grid;grid-template-columns:minmax(200px,250px) 120px minmax(0,1fr) 130px 110px 150px;gap:12px;align-items:center;padding:10px 26px}',
-      '.ebm-cols{background:#F6F8FA;border-bottom:1px solid var(--eb-line);font-size:11px;font-weight:600;color:var(--eb-mut);letter-spacing:.04em;padding-top:9px;padding-bottom:9px}',
+      '.ebm-cols,.ebm-row{display:grid;grid-template-columns:minmax(220px,300px) 120px minmax(0,1fr) 150px 104px 140px;gap:12px;align-items:center;padding:5px 26px}',
+      '.ebm-cols{background:#F6F8FA;border-bottom:1px solid var(--eb-line);font-size:11px;font-weight:600;color:var(--eb-mut);letter-spacing:.04em;padding-top:7px;padding-bottom:7px}',
       '.ebm-cols>div{display:flex;align-items:center;gap:8px}',
       '.ebm-livek{display:inline-flex;align-items:center;gap:5px;color:#15803D;letter-spacing:.06em}',
       '@media(max-width:1000px){.ebm-cols{display:none}.ebm-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ebm-row .rt{grid-column:1/-1}}',
-      '.ebm-pier{display:flex;align-items:center;gap:10px;padding:12px 26px 4px;font-size:11.5px;font-weight:700;color:#334155;border-top:1px solid #EEF1F5}',
+      '.ebm-pier{display:flex;align-items:center;gap:10px;padding:8px 26px 3px;font-size:11.5px;font-weight:700;color:#334155;border-top:1px solid #EEF1F5}',
       '.ebm-row{border-top:1px solid #EEF1F5}.ebm-row.be{background:#FFF7F7}',
-      '.ebm-row .rt b{display:block;font-weight:600}.ebm-row .rt small{display:block;font-size:11.5px;color:var(--eb-mut)}',
-      '.ebm-row .bts{display:flex;flex-direction:column;gap:3px;min-width:0}.ebm-row .bt{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;white-space:nowrap}.ebm-row .bt i{width:10px;height:10px;border-radius:50%;flex:none}.ebm-row .bt small{font-weight:600;color:var(--eb-mut)}',
+      '.ebm-row .rt{min-width:0;line-height:1.3}.ebm-row .rt b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ebm-row .rt small{display:block;font-size:11px;color:var(--eb-mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.ebm-row .bts{display:flex;flex-wrap:wrap;column-gap:10px;row-gap:1px;min-width:0;line-height:1.3}.ebm-row .bt{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;white-space:nowrap}.ebm-row .bt i{width:10px;height:10px;border-radius:50%;flex:none}.ebm-row .bt small{font-weight:600;color:var(--eb-mut)}',
       '.ebm-fill{position:relative;height:22px;background:#EEF1F5;border-radius:6px;overflow:hidden}',
       '.ebm-fill>i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}',
       '.ebm-fill>s{position:absolute;top:0;bottom:0;width:2px;background:var(--eb-ink);opacity:.6}',
@@ -1474,7 +1477,7 @@
       '.ebm-scan{position:absolute;top:0;bottom:0;width:30%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:ebm-scan 2.4s ease-in-out infinite;pointer-events:none}',
       '.ebm-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#16A34A;animation:ebm-pulse 1.4s ease-in-out infinite}',
       '@media(prefers-reduced-motion:reduce){.ebm-live,.ebm-scan,.ebm-dot{animation:none}}',
-      '.ebm-row .lst{display:flex;flex-direction:column;gap:2px;min-width:0}.ebm-row .lst small{font-size:11px;color:var(--eb-mut)}',
+      '.ebm-row .lst{display:flex;flex-direction:column;gap:0;min-width:0;line-height:1.3}.ebm-row .lst small{font-size:10.5px;color:var(--eb-mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.ebm-new{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#15803D;background:#DCFCE7;border-radius:6px;padding:1px 7px;width:fit-content;font-variant-numeric:tabular-nums}',
       '.ebm-old{font-size:12px;font-weight:600;color:#334155;font-variant-numeric:tabular-nums}',
       '.ebm-row .bec{font-size:12px;color:var(--eb-mut)}.eb-num{font-weight:600;color:var(--eb-ink);font-variant-numeric:tabular-nums}',

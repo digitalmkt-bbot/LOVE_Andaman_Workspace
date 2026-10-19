@@ -95,16 +95,17 @@ const A = await page.evaluate((S) => {
   }
   const badRow = R1.rows.find(r => { const p = A.per[r.rid]; if (!p) return r.fill !== '' && !/ไม่จำกัด/.test(r.fill); return r.fill.replace(/[^0-9/]/g, '') !== (p.bk + '/' + p.cap); });
   const rowIds = R1.rows.map(r => r.rid).sort().join(','), want = A.rids.sort().join(',');
-  const liveBad = R1.rows.filter(r => (r.st === 'open' || r.st === 'be') ? !(r.live && r.scan) : r.live);
+  const liveBad = R1.rows.filter(r => ((r.st === 'open' || r.st === 'be') && r.fresh) ? !(r.live && r.scan) : (r.live || r.scan));   /* §execMvCompact · วิ่งเฉพาะแถวที่มีใบเข้าใน 1 ชม. */
+  const nLive = R1.rows.filter(r => r.live).length, nQuiet = R1.rows.filter(r => (r.st === 'open' || r.st === 'be') && !r.fresh).length;
   const pierOf = await page.evaluate(ids => Object.fromEntries(ids.map(id => [id, (getRoute(id) || {}).pier || ''])), R1.rows.map(r => r.rid));
   const rix = await page.evaluate(ids => Object.fromEntries(ids.map(id => [id, ROUTES.findIndex(r => r && r.id === id)])), R1.rows.map(r => r.rid));
   const groups = {}; R1.rows.forEach(r => { (groups[pierOf[r.rid]] = groups[pierOf[r.rid]] || []).push(rix[r.rid]); });
   const order = Object.values(groups).every(g => g.every((v, i) => i === 0 || v >= g[i - 1]));   /* ในแต่ละท่า: เรียงตามลำดับโปรแกรม (ROUTES) · ลำเต็มอยู่ที่เดิม */
   if (rowIds !== want) fail('3 แถวไม่ตรงโปรแกรมพรุ่งนี้ · ' + rowIds + ' vs ' + want);
   else if (badRow) fail('3 ที่นั่งในแถวไม่ตรง getAllotment · ' + JSON.stringify(badRow) + ' vs ' + JSON.stringify(A.per[badRow.rid]));
-  else if (liveBad.length) fail('3 ลายวิ่งผิดแถว · ' + JSON.stringify(liveBad.map(r => [r.rid, r.st, r.live])));
+  else if (liveBad.length || !nLive || !nQuiet) fail('3 ลายวิ่งผิดแถว · ' + JSON.stringify(R1.rows.map(r => [r.rid, r.st, r.live, r.fresh])));
   else if (!order) fail('3 แถวไม่ได้เรียงตามลำดับโปรแกรม · ' + R1.rows.map(r => r.rid + ':' + rix[r.rid]).join(','));
-  else ok('3 ' + R1.rows.length + ' แถว · ที่นั่งตรง getAllotment · ลายวิ่งเฉพาะแถวที่ยังรับจอง · เรียงตามลำดับโปรแกรม');
+  else ok('3 ' + R1.rows.length + ' แถว · ที่นั่งตรง getAllotment · ลายวิ่งเฉพาะแถวที่มีใบเข้าใน 1 ชม. (' + nLive + ' แถว) · แถวที่ยังว่างแต่เงียบนิ่ง (' + nQuiet + ' แถว) · เรียงตามลำดับโปรแกรม');
 }
 
 /* ══ 4 · โซนรับ ══════════════════════════════════════════════════════ */
