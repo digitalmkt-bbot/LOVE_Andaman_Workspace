@@ -14339,7 +14339,9 @@ function pcSheetPK(pier, opt){
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
     if(typeof pcPkSheetTotals==='function'){ var _sv=pcPkSheetTotals(pier,ds);   /* §w7c · the day's keyed sums and due from the server's park sheet (print) */
-      if(_sv){ PC_PK.forEach(function(k,i){ DK[i]=_sv[k]||0; }); dktot=_sv.heads; dm=_sv.amount; ddk=_sv.dock; if(_sv.due!==undefined) dex=_sv.due; } }
+      if(_sv){ PC_PK.forEach(function(k,i){ DK[i]=_sv[k]||0; }); dktot=_sv.heads; dm=_sv.amount; ddk=_sv.dock; if(_sv.due!==undefined) dex=_sv.due;
+        if(_sv.booked){ PC_PK.forEach(function(k,i){ DT[i]=+_sv.booked[k]||0; }); dtot=+_sv.booked.tot||0; }   /* §w8 · ตามใบจอง from the server (days[].booked), not summed per boat here */
+      } }
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
     gtot+=dtot; gktot+=dktot; gm+=dm; gex+=dex; gdk+=ddk;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="25">'

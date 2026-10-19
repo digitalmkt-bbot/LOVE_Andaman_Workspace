@@ -9,7 +9,7 @@
 
      pcPkGroupDiffPaid(pier, ds, rid, legacy)   a route group's check.diff_paid ("รวมเส้นทางนี้" in pc2PKDay). null = no boat with both figures.
      pcPkSheetTotals(pier, ds)                  the day's totals + check.due, for the petty-cash print (pcSheetPK, marked §w7c), or null.
-   Still the browser's in the print: the "ตามใบจอง" (booked heads) day sum - the park sheet answer carries no booked-heads total.
+   The "ตามใบจอง" (booked heads) day sum is the server's too since §w8: days[].booked { ad_th..foc_fr, tot } (pcPkSheetTotals().booked).
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -39,6 +39,7 @@
     var d = dayOf(pier, ds); if(!d || !d.totals) return null;
     var t = {}; Object.keys(d.totals).forEach(function(k){ t[k] = +d.totals[k] || 0; });
     t.due = d.check && d.check.due != null ? +d.check.due : undefined;
+    t.booked = (d.booked && typeof d.booked === 'object') ? d.booked : undefined;   // §w8 · the "ตามใบจอง" heads of the day (backend: days[].booked)
     return t;
   };
 })();

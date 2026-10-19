@@ -21,6 +21,9 @@ function bookingV2RenderAddOnsSection(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const checked = type => d.addOns.some(a => a.type === type);
   const opts = [];
+  /* §w8 · the add-ons offered are the server's (POST /v1/quote add_on_offers) once the quote for this draft has answered; legacy's own list until then */
+  const _srvOffers = (typeof window.laOpsAddOnOffers === 'function') ? window.laOpsAddOnOffers() : null;
+  if(_srvOffers){ _srvOffers.forEach(o => opts.push(o)); } else {
 
   // Check if any selected trip route has bundled longtail · disable Longtail Join in that case
   const bundledRoutes = d.trips
@@ -75,6 +78,8 @@ function bookingV2RenderAddOnsSection(){
       });
     });
   });
+
+  }   /* §w8 · end of legacy's own list */
 
   if(opts.length === 0) return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">No add-ons available for this rate type · or pick trips first to enable transfer options.</div>`;
 
