@@ -58,7 +58,8 @@
   function serverIdOf(date, routeId, num){ return num ? (serverIds[keyOf(date, routeId, num)] || null) : null; }
   function enc(x){ return encodeURIComponent(x); }
   function failCode(e){ return (e && (e.code || e.status)) || 'error'; }
-  function redraw(){ if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep(); }
+  /* w6: not while another screen is on show - bookingV2RenderTab2 runs bkOvnHealSpans, which re-created a nightly charter cell just removed in Boat Operation before its DELETE was sent */
+  function redraw(){ var v = ''; try{ v = O.activeView ? O.activeView() : ''; }catch(_){} if(v && v !== 'booking') return; if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep(); }
 
   function refuse(title, sub){
     O.toast({ kind: 'error', title: title, status: 'REFUSED', sub: sub || '', dur: 7000 });
