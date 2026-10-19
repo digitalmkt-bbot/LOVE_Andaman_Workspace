@@ -28274,18 +28274,63 @@ function flwsOpen(kind,id){
   flwsClose(); FLWS={kind:kind,id:id,D:D};
   var o=document.createElement('div'); o.id='flws';
   o.innerHTML=flwsCSS()+'<div class="bar"><b>Job summary · '+fjE(flwsNos(D))+'</b>'
-    +'<button type="button" onclick="flwsCopy()">Copy text</button><button type="button" onclick="flwsImg(\'copy\')">Copy image</button>'
+    +'<span style="position:relative;display:inline-flex"><button type="button" onclick="flwsCopy(\'short\')" style="border-radius:8px 0 0 8px">Copy text</button><button type="button" title="Short or full" onclick="flwsMenu(event)" style="border-radius:0 8px 8px 0;border-left:0;padding:0 8px">&#8964;</button>'
+    +'<div id="flws-mn" style="display:none;position:absolute;top:36px;left:0;z-index:5;background:#fff;color:#0F1B3D;border-radius:10px;box-shadow:0 12px 30px rgba(2,10,30,.3);width:240px;padding:5px">'
+    +'<div onclick="flwsCopy(\'short\')" style="padding:7px 9px;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:700;background:#EEF1F6">Short · where, when, what, fix<small style="display:block;font-weight:400;color:#8A8F9C;font-size:11px">default · for LINE</small></div>'
+    +'<div onclick="flwsCopy(\'full\')" style="padding:7px 9px;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:700">Full · every detail<small style="display:block;font-weight:400;color:#8A8F9C;font-size:11px">all parts and the whole log</small></div></div></span>'
+    +'<button type="button" onclick="flwsImg(\'copy\')">Copy image</button>'
     +'<button type="button" class="pri" onclick="flwsImg(\'save\')">Save image</button><button type="button" onclick="flwsPrint()">Print / PDF</button>'
     +'<button type="button" class="x" title="Close" onclick="flwsClose()">&times;</button></div><div id="flws-sheet">'+flwsSheet(D)+'</div>';
-  o.addEventListener('click',function(e){ if(e.target===o) flwsClose(); });
+  o.addEventListener('click',function(e){ var mn=document.getElementById('flws-mn'); if(mn&&!e.target.closest('#flws-mn')) mn.style.display='none'; if(e.target===o) flwsClose(); });
   document.body.appendChild(o); document.addEventListener('keydown', flwsKey);
 }
 function flwsKey(e){ if(e.key==='Escape') flwsClose(); }
 function flwsClose(){ var o=document.getElementById('flws'); if(o) o.remove(); document.removeEventListener('keydown', flwsKey); FLWS=null; document.body.classList.remove('flws-print'); }
 function flwsToast(t){ try{ if(typeof showToast==='function'){ showToast(t); return; } }catch(_){ }
   var b=document.querySelector('#flws .bar b'); if(b){ var o=b.textContent; b.textContent=t; setTimeout(function(){ if(b) b.textContent=o; },1600); } }
-function flwsCopy(){
-  if(!FLWS) return; var t=flwsText(FLWS.D);
+/* §flwShort (2026-10-19) · owner "copy text ต้องกระชับกว่านี้ เกิดที่ไหน เมื่อไหร่ อย่างไร แก้ยังไง" → mock FWS แบบ B
+   Copy text = แบบสั้น 5-7 บรรทัด · ลูกศร ⌄ เลือก Full (แบบยาวเดิม) */
+var FLWS_OUT_TH={success:'ซ่อมเสร็จ',limited:'ใช้งานได้จำกัด',rework:'ต้องแก้ซ้ำ',decommission:'ปลดระวาง',cancelled:'ยกเลิก'};
+function flwsCut(t,n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?(t.slice(0,n-1).trim()+'…'):t; }
+function flwsDays(a,b){ var x=Date.parse(String(a||'').slice(0,10)), y=Date.parse(String(b||'').slice(0,10)); return (isNaN(x)||isNaN(y))?null:Math.max(0,Math.round((y-x)/864e5)); }
+function flwsIsSys(l){ return /^(ระบบ|system|equip)$/i.test(String(l.by||'').trim()) || /^(▶|✓|📋|📦|↩|⚙|🔄|＋|\+)/.test(String(l.t||'')); }
+function flwsShort(D){
+  var m=D.m, inc=D.inc, b=D.b, L=[], today=(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
+  var d0=(inc&&inc.date)||(m&&m.startDate)||'', done=!!(m&&m.status==='done'), d1=done?(m.endDate||''):today, nd=flwsDays(d0,d1);
+  var st;
+  if(m&&m.status==='cancelled') st='✖ ยกเลิกงาน';
+  else if(done) st='✅ '+(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
+  else if(m) st='⏳ '+(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' ('+nd+' วัน)'):'');
+  else st='🆕 แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' ('+nd+' วัน)'):'');
+  L.push('🔧 '+(b?b.name:'—')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
+  var parts=[]; ((inc&&inc.damagedAssets)||[]).concat((m&&m.assets)||[]).forEach(function(a){ var t=a&&a.label; if(t&&parts.indexOf(t)<0) parts.push(t); });
+  L.push('📍 ที่ไหน: '+[b?b.name:''].concat(parts.slice(0,3)).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · '));
+  var y0=String(d0).slice(0,4), sameY=String(d1).slice(0,4)===y0;
+  L.push('🗓 เมื่อไหร่: '+(flwsD(d0, inc&&inc.time)||'—')+(done&&d1?(' → เสร็จ '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
+  var tt=(inc&&inc.title)||(m&&m.title)||'', dt=String((inc&&inc.detail)||(m&&m.detail)||'').split(/\n|(?:\.\s)/)[0];
+  L.push('⚠️ เกิดอะไร: '+flwsCut(tt,70)+(dt&&dt.trim()!==tt.trim()?(' · '+flwsCut(dt,60)):''));
+  var notes=D.log.filter(function(l){ return !flwsIsSys(l); }).map(function(l){ return flwsCut(l.t,50); });
+  if(notes.length>4) notes=[notes[0],'…'].concat(notes.slice(-3));
+  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,50));
+  if(!notes.length && inc&&typeof inc.quickFix==='string') notes.push(flwsCut(inc.quickFix,50));
+  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึกการแก้':'ยังไม่เปิดงาน');
+  if(done && m.outcome && m.outcome!=='success') fix+=' ('+(FLWS_OUT_TH[m.outcome]||m.outcome)+')';
+  L.push('🛠 แก้ยังไง: '+fix);
+  if(m){ var top=D.parts.slice().sort(function(a,c){ return (+c.qty||0)*(+c.cost||0)-(+a.qty||0)*(+a.cost||0); });
+    var pt=top.slice(0,3).map(function(p){ return flwsCut(p.name,28)+((+p.qty||0)>1?(' '+p.qty+(p.unit?(' '+p.unit):'')):''); }).join(', ')+(top.length>3?(' +'+(top.length-3)):'');
+    var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
+    var mm=om.length?('memo '+om.map(function(mo){ return (mo.no||'MO')+' '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }).slice(0,2).join(', ')):'';
+    L.push('💰 '+(D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย')+(D.parts.length?(' · อะไหล่ '+D.parts.length+' รายการ ('+pt+')'):'')+(mm?(' · '+mm):'')); }
+  var who=[]; if(m&&String(m.owner||'').trim()) who.push(String(m.owner).trim());
+  D.log.forEach(function(l){ if(!flwsIsSys(l)&&l.by&&who.indexOf(l.by)<0) who.push(l.by); });
+  var last=[]; if(D.photos.length) last.push('📷 รูป '+D.photos.length+' รูป'); if(who.length) last.push('👷 '+who.slice(0,3).join(', '));
+  if(last.length) L.push(last.join(' · '));
+  return L.join('\n');
+}
+function flwsMenu(ev){ if(ev) ev.stopPropagation(); var mn=document.getElementById('flws-mn'); if(mn) mn.style.display=(mn.style.display==='block'?'none':'block'); }
+function flwsCopy(mode){
+  if(!FLWS) return; var mn=document.getElementById('flws-mn'); if(mn) mn.style.display='none';
+  var t=(mode==='full')?flwsText(FLWS.D):flwsShort(FLWS.D);
   var fb=function(){ var ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){ } ta.remove(); flwsToast('Copied text'); };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ flwsToast('Copied text'); }, fb); return; } }catch(_){ }
   fb();
