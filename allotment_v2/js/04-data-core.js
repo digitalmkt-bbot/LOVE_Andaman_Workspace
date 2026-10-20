@@ -3654,7 +3654,8 @@ function renderDash(){
     totFree=s.free_seats==null?0:+s.free_seats;
     fillPct=s.fill_percent==null?0:+s.fill_percent;
     operatingCount=+s.active_boats||0;
-    availTotal=+s.available_boats||0;
+    /* ready_boats = every boat ready that day, deployed or not (legacy availTotal, the "of 13"); available_boats counts only the deployed ones */
+    availTotal=s.ready_boats!=null?+s.ready_boats||0:+s.available_boats||0;
     fixCount=+s.fixing_boats||0;
     unavailCount=+s.unavailable_boats||0;
     activeBoats=operatingCount;
