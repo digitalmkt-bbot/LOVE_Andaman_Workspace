@@ -3651,7 +3651,8 @@ function renderDash(){
     const s=_opsDash.summary;
     totAllot=+s.total_capacity||0;
     totBooked=+s.booked_pax||0;
-    totFree=s.free_seats==null?0:+s.free_seats;
+    /* seats_left = capacity less booked (legacy totFree); free_seats is null whenever a land route is in the catalogue, which this screen showed as 0 */
+    totFree=s.seats_left!=null?+s.seats_left:(s.free_seats==null?0:+s.free_seats);
     fillPct=s.fill_percent==null?0:+s.fill_percent;
     operatingCount=+s.active_boats||0;
     /* ready_boats = every boat ready that day, deployed or not (legacy availTotal, the "of 13"); available_boats counts only the deployed ones */
