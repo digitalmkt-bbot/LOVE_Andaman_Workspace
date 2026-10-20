@@ -17,6 +17,8 @@
    Server first: local arrays change only after the server answers.
    Legacy persistence (sbMarketsPersist / sbSalesPersist) is a no-op in ops mode.
 
+   - agSubMarketRemember(marketId,sub) (agent form, new sub-market) -> PATCH /v1/markets/:id {subs}  (undone on refusal)
+
    Sales Board (source: sales-editing.ts ~450-490, domain/sales-board.ts):
    - GET /v1/sales-board?month=YYYY-MM  -> the whole board (pax, FOC, target, streak, rank, previous rank,
      agents with pax / previous pax / trend / followed flags). Cached per month (20 s, then refreshed in
@@ -284,6 +286,30 @@
   // Legacy blob writers for these two lists never run in ops mode (the server owns them).
   ['sbMarketsPersist', 'sbSalesPersist'].forEach(function(name){
     wrap(name, function(){ return undefined; });
+  });
+
+  /* Agent form: a new sub-market typed or picked is remembered under its market (legacy saved SB_MARKETS at once).
+     The legacy function adds it to the local list and returns true; we then write only that market's subs:
+     PATCH /v1/markets/:id {subs}. A refusal takes the sub back out of the list. A 403 (an agent editor without the
+     config right) is silent: the server also adds a new sub-market to the market when the agent itself is saved. */
+  wrap('agSubMarketRemember', function(orig, marketId, sub){
+    var added = orig.apply(this, [].slice.call(arguments, 1));
+    if(added !== true) return added;
+    var list = listMarkets();
+    var m = list ? list.find(function(x){ return x && x.id === marketId; }) : null;
+    if(!m) return added;
+    var name = text(sub);
+    O.queue(function(){
+      return O.patch('/v1/markets/' + enc(marketId), { subs: m.subs.map(text).filter(Boolean) });
+    }).then(function(row){
+      if(row && Array.isArray(row.subs)) m.subs = row.subs.slice();
+      O.wrote('sales-market-subs');
+    }, function(e){
+      var i = m.subs.findIndex(function(s){ return String(s).toLowerCase() === name.toLowerCase(); });
+      if(i >= 0) m.subs.splice(i, 1);
+      if(!(e && e.statusCode === 403)) O.fail('Could not save sub-market', e);
+    });
+    return added;
   });
 
   // ── Sales Board (the server board replaces salesPaxAgg and friends) ──

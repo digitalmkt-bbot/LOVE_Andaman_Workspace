@@ -49,6 +49,11 @@ function runtime({ enabled = true, respond }) {
   // Legacy originals: must run in legacy mode, and must not run in ops mode.
   const origs = ['tmSaveModal', 'tmDeleteMarket', 'tmDeleteSales', 'tmApplyMarketOrder', 'sbMarketsPersist', 'sbSalesPersist'];
   origs.forEach((n) => { window[n] = (...args) => { legacy.push(n); return 'legacy:' + n + ':' + args.length; }; });
+  window.agSubMarketRemember = (id, sub) => { // legacy: adds to the local list, true when new
+    const m = ctx.SB_MARKETS.find((x) => x.id === id);
+    if (!m || !sub || m.subs.some((x) => x.toLowerCase() === sub.toLowerCase())) return false;
+    m.subs.push(sub); legacy.push('agSubMarketRemember'); return true;
+  };
   vm.runInNewContext(SOURCE, ctx);
   return { window, ctx, calls, failures, wrote, alerts, legacy };
 }
@@ -172,5 +177,34 @@ test('legacy mode: every wrapper delegates to the original and makes no API requ
   assert.equal(rt.window.tmApplyMarketOrder(['de', 'ru']), 'legacy:tmApplyMarketOrder:1');
   assert.equal(rt.window.sbMarketsPersist(), 'legacy:sbMarketsPersist:0');
   assert.equal(rt.window.sbSalesPersist(), 'legacy:sbSalesPersist:0');
+  assert.deepEqual(rt.calls, []);
+});
+
+test('agent form new sub-market: one targeted PATCH of that market subs; a known one writes nothing', async () => {
+  const rt = runtime({ respond: async (m, path, body) => ({ id: 'ru', name: 'Russia', color: '#111', subs: body.subs, sort: 1 }) });
+  assert.equal(rt.window.agSubMarketRemember('ru', 'Moscow'), false, 'already known: legacy says no');
+  assert.equal(rt.window.agSubMarketRemember('ru', 'Sochi'), true);
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(rt.calls, [{ method: 'PATCH', path: '/v1/markets/ru', body: { subs: ['Moscow', 'Sochi'] } }]);
+  assert.deepEqual(rt.ctx.SB_MARKETS[0].subs, ['Moscow', 'Sochi']);
+  assert.deepEqual(rt.wrote, ['sales-market-subs']);
+});
+
+test('agent form new sub-market: a refusal takes the sub back out and toasts; a 403 is silent', async () => {
+  const bad = runtime({ respond: async () => { throw Object.assign(new Error('nope'), { statusCode: 400 }); } });
+  bad.window.agSubMarketRemember('ru', 'Sochi');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(bad.ctx.SB_MARKETS[0].subs, ['Moscow']);
+  assert.deepEqual(bad.failures, [{ title: 'Could not save sub-market', message: 'nope' }]);
+  const denied = runtime({ respond: async () => { throw Object.assign(new Error('forbidden'), { statusCode: 403 }); } });
+  denied.window.agSubMarketRemember('ru', 'Sochi');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(denied.ctx.SB_MARKETS[0].subs, ['Moscow']);
+  assert.deepEqual(denied.failures, []);
+});
+
+test('legacy mode: agSubMarketRemember runs the original and writes nothing', () => {
+  const rt = runtime({ enabled: false, respond: async () => ({}) });
+  assert.equal(rt.window.agSubMarketRemember('ru', 'Sochi'), true);
   assert.deepEqual(rt.calls, []);
 });
