@@ -28314,38 +28314,39 @@ var FLWS_OUT_TH={success:'ซ่อมเสร็จ',limited:'ใช้งา�
 function flwsCut(t,n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?(t.slice(0,n-1).trim()+'…'):t; }
 function flwsDays(a,b){ var x=Date.parse(String(a||'').slice(0,10)), y=Date.parse(String(b||'').slice(0,10)); return (isNaN(x)||isNaN(y))?null:Math.max(0,Math.round((y-x)/864e5)); }
 function flwsIsSys(l){ return /^(ระบบ|system|equip)$/i.test(String(l.by||'').trim()) || /^(▶|✓|📋|📦|↩|⚙|🔄|＋|\+)/.test(String(l.t||'')); }
+/* §flwShort2 (2026-10-20) · owner "Copy text ขอกระชับ ตัดอีโมจิออก"
+   ไม่มีอีโมจิ · ไม่ซ้ำชื่อเรือ · แก้ยังไง = 2 บันทึกล่าสุด · อะไหล่บอกแค่จำนวน · ตัดอีโมจิที่ติดมากับข้อความผู้ใช้ด้วย */
+function flwsNoEmoji(t){ try{ return String(t||'').replace(/[\p{Extended_Pictographic}\u{2600}-\u{27BF}\u{25B6}\u{FE0F}\u{200D}\u{20E3}]/gu,'').replace(/[ \t]{2,}/g,' ').replace(/^ +| +$/gm,''); }catch(_){ return String(t||''); } }
 function flwsShort(D){
   var m=D.m, inc=D.inc, b=D.b, L=[], today=(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
   var d0=(inc&&inc.date)||(m&&m.startDate)||'', done=!!(m&&m.status==='done'), d1=done?(m.endDate||''):today, nd=flwsDays(d0,d1);
   var st;
-  if(m&&m.status==='cancelled') st='✖ ยกเลิกงาน';
-  else if(done) st='✅ '+(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
-  else if(m) st='⏳ '+(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' ('+nd+' วัน)'):'');
-  else st='🆕 แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' ('+nd+' วัน)'):'');
-  L.push('🔧 '+(b?b.name:'—')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
+  if(m&&m.status==='cancelled') st='ยกเลิกงาน';
+  else if(done) st=(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
+  else if(m) st=(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' '+nd+' วัน'):'');
+  else st='แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' '+nd+' วัน'):'');
+  L.push((b?b.name:'-')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
   var parts=[]; ((inc&&inc.damagedAssets)||[]).concat((m&&m.assets)||[]).forEach(function(a){ var t=a&&a.label; if(t&&parts.indexOf(t)<0) parts.push(t); });
-  L.push('📍 ที่ไหน: '+[b?b.name:''].concat(parts.slice(0,3)).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · '));
+  var where=parts.slice(0,2).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · ');
+  if(where) L.push('ที่: '+where);
   var y0=String(d0).slice(0,4), sameY=String(d1).slice(0,4)===y0;
-  L.push('🗓 เมื่อไหร่: '+(flwsD(d0, inc&&inc.time)||'—')+(done&&d1?(' → เสร็จ '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
-  var tt=(inc&&inc.title)||(m&&m.title)||'', dt=String((inc&&inc.detail)||(m&&m.detail)||'').split(/\n|(?:\.\s)/)[0];
-  L.push('⚠️ เกิดอะไร: '+flwsCut(tt,70)+(dt&&dt.trim()!==tt.trim()?(' · '+flwsCut(dt,60)):''));
-  var notes=D.log.filter(function(l){ return !flwsIsSys(l); }).map(function(l){ return flwsCut(l.t,50); });
-  if(notes.length>4) notes=[notes[0],'…'].concat(notes.slice(-3));
-  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,50));
+  L.push('วันที่: '+(flwsD(d0, inc&&inc.time)||'-')+(done&&d1?(' → '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
+  var tt=(inc&&inc.title)||(m&&m.title)||'';
+  L.push('อาการ: '+flwsCut(tt,70));
+  var notes=D.log.filter(function(l){ return !flwsIsSys(l) && !/^(photo|video|photo\/video) added|^\u270E/i.test(String(l.t||'')); }).map(function(l){ return flwsCut(l.t,70); });
+  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,70));
+  notes=notes.filter(function(x,i){ return notes.indexOf(x)===i; }).slice(-2);
+  if(!notes.length && m && m.detail) notes.push(flwsCut(m.detail,80));
   if(!notes.length && inc&&typeof inc.quickFix==='string') notes.push(flwsCut(inc.quickFix,50));
-  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึกการแก้':'ยังไม่เปิดงาน');
+  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึก':'ยังไม่เปิดงาน');
   if(done && m.outcome && m.outcome!=='success') fix+=' ('+(FLWS_OUT_TH[m.outcome]||m.outcome)+')';
-  L.push('🛠 แก้ยังไง: '+fix);
-  if(m){ var top=D.parts.slice().sort(function(a,c){ return (+c.qty||0)*(+c.cost||0)-(+a.qty||0)*(+a.cost||0); });
-    var pt=top.slice(0,3).map(function(p){ return flwsCut(p.name,28)+((+p.qty||0)>1?(' '+p.qty+(p.unit?(' '+p.unit):'')):''); }).join(', ')+(top.length>3?(' +'+(top.length-3)):'');
-    var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
-    var mm=om.length?('memo '+om.map(function(mo){ return (mo.no||'MO')+' '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }).slice(0,2).join(', ')):'';
-    L.push('💰 '+(D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย')+(D.parts.length?(' · อะไหล่ '+D.parts.length+' รายการ ('+pt+')'):'')+(mm?(' · '+mm):'')); }
-  var who=[]; if(m&&String(m.owner||'').trim()) who.push(String(m.owner).trim());
-  D.log.forEach(function(l){ if(!flwsIsSys(l)&&l.by&&who.indexOf(l.by)<0) who.push(l.by); });
-  var last=[]; if(D.photos.length) last.push('📷 รูป '+D.photos.length+' รูป'); if(who.length) last.push('👷 '+who.slice(0,3).join(', '));
-  if(last.length) L.push(last.join(' · '));
-  return L.join('\n');
+  L.push('แก้: '+fix);
+  if(m){ var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
+    var c=[D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย'];
+    if(D.parts.length) c.push('อะไหล่ '+D.parts.length+' รายการ');
+    if(om.length){ var lb=om.map(function(mo){ return (typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }); c.push(om.length+' memo'+(lb.every(function(x){ return x===lb[0]; })?(' '+lb[0]):' ค้าง')); }
+    L.push('ค่าใช้จ่าย: '+c.join(' · ')); }
+  return flwsNoEmoji(L.join('\n'));
 }
 function flwsMenu(ev){ if(ev) ev.stopPropagation(); var mn=document.getElementById('flws-mn'); if(mn) mn.style.display=(mn.style.display==='block'?'none':'block'); }
 function flwsCopy(mode){
