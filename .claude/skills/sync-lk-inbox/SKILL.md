@@ -74,6 +74,11 @@ copy. `tools/sync-upstream.mjs` merges per function instead, driven by `tools/re
    | e.g. Park tickets month view (bd6384b) | park tickets for a whole month | **MISSING**: only `GET /v1/pier-office/{pier}/park-tickets?date=` (one day) | add a month/range endpoint, then wire `js/ops/32-ops-park.js` |
    | … | … | **EXISTS**: `METHOD /v1/…` (in swagger + main) | wire in `js/ops/…` |
 
+   For the deeper check, run the `lk-inbox-watcher` agent (defined in operation-backend,
+   `.claude/agents/lk-inbox-watcher.md`). It reads the upstream diffs and the backend code itself, instead of
+   matching text, and returns this same table with a verdict per feature (NONE / EDIT / NEW / ASK). Use its
+   table in place of the heuristic list when they disagree.
+
    Every MISSING row is the list of endpoints to build. Say plainly which merged features won't work here
    until they're built.
 
