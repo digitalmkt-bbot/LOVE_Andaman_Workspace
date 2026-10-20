@@ -23603,12 +23603,9 @@ function pckBoatTabs(all, part){
      คู่กับ "ทุกโปรแกรม" ของการ์ดซ้าย ปุ่มล้างของสองระดับจะได้อยู่ที่เดียวกัน */
   var allBtn='<button class="pck-btab'+(_pckBoat?'':' on')+'" onclick="pckSetBoat(\'\')" style="'+(_pckBoat?'':'background:#2f2f2b;color:#fff')+'">เรือทั้งหมด <span class="c"'+(_pckBoat?'':' style="background:rgba(255,255,255,.25);color:#fff"')+'>'+ks.length+'</span></button>';
   if(part==='all') return allBtn;
-  /* §pckChipD (2026-10-20) · owner เลือกแบบ D: ชิปเหลือแค่ชื่อเรือ + ยอดคน · โปรแกรมดูจากสีขีดใต้ชิป · แถวคำอธิบายสีโปรแกรมอยู่บนสุด */
-  var lgSeen={}, lg='';
-  ks.forEach(function(k){ var rid=m[k].rid; if(lgSeen[rid]) return; lgSeen[rid]=1;
-    var rt0=(typeof getRoute==='function'?getRoute(rid):null)||{}, dp0=pckDepOf(rid);
-    lg+='<span class="pck-blg-i" title="'+e((rt0.name||'')+(dp0?(' · '+dp0):''))+'"><i style="background:'+(rt0.color||'#999')+'"></i>'+e(pckRouteShort(rt0))+(dp0?(' <b>'+e(dp0)+'</b>'):'')+'</span>'; });
-  var h='<div class="pck-btabs"><div class="pck-blg"><span class="ck-unitbar-lbl">โปรแกรม</span>'+lg+'</div><span class="ck-unitbar-lbl">เรือวันนี้</span>'
+  /* §pckChipD (2026-10-20) · owner เลือกแบบ D: ชิปเหลือแค่ชื่อเรือ + ยอดคน · โปรแกรมดูจากสีขีดใต้ชิป (ชื่อเต็มใน tooltip)
+     แถวคำอธิบายสีโปรแกรมเคยอยู่บนสุด · owner "ซ่อนไปเลยดีกว่า" → เอาออก */
+  var h='<div class="pck-btabs"><span class="ck-unitbar-lbl">เรือวันนี้</span>'
    +((part==='tabs')?'':allBtn);
   ks.forEach(function(k){
     var col=pckBoatColor(k), ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff';
@@ -24771,11 +24768,6 @@ function pckHeadCSS(){
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
   +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:12.5px;font-weight:800;letter-spacing:-.2px}'
   +H+' .pkh-boats .pck-btab .rt{max-width:150px}'   /* §pckChipShort */
-  /* §pckChipD · แถวคำอธิบายสีโปรแกรม + ขีดสีโปรแกรมใต้ชิปเรือ */
-  +H+' .pck-blg{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:3px 14px;font-size:10px;font-weight:600;color:#77776f;margin-bottom:2px}'
-  +H+' .pck-blg-i{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
-  +H+' .pck-blg-i i{display:inline-block;width:14px;height:4px;border-radius:2px;flex:none}'
-  +H+' .pck-blg-i b{font-family:\'DM Mono\',monospace;font-weight:500}'
   +H+' .pck-btab.pck-btab-d{border-bottom-width:4px !important;border-bottom-style:solid !important;border-radius:9px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:10px !important}'
