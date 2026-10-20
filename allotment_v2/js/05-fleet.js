@@ -28008,7 +28008,21 @@ function flwAv(b,sz){
   return '<span style="flex:none;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+c+';color:#fff;font-size:'+(sz>=40?13:11)+'px;font-weight:700;display:flex;align-items:center;justify-content:center">'+String(t).replace(/[&<>"]/g,'')+'</span>';
 }
 function flwPickBoat(id){ FLW.boat=id; FLW.item=''; flRenderWork(); }
-function flwPickItem(k){ FLW.item=k; flRenderWork(); }
+/* §flwDbl (2026-10-20) · owner "ขอให้สามารถ ดับเบิ้ลคลิก ที่งาน แล้วเด้งไปที่งานนั้นๆ"
+   คลิกเดียว = เลือกงาน (แผงขวา) เหมือนเดิม · คลิกซ้ำงานเดิมภายใน 450ms = เปิดหน้างานเต็ม (ปุ่ม Open the full job page ตัวเดียวกัน)
+   ไม่ใช้ ondblclick เพราะคลิกแรก flRenderWork() วาดแถวใหม่ทั้งรายการ · คลิกที่สองตกบนแถวใหม่ เบราว์เซอร์ไม่ถือว่าเป็น dblclick
+   INC → หน้า Incident · MJ (รวมงานที่ปิดแล้ว dn:) → หน้า Maintenance · PRJ → หน้าโปรเจกต์ */
+var _flwLastPick={k:'',t:0};
+function flwOpenItem(k){
+  var m=String(k||'').match(/^(inc|mj|prj|dn):(.+)$/); if(!m) return;
+  flwGo(m[1]==='dn'?'mj':m[1], m[2]);
+}
+function flwPickItem(k){
+  var now=Date.now(), dbl=(_flwLastPick.k===k && now-_flwLastPick.t<450);
+  _flwLastPick={k:k, t:dbl?0:now};
+  if(dbl){ flwOpenItem(k); return; }
+  FLW.item=k; flRenderWork();
+}
 function flwStage(i){ FLW.stage=(FLW.stage===i)?-1:i; FLW.item=''; flRenderWork(); }
 function flwBF(k){ FLW.bf=k; flRenderWork(); }
 function flwGo(kind,id){
@@ -28738,7 +28752,7 @@ function flRenderWork(){
           return E(j.no)+(f?(' '+E(f.title)):(pj?(' '+E(pj.name)):'')); });
         if(names.length) blk='<div style="padding:9px 18px;background:#FBF1DF;border-bottom:1px solid #ECEBE6;font-size:12.5px;color:#7A4300;line-height:1.45"><b>What keeps this boat down:</b> '+names.join(' · ')+(jb.length>3?(' · +'+(jb.length-3)+' more'):'')+'</div>'; }catch(_){} }
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?'No owner':'—');
-      return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)">'
+      return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)" title="Double-click to open the job">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
         +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
         +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
