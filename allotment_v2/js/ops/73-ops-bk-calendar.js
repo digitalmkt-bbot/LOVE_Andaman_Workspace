@@ -51,7 +51,26 @@
     if(!d) return orig.apply(this, [].slice.call(arguments, 1));
     var f = d.__fam[familyId];
     if(!f) return { total: 0, ad: 0, chd: 0, inf: 0, foc: 0, pk: 0, kl: 0, nt: 0, hasFocPending: false, subCount: 0 };
-    return { total: n(f.total), ad: n(f.ad), chd: n(f.chd), inf: n(f.inf), foc: n(f.foc), pk: n(f.pk), kl: n(f.kl), nt: n(f.nt), hasFocPending: !!f.foc_pending, subCount: n(f.sub_count) };
+    var K = ['total', 'ad', 'chd', 'inf', 'foc', 'pk', 'kl', 'nt'], out = { hasFocPending: !!f.foc_pending, subCount: n(f.sub_count) };
+    /* the server's figures are NET of the cancelled variants (cut); legacy's renderers subtract cut from a GROSS aggregate
+       (and a struck chip still shows its count), so add cut back here: heads are subtracted once, not twice. Answer
+       without cut (old cache) = figures as they are. */
+    var cut = f.cut && typeof f.cut === 'object' ? f.cut : null;
+    K.forEach(function(k){ out[k] = n(f[k]) + (cut ? n(cut[k]) : 0); });
+    if(cut) out.cut = cut;
+    return out;
+  });
+
+  /* the cancelled-variants split of a family on a day (§calCxlSplit): the server decides which variants are cancelled,
+     what the reason is and how many heads they cut; same shape as legacy's {closed, cut, all, lbl, R} */
+  wrap('bookingV2FamCxlSplit', function(orig, famId, ds){
+    var j = month(String(ds || '').slice(0, 7)), d = j && j.__byDate[ds], f = d && d.__fam[famId];
+    if(!f || !Array.isArray(f.closed_routes) || !f.cut || typeof f.cut !== 'object') return orig.apply(this, [].slice.call(arguments, 1));
+    var K = ['total', 'ad', 'chd', 'inf', 'foc', 'pk', 'kl', 'nt'], cut = {};
+    K.forEach(function(k){ cut[k] = n(f.cut[k]); });
+    var TR = window.TCX_R || {}, R = null;
+    if(f.closed_routes.length) R = TR[f.reason] || TR.other || null;
+    return { closed: f.closed_routes.slice(), cut: cut, all: !!f.all_closed, lbl: f.closed_routes.length ? (f.reason_label || '') : '', R: R };
   });
 
   /* the little line in the top bar: pax and bookings of the month on screen */
