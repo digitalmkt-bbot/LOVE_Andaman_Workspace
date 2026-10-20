@@ -16668,9 +16668,11 @@ function pcRowsAudit(){
   });
   return out;
 }
-function pcNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0)); }
-function pcMoney(n){ return '฿'+Math.round(+n||0).toLocaleString('en-US'); }
-function pcN(n){ return Math.round(+n||0).toLocaleString('en-US'); }
+/* §pcDec · เงินมีทศนิยมได้ 2 ตำแหน่ง (สตางค์) · จำนวนเต็มยังโชว์เหมือนเดิม ไม่ต่อ .00 */
+function pcC(x){ return Math.round((+x||0)*100)/100; }
+function pcNum(v){ return Math.max(0, pcC(parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')))); }
+function pcMoney(n){ return '฿'+pcN(n); }
+function pcN(n){ return pcC(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
 function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 /* §pkNat (2026-09-05) · สัญชาติจริงของ นทท. · คนละเรื่องกับช่องราคา
@@ -16931,7 +16933,7 @@ function pcFillPanel(ds,bid,pier,X,R){
 /* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
 function pcDiffCell(paid,exp){
   if(exp==null||!(paid>0)) return '<td class="pc-df">—</td>';
-  var d=paid-exp;
+  var d=pcC(paid-exp);
   if(d===0) return '<td class="pc-df ok">✓ ตรง</td>';
   if(d>0)   return '<td class="pc-df over" title="จ่ายมากกว่าที่คำนวณ">+'+pcN(d)+'</td>';
   return '<td class="pc-df under" title="จ่ายน้อยกว่าที่คำนวณ">−'+pcN(-d)+'</td>';
@@ -17241,7 +17243,7 @@ function pcRowAdd(kind){
    +'      <div style="flex:none"><div class="lb">เวลา</div>'
    +'        <input id="pc-r-at" class="ck-inp" type="time" value="'+((typeof ckNowHM==='function')?ckNowHM():'')+'" style="width:130px"></div>'
    +'      <div style="flex:1;min-width:150px"><div class="lb">จำนวนเงิน</div>'
-   +'        <input id="pc-r-amt" class="ck-inp" type="text" inputmode="numeric" placeholder="0"></div>'
+   +'        <input id="pc-r-amt" class="ck-inp" type="text" inputmode="decimal" placeholder="0"></div>'
    +'    </div>'
    +'    <div class="ck-fn">ยอดนี้จะเข้าไปในสมุดเดินบัญชีของวันที่เลือกอยู่ และมีผลกับยอดคงเหลือทันที</div>'
    +'  </div>'
@@ -17741,15 +17743,15 @@ function pcSheetLT(pier, opt){
         /* §pcLtSplit · ใช้จริงแยกสองช่อง · หน้างานจอยอาจยุบลำ เหมาอาจใช้น้อยกว่าที่จอง
            รวมกันเป็นเลขเดียวแล้วดูย้อนหลังไม่ออกว่าที่ต่างจากใบจองคือฝั่งไหน */
         +box('cb', (U.j!=null?U.j:''),
-          '<input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
+          '<input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="decimal" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งจอย" '
           +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)">')
         +box('cb', (U.c!=null?U.c:''),
-          '<input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
+          '<input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="decimal" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งเหมา" '
           +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)">')
         +box('cy', (C.amt?pcN(C.amt):''),
-          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="decimal" '
           +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
         +box('ctx', (C.note||''),
           '<input value="'+pcE(C.note||'')+'" placeholder="—" '
@@ -17830,7 +17832,7 @@ function pcSheetPK(pier, opt){
         var mm=(hasK && (+C[k]||0)!==(+XN[k]||0))?' mm':'';
         return box('cy ct'+((i===0||i===HF)?' gs':'')+mm, (C[k]||''),
           '<input value="'+(C[k]||'')+'" placeholder="—" '
-          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
+          +'inputmode="decimal" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex gs na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
         : '<td class="pc-ex gs"><b>'+pcN(exp)+'</b><i>'+(hasK?('ตามที่คีย์'+(C.src==='price'?' · เรทขาย':(C.src==='nat'?' · สัญชาติจริง':'')))
@@ -17857,12 +17859,12 @@ function pcSheetPK(pier, opt){
           +'</td>'+cells
         +'<td class="v">'+XN.tot+'</td>'+keys
         +box('cy gs', (C.dock?pcN(C.dock):''),
-          '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
+          '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="decimal" '
           +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
         +'<td class="v"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
         +exc
         +box('cy', (C.amt?pcN(C.amt):''),
-          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="decimal" '
           +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
@@ -80739,7 +80741,7 @@ function pc2DayList(pier, kind){
       else { txt=s.n+' ลำ · ครบ'; st='ok'; } }
     else { s=pc2StatPK(pier,ds);
       if(s.miss){ txt=s.miss+' ลำยังไม่กรอก'; st='miss'; }
-      else if(s.keyed && Math.round(s.diff)!==0){ txt='ต่าง '+(s.diff>0?'+':'−')+pcN(Math.abs(s.diff)); st='diff'; }
+      else if(s.keyed && pcC(s.diff)!==0){ txt='ต่าง '+(s.diff>0?'+':'−')+pcN(Math.abs(s.diff)); st='diff'; }
       else if(s.keyed){ txt='ตรง'; st='ok'; }
       else { txt=s.n+' ลำ'; st='none'; } }
     out+='<button class="pc2-dl'+(ds===_pcDate?' on':'')+'" onclick="pcPickDay(\''+ds+'\')">'
@@ -80903,7 +80905,7 @@ function pc2LTDay(pier, ds){
     var need=(+L.join||0)>0||(+L.chtr||0)>0, miss=need&&!(+C.amt>0);
     dj+=(+L.join||0); dc+=(+L.chtr||0); duj+=(U.j||0); duc+=(U.c||0); dm+=(+C.amt||0); if(U.j!=null||U.c!=null) anyU=true;
     var cMm=(U.c!=null && U.c!==(+L.chtr||0));
-    var inp=function(fld,v,cls,ph,title){ return '<input class="pc2-in'+(cls?(' '+cls):'')+'" inputmode="numeric" placeholder="'+(ph||'—')+'" title="'+pcE(title||'')+'" value="'+(v==null||v===''?'':pcE(v))+'" '
+    var inp=function(fld,v,cls,ph,title){ return '<input class="pc2-in'+(cls?(' '+cls):'')+'" inputmode="decimal" placeholder="'+(ph||'—')+'" title="'+pcE(title||'')+'" value="'+(v==null||v===''?'':pcE(v))+'" '
       +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\''+fld+'\',this.value)">'; };
     rows+='<div class="pc2-tr lt'+(miss?' miss':'')+'">'
       +'<span class="bn">'+pcE(B.name)+'</span>'
@@ -80986,8 +80988,8 @@ function pc2PKDay(pier, ds){
       var keyed;
       if(open){
         keyed=PC_PK.map(function(k,i){ var mm=hasK&&((+C[k]||0)!==(+XN[k]||0));
-            return '<span class="k'+bl(i)+'"><input class="pc2-in'+(mm?' mm':'')+'" inputmode="numeric" placeholder="—" value="'+(C[k]||'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></span>'; }).join('')
-          +'<span class="k cl"><input class="pc2-in sm" inputmode="numeric" placeholder="—" value="'+(C.dock?pcN(C.dock):'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)"></span>'
+            return '<span class="k'+bl(i)+'"><input class="pc2-in'+(mm?' mm':'')+'" inputmode="decimal" placeholder="—" value="'+(C[k]||'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></span>'; }).join('')
+          +'<span class="k cl"><input class="pc2-in sm" inputmode="decimal" placeholder="—" value="'+(C.dock?pcN(C.dock):'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)"></span>'
           +'<span class="k cl gl kt">'+(hasK?kt:'—')+'</span>';
       } else if(_pcFillAsk===(ds+'::'+B.bid)){
         keyed='<span class="k span10 gl">'+pcFillPanel(ds,B.bid,pier,X,R)+'</span>';
@@ -80996,7 +80998,7 @@ function pc2PKDay(pier, ds){
           +'<button class="f" onclick="pcFillAsk(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')" title="คัดลอกยอดเดินทางจริงมาใส่ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง">⤓ เติมจากใบจอง</button>'
           +'<button class="o" onclick="pc2OpenKey(\''+ds+'\',\''+B.bid+'\')">กรอกเอง</button></span></span>';
       }
-      var d=(exp!=null && +C.amt>0)?((+C.amt)-exp):null;
+      var d=(exp!=null && +C.amt>0)?pcC((+C.amt)-exp):null;
       var diff=(+C.amt>0)?(d===null?'<em class="df">—</em>':(d===0?'<em class="df ok">ตรง</em>':(d>0?'<em class="df w" title="จ่ายมากกว่าที่คำนวณ">+'+pcN(d)+'</em>':'<em class="df w" title="จ่ายน้อยกว่าที่คำนวณ">−'+pcN(-d)+'</em>')))
         :(XN.tot>0?'<em class="df n">ยังไม่กรอก</em>':'<em class="df">—</em>');
       rows+='<div class="pc2-tr pk'+((XN.tot>0&&!(+C.amt>0))?' miss':'')+'">'
@@ -81005,14 +81007,14 @@ function pc2PKDay(pier, ds){
         +'<span class="c cl gl tt">'+XN.tot+'</span>'
         +keyed
         +'<span class="mn ex" title="'+(exp==null?pcE(R.why||'ไม่มีราคา'):((hasK?'คิดตามที่คีย์':'คิดตามใบจอง (ยังไม่ได้คีย์)')+' · ค่าอุทยาน '+pcN(expPk)+(+C.dock>0?(' + ค่าจอด '+pcN(+C.dock)):'')))+'">'+(exp==null?'—':pcN(exp))+'<small>'+(exp==null?'ไม่มีราคา':((hasK?'ตามที่คีย์':'ตามใบจอง')+(+C.dock>0?' + จอด':'')))+'</small></span>'
-        +'<span class="k cl"><input class="pc2-in r" inputmode="numeric" placeholder="—" value="'+(C.amt?pcN(C.amt):'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></span>'
+        +'<span class="k cl"><input class="pc2-in r" inputmode="decimal" placeholder="—" value="'+(C.amt?pcN(C.amt):'')+'" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></span>'
         +'<span class="mn cl ctr">'+diff+'</span>'
       +'</div>';
     });
     PC_PK.forEach(function(k,i){ DT[i]+=GT[i]; DK[i]+=GK[i]; });
     dtot+=gtot; dkt+=gkt; ddk+=gdk; dm+=gm; if(gx){ dex+=gex; anyx=true; } if(gk) anyk=true; if(gP){ dexP+=gexP; dP=true; }
     /* ต่าง · เทียบเฉพาะลำที่กรอกเงินแล้ว · ลำที่ยังไม่กรอกไม่ใช่ส่วนต่าง */
-    var gd=(gP&&gm>0)?Math.round(gm-gexP):null;
+    var gd=(gP&&gm>0)?pcC(gm-gexP):null;
     html+='<div class="pc2-tr pk grp" style="--rc:'+pcE(pcRouteColor(G.rid)||'#C9D2E0')+'"><span class="span-all">'+pc2Route(G.rid,G.route)
         +'<span class="gn">'+G.boats.length+' ลำ · '+gtot+' คน</span>'+pcRateChip(R)+'</span></div>'
       +rows
@@ -81022,7 +81024,7 @@ function pc2PKDay(pier, ds){
         +'<span class="mn ex">'+(gx?pcN(gex):'—')+'</span><span class="mn cl r">'+(gm?pcN(gm):'—')+'</span>'
         +'<span class="mn cl ctr">'+(gd===null?'':(gd===0?'<em class="df ok">ตรง</em>':'<em class="df w">'+(gd>0?'+':'−')+pcN(Math.abs(gd))+'</em>'))+'</span></div>'):'');
   });
-  var dd=(dP&&dm>0)?Math.round(dm-dexP):null;
+  var dd=(dP&&dm>0)?pcC(dm-dexP):null;
   var T=pcTotals(pier,ds), D2=pcDay(pier,ds,false)||{out:[]};
   /* §pkPullBoat · ดึงรายลำ · ปุ่มดึงขึ้นตราบใดที่ยังมีลำที่ยังไม่ได้ดึง · ยอดที่ดึงไว้ไม่ตรงชีท (แก้ทีหลัง / ดึงแบบเดิมที่นับค่าจอดซ้ำ) ขึ้นเตือน */
   var PS=pcPkPullState(pier,ds), pkOff=PS.off, pulledPk=PS.nPulled>0||PS.old, pPk=PS.pulledAmt, pDk=0;
@@ -82241,7 +82243,7 @@ function pc2EdRow(E,base,no){
   var kd=' onkeydown="pc2EdKey(event,\'', ip=function(f,cls,ph,val,extra){
     return '<input id="pc2-ed-'+f+'" class="pc2-ei '+cls+'" placeholder="'+ph+'" value="'+pcE(val)+'"'+(extra||'')
       +kd+f+'\')" oninput="pc2EdSet(\''+f+'\',this.value)" autocomplete="off">'; };
-  var amtIn=ip('amt','r '+(isIn?'in':'out'),'0',E.amt,' inputmode="numeric"');
+  var amtIn=ip('amt','r '+(isIn?'in':'out'),'0',E.amt,' inputmode="decimal"');
   var CATS={lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'};
   return '<div class="pc2-lr ed" id="pc2-ed">'
     +'<span></span>'
