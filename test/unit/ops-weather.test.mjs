@@ -96,7 +96,7 @@ test('load maps server closures to the legacy shape and keeps closures outside t
   assert.deepEqual(A(rt.SB_WEATHER_CLOSURES), [
     { opsId: 'wx_0', routeId: 'r9', date: '2026-09-01', reason: 'weather', note: '', at: '' },
     { opsId: 'wx_1', routeId: 'r10', date: '2026-10-05', reason: 'weather', note: 'high waves 3m', at: '2026-10-04T05:00:00.000Z',
-      counts: { awaiting: 1, notified: 1, resolved: 2 }, pax: { pending: 6, cancelled: 2, rescheduled: 4, total: 12 } },
+      counts: { awaiting: 1, notified: 1, resolved: 2 }, pax: { pending: 6, cancelled: 2, rescheduled: 4, total: 12 }, snapshot: null, reasonLog: [], reopenedAt: null },
   ]);
 });
 
@@ -114,7 +114,7 @@ test('create: nothing local before the server answers, then the closure is held 
   g.open();
   await p;
   assert.deepEqual(rt.calls, ['POST /v1/weather-closures', 'GET /v1/weather-closures/wx_2']);
-  assert.deepEqual(rt.bodies[0], { route_id: 'r10', service_date: '2026-10-06', note: 'port closed' });
+  assert.deepEqual(rt.bodies[0], { route_id: 'r10', service_date: '2026-10-06', note: 'port closed', reason: 'weather' });
   assert.equal(rt.SB_WEATHER_CLOSURES.length, 1);
   assert.equal(rt.SB_WEATHER_CLOSURES[0].opsId, 'wx_2');
   assert.deepEqual(rt.wrote, ['weather']);
@@ -149,7 +149,7 @@ test('update note: PATCH with only the note; local note changes only from the an
   g.open();
   await p;
   assert.deepEqual(rt.calls, ['PATCH /v1/weather-closures/wx_1', 'GET /v1/weather-closures/wx_1']);
-  assert.deepEqual(rt.bodies[0], { note: 'updated' });
+  assert.deepEqual(rt.bodies[0], { note: 'updated', reason: 'weather' }, 'the note and the reason picked on the form (the server logs a change)');
   assert.equal(rt.SB_WEATHER_CLOSURES[0].note, 'updated');
 });
 
@@ -355,7 +355,7 @@ test('the read-side mapping of one closure row keeps the server id and tallies',
   const rt = runtime();
   const m = A(rt.window.laOps.weather.mapClosure(ROW_WX1));
   assert.deepEqual(m, { opsId: 'wx_1', routeId: 'r10', date: '2026-10-05', reason: 'weather', note: 'high waves 3m',
-    at: '2026-10-04T05:00:00.000Z', counts: { awaiting: 1, notified: 1, resolved: 2 }, pax: { pending: 6, cancelled: 2, rescheduled: 4, total: 12 } });
+    at: '2026-10-04T05:00:00.000Z', counts: { awaiting: 1, notified: 1, resolved: 2 }, pax: { pending: 6, cancelled: 2, rescheduled: 4, total: 12 }, snapshot: null, reasonLog: [], reopenedAt: null });
 });
 
 test('reschedule refused when the booking has another trip that day: the server would move it too', async () => {

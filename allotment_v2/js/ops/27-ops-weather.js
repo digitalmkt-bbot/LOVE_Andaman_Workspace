@@ -710,7 +710,7 @@
     }
     return [];
   });
-  O.onWrite(function(){ tg.cache = {}; hist.cache = {}; below.at = 0; });
+  if(typeof O.onWrite === 'function') O.onWrite(function(){ tg.cache = {}; hist.cache = {}; below.at = 0; });
 
   O.weather = { load: load, refreshDetail: refreshDetail, mapClosure: mapClosure, listRows: listRows,
                 syncFollowUps: syncFollowUps, closureIdFor: closureIdFor };
