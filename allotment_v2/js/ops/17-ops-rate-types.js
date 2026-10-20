@@ -419,6 +419,24 @@
     };
   }
 
+  /* rtSetOwner (admin select on the Rate Types page): legacy set rt.owner and called rtPersist, a no-op here, so the owner
+     was lost on reload. Server first: PATCH /v1/rate-types/{id} {owner} (admin only, 403 otherwise), then only the owner of the local
+     object changes. A refusal shows the server's message and redraws, which puts the select back on the saved owner. */
+  if(typeof window.rtSetOwner === 'function'){
+    var legacySetOwner = window.rtSetOwner;
+    window.rtSetOwner = function(rtId, salesId){
+      if(!O.enabled()) return legacySetOwner.apply(this, arguments);
+      if(typeof window.laIsAdmin === 'function' && !window.laIsAdmin()){ alert('Only an admin can set the owner of a Rate Type'); return; }
+      var rt = typeof window.getRateType === 'function' ? window.getRateType(rtId) : null; if(!rt) return;
+      var redraw = function(){ try{ if(typeof window.rtRenderList === 'function') window.rtRenderList(); if(typeof window.rtRenderDetail === 'function') window.rtRenderDetail(rtId); }catch(_){ } };
+      if(!canWrite()){ failNotReady(); redraw(); return; }
+      return O.queue(function(){ return O.patch('/v1/rate-types/' + encodeURIComponent(rtId), { owner: salesId || null }); }).then(function(row){
+        rt.owner = (row && row.owner) || '';
+        O.wrote('rate-type-owner'); redraw();
+      }, function(e){ O.fail('Owner was not changed', e); redraw(); });
+    };
+  }
+
   /* Load before the ops boot redraws the active view. */
   if(O.enabled()) load();
 })();
