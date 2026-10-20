@@ -21,6 +21,8 @@
 
   var FAIL_MS = 15000;
   var cache = {};                       // 'date|land' -> { ok, at, stale, res, json, busy }
+  var onLoad = [];                      // other screens that draw from an answer (the dashboard's Programmes card): fn(date) when a day's figures changed
+  window.laOpsByTripOnLoad = function(fn){ if(typeof fn === 'function') onLoad.push(fn); };
 
   function enabled(){ return !!(O.enabled && O.enabled()); }
   function key(date, land){ return date + '|' + (land ? 'land' : 'marine'); }
@@ -43,7 +45,7 @@
     O.get('/operations/by-trip', { date: date, land: land ? 'true' : '' }).then(function(res){
       var json = JSON.stringify(res), changed = !e.ok || e.json !== json;
       cache[k] = { ok: true, at: Date.now(), stale: false, res: res, json: json, busy: false };
-      if(changed) redraw(date);
+      if(changed){ redraw(date); onLoad.forEach(function(fn){ try{ fn(date); }catch(_){} }); }
     }, function(err){
       var old = cache[k] || {};
       cache[k] = { ok: !!old.res, res: old.res, json: old.json, at: Date.now(), stale: false, failedAt: Date.now(), busy: false };
