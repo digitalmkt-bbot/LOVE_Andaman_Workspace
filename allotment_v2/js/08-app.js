@@ -51437,6 +51437,19 @@ function bkV2RenderPickupSection(){
   `;
 }
 
+/* ══ §bkChCap (2026-10-20) · ทริปเหมาลำ ต้องเทียบคนกับ "ลำที่เหมา" ไม่ใช่ที่นั่งจอยของโปรแกรม ══
+   owner: "อันนี้เป็นบั๊คไหม" · ZA261030Adele · เหมา Hermetis 3 พ.ย. 64 คน · หน้าจองขึ้น OVER 64/56
+   56 = ที่นั่งจอยที่เหลือของ Phi Phi Bamboo วันนั้น (ลำอื่นที่ขายจอย) · ไม่เกี่ยวกับลำที่เหมา
+   Hermetis 65 ที่ (ทะเบียน 75) · 64 คนจึงพอดี · ตัวกันตอนบันทึก (§lockViolation) ข้ามเหมาลำอยู่แล้ว เหลือแค่ป้ายที่ผิด
+   ป้ายใหม่: เทียบกับที่นั่งของลำนั้นในวันนั้น (boatCapFor · รวมที่ปรับรายวัน) และที่นั่งตามทะเบียน */
+function bkV2CharterCap(t){
+  if(!t || t.bookingMode!=='charter' || !t.charterBoatId) return null;
+  var b=(typeof getBoat==='function')?getBoat(t.charterBoatId):null; if(!b) return null;
+  var cap=(typeof boatCapFor==='function')?boatCapFor(b.id, t.date):(+b.cap||0);
+  var lic=(typeof boatCapLicense==='function')?boatCapLicense(b.id):(+b.licensePax||+b.cap||0);
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  return { name:b.name||b.id, cap:cap, lic:lic, pax:pax, overLic:lic>0 && pax>lic, overCap:cap>0 && pax>cap };
+}
 function bkV2RenderTripsSection(){
   const d = _bkV2.newBooking;
   const rt = bkV2GetRT();
@@ -51539,6 +51552,14 @@ function bkV2RenderTripsSection(){
       if(al.hasAllotment && totPaxThisTrip > al.seatsAvailable && totPaxThisTrip > 0){
         warn = `<div style="margin-top:6px;padding:8px 12px;background:#FBE3E0;color:#8E2019;border-radius:10px;font-size:12.5px;font-weight:600">⚠ Over capacity · ${totPaxThisTrip} pax requested · only ${al.seatsAvailable} seat${al.seatsAvailable===1?'':'s'} left. Booking can be saved but needs dispatcher action.</div>`;
       }
+      if(t.bookingMode==='charter'){   /* §bkChCap · เหมาลำ = เทียบกับลำที่เหมา */
+        const _cc = bkV2CharterCap(t);
+        allotBadge = !_cc ? '' : (_cc.overLic
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#FBE3E0;color:#8E2019;border-radius:10px;font-size:12.5px;font-weight:600">⚠ Over the boat licence · ${_cc.pax} pax · ${escapeHTML(_cc.name)} is licensed for ${_cc.lic}</div>`
+          : _cc.overCap
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#FBEBD3;color:#7A4300;border-radius:10px;font-size:12.5px;font-weight:600">⚠ ${_cc.pax} pax on ${escapeHTML(_cc.name)} · above its ${_cc.cap} seats (licence ${_cc.lic})</div>`
+          : `<div style="margin-top:8px;padding:8px 12px;background:#F4E8FB;border:1px solid #D7B5F0;color:#6B289A;border-radius:10px;font-size:12.5px;font-weight:600">CHARTER · ${escapeHTML(_cc.name)} · ${_cc.pax} / ${_cc.cap} seats</div>`);
+      } else
       allotBadge = `<div style="margin-top:8px;padding:8px 12px;background:${s.bg};border:${s.dashed?'1px dashed':'1px solid'} ${s.border};border-radius:10px;font-size:12.5px;color:${s.color};font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="background:${s.color};color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em;font-weight:700;flex-shrink:0">${s.tag}</span><span style="flex:1;min-width:0">${msg}</span></div>${warn}`;
     }
     const isCharter = t.bookingMode === 'charter';
@@ -52074,6 +52095,14 @@ function bkV2RenderReviewPanel(){
     const sub = bkV2TripSubtotal(t);
     // Allotment chip
     let allotChip = '';
+    const _cc = (t.bookingMode==='charter') ? bkV2CharterCap(t) : null;   /* §bkChCap */
+    if(_cc){
+      allotChip = (_cc.overLic||_cc.overCap)
+        ? `<span style="background:#FDE7E7;color:#a32d2d;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700" title="${escapeHTML(_cc.name)} · ${_cc.cap} seats · licence ${_cc.lic}">OVER ${tp}/${_cc.overLic?_cc.lic:_cc.cap}</span>`
+        : `<span style="background:#E1F5EE;color:#0F6E56;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600" title="${escapeHTML(_cc.name)} · licence ${_cc.lic}">${tp}/${_cc.cap} seats</span>`;
+    } else if(t.bookingMode==='charter'){
+      allotChip = '';
+    } else
     if(t.date && typeof getAllotment === 'function'){
       const al = getAllotment(t.routeId, t.date, _bkV2.editingId || null);   // exclude own seats when editing
       const isOver = al.hasAllotment && tp > al.seatsAvailable && tp > 0;
