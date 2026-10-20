@@ -145,7 +145,7 @@
       if(n(c.cot) > 0){
         F.cotAll += n(c.cot);
         if(!r.dec || r.dec.over) F.cotLeft++;
-        else if(r.dec.mode === 'nocol'){ F.cotNo += n(c.cot); F.nCotNo++; }
+        else if(r.dec.mode === 'nocol'){ var nd0 = Math.min(n(c.cot), n(r.dec.deduct)); F.cotNo += n(c.cot) - nd0; F.deduct += nd0; F.nCotNo++; }   /* §cotPart: the part collected is not "could not collect" */
         else { F.deduct += n(r.dec.deduct); F.out += n(r.dec.payout); }
       }
     });
@@ -242,6 +242,18 @@
     var e = esc, body = '', cases = R.all.filter(function(r){ return r.isCase; });
     cases.slice().sort(function(x, y){ return (x.ns ? 1 : 0) - (y.ns ? 1 : 0); }).forEach(function(r){
       var b = r.b, id = q(r.id), d = q(date), dec = r.ns, amt = r.amount, half = Math.round(n(amt) / 2);
+      /* §tsLostPart · only some of the booking's heads did not travel: the buttons speak of those heads and the suggested charge is the server's
+         (noshow_suggestion: full = trip price x lost / booked, half of it); who they are comes from the server's pax_split (booked - left per type) */
+      var sug = (r.a && r.a.noshow_suggestion) || (r.sr && r.sr.noshow_suggestion) || null, part = !!(sug && sug.part_lost), est = part ? n(sug.full) : amt, lostW = '', goW = '';
+      if(part){
+        half = n(sug.half);
+        var ps = r.sr && r.sr.pax_split, lostPb = { ad: 0, chd: 0, inf: 0, foc: 0 }, goPb = { ad: 0, chd: 0, inf: 0, foc: 0 };
+        if(ps) Object.keys(lostPb).forEach(function(k){ var x = ps[k] || {}; lostPb[k] = Math.max(0, n(x.booked) - n(x.left)); goPb[k] = n(x.left); });
+        else { r.ev.forEach(function(x){ Object.keys(lostPb).forEach(function(k){ lostPb[k] += n(x[k]); }); }); Object.keys(goPb).forEach(function(k){ goPb[k] = Math.max(0, n(r.pb[k]) - lostPb[k]); }); }
+        lostW = who(lostPb) || (n(sug.lost) + ' คน'); goW = who(goPb) || (Math.max(0, n(sug.booked) - n(sug.lost)) + ' คน');
+      }
+      var decLbl = function(dc){ if(!part || !dc) return (DEC[dc.decision] || DEC.none)[0];
+        return ({ full: 'เก็บเต็ม · คนที่ไม่ไป ' + lostW, partial: 'เก็บบางส่วน · คนที่ไม่ไป ' + lostW, none: 'ไม่ชาร์จคนที่ยกเลิก ' + lostW, postpone: 'เลื่อนวัน' })[dc.decision] || (DEC[dc.decision] || DEC.none)[0]; };
       var why = r.ev.map(function(x){ return call('ckReasonLabel', [x.reason_code], text(x.reason_code)) + (x.note ? ' · ' + x.note : ''); }).filter(Boolean).join(' · ');
       var btn = function(k, lbl, a, fn, cls){ var on = dec && dec.decision === k;
         return '<button class="ts-db ' + (cls || '') + (on ? ' on' : '') + '" data-ops-ts-ns="' + k + '" onclick="' + (fn || ("tsPick('" + id + "','" + d + "','" + k + "'," + a + ")")) + '">' + lbl + '</button>'; };
@@ -253,14 +265,19 @@
         + '<td style="max-width:210px;color:var(--zn700)">' + (e(why) || '<span style="color:var(--zn400)">—</span>') + '</td>'
         + '<td class="r ts-mono" style="font-weight:800">' + (amt == null ? '—' : money(amt)) + '<div class="ts-tel" style="font-weight:400;margin-top:3px">จอง ' + e(who(r.pb)) + '</div></td>'
         + '<td class="ts-noprint"><div style="display:flex;flex-wrap:wrap;max-width:310px">'
-          + (amt == null ? '' : btn('full', 'เก็บเต็ม ' + money(amt), amt) + btn('partial', '50%', half, null, 'warn'))
-          + btn('none', 'ไม่ชาร์จ', 0, null, 'mut')
+          + (amt == null ? '' : part
+            ? btn('full', 'เก็บเต็ม · ' + e(lostW), est, "tsFullLost('" + id + "','" + d + "'," + est + ")").replace('<button ', '<button title="เก็บเต็มราคาของคนที่ไม่ได้ไป ' + e(lostW) + ' · ใส่ยอดเอง (เติมยอดประมาณให้)" ')
+              + btn('partial', '50% · ' + money(half), half, null, 'warn')
+            : btn('full', 'เก็บเต็ม ' + money(amt), amt) + btn('partial', '50%', half, null, 'warn'))
+          + (part ? btn('none', 'ไม่ชาร์จ · ' + e(lostW), 0, null, 'mut').replace('<button ', '<button title="ไม่เก็บเงินคนที่ยกเลิก/ไม่มา ' + e(lostW) + ' · คนที่เดินทางจ่ายตามปกติ" ') : btn('none', 'ไม่ชาร์จ', 0, null, 'mut'))
           + btn('partial', 'ระบุเอง', 0, "tsCustom('" + id + "','" + d + "')", 'warn')
           + btn('postpone', 'เลื่อนวัน', 0, "tsPostpone('" + id + "','" + d + "')", 'pp')
           + (dec ? '<button class="ts-db del" onclick="tsClear(\'' + id + '\',\'' + d + '\')">ล้าง</button>' : '')
-          + '</div><input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง"></td>'
+          + '</div>'
+          + (part ? '<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป ' + e(lostW) + '</b> &middot; อีก <b>' + e(goW) + '</b> ที่เดินทางจ่ายตามปกติ</div>' : '')
+          + '<input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง"></td>'
         + '<td class="c">' + (dec
-          ? '<span class="ts-chip ' + (DEC[dec.decision] || DEC.none)[1] + '">' + (DEC[dec.decision] || DEC.none)[0] + (dec.decision === 'postpone' ? '' : ' · ' + money(dec.amount)) + '</span>'
+          ? '<span class="ts-chip ' + (DEC[dec.decision] || DEC.none)[1] + '">' + e(decLbl(dec)) + (dec.decision === 'postpone' ? '' : ' · ' + money(dec.amount)) + '</span>'
             + '<div class="ts-tel" style="margin-top:3px">' + e(dec.by || '') + (dec.at ? ' · ' + e(text(dec.at).slice(0, 16).replace('T', ' ')) : '') + '</div>'
           : '<span class="ts-chip r">รอตัดสิน</span>') + '</td></tr>';
     });
@@ -323,7 +340,13 @@
       h += '<input id="ts-cotr-' + e(r.id) + '" data-ops-ts-cotreason="1" class="ts-note" type="text" value="' + e(why) + '" placeholder="เก็บไม่ได้เพราะอะไร"'
         + (mode ? ' onchange="laOps.travelRows.cotRef(\'' + id + '\')"' : '') + '>';
     } else if(mode) h += '<input id="ts-cotr-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec.ref || '') + '" placeholder="เลขอ้างอิงการโอน" onchange="laOps.travelRows.cotRef(\'' + id + '\')">';
-    if(mode === 'nocol') h += '<div class="ts-cotsum"><b style="color:var(--rs700)">&#10007; เก็บไม่ได้ ' + money(cot) + '</b>'
+    if(mode === 'nocol'){
+      /* §cotPart · could not collect may be only part of it: the amount collected (deducted from the bill) is typed, the rest is what was not collected */
+      var ncd = Math.min(cot, n(dec.deduct)), nca = Math.max(0, cot - ncd);
+      h += '<div class="ts-cotp"><span>เก็บได้/หักบิล</span><input id="ts-cotd-' + e(r.id) + '" class="ts-cotamt" value="' + ncd + '" title="ยอดที่เก็บได้จริง (หักบิล agent) · ที่เหลือของ COT = เก็บไม่ได้" onchange="laOps.travelRows.cotAmt(\'' + id + '\')">'
+        + '<span>เก็บไม่ได้</span><b style="color:var(--rs700);font-family:\'DM Mono\',monospace">' + money(nca) + '</b></div>';
+    }
+    if(mode === 'nocol') h += '<div class="ts-cotsum">' + (ncd > 0 ? '<b style="color:var(--bl700)">หักบิล ' + money(ncd) + '</b> &middot; ' : '') + '<b style="color:var(--rs700)">&#10007; เก็บไม่ได้ ' + money(nca) + '</b>'
       + (dec.ref ? ' <span style="color:var(--zn700)">&middot; ' + e(dec.ref) + '</span>' : ' <span style="color:var(--am700);font-weight:700">&middot; ยังไม่ระบุเหตุผล</span>') + by + '</div>';
     else if(mode){
       var L = [], keep = n(dec.kept != null ? dec.kept : cot - n(dec.deduct) - n(dec.payout));
@@ -339,7 +362,8 @@
     rows.forEach(function(r){
       var b = r.b, c = r.c, t = r.t, van = vanOf(t), boat = boatOf(t), dec = r.dec;
       var noCol = dec && dec.mode === 'nocol';
-      if(noCol) cotNoList.push({ code: r.voucher, amt: n(c.cot), why: dec.ref || '' });
+      var noColAmt = noCol ? Math.max(0, n(c.cot) - Math.min(n(c.cot), n(dec.deduct))) : 0;   /* §cotPart */
+      if(noCol && noColAmt > 0) cotNoList.push({ code: r.voucher, amt: noColAmt, why: dec.ref || '' });
       var chips = payChips(c) || (n(c.billed) > 0 ? '<span class="ts-chip g">&#10003; จ่ายผ่านบิล</span>' : '<span class="ts-chip n">ยังไม่เก็บ</span>');
       if(n(c.no_slip) > 0) chips += '<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป ' + n(c.no_slip) + '</span>';
       var parts = []; if(n(c.cot) > 0) parts.push('COT ' + money(c.cot)); if(n(c.b2c_balance) > 0) parts.push('ค้าง ' + money(c.b2c_balance)); if(n(c.upgrades_due) > 0) parts.push('upgrade ' + money(c.upgrades_due));
@@ -360,7 +384,7 @@
         + '<td class="c">' + (cx
           ? '<span class="ts-chip r">' + (c.not_counted === 'cxl' ? 'ยกเลิกหน้างาน' : 'ไม่มา') + '</span><div class="ts-tel" style="margin-top:3px">ไม่นับเข้ายอดวันนี้</div>'
           : n(c.due) > 0 ? '<span class="ts-chip a">รอเก็บ ' + money(c.due) + '</span>'
-          : noCol ? '<span class="ts-chip r">เก็บไม่ได้ ' + money(c.cot) + '</span>'
+          : noCol && noColAmt > 0 ? '<span class="ts-chip r">เก็บไม่ได้ ' + money(noColAmt) + '</span>'
           : (n(c.target) <= 0 && n(c.paid) <= 0 && n(sl.got) > 0) ? '<span class="ts-chip g">ขายเพิ่ม ' + money(sl.got) + '</span>'
           : (n(c.target) <= 0 && n(c.paid) <= 0 && n(sl.due) > 0) ? ''
           : '<span class="ts-chip g">เก็บครบ ' + money(c.paid) + '</span>')
@@ -416,7 +440,8 @@
     if(cotV > 0){
       var d = r.dec, lb, cls;
       if(d){ var P = []; if(n(d.deduct) > 0) P.push('หักบิล ' + money(d.deduct)); if(n(d.payout) > 0) P.push('โอนออก ' + money(d.payout));
-        if(n(d.kept) > 0) P.push('บริษัทรับไว้ ' + money(d.kept)); if(d.mode === 'nocol') P = ['เก็บไม่ได้'];
+        if(n(d.kept) > 0) P.push('บริษัทรับไว้ ' + money(d.kept));
+        if(d.mode === 'nocol'){ P = []; var ncd2 = Math.min(cotV, n(d.deduct)); if(ncd2 > 0) P.push('หักบิล ' + money(ncd2)); if(cotV - ncd2 > 0) P.push('เก็บไม่ได้ ' + money(cotV - ncd2)); }
         lb = P.join(' &middot; ') || 'ไม่หักบิล'; cls = n(d.payout) > 0 ? 'p' : (n(d.deduct) > 0 ? 'b' : 'e'); }
       else { lb = 'ตั้งไว้ ' + (b.cash_on_tour_handling === 'separate' ? 'แยกจากบิล' : 'หักจากบิล'); cls = b.cash_on_tour_handling === 'separate' ? 'a' : 'n'; }
       L.push('<span class="ts-chip ' + cls + '">COT ' + money(cotV) + ' &middot; ' + lb + '</span>');
@@ -664,6 +689,15 @@
   function T(){ return O.travelRows; }
   wrap('tsPick', function(orig, bkId, date, kind, amt){ return T().nsPick(bkId, kind, amt); });
   wrap('tsClear', function(orig, bkId){ return T().nsClear(bkId); });
+  /* §tsLostPart · charge in full for the guests who did not travel: the prompt starts from the server's suggestion (noshow_suggestion.full), the amount is the person's */
+  wrap('tsFullLost', function(orig, bkId, date, est){
+    var after = T().afterRow ? T().afterRow(date || dateOf(), bkId) : null, cur = after && after.noshow, srv = null;
+    if(after && after.noshow_suggestion) srv = n(after.noshow_suggestion.full);
+    var v = typeof window.prompt === 'function' ? window.prompt('Full charge for the guests who did not travel (THB). Suggested from booking price x guests missing / guests booked; edit if the real price differs.',
+      String(cur && cur.decision === 'full' ? n(cur.amount) : (srv != null ? srv : (+est || 0)))) : null;
+    if(v == null) return Promise.resolve();
+    return T().nsPick(bkId, 'full', Math.max(0, Math.round(parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)), true);
+  });
   wrap('tsCustom', function(orig, bkId){
     var v = typeof window.prompt === 'function' ? window.prompt('ยอดที่จะเก็บ (บาท)', '0') : null;
     if(v == null) return Promise.resolve();

@@ -330,6 +330,9 @@
   function cotAmt(bookingId){
     if(!guard()) return Promise.resolve();
     var num = function(id){ return Math.max(0, Math.round(parseFloat(inputVal(id).replace(/[^0-9.]/g, '')) || 0)); };
+    /* §cotPart · a "could not collect" decision may be partial: the one box is what was collected (deduct); the server keeps the reason and the payout stays 0 */
+    var date = lastView && lastView.date, row = date && afterRow(date, bookingId), dec0 = row && row.cot && row.cot.decision;
+    if(dec0 && dec0.mode === 'nocol') return afterWrite('Cash on tour not saved', 'cot-decision', bookingId, 'PUT', cotPath(bookingId), { mode: 'nocol', deduct: num('ts-cotd-' + bookingId) });
     return afterWrite('Cash on tour not saved', 'cot-decision', bookingId, 'PUT', cotPath(bookingId), { mode: 'part', deduct: num('ts-cotd-' + bookingId), payout: num('ts-cotp-' + bookingId) });
   }
   /* The reference / reason of the current decision (legacy tsCotRefSave): same mode, new ref. */
@@ -346,10 +349,11 @@
     return afterWrite('Cash on tour not cleared', 'cot-decision', bookingId, 'DELETE', cotPath(bookingId));
   }
   /* No-show decision (legacy tsPick / tsCustom / tsPostpone): the note comes from the row's input. */
-  function nsPick(bookingId, decision, amount){
+  /* sendAmount: a full charge for only the guests who did not travel carries the amount the person confirmed (legacy tsFullLost); the server refuses one above the trip price */
+  function nsPick(bookingId, decision, amount, sendAmount){
     if(!guard()) return Promise.resolve();
     var body = { decision: decision, note: inputVal('ts-note-' + bookingId) || null };
-    if(decision === 'partial') body.amount = Math.max(0, Math.round(n(amount)));
+    if(decision === 'partial' || (decision === 'full' && sendAmount)) body.amount = Math.max(0, Math.round(n(amount)));
     return afterWrite('No-show decision not saved', 'noshow-decision', bookingId, 'PUT', nsPath(bookingId), body);
   }
   function nsClear(bookingId){
@@ -416,7 +420,7 @@
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
     whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack,
-    cotPick: cotPick, cotAmt: cotAmt, cotRef: cotRef, cotClear: cotClear, nsPick: nsPick, nsClear: nsClear,
+    afterRow: afterRow, cotPick: cotPick, cotAmt: cotAmt, cotRef: cotRef, cotClear: cotClear, nsPick: nsPick, nsClear: nsClear,
     clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; }
   };
 })();
