@@ -82591,6 +82591,12 @@ function pc2CSS3(S){
     'body.btc #view-booking .t2-ckok::before{content:"\\2713";font-size:10px;color:#fff;font-weight:800}',
     'body.btc #view-booking .t2-leadonly{display:none}',
     'body.btc #view-booking td.t2-cu{white-space:nowrap}',
+    /* §btcNxt (2026-10-20) · owner "อันนี้ บังจำนวน ลค ไหม" · ชิปทริปอื่น (→ Private Transfer to Pier) ต่อท้ายชื่อในบรรทัดเดียว
+       ช่องลูกค้าไม่ตัด (ป้าย Together ลอยเหนือช่อง ใส่ overflow:hidden ไม่ได้) จึงล้นไปทับเลข AD · 11 เห็นเป็น 1 · 10 เห็นเป็น 0
+       แบ่งที่กันในช่อง: ชิปไม่เกิน 116px ตัด … · ชื่อลูกค้าเหลือที่ที่เหลือ · ชี้เมาส์ยังเห็นชื่อเต็ม/ทริปเต็ม */
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2{max-width:116px;overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu:has(.t2-cul2) .t2-lead{max-width:calc(100% - 124px)}',
     'body.btc #view-booking td.t2-c .t2-dim{color:#D5D9E0}',
     'body.btc #view-booking .t2-needpickup{background:transparent;border:0;padding:0;color:#B42318;font-size:11px;font-weight:600}',
     'body.btc #view-booking td.t2-tm>div.btc-was{display:none}',
