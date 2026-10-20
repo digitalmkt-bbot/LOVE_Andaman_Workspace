@@ -711,6 +711,14 @@
       if(c.route_id == null) G.base = n(c.rate);
       else { G.rt = G.rt || {}; (G.rt[c.route_id] = G.rt[c.route_id] || {})[c.field] = n(c.rate); }
     });
+    /* §vanTpl · each group's link to a rate set and how it stands against it (the server's state): vanGroupState / vanTplDiff read R[gk]._state.
+       vrFlat ignores both, so a link never turns into a rate write. A group on the defaults carries neither. */
+    (view.groups || []).forEach(function(g){
+      var st = g && g.state; if(!g || !st || st.kind === 'def') return;
+      var G = R[g.key] = R[g.key] || {};
+      if(st.kind === 'tpl') G.tpl = st.set_id;
+      G._state = st;
+    });
     vr.rates = R; vr.known = vrFlat(R); vr.loaded = true;
   }
   /* Readers of vanRates() outside the Costing screen get {} until the first load lands. After that first
@@ -734,6 +742,7 @@
     return vr.loading.then(function(){ vr.loading = null; }, function(e){ vr.loading = null; throw e; });
   }
   function vrRepaint(){ if(typeof window.ctRender === 'function') window.ctRender(); }
+  O.vanRates = { apply: vrApply, load: vrLoad, repaint: vrRepaint };   // 99-ops-van-rate-sets.js applies the answers of its commands here
   function vrWrite(val){
     if(!vr.loaded) { O.fail('Van rates were not saved', new Error('Wait for van rates to load')); return; }
     var next = vrFlat(val), jobs = Object.keys(next).filter(function(k){ return next[k] !== vr.known[k]; });
