@@ -131,12 +131,11 @@ test('a failed read shows the error inside the legacy frame and a toast', async 
   assert.deepEqual(h.fails, ['Daily Report did not load']);
 });
 
-test('the e-mail button stays but does not open the browser-built form', async () => {
+test('the e-mail button no longer shows "not available" or opens the legacy browser-built form (see ops-daily-report-mail.test.mjs)', async () => {
   const h = load();
   h.ctx.window.drMailShow();
   assert.deepEqual(h.legacy, []);
-  assert.equal(h.toasts.length, 1);
-  assert.match(h.toasts[0].sub, /no Daily Report send endpoint/);
+  assert.equal(h.toasts.length, 0);
 });
 
 test('with laOps off the legacy page renders and nothing is read', async () => {

@@ -759,12 +759,68 @@
     if(!painted && !host.querySelector('[data-ops-dr]')) host.innerHTML = O.loadingHtml('Loading Daily Report…');
     return done;
   });
-  /* No server endpoint sends or composes the Daily Report e-mail yet; the legacy form would fill
-     itself from the browser's own booking list, so it does not open here. */
+  /* ── E-mail (2026-10-20) · GET /v1/reports/daily/mail?date=&note=&sections= → { subject, html, text, recipients_default, note, sections }
+     The legacy modal (drMailShow / drMailPaint and its copy / .eml / mailto buttons) stays; what it composed from the browser's
+     booking list (drMailSubject / drMailHTML / drMailText over drData) now comes from the server. The form (to, cc, note, parts)
+     is the dr_mail config (61-ops-config-store); the typed note and the ticked parts are sent with each request so the preview
+     follows the form at once. The chart images (drmEnsureImgs) stay off: the server's mail uses bar charts. Nothing is sent. */
+  var mailCache = {}, mailFlight = {}, mailBad = {}, mailLast = {}, mailTimer = null;
+  function mailCfg(){ return typeof window.drMailCfg === 'function' ? window.drMailCfg() : { to: '', cc: '', note: '', inc: {} }; }
+  function mailSections(C){ return Object.keys(C.inc || {}).filter(function(k){ return C.inc[k]; }).join(','); }
+  function mailKey(date, C){ return date + '|' + text(C.note) + '|' + mailSections(C); }
+  function mailFetch(date, C, key){
+    if(mailFlight[key] || mailBad[key]) return;
+    mailFlight[key] = true;
+    var q = { date: date, note: text(C.note) }, s = mailSections(C); if(s) q.sections = s;
+    O.get('/v1/reports/daily/mail', q).then(function(r){
+      delete mailFlight[key];
+      mailCache[key] = { subject: text(r && r.subject), html: text(r && r.html), text: text(r && r.text) };
+      mailLast[date] = mailCache[key];
+      if(window._drMailOpen && typeof window.drMailPaint === 'function') window.drMailPaint();
+    }, function(e){
+      delete mailFlight[key]; mailBad[key] = true;
+      O.fail('Daily Report e-mail did not load', e);
+    });
+  }
+  /* the composed mail for the open day and form; asks the server (after a short pause while typing) when it has not got it yet */
+  function mailFor(date){
+    var C = mailCfg(), key = mailKey(date, C);
+    if(mailCache[key]) return mailCache[key];
+    if(!mailFlight[key] && !mailBad[key]){
+      clearTimeout(mailTimer);
+      mailTimer = setTimeout(function(){ mailFetch(date, mailCfg(), key); }, mailLast[date] ? 350 : 0);
+    }
+    return mailLast[date] || { subject: '', html: '<p style="font:13px sans-serif;color:#6b7280;padding:16px">Preparing the e-mail…</p>', text: '' };
+  }
+  function mailReady(date){ return !!mailCache[mailKey(date, mailCfg())]; }
+  function mailDate(D){ return dateOf(D && D.date || (typeof _drDate !== 'undefined' ? _drDate : null)); }
+  /* the legacy modal reads drData(_drDate) for its image key and file name only; the browser's booking list is not used here */
+  wrap('drData', function(orig, date){
+    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
+    return { date: dateOf(date), pax: { tot: 0 }, rev: 0, rows: [], cxl: [] };
+  });
+  wrap('drmEnsureImgs', function(orig){ if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1)); });
+  wrap('drMailSubject', function(orig, D){ return enabled() ? mailFor(mailDate(D)).subject : orig.call(this, D); });
+  wrap('drMailHTML', function(orig, D){ return enabled() ? mailFor(mailDate(D)).html : orig.call(this, D); });
+  wrap('drMailText', function(orig, D){ return enabled() ? mailFor(mailDate(D)).text : orig.call(this, D); });
+  ['drMailCopy', 'drMailEml', 'drMailto'].forEach(function(name){
+    wrap(name, function(orig){
+      if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
+      var date = mailDate(null);
+      if(!mailReady(date)){
+        if(typeof window.drMailToast === 'function') window.drMailToast('Preparing the e-mail · try again in a moment');
+        mailFor(date); return;
+      }
+      return orig.apply(this, [].slice.call(arguments, 1));
+    });
+  });
   wrap('drMailShow', function(orig){
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
-    O.toast({ kind: 'pending', title: 'Email not available yet', sub: 'operation-backend has no Daily Report send endpoint', dur: 7000 });
+    mailBad = {};
+    window._drMailOpen = true;
+    if(typeof window.drMailPaint === 'function') window.drMailPaint();
   });
+  O.onWrite(function(){ mailCache = {}; mailLast = {}; mailBad = {}; });
 
   O.onWrite(function(){ cache = {}; });
   window.laOps.dailyReport = { model: model, html: html, load: load, rowsOf: rowsOf, boatsOf: boatsOf, vansOf: vansOf, clear: function(){ cache = {}; } };
