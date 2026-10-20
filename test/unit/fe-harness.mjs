@@ -36,5 +36,6 @@ export function runtime({ files = [], handlers = {}, globals = {}, pre = '', ena
   vm.runInContext(read('allotment_v2/js/ops/00-ops-core.js'), ctx);
   for (const f of files) vm.runInContext(read('allotment_v2/js/ops/' + f), ctx);
   const settle = async () => { for (let i = 0; i < 60; i++) await new Promise((r) => setImmediate(r)); };
-  return { ctx, requests, toasts, alerts, confirms, settle, O: ctx.laOps };
+  const load = (f) => vm.runInContext(read('allotment_v2/js/ops/' + f), ctx);
+  return { ctx, requests, toasts, alerts, confirms, settle, load, O: ctx.laOps };
 }

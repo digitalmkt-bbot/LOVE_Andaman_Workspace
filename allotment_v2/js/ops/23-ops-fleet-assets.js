@@ -751,6 +751,15 @@
     }).catch(function(){ return null; });
   });
 
+  /* §eqProp · a spare propeller still sitting on a gearbox is set Active: POST /v1/fleet/propellers/:id/activate (409 not_on_gearbox → toast) */
+  wrap('flEquipPropActive', function(orig, id){
+    var p = listPropellers().find(function(x){ return x && x.id === id; });
+    if(!p) return null;
+    return runAssetCommand('propellers', id, 'activate', {}, 'Could not set the propeller Active').then(function(){
+      if(typeof window.flRenderEquip === 'function') window.flRenderEquip();
+    }).catch(function(){ return null; });
+  });
+
   wrap('flEquipRemove', function(orig, type, id){
     var list = type === 'eng' ? listEngines() : type === 'gb' ? listGearboxes() : listPropellers();
     var o = list.find(function(x){ return x && x.id === id; });

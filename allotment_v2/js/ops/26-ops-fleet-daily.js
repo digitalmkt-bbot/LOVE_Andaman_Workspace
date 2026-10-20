@@ -129,7 +129,8 @@
           id: d.id, name: d.name || '', attId: d.attachment_id || null, url: d.attachment_id ? window.laOpsAttachments.viewUrl(d.attachment_id) : (d.url || ''),
           mime: d.mime || null, size: d.size || null, note: d.note || '',
           type: d.type || null, phase: d.phase || null, status: d.status || 'required',
-          addedAt: d.added_at || null, by: d.by || null
+          addedAt: d.added_at || null, by: d.by || null,
+          removed: !!d.hidden_at, removedBy: d.hidden_by || '', removedAt: d.hidden_at || ''   // §flPhotos: a hidden project photo, so flpList('prj', ...) still lists it
         };
       }),
       vendorVisits: (Array.isArray(p.vendor_visits) ? p.vendor_visits : []).map(function(v){
@@ -1488,6 +1489,7 @@
       return O.queue(function(){ return O.call(method, '/v1/fleet/projects/' + enc(projId) + '/documents' + (sub ? '/' + enc(sub) : ''), body); })
         .then(function(res){ if(res && res.id) upsertProject(res); O.wrote('fleet-project-doc'); redrawDailyAndProjects(); return res; });
     },
+    reloadProject: function(id){ return freshProject(id); },
     loadDashboard: function(date){ return O.get('/v1/fleet/dashboard', date ? { date: date } : {}); },
     loadRepairHistory: function(boatId){ return O.get('/v1/fleet/repair-history', { boat_id: boatId }); },
     loadCostReport: function(period){ return O.get('/v1/fleet/reports/cost', { period: period || 'all' }); },

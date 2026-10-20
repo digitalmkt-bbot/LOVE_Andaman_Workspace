@@ -51,21 +51,22 @@
   function hydrate(el){
     var id=el&&el.getAttribute&&el.getAttribute('data-la-attachment-id'); if(!id||el.dataset.laAttachmentLoading) return;
     el.dataset.laAttachmentLoading='1';
-    blob(id).then(function(b){ var u=URL.createObjectURL(b); if(el.tagName==='IMG'||el.tagName==='IFRAME') el.src=u; else el.href=u; el.dataset.laAttachmentUrl=u; },function(e){ try{ console.warn('[ops] attachment '+id+' could not be shown: '+e.message); }catch(_){} });
+    blob(id).then(function(b){ var u=URL.createObjectURL(b); if(el.tagName==='IMG'||el.tagName==='IFRAME'||el.tagName==='VIDEO') el.src=u; else el.href=u; el.dataset.laAttachmentUrl=u; },function(e){ try{ console.warn('[ops] attachment '+id+' could not be shown: '+e.message); }catch(_){} });
   }
   function legacyView(el){
     if(!on() || !el || !el.getAttribute) return;
     var raw=el.getAttribute('src')||el.getAttribute('href')||'';
     var m=/^\/api\/attach\/([^?#]+)/.exec(raw) || /#la-attachment-([^?#]+)/.exec(raw); if(!m) return;
     el.setAttribute('data-la-attachment-id',decodeURIComponent(m[1]));
-    if(el.hasAttribute('src')) el.setAttribute('src',el.tagName==='IFRAME'?'about:blank':blank); else el.setAttribute('href',blank);
+    /* §flVideo · a fleet clip plays from a blob copy of the whole file (<= 6 MB): a <video> cannot send the Bearer header, so the server's HTTP Range (206) is for direct fetches only */
+    if(el.hasAttribute('src')){ if(el.tagName==='VIDEO') el.removeAttribute('src'); else el.setAttribute('src',el.tagName==='IFRAME'?'about:blank':blank); } else el.setAttribute('href',blank);
     hydrate(el);
   }
   function scan(root){
     if(!root) return;
     if(root.nodeType===1){ legacyView(root); if(root.hasAttribute&&root.hasAttribute('data-la-attachment-id')) hydrate(root); }
     if(root.querySelectorAll){
-      Array.prototype.forEach.call(root.querySelectorAll('img[src^="/api/attach/"],iframe[src^="/api/attach/"],a[href^="/api/attach/"],img[src*="#la-attachment-"],iframe[src*="#la-attachment-"],a[href*="#la-attachment-"]'),legacyView);
+      Array.prototype.forEach.call(root.querySelectorAll('img[src^="/api/attach/"],iframe[src^="/api/attach/"],video[src^="/api/attach/"],a[href^="/api/attach/"],img[src*="#la-attachment-"],iframe[src*="#la-attachment-"],video[src*="#la-attachment-"],a[href*="#la-attachment-"]'),legacyView);
       Array.prototype.forEach.call(root.querySelectorAll('[data-la-attachment-id]'),hydrate);
     }
   }
@@ -104,7 +105,7 @@
     try{ return orig.apply(self,args); } finally{ window.open=realOpen; }
   }
   function installPrint(){
-    ['pfmPrintReport','tsPrintSheet','docCheckPrintPack'].forEach(function(n){
+    ['pfmPrintReport','tsPrintSheet','docCheckPrintPack','pcPrintWin'].forEach(function(n){
       wrapGlobal(n,function(orig){ return function(){ return on()?withStandIn(orig,this,arguments):orig.apply(this,arguments); }; });
     });
     wrapGlobal('_docPackDrive',function(orig){ return function(w){

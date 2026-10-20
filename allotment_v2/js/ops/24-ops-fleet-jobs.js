@@ -76,6 +76,16 @@
     return o;
   }
 
+  /* §flPhotos · a server photo (GET /v1/fleet/{jobs|incidents|projects}/{id}/photos, and photos[] on a job or incident) → legacy's photos[] entry.
+     A stored file is shown through /api/attach/<id>: 38-ops-attachments.js turns that into a blob URL (a <img>/<video> cannot send the Bearer header). */
+  function photoFrom(p){
+    p = p || {};
+    return { id: p.id, attId: p.attachment_id || '', url: p.attachment_id ? '/api/attach/' + encodeURIComponent(p.attachment_id) : (p.url || ''), embed: p.embed_url || null,
+      mime: p.mime || '', size: p.size || 0, name: p.name || '', cap: p.caption || '', stage: p.stage || '', addedAt: p.added_at || '', by: p.added_by || '',
+      kind: p.kind || 'photo', removed: !!p.hidden, removedBy: p.hidden_by || '', removedAt: p.hidden_at || '' };
+  }
+  O.fleetPhotoFrom = photoFrom;
+
   function fromServerIncident(i){
     i = i || {};
     return {
@@ -100,6 +110,7 @@
       resolvedDate: i.resolved_on || null,
       damagedAssets: Array.isArray(i.damaged_assets) ? i.damaged_assets.map(mapDamagedAsset) : [],
       progressLog: Array.isArray(i.progress_log) ? i.progress_log.map(mapProgressLine) : [],
+      photos: Array.isArray(i.photos) ? i.photos.map(photoFrom) : [],
       _fromOpsBackend: true
     };
   }
@@ -192,6 +203,7 @@
       parts: Array.isArray(j.parts) ? j.parts.map(mapJobPart) : [],
       progressLog: Array.isArray(j.progress_log) ? j.progress_log.map(mapProgressLine) : [],
       subs: Array.isArray(j.steps) ? j.steps.map(mapJobStep) : [],
+      photos: Array.isArray(j.photos) ? j.photos.map(photoFrom) : [],
       _fromOpsBackend: true
     };
   }
@@ -1583,6 +1595,9 @@
     load: function(){ return loadAll(true); },
     ensureLoaded: function(){ return loadAll(false); },
     refetchAll: refetchAll,
+    /* one record again (its photos and log changed): GET /v1/fleet/jobs/{id} | /incidents/{id} */
+    reloadJob: function(id){ return O.get('/v1/fleet/jobs/' + enc(id)).then(function(r){ return upsertJob(r); }); },
+    reloadIncident: function(id){ return O.get('/v1/fleet/incidents/' + enc(id)).then(function(r){ return upsertIncident(r); }); },
     createIncident: function(body){ return O.queue(function(){ return O.post('/v1/fleet/incidents', toIncidentCreateBody(body)); }).then(function(r){ upsertIncident(r); return r; }); },
     patchIncident: function(id, body){ return O.queue(function(){ return O.patch('/v1/fleet/incidents/' + enc(id), toIncidentPatchBody(body)); }).then(function(r){ upsertIncident(r); return r; }); },
     swapIncidentAsset: function(id, body){ return O.queue(function(){ return O.post('/v1/fleet/incidents/' + enc(id) + '/swap', body); }).then(function(r){ upsertIncident(r); return refetchAll(r.boat_id).then(function(){ return r; }); }); },
