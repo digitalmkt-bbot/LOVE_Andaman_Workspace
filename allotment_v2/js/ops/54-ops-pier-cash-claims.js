@@ -27,18 +27,23 @@
   ['renderPierCash','pcClmRows','pcClmSave','pcClmDel','pcClmRename','pcClmUnline','pcRefundMatch'].forEach(function(n){ L[n] = window[n]; });
   function on(){ return !!(O.enabled && O.enabled()); }
 
-  var st = { months: {}, pendM: {}, failM: {}, lines: {}, refund: {}, pendR: {}, failR: {}, epoch: 0 };
+  /* payee: row id -> {id, name} (the payee of a claimed line, from the claim's lines) · rcpt: claim id -> {with_payee, lines} (99-ops-pc-payees.js reads both) */
+  var st = { months: {}, pendM: {}, failM: {}, lines: {}, refund: {}, pendR: {}, failR: {}, epoch: 0, payee: {}, rcpt: {} };
   function arr(){ return typeof window.pcClmArr === 'function' ? window.pcClmArr() : []; }
   function keep(){ try{ if(typeof window.pcKeep === 'function') window.pcKeep(); else if(typeof window.renderPierCash === 'function') window.renderPierCash(window._pcPier); }catch(_){} }
   function guard(){ return !(typeof window.pcGuard === 'function') || window.pcGuard(); }
   function getClaim(id){ return typeof window.pcClmGet === 'function' ? window.pcClmGet(id) : null; }
   function mapClaim(c){ return { id: c.id, pier: c.pier, date: c.date, name: c.name || '', by: c.created_by || '', ts: c.created_at || '' }; }
-  function dropClaim(id){ var a = arr(); for(var i = a.length - 1; i >= 0; i--) if(a[i] && a[i].id === id) a.splice(i, 1); delete st.lines[id]; }
+  function dropClaim(id){ var a = arr(); for(var i = a.length - 1; i >= 0; i--) if(a[i] && a[i].id === id) a.splice(i, 1); (st.lines[id] || []).forEach(function(l){ delete st.payee[l.row_id]; }); delete st.lines[id]; delete st.rcpt[id]; }
   function putClaim(c){
     var a = arr(), m = mapClaim(c), hit = false;
     a.forEach(function(x, i){ if(x && x.id === c.id){ a[i] = m; hit = true; } });
     if(!hit) a.push(m);
-    if(c.lines) st.lines[c.id] = c.lines;
+    if(c.lines){
+      st.lines[c.id] = c.lines;
+      c.lines.forEach(function(l){ if(l.payee) st.payee[l.row_id] = l.payee; else delete st.payee[l.row_id]; });   // §pcRcpt: BE-2, the payee of each claimed line
+    }
+    if(c.receipts) st.rcpt[c.id] = c.receipts;
   }
 
   /* ── the month's claims ─────────────────────────────────────────────── */
@@ -81,7 +86,7 @@
     if(!on() || !st.lines[id]) return L.pcClmRows.apply(this, arguments);
     var SRC = { longtail: 'lt', park: 'pk', dock: 'dock' };
     return st.lines[id].map(function(l){
-      return { ds: l.date, x: { id: l.row_id, txt: l.description || '', amt: +l.amount || 0, at: l.time || '', src: SRC[l.source] || '', claim: id } };
+      return { ds: l.date, x: { id: l.row_id, txt: l.description || '', amt: +l.amount || 0, at: l.time || '', src: SRC[l.source] || '', claim: id, payee: l.payee || null } };
     });
   };
 

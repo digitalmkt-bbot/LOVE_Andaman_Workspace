@@ -3,7 +3,7 @@
   'use strict';
   var O=window.laOps; if(!O) return;
   var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={}, catById={};
-  ['renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates','pcPkPullState'].forEach(function(n){ L[n]=window[n]; });
+  ['pcCoAddr','renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates','pcPkPullState'].forEach(function(n){ L[n]=window[n]; });
   function on(){ return !!(O.enabled&&O.enabled()); }
   function key(p,d){ return p+'|'+d; }
   function call(m,path,body){ return O.call(m,path,body); }
@@ -242,7 +242,11 @@
   };
   window.pcCoName=function(){ return on()&&cache.settings ? (cache.settings.company_name||'') : L.pcCoName.apply(this,arguments); };
   window.pcCoNameSet=function(v){ if(!on()) return L.pcCoNameSet.apply(this,arguments); return O.queue(function(){ return call('PUT','/v1/pier-cash/settings',{company_name:String(v==null?'':v).trim()||null}); }).then(function(j){cache.settings=j||{}; O.wrote('pier'); redraw(); return true;},function(e){fail('Company name not saved',e); return false;}); };
-  window.pcCoSave=function(){ if(!on()) return L.pcCoSave.apply(this,arguments); var el=document.getElementById('pc-co-inp'),v=el?el.value:'', next=window._pcCoNext; window._pcCoNext=null; return window.pcCoNameSet(v).then(function(ok){ if(!ok) return; if(typeof window.ckReasonClose==='function') window.ckReasonClose(); if(next&&window.pcCoName()) setTimeout(next,0); }); };
+  /* §pcRcpt · the company's address (the "received from" line of a receipt) is saved with its name: PUT /v1/pier-cash/settings {company_name, company_address} */
+  window.pcCoAddr=function(){ return on()&&cache.settings ? (cache.settings.company_address||'') : (L.pcCoAddr?L.pcCoAddr.apply(this,arguments):''); };
+  window.pcCoSave=function(){ if(!on()) return L.pcCoSave.apply(this,arguments); var el=document.getElementById('pc-co-inp'),v=el?el.value:'', ea=document.getElementById('pc-co-addr'), next=window._pcCoNext; window._pcCoNext=null;
+    var body={company_name:String(v==null?'':v).trim()||null}; if(ea) body.company_address=String(ea.value||'').replace(/\s+/g,' ').trim()||null;
+    return O.queue(function(){ return call('PUT','/v1/pier-cash/settings',body); }).then(function(j){cache.settings=j||{}; O.wrote('pier'); redraw(); return true;},function(e){fail('Company name not saved',e); return false;}).then(function(ok){ if(!ok) return; if(typeof window.ckReasonClose==='function') window.ckReasonClose(); if(next&&window.pcCoName()) setTimeout(next,0); }); };
   // The receipt-substitute certificate comes from the server (rows, company, total, Thai text); the legacy
   // print layout is reused by feeding it those values for the duration of the (synchronous) call.
   window.pcPrintCert=function(opt){
