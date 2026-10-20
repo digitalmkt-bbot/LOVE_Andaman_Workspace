@@ -437,6 +437,19 @@
     };
   }
 
+  /* Duplicate rate-type codes (rtDupCodeBanner, "แก้โค้ดให้ไม่ซ้ำ" button, rtDupCodeFix). Legacy let two rate types share a code
+     and offered a button that re-coded the extras. The server keeps `rate_types.code` UNIQUE (migration 022) and refuses a code
+     change on PATCH (an import matches rate types on it), so there are no duplicate codes to show and the button could not save.
+     In ops mode the scan finds none (the banner clears itself) and the fix does nothing. */
+  if(typeof window.rtDupCodeScan === 'function'){
+    var legacyDupScan = window.rtDupCodeScan;
+    window.rtDupCodeScan = function(){ return O.enabled() ? [] : legacyDupScan.apply(this, arguments); };
+  }
+  if(typeof window.rtDupCodeFix === 'function'){
+    var legacyDupFix = window.rtDupCodeFix;
+    window.rtDupCodeFix = function(){ if(!O.enabled()) return legacyDupFix.apply(this, arguments); };
+  }
+
   /* Load before the ops boot redraws the active view. */
   if(O.enabled()) load();
 })();
