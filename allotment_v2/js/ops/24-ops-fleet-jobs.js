@@ -1596,6 +1596,7 @@
     ensureLoaded: function(){ return loadAll(false); },
     refetchAll: refetchAll,
     /* one record again (its photos and log changed): GET /v1/fleet/jobs/{id} | /incidents/{id} */
+    fromServerJob: fromServerJob, fromServerIncident: fromServerIncident,   // the job summary (99-ops-fleet-work.js) maps the server's job and incident to legacy's shapes
     reloadJob: function(id){ return O.get('/v1/fleet/jobs/' + enc(id)).then(function(r){ return upsertJob(r); }); },
     reloadIncident: function(id){ return O.get('/v1/fleet/incidents/' + enc(id)).then(function(r){ return upsertIncident(r); }); },
     createIncident: function(body){ return O.queue(function(){ return O.post('/v1/fleet/incidents', toIncidentCreateBody(body)); }).then(function(r){ upsertIncident(r); return r; }); },

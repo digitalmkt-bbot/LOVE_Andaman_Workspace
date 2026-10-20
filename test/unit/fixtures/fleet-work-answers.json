@@ -1,0 +1,295 @@
+{
+ "oil": {
+  "counts": {
+   "over": 0,
+   "soon": 1,
+   "ok": 0,
+   "nodata": 1
+  },
+  "rows": [
+   {
+    "boat": {
+     "id": "b1",
+     "name": "Boat One"
+    },
+    "pier": "panwa",
+    "state": "soon",
+    "worst": {
+     "id": "e1",
+     "pos": "Port",
+     "serial": "S1",
+     "no_data": false,
+     "hours": 150,
+     "interval": 100,
+     "base": 80,
+     "since": 70,
+     "left": 30,
+     "rate": 5,
+     "last_service_date": "2026-08-01"
+    },
+    "engines": [
+     {
+      "id": "e1",
+      "pos": "Port",
+      "serial": "S1",
+      "no_data": false,
+      "hours": 150,
+      "interval": 100,
+      "base": 80,
+      "since": 70,
+      "left": 30,
+      "rate": 5,
+      "last_service_date": "2026-08-01"
+     }
+    ],
+    "gearbox": {
+     "id": "g1",
+     "serial": "G1",
+     "since": 480,
+     "interval": 500,
+     "left": 20,
+     "state": "soon"
+    },
+    "rate": 5,
+    "days_left": 6,
+    "no_data_count": 0,
+    "job": null,
+    "suggest_job": {
+     "boat_id": "b1",
+     "type": "preventive",
+     "boat_status": "available",
+     "title": "เปลี่ยนถ่ายน้ำมันเครื่อง 100 ชม. · ทุกเครื่อง + น้ำมันเกียร์",
+     "assets": [
+      {
+       "type": "engine",
+       "asset_id": "e1"
+      },
+      {
+       "type": "gearbox",
+       "asset_id": "g1"
+      }
+     ]
+    }
+   },
+   {
+    "boat": {
+     "id": "b2",
+     "name": "Boat Two"
+    },
+    "pier": "tublamu",
+    "state": "nodata",
+    "worst": null,
+    "engines": [
+     {
+      "id": "e2",
+      "pos": "Std",
+      "serial": "S2",
+      "no_data": true,
+      "hours": 0,
+      "interval": null,
+      "base": 0,
+      "since": 0,
+      "left": null,
+      "rate": null,
+      "last_service_date": null
+     }
+    ],
+    "gearbox": null,
+    "rate": null,
+    "days_left": null,
+    "no_data_count": 1,
+    "job": {
+     "id": "j9",
+     "no": "MJ-9",
+     "key": "mj:j9",
+     "title": "Oil change"
+    },
+    "suggest_job": null
+   }
+  ]
+ },
+ "done": {
+  "today": "2026-10-20",
+  "boat_id": null,
+  "items": [
+   {
+    "key": "dn:j1",
+    "kind": "job",
+    "id": "j1",
+    "no": "MJ-1",
+    "title": "Fix prop",
+    "boat_id": "b1",
+    "stage": 6,
+    "done": true,
+    "owner": "Somchai",
+    "silent_days": 0,
+    "cost": 100,
+    "closed_on": "2026-10-15",
+    "outcome": "success",
+    "project_id": "",
+    "sub": "closed 15 Oct · success · ok"
+   }
+  ]
+ },
+ "summary": {
+  "kind": "job",
+  "title": "Fix prop",
+  "nos": "INC-1 · MJ-1",
+  "status": "Done · Success",
+  "today": "2026-10-20",
+  "boat": {
+   "id": "b1",
+   "name": "Boat One",
+   "type": "speedboat",
+   "pier": "panwa",
+   "pier_label": "Visit Panwa"
+  },
+  "incident": {
+   "id": "i1",
+   "no": "INC-1",
+   "boat_id": "b1",
+   "date": "2026-09-30",
+   "time": "10:00",
+   "title": "Prop hit",
+   "detail": "hit a rock",
+   "remark": "",
+   "severity": "critical",
+   "status": "resolved",
+   "job_id": "j1",
+   "damaged_assets": [
+    {
+     "type": "propeller",
+     "asset_id": "p1",
+     "label": "Prop 1"
+    }
+   ],
+   "progress_log": [
+    {
+     "date": "2026-09-30",
+     "text": "Reported",
+     "by": "sam"
+    }
+   ],
+   "quick_fix": false,
+   "closed_on": null,
+   "resolved_on": "2026-10-15"
+  },
+  "job": {
+   "id": "j1",
+   "no": "MJ-1",
+   "boat_id": "b1",
+   "type": "corrective",
+   "title": "Fix prop",
+   "detail": "bent",
+   "location": "Yard",
+   "status": "done",
+   "start_date": "2026-10-01",
+   "end_date": "2026-10-15",
+   "incident_id": "i1",
+   "outcome": "success",
+   "close_note": "ok",
+   "owner": "Somchai",
+   "due_date": null,
+   "parent_project_id": null,
+   "awaiting_invoice": false,
+   "assets": [
+    {
+     "type": "propeller",
+     "asset_id": "p1",
+     "label": "Prop 1"
+    }
+   ],
+   "steps": [
+    {
+     "text": "Remove",
+     "done": true
+    }
+   ],
+   "parts": [
+    {
+     "id": "pt1",
+     "name": "Bolt",
+     "qty": 4,
+     "unit": "pcs",
+     "cost": 25,
+     "location": "Shop"
+    }
+   ],
+   "progress_log": [
+    {
+     "date": "2026-10-02",
+     "text": "Started",
+     "by": "sam"
+    },
+    {
+     "date": "2026-10-03",
+     "text": "📦 Bolt",
+     "by": "sam"
+    }
+   ],
+   "steps_total": 1
+  },
+  "project": null,
+  "memos": [
+   {
+    "id": "m1",
+    "no": "MO-1",
+    "title": "Paint",
+    "supplier": "Yard",
+    "amount": 500,
+    "status": "approved",
+    "open": true,
+    "label": "approved, not ordered yet"
+   }
+  ],
+  "parts": [
+   {
+    "id": "pt1",
+    "name": "Bolt",
+    "qty": 4,
+    "unit": "pcs",
+    "cost": 25,
+    "location": "Shop",
+    "amount": 100
+   }
+  ],
+  "parts_cost": 100,
+  "cost": 600,
+  "log": [
+   {
+    "date": "2026-09-30",
+    "text": "Reported",
+    "by": "sam",
+    "source": "incident"
+   },
+   {
+    "date": "2026-10-02",
+    "text": "Started",
+    "by": "sam",
+    "source": "job"
+   }
+  ],
+  "hidden_part_lines": 1,
+  "photos": [
+   {
+    "id": "ph1",
+    "kind": "photo",
+    "url": "/v1/attachments/a1",
+    "embed_url": null,
+    "attachment_id": "a1",
+    "mime": "image/jpeg",
+    "size": 10,
+    "name": "a",
+    "caption": "bent",
+    "stage": "Reported",
+    "added_at": "2026-09-30",
+    "added_by": "sam",
+    "hidden": false,
+    "hidden_at": null,
+    "hidden_by": null
+   }
+  ],
+  "text": "📄 สรุปงาน · INC-1 · MJ-1\nFix prop\nเรือ: Boat One · Visit Panwa\nสถานะ: Done · Success\n\n— เหตุการณ์ INC-1 —\nวันที่: 30 Sep 2026 10:00\nความรุนแรง: CRITICAL\nหัวข้อ: Prop hit\nรายละเอียด: hit a rock\nชิ้นที่เสียหาย: Prop 1\nปิดเมื่อ: 15 Oct 2026\n\n— งานซ่อม MJ-1 —\nประเภท: Corrective\nหัวข้อ: Fix prop\nรายละเอียด: bent\nสถานที่: Yard\nผู้รับผิดชอบ: Somchai\nเริ่ม: 1 Oct 2026\nปิดงาน: 15 Oct 2026\nผลการซ่อม: Success\nหมายเหตุปิดงาน: ok\nอุปกรณ์ที่เกี่ยวข้อง: Prop 1\nขั้นตอนย่อย:\n  ✓ Remove\nอะไหล่ที่เบิก (1 รายการ · ฿100):\n  - Bolt × 4 pcs · ฿100\nMemo:\n  - MO-1 Paint · Yard · ฿500 · approved, not ordered yet\nค่าใช้จ่ายรวม: ฿600\n\n— บันทึกความคืบหน้า —\n30 Sep 2026 · Reported (sam)\n2 Oct 2026 · Started (sam)\n(+ เบิกอะไหล่ 1 ครั้ง ดูในรายการอะไหล่)\n\n📷 รูป 1 รูป (อยู่ในใบสรุปแบบรูปภาพ)",
+  "short_text": "🔧 Boat One · MJ-1 · ✅ ซ่อมเสร็จ\n📍 ที่ไหน: Boat One · Prop 1 · Yard\n🗓 เมื่อไหร่: 30 Sep 2026 10:00 → เสร็จ 15 Oct (15 วัน)\n⚠️ เกิดอะไร: Prop hit · hit a rock\n🛠 แก้ยังไง: Reported → Started → ok\n💰 ฿600 · อะไหล่ 1 รายการ (Bolt 4 pcs) · memo MO-1 approved, not ordered yet\n📷 รูป 1 รูป · 👷 Somchai, sam"
+ }
+}
