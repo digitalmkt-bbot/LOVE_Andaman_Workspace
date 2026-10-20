@@ -21264,6 +21264,12 @@ function pckMealOvnOf(date, bid, bkId){
   var v=pckMealOvnMap(date,bid)[bkId];
   return (v==='in'||v==='out')?v:'';
 }
+/* ══ §mealOut (2026-10-20) · กรุ๊ปที่ไม่ทานอาหารกลางวัน · ใช้ได้กับทุกใบจอง ไม่ใช่แค่รับกลับค้างคืน ══
+   owner: "มีบางกรุ๊ปที่ไม่กินข้าวอาหารกลางวัน เราต้องทำยังไง" → ทำส่วนที่ 2 (เลือกที่การ์ดครัว)
+   เก็บในก้อนเดียวกับ §mealOvn (trip_actuals[date::boat].mealOvn[bkId] = 'out') · ไม่เพิ่มคอลัมน์
+   ใบปกติ: ไม่มีค่า / 'in' = ทาน (ค่าเดิม) · 'out' = ไม่ทาน
+   ผล: ใบสั่งอาหารขึ้นแถวเทา "ไม่รวมอาหาร" ไม่นับใน Total · ยอด/ค่าอาหารในการ์ดครัวลดตาม · ค่าอาหารประมาณใน P&L ลดตาม */
+function pckMealOut(date, bid, bkId){ return pckMealOvnOf(date,bid,bkId)==='out'; }
 function pckMealOvnSet(date, bid, bkId, v){
   if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
   var m={}, cur=pckMealOvnMap(date,bid);
@@ -23566,6 +23572,9 @@ function pckMealCount(rows){
   var o={ad:0, chd:0, inf:0, tot:0, book:0, veg:0, vegan:0, halal:0, allergy:0};
   (rows||[]).forEach(function(r){
     if(r._vd) return;                                        /* ปิดรายการแล้ว ไม่ต้องสั่งอาหาร */
+    if(r.__inc==='out') return;                              /* §mealOut */
+    if(r.b && r.t && !r.t.ovnLeg && r.__inc==null){ var _mb=r.bid||(r.O&&r.O.boatId)||r.t.charterBoatId, _md=r.t.date||r.date;
+      if(_mb && _md && pckMealOut(_md,_mb,r.b.id)) return; }
     /* §mealOvn · ขากลับค้างคืนที่ไม่ได้ระบุว่ารวมอาหาร ไม่นับเข้ายอดที่จะจ่ายร้าน */
     if(r.t && r.t.ovnLeg && r.__inc!=='in') return;
     /* หัวที่จะไปจริง · หัก no-show ทั้งฝั่งรถและฝั่งท่า
@@ -23596,6 +23605,43 @@ function pckAllergyList(rows){
     });
   });
   return Object.keys(by).map(function(k){ return {name:k, qty:by[k]}; });
+}
+/* §mealOut · กล่องในการ์ดครัว · พับไว้ · เปิดแล้วเลือกกรุ๊ปที่ไม่ทาน · กรุ๊ปที่เลือกแล้วขึ้นบนหัวกล่องเสมอ */
+var _pckMealOutOpen={};
+function pckMealOutToggle(bid){ _pckMealOutOpen[bid]=!_pckMealOutOpen[bid]; if(typeof pckKitchenRender==='function') pckKitchenRender(); }
+function pckMealOutSet(date, bid, bkId, out){
+  pckMealOvnSet(date, bid, bkId, out?'out':'in');
+  if(typeof pckKitchenRender==='function') pckKitchenRender();
+}
+function pckMealOutBox(date, bid, rows){
+  var e=ckEsc, seen={}, L=[];
+  (rows||[]).forEach(function(r){ if(!r||!r.b||r._vd||seen[r.b.id]||(r.t&&r.t.ovnLeg)) return; seen[r.b.id]=1;
+    var pax=Math.max(0, ((r.expect!=null?r.expect:r.booked)||0) - ((r.ck&&r.ck.at)?(+r.ck.noShow||0):0));
+    if(!pax) return;
+    L.push({ id:r.b.id, lead:String(r.b.leadPax||'').trim()||'—', pax:pax, out:pckMealOut(date,bid,r.b.id) }); });
+  if(!L.length) return '';
+  var outs=L.filter(function(x){ return x.out; }), nOut=outs.reduce(function(a,x){ return a+x.pax; },0), open=!!_pckMealOutOpen[bid];
+  L.sort(function(a,b){ return (b.out?1:0)-(a.out?1:0) || a.lead.localeCompare(b.lead,'th'); });
+  var row=function(x){
+    var b=function(v,lb,col){ var on=(x.out===v);
+      return '<button onclick="pckMealOutSet(\''+e(date)+'\',\''+e(bid)+'\',\''+e(x.id)+'\','+(v?1:0)+')" '
+        +'style="border:0;background:'+(on?col:'#fff')+';color:'+(on?'#fff':'#5F5E5A')+';font:700 11px inherit;'
+        +'padding:5px 12px;cursor:pointer;font-family:inherit">'+lb+'</button>'; };
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid #EEF0F3;'
+      +(x.out?'background:#F4F5F7':'')+'">'
+      +'<b style="flex:1;min-width:0;font-size:12.5px;font-weight:700;'+(x.out?'color:#6B7280':'')+'">'+e(x.lead)+'</b>'
+      +'<span style="font:700 12.5px \'DM Mono\',monospace;color:#475569">'+x.pax+' ท่าน</span>'
+      +'<span style="display:flex;border:1px solid #D8D4CA;border-radius:8px;overflow:hidden">'
+        +b(false,'ทาน','#0F6E56')+'<span style="width:1px;background:#E7E4DC"></span>'+b(true,'ไม่ทาน','#5F6B7C')+'</span></div>'; };
+  return '<div style="margin-top:11px;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+    +'<button onclick="pckMealOutToggle(\''+e(bid)+'\')" style="width:100%;display:flex;align-items:center;gap:9px;'
+      +'background:#F8FAFC;border:0;padding:8px 12px;cursor:pointer;font:800 11.5px inherit;font-family:inherit;color:#334155;text-align:left">'
+      +'<span>'+(open?'&#9662;':'&#9656;')+' กรุ๊ปที่ไม่ทานอาหารกลางวัน</span>'
+      +(outs.length?('<span style="background:#EDEFF3;border:1px solid #C3C9D4;color:#374151;border-radius:999px;padding:1px 9px;font-size:10.5px">'
+          +outs.length+' กรุ๊ป · '+nOut+' ท่าน · ไม่นับในยอด</span>'):'<span style="font-weight:600;color:#94A3B8">ทุกกรุ๊ปทาน · กดเพื่อเลือก</span>')
+    +'</button>'
+    +(open?L.map(row).join(''):(outs.length?outs.map(row).join(''):''))
+    +'</div>';
 }
 function pckKitchenHtml(border, boats, date, bare){
   if(!border || !border.length) return '';
@@ -23675,6 +23721,7 @@ function pckKitchenHtml(border, boats, date, bare){
               +'&#9998; '+e(MN)+'</div>'):'')
             +'</div>';
         })()
+      + pckMealOutBox(date, bid, B.rows||[])   /* §mealOut */
       /* §mealOvn · กลุ่มรับกลับจากเกาะ · ต้องเลือกทีละใบว่ารวมอาหารหรือไม่ */
       + (OV.length?('<div style="margin-top:11px;border:1px solid #DDD0F5;background:#FBF9FF;border-radius:12px;overflow:hidden">'
           +'<div style="background:#F1ECFB;padding:7px 12px;font-size:11.5px;font-weight:800;color:#4A2E86;'
@@ -23811,7 +23858,7 @@ function mvLunchRows(date, bid){
     /* §mealOvn · ขากลับค้างคืน · คิดอาหารก็ต่อเมื่อระบุว่า "รวม" เท่านั้น
        ยังไม่ระบุ = ยังไม่คิด · ปุ่มส่งถูกล็อกไว้อยู่แล้วจนกว่าจะระบุครบ */
     var _ovn=!!(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t));
-    var _inc=_ovn?pckMealOvnOf(date,bid,b.id):'in';
+    var _inc=_ovn?pckMealOvnOf(date,bid,b.id):(pckMealOut(date,bid,b.id)?'out':'in');   /* §mealOut */
     out.push({lead:String(b.leadPax||'').trim()||'—', ad:ad, chd:chd, inf:inf, foc:foc, sr:sr.join('\n'),
               ovn:_ovn, inc:_inc, bkId:b.id,
               outDate:(_ovn && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):''});
@@ -23935,8 +23982,10 @@ function mvOrderSlip(date, bid, V, rid){
       +'<span class="mpill '+(r.inc==='out'?'o':'q')+'">'
       +(r.inc==='out'?'ไม่รวมอาหาร':'ยังไม่ระบุ')+'</span></td>'
       +'<td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td>'
-      +'<td style="font-size:11.5px;color:#8b93a1">อยู่บนเรือ '+(r.ad+r.chd+r.inf)+' ท่าน · ไม่ต้องทำอาหาร</td></tr>'; };
-  var MAIN=rows.filter(function(r){ return !r.ovn; });
+      +'<td style="font-size:11.5px;color:#8b93a1">อยู่บนเรือ '+(r.ad+r.chd+r.inf)+' ท่าน · '+(r.ovn?'ไม่ต้องทำอาหาร':'ไม่ทานอาหารกลางวัน')+'</td></tr>'; };
+  var MALL=rows.filter(function(r){ return !r.ovn; });
+  var MAIN=MALL.filter(function(r){ return r.inc!=='out'; });   /* §mealOut · ทานอาหาร */
+  var MOUT=MALL.filter(function(r){ return r.inc==='out'; });   /* §mealOut · ไม่ทาน · ยังอยู่บนใบเป็นแถวเทา */
   var OVN =rows.filter(function(r){ return  r.ovn; });
   var OIN =OVN.filter(function(r){ return r.inc==='in'; });
   var OOUT=OVN.filter(function(r){ return r.inc!=='in'; });
@@ -23946,7 +23995,8 @@ function mvOrderSlip(date, bid, V, rid){
   var nOut=sum(OOUT,'ad')+sum(OOUT,'chd')+sum(OOUT,'inf');
   var subRow=function(lb,x){ return '<tr class="sub"><td class="lb">'+lb+'</td>'
       +'<td class="n">'+x.ad+'</td><td class="n">'+x.chd+'</td><td class="n">'+x.inf+'</td><td></td></tr>'; };
-  var body=MAIN.map(function(r){ return line(r); }).join('');
+  var body=MAIN.map(function(r){ return line(r); }).join('')+MOUT.map(function(r){ return lineOut(r); }).join('');
+  var nSkip=sum(MOUT,'ad')+sum(MOUT,'chd')+sum(MOUT,'inf');   /* §mealOut */
   if(OVN.length){
     body+=subRow('รวม · ทริปวันนี้', M)
       +'<tr class="grp"><td colspan="5">&#127765; รับกลับจากเกาะ · ค้างคืน'
@@ -23986,8 +24036,10 @@ function mvOrderSlip(date, bid, V, rid){
        +'<td class="n">'+(M.ad+O.ad)+'</td><td class="n">'+(M.chd+O.chd)+'</td>'
        +'<td class="n">'+(M.inf+O.inf)+'</td><td></td></tr></tbody></table>'
    +(nOut?('<div style="margin-top:7px;font-size:11px;color:#475569;line-height:1.6">'
-       +'บนเรือมีทั้งหมด '+(M.ad+M.chd+M.inf+sum(OVN,'ad')+sum(OVN,'chd')+sum(OVN,'inf'))+' ท่าน · '
+       +'บนเรือมีทั้งหมด '+(M.ad+M.chd+M.inf+nSkip+sum(OVN,'ad')+sum(OVN,'chd')+sum(OVN,'inf'))+' ท่าน · '
        +'<b>ไม่คิดอาหาร '+nOut+' ท่าน</b> (รับกลับจากเกาะ · อาหารไม่ได้อยู่กับเรา)</div>'):'')
+   +(nSkip?('<div style="margin-top:7px;font-size:11px;color:#475569;line-height:1.6">'   /* §mealOut */
+       +'<b>ไม่ทานอาหาร '+nSkip+' ท่าน</b> ('+MOUT.length+' กรุ๊ป · แจ้งไว้ว่าไม่ทานกลางวัน) · ไม่นับใน Total</div>'):'')
    +(T.foc?('<div style="margin-top:6px;font-size:10.5px;color:#475569;font-weight:600">'
        +'\u0e23\u0e27\u0e21 FOC '+T.foc+' \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e2d\u0e07 AD '
        +'\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e17\u0e33\u0e2d\u0e32\u0e2b\u0e32\u0e23\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48</div>'):'')
@@ -24039,7 +24091,7 @@ function pckMealSend(bid){
       +'\n\nระบุที่กล่อง "รับกลับจากเกาะ" ในการ์ดครัวก่อน แล้วค่อยส่ง');
     return;
   }
-  rows.forEach(function(r){ r.__inc=(r.t&&r.t.ovnLeg)?pckMealOvnOf(date,bid,r.b.id):'in'; });
+  rows.forEach(function(r){ r.__inc=(r.t&&r.t.ovnLeg)?pckMealOvnOf(date,bid,r.b.id):(pckMealOut(date,bid,r.b.id)?'out':'in'); });   /* §mealOut */
   var C=pckMealCount(rows), amt=mvCost(V,C.ad,C.chd);
   if(!(C.ad+C.chd)){ alert('ลำนี้ยังไม่มีคนที่จะไปจริง · ไม่ต้องสั่งอาหาร'); return; }
   /* บันทึกก่อน เปิดใบทีหลัง · ถ้า pop-up โดนบล็อก ต้นทุนก็ยังถูกบันทึกไว้แล้ว
@@ -32971,6 +33023,8 @@ function pxTrip(date, bid){
       var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
       if(V){
         var nCh=Math.min(PX.chd, PX.tot), nAd=Math.max(0, PX.tot-nCh-PX.inf);
+        /* §mealOut · กรุ๊ปที่แจ้งไม่ทาน ไม่คิดค่าอาหาร */
+        try{ if(typeof mvLunchRows==='function') mvLunchRows(date,bid).forEach(function(r){ if(r.ovn||r.inc!=='out') return; nAd=Math.max(0,nAd-(r.ad||0)); nCh=Math.max(0,nCh-(r.chd||0)); }); }catch(_){ }
         var exp=(typeof mvCost==='function')?mvCost(V, nAd, nCh):null;
         mealWait={ name:(V.name||''), exp:exp,
                    why:'\u0e23\u0e49\u0e32\u0e19 '+(V.name||'')+' \u00b7 '+nAd+'\u00d7\u0e3f'+(+V.priceAd||0)
