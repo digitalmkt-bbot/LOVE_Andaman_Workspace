@@ -28237,7 +28237,7 @@ function flwsSheet(D){
     +(D.hidPk?('<div><span></span><p style="color:#8A8F9C">+ '+D.hidPk+' stock withdrawals · listed under Parts</p></div>'):'')+'</div></div>';
   if(D.photos.length) h+='<div class="sec"><div class="sh"><u>Photos</u>'+D.photos.length+'</div><div class="ph">'
     +D.photos.map(function(p){ var v=(typeof flpIsVideo==='function')&&flpIsVideo(p);
-      return '<figure>'+(v?('<div class="vd">Video<br><small>'+E(p.cap||p.name||'')+'</small></div>'):('<div class="im" data-src="'+E(p.url)+'" style="background-image:url(\''+E(String(p.url).replace(/'/g,'%27'))+'\')"></div>'))
+      return '<figure>'+(v?('<div class="vd">Video<br><small>'+E(p.cap||p.name||'')+'</small></div>'):('<div class="im" data-src="'+E(p.url)+'"><img src="'+E(p.url)+'" alt="" decoding="async"></div>')/* §flwsPhoto */)
         +'<figcaption><b style="background:'+((typeof FLP_C!=='undefined'&&FLP_C[p.stage])||'#5B6170')+'">'+E(p.stage||'')+'</b>'+E(p.cap||'')+'<i>'+E(flwsD(p.addedAt))+(p.by?(' · '+E(p.by)):'')+'</i></figcaption></figure>'; }).join('')+'</div></div>';
   h+='<div class="ft">Printed '+E(flwsD(typeof TODAY_STR!=='undefined'?TODAY_STR:''))+(typeof flpBy==='function'?(' · by '+E(flpBy())):'')+'</div>';
   return h;
@@ -28263,11 +28263,11 @@ function flwsCSS(){
   +'#flws-sheet table{width:100%;border-collapse:collapse;margin-top:4px;font-size:12px}#flws-sheet th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#8A8F9C;border-bottom:1px solid #E4E2DC;padding:4px 6px}'
   +'#flws-sheet td{border-bottom:1px solid #F1F0EC;padding:4px 6px;vertical-align:top}#flws-sheet td i{display:block;font-style:normal;font-size:10.5px;color:#8A8F9C}#flws-sheet .r{text-align:right;font-family:\'DM Mono\',monospace;white-space:nowrap}#flws-sheet tr.st td{font-weight:700;border-bottom:0}'
   +'#flws-sheet .lg>div{display:flex;gap:10px;padding:3px 0;border-bottom:1px dashed #EEECE6}#flws-sheet .lg span{flex:none;width:86px;font-family:\'DM Mono\',monospace;font-size:11px;color:#5B6170}#flws-sheet .lg p{margin:0;flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}#flws-sheet .lg p i{font-style:normal;color:#8A8F9C;font-size:11px;margin-left:6px}'
-  +'#flws-sheet .ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#flws-sheet figure{margin:0;border:1px solid #E4E2DC;border-radius:8px;overflow:hidden;break-inside:avoid}#flws-sheet figure .im{width:100%;height:170px;background:#F4F2EE center/cover no-repeat}'
-  +'#flws-sheet .vd{height:170px;display:flex;align-items:center;justify-content:center;text-align:center;background:#1B2340;color:#fff;font-weight:700}#flws-sheet figcaption{padding:5px 7px;font-size:11px}#flws-sheet figcaption b{color:#fff;border-radius:4px;padding:0 5px;font-size:9.5px;margin-right:5px}#flws-sheet figcaption i{display:block;font-style:normal;color:#8A8F9C;font-size:10px}'
+  +'#flws-sheet .ph{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#flws-sheet figure{margin:0;border:1px solid #E4E2DC;border-radius:8px;overflow:hidden;break-inside:avoid}#flws-sheet figure .im{width:100%;aspect-ratio:4/3;background:#F4F2EE center/contain no-repeat;display:flex;align-items:center;justify-content:center}#flws-sheet figure .im img{display:block;width:100%;height:100%;object-fit:contain}'
+  +'#flws-sheet .vd{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;text-align:center;background:#1B2340;color:#fff;font-weight:700}#flws-sheet figcaption{padding:5px 7px;font-size:11px}#flws-sheet figcaption b{color:#fff;border-radius:4px;padding:0 5px;font-size:9.5px;margin-right:5px}#flws-sheet figcaption i{display:block;font-style:normal;color:#8A8F9C;font-size:10px}'
   +'#flws-sheet .ft{margin-top:12px;font-size:10.5px;color:#8A8F9C;text-align:right}'
   +'@media(max-width:640px){#flws-sheet{padding:16px 14px}#flws-sheet .hd{flex-direction:column}#flws-sheet .bt{text-align:left;max-width:none}#flws-sheet .bt i{align-self:flex-start}#flws-sheet .g{grid-template-columns:1fr 1fr}#flws-sheet .ph{grid-template-columns:1fr 1fr}#flws-sheet .sub{grid-template-columns:1fr}}'
-  +'@media print{body.flws-print>*:not(#flws){display:none!important}body.flws-print #flws{position:static;background:#fff;padding:0;overflow:visible}body.flws-print #flws .bar{display:none}body.flws-print #flws-sheet{width:100%;border-radius:0;padding:0}}'
+  +'@media print{body.flws-print>*:not(#flws){display:none!important}body.flws-print #flws{position:static;background:#fff;padding:0;overflow:visible}body.flws-print #flws .bar{display:none}body.flws-print #flws-sheet{width:100%;border-radius:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.flws-print #flws-sheet .ph{gap:8px}body.flws-print #flws-sheet figure .im{aspect-ratio:auto;height:7.2cm}body.flws-print::before,body.flws-print::after{display:none!important;content:none!important}}'
   +'</style>';
 }
 function flwsOpen(kind,id){
@@ -28350,7 +28350,7 @@ function flwsImg(mode){
   Promise.all(srcs.map(function(u){ return new Promise(function(ok){ var im=new Image(); im.onload=im.onerror=function(){ ok(); }; setTimeout(ok,6000); im.src=u; }); })).then(function(){
     flwsH2C(function(){
       var r0=el.style.borderRadius; el.style.borderRadius='0';
-      html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true}).then(function(cv){
+      html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true,onclone:function(doc){ [].slice.call(doc.querySelectorAll('#flws-sheet .im img')).forEach(function(im){ var d=im.parentNode; d.style.backgroundImage='url("'+String(im.getAttribute('src')||'').replace(/"/g,'%22')+'")'; im.remove(); }); }}).then(function(cv){
         el.style.borderRadius=r0;
         var dl=function(){ var a=document.createElement('a'); a.download=name; a.href=cv.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove(); flwsToast('Saved '+name); };
         if(mode==='copy' && navigator.clipboard && window.ClipboardItem){
@@ -28360,8 +28360,25 @@ function flwsImg(mode){
     });
   });
 }
-function flwsPrint(){ document.body.classList.add('flws-print'); var off=function(){ document.body.classList.remove('flws-print'); window.removeEventListener('afterprint',off); };
-  window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60); }
+/* §flwsPhoto (2026-10-20) · owner: "print ไม่ขึ้นรูป แต่อาจจะต้องปรับเรื่องรูปให้เห็นชัดขึ้น"
+   รูปเคยเป็น background-image · กล่องพิมพ์ของ Chrome ปิด "Background graphics" ไว้เป็นค่าเริ่มต้น = รูปหายทั้งแถว
+   เปลี่ยนเป็น <img> จริง · 2 รูปต่อแถว เห็นทั้งรูป (ไม่ครอป) · พิมพ์หลังรูปโหลดครบ (รอไม่เกิน 6 วิ)
+   html2canvas (Copy/Save image) ไม่รองรับ object-fit → ตอนทำรูปสลับกลับเป็นพื้นหลังเฉพาะในสำเนา */
+function flwsWaitImgs(el, cb){
+  var L=[].slice.call(el.querySelectorAll('img')).filter(function(i){ return !i.complete; });
+  if(!L.length){ cb(); return; }
+  var n=L.length, done=false, fin=function(){ if(done) return; done=true; cb(); };
+  L.forEach(function(i){ var f=function(){ if(--n<=0) fin(); }; i.addEventListener('load',f); i.addEventListener('error',f); });
+  setTimeout(fin, 6000);
+}
+function flwsPrint(){
+  var el=document.getElementById('flws-sheet');
+  var go=function(){ document.body.classList.add('flws-print'); var off=function(){ document.body.classList.remove('flws-print'); window.removeEventListener('afterprint',off); };
+    window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60); };
+  if(!el){ go(); return; }
+  if([].slice.call(el.querySelectorAll('img')).some(function(i){ return !i.complete; })) flwsToast('Loading photos…');
+  flwsWaitImgs(el, go);
+}
 function flwDonePanel(it, E){
   var m=it.ref, proj=it.projId?flwProj(it.projId):null;
   return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
