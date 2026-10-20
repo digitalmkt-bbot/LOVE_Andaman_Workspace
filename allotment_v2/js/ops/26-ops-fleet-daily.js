@@ -64,7 +64,8 @@
     reports: {},
     drBoat: {},               // 'date|boat' → the server's status / operated / ran_despite / pax_effective / fuel_cost for that boat-day (flRenderDR)
     drPier: {},               // 'date|pier' → the server's pier totals of the day (piers[])
-    drClosed: {}              // date → { pier: true } the piers the server says are closed (closed_piers)
+    drClosed: {},             // date → { pier: true } the piers the server says are closed (closed_piers)
+    drCharters: {}            // date → [boat id] the boats a live charter booking uses that day (day.charter_boats, the charters tile)
   };
   var originals = {};
 
@@ -178,6 +179,7 @@
     Object.keys(state.prevMeterByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.prevMeterByKey[k]; });
     Object.keys(state.drBoat).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drBoat[k]; });
     Object.keys(state.drPier).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drPier[k]; });
+    if(Array.isArray(day.charter_boats)) state.drCharters[ds] = day.charter_boats.slice(); else delete state.drCharters[ds];
 
     (Array.isArray(day.boats) ? day.boats : []).forEach(function(b){
       if(!b || !b.boat_id) return;
@@ -271,6 +273,13 @@
       });
     }
     if(Array.isArray(res.issue_items)) state.issueItems = clone(res.issue_items);
+    /* a day the server left out of the answer had no boats, prices, locks or requests, so no charter either */
+    var ymd = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+    if(ymd.test(res.from || '') && ymd.test(res.to || '')){
+      for(var t = Date.parse(res.from + 'T00:00:00Z'), end = Date.parse(res.to + 'T00:00:00Z'), n = 0; t <= end && n < 100; t += 864e5, n++){
+        state.drCharters[new Date(t).toISOString().slice(0, 10)] = [];
+      }
+    }
     (Array.isArray(res.days) ? res.days : []).forEach(applyDailyDay);
     return res;
   }
@@ -1329,6 +1338,8 @@
   /* flRenderDR (Daily Fleet Log): what the server worked out for a boat-day and a pier-day. Legacy's render asks these
      (not wraps: flRenderDR is one long function) and keeps its own sums for a day the server did not send. */
   window.flDrServerBoat = function(ds, boatId){ return enabled() ? (state.drBoat[ds + '|' + boatId] || null) : null; };
+  /* the boats chartered that day (charters tile): the server's list, or null when the day was not read (legacy counts the loaded bookings) */
+  window.flDrServerCharters = function(ds){ return enabled() ? (state.drCharters[ds] ? state.drCharters[ds].slice() : null) : null; };
   window.flDrServerPier = function(ds, pier){ return enabled() ? (state.drPier[ds + '|' + pier] || null) : null; };
   window.flDrPierClosed = function(ds, pier){
     if(!enabled() || !state.drClosed[ds]) return null;     // day not read: legacy's own check
@@ -1506,6 +1517,7 @@
     fromServerProject: fromServerProject,
     fromServerSafety: fromServerSafety,
     applyDailyDay: applyDailyDay,
+    applyDailyRange: applyDailyRange,
     toProjectBody: toProjectBody,
     toBoatDayPatchBody: toBoatDayPatchBody,
     toSafetyBody: toSafetyBody,

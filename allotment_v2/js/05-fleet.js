@@ -9232,7 +9232,11 @@ function flRenderDR(){
     }
   });
   // Charter count (distinct boats chartered that day · from bookings)
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
+  /* ops mode: the server's list (daily-log day.charter_boats). SB_BOOKINGS holds only the days some view loaded, so
+     the browser's own count below is partial there; it stays for a day the server did not send. */
+  const _srvCh=(typeof flDrServerCharters==='function')?flDrServerCharters(ds):null;
+  if(_srvCh) _srvCh.forEach(cb=>{ if(cb&&!charters.includes(cb))charters.push(cb); });
+  else (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return;
     if(bk.schemaVer===2 && Array.isArray(bk.trips)) bk.trips.forEach(t=>{
       if(t.date===ds && t.bookingMode==='charter'){   // §boatSplit · นับทุกลำที่ใบนี้ใช้
