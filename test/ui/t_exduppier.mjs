@@ -42,9 +42,36 @@ const r = await page.evaluate(async () => {
   if (link) link.click(); await z(400);
   const x3 = SB_EXTRAS.find(k => k.id === 'ex_t1');
   const row3 = [...document.querySelectorAll('tr')].find(tr => tr.textContent.includes(b.voucherRef || b.code));
+  // 6) กรณีจริง 20 ต.ค. · เป็น "อัปเกรด" ไม่ใช่ extra · ใบอื่นที่ว่าง
+  SB_EXTRAS = SB_EXTRAS.filter(k => k.id !== 'ex_t1'); b.pierPayments = [];
+  const b2 = (SB_BOOKINGS || []).find(x => x !== b && x.agentId && x.agentId !== 'a_b2c' && (x.trips || []).length && !(x.pierPayments || []).length
+    && !(x.cashOnTour && +x.cashOnTour.amount > 0) && !(x.paymentSnapshot && +x.paymentSnapshot.balance > 0) && !bkV2ExtrasFor(x.id).length && !(x.upgrades || []).length && x.trips[0].date === date);
+  if (!b2) return { none2: 1 };
+  b2.upgrades = [{ id: 'up_t1', label: 'Longtail · Join → เหมา (Charter)', sellPrice: 2000, toCompany: 1400, commission: 600, collected: false, note: '', seller: 'KAI', settle: 'pending', at: new Date().toISOString(), method: 'cash', fee: 0, slips: [] }];
+  const uDue = pckMoney(b2, date).due;
+  b2.pierPayments = [{ id: 'pp_t2', date, amount: 2000, method: 'card', fee: 100, feePct: null, note: '', slips: [{ name: 's.jpg' }], by: 'GSA', at: new Date().toISOString() }];
+  const uM1 = pckMoney(b2, date);
+  // พยายามติ๊กเก็บแล้วซ้ำ → ถูกกัน
+  _bkUpgEditId = 'up_t1'; _bkExtraPay = { m: 'card', feePct: 5, fee: 100, slips: [] };
+  const mkc = (id, v, chk) => { let el = document.getElementById(id); if (!el) { el = document.createElement('input'); el.id = id; document.body.appendChild(el); } if (chk !== undefined) { el.type = 'checkbox'; el.checked = chk; } else el.value = v; };
+  mkc('bku-label', 'Longtail · Join → เหมา (Charter)'); mkc('bku-sell', 2000); mkc('bku-company', 1400); mkc('bku-coll', '', true); mkc('bku-note', ''); mkc('bku-seller', 'KAI');
+  window.bkV2ExtraFee = () => 100;
+  bkV2UpgradeSave(b2.id);
+  const uGuard = b2.upgrades[0].collected;
+  // ข้อมูลซ้ำแบบจริง · ติ๊กเก็บแล้ว บัตร + fee
+  Object.assign(b2.upgrades[0], { collected: true, method: 'card', fee: 100, feePct: 5, customerPaid: 2100 });
+  const uM2 = pckMoney(b2, date), uS2 = tsSaleList(b2, date);
+  _tsPier = ''; _tsRoute = ''; _tsVatF = ''; _tsOnlyIssue = false; renderTravelSum(); await z(500);
+  const urow = [...document.querySelectorAll('tr')].find(tr => tr.textContent.includes(b2.leadPax) && /Longtail/.test(tr.textContent) && tr.querySelector('.ts-chip'));
+  const uChips = urow ? [...urow.querySelectorAll('.ts-chip')].filter(c => /บัตรเครดิต/.test(c.textContent)).length : -1;
+  const ulink = urow && [...urow.querySelectorAll('a')].find(a => /แก้ให้/.test(a.textContent));
+  if (ulink) ulink.click(); await z(400);
+  const u3 = b2.upgrades[0], uM3 = pckMoney(b2, date);
+  const urow3 = [...document.querySelectorAll('tr')].find(tr => tr.textContent.includes(b2.leadPax) && /Longtail/.test(tr.textContent) && tr.querySelector('.ts-chip'));
+  const U = { vc: b2.voucherRef || b2.code || b2.leadPax, uDue, uM1: { due: uM1.due, got: uM1.got }, uGuard, uM2: { due: uM2.due, got: uM2.got, upGot: uM2.upGot, upCov: uM2.upCov }, uS2: { got: uS2.got, card: uS2.by.card, noSlip: uS2.noSlip, dup: uS2.list[0].dup }, uChips, hadLink: !!ulink, u3: { collected: u3.collected, fee: u3.fee }, uM3: { due: uM3.due, got: uM3.got }, urow3: urow3 ? urow3.textContent.slice(0, 300) : '' };
   const out = { vc: b.voucherRef || b.code, due0, M1: { due: M1.due, got: M1.got, exCov: M1.exCov, exGot: M1.exGot }, S1: { got: S1.got, card: S1.by.card, noSlip: S1.noSlip }, cov1, afterGuard,
     dup, cov2, M2: { due: M2.due, got: M2.got, exCov: M2.exCov, exGot: M2.exGot }, S2: { got: S2.got, card: S2.by.card, noSlip: S2.noSlip, dupFlag: S2.list[0].dup }, dupY,
-    rowTxt: rowTxt.slice(0, 400), chipsCard, hadLink: !!link, x3: { method: x3.method, settle: x3.settle, fee: x3.fee }, row3: row3 ? row3.textContent.slice(0, 300) : '' };
+    rowTxt: rowTxt.slice(0, 400), chipsCard, hadLink: !!link, x3: { method: x3.method, settle: x3.settle, fee: x3.fee }, row3: row3 ? row3.textContent.slice(0, 300) : '', U };
   window.bkV2ExtraFee = _fee0;
   return out;
 });
@@ -57,5 +84,10 @@ if (r.dup && r.cov2 && r.M2.exCov === 2000 && r.M2.exGot === 0 && r.M2.got === 2
 if (r.dupY === false) ok('ขายเพิ่มรูดบัตรเองอีกรายการ (เงินคนละก้อน) ไม่ถูกมองเป็นซ้ำ'); else fail('dupY ' + R);
 if (r.chipsCard === 1 && /บันทึกซ้ำกับเงินหน้าท่า/.test(r.rowTxt) && r.hadLink) ok('หน้าปิดวัน · ป้ายบัตรขึ้นครั้งเดียว + ป้าย "บันทึกซ้ำ" + ลิงก์แก้ให้'); else fail('row ' + R);
 if (r.x3.method === 'cot' && r.x3.settle === 'pending' && r.x3.fee === 0 && !/บันทึกซ้ำ/.test(r.row3)) ok('กดแก้ให้ → กลับเป็นเก็บหน้าท่า · ป้ายซ้ำหาย'); else fail('fix ' + R);
+const U = r.U || {};
+if (U.uDue === 2000 && U.uM1.due === 0 && U.uM1.got === 2000) ok(U.vc + ' · อัปเกรด 2,000 ยังไม่เก็บ → หน้าท่ารูดบัตร → ไม่ค้าง'); else fail('up cover ' + JSON.stringify(U));
+if (U.uGuard === false && dialogs.some(d => /อัปเกรดนี้บันทึกไว้ที่หน้าท่าแล้ว/.test(d))) ok('ติ๊ก "เก็บแล้ว" ซ้ำ → ถูกกัน'); else fail('up guard ' + JSON.stringify(U) + dialogs.join('|'));
+if (U.uM2.got === 2000 && U.uM2.upGot === 0 && U.uM2.upCov === 2000 && U.uS2.card === 0 && U.uS2.got === 0 && U.uS2.noSlip === 0 && U.uS2.dup && U.uChips === 1 && U.hadLink) ok('อัปเกรดซ้ำแบบ 20 ต.ค. · จับได้ · ไม่บวกซ้ำ · ป้ายบัตรครั้งเดียว + แก้ให้'); else fail('up dup ' + JSON.stringify(U));
+if (U.u3 && U.u3.collected === false && U.u3.fee === 0 && U.uM3.due === 0 && U.uM3.got === 2000 && !/บันทึกซ้ำ/.test(U.urow3)) ok('กดแก้ให้ → เอาติ๊กออก · ไม่ค้าง · got 2,000'); else fail('up fix ' + JSON.stringify(U));
 if (errors.length) { fail('page errors'); console.log('    errors:', errors.slice(0, 3)); }
 console.log(bad ? `FAIL ${bad}` : 'PASS'); await close(); process.exit(bad ? 1 : 0);
