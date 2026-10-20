@@ -1,0 +1,3282 @@
+{
+ "overview_today": {
+  "period": "today",
+  "range": {
+   "from": "2026-10-21",
+   "to": "2026-10-21"
+  },
+  "today": "2026-10-21",
+  "generated_at": "2026-10-21T08:00:00.000Z",
+  "pier": null,
+  "tomorrow": {
+   "date": "2026-10-22",
+   "rows": [
+    {
+     "route_id": "r1",
+     "name": "Similan by Speedboat",
+     "family": "Similan",
+     "color": "#111111",
+     "departure": "08:00",
+     "pax": 12,
+     "capacity": 50,
+     "free": 40,
+     "revenue": 1200,
+     "added_pax": 5,
+     "pending_pax": 0
+    },
+    {
+     "route_id": "r2",
+     "name": "Phi Phi Bamboo",
+     "family": "Phi Phi Bamboo",
+     "color": "#abcdef",
+     "departure": "07:30",
+     "pax": 0,
+     "capacity": 30,
+     "free": 10,
+     "revenue": 0,
+     "added_pax": 0,
+     "pending_pax": 0
+    }
+   ],
+   "totals": {
+    "pax": 12,
+    "capacity": 80,
+    "free": 50,
+    "added_pax": 5,
+    "added_trips": 1,
+    "pending_pax": 0,
+    "pending_trips": 0,
+    "revenue": 1200,
+    "added_value": 500,
+    "pending_value": 0,
+    "load_factor_pct": 15,
+    "routes": 2
+   },
+   "feed": [
+    {
+     "booking_id": "tod1",
+     "code": "tod1",
+     "at": "2026-10-21T05:00:00.000Z",
+     "created_day": "2026-10-21",
+     "agent": "Agent ag1",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-22",
+     "pax": 5,
+     "amount": 500,
+     "pending_approval": false
+    },
+    {
+     "booking_id": "fx_42",
+     "code": "fx_42",
+     "at": "2026-10-17T03:00:00.000Z",
+     "created_day": "2026-10-17",
+     "agent": "Agent ag2",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-22",
+     "pax": 7,
+     "amount": 700,
+     "pending_approval": false
+    }
+   ]
+  },
+  "lead_by_market": [
+   {
+    "code": "m1",
+    "name": "Market One",
+    "pax": 285,
+    "trips": 53,
+    "median": 5,
+    "p25": 5,
+    "p75": 5,
+    "warn_at": 8
+   }
+  ],
+  "lead_within7_pct": 100,
+  "leakage": {
+   "no_show_pax": 0,
+   "no_show_value": 0,
+   "onsite_cancel_pax": 0,
+   "onsite_cancel_value": 0,
+   "weather_pax": 0,
+   "weather_value": 0,
+   "discount": 0,
+   "foc": 0
+  },
+  "kpis": {
+   "revenue": {
+    "value": 1000,
+    "last_week": {
+     "value": 1000,
+     "base": 500,
+     "change_pct": 100
+    },
+    "last_year": {
+     "value": 1000,
+     "base": 0,
+     "change_pct": null
+    }
+   },
+   "passengers": {
+    "travelled": 9,
+    "booked": 10,
+    "checked_in_bookings": 1,
+    "bookings": 2,
+    "checked_in_pct": 50,
+    "lost": 1
+   },
+   "sales_in": {
+    "value": 3000,
+    "bookings": 3,
+    "pax": 17,
+    "avg_7_days": 1000,
+    "change_pct_vs_avg_7_days": 200
+   },
+   "cancelled": {
+    "value": 1000,
+    "bookings": 1,
+    "pax": 3,
+    "net": 2000
+   },
+   "lost": {
+    "pax": 1,
+    "value": 100
+   },
+   "money_in": {
+    "value": 620,
+    "payments": 1,
+    "payments_value": 500,
+    "payment_agents": 1,
+    "pier_cash": 120
+   }
+  },
+  "trips_today": [
+   {
+    "route_id": "r1",
+    "name": "Similan by Speedboat",
+    "family": "Similan",
+    "color": "#111111",
+    "departure": "08:00",
+    "check_in": {
+     "status": "all",
+     "done": 1,
+     "bookings": 1
+    },
+    "booked": 6,
+    "travelled": 6,
+    "lost": 0,
+    "revenue": 600,
+    "capacity": 50,
+    "load_factor_pct": 12
+   },
+   {
+    "route_id": "r2",
+    "name": "Phi Phi Bamboo",
+    "family": "Phi Phi Bamboo",
+    "color": "#abcdef",
+    "departure": "07:30",
+    "check_in": {
+     "status": "waiting",
+     "done": 0,
+     "bookings": 1
+    },
+    "booked": 4,
+    "travelled": 3,
+    "lost": 1,
+    "revenue": 400,
+    "capacity": 0,
+    "load_factor_pct": null
+   }
+  ],
+  "sales_today": {
+   "hours": [
+    {
+     "hour": 7,
+     "value": 0
+    },
+    {
+     "hour": 8,
+     "value": 0
+    },
+    {
+     "hour": 9,
+     "value": 0
+    },
+    {
+     "hour": 10,
+     "value": 1000
+    },
+    {
+     "hour": 11,
+     "value": 0
+    },
+    {
+     "hour": 12,
+     "value": 1000
+    },
+    {
+     "hour": 13,
+     "value": 0
+    },
+    {
+     "hour": 14,
+     "value": 1000
+    },
+    {
+     "hour": 15,
+     "value": 0
+    },
+    {
+     "hour": 16,
+     "value": 0
+    },
+    {
+     "hour": 17,
+     "value": 0
+    },
+    {
+     "hour": 18,
+     "value": 0
+    },
+    {
+     "hour": 19,
+     "value": 0
+    },
+    {
+     "hour": 20,
+     "value": 0
+    },
+    {
+     "hour": 21,
+     "value": 0
+    },
+    {
+     "hour": 22,
+     "value": 0
+    }
+   ],
+   "now_hour": 15,
+   "feed": [
+    {
+     "booking_id": "tod2",
+     "code": "tod2",
+     "at": "2026-10-21T07:30:00.000Z",
+     "created_day": "2026-10-21",
+     "agent": "Agent ag1",
+     "route_id": "r2",
+     "family": "Phi Phi Bamboo",
+     "service_date": "2026-10-21",
+     "pax": 4,
+     "amount": 400,
+     "pending_approval": true
+    },
+    {
+     "booking_id": "tod1",
+     "code": "tod1",
+     "at": "2026-10-21T05:00:00.000Z",
+     "created_day": "2026-10-21",
+     "agent": "Agent ag1",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-22",
+     "pax": 5,
+     "amount": 500,
+     "pending_approval": false
+    },
+    {
+     "booking_id": "fx_46",
+     "code": "fx_46",
+     "at": "2026-10-21T03:00:00.000Z",
+     "created_day": "2026-10-21",
+     "agent": "Agent ag2",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-26",
+     "pax": 8,
+     "amount": 800,
+     "pending_approval": false
+    }
+   ],
+   "by_travel": {
+    "to_tomorrow": 900,
+    "within_7_days": 800,
+    "later": 0
+   },
+   "top_agents": [
+    {
+     "key": "ag1",
+     "name": "Agent ag1",
+     "sales": "Sales One",
+     "n": 2,
+     "pax": 9,
+     "value": 2000,
+     "change_pct_vs_avg_7_days": 600
+    },
+    {
+     "key": "ag2",
+     "name": "Agent ag2",
+     "sales": "Sales One",
+     "n": 1,
+     "pax": 8,
+     "value": 1000,
+     "change_pct_vs_avg_7_days": 600
+    }
+   ],
+   "quiet_agents": [
+    {
+     "key": "ag4",
+     "name": "Agent ag4",
+     "usual_per_day": 1000
+    }
+   ],
+   "by_channel": {
+    "b2b": 3000,
+    "b2c": 0,
+    "ctr": 0
+   },
+   "by_family": [
+    {
+     "id": "f1",
+     "name": "Similan",
+     "color": "#111111",
+     "value": 1300
+    },
+    {
+     "id": "_",
+     "name": "Phi Phi Bamboo",
+     "color": "#abcdef",
+     "value": 400
+    }
+   ]
+  },
+  "trend": null
+ },
+ "overview_month": {
+  "period": "month",
+  "range": {
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  "today": "2026-10-21",
+  "generated_at": "2026-10-21T08:00:00.000Z",
+  "pier": null,
+  "tomorrow": {
+   "date": "2026-10-22",
+   "rows": [
+    {
+     "route_id": "r1",
+     "name": "Similan by Speedboat",
+     "family": "Similan",
+     "color": "#111111",
+     "departure": "08:00",
+     "pax": 12,
+     "capacity": 50,
+     "free": 40,
+     "revenue": 1200,
+     "added_pax": 5,
+     "pending_pax": 0
+    },
+    {
+     "route_id": "r2",
+     "name": "Phi Phi Bamboo",
+     "family": "Phi Phi Bamboo",
+     "color": "#abcdef",
+     "departure": "07:30",
+     "pax": 0,
+     "capacity": 30,
+     "free": 10,
+     "revenue": 0,
+     "added_pax": 0,
+     "pending_pax": 0
+    }
+   ],
+   "totals": {
+    "pax": 12,
+    "capacity": 80,
+    "free": 50,
+    "added_pax": 5,
+    "added_trips": 1,
+    "pending_pax": 0,
+    "pending_trips": 0,
+    "revenue": 1200,
+    "added_value": 500,
+    "pending_value": 0,
+    "load_factor_pct": 15,
+    "routes": 2
+   },
+   "feed": [
+    {
+     "booking_id": "tod1",
+     "code": "tod1",
+     "at": "2026-10-21T05:00:00.000Z",
+     "created_day": "2026-10-21",
+     "agent": "Agent ag1",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-22",
+     "pax": 5,
+     "amount": 500,
+     "pending_approval": false
+    },
+    {
+     "booking_id": "fx_42",
+     "code": "fx_42",
+     "at": "2026-10-17T03:00:00.000Z",
+     "created_day": "2026-10-17",
+     "agent": "Agent ag2",
+     "route_id": "r1",
+     "family": "Similan",
+     "service_date": "2026-10-22",
+     "pax": 7,
+     "amount": 700,
+     "pending_approval": false
+    }
+   ]
+  },
+  "lead_by_market": [
+   {
+    "code": "m1",
+    "name": "Market One",
+    "pax": 285,
+    "trips": 53,
+    "median": 5,
+    "p25": 5,
+    "p75": 5,
+    "warn_at": 8
+   }
+  ],
+  "lead_within7_pct": 100,
+  "leakage": {
+   "no_show_pax": 0,
+   "no_show_value": 0,
+   "onsite_cancel_pax": 0,
+   "onsite_cancel_value": 0,
+   "weather_pax": 0,
+   "weather_value": 0,
+   "discount": 0,
+   "foc": 0
+  },
+  "kpis": {
+   "revenue": {
+    "value": 10900,
+    "base": 0,
+    "change_pct": null,
+    "pax": 109
+   },
+   "forecast": {
+    "value": 18400,
+    "done": 10900,
+    "booked": 7500,
+    "complete": false,
+    "done_pct": 59
+   },
+   "sales_in": {
+    "value": 23000,
+    "base": 0,
+    "change_pct": null,
+    "bookings": 23
+   },
+   "revenue_per_pax": {
+    "value": 100,
+    "base": 0,
+    "change_pct": null
+   },
+   "next_30_days": {
+    "value": 7500,
+    "base": 0,
+    "change_pct": null,
+    "pax": 75
+   },
+   "cancellations": {
+    "value": 1000,
+    "bookings": 1,
+    "pax": 3,
+    "net_sales_in": 22000,
+    "warning": false
+   },
+   "discounts": {
+    "foc": 0,
+    "discount": 0,
+    "total": 0,
+    "share_of_period_pct": 0
+   }
+  },
+  "trend": [
+   {
+    "date": "2026-09-22",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-23",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-24",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-25",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-26",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-09-27",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-09-28",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-29",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-09-30",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-01",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-02",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-03",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-04",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-05",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-06",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-07",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-08",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-09",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-10",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-11",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-12",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-13",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-14",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-15",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-16",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-17",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-18",
+    "value": 600,
+    "today": false,
+    "future": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-19",
+    "value": 400,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-20",
+    "value": 500,
+    "today": false,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-21",
+    "value": 1000,
+    "today": true,
+    "future": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-22",
+    "value": 1200,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-23",
+    "value": 800,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-24",
+    "value": 600,
+    "today": false,
+    "future": true,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-25",
+    "value": 700,
+    "today": false,
+    "future": true,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-26",
+    "value": 800,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-27",
+    "value": 600,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-28",
+    "value": 700,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-29",
+    "value": 800,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-30",
+    "value": 600,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-31",
+    "value": 700,
+    "today": false,
+    "future": true,
+    "weekend": true
+   },
+   {
+    "date": "2026-11-01",
+    "value": 0,
+    "today": false,
+    "future": true,
+    "weekend": true
+   },
+   {
+    "date": "2026-11-02",
+    "value": 0,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-11-03",
+    "value": 0,
+    "today": false,
+    "future": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-11-04",
+    "value": 0,
+    "today": false,
+    "future": true,
+    "weekend": false
+   }
+  ],
+  "by_family": [
+   {
+    "id": "f1",
+    "name": "Similan",
+    "color": "#111111",
+    "rev": 10500,
+    "pax": 105,
+    "share_pct": 96,
+    "last_year": 0,
+    "change_pct": null,
+    "rev_per_pax": 100
+   },
+   {
+    "id": "_",
+    "name": "Phi Phi Bamboo",
+    "color": "#abcdef",
+    "rev": 400,
+    "pax": 4,
+    "share_pct": 4,
+    "last_year": 0,
+    "change_pct": null,
+    "rev_per_pax": 100
+   }
+  ],
+  "by_channel": {
+   "b2b": 10900,
+   "b2c": 0,
+   "ctr": 0
+  },
+  "by_nationality": [
+   {
+    "code": "th",
+    "name": "Thai",
+    "rev": 10900
+   }
+  ],
+  "top_agents": {
+   "rows": [
+    {
+     "key": "ag1",
+     "name": "Agent ag1",
+     "agent_id": "ag1",
+     "rev": 3400,
+     "pax": 34,
+     "n": 7,
+     "last_year": 0,
+     "change_pct": null,
+     "rev_per_pax": 100
+    },
+    {
+     "key": "ag2",
+     "name": "Agent ag2",
+     "agent_id": "ag2",
+     "rev": 2600,
+     "pax": 26,
+     "n": 5,
+     "last_year": 0,
+     "change_pct": null,
+     "rev_per_pax": 100
+    },
+    {
+     "key": "ag3",
+     "name": "Agent ag3",
+     "agent_id": "ag3",
+     "rev": 2500,
+     "pax": 25,
+     "n": 5,
+     "last_year": 0,
+     "change_pct": null,
+     "rev_per_pax": 100
+    },
+    {
+     "key": "ag4",
+     "name": "Agent ag4",
+     "agent_id": "ag4",
+     "rev": 2400,
+     "pax": 24,
+     "n": 5,
+     "last_year": 0,
+     "change_pct": null,
+     "rev_per_pax": 100
+    }
+   ],
+   "top5_share_pct": 100,
+   "dropped": []
+  },
+  "trips_today": null
+ },
+ "sales_week": {
+  "kind": "week",
+  "offset": 0,
+  "today": "2026-10-21",
+  "range": {
+   "from": "2026-10-18",
+   "end": "2026-10-24",
+   "to": "2026-10-21",
+   "days": 4,
+   "full": false
+  },
+  "previous": {
+   "from": "2026-10-11",
+   "to": "2026-10-14",
+   "days": 4
+  },
+  "totals": {
+   "pax": 38,
+   "value": 6000,
+   "bookings": 6,
+   "foc": 0,
+   "foc_pct": 0,
+   "foc_warning": false,
+   "cancelled_pax": 0,
+   "cancelled_value": 0,
+   "pax_per_booking": 6.33,
+   "value_per_pax": 158,
+   "pax_per_day": 9.5,
+   "value_per_day": 1500,
+   "agents_sent": 4,
+   "agents_new": 0,
+   "agents_quiet": 0,
+   "agents_total": null,
+   "activation_pct": null,
+   "pax_per_agent": 9.5,
+   "vs_previous": {
+    "pax": {
+     "value": 38,
+     "base": 19,
+     "change_pct": 100
+    },
+    "value": {
+     "value": 6000,
+     "base": 4000,
+     "change_pct": 50
+    },
+    "bookings": {
+     "value": 6,
+     "base": 4,
+     "change_pct": 50
+    },
+    "value_per_pax": {
+     "value": 157.89,
+     "base": 210.53,
+     "change_pct": -25
+    },
+    "foc_pct": 0
+   }
+  },
+  "sales": [
+   {
+    "sales_id": "s1",
+    "name": "Sales One",
+    "color": "#111111",
+    "unassigned": false,
+    "rank": 1,
+    "pax": 23,
+    "value": 4000,
+    "share_pct": 67,
+    "bookings": 4,
+    "cancelled_pax": 0,
+    "cancelled_value": 0,
+    "foc": 0,
+    "foc_pct": 0,
+    "value_per_pax": 174,
+    "pax_per_day": 5.8,
+    "change_pct_vs_previous": 130,
+    "agents_sent": 3,
+    "agents_new": 0,
+    "agents_quiet": 0,
+    "top_agent": {
+     "agent": "ag1",
+     "name": "Agent ag1",
+     "share_pct": 39
+    },
+    "agents_total": 1,
+    "activation_pct": 300,
+    "pax_per_agent": 7.7,
+    "agents": [
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "pax": 9,
+      "value": 2000,
+      "bookings": 2,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag2",
+      "name": "Agent ag2",
+      "pax": 8,
+      "value": 1000,
+      "bookings": 1,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag4",
+      "name": "Agent ag4",
+      "pax": 6,
+      "value": 1000,
+      "bookings": 1,
+      "cancelled_pax": 0,
+      "new": false
+     }
+    ]
+   },
+   {
+    "sales_id": "s2",
+    "name": "Sales Two",
+    "color": "#222222",
+    "unassigned": false,
+    "rank": 2,
+    "pax": 15,
+    "value": 2000,
+    "share_pct": 33,
+    "bookings": 2,
+    "cancelled_pax": 0,
+    "cancelled_value": 0,
+    "foc": 0,
+    "foc_pct": 0,
+    "value_per_pax": 133,
+    "pax_per_day": 3.8,
+    "change_pct_vs_previous": 66.7,
+    "agents_sent": 2,
+    "agents_new": 0,
+    "agents_quiet": 0,
+    "top_agent": {
+     "agent": "ag3",
+     "name": "Agent ag3",
+     "share_pct": 53
+    },
+    "agents_total": 0,
+    "activation_pct": null,
+    "pax_per_agent": 7.5,
+    "agents": [
+     {
+      "agent": "ag3",
+      "name": "Agent ag3",
+      "pax": 8,
+      "value": 1000,
+      "bookings": 1,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "pax": 7,
+      "value": 1000,
+      "bookings": 1,
+      "cancelled_pax": 0,
+      "new": false
+     }
+    ]
+   }
+  ],
+  "trend": {
+   "periods": [
+    {
+     "from": "2026-09-06",
+     "to": "2026-09-12",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-09-13",
+     "to": "2026-09-19",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-09-20",
+     "to": "2026-09-26",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-09-27",
+     "to": "2026-10-03",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-10-04",
+     "to": "2026-10-10",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-10-11",
+     "to": "2026-10-17",
+     "days": 7,
+     "full": true
+    },
+    {
+     "from": "2026-10-18",
+     "to": "2026-10-21",
+     "days": 4,
+     "full": false
+    }
+   ],
+   "sales": [
+    {
+     "sales_id": "s1",
+     "name": "Sales One",
+     "color": "#111111",
+     "pax_per_day": [
+      2.1,
+      3,
+      2.1,
+      2.9,
+      2.1,
+      3.1,
+      5.8
+     ],
+     "value_per_day": [
+      429,
+      571,
+      429,
+      571,
+      429,
+      571,
+      1000
+     ]
+    },
+    {
+     "sales_id": "s2",
+     "name": "Sales Two",
+     "color": "#222222",
+     "pax_per_day": [
+      2.9,
+      2.1,
+      2.7,
+      2.1,
+      3,
+      2.1,
+      3.8
+     ],
+     "value_per_day": [
+      571,
+      429,
+      571,
+      429,
+      571,
+      429,
+      500
+     ]
+    }
+   ],
+   "team": {
+    "pax_per_day": [
+     5,
+     5.1,
+     4.9,
+     5,
+     5.1,
+     5.3,
+     9.5
+    ],
+    "value_per_day": [
+     1000,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000,
+     1500
+    ]
+   }
+  },
+  "top_agents": [
+   {
+    "rank": 1,
+    "agent": "ag1",
+    "name": "Agent ag1",
+    "sales_id": "s2",
+    "sales_name": "Sales Two",
+    "sales_color": "#222222",
+    "pax": 16,
+    "value": 3000,
+    "new": false
+   },
+   {
+    "rank": 2,
+    "agent": "ag2",
+    "name": "Agent ag2",
+    "sales_id": "s1",
+    "sales_name": "Sales One",
+    "sales_color": "#111111",
+    "pax": 8,
+    "value": 1000,
+    "new": false
+   },
+   {
+    "rank": 3,
+    "agent": "ag3",
+    "name": "Agent ag3",
+    "sales_id": "s2",
+    "sales_name": "Sales Two",
+    "sales_color": "#222222",
+    "pax": 8,
+    "value": 1000,
+    "new": false
+   },
+   {
+    "rank": 4,
+    "agent": "ag4",
+    "name": "Agent ag4",
+    "sales_id": "s1",
+    "sales_name": "Sales One",
+    "sales_color": "#111111",
+    "pax": 6,
+    "value": 1000,
+    "new": false
+   }
+  ],
+  "quiet": {
+   "basis": "this_month",
+   "label": "ส่งยอดเดือนนี้แล้ว แต่สัปดาห์นี้เงียบ",
+   "from": "2026-10-01",
+   "to": "2026-10-17",
+   "count": 0,
+   "agents": []
+  }
+ },
+ "sales_month": {
+  "kind": "month",
+  "offset": 0,
+  "today": "2026-10-21",
+  "range": {
+   "from": "2026-10-01",
+   "end": "2026-10-31",
+   "to": "2026-10-21",
+   "days": 21,
+   "full": false
+  },
+  "previous": {
+   "from": "2026-09-01",
+   "to": "2026-09-21",
+   "days": 21
+  },
+  "totals": {
+   "pax": 126,
+   "value": 23000,
+   "bookings": 23,
+   "foc": 0,
+   "foc_pct": 0,
+   "foc_warning": false,
+   "cancelled_pax": 0,
+   "cancelled_value": 0,
+   "pax_per_booking": 5.48,
+   "value_per_pax": 183,
+   "pax_per_day": 6,
+   "value_per_day": 1095,
+   "agents_sent": 4,
+   "agents_new": 0,
+   "agents_quiet": 0,
+   "agents_total": 1,
+   "activation_pct": 400,
+   "pax_per_agent": 31.5,
+   "vs_previous": {
+    "pax": {
+     "value": 126,
+     "base": 80,
+     "change_pct": 57.5
+    },
+    "value": {
+     "value": 23000,
+     "base": 16000,
+     "change_pct": 43.8
+    },
+    "bookings": {
+     "value": 23,
+     "base": 16,
+     "change_pct": 43.8
+    },
+    "value_per_pax": {
+     "value": 182.54,
+     "base": 200,
+     "change_pct": -8.7
+    },
+    "foc_pct": 0
+   }
+  },
+  "sales": [
+   {
+    "sales_id": "s1",
+    "name": "Sales One",
+    "color": "#111111",
+    "unassigned": false,
+    "rank": 1,
+    "pax": 71,
+    "value": 13000,
+    "share_pct": 57,
+    "bookings": 13,
+    "cancelled_pax": 0,
+    "cancelled_value": 0,
+    "foc": 0,
+    "foc_pct": 0,
+    "value_per_pax": 183,
+    "pax_per_day": 3.4,
+    "change_pct_vs_previous": 73.2,
+    "agents_sent": 3,
+    "agents_new": 0,
+    "agents_quiet": 0,
+    "top_agent": {
+     "agent": "ag2",
+     "name": "Agent ag2",
+     "share_pct": 51
+    },
+    "agents_total": 1,
+    "activation_pct": 300,
+    "pax_per_agent": 23.7,
+    "agents": [
+     {
+      "agent": "ag2",
+      "name": "Agent ag2",
+      "pax": 36,
+      "value": 6000,
+      "bookings": 6,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag4",
+      "name": "Agent ag4",
+      "pax": 26,
+      "value": 5000,
+      "bookings": 5,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "pax": 9,
+      "value": 2000,
+      "bookings": 2,
+      "cancelled_pax": 0,
+      "new": false
+     }
+    ]
+   },
+   {
+    "sales_id": "s2",
+    "name": "ไม่มีเซลส์ดูแล",
+    "color": "#B8B3C8",
+    "unassigned": true,
+    "rank": null,
+    "pax": 55,
+    "value": 10000,
+    "share_pct": 43,
+    "bookings": 10,
+    "cancelled_pax": 0,
+    "cancelled_value": 0,
+    "foc": 0,
+    "foc_pct": 0,
+    "value_per_pax": 182,
+    "pax_per_day": 2.6,
+    "change_pct_vs_previous": 41,
+    "agents_sent": 2,
+    "agents_new": 0,
+    "agents_quiet": 0,
+    "top_agent": {
+     "agent": "ag1",
+     "name": "Agent ag1",
+     "share_pct": 51
+    },
+    "agents_total": 0,
+    "activation_pct": null,
+    "pax_per_agent": 27.5,
+    "agents": [
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "pax": 28,
+      "value": 5000,
+      "bookings": 5,
+      "cancelled_pax": 0,
+      "new": false
+     },
+     {
+      "agent": "ag3",
+      "name": "Agent ag3",
+      "pax": 27,
+      "value": 5000,
+      "bookings": 5,
+      "cancelled_pax": 0,
+      "new": false
+     }
+    ]
+   }
+  ],
+  "trend": {
+   "periods": [
+    {
+     "from": "2026-04-01",
+     "to": "2026-04-30",
+     "days": 30,
+     "full": true
+    },
+    {
+     "from": "2026-05-01",
+     "to": "2026-05-31",
+     "days": 31,
+     "full": true
+    },
+    {
+     "from": "2026-06-01",
+     "to": "2026-06-30",
+     "days": 30,
+     "full": true
+    },
+    {
+     "from": "2026-07-01",
+     "to": "2026-07-31",
+     "days": 31,
+     "full": true
+    },
+    {
+     "from": "2026-08-01",
+     "to": "2026-08-31",
+     "days": 31,
+     "full": true
+    },
+    {
+     "from": "2026-09-01",
+     "to": "2026-09-30",
+     "days": 30,
+     "full": true
+    },
+    {
+     "from": "2026-10-01",
+     "to": "2026-10-21",
+     "days": 21,
+     "full": false
+    }
+   ],
+   "sales": [
+    {
+     "sales_id": "s1",
+     "name": "Sales One",
+     "color": "#111111",
+     "pax_per_day": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      3.4
+     ],
+     "value_per_day": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      400,
+      619
+     ]
+    }
+   ],
+   "team": {
+    "pax_per_day": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     4.2,
+     6
+    ],
+    "value_per_day": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     833,
+     1095
+    ]
+   }
+  },
+  "top_agents": [
+   {
+    "rank": 1,
+    "agent": "ag1",
+    "name": "Agent ag1",
+    "sales_id": "s2",
+    "sales_name": "ไม่มีเซลส์ดูแล",
+    "sales_color": "#B8B3C8",
+    "pax": 37,
+    "value": 7000,
+    "new": false
+   },
+   {
+    "rank": 2,
+    "agent": "ag2",
+    "name": "Agent ag2",
+    "sales_id": "s1",
+    "sales_name": "Sales One",
+    "sales_color": "#111111",
+    "pax": 36,
+    "value": 6000,
+    "new": false
+   },
+   {
+    "rank": 3,
+    "agent": "ag3",
+    "name": "Agent ag3",
+    "sales_id": "s2",
+    "sales_name": "ไม่มีเซลส์ดูแล",
+    "sales_color": "#B8B3C8",
+    "pax": 27,
+    "value": 5000,
+    "new": false
+   },
+   {
+    "rank": 4,
+    "agent": "ag4",
+    "name": "Agent ag4",
+    "sales_id": "s1",
+    "sales_name": "Sales One",
+    "sales_color": "#111111",
+    "pax": 26,
+    "value": 5000,
+    "new": false
+   }
+  ],
+  "quiet": {
+   "basis": "last_month",
+   "label": "ส่งยอดเดือนก่อน แต่เดือนนี้ยังเงียบ",
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "count": 0,
+   "agents": []
+  }
+ },
+ "gap": {
+  "range": {
+   "key": "h14",
+   "from": "2026-10-21",
+   "to": "2026-11-03",
+   "label": "14 วันข้างหน้า",
+   "month_from": "2026-10-01",
+   "month_to": "2026-10-31"
+  },
+  "month": "2026-10",
+  "today": "2026-10-21",
+  "pier": null,
+  "curve_source": "company",
+  "curve_routes_with_own_curve": 1,
+  "shares": {
+   "source": "manual",
+   "manual": true,
+   "set_by": "boss",
+   "set_at": "2026-10-15T00:00:00.000Z"
+  },
+  "totals": {
+   "target": 180,
+   "booked": 47,
+   "gap": 133,
+   "booked_pct": 26,
+   "need_per_day": 10,
+   "days_left": 14,
+   "should_pct": 75,
+   "behind_pct": 49,
+   "pace7": 6,
+   "projected": 133,
+   "projected_state": "short",
+   "in_today": 17,
+   "risk_trips": 3,
+   "trips": 4,
+   "below_break_even_trips": 2,
+   "below_break_even_seats_short": 33,
+   "value_if_full": 13300,
+   "month": {
+    "target": 180,
+    "booked": 47,
+    "gap": 133,
+    "need_per_day": 12.1,
+    "days_left": 11,
+    "elapsed_days": 21,
+    "should_pct": 65
+   }
+  },
+  "rpp": 100,
+  "pace7": 6.1,
+  "days": [
+   {
+    "date": "2026-10-21",
+    "label": "พ 21",
+    "today": true,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-22",
+    "label": "พฤ 22",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-23",
+    "label": "ศ 23",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-24",
+    "label": "ส 24",
+    "today": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-25",
+    "label": "อา 25",
+    "today": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-10-26",
+    "label": "จ 26",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-27",
+    "label": "อ 27",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-28",
+    "label": "พ 28",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-29",
+    "label": "พฤ 29",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-30",
+    "label": "ศ 30",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-10-31",
+    "label": "ส 31",
+    "today": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-11-01",
+    "label": "อา 1",
+    "today": false,
+    "weekend": true
+   },
+   {
+    "date": "2026-11-02",
+    "label": "จ 2",
+    "today": false,
+    "weekend": false
+   },
+   {
+    "date": "2026-11-03",
+    "label": "อ 3",
+    "today": false,
+    "weekend": false
+   }
+  ],
+  "families": [
+   {
+    "id": "f1",
+    "name": "Similan",
+    "color": "#111111",
+    "route_ids": [
+     "r1"
+    ],
+    "trips_per_day": 1,
+    "month_target": 180,
+    "month_booked": 47,
+    "month_capacity": 200,
+    "free": 153
+   }
+  ],
+  "cells": [
+   {
+    "family_id": "f1",
+    "date": "2026-10-22",
+    "trips": 1,
+    "capacity": 50,
+    "booked": 10,
+    "free": 40,
+    "locked": 0,
+    "target": 45,
+    "expected": 45,
+    "projected": 10,
+    "behind": 35,
+    "lead": 1,
+    "state": "behind",
+    "worst": "r",
+    "below_break_even": true,
+    "in_today": 5,
+    "routes": [
+     {
+      "route_id": "r1",
+      "name": "Similan by Speedboat",
+      "capacity": 50,
+      "booked": 10,
+      "free": 40,
+      "locked": 0,
+      "target": 45,
+      "expected": 45,
+      "projected": 10,
+      "behind": 35,
+      "state": "behind",
+      "worst": "r",
+      "break_even": 20,
+      "below_break_even": true,
+      "lead": 1
+     }
+    ]
+   },
+   {
+    "family_id": "f1",
+    "date": "2026-10-23",
+    "trips": 1,
+    "capacity": 50,
+    "booked": 2,
+    "free": 48,
+    "locked": 0,
+    "target": 45,
+    "expected": 45,
+    "projected": 2,
+    "behind": 43,
+    "lead": 2,
+    "state": "behind",
+    "worst": "r",
+    "below_break_even": true,
+    "in_today": 0,
+    "routes": [
+     {
+      "route_id": "r1",
+      "name": "Similan by Speedboat",
+      "capacity": 50,
+      "booked": 2,
+      "free": 48,
+      "locked": 0,
+      "target": 45,
+      "expected": 45,
+      "projected": 2,
+      "behind": 43,
+      "state": "behind",
+      "worst": "r",
+      "break_even": 25,
+      "below_break_even": true,
+      "lead": 2
+     }
+    ]
+   },
+   {
+    "family_id": "f1",
+    "date": "2026-10-26",
+    "trips": 1,
+    "capacity": 50,
+    "booked": 30,
+    "free": 20,
+    "locked": 0,
+    "target": 45,
+    "expected": 45,
+    "projected": 30,
+    "behind": 15,
+    "lead": 5,
+    "state": "behind",
+    "worst": "r",
+    "below_break_even": false,
+    "in_today": 8,
+    "routes": [
+     {
+      "route_id": "r1",
+      "name": "Similan by Speedboat",
+      "capacity": 50,
+      "booked": 30,
+      "free": 20,
+      "locked": 0,
+      "target": 45,
+      "expected": 45,
+      "projected": 30,
+      "behind": 15,
+      "state": "behind",
+      "worst": "r",
+      "break_even": 0,
+      "below_break_even": false,
+      "lead": 5
+     }
+    ]
+   },
+   {
+    "family_id": "f1",
+    "date": "2026-10-30",
+    "trips": 1,
+    "capacity": 50,
+    "booked": 5,
+    "free": 45,
+    "locked": 0,
+    "target": 45,
+    "expected": 0,
+    "projected": 50,
+    "behind": 0,
+    "lead": 9,
+    "state": "on_track",
+    "worst": "g",
+    "below_break_even": false,
+    "in_today": 0,
+    "routes": [
+     {
+      "route_id": "r1",
+      "name": "Similan by Speedboat",
+      "capacity": 50,
+      "booked": 5,
+      "free": 45,
+      "locked": 0,
+      "target": 45,
+      "expected": 0,
+      "projected": 50,
+      "behind": 0,
+      "state": "on_track",
+      "worst": "g",
+      "break_even": 0,
+      "below_break_even": false,
+      "lead": 9
+     }
+    ]
+   }
+  ],
+  "decisions": [
+   {
+    "route_id": "r1",
+    "family_id": "f1",
+    "family": "Similan",
+    "variant": "Speedboat",
+    "date": "2026-10-22",
+    "label": "พฤ 22",
+    "lead": 1,
+    "booked": 10,
+    "capacity": 50,
+    "target": 45,
+    "behind": 35,
+    "break_even": 20,
+    "short_of_break_even": 10,
+    "state": "behind",
+    "below_break_even": true,
+    "suggestion": {
+     "action": "merge",
+     "text": "รวมกับ ศ 23",
+     "reason": "อีกเที่ยวว่าง 48 ที่ รับได้ทั้ง 10 คน",
+     "merge_with": {
+      "date": "2026-10-23",
+      "free": 48
+     }
+    },
+    "options": [
+     "notify_sales",
+     "b2c_promo",
+     "merge",
+     "wait"
+    ]
+   },
+   {
+    "route_id": "r1",
+    "family_id": "f1",
+    "family": "Similan",
+    "variant": "Speedboat",
+    "date": "2026-10-23",
+    "label": "ศ 23",
+    "lead": 2,
+    "booked": 2,
+    "capacity": 50,
+    "target": 45,
+    "behind": 43,
+    "break_even": 25,
+    "short_of_break_even": 23,
+    "state": "behind",
+    "below_break_even": true,
+    "suggestion": {
+     "action": "merge",
+     "text": "รวมกับ พฤ 22",
+     "reason": "อีกเที่ยวว่าง 40 ที่ รับได้ทั้ง 2 คน",
+     "merge_with": {
+      "date": "2026-10-22",
+      "free": 40
+     }
+    },
+    "options": [
+     "notify_sales",
+     "b2c_promo",
+     "merge",
+     "wait"
+    ]
+   }
+  ],
+  "sales": [
+   {
+    "sales_id": "s1",
+    "name": "Sales One",
+    "color": "#111111",
+    "unassigned": false,
+    "target": 108,
+    "booked": 28.2,
+    "gap": 80,
+    "booked_pct": 26,
+    "need_per_day": 7.3,
+    "need_per_day_ceil": 8,
+    "pace": 2.6,
+    "today": 17,
+    "d7": [
+     5,
+     0,
+     7,
+     0,
+     6,
+     0,
+     17
+    ],
+    "own": 93,
+    "status": {
+     "code": "g",
+     "key": "on_plan",
+     "label": "ตามแผน"
+    },
+    "pace_state": "bad",
+    "families": [
+     {
+      "family_id": "f1",
+      "name": "Similan",
+      "target": 108,
+      "booked": 28.2,
+      "gap": 80,
+      "weight_pct": 60,
+      "need_per_day": 7.3,
+      "need_per_day_ceil": 8,
+      "today": 13,
+      "status": {
+       "code": "g",
+       "key": "on_plan",
+       "label": "ตามแผน"
+      },
+      "lag": true,
+      "own": 89,
+      "open_days": [
+       {
+        "date": "2026-10-23",
+        "free": 48,
+        "route_id": "r1",
+        "label": "ศ 23"
+       },
+       {
+        "date": "2026-10-30",
+        "free": 45,
+        "route_id": "r1",
+        "label": "ศ 30"
+       },
+       {
+        "date": "2026-10-22",
+        "free": 40,
+        "route_id": "r1",
+        "label": "พฤ 22"
+       }
+      ]
+     }
+    ],
+    "calls": [
+     {
+      "agent": "ag9",
+      "name": "Agent Nine",
+      "kind": "lock_unused",
+      "why": "ล็อก 4 ที่ยังไม่ใช้",
+      "detail": "Similan · 22 ต.ค.",
+      "family_id": "f1"
+     },
+     {
+      "agent": "ag4",
+      "name": "Agent ag4",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 56 pax",
+      "family_id": "f1"
+     },
+     {
+      "agent": "ag2",
+      "name": "Agent ag2",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 58 pax",
+      "family_id": "f1"
+     }
+    ]
+   },
+   {
+    "sales_id": "s2",
+    "name": "Sales Two",
+    "color": "#222222",
+    "unassigned": false,
+    "target": 54,
+    "booked": 14.1,
+    "gap": 40,
+    "booked_pct": 26,
+    "need_per_day": 3.6,
+    "need_per_day_ceil": 4,
+    "pace": 3.6,
+    "today": 0,
+    "d7": [
+     0,
+     6,
+     0,
+     8,
+     0,
+     7,
+     0
+    ],
+    "own": 91,
+    "status": {
+     "code": "b",
+     "key": "miss",
+     "label": "ไม่ทัน"
+    },
+    "pace_state": "warn",
+    "families": [
+     {
+      "family_id": "f1",
+      "name": "Similan",
+      "target": 54,
+      "booked": 14.1,
+      "gap": 40,
+      "weight_pct": 30,
+      "need_per_day": 3.6,
+      "need_per_day_ceil": 4,
+      "today": 0,
+      "status": {
+       "code": "b",
+       "key": "miss",
+       "label": "ไม่ทัน"
+      },
+      "lag": false,
+      "own": 91,
+      "open_days": [
+       {
+        "date": "2026-10-23",
+        "free": 48,
+        "route_id": "r1",
+        "label": "ศ 23"
+       },
+       {
+        "date": "2026-10-30",
+        "free": 45,
+        "route_id": "r1",
+        "label": "ศ 30"
+       },
+       {
+        "date": "2026-10-22",
+        "free": 40,
+        "route_id": "r1",
+        "label": "พฤ 22"
+       }
+      ]
+     }
+    ],
+    "calls": [
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 63 pax",
+      "family_id": "f1"
+     },
+     {
+      "agent": "ag3",
+      "name": "Agent ag3",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 57 pax",
+      "family_id": "f1"
+     }
+    ]
+   },
+   {
+    "sales_id": "__none",
+    "name": "ยังไม่มอบหมาย",
+    "color": "#B8B3C8",
+    "unassigned": true,
+    "target": 18,
+    "booked": 4.7,
+    "gap": 13,
+    "booked_pct": 26,
+    "need_per_day": 1.2,
+    "need_per_day_ceil": 2,
+    "pace": 0,
+    "today": 0,
+    "d7": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "own": 0,
+    "status": {
+     "code": "b",
+     "key": "miss",
+     "label": "ไม่ทัน"
+    },
+    "pace_state": "warn",
+    "families": [
+     {
+      "family_id": "f1",
+      "name": "Similan",
+      "target": 18,
+      "booked": 4.7,
+      "gap": 13,
+      "weight_pct": 10,
+      "need_per_day": 1.2,
+      "need_per_day_ceil": 2,
+      "today": 0,
+      "status": {
+       "code": "b",
+       "key": "miss",
+       "label": "ไม่ทัน"
+      },
+      "lag": false,
+      "own": 0,
+      "open_days": [
+       {
+        "date": "2026-10-23",
+        "free": 48,
+        "route_id": "r1",
+        "label": "ศ 23"
+       },
+       {
+        "date": "2026-10-30",
+        "free": 45,
+        "route_id": "r1",
+        "label": "ศ 30"
+       },
+       {
+        "date": "2026-10-22",
+        "free": 40,
+        "route_id": "r1",
+        "label": "พฤ 22"
+       }
+      ]
+     }
+    ],
+    "calls": []
+   }
+  ],
+  "open_days": {
+   "f1": [
+    {
+     "date": "2026-10-23",
+     "free": 48,
+     "route_id": "r1",
+     "label": "ศ 23"
+    },
+    {
+     "date": "2026-10-30",
+     "free": 45,
+     "route_id": "r1",
+     "label": "ศ 30"
+    },
+    {
+     "date": "2026-10-22",
+     "free": 40,
+     "route_id": "r1",
+     "label": "พฤ 22"
+    },
+    {
+     "date": "2026-10-26",
+     "free": 20,
+     "route_id": "r1",
+     "label": "จ 26"
+    }
+   ]
+  }
+ },
+ "targets": {
+  "month": "2026-10",
+  "label": "ตุลาคม 2569",
+  "today": "2026-10-21",
+  "days_left": 11,
+  "me": false,
+  "my_sales_id": null,
+  "reason": null,
+  "team": {
+   "today": 17,
+   "need": 12.1,
+   "need_ceil": 13,
+   "month_gap": 133,
+   "reached": false,
+   "on_target": true,
+   "bar_pct": 141,
+   "hit": 1,
+   "near": 0,
+   "miss": 1,
+   "d14": [
+    {
+     "date": "2026-10-08",
+     "pax": 4
+    },
+    {
+     "date": "2026-10-09",
+     "pax": 5
+    },
+    {
+     "date": "2026-10-10",
+     "pax": 6
+    },
+    {
+     "date": "2026-10-11",
+     "pax": 4
+    },
+    {
+     "date": "2026-10-12",
+     "pax": 5
+    },
+    {
+     "date": "2026-10-13",
+     "pax": 6
+    },
+    {
+     "date": "2026-10-14",
+     "pax": 4
+    },
+    {
+     "date": "2026-10-15",
+     "pax": 5
+    },
+    {
+     "date": "2026-10-16",
+     "pax": 6
+    },
+    {
+     "date": "2026-10-17",
+     "pax": 7
+    },
+    {
+     "date": "2026-10-18",
+     "pax": 8
+    },
+    {
+     "date": "2026-10-19",
+     "pax": 6
+    },
+    {
+     "date": "2026-10-20",
+     "pax": 7
+    },
+    {
+     "date": "2026-10-21",
+     "pax": 17
+    }
+   ]
+  },
+  "cards": [
+   {
+    "sales_id": "s1",
+    "name": "Sales One",
+    "color": "#111111",
+    "unassigned": false,
+    "target": 108,
+    "booked": 28.2,
+    "gap": 80,
+    "booked_pct": 26,
+    "need_per_day": 7.3,
+    "need_per_day_ceil": 8,
+    "pace": 2.6,
+    "today": 17,
+    "d7": [
+     5,
+     0,
+     7,
+     0,
+     6,
+     0,
+     17
+    ],
+    "own": 93,
+    "status": {
+     "code": "g",
+     "key": "on_plan",
+     "label": "ตามแผน"
+    },
+    "pace_state": "bad",
+    "families": [
+     {
+      "family_id": "f1",
+      "name": "Similan",
+      "target": 108,
+      "booked": 28.2,
+      "gap": 80,
+      "weight_pct": 60,
+      "need_per_day": 7.3,
+      "need_per_day_ceil": 8,
+      "today": 13,
+      "status": {
+       "code": "g",
+       "key": "on_plan",
+       "label": "ตามแผน"
+      },
+      "lag": true,
+      "own": 89,
+      "open_days": [
+       {
+        "date": "2026-10-23",
+        "free": 48,
+        "route_id": "r1",
+        "label": "ศ 23"
+       },
+       {
+        "date": "2026-10-30",
+        "free": 45,
+        "route_id": "r1",
+        "label": "ศ 30"
+       },
+       {
+        "date": "2026-10-22",
+        "free": 40,
+        "route_id": "r1",
+        "label": "พฤ 22"
+       }
+      ]
+     }
+    ],
+    "calls": [
+     {
+      "agent": "ag4",
+      "name": "Agent ag4",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 56 pax",
+      "family_id": "f1"
+     },
+     {
+      "agent": "ag2",
+      "name": "Agent ag2",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 58 pax",
+      "family_id": "f1"
+     }
+    ],
+    "miss_run": 0,
+    "alert": false,
+    "days_on_target": 1,
+    "text": "Sales One · ตุลาคม 2569\nขาด 80 ที่ · ต้องได้วันละ 8 · วันนี้ +17\n- Similan: ขาด 80 · วันละ 8 · ว่าง ศ 23 (48), ศ 30 (45), พฤ 22 (40)\nติดต่อ: Agent ag4 (ว่าง พฤ 22), Agent ag2 (ว่าง พฤ 22)"
+   },
+   {
+    "sales_id": "s2",
+    "name": "Sales Two",
+    "color": "#222222",
+    "unassigned": false,
+    "target": 54,
+    "booked": 14.1,
+    "gap": 40,
+    "booked_pct": 26,
+    "need_per_day": 3.6,
+    "need_per_day_ceil": 4,
+    "pace": 3.6,
+    "today": 0,
+    "d7": [
+     0,
+     6,
+     0,
+     8,
+     0,
+     7,
+     0
+    ],
+    "own": 91,
+    "status": {
+     "code": "b",
+     "key": "miss",
+     "label": "ไม่ทัน"
+    },
+    "pace_state": "warn",
+    "families": [
+     {
+      "family_id": "f1",
+      "name": "Similan",
+      "target": 54,
+      "booked": 14.1,
+      "gap": 40,
+      "weight_pct": 30,
+      "need_per_day": 3.6,
+      "need_per_day_ceil": 4,
+      "today": 0,
+      "status": {
+       "code": "b",
+       "key": "miss",
+       "label": "ไม่ทัน"
+      },
+      "lag": false,
+      "own": 91,
+      "open_days": [
+       {
+        "date": "2026-10-23",
+        "free": 48,
+        "route_id": "r1",
+        "label": "ศ 23"
+       },
+       {
+        "date": "2026-10-30",
+        "free": 45,
+        "route_id": "r1",
+        "label": "ศ 30"
+       },
+       {
+        "date": "2026-10-22",
+        "free": 40,
+        "route_id": "r1",
+        "label": "พฤ 22"
+       }
+      ]
+     }
+    ],
+    "calls": [
+     {
+      "agent": "ag1",
+      "name": "Agent ag1",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 63 pax",
+      "family_id": "f1"
+     },
+     {
+      "agent": "ag3",
+      "name": "Agent ag3",
+      "kind": "short_family",
+      "why": "ว่าง พฤ 22",
+      "detail": "เคยส่ง Similan · 57 pax",
+      "family_id": "f1"
+     }
+    ],
+    "miss_run": 1,
+    "alert": false,
+    "days_on_target": 3,
+    "text": "Sales Two · ตุลาคม 2569\nขาด 40 ที่ · ต้องได้วันละ 4 · วันนี้ +0\n- Similan: ขาด 40 · วันละ 4 · ว่าง ศ 23 (48), ศ 30 (45), พฤ 22 (40)\nติดต่อ: Agent ag1 (ว่าง พฤ 22), Agent ag3 (ว่าง พฤ 22)"
+   }
+  ]
+ },
+ "movement": {
+  "date": "2026-10-22",
+  "server_date": "2026-10-21",
+  "generated_at": "2026-10-21T08:00:00.000Z",
+  "pier": null,
+  "label": {
+   "key": "tomorrow",
+   "th": "พรุ่งนี้",
+   "en": "Tomorrow",
+   "full_th": "พฤหัสบดี 22 ต.ค. 2569",
+   "full_en": "Thu 22 Oct 2026"
+  },
+  "rows": [
+   {
+    "route_id": "r1",
+    "name": "Similan by Speedboat",
+    "family_id": "f1",
+    "family": "Similan",
+    "variant": "Speedboat",
+    "color": "#111111",
+    "pier": "tublamu",
+    "departure": "08:00",
+    "boats": [
+     {
+      "boat_id": "b1",
+      "name": "Boat b1",
+      "capacity": 50,
+      "charter": false,
+      "pax": 0
+     },
+     {
+      "boat_id": "b2",
+      "name": "Boat b2",
+      "capacity": 50,
+      "charter": false,
+      "pax": 0
+     }
+    ],
+    "capacity": 100,
+    "booked": 98,
+    "free": 2,
+    "state": "full",
+    "full": true,
+    "break_even": 30,
+    "below_break_even": false,
+    "revenue": 1200,
+    "trips": 2,
+    "zones": {
+     "PK": 12,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0
+    },
+    "px": {
+     "ad": 12,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added_px": {
+     "ad": 5,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added": 5,
+    "added_agents": 1,
+    "last": {
+     "at": "2026-10-21T05:00:00.000Z",
+     "pax": 5,
+     "agent": "Agent ag1",
+     "fresh": false
+    },
+    "last_booking_at": "2026-10-21T05:00:00.000Z",
+    "silent_hours": 3,
+    "booked_over_24h": 7,
+    "boats_total": 2,
+    "boats_full": 2,
+    "charter_boats": 0,
+    "charter_capacity": null
+   },
+   {
+    "route_id": "r4",
+    "name": "Similan Charter",
+    "family_id": "f1",
+    "family": "Similan",
+    "variant": "Charter",
+    "color": "#111111",
+    "pier": "tublamu",
+    "departure": "09:00",
+    "boats": [
+     {
+      "boat_id": "b4",
+      "name": "Boat b4",
+      "capacity": 30,
+      "charter": true,
+      "pax": null
+     }
+    ],
+    "capacity": 0,
+    "booked": 0,
+    "free": null,
+    "state": "ch",
+    "full": true,
+    "break_even": null,
+    "below_break_even": false,
+    "revenue": 0,
+    "trips": 0,
+    "zones": {
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0
+    },
+    "px": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added_px": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added": 0,
+    "added_agents": 0,
+    "last": null,
+    "last_booking_at": null,
+    "silent_hours": null,
+    "booked_over_24h": 0,
+    "boats_total": 1,
+    "boats_full": 1,
+    "charter_boats": 1,
+    "charter_capacity": 30
+   },
+   {
+    "route_id": "r2",
+    "name": "Phi Phi Bamboo",
+    "family_id": "r2",
+    "family": "Phi Phi Bamboo",
+    "variant": "",
+    "color": "#abcdef",
+    "pier": "panwa",
+    "departure": "07:30",
+    "boats": [
+     {
+      "boat_id": "b3",
+      "name": "Boat b3",
+      "capacity": 40,
+      "charter": false,
+      "pax": 0
+     }
+    ],
+    "capacity": 40,
+    "booked": 20,
+    "free": 20,
+    "state": "be",
+    "full": false,
+    "break_even": 25,
+    "below_break_even": true,
+    "revenue": 0,
+    "trips": 0,
+    "zones": {
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0
+    },
+    "px": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added_px": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "added": 0,
+    "added_agents": 0,
+    "last": null,
+    "last_booking_at": null,
+    "silent_hours": null,
+    "booked_over_24h": 0,
+    "boats_total": 1,
+    "boats_full": 0,
+    "charter_boats": 0,
+    "charter_capacity": null
+   }
+  ],
+  "piers": [
+   {
+    "pier": "tublamu",
+    "full": 3,
+    "boats": 3
+   },
+   {
+    "pier": "panwa",
+    "full": 0,
+    "boats": 1
+   }
+  ],
+  "totals": {
+   "capacity": 140,
+   "booked": 118,
+   "boats_full": 3,
+   "below_break_even": 1,
+   "revenue": 1200,
+   "break_even": 55,
+   "added": 5,
+   "added_bookings": 1,
+   "added_value": 500,
+   "added_zones": {
+    "PK": 5,
+    "KL": 0,
+    "RN": 0,
+    "NT": 0,
+    "O": 0
+   },
+   "cancelled_pax": 0,
+   "cancelled_bookings": 0,
+   "booked_over_24h": 7,
+   "capacity_over_24h": 140,
+   "free": 22,
+   "boats": 4,
+   "open_routes": 0,
+   "free_on_open_routes": 0,
+   "px": {
+    "ad": 12,
+    "chd": 0,
+    "inf": 0,
+    "foc": 0
+   },
+   "added_px": {
+    "ad": 5,
+    "chd": 0,
+    "inf": 0,
+    "foc": 0
+   }
+  },
+  "pct": 84,
+  "pct24": 5,
+  "summary": {
+   "boats": 4,
+   "boats_full": 3,
+   "free": 22,
+   "below_break_even": 1,
+   "all_pass_break_even": false,
+   "mood": "อีก 1 ลำว่างรวม 22 ที่",
+   "vs_yesterday": {
+    "pct": 5,
+    "up": true
+   }
+  },
+  "variants": [
+   {
+    "family_id": "f1",
+    "name": "Similan",
+    "color": "#111111",
+    "px": {
+     "ad": 12,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "total": 12,
+    "added": 5,
+    "variants": [
+     {
+      "route_id": "r1",
+      "label": "Speedboat",
+      "departure": "08:00",
+      "px": {
+       "ad": 12,
+       "chd": 0,
+       "inf": 0,
+       "foc": 0
+      },
+      "total": 12,
+      "added": 5,
+      "charter": false
+     },
+     {
+      "route_id": "r4",
+      "label": "Charter",
+      "departure": "09:00",
+      "px": {
+       "ad": 0,
+       "chd": 0,
+       "inf": 0,
+       "foc": 0
+      },
+      "total": 0,
+      "added": 0,
+      "charter": true
+     }
+    ]
+   },
+   {
+    "family_id": "r2",
+    "name": "Phi Phi Bamboo",
+    "color": "#abcdef",
+    "px": {
+     "ad": 0,
+     "chd": 0,
+     "inf": 0,
+     "foc": 0
+    },
+    "total": 0,
+    "added": 0,
+    "variants": [
+     {
+      "route_id": "r2",
+      "label": "Phi Phi Bamboo",
+      "departure": "07:30",
+      "px": {
+       "ad": 0,
+       "chd": 0,
+       "inf": 0,
+       "foc": 0
+      },
+      "total": 0,
+      "added": 0,
+      "charter": false
+     }
+    ]
+   }
+  ],
+  "today": {
+   "bookings": 3,
+   "pax": 17,
+   "value": 3000,
+   "zones": {
+    "PK": 17,
+    "KL": 0,
+    "RN": 0,
+    "NT": 0,
+    "O": 0
+   },
+   "hours": [
+    {
+     "hour": 0,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 1,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 2,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 3,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 4,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 5,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 6,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 7,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 8,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 9,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 10,
+     "PK": 8,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 1,
+     "pax": 8
+    },
+    {
+     "hour": 11,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 12,
+     "PK": 5,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 1,
+     "pax": 5
+    },
+    {
+     "hour": 13,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 14,
+     "PK": 4,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 1,
+     "pax": 4
+    },
+    {
+     "hour": 15,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 16,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 17,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 18,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 19,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 20,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 21,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 22,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    },
+    {
+     "hour": 23,
+     "PK": 0,
+     "KL": 0,
+     "RN": 0,
+     "NT": 0,
+     "O": 0,
+     "bookings": 0,
+     "pax": 0
+    }
+   ],
+   "now_hour": 15,
+   "feed": [
+    {
+     "kind": "in",
+     "at": "2026-10-21T07:30:00.000Z",
+     "booking_id": "tod2",
+     "code": "tod2",
+     "agent": "Agent ag1",
+     "route_id": "r2",
+     "family": "Phi Phi Bamboo",
+     "variant": "",
+     "zone": "PK",
+     "sales_id": "s1",
+     "sales_name": "Sales One",
+     "b2c": false,
+     "pax": 4,
+     "service_date": "2026-10-21",
+     "time": "14:30"
+    },
+    {
+     "kind": "in",
+     "at": "2026-10-21T05:00:00.000Z",
+     "booking_id": "tod1",
+     "code": "tod1",
+     "agent": "Agent ag1",
+     "route_id": "r1",
+     "family": "Similan",
+     "variant": "Speedboat",
+     "zone": "PK",
+     "sales_id": "s1",
+     "sales_name": "Sales One",
+     "b2c": false,
+     "pax": 5,
+     "service_date": "2026-10-22",
+     "time": "12:00"
+    },
+    {
+     "kind": "cancelled",
+     "at": "2026-10-21T04:00:00.000Z",
+     "booking_id": "cx1",
+     "code": "cx1",
+     "agent": "Agent ag1",
+     "route_id": "r1",
+     "family": "Similan",
+     "variant": "Speedboat",
+     "zone": "PK",
+     "sales_id": "s1",
+     "sales_name": "Sales One",
+     "b2c": false,
+     "pax": 3,
+     "service_date": "2026-10-23",
+     "time": "11:00"
+    },
+    {
+     "kind": "in",
+     "at": "2026-10-21T03:00:00.000Z",
+     "booking_id": "fx_46",
+     "code": "fx_46",
+     "agent": "Agent ag2",
+     "route_id": "r1",
+     "family": "Similan",
+     "variant": "Speedboat",
+     "zone": "PK",
+     "sales_id": "s1",
+     "sales_name": "Sales One",
+     "b2c": false,
+     "pax": 8,
+     "service_date": "2026-10-26",
+     "time": "10:00"
+    }
+   ],
+   "pk_share": 100,
+   "pk_share_week": 100,
+   "week_has_data": true
+  },
+  "next7": [
+   {
+    "date": "2026-10-22",
+    "label": "พฤ 22",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   },
+   {
+    "date": "2026-10-23",
+    "label": "ศ 23",
+    "capacity": 50,
+    "booked": 10,
+    "boats": 1,
+    "boats_full": 0,
+    "routes": 1,
+    "pct": 20,
+    "state": "low"
+   },
+   {
+    "date": "2026-10-24",
+    "label": "ส 24",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   },
+   {
+    "date": "2026-10-25",
+    "label": "อา 25",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   },
+   {
+    "date": "2026-10-26",
+    "label": "จ 26",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   },
+   {
+    "date": "2026-10-27",
+    "label": "อ 27",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   },
+   {
+    "date": "2026-10-28",
+    "label": "พ 28",
+    "capacity": 0,
+    "booked": 0,
+    "boats": 0,
+    "boats_full": 0,
+    "routes": 0,
+    "pct": 0,
+    "state": "none"
+   }
+  ],
+  "help": [
+   {
+    "kind": "below_break_even",
+    "route_id": "r2",
+    "date": "2026-10-22",
+    "title": "Phi Phi Bamboo · Boat b3 · พรุ่งนี้",
+    "detail": "20/40 · ขาดอีก 5 ถึงจะคุ้มทุน"
+   },
+   {
+    "kind": "weak_days",
+    "dates": [
+     "2026-10-23"
+    ],
+    "title": "ศุกร์ 23 ต.ค. ทุกเส้นทาง",
+    "detail": "ยังไม่มีลำไหนเต็ม · ว่างรวม 40 ที่"
+   }
+  ]
+ },
+ "alloc": {
+  "month": "2026-10",
+  "manual": true,
+  "set_at": "2026-10-15T00:00:00.000Z",
+  "set_by": "boss",
+  "shares": {
+   "f1": {
+    "s1": 60,
+    "s2": 30
+   }
+  },
+  "lf": {},
+  "pier": null,
+  "lf_default": 90,
+  "calc": {
+   "source": "last_90_days",
+   "shares": {
+    "f1": {
+     "s1": 50,
+     "s2": 50
+    }
+   }
+  },
+  "families": [
+   "f1"
+  ],
+  "seats": {
+   "f1": {
+    "capacity": 200,
+    "booked": 60,
+    "target": 180,
+    "gap": 120,
+    "lf": 90
+   }
+  },
+  "sales": [
+   {
+    "id": "s1",
+    "name": "Sales One",
+    "color": "#111111",
+    "active": true
+   },
+   {
+    "id": "s2",
+    "name": "Sales Two",
+    "color": null,
+    "active": true
+   }
+  ]
+ }
+}
