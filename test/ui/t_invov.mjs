@@ -1,0 +1,43 @@
+// §invOv · Inventory / Memo · แท็บ Overview รายคลัง · เรียงจากมากสุด · แก้ชื่อคลัง
+import { open } from './_harness.mjs';
+let bad = 0; const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
+const { page, errors, close } = await open({ blob: process.env.LAD, width: 1500, height: 1000 });
+page.on('dialog', d => d.accept());
+const r = await page.evaluate(async () => {
+  const z = ms => new Promise(f => setTimeout(f, ms));
+  nav(document.querySelector('.nav-item[data-view="fl-inventory"]')); await z(500);
+  invSwitchTab('overview'); await z(300);
+  const W = document.getElementById('fl-inv-pink-wrap');
+  const cards = [...W.querySelectorAll('.ivo-c')].map(c => c.querySelector('.ivo-nm').textContent);
+  const D = ivoData();
+  // ยอดต้องตรงกับผลรวม stocks[] ตรง ๆ
+  let vp = 0, tl = 0; _invAll().forEach(x => ivoStocks(x).forEach(s => { const k = ivoWhOf(s.location), q = +s.qty || 0; if (q > 0 && k === 'VP') vp += q * (+x.cost || 0); if (q > 0 && k === 'TL') tl += q * (+x.cost || 0); }));
+  const rows = () => [...W.querySelectorAll('.ivo-box .ivo-t tbody tr.ck')];
+  const vals = () => rows().map(tr => +tr.children[6].textContent.replace(/[^0-9]/g, ''));
+  const v1 = vals();
+  ivoSetSort('qty'); await z(150);
+  const q1 = rows().map(tr => +tr.children[4].textContent.replace(/[^0-9]/g, ''));
+  ivoSetWh('TL'); await z(150); const tlN = rows().length;
+  ivoSetWh('ALL'); ivoToggleAll(); await z(150); const allN = rows().length;
+  ivoSetWh('VP'); ivoSetSort('value'); await z(150);
+  const todo = [...W.querySelectorAll('.ivo-do .t')].map(x => x.textContent);
+  const bad0 = D.badLoc.length;
+  const tot0 = _invAll().reduce((s, x) => s + ivoStocks(x).reduce((a, b) => a + (+b.qty || 0), 0), 0);
+  ivoFixLoc(); await z(200);
+  const D2 = ivoData();
+  const tot1 = _invAll().reduce((s, x) => s + ivoStocks(x).reduce((a, b) => a + (+b.qty || 0), 0), 0);
+  invSwitchTab('overview'); await z(200);
+  return { cards, vpV: D.W.VP.value, vp, tlV: D.W.TL.value, tl, v1, q1, tlN, allN, todo, bad0, bad1: D2.badLoc.length, tot0, tot1, vpAfter: D2.W.VP.value, vpBefore: D.W.VP.value };
+});
+await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: '/mnt/user-data/outputs/invov.png', fullPage: true });
+const R = JSON.stringify(r).slice(0, 900);
+if (r.cards.length === 3) ok('3 การ์ดคลัง · ' + r.cards.join(' / ')); else fail('cards ' + R);
+if (Math.abs(r.vpV - r.vp) < 1 && Math.abs(r.tlV - r.tl) < 1) ok(`มูลค่าตรงกับ stocks[] · VP ${Math.round(r.vp)} · TL ${Math.round(r.tl)}`); else fail('value ' + R);
+const desc = a => a.every((x, i) => !i || a[i - 1] >= x);
+if (r.v1.length === 10 && desc(r.v1)) ok('เรียงตามมูลค่า มากไปน้อย · 10 อันดับ · อันดับ 1 ' + r.v1[0]); else fail('value sort ' + R);
+if (r.q1.length === 10 && desc(r.q1)) ok('เรียงตามจำนวน มากไปน้อย · อันดับ 1 ' + r.q1[0]); else fail('qty sort ' + R);
+if (r.tlN > 0 && r.allN > 10) ok(`สลับคลังได้ · TL ${r.tlN} แถว · ทุกคลัง ดูทั้งหมด ${r.allN} แถว`); else fail('wh ' + R);
+if (r.todo.some(t => /ต่ำกว่าขั้นต่ำ/.test(t)) && r.todo.some(t => /สะกดไม่ตรง/.test(t))) ok('ต้องจัดการ · ' + r.todo.join(' | ')); else fail('todo ' + JSON.stringify(r.todo));
+if (r.bad0 > 0 && r.bad1 === 0 && r.tot0 === r.tot1 && Math.abs(r.vpAfter - r.vpBefore) < 1) ok(`แก้ชื่อคลัง ${r.bad0} รายการ · จำนวนรวมเท่าเดิม ${r.tot1} · มูลค่า VP เท่าเดิม`); else fail('fix ' + R);
+if (errors.length) console.log('    errors:', errors.slice(0, 3));
+console.log(bad ? `FAIL ${bad}` : 'PASS'); await close(); process.exit(bad ? 1 : 0);

@@ -23040,10 +23040,11 @@ function flRenderInventory(){
   const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidThisMonth.length+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
 
   const tabBtn=function(val,label,count){var isOn=_invTab===val;return '<button onclick="invSwitchTab(\''+val+'\')" style="background:'+(isOn?dim.ink:'transparent')+';color:'+(isOn?'white':dim.ink2)+';border:none;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:'+(isOn?600:500)+';cursor:pointer">'+label+' <span style="background:'+(isOn?'rgba(255,255,255,.2)':'rgba(0,0,0,.06)')+';padding:0 6px;border-radius:8px;margin-left:4px;font-size:10px">'+count+'</span></button>'};
-  const tabToggle='<div style="background:white;border-radius:14px;padding:4px;display:flex;gap:2px;margin-bottom:12px;width:fit-content;border:1px solid '+dim.line+'">'+tabBtn('stock','Stock items',totalItems)+tabBtn('memo','Memorandum',memos.length)+'</div>';
+  const tabToggle='<div style="background:white;border-radius:14px;padding:4px;display:flex;gap:2px;margin-bottom:12px;width:fit-content;border:1px solid '+dim.line+'">'+(function(){ var on=_invTab==='overview'; return '<button onclick="invSwitchTab(\'overview\')" style="background:'+(on?dim.ink:'transparent')+';color:'+(on?'white':dim.ink2)+';border:none;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:'+(on?600:500)+';cursor:pointer">Overview</button>'; })()/* §invOv */+tabBtn('stock','Stock items',totalItems)+tabBtn('memo','Memorandum',memos.length)+'</div>';
 
   let content='';
-  if(_invTab==='stock'){content=buildStockTab();}else{content=buildMemoTab();}
+  if(_invTab==='overview' && typeof ivoBuild==='function'){content=ivoBuild();}   /* §invOv */
+  else if(_invTab==='stock'){content=buildStockTab();}else{content=buildMemoTab();}
   wrap.innerHTML=headerBar+kpiStrip+tabToggle+content;
 
   function buildStockTab(){
@@ -30106,3 +30107,288 @@ function faSpRight(free,P){
 }
 
 // ══════ §asset2 END ══════
+
+/* ══ §invOv (2026-10-20) · Inventory / Memo · แท็บ Overview · ภาพรวมสต็อกรายคลัง ══════════════
+   เจ้าของ: "ขอเพิ่มหน้าตา Overview ที่ไว้เช็คภาพรวมสตอกของแต่ล่ะท่า" + "อยากได้รายการเรียงจากมากสุด"
+   mockup ที่ตกลง: Claude Design canvas "Inventory Overview · รายคลัง"
+   อ่านอย่างเดียว ยกเว้นปุ่ม "แก้ชื่อคลัง" (ivoFixLoc) ที่รวมชื่อคลังที่สะกดผิดเข้าชื่อมาตรฐาน
+   ยอดคิดจาก stocks[] ของแต่ละรายการ (ตัวเดียวกับหน้า Stock items) · ไม่เก็บตัวเลขอะไรเพิ่ม
+
+   ชื่อคลังในข้อมูลจริงสะกดหลายแบบ ("คลังVisit Panwa" · "Visit panda" · "คลัง Tub La mu" ...)
+   หน้านี้จัดเข้าคลังด้วยคำในชื่อ (tub / panwa / panda / ranong) จึงนับครบ
+   ต่ำกว่าขั้นต่ำ = ตั้งขั้นต่ำไว้ (> 0) และมีน้อยกว่าขั้นต่ำ · ของ 0 ชิ้นที่ไม่ได้ตั้งขั้นต่ำนับแยก
+   (ตัวเลข low stock บนหัวหน้าเดิมนับสองกลุ่มนี้รวมกัน ซึ่งส่วนใหญ่ไม่ใช่ของขาดจริง) */
+var IVO_WH=[{k:'VP',loc:'คลัง Visit Panwa',n:'Visit Panwa',sub:'ภูเก็ต',c:'#0F6E56',inv:'panwa',memo:/ภูเก็ต|panwa/i},
+            {k:'TL',loc:'คลัง Tub Lamu',n:'Tub Lamu',sub:'ทับละมุ',c:'#185FA5',inv:'tub',memo:/ทับละมุ|tub/i},
+            {k:'RN',loc:'คลัง Ranong',n:'Ranong',sub:'ระนอง',c:'#BA7517',inv:'ranong',memo:/ระนอง|ranong/i}];
+var IVO_CAT=[{k:'engine',t:'Engine',c:'#185FA5',bg:'#E6F1FB'},{k:'gearbox',t:'Gearbox',c:'#BA7517',bg:'#FAEEDA'},
+             {k:'propeller',t:'Propeller',c:'#0F6E56',bg:'#E1F5EE'},{k:'hull',t:'Hull',c:'#7F77DD',bg:'#EEEDFE'},
+             {k:'general',t:'General',c:'#666',bg:'#F1F0EC'}];
+var _ivoWh='VP', _ivoSort='value', _ivoAll=false;
+function ivoE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ivoB(n){ return '฿'+Math.round(+n||0).toLocaleString(); }
+function ivoN(n){ return Math.round(+n||0).toLocaleString(); }
+/* ชื่อคลังที่เขียนไว้ → รหัสคลัง · ไม่รู้จัก = '' */
+function ivoWhOf(loc){
+  var s=String(loc||'').toLowerCase().replace(/\s+/g,'');
+  if(!s) return '';
+  if(s.indexOf('tub')>=0 || s.indexOf('ทับละมุ')>=0) return 'TL';
+  if(s.indexOf('panwa')>=0 || s.indexOf('panda')>=0 || s.indexOf('พันวา')>=0) return 'VP';
+  if(s.indexOf('ranong')>=0 || s.indexOf('ระนอง')>=0) return 'RN';
+  return '';
+}
+function ivoCatOf(x){ var c=(x&&x.category)||'general'; return IVO_CAT.some(function(k){ return k.k===c; })?c:'general'; }
+function ivoStocks(x){ return (x && Array.isArray(x.stocks) && x.stocks.length) ? x.stocks : [{location:(x&&x.location)||'', qty:(x&&x.qty)||0, minQty:(x&&x.minQty)||0}]; }
+function ivoAddDays(ymd, n){ var d=new Date(ymd+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function ivoData(){
+  var W={}; IVO_WH.forEach(function(w){ W[w.k]={ w:w, lines:0, units:0, value:0, withQty:0, zero:0, below:[], cat:{}, rows:[],
+    recQ:0, recV:0, wdQ:0, wdV:0, wdTop:{}, memoN:0, memoV:0 }; });
+  var badLoc=[], noLoc=0;
+  var today=(typeof TODAY_STR!=='undefined' && TODAY_STR)?TODAY_STR:new Date().toISOString().slice(0,10);
+  var from=ivoAddDays(today,-29);
+  _invAll().forEach(function(x){
+    var cost=+x.cost||0, cat=ivoCatOf(x);
+    ivoStocks(x).forEach(function(s){
+      var k=ivoWhOf(s.location); if(!k){ noLoc++; return; }
+      var A=W[k], q=+s.qty||0, mn=+s.minQty||0;
+      if(s.location!==A.w.loc) badLoc.push(x.id);
+      A.lines++;
+      if(q<=0){ if(!(mn>0)) A.zero++; }   /* ตั้งขั้นต่ำไว้แล้วหมด = ของขาดจริง · นับใน below ไม่ใช่ที่นี่ */
+      else{
+        A.withQty++; A.units+=q; A.value+=q*cost;
+        var C=A.cat[cat]||(A.cat[cat]={q:0,v:0}); C.q+=q; C.v+=q*cost;
+        A.rows.push({ id:x.id, name:x.name||'', partNo:x.partNo||'', cat:cat, unit:x.unit||'ชิ้น', q:q, cost:cost, v:q*cost });
+      }
+      if(mn>0 && q<mn) A.below.push({ id:x.id, name:x.name||'', q:q, mn:mn });
+    });
+    (x.history||[]).forEach(function(h){
+      var d=String(h.date||''); if(d<from || d>today) return;
+      var k=ivoWhOf(h.location||x.location); if(!k) return;
+      var A=W[k], q=+h.qty||0;
+      if(h.type==='receive'){ A.recQ+=q; A.recV+=q*cost; }
+      else if(h.type==='withdraw'){ A.wdQ+=q; A.wdV+=q*cost;
+        var T=A.wdTop[x.id]||(A.wdTop[x.id]={name:x.name||'', q:0, v:0}); T.q+=q; T.v+=q*cost; }
+    });
+  });
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){
+    if(!m || m.status!=='pending_approval') return;
+    var src=String(m.from||'')+' '+String(m.receivedLocation||'');
+    var w=IVO_WH.filter(function(z){ return z.memo.test(src); })[0]; if(!w) return;
+    W[w.k].memoN++; W[w.k].memoV+=(+m.amount||0);
+  });
+  var seen={}; badLoc=badLoc.filter(function(id){ if(seen[id]) return false; seen[id]=1; return true; });
+  return { W:W, badLoc:badLoc, noLoc:noLoc, from:from, to:today };
+}
+function ivoGoStock(wk, low){
+  var w=IVO_WH.filter(function(z){ return z.k===wk; })[0];
+  _invLoc=(w && (w.inv==='tub'||w.inv==='panwa'))?w.inv:'all';
+  _invLowOnly=!!low; _invTab='stock'; flRenderInventory();
+}
+function ivoOpenItem(id){ _invTab='stock'; _invLoc='all'; _invLowOnly=false; _selInvId=id; flRenderInventory(); }
+function ivoSetWh(k){ _ivoWh=k; _ivoAll=false; flRenderInventory(); }
+function ivoSetSort(k){ _ivoSort=k; flRenderInventory(); }
+function ivoToggleAll(){ _ivoAll=!_ivoAll; flRenderInventory(); }
+/* รวมชื่อคลังที่สะกดผิดเข้าชื่อมาตรฐาน · แถวที่ชนกับคลังเดียวกันถูกรวมยอด (ขั้นต่ำใช้ค่าที่สูงกว่า) */
+function ivoFixLoc(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')){ alert('View only - no edit permission for Fleet.'); return; }
+  var D=ivoData(); if(!D.badLoc.length){ alert('All warehouse names are already standard.'); return; }
+  var names={};
+  _invAll().forEach(function(x){ if(D.badLoc.indexOf(x.id)<0) return;
+    ivoStocks(x).forEach(function(s){ var k=ivoWhOf(s.location); if(!k) return; var w=IVO_WH.filter(function(z){ return z.k===k; })[0];
+      if(s.location!==w.loc) names[s.location]=w.loc; }); });
+  var list=Object.keys(names).map(function(n){ return '"'+n+'" → '+names[n]; }).join('\n');
+  if(!confirm('แก้ชื่อคลัง '+D.badLoc.length+' รายการ\n\n'+list+'\n\nจำนวนของไม่เปลี่ยน · เปลี่ยนแค่ชื่อคลังให้ตรงกัน')) return;
+  var by=(typeof laBy==='function')?laBy():'', today=(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
+  _invAll().forEach(function(x){
+    if(D.badLoc.indexOf(x.id)<0) return;
+    if(!Array.isArray(x.stocks) || !x.stocks.length) x.stocks=[{location:x.location||'', qty:+x.qty||0, minQty:+x.minQty||0}];
+    var out=[], at={}, moved=[];
+    x.stocks.forEach(function(s){
+      var k=ivoWhOf(s.location), w=k?IVO_WH.filter(function(z){ return z.k===k; })[0]:null;
+      var loc=w?w.loc:s.location;
+      if(w && s.location!==loc) moved.push(s.location);
+      if(at[loc]){ at[loc].qty=(+at[loc].qty||0)+(+s.qty||0); at[loc].minQty=Math.max(+at[loc].minQty||0, +s.minQty||0); }
+      else { var n=Object.assign({}, s, {location:loc}); at[loc]=n; out.push(n); }
+    });
+    x.stocks=out;
+    if(typeof invSyncLegacy==='function') invSyncLegacy(x);
+    if(!Array.isArray(x.history)) x.history=[];
+    x.history.push({ date:today, type:'edit', qty:0, note:'แก้ชื่อคลัง · '+moved.join(', ')+' → ชื่อมาตรฐาน', by:by });
+  });
+  if(typeof flSave==='function') flSave();
+  if(typeof flShowToast==='function') flShowToast('แก้ชื่อคลังแล้ว '+D.badLoc.length+' รายการ');
+  flRenderInventory();
+}
+function ivoCSS(){ return '<style id="ivo-css">'
+  +'.ivo{display:flex;flex-direction:column;gap:14px;font-family:inherit;color:#1A1A1A}'
+  +'.ivo-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}'
+  +'.ivo-c{background:#fff;border-radius:16px;padding:18px;border:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column;gap:14px;min-width:0}'
+  +'.ivo-c.empty{border:1px dashed rgba(0,0,0,.14)}'
+  +'.ivo-hd{display:flex;align-items:center;gap:12px}'
+  +'.ivo-bd{width:38px;height:38px;border-radius:11px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}'
+  +'.ivo-nm{font-size:16px;font-weight:600}.ivo-sub{font-size:12px;color:#777}'
+  +'.ivo-lk{font-size:12.5px;font-weight:600;color:#185FA5;background:none;border:none;cursor:pointer;padding:6px 4px;font-family:inherit;white-space:nowrap}'
+  +'.ivo-k3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}'
+  +'.ivo-kl{font-size:11.5px;color:#888}.ivo-kv{font-family:"DM Mono",monospace;font-size:20px;margin-top:3px}.ivo-kv small{font-size:12px;color:#999}'
+  +'.ivo-bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F1F0EC}'
+  +'.ivo-leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;font-size:11.5px;color:#555}.ivo-leg i{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:5px}'
+  +'.ivo-mv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;background:#FAF9F6;border-radius:11px;padding:11px 12px}'
+  +'.ivo-mv b{display:block;font-size:13.5px;font-weight:600;margin-top:2px}'
+  +'.ivo-chips{display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px}.ivo-chip{border-radius:8px;padding:4px 9px;background:#F1F0EC;color:#444;border:none;font-family:inherit;font-size:11.5px}'
+  +'button.ivo-chip{cursor:pointer}.ivo-chip.warn{background:#FCEFD9;color:#8A5300;font-weight:600}.ivo-chip.bad{background:#FDECEC;color:#B42318;font-weight:600}'
+  +'.ivo-box{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.04);overflow-x:auto}'
+  +'.ivo-bh{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 18px 10px}'
+  +'.ivo-bh h3{margin:0;font-size:15px;font-weight:600}.ivo-bh .s{font-size:12px;color:#888}'
+  +'.ivo-seg{display:flex;gap:2px;background:#F4F2EE;border-radius:11px;padding:3px;align-items:center}'
+  +'.ivo-seg span{font-size:11.5px;color:#888;padding:0 4px 0 7px}'
+  +'.ivo-seg button{border:none;background:transparent;color:#666;border-radius:8px;padding:6px 11px;font:500 12px inherit;font-family:inherit;cursor:pointer}'
+  +'.ivo-seg button.on{background:#1A1A1A;color:#fff;font-weight:600}'
+  +'.ivo-t{width:100%;border-collapse:collapse;font-size:13px}'
+  +'.ivo-t th{color:#888;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding:8px 10px;text-align:left;white-space:nowrap}'
+  +'.ivo-t td{padding:9px 10px;border-top:1px solid rgba(0,0,0,.05);vertical-align:middle}'
+  +'.ivo-t .r{text-align:right}.ivo-t .m{font-family:"DM Mono",monospace}.ivo-t .q{color:#999}'
+  +'.ivo-t tbody tr.ck{cursor:pointer}.ivo-t tbody tr.ck:hover{background:#FAF9F6}'
+  +'.ivo-t th:first-child,.ivo-t td:first-child{padding-left:18px}.ivo-t th:last-child,.ivo-t td:last-child{padding-right:18px}'
+  +'.ivo-tag{font-size:11px;border-radius:6px;padding:2px 8px;white-space:nowrap}'
+  +'.ivo-sh{display:flex;align-items:center;gap:8px}.ivo-sh div{flex:1;height:6px;border-radius:3px;background:#F1F0EC;min-width:60px}.ivo-sh div i{display:block;height:6px;border-radius:3px;background:#E03B7E}'
+  +'.ivo-sh span{font-size:11.5px;color:#666;font-family:"DM Mono",monospace;width:44px;text-align:right}'
+  +'.ivo-ft{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 18px 14px;border-top:1px solid rgba(0,0,0,.05);font-size:12px;color:#666}'
+  +'.ivo-btn{border:1px solid #D8D4CA;background:#fff;color:#1A1A1A;border-radius:9px;padding:7px 13px;font:600 12px inherit;font-family:inherit;cursor:pointer}'
+  +'.ivo-row2{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}'
+  +'.ivo-l{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:12px}.ivo-r{flex:1 1 340px;min-width:0}'
+  +'.ivo-tops{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}'
+  +'.ivo-tp{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.04);padding:14px 18px}'
+  +'.ivo-tp h3{margin:0 0 6px;font-size:14px;font-weight:600}.ivo-tp h3 span{font-size:11.5px;color:#888;font-weight:400;margin-left:6px}'
+  +'.ivo-tl{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(0,0,0,.05);font-size:12.5px}.ivo-tl:first-of-type{border-top:none}'
+  +'.ivo-tl span:last-child{font-family:"DM Mono",monospace;white-space:nowrap}'
+  +'.ivo-do{display:flex;gap:11px;padding:13px 18px;border-top:1px solid rgba(0,0,0,.05)}'
+  +'.ivo-do .d{width:8px;height:8px;border-radius:4px;margin-top:6px;flex:none}.ivo-do .t{font-size:13px;font-weight:600}.ivo-do .s{font-size:11.5px;color:#666;margin-top:2px;line-height:1.5}'
+  +'.ivo-do .x{flex:1;min-width:0}'
+  +'.ivo-empty{font-size:12.5px;color:#888;padding:6px 0}'
+  +'</style>'; }
+function ivoCard(A){
+  var w=A.w, e=ivoE;
+  if(!A.lines) return '<div class="ivo-c empty"><div class="ivo-hd"><div class="ivo-bd" style="background:'+w.c+'">'+w.k+'</div>'
+    +'<div style="flex:1;min-width:0"><div class="ivo-nm">คลัง '+e(w.n)+'</div><div class="ivo-sub">'+e(w.sub)+' · ยังไม่มีของในทะเบียน</div></div></div>'
+    +'<div style="font-size:12.5px;color:#666;line-height:1.6">ยังไม่มีรายการไหนลงไว้ที่คลังนี้ · รับของเข้าหรือโอนจากคลังอื่นแล้วการ์ดนี้จะขึ้นยอด</div>'
+    +(A.memoN?('<div class="ivo-chips"><span class="ivo-chip warn">Memo รออนุมัติ '+A.memoN+' · '+ivoB(A.memoV)+'</span></div>'):'')+'</div>';
+  var segs=IVO_CAT.filter(function(c){ return A.cat[c.k] && A.cat[c.k].v>0; }).sort(function(a,b){ return A.cat[b.k].v-A.cat[a.k].v; });
+  var bar=A.value>0?segs.map(function(c){ return '<div style="width:'+(A.cat[c.k].v/A.value*100).toFixed(1)+'%;background:'+c.c+'"></div>'; }).join(''):'';
+  var leg=segs.map(function(c){ return '<span><i style="background:'+c.c+'"></i>'+c.t+' '+ivoB(A.cat[c.k].v)+'</span>'; }).join('');
+  var chips='';
+  if(A.memoN) chips+='<span class="ivo-chip warn">Memo รออนุมัติ '+A.memoN+' · '+ivoB(A.memoV)+'</span>';
+  chips+=A.below.length?('<button class="ivo-chip bad" onclick="ivoGoStock(\''+w.k+'\',true)">ต่ำกว่าขั้นต่ำ '+A.below.length+'</button>'):'<span class="ivo-chip">ต่ำกว่าขั้นต่ำ 0</span>';
+  if(A.zero) chips+='<span class="ivo-chip">ลงทะเบียนไว้แต่ 0 ชิ้น · '+ivoN(A.zero)+'</span>';
+  return '<div class="ivo-c"><div class="ivo-hd"><div class="ivo-bd" style="background:'+w.c+'">'+w.k+'</div>'
+    +'<div style="flex:1;min-width:0"><div class="ivo-nm">คลัง '+e(w.n)+'</div><div class="ivo-sub">'+e(w.sub)+' · '+ivoN(A.lines)+' รายการในทะเบียน</div></div>'
+    +(w.inv==='tub'||w.inv==='panwa'?('<button class="ivo-lk" onclick="ivoGoStock(\''+w.k+'\',false)">ดูรายการ &rarr;</button>'):'')+'</div>'
+    +'<div class="ivo-k3"><div><div class="ivo-kl">มูลค่าในคลัง</div><div class="ivo-kv">'+ivoB(A.value)+'</div></div>'
+      +'<div><div class="ivo-kl">จำนวนชิ้น</div><div class="ivo-kv">'+ivoN(A.units)+'</div></div>'
+      +'<div><div class="ivo-kl">รายการที่มีของ</div><div class="ivo-kv">'+ivoN(A.withQty)+'<small>/'+ivoN(A.lines)+'</small></div></div></div>'
+    +(bar?('<div><div class="ivo-kl" style="margin-bottom:6px">มูลค่าแยกหมวด</div><div class="ivo-bar">'+bar+'</div><div class="ivo-leg">'+leg+'</div></div>'):'')
+    +'<div class="ivo-mv"><div><span class="ivo-kl">รับเข้า · 30 วัน</span><b>'+ivoN(A.recQ)+' ชิ้น · '+ivoB(A.recV)+'</b></div>'
+      +'<div><span class="ivo-kl">เบิกใช้ · 30 วัน</span><b>'+ivoN(A.wdQ)+' ชิ้น · '+ivoB(A.wdV)+'</b></div></div>'
+    +'<div class="ivo-chips">'+chips+'</div></div>';
+}
+function ivoRanked(D){
+  var e=ivoE, rows=[], tot=0, scope;
+  if(_ivoWh==='ALL'){
+    scope='ทุกคลัง';
+    var M={};
+    IVO_WH.forEach(function(w){ D.W[w.k].rows.forEach(function(r){
+      var m=M[r.id]||(M[r.id]=Object.assign({}, r, {q:0, v:0, wh:[]})); m.q+=r.q; m.v+=r.v; m.wh.push(w.k); }); });
+    rows=Object.keys(M).map(function(k){ return M[k]; });
+    IVO_WH.forEach(function(w){ tot+=D.W[w.k].value; });
+  } else {
+    var A=D.W[_ivoWh]||D.W.VP; scope='คลัง '+A.w.n; rows=A.rows.slice(); tot=A.value;
+  }
+  var byQ=(_ivoSort==='qty');
+  rows.sort(function(a,b){ return byQ ? ((b.q-a.q)||(b.v-a.v)) : ((b.v-a.v)||(b.q-a.q)); });
+  var n=rows.length, show=_ivoAll?rows:rows.slice(0,10);
+  var max=show.length?(byQ?show[0].q:show[0].v):0;
+  var top10=rows.slice(0,10).reduce(function(s,r){ return s+(byQ?r.q:r.v); },0);
+  var all=rows.reduce(function(s,r){ return s+(byQ?r.q:r.v); },0);
+  var cat=function(k){ var c=IVO_CAT.filter(function(z){ return z.k===k; })[0]||IVO_CAT[4]; return '<span class="ivo-tag" style="background:'+c.bg+';color:'+c.c+'">'+c.t+'</span>'; };
+  var seg=function(fn,cur,opts,lbl){ return '<div class="ivo-seg">'+(lbl?('<span>'+lbl+'</span>'):'')+opts.map(function(o){
+    return '<button class="'+(cur===o[0]?'on':'')+'" onclick="'+fn+'(\''+o[0]+'\')">'+o[1]+'</button>'; }).join('')+'</div>'; };
+  var whOpts=IVO_WH.filter(function(w){ return D.W[w.k].withQty>0; }).map(function(w){ return [w.k, w.n]; }).concat([['ALL','ทุกคลัง']]);
+  var body=show.map(function(r,i){
+    var val=byQ?r.q:r.v, pct=(byQ?all:tot)>0?(val/(byQ?all:tot)*100):0, w=max>0?(val/max*100):0;
+    return '<tr class="ck" onclick="ivoOpenItem(\''+e(r.id)+'\')" title="เปิดรายการนี้ในหน้า Stock items">'
+      +'<td class="m q">'+(i+1)+'</td><td>'+e(r.name)+(r.wh&&r.wh.length>1?(' <span class="ivo-tag" style="background:#F1F0EC;color:#666">'+r.wh.join(' + ')+'</span>'):'')+'</td>'
+      +'<td class="m" style="color:'+(r.partNo?'#666':'#bbb')+'">'+(r.partNo?e(r.partNo):'&mdash;')+'</td><td>'+cat(r.cat)+'</td>'
+      +'<td class="r m">'+ivoN(r.q)+' <span class="q">'+e(r.unit)+'</span></td><td class="r m">'+ivoB(r.cost)+'</td>'
+      +'<td class="r m" style="font-weight:600">'+ivoB(r.v)+'</td>'
+      +'<td><div class="ivo-sh"><div><i style="width:'+w.toFixed(1)+'%"></i></div><span>'+pct.toFixed(1)+'%</span></div></td></tr>';
+  }).join('');
+  var ft='';
+  if(n){
+    ft='<div class="ivo-ft"><span>'+(n>10?('10 อันดับแรก = '+(byQ?(ivoN(top10)+' ชิ้น'):ivoB(top10))+' · '+((all>0?top10/all*100:0).toFixed(0))+'% ของ'+(byQ?'จำนวนชิ้น':'มูลค่า')+scope):('ทั้งหมด '+n+' รายการ'))+'</span>'
+      +'<span style="flex:1"></span>'
+      +(n>10?('<button class="ivo-btn" onclick="ivoToggleAll()">'+(_ivoAll?'ย่อเหลือ 10 อันดับ':('ดูทั้งหมด '+n+' รายการ'))+'</button>'):'')+'</div>';
+  }
+  return '<div class="ivo-box"><div class="ivo-bh"><h3>ของในคลัง · เรียงจากมากสุด</h3><span class="s">'+ivoN(n)+' รายการที่มีของ · '+e(scope)+'</span>'
+    +'<span style="flex:1"></span>'+seg('ivoSetWh',_ivoWh,whOpts,'')+seg('ivoSetSort',_ivoSort,[['value','มูลค่า'],['qty','จำนวน']],'เรียงตาม')+'</div>'
+    +(n?('<table class="ivo-t" style="min-width:820px"><thead><tr><th style="width:34px">#</th><th>Item</th><th>Part no</th><th>Category</th>'
+      +'<th class="r">Qty</th><th class="r">Cost</th><th class="r">มูลค่า</th><th style="width:170px">สัดส่วน'+(byQ?'จำนวน':'มูลค่า')+'</th></tr></thead><tbody>'+body+'</tbody></table>')
+       :'<div class="ivo-empty" style="padding:4px 18px 16px">ยังไม่มีของในคลังนี้</div>')
+    +ft+'</div>';
+}
+function ivoCompare(D){
+  var ws=IVO_WH, tot={v:0,q:0};
+  var head='<tr><th>หมวด</th>'+ws.map(function(w){ return '<th class="r">'+ivoE(w.n)+'</th>'; }).join('')+'<th class="r" style="color:#1A1A1A">รวม</th></tr>';
+  var rows=IVO_CAT.map(function(c){
+    var rv=0, rq=0;
+    var cells=ws.map(function(w){ var C=D.W[w.k].cat[c.k]; if(!C||!C.q) return '<td class="r m" style="color:#ccc">&mdash;</td>';
+      rv+=C.v; rq+=C.q; return '<td class="r m">'+ivoB(C.v)+' <span class="q">· '+ivoN(C.q)+'</span></td>'; }).join('');
+    if(!rq) return '';
+    tot.v+=rv; tot.q+=rq;
+    return '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:'+c.c+';margin-right:8px"></span>'+c.t+'</td>'+cells
+      +'<td class="r m">'+ivoB(rv)+' <span class="q">· '+ivoN(rq)+'</span></td></tr>';
+  }).join('');
+  var empty=IVO_CAT.filter(function(c){ return !ws.some(function(w){ var C=D.W[w.k].cat[c.k]; return C&&C.q; }); }).map(function(c){ return c.t; });
+  var foot='<tr style="background:#FAF9F6;font-weight:600"><td>รวม</td>'+ws.map(function(w){ var A=D.W[w.k];
+      return A.units?('<td class="r m">'+ivoB(A.value)+' <span class="q">· '+ivoN(A.units)+'</span></td>'):'<td class="r m" style="color:#ccc">&mdash;</td>'; }).join('')
+    +'<td class="r m">'+ivoB(tot.v)+' <span class="q">· '+ivoN(tot.q)+'</span></td></tr>';
+  return '<div class="ivo-box"><div class="ivo-bh"><h3>เทียบรายหมวด</h3><span class="s">มูลค่า · จำนวนชิ้น</span></div>'
+    +'<table class="ivo-t" style="min-width:560px"><thead>'+head+'</thead><tbody>'+rows+foot+'</tbody></table>'
+    +(empty.length?('<div class="ivo-ft">'+ivoE(empty.join(' · '))+' ยังไม่มีของในคลังไหน</div>'):'')+'</div>';
+}
+function ivoTops(D){
+  var cards=IVO_WH.map(function(w){
+    var A=D.W[w.k]; var L=Object.keys(A.wdTop).map(function(k){ return A.wdTop[k]; }).sort(function(a,b){ return (b.v-a.v)||(b.q-a.q); }).slice(0,5);
+    if(!L.length && !A.lines) return '';
+    return '<div class="ivo-tp"><h3>เบิกใช้มากสุด · '+ivoE(w.n)+'<span>30 วัน · ตามมูลค่า</span></h3>'
+      +(L.length?L.map(function(t){ return '<div class="ivo-tl"><span>'+ivoE(t.name)+' <span style="color:#999">· '+ivoN(t.q)+'</span></span><span>'+ivoB(t.v)+'</span></div>'; }).join('')
+        :'<div class="ivo-empty">ไม่มีการเบิกใน 30 วันนี้</div>')+'</div>';
+  }).join('');
+  return '<div class="ivo-tops">'+cards+'</div>';
+}
+function ivoTodo(D){
+  var e=ivoE, out=[], can=!(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet'));
+  var item=function(col,t,s,btn){ out.push('<div class="ivo-do"><span class="d" style="background:'+col+'"></span><div class="x"><div class="t">'+t+'</div>'+(s?('<div class="s">'+s+'</div>'):'')+'</div>'+(btn||'')+'</div>'); };
+  IVO_WH.forEach(function(w){ var A=D.W[w.k]; if(!A.below.length) return;
+    var out0=A.below.filter(function(b){ return !(b.q>0); }).length;
+    var names=A.below.slice().sort(function(x,y){ return (x.q/x.mn)-(y.q/y.mn); }).slice(0,3).map(function(b){ return e(b.name)+' '+b.q+'/'+b.mn; }).join(' · ');
+    item('#DC2626', e(w.n)+' · '+A.below.length+' รายการต่ำกว่าขั้นต่ำ', (out0?('หมดแล้ว '+out0+' · '):'')+names+(A.below.length>3?' ...':''),
+      '<button class="ivo-lk" onclick="ivoGoStock(\''+w.k+'\',true)">ไปดู</button>'); });
+  var mN=0, mV=0, mBy=[]; IVO_WH.forEach(function(w){ var A=D.W[w.k]; if(A.memoN){ mN+=A.memoN; mV+=A.memoV; mBy.push(e(w.n)+' '+A.memoN); } });
+  if(mN) item('#D97706', 'Memo รออนุมัติ '+mN+' ใบ · '+ivoB(mV), mBy.join(' · '), '<button class="ivo-lk" onclick="invSwitchTab(\'memo\')">ไปดู</button>');
+  if(D.badLoc.length) item('#D97706', 'ชื่อคลังสะกดไม่ตรง '+D.badLoc.length+' รายการ',
+    'หน้านี้นับรวมเข้าคลังที่ถูกให้แล้ว แต่ตัวกรองคลังในหน้า Stock items อาจหาไม่เจอ',
+    can?'<button class="ivo-lk" onclick="ivoFixLoc()">แก้ทีเดียว</button>':'');
+  if(D.noLoc) item('#9CA3AF', D.noLoc+' แถวไม่ได้ระบุคลัง', 'ไม่ถูกนับในคลังไหนเลย · แก้ที่ปุ่ม Edit ของรายการนั้น', '');
+  var z=0, zBy=[]; IVO_WH.forEach(function(w){ var A=D.W[w.k]; if(A.zero){ z+=A.zero; zBy.push(e(w.n)+' '+ivoN(A.zero)); } });
+  if(z) item('#9CA3AF', ivoN(z)+' แถวลงทะเบียนไว้แต่ 0 ชิ้น', zBy.join(' · ')+' · ไม่ได้ตั้งขั้นต่ำ จึงไม่นับเป็นของขาดในหน้านี้', '');
+  return '<div class="ivo-box"><div class="ivo-bh"><h3>ต้องจัดการ</h3>'
+    +(out.length?('<span class="ivo-chip bad" style="border-radius:10px">'+out.length+'</span>'):'')+'</div>'
+    +(out.length?out.join(''):'<div class="ivo-empty" style="padding:4px 18px 16px">ไม่มีเรื่องค้าง</div>')+'</div>';
+}
+function ivoBuild(){
+  var D=ivoData();
+  return ivoCSS()+'<div class="ivo">'
+    +'<div class="ivo-cards">'+IVO_WH.map(function(w){ return ivoCard(D.W[w.k]); }).join('')+'</div>'
+    +ivoRanked(D)
+    +'<div class="ivo-row2"><div class="ivo-l">'+ivoCompare(D)+ivoTops(D)+'</div><div class="ivo-r">'+ivoTodo(D)+'</div></div>'
+    +'</div>';
+}
