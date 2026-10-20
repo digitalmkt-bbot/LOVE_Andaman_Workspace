@@ -77,6 +77,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       Daily Availability
     </div>
+    <!-- §execBoard -->
+    <div class="nav-item" data-view="execboard" onclick="nav(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><path d="M6 16v-5"/><path d="M11 16V7"/><path d="M16 16v-8"/><path d="M20 4l-5 4-4-2-5 4"/></svg>
+      Executive Board
+    </div>
     <!-- §abBoard -->
     <div class="nav-item" data-view="actionboard" onclick="nav(this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v14H3z"/><path d="M7 21h10"/><path d="M7 12l3-3 3 3 4-5"/></svg>
@@ -423,6 +428,7 @@
     </div>
 
     <!-- ══════════ ACTION BOARD (§abBoard) ══════════ -->
+    <div id="view-execboard" class="view"><div id="eb-wrap"></div></div>   <!-- §execBoard -->
     <div id="view-actionboard" class="view"><div id="ab-wrap" style="background:#00BCDF;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div></div>
 
     <!-- ══════════ CALENDAR (redesigned · Fleet Insights style) ══════════ -->
@@ -3833,7 +3839,16 @@
 <script src="js/booking/bookingV2NatOpen.js?v=863e6bb4"></script>
 <script src="js/booking/bookingV2NatToggle.js?v=20fd0261"></script>
 <script src="js/booking/bookingV2NatWarn.js?v=355a8a63"></script>
+<script src="js/booking/bookingV2VanUpgrade.js"></script>
+<script src="js/booking/bookingV2UpgVanClose.js"></script>
+<script src="js/booking/bookingV2UpgVanModal.js"></script>
+<script src="js/booking/bookingV2UpgVanApply.js"></script>
+<script src="js/booking/bookingV2UpgVanConfirmView.js"></script>
+<script src="js/booking/bookingV2VanUpgUndo.js"></script>
+<script src="js/booking/bookingV2CxlInfo.js"></script>
+<script src="js/booking/bookingV2FamCxlSplit.js"></script>
 <script src="js/09-action-board.js?v=c2953402"></script>
+<script src="js/11-exec-board.js?v=c068507b"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=17c02520"></script>
 <script src="js/ops/16-ops-agents.js?v=eea58035"></script>

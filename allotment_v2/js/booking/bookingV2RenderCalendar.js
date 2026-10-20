@@ -69,34 +69,34 @@ function bookingV2RenderCalendar(){
        ต้องเห็นเสมอ ไม่สนตัวกรองโปรแกรม เพราะมันคือของที่ต้องไปจัดการ ไม่ใช่ของที่เลือกดู
        คิดสดทุกครั้งที่วาด · ย้าย/ยกเลิกเสร็จเมื่อไร ป้ายหายเอง ไม่ต้องมีใครมากดเคลียร์ */
     const famRows = activeFams
-      .map(fam => ({ fam, agg: bookingV2FamilyAggregate(fam.id, dateKey, agg), open: bookingV2IsFamilyOpenOn(fam.id, dateKey) }))
+      .map(fam => ({ fam, agg: bookingV2FamilyAggregate(fam.id, dateKey, agg), open: bookingV2IsFamilyOpenOn(fam.id, dateKey), cx: bookingV2FamCxlSplit(fam.id, dateKey, agg) }))   /* §calCxlSplit */
       .map(o => ({ ...o, orphan: !o.open && (o.agg.total || 0) > 0 }));
     const openFams = famRows.filter(o => o.orphan || (o.open && (!calSel || calSel.has(o.fam.id))));
     /* ยอดรวมข้างเลขวันคือ "วันนี้มีคนออกกี่คน" · คนที่ค้างอยู่คือคนที่ตารางตอนนี้ไม่ได้พาออก
        เอามารวมกันแล้วเลขหัวเซลล์จะอ่านผิด · ตัวเลขของคนค้างอยู่บนชิปแดงของมันเอง */
-    const dayTotal = openFams.reduce((s, o) => s + (o.orphan ? 0 : (o.agg.total || 0)), 0);
+    const dayTotal = openFams.reduce((s, o) => s + (o.orphan ? 0 : Math.max(0, (o.agg.total || 0) - o.cx.cut.total)), 0);   /* §calCxlSplit · ไม่นับคนในรอบที่ยกเลิก */
     if(openFams.length){
       /* §bkCalOrphan · ของค้างขึ้นบนสุดเสมอ · ถ้าวันนั้นมีหลายโปรแกรมจนชิปล้น
          ตัวที่ต้องไปจัดการต้องไม่ใช่ตัวที่ถูกยุบไปอยู่ใน "+N more" */
       openFams.sort((a, b) => (b.orphan?1:0) - (a.orphan?1:0) || b.agg.total - a.agg.total);
       const visible = openFams.slice(0, 5);
       const overflow = openFams.length - visible.length;
-      chipsHtml = visible.map(({ fam, agg: famAgg, orphan }) => {
+      chipsHtml = visible.map(({ fam, agg: famAgg, orphan, cx }) => {
         const col = fam.color;
         /* §bkCalOrphan · ชิปแดงพร้อมจำนวน · ไม่ขีดฆ่าเหมือนชิปอากาศปิด
            เพราะคนกลุ่มนี้ยังไม่ถูกจัดการ ตัวเลขยังมีผลอยู่ ไม่ใช่ตัวเลขที่ตายแล้ว */
         if(orphan){
           return `<div class="bkv2-cal-chip orphan" style="border-left-color:#B4560A" title="${fam.name} · วันนี้ปิดไปแล้ว แต่ยังมี booking ค้างอยู่ ${famAgg.total} คน · ต้องย้ายวัน ย้ายโปรแกรม หรือยกเลิกก่อน"><span class="bkv2-cal-chip-name">&#9888; ${fam.name}</span><span class="bkv2-cal-chip-pax">${famAgg.total}</span></div>`;
         }
-        const pax = famAgg.total;
+        const pax = Math.max(0, famAgg.total - ((cx && !cx.all) ? cx.cut.total : 0));   /* §calCxlSplit · เฉพาะรอบที่ยังออก */
         const focCls = famAgg.hasFocPending ? ' foc' : '';
         const emptyCls = pax === 0 ? ' empty' : '';
         if(famAgg.hasFocPending) dayHasFoc = true;
-        const famWx = (typeof bookingV2IsWeatherClosed==='function') && (bookingV2FamilyRoutes(fam.id)||[]).some(rd => bookingV2IsWeatherClosed((rd.id||rd), dateKey));
-        if(famWx){
-          return `<div class="bkv2-cal-chip${emptyCls}" style="border-left-color:#A32D2D" title="${fam.name} · Cancelled (weather)"><span class="bkv2-cal-chip-name" style="color:#A32D2D">&#9928; ${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:#A32D2D;text-decoration:line-through">${pax}</span>` : ''}</div>`;
+        if(cx && cx.all){   /* §calCxlSplit · ทุกรอบของโปรแกรมวันนั้นยกเลิก = ขีดทั้งชิป · ป้ายตามเหตุผลจริง */
+          return `<div class="bkv2-cal-chip${emptyCls}" style="border-left-color:${cx.R.fg}" title="${fam.name} · ${cx.lbl}"><span class="bkv2-cal-chip-name" style="color:${cx.R.fg}">${cx.R.ic} ${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${cx.R.fg};text-decoration:line-through">${pax}</span>` : ''}</div>`;
         }
-        return `<div class="bkv2-cal-chip${focCls}${emptyCls}" style="border-left-color:${col}" title="${fam.name}"><span class="bkv2-cal-chip-name" style="color:${col}">${fam.name}</span>${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${col}">${pax}</span>` : ''}</div>`;
+        const cxTag = (cx && cx.closed.length) ? `<span title="${cx.closed.length} trip${cx.closed.length>1?'s':''} ${cx.lbl.toLowerCase()} · ${cx.cut.total} pax not counted" style="color:${cx.R.fg};font-size:10px;font-weight:700;margin-left:auto;margin-right:5px;white-space:nowrap">${cx.R.ic}&minus;${cx.cut.total}</span>` : '';
+        return `<div class="bkv2-cal-chip${focCls}${emptyCls}" style="border-left-color:${col}" title="${fam.name}"><span class="bkv2-cal-chip-name" style="color:${col}">${fam.name}</span>${cxTag}${pax > 0 ? `<span class="bkv2-cal-chip-pax" style="color:${col}">${pax}</span>` : ''}</div>`;
       }).join('');
       if(overflow > 0) chipsHtml += `<div class="bkv2-cal-more">+${overflow} more</div>`;
     }

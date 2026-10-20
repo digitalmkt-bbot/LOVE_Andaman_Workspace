@@ -3,6 +3,7 @@
 function bookingV2WeatherUncancel(routeId,date){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('View only - no permission to edit operations'); return; }
   if(!bookingV2IsWeatherClosed(routeId,date)) return;
+  if(!tcxCan()){ alert('You do not have permission to cancel or re-open a trip.'); return; }
   const rname=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
   const key=bookingV2WeatherKey(routeId,date);
   const tagged=(SB_BOOKINGS||[]).filter(bk=>bk.weatherResolve && bk.weatherResolve.event===key);
@@ -14,8 +15,10 @@ function bookingV2WeatherUncancel(routeId,date){
     +kept.map(bk=>(bk.code||bk.id)+' \u00B7 '+((bk.weatherResolve||{}).outcome||'resolved')).join('\n  ');
   if(!confirm(msg)) return;
   for(let i=SB_WEATHER_CLOSURES.length-1;i>=0;i--){ const c=SB_WEATHER_CLOSURES[i]; if(c&&c.routeId===routeId&&c.date===date) SB_WEATHER_CLOSURES.splice(i,1); }
-  back.forEach(bk=>{ delete bk.weatherResolve; bookingV2AddHistory(bk,'weather','Trip '+rname+' \u00B7 '+date+' re-opened \u00B7 weather cancellation undone','Weather'); });
+  const _rk=TCX_R[tcxReason(routeId,date)]||TCX_R.weather;
+  back.forEach(bk=>{ delete bk.weatherResolve; bookingV2AddHistory(bk,'weather','Trip '+rname+' \u00B7 '+date+' re-opened \u00B7 cancellation ('+_rk.en+') undone','Trip CXL'); });
   sbWeatherPersist();
+  { const sn=tcxSnapOf(routeId,date); if(sn){ sn.undone={at:new Date().toISOString(), by:laBy()}; tcxSnapPutLater(key, sn); tcxSnapFlush(); } }   /* §tripCxl · ประวัติไม่หาย */
   if(back.length && typeof acctPersistBookings==='function') acctPersistBookings();
   acctModalClose();
   if(typeof renderOp==='function') renderOp();

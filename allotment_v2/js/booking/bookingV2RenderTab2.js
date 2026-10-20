@@ -293,7 +293,7 @@ function bookingV2RenderTab2(){
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
-  rowsPier.forEach(r => { if(r.cxl) return; const f=bookingV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
+  rowsPier.forEach(r => { if(r.cxl) return; const f=bookingV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.bd=a.bd||{ad:0,chd:0,inf:0,foc:0}; ['ad','chd','inf','foc'].forEach(k=>{ a.bd[k]+=P(r.pax,k); }); a.rids.add(r.routeId); });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bookingV2LockedTotal==='function')?bookingV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bookingV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
   Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bookingV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
@@ -424,20 +424,33 @@ function bookingV2RenderTab2(){
   /* เรือของทริปหนึ่ง · ลำที่ Boat Operation จัดไว้ + ลำที่มี booking เกาะอยู่จริง */
   /* w6-d · the figures of a boat on a route that day are the server's (GET /operations/by-trip routes[].boats: pax, capacity, over, over_by) */
   const _btSrvBoat = (rid,bid)=>{ const sr=(_srv&&Array.isArray(_srv.routes))?_srv.routes.find(x=>x.route_id===rid):null; return (sr&&Array.isArray(sr.boats))?(sr.boats.find(x=>x.boat_id===bid)||null):null; };
+  /* ══ §btBd (2026-10-17) · owner "หน้าโปรแกรม อยากได้เพิ่มที่แยก AD CHD INF FOC แต่จะทำยังไงไม่ให้ดูรก
+     · Boat Running ของเรือแต่ละลำ ก็อยากเห็นแยก AD CHD INF FOC"
+     ไม่ให้รก: ตัวเลขเล็ก สีจาง ตัวอักษรย่อ A C I F · ประเภทที่เป็น 0 ไม่แสดงเลย (ส่วนใหญ่ INF/FOC เป็น 0)
+     โปรแกรมที่วิ่ง variant เดียว แถวหัวไม่แสดงซ้ำ (ตัวเลขเดียวกับแถวล่าง) · ชี้เมาส์ได้ครบสี่ตัว · นับจากใบจองชุดเดียวกับตัวเลข pax ของแถวนั้น (ไม่นับใบยกเลิก) */
+  const _btBdOf = list => { const o={ad:0,chd:0,inf:0,foc:0};
+    (list||[]).forEach(r=>{ if(r.cxl) return; o.ad+=P(r.pax,'ad'); o.chd+=P(r.pax,'chd'); o.inf+=P(r.pax,'inf'); o.foc+=P(r.pax,'foc'); });
+    return o; };
+  const _btBdHtml = (o,cls) => { o=o||{};
+    const ks=[['ad','A'],['chd','C'],['inf','I'],['foc','F']].filter(x=>(+o[x[0]]||0)>0);
+    if(!ks.length) return '';
+    return `<span class="bt-bd${cls?' '+cls:''}" title="AD ${+o.ad||0} · CHD ${+o.chd||0} · INF ${+o.inf||0} · FOC ${+o.foc||0}">`
+      + ks.map(x=>`<span class="${x[0]}"><b>${+o[x[0]]}</b>${x[1]}</span>`).join('') + '</span>'; };
   const _btBoats = rid => {
     /* w6-a MARKED EDIT (§opsByTripBoats · ops/91-ops-by-trip-boats.js): the boats of a trip with their heads, seats and "over" are the server's (by-trip routes[].boats) */
     const _sb=(_srv && typeof window.laOpsByTripBoats==='function')?window.laOpsByTripBoats(_srv,rid):null;
     if(_sb) return _sb;
     const acc={}, order=[];
     ((typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[]).forEach(x=>{
-      if(acc[x.boatId]) return; acc[x.boatId]={boat:x.boat||{},pax:0}; order.push(x.boatId); });
+      if(acc[x.boatId]) return; acc[x.boatId]={boat:x.boat||{},pax:0,bd:{ad:0,chd:0,inf:0,foc:0}}; order.push(x.boatId); });
     (groups[rid]||[]).forEach(r=>{ if(r.cxl) return;
       const bid = r.charter ? (r.charterBoatId||bkOpsRead(r.bk,date).boatId)
                             : bkOpsRead(r.bk,date).boatId;
       if(!bid) return;
       if(!acc[bid]){ const bo=((typeof BOATS!=='undefined'?BOATS:[]).find(b=>b.id===bid))||{};
-        acc[bid]={boat:bo,pax:0}; order.push(bid); }
+        acc[bid]={boat:bo,pax:0,bd:{ad:0,chd:0,inf:0,foc:0}}; order.push(bid); }
       acc[bid].pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+      ['ad','chd','inf','foc'].forEach(k=>{ acc[bid].bd[k]+=P(r.pax,k); });   /* §btBd */
     });
     /* §ovnSpan · ลำที่ติดใบเหมาค้างเกาะ · วันระหว่างทางไม่มี trip ในใบเลย
        จึงไม่เข้าทั้งทาง baBoatsForRoute (ตัดเรือเหมาออกโดยตั้งใจ) และทางบุคกิ้ง
@@ -457,8 +470,8 @@ function bookingV2RenderTab2(){
       const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
       const _sb=_btSrvBoat(rid,bid);
-      if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null};
-      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null};
+      if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null,bd:a.bd||null};
+      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null,bd:a.bd||null};
     });
   };
 
@@ -541,12 +554,12 @@ function bookingV2RenderTab2(){
                                : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bookingV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
-        <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
+        <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>${_btBdHtml(_btBdOf(rowsPier.filter(r=>r.routeId===rid)),'v')}
         <span class="sp">${_btHoldsOf(rid).length?`<span class="bt-lk bt-bhold" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE" title="${laT('เรือที่กันไว้ทั้งลำให้เอเยนต์ · ไม่อยู่ในพูลขายที่นั่งแล้ว')}">&#9973; ${_btHoldsOf(rid).length}</span>`:''}${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bookingV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
-      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>
+      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${nRun>1?_btBdHtml(a.bd,'f'):''}
       ${(function(){ /* §famSum */
         if(!_fLk && !_fCapN) return '';
         const _tot=_fBk+_fLk, _r=_fCap>0?_fAv/_fCap:0, _c=_fAv<=0?'full':(_r<0.20?'low':'ok');
@@ -623,10 +636,10 @@ function bookingV2RenderTab2(){
       <div class="bt-bnm">${esc(rnm)}<span>${esc(_btDep(_btSelRid))}${_btPier(_btSelRid)?' · '+esc(_btPier(_btSelRid)):''}</span></div>
       <div class="bt-avrow">
         <span class="bt-av"><span class="k">Free</span><span class="v ${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':''))}">${cp<=0?'\u2014':av}</span></span><span class="bt-avs"></span>
-        <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span>${_btBdHtml(_btBdOf(groups[_btSelRid]),'s')}</span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.overBy!=null?b.overBy:(b.pax-b.cap))):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span>${b.ovn?'':_btBdHtml(b.bd,'b')}<span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.overBy!=null?b.overBy:(b.pax-b.cap))):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
       ${_btWhyHtml(_btSelRid)}${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date)).map(rid=>{
@@ -1184,7 +1197,8 @@ function bookingV2RenderTab2(){
             ${vid?`<span onclick="event.stopPropagation()" title="คนขับวันนี้ของรถคันนี้ — เชื่อมกับใบงานรถ (แก้ที่ไหนก็อัปเดตอีกที่)" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#5a6b62">&#128100;<input value="${esc(_drvO.driver||'')}" oninput="vanJobsSetDriver('${date}','${vid}','driver',this)" placeholder="${esc(_drvV.driver||'คนขับ')}" style="width:86px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:inherit;color:#1B2A55"><input value="${esc(_drvO.phone||'')}" oninput="vanJobsSetDriver('${date}','${vid}','phone',this)" placeholder="${esc(_drvV.driverPhone||'เบอร์')}" style="width:96px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#1B2A55">${_drvV.ownership==='partner'?`<input value="${esc(_drvO.plate||'')}" oninput="vanJobsSetDriver('${date}','${vid}','plate',this)" placeholder="${esc((_drvV.plate&&_drvV.plate!=='-')?_drvV.plate:'ทะเบียน')}" title="ทะเบียนรถวันนี้ (รถร่วม)" style="width:84px;border:1px solid #E6C9A3;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#8a5500">`:''}${(_drvO.driver||_drvO.phone||_drvO.plate)?'<span style="font-size:9px" title="อัปเดตแล้ว">&#128204;</span>':''}</span>`:''}
             <button onclick="event.stopPropagation();bookingV2VanGroupSave('${date}')" title="บันทึก · ถ้าติ๊กแถวไว้จะจัดลำดับตามที่ติ๊ก" style="background:#0F6E56;border:none;color:#fff;border-radius:6px;padding:3px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; Save</button>
             ${mem.some(a=>a.seq>0)?`<button onclick="event.stopPropagation();bookingV2VanGroupClearSeq('${date}','${rid}','${z}','${g}')" title="ล้างลำดับที่ตั้งเอง → กลับไปเรียงตามเวลา" style="background:transparent;border:1px solid #d7dbe2;color:#6a6a64;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">&#8635; เรียงตามเวลา</button>`:''}
-            <button onclick="event.stopPropagation();bookingV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)" style="margin-left:auto;background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิกกรุ๊ป</button>
+            <span style="margin-left:auto"></span>${(typeof bkUpgVanBtn==='function')?bkUpgVanBtn(date,rid,z,g):''}
+            <button onclick="event.stopPropagation();bookingV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิกกรุ๊ป</button>
           </div></td></tr>`;
       };
       /* ══ §vanStop · แถวจุดแวะในกรุ๊ปรถ ═══════════════════════════════════════
@@ -1881,7 +1895,7 @@ function bookingV2RenderTab2(){
           const gpax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(mt.pax||{}):0;
           const lead=bk.leadPax||bk.customerName||'—';
           const nd=g.nd;
-          const why=g.wx?' · weather':(bk.reschedule&&bk.reschedule.reason?(' · '+bk.reschedule.reason):'');
+          const why=g.wx?(' · '+((TCX_R[tcxReason(rid,date)]||TCX_R.weather).en).toLowerCase()):(bk.reschedule&&bk.reschedule.reason?(' · '+bk.reschedule.reason):'');   /* §tcxBkWhy */
           let ndLbl=nd; try{ ndLbl=new Date(nd+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){}
           return `<div class="t2-ghost-row">
             <span class="t2-ghost-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
@@ -1911,7 +1925,7 @@ function bookingV2RenderTab2(){
           const lead=bk.leadPax||bk.customerName||'—';
           const cpax=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
           const cc=bk.cancellation||null;
-          const chLbl = cc ? (cc.chargeType==='full'?('Full charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):cc.chargeType==='partial'?('Charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):'No charge') : (bk.status==='cancelled_weather'?'Weather':'—');
+          const chLbl = cc ? (cc.chargeType==='full'?('Full charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):cc.chargeType==='partial'?('Charge ฿'+Math.round(cc.chargeAmount||0).toLocaleString()):'No charge') : (bk.status==='cancelled_weather'?((TCX_R[tcxBkReason(bk)]||TCX_R.weather).en):'—');   /* §tcxBkWhy */
           return `<div class="t2-cxl-row">
             <span class="t2-cxl-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
             <span class="t2-cxl-ag">${esc(norm.agentName)}</span>
@@ -2097,7 +2111,7 @@ function bookingV2RenderTab2(){
     return `
       <div class="t2-trip t2-trip-variant${(typeof bookingV2IsWeatherClosed==='function'&&bookingV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}${_notRun?' t2-trip-closed':''}" style="--fam:${famColor}">
         ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t"><span class="t2-notrun-nm" data-notrun-nm="1">${esc(route?.name||rid)}</span><span class="t2-notrun-tag">${laT('ไม่ออกวันนี้')}</span><span class="t2-notrun-why">${esc(_notRunWhy)}</span></div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
-        ${(typeof bookingV2IsWeatherClosed==='function'&&bookingV2IsWeatherClosed(rid,date))?`<div style="background:#FCEBEB;border:1.5px solid #E89A92;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">&#9928;</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#A32D2D">This trip is cancelled due to weather</div><div style="font-size:11px;color:#8a3a30;margin-top:1px">${bookingV2WeatherNote(rid,date)?esc(bookingV2WeatherNote(rid,date)):'Cannot depart'} · resolve booking by booking</div></div><button onclick="event.stopPropagation();bookingV2WeatherPanel('${rid}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>`:''}
+        ${(typeof bookingV2IsWeatherClosed==='function'&&bookingV2IsWeatherClosed(rid,date))?tcxByTripBanner(rid,date):''}
         <div class="t2-tripcard">
         ${/* §btBand · ชื่อทริปย้ายลงไปเป็นแถบแรกของตารางแล้ว */''}
         <div class="t2-triphead" hidden>
@@ -3160,6 +3174,12 @@ function bookingV2RenderTab2(){
     .bt-brow.over{border-color:#F0BDB4;background:#FDF4F2}
     .bt-brow .d{width:10px;height:10px;border-radius:50%;flex:none}
     .bt-brow .nm{font-size:12.5px;font-weight:800;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* §btBd · แยก AD/CHD/INF/FOC · เล็ก จาง ไม่แสดงตัวที่เป็น 0 */
+    .bt-bd{display:inline-flex;align-items:baseline;gap:7px;flex:none;white-space:nowrap;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;color:#A2A8B4;line-height:1}
+    .bt-bd b{font-weight:700;color:#4A5263;margin-right:1px}
+    .bt-bd .foc b{color:#A32D2D}
+    .bt-bd.f{margin-left:4px}
+    .bt-av .bt-bd.s{display:flex;justify-content:center;gap:6px;margin-top:3px;font-size:10px}
     .bt-brow .ld{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700;background:#F3EFEB;
       border-radius:7px;padding:2px 8px;color:#3a3a36;white-space:nowrap}
     .bt-brow.over .ld{background:#F7DCD7;color:#A32D2D}

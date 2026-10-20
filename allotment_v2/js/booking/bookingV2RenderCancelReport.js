@@ -26,9 +26,10 @@ function bookingV2RenderCancelReport(){
   const denom=all.filter(b=>b.status!=='rejected' && b.status!=='draft').length || 1;  // confirmed+completed+cancelled
   const paxOf=b=>(b.trips||[]).filter(t=>!range || (t.date>=range.from && t.date<=range.to)).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
   const REASONS=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[];
-  const catLabel=code=> (typeof bookingV2CancelLabel==='function')?bookingV2CancelLabel(code):((REASONS.find(x=>x.code===code)?.en)||code||'—');
-  const catGroup=code=> code==='weather'?'operator':(REASONS.find(x=>x.code===code)?.group)||'other';
-  const codeOf=b=> (b._fromOpsBackend && b.cancellation && b.cancellation.category) || (b.status==='cancelled_weather'?'weather':(b.cancelCategory||(b.cancellation&&b.cancellation.category)||'unspecified'));
+  /* §tcxBkWhy · ใบจากการยกเลิกรอบ แยกตามเหตุผลจริง (Weather / Below break-even / No boat / Other) */
+  const catLabel=code=> /^tcx_/.test(code) ? ('Trip cancelled · '+((TCX_R[code.slice(4)]||TCX_R.other).en)) : ((typeof bookingV2CancelLabel==='function')?bookingV2CancelLabel(code):((REASONS.find(x=>x.code===code)?.en)||code||'—'));
+  const catGroup=code=> (code==='weather'||/^tcx_/.test(code))?'operator':(REASONS.find(x=>x.code===code)?.group)||'other';
+  const codeOf=b=> (b._fromOpsBackend && b.cancellation && b.cancellation.category) || (b.status==='cancelled_weather'?(()=>{ const k=(typeof tcxBkReason==='function')?tcxBkReason(b):'weather'; return k==='weather'?'weather':('tcx_'+k); })():(b.cancelCategory||(b.cancellation&&b.cancellation.category)||'unspecified'));
   const feeOf=b=> Number((b.cancellation&&b.cancellation.chargeAmount)||0);
   // aggregate
   const byCat={}, byGroup={customer:0,operator:0,other:0}, byMonth={}, byAgent={};

@@ -1,4 +1,3 @@
-// Aggregate family pax for a specific date (sum across sub-routes)
 function bookingV2FamilyAggregate(familyId, dateStr, agg){
   const day = agg.byDate[dateStr];
   if(!day) return { total:0, ad:0, chd:0, inf:0, foc:0, pk:0, kl:0, nt:0, hasFocPending:false, subCount:0 };

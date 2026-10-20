@@ -1,2 +1,1 @@
-// Event handlers
-function bookingV2SwitchTab(t){ _bkV2.tab = t; bookingV2Render(); }
+function bookingV2SwitchTab(t){ if(bkLimProg() && t!=='cal' && t!=='bytrip') t='bytrip'; _bkV2.tab = t; bookingV2Render(); }

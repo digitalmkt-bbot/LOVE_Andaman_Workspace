@@ -1,5 +1,6 @@
 // P2 · New Booking form handlers
 function bookingV2NewBooking(){
+  if(bkLimProg()) return;   /* §bkLim */
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   _bkV2.newBooking = {
     code: bookingV2GenerateBookingCode(),

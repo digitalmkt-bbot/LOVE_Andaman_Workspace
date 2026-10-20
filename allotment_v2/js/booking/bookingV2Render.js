@@ -26,6 +26,7 @@ window._BKV2_FAMILIES = window._BKV2_FAMILIES || [
 function bookingV2Render(){
   const host = document.getElementById('bkv2-host');
   if(!host) return;
+  if(bkLimProg()){ if(_bkV2.tab!=='cal' && _bkV2.tab!=='bytrip') _bkV2.tab='bytrip'; _bkV2.detailId=null; _bkV2.newBooking=null; }   /* §bkLim */
   try{
     // P3 · Detail view (read-only by default · Edit toggles into newBooking flow)
     if(_bkV2.detailId && !_bkV2.newBooking){

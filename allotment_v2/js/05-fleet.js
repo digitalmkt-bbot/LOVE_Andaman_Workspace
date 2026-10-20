@@ -10091,6 +10091,16 @@ function flEquipStartSwap(type,id){ _flSwap={type:type,id:id}; flRenderEquip(); 
 function flEquipCancelSwap(){ _flSwap=null; flRenderEquip(); }
 function _flEquipObj(type,id){ return type==='eng'?flGetEng(id):type==='gb'?flGetGb(id):(FL_PROPELLERS||[]).find(x=>x.id===id); }
 function _flEquipLog(obj,kind,desc){ if(!obj.log)obj.log=[]; obj.log.push({date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),type:kind,desc:desc,by:'Equip'}); }
+function _flEquipPropSync(p){   /* §eqProp */
+  if(!p) return; const st=p.status||'active';
+  if(p.gearboxId){ const g=flGetGb(p.gearboxId), e=g&&g.engineId?flGetEng(g.engineId):null; if(st==='spare') p.status='active'; if(p.status==='active') p.spareLocation=null; p.boatId=e?(e.boatId||null):(p.boatId||null); }
+  else { if(st==='active') p.status='spare'; p.boatId=null; }
+}
+function flEquipPropActive(id){   /* §eqProp · ซ่อมของเก่าที่ค้างสถานะ spare บนเกียร์ */
+  const p=(FL_PROPELLERS||[]).find(x=>x.id===id); if(!p||!p.gearboxId) return;
+  p.status='active'; _flEquipPropSync(p); _flEquipLog(p,'status','ตั้งเป็น Active (ติดอยู่บนเกียร์)');
+  if(typeof flSave==='function') flSave(); flRenderEquip();
+}
 function flEquipSwapDo(targetId){
   if(!_flSwap) return; const t=_flSwap.type, a=_flEquipObj(t,_flSwap.id), b=_flEquipObj(t,targetId);
   if(!a||!b||a.id===b.id){ _flSwap=null; return flRenderEquip(); }
@@ -10100,7 +10110,7 @@ function flEquipSwapDo(targetId){
     _flEquipLog(b,'swap',`สลับ → ${bn(b.boatId)}${b.boatId?(' · '+flPosLabel(b.pos)):''} (กับ ${a.serial})`); }
   else if(t==='gb'){ const _e=a.engineId; a.engineId=b.engineId; b.engineId=_e; if(a.engineId&&a.status==='spare')a.status='ready'; if(b.engineId&&b.status==='spare')b.status='ready'; if(!a.engineId)a.status='spare'; if(!b.engineId)b.status='spare';
     _flEquipLog(a,'swap',`สลับเกียร์ (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับเกียร์ (กับ ${a.serial})`); }
-  else { const _g=a.gearboxId; a.gearboxId=b.gearboxId; b.gearboxId=_g;
+  else { const _g=a.gearboxId; a.gearboxId=b.gearboxId; b.gearboxId=_g; _flEquipPropSync(a); _flEquipPropSync(b);
     _flEquipLog(a,'swap',`สลับใบจักร (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับใบจักร (กับ ${a.serial})`); }
   _flSwap=null; if(typeof flSave==='function') flSave(); flRenderEquip();
 }
@@ -10109,7 +10119,7 @@ function flEquipRemove(type,id){
   if(!confirm('ถอด '+o.serial+' เก็บเป็น Spare?')) return;
   if(type==='eng'){ const wb=o.boatId?(getBoat(o.boatId)||{}).name:''; _flEquipLog(o,'remove',`ถอดจาก ${wb} ${flPosLabel(o.pos)} → Spare`); o.boatId=null; }
   else if(type==='gb'){ _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.engineId=null; o.status='spare'; }
-  else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; }
+  else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; _flEquipPropSync(o); }
   if(typeof flSave==='function') flSave(); flRenderEquip();
 }
 function flEquipOpen(boatId){ _flEquipBoat=boatId||_flEquipBoat; _flSwap=null; flRenderEquip(); if(typeof openModal==='function') openModal('fl-modal-equip'); }
@@ -10131,7 +10141,8 @@ function flRenderEquip(){
     const stbg=st==='fixing'?'#FAEEDA':st==='spare'?'#F1EFE8':st==='broken'?'#FCEBEB':'#E1F5EE';
     let act='';
     if(sw){ if(isTarget) act=`<button onclick="flEquipSwapDo('${obj.id}')" style="border:1px solid #185FA5;background:#E6F1FB;color:#185FA5;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ใส่ที่นี่</button>`; else if(isSel) act=`<span style="font-size:10.5px;color:#854F0B;font-weight:600">เลือกอยู่</span>`; }
-    else { act=`<button onclick="flEquipStartSwap('${type}','${obj.id}')" title="สลับชิ้นนี้" style="border:1px solid #cfe0d8;background:#fff;color:#0F6E56;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">&#8596; สลับ</button><button onclick="flEquipRemove('${type}','${obj.id}')" title="ถอดเก็บเป็น Spare" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">ถอดเก็บ</button>`; }
+    else { act=`<button onclick="flEquipStartSwap('${type}','${obj.id}')" title="สลับชิ้นนี้" style="border:1px solid #cfe0d8;background:#fff;color:#0F6E56;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">&#8596; สลับ</button><button onclick="flEquipRemove('${type}','${obj.id}')" title="ถอดเก็บเป็น Spare" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">ถอดเก็บ</button>`;
+      if(type==='prop'&&obj.gearboxId&&st==='spare') act=`<button onclick="flEquipPropActive('${obj.id}')" title="ใบจักรติดอยู่บนเกียร์แต่สถานะยังเป็น Spare · หน้า Company Asset จะไม่นับว่าติดอยู่" style="border:1px solid #E0B25C;background:#FFF4DC;color:#854F0B;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ตั้งเป็น Active</button>`+act; }
     return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:0.5px solid ${line};${isSel?'background:#FFF8E1;border-radius:8px;padding-left:7px;padding-right:7px':''}">
       <span style="background:${tb[0]};color:${tb[1]};font-size:10px;font-weight:600;width:30px;text-align:center;padding:3px 0;border-radius:6px;flex:none">${tb[2]}</span>
       <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obj.serial}</div><div style="margin-top:2px"><span style="background:${stbg};color:${stc};font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:6px">${st}</span></div></div>
@@ -17194,6 +17205,14 @@ function flMaintUnlinkProject(mjId){
 }
 
 let _selMaintId=null, _maintStFilter='all', _maintArchiveTab='active', _maintTypeFilter='all', _maintBoatFilter='all', _maintFilterExpand=false;
+var _maintQ='';   /* §faSkin · ช่องค้นหา (เลข · ชื่อ · เรือ · อู่) */
+function maintSetQ(v){ _maintQ=String(v||''); clearTimeout(window._maintQT); window._maintQT=setTimeout(function(){ flRenderMaint(); var q=document.getElementById('fj-mj-q'); if(q){ q.focus(); try{ q.setSelectionRange(q.value.length,q.value.length); }catch(_){} } },160); }
+function maintTile(k){
+  if(k==='pending'||k==='inprogress'){ _maintArchiveTab='active'; _maintStFilter=(_maintStFilter===k)?'all':k; }
+  else if(k==='awaiting'){ _maintArchiveTab=(_maintArchiveTab==='awaiting')?'active':'awaiting'; _maintStFilter='all'; }
+  else if(k==='done'){ _maintArchiveTab=(_maintArchiveTab==='archive')?'active':'archive'; _maintStFilter='all'; }
+  flRenderMaint();
+}
 
 function flRenderMaint(){
   const wrap=document.getElementById('fl-maint-pink-wrap');
@@ -17311,6 +17330,7 @@ function flRenderMaint(){
   if(_maintStFilter!=='all') jobs=jobs.filter(m=>m.status===_maintStFilter);
   if(_maintTypeFilter!=='all') jobs=jobs.filter(m=>m.type===_maintTypeFilter);
   if(_maintBoatFilter!=='all') jobs=jobs.filter(m=>m.boatId===_maintBoatFilter);
+  if(_maintQ.trim()){ const q=_maintQ.trim().toLowerCase(); jobs=jobs.filter(m=>{ const b=getBoat(m.boatId); return [m.no,m.title,m.detail,m.location,m.owner,b&&b.name].filter(Boolean).join(' ').toLowerCase().indexOf(q)>=0; }); }   /* §faSkin */
   jobs.sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
 
   const STATUS_STYLE={
@@ -17451,53 +17471,68 @@ function flRenderMaint(){
     </div>
   </div>` : '';
 
-  // Split jobs into pinned + regular (only in active tab)
-  let listHtml = '';
-  if(jobs.length === 0){
-    listHtml = `<div style="font-size:12px;color:${dim.ink3};text-align:center;padding:20px">No jobs match filter</div>`;
-  } else if(_maintArchiveTab === 'active'){
-    const pinnedJobs = jobs.filter(j=>j.pinned).sort((a,b)=>(b.pinnedAt||'').localeCompare(a.pinnedAt||''));
-    const regularJobs = jobs.filter(j=>!j.pinned);
-    let html = '';
-    if(pinnedJobs.length){
-      html += `<div style="background:#FBEAF0;border-radius:8px;padding:8px;margin-bottom:8px;border-left:3px solid #D4537E">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;padding:0 4px">
-          <span style="font-size:13px;color:#993556">📌</span>
-          <span style="font-size:10px;font-weight:600;color:#993556;letter-spacing:.05em;text-transform:uppercase">Pinned</span>
-          <span style="font-size:10px;color:#993556;opacity:.6;font-family:'DM Mono',monospace">${pinnedJobs.length}</span>
-        </div>
-        ${pinnedJobs.map(buildJobRow).join('')}
-      </div>`;
-    }
-    if(regularJobs.length){
-      if(pinnedJobs.length){
-        html += `<div style="font-size:10px;font-weight:600;color:${dim.ink3};letter-spacing:.05em;text-transform:uppercase;padding:6px 4px 4px">Active</div>`;
-      }
-      html += regularJobs.map(buildJobRow).join('');
-    }
-    listHtml = html;
-  } else {
-    listHtml = jobs.map(buildJobRow).join('');
-  }
-  const listPanel=`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:600;flex:1">Jobs</span>
-      ${resetBtn}
-      <span style="font-size:10px;color:${dim.ink3}">${jobs.length}/${totalJobs}</span>
-    </div>
-    ${tabBar}
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;align-items:center">
-      ${subFilter}
-      ${filterToggleBtn}
-    </div>
-    ${advancedPanel}
-    ${listHtml}
+  /* §faSkin · แถวแบบ Fleet Work · แถบสีตามประเภท · เลข+ป้ายประเภท+ป้ายเรือ · ชื่อ 2 บรรทัด · เมตา · ขวา: สเตจ · ค่าใช้จ่าย · แถบ 6 สเตจ */
+  const TY_BAR={corrective:'#C0392B',preventive:'#2E9C78',scheduled:'#1272B3'};
+  const TY_PILL={corrective:['#FBE0DD','#8E2A20','Corrective'],preventive:['#DDF1EA','#0B5A43','Preventive'],scheduled:['#DCEBF6','#0B4F7A','Scheduled']};
+  const fjJobRow=(m)=>{
+    const isSel=_selMaintId===m.id, b=getBoat(m.boatId), tp=TY_PILL[m.type]||['#F1F0EC','#3E4658','Job'];
+    const bc=(b&&typeof getBoatColor==='function')?getBoatColor(b.id):null;
+    const jobCost=typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0);
+    const fmtKR=(n)=>{ if(n>=1000000) return (n/1000000).toFixed(1)+'M'; if(n>=1000) return Math.round(n/1000)+'K'; return Math.round(n).toString(); };
+    const done=m.status==='done', stage=done?6:fjStageOf('mj',m.id);
+    const S=(typeof FLW_ST!=='undefined')?FLW_ST:[];
+    const sp=done?['#E4F3EC','#0F6E56',m.awaitingInvoice?'Awaiting invoice':'Done']:(stage>=0&&S[stage])?[S[stage].pb,S[stage].pf,S[stage].t]:(m.status==='pending'?['#DCEBF6','#0B4F7A','Job open']:['#DDF1EA','#0B5A43','In progress']);
+    const la=(typeof flwLast==='function')?flwLast(m.progressLog,m.startDate):{date:m.startDate};
+    const sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(la.date)):0;
+    const ph=(typeof flpChip==='function')?flpChip('mj',m,false):'';
+    const meta=[fjD(m.startDate), m.location||m.owner||'', done?('closed '+fjD(m.endDate)):(la.text?String(la.text).slice(0,40):('silent '+sil+' d'))].filter(Boolean);
+    return `<div class="fj-row${isSel?' on':''}${done&&!isSel?' dim':''}" onclick="flSelMaint('${m.id}')"><div class="bar" style="background:${TY_BAR[m.type]||'#9AA3B8'}"></div>
+      <div style="min-width:0"><div class="no">${fjE(m.no||'—')}<span class="fj-pill" style="background:${tp[0]};color:${tp[1]}">${tp[2]}</span>${b?`<span class="fj-boat" style="background:${bc?bc.text:'#5B6170'}">${fjE(b.name)}</span>`:''}${m.pinned&&!done?'<span title="Pinned" style="font-size:11px">📌</span>':''}</div>
+        <div class="ttl">${fjE(m.title||'—')}${ph}</div>
+        <div class="mt">${fjE(meta.join(' · '))}</div></div>
+      <div class="rt"><span class="fj-pill" style="background:${sp[0]};color:${sp[1]}">${sp[2]}</span><span class="num" style="color:${jobCost>0?'#0F1B3D':'#9AA3AE'}">${jobCost>0?'฿'+fmtKR(jobCost):'&mdash;'}</span>${fjTrk(stage,done)}</div></div>`;
+  };
+  const grp=(t,d,n)=>`<div class="fj-grp"><b>${t}</b><span>${d}</span>${n!=null?`<span class="mono" style="margin-left:auto;color:#3E4658">${n}</span>`:''}</div>`;
+  const sumCost=(L)=>{ let t=0; L.forEach(j=>{ t+=(typeof flMaintCalcCost==='function'?flMaintCalcCost(j.id):(j.cost||0))||0; }); return '฿'+Math.round(t).toLocaleString(); };
+  let listHtml='';
+  if(!jobs.length) listHtml=`<div style="padding:28px 14px;text-align:center;font-size:12.5px;color:#5B6170">No jobs match this filter${_maintQ.trim()?' · <a style="color:#0F6CA6;font-weight:600;cursor:pointer" onclick="maintSetQ(\'\')">clear search</a>':''}</div>`;
+  else if(_maintArchiveTab==='active'){
+    const pinnedJobs=jobs.filter(j=>j.pinned).sort((a,b)=>(b.pinnedAt||'').localeCompare(a.pinnedAt||'')), pend=jobs.filter(j=>!j.pinned&&j.status==='pending'), reg=jobs.filter(j=>!j.pinned&&j.status!=='pending');
+    listHtml=(pinnedJobs.length?grp('Pinned','kept on top by you',pinnedJobs.length)+pinnedJobs.map(fjJobRow).join(''):'')
+      +(pend.length?grp('Pending','opened, not started',pend.length)+pend.map(fjJobRow).join(''):'')
+      +(reg.length?grp('In progress','newest first',sumCost(reg))+reg.map(fjJobRow).join(''):'');
+  } else if(_maintArchiveTab==='awaiting') listHtml=grp('Awaiting invoice','work closed · invoice not recorded',sumCost(jobs))+jobs.map(fjJobRow).join('');
+  else listHtml=grp('Archive','closed · newest first',jobs.length)+jobs.map(fjJobRow).join('');
+  const fc=(val,label,n,on,fn)=>`<button type="button" class="fj-fc${on?' on':''}" onclick="${fn}('${val}')">${label}${n!=null?` <i>${n}</i>`:''}</button>`;
+  let subFa='';
+  if(_maintArchiveTab==='active') subFa=fc('all','All',allActiveJobs.length,_maintStFilter==='all','maintFilterSt')+fc('pending','Pending',cntPending,_maintStFilter==='pending','maintFilterSt')+fc('inprogress','In progress',cntInProgress,_maintStFilter==='inprogress','maintFilterSt');
+  else if(_maintArchiveTab==='archive') subFa=fc('all','All',allArchiveJobs.length,_maintStFilter==='all','maintFilterSt')+fc('done','Done',allArchiveJobs.length,_maintStFilter==='done','maintFilterSt');
+  const tyFa=['corrective','preventive','scheduled'].map(t=>fc(t,TY_PILL[t][2],typeCnt[t]||0,_maintTypeFilter===t,'maintSetType')).join('');
+  const boatFa=boatsWithJobs.map(bb=>{ const c=(typeof getBoatColor==='function')?getBoatColor(bb.id):null; const on=_maintBoatFilter===bb.id; return `<button type="button" class="fj-fc${on?' on':''}" style="${on&&c?'background:'+c.text+';border-color:'+c.text:''}" onclick="maintSetBoat('${bb.id}')">${fjE(bb.name)} <i>${bb.count}</i></button>`; }).join('');
+  const advFa=_maintFilterExpand?`<div style="display:flex;flex-direction:column;gap:6px;padding:8px 14px;border-bottom:1px solid #ECEBE6;background:#F7F7F5">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="fj-kick" style="font-size:10px;width:34px">Type</span>${fc('all','All',baseJobs.length,_maintTypeFilter==='all','maintSetType')}${tyFa}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="fj-kick" style="font-size:10px;width:34px">Boat</span>${fc('all','All',baseJobs.length,_maintBoatFilter==='all','maintSetBoat')}${boatFa}</div></div>`:'';
+  const listPanel=`<div class="fj-card" style="height:calc(100vh - 258px);min-height:520px">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 14px 10px;border-bottom:1px solid #ECEBE6"><span class="fj-kick">Jobs</span><span class="mono" style="font-size:11px;color:#5B6170">${jobs.length} / ${totalJobs}</span>
+      <label class="fj-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="fj-mj-q" aria-label="Search jobs" placeholder="Search · no · boat" value="${fjE(_maintQ)}" oninput="maintSetQ(this.value)"></label></div>
+    <div class="fj-seg"><button type="button" class="${_maintArchiveTab==='active'?'on':''}" onclick="maintSetArchive('active')">Active <i>${allActiveJobs.length}</i></button>${allAwaitingJobs.length?`<button type="button" class="${_maintArchiveTab==='awaiting'?'on':''}" onclick="maintSetArchive('awaiting')">Awaiting invoice <i>${allAwaitingJobs.length}</i></button>`:''}<button type="button" class="${_maintArchiveTab==='archive'?'on':''}" onclick="maintSetArchive('archive')">Archive <i>${allArchiveJobs.length}</i></button></div>
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid #ECEBE6;flex-wrap:wrap;align-items:center">${subFa}<button type="button" class="fj-fc${(_maintFilterExpand||advFilterCnt)?' on':''}" style="margin-left:auto" onclick="maintToggleFilterPanel()">Filter${advFilterCnt?` <i>${advFilterCnt}</i>`:''} ${_maintFilterExpand?'▴':'▾'}</button>${hasAnyFilter?`<a style="font-size:11.5px;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="maintResetFilters()">Clear</a>`:''}</div>
+    ${advFa}
+    <div class="fj-list">${listHtml}</div>
+    <div class="fj-foot"><span><b class="mono" style="font-weight:500;color:#0F1B3D">${allActiveJobs.length}</b> active</span><span><b class="mono" style="font-weight:500;color:${cntPending?'#8E2019':'#0F1B3D'}">${cntPending}</b> pending</span><a onclick="flNavGo('fl-work')">Fleet Work ›</a></div>
   </div>`;
-
-  const detailPanel=`<div id="fl-maint-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
-
-  wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:340px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
-
+  const detailPanel=`<div id="fl-maint-detail-mount" class="fj-card" style="height:calc(100vh - 258px);min-height:520px"></div>`;
+  const top=fjTop({ big:totalJobs, lbl:'Jobs', sub:cntActive+' active · '+cntPending+' pending · '+boatsServiced+' boats', wm:'MAINTENANCE', view:'fl-maintenance',
+    chips:[['฿'+(ytdSpend>=1000?Math.round(ytdSpend/1000)+'K':ytdSpend),'YTD spend',''],['฿'+avgCost.toLocaleString(),'avg / job',''],[avgDaysOpen+' d','avg open',avgDaysOpen>60?'amb':'']],
+    btns:[['+ Create job','flOpenCreateJobModal()']],
+    tiles:[
+      {t:'Pending', d:'opened, not started', n:cntPending, red:cntPending>0, on:_maintArchiveTab==='active'&&_maintStFilter==='pending', onclick:"maintTile('pending')"},
+      {t:'In progress', d:'avg '+avgDaysOpen+' days open', n:cntInProgress, on:_maintArchiveTab==='active'&&_maintStFilter==='inprogress', onclick:"maintTile('inprogress')"},
+      {t:'Awaiting invoice', d:'work closed, not billed', n:allAwaitingJobs.length, red:allAwaitingJobs.length>0, on:_maintArchiveTab==='awaiting', onclick:"maintTile('awaiting')"},
+      {t:'Done this month', d:'฿'+Math.round(doneMonthSpend).toLocaleString()+' spent', n:doneMonthCount, on:_maintArchiveTab==='archive', onclick:"maintTile('done')"},
+      {t:'By type', d:'Corrective '+cntCorrective+' · Preventive '+cntPreventive+' · Scheduled '+cntScheduled, n:totalJobs, on:false, onclick:"maintToggleFilterPanel()"}
+    ] });
+  wrap.innerHTML=`${top}<div class="fj-2">${listPanel}${detailPanel}</div>`;
   flRenderMaintDetailPink();
 }
 
@@ -19844,27 +19879,27 @@ function flRenderMaintDetailPink(){
     return ` <span style="background:${o.bg};color:${o.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${o.icon} ${o.label}</span>`;
   })():'';
 
-  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:50px;height:50px;border-radius:12px;background:${ss.accent};color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace">
-        <span style="font-size:9px;opacity:.85">${noPrefix}</span>
-        <span style="font-size:13px;font-weight:700;line-height:1">${noLast3}</span>
+  /* §faSkin · หัวการ์ดขาว · กล่องเลขกรมท่า · ป้ายสเตจ (ชุดเดียวกับ Fleet Work) + ประเภท + ผลปิดงาน · เมตารวม · ปุ่ม Start/Close · Edit · Open in Fleet Work · ปักหมุด */
+  const _S=(typeof FLW_ST!=='undefined')?FLW_ST:[], _stg=(m.status==='done')?-1:fjStageOf('mj',m.id);
+  const _stPill=(m.status==='done')?['#E4F3EC','#0F6E56',m.awaitingInvoice?'Awaiting invoice':'Done']:(_stg>=0&&_S[_stg])?[_S[_stg].pb,_S[_stg].pf,_S[_stg].t]:(m.status==='pending'?['#DCEBF6','#0B4F7A','Job open']:['#DDF1EA','#0B5A43','In progress']);
+  const _tyPill={corrective:['#FBE0DD','#8E2A20','Corrective'],preventive:['#DDF1EA','#0B5A43','Preventive'],scheduled:['#DCEBF6','#0B4F7A','Scheduled']}[m.type]||['#F1F0EC','#3E4658','Job'];
+  const _la=(typeof flwLast==='function')?flwLast(m.progressLog,m.startDate):{date:m.startDate};
+  const _sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(_la.date)):0;
+  const _outPill=(m.status==='done'&&m.outcome&&m.outcome!=='success')?(()=>{ const o=OUT_STYLE[m.outcome]||OUT_STYLE.success; return `<span class="fj-pill" style="background:${o.bg};color:${o.color}">${o.icon} ${o.label}</span>`; })():'';
+  const headerStrip=`<div class="fj-dh">
+      <div class="fj-id"><span>${fjE(noPrefix)}</span><span>${fjE(noLast3)}</span></div>
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700;line-height:1.25">${fjE(m.title||'—')}</span><span class="fj-pill" style="background:${_stPill[0]};color:${_stPill[1]}">${_stPill[2]}</span><span class="fj-pill" style="background:${_tyPill[0]};color:${_tyPill[1]}">${_tyPill[2]}</span>${_outPill}</div>
+        <div style="margin-top:3px;font-size:12.5px;color:#5B6170">${b?fjE(b.name)+' · '+fjE(b.type||'')+' · ':''}${m.startDate?fjE(fmtD(m.startDate)):'—'}${m.endDate?' → '+fjE(fmtD(m.endDate)):' → ongoing'}${m.location?' · '+fjE(m.location):''}${inc?` · from <span class="mono" style="color:#0F6CA6">${fjE(inc.no)}</span>`:''}${m.status!=='done'?(m.owner?' · '+fjE(m.owner):' · <b style="color:#8E2019">No owner</b>')+` · silent <b class="mono" style="font-weight:500;color:${_sil>60?'#8E2019':_sil>30?'#7A4300':'#0F1B3D'}">${_sil} d</b>`:''}</div>
+        ${m.closeNote?`<div style="margin-top:6px;font-size:12px;color:#3E4658"><b>Close note:</b> ${fjE(m.closeNote)}</div>`:''}
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:20px;font-weight:700">${m.title||'—'}</span>
-          <span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span>${outBadge}
-        </div>
-        <div style="font-size:11px;color:${dim.ink2};margin-top:3px">${b?b.name+' · '+(b.type||'')+' · ':''}${TYPE_LABEL[m.type]||'Job'}${m.startDate?' · '+fmtD(m.startDate):''}${m.endDate?' → '+fmtD(m.endDate):' → ongoing'}${m.location?' · '+m.location:''}</div>
+      <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end">
+        ${m.status==='pending'?`<button type="button" class="fj-btn pri" onclick="flMaintStart('${m.id}')">▶ Start</button>`:''}
+        ${m.status==='inprogress'?`<button type="button" class="fj-btn ok" onclick="flMaintOpenCloseModal('${m.id}')">✓ Close job</button>`:''}
+        <button type="button" class="fj-btn" onclick="FLW.boat='${fjE(m.boatId||'')}';FLW.item='${m.status==='done'?'dn:':'mj:'}${fjE(m.id)}';FLW.stage=-1;${m.status==='done'?"FLW.bf='all';":''}flNavGo('fl-work')">Open in Fleet Work</button>
+        ${m.status!=='done'?`<button type="button" class="fj-btn" title="${m.pinned?'Unpin':'Pin to top'}" style="width:34px;padding:0;justify-content:center;${m.pinned?'background:#FBEBD3;border-color:#F5C77E':''}" onclick="flMaintTogglePin('${m.id}',event)">📌</button>`:''}
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        ${m.status!=='done'?`<button onclick="flMaintTogglePin('${m.id}',event)" title="${m.pinned?'Unpin':'Pin to top'}" style="background:${m.pinned?'#FBEAF0':'white'};color:${m.pinned?'#993556':dim.ink2};border:1px solid ${m.pinned?'#F4C0D1':'rgba(0,0,0,.12)'};border-radius:20px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer">📌${m.pinned?' Pinned':''}</button>`:''}
-        ${m.status==='pending'?`<button onclick="flMaintStart('${m.id}')" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">▶ Start</button>`:''}
-        ${m.status==='inprogress'?`<button onclick="flMaintOpenCloseModal('${m.id}')" style="background:#1D9E75;color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✓ Close</button>`:''}
-      </div>
-    </div>
-    ${m.closeNote?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;font-size:11px;color:${dim.ink2};border-left:3px solid ${(OUT_STYLE[m.outcome]||OUT_STYLE.success).bg}"><span style="font-weight:600;color:${dim.ink}">Close note: </span>${m.closeNote}</div>`:''}
-  </div>`;
+    </div>`;
 
   const cost=typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):0;
   const days=m.startDate&&m.endDate?Math.max(1,Math.ceil((new Date(m.endDate)-new Date(m.startDate))/86400000)):null;
@@ -20089,16 +20124,27 @@ function flRenderMaintDetailPink(){
     <button onclick="flDeleteMaint('${m.id}')" style="background:transparent;border:1px solid #FCEBEB;color:#A32D2D;border-radius:14px;padding:5px 12px;font-size:10px;font-weight:500;cursor:pointer">Delete job</button>
   </div>`:'';
 
-  mount.innerHTML=`${headerStrip}<div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 280px);overflow-y:auto">
+  /* §faSkin · สองคอลัมน์แบบ Fleet Work · ซ้าย: สเตจ · คำอธิบาย · สถานะเรือ · ทรัพย์สิน · timeline · ขวา: Next step · incident/project ที่ผูก · อะไหล่ · memo · รูป · ลบ */
+  mount.innerHTML=`${headerStrip}<div class="fj-body" style="max-height:calc(100vh - 340px)">
     ${statCards}
-    ${incBanner}
-    ${descSection}
-    ${parentProjSection}
-    ${boatStatusSection}
-    ${assetSection}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${timelineSection}${partsSection}</div>
-    ${memoSection}
-    ${deleteSection}
+    <div class="fj-cols">
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        ${fjStandHtml('mj',m.id)}
+        ${descSection}
+        ${boatStatusSection}
+        ${assetSection}
+        ${timelineSection}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        ${fjNextHtml('mj',m.id,'')}
+        ${incBanner}
+        ${parentProjSection}
+        ${partsSection}
+        ${memoSection}
+        ${(typeof flpCard==='function')?flpCard('mj', m.id, {cols:3}):''}
+        ${deleteSection}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -21604,6 +21650,14 @@ function flSaveCreateJob(){
 
 // ── INCIDENT ──
 let _incStFilter='all', _selIncId=null, _incArchiveTab='active';
+var _incQ='';   /* §faSkin · ช่องค้นหา (เลข · ชื่อ · เรือ) */
+/* §jaBoat (2026-10-18) · เจ้าของ: "JOB ASSIGNMENT ขอ Filter กรองเรือ" · แบบเดียวกับหน้า Maintenance · ปุ่ม Filter ▾ กางเม็ดเรือ (นับจากแท็บที่ดูอยู่) */
+var _incBoatFilter='all', _incFilterExpand=false;
+function incSetBoat(v){ _incBoatFilter=v||'all'; flRenderIncident(); }
+function incToggleFilterPanel(){ _incFilterExpand=!_incFilterExpand; flRenderIncident(); }
+function incResetFilters(){ _incStFilter='all'; _incBoatFilter='all'; _incQ=''; flRenderIncident(); }
+function incSetQ(v){ _incQ=String(v||''); clearTimeout(window._incQT); window._incQT=setTimeout(function(){ flRenderIncident(); var q=document.getElementById('fj-inc-q'); if(q){ q.focus(); try{ q.setSelectionRange(q.value.length,q.value.length); }catch(_){} } },160); }
+function incTile(k){ if(k==='resolved'){ _incArchiveTab='archive'; _incStFilter='all'; } else { _incArchiveTab='active'; _incStFilter=(_incStFilter===k)?'all':k; } flRenderIncident(); }
 
 function flRenderIncident(){
   const wrap=document.getElementById('fl-inc-pink-wrap');
@@ -21725,6 +21779,9 @@ function flRenderIncident(){
   if(_incStFilter==='open')incs=incs.filter(x=>effStatus(x)==='open');
   else if(_incStFilter==='inprogress')incs=incs.filter(x=>{const e=effStatus(x);return e==='pending'||e==='inprogress';});
   else if(_incStFilter==='resolved')incs=incs.filter(x=>effStatus(x)==='resolved');
+  else if(_incStFilter==='unlinked')incs=incs.filter(x=>!x.maintId);   /* §faSkin · แถบ "Unlinked" */
+  if(_incQ.trim()){ const q=_incQ.trim().toLowerCase(); incs=incs.filter(x=>{ const b=getBoat(x.boatId); return [x.no,x.title,x.detail,b&&b.name].filter(Boolean).join(' ').toLowerCase().indexOf(q)>=0; }); }
+  if(_incBoatFilter!=='all') incs=incs.filter(x=>String(x.boatId||'')===_incBoatFilter);   /* §jaBoat */
   incs.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const SEV_STYLE={
@@ -21794,23 +21851,62 @@ function flRenderIncident(){
     subFilter = `${fBtn('all','All')}${fBtn('resolved','Resolved','#0F6E56')}`;
   }
 
-  const listHtml=incs.length?incs.map(buildIncRow).join(''):`<div style="font-size:12px;color:${dim.ink3};text-align:center;padding:20px">No incidents match filter</div>`;
-  const listPanel=`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:600;flex:1">Incidents</span>
-      <span style="font-size:10px;color:${dim.ink3}">${incs.length}/${totalInc}</span>
-    </div>
-    ${tabBar}
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-      ${subFilter}
-    </div>
-    ${listHtml}
+  /* §faSkin · แถวแบบ Fleet Work · แถบสีตามความรุนแรง · เลข+ป้าย · ชื่อ 2 บรรทัด · เมตา · ขวา: สเตจ · วันเงียบ · แถบ 6 สเตจ */
+  const SEV_BAR={critical:'#C0392B',major:'#D9952B',minor:'#9AA3B8'};
+  const SEV_PILL={critical:['#FBE0DD','#8E2A20','Critical'],major:['#FBEBD3','#7A4300','Major'],minor:['#F1F0EC','#3E4658','Minor']};
+  const ST_PILL={open:['#FBE0DD','#8E2A20','Open'],pending:['#DCEBF6','#0B4F7A','Job open'],inprogress:['#DDF1EA','#0B5A43','In progress'],resolved:['#E4F3EC','#0F6E56','Resolved']};
+  const fjRow=(inc)=>{
+    const isSel=_selIncId===inc.id, b=getBoat(inc.boatId), mj=inc.maintId?FL_MAINT.find(m=>m.id===inc.maintId):null;
+    const sv=SEV_PILL[inc.severity||'minor']||SEV_PILL.minor, st=effStatus(inc), sp=ST_PILL[st]||ST_PILL.open, prio=inc.priority||0;
+    const stage=(st==='resolved')?6:fjStageOf('inc',inc.id)>=0?fjStageOf('inc',inc.id):(mj?fjStageOf('mj',mj.id):0);
+    const la=(typeof flwLast==='function')?flwLast(inc.progressLog,inc.date):{date:inc.date};
+    const sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(la.date)):0;
+    const when=fjD(inc.date);
+    const ph=(typeof flpChip==='function')?flpChip('inc',inc,false):'';
+    return `<div class="fj-row${isSel?' on':''}${st==='resolved'&&!isSel?' dim':''}" onclick="flShowInc('${inc.id}')"><div class="bar" style="background:${SEV_BAR[inc.severity||'minor']||'#9AA3B8'}"></div>
+      <div style="min-width:0"><div class="no">${fjE(inc.no||'—')}<span class="fj-pill" style="background:${sv[0]};color:${sv[1]}">${sv[2]}</span>${mj?`<span class="fj-lk">→ ${fjE(mj.no)}${mj.status==='done'?' ✓':''}</span>`:''}${inc.quickFix?'<span class="fj-pill" style="background:#E4F3EC;color:#0F6E56">Quick fix</span>':''}</div>
+        <div class="ttl">${fjE(inc.title||inc.detail||'—')}${ph}</div>
+        <div class="mt">${b?fjE(b.name)+' · ':''}${fjE(when)}${(inc.damagedAssets||[]).length?' · '+(inc.damagedAssets||[]).length+' asset'+((inc.damagedAssets||[]).length>1?'s':''):''}${la.text?' · '+fjE(String(la.text).slice(0,40)):''}</div></div>
+      <div class="rt"><span class="fj-pill" style="background:${sp[0]};color:${sp[1]}">${sp[2]}</span><span class="num" style="color:${st==='resolved'?'#9AA3AE':sil>60?'#8E2019':sil>30?'#7A4300':'#3E4658'}">${st==='resolved'?'&mdash;':sil+' d'}</span><span class="fj-dots">${Array.from({length:5},(_,i)=>`<i class="${i<prio?'on':''}"></i>`).join('')}</span></div></div>`;
+  };
+  const grp=(t,d,n)=>`<div class="fj-grp"><b>${t}</b><span>${d}</span>${n!=null?`<span class="mono" style="margin-left:auto;color:#3E4658">${n}</span>`:''}</div>`;
+  let listHtml='';
+  if(!incs.length) listHtml=`<div style="padding:28px 14px;text-align:center;font-size:12.5px;color:#5B6170">No incidents match this filter${_incQ.trim()?' · <a style="color:#0F6CA6;font-weight:600;cursor:pointer" onclick="incSetQ(\'\')">clear search</a>':''}</div>`;
+  else if(_incArchiveTab==='active'){
+    const o=incs.filter(x=>effStatus(x)==='open'), r=incs.filter(x=>effStatus(x)!=='open');
+    listHtml=(o.length?grp('Open · no job yet','decide: open a job, quick fix, or dismiss',o.length)+o.map(fjRow).join(''):'')+(r.length?grp('In progress','a job is open for it',r.length)+r.map(fjRow).join(''):'');
+  } else listHtml=grp('Resolved','closed · newest first',incs.length)+incs.map(fjRow).join('');
+  const fc=(val,label,n)=>`<button type="button" class="fj-fc${_incStFilter===val?' on':''}" onclick="incFilterSt('${val}')">${label}${n!=null?` <i>${n}</i>`:''}</button>`;
+  /* §jaBoat · เรือที่มีรายการในแท็บนี้ (ก่อนกรองเรือ) · เรียงตามจำนวน · สีประจำลำตอนเลือก */
+  const _baseInc=(_incArchiveTab==='archive')?allArchiveInc:allActiveInc, _bCnt={};
+  _baseInc.forEach(x=>{ if(x.boatId) _bCnt[x.boatId]=(_bCnt[x.boatId]||0)+1; });
+  const _boats=Object.keys(_bCnt).map(bid=>{ const bb=getBoat(bid); return {id:bid,name:bb?bb.name:bid,n:_bCnt[bid]}; }).sort((a,b)=>b.n-a.n);
+  const _advN=(_incBoatFilter!=='all')?1:0, _anyF=_incStFilter!=='all'||_advN>0||!!_incQ.trim();
+  const _boatFa=_boats.map(bb=>{ const c=(typeof getBoatColor==='function')?getBoatColor(bb.id):null; const on=_incBoatFilter===bb.id; return `<button type="button" class="fj-fc${on?' on':''}" style="${on&&c?'background:'+c.text+';border-color:'+c.text:''}" onclick="incSetBoat('${fjE(bb.id)}')">${fjE(bb.name)} <i>${bb.n}</i></button>`; }).join('');
+  const _advFa=_incFilterExpand?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 14px;border-bottom:1px solid #ECEBE6;background:#F7F7F5"><span class="fj-kick" style="font-size:10px;width:34px">Boat</span><button type="button" class="fj-fc${_incBoatFilter==='all'?' on':''}" onclick="incSetBoat('all')">All <i>${_baseInc.length}</i></button>${_boatFa}</div>`:'';
+  const subFilterFa=(_incArchiveTab==='active')
+    ? fc('all','All',allActiveInc.length)+fc('open','Open',cntOpen)+fc('inprogress','In progress',cntPending+cntInProgress)+fc('unlinked','Unlinked',allActiveInc.filter(x=>!x.maintId).length)
+    : fc('all','All',allArchiveInc.length)+fc('resolved','Resolved',allArchiveInc.length);
+  const listPanel=`<div class="fj-card" style="height:calc(100vh - 258px);min-height:520px">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 14px 10px;border-bottom:1px solid #ECEBE6"><span class="fj-kick">Incidents</span><span class="mono" style="font-size:11px;color:#5B6170">${incs.length} / ${totalInc}</span>
+      <label class="fj-q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="fj-inc-q" aria-label="Search incidents" placeholder="Search · no · boat" value="${fjE(_incQ)}" oninput="incSetQ(this.value)"></label></div>
+    <div class="fj-seg"><button type="button" class="${_incArchiveTab==='active'?'on':''}" onclick="incSetArchive('active')">Active <i>${allActiveInc.length}</i></button><button type="button" class="${_incArchiveTab==='archive'?'on':''}" onclick="incSetArchive('archive')">Archive <i>${allArchiveInc.length}</i></button></div>
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid #ECEBE6;flex-wrap:wrap;align-items:center">${subFilterFa}<button type="button" class="fj-fc${(_incFilterExpand||_advN)?' on':''}" style="margin-left:auto" onclick="incToggleFilterPanel()">Boat${_advN?` <i>1</i>`:''} ${_incFilterExpand?'▴':'▾'}</button>${_anyF?`<a style="font-size:11.5px;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="incResetFilters()">Clear</a>`:''}</div>
+    ${_advFa}
+    <div class="fj-list">${listHtml}</div>
+    <div class="fj-foot"><span><b class="mono" style="font-weight:500;color:#0F1B3D">${cntActive}</b> active</span><span><b class="mono" style="font-weight:500;color:${cntUnlinked?'#8E2019':'#0F1B3D'}">${allActiveInc.filter(x=>!x.maintId).length}</b> without a job</span><a onclick="flNavGo('fl-work')">Fleet Work ›</a></div>
   </div>`;
-
-  const detailPanel=`<div id="fl-inc-detail-mount" style="background:white;border-radius:14px;border:1px solid ${dim.line};overflow:hidden;min-height:400px"></div>`;
-
-  wrap.innerHTML=`${headerBar}${kpiStrip}<div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">${listPanel}${detailPanel}</div>`;
-
+  const detailPanel=`<div id="fl-inc-detail-mount" class="fj-card" style="height:calc(100vh - 258px);min-height:520px"></div>`;
+  const top=fjTop({ big:totalInc, lbl:'Incidents', sub:cntActive+' active · '+cntUnlinked+' unlinked · '+boatsAffected+' boats', wm:'JOB ASSIGNMENT', view:'fl-incident',
+    chips:[[cntCritical,'critical','red'],[cntMajor,'major','amb'],['฿'+damageTotal.toLocaleString(),'damage','']],
+    btns:[['+ Log incident','flOpenAddIncidentModal()'],['+ Create job','flOpenCreateJobModal()']],
+    tiles:[
+      {t:'Open', d:'no job yet · need attention', n:cntOpen, red:cntOpen>0, on:_incArchiveTab==='active'&&_incStFilter==='open', onclick:"incTile('open')"},
+      {t:'In progress', d:'linked to a job', n:cntPending+cntInProgress, on:_incArchiveTab==='active'&&_incStFilter==='inprogress', onclick:"incTile('inprogress')"},
+      {t:'Unlinked', d:'active, no job behind it', n:allActiveInc.filter(x=>!x.maintId).length, red:allActiveInc.some(x=>!x.maintId), on:_incStFilter==='unlinked', onclick:"incTile('unlinked')"},
+      {t:'Resolved', d:'avg '+avgFixDays+' days to fix', n:cntResolved, on:_incArchiveTab==='archive', onclick:"incTile('resolved')"}
+    ] });
+  wrap.innerHTML=`${top}<div class="fj-2">${listPanel}${detailPanel}</div>`;
   flRenderIncDetailPink();
 }
 
@@ -21887,28 +21983,24 @@ function flRenderIncDetailPink(){
   const noLast3=(inc.no||'').slice(-3).padStart(3,'0');
   const noPrefix=(inc.no||'INC').replace(/[-\d]+$/,'')||'INC';
 
-  // Header strip
-  const headerStrip=`<div style="padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:50px;height:50px;border-radius:12px;background:${sev.accent};color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace">
-        <span style="font-size:9px;opacity:.85">${noPrefix}</span>
-        <span style="font-size:13px;font-weight:700;line-height:1">${noLast3}</span>
+  // §faSkin · หัวการ์ดขาว · กล่องเลขกรมท่า · ป้ายสเตจ+ความรุนแรง · เมตารวมบรรทัดเดียว · ปุ่ม Edit / Open in Fleet Work / ลบ
+  const _stPill={open:['#FBE0DD','#8E2A20','Open'],pending:['#DCEBF6','#0B4F7A','Job open'],inprogress:['#DDF1EA','#0B5A43','In progress'],resolved:['#E4F3EC','#0F6E56','Resolved']}[st]||['#FBE0DD','#8E2A20','Open'];
+  const _svPill={critical:['#FBE0DD','#8E2A20','Critical'],major:['#FBEBD3','#7A4300','Major'],minor:['#F1F0EC','#3E4658','Minor']}[inc.severity||'minor'];
+  const _la=(typeof flwLast==='function')?flwLast(inc.progressLog,inc.date):{date:inc.date};
+  const _sil=(typeof flBoardDaysTo==='function')?Math.max(0,flBoardDaysTo(_la.date)):0;
+  const headerStrip=`<div class="fj-dh">
+      <div class="fj-id"><span>${fjE(noPrefix)}</span><span>${fjE(noLast3)}</span></div>
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700;line-height:1.25">${fjE(inc.title||'—')}</span><span class="fj-pill" style="background:${_stPill[0]};color:${_stPill[1]}">${_stPill[2]}</span><span class="fj-pill" style="background:${_svPill[0]};color:${_svPill[1]}">${_svPill[2]}</span>${inc.quickFix?'<span class="fj-pill" style="background:#E4F3EC;color:#0F6E56">Quick fix</span>':''}</div>
+        <div style="margin-top:3px;font-size:12.5px;color:#5B6170">${b?fjE(b.name)+' · '+fjE(b.type||'')+' · ':''}reported ${fjE(fmtD(inc.date))}${inc.time?' '+fjE(inc.time):''}${mj?` · job <span class="mono" style="color:#0F6CA6">${fjE(mj.no)}</span>`:' · <b style="color:#8E2019">no job linked</b>'}${st!=='resolved'?` · silent <b class="mono" style="font-weight:500;color:${_sil>60?'#8E2019':_sil>30?'#7A4300':'#0F1B3D'}">${_sil} d</b>`:''}</div>
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:20px;font-weight:700">${inc.title||'—'}</span>
-          <span style="background:${ss.bg};color:${ss.color};padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;letter-spacing:.04em">${ss.label}</span>
-          <span style="background:${sev.accent};color:white;padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600">${sev.label}</span>
-        </div>
-        <div style="font-size:11px;color:${dim.ink2};margin-top:3px">${b?b.name+' · '+(b.type||'')+' · ':''}${fmtD(inc.date)}${inc.time?' '+inc.time:''}${mj?' · '+mj.no:' · No job linked'}</div>
+      <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end">
+        ${(!mj && !inc.quickFix)?`<button type="button" class="fj-btn pri" onclick="flCreateMaintFromInc('${inc.id}')">→ Create job</button>`:''}
+        <button type="button" class="fj-btn${(!mj && !inc.quickFix)?'':' pri'}" onclick="flOpenAddIncidentModal('${inc.id}')">Edit</button>
+        <button type="button" class="fj-btn" onclick="FLW.boat='${fjE(inc.boatId||'')}';FLW.item='${mj?'mj:'+fjE(mj.id):'inc:'+fjE(inc.id)}';FLW.stage=-1;flNavGo('fl-work')">Open in Fleet Work</button>
+        <button type="button" class="fj-btn dz" title="ลบ Incident ถาวร" onclick="flDeleteIncident('${inc.id}')">ลบ</button>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        ${(!mj && !inc.quickFix)?`<button onclick="flCreateMaintFromInc('${inc.id}')" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">→ Create Job</button>`:''}
-        <button onclick="flOpenAddIncidentModal('${inc.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
-        <button onclick="flDeleteIncident('${inc.id}')" title="ลบ Incident ถาวร" style="background:white;color:#C0392B;border:1px solid #E2B6B0;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">ลบ</button>
-      </div>
-    </div>
-  </div>`;
+    </div>`;
 
   // 4 stat cards
   const prio=inc.priority||0;
@@ -22079,12 +22171,25 @@ function flRenderIncDetailPink(){
     </div>
   </div>`;
 
-  mount.innerHTML=`${headerStrip}<div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 280px);overflow-y:auto">
+  /* §faSkin · โครงสองคอลัมน์แบบ Fleet Work · ซ้าย: สเตจ · คำอธิบาย/ทรัพย์สิน · timeline · ขวา: Next step · งานที่ผูก · การมอบหมาย · รูป */
+  const standKind=mj?'mj':'inc', standId=mj?mj.id:inc.id;
+  const nextExtra=(!mj && !inc.quickFix && st!=='resolved')?`<button type="button" class="fj-btn pri" onclick="flCreateMaintFromInc('${inc.id}')">→ Create job</button>`:'';
+  mount.innerHTML=`${headerStrip}<div class="fj-body" style="max-height:calc(100vh - 340px)">
     ${statCards}
-    ${warningBanner}
-    ${descSection}
-    ${damagedSection}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${timelineSection}${assignmentSection}</div>
+    <div class="fj-cols">
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        ${fjStandHtml(standKind,standId)}
+        ${descSection}
+        ${damagedSection}
+        ${timelineSection}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        ${fjNextHtml(standKind,standId,nextExtra)}
+        ${warningBanner}
+        ${assignmentSection}
+        ${(typeof flpCard==='function')?flpCard('inc', inc.id, {cols:3}):''}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -27366,6 +27471,448 @@ function fdCSS(){
   document.head.appendChild(s);
 }
 
+
+/* ══ §flPhoto (2026-10-18) · รูปในงาน · ใช้ร่วมกัน Fleet Work / Maintenance / Job Assignment / Project ═══════
+   เจ้าของ: "ตัว Fleet work ขอเพิ่มการเพิ่มรูปในงานหน่อย" · "ขอสามารถกลับไปแนบรูปตัวงานที่เสร็จไปแล้วด้วย"
+   · ลบ = ซ่อนก่อน (ตามหลัก) กู้คืนได้ · ลบถาวรเฉพาะจากรายการที่ซ่อน
+
+   เก็บที่ไหน:  งานซ่อม (MJ)  → m.photos[]        รายงานปัญหา (INC) → inc.photos[]
+                โปรเจค (PRJ)  → p.docs[] type='photo' ของเดิม (§projAttach) · ไม่ย้าย ไม่ซ้ำ
+   หนึ่งรูป = { id, attId, url, mime, size, name, cap, stage, addedAt, by, removed?, removedBy?, removedAt? }
+     stage = สเตจของงาน "ตอนที่เพิ่มรูป" (Reported / Repairing / To close / Done …) ระบบใส่ให้เอง
+     ⚠ เก็บแค่ ref · ไฟล์จริงอยู่ตาราง attachments (POST /api/attach · ท่อเดียวกับสลิปและ Project)
+       ไม่เคยเก็บ base64 ลง blob
+   ฐานข้อมูล: fleet_maintenance.photos / fleet_incidents.photos เป็น json_text (migration 038)
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var FLP_C={'Reported':'#5B6170','Job open':'#1272B3','Waiting':'#D9952B','Repairing':'#2E9C78','To close':'#16265C','Billing':'#8E3A6B','Done':'#0F6E56','Project':'#534AB7','Quick fix':'#0F6E56'};
+var FLP_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+function flpE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* ══ §flpVideo (2026-10-18) · คลิปวิดีโอเป็นหลักฐานได้ด้วย · เจ้าของส่งคลิป 5 วิ 1.3MB มาเป็นตัวอย่าง
+   ทางที่ 1 · คลิปสั้น ≤ 6MB อัปตรงท่อเดิม (เพดานของเซิร์ฟเวอร์ · ไฟล์อยู่ในตาราง attachments) · ใหญ่กว่านั้นบอกให้ใช้ลิงก์
+   ทางที่ 2 · แปะลิงก์ YouTube / Google Drive / ไฟล์ .mp4 จากที่อื่น · เก็บแค่ลิงก์
+   เก็บใน photos[] เดิม เพิ่ม kind:'video' · ไม่แตะฐานข้อมูล · การ์ดแสดงเป็นช่อง ▶ · ดูเต็มจอเล่นในหน้าต่างเดียวกัน
+   ⚠ iPhone เล่นวิดีโอได้ต่อเมื่อเซิร์ฟเวอร์รองรับ HTTP Range · /api/attach/<id> ถูกแก้ให้ตอบ 206 แล้ว (server.js §attachRange) */
+var FLP_VID_MAX=6*1024*1024;
+var FLP_PLAY='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+function flpIsVideo(p){ return !!(p && (p.kind==='video' || /^video\//i.test(String(p.mime||'')))); }
+/* ลิงก์วิดีโอจากที่อื่น → {embed, direct} · YouTube / Drive เล่นแบบฝัง · ไฟล์ .mp4/.mov/.webm เล่นตรง */
+function flpVidLink(url){
+  var u=String(url||'').trim(), m;
+  if((m=u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/))) return {embed:'https://www.youtube.com/embed/'+m[1], kind:'youtube'};
+  if((m=u.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/))) return {embed:'https://drive.google.com/file/d/'+m[1]+'/preview', kind:'drive'};
+  if((m=u.match(/drive\.google\.com\/open\?id=([A-Za-z0-9_-]+)/))) return {embed:'https://drive.google.com/file/d/'+m[1]+'/preview', kind:'drive'};
+  if(/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u)) return {direct:u, kind:'file'};
+  return null;
+}
+function flpVidHtml(p, full){
+  var lk=(p.attId||!p.url)?null:flpVidLink(p.url);
+  if(lk && lk.embed) return '<iframe src="'+flpE(lk.embed)+'" allow="autoplay; fullscreen" allowfullscreen style="width:min(92vw,960px);aspect-ratio:16/9;border:0;border-radius:8px;background:#000"></iframe>';
+  return '<video src="'+flpE(p.url)+'" controls autoplay playsinline preload="metadata" style="max-width:92vw;max-height:80vh;border-radius:8px;background:#000"></video>';
+}
+function flpRec(kind,id){
+  try{
+    if(kind==='mj')  return (FL_MAINT||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+    if(kind==='inc') return (FL_INCIDENTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+    if(kind==='prj') return (FL_PROJECTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+  }catch(_){}
+  return null;
+}
+/* รายการรูปในรูปแบบเดียวกันทุกชนิด · โปรเจคอ่านจาก docs[] (แปลง name→cap · phase→stage) */
+function flpList(kind,rec){
+  if(!rec) return [];
+  if(kind==='prj'){
+    return (rec.docs||[]).filter(function(d){ return d&&d.type==='photo'; }).map(function(d){
+      return { id:d.id, attId:d.attId||'', url:d.url||'', mime:d.mime||'', size:d.size||0, name:d.name||'', cap:d.name||'', stage:'Project',
+               addedAt:d.addedAt||'', by:d.by||'', removed:!!d.removed, removedBy:d.removedBy||'', removedAt:d.removedAt||'', _doc:d }; });
+  }
+  if(!Array.isArray(rec.photos)) return [];
+  return rec.photos.filter(Boolean);
+}
+function flpCount(kind,rec){ return flpList(kind,rec).filter(function(p){ return !p.removed; }).length; }
+/* สเตจของงานตอนนี้ · ใช้กติกาเดียวกับหน้า Fleet Work (flwItems) · งานที่ปิดแล้ว = Done */
+function flpStageNow(kind,rec){
+  if(!rec) return '';
+  if(kind==='prj') return 'Project';
+  if(kind==='mj'){
+    if(rec.status==='done' && !rec.awaitingInvoice) return 'Done';
+    try{ var it=flwItems().filter(function(x){ return x.key==='mj:'+rec.id; })[0]; if(it) return FLW_ST[it.stage].t; }catch(_){}
+    return rec.status==='done'?'Billing':(rec.status==='pending'?'Job open':'Repairing');
+  }
+  var st=String(rec.status||'open');
+  if(st==='resolved'||st==='closed') return rec.quickFix?'Quick fix':'Done';
+  if(rec.maintId){ var m=flpRec('mj',rec.maintId); if(m) return flpStageNow('mj',m); }
+  return 'Reported';
+}
+function flpBy(){ var w=''; try{ w=(typeof flBoardWho==='function'?flBoardWho():'')||''; }catch(_){} if(!w){ try{ w=(typeof laBy==='function'?laBy():'')||''; }catch(_){} } return w||'user'; }
+function flpCan(){ try{ return (typeof flBoardCanEdit==='function')?flBoardCanEdit():true; }catch(_){ return true; } }
+function flpLog(kind,rec,text){
+  try{
+    var by=flpBy();
+    if(kind==='prj'){ if(!rec.log) rec.log=[]; rec.log.push({date:TODAY_STR, text:text, by:by}); return; }
+    if(!rec.progressLog) rec.progressLog=[];
+    rec.progressLog.push({date:TODAY_STR, text:text, by:by});
+    if(kind==='mj' && typeof flPushLog==='function') flPushLog(rec.id, text, by, TODAY_STR);
+  }catch(_){}
+}
+function flpPush(kind,rec,meta,cap){
+  var now=new Date().toISOString(), by=flpBy();
+  if(kind==='prj'){
+    if(!rec.docs) rec.docs=[];
+    rec.docs.push({ id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), name:cap||meta.name||('Photo · '+TODAY_STR), url:meta.url, attId:meta.attId||'', mime:meta.mime||'', size:meta.size||0,
+                    note:cap||'', type:'photo', phase:rec.phase||'planning', status:'received', addedAt:TODAY_STR, by:by });
+    return;
+  }
+  if(!Array.isArray(rec.photos)) rec.photos=[];
+  var isV=/^video\//i.test(String(meta.mime||'')) || meta.kind==='video';
+  rec.photos.push({ id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), attId:meta.attId||'', url:meta.url, mime:meta.mime||'', size:meta.size||0,
+                    name:meta.name||'', cap:cap||'', stage:flpStageNow(kind,rec), addedAt:now, by:by, kind:isV?'video':'photo' });
+}
+/* เพิ่มรูปจากเครื่อง/กล้อง · note = ข้อความจากช่องโน้ต (ถ้ามี) จะลง timeline พร้อมกัน */
+function flpAdd(kind,id,note){
+  if(!flpCan()) return;
+  if(!flpRec(kind,id)) return;
+  if(typeof _flProjPickFiles!=='function' || typeof _flProjUploadAll!=='function'){ alert('Photo upload is not available on this page.'); return; }
+  _flProjPickFiles('image/*,video/*', true, function(files){
+    /* §flpVideo · คลิปเกิน 6MB ไม่ส่ง (เซิร์ฟเวอร์ปฏิเสธอยู่ดี) · บอกขนาดและทางออก · ไฟล์อื่นในชุดเดียวกันยังไปต่อ */
+    var big=files.filter(function(f){ return /^video\//i.test(f.type||'') && f.size>FLP_VID_MAX; });
+    if(big.length){ alert('Video too large: '+big.map(function(f){ return (f.name||'clip')+' ('+(f.size/1048576).toFixed(1)+' MB)'; }).join(', ')+'\nLimit 6 MB per clip. Trim it, or upload it to Drive and use "Paste link".'); files=files.filter(function(f){ return big.indexOf(f)<0; }); if(!files.length) return; }
+    /* §flpMulti (2026-10-18) · เจ้าของ: "add หลายๆ รูปพร้อมกันไม่เข้า"
+       อัปหลายรูปกินเวลาหลายวินาที · ระหว่างนั้นถ้ามีคนอื่นเซฟอะไรในระบบ ตัวซิงก์จะดึงข้อมูลใหม่มาทับ
+       (_laReloadData) · FL_MAINT กลายเป็นอ็อบเจ็กต์ชุดใหม่ · ของเดิมถือ rec ตัวเก่าไว้ใน closure
+       รูปจึงถูกยัดลงอ็อบเจ็กต์ที่ไม่มีใครอ่านแล้ว แล้ว flSave ตอนจบก็เขียนชุดใหม่ที่ไม่มีรูป = หายเงียบ
+       แก้ 3 ชั้น: (1) หา rec ใหม่ทุกครั้งที่จะเขียน (2) เซฟทันทีทีละรูป ไม่รอจบ
+       (3) บอกตัวซิงก์ว่ากำลังอัปอยู่ (_flpUploading) ให้เลื่อนการดึงข้อมูลใหม่ไปก่อน · และตอนจบเช็กซ้ำว่ารูปทุกใบยังอยู่ */
+    var n=0, added=[], t=String(note||'').trim();
+    window._flpUploading=(window._flpUploading||0)+1;
+    _flProjUploadAll(files, kind+'_'+id, function(meta){
+      var rec=flpRec(kind,id); if(!rec) return;
+      n++; flpPush(kind, rec, { attId:meta.id, url:'/api/attach/'+encodeURIComponent(meta.id), mime:meta.mime, size:meta.size, name:meta.name }, (n===1?t:''));
+      var L=flpList(kind,rec); added.push(L[L.length-1]);
+      try{ flSave(); }catch(_){}
+    }, function(ok){
+      window._flpUploading=Math.max(0,(window._flpUploading||1)-1);
+      var rec=flpRec(kind,id); if(!rec) return;
+      if(!ok) return;
+      /* รูปที่ถูกข้อมูลใหม่ทับไปแล้ว เติมกลับ */
+      var have={}; flpList(kind,rec).forEach(function(p){ have[p.id]=1; });
+      added.forEach(function(p){ if(p && !have[p.id]){ if(kind==='prj'){ if(!rec.docs) rec.docs=[]; rec.docs.push(p._doc||p); } else { if(!Array.isArray(rec.photos)) rec.photos=[]; rec.photos.push(p); } } });
+      var nv=added.filter(flpIsVideo).length;
+      flpLog(kind, rec, (t?(t+' · '):'')+(nv===ok?'Video added · ':nv?'Photo/video added · ':'Photo added · ')+ok+' file'+(ok>1?'s':''));
+      flSave(); flpRefresh(kind,id,true);
+    });
+  });
+}
+/* แปะลิงก์รูปจากที่อื่น (Drive ของอู่) · ทางเดิมของ Project */
+function flpAddUrl(kind,id){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id); if(!rec) return;
+  var url=prompt('Image or video URL (YouTube · Google Drive · .jpg/.mp4):',''); if(!url) return; url=String(url).trim(); if(!url) return;
+  var cap=prompt('Caption (optional):','')||'';
+  var vl=flpVidLink(url);   /* §flpVideo */
+  flpPush(kind, rec, { url:url, name:cap||((vl?'Video':'Photo')+' · '+TODAY_STR), kind:vl?'video':'photo' }, cap);
+  flpLog(kind, rec, (vl?'Video':'Photo')+' link added'+(cap?(': '+cap):''));
+  flSave(); flpRefresh(kind,id,true);
+}
+function flpFind(kind,rec,pid){ return flpList(kind,rec).filter(function(p){ return p.id===pid; })[0]||null; }
+function flpCap(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var v=prompt('Caption:', p.cap||''); if(v==null) return; v=String(v).trim();
+  if(p._doc){ p._doc.name=v||p._doc.name; p._doc.note=v; } else p.cap=v;
+  flSave(); flpRefresh(kind,id);
+}
+/* ลบ = ซ่อน · รูปยังอยู่บนเซิร์ฟเวอร์ · กู้คืนได้จาก "ซ่อนไว้ N รูป" */
+function flpHide(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var tgt=p._doc||p; tgt.removed=true; tgt.removedBy=flpBy(); tgt.removedAt=new Date().toISOString();
+  flpLog(kind, rec, 'Photo hidden'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+function flpRestore(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p) return;
+  var tgt=p._doc||p; delete tgt.removed; delete tgt.removedBy; delete tgt.removedAt;
+  flpLog(kind, rec, 'Photo restored'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+/* ลบถาวร · เฉพาะรูปที่ซ่อนอยู่แล้ว · ไฟล์บนเซิร์ฟเวอร์ลบตาม (ลิงก์ที่แปะเองไม่มีไฟล์ ไม่ต้องยิง) */
+function flpPurge(kind,id,pid){
+  if(!flpCan()) return;
+  var rec=flpRec(kind,id), p=rec&&flpFind(kind,rec,pid); if(!p||!p.removed) return;
+  if(!confirm('Delete this photo permanently? This cannot be undone.')) return;
+  if(p.attId) fetch('/api/attach/'+encodeURIComponent(p.attId),{method:'DELETE'}).catch(function(){});
+  if(kind==='prj') rec.docs=(rec.docs||[]).filter(function(d){ return d&&d.id!==pid; });
+  else rec.photos=(rec.photos||[]).filter(function(x){ return x&&x.id!==pid; });
+  flpLog(kind, rec, 'Photo deleted permanently'+(p.cap?(': '+p.cap):''));
+  flSave(); flpRefresh(kind,id);
+}
+function flpTogHidden(kind,id){ var k=kind+':'+id; window._flpShowHidden=window._flpShowHidden||{}; window._flpShowHidden[k]=!window._flpShowHidden[k]; flpRefresh(kind,id); }
+/* ดูเต็มจอ · ← → เลื่อนรูป · Esc ปิด */
+function flpView(kind,id,pid){
+  var rec=flpRec(kind,id); if(!rec) return;
+  var L=flpList(kind,rec).filter(function(p){ return !p.removed; }); var i=L.findIndex(function(p){ return p.id===pid; }); if(i<0) return;
+  var old=document.getElementById('flp-lb'); if(old) old.remove();
+  var box=document.createElement('div'); box.id='flp-lb';
+  box.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(10,14,28,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-family:inherit';
+  var draw=function(){ var p=L[i];
+    box.innerHTML=(flpIsVideo(p)?flpVidHtml(p,true):'<img src="'+flpE(p.url)+'" style="max-width:92vw;max-height:80vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);object-fit:contain;background:#000">')
+      +'<div style="color:#E5E7EB;font-size:13px;display:flex;align-items:center;gap:10px;max-width:92vw"><span style="font-weight:700;color:#fff;background:'+(FLP_C[p.stage]||'#5B6170')+';border-radius:6px;padding:2px 8px;font-size:11px">'+flpE(p.stage||'')+'</span>'
+      +'<span>'+flpE(p.cap||p.name||'')+'</span><span style="color:#9CA3AF">'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span><span style="color:#9CA3AF">'+(i+1)+' / '+L.length+'</span></div>'
+      +(L.length>1?'<button type="button" data-d="-1" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8249;</button><button type="button" data-d="1" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">&#8250;</button>':'')
+      +'<button type="button" data-x="1" style="position:absolute;right:14px;top:12px;width:36px;height:36px;border-radius:18px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer">&times;</button>'; };
+  var key=function(e){ if(e.key==='Escape') close(); else if(e.key==='ArrowLeft'){ i=(i-1+L.length)%L.length; draw(); } else if(e.key==='ArrowRight'){ i=(i+1)%L.length; draw(); } };
+  var close=function(){ box.remove(); document.removeEventListener('keydown',key); };
+  box.addEventListener('click',function(e){ var b=e.target.closest('button'); if(b&&b.dataset.d){ i=(i+(+b.dataset.d)+L.length)%L.length; draw(); return; } if(b&&b.dataset.x){ close(); return; } if(e.target===box) close(); });
+  document.addEventListener('keydown',key);
+  draw(); document.body.appendChild(box);
+}
+function flpWhen(s){ s=String(s||''); if(!s) return ''; var d=s.slice(0,10).split('-'); if(d.length<3||!+d[0]) return s; var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (+d[2])+' '+MO[(+d[1]||1)-1]; }
+/* การ์ด PHOTOS · ใช้ได้ทุกหน้า · opts: {cols, title, compact} · data-flp ใช้ตอน refresh เฉพาะการ์ดไม่ต้อง render ทั้งหน้า */
+function flpCard(kind,id,opts){
+  opts=opts||{}; var rec=flpRec(kind,id); if(!rec) return '';
+  var can=flpCan(), all=flpList(kind,rec), L=all.filter(function(p){ return !p.removed; }), H=all.filter(function(p){ return p.removed; });
+  var showH=!!(window._flpShowHidden&&window._flpShowHidden[kind+':'+id]);
+  var cols=+opts.cols||3, closed=(flpStageNow(kind,rec)==='Done');
+  var A="'"+flpE(kind)+"','"+flpE(id)+"'";
+  var tile=function(p,hid){
+    var isV=flpIsVideo(p), vl=(isV&&!p.attId)?flpVidLink(p.url):null;
+    return '<div class="flp-t'+(hid?' hid':'')+(isV?' vid':'')+'" title="'+flpE(p.cap||p.name||'')+'">'
+      +(isV
+        ? ((vl&&vl.embed)
+            ? '<div class="flp-vph" onclick="flpView('+A+',\''+flpE(p.id)+'\')"><span>'+flpE(vl.kind==='youtube'?'YouTube':'Google Drive')+'</span></div>'
+            : '<video src="'+flpE(p.url)+'#t=0.1" muted playsinline preload="metadata" onclick="flpView('+A+',\''+flpE(p.id)+'\')"></video>')
+          +'<i class="flp-play" onclick="flpView('+A+',\''+flpE(p.id)+'\')">'+FLP_PLAY+'</i>'
+        : '<img src="'+flpE(p.url)+'" loading="lazy" alt="" onclick="flpView('+A+',\''+flpE(p.id)+'\')" onerror="this.style.opacity=.25">')
+      +'<span class="flp-s" style="background:'+(FLP_C[p.stage]||'#5B6170')+'">'+flpE(p.stage||'')+'</span>'
+      +'<div class="flp-m" onclick="flpView('+A+',\''+flpE(p.id)+'\')"><b>'+(p.cap?flpE(p.cap):'<i>'+(can?'add caption':'')+'</i>')+'</b><span>'+flpE(flpWhen(p.addedAt))+(p.by?(' · '+flpE(p.by)):'')+'</span></div>'
+      +(can?(hid
+        ?('<div class="flp-hb"><button type="button" onclick="flpRestore('+A+',\''+flpE(p.id)+'\')">Restore</button><button type="button" class="dz" onclick="flpPurge('+A+',\''+flpE(p.id)+'\')">Delete</button></div>')
+        :('<button type="button" class="flp-x" title="Hide photo" onclick="event.stopPropagation();flpHide('+A+',\''+flpE(p.id)+'\')">&times;</button>'
+          +'<button type="button" class="flp-c" title="Edit caption" onclick="event.stopPropagation();flpCap('+A+',\''+flpE(p.id)+'\')">&#9998;</button>')):'')
+      +'</div>'; };
+  var h='<div class="flp" data-flp="'+flpE(kind+':'+id)+'" data-flpo="'+flpE(JSON.stringify(opts))+'">'
+    +'<div class="flp-h"><span class="k">'+flpE(opts.title||'Photos')+'</span><span class="n">'+L.length+'</span>'
+    +(closed&&kind!=='prj'?'<span class="flp-done">&#10003; Done · photos can still be added</span>':'')
+    +(can?('<div class="flp-b"><button type="button" class="pri" onclick="flpAdd('+A+')">'+FLP_SVG+' Add photo / video</button><button type="button" onclick="flpAddUrl('+A+')">Paste link</button></div>'):'')+'</div>'
+    +'<div class="flp-g" style="grid-template-columns:repeat('+cols+',1fr)">'+L.map(function(p){ return tile(p,false); }).join('')
+    +(can?('<div class="flp-add" onclick="flpAdd('+A+')">'+FLP_SVG+'<span>Add photo</span></div>'):(L.length?'':'<div class="flp-add" style="cursor:default">'+FLP_SVG+'<span>No photos</span></div>'))+'</div>'
+    +(H.length?('<div class="flp-f"><a onclick="flpTogHidden('+A+')">'+(showH?'Hide':'Show')+' hidden · '+H.length+' photo'+(H.length>1?'s':'')+'</a></div>'
+      +(showH?('<div class="flp-g hid" style="grid-template-columns:repeat('+cols+',1fr)">'+H.map(function(p){ return tile(p,true); }).join('')+'</div>'):'')):'')
+    +(opts.compact?'':'<div class="flp-f">Tagged with the stage the job was in when added · tap to view full size · video clips up to 6 MB, longer ones via a YouTube / Drive link · hidden items stay on the server until deleted from the hidden list</div>')
+    +'</div>';
+  return h;
+}
+/* วาดการ์ดใหม่เฉพาะจุด · ไม่ render ทั้งหน้า (ไม่เสีย scroll / โฟกัส) · full=true ใช้ตอนจำนวนรูปเปลี่ยน ให้ตัวนับในรายการตามด้วย */
+function flpRefresh(kind,id,full){
+  var sel='[data-flp="'+kind+':'+id+'"]', done=false;
+  try{ [].slice.call(document.querySelectorAll(sel)).forEach(function(el){ var o={}; try{ o=JSON.parse(el.getAttribute('data-flpo')||'{}'); }catch(_){} var w=document.createElement('div'); w.innerHTML=flpCard(kind,id,o); if(w.firstChild){ el.replaceWith(w.firstChild); done=true; } }); }catch(_){}
+  if(full){ try{ if(typeof FLW!=='undefined' && document.getElementById('fl-work-wrap') && document.getElementById('view-fl-work') && document.getElementById('view-fl-work').classList.contains('active') && typeof flRenderWork==='function') flRenderWork(); }catch(_){} }
+  if(!done){ try{ if(kind==='prj' && typeof flRenderProjects==='function') flRenderProjects(); }catch(_){} }
+}
+function flpCSS(){
+  if(document.getElementById('flp-css')) return;
+  var s=document.createElement('style'); s.id='flp-css';
+  s.textContent=''
+   +'.flp{padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #ECEBE6;font-family:inherit}'
+   +'.flp-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}'
+   +'.flp-h .k{font-size:13px;font-weight:700;color:#0F1B3D}'
+   +'.flp-h .n{font-family:"DM Mono",monospace;font-size:11px;color:#5B6170;background:#F1F0EC;border-radius:6px;padding:1px 6px}'
+   +'.flp-done{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#0F6E56;background:#E4F3EC;border-radius:6px;padding:2px 8px;font-weight:600}'
+   +'.flp-b{margin-left:auto;display:flex;gap:6px;flex:none}'
+   +'.flp-b button{height:28px;padding:0 10px;border-radius:8px;border:1px solid #CFCFC8;background:#fff;font:600 12px/1 inherit;font-family:inherit;color:#0F1B3D;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
+   +'.flp-b button svg{width:14px;height:14px;flex:none}'
+   +'.flp-b button.pri{background:#16265C;border-color:#16265C;color:#fff}'
+   +'.flp-g{display:grid;gap:8px}'
+   +'.flp-g.hid{margin-top:8px;opacity:.75}'
+   +'.flp-t{position:relative;border-radius:8px;overflow:hidden;background:#F1F0EC;aspect-ratio:1;cursor:zoom-in}'
+   +'.flp-t img{width:100%;height:100%;object-fit:cover;display:block}'
+   +'.flp-t video{width:100%;height:100%;object-fit:cover;display:block;background:#000}'
+   +'.flp-vph{width:100%;height:100%;background:linear-gradient(135deg,#1F2937,#0F1B3D);display:flex;align-items:flex-start;justify-content:flex-end;padding:6px;box-sizing:border-box}'
+   +'.flp-vph span{font-size:9.5px;font-weight:700;color:#E5E7EB;background:rgba(255,255,255,.14);border-radius:5px;padding:2px 6px}'
+   +'.flp-play{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:none}'
+   +'.flp-play svg{width:20px;height:20px;margin-left:2px}'
+   +'.flp-t.hid img{filter:grayscale(1)}'
+   +'.flp-s{position:absolute;left:6px;top:6px;font-size:9.5px;font-weight:700;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.02em;pointer-events:none}'
+   +'.flp-m{position:absolute;left:0;right:0;bottom:0;padding:16px 7px 6px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:10.5px;line-height:1.3}'
+   +'.flp-m b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .flp-m i{color:#D1D5DB;font-weight:400;font-style:italic} .flp-m span{color:#D1D5DB;font-size:9.5px}'
+   +'.flp-x,.flp-c{position:absolute;top:5px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:14px;line-height:22px;padding:0;cursor:pointer;opacity:0;transition:opacity .12s}'
+   +'.flp-x{right:5px} .flp-c{right:31px;font-size:12px}'
+   +'.flp-t:hover .flp-x,.flp-t:hover .flp-c{opacity:1}'
+   +'@media (hover:none){.flp-x,.flp-c{opacity:.85}}'
+   +'.flp-hb{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(0,0,0,.35)}'
+   +'.flp-hb button{height:26px;padding:0 9px;border-radius:7px;border:0;background:#fff;color:#0F1B3D;font:600 11px/1 inherit;font-family:inherit;cursor:pointer}'
+   +'.flp-hb button.dz{background:#A32D2D;color:#fff}'
+   +'.flp-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed #CFCFC8;border-radius:8px;aspect-ratio:1;color:#5B6170;font-size:11px;font-weight:600;cursor:pointer;background:#FAFAF8}'
+   +'.flp-add svg{width:22px;height:22px}'
+   +'.flp-f{margin-top:8px;font-size:11px;color:#8A8F9B;line-height:1.4}'
+   +'.flp-f a{color:#0F6CA6;font-weight:600;cursor:pointer}'
+   +'.flp-cnt{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#5B6170;margin-left:6px;vertical-align:middle;border:1px solid #E3E6EA;border-radius:5px;padding:0 5px;line-height:16px;font-weight:600}'
+   +'.flp-cnt.z{color:#B45309;border-color:#F5D9A8;background:#FFF7E6}'
+   +'.flp-cnt svg{width:12px;height:12px}';
+  document.head.appendChild(s);
+}
+try{ flpCSS(); }catch(_){}
+function flpChip(kind,rec,warnEmpty){
+  var n=flpCount(kind,rec);
+  if(!n && !warnEmpty) return '';
+  return '<span class="flp-cnt'+(n?'':' z')+'" title="'+(n?(n+' photo'+(n>1?'s':'')):'no photo yet')+'">'+FLP_SVG+(n?n:'no photo')+'</span>';
+}
+
+/* ══ §faSkin (2026-10-18) · Job Assignment + Maintenance ดีไซน์ตาม Fleet Work ═══════════════════════════
+   เจ้าของ: "ปรับดีไซน์หน้า Job assignment Maintenance อิงตาม Fleet work" → mock ใน Claude Design → "ทำ"
+   ชั้นนี้ทำ 4 อย่าง · ไม่แตะตรรกะ ไม่แตะฐานข้อมูล · ถอดออก = หน้าตาเดิม
+     1. fjCSS   เปลือกกรมท่า + การ์ดขาว (ตัวเลข mono · ป้าย · เม็ดตัวกรอง) ของสองหน้า
+     2. fjTop   หัวหน้าแบบ Fleet Work · ตัวเลขใหญ่ซ้าย · wordmark กลาง · ชิป+ปุ่มขวา · แท็บ · แถบสเตจ (กดแล้วกรอง)
+     3. fjStand "Where it stands" + "Next step" ของงาน/รายงาน · ใช้ตัวคำนวณเดียวกับ Fleet Work (flwItems + flwPanel core)
+     4. fjRow   แถวรายการ (แถบสีซ้าย · เลข mono · ป้าย · ชื่อ 2 บรรทัด · เมตา · ขวา: สเตจ/ตัวเลข/แถบ 6 สเตจ)
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* วันที่สั้น · ไม่พึ่ง FLW_MO (ประกาศทีหลังในไฟล์ · ตอน flLoad บูตยังเป็น undefined) */
+function fjD(s){ s=String(s||'').slice(0,10); var a=s.split('-'); if(a.length<3||!+a[0]) return s||'—'; var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (+a[2])+' '+(MO[(+a[1]||1)-1]||'')+(+a[0]!==new Date().getFullYear()?(' '+a[0]):''); }
+function fjE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fjCSS(){
+  if(document.getElementById('fj-css')) return;
+  var s=document.createElement('style'); s.id='fj-css';
+  var VV=['#view-fl-incident','#view-fl-maintenance'], css='';
+  VV.forEach(function(V){
+    css+=V+'{padding:18px 18px 0;background:#16265C;min-height:100%;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D}'
+      +V+' > .page-hd{display:none}'
+      +V+' #fl-inc-pink-wrap,'+V+' #fl-maint-pink-wrap{background:transparent!important;margin:0!important;padding:0!important}'
+      +V+' .mono{font-family:\'DM Mono\',ui-monospace,monospace;font-variant-numeric:tabular-nums}'
+      /* หัว */
+      +V+' .fj-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;min-height:46px}'
+      +V+' .fj-l{display:flex;align-items:center;gap:10px;color:#fff}'
+      +V+' .fj-l b{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1}'
+      +V+' .fj-l span{line-height:1.15;font-size:13px;font-weight:700}'
+      +V+' .fj-l span i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#B4BCDD}'
+      +V+' .fj-wm{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff;padding-left:.30em;white-space:nowrap}'
+      +V+' .fj-wm i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD}'
+      +V+' .fj-chips{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}'
+      +V+' .fj-chip{height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.14);white-space:nowrap}'
+      +V+' .fj-chip b{font-weight:800}'
+      +V+' .fj-chip.red{background:#FBE0DD;color:#8E2A20;border-color:transparent}'+V+' .fj-chip.amb{background:#FBEBD3;color:#7A4300;border-color:transparent}'
+      +V+' .fj-btnw{height:32px;padding:0 14px;border-radius:16px;border:1px solid #fff;background:#fff;color:#0F1B3D;font:700 12.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+      +V+' .fj-tabs{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}'
+      +V+' .fj-tabs button{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font:600 12.5px inherit;font-family:inherit;cursor:pointer}'
+      +V+' .fj-tabs button.on{background:#fff;border-color:#fff;color:#0F1B3D;font-weight:700}'
+      +V+' .fj-st{display:grid;gap:6px;margin-top:10px}'
+      +V+' .fj-stg{height:54px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;font-family:inherit;min-width:0}'
+      +V+' .fj-stg.on{background:#fff;color:#0F1B3D;border-color:#fff}'
+      +V+' .fj-stg u{text-decoration:none;font-family:\'DM Mono\',monospace;font-size:11px;opacity:.7}'
+      +V+' .fj-stg span{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +V+' .fj-stg span i{display:block;font-style:normal;font-size:11px;font-weight:400;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +V+' .fj-stg b{font-family:\'DM Mono\',monospace;font-size:20px;font-weight:500}'
+      +V+' .fj-stg b.r{color:#FF9D94}'+V+' .fj-stg.on b.r{color:#A32D2D}'
+      /* ตัวหน้า */
+      +V+' .fj-2{display:grid;grid-template-columns:400px minmax(0,1fr);gap:10px;margin-top:10px;align-items:start}'
+      +V+' .fj-card{background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(2,10,30,.34);overflow:hidden;display:flex;flex-direction:column;min-width:0}'
+      +V+' .fj-kick{font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658}'
+      +V+' .fj-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;white-space:nowrap}'
+      +V+' .fj-q{margin-left:auto;display:flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px solid #CFCFC8;border-radius:14px;font-size:12px;color:#5B6170;width:150px;box-sizing:border-box}'
+      +V+' .fj-q input{border:0;outline:0;background:transparent;font:inherit;width:100%;color:#0F1B3D;min-width:0}'
+      +V+' .fj-q svg{width:14px;height:14px;flex:none}'
+      +V+' .fj-seg{display:flex;border-bottom:1px solid #ECEBE6}'
+      +V+' .fj-seg button{flex:1;height:38px;border:0;background:#fff;font:600 12.5px inherit;font-family:inherit;color:#5B6170;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-bottom:2px solid transparent}'
+      +V+' .fj-seg button.on{color:#0F1B3D;border-bottom-color:#0F1B3D}'
+      +V+' .fj-seg button i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:11px;background:#F1F0EC;border-radius:6px;padding:0 6px;line-height:17px;color:#3E4658}'
+      +V+' .fj-fc{height:28px;padding:0 10px;border-radius:14px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
+      +V+' .fj-fc.on{background:#0F1B3D;border-color:#0F1B3D;color:#fff}'+V+' .fj-fc i{font-style:normal;font-family:\'DM Mono\',monospace;opacity:.7}'
+      +V+' .fj-grp{display:flex;align-items:center;gap:10px;padding:7px 14px;background:#F7F7F5;border-bottom:1px solid #ECEBE6;font-size:12px;color:#5B6170}'
+      +V+' .fj-grp b{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#3E4658}'
+      +V+' .fj-grp a{margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer;white-space:nowrap}'
+      +V+' .fj-row{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:10px;padding:9px 14px 9px 12px;border-bottom:1px solid #ECEBE6;cursor:pointer;align-items:start;min-height:62px}'
+      +V+' .fj-row:hover{background:#F7F7F5}'+V+' .fj-row.on{background:#E8F3FB;box-shadow:inset 3px 0 0 #1272B3}'
+      +V+' .fj-row.dim{opacity:.72}'
+      +V+' .fj-row .bar{width:4px;border-radius:2px;align-self:stretch;min-height:44px}'
+      +V+' .fj-row .no{font-family:\'DM Mono\',monospace;font-size:11.5px;color:#5B6170;display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
+      +V+' .fj-row .ttl{font-size:13px;font-weight:600;color:#0F1B3D;line-height:1.3;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+      +V+' .fj-row .mt{font-size:11px;color:#5B6170;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +V+' .fj-row .rt{display:flex;flex-direction:column;align-items:flex-end;gap:5px}'
+      +V+' .fj-row .num{font-family:\'DM Mono\',monospace;font-size:11.5px;color:#3E4658}'
+      +V+' .fj-lk{font-family:\'DM Mono\',monospace;font-size:10.5px;color:#0F6CA6;background:#E8F3FB;border-radius:5px;padding:1px 6px}'
+      +V+' .fj-boat{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;color:#fff}'
+      +V+' .fj-dots{display:inline-flex;gap:2px}'+V+' .fj-dots i{width:6px;height:6px;border-radius:3px;background:#E2DED6}'+V+' .fj-dots i.on{background:#A32D2D}'
+      +V+' .fj-trk{display:flex;gap:2px}'+V+' .fj-trk i{width:9px;height:4px;border-radius:2px;background:#ECEBE6}'
+      +V+' .fj-foot{flex:none;display:flex;gap:14px;align-items:center;padding:9px 14px 11px;border-top:1px solid #ECEBE6;font-size:12px;color:#5B6170}'
+      +V+' .fj-foot a{margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer}'
+      +V+' .fj-list{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}'
+      /* การ์ดขวา · หัว */
+      +V+' .fj-dh{padding:14px 18px 12px;border-bottom:1px solid #ECEBE6;display:flex;align-items:flex-start;gap:12px}'
+      +V+' .fj-id{width:48px;height:48px;border-radius:12px;background:#0F1B3D;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}'
+      +V+' .fj-id span:first-child{font-size:9px;font-weight:700;letter-spacing:.12em;opacity:.7}'
+      +V+' .fj-id span:last-child{font-family:\'DM Mono\',monospace;font-size:15px;font-weight:500}'
+      +V+' .fj-btn{height:34px;padding:0 14px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}'
+      +V+' .fj-btn.pri{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'+V+' .fj-btn.ok{background:#0F6E56;border-color:#0F6E56;color:#fff;font-weight:700}'+V+' .fj-btn.dz{color:#A32D2D;border-color:#F0C9C9}'
+      +V+' .fj-body{padding:14px 18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;scrollbar-width:thin}'
+      +V+' .fj-cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}'
+      +V+' .fj-sec{font-size:13px;font-weight:700;color:#0F1B3D;display:flex;align-items:center;gap:8px}'+V+' .fj-sec small{font-weight:500;color:#5B6170;font-size:11.5px}'
+      +V+' .fj-next{background:#F7F7F5;border:1px solid #ECEBE6;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.45}'
+      +V+' .fj-next .k{font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170}'
+      +V+' .fj-next .flw-btn{height:34px;padding:0 14px;border-radius:10px;border:1px solid #CFCFC8;background:#fff;color:#0F1B3D;font:600 12.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+      +V+' .fj-next .flw-btn.pri{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
+      +V+' .fj-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:14px;margin-top:6px}'
+      +V+' .fj-steps .flw-step{display:grid;grid-template-columns:22px 1fr;gap:10px;align-items:start;padding:6px 0}'
+      +V+' .fj-steps .flw-step .dot{position:relative}'+V+' .fj-steps .flw-step .dot b{width:20px;height:20px;border-radius:10px;border:2px solid #CFCFC8;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:#fff;box-sizing:border-box;font-style:normal}'
+      +V+' .fj-steps .flw-step .dot u{display:none}'
+      +V+' .fj-steps .flw-step.done .dot b{background:#2E9C78;border-color:#2E9C78}'+V+' .fj-steps .flw-step.now .dot b{border-color:#D9952B;box-shadow:inset 0 0 0 4px #D9952B}'+V+' .fj-steps .flw-step.skip .dot b{background:#CFCFC8;border-color:#CFCFC8}'
+      +V+' .fj-steps .flw-step .tx{font-size:11.5px;color:#5B6170;line-height:1.35;min-width:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}'+V+' .fj-steps .flw-step .tx b{display:block;font-size:12.5px;font-weight:700;color:#0F1B3D}'+V+' .fj-steps .flw-step .tx b i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:11px;font-weight:400;color:#5B6170;margin-left:6px}'
+      +V+' .fj-steps .flw-step.todo .tx{color:#9AA3AE}'+V+' .fj-steps .flw-step.todo .tx b{color:#9AA3AE}'
+      +V+' .fj-sub{border:1px solid #ECEBE6;border-radius:10px;overflow:hidden}'
+      +V+' .fj-sub .fj-grp{padding:8px 12px}'
+      /* ของเดิมข้างใน · ครีม → เทาฟ้า */
+      +V+' #fl-inc-detail-mount [style*="background:#F4F2EE"],'+V+' #fl-maint-detail-mount [style*="background:#F4F2EE"],'+V+' #fl-maint-detail-mount [style*="background:#FBFAF7"],'+V+' #fl-inc-detail-mount [style*="background:#FBFAF7"]{background:#F7F7F5!important;border:1px solid #ECEBE6!important}'
+      +V+' #fl-inc-detail-mount [style*="background:#F4F2EE"] [style*="border"],'+V+' #fl-maint-detail-mount [style*="background:#F4F2EE"] [style*="border"]{border-color:#E2DED6}'
+      +V+' #fl-inc-detail-mount button[style*="background:#1A1A1A"],'+V+' #fl-maint-detail-mount button[style*="background:#1A1A1A"]{background:#16265C!important}'
+      +V+' #fl-inc-detail-mount button[style*="background:#E03B7E"],'+V+' #fl-maint-detail-mount button[style*="background:#E03B7E"]{background:#16265C!important}'
+      +V+' #fl-inc-detail-mount input,'+V+' #fl-maint-detail-mount input,'+V+' #fl-maint-detail-mount select{border-color:#CFCFC8!important;background:#fff!important;font-size:12.5px!important}';
+  });
+  css+='@media (max-width:1500px){#view-fl-incident .fj-cols,#view-fl-maintenance .fj-cols{grid-template-columns:minmax(0,1fr)}#view-fl-incident .fj-2,#view-fl-maintenance .fj-2{grid-template-columns:340px minmax(0,1fr)}}';
+  s.textContent=css; document.head.appendChild(s);
+}
+/* แท็บ Overview / Job Assignment / Maintenance / Projects · ชุดเดียวกับ Fleet Work */
+function fjTabs(cur){
+  try{ var G=(typeof FL_NAV_GROUPS!=='undefined'?FL_NAV_GROUPS:[]).filter(function(g){ return g.k==='work'; })[0]; if(!G) return '';
+    var okv=G.views.filter(function(v){ return (typeof flNavOk==='function')?flNavOk(v):true; }); if(okv.length<2) return '';
+    return '<div class="fj-tabs">'+okv.map(function(v){ return '<button type="button" class="'+(v===cur?'on':'')+'" data-v="'+v+'" onclick="flNavGo(this.dataset.v)">'+fjE(G.tabs[G.views.indexOf(v)])+'</button>'; }).join('')+'</div>'; }catch(_){ return ''; }
+}
+/* หัว · cfg: {big, lbl, sub, wm, chips:[[val,label,cls]], btns:[[label,onclick]], tiles:[{t,d,n,red,on,onclick}], view} */
+function fjTop(cfg){
+  var chips=(cfg.chips||[]).map(function(c){ return '<span class="fj-chip'+(c[2]?(' '+c[2]):'')+'"><b>'+fjE(c[0])+'</b>'+fjE(c[1])+'</span>'; }).join('');
+  var btns=(cfg.btns||[]).map(function(b){ return '<button type="button" class="fj-btnw" onclick="'+b[1]+'">'+fjE(b[0])+'</button>'; }).join('');
+  var tiles=(cfg.tiles||[]).map(function(t,i){ return '<button type="button" class="fj-stg'+(t.on?' on':'')+'" onclick="'+(t.onclick||'')+'"><u>0'+(i+1)+'</u><span>'+fjE(t.t)+'<i>'+fjE(t.d)+'</i></span><b class="'+(t.red?'r':'')+'">'+fjE(t.n)+'</b></button>'; }).join('');
+  return '<div class="fj-top"><div class="fj-l"><b>'+fjE(cfg.big)+'</b><span>'+fjE(cfg.lbl)+'<i>'+fjE(cfg.sub)+'</i></span></div>'
+    +'<div class="fj-wm"><i>LOVE ANDAMAN</i>'+fjE(cfg.wm)+'</div><div class="fj-chips">'+chips+btns+'</div></div>'
+    +fjTabs(cfg.view)
+    +'<div class="fj-st" style="grid-template-columns:repeat('+(cfg.tiles||[]).length+',minmax(0,1fr))">'+tiles+'</div>';
+}
+/* Where it stands + Next step · ตัวเดียวกับ Fleet Work · งานที่ปิดแล้ว = ทุกขั้นเสร็จ */
+function fjStand(kind, id){
+  var key=kind+':'+id, it=null;
+  try{ it=flwItems().filter(function(x){ return x.key===key; })[0]||null; }catch(_){}
+  var E=fjE, S=(typeof FLW_ST!=='undefined')?FLW_ST:[];
+  if(!it){
+    var rec=flpRec(kind,id), done=rec && ((kind==='mj' && rec.status==='done') || (kind==='inc' && (rec.status==='resolved'||rec.status==='closed')));
+    var stepsH=S.map(function(s,i){ return '<div class="flw-step '+(done?'done':'todo')+'"><div class="dot"><b>'+(done?'✓':'')+'</b></div><div class="tx"><b>'+E(s.t)+'</b>'+E(s.d)+'</div></div>'; }).join('');
+    return { stepsH:stepsH, next:done?'This '+(kind==='inc'?'report':'job')+' is closed. Photos of the finished work can still be added.':'', b1:'', b2:'', stage:done?'Done':'' };
+  }
+  var core={}; try{ core=flwPanel(Object.assign({}, it, {_core:true}), E)||{}; }catch(_){ core={}; }
+  return { stepsH:core.stepsH||'', next:core.next||'', b1:core.b1||'', b2:core.b2||'', stage:S[it.stage]?S[it.stage].t:'', it:it };
+}
+function fjStandHtml(kind,id){
+  var st=fjStand(kind,id);
+  var h='<div><div class="fj-sec">Where it stands <small>same 6 stages as Fleet Work</small></div><div class="fj-steps">'+st.stepsH+'</div></div>';
+  return h;
+}
+function fjNextHtml(kind,id,extra){
+  var st=fjStand(kind,id);
+  if(!st.next && !st.b1 && !extra) return '';
+  return '<div class="fj-next"><div class="k">Next step</div><div style="margin-top:2px">'+(st.next||'')+'</div>'
+    +((st.b1||st.b2||extra)?('<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+(st.b1||'')+(st.b2||'')+(extra||'')+'</div>'):'')+'</div>';
+}
+function fjTrk(stage, done){ var S=(typeof FLW_ST!=='undefined')?FLW_ST:[]; return '<span class="fj-trk">'+S.map(function(s,i){ return '<i style="background:'+(done?'#9AA3B8':i<stage?'#9AA3B8':i===stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span>'; }
+function fjStageOf(kind,id){ try{ var it=flwItems().filter(function(x){ return x.key===kind+':'+id; })[0]; return it?it.stage:-1; }catch(_){ return -1; } }
+function fjBoatColor(bid){ try{ var b=(typeof getBoat==='function')?getBoat(bid):null; var c=(b&&(b.color||b.avatarColor))||''; if(c) return c; }catch(_){} var P=['#7C3AED','#0F6E56','#B7791F','#1E4FA0','#C0392B','#0891B2','#BE185D','#4D7C0F']; var h=0; String(bid||'').split('').forEach(function(ch){ h=(h*31+ch.charCodeAt(0))>>>0; }); return P[h%P.length]; }
+try{ fjCSS(); }catch(_){}
 /* ══ §flWork (2026-10-08) · Fleet Work · the whole repair flow on one page · PHASE 1 = read-only ═══
    Owner: "the work is scattered over many pages · bring the steps together on one page · by boat, with that boat's jobs".
    What this page does: reads FL_INCIDENTS / FL_MAINT / FL_MEMOS / FL_PROJECTS as they are and sorts every open
@@ -27612,7 +28159,268 @@ function flwFit(){
   }catch(_){ }
 }
 if(!window._flwFitOn){ window._flwFitOn=1; window.addEventListener('resize', function(){ flwFit(); }, {passive:true}); }
+/* §flPhoto · งานที่ปิดแล้ว (บล็อก "Done · last 30 days") · แผงขวาแสดงแค่ที่จำเป็น + การ์ดรูป · ไม่มีปุ่มเปลี่ยนสถานะ */
+function flwDoneItems(boatId){
+  var open={}; try{ flwItems().forEach(function(x){ open[x.key]=1; }); }catch(_){}
+  var cut=new Date(); cut.setDate(cut.getDate()-30); var lim=cut.toISOString().slice(0,10), out=[];
+  flwA('m').forEach(function(m){
+    if(!m || m.status!=='done' || open['mj:'+m.id]) return;
+    if(String(m.boatId||'')!==String(boatId||'')) return;
+    var d=String(m.endDate||'').slice(0,10); if(!d || (d<lim && FLW.item!=='dn:'+m.id)) return;   /* §faSkin · เปิดจากหน้า Maintenance ได้แม้ปิดเกิน 30 วัน */
+    var cost=0; try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=m.cost||0; }
+    out.push({key:'dn:'+m.id, kind:'mj', id:m.id, no:m.no||'MJ', title:m.title||'(no title)', boatId:m.boatId||'', stage:6, done:true,
+      owner:String(m.owner||'').trim(), silent:0, cost:cost, sub:'closed '+flwD(m.endDate)+(m.outcome?(' · '+m.outcome):'')+(m.closeNote?(' · '+m.closeNote):''), projId:m.parentProjectId||'', ref:m});
+  });
+  out.sort(function(a,b){ return String(b.ref.endDate||'').localeCompare(String(a.ref.endDate||'')); });
+  return out;
+}
+/* ══ §flwSum (2026-10-19) · owner "สำหรับแต่ละงาน เพิ่มตัวที่เป็นสรุปรายการ ทั้งเหตุการณ์ และการซ่อม รายละเอียดครบ Copy ได้ และปุ่ม Save เหมือนใบสรุปงาน 1 งาน ถ้ามีรูปก็แนบรูปด้วย"
+   ปุ่ม "Summary" บนหัวการ์ดงานในหน้า Fleet Work (งานที่เปิดอยู่ + งานที่ปิดแล้ว + รายงานปัญหาที่ยังไม่เปิดงาน)
+   เปิดใบสรุป 1 ใบ: เรือ · เหตุการณ์ (INC) · งานซ่อม (MJ) · ขั้นตอนย่อย · อะไหล่ที่เบิก · memo · ค่าใช้จ่ายรวม · บันทึกความคืบหน้า · รูป
+   Copy text = ข้อความล้วนไว้วาง LINE · Copy image / Save image = รูป PNG ของทั้งใบ (มีรูปแนบ) · Print = พิมพ์ / บันทึก PDF
+   อ่านอย่างเดียว ไม่แก้ข้อมูล ══ */
+var FLWS=null;
+var FLWS_OUT={success:'Success',limited:'Limited use',rework:'Rework needed',decommission:'Decommissioned',cancelled:'Cancelled'};
+var FLWS_TYPE={corrective:'Corrective',preventive:'Preventive',scheduled:'Scheduled'};
+function flwsD(s,t){ s=String(s||'').slice(0,10); var a=s.split('-'); if(a.length<3||!+a[0]) return '';
+  return (+a[2])+' '+FLW_MO[(+a[1]||1)-1]+' '+a[0]+(t?(' '+t):''); }
+function flwsM(v){ v=+v||0; return '฿'+v.toLocaleString('en-US',{minimumFractionDigits:v%1?2:0,maximumFractionDigits:2}); }
+function flwsBtn(kind,id,auto){
+  if(kind!=='mj'&&kind!=='inc') return '';
+  return '<button type="button" class="flw-btn" title="Job summary · copy or save" data-k="'+kind+'" data-id="'+fjE(id)+'" onclick="flwsOpen(this.dataset.k,this.dataset.id)" '
+    +'style="flex:none;height:28px;padding:0 10px;font-size:12px;'+(auto?'margin-left:auto':'margin-left:8px')+'">&#128196; Summary</button>';
+}
+/* รวมข้อมูลของงาน 1 งาน (MJ + INC ที่ผูกกัน) */
+function flwsData(kind,id){
+  var M=flwA('m'), I=flwA('i'), m=null, inc=null;
+  if(kind==='mj'){ m=M.filter(function(x){ return x&&x.id===id; })[0]||null; if(!m) return null;
+    if(m.incidentId) inc=I.filter(function(x){ return x&&x.id===m.incidentId; })[0]||null; }
+  else { inc=I.filter(function(x){ return x&&x.id===id; })[0]||null; if(!inc) return null;
+    if(inc.maintId) m=M.filter(function(x){ return x&&x.id===inc.maintId; })[0]||null; }
+  var bid=(m&&m.boatId)||(inc&&inc.boatId)||'', b=bid&&typeof getBoat==='function'?getBoat(bid):null;
+  var memos=m?flwA('o').filter(function(mo){ return mo&&mo.maintId===m.id&&mo.status!=='cancelled'; }):[];
+  var parts=m?(m.parts||[]):[], pc=0; parts.forEach(function(p){ pc+=(+p.qty||0)*(+p.cost||0); });
+  var cost=0; if(m){ try{ cost=flMaintCalcCost(m.id)||0; }catch(_){ cost=+m.cost||0; } }
+  /* บันทึก: รวม INC + MJ · ตัดบรรทัดซ้ำ (INC สำเนาโน้ตของงานไว้) · บรรทัด 📦 เบิก ซ่อนเมื่อมีตารางอะไหล่แล้ว */
+  var seen={}, log=[], hidPk=0;
+  [[inc,'INC'],[m,'MJ']].forEach(function(z){ if(!z[0]) return; (z[0].progressLog||[]).forEach(function(l,i){ if(!l) return;
+    var tx=String(l.text||'').trim(); if(!tx) return;
+    var nt=tx.replace(/\s+/g,' '), sys=/^(ระบบ|system)$/i.test(String(l.by||'').trim());
+    var k=String(l.date||'')+'|'+(sys?nt.split(' · ')[0]:nt.slice(0,60)); if(seen[k]) return; seen[k]=1;
+    if(parts.length && /^📦/.test(tx)){ hidPk++; return; }
+    log.push({d:String(l.date||''), t:tx, by:String(l.by||''), o:(z[1]==='INC'?0:10000)+i}); }); });
+  log.sort(function(a,b){ return a.d<b.d?-1:a.d>b.d?1:a.o-b.o; });
+  var photos=[]; [[inc,'inc'],[m,'mj']].forEach(function(z){ if(!z[0]) return;
+    try{ flpList(z[1],z[0]).forEach(function(p){ if(p&&!p.removed&&p.url) photos.push(p); }); }catch(_){ } });
+  var proj=(m&&m.parentProjectId)?flwProj(m.parentProjectId):null;
+  return {kind:kind, m:m, inc:inc, b:b, memos:memos, parts:parts, pc:pc, cost:cost, log:log, hidPk:hidPk, photos:photos, proj:proj};
+}
+function flwsStatus(D){
+  var m=D.m, inc=D.inc;
+  if(m){ if(m.status==='done') return 'Done'+(m.outcome?(' · '+(FLWS_OUT[m.outcome]||m.outcome)):'')+(m.awaitingInvoice?' · invoice pending':'');
+    if(m.status==='cancelled') return 'Cancelled'; if(m.status==='pending') return 'Job open · not started'; return 'In progress'; }
+  var st=String(inc.status||'open'); return st==='open'?'Reported · no job yet':(st.charAt(0).toUpperCase()+st.slice(1));
+}
+function flwsTitle(D){ return (D.m&&D.m.title)||(D.inc&&D.inc.title)||'(no title)'; }
+function flwsNos(D){ return [D.inc&&D.inc.no, D.m&&D.m.no].filter(Boolean).join(' · '); }
+function flwsText(D){
+  var L=[], m=D.m, inc=D.inc, b=D.b, add=function(k,v){ if(v!=null&&String(v).trim()!=='') L.push(k+': '+v); };
+  L.push('📄 สรุปงาน · '+flwsNos(D)); L.push(flwsTitle(D));
+  add('เรือ', b?(b.name+(b.pier?(' · '+(faPier(b)||b.pier)):'')):''); add('สถานะ', flwsStatus(D));
+  if(D.proj) add('โปรเจกต์', (D.proj.no||'PRJ')+' '+(D.proj.name||''));
+  if(inc){ L.push(''); L.push('— เหตุการณ์ '+(inc.no||'INC')+' —');
+    add('วันที่', flwsD(inc.date, inc.time)); add('ความรุนแรง', inc.severity?String(inc.severity).toUpperCase():'');
+    add('หัวข้อ', inc.title); if(inc.detail&&inc.detail!==inc.title) add('รายละเอียด', inc.detail); add('หมายเหตุ', inc.remark);
+    var da=(inc.damagedAssets||[]).map(function(a){ return a&&a.label; }).filter(Boolean); if(da.length) add('ชิ้นที่เสียหาย', da.join(', '));
+    if(inc.quickFix) add('แก้ไขเบื้องต้น', typeof inc.quickFix==='string'?inc.quickFix:'Quick fix');
+    add('ปิดเมื่อ', flwsD(inc.closedDate||inc.resolvedDate)); }
+  if(m){ L.push(''); L.push('— งานซ่อม '+(m.no||'MJ')+' —');
+    add('ประเภท', FLWS_TYPE[m.type]||m.type); if(!inc||m.title!==inc.title) add('หัวข้อ', m.title); if(m.detail&&m.detail!==m.title&&(!inc||m.detail!==inc.detail)) add('รายละเอียด', m.detail);
+    add('สถานที่', m.location); add('ผู้รับผิดชอบ', m.owner); add('เริ่ม', flwsD(m.startDate)); add('ปิดงาน', flwsD(m.endDate)); add('กำหนดเสร็จ', flwsD(m.dueDate));
+    add('ผลการซ่อม', m.outcome?(FLWS_OUT[m.outcome]||m.outcome):''); add('หมายเหตุปิดงาน', m.closeNote);
+    var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean); if(as.length) add('อุปกรณ์ที่เกี่ยวข้อง', as.join(', '));
+    var sb=(m.subs||[]); if(sb.length){ L.push('ขั้นตอนย่อย:'); sb.forEach(function(s){ if(s) L.push('  '+(s.d?'✓':'○')+' '+(s.t||'')); }); }
+    if(D.parts.length){ L.push('อะไหล่ที่เบิก ('+D.parts.length+' รายการ · '+flwsM(D.pc)+'):'); D.parts.forEach(function(p){ L.push('  - '+p.name+' × '+(p.qty||0)+' '+(p.unit||'')+' · '+flwsM((+p.qty||0)*(+p.cost||0))); }); }
+    if(D.memos.length){ L.push('Memo:'); D.memos.forEach(function(mo){ L.push('  - '+(mo.no||'MO')+' '+(mo.title||'')+(mo.supplier?(' · '+mo.supplier):'')+' · '+flwsM(mo.amount)+' · '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status)); }); }
+    add('ค่าใช้จ่ายรวม', D.cost>0?flwsM(D.cost):''); }
+  if(D.log.length){ L.push(''); L.push('— บันทึกความคืบหน้า —'); D.log.forEach(function(l){ L.push(flwsD(l.d)+' · '+l.t+(l.by?(' ('+l.by+')'):'')); });
+    if(D.hidPk) L.push('(+ เบิกอะไหล่ '+D.hidPk+' ครั้ง ดูในรายการอะไหล่)'); }
+  if(D.photos.length) L.push('', '📷 รูป '+D.photos.length+' รูป (อยู่ในใบสรุปแบบรูปภาพ)');
+  return L.join('\n');
+}
+function flwsSheet(D){
+  var E=fjE, m=D.m, inc=D.inc, b=D.b;
+  var kv=function(k,v,wide){ if(v==null||String(v).trim()==='') return ''; return '<div class="kv'+(wide?' w':'')+'"><span>'+k+'</span><b>'+v+'</b></div>'; };
+  var h='<div class="hd"><div><div class="co">LOVE Andaman · Fleet job summary</div><div class="ti">'+E(flwsTitle(D))+'</div>'
+    +'<div class="no">'+E(flwsNos(D))+'</div></div>'
+    +'<div class="bt">'+(b?('<b>'+E(b.name)+'</b><span>'+E([b.type, faPier(b)].filter(Boolean).join(' · '))+'</span>'):'')+'<i>'+E(flwsStatus(D))+'</i></div></div>';
+  if(D.proj) h+='<div class="pj">Part of project '+E((D.proj.no||'PRJ')+' · '+(D.proj.name||''))+'</div>';
+  if(inc){ var da=(inc.damagedAssets||[]).map(function(a){ return a&&a.label; }).filter(Boolean);
+    h+='<div class="sec"><div class="sh"><u>Incident</u>'+E(inc.no||'INC')+(inc.severity?('<em class="sv '+E(inc.severity)+'">'+E(String(inc.severity).toUpperCase())+'</em>'):'')+'</div><div class="g">'
+      +kv('Reported', E(flwsD(inc.date, inc.time)))+kv('Status', E(inc.status||''))+kv('Closed', E(flwsD(inc.closedDate||inc.resolvedDate)))
+      +kv('Title', E(inc.title||''), 1)+(inc.detail&&inc.detail!==inc.title?kv('Detail', E(inc.detail), 1):'')+kv('Remark', E(inc.remark||''), 1)
+      +(da.length?kv('Damaged', E(da.join(' · ')), 1):'')+(inc.quickFix?kv('Quick fix', E(typeof inc.quickFix==='string'?inc.quickFix:'Yes'), 1):'')+'</div></div>'; }
+  if(m){ var as=(m.assets||[]).map(function(a){ return a&&a.label; }).filter(Boolean), sb=(m.subs||[]).filter(Boolean);
+    h+='<div class="sec"><div class="sh"><u>Repair job</u>'+E(m.no||'MJ')+(m.type?('<em>'+E(FLWS_TYPE[m.type]||m.type)+'</em>'):'')+'</div><div class="g">'
+      +kv('Started', E(flwsD(m.startDate)))+kv('Closed', E(flwsD(m.endDate)))+kv('Due', E(flwsD(m.dueDate)))
+      +kv('Owner', E(m.owner||''))+kv('Location', E(m.location||''))+kv('Outcome', E(m.outcome?(FLWS_OUT[m.outcome]||m.outcome):''))
+      +((!inc||m.title!==inc.title)?kv('Title', E(m.title||''), 1):'')+(m.detail&&m.detail!==m.title&&(!inc||m.detail!==inc.detail)?kv('Detail', E(m.detail), 1):'')+(as.length?kv('Equipment', E(as.join(' · ')), 1):'')
+      +kv('Close note', E(m.closeNote||''), 1)+'</div>'
+      +(sb.length?('<div class="sub">'+sb.map(function(s){ return '<div class="'+(s.d?'ok':'')+'">'+(s.d?'✓':'○')+' '+E(s.t||'')+'</div>'; }).join('')+'</div>'):'')+'</div>';
+    if(D.parts.length||D.memos.length||D.cost>0){
+      h+='<div class="sec"><div class="sh"><u>Cost</u>'+(D.cost>0?('<em class="tot">'+flwsM(D.cost)+'</em>'):'')+'</div>';
+      if(D.parts.length) h+='<table><tr><th>Parts from stock</th><th>Qty</th><th class="r">Amount</th></tr>'
+        +D.parts.map(function(p){ return '<tr><td>'+E(p.name||'')+(p.location?('<i>'+E(p.location)+'</i>'):'')+'</td><td>'+E((p.qty||0)+' '+(p.unit||''))+'</td><td class="r">'+flwsM((+p.qty||0)*(+p.cost||0))+'</td></tr>'; }).join('')
+        +'<tr class="st"><td colspan="2">Parts total</td><td class="r">'+flwsM(D.pc)+'</td></tr></table>';
+      if(D.memos.length) h+='<table><tr><th>Memo</th><th>Status</th><th class="r">Amount</th></tr>'
+        +D.memos.map(function(mo){ return '<tr><td><b>'+E(mo.no||'MO')+'</b> '+E(mo.title||'')+(mo.supplier?('<i>'+E(mo.supplier)+'</i>'):'')+'</td><td>'+E(typeof flwMemoLabel==='function'?flwMemoLabel(mo):(mo.status||''))+'</td><td class="r">'+flwsM(mo.amount)+'</td></tr>'; }).join('')+'</table>';
+      h+='</div>'; } }
+  if(D.log.length) h+='<div class="sec"><div class="sh"><u>Progress log</u>'+D.log.length+' entries</div><div class="lg">'
+    +D.log.map(function(l){ return '<div><span>'+E(flwsD(l.d))+'</span><p>'+E(l.t)+(l.by?('<i>'+E(l.by)+'</i>'):'')+'</p></div>'; }).join('')
+    +(D.hidPk?('<div><span></span><p style="color:#8A8F9C">+ '+D.hidPk+' stock withdrawals · listed under Parts</p></div>'):'')+'</div></div>';
+  if(D.photos.length) h+='<div class="sec"><div class="sh"><u>Photos</u>'+D.photos.length+'</div><div class="ph">'
+    +D.photos.map(function(p){ var v=(typeof flpIsVideo==='function')&&flpIsVideo(p);
+      return '<figure>'+(v?('<div class="vd">Video<br><small>'+E(p.cap||p.name||'')+'</small></div>'):('<div class="im" data-src="'+E(p.url)+'" style="background-image:url(\''+E(String(p.url).replace(/'/g,'%27'))+'\')"></div>'))
+        +'<figcaption><b style="background:'+((typeof FLP_C!=='undefined'&&FLP_C[p.stage])||'#5B6170')+'">'+E(p.stage||'')+'</b>'+E(p.cap||'')+'<i>'+E(flwsD(p.addedAt))+(p.by?(' · '+E(p.by)):'')+'</i></figcaption></figure>'; }).join('')+'</div></div>';
+  h+='<div class="ft">Printed '+E(flwsD(typeof TODAY_STR!=='undefined'?TODAY_STR:''))+(typeof flpBy==='function'?(' · by '+E(flpBy())):'')+'</div>';
+  return h;
+}
+function flwsCSS(){
+  return '<style>#flws{position:fixed;inset:0;z-index:9500;background:rgba(10,18,48,.56);display:flex;flex-direction:column;align-items:center;padding:14px 12px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif}'
+  +'#flws .bar{position:sticky;top:0;z-index:2;display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:min(820px,100%);background:#0F1B3D;color:#fff;border-radius:12px;padding:8px 10px;margin-bottom:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}'
+  +'#flws .bar b{font-size:13px;flex:1;min-width:120px}#flws .bar button{height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;padding:0 12px;cursor:pointer}'
+  +'#flws .bar button.pri{background:#fff;color:#0F1B3D;border-color:#fff}#flws .bar .x{width:32px;padding:0;font-size:18px}'
+  +'#flws-sheet{width:min(820px,100%);background:#fff;color:#0F1B3D;border-radius:12px;padding:22px 24px 16px;box-sizing:border-box;font-size:12.5px;line-height:1.45}'
+  +'#flws-sheet .hd{display:flex;gap:16px;align-items:flex-start;border-bottom:2px solid #0F1B3D;padding-bottom:12px}#flws-sheet .hd>div:first-child{flex:1;min-width:0}'
+  +'#flws-sheet .co{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#5B6170;font-weight:700}#flws-sheet .ti{font-size:20px;font-weight:800;line-height:1.25;margin-top:3px}'
+  +'#flws-sheet .no{font-family:\'DM Mono\',monospace;font-size:12.5px;color:#3E4658;margin-top:3px}#flws-sheet .bt{text-align:right;display:flex;flex-direction:column;gap:2px;flex:none;max-width:42%}'
+  +'#flws-sheet .bt b{font-size:15px}#flws-sheet .bt span{font-size:11.5px;color:#5B6170}#flws-sheet .bt i{font-style:normal;font-size:11.5px;font-weight:700;background:#E4F3EC;color:#0F6E56;border-radius:6px;padding:2px 8px;align-self:flex-end;margin-top:3px}'
+  +'#flws-sheet .pj{margin-top:8px;font-size:11.5px;color:#534AB7;font-weight:600}'
+  +'#flws-sheet .sec{margin-top:14px;border:1px solid #E4E2DC;border-radius:10px;padding:10px 12px;break-inside:avoid}'
+  +'#flws-sheet .sh{display:flex;align-items:center;gap:8px;font-family:\'DM Mono\',monospace;font-size:12px;color:#3E4658;margin-bottom:8px}#flws-sheet .sh u{text-decoration:none;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#0F1B3D}'
+  +'#flws-sheet .sh em{font-style:normal;font-family:\'DM Sans\',sans-serif;font-size:10.5px;font-weight:700;background:#F1F0EC;color:#3E4658;border-radius:5px;padding:1px 7px}#flws-sheet .sh em.critical{background:#FCEBEB;color:#A32D2D}#flws-sheet .sh em.major{background:#FAEEDA;color:#854F0B}'
+  +'#flws-sheet .sh em.tot{margin-left:auto;background:#0F1B3D;color:#fff;font-family:\'DM Mono\',monospace;font-size:12.5px}'
+  +'#flws-sheet .g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px}#flws-sheet .kv{display:flex;flex-direction:column;min-width:0}#flws-sheet .kv.w{grid-column:1/-1}'
+  +'#flws-sheet .kv span{font-size:10px;color:#8A8F9C;text-transform:uppercase;letter-spacing:.06em;font-weight:700}#flws-sheet .kv b{font-weight:500;white-space:pre-wrap;word-break:break-word}'
+  +'#flws-sheet .sub{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;color:#5B6170}#flws-sheet .sub .ok{color:#0F6E56}'
+  +'#flws-sheet table{width:100%;border-collapse:collapse;margin-top:4px;font-size:12px}#flws-sheet th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#8A8F9C;border-bottom:1px solid #E4E2DC;padding:4px 6px}'
+  +'#flws-sheet td{border-bottom:1px solid #F1F0EC;padding:4px 6px;vertical-align:top}#flws-sheet td i{display:block;font-style:normal;font-size:10.5px;color:#8A8F9C}#flws-sheet .r{text-align:right;font-family:\'DM Mono\',monospace;white-space:nowrap}#flws-sheet tr.st td{font-weight:700;border-bottom:0}'
+  +'#flws-sheet .lg>div{display:flex;gap:10px;padding:3px 0;border-bottom:1px dashed #EEECE6}#flws-sheet .lg span{flex:none;width:86px;font-family:\'DM Mono\',monospace;font-size:11px;color:#5B6170}#flws-sheet .lg p{margin:0;flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}#flws-sheet .lg p i{font-style:normal;color:#8A8F9C;font-size:11px;margin-left:6px}'
+  +'#flws-sheet .ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#flws-sheet figure{margin:0;border:1px solid #E4E2DC;border-radius:8px;overflow:hidden;break-inside:avoid}#flws-sheet figure .im{width:100%;height:170px;background:#F4F2EE center/cover no-repeat}'
+  +'#flws-sheet .vd{height:170px;display:flex;align-items:center;justify-content:center;text-align:center;background:#1B2340;color:#fff;font-weight:700}#flws-sheet figcaption{padding:5px 7px;font-size:11px}#flws-sheet figcaption b{color:#fff;border-radius:4px;padding:0 5px;font-size:9.5px;margin-right:5px}#flws-sheet figcaption i{display:block;font-style:normal;color:#8A8F9C;font-size:10px}'
+  +'#flws-sheet .ft{margin-top:12px;font-size:10.5px;color:#8A8F9C;text-align:right}'
+  +'@media(max-width:640px){#flws-sheet{padding:16px 14px}#flws-sheet .hd{flex-direction:column}#flws-sheet .bt{text-align:left;max-width:none}#flws-sheet .bt i{align-self:flex-start}#flws-sheet .g{grid-template-columns:1fr 1fr}#flws-sheet .ph{grid-template-columns:1fr 1fr}#flws-sheet .sub{grid-template-columns:1fr}}'
+  +'@media print{body.flws-print>*:not(#flws){display:none!important}body.flws-print #flws{position:static;background:#fff;padding:0;overflow:visible}body.flws-print #flws .bar{display:none}body.flws-print #flws-sheet{width:100%;border-radius:0;padding:0}}'
+  +'</style>';
+}
+function flwsOpen(kind,id){
+  var D=flwsData(kind,id); if(!D) return;
+  flwsClose(); FLWS={kind:kind,id:id,D:D};
+  var o=document.createElement('div'); o.id='flws';
+  o.innerHTML=flwsCSS()+'<div class="bar"><b>Job summary · '+fjE(flwsNos(D))+'</b>'
+    +'<span style="position:relative;display:inline-flex"><button type="button" onclick="flwsCopy(\'short\')" style="border-radius:8px 0 0 8px">Copy text</button><button type="button" title="Short or full" onclick="flwsMenu(event)" style="border-radius:0 8px 8px 0;border-left:0;padding:0 8px">&#8964;</button>'
+    +'<div id="flws-mn" style="display:none;position:absolute;top:36px;left:0;z-index:5;background:#fff;color:#0F1B3D;border-radius:10px;box-shadow:0 12px 30px rgba(2,10,30,.3);width:240px;padding:5px">'
+    +'<div onclick="flwsCopy(\'short\')" style="padding:7px 9px;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:700;background:#EEF1F6">Short · where, when, what, fix<small style="display:block;font-weight:400;color:#8A8F9C;font-size:11px">default · for LINE</small></div>'
+    +'<div onclick="flwsCopy(\'full\')" style="padding:7px 9px;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:700">Full · every detail<small style="display:block;font-weight:400;color:#8A8F9C;font-size:11px">all parts and the whole log</small></div></div></span>'
+    +'<button type="button" onclick="flwsImg(\'copy\')">Copy image</button>'
+    +'<button type="button" class="pri" onclick="flwsImg(\'save\')">Save image</button><button type="button" onclick="flwsPrint()">Print / PDF</button>'
+    +'<button type="button" class="x" title="Close" onclick="flwsClose()">&times;</button></div><div id="flws-sheet">'+flwsSheet(D)+'</div>';
+  o.addEventListener('click',function(e){ var mn=document.getElementById('flws-mn'); if(mn&&!e.target.closest('#flws-mn')) mn.style.display='none'; if(e.target===o) flwsClose(); });
+  document.body.appendChild(o); document.addEventListener('keydown', flwsKey);
+}
+function flwsKey(e){ if(e.key==='Escape') flwsClose(); }
+function flwsClose(){ var o=document.getElementById('flws'); if(o) o.remove(); document.removeEventListener('keydown', flwsKey); FLWS=null; document.body.classList.remove('flws-print'); }
+function flwsToast(t){ try{ if(typeof showToast==='function'){ showToast(t); return; } }catch(_){ }
+  var b=document.querySelector('#flws .bar b'); if(b){ var o=b.textContent; b.textContent=t; setTimeout(function(){ if(b) b.textContent=o; },1600); } }
+/* §flwShort (2026-10-19) · owner "copy text ต้องกระชับกว่านี้ เกิดที่ไหน เมื่อไหร่ อย่างไร แก้ยังไง" → mock FWS แบบ B
+   Copy text = แบบสั้น 5-7 บรรทัด · ลูกศร ⌄ เลือก Full (แบบยาวเดิม) */
+var FLWS_OUT_TH={success:'ซ่อมเสร็จ',limited:'ใช้งานได้จำกัด',rework:'ต้องแก้ซ้ำ',decommission:'ปลดระวาง',cancelled:'ยกเลิก'};
+function flwsCut(t,n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?(t.slice(0,n-1).trim()+'…'):t; }
+function flwsDays(a,b){ var x=Date.parse(String(a||'').slice(0,10)), y=Date.parse(String(b||'').slice(0,10)); return (isNaN(x)||isNaN(y))?null:Math.max(0,Math.round((y-x)/864e5)); }
+function flwsIsSys(l){ return /^(ระบบ|system|equip)$/i.test(String(l.by||'').trim()) || /^(▶|✓|📋|📦|↩|⚙|🔄|＋|\+)/.test(String(l.t||'')); }
+function flwsShort(D){
+  var m=D.m, inc=D.inc, b=D.b, L=[], today=(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
+  var d0=(inc&&inc.date)||(m&&m.startDate)||'', done=!!(m&&m.status==='done'), d1=done?(m.endDate||''):today, nd=flwsDays(d0,d1);
+  var st;
+  if(m&&m.status==='cancelled') st='✖ ยกเลิกงาน';
+  else if(done) st='✅ '+(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
+  else if(m) st='⏳ '+(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' ('+nd+' วัน)'):'');
+  else st='🆕 แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' ('+nd+' วัน)'):'');
+  L.push('🔧 '+(b?b.name:'—')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
+  var parts=[]; ((inc&&inc.damagedAssets)||[]).concat((m&&m.assets)||[]).forEach(function(a){ var t=a&&a.label; if(t&&parts.indexOf(t)<0) parts.push(t); });
+  L.push('📍 ที่ไหน: '+[b?b.name:''].concat(parts.slice(0,3)).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · '));
+  var y0=String(d0).slice(0,4), sameY=String(d1).slice(0,4)===y0;
+  L.push('🗓 เมื่อไหร่: '+(flwsD(d0, inc&&inc.time)||'—')+(done&&d1?(' → เสร็จ '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
+  var tt=(inc&&inc.title)||(m&&m.title)||'', dt=String((inc&&inc.detail)||(m&&m.detail)||'').split(/\n|(?:\.\s)/)[0];
+  L.push('⚠️ เกิดอะไร: '+flwsCut(tt,70)+(dt&&dt.trim()!==tt.trim()?(' · '+flwsCut(dt,60)):''));
+  var notes=D.log.filter(function(l){ return !flwsIsSys(l); }).map(function(l){ return flwsCut(l.t,50); });
+  if(notes.length>4) notes=[notes[0],'…'].concat(notes.slice(-3));
+  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,50));
+  if(!notes.length && inc&&typeof inc.quickFix==='string') notes.push(flwsCut(inc.quickFix,50));
+  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึกการแก้':'ยังไม่เปิดงาน');
+  if(done && m.outcome && m.outcome!=='success') fix+=' ('+(FLWS_OUT_TH[m.outcome]||m.outcome)+')';
+  L.push('🛠 แก้ยังไง: '+fix);
+  if(m){ var top=D.parts.slice().sort(function(a,c){ return (+c.qty||0)*(+c.cost||0)-(+a.qty||0)*(+a.cost||0); });
+    var pt=top.slice(0,3).map(function(p){ return flwsCut(p.name,28)+((+p.qty||0)>1?(' '+p.qty+(p.unit?(' '+p.unit):'')):''); }).join(', ')+(top.length>3?(' +'+(top.length-3)):'');
+    var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
+    var mm=om.length?('memo '+om.map(function(mo){ return (mo.no||'MO')+' '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }).slice(0,2).join(', ')):'';
+    L.push('💰 '+(D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย')+(D.parts.length?(' · อะไหล่ '+D.parts.length+' รายการ ('+pt+')'):'')+(mm?(' · '+mm):'')); }
+  var who=[]; if(m&&String(m.owner||'').trim()) who.push(String(m.owner).trim());
+  D.log.forEach(function(l){ if(!flwsIsSys(l)&&l.by&&who.indexOf(l.by)<0) who.push(l.by); });
+  var last=[]; if(D.photos.length) last.push('📷 รูป '+D.photos.length+' รูป'); if(who.length) last.push('👷 '+who.slice(0,3).join(', '));
+  if(last.length) L.push(last.join(' · '));
+  return L.join('\n');
+}
+function flwsMenu(ev){ if(ev) ev.stopPropagation(); var mn=document.getElementById('flws-mn'); if(mn) mn.style.display=(mn.style.display==='block'?'none':'block'); }
+function flwsCopy(mode){
+  if(!FLWS) return; var mn=document.getElementById('flws-mn'); if(mn) mn.style.display='none';
+  var t=(mode==='full')?flwsText(FLWS.D):flwsShort(FLWS.D);
+  var fb=function(){ var ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){ } ta.remove(); flwsToast('Copied text'); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ flwsToast('Copied text'); }, fb); return; } }catch(_){ }
+  fb();
+}
+function flwsH2C(cb){
+  if(window.html2canvas){ cb(); return; }
+  if(typeof _vjEnsureH2C==='function'){ _vjEnsureH2C(cb); return; }
+  var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=cb;
+  s.onerror=function(){ alert('Could not load the image tool. Check the internet connection and try again.'); }; document.head.appendChild(s);
+}
+function flwsImg(mode){
+  if(!FLWS) return; var el=document.getElementById('flws-sheet'); if(!el) return;
+  var name=(flwsNos(FLWS.D).replace(/[^A-Za-z0-9-]+/g,'_')||'job')+'_summary.png';
+  flwsToast('Making image…');
+  var srcs=[].slice.call(el.querySelectorAll('.im[data-src]')).map(function(d){ return d.getAttribute('data-src'); });
+  Promise.all(srcs.map(function(u){ return new Promise(function(ok){ var im=new Image(); im.onload=im.onerror=function(){ ok(); }; setTimeout(ok,6000); im.src=u; }); })).then(function(){
+    flwsH2C(function(){
+      var r0=el.style.borderRadius; el.style.borderRadius='0';
+      html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true}).then(function(cv){
+        el.style.borderRadius=r0;
+        var dl=function(){ var a=document.createElement('a'); a.download=name; a.href=cv.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove(); flwsToast('Saved '+name); };
+        if(mode==='copy' && navigator.clipboard && window.ClipboardItem){
+          cv.toBlob(function(bl){ navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).then(function(){ flwsToast('Copied image'); }, function(){ dl(); }); }, 'image/png');
+        } else dl();
+      }).catch(function(){ el.style.borderRadius=r0; alert('Could not make the image. Try Print / PDF instead.'); });
+    });
+  });
+}
+function flwsPrint(){ document.body.classList.add('flws-print'); var off=function(){ document.body.classList.remove('flws-print'); window.removeEventListener('afterprint',off); };
+  window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60); }
+function flwDonePanel(it, E){
+  var m=it.ref, proj=it.projId?flwProj(it.projId):null;
+  return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span><span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>'
+        +(proj?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+flwsBtn('mj',it.id,!proj)+'</div>'
+      +'<div style="margin-top:6px;font-size:16px;font-weight:700;line-height:1.3">'+E(it.title)+'</div>'
+      +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+E(it.sub)+(it.owner?(' · '+E(it.owner)):'')+'</div></div>'
+    +'<div class="flw-scroll" id="flw-rp">'
+      +'<div class="flw-next" style="margin-top:14px"><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Finished job</div>'
+        +'<div style="margin-top:2px">This job is closed. Photos of the finished work can still be added here; the job itself stays closed.</div>'
+        +'<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="mj" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full job page</a></div></div>'
+      +'<div style="margin:14px 18px 0">'+flpCard('mj', it.id, {cols:3})+'</div>'
+    +'</div>';
+}
 function flwPanel(it, E){
+  if(it.done) return flwDonePanel(it, E);
   var S=FLW_ST, st=S[it.stage], m=it.ref, proj=it.projId?flwProj(it.projId):null;
   var pill=function(i){ return '<span class="flw-pill" style="background:'+S[i].pb+';color:'+S[i].pf+'">'+S[i].t+'</span>'; };
   var cut=function(s,n){ s=String(s||''); return s.length>n?(s.slice(0,n-1)+'…'):s; };
@@ -27684,9 +28492,12 @@ function flwPanel(it, E){
     if(can){ b1=act('close',it.id,'Close job'); b2=''; }
   }
   if(can && it.kind!=='prj' && it.stage<5)
-    noteH='<div style="display:flex;gap:8px;margin-top:8px"><input id="flw-note" type="text" placeholder="Add a note: what moved today" data-id="'+E(it.id)+'" '
-      +'style="flex:1;min-width:0;height:36px;border:1px solid #CFCFC8;border-radius:10px;padding:0 10px;font-family:inherit;font-size:13px;color:#0F1B3D;background:#fff" '
+    noteH='<div style="display:flex;gap:8px;margin-top:8px"><span style="flex:1;min-width:0;position:relative;display:flex"><input id="flw-note" type="text" placeholder="Add a note: what moved today" data-id="'+E(it.id)+'" '
+      +'style="flex:1;min-width:0;height:36px;border:1px solid #CFCFC8;border-radius:10px;padding:0 36px 0 10px;font-family:inherit;font-size:13px;color:#0F1B3D;background:#fff" '
       +'onkeydown="if(event.key===\'Enter\')flwAct(\'note\',this.dataset.id,\'\')">'
+      /* §flPhoto · กล้องในช่องโน้ต · ถ่ายรูปพร้อมโน้ตในครั้งเดียว · โน้ต (ถ้ามี) ลง timeline และเป็น caption ของรูปแรก */
+      +'<button type="button" title="Add a photo with this note" data-id="'+E(it.id)+'" onclick="flwAct(\'notephoto\',this.dataset.id,\'\')" '
+      +'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:26px;height:26px;border:0;background:transparent;color:#5B6170;cursor:pointer;padding:3px">'+FLP_SVG+'</button></span>'
       +'<button type="button" class="flw-btn" data-id="'+E(it.id)+'" onclick="flwAct(\'note\',this.dataset.id,\'\')">Add note</button></div>';
   if(it.kind!=='prj') noteH+='<div style="margin-top:8px;font-size:11.5px"><a style="color:#0F6CA6;font-weight:600;cursor:pointer" data-k="'+it.kind+'" data-id="'+E(it.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open the full '+(it.kind==='inc'?'report':'job')+' page</a>'+(can?'':' · view only')+'</div>';
   /* §flwMemo2 · every memo of the job gets its own next-step button, so a second or third memo does not have to wait for the first */
@@ -27697,11 +28508,12 @@ function flwPanel(it, E){
     var cls=(s[2]==='now'||i===it.stage)?'now':(i<it.stage?(s[3]?'done skip':'done'):'todo'), when=(s[2]==='now')?'':s[2];
     return '<div class="flw-step '+cls+'"><div class="dot"><b>'+(cls==='done'?'✓':cls==='done skip'?'–':'')+'</b>'+(i<5?'<u></u>':'')+'</div>'
       +'<div class="tx"><b>'+S[i].t+(when&&when!=='—'?('<i>'+when+'</i>'):'')+'</b>'+(cls==='todo'&&it.kind!=='mj'?'':(s[1]||''))+'</div></div>'; }).join('');
+  if(it._core) return { stepsH:stepsH, next:next, b1:b1, b2:b2, noteH:noteH, links:links };   /* §faSkin · Job Assignment / Maintenance reuse the same stand + next step */
   var meta=[]; if(it.owner) meta.push('Owner '+E(it.owner)); else if(it.kind==='mj') meta.push('<span style="color:#8E2019;font-weight:600">No owner</span>');
   if(it.due) meta.push('due '+flwD(it.due)); meta.push('silent '+it.silent+' day'+(it.silent===1?'':'s'));
   return '<div style="padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
       +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12.5px;font-weight:500;color:#3E4658;white-space:nowrap">'+E(it.no)+'</span>'+(it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))
-        +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+'</div>'
+        +(proj&&it.kind!=='prj'?('<span class="flw-el" style="margin-left:auto;font-size:12px;color:#5B6170;min-width:0">part of '+E((proj.no||'PRJ')+' '+proj.name)+'</span>'):'')+flwsBtn(it.kind,it.id,!(proj&&it.kind!=='prj'))+'</div>'
       +'<div style="margin-top:4px;font-size:18px;font-weight:700;line-height:1.25">'+E(it.title)+'</div>'
       +'<div style="margin-top:2px;font-size:12.5px;color:#5B6170">'+meta.join(' · ')+'</div></div>'
     +'<div class="flw-scroll" id="flw-rp">'
@@ -27709,9 +28521,181 @@ function flwPanel(it, E){
       +'<div class="flw-next"'+(it.park?' style="margin-top:14px"':'')+'><div style="font-size:10px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#5B6170">Next step</div>'
         +'<div style="margin-top:2px">'+next+'</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+b1+b2+'</div>'
         +noteH+'</div>'
+      /* §flPhoto · การ์ดรูปของงาน / รายงานปัญหา · โปรเจคใช้การ์ดเดียวกันอ่านจาก docs[] */
+      +'<div style="margin:14px 18px 0">'+flpCard(it.kind, it.id, {cols:3})+'</div>'
       +(links.length?('<div class="flw-kick" style="padding:12px 18px 6px">Everything linked to this</div>'
         +links.map(function(l){ return '<div class="flw-link'+(l[4]?' go':'')+'" '+l[4]+'><u>'+l[0]+'</u><span class="flw-el">'+l[1]+(l[2]?('<i class="flw-el">'+l[2]+'</i>'):'')+'</span><b class="mono" style="font-weight:400;font-size:12px;color:#3E4658">'+(l[3]||'')+'</b>'+mBtn(l[5])+'</div>'; }).join('')):'')
     +'</div>';
+}
+/* ══ §flwOil (2026-10-17) · owner "มันควรมีตารางภาพรวม ที่บอกว่าลำไหนใช้ไปกี่ ชม. แล้ว เหลืออีกกี่ ชม. ที่จะต้องถ่ายน้ำมันเครื่อง" · mock OSV → "ทำ"
+   อยู่ในหน้า Fleet Work · ป้ายบนหัว "🛢 รอบถ่ายน้ำมัน" → กดแล้วเปิดตารางภาพรวมแทนกระดานงาน (กดกลับได้)
+   ลำละ 1 แถว · เรียงใกล้ถึงรอบก่อน · ลำหลายเครื่องใช้เครื่องที่ใกล้ที่สุดเป็นตัวแทน · กด ▸ ดูทีละเครื่อง
+   ตัวเลขชุดเดียวกับหน้าเครื่องยนต์ (flEngServiceState · flGbServiceState) · ถ่ายแล้วกดรีเซ็ตรอบ ตารางขยับทันที
+   เลยรอบ = เหลือ < 0 · ใกล้ถึง = เหลือ ≤ 30 ชม. · ชม.ต่อวัน = มิเตอร์ Daily-Log 14 วันล่าสุด (ไม่มีข้อมูล = ไม่คาดวัน)
+   เครื่องที่ยังไม่มีชั่วโมง / ไม่ได้ตั้งรอบ = กลุ่ม "ต้องกรอกข้อมูล"
+   ปุ่ม "เปิดงานถ่ายน้ำมัน" = ฟอร์ม Add work แบบ Planned job · Preventive · Available · ชื่องานมีคำว่า "ถ่ายน้ำมัน" (ให้ระบบถามรีเซ็ตรอบตอนปิดงาน) · ติ๊กทุกเครื่องให้
+   ลำที่มีงานถ่ายน้ำมันเปิดอยู่ (MJ ที่ชื่อมี น้ำมัน/ถ่าย/service) ขึ้นป้ายเลขงานแทนปุ่ม ══ */
+var FLW_OIL_SOON=30;
+function flwOilRate(engId){
+  var t0=new Date((typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10))+'T12:00:00'), lo=null, loD='', hi=null, hiD='';
+  var from=new Date(t0.getTime()-14*864e5).toISOString().slice(0,10);
+  try{ Object.keys(FL_DAILY||{}).forEach(function(ds){ if(ds<from) return; var day=FL_DAILY[ds]||{};
+    Object.keys(day).forEach(function(bk){ var trips=(day[bk]||{}).trips||{}; Object.keys(trips).forEach(function(tk){ var v=+(((trips[tk]||{}).engines||{})[engId]); if(!(v>0)) return;
+      if(lo===null || ds<loD || (ds===loD && v<lo)){ lo=v; loD=ds; } if(hi===null || ds>hiD || (ds===hiD && v>hi)){ hi=v; hiD=ds; } }); }); }); }catch(_){}
+  if(lo===null || hi===null || hi<=lo) return null;
+  var days=Math.max(1, Math.round((t0-new Date(loD+'T12:00:00'))/864e5));
+  return +(((hi-lo)/days)).toFixed(1);
+}
+function flwOilRows(){
+  var boats=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired && b.ownership!=='charter'; });
+  var items=[]; try{ items=flwItems(); }catch(_){}
+  var re=/น้ำมัน|ถ่าย|เซอร์วิส|service|\boil\b|svc/i;
+  var rows=[];
+  boats.forEach(function(b){
+    var engs=(FL_ENGINES||[]).filter(function(e){ return e && e.boatId===b.id && e.retired!==true && e.status!=='retired'; });
+    if(!engs.length) return;
+    var E=engs.map(function(e){ var ss=flEngServiceState(e)||{}; var noData=!(ss.curH>0) || !ss.interval;
+      return {e:e, ss:ss, noData:noData, rate:flwOilRate(e.id)}; });
+    var ok=E.filter(function(x){ return !x.noData; });
+    var worst=ok.slice().sort(function(a,b){ return a.ss.left-b.ss.left; })[0]||null;
+    var gbs=(FL_GEARBOXES||[]).filter(function(g){ return g && g.engineId && engs.some(function(e){ return e.id===g.engineId; }); })
+      .map(function(g){ return {g:g, ss:flGbServiceState(g)}; }).filter(function(x){ return x.ss; });
+    var gw=gbs.slice().sort(function(a,b){ return a.ss.left-b.ss.left; })[0]||null;
+    var st=!worst?'nodata':(worst.ss.left<0?'over':(worst.ss.left<=FLW_OIL_SOON?'soon':'ok'));
+    var rates=ok.map(function(x){ return x.rate; }).filter(function(v){ return v>0; });
+    var rate=rates.length?Math.max.apply(null,rates):null;
+    var mj=items.filter(function(it){ return it.kind==='mj' && it.boatId===b.id && it.stage<5 && !it.park && re.test(it.title||''); })[0]||null;
+    var pier=''; try{ pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); }catch(_){ pier=b.pier||''; }
+    rows.push({b:b, engs:E, worst:worst, st:st, rate:rate, gb:gw, mj:mj, pier:pier||'', nNo:E.length-ok.length});
+  });
+  var ord={over:0,soon:1,ok:2,nodata:3};
+  rows.sort(function(a,b){ return (ord[a.st]-ord[b.st]) || ((a.worst?a.worst.ss.left:1e9)-(b.worst?b.worst.ss.left:1e9)) || String(a.b.name).localeCompare(String(b.b.name)); });
+  return rows;
+}
+function flwOilCounts(rows){ var c={over:0,soon:0,ok:0,nodata:0}; (rows||[]).forEach(function(r){ c[r.st]++; }); return c; }
+function flwOilChip(){
+  var c; try{ c=flwOilCounts(flwOilRows()); }catch(_){ return ''; }
+  var red=c.over>0, amb=!red && c.soon>0;
+  return '<button type="button" class="flw-chip flw-oilchip'+(red?' red':amb?' amb':'')+'" onclick="flwOilOpen()" title="ตารางรอบเปลี่ยนถ่ายน้ำมันเครื่อง ทุกลำ">&#128738; รอบถ่ายน้ำมัน'
+    +(c.over?(' &middot; <b>เลยรอบ '+c.over+'</b>'):'')+(c.soon?(' &middot; <b>ใกล้ถึง '+c.soon+'</b>'):'')+((!c.over&&!c.soon)?' &middot; ปกติ':'')+' <u>ดูตาราง &rsaquo;</u></button>';
+}
+function flwOilOpen(){ FLW.oil=true; flRenderWork(); try{ window.scrollTo(0,0); }catch(_){} }
+function flwOilClose(){ FLW.oil=false; flRenderWork(); }
+function flwOilF(k){ FLW.oilF=k; flRenderWork(); }
+function flwOilP(k){ FLW.oilP=k; flRenderWork(); }
+function flwOilTog(id){ var O=FLW.oilOpen||(FLW.oilOpen={}); O[id]=!O[id]; flRenderWork(); }
+function flwOilJob(bid){
+  if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
+  var r=flwOilRows().filter(function(x){ return x.b.id===bid; })[0]; if(!r) return;
+  FLW.boat=bid;
+  flnOpen(); if(!FLN) return;
+  var gbDue=r.gb && r.gb.ss && r.gb.ss.left<=FLW_OIL_SOON;
+  FLN.boat=bid; FLN.kind='job'; FLN.jtype='preventive'; FLN.jstatus='available'; FLN.reason=''; FLN.assets={};
+  r.engs.forEach(function(x){ FLN.assets['engine|'+x.e.id]=1; });
+  if(gbDue){ (FL_GEARBOXES||[]).forEach(function(g){ if(g && g.engineId && r.engs.some(function(x){ return x.e.id===g.engineId; })) FLN.assets['gearbox|'+g.id]=1; }); }
+  FLN.title='เปลี่ยนถ่ายน้ำมันเครื่อง '+((r.worst&&r.worst.ss.interval)||100)+' ชม. · ทุกเครื่อง'+(gbDue?' + น้ำมันเกียร์':'');
+  flnRender();
+}
+function flwOilHtml(E){
+  var all=flwOilRows(), c=flwOilCounts(all), F=FLW.oilF||'all', PF=FLW.oilP||'all', O=FLW.oilOpen||{};
+  var piers={}; all.forEach(function(r){ if(r.pier) piers[r.pier]=1; });
+  var PN={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong',shop:'In shop'};
+  var rows=all.filter(function(r){ return (F==='all'||r.st===F) && (PF==='all'||r.pier===PF); });
+  var col={over:'#C0392B',soon:'#E08A1E',ok:'#2E9B6A',nodata:'#9AA3B8'};
+  var lt=function(ss){ return ss.left<0?('over '+Math.abs(Math.round(ss.left))):(Math.round(ss.left)+' h'); };
+  var cls=function(ss){ return ss.left<0?'over':(ss.left<=FLW_OIL_SOON?'soon':'ok'); };
+  var bar=function(ss,w){ var pc=Math.max(0,Math.min(100,ss.interval?(ss.since/ss.interval*100):0)), k=cls(ss);
+    return '<span class="flo-bar" style="width:'+(w||130)+'px"><i style="width:'+pc+'%;background:'+col[k]+'"></i></span><span class="flo-bx">'+Math.round(ss.since)+'/'+ss.interval+'</span>'; };
+  var fh=function(n){ return (Math.round((+n||0)*10)/10).toLocaleString('en-US'); };
+  var eta=function(r){ if(!r.worst) return '<span class="flo-mut">—</span>'; var L=r.worst.ss.left;
+    if(L<0) return '<b style="color:#A32D2D">เลยรอบ '+Math.abs(Math.round(L))+' ชม.</b><small>ควรถ่ายโดยเร็ว</small>';
+    if(!(r.rate>0)) return '<span class="flo-mut">ยังคาดไม่ได้</span><small>ไม่มีมิเตอร์ 14 วันล่าสุด</small>';
+    var d=Math.max(1,Math.round(L/r.rate)); return '<b>อีก ~'+d+' วัน</b><small>ใช้เฉลี่ย '+r.rate+' ชม./วัน</small>'; };
+  var tab=function(k,t,n){ return '<button type="button" class="'+(F===k?'on':'')+'" onclick="flwOilF(\''+k+'\')">'+t+' <i>'+n+'</i></button>'; };
+  var pb=function(k,t){ return '<button type="button" class="'+(PF===k?'on':'')+'" onclick="flwOilP(\''+k+'\')">'+t+'</button>'; };
+  var canEd=(typeof flBoardCanEdit==='function')?flBoardCanEdit():true;
+  var body=rows.map(function(r){
+    var b=r.b, w=r.worst, open=!!O[b.id], gb=r.gb;
+    var act=r.mj?('<button type="button" class="flo-mj" onclick="flwOilGoJob(\''+E(r.mj.key)+'\',\''+E(b.id)+'\')" title="'+E(r.mj.title)+'">&#128295; '+E(r.mj.no)+' &middot; เปิดอยู่</button>')
+      :(canEd && r.st!=='nodata'?('<button type="button" class="flw-btn'+(r.st==='ok'?'':' pri')+' flo-go" onclick="flwOilJob(\''+E(b.id)+'\')">เปิดงานถ่ายน้ำมัน</button>'):'');
+    var h='<div class="flo-r flo-'+r.st+'" style="--c:'+col[r.st]+'">'
+      +'<span class="nm" onclick="flwOilTog(\''+E(b.id)+'\')"><i class="ar">'+(open?'&#9662;':'&#9656;')+'</i><span><b>'+E(b.name)+'</b><small>'+E(PN[r.pier]||r.pier||'—')+' &middot; '+r.engs.length+' เครื่อง'+(r.nNo?(' &middot; <em>ไม่มีข้อมูล '+r.nNo+'</em>'):'')+'</small></span></span>'
+      +'<span class="hr mono">'+(w?fh(w.ss.curH):'—')+'</span>'
+      +'<span class="la">'+(w?('<span class="mono">'+fh(w.ss.base)+' h</span>'+(w.e.lastServiceDate?('<small>'+E(flwD(w.e.lastServiceDate))+'</small>'):'<small>ยังไม่เคยบันทึกถ่าย</small>')):'—')+'</span>'
+      +'<span class="us">'+(w?bar(w.ss):'<span class="flo-mut">ต้องกรอกชั่วโมงเครื่อง / รอบเซอร์วิส</span>')+'</span>'
+      +'<span class="lf'+(w?(' '+cls(w.ss)):'')+'">'+(w?lt(w.ss):'—')+'</span>'
+      +'<span class="et">'+eta(r)+'</span>'
+      +'<span class="gb">'+(gb?('<span class="mono'+(gb.ss.left<=FLW_OIL_SOON?(' '+cls(gb.ss)):'')+'">'+Math.round(gb.ss.since)+'/'+gb.ss.interval+'</span>'+(gb.ss.left<0?'<small style="color:#A32D2D">เลยรอบ</small>':(gb.ss.left<=FLW_OIL_SOON?'<small style="color:#9A5B00">ใกล้ถึง</small>':''))):'<span class="flo-mut">—</span>')+'</span>'
+      +'<span class="ac">'+act+'</span></div>';
+    if(open) h+=r.engs.map(function(x){ var ss=x.ss, e=x.e;
+      return '<div class="flo-e"><span class="nm">'+E((e.pos||'')+' · '+(e.serial||e.id))+'</span>'
+        +'<span class="hr mono">'+(x.noData?'—':fh(ss.curH))+'</span>'
+        +'<span class="la">'+(x.noData?'':('<span class="mono">'+fh(ss.base)+' h</span>'+(e.lastServiceDate?('<small>'+E(flwD(e.lastServiceDate))+'</small>'):'')))+'</span>'
+        +'<span class="us">'+(x.noData?'<span class="flo-mut">'+(!(ss.curH>0)?'ไม่มีชั่วโมงเครื่อง':'ยังไม่ได้ตั้งรอบเซอร์วิส')+'</span>':bar(ss,110))+'</span>'
+        +'<span class="lf'+(x.noData?'':(' '+cls(ss)))+'">'+(x.noData?'—':lt(ss))+'</span>'
+        +'<span class="et">'+(x.rate>0?('<small>'+x.rate+' ชม./วัน</small>'):'')+'</span><span class="gb"></span><span class="ac"></span></div>'; }).join('');
+    return h; }).join('') || '<div class="flw-empty">ไม่มีลำในกลุ่มนี้</div>';
+  return '<div class="flw-card flo-card">'
+    +'<div class="flo-top"><button type="button" class="flw-btn" onclick="flwOilClose()">&lsaquo; Fleet Work</button>'
+      +'<b class="flo-h">รอบเปลี่ยนถ่ายน้ำมันเครื่อง</b>'
+      +'<span class="flo-sum"><span class="r">&#9679; เลยรอบ '+c.over+' ลำ</span><span class="a">&#9679; ใกล้ถึง '+c.soon+' ลำ</span><span class="g">&#9679; ปกติ '+c.ok+' ลำ</span>'+(c.nodata?('<span class="n">&#9679; ต้องกรอกข้อมูล '+c.nodata+'</span>'):'')+'</span></div>'
+    +'<div class="flo-fl"><span class="flo-tabs">'+tab('all','ทั้งหมด',all.length)+tab('over','เลยรอบ',c.over)+tab('soon','ใกล้ถึง',c.soon)+tab('ok','ปกติ',c.ok)+(c.nodata?tab('nodata','ต้องกรอกข้อมูล',c.nodata):'')+'</span>'
+      +(Object.keys(piers).length>1?('<span class="flo-seg">'+pb('all','All')+Object.keys(piers).map(function(k){ return pb(k,PN[k]||k); }).join('')+'</span>'):'')
+      +'<span class="flo-note">รอบน้ำมันเครื่องตามที่ตั้งในเครื่อง (ส่วนใหญ่ 100 ชม.) &middot; เกียร์ 200 ชม. &middot; ใกล้ถึง = เหลือ &le; '+FLW_OIL_SOON+' ชม.</span></div>'
+    +'<div class="flo-hd"><span>ลำ</span><span class="hr">ชม. สะสม</span><span>ถ่ายล่าสุด</span><span>ใช้ไปรอบนี้</span><span class="lf">เหลือ</span><span>คาดว่าจะถึงรอบ</span><span>น้ำมันเกียร์</span><span></span></div>'
+    +'<div class="flo-body">'+body+'</div>'
+    +'<div class="flo-ft">ลำที่มีหลายเครื่อง = ใช้เครื่องที่ใกล้ถึงรอบที่สุดเป็นตัวแทน &middot; กด ▸ ดูทีละเครื่อง &middot; ตัวเลขชุดเดียวกับหน้าเครื่องยนต์ (นับจากครั้งล่าสุดที่บันทึกถ่าย) &middot; ปิดงานถ่ายน้ำมันแล้วกด OK รีเซ็ตรอบ ตารางนี้จะขยับเอง</div>'
+  +'</div>';
+}
+function flwOilGoJob(key,bid){ FLW.oil=false; FLW.boat=bid; FLW.item=key; FLW.stage=-1; FLW.bf='work'; flRenderWork(); }
+function flwOilCSS(){
+  var V='#view-fl-work';
+  return '<style>'
+    +V+' .flw-oilchip{cursor:pointer;border:1px solid #DDE3EC;font-family:inherit}'+V+' .flw-oilchip u{text-decoration:none;color:#0F6CA6;font-weight:700;margin-left:4px}'
+    +V+' .flo-card{padding:0;overflow:hidden}'
+    +V+' .flo-top{display:flex;align-items:center;gap:12px;padding:14px 18px 10px;flex-wrap:wrap}'
+    +V+' .flo-h{font-size:19px;font-weight:700;color:#0F1B3D}'
+    +V+' .flo-sum{display:flex;gap:6px;flex-wrap:wrap}'+V+' .flo-sum span{height:28px;padding:0 11px;border-radius:14px;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;gap:5px}'
+    +V+' .flo-sum .r{background:#FBE3E0;color:#A32D2D}'+V+' .flo-sum .a{background:#FFF1DC;color:#9A5B00}'+V+' .flo-sum .g{background:#E3F4EC;color:#0B6B47}'+V+' .flo-sum .n{background:#F1F2F5;color:#5B6170}'
+    +V+' .flo-fl{display:flex;align-items:center;gap:10px;padding:0 18px 10px;flex-wrap:wrap}'
+    +V+' .flo-tabs,'+V+' .flo-seg{display:flex;gap:6px;flex-wrap:wrap}'
+    +V+' .flo-tabs button,'+V+' .flo-seg button{height:30px;padding:0 12px;border-radius:15px;border:1px solid #D5DAE5;background:#fff;color:#3E4A6B;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}'
+    +V+' .flo-tabs button i{font-style:normal;font-size:11px;opacity:.7}'
+    +V+' .flo-tabs button.on,'+V+' .flo-seg button.on{background:#16265C;color:#fff;border-color:#16265C}'
+    +V+' .flo-note{margin-left:auto;font-size:11.5px;color:#6B7489}'
+    +V+' .flo-hd,'+V+' .flo-r,'+V+' .flo-e{display:grid;grid-template-columns:minmax(170px,1.3fr) 90px 130px minmax(190px,1.2fr) 80px minmax(140px,1fr) 100px 170px;gap:10px;align-items:center;padding:9px 18px}'
+    +V+' .flo-hd{font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#6B7489;background:#F6F7FA;border-top:1px solid #ECEBE6;border-bottom:1.5px solid #16265C;padding-top:8px;padding-bottom:8px}'
+    +V+' .flo-hd .hr,'+V+' .flo-hd .lf{text-align:right}'
+    +V+' .flo-r{border-bottom:1px solid #EEF1F6;box-shadow:inset 4px 0 0 var(--c);font-size:13px;color:#0F1B3D}'
+    +V+' .flo-r .nm{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}'+V+' .flo-r .nm .ar{font-style:normal;color:#9AA3B8;font-size:11px}'
+    +V+' .flo-r .nm b{display:block;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +V+' .flo-r .nm small,'+V+' .flo-r small,'+V+' .flo-e small{display:block;font-size:11px;color:#8A8F9C;font-weight:500}'
+    +V+' .flo-r .nm em{font-style:normal;color:#A32D2D}'
+    +V+' .flo-r .hr,'+V+' .flo-e .hr{text-align:right;font-size:13px}'
+    +V+' .flo-bar{position:relative;display:inline-block;height:10px;border-radius:6px;background:#E6E9F0;overflow:hidden;vertical-align:middle}'+V+' .flo-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}'
+    +V+' .flo-bx{font-family:"DM Mono",monospace;font-size:11.5px;color:#3E4A6B;margin-left:6px}'
+    +V+' .flo-r .lf,'+V+' .flo-e .lf{text-align:right;font-family:"DM Mono",monospace;font-weight:800;font-size:14px}'
+    +V+' .lf.over,'+V+' .gb .over{color:#A32D2D}'+V+' .lf.soon,'+V+' .gb .soon{color:#9A5B00}'+V+' .lf.ok{color:#0B6B47}'
+    +V+' .flo-r .et{font-size:12px}'+V+' .flo-r .et b{font-weight:800}'
+    +V+' .flo-r .gb{font-size:11.5px}'+V+' .flo-r .ac{text-align:right}'
+    +V+' .flo-go{height:30px;font-size:12px;white-space:nowrap}'
+    +V+' .flo-mj{height:28px;padding:0 10px;border-radius:8px;font:inherit;font-size:11.5px;font-weight:800;background:#EEF3FB;color:#185FA5;border:1px solid #C6D4EC;cursor:pointer;white-space:nowrap}'
+    +V+' .flo-mut{color:#9AA3B8;font-size:12px}'
+    +V+' .flo-e{background:#FAFBFD;border-bottom:1px solid #EEF1F6;font-size:12px;padding-top:6px;padding-bottom:6px}'+V+' .flo-e .nm{padding-left:22px;color:#5B6170;font-family:"DM Mono",monospace;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +V+' .flo-e .lf{font-size:12.5px}'
+    +V+' .flo-ft{padding:10px 18px 14px;font-size:11.5px;color:#8A8F9C}'
+    +'@media (max-width:980px){'
+      +V+' .flo-hd{display:none}'
+      +V+' .flo-r{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm lf" "us et" "la ac" "gb ac";row-gap:5px;padding:12px 14px}'
+      +V+' .flo-r .nm{grid-area:nm}'+V+' .flo-r .lf{grid-area:lf}'+V+' .flo-r .us{grid-area:us}'+V+' .flo-r .et{grid-area:et;text-align:right}'
+      +V+' .flo-r .la{grid-area:la;font-size:12px}'+V+' .flo-r .gb{grid-area:gb}'+V+' .flo-r .ac{grid-area:ac;align-self:end}'+V+' .flo-r .hr{display:none}'
+      +V+' .flo-r .gb:not(:empty)::before{content:"เกียร์ ";color:#8A8F9C;font-size:11px}'
+      +V+' .flo-e{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm lf" "us et";padding:7px 14px}'
+      +V+' .flo-e .nm{grid-area:nm;padding-left:10px}'+V+' .flo-e .lf{grid-area:lf}'+V+' .flo-e .us{grid-area:us}'+V+' .flo-e .et{grid-area:et;text-align:right}'
+      +V+' .flo-e .hr,'+V+' .flo-e .la,'+V+' .flo-e .gb,'+V+' .flo-e .ac{display:none}'
+      +V+' .flo-note{margin-left:0}'
+    +'}'
+    +'</style>';
 }
 function flRenderWork(){
   var wrap=document.getElementById('fl-work-wrap'); if(!wrap) return;
@@ -27737,6 +28721,7 @@ function flRenderWork(){
     +'<div class="flw-chips"><span class="flw-chip"><b>'+flwMoney(scan.money)+'</b>tied up</span>'
       +(nSilent?('<span class="flw-chip red"><b>'+nSilent+'</b>silent over 60 days</span>'):'')
       +(nNoOwner?('<span class="flw-chip amb"><b>'+nNoOwner+'</b>no owner</span>'):'')
+      +flwOilChip()   /* §flwOil */
       +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn" style="height:32px;border-radius:16px;border:0;font-weight:700;font-size:12.5px" onclick="flnOpen()">+ Add work</button>':'')
       +'</div></div>';
   var stages='<div class="flw-stages">'+S.map(function(s,i){
@@ -27768,7 +28753,9 @@ function flRenderWork(){
             right='<div class="flw-card"><div class="flw-empty">Pick a boat, then a job.</div></div>'; }
   else {
     var list=(FLW.stage>=0)?cur.items.filter(function(x){ return x.stage===FLW.stage && !x.park; }):cur.items.slice();
-    if(!list.some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
+    /* §flPhoto · งานที่ปิดใน 30 วัน · อยู่ท้ายรายการ ไม่นับเป็นงานค้าง · เลือกได้เพื่อแนบรูปย้อนหลัง */
+    var doneL=[]; try{ doneL=(FLW.stage>=0)?[]:flwDoneItems(cur.id); }catch(_){ doneL=[]; }
+    if(!list.concat(doneL).some(function(x){ return x.key===FLW.item; })) FLW.item=list.length?list.slice().sort(function(a,b){ return b.stage-a.stage; })[0].key:'';
     var p=sp(cur.s), b=cur.b, pierEn={panwa:'Visit Panwa',tublamu:'Tub Lamu',ranong:'Ranong',shop:'In shop'}, bsub=[];
     if(b){ if(b.type) bsub.push(E(b.type)); if(b.capacity||b.cap) bsub.push((b.capacity||b.cap)+' PAX');
       try{ var pr=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):(b.pier||''); if(pr) bsub.push(E(pierEn[pr]||pr)); }catch(_){} }
@@ -27779,10 +28766,10 @@ function flRenderWork(){
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?'No owner':'—');
       return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
-        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3">'+E(it.title)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:#5B6170">'+E(it.sub)+'</i></span>'
-        +'<span>'+(it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
+        +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
         +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'||it.park?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
-        +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+it.silent+' d</span>'
+        +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park||it.done?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+(it.done?'&mdash;':(it.silent+' d'))+'</span>'
         +'<span class="mono x" style="text-align:right;font-size:12.5px">'+flwMoney(it.cost)+'</span></div>'; };
     var groups=[], seen={};
     var parkL=list.filter(function(x){ return x.park; }); list=list.filter(function(x){ return !x.park; });
@@ -27796,7 +28783,9 @@ function flRenderWork(){
           +(pj?('<a style="margin-left:12px" data-k="prj" data-id="'+E(pj.id)+'" onclick="flwGo(this.dataset.k,this.dataset.id)">Open project</a>'):'')+'</div>'+g.rows.map(rowH).join(''); }).join('')
       +(other.length?('<div class="flw-grp"><b>'+(groups.length?'Other jobs':'Jobs')+'</b><span>'+(groups.length?'not part of a project':'')+'</span><span class="mono" style="margin-left:auto;color:#3E4658">'+flwMoney(sum(other))+'</span></div>'+other.map(rowH).join('')):'')
       +(rep.length?('<div class="flw-grp"><b>Reported · no job yet</b><span>decide: open a job, quick fix, or dismiss</span></div>'+rep.map(rowH).join('')):'')
-      +(parkL.length?('<div class="flw-grp"><b>Parked on purpose</b><span>not repair work · not counted as silent</span></div>'+parkL.map(rowH).join('')):'');
+      +(parkL.length?('<div class="flw-grp"><b>Parked on purpose</b><span>not repair work · not counted as silent</span></div>'+parkL.map(rowH).join('')):'')
+      +(doneL.length?('<div class="flw-grp"><b>Done · last 30 days</b><span>finished jobs stay here a month so photos can still be added</span>'
+          +'<a style="margin-left:auto" data-v="fl-maintenance" onclick="flNavGo(this.dataset.v)">All finished jobs &rsaquo;</a></div>'+doneL.map(rowH).join('')):'');
     list=list.concat(parkL);
     mid='<div class="flw-card"><div style="display:flex;align-items:center;gap:12px;padding:14px 18px 12px;border-bottom:1px solid #ECEBE6">'
         +flwAv(b,40)+'<div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:21px;font-weight:700">'+E(cur.name)+'</span>'
@@ -27807,17 +28796,20 @@ function flRenderWork(){
         +(((typeof flBoardCanEdit==='function')?flBoardCanEdit():true)?'<button type="button" class="flw-btn pri"'+(b?'':' style="margin-left:auto"')+' onclick="flnOpen()">+ Add work</button>':'')+'</div>'
       +blk
       +'<div class="flw-cols flw-hd"><span>No.</span><span>Work</span><span>Stage</span><span class="x o">Owner</span><span class="x" style="text-align:right">Silent</span><span class="x" style="text-align:right">Cost</span></div>'
-      +'<div class="flw-scroll" id="flw-ml">'+(list.length?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
+      +'<div class="flw-scroll" id="flw-ml">'+((list.length||doneL.length)?body:'<div class="flw-empty">Nothing open on this boat'+(FLW.stage>=0?(' at stage “'+S[FLW.stage].t+'”'):'')+'.</div>')+'</div>'
       +'<div style="flex:none;display:flex;gap:14px;padding:9px 18px 11px;border-top:1px solid #ECEBE6;font-size:12px;color:#5B6170"><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+list.length+'</b> open item'+(list.length===1?'':'s')+'</span><span><b class="mono" style="font-weight:500;color:#0F1B3D">'+flwMoney(sum(list))+'</b> on this boat</span>'
         +(FLW.stage>=0?('<a style="margin-left:auto;color:#0F6CA6;font-weight:600;cursor:pointer" onclick="flwStage('+FLW.stage+')">Show all stages</a>'):'')+'</div></div>';
-    var sel=list.filter(function(x){ return x.key===FLW.item; })[0];
+    var sel=list.concat(doneL).filter(function(x){ return x.key===FLW.item; })[0];
     right='<div class="flw-card">'+(sel?flwPanel(sel,E):'<div class="flw-empty">Pick a job to see where it stands.</div>')+'</div>';
   }
   /* §flWork3 · tabs to the three old pages · same list the sidebar group uses (FL_NAV_GROUPS) */
   var tabsH=''; try{ var G=(typeof FL_NAV_GROUPS!=='undefined'?FL_NAV_GROUPS:[]).filter(function(g){ return g.k==='work'; })[0];
     if(G){ var okv=G.views.filter(function(v){ return (typeof flNavOk==='function')?flNavOk(v):true; });
       if(okv.length>1) tabsH='<div class="flw-tabs">'+okv.map(function(v){ return '<button type="button" class="'+(v==='fl-work'?'on':'')+'" data-v="'+v+'" onclick="flNavGo(this.dataset.v)">'+G.tabs[G.views.indexOf(v)]+'</button>'; }).join('')+'</div>'; } }catch(_){}
-  wrap.innerHTML=flwCSS()+top+tabsH+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
+  /* §flwOil · ตารางรอบถ่ายน้ำมันแทนกระดานงาน */
+  if(FLW.oil){ var _oh=''; try{ _oh=flwOilHtml(E); }catch(err){ _oh='<div class="flw-card"><div class="flw-empty">Could not build the oil-change table: '+E(err&&err.message)+'</div></div>'; try{ console.error('[flwOil]', err); }catch(_){} }
+    wrap.innerHTML=flwCSS()+flwOilCSS()+top+tabsH+_oh; return; }
+  wrap.innerHTML=flwCSS()+flwOilCSS()+top+tabsH+stages+'<div class="flw-3">'+bl+mid+right+'</div>';
   flwFit();
   ['flw-bl','flw-ml','flw-rp'].forEach(function(id){ var e=document.getElementById(id); if(e && keep[id]) e.scrollTop=keep[id]; });
 }
@@ -27846,6 +28838,10 @@ function flwAct(a,id,x){
     else if(a==='newmemo'){ flMaintCreateMemo(id, x==='1'); }
     else if(a==='tick'){ flBoardSubTick(null,id,+x,true); }
     else if(a==='close'){ flMaintOpenCloseModal(id); }
+    else if(a==='notephoto'){
+      /* §flPhoto · รูป + โน้ตในครั้งเดียว · อัปเสร็จ flpRefresh(full) วาดหน้าใหม่ ช่องโน้ตว่างเอง */
+      var ne=document.getElementById('flw-note'), nt=ne?String(ne.value||'').trim():'';
+      flpAdd(String(FLW.item).indexOf('inc:')===0?'inc':'mj', id, nt); }
     else if(a==='note'){
       var el=document.getElementById('flw-note'), t=el?String(el.value||'').trim():'';
       if(!t){ if(el) el.focus(); return; }

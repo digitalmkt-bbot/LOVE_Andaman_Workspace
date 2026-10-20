@@ -690,6 +690,14 @@
     "bkV2PruneLtAddOns": "allotment_v2/js/booking/bookingV2PruneLtAddOns.js",
     "bkV2NatOpen": "allotment_v2/js/booking/bookingV2NatOpen.js",
     "bkV2NatToggle": "allotment_v2/js/booking/bookingV2NatToggle.js",
-    "bkV2NatWarn": "allotment_v2/js/booking/bookingV2NatWarn.js"
+    "bkV2NatWarn": "allotment_v2/js/booking/bookingV2NatWarn.js",
+    "bkV2VanUpgrade": "allotment_v2/js/booking/bookingV2VanUpgrade.js",
+    "bkV2UpgVanClose": "allotment_v2/js/booking/bookingV2UpgVanClose.js",
+    "bkV2UpgVanModal": "allotment_v2/js/booking/bookingV2UpgVanModal.js",
+    "bkV2UpgVanApply": "allotment_v2/js/booking/bookingV2UpgVanApply.js",
+    "bkV2UpgVanConfirmView": "allotment_v2/js/booking/bookingV2UpgVanConfirmView.js",
+    "bkV2VanUpgUndo": "allotment_v2/js/booking/bookingV2VanUpgUndo.js",
+    "bkV2CxlInfo": "allotment_v2/js/booking/bookingV2CxlInfo.js",
+    "bkV2FamCxlSplit": "allotment_v2/js/booking/bookingV2FamCxlSplit.js"
   }
 }

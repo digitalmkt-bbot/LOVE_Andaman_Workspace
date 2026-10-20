@@ -584,6 +584,7 @@
   }
   function _laBusy(skipIdle){
     if(_dirty) return true;                                                             // local changes not yet synced → never overwrite
+    if(window._flpUploading) return true;                                               // §flpMulti · photos uploading to a fleet job · a reload mid-way drops them
     if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
     /* §vbFocus · โหมดแก้ไขของใบวางบิลรถร่วม · ที่แก้ไว้อยู่ในหน่วยความจำอย่างเดียวจนกว่าจะกดบันทึก
        (vbPersist ตั้งใจไม่เขียนระหว่างแก้ ปุ่มยกเลิกจะได้มีความหมาย) _dirty จึงเป็น false ตลอด
@@ -1267,17 +1268,17 @@
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',actionboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',landcheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-work':'fleet','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',execboard:'overview',actionboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',landcheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales','rate-admin':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-work':'fleet','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',
     'fl-deployment':'fleet','rep-ops':'operations','rep-fleet':'fleet',
     settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
-    {v:'dashboard',t:'Dashboard',a:'overview'},{v:'actionboard',t:'Action Board',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
+    {v:'dashboard',t:'Dashboard',a:'overview'},{v:'execboard',t:'Executive Board',a:'overview'},{v:'actionboard',t:'Action Board',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
     /* §สิทธิ์ · reconfirm กับ bookingflow ไม่เคยอยู่ใน LA_NAV เลย และ laAllowed() ปล่อยผ่านเมนูที่ไม่รู้จัก
        (return managed?false:true) → 2 หน้านี้เปิดให้ "ทุกคน" มาตลอด แม้ผู้ใช้จะไม่ได้ติ๊กพื้นที่ปฏิบัติการไว้
        ใส่เข้ากลุ่ม operations · เรียงตามลำดับในเมนูจริง (Booking → Re-confirm → Booking Flow → ตรวจเอกสาร) */
     {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'landcheckin',t:'เช็คอิน City tour',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
-    {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
+    {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'rate-admin',t:'Rate Expiry',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},{v:'vanbill',t:'วางบิลรถร่วม',a:'accounting'},{v:'commissions',t:'Commission payouts',a:'accounting'},{v:'prpo',t:'PR/PO Dashboard',a:'accounting'},
     {v:'fl-work',t:'Fleet Work',a:'fleet'},{v:'fl-deployment',t:'Fleet Deployment',a:'fleet'},{v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
@@ -1301,9 +1302,20 @@
     {v:'act-capunlock', t:'ปลด cap เรือเฉพาะวัน (ฉุกเฉิน)', d:'เพิ่มที่นั่งของเรือลำหนึ่งเฉพาะวันนั้น เมื่อเรือเต็มแล้วยังมีคนที่รับจองไปแล้วค้างอยู่ · ไม่เกินที่นั่งจดทะเบียน'},
     {v:'act-approve', t:'อนุมัติ booking / FOC', d:'อนุมัติ booking ที่เกิน allotment หรือผู้โดยสาร FOC ตามสิทธิ์ที่ server ตรวจสอบ'},
     /* §pckMove (2026-10-10) · ย้ายลำฉุกเฉินจากหน้า Pier Check-in · admin เลือกคนที่ทำได้ */
-    {v:'act-pckmove', t:'ย้ายลำหน้าท่า (Pier Check-in)', d:'ย้ายบุคกิ้งไปอีกลำที่วิ่งโปรแกรมเดียวกันวันนั้น จากหน้าเช็คอินหน้าท่า · ต้องเลือกเหตุผล · ลงประวัติใบจอง · ไม่เกินที่นั่งของลำปลายทาง'}
+    {v:'act-pckmove', t:'ย้ายลำหน้าท่า (Pier Check-in)', d:'ย้ายบุคกิ้งไปอีกลำที่วิ่งโปรแกรมเดียวกันวันนั้น จากหน้าเช็คอินหน้าท่า · ต้องเลือกเหตุผล · ลงประวัติใบจอง · ไม่เกินที่นั่งของลำปลายทาง'},
+    /* §tripCxl (2026-10-19) · ยกเลิกรอบ (อากาศ / ไม่ถึงคุ้มทุน / เรือ) จาก Boat Operation · ถอนการยกเลิกได้ด้วย */
+    {v:'act-tripcxl', t:'ยกเลิกรอบ (Cancel trip)', d:'ยกเลิกทั้งรอบของโปรแกรมในวันนั้น พร้อมเหตุผล (อากาศ · ไม่ถึงคุ้มทุน · เรือเสีย · อื่นๆ) และถอนการยกเลิก · การตัดสินใบจองใน By trip ใช้สิทธิ์ Operations เดิม'}
   ];
+  LA_ACTS.push(
+    /* §bkLim (2026-10-19) · ข้อจำกัดการมองเห็น (กลับด้านกับสิทธิ์พิเศษ: ติ๊ก = เห็นน้อยลง) · เจ้าของ: K.Tua
+       "ปรับสิทธิ์หน้า Booking คงเหลือแต่ Calendar กับ By trip date · By trip date ให้เหลือแค่ตารางโปรแกรม"
+       อยู่ในช่อง perms เดิม (ไม่มีคอลัมน์ใหม่) · ใช้ทางบันทึกเดียวกับ act-* ทุกจุด · lim:true = แสดงในกล่องแยก */
+    /* §pjLim (2026-10-19) · เจ้าของ: "ไปดูสิทธิ์หน้าใบงานเรือ ตัด Captain & Crew · Guides & Trainee ออก และไม่ต้องมีปุ่มปริ้น" */
+    {v:'lim-pjlite', lim:true, t:'ใบงานเรือ · ไม่เห็นทีมเรือ/ไกด์ · ไม่มีปุ่มพิมพ์', d:'หน้าใบงานเรือของทุกท่า · ซ่อนหัวข้อ Captain & Crew และ Guides & Trainee (รวมใบอนุญาต ปุ่มดึงทีม/จัดไกด์ ใบงานไกด์) · ไม่มีปุ่มพิมพ์ · ยังเห็นเรือ เส้นทาง ภาษา ครัว ลูกค้า โน้ต'},
+    {v:'lim-bkct', lim:true, t:'ไม่เห็น Booking – Transfer / City Tour', d:'ซ่อนเมนู Booking – Transfer / City Tour (หน้าจองฝั่งรถ/ทัวร์บก) · เมนู Booking ฝั่งเรือยังเห็นตามสิทธิ์'},
+    {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม + Boat Running', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรมกับ Boats running (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
   window.LA_ACTS=LA_ACTS;
+  window.laLimited=function(key){ if(!ME || ME.role==='admin') return false; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };   /* §bkLim */
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }
   // §opsMe · operation-backend keeps act- keys in their own list (/v1/me `actions`), not inside perms
   window.laCanAct=function(key){ if(!ME || ME.role==='admin') return true; return Array.isArray(ME.actions) && ME.actions.indexOf(key)>=0; };
@@ -1368,13 +1380,22 @@
   window.laIsAdmin=function(){ return !!(ME && ME.role==='admin'); };   // admin-only actions (e.g. delete agent profile)
   window.laGuardEdit=function(area){ if(laCanEditArea(area)) return true; _laToast('👁 ส่วนนี้คุณมีสิทธิ์ดูอย่างเดียว · แก้ไขไม่ได้ (ติดต่อ admin)'); return false; };
   function laFullAccess(){ return !ME || ME.role==='admin' || !Array.isArray(ME.perms); }
-  function laAllowed(view){ if(laFullAccess()) return true; var set=laExpandPerms(ME.perms); if(!set) return true; if(set[view]) return true; var managed=false; for(var i=0;i<LA_NAV.length;i++){ if(LA_NAV[i].v===view){managed=true;break;} } return managed?false:true; }
+  /* §navHole (2026-10-19) · เจ้าของ: "ทำไม Rate Expiry กับ Booking Transfer ขึ้น" (บัญชี K.Tua ติ๊กแค่ Booking + Calendar)
+     Rate Expiry (rate-admin) ไม่เคยอยู่ใน LA_NAV · laAllowed ปล่อยเมนูที่ไม่รู้จักผ่านให้ทุกคน (ครั้งที่หกของกับดักเดียวกัน)
+     ใส่เข้ากลุ่ม sales · คนที่ถือ Rate Types อยู่แล้วยังเห็นเหมือนเดิม (เป็นหน้าภาพรวมของ Rate Types) ไม่ต้องไล่ติ๊กใหม่
+     Booking – Transfer / City Tour ใช้ view เดียวกับ Booking (data-citytour) แยกสิทธิ์ไม่ได้ · ใช้ข้อจำกัด lim-bkct แทน */
+  function laAllowed(view){ if(laFullAccess()) return true; var set=laExpandPerms(ME.perms); if(!set) return true; if(set[view]) return true;
+    if(view==='rate-admin' && set['rate-types']) return true; var managed=false; for(var i=0;i<LA_NAV.length;i++){ if(LA_NAV[i].v===view){managed=true;break;} } return managed?false:true; }
   /* §plMerge · หน้าที่ยุบเมนูมารวมกันต้องเช็คสิทธิ์ของเมนูที่ถูกยุบเองได้
      ไม่งั้นคนที่มีสิทธิ์หน้าหนึ่งจะเห็นอีกหน้าที่ admin ไม่ได้ให้สิทธิ์ไว้ */
   window.laAllowed=laAllowed;
-  function laApplyPerms(){ if(laFullAccess()) return;
+  function laApplyPerms(){
+    try{ document.body.classList.toggle('la-bkprog', !!window.laLimited('lim-bkprog')); }catch(e){}   /* §bkLim */
+    try{ document.body.classList.toggle('la-pjlite', !!window.laLimited('lim-pjlite')); }catch(e){}   /* §pjLim */
+    if(laFullAccess()) return;
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });
+    try{ if(window.laLimited('lim-bkct')) document.querySelectorAll('.nav-item[data-citytour]').forEach(function(it){ it.style.display='none'; }); }catch(e){}   /* §navHole · หลังรอบบน ไม่งั้นโดนเปิดคืน (view เดียวกับ Booking) */
     try{ if(typeof flNavMergeSync==='function') flNavMergeSync(); }catch(e){}   /* §flNavMerge · pick the group head from the pages this user may see */
     document.querySelectorAll('[data-adminonly]').forEach(function(it){ it.style.display='none'; }); // admin-only nodes hidden for everyone else (laApplyPerms only runs for non-admins)
     /* §pierSub · หัวกลุ่มท่าไม่มี data-view จึงไม่โดนรอบบน · ซ่อนเองถ้าลูกไม่เหลือสักอัน */
@@ -2326,11 +2347,20 @@
               +esc(m.t)+'</span>'; }).join('')+'</div></div>';
     }).join('')
     /* §actPerm · สิทธิ์พิเศษ · แยกจากพื้นที่ · ปุ่ม "ทุกพื้นที่"/ชุดลัด ไม่ติ๊กให้ ต้องกดเองทีละคน */
-    +'<div class="ar open '+((D.acts||[]).length?'has':'')+'" id="'+pfx+'-ar-acts" data-acts="1">'
+    +(function(){   /* §bkLim · ข้อจำกัดการมองเห็น · กล่องแยกจากสิทธิ์พิเศษ เพราะความหมายกลับด้าน */
+      var LL=LA_ACTS.filter(function(a){ return a.lim; }), on=LL.filter(function(a){ return (D.acts||[]).indexOf(a.v)>=0; }).length;
+      return '<div class="ar open '+(on?'has':'')+'" id="'+pfx+'-ar-lims" data-acts="1">'
+        +'<div class="top"><span class="dot" style="background:#1272B3"></span>'
+          +'<div class="nm"><b>ข้อจำกัดการมองเห็น</b><span>ติ๊ก = เห็นน้อยลงในหน้าที่มีสิทธิ์อยู่แล้ว · ใช้กับคนนอกฝ่ายจองที่ต้องดูยอด</span></div>'
+          +'<span class="fr2 '+(on?'all':'')+'">'+on+'/'+LL.length+'</span></div>'
+        +'<div class="mns">'+LL.map(function(a){
+            return '<span class="mn '+((D.acts||[]).indexOf(a.v)>=0?'on':'')+'" data-act="'+a.v+'" title="'+esc(a.d)+'" onclick="__laTogAct(\''+pfx+'\',\''+a.v+'\')">'
+              +esc(a.t)+'</span>'; }).join('')+'</div></div>'; })()
+    +'<div class="ar open '+((D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length?'has':'')+'" id="'+pfx+'-ar-acts" data-acts="1">'
       +'<div class="top"><span class="dot" style="background:#A32D2D"></span>'
         +'<div class="nm"><b>สิทธิ์พิเศษ</b><span>ไม่มากับชุดลัดหรือพื้นที่ · ให้เฉพาะคนที่ต้องตัดสินใจกรณีฉุกเฉิน</span></div>'
-        +'<span class="fr2 '+((D.acts||[]).length?'all':'')+'">'+(D.acts||[]).length+'/'+LA_ACTS.length+'</span></div>'
-      +'<div class="mns">'+LA_ACTS.map(function(a){
+        +'<span class="fr2 '+((D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length?'all':'')+'">'+(D.acts||[]).filter(function(k){ return k.indexOf('act-')===0; }).length+'/'+LA_ACTS.filter(function(a){ return !a.lim; }).length+'</span></div>'
+      +'<div class="mns">'+LA_ACTS.filter(function(a){ return !a.lim; }).map(function(a){
           return '<span class="mn '+((D.acts||[]).indexOf(a.v)>=0?'on':'')+'" data-act="'+a.v+'" title="'+esc(a.d)+'" onclick="__laTogAct(\''+pfx+'\',\''+a.v+'\')">'
             +esc(a.t)+'</span>'; }).join('')+'</div></div>';
   }

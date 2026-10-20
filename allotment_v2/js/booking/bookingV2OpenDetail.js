@@ -2,6 +2,7 @@
 // P3 · Booking Detail · view / FOC approval / cancel / edit
 // ═══════════════════════════════════════════════════════════════
 function bookingV2OpenDetail(id){
+  if(bkLimProg()) return;   /* §bkLim */
   if(!id) return;
   _bkV2.detailId = id;
   bookingV2Render();
