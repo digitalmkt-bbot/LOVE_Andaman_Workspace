@@ -19362,9 +19362,46 @@ function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bk
           = ขายเพิ่มที่รอเก็บทุกรายการของวันนั้นถือว่าเก็บแล้ว "ผ่านหน้าท่า" · เก็บไม่ครบ = ยังค้างเหมือนเดิม
    เงินก้อนนั้นอยู่ใน bk.pierPayments แล้ว · รายการที่ครอบคลุมจึง "ไม่" ถูกบวกเข้ายอดรับซ้ำ (ดู pckMoney / tsSaleList)
    ไม่แก้ข้อมูลรายการขายเพิ่ม (settle ยัง pending) · เป็นการอ่านให้ตรงกันของสองหน้า จึงไม่ต้อง migrate */
+/* §exDupPier (2026-10-20) · ขายเพิ่มแบบ COT ที่หน้าท่าเก็บเงินไปแล้ว แล้วมีคนมา "แก้ไข" เปลี่ยนวิธีเป็นโอน/บัตรซ้ำอีกที
+   เจ้าของ: "ตรวจหน่อย ทำไมขึ้นซ้ำ" (20 ต.ค. · AS-TVB-2026-100055 กับ F2400 · บัตร ฿2,000 +fee ฿100 ขึ้นสองป้าย)
+   พอไม่ใช่ COT แล้ว ตัวครอบคลุมข้างล่างมองไม่เห็น · เงินก้อนเดียวจึงถูกบวกทั้งจากแถวหน้าท่าและจากตัวรายการขายเพิ่ม
+   กติกา · เงินหน้าท่าของวันนั้น "เกิน" ยอดที่ใบนั้นต้องเก็บ (COT + อัปเกรดค้าง + ยอดค้าง + ขายเพิ่มที่ยังรอ)
+          และส่วนเกินนั้นพอจ่ายรายการขายเพิ่มที่ถูกเปลี่ยนเป็นโอน/บัตรได้ → ถือว่าเป็นก้อนเดียวกับเงินหน้าท่า ไม่บวกซ้ำ
+   อ่านให้ตรงกันเฉย ๆ ไม่แก้ข้อมูล · ปุ่ม "แก้ให้" (tsExDupFix) ในหน้าปิดวันค่อยเปลี่ยนรายการกลับเป็นแบบเก็บหน้าท่า */
+function bkxExNeed(b, date, skipId){
+  var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
+  var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
+  var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
+  var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
+  var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  var exDue=0; ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(k){
+    if(date && k.tripDate && k.tripDate!==date) return;
+    if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
+  return cot+upDue+bal+exDue;
+}
+function bkxExDupPier(x){
+  try{
+    if(!x || !x.id || x.method==='cot' || x.method==='cash' || !x.method) return false;
+    var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
+    var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
+    var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[];
+    if(!pays.some(function(p){ return (p.method||'cash')===x.method && (+p.amount||0)>0; })) return false;   // ต้องมีเงินหน้าท่าวิธีเดียวกันจริง
+    var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0;
+    var extra=pckN(paid - bkxExNeed(b,date));
+    if(!(extra>0.005)) return false;
+    /* ส่วนเกินจ่ายให้รายการที่เปลี่ยนเป็นโอน/บัตรตามลำดับที่บันทึก · ถึงคิวนี้แล้วยังพอ = ซ้ำ */
+    var list=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).filter(function(k){
+      return k.method===x.method && k.method!=='cot' && k.method!=='cash' && (!date || !k.tripDate || k.tripDate===date); });
+    for(var i=0;i<list.length;i++){ var k=list[i], amt=+k.total||0;
+      if(k.id===x.id) return extra>=amt-0.005;
+      if(extra>=amt-0.005) extra=pckN(extra-amt); }
+    return false;
+  }catch(_){ return false; }
+}
 function bkxExCovered(x){
   try{
-    if(!x || x.method!=='cot' || x.settle==='done') return false;
+    if(!x) return false;
+    if(x.method!=='cot' || x.settle==='done') return bkxExDupPier(x);   /* §exDupPier */
     var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
     var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
     var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0; if(!(paid>0)) return false;
@@ -19399,7 +19436,7 @@ function pckMoney(b, date){
   });
   var exGot=0, exDue=0, exCov=0;
   /* §exCotPier · own = รับเงินที่ตัวรายการเอง (เข้า got) · covered = เงินอยู่ใน pierPayments แล้ว (ไม่บวกซ้ำ ไม่ค้าง) */
-  ex.forEach(function(x){ var v=+x.total||0; if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else if(bkxExCovered(x)) exCov+=v; else exDue+=v; });
+  ex.forEach(function(x){ var v=+x.total||0; if(bkxExCovered(x)) exCov+=v; else if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else exDue+=v; });   /* §exDupPier · ซ้ำกับเงินหน้าท่า = covered */
   var exTot=exGot+exDue+exCov;
   var ups=(!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[];
   var upDue=0, upGot=0;
@@ -27364,7 +27401,8 @@ function tsSaleList(b, date){
                slips:(x.slips||[]).slice(),
                // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
                comm:_cm, toCompany:(+x.toCompany||0),
-               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing });
+               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing,
+               dup:(!!_cov && x.method!=='cot') });   /* §exDupPier · ถูกเปลี่ยนเป็นโอน/บัตรทั้งที่หน้าท่าเก็บแล้ว */
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
@@ -27402,8 +27440,28 @@ function tsSaleCell(S, money, e){
       +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
       +(x.done?(x.covered?' <i style="font-style:normal;opacity:.75">เก็บที่ท่า</i>':''):' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
-      +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
+      +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>'
+      /* §exDupPier · บันทึกซ้ำกับเงินหน้าท่า · ไม่บวกซ้ำแล้ว · กดแก้ให้กลับเป็นแบบเก็บหน้าท่า */
+      +(x.dup?('<span class="ts-chip a" style="margin-top:3px" title="รายการนี้เคยเป็นแบบเก็บวันเดินทาง หน้าท่าเก็บเงินไปแล้ว แล้วถูกแก้เป็น'+e(PM[x.method]||x.method)+'ซ้ำอีกที · ยอดนับจากแถวเงินหน้าท่าที่เดียว">บันทึกซ้ำกับเงินหน้าท่า · ไม่นับซ้ำ'
+          +(x.id?(' <a href="javascript:void 0" onclick="tsExDupFix(\''+e(x.id)+'\')" style="color:inherit;font-weight:800;text-decoration:underline">แก้ให้</a>'):'')+'</span>'):'');
   }).join('')+'</div>';
+}
+/* §exDupPier · เปลี่ยนรายการขายเพิ่มที่บันทึกซ้ำกลับเป็นแบบเก็บหน้าท่า · เงินและสลิปอยู่ที่แถวหน้าท่าอยู่แล้ว */
+function tsExDupFix(exId){
+  var x=(SB_EXTRAS||[]).find(function(k){ return k.id===exId; }); if(!x) return;
+  if(!bkxExDupPier(x)){ alert('This extra is not covered by a pier payment any more'); return; }
+  var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; });
+  var old=x.method, fee=+x.fee||0;
+  if(!confirm('"'+(x.service||'')+'" ฿'+pckNum(x.total)+'\n\nเงินก้อนนี้บันทึกไว้ที่แถวเงินหน้าท่าแล้ว ('+pckMLabel(old)+')\nจะเปลี่ยนรายการขายเพิ่มกลับเป็น "เก็บแล้วที่หน้าท่า" เพื่อไม่ให้นับซ้ำ'+(fee?('\nค่าธรรมเนียม ฿'+pckNum(fee)+' ที่ใส่ซ้ำไว้จะถูกเอาออก (ของจริงอยู่ที่แถวหน้าท่า)'):'')+'\n\nทำเลยไหม?')) return;
+  x.method='cot'; x.settle='pending'; x.feePct=0; x.fee=0; x.customerPaid=+x.total||0;
+  if(b && typeof bkV2AddHistory==='function'){
+    bkV2AddHistory(b,'extra','Extra "'+(x.service||'')+'" ฿'+pckNum(x.total)+' · duplicate of pier payment ('+old+') · reset to collected-at-pier','Extra');
+    try{ acctPersistBookings(); }catch(_){}
+  }
+  sbExtrasPersist();
+  try{ if(typeof renderTravelSum==='function') renderTravelSum(); }catch(_){}
+  try{ if(typeof renderPierCheckin==='function') renderPierCheckin(); }catch(_){}
+  try{ if(typeof renderCheckinAll==='function') renderCheckinAll(); }catch(_){}
 }
 // §tsSlipAdd · แนบสลิปจากหน้าปิดวันโดยตรง · kind 'p' = เงินที่รับหน้าท่า · 'x' = ของที่ขายเพิ่ม
 function tsSlipPick(kind, bkId, itemId, inp){
@@ -30312,7 +30370,7 @@ function renderTravelSum(){
     // §tsSalePayChip · เงินของที่ขายเพิ่มหน้างานเก็บอยู่บนตัวรายการ ไม่ได้อยู่ใน pierPayments
     //   ถ้าไม่เติมตรงนี้ ใบที่ขายแต่ของเพิ่มจะขึ้นว่า "ยังไม่เก็บ" ทั้งที่รับเงินไปแล้ว
     var _sby={};
-    m.S.list.forEach(function(x){ if(!x.done) return; var k=x.method||'cash'; _sby[k]=(_sby[k]||0)+x.amt; });
+    m.S.list.forEach(function(x){ if(!x.done || x.covered) return; var k=x.method||'cash'; _sby[k]=(_sby[k]||0)+x.amt; });   /* §exDupPier · เงินอยู่ในแถวหน้าท่าแล้ว ไม่ขึ้นป้ายซ้ำ */
     Object.keys(_sby).forEach(function(k){ var x=PM[k]||['อื่นๆ','n'];
       mchips+='<span class="ts-chip '+x[1]+'" title="เงินจากของที่ขายเพิ่มหน้างาน">'
         + x[0]+' '+money(_sby[k])+' <i style="font-style:normal;opacity:.7">ขายเพิ่ม</i></span>'; });
@@ -38876,6 +38934,11 @@ function bkV2ExtraSave(bkId){
   if(_bkExtraEditId){
     // update existing record (no duplicate)
     const e=SB_EXTRAS.find(x=>x.id===_bkExtraEditId);
+    /* §exDupPier · เป็น COT และหน้าท่าเก็บเงินไปแล้ว · ห้ามเปลี่ยนเป็นโอน/บัตรซ้ำ ไม่งั้นนับสองรอบ */
+    if(e && e.method==='cot' && e.settle!=='done' && _pm!=='cot' && bkxExCovered(e)){
+      alert('เงินของรายการนี้บันทึกไว้ที่หน้าท่าแล้ว (ปุ่มเก็บเงินในหน้า Pier check-in)\n\nไม่ต้องเปลี่ยนวิธีรับเงินซ้ำ · ระบบนับจากแถวเงินหน้าท่าอยู่แล้ว\nถ้าวิธี/ค่าธรรมเนียมไม่ตรง ให้แก้ที่รายการเงินหน้าท่าแทน');
+      return;
+    }
     if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller;
            e.method=_pm; e.feePct=(_pm==='card'?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);
            e.slips=(_pm==='cot'?[]:_slips);
@@ -38911,8 +38974,9 @@ function bkV2ExtraDayOf(bk){
 /* §exCot · เก็บเงินสดหน้าท่าแล้วกดปุ่มเดียวจบ · ถ้าเป็นโอน/บัตรให้กดแก้ไขแล้วเลือกวิธีเอง */
 function bkV2ExtraCollect(id, bkId){
   var e=SB_EXTRAS.find(function(x){ return x.id===id; }); if(!e) return;
+  if(bkxExCovered(e)){ alert('รายการนี้เก็บเงินผ่านหน้าท่าไปแล้ว · ไม่ต้องกดซ้ำ'); return; }   /* §exDupPier */
   if(!confirm('ยืนยันว่าเก็บเงิน "'+(e.service||'')+'" ฿'+pckNum(e.total)
-    +' เป็นเงินสดแล้ว\n\n(ถ้ารับเป็นโอน/บัตร ให้กดแก้ไขแทน)')) return;
+    +' เป็นเงินสดแล้ว\n\n(ถ้ารับเป็นโอน/บัตร ให้กด "เก็บเงิน" ในหน้า Pier check-in · ไม่ต้องแก้รายการนี้)')) return;
   e.method='cash'; e.feePct=0; e.fee=0; e.customerPaid=+e.total||0;
   e.settle='done'; e.collectedAt=new Date().toISOString();
   var bk=(SB_BOOKINGS||[]).find(function(x){ return x.id===(bkId||e.bookingId); });
