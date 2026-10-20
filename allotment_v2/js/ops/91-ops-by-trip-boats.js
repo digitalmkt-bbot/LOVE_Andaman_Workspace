@@ -9,6 +9,15 @@
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
+  /* §btBd · A/C/I/F of some routes (a variant, a programme's variants, the selected route): the sum of the server's routes[].pax {ad, chd, inf, foc}.
+     The server leaves bookings waiting for approval out of pax (so out of this too); legacy counted them. null without an answer: the page keeps its own count. */
+  window.laOpsByTripBd = function(srv, routeIds){
+    if(!srv || !Array.isArray(srv.routes)) return null;
+    var want = {}; (routeIds || []).forEach(function(r){ want[r] = 1; });
+    var o = { ad: 0, chd: 0, inf: 0, foc: 0 };
+    srv.routes.forEach(function(r){ if(!r || !want[r.route_id]) return; var p = r.pax || {}; ['ad', 'chd', 'inf', 'foc'].forEach(function(k){ o[k] += +p[k] || 0; }); });
+    return o;
+  };
   window.laOpsByTripBoats = function(srv, routeId){
     if(!srv || !Array.isArray(srv.routes)) return null;
     var r = srv.routes.filter(function(x){ return x && x.route_id === routeId; })[0];
@@ -17,7 +26,7 @@
     return r.boats.map(function(b){
       var c = '#5b6472';
       try{ if(typeof getBoatColor === 'function'){ var k = getBoatColor(b.boat_id); if(k && k.text) c = k.fill || k.text; } }catch(_){}
-      return { id: b.boat_id, name: b.boat_name || b.boat_id, col: c, pax: +b.pax || 0, cap: +b.capacity || 0, over: !!b.over, overBy: +b.over_by || 0,
+      return { id: b.boat_id, name: b.boat_name || b.boat_id, col: c, pax: +b.pax || 0, bd: b.pax_by_type || null, cap: +b.capacity || 0, over: !!b.over, overBy: +b.over_by || 0,   // bd: A/C/I/F of the boat (BE-1, computed)
                ovn: b.ovn_hold ? { bkId: b.ovn_hold.booking_id, from: b.ovn_hold.from, to: b.ovn_hold.to, routeId: routeId } : null };
     });
   };

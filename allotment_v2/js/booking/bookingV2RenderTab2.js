@@ -470,7 +470,7 @@ function bookingV2RenderTab2(){
       const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
       const _sb=_btSrvBoat(rid,bid);
-      if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null,bd:a.bd||null};
+      if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null,bd:_sb.pax_by_type||a.bd||null};   /* §opsByTripBd MARKED EDIT · A/C/I/F of a boat is the server's (routes[].boats[].pax_by_type) */
       return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null,bd:a.bd||null};
     });
   };
@@ -554,12 +554,12 @@ function bookingV2RenderTab2(){
                                : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bookingV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
-        <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>${_btBdHtml(_btBdOf(rowsPier.filter(r=>r.routeId===rid)),'v')}
+        <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>${/* §opsByTripBd MARKED EDIT */_btBdHtml((_srv&&typeof window.laOpsByTripBd==='function')?window.laOpsByTripBd(_srv,[rid]):_btBdOf(rowsPier.filter(r=>r.routeId===rid)),'v')}
         <span class="sp">${_btHoldsOf(rid).length?`<span class="bt-lk bt-bhold" style="background:#F3EBFA;color:#53207A;border-color:#DCC7EE" title="${laT('เรือที่กันไว้ทั้งลำให้เอเยนต์ · ไม่อยู่ในพูลขายที่นั่งแล้ว')}">&#9973; ${_btHoldsOf(rid).length}</span>`:''}${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bookingV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
-      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${nRun>1?_btBdHtml(a.bd,'f'):''}
+      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${nRun>1?/* §opsByTripBd MARKED EDIT */_btBdHtml((_srv&&typeof window.laOpsByTripBd==='function')?window.laOpsByTripBd(_srv,rids):a.bd,'f'):''}
       ${(function(){ /* §famSum */
         if(!_fLk && !_fCapN) return '';
         const _tot=_fBk+_fLk, _r=_fCap>0?_fAv/_fCap:0, _c=_fAv<=0?'full':(_r<0.20?'low':'ok');
@@ -636,7 +636,7 @@ function bookingV2RenderTab2(){
       <div class="bt-bnm">${esc(rnm)}<span>${esc(_btDep(_btSelRid))}${_btPier(_btSelRid)?' · '+esc(_btPier(_btSelRid)):''}</span></div>
       <div class="bt-avrow">
         <span class="bt-av"><span class="k">Free</span><span class="v ${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':''))}">${cp<=0?'\u2014':av}</span></span><span class="bt-avs"></span>
-        <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span>${_btBdHtml(_btBdOf(groups[_btSelRid]),'s')}</span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span>${/* §opsByTripBd MARKED EDIT */_btBdHtml((_srv&&typeof window.laOpsByTripBd==='function')?window.laOpsByTripBd(_srv,[_btSelRid]):_btBdOf(groups[_btSelRid]),'s')}</span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
       <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span>${b.ovn?'':_btBdHtml(b.bd,'b')}<span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.overBy!=null?b.overBy:(b.pax-b.cap))):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
