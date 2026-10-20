@@ -3128,6 +3128,23 @@ function bkV2DrawSources(routeId, date, agentId){
   });
   return out;
 }
+/* §lkStaleDraw (2026-10-20) · ใบจองที่ดึงจากล็อกที่ถูกปล่อย/เต็มไปแล้ว · หน้าแก้ไขไม่ขึ้นกล่องล็อก (ไม่มีที่เหลือให้ดึง)
+   จึงลดการดึงเป็น 0 ไม่ได้ · Upgrade ก็ติด "Release the lock draw first" ตลอด
+   ใส่ล็อกที่ใบนี้เลือกดึงไว้แล้ว (lockDrawSel) กลับเข้ารายการด้วย · ลดได้อย่างเดียว ไม่เพิ่มเกินที่เคยดึง */
+function bkV2DrawSourcesFor(t, agentId){
+  const srcs = bkV2DrawSources(t.routeId, t.date, agentId);
+  const sel = t.lockDrawSel || {};
+  /* ใบที่บันทึกแล้ว: ที่นั่งที่ใบนี้ดึงไว้ยังนับเป็น "ใช้แล้ว" ระหว่างแก้ (คืนตอนกดบันทึก) → บวกกลับให้ปรับได้เต็มจำนวน */
+  const own = {}; (Array.isArray(t.lockDraws)?t.lockDraws:[]).forEach(x=>{ if(x && x.lockId) own[x.lockId]=(own[x.lockId]||0)+(Number(x.qty)||0); });
+  Object.keys(sel).forEach(id=>{ const q = Math.max(own[id]||0, Number(sel[id])||0); if(!((Number(sel[id])||0)>0)) return;
+    const s = srcs.find(x=>x.lockId===id);
+    if(s){ s.remaining += (own[id]||0); return; }
+    const l = SB_SEAT_LOCKS.find(x=>x.id===id);
+    const p = l && l.parentId ? SB_SEAT_LOCKS.find(x=>x.id===l.parentId) : null;
+    const nm = l ? (bkV2LockHolderName(p||l)+(l.parentId?(' · '+(l.subName||'ย่อย')):'')) : id;
+    srcs.push({lockId:id, label:nm+' · ดึงไว้เดิม', remaining:q, held:true}); });
+  return srcs;
+}
 // ── Parent / child sub-locks (Option A) · a lock with children is an umbrella; children carve out its qty ──
 function bkV2LockChildren(parentId){ return SB_SEAT_LOCKS.filter(x=>x.parentId===parentId); }
 function bkV2LockAllocated(parent){ return bkV2LockChildren(parent.id).reduce((s,c)=>s+(c.qty||0),0); }            // seats carved into sub-groups
@@ -51793,7 +51810,7 @@ function bkV2RenderTripsSection(){
     // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
     let lockBannerHtml = '';
     if(!isCharter && t.routeId && t.date && d.agentId && typeof bkV2DrawSources==='function'){
-      const srcs = bkV2DrawSources(t.routeId, t.date, d.agentId);
+      const srcs = bkV2DrawSourcesFor(t, d.agentId);   /* §lkStaleDraw */
       const remTotal = srcs.reduce((s,x)=>s+x.remaining,0);
       if(remTotal > 0){
         const pax = bkV2PaxAllTot(t.pax);
@@ -59790,7 +59807,7 @@ function bkV2SetTripLockDraw(idx, lockId, qty){
   const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx]; if(!t) return;
   const pax = bkV2PaxAllTot(t.pax);
   t.lockDrawSel = t.lockDrawSel || {};
-  const srcs = (typeof bkV2DrawSources==='function') ? bkV2DrawSources(t.routeId, t.date, _bkV2.newBooking.agentId) : [];
+  const srcs = (typeof bkV2DrawSourcesFor==='function') ? bkV2DrawSourcesFor(t, _bkV2.newBooking.agentId) : [];   /* §lkStaleDraw */
   const src = srcs.find(s=>s.lockId===lockId);
   const srcMax = src ? src.remaining : 0;
   let v = Math.max(0, Math.min(Number(qty)||0, srcMax));
