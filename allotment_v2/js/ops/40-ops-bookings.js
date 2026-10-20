@@ -351,6 +351,9 @@
     var up = t.operations && t.operations.upgrade;
     if(up && up.from_route_id && up.to_route_id) o.upg = { fromRouteId: up.from_route_id, toRouteId: up.to_route_id, date: up.to_date || o.date,
       reason: up.reason || '', charge: +up.charge || 0, upgId: up.upgrade_id || '', by: up.by || '', at: up.at || '' };
+    /* §upgVan · a whole-van upgrade: bkUpgVanOf / bkUpgVanBtn read t.upg.van (server: operations.upgrade.van) */
+    if(o.upg && up.van) o.upg.van = { key: up.van.key, gid: up.van.from_number, newGid: up.van.to_number, vanId: up.van.van_id || '',
+      pick: up.van.pickup_time || '', pickChanged: !!up.van.pickup_changed };
 
     return o;
   }

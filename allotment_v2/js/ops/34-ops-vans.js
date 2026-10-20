@@ -43,7 +43,8 @@
     'bookingV2AssignVanReturn', 'bookingV2AssignVanReturnSplit', 'bookingV2SetSplitPickTime', 'bookingV2SetReturnSameVan', 'bookingV2VanSplit',
     'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal',
     'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet',
-    'bookingV2SplitApply', 'bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs'];
+    'bookingV2SplitApply', 'bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs',
+    'bookingV2UpgVanApply', 'bookingV2VanUpgUndo', 'bkUpgVanMoveStops'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
 
   function wrap(name, opsFn){
@@ -313,6 +314,44 @@
       return null;
     });
   });
+
+  /* §upgVan · whole-van upgrade. POST /operations/van-groups/{id}/upgrade and .../upgrade/undo: the server moves the
+     group's bookings and stops together (bkUpgVanMoveStops does nothing in ops). go !== true is legacy's form check + confirm view. */
+  wrap('bookingV2UpgVanApply', function(go){
+    if(go !== true) return originals.bookingV2UpgVanApply.apply(this, arguments);
+    var U = window._bkUpgVan; if(!U) return null;
+    var sid = serverIdOf(U.date, U.from, U.gid);
+    if(!sid) return O.fail('Upgrade refused', new Error('van group has no server id'));
+    var pick = String(U.pick || '').trim(), pickChanged = (pick !== String(U.pick0 || '').trim());
+    var body = { to_route_id: U.to, reason: String(U.reason || '').trim(),
+      charge: Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g, '')) || 0) * 100) / 100) };
+    if(pickChanged) body.pickup_time = pick || null;
+    return O.queue(function(){ return O.post(BASE + '/' + enc(sid) + '/upgrade', body); }).then(function(){
+      if(typeof bookingV2UpgVanClose === 'function') bookingV2UpgVanClose();
+      return refreshUpgDay(U.date, U.from, U.to);
+    }, function(e){ O.fail('Upgrade refused · ' + failCode(e), e); return null; });
+  });
+  wrap('bookingV2VanUpgUndo', function(date, rid, zone, gid){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return null;
+    var U = (typeof bkUpgVanOf === 'function') ? bkUpgVanOf(date, rid, gid) : null;
+    if(!U){ alert('This van group did not come from a whole-van upgrade.'); return null; }
+    var sid = serverIdOf(date, rid, +gid);
+    if(!sid) return O.fail('Undo refused', new Error('van group has no server id'));
+    var m = bkUpgVanMembers(date, rid, gid), pax = m.reduce(function(s, x){ return s + x.pax; }, 0), uncol = 0, col = 0;
+    m.forEach(function(x){ var u = x.t.upg; var it = (u && u.upgId && Array.isArray(x.b.upgrades)) ? x.b.upgrades.find(function(y){ return y.id === u.upgId; }) : null;
+      if(it){ if(it.collected) col += (+it.sellPrice || 0); else uncol += (+it.sellPrice || 0); } });
+    if(!confirm('Undo the whole-van upgrade? (' + m.length + ' bookings, ' + pax + ' pax)\n' + bkUpgRouteName(rid) + ' > back to ' + bkUpgRouteName(U.from) + '\n' +
+      (uncol ? ('Uncollected extra charges (THB ' + uncol.toLocaleString() + ') will be removed.\n') : '') +
+      (col ? ('Collected charges (THB ' + col.toLocaleString() + ') stay on the bookings.\n') : '') + 'Boats must be assigned again.')) return null;
+    return O.queue(function(){ return O.post(BASE + '/' + enc(sid) + '/upgrade/undo', {}); }).then(function(){
+      return refreshUpgDay(date, U.from, rid);
+    }, function(e){ O.fail('Undo refused · ' + failCode(e), e); return null; });
+  });
+  wrap('bkUpgVanMoveStops', function(){ return 0; });
+  function refreshUpgDay(date, from, to){
+    var re = (O.bookings && typeof O.bookings.refreshDay === 'function') ? O.bookings.refreshDay(date) : null;
+    return Promise.resolve(re).then(function(){ return load(date, from); }).then(function(){ return load(date, to); }).then(function(){ redraw(); return true; });
+  }
 
   wrap('bookingV2VanGroupDisband', function(date, routeId, zone, gid){
     var num = +gid;
