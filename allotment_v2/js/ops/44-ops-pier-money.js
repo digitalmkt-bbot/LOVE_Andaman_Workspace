@@ -208,5 +208,8 @@
   // other people's writes: drop the cache so the next repaint asks again
   O.onChange(function(){ Object.keys(days).forEach(function(k){ days[k].at = 0; }); });
 
-  window.laOpsPierMoney = { loadDay: loadDay, rowFor: rowFor, originals: originals };
+  window.laOpsPierMoney = { loadDay: loadDay, rowFor: rowFor, originals: originals,
+    /* the day's row by server booking id (the Travel Summary has no legacy booking object) and the day's change signature */
+    rowById: function(id, date){ var d = days[date]; return d && d.rows[id] || null; },
+    sigOf: function(date){ var d = days[date]; return d ? d.sig : ''; } };
 })();

@@ -320,6 +320,101 @@
     ['cash','transfer','card'].forEach(function(k){ if(n(rc[k]) > 0) out += '<span class="ts-chip ' + PM[k][1] + '">' + PM[k][0] + ' ' + money(rc[k]) + '</span>'; });
     return out;
   }
+  /* §tsSlipAdd / §cotSlip (2026-10-20) · attach a slip from the Travel Summary.
+     Pier payments and on-tour sales: the file goes up through pckSlipUpload (38-ops-attachments, POST /v1/attachments),
+     then is named to the server: POST /v1/bookings/:id/pier-payments/:pid/slips {slip_ids} or
+     PATCH /v1/bookings/:id/tour-sales/:sid {slip_ids} (the full list: the server replaces it).
+     COT decisions: PUT /v1/bookings/:id/cot-decisions/:date with the decision as it stands plus slip_ids.
+     The payments and sales (with their ids and slips) come from GET /v1/pier-money?date= (44-ops-pier-money). */
+  function pierMoney(){ return window.laOpsPierMoney || null; }
+  function enc(v){ return encodeURIComponent(text(v)); }
+  function slipIdsOf(list){ return (list || []).map(function(s){ return s && s.id; }).filter(Boolean); }
+  function slipLabel(has, lb, kind, bkId, itemId){
+    var e = esc;
+    return '<label class="ts-slipb" data-ops-ts-slip="' + e(kind) + '" title="' + e('แนบสลิป · ' + lb) + '">&#128206; ' + (has ? 'เพิ่มสลิป' : 'แนบสลิป ' + e(lb))
+      + '<input type="file" accept="image/*,application/pdf" style="display:none" onchange="tsSlipPick(\'' + kind + '\',\'' + q(bkId) + '\',\'' + q(itemId) + '\',this)"></label>';
+  }
+  function slipSeen(slips, lb){
+    var mark = call('laSlipClickAttr', [slips, lb], '');
+    return '<span class="ts-slipok"' + (mark ? ' style="cursor:pointer" ' + mark : '') + ' title="' + esc('มีสลิปแล้ว ' + slips.length + ' ใบ') + '">&#128206; สลิป ' + slips.length + ' ใบ</span>';
+  }
+  /* one block per non-cash payment / collected sale of the booking that day */
+  function slipCell(r, date){
+    var P = pierMoney(), row = P && P.rowById ? P.rowById(r.id, date) : null; if(!row) return '';
+    var h = '', PMN = { transfer: 'โอน', card: 'บัตร' };
+    (row.payments || []).filter(function(p){ return !p.deleted_at && p.service_date === date && p.method !== 'cash'; }).forEach(function(p){
+      var lb = (PMN[p.method] || p.method) + ' ' + money(p.amount), has = (p.slips || []).length > 0;
+      h += '<div class="ts-slips" data-ops-ts-payslip="' + esc(p.id) + '">' + (has ? slipSeen(p.slips, lb) : '') + slipLabel(has, lb, 'p', r.id, p.id) + '</div>';
+    });
+    (row.tour_sales || []).filter(function(s){ return s.settle === 'done' && !s.covered_by_pier && s.method !== 'cash' && s.method !== 'cot'; }).forEach(function(s){
+      var lb = 'ขายเพิ่ม ' + (PMN[s.method] || s.method) + ' ' + money(s.total), has = (s.slips || []).length > 0;
+      h += '<div class="ts-slips" data-ops-ts-saleslip="' + esc(s.id) + '">' + (has ? slipSeen(s.slips, lb) : '') + slipLabel(has, lb, 'x', r.id, s.id) + '</div>';
+    });
+    return h;
+  }
+  function cotSlipRow(r, dec){
+    var ss = (dec && dec.slips) || [], lb = 'สลิป COT', id = q(r.id), date = dateOf();
+    var add = '<label class="ts-slipb" data-ops-ts-cotslip="1" title="' + esc('แนบสลิป · ' + lb) + '">&#128206; ' + (ss.length ? 'เพิ่มสลิป' : 'แนบสลิป')
+      + '<input type="file" accept="image/*,application/pdf" style="display:none" onchange="tsCotSlipPick(\'' + id + '\',\'' + date + '\',this)"></label>';
+    var seen = ss.length ? slipSeen(ss, lb) + '<a class="ts-slipx" onclick="tsCotSlipDrop(\'' + id + '\',\'' + date + '\')" title="ปลดสลิปออก" style="color:var(--rs700);cursor:pointer;font-size:11px;font-weight:800;align-self:center">&times;</a>' : '';
+    return '<div class="ts-slips" data-ops-ts-cotslips="1">' + seen + add + '</div>';
+  }
+  function pickedFile(inp){ var f = (inp && inp.files && inp.files[0]) || null; if(inp) inp.value = ''; return f; }
+  function redraw(){ last = {}; var T = O.travelRows; if(T && T.clear) T.clear(); if(typeof window.renderTravelSum === 'function') window.renderTravelSum(); }
+  function dropUpload(id){ var A = window.laOpsAttachments; if(A && A.remove) return A.remove(id).then(null, function(){}); return Promise.resolve(); }
+  /* upload, then link; a refused link removes the upload again. send(bk, attachmentId, pierMoneyRow) does the server call */
+  function uploadAndLink(f, bkId, date, send, kind){
+    if(typeof window.pckSlipUpload !== 'function'){ alert('Slips cannot be attached on this page.'); return; }
+    window.pckSlipUpload(f, bkId, function(meta){
+      var P = pierMoney(), row = P && P.rowById ? P.rowById(bkId, date) : null;
+      var bk = { id: bkId, opsId: bkId, opsVersion: row && row.version != null ? row.version : null };
+      return O.queue(function(){ return send(bk, meta.id, row); }).then(function(){
+        O.wrote(kind);
+        return Promise.resolve(P && P.loadDay ? P.loadDay(date, true) : null).then(redraw, redraw);
+      }, function(e){
+        O.fail('Slip was not attached', e);
+        return dropUpload(meta.id).then(function(){ if(P && P.loadDay) P.loadDay(date, true); });
+      });
+    });
+  }
+  function slipPick(kind, bkId, itemId, inp){
+    var f = pickedFile(inp); if(!f) return;
+    var date = dateOf(), base = '/v1/bookings/' + enc(bkId);
+    if(kind === 'p') return uploadAndLink(f, bkId, date, function(bk, id){ return O.bookingWrite('POST', base + '/pier-payments/' + enc(itemId) + '/slips', bk, { slip_ids: [id] }); }, 'ts-pier-slip');
+    return uploadAndLink(f, bkId, date, function(bk, id, row){
+      var sale = ((row && row.tour_sales) || []).filter(function(s){ return s.id === itemId; })[0];
+      return O.bookingWrite('PATCH', base + '/tour-sales/' + enc(itemId), bk, { slip_ids: slipIdsOf(sale && sale.slips).concat([id]) });
+    }, 'ts-sale-slip');
+  }
+  function cotDecisionOf(bkId, date){ var T = O.travelRows, a = T && T.afterRow ? T.afterRow(date, bkId) : null; return { row: a, dec: a && a.cot && a.cot.decision || null }; }
+  /* the decision as it stands, so the PUT changes the slips only */
+  function cotBody(dec, ids){
+    var b = { mode: dec.mode, slip_ids: ids };
+    if(dec.ref != null && dec.ref !== '') b.ref = dec.ref;
+    if(dec.mode === 'part' || dec.mode === 'nocol') b.deduct = n(dec.deduct);
+    if(dec.mode === 'part') b.payout = n(dec.payout);
+    return b;
+  }
+  function cotWrite(bkId, date, cur, ids, title){
+    var bk = { id: bkId, opsId: bkId, opsVersion: cur.row && cur.row.version != null ? cur.row.version : null };
+    return O.queue(function(){ return O.bookingWrite('PUT', '/v1/bookings/' + enc(bkId) + '/cot-decisions/' + enc(date), bk, cotBody(cur.dec, ids)); }).then(function(){
+      O.wrote('cot-slip'); redraw();
+    }, function(e){ O.fail(title, e); throw e; });
+  }
+  function cotSlipPick(bkId, date, inp){
+    var f = pickedFile(inp); if(!f) return;
+    var cur = cotDecisionOf(bkId, date);
+    if(!cur.dec){ alert('Pick how this COT is handled first, then attach the slip.'); return; }
+    if(typeof window.pckSlipUpload !== 'function'){ alert('Slips cannot be attached on this page.'); return; }
+    window.pckSlipUpload(f, bkId, function(meta){
+      return cotWrite(bkId, date, cur, slipIdsOf(cur.dec.slips).concat([meta.id]), 'Slip was not attached').then(null, function(){ return dropUpload(meta.id); });
+    });
+  }
+  function cotSlipDrop(bkId, date){
+    var cur = cotDecisionOf(bkId, date); if(!cur.dec || !(cur.dec.slips || []).length) return;
+    if(typeof window.confirm === 'function' && !window.confirm('Remove ' + cur.dec.slips.length + ' slip(s) from this decision? (The files stay in the booking documents.)')) return;
+    return cotWrite(bkId, date, cur, [], 'Slip was not removed').then(null, function(){});
+  }
   function cotCell(r){
     var c = r.c, cot = n(c && c.cot);
     if(!(cot > 0)) return '<span style="color:var(--zn400)">&mdash;</span>';
@@ -355,6 +450,7 @@
       if(keep > 0) L.push('บริษัทรับไว้ ' + money(keep));
       h += '<div class="ts-cotsum">' + (dec.over ? '<span style="color:var(--rs700);font-weight:800">&#9888; หัก+โอนออก เกินยอด COT</span>' + by : (L.join(' &middot; ') || 'ไม่หักจากบิล') + by) + '</div>';
     } else h += '<div class="ts-cotsum" style="color:var(--am700);font-weight:700">&#9888; ' + (c.not_counted ? 'ลูกค้าไม่ได้เดินทาง · ต้องระบุว่าเก็บไม่ได้เพราะอะไร' : 'ยังไม่ตัดสิน') + '</div>';
+    if(mode) h += cotSlipRow(r, dec);
     return h;
   }
   function s03Html(R, F, S){
@@ -376,7 +472,7 @@
         + '<td><div style="font-size:11px">' + e(b.hotel_name || '—') + '</div><div class="ts-tel">' + (van ? e(vanName(van)) : 'มาเอง') + (boat ? ' · ' + e(boatName(boat)) : '') + '</div></td>'
         + '<td class="ts-aocol">' + sale + '</td>'
         + '<td class="ts-mono" style="font-size:10.5px"><span style="color:var(--zn400)">&mdash;</span></td>'
-        + '<td>' + chips + '</td>'
+        + '<td>' + chips + slipCell(r, S.date) + '</td>'
         + '<td class="r ts-mono" style="font-weight:800">' + (cx ? '<span style="text-decoration:line-through;opacity:.45">' + money(c.target) + '</span>' : money(c.target))
           + '<div class="ts-tel">' + (cx ? 'ไม่นับ · เก็บไม่ได้' : e(parts.join(' · '))) + '</div></td>'
         + '<td>' + (n(c.cot) > 0 ? (text(b.cash_on_tour_note).trim() ? '<div class="ts-cotn">' + e(text(b.cash_on_tour_note).trim()) + '</div>' : '<div class="ts-cotn empty">ไม่มีโน้ต</div>') : '<span style="color:var(--zn400)">—</span>') + '</td>'
@@ -655,8 +751,16 @@
       + '<div class="ts-wrap" data-ops-ts-view="1" data-ops-ts-docno="' + esc(V.docNo) + '">' + headHtml(d, V, R, F, date) + empty + noRoster
       + s01Html(F, d) + s02Html(R, F, d, V, date, onlyIssue) + s03Html(R, F, d) + s04Html(R, F, date, onlyIssue) + '</div>';
   }
+  var pmSeen = {};                                // date -> pier-money signature the last paint was drawn from
   function paint(host, d){
+    var P = pierMoney(), date = d && d.date;
     host.innerHTML = html(d);
+    if(P && P.loadDay && P.sigOf && date){
+      pmSeen[date] = P.sigOf(date);
+      Promise.resolve(P.loadDay(date, false)).then(function(){
+        if(P.sigOf(date) !== pmSeen[date] && dateOf() === date && last[date] === d){ pmSeen[date] = P.sigOf(date); var h = document.getElementById('travelsum-host'); if(h) paint(h, d); }
+      }, function(){});
+    }
     call('tsV6Bleed', [], null);
     call('tsManApply', [], null);
   }
@@ -713,6 +817,10 @@
       else if(O.toast) O.toast({ kind: 'info', title: 'Saved as postponed', sub: 'Set the new date on the booking page.', dur: 6000 });
     });
   });
+  wrap('tsSlipPick', function(orig, kind, bkId, itemId, inp){ return slipPick(kind, bkId, itemId, inp); });
+  wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
+  wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });
   O.onWrite(function(){ last = {}; });
+  window.laOps.travelSlips = { pick: slipPick, cotPick: cotSlipPick, cotDrop: cotSlipDrop };
   window.laOps.travelView = { html: html, figures: figures, clear: function(){ last = {}; } };
 })();
