@@ -66,7 +66,7 @@
         TY.forEach(function(Ty){ s.ty[Ty.k] = n((B.tickets || {})[Ty.k]); s.pc[Ty.k] = n(((B.pc || B.counts) || {})[Ty.k]); });   /* §w7c · pc = the server's per-boat should-be-issued */
         s.tyT = n(B.ticket_total);
         var rt = (typeof window.getRoute === 'function' && window.getRoute(B.route_id)) || {};
-        boats.push({ s: s, rc: rt.color || '#94A3B8', rn: B.route_name || rt.name || B.route_id, bn: B.boat_name || B.boat_id, dep: B.departure || '' });
+        boats.push({ s: s, rc: rt.color || '#94A3B8', rn: B.route_name || rt.name || B.route_id, bn: B.boat_name || B.boat_id, dep: B.departure || '', cx: (O.parkCx && O.parkCx(B.cx)) || undefined });   /* §pkCx · the heads taken off (server cx) for the family / all chips */
         routes[B.route_id] = 1;
         if(!D.by_type || !D.pc) addPcTy(ds_, s, true);   /* §w7c · only an older server without the day's by_type / pc is added up here */
       });

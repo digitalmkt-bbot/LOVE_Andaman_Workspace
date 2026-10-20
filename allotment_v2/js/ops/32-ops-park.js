@@ -27,7 +27,7 @@
 
   // Legacy originals, captured before they are replaced. Legacy mode calls these exactly.
   var L = {
-    renderPierPark: window.renderPierPark, pkTkData: window.pkTkData, pkTypes: window.pkTypes,
+    renderPierPark: window.renderPierPark, pkTkData: window.pkTkData, pkTypes: window.pkTypes, pkCxPax: window.pkCxPax,
     pkTyModal: window.pkTyModal, pkNmEdit: window.pkNmEdit, pkFixSet: window.pkFixSet,
     pkNmClearBoat: window.pkNmClearBoat, pkNmDropOver: window.pkNmDropOver,
     pkNmFillLead: window.pkNmFillLead, pkNmDropLeadDup: window.pkNmDropLeadDup,
@@ -106,6 +106,11 @@
     }catch(_){}
     return '#94A3B8';
   }
+  /* §pkCx · what was taken off a boat's count for cancelled / no-show / moved-away heads (server: cx {cells, tot, cxl, ns, mv, text, why}, computed) → legacy's
+     {p8, tot, cxl, ns, mv}. pkCxAdd / pkCxChip / pkCxWhy / pkCxTxt stay legacy's: they only add and print the server's cells. */
+  function cxFrom(c){ return c && c.tot ? { p8: c.cells || {}, tot: c.tot, cxl: c.cxl || 0, ns: c.ns || 0, mv: c.mv || 0 } : null; }
+  var CX0 = function(){ return { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 }; };
+  O.parkCx = cxFrom;
   function convBoat(b){
     var cnt = {
       adTH: b.counts.adTH || 0, chTH: b.counts.chTH || 0, adFR: b.counts.adFR || 0, chFR: b.counts.chFR || 0, inf: b.counts.inf || 0
@@ -113,6 +118,7 @@
     return {
       bid: b.boat_id, boat: { id: b.boat_id, name: b.boat_name }, dep: b.departure || '',   // the job's own time, else the route's first (server)
       cnt: cnt, tot: b.tot, cntPc: cnt, totPc: b.tot, pcDiff: false, pax8: st.nat[b.boat_id] || {},
+      cx: cxFrom(b.cx) || CX0(),
       booked: b.booked, people: (b.people || []).map(convPerson), miss: b.miss || {}, missTot: b.miss_total || 0,
       orphan: (b.orphans || []).map(function(o){ return { full: o.full, cat: o.cat, seq: o.seq, bkId: o.booking_id, vc: '', lead: '' }; }),
       byNat: false
@@ -130,6 +136,13 @@
       if(b.departure && O.pier){ O.pier.dep = O.pier.dep || {}; O.pier.dep[st.key.split('|')[1] + '|' + b.boat_id] = { departure: b.departure, source: b.departure_source || null }; }   // read by pjDepOf (47)
     });
     return order;
+  };
+
+  window.pkCxPax = function(date, bid, pier){
+    if(!O.enabled()) return L.pkCxPax.apply(this, arguments);
+    if(!fresh(date, pier)) return CX0();
+    var hit = null; st.boats.forEach(function(b){ if(!hit && b.boat_id === bid) hit = b; });
+    return (hit && cxFrom(hit.cx)) || CX0();
   };
 
   window.pkTypes = function(){

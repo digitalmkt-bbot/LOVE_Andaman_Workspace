@@ -372,3 +372,16 @@ test('O.park.load is exposed for the boot step and reads the given day', async (
   assert.deepEqual(rt.calls, [{ method: 'GET', path: GET_PATH }]);
   assert.equal(J(rt.w.pkTkData(DATE, 'tublamu'))[0].boats.length, 1);
 });
+
+test('cancel breakdown (pkCx): the boat carries the server\'s cx in legacy shape, pkCxPax answers from the cached boat, empty without one', async () => {
+  const rt = runtime();
+  rt.state.day.boats[0].cx = { cells: { ad_th: 1, chd_th: 0, ad_fr: 2, chd_fr: 0, inf_th: 0, inf_fr: 0, foc_th: 0, foc_fr: 0 }, tot: 3, cxl: 1, ns: 1, mv: 1, text: 'x', why: 'y' };
+  rt.w.renderPierPark();
+  await rt.flush();
+  const B = J(rt.w.pkTkData(DATE, 'tublamu'))[0].boats[0];
+  assert.deepEqual(B.cx, { p8: { ad_th: 1, chd_th: 0, ad_fr: 2, chd_fr: 0, inf_th: 0, inf_fr: 0, foc_th: 0, foc_fr: 0 }, tot: 3, cxl: 1, ns: 1, mv: 1 });
+  assert.deepEqual(J(rt.w.pkCxPax(DATE, 'b1', 'tublamu')), B.cx);
+  assert.deepEqual(J(rt.w.pkCxPax(DATE, 'nope', 'tublamu')), { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 });
+  const none = runtime(); none.w.renderPierPark(); await none.flush();
+  assert.deepEqual(J(none.w.pkTkData(DATE, 'tublamu'))[0].boats[0].cx, { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 }, 'a boat with nothing taken off has the empty split, as legacy');
+});
