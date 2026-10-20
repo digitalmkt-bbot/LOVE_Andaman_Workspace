@@ -28342,9 +28342,15 @@ function flwsShort(D){
   if(done && m.outcome && m.outcome!=='success') fix+=' ('+(FLWS_OUT_TH[m.outcome]||m.outcome)+')';
   L.push('แก้: '+fix);
   if(m){ var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
-    var c=[D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย'];
+    /* §flwsCostPend · ยอดใน D.cost (flMaintCalcCost) นับเฉพาะ memo ที่อนุมัติแล้ว → memo รออนุมัติต้องบอกแยก ไม่งั้นขึ้น "ยังไม่มีค่าใช้จ่าย" ทั้งที่มี memo */
+    var pend=D.memos.filter(function(mo){ return mo.status==='pending_approval'; }), pAmt=0; pend.forEach(function(mo){ pAmt+=(+mo.amount||0); });
+    var c=[];
+    if(D.cost>0) c.push(flwsM(Math.round(D.cost)));
+    if(pend.length) c.push('รออนุมัติ '+flwsM(Math.round(pAmt))+' ('+pend.length+' memo)');
+    if(!c.length) c.push('ยังไม่มีค่าใช้จ่าย');
     if(D.parts.length) c.push('อะไหล่ '+D.parts.length+' รายการ');
-    if(om.length){ var lb=om.map(function(mo){ return (typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }); c.push(om.length+' memo'+(lb.every(function(x){ return x===lb[0]; })?(' '+lb[0]):' ค้าง')); }
+    var om2=om.filter(function(mo){ return mo.status!=='pending_approval'; });
+    if(om2.length){ var lb=om2.map(function(mo){ return (typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }); c.push(om2.length+' memo'+(lb.every(function(x){ return x===lb[0]; })?(' '+lb[0]):' ค้าง')); }
     L.push('ค่าใช้จ่าย: '+c.join(' · ')); }
   return flwsNoEmoji(L.join('\n'));
 }
