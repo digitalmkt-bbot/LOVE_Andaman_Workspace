@@ -4107,9 +4107,102 @@ function bkV2ReleaseLock(lockId, qty){
   const floor = l.parentId ? peak : Math.max(peak, bkV2LockAllocated(l));   // never drop below used, and (parent) never below what's allocated to children
   l.qty = Math.max(floor, (l.qty||0) - n);
   bkV2LockPendShrink(l, n);   /* §lkPend · ลดจำนวน = ตัดส่วนที่รออยู่ออกก่อน */
-  (l.log=l.log||[]).push({date:today, type:'release', qty:n});
+  (l.log=l.log||[]).push({date:today, at:new Date().toISOString(), type:'release', qty:n, by:(typeof laBy==='function')?laBy():''});   /* §lkUndo · at/by ไว้โชว์ในประวัติ */
   if(bkV2LockDrawable(l) <= 0 && bkV2LockPendOn(l, l.date) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
   sbSeatLocksPersist();
+}
+/* ══ §lkUndo (2026-10-20) · owner "ปลดล็อคของ BG Travel ผิด จะคืนกลับมายังไง · ทำประวัติ และเพิ่มการคืนค่า"
+   เดิมกดปล่อยแล้วไม่มีทางย้อน · ปล่อยหมดใบ = ปุ่ม "+ ที่นั่ง" หายไปด้วย · ปล่อยรายรอบ = ไม่มีปุ่มใดเอาวันนั้นออก
+   ตอนนี้: ประวัติในหน้าต่าง "ประวัติ" ของล็อก + ปุ่ม "คืนกลับ" ต่อรายการปล่อย
+   - ปล่อยจำนวน (release)      → qty += n · สถานะกลับเป็น active · log 'unrelease' note 'undo#<idx>' (กันคืนซ้ำ)
+   - ปล่อยรายรอบ (release-round) → เอาวันนั้นออกจาก releasedDates · log 'unrelease-round'
+   กันขายเกิน: ต้องมีที่ว่างใน pool ของวันนั้นพอ (bkV2LockFreeOn) · ไม่พอ = ไม่คืน บอกวันที่ไม่พอ
+   ไม่มีฟิลด์ใหม่ · ใช้คอลัมน์ log เดิม (type/qty/note/tripDate/at/by) · ไม่ต้องแก้ฐานข้อมูล ══ */
+function bkV2LockToday(){ return (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10); }
+function bkV2LockUndoneIdx(l){ const s={}; (l.log||[]).forEach(e=>{ const m=/^undo#(\d+)$/.exec(String(e&&e.note||'')); if(e && e.type==='unrelease' && m) s[m[1]]=1; }); return s; }
+/* วันที่ยังไม่ผ่านของล็อกนี้ ที่ยังกันที่นั่งอยู่ (ไม่นับรอบที่ปล่อยแล้ว) · ใช้เช็กที่ว่างตอนคืนจำนวน */
+function bkV2LockLiveDates(l){
+  const today=bkV2LockToday();
+  if(!bkV2LockSpansDays(l)) return (l.date && l.date>=today) ? [l.date] : [];
+  const rg=bkV2LockRange(l); if(!rg.from) return [];
+  const out=[]; let d=new Date((rg.from<today?today:rg.from)+'T00:00:00'); const end=rg.to;
+  for(let i=0;i<400;i++){ const ds=bkV2LocalYMD(d); if(ds>end) break;
+    if(bkV2LockDowOk(l,ds) && !bkV2LockRoundReleased(l,ds)) out.push(ds); d.setDate(d.getDate()+1); }
+  return out;
+}
+function bkV2LockCanUndoRelease(l, idx){
+  const e=(l.log||[])[idx]; if(!e || e.type!=='release' || !(+e.qty>0)) return {ok:false};
+  if(bkV2LockUndoneIdx(l)[idx]) return {ok:false, done:true};
+  if(l.status==='expired') return {ok:false, why:'Lock expired'};
+  const dates=bkV2LockLiveDates(l); if(!dates.length) return {ok:false, why:'Trip date has passed'};
+  const n=+e.qty;
+  if(l.parentId){ const p=SB_SEAT_LOCKS.find(x=>x.id===l.parentId); if(p && bkV2LockUnalloc(p)<n) return {ok:false, why:'Parent lock has only '+bkV2LockUnalloc(p)+' unallocated seats'}; }
+  if(!l.parentId){ const short=[]; dates.forEach(ds=>{ const f=bkV2LockFreeOn(l.routeId, ds, null); if(f!=null && f<n) short.push(ds+' ('+f+' free)'); });
+    if(short.length) return {ok:false, why:'Not enough free seats on '+short.slice(0,5).join(', ')+(short.length>5?' ...':''), short:short}; }
+  return {ok:true, n:n};
+}
+function bkV2LockUndoReleaseGo(lockId, idx){
+  const l=SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return;
+  const c=bkV2LockCanUndoRelease(l, idx);
+  if(!c.ok){ alert('Cannot restore this release.\n\n'+(c.done?'Already restored.':(c.why||''))); return; }
+  if(!confirm('Restore '+c.n+' seats back into this lock?\n\n'+bkV2LockHolderName(l)+(l.subName?(' / '+l.subName):'')+'\n\nThe seats will be held for this holder again and taken out of the general pool.')) return;
+  l.qty=(l.qty||0)+c.n;
+  if(l.status==='released' || l.status==='depleted') l.status='active';
+  (l.log=l.log||[]).push({date:bkV2LockToday(), at:new Date().toISOString(), type:'unrelease', qty:c.n, note:'undo#'+idx, by:laBy()});
+  sbSeatLocksPersist(); bkV2Render();
+}
+function bkV2LockCanUndoRound(l, tripDate){
+  if(!bkV2LockRoundReleased(l, tripDate)) return {ok:false, done:true};
+  if(l.status!=='active') return {ok:false, why:'Lock is not active'};
+  if(tripDate < bkV2LockToday()) return {ok:false, why:'Trip date has passed'};
+  const free=bkV2LockFreeOn(l.routeId, tripDate, null);
+  const m=l.releasedDates; const was=Array.isArray(m)?m.slice():m;
+  if(Array.isArray(m)) l.releasedDates=m.filter(x=>x!==tripDate); else if(m) { l.releasedDates=Object.assign({},m); delete l.releasedDates[tripDate]; }
+  const seats=bkV2LockPoolHold(l, tripDate);
+  l.releasedDates=was;
+  if(free!=null && seats>free) return {ok:false, why:'Only '+free+' free seats on '+tripDate+', this round needs '+seats};
+  return {ok:true, n:seats};
+}
+function bkV2LockUndoRoundGo(lockId, tripDate){
+  const l=SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return;
+  const c=bkV2LockCanUndoRound(l, tripDate);
+  if(!c.ok){ alert('Cannot restore this round.\n\n'+(c.done?'This round is not released.':(c.why||''))); return; }
+  if(!confirm('Restore round '+tripDate+' to this lock?\n\n'+bkV2LockHolderName(l)+' · '+c.n+' seats\n\nThe seats will be held for this holder again and taken out of the general pool.')) return;
+  const m=l.releasedDates;
+  if(Array.isArray(m)) l.releasedDates=m.filter(x=>x!==tripDate); else if(m){ l.releasedDates=Object.assign({},m); delete l.releasedDates[tripDate]; }
+  (l.log=l.log||[]).push({date:bkV2LockToday(), at:new Date().toISOString(), type:'unrelease-round', tripDate:tripDate, qty:c.n, by:laBy()});
+  sbSeatLocksPersist(); bkV2Render();
+}
+/* ประวัติของล็อก (รวมกรุ๊ปย่อย) · ใหม่สุดก่อน · ปุ่มคืนกลับเฉพาะรายการที่ยังคืนได้ */
+function bkV2LockHistoryHtml(mL, esc){
+  const kids=bkV2LockChildren(mL.id);
+  const T={release:['ปล่อยที่นั่ง','#A32D2D'], 'release-round':['ปล่อยรอบ','#A32D2D'], add:['เพิ่มที่นั่ง','#0F6E56'],
+           unrelease:['คืนกลับ','#0F6E56'], 'unrelease-round':['คืนรอบกลับ','#0F6E56'], expire:['หมดอายุ','#64748B'], reactivate:['เปิดใหม่','#64748B']};
+  const rows=[];
+  [mL].concat(kids).forEach(l=>{ const und=bkV2LockUndoneIdx(l);
+    (l.log||[]).forEach((e,i)=>{ if(!e || !T[e.type]) return; rows.push({l:l,e:e,i:i,und:und}); }); });
+  const latestRound={}; rows.forEach(r=>{ if(r.e.type==='release-round'){ const k=r.l.id+'|'+r.e.tripDate; if(!latestRound[k] || r.i>latestRound[k].i) latestRound[k]=r; } });
+  const key=r=>String(r.e.at||((r.e.date||'')+'T99'))+'|'+String(r.i).padStart(5,'0');
+  rows.sort((a,b)=> key(b).localeCompare(key(a)));
+  if(!rows.length) return `<div style="margin-top:14px;border-top:1px solid var(--border-2);padding-top:11px"><div style="font-size:10px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em">ประวัติ</div><div style="font-size:11px;color:var(--ink-soft);margin-top:4px">ยังไม่มีการปล่อยหรือเพิ่มที่นั่ง</div></div>`;
+  const tm=e=>{ if(!e.at) return esc(e.date||''); const d=new Date(e.at); if(isNaN(d)) return esc(e.date||''); return esc(bkV2LocalYMD(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')); };
+  const btn=(fn,title)=>`<button onclick="${fn}" title="${esc(title)}" style="font-size:10.5px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit;white-space:nowrap">คืนกลับ</button>`;
+  const body=rows.slice(0,40).map(r=>{ const e=r.e, l=r.l, t=T[e.type];
+    let act='';
+    if(e.type==='release'){
+      if(r.und[r.i]) act=`<span style="font-size:10px;color:#0F6E56">คืนแล้ว</span>`;
+      else { const c=bkV2LockCanUndoRelease(l, r.i); act=c.ok?btn(`bkV2LockUndoReleaseGo('${l.id}',${r.i})`,'Hold these '+c.n+' seats for this holder again'):(c.why?`<span title="${esc(c.why)}" style="font-size:10px;color:var(--ink-faint)">คืนไม่ได้</span>`:''); }
+    } else if(e.type==='release-round' && e.tripDate && latestRound[l.id+'|'+e.tripDate]===r){
+      if(!bkV2LockRoundReleased(l, e.tripDate)) act=`<span style="font-size:10px;color:#0F6E56">คืนแล้ว</span>`;
+      else { const c=bkV2LockCanUndoRound(l, e.tripDate); act=c.ok?btn(`bkV2LockUndoRoundGo('${l.id}','${esc(e.tripDate)}')`,'Hold round '+e.tripDate+' for this holder again'):`<span title="${esc(c.why||'')}" style="font-size:10px;color:var(--ink-faint)">คืนไม่ได้</span>`; }
+    }
+    const what=t[0]+(e.qty?(' '+e.qty+' ที่'):'')+(e.tripDate?(' · รอบ '+e.tripDate):'');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-2)">
+        <div style="flex:1;min-width:0"><div style="font-size:11.5px;font-weight:700;color:${t[1]}">${esc(what)}${l.parentId?` <span style="font-weight:600;color:#534AB7">· ${esc(l.subName||'ย่อย')}</span>`:''}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9.5px;color:var(--ink-soft)">${tm(e)}${e.by?(' · '+esc(e.by)):''}${(e.note && !/^undo#/.test(e.note))?(' · '+esc(e.note)):''}</div></div>${act}</div>`; }).join('');
+  return `<div style="margin-top:14px;border-top:1px solid var(--border-2);padding-top:11px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:10px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.05em">ประวัติ</span><span style="font-size:10px;color:var(--ink-soft)">ปล่อยผิด กดคืนกลับได้ ถ้าวันนั้นยังมีที่ว่างพอ</span></div>
+      <div style="margin-top:4px">${body}</div></div>`;
 }
 // KPI · per agent · locked vs converted (drawn)
 function bkV2LockKpiByAgent(agentId){
@@ -5445,6 +5538,7 @@ function bkV2LockOverlays(){
             <span style="margin-left:auto;font-size:10.5px;color:var(--ink-soft)">${kFree.length?`<b style="color:#0F6E56">ว่าง ${kFree.length}</b>`:''}${kUsed.length?` · <b style="color:#3730A3">ใช้แล้ว ${kUsed.length}</b>`:''}${kRel.length?` · ปล่อยแล้ว ${kRel.length}`:''}</span>
           </div>
           ${kidRows}
+          ${bkV2LockHistoryHtml(mL, esc)}
         </div>
         <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border);flex-wrap:wrap">
           ${(mL.status==='active')?`<button onclick="bkV2LockManageClose();bkV2LockAddOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ เพิ่มที่นั่ง</button>`:''}
