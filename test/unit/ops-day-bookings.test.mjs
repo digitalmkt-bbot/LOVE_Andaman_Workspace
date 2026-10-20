@@ -19,7 +19,8 @@ function runtime({ enabled = true, cached = new Set(), failLoad = false, view = 
   };
   const ctx = {
     console, Promise, Date, Array, Object, String, setImmediate,
-    document: { getElementById: (id) => (id === 'piercheckin-host' ? {} : null) },
+    document: { getElementById: (id) => (['piercheckin-host', 'reconfirm-host', 'doccheck-host', 'insurance-host'].includes(id) ? {} : null) },
+    _rcDate: null, _docCheck: { date: '2026-10-23' }, _insDate: '2026-10-24',
     laOps: O,
     _pckDate: '2026-10-20', _poDate: '2026-10-21', _vehDate: '2026-10-16', _bkV2LockManageId: null,
     SB_SEAT_LOCKS: [{ id: 'L1', date: '2026-10-22' }, { id: 'L2', date: '2026-10-22', scope: 'bulk' }],
@@ -32,6 +33,9 @@ function runtime({ enabled = true, cached = new Set(), failLoad = false, view = 
   w.renderPierCheckin = () => { renders.push('pier:' + ctx._pckDate); return 'r'; };
   w.renderPierJob = () => { renders.push('job:' + ctx._poDate); };
   w.renderVehicles = () => { renders.push('veh'); };
+  w.renderReconfirm = () => { renders.push('rc:' + ctx._rcDate); };
+  w.renderDocCheck = () => { renders.push('doc:' + ctx._docCheck.date); };
+  w.renderInsurance = () => { renders.push('ins:' + ctx._insDate); };
   w.bookingV2LockManageOpen = (id) => { ctx._bkV2LockManageId = id; legacy.push('manage:' + id); };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
@@ -100,4 +104,27 @@ test('legacy mode: the originals, zero loads', async () => {
   assert.deepEqual(rt.ensured, []);
   assert.equal(rt.vanDays.length, 0);
   assert.deepEqual(rt.renders, ['pier:2026-10-20', 'job:2026-10-21', 'veh']);
+});
+
+test('Re-confirm, Doc check, Insurance each load their own date and redraw once', async () => {
+  const rt = runtime();
+  rt.ctx._rcDate = '2026-10-22';
+  rt.w.renderReconfirm(); rt.w.renderDocCheck(); rt.w.renderInsurance(); await tick();
+  assert.deepEqual(rt.ensured.sort(), ['2026-10-22', '2026-10-23', '2026-10-24']);
+  assert.deepEqual(rt.renders, ['rc:2026-10-22', 'doc:2026-10-23', 'ins:2026-10-24', 'rc:2026-10-22', 'doc:2026-10-23', 'ins:2026-10-24']);
+});
+
+test('Re-confirm with no date picked yet asks for today', async () => {
+  const rt = runtime();
+  rt.w.renderReconfirm(); await tick();
+  assert.deepEqual(rt.ensured, ['2026-10-15']);
+});
+
+test('Doc check / Insurance: date changed during the load means no stale redraw; legacy mode loads nothing', async () => {
+  const rt = runtime();
+  rt.w.renderInsurance(); rt.ctx._insDate = '2026-11-01'; await tick();
+  assert.deepEqual(rt.renders, ['ins:2026-10-24']);
+  const off = runtime({ enabled: false });
+  off.w.renderReconfirm(); off.w.renderDocCheck(); off.w.renderInsurance(); await tick();
+  assert.deepEqual(off.ensured, []);
 });

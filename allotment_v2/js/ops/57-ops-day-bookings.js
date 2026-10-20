@@ -68,6 +68,28 @@
     return afterDays(orig, this, args, uniq([d]), function(){ return ymd(pckDate()) === d && !!document.getElementById('piercheckin-host'); });
   });
 
+  /* Re-confirm (renderReconfirm, _rcDate), Doc check (renderDocCheck, _docCheck.date), Insurance
+     (renderInsurance, _insDate) · 2026-10-20. Each lists the day's bookings from SB_BOOKINGS and loaded nothing.
+     Decision: Re-confirm also loads bookings (not GET /v1/reconfirm?date=): the legacy page builds its rows
+     (_rcRowData, the agent/route grouping, picks, sent state) from the booking objects, so loading the day keeps
+     the screen identical and the 39-ops-reconfirm.js writes keep updating the same objects. */
+  function rcDate(){ try{ return _rcDate || O.today(); }catch(_){ return ''; } }
+  function docDate(){ try{ return _docCheck.date; }catch(_){ return ''; } }
+  function insDate(){ try{ return _insDate; }catch(_){ return ''; } }
+
+  wrap('renderReconfirm', function(orig){
+    var d = ymd(rcDate()), args = [].slice.call(arguments, 1);
+    return afterDays(orig, this, args, uniq([d]), function(){ return ymd(rcDate()) === d && !!document.getElementById('reconfirm-host'); });
+  });
+  wrap('renderDocCheck', function(orig){
+    var d = ymd(docDate()), args = [].slice.call(arguments, 1);
+    return afterDays(orig, this, args, uniq([d]), function(){ return ymd(docDate()) === d && !!document.getElementById('doccheck-host'); });
+  });
+  wrap('renderInsurance', function(orig){
+    var d = ymd(insDate()), args = [].slice.call(arguments, 1);
+    return afterDays(orig, this, args, uniq([d]), function(){ return ymd(insDate()) === d && !!document.getElementById('insurance-host'); });
+  });
+
   /* Boat job sheet · _poDate */
   wrap('renderPierJob', function(orig){
     var d = ymd(poDate()), args = [].slice.call(arguments, 1);
