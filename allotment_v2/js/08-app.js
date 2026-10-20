@@ -23578,6 +23578,15 @@ function pckTravelReg(bid){
 }
 
 // แถบแท็บเรือ · ทำหน้าที่เป็นตัวกรองเรือไปในตัว (แทน select เดิมในแถบตัวกรอง)
+/* §pckChipShort (2026-10-20) · owner "ปรับตรงนี้ให้กระชับ ตอนนี้เยอะแล้วมันล้น"
+   ชิปเรือหน้าเช็คอินใช้ชื่อโปรแกรมแบบสั้น (ชื่อในปฏิทิน ถ้าตั้งไว้ · ไม่งั้นย่อคำยาว) · ชื่อเต็มยังอยู่ใน tooltip */
+function pckRouteShort(rt){
+  if(!rt) return '—';
+  var n=(typeof _calName==='function')?_calName(rt):(rt.name||'');
+  n=String(n||rt.name||'').replace(/\bIslands?\b/g,'').replace(/\bExclusive\b/g,'Excl').replace(/\bby Speedboat\b/g,'Spd')
+    .replace(/\bby Catamaran\b/g,'Cat').replace(/^Early\s+/,'E.').replace(/\s+by\s+/g,' ').replace(/\s{2,}/g,' ').trim();
+  return n||rt.name||'—';
+}
 function pckBoatTabs(all, part){
   var e=ckEsc, m={}, ks=[];
   all.forEach(function(r){
@@ -23594,16 +23603,20 @@ function pckBoatTabs(all, part){
      คู่กับ "ทุกโปรแกรม" ของการ์ดซ้าย ปุ่มล้างของสองระดับจะได้อยู่ที่เดียวกัน */
   var allBtn='<button class="pck-btab'+(_pckBoat?'':' on')+'" onclick="pckSetBoat(\'\')" style="'+(_pckBoat?'':'background:#2f2f2b;color:#fff')+'">เรือทั้งหมด <span class="c"'+(_pckBoat?'':' style="background:rgba(255,255,255,.25);color:#fff"')+'>'+ks.length+'</span></button>';
   if(part==='all') return allBtn;
-  var h='<div class="pck-btabs"><span class="ck-unitbar-lbl">เรือวันนี้</span>'
+  /* §pckChipD (2026-10-20) · owner เลือกแบบ D: ชิปเหลือแค่ชื่อเรือ + ยอดคน · โปรแกรมดูจากสีขีดใต้ชิป · แถวคำอธิบายสีโปรแกรมอยู่บนสุด */
+  var lgSeen={}, lg='';
+  ks.forEach(function(k){ var rid=m[k].rid; if(lgSeen[rid]) return; lgSeen[rid]=1;
+    var rt0=(typeof getRoute==='function'?getRoute(rid):null)||{}, dp0=pckDepOf(rid);
+    lg+='<span class="pck-blg-i" title="'+e((rt0.name||'')+(dp0?(' · '+dp0):''))+'"><i style="background:'+(rt0.color||'#999')+'"></i>'+e(pckRouteShort(rt0))+(dp0?(' <b>'+e(dp0)+'</b>'):'')+'</span>'; });
+  var h='<div class="pck-btabs"><div class="pck-blg"><span class="ck-unitbar-lbl">โปรแกรม</span>'+lg+'</div><span class="ck-unitbar-lbl">เรือวันนี้</span>'
    +((part==='tabs')?'':allBtn);
   ks.forEach(function(k){
     var col=pckBoatColor(k), ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff';
     var rt=(typeof getRoute==='function'?getRoute(m[k].rid):null)||{}, a=pckAgg(m[k].rows), dep=pckDepOf(m[k].rid);
     var on=(_pckBoat===k);
-    h+='<button class="pck-btab'+(on?' on':'')+'" onclick="pckSetBoat(\''+k+'\')" title="'+e(pckBoatName(k)+' · '+(rt.name||''))+'" style="'+(on?('background:'+col+';color:'+ink):'')+'">'
+    h+='<button class="pck-btab pck-btab-d'+(on?' on':'')+'" onclick="pckSetBoat(\''+k+'\')" title="'+e(pckBoatName(k)+' · '+(rt.name||'')+(dep?(' · '+dep):''))+'" style="border-bottom-color:'+(rt.color||'#999')+';'+(on?('background:'+col+';color:'+ink):'')+'">'
       +'<span style="width:10px;height:10px;border-radius:50%;flex:none;background:'+(on?ink:col)+'"></span>'
       +'<span>'+e(pckBoatName(k))+'</span>'
-      +'<span class="rt"'+(on?' style="color:'+ink+'"':'')+'><i style="background:'+(rt.color||'#999')+'"></i>'+e(rt.name||'—')+(dep?(' · '+e(dep)):'')+'</span>'
       +'<span class="c"'+(on?' style="color:'+ink+'"':'')+' title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking">'+a.onP+'/'+a.pax+'</span></button>';
   });
   /* §kitPop · จำนวนลำที่มีร้านแล้วแต่ยังไม่ได้ส่งรายการ · ติดเป็นจุดส้มบนปุ่ม
@@ -24754,9 +24767,16 @@ function pckHeadCSS(){
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
   +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
-  +H+' .pkh-boats .pck-btab{padding:3px 11px !important;font-size:11px !important;gap:7px !important}'
+  +H+' .pkh-boats .pck-btab{padding:2px 9px !important;font-size:11px !important;gap:5px !important}'
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
-  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:14px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:12.5px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab .rt{max-width:150px}'   /* §pckChipShort */
+  /* §pckChipD · แถวคำอธิบายสีโปรแกรม + ขีดสีโปรแกรมใต้ชิปเรือ */
+  +H+' .pck-blg{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:3px 14px;font-size:10px;font-weight:600;color:#77776f;margin-bottom:2px}'
+  +H+' .pck-blg-i{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
+  +H+' .pck-blg-i i{display:inline-block;width:14px;height:4px;border-radius:2px;flex:none}'
+  +H+' .pck-blg-i b{font-family:\'DM Mono\',monospace;font-weight:500}'
+  +H+' .pck-btab.pck-btab-d{border-bottom-width:4px !important;border-bottom-style:solid !important;border-radius:9px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
