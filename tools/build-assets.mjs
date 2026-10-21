@@ -5,7 +5,7 @@
 //   npm run build:try        anywhere · copies allotment_v2/ to .build/ and builds there (LA_APP_ROOT=.build to test it)
 //
 // What it does, in order:
-//   1. js/booking/*.js (one function per file, ~620 <script> tags) → js/booking.bundle.js, one tag.
+//   1. js/booking/*.js (one function per file, ~680 <script> tags) → js/booking.bundle.js, one tag; js/ops/*.js (~160) → js/ops.bundle.js, one tag.
 //      Concatenated in the HTML's own order. Classic scripts share one global scope either way;
 //      checked when this was written: no top-level let/const/class is declared twice, and only two
 //      files run code at load (both harmless). Tags that are NOT in the main block stay as they are —
@@ -49,25 +49,31 @@ let html = fs.readFileSync(HTML, 'utf8');
 const nl = html.includes('\r\n') ? '\r\n' : '\n';
 const t0 = Date.now();
 
-// ── 1 · bundle the main js/booking block ──
-const lines = html.split(/\r?\n/);
-const isBk = (l) => /^<script src="js\/booking\/[^"]+\.js(\?v=[^"]*)?"><\/script>\s*$/.test(l.trim());
-let best = null;
-for (let i = 0; i < lines.length; i++) {
-  if (!isBk(lines[i])) continue;
-  let j = i; while (j + 1 < lines.length && isBk(lines[j + 1])) j++;
-  if (!best || j - i > best[1] - best[0]) best = [i, j];
-  i = j;
-}
-let bundled = 0;
-if (best && best[1] - best[0] >= 10) {
-  const files = lines.slice(best[0], best[1] + 1).map((l) => /src="(js\/booking\/[^"?]+)/.exec(l)[1]);
+// ── 1 · bundle the long runs of one-function-per-file tags: js/booking/ and js/ops/ ──
+// Each folder's longest consecutive run of plain <script src> tags becomes one bundle, in the HTML's own order.
+// js/ops/ is one run (§opsApi, ~160 files): it wraps functions the booking bundle defines, so it keeps its place after it.
+let lines = html.split(/\r?\n/);
+function bundleRun(dir) {
+  const re = new RegExp('^<script src="js/' + dir + '/[^"]+\\.js(\\?v=[^"]*)?"></script>\\s*$');
+  const isRun = (l) => re.test(l.trim());
+  let best = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (!isRun(lines[i])) continue;
+    let j = i; while (j + 1 < lines.length && isRun(lines[j + 1])) j++;
+    if (!best || j - i > best[1] - best[0]) best = [i, j];
+    i = j;
+  }
+  if (!best || best[1] - best[0] < 10) return 0;
+  const files = lines.slice(best[0], best[1] + 1).map((l) => new RegExp('src="(js/' + dir + '/[^"?]+)').exec(l)[1]);
   const parts = files.map((f) => '/* ' + f + ' */\n' + fs.readFileSync(path.join(APP, f), 'utf8') + '\n;\n');
-  fs.writeFileSync(path.join(APP, 'js', 'booking.bundle.js'), parts.join(''));
-  lines.splice(best[0], best[1] - best[0] + 1, '<script src="js/booking.bundle.js"></script>');
-  html = lines.join(nl);
-  bundled = files.length;
+  fs.writeFileSync(path.join(APP, 'js', dir + '.bundle.js'), parts.join(''));
+  lines.splice(best[0], best[1] - best[0] + 1, '<script src="js/' + dir + '.bundle.js"></script>');
+  return files.length;
 }
+const bundledBooking = bundleRun('booking');
+const bundledOps = bundleRun('ops');
+html = lines.join(nl);
+const bundled = bundledBooking + bundledOps;
 
 // ── 2 · minify ──
 let esbuild = null;
@@ -107,6 +113,6 @@ html = html.replace(/(<script\s+src="|<link\s+rel="stylesheet"\s+href=")((?:js|c
 fs.writeFileSync(HTML, html);
 
 const mb = (n) => (n / 1e6).toFixed(2) + 'MB';
-console.log('[build] ' + (bundled ? bundled + ' booking files → js/booking.bundle.js · ' : '') +
+console.log('[build] ' + (bundled ? bundledBooking + ' booking files → js/booking.bundle.js, ' + bundledOps + ' ops files → js/ops.bundle.js · ' : '') +
   (esbuild ? jsFiles.length + ' js minified ' + mb(before) + ' → ' + mb(after) + ' · ' : '') +
   stamped + ' tags stamped · ' + (Date.now() - t0) + 'ms · ' + (outArg ? 'out ' + APP : 'in place'));
