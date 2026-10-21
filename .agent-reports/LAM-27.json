@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-27",
+  "title": "Single source of truth for cancelled/rejected/cancelled_weather status triple",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-27-cancelled-status-constant",
+    "worktree": "D:/projects/wt-sprint2b/LAM-27-cancelled-status-constant",
+    "commit": "aaeaf6fbd8988b9ffcc6c6ed049fd2a3b5802fb3",
+    "pr": {
+      "number": 19,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/19",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Replace the duplicated ['cancelled','cancelled_weather','rejected'] status-triple literal (and the misleadingly-named ACCT_PAID_STATES constant holding the same list) with one exported constant, ACCT_EXCLUDED_STATES, used everywhere the exact triple is checked, plus a standalone guard script that fails on any new inline duplicate.",
+    "acceptanceCriteria": [
+      "Grep-count the real number of inline triple occurrences (ticket said 'roughly ten') and report the actual figure with every location",
+      "Replace every exact-triple occurrence with ACCT_EXCLUDED_STATES; rename ACCT_PAID_STATES to ACCT_EXCLUDED_STATES and update all its references",
+      "Pure refactor: behavior identical afterwards; any site whose literal differs from the exact triple must be left alone and reported as a finding, not normalized",
+      "Add tools/check-excluded-states.mjs as a standalone Node script (grep-based, exits non-zero on a new inline duplicate) without wiring it into package.json or .github/**",
+      "Verify every JS change via node --check on the extracted <script> content"
+    ],
+    "allowedScope": [
+      "allotment_v2/allotment_v2.html",
+      "tools/check-excluded-states.mjs",
+      "docs/development/tasks/LAM-27.md",
+      ".agent-reports/LAM-27.json"
+    ],
+    "constraints": [
+      "Never git add -A or git add .; stage only owned paths explicitly",
+      "Do not touch test/**, package.json, .github/**, CLAUDE.md, README.md",
+      "allotment_v2/allotment_v2.html editing is explicitly pre-approved for this task by the user",
+      "Stay clear of LAM-29's concurrent edits to the same file (three load-condition/Array.isArray sites)",
+      "Never force-push; never commit to main or refactor/booking-v2-migration directly",
+      "Do not merge the PR; do not transition or comment on any Jira issue"
+    ],
+    "assumptions": [
+      "allotment_v2.html contains 8 real top-level <script>...</script> blocks (verified by distinguishing real tags from <script> text embedded inside JS string literals that build HTML strings)",
+      "A bare top-level const declared in an earlier <script> block is visible (via the page's shared global lexical environment) to every later <script> block and to any function defined anywhere in the file, once that earlier block has executed",
+      "No Postgres/prod service is reachable from this sandbox, so only static/syntactic verification was possible"
+    ]
+  },
+  "output": {
+    "summary": "Consolidated 94 inline occurrences of the cancelled/rejected/cancelled_weather status triple (90 array-literal call sites + 1 declaration + 4 chained-=== call sites — ticket estimated 'roughly ten') into one top-of-file constant ACCT_EXCLUDED_STATES (renamed from the misleadingly-named ACCT_PAID_STATES, and hoisted from mid-file to the very first <script> block so it is safely visible to code that runs at document-parse time). Left 11 sites whose literal genuinely differs from the exact triple untouched, reported as findings. Added tools/check-excluded-states.mjs, a standalone guard script (not wired into package.json/.github, per scope) that detects both array-literal and chained-comparison duplicates of the triple in any order, and correctly ignores subset/superset variants.",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Add top-of-file ACCT_EXCLUDED_STATES constant; replace 90 inline array-literal occurrences and 4 chained-=== occurrences of the cancelled/rejected/cancelled_weather triple with references to it; rename ACCT_PAID_STATES (and its 3 usages) to ACCT_EXCLUDED_STATES; leave a pointer comment at the old declaration site"
+      },
+      {
+        "path": "tools/check-excluded-states.mjs",
+        "change": "added",
+        "purpose": "Standalone Node guard script: greps allotment_v2.html for new inline duplicates (array-literal, any of 6 permutations/quote styles, or chained x.status===a||...===b||...===c) of the excluded-status triple outside the ACCT_EXCLUDED_STATES declaration line; exits 1 if found, 0 if clean, 2 on setup problems. Not wired into package.json or .github/** (declared as a follow-up dependency owned by someone else)"
+      },
+      {
+        "path": "docs/development/tasks/LAM-27.md",
+        "change": "added",
+        "purpose": "Durable human-readable development record for this task (input/output contract, occurrence count, findings, verification evidence, decisions/risks/rollback)"
+      },
+      {
+        "path": ".agent-reports/LAM-27.json",
+        "change": "added",
+        "purpose": "Coordinator-readable machine contract mirroring the Markdown report"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Every function that filters/excludes cancelled, rejected, or cancelled_weather bookings via the exact 3-value set (booking aggregates, dashboard, seat/pax counts, boat/van assignment, van job orders, check-in, market intelligence, accounting credit/invoice picker, weather closures, restore/duplicate detection, staff welfare quota, etc.)",
+        "before": "Each call site independently wrote out ['cancelled','rejected','cancelled_weather'] (or a permutation, or a chained x.status===a||...) inline",
+        "after": "Each call site references the single ACCT_EXCLUDED_STATES constant; identical runtime semantics (same 3 values, same .includes/.indexOf/chained-=== usage pattern as each site originally had — only the chained-=== sites were rewritten to use .includes, which is provably equivalent)"
+      },
+      {
+        "area": "ACCT_PAID_STATES (accounting: agCreditState, acctNewInvoiceRender x2)",
+        "before": "Locally-named constant, mid-file, whose name implied the opposite of its meaning",
+        "after": "Renamed to ACCT_EXCLUDED_STATES and hoisted to the top of the file; all 3 references updated; same value"
+      },
+      {
+        "area": "Sites where the status set differs from the exact triple (2-element excludes-rejected variant at 9 locations; 4-element adds-completed variant at 2 locations)",
+        "before": "Inline literal, semantically distinct from the triple",
+        "after": "Left completely unchanged — reusing ACCT_EXCLUDED_STATES here would have silently changed behavior, which was explicitly out of scope"
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "const ACCT_EXCLUDED_STATES (top-level, allotment_v2/allotment_v2.html, first <script> block, line 13)",
+        "tools/check-excluded-states.mjs CLI: node tools/check-excluded-states.mjs [path-to-html] — exit 0 clean / 1 found duplicate / 2 setup problem"
+      ],
+      "changed": [
+        "ACCT_PAID_STATES renamed to ACCT_EXCLUDED_STATES (same array value); all 3 pre-existing references updated"
+      ],
+      "removed": [
+        "ACCT_PAID_STATES as a name (superseded; pointer comment left at its old declaration site)"
+      ]
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "grep -noE \"\\[(['\\\"](cancelled|rejected|cancelled_weather)['\\\"],?\\s*){3}\\]\" allotment_v2/allotment_v2.html  (pre-edit)",
+      "status": "passed",
+      "evidence": "91 matches (90 call sites + the ACCT_PAID_STATES declaration)"
+    },
+    {
+      "command": "grep -noE \"\\[(['\\\"](cancelled|rejected|cancelled_weather)['\\\"],?\\s*){3}\\]\" allotment_v2/allotment_v2.html  (post-edit)",
+      "status": "passed",
+      "evidence": "1 match — only the new const ACCT_EXCLUDED_STATES declaration at line 13"
+    },
+    {
+      "command": "grep -noE for chained x.status===a||x.status===b||x.status===c (all 6 permutations)  (pre/post-edit)",
+      "status": "passed",
+      "evidence": "4 matches pre-edit (lines 12060, 12202, 12982 using bk.status; 43601 using b.status); 0 matches post-edit"
+    },
+    {
+      "command": "node -e \"extract every <script>...</script> block from allotment_v2.html, concatenate, write to a temp file\" && node --check <tempfile>",
+      "status": "passed",
+      "evidence": "blocks: 8; node --check exited 0 (no output = syntax OK)"
+    },
+    {
+      "command": "node --check tools/check-excluded-states.mjs",
+      "status": "passed",
+      "evidence": "exited 0, printed 'guard syntax OK'"
+    },
+    {
+      "command": "node tools/check-excluded-states.mjs   (against the real edited allotment_v2.html)",
+      "status": "passed",
+      "evidence": "[check-excluded-states] OK — no inline duplicates of the excluded-status triple in allotment_v2/allotment_v2.html (single source of truth: ACCT_EXCLUDED_STATES, line 13). exit 0"
+    },
+    {
+      "command": "node tools/check-excluded-states.mjs <scratch/guard-test.html>  (synthetic file: 1 array-literal duplicate in a different order, 1 chained-=== duplicate, 1 deliberately-different 2-element array)",
+      "status": "passed",
+      "evidence": "Correctly reported exit 1 with 2 hits (the array-literal and the chained-comparison), and correctly did NOT flag the 2-element array. Scratch file deleted after the test."
+    },
+    {
+      "command": "git diff --name-status origin/refactor/booking-v2-migration...HEAD ; git diff --name-status ; git diff --cached --name-status ; git status --short",
+      "status": "passed",
+      "evidence": "Confirms exactly one modified tracked file (allotment_v2/allotment_v2.html) and the 3 new owned files; nothing outside the declared scope"
+    },
+    {
+      "command": "Live browser / Postgres exercise of the affected aggregates (dashboard, boat/van assignment, accounting credit calc, etc.)",
+      "status": "blocked",
+      "evidence": "No Postgres or prod service reachable from this sandbox per task constraints; change is argued behavior-preserving via static analysis and node --check only, not exercised at runtime"
+    },
+    {
+      "command": "npm test / repo-level CI (would include the new guard once wired)",
+      "status": "not_run",
+      "evidence": "This worker does not own package.json or .github/**; wiring tools/check-excluded-states.mjs into either is explicitly out of scope and declared as a dependency for the owning team"
+    }
+  ],
+  "decisions": [
+    "Hoisted the single ACCT_EXCLUDED_STATES declaration to the very top of the file (before the first IIFE, in the first of 8 <script> blocks) instead of leaving it mid-file where ACCT_PAID_STATES used to live, because earlier <script> blocks contain code (e.g. the SSE/health-check IIFE) that executes immediately at parse time and references the triple — a mid-file const would not exist yet when that code runs. Verified by mapping all real <script> boundaries and confirming with a whole-file node --check pass.",
+    "Converted the 4 chained-=== sites (same 3 values, OR'd equality checks instead of an array literal) to ACCT_EXCLUDED_STATES.includes(...) since this is provably behavior-identical and is the same category of literal duplication the ticket targets, just a different syntactic shape; the new guard also detects this shape.",
+    "Left all sites whose literal set is not exactly {cancelled, rejected, cancelled_weather} completely unchanged (2-element excludes-rejected variant, 9 sites; 4-element adds-completed variant, 2 sites) and reported them as findings rather than silently normalizing, per explicit task instruction.",
+    "Built tools/check-excluded-states.mjs as a zero-dependency, standalone script (node:fs/path/url only) and did not add it to package.json or .github/workflows/**, since this worker owns neither file; that wiring is declared as a follow-up dependency."
+  ],
+  "risks": [
+    "The guard matches by permutation of the 3 known literal string values; if the status strings themselves are ever renamed, the guard silently stops catching duplicates until updated — inherent to a grep-based (non-AST) check.",
+    "The guard is not wired into any CI gate yet, so it only protects the codebase when run manually until its owning team wires it in.",
+    "No live/browser verification against real booking data was possible in this sandbox; verification is limited to static/syntactic checks and a behavioral argument (identical .includes/.indexOf/chained-=== semantics)."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Wiring tools/check-excluded-states.mjs into package.json (npm script) and/or a .github/workflows/*.yml CI step — deferred to whoever owns those files, since this worker's scope explicitly excludes them.",
+    "LAM-31's planned global rename rebase on top of this task and LAM-29 — no action needed from this task beyond staying out of LAM-29's three load-condition sites, which it did (this task only touched status-triple call sites, none of which are Array.isArray(d.sb_...) load conditions)."
+  ],
+  "followUps": [
+    "Consider a dedicated constant (e.g. ACCT_TERMINAL_STATES) for the 4-element {cancelled, completed, rejected, cancelled_weather} set used by the reschedule/edit guards.",
+    "Consider a documented 'excludes-rejected' 2-element constant for the 9 sites using {cancelled, cancelled_weather} only, if that pattern is judged worth consolidating too.",
+    "Wire tools/check-excluded-states.mjs into CI once its owning task/worker is assigned."
+  ],
+  "rollback": "git revert the single commit on this branch (touches allotment_v2/allotment_v2.html plus the 3 new report/tool files). No data or schema changes were made, so no data-side rollback is required — reverting the commit fully restores the pre-refactor inline literals and the ACCT_PAID_STATES name."
+}
