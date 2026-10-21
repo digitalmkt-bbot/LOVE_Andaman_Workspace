@@ -53,3 +53,15 @@ test('rate type API projection does not invent unsupported custom add-ons', () =
   assert.deepEqual(JSON.parse(JSON.stringify(body.routes[0].zones)), {});
   assert.equal(body.routes[0].custom_fee, undefined);
 });
+
+test('a foreigner-only rate type is "fr" on the screen and "foreign" on the server, both ways', () => {
+  const c = compat();
+  assert.equal(c.fromServer({ id: 'x', nationality_scope: 'foreign', routes: [] }).nationalityScope, 'fr', 'server foreign -> the screen\'s fr (Thai columns hidden)');
+  assert.equal(c.fromServer({ id: 'x', nationality_scope: 'thai', routes: [] }).nationalityScope, 'thai');
+  assert.equal(c.fromServer({ id: 'x', nationality_scope: null, routes: [] }).nationalityScope, 'both');
+  const d = { id: 'x', name: 'F', routes: [], nationalityScope: 'fr' };
+  assert.equal(c.toCreateBody(d).nationality_scope, 'foreign', 'create sends foreign, which the server accepts');
+  assert.equal(c.toPatch(d).nationality_scope, 'foreign', 'edit sends foreign');
+  assert.equal(c.toCreateBody({ ...d, nationalityScope: 'thai' }).nationality_scope, 'thai');
+  assert.equal(c.toCreateBody({ ...d, nationalityScope: 'both' }).nationality_scope, 'both');
+});

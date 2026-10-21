@@ -40,7 +40,7 @@ test('tab open loads the agent with limit 500 and redraws the tab once', async (
   let release;
   const { ctx, calls, renders, body } = adapter({ ensure: () => new Promise((r) => { release = r; }) });
   assert.equal(ctx.agTabHist({ id: 'AG1' }), 'LEGACY:AG1');
-  assert.deepEqual(calls.find((c) => c.ensure).ensure, { agentId: 'AG1', limit: 500, maxPages: 40, refresh: false });
+  assert.deepEqual(calls.find((c) => c.ensure).ensure, { agentId: 'AG1', limit: 500, maxPages: 40, refresh: false, delta: true });
   ctx.agTabHist({ id: 'AG1' });                 // re-render while in flight: no second load
   assert.equal(calls.filter((c) => c.ensure).length, 1);
   release({ bookings: [] }); await tick();
@@ -97,7 +97,7 @@ test('shared loader: agentId sends agent_id, needs no from/to, follows cursors, 
   assert.ok(p);
   await p;
   assert.equal(urls.length, 2);
-  assert.match(urls[0], /^\/v1\/bookings\?agent_id=AG1&limit=500$/);
+  assert.match(urls[0], /^\/v1\/bookings\?agent_id=AG1&limit=1000$/);
   assert.match(urls[1], /cursor=c1/);
   assert.deepEqual(SB.map((b) => b.id), ['b1', 'b2']);
   assert.equal(ctx.bookingV2EnsureOpsRange({ agentId: 'AG1', limit: 500 }), null);   // cached

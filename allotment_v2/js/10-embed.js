@@ -28,6 +28,17 @@
      อะไรก็ได้ · ใช้กับคนที่มีสิทธิ์อยู่แล้วเท่านั้น คนนอกต้องทำหน้า read-only
      แยกที่ดึงจาก API แคบ ๆ ไม่ใช่ฝังหน้านี้
    ══════════════════════════════════════════════════════════════════════════ */
+/* §domReady · the page's scripts are `defer` in the build, so a script runs while document.readyState is already 'interactive'
+   and a test of readyState==='loading' is false: code that waited for "all scripts have run" ran at once, before the later
+   scripts existed (renderDash threw FL_MAINT is not defined; the booking scroll-keeper never installed).
+   laDomReady(fn) runs fn at DOMContentLoaded, which is after every deferred script, or at once if that has already happened. */
+(function(){
+  var q = [], fired = false;
+  function run(){ fired = true; q.splice(0).forEach(function(f){ try{ f(); }catch(e){ try{ console.error('[domReady]', e); }catch(_){} } }); }
+  window.laDomReady = function(fn){ if(fired) fn(); else q.push(fn); };
+  document.addEventListener('DOMContentLoaded', run);
+})();
+
 (function(){
   'use strict';
 
@@ -252,8 +263,7 @@
   function boot(){ applyView(); setTimeout(applyView, 700); setTimeout(applyView, 1000);
     try{ window.parent.postMessage({type:'la-embed-ready', view:VIEW, tab:TAB, date:DATE}, PARENT_ORIGIN); }catch(_){}
   }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 0); });
-  else setTimeout(boot, 0);
+  window.laDomReady(function(){ setTimeout(boot, 0); });
 
   /* §embedMsg · ให้หน้าแม่สั่งเปลี่ยนวัน/แท็บได้โดยไม่ต้องโหลด iframe ใหม่
      โหลดใหม่ = ดาวน์โหลด JS ~2.2MB (gzip) + /api/load ทั้งก้อนอีกรอบ

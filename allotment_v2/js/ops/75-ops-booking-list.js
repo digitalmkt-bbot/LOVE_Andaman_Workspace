@@ -124,10 +124,39 @@
     }
     return (SETS[key] && SETS[key].ids) || null;
   };
+  /* ── the Approvals tab badge · the server's count of every pending approval (GET /v1/bookings/stats by_status), not the
+        pending ones among the loaded months · null until the answer is in (the screen then counts what it has) ── */
+  var appr = { n: null, busy: false, failedAt: 0 }, apprTimer = null;
+  function redrawBooking(){
+    try{
+      var st = window._bkV2;
+      if(O.activeView() !== 'booking' || (st && st.newBooking) || typeof window.bookingV2Render !== 'function') return;
+      var a = document.activeElement;
+      if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      window.bookingV2Render();
+    }catch(e){ console.warn('[ops] approvals badge redraw failed', e); }
+  }
+  function apprAsk(){
+    if(appr.busy) return;
+    appr.busy = true;
+    O.get('/v1/bookings/stats').then(function(j){
+      appr.busy = false; if(!j) return;
+      window._opsAllStats = j;
+      var n = Number(j.by_status && j.by_status.pending_approval) || 0, changed = appr.n !== n;
+      appr.n = n; if(changed) redrawBooking();
+    }, function(){ appr.busy = false; appr.failedAt = Date.now(); });
+  }
+  window.laOpsPendingApprovals = function(){
+    if(!enabled()) return null;
+    if(appr.n === null && !appr.busy && Date.now() - appr.failedAt > 15000) apprAsk();
+    return appr.n;
+  };
+
   /* any booking write may move who matches: keep the old set on screen, ask again on the next draw */
   var statsTimer = null;
   O.onWrite(function(kind){
     Object.keys(SETS).forEach(function(k){ if(SETS[k]) SETS[k].stale = true; });
+    if(/booking/.test(String(kind || ''))){ clearTimeout(apprTimer); apprTimer = setTimeout(apprAsk, 500); }
     /* the KPI cards (stats.pending_foc_count ...) are the server's too: ask again after a booking write */
     if(kind === 'booking' && window._opsAllStats){
       clearTimeout(statsTimer);

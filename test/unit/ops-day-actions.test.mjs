@@ -157,6 +157,7 @@ function createRuntime(){
     _bkExtraPay: { m: 'cot', feePct: 0, slips: [] },
     _bkExtraEditId: null
   };
+  context.setTimeout = setTimeout; context.clearTimeout = clearTimeout;
   vm.runInNewContext(SOURCE, context);
   return {
     window,
@@ -174,8 +175,14 @@ test('insurance, meals, tour-sales, and upgrade-collect use versioned bookingWri
   const rt = createRuntime();
 
   // 1. Insurance PUT uses bookingWrite with If-Match version 5 and bumps version on response
+  /* oninput: three keystrokes in a burst are ONE save, 600 ms after the last, carrying the last value */
+  rt.window.insSetField('bk_client_1', 'lead', 'age', '4');
+  rt.window.insSetField('bk_client_1', 'lead', 'age', '41');
   const insP = rt.window.insSetField('bk_client_1', 'lead', 'age', '42');
   await rt.tick();
+  assert.equal(rt.calls.filter(x => x.method === 'PUT' && x.path === '/v1/bookings/bk_srv_1/insurance').length, 0, 'nothing is sent while the person is still typing');
+  await new Promise(r => setTimeout(r, 700));
+  assert.equal(rt.calls.filter(x => x.method === 'PUT' && x.path === '/v1/bookings/bk_srv_1/insurance').length, 1, 'one save for the burst');
   const insCall = rt.calls.find(x => x.method === 'PUT' && x.path === '/v1/bookings/bk_srv_1/insurance');
   assert.ok(insCall);
   assert.equal(insCall.version, 5);

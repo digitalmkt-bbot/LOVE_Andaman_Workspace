@@ -14,6 +14,17 @@
   'use strict';
   var O = window.laOps; if(!O || !O.enabled()) return;
 
+  /* §opsRefresh · the topbar ↻ Refresh and 💾 Backup were legacy's: refreshData pulled /api/load (404 here) and flBackupData
+     downloaded this browser's localStorage copy, which in this deployment is only seed data.
+       ↻ Refresh  → reload the page: every cache (bookings, catalogue, adapters) is rebuilt from operation-backend and the
+                    router puts the user back on the same view (the token stays in sessionStorage). A write in flight is waited for.
+       💾 Backup  → hidden: the data lives in operation-backend's database, whose backup is the server's, not a browser file. */
+  window.refreshData = function(){
+    if(O.busy && O.busy()){ setTimeout(window.refreshData, 600); return; }
+    location.reload();
+  };
+  try{ document.querySelectorAll('[onclick="flBackupData()"]').forEach(function(b){ b.style.display = 'none'; }); }catch(_){}
+
   var failed = [];
   function step(name, fn){
     return function(){
