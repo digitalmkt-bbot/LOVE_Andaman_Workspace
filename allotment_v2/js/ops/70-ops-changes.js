@@ -17,8 +17,37 @@
     var me = window.LA_ME && window.LA_ME.username;
     return !!(me && change && change.changed_by && String(change.changed_by) === String(me));
   }
+  /* §b2cFeed · legacy's new-B2C-booking card (+ its sound) came from comparing two /api/load blobs (_laB2CScan). Here the change feed says a
+     booking was created; an id that starts b2c_ is Love Kingdom's, so that booking is read (GET /v1/bookings/{id}) and shown through the
+     same card, _laB2CAlert. Several in one burst are one card. The generic "New booking" toast is not shown for it (legacy had none). */
+  var B2C_PIER = { tublamu: 'Tub Lamu', panwa: 'Visit Panwa', ranong: 'Ranong' }, b2cQueue = [], b2cTimer = null, B2C_CXL = ['cancelled', 'cancelled_weather', 'rejected'];
+  function isB2cCreated(change){ return !!(change && change.kind === 'booking' && change.action === 'created' && /^b2c_/.test(String(change.entity_id || ''))); }
+  function b2cItem(ob){
+    var bk = window.bookingV2FromOpsBooking(ob), t = (bk.trips && bk.trips[0]) || {}, pax = 0;
+    (bk.trips || []).forEach(function(tp){ var p = tp.pax || {}; Object.keys(p).forEach(function(k){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax += (+p[k] || 0); }); });
+    var route = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES.find(function(r){ return r && r.id === t.routeId; }) : null;
+    var ps = bk.paymentSnapshot || {};
+    return { id: bk.id, ref: bk.voucherRef ? String(bk.voucherRef) : String(bk.id || '').replace(/^b2c_/, '').replace(/_\d+$/, ''),
+      route: (route && route.name) || t.routeId || '-', port: route ? (B2C_PIER[route.pier] || route.pier || '') : '',
+      date: t.date || '', pax: pax, total: (bk.priceBreakdown && bk.priceBreakdown.total) || bk.total || 0,
+      lead: bk.leadPax || '', paid: ps.paidStatus || '', trips: (bk.trips || []).length };
+  }
+  function flushB2c(){
+    var ids = b2cQueue.splice(0); b2cTimer = null;
+    if(!ids.length || typeof window._laB2CAlert !== 'function' || typeof window.bookingV2FromOpsBooking !== 'function') return;
+    Promise.all(ids.map(function(id){ return O.get('/v1/bookings/' + encodeURIComponent(id)).catch(function(){ return null; }); })).then(function(rows){
+      var list = rows.filter(function(ob){ return ob && B2C_CXL.indexOf(ob.status) < 0; }).map(b2cItem);
+      if(list.length) try{ window._laB2CAlert(list); }catch(e){ console.warn('[ops] B2C alert failed', e); }
+    });
+  }
+  function b2cAlert(change){
+    if(!isB2cCreated(change) || mine(change) || typeof window._laB2CAlert !== 'function') return;
+    b2cQueue.push(String(change.entity_id));
+    if(!b2cTimer) b2cTimer = setTimeout(flushB2c, 1200);
+  }
   function bookingToast(change){
     if(!change || change.kind !== 'booking' || mine(change)) return;
+    if(isB2cCreated(change) && typeof window._laB2CAlert === 'function') return;   // the card tells it
     var action = change.action || 'updated';
     var title = action === 'created' ? 'New booking' : action === 'deleted' ? 'Booking deleted' : 'Booking updated';
     var sub = change.entity_id || '';
@@ -65,6 +94,7 @@
     if(O.wrote) O.wrote('remote:' + (change.kind || 'change'));
     repaintCheckin(change);
     bookingToast(change);
+    b2cAlert(change);
   }
   function baseline(){
     return O.get('/v1/changes').then(function(j){

@@ -717,6 +717,7 @@
     try{ x.send(); }catch(e){ _laLoadBusy=false; }
   }
   window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
+  window._laB2CAlert=_laB2CAlert;         // §b2cFeed · ops/70-ops-changes.js shows the new-B2C-booking card from the change feed
   /* ══ §ckDay (2026-09-22) · หน้าเช็คอินดึงเฉพาะของวันที่เปิดอยู่ ════════════
      เขียนขึ้นเซิร์ฟเวอร์ส่งเฉพาะส่วนที่เปลี่ยนมานานแล้ว (/api/v1/_batch)
      แต่ขาอ่านยังดึง /api/load ซึ่งเป็นก้อนทั้งระบบ ~20MB ทุกครั้งที่ใครก็ตามเซฟอะไร

@@ -48,6 +48,8 @@
     if(typeof window.bookingV2OpsEnsureDay === 'function'){
       dates.forEach(function(d){ var p = window.bookingV2OpsEnsureDay(d); if(p) loads.push(p); });
     }
+    /* the day's boats: outside the boot window (-30/+180 days) the deployments are read on demand (O.deployments.ensure) */
+    try{ var dp = O.deployments && O.deployments.ensure ? O.deployments.ensure(dates) : null; if(dp) loads.push(dp); }catch(_){}
     if(loads.length){
       Promise.all(loads).then(function(rs){
         if(rs.every(Boolean) && still()) orig.apply(self, args);
