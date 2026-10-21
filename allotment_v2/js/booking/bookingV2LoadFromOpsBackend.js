@@ -14,7 +14,15 @@ function _opsBookingMonthRange(month){
   d.setMonth(d.getMonth()+1); d.setDate(0);
   return {from:from,to:_opsBookingYMD(d)};
 }
-function _opsBookingRangeKey(o){ var k=[o.routeId||'',o.from||'',o.to||'',o.limit||100]; if(o.agentId) k.push(o.agentId); return k.join('|'); }
+/* The key has no page size: a range is always loaded to its end, so the limit only sizes the pages. A load made with
+   limit 500 satisfies the same range asked with 100 (it used to be fetched twice). */
+function _opsBookingRangeKey(o){ var k=[o.routeId||'',o.from||'',o.to||'']; if(o.agentId) k.push(o.agentId); return k.join('|'); }
+/* Page size: the booking list allows up to 5000 (src/routes/operations.ts); 1000 keeps one response modest and covers a
+   busy month in one request. A caller may ask for more, never less. */
+var OPS_BOOKING_PAGE=1000;
+/* §deltaRefresh · when a range last finished loading (an ISO instant, early by a safety margin), so a refresh can ask the
+   server only for what changed since (GET /v1/bookings?updated_since=) instead of paging the whole range again. */
+var _opsBookingStamp = Object.create(null);
 function _opsBookingMerge(mapped){
   var at=Object.create(null);
   SB_BOOKINGS.forEach(function(b,i){ at[b.opsId||b.id]=i; });
@@ -29,7 +37,7 @@ function _opsBookingMerge(mapped){
 }
 function bookingV2OpsResetCache(){
   _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null); _opsDailyCounts=Object.create(null);
-  _opsBookingSeen=Object.create(null); _opsBookingFailed=Object.create(null);
+  _opsBookingSeen=Object.create(null); _opsBookingFailed=Object.create(null); _opsBookingStamp=Object.create(null);
   delete window._opsAllStats; delete window._opsAllMonthCounts;
   if(typeof SB_BOOKINGS!=='undefined') SB_BOOKINGS.length=0;
 }
@@ -43,13 +51,15 @@ function bookingV2EnsureOpsRange(options){
   /* agentId: one agent's bookings; from/to may then be left out (all of that agent's trips).
      The server wants from and to together or neither. refresh: forget a cached load first. */
   if(!options.agentId && (!from || !to)) return null;
-  var q={routeId:options.routeId,from:from,to:to,limit:options.limit||100,agentId:options.agentId};
+  var q={routeId:options.routeId,from:from,to:to,limit:Math.max(+options.limit||0,OPS_BOOKING_PAGE),agentId:options.agentId};
   var key=_opsBookingRangeKey(q);
+  /* refresh + delta: ask only for bookings changed since the last load of this range; with no stamp it is a full refresh */
+  var since=(options.refresh && options.delta) ? _opsBookingStamp[key] : null, startedAt=new Date(Date.now()-120000).toISOString();
   if(options.refresh && !_opsBookingRangeLoads[key]) delete _opsBookingRanges[key];
   if(_opsBookingRanges[key]) return null;
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
   var params=[];
-  [['agent_id',q.agentId],['route_id',q.routeId],['from',from],['to',to],['limit',q.limit]].forEach(function(pair){
+  [['agent_id',q.agentId],['route_id',q.routeId],['from',from],['to',to],['updated_since',since],['limit',q.limit]].forEach(function(pair){
     if(pair[1]!==undefined && pair[1]!==null && pair[1]!=='') params.push(encodeURIComponent(pair[0])+'='+encodeURIComponent(pair[1]));
   });
   var base='/v1/bookings?'+params.join('&'), all=[], pages=0, MAX_PAGES=options.maxPages||200;
@@ -59,7 +69,7 @@ function bookingV2EnsureOpsRange(options){
       Array.prototype.push.apply(all,j.bookings);
       if(j.next_cursor && ++pages<MAX_PAGES) return page(j.next_cursor);
       if(j.next_cursor) console.warn('[opsSync] stopped after '+pages+' pages; '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' is incomplete');
-      var mapped=all.map(bookingV2FromOpsBooking); _opsBookingMerge(mapped); _opsBookingRanges[key]=true;
+      var mapped=all.map(bookingV2FromOpsBooking); _opsBookingMerge(mapped); _opsBookingRanges[key]=true; _opsBookingStamp[key]=startedAt;
       _opsBookingSeen[key]=true; delete _opsBookingFailed[key];
       console.log('[opsSync] loaded '+mapped.length+' booking(s) for '+(q.agentId?('agent '+q.agentId):(from+' → '+to))+' from operation-backend');
       return {bookings:all};
@@ -76,13 +86,13 @@ function bookingV2OpsEnsureDay(date){ return bookingV2EnsureOpsRange({from:date,
 /* §calSkel · 'loading' = in flight and never loaded this session (draw a skeleton, not zeros);
    'failed' = the last load failed (callers stop auto-retrying until bookingV2OpsRetryMonth). */
 function bookingV2OpsMonthStatus(month){
-  var r=_opsBookingMonthRange(month), key=_opsBookingRangeKey({from:r.from,to:r.to,limit:100});
+  var r=_opsBookingMonthRange(month), key=_opsBookingRangeKey({from:r.from,to:r.to});
   if(_opsBookingRangeLoads[key] && !_opsBookingSeen[key]) return 'loading';
   return _opsBookingFailed[key] ? 'failed' : '';
 }
 function bookingV2OpsRetryMonth(month){
   var r=_opsBookingMonthRange(month);
-  delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to,limit:100})];
+  delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to})];
   bookingV2Render();
 }
 function bookingV2OpsEnsureSummary(){
@@ -247,17 +257,68 @@ function bookingV2LoadFromOpsBackend(options){
   return bookingV2EnsureOpsRange(options)||Promise.resolve({bookings:[]});
 }
 var _opsBookingWriteHook=false;
+/* A booking changed: the cached totals and the "newest bookings" feeds are stale; the loaded ranges are not (the
+   changed booking itself is merged into SB_BOOKINGS, which every screen filters). */
+function _opsDropBookingAggregates(){
+  _opsDailyCounts=Object.create(null);
+  delete window._opsAllStats; delete window._opsAllMonthCounts;
+  Object.keys(_opsBookingRanges).forEach(function(k){ if(k==='summary'||k==='all'||k.indexOf('recent|')===0) delete _opsBookingRanges[k]; });
+}
+/* Local writes that move OTHER bookings' fields on the server (check-in, van arrival, trip arrangement, deployments,
+   pickups): the loaded days are re-read on next use, as before. */
+var OPS_WRITE_DROPS_RANGES=/^(trip-|van-arrival|deployments|pickup|booking-reconfirm-all)/;
+var OPS_WRITE_BOOKING=/^(booking|doc-check|invoice|deposit|refund)/;
+var _opsRemoteBookingIds=Object.create(null), _opsRemoteBookingSince=null, _opsRemoteBookingTimer=null;
+function _opsRemoveBooking(id){
+  for(var i=SB_BOOKINGS.length-1;i>=0;i--){ var b=SB_BOOKINGS[i]; if(b.opsId===id||b.id===id) SB_BOOKINGS.splice(i,1); }
+}
+/* §remoteBooking · another user wrote a booking: re-read just that booking (GET /v1/bookings/{id}); a burst of more than 8
+   is read as one list since the first change (updated_since). Deleted or gone (404) = removed from the screen's list. */
+function _opsRefreshRemoteBookings(){
+  var ids=Object.keys(_opsRemoteBookingIds).filter(function(id){ return _opsRemoteBookingIds[id]!=='deleted'; }), since=_opsRemoteBookingSince;
+  _opsRemoteBookingIds=Object.create(null); _opsRemoteBookingSince=null; _opsRemoteBookingTimer=null;
+  if(!ids.length || typeof window.laOpsFetch!=='function') return;
+  var one=function(id){
+    return window.laOpsFetch('/v1/bookings/'+encodeURIComponent(id)).then(function(r){
+      if(r.status===404){ _opsRemoveBooking(id); return null; }
+      return r.ok?r.json():null;
+    }).then(function(j){ if(j && j.id) _opsBookingMerge([bookingV2FromOpsBooking(j)]); }).catch(function(e){ console.warn('[opsSync] could not refresh booking '+id+': '+((e&&e.message)||e)); });
+  }, work;
+  if(ids.length>8 && since){
+    var all=[], page=function(cursor){
+      return window.laOpsFetch('/v1/bookings?updated_since='+encodeURIComponent(since)+'&limit='+OPS_BOOKING_PAGE+(cursor?'&cursor='+encodeURIComponent(cursor):'')).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+        if(!j || !Array.isArray(j.bookings)) return;
+        Array.prototype.push.apply(all,j.bookings);
+        if(j.next_cursor && all.length<20000) return page(j.next_cursor);
+      });
+    };
+    work=page(null).then(function(){ _opsBookingMerge(all.map(bookingV2FromOpsBooking)); }).catch(function(e){ console.warn('[opsSync] could not refresh changed bookings: '+((e&&e.message)||e)); });
+  }else work=Promise.all(ids.map(one));
+}
 function bookingV2OpsAttachWriteInvalidation(){
   if(_opsBookingWriteHook || !window.laOps || !window.laOps.onWrite) return;
   _opsBookingWriteHook=true;
   window.laOps.onWrite(function(kind){
-    // Remote van/pickup changes arrive from the change feed and cannot move a
-    // booking. Dropping the range cache for them re-pages the whole recent feed
-    // on every poll, so skip them.
-    if(typeof kind==='string' && /^remote:(van|van_day|van_stop|van_group|pickup_area|pickup_profile)$/.test(kind)) return;
-    // A write can move a booking between any cached day/month. Keep entities,
-    // but revalidate query membership next time that date/month is opened.
-    _opsBookingRanges=Object.create(null); _opsDailyCounts=Object.create(null);
-    delete window._opsAllStats; delete window._opsAllMonthCounts;
+    kind=String(kind||'');
+    // Only a booking write makes the totals stale. A remote van, fleet, config, lock, payment or ui event leaves the cache
+    // alone (it used to empty every range, so the next draw re-paged whole months). A remote booking is merged by the
+    // onChange hook below, one GET /v1/bookings/{id}.
+    if(kind==='remote:booking'){ _opsDropBookingAggregates(); return; }
+    if(/^remote:/.test(kind)) return;
+    if(OPS_WRITE_DROPS_RANGES.test(kind)){
+      _opsBookingRanges=Object.create(null); _opsDailyCounts=Object.create(null);
+      delete window._opsAllStats; delete window._opsAllMonthCounts;
+      return;
+    }
+    if(OPS_WRITE_BOOKING.test(kind)) _opsDropBookingAggregates();
+  });
+  if(window.laOps.onChange) window.laOps.onChange(function(change){
+    if(!change || change.kind!=='booking' || !change.entity_id) return;
+    var id=String(change.entity_id);
+    if(change.action==='deleted'){ _opsRemoveBooking(id); _opsRemoteBookingIds[id]='deleted'; }
+    else _opsRemoteBookingIds[id]=true;
+    var at=change.changed_at||new Date(Date.now()-60000).toISOString();
+    if(!_opsRemoteBookingSince || at<_opsRemoteBookingSince) _opsRemoteBookingSince=at;
+    if(!_opsRemoteBookingTimer) _opsRemoteBookingTimer=setTimeout(_opsRefreshRemoteBookings,400);
   });
 }

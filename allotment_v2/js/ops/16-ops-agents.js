@@ -708,7 +708,7 @@
   var legacyHist=window.agTabHist;
   if(typeof legacyHist==='function'){
     var histState=Object.create(null), histEver=Object.create(null), histEpoch=0;
-    O.onWrite(function(){ histEpoch++; histState=Object.create(null); });
+    O.onWrite(function(kind){ if(/^remote:/.test(String(kind||'')) && kind!=='remote:booking') return; histEpoch++; histState=Object.create(null); });
     var histOnScreen=function(id){
       var t=document.querySelector('#ag-main .sb-tab.on[data-tab="hist"]');
       return !!(t && String(t.getAttribute('onclick')||'').indexOf("'"+id+"'")>=0 && document.getElementById('ag-tabbody'));
@@ -716,7 +716,7 @@
     var hist=function(a){
       if(enabled() && a && a.id && !histState[a.id] && typeof window.bookingV2EnsureOpsRange==='function'){
         var id=a.id, epoch=histEpoch;
-        var load=window.bookingV2EnsureOpsRange({agentId:id,limit:500,maxPages:40,refresh:!!histEver[id]});
+        var load=window.bookingV2EnsureOpsRange({agentId:id,limit:500,maxPages:40,refresh:!!histEver[id],delta:true});
         if(!load) histState[id]='done';
         else{
           histState[id]='loading';
