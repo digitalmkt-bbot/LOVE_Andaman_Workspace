@@ -215,6 +215,45 @@
     }
   })();
 
+  /* §opsDeployDay · boot loads BACK..AHEAD days around today; a screen that shows a date outside it (Boat job sheet, guide order,
+     park tickets, a past month's job sheet) asked the window and found no boats. ensure(dates) reads each missing day from the
+     server (GET /operations/deployments?from=d&to=d) and adds it to TRIPS and to what is "confirmed", so the next sync sends nothing for
+     it. A cell the person already edited on that day is kept as it is. null = every date is inside the window or already read;
+     otherwise a promise of true (all read) or false (one failed: the screen keeps what it has). */
+  var winFrom = null, winTo = null, dayLoaded = {}, dayLoading = {};
+  function mergeDay(rows){
+    var T = trips(), C = capOvr(); if(!T) return;
+    rows.forEach(function(r){
+      var k = key(r.service_date, r.boat_id);
+      if(synced[k] || (T[r.service_date] && T[r.service_date][r.boat_id])) return;
+      var cell = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+      (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cell;
+      if(snapTrips) (snapTrips[r.service_date] = snapTrips[r.service_date] || {})[r.boat_id] = O.clone(cell);
+      var b = (typeof getBoat === 'function') ? getBoat(r.boat_id) : null;
+      if(C && b && +b.cap !== +r.capacity){
+        var ov = { cap: r.capacity, reason: 'operation-backend', by: '', at: '' };
+        C[k] = ov; if(snapCap) snapCap[k] = O.clone(ov);
+      }
+      synced[k] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
+    });
+  }
+  function ensure(dates){
+    if(!ready || !winFrom || !O.enabled()) return null;
+    var need = (Array.isArray(dates) ? dates : [dates]).filter(function(d){
+      return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && (d < winFrom || d > winTo) && !dayLoaded[d];
+    });
+    if(!need.length) return null;
+    return Promise.all(need.map(function(d){
+      return dayLoading[d] || (dayLoading[d] = O.get('/operations/deployments', { from: d, to: d }).then(function(j){
+        mergeDay((j && j.deployments) || []); dayLoaded[d] = true; delete dayLoading[d]; return true;
+      }, function(e){
+        delete dayLoading[d];
+        try{ console.warn('[ops] deployments for ' + d + ' did not load · ' + ((e && e.message) || e)); }catch(_){}
+        return false;
+      }));
+    })).then(function(rs){ return rs.every(Boolean); });
+  }
+
   function load(){
     var from = O.shift(O.today(), -BACK), to = O.shift(O.today(), AHEAD);
     return O.get('/operations/deployments', { from: from, to: to }).then(function(j){
@@ -231,6 +270,7 @@
         synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
       });
       ready = true;
+      winFrom = from; winTo = to; dayLoaded = {}; dayLoading = {};
       snapshot();
       try{ console.log('[ops] deployments · ' + rows.length + ' for ' + from + ' → ' + to); }catch(_){}
     });
@@ -302,5 +342,5 @@
     snapshot();
   }
 
-  O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
+  O.deployments = { adopt: adopt, load: load, ensure: ensure, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
 })();

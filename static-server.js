@@ -89,6 +89,26 @@ http.createServer((req, res) => {
   // Local static-server compatibility and a friendlier direct frontend URL.
   if(url.pathname === '/allotment_v2.html') return redirect(res, APP + url.search);
   if(url.pathname === '/health') { res.writeHead(200, {'Content-Type':'application/json','Cache-Control':'no-store'}); return res.end('{"ok":true,"service":"operation-frontend"}'); }
+  // §embedRoute · the short addresses the CS app puts in an <iframe> (lk-inbox's server.js served the same two):
+  //   /embed/calendar → the Booking calendar · /embed/bytrip?date=2026-09-20 → By trip for that day
+  // A 302, not a rewrite: the page's js/ and css/ links are relative, so serving it under /embed/ would 404 them all.
+  // Only known, shape-checked parameters are forwarded (anything else in Location is header injection / open redirect).
+  // The ticket (?t=) is forwarded too: unlike lk-inbox, whose server turned it into a cookie, here the page itself
+  // exchanges it (POST /v1/embed/token, js/10-embed.js). No ?edit=1 = view only.
+  if(url.pathname === '/embed' || url.pathname.startsWith('/embed/')){
+    const EMBED_PAGES = { calendar:'view=booking&tab=cal', bytrip:'view=booking&tab=bytrip' };
+    const page = url.pathname.slice('/embed/'.length).replace(/\/+$/, '');
+    const base = Object.prototype.hasOwnProperty.call(EMBED_PAGES, page) ? EMBED_PAGES[page] : null;
+    if(!base) return send(res, 404, 'unknown embed page · try /embed/' + Object.keys(EMBED_PAGES).join(' or /embed/'));
+    const qp = url.searchParams, out = ['embed=1', base];
+    const date = qp.get('date');   if(date && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push('date=' + date);
+    const rid  = qp.get('route');  if(rid && /^[A-Za-z0-9_-]{1,40}$/.test(rid)) out.push('route=' + rid);
+    if(qp.get('chrome') === '1') out.push('chrome=1');
+    if(qp.get('edit') === '1') out.push('edit=1');
+    const ticket = qp.get('t') || qp.get('ticket');
+    if(ticket && /^[A-Za-z0-9._~-]{1,2048}$/.test(ticket)) out.push('t=' + ticket);
+    return redirect(res, APP + '?' + out.join('&'));
+  }
 
   if(url.pathname === '/allotment_v2/la-config.js'){
     res.writeHead(200, {'Content-Type':MIME['.js'],'Cache-Control':'no-store'});
