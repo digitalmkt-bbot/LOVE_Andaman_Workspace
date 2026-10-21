@@ -24783,7 +24783,7 @@ function pckHeadCSS(){
   +H+' .pkh-fwrap .ck-fsep{height:16px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
-  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:18px 8px;padding:14px 12px 0 0}'   /* §pckBump · เว้นที่ให้ป้ายตัวเลขลอยพ้นขอบชิป */
+  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:26px 8px;padding:20px 12px 0 0}'   /* §pckBump · เว้นที่ให้ป้ายตัวเลขลอยพ้นขอบชิป */
   +H+' .pkh-boats .pck-btab{padding:2px 9px !important;font-size:11px !important;gap:5px !important}'
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
   +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:12.5px;font-weight:800;letter-spacing:-.2px}'
@@ -24794,8 +24794,9 @@ function pckHeadCSS(){
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
   /* §pckBump · ป้ายยอดขึ้นเรือ ลอยมุมขวาบนของชิป · เลขหน้าใหญ่หนา · /ทั้งหมด เล็กสีเทา · เต็มลำ = เขียว */
-  +H+' .pck-btab.pck-btab-d{position:relative;overflow:visible;padding-right:26px !important}'
-  +H+' .pck-btab-d .pck-bdg{position:absolute;top:-14px;right:-12px;display:inline-flex;align-items:baseline;gap:1px;padding:2px 9px 1px !important;'
+  /* ป้ายเคยลอยกลางมุมขวาบน (top:-14px) = ทับครึ่งล่างลงมาบังชื่อเรือ · owner "บังชื่อเรือ" → ยกขึ้นไปอยู่เหนือชิป ทับแค่ขอบบน */
+  +H+' .pck-btab.pck-btab-d{position:relative;overflow:visible;padding-right:12px !important}'
+  +H+' .pck-btab-d .pck-bdg{position:absolute;bottom:calc(100% - 5px);right:-8px;display:inline-flex;align-items:baseline;gap:1px;padding:2px 9px 1px !important;'
     +'border-radius:999px;white-space:nowrap;background:#fff !important;color:#1F1F1C !important;border:1.5px solid #E7E4DC;box-shadow:0 2px 6px rgba(31,31,28,.16);font-family:inherit !important}'
   +H+' .pck-btab-d .pck-bdg b{display:inline-block;transform-origin:50% 85%;font-family:\'DM Sans\',sans-serif;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;letter-spacing:-.4px;line-height:1.05}'
   +H+' .pck-btab-d .pck-bdg i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:10.5px;font-weight:400;color:#8A8A82}'
