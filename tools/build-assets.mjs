@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // §assetBuild (2026-10-05) · smaller JS for allotment_v2, built at deploy time
 //
-//   npm run build:deploy     Railway's build step (railway.json buildCommand) · rewrites allotment_v2/ in place
+//   npm run build:deploy     Railway's build step (railway.json buildCommand) · writes the built app to .build/, which static-server.js serves
 //   npm run build:try        anywhere · copies allotment_v2/ to .build/ and builds there (LA_APP_ROOT=.build to test it)
 //
 // What it does, in order:

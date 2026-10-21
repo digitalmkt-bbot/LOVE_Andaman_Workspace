@@ -13,6 +13,12 @@ const zlib = require('node:zlib');
 const ROOT = path.resolve(__dirname);
 const PORT = Number(process.env.PORT) || 3000;
 const APP = '/allotment_v2/allotment_v2.html';
+// §builtApp · the Railway build writes the minified, bundled app to .build/ (npm run build:deploy). It can't build in
+// place: Nixpacks ends with COPY . /app, which puts the original source back over the built files. When .build/ exists
+// it is served for /allotment_v2/*; a file it doesn't hold (BACKUP, data_exports are left out) falls back to the source.
+const BUILT = path.join(ROOT, '.build');
+const HAS_BUILT = fs.existsSync(path.join(BUILT, 'allotment_v2.html'));
+const APP_DIR = HAS_BUILT ? BUILT : path.join(ROOT, 'allotment_v2');
 const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
   '.json':'application/json; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
   '.webp':'image/webp', '.gif':'image/gif', '.ico':'image/x-icon', '.pdf':'application/pdf', '.woff2':'font/woff2' };
@@ -42,7 +48,12 @@ function filePath(urlPath){
   try { decoded = decodeURIComponent(urlPath); } catch (_) { return null; }
   if(decoded.includes('\0')) return null;
   const target = path.resolve(ROOT, '.' + decoded);
-  return target === ROOT || target.startsWith(ROOT + path.sep) ? target : null;
+  if(!(target === ROOT || target.startsWith(ROOT + path.sep))) return null;
+  if(HAS_BUILT && decoded.startsWith('/allotment_v2/')){
+    const built = path.resolve(BUILT, '.' + decoded.slice('/allotment_v2'.length));
+    if(built.startsWith(BUILT + path.sep) && fs.existsSync(built)) return built;
+  }
+  return target;
 }
 
 http.createServer((req, res) => {
@@ -73,7 +84,7 @@ http.createServer((req, res) => {
     fs.createReadStream(target).on('error', () => send(res, 500, 'Read error')).pipe(res);
   });
 }).listen(PORT, () => {
-  console.log('Operation frontend static host on ' + PORT);
+  console.log('Operation frontend static host on ' + PORT + (HAS_BUILT ? ' · serving built app from .build/' : ' · serving source (no .build/)'));
   // warm the compressed copies in the background so the first visitor doesn't wait for brotli on a 4MB file
   (async () => {
     const todo = [];
@@ -83,8 +94,8 @@ http.createServer((req, res) => {
         if(e.isDirectory()){ if(e.name !== 'node_modules' && e.name !== 'data_exports' && e.name !== 'BACKUP') walk(p); }
         else if(COMPRESSIBLE.has(path.extname(e.name).toLowerCase())) todo.push(p);
       }
-    })(path.join(ROOT, 'allotment_v2', 'js'));
-    todo.push(path.join(ROOT, 'allotment_v2', 'allotment_v2.html'));
+    })(path.join(APP_DIR, 'js'));
+    todo.push(path.join(APP_DIR, 'allotment_v2.html'));
     for(const p of todo){
       try { const st = fs.statSync(p); if(st.size > 1024){ await pack(p, st, 'br'); await pack(p, st, 'gzip'); } } catch (_) {}
     }

@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node static-server.js",
     "sync:upstream": "node tools/sync-upstream.mjs",
-    "build": "node tools/build-assets.mjs --in-place",
-    "build:deploy": "node tools/build-assets.mjs --in-place",
+    "build": "node tools/build-assets.mjs --out .build",
+    "build:deploy": "node tools/build-assets.mjs --out .build",
     "build:try": "node tools/build-assets.mjs --out .build",
     "safari": "node tools/safari-smoke.js",
     "test:smoke": "node test/ui/t_smoke.mjs",
