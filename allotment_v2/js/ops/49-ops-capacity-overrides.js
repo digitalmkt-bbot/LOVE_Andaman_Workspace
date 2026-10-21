@@ -70,9 +70,13 @@
   function load(){
     var from = O.shift(O.today(), -BACK), to = O.shift(O.today(), AHEAD);
     var C = cache();
-    return Promise.all(boatIds().map(function(id){
+    /* §capOne · one GET /v1/capacity-overrides for every boat (it was one request per deployed boat); an older server: per boat */
+    var perBoat = function(){ return Promise.all(boatIds().map(function(id){
       return O.get(path(id), { from: from, to: to }).then(function(j){ return (j && j.overrides) || []; });
-    })).then(function(lists){
+    })); };
+    return O.get('/v1/capacity-overrides', { from: from, to: to }).then(function(j){
+      return (j && Array.isArray(j.overrides)) ? [j.overrides] : perBoat();
+    }, perBoat).then(function(lists){
       if(C) Object.keys(C).forEach(function(k){ if(C[k] && C[k].srv) delete C[k]; });
       var n = 0;
       lists.forEach(function(rows){ rows.forEach(function(d){ applyDay(d); if(d.overridden) n++; }); });

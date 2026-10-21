@@ -194,7 +194,7 @@
   function replaceTemplates(rows){var m=listTemplates();Object.keys(m).forEach(function(k){delete m[k];});(rows||[]).forEach(function(t){var x=fromServerTemplate(t);m[x.id]=x;});return m;}
   function loadTemplates(){
     if(!enabled()) return Promise.resolve(false); if(state.templates.loading) return state.templates.loading; listTemplates();
-    state.templates.loading=O.get('/v1/contract-templates',{active:'all'}).then(function(j){return Promise.all((j&&j.contract_templates||[]).map(function(x){return O.get('/v1/contract-templates/'+enc(x.id));}));})
+    state.templates.loading=O.get('/v1/contract-templates',{active:'all',detail:'full'}).then(function(j){var rows=(j&&j.contract_templates)||[];if(rows.every(function(x){return x.sections_effective;}))return rows;/* older server: summaries only, read each */return Promise.all(rows.map(function(x){return O.get('/v1/contract-templates/'+enc(x.id));}));})
       .then(function(rows){replaceTemplates(rows);state.templates.loaded=true;state.templates.failed=false;redraw();return true;})
       .catch(function(e){state.templates.failed=true;state.templates.loaded=false;var m=listTemplates();Object.keys(m).forEach(function(k){delete m[k];});O.fail('Could not load contract templates',e);return false;})
       .finally(function(){state.templates.loading=null;}); return state.templates.loading;

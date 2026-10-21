@@ -210,11 +210,16 @@
       existing.length = 0;
       Array.prototype.push.apply(existing, next);
       if(res[1]){ state.certificates = res[1]; state.certAt = Date.now(); overlayCertificates(); }
-      return Promise.all(next.map(function(b){
+      /* §asnOne · every boat's assignments in ONE request (it was one GET per boat); an older server has no such route: read each */
+      var eachBoat = function(){ return Promise.all(next.map(function(b){
         return O.get('/v1/boats/' + enc(b.id) + '/assignments').then(function(asnRes){
           applyAssignments(b.id, asnRes);
         }).catch(function(){});
-      })).then(function(){
+      })); };
+      return O.get('/v1/boats/assignments').then(function(all){
+        if(!all || !all.boats) return eachBoat();
+        next.forEach(function(b){ if(all.boats[b.id]) applyAssignments(b.id, all.boats[b.id]); });
+      }, eachBoat).then(function(){
         state.loaded = true;
         state.failed = false;
         return true;
