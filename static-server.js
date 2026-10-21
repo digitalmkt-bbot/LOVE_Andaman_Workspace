@@ -20,7 +20,7 @@ const APP = '/allotment_v2/allotment_v2.html';
 const BUILT = path.join(ROOT, '.build');
 const HAS_BUILT = fs.existsSync(path.join(BUILT, 'allotment_v2.html'));
 const APP_DIR = HAS_BUILT ? BUILT : path.join(ROOT, 'allotment_v2');
-// §sameOrigin · the browser calls /v1/* on THIS host and the host forwards it to operation-backend, so there is no
+// §sameOrigin · the browser calls /v1/* and /operations/* on THIS host and the host forwards it to operation-backend, so there is no
 // cross-origin hop and therefore no CORS preflight (an OPTIONS before nearly every call, one per distinct URL).
 // OPS_API_URL names the backend; OPS_API_URL=direct turns the proxy off and the browser calls the backend itself.
 const OPS_API = (process.env.OPS_API_URL || 'https://operationbackend-production.up.railway.app').replace(/\/+$/, '');
@@ -81,7 +81,7 @@ function filePath(urlPath){
 }
 
 http.createServer((req, res) => {
-  if(PROXY_ON && /^\/v1(?:[/?]|$)/.test(req.url)) return proxy(req, res);
+  if(PROXY_ON && /^\/(?:v1|operations)(?:[/?]|$)/.test(req.url)) return proxy(req, res);
   if(req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
   let url;
   try { url = new URL(req.url, 'http://localhost'); } catch (_) { return send(res, 400, 'Bad request'); }
