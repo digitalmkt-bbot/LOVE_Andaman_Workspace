@@ -101,6 +101,14 @@ function bookingV2RenderTripsSection(){
       if(al.hasAllotment && totPaxThisTrip > al.seatsAvailable && totPaxThisTrip > 0){
         warn = `<div style="margin-top:6px;padding:8px 12px;background:#FBE3E0;color:#8E2019;border-radius:10px;font-size:12.5px;font-weight:600">⚠ Over capacity · ${totPaxThisTrip} pax requested · only ${al.seatsAvailable} seat${al.seatsAvailable===1?'':'s'} left. Booking can be saved but needs dispatcher action.</div>`;
       }
+      if(t.bookingMode==='charter'){   /* §bkChCap · เหมาลำ = เทียบกับลำที่เหมา */
+        const _cc = bookingV2CharterCap(t);
+        allotBadge = !_cc ? '' : (_cc.overLic
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#FBE3E0;color:#8E2019;border-radius:10px;font-size:12.5px;font-weight:600">⚠ Over the boat licence · ${_cc.pax} pax · ${escapeHTML(_cc.name)} is licensed for ${_cc.lic}</div>`
+          : _cc.overCap
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#FBEBD3;color:#7A4300;border-radius:10px;font-size:12.5px;font-weight:600">⚠ ${_cc.pax} pax on ${escapeHTML(_cc.name)} · above its ${_cc.cap} seats (licence ${_cc.lic})</div>`
+          : `<div style="margin-top:8px;padding:8px 12px;background:#F4E8FB;border:1px solid #D7B5F0;color:#6B289A;border-radius:10px;font-size:12.5px;font-weight:600">CHARTER · ${escapeHTML(_cc.name)} · ${_cc.pax} / ${_cc.cap} seats</div>`);
+      } else
       allotBadge = `<div style="margin-top:8px;padding:8px 12px;background:${s.bg};border:${s.dashed?'1px dashed':'1px solid'} ${s.border};border-radius:10px;font-size:12.5px;color:${s.color};font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="background:${s.color};color:#fff;padding:1px 7px;border-radius:5px;font-size:10.5px;letter-spacing:.06em;font-weight:700;flex-shrink:0">${s.tag}</span><span style="flex:1;min-width:0">${msg}</span></div>${warn}`;
     }
     const isCharter = t.bookingMode === 'charter';
@@ -193,7 +201,7 @@ function bookingV2RenderTripsSection(){
     // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
     let lockBannerHtml = '';
     if(!isCharter && t.routeId && t.date && d.agentId && typeof bookingV2DrawSources==='function'){
-      const srcs = bookingV2DrawSources(t.routeId, t.date, d.agentId);
+      const srcs = bookingV2DrawSourcesFor(t, d.agentId);   /* §lkStaleDraw */
       const remTotal = srcs.reduce((s,x)=>s+x.remaining,0);
       if(remTotal > 0){
         const pax = bookingV2PaxAllTot(t.pax);

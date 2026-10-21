@@ -12947,6 +12947,7 @@ function memoRenderItems(){
         <input type="text" value="${it.name||''}" style="width:55%;font-size:11px;border:none;background:transparent;color:var(--ink);padding:2px 0" onchange="_memoItems[${i}].name=this.value;memoCalcTotal()">${fixedPill}${catPill}
         ${it.invId?`<span style="font-size:9px;background:#E1F5EE;color:#0F6E56;padding:1px 5px;border-radius:5px;margin-left:4px;font-weight:600" title="ลิ้งกับ Inventory item · ราคา lock ตาม cost ของ Inventory">🔗 Inv</span>`:(it.autoRegister?`<span style="font-size:9px;background:#FFF8E1;color:#854F0B;padding:1px 5px;border-radius:5px;margin-left:4px;font-weight:600" title="จะถูกลงทะเบียนเข้า Inventory ตอนบันทึก Memo">🆕 Auto</span>`:'')}
         ${priceMismatch?`<span style="font-size:9px;background:#FDECEA;color:#A32D2D;padding:1px 5px;border-radius:5px;margin-left:4px;font-weight:600" title="ราคาในรายการ (${(it.price||0).toLocaleString()}) ไม่ตรงกับ cost ใน Inventory (${invCost.toLocaleString()}) — เลือก part ผิดหรือเปล่า?">⚠ price mismatch</span>`:''}
+        ${typeof ivmCreateHint==='function'?ivmCreateHint(Object.assign({},it,{category:cat}),i):''}
       </td>
       <td style="padding:4px 6px;width:48px">
         <input type="number" value="${it.qty||1}" min="0" style="width:100%;font-size:11px;border:none;background:transparent;color:var(--ink);text-align:center;padding:2px 0" onchange="_memoItems[${i}].qty=+this.value;memoRenderItems()">
@@ -13652,6 +13653,7 @@ function flViewMemo(moId){
   const live = (_moLiveId===mo.id);
   const rowItems = live ? _moLiveItems : items;
   const inp='font-size:11px;border:0.5px solid #E0DDD5;border-radius:6px;padding:3px 6px;background:#fff;font-family:inherit;color:#27343B';
+  const _ivmOn = !live && typeof ivmMemoCells==='function';   /* §invMove · คงคลัง + Movement ต่อบรรทัด */
   const itemRows = live
    ? (rowItems.map((it,i)=>{
       const locked=!!it.invId;
@@ -13681,7 +13683,8 @@ function flViewMemo(moId){
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums">${(it.qty||1)}</td>
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums">${(it.price||0).toLocaleString()}</td>
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${((it.qty||1)*(it.price||0)).toLocaleString()}</td>
-    </tr>`).join('') : `<tr><td colspan="5" style="padding:10px;text-align:center;color:#aaa">ไม่มีรายการ</td></tr>`);
+      ${_ivmOn?ivmMemoCells(it,i):''}
+    </tr>${_ivmOn?ivmMemoExpandRow(i):''}`).join('') : `<tr><td colspan="${_ivmOn?7:5}" style="padding:10px;text-align:center;color:#aaa">ไม่มีรายการ</td></tr>`);
   const liveT = live ? moLiveTotals(mo,_moLiveItems) : null;
   const hist=(mo.history||[]);
   const histRows = hist.length? hist.slice().reverse().map(h=>{
@@ -13717,12 +13720,13 @@ function flViewMemo(moId){
         ? `<span style="font-size:10px;color:#0F6E56;background:#E1F5EE;padding:2px 9px;border-radius:9px;font-weight:700">กำลังแก้รายการ</span>`
         : (canMod?`<button onclick="moLiveStart('${mo.id}')" style="border:0.5px solid #C9E3D8;background:#F2FAF7;color:#0F6E56;font-size:10.5px;font-weight:700;padding:4px 11px;border-radius:8px;cursor:pointer;font-family:inherit">✏️ แก้รายการ</button>`:'')}
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px">
+    ${_ivmOn?ivmMemoBanner(items,mo):''}
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px">
       <thead><tr style="border-bottom:1px solid rgba(0,0,0,.1);color:#999;font-size:9px;text-transform:uppercase">
         <th style="padding:4px 6px;text-align:left"></th><th style="padding:4px 6px;text-align:left">รายการ</th>
-        <th style="padding:4px 6px;text-align:right">Qty</th><th style="padding:4px 6px;text-align:right">หน่วยละ</th><th style="padding:4px 6px;text-align:right">รวม</th>${live?'<th></th>':''}</tr></thead>
+        <th style="padding:4px 6px;text-align:right">Qty</th><th style="padding:4px 6px;text-align:right">หน่วยละ</th><th style="padding:4px 6px;text-align:right">รวม</th>${live?'<th></th>':''}${_ivmOn?ivmMemoHead():''}</tr></thead>
       <tbody>${itemRows}</tbody>
-    </table>
+    </table></div>
     <div id="molive-total" style="text-align:right;font-size:13px;font-weight:700;margin-bottom:14px">รวมทั้งสิ้น ฿${((live?liveT.total:mo.amount)||0).toLocaleString(undefined,{maximumFractionDigits:2})}${live?`<span style="font-size:10px;font-weight:500;color:#999;margin-left:8px">${moLiveSubLine(liveT)}</span>`:''}</div>
     ${(mo.note||'').trim()?`<div style="background:#fafaf8;border:0.5px solid rgba(0,0,0,.12);border-left:2px solid #333;border-radius:6px;padding:8px 10px;margin-bottom:14px;font-size:11px;white-space:pre-wrap">${esc(mo.note)}</div>`:''}
     <div style="font-size:11px;font-weight:600;margin-bottom:4px">ประวัติ (History)</div>
@@ -13739,6 +13743,7 @@ function flViewMemo(moId){
   const bodyEl=document.getElementById('memoview-body'), footEl=document.getElementById('memoview-foot');
   if(bodyEl) bodyEl.innerHTML=body;
   if(footEl) footEl.innerHTML=foot;
+  { const _md=bodyEl&&bodyEl.closest('.modal'); if(_md) _md.style.maxWidth=_ivmOn?'920px':'560px'; }   /* §invMove · ตารางมี 2 คอลัมน์เพิ่ม */
   openModal('fl-modal-memoview');
 }
 function flCloseMemoModal(){
@@ -23242,7 +23247,7 @@ function flRenderInventory(){
       return '<div style="display:flex;gap:10px;padding:8px 0;'+(isLast?'':'border-bottom:0.5px solid rgba(0,0,0,.06)')+'"><div style="position:relative;flex-shrink:0"><div style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';margin-top:4px"></div>'+(!isLast?'<div style="position:absolute;left:3.5px;top:13px;bottom:-9px;width:1px;background:rgba(0,0,0,.08)"></div>':'')+'</div><div style="font-size:10px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';flex-shrink:0;min-width:55px">'+fmtD(h.date)+'</div><div style="flex:1;min-width:0"><div style="font-size:11px;color:'+dim.ink+'">'+mainText+'</div>'+(h.by?'<div style="font-size:9px;color:'+dim.ink3+'">'+h.by+'</div>':'')+'</div>'+rightText+'</div>';
     }).join(''):'<div style="font-size:11px;color:'+dim.ink3+';text-align:center;padding:20px">No movement history</div>';
 
-    return '<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden;position:sticky;top:0"><div style="padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+(item.name||'\u2014')+'</div><div style="font-size:10px;color:'+dim.ink2+';margin-top:2px;font-family:\'DM Mono\',monospace">'+(item.partNo||'')+(item.supplier?' \u00b7 '+item.supplier:'')+(item.location?' \u00b7 '+item.location:'')+'</div></div><button onclick="flCloseInvPanel()" style="background:transparent;border:none;color:'+dim.ink2+';font-size:18px;cursor:pointer;line-height:1;padding:0">\u00d7</button></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,.06)"><div style="background:'+(isLow?SVG_PINK.soft:dim.bg)+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+(isLow?'#A32D2D':dim.ink)+'">'+(item.qty||0)+'</div><div style="font-size:9px;color:'+(isLow?SVG_PINK.text:dim.ink3)+'">in stock</div></div><div style="background:'+dim.bg+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">'+(item.minQty||0)+'</div><div style="font-size:9px;color:'+dim.ink3+'">min qty</div></div><div style="background:'+dim.bg+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink+'">\u0e3f'+(item.cost||0).toLocaleString()+'</div><div style="font-size:9px;color:'+dim.ink3+'">per unit</div></div></div><div style="padding:12px 14px;max-height:380px;overflow-y:auto"><div style="font-size:11px;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Movement history</div>'+histHtml+'</div><div style="padding:10px 14px;border-top:1px solid rgba(0,0,0,.06);background:#FBFAF7;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:'+dim.ink3+'">Current balance</span><span style="font-size:14px;font-weight:700;color:'+(isLow?'#A32D2D':dim.ink)+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+' '+(item.unit||'')+(isLow?' \u00b7 \u26a0 low':'')+'</span></div></div>';
+    return '<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden;position:sticky;top:0"><div style="padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);background:linear-gradient(to right,#FFF5EC 0%,#FBEAF0 60%,#F5DDE6 100%)"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+(item.name||'\u2014')+'</div><div style="font-size:10px;color:'+dim.ink2+';margin-top:2px;font-family:\'DM Mono\',monospace">'+(item.partNo||'')+(item.supplier?' \u00b7 '+item.supplier:'')+(item.location?' \u00b7 '+item.location:'')+'</div></div>'+(typeof ivmReportOpen==='function'?'<button onclick="ivmReportOpen(\''+item.id+'\')" title="Stock card" style="background:white;border:1px solid rgba(0,0,0,.12);border-radius:8px;color:'+dim.ink+';font-size:11px;font-weight:700;cursor:pointer;padding:4px 9px;white-space:nowrap;flex-shrink:0">📄 Stock card</button>':'')/* §invMove */+'<button onclick="flCloseInvPanel()" style="background:transparent;border:none;color:'+dim.ink2+';font-size:18px;cursor:pointer;line-height:1;padding:0">\u00d7</button></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,.06)"><div style="background:'+(isLow?SVG_PINK.soft:dim.bg)+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+(isLow?'#A32D2D':dim.ink)+'">'+(item.qty||0)+'</div><div style="font-size:9px;color:'+(isLow?SVG_PINK.text:dim.ink3)+'">in stock</div></div><div style="background:'+dim.bg+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">'+(item.minQty||0)+'</div><div style="font-size:9px;color:'+dim.ink3+'">min qty</div></div><div style="background:'+dim.bg+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink+'">\u0e3f'+(item.cost||0).toLocaleString()+'</div><div style="font-size:9px;color:'+dim.ink3+'">per unit</div></div></div><div style="padding:12px 14px;max-height:380px;overflow-y:auto"><div style="font-size:11px;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Movement history</div>'+histHtml+'</div><div style="padding:10px 14px;border-top:1px solid rgba(0,0,0,.06);background:#FBFAF7;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:'+dim.ink3+'">Current balance</span><span style="font-size:14px;font-weight:700;color:'+(isLow?'#A32D2D':dim.ink)+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+' '+(item.unit||'')+(isLow?' \u00b7 \u26a0 low':'')+'</span></div></div>';
   }
 
   function buildMemoTab(){
@@ -28056,7 +28061,21 @@ function flwAv(b,sz){
   return '<span style="flex:none;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+c+';color:#fff;font-size:'+(sz>=40?13:11)+'px;font-weight:700;display:flex;align-items:center;justify-content:center">'+String(t).replace(/[&<>"]/g,'')+'</span>';
 }
 function flwPickBoat(id){ FLW.boat=id; FLW.item=''; flRenderWork(); }
-function flwPickItem(k){ FLW.item=k; flRenderWork(); }
+/* §flwDbl (2026-10-20) · owner "ขอให้สามารถ ดับเบิ้ลคลิก ที่งาน แล้วเด้งไปที่งานนั้นๆ"
+   คลิกเดียว = เลือกงาน (แผงขวา) เหมือนเดิม · คลิกซ้ำงานเดิมภายใน 450ms = เปิดหน้างานเต็ม (ปุ่ม Open the full job page ตัวเดียวกัน)
+   ไม่ใช้ ondblclick เพราะคลิกแรก flRenderWork() วาดแถวใหม่ทั้งรายการ · คลิกที่สองตกบนแถวใหม่ เบราว์เซอร์ไม่ถือว่าเป็น dblclick
+   INC → หน้า Incident · MJ (รวมงานที่ปิดแล้ว dn:) → หน้า Maintenance · PRJ → หน้าโปรเจกต์ */
+var _flwLastPick={k:'',t:0};
+function flwOpenItem(k){
+  var m=String(k||'').match(/^(inc|mj|prj|dn):(.+)$/); if(!m) return;
+  flwGo(m[1]==='dn'?'mj':m[1], m[2]);
+}
+function flwPickItem(k){
+  var now=Date.now(), dbl=(_flwLastPick.k===k && now-_flwLastPick.t<450);
+  _flwLastPick={k:k, t:dbl?0:now};
+  if(dbl){ flwOpenItem(k); return; }
+  FLW.item=k; flRenderWork();
+}
 function flwStage(i){ FLW.stage=(FLW.stage===i)?-1:i; FLW.item=''; flRenderWork(); }
 function flwBF(k){ FLW.bf=k; flRenderWork(); }
 function flwGo(kind,id){
@@ -28343,38 +28362,45 @@ var FLWS_OUT_TH={success:'ซ่อมเสร็จ',limited:'ใช้งา�
 function flwsCut(t,n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?(t.slice(0,n-1).trim()+'…'):t; }
 function flwsDays(a,b){ var x=Date.parse(String(a||'').slice(0,10)), y=Date.parse(String(b||'').slice(0,10)); return (isNaN(x)||isNaN(y))?null:Math.max(0,Math.round((y-x)/864e5)); }
 function flwsIsSys(l){ return /^(ระบบ|system|equip)$/i.test(String(l.by||'').trim()) || /^(▶|✓|📋|📦|↩|⚙|🔄|＋|\+)/.test(String(l.t||'')); }
+/* §flwShort2 (2026-10-20) · owner "Copy text ขอกระชับ ตัดอีโมจิออก"
+   ไม่มีอีโมจิ · ไม่ซ้ำชื่อเรือ · แก้ยังไง = 2 บันทึกล่าสุด · อะไหล่บอกแค่จำนวน · ตัดอีโมจิที่ติดมากับข้อความผู้ใช้ด้วย */
+function flwsNoEmoji(t){ try{ return String(t||'').replace(/[\p{Extended_Pictographic}\u{2600}-\u{27BF}\u{25B6}\u{FE0F}\u{200D}\u{20E3}]/gu,'').replace(/[ \t]{2,}/g,' ').replace(/^ +| +$/gm,''); }catch(_){ return String(t||''); } }
 function flwsShort(D){
   var m=D.m, inc=D.inc, b=D.b, L=[], today=(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
   var d0=(inc&&inc.date)||(m&&m.startDate)||'', done=!!(m&&m.status==='done'), d1=done?(m.endDate||''):today, nd=flwsDays(d0,d1);
   var st;
-  if(m&&m.status==='cancelled') st='✖ ยกเลิกงาน';
-  else if(done) st='✅ '+(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
-  else if(m) st='⏳ '+(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' ('+nd+' วัน)'):'');
-  else st='🆕 แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' ('+nd+' วัน)'):'');
-  L.push('🔧 '+(b?b.name:'—')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
+  if(m&&m.status==='cancelled') st='ยกเลิกงาน';
+  else if(done) st=(FLWS_OUT_TH[m.outcome]||'ปิดงานแล้ว')+(m.awaitingInvoice?' · รอบิล':'');
+  else if(m) st=(m.status==='pending'?'รอเริ่มงาน':'กำลังซ่อม')+(nd!=null?(' '+nd+' วัน'):'');
+  else st='แจ้งแล้ว ยังไม่เปิดงาน'+(nd!=null?(' '+nd+' วัน'):'');
+  L.push((b?b.name:'-')+' · '+((m&&m.no)||(inc&&inc.no)||'')+' · '+st);
   var parts=[]; ((inc&&inc.damagedAssets)||[]).concat((m&&m.assets)||[]).forEach(function(a){ var t=a&&a.label; if(t&&parts.indexOf(t)<0) parts.push(t); });
-  L.push('📍 ที่ไหน: '+[b?b.name:''].concat(parts.slice(0,3)).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · '));
+  var where=parts.slice(0,2).concat(m&&m.location?[m.location]:[]).filter(Boolean).join(' · ');
+  if(where) L.push('ที่: '+where);
   var y0=String(d0).slice(0,4), sameY=String(d1).slice(0,4)===y0;
-  L.push('🗓 เมื่อไหร่: '+(flwsD(d0, inc&&inc.time)||'—')+(done&&d1?(' → เสร็จ '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
-  var tt=(inc&&inc.title)||(m&&m.title)||'', dt=String((inc&&inc.detail)||(m&&m.detail)||'').split(/\n|(?:\.\s)/)[0];
-  L.push('⚠️ เกิดอะไร: '+flwsCut(tt,70)+(dt&&dt.trim()!==tt.trim()?(' · '+flwsCut(dt,60)):''));
-  var notes=D.log.filter(function(l){ return !flwsIsSys(l); }).map(function(l){ return flwsCut(l.t,50); });
-  if(notes.length>4) notes=[notes[0],'…'].concat(notes.slice(-3));
-  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,50));
+  L.push('วันที่: '+(flwsD(d0, inc&&inc.time)||'-')+(done&&d1?(' → '+(sameY?flwD(d1):flwsD(d1))+(nd!=null?(' ('+nd+' วัน)'):'')):''));
+  var tt=(inc&&inc.title)||(m&&m.title)||'';
+  L.push('อาการ: '+flwsCut(tt,70));
+  var notes=D.log.filter(function(l){ return !flwsIsSys(l) && !/^(photo|video|photo\/video) added|^\u270E/i.test(String(l.t||'')); }).map(function(l){ return flwsCut(l.t,70); });
+  if(m&&m.closeNote) notes.push(flwsCut(m.closeNote,70));
+  notes=notes.filter(function(x,i){ return notes.indexOf(x)===i; }).slice(-2);
+  if(!notes.length && m && m.detail) notes.push(flwsCut(m.detail,80));
   if(!notes.length && inc&&typeof inc.quickFix==='string') notes.push(flwsCut(inc.quickFix,50));
-  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึกการแก้':'ยังไม่เปิดงาน');
+  var fix=notes.length?notes.join(' → '):(m?'ยังไม่มีบันทึก':'ยังไม่เปิดงาน');
   if(done && m.outcome && m.outcome!=='success') fix+=' ('+(FLWS_OUT_TH[m.outcome]||m.outcome)+')';
-  L.push('🛠 แก้ยังไง: '+fix);
-  if(m){ var top=D.parts.slice().sort(function(a,c){ return (+c.qty||0)*(+c.cost||0)-(+a.qty||0)*(+a.cost||0); });
-    var pt=top.slice(0,3).map(function(p){ return flwsCut(p.name,28)+((+p.qty||0)>1?(' '+p.qty+(p.unit?(' '+p.unit):'')):''); }).join(', ')+(top.length>3?(' +'+(top.length-3)):'');
-    var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
-    var mm=om.length?('memo '+om.map(function(mo){ return (mo.no||'MO')+' '+(typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }).slice(0,2).join(', ')):'';
-    L.push('💰 '+(D.cost>0?flwsM(Math.round(D.cost)):'ยังไม่มีค่าใช้จ่าย')+(D.parts.length?(' · อะไหล่ '+D.parts.length+' รายการ ('+pt+')'):'')+(mm?(' · '+mm):'')); }
-  var who=[]; if(m&&String(m.owner||'').trim()) who.push(String(m.owner).trim());
-  D.log.forEach(function(l){ if(!flwsIsSys(l)&&l.by&&who.indexOf(l.by)<0) who.push(l.by); });
-  var last=[]; if(D.photos.length) last.push('📷 รูป '+D.photos.length+' รูป'); if(who.length) last.push('👷 '+who.slice(0,3).join(', '));
-  if(last.length) L.push(last.join(' · '));
-  return L.join('\n');
+  L.push('แก้: '+fix);
+  if(m){ var om=D.memos.filter(function(mo){ return mo.status!=='paid'&&mo.status!=='received'&&(typeof flwMemoOpen!=='function'||flwMemoOpen(mo)); });
+    /* §flwsCostPend · ยอดใน D.cost (flMaintCalcCost) นับเฉพาะ memo ที่อนุมัติแล้ว → memo รออนุมัติต้องบอกแยก ไม่งั้นขึ้น "ยังไม่มีค่าใช้จ่าย" ทั้งที่มี memo */
+    var pend=D.memos.filter(function(mo){ return mo.status==='pending_approval'; }), pAmt=0; pend.forEach(function(mo){ pAmt+=(+mo.amount||0); });
+    var c=[];
+    if(D.cost>0) c.push(flwsM(Math.round(D.cost)));
+    if(pend.length) c.push('รออนุมัติ '+flwsM(Math.round(pAmt))+' ('+pend.length+' memo)');
+    if(!c.length) c.push('ยังไม่มีค่าใช้จ่าย');
+    if(D.parts.length) c.push('อะไหล่ '+D.parts.length+' รายการ');
+    var om2=om.filter(function(mo){ return mo.status!=='pending_approval'; });
+    if(om2.length){ var lb=om2.map(function(mo){ return (typeof flwMemoLabel==='function'?flwMemoLabel(mo):mo.status); }); c.push(om2.length+' memo'+(lb.every(function(x){ return x===lb[0]; })?(' '+lb[0]):' ค้าง')); }
+    L.push('ค่าใช้จ่าย: '+c.join(' · ')); }
+  return flwsNoEmoji(L.join('\n'));
 }
 function flwsMenu(ev){ if(ev) ev.stopPropagation(); var mn=document.getElementById('flws-mn'); if(mn) mn.style.display=(mn.style.display==='block'?'none':'block'); }
 function flwsCopy(mode){
@@ -28786,7 +28812,7 @@ function flRenderWork(){
           return E(j.no)+(f?(' '+E(f.title)):(pj?(' '+E(pj.name)):'')); });
         if(names.length) blk='<div style="padding:9px 18px;background:#FBF1DF;border-bottom:1px solid #ECEBE6;font-size:12.5px;color:#7A4300;line-height:1.45"><b>What keeps this boat down:</b> '+names.join(' · ')+(jb.length>3?(' · +'+(jb.length-3)+' more'):'')+'</div>'; }catch(_){} }
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?'No owner':'—');
-      return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)">'
+      return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)" title="Double-click to open the job">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
         +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
         +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">Done</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">Parked</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
@@ -30459,4 +30485,433 @@ function ivoBuild(){
     +ivoRanked(D)
     +'<div class="ivo-row2"><div class="ivo-l">'+ivoCompare(D)+ivoTops(D)+'</div><div class="ivo-r">'+ivoTodo(D)+'</div></div>'
     +'</div>';
+}
+
+/* ══ §invMove (2026-10-20) · ยอดคงคลัง + Movement ต่อรายการ · Stock card ════════════════════
+   เจ้าของ: "เราจะต้องการระบุ ยอดคงค้างในคลังกับการ Movement ของรายการนั้นๆ เพื่อให้เห็นถึงความโปร่งใส"
+            "รายการสรุป ให้เหมือนกด รีพอร์ตได้ไหม อ้างอิง ให้ระบุเรือ" + "ขอ Copy text ด้วย"
+   mockup ที่ตกลง: Claude Design canvas "Inventory Overview · รายคลัง" (Memo.dc · Report.dc)
+
+   อ่านอย่างเดียว · ไม่เก็บตัวเลขอะไรเพิ่ม · ทุกอย่างคิดจาก stocks[] กับ history[] ที่มีอยู่แล้ว
+   ยอดคงเหลือแต่ละบรรทัดคิดย้อนจากยอดปัจจุบัน (stocks[]) ทีละบรรทัด
+   ยอดปิดจึงตรงกับหน้า Stock items เสมอ · ส่วนที่ประวัติไม่ครบจะไปโผล่เป็น "ยกมา" แทน
+   เรือ: ใบ Memo → boatId ของใบ (ไม่มีเรือ = สแปร์) · งานซ่อม MJ → boatId ของงาน · เบิกของใช้ → boatId ของ log
+
+   ใช้ใน 3 ที่
+   1) เปิดดู Memo (flViewMemo)   · ทุกบรรทัดบอกคงคลังรายคลัง + Movement 90 วัน · กดดูบัญชีย่อยได้
+   2) สร้าง Memo (memoRenderItems) · บรรทัดที่ผูกคลังบอกยอด · บรรทัดใหม่ที่ชื่อ/เบอร์คล้ายของในคลัง เสนอให้ผูกแทนสร้างซ้ำ
+   3) Stock card (ivmReportOpen)  · รายงานเต็ม พิมพ์ / Excel / Copy text                            */
+var IVM=null;
+var IVM_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function ivmE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function ivmToday(){ return (typeof TODAY_STR!=='undefined' && TODAY_STR) ? TODAY_STR : new Date().toISOString().slice(0,10); }
+function ivmD(ymd, yr){ var s=String(ymd||'').slice(0,10); var p=s.split('-'); if(p.length<3) return s||'—'; return (+p[2])+' '+IVM_TH[(+p[1])-1]+(yr?(' '+p[0]):''); }
+function ivmAddDays(ymd, n){ var d=new Date(ymd+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function ivmN(n){ return (Math.round((+n||0)*100)/100).toLocaleString(); }
+function ivmSg(n){ return n>0?('+'+ivmN(n)):(n<0?('−'+ivmN(-n)):'0'); }
+/* รหัสคลังจากชื่อคลัง · ใช้ตัวเดียวกับ Overview · ไม่รู้จัก = ชื่อเดิม */
+function ivmWh(loc){
+  var k=(typeof ivoWhOf==='function')?ivoWhOf(loc):'';
+  return k || String(loc||'').trim() || '?';
+}
+function ivmWhName(k){
+  var w=(typeof IVO_WH!=='undefined'?IVO_WH:[]).find(function(x){ return x.k===k; });
+  return w?w.n:String(k||'');
+}
+function ivmStocks(item){ return (typeof ivoStocks==='function')?ivoStocks(item):((item&&item.stocks)||[]); }
+/* ยอดคงคลังตอนนี้แยกรายคลัง {TL:8, VP:0} + รวม */
+function ivmNow(item){
+  var by={}, tot=0;
+  ivmStocks(item).forEach(function(s){ var k=ivmWh(s.location); by[k]=(by[k]||0)+(+s.qty||0); tot+=(+s.qty||0); });
+  return {by:by, total:tot};
+}
+function ivmDelta(h){
+  var q=+h.qty||0, t=h.type;
+  if(t==='receive'||t==='in'||t==='transfer-in') return Math.abs(q);
+  if(t==='withdraw'||t==='out'||t==='adjust_out'||t==='transfer-out') return -Math.abs(q);
+  if(t==='adjust') return q;
+  return 0;
+}
+function ivmLocOf(h, item){
+  if(h.location) return h.location;
+  var m=String(h.note||'').match(/@\s*(คลัง[^·]+)/);
+  if(m) return m[1].trim();
+  return (item&&(item.primaryLocation||item.location))||'';
+}
+function ivmBoatNm(id){ var b=(id&&typeof getBoat==='function')?getBoat(id):null; return b?(b.name||id):''; }
+/* เรือที่เอ่ยชื่อไว้ในหัวเรื่อง (ใบสแปร์มักเขียนว่า "... Okeanos Verona Romeo") */
+function ivmBoatsInText(t){
+  var s=String(t||'').toLowerCase(); if(!s) return [];
+  return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ var n=String(b&&b.name||'').toLowerCase(); return n.length>=3 && s.indexOf(n)>=0; }).map(function(b){ return b.name; });
+}
+function ivmShortTitle(t){
+  var s=String(t||'').replace(/^ขออนุมัติ(ค่า)?\s*/,'').replace(/\s+/g,' ').trim();
+  return s.length>46 ? s.slice(0,45)+'…' : s;
+}
+/* อ้างอิงของบรรทัดประวัติ → {ref, boat, spare, mentioned[], title, memo, job} */
+function ivmRef(h, item){
+  var note=String(h.note||h.desc||''), R={ref:'', boat:'', spare:false, mentioned:[], title:'', memo:null, job:null};
+  var memos=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]), jobs=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]);
+  var mo=null, mj=null;
+  if(h.memoId) mo=memos.find(function(x){ return x.id===h.memoId; })||null;
+  if(!mo){ var mm=note.match(/MO-\d+/); if(mm) mo=memos.find(function(x){ return x.no===mm[0]; })||null; if(!mo&&mm) R.ref=mm[0]; }
+  if(h.jobId) mj=jobs.find(function(x){ return x.id===h.jobId; })||null;
+  if(!mj){ var mjm=note.match(/MJ-\d+/); if(mjm) mj=jobs.find(function(x){ return x.no===mjm[0]; })||null; if(!mj&&mjm&&!R.ref) R.ref=mjm[0]; }
+  if(mj && h.type!=='receive'){            /* ของที่เบิกให้งานซ่อม (คืนสต็อกก็ใช้เลขงานเดียวกัน) */
+    R.job=mj; R.ref=mj.no||R.ref; R.boat=ivmBoatNm(mj.boatId); R.title=mj.title||'';
+  } else if(mo){
+    R.memo=mo; R.ref=mo.no||R.ref; R.boat=ivmBoatNm(mo.boatId); R.title=mo.title||'';
+    if(!R.boat){ R.spare=true; R.mentioned=ivmBoatsInText(mo.title); }
+  } else if(mj){
+    R.job=mj; R.ref=mj.no||R.ref; R.boat=ivmBoatNm(mj.boatId); R.title=mj.title||'';
+  }
+  if(!R.boat && h.consumeId){
+    var c=(typeof FL_CONSUMABLE_LOGS!=='undefined'?FL_CONSUMABLE_LOGS:[]).find(function(x){ return x.id===h.consumeId; });
+    if(c){ R.boat=ivmBoatNm(c.boatId); R.ref=R.ref||'เบิกของใช้'; }
+  }
+  if(!R.boat && !R.spare){ var bm=note.match(/→\s*([^·@]+)/); if(bm && h.type==='withdraw') R.boat=bm[1].trim(); }
+  return R;
+}
+function ivmKindLabel(h, R){
+  var t=h.type, note=String(h.note||'');
+  if(t==='register') return 'ลงทะเบียน'+(R.memo?' จาก Memo':'')+(R.memo&&['created','pending_approval'].indexOf(R.memo.status)>=0?' (ยังไม่อนุมัติ)':'');
+  if(t==='receive'||t==='in') return /คืนสต็อก/.test(note)?'คืนสต็อก':'รับเข้า';
+  if(t==='withdraw') return R.job?'เบิกใช้':(h.consumeId||/เบิกของใช้/.test(note)?'เบิกของใช้':'เบิก');
+  if(t==='transfer-out') return 'โอนออก';
+  if(t==='transfer-in') return 'โอนเข้า';
+  if(t==='adjust'||t==='adjust_out') return 'ปรับยอด';
+  if(t==='merge') return 'รวมรายการซ้ำ';
+  return t||'—';
+}
+/* บัญชีความเคลื่อนไหว · opt.days (0 = ทั้งหมด) · opt.wh ('all' หรือรหัสคลัง) */
+function ivmLedger(item, opt){
+  opt=opt||{}; var days=+opt.days||0, wh=opt.wh||'all';
+  var to=ivmToday(), from=days?ivmAddDays(to,-days):'';
+  var now=ivmNow(item);
+  var closing = wh==='all' ? now.total : (now.by[wh]||0);
+  var H=(item.history||[]).map(function(h,i){ return {h:h,i:i}; }).filter(function(o){ return o.h && o.h.type!=='edit'; });
+  H.sort(function(a,b){ var x=String(a.h.date||'').slice(0,10), y=String(b.h.date||'').slice(0,10); return x<y?-1:(x>y?1:a.i-b.i); });
+  var rows=H.map(function(o){
+    var h=o.h, loc=ivmLocOf(h,item), R=ivmRef(h,item);
+    return {date:String(h.date||'').slice(0,10), type:h.type, delta:ivmDelta(h), qty:+h.qty||0, wh:ivmWh(loc), loc:loc, R:R, label:ivmKindLabel(h,R), note:h.note||h.desc||'', by:h.by||''};
+  }).filter(function(r){ return wh==='all' || r.wh===wh || (r.delta===0 && r.type==='register'); });
+  /* ทั้งหมด (ไม่จำกัดช่วง) ใช้ตรวจว่าประวัติครบไหม */
+  var allSum=rows.reduce(function(s,r){ return s+r.delta; },0);
+  var inP=rows.filter(function(r){ return !from || r.date>=from; });
+  var bal=closing; for(var k=inP.length-1;k>=0;k--){ inP[k].bal=bal; bal-=inP[k].delta; }
+  var opening=bal;
+  var tin=0,tout=0, bought={}, used={}, lastIn='', lastOut='';
+  inP.forEach(function(r){
+    if(r.delta>0 && r.type!=='transfer-in'){ tin+=r.delta; if(r.date>lastIn) lastIn=r.date;
+      var bk=r.R.boat || (r.R.spare?'สแปร์':'ไม่ระบุเรือ'); var b=bought[bk]||(bought[bk]={q:0,refs:[],spare:!r.R.boat,mentioned:[]}); b.q+=r.delta; if(r.R.ref&&b.refs.indexOf(r.R.ref)<0) b.refs.push(r.R.ref);
+      r.R.mentioned.forEach(function(n){ if(b.mentioned.indexOf(n)<0) b.mentioned.push(n); }); }
+    else if(r.delta<0 && r.type!=='transfer-out'){ tout+=-r.delta; if(r.date>lastOut) lastOut=r.date;
+      var uk=r.R.boat || 'ไม่ระบุเรือ'; var u=used[uk]||(used[uk]={q:0,refs:[]}); u.q+=-r.delta; if(r.R.ref&&u.refs.indexOf(r.R.ref)<0) u.refs.push(r.R.ref); }
+  });
+  /* โอนระหว่างคลัง: ดูทุกคลัง = ย้ายที่เฉย ๆ ไม่นับรับ/เบิก · ดูคลังเดียว = เข้า/ออกของคลังนั้น */
+  if(wh!=='all') inP.forEach(function(r){ if(r.type==='transfer-in') tin+=r.delta; if(r.type==='transfer-out') tout+=-r.delta; });
+  return {item:item, from:from, to:to, days:days, wh:wh, opening:opening, closing:closing, tin:tin, tout:tout,
+          rows:inP, bought:bought, used:used, lastIn:lastIn, lastOut:lastOut, gap:(closing-allSum), now:now,
+          value:closing*(+item.cost||0)};
+}
+/* ── จับคู่ชื่อ / เบอร์อะไหล่ · กันลงทะเบียนของซ้ำจาก Memo ── */
+function ivmPns(s){ return (String(s||'').toUpperCase().match(/[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+/g)||[]).filter(function(t){ return /\d/.test(t) && t.length>=6 && !/^(MO|MJ|PRJ|INC)-\d+$/.test(t); }); }
+function ivmBase(s){ var x=String(s||''); ivmPns(x).forEach(function(p){ x=x.toUpperCase().split(p).join(' '); }); return x.toLowerCase().replace(/[\s\-_.,()\/\[\]·#]+/g,''); }
+function ivmFuzzy(name, partNo, skipId){
+  var nm=String(name||'').trim(); if(!nm && !partNo) return [];
+  var pns=ivmPns(nm+' '+(partNo||'')); var base=ivmBase(nm);
+  var out=[];
+  _invAll().forEach(function(x){
+    if(!x || x.id===skipId) return;
+    var xp=ivmPns((x.name||'')+' '+(x.partNo||'')), xb=ivmBase(x.name), sc=0;
+    if(pns.length && xp.some(function(p){ return pns.indexOf(p)>=0; })) sc=3;
+    else if(!pns.length || !xp.length){
+      if(base.length>=4 && xb===base) sc=2;
+      else if(base.length>=6 && xb.length>=6 && (xb.indexOf(base)>=0 || base.indexOf(xb)>=0)) sc=1;
+    }
+    if(sc) out.push({x:x, sc:sc, qty:ivmNow(x).total});
+  });
+  out.sort(function(a,b){ return (b.sc-a.sc)||(b.qty-a.qty); });
+  return out.slice(0,3);
+}
+function ivmWhLine(now){
+  var ks=Object.keys(now.by); if(!ks.length) return '';
+  var order=['TL','VP','RN']; ks.sort(function(a,b){ var x=order.indexOf(a), y=order.indexOf(b); return (x<0?9:x)-(y<0?9:y); });
+  return ks.map(function(k){ return ivmE(k)+' '+ivmN(now.by[k]); }).join(' · ');
+}
+/* ── 1) เปิดดู Memo ────────────────────────────────────────────── */
+function ivmMemoHead(){ return '<th style="padding:4px 6px;text-align:left">คงคลังตอนนี้</th><th style="padding:4px 6px;text-align:left">Movement · 90 วัน</th>'; }
+function ivmLineInfo(it){
+  var inv=it&&it.invId?_invAll().find(function(x){ return x.id===it.invId; }):null;
+  var sim=ivmFuzzy(it&&it.name, it&&it.partNo, inv?inv.id:null).filter(function(o){ return o.qty>0; });
+  if(!inv) return {inv:null, sim:sim};
+  var now=ivmNow(inv), L=ivmLedger(inv,{days:90});
+  var everMoved=(inv.history||[]).some(function(h){ return ivmDelta(h)!==0; });
+  return {inv:inv, now:now, L:L, everMoved:everMoved, sim:sim};
+}
+function ivmSimHtml(sim){
+  if(!sim||!sim.length) return '';
+  var o=sim[0];
+  return '<div style="margin-top:3px;font-size:9.5px;color:#92400E;background:#FFF8EC;border-radius:5px;padding:2px 6px;display:inline-block;max-width:100%" title="มีรายการชื่อหรือเบอร์คล้ายกันอยู่ในคลัง · อาจเป็นของชิ้นเดียวกันที่ลงทะเบียนซ้ำ">คล้ายกัน: '+ivmE(o.x.name)+(o.x.partNo?(' · '+ivmE(o.x.partNo)):'')+' · มี '+ivmN(o.qty)+' <a href="javascript:void 0" onclick="ivmReportOpen(\''+ivmE(o.x.id)+'\')" style="color:#92400E;text-decoration:underline">ดู</a></div>';
+}
+function ivmMemoCells(it, i){
+  var I=ivmLineInfo(it), c1, c2;
+  var isLabor=(it.category==='labor');
+  if(!I.inv){
+    c1= isLabor ? '<span style="font-size:10px;color:#A0A099">ค่าแรง · ไม่เข้าคลัง</span>'
+                : '<span style="font-size:10px;color:#8A8880">ไม่ได้ผูกกับคลัง</span>'+ivmSimHtml(I.sim);
+    c2='<span style="color:#C9C6BE">—</span>';
+  } else {
+    var tot=I.now.total, u=ivmE(I.inv.unit||'ชิ้น');
+    if(tot>0) c1='<span style="display:inline-block;background:#E1F5EE;color:#0F6E56;font-weight:700;font-size:10px;padding:1px 7px;border-radius:8px;white-space:nowrap">มีในคลัง '+ivmN(tot)+' '+u+'</span><div style="font-size:9.5px;color:#5B6170;font-family:\'DM Mono\',monospace;margin-top:2px">'+ivmWhLine(I.now)+'</div>';
+    else if(!I.everMoved) c1='<span style="font-size:10px;color:#8A8880">รายการใหม่ · ไม่เคยมีในคลัง</span>';
+    else c1='<span style="display:inline-block;background:#F1F0EC;color:#5B6170;font-weight:700;font-size:10px;padding:1px 7px;border-radius:8px">หมด · 0 '+u+'</span>';
+    c1+=ivmSimHtml(I.sim);
+    var L=I.L, mv=(L.tin||L.tout);
+    c2 = (mv ? '<div style="font-family:\'DM Mono\',monospace;font-size:10.5px;white-space:nowrap"><span style="color:#0F6E56">+'+ivmN(L.tin)+'</span> <span style="color:#8A8880;font-family:inherit">รับ</span> <span style="color:#B42318">−'+ivmN(L.tout)+'</span> <span style="color:#8A8880">เบิก</span></div>'
+                 +'<div style="font-size:9.5px;color:#8A8880;margin-top:1px">'+(L.lastOut?('เบิกล่าสุด '+ivmD(L.lastOut)):'ยังไม่มีการเบิก')+(L.lastIn?(' · รับเข้า '+ivmD(L.lastIn)):'')+'</div>'
+                 : '<div style="font-size:10px;color:#A0A099">'+(I.everMoved?'ไม่มีความเคลื่อนไหวใน 90 วัน':'—')+'</div>')
+       +(!I.everMoved?'':'<a href="javascript:void 0" id="ivm-mt-'+i+'" onclick="ivmMemoToggle('+i+',\''+ivmE(I.inv.id)+'\')" style="font-size:10px;font-weight:700;color:#185FA5">▸ Movement</a>');
+  }
+  return '<td style="padding:5px 6px;vertical-align:top;min-width:120px">'+c1+'</td><td style="padding:5px 6px;vertical-align:top;min-width:130px">'+c2+'</td>';
+}
+function ivmMemoExpandRow(i){ return '<tr id="ivm-mx-'+i+'" style="display:none"><td colspan="7" style="padding:0 6px 10px"></td></tr>'; }
+function ivmMemoToggle(i, invId){
+  var tr=document.getElementById('ivm-mx-'+i), a=document.getElementById('ivm-mt-'+i); if(!tr) return;
+  var open=tr.style.display==='none';
+  if(open){
+    var inv=_invAll().find(function(x){ return x.id===invId; }); if(!inv) return;
+    tr.firstChild.innerHTML=ivmMiniLedger(inv);
+  }
+  tr.style.display=open?'':'none';
+  if(a) a.textContent=open?'▾ ซ่อน':'▸ Movement';
+}
+/* รับเข้าวันเดียวกันหลายใบ รวมเป็นบรรทัดเดียว (แบบ mockup) */
+function ivmMiniLedger(inv){
+  var L=ivmLedger(inv,{days:90}), G=[];
+  L.rows.forEach(function(r){
+    var g=G[G.length-1];
+    if(g && g.date===r.date && g.type===r.type && r.type==='receive' && g.wh===r.wh){ g.delta+=r.delta; g.bal=r.bal; g.refs.push(r); return; }
+    G.push({date:r.date, type:r.type, wh:r.wh, delta:r.delta, bal:r.bal, label:r.label, R:r.R, refs:[r]});
+  });
+  var refTxt=function(g){
+    return g.refs.map(function(r,k){ var ref=r.R.ref||'—'; if(k>0) ref=ref.replace(/^MO-/,''); var bt=r.R.boat||(r.R.spare?'สแปร์':''); return ivmE(ref)+(bt?(' <span style="color:#5B6170">'+ivmE(bt)+'</span>'):''); }).join(' · ');
+  };
+  var th='padding:5px 6px;font-size:9px;text-transform:uppercase;color:#8A8880;font-weight:700;text-align:left;border-bottom:1px solid #E4E2DC';
+  var body=G.length ? G.map(function(g){
+    var ttl=g.refs.length===1 ? ivmShortTitle(g.R.title) : '';
+    return '<tr style="border-bottom:0.5px solid #EEECE6'+(g.delta===0?';color:#8A8880':'')+'"><td style="padding:5px 6px;white-space:nowrap">'+ivmD(g.date)+'</td>'
+      +'<td style="padding:5px 6px">'+ivmE(g.label)+(ttl?(' · <span style="color:#5B6170">'+ivmE(ttl)+'</span>'):'')+'</td>'
+      +'<td style="padding:5px 6px;white-space:nowrap">'+ivmE(ivmWhName(g.wh))+'</td>'
+      +'<td style="padding:5px 6px;font-family:\'DM Mono\',monospace;font-size:10.5px">'+refTxt(g)+'</td>'
+      +'<td style="padding:5px 6px;text-align:right;font-family:\'DM Mono\',monospace;color:'+(g.delta>0?'#0F6E56':(g.delta<0?'#B42318':'#8A8880'))+'">'+ivmSg(g.delta)+'</td>'
+      +'<td style="padding:5px 6px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:700">'+ivmN(g.bal)+'</td></tr>';
+  }).join('') : '<tr><td colspan="6" style="padding:10px;text-align:center;color:#A0A099">ไม่มีความเคลื่อนไหวใน 90 วัน</td></tr>';
+  return '<div style="background:#FBFAF7;border:1px solid #ECEAE4;border-radius:8px;padding:6px 8px;margin-top:2px">'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px"><thead><tr><th style="'+th+'">วันที่</th><th style="'+th+'">รายการ</th><th style="'+th+'">คลัง</th><th style="'+th+'">อ้างอิง</th><th style="'+th+';text-align:right">เข้า / ออก</th><th style="'+th+';text-align:right">คงเหลือ</th></tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<div style="font-size:10px;color:#8A8880;margin-top:6px">'+(L.opening?('ยกมาก่อนช่วงนี้ '+ivmN(L.opening)+' · '):'')+'ยอดคงเหลือคิดจาก Movement ทุกบรรทัด · ตรงกับยอดในหน้า Stock items ('+ivmN(L.closing)+') · <a href="javascript:void 0" onclick="ivmReportOpen(\''+ivmE(inv.id)+'\')" style="color:#185FA5;font-weight:700">เปิดรายงานฉบับเต็ม (พิมพ์ / Excel)</a></div></div>';
+}
+function ivmMemoBanner(items, mo){
+  items=items||[]; var parts=items.filter(function(it){ return it && it.category!=='labor'; });
+  if(!parts.length) return '';
+  var have=[], simOnly=0, val=0;
+  parts.forEach(function(it){
+    var I=ivmLineInfo(it);
+    if(I.inv && I.now.total>0){ have.push({it:it, I:I}); val+=(+it.qty||1)*(+it.price||0); }
+    else if(I.sim && I.sim.length) simOnly++;
+  });
+  var done=mo && ['received','paid','cancelled'].indexOf(mo.status)>=0;
+  var head = done ? ('คงคลังตอนนี้ · '+have.length+' จาก '+parts.length+' รายการยังมีของในคลัง')
+                  : (have.length+' จาก '+parts.length+' รายการมีของอยู่ในคลังแล้ว');
+  var names=have.slice(0,3).map(function(o){ return ivmE(o.I.inv.name); }).join(' · ')+(have.length>3?(' · +'+(have.length-3)):'');
+  var whs={}; have.forEach(function(o){ Object.keys(o.I.now.by).forEach(function(k){ if(o.I.now.by[k]>0) whs[k]=1; }); });
+  var sub = have.length ? (names+' · '+Object.keys(whs).map(function(k){ return 'คลัง '+ivmE(ivmWhName(k)); }).join(', ')+(done?'':(' · ยอดในใบนี้ ฿'+Math.round(val).toLocaleString())))
+                        : 'ทุกรายการในใบนี้ไม่มีของเหลือในคลัง';
+  if(simOnly) sub+=' · อีก '+simOnly+' รายการมีของชื่อ/เบอร์คล้ายกันในคลัง';
+  var hot=have.length && !done;
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(hot?'#FFF8EC':'#F4F6F8')+';border:1px solid '+(hot?'#F3D9A8':'#E4E7EB')+';border-radius:10px;padding:8px 12px;margin-bottom:10px">'
+    +'<div style="flex:1;min-width:200px"><div style="font-size:12px;font-weight:700;color:'+(hot?'#92400E':'#374151')+'">'+head+'</div><div style="font-size:10.5px;color:#5B6170;margin-top:2px">'+sub+'</div></div>'
+    +'<span style="font-size:10px;font-weight:700;background:#E1F5EE;color:#0F6E56;padding:2px 9px;border-radius:9px">มีของในคลัง '+have.length+'</span>'
+    +'<span style="font-size:10px;font-weight:700;background:#F1F0EC;color:#5B6170;padding:2px 9px;border-radius:9px">ไม่มีในคลัง '+(parts.length-have.length)+'</span></div>';
+}
+/* ── 2) สร้าง Memo ─────────────────────────────────────────────── */
+function ivmCreateHint(it, i){
+  if(!it) return '';
+  if(it.invId){
+    var inv=_invAll().find(function(x){ return x.id===it.invId; }); if(!inv) return '';
+    var now=ivmNow(inv), L=ivmLedger(inv,{days:90});
+    return '<div style="font-size:9.5px;margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      +(now.total>0?('<span style="background:#E1F5EE;color:#0F6E56;font-weight:700;padding:0 6px;border-radius:6px">มีในคลัง '+ivmN(now.total)+' '+ivmE(inv.unit||'ชิ้น')+'</span><span style="color:#5B6170;font-family:\'DM Mono\',monospace">'+ivmWhLine(now)+'</span>')
+                   :'<span style="color:#8A8880">ในคลังตอนนี้ 0</span>')
+      +((L.tin||L.tout)?('<span style="color:#8A8880">90 วัน +'+ivmN(L.tin)+' / −'+ivmN(L.tout)+'</span>'):'')
+      +'<a href="javascript:void 0" onclick="ivmReportOpen(\''+ivmE(inv.id)+'\')" style="color:#185FA5;font-weight:700">Stock card</a></div>';
+  }
+  if(it.category==='labor') return '';
+  var sim=ivmFuzzy(it.name, it.partNo, null); if(!sim.length) return '';
+  return '<div style="margin-top:3px;display:flex;flex-direction:column;gap:2px">'+sim.slice(0,2).map(function(o){
+    var now=ivmNow(o.x);
+    return '<div style="font-size:9.5px;color:#92400E;background:#FFF8EC;border:1px solid #F3D9A8;border-radius:6px;padding:2px 6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      +'<span>มีในคลังแล้ว? <b>'+ivmE(o.x.name)+'</b>'+(o.x.partNo?(' · <span style="font-family:\'DM Mono\',monospace">'+ivmE(o.x.partNo)+'</span>'):'')+' · '+(now.total>0?(ivmWhLine(now)):'0')+'</span>'
+      +'<button type="button" onclick="ivmMemoLink('+i+',\''+ivmE(o.x.id)+'\')" style="border:none;background:#92400E;color:#fff;border-radius:5px;padding:1px 7px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit">ใช้รายการนี้</button></div>';
+  }).join('')+'</div>';
+}
+function ivmMemoLink(i, invId){
+  var it=(typeof _memoItems!=='undefined')?_memoItems[i]:null, x=_invAll().find(function(y){ return y.id===invId; });
+  if(!it||!x) return;
+  it.invId=x.id; it.fromInventory=true; it.autoRegister=false;
+  it.partNo=x.partNo||''; it.unit=x.unit||it.unit||'ชิ้น';
+  it.inventorySnapshot={cost:x.cost||0, primaryLocation:x.primaryLocation||x.location||'', qtyAtSelection:ivmNow(x).total};
+  if(typeof memoAutofillSupplierFromItem==='function') memoAutofillSupplierFromItem(x.id);
+  memoRenderItems();
+  if(typeof flShowToast==='function') flShowToast('ผูกกับรายการในคลังแล้ว · ไม่สร้างรายการซ้ำ');
+}
+/* ── 3) Stock card ─────────────────────────────────────────────── */
+function ivmReportOpen(itemId, opt){
+  var item=_invAll().find(function(x){ return x.id===itemId; }); if(!item) return;
+  ivmReportClose();
+  IVM={id:itemId, days:(opt&&opt.days!=null)?opt.days:90, wh:(opt&&opt.wh)||'all'};
+  var o=document.createElement('div'); o.id='ivm';
+  o.addEventListener('click', function(e){ if(e.target===o) ivmReportClose(); });
+  document.body.appendChild(o);
+  document.addEventListener('keydown', ivmKey);
+  ivmReportRender();
+}
+function ivmKey(e){ if(e.key==='Escape') ivmReportClose(); }
+function ivmReportClose(){ var o=document.getElementById('ivm'); if(o) o.remove(); document.removeEventListener('keydown', ivmKey); document.body.classList.remove('ivm-print'); IVM=null; }
+function ivmSet(k, v){ if(!IVM) return; IVM[k]=v; ivmReportRender(); }
+function ivmCSS(){ return '<style>'
+  +'#ivm{position:fixed;inset:0;z-index:10050;background:rgba(17,24,39,.55);overflow:auto;padding:24px 16px;box-sizing:border-box;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#111827}'
+  +'#ivm .wr{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:12px}'
+  +'#ivm .bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}#ivm .bar b{font-size:13px;color:#fff}'
+  +'#ivm .sg{display:flex;gap:2px;background:#fff;border-radius:10px;padding:3px}#ivm .sg button{border:none;background:transparent;border-radius:8px;padding:6px 11px;font:600 12px inherit;font-family:inherit;color:#555;cursor:pointer}#ivm .sg button.on{background:#111827;color:#fff}'
+  +'#ivm .bt{border:1px solid #D1D5DB;background:#fff;border-radius:10px;padding:8px 14px;font:700 12.5px inherit;font-family:inherit;cursor:pointer;color:#111827}#ivm .bt.pri{background:#111827;color:#fff;border-color:#111827}#ivm .bt.x{padding:6px 11px;font-size:16px;line-height:1}'
+  +'#ivm-sheet{background:#fff;border-radius:6px;box-shadow:0 10px 30px -12px rgba(17,24,39,.4);padding:30px 34px 26px;display:flex;flex-direction:column;gap:18px}'
+  +'#ivm-sheet .hd{display:flex;align-items:flex-start;gap:20px;border-bottom:2px solid #111827;padding-bottom:14px}'
+  +'#ivm-sheet .k{font-size:11px;letter-spacing:.14em;font-weight:700;color:#6B7280}#ivm-sheet .nm{font-size:22px;font-weight:700;margin-top:4px}#ivm-sheet .meta{font-size:13px;color:#4B5563;margin-top:3px}'
+  +'#ivm-sheet .rt{text-align:right;font-size:12.5px;color:#4B5563;line-height:1.7}'
+  +'#ivm-sheet .sm{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}#ivm-sheet .sm>div{border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px}#ivm-sheet .sm span{font-size:11.5px;color:#6B7280}#ivm-sheet .sm b{display:block;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:500;margin-top:2px}'
+  +'#ivm-sheet .tw{overflow-x:auto}#ivm-sheet table{width:100%;border-collapse:collapse;font-size:12.5px}#ivm-sheet th{text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid #111827;padding:7px 8px;font-weight:700;white-space:nowrap}#ivm-sheet .d,#ivm-sheet .w{white-space:nowrap}'
+  +'#ivm-sheet td{border-bottom:1px solid #E5E7EB;padding:7px 8px;vertical-align:top}#ivm-sheet .r{text-align:right;font-family:\'DM Mono\',monospace;white-space:nowrap}#ivm-sheet .m{font-family:\'DM Mono\',monospace;white-space:nowrap}#ivm-sheet tr.z td{color:#6B7280}#ivm-sheet tr.t td{border-top:1.5px solid #111827;border-bottom:none;font-weight:700}'
+  +'#ivm-sheet .bb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}#ivm-sheet .bb>div{border:1px solid #E5E7EB;border-radius:10px;padding:12px 14px}#ivm-sheet .bb h4{margin:0 0 6px;font-size:12px;color:#374151}#ivm-sheet .bb p{display:flex;justify-content:space-between;gap:10px;margin:0;font-size:12.5px;padding:3px 0}#ivm-sheet .bb p.g{color:#6B7280}'
+  +'#ivm-sheet .nt{font-size:11.5px;color:#92400E;background:#FFF8EC;border-radius:6px;padding:6px 8px;margin-top:8px;line-height:1.5}'
+  +'#ivm-sheet .sig{display:flex;justify-content:space-between;gap:20px;margin-top:34px;font-size:12px;color:#374151}#ivm-sheet .sig div{flex:1;border-top:1px solid #9CA3AF;padding-top:6px;text-align:center}'
+  +'@media(max-width:700px){#ivm{padding:12px 8px}#ivm-sheet{padding:18px 14px}#ivm-sheet .hd{flex-direction:column;gap:8px}#ivm-sheet .rt{text-align:left}#ivm-sheet .sm{grid-template-columns:repeat(2,minmax(0,1fr))}#ivm-sheet .bb{grid-template-columns:1fr}#ivm-sheet .nm{font-size:18px}#ivm-sheet table{min-width:680px}}'
+  +'@media print{@page{size:A4;margin:12mm}body.ivm-print>*:not(#ivm){display:none!important}body.ivm-print #ivm{position:static;background:#fff;padding:0;overflow:visible}body.ivm-print #ivm .bar{display:none}body.ivm-print #ivm-sheet{box-shadow:none;border-radius:0;padding:0}body.ivm-print #ivm-sheet .tw{overflow:visible}body.ivm-print #ivm-sheet tr{break-inside:avoid}body.ivm-print::before,body.ivm-print::after{display:none!important;content:none!important}}'
+  +'</style>'; }
+function ivmPeriodTxt(L){ return (L.from?ivmD(L.from,true):'เริ่มบันทึก')+' – '+ivmD(L.to,true)+(L.days?(' ('+L.days+' วัน)'):''); }
+function ivmWhTxt(wh){ return wh==='all'?'ทุกคลัง':('คลัง '+ivmWhName(wh)); }
+function ivmPnOf(item){ var p=String(item.partNo||'').trim(); if(p) return p; var t=ivmPns(item.name); return t[0]||''; }
+function ivmBoatCell(R){
+  if(R.boat) return ivmE(R.boat);
+  if(R.spare) return '<span style="color:#6B7280">สแปร์'+(R.mentioned.length?(' · '+ivmE(R.mentioned.join(' '))):'')+'</span>';
+  return '<span style="color:#9CA3AF">—</span>';
+}
+function ivmReportRender(){
+  var o=document.getElementById('ivm'); if(!o||!IVM) return;
+  var item=_invAll().find(function(x){ return x.id===IVM.id; }); if(!item){ ivmReportClose(); return; }
+  var L=ivmLedger(item,{days:IVM.days, wh:IVM.wh}); IVM.L=L;
+  var whs={}; ivmStocks(item).forEach(function(s){ whs[ivmWh(s.location)]=1; }); (item.history||[]).forEach(function(h){ if(ivmDelta(h)) whs[ivmWh(ivmLocOf(h,item))]=1; });
+  var whKeys=Object.keys(whs).filter(function(k){ return k && k!=='?'; });
+  var seg=function(k, v, t){ return '<button type="button" class="'+(IVM[k]===v?'on':'')+'" onclick="ivmSet(\''+k+'\','+(typeof v==='number'?v:('\''+ivmE(v)+'\''))+')">'+t+'</button>'; };
+  var unit=item.unit||'ชิ้น', pn=ivmPnOf(item);
+  var cat=(typeof IVO_CAT!=='undefined'?IVO_CAT:[]).find(function(c){ return c.k===item.category; });
+  var meta=[pn?('<span style="font-family:\'DM Mono\',monospace">'+ivmE(pn)+'</span>'):'', cat?cat.t:(item.category?ivmE(item.category):''), item.supplier?ivmE(item.supplier):'', '฿'+ivmN(item.cost||0)+' / '+ivmE(unit)].filter(Boolean).join(' · ');
+  var rows=L.rows.map(function(r){
+    var ttl=ivmShortTitle(r.R.title), desc=ivmE(r.label)+(ttl?(' · '+ivmE(ttl)):'');
+    if((r.type==='transfer-out'||r.type==='transfer-in'||r.type==='adjust'||r.type==='adjust_out') && r.note) desc=ivmE(r.label)+' · '+ivmE(String(r.note).slice(0,60));
+    var isIn=r.delta>0, isOut=r.delta<0;
+    return '<tr class="'+(r.delta===0?'z':'')+'"><td class="d">'+ivmD(r.date)+'</td><td>'+desc+'</td><td class="m">'+ivmE(r.R.ref||'—')+'</td><td>'+ivmBoatCell(r.R)+'</td><td class="w">'+ivmE(ivmWhName(r.wh))+'</td>'
+      +'<td class="r" style="color:#0F6E56">'+(isIn?ivmN(r.delta):'')+'</td><td class="r" style="color:#B42318">'+(isOut?ivmN(-r.delta):'')+'</td><td class="r" style="font-weight:600">'+ivmN(r.bal)+'</td></tr>';
+  }).join('');
+  var openRow='<tr class="z"><td class="d">'+(L.from?ivmD(L.from):'—')+'</td><td>ยอดยกมา</td><td></td><td></td><td class="w">'+ivmE(ivmWhTxt(L.wh))+'</td><td></td><td></td><td class="r">'+ivmN(L.opening)+'</td></tr>';
+  var tot='<tr class="t"><td colspan="5" style="text-align:right">รวมช่วงนี้</td><td class="r">'+ivmN(L.tin)+'</td><td class="r">'+ivmN(L.tout)+'</td><td class="r">'+ivmN(L.closing)+'</td></tr>';
+  var bk=function(M, spareOk){ var ks=Object.keys(M); if(!ks.length) return '<p class="g"><span>ไม่มีในช่วงนี้</span><span></span></p>';
+    ks.sort(function(a,b){ return (M[a].spare?1:0)-(M[b].spare?1:0) || M[b].q-M[a].q; });
+    return ks.map(function(k){ var v=M[k]; return '<p class="'+(v.spare?'g':'')+'"><span>'+ivmE(k)+(v.refs.length?(' · '+ivmE(v.refs.join(', '))):'')+(v.mentioned&&v.mentioned.length?(' <span style="color:#9CA3AF">('+ivmE(v.mentioned.join(' '))+')</span>'):'')+'</span><span style="font-family:\'DM Mono\',monospace">'+ivmN(v.q)+'</span></p>'; }).join(''); };
+  var boughtFor=Object.keys(L.bought).filter(function(k){ return !L.bought[k].spare; }), usedFor=Object.keys(L.used).filter(function(k){ return k!=='ไม่ระบุเรือ'; });
+  var notUsed=boughtFor.filter(function(k){ return usedFor.indexOf(k)<0; }), noBuy=usedFor.filter(function(k){ return boughtFor.indexOf(k)<0; });
+  var note=[];
+  if(notUsed.length) note.push('ซื้อเพื่อ '+notUsed.map(ivmE).join(' · ')+' แต่ยังไม่มีการเบิกให้'+(notUsed.length>1?'เรือเหล่านี้':'เรือนี้')+'ในช่วงนี้');
+  if(noBuy.length && boughtFor.length){
+    var pend=L.rows.filter(function(r){ return r.type==='register' && r.R.memo && noBuy.indexOf(r.R.boat)>=0 && ['created','pending_approval','approved','ordered'].indexOf(r.R.memo.status)>=0; });
+    note.push(noBuy.map(ivmE).join(' · ')+' เบิกไปโดยไม่มีใบซื้อที่รับเข้าของ'+(noBuy.length>1?'เรือเหล่านี้':'เรือนี้')+'ในช่วงนี้ (ใช้ของสแปร์หรือของที่มีอยู่)'
+      +(pend.length?(' · Memo ของ '+pend.map(function(r){ return ivmE(r.R.boat)+' ('+ivmE(r.R.ref)+')'; }).join(', ')+' ยังไม่รับของ'):''));
+  }
+  var by=(typeof laBy==='function')?laBy():'';
+  o.innerHTML=ivmCSS()+'<div class="wr"><div class="bar"><b>Stock card</b>'
+      +'<div class="sg">'+seg('days',30,'30 วัน')+seg('days',90,'90 วัน')+seg('days',0,'ทั้งหมด')+'</div>'
+      +'<div class="sg">'+seg('wh','all','ทุกคลัง')+whKeys.map(function(k){ return seg('wh',k,ivmE(ivmWhName(k))); }).join('')+'</div>'
+      +'<span style="flex:1"></span><button type="button" class="bt" onclick="ivmCopy()">Copy text</button><button type="button" class="bt" onclick="ivmExcel()">Excel</button><button type="button" class="bt pri" onclick="ivmPrint()">พิมพ์ / PDF</button><button type="button" class="bt x" title="Close" onclick="ivmReportClose()">&times;</button></div>'
+    +'<div id="ivm-sheet"><div class="hd"><div style="flex:1;min-width:0"><div class="k">LOVE ANDAMAN · STOCK CARD</div><div class="nm">'+ivmE(item.name||'—')+'</div><div class="meta">'+meta+'</div></div>'
+      +'<div class="rt"><div>ช่วง '+ivmPeriodTxt(L)+'</div><div>'+ivmE(ivmWhTxt(L.wh))+'</div><div>พิมพ์ '+ivmD(ivmToday(),true)+(by?(' · โดย '+ivmE(by)):'')+'</div></div></div>'
+      +'<div class="sm"><div><span>ยกมา</span><b>'+ivmN(L.opening)+'</b></div><div><span>รับเข้า</span><b style="color:#0F6E56">+'+ivmN(L.tin)+'</b></div><div><span>เบิกใช้</span><b style="color:#B42318">−'+ivmN(L.tout)+'</b></div><div><span>คงเหลือ</span><b style="font-weight:700">'+ivmN(L.closing)+'</b></div><div><span>มูลค่าคงเหลือ</span><b>฿'+Math.round(L.value).toLocaleString()+'</b></div></div>'
+      +'<div class="tw"><table><thead><tr><th>วันที่</th><th>รายการ</th><th>อ้างอิง</th><th>เรือ</th><th>คลัง</th><th style="text-align:right">รับ</th><th style="text-align:right">เบิก</th><th style="text-align:right">คงเหลือ</th></tr></thead><tbody>'
+        +openRow+(rows||'<tr class="z"><td colspan="8" style="text-align:center;padding:14px">ไม่มีความเคลื่อนไหวในช่วงนี้</td></tr>')+tot+'</tbody></table></div>'
+      +'<div class="bb"><div><h4>ซื้อเข้าเพื่อเรือ</h4>'+bk(L.bought)+'</div><div><h4>เบิกไปใช้กับเรือ</h4>'+bk(L.used)+(note.length?('<div class="nt">'+note.join('<br>')+'</div>'):'')+'</div></div>'
+      +(L.days===0 && Math.abs(L.gap)>0.001?('<div style="font-size:11.5px;color:#6B7280">ยอดยกมา '+ivmN(L.gap)+' = ยอดที่อยู่ในคลังก่อนเริ่มมีประวัติในระบบ · ยอดคงเหลือคิดย้อนจากยอดปัจจุบันจึงตรงกับหน้า Stock items</div>'):'')
+      +'<div class="sig"><div>ผู้จัดทำ</div><div>ผู้ตรวจสอบ</div><div>ผู้อนุมัติ</div></div>'
+    +'</div></div>';
+}
+function ivmText(){
+  if(!IVM||!IVM.L) return '';
+  var L=IVM.L, item=L.item, pn=ivmPnOf(item), out=[];
+  out.push('📦 Stock card · '+(item.name||'')+(pn&&String(item.name||'').indexOf(pn)<0?(' ('+pn+')'):''));
+  out.push('ช่วง '+(L.from?ivmD(L.from):'เริ่มบันทึก')+' – '+ivmD(L.to,true)+' · '+ivmWhTxt(L.wh));
+  out.push('ยกมา '+ivmN(L.opening)+' · รับ +'+ivmN(L.tin)+' · เบิก −'+ivmN(L.tout)+' · คงเหลือ '+ivmN(L.closing)+' (฿'+Math.round(L.value).toLocaleString()+')');
+  out.push('');
+  L.rows.forEach(function(r){
+    var act = r.type==='register' ? 'ลงทะเบียน'
+            : (r.delta>0 ? ((r.type==='transfer-in'?'โอนเข้า':(r.label==='คืนสต็อก'?'คืน':'รับ'))+' +'+ivmN(r.delta))
+            : (r.delta<0 ? ((r.type==='transfer-out'?'โอนออก':(r.label==='ปรับยอด'?'ปรับ':'เบิก'))+' −'+ivmN(-r.delta)) : r.label));
+    var bt = r.R.boat || (r.R.spare?'สแปร์':'');
+    out.push(ivmD(r.date)+' '+act+(r.R.ref?(' '+r.R.ref):'')+(bt?(' · '+bt):'')+(L.wh==='all'&&r.wh!=='?'?(' @'+r.wh):'')+' → '+ivmN(r.bal));
+  });
+  var bl=function(M){ return Object.keys(M).sort(function(a,b){ return (M[a].spare?1:0)-(M[b].spare?1:0) || M[b].q-M[a].q; }).map(function(k){ return k+' '+ivmN(M[k].q); }).join(' · '); };
+  if(Object.keys(L.bought).length || Object.keys(L.used).length) out.push('');
+  if(Object.keys(L.bought).length) out.push('ซื้อเพื่อ: '+bl(L.bought));
+  if(Object.keys(L.used).length) out.push('เบิกให้: '+bl(L.used));
+  return out.join('\n');
+}
+function ivmToast(t){ try{ if(typeof flShowToast==='function'){ flShowToast(t); return; } if(typeof showToast==='function'){ showToast(t); return; } }catch(_){ } }
+function ivmCopy(){
+  var t=ivmText(); if(!t) return;
+  var fb=function(){ var ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){ } ta.remove(); ivmToast('Copied text'); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ ivmToast('Copied text'); }, fb); return; } }catch(_){ }
+  fb();
+}
+function ivmAoa(){
+  var L=IVM.L, item=L.item, A=[];
+  A.push(['LOVE ANDAMAN · STOCK CARD']); A.push([item.name||'']);
+  A.push(['Part no', ivmPnOf(item), 'หมวด', item.category||'', 'Supplier', item.supplier||'', 'ราคา/หน่วย', +item.cost||0]);
+  A.push(['ช่วง', ivmPeriodTxt(L), 'คลัง', ivmWhTxt(L.wh), 'พิมพ์', ivmD(ivmToday(),true)+((typeof laBy==='function')?(' · '+laBy()):'')]);
+  A.push([]);
+  A.push(['ยกมา', L.opening, 'รับเข้า', L.tin, 'เบิกใช้', L.tout, 'คงเหลือ', L.closing, 'มูลค่า', Math.round(L.value)]);
+  A.push([]);
+  A.push(['วันที่','รายการ','อ้างอิง','เรือ','คลัง','รับ','เบิก','คงเหลือ']);
+  A.push([L.from||'', 'ยอดยกมา', '', '', ivmWhTxt(L.wh), '', '', L.opening]);
+  L.rows.forEach(function(r){ var ttl=ivmShortTitle(r.R.title);
+    A.push([r.date, r.label+(ttl?(' · '+ttl):''), r.R.ref||'', r.R.boat||(r.R.spare?('สแปร์'+(r.R.mentioned.length?(' · '+r.R.mentioned.join(' ')):'')):''), ivmWhName(r.wh), r.delta>0?r.delta:'', r.delta<0?-r.delta:'', r.bal]); });
+  A.push(['', 'รวมช่วงนี้', '', '', '', L.tin, L.tout, L.closing]);
+  A.push([]);
+  A.push(['ซื้อเข้าเพื่อเรือ','จำนวน','อ้างอิง']); Object.keys(L.bought).forEach(function(k){ A.push([k, L.bought[k].q, L.bought[k].refs.join(', ')]); });
+  A.push([]);
+  A.push(['เบิกไปใช้กับเรือ','จำนวน','อ้างอิง']); Object.keys(L.used).forEach(function(k){ A.push([k, L.used[k].q, L.used[k].refs.join(', ')]); });
+  return A;
+}
+function ivmExcel(){
+  if(!IVM||!IVM.L) return;
+  var A=ivmAoa(), item=IVM.L.item, fn='stockcard_'+String(ivmPnOf(item)||item.id).replace(/[^A-Za-z0-9_-]+/g,'_')+'_'+ivmToday();
+  try{
+    if(typeof XLSX!=='undefined' && XLSX.utils){
+      var ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=[{wch:12},{wch:44},{wch:12},{wch:22},{wch:14},{wch:8},{wch:8},{wch:10},{wch:8},{wch:10}];
+      var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Stock card'); XLSX.writeFile(wb, fn+'.xlsx'); return;
+    }
+  }catch(e){ console.warn('[ivm] xlsx failed, falling back to csv', e); }
+  var csv='﻿'+A.map(function(r){ return r.map(function(c){ var s=String(c==null?'':c); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }).join(','); }).join('\n');
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download=fn+'.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+function ivmPrint(){
+  document.body.classList.add('ivm-print');
+  var off=function(){ document.body.classList.remove('ivm-print'); window.removeEventListener('afterprint',off); };
+  window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60);
 }
