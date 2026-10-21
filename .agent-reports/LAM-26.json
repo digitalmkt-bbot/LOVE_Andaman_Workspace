@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-26",
+  "title": "Seat-lock and allotment invariant tests (S2-02)",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-26-seat-lock-invariants",
+    "worktree": "D:/projects/wt-sprint2b/LAM-26-seat-lock-invariants",
+    "commit": "cf95d582fb5afc0396e67c05fb0b202c14e9c30e",
+    "pr": {
+      "number": 20,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/20",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Add invariant tests (assertions that fail if the rule is broken) protecting the interlocking seat-lock/allotment rules: children contribute 0 to the pool (bkV2LockPoolHold:41783); month locks use rolling per-trip release not a global expiry (:41696); lockDraws is the source of truth for lock usage, not the used counter; over-capacity pending_approval bookings hold no seats (bkPendHoldsSeat:12040); charter never consumes seats; the hard-block vs soft-confirm split in the anti-overbook guard at :76672; and the cancelled-status exclusion across all six named aggregate sites.",
+    "acceptanceCriteria": [
+      "Real-execution (vm-sandboxed, extracted-from-source) tests for each of the 7 invariant clusters named in the ticket",
+      "Add only the delta beyond LAM-77's existing characterization suite (tests/legacy/seat-locks.test.mjs, tests/legacy/cancelled-status-aggregates.test.mjs on origin/main) and state the overlap explicitly",
+      "Enumerate and cover all six aggregate sites for the cancelled-status exclusion; report the real count/locations found, not an assumed number",
+      "Reuse the LAM-22 test harness pattern (node:test, zero new dependencies) rather than inventing a new one",
+      "Read allotment_v2.html only, never edit it"
+    ],
+    "allowedScope": [
+      "test/regression/seat-locks/**",
+      "docs/development/tasks/LAM-26.md",
+      ".agent-reports/LAM-26.json"
+    ],
+    "constraints": [
+      "Do not edit test/helpers/**, test/fixtures/**, or root package.json -- declare needed changes as dependencies instead",
+      "Do not touch test/regression/edit-preserve/** (LAM-25, concurrent task)",
+      "Do not edit allotment_v2/allotment_v2.html -- read only",
+      "Stage only explicitly owned paths (git add -- <path>), never git add -A / git add .",
+      "No Postgres or prod service reachable from this sandbox; report DB/prod checks as blocked rather than inventing results"
+    ],
+    "assumptions": [
+      "test/ (helpers/fixtures/unit/e2e from LAM-22) already exists on this branch and is safe to import from as a read-only dependency",
+      "tests/legacy/ (LAM-77) does not exist on this branch -- read via `git show origin/main:tests/legacy/...` without checking it out, per task instructions",
+      "The six aggregate sites are the six functions LAM-77 itself names (getSeatsConsumed, getBookingsForRouteDate, baCharterBoatMap, flBoatBookingsFor, baAssignedPax, baAssignedBookings), independently re-verified to exist in this branch's allotment_v2.html at matching line numbers"
+    ]
+  },
+  "output": {
+    "summary": "Added 60 real-execution node:test assertions under test/regression/seat-locks/** covering 7 seat-lock/allotment invariant clusters, each run against the actual extracted allotment_v2.html source in a node:vm sandbox: (1) child-lock pool-hold non-double-counting under multiple children, (2) month-lock rolling per-trip release vs the bkV2LockExpireSweep global-expiry companion rule, (3) lockDraws as the source of truth over the lock's used counter (bkV2LockClaims/bkV2LockAudit), (4) bkPendHoldsSeat boundary values in isolation, (5) the anti-overbook guard's exact tier boundaries plus a mixed-tier multi-trip case, (6) all six named cancelled-status aggregate sites executed for real (five newly executed; getSeatsConsumed left to LAM-77 to avoid duplication), and (7) charter-never-consumes-seats via baSeatBookingsForRoute and baDayBoats. Added local lib/source.mjs + lib/sandbox.mjs helpers (same technique as LAM-77's, kept inside this task's owned tree since test/helpers/** is not owned here). No application code changed.",
+    "filesChanged": [
+      { "path": ".agent-reports/LAM-26.json", "change": "added", "purpose": "Coordinator-readable I/O manifest for this task" },
+      { "path": "docs/development/tasks/LAM-26.md", "change": "added", "purpose": "Human development record: input/output contract, decisions, verification evidence" },
+      { "path": "test/regression/seat-locks/lib/source.mjs", "change": "added", "purpose": "Local extraction helper: pulls real function/inline-block source out of allotment_v2.html by name or literal marker" },
+      { "path": "test/regression/seat-locks/lib/sandbox.mjs", "change": "added", "purpose": "Local node:vm sandbox runner for extracted source, plus a Realm-safe JSON plain() helper" },
+      { "path": "test/regression/seat-locks/lock-pool-hold.test.mjs", "change": "added", "purpose": "Invariant: child locks contribute 0 to bkV2LockedTotal under multiple-children and mixed standalone+parent scenarios (:41783)" },
+      { "path": "test/regression/seat-locks/month-lock-rolling-release.test.mjs", "change": "added", "purpose": "Invariant: month/bulk-scope locks release per-trip-date (bkV2LockReleasedForDate) and expire only on range-end, not a stale `expiry` field (bkV2LockExpireSweep) (:41696)" },
+      { "path": "test/regression/seat-locks/lock-draws-source-of-truth.test.mjs", "change": "added", "purpose": "Invariant: bkV2LockClaims/bkV2LockAudit derive lock usage from trips[].lockDraws on bookings, never from the lock's own `used` counter" },
+      { "path": "test/regression/seat-locks/bk-pend-holds-seat.test.mjs", "change": "added", "purpose": "Boundary-value tests for bkPendHoldsSeat in isolation (:12040)" },
+      { "path": "test/regression/seat-locks/anti-overbook-guard-tiers.test.mjs", "change": "added", "purpose": "Exact boundary values and a mixed-tier multi-trip case for the hard-block vs soft-confirm tiered guard (:76672)" },
+      { "path": "test/regression/seat-locks/cancelled-status-six-aggregates.test.mjs", "change": "added", "purpose": "Real execution of 5 of the 6 named cancelled-status aggregate sites (getSeatsConsumed left to LAM-77), plus a cross-site consistency test" },
+      { "path": "test/regression/seat-locks/charter-never-consumes-seats.test.mjs", "change": "added", "purpose": "Real execution of baSeatBookingsForRoute and baDayBoats proving charter trips/boats never consume/block the seat pool" }
+    ],
+    "behaviorChanges": [
+      { "area": "Test coverage only -- no production code changed", "before": "Seat-lock/allotment invariants covered only by LAM-77's characterization suite (present on origin/main, not on this branch) plus manual code reading; only 1 of 6 named cancelled-status aggregate sites had ever been executed against fixture data", "after": "60 additional real-execution node:test assertions in test/regression/seat-locks/** cover the 7 invariant clusters named in the ticket; all 6 aggregate sites are enumerated with verified line numbers and 5 of 6 are now executed for real (the 6th, getSeatsConsumed, is explicitly left to LAM-77 to avoid duplication)" }
+    ],
+    "interfaces": {
+      "added": [
+        "test/regression/seat-locks/lib/source.mjs (test-only helper module, not an application interface)",
+        "test/regression/seat-locks/lib/sandbox.mjs (test-only helper module, not an application interface)"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "read-only",
+      "details": [
+        "All tests read allotment_v2/allotment_v2.html as text (fs.readFileSync) and execute extracted fragments in an isolated node:vm context; nothing is written back to the file",
+        "No test in this task's scope connects to Postgres or any network service"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --check test/regression/seat-locks/anti-overbook-guard-tiers.test.mjs test/regression/seat-locks/bk-pend-holds-seat.test.mjs test/regression/seat-locks/cancelled-status-six-aggregates.test.mjs test/regression/seat-locks/charter-never-consumes-seats.test.mjs test/regression/seat-locks/lock-draws-source-of-truth.test.mjs test/regression/seat-locks/lock-pool-hold.test.mjs test/regression/seat-locks/month-lock-rolling-release.test.mjs test/regression/seat-locks/lib/sandbox.mjs test/regression/seat-locks/lib/source.mjs",
+      "status": "passed",
+      "evidence": "Ran individually per file (a loop in bash) -- all 9 files printed OK with zero syntax errors"
+    },
+    {
+      "command": "node --test \"test/regression/seat-locks/**/*.test.mjs\"",
+      "status": "passed",
+      "evidence": "ℹ tests 60 / ℹ suites 16 / ℹ pass 60 / ℹ fail 0 / ℹ duration_ms 697.3"
+    },
+    {
+      "command": "node --test (full repo, from the repo root, no path args)",
+      "status": "passed",
+      "evidence": "ℹ tests 75 / ℹ pass 73 / ℹ fail 2 -- the 2 failures are test/e2e/booking-write-path.test.mjs and test/helpers/db.mjs, both pre-existing/unrelated: node_modules/ is not installed at all in this sandbox (`ls node_modules` -> \"No such file or directory\"), so both fail on `Cannot find package 'pg'` at import time before any test body runs. This task's own 60 tests import zero npm packages (only node:fs/path/vm/test/assert) and are unaffected."
+    },
+    {
+      "command": "git status --short --branch (run FIRST, before any change)",
+      "status": "passed",
+      "evidence": "## agent/LAM-26-seat-lock-invariants...origin/refactor/booking-v2-migration -- no pre-existing uncommitted changes"
+    },
+    {
+      "command": "git diff --stat / git diff --name-status / git diff --cached --stat / git diff --cached --name-status (owned-scope check, before staging)",
+      "status": "passed",
+      "evidence": "git diff --stat / --name-status against the working tree were empty (everything is new/untracked); `git status --short --branch` listed exactly 3 new paths: .agent-reports/LAM-26.json, docs/development/tasks/LAM-26.md, test/regression/ -- all within owned scope"
+    },
+    {
+      "command": "grep -n \"function <name>(\" allotment_v2/allotment_v2.html for each of the 6 named aggregate functions and every extracted helper function (~20 names total)",
+      "status": "passed",
+      "evidence": "All 6 named aggregate functions confirmed present at: getSeatsConsumed:12046, flBoatBookingsFor:12075, getBookingsForRouteDate:12189, baCharterBoatMap:45323, baAssignedPax:45465, baAssignedBookings:45497 -- matching the line numbers LAM-77 found on origin/main. bkV2LockPoolHold:41783, bkV2LockReleaseCutoff:41696, bkPendHoldsSeat:12040 also confirmed at the exact lines cited in the ticket."
+    },
+    {
+      "command": "npm test / a package.json \"test\" script",
+      "status": "not_run",
+      "evidence": "This task does not own root package.json and no \"test\" script exists there to invoke; the harness is run directly via `node --test` per test/README.md's documented convention"
+    },
+    {
+      "command": "Live Postgres / prod service checks",
+      "status": "blocked",
+      "evidence": "No Postgres or prod service reachable from this sandbox, and none of this task's tests require one (all are pure vm-sandboxed source extraction against static fixture data)"
+    }
+  ],
+  "decisions": [
+    "Built local test/regression/seat-locks/lib/source.mjs and lib/sandbox.mjs (same technique as LAM-77's tests/legacy/lib/*.mjs) instead of editing test/helpers/**, which this task does not own; flagged as a follow-up consolidation once both branches share a base",
+    "Resolved 'the six aggregate sites' from LAM-77's own explicit naming (getSeatsConsumed, getBookingsForRouteDate, baCharterBoatMap, flBoatBookingsFor, baAssignedPax, baAssignedBookings) and independently re-verified all six exist in this branch's allotment_v2.html at matching line numbers; found no seventh site among these names and no site missing",
+    "Deliberately did NOT re-execute getSeatsConsumed (site 1 of 6) -- LAM-77 already executes it for real against all three cancelled statuses; re-implementing it would be duplication, not delta, per the ticket's explicit instruction",
+    "Executed the other 5 of 6 aggregate sites for real for the first time (LAM-77 only source-scanned them via occurrences())",
+    "Verified the anti-overbook guard's exact tier boundary (need<=physicalFree is INSIDE the hard-block tier, not outside) empirically against the real extracted source before writing boundary assertions, rather than assuming from a read-through",
+    "Noted, but did not execute, the much larger population (~90+ call sites) of OTHER places in allotment_v2.html that also re-check the 3-status cancelled exclusion outside the six named aggregate functions -- out of scope for this ticket, filed as a follow-up"
+  ],
+  "risks": [
+    "The source-extraction helpers are brittle by construction (grep/brace-scan by exact function name or literal marker text) -- a future rename of one of the ~20 extracted function names, or an edit to the exact literal markers used by extractBetween() in anti-overbook-guard-tiers.test.mjs, will make the corresponding test throw a clear 'not found' error rather than silently pass incorrectly. This is the same trade-off LAM-77 made for the same reason (testing real code, not a paraphrase) and is treated as acceptable, matching precedent.",
+    "test/regression/seat-locks/lib/source.mjs and lib/sandbox.mjs are near-duplicates of LAM-77's tests/legacy/lib/*.mjs on a different branch -- intentional given this task's owned-files constraint, not an oversight, but is technical debt until the two branches converge (see follow-ups)"
+  ],
+  "blockers": [],
+  "dependencies": [
+    "None required for this task's own tests to run -- zero new npm packages, only Node built-ins already relied on by the LAM-22 harness (node:test, node:assert/strict, node:fs, node:path, node:vm)",
+    "The pre-existing test/e2e and test/helpers/db.mjs suites depend on the `pg` npm package, which is not installed in this sandbox (no node_modules/ at all) -- that dependency belongs to LAM-22's scope, not this task's, and is reported here only as context for why the full-repo `node --test` run shows 2 unrelated failures"
+  ],
+  "followUps": [
+    "Once refactor/booking-v2-migration and LAM-77's origin/main branch share a common base, consolidate test/regression/seat-locks/lib/* and tests/legacy/lib/* into one shared test/helpers/source.mjs + sandbox.mjs (outside this task's owned scope to do unilaterally)",
+    "Consider whether the ~90+ OTHER call sites across allotment_v2.html that also re-check the ['cancelled','cancelled_weather','rejected'] list (accounting, market intelligence, pickup map, van jobs, PFM, etc.) need the same real-execution invariant coverage as the six named aggregate sites, or whether LAM-77's source-scan is sufficient for that wider population",
+    "db/migrations/002_add_operation_schemas.sql still does not exist on this branch (removed at 094dde1) -- unrelated to this task, but means no test anywhere under test/ can exercise the real Postgres write path; this task's tests deliberately do not need to"
+  ],
+  "rollback": "git revert the merge commit, or delete test/regression/seat-locks/, docs/development/tasks/LAM-26.md, and .agent-reports/LAM-26.json directly -- no other file is touched, and no data, schema, or running service exists to roll back since every test in scope is a pure, read-only, in-process vm execution against static fixture data."
+}
