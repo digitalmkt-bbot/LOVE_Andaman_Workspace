@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-25",
+  "title": "Regression suite for the edit-preserve block (S2-01)",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-25-edit-preserve-regression",
+    "worktree": "D:/projects/wt-sprint2b/LAM-25-edit-preserve-regression",
+    "commit": "b4b8c0b716d2081ada059dfba6f101366166393b",
+    "pr": {
+      "number": 17,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/17",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "A data-driven regression suite for bkV2CommitBooking's edit-preserve block (allotment_v2.html ~:76868-76956) proving each of the 15 fields it must carry from `editing` onto the rebuilt `newBk` (history, weatherResolve, rebook, invoiceId, paymentStatus, ops, b2cOverride, upgrades, feeItems, reschedule, partialCancels, cancellation, cancelCategory, resolved approval, decided focApproval) really does, sourced live from the app file so a future deleted carry-over line fails the matching test.",
+    "acceptanceCriteria": [
+      "One test per carry-over field, generated from a single data-driven list (not hand-written per field)",
+      "Deleting a carry-over line from allotment_v2.html makes the suite go red for that field — proven, not just asserted",
+      "Add only the delta beyond LAM-77's tests/legacy/edit-preserve.test.mjs (origin/main), and state the overlap explicitly",
+      "Reuse the existing LAM-22 test/ harness conventions (node:test, no framework) rather than introducing a new one"
+    ],
+    "allowedScope": [
+      "test/regression/edit-preserve/**",
+      "docs/development/tasks/LAM-25.md",
+      ".agent-reports/LAM-25.json"
+    ],
+    "constraints": [
+      "Do NOT edit allotment_v2/allotment_v2.html — read only",
+      "Do NOT edit test/helpers/**, test/fixtures/**, or root package.json — declare as a dependency instead if needed",
+      "Do NOT touch test/regression/seat-locks/** (LAM-26, concurrent)",
+      "Stage only owned paths with git add -- <path>, never git add . / -A",
+      "Commit message exactly 'LAM-25: <imperative summary>'",
+      "No Postgres/prod reachable from this sandbox — report those checks as blocked/not_run, never fabricate results"
+    ],
+    "assumptions": [
+      "Worktree was clean at e7d28f0 before any edit (verified via git status --short --branch)",
+      "tests/legacy/** (LAM-77) does not exist on refactor/booking-v2-migration — read via `git show origin/main:...` only, never checked out",
+      "allotment_v2/docs/workflows/01-booking-lifecycle.md already existed on this branch and documents the same block at the same rough line range"
+    ]
+  },
+  "output": {
+    "summary": "Added test/regression/edit-preserve/ (fields.mjs's single CARRY_OVER_FIELDS list + lib/source.mjs + lib/sandbox.mjs + edit-preserve.test.mjs), a node:test suite that extracts each of the 15 required carry-over fields' real marker line(s) straight out of allotment_v2.html at run time and executes them in an isolated vm sandbox, generating one present-case and one absent-case test per field (31 tests total) from that single list. Proved live — twice, on two different fields (ops and b2cOverride) — that deleting the real carry-over line in a scratch copy of the file (never the tracked file) turns exactly that field's two tests red and nothing else, then restoring returns the suite to green. allotment_v2.html itself was never modified (git diff --stat empty throughout).",
+    "filesChanged": [
+      {
+        "path": ".agent-reports/LAM-25.json",
+        "change": "added",
+        "purpose": "This task's change manifest"
+      },
+      {
+        "path": "docs/development/tasks/LAM-25.md",
+        "change": "added",
+        "purpose": "This task's change report"
+      },
+      {
+        "path": "test/regression/edit-preserve/fields.mjs",
+        "change": "added",
+        "purpose": "The single data-driven CARRY_OVER_FIELDS list (15 fields: marker text, present/absent fixtures, assertions) the test suite is generated from"
+      },
+      {
+        "path": "test/regression/edit-preserve/lib/source.mjs",
+        "change": "added",
+        "purpose": "Reads allotment_v2.html (default: tracked file; override via EDIT_PRESERVE_HTML_PATH) and extracts literal marker text (extractLine/extractBetween), throwing a field-named error when a marker is missing/non-unique"
+      },
+      {
+        "path": "test/regression/edit-preserve/lib/sandbox.mjs",
+        "change": "added",
+        "purpose": "Thin node:vm wrapper that runs an extracted code snippet and returns its exported function"
+      },
+      {
+        "path": "test/regression/edit-preserve/edit-preserve.test.mjs",
+        "change": "added",
+        "purpose": "node:test suite generated from CARRY_OVER_FIELDS — one present-case + one absent-case test per field, plus a field-list coverage check against the ticket's named list"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Test coverage of bkV2CommitBooking's edit-preserve block on refactor/booking-v2-migration",
+        "before": "No test in this branch's test/ tree exercised the edit-preserve block; LAM-77's characterization suite exists only on origin/main under tests/legacy/, unreachable from this branch.",
+        "after": "node --test runs 31 new tests (15 fields x 2 + 1 coverage check) generated from a single list, each executing the field's real carry-over line(s) pulled live from allotment_v2.html; deleting a carry-over line fails exactly that field's tests with a clear error, proven live for ops and b2cOverride."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "test/regression/edit-preserve/fields.mjs: export const CARRY_OVER_FIELDS",
+        "test/regression/edit-preserve/lib/source.mjs: export function resolveHtmlPath/getSource/resetCache/assertUnique/extractLine/extractBetween",
+        "test/regression/edit-preserve/lib/sandbox.mjs: export function runInSandbox",
+        "Environment variable EDIT_PRESERVE_HTML_PATH (optional, test-only): overrides which HTML file lib/source.mjs reads, used for the mutation-proof verification runs against a scratch copy"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Test-only change: no server.js, mapping, or SQL file touched; no data written anywhere"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch (run first, before any edit)",
+      "status": "passed",
+      "evidence": "Clean: '## agent/LAM-25-edit-preserve-regression...origin/refactor/booking-v2-migration' with no changed-file lines."
+    },
+    {
+      "command": "node --test \"test/regression/edit-preserve/*.test.mjs\"",
+      "status": "passed",
+      "evidence": "tests 31, pass 31, fail 0, duration_ms ~340-390."
+    },
+    {
+      "command": "node --test (full repo suite from root)",
+      "status": "passed",
+      "evidence": "All 31 new edit-preserve tests pass plus the pre-existing test/unit/booking-fixture.test.mjs (9 tests). test/e2e/booking-write-path.test.mjs and test/helpers/db.mjs fail with 'Cannot find module' when node --test resolves a directory arg on this Windows/Node v24.18.0 sandbox — pre-existing, unrelated to this task (confirmed by running `node --test test/e2e test/helpers` in isolation with the same failure, and by these files being outside this task's owned scope / not modified here)."
+    },
+    {
+      "command": "Mutation proof (ops): cp allotment_v2.html to a scratch path outside the repo; sed -i '76876d' <scratch> (deletes `if(editing.ops) newBk.ops = editing.ops;`); EDIT_PRESERVE_HTML_PATH=<scratch> node --test \"test/regression/edit-preserve/*.test.mjs\"",
+      "status": "passed",
+      "evidence": "tests 31, pass 29, fail 2 — both failures are exactly the two `ops` tests, error: \"edit-preserve marker not found in <scratch path> (the carry-over line was deleted, moved, or reworded): \\\"if(editing.ops) newBk.ops = editing.ops;\\\"\". All 13 other fields' 26 tests stayed green."
+    },
+    {
+      "command": "Mutation proof (ops) restore: rm <scratch file>; unset EDIT_PRESERVE_HTML_PATH; node --test \"test/regression/edit-preserve/*.test.mjs\"; git status --short && git diff --stat -- allotment_v2/allotment_v2.html",
+      "status": "passed",
+      "evidence": "tests 31, pass 31, fail 0 (back to green). git status showed only the untracked test/regression/ (this task's own new files); git diff --stat on allotment_v2.html was empty — the tracked file was never touched."
+    },
+    {
+      "command": "Mutation proof (b2cOverride, independent field, beyond LAM-77's coverage): fresh scratch copy; sed -i '76892d' <scratch> (deletes the b2cOverride else-if carry line); EDIT_PRESERVE_HTML_PATH=<scratch> node --test \"test/regression/edit-preserve/*.test.mjs\"",
+      "status": "passed",
+      "evidence": "tests 31, pass 29, fail 2 — both failures are exactly the two `b2cOverride` tests, same 'marker not found' error shape for that field's line."
+    },
+    {
+      "command": "Mutation proof (b2cOverride) restore: rm <scratch file>; unset EDIT_PRESERVE_HTML_PATH; node --test \"test/regression/edit-preserve/*.test.mjs\"",
+      "status": "passed",
+      "evidence": "tests 31, pass 31, fail 0 (back to green)."
+    },
+    {
+      "command": "node --check on the extracted <script> of allotment_v2.html",
+      "status": "not_run",
+      "evidence": "Not applicable — this task made no edit to allotment_v2.html (read-only per task constraints)."
+    },
+    {
+      "command": "Postgres / server.js boot / prod verification",
+      "status": "blocked",
+      "evidence": "No Postgres or prod service reachable from this sandbox, and this task's change touches no server/DB code, so nothing here needs it — recorded as blocked/not-applicable rather than skipped silently."
+    }
+  ],
+  "decisions": [
+    "Built this task's own lib/source.mjs and lib/sandbox.mjs under the owned test/regression/edit-preserve/lib/ rather than reusing LAM-77's tests/legacy/lib/, which does not exist on refactor/booking-v2-migration and lives outside this task's owned paths on origin/main; followed the same literal-marker-extraction pattern LAM-77 established for consistency.",
+    "Extracted each carry-over field at the smallest self-contained unit of source (a single statement for 12 of 15 fields) instead of LAM-77's 3 larger grouped sub-blocks, so 'one test per field' means deleting any one carry-over line invalidates exactly that field's test(s) and no others — proven for ops and b2cOverride.",
+    "For b2cOverride and resolved approval, both real else-if branches of an earlier condition outside the extracted span, prefixed the extracted text with a `if(false){` stub to run them standalone and always reach the else branch — this characterizes the exact non-B2C-diff / non-fresh-approval-request carry-over the ticket names, without pulling in the separate B2C merge/diff or over-capacity-approval logic that shares the same if/else.",
+    "Ran the mutation (delete-line) proof only against a scratch copy of allotment_v2.html outside the repo (via EDIT_PRESERVE_HTML_PATH), never against the tracked file, per the explicit 'read only, never edit' constraint on allotment_v2.html — even a temporarily-deleted-then-restored edit would violate that.",
+    "Did not add a permanent in-suite mutation self-test (programmatically stripping markers on every CI run) — treated the ticket's ask as a one-time proof to capture as verification evidence; assertUnique's field-named error already makes any future accidental line loss in the real file surface immediately and specifically the next time this suite runs."
+  ],
+  "risks": [
+    "Extraction depends on exact marker text (whitespace/quote style) matching allotment_v2.html verbatim — a pure reformat (e.g. Prettier) with no behavior change would false-fail these tests, the same trade-off LAM-77 already accepted.",
+    "b2cOverride's test covers only the non-B2C carry-over (else) path; the B2C merge/diff branch above it (bkV2B2CDiff, _b2cSnap) is separate and not covered here — flagged as a follow-up, not assumed correct.",
+    "test/e2e/booking-write-path.test.mjs and test/helpers/db.mjs fail outright (not skip) under `node --test <dir>` on this Windows/Node 24 sandbox — pre-existing and outside this task's scope, not fixed here."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "allotment_v2/docs/workflows/01-booking-lifecycle.md staying accurate about the edit-preserve block's location for future orientation (tests themselves depend only on marker text, not the doc)",
+    "The LAM-22 test harness convention (node:test, no framework dependency) and its existing node --test step in .github/workflows/tests.yml, which discovers this suite automatically — no package.json change requested"
+  ],
+  "followUps": [
+    "Extend CARRY_OVER_FIELDS (or add a sibling suite) to cover the B2C merge/diff branch of the edit-preserve block (bkV2IsB2CBk(editing) true path: total, priceBreakdown, priceMode, manualTotal, trips, passengers, addOns) — related to but distinct from b2cOverride itself.",
+    "Consider reconciling this suite with LAM-77's tests/legacy/edit-preserve.test.mjs once both branches converge on the same target — they currently overlap on 12 of 15 fields at different granularity (LAM-77: 3 grouped tests; this suite: 15x2 single-field tests) and this suite adds 3 fields LAM-77 does not cover (b2cOverride, resolved approval, decided focApproval)."
+  ],
+  "rollback": "Purely additive test files with no runtime/schema/server dependency. `git rm -r test/regression/edit-preserve docs/development/tasks/LAM-25.md .agent-reports/LAM-25.json` on this branch, or simply do not merge the PR."
+}
