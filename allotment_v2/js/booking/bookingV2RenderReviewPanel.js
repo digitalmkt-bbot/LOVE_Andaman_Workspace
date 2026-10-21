@@ -22,6 +22,14 @@ function bookingV2RenderReviewPanel(){
     const sub = bookingV2TripSubtotal(t);
     // Allotment chip
     let allotChip = '';
+    const _cc = (t.bookingMode==='charter') ? bookingV2CharterCap(t) : null;   /* §bkChCap */
+    if(_cc){
+      allotChip = (_cc.overLic||_cc.overCap)
+        ? `<span style="background:#FDE7E7;color:#a32d2d;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700" title="${escapeHTML(_cc.name)} · ${_cc.cap} seats · licence ${_cc.lic}">OVER ${tp}/${_cc.overLic?_cc.lic:_cc.cap}</span>`
+        : `<span style="background:#E1F5EE;color:#0F6E56;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600" title="${escapeHTML(_cc.name)} · licence ${_cc.lic}">${tp}/${_cc.cap} seats</span>`;
+    } else if(t.bookingMode==='charter'){
+      allotChip = '';
+    } else
     if(t.date && typeof getAllotment === 'function'){
       const al = getAllotment(t.routeId, t.date, _bkV2.editingId || null);   // exclude own seats when editing
       const isOver = al.hasAllotment && tp > al.seatsAvailable && tp > 0;

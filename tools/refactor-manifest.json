@@ -698,6 +698,9 @@
     "bkV2UpgVanConfirmView": "allotment_v2/js/booking/bookingV2UpgVanConfirmView.js",
     "bkV2VanUpgUndo": "allotment_v2/js/booking/bookingV2VanUpgUndo.js",
     "bkV2CxlInfo": "allotment_v2/js/booking/bookingV2CxlInfo.js",
-    "bkV2FamCxlSplit": "allotment_v2/js/booking/bookingV2FamCxlSplit.js"
+    "bkV2FamCxlSplit": "allotment_v2/js/booking/bookingV2FamCxlSplit.js",
+    "bkV2DrawSourcesFor": "allotment_v2/js/booking/bookingV2DrawSourcesFor.js",
+    "bkV2LockHistoryHtml": "allotment_v2/js/booking/bookingV2LockHistoryHtml.js",
+    "bkV2CharterCap": "allotment_v2/js/booking/bookingV2CharterCap.js"
   }
 }
