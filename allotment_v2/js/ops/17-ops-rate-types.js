@@ -262,9 +262,12 @@
   function load(){
     if(!O.enabled()) return Promise.resolve(false);
     if(state.loading) return state.loading;
-    state.loading = O.get('/v1/rate-types', { active:'all' }).then(function(result){
-      var summaries = (result && result.rate_types) || [];
-      return Promise.all(summaries.map(function(summary){ return O.get('/v1/rate-types/' + encodeURIComponent(summary.id)); }));
+    /* §rateTypesOne · detail=full returns every rate whole in ONE request (it was one GET per rate: 100 requests on boot).
+       An older server ignores detail and sends summaries (no routes[]): then read each one, as before. */
+    state.loading = O.get('/v1/rate-types', { active:'all', detail:'full' }).then(function(result){
+      var rows = (result && result.rate_types) || [];
+      if(rows.every(function(r){ return Array.isArray(r.routes); })) return rows;
+      return Promise.all(rows.map(function(summary){ return O.get('/v1/rate-types/' + encodeURIComponent(summary.id)); }));
     }).then(function(rows){
       replaceAll(rows); state.loaded = true; state.failed = false; redraw(); return true;
     }).catch(function(error){
