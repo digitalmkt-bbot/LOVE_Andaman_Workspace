@@ -254,3 +254,53 @@ The owner reports in Thai, briefly, usually from a screenshot, usually mid-shift
 - Don't add a build step, a bundler, a framework, or a CDN dependency.
 - Don't add dependencies to make a test pass.
 - Don't write a fix you haven't measured, and don't report a result you haven't seen printed.
+
+---
+
+## 10 · Ideas parked (2026-10-21) · อะไหล่และเครื่องยนต์
+
+Owner's words: "น่าจะต้องมีการศึกษาให้ลึกซึ้งกว่านี้ว่า เครื่องยนต์ 1 ลูก ประกอบด้วยอะไรบ้าง และวันที่เปลี่ยน
+มีประวัติส่วนนั้นเปลี่ยนอะไรไปกี่ครั้งแล้ว" and, earlier the same day, "หลังซ่อมเสร็จ คืนอะไหล่เก่าเพื่อเช็ค".
+Neither is built. Written here so the next session does not rediscover the gap.
+
+**What exists today (measured on backup_2026-10-20)**
+- 54 engines in `FL_ENGINES` (brand, model, serial, boat, Port/Std, hours, service dates) with a `log[]`
+  of swaps, repairs, services.
+- 148 maintenance jobs name the engine they are about (`m.assets[] = {type:'engine', engId}`).
+- 534 withdrawn parts on jobs (`m.parts[]`): name, qty, cost, date, warehouse. Category from the
+  inventory item: engine 182 · gearbox 78 · general 268.
+- A part is tied to the **job** and the **boat**, never to the **engine**. Engines move between boats
+  (`swap` log entries are common), so "โอริงปั๊มน้ำ · Artemis · 3 ครั้ง" may be three different engines.
+- Part names are free text ("กรองเบนซิน แรงดันสูง", "โอริง 65.4X2.4 BF250"); nothing says which system
+  of the engine they belong to.
+- Transparency tools that already exist and should be reused, not duplicated: `ivmLedger` /
+  `ivmReportOpen` (Stock card, §invMove), `flMaintCalcCost` (memo vs withdrawn parts, §costDoubleCount),
+  `flwsOpen` (job summary).
+
+**Idea A · คืนซากอะไหล่เก่า (old-part return)**
+- Each `m.parts[]` line gets `oldBack:{qty, by, date}`; the job panel shows "รับซากเก่าแล้ว n / qty".
+- Closing a job with old parts outstanding sets a flag (block or warn: owner to decide) and the Job
+  summary prints it.
+- Stock card gains a "ซากคืน" column beside "เบิก" so เบิก 4 / คืนซาก 4 reads at a glance.
+- Open questions for the owner: every part or only high-value ones; who receives and inspects; what
+  about parts replaced at an outside shop.
+- No new DB table: the field rides inside `fleet_maintenance[].parts[]`, which is already a whole-JSON
+  value. Check `field_mapping.json` anyway (§3 rule).
+
+**Idea B · ผังอะไหล่ต่อเครื่อง + ประวัติการเปลี่ยน (engine BOM and per-component history)**
+1. Part map per engine model (BF250D, BF225 …): systems (fuel · cooling · ignition · lubrication ·
+   gearbox/prop · electrical), each a list of standard part numbers with a suggested change interval in
+   hours. Source: Honda manuals + the mechanics. Inventory items link to a map entry (by part no;
+   `ivmPns()` already extracts part numbers from names).
+2. Withdrawing an engine/gearbox part asks which engine (default: the job's `assets[]` engine) and
+   stores `engId` + engine hours at the time on the part line. Cheapest step; start here — it begins
+   collecting correct data immediately.
+3. Engine page: the map as a picture; per component the last change date, hours, count, overdue by
+   interval, and "changed 3× in 200 h" as an anomaly flag (points at a cause elsewhere).
+4. Backfill: parts on the 148 jobs that name an engine can be attributed from `assets[]`; the rest are
+   shown as "ไม่ระบุเครื่อง", not guessed.
+- Suggested order: 2 → 4 → 1 → 3. Step 3 needs a mockup and the owner's go (design rule).
+- Do not invent the part map from memory; the model list and the manual version come from the
+  mechanics.
+
+Related doc for management (Thai, non-technical): Claude Doc "ระบบเบิกอะไหล่และงานซ่อมเรือ" (2026-10-21).
