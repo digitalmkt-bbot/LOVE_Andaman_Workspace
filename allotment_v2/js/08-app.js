@@ -81856,6 +81856,28 @@ function pcDaysLabel(L){
      ตั้งแต่วันที่เริ่มใช้ตั้งเบิก รายจ่ายที่ไม่ได้ตั้งเบิกไม่ถูกนับว่ารอเงินคืน
    ลำดับการจับคู่: ชื่อรายการตั้งเบิกอยู่ในข้อความเงินคืน → วันที่ในข้อความ → ชุดติดกันที่ยอดพอดี → ชุดใดก็ได้ที่พอดี → เก่าสุดก่อน
    ผลรวมรายวัน (claim/rem/list/by) ยังคืนรูปเดิม · ตัวเรียกเดิมไม่ต้องแก้ */
+/* §pcRfName (2026-10-21) · เทียบชื่อรายการตั้งเบิกกับข้อความเงินคืนแบบ "แก่น" ไม่ใช่ตัวอักษรตรง ๆ
+   เจ้าของ: "ตรวจรายการทำไมไม่ตรง" · 21 ต.ค. ทับละมุ · เงินคืน "ตั้งเบิกเงินหน้าท่านอกระบบ 16/10/26" 27,700
+   ชื่อรายการที่ตั้งไว้คือ "ตั้งเบิกหน้าท่านอกระบบ 16/10/69" (ไม่มีคำว่า "เงิน" · ปีเขียน พ.ศ.) ตัวอักษรจึงไม่ตรงกัน
+   ไปเข้ากติกา "วันที่ในข้อความ" แทน ซึ่งคว้าทุกรายการของ 16/10 แล้วหักจากรายการแรกก่อน (ในระบบ 27,212)
+   27,700 จึงกลายเป็น ในระบบเต็ม + นอกระบบ 488 → "ขาด 27,212" และลามไปทำให้เงินคืนก้อนถัด ๆ ไปของวันนั้นเพี้ยนตาม
+   แก่น = ตัดวันที่ · ตัดคำ "รับเงินคืน รายการ ตั้งเบิก เงิน ค่า" · ตัดช่องว่าง → "หน้าท่านอกระบบ"
+   จับคู่เมื่อแก่นของชื่อรายการอยู่ในแก่นของข้อความ (หรือกลับกัน เช่น "อุทยาน" กับ "อุทยานสิมิลัน")
+   และวันที่ในชื่อ (ถ้ามี) ตรงกับวันที่ในข้อความ · ได้หลายรายการ → เลือกชุดที่ยอดรวมเท่าเงินคืนพอดีก่อน */
+function pcNmCore(s){
+  var t=String(s||'');
+  t=t.replace(/\d{1,2}\s*[-–]\s*\d{1,2}\s*\/\s*\d{1,2}(?:\s*\/\s*\d{2,4})?/g,' ').replace(/\d{1,2}\s*\/\s*\d{1,2}(?:\s*\/\s*\d{2,4})?/g,' ');
+  t=t.replace(/\d{1,2}(?:\s*[-–]\s*\d{1,2})?\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(?:\d{2,4})?/g,' ');
+  t=t.replace(/รับเงินคืน|เงินเบิกคืน|รายการ|ตตั้งเบิก|ตั้งเบิก|ตั้งเงิน|เงิน|ค่า/g,' ');
+  return t.replace(/[\s\.\-–·,\/()]+/g,'').toLowerCase();
+}
+/* ชุดย่อยของ T ที่ยอดคงค้างรวมเท่าเงินคืนพอดี · ไม่มี = คืน T เดิม */
+function pcPickExact(T,urem,amt){
+  if(!T || T.length<2 || T.length>16) return T;
+  var best=-1, bestN=99;
+  for(var mk=1; mk<(1<<T.length); mk++){ var su=0, n=0; for(var b=0;b<T.length;b++){ if(mk&(1<<b)){ su+=urem[T[b]]; n++; } } if(su===amt && n<bestN){ best=mk; bestN=n; } }
+  return best>0 ? T.filter(function(d,b){ return best&(1<<b); }) : T;
+}
 function pcRefundMatch(pier,upto){   /* upto = นับเฉพาะเงินคืนที่รับถึงวันนั้น (การ์ด ณ วันที่เลือก) */
   var A=pcPier(pier)||{}, days=Object.keys(A).sort();
   var CL={}, c0=''; pcClmAll(pier).forEach(function(c){ CL[c.id]=c; if(c.date && (!c0 || c.date<c0)) c0=c.date; });
@@ -81879,8 +81901,17 @@ function pcRefundMatch(pier,upto){   /* upto = นับเฉพาะเงิ
     var cand=keys.filter(function(k){ var u=U[k]; return (u.cid?(u.ds<=R.ds):(u.ds<R.ds)) && u.ds>=from && urem[k]>0; });
     var T=null, how='';
     var nm=cand.filter(function(k){ var n=U[k].name.trim(); return n.length>=3 && tx.indexOf(n)>=0; });
-    if(nm.length){ T=nm; how='name'; }
-    if(!T){ var td=pcRefundTxtDays(R.x.txt,R.ds); if(td.length){ var tt=cand.filter(function(k){ return td.indexOf(U[k].ds)>=0; }); if(tt.length){ T=tt; how='text'; } } }
+    if(nm.length){ T=pcPickExact(nm,urem,amt); how='name'; }
+    var td=pcRefundTxtDays(R.x.txt,R.ds);
+    if(!T){   /* §pcRfName · เทียบแก่นชื่อ + วันที่ในชื่อ */
+      var tc=pcNmCore(tx), nf=[], nr=[];
+      if(tc.length>=3) cand.forEach(function(k){ var u=U[k]; if(!u.cid) return; var c=pcNmCore(u.name); if(c.length<3) return;
+        var cd=pcRefundTxtDays(u.name,R.ds); if(cd.length && td.length && !cd.some(function(d){ return td.indexOf(d)>=0; })) return;
+        if(tc.indexOf(c)>=0) nf.push(k); else if(c.indexOf(tc)>=0) nr.push(k); });
+      if(nf.length){ T=pcPickExact(nf,urem,amt); how='name'; }
+      else if(nr.length){ T=pcPickExact(nr,urem,amt); how='name'; if(T.length>1 && T.length===nr.length && td.length) T=null; }   /* กว้างไปและยอดไม่ชี้ตัวไหน → ไปใช้วันที่ */
+    }
+    if(!T){ if(td.length){ var tt=cand.filter(function(k){ return td.indexOf(U[k].ds)>=0; }); if(tt.length){ T=pcPickExact(tt,urem,amt); how='text'; } } }
     for(var i=0; !T && i<cand.length; i++){ var sm=0; for(var j=i;j<cand.length;j++){ sm+=urem[cand[j]]; if(sm===amt){ T=cand.slice(i,j+1); how='run'; break; } if(sm>amt) break; } }
     if(!T && cand.length && cand.length<=16){
       var best=-1, bestMax=1e9;
