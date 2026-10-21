@@ -21,20 +21,6 @@
 (function(){
   'use strict';
   var O = window.laOps; if(!O || !O.dashboard) return;
-  function shift(ds, n){ var d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + n); return O.ymd(d); }
-
-  function monthAnswer(ds){
-    var first = ds.slice(0, 8) + '01';
-    O.dashboard.ensure(first, 'month');   // answers from the cache unless a write made it stale
-    var j = O.dashboard.get(first, 'month');
-    return j && Array.isArray(j.series) ? j : null;
-  }
-  function yearAnswer(y){
-    var first = y + '-01-01';
-    O.dashboard.ensure(first, 'year');
-    var j = O.dashboard.get(first, 'year');
-    return j && Array.isArray(j.series) ? j : null;
-  }
   function charterBoats(list){
     var o = {}; (list || []).forEach(function(c){ if(c.pax > 0) o[c.boat_id || ''] = (o[c.boat_id || ''] || 0) + c.pax; });
     return o;
@@ -47,33 +33,21 @@
   window.laOpsDashSeries = function(mode, sel, todayStr){
     if(!O.enabled() || !/^\d{4}-\d{2}-\d{2}$/.test(sel || '')) return null;
     if(mode === 'month'){
-      var days = [], need = {};
-      for(var d = -29; d <= 0; d++) days.push(shift(sel, d));
-      days.forEach(function(ds){ need[ds.slice(0, 7)] = ds; });
-      var answers = {}, missing = false;
-      Object.keys(need).forEach(function(m){ var a = monthAnswer(need[m]); if(a) answers[m] = a; else missing = true; });
-      if(missing) return null;
-      var by = {};
-      Object.keys(answers).forEach(function(m){ answers[m].series.forEach(function(b){ by[b.bucket] = b; }); });
-      var out = [];
-      for(var i = 0; i < days.length; i++){
-        var b = by[days[i]]; if(!b) return null;
-        out.push(asBucket(b, { ds: days[i], dt: new Date(days[i]), isSel: i === days.length - 1, isToday: days[i] === todayStr }));
-      }
-      return out;
+      /* the server's own rolling window (30 days ending on the picked day), asked with the day answer */
+      var rm = O.dashboard.get(sel, 'rolling_month');
+      if(!rm || !Array.isArray(rm.series) || rm.series.length !== 30) return null;
+      return rm.series.map(function(b, i){
+        return asBucket(b, { ds: b.bucket, dt: new Date(b.bucket), isSel: i === rm.series.length - 1, isToday: b.bucket === todayStr });
+      });
     }
     if(mode === 'year'){
-      var anchor = new Date(sel), y1 = anchor.getFullYear(), ya = yearAnswer(y1), yb = yearAnswer(y1 - 1);
-      if(!ya || !yb) return null;
-      var bm = {}; ya.series.concat(yb.series).forEach(function(b){ bm[b.bucket] = b; });
-      var res = [];
-      for(var off = -11; off <= 0; off++){
-        var md = new Date(anchor.getFullYear(), anchor.getMonth() + off, 1);
-        var key = md.getFullYear() + '-' + String(md.getMonth() + 1).padStart(2, '0'), s = bm[key];
-        if(!s) return null;
-        res.push(asBucket(s, { dt: md, isSel: off === 0, isToday: key === todayStr.slice(0, 7) }));
-      }
-      return res;
+      var ry = O.dashboard.get(sel, 'rolling_year');
+      if(!ry || !Array.isArray(ry.series) || ry.series.length !== 12) return null;
+      var anchor = new Date(sel);
+      return ry.series.map(function(b, i){
+        var md = new Date(anchor.getFullYear(), anchor.getMonth() - (11 - i), 1);
+        return asBucket(b, { dt: md, isSel: i === 11, isToday: b.bucket === todayStr.slice(0, 7) });
+      });
     }
     return null;
   };

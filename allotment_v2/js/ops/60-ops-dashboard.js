@@ -37,8 +37,26 @@
     if(cache[k] && !stale[k]) return Promise.resolve(cache[k]);
     if(loading[k]) return loading[k];
     delete failed[k];
-    loading[k] = O.get('/v1/dashboard', family ? { date: date, mode: mode, family: family } : { date: date, mode: mode }).then(function(j){
+    /* §dashOneCall · a day request also asks for the rest of the screen (seat calendar month, 30-day bars,
+       12-month bars): one request instead of four. The server nests each piece under its own key; they are
+       cached under the keys their own requests would use. */
+    var q = { date: date, mode: mode };
+    if(mode === 'day'){
+      var fam = window._dashCalFam || '';
+      q.include = 'month,rolling_month,rolling_year';
+      if(fam) q.family = fam;
+    }
+    loading[k] = O.get('/v1/dashboard', family ? { date: date, mode: mode, family: family } : q).then(function(j){
       if(!j || j.version !== 1 || !j.summary) throw new Error('invalid dashboard response');
+      if(mode === 'day'){
+        var parts = { month: [date.slice(0, 8) + '01', 'month', q.family || ''], rolling_month: [date, 'rolling_month', ''], rolling_year: [date, 'rolling_year', ''] };
+        Object.keys(parts).forEach(function(name){
+          if(!j[name]) return;
+          var pk = key(parts[name][0], parts[name][1], parts[name][2]);
+          cache[pk] = j[name]; delete stale[pk]; delete failed[pk];
+          delete j[name];
+        });
+      }
       cache[k] = j; delete stale[k];
       return j;
     }).catch(function(e){
