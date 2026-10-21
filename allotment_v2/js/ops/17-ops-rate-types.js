@@ -42,7 +42,7 @@
       id:s.id, code:s.code || '', name:s.name || '', note:s.note || '', color:s.color || '#185FA5',
       createdDate:s.created_on || (s.created_at ? String(s.created_at).slice(0,10) : ''),
       validFrom:s.valid_from || '', validTo:s.valid_to || '', active:s.active !== false,
-      owner:s.owner || '', nationalityScope:s.nationality_scope || 'both',
+      owner:s.owner || '', nationalityScope:natFromServer(s.nationality_scope),
       transferUnit:s.transfer_unit || '', routes:[], seatRates:{}, priceTiers:{}, routeValidity:{},
       pricedRoutes:Array.isArray(s.priced_routes) ? s.priced_routes.slice() : null,   // w5-e: the server's own list of routes the rate can price (agRtRoutes)
       routeBundles:{}, charterRates:{}, addOns:{}
@@ -193,11 +193,14 @@
   }
 
   /* legacy shape → operation-backend create body */
+  /* the screen says 'fr' for a foreigner-only rate (legacy's nationalityScope), the server says 'foreign' */
+  function natToServer(v){ return v === 'fr' ? 'foreign' : (v || null); }
+  function natFromServer(v){ return v === 'foreign' ? 'fr' : (v || 'both'); }
   function toCreateBody(d){
     var body = {
       name:String(d.name || '').trim(), note:d.note || null, color:d.color || null, owner:d.owner || null,
       valid_from:d.validFrom || null, valid_to:d.validTo || null, active:d.active !== false,
-      nationality_scope:d.nationalityScope || null, transfer_unit:d.transferUnit || null,
+      nationality_scope:natToServer(d.nationalityScope), transfer_unit:d.transferUnit || null,
       routes:[]
     };
     (d.routes || []).forEach(function(routeId){ body.routes.push({ route_id:routeId, ...blockFor(d, routeId) }); });
@@ -208,7 +211,7 @@
   function toPatch(d){
     return { name:String(d.name || '').trim(), note:d.note || null, color:d.color || null, owner:d.owner || null,
       valid_from:d.validFrom || null, valid_to:d.validTo || null, active:d.active !== false,
-      nationality_scope:d.nationalityScope || null, transfer_unit:d.transferUnit || null };
+      nationality_scope:natToServer(d.nationalityScope), transfer_unit:d.transferUnit || null };
   }
   /* Custom add-on keys on a draft (anything but the two built-ins, which travel in the route blocks). */
   function customAddOns(d){

@@ -137,7 +137,9 @@
     }).then(function(ob){
       applyBookingResponse(bk, ob);
       O.wrote('booking-insurance');
-      if(typeof window.renderInsurance === 'function' && document.getElementById('insurance-host')){
+      /* not while the person is typing in the list: the redraw would replace the field they are in */
+      var typing = document.activeElement, host = document.getElementById('insurance-host');
+      if(typeof window.renderInsurance === 'function' && host && !(typing && host.contains(typing) && /^(INPUT|TEXTAREA|SELECT)$/.test(typing.tagName))){
         window.renderInsurance();
       }
       return ob;
@@ -636,9 +638,18 @@
     return Object.keys(base).length ? base : null;
   });
 
+  var insAgeTimers = {};
   wrap('insSetField', function(orig, bkId, pk, field, val){
     if(field === 'age'){
-      return updateInsuranceServer(bkId, pk, { age: val }).catch(function(){ return null; });
+      /* oninput: one save per pause in typing (600 ms), carrying the latest value, not one per keystroke */
+      var k = bkId + '::' + pk;
+      clearTimeout(insAgeTimers[k]);
+      return new Promise(function(done){
+        insAgeTimers[k] = setTimeout(function(){
+          delete insAgeTimers[k];
+          updateInsuranceServer(bkId, pk, { age: val }).catch(function(){ return null; }).then(done);
+        }, 600);
+      });
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });

@@ -4,7 +4,8 @@
 // ══════════════════════════════════════
 const TODAY = new Date();
 const TODAY_STR = fmt(TODAY);
-function fmt(d){return d.toISOString().slice(0,10);}
+/* local calendar day, as bookingV2LocalYMD · toISOString is UTC, so TODAY_STR was yesterday from 00:00 to 07:00 Thai time */
+function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function dStr(n){return fmt(addDays(TODAY,n));}
 
@@ -12722,5 +12723,4 @@ initOpListeners();
 // like FL_MAINT, FL_ENGINES) are populated. setTimeout(0) can fire between inline scripts
 // in Chrome, causing ReferenceError. DOMContentLoaded is fired only after ALL inline scripts run.
 function _safeRenderDash(){ try{ renderDash(); }catch(e){ console.error('renderDash failed:',e); } }
-if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _safeRenderDash);
-else _safeRenderDash();
+(window.laDomReady||function(f){f()})(_safeRenderDash);   // §domReady · after DOMContentLoaded, i.e. after every (deferred) script: FL_MAINT etc. exist

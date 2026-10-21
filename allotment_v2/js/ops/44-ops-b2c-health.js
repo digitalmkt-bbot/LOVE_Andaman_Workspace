@@ -97,7 +97,7 @@
   window.laOpsHeldBtn=function(el){ return heldAct(el.getAttribute('data-h'), el.getAttribute('data-c')); };
   O.b2cHealth={heldAct:heldAct, rows:rows, badge:badge, poll:poll, start:start};
   if(typeof document!=='undefined'){
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else setTimeout(start, 0);
+    (window.laDomReady||function(f){setTimeout(f,0)})(start);   // §domReady
   }
 })();
 
@@ -236,6 +236,6 @@
   }
   O.b2cReview={refresh:refresh, start:start, mapPending:mapPending};
   if(typeof document!=='undefined'){
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else setTimeout(start, 0);
+    (window.laDomReady||function(f){setTimeout(f,0)})(start);   // §domReady
   }
 })();

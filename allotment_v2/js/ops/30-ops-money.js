@@ -473,7 +473,9 @@
     opt = opt || {};
     var body = toPaymentBody(amount, method, opt);
     return O.queue(function(){
-      return O.post('/v1/invoices/' + enc(invoiceId) + '/payments', body);
+      /* 409 overpayment = legacy's "save anyway?" confirm; OK resends with overpay_anyway, Cancel leaves everything as it was */
+      return O.anyway(function(extra){ return O.post('/v1/invoices/' + enc(invoiceId) + '/payments', Object.assign({}, body, extra)); },
+        { overpayment: { flag: 'overpay_anyway' } });
     }).then(function(res){
       var mapped = upsertInvoice(res);
       if(body.method === 'credit' && mapped.agentId && state.creditBalances[mapped.agentId]){
@@ -483,7 +485,7 @@
       redrawAccounting();
       return mapped;
     }, function(e){
-      O.fail('Could not record payment', e);
+      if(!e.declined) O.fail('Could not record payment', e);
       throw e;
     });
   }
@@ -588,14 +590,15 @@
     var body = toCorrectionsBody(rows, reason, overpayAnyway);
     if(!body.payments.length) return Promise.resolve(listInvoices().find(function(i){ return i && i.id === invoiceId; }) || null);
     return O.queue(function(){
-      return O.post('/v1/invoices/' + enc(invoiceId) + '/payment-corrections', body);
+      return O.anyway(function(extra){ return O.post('/v1/invoices/' + enc(invoiceId) + '/payment-corrections', Object.assign({}, body, extra)); },
+        { overpayment: { flag: 'overpay_anyway' } });
     }).then(function(res){
       var mapped = upsertInvoice(res);
       O.wrote('invoice-payment-correction');
       redrawAccounting();
       return mapped;
     }, function(e){
-      O.fail('Could not correct invoice payments', e);
+      if(!e.declined) O.fail('Could not correct invoice payments', e);
       throw e;
     });
   }

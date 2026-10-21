@@ -46129,8 +46129,7 @@ function natLearnBootstrap(){
 }
 // Trigger bootstrap once DOM is ready
 if(typeof window !== 'undefined'){
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', natLearnBootstrap);
-  else setTimeout(natLearnBootstrap, 0);
+  (window.laDomReady||function(f){setTimeout(f,0)})(natLearnBootstrap);   // §domReady
 }
 function natLearnGuess(name){
   const tokens = _natTokenize(name);
@@ -63554,8 +63553,7 @@ try{ window.laRebuildDerived('boot'); }catch(_){}
 //   Postgres on the next ordinary config save.
 (function(){
   function _famBoot(){ try{ if(typeof bookingV2BackfillRouteFamilies==="function") bookingV2BackfillRouteFamilies(); }catch(_){} }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", _famBoot);
-  else _famBoot();
+  (window.laDomReady||function(f){f()})(_famBoot);   // §domReady
 })();
 
 /* §nbfSkin (2026-10-08) · New Booking form · navy shell + white cards, same look as Boat Operation / Fleet Work
@@ -66656,7 +66654,7 @@ function pc2CSS3(S){
     try{ new MutationObserver(function(){ if(!busy) queue(); }).observe(root, {childList: true, subtree: true}); }catch(e){ console.error('[btCompact] observer', e); }
     pass();
   }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  (window.laDomReady||function(f){f()})(boot);   // §domReady
 })();
 // ══════ §btCompact END ══════
 // ══════ §bkMro BEGIN ══════
@@ -67363,7 +67361,7 @@ function pc2CSS3(S){
     document.addEventListener('click', calTap, true);
     pass();
   }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  (window.laDomReady||function(f){f()})(boot);   // §domReady
 })();
 // ══════ §bkMro END ══════
 /* §pjLim · ใบงานเรือแบบไม่มีทีม · หัวข้อในการ์ดเป็นพี่น้องเรียงกัน (ไม่มีกล่องห่อ) จึงซ่อนเป็นช่วง:
