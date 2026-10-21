@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// LAM-27 · single source of truth for the "excluded from every booking aggregate" status triple.
+// Declared as a bare top-level const in this FIRST <script> block (not inside the IIFE below) so it
+// joins the page's shared global lexical environment before any later <script> block — or any code
+// later in THIS block — runs. Every other <script> tag in this file executes after this one, so all
+// of them (and every function they define, however deferred) can reference ACCT_EXCLUDED_STATES.
+// Do not move this inside a function/IIFE and do not inline the literal elsewhere — see
+// tools/check-excluded-states.mjs, which fails CI-style on any new inline duplicate.
+const ACCT_EXCLUDED_STATES = ['cancelled','rejected','cancelled_weather'];
 /* ════ LOGIN + CLOUD SYNC (Railway Postgres) ════
    - login gate (/api/me) · data blob in DB with version (optimistic concurrency)
    - auto-load on open · auto-save on change · 409 = blocked + reload (no silent overwrite)
@@ -78,7 +86,7 @@
   //   (เจอจริง 30 ก.ค. 2026 · เซิร์ฟเวอร์ตีกลับ trips 94→0 — ถ้าไม่มีตัวกันฝั่งนั้น ข้อมูลหายเกลี้ยง)
   _SP.removeItem=function(k){ if(_isLS(this)&&k===LS){ _mem=null; _dirty=false; try{ clearTimeout(_t); }catch(e){} return; } _oDel.call(this,k); };
   _SP.setItem=function(k,v){ if(!_isLS(this)||k!==LS){ return _oSet.call(this,k,v); } _mem=v;   // state blob → memory only (no quota)
-    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
+    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ _laSyncSave(v); },1000); } };   // view-only users never sync
   // Reclaim quota on devices poisoned by the broken shim: the pre-mem-store ~6MB blob still sitting
   // in real localStorage, the junk 'setItem'/'getItem'/'removeItem' items WebKit created from the old
   // instance assignments, and any oversized _snap_ full copies. All dead weight — SQL is the store.
@@ -157,7 +165,7 @@
   // §syncGate (2026-07-30) · เปิด auto-save ได้ก็ต่อเมื่อ "ได้ข้อมูลจริงจากเซิร์ฟเวอร์แล้ว" เท่านั้น
   //   เดิมบรรทัดนี้เป็น _syncReady=true เสมอ แม้ /api/load จะล้มเหลว (502) และกำลัง retry แบบ async อยู่
   //   ช่วงนั้น _mem ยังว่าง แต่ flLoad() เห็น state ว่างแล้วเข้าโหมด "First-time" → seed อาร์เรย์เปล่า
-  //   แล้วเขียน blob → setItem → debounce 1 วิ → save() ยิงขึ้นเซิร์ฟเวอร์ = ลบข้อมูลจริงทั้งหมด
+  //   แล้วเขียน blob → setItem → debounce 1 วิ → _laSyncSave() ยิงขึ้นเซิร์ฟเวอร์ = ลบข้อมูลจริงทั้งหมด
   //   (เจอจริง 30 ก.ค. 2026 14:14 · /api/load 502 · เซิร์ฟเวอร์ตีกลับ trips 94→0 · ข้อมูลจริงมาถึงตอน 14:14:16
   //    หน้าต่างอันตราย 4 วินาที แล้วหายเอง — เลยดูเหมือน "แปปเดียว")
   //   ไม่ได้ข้อมูล = ไม่มีสิทธิ์เขียนทับของบนเซิร์ฟเวอร์ · overlay บังจออยู่แล้ว ผู้ใช้แก้อะไรไม่ได้ระหว่างนี้
@@ -208,18 +216,18 @@
   // blob ว่าง/พังไม่เคยแปลว่า "ผู้ใช้ลบข้อมูลทั้งหมด" — มันแปลว่า state ยังไม่พร้อมหรือเพิ่งถูกล้าง
   // ปล่อยให้ diff เดินต่อคือเปิดทางลบข้อมูลทั้งระบบด้วยการเซฟครั้งเดียว
   function _laBlobUsable(cur){ return !!(cur && typeof cur==='object' && Object.keys(cur).length>0); }
-  function save(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
+  function _laSyncSave(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
     x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
-      else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
+      else if(ops && (x.status===404||x.status===400)){ _laSyncSave(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
-      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
-    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
+      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
+    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }, 5000); };
     try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
@@ -235,7 +243,7 @@
   window.addEventListener('beforeunload', _laFlush);
   window.addEventListener('pagehide', _laFlush);
   // recover unsaved local work detected at load (new bookings / edits that never reached the cloud) → push it now
-  if(_recoverPush){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ try{ var nv=localStorage.getItem(LS); if(nv) save(nv); }catch(e){} }, 1500); }
+  if(_recoverPush){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ try{ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }catch(e){} }, 1500); }
   function _isPlainObj(x){ return x && typeof x==='object' && !Array.isArray(x); }
   // Deep diff of two plain objects → {p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]} or null if identical.
   function _deepDiff(b,c){ var p={}, d=[], ch=false;
@@ -357,7 +365,7 @@
   setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
   function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laSoftRefresh()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
   // §B2C new-booking alert helpers (2026-07-24)
-  var _B2C_CXL=['cancelled','rejected','cancelled_weather'];
+  var _B2C_CXL=ACCT_EXCLUDED_STATES;
   function _laB2CIds(raw){ var s={}; if(!raw) return s; try{ var o=JSON.parse(raw); var arr=o&&o.sb_bookings; if(Array.isArray(arr)){ for(var i=0;i<arr.length;i++){ var b=arr[i]; if(!b||!b.id) continue; if(String(b.id).indexOf('b2c_')!==0) continue; if(b.status&&_B2C_CXL.indexOf(b.status)>=0) continue; s[b.id]=1; } } }catch(e){} return s; }
   function _laB2CDiff(oldRaw,newRaw){ var o=_laB2CIds(oldRaw), n=_laB2CIds(newRaw), c=0; for(var id in n){ if(!o[id]) c++; } return c; }
   // Return detail objects for genuinely NEW (non-cancelled) b2c bookings — route/date/pax/total for the alert card.
@@ -5798,11 +5806,11 @@ function loadData(){
   return {routes:DEFAULT_ROUTES, boats:DEFAULT_BOATS, trips:{}};
 }
 
-/* §edit-guard · save() เขียน routes/boats (config) + trips (operations) ปนกัน — guard ตัวเดียวไม่ได้
+/* §edit-guard · saveData() เขียน routes/boats (config) + trips (operations) ปนกัน — guard ตัวเดียวไม่ได้
    จึงรับ area เป็นพารามิเตอร์: call ที่เป็น "user แก้" ส่ง area มา ('config' ตอนแก้โปรแกรม/เรือ ·
    'operations' ตอนจัด Boat Operation) → ถ้า view-only ของ area นั้น จะไม่ persist
-   call ภายใน (seed · migration · โหลด) เรียก save() เปล่า → ไม่ถูก guard ทำงานตามปกติ */
-function save(area){
+   call ภายใน (seed · migration · โหลด) เรียก saveData() เปล่า → ไม่ถูก guard ทำงานตามปกติ */
+function saveData(area){
   if(area && typeof window.laCanEditArea==='function' && !window.laCanEditArea(area)) return;
   // READ-MODIFY-WRITE: preserve fleet_* fields (managed by flSave) — do NOT clobber the whole key
   try{
@@ -6201,7 +6209,7 @@ function _dashAgo(ts){ if(!ts) return ''; var d=Date.now()-ts; if(d<0)d=0; var s
 function _dashBkTs(bk){ var h=(bk.history||[]).find(function(e){return e.tag==='Created'||e.kind==='created';}); var iso=(h&&h.at)||bk.createdAt||(bk.bookingDate?bk.bookingDate+'T12:00:00':''); var t=iso?Date.parse(iso):0; return isNaN(t)?0:t; }
 function _dashDateShort(ds){ try{ return new Date(ds+'T00:00:00').toLocaleDateString('en-GB',{month:'short',day:'numeric'}); }catch(e){ return ds||''; } }
 function _dashBoardData(){
-  var today=TODAY_STR; var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
+  var today=TODAY_STR; var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=ACCT_EXCLUDED_STATES;
   var pend=BK.filter(function(b){return b.status==='pending_approval';}).length;
   var wxDates=[]; var wx=BK.filter(function(b){ var ok=b.weatherResolve && b.weatherResolve.status && b.weatherResolve.status!=='resolved' && CXL.indexOf(b.status)<0; if(ok){ (b.trips||[]).forEach(function(t){ if(t.date)wxDates.push(t.date); }); } return ok; }).length;
   wxDates.sort(); var wxDate=wxDates[0]||today;
@@ -6236,7 +6244,7 @@ function _dashBookingBoardHtml(dx,F){
     +'<div style="display:flex;flex-direction:column;gap:7px">'+rows+'</div></div>';
 }
 function _dashLiveFeedHtml(dx,F){
-  var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
+  var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=ACCT_EXCLUDED_STATES;
   var arr=BK.filter(function(b){return b.schemaVer===2 && b.status!=='rejected';}).map(function(b){return {b:b, ts:_dashBkTs(b)};});
   arr.sort(function(x,y){return y.ts-x.ts;}); arr=arr.slice(0,12);
   var AV=['#E6F1FB|#185FA5','#EEEDFE|#534AB7','#FCEBEB|#A32D2D','#E7F5EC|#0A6B3F','#FAEEDA|#854F0B','#FBEAF0|#993556'];
@@ -6313,7 +6321,7 @@ function renderDash(){
   });
   // bookings → routes/boats not in TRIPS (assigned via booking only) — count both capacity + booked so the card matches the chart
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
     bk.trips.forEach(t=>{
       if((t.date||'')!==_ds || t.bookingMode==='charter') return;
@@ -6419,7 +6427,7 @@ function renderDash(){
     (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(r=>{ if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(r.id,ds)) wx++; });
     // Bookings on this day → seat demand + charter pax + capacity of the boat each booking actually rides
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
-      if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+      if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
       if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
       bk.trips.forEach(t=>{
         if((t.date||'')!==ds) return;
@@ -6880,7 +6888,7 @@ function renderDash(){
   };
   // ── Bookings + pax per day (counted by bookingDate = creation date) ──
   const _bkForDay=(ds)=>{ let pax=0,bk=0; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const cd=String(b.bookingDate||b.createdAt||'').slice(0,10); if(cd!==ds) return;
     bk++; const t0=(b.trips||[])[0]; pax += (t0 && typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t0.pax||{}) : 0;
   }); return {pax:pax,bk:bk}; };
@@ -7149,7 +7157,7 @@ function _calTripsFor(ds, pier){
     const _rawRoutes=new Set(raw.map(x=>x.r.id));
     const _rawBoats=new Set(raw.map(x=>x.b.id));
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
-      if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+      if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
       if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
       bk.trips.forEach(t=>{
         if((t.date||'')!==ds || t.bookingMode==='charter') return;
@@ -7172,7 +7180,7 @@ function _calTripsFor(ds, pier){
   //   Such a boat is taken WHOLE by the charter: excluded from the seat pool (0 free) + labelled Charter · its pax NOT counted in seat consumption.
   const _chtrBoat={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
     bk.trips.forEach(t=>{ if((t.date||'')!==ds || t.bookingMode!=='charter') return;
       const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,ds):null;
@@ -8952,7 +8960,7 @@ function bsCleanupLog(bid){
     }
   });
   b.log = final;
-  if(typeof save==='function')save();
+  if(typeof saveData==='function')saveData();
   if(typeof renderBoats==='function')renderBoats();
   alert('เสร็จ! เหลือ '+b.log.length+' entries\n'+(activeMjNos.size?'(เก็บ '+activeMjNos.size+' fixing log ผูก MJ ที่เปิดอยู่)':''));
 }
@@ -9327,7 +9335,7 @@ function confirmCap(){
   const v=parseInt(document.getElementById('bdp-cap-inp').value);
   if(v>0){ b.cap=v; }
   document.getElementById('bdp-cap-val').textContent=b.cap;
-  cancelCap(); save('config');
+  cancelCap(); saveData('config');
 }
 function cancelCap(){
   document.getElementById('bdp-cap-display').style.display='inline-flex';
@@ -9345,7 +9353,7 @@ function confirmType(){
   const b=getBoat(selBoatId);if(!b)return;
   b.type=document.getElementById('bdp-type-sel').value;
   document.getElementById('bdp-meta-type').textContent=b.type;
-  cancelType(); save('config'); renderBoats();
+  cancelType(); saveData('config'); renderBoats();
 }
 function cancelType(){
   document.getElementById('bdp-type-display').style.display='inline-flex';
@@ -9363,13 +9371,13 @@ function confirmName(){
   const v=document.getElementById('bdp-name-inp').value.trim();
   if(v) b.name=v;
   document.getElementById('bdp-name-text').textContent=b.name;
-  cancelName(); renderBoats(); save('config');
+  cancelName(); renderBoats(); saveData('config');
 }
 // §set the boat identity colour · flows to every getBoatColor consumer (Boat Asset, Boat Status, By-trip, n8n, job rows)
 function flSetBoatColor(id,hex){
   const b=getBoat(id); if(!b) return;
   if(!/^#[0-9a-fA-F]{6}$/.test(String(hex||''))) return;
-  b.color=hex; save('config');
+  b.color=hex; saveData('config');
   try{ if(typeof flRenderBoatList==='function') flRenderBoatList(); }catch(_){}
   try{ if(typeof flRenderBoatDetailPink==='function') flRenderBoatDetailPink(); }catch(_){}
   try{ if(typeof renderBoats==='function') renderBoats(); }catch(_){}
@@ -9648,7 +9656,7 @@ function delStatus(bid,slid){
   if(!confirm('ลบ Status นี้?'))return;
   const b=getBoat(bid);if(!b)return;
   b.log=b.log.filter(e=>e.id!==slid);
-  renderTimeline(b);renderBoats();save('config');
+  renderTimeline(b);renderBoats();saveData('config');
 }
 function pickSt(v){
   selSt=v;updateStPicker(v);
@@ -9693,7 +9701,7 @@ function saveStatus(){
     autoClosePrevLog(b,from,to);
     b.log.push({id:'sl'+Date.now(),s:selSt,from,to,loc,province,locType,detail,note,reason});
   }
-  closeModal('status-modal');renderTimeline(b);renderBoats();save('config');
+  closeModal('status-modal');renderTimeline(b);renderBoats();saveData('config');
 }
 
 // auto-close previous open/overlapping log entries when adding a new one
@@ -9876,14 +9884,14 @@ function saveBoat(){
       autoClosePrevLog(b,TODAY_STR);
       b.log.push({id:'sl'+Date.now(),s:newSt,from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''});
     }
-    closeModal('boat-modal'); renderBoats(); save('config');
+    closeModal('boat-modal'); renderBoats(); saveData('config');
     if(typeof flRenderBoatList==='function'){flRenderBoatList();flSelBoat(bid);}
   } else {
     // ADD MODE
     fields.id=LA_UID('b');
     fields.log=[{id:'sl'+Date.now(),s:stMap[fmBoatSt],from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''}];
     BOATS.push(fields);
-    closeModal('boat-modal'); renderBoats(); save('config');
+    closeModal('boat-modal'); renderBoats(); saveData('config');
     if(typeof flRenderBoatList==='function') flRenderBoatList();
   }
 }
@@ -10281,7 +10289,7 @@ function bop2AssignBoat(routeId, date, boatId){
   } else {
     TRIPS[date][boatId] = { route: routeId, type: 'normal', booked: 0 };
   }
-  save('operations');
+  saveData('operations');
   renderOp();
 }
 function bop2UnassignBoat(date, boatId){
@@ -10298,7 +10306,7 @@ function bop2UnassignBoat(date, boatId){
     if(!confirm('เรือ '+bn+' มี '+ab.count+' booking ('+ab.pax+' pax) จัดอยู่วันนี้\n\nถอดออกจาก Boat Operation? — booking จะถูกติดธง ⚠ "เรือถูกถอด · จัดใหม่" ในหน้าจัดเรือ + Daily Fleet Log')) return;
   }
   delete TRIPS[date][boatId];
-  save('operations');
+  saveData('operations');
   renderOp();
 }
 
@@ -10654,7 +10662,7 @@ function bop2CopyWeekToNext(){
       copied++;
     });
   });
-  save('operations');
+  saveData('operations');
   alert('Copied ' + copied + ' assignments. Skipped ' + skipped + ' (existing/charter).');
   bop2ShiftWeek(offset);
 }
@@ -10675,7 +10683,7 @@ function bop2CopyDayToWeek(){
       copied++;
     });
   });
-  save('operations');
+  saveData('operations');
   alert('Copied to ' + copied + ' slot(s). Skipped ' + skipped + '.');
   renderOp();
 }
@@ -10807,7 +10815,7 @@ function bop2ApplyAssignRange(){
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   const parts = ['Applied to ' + applied + ' day(s)'];
   if(skipped > 0) parts.push(skipped + ' kept existing');
@@ -10953,7 +10961,7 @@ function bop2ApplyTemplate(){
       applied++;
     });
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   alert('Applied ' + applied + ' slots from "' + tpl.name + '". Skipped ' + skipped + '. Chartered ' + chartered + '.'
     + (pastSkip>0 ? (' ข้าม ' + pastSkip + ' วัน (ผ่านมาแล้ว).') : ''));   // §bopPastLock
@@ -11016,7 +11024,7 @@ function bop2ApplySwap(){
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
   TRIPS[date][a].route = TRIPS[date][b].route; TRIPS[date][a].type = TRIPS[date][b].type;
   TRIPS[date][b].route = tmpR; TRIPS[date][b].type = tmpT;
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   alert('Swapped.');
   renderOp();
@@ -11105,7 +11113,7 @@ function bop2ApplyWeekdayPattern(){
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   const parts = ['Found ' + totalDays + ' matching day(s)', 'Applied ' + applied];
   if(skipped > 0) parts.push(skipped + ' kept existing');
@@ -11201,7 +11209,7 @@ function bop2ClearWeek(){
     });
     if(Object.keys(TRIPS[d]).length === 0) delete TRIPS[d];
   });
-  save('operations');
+  saveData('operations');
   alert('Cleared ' + cleared + ' assignment(s).');
   renderOp();
 }
@@ -11834,7 +11842,7 @@ function initOpListeners(){
     } else {
       getOp(ds,bid).type=item.dataset.type;
     }
-    closeAllDd(); save(); renderOp();
+    closeAllDd(); saveData(); renderOp();
   });
 
   // step buttons — delegated via document
@@ -11855,7 +11863,7 @@ function initOpListeners(){
     const free=b.cap-v;
     const badge=btn.closest('.cell-line').querySelector('.op-free');
     if(badge){badge.textContent=(pct>=95?'✕':free)+'v/'+b.cap;badge.className='op-free '+(pct>=95?'full':pct>=70?'warn':'ok');}
-    save();
+    saveData();
   });
   document.addEventListener('click',function(e){
     const trigger=e.target.closest('#matrix-tbl [data-dd]');
@@ -11883,7 +11891,7 @@ function attachOpHandlers(){
       const free=b.cap-v;
       const badge=inp.closest('.cell-line').querySelector('.op-free');
       if(badge){badge.textContent=(pct>=95?'✕':free)+'v/'+b.cap;badge.className='op-free '+(pct>=95?'full':pct>=70?'warn':'ok');}
-      save();
+      saveData();
     });
   });
 }
@@ -11948,7 +11956,7 @@ function getTripPaxTotal(trip){
    เข้าเป้าด้วย "จำนวน pax ที่เดินทางในเดือนนั้น" — นับตามเดือนของ trip ไม่ใช่วันที่จอง
    (จองล่วงหน้าเดือน มิ.ย. แต่เดินทาง ก.ค. → นับเข้า ก.ค.) · ตัด booking ยกเลิกออก
    1 booking หลาย trip ข้ามเดือน (OVN) → แต่ละ trip นับเข้าเดือนของตัวเอง ไม่นับซ้ำ           */
-const _SB_CXL = ['cancelled','rejected','cancelled_weather'];
+const _SB_CXL = ACCT_EXCLUDED_STATES;
 function _ymOf(d){ return String(d||'').slice(0,7); }
 /* FOC (free-of-charge) pax ต่อ trip · แยกออกมาโชว์ในตาราง — pax รวมยังนับ FOC เหมือนเดิม (ไม่เปลี่ยน metric) */
 function getTripFoc(t){ const p=(t&&t.pax)||{}; return (+p.foc||0)+(+p.foc_fr||0)+(+p.foc_th||0); }
@@ -12049,7 +12057,7 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
   let total = 0;
   SB_BOOKINGS.forEach(bk => {
     if(excludeBkId && bk.id === excludeBkId) return;   // exclude the booking being edited (don't count its own seats against itself)
-    if(bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     if(!bkPendHoldsSeat(bk)) return;   // §pendSeat · รออนุมัติเพราะเกิน cap = ที่นั่งยังไม่มีอยู่จริง
     // v2 bookings with trips[]
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
@@ -12076,7 +12084,7 @@ function flBoatBookingsFor(boatId, dateStr){
   const out = { pax:0, routes:{}, trips:0 };
   if(!boatId || !dateStr || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return out;
   SB_BOOKINGS.forEach(bk => {
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     if(bkOpsRead(bk, dateStr).boatId !== boatId) return;                            // per-day boat
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
@@ -12191,7 +12199,7 @@ function getBookingsForRouteDate(routeId, dateStr){
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return [];
   const out = [];
   SB_BOOKINGS.forEach(bk => {
-    if(bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
         if(t.routeId !== routeId || t.date !== dateStr) return;
@@ -12258,7 +12266,7 @@ function toggleDayOverride(rid,dateStr){
   } else {
     r.overrides[dateStr]='open'; // no season, default to open
   }
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 // Guarded · checks booking impact when toggling a day to CLOSED
 function toggleDayOverrideGuarded(rid, dateStr){
@@ -12414,7 +12422,7 @@ function stApplyRouteOrder(ids, pier){
   const next = ROUTES.map(r => r.pier===pier ? ordered[k++] : r);
   ROUTES.length=0; next.forEach(r=>ROUTES.push(r));
   ROUTES.forEach((r,i)=>{ r.sort = i; });        // explicit order → survives reload (scalar col · diffed as a normal field)
-  save('config');                                        // → localStorage → auto-sync to server
+  saveData('config');                                        // → localStorage → auto-sync to server
   renderSettings();
   const pn = pier==='panwa'?'VISIT PANWA':pier==='tublamu'?'TUB LAMU':pier.toUpperCase();
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'บันทึกลำดับ Program แล้ว', status:pn, sub:ordered.length+' โปรแกรม', dur:2600});
@@ -12961,7 +12969,7 @@ function saveNewSeason(rid){
   r.seasons.push({id:'s'+Date.now(),type:addSeasonType,from,to});
   r.seasons.sort((a,b)=>a.from.localeCompare(b.from));
   showSeasonForm=false;
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 
 // ─── Guarded save: warns if closing dates with existing bookings/assignments ───
@@ -12971,7 +12979,7 @@ function progCountBookingImpact(routeId, from, to){
   let totalPax = 0;
   if(typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)){
     SB_BOOKINGS.forEach(bk => {
-      if(bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
+      if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
       if(bk.schemaVer !== 2 || !Array.isArray(bk.trips)) return;
       bk.trips.forEach(t => {
         if(t.routeId !== routeId) return;
@@ -13106,7 +13114,7 @@ function delSeason(rid,sid){
   const msg=`ลบ Season นี้?\n\n${typeLabel} · ${fmtD(s.from)} → ${fmtD(s.to)}\nโปรแกรม: ${r.name}\n\nการลบนี้ไม่สามารถยกเลิกได้`;
   if(!confirm(msg))return;
   r.seasons=(r.seasons||[]).filter(x=>x.id!==sid);
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 
 let selProgramStatus='active';
@@ -13148,7 +13156,7 @@ function saveRoute(){
   } else {
     ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,seasons:[]});
   }
-  closeModal('route-modal');renderSettings();save('config');
+  closeModal('route-modal');renderSettings();saveData('config');
 }
 function delRoute(id){
   const r=ROUTES.find(x=>x.id===id);if(!r)return;
@@ -13157,7 +13165,7 @@ function delRoute(id){
   if(!confirm(msg))return;
   ROUTES=ROUTES.filter(r=>r.id!==id);
   if(selProgId===id) selProgId=null;
-  renderSettings();save('config');
+  renderSettings();saveData('config');
 }
 
 // ══════════════════════════════════════
@@ -13172,7 +13180,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-function refreshData(){seed();save();renderDash();}
+function refreshData(){seed();saveData();renderDash();}
 
 function exportHTML(){
   // ดึง HTML ของหน้าปัจจุบันจาก DOM (ไม่ใช้ fetch · ทำงานใน artifact preview ได้)
@@ -13284,7 +13292,7 @@ function resetAllData(){
 // One-click data backup -> downloads a timestamped JSON to the Downloads folder.
 function flBackupData(){
   try{
-    if(typeof save==='function') save();
+    if(typeof saveData==='function') saveData();
     if(typeof flSave==='function') flSave();
     const raw=localStorage.getItem(LS_KEY)||'{}';
     const n=new Date();
@@ -13328,7 +13336,7 @@ function flImportData(){
 
 updateDate();
 seed();
-save();
+saveData();
 initOpListeners();
 // Defer renderDash until DOMContentLoaded so FL_* arrays (declared in later script tags
 // like FL_MAINT, FL_ENGINES) are populated. setTimeout(0) can fire between inline scripts
@@ -19406,7 +19414,7 @@ function laRenumberSet(k){
   });
   if(changed.length){
     if(typeof flSave==='function') flSave();
-    if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+    if(typeof saveData==='function'){ try{ saveData('config'); }catch(e){} }
   }
   return { n:changed.length, changed:changed };
 }
@@ -19440,7 +19448,7 @@ function laRenumberOne(k, id){
     }
   }
   if(typeof flSave==='function') flSave();
-  if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+  if(typeof saveData==='function'){ try{ saveData('config'); }catch(e){} }
   return { from:oldNo, to:newNo };
 }
 function costNoRenumberOne(k, id){
@@ -19586,7 +19594,7 @@ function laDupClean(key){
   }
   if(removed>0){
     if(typeof flSave==='function') flSave();
-    if(typeof save==='function'){ try{ save('bookings'); }catch(e){} }
+    if(typeof saveData==='function'){ try{ saveData('bookings'); }catch(e){} }
   }
   return removed;
 }
@@ -19693,6 +19701,15 @@ function flDedupeMaint(list){
   });
   return out;
 }
+// LAM-31: flSave() persists BOATS on purpose, even though BOATS is a sales/schedule global
+// that saveData() (allotment_v2.html:5813) also owns. Fleet UI code (boat status editor, quick
+// swap, project close, etc.) mutates `b.log` on the shared BOATS array constantly, and it does
+// this ENTIRELY through flSave() call sites — it never calls saveData(). saveData() is gated by
+// laCanEditArea('config'|'operations'|'bookings') and is only invoked from Booking/Boat-Operation
+// screens, so a boat-status change made from the Fleet UI would never reach localStorage if
+// flSave() didn't also write d.boats=BOATS — the edit would be visible in-memory but vanish on
+// the next reload. Do not remove `d.boats=BOATS` here without first proving every fleet
+// call site that mutates BOATS also now calls saveData().
 function flSave(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')) return;   // fleet view-only → no save
   const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');
@@ -19701,7 +19718,7 @@ function flSave(){
   d.fleet_inventory=FL_INVENTORY;d.fleet_memos=FL_MEMOS;d.fleet_safety=FL_SAFETY;d.fleet_projects=FL_PROJECTS;d.fleet_version=FLEET_VERSION;
   d.fleet_consumable_logs=FL_CONSUMABLE_LOGS;
   // §flBoatPersist · ฝั่ง Fleet แก้ b.log (สถานะเรือ) อยู่ตลอด แต่ BOATS ไม่เคยถูกเขียนลง
-  //   localStorage เพราะ save() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
+  //   localStorage เพราะ saveData() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
   d.boats=BOATS;
   localStorage.setItem(LS_KEY,JSON.stringify(d));
 }
@@ -21841,7 +21858,7 @@ function flRenderDR(){
   });
   // Charter count (distinct boats chartered that day · from bookings)
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status))return;
     if(bk.schemaVer===2 && Array.isArray(bk.trips)) bk.trips.forEach(t=>{
       if(t.date===ds && t.bookingMode==='charter'){   // §boatSplit · นับทุกลำที่ใบนี้ใช้
         let _cbs=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
@@ -22061,7 +22078,7 @@ function flRenderDR(){
     // ⚠ orphan: a booking points to this boat but the boat was pulled from Boat Operation for this date
     //    (removed · now chartered · or now serving a different route). Today + future only · uses shared bkV2BoatPulled.
     const orphanWarn = (!isNotAvail && (typeof bkV2BoatPulled==='function') && (SB_BOOKINGS||[]).some(_ob=>{
-      if(['cancelled','rejected','cancelled_weather'].includes(_ob.status)) return false;
+      if(ACCT_EXCLUDED_STATES.includes(_ob.status)) return false;
       if(!(_ob.ops && _ob.ops.boatId===b.id)) return false;
       if(!(_ob.trips||[]).some(_t=>(_t.date||'')===ds)) return false;
       return bkV2BoatPulled(_ob, ds);
@@ -22337,7 +22354,7 @@ function flDREdit(ds, pierKey){ flDRSetLock(ds, pierKey, false); }   // unlock f
 // Daily Fleet Log · "Save" — commits any field still being typed, persists, then LOCKS the pier (read-only until Edit).
 function flSaveDayLog(btn, pierKey, ds){
   try{ if(document.activeElement && typeof document.activeElement.blur==='function') document.activeElement.blur(); }catch(e){}
-  try{ flSave(); }catch(e){ try{ save(); }catch(_){} }
+  try{ flSave(); }catch(e){ try{ saveData(); }catch(_){} }
   if(pierKey && ds){ flDRSetLock(ds, pierKey, true); return; }   // lock + re-render (re-render replaces the button)
   if(btn){
     const _html=btn.innerHTML, _bg=btn.style.background, _col=btn.style.color, _bd=btn.style.borderColor;
@@ -28641,7 +28658,7 @@ function flProjStart(id){
       projectId: p.id
     });
   }
-  flSave(); save();
+  flSave(); saveData();
   flRenderProjects();
   flShowToast('Project started · boat removed from operation');
 }
@@ -28718,7 +28735,7 @@ function flProjCancel(id){
         note: `Returned · Project ${p.no} cancelled`
       });
     }
-    save();
+    saveData();
   }
   flSave();
   flRenderProjects();
@@ -28775,7 +28792,7 @@ function flProjMarkComplete(id){
       note: `Returned from Project ${p.no}`
     });
   }
-  flSave(); save();
+  flSave(); saveData();
   flRenderProjects();
   flShowToast(`Project ${p.no} completed · ${openKids.length} MJ auto-closed · boat returned`);
 }
@@ -29899,7 +29916,7 @@ function _fuelAgg(month){
   Object.values(out.byBoat).forEach(bb=>{ if(bb.fdays.length>=3){ const avg=bb.fdays.reduce((s,x)=>s+x,0)/bb.fdays.length; } });
   Object.keys(out.byBoat).forEach(bid=>{ const bb=out.byBoat[bid]; if(bb.fdays.length>=3){ const avg=bb.fdays.reduce((s,x)=>s+x,0)/bb.fdays.length; Object.keys(FL_DAILY).filter(ds=>ds.slice(0,7)===month&&FL_DAILY[ds][bid]&&+FL_DAILY[ds][bid].fuel>avg*1.3).forEach(ds=>{ const f=+FL_DAILY[ds][bid].fuel; out.anomalies.push({name:bb.name,ds,fuel:Math.round(f),avg:Math.round(avg),pct:Math.round((f/avg-1)*100)}); }); } });
   out.anomalies.sort((a,b)=>b.pct-a.pct);
-  (SB_BOOKINGS||[]).forEach(bk=>{ if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return; const trs=(bk.trips||[]).filter(t=>(t.date||'').slice(0,7)===month); if(!trs.length)return; const tot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||0); trs.forEach(t=>{ const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; const fid=(fam&&fam.id)||t.routeId; const fnm=(fam&&fam.name)||((getRoute(t.routeId)||{}).name)||t.routeId; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; ff.rev+=(t.subtotal>0?t.subtotal:(tot/trs.length)); }); });
+  (SB_BOOKINGS||[]).forEach(bk=>{ if(ACCT_EXCLUDED_STATES.includes(bk.status))return; const trs=(bk.trips||[]).filter(t=>(t.date||'').slice(0,7)===month); if(!trs.length)return; const tot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||0); trs.forEach(t=>{ const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; const fid=(fam&&fam.id)||t.routeId; const fnm=(fam&&fam.name)||((getRoute(t.routeId)||{}).name)||t.routeId; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; ff.rev+=(t.subtotal>0?t.subtotal:(tot/trs.length)); }); });
   return out;
 }
 // §fuelWk · ยอดรายลำ แยกรายสัปดาห์ · ตรรกะต่อวันเหมือน _fuelAgg เป๊ะ (ราคา · ชั่วโมงเครื่อง · เงื่อนไข "ออกจริง")
@@ -32436,7 +32453,7 @@ function _flDayAfter(ds){ const d=new Date(ds+'T12:00:00'); if(isNaN(d)) return 
 function _flBoatRanOn(boatId, ds){
   if(typeof TRIPS!=='undefined' && TRIPS[ds] && TRIPS[ds][boatId] && TRIPS[ds][boatId].route) return true;
   if(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS)){
-    return SB_BOOKINGS.some(bk=>{ if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return false; if(bkOpsRead(bk,ds).boatId!==boatId) return false; return (bk.trips||[]).some(t=>(t.date||'')===ds); });
+    return SB_BOOKINGS.some(bk=>{ if(ACCT_EXCLUDED_STATES.includes(bk.status)) return false; if(bkOpsRead(bk,ds).boatId!==boatId) return false; return (bk.trips||[]).some(t=>(t.date||'')===ds); });
   }
   return false;
 }
@@ -39162,7 +39179,7 @@ function saveCharterBoat(){
     ownership:'charter',
     log:[{id:'sl'+Date.now(),s:'available',from,to,loc:locMap[pier]||pier,note}]
   });
-  closeModal('charter-modal');renderBoats();save('config');
+  closeModal('charter-modal');renderBoats();saveData('config');
 }
 </script>
 <!-- Doc Inline Edit Popup -->
@@ -39265,7 +39282,7 @@ function depSave(){
       .forEach(d=>d.renewStatus='done');
   }
 
-  save();
+  saveData();
   if(typeof flRenderDocsList==='function') flRenderDocsList();
   depClose();
 }
@@ -39429,7 +39446,7 @@ function staffWelfareUsed(staffId, year){
   let n=0; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(b.staffId!==staffId) return;
     if(b.staffPurpose==='inspection' || b.purpose==='staff_inspection') return;   // inspection trips don't consume welfare quota
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     (b.trips||[]).forEach(t=>{ if((t.date||'').slice(0,4)===String(year)) n += (typeof bkV2PaxTot==='function'?bkV2PaxTot(t.pax||{},'foc'):0); });
   });
   return n;
@@ -39444,7 +39461,7 @@ function staffTripsFor(year){
   const out=[]; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     const isStaffBk = b.staffId || b.purpose==='staff_welfare' || b.purpose==='staff_inspection';
     if(!isStaffBk) return;
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const purpose = (b.staffPurpose==='inspection'||b.purpose==='staff_inspection') ? 'inspection' : 'welfare';
     (b.trips||[]).forEach(t=>{
       if((t.date||'').slice(0,4)!==String(year)) return;
@@ -41594,11 +41611,11 @@ window._laReloadData=function(){
     if(typeof PIER_DUTY!=='undefined' && d.pier_duty) PIER_DUTY=d.pier_duty;
     if(typeof PIER_TEAM!=='undefined' && d.pier_team) PIER_TEAM=d.pier_team;   // §pierJob
     if(typeof PIER_JOB!=='undefined' && d.pier_job) PIER_JOB=d.pier_job;
-    if(typeof PIER_LIC_TYPES!=='undefined' && Array.isArray(d.pier_lic_types) && d.pier_lic_types.length) PIER_LIC_TYPES=d.pier_lic_types;   // §pierLic
-    if(typeof PIER_LIC_CLASSES!=='undefined' && Array.isArray(d.pier_lic_classes) && d.pier_lic_classes.length) PIER_LIC_CLASSES=d.pier_lic_classes;
+    if(typeof PIER_LIC_TYPES!=='undefined' && Array.isArray(d.pier_lic_types) && d.pier_lic_types.length) PIER_LIC_TYPES=d.pier_lic_types;   // §pierLic §seedRevert-deliberate · LAM-29: kept on purpose, not a bug. This is a reference-data store seeded like FL_DEFAULT_* (CLAUDE.md §2 back-fill pattern), not a transactional store like sb_bookings/sb_agents. A hard reload already reseeds when empty (:79729 `if(PIER_LIC_TYPES.length) return;`) regardless of this guard, so dropping just this soft-refresh guard would make refresh disagree with reload, not make "clear stays cleared" actually true end-to-end. See docs/workflows/07-data-persistence-api.md §10.6.
+    if(typeof PIER_LIC_CLASSES!=='undefined' && Array.isArray(d.pier_lic_classes) && d.pier_lic_classes.length) PIER_LIC_CLASSES=d.pier_lic_classes;   // §seedRevert-deliberate · LAM-29: same reasoning as PIER_LIC_TYPES above — boot-time reseed at :79729 makes this consistent, not a bug.
     if(typeof PIER_LICENSES!=='undefined' && Array.isArray(d.pier_licenses)) PIER_LICENSES=d.pier_licenses;
     if(typeof PIER_CFG!=='undefined' && d.pier_cfg) PIER_CFG=d.pier_cfg;
-    if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt
+    if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt §seedRevert-deliberate · LAM-29: kept on purpose. Attendance-code reference data, seeded like FL_DEFAULT_* (CLAUDE.md §2); boot-time reseed at :79712 (`if(PIER_CODES.length) return;`) already reverts an emptied list on hard reload, so this guard just keeps soft-refresh consistent with that. See docs/workflows/07-data-persistence-api.md §10.6.
     if(typeof PIER_SHIFT!=='undefined' && d.pier_shift) PIER_SHIFT=d.pier_shift;
     if(typeof PIER_SECT!=='undefined' && Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
@@ -41877,7 +41894,7 @@ function bkV2ReturnBookingDraws(bk, why){
 function bkV2LockClaims(lockId){
   const out = [];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b => {
-    const dead = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
+    const dead = ACCT_EXCLUDED_STATES.indexOf(b.status)>=0;
     (b.trips||[]).forEach(t => { (t.lockDraws||[]).forEach(x => {
       if(x.lockId!==lockId) return;
       out.push({ id:b.id, vc:(b.voucherRef||b.code||b.id||''), lead:String(b.leadPax||'').trim(),
@@ -41906,7 +41923,7 @@ function bkV2LockCoverage(l, date){
   bkV2LockChildren(l.id).forEach(c => { mine[c.id]=1; });        /* ล็อกแม่ = นับกรุ๊ปย่อยของตัวเองด้วย */
   const rows = [];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b => {
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     if(l.holderType==='agent' && b.agentId!==l.holderId) return; /* ล็อกของ office/global ดูทุกใบบนทริป */
     (b.trips||[]).forEach(t => {
       if(t.routeId!==l.routeId || t.date!==d) return;
@@ -42886,7 +42903,8 @@ function acctPersistBookings(){ if(!acctCanEditBookings()) return;
   if(typeof baChMemoClear==='function') baChMemoClear();   // §boatSplit · ข้อมูลเปลี่ยนแล้ว แคชเรือเหมาต้องหมดอายุทันที
   try{ laBlob().sb_bookings=SB_BOOKINGS; laBlobSave(); }catch(e){ console.warn('persist sb_bookings failed',e);} }
 
-const ACCT_PAID_STATES = ['cancelled','rejected','cancelled_weather'];
+// ACCT_PAID_STATES was renamed to ACCT_EXCLUDED_STATES and hoisted to the top of the file (LAM-27) —
+// it is the single source of truth for the cancelled/rejected/cancelled_weather status triple.
 function acctBookingBase(bk){ return (bk&&(bk.total || (bk.priceBreakdown&&bk.priceBreakdown.total)))||0; }
 function acctBookingTotal(bk){ if(!bk) return 0; const fees=(bk.feeItems||[]).reduce((s,f)=>s+(+f.amount||0),0); return acctBookingBase(bk)+fees; }
 function acctFmt(n){ return '฿'+Math.round(n||0).toLocaleString(); }
@@ -42912,7 +42930,7 @@ function agCreditState(agentId){
   if(a && a.payType==='invoice'){
     (SB_BOOKINGS||[]).forEach(bk=>{
       if(bk.agentId!==agentId) return;
-      if(ACCT_PAID_STATES.includes(bk.status)) return;
+      if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
       if(bk.status==='quote' || bk.status==='draft') return;  // not yet committed
       if(acctBookingPaid(bk)) return;                          // paid → credit restored
       used += acctBookingTotal(bk);
@@ -43069,10 +43087,10 @@ function mdBkMix(b){
   if(rem>0){ const fb=leadCode||(Object.keys(mix).sort((x,y)=>mix[y]-mix[x])[0]||''); add(fb,rem); }
   return mix;
 }
-function mdOurMixByCode(){ const out={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; const mix=mdBkMix(b); Object.keys(mix).forEach(c=>{ out[c]=(out[c]||0)+mix[c]; }); }); return out; }
-function mdOurNatCoverage(){ let w=0,t=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; t++; if(mdBkCode(b)) w++; }); return {with:w,total:t}; }
+function mdOurMixByCode(){ const out={}; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; const mix=mdBkMix(b); Object.keys(mix).forEach(c=>{ out[c]=(out[c]||0)+mix[c]; }); }); return out; }
+function mdOurNatCoverage(){ let w=0,t=0; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; t++; if(mdBkCode(b)) w++; }); return {with:w,total:t}; }
 // bookings whose nationality can't be resolved (even by guessing) → need manual fill
-function mdMissingNat(){ return (SB_BOOKINGS||[]).filter(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false; return !mdBkCode(b); }); }
+function mdMissingNat(){ return (SB_BOOKINGS||[]).filter(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return false; return !mdBkCode(b); }); }
 function mdOpenBk(id){ const nb=[...document.querySelectorAll('.nav-item')].find(n=>n.dataset.view==='booking'); if(nb && typeof nav==='function') nav(nb); if(typeof bkV2OpenDetail==='function') bkV2OpenDetail(id); }
 function mdCleanupNats(){ if(typeof bkV2CleanupNats!=='function') return; if(!confirm('Clean up the nationality list?\n\n· Fix names with stray brackets / " · CODE" labels\n· Merge duplicates (and any that match a built-in)\n· Re-point affected bookings to the kept entry')) return; const r=bkV2CleanupNats(); try{ alert('Nationality list cleaned\n\nRemoved/merged: '+r.removed+'\nKept (custom): '+r.kept+'\nBookings re-pointed: '+r.bookingsRemapped); }catch(e){} renderMarketData(); }
 function mdMissingNatCard(){
@@ -43091,7 +43109,7 @@ function mdBackfillNat(){
   if(!confirm('Auto-fill Nationality on existing bookings by guessing from the customer name?\n\n· Existing nationalities are kept\n· Only fills blanks the guesser is confident about')) return;
   let had=0,filled=0,blank=0,total=0;
   (SB_BOOKINGS||[]).forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; total++;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return; total++;
     const cur=mdValidNat(b.leadNationality); if(cur){ had++; return; }
     let g=(typeof bkV2GuessNationality==='function')?mdValidNat(bkV2GuessNationality(b.leadPax||b.customerName||'')):'';
     if(!g && Array.isArray(b.passengers)){ for(const p of b.passengers){ const pc=mdValidNat(p.nationality); if(pc){g=pc;break;} const pg=(typeof bkV2GuessNationality==='function')?mdValidNat(bkV2GuessNationality(p.name||'')):''; if(pg){g=pg;break;} } }
@@ -43113,7 +43131,7 @@ function mdLangBuckets(byCode){ const o={Russian:0,Chinese:0,English:0}; Object.
 // our bookings lead-time buckets per market
 function mdLeadByMarket(){
   const buckets=['0-3d','4-7d','8-14d','15-30d','30d+']; const out={};
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const bd=b.bookingDate||b.createdAt; const td=(b.trips||[]).map(t=>t.date).filter(Boolean).sort()[0]; if(!bd||!td) return;
     const lt=mdDaysBetween(String(bd).slice(0,10),td); if(lt==null||lt<0) return;
     const pax=(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
@@ -43126,14 +43144,14 @@ function mdLeadByMarket(){
 // on-the-books future pax by week (next 8 weeks)
 function mdOnTheBooks(){
   const today=mdToday(); const weeks={};
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     (b.trips||[]).forEach(t=>{ if(!t.date||t.date<today) return; const dd=mdDaysBetween(today,t.date); if(dd==null||dd>56) return; const wk=Math.floor(dd/7);
       const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; weeks[wk]=(weeks[wk]||0)+pax; });
   });
   return weeks;
 }
 function mdArrivalsByWeekday(){ const wd=[0,0,0,0,0,0,0]; Object.values(SB_MARKET_STATS).forEach(d=>{ if(!d.in) return; const dt=new Date((d.date||'')+'T00:00'); if(isNaN(dt)) return; wd[dt.getDay()]+=mdDirTot(d,'in'); }); return wd; }
-function mdOurPaxByMarket(){ const out={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; const mk=(b.marketSnapshot&&b.marketSnapshot.market)||(typeof sbGetAgent==='function'&&sbGetAgent(b.agentId)?.market)||(b.b2cChannel||b.channelType==='b2c'?'B2C':'unassigned'); const pax=(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0); if(!out[mk]) out[mk]={pax:0,bookings:0}; out[mk].pax+=pax; out[mk].bookings++; }); return out; }
+function mdOurPaxByMarket(){ const out={}; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; const mk=(b.marketSnapshot&&b.marketSnapshot.market)||(typeof sbGetAgent==='function'&&sbGetAgent(b.agentId)?.market)||(b.b2cChannel||b.channelType==='b2c'?'B2C':'unassigned'); const pax=(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0); if(!out[mk]) out[mk]={pax:0,bookings:0}; out[mk].pax+=pax; out[mk].bookings++; }); return out; }
 function mdCard(title,sub,inner){ return `<div class="md-card"><div style="font-size:12px;font-weight:700">${title}${sub?` <span style="font-weight:400;color:var(--fd-ink-soft)">· ${sub}</span>`:''}</div><div style="margin-top:9px">${inner}</div></div>`; }
 function mdNote(t){ return `<div style="font-size:10.5px;color:#7A4A00;background:#FBF0DD;border:1px solid #EAD9B0;border-radius:8px;padding:7px 10px;margin-bottom:12px">${t}</div>`; }
 function mdHbars(rows,max,col){ max=Math.max(1,max); return rows.map(r=>`<div style="display:flex;align-items:center;gap:9px;padding:4px 0"><div style="width:130px;font-size:11.5px;flex-shrink:0">${r.label}</div><div style="flex:1;background:#eef0f3;border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.round(100*r.val/max)}%;height:100%;background:${r.col||col||'#1683C7'}"></div></div><div style="width:64px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:700">${mdFmt(r.val)}</div>${r.extra?`<div style="width:80px;text-align:right;font-size:10px;color:var(--fd-ink-soft)">${r.extra}</div>`:''}</div>`).join(''); }
@@ -43378,7 +43396,7 @@ function mdTabOps(days){
   const latest=days[days.length-1]; const arrByCode={}; Object.entries(latest.in||{}).forEach(([n,v])=>{ const c=MD_NAT_TH2CODE[n]; if(c) arrByCode[c]=(arrByCode[c]||0)+v; });
   const lang=mdLangBuckets(arrByCode); const langRows=[{label:'🇷🇺 Russian guide',val:lang.Russian,col:'#A32D2D'},{label:'🇨🇳 Chinese guide',val:lang.Chinese,col:'#BA7517'},{label:'🇬🇧 English guide',val:lang.English,col:'#185FA5'}];
   // pickup zone demand from our bookings
-  const zone={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ const z=t.zone||b.pickupZone||'NoTransfer'; const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; zone[z]=(zone[z]||0)+pax; }); });
+  const zone={}; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; (b.trips||[]).forEach(t=>{ const z=t.zone||b.pickupZone||'NoTransfer'; const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; zone[z]=(zone[z]||0)+pax; }); });
   const zlab=z=>({PK:'Phuket (PK)',KL:'Khao Lak (KL)',NoTransfer:'No transfer',NT:'No transfer'})[z]||z;
   const zoneRows=Object.entries(zone).sort((a,b)=>b[1]-a[1]).map(([z,v])=>({label:zlab(z),val:v,col:'#0F6E56'}));
   return mdNote('Guide-language demand is estimated from arrival nationalities (latest day) — Russian/Chinese get their own guide, the rest map to English. Pickup-zone demand comes from your bookings.')
@@ -43589,7 +43607,7 @@ function insToday(){ _insDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(ne
 function insSplitName(nm){ nm=String(nm||'').trim(); if(!nm) return {f:'',l:''}; nm=nm.replace(/\s*\+?\d[\d\s().\-]{5,}\d\s*$/,'').trim(); nm=nm.replace(/^(mr|mrs|ms|miss|mstr|master|dr|prof|mx|khun)\b\.?\s*/i,'').trim(); if(!nm) return {f:'',l:''}; const p=nm.split(/\s+/); return {f:p[0], l:p.slice(1).join(' ')}; }
 function insNatLabel(code){ if(!code) return ''; try{ return (typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(code):code; }catch(e){ return code; } }
 function insBkPax(b){ const rows=[]; rows.push({key:'lead', name:b.leadPax||'', natCode:b.leadNationality||'', lead:true}); (b.passengers||[]).forEach((p,i)=>{ rows.push({key:String(i), name:(p&&p.name)||'', natCode:(p&&p.nationality)||''}); }); return rows; }
-function insTripsForDate(ds){ const map={}; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(!b||b.status==='cancelled'||b.status==='cancelled_weather'||b.status==='rejected') return; const tr=(b.trips||[]).filter(t=>t && t.date===ds); if(!tr.length) return; const rid=tr[0].routeId; const g=map[rid]=map[rid]||{routeId:rid, bookings:[]}; if(g.bookings.indexOf(b)<0) g.bookings.push(b); }); return Object.values(map); }
+function insTripsForDate(ds){ const map={}; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(!b||ACCT_EXCLUDED_STATES.includes(b.status)) return; const tr=(b.trips||[]).filter(t=>t && t.date===ds); if(!tr.length) return; const rid=tr[0].routeId; const g=map[rid]=map[rid]||{routeId:rid, bookings:[]}; if(g.bookings.indexOf(b)<0) g.bookings.push(b); }); return Object.values(map); }
 function insRouteName(rid){ const r=(typeof getRoute==='function')?getRoute(rid):null; if(!r) return rid||'-'; const f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null; return (r.name||(f?f.name:rid)); }
 // ── Booking Flow · incoming-bookings analytics (intake by day/week/month · market · sales · lead time · travel calendar) ──
 let _bfMode='month';
@@ -43599,7 +43617,7 @@ function renderBookingFlow(){
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ymd=d=>(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10);
   const paxOf=t=>(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0;
-  const B=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(b=>b && !['cancelled','cancelled_weather','rejected'].includes(b.status));
+  const B=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(b=>b && !ACCT_EXCLUDED_STATES.includes(b.status));
   const bkDate=b=>{ if(b.bookingDate) return String(b.bookingDate).slice(0,10); const tr=(b.trips||[]).map(t=>t.date).filter(Boolean).sort(); return tr[0]||''; };
   const firstTrip=b=>((b.trips||[]).filter(t=>t.date).sort((x,y)=>String(x.date).localeCompare(String(y.date)))[0])||null;
   const mkOf=b=>{ let code=(typeof pmMarket==='function')?pmMarket(b):((b.marketSnapshot&&b.marketSnapshot.market)||'unassigned'); code=code||'unassigned'; const m=(typeof sbGetMarket==='function')?sbGetMarket(code):null; return {code:code, name:m?(m.name||m.code||code):(code==='b2c'?'B2C':code==='unassigned'?'ไม่ระบุ':code), color:m?(m.color||'#94A3B8'):'#94A3B8'}; };
@@ -44153,7 +44171,7 @@ function pmapSetMetric(m){ if(_pmapMetric===m)return; _pmapMetric=m; pmapRefresh
 function pmapArrivals(per){ let a=0,has=false; Object.values(SB_MARKET_STATS||{}).forEach(d=>{ if(per.test(d.date||'')){ const t=(typeof mdDirTot==='function')?mdDirTot(d,'in'):0; if(t){a+=t;has=true;} } }); return has?a:null; }
 function pmapMoM(key){ const c=_PM.areas.find(x=>x.key===key); if(!c)return null; const cv=pmVal(c); const p=_PM.prev[key]; if(!p)return null; const pv=_pmapMetric==='value'?p.val:p.pax; if(!pv)return null; return Math.round((cv/pv-1)*100); }
 function pmapAreaDetail(key){ const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod(); const H={},A={}; let bk=0;
-  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(pmAgSkip(b))return; const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const rk=ar?pmNormArea(ar.name):''; if(rk!==key)return; if(_pmapMkFilter&&pmMarket(b)!==_pmapMkFilter)return; let cp=0;(b.trips||[]).forEach(t=>{if(per.test(t.date||''))cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;}); if(cp<=0)return; bk++; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0); const w=_pmapMetric==='value'?val:cp; const hn=(b.hotelName||b.pickup||'—'); H[hn]=(H[hn]||0)+w; const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; const an=ag?ag.name:((b.b2cChannel||b.channelType==='b2c')?'B2C':'—'); A[an]=(A[an]||0)+w; });
+  BK.forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(pmAgSkip(b))return; const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const rk=ar?pmNormArea(ar.name):''; if(rk!==key)return; if(_pmapMkFilter&&pmMarket(b)!==_pmapMkFilter)return; let cp=0;(b.trips||[]).forEach(t=>{if(per.test(t.date||''))cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;}); if(cp<=0)return; bk++; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0); const w=_pmapMetric==='value'?val:cp; const hn=(b.hotelName||b.pickup||'—'); H[hn]=(H[hn]||0)+w; const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; const an=ag?ag.name:((b.b2cChannel||b.channelType==='b2c')?'B2C':'—'); A[an]=(A[an]||0)+w; });
   const srt=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,5); return {hotels:srt(H),agents:srt(A),bk}; }
 function pmapPeriod(anchor){ const a=anchor||_pmapAnchor, d=new Date(a+'T00:00');
   if(_pmapMode==='year'){ const y=a.slice(0,4); return {test:s=>s.slice(0,4)===y, label:'ปี '+(+y+543)}; }
@@ -44171,7 +44189,7 @@ function pmNormArea(nm){ return String(nm||'').replace(/\(self-?arrive\)/i,'').r
 function pmapAgg(){ const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod(), prevPer=pmapPeriod(_pmPrevAnchor());
   const agg={},mkTot={}; const tot={pax:0,val:0}, other={pax:0,val:0}; const otherAreas={}; const prev={};
   const bump=(o,mk,pax,val)=>{ o.pax+=pax;o.val+=val; const m=o.mk[mk]=o.mk[mk]||{pax:0,val:0}; m.pax+=pax;m.val+=val; };
-  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(pmAgSkip(b))return; const mk=pmMarket(b); const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const nm=ar?ar.name:''; const rk=nm?pmNormArea(nm):''; const key=(rk&&PHUKET_LL[rk])?rk:''; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  BK.forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(pmAgSkip(b))return; const mk=pmMarket(b); const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const nm=ar?ar.name:''; const rk=nm?pmNormArea(nm):''; const key=(rk&&PHUKET_LL[rk])?rk:''; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     let cp=0,pp=0; (b.trips||[]).forEach(t=>{ const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(per.test(t.date||''))cp+=px; if(prevPer.test(t.date||''))pp+=px; });
     if(cp>0){ mkTot[mk]=mkTot[mk]||{pax:0,val:0}; mkTot[mk].pax+=cp; mkTot[mk].val+=val; tot.pax+=cp; tot.val+=val;
       if(key){ const e=agg[key]=agg[key]||{key,pax:0,val:0,mk:{}}; bump(e,mk,cp,val); } else { other.pax+=cp; other.val+=val; otherAreas[nm||'ไม่ระบุ']=(otherAreas[nm||'ไม่ระบุ']||0)+cp; } }
@@ -44279,7 +44297,7 @@ function pmapAgHotels(){
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod();
   const H={}, HO=[];
   BK.forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     if(pmAgKeyOf(b)!==_pmapAgFilter)return;
     if(_pmapMkFilter && pmMarket(b)!==_pmapMkFilter)return;
     let cp=0; (b.trips||[]).forEach(t=>{ if(per.test(t.date||'')) cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
@@ -44308,7 +44326,7 @@ function pmapAgentZone(){
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod();
   const AG={}, AO=[], ZT={}, ZO=[]; let tot=0;
   BK.forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     if(_pmapMkFilter && pmMarket(b)!==_pmapMkFilter)return;
     if(pmAgSkip(b))return;   // §pmapAgFilter
     let cp=0; (b.trips||[]).forEach(t=>{ if(per.test(t.date||'')) cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
@@ -44506,7 +44524,7 @@ function renderDevLog(){ var host=document.getElementById('devlog-host'); if(!ho
    (same status the By-trip-date "Re-Confirm" mode sets) so both stay in sync.
    Name-cell color (after sent): YELLOW = invoice agent OR paid · PURPLE = other unpaid. */
 var _rcDate=null, _rcView='agent';
-var _RC_CXL=['cancelled','rejected','cancelled_weather'];
+var _RC_CXL=ACCT_EXCLUDED_STATES;
 // Per-booking re-confirm status — a multi-step process, not just a checkbox.
 // Only 'done' counts as fully confirmed (By-trip-date yellow name + agent "Sent" use status==='done').
 var RC_STATES=[
@@ -44889,7 +44907,7 @@ function pfmSalesName(bk){ const sid = bk.soldBy || (sbGetAgent(bk.agentId)||{})
 function pfmCutoff(date){ const c=new Date(date+'T18:00:00'); c.setDate(c.getDate()-1); return c; }   // 18:00 day before
 function pfmBookingsFor(date){
   return (SB_BOOKINGS||[]).filter(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return false;
     if(!pfmIsProforma(b)) return false;
     return (b.trips||[]).some(t=>(t.date||'')===date);
   });
@@ -44907,7 +44925,7 @@ function pfmBookingsForPeriod(date, mode){
   const r=pfmPeriodRange(date, mode||'daily');
   const repDate=b=>{ const ds=(b.trips||[]).map(t=>t.date||'').filter(x=>x>=r.from&&x<=r.to).sort(); return ds.length?ds[ds.length-1]:''; };
   const out=(SB_BOOKINGS||[]).filter(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return false;
     if(!pfmIsProforma(b)) return false;
     return (b.trips||[]).some(t=>{ const td=t.date||''; return td>=r.from && td<=r.to; });
   });
@@ -44924,7 +44942,7 @@ function pfmChartBuckets(date, mode){
     else if(mode==='year'){ const yr=d0.getFullYear()-i; from=yr+'-01-01'; to=yr+'-12-31'; lab=String(yr); }
     else { const dd=new Date(d0); dd.setDate(d0.getDate()-i); from=to=bkV2LocalYMD(dd); lab=from.slice(8); }
     out.push({from,to,lab,cur:i===0,tot:0,paid:0,unpaid:0}); }
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!pfmIsProforma(b))return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(!pfmIsProforma(b))return;
     const ds=(b.trips||[]).map(t=>t.date||'').filter(Boolean).sort(); if(!ds.length)return; const rep=ds[0];
     const bk=out.find(o=>rep>=o.from&&rep<=o.to); if(!bk)return;
     const inv=acctBookingInvoice(b.id); const total=acctBookingTotal(b); const bal=inv?acctInvoiceBalance(inv):total;
@@ -45323,7 +45341,7 @@ function baSetDate(delta){ const d=new Date(_baDate+'T12:00:00'); d.setDate(d.ge
 function baCharterBoatMap(date){
   const m=new Map();
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     (b.trips||[]).forEach(t=>{
       if((t.date||'')!==date||t.bookingMode!=='charter')return;
       let ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(b,date):[];
@@ -45442,7 +45460,7 @@ function bkIsOvnOutbound(t){ return !!(t && t.ovn==='return' && t.ovnReturnDate)
 
 function bkV2CharterBoatHeal(date){
   let healed=0;
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     const t=(b.trips||[]).find(t=>(!date||(t.date||'')===date) && t.bookingMode==='charter' && t.charterBoatId);
     if(typeof bkBoatSplits==='function' && bkBoatSplits(b,date)) return;   // §boatSplit · แยกลำไว้แล้ว อย่าทับ
     if(t && !bkOpsRead(b,date).boatId){ bkOpsFor(b,date).boatId=t.charterBoatId; healed++; }
@@ -45458,13 +45476,13 @@ function baDayBoats(date){ // all non-charter assigned boats that day → [{boat
 function baBoatsForRoute(date, routeId){ return baDayBoats(date).filter(x=>x.routeId===routeId); }
 function baSeatBookingsForRoute(date, routeId){
   const out=[];
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     (b.trips||[]).forEach(t=>{ if((t.date||'')===date && t.routeId===routeId && t.bookingMode!=='charter'){ out.push({b,t}); } }); });
   return out;
 }
 function baAssignedPax(date, boatId){
   // §boatSplit · บุคกิ้งที่แยกลง N ลำ นับเฉพาะก้อนที่อยู่บนลำนี้ · ที่ไม่ได้แยกได้ผลเท่าสูตรเดิม
-  let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     n+=(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(b,date,boatId):0; });
   return n;
 }
@@ -45496,7 +45514,7 @@ function _bkV2BoatPulled1(bk, date, bid){
 // Bookings (non-cancelled) assigned to a boat on a date · {count, pax}
 function baAssignedBookings(date, boatId){
   let count=0, pax=0;
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const _p=(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(b,date,boatId):0;   // §boatSplit
     if(_p<=0) return;
     count++; pax+=_p;
@@ -45687,7 +45705,7 @@ function bkV2ToggleReconfirmMode(){ _bkV2.reconfirmMode=!_bkV2.reconfirmMode; if
 // ── Re-confirmation · confirm actual pickup time with the agent ──
 function bkV2Reconfirm(bkId, via){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done', via:via||'list', at:new Date().toISOString(), by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+')','Notify'); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
 function bkV2ReconfirmClear(bkId){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b||!b.ops) return; b.ops.reconfirm=null; acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
-function bkV2ReconfirmAll(date, rid, via){ if(!confirm('Mark ALL un-confirmed bookings on this trip as re-confirmed ('+(via==='phone'?'phone':'list')+')?')) return; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')return; if(!(b.trips||[]).some(t=>(t.date||'')===date && t.routeId===rid))return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done',via:via||'list',at:new Date().toISOString(),by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+') · bulk','Notify'); }); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2ReconfirmAll(date, rid, via){ if(!confirm('Mark ALL un-confirmed bookings on this trip as re-confirmed ('+(via==='phone'?'phone':'list')+')?')) return; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')return; if(!(b.trips||[]).some(t=>(t.date||'')===date && t.routeId===rid))return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done',via:via||'list',at:new Date().toISOString(),by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+') · bulk','Notify'); }); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
 function bkV2GoBoatAssign(){
   const bnav=[...document.querySelectorAll('.nav-item')].find(n=>n.dataset.view==='booking');
   if(bnav && typeof nav==='function') nav(bnav);
@@ -45788,7 +45806,7 @@ function bkV2VanGroupSelected(date, routeId, zone, groupId){
 // For each van-group (date|route|zone|gid), if ANY member has a vanId but others don't, the others inherit it.
 // Prevents "ตกบุคกิ้ง" (a booking added to a van-group but missing the van → not shown for pickup). Idempotent.
 function bkV2VanGroupHeal(date){
-  const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
+  const isC=b=>ACCT_EXCLUDED_STATES.includes(b.status);
   const grp={};   // key → {van, ret}
   /* §per-trip ops · เดิมวน trips แต่หยิบ b.ops (วันแรก) มาใช้ทุกวัน → กรุ๊ปวันที่ 2 ถูก "ซ่อม" ด้วยรถของวันที่ 1
      ทับของที่เพิ่งจัดไปทุกครั้งที่เปิดใบงาน · ตอนนี้ ops ตามวันของ trip นั้นๆ */
@@ -45805,7 +45823,7 @@ function bkV2VanGroupHeal(date){
 // This should be impossible after bkV2VanGroupSelected/SetVan always write the group's van, but we scan EVERY group on EVERY render as a safety net (legacy data / future code paths). NO auto-pick (per user: ห้ามเดา) — surfaced as a warning to resolve by re-selecting the group van.
 // Returns [{date,routeId,zone,gid,routeName,vans:{vanId:count},pax}] · pass a date to scope, omit for all.
 function bkV2VanGroupConflicts(date){
-  const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
+  const isC=b=>ACCT_EXCLUDED_STATES.includes(b.status);
   const G={};
   (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b))return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const o=bkOpsRead(b,t.date||''); if(!o)return; const z=(t.bookingMode==='charter')?'__CHARTER__':((typeof bkV2EffZone==='function'?bkV2EffZone(b,t):(t.zone||b.pickupZone))||''); if(z==='NoTransfer'||z==='NT')return;   // §per-trip ops · เดิมอ่าน b.ops ทุกวัน → เตือน "รถปนกันในกรุ๊ป" ผิดวัน
     const add=(g,van,pax)=>{ if(!g)return; const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z+'|'+g; const e=G[k]=G[k]||{date:t.date,routeId:t.routeId,zone:z,gid:+g,vans:{},pax:0}; e.pax+=pax||0; if(van){ e.vans[van]=(e.vans[van]||0)+1; } };
@@ -46061,7 +46079,7 @@ function bkBoatLoadOther(b, date, boatId){
   let n=0;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(x=>{
     if(!x || (b&&x.id===b.id)) return;
-    if(['cancelled','rejected','cancelled_weather'].indexOf(x.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(x.status)>=0) return;
     n+=bkBoatPaxOnBoat(x,date,boatId);
   });
   return n;
@@ -46371,7 +46389,7 @@ function bkV2HealSelfArrivePickup(date){
   const _isClock = s => /\d{1,2}[:.]\d{2}/.test(String(s||'')) && !/pier/i.test(String(s||''));   // "07:30-07:45" ใช่ · "Before 08:30 at pier" ไม่ใช่
   let changed=false;
   SB_BOOKINGS.forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const _area=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
     (b.trips||[]).forEach(t=>{
       if((t.date||'')!==date) return;
@@ -46388,7 +46406,7 @@ function bkV2HealSelfArrivePickup(date){
 }
 function bkV2HealAltSplits(date){
   let changed=false;
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     if(date && !(b.trips||[]).some(t=>t.date===date)) return;
     // สร้าง/รีเฟรช auto split จากจุดรับ — เฉพาะบุ๊กกิ้งที่มีจุดรับเพิ่ม
     if(Array.isArray(b.altPickups) && b.altPickups.length){
@@ -46462,7 +46480,7 @@ function vanJobsToggleSent(date,key){ const k=date+'::'+key; if(VANJOB_SENT[k]) 
 function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
 function vanJobsSentCellInner(date,key){ var s=vanJobsSentAt(date,key); return '<label onclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer"><input type="checkbox" '+(s?'checked':'')+' onchange="event.stopPropagation();vanJobsToggleSent(\''+date+'\',\''+key+'\')" style="width:17px;height:17px;cursor:pointer;accent-color:#0F6E56"><span style="font-size:8.5px;'+(s?'color:#0F6E56;font-weight:700':'color:#c2c0b7')+';white-space:nowrap;margin-top:1px">'+(s?vanJobsSentLbl(s):'ยังไม่ส่ง')+'</span></label>'; }
 function vanJobsBookingsFor(date, vid, routeId, leg){ const ret=leg==='ret'; const out=[];
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     const has=(b.trips||[]).some(t=>(t.date||'')===date && (!routeId||t.routeId===routeId)); if(!has)return;
     const o=bkOpsRead(b, date);                                                     // per-day van
     const sp=Array.isArray(o.vanSplits)&&o.vanSplits.length ? o.vanSplits : null;
@@ -46565,7 +46583,7 @@ function renderVanJobs(){
   let unRet=0; const unRetList=[]; const unRetByRoute={};   // return-leg not arranged (separate drop-off · not self-return · no return van)
   const selfWarn=[];   // §guard: booking ticked self-arrive but still on a transfer zone / has a van assigned → silently excluded from ① OUTBOUND (likely a mis-tick)
   const _addUn=(rid,pax)=>{ unTot+=pax; const k=rid||'_'; unByRoute[k]=(unByRoute[k]||0)+pax; };
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
     const t=(b.trips||[]).find(t=>(t.date||'')===date)||{};
     // §OVN — the return leg is a DROP-OFF day. The customer is coming back from the island on a boat;
     // nobody is waiting in a hotel lobby. Before this, the leg inherited b.hotelName + the outbound
@@ -46813,7 +46831,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   const _allRoutes={};
   // RETURN leg = every booking this van brings back: returnVan = vanReturnId || outbound vanId (default same-van return).
   // OUTBOUND leg = bookings this van picks up (vanId). outVid carried so the return row can show กลับคันเดิม / มาจากรถอื่น.
-  const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b,date).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
+  const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b,date).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
       if(!isRet && b.pickupSelf) return;   // ขารับ "มาเอง" (self-arrive) → ไม่มีรถไปรับ → ไม่ขึ้นในใบงานขาไป
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(routeId && t.routeId!==routeId) return;   // this sheet = one program(route) only
       // §OVN outbound — they sleep on the island. No return run for them TODAY (the return is its own day).
@@ -46963,7 +46981,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   // bookings already visible on THIS sheet (outbound OR return) can't "drop off this sheet" → exclude from the guard (fixes the confusing warning for a booking that returns with this van but has no outbound van — it's shown in the return section)
   const _onSheet=new Set(); out.rows.forEach(x=>{ if(x.b) _onSheet.add(x.b.id); }); ret.rows.forEach(x=>{ if(x.b) _onSheet.add(x.b.id); });
   let _unaPax=0,_unaBk=0; const _unaTrip={};
-  if(_vanRoutes.size){ (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.pickupSelf)return; if(_onSheet.has(b.id))return;   // already on this sheet
+  if(_vanRoutes.size){ (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(b.pickupSelf)return; if(_onSheet.has(b.id))return;   // already on this sheet
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(!_vanRoutes.has(t.routeId)) return; const z=bkV2EffZone(b,t); if(z==='NoTransfer'||z==='NT') return;
       const o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}); const _nm=((typeof getRoute==='function'?getRoute(t.routeId):null)||{}).name||t.routeId;   /* §per-trip ops · เดิมอ่าน b.ops → OVN วันที่ 2 ที่ยังไม่มีรถ ถูกมองว่า "มีรถแล้ว" เพราะไปเห็นรถของวันที่ 1 → คำเตือน "ยังไม่มีรถ" ไม่ขึ้น */
       if(Array.isArray(o.vanSplits)&&o.vanSplits.length){ o.vanSplits.forEach(s=>{ if(!s.vanId){ const hp=+s.pax||0; _unaPax+=hp; _unaBk++; _unaTrip[_nm]=(_unaTrip[_nm]||0)+hp; } }); }
@@ -47288,7 +47306,7 @@ function pckVanBoatSplit(vanId, date){
   var out=[], idx={};
   if(!vanId) return out;
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var mine=false, pax=0;
@@ -47958,7 +47976,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   var abbr=function(s){ var k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(var w in ABBR){ if(k.indexOf(w)>=0) return ABBR[w]; } var ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(function(x){return x[0]||'';}).join(''):String(s).slice(0,4)).toUpperCase(); };
   var fam={}, rst={}, dA=0,dC=0,dI=0,dF=0;
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){ if((t.date||'')!==date) return;
       var p=t.pax||{};
       // §check-in · ทุกตัวเลขบนการ์ด = "เดินทางจริง" · หักคนที่ No-show / CXL ออกรายประเภท
@@ -48015,7 +48033,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   // §check-in · ยอดรวมทั้งวันต้องเป็น "เดินทางจริง" · เก็บยอดจองเดิมไว้เทียบ
   var _lostAll=0;
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     if(!ckTripOn(b,date)) return;
     var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null; _lostAll+=((L&&L.total)||0);
   });
@@ -48218,7 +48236,7 @@ function renderVanCheckin(){
   var zoneLbl=function(z){ return (typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(z):(z||'—'); };
   var groups={}, unassigned=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN = ส่งกลับ ไม่ใช่รับขึ้นรถ
     if(_vckRoute){ if(t.routeId!==_vckRoute) return; }
@@ -50508,7 +50526,7 @@ function goThDate(d){
 function goRows(date,bid){
   var out=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     // §ovnBack · ขากลับค้างคืนอยู่บนเรือจริงในวันนั้น · ใบสั่งงานเป็นเอกสารที่ประกาศจำนวนคนบนเรือ
     //   จึงต้องนับรวม ไม่งั้นเลขบนใบไม่ตรงกับหัวคนที่อยู่บนเรือจริง
@@ -50654,7 +50672,7 @@ function goPrint(bid){
   else {
     var seen={};
     (SB_BOOKINGS||[]).forEach(function(b){
-      if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+      if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
       var t=ckTripOn(b,date); if(!t) return;
       var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       var k=O.boatId||t.charterBoatId||''; if(k && !seen[k]){ seen[k]=1; ids.push(k); }
@@ -50826,7 +50844,7 @@ function pckGuideJobOrder(bid){
   //   เก็บแค่ยอดรวมไว้ขึ้นหัวใบ เผื่อพิมพ์ซ้ำหลังเกิดเรื่องแล้วเลขจะได้อธิบายตัวเองได้
   var all=[], voidBy={};
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var booked=ckBookedPax(t);
@@ -51073,7 +51091,7 @@ function pckKitchenHtml(border, boats, date){
 function mvLunchRows(date, bid){
   var out=[], PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -51233,7 +51251,7 @@ function pckMealSend(bid){
   if(!V){ alert('ลำนี้ยังไม่มีร้านอาหาร · ตั้งร้านก่อนแล้วค่อยส่งรายการ'); return; }
   var rows=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -51269,7 +51287,7 @@ function renderPierCheckin(){
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     if(_pckRoute){ if(t.routeId!==_pckRoute) return; }
@@ -51595,7 +51613,7 @@ function tsAgName(b){
 function tsRows(date){
   const out=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     const t=ckTripOn(b,date); if(!t) return;
     // §ovnBack · ขากลับค้างคืนเป็นคนที่เดินทางจริงในวันนั้น จึงต้องอยู่ในใบสรุปและชุดเอกสาร
     //   ยอดเงินไม่ซ้ำเพราะ tsTripAmount() คืน 0 ให้ ovnLeg (และ tsNetOf คืน null อยู่แล้ว)
@@ -52703,7 +52721,7 @@ function drVanReal(date){
   if(typeof SB_BOOKINGS === 'undefined' || typeof vehGet !== 'function') return out;
   var all = {}, cell = {}, order = [];
   SB_BOOKINGS.forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status) >= 0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status) >= 0) return;
     var t = (typeof ckTripOn==='function') ? ckTripOn(b, date) : null; if(!t) return;
     var O = (typeof bkOpsRead==='function') ? bkOpsRead(b, date) : (b.ops||{});
     var vid = O.vanId; if(!vid) return;
@@ -53007,7 +53025,7 @@ function drTrendBooked(date, nDays){
   }
   var mkt={}, order=[];
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var cd=String(b.bookingDate||b.createdAt||'').slice(0,10);
     var p=map[cd]; if(!p) return;
     var px=0; (b.trips||[]).forEach(function(t){ px+=drPaxOf(t).tot; });
@@ -55247,7 +55265,7 @@ function renderBoatAssign(){
   const dlabel=(function(){ try{ return new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return date; } })();
   const dayBoats=baDayBoats(date);
   // routes that have seat bookings on this date
-  const routeIds=[...new Set((SB_BOOKINGS||[]).flatMap(b=>['cancelled','rejected','cancelled_weather'].includes(b.status)?[]:(b.trips||[]).filter(t=>(t.date||'')===date && t.bookingMode!=='charter').map(t=>t.routeId)))];
+  const routeIds=[...new Set((SB_BOOKINGS||[]).flatMap(b=>ACCT_EXCLUDED_STATES.includes(b.status)?[]:(b.trips||[]).filter(t=>(t.date||'')===date && t.bookingMode!=='charter').map(t=>t.routeId)))];
   // option list builder for a booking's boat <select>
   const boatOpts=(bk, routeId)=>{
     const cur=bkOpsRead(bk,date).boatId||'';
@@ -55329,7 +55347,7 @@ let _vehMonth=(bkV2LocalYMD(new Date())).slice(0,7);   // 'YYYY-MM'
 let _vehCalMonth=(bkV2LocalYMD(new Date())).slice(0,7); // detail-panel status calendar month
 function vehCalShift(n){ const [y,m]=_vehCalMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
 function vehMonthShift(n){ const [y,m]=_vehMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
-function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
+function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
 function _vehDayCellInner(v,date){
   const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
   const routes=_vehDayRoutes(v,date);
@@ -55364,7 +55382,7 @@ function vehDayPopup(id,date){
   const dz=(v.dayZone&&v.dayZone[date])||''; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
   let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'}); }catch(_){}
   // trips today for this van
-  const jobs=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jobs.push({b,t}); }); });
+  const jobs=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jobs.push({b,t}); }); });
   const jrows=jobs.length?jobs.map(x=>{ const a=sbGetAgent(x.b.agentId); const tm=(x.b.ops&&x.b.ops.pickupTimeFinal)||x.t.pickupTime||x.b.pickupTime||'—'; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(x.t.pax||{}):0; return `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid #f3f1ea;font-size:11.5px"><span style="font-family:'DM Mono',monospace;color:#185FA5;min-width:50px">${e(tm)}</span><span style="flex:1;min-width:0">${e(x.b.leadPax||x.b.voucherRef||x.b.id)} <span style="color:#8a8a82">· ${e(a?a.name:'')}</span></span><span style="font-family:'DM Mono',monospace">${px} pax</span></div>`; }).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:6px 0">ไม่มีงานวันนี้</div>';
   const routes=_vehDayRoutes(v,date);
   const fams=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[];
@@ -55410,7 +55428,7 @@ function _vehRouteAbbr(rid){ return String(rid||'').replace(/^r/i,''); }
 function _vehRouteShort(rid){ const r=_vehRoute(rid); if(!r)return rid; return String(r.name||rid).replace(/\bIslands?\b/gi,'').replace(/\bby\b/gi,'').replace(/\s+/g,' ').trim(); }
 function _vehRoutesOpenOn(date){ const rs=(typeof ROUTES!=='undefined'&&ROUTES)||[]; const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
 // Customer demand on a route+date · pax = total seat pax · pickup = pax needing transfer (zone PK/KL, not No-Transfer)
-function _vehRouteDemand(routeId,date){ let pax=0,pickup=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; (b.trips||[]).forEach(t=>{ if(t.routeId!==routeId||t.date!==date)return; if(t.bookingMode==='charter')return; const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT')pickup+=p; }); }); return {pax,pickup}; }
+function _vehRouteDemand(routeId,date){ let pax=0,pickup=0; (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status))return; (b.trips||[]).forEach(t=>{ if(t.routeId!==routeId||t.date!==date)return; if(t.bookingMode==='charter')return; const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT')pickup+=p; }); }); return {pax,pickup}; }
 // A van can run MORE THAN ONE program in a day (2 jobs) → dayRoute[date] may be a single routeId (legacy) OR an array of routeIds. Always read via this normalizer.
 function _vehDayRoutes(v,date){ const dr=v&&v.dayRoute&&v.dayRoute[date]; if(!dr)return []; return Array.isArray(dr)?dr.filter(Boolean):[dr]; }
 function vehDaySetRoute(id,date,fid){ const v=vehGet(id); if(!v)return; v.dayRoute=v.dayRoute||{}; if(fid){ v.dayRoute[date]=fid; } else { delete v.dayRoute[date]; } const f=_vehRoute(fid); vehLog(id,'zone',date+' · เส้นทาง '+(f?f.name:'ล้าง')); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
@@ -55426,7 +55444,7 @@ function _vehSumRefresh(){ const el=document.getElementById('veh-matrix-summary'
 function _vehGroupsForDay(routeId,day){
   const set=new Set(); const vanByKey={};
   (SB_BOOKINGS||[]).forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status))return;
     (b.trips||[]).forEach(t=>{
       if(t.routeId!==routeId||t.date!==day)return; if(t.bookingMode==='charter')return;
       const zone=t.zone||b.pickupZone||''; const ops=b.ops||{};
@@ -55636,7 +55654,7 @@ function vehZoneOpen(id){ if(typeof window.laGuardEdit==='function' && !window.l
 }
 function vehJobsFor(date){
   const jobs={}; (SB_VEHICLES||[]).forEach(v=>jobs[v.id]={bk:0,pax:0,list:[]});
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; const vid=bkOpsRead(b,date).vanId; if(!vid||!jobs[vid]) return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(ACCT_EXCLUDED_STATES.includes(b.status)) return; const vid=bkOpsRead(b,date).vanId; if(!vid||!jobs[vid]) return;
     (b.trips||[]).forEach(t=>{ if((t.date||'')===date){ jobs[vid].bk++; jobs[vid].pax+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; jobs[vid].list.push({b,t}); } }); });
   return jobs;
 }
@@ -56348,7 +56366,7 @@ function pxPax(date, bid){
   var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0};
   var KIND=['ad','chd','inf','foc'];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -56379,7 +56397,7 @@ function pxPax(date, bid){
 function pxLongtail(date, bid){
   var chtr = 0, join = 0;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -56399,7 +56417,7 @@ function pxLongtail(date, bid){
 function pxUpsell(date, bid){
   var rows=[], sell=0, comp=0, comm=0, mine={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -56429,7 +56447,7 @@ function pxUpsell(date, bid){
 function pxAgents(date, bid){
   var M={}, ord=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
@@ -56456,7 +56474,7 @@ function pxAgents(date, bid){
 function pxVanCost(date, bid, routeId){
   var mine={}, all={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var vid=O.vanId; if(!vid) return;
@@ -58363,7 +58381,7 @@ function mvToggle(id){ var x = mvGet(id); if(!x) return; x.active = (x.active ==
 function mvRouteSet(rid, vid){
   var r = (typeof getRoute === 'function') ? getRoute(rid) : null; if(!r) return;
   r.mealVenueId = vid || '';
-  if(typeof save === 'function') save();
+  if(typeof saveData === 'function') saveData();
   ctRender();
 }
 function ctOdFold(){ _ct.odOpen = !_ct.odOpen; ctRender(); }
@@ -59064,11 +59082,11 @@ let _acctNewInvAgent='';
 function acctNewInvoiceOpen(){ _acctNewInvAgent=''; acctModal(''); acctNewInvoiceRender(); }
 function acctNewInvoiceRender(){
   const ov=document.getElementById('acct-modal'); if(!ov) return;
-  const agentsWith = (SB_AGENTS||[]).filter(a=>(SB_BOOKINGS||[]).some(b=>b.agentId===a.id && !ACCT_PAID_STATES.includes(b.status) && !acctBookingInvoice(b.id)));
+  const agentsWith = (SB_AGENTS||[]).filter(a=>(SB_BOOKINGS||[]).some(b=>b.agentId===a.id && !ACCT_EXCLUDED_STATES.includes(b.status) && !acctBookingInvoice(b.id)));
   const aOpts=agentsWith.map(a=>`<option value="${a.id}" ${a.id===_acctNewInvAgent?'selected':''}>${a.code?a.code+' · ':''}${a.name}</option>`).join('');
   let bkList='';
   if(_acctNewInvAgent){
-    const bks=(SB_BOOKINGS||[]).filter(b=>b.agentId===_acctNewInvAgent && !ACCT_PAID_STATES.includes(b.status) && !acctBookingInvoice(b.id));
+    const bks=(SB_BOOKINGS||[]).filter(b=>b.agentId===_acctNewInvAgent && !ACCT_EXCLUDED_STATES.includes(b.status) && !acctBookingInvoice(b.id));
     bkList = bks.length? bks.map(b=>{
       const d=(b.trips&&b.trips[0]&&b.trips[0].date)||b.travelDate||'';
       return `<label style="display:flex;align-items:center;gap:9px;padding:8px 10px;border:0.5px solid var(--fd-line-soft);border-radius:9px;margin-bottom:6px;cursor:pointer">
@@ -59915,7 +59933,7 @@ function sbWeatherPersist(){ if(typeof window.laCanEditArea==='function' && !win
 function bkV2IsWeatherClosed(routeId,date){ return SB_WEATHER_CLOSURES.some(c=>c.routeId===routeId && c.date===date); }
 function bkV2WeatherBookingsFor(routeId,date){
   return (SB_BOOKINGS||[]).filter(bk=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return false;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return false;
     return (bk.trips||[]).some(t=>t.routeId===routeId && t.date===date && t.bookingMode!=='charter');
   });
 }
@@ -59972,7 +59990,7 @@ function bkV2WeatherTagBookings(routeId,date){
   const key=bkV2WeatherKey(routeId,date); let tagged=0;
   const rName=((typeof ROUTES!=='undefined'&&ROUTES.find(r=>r.id===routeId))||{}).name||routeId;
   (SB_BOOKINGS||[]).forEach(bk=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;
     const onTrip=(bk.trips||[]).some(t=>t.routeId===routeId && t.date===date && t.bookingMode!=='charter');
     if(onTrip && !(bk.weatherResolve && bk.weatherResolve.event===key)){ bk.weatherResolve={event:key,status:'awaiting'}; bkV2AddHistory(bk,'weather','Trip '+rName+' · '+date+' cancelled due to weather','Weather'); tagged++; }
   });
@@ -63950,7 +63968,7 @@ function agEditRenderPP(p, i){
   // Effective travel dates always come from rate type; if missing → empty
   const travelFrom = rv ? (rv.from||'') : '';
   const travelTo   = rv ? (rv.to||'')   : '';
-  // Sync inherited dates back into draft so save() captures snapshot of rate type's dates
+  // Sync inherited dates back into draft so saveData() captures snapshot of rate type's dates
   if(_agEditDraft && _agEditDraft.programPeriods && _agEditDraft.programPeriods[i]){
     _agEditDraft.programPeriods[i].travelFrom = travelFrom;
     _agEditDraft.programPeriods[i].travelTo   = travelTo;
@@ -69100,7 +69118,7 @@ function bkV2Aggregate(){
   };
 
   SB_BOOKINGS.forEach(bk => {
-    if(['cancelled','cancelled_weather','rejected'].includes(bk.status)) return;   // don't count cancelled/rejected pax in the calendar chips (matches By-trip / seat calc)
+    if(ACCT_EXCLUDED_STATES.includes(bk.status)) return;   // don't count cancelled/rejected pax in the calendar chips (matches By-trip / seat calc)
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       const zone = bkV2InferZone(bk);
       const focPending = bk.focApproval?.status === 'pending';
@@ -71936,9 +71954,9 @@ function bkV2RenderTab2(){
   const rows = [];
   SB_BOOKINGS.forEach(bk=>{
     if(bk.schemaVer===2){
-      (bk.trips||[]).forEach(t=>{ if(t.date===date) rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
+      (bk.trips||[]).forEach(t=>{ if(t.date===date) rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:ACCT_EXCLUDED_STATES.includes(bk.status)}); });
     } else if(bk.travelDate===date){
-      rows.push({bk, t:null, routeId:bk.programId, zone:bk.transfer||'NoTransfer', pax:{ad:bk.pax?.adult||0, chd:bk.pax?.child||0, inf:bk.pax?.infant||0, foc:0}, charter:false, charterBoatId:null, pickupTime:'', subtotal:bk.total||0, cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)});
+      rows.push({bk, t:null, routeId:bk.programId, zone:bk.transfer||'NoTransfer', pax:{ad:bk.pax?.adult||0, chd:bk.pax?.child||0, inf:bk.pax?.infant||0, foc:0}, charter:false, charterBoatId:null, pickupTime:'', subtotal:bk.total||0, cxl:ACCT_EXCLUDED_STATES.includes(bk.status)});
     }
   });
 
@@ -72074,7 +72092,7 @@ function bkV2RenderTab2(){
   const _tripAbbr=s=>{ const k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(const w in _PPABBR){ if(k.includes(w)) return _PPABBR[w]; } const ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(w=>w[0]||'').join(''):String(s).slice(0,4)).toUpperCase(); };
   let _unBoatN=0,_unBoatPax=0,_unVanN=0,_unVanPax=0,_unRetN=0,_unRetPax=0,_unRcN=0,_unRcPax=0; const _unBoatR={}, _unVanR={}, _unRetR={}, _unRcR={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const dts=(b.trips||[]).filter(t=>(t.date||'')===date); if(!dts.length) return;
     const pax=dts.reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
@@ -72109,7 +72127,7 @@ function bkV2RenderTab2(){
     if(typeof ckSummary!=='function') return '';
     let vD=0,vT=0,vN=0,pD=0,pT=0,pN=0;
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
-      if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+      if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
       const s=ckSummary(b,date); if(!s) return;
       const _o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       if(_o.vanId){ vT++; if(s.van&&s.van.at){ vD++; vN+=s.vanNoShow; } }
@@ -73380,7 +73398,7 @@ function bkV2RenderTab3(){
         <tbody>
           ${filtered.map(b => `
             <tr onclick="bkV2OpenDetail('${b.id}')">
-              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="trip-date">created ${bkV2FmtDate(b.createdAt)}</div>${b.id.startsWith('b2c_')?'<span style="display:inline-block;margin-top:3px;background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span>':''}${(function(){ const _o=(SB_BOOKINGS||[]).find(x=>x.id===b.id); if(!_o||['cancelled','rejected','cancelled_weather'].includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<div title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})" style="display:inline-block;margin-top:3px;background:#FBE9D6;color:#9A5B00;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;cursor:help">&#9888; อาจซ้ำ</div>`; })()}</td>
+              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="trip-date">created ${bkV2FmtDate(b.createdAt)}</div>${b.id.startsWith('b2c_')?'<span style="display:inline-block;margin-top:3px;background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span>':''}${(function(){ const _o=(SB_BOOKINGS||[]).find(x=>x.id===b.id); if(!_o||ACCT_EXCLUDED_STATES.includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<div title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})" style="display:inline-block;margin-top:3px;background:#FBE9D6;color:#9A5B00;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;cursor:help">&#9888; อาจซ้ำ</div>`; })()}</td>
               <td><div class="agent-name">${escapeHTML(b.agentName)}</div><div class="agent-rt">${escapeHTML(b.agentSub)}</div></td>
               <td><div class="trip-name">${escapeHTML(b.tripSummary)}</div></td>
               <td><div class="trip-date">${bkV2FmtDate(b.travelDate)}</div></td>
@@ -76400,7 +76418,7 @@ function bkV2RestoreBooking(bookingId){
   if(!bookingId || typeof SB_BOOKINGS==='undefined') return false;
   const bk = SB_BOOKINGS.find(b=>b.id===bookingId);
   if(!bk){ console.warn('[bkV2RestoreBooking] not found:', bookingId); return false; }
-  if(!['cancelled','cancelled_weather','rejected'].includes(bk.status)){ alert('Booking is not cancelled'); return false; }
+  if(!ACCT_EXCLUDED_STATES.includes(bk.status)){ alert('Booking is not cancelled'); return false; }
   if(!confirm('Restore (un-cancel) booking '+(bk.voucherRef||bk.code||bk.id)+' back to Confirmed?')) return false;
   // Void any cancellation-fee invoice raised at cancel time
   try{
@@ -76455,7 +76473,7 @@ function bkV2FindDuplicateBookings(d, excludeId){
   const out=[];
   (SB_BOOKINGS||[]).forEach(b=>{
     if(b.id===excludeId) return;
-    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(ACCT_EXCLUDED_STATES.includes(b.status)) return;
     const reasons=[];
     const bv=norm(b.voucherRef||b.code);
     if(vref && bv && bv===vref) reasons.push('เลข Voucher ตรงกัน ('+(b.voucherRef||b.code)+')');
@@ -76472,7 +76490,7 @@ function bkV2VoucherDupHtml(val){
   if(!v) return '';
   const excl=_bkV2.editingId||null;
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const hits=(SB_BOOKINGS||[]).filter(b=>{ if(b.id===excl) return false; if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return false; const bv=String(b.voucherRef||b.code||'').trim().toLowerCase().replace(/\s+/g,' '); return bv && bv===v; });
+  const hits=(SB_BOOKINGS||[]).filter(b=>{ if(b.id===excl) return false; if(ACCT_EXCLUDED_STATES.includes(b.status)) return false; const bv=String(b.voucherRef||b.code||'').trim().toLowerCase().replace(/\s+/g,' '); return bv && bv===v; });
   if(!hits.length) return '';
   const b=hits[0]; const _t0=(b.trips||[])[0]||{}; const _rn=((typeof getRoute==='function'&&getRoute(_t0.routeId))||{}).name||'';
   const more=hits.length>1?(' · และอีก '+(hits.length-1)):'';
@@ -76515,7 +76533,7 @@ function bkV2CommitBooking(status){
     }
     if(_isStaff && (d.staffPurpose||'welfare')==='welfare'){
       const exclId = _bkV2.editingId || null;
-      const usedExcl = (year)=>{ let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(b.id===exclId||b.staffId!==d.staffId) return; if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ if((t.date||'').slice(0,4)===String(year)) n += bkV2PaxTot(t.pax||{},'foc'); }); }); return n; };
+      const usedExcl = (year)=>{ let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(b.id===exclId||b.staffId!==d.staffId) return; if(ACCT_EXCLUDED_STATES.includes(b.status)) return; (b.trips||[]).forEach(t=>{ if((t.date||'').slice(0,4)===String(year)) n += bkV2PaxTot(t.pax||{},'foc'); }); }); return n; };
       const reqByYear={}; (d.trips||[]).forEach(t=>{ const y=(t.date||'').slice(0,4); if(!y) return; reqByYear[y]=(reqByYear[y]||0)+bkV2PaxTot(t.pax||{},'foc'); });
       let over='';
       Object.keys(reqByYear).forEach(y=>{ const rem=(typeof staffQuota==='function'?staffQuota(d.staffId,y):0)-usedExcl(y); const req=reqByYear[y]; if(req>rem) over += 'Year '+y+': '+rem+' free seats left, '+req+' requested -> over by '+(req-rem)+'\n'; });
@@ -78144,7 +78162,7 @@ function bkV2RenderBookingDetail(){
           ${canCancel?`<button class="bkv2-nb-btn" onclick="bkV2DetailReschedule('${bk.id}')" style="display:inline-flex;align-items:center;gap:6px;color:#185FA5;border-color:rgba(24,95,165,0.3)">${bkV2DetailIcon('clock',13)} Reschedule</button>`:''}
           ${canCancel?`<button class="bkv2-nb-btn" onclick="bkV2DetailPartial('${bk.id}')" style="display:inline-flex;align-items:center;gap:6px;color:#A05A1A;border-color:rgba(160,90,26,0.3)">− Reduce pax</button>`:''}
           ${canCancel?`<button class="bkv2-nb-btn" onclick="bkV2DetailCancel('${bk.id}')" style="display:inline-flex;align-items:center;gap:6px;color:#c43a2e;border-color:rgba(196,58,46,0.3)">${bkV2DetailIcon('cancel',13)} Cancel</button>`:''}
-          ${['cancelled','cancelled_weather','rejected'].includes(bk.status)?`<button class="bkv2-nb-btn" onclick="bkV2RestoreBooking('${bk.id}')" style="display:inline-flex;align-items:center;gap:6px;color:#0F6E56;border-color:rgba(15,110,86,0.35)">&#8634; กู้คืน (Restore)</button>`:''}
+          ${ACCT_EXCLUDED_STATES.includes(bk.status)?`<button class="bkv2-nb-btn" onclick="bkV2RestoreBooking('${bk.id}')" style="display:inline-flex;align-items:center;gap:6px;color:#0F6E56;border-color:rgba(15,110,86,0.35)">&#8634; กู้คืน (Restore)</button>`:''}
         </div>
       </div>
 
@@ -79833,7 +79851,7 @@ function poBoats(date, pier){
   });
   /* จำนวน ลค · นับจาก booking ที่ผูกลำไว้แล้ว (ops.boatId) แบบเดียวกับเช็คอินหน้าท่า */
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -79857,7 +79875,7 @@ function poBoats(date, pier){
 function poUnassigned(date, pier){
   var n=0;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -82177,7 +82195,7 @@ function pjStaffName(id){ if(!id) return ''; var s=(PIER_STAFF||[]).filter(funct
 function pjPax(date, boatId, pier){
   var out={ad:0,chd:0,inf:0,foc:0,n:0,langs:{}};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(ACCT_EXCLUDED_STATES.indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -82784,10 +82802,10 @@ function pjProgColor(rid,hex){
   var okCfg=(typeof laCanEditArea==='function') ? laCanEditArea('config') : true;
   if(!okCfg && !poCanEdit()){ if(typeof laGuardEdit==='function') laGuardEdit('pier'); return; }
   for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i].id===rid){ ROUTES[i].color=hex; break; } }
-  // §pierBlob · ห้ามใช้ save('config') · มันมีด่านสิทธิ์ของตัวเองแล้ว return เงียบ
+  // §pierBlob · ห้ามใช้ saveData('config') · มันมีด่านสิทธิ์ของตัวเองแล้ว return เงียบ
   //   คนหน้าท่าไม่มีสิทธิ์ config · สีจะเปลี่ยนบนจอแต่ไม่ถูกบันทึก แล้วเด้งกลับตอนรีเฟรช
   //   เขียนเฉพาะ routes ผ่านแคชกลาง · ตรงกับที่ตัดสินไว้ว่าแก้ท่าเรือได้ก็แต้มสีได้
-  try{ if(typeof laBlob==='function'){ laBlob().routes=ROUTES; laBlobSave(); } else save('config'); }catch(_){}
+  try{ if(typeof laBlob==='function'){ laBlob().routes=ROUTES; laBlobSave(); } else saveData('config'); }catch(_){}
   renderPierJob();
   if(window.event) window.event.stopPropagation();
 }
