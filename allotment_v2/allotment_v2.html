@@ -41594,11 +41594,11 @@ window._laReloadData=function(){
     if(typeof PIER_DUTY!=='undefined' && d.pier_duty) PIER_DUTY=d.pier_duty;
     if(typeof PIER_TEAM!=='undefined' && d.pier_team) PIER_TEAM=d.pier_team;   // §pierJob
     if(typeof PIER_JOB!=='undefined' && d.pier_job) PIER_JOB=d.pier_job;
-    if(typeof PIER_LIC_TYPES!=='undefined' && Array.isArray(d.pier_lic_types) && d.pier_lic_types.length) PIER_LIC_TYPES=d.pier_lic_types;   // §pierLic
-    if(typeof PIER_LIC_CLASSES!=='undefined' && Array.isArray(d.pier_lic_classes) && d.pier_lic_classes.length) PIER_LIC_CLASSES=d.pier_lic_classes;
+    if(typeof PIER_LIC_TYPES!=='undefined' && Array.isArray(d.pier_lic_types) && d.pier_lic_types.length) PIER_LIC_TYPES=d.pier_lic_types;   // §pierLic §seedRevert-deliberate · LAM-29: kept on purpose, not a bug. This is a reference-data store seeded like FL_DEFAULT_* (CLAUDE.md §2 back-fill pattern), not a transactional store like sb_bookings/sb_agents. A hard reload already reseeds when empty (:79729 `if(PIER_LIC_TYPES.length) return;`) regardless of this guard, so dropping just this soft-refresh guard would make refresh disagree with reload, not make "clear stays cleared" actually true end-to-end. See docs/workflows/07-data-persistence-api.md §10.6.
+    if(typeof PIER_LIC_CLASSES!=='undefined' && Array.isArray(d.pier_lic_classes) && d.pier_lic_classes.length) PIER_LIC_CLASSES=d.pier_lic_classes;   // §seedRevert-deliberate · LAM-29: same reasoning as PIER_LIC_TYPES above — boot-time reseed at :79729 makes this consistent, not a bug.
     if(typeof PIER_LICENSES!=='undefined' && Array.isArray(d.pier_licenses)) PIER_LICENSES=d.pier_licenses;
     if(typeof PIER_CFG!=='undefined' && d.pier_cfg) PIER_CFG=d.pier_cfg;
-    if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt
+    if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt §seedRevert-deliberate · LAM-29: kept on purpose. Attendance-code reference data, seeded like FL_DEFAULT_* (CLAUDE.md §2); boot-time reseed at :79712 (`if(PIER_CODES.length) return;`) already reverts an emptied list on hard reload, so this guard just keeps soft-refresh consistent with that. See docs/workflows/07-data-persistence-api.md §10.6.
     if(typeof PIER_SHIFT!=='undefined' && d.pier_shift) PIER_SHIFT=d.pier_shift;
     if(typeof PIER_SECT!=='undefined' && Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
