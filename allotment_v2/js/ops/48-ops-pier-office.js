@@ -118,10 +118,26 @@
       if(num(m.crew) !== null) o.pay_ws_min_crew = +m.crew;
     }
     o.display = displayView();
+    if(hasParkPrice) o.park_price = parkPriceView();
     return o;
+  }
+  /* §parkPrice · the Park Tickets calculation table (legacy PIER_CFG.parkPrice, pkPriceSet), shared by every device through the settings:
+     ticket type key -> price text in the page, baht per head on the server. A blank price is no price. An older server has no park_price: the
+     page's table then stays local and nothing is sent. */
+  var hasParkPrice = false;
+  function parkPriceView(){
+    var pp = cfg().parkPrice, out = {};
+    if(pp && typeof pp === 'object') Object.keys(pp).forEach(function(k){
+      var raw = String(pp[k] == null ? '' : pp[k]).trim(); if(!raw) return;
+      var n = parseFloat(raw.replace(/[^0-9.\-]/g, ''));
+      if(isFinite(n) && n >= 0) out[k] = Math.round(n * 100) / 100;
+    });
+    return out;
   }
   function applySettings(s){
     setSrv = s; var c = cfg();
+    hasParkPrice = !!(s.park_price && typeof s.park_price === 'object');
+    if(hasParkPrice){ c.parkPrice = {}; Object.keys(s.park_price).forEach(function(k){ c.parkPrice[k] = String(s.park_price[k]); }); }
     SET_KEYS.forEach(function(k){ c[k[0]] = s[k[1]] == null ? '' : s[k[1]]; });
     c.payWsMin = { cap: s.pay_ws_min_cap, crew: s.pay_ws_min_crew };
     var dsp = (s.display && typeof s.display === 'object') ? s.display : {};

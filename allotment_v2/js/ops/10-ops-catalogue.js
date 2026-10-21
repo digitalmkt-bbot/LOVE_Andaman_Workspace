@@ -193,7 +193,9 @@
       O.get('/v1/boats'),
       window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/markets'),   // w5-a: CS's embed token reads the calendar and By-trip pages only (no markets, no sales)
       window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/sales'),
-      O.get('/v1/agents', { active: 'all' })
+      O.get('/v1/agents', { active: 'all' }),
+      // an agent's Additional Services (migration 572) in one request; an older server answers 404 and the agents just have none
+      window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/agents/addon-services').catch(function(){ return null; })
     ]).then(function(r){
       var routes = (r[0] && r[0].routes) || [];
       window.OPS_ROUTE_DAYS = {};
@@ -204,6 +206,10 @@
       if(typeof SB_MARKETS !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_MARKETS, (r[2] && r[2].markets) || [], mapMarket);
       if(typeof SB_SALES !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_SALES, (r[3] && r[3].sales) || [], mapSales);
       if(typeof SB_AGENTS !== 'undefined') replaceWith(SB_AGENTS, (r[4] && r[4].agents) || [], mapAgentSummary, agentDefaults);
+      if(typeof SB_AGENTS !== 'undefined' && r[5] && r[5].agents) SB_AGENTS.forEach(function(a){
+        var mine = r[5].agents[a.id];
+        if(mine) a.addonServices = mine.map(function(s){ return { svcId: s.service_id, variants: (s.variants || []).map(function(v){ return { varId: v.variant_id, selling: v.selling || 0, net: v.net || 0 }; }) }; });
+      });
       if(O.contractClock && r[4]) O.contractClock.put(r[4].expiring_count);   // F4: the nav badge number
       O.agentGapCounts = (r[4] && r[4].gap_counts) ? Object.assign({}, r[4].gap_counts) : null;   // w6-d: the server's chip counts (94-ops-agents-w6.js); dropped by a write to an agent
       try{ console.log('[ops] catalogue · ' + routes.length + ' routes · ' + boats.length + ' boats · ' + ((r[4] && r[4].agents) || []).length + ' agents'); }catch(_){}

@@ -421,7 +421,7 @@
       planned_budget: Math.max(0, num(d.planned_budget != null ? d.planned_budget : (d.plannedBudget != null ? d.plannedBudget : d.budget))),
       notes: nullable(d.notes)
     };
-    if(!isPatch) body.no = text(d.no);
+    if(!isPatch && text(d.no)) body.no = text(d.no);   // normally left out: the server numbers a project
     if(d.phase !== undefined) body.phase = nullable(d.phase);
     if(d.bill_note !== undefined || d.billNote !== undefined) body.bill_note = nullable(d.bill_note != null ? d.bill_note : d.billNote);
     return body;
@@ -787,13 +787,8 @@
     var planFrom = d('fl-proj-from') ? d('fl-proj-from').value : '';
     if(!name){ alert('Project name is required'); return null; }
     if(!planFrom){ alert('Planned start is required'); return null; }
-    var projects = listProjects();
-    var maxNo = projects.reduce(function(mx, p){
-      var n = parseInt(String((p && p.no) || '').replace(/^PRJ-/, ''), 10) || 0;
-      return Math.max(mx, n);
-    }, 0);
+    /* the project number is the server's (PRJ- + the highest used + 1, taken under a lock): none is sent, the answer carries it */
     var input = {
-      no: editId ? undefined : ('PRJ-' + String(maxNo + 1).padStart(3, '0')),
       name: name,
       boatId: d('fl-proj-boat') && d('fl-proj-boat').value !== '__none__' ? (d('fl-proj-boat').value || null) : null,
       type: d('fl-proj-type') ? d('fl-proj-type').value : 'drydock',

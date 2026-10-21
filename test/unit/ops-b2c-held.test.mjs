@@ -71,3 +71,14 @@ test('panel list: held rows leave the issue list and get their own buttons', asy
   assert.match(rt.painted.html, /laOpsHeldBtn/);
   assert.match(rt.painted.html, /data-c="dismiss"/);
 });
+
+test('the red failure bar: the issues answer\'s health becomes the object _laB2CHealth reads; an older server (no health) leaves the bar off', () => {
+  const rt = runtime({ held: [] });
+  const { healthFor } = rt.window.laOps.b2cHealth;
+  assert.deepEqual(JSON.parse(JSON.stringify(healthFor({ health: { configured: true, ok: false, held_open: 2, consecutive: 3, stale_minutes: 12, phase: 'held', message: 'LOV-1: Unknown route: r9' } }))),
+    { configured: true, ok: false, neverOk: false, staleMin: 12, consecutive: 3, phase: 'held', message: 'LOV-1: Unknown route: r9' });
+  assert.deepEqual(JSON.parse(JSON.stringify(healthFor({ health: { configured: true, ok: true, held_open: 0, consecutive: 0, stale_minutes: null, phase: null, message: null } }))),
+    { configured: true, ok: true, neverOk: false, staleMin: null, consecutive: 0, phase: '', message: '' });
+  assert.equal(healthFor({ held_orders: [], issues: [] }), null);
+  assert.equal(healthFor(null), null);
+});

@@ -104,9 +104,11 @@
     var m = orig(b, date);
     var r = rowFor(b, date);
     if(!r || !m) return m;
-    var exCov = n(m.exCov);
+    /* the server's covered sales (cash on tour the pier took, and sales / upgrades that repeat pier money, §exDupPier); an older server has no figure */
+    var exCov = r.tour_sales_covered != null ? n(r.tour_sales_covered) : n(m.exCov);
+    m.exCov = exCov;
     m.cot = n(r.cot); m.cur = r.cot_currency || m.cur; m.handling = r.cot_handling || ''; m.note = r.cot_note || '';
-    m.upDue = n(r.upgrades_due); m.upGot = n(r.upgrades_got); m.balance = n(r.b2c_balance);
+    m.upDue = n(r.upgrades_due); m.upGot = n(r.upgrades_got); m.upCov = n(r.up_covered); m.balance = n(r.b2c_balance);
     m.exDue = n(r.tour_sales_due); m.exGot = n(r.tour_sales_got); m.extrasTot = m.exGot + m.exDue + exCov;
     m.gross = n(r.gross); m.pierPaid = n(r.paid); m.pierFee = n(r.fees); m.due = n(r.due); m.got = n(r.got);
     m.noSlip = n(r.no_slip);
@@ -115,6 +117,17 @@
     m.paidState = r.paid_status ? String(r.paid_status) : '';
     m.ovnSettled = !!r.overnight_return;
     return m;
+  });
+
+  /* §exDupPier (lk-inbox 960339db, fca1a7bb): which sales and upgrades repeat the pier's own payments. The server decides (pier-money
+     `covered_upgrade_ids`, each sale's `pier_duplicate`); bkxExDupPier / bkxUpDupPier read this map. The function arrives with that sync. */
+  if(typeof window.bkxPierDupIds === 'function') wrap('bkxPierDupIds', function(orig, b, date){
+    var r = date ? rowFor(b, date) : null;
+    if(!r || !Array.isArray(r.covered_upgrade_ids)) return orig.apply(this, [].slice.call(arguments, 1));
+    var out = {};
+    r.covered_upgrade_ids.forEach(function(id){ out[id] = 1; });
+    (r.tour_sales || []).forEach(function(s){ if(s && s.pier_duplicate === true) out[s.id] = 1; });
+    return out;
   });
 
   // paid / fees / no_slip of the day: the server row's (live pier payments), not b.pierPayments, which is only

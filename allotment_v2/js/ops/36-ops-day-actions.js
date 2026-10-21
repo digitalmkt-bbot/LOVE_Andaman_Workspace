@@ -427,6 +427,7 @@
       customerPaid: num(s.customer_paid),
       settle: s.settle || (s.method === 'cot' ? 'pending' : 'done'),
       coveredByPier: s.covered_by_pier === true,        // w5-d: the server's bkxExCovered (README "Pier money"): the pier's cash already holds this sale's money
+      pierDuplicate: s.pier_duplicate === true,         // §exDupPier: re-saved as transfer / card, and the pier already took that money (a covered sale that was not cash on tour)
       collectedAt: s.collected_at || '',
       collectedBy: s.collected_by || '',
       date: s.sold_at || '',
