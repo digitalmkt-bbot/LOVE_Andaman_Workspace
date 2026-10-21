@@ -35,7 +35,14 @@ function _opsBookingMerge(mapped){
     if(kept) V.put(SB_BOOKINGS[i],kept);
   });
 }
-function bookingV2OpsResetCache(){
+/* keepLoaded (the boot call): the page may have started loading its month while the boot was still reading the catalogue; that
+   load, or its finished result, is real server data, so only the seed bookings go. Without it, boot dropped the in-flight load
+   and the next draw paged the same month again (a busy month is 2 pages of ~750 kB, 5-9 s each). */
+function bookingV2OpsResetCache(keepLoaded){
+  if(keepLoaded){
+    if(typeof SB_BOOKINGS!=='undefined') for(var i=SB_BOOKINGS.length-1;i>=0;i--) if(!SB_BOOKINGS[i]._fromOpsBackend) SB_BOOKINGS.splice(i,1);
+    return;
+  }
   _opsBookingRanges=Object.create(null); _opsBookingRangeLoads=Object.create(null); _opsDailyCounts=Object.create(null);
   _opsBookingSeen=Object.create(null); _opsBookingFailed=Object.create(null); _opsBookingStamp=Object.create(null);
   delete window._opsAllStats; delete window._opsAllMonthCounts;

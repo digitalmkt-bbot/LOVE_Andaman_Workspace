@@ -48,7 +48,7 @@
     .then(function(){
       // Booking records are page-owned: Calendar loads its visible month and
       // By-trip its selected day. Never download a 120-day booking blob at boot.
-      if(typeof bookingV2OpsResetCache==='function') bookingV2OpsResetCache();
+      if(typeof bookingV2OpsResetCache==='function') bookingV2OpsResetCache(true);
       if(typeof bookingV2OpsAttachWriteInvalidation==='function') bookingV2OpsAttachWriteInvalidation();
     })
     // Pending approvals are an all-date queue. Load them only when its tab is
