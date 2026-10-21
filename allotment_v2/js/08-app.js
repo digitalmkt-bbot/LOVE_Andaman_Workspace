@@ -19305,7 +19305,7 @@ var _pckBoat='', _pckVan='', _pckArr='', _pckStat='', _pckQ='';
 // คอลัมน์ Submitted by · หน้าท่าไม่ได้ใช้ทุกวัน ปกติซ่อน · จำค่าที่เลือกไว้ข้ามการเปิดหน้า
 var _pckShowBy=(function(){ try{ return localStorage.getItem('pck_showby')==='1'; }catch(_){ return false; } })();
 function pckToggleBy(){ _pckShowBy=!_pckShowBy; try{ localStorage.setItem('pck_showby', _pckShowBy?'1':'0'); }catch(_){} renderPierCheckin(); }
-function pckSetBoat(v){ _pckBoat=v||''; renderPierCheckin(); }
+function pckSetBoat(v){ v=v||''; _pckBoat=(v && v===_pckBoat)?'':v; renderPierCheckin(); }   /* §pckBoatToggle · กดชิปเรือที่เลือกอยู่ซ้ำ = กลับไปเรือทั้งหมด */
 function pckSetVan(v){ _pckVan=v||''; renderPierCheckin(); }
 function pckSetArr(v){ _pckArr=(_pckArr===v)?'':v; renderPierCheckin(); }
 function pckSetStat(v){ _pckStat=(_pckStat===v)?'':v; renderPierCheckin(); }
