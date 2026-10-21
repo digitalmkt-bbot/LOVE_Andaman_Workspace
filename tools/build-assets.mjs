@@ -110,9 +110,14 @@ html = html.replace(/(<script\s+src="|<link\s+rel="stylesheet"\s+href=")((?:js|c
   stamped++;
   return a + rel + '?v=' + md5(p) + z;
 });
+
+// ── 4 · defer every script · the page is only external classic scripts (no inline blocks), so deferring keeps their order
+// and runs them all before DOMContentLoaded; the browser just stops freezing the page while each one downloads and parses.
+let deferred = 0;
+html = html.replace(/<script src="((?:js\/|https:\/\/cdnjs\.cloudflare\.com\/)[^"]+)"><\/script>/g, (m, src) => { deferred++; return '<script defer src="' + src + '"></script>'; });
 fs.writeFileSync(HTML, html);
 
 const mb = (n) => (n / 1e6).toFixed(2) + 'MB';
 console.log('[build] ' + (bundled ? bundledBooking + ' booking files → js/booking.bundle.js, ' + bundledOps + ' ops files → js/ops.bundle.js · ' : '') +
   (esbuild ? jsFiles.length + ' js minified ' + mb(before) + ' → ' + mb(after) + ' · ' : '') +
-  stamped + ' tags stamped · ' + (Date.now() - t0) + 'ms · ' + (outArg ? 'out ' + APP : 'in place'));
+  stamped + ' tags stamped · ' + deferred + ' deferred · ' + (Date.now() - t0) + 'ms · ' + (outArg ? 'out ' + APP : 'in place'));
