@@ -23587,6 +23587,21 @@ function pckRouteShort(rt){
     .replace(/\bby Catamaran\b/g,'Cat').replace(/^Early\s+/,'E.').replace(/\s+by\s+/g,' ').replace(/\s{2,}/g,' ').trim();
   return n||rt.name||'—';
 }
+/* §pckBump (2026-10-21) · owner: ตัวเลขหลังชื่อเรือ "พอเช็คอินตัวเลขก็เด้งขึ้น" · เลือกแบบป้ายลอยมุมขวาบน (mockup H)
+   จำยอดขึ้นเรือของแต่ละลำไว้ (ต่อวัน) · รอบ render ใหม่ยอดเพิ่ม = เด้งเลขหน้า · เปิดหน้าครั้งแรกไม่เด้ง */
+var _PCK_BUMP_LAST={}, _PCK_BUMP_Q=[];
+function pckBumpRun(){
+  var q=_PCK_BUMP_Q.splice(0);
+  var go=function(){ q.forEach(function(k){
+    var els=document.querySelectorAll('[data-pck-bump="'+String(k).replace(/["\\]/g,'')+'"]');
+    for(var i=0;i<els.length;i++){ try{ els[i].animate([
+      {transform:'translateY(0) scale(1)'},
+      {transform:'translateY(-6px) scale(1.45)',color:'#16A34A',offset:.3},
+      {transform:'translateY(1px) scale(.92)',color:'#16A34A',offset:.65},
+      {transform:'translateY(0) scale(1)'}],{duration:600,easing:'ease-out'}); }catch(_){} }
+  }); };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(function(){ requestAnimationFrame(go); }); else setTimeout(go,30);
+}
 function pckBoatTabs(all, part){
   var e=ckEsc, m={}, ks=[];
   all.forEach(function(r){
@@ -23614,7 +23629,11 @@ function pckBoatTabs(all, part){
     h+='<button class="pck-btab pck-btab-d'+(on?' on':'')+'" onclick="pckSetBoat(\''+k+'\')" title="'+e(pckBoatName(k)+' · '+(rt.name||'')+(dep?(' · '+dep):''))+'" style="border-bottom-color:'+(rt.color||'#999')+';'+(on?('background:'+col+';color:'+ink):'')+'">'
       +'<span style="width:10px;height:10px;border-radius:50%;flex:none;background:'+(on?ink:col)+'"></span>'
       +'<span>'+e(pckBoatName(k))+'</span>'
-      +'<span class="c"'+(on?' style="color:'+ink+'"':'')+' title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking">'+a.onP+'/'+a.pax+'</span></button>';
+      +'<span class="c pck-bdg'+((a.pax>0&&a.onP>=a.pax)?' full':'')+'" title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking"><b data-pck-bump="'+e(k)+'">'+a.onP+'</b><i>/'+a.pax+'</i></span></button>';
+    /* §pckBump · ยอดขึ้นเรือเพิ่มจากรอบก่อน (กดเช็คอิน หรือมีคนเช็คอินจากเครื่องอื่นแล้วหน้ารีเฟรช) → ตัวเลขเด้ง */
+    var _bk=_pckDate+'|'+k, _pv=_PCK_BUMP_LAST[_bk];
+    if(_pv!=null && a.onP>_pv) _PCK_BUMP_Q.push(k);
+    _PCK_BUMP_LAST[_bk]=a.onP;
   });
   /* §kitPop · จำนวนลำที่มีร้านแล้วแต่ยังไม่ได้ส่งรายการ · ติดเป็นจุดส้มบนปุ่ม
      ของเดิมแถบครัวกางอยู่ตลอด เห็นเองว่ายังไม่ส่ง · พอย้ายเข้า popup ต้องมีอะไรมาแทนการมองเห็นนั้น */
@@ -23633,6 +23652,7 @@ function pckBoatTabs(all, part){
     +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่ออย่างเดียว · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ (ปุ่มใบสั่งงานออกให้ทั้งสองใบอยู่แล้ว)">&#128203;</button>'
     +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
       +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>';
+  if(_PCK_BUMP_Q.length) pckBumpRun();
   if(part==='jobs') return '<span class="pkh-jobs">'+jobs+'</span>';
   if(part==='tabs') return h+'</div>';
   return h+jobs+'</div>';
@@ -24763,7 +24783,7 @@ function pckHeadCSS(){
   +H+' .pkh-fwrap .ck-fsep{height:16px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
-  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
+  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:18px 8px;padding:14px 12px 0 0}'   /* §pckBump · เว้นที่ให้ป้ายตัวเลขลอยพ้นขอบชิป */
   +H+' .pkh-boats .pck-btab{padding:2px 9px !important;font-size:11px !important;gap:5px !important}'
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
   +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:12.5px;font-weight:800;letter-spacing:-.2px}'
@@ -24773,6 +24793,14 @@ function pckHeadCSS(){
   +H+' .pkh-boats .pck-btab .c{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
+  /* §pckBump · ป้ายยอดขึ้นเรือ ลอยมุมขวาบนของชิป · เลขหน้าใหญ่หนา · /ทั้งหมด เล็กสีเทา · เต็มลำ = เขียว */
+  +H+' .pck-btab.pck-btab-d{position:relative;overflow:visible;padding-right:26px !important}'
+  +H+' .pck-btab-d .pck-bdg{position:absolute;top:-14px;right:-12px;display:inline-flex;align-items:baseline;gap:1px;padding:2px 9px 1px !important;'
+    +'border-radius:999px;white-space:nowrap;background:#fff !important;color:#1F1F1C !important;border:1.5px solid #E7E4DC;box-shadow:0 2px 6px rgba(31,31,28,.16);font-family:inherit !important}'
+  +H+' .pck-btab-d .pck-bdg b{display:inline-block;transform-origin:50% 85%;font-family:\'DM Sans\',sans-serif;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;letter-spacing:-.4px;line-height:1.05}'
+  +H+' .pck-btab-d .pck-bdg i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:10.5px;font-weight:400;color:#8A8A82}'
+  +H+' .pck-btab-d .pck-bdg.full{background:#DCFCE7 !important;border-color:#86D7A4;color:#15803D !important}'
+  +H+' .pck-btab-d .pck-bdg.full i{color:#15803D}'
   +H+' .pkh-boats .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
   /* ══ §pckProgBt · แผงโปรแกรมใช้จังหวะเดียวกับการ์ด Programmes ของ By trip ══
      สองหน้านี้อ่านข้อมูลชุดเดียวกัน คนเดินไปมาระหว่างสองหน้าตลอดวัน
