@@ -81488,6 +81488,28 @@ function pc2CSS(S){
   S+' .pc-selbar input.pc-clm-in{flex:1 1 220px;min-width:160px;height:32px;border:1.5px solid #0E7490;border-radius:8px;padding:0 10px;font:inherit;font-size:13.5px}',
   S+' .pc-selbar input.pc-clm-in.bad{border-color:#A32D2D;background:#FDF0EF}',
   S+' .pc2-clms{border-top:4px solid #0E7490}',
+  /* §pcClmTbl · ตารางรายการตั้งเบิก */
+  S+' .pcc-h{flex-wrap:wrap;gap:10px 18px;align-items:center} '+S+' .pcc-t{min-width:200px}',
+  S+' .pcc-k{display:flex;gap:8px;flex-wrap:wrap} '+S+' .pcc-k>div{border:1px solid #DCE2E8;border-radius:9px;padding:5px 11px;min-width:112px} '+S+' .pcc-k>div.wn{border-color:#F0C98C;background:#FFF8EC}',
+  S+' .pcc-k span{display:block;font-size:11px;color:'+M+'} '+S+' .pcc-k>div.wn span{color:#8A5A0B} '+S+' .pcc-k b{display:block;font-family:"DM Mono",monospace;font-weight:500;font-size:15px} '+S+' .pcc-k b.ok{color:#0B6E4F} '+S+' .pcc-k>div.wn b{color:#8A5A0B} '+S+' .pcc-k b.bad{color:#A3321D} '+S+' .pcc-k b i{font-style:normal;font-family:inherit;font-size:12px}',
+  S+' .pcc-f{display:flex;gap:2px;background:#EEF2F8;border-radius:10px;padding:3px;margin-left:auto} '+S+' .pcc-f button{border:none;background:transparent;color:'+SUB+';border-radius:8px;padding:6px 11px;font:600 12px inherit;font-family:inherit;cursor:pointer;white-space:nowrap} '+S+' .pcc-f button span{opacity:.7} '+S+' .pcc-f button.on{background:'+N+';color:#fff}',
+  S+' .pcc-w{overflow-x:auto} '+S+' table.pcc-t{width:100%;min-width:700px;border-collapse:collapse;font-size:12.5px}',
+  S+' table.pcc-t th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:'+M+';text-transform:uppercase;letter-spacing:.04em;background:#F8FAFB;border-bottom:1px solid #DCE2E8;white-space:nowrap} '+S+' table.pcc-t th:first-child{padding-left:12px;width:30%}',
+  S+' table.pcc-t td{padding:6px 7px;vertical-align:middle;border-bottom:1px solid #EEF1F4} '+S+' table.pcc-t .r{text-align:right} '+S+' table.pcc-t .m{font-family:"DM Mono",monospace;font-weight:500;white-space:nowrap} '+S+' table.pcc-t .mut{color:#8A97A8} '+S+' table.pcc-t .wn{color:#8A5A0B}',
+  S+' table.pcc-t tr.pcc-d td{background:#F3F6F9;border-bottom:1px solid #DCE2E8} '+S+' table.pcc-t tr.pcc-d.cur td{background:#E9F3F8}',
+  S+' .pcc-dh{display:flex;align-items:center;gap:8px;padding-left:2px} '+S+' .pcc-dh b{font-size:13px;color:'+N+'} '+S+' .pcc-dh a{text-decoration:none} '+S+' .pcc-dh span{font-size:12px;color:'+M+'}',
+  S+' .pcc-dh em,'+S+' .pcc-r em{font-style:normal;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;background:#FBEBD3;color:#7A4300} '+S+' .pcc-dh em.bad{background:#FDECE7;color:#A3321D} '+S+' .pcc-dh em.ok,'+S+' .pcc-r em.ok{background:#E6F4EE;color:#0B6E4F} '+S+' .pcc-r em.wn{background:#FDECE7;color:#A3321D} '+S+' .pcc-r em.z{background:#EEF2F8;color:'+M+'}',
+  S+' .pcc-t .tg{width:24px;height:24px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:#8A97A8;font-size:11px;flex:none;padding:0} '+S+' .pcc-t .tg:hover{background:#EEF2F8}',
+  S+' .pcc-nm{display:flex;align-items:center;gap:6px;padding-left:16px;min-width:0} '+S+' .pcc-nm b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px} '+S+' .pcc-nm small{font-size:11px;color:#8A97A8;font-family:"DM Mono",monospace;white-space:nowrap}',
+  S+' tr.pcc-r.op td{background:#FBFCFD;border-bottom:none} '+S+' tr.pcc-x td{background:#FBFCFD;padding:0 16px 10px 70px} '+S+' tr.pcc-x .ln{padding:0} '+S+' tr.pcc-x .l{display:grid;grid-template-columns:62px minmax(0,1fr) auto 90px 28px;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #E3E7EF;font-size:12.5px}',
+  S+' tr.pcc-x .l .d{color:'+M+';font-family:"DM Mono",monospace;font-size:12px} '+S+' tr.pcc-x .l .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} '+S+' tr.pcc-x .l .m{text-align:right;font-family:"DM Mono",monospace} '+S+' tr.pcc-x .l .py em.pc-py{max-width:none;margin:0}',
+  S+' .pcc-rc{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap} '+S+' .pcc-rc i{width:36px;height:6px;background:#EEF1F4;border-radius:3px;overflow:hidden;display:inline-block} '+S+' .pcc-rc i b{display:block;height:100%;background:#0B6E4F} '+S+' .pcc-rc .bad{color:#A3321D} '+S+' .pcc-rc .ok{color:#0B6E4F}',
+  S+' table.pcc-t td.ac{white-space:nowrap;padding-right:10px} '+S+' .pcc-t .ol{height:26px;padding:0 7px;font-size:11px;font-weight:600;margin-left:3px;vertical-align:middle} '+S+' .pcc-t .ol.ic{width:28px;padding:0;font-size:12px} '+S+' .pcc-t .ol.sm{font-size:11px} '+S+' .pcc-t .ol.mut{color:#8A97A8}',
+  S+' .pcc-mn{position:relative;display:inline-block} '+S+' .pcc-pop{position:absolute;right:0;top:32px;z-index:6;background:#fff;border:1px solid #DCE2E8;border-radius:9px;box-shadow:0 10px 28px rgba(11,30,91,.14);padding:4px;min-width:190px;text-align:left}',
+  S+' .pcc-pop button{display:block;width:100%;border:none;background:transparent;text-align:left;padding:7px 10px;border-radius:6px;font:500 12.5px inherit;font-family:inherit;cursor:pointer;color:'+SUB+'} '+S+' .pcc-pop button:hover{background:#EEF2F8} '+S+' .pcc-pop button.dg{color:#A32D2D}',
+  S+' tr.pcc-r.fl td{animation:pcClmFl 1.6s ease}',
+  S+' table.pcc-t tfoot td{border-top:2px solid '+N+';border-bottom:none;font-weight:700;padding:9px 10px} '+S+' table.pcc-t tfoot td:first-child{padding-left:16px}',
+  '@media (max-width:760px){'+S+' .pcc-f{margin-left:0} '+S+' .pcc-nm b{max-width:200px}}',
   S+' .pc2-cl{border-top:1px solid #ECEFF4} '+S+' .pc2-cl.cur{background:#F5FAFC} '+S+' .pc2-cl.fl{animation:pcClmFl 1.6s ease}',
   '@keyframes pcClmFl{0%,40%{background:#FFF3C4}100%{background:transparent}}',
   S+' .pc2-cl .r{display:flex;align-items:center;gap:10px;padding:9px 14px}',
@@ -82496,45 +82518,100 @@ function pcClmFocus(id){
   pcKeep();
   setTimeout(function(){ var el=document.getElementById('pc-clm-'+id); if(el){ try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){ el.scrollIntoView(); } el.classList.add('fl'); setTimeout(function(){ el.classList.remove('fl'); },1600); } },30);
 }
-/* การ์ดใต้สมุด · รายการตั้งเบิกของเดือนที่ดูอยู่ · ใหม่สุดก่อน */
+/* ══ §pcClmTbl (2026-10-21) · การ์ดรายการตั้งเบิกของเดือน · ตารางแถวเดียว จัดกลุ่มตามวัน ═══════════
+   เจ้าของ: "ต้องจัดตารางอันนี้ใหม่ ตอนนี้ตารางยาวมาก และดูยาก" · mockup ที่ตกลง: canvas "รายการตั้งเบิก · จัดใหม่"
+   ของเดิมเป็นการ์ดละ ~100px × 25 รายการ · ชื่อซ้ำคำว่า "รายการตั้งเบิก" กับวันที่ · "AC.Tublamu" ซ้ำทุกแถว · ปุ่ม 4 ปุ่มต่อแถว
+   ใหม่: 1 แถว ~40px · หัววันบอกจำนวน/ยอด/ค้าง + พิมพ์ทั้งวัน (ย่อได้) · คอลัมน์ แถว / คนรับเงิน / เงินคืน / ยอด / ค้าง
+         ปุ่มเหลือ พิมพ์ · ใบเสร็จ N · ⋯ (เปลี่ยนชื่อ · ยกเลิก) · ตัวกรอง ค้างรับคืน (เริ่มต้น) / ยังไม่เลือกคนรับเงิน / คืนครบ / ทั้งหมด
+   ข้อมูลและตัวคำนวณเดิมทั้งหมด (pcRefundMatch · pcRcptCount · pcClmRows) · ไม่เก็บอะไรเพิ่ม · แถวย่อย (.ln/.l) เหมือนเดิม */
+var _pcClmF='open', _pcClmDayCl={}, _pcClmMenu='';
+function pcClmSetF(f){ _pcClmF=f; pcKeep(); }
+function pcClmDayToggle(ds){ if(_pcClmDayCl[ds]) delete _pcClmDayCl[ds]; else _pcClmDayCl[ds]=1; pcKeep(); }
+function pcClmMenu(id){ _pcClmMenu=(_pcClmMenu===id)?'':id; pcKeep(); }
+function pcClmPrintDay(ds){ var o=_pcDate; _pcDate=ds; try{ pcPrintClaim(); } finally{ _pcDate=o; } }
+/* ชื่อที่โชว์ · ตัดคำนำหน้า "รายการตั้งเบิก(เงิน)" และวันที่ท้ายชื่อออก (ไปอยู่คอลัมน์วันแล้ว) · ชื่อจริงไม่แตะ */
+function pcClmShort(name){
+  var t=String(name||'').replace(/^\s*รายการ\s*(ตตั้งเบิก|ตั้งเบิก|ตั้งเงิน)\s*(เงิน)?\s*/,'');
+  var m=/^(.*?)\s*((\d{1,2}\s*[-–]\s*)?\d{1,2}\s*\/\s*\d{1,2}(\s*\/\s*\d{2,4})?|\d{1,2}\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*\d{0,4})\s*(.*)$/.exec(t);
+  var core=t, dt='';
+  if(m){ core=(m[1]+(m[6]?(' '+m[6]):'')).trim(); dt=m[2].replace(/\s+/g,''); }
+  if(!core) core=String(name||'—');
+  return {core:core, dt:dt};
+}
 function pcClmList(pier){
   var ym=_pcYM||String(_pcDate||'').slice(0,7);
   var L=pcClmAll(pier).filter(function(c){ return String(c.date||'').slice(0,7)===ym; })
-    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(b.ts||'').localeCompare(String(a.ts||'')); });
-  var M=pcRefundMatch(pier), body='', sum=0, sumLeft=0;
-  L.forEach(function(c){
+    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(a.ts||'').localeCompare(String(b.ts||'')); });
+  var M=pcRefundMatch(pier);
+  var rows=L.map(function(c){
     var R=pcClmRows(pier,c.id), amt=0; R.forEach(function(o){ amt+=(+o.x.amt||0); }); amt=Math.round(amt);
-    var k='c:'+c.id, left=(M.urem[k]!=null)?M.urem[k]:amt, back=amt-left, by=M.uby[k]||[];
-    sum+=amt; sumLeft+=left;
-    var st=!amt?'<em class="z">ไม่มีรายการ</em>'
-      :(left<=0?('<em class="ok">คืนครบ · '+pcE(by.map(function(b){ return pcDS(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', '))+'</em>')
-      :(back>0?('<em class="wn">คืนแล้ว '+pcN(back)+' · ค้าง '+pcN(left)+'</em>'):'<em>รอรับคืน</em>'));
-    var op=!!_pcClmOpen[c.id], cur=(c.date===_pcDate), _rc=pcRcptCount(pier,c.id);   /* §pcRcpt */
-    body+='<div class="pc2-cl'+(op?' op':'')+(cur?' cur':'')+'" id="pc-clm-'+pcE(c.id)+'">'
-      +'<div class="r">'
-        +'<button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนรายการ':'ดูรายการ')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
-        +'<span class="nm"><b>'+pcE(c.name||'—')+'</b><small>'
-          +(cur?pcE(pc2D(c.date)):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(c.date)+'\')">'+pcE(pc2D(c.date))+'</a>'))
-          +' · '+R.length+' รายการ · '+pcE(c.by||'—')
-          +(R.length?(_rc.n<R.length?(' · <b class="rcw">ยังไม่เลือกคนรับเงิน '+(R.length-_rc.n)+'</b>'):' · ใบเสร็จครบ'):'')+'</small></span>'
-        +'<span class="st">'+st+'</span>'
-        +'<span class="am">'+pcMoney(amt)+'</span>'
-        +'<span class="ac"><button type="button" class="ol" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
-          +'<button type="button" class="ol rc" onclick="pcPrintReceipts(\''+pcE(c.id)+'\')" title="พิมพ์ใบเสร็จรับเงิน 1 หน้าต่อรายการ (เฉพาะรายการที่เลือกคนรับเงินแล้ว)">&#129534; ใบเสร็จ '+_rc.n+'</button>'   /* §pcRcpt */
-          +'<button type="button" class="ol" onclick="pcClmRename(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ">&#9998;</button>'
-          +'<button type="button" class="pc2-x" onclick="pcClmDel(\''+pcE(c.id)+'\')" title="ยกเลิกรายการตั้งเบิก (แถวในสมุดยังอยู่)">&times;</button></span>'
-      +'</div>'
-      +(op?('<div class="ln">'+(R.length?R.map(function(o){
-          return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
-            +'<span class="py">'+pcPyChip('out',o.x)+'</span>'+'<span class="m">'+pcN(+o.x.amt||0)+'</span>'
-            +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
-        :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div>'):'')
-      +'</div>';
+    var k='c:'+c.id, left=(M.urem[k]!=null)?M.urem[k]:amt, back=amt-left, by=M.uby[k]||[], rc=pcRcptCount(pier,c.id);
+    var refDs=by.map(function(b){ return b.ref; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).sort();
+    /* คืนเกิน · เงินคืนก้อนที่จับคู่กับรายการนี้มียอดเกินกว่าที่ตั้งเบิก */
+    var over=0; by.forEach(function(b){ var r=M.res[b.id]; if(r && r.diff>0 && r.cov.length===1 && r.cov[0].k===k) over+=r.diff; });
+    return {c:c, R:R, amt:amt, left:left, back:back, refDs:refDs, over:over, rc:rc, noRc:R.length-rc.n, done:(amt>0 && left<=0)};
   });
-  return '<div class="pc2-card pc2-clms"><div class="ch"><div><b>รายการตั้งเบิก · '+pcE(pc2MonthName(ym))+'</b>'
-      +'<div class="cs">'+(L.length?(L.length+' รายการ · รวม '+pcMoney(sum)+(sumLeft>0?(' · ค้างรับคืน '+pcMoney(sumLeft)):' · คืนครบ')):'ติ๊กรายการจ่ายในสมุด แล้วกด สรุปตั้งเบิก เพื่อเริ่ม')+'</div></div></div>'
-    +(body||'<div class="pc2-empty">ยังไม่มีรายการตั้งเบิกในเดือนนี้</div>')
+  var sum=0, sumLeft=0, sumBack=0, noRcRows=0, noRcN=0, nOpen=0, nDone=0, nNoRc=0;
+  rows.forEach(function(r){ sum+=r.amt; sumLeft+=r.left; sumBack+=r.back; if(r.noRc>0){ noRcRows+=r.noRc; nNoRc++; } if(r.done) nDone++; else nOpen++; });
+  var F=_pcClmF, show=rows.filter(function(r){ return F==='all' || (F==='open'?!r.done:(F==='norc'?r.noRc>0:r.done)); });
+  var money=function(n){ return pcMoney(n); }, N=function(n){ return pcN(n); };
+  var fb=function(f,lb,n){ return '<button type="button" class="'+(F===f?'on':'')+'" onclick="pcClmSetF(\''+f+'\')">'+lb+' <span>'+n+'</span></button>'; };
+  var head='<div class="ch pcc-h"><div class="pcc-t"><b>รายการตั้งเบิก · '+pcE(pc2MonthName(ym))+'</b>'
+      +'<div class="cs">'+(L.length?(L.length+' รายการ · '+Object.keys(rows.reduce(function(o,r){ o[r.c.date]=1; return o; },{})).length+' วัน · '+pcE(pier==='panwa'?'AC.Panwa':(pier==='tublamu'?'AC.Tublamu':pier))):'ติ๊กรายการจ่ายในสมุด แล้วกด สรุปตั้งเบิก เพื่อเริ่ม')+'</div></div>'
+    +(L.length?('<div class="pcc-k"><div><span>ตั้งเบิกทั้งเดือน</span><b>'+money(sum)+'</b></div>'
+      +'<div><span>รับคืนแล้ว</span><b class="ok">'+money(sumBack)+'</b></div>'
+      +'<div class="'+(sumLeft>0?'wn':'')+'"><span>ค้างรับคืน</span><b>'+(sumLeft>0?money(sumLeft):'—')+'</b></div>'
+      +'<div><span>ยังไม่เลือกคนรับเงิน</span><b class="'+(noRcRows?'bad':'')+'">'+(noRcRows?(noRcRows+' <i>แถว · '+nNoRc+' รายการ</i>'):'ครบ')+'</b></div></div>'
+      +'<div class="pcc-f">'+fb('open','ค้างรับคืน',nOpen)+fb('norc','ยังไม่เลือกคนรับเงิน',nNoRc)+fb('done','คืนครบ',nDone)+fb('all','ทั้งหมด',rows.length)+'</div>'):'')
     +'</div>';
+  if(!L.length) return '<div class="pc2-card pc2-clms">'+head+'<div class="pc2-empty">ยังไม่มีรายการตั้งเบิกในเดือนนี้</div></div>';
+  if(!show.length) return '<div class="pc2-card pc2-clms">'+head+'<div class="pc2-empty">ไม่มีรายการในตัวกรองนี้ · <a href="javascript:void 0" onclick="pcClmSetF(\'all\')">ดูทั้งหมด</a></div></div>';
+  /* จัดกลุ่มตามวัน · ใหม่สุดก่อน */
+  var days=[], byDay={};
+  show.forEach(function(r){ var d=r.c.date||''; if(!byDay[d]){ byDay[d]=[]; days.push(d); } byDay[d].push(r); });
+  var body='', tAmt=0, tLeft=0;
+  days.forEach(function(ds){
+    var G=byDay[ds], dAmt=0, dLeft=0, dRows=0, dNoRc=0; G.forEach(function(r){ dAmt+=r.amt; dLeft+=r.left; dRows+=r.R.length; dNoRc+=r.noRc; });
+    tAmt+=dAmt; tLeft+=dLeft;
+    var cl=!!_pcClmDayCl[ds], cur=(ds===_pcDate);
+    body+='<tr class="pcc-d'+(cur?' cur':'')+'"><td colspan="4"><div class="pcc-dh">'
+        +'<button type="button" class="tg" onclick="pcClmDayToggle(\''+pcE(ds)+'\')" title="'+(cl?'ขยายวัน':'ย่อวัน')+'">'+(cl?'&#9656;':'&#9662;')+'</button>'
+        +(cur?('<b>'+pcE(pc2DL(ds))+'</b>'):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(ds)+'\')" title="เปิดสมุดวันนี้"><b>'+pcE(pc2DL(ds))+'</b></a>'))
+        +'<span>'+G.length+' รายการ · '+dRows+' แถว</span>'
+        +(dNoRc>0?('<em class="bad">ยังไม่เลือกคนรับเงิน '+dNoRc+'</em>'):(dLeft<=0?'<em class="ok">คืนครบ</em>':''))
+      +'</div></td><td class="r m">'+N(dAmt)+'</td><td class="r m '+(dLeft>0?'wn':'mut')+'">'+(dLeft>0?N(dLeft):'—')+'</td>'
+      +'<td class="r"><button type="button" class="ol sm" onclick="pcClmPrintDay(\''+pcE(ds)+'\')" title="พิมพ์รายจ่ายทั้งวัน">พิมพ์ทั้งวัน</button></td></tr>';
+    if(cl) return;
+    G.forEach(function(r){
+      var c=r.c, op=!!_pcClmOpen[c.id], nm=pcClmShort(c.name), pct=r.R.length?Math.round(r.rc.n/r.R.length*100):0;
+      var st=!r.amt?'<em class="z">ไม่มีรายการ</em>'
+        :(r.over>0?('<em class="wn">คืนเกิน '+N(r.over)+(r.refDs.length?(' · '+pcE(r.refDs.map(pcDS).join(', '))):'')+'</em>')
+        :(r.done?('<em class="ok">คืนครบ'+(r.refDs.length?(' · '+pcE(r.refDs.map(pcDS).join(', '))):'')+'</em>')
+        :(r.back>0?('<em class="wn">คืนแล้ว '+N(r.back)+' · ค้าง '+N(r.left)+'</em>'):'<em>รอรับคืน</em>')));
+      body+='<tr class="pcc-r'+(op?' op':'')+'" id="pc-clm-'+pcE(c.id)+'">'
+        +'<td><div class="pcc-nm"><button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนแถว':'ดูแถว')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
+          +'<b title="'+pcE(c.name||'')+'">'+pcE(nm.core)+'</b>'+(nm.dt?('<small>'+pcE(nm.dt)+'</small>'):'')+'</div></td>'
+        +'<td class="r m mut">'+r.R.length+'</td>'
+        +'<td><span class="pcc-rc"><i><b style="width:'+pct+'%"></b></i><span class="'+(r.noRc>0?'bad':'ok')+'">'+(r.R.length?(r.noRc>0?(r.rc.n+' / '+r.R.length):('ครบ '+r.rc.n)):'—')+'</span></span></td>'
+        +'<td class="st">'+st+'</td>'
+        +'<td class="r m">'+N(r.amt)+'</td>'
+        +'<td class="r m '+(r.left>0?'wn':'mut')+'">'+(r.left>0?N(r.left):'—')+'</td>'
+        +'<td class="r ac"><button type="button" class="ol ic" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
+          +'<button type="button" class="ol sm'+(r.rc.n?'':' mut')+'" onclick="pcPrintReceipts(\''+pcE(c.id)+'\')" title="พิมพ์ใบเสร็จรับเงิน '+r.rc.n+' ใบ (1 หน้าต่อรายการ · เฉพาะที่เลือกคนรับเงินแล้ว)">&#129534; '+r.rc.n+'</button>'
+          +'<span class="pcc-mn"><button type="button" class="ol ic" onclick="pcClmMenu(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ · ยกเลิก">&#8943;</button>'
+            +(_pcClmMenu===c.id?('<div class="pcc-pop"><button type="button" onclick="_pcClmMenu=\'\';pcClmRename(\''+pcE(c.id)+'\')">&#9998; เปลี่ยนชื่อ</button><button type="button" class="dg" onclick="_pcClmMenu=\'\';pcClmDel(\''+pcE(c.id)+'\')">&times; ยกเลิกรายการตั้งเบิก</button></div>'):'')
+          +'</span></td></tr>';
+      if(op) body+='<tr class="pcc-x"><td colspan="7"><div class="ln">'+(r.R.length?r.R.map(function(o){
+          return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
+            +'<span class="py">'+pcPyChip('out',o.x)+'</span>'+'<span class="m">'+N(+o.x.amt||0)+'</span>'
+            +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
+        :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div></td></tr>';
+    });
+  });
+  return '<div class="pc2-card pc2-clms">'+head
+    +'<div class="pcc-w"><table class="pcc-t"><thead><tr><th>รายการตั้งเบิก</th><th class="r">แถว</th><th>คนรับเงิน</th><th>เงินคืน</th><th class="r">ยอดตั้งเบิก</th><th class="r">ค้าง</th><th></th></tr></thead>'
+    +'<tbody>'+body+'</tbody>'
+    +'<tfoot><tr><td colspan="4">รวมที่แสดง · '+show.length+' รายการ · '+days.length+' วัน</td><td class="r m">'+N(tAmt)+'</td><td class="r m '+(tLeft>0?'wn':'mut')+'">'+(tLeft>0?N(tLeft):'—')+'</td><td></td></tr></tfoot></table></div></div>';
 }
 /* บรรทัดที่กำลังกรอก · base = คงเหลือก่อนบรรทัดนี้ (ไว้คำนวณยอดจาง ๆ ระหว่างพิมพ์) */
 function pc2EdRow(E,base,no){
