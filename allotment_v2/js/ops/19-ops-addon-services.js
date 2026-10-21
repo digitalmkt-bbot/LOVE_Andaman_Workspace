@@ -210,6 +210,54 @@
   wrap('aosDeleteVariant',deleteVariant);
   wrap('aosSaveModal',saveModal);
 
+  /* ── an agent's Additional Services (legacy agpAddon*, agent.addonServices) ⇄ /v1/agents/{id}/addon-services ──
+     The agent takes a service from the catalogue and states its own Selling / Net per variant. Legacy kept it on the agent object only (lost on
+     reload). Server first: the answer is the agent's whole list, which replaces the local one; a refusal leaves the screen as it was.
+       agpAddonAddService  PUT .../{service_id} with no body  (every variant at 0; the legacy function then opens the price modal)
+       agpAddonSaveVariants PUT .../{service_id} {variants:[{variant_id,selling,net}]}
+       agpAddonRemove       DELETE .../{service_id}  (after legacy's own confirm) */
+  function agentOf(id){ return typeof sbGetAgent==='function' ? sbGetAgent(id) : null; }
+  function agentListFrom(rows){
+    return (rows||[]).map(function(s){ return {svcId:s.service_id, variants:(s.variants||[]).map(function(v){ return {varId:v.variant_id, selling:v.selling||0, net:v.net||0}; })}; });
+  }
+  function agentPath(agentId,svcId){ return '/v1/agents/'+enc(agentId)+'/addon-services/'+enc(svcId); }
+  var legacyAgentAdd=window.agpAddonAddService, legacyAgentSave=window.agpAddonSaveVariants, legacyAgentRemove=window.agpAddonRemove;
+  function agentRedraw(agentId){ try{ if(typeof window.agRenderDetail==='function') window.agRenderDetail(agentId); }catch(_){ } }
+  if(typeof legacyAgentAdd==='function') window.agpAddonAddService=function(svcId){
+    if(!enabled()) return legacyAgentAdd.apply(this,arguments);
+    var self=this, args=arguments, a=agentOf(_agpAddonAgentId);
+    if(!a) return undefined;
+    return write('PUT',agentPath(a.id,svcId),{}).then(function(res){
+      // the server holds the service now; the legacy function adds the same zero-priced entry itself and opens the price modal
+      a.addonServices=agentListFrom(res && res.addon_services).filter(function(p){ return p.svcId!==svcId; });
+      if(O.wrote) O.wrote('agent-addon-service');
+      return legacyAgentAdd.apply(self,args);
+    }).catch(function(error){ return fail('Could not add the service to the contract',error); });
+  };
+  if(typeof legacyAgentSave==='function') window.agpAddonSaveVariants=function(){
+    if(!enabled()) return legacyAgentSave.apply(this,arguments);
+    var a=agentOf(_agpAddonAgentId), svcId=_agpAddonEditSvcId, draft=_agpAddonDraft;
+    if(!a || !svcId || !draft){ if(typeof window.agpAddonCloseModal==='function') window.agpAddonCloseModal(); return undefined; }
+    var variants=(draft.variants||[]).map(function(v){ return {variant_id:v.varId, selling:Number(v.selling)||0, net:Number(v.net)||0}; });
+    return write('PUT',agentPath(a.id,svcId),{variants:variants}).then(function(res){
+      a.addonServices=agentListFrom(res && res.addon_services);
+      if(O.wrote) O.wrote('agent-addon-service');
+      if(typeof window.agpAddonCloseModal==='function') window.agpAddonCloseModal();
+      agentRedraw(a.id);
+    }).catch(function(error){ return fail('Could not save the service prices',error); });   // the modal stays open with what was typed
+  };
+  if(typeof legacyAgentRemove==='function') window.agpAddonRemove=function(agentId,svcId){
+    if(!enabled()) return legacyAgentRemove.apply(this,arguments);
+    var a=agentOf(agentId); if(!a) return undefined;
+    var svc=list().find(function(s){ return s && s.id===svcId; });
+    if(!confirm('ลบ "'+((svc&&svc.name)||'Service นี้')+'" ออกจากสัญญา ?')) return undefined;
+    return write('DELETE',agentPath(agentId,svcId)).then(function(){
+      a.addonServices=(a.addonServices||[]).filter(function(p){ return p.svcId!==svcId; });
+      if(O.wrote) O.wrote('agent-addon-service');
+      agentRedraw(agentId);
+    }).catch(function(error){ return fail('Could not remove the service from the contract',error); });
+  };
+
   window.__laOpsAddonServiceCompat={
     fromServer:fromServer, toCreateBody:createBody, toPatch:patchBody,
     variantsPatch:variantsPatch, variantBody:variantBody

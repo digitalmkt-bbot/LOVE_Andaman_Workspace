@@ -27,6 +27,14 @@
     });
     return out;
   }
+  /* the red bar (legacy _laB2CHealth, fed by the pull's /api/b2c/health): the server's health object -> the keys that function reads.
+     Love Kingdom pushes, so a failed run is a held order; the server says ok / consecutive failed pushes / minutes the oldest has waited. An older
+     server sends no health: the bar stays off. */
+  function healthFor(j){
+    var h=j&&j.health; if(!h||typeof h!=='object') return null;
+    return {configured:h.configured!==false, ok:h.ok!==false, neverOk:false, staleMin:h.stale_minutes==null?null:Number(h.stale_minutes),
+      consecutive:Number(h.consecutive)||0, phase:h.phase||'', message:h.message||''};
+  }
   function badge(j){
     var c=(j&&j.counts)||{};
     return {issueCount:(Number(c.held)||0)+(Number(c.warn)||0), issueSig:(j&&j.signature)||''};
@@ -88,6 +96,7 @@
     O.get('/v1/b2c/issues').then(function(j){
       busy=false;
       if(typeof window._laB2CIssues==='function') window._laB2CIssues(badge(j));
+      var h=healthFor(j); if(h && typeof window._laB2CHealth==='function') window._laB2CHealth(h);
     }, function(){ busy=false; });
   }
   function start(){ if(timer||!O.enabled()) return; poll(); timer=setInterval(poll, POLL_MS); }
@@ -95,7 +104,7 @@
   window.laOpsB2CIssues=open;
   window.laOpsHeldAct=heldAct;
   window.laOpsHeldBtn=function(el){ return heldAct(el.getAttribute('data-h'), el.getAttribute('data-c')); };
-  O.b2cHealth={heldAct:heldAct, rows:rows, badge:badge, poll:poll, start:start};
+  O.b2cHealth={heldAct:heldAct, rows:rows, badge:badge, healthFor:healthFor, poll:poll, start:start};
   if(typeof document!=='undefined'){
     if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else setTimeout(start, 0);
   }

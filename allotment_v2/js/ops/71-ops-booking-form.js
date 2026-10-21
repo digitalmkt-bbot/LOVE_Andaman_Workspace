@@ -185,7 +185,9 @@
     if(ldFresh(e)){
       var hit = e.ok ? e.by[routeId + '|' + date] : null;
       if(!hit) return legacy;
-      return (hit.sources || []).map(function(s){ return { lockId: clientLockId(s.lock_id), label: s.label, remaining: s.remaining }; });
+      /* held: a lock the booking being edited already drew from that no longer offers seats (released, expired), listed so the draw can be stepped down to 0
+         (§lkStaleDraw, lk-inbox cfc03199; the server's `kept`). It is the same flag legacy's bkV2DrawSourcesFor sets. */
+      return (hit.sources || []).map(function(s){ var o = { lockId: clientLockId(s.lock_id), label: s.label, remaining: s.remaining }; if(s.kept === true) o.held = true; return o; });
     }
     ldSchedule(req, d);
     return legacy;

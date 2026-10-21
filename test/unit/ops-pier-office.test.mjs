@@ -125,6 +125,23 @@ test('settings: only the scalar that changed is PATCHed; a refusal puts it back'
   assert.equal(bad.w.PIER_CFG.cycleStart, 26);
 });
 
+test('the park ticket price table (PIER_CFG.parkPrice) is settings.park_price on the server: read on load, sent whole when a price changes, a blank price leaves the key out', async () => {
+  const withPrices = { ...SETTINGS, park_price: { adFR: 500, xyz: 120.5 } };
+  const rt = runtime({ answers: { 'GET /v1/pier-office/settings': withPrices, 'PATCH /v1/pier-office/settings': (b) => ({ ...withPrices, ...b }) } });
+  await boot(rt);
+  assert.deepEqual(J(rt.w.PIER_CFG.parkPrice), { adFR: '500', xyz: '120.5' }, 'the page holds the prices as text, as legacy does');
+  assert.deepEqual(writes(rt), [], 'a load writes nothing');
+  rt.w.PIER_CFG.parkPrice.adFR = '550'; rt.w.PIER_CFG.parkPrice.xyz = ''; rt.w.PIER_CFG.parkPrice.chTH = ' 80 ';
+  await save(rt);
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PATCH', '/v1/pier-office/settings', { park_price: { adFR: 550, chTH: 80 } }]]);
+  // an older server without park_price: the page's table stays local and nothing is sent about it
+  const old = runtime({ answers: { 'PATCH /v1/pier-office/settings': (b) => ({ ...SETTINGS, ...b }) } });
+  await boot(old);
+  old.w.PIER_CFG.parkPrice = { adFR: '500' }; old.w.PIER_CFG.licWarnDays = 30;
+  await save(old);
+  assert.deepEqual(writes(old).map((c) => c.body), [{ lic_warn_days: 30 }]);
+});
+
 test('licences: add, change and delete; a class is added under its type', async () => {
   const rt = runtime({ answers: {
     'POST /v1/pier-office/staff/ps_1/licences': { ...LIC, id: 'pl_new', licence_no: 'No2' },
