@@ -9,6 +9,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
+const https = require('node:https');
 
 const ROOT = path.resolve(__dirname);
 const PORT = Number(process.env.PORT) || 3000;
@@ -19,6 +20,29 @@ const APP = '/allotment_v2/allotment_v2.html';
 const BUILT = path.join(ROOT, '.build');
 const HAS_BUILT = fs.existsSync(path.join(BUILT, 'allotment_v2.html'));
 const APP_DIR = HAS_BUILT ? BUILT : path.join(ROOT, 'allotment_v2');
+// §sameOrigin · the browser calls /v1/* on THIS host and the host forwards it to operation-backend, so there is no
+// cross-origin hop and therefore no CORS preflight (an OPTIONS before nearly every call, one per distinct URL).
+// OPS_API_URL names the backend; OPS_API_URL=direct turns the proxy off and the browser calls the backend itself.
+const OPS_API = (process.env.OPS_API_URL || 'https://operationbackend-production.up.railway.app').replace(/\/+$/, '');
+const PROXY_ON = OPS_API !== 'direct';
+const UPSTREAM = PROXY_ON ? new URL(OPS_API) : null;
+const HOP = new Set(['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade','host']);
+function proxy(req, res){
+  const headers = {};
+  for(const [k, v] of Object.entries(req.headers)) if(!HOP.has(k)) headers[k] = v;
+  headers.host = UPSTREAM.host;
+  delete headers.origin; delete headers.referer;   // same-origin to the browser; the backend sees a plain server call
+  const lib = UPSTREAM.protocol === 'http:' ? require('node:http') : https;
+  const up = lib.request({ hostname:UPSTREAM.hostname, port:UPSTREAM.port || undefined, method:req.method, path:req.url, headers }, (r) => {
+    const out = {};
+    for(const [k, v] of Object.entries(r.headers)) if(!HOP.has(k) && !k.startsWith('access-control-')) out[k] = v;
+    res.writeHead(r.statusCode, out);
+    r.pipe(res);
+  });
+  up.setTimeout(120000, () => up.destroy(new Error('timeout')));
+  up.on('error', () => { if(!res.headersSent) send(res, 502, 'Bad gateway'); else res.destroy(); });
+  req.pipe(up);
+}
 const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
   '.json':'application/json; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
   '.webp':'image/webp', '.gif':'image/gif', '.ico':'image/x-icon', '.pdf':'application/pdf', '.woff2':'font/woff2' };
@@ -57,6 +81,7 @@ function filePath(urlPath){
 }
 
 http.createServer((req, res) => {
+  if(PROXY_ON && /^\/v1(?:[/?]|$)/.test(req.url)) return proxy(req, res);
   if(req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
   let url;
   try { url = new URL(req.url, 'http://localhost'); } catch (_) { return send(res, 400, 'Bad request'); }
@@ -65,6 +90,10 @@ http.createServer((req, res) => {
   if(url.pathname === '/allotment_v2.html') return redirect(res, APP + url.search);
   if(url.pathname === '/health') { res.writeHead(200, {'Content-Type':'application/json','Cache-Control':'no-store'}); return res.end('{"ok":true,"service":"operation-frontend"}'); }
 
+  if(url.pathname === '/allotment_v2/la-config.js'){
+    res.writeHead(200, {'Content-Type':MIME['.js'],'Cache-Control':'no-store'});
+    return res.end(PROXY_ON ? 'window.LA_CONFIG={opsBackend:location.origin};' : '');
+  }
   const target = filePath(url.pathname);
   if(!target) return send(res, 403, 'Forbidden');
   fs.stat(target, (statError, stat) => {
