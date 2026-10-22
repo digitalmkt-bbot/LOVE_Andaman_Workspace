@@ -43,6 +43,13 @@ const r = await page.evaluate(async () => {
   const saved = JSON.parse(localStorage.getItem('loveandaman_v2')).fleet_batteries;
   return { tabBtn: !!tabBtn, empty: /ยังไม่มีแบต|Add battery/.test(empty), states, serials, dueTxt, overTxt, shell, list: list.slice(0, 600), nOver, old: { status: old.status, reason: old.retiredReason, boatId: old.boatId }, neu: { status: neu.status, pos: neu.pos, replacedId: neu.replacedId, serial: neu.serial, logN: (neu.log || []).length }, volt, bsec: bsec.slice(0, 900), ovShell, savedN: (saved || []).length };
 });
+// §flBatLoad · reload → ค่าที่โหลดจาก storage ต้องไม่ถูก `var FL_BATTERIES=[]` ล้างทิ้ง (flLoad วิ่งก่อนบรรทัดประกาศ)
+await page.reload({ waitUntil: 'load' }); await new Promise(f => setTimeout(f, 1500));
+const rl = await page.evaluate(async () => { const z = ms => new Promise(f => setTimeout(f, ms));
+  nav(document.querySelector('.nav-item[data-view="fl-asset"]')); await z(400); faGo('batteries'); await z(400);
+  const W = document.getElementById('fl-bats-pink-wrap');
+  return { n: (FL_BATTERIES || []).length, rows: document.querySelectorAll('#fl-bat-listpanel .fa-prow').length, txt: W ? W.textContent.replace(/\s+/g, ' ').slice(0, 200) : '' }; });
+if (rl.n === 5 && rl.rows >= 4) ok('reload แล้วแบตยังอยู่ · FL_BATTERIES 5 · แสดง ' + rl.rows + ' แถว'); else fail('reload ' + JSON.stringify(rl));
 await page.evaluate(async () => { const z = ms => new Promise(f => setTimeout(f, ms)); faGo('batteries'); await z(300); });
 await page.screenshot({ path: '/mnt/user-data/outputs/flbat.png' });
 const J = JSON.stringify(r).slice(0, 1800);
@@ -57,6 +64,6 @@ if (r.volt) ok('วัดโวลต์ลงประวัติ 12.1V'); els
 if (/แบตเตอรี่ · 3 ลูก/.test(r.bsec) && /ใกล้หมด/.test(r.bsec)) ok('หน้าเรือ · ส่วนแบตเตอรี่ 3 ลูก + ป้ายใกล้หมด'); else fail('boat ' + r.bsec.slice(0, 400));
 if (/แบตใกล้หมดอายุ/.test(r.ovShell) && !/แบตเกินอายุ/.test(r.ovShell)) ok('Overview · ชิป "แบตใกล้หมดอายุ" (ตัวเกินอายุถูกเปลี่ยนไปแล้ว)'); else fail('ov ' + r.ovShell.slice(0, 300));
 if (r.savedN === 5) ok('บันทึกลง fleet_batteries · 5 ลูก (รวมลูกที่ถอดแล้ว)'); else fail('persist ' + r.savedN);
-const errs = errors.filter(e => !/404/.test(e));
+const errs = errors.filter(e => !/404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/.test(e));
 if (errs.length) { fail('page errors'); console.log('    errors:', errs.slice(0, 3)); }
 console.log(bad ? `FAIL ${bad}` : 'PASS'); await close(); process.exit(bad ? 1 : 0);

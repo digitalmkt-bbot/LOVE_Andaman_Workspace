@@ -30883,7 +30883,9 @@ function ivmPrint(){
        note, photos:[…§flp], log:[{date,type,desc,by}] }
    อายุ = วันนี้ − installDate เทียบ lifeMonths (ค่าเริ่มต้น 18 · แก้ได้ทีละลูก) · เตือนล่วงหน้า 3 เดือน
    รูปใช้ท่อ §flp เดียวกับงานซ่อม (kind 'bat') · ไม่เก็บ base64 */
-var FL_BATTERIES=[];
+/* §flBatLoad (2026-10-22) · flLoad() วิ่งที่บรรทัด ~25096 ก่อนถึงตรงนี้ · เดิมเป็น `var FL_BATTERIES=[]` จึงล้างค่าที่โหลดมาทิ้ง
+   ทุกครั้งที่เปิดหน้า → แท็บว่าง และ flSave() ครั้งถัดไปเขียน [] กลับขึ้นเซิร์ฟเวอร์ = แบตที่บันทึกไว้หาย · เก็บค่าที่โหลดแล้วไว้ */
+var FL_BATTERIES; if(!Array.isArray(FL_BATTERIES)) FL_BATTERIES=[];
 var FB_POS=[['Port','Port (ซ้าย)'],['Std','Std (ขวา)'],['House','House (เรือนไฟ)'],['Bow','Bow thruster'],['Other','อื่น ๆ']];
 var FB_LIFE_DEFAULT=18, FB_WARN_MONTHS=3;
 var FB={ boat:null, q:'', sel:null, modal:null };
