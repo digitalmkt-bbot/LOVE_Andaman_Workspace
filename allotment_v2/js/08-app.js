@@ -11625,7 +11625,11 @@ function vbAreaNm(id){
   if(!id || typeof bkV2GetArea!=='function') return '';
   return String((bkV2GetArea(id)||{}).name||'').trim();
 }
-function vbPickName(b, sp){ return (sp?vbAreaNm(sp.pickAreaId):'') || String((b&&b.pickupArea)||'').trim(); }
+/* §vbPickId (2026-10-22) · owner "ตรวจ ทำไมขึ้นโซนไม่ครบ" (16/10 Phi Phi Bamboo · VAN4 ขึ้นแค่ กะตะ · ราไวย์)
+   ใบจองมีจุดรับ 2 ช่อง: pickupAreaId (ที่หน้าแก้ไขใช้ และคิดราคา) กับ pickupArea (ข้อความเดิมตอนนำเข้า)
+   แก้จุดรับในหน้าแก้ไขแล้ว ข้อความเดิมไม่เปลี่ยนตาม (73 ใบใน backup 20 ต.ค. ไม่ตรงกัน) · ของเดิมอ่านข้อความก่อน
+   ใบ Phuket Orchid (โรงแรมอยู่กะรน · id = pk-karon) จึงขึ้นเป็น Kata · ตอนนี้อ่าน id ก่อน ข้อความเป็นตัวสำรอง */
+function vbPickName(b, sp){ return (sp?vbAreaNm(sp.pickAreaId):'') || vbAreaNm(b&&b.pickupAreaId) || String((b&&b.pickupArea)||'').trim(); }
 /* §vbDropWhy · คืนทั้งชื่อ และ "ใบนี้ตั้งจุดส่งใหม่จริงหรือเปล่า" มาด้วยกัน
    ที่มา (2026-09-22) · ของเดิมตัดสินสีตอนวาดด้วยการเทียบสตริงกับจุดรับของ "แถว"
    แต่แถวหนึ่งรวมหลายใบ · รถไปส่งกรุ๊ปหนึ่งแล้วรับอีกกรุ๊ปกลับ จุดส่งจึงเป็นของกรุ๊ปที่
