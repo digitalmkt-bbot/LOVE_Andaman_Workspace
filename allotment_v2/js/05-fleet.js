@@ -4783,6 +4783,7 @@ function flLoad(){
   FL_INCIDENTS=d.fleet_incidents||[];
   FL_INVENTORY=d.fleet_inventory||[];FL_MEMOS=d.fleet_memos||[];
   FL_CONSUMABLE_LOGS=Array.isArray(d.fleet_consumable_logs)?d.fleet_consumable_logs:[];
+  FL_BATTERIES=Array.isArray(d.fleet_batteries)?d.fleet_batteries:[];   /* §flBat */
   // Back-fill NEW seed inventory items missing from already-seeded storage.
   // FL_DEFAULT_INVENTORY only seeds when the array is empty, so items appended to the
   // default list later (e.g. the HO-IV26004083 batch) never reach users whose localStorage
@@ -6053,6 +6054,7 @@ function flSave(){
   d.fleet_daily=FL_DAILY;d.fleet_fuelprice=FL_FUEL_PRICE;d.fleet_drlock=FL_DR_LOCK;d.fleet_maintenance=FL_MAINT;d.fleet_incidents=FL_INCIDENTS;
   d.fleet_inventory=FL_INVENTORY;d.fleet_memos=FL_MEMOS;d.fleet_safety=FL_SAFETY;d.fleet_projects=FL_PROJECTS;d.fleet_version=FLEET_VERSION;
   d.fleet_consumable_logs=FL_CONSUMABLE_LOGS;
+  d.fleet_batteries=FL_BATTERIES;   /* §flBat */
   // §flBoatPersist · ฝั่ง Fleet แก้ b.log (สถานะเรือ) อยู่ตลอด แต่ BOATS ไม่เคยถูกเขียนลง
   //   localStorage เพราะ save() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
   d.boats=BOATS;
@@ -10156,6 +10158,7 @@ function flRenderAsset(){
   else if(flAssetTab==='engines')flRenderEngList();
   else if(flAssetTab==='gearboxes')flRenderGbList();
   else if(flAssetTab==='propellers')flRenderPropList();
+  else if(flAssetTab==='batteries'&&typeof fbRender==='function')fbRender();   /* §flBat */
   else if(flAssetTab==='docs')flRenderDocsList();
   else if(flAssetTab==='safety')flRenderSafetyList();
 }
@@ -10176,6 +10179,7 @@ function flGoToAsset(tab,id){
   else if(tab==='engines')flSelEngId=id;
   else if(tab==='gearboxes')flSelGbId=id;
   else if(tab==='propellers')flSelPropId=id;
+  else if(tab==='batteries'){ FB.sel=id; FB.boat=null; }   /* §flBat */
   flRenderAsset();
 }
 
@@ -27446,7 +27450,7 @@ function fdCSS(){
        ไม่เคยเก็บ base64 ลง blob
    ฐานข้อมูล: fleet_maintenance.photos / fleet_incidents.photos เป็น json_text (migration 038)
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
-var FLP_C={'Reported':'#5B6170','Job open':'#1272B3','Waiting':'#D9952B','Repairing':'#2E9C78','To close':'#16265C','Billing':'#8E3A6B','Done':'#0F6E56','Project':'#534AB7','Quick fix':'#0F6E56'};
+var FLP_C={'Reported':'#5B6170','Job open':'#1272B3','Waiting':'#D9952B','Repairing':'#2E9C78','To close':'#16265C','Billing':'#8E3A6B','Done':'#0F6E56','Project':'#534AB7','Quick fix':'#0F6E56','Battery':'#16265C'};
 var FLP_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 function flpE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 /* ══ §flpVideo (2026-10-18) · คลิปวิดีโอเป็นหลักฐานได้ด้วย · เจ้าของส่งคลิป 5 วิ 1.3MB มาเป็นตัวอย่าง
@@ -27476,6 +27480,7 @@ function flpRec(kind,id){
     if(kind==='mj')  return (FL_MAINT||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
     if(kind==='inc') return (FL_INCIDENTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
     if(kind==='prj') return (FL_PROJECTS||[]).filter(function(x){ return x&&x.id===id; })[0]||null;
+    if(kind==='bat') return (typeof FL_BATTERIES!=='undefined'?FL_BATTERIES:[]).filter(function(x){ return x&&x.id===id; })[0]||null;   /* §flBat */
   }catch(_){}
   return null;
 }
@@ -27495,6 +27500,7 @@ function flpCount(kind,rec){ return flpList(kind,rec).filter(function(p){ return
 function flpStageNow(kind,rec){
   if(!rec) return '';
   if(kind==='prj') return 'Project';
+  if(kind==='bat') return 'Battery';   /* §flBat */
   if(kind==='mj'){
     if(rec.status==='done' && !rec.awaitingInvoice) return 'Done';
     try{ var it=flwItems().filter(function(x){ return x.key==='mj:'+rec.id; })[0]; if(it) return FLW_ST[it.stage].t; }catch(_){}
@@ -27671,6 +27677,7 @@ function flpRefresh(kind,id,full){
   try{ [].slice.call(document.querySelectorAll(sel)).forEach(function(el){ var o={}; try{ o=JSON.parse(el.getAttribute('data-flpo')||'{}'); }catch(_){} var w=document.createElement('div'); w.innerHTML=flpCard(kind,id,o); if(w.firstChild){ el.replaceWith(w.firstChild); done=true; } }); }catch(_){}
   if(full){ try{ if(typeof FLW!=='undefined' && document.getElementById('fl-work-wrap') && document.getElementById('view-fl-work') && document.getElementById('view-fl-work').classList.contains('active') && typeof flRenderWork==='function') flRenderWork(); }catch(_){} }
   if(!done){ try{ if(kind==='prj' && typeof flRenderProjects==='function') flRenderProjects(); }catch(_){} }
+  if(kind==='bat'){ try{ if(typeof fbAfter==='function') fbAfter(); }catch(_){} }   /* §flBat */
 }
 function flpCSS(){
   if(document.getElementById('flp-css')) return;
@@ -29277,7 +29284,7 @@ function flnSaveJob(){
 }
 
 // ══════ §asset2 BEGIN ══════
-var FA_NEW={overview:1,docs:1,engines:1,gearboxes:1,propellers:1,safety:1,boats:1};
+var FA_NEW={overview:1,docs:1,engines:1,gearboxes:1,propellers:1,batteries:1,safety:1,boats:1};   /* §flBat */
 
 // ══════════════════════════════════════════════════════════════════════════
 // §asset2 · Company Asset — grey Fleet-Work layout (2026-10-12)
@@ -29357,7 +29364,7 @@ function faCSS(){
 }
 
 // ── shell: header + tabs + stages ──
-var FA_TABS=[['overview','Overview'],['boats','Boats'],['engines','Engines'],['gearboxes','Gearboxes'],['propellers','Propellers'],['docs','Documents'],['safety','Safety']];
+var FA_TABS=[['overview','Overview'],['boats','Boats'],['engines','Engines'],['gearboxes','Gearboxes'],['propellers','Propellers'],['batteries','Batteries'],['docs','Documents'],['safety','Safety']];   /* §flBat */
 function faGo(id){
   var btn=document.querySelector('#view-fl-asset .fl-tab-btn[onclick*="\''+id+'\'"]');
   flGoAssetTab(id,btn);
@@ -29949,7 +29956,8 @@ function faBoatDetail(o){
     +KV('GT / NT',faE((b.gt||'—')+' / '+(b.nt||'—')),1)+KV('ยาว × กว้าง × ลึก',faE((b.loa||'—')+' × '+(b.beam||'—')+' × '+(b.depth||'—')+' m'),1)+KV('BHP',b.bhp?faE(b.bhp+' HP'):'',1)+KV('ผังเครื่อง',faE(pos))
     +KV('ผู้โดยสารตามใบอนุญาต',b.licensePax?faE(b.licensePax+' PAX + ลูกเรือ '+(b.crew||0)):'',1)+KV('ใช้ขายจริง',b.cap?faE(b.cap+' PAX'):'',1)+'</div></div>'
     +(b.ownerAddr?('<div style="padding:10px 18px;font-size:12px;color:#5B6170;border-top:1px solid #ECEBE6">ที่อยู่เจ้าของ: '+faE(b.ownerAddr)+'</div>'):'');
-  return head+alerts+tiles+engRows+info;
+  var batRows=(typeof fbBoatSection==='function')?fbBoatSection(b.id):'';   /* §flBat */
+  return head+alerts+tiles+engRows+batRows+info;
 }
 function faBoatSide(o){
   var b=o.b;
@@ -30001,7 +30009,7 @@ function faRenderOverview(){
   var st=(FA.st.overview==null?-1:FA.st.overview);
   if(st>=0 && st<=3){ FA.st.overview=-1; faGo(stages[st].go[0]); return; }
   faShell({ big:bst.filter(function(s){ return s==='available'; }).length, bigT:'Boats ready', bigS:'of '+boats.length+' · '+spares.length+' spares not on a boat', badges:{docs:faDocAlertCount()}, stages:stages,
-    chips:(nFlag?('<span class="fa-chip red"><b>'+nFlag+'</b>data to fix</span>'):'') });
+    chips:(nFlag?('<span class="fa-chip red"><b>'+nFlag+'</b>data to fix</span>'):'')+((typeof fbAlertChips==='function')?fbAlertChips():'') });   /* §flBat */
   if(st===4){ wrap.innerHTML=faSparesView(boats,P); return; }
   if(st===5){ wrap.innerHTML=faFixView(flags); return; }
   if(!FA.ov||!boats.some(function(b){ return b.id===FA.ov; })) FA.ov=boats[0]?boats[0].id:null;
@@ -30864,3 +30872,240 @@ function ivmPrint(){
   var off=function(){ document.body.classList.remove('ivm-print'); window.removeEventListener('afterprint',off); };
   window.addEventListener('afterprint',off); setTimeout(function(){ window.print(); },60);
 }
+
+/* ══ §flBat (2026-10-22) · Company Asset · แท็บ Batteries · แบตเตอรี่รายลูก ผูกเรือ+ตำแหน่ง · อายุ · รูป ══════
+   เจ้าของ: "เราจะมีการเพิ่มแบตเตอรี่ของเรือลำนั้น ๆ และจะได้มีการเช็คอายุแบตด้วย ติดตั้งวันไหน
+            และมีการถ่ายรูปไว้ เรือนึงลำใช้หลายลูก ไปเพิ่มในไหนดี" → mockup ที่ตกลง: canvas "Company Asset · Batteries"
+   ที่อยู่: Company Asset → Batteries (ข้าง Engines / Gearboxes / Propellers) · ส่วน "แบตเตอรี่" ในหน้าเรือ · ชิปเตือนใน Overview
+   ข้อมูล: FL_BATTERIES[] ↔ d.fleet_batteries (ตาราง fleet_batteries · migration 039 · photos/log เป็น json_text)
+     { id, boatId, pos, brand, model, cap, volt, serial, cost, supplier, status:'installed'|'spare'|'retired',
+       installDate, buyDate, lifeMonths, warrantyMonths, spareLocation, memoNo, replacedId, retiredDate, retiredReason,
+       note, photos:[…§flp], log:[{date,type,desc,by}] }
+   อายุ = วันนี้ − installDate เทียบ lifeMonths (ค่าเริ่มต้น 18 · แก้ได้ทีละลูก) · เตือนล่วงหน้า 3 เดือน
+   รูปใช้ท่อ §flp เดียวกับงานซ่อม (kind 'bat') · ไม่เก็บ base64 */
+var FL_BATTERIES=[];
+var FB_POS=[['Port','Port (ซ้าย)'],['Std','Std (ขวา)'],['House','House (เรือนไฟ)'],['Bow','Bow thruster'],['Other','อื่น ๆ']];
+var FB_LIFE_DEFAULT=18, FB_WARN_MONTHS=3;
+var FB={ boat:null, q:'', sel:null, modal:null };
+function fbE(s){ return (typeof faE==='function')?faE(s):String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function fbToday(){ return (typeof TODAY_STR!=='undefined'&&TODAY_STR)?TODAY_STR:new Date().toISOString().slice(0,10); }
+function fbBy(){ try{ return (typeof flpBy==='function')?flpBy():'user'; }catch(_){ return 'user'; } }
+function fbCan(){ try{ return (typeof flBoardCanEdit==='function')?flBoardCanEdit():true; }catch(_){ return true; } }
+function fbGet(id){ return (FL_BATTERIES||[]).filter(function(x){ return x && x.id===id; })[0]||null; }
+function fbPosLabel(p){ var f=FB_POS.filter(function(x){ return x[0]===p; })[0]; return f?f[1]:(p||'—'); }
+function fbPosRank(p){ var i=FB_POS.map(function(x){ return x[0]; }).indexOf(p); return i<0?9:i; }
+function fbAddMonths(ymd, n){ var d=new Date(ymd+'T12:00:00'); if(isNaN(d)) return ''; d.setMonth(d.getMonth()+n); return d.toISOString().slice(0,10); }
+function fbDiffDays(a,b){ return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000); }
+/* ระยะเวลาเป็นข้อความ "1 ปี 2 เดือน 5 วัน" */
+function fbSpan(days){
+  days=Math.abs(Math.round(days)); var m=Math.floor(days/30.4375), d=Math.round(days-m*30.4375), y=Math.floor(m/12); m=m%12;
+  var out=[]; if(y) out.push(y+' ปี'); if(m) out.push(m+' เดือน'); if(!y && d) out.push(d+' วัน'); if(!out.length) out.push('0 วัน');
+  return out.join(' ');
+}
+/* อายุของลูกนี้ · state: installed → ok / due / over · spare · retired */
+function fbAge(b){
+  var life=+b.lifeMonths||FB_LIFE_DEFAULT, st=b.status||(b.boatId?'installed':'spare');
+  if(st==='retired') return {state:'retired', life:life, pct:0, txt:'ถอดแล้ว'+(b.retiredDate?(' · '+(typeof faFmtD==='function'?faFmtD(b.retiredDate,1):b.retiredDate)):'')};
+  if(st!=='installed' || !b.installDate) return {state:'spare', life:life, pct:0, txt:'ยังไม่ติดตั้ง · อายุนับเมื่อติดเรือ'};
+  var today=fbToday(), due=fbAddMonths(b.installDate,life), used=fbDiffDays(b.installDate,today), left=fbDiffDays(today,due);
+  var months=used/30.4375, pct=Math.max(0,Math.min(100,Math.round(months/life*100)));
+  var state=left<0?'over':(left<=FB_WARN_MONTHS*30.4375?'due':'ok');
+  var txt=(left<0?('เกิน '+fbSpan(left)):('เหลือ '+fbSpan(left)))+' · '+(Math.round(months*10)/10)+' / '+life+' เดือน';
+  return {state:state, life:life, due:due, used:used, left:left, months:months, pct:pct, txt:txt};
+}
+var FB_ST={ ok:['OK','#DDF1EA','#0B5A43','#0F6E56'], due:['DUE SOON','#FAEEDA','#854F0B','#D9952B'], over:['OVER AGE','#FBE3E0','#A32D2D','#A32D2D'],
+            spare:['SPARE','#EEF2F8','#5B6170','#8A8F9C'], retired:['RETIRED','#F1EFE8','#8A8F9C','#B9BDC7'] };
+function fbBar(a){ var S=FB_ST[a.state]||FB_ST.spare;
+  if(a.state==='spare'||a.state==='retired') return '<div style="font-size:10.5px;color:#8A8F9C">'+fbE(a.txt)+'</div>';
+  return '<div style="display:inline-block;width:100%;height:6px;background:#EEF1F4;border-radius:3px;overflow:hidden"><span style="display:block;width:'+a.pct+'%;height:100%;background:'+S[3]+'"></span></div>'
+    +'<div style="font-size:10.5px;margin-top:2px;color:'+(a.state==='ok'?'#8A8F9C':S[2])+(a.state==='ok'?'':';font-weight:700')+'">'+fbE(a.txt)+'</div>'; }
+function fbRows(){ return (FL_BATTERIES||[]).filter(Boolean).map(function(b){ return {o:b, a:fbAge(b)}; }); }
+/* ── แท็บ Batteries ────────────────────────────────────────────── */
+function fbRender(){
+  var wrap=document.getElementById('fl-bats-pink-wrap'); if(!wrap) return;
+  if(typeof faPartsCSS==='function') faPartsCSS(); wrap.classList.add('fa-pad');
+  var R=fbRows(), st=(FA.st.batteries==null?-1:FA.st.batteries);
+  var cnt=function(k){ return R.filter(function(r){ return r.a.state===k; }).length; };
+  var stages=[{t:'All batteries',s:'ทุกลูก',v:R.length,f:null},
+    {t:'Installed',s:'ติดเรืออยู่',v:R.filter(function(r){ return r.o.status==='installed'; }).length,f:function(r){ return r.o.status==='installed'; }},
+    {t:'Spare',s:'สำรอง',v:cnt('spare'),f:function(r){ return r.a.state==='spare'; }},
+    {t:'Due soon',s:'เหลือ < '+FB_WARN_MONTHS+' เดือน',v:cnt('due'),f:function(r){ return r.a.state==='due'; },red:cnt('due')>0},
+    {t:'Over age',s:'เกินอายุที่คาด',v:cnt('over'),f:function(r){ return r.a.state==='over'; },red:cnt('over')>0},
+    {t:'Retired',s:'ถอดแล้ว',v:cnt('retired'),f:function(r){ return r.a.state==='retired'; }}];
+  var flt=st>=0&&stages[st]?stages[st].f:null;
+  var shown=R.filter(function(r){ return (!flt||flt(r)) && (flt||r.a.state!=='retired'); });
+  var boats=(typeof faCompanyBoats==='function'?faCompanyBoats():BOATS).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+  var onBoat=function(r,bid){ return r.o.status==='installed' && r.o.boatId===bid; };
+  var cntB=function(bid){ return shown.filter(function(r){ return bid==='-'?!(r.o.status==='installed'&&r.o.boatId):onBoat(r,bid); }); };
+  var dot=function(L){ var ov=L.some(function(r){ return r.a.state==='over'; }), du=L.some(function(r){ return r.a.state==='due'; }); return ov?'<i style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#A32D2D;margin-left:6px;vertical-align:2px"></i>':(du?'<i style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#D9952B;margin-left:6px;vertical-align:2px"></i>':''); };
+  var bl='<div class="fa-card"><div style="padding:12px 14px 10px"><div class="fa-kick">กรองตามเรือ</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+    +'<button type="button" class="fa-fc'+(!FB.boat?' on':'')+'" onclick="fbPickBoat(null)">All '+shown.length+'</button>'
+    +'<button type="button" class="fa-fc" style="border-color:#D9952B;color:#854F0B" onclick="faStage(\'batteries\',3)">ใกล้หมด '+(cnt('due')+cnt('over'))+'</button></div></div><div class="fa-sc">'
+    +boats.map(function(b){ var L=cntB(b.id); return '<div class="fa-boat'+(FB.boat===b.id?' on':'')+'" onclick="fbPickBoat(\''+b.id+'\')">'+(typeof faAv==='function'?faAv(b,26):'')
+        +'<span class="fa-el" style="flex:1;min-width:0;font-size:13px;font-weight:600">'+fbE(b.name)+dot(L)+'</span><b class="mono" style="font-size:12.5px;font-weight:500;width:20px;text-align:right">'+L.length+'</b></div>'; }).join('')
+    +(function(){ var L=cntB('-'); return '<div class="fa-boat'+(FB.boat==='-'?' on':'')+'" onclick="fbPickBoat(\'-\')"><span style="flex:none;width:26px;height:26px;border-radius:13px;border:1.5px dashed #B9BDC7;box-sizing:border-box"></span><span style="flex:1;font-size:13px;font-weight:600;color:#5B6170">สำรอง (คลัง)</span><b class="mono" style="font-size:12.5px;font-weight:500;width:20px;text-align:right">'+L.length+'</b></div>'; })()
+    +'</div></div>';
+  var groups=[]; boats.forEach(function(b){ if(FB.boat && FB.boat!==b.id) return; var L=cntB(b.id); if(L.length) groups.push({b:b,rows:L}); });
+  if(!FB.boat||FB.boat==='-'){ var L0=cntB('-'); if(L0.length) groups.push({b:null,rows:L0}); }
+  groups.forEach(function(g){ g.rows.sort(function(a,z){ return (fbPosRank(a.o.pos)-fbPosRank(z.o.pos))||String(a.o.serial||'').localeCompare(String(z.o.serial||'')); }); });
+  if(!FB.sel || !R.some(function(r){ return r.o.id===FB.sel; })){ FB.sel=groups.length?groups[0].rows[0].o.id:null; }
+  var row=function(r){ var o=r.o, S=FB_ST[r.a.state]||FB_ST.spare, on=o.id===FB.sel, inst=o.status==='installed';
+    return '<div data-q="'+fbE(String(o.serial||'').toLowerCase()+' '+String(o.brand||'').toLowerCase()+' '+String(o.model||'').toLowerCase())+'"><div class="fa-prow'+(on?' on':'')+'" style="background:'+(on?'#E8F3FB':'transparent')+'" onclick="fbPick(\''+fbE(o.id)+'\')">'
+      +'<span class="fa-bdg" style="color:'+(inst?'#fff':'#5B6170')+';background:'+(inst?(o.pos==='House'?'#5B6170':'#16265C'):'#fff')+';border-color:'+(inst?(o.pos==='House'?'#5B6170':'#16265C'):'#B9BDC7')+'">'+fbE(inst?(o.pos||'—'):'Spare')+'</span>'
+      +'<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;min-width:0"><span class="mono fa-el" style="font-size:12.5px;font-weight:600">'+fbE(o.serial||'—')+'</span><span class="fa-st" style="background:'+S[1]+';color:'+S[2]+'">'+S[0]+'</span></div>'
+      +'<div class="fa-el" style="font-size:10.5px;color:#8A8F9C;margin-top:2px">'+fbE([o.brand,o.model,o.cap].filter(Boolean).join(' · '))+(o.installDate&&inst?(' · ติดตั้ง '+fbE(faFmtD(o.installDate,1))):'')+'</div>'
+      +'<div style="margin-top:4px">'+fbBar(r.a)+'</div></div></div></div>'; };
+  var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">แบตเตอรี่</b><span style="font-size:11.5px;color:#8A8F9C">'+shown.length+' ลูก · ตามเรือ · เรียงตามตำแหน่ง</span></div>'
+    +'<input class="fa-q" style="width:100%;margin-top:8px" placeholder="ค้นหา serial / ยี่ห้อ…" value="'+fbE(FB.q||'')+'" oninput="fbFilter(this.value)"></div>'
+    +'<div class="fa-sc" id="fl-bat-listpanel">'+(groups.length?groups.map(function(g){
+        var ov=g.rows.filter(function(r){ return r.a.state==='over'; }).length, du=g.rows.filter(function(r){ return r.a.state==='due'; }).length;
+        return '<div class="fa-grp">'+(g.b?(typeof faAv==='function'?faAv(g.b,22):''):'<span style="width:22px;height:22px;border-radius:11px;border:1.5px dashed #B9BDC7;box-sizing:border-box"></span>')+'<span>'+fbE(g.b?g.b.name:'สำรอง · ไม่ได้ติดเรือ')+'</span><em style="color:'+(ov?'#A32D2D':'#854F0B')+'">'+(ov?(ov+' เกินอายุ'):(du?(du+' ใกล้หมด'):''))+'</em></div>'+g.rows.map(row).join(''); }).join('')
+      :'<div style="padding:28px;text-align:center;color:#8A8F9C;font-size:12.5px">ยังไม่มีแบตในกลุ่มนี้</div>')+'</div></div>';
+  var sel=fbGet(FB.sel);
+  var det='<div class="fa-card" id="fb-detail">'+(sel?fbDetail(sel):'<div style="padding:40px;text-align:center;color:#8A8F9C">เลือกลูกทางซ้าย หรือกด + Add battery</div>')+'</div>';
+  if(typeof faShell==='function') faShell({ big:R.filter(function(r){ return r.o.status==='installed'; }).length, bigT:'Batteries on boats', bigS:'of '+R.filter(function(r){ return r.a.state!=='retired'; }).length+' · '+cnt('spare')+' spare',
+    badges:{docs:(typeof faDocAlertCount==='function')?faDocAlertCount():0}, stages:stages,
+    chips:(cnt('over')?('<span class="fa-chip red"><b>'+cnt('over')+'</b>เกินอายุ</span>'):'')+(cnt('due')?('<span class="fa-chip amb"><b>'+cnt('due')+'</b>ใกล้หมดอายุ</span>'):''), add:['Add battery','fbOpenForm(null)'] });
+  var keep=document.getElementById('fl-bat-listpanel'), kt=keep?keep.scrollTop:0;
+  wrap.innerHTML='<div class="fa-3">'+bl+mid+det+'</div>';
+  var lp=document.getElementById('fl-bat-listpanel'); if(lp) lp.scrollTop=kt;
+  if(FB.q) fbFilter(FB.q);
+}
+function fbPickBoat(id){ FB.boat=(FB.boat===id)?null:id; fbRender(); }
+function fbPick(id){ FB.sel=id; fbRender(); }
+function fbFilter(v){ FB.q=v; var q=String(v||'').toLowerCase(); var lp=document.getElementById('fl-bat-listpanel'); if(!lp) return;
+  lp.querySelectorAll('[data-q]').forEach(function(d){ d.style.display=(!q||d.getAttribute('data-q').indexOf(q)>=0)?'':'none'; }); }
+function fbDetail(o){
+  var a=fbAge(o), S=FB_ST[a.state]||FB_ST.spare, b=o.boatId?getBoat(o.boatId):null, inst=o.status==='installed';
+  var FD=function(d){ return d?faFmtD(d,1):'—'; };
+  var btns='';
+  if(inst){ btns+='<button type="button" class="fa-btn" onclick="fbOpenForm(null,{replaceId:\''+fbE(o.id)+'\'})">เปลี่ยนลูกใหม่</button><button type="button" class="fa-btn" onclick="fbVolt(\''+fbE(o.id)+'\')">วัดโวลต์</button><button type="button" class="fa-btn" onclick="fbUninstall(\''+fbE(o.id)+'\')">ถอดเก็บ</button>'; }
+  else if(o.status==='spare'){ btns+='<button type="button" class="fa-btn" onclick="fbOpenForm(\''+fbE(o.id)+'\',{install:1})">ติดตั้งลงเรือ</button><button type="button" class="fa-btn" onclick="fbRetire(\''+fbE(o.id)+'\')">ทิ้ง / เสื่อม</button>'; }
+  btns+='<button type="button" class="fa-btn pri" onclick="fbOpenForm(\''+fbE(o.id)+'\')">Edit</button>';
+  var head='<div style="display:flex;align-items:center;gap:14px;padding:16px 20px;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:700;color:'+(inst?'#fff':'#5B6170')+';background:'+(inst?'#16265C':'#fff')+';border:1.5px solid '+(inst?'#16265C':'#B9BDC7')+';padding:6px 6px;border-radius:6px;font-family:\'DM Mono\',monospace;min-width:64px;text-align:center;box-sizing:border-box;white-space:nowrap">'+fbE(inst?(o.pos||'—'):'Spare')+'</span>'
+    +'<div style="flex:1;min-width:240px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b class="mono" style="font-size:22px;font-weight:500">'+fbE(o.serial||'—')+'</b><span style="background:'+S[1]+';color:'+S[2]+';padding:2px 9px;border-radius:7px;font-size:11px;font-weight:700">'+S[0]+'</span></div>'
+    +'<div style="font-size:13px;color:#5B6170;margin-top:2px">'+fbE([o.brand,o.model,o.cap,o.volt].filter(Boolean).join(' · '))+(b&&inst?(' · <b style="color:#0F1B3D">'+fbE(b.name)+'</b> · '+fbE(fbPosLabel(o.pos))):'')+(!inst&&o.spareLocation?(' · @ '+fbE(o.spareLocation)):'')+'</div></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+btns+'</div></div>';
+  var alert='';
+  if(a.state==='over') alert='<div class="fa-alert red" style="border-top:1px solid #F2C9C3"><b>!</b><span style="flex:1"><b>เกินอายุที่คาด</b> '+fbE(fbSpan(a.left))+' · ครบกำหนด '+fbE(FD(a.due))+'</span><button type="button" class="fa-btn" onclick="fbOpenForm(null,{replaceId:\''+fbE(o.id)+'\'})">เปลี่ยนลูกใหม่</button></div>';
+  else if(a.state==='due') alert='<div class="fa-alert amb" style="border-top:1px solid #EBD3A6"><b>!</b><span style="flex:1">ใกล้ครบอายุ · เหลือ '+fbE(fbSpan(a.left))+' · ครบกำหนด '+fbE(FD(a.due))+'</span></div>';
+  var war=(o.installDate&&+o.warrantyMonths)?fbAddMonths(o.installDate,+o.warrantyMonths):'';
+  var tiles='<div style="display:flex;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">'
+    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ติดตั้ง</div><b style="font-size:16px">'+fbE(FD(o.installDate))+'</b><i>'+(inst&&o.installDate?fbE(fbSpan(a.used)+'ก่อน'):'ยังไม่ติดตั้ง')+'</i></div>'
+    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">อายุที่คาด</div><b style="font-size:16px">'+a.life+' เดือน</b><i style="color:'+(a.state==='over'?'#A32D2D':a.state==='due'?'#854F0B':'#8A8F9C')+'">'+(a.due?('ครบกำหนด '+fbE(FD(a.due))):'—')+'</i></div>'
+    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">ราคา · ประกัน</div><b style="font-size:16px">'+(o.cost?('฿'+Number(o.cost).toLocaleString()):'—')+'</b><i>'+(o.warrantyMonths?('ประกัน '+o.warrantyMonths+' เดือน'+(war?(fbDiffDays(fbToday(),war)<0?' · หมดแล้ว':(' · ถึง '+fbE(FD(war)))):'')):'ไม่ระบุประกัน')+(o.memoNo?(' · '+fbE(o.memoNo)):'')+'</i></div></div>';
+  var photos=(typeof flpCard==='function')?('<div style="padding:10px 14px;border-bottom:1px solid #ECEBE6">'+flpCard('bat',o.id,{cols:3,title:'รูป'})+'</div>'):'';
+  var log=(o.log||[]).slice().reverse();
+  var logH='<div class="fa-sec fa-kick">ประวัติ · ใหม่ → เก่า · '+log.length+' รายการ</div>'+(log.length?log.map(function(l){ return '<div class="fa-log"><span class="mono" style="flex:none;width:86px;font-size:11px;color:#5B6170">'+fbE(l.date?faFmtD(l.date):'')+'</span><span style="flex:1;font-size:12.5px">'+fbE(l.desc||l.type||'')+(l.by?(' <span style="color:#8A8F9C">· '+fbE(l.by)+'</span>'):'')+'</span></div>'; }).join(''):'<div style="padding:14px 18px;color:#8A8F9C;font-size:12px">ยังไม่มีประวัติ</div>');
+  var note=o.note?('<div style="padding:10px 18px;font-size:12px;color:#5B6170;border-top:1px solid #ECEBE6">หมายเหตุ: '+fbE(o.note)+'</div>'):'';
+  return head+alert+tiles+photos+logH+note;
+}
+/* ── ส่วนในหน้าเรือ + ชิปใน Overview ────────────────────────────── */
+function fbBoatSection(boatId){
+  var L=fbRows().filter(function(r){ return r.o.status==='installed' && r.o.boatId===boatId; }).sort(function(a,z){ return fbPosRank(a.o.pos)-fbPosRank(z.o.pos); });
+  var ov=L.filter(function(r){ return r.a.state==='over'; }).length, du=L.filter(function(r){ return r.a.state==='due'; }).length;
+  var h='<div class="fa-sec fa-kick"><i style="width:7px;height:7px;border-radius:4px;background:'+(ov?'#A32D2D':du?'#D9952B':'#0F6E56')+';margin-right:6px"></i>แบตเตอรี่ · '+L.length+' ลูก'
+    +(ov?('<span style="margin-left:8px;font-size:10px;font-weight:700;background:#FBE3E0;color:#A32D2D;border-radius:6px;padding:1px 7px;letter-spacing:0;text-transform:none">'+ov+' เกินอายุ</span>'):(du?('<span style="margin-left:8px;font-size:10px;font-weight:700;background:#FAEEDA;color:#854F0B;border-radius:6px;padding:1px 7px;letter-spacing:0;text-transform:none">'+du+' ใกล้หมด</span>'):''))
+    +'<span style="margin-left:auto;letter-spacing:0;text-transform:none"><button type="button" class="fa-btn" style="height:26px;font-size:11.5px" onclick="fbOpenForm(null,{boatId:\''+fbE(boatId)+'\'})">+ เพิ่มลูก</button></span></div>';
+  if(!L.length) return h+'<div style="padding:14px 18px;color:#8A8F9C;font-size:12px">ยังไม่ได้ลงทะเบียนแบตของเรือลำนี้</div>';
+  return h+L.map(function(r){ var o=r.o, S=FB_ST[r.a.state];
+    return '<div class="fa-prow" onclick="flGoToAsset(\'batteries\',\''+fbE(o.id)+'\')"><span class="fa-bdg" style="color:#fff;background:'+(o.pos==='House'?'#5B6170':'#16265C')+';border-color:'+(o.pos==='House'?'#5B6170':'#16265C')+'">'+fbE(o.pos||'—')+'</span>'
+      +'<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px"><span class="mono fa-el" style="font-size:12.5px;font-weight:600">'+fbE(o.serial||'—')+'</span><span style="font-size:11px;color:#8A8F9C">'+fbE([o.brand,o.model,o.cap].filter(Boolean).join(' '))+'</span></div><div style="width:200px">'+fbBar(r.a)+'</div></div>'
+      +(r.a.state==='over'?('<button type="button" class="fa-btn" style="height:26px;font-size:11px;color:#A32D2D;border-color:#F0B9AE" onclick="event.stopPropagation();fbOpenForm(null,{replaceId:\''+fbE(o.id)+'\'})">เปลี่ยน</button>'):('<span class="fa-st" style="background:'+S[1]+';color:'+S[2]+'">'+S[0]+'</span>'))+'</div>'; }).join('');
+}
+function fbAlertChips(){
+  var R=fbRows(), ov=R.filter(function(r){ return r.a.state==='over'; }), du=R.filter(function(r){ return r.a.state==='due'; });
+  var nm=function(r){ var b=r.o.boatId?getBoat(r.o.boatId):null; return (b?b.name:'?')+' '+(r.o.pos||''); };
+  var h='';
+  if(ov.length) h+='<span class="fa-chip red" style="cursor:pointer" title="'+fbE(ov.map(nm).join(' · '))+'" onclick="faGoStage(\'batteries\',4)"><b>'+ov.length+'</b>แบตเกินอายุ</span>';
+  if(du.length) h+='<span class="fa-chip amb" style="cursor:pointer" title="'+fbE(du.map(nm).join(' · '))+'" onclick="faGoStage(\'batteries\',3)"><b>'+du.length+'</b>แบตใกล้หมดอายุ</span>';
+  return h;
+}
+/* ── ฟอร์ม เพิ่ม / แก้ / เปลี่ยน / ติดตั้ง ──────────────────────── */
+function fbOpenForm(id, opt){
+  if(!fbCan()){ alert('No permission to edit fleet assets'); return; }
+  opt=opt||{}; var o=id?fbGet(id):null, rep=opt.replaceId?fbGet(opt.replaceId):null;
+  var boatId=o?o.boatId:(rep?rep.boatId:(opt.boatId||'')), pos=o?o.pos:(rep?rep.pos:'Port');
+  var status=o?(o.status||'installed'):'installed'; if(o && opt.install) status='installed';
+  var v=function(k,d){ return fbE(o&&o[k]!=null?o[k]:(d==null?'':d)); };
+  var boats=(typeof faCompanyBoats==='function'?faCompanyBoats():BOATS).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+  var inp='width:100%;box-sizing:border-box;border:1px solid #DCE2E8;border-radius:8px;padding:7px 10px;font:12.5px inherit;font-family:inherit;margin-top:3px;background:#fff';
+  var lb='font-size:10px;color:#6B7280;font-weight:700';
+  var F=function(l,h){ return '<div><label style="'+lb+'">'+l+'</label>'+h+'</div>'; };
+  var spareOpts=['คลัง Tub Lamu','คลัง Visit Panwa','คลัง Ranong'];
+  var today=fbToday();
+  var h='<div style="padding:12px 16px;border-bottom:1px solid #EEF1F4;display:flex;align-items:center;gap:8px"><b style="font-size:14px">'+(rep?'เปลี่ยนแบตลูกใหม่':(o?(opt.install?'ติดตั้งลงเรือ':'แก้ไขแบตเตอรี่'):'เพิ่มแบตเตอรี่'))+'</b><span style="font-size:11px;color:#6B7280">'+(rep?('แทน '+fbE(rep.serial||'')+' · '+fbE((getBoat(rep.boatId)||{}).name||'')+' '+fbE(rep.pos||'')):'ลงทะเบียน 1 ลูก')+'</span><span style="flex:1"></span><button type="button" onclick="fbClose()" style="border:none;background:transparent;font-size:18px;color:#6B7280;cursor:pointer">&times;</button></div>'
+    +'<div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:70vh">'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+F('ยี่ห้อ','<input id="fb-brand" style="'+inp+'" value="'+v('brand','')+'" placeholder="เช่น 3K / Amaron">')+F('รุ่น','<input id="fb-model" style="'+inp+'" value="'+v('model','')+'" placeholder="เช่น N150">')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+F('ขนาด (Ah / CCA)','<input id="fb-cap" style="'+inp+'" value="'+v('cap','')+'" placeholder="150Ah">')+F('โวลต์','<input id="fb-volt" style="'+inp+'" value="'+v('volt','12V')+'">')+F('ราคา ฿','<input id="fb-cost" style="'+inp+';text-align:right;font-family:\'DM Mono\',monospace" value="'+v('cost','')+'" inputmode="decimal">')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+F('Serial (จากป้าย · เว้นว่าง = ระบบตั้งให้)','<input id="fb-serial" style="'+inp+';font-family:\'DM Mono\',monospace" value="'+v('serial','')+'">')+F('ร้าน / Supplier','<input id="fb-supplier" style="'+inp+'" value="'+v('supplier','')+'">')+'</div>'
+    +'<div style="border-top:1px solid #EEF1F4;padding-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      +F('สถานะ','<select id="fb-status" style="'+inp+'" onchange="fbFormSync()"><option value="installed"'+(status==='installed'?' selected':'')+'>ติดเรืออยู่</option><option value="spare"'+(status==='spare'?' selected':'')+'>สำรอง (คลัง)</option></select>')
+      +F('เรือ','<select id="fb-boat" style="'+inp+'">'+boats.map(function(b){ return '<option value="'+fbE(b.id)+'"'+(b.id===boatId?' selected':'')+'>'+fbE(b.name)+'</option>'; }).join('')+'</select>')
+      +F('ตำแหน่ง','<select id="fb-pos" style="'+inp+'">'+FB_POS.map(function(p){ return '<option value="'+p[0]+'"'+(p[0]===pos?' selected':'')+'>'+fbE(p[1])+'</option>'; }).join('')+'</select>')+'</div>'
+    +'<div id="fb-spare-row">'+F('เก็บที่','<select id="fb-sploc" style="'+inp+'">'+spareOpts.map(function(s){ return '<option'+(o&&o.spareLocation===s?' selected':'')+'>'+fbE(s)+'</option>'; }).join('')+'</select>')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">'
+      +F('วันติดตั้ง','<input id="fb-inst" type="date" style="'+inp+'" value="'+v('installDate',(o&&!opt.install)?'':today)+'" onchange="fbFormSync()">')
+      +F('วันซื้อ','<input id="fb-buy" type="date" style="'+inp+'" value="'+v('buyDate','')+'">')
+      +F('อายุที่คาด (เดือน)','<input id="fb-life" type="number" min="1" style="'+inp+';font-family:\'DM Mono\',monospace" value="'+v('lifeMonths',FB_LIFE_DEFAULT)+'" onchange="fbFormSync()">')
+      +F('ประกัน (เดือน)','<input id="fb-war" type="number" min="0" style="'+inp+';font-family:\'DM Mono\',monospace" value="'+v('warrantyMonths',12)+'">')+'</div>'
+    +'<div id="fb-due" style="font-size:11.5px;color:#0F6E56;background:#E6F4EE;border-radius:8px;padding:6px 10px"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+F('ซื้อผ่าน Memo (ถ้ามี)','<input id="fb-memo" style="'+inp+';font-family:\'DM Mono\',monospace" value="'+v('memoNo','')+'" placeholder="MO-xxx">')+F('หมายเหตุ','<input id="fb-note" style="'+inp+'" value="'+v('note','')+'">')+'</div>'
+    +(rep?('<div style="font-size:11.5px;color:#7A4300;background:#FFF8EC;border-radius:8px;padding:6px 10px">ลูกเดิม <b class="mono">'+fbE(rep.serial||'')+'</b> จะถูกตั้งเป็น "ถอดแล้ว" · <label style="font-weight:600">เหตุผล <select id="fb-rep-why" style="border:1px solid #DCE2E8;border-radius:6px;padding:3px 6px;font:12px inherit;font-family:inherit"><option>หมดอายุ</option><option>เสื่อม / สตาร์ทไม่ติด</option><option>เคลมประกัน</option><option>อื่น ๆ</option></select></label></div>'):'')
+    +'<div style="font-size:11px;color:#8A8F9C">บันทึกแล้วจึงถ่ายรูปได้ที่แผงรายละเอียด (ป้ายซีเรียล · วันที่เขียนบนแบต · ตำแหน่งในเรือ)</div>'
+    +'</div><div style="padding:10px 16px;border-top:1px solid #EEF1F4;display:flex;gap:8px;justify-content:flex-end"><button type="button" class="fa-btn" onclick="fbClose()">ยกเลิก</button><button type="button" class="fa-btn pri" onclick="fbSave()">'+(rep?'บันทึกและเปลี่ยน':(opt.install?'ติดตั้ง':'บันทึก'))+'</button></div>';
+  var ov=document.createElement('div'); ov.id='fb-modal';
+  ov.style.cssText='position:fixed;inset:0;z-index:10060;background:rgba(15,27,61,.45);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;width:560px;max-width:100%;box-shadow:0 20px 50px rgba(2,10,30,.3)">'+h+'</div>';
+  ov.addEventListener('click',function(e){ if(e.target===ov) fbClose(); });
+  document.body.appendChild(ov);
+  FB.modal={id:id||null, replaceId:opt.replaceId||null, install:!!opt.install};
+  fbFormSync();
+}
+function fbClose(){ var m=document.getElementById('fb-modal'); if(m) m.remove(); FB.modal=null; }
+function fbFormSync(){
+  var st=(document.getElementById('fb-status')||{}).value, sp=document.getElementById('fb-spare-row'), due=document.getElementById('fb-due');
+  var inst=(document.getElementById('fb-inst')||{}).value, life=+(document.getElementById('fb-life')||{}).value||FB_LIFE_DEFAULT;
+  if(sp) sp.style.display=(st==='spare')?'':'none';
+  ['fb-boat','fb-pos','fb-inst'].forEach(function(k){ var el=document.getElementById(k); if(el) el.disabled=(st==='spare'); });
+  if(due){ if(st==='spare'||!inst) due.textContent='สำรอง · อายุเริ่มนับเมื่อติดตั้งลงเรือ';
+    else { var d=fbAddMonths(inst,life), w=fbAddMonths(inst,life-FB_WARN_MONTHS); due.innerHTML='ครบกำหนดเปลี่ยน <b>'+fbE(faFmtD(d,1))+'</b> · ระบบเตือนล่วงหน้า '+FB_WARN_MONTHS+' เดือน ('+fbE(faFmtD(w,1))+')'; } }
+}
+function fbSerialAuto(boatId,pos){ var b=boatId?getBoat(boatId):null, pre=(b?String(b.name||'').replace(/[^A-Za-z0-9]/g,'').slice(0,3).toUpperCase():'SP')||'BT';
+  var base=pre+'-BT-'+(pos?String(pos).slice(0,1).toUpperCase():'X'), n=1; while((FL_BATTERIES||[]).some(function(x){ return x.serial===base+'-'+String(n).padStart(2,'0'); })) n++; return base+'-'+String(n).padStart(2,'0'); }
+function fbSave(){
+  var M=FB.modal; if(!M) return;
+  var g=function(k){ var el=document.getElementById(k); return el?String(el.value||'').trim():''; };
+  var st=g('fb-status'), boatId=st==='installed'?g('fb-boat'):'', pos=st==='installed'?g('fb-pos'):'';
+  if(st==='installed' && !boatId){ alert('Pick a boat'); return; }
+  var inst=st==='installed'?g('fb-inst'):'';
+  if(st==='installed' && !inst){ alert('Install date is required'); return; }
+  var o=M.id?fbGet(M.id):null, isNew=!o, now=fbToday(), by=fbBy();
+  if(isNew){ o={ id:'bat'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), log:[], photos:[] }; FL_BATTERIES.push(o); }
+  var prev={status:o.status, boatId:o.boatId, pos:o.pos, installDate:o.installDate};
+  o.brand=g('fb-brand'); o.model=g('fb-model'); o.cap=g('fb-cap'); o.volt=g('fb-volt'); o.cost=parseFloat(g('fb-cost').replace(/,/g,''))||0;
+  o.serial=g('fb-serial')||o.serial||fbSerialAuto(boatId,pos); o.supplier=g('fb-supplier'); o.status=st;
+  o.boatId=boatId||''; o.pos=pos||''; o.installDate=inst||(st==='spare'?'':o.installDate||''); o.buyDate=g('fb-buy');
+  o.lifeMonths=+g('fb-life')||FB_LIFE_DEFAULT; o.warrantyMonths=+g('fb-war')||0; o.spareLocation=st==='spare'?g('fb-sploc'):''; o.memoNo=g('fb-memo'); o.note=g('fb-note');
+  if(!Array.isArray(o.log)) o.log=[];
+  var bn=boatId?((getBoat(boatId)||{}).name||boatId):'';
+  if(isNew) o.log.push({date:now, type:(st==='installed'?'install':'register'), desc:(st==='installed'?('ติดตั้ง '+bn+' '+pos+' · วันติดตั้ง '+inst):('ลงทะเบียนเป็นสำรอง · '+o.spareLocation))+(o.memoNo?(' · ซื้อผ่าน '+o.memoNo):''), by:by});
+  else if(prev.status!=='installed' && st==='installed') o.log.push({date:now, type:'install', desc:'ติดตั้ง '+bn+' '+pos+' · วันติดตั้ง '+inst, by:by});
+  else if(prev.status==='installed' && st==='spare') o.log.push({date:now, type:'remove', desc:'ถอดเก็บเป็นสำรอง · '+o.spareLocation, by:by});
+  else if(st==='installed' && (prev.boatId!==boatId || prev.pos!==pos)) o.log.push({date:now, type:'move', desc:'ย้าย '+((getBoat(prev.boatId)||{}).name||'?')+' '+(prev.pos||'')+' → '+bn+' '+pos, by:by});
+  else if(!isNew) o.log.push({date:now, type:'edit', desc:'แก้ไขข้อมูล', by:by});
+  if(M.replaceId){ var r=fbGet(M.replaceId); if(r){ var why=g('fb-rep-why')||'เปลี่ยน'; r.status='retired'; r.retiredDate=now; r.retiredReason=why; r.replacedById=o.id; r.boatId=''; r.pos='';
+      if(!Array.isArray(r.log)) r.log=[]; r.log.push({date:now, type:'retire', desc:'ถอดออก · '+why+' · แทนด้วย '+o.serial, by:by});
+      o.replacedId=r.id; o.log.push({date:now, type:'replace', desc:'ใส่แทน '+(r.serial||'')+' ('+why+')', by:by}); } }
+  flSave(); fbClose(); FB.sel=o.id;
+  try{ if(typeof flShowToast==='function') flShowToast(isNew?'Battery saved':'Battery updated'); }catch(_){}
+  fbAfter();
+}
+function fbAfter(){ try{ if(typeof flAssetTab!=='undefined' && document.getElementById('view-fl-asset') && document.getElementById('view-fl-asset').classList.contains('active')) flRenderAsset(); }catch(_){} }
+function fbVolt(id){ if(!fbCan()) return; var o=fbGet(id); if(!o) return; var v=prompt('Voltage reading (V) · e.g. 12.6', ''); if(v==null) return; var n=parseFloat(v); if(!(n>0)){ alert('Enter a number'); return; }
+  if(!Array.isArray(o.log)) o.log=[]; o.log.push({date:fbToday(), type:'volt', volt:n, desc:'วัดโวลต์ '+n+'V'+(n<12.4?' · ต่ำกว่าเกณฑ์ 12.4':''), by:fbBy()}); flSave(); fbAfter(); }
+function fbUninstall(id){ if(!fbCan()) return; var o=fbGet(id); if(!o) return; var loc=prompt('Store where? (คลัง Tub Lamu / คลัง Visit Panwa)', 'คลัง Tub Lamu'); if(loc==null) return;
+  var bn=(getBoat(o.boatId)||{}).name||''; o.status='spare'; o.spareLocation=loc; var p=o.pos; o.boatId=''; o.pos=''; if(!Array.isArray(o.log)) o.log=[]; o.log.push({date:fbToday(), type:'remove', desc:'ถอดจาก '+bn+' '+p+' เก็บที่ '+loc, by:fbBy()}); flSave(); fbAfter(); }
+function fbRetire(id){ if(!fbCan()) return; var o=fbGet(id); if(!o) return; var why=prompt('Reason (หมดอายุ / เสื่อม / เคลม)', 'เสื่อม'); if(why==null) return;
+  o.status='retired'; o.retiredDate=fbToday(); o.retiredReason=why; o.boatId=''; o.pos=''; if(!Array.isArray(o.log)) o.log=[]; o.log.push({date:fbToday(), type:'retire', desc:'ทิ้ง · '+why, by:fbBy()}); flSave(); fbAfter(); }

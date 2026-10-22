@@ -7277,5 +7277,108 @@
     "primary_key": "id",
     "foreign_keys": [],
     "rows": 0
+  },
+  "fleet_batteries": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "boatid",
+        "type": "text"
+      },
+      {
+        "name": "pos",
+        "type": "text"
+      },
+      {
+        "name": "brand",
+        "type": "text"
+      },
+      {
+        "name": "model",
+        "type": "text"
+      },
+      {
+        "name": "cap",
+        "type": "text"
+      },
+      {
+        "name": "volt",
+        "type": "text"
+      },
+      {
+        "name": "serial",
+        "type": "text"
+      },
+      {
+        "name": "cost",
+        "type": "double precision"
+      },
+      {
+        "name": "supplier",
+        "type": "text"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "installdate",
+        "type": "text"
+      },
+      {
+        "name": "buydate",
+        "type": "text"
+      },
+      {
+        "name": "lifemonths",
+        "type": "bigint"
+      },
+      {
+        "name": "warrantymonths",
+        "type": "bigint"
+      },
+      {
+        "name": "sparelocation",
+        "type": "text"
+      },
+      {
+        "name": "memono",
+        "type": "text"
+      },
+      {
+        "name": "replacedid",
+        "type": "text"
+      },
+      {
+        "name": "replacedbyid",
+        "type": "text"
+      },
+      {
+        "name": "retireddate",
+        "type": "text"
+      },
+      {
+        "name": "retiredreason",
+        "type": "text"
+      },
+      {
+        "name": "note",
+        "type": "text"
+      },
+      {
+        "name": "photos",
+        "type": "text"
+      },
+      {
+        "name": "log",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
   }
 }

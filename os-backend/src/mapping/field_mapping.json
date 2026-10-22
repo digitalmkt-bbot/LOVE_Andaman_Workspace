@@ -7873,5 +7873,127 @@
       "kind": "scalar",
       "db_type": "text"
     }
+  },
+  "fleet_batteries": {
+    "id": {
+      "source": "fleet_batteries[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "boatid": {
+      "source": "boatId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "pos": {
+      "source": "pos",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "brand": {
+      "source": "brand",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "model": {
+      "source": "model",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "cap": {
+      "source": "cap",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "volt": {
+      "source": "volt",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "serial": {
+      "source": "serial",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "cost": {
+      "source": "cost",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "supplier": {
+      "source": "supplier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "status": {
+      "source": "status",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "installdate": {
+      "source": "installDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "buydate": {
+      "source": "buyDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "lifemonths": {
+      "source": "lifeMonths",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "warrantymonths": {
+      "source": "warrantyMonths",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "sparelocation": {
+      "source": "spareLocation",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "memono": {
+      "source": "memoNo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "replacedid": {
+      "source": "replacedId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "replacedbyid": {
+      "source": "replacedById",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "retireddate": {
+      "source": "retiredDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "retiredreason": {
+      "source": "retiredReason",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "photos": {
+      "source": "photos",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "log": {
+      "source": "log",
+      "kind": "json_text",
+      "db_type": "text"
+    }
   }
 }
