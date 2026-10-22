@@ -3654,8 +3654,8 @@ function renderDash(){
     totBooked=+s.booked_pax||0;
     /* seats_left = capacity less booked (legacy totFree); free_seats is null whenever a land route is in the catalogue, which this screen showed as 0 */
     totFree=s.seats_left!=null?+s.seats_left:(s.free_seats==null?0:+s.free_seats);
-    fillPct=s.fill_percent==null?0:+s.fill_percent;
-    operatingCount=+s.active_boats||0;
+    fillPct=s.fill_percent==null?0:Math.round(+s.fill_percent);   /* legacy rounds to a whole percent */
+    operatingCount=s.available_boats!=null?+s.available_boats||0:+s.active_boats||0;   /* legacy operatingCount: deployed boats that are available (a fixing boat on a route is not operating); active_boats counts it */
     /* ready_boats = every boat ready that day, deployed or not (legacy availTotal, the "of 13"); available_boats counts only the deployed ones */
     availTotal=s.ready_boats!=null?+s.ready_boats||0:+s.available_boats||0;
     fixCount=+s.fixing_boats||0;
