@@ -55116,7 +55116,11 @@ function bkV2RenderTab2(){
       }); }catch(_){}
     }
     return order.map(bid=>{ const a=acc[bid], bo=a.boat||{};
-      const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
+      /* §btCapOvr (2026-10-22) · owner "Cap ที่ปลดเพิ่ม เป็นบัคไหม ของ tadeo" (23 ต.ค. · Tadeo 31/38 แต่ Capacity รวม 74)
+         ยอด Capacity ของทริปมาจาก getAllotment ซึ่งใช้ cap รายวัน (BOAT_CAP_OVR) · แถวเรือเคยอ่าน boat.cap ตรง ๆ
+         ปลด cap ของวันนั้นเพิ่มแล้ว แถวเรือยังโชว์ cap ปกติ ตัวเลขสองที่จึงไม่ตรงกัน · ใช้ cap ของวันนั้นเหมือนกัน */
+      const _cBase=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
+      const cap=(typeof boatCapFor==='function' && bid)?((+boatCapFor(bid,date))||_cBase):_cBase;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
       return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null,bd:a.bd||null};
     });
