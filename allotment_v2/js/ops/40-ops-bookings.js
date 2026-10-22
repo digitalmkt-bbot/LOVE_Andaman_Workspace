@@ -505,7 +505,12 @@
     if(ob.drop && typeof ob.drop === 'object') bk.srvDrop = { separate: !!ob.drop.separate, name: ob.drop.name || '', selfReturn: !!ob.drop.self_return };
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
-    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
+    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc,
+      age: p.age != null ? p.age : null, insuranceReviewedAt: p.insurance_reviewed_at || null, insuranceReviewedBy: p.insurance_reviewed_by || null }; });
+    /* insurance ages are the server's (PUT /insurance) · read here so insEff/insOv see them after a reload; never sent back (toServer) */
+    if(ob.lead_age !== undefined) bk.leadAge = ob.lead_age;
+    if(ob.lead_insurance_reviewed_at !== undefined) bk.leadInsuranceReviewedAt = ob.lead_insurance_reviewed_at;
+    if(ob.lead_insurance_reviewed_by !== undefined) bk.leadInsuranceReviewedBy = ob.lead_insurance_reviewed_by;
     bk.addOns = (ob.add_ons || []).map(function(a){
       var o = { type: a.type, label: a.label || '', amount: +a.amount || 0, qty: a.qty != null ? a.qty : 1, note: a.note || '' };
       if(a.join_adults !== undefined) o.jAd = a.join_adults; if(a.join_children !== undefined) o.jChd = a.join_children;
@@ -794,12 +799,12 @@
       return function(){ return O.bookingWrite('POST', B(bk) + '/' + kind, bk, note ? { note: note } : {}); };
     };
   }
-  // the cancellation-fee invoice is voided only once /restore went through · a refused restore
-  // (route_closed, a charter boat taken meanwhile…) leaves it as it was
+  // the server voids the cancellation-fee invoice inside /restore (a refused restore leaves it as it was),
+  // so legacy's acctVoidInvoice is not run afterwards: on the voided invoice it answers 409 invoice_void
   tx('bookingV2RestoreBooking', function(bk, was){
     if(bk.status === was.status || RELEASED.indexOf(was.status) < 0) return null;
     return function(){ return O.bookingWrite('POST', B(bk) + '/restore', bk, {}); };
-  }, ['acctVoidInvoice']);
+  });
   tx('bookingV2ApproveBooking', command('approve'));
   tx('bookingV2RejectBooking', command('reject', function(bk){ return bk.approval && bk.approval.note; }));
   // FOC approval needs the reason on the booking; one typed at the prompt is saved there first

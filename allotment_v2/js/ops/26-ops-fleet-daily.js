@@ -786,7 +786,9 @@
     var name = d('fl-proj-name') ? d('fl-proj-name').value.trim() : '';
     var planFrom = d('fl-proj-from') ? d('fl-proj-from').value : '';
     if(!name){ alert('Project name is required'); return null; }
+    if(d('fl-proj-boat') && !d('fl-proj-boat').value){ alert('Select a boat, or choose General (non-vessel project)'); return null; }
     if(!planFrom){ alert('Planned start is required'); return null; }
+    if(d('fl-proj-to') && d('fl-proj-to').value && d('fl-proj-to').value < planFrom){ alert('Planned end must be after start'); return null; }
     var projects = listProjects();
     var maxNo = projects.reduce(function(mx, p){
       var n = parseInt(String((p && p.no) || '').replace(/^PRJ-/, ''), 10) || 0;
