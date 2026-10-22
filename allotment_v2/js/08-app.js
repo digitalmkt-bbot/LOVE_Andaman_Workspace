@@ -51628,7 +51628,7 @@ function bkV2RenderPickupSection(){
           : `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">เลือกจุดรับ → โซนมาอัตโนมัติ</div>`;
         return `
         <div class="bkv2-nb-row bkv2-alt-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
-          <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bkV2SetAltPickup(${i},'who',this.value)">
+          <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bkV2SetAltPickup(${i},'who',this.value)" onchange="bkV2AltWhoPicked(${i},this.value)">
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">${PAX_K.map(k=>{const _v=bkAltPax(a)[k]; const _bad=_altBd[k]>_bkBd[k]; return `<input class="bkv2-nb-input bkv2-pax-box" type="number" min="0" step="1" value="${_v}" onchange="bkV2SetAltPickupPax(${i},'${k}',this.value)" title="${PAX_LBL[k]} ที่จุดนี้ (กลุ่มนี้มีทั้งหมด ${_bkBd[k]})"${_bad?' style="border-color:#E0857E;background:#FDECEA"':(_v?'':' style="color:#c4c1b8"')}>`;}).join('')}</div>
           <div>
             <select class="bkv2-nb-input" onchange="bkV2SetAltPickupArea(${i},this.value)" style="cursor:pointer"><option value="">— เลือกจุดรับ —</option>${_areaSel}</select>
@@ -60192,6 +60192,28 @@ function bkV2SetAltPickup(i, field, val){
   if(!_bkV2.newBooking || !Array.isArray(_bkV2.newBooking.altPickups)) return;
   const a = _bkV2.newBooking.altPickups[i]; if(!a) return;
   a[field] = val;
+}
+/* §altWhoType (2026-10-22) · เลือกชื่อที่จุดรับเพิ่มแล้ว ประเภทของคนนั้นต้องตามมาด้วย
+   เจ้าของ: "ตรวจเคส FOC จริงๆ ตอนเลือกเป็น วิศรุต เป็น FOC แต่ตอนโชว์" (22 ต.ค. · Suntan Tour · Similan)
+   ของเดิม: แถวจุดรับเพิ่มเริ่มที่ AD 1 เสมอ · เลือกชื่อไกด์ที่เป็น FOC แล้วช่อง 4 ช่องไม่ขยับ
+   → แถวแยกโชว์เป็นผู้ใหญ่ 1 · ส่วน FOC ไปตกอยู่กับกลุ่มหลักแทน (ใบงานรถ/เรือนับคนผิดประเภท)
+   กติกา: ชื่อตรงกับ Lead หรือผู้โดยสารในส่วน Guests และแถวนี้ยังเป็นคนเดียว → ตั้ง 4 ช่องตามประเภทของคนนั้น
+   แถวที่ผู้ใช้ตั้งไว้หลายคนแล้ว (เช่น "2 คน") ไม่แตะ · ชื่อที่ไม่ตรงใคร ไม่แตะ */
+function bkV2AltWhoType(name){
+  const d=_bkV2&&_bkV2.newBooking; if(!d) return '';
+  const n=String(name||'').trim().toLowerCase(); if(!n) return '';
+  if(String(d.leadPax||'').trim().toLowerCase()===n) return String(d.leadType||'AD');
+  const p=(d.passengers||[]).find(x=>x && String(x.name||'').trim().toLowerCase()===n);
+  return p ? String(p.type||(p.foc?'FOC':'AD')) : '';
+}
+function bkV2AltWhoPicked(i, val){
+  if(!_bkV2.newBooking || !Array.isArray(_bkV2.newBooking.altPickups)) return;
+  const a=_bkV2.newBooking.altPickups[i]; if(!a) return;
+  a.who=val;
+  const ty=bkV2AltWhoType(val).toLowerCase();
+  if(PAX_K.indexOf(ty)<0 || bkPaxSum(bkAltPax(a))>1){ return; }
+  PAX_K.forEach(k=>{ a[k]=(k===ty)?1:0; }); a.qty=1;
+  bkV2Render();
 }
 /* §altDrop · จุดส่งของแถวแยก · โซนมาจากพื้นที่ที่เลือกอัตโนมัติเหมือนฝั่งรับ */
 function bkV2SetAltDropArea(i, areaId){
