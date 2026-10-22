@@ -106,11 +106,29 @@
 
   /* one write at a time · a failed job doesn't block the next one */
   var chain = Promise.resolve();
+  var inQueue = 0;
   function queue(fn){
+    inQueue++; savingBadge();
     var p = chain.then(function(){ return fn(); });
     chain = p.catch(function(){});
+    chain.then(function(){ inQueue--; savingBadge(); });
     return p;
   }
+  /* writes still waiting: a reload now would lose them silently, so the browser is asked to confirm and a badge says so */
+  function pending(){ return inQueue; }
+  function savingBadge(){
+    try{
+      var el = document.getElementById('laops-saving');
+      if(inQueue > 0 && !el && document.body){
+        el = document.createElement('div'); el.id = 'laops-saving'; el.textContent = 'Saving...';
+        el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;background:#1f2937;color:#fff;font:600 12px sans-serif;padding:6px 12px;border-radius:14px;opacity:.92;pointer-events:none';
+        document.body.appendChild(el);
+      } else if(inQueue <= 0 && el){ el.parentNode.removeChild(el); }
+    }catch(_){}
+  }
+  if(typeof window.addEventListener === 'function') window.addEventListener('beforeunload', function(ev){
+    if(inQueue > 0){ ev.preventDefault(); ev.returnValue = 'Changes are still being saved.'; return ev.returnValue; }
+  });
 
   /* ops: [{label, run: () => Promise<result>, undo?: (result) => Promise}] · sequential */
   function runBatch(ops){
@@ -206,7 +224,7 @@
     post: function(p, b){ return call('POST', p, b === undefined ? {} : b); },
     patch: function(p, b){ return call('PATCH', p, b); },
     del: function(p){ return call('DELETE', p); },
-    queue: queue, runBatch: runBatch, anyway: anyway,
+    queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today,

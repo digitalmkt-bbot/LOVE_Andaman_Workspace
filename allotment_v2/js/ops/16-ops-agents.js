@@ -416,7 +416,7 @@
      which detects __ops and does not add its former read-only/detail wrapper. */
   if(typeof legacyDetail==='function'){
     var detail=function(id){
-      if(!enabled()) return legacyDetail.apply(this,arguments);
+      if(!enabled() || id==null || id==='') return legacyDetail.apply(this,arguments);   // no agent picked: nothing to fetch
       return fetchAgent(id).then(function(){ legacyDetail.call(this,id); }.bind(this),function(e){ fail('Could not load agent',e); });
     };
     detail.__ops=true; detail.__opsAgents=true; window.agRenderDetail=detail;
