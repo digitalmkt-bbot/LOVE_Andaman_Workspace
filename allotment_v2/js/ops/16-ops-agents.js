@@ -170,8 +170,12 @@
     if(section==='ratetype'){ method='PUT'; path+='/rate-type'; body={rate_type_id:nullable(d.rateTypeId)}; }
     if(!body) return;
     return write(method,path,body).catch(function(e){
-      if(section==='ratetype' && e.code==='unpriced_programs' && confirm('This rate has no price for existing programs. Remove those programs and continue?'))
-        return write('PUT',path,{rate_type_id:nullable(d.rateTypeId),drop_unpriced:true});
+      /* legacy keeps the programmes the new rate does not price (booking them stays blocked until it does); removing them is the
+         choice. So Cancel is "keep them", not "abandon the change": the rate type is changed either way. */
+      if(section==='ratetype' && e.code==='unpriced_programs'){
+        var drop=confirm('This rate has no price for some of the agent\'s existing programs.\n\nOK = remove those programs.\nCancel = keep them (they cannot be booked until the rate prices them).');
+        return write('PUT',path,{rate_type_id:nullable(d.rateTypeId),drop_unpriced:drop});
+      }
       throw e;
     }).then(function(row){ refreshAfter(id,row); if(typeof agEditClose==='function') agEditClose(); },function(e){ return fail('Could not save agent',e); });
   }
@@ -412,7 +416,7 @@
      which detects __ops and does not add its former read-only/detail wrapper. */
   if(typeof legacyDetail==='function'){
     var detail=function(id){
-      if(!enabled()) return legacyDetail.apply(this,arguments);
+      if(!enabled() || id==null || id==='') return legacyDetail.apply(this,arguments);   // no agent picked: nothing to fetch
       return fetchAgent(id).then(function(){ legacyDetail.call(this,id); }.bind(this),function(e){ fail('Could not load agent',e); });
     };
     detail.__ops=true; detail.__opsAgents=true; window.agRenderDetail=detail;

@@ -49,7 +49,7 @@
     if(asked[k] === epoch) return;
     asked[k] = epoch;
     var ep = epoch;
-    O.queue(function(){ return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/crew-flags'); }).then(function(j){
+    O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/crew-flags').then(function(j){
       if(ep !== epoch){ askFlags(date); return; }          // a write came in meanwhile: read again
       flags[k] = { epoch: ep, data: j || {} };
       redraw();
@@ -112,7 +112,7 @@
     var k2 = lic.staffId + '|' + boat.id;
     if(!lic.staffId || covAsked[k2] === ep) return;
     covAsked[k2] = ep;
-    O.queue(function(){ return O.get('/v1/pier-office/staff/' + enc(lic.staffId) + '/licences', { boat_id: boat.id }); }).then(function(j){
+    O.get('/v1/pier-office/staff/' + enc(lic.staffId) + '/licences', { boat_id: boat.id }).then(function(j){
       if(ep !== covEpoch){ askOne(lic, boat, covEpoch); return; }
       ((j && j.licences) || []).forEach(function(l){ put(l.id, boat.id, l.covers_boat); });
       redraw();
@@ -124,7 +124,7 @@
     var k = 'pier|' + st.pier;                                  // the holder's own pier: one read for all its boats
     if(covAsked[k] === ep) return askOne(lic, boat, ep);       // already read and this boat was not in it: ask for it alone
     covAsked[k] = ep;
-    O.queue(function(){ return O.get('/v1/pier-office/' + enc(st.pier) + '/licences', { boats: 'pier' }); }).then(function(j){
+    O.get('/v1/pier-office/' + enc(st.pier) + '/licences', { boats: 'pier' }).then(function(j){
       if(ep !== covEpoch){ askCovers(lic, boat); return; }   // a write came in meanwhile: read again
       ((j && j.licences) || []).forEach(function(l){ Object.keys(l.covers || {}).forEach(function(b){ put(l.id, b, l.covers[b]); }); });
       if(covOf(lic, boat) === null) askOne(lic, boat, ep);

@@ -117,5 +117,5 @@
       }
     });
   }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initGlassSidebar); else setTimeout(initGlassSidebar,0);
+  (window.laDomReady||function(f){setTimeout(f,0)})(initGlassSidebar);   // §domReady
 })();

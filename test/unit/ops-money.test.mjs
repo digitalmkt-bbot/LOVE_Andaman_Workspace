@@ -164,6 +164,16 @@ function createRuntime(){
       nextResolver = { resolve, reject };
     }),
     queue: fn => Promise.resolve().then(fn),
+    /* the real laOps.anyway (ops/00-ops-core.js): a 409 with a known code asks, OK resends with the flag */
+    anyway: (send, rules, preset) => {
+      const once = (extra) => send(extra).catch((e) => {
+        const r = e && e.status === 409 && rules[e.code];
+        if(!r || extra[r.flag]) throw e;
+        if(!context.confirm(e.message)){ e.declined = true; throw e; }
+        return once(Object.assign({}, extra, { [r.flag]: true }));
+      });
+      return once(Object.assign({}, preset || {}));
+    },
     fail: (title, err) => calls.push({ fail: title, message: err && err.message, code: err && err.code }),
     wrote: kind => calls.push({ wrote: kind }),
     onChange: () => {}
@@ -272,6 +282,13 @@ test('mutations are server-first: no local mutation before response, no mutation
   assert.equal(rt.SB_PAYMENTS.length, 0, 'no local payment before server responds');
   const overErr = Object.assign(new Error('Total received is more than invoice total'), { status: 409, code: 'overpayment' });
   rt.rejectNext(overErr);
+  /* the confirm says yes: the same payment is sent again with overpay_anyway (legacy's "save anyway?") */
+  await rt.tick();
+  const resend = rt.calls.filter(x => x.path === '/v1/invoices/inv_10/payments');
+  assert.equal(resend.length, 2, 'the overpayment refusal is asked about and resent');
+  assert.equal(resend[1].body.overpay_anyway, true);
+  assert.equal(resend[0].body.overpay_anyway, undefined);
+  rt.rejectNext(overErr);   // refused again with the flag set: now it is a plain failure
   await payP;
   assert.equal(rt.SB_PAYMENTS.length, 0, 'rejected payment does not mutate SB_PAYMENTS');
   assert.equal(rt.SB_INVOICES[0].balance, 2000, 'rejected payment leaves invoice balance untouched');
