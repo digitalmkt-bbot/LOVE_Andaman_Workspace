@@ -84645,10 +84645,16 @@ function pcVbIndex(){
 }
 function pcVbBust(){ _pcVbIx=null; }
 /* บรรทัดในสมุดที่ผูกกับแถวบิล k · ตัดลิงก์ค้าง (บรรทัดถูกลบไปแล้วทางอื่น) ทิ้งเงียบ ๆ */
+function pcVbKs(L){ return Array.isArray(L.ks)?L.ks:(L.k?[L.k]:[]); }
+/* บรรทัดในสมุดที่ผูกกับแถวบิล k · 1 บรรทัดอาจคลุมหลายคัน (จ่ายคนเดียวกันในวันเดียวกัน · "(2คัน)") → amt = ส่วนของคันนี้
+   เกลี่ยตามยอดบิลตอนสร้าง (parts) · ถ้ายอดบรรทัดถูกแก้ ส่วนแบ่งขยับตามสัดส่วน ทุกคันในกลุ่มจึงขึ้น ⚠ พร้อมกัน
+   ตัดลิงก์ค้าง (บรรทัดถูกลบไปแล้วทางอื่น) ทิ้งเงียบ ๆ */
 function pcVbRowsFor(k){
   var M=pcVbMap(), IX=pcVbIndex(), out=[];
-  Object.keys(M).forEach(function(rid){ var L=M[rid]; if(!L || L.k!==k) return; var h=IX[rid]; if(!h) return;
-    out.push({id:rid, x:h.x, ds:h.ds, pier:h.pier, amt:Math.round(+h.x.amt||0), by:String(h.x.by||L.by||'')}); });
+  Object.keys(M).forEach(function(rid){ var L=M[rid]; if(!L) return; var ks=pcVbKs(L); if(ks.indexOf(k)<0) return; var h=IX[rid]; if(!h) return;
+    var tot=Math.round(+h.x.amt||0), parts=L.parts||{}, sumP=0; ks.forEach(function(q){ sumP+=Math.round(+parts[q]||0); });
+    var share=(ks.length===1)?tot:(sumP>0?Math.round(tot*(Math.round(+parts[k]||0)/sumP)):Math.round(tot/ks.length));
+    out.push({id:rid, x:h.x, ds:h.ds, pier:h.pier, amt:share, tot:tot, nK:ks.length, ks:ks, by:String(h.x.by||L.by||'')}); });
   return out;
 }
 function pcVbStatus(k, bill){
@@ -84675,7 +84681,7 @@ function vbPayCell(k, bill, ri, ds){
   var who=S.rows.map(function(r){ return r.by; }).filter(Boolean)[0]||'';
   var lbl=ok?('&#10003; จ่ายแล้ว ฿'+S.paid.toLocaleString('en-US')):('&#9888; จ่ายสด ฿'+S.paid.toLocaleString('en-US')+' · ต่าง '+Math.abs(S.diff).toLocaleString('en-US'));
   return '<span class="vbp-chip '+(ok?'ok':'warn')+'" onclick="event.stopPropagation();vbPayGo(\''+e(r0.id)+'\')" title="'+(ok?'ยอดในสมุดตรงกับยอดจ่ายของแถวนี้':('บิล '+S.bill.toLocaleString('en-US')+' · สมุด '+S.paid.toLocaleString('en-US')))+' · '+e(VB_PIER_SH[r0.pier]||r0.pier)+' '+e(pcVbDM(r0.ds))+(who?(' · '+e(who)):'')+' · กดไปดูในสมุด">'+lbl
-    +'<small>'+e(VB_PIER_SH[r0.pier]||r0.pier)+' '+e(pcVbDM(r0.ds))+(S.n>1?(' · '+S.n+' บรรทัด'):'')+'</small></span>'
+    +'<small>'+e(VB_PIER_SH[r0.pier]||r0.pier)+' '+e(pcVbDM(r0.ds))+(r0.nK>1?(' · รวมใบ '+r0.nK+' คัน ฿'+r0.tot.toLocaleString('en-US')):'')+(S.n>1?(' · '+S.n+' บรรทัด'):'')+'</small></span>'
     +'<a class="vbp-x" onclick="event.stopPropagation();vbPayUndo(\''+e(k)+'\')" title="ยกเลิกจ่ายสด · ลบบรรทัดที่สร้างไว้ในสมุดออก">&times;</a>';
 }
 /* สรุปทั้งชีท · ใช้ในแถบบน */
@@ -84687,15 +84693,15 @@ function vbPaySum(calc, extras){
 }
 /* ── กล่องยืนยัน ── */
 var _vbPay=null;
-function vbPayItems(keys){
-  var P=vbPeriod(), st=vbState(), pier=_vb.pier||'panwa', perDef=vbPerOf(st, pier), items=[];
+function vbPaySingles(keys){
+  var P=vbPeriod(), st=vbState(), pier=_vb.pier||'panwa', items=[];
   var rows=vbRows().filter(function(r){ return vbPk(r.routeId)===pier; });
   keys.forEach(function(k){
     if(k.charAt(0)==='x'){
       var x=(st.extra||[]).filter(function(q){ return ('x'+q.id)===k; })[0]; if(!x) return;
       var b=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0);
-      items.push({k:k, ds:x.date||P.from, pier:pcVbPierOk(pier), amt:Math.round(b), who:_vb.sup, van:(+x.van||1),
-                  txt:pcVbTxt('', pier, x.date||P.from, (+x.van||1), false, _vb.sup), sub:(x.note||'รถนอก'), base:Math.round((+x.van||0)*(+x.rate||0)), ex:+x.ex||0, cut:+x.cut||0});
+      items.push({k:k, ds:x.date||P.from, pier:pcVbPierOk(pier), amt:Math.round(b), who:_vb.sup, van:(+x.van||1), code:'', far:false, ret:false,
+                  sub:(x.note||'รถนอก'), base:Math.round((+x.van||0)*(+x.rate||0)), ex:+x.ex||0, cut:+x.cut||0});
       return;
     }
     var r=rows.filter(function(q){ return vbRowKey(q)===k; })[0]; if(!r) return;
@@ -84703,15 +84709,27 @@ function vbPayItems(keys){
     var rate=(m.rate!=null?m.rate:vbRateOf(C.c, st))||0, ex=+m.ex||0, cut=+m.cut||0, bill=rate+ex-cut;
     var far=Object.keys(r.areas||{}).some(function(a){ return vbIsFar(a); });
     var drv=pcVbDriver(r.vanId), v=(typeof vehGet==='function')?vehGet(r.vanId):null;
-    var who=drv||_vb.sup;
-    items.push({k:k, ds:r.date, pier:pcVbPierOk(pier), amt:Math.round(bill), who:who, van:1, vid:r.vanId,
-                txt:pcVbTxt(C.c, pier, r.date, 1, far, who, !!r.ret), sub:((v&&v.name)||r.vanId)+(v&&v.plate?(' · '+v.plate):'')+' · '+(C.c||'')+(r.ret?' · ขากลับ':''), base:Math.round(rate), ex:ex, cut:cut});
+    items.push({k:k, ds:r.date, pier:pcVbPierOk(pier), amt:Math.round(bill), who:(drv||_vb.sup), van:1, vid:r.vanId, code:C.c||'', far:far, ret:!!r.ret,
+                sub:((v&&v.name)||r.vanId)+(v&&v.plate?(' · '+v.plate):'')+' · '+(C.c||'')+(r.ret?' · ขากลับ':''), base:Math.round(rate), ex:ex, cut:cut});
   });
   return items;
 }
+/* รวมคันที่จ่ายคนเดียวกัน วันเดียวกัน เป็น 1 บรรทัด "(Nคัน)" · ตามที่หน้าท่าลงอยู่จริง (owner "ใบในตาราง Petty cash ที่จ่ายมันจะเป็นกรุ๊ปนั้น ๆ")
+   แยกเป็นรายคันได้ในกล่องยืนยัน */
+function vbPayGroup(singles){
+  var G={}, ord=[];
+  singles.forEach(function(it){ var g=it.ds+'|'+it.pier+'|'+pcPyNorm(it.who||''); if(!G[g]){ G[g]={ds:it.ds, pier:it.pier, who:it.who, ks:[], parts:{}, subs:[], codes:[], amt:0, van:0, base:0, ex:0, cut:0, far:false, ret:true}; ord.push(g); }
+    var o=G[g]; o.ks.push(it.k); o.parts[it.k]=it.amt; o.subs.push(it.sub); if(it.code && o.codes.indexOf(it.code)<0) o.codes.push(it.code);
+    o.amt+=it.amt; o.van+=it.van; o.base+=it.base; o.ex+=it.ex; o.cut+=it.cut; o.far=o.far||it.far; o.ret=o.ret&&it.ret; });
+  return ord.map(function(g){ var o=G[g]; o.txt=pcVbTxt(o.codes.join('/'), o.pier, o.ds, o.van, o.far, o.who, o.ret); return o; });
+}
+function vbPayItems(keys){ return vbPayGroup(vbPaySingles(keys)); }
+function vbPaySplit(i){ var W=_vbPay; if(!W||!W.items[i]) return; var it=W.items[i]; if(it.ks.length<2) return;
+  var parts=it.ks.map(function(k){ return vbPayGroup(vbPaySingles([k]))[0]; }).filter(Boolean);
+  W.items.splice.apply(W.items, [i,1].concat(parts)); vbPayPaint(); }
 function vbPayOpen(keys){
   if(typeof pcGuard==='function' && !pcGuard()) return;
-  var items=vbPayItems(keys||[]).filter(function(it){ return !pcVbStatus(it.k, it.amt).n; });
+  var items=vbPayGroup(vbPaySingles(keys||[]).filter(function(it){ return !pcVbStatus(it.k, it.amt).n; }));
   if(!items.length){ alert('Nothing to pay: these rows already have a Petty Cash line.'); return; }
   _vbPay={items:items};
   vbPayPaint();
@@ -84722,7 +84740,7 @@ function vbPayPaint(){
   var tot=0; W.items.forEach(function(it){ tot+=Math.round(+it.amt||0); });
   var piers=PC_PIERS.map(function(p){ return '<option value="'+p+'">'+e(VB_PIER_LBL[p]||p)+'</option>'; }).join('');
   var rows=W.items.map(function(it,i){
-    return '<div class="vbp-it"><div class="vbp-h"><b>'+e(it.sub||'')+'</b><span>'+e(pcVbDM(it.ds))+' · วางบิล '+Math.round(it.base).toLocaleString('en-US')+(it.ex?(' + Extra '+Math.round(it.ex).toLocaleString('en-US')):'')+(it.cut?(' − หัก '+Math.round(it.cut).toLocaleString('en-US')):'')+' = <b>'+Math.round(it.base+it.ex-it.cut).toLocaleString('en-US')+'</b></span>'
+    return '<div class="vbp-it"><div class="vbp-h"><b>'+e(it.subs.join(' + '))+(it.ks.length>1?(' <i class="vbp-n">'+it.ks.length+' คัน · <a onclick="vbPaySplit('+i+')">แยกเป็นรายคัน</a></i>'):'')+'</b><span>'+e(pcVbDM(it.ds))+' · วางบิล '+Math.round(it.base).toLocaleString('en-US')+(it.ex?(' + Extra '+Math.round(it.ex).toLocaleString('en-US')):'')+(it.cut?(' − หัก '+Math.round(it.cut).toLocaleString('en-US')):'')+' = <b>'+Math.round(it.base+it.ex-it.cut).toLocaleString('en-US')+'</b></span>'
       +(W.items.length>1?('<a onclick="vbPayDrop('+i+')" title="ไม่เอาแถวนี้">&times;</a>'):'')+'</div>'
       +'<div class="vbp-g"><label>สมุด</label><select class="ck-inp" onchange="vbPaySet('+i+',\'pier\',this.value)">'+piers.replace('value="'+it.pier+'"','value="'+it.pier+'" selected')+'</select>'
       +'<label>วันที่</label><input class="ck-inp" type="date" value="'+e(it.ds)+'" onchange="vbPaySet('+i+',\'ds\',this.value)">'
@@ -84756,10 +84774,10 @@ function vbPaySave(){
   for(var i=0;i<W.items.length;i++){ if(!(W.items[i].amt>0)){ alert('Row '+(i+1)+': amount must be more than 0.'); return; } if(!W.items[i].txt){ alert('Row '+(i+1)+': description is empty.'); return; } }
   var M=pcVbMap(), PD=pcPyDB(), pyDirty=false, now=new Date().toISOString(), me=pcWho(), n=0;
   W.items.forEach(function(it){
-    if(pcVbStatus(it.k, it.amt).n) return;   /* คนอื่นเพิ่งจ่ายไปก่อน · ไม่สร้างซ้ำ */
+    if(it.ks.some(function(k){ return pcVbStatus(k, 0).n; })) return;   /* คนอื่นเพิ่งจ่ายไปก่อน · ไม่สร้างซ้ำ */
     var D=pcDay(it.pier, it.ds, true), id='pc'+Date.now()+Math.random().toString(36).slice(2,5);
     D.out.push({ id:id, txt:it.txt, amt:it.amt, at:(typeof ckNowHM==='function')?ckNowHM():'', by:me, ts:now });
-    M[id]={k:it.k, sup:_vb.sup, pier:it.pier, ds:it.ds, by:me, at:now};
+    M[id]={ks:it.ks.slice(), parts:it.parts, sup:_vb.sup, pier:it.pier, ds:it.ds, by:me, at:now};
     var pid=vbPayPayee(PD, it.who, me, now);
     if(pid){ PD.of[id]=pid; pyDirty=true; }
     n++;
@@ -84774,7 +84792,8 @@ function vbPayUndo(k){
   if(typeof pcGuard==='function' && !pcGuard()) return;
   var R=pcVbRowsFor(k); if(!R.length){ pcVbBust(); vbRenderSoon(); return; }
   var tot=0; R.forEach(function(r){ tot+=r.amt; });
-  if(!confirm('Cancel cash payment for this row?\nThis deletes '+R.length+' Petty Cash line(s) totalling '+tot.toLocaleString('en-US')+' that were created from the bill.')) return;
+  var tot2=0, grp=0; R.forEach(function(r){ tot2+=r.tot; if(r.nK>1) grp=Math.max(grp,r.nK); });
+  if(!confirm('Cancel cash payment for this row?\nThis deletes '+R.length+' Petty Cash line(s) totalling '+tot2.toLocaleString('en-US')+' that were created from the bill.'+(grp?('\nNote: the line covers '+grp+' vans — all of them go back to "pay cash".'):''))) return;
   var M=pcVbMap();
   R.forEach(function(r){ var D=pcDay(r.pier, r.ds, false); if(D) D.out=(D.out||[]).filter(function(x){ return String(x.id)!==r.id; }); delete M[r.id]; });
   pcSave(); pcVbPut(M); pcVbBust(); vbRenderSoon();
@@ -84791,9 +84810,9 @@ function vbPayGo(rowId){
 function pcVbChip(k,x){
   if(k!=='out' || !x || !x.id) return '';
   var L=pcVbMap()[String(x.id)]; if(!L) return '';
-  var kk=String(L.k||''), vid=(kk.charAt(0)==='x')?'':(kk.split('~')[2]||''), v=vid&&(typeof vehGet==='function')?vehGet(vid):null;
-  var lbl=(v&&v.name)||vid||'รถนอก';
-  return '<em class="pc-vb" title="สร้างจากใบวางบิล '+pcE(L.sup||'')+' · '+pcE(lbl)+' · กดไปดูแถวในบิล" onclick="event.stopPropagation();pcVbGo(\''+pcE(String(x.id))+'\')">&#128656; '+pcE(L.sup||'บิล')+' · '+pcE(lbl)+'</em>';
+  var names=pcVbKs(L).map(function(kk){ kk=String(kk||''); if(kk.charAt(0)==='x') return 'รถนอก'; var vid=kk.split('~')[2]||'', v=vid&&(typeof vehGet==='function')?vehGet(vid):null; return (v&&v.name)||vid||'?'; });
+  var lbl=names.length>3?(names.slice(0,3).join(', ')+' +'+(names.length-3)):names.join(', ');
+  return '<em class="pc-vb" title="สร้างจากใบวางบิล '+pcE(L.sup||'')+' · '+pcE(names.join(', '))+' · กดไปดูแถวในบิล" onclick="event.stopPropagation();pcVbGo(\''+pcE(String(x.id))+'\')">&#128656; '+pcE(L.sup||'บิล')+' · '+pcE(lbl)+'</em>';
 }
 function pcVbGo(rowId){
   var L=pcVbMap()[String(rowId)]; if(!L) return;
@@ -84801,7 +84820,7 @@ function pcVbGo(rowId){
   _vb.sup=L.sup||_vb.sup; _vb.ym=ds.slice(0,7); _vb.per=(dd<=10)?1:(dd<=20?2:3); _vb.pier=L.pier||_vb.pier; _vb.mode='one'; _vb.van='';
   var el=document.querySelector('.nav-item[data-view="vanbill"]');
   if(el && typeof nav==='function') nav(el); else renderVanBill();
-  setTimeout(function(){ try{ var c=document.querySelector('#vanbill-host [data-vbk="pay|'+L.k.replace(/"/g,'')+'"]'); if(c) c.scrollIntoView({block:'center'}); }catch(_){} }, 60);
+  setTimeout(function(){ try{ var k0=pcVbKs(L)[0]||''; var c=document.querySelector('#vanbill-host [data-vbk="pay|'+k0.replace(/"/g,'')+'"]'); if(c) c.scrollIntoView({block:'center'}); }catch(_){} }, 60);
 }
 /* ลบบรรทัดที่ผูกอยู่จากสมุด · ปลดลิงก์ให้ด้วย (ปุ่มจ่ายสดกลับมาที่บิล) */
 function pcVbOnDel(id){ try{ var M=pcVbMap(); if(M[String(id)]){ delete M[String(id)]; pcVbPut(M); pcVbBust(); } }catch(_){} }
@@ -84823,6 +84842,7 @@ function pcVbCss(){
     +'.vbp-it{border:1px solid #E6E8EE;border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#FAFBFC}'
     +'.vbp-it .vbp-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;font-size:12px;color:#6B7489}'
     +'.vbp-it .vbp-h b{color:#0F1B3D;font-size:13px} .vbp-it .vbp-h a{margin-left:auto;cursor:pointer;color:#9AA3B8;font-size:18px;font-weight:800;line-height:1}'
+    +'.vbp-it .vbp-h i.vbp-n{font-style:normal;font-size:11px;color:#6B7489;font-weight:600;margin-left:6px} .vbp-it .vbp-h i.vbp-n a{color:#0F6E56;cursor:pointer;text-decoration:underline dotted;font-size:11px;margin:0}'
     +'.vbp-g{display:grid;grid-template-columns:76px 1fr;gap:6px 10px;align-items:center}'
     +'.vbp-g label{font-size:10.5px;font-weight:800;color:#6B7489;letter-spacing:.04em}'
     +'.vbp-g .ck-inp{padding:6px 10px;font-size:13px} .vbp-g .ck-inp.mono{font-family:"DM Mono",monospace;font-weight:700}'
