@@ -283,3 +283,15 @@ test('edit via form does not send color unless the user picked one (legacy form 
   rt.ctx.vehFormSave(); await rt.settle();
   assert.equal(plain(rt.writes()[1].body).color, null);
 });
+
+test('a range start moved past its end takes the end with it (one PATCH), and an end moved before the start takes the start', async () => {
+  const rt = runtime({ handlers: {
+    'PATCH /operations/vans/veh01/status-ranges/7': (b) => ({ body: { id: 7, van_id: 'veh01', status: 'maintenance', from_date: b.from_date || '2026-10-10', to_date: b.to_date === undefined ? null : b.to_date, note: null } }),
+  } });
+  await rt.loadVans();
+  rt.ctx.vehStatusSet('veh01', 0, 'to', '2026-10-12'); await rt.settle();
+  rt.ctx.vehStatusSet('veh01', 0, 'from', '2030-01-05'); await rt.settle();
+  assert.deepEqual(plain(rt.writes()[1].body), { from_date: '2030-01-05', to_date: '2030-01-05' }, 'start after the old end: both sent, never a range that ends before it starts');
+  rt.ctx.vehStatusSet('veh01', 0, 'to', '2030-01-09'); await rt.settle();
+  assert.deepEqual(plain(rt.writes()[2].body), { to_date: '2030-01-09' });
+});

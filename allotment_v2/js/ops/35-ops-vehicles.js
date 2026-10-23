@@ -96,6 +96,7 @@
     /* until the server's vans land, legacy's 6 demo vans (08-app.js seed) must not be drawn: show a loading line instead */
     var r;
     if(O.enabled() && V.vansLoaded && !V.vansLoaded()){
+      var seed = list(); if(seed) seed.length = 0;      // the 6 demo vans are not the fleet: nothing else may read them either
       var host = elById('vehicles-host');
       if(host) host.innerHTML = O.loadingHtml('Loading vans…');
     } else r = originals.renderVehicles ? originals.renderVehicles.apply(this, arguments) : undefined;
@@ -287,6 +288,10 @@
     if(!cur || !col) return;
     if(!cur.id){ O.toast({ kind: 'error', title: K.title + ' not saved', status: 'REFUSED', sub: 'This range is not on the server · reload the page', dur: 7000 }); return; }
     var body = {}; body[col] = (typeof val === 'string' && val.trim() === '') ? null : val;
+    /* legacy keeps whatever dates are typed; the server refuses a range that ends before it starts. A start moved past the end (a new range is
+       today..today) takes the end with it, and an end moved before the start takes the start: one request, so the van is never off from today */
+    if(field === 'from' && body[col] && cur.to && String(val) > String(cur.to)) body[K.cols.to] = val;
+    if(field === 'to' && body[col] && cur.from && String(val) < String(cur.from)) body[K.cols.from] = val;
     /* from and to edited one after the other (or a status and its dates) leave the server a state it refuses part-way
        (a range that ends before it starts, or one that stays open from today): the fields of one range edited in the
        same moment go out in ONE request */
