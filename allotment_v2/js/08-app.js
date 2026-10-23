@@ -82588,7 +82588,9 @@ function pcPyDB(){
 function pcPyPut(o){ try{ var b=laBlob(); b.po_cash_payees=JSON.stringify(o); laBlobSave(); }catch(e){ alert('Save failed: '+(e&&e.message)); } }
 function pcPyOf(x){ if(!x || !x.id) return null; var D=pcPyDB(), id=D.of[String(x.id)]; return (id && D.p[id])?D.p[id]:null; }
 function pcPyChip(k,x){
-  if(k!=='out' || !x || !pcClmOn(x)) return '';
+  if(k!=='out' || !x) return '';
+  /* §pcVanPay · บรรทัดที่สร้างจากใบวางบิลมีคนรับเงินมาแล้ว · โชว์เลยไม่ต้องรอเข้าตั้งเบิก (owner "พอมันดึงมา มันขาดคนรับเงิน") */
+  if(!pcClmOn(x) && !pcPyOf(x) && !pcVbMap()[String(x.id)]) return '';
   var p=pcPyOf(x), id=pcE(String(x.id));
   return p?('<em class="pc-py" title="จ่ายให้ · กดเพื่อเปลี่ยน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">&#128100; '+pcE(p.name||'')+'</em>')
           :('<em class="pc-py no" title="เลือกคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงิน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">+ จ่ายให้</em>');
