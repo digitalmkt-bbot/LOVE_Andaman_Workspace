@@ -18430,19 +18430,21 @@ function pcPrintLedger(){
   rows=pcLedgerSort(rows,_pcPier,ds);   /* §pkLineOrd */
   var run=op, body='', i=0;
   body+='<tr><td class="rn">—</td><td class="c">—</td><td><i>ยอดยกมาจากวันก่อนหน้า</i></td>'
-    +'<td class="rt">ยกมา</td><td class="rt">ระบบ</td><td></td><td></td>'
+    +'<td class="rt">ยกมา</td><td class="rt"></td><td class="rt">ระบบ</td><td></td><td></td>'
     +'<td class="r v">'+pcN(op)+'</td></tr>';
   rows.forEach(function(r){
     i++;
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
-    var cat=isIn?'รับเงิน':(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น');
+    var _g=(!isIn && typeof pcGrpOf==='function')?pcGrpOf(r.x,'out'):null;   /* §pcVanPay4 · หมวดตามกลุ่มในสมุด (รถตู้ / ไกด์ / อุทยาน …) */
+    var cat=isIn?'รับเงิน':(_g?_g.t:(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น'));
+    var _py=(!isIn && typeof pcPyOf==='function')?pcPyOf(r.x):null;   /* §pcVanPay4 · ผู้รับเงินจากทะเบียน (owner "รายการปริ้นไม่ขึ้นชื่อผู้รับ") */
     run += isIn ? amt : -amt;
     body+='<tr><td class="rn">'+i+'</td><td class="c">'+pcE(r.x.at||'—')+'</td>'
-      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
+      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt" style="color:#1B2A55;font-weight:600">'+(_py?pcE(_py.name||''):'')+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
       +'<td class="r v">'+(isIn?pcN(amt):'')+'</td><td class="r v">'+(!isIn?pcN(amt):'')+'</td>'
       +'<td class="r v">'+pcN(run)+'</td></tr>';
   });
-  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="7" style="color:#B9BCC6;padding:18px 12px">'
+  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="8" style="color:#B9BCC6;padding:18px 12px">'
     +'ไม่มีรายการของวันนี้</td></tr>';
 
   var css=PC_PRINT_HEAD_CSS
@@ -18451,11 +18453,11 @@ function pcPrintLedger(){
   var sheet=pcPrintHead('สมุดเดินบัญชีเงินสดย่อย','ยอดยกมา · รับ · จ่าย · คงเหลือ ของวันที่เลือก')
    +'<div class="pc-sheet"><div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
-     +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
-     +'<th class="r" style="width:104px">รับ</th><th class="r" style="width:104px">จ่าย</th>'
-     +'<th class="r" style="width:116px">คงเหลือ</th></tr></thead>'
+     +'<th style="width:84px">หมวด</th><th style="width:150px">ผู้รับเงิน</th><th style="width:90px">ผู้บันทึก</th>'
+     +'<th class="r" style="width:96px">รับ</th><th class="r" style="width:96px">จ่าย</th>'
+     +'<th class="r" style="width:108px">คงเหลือ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="4">รวมวันนี้</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="5">รวมวันนี้</td>'
        +'<td class="r">'+pcN(T.in)+'</td><td class="r">'+pcN(T.out)+'</td>'
        +'<td class="r">'+pcN(bal)+'</td></tr></tfoot></table></div></div>'
    +'<div class="pcp-sg"><div><div class="l"></div>(ผู้บันทึก)</div>'
