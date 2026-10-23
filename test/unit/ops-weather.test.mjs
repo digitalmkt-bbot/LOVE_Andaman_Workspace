@@ -269,11 +269,15 @@ test('undo: 409 has_resolved asks, then re-sends with undo_anyway; resolved foll
       'POST /v1/weather-closures/wx_1/undo': (body) => (body && body.undo_anyway
         ? { id: 'wx_1', reopened_at: '2026-10-12T04:00:00.000Z' }
         : Promise.reject(apiErr(409, 'has_resolved', 'resolved: BK-2 · refund'))),
+      // after the undo the follow-up rows are read again so a resolved booking keeps its outcome (legacy keeps bk.weatherResolve)
+      'GET /v1/weather-closures/wx_1': { id: 'wx_1', route_id: 'r10', service_date: '2026-10-05', reopened_at: '2026-10-12T04:00:00.000Z',
+        bookings: [{ booking_id: 'BK-2', status: 'resolved', outcome: 'refund' }] },
     },
   });
   await rt.window.bookingV2WeatherUncancel('r10', '2026-10-05');
-  assert.deepEqual(rt.calls, ['POST /v1/weather-closures/wx_1/undo', 'POST /v1/weather-closures/wx_1/undo']);
-  assert.deepEqual(rt.bodies, [{}, { undo_anyway: true }]);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(rt.calls, ['POST /v1/weather-closures/wx_1/undo', 'POST /v1/weather-closures/wx_1/undo', 'GET /v1/weather-closures/wx_1']);
+  assert.deepEqual(rt.bodies.slice(0, 2), [{}, { undo_anyway: true }]);
   assert.equal(rt.confirms.length, 1);
   assert.match(rt.confirms[0], /resolved: BK-2/);
   assert.equal(rt.SB_WEATHER_CLOSURES.length, 0);

@@ -293,9 +293,9 @@
     var rk = kind + '|' + id + '|' + cur.id;
     if(field !== 'note'){
       var q = rangeQ[rk];
-      if(q){ Object.assign(q.body, body); clearTimeout(q.t); }
-      else q = rangeQ[rk] = { body: body };
-      q.t = setTimeout(function(){ delete rangeQ[rk]; flush(q.body); }, 150);
+      if(q){ Object.assign(q.body, body); return; }          // another field of the same range in the same tick: it rides the pending request
+      q = rangeQ[rk] = { body: body };
+      Promise.resolve().then(function(){ delete rangeQ[rk]; flush(q.body); });
       return;
     }
     var go = function(){ flush(body); };

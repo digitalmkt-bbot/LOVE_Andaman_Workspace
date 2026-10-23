@@ -14,7 +14,9 @@
 (function(){
   'use strict';
   var O=window.laOps; if(!O) return;
-  var POLL_MS=30000, timer=null, busy=false;
+  /* the change feed announces a new or changed booking and a held order, which is what moves these counts: read again then (debounced).
+     The slow timer is only for what no change announces (the import health: a clock). */
+  var POLL_MS=300000, timer=null, busy=false, kickT=null;
 
   /* server answer -> the rows the panel draws: {id (booking), ref, msg, code} */
   function rows(j){
@@ -91,6 +93,10 @@
     }, function(){ busy=false; });
   }
   function start(){ if(timer||!O.enabled()) return; poll(); timer=setInterval(poll, POLL_MS); }
+  if(O.onChange) O.onChange(function(c){
+    if(!c || !(c.kind === 'booking' || c.kind === 'b2c_held_order')) return;
+    clearTimeout(kickT); kickT=setTimeout(poll, 3000);
+  });
 
   window.laOpsB2CIssues=open;
   window.laOpsHeldAct=heldAct;
@@ -121,7 +127,7 @@
 (function(){
   'use strict';
   var O=window.laOps; if(!O) return;
-  var POLL_MS=60000, timer=null, busy=null, dirty=false;
+  var POLL_MS=300000, timer=null, busy=null, dirty=false, kickT=null;   // a B2C booking arrives through the change feed (below); the timer is a slow safety
   var pend=null;                       // server booking id -> pending (the shape bookingV2B2CPending returns) · null until the first answer
   var dates={};                        // server booking id -> service_date, for a booking whose trips are not loaded
 
@@ -234,6 +240,10 @@
       redrawWhenIdle(); refresh();
     }, POLL_MS);
   }
+  if(O.onChange) O.onChange(function(c){
+    if(!c || c.kind !== 'booking' || (typeof document!=='undefined' && document.hidden)) return;
+    clearTimeout(kickT); kickT=setTimeout(function(){ redrawWhenIdle(); refresh(); }, 3000);
+  });
   O.b2cReview={refresh:refresh, start:start, mapPending:mapPending};
   if(typeof document!=='undefined'){
     (window.laDomReady||function(f){setTimeout(f,0)})(start);   // §domReady

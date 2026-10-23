@@ -87,13 +87,16 @@ test('legacy mode delegates every wrapped function and sends nothing', async () 
   assert.equal(rt.requests.length, 0);
 });
 
-test('renderVehicles draws, then loads the vans for the screen dates and redraws', async () => {
+test('renderVehicles does not draw legacy\'s demo vans: it waits for the server\'s, loads them once and draws', async () => {
   const rt = runtime();
-  assert.equal(rt.ctx.renderVehicles(), 'legacy:renderVehicles');
+  assert.equal(rt.ctx.renderVehicles(), undefined, 'nothing drawn from the 6-van seed before the server answers');
+  assert.equal(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length, 0);
+  rt.ctx.renderVehicles();                    // a second render while the read is in flight asks nothing more
   await rt.settle();
-  assert.equal(rt.requests.filter((r) => r.path.startsWith('/operations/van-days')).length, 1, 'one window covers the dates');
+  assert.equal(rt.requests.filter((r) => r.path.startsWith('/operations/van-days')).length, 1, 'one window covers the dates, one request');
   assert.deepEqual(rt.ctx.SB_VEHICLES.map((v) => v.id), ['veh01', 'veh02']);
-  assert.equal(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length, 2, 'redrawn once the vans arrived');
+  assert.ok(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length >= 1, 'drawn once the vans arrived');
+  assert.equal(rt.ctx.renderVehicles(), 'legacy:renderVehicles', 'afterwards it draws at once');
 });
 
 test('new vehicle: form save POSTs, adds the server van (server id), closes the form', async () => {
