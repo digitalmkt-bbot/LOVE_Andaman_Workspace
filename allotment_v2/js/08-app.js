@@ -81169,7 +81169,7 @@ function pc2Main(pier){
   var CAT={'in':['รับเงิน','in'],lt:['หางยาว','lt'],pk:['อุทยาน','pk'],dock:['ค่าจอด','dk'],other:['จ่ายอื่น','ot']};
   var run=op, body='', ED=pc2EdCur(), edHit=false, no=0;
   var _RM=pcRefundMatch(pier);   /* §pcRefund · เงินคืนจับคู่กับวันที่ตั้งเบิก */
-  body+='<div class="pc2-lr op"><span></span><span class="no">—</span><span class="c">—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span class="m'+(op<0?' neg':'')+'">'+(op<0?'−':'')+pcN(Math.abs(op))+'</span><span></span></div>';
+  body+='<div class="pc2-lr op"><span></span><span class="no">—</span><span class="c">—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span></span><span class="m'+(op<0?' neg':'')+'">'+(op<0?'−':'')+pcN(Math.abs(op))+'</span><span></span></div>';
   rows.forEach(function(r){
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
     var ck=isIn?'in':(r.x.src&&CAT[r.x.src]?r.x.src:'other');
@@ -81183,9 +81183,10 @@ function pc2Main(pier){
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
       +'<span class="no">'+no+'</span>'
       +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
-      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+pcClmChip(r.k,r.x)+'</span>'
+      +'<span class="tx" title="'+pcE(r.x.txt||'')+(r.x.by?(' · บันทึกโดย '+pcE(r.x.by)):'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+'</span>'
       +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+(_g?(' style="color:'+_g.c+';background:#fff;border-color:'+_g.c+'"'):'')+'>'+(_g?pcE(_g.t):((r.k==='in'&&pcIsRefund(r.x))?'เงินคืน':CAT[ck][0]))+'</em></span>'
-      +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
+      +'<span class="cl">'+pcClmChip(r.k,r.x)+'</span>'   /* §pcSheet · ตั้งเบิก / คนรับเงิน แยกคอลัมน์ · ผู้บันทึกอยู่ใน tooltip */
+      +'<span class="py">'+(r.k==='out'?pcPyChip('out',r.x):'')+'</span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
       +'<span class="m out">'+(!isIn?pcN(amt):'')+'</span>'
       +'<span class="m'+(run<0?' neg':'')+'">'+(run<0?'−':'')+pcN(Math.abs(run))+'</span>'
@@ -81274,9 +81275,9 @@ function pc2Main(pier){
           +'</div>'
         +'<div class="pc2-ltw"><div class="pc2-ltb">'
         +'<div class="pc2-lr hd"><span class="sc"><input type="checkbox" id="pc-selall" class="pc-cb" title="เลือกทุกรายการของวันนี้" onchange="pcSelAll(this.checked)"></span>'
-          +'<span class="no">#</span><span class="c">เวลา</span><span>รายการ</span><span class="ct">หมวด</span><span>ผู้บันทึก</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'
+          +'<span class="no">#</span><span class="c">เวลา</span><span>รายการ</span><span class="ct">หมวด</span><span>ตั้งเบิก</span><span>คนรับเงิน</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'   /* §pcSheet */
         +body
-        +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
+        +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
         +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
         +'<div class="pc2-ft">'   /* §pcFtCmp (2026-10-16) · owner: "ส่วนนี้ทำ ดีไซน์ให้กระชับหน่อย" · แถบเลือก/ชิปกลุ่ม/ปุ่มเพิ่ม/คำอธิบาย เดิมสี่ชั้น → แถวปุ่มเดียว + วิธีใช้พับได้ */
@@ -82248,6 +82249,24 @@ function pc2CSS4(S){
   S+' .pcx-rfb{display:flex;gap:6px;margin-top:6px} '+S+' .pcx-rfb button{height:26px;padding:0 10px;border-radius:7px;border:1px solid #D5DBE6;background:#fff;color:'+N+';font-size:11.5px;font-weight:700;cursor:pointer} '+S+' .pcx-rfb button.k{background:'+N+';border-color:'+N+';color:#fff} '+S+' .pcx-rfb button[disabled]{opacity:.45;cursor:default}',
   '.pcx-rfo{display:grid;grid-template-columns:22px 86px 1fr 110px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #EEF1F6;font-size:13px;cursor:pointer}',
   '.pcx-rfo:hover{background:#F7F9FD} .pcx-rfo .d{font-family:"DM Mono",monospace;color:#6B7693;font-size:12px} .pcx-rfo .m{text-align:right;font-family:"DM Mono",monospace;font-weight:700} .pcx-rfo .m small{display:block;font-weight:400;color:#A32D2D;font-size:10.5px}',
+  /* §pcSheet · สมุดแบบชีท Excel */
+  S+' .pc2-led .pc2-ltb{min-width:900px}',
+  S+' .pc2-led .pc2-lr{grid-template-columns:32px 34px minmax(170px,1fr) 86px minmax(120px,175px) minmax(130px,190px) 84px 84px 96px 58px;min-height:30px;font-size:12.5px}',
+  S+' .pc2-led .pc2-lr>span:nth-child(3){display:none}',
+  S+' .pc2-led .pc2-lr>span{padding:3px 7px;border-right:1px solid #D9DEE7}',
+  S+' .pc2-led .pc2-lr>span.sc{padding:0}',
+  S+' .pc2-led .pc2-lr .tx i,'+S+' .pc2-led .pc2-lr .by i{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}',
+  S+' .pc2-led .pc2-lr .tx{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}',
+  S+' .pc2-led .pc2-lr>span.cl,'+S+' .pc2-led .pc2-lr>span.py{align-items:center}',
+  S+' .pc2-led .pc2-lr>span.cl em.pc-cl,'+S+' .pc2-led .pc2-lr>span.py em.pc-py{display:inline;max-width:none;overflow:visible;text-overflow:clip;font-size:10.5px;white-space:normal;line-height:1.6;margin:0;padding:1px 6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}',
+  S+' .pc2-led .pc2-lr.rw:not(.pcp-on){background:#fff}',
+  S+' .pc2-led .pc2-lr.rw:hover:not(.pcp-on){background:#F8FAFD}',
+  S+' .pc2-led .pc2-lr .m{font-family:"DM Mono",monospace;font-size:12.5px}',
+  S+' .pc2-led .pc2-lr.hd{min-height:28px;font-size:10.5px}',
+  S+' .pc2-led .pc2-lr.tot{min-height:36px}',
+  S+' .pc2-led .pc2-lr.ed{min-height:44px}',
+  S+' .pc2-led .pc2-lr.ed>span{padding:0 5px}',
+  S+' .pc2-led .pc2-lr .pkd{width:7px;height:7px}',
   ].join('\n');
 }
 /* ยอด 4 ตัวเป็นสมการ · ยกมา + รับ − จ่าย = คงเหลือ */
@@ -83042,6 +83061,7 @@ function pc2EdRow(E,base,no){
     +'<span>'+(E.src?('<em class="cat '+(E.src==='dock'?'dk':E.src)+'">'+(CATS[E.src]||'จ่ายอื่น')+'</em>')
       :('<span class="pc2-tg"><button type="button" class="i'+(isIn?' on':'')+'" onclick="pc2EdKind(\'in\')">รับ</button>'
        +'<button type="button" class="o'+(!isIn?' on':'')+'" onclick="pc2EdKind(\'out\')">จ่าย</button></span>'))+'</span>'
+    +'<span></span>'   /* §pcSheet · ช่องตั้งเบิก */
     +'<span class="by"><i>'+pcE(E.by||'—')+'</i></span>'
     +'<span'+(isIn?'':' class="nil"')+'>'+(isIn?amtIn:'')+'</span>'
     +'<span'+(!isIn?'':' class="nil"')+'>'+(!isIn?amtIn:'')+'</span>'
