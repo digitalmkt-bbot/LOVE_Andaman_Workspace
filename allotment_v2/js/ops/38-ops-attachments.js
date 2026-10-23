@@ -334,5 +334,5 @@
     }; });
   })();
   installPrint(); installFleetDocs();
-  window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
+  window.laOpsAttachments={ syncSlipView:syncSlipView, idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
 })();
