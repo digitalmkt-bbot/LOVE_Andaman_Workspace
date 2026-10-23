@@ -338,11 +338,18 @@
   /* The reference / reason of the current decision (legacy tsCotRefSave): same mode, new ref. */
   function cotRef(bookingId){
     if(!guard()) return Promise.resolve();
-    var date = lastView && lastView.date, row = date && afterRow(date, bookingId), dec = row && row.cot && row.cot.decision;
-    if(!dec) return Promise.resolve();
-    var body = { mode: dec.mode, ref: inputVal('ts-cotr-' + bookingId) };
-    if(dec.mode === 'part'){ body.deduct = dec.deduct; body.payout = dec.payout; }
-    return afterWrite('Cash on tour not saved', 'cot-decision', bookingId, 'PUT', cotPath(bookingId), body);
+    var date = lastView && lastView.date; if(!date) return Promise.resolve();
+    var typed = inputVal('ts-cotr-' + bookingId);          // read now: the box is redrawn while the roster reloads
+    // A write just before (the pick) empties the roster cache, so the decision is read again first; it was silently skipped with none cached
+    var ready = cache[date] ? Promise.resolve() : load(date);
+    return ready.then(function(){
+      var row = afterRow(date, bookingId), dec = row && row.cot && row.cot.decision;
+      if(!dec) return;
+      var body = { mode: dec.mode, ref: typed };
+      if(dec.mode === 'part'){ body.deduct = dec.deduct; body.payout = dec.payout; }
+      if(dec.mode === 'nocol' && dec.deduct != null) body.deduct = dec.deduct;
+      return afterWrite('Cash on tour not saved', 'cot-decision', bookingId, 'PUT', cotPath(bookingId), body);
+    });
   }
   function cotClear(bookingId){
     if(!guard()) return Promise.resolve();
