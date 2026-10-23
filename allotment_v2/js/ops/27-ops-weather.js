@@ -312,6 +312,8 @@
     }).then(function(r){
       if(r.declined) return null;
       removeLocal(c.opsId);
+      // resolved bookings keep their follow-up (outcome, new date) the way legacy keeps bk.weatherResolve; refresh it from the server's rows
+      refreshDetail(c.opsId).catch(function(){}).then(function(){ removeLocal(c.opsId); redrawBooking(); });
       // the server deleted the follow-up of every unresolved booking on this trip
       bookingList().forEach(function(bk){ if(bk && bk.weatherResolve && bk.weatherResolve.event === key && bk.weatherResolve.status !== 'resolved') delete bk.weatherResolve; });
       O.wrote('weather'); closeModal(); redrawOp(); redrawBooking();
@@ -429,12 +431,26 @@
     if(c && c.snapshot) return c.snapshot;
     return T0.tcxSnapNow ? T0.tcxSnapNow.apply(this, arguments) : { pax: 0, bk: 0, ad: 0, chd: 0, byAg: {}, be: 0, by: '', at: new Date().toISOString(), before: null };
   });
+  /* the 3-day banner list covers today..+3; any other day is asked of the server once (GET /v1/trip-cancellations/break-even),
+     0 until it answers, and the screen is drawn again when it lands */
+  var beFar = {};
   tw('tcxBE', function(rid, ds){
     var c = findClosure(rid, ds);
     if(c && c.snapshot && c.snapshot.be > 0) return c.snapshot.be;
     var r = ((below.rows || []).find(function(x){ return x.route_id === rid && x.service_date === ds; }));
-    return r ? (+r.break_even || 0) : 0;
+    if(r) return +r.break_even || 0;
+    var k = rid + '|' + ds, f = beFar[k];
+    if(f) return f.v;
+    if(O.enabled() && /^\d{4}-\d{2}-\d{2}$/.test(ds || '') && rid){
+      beFar[k] = { v: 0 };
+      O.get('/v1/trip-cancellations/break-even', { route_id: rid, service_date: ds }).then(function(j){
+        beFar[k] = { v: (j && +j.break_even) || 0 };
+        if(beFar[k].v) redrawOp();
+      }, function(){ delete beFar[k]; });
+    }
+    return 0;
   });
+  if(typeof O.onWrite === 'function') O.onWrite(function(){ beFar = {}; });
 
   /* ── move targets ── */
   var tg = { cache: {}, pending: {} };
@@ -627,10 +643,12 @@
     if(D.bulk) return null;
     if(D.out === 'reschedule' && (!D.rsDs || D.rsDs === D.ds)){ alert('Pick a new date.'); return null; }
     var id = D.ids[0];
-    window.bookingV2WeatherResolveOne(id, 'wxd-');   // reads the result and the day from the dialog's hidden fields
-    try{ acctModalClose(); }catch(_){}
-    window._tcxD = null;
-    return true;
+    // the resolve reads its fields (result, new date) from this dialog after a server round-trip, so the dialog stays
+    // until it answers; a refused write leaves it open for another try
+    return window.bookingV2WeatherResolveOne(id, 'wxd-').then(function(j){
+      if(j !== null && j !== undefined){ try{ acctModalClose(); }catch(_){} window._tcxD = null; }
+      return j;
+    });
   });
   tw('tcxBulkMove', function(rid, ds){
     if(!guardEdit()) return null;

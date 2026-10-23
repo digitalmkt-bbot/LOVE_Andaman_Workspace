@@ -118,12 +118,18 @@
       if(num(m.crew) !== null) o.pay_ws_min_crew = +m.crew;
     }
     o.display = displayView();
+    /* the Park Tickets calculation table (legacy PIER_CFG.parkPrice, pkPriceSet): { ticket type: baht per head }, sent whole; the screen holds the prices as text */
+    var pp = {}, src = c.parkPrice;
+    if(src && typeof src === 'object') Object.keys(src).forEach(function(k){ var n = num(src[k]); if(n !== null && n >= 0) pp[k] = +n; });
+    o.park_price = pp;
     return o;
   }
   function applySettings(s){
     setSrv = s; var c = cfg();
     SET_KEYS.forEach(function(k){ c[k[0]] = s[k[1]] == null ? '' : s[k[1]]; });
     c.payWsMin = { cap: s.pay_ws_min_cap, crew: s.pay_ws_min_crew };
+    var pp = (s.park_price && typeof s.park_price === 'object') ? s.park_price : {};
+    c.parkPrice = {}; Object.keys(pp).forEach(function(k){ c.parkPrice[k] = String(pp[k]); });
     var dsp = (s.display && typeof s.display === 'object') ? s.display : {};
     DISPLAY_KEYS.forEach(function(k){ if(dsp[k] && typeof dsp[k] === 'object') c[k] = clone(dsp[k]); else delete c[k]; });
     setBase = setView();

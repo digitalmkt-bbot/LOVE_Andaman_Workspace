@@ -92,6 +92,7 @@
   var statusRanges = {};   // range id -> range
   var zoneRanges = {};     // range id -> range
   var vansWindow = null;   // {from, to, at}
+  var vansPending = null, vansEver = false;   // the read in flight · whether the server's vans have ever landed (until then SB_VEHICLES holds legacy's 6 demo vans)
 
   function vehicleOf(v, old){
     var veh = {
@@ -137,12 +138,19 @@
   function loadVans(date){
     var now = Date.now();
     if(vansWindow && vansWindow.from <= date && date <= vansWindow.to && now - vansWindow.at < 60000) return Promise.resolve(null);
+    // one read per window at a time: the screen's render, the day load and the fleet screen all ask on opening
+    if(vansPending && vansPending.from <= date && date <= vansPending.to) return vansPending.p.then(function(){ return null; });
     var from = O.shift(date, -31), to = O.shift(date, 31);
-    return O.get('/operations/van-days', { from: from, to: to }).then(function(j){
+    var p = O.get('/operations/van-days', { from: from, to: to }).then(function(j){
       vansWindow = { from: from, to: to, at: Date.now() };
+      vansEver = true;
       applyVans(j || {});
       return j;
     });
+    var pend = vansPending = { from: from, to: to, p: p };
+    var clear = function(){ if(vansPending === pend) vansPending = null; };
+    p.then(clear, clear);
+    return p;
   }
 
   /* ════ Thai pickup names → VANJOB_PICKUP_TH ════ */
@@ -466,7 +474,7 @@
     loadJobs: loadJobs, redraw: redraw,
     jobKey: function(date, legacyKey){ return jobKeys[date + '::' + legacyKey] || null; },
     dayRead: function(date){ return dayRead[date] || null; },
-    loadVans: loadVans, vehicleOf: vehicleOf,
+    loadVans: loadVans, vehicleOf: vehicleOf, vansLoaded: function(){ return vansEver; },
     putCell: function(c){ if(c && c.van_id) cells[c.van_id + '|' + c.service_date] = c; },
     cellOf: function(vanId, date){ return cells[vanId + '|' + date] || null; },      // w5-d: status_on / zone_on / usable of the day (83-ops-fleet-server.js)
     putRange: function(kind, r){ (kind === 'zone' ? zoneRanges : statusRanges)[r.id] = r; },

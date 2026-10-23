@@ -93,13 +93,18 @@
     return out;
   }
   wrap('renderVehicles', function(){
-    var r = originals.renderVehicles ? originals.renderVehicles.apply(this, arguments) : undefined;
+    /* until the server's vans land, legacy's 6 demo vans (08-app.js seed) must not be drawn: show a loading line instead */
+    var r;
+    if(O.enabled() && V.vansLoaded && !V.vansLoaded()){
+      var host = elById('vehicles-host');
+      if(host) host.innerHTML = O.loadingHtml('Loading vans…');
+    } else r = originals.renderVehicles ? originals.renderVehicles.apply(this, arguments) : undefined;
     var dates = screenDates();
-    var loaded = false;
+    var loaded = false, wasLoaded = !!(V.vansLoaded && V.vansLoaded());
     dates.reduce(function(p, d){
       return p.then(function(){ return V.loadVans(d); }).then(function(j){ if(j) loaded = true; });
     }, Promise.resolve()).then(function(){
-      if(!loaded || (O.busy && O.busy())) return;
+      if(!(loaded || (!wasLoaded && V.vansLoaded && V.vansLoaded())) || (O.busy && O.busy())) return;
       for(var i = 0; i < MODALS.length; i++){ if(elById(MODALS[i])) return; }
       if(O.activeView && O.activeView() && O.activeView() !== 'vehicles') return;
       if(originals.renderVehicles) originals.renderVehicles();
@@ -274,6 +279,7 @@
       call(K.open, id);
     }, function(e){ O.fail(K.title + ' not added · ' + failCode(e), e); call(K.open, id); });
   }
+  var rangeQ = {};
   function setRange(kind, id, i, field, val){
     if(!guard()) return;
     var v = vehOf(id), K = KINDS[kind]; if(!v) return;
@@ -281,15 +287,27 @@
     if(!cur || !col) return;
     if(!cur.id){ O.toast({ kind: 'error', title: K.title + ' not saved', status: 'REFUSED', sub: 'This range is not on the server · reload the page', dur: 7000 }); return; }
     var body = {}; body[col] = (typeof val === 'string' && val.trim() === '') ? null : val;
-    var go = function(){
+    /* from and to edited one after the other (or a status and its dates) leave the server a state it refuses part-way
+       (a range that ends before it starts, or one that stays open from today): the fields of one range edited in the
+       same moment go out in ONE request */
+    var rk = kind + '|' + id + '|' + cur.id;
+    if(field !== 'note'){
+      var q = rangeQ[rk];
+      if(q){ Object.assign(q.body, body); clearTimeout(q.t); }
+      else q = rangeQ[rk] = { body: body };
+      q.t = setTimeout(function(){ delete rangeQ[rk]; flush(q.body); }, 150);
+      return;
+    }
+    var go = function(){ flush(body); };
+    function flush(body){
       send('PATCH', '/operations/vans/' + enc(id) + '/' + K.path + '/' + enc(cur.id), body).then(function(r){
         var mine = vehOf(id); if(!mine) return;
         var row = (mine[K.mine] || []).filter(function(x){ return x.id === r.id; })[0];
         if(row) Object.assign(row, K.toLocal(r));
         V.putRange(kind, r);
       }, function(e){ O.fail(K.title + ' not saved · ' + failCode(e), e); call(K.open, id); });
-    };
-    if(field === 'note') later(kind + '|' + id + '|' + cur.id + '|' + field, go); else go();
+    }
+    later(kind + '|' + id + '|' + cur.id + '|' + field, go);
   }
   function delRange(kind, id, i){
     if(!guard()) return;

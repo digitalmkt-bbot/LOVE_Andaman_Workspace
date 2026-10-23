@@ -302,5 +302,52 @@
     snapshot();
   }
 
-  O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, isReady: function(){ return ready; } };
+  /* ── days outside the loaded window (-30/+180): read when a screen shows them, added to TRIPS beside what is there ──
+     Boat Operation, job sheets and park tickets looked empty past the window. One read per month asked for, never twice;
+     the screen is drawn again when it lands. A cell already in TRIPS (a local edit not yet sent) is kept. */
+  var farDone = {}, farBusy = {};
+  function monthOf(d){ return String(d || '').slice(0, 7); }
+  function inWindow(d){ return d >= O.shift(O.today(), -BACK) && d <= O.shift(O.today(), AHEAD); }
+  function ensureDays(dates){
+    if(!ready || !O.enabled()) return null;
+    var months = {};
+    (dates || []).forEach(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d || '') && !inWindow(d) && !farDone[monthOf(d)] && !farBusy[monthOf(d)]) months[monthOf(d)] = 1; });
+    var list = Object.keys(months);
+    if(!list.length) return null;
+    return Promise.all(list.map(function(m){
+      farBusy[m] = 1;
+      var from = m + '-01', to = m + '-' + String(new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate()).padStart(2, '0');
+      return O.get('/operations/deployments', { from: from, to: to }).then(function(j){
+        var T = trips();
+        ((j && j.deployments) || []).forEach(function(r){
+          if(!T) return;
+          if(T[r.service_date] && T[r.service_date][r.boat_id]) return;
+          (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+          synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
+        });
+        farDone[m] = 1;
+      }).catch(function(e){ try{ console.warn('[ops] deployments ' + m + ' · ' + (e && e.message)); }catch(_){} })
+        .then(function(){ delete farBusy[m]; });
+    })).then(function(){ snapshot(); rerender(); });
+  }
+  // Boat Operation shows a week or a month and a selected day: ask for those; the other screens call laOps.deployments.ensureDays(...)
+  [['bop2GetDates', function(out){ return out; }]].forEach(function(p){
+    var orig = window[p[0]]; if(typeof orig !== 'function' || orig.__opsFar) return;
+    var w = function(){ var out = orig.apply(this, arguments); try{ if(Array.isArray(out) && out.length) ensureDays([out[0], out[out.length - 1]]); }catch(_){} return out; };
+    w.__opsFar = true; window[p[0]] = w;
+  });
+  ['bop2SelectCell', 'bop2SelectDate'].forEach(function(n){
+    var orig = window[n]; if(typeof orig !== 'function' || orig.__opsFar) return;
+    var w = function(a, b){ try{ ensureDays([n === 'bop2SelectCell' ? b : a]); }catch(_){} return orig.apply(this, arguments); };
+    w.__opsFar = true; window[n] = w;
+  });
+
+  // the pier screens that show one day (park tickets, job cards, check-in) keep it in _poDate
+  ['renderPierPark', 'renderPierJob', 'renderPierCheckin'].forEach(function(n){
+    var orig = window[n]; if(typeof orig !== 'function' || orig.__opsFar) return;
+    var w = function(){ try{ if(typeof _poDate === 'string') ensureDays([_poDate]); }catch(_){} return orig.apply(this, arguments); };
+    w.__opsFar = true; window[n] = w;
+  });
+
+  O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, ensureDays: ensureDays, isReady: function(){ return ready; } };
 })();

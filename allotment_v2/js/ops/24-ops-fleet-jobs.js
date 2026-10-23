@@ -742,6 +742,9 @@
     }).then(function(){
       return loc ? O.queue(function(){ return O.patch('/v1/fleet/engines/' + enc(next.oldEngId), { spare_location: loc }); }) : null;
     }).then(function(){
+      // legacy keeps the job's location in step with where the pulled engine went (flStartSwapInstall: m.location = place)
+      return loc ? O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(ctx.jobId), { location: loc }); }).then(function(res){ upsertJob(res); }) : null;
+    }).then(function(){
       return refetchAll(ctx.boatId);
     }).then(function(){
       next.filled = true;
@@ -976,6 +979,8 @@
         });
       }, Promise.resolve());
     }).then(function(){
+      // the server's PATCH already wrote 'ย้ายไปเลน "…"' (and onto the incident): only a drag of a whole boat adds its own words
+      if(!suffix) return null;
       return list.reduce(function(p, m){
         return p.then(function(){ return window.flBoardLog(m, 'ย้ายไปเลน "' + label + '"' + suffix); });
       }, Promise.resolve());

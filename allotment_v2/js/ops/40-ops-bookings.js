@@ -269,6 +269,9 @@
                collect: x.collect, at: x.at, by: x.by || '' };
     });
     if(r.reschedules.length) r.reschedule = r.reschedules[r.reschedules.length - 1];
+    // legacy bk.rebook: set when the move came from a weather closure (the trip date moved, here is why)
+    var wxMove = r.reschedules.filter(function(x){ return x.reason === 'weather'; }).pop();
+    if(wxMove) r.rebook = { from: wxMove.fromDate, to: wxMove.toDate, reason: 'weather', at: wxMove.at };
     r.partialCancels = (ob.partial_cancels || []).map(function(x){
       var idx = (trips || []).findIndex(function(t){ return t.opsTripId === x.trip_id; });
       var waived = x.waived || { count: 0, amount: 0 };
@@ -526,6 +529,7 @@
     if(typeof ob.addon_only === 'boolean') bk.srvAddonOnly = ob.addon_only;
     if(Array.isArray(ob.order_lines)) bk.srvOrderLines = ob.order_lines.map(function(x){ return fromServer(x); });
     Object.assign(bk, records(ob, bk.trips));
+    if(ob.foc_reason) bk.focReason = String(ob.foc_reason);    // focApproval.reason (focFrom) and legacy's FOC approval screen read it after a reload
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);
     return bk;
@@ -537,7 +541,7 @@
     var fresh = fromServer(ob);
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
-    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'weatherResolve', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
@@ -954,14 +958,7 @@
     };
     w.__opsRender = true; window.bookingV2Render = w;
   })();
-  // other people's bookings show up on the open day without a reload
-  setInterval(function(){
-    try{
-      if(!O.enabled() || !O.state.loaded || document.hidden || O.activeView() !== 'booking') return;
-      var st = _bkV2;
-      if(st.tab === 'bytrip' && st.filterDate && !st.newBooking && !st.detailId) refreshDay(st.filterDate);
-    }catch(_){}
-  }, 60000);
+  // other people's bookings reach the open day through the change feed (O.onChange above); no timer
 
   /* ── pending approvals, any date · fetched only when the Approvals tab opens ── */
   var pendingAt=0, pendingBusy=null;
