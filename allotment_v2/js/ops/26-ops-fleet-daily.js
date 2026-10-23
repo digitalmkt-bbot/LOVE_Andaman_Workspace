@@ -390,6 +390,26 @@
     return state.loading;
   }
 
+  /* Fuel intelligence reads the month it shows and the six before it (FL_DAILY and the bookings of those days); the first load holds the last
+     14 days only, so the screen drew its header and nothing else. Each month window is asked once, then the screen is drawn again. */
+  var fuelAsked = {};
+  wrap('renderFuelIntel', function(orig){
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    try{
+      var m = typeof _fuelMonth === 'string' ? _fuelMonth : '';
+      if(!enabled() || !/^\d{4}-\d{2}$/.test(m)) return r;
+      var d0 = new Date(+m.slice(0, 4), +m.slice(5, 7) - 7, 1), d1 = new Date(+m.slice(0, 4), +m.slice(5, 7), 0);
+      var from = O.ymd(d0), to = O.ymd(d1), k = from + '|' + to;
+      if(fuelAsked[k]) return r;
+      fuelAsked[k] = 1;
+      var books = typeof window.bookingV2EnsureOpsRange === 'function' ? window.bookingV2EnsureOpsRange({ from: from, to: to }) : null;
+      Promise.all([loadDailyWindow(from, to).catch(function(){ return null; }), Promise.resolve(books).catch(function(){ return null; })]).then(function(){
+        if(O.activeView() === 'fl-fuel' && !(O.busy && O.busy()) && typeof window.renderFuelIntel === 'function') window.renderFuelIntel();
+      });
+    }catch(_){}
+    return r;
+  });
+
   /* legacy flProjAutoCreateForScheduledMJs runs on every load: a scheduled job with no project is linked to the boat's
      overlapping open project or gets its own "Scheduled · boat · title" one. The server does it (POST …/projects/auto-create);
      once per session, a login that cannot write fleet data is simply refused and ignored */

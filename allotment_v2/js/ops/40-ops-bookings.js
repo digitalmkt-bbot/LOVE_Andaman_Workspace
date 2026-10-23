@@ -509,9 +509,11 @@
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
     bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc,
-      age: p.age != null ? p.age : null, insuranceReviewedAt: p.insurance_reviewed_at || null, insuranceReviewedBy: p.insurance_reviewed_by || null }; });
+      age: p.age != null ? p.age : null, insuranceReviewedAt: p.insurance_reviewed_at || null, insuranceReviewedBy: p.insurance_reviewed_by || null,
+      insuranceFirstName: p.insurance_first_name || null, insuranceLastName: p.insurance_last_name || null, insuranceNat: p.insurance_nationality || null }; });
     /* insurance ages are the server's (PUT /insurance) · read here so insEff/insOv see them after a reload; never sent back (toServer) */
-    if(ob.lead_age !== undefined) bk.leadAge = ob.lead_age;
+    bk.leadAge = ob.lead_age != null ? ob.lead_age : null;      // a cleared age is left off the answer
+    bk.leadInsuranceFirstName = ob.lead_insurance_first_name || null; bk.leadInsuranceLastName = ob.lead_insurance_last_name || null; bk.leadInsuranceNat = ob.lead_insurance_nationality || null;
     if(ob.lead_insurance_reviewed_at !== undefined) bk.leadInsuranceReviewedAt = ob.lead_insurance_reviewed_at;
     if(ob.lead_insurance_reviewed_by !== undefined) bk.leadInsuranceReviewedBy = ob.lead_insurance_reviewed_by;
     bk.addOns = (ob.add_ons || []).map(function(a){

@@ -286,7 +286,7 @@
 
   function refetchStockAndMemos(){
     return Promise.all([
-      O.get('/v1/fleet/stock-items'),
+      O.get('/v1/fleet/stock-items', { include: 'movements' }),
       O.get('/v1/fleet/memos'),
       O.get('/v1/fleet/consumables')
     ]).then(function(res){
