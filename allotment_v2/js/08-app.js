@@ -9620,6 +9620,32 @@ function bkV2KeepScroll(fn){
   requestAnimationFrame(()=>{ put(); requestAnimationFrame(put); });
 }
 function bkV2RenderKeep(){ if(typeof bkV2Render==='function') bkV2KeepScroll(bkV2Render); }
+/* ══ §btBoatClear (2026-10-23) · owner "By trip date การจัดเรือ ตอนถอดเรือ ถอดออกทีละลำ สามารถถอดออกทีเดียวทั้งลำได้ไหม"
+   เดิมถอดได้ทีละใบ (× ในตัวเลือกเรือ) · ปุ่ม "ถอดทั้งลำ" บนการ์ดเรือในโหมดเรือ ถอดเรือลำนั้นออกจากทุกใบของรอบนี้ (วัน + โปรแกรม) ในครั้งเดียว
+   ทำแบบเดียวกับถอดทีละใบ (ops.boatId = null ของวันนั้น) · ใบที่แยกลงหลายลำ (§boatSplit) ไม่แตะ แจ้งให้ไปแก้ทีละใบ
+   (ก้อนที่ไม่มีเรือไม่มีในโครงของ split · ถอดก้อนเดียวคนจะหาย) · ถามยืนยันก่อน · ตำแหน่งเลื่อนอยู่ที่เดิม */
+function bkV2BoatClearScan(boatId, date, rid){
+  const one=[], split=[]; let pax=0;
+  (SB_BOOKINGS||[]).forEach(b=>{
+    if(!b || ['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(!(b.trips||[]).some(t=>t && t.date===date && t.routeId===rid)) return;
+    const sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null;
+    if(sp){ if(sp.some(x=>x && x.boatId===boatId)) split.push(b); return; }
+    if((bkOpsRead(b,date)||{}).boatId!==boatId) return;
+    one.push(b); pax+=(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(b,date,boatId):0;
+  });
+  return {one, split, pax};
+}
+function bkV2BoatClearTrip(boatId, date, rid){
+  const S=bkV2BoatClearScan(boatId, date, rid);
+  const nm=(((typeof BOATS!=='undefined'?BOATS:[]).find(x=>x.id===boatId))||{}).name||boatId;
+  const sk=S.split.length ? ('\n\n'+S.split.length+' booking(s) split across several boats are not changed - open each one to change its split:\n  '+S.split.map(b=>b.voucherRef||b.code||b.id).join(', ')) : '';
+  if(!S.one.length){ if(S.split.length) alert('Nothing to remove from '+nm+' except split bookings.'+sk); return; }
+  if(!confirm('Remove boat '+nm+' from '+S.one.length+' booking(s) ('+S.pax+' pax) on this trip?\n'+date+'\n\nThey go back to "not assigned".'+sk)) return;
+  S.one.forEach(b=>{ const o=bkOpsFor(b, (typeof bkOpsDate==='function')?bkOpsDate(b,date):date); o.boatId=null; });
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  bkV2RenderKeep();
+}
 // ── Boat Assign · multi-select (tick) then assign all at once ──
 window._bkV2BoatSel = window._bkV2BoatSel || {};
 function bkV2BoatSelToggle(bkId){ const s=window._bkV2BoatSel; if(s[bkId]) delete s[bkId]; else s[bkId]=true; bkV2RenderKeep(); }
@@ -56168,6 +56194,7 @@ function bkV2RenderTab2(){
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:${c}"><span style="width:19px;height:19px;border-radius:50%;background:${c};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">${esc(bkV2BoatInitials(bn))}</span>&#128676; ${esc(bn)}</span>
             <span style="font-size:11px;color:#6a6a64">${mem.length} booking${xZone?(' · '+bpax+' โซนนี้'):''} · <b style="color:${over?'#A32D2D':c}">${dayPax}${cap?('/'+cap):''} pax</b>${over?(' <span style="color:#A32D2D;font-weight:700">เกิน '+(dayPax-cap)+'</span>'):''}</span>
+            ${mem.length?`<button type="button" class="t2-bclr" onclick="event.stopPropagation();bkV2BoatClearTrip('${esc(bid)}','${esc(date)}','${esc(rid)}')" title="${esc(laT('ถอดเรือลำนี้ออกจากทุก booking ของรอบนี้ (ทุกโซน) · กลับไปเป็นยังไม่จัดเรือ'))}">&#10005; ${laT('ถอดทั้งลำ')}</button>`:''}
           </div></td></tr>`;
       };
       { let _pg=null, _pb=null; _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups) body+=_unassignedHdr(); _pg=o.g; } body+=o.html; }); }
@@ -56988,6 +57015,7 @@ function bkV2RenderTab2(){
     .t2-boatpin{position:sticky;top:var(--t2-vangroup-top,52px);z-index:46;box-shadow:0 4px 10px rgba(0,0,0,.10);border-radius:14px 14px 0 0;overflow:hidden}
     .t2-boatpin .t2-boatstrip{border-top:none}
     .t2-boatstrip-lbl{font-size:10px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;flex:none}
+    .t2-bclr{margin-left:auto;font-family:inherit;font-size:10.5px;font-weight:700;color:#A32D2D;background:#fff;border:1px solid #F0C9C3;border-radius:6px;padding:2px 9px;cursor:pointer;line-height:1.5}.t2-bclr:hover{background:#FDEEEC;border-color:#E89A92}   /* §btBoatClear */
     .t2-addonbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 14px 5px 18px;background:#FBFAFF;border-top:1px solid var(--border-2)}
     .t2-addonbar-lbl{font-size:10px;font-weight:700;color:#7A5AB0;text-transform:uppercase;letter-spacing:.05em;flex:none}
     .t2-aochip{font-size:11px;font-weight:600;border-radius:7px;padding:3px 9px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
