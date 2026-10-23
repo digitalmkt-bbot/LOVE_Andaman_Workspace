@@ -55,7 +55,10 @@
   function route(id){ try{ return (typeof getRoute==='function' && getRoute(id)) || null; }catch(_){ return null; } }
   function fam(rid){ try{ return (typeof bkV2RouteFamily==='function' && bkV2RouteFamily(rid)) || null; }catch(_){ return null; } }
   function famIdx(f){ try{ var i=(_BKV2_FAMILIES||[]).findIndex(function(x){ return x.id===(f&&f.id); }); return i<0?999:i; }catch(_){ return 999; } }
-  function pierOk(r){ return !EB.pier || ((r&&r.pier)||'')===EB.pier; }
+  /* §ebNoRanong (2026-10-23) · owner "ยอดของ Ranong ไม่ควรเอามารวม ควรแยกไป"
+     "ทุกท่า" = ท่าที่วิ่งจริง (ทับละมุ + พันวา) · ระนองยังเป็นแผน ยอดว่าง/เป้าของมันทำให้ตัวเลขรวมเพี้ยน
+     กดแท็บ Ranong เองถึงจะเห็น · ใช้กับทุกแท็บของบอร์ด (ตัวกรองเดียวกัน) */
+  function pierOk(r){ var p=((r&&r.pier)||''); return EB.pier ? (p===EB.pier) : (p!=='ranong'); }
   function pax(t){ return (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot((t&&t.pax)||{}) : 0; }
   function paxK(t,k){ return (typeof bkV2PaxTot==='function') ? bkV2PaxTot((t&&t.pax)||{},k) : 0; }
   function amt(b,t){ try{ return +tsTripAmount(b,t)||0; }catch(_){ return 0; } }
@@ -1236,18 +1239,18 @@
       + '<div class="eb-top"><h1>Executive Board<small>'+(EB.tab==='move'?'OVERVIEW · มูฟเมนต์บุคกิ้ง':EB.tab==='tgt'?'OVERVIEW · เป้าเซลส์รายวัน':EB.tab==='gap'?'OVERVIEW · ต้องหาอีกเท่าไหร่ถึงเต็มเรือ':'OVERVIEW · รายได้และยอดจอง')+'</small></h1>'
       + seg('tab',[['move','มูฟเมนต์'],['rev','ภาพรวมรายได้'],['sales','Sales Performance'],['gap','Gap to Target'],['tgt','เป้าเซลส์']])
       + (EB.tab==='tgt'
-          ? (seg('stm',[['this','เดือนนี้'],['next','เดือนหน้า']]) + seg('me',[['','ทุกคน'],['1','เฉพาะฉัน']]) + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']]))
+          ? (seg('stm',[['this','เดือนนี้'],['next','เดือนหน้า']]) + seg('me',[['','ทุกคน'],['1','เฉพาะฉัน']]) + seg('pier',[['','TL + Panwa'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']]))
           : EB.tab==='move'
-          ? seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])
+          ? seg('pier',[['','TL + Panwa'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])
           : EB.tab==='sales'
           ? (seg('sp',[['week','สัปดาห์'],['month','เดือน']])
              + '<span class="eb-nav"><button onclick="ebSet(\'off\','+((+EB.off||0)-1)+')" title="ช่วงก่อนหน้า">\u2039</button><b>'+E(spLabel(spRange(EB.sp||'week',+EB.off||0),EB.sp||'week'))+'</b>'
              + '<button onclick="ebSet(\'off\','+Math.min(0,(+EB.off||0)+1)+')"'+((+EB.off||0)>=0?' disabled':'')+' title="ช่วงถัดไป">\u203a</button></span>')
           : EB.tab==='gap'
           ? (seg('gp',[['h',EB_HORIZON+' วันข้างหน้า'],['month','เดือนนี้'],['next','เดือนหน้า']])
-             + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']]))
+             + seg('pier',[['','TL + Panwa'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']]))
           : (seg('per',[['today','วันนี้'],['month','เดือนนี้'],['quarter','ไตรมาส'],['year','ปีนี้']])
-             + seg('pier',[['','ทุกท่า'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])))
+             + seg('pier',[['','TL + Panwa'],['tublamu','Tub Lamu'],['panwa','Panwa'],['ranong','Ranong']])))
       + '<span class="eb-sp"></span><span class="eb-upd">'+E(thDow(t0))+' '+E(thD(t0))+' '+t0.slice(0,4)+' · อัปเดต '+hhmm(Date.now())+' · วาดใหม่ทุก 1 นาที</span></div>'
       + body + '</div>';
   }
