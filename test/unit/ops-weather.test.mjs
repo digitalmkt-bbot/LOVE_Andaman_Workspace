@@ -92,7 +92,7 @@ test('load maps server closures to the legacy shape and keeps closures outside t
   });
   const rows = await rt.window.laOps.weather.load('2026-10-01', '2026-10-31');
   assert.equal(rows.length, 1);
-  assert.deepEqual(rt.calls, ['GET /v1/weather-closures?from=2026-10-01&to=2026-10-31']);
+  assert.deepEqual(rt.calls, ['GET /v1/weather-closures?from=2026-10-01&to=2026-10-31', 'GET /v1/weather-closures?from=2026-10-01&to=2026-10-31&include_reopened=true']);   // the second one: follow-ups of re-opened trips
   assert.deepEqual(A(rt.SB_WEATHER_CLOSURES), [
     { opsId: 'wx_0', routeId: 'r9', date: '2026-09-01', reason: 'weather', note: '', at: '' },
     { opsId: 'wx_1', routeId: 'r10', date: '2026-10-05', reason: 'weather', note: 'high waves 3m', at: '2026-10-04T05:00:00.000Z',

@@ -111,12 +111,29 @@
       } else if(bk.weatherResolve && bk.weatherResolve.event === key){ delete bk.weatherResolve; }
     });
   }
+  /* A re-opened trip keeps the follow-up of the bookings that were already resolved (outcome, new date), as legacy keeps bk.weatherResolve;
+     the server keeps those rows, but the open-closure list does not carry them, so after a reload the bookings showed none.
+     The re-opened closures with resolved rows are read once each and only their follow-ups are mirrored (never put back as closures). */
+  var reopenedSeen = {};
+  var reopenedAsked = {};
+  function keepResolvedOfReopened(from, to){
+    if(reopenedAsked[from + '|' + to]) return;           // once per window and session; a write drops it (below)
+    reopenedAsked[from + '|' + to] = 1;
+    O.get('/v1/weather-closures', { from: from, to: to, include_reopened: 'true' }).then(function(j){
+      listRows(j).forEach(function(r){
+        if(!r || !r.id || !r.reopened_at || reopenedSeen[r.id] || !(r.counts && r.counts.resolved > 0)) return;
+        reopenedSeen[r.id] = 1;
+        O.get('/v1/weather-closures/' + enc(r.id)).then(function(d){ syncFollowUps(d); redrawBooking(); }, function(){ delete reopenedSeen[r.id]; });
+      });
+    }, function(){});
+  }
   function load(from, to){
     from = from || O.shift(O.today(), -30);
     to = to || O.shift(O.today(), 120);
     return O.get('/v1/weather-closures', { from: from, to: to }).then(function(j){
       var rows = listRows(j);
       setClosures(rows, from, to);
+      keepResolvedOfReopened(from, to);
       return rows;
     });
   }
@@ -728,7 +745,7 @@
     }
     return [];
   });
-  if(typeof O.onWrite === 'function') O.onWrite(function(){ tg.cache = {}; hist.cache = {}; below.at = 0; });
+  if(typeof O.onWrite === 'function') O.onWrite(function(){ tg.cache = {}; reopenedAsked = {}; hist.cache = {}; below.at = 0; });
 
   O.weather = { load: load, refreshDetail: refreshDetail, mapClosure: mapClosure, listRows: listRows,
                 syncFollowUps: syncFollowUps, closureIdFor: closureIdFor };
