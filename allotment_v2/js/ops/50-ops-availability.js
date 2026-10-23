@@ -236,6 +236,7 @@
   });
   /* other users' writes · the change feed names the route-days a change touched; refetch only the loaded
      windows that hold one of them (no timer: an idle tab asks for nothing), redraw only if a number moved */
+  var pendingStarts = {}, changeT = null;
   var SEAT_KINDS = { booking:1, seat_lock:1, deployment:1, route:1, weather_closure:1, boat:1, config:1 };
   function refreshWindows(starts){
     starts.forEach(function(w){
@@ -258,7 +259,10 @@
     var starts = days ? loaded.filter(function(w){ var to = O.shift(w, SPAN - 1); return days.some(function(d){ return d && d.service_date >= w && d.service_date <= to; }); }) : loaded;
     if(!starts.length) return;
     AL = {};
-    refreshWindows(starts);
+    // a burst of changes (an import, a bulk lock) asks for each window once, a moment after the last one
+    starts.forEach(function(w){ pendingStarts[w] = 1; });
+    clearTimeout(changeT);
+    changeT = setTimeout(function(){ var list = Object.keys(pendingStarts); pendingStarts = {}; refreshWindows(list); }, 1500);
   });
 
   O.availability = { ensure: ensure, get: cached, calRows: calRowsFor, put: put, clear: clear, preload: function(){ var t = O.today(); ensure(t); ensure(O.shift(windowStart(t), SPAN)); } };
