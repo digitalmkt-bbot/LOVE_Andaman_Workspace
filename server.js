@@ -375,7 +375,9 @@ const B2C_OWN_BK = new Set([
 // v35: nationality names from the B2C dropdown that resolved to blank (Hong Konger, Chilean, Hungarian,
 //      Icelandic, New Zealander, Peruvian, Scottish, Welsh) now map; later trips of a multi-trip order
 //      carry the traveller list (capped to their head count) instead of only the lead. LOV-9461107.
-const B2C_MAP_VER = 35;
+// v36: B2C return-leg area (details.dropoffZone/dropoffHotel; dropoffLocation = area name when
+//      dropoffSame:false) and per-line travellers (details.travellerUids + passengers[].uid).
+const B2C_MAP_VER = 36;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
