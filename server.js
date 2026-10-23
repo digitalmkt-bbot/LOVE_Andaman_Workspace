@@ -2164,8 +2164,41 @@ let _lagMax = 0;
 })();
 
 let _loadBuild = null;   // { version, promise }
-function buildLoadCache(version, m){
+/* ══ §loadGap (2026-10-23) · owner "Pier Check In ดีเลย์ · เครื่องนึงเช็ค อีกเครื่องใช้เวลานานกว่าจะเห็น · เป็นอีกแล้ว"
+   วัดจริง 23 ต.ค. 09:46–10:00: เซฟ 24 ครั้ง/นาที → ทุกเวอร์ชันใหม่ประกอบก้อน 41.9 MB ใหม่ (54 ครั้งใน 6 นาที · ครั้งละ ~3.1 วิ
+   ซึ่ง ~1.3 วิเป็น JSON.stringify ที่บล็อก event loop) → [loop-lag] 2–3 วิ ทุก 5–6 วิ → /api/version แถวเดียวตอบ 2.5 วิ
+   → การเซฟของหน้าท่า p50 2.1 วิ p90 4.3 วิ → อีกเครื่องเห็นช้า
+   ตัวนี้: ประกอบก้อนใหม่ได้อย่างถี่สุดทุก LOAD_BUILD_GAP_MS (ค่าเริ่มต้น 12 วิ) · คำขอที่มาระหว่างนั้นเกาะคิวเดียวกัน
+   พอถึงเวลา อ่านเวอร์ชันล่าสุดอีกครั้งแล้วประกอบ "ของปัจจุบัน" รอบเดียว ทุกคนที่รอได้ก้อนที่ใหม่กว่าหรือเท่ากับที่ขอ
+   (ไคลเอนต์ทิ้งก้อนที่เวอร์ชันถอยหลัง จึงห้ามส่งก้อนเก่าออกไปแทน) · ก้อนที่โหลดอยู่ก็ช้ากว่าเดิมอย่างมาก 12 วิ
+   ซึ่งเป็นงานเบื้องหลังอยู่แล้ว (เดิม 8–19 วิ) · หน้าเช็คอินไม่ผ่านทางนี้ (ใช้ /api/ck) */
+const LOAD_BUILD_GAP_MS = Math.max(0, +(process.env.LOAD_BUILD_GAP_MS || 12000) || 0);
+let _loadBuiltAt = 0, _loadNext = null;
+async function buildLoadCache(version, m){
+  /* คิวที่กำลังรออาจอ่านเวอร์ชันไปแล้วก่อนคำขอนี้มาถึง → ได้ก้อนเก่ากว่าที่ขอ · วนต่อคิวถัดไปจนได้ของที่ไม่ถอยหลัง */
+  let c; do { c = await _buildLoadQueued(version, m); } while(c && (c.version||0) < (version||0));
+  return c;
+}
+function _buildLoadQueued(version, m){
+  if(_loadCache && _loadCache.version === version) return Promise.resolve(_loadCache);
   if(_loadBuild && _loadBuild.version === version) return _loadBuild.promise;
+  if(_loadNext) return _loadNext;                       // a debounced build is already queued · join it
+  _loadNext = (async () => {
+    try{
+      if(_loadBuild){ try{ await _loadBuild.promise; }catch(_){} }
+      const wait = LOAD_BUILD_GAP_MS - (Date.now() - _loadBuiltAt);
+      if(wait > 0) await new Promise(r => setTimeout(r, wait));
+      let v = version, mm = m;
+      try{ const r = await pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY]);
+        if(r.rows[0]){ mm = r.rows[0]; v = mm.version || 0; } }catch(_){}
+      if(_loadCache && _loadCache.version === v) return _loadCache;
+      if(_loadBuild && _loadBuild.version === v) return _loadBuild.promise;
+      return await _buildLoadNow(v, mm);
+    } finally { _loadNext = null; }
+  })();
+  return _loadNext;
+}
+function _buildLoadNow(version, m){
   const t0 = Date.now(); _lagMax = 0;
   const promise = relLoad().then(blob => {
     const tQ = Date.now();
@@ -2174,7 +2207,7 @@ function buildLoadCache(version, m){
     const str = JSON.stringify({data:inner, version,
       updated_by:m.updated_by, updated_at:m.updated_at});
     const tS2 = Date.now();
-    _loadCache = { version, str };
+    _loadCache = { version, str }; _loadBuiltAt = Date.now();   /* §loadGap */
     const mu = process.memoryUsage();
     console.log(`[load-build] v${version} total=${tS2-t0}ms query=${tQ-t0}ms stringify1=${tS1-tQ}ms stringify2=${tS2-tS1}ms `
       + `out=${(str.length/1048576).toFixed(1)}MB rss=${(mu.rss/1048576).toFixed(0)}MB heap=${(mu.heapUsed/1048576).toFixed(0)}MB maxLag=${_lagMax}ms`);
