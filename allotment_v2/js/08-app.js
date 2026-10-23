@@ -12630,6 +12630,26 @@ function vbRenderOv2(host){
 /* ══ หน้า 2 · รายเจ้า แบบตาราง (Spreadsheet) ══
    ช่องเทา = ระบบดึงจากใบงานรถ · ช่องขาว = กรอกเอง (ตามกติกา §vbFill เดิม: ว่าง = คีย์ได้ · มีเลขแล้ว = กดแก้ไขก่อน)
    Enter/↓ ลงล่าง · ↑ ขึ้น · Tab ไปขวา · Ctrl+D เติมค่าจากแถวบน · วางช่วงจาก Excel ได้ (ข้ามช่องที่ล็อก) */
+/* ══ §vbDaily (2026-10-23) · owner (หน้ารายเจ้า) "เพิ่มที่เป็นรายการสรุปรายวันได้ด้วย และปริ้นได้"
+   สรุปรายวันของเจ้าที่เปิดอยู่ ที่ท่านี้ · แถวละวัน: เที่ยว · คน · คน/คัน · ค่ารถ · Extra · หัก · เรียกเก็บ (+ ราคาขาย · กำไร ในฉบับภายใน)
+   สูตรเดียวกับตารางและใบวางบิล (เรต + extra − หัก · ขาย = คน × ขาย/คน) · รถนอกนับตามวันที่ใส่ไว้ (ไม่มีวันที่ = "ไม่ระบุวัน")
+   พิมพ์ได้สองฉบับเหมือนใบวางบิล: ส่งเจ้าของรถ (ไม่มีราคาขาย/กำไร) · ฉบับภายใน */
+function vbDayAgg(rows, extras, st, pier){
+  var D={}, ord=[], perDef=vbPerOf(st, pier);
+  var get=function(ds){ var k=ds||''; if(!D[k]){ D[k]={ds:k, trips:0, out:0, pax:0, ad:0, chd:0, inf:0, foc:0, base:0, ex:0, cut:0, bill:0, sale:0, vans:{}}; ord.push(k); } return D[k]; };
+  (rows||[]).forEach(function(r){
+    var m=(st.rows||{})[vbRowKey(r)]||{}, C=vbCode(r.routeId);
+    var rate=(m.rate!=null?m.rate:vbRateOf(C.c, st))||0, ex=+m.ex||0, cut=+m.cut||0, per=(m.per!=null?m.per:perDef)||0;
+    var g=get(r.date); g.trips++; if(!r.ret) g.out++; g.pax+=r.pax; g.ad+=(+r.ad||0); g.chd+=(+r.chd||0); g.inf+=(+r.inf||0); g.foc+=(+r.foc||0);
+    g.base+=rate; g.ex+=ex; g.cut+=cut; g.bill+=rate+ex-cut; g.sale+=r.pax*per; if(r.vanId) g.vans[r.vanId]=1;
+  });
+  (extras||[]).forEach(function(x){ var n=+x.van||0, g=get(x.date||'');
+    g.trips+=n; g.out+=n; g.pax+=(+x.pax||0); g.base+=n*(+x.rate||0); g.ex+=(+x.ex||0); g.cut+=(+x.cut||0);
+    g.bill+=n*(+x.rate||0)+(+x.ex||0)-(+x.cut||0); g.sale+=(+x.pax||0)*(+x.per||0); });
+  ord.sort(function(a,b){ return (a?0:1)-(b?0:1) || (a<b?-1:a>b?1:0); });
+  return ord.map(function(k){ return D[k]; });
+}
+function vbDayLbl(ds, long){ if(!ds) return 'ไม่ระบุวัน'; try{ return new Date(ds+'T00:00:00').toLocaleDateString('th-TH', long?{weekday:'long',day:'numeric',month:'short'}:{weekday:'short',day:'numeric',month:'short'}); }catch(_){ return ds; } }
 function vbRenderSheet(host){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var sups=vbSuppliers();
@@ -12815,6 +12835,18 @@ function vbRenderSheet(host){
       +'<div class="eq"><span>ค่ารถ '+T.van+' เที่ยว</span><b>'+vbB(T.bill-T.ex+T.cut)+'</b><span>+ Extra</span><b>'+vbB(T.ex)+'</b><span>− หัก</span><b>'+vbB(T.cut)+'</b></div>'
       +'<div class="eq t"><span>รวม</span><b>'+vbB(T.bill)+'</b></div>'
       +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่มีใครกรอก')+'</div></div></div>';
+  /* §vbDaily · สรุปรายวัน (ตามคันที่เลือกอยู่) */
+  var DY=vbDayAgg(rows, extras, st, pier), NN=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
+  var daily = DY.length ? ('<div class="vbx-dy"><div class="hh"><b>สรุปรายวัน</b><span>'+DY.length+' วัน · '+e(_vb.sup)+' · '+e(VB_PIER_SH[pier]||pier)+(_vb.van?(' · เฉพาะ '+e(vName(_vb.van))):'')+'</span><i></i>'
+      +'<button class="vbx-btn sm" onclick="vbPrint(1,1)" title="มีราคาขายและกำไร · ใช้ภายใน">ฉบับภายใน</button>'
+      +'<button class="vbx-btn sm pri" onclick="vbPrint(0,1)">&#128424; พิมพ์สรุปรายวัน</button></div>'
+    +'<table><thead><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th class="b">เรียกเก็บ</th><th>ราคาขาย</th><th>กำไร</th></tr></thead><tbody>'
+    + DY.map(function(g){ var gp=g.sale-g.bill;
+        return '<tr><td class="l">'+e(vbDayLbl(g.ds))+'</td><td>'+g.trips+'</td><td>'+g.pax+'</td><td>'+(g.out?(g.pax/g.out).toFixed(2):'—')+'</td><td>'+NN(g.base)+'</td>'
+          +'<td>'+(g.ex?NN(g.ex):'<span class="vbx-mut">—</span>')+'</td><td>'+(g.cut?('-'+NN(g.cut)):'<span class="vbx-mut">—</span>')+'</td><td class="b">'+NN(g.bill)+'</td>'
+          +'<td>'+NN(g.sale)+'</td><td style="color:'+(gp<0?'#B42318':'#0F7A4E')+';font-weight:700">'+vbB(gp).replace('฿','')+'</td></tr>'; }).join('')
+    +'<tr class="t"><td class="l">รวม</td><td>'+T.van+'</td><td>'+T.pax+'</td><td>'+avg.toFixed(2)+'</td><td>'+NN(T.bill-T.ex+T.cut)+'</td><td>'+NN(T.ex)+'</td><td>'+(T.cut?('-'+NN(T.cut)):'0')+'</td><td class="b">'+NN(T.bill)+'</td>'
+    +'<td>'+NN(T.sale)+'</td><td style="font-weight:800;color:'+(pl<0?'#B42318':'#0F7A4E')+'">'+vbB(pl).replace('฿','')+'</td></tr></tbody></table></div>') : '';
   var acts=ED?('<span class="vbx-dirty">&#9679; กำลังแก้ไข · ยังไม่บันทึก</span><button class="vbx-btn" onclick="vbCancel()">ยกเลิก</button>'
                +'<button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
     :('<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>'
@@ -12830,7 +12862,7 @@ function vbRenderSheet(host){
       +'<div style="flex:1;min-width:0"><div class="n">'+e(_vb.sup)+' <span class="vbx-pp" style="color:'+col+'">'+e(VB_PIER_LBL[pier]||pier)+'</span>'
       +'<span class="by">'+(st.by?(' · แก้ล่าสุด '+e(st.by)+(st.at?(' '+String(st.at).slice(0,10)):'')):'')+'</span></div>'
       +'<div class="vbx-vc">'+vchips+'</div></div>'+stPill+'</div>'
-    + rateStrip + kpi + table + sum
+    + rateStrip + kpi + table + sum + daily
     +'</div>';
   vbxBind(host);
   if(_vb.foc){ var _k=_vb.foc, _fv=_vb.focVal, _fs=_vb.focSel; _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
@@ -12911,7 +12943,7 @@ function renderVanBill(){
    สรุปรอบบิล = เอกสารภายใน (A4 แนวนอน) แยกก้อนตามท่า
    ใบวางบิล = ส่งให้เจ้าของรถเซ็น (A4 แนวตั้ง) · ต่อเจ้า ต่อท่า · ไม่มีราคาขาย/กำไร
    (ของเดิมพิมพ์ภาพหน้าจอ ซึ่งมีราคาขายและกำไรของเราติดไปด้วย) · ฉบับภายใน = มีราคาขาย/กำไร */
-function vbPrint(internal){
+function vbPrint(internal, daily){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var N=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
   var P=vbPeriod(), y=+_vb.ym.slice(0,4), mm=_vb.ym.slice(5,7);
@@ -13019,6 +13051,27 @@ function vbPrint(internal){
         +'<td>'+N(x.rate)+(n>1?(' ×'+n):'')+'</td><td>'+(+x.ex?N(x.ex):'—')+'</td><td>'+(+x.cut?('-'+N(x.cut)):'—')+'</td><td><b>'+N(bill)+'</b></td>'
         +(IN2?('<td>'+N(sale)+'</td><td class="'+((sale-bill)<0?'neg':'pos')+'">'+((sale-bill)<0?'-':'')+N(Math.abs(sale-bill))+'</td>'):'')+'</tr>'; });
     var pl=tsale-tb;
+    if(daily){   /* §vbDaily · ใบสรุปรายวัน · ทุกคันของเจ้านี้ที่ท่านี้ (เหมือนใบวางบิล) */
+      var DY=vbDayAgg(rows, extras, st, pier), TR=0, TO=0;
+      DY.forEach(function(g){ TR+=g.trips; TO+=g.out; });
+      var dcols=IN2?10:8;
+      html=head('สรุปรายวันค่ารถร่วม','DAILY SUMMARY · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
+        +'<div class="meta"><div style="grid-column:span 2"><i>เจ้าของรถ</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
+        +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
+        +'<div><i>อ้างอิงใบวางบิล</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+'</b></div></div>'
+        +'<table><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>เรียกเก็บ</th>'+(IN2?'<th>ราคาขาย</th><th>กำไร</th>':'')+'</tr>'
+        +(DY.length?DY.map(function(g,k){ var gp=g.sale-g.bill;
+            return '<tr class="'+(k%2?'z':'')+'"><td class="l"><b>'+e(vbDayLbl(g.ds,1))+'</b><div class="sub">'+e(Object.keys(g.vans).map(function(id){ var v=(typeof vehGet==='function')?vehGet(id):null; return (v&&v.name)||id; }).join(' · '))+'</div></td>'
+              +'<td>'+g.trips+'</td><td>'+g.pax+'</td><td>'+(g.out?(g.pax/g.out).toFixed(2):'—')+'</td><td>'+N(g.base)+'</td><td>'+(g.ex?N(g.ex):'—')+'</td><td>'+(g.cut?('-'+N(g.cut)):'—')+'</td><td><b>'+N(g.bill)+'</b></td>'
+              +(IN2?('<td>'+N(g.sale)+'</td><td class="'+(gp<0?'neg':'pos')+'">'+(gp<0?'-':'')+N(Math.abs(gp))+'</td>'):'')+'</tr>'; }).join('')
+          :'<tr><td colspan="'+dcols+'" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
+        +'<tr class="tot"><td class="l">รวม '+DY.length+' วัน</td><td>'+TR+'</td><td>'+tpax+'</td><td>'+(TO?(tpax/TO).toFixed(2):'—')+'</td><td>'+N(tb-tex+tcut)+'</td><td>'+N(tex)+'</td><td>'+(tcut?('-'+N(tcut)):'0')+'</td><td>'+N(tb)+'</td>'
+        +(IN2?('<td>'+N(tsale)+'</td><td class="'+(pl<0?'neg':'pos')+'">'+(pl<0?'-':'')+N(Math.abs(pl))+'</td>'):'')+'</tr></table>'
+        +'<div class="words"><b>ยอดเรียกเก็บรวม (ตัวอักษร)</b> &nbsp; '+e(typeof pcBahtText==='function'?pcBahtText(tb):'')+'</div>'
+        +'<div class="note">เที่ยว = จำนวนคันที่วิ่ง (รวมขากลับ) · คน = ลูกค้าที่ขึ้นรถจริง · รายละเอียดทีละเที่ยวอยู่ในใบวางบิลเลขที่อ้างอิงด้านบน</div>'
+        +sig(['ผู้จัดทำ','ฝ่ายปฏิบัติการ'],['ผู้ตรวจสอบ',IN2?'ฝ่ายบัญชี':'เจ้าของรถ'],['ผู้อนุมัติ',''])
+        +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+' · สรุปรายวัน</span></div>';
+    } else
     html=head('ใบวางบิลค่ารถร่วม','BILLING NOTE · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
       +'<div class="meta"><div style="grid-column:span 2"><i>ผู้วางบิล (เจ้าของรถ)</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
       +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
@@ -13048,7 +13101,7 @@ function vbPrint(internal){
       +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+'</span></div>';
   }
   var w=window.open('','_blank'); if(!w) return;
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':('ใบวางบิล '+e(_vb.sup)))+'</title>'
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':((daily?'สรุปรายวัน ':'ใบวางบิล ')+e(_vb.sup)))+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
     +'<style>'+css+'</style></head><body>'+html+'</body></html>');
   w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 600);
@@ -13158,6 +13211,12 @@ function vbxCss(){
   +'.vbx-leg i{display:inline-block;width:14px;height:12px;border:1px solid #DDE1E6;background:#F6F8FB;vertical-align:-2px;margin-right:4px}'
   +'.vbx-leg i.w{background:#F8FCFF;border:1px dashed #9EC4E4}.vbx-leg i.ro{background:#fff}.vbx-leg i.sel{background:#E8F0FE;border:2px solid #1A73E8}'
   +'.vbx-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin-top:12px}'
+  +'.vbx-dy{margin-top:12px;border:1px solid #DCDFE6;border-radius:13px;background:#fff;padding:12px 14px}'   /* §vbDaily */
+  +'.vbx-dy .hh{display:flex;align-items:center;gap:10px;margin-bottom:8px}.vbx-dy .hh b{font-size:14px}.vbx-dy .hh span{font-size:12px;color:#5B6170}.vbx-dy .hh i{flex:1}'
+  +'.vbx-dy table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}'
+  +'.vbx-dy th{font-size:10.5px;font-weight:700;color:#5B6170;letter-spacing:.04em;text-align:right;padding:6px 10px;border-bottom:1px solid #DCDFE6;background:#F6F8FA}'
+  +'.vbx-dy td{text-align:right;padding:6px 10px;border-bottom:1px solid #EEF0F4}.vbx-dy .l{text-align:left}.vbx-dy .b{font-weight:800}'
+  +'.vbx-dy tr.t td{border-top:2px solid #0F1B3D;border-bottom:0;font-weight:800;background:#F6F8FA}'
   +'.vbx-cc{border:1px solid #DCDFE6;border-radius:13px;padding:11px 14px;background:#fff}'
   +'.vbx-cc .t{font-size:11px;font-weight:700;color:#5B6170}.vbx-cc .b{font-size:18px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}'
   +'.vbx-cc .s{font-size:11px;color:#8A8F9C;margin-top:2px}'
