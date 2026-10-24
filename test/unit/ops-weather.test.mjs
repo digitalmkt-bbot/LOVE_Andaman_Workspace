@@ -376,3 +376,20 @@ test('reschedule refused when the booking has another trip that day: the server 
   assert.equal(rt.SB_BOOKINGS[0].weatherResolve.status, 'notified');
   assert.match(rt.failures[0].message, /other trip/);
 });
+
+test('a re-opened trip: its resolved follow-up is kept for bookings that arrive after the weather list (followUpOf), the open ones are not', async () => {
+  const reopened = { ...ROW_WX1, reopened_at: '2026-10-06T01:00:00.000Z', counts: { awaiting: 0, notified: 0, resolved: 1 },
+    bookings: [followUp({ booking_id: 'BK-R', status: 'resolved', outcome: 'cancel', resolved_by: 'ann', resolved_at: '2026-10-05T09:00:00.000Z' }), followUp({ booking_id: 'BK-N', status: 'notified' })] };
+  const rt = runtime({ answers: {
+    'GET /v1/weather-closures?from=2026-10-01&to=2026-10-31': { closures: [] },
+    'GET /v1/weather-closures?from=2026-10-01&to=2026-10-31&include_reopened=true': { closures: [{ ...ROW_WX1, reopened_at: reopened.reopened_at, counts: reopened.counts }] },
+    'GET /v1/weather-closures/wx_1': reopened,
+  } });
+  const W = rt.window.laOps.weather;
+  assert.equal(W.followUpOf('BK-R'), null);                    // nothing yet
+  await W.load('2026-10-01', '2026-10-31');
+  await new Promise((r) => setTimeout(r, 10));                 // the detail read of the re-opened trip
+  const wr = A(W.followUpOf('BK-R'));
+  assert.equal(wr.status, 'resolved'); assert.equal(wr.outcome, 'cancel'); assert.equal(wr.event, 'r10|2026-10-05');
+  assert.equal(W.followUpOf('BK-N'), null);                    // an unresolved one went back to normal
+});

@@ -534,6 +534,7 @@
     if(ob.foc_reason) bk.focReason = String(ob.foc_reason);    // focApproval.reason (focFrom) and legacy's FOC approval screen read it after a reload
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);
+    if(!bk.weatherResolve && O.weather && O.weather.followUpOf && ob.id){ var wr = O.weather.followUpOf(ob.id); if(wr) bk.weatherResolve = wr; }   // a re-opened trip's resolved follow-up (the weather list is read before the day's bookings arrive)
     return bk;
   }
 
@@ -552,6 +553,7 @@
     delete bk.srvAddonOnly;      // §w7a · same for the drop-off reading and the add-on-only flag (order lines stay: the siblings do not change with this booking)
     Object.keys(fresh).forEach(function(k){ bk[k] = fresh[k]; });
     Object.assign(bk, keep);
+    if(!bk.weatherResolve && O.weather && O.weather.followUpOf && ob.id){ var wr = O.weather.followUpOf(ob.id); if(wr) bk.weatherResolve = wr; }
     if(vans) O.vans.put(bk, vans);
     // §opsApprovals · the local copy stays only where the server has no entry of that kind
     approvalsInto(bk, ob, { approval: keep.approval, focApproval: keep.focApproval });
