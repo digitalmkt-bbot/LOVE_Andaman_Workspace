@@ -115,6 +115,18 @@
      the server keeps those rows, but the open-closure list does not carry them, so after a reload the bookings showed none.
      The re-opened closures with resolved rows are read once each and only their follow-ups are mirrored (never put back as closures). */
   var reopenedSeen = {};
+  /* The resolved follow-ups of re-opened trips, by booking id: the weather list is read at boot, before a day's bookings are on screen,
+     so a booking that arrives later takes its follow-up from here (40-ops-bookings fromServer / mergeInto). */
+  var keptFollowUps = {};
+  function keepFollowUps(d){
+    if(!d || !d.reopened_at) return;
+    var key = d.route_id + '|' + d.service_date;
+    (d.bookings || []).forEach(function(r){
+      if(r && r.status === 'resolved') keptFollowUps[r.booking_id] = { event: key, status: r.status, outcome: r.outcome || undefined,
+        newDate: r.new_date || undefined, newRoute: r.new_route_id || undefined, by: r.resolved_by || undefined, notifiedAt: r.notified_at || undefined, resolvedAt: r.resolved_at || undefined };
+    });
+  }
+  function followUpOf(bookingId){ var w = keptFollowUps[bookingId]; return w ? Object.assign({}, w) : null; }
   var reopenedAsked = {};
   function keepResolvedOfReopened(from, to){
     if(reopenedAsked[from + '|' + to]) return;           // once per window and session; a write drops it (below)
@@ -123,7 +135,7 @@
       listRows(j).forEach(function(r){
         if(!r || !r.id || !r.reopened_at || reopenedSeen[r.id] || !(r.counts && r.counts.resolved > 0)) return;
         reopenedSeen[r.id] = 1;
-        O.get('/v1/weather-closures/' + enc(r.id)).then(function(d){ syncFollowUps(d); redrawBooking(); }, function(){ delete reopenedSeen[r.id]; });
+        O.get('/v1/weather-closures/' + enc(r.id)).then(function(d){ keepFollowUps(d); syncFollowUps(d); redrawBooking(); }, function(){ delete reopenedSeen[r.id]; });
       });
     }, function(){});
   }
@@ -330,7 +342,7 @@
       if(r.declined) return null;
       removeLocal(c.opsId);
       // resolved bookings keep their follow-up (outcome, new date) the way legacy keeps bk.weatherResolve; refresh it from the server's rows
-      refreshDetail(c.opsId).catch(function(){}).then(function(){ removeLocal(c.opsId); redrawBooking(); });
+      refreshDetail(c.opsId).catch(function(){}).then(function(d){ keepFollowUps(d); removeLocal(c.opsId); redrawBooking(); });
       // the server deleted the follow-up of every unresolved booking on this trip
       bookingList().forEach(function(bk){ if(bk && bk.weatherResolve && bk.weatherResolve.event === key && bk.weatherResolve.status !== 'resolved') delete bk.weatherResolve; });
       O.wrote('weather'); closeModal(); redrawOp(); redrawBooking();
@@ -748,5 +760,5 @@
   if(typeof O.onWrite === 'function') O.onWrite(function(){ tg.cache = {}; reopenedAsked = {}; hist.cache = {}; below.at = 0; });
 
   O.weather = { load: load, refreshDetail: refreshDetail, mapClosure: mapClosure, listRows: listRows,
-                syncFollowUps: syncFollowUps, closureIdFor: closureIdFor };
+                syncFollowUps: syncFollowUps, followUpOf: followUpOf, closureIdFor: closureIdFor };
 })();
