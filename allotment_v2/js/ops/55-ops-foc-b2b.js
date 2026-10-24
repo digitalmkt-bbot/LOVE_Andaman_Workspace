@@ -68,7 +68,9 @@
   function viewIs(v){ try{ return O.activeView() === v; }catch(_){ return false; } }
 
   /* ════ FOC Detail · trips in [today−90d .. today+30d] ════ */
-  var FOC_BACK = 89, FOC_FWD = 30;
+  /* legacy ranks every booking ever made (all-time FOC pax, agents and value); a 120-day window showed 490 FOC pax against lk's 652.
+     So the window is the whole history; the first open pages it in once (limit 500), later opens read the cached range. */
+  var FOC_BACK = 3650, FOC_FWD = 400;
   function focWindow(){ var t = O.today(); return { from: O.shift(t, -FOC_BACK), to: O.shift(t, FOC_FWD) }; }
   function tripIn(b, from, to){
     return !!b && (b.trips || []).some(function(t){ var d = t && iso(t.date); return d && d >= from && d <= to; });
@@ -79,9 +81,8 @@
       var el = document.createElement('div');
       el.id = 'foc-ops-period';
       el.style.cssText = 'margin:0 0 10px;padding:8px 14px;border-radius:10px;background:#EDF4FB;color:#1B5E96;font-size:11.5px;font-weight:600';
-      el.textContent = 'Period: trips ' + w.from + ' - ' + w.to + ' (last 90 days + next 30)'
-        + (loading ? ' - loading from operation-backend...' : '')
-        + ' - all-time totals need a server summary endpoint';
+      if(!loading) return;          // the whole history is shown: legacy has no period line, only a note while the rest is still coming in
+      el.textContent = 'Loading every booking from operation-backend... the totals fill in when it lands';
       host.insertBefore(el, host.firstChild);
     }catch(_){}
   }

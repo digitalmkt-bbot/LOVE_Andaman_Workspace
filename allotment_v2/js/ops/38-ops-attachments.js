@@ -71,7 +71,7 @@
     }
   }
   function observe(){ scan(document); new MutationObserver(function(ms){ ms.forEach(function(m){ Array.prototype.forEach.call(m.addedNodes,scan); }); }).observe(document.documentElement,{childList:true,subtree:true}); }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',observe); else observe();
+  (window.laDomReady||function(f){f()})(observe);   // §domReady
 
   /* ---- Print windows, OCR and project documents ------------------------------------
      Print sheets write HTML into a new window with /api/attach/<id> URLs, and Tesseract
@@ -334,5 +334,5 @@
     }; });
   })();
   installPrint(); installFleetDocs();
-  window.laOpsAttachments={ idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
+  window.laOpsAttachments={ syncSlipView:syncSlipView, idsIn:idsIn, rewriteHtml:rewriteHtml, legacyReply:legacyReply, upload:upload, remove:remove, blob:blob, viewAttr:viewAttr, viewUrl:viewUrl, scan:scan, responseJson:json };
 })();

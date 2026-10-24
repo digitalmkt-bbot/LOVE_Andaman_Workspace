@@ -118,12 +118,18 @@
       if(num(m.crew) !== null) o.pay_ws_min_crew = +m.crew;
     }
     o.display = displayView();
+    /* the Park Tickets calculation table (legacy PIER_CFG.parkPrice, pkPriceSet): { ticket type: baht per head }, sent whole; the screen holds the prices as text */
+    var pp = {}, src = c.parkPrice;
+    if(src && typeof src === 'object') Object.keys(src).forEach(function(k){ var n = num(src[k]); if(n !== null && n >= 0) pp[k] = +n; });
+    o.park_price = pp;
     return o;
   }
   function applySettings(s){
     setSrv = s; var c = cfg();
     SET_KEYS.forEach(function(k){ c[k[0]] = s[k[1]] == null ? '' : s[k[1]]; });
     c.payWsMin = { cap: s.pay_ws_min_cap, crew: s.pay_ws_min_crew };
+    var pp = (s.park_price && typeof s.park_price === 'object') ? s.park_price : {};
+    c.parkPrice = {}; Object.keys(pp).forEach(function(k){ c.parkPrice[k] = String(pp[k]); });
     var dsp = (s.display && typeof s.display === 'object') ? s.display : {};
     DISPLAY_KEYS.forEach(function(k){ if(dsp[k] && typeof dsp[k] === 'object') c[k] = clone(dsp[k]); else delete c[k]; });
     setBase = setView();
@@ -143,6 +149,41 @@
     commit: function(){ if(setBase) setBase = setView(); }
   });
   P.afterLoad(function(){ return O.get('/v1/pier-office/settings').then(applySettings); });
+
+  /* The park ticket price table (pkPriceSet, Park Tickets): the settings plan above only runs once the Pier Office settings have been read,
+     and the Park Tickets screen never reads them, so a typed price stayed in the browser. It is sent on its own, the whole table (the server's
+     contract), a moment after the last keystroke; the server's answer is what is kept. */
+  (function(){
+    var orig = window.pkPriceSet, t = null;
+    if(typeof orig !== 'function' || orig.__opsPk) return;
+    var w = function(k, v){
+      var r = orig.apply(this, arguments);
+      if(!O.enabled()) return r;
+      clearTimeout(t);
+      t = setTimeout(function(){
+        var pp = {}, src = cfg().parkPrice;
+        if(src && typeof src === 'object') Object.keys(src).forEach(function(x){ var n = num(src[x]); if(n !== null && n >= 0) pp[x] = +n; });
+        O.queue(function(){ return O.call('PATCH', '/v1/pier-office/settings', { park_price: pp }); }).then(function(s){
+          if(setBase && s && s.park_price) setBase.park_price = JSON.parse(JSON.stringify(s.park_price));
+        }, function(e){ O.fail('Park ticket price not saved', e); });
+      }, 600);
+      return r;
+    };
+    w.__opsPk = true; window.pkPriceSet = w;
+    // and the table is read when Park Tickets opens, for the same reason (nothing else on that screen asks for the settings)
+    var origRender = window.renderPierPark, asked = false;
+    if(typeof origRender === 'function' && !origRender.__opsPkRead){
+      var wr = function(){
+        var r = origRender.apply(this, arguments);
+        if(O.enabled() && !asked && !setSrv){
+          asked = true;
+          O.get('/v1/pier-office/settings').then(function(s){ applySettings(s); if(typeof window.renderPierPark === 'function' && O.activeView && /^pok-/.test(O.activeView() || '')) window.renderPierPark(); }, function(){ asked = false; });
+        }
+        return r;
+      };
+      wr.__opsPkRead = true; window.renderPierPark = wr;
+    }
+  })();
 
   /* ════ licence types, classes, licences ══════════════════════════════ */
   P.listSpec({

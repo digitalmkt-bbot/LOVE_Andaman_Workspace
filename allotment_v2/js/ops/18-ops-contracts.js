@@ -199,7 +199,8 @@
       .catch(function(e){state.templates.failed=true;state.templates.loaded=false;var m=listTemplates();Object.keys(m).forEach(function(k){delete m[k];});O.fail('Could not load contract templates',e);return false;})
       .finally(function(){state.templates.loading=null;}); return state.templates.loading;
   }
-  function templateWrite(id,body){return O.queue(function(){return O.patch('/v1/contract-templates/'+enc(id),body);}).then(function(row){replaceTemplate(row);redraw();return row;});}
+  /* quiet = a keystroke save: refresh only the live preview (as legacy's cttSetText does), never rebuild the page under the cursor */
+  function templateWrite(id,body,quiet){return O.queue(function(){return O.patch('/v1/contract-templates/'+enc(id),body);}).then(function(row){replaceTemplate(row);if(quiet){try{if(typeof cttPreview==='function')cttPreview();}catch(_){}}else redraw();return row;});}
   function templateEdit(id,key,value){
     var t=listTemplates()[id];if(!t)return;var next=clone(t);next[key]=value;return templateWrite(id,templateBody(next)).catch(function(e){O.fail('Could not save contract template',e);});
   }
@@ -212,7 +213,7 @@
     if(typeof originals.ctTmplPersist==='function') window.ctTmplPersist=function(){if(!enabled())return originals.ctTmplPersist.apply(this,arguments);};
     if(typeof originals.cttNew==='function') window.cttNew=function(){if(!enabled())return originals.cttNew.apply(this,arguments);var base=Object.values(listTemplates()).find(function(x){return x.isDefault&&x.active;})||Object.values(listTemplates())[0]||{};var t={code:'',name:'Template ใหม่',active:true,note:'',form:base.form||'ocean',accent:base.accent||'navy',accentHex:base.accentHex||'',font:base.font||'manrope',sections:clone(base.sections||{}),text:clone(base.text||{en:{},th:{}})};return O.queue(function(){return O.post('/v1/contract-templates',templateBody(t));}).then(function(row){var x=replaceTemplate(row);try{_cttSel=x.id;_cttEdit=true;}catch(_){}redraw();}).catch(function(e){O.fail('Could not create contract template',e);});};
     if(typeof originals.cttSetField==='function') window.cttSetField=function(id,k,v){if(!enabled())return originals.cttSetField.apply(this,arguments);return templateEdit(id,k,v);};
-    if(typeof originals.cttSetText==='function') window.cttSetText=function(id,key,lang,v){if(!enabled())return originals.cttSetText.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;t.text=t.text||{en:{},th:{}};var L=lang==='th'?'th':'en';t.text[L]=t.text[L]||{};var kind='text';try{if(typeof CT_TMPL_GROUPS!=='undefined')CT_TMPL_GROUPS.forEach(function(g){(g.keys||[]).forEach(function(x){if(x.k===key)kind=x.type||'text';});});}catch(_){}t.text[L][key]=kind==='list'?String(v||'').split('\\n').map(function(s){return s.trim();}).filter(Boolean):v;return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not save contract template text',e);});};
+    if(typeof originals.cttSetText==='function') window.cttSetText=function(id,key,lang,v){if(!enabled())return originals.cttSetText.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;t.text=t.text||{en:{},th:{}};var L=lang==='th'?'th':'en';t.text[L]=t.text[L]||{};var kind='text';try{if(typeof CT_TMPL_GROUPS!=='undefined')CT_TMPL_GROUPS.forEach(function(g){(g.keys||[]).forEach(function(x){if(x.k===key)kind=x.type||'text';});});}catch(_){}t.text[L][key]=kind==='list'?String(v||'').split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean):v;return templateWrite(id,templateBody(t),true).catch(function(e){O.fail('Could not save contract template text',e);});};
     if(typeof originals.cttSetForm==='function') window.cttSetForm=function(id,v){if(!enabled())return originals.cttSetForm.apply(this,arguments);return templateEdit(id,'form',v);};
     if(typeof originals.cttSetAccent==='function') window.cttSetAccent=function(id,v){if(!enabled())return originals.cttSetAccent.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;t.accent=v;t.accentHex='';return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not save template accent',e);});};
     if(typeof originals.cttSetHex==='function') window.cttSetHex=function(id,v){if(!enabled())return originals.cttSetHex.apply(this,arguments);return templateEdit(id,'accentHex',/^#[0-9a-fA-F]{6}$/.test(v||'')?v:'');};
@@ -222,6 +223,17 @@
     if(typeof originals.cttToggleActive==='function') window.cttToggleActive=function(id){if(!enabled())return originals.cttToggleActive.apply(this,arguments);var t=listTemplates()[id];if(!t)return;return templateEdit(id,'active',!t.active);};
     if(typeof originals.cttDelete==='function') window.cttDelete=function(id){if(!enabled())return originals.cttDelete.apply(this,arguments);var t=listTemplates()[id];if(!t||!confirm('Delete contract template "'+t.name+'"?'))return;return O.queue(function(){return O.del('/v1/contract-templates/'+enc(id));}).then(function(){delete listTemplates()[id];countsStale=true;redraw();}).catch(function(e){O.fail('Could not delete contract template',e);});};
     if(typeof originals.cttResetKey==='function') window.cttResetKey=function(id,key,lang){if(!enabled())return originals.cttResetKey.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;var L=lang==='th'?'th':'en',v=typeof CT_DOC_I18N!=='undefined'&&CT_DOC_I18N[L]&&CT_DOC_I18N[L][key];if(v===undefined)return;t.text=t.text||{en:{},th:{}};t.text[L]=t.text[L]||{};t.text[L][key]=clone(v);return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not reset contract template text',e);});};
+    /* oninput handlers: one save per pause in typing (600 ms) with the latest value, not one write per keystroke */
+    ['cttSetText','cttSetHex'].forEach(function(n){
+      var f=window[n]; if(typeof f!=='function') return;
+      var timers={};
+      window[n]=function(){
+        if(!enabled()) return f.apply(this,arguments);
+        var args=[].slice.call(arguments), key=args.slice(0,-1).join('|'), self=this;
+        clearTimeout(timers[key]);
+        return new Promise(function(done){ timers[key]=setTimeout(function(){ delete timers[key]; done(f.apply(self,args)); },600); });
+      };
+    });
   }
 
   function escapeHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

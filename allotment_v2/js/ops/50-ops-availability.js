@@ -227,16 +227,18 @@
   })();
 
   var refreshT = null;
-  O.onWrite(function(){
+  // A remote change is handled by onChange below (only the windows it touches); only this tab's own write empties the cache.
+  O.onWrite(function(kind){
+    if(typeof kind === 'string' && kind.indexOf('remote:') === 0) return;
     clear();
     clearTimeout(refreshT);
     refreshT = setTimeout(redraw, 300);       // the redraw asks again for what it shows
   });
-  /* other users' writes · refetch what's cached, redraw only if a number moved (a redraw for
-     nothing can still cost someone their scroll position on the heavier screens) */
-  function refreshQuiet(){
-    var starts = Object.keys(windows).filter(function(w){ return typeof windows[w] === 'number'; });
-    AL = {};
+  /* other users' writes · the change feed names the route-days a change touched; refetch only the loaded
+     windows that hold one of them (no timer: an idle tab asks for nothing), redraw only if a number moved */
+  var pendingStarts = {}, changeT = null;
+  var SEAT_KINDS = { booking:1, seat_lock:1, deployment:1, route:1, weather_closure:1, boat:1, config:1 };
+  function refreshWindows(starts){
     starts.forEach(function(w){
       O.get('/v1/availability', { from: w, to: O.shift(w, SPAN - 1) }).then(function(j){
         var moved = false;
@@ -250,7 +252,18 @@
       }).catch(function(){});
     });
   }
-  setInterval(function(){ if(O.enabled() && O.state.loaded && !document.hidden) refreshQuiet(); }, 120000);
+  O.onChange(function(change){
+    if(!change || !SEAT_KINDS[change.kind]) return;
+    var loaded = Object.keys(windows).filter(function(w){ return typeof windows[w] === 'number'; });
+    var days = Array.isArray(change.route_days) ? change.route_days : null;
+    var starts = days ? loaded.filter(function(w){ var to = O.shift(w, SPAN - 1); return days.some(function(d){ return d && d.service_date >= w && d.service_date <= to; }); }) : loaded;
+    if(!starts.length) return;
+    AL = {};
+    // a burst of changes (an import, a bulk lock) asks for each window once, a moment after the last one
+    starts.forEach(function(w){ pendingStarts[w] = 1; });
+    clearTimeout(changeT);
+    changeT = setTimeout(function(){ var list = Object.keys(pendingStarts); pendingStarts = {}; refreshWindows(list); }, 1500);
+  });
 
   O.availability = { ensure: ensure, get: cached, calRows: calRowsFor, put: put, clear: clear, preload: function(){ var t = O.today(); ensure(t); ensure(O.shift(windowStart(t), SPAN)); } };
 })();

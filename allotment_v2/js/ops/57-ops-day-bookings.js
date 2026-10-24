@@ -96,6 +96,13 @@
     return afterDays(orig, this, args, uniq([d]), function(){ return ymd(poDate()) === d; });
   });
 
+  /* Park tickets (renderPierPark, _poDate) · its boats and the people on them come from the day's bookings: with none loaded it said
+     "no boats today" (Panwa) or listed one boat of five (Tub Lamu) while lk showed them all */
+  wrap('renderPierPark', function(orig){
+    var d = ymd(poDate()), args = [].slice.call(arguments, 1);
+    return afterDays(orig, this, args, uniq([d]), function(){ return ymd(poDate()) === d; });
+  });
+
   /* Seat lock page · a lock's audit reads the bookings that name it; a day lock names one date */
   wrap('bookingV2LockManageOpen', function(orig, id){
     var args = [].slice.call(arguments, 1), L = null;

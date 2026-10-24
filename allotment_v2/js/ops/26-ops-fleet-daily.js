@@ -355,7 +355,7 @@
     if(state.loaded && !force) return Promise.resolve(true);
     if(state.loading) return state.loading;
     state.loading = Promise.all([
-      O.get('/v1/fleet/projects'),
+      O.get('/v1/fleet/projects', { include: 'log' }),
       O.get('/v1/fleet/safety'),
       O.get('/v1/fleet/fuel-budgets').catch(function(){ return { budgets: [] }; }),
       O.get('/v1/fleet/safety-categories').catch(function(){ return { categories: [] }; }),
@@ -378,6 +378,7 @@
       }
       state.loaded = true;
       state.failed = false;
+      autoProjects();
       return true;
     }).catch(function(e){
       state.failed = true;
@@ -389,9 +390,41 @@
     return state.loading;
   }
 
+  /* Fuel intelligence reads the month it shows and the six before it (FL_DAILY and the bookings of those days); the first load holds the last
+     14 days only, so the screen drew its header and nothing else. Each month window is asked once, then the screen is drawn again. */
+  var fuelAsked = {};
+  wrap('renderFuelIntel', function(orig){
+    var r = orig.apply(this, [].slice.call(arguments, 1));
+    try{
+      var m = typeof _fuelMonth === 'string' ? _fuelMonth : '';
+      if(!enabled() || !/^\d{4}-\d{2}$/.test(m)) return r;
+      var d0 = new Date(+m.slice(0, 4), +m.slice(5, 7) - 7, 1), d1 = new Date(+m.slice(0, 4), +m.slice(5, 7), 0);
+      var from = O.ymd(d0), to = O.ymd(d1), k = from + '|' + to;
+      if(fuelAsked[k]) return r;
+      fuelAsked[k] = 1;
+      var books = typeof window.bookingV2EnsureOpsRange === 'function' ? window.bookingV2EnsureOpsRange({ from: from, to: to }) : null;
+      Promise.all([loadDailyWindow(from, to).catch(function(){ return null; }), Promise.resolve(books).catch(function(){ return null; })]).then(function(){
+        if(O.activeView() === 'fl-fuel' && !(O.busy && O.busy()) && typeof window.renderFuelIntel === 'function') window.renderFuelIntel();
+      });
+    }catch(_){}
+    return r;
+  });
+
+  /* legacy flProjAutoCreateForScheduledMJs runs on every load: a scheduled job with no project is linked to the boat's
+     overlapping open project or gets its own "Scheduled · boat · title" one. The server does it (POST …/projects/auto-create);
+     once per session, a login that cannot write fleet data is simply refused and ignored */
+  var autoSwept = false;
+  function autoProjects(){
+    if(autoSwept) return; autoSwept = true;
+    O.post('/v1/fleet/projects/auto-create', {}).then(function(r){
+      if(!r || !((r.created || 0) + (r.linked || 0))) return;
+      return refetchAfterProjectCascade(null);
+    }).catch(function(){});
+  }
+
   function refetchAfterProjectCascade(boatId){
     var tasks = [
-      O.get('/v1/fleet/projects').then(function(r){ replaceProjects((r && r.projects) || []); })
+      O.get('/v1/fleet/projects', { include: 'log' }).then(function(r){ replaceProjects((r && r.projects) || []); })
     ];
     if(O.fleetJobs && typeof O.fleetJobs.load === 'function'){
       tasks.push(O.fleetJobs.load().catch(function(){}));
@@ -786,7 +819,9 @@
     var name = d('fl-proj-name') ? d('fl-proj-name').value.trim() : '';
     var planFrom = d('fl-proj-from') ? d('fl-proj-from').value : '';
     if(!name){ alert('Project name is required'); return null; }
+    if(d('fl-proj-boat') && !d('fl-proj-boat').value){ alert('Select a boat, or choose General (non-vessel project)'); return null; }
     if(!planFrom){ alert('Planned start is required'); return null; }
+    if(d('fl-proj-to') && d('fl-proj-to').value && d('fl-proj-to').value < planFrom){ alert('Planned end must be after start'); return null; }
     var projects = listProjects();
     var maxNo = projects.reduce(function(mx, p){
       var n = parseInt(String((p && p.no) || '').replace(/^PRJ-/, ''), 10) || 0;
@@ -899,6 +934,7 @@
       return null;
     }
     if(typeof window.flProjBillClose_ === 'function') window.flProjBillClose_();
+    if(!completeConfirm(id)) return null;      // legacy: the no-cost choice ends in flProjMarkComplete, which asks
     return runProjectCmd(id, 'complete', { no_cost_reason: reason }, 'Could not complete project');
   });
 
@@ -927,6 +963,8 @@
   });
 
   wrap('flProjBillBack', function(orig, id){
+    var bp = listProjects().find(function(x){ return x && x.id === id; });
+    if(bp && !confirm('ดึง ' + bp.no + ' กลับมาทำต่อ?\n\nเรือจะถูกกันออกจากตารางวิ่งอีกครั้ง\nMJ ที่ปิดไปแล้วไม่ถูกเปิดคืนให้เอง')) return null;
     return runProjectCmd(id, 'bill-back', {}, 'Could not return project to work');
   });
 
@@ -937,15 +975,19 @@
     return O.get('/v1/fleet/projects/' + enc(id)).then(function(res){ return upsertProject(res); });
   }
 
+  /* legacy flProjMarkComplete's confirm (also the last step of the no-cost close) */
+  function completeConfirm(id){
+    var kids = typeof window.flProjChildMJs === 'function' ? window.flProjChildMJs(id).filter(function(m){ return m.status !== 'done'; }) : [];
+    var msg = kids.length
+      ? 'Mark project complete?\n\nThis will:\n- Close ' + kids.length + ' open child MJ(s)\n- Set boat status → available\n- Set project status → completed\n\nContinue?'
+      : 'Mark project complete?\n\nThis will set boat status → available and project status → completed.';
+    return confirm(msg);
+  }
   wrap('flProjMarkComplete', function(orig, id){
     return freshProject(id).then(function(p){
       if(p.status === 'completed'){ if(typeof window.flShowToast === 'function') window.flShowToast('Already completed'); return null; }
       if(p.billGate && !p.billGate.ok && typeof window.flProjBillAsk === 'function'){ window.flProjBillAsk(id); return null; }
-      var kids = typeof window.flProjChildMJs === 'function' ? window.flProjChildMJs(id).filter(function(m){ return m.status !== 'done'; }) : [];
-      var msg = kids.length
-        ? 'Mark project complete?\n\nThis will:\n- Close ' + kids.length + ' open child MJ(s)\n- Set boat status → available\n- Set project status → completed\n\nContinue?'
-        : 'Mark project complete?\n\nThis will set boat status → available and project status → completed.';
-      if(!confirm(msg)) return null;
+      if(!completeConfirm(id)) return null;
       return runProjectCmd(id, 'complete', {}, 'Could not complete project');
     }).catch(function(e){ O.fail('Could not complete project', e); return null; });
   });
@@ -1032,7 +1074,7 @@
     if(kind.indexOf('fleet-job') !== 0 && kind.indexOf('fleet-memo') !== 0 && kind.indexOf('fleet-incident') !== 0) return;
     clearTimeout(projRefreshTimer);
     projRefreshTimer = setTimeout(function(){
-      O.get('/v1/fleet/projects').then(function(r){
+      O.get('/v1/fleet/projects', { include: 'log' }).then(function(r){
         replaceProjects((r && r.projects) || []);
         redrawDailyAndProjects();
       }).catch(function(){});
@@ -1078,6 +1120,9 @@
   });
 
   wrap('flProjDeletePlanItem', function(orig, projId, itemId){
+    var dp = listProjects().find(function(x){ return x && x.id === projId; });
+    var di = dp && (dp.plan || []).find(function(x){ return x && x.id === itemId; });
+    if(di && !confirm('Delete plan item: ' + (di.text || '') + '?')) return null;
     return O.queue(function(){
       return O.del('/v1/fleet/projects/' + enc(projId) + '/plan/' + enc(itemId));
     }).then(function(res){

@@ -269,6 +269,9 @@
                collect: x.collect, at: x.at, by: x.by || '' };
     });
     if(r.reschedules.length) r.reschedule = r.reschedules[r.reschedules.length - 1];
+    // legacy bk.rebook: set when the move came from a weather closure (the trip date moved, here is why)
+    var wxMove = r.reschedules.filter(function(x){ return x.reason === 'weather'; }).pop();
+    if(wxMove) r.rebook = { from: wxMove.fromDate, to: wxMove.toDate, reason: 'weather', at: wxMove.at };
     r.partialCancels = (ob.partial_cancels || []).map(function(x){
       var idx = (trips || []).findIndex(function(t){ return t.opsTripId === x.trip_id; });
       var waived = x.waived || { count: 0, amount: 0 };
@@ -505,7 +508,14 @@
     if(ob.drop && typeof ob.drop === 'object') bk.srvDrop = { separate: !!ob.drop.separate, name: ob.drop.name || '', selfReturn: !!ob.drop.self_return };
     /* nationality is what was recorded (the only one sent back); nationalityEffective is the server's reading, the passenger's own
        else the lead's (README "Passengers"), for every screen that counts or shows a nationality. Never sent (toServer), never guessed here. */
-    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc }; });
+    bk.passengers = (ob.passengers || []).map(function(p){ return { name: p.name, nationality: p.nationality || '', nationalityEffective: p.nationality_effective || '', type: p.type || 'AD', foc: !!p.foc,
+      age: p.age != null ? p.age : null, insuranceReviewedAt: p.insurance_reviewed_at || null, insuranceReviewedBy: p.insurance_reviewed_by || null,
+      insuranceFirstName: p.insurance_first_name || null, insuranceLastName: p.insurance_last_name || null, insuranceNat: p.insurance_nationality || null }; });
+    /* insurance ages are the server's (PUT /insurance) · read here so insEff/insOv see them after a reload; never sent back (toServer) */
+    bk.leadAge = ob.lead_age != null ? ob.lead_age : null;      // a cleared age is left off the answer
+    bk.leadInsuranceFirstName = ob.lead_insurance_first_name || null; bk.leadInsuranceLastName = ob.lead_insurance_last_name || null; bk.leadInsuranceNat = ob.lead_insurance_nationality || null;
+    if(ob.lead_insurance_reviewed_at !== undefined) bk.leadInsuranceReviewedAt = ob.lead_insurance_reviewed_at;
+    if(ob.lead_insurance_reviewed_by !== undefined) bk.leadInsuranceReviewedBy = ob.lead_insurance_reviewed_by;
     bk.addOns = (ob.add_ons || []).map(function(a){
       var o = { type: a.type, label: a.label || '', amount: +a.amount || 0, qty: a.qty != null ? a.qty : 1, note: a.note || '' };
       if(a.join_adults !== undefined) o.jAd = a.join_adults; if(a.join_children !== undefined) o.jChd = a.join_children;
@@ -521,6 +531,7 @@
     if(typeof ob.addon_only === 'boolean') bk.srvAddonOnly = ob.addon_only;
     if(Array.isArray(ob.order_lines)) bk.srvOrderLines = ob.order_lines.map(function(x){ return fromServer(x); });
     Object.assign(bk, records(ob, bk.trips));
+    if(ob.foc_reason) bk.focReason = String(ob.foc_reason);    // focApproval.reason (focFrom) and legacy's FOC approval screen read it after a reload
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);
     return bk;
@@ -532,7 +543,7 @@
     var fresh = fromServer(ob);
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
-    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'weatherResolve', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count
@@ -794,12 +805,12 @@
       return function(){ return O.bookingWrite('POST', B(bk) + '/' + kind, bk, note ? { note: note } : {}); };
     };
   }
-  // the cancellation-fee invoice is voided only once /restore went through · a refused restore
-  // (route_closed, a charter boat taken meanwhile…) leaves it as it was
+  // the server voids the cancellation-fee invoice inside /restore (a refused restore leaves it as it was),
+  // so legacy's acctVoidInvoice is not run afterwards: on the voided invoice it answers 409 invoice_void
   tx('bookingV2RestoreBooking', function(bk, was){
     if(bk.status === was.status || RELEASED.indexOf(was.status) < 0) return null;
     return function(){ return O.bookingWrite('POST', B(bk) + '/restore', bk, {}); };
-  }, ['acctVoidInvoice']);
+  });
   tx('bookingV2ApproveBooking', command('approve'));
   tx('bookingV2RejectBooking', command('reject', function(bk){ return bk.approval && bk.approval.note; }));
   // FOC approval needs the reason on the booking; one typed at the prompt is saved there first
@@ -949,14 +960,7 @@
     };
     w.__opsRender = true; window.bookingV2Render = w;
   })();
-  // other people's bookings show up on the open day without a reload
-  setInterval(function(){
-    try{
-      if(!O.enabled() || !O.state.loaded || document.hidden || O.activeView() !== 'booking') return;
-      var st = _bkV2;
-      if(st.tab === 'bytrip' && st.filterDate && !st.newBooking && !st.detailId) refreshDay(st.filterDate);
-    }catch(_){}
-  }, 60000);
+  // other people's bookings reach the open day through the change feed (O.onChange above); no timer
 
   /* ── pending approvals, any date · fetched only when the Approvals tab opens ── */
   var pendingAt=0, pendingBusy=null;

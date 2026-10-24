@@ -170,8 +170,12 @@
     if(section==='ratetype'){ method='PUT'; path+='/rate-type'; body={rate_type_id:nullable(d.rateTypeId)}; }
     if(!body) return;
     return write(method,path,body).catch(function(e){
-      if(section==='ratetype' && e.code==='unpriced_programs' && confirm('This rate has no price for existing programs. Remove those programs and continue?'))
-        return write('PUT',path,{rate_type_id:nullable(d.rateTypeId),drop_unpriced:true});
+      /* legacy keeps the programmes the new rate does not price (booking them stays blocked until it does); removing them is the
+         choice. So Cancel is "keep them", not "abandon the change": the rate type is changed either way. */
+      if(section==='ratetype' && e.code==='unpriced_programs'){
+        var drop=confirm('This rate has no price for some of the agent\'s existing programs.\n\nOK = remove those programs.\nCancel = keep them (they cannot be booked until the rate prices them).');
+        return write('PUT',path,{rate_type_id:nullable(d.rateTypeId),drop_unpriced:drop});
+      }
       throw e;
     }).then(function(row){ refreshAfter(id,row); if(typeof agEditClose==='function') agEditClose(); },function(e){ return fail('Could not save agent',e); });
   }
@@ -412,7 +416,7 @@
      which detects __ops and does not add its former read-only/detail wrapper. */
   if(typeof legacyDetail==='function'){
     var detail=function(id){
-      if(!enabled()) return legacyDetail.apply(this,arguments);
+      if(!enabled() || id==null || id==='') return legacyDetail.apply(this,arguments);   // no agent picked: nothing to fetch
       return fetchAgent(id).then(function(){ legacyDetail.call(this,id); }.bind(this),function(e){ fail('Could not load agent',e); });
     };
     detail.__ops=true; detail.__opsAgents=true; window.agRenderDetail=detail;
@@ -740,8 +744,8 @@
      The list does not carry it, the detail does. agCreditState is synchronous, so it answers from the server's
      credit when this agent's is in hand and fresh (any write drops it), and asks for it in the background
      otherwise; until it lands the legacy sum answers. */
-  var CREDIT_TTL=60000, creditAsk=Object.create(null);
-  function dropCredit(){ list().forEach(function(a){ if(a) delete a.serverCredit; }); creditAsk=Object.create(null); }
+  var CREDIT_TTL=60000, creditAsk=Object.create(null), creditAll=null;
+  function dropCredit(){ list().forEach(function(a){ if(a) delete a.serverCredit; }); creditAsk=Object.create(null); creditAll=null; }
   O.onWrite(dropCredit);
   if(typeof agCreditState==='function'){
     var legacyCredit=agCreditState;
@@ -751,9 +755,17 @@
       if(c && Date.now()-c.at<CREDIT_TTL) return { limit:c.limit, used:c.used, available:c.available, pct:c.pct, mode:a.payType||null, over:c.over };
       if(a && !creditAsk[agentId]){
         creditAsk[agentId]=true;
-        O.get('/v1/agents/'+enc(agentId)).then(function(s){
-          var m=current(agentId); if(m && s && s.credit) m.serverCredit=Object.assign({ at:Date.now() }, s.credit);
-        },function(){}).then(function(){ setTimeout(function(){ delete creditAsk[agentId]; }, CREDIT_TTL); });
+        // one read for every agent (GET /v1/agents/credit): the Accounting screen asks this for ~450 agents at once, which was ~450 detail requests
+        if(!creditAll){
+          creditAll=O.get('/v1/agents/credit').then(function(r){
+            ((r&&r.credits)||[]).forEach(function(c){ var m=current(c.agent_id); if(m) m.serverCredit={ at:Date.now(), limit:c.limit, used:c.used, available:c.available, pct:c.pct, over:c.over }; });
+            return true;
+          },function(){ return false; }).then(function(ok){
+            setTimeout(function(){ creditAll=null; creditAsk=Object.create(null); }, CREDIT_TTL);
+            if(ok && typeof window.renderAccounting==='function' && O.activeView && O.activeView()==='accounting' && !(O.busy&&O.busy())) try{ window.renderAccounting(); }catch(_){}
+            return ok;
+          });
+        }
       }
       return legacyCredit.apply(this,arguments);
     };

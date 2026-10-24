@@ -84,12 +84,12 @@
     var jobs = runsOf(need).map(function(run){
       var e = epoch, ds = [];
       for(var x = run.from; x <= run.to; x = O.shift(x, 1)) { ds.push(x); inflight[x] = e; }
-      return O.queue(function(){
-        return Promise.all([
-          O.get('/v1/fleet/availability', { from: run.from, to: run.to }),
-          O.get('/v1/fleet/boat-operation', { from: run.from, to: run.to, pier: 'all' })
-        ]);
-      }).then(function(res){
+      /* reads stay off O.queue (it serialises writes): a deployment save waited 18-25 s behind them.
+         A write that lands meanwhile bumps the epoch, so a stale answer is dropped below. */
+      return Promise.all([
+        O.get('/v1/fleet/availability', { from: run.from, to: run.to }),
+        O.get('/v1/fleet/boat-operation', { from: run.from, to: run.to, pier: 'all' })
+      ]).then(function(res){
         ds.forEach(function(d){ if(inflight[d] === e) delete inflight[d]; });
         if(e !== epoch) return false;               // a write came in meanwhile: the next draw asks again
         var av = {}, panels = {};

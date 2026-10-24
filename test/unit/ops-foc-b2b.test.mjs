@@ -65,8 +65,8 @@ const srv = (id, over = {}) => ({ id, status: 'confirmed', agent_id: 'ag1', trip
 
 // ── FOC Detail ───────────────────────────────────────────────────────────────
 
-test('FOC Detail loads its travel window and aggregates only that window', async () => {
-  const from = shift(TODAY, -89), to = shift(TODAY, 30);
+test('FOC Detail loads the whole history (legacy ranks every booking ever made) and aggregates what is loaded', async () => {
+  const from = shift(TODAY, -3650), to = shift(TODAY, 400);
   const rt = runtime({
     bookings: [
       sb('inWin', { trips: [{ date: TODAY, routeId: 'r1', pax: { foc: 2 } }] }),
@@ -80,16 +80,14 @@ test('FOC Detail loads its travel window and aggregates only that window', async
   rt.ctx.renderFocDetail();
   await rt.settle();
 
-  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings?from=' + from + '&to=' + to + '&limit=500'],
-    'the render asks the server for exactly the screen\'s window (limit 500: ~4k rows, 8 pages not 40)');
+  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings?from=' + from + '&to=' + to + '&limit=1000'],
+    'the render asks the server for exactly the screen\'s window (a page holds up to 1000 rows; the cache key has no page size)');
   assert.equal(rt.renders.renderFocDetail.length, 2, 'renders once now, once when the window arrives');
-  assert.deepEqual(rt.renders.renderFocDetail[0], ['inWin'], 'the first paint shows only cached in-window bookings');
-  assert.deepEqual(rt.renders.renderFocDetail[1].sort(), ['S1', 'S2', 'inWin'],
-    'the redraw sees the full window and never the out-of-window booking');
+  assert.deepEqual(rt.renders.renderFocDetail[0].sort(), ['inWin', 'outWin'], 'the first paint shows the cached bookings (both are within the history)');
+  assert.deepEqual(rt.renders.renderFocDetail[1].sort(), ['S1', 'S2', 'inWin', 'outWin'], 'the redraw sees everything that arrived');
   assert.deepEqual(rt.ctx.SB_BOOKINGS.map((b) => b.id).sort(), ['S1', 'S2', 'inWin', 'outWin'],
     'SB_BOOKINGS itself is restored after the swap (merge included)');
-  assert.ok(rt.host.firstChild && rt.host.firstChild.textContent.includes(from + ' - ' + to),
-    'the screen is labelled with the period it covers');
+  assert.ok(!rt.host.querySelector || !rt.host.querySelector('#foc-ops-period'), 'no period line once everything is shown (legacy has none)');
 });
 
 test('FOC Detail does not refetch a cached window and does not loop', async () => {

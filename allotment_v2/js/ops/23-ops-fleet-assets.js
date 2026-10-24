@@ -195,9 +195,9 @@
 
   function refetchChain(){
     return Promise.all([
-      O.get('/v1/fleet/engines'),
-      O.get('/v1/fleet/gearboxes'),
-      O.get('/v1/fleet/propellers')
+      O.get('/v1/fleet/engines', { include: 'log' }),
+      O.get('/v1/fleet/gearboxes', { include: 'log' }),
+      O.get('/v1/fleet/propellers', { include: 'log' })
     ]).then(function(res){
       replaceProjection(listEngines(), (res[0] && res[0].engines) || [], fromServerEngine);
       replaceProjection(listGearboxes(), (res[1] && res[1].gearboxes) || [], fromServerGearbox);

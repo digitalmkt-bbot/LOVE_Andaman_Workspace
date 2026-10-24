@@ -208,12 +208,15 @@
 
   function syntheticBookingForRow(r){
     var bk = findBooking(r.clientId || r.booking_id);
+    // the slip chip counts bk.paymentSlips, which was only rebuilt when the slip viewer opened (so it said 0): build it from the invoice payments and the booking's slips now
+    try{ if(bk && window.laOpsAttachments && window.laOpsAttachments.syncSlipView) window.laOpsAttachments.syncSlipView(bk.id); }catch(_){}
     var base = bk ? Object.assign({}, bk) : {
       id: r.clientId || r.booking_id,
       opsId: r.booking_id,
       opsVersion: r.version,
-      voucherRef: r.voucher_ref || r.booking_id,
-      code: r.voucher_ref || r.booking_id,
+      // a booking with no voucher shows its booking code, as legacy does; an imported booking's server id is its legacy code behind "lg_"
+      voucherRef: r.voucher_ref || String(r.booking_id || '').replace(/^lg_/, ''),
+      code: r.voucher_ref || String(r.booking_id || '').replace(/^lg_/, ''),
       agentId: r.agent_id,
       status: 'confirmed',
       total: r.total,

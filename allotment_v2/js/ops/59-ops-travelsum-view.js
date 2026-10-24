@@ -346,7 +346,12 @@
       var lb = (PMN[p.method] || p.method) + ' ' + money(p.amount), has = (p.slips || []).length > 0;
       h += '<div class="ts-slips" data-ops-ts-payslip="' + esc(p.id) + '">' + (has ? slipSeen(p.slips, lb) : '') + slipLabel(has, lb, 'p', r.id, p.id) + '</div>';
     });
-    (row.tour_sales || []).filter(function(s){ return s.settle === 'done' && !s.covered_by_pier && s.method !== 'cash' && s.method !== 'cot'; }).forEach(function(s){
+    /* §exDupPier · a sale saved as transfer/card whose money the pier row already holds is counted once; "แก้ให้" sets it back to collected-at-pier */
+    (row.tour_sales || []).filter(function(s){ return s.pier_duplicate; }).forEach(function(s){
+      h += '<div class="ts-slips" data-ops-ts-exdup="' + esc(s.id) + '"><span class="ts-chip a" title="' + esc('รายการนี้เคยเป็นแบบเก็บวันเดินทาง หน้าท่าเก็บเงินไปแล้ว แล้วถูกแก้เป็น' + (PMN[s.method] || s.method) + 'ซ้ำอีกที ระบบนับเงินก้อนนี้ครั้งเดียว') + '">'
+        + esc(s.service || 'Extra') + ' ' + money(s.total) + ' · ซ้ำกับเงินหน้าท่า <a href="javascript:void 0" onclick="tsExDupFix(\'ex\',\'' + esc(s.id) + '\',\'' + esc(r.id) + '\')" style="color:inherit;font-weight:800;text-decoration:underline">แก้ให้</a></span></div>';
+    });
+    (row.tour_sales || []).filter(function(s){ return s.settle === 'done' && !s.covered_by_pier && !s.pier_duplicate && s.method !== 'cash' && s.method !== 'cot'; }).forEach(function(s){
       var lb = 'ขายเพิ่ม ' + (PMN[s.method] || s.method) + ' ' + money(s.total), has = (s.slips || []).length > 0;
       h += '<div class="ts-slips" data-ops-ts-saleslip="' + esc(s.id) + '">' + (has ? slipSeen(s.slips, lb) : '') + slipLabel(has, lb, 'x', r.id, s.id) + '</div>';
     });
@@ -401,19 +406,27 @@
       O.wrote('cot-slip'); redraw();
     }, function(e){ O.fail(title, e); throw e; });
   }
+  /* the 20 s change poll empties the roster cache, so the decision is read again first (as afterWrite in 57 does) */
+  function cotCurrent(bkId, date){
+    var T = O.travelRows;
+    return (T && T.load ? T.load(date).catch(function(){}) : Promise.resolve()).then(function(){ return cotDecisionOf(bkId, date); });
+  }
   function cotSlipPick(bkId, date, inp){
     var f = pickedFile(inp); if(!f) return;
-    var cur = cotDecisionOf(bkId, date);
-    if(!cur.dec){ alert('Pick how this COT is handled first, then attach the slip.'); return; }
-    if(typeof window.pckSlipUpload !== 'function'){ alert('Slips cannot be attached on this page.'); return; }
-    window.pckSlipUpload(f, bkId, function(meta){
-      return cotWrite(bkId, date, cur, slipIdsOf(cur.dec.slips).concat([meta.id]), 'Slip was not attached').then(null, function(){ return dropUpload(meta.id); });
+    return cotCurrent(bkId, date).then(function(cur){
+      if(!cur.dec){ alert('Pick how this COT is handled first, then attach the slip.'); return; }
+      if(typeof window.pckSlipUpload !== 'function'){ alert('Slips cannot be attached on this page.'); return; }
+      window.pckSlipUpload(f, bkId, function(meta){
+        return cotWrite(bkId, date, cur, slipIdsOf(cur.dec.slips).concat([meta.id]), 'Slip was not attached').then(null, function(){ return dropUpload(meta.id); });
+      });
     });
   }
   function cotSlipDrop(bkId, date){
-    var cur = cotDecisionOf(bkId, date); if(!cur.dec || !(cur.dec.slips || []).length) return;
-    if(typeof window.confirm === 'function' && !window.confirm('Remove ' + cur.dec.slips.length + ' slip(s) from this decision? (The files stay in the booking documents.)')) return;
-    return cotWrite(bkId, date, cur, [], 'Slip was not removed').then(null, function(){});
+    return cotCurrent(bkId, date).then(function(cur){
+      if(!cur.dec || !(cur.dec.slips || []).length) return;
+      if(typeof window.confirm === 'function' && !window.confirm('Remove ' + cur.dec.slips.length + ' slip(s) from this decision? (The files stay in the booking documents.)')) return;
+      return cotWrite(bkId, date, cur, [], 'Slip was not removed').then(null, function(){});
+    });
   }
   function cotCell(r){
     var c = r.c, cot = n(c && c.cot);
@@ -818,6 +831,19 @@
     });
   });
   wrap('tsSlipPick', function(orig, kind, bkId, itemId, inp){ return slipPick(kind, bkId, itemId, inp); });
+  /* legacy tsExDupFix (lk 960339db): a duplicate extra goes back to "collected at the pier"; the money and slips stay on the pier row */
+  window.tsExDupFix = function(kind, saleId, bkId){
+    if(!O.enabled()) return;
+    var date = dateOf(), P = pierMoney(), row = P && P.rowById ? P.rowById(bkId, date) : null;
+    var s = row && (row.tour_sales || []).filter(function(x){ return x.id === saleId; })[0];
+    if(!s){ alert('This extra is not covered by a pier payment any more'); return; }
+    if(!window.confirm('"' + (s.service || '') + '" ' + money(s.total) + '\n\nThe money is already on the pier payment row (' + s.method + ').\nThe extra goes back to "collected at the pier" so it is not counted twice.\n\nContinue?')) return;
+    var bk = { id: bkId, opsId: bkId, opsVersion: row && row.version != null ? row.version : null };
+    return O.queue(function(){ return O.bookingWrite('PATCH', '/v1/bookings/' + enc(bkId) + '/tour-sales/' + enc(saleId), bk, { method: 'cot' }); }).then(function(){
+      O.wrote('ts-exdup');
+      return Promise.resolve(P && P.loadDay ? P.loadDay(date, true) : null).then(redraw, redraw);
+    }, function(e){ O.fail('Could not reset the extra', e); });
+  };
   wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
   wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });
   O.onWrite(function(){ last = {}; });

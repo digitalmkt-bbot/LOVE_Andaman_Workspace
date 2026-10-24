@@ -55,9 +55,13 @@
     var target = bk || findBooking(ob.external_id || ob.id);
     if(target){
       if(ob.version != null) target.opsVersion = +ob.version;
-      if(ob.lead_age !== undefined) target.leadAge = ob.lead_age;
-      if(ob.lead_insurance_reviewed_at !== undefined) target.leadInsuranceReviewedAt = ob.lead_insurance_reviewed_at;
-      if(ob.lead_insurance_reviewed_by !== undefined) target.leadInsuranceReviewedBy = ob.lead_insurance_reviewed_by;
+      // the answer is the whole booking: a field the server omits is cleared there
+      target.leadAge = ob.lead_age != null ? ob.lead_age : null;
+      if(ob.lead_insurance_reviewed_at !== undefined || ob.lead_age !== undefined) target.leadInsuranceReviewedAt = ob.lead_insurance_reviewed_at || null;
+      if(ob.lead_insurance_reviewed_by !== undefined || ob.lead_age !== undefined) target.leadInsuranceReviewedBy = ob.lead_insurance_reviewed_by || null;
+      target.leadInsuranceFirstName = ob.lead_insurance_first_name || null;
+      target.leadInsuranceLastName = ob.lead_insurance_last_name || null;
+      target.leadInsuranceNat = ob.lead_insurance_nationality || null;
       if(Array.isArray(ob.passengers)){
         target.passengers = ob.passengers.map(function(p){
           return {
@@ -68,7 +72,10 @@
             foc: !!p.foc,
             age: p.age != null ? p.age : null,
             insuranceReviewedAt: p.insurance_reviewed_at || null,
-            insuranceReviewedBy: p.insurance_reviewed_by || null
+            insuranceReviewedBy: p.insurance_reviewed_by || null,
+            insuranceFirstName: p.insurance_first_name || null,
+            insuranceLastName: p.insurance_last_name || null,
+            insuranceNat: p.insurance_nationality || null
           };
         });
       }
@@ -125,6 +132,10 @@
     if(update.reviewed !== undefined){
       item.reviewed = !!update.reviewed;
     }
+    // the insurer's form: first / last name and nationality typed on the Insurance page (blank clears it)
+    if(update.firstName !== undefined) item.first_name = update.firstName === '' ? null : String(update.firstName);
+    if(update.lastName !== undefined) item.last_name = update.lastName === '' ? null : String(update.lastName);
+    if(update.nat !== undefined) item.nationality = update.nat === '' ? null : String(update.nat);
     return { passengers: [item] };
   }
 
@@ -137,7 +148,9 @@
     }).then(function(ob){
       applyBookingResponse(bk, ob);
       O.wrote('booking-insurance');
-      if(typeof window.renderInsurance === 'function' && document.getElementById('insurance-host')){
+      /* not while the person is typing in the list: the redraw would replace the field they are in */
+      var typing = document.activeElement, host = document.getElementById('insurance-host');
+      if(typeof window.renderInsurance === 'function' && host && !(typing && host.contains(typing) && /^(INPUT|TEXTAREA|SELECT)$/.test(typing.tagName))){
         window.renderInsurance();
       }
       return ob;
@@ -607,9 +620,22 @@
     wrap(name, function(){ return; });
   });
 
+  /* the insurer's form values the server keeps: legacy's insEff fields firstName / lastName / nat / age */
+  function insForm(bk, pk, field){
+    var p = pk === 'lead' ? null : (bk.passengers || [])[parseInt(pk, 10)];
+    if(pk !== 'lead' && !p) return null;
+    if(field === 'firstName') return pk === 'lead' ? bk.leadInsuranceFirstName : p.insuranceFirstName;
+    if(field === 'lastName') return pk === 'lead' ? bk.leadInsuranceLastName : p.insuranceLastName;
+    if(field === 'nat') return pk === 'lead' ? bk.leadInsuranceNat : p.insuranceNat;
+    return null;
+  }
   wrap('insEff', function(orig, bkId, pk, field, src){
     var bk = findBooking(bkId);
     if(bk && bk._fromOpsBackend){
+      if(field === 'firstName' || field === 'lastName' || field === 'nat'){
+        var typed = insForm(bk, pk, field);
+        if(typed) return typed;
+      }
       if(field === 'age'){
         if(pk === 'lead' && bk.leadAge != null) return bk.leadAge;
         var idx = parseInt(pk, 10);
@@ -625,6 +651,8 @@
     var base = orig.apply(this, [].slice.call(arguments, 1)) || {};
     var bk = findBooking(bkId);
     if(bk && bk._fromOpsBackend){
+      // typed names / nationality (the server's) count as overrides: the "edited" dots and Revert read them
+      ['firstName', 'lastName', 'nat'].forEach(function(f){ var v = insForm(bk, pk, f); if(v) base = Object.assign({}, base, (function(o){ o[f] = v; return o; })({})); });
       if(pk === 'lead' && bk.leadInsuranceReviewedAt){
         return Object.assign({}, base, { reviewed: true, age: bk.leadAge });
       }
@@ -636,9 +664,19 @@
     return Object.keys(base).length ? base : null;
   });
 
+  var insAgeTimers = {};
   wrap('insSetField', function(orig, bkId, pk, field, val){
-    if(field === 'age'){
-      return updateInsuranceServer(bkId, pk, { age: val }).catch(function(){ return null; });
+    if(field === 'age' || field === 'firstName' || field === 'lastName' || field === 'nat'){
+      /* oninput: one save per pause in typing (600 ms), carrying the latest value, not one per keystroke */
+      var k = bkId + '::' + pk + '::' + field;
+      clearTimeout(insAgeTimers[k]);
+      return new Promise(function(done){
+        insAgeTimers[k] = setTimeout(function(){
+          delete insAgeTimers[k];
+          var u = {}; u[field] = val;
+          updateInsuranceServer(bkId, pk, u).catch(function(){ return null; }).then(done);
+        }, 600);
+      });
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });
@@ -656,8 +694,11 @@
     var r = orig.apply(this, [].slice.call(arguments, 1));
     if(bk && bk._fromOpsBackend){
       var idx = parseInt(pk, 10);
-      var has = pk === 'lead' ? bk.leadAge != null : (Number.isFinite(idx) && bk.passengers && bk.passengers[idx] && bk.passengers[idx].age != null);
-      if(has) updateInsuranceServer(bkId, pk, { age: null }).catch(function(){ return null; });
+      var p = pk === 'lead' ? null : (Number.isFinite(idx) && bk.passengers && bk.passengers[idx]);
+      var has = pk === 'lead' ? (bk.leadAge != null || bk.leadInsuranceFirstName || bk.leadInsuranceLastName || bk.leadInsuranceNat)
+        : (p && (p.age != null || p.insuranceFirstName || p.insuranceLastName || p.insuranceNat));
+      // Revert drops the typed age, names and nationality: all of them live on the server now
+      if(has) updateInsuranceServer(bkId, pk, { age: null, firstName: '', lastName: '', nat: '' }).catch(function(){ return null; });
     }
     return r;
   });

@@ -87,13 +87,16 @@ test('legacy mode delegates every wrapped function and sends nothing', async () 
   assert.equal(rt.requests.length, 0);
 });
 
-test('renderVehicles draws, then loads the vans for the screen dates and redraws', async () => {
+test('renderVehicles does not draw legacy\'s demo vans: it waits for the server\'s, loads them once and draws', async () => {
   const rt = runtime();
-  assert.equal(rt.ctx.renderVehicles(), 'legacy:renderVehicles');
+  assert.equal(rt.ctx.renderVehicles(), undefined, 'nothing drawn from the 6-van seed before the server answers');
+  assert.equal(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length, 0);
+  rt.ctx.renderVehicles();                    // a second render while the read is in flight asks nothing more
   await rt.settle();
-  assert.equal(rt.requests.filter((r) => r.path.startsWith('/operations/van-days')).length, 1, 'one window covers the dates');
+  assert.equal(rt.requests.filter((r) => r.path.startsWith('/operations/van-days')).length, 1, 'one window covers the dates, one request');
   assert.deepEqual(rt.ctx.SB_VEHICLES.map((v) => v.id), ['veh01', 'veh02']);
-  assert.equal(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length, 2, 'redrawn once the vans arrived');
+  assert.ok(rt.legacyCalls.filter((c) => c[0] === 'renderVehicles').length >= 1, 'drawn once the vans arrived');
+  assert.equal(rt.ctx.renderVehicles(), 'legacy:renderVehicles', 'afterwards it draws at once');
 });
 
 test('new vehicle: form save POSTs, adds the server van (server id), closes the form', async () => {
@@ -279,4 +282,16 @@ test('edit via form does not send color unless the user picked one (legacy form 
   rt.ctx._vehForm = { id: 'veh01', name: 'Van', plate: 'P', type: 'van', capacity: 9, ownership: 'own', zoneBase: 'PK', driver: '', driverPhone: '', active: true, color: '' };
   rt.ctx.vehFormSave(); await rt.settle();
   assert.equal(plain(rt.writes()[1].body).color, null);
+});
+
+test('a range start moved past its end takes the end with it (one PATCH), and an end moved before the start takes the start', async () => {
+  const rt = runtime({ handlers: {
+    'PATCH /operations/vans/veh01/status-ranges/7': (b) => ({ body: { id: 7, van_id: 'veh01', status: 'maintenance', from_date: b.from_date || '2026-10-10', to_date: b.to_date === undefined ? null : b.to_date, note: null } }),
+  } });
+  await rt.loadVans();
+  rt.ctx.vehStatusSet('veh01', 0, 'to', '2026-10-12'); await rt.settle();
+  rt.ctx.vehStatusSet('veh01', 0, 'from', '2030-01-05'); await rt.settle();
+  assert.deepEqual(plain(rt.writes()[1].body), { from_date: '2030-01-05', to_date: '2030-01-05' }, 'start after the old end: both sent, never a range that ends before it starts');
+  rt.ctx.vehStatusSet('veh01', 0, 'to', '2030-01-09'); await rt.settle();
+  assert.deepEqual(plain(rt.writes()[2].body), { to_date: '2030-01-09' });
 });
