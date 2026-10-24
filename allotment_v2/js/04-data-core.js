@@ -11098,6 +11098,18 @@ function flBoatBookingsFor(boatId, dateStr){
   if(!boatId || !dateStr || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return out;
   SB_BOOKINGS.forEach(bk => {
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    /* §flSplitPax (2026-10-24) · owner (ใบบันทึกประจำวันเรือ · Visit Panwa) "อันนี้บัคมาจากการแยกลงเรือไหม"
+       ใบที่แยกลงหลายลำ (§boatSplit) เคยนับทั้งใบให้ลำหลัก (ops.boatId = ก้อนแรก) · ลำที่สองได้ 0 → ขึ้น "ไม่ออก"
+       เคสจริง: Hermetis 121 คน (เรือ 65 ที่) · Achilles ไม่ออก · ตอนนี้แต่ละลำนับเฉพาะก้อนที่อยู่บนลำนั้น (bkBoatPaxOnBoat) */
+    const _sp = (typeof bkBoatSplits === 'function') ? bkBoatSplits(bk, dateStr) : null;
+    if(_sp){
+      const share = (typeof bkBoatPaxOnBoat === 'function') ? bkBoatPaxOnBoat(bk, dateStr, boatId) : 0;
+      if(!share) return;
+      const t0 = (bk.trips||[]).find(t => t && t.date === dateStr);
+      out.pax += share;
+      if(t0 && t0.routeId) out.routes[t0.routeId] = (out.routes[t0.routeId]||0) + share;
+      return;
+    }
     if(bkOpsRead(bk, dateStr).boatId !== boatId) return;                            // per-day boat
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
