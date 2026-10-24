@@ -877,10 +877,25 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
       // invisible, newest bookings included, with nothing logged. Two changes: only sync the window
       // ops actually works in (recent + all future travel dates), and never truncate silently.
       // Compared as text so it holds whether travel_date is a date, timestamp or ISO string.
+      // §b2cOpenDate · an order we already hold that B2C has since turned into an open voucher (date
+      // cleared) has NULL for both dates, and NULL >= $1 is never true — so it fell out of every full
+      // run and stayed on its old day, still taking seats. Pull those orders back in by id. Only orders
+      // already imported with a dated trip in the window; a brand-new open-date order is not imported.
+      let heldIds = [];
+      try {
+        heldIds = (await pool.query(
+          `SELECT DISTINCT split_part(b.id, '_', 2) AS ext FROM ${fqt('sb_bookings')} b
+             JOIN ${fqt('sb_bookings__trips')} t ON t.sb_bookings_id = b.id
+            WHERE b.id LIKE 'b2c\\_%' AND t.date >= $1
+              AND b.status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          [B2C_SYNC_FROM()]
+        )).rows.map(r => r.ext);
+      } catch (e) { console.warn('[b2c-sync] open-date lookup skipped:', e.message); }
       ({ rows: itemRows } = await b2cPool.query(
-        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date::text, b.travel_date::text) >= $1
+        B2C_ITEM_JOIN + ` AND (COALESCE(bi.travel_date::text, b.travel_date::text) >= $1
+                               OR (COALESCE(bi.travel_date::text, b.travel_date::text) IS NULL AND bi.booking_id::text = ANY($3)))
                           ORDER BY bi.booking_id, bi.line_no LIMIT $2`,
-        [B2C_SYNC_FROM(), B2C_SYNC_MAX_ROWS + 1]
+        [B2C_SYNC_FROM(), B2C_SYNC_MAX_ROWS + 1, heldIds]
       ));
       if (!itemRows.length) { _b2cHealthOk(); return; }
       if (itemRows.length > B2C_SYNC_MAX_ROWS) {
@@ -1131,6 +1146,20 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
             [...NAT_COLS.map(c => old[c]), bkId, Number(idx)]
           );
         }
+      }
+
+      // §b2cOpenDate · a held order whose date B2C has cleared (open voucher) has no day left for its
+      // boat / van / check-in to belong to. The restore above put the old day's ops back on the dateless
+      // trip, so wipe them — booking level and trip level. Only orders that existed before this run.
+      _phase = 'clear ops on open-date';
+      const _openIds = b2cBks.filter(b => preExisting.has(b.id) && (b.trips || []).length && (b.trips || []).every(t => !t.date)).map(b => b.id);
+      if (_openIds.length) {
+        const bkOps = OS_COLS['sb_bookings'].filter(c => c.indexOf('ops_') === 0);
+        if (bkOps.length) await client.query(
+          `UPDATE ${fqt('sb_bookings')} SET ${bkOps.map(c => `${qic(c)}=NULL`).join(', ')} WHERE id = ANY($1)`, [_openIds]);
+        if (TRIP_OPS.length) await client.query(
+          `UPDATE ${fqt('sb_bookings__trips')} SET ${TRIP_OPS.map(c => `${qic(c)}=NULL`).join(', ')} WHERE sb_bookings_id = ANY($1)`, [_openIds]);
+        console.log(`[b2c-sync] ${_openIds.length} booking(s) went open-date in B2C — boat/van/check-in cleared:`, _openIds.join(', '));
       }
 
       // 3. Refresh passengers + addons (B2C is source of truth for these)
