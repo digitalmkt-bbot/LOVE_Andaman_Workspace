@@ -29812,7 +29812,7 @@ function faRenderSafety(){
   var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">อุปกรณ์ความปลอดภัย</b><span style="font-size:11.5px;color:#8A8F9C">'+groups.reduce(function(n,g){ return n+g.rows.length; },0)+' ชิ้น · ตามเรือ → ประเภท</span></div>'
     +'<input class="fa-q" style="width:100%;margin-top:8px" placeholder="ค้นหา serial / ชื่อ…" value="'+faE(FA.q.safety||'')+'" oninput="faPartFilter(\'safety\',this.value)"></div><div class="fa-sc" id="fl-safety-listpanel">'
     +(groups.length?groups.map(function(g){ var ov=g.rows.filter(function(o){ return o.x.k==='over'; }).length;
-        return '<div class="fa-grp">'+(g.b?faAv(g.b,22):'')+'<span>'+faE(g.b?g.b.name:'ไม่ผูกเรือ')+'</span><em style="color:#A32D2D">'+(ov?('เลยกำหนด '+ov):'')+'</em></div>'+g.rows.map(function(o){ return faSfRow(o.it,selId); }).join(''); }).join('')
+        return '<div class="fa-grp">'+(g.b?faAv(g.b,22):'')+'<span>'+faE(g.b?g.b.name:'ไม่ผูกเรือ')+'</span><em style="color:#A32D2D">'+(ov?('เลยกำหนด '+ov):'')+'</em>'+(g.b?faAnchorMissChip(g.b.id):'')+'</div>'+g.rows.map(function(o){ return faSfRow(o.it,selId); }).join(''); }).join('')
       :'<div style="padding:28px;text-align:center;color:#8A8F9C;font-size:12.5px">ไม่มีรายการในกลุ่มนี้</div>')+'</div></div>';
   var sel=all.filter(function(it){ return it.id===selId; })[0];
   var det='<div class="fa-card">'+(sel?faSfDetail(sel):'<div style="padding:40px;text-align:center;color:#8A8F9C">เลือกรายการทางซ้ายเพื่อดูรายละเอียด</div>')+'</div>';
@@ -29957,7 +29957,7 @@ function faBoatDetail(o){
     +KV('ผู้โดยสารตามใบอนุญาต',b.licensePax?faE(b.licensePax+' PAX + ลูกเรือ '+(b.crew||0)):'',1)+KV('ใช้ขายจริง',b.cap?faE(b.cap+' PAX'):'',1)+'</div></div>'
     +(b.ownerAddr?('<div style="padding:10px 18px;font-size:12px;color:#5B6170;border-top:1px solid #ECEBE6">ที่อยู่เจ้าของ: '+faE(b.ownerAddr)+'</div>'):'');
   var batRows=(typeof fbBoatSection==='function')?fbBoatSection(b.id):'';   /* §flBat */
-  return head+alerts+tiles+engRows+batRows+info;
+  return head+alerts+tiles+faAnchorStrip(b.id)+engRows+batRows+info;   /* §anchor */
 }
 function faBoatSide(o){
   var b=o.b;
@@ -31111,3 +31111,91 @@ function fbUninstall(id){ if(!fbCan()) return; var o=fbGet(id); if(!o) return; v
   var bn=(getBoat(o.boatId)||{}).name||''; o.status='spare'; o.spareLocation=loc; var p=o.pos; o.boatId=''; o.pos=''; if(!Array.isArray(o.log)) o.log=[]; o.log.push({date:fbToday(), type:'remove', desc:'ถอดจาก '+bn+' '+p+' เก็บที่ '+loc, by:fbBy()}); flSave(); fbAfter(); }
 function fbRetire(id){ if(!fbCan()) return; var o=fbGet(id); if(!o) return; var why=prompt('Reason (หมดอายุ / เสื่อม / เคลม)', 'เสื่อม'); if(why==null) return;
   o.status='retired'; o.retiredDate=fbToday(); o.retiredReason=why; o.boatId=''; o.pos=''; if(!Array.isArray(o.log)) o.log=[]; o.log.push({date:fbToday(), type:'retire', desc:'ทิ้ง · '+why, by:fbBy()}); flSave(); fbAfter(); }
+
+/* ══ §anchor (2026-10-24) · owner "Company Asset มีเรื่องสมอเรือ สมอหัว สมอท้าย โยธกา อันนี้ต้องเก็บยังไงดี" → "โอเค"
+   สมอเก็บในแท็บความปลอดภัย หมวด anchor (สมอ + โซ่) อยู่แล้ว · ตอนนี้ 1 รายการ = สมอ 1 ตัว แยกชนิด
+     สมอหัว (bow) · สมอท้าย (stern) · โยธกา = สมอเกี่ยว (grapnel · ใช้เกี่ยวหิน/ปะการังตอนจอดเกาะ · หายบ่อย · ลำละหลายตัวได้)
+   ⚠ ไม่แตะ DB · fleet_safety เป็นตารางคอลัมน์ตายตัว (id boatid category name brand model serial qty … location note)
+     ชนิด = อ่านจากชื่อ (name) · น้ำหนัก/โซ่/เชือก/ขา = ประกอบเป็นข้อความในช่อง model แบบคงรูป "25 kg · โซ่ 30 m · เชือก 50 m · 4 ขา"
+     ฟอร์มมีช่องแยกให้กรอก แล้วแปลงไป-กลับจาก model เอง · ข้อมูลเก่าที่พิมพ์มือยังอ่านได้ถ้ามี "kg" / "โซ่ N" / "เชือก N" / "N ขา"
+   หน้าเรือ (Asset → เรือ) มีแถบ "สมอ" บอกว่า หัว/ท้าย มีไหม · โยธกากี่ตัว · กดไปแท็บความปลอดภัยของลำนั้น
+   รายการความปลอดภัย หัวกลุ่มเรือ ขึ้นชิปแดงถ้ายังไม่มีสมอหัวหรือท้าย ══ */
+var FL_ANCHOR_KIND=[{k:'bow',t:'สมอหัว',re:/สมอ\s*หัว|^bow/i},{k:'stern',t:'สมอท้าย',re:/สมอ\s*ท้าย|^stern/i},{k:'grapnel',t:'โยธกา (สมอเกี่ยว)',re:/โยธกา|โยทะกา|สมอเกี่ยว|grapnel/i}];
+function flAnchorKindOf(it){ var n=String((it&&it.name)||''); for(var i=0;i<FL_ANCHOR_KIND.length;i++){ if(FL_ANCHOR_KIND[i].re.test(n)) return FL_ANCHOR_KIND[i].k; } return ''; }
+function flAnchorParse(model){
+  var m=String(model||''), g=function(re){ var x=re.exec(m); return x?x[1]:''; };
+  return { kg:g(/(\d+(?:\.\d+)?)\s*kg/i), chain:g(/โซ่\s*(\d+(?:\.\d+)?)/), rope:g(/เชือก\s*(\d+(?:\.\d+)?)/), flukes:g(/(\d+)\s*ขา/) };
+}
+function flAnchorModel(o){
+  var p=[]; if(o.kg) p.push(o.kg+' kg'); if(o.chain) p.push('โซ่ '+o.chain+' m'); if(o.rope) p.push('เชือก '+o.rope+' m'); if(o.flukes) p.push(o.flukes+' ขา');
+  return p.join(' · ');
+}
+/* สมอของเรือลำหนึ่ง (เฉพาะที่ยังใช้งาน) · {bow:[],stern:[],grapnel:[],other:[]} */
+function flAnchorsOf(boatId){
+  var o={bow:[],stern:[],grapnel:[],other:[]};
+  (typeof FL_SAFETY!=='undefined'?FL_SAFETY:[]).forEach(function(it){
+    if(!it || it.boatId!==boatId || it.category!=='anchor' || it.status==='replaced' || it.status==='retired') return;
+    var k=flAnchorKindOf(it)||'other'; o[k].push(it);
+  });
+  return o;
+}
+/* ฟอร์ม: บล็อกช่องสมอ แทรกใต้ช่อง Name · โชว์เฉพาะหมวด anchor */
+function flAnchorFormSync(){
+  var cat=document.getElementById('fl-sf-category'), name=document.getElementById('fl-sf-name'); if(!cat||!name) return;
+  var row=name.closest('.form-row')||name.parentNode, box=document.getElementById('fl-sf-anchor');
+  if(!box){
+    box=document.createElement('div'); box.id='fl-sf-anchor';
+    box.innerHTML='<div class="form-row" style="margin-top:4px"><label class="form-label">ชนิดสมอ</label><select id="fl-sf-akind" style="width:100%" onchange="flAnchorKindPick()"><option value="">— เลือก —</option>'
+      +FL_ANCHOR_KIND.map(function(k){ return '<option value="'+k.k+'">'+k.t+'</option>'; }).join('')+'</select></div>'
+      +'<div class="form-2"><div class="form-row"><label class="form-label">น้ำหนัก (kg)</label><input type="number" min="0" step="0.5" id="fl-sf-akg" style="width:100%" placeholder="25"></div>'
+      +'<div class="form-row"><label class="form-label">จำนวนขา (โยธกา)</label><input type="number" min="0" step="1" id="fl-sf-aflukes" style="width:100%" placeholder="4"></div></div>'
+      +'<div class="form-2"><div class="form-row"><label class="form-label">โซ่ (เมตร)</label><input type="number" min="0" step="1" id="fl-sf-achain" style="width:100%" placeholder="30"></div>'
+      +'<div class="form-row"><label class="form-label">เชือก (เมตร)</label><input type="number" min="0" step="1" id="fl-sf-arope" style="width:100%" placeholder="50"></div></div>'
+      +'<div style="font-size:11px;color:#8A8F9C;margin:-4px 0 8px">1 รายการ = สมอ 1 ตัว · โยธกามีหลายตัวให้เพิ่มทีละรายการ · ช่อง Model จะถูกประกอบจากค่าตรงนี้ให้เอง</div>';
+    row.parentNode.insertBefore(box, row.nextSibling);
+    cat.addEventListener('change', flAnchorFormSync);
+  }
+  var on=(cat.value==='anchor'); box.style.display=on?'':'none';
+  if(!on) return;
+  var kind=document.getElementById('fl-sf-akind'), P=flAnchorParse(document.getElementById('fl-sf-model').value);
+  var k=flAnchorKindOf({name:name.value}); if(kind.value!==k) kind.value=k;
+  document.getElementById('fl-sf-akg').value=P.kg; document.getElementById('fl-sf-achain').value=P.chain;
+  document.getElementById('fl-sf-arope').value=P.rope; document.getElementById('fl-sf-aflukes').value=P.flukes;
+}
+function flAnchorKindPick(){
+  var kind=document.getElementById('fl-sf-akind'), name=document.getElementById('fl-sf-name'), K=FL_ANCHOR_KIND.filter(function(x){ return x.k===kind.value; })[0];
+  if(!K) return;
+  if(!name.value.trim() || flAnchorKindOf({name:name.value})) name.value=K.t;
+  var loc=document.getElementById('fl-sf-location'); if(loc && !loc.value.trim()) loc.value=(K.k==='bow'?'หัวเรือ':K.k==='stern'?'ท้ายเรือ':'');
+}
+/* เรียกตอนบันทึก · คืนค่า model ที่ประกอบแล้ว (หรือค่าเดิมถ้าไม่ใช่หมวดสมอ) */
+function flAnchorModelFromForm(category, model){
+  if(category!=='anchor') return model;
+  var box=document.getElementById('fl-sf-anchor'); if(!box || box.style.display==='none') return model;
+  var v=function(id){ return String((document.getElementById(id)||{}).value||'').trim(); };
+  var o={kg:v('fl-sf-akg'), chain:v('fl-sf-achain'), rope:v('fl-sf-arope'), flukes:v('fl-sf-aflukes')};
+  var built=flAnchorModel(o);
+  return built || model;
+}
+/* แถบสมอบนหน้าเรือ */
+function faAnchorStrip(boatId){
+  var A=flAnchorsOf(boatId), e=(typeof faE==='function')?faE:function(x){ return String(x==null?'':x); };
+  var cell=function(lbl, L, need){
+    var ok=L.length>0, col=ok?'#0F6E56':(need?'#A32D2D':'#8A8F9C'), bg=ok?'#DDF1EA':(need?'#FBE3E0':'#F1EFE8');
+    var sub=ok?L.map(function(it){ var P=flAnchorParse(it.model); return (P.kg?P.kg+' kg':'')+(P.flukes?(' · '+P.flukes+' ขา'):''); }).filter(Boolean).join(' · '):(need?'ยังไม่มี':'—');
+    return '<div class="fa-tile" style="flex:1;cursor:pointer" onclick="faAnchorGo(\''+e(boatId)+'\')" title="ไปที่อุปกรณ์ความปลอดภัยของลำนี้"><div class="fa-kick">'+lbl+'</div><b style="color:'+col+'"><span style="display:inline-block;background:'+bg+';color:'+col+';border-radius:6px;padding:0 8px;font-size:14px">'+(ok?(L.length>1?L.length+' ตัว':'✓'):'✗')+'</span></b><i>'+e(sub)+'</i></div>';
+  };
+  return '<div style="display:flex;border-bottom:1px solid #ECEBE6;flex-wrap:wrap;background:#FAFBFC">'
+    +'<div class="fa-tile" style="flex:0 0 96px"><div class="fa-kick">สมอ</div><b style="font-size:13px">⚓ '+(A.bow.length+A.stern.length+A.grapnel.length+A.other.length)+' ตัว</b><i>'+(A.other.length?('ไม่ระบุชนิด '+A.other.length):'ตรวจทุกเดือน')+'</i></div>'
+    +cell('สมอหัว',A.bow,true)+cell('สมอท้าย',A.stern,true)+cell('โยธกา · สมอเกี่ยว',A.grapnel,false)+'</div>';
+}
+function faAnchorGo(boatId){
+  try{ FA.boat=FA.boat||{}; FA.boat.safety=boatId; _flSafetySelBoat=boatId; _flSafetySelCat='anchor'; }catch(_){}
+  flGoToAsset('safety', null);
+}
+/* ชิปเตือนในหัวกลุ่มของรายการความปลอดภัย */
+function faAnchorMissChip(boatId){
+  var A=flAnchorsOf(boatId), miss=[]; if(!A.bow.length) miss.push('สมอหัว'); if(!A.stern.length) miss.push('สมอท้าย');
+  if(!miss.length) return '';
+  return '<em style="color:#A32D2D;margin-left:6px" title="ยังไม่มีรายการสมอชนิดนี้ของลำนี้">⚓ ขาด '+miss.join(' + ')+'</em>';
+}
