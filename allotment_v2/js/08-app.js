@@ -66030,6 +66030,28 @@ function poRowCmp(a,b){
    ยังไม่มีใครกด No-show / CXL → คืนยอดจองเต็มตามเดิม (พิมพ์ใบตอนเช้ายังได้ครบ)
    กดแล้ว → หักออกให้ · ตัวเดียวกับที่ใบงานเรือ (pjPax §pjPaxReal) ทะเบียนผู้เดินทาง
    และ Travel Summary ใช้อยู่แล้ว · สามใบจึงพูดเลขเดียวกัน */
+/* ══ §pjSplit (2026-10-24) · owner "Achilles เป็น ลค กรุ๊ปเดียวที่แยกลำมาจาก Hermetis แต่ไม่ขึ้นป้าย Charter ให้"
+   ใบจองที่แยกลงหลายลำ (ops.boatSplits · §boatSplit) เดิมใบงานเรือ/บอร์ด Departures อ่านแค่ ops.boatId (ลำแรก)
+   ลำที่สองจึงได้ 0 คน ไม่มีป้ายเหมาลำ ส่วนลำแรกโชว์คนทั้งใบ (121/65 เกิน 56) ทั้งที่จัดคนไว้แล้วว่าลำละเท่าไร
+   ตัวนี้คืน "ส่วนของลำนี้" ของใบนั้นวันนั้น · คนจริง (เช็คอินแล้ว) เกลี่ยตามสัดส่วนที่จัดไว้ เศษไปลำสุดท้าย
+   คืน null = ใบนี้ไม่ได้แยกลำ (ใช้ทางเดิม) · {skip:true} = แยกลำแต่ไม่มีลำนี้ */
+function pjSplitShare(b, date, t, boatId){
+  var sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null; if(!sp) return null;
+  var idx=-1; for(var i=0;i<sp.length;i++){ if(sp[i] && sp[i].boatId===boatId){ idx=i; break; } }
+  if(idx<0) return {skip:true};
+  var K=['ad','chd','inf','foc'], booked={}, tot={}, real=poPaxLeft(b,date,t), out={booked:0,tot:0};
+  sp.forEach(function(x){ var q=bkSplitPax(x); K.forEach(function(k){ tot[k]=(tot[k]||0)+(+q[k]||0); }); });
+  var mine=bkSplitPax(sp[idx]), last=(idx===sp.length-1);
+  K.forEach(function(k){
+    var bk=+mine[k]||0, T=+tot[k]||0, R=+real[k]||0, sh;
+    if(!T) sh=0;
+    else if(last){ var used=0; for(var j=0;j<idx;j++){ used+=Math.round(R*((+bkSplitPax(sp[j])[k]||0)/T)); } sh=Math.max(0,R-used); }
+    else sh=Math.round(R*(bk/T));
+    out[k]=sh; out.booked+=bk; out.tot+=sh; booked[k]=bk;
+  });
+  out.bookedBy=booked;
+  return out;
+}
 function poPaxLeft(b, date, t){
   var P=(typeof ckPaxBreak==='function')?ckPaxBreak(t&&t.pax):null;
   if(!P) return {ad:0,chd:0,inf:0,foc:0,tot:0};
@@ -66164,6 +66186,12 @@ function poBoats(date, pier){
     var bid=O.boatId||t.charterBoatId||'';
     var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
     var real=poPaxLeft(b,date,t).tot;   /* §poPaxReal */
+    /* §pjSplit · ใบที่แยกลำ → ลงทุกลำที่มันขี่ ด้วยคนส่วนของลำนั้น */
+    var _sp=(typeof bkBoatIdsOn==='function' && typeof bkBoatSplits==='function' && bkBoatSplits(b,date))?bkBoatIdsOn(b,date):null;
+    var _targets=(_sp&&_sp.length)?_sp.map(function(x){ var S=pjSplitShare(b,date,t,x)||{}; return {bid:x, pax:+S.booked||0, real:+S.tot||0, split:true, secondary:(x!==_sp[0])}; })
+                                  :[{bid:bid, pax:pax, real:real, split:false}];
+    _targets.forEach(function(G){
+    var bid=G.bid, pax=G.pax, real=G.real;
     var row=null;
     for(var i=0;i<out.length;i++){ if(out[i].bid===bid){ row=out[i]; break; } }
     if(!row){
@@ -66174,7 +66202,9 @@ function poBoats(date, pier){
       } else return;   /* ยังไม่ผูกลำ · ไปโผล่ในกล่อง "ยังไม่ระบุเรือ" */
     }
     row.pax+=pax; row.paxReal=(row.paxReal||0)+real;
-    row.bks.push({b:b,t:t,pax:pax,paxReal:real});
+    /* secondary = ลำที่ 2+ ของใบแยกลำ · ชีทที่ไล่รายชื่อ/ตั๋ว/ของเบิกต่อใบ (อุทยาน · ใบเซ็น) ยังนับที่ลำแรกลำเดียว กันซ้ำ */
+    row.bks.push({b:b,t:t,pax:pax,paxReal:real,split:G.split,secondary:!!G.secondary});
+    });
   });
   out.sort(function(a,b){ return String(a.dep||'99').localeCompare(String(b.dep||'99')) || String(a.boat.name||'').localeCompare(String(b.boat.name||'')); });
   return out;
@@ -69111,6 +69141,7 @@ function pkTkData(date, pier){
     var orphan=[];
     (B.bks||[]).forEach(function(x){
       var b=x.b;
+      if(x.secondary) return;   /* §pjSplit · ใบแยกลำนับตั๋วที่ลำแรกลำเดียว */
       if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,x.t)) return;
       if(typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)) return;   /* §b2cAddon · ไม่มีคน ไม่มีตั๋ว */
       var bc=pkBkCnt(b,x.t,date);
@@ -71757,7 +71788,7 @@ function poIsBuild(bid){
   var ledRet={}; KS.forEach(function(k){ var n=0;
     byKind[k].forEach(function(it){ n+=(S[it.id]?S[it.id].ret:0); }); ledRet[k]=n; });
   var PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
-  var rows=B.bks.map(function(x){
+  var rows=B.bks.filter(function(x){ return !x.secondary; }).map(function(x){   /* §pjSplit */
     var b=x.b, t=x.t, O=(typeof bkOpsRead==='function')?bkOpsRead(b,_poDate):(b.ops||{});
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var px=(t&&t.pax)||{}, nm=[];
@@ -75699,13 +75730,18 @@ function pjPax(date, boatId, pier){
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var p;
+    var _S=pjSplitShare(b,date,t,boatId);   /* §pjSplit · ใบที่แยกลำ นับเฉพาะส่วนของลำนี้ */
+    if(_S){ if(_S.skip) return; p={ad:_S.ad,chd:_S.chd,inf:_S.inf,foc:_S.foc}; }
+    else {
     if((O.boatId||t.charterBoatId||'')!==boatId) return;
-    var p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
+    p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
     /* §pjPaxReal · เช็คอินแล้วใช้คนที่เดินทางจริง · ยังไม่เช็คอินคืนยอดจองเต็มอยู่แล้ว
        แหล่งเดียวกับทะเบียนรายชื่อผู้เดินทางและ Travel Summary · เลขสองใบจึงตรงกันเสมอ */
     if(typeof ckPaxLeft==='function'){
       p={ ad:ckPaxLeft(b,date,'ad',p.ad), chd:ckPaxLeft(b,date,'chd',p.chd),
           inf:ckPaxLeft(b,date,'inf',p.inf), foc:ckPaxLeft(b,date,'foc',p.foc) };
+    }
     }
     out.ad+=p.ad; out.chd+=p.chd; out.inf+=p.inf; out.foc+=p.foc;
     if(p.ad+p.chd+p.inf+p.foc>0) out.n++;      /* ทั้งใบไม่มาเลย ไม่ต้องนับเป็นใบบนเรือ */
@@ -79116,6 +79152,7 @@ function poSignSheet(bid){
      ไม่ยกทั้งทะเบียนมากอง เพราะที่ต้องแยกกองคือของที่อยู่ตรงหน้า ไม่ใช่ทั้งบริษัท */
   var AG={}, agOrd=[];
   B.bks.forEach(function(x){
+    if(x.secondary) return;   /* §pjSplit */
     var id=x.b.agentId; if(!id || AG[id]) return;
     var a=(typeof sbGetAgent==='function')?sbGetAgent(id):null;
     AG[id]=(a&&a.name)||id; agOrd.push(id);
@@ -79156,7 +79193,7 @@ function poSignPrint(bid, kinds){
   var KS=(kinds||[]).filter(function(k){ return PO_KIND[k]; });
 
   /* ── หนึ่งแถวต่อหนึ่งใบจอง · ชื่อทุกคนซ้อนกันในช่องเดียว เหมือนไฟล์ที่ใช้อยู่ ── */
-  var rows=B.bks.map(function(x){
+  var rows=B.bks.filter(function(x){ return !x.secondary; }).map(function(x){   /* §pjSplit */
     var b=x.b, t=x.t;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,_poDate):(b.ops||{});
     var van=(O&&O.vanId&&typeof vehGet==='function')?vehGet(O.vanId):null;
