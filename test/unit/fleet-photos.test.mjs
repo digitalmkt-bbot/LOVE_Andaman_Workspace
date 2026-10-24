@@ -1,10 +1,14 @@
 // §flPhoto · photos[] on maintenance jobs and problem reports survive the SQL round-trip
 // 2026-10-18 · Fleet Work "add photo" · refs only (file lives in attachments) · hidden flag kept
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const osRepo = require('../../os-backend/src/mapping/os_repo.js');
+// os-backend lives on lk-inbox only, so on main these tests skip instead of failing
+const HAS_OS = fs.existsSync(new URL('../../os-backend/src/mapping/os_repo.js', import.meta.url));
+const osRepo = HAS_OS ? require('../../os-backend/src/mapping/os_repo.js') : null;
+const test = HAS_OS ? nodeTest : nodeTest.skip;
 
 const PH = [
   { id: 'ph_1', attId: 'att1', url: '/api/attach/att1', mime: 'image/jpeg', size: 1234, name: 'a.jpg', cap: 'ถอดเกียร์แล้ว', stage: 'Repairing', addedAt: '2026-10-18T10:00:00.000Z', by: 'Pae' },

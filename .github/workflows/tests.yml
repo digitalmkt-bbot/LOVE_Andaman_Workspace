@@ -68,20 +68,12 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      - name: Apply relational schema from db/migrations (if present)
-        run: |
-          if [ -d db/migrations ] && ls db/migrations/*.sql >/dev/null 2>&1; then
-            echo "Applying db/migrations/*.sql to $DATABASE_URL ..."
-            for f in $(ls db/migrations/*.sql | sort); do
-              echo "  -> $f"
-              PGPASSWORD=postgres psql -h localhost -U postgres -d love_andaman_test -v ON_ERROR_STOP=1 -f "$f"
-            done
-          else
-            echo "::warning::db/migrations/ not present on this branch (tracked by LAM-73) — the e2e write-path test will report itself skipped, not passed."
-          fi
+      # No step applies db/migrations here: they belong to the legacy database (migration 020 needs operation_schemas.trips,
+      # which a blank database does not have), and main's data lives in operation-backend now.
 
-      - name: Run test suite (node --test)
-        run: node --test
+      - name: Run unit tests (node --test test/unit)
+        # Only test/unit: the scripts under test/ui drive Chrome and cannot run on a CI runner.
+        run: node --test test/unit/*.test.mjs
 
       - name: Install db/ dependencies
         working-directory: db
