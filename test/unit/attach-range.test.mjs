@@ -1,12 +1,16 @@
 // §attachRange · /api/attach/<id> answers HTTP Range so Safari / iOS can play fleet-job video clips (§flpVideo)
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 // server.js starts listening on require · lift just the helper out of the file text instead
-const src = fs.readFileSync(new URL('../../server.js', import.meta.url), 'utf8');
-const m = /function attachRange\(h, len\)\{[\s\S]*?\n\}\n/.exec(src); assert.ok(m, 'attachRange not found in server.js');
-const _ar = vm.runInNewContext(m[0] + '; attachRange');
+// server.js lives on lk-inbox only (main has no legacy server), so on main these tests skip instead of failing
+const HAS_SERVER = fs.existsSync(new URL('../../server.js', import.meta.url));
+const src = HAS_SERVER ? fs.readFileSync(new URL('../../server.js', import.meta.url), 'utf8') : '';
+const m = HAS_SERVER ? /function attachRange\(h, len\)\{[\s\S]*?\n\}\n/.exec(src) : null;
+if (HAS_SERVER) assert.ok(m, 'attachRange not found in server.js');
+const _ar = HAS_SERVER ? vm.runInNewContext(m[0] + '; attachRange') : null;
+const test = HAS_SERVER ? nodeTest : nodeTest.skip;
 const attachRange = (h, len) => { const r = _ar(h, len); return r && typeof r === 'object' ? { start: r.start, end: r.end } : r; };   // objects cross the vm boundary · copy them so deepEqual compares values
 
 test('no header or empty file → whole file (200)', () => {
