@@ -40876,9 +40876,11 @@ function agRenderTable(){
             return '<td style="padding:0;border-bottom:1px solid #f1efe9;border-right:1px solid #f1efe9">'+inner+'</td>';
           }
           const txt = agCellText(a,c);
+          /* §agRtLink · ช่อง Rate Type มีปุ่ม ↗ เปิดเรทนั้น · กดที่ตัวหนังสือยังแก้ค่าได้เหมือนเดิม */
+          const rtGo = (c.k==='rateTypeId' && !blank && a.rateTypeId) ? '<a onclick="agGoRateType(\''+e(a.rateTypeId)+'\',event)" title="เปิด Rate Type นี้" style="float:right;margin-left:6px;color:#185FA5;font-weight:700;cursor:pointer">&#8599;</a>' : '';
           return '<td onclick="window.__agFillSrc={id:\''+e(a.id)+'\',k:\''+e(c.k)+'\'};agTblEdit(\''+e(a.id)+'\',\''+e(c.k)+'\')" '
             +'style="padding:7px 8px;border-bottom:1px solid #f1efe9;border-right:1px solid #f1efe9;font-size:12px;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+c.w+'px;'
-            +(blank?'background:#FDF6E3;color:#a9884a':'color:#2b3a34')+'" title="'+e(txt||'ว่าง')+'">'+(blank?'— ว่าง —':e(txt))+'</td>';
+            +(blank?'background:#FDF6E3;color:#a9884a':'color:#2b3a34')+'" title="'+e(txt||'ว่าง')+'">'+rtGo+(blank?'— ว่าง —':e(txt))+'</td>';
         }).join('')
       +'</tr>';
   }).join('') : '<tr><td colspan="'+(cols.length+1)+'" style="padding:26px;text-align:center;color:#9aa8a2;font-size:12.5px">ไม่มีเอเจ้นตามเงื่อนไขที่เลือก</td></tr>';
@@ -43967,6 +43969,19 @@ function agRenderFilters(){
    ═══════════════════════════════════════════════════════════════════════════ */
 /* เรทที่ใช้จริงของเอเย่นต์รายหนึ่ง · a.rateTypeId ถูก sidecar sb_agents_rate_bindings เขียนทับตอนโหลดแล้ว
    ฟังก์ชันนี้จึงอ่านตัวเดียวพอ — เขียนเป็นฟังก์ชันไว้เพื่อให้ที่อื่นเรียกใช้คำนิยามเดียวกัน */
+/* §agRtLink (2026-10-25) · owner "หน้า Agent list พอกดที่ Rate ให้เด้งไปที่ Rate type นั้น ๆ"
+   เปิดหน้า Rate Types แล้วเลือกเรทนั้นให้ · ใช้จากการ์ด Bound rate · ชิป Source ใน Pricing Matrix · ปุ่ม ↗ ในตาราง */
+function agGoRateType(rtId, ev){
+  try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(_){}
+  if(!rtId || typeof getRateType!=='function' || !getRateType(rtId)) return;
+  _rtSelected=rtId;
+  const el=document.querySelector('.nav-item[data-view="rate-types"]');
+  if(el && typeof nav==='function') nav(el); else if(typeof renderRateTypes==='function') renderRateTypes();
+  setTimeout(function(){ try{
+    if(typeof rtSideCloseOnPhone==='function') rtSideCloseOnPhone();
+    const card=document.querySelector('#rt-list [data-rt-id="'+rtId+'"], #rt-list .rt-card.on, #rt-list .on'); if(card && card.scrollIntoView) card.scrollIntoView({block:'nearest'});
+  }catch(_){} }, 80);
+}
 function agHdRateOf(a){
   if(!a || !a.rateTypeId) return null;
   return (typeof getRateType==='function') ? getRateType(a.rateTypeId) : null;
@@ -46034,7 +46049,7 @@ function agTabInfo(a){
       today = tag('In window · ends in '+dvt+' days','amb');
     }
     boxBound = box('Bound rate',
-      rowS('Rate', `${E(_rtNow.name||'')}<span class="sub mono">${E(_rtNow.code||'')}</span>`)
+      rowS('Rate', `<a onclick="agGoRateType('${E(_rtNow.id||'')}',event)" style="cursor:pointer;color:var(--ag-navy,#16265C);text-decoration:underline dotted;text-underline-offset:3px" title="เปิด Rate Type นี้">${E(_rtNow.name||'')} ↗</a><span class="sub mono">${E(_rtNow.code||'')}</span>`)   /* §agRtLink */
       + rowS('Active', `<span class="mono">${E(_rtFmtDate(vf)||vf||'—')} → ${E(_rtFmtDate(vt)||vt||'no end date')}</span>`)
       + rowS('In effect today', today),
       tag(_rtCover.length + ' route' + (_rtCover.length===1?'':'s')), 'c5');
@@ -46258,8 +46273,8 @@ function agTabPrices(a){
     <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:${isInactive?'#854F0B':rt.color};flex-wrap:wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>
       <span style="font-weight:500">Source: Rate Type</span>
-      <span style="background:#fff;color:${rt.color};font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code}</span>
-      <span style="font-weight:600">${rt.name}</span>
+      <span onclick="agGoRateType('${rt.id}',event)" title="เปิด Rate Type นี้" style="cursor:pointer;background:#fff;color:${rt.color};font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code}</span>
+      <span onclick="agGoRateType('${rt.id}',event)" title="เปิด Rate Type นี้" style="cursor:pointer;font-weight:600;text-decoration:underline dotted;text-underline-offset:3px">${rt.name} ↗</span>   <!-- §agRtLink -->
       ${isInactive?'<span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em">Inactive</span>':''}
       <span style="font-size:10px;color:${isInactive?'#854F0B':rt.color};opacity:.7;font-variant-numeric:tabular-nums" title="ช่วงที่ตกลงราคากันไว้ · ไม่ได้กั้นการคิดเงิน — จองนอกช่วงก็ยังคิดราคาชุดนี้">${validHint}</span>
       <span style="font-size:9.5px;color:#8A929E;font-weight:500">(ช่วงที่ตกลงราคา &middot; ไม่ได้กั้นการคิดเงิน)</span>
