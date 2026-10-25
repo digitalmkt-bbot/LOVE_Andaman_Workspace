@@ -70095,7 +70095,18 @@ function renderPierPark(pier){
     var set=function(){ try{
       /* ตำแหน่งที่แถบบนตรึงจริง (ค่า top ที่เบราว์เซอร์คำนวณให้) + ความสูงของมัน */
       var tb=parseFloat(getComputedStyle(st).top)||0;
-      host.style.setProperty('--pk-top', Math.round(tb+st.getBoundingClientRect().height)+'px');
+      /* §pkTopOsc (2026-10-25) · owner "แถบเลื่อนเด้งไปมา"
+         --pk-top กำหนดความสูงกล่องชีท (max-height: 100vh − --pk-top) → ความสูงหน้าเปลี่ยน → แถบเลื่อนแนวตั้งโผล่/หาย
+         → หน้าแคบ/กว้างขึ้น ~15px → แถบบนตกบรรทัด/ไม่ตก → สูงเปลี่ยน → ResizeObserver ยิงกลับมาที่นี่ → วนไม่รู้จบ
+         (เกิดตรงความกว้างที่ป้ายในแถบบนพอดีขอบ · เห็นเป็นแถบเลื่อนกระพริบเด้งไปมา)
+         ถ้าค่าสลับไปมาระหว่างสองค่าภายใน 1.5 วิ ให้หยุดที่ค่ามากสุดแล้วไม่ตามอีก */
+      var v=Math.round(tb+st.getBoundingClientRect().height), cur=parseInt(host.style.getPropertyValue('--pk-top'))||0;
+      if(v===cur) return;
+      var Hh=host._pkTopH||(host._pkTopH=[]), now=Date.now(); Hh.push([v,now]); while(Hh.length>8) Hh.shift();
+      var rec=Hh.filter(function(x){ return now-x[1]<1500; });
+      if(rec.length>=4){ var vals={}; rec.forEach(function(x){ vals[x[0]]=1; }); var ks=Object.keys(vals);
+        if(ks.length<=2){ v=Math.max.apply(null, ks.map(Number)); if(v===cur) return; } }
+      host.style.setProperty('--pk-top', v+'px');
       /* หัวตารางเดือนสองชั้น · ชั้นล่างตรึงต่อจากความสูงจริงของชั้นบน */
       var gh=host.querySelector('.pk2-ov thead tr.g th.gh'); if(gh) host.style.setProperty('--pk-gh', Math.round(gh.getBoundingClientRect().height)+'px');
     }catch(_){} };
