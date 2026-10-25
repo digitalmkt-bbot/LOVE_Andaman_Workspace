@@ -40965,6 +40965,7 @@ function renderAgents(){
   if(_agSelected){
     agRenderDetail(_agSelected);
   } else {
+    try{ if(window.matchMedia && matchMedia('(max-width:900px)').matches){ const _sd=document.querySelector('#view-agents .sb-side'); if(_sd && !_sd.classList.contains('open')){ _sd.classList.add('open'); const _b=document.getElementById('ag-side-tgl'); if(_b) _b.textContent='Hide'; } } }catch(_){}   /* §mobSales */
     document.getElementById('ag-main').innerHTML = '<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   }
 }
@@ -41624,6 +41625,7 @@ function renderRateTypes(){
   rtDupCodeBanner();             /* §rtDupCode · โค้ดซ้ำทำให้การนำเข้า Agent ผูกเรทผิดชุด */
   rtExpBanner();                 /* §rtAdmin · หน้านี้เอาไว้ทำเรท · แผงเตือนย้ายไปหน้ารวม เหลือบรรทัดเดียวชี้ทาง */
   rtApplyViewMode();
+  rtSideEnsure();   /* §mobSales */
   rtRenderList();
   if(_rtSelected){
     rtRenderDetail(_rtSelected);
@@ -41634,7 +41636,25 @@ function renderRateTypes(){
   }
 }
 
+/* §mobSales · ลิสต์ Rate Type บนมือถือ · ยุบ/กาง แบบเดียวกับ Agent (§agPhone) · จอใหญ่ไม่เห็นปุ่ม */
+function rtSideToggle(){
+  const side=document.querySelector('#view-rate-types .sb-side'); if(!side) return;
+  const on=side.classList.toggle('open');
+  const b=document.getElementById('rt-side-tgl'); if(b) b.textContent=on?'Hide':'Browse';
+}
+function rtSideEnsure(){
+  try{
+    const hd=document.querySelector('#view-rate-types .sb-side-hd'); if(!hd || document.getElementById('rt-side-tgl')) return;
+    const b=document.createElement('button'); b.id='rt-side-tgl'; b.type='button'; b.className='ag-side-tgl rt-side-tgl'; b.textContent='Browse'; b.onclick=rtSideToggle;
+    hd.appendChild(b);
+  }catch(_){}
+}
+function rtSideCloseOnPhone(){
+  try{ if(window.matchMedia && matchMedia('(max-width:900px)').matches){ const side=document.querySelector('#view-rate-types .sb-side'); if(side) side.classList.remove('open'); const b=document.getElementById('rt-side-tgl'); if(b) b.textContent='Browse';
+    const det=document.getElementById('rt-detail'); if(det && det.scrollIntoView) setTimeout(function(){ det.scrollIntoView({block:'start',behavior:'smooth'}); },60); } }catch(_){}
+}
 function rtSelectCard(rtId){
+  rtSideCloseOnPhone();   /* §mobSales */
   _rtSelected = rtId;
   rtRenderList();
   if(rtId){
@@ -49591,7 +49611,7 @@ function renderSalesBoard(){
         <button onclick="sbPickWho('${x.s.id}')" style="width:100%;margin-top:13px;background:${mid?c:'#fff'};border:${mid?'none':'0.5px solid var(--fd-line)'};border-radius:10px;padding:${mid?10:9}px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:${mid?'#fff':'#15201a'}">View Board</button>
       </div></div>`;
   };
-  const podiumHtml = sales.length ? `<div style="display:grid;grid-template-columns:1fr 1.06fr 1fr;gap:14px;align-items:end;position:relative;z-index:1;padding:0 4px">${podCard(1,false)}${podCard(0,true)}${podCard(2,false)}</div>` : '';
+  const podiumHtml = sales.length ? `<div class="sb-podium" style="display:grid;grid-template-columns:1fr 1.06fr 1fr;gap:14px;align-items:end;position:relative;z-index:1;padding:0 4px">${podCard(1,false)}${podCard(0,true)}${podCard(2,false)}</div>` : '';   /* §mobSales · class ไว้เรียง 1-2-3 บนมือถือ */
 
   const hl=(av,avc,ic,icc,lbl,who,val)=>`<div style="background:rgba(255,255,255,.58);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);border:1px solid rgba(255,255,255,.65);border-radius:14px;box-shadow:0 5px 18px rgba(30,30,60,.09),inset 0 1px 0 rgba(255,255,255,.85);padding:12px 14px;display:flex;align-items:center;gap:11px">
       <span style="position:relative;flex:none"><span style="width:38px;height:38px;border-radius:50%;background:var(--fd-bg,#F1EFE8);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:${avc}">${e((av||'?')[0])}</span><span style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:${icc};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px">${ic}</span></span>
@@ -49605,7 +49625,7 @@ function renderSalesBoard(){
     </div>`;
 
   const GC = '26px 1.4fr 84px 52px 46px 56px 58px 84px';
-  const tblHead = `<div style="display:grid;grid-template-columns:${GC};gap:8px;padding:0 16px 7px;font-size:9.5px;color:#a8a69e">
+  const tblHead = `<div class="sb-lbh" style="display:grid;grid-template-columns:${GC};gap:8px;padding:0 16px 7px;font-size:9.5px;color:#a8a69e">
       <span></span><span>Name</span><span>Market</span><span style="text-align:right">PAX</span><span style="text-align:right">FOC</span><span style="text-align:right">Share</span><span style="text-align:right">Book</span><span style="text-align:right">Score</span></div>`;
   const tblRows = sales.map((x,i)=>{ const c=x.s.color||'#888',rk=i+1,top3=rk<=3,me=x.s.id===myId;
     const pct=x.tgt?Math.round(x.pax/x.tgt*100):null, done=pct!=null&&pct>=100;
@@ -49613,15 +49633,15 @@ function renderSalesBoard(){
     const score = pct!=null
       ? `<span onclick="${isAdmin?`event.stopPropagation();sbEditTarget('${x.s.id}','${ym}')`:''}" style="background:#1c2b45;color:#fff;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;${isAdmin?'cursor:pointer':''}">🎯${pct}${done?'✓':''}</span>`
       : (isAdmin?`<span onclick="event.stopPropagation();sbEditTarget('${x.s.id}','${ym}')" style="font-size:10px;color:#185FA5;cursor:pointer">+ target</span>`:'<span style="font-size:10px;color:#c4c2ba">—</span>');
-    return `<div class="sb-in" data-delay="${(i+3)*45}" onclick="sbPickWho('${x.s.id}')" style="display:grid;grid-template-columns:${GC};gap:8px;align-items:center;background:#fff;border:${top3?'1px solid '+c:'0.5px solid var(--fd-line)'};border-radius:12px;${top3?'box-shadow:0 3px 10px rgba(20,20,40,.06);':''}padding:9px 16px;margin-bottom:7px;cursor:pointer">
+    return `<div class="sb-in sb-lbr" data-delay="${(i+3)*45}" onclick="sbPickWho('${x.s.id}')" style="display:grid;grid-template-columns:${GC};gap:8px;align-items:center;background:#fff;border:${top3?'1px solid '+c:'0.5px solid var(--fd-line)'};border-radius:12px;${top3?'box-shadow:0 3px 10px rgba(20,20,40,.06);':''}padding:9px 16px;margin-bottom:7px;cursor:pointer">
         <span style="font-size:16px;font-weight:700;font-style:italic;color:${top3?c:'#b0aea6'}">${rk}</span>
         <span style="display:flex;align-items:center;gap:10px;min-width:0">${hex(x.s.name,c,30,34,12,false)}<span style="min-width:0"><span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px">${e(x.s.name)}<span style="color:#185FA5;font-size:10px">✔</span></span><span style="font-size:10px;color:#a8a69e">${e(x.s.sub||x.s.market||'')}</span></span></span>
-        <span><span style="font-size:10px;background:var(--fd-bg,#F1EFE8);color:#5F5E5A;border-radius:6px;padding:3px 9px;font-weight:500;white-space:nowrap">${e((x.s.market||'—')).slice(0,9)}</span></span>
-        <span style="text-align:right;font-size:14px;font-weight:600"><span class="sb-cnt" data-pax="${x.pax}" data-delay="${(i+3)*45}">0</span></span>
-        <span style="text-align:right;font-size:12.5px;color:${x.foc?'#5B289A':'#c4c2ba'};font-variant-numeric:tabular-nums">${x.foc?fN(x.foc):'0'}</span>
-        <span style="text-align:right;font-size:12.5px;font-weight:600;color:#5F5E5A;font-variant-numeric:tabular-nums">${share}%</span>
-        <span style="text-align:right;font-size:12.5px;color:#8a8880;font-variant-numeric:tabular-nums">${fN(bkBySales[x.s.id]||0)}</span>
-        <span style="text-align:right">${score}</span></div>`;
+        <span class="sb-lbs"><span data-l="Market"><span style="font-size:10px;background:var(--fd-bg,#F1EFE8);color:#5F5E5A;border-radius:6px;padding:3px 9px;font-weight:500;white-space:nowrap">${e((x.s.market||'—')).slice(0,9)}</span></span>
+        <span data-l="PAX" style="text-align:right;font-size:14px;font-weight:600"><span class="sb-cnt" data-pax="${x.pax}" data-delay="${(i+3)*45}">0</span></span>
+        <span data-l="FOC" style="text-align:right;font-size:12.5px;color:${x.foc?'#5B289A':'#c4c2ba'};font-variant-numeric:tabular-nums">${x.foc?fN(x.foc):'0'}</span>
+        <span data-l="Share" style="text-align:right;font-size:12.5px;font-weight:600;color:#5F5E5A;font-variant-numeric:tabular-nums">${share}%</span>
+        <span data-l="Book" style="text-align:right;font-size:12.5px;color:#8a8880;font-variant-numeric:tabular-nums">${fN(bkBySales[x.s.id]||0)}</span></span>
+        <span class="sb-lbc" style="text-align:right">${score}</span></div>`;   /* §mobSales · .sb-lbs = display:contents บนจอใหญ่ (คอลัมน์เท่าเดิม) · บนมือถือเป็นแถวชิปมีป้าย */
   }).join('') || '<div style="padding:20px;text-align:center;color:#b0aea6;font-size:12px">No sales staff</div>';
 
   wrap.innerHTML = `
