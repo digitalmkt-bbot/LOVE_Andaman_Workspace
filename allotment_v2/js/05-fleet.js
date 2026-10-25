@@ -8022,7 +8022,7 @@ function flRenderDashboard(){
 
   // Today's fuel (from FL_DAILY)
   let todayFuel=0,todayPAX=0;
-  Object.values(FL_DAILY[ds]||{}).forEach(bd=>{if(bd.fuel)todayFuel+=bd.fuel;});
+  Object.values(FL_DAILY[ds]||{}).forEach(bd=>{if(bd.fuel)todayFuel+=bd.fuel; if(bd.pos&&!bd.pos.off&&+bd.pos.fuel>0)todayFuel+=+bd.pos.fuel;});   // §drPos · น้ำมันตีเรือเข้ายอดวันนี้
   Object.values((typeof TRIPS!=='undefined'?TRIPS[ds]:null)||{}).forEach(op=>{if(op.booked)todayPAX+=op.booked;});
 
   // Maintenance
@@ -8832,6 +8832,7 @@ function flDRRan(ds,b){
     var dd=(typeof FL_DAILY!=='undefined'&&FL_DAILY[ds])?FL_DAILY[ds][b.id]:null;
     if(dd && (dd.fuel>0 || dd.paxActual!=null ||
       (dd.trips && Object.keys(dd.trips).some(function(k){ var tp=dd.trips[k]; return tp&&tp.engines&&Object.keys(tp.engines).length; })))) return true;
+    if(dd && dd.pos && !dd.pos.off && (dd.pos.manual || +dd.pos.fuel>0)) return true;   /* §drPos · ตีเรือเช่า */
     if(Object.keys(flWaterGet(ds,b.id)||{}).length) return true;
     if(flExtraGet(ds,b.id).length) return true;
     var iss=flIssueAll()[flWaterKey(ds,b.id)];
@@ -9146,6 +9147,79 @@ function flReqDelBtn(){
 /* ── ชิปกรองท่า · '' = ทุกท่า ── */
 var _FL_DR_PIER='';
 function flDRSetPier(k){ _FL_DR_PIER=(k===_FL_DR_PIER&&k!=='')?'':k; flRenderDR(); }
+/* ══ §drPos (2026-10-25) · ตีเรือย้ายท่า · บันทึกน้ำมันของเที่ยวที่ไม่มีลูกค้า ═════════════════
+   owner "มันมีบางช่วงที่เราตีเรือสลับไปมา · ต้องมีบันทึกค่าน้ำมันด้วยไหม" → "เพิ่ม + ตีเรือ ใน Daily Fleet ด้วยก็ได้"
+   ของเดิม แถวเรือที่ไม่มีลูกค้ายุบเป็น "ไม่ออก" ไม่มีช่องใส่น้ำมัน · น้ำมันที่ใช้ตีเรือจึงไม่ถูกบันทึก
+   ที่มาของรายการ: (1) อัตโนมัติ · ท่าของเรือวันนี้ต่างจากเมื่อวาน (ใบย้ายท่าใน Boat Status) (2) กด + ตีเรือ เอง
+   เก็บที่ FL_DAILY[วัน][เรือ].pos = {from,to,rt,fuel,note,by,at,manual} · off:1 = รายการอัตโนมัติที่บอกว่าไม่ได้ตีเรือ
+   น้ำมันตีเรือแยกจากน้ำมันเที่ยวลูกค้า (pos.fuel ไม่ใช่ .fuel) · นับเข้ายอดน้ำมันของท่า/ลำ และหน้า Fuel
+   แต่ไม่เข้า L/คน และไม่เข้าต้นทุนเที่ยวของโปรแกรม (Trip P&L อ่าน .fuel) */
+var FL_PIER_TH={tublamu:'ทับละมุ', panwa:'พันวา', ranong:'ระนอง'};
+function flPosPrevDay(ds){ var d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()-1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function flPosPierOn(b,ds){ if(!b) return ''; if(typeof getBoatCurrentPier!=='function') return b.pier||''; var p=getBoatCurrentPier(b,ds); return (p==='shop')?'':(p||''); }
+function flPosAuto(ds,b){ var a=flPosPierOn(b,flPosPrevDay(ds)), c=flPosPierOn(b,ds); return (a&&c&&a!==c)?{from:a,to:c,auto:1}:null; }
+function flPosGet(ds,b){
+  if(!b) return null;
+  var dd=(typeof FL_DAILY!=='undefined'&&FL_DAILY[ds])?FL_DAILY[ds][b.id]:null, m=dd&&dd.pos;
+  if(m && m.off) return null;
+  if(m && m.manual && (m.from||m.to)) return m;
+  var au=flPosAuto(ds,b); if(!au) return null;
+  if(m){ if(m.fuel!=null) au.fuel=m.fuel; if(m.note) au.note=m.note; if(m.rt) au.rt=1; }
+  return au;
+}
+function flPosFuelOf(ds,b){ var P=flPosGet(ds,b); return (P && +P.fuel>0)?+P.fuel:0; }
+function flPosLbl(P){ return P?((FL_PIER_TH[P.from]||P.from||'?')+' \u2192 '+(FL_PIER_TH[P.to]||P.to||'?')+(P.rt?' \u00b7 ไป-กลับ':'')):''; }
+function _flPosRec(ds,bid){ if(!FL_DAILY[ds]) FL_DAILY[ds]={}; if(!FL_DAILY[ds][bid]) FL_DAILY[ds][bid]={trips:{}}; return FL_DAILY[ds][bid]; }
+function flPosFuel(ds,bid,val){
+  var b=(typeof getBoat==='function')?getBoat(bid):null, cur=flPosGet(ds,b), rec=_flPosRec(ds,bid);
+  var P=rec.pos||(cur?{from:cur.from,to:cur.to,rt:cur.rt?1:0}:{});
+  var f=parseFloat(val); P.fuel=(isFinite(f)&&f>0)?f:null; rec.pos=P; flSave();
+}
+var _FLX_POS={ds:'',pier:'',bid:''};
+function flPosOpen(ds,pierKey,bid){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('View only - you cannot edit the fleet log.'); return; }
+  _FLX_POS={ds:ds,pier:pierKey||'',bid:bid||''};
+  var b=bid?getBoat(bid):null, cur=b?flPosGet(ds,b):null, rec=b?((FL_DAILY[ds]||{})[bid]||{}).pos:null;
+  var boats=BOATS.filter(function(x){ return x && !x.retired && (x.ownership!=='charter' || (typeof flDRRan==='function' && flDRRan(ds,x)) || x.id===bid); })
+    .sort(function(a,c){ return String(a.name).localeCompare(String(c.name)); });
+  var to=(cur&&cur.to)||pierKey||'panwa', from=(cur&&cur.from)||(to==='panwa'?'tublamu':'panwa');
+  var opt=function(v,lbl,on){ return '<option value="'+v+'"'+(on?' selected':'')+'>'+lbl+'</option>'; };
+  var piers=['tublamu','panwa','ranong'];
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#8644; '+(cur?'แก้ตีเรือ':'ตีเรือ · ย้ายท่า')+'<button class="x" onclick="flxClose()">&times;</button></div>'
+   +(cur&&cur.auto?'<div class="flx-n" style="margin:-4px 0 10px;color:#185FA5">ระบบเห็นจากใบย้ายท่าใน Boat Status ว่าลำนี้ย้ายท่าวันนี้</div>':'')
+   +'<label class="flx-l">เรือ<select id="flx-pb"'+(b?' disabled':'')+'>'+(b?'':opt('','-- เลือกเรือ --',1))+boats.map(function(x){ return opt(x.id, _flEsc(x.name)+(x.ownership==='charter'?' (เช่า)':''), x.id===bid); }).join('')+'</select></label>'
+   +'<div style="display:flex;gap:8px;align-items:flex-end">'
+     +'<label class="flx-l" style="flex:1">จากท่า<select id="flx-pf">'+piers.map(function(k){ return opt(k,FL_PIER_TH[k],k===from); }).join('')+'</select></label>'
+     +'<span style="padding-bottom:17px;color:#8a8a82">&#8594;</span>'
+     +'<label class="flx-l" style="flex:1">ไปท่า<select id="flx-pt">'+piers.map(function(k){ return opt(k,FL_PIER_TH[k],k===to); }).join('')+'</select></label>'
+   +'</div>'
+   +'<label class="flx-sc" style="gap:8px;cursor:pointer"><input type="checkbox" id="flx-prt"'+(cur&&cur.rt?' checked':'')+'> ไป-กลับในวันเดียว (ตีไปแล้วตีกลับ)</label>'
+   +'<div style="display:flex;gap:8px"><label class="flx-l" style="flex:1">น้ำมันที่ใช้ตีเรือ (L)<input id="flx-pfu" type="number" step="1" min="0" placeholder="0" value="'+(cur&&cur.fuel!=null?cur.fuel:'')+'"></label></div>'
+   +'<label class="flx-l">หมายเหตุ<input id="flx-pn" placeholder="เช่น ตีไปเสริมพันวา · กลับเข้าอู่" value="'+_flEsc(cur&&cur.note||'')+'"></label>'
+   +'<button class="flx-ok" onclick="flPosSaveBtn()">'+(cur?'บันทึก':'เพิ่มตีเรือ')+'</button>'
+   +(cur?('<button class="flx-ok" style="background:#fff;color:#A32D2D;border:1px solid #E7C4C0;margin-top:7px" onclick="flPosDelBtn()">'+(cur.auto?'ไม่ได้ตีเรือวันนี้ · ซ่อน':'ลบรายการตีเรือ')+'</button>'):'')
+   +'<div class="flx-n">น้ำมันตีเรือนับเข้ายอดน้ำมันของลำและของท่า แต่ไม่นับเป็นเที่ยวขาย ไม่เข้า L/คน และไม่เข้าต้นทุนเที่ยวของโปรแกรม · ราคา ฿/L ใช้ช่องของแถวเรือ</div>'
+   +'</div></div>';
+  void rec;
+}
+function flPosSaveBtn(){
+  var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
+  var bid=_FLX_POS.bid||g('flx-pb'); if(!bid){ alert('Select a boat first.'); return; }
+  var from=g('flx-pf'), to=g('flx-pt'); if(from===to){ alert('From and to must be different piers.'); return; }
+  var rec=_flPosRec(_FLX_POS.ds,bid), f=parseFloat(g('flx-pfu'));
+  var rtEl=document.getElementById('flx-prt');
+  rec.pos={from:from, to:to, rt:(rtEl&&rtEl.checked)?1:0, fuel:(isFinite(f)&&f>0)?f:null, note:String(g('flx-pn')||'').trim(), manual:1,
+           by:(typeof laBy==='function')?laBy():'', at:new Date().toISOString()};
+  flSave(); flxClose(); flRenderDR();
+}
+function flPosDelBtn(){
+  var ds=_FLX_POS.ds, bid=_FLX_POS.bid; if(!bid) return;
+  var b=getBoat(bid), au=flPosAuto(ds,b), rec=_flPosRec(ds,bid);
+  if(au) rec.pos={off:1, by:(typeof laBy==='function')?laBy():'', at:new Date().toISOString()};   /* รายการอัตโนมัติ · จำไว้ว่าไม่ได้ตีเรือ */
+  else delete rec.pos;
+  flSave(); flxClose(); flRenderDR();
+}
 function flRenderDR(){
   const dateEl=document.getElementById('fl-dr-date');
   if(!dateEl.value)dateEl.value=TODAY_STR;
@@ -9462,6 +9536,7 @@ function flRenderDR(){
       return bkV2BoatPulled(_ob, ds);
     }));
     const fuel=dayDR?.fuel;
+    const posI=flPosGet(ds,b);   /* §drPos */
     const isAnomaly=anomalies.find(a=>a.bid===b.id);
     const engs=FL_ENGINES.filter(e=>e.boatId===b.id).sort((x,y)=>(typeof flPosRank==='function'?flPosRank(x.pos)-flPosRank(y.pos):0));   // order columns by standard position: Port → C.Port → Center → C.Std → Std
 
@@ -9506,7 +9581,8 @@ function flRenderDR(){
     const _isCh = b.ownership==='charter';
     /* §drExtra · เรือเช่าที่วิ่งวันนั้นต้องมีแถวให้กรอกเสมอ แม้ยอดลูกค้าจะยังเป็น 0
        เพราะเหตุผลที่มันอยู่ในตารางคือ "เราเบิกของลงเรือลำนี้" ไม่ใช่ยอดขาย */
-    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b));
+    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b)) && !posI;   /* §drPos · วันที่ตีเรือต้องมีช่องให้ใส่น้ำมัน */
+    const posOnly = !!posI && pax===0;
 
     // ── Entry cards (Style A · fixed height · PAX/Fuel fixed-width so they line up across rows · engines fill the rest) ──
     const CARD='border-radius:9px;padding:0 13px;box-sizing:border-box;height:50px;display:flex;flex-direction:column;justify-content:center';   // shared box
@@ -9522,8 +9598,9 @@ function flRenderDR(){
 
     // Fuel price ฿/L — PER BOAT · shows ฿ cost = L × price
     const _fpOwn  = (FL_FUEL_PRICE[ds] && FL_FUEL_PRICE[ds][b.id]!=null) ? FL_FUEL_PRICE[ds][b.id] : null;
-    const _fpCost = (_fpOwn!=null && fuel) ? Math.round(fuel*_fpOwn) : null;
-    const _fpNeed = !_DIS && _fpOwn==null && fuel>0;   // entered fuel but no price yet
+    const _fuelAll = (+fuel||0) + (posI && +posI.fuel>0 ? +posI.fuel : 0);   /* §drPos · ฿ ของแถว = น้ำมันเที่ยว + ตีเรือ */
+    const _fpCost = (_fpOwn!=null && _fuelAll) ? Math.round(_fuelAll*_fpOwn) : null;
+    const _fpNeed = !_DIS && _fpOwn==null && _fuelAll>0;   // entered fuel but no price yet
     const priceCard = `<div class="fldr-cell" style="${CARD};width:110px;flex:none;background:${_fpNeed?'#FFF6E0':(_fpOwn!=null?'#FFF3E0':'#FBF6EC')};border:0.5px solid ${_fpNeed?'#EF9F27':(_fpOwn!=null?'#F0CF9A':'#EAD9B0')}" title="ราคาน้ำมัน ฿/ลิตร ของลำนี้">
         <div style="display:flex;justify-content:space-between;line-height:1"><span style="font-size:11px;color:#854F0B">฿/L</span>${_fpCost!=null?`<span style="font-size:10px;color:#BA7517">฿${_fpCost.toLocaleString()}</span>`:(_fpNeed?'<span style="font-size:10px;color:#BA7517">&#9888;</span>':'')}</div>
         <input class="fldr-in" type="number" step="0.01" min="0" value="${_fpOwn!=null?_fpOwn:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)" style="${INP};font-size:15px;font-weight:700;color:#854F0B">
@@ -9558,7 +9635,8 @@ function flRenderDR(){
         <span class="fs-av" style="background:${c}">${init}</span>
         <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}${_isCh?'<span class="fs-ch">เช่า</span>':''}
           <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
-    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${tripsHtml}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
+    const _posChip = posI ? `<div class="fs-pos${locked?'':' on'}"${locked?'':` onclick="flPosOpen('${ds}','','${b.id}')"`} title="${posI.auto?'จากใบย้ายท่าใน Boat Status · ':''}${_e(posI.note||'')}"><b>&#8644; ตีเรือ</b> ${flPosLbl(posI)}${(!posOnly)?`<input class="fs-in" type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" placeholder="L" ${_DIS} onclick="event.stopPropagation()" onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ (แยกจากเที่ยวลูกค้า)">`:''}</div>` : '';
+    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
     const IN='class="fs-in"';
     /* §drIssIdle (2026-09-12) · "แอดเพิ่ม เป็นชื่อเรือ กลายเป็นว่า
@@ -9595,7 +9673,9 @@ function flRenderDR(){
     const _fpOwn2=_fpOwn;
     return `<tr>${_btCell}${_rtCell}
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
-      <td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>
+      ${posOnly
+        ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
+        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };
@@ -9645,7 +9725,7 @@ function flRenderDR(){
     boats.forEach(b=>{
       const op=(TRIPS[ds]||{})[b.id];
       if(op?.booked){pPAX+=op.booked;pTrips++;}
-      const fl=(FL_DAILY[ds]||{})[b.id]?.fuel;
+      const fl=((FL_DAILY[ds]||{})[b.id]?.fuel||0) + flPosFuelOf(ds,b);   /* §drPos · รวมน้ำมันตีเรือ */
       if(fl){ pFuel+=fl; const pr=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):null; if(pr!=null) pCost+=fl*pr; else pCostMissing=true; }
     });
     flReqGet(ds,pierKey).forEach(r=>{
@@ -9693,6 +9773,7 @@ function flRenderDR(){
         <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
         <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace">${operating} operating</span>
         <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${pFuel} L${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
+        ${locked?'':`<button onclick="event.stopPropagation();flPosOpen('${ds}','${pierKey}','')" title="บันทึกเรือที่ตีย้ายท่า · ใส่น้ำมันที่ใช้ (ไม่มีลูกค้า)" style="margin-left:12px;border:1.5px solid #B5D4F4;background:#fff;color:#185FA5;border-radius:8px;padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit">+ ตีเรือ</button>`}
         <button onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการเบิกของ · พิมพ์ชื่อเอง ชื่อที่เคยใช้ขึ้นให้เลือก" style="margin-left:12px;border:1.5px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ อื่นๆ</button>
         <button onclick="event.stopPropagation();flIssueManageOpen('${pierKey}')" title="จัดการรายการเบิกของทั้งหมด" style="border:1px solid ${dim.line};background:#fff;color:${dim.ink2};border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">&#9881; จัดการรายการ</button>
         ${locked
@@ -9755,7 +9836,7 @@ function flRenderDR(){
           let tp=0,tf=0; const tw={}, ti={};
           boats.forEach(b=>{
             const bp2=boatPax[b.id]||{eff:0}; tp+=bp2.eff||0;
-            const fl=(FL_DAILY[ds]||{})[b.id]?.fuel; if(fl) tf+=fl;
+            const fl=((FL_DAILY[ds]||{})[b.id]?.fuel||0) + flPosFuelOf(ds,b); if(fl) tf+=fl;   /* §drPos */
             const u=flWaterUsed(ds,b.id); if(u!=null) tw.v=(tw.v||0)+u;
             ISS.forEach(it=>{ const v=flIssueGet(ds,b.id,it.id); if(v!=null) ti[it.id]=(ti[it.id]||0)+v; });
           });
@@ -9879,6 +9960,10 @@ function flRenderDR(){
 #fl-dr-body td.fs-w:first-of-type,#fl-dr-body td.fs-i:first-of-type{border-left:2px solid #CFCBBF}
 /* กล่องลอย */
 .flx-ovl{position:fixed;inset:0;background:rgba(20,24,20,.34);z-index:900;display:flex;align-items:center;justify-content:center}
+#fl-dr-body .fs-pos{display:inline-flex;align-items:center;gap:6px;margin-top:3px;padding:2px 8px;border-radius:7px;background:#E6F1FB;color:#185FA5;font-size:10.5px;white-space:nowrap}
+#fl-dr-body .fs-pos.on{cursor:pointer}#fl-dr-body .fs-pos.on:hover{background:#D6E7F8}
+#fl-dr-body .fs-pos input.fs-in{width:58px;height:22px;font-size:11px;border:1px solid #B5D4F4;border-radius:5px;background:#fff;text-align:right;padding:0 5px}
+#fl-dr-body td.fs-posf{background:#EEF5FC}#fl-dr-body td.fs-posf em{color:#185FA5}
 .flx-dlg{width:360px;max-height:84vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);padding:15px;font-family:'DM Sans','Noto Sans Thai',sans-serif}
 .flx-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#0B5C46;margin-bottom:11px}
 .flx-h .x{margin-left:auto;background:none;border:none;font-size:18px;color:#a3a29a;cursor:pointer;font-family:inherit}
@@ -18140,7 +18225,10 @@ function _fuelAgg(month){
       const b=getBoat(bid); if(!b||b.ownership==='charter'||b.retired) return;
       const bd=day[bid]||{}; const fuel=+bd.fuel||0;
       const info=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(bid,ds):{pax:0,routes:{}};
-      const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0; if(!ran) return;
+      const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0;
+      const posF=(typeof flPosFuelOf==='function')?flPosFuelOf(ds,b):0;   // §drPos · น้ำมันตีเรือ (ย้ายท่า) · นับเข้ายอดน้ำมัน/ค่าใช้จ่าย ไม่นับเป็นวันออกขาย ไม่นับ L/pax
+      if(!ran&&!posF) return;
+      if(ran){
       out.tripDays++;
       const pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):b.pier;
       const price=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):((typeof flFuelPrice==='function')?flFuelPrice(ds,pier):null);   // per-boat price → pier default
@@ -18155,6 +18243,13 @@ function _fuelAgg(month){
       if(fuel>0 && rk.length===0){ const brk=bb.routes._none=bb.routes._none||{name:'ไม่ระบุเส้นทาง',fuel:0,cost:0,pax:0,days:0}; brk.fuel+=fuel; brk.cost+=cost; brk.days++; }
       out.fuel+=fuel; out.cost+=cost; out.pax+=info.pax;
       out.weekly['W'+Math.ceil((+ds.slice(8,10))/7)]=(out.weekly['W'+Math.ceil((+ds.slice(8,10))/7)]||0)+cost;
+      }
+      if(posF>0){ const pp=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):null; const pc=(pp!=null)?posF*pp:0; if(pp==null) out.priceMissing=true;
+        const bb=out.byBoat[bid]=out.byBoat[bid]||{id:bid,name:b.name,fuel:0,cost:0,pax:0,runH:0,days:0,missing:0,fdays:[],routes:{}};
+        bb.fuel+=posF; bb.cost+=pc; bb.posFuel=(bb.posFuel||0)+posF; bb.posCost=(bb.posCost||0)+pc;
+        const brk=bb.routes._pos=bb.routes._pos||{name:'ตีเรือ (ย้ายท่า)',fuel:0,cost:0,pax:0,days:0}; brk.fuel+=posF; brk.cost+=pc; brk.days++;
+        out.fuel+=posF; out.cost+=pc; out.posFuel=(out.posFuel||0)+posF; out.posCost=(out.posCost||0)+pc;
+        out.weekly['W'+Math.ceil((+ds.slice(8,10))/7)]=(out.weekly['W'+Math.ceil((+ds.slice(8,10))/7)]||0)+pc; }
     });
   });
   Object.values(out.byBoat).forEach(bb=>{ if(bb.fdays.length>=3){ const avg=bb.fdays.reduce((s,x)=>s+x,0)/bb.fdays.length; } });
@@ -18176,7 +18271,14 @@ function _fuelWkAgg(month){
       const b=getBoat(bid); if(!b||b.ownership==='charter'||b.retired) return;
       const bd=day[bid]||{}; const fuel=+bd.fuel||0;
       const info=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(bid,ds):{pax:0,routes:{}};
-      const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0; if(!ran) return;   // §nil · ไม่ออก = ไม่นับ ไม่ใช่ 0
+      const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0;
+      const posF=(typeof flPosFuelOf==='function')?flPosFuelOf(ds,b):0;   // §drPos · ตีเรือ = นับเฉพาะ ฿ · ไม่นับ L/hr L/วัน L/pax
+      if(!ran&&!posF) return;
+      const wiP=Math.min(4,Math.max(0,Math.ceil((+ds.slice(8,10))/7)-1));
+      if(posF>0){ const pp=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):null; const pc=(pp!=null)?posF*pp:0;
+        const r0=out[bid]||(out[bid]={id:bid,name:b.name,w:[null,null,null,null,null],tot:{fuel:0,cost:0,pax:0,days:0,runH:0}});
+        const w0=r0.w[wiP]||(r0.w[wiP]={fuel:0,cost:0,pax:0,days:0,runH:0}); w0.cost+=pc; r0.tot.cost+=pc; }
+      if(!ran) return;   // §nil · ไม่ออก = ไม่นับ ไม่ใช่ 0
       const pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):b.pier;
       const price=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):((typeof flFuelPrice==='function')?flFuelPrice(ds,pier):null);
       const cost=(fuel&&price!=null)?fuel*price:0;
@@ -18248,8 +18350,8 @@ function renderFuelIntel(){
           return `<td style="${M}" title="${_cap?('ที่นั่ง '+_cap+' ที่ · เฉลี่ยเต็ม '+(_pct!=null?_pct+'%':'—')):'ยังไม่ได้ตั้งจำนวนที่นั่งของเรือลำนี้'}"><div>${_avg>0?Math.round(_avg):'—'}</div>${_pct!=null?`<div style="font-size:9.5px;font-weight:600;color:${_col};line-height:1.2;margin-top:1px">${_pct}%</div>`:''}</td>`; })()
       +`<td style="${M}"><div>${fL(b.fuel)}</div><div style="height:4px;background:${c}33;border-radius:2px;width:${Math.max(6,bar)}%;margin:5px 0 0 auto"></div></td>`
       +`<td style="${M}">${fL(b.cost)}</td>`
-      +`<td style="${M}">${b.days?Math.round(b.fuel/b.days):'—'}</td>`
-      +`<td style="${M}">${b.pax>0?(b.fuel/b.pax).toFixed(1):'—'}</td>`
+      +`<td style="${M}">${b.days?Math.round((b.fuel-(b.posFuel||0))/b.days):'—'}</td>`
+      +`<td style="${M}">${b.pax>0?((b.fuel-(b.posFuel||0))/b.pax).toFixed(1):'—'}</td>`
       +`<td style="text-align:right">${b.missing?`<span style="background:#FCEBEB;color:#A32D2D;padding:2px 9px;border-radius:9px;font-size:11px;font-weight:600;font-family:'DM Mono',monospace">${b.missing}</span>`:`<span style="color:#cac8c0">0</span>`}</td>`
       +`</tr>`;
     const routeRows=open?rts.map(r=>`<tr style="border-top:0.5px solid ${line};background:#fff">`
