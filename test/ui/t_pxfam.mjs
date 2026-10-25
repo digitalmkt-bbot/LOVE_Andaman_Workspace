@@ -11,6 +11,8 @@
 //   3 Daily: การ์ด Net มี Sales + FAM · ตารางมี "of which Sales / FAM" · ป้าย FAM บนแถว · กล่อง FAM + กล่องเตือน ฿0 ในการ์ดเรือ · ป้ายหัว "check price"
 //   4 Monthly: กล่อง Sales vs FAM · Sales + FAM = Net ของเดือน · ตารางเส้นทางมีคอลัมน์ Sales / FAM · Day by day มีป้าย FAM
 //   5 วันที่ไม่มี FAM: ไม่มีคอลัมน์เพิ่ม ไม่มีกล่อง · ไม่มี error
+//   6 (§pxFamHide · owner "ให้สามารถซ่อนได้") กด Hide FAM → Daily ไม่มีคอลัมน์/กล่อง/ป้าย FAM แต่เตือน ฿0 ยังอยู่ · Net เท่าเดิม
+//     Monthly เหลือแถบเล็ก + ปุ่ม Show · ตารางเส้นทางไม่มีคอลัมน์ FAM · จำค่าไว้ (localStorage) · กด Show กลับมาครบ
 import { open, goView } from './_harness.mjs';
 let bad = 0;
 const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
@@ -82,5 +84,24 @@ const R5 = await page.evaluate(S => { _px.date = S.D2; _px.tab = 'd'; renderTrip
   return { kfam: !!h.querySelector('.kfam'), ths: [...h.querySelectorAll('table.sum thead th')].map(x => x.textContent.trim()), box: h.querySelectorAll('.pxfam,.pxzero').length }; }, S);
 if (!R5.kfam && !R5.ths.includes('of which FAM') && R5.box === 0 && errors.length === 0) ok('5 วันไม่มี FAM: ไม่มีคอลัมน์ / กล่องเพิ่ม · ไม่มี error');
 else fail('5 ' + JSON.stringify({ R5, errors: errors.slice(0, 3) }));
+
+/* ══ 6 · §pxFamHide ══ */
+const snap = () => page.evaluate(() => { const h = document.getElementById('trippl-host');
+  let rt = []; h.querySelectorAll('table.sum').forEach(t => { const a = [...t.querySelectorAll('thead th')].map(x => x.textContent.trim()); if (a.includes('Route')) rt = a; });
+  return { kfam: !!h.querySelector('.kfam'), ths: [...h.querySelectorAll('table.sum thead th')].map(x => x.textContent.trim()), box: h.querySelectorAll('.pxfam').length,
+    zero: h.querySelectorAll('.pxzero').length, pills: [...h.querySelectorAll('table.sum .pill.pu')].length, tg: ((h.querySelector('.pxfamtg') || {}).textContent || ''),
+    net: ((h.querySelector('.pnet b') || {}).textContent || ''), mini: !!h.querySelector('.pxfammini'), full: !!h.querySelector('.pxfamm'), rt }; });
+await page.evaluate(S => { _px.date = S.D; _px.tab = 'd'; renderTripPL(); }, S);
+const d0 = await snap();
+await page.evaluate(() => document.querySelector('#trippl-host .pxfamtg').click());
+const d1 = await snap(); const ls1 = await page.evaluate(() => localStorage.getItem('la_px_famhide'));
+await page.evaluate(S => { _px.tab = 'm'; _px.mon = S.D.slice(0, 7); renderTripPL(); }, S);
+const m1 = await snap();
+await page.evaluate(() => document.querySelector('#trippl-host .pxfammini .pxfamtg').click());
+const m2 = await snap();
+const okD = d0.box === 2 && /Hide FAM/.test(d0.tg) && !d1.kfam && !d1.ths.includes('of which FAM') && d1.box === 0 && d1.pills === 0 && d1.zero === 1 && d1.net === d0.net && /Show FAM/.test(d1.tg) && ls1 === '1';
+const okM = m1.mini && !m1.full && !m1.rt.includes('FAM') && m2.full && !m2.mini && m2.rt.includes('FAM');
+if (okD && okM && errors.length === 0) ok('6 Hide FAM: Daily ไม่มีคอลัมน์/กล่อง/ป้าย FAM · เตือน ฿0 ยังอยู่ · Net ' + d1.net + ' เท่าเดิม · จำไว้ · Monthly เหลือแถบเล็ก → กด Show กลับมาครบ');
+else fail('6 ' + JSON.stringify({ d0: { box: d0.box, tg: d0.tg, net: d0.net }, d1, ls1, m1: { mini: m1.mini, full: m1.full, rt: m1.rt }, m2: { mini: m2.mini, full: m2.full, rt: m2.rt }, errors: errors.slice(0, 3) }));
 await close();
 if (bad) { console.log(bad + ' FAILED'); process.exit(1); } console.log('ALL OK');
