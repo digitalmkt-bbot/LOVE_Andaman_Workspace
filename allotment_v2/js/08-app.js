@@ -8026,7 +8026,11 @@ function vbAreaNm(id){
   if(!id || typeof bookingV2GetArea!=='function') return '';
   return String((bookingV2GetArea(id)||{}).name||'').trim();
 }
-function vbPickName(b, sp){ return (sp?vbAreaNm(sp.pickAreaId):'') || String((b&&b.pickupArea)||'').trim(); }
+/* §vbPickId (2026-10-22) · owner "ตรวจ ทำไมขึ้นโซนไม่ครบ" (16/10 Phi Phi Bamboo · VAN4 ขึ้นแค่ กะตะ · ราไวย์)
+   ใบจองมีจุดรับ 2 ช่อง: pickupAreaId (ที่หน้าแก้ไขใช้ และคิดราคา) กับ pickupArea (ข้อความเดิมตอนนำเข้า)
+   แก้จุดรับในหน้าแก้ไขแล้ว ข้อความเดิมไม่เปลี่ยนตาม (73 ใบใน backup 20 ต.ค. ไม่ตรงกัน) · ของเดิมอ่านข้อความก่อน
+   ใบ Phuket Orchid (โรงแรมอยู่กะรน · id = pk-karon) จึงขึ้นเป็น Kata · ตอนนี้อ่าน id ก่อน ข้อความเป็นตัวสำรอง */
+function vbPickName(b, sp){ return (sp?vbAreaNm(sp.pickAreaId):'') || vbAreaNm(b&&b.pickupAreaId) || String((b&&b.pickupArea)||'').trim(); }
 /* §vbDropWhy · คืนทั้งชื่อ และ "ใบนี้ตั้งจุดส่งใหม่จริงหรือเปล่า" มาด้วยกัน
    ที่มา (2026-09-22) · ของเดิมตัดสินสีตอนวาดด้วยการเทียบสตริงกับจุดรับของ "แถว"
    แต่แถวหนึ่งรวมหลายใบ · รถไปส่งกรุ๊ปหนึ่งแล้วรับอีกกรุ๊ปกลับ จุดส่งจึงเป็นของกรุ๊ปที่
@@ -8990,7 +8994,7 @@ function vbRenderOv2(host){
       +'<td class="l" colspan="2" style="color:'+(S.miss?'#FCD34D':'#86EFAC')+'">'+(S.miss?('ยังไม่ใส่เรต '+S.miss+' แถว'):'ครบทุกเจ้า')+'</td></tr></tfoot></table></div></div>';
   };
   var idle=vbSuppliers().filter(function(s){ return !ns[s]; });
-  host.innerHTML=vbCss()+vbxCss()+'<div class="vbx">'
+  host.innerHTML=vbCss()+vbxCss()+'<style>'+pcVbCss()+'</style><div class="vbx">'
     + vbxTop(A, e(vbPerLbl()), e(vbMoLbl()), (_vb.pier?e(VB_PIER_LBL[_vb.pier]):'ทุกท่า')+' · '+Object.keys(ns).length+' เจ้ามีงาน',
         '<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์สรุปรอบบิล'+(_vb.pier?(' · '+e(VB_PIER_SH[_vb.pier])):'')+'</button>')
     + kpi
@@ -9001,6 +9005,26 @@ function vbRenderOv2(host){
 /* ══ หน้า 2 · รายเจ้า แบบตาราง (Spreadsheet) ══
    ช่องเทา = ระบบดึงจากใบงานรถ · ช่องขาว = กรอกเอง (ตามกติกา §vbFill เดิม: ว่าง = คีย์ได้ · มีเลขแล้ว = กดแก้ไขก่อน)
    Enter/↓ ลงล่าง · ↑ ขึ้น · Tab ไปขวา · Ctrl+D เติมค่าจากแถวบน · วางช่วงจาก Excel ได้ (ข้ามช่องที่ล็อก) */
+/* ══ §vbDaily (2026-10-23) · owner (หน้ารายเจ้า) "เพิ่มที่เป็นรายการสรุปรายวันได้ด้วย และปริ้นได้"
+   สรุปรายวันของเจ้าที่เปิดอยู่ ที่ท่านี้ · แถวละวัน: เที่ยว · คน · คน/คัน · ค่ารถ · Extra · หัก · เรียกเก็บ (+ ราคาขาย · กำไร ในฉบับภายใน)
+   สูตรเดียวกับตารางและใบวางบิล (เรต + extra − หัก · ขาย = คน × ขาย/คน) · รถนอกนับตามวันที่ใส่ไว้ (ไม่มีวันที่ = "ไม่ระบุวัน")
+   พิมพ์ได้สองฉบับเหมือนใบวางบิล: ส่งเจ้าของรถ (ไม่มีราคาขาย/กำไร) · ฉบับภายใน */
+function vbDayAgg(rows, extras, st, pier){
+  var D={}, ord=[], perDef=vbPerOf(st, pier);
+  var get=function(ds){ var k=ds||''; if(!D[k]){ D[k]={ds:k, trips:0, out:0, pax:0, ad:0, chd:0, inf:0, foc:0, base:0, ex:0, cut:0, bill:0, sale:0, vans:{}}; ord.push(k); } return D[k]; };
+  (rows||[]).forEach(function(r){
+    var m=(st.rows||{})[vbRowKey(r)]||{}, C=vbCode(r.routeId);
+    var rate=(m.rate!=null?m.rate:vbRateOf(C.c, st))||0, ex=+m.ex||0, cut=+m.cut||0, per=(m.per!=null?m.per:perDef)||0;
+    var g=get(r.date); g.trips++; if(!r.ret) g.out++; g.pax+=r.pax; g.ad+=(+r.ad||0); g.chd+=(+r.chd||0); g.inf+=(+r.inf||0); g.foc+=(+r.foc||0);
+    g.base+=rate; g.ex+=ex; g.cut+=cut; g.bill+=rate+ex-cut; g.sale+=r.pax*per; if(r.vanId) g.vans[r.vanId]=1;
+  });
+  (extras||[]).forEach(function(x){ var n=+x.van||0, g=get(x.date||'');
+    g.trips+=n; g.out+=n; g.pax+=(+x.pax||0); g.base+=n*(+x.rate||0); g.ex+=(+x.ex||0); g.cut+=(+x.cut||0);
+    g.bill+=n*(+x.rate||0)+(+x.ex||0)-(+x.cut||0); g.sale+=(+x.pax||0)*(+x.per||0); });
+  ord.sort(function(a,b){ return (a?0:1)-(b?0:1) || (a<b?-1:a>b?1:0); });
+  return ord.map(function(k){ return D[k]; });
+}
+function vbDayLbl(ds, long){ if(!ds) return 'ไม่ระบุวัน'; try{ return new Date(ds+'T00:00:00').toLocaleDateString('th-TH', long?{weekday:'long',day:'numeric',month:'short'}:{weekday:'short',day:'numeric',month:'short'}); }catch(_){ return ds; } }
 function vbRenderSheet(host){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var sups=vbSuppliers();
@@ -9060,7 +9084,9 @@ function vbRenderSheet(host){
     var r=x.r, C=vbCode(r.routeId);
     if(r.date!==last){
       var nd=calc.filter(function(y){ return y.r.date===r.date; }).length;
-      body+='<tr class="vbx-day"><td class="rn"></td><td colspan="14">'+e(dayLbl(r.date))+' · '+nd+' คัน</td></tr>';
+      var _unp=calc.filter(function(y){ return y.r.date===r.date && y.bill>0 && !pcVbStatus(y.rk, y.bill).n; });   /* §pcVanPay */
+      body+='<tr class="vbx-day"><td class="rn"></td><td colspan="15">'+e(dayLbl(r.date))+' · '+nd+' คัน'
+        +(_unp.length>1?('<a class="vbp-day" onclick="vbPayOpen('+e(JSON.stringify(_unp.map(function(y){ return y.rk; })))+')">&#128181; จ่ายสดทั้งวัน · '+_unp.length+' คัน</a>'):'')+'</td></tr>';
       last=r.date;
     }
     var rn=((typeof getRoute==='function'?getRoute(r.routeId):null)||{}).name||r.routeId||'—';
@@ -9089,6 +9115,7 @@ function vbRenderSheet(host){
       +'<td class="i n">'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', x.rk+'|ex', ri, 'ex')+'</td>'
       +'<td class="i n">'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', x.rk+'|cut', ri, 'cut', 1)+'</td>'
       +'<td class="s n bill">'+(x.rate>0||x.ex||x.cut?Math.round(x.bill).toLocaleString('en-US'):'<span class="vbx-mut">ยังไม่มีเรต</span>')+'</td>'
+      +'<td class="s vbp">'+vbPayCell(x.rk, x.bill, ri, r.date)+'</td>'   /* §pcVanPay */
       +'<td class="i n">'+IN("vbSetRow('"+x.rk+"','per',this.value)", (x.m.per!=null?x.m.per:''), x.rk+'|per', ri, 'per')
         +((x.m.per==null&&x.per)?'<div class="vbx-sub">'+x.per+' ทั้งรอบ</div>':'')+'</td>'
       +'<td class="s n">'+(r.ret?'<span class="vbx-mut">ค่ารถอย่างเดียว</span>':(x.sale?Math.round(x.sale).toLocaleString('en-US'):'<span class="vbx-mut">·</span>'))+'</td>'
@@ -9111,27 +9138,34 @@ function vbRenderSheet(host){
       +'<td class="i n">'+IN(fn('ex'), x.ex||'', k('ex'), ri, 'ex')+'</td>'
       +'<td class="i n">'+IN(fn('cut'), x.cut||'', k('cut'), ri, 'cut', 1)+'</td>'
       +'<td class="s n bill">'+Math.round(bill).toLocaleString('en-US')+'</td>'
+      +'<td class="s vbp">'+vbPayCell('x'+x.id, bill, ri, x.date||'')+'</td>'   /* §pcVanPay */
       +'<td class="i n">'+IN(fn('per'), x.per||'', k('per'), ri, 'per')+'</td>'
       +'<td class="s n">'+Math.round(sale).toLocaleString('en-US')+'</td>'
       +'<td class="s n">'+(ED?('<a onclick="vbDelExtra(\''+x.id+'\')" style="color:#B42318;cursor:pointer;font-weight:700">ลบแถว</a>'):'')+'</td></tr>';
     ri++;
   });
-  var L='ABCDEFGHIJKLMN';
-  var H=['วันที่','รหัส','งาน','รถ','จุดรับ','จุดส่ง (ขากลับ)','คน','เรต/คัน','Extra','หัก','เรียกเก็บ','ขาย/คน','ราคาขาย','กำไร'];
-  var MAN={7:1,8:1,9:1,11:1};
+  var PS=vbPaySum(calc, extras);   /* §pcVanPay · จ่ายสดแล้ว / ค้าง */
+  var L='ABCDEFGHIJKLMNO';
+  var H=['วันที่','รหัส','งาน','รถ','จุดรับ','จุดส่ง (ขากลับ)','คน','เรต/คัน','Extra','หัก','เรียกเก็บ','จ่ายสด','ขาย/คน','ราคาขาย','กำไร'];   /* §pcVanPay · คอลัมน์ L */
+  var MAN={7:1,8:1,9:1,12:1};
   var thead='<thead><tr class="lt"><th></th>'+H.map(function(_,i){ return '<th>'+L[i]+'</th>'; }).join('')+'</tr>'
     +'<tr><th style="width:30px">#</th>'+H.map(function(h,i){ return '<th class="'+(MAN[i]?'man':'')+'">'+h+'</th>'; }).join('')+'</tr></thead>';
-  var foot='<tr class="vbx-add"><td class="rn">'+(ri+1)+'</td><td colspan="14"><a onclick="vbAddExtra()">+ เพิ่มแถว · รถนอก / งานที่ไม่ได้ผ่านใบงาน ('+e(VB_PIER_SH[pier]||pier)+')</a></td></tr>'
+  var foot='<tr class="vbx-add"><td class="rn">'+(ri+1)+'</td><td colspan="15"><a onclick="vbAddExtra()">+ เพิ่มแถว · รถนอก / งานที่ไม่ได้ผ่านใบงาน ('+e(VB_PIER_SH[pier]||pier)+')</a></td></tr>'
     +'<tr class="vbx-tot"><td class="rn">&Sigma;</td><td colspan="6">รวม '+T.van+' เที่ยว · '+e(VB_PIER_LBL[pier]||pier)+'</td>'
     +'<td class="n">'+T.pax+'<div style="font-size:9.5px;font-weight:600;opacity:.75;white-space:normal">'+T.ad+' AD · '+T.chd+' CHD · '+T.inf+' INF · '+T.foc+' FOC</div></td>'
     +'<td class="n">'+Math.round(T.bill-T.ex+T.cut).toLocaleString('en-US')+'</td><td class="n">'+Math.round(T.ex).toLocaleString('en-US')+'</td>'
     +'<td class="n">'+(T.cut?('-'+Math.round(T.cut).toLocaleString('en-US')):'0')+'</td><td class="n">'+Math.round(T.bill).toLocaleString('en-US')+'</td>'
+    +'<td class="n" style="font-size:11px">'+(PS.paid?('สด '+Math.round(PS.paid).toLocaleString('en-US')):'')+'</td>'   /* §pcVanPay */
     +'<td></td><td class="n">'+Math.round(T.sale).toLocaleString('en-US')+'</td><td class="n" style="color:'+(pl<0?'#FCA5A5':'#86EFAC')+'">'+vbB(pl).replace('฿','')+'</td></tr>';
+  var payStrip=(PS.n||PS.miss)?('<div class="vbp-sum">&#128181; จ่ายสดหน้าท่าแล้ว <b class="ok">฿'+Math.round(PS.paid).toLocaleString('en-US')+'</b><span class="mut">· '+PS.n+' แถว</span>'
+      +(PS.miss?('<span class="mut">·</span> ยังไม่จ่าย <b class="due">฿'+Math.round(PS.due).toLocaleString('en-US')+'</b><span class="mut">· '+PS.miss+' แถว</span>'):'<span class="mut">· ครบทุกแถว</span>')
+      +(PS.warn?('<span class="due">&#9888; ยอดไม่ตรง '+PS.warn+' แถว</span>'):'')
+      +(PS.miss>1?('<button onclick="vbPayOpen('+e(JSON.stringify(calc.filter(function(y){ return y.bill>0 && !pcVbStatus(y.rk, y.bill).n; }).map(function(y){ return y.rk; }).concat(extras.filter(function(x){ var b=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0); return b>0 && !pcVbStatus('x'+x.id, b).n; }).map(function(x){ return 'x'+x.id; }))))+')">&#128181; จ่ายสดที่เหลือ · '+PS.miss+' แถว</button>'):'')+'</div>'):'';
   var table='<div class="vbx-fx"><span class="ref" id="vbx-ref">—</span><span class="f">fx</span><span class="v" id="vbx-fv">คลิกช่องในตารางเพื่อดูสูตรของแถวนั้น</span>'
     +'<span class="h">Enter/↓ ลงล่าง · ↑ ขึ้น · Tab ไปขวา · Ctrl+D เติมจากแถวบน · วางช่วงจาก Excel ได้</span></div>'
     +'<div class="vbx-xlw"><table class="vbx-xl">'+thead+'<tbody>'
-    +(body||'<tr><td class="rn"></td><td colspan="14" style="padding:22px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ที่'+e(VB_PIER_SH[pier]||pier)+'ในรอบบิลนี้</td></tr>')
-    +foot+'</tbody></table></div>'
+    +(body||'<tr><td class="rn"></td><td colspan="15" style="padding:22px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ที่'+e(VB_PIER_SH[pier]||pier)+'ในรอบบิลนี้</td></tr>')
+    +foot+'</tbody></table></div>'+payStrip
     +'<div class="vbx-sheets">'+VB_PIER_ORD.filter(function(p){ return p===pier || mine(p) || p==='panwa' || p==='tublamu'; }).map(function(p){
         var g=mine(p);
         return '<button class="'+(p===pier?'on':'')+'" onclick="vbSetPier(\''+p+'\')">'+e(VB_PIER_LBL[p]||p)+(g?(' · '+g.trips):'')+'</button>'; }).join('')+'</div>'
@@ -9186,12 +9220,24 @@ function vbRenderSheet(host){
       +'<div class="eq"><span>ค่ารถ '+T.van+' เที่ยว</span><b>'+vbB(T.bill-T.ex+T.cut)+'</b><span>+ Extra</span><b>'+vbB(T.ex)+'</b><span>− หัก</span><b>'+vbB(T.cut)+'</b></div>'
       +'<div class="eq t"><span>รวม</span><b>'+vbB(T.bill)+'</b></div>'
       +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่มีใครกรอก')+'</div></div></div>';
+  /* §vbDaily · สรุปรายวัน (ตามคันที่เลือกอยู่) */
+  var DY=vbDayAgg(rows, extras, st, pier), NN=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
+  var daily = DY.length ? ('<div class="vbx-dy"><div class="hh"><b>สรุปรายวัน</b><span>'+DY.length+' วัน · '+e(_vb.sup)+' · '+e(VB_PIER_SH[pier]||pier)+(_vb.van?(' · เฉพาะ '+e(vName(_vb.van))):'')+'</span><i></i>'
+      +'<button class="vbx-btn sm" onclick="vbPrint(1,1)" title="มีราคาขายและกำไร · ใช้ภายใน">ฉบับภายใน</button>'
+      +'<button class="vbx-btn sm pri" onclick="vbPrint(0,1)">&#128424; พิมพ์สรุปรายวัน</button></div>'
+    +'<table><thead><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th class="b">เรียกเก็บ</th><th>ราคาขาย</th><th>กำไร</th></tr></thead><tbody>'
+    + DY.map(function(g){ var gp=g.sale-g.bill;
+        return '<tr><td class="l">'+e(vbDayLbl(g.ds))+'</td><td>'+g.trips+'</td><td>'+g.pax+'</td><td>'+(g.out?(g.pax/g.out).toFixed(2):'—')+'</td><td>'+NN(g.base)+'</td>'
+          +'<td>'+(g.ex?NN(g.ex):'<span class="vbx-mut">—</span>')+'</td><td>'+(g.cut?('-'+NN(g.cut)):'<span class="vbx-mut">—</span>')+'</td><td class="b">'+NN(g.bill)+'</td>'
+          +'<td>'+NN(g.sale)+'</td><td style="color:'+(gp<0?'#B42318':'#0F7A4E')+';font-weight:700">'+vbB(gp).replace('฿','')+'</td></tr>'; }).join('')
+    +'<tr class="t"><td class="l">รวม</td><td>'+T.van+'</td><td>'+T.pax+'</td><td>'+avg.toFixed(2)+'</td><td>'+NN(T.bill-T.ex+T.cut)+'</td><td>'+NN(T.ex)+'</td><td>'+(T.cut?('-'+NN(T.cut)):'0')+'</td><td class="b">'+NN(T.bill)+'</td>'
+    +'<td>'+NN(T.sale)+'</td><td style="font-weight:800;color:'+(pl<0?'#B42318':'#0F7A4E')+'">'+vbB(pl).replace('฿','')+'</td></tr></tbody></table></div>') : '';
   var acts=ED?('<span class="vbx-dirty">&#9679; กำลังแก้ไข · ยังไม่บันทึก</span><button class="vbx-btn" onclick="vbCancel()">ยกเลิก</button>'
                +'<button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
     :('<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>'
       +'<button class="vbx-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
       +'<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · '+e(VB_PIER_SH[pier]||pier)+'</button>');
-  host.innerHTML=vbCss()+vbxCss()+'<div class="vbx">'
+  host.innerHTML=vbCss()+vbxCss()+'<style>'+pcVbCss()+'</style><div class="vbx">'
     + vbxTop(A, vbB(T.bill).replace('฿',''), e(_vb.sup), 'รอบ '+e(vbPerLbl())+' '+e(vbMoLbl())+' · '+e(VB_PIER_LBL[pier]||pier), acts)
     + chips
     + (newRows.length?('<div class="vb-newrow">&#9888;&#65039; <b>มี '+newRows.length+' แถวที่เพิ่งโผล่หลังจากกรอกบิลใบนี้ไปแล้ว</b><span>('
@@ -9201,7 +9247,7 @@ function vbRenderSheet(host){
       +'<div style="flex:1;min-width:0"><div class="n">'+e(_vb.sup)+' <span class="vbx-pp" style="color:'+col+'">'+e(VB_PIER_LBL[pier]||pier)+'</span>'
       +'<span class="by">'+(st.by?(' · แก้ล่าสุด '+e(st.by)+(st.at?(' '+String(st.at).slice(0,10)):'')):'')+'</span></div>'
       +'<div class="vbx-vc">'+vchips+'</div></div>'+stPill+'</div>'
-    + rateStrip + kpi + table + sum
+    + rateStrip + kpi + table + sum + daily
     +'</div>';
   vbxBind(host);
   if(_vb.foc){ var _k=_vb.foc, _fv=_vb.focVal, _fs=_vb.focSel; _vb.foc=''; _vb.focVal=null; _vb.focSel=null;
@@ -9282,7 +9328,7 @@ function renderVanBill(){
    สรุปรอบบิล = เอกสารภายใน (A4 แนวนอน) แยกก้อนตามท่า
    ใบวางบิล = ส่งให้เจ้าของรถเซ็น (A4 แนวตั้ง) · ต่อเจ้า ต่อท่า · ไม่มีราคาขาย/กำไร
    (ของเดิมพิมพ์ภาพหน้าจอ ซึ่งมีราคาขายและกำไรของเราติดไปด้วย) · ฉบับภายใน = มีราคาขาย/กำไร */
-function vbPrint(internal){
+function vbPrint(internal, daily){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var N=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
   var P=vbPeriod(), y=+_vb.ym.slice(0,4), mm=_vb.ym.slice(5,7);
@@ -9390,6 +9436,27 @@ function vbPrint(internal){
         +'<td>'+N(x.rate)+(n>1?(' ×'+n):'')+'</td><td>'+(+x.ex?N(x.ex):'—')+'</td><td>'+(+x.cut?('-'+N(x.cut)):'—')+'</td><td><b>'+N(bill)+'</b></td>'
         +(IN2?('<td>'+N(sale)+'</td><td class="'+((sale-bill)<0?'neg':'pos')+'">'+((sale-bill)<0?'-':'')+N(Math.abs(sale-bill))+'</td>'):'')+'</tr>'; });
     var pl=tsale-tb;
+    if(daily){   /* §vbDaily · ใบสรุปรายวัน · ทุกคันของเจ้านี้ที่ท่านี้ (เหมือนใบวางบิล) */
+      var DY=vbDayAgg(rows, extras, st, pier), TR=0, TO=0;
+      DY.forEach(function(g){ TR+=g.trips; TO+=g.out; });
+      var dcols=IN2?10:8;
+      html=head('สรุปรายวันค่ารถร่วม','DAILY SUMMARY · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
+        +'<div class="meta"><div style="grid-column:span 2"><i>เจ้าของรถ</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
+        +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
+        +'<div><i>อ้างอิงใบวางบิล</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+'</b></div></div>'
+        +'<table><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>เรียกเก็บ</th>'+(IN2?'<th>ราคาขาย</th><th>กำไร</th>':'')+'</tr>'
+        +(DY.length?DY.map(function(g,k){ var gp=g.sale-g.bill;
+            return '<tr class="'+(k%2?'z':'')+'"><td class="l"><b>'+e(vbDayLbl(g.ds,1))+'</b><div class="sub">'+e(Object.keys(g.vans).map(function(id){ var v=(typeof vehGet==='function')?vehGet(id):null; return (v&&v.name)||id; }).join(' · '))+'</div></td>'
+              +'<td>'+g.trips+'</td><td>'+g.pax+'</td><td>'+(g.out?(g.pax/g.out).toFixed(2):'—')+'</td><td>'+N(g.base)+'</td><td>'+(g.ex?N(g.ex):'—')+'</td><td>'+(g.cut?('-'+N(g.cut)):'—')+'</td><td><b>'+N(g.bill)+'</b></td>'
+              +(IN2?('<td>'+N(g.sale)+'</td><td class="'+(gp<0?'neg':'pos')+'">'+(gp<0?'-':'')+N(Math.abs(gp))+'</td>'):'')+'</tr>'; }).join('')
+          :'<tr><td colspan="'+dcols+'" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
+        +'<tr class="tot"><td class="l">รวม '+DY.length+' วัน</td><td>'+TR+'</td><td>'+tpax+'</td><td>'+(TO?(tpax/TO).toFixed(2):'—')+'</td><td>'+N(tb-tex+tcut)+'</td><td>'+N(tex)+'</td><td>'+(tcut?('-'+N(tcut)):'0')+'</td><td>'+N(tb)+'</td>'
+        +(IN2?('<td>'+N(tsale)+'</td><td class="'+(pl<0?'neg':'pos')+'">'+(pl<0?'-':'')+N(Math.abs(pl))+'</td>'):'')+'</tr></table>'
+        +'<div class="words"><b>ยอดเรียกเก็บรวม (ตัวอักษร)</b> &nbsp; '+e(typeof pcBahtText==='function'?pcBahtText(tb):'')+'</div>'
+        +'<div class="note">เที่ยว = จำนวนคันที่วิ่ง (รวมขากลับ) · คน = ลูกค้าที่ขึ้นรถจริง · รายละเอียดทีละเที่ยวอยู่ในใบวางบิลเลขที่อ้างอิงด้านบน</div>'
+        +sig(['ผู้จัดทำ','ฝ่ายปฏิบัติการ'],['ผู้ตรวจสอบ',IN2?'ฝ่ายบัญชี':'เจ้าของรถ'],['ผู้อนุมัติ',''])
+        +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+' · สรุปรายวัน</span></div>';
+    } else
     html=head('ใบวางบิลค่ารถร่วม','BILLING NOTE · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
       +'<div class="meta"><div style="grid-column:span 2"><i>ผู้วางบิล (เจ้าของรถ)</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
       +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
@@ -9419,7 +9486,7 @@ function vbPrint(internal){
       +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+'</span></div>';
   }
   var w=window.open('','_blank'); if(!w) return;
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':('ใบวางบิล '+e(_vb.sup)))+'</title>'
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':((daily?'สรุปรายวัน ':'ใบวางบิล ')+e(_vb.sup)))+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
     +'<style>'+css+'</style></head><body>'+html+'</body></html>');
   w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 600);
@@ -9529,6 +9596,12 @@ function vbxCss(){
   +'.vbx-leg i{display:inline-block;width:14px;height:12px;border:1px solid #DDE1E6;background:#F6F8FB;vertical-align:-2px;margin-right:4px}'
   +'.vbx-leg i.w{background:#F8FCFF;border:1px dashed #9EC4E4}.vbx-leg i.ro{background:#fff}.vbx-leg i.sel{background:#E8F0FE;border:2px solid #1A73E8}'
   +'.vbx-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin-top:12px}'
+  +'.vbx-dy{margin-top:12px;border:1px solid #DCDFE6;border-radius:13px;background:#fff;padding:12px 14px}'   /* §vbDaily */
+  +'.vbx-dy .hh{display:flex;align-items:center;gap:10px;margin-bottom:8px}.vbx-dy .hh b{font-size:14px}.vbx-dy .hh span{font-size:12px;color:#5B6170}.vbx-dy .hh i{flex:1}'
+  +'.vbx-dy table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}'
+  +'.vbx-dy th{font-size:10.5px;font-weight:700;color:#5B6170;letter-spacing:.04em;text-align:right;padding:6px 10px;border-bottom:1px solid #DCDFE6;background:#F6F8FA}'
+  +'.vbx-dy td{text-align:right;padding:6px 10px;border-bottom:1px solid #EEF0F4}.vbx-dy .l{text-align:left}.vbx-dy .b{font-weight:800}'
+  +'.vbx-dy tr.t td{border-top:2px solid #0F1B3D;border-bottom:0;font-weight:800;background:#F6F8FA}'
   +'.vbx-cc{border:1px solid #DCDFE6;border-radius:13px;padding:11px 14px;background:#fff}'
   +'.vbx-cc .t{font-size:11px;font-weight:700;color:#5B6170}.vbx-cc .b{font-size:18px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}'
   +'.vbx-cc .s{font-size:11px;color:#8A8F9C;margin-top:2px}'
@@ -13014,7 +13087,7 @@ function pcApplyDelta(arr, now, was){
   }
   return n;
 }
-function pcSave(){
+function pcSave(){ try{ pcVbBust(); }catch(_){}
   try{
     pcSync();
     var A = pcFlatten(_PC_MEM), B = pcFlatten(_PC_V0);
@@ -13745,9 +13818,11 @@ function pcRowDel(kind,id){
   var D=pcDay(_pcPier,_pcDate,false); if(!D) return;
   var k=(kind==='in')?'in':'out';
   var hit=(D[k]||[]).filter(function(x){ return x.id===id; })[0]; if(!hit) return;
-  if(!confirm('ลบรายการนี้?\n'+(hit.txt||'')+' · '+pcMoney(hit.amt))) return;
+  var _vbL=(k==='out')?pcVbMap()[String(id)]:null;   /* §pcVanPay */
+  if(_vbL){ if(!confirm('This line was created from the van bill ('+(_vbL.sup||'')+').\nDelete it? The bill row will show "pay cash" again.\n'+(hit.txt||'')+' · '+pcMoney(hit.amt))) return; }
+  else if(!confirm('ลบรายการนี้?\n'+(hit.txt||'')+' · '+pcMoney(hit.amt))) return;
   D[k]=D[k].filter(function(x){ return x.id!==id; });
-  pcSave(); pcKeep();
+  pcSave(); if(_vbL) pcVbOnDel(id); pcKeep();
 }
 /* ── §pcPick · เลือกแถวในสมุดเดินบัญชี แล้วอ่านยอดรวมเฉพาะที่เลือก ──────
    คำถามหน้างานคือ "บิลกองนี้รวมกันเท่าไร" · ยอดรวมของทั้งวันมีอยู่แล้วที่แถวล่าง
@@ -14490,7 +14565,7 @@ function _renderPierCash(pier){
   _pcPier=pier||_pcPier;
   var host=document.getElementById('pc-host-'+_pcPier); if(!host) return;
   var P=(typeof PO_PIERS!=='undefined')?(PO_PIERS.filter(function(x){ return x.k===_pcPier; })[0]||{}):{};
-  var body=(_pcTab===1)?pcSheetLT(_pcPier):((_pcTab===2)?pcSheetPK(_pcPier):pcSheetMain(_pcPier));
+  var body=(_pcTab===1)?pcSheetLT(_pcPier):((_pcTab===2)?pcSheetPK(_pcPier):((_pcTab===3&&typeof pc2Claims==='function')?pc2Claims(_pcPier):pcSheetMain(_pcPier)));   /* §pcFlow */
   var tab=function(i,t){ return '<button class="'+(_pcTab===i?'on':'')+'" onclick="pcTab('+i+')">'+t+'</button>'; };
   host.className='pj-host sk';
   host.innerHTML='<style id="pc-style">'+pcCSS('#pc-host-'+_pcPier)
@@ -14774,19 +14849,21 @@ function pcPrintLedger(){
   rows=pcLedgerSort(rows,_pcPier,ds);   /* §pkLineOrd */
   var run=op, body='', i=0;
   body+='<tr><td class="rn">—</td><td class="c">—</td><td><i>ยอดยกมาจากวันก่อนหน้า</i></td>'
-    +'<td class="rt">ยกมา</td><td class="rt">ระบบ</td><td></td><td></td>'
+    +'<td class="rt">ยกมา</td><td class="rt"></td><td class="rt">ระบบ</td><td></td><td></td>'
     +'<td class="r v">'+pcN(op)+'</td></tr>';
   rows.forEach(function(r){
     i++;
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
-    var cat=isIn?'รับเงิน':(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น');
+    var _g=(!isIn && typeof pcGrpOf==='function')?pcGrpOf(r.x,'out'):null;   /* §pcVanPay4 · หมวดตามกลุ่มในสมุด (รถตู้ / ไกด์ / อุทยาน …) */
+    var cat=isIn?'รับเงิน':(_g?_g.t:(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น'));
+    var _py=(!isIn && typeof pcPyOf==='function')?pcPyOf(r.x):null;   /* §pcVanPay4 · ผู้รับเงินจากทะเบียน (owner "รายการปริ้นไม่ขึ้นชื่อผู้รับ") */
     run=pcRunBal(run,r,isIn,amt);   /* §w5cLedger */
     body+='<tr><td class="rn">'+i+'</td><td class="c">'+pcE(r.x.at||'—')+'</td>'
-      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
+      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt" style="color:#1B2A55;font-weight:600">'+(_py?pcE(_py.name||''):'')+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
       +'<td class="r v">'+(isIn?pcN(amt):'')+'</td><td class="r v">'+(!isIn?pcN(amt):'')+'</td>'
       +'<td class="r v">'+pcN(run)+'</td></tr>';
   });
-  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="7" style="color:#B9BCC6;padding:18px 12px">'
+  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="8" style="color:#B9BCC6;padding:18px 12px">'
     +'ไม่มีรายการของวันนี้</td></tr>';
 
   var css=PC_PRINT_HEAD_CSS
@@ -14795,11 +14872,11 @@ function pcPrintLedger(){
   var sheet=pcPrintHead('สมุดเดินบัญชีเงินสดย่อย','ยอดยกมา · รับ · จ่าย · คงเหลือ ของวันที่เลือก')
    +'<div class="pc-sheet"><div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
-     +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
-     +'<th class="r" style="width:104px">รับ</th><th class="r" style="width:104px">จ่าย</th>'
-     +'<th class="r" style="width:116px">คงเหลือ</th></tr></thead>'
+     +'<th style="width:84px">หมวด</th><th style="width:150px">ผู้รับเงิน</th><th style="width:90px">ผู้บันทึก</th>'
+     +'<th class="r" style="width:96px">รับ</th><th class="r" style="width:96px">จ่าย</th>'
+     +'<th class="r" style="width:108px">คงเหลือ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="4">รวมวันนี้</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="5">รวมวันนี้</td>'
        +'<td class="r">'+pcN(T.in)+'</td><td class="r">'+pcN(T.out)+'</td>'
        +'<td class="r">'+pcN(bal)+'</td></tr></tfoot></table></div></div>'
    +'<div class="pcp-sg"><div><div class="l"></div>(ผู้บันทึก)</div>'
@@ -15750,7 +15827,7 @@ var _pckBoat='', _pckVan='', _pckArr='', _pckStat='', _pckQ='';
 // คอลัมน์ Submitted by · หน้าท่าไม่ได้ใช้ทุกวัน ปกติซ่อน · จำค่าที่เลือกไว้ข้ามการเปิดหน้า
 var _pckShowBy=(function(){ try{ return localStorage.getItem('pck_showby')==='1'; }catch(_){ return false; } })();
 function pckToggleBy(){ _pckShowBy=!_pckShowBy; try{ localStorage.setItem('pck_showby', _pckShowBy?'1':'0'); }catch(_){} renderPierCheckin(); }
-function pckSetBoat(v){ _pckBoat=v||''; renderPierCheckin(); }
+function pckSetBoat(v){ v=v||''; _pckBoat=(v && v===_pckBoat)?'':v; renderPierCheckin(); }   /* §pckBoatToggle · กดชิปเรือที่เลือกอยู่ซ้ำ = กลับไปเรือทั้งหมด */
 function pckSetVan(v){ _pckVan=v||''; renderPierCheckin(); }
 function pckSetArr(v){ _pckArr=(_pckArr===v)?'':v; renderPierCheckin(); }
 function pckSetStat(v){ _pckStat=(_pckStat===v)?'':v; renderPierCheckin(); }
@@ -15847,9 +15924,58 @@ function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bk
           = ขายเพิ่มที่รอเก็บทุกรายการของวันนั้นถือว่าเก็บแล้ว "ผ่านหน้าท่า" · เก็บไม่ครบ = ยังค้างเหมือนเดิม
    เงินก้อนนั้นอยู่ใน bk.pierPayments แล้ว · รายการที่ครอบคลุมจึง "ไม่" ถูกบวกเข้ายอดรับซ้ำ (ดู pckMoney / tsSaleList)
    ไม่แก้ข้อมูลรายการขายเพิ่ม (settle ยัง pending) · เป็นการอ่านให้ตรงกันของสองหน้า จึงไม่ต้อง migrate */
+/* §exDupPier (2026-10-20) · ขายเพิ่มแบบ COT ที่หน้าท่าเก็บเงินไปแล้ว แล้วมีคนมา "แก้ไข" เปลี่ยนวิธีเป็นโอน/บัตรซ้ำอีกที
+   เจ้าของ: "ตรวจหน่อย ทำไมขึ้นซ้ำ" (20 ต.ค. · AS-TVB-2026-100055 กับ F2400 · บัตร ฿2,000 +fee ฿100 ขึ้นสองป้าย)
+   พอไม่ใช่ COT แล้ว ตัวครอบคลุมข้างล่างมองไม่เห็น · เงินก้อนเดียวจึงถูกบวกทั้งจากแถวหน้าท่าและจากตัวรายการขายเพิ่ม
+   กติกา · เงินหน้าท่าของวันนั้น "เกิน" ยอดที่ใบนั้นต้องเก็บ (COT + อัปเกรดค้าง + ยอดค้าง + ขายเพิ่มที่ยังรอ)
+          และส่วนเกินนั้นพอจ่ายรายการขายเพิ่มที่ถูกเปลี่ยนเป็นโอน/บัตรได้ → ถือว่าเป็นก้อนเดียวกับเงินหน้าท่า ไม่บวกซ้ำ
+   อ่านให้ตรงกันเฉย ๆ ไม่แก้ข้อมูล · ปุ่ม "แก้ให้" (tsExDupFix) ในหน้าปิดวันค่อยเปลี่ยนรายการกลับเป็นแบบเก็บหน้าท่า */
+function bkxExNeed(b, date, skipId){
+  var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
+  var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
+  var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
+  var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
+  var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  var exDue=0; ((typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(b.id):[]).forEach(function(k){
+    if(date && k.tripDate && k.tripDate!==date) return;
+    if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
+  return cot+upDue+bal+exDue;
+}
+/* ส่วนเกินของเงินหน้าท่า (เกินจากที่ใบนั้นต้องเก็บ) จ่ายให้รายการที่ถูกบันทึกเป็นโอน/บัตรซ้ำ
+   ทั้ง extra (method ไม่ใช่ cot/cash) และอัปเกรดที่ติ๊กเก็บแล้ว · ตามลำดับที่บันทึก · คืน id ที่ซ้ำ */
+function bkxPierDupIds(b, date){
+  var out={}; try{
+    var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[]; if(!pays.length) return out;
+    var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0;
+    var extra=pckN(paid - bkxExNeed(b,date)); if(!(extra>0.005)) return out;
+    var byM={}; pays.forEach(function(p){ var m=p.method||'cash'; byM[m]=(byM[m]||0)+(+p.amount||0); });
+    var cand=[];
+    ((typeof bookingV2ExtrasFor==='function')?bookingV2ExtrasFor(b.id):[]).forEach(function(k){
+      if(!k.id || k.method==='cot' || k.method==='cash' || !k.method) return;
+      if(date && k.tripDate && k.tripDate!==date) return;
+      cand.push({id:k.id, m:k.method, amt:+k.total||0, at:k.collectedAt||k.date||''}); });
+    (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
+      if(!u.id || !u.collected || !u.method || u.method==='cash' || u.method==='cot') return;
+      cand.push({id:u.id, m:u.method, amt:+u.sellPrice||0, at:u.at||''}); });
+    cand.forEach(function(c){
+      if(!(byM[c.m]>0)) return;                      /* ต้องมีเงินหน้าท่าวิธีเดียวกันจริง */
+      if(extra>=c.amt-0.005 && c.amt>0){ extra=pckN(extra-c.amt); out[c.id]=1; } });
+  }catch(_){}
+  return out;
+}
+function bkxExDupPier(x){
+  try{
+    if(!x || !x.id || x.method==='cot' || x.method==='cash' || !x.method) return false;
+    var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
+    var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
+    return !!bkxPierDupIds(b,date)[x.id];
+  }catch(_){ return false; }
+}
+function bkxUpDupPier(b, u, date){ try{ return !!(u && u.id && bkxPierDupIds(b,date)[u.id]); }catch(_){ return false; } }
 function bkxExCovered(x){
   try{
-    if(!x || x.method!=='cot' || x.settle==='done') return false;
+    if(!x) return false;
+    if(x.method!=='cot' || x.settle==='done') return bkxExDupPier(x);   /* §exDupPier */
     var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; }); if(!b) return false;
     var date=x.tripDate||(((b.trips||[])[0]||{}).date)||'';
     var paid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0; if(!(paid>0)) return false;
@@ -15884,11 +16010,12 @@ function pckMoney(b, date){
   });
   var exGot=0, exDue=0, exCov=0;
   /* §exCotPier · own = รับเงินที่ตัวรายการเอง (เข้า got) · covered = เงินอยู่ใน pierPayments แล้ว (ไม่บวกซ้ำ ไม่ค้าง) */
-  ex.forEach(function(x){ var v=+x.total||0; if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else if(bkxExCovered(x)) exCov+=v; else exDue+=v; });
+  ex.forEach(function(x){ var v=+x.total||0; if(bkxExCovered(x)) exCov+=v; else if(!(x.method==='cot' && x.settle!=='done')) exGot+=v; else exDue+=v; });   /* §exDupPier · ซ้ำกับเงินหน้าท่า = covered */
   var exTot=exGot+exDue+exCov;
   var ups=(!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[];
   var upDue=0, upGot=0;
-  ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected) upGot+=v; else upDue+=v; });
+  var _upDup=bkxPierDupIds(b,date);   /* §exDupPier · อัปเกรดที่ติ๊กเก็บแล้วทั้งที่หน้าท่าเก็บไปแล้ว = เงินก้อนเดียวกับแถวหน้าท่า */
+  var upCov=0; ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected){ if(_upDup[u.id]) upCov+=v; else upGot+=v; } else upDue+=v; });
   var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   // §pierPay · เงินที่เก็บหน้าท่าไปแล้ว (bk.pierPayments) หักออกจากยอดค้างทันที
@@ -15898,7 +16025,7 @@ function pckMoney(b, date){
   var gross=pckN(cot+upDue+bal+exDue);
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot,
-           exGot:exGot, exDue:exDue, exCov:exCov, upgrades:ups, upDue:upDue, upGot:upGot,
+           exGot:exGot, exDue:exDue, exCov:exCov, upgrades:ups, upDue:upDue, upGot:upGot, upCov:upCov,
            balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'',
@@ -17746,6 +17873,12 @@ function pckMealOvnOf(date, bid, bkId){
   var v=pckMealOvnMap(date,bid)[bkId];
   return (v==='in'||v==='out')?v:'';
 }
+/* ══ §mealOut (2026-10-20) · กรุ๊ปที่ไม่ทานอาหารกลางวัน · ใช้ได้กับทุกใบจอง ไม่ใช่แค่รับกลับค้างคืน ══
+   owner: "มีบางกรุ๊ปที่ไม่กินข้าวอาหารกลางวัน เราต้องทำยังไง" → ทำส่วนที่ 2 (เลือกที่การ์ดครัว)
+   เก็บในก้อนเดียวกับ §mealOvn (trip_actuals[date::boat].mealOvn[bkId] = 'out') · ไม่เพิ่มคอลัมน์
+   ใบปกติ: ไม่มีค่า / 'in' = ทาน (ค่าเดิม) · 'out' = ไม่ทาน
+   ผล: ใบสั่งอาหารขึ้นแถวเทา "ไม่รวมอาหาร" ไม่นับใน Total · ยอด/ค่าอาหารในการ์ดครัวลดตาม · ค่าอาหารประมาณใน P&L ลดตาม */
+function pckMealOut(date, bid, bkId){ return pckMealOvnOf(date,bid,bkId)==='out'; }
 function pckMealOvnSet(date, bid, bkId, v){
   if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
   var m={}, cur=pckMealOvnMap(date,bid);
@@ -19978,6 +20111,30 @@ function pckTravelReg(bid){
 }
 
 // แถบแท็บเรือ · ทำหน้าที่เป็นตัวกรองเรือไปในตัว (แทน select เดิมในแถบตัวกรอง)
+/* §pckChipShort (2026-10-20) · owner "ปรับตรงนี้ให้กระชับ ตอนนี้เยอะแล้วมันล้น"
+   ชิปเรือหน้าเช็คอินใช้ชื่อโปรแกรมแบบสั้น (ชื่อในปฏิทิน ถ้าตั้งไว้ · ไม่งั้นย่อคำยาว) · ชื่อเต็มยังอยู่ใน tooltip */
+function pckRouteShort(rt){
+  if(!rt) return '—';
+  var n=(typeof _calName==='function')?_calName(rt):(rt.name||'');
+  n=String(n||rt.name||'').replace(/\bIslands?\b/g,'').replace(/\bExclusive\b/g,'Excl').replace(/\bby Speedboat\b/g,'Spd')
+    .replace(/\bby Catamaran\b/g,'Cat').replace(/^Early\s+/,'E.').replace(/\s+by\s+/g,' ').replace(/\s{2,}/g,' ').trim();
+  return n||rt.name||'—';
+}
+/* §pckBump (2026-10-21) · owner: ตัวเลขหลังชื่อเรือ "พอเช็คอินตัวเลขก็เด้งขึ้น" · เลือกแบบป้ายลอยมุมขวาบน (mockup H)
+   จำยอดขึ้นเรือของแต่ละลำไว้ (ต่อวัน) · รอบ render ใหม่ยอดเพิ่ม = เด้งเลขหน้า · เปิดหน้าครั้งแรกไม่เด้ง */
+var _PCK_BUMP_LAST={}, _PCK_BUMP_Q=[];
+function pckBumpRun(){
+  var q=_PCK_BUMP_Q.splice(0);
+  var go=function(){ q.forEach(function(k){
+    var els=document.querySelectorAll('[data-pck-bump="'+String(k).replace(/["\\]/g,'')+'"]');
+    for(var i=0;i<els.length;i++){ try{ els[i].animate([
+      {transform:'translateY(0) scale(1)'},
+      {transform:'translateY(-6px) scale(1.45)',color:'#16A34A',offset:.3},
+      {transform:'translateY(1px) scale(.92)',color:'#16A34A',offset:.65},
+      {transform:'translateY(0) scale(1)'}],{duration:600,easing:'ease-out'}); }catch(_){} }
+  }); };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(function(){ requestAnimationFrame(go); }); else setTimeout(go,30);
+}
 function pckBoatTabs(all, part){
   var e=ckEsc, m={}, ks=[];
   all.forEach(function(r){
@@ -19994,17 +20151,22 @@ function pckBoatTabs(all, part){
      คู่กับ "ทุกโปรแกรม" ของการ์ดซ้าย ปุ่มล้างของสองระดับจะได้อยู่ที่เดียวกัน */
   var allBtn='<button class="pck-btab'+(_pckBoat?'':' on')+'" onclick="pckSetBoat(\'\')" style="'+(_pckBoat?'':'background:#2f2f2b;color:#fff')+'">เรือทั้งหมด <span class="c"'+(_pckBoat?'':' style="background:rgba(255,255,255,.25);color:#fff"')+'>'+ks.length+'</span></button>';
   if(part==='all') return allBtn;
+  /* §pckChipD (2026-10-20) · owner เลือกแบบ D: ชิปเหลือแค่ชื่อเรือ + ยอดคน · โปรแกรมดูจากสีขีดใต้ชิป (ชื่อเต็มใน tooltip)
+     แถวคำอธิบายสีโปรแกรมเคยอยู่บนสุด · owner "ซ่อนไปเลยดีกว่า" → เอาออก */
   var h='<div class="pck-btabs"><span class="ck-unitbar-lbl">เรือวันนี้</span>'
    +((part==='tabs')?'':allBtn);
   ks.forEach(function(k){
     var col=pckBoatColor(k), ink=(typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(col):'#fff';
     var rt=(typeof getRoute==='function'?getRoute(m[k].rid):null)||{}, a=pckAgg(m[k].rows), dep=pckDepOf(m[k].rid);
     var on=(_pckBoat===k);
-    h+='<button class="pck-btab'+(on?' on':'')+'" onclick="pckSetBoat(\''+k+'\')" title="'+e(pckBoatName(k)+' · '+(rt.name||''))+'" style="'+(on?('background:'+col+';color:'+ink):'')+'">'
+    h+='<button class="pck-btab pck-btab-d'+(on?' on':'')+'" onclick="pckSetBoat(\''+k+'\')" title="'+e(pckBoatName(k)+' · '+(rt.name||'')+(dep?(' · '+dep):''))+'" style="border-bottom-color:'+(rt.color||'#999')+';'+(on?('background:'+col+';color:'+ink):'')+'">'
       +'<span style="width:10px;height:10px;border-radius:50%;flex:none;background:'+(on?ink:col)+'"></span>'
       +'<span>'+e(pckBoatName(k))+'</span>'
-      +'<span class="rt"'+(on?' style="color:'+ink+'"':'')+'><i style="background:'+(rt.color||'#999')+'"></i>'+e(rt.name||'—')+(dep?(' · '+e(dep)):'')+'</span>'
-      +'<span class="c"'+(on?' style="color:'+ink+'"':'')+' title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking">'+a.onP+'/'+a.pax+'</span></button>';
+      +'<span class="c pck-bdg'+((a.pax>0&&a.onP>=a.pax)?' full':'')+'" title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking"><b data-pck-bump="'+e(k)+'">'+a.onP+'</b><i>/'+a.pax+'</i></span></button>';
+    /* §pckBump · ยอดขึ้นเรือเพิ่มจากรอบก่อน (กดเช็คอิน หรือมีคนเช็คอินจากเครื่องอื่นแล้วหน้ารีเฟรช) → ตัวเลขเด้ง */
+    var _bk=_pckDate+'|'+k, _pv=_PCK_BUMP_LAST[_bk];
+    if(_pv!=null && a.onP>_pv) _PCK_BUMP_Q.push(k);
+    _PCK_BUMP_LAST[_bk]=a.onP;
   });
   /* §kitPop · จำนวนลำที่มีร้านแล้วแต่ยังไม่ได้ส่งรายการ · ติดเป็นจุดส้มบนปุ่ม
      ของเดิมแถบครัวกางอยู่ตลอด เห็นเองว่ายังไม่ส่ง · พอย้ายเข้า popup ต้องมีอะไรมาแทนการมองเห็นนั้น */
@@ -20023,6 +20185,7 @@ function pckBoatTabs(all, part){
     +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่ออย่างเดียว · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ (ปุ่มใบสั่งงานออกให้ทั้งสองใบอยู่แล้ว)">&#128203;</button>'
     +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
       +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>';
+  if(_PCK_BUMP_Q.length) pckBumpRun();
   if(part==='jobs') return '<span class="pkh-jobs">'+jobs+'</span>';
   if(part==='tabs') return h+'</div>';
   return h+jobs+'</div>';
@@ -20062,6 +20225,9 @@ function pckMealCount(rows){
   var o={ad:0, chd:0, inf:0, tot:0, book:0, veg:0, vegan:0, halal:0, allergy:0};
   (rows||[]).forEach(function(r){
     if(r._vd) return;                                        /* ปิดรายการแล้ว ไม่ต้องสั่งอาหาร */
+    if(r.__inc==='out') return;                              /* §mealOut */
+    if(r.b && r.t && !r.t.ovnLeg && r.__inc==null){ var _mb=r.bid||(r.O&&r.O.boatId)||r.t.charterBoatId, _md=r.t.date||r.date;
+      if(_mb && _md && pckMealOut(_md,_mb,r.b.id)) return; }
     /* §mealOvn · ขากลับค้างคืนที่ไม่ได้ระบุว่ารวมอาหาร ไม่นับเข้ายอดที่จะจ่ายร้าน */
     if(r.t && r.t.ovnLeg && r.__inc!=='in') return;
     /* หัวที่จะไปจริง · หัก no-show ทั้งฝั่งรถและฝั่งท่า
@@ -20092,6 +20258,43 @@ function pckAllergyList(rows){
     });
   });
   return Object.keys(by).map(function(k){ return {name:k, qty:by[k]}; });
+}
+/* §mealOut · กล่องในการ์ดครัว · พับไว้ · เปิดแล้วเลือกกรุ๊ปที่ไม่ทาน · กรุ๊ปที่เลือกแล้วขึ้นบนหัวกล่องเสมอ */
+var _pckMealOutOpen={};
+function pckMealOutToggle(bid){ _pckMealOutOpen[bid]=!_pckMealOutOpen[bid]; if(typeof pckKitchenRender==='function') pckKitchenRender(); }
+function pckMealOutSet(date, bid, bkId, out){
+  pckMealOvnSet(date, bid, bkId, out?'out':'in');
+  if(typeof pckKitchenRender==='function') pckKitchenRender();
+}
+function pckMealOutBox(date, bid, rows){
+  var e=ckEsc, seen={}, L=[];
+  (rows||[]).forEach(function(r){ if(!r||!r.b||r._vd||seen[r.b.id]||(r.t&&r.t.ovnLeg)) return; seen[r.b.id]=1;
+    var pax=Math.max(0, ((r.expect!=null?r.expect:r.booked)||0) - ((r.ck&&r.ck.at)?(+r.ck.noShow||0):0));
+    if(!pax) return;
+    L.push({ id:r.b.id, lead:String(r.b.leadPax||'').trim()||'—', pax:pax, out:pckMealOut(date,bid,r.b.id) }); });
+  if(!L.length) return '';
+  var outs=L.filter(function(x){ return x.out; }), nOut=outs.reduce(function(a,x){ return a+x.pax; },0), open=!!_pckMealOutOpen[bid];
+  L.sort(function(a,b){ return (b.out?1:0)-(a.out?1:0) || a.lead.localeCompare(b.lead,'th'); });
+  var row=function(x){
+    var b=function(v,lb,col){ var on=(x.out===v);
+      return '<button onclick="pckMealOutSet(\''+e(date)+'\',\''+e(bid)+'\',\''+e(x.id)+'\','+(v?1:0)+')" '
+        +'style="border:0;background:'+(on?col:'#fff')+';color:'+(on?'#fff':'#5F5E5A')+';font:700 11px inherit;'
+        +'padding:5px 12px;cursor:pointer;font-family:inherit">'+lb+'</button>'; };
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid #EEF0F3;'
+      +(x.out?'background:#F4F5F7':'')+'">'
+      +'<b style="flex:1;min-width:0;font-size:12.5px;font-weight:700;'+(x.out?'color:#6B7280':'')+'">'+e(x.lead)+'</b>'
+      +'<span style="font:700 12.5px \'DM Mono\',monospace;color:#475569">'+x.pax+' ท่าน</span>'
+      +'<span style="display:flex;border:1px solid #D8D4CA;border-radius:8px;overflow:hidden">'
+        +b(false,'ทาน','#0F6E56')+'<span style="width:1px;background:#E7E4DC"></span>'+b(true,'ไม่ทาน','#5F6B7C')+'</span></div>'; };
+  return '<div style="margin-top:11px;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+    +'<button onclick="pckMealOutToggle(\''+e(bid)+'\')" style="width:100%;display:flex;align-items:center;gap:9px;'
+      +'background:#F8FAFC;border:0;padding:8px 12px;cursor:pointer;font:800 11.5px inherit;font-family:inherit;color:#334155;text-align:left">'
+      +'<span>'+(open?'&#9662;':'&#9656;')+' กรุ๊ปที่ไม่ทานอาหารกลางวัน</span>'
+      +(outs.length?('<span style="background:#EDEFF3;border:1px solid #C3C9D4;color:#374151;border-radius:999px;padding:1px 9px;font-size:10.5px">'
+          +outs.length+' กรุ๊ป · '+nOut+' ท่าน · ไม่นับในยอด</span>'):'<span style="font-weight:600;color:#94A3B8">ทุกกรุ๊ปทาน · กดเพื่อเลือก</span>')
+    +'</button>'
+    +(open?L.map(row).join(''):(outs.length?outs.map(row).join(''):''))
+    +'</div>';
 }
 function pckKitchenHtml(border, boats, date, bare){
   if(!border || !border.length) return '';
@@ -20171,6 +20374,7 @@ function pckKitchenHtml(border, boats, date, bare){
               +'&#9998; '+e(MN)+'</div>'):'')
             +'</div>';
         })()
+      + pckMealOutBox(date, bid, B.rows||[])   /* §mealOut */
       /* §mealOvn · กลุ่มรับกลับจากเกาะ · ต้องเลือกทีละใบว่ารวมอาหารหรือไม่ */
       + (OV.length?('<div style="margin-top:11px;border:1px solid #DDD0F5;background:#FBF9FF;border-radius:12px;overflow:hidden">'
           +'<div style="background:#F1ECFB;padding:7px 12px;font-size:11.5px;font-weight:800;color:#4A2E86;'
@@ -20307,7 +20511,7 @@ function mvLunchRows(date, bid){
     /* §mealOvn · ขากลับค้างคืน · คิดอาหารก็ต่อเมื่อระบุว่า "รวม" เท่านั้น
        ยังไม่ระบุ = ยังไม่คิด · ปุ่มส่งถูกล็อกไว้อยู่แล้วจนกว่าจะระบุครบ */
     var _ovn=!!(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t));
-    var _inc=_ovn?pckMealOvnOf(date,bid,b.id):'in';
+    var _inc=_ovn?pckMealOvnOf(date,bid,b.id):(pckMealOut(date,bid,b.id)?'out':'in');   /* §mealOut */
     out.push({lead:String(b.leadPax||'').trim()||'—', ad:ad, chd:chd, inf:inf, foc:foc, sr:sr.join('\n'),
               ovn:_ovn, inc:_inc, bkId:b.id,
               outDate:(_ovn && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):''});
@@ -20431,8 +20635,10 @@ function mvOrderSlip(date, bid, V, rid){
       +'<span class="mpill '+(r.inc==='out'?'o':'q')+'">'
       +(r.inc==='out'?'ไม่รวมอาหาร':'ยังไม่ระบุ')+'</span></td>'
       +'<td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td>'
-      +'<td style="font-size:11.5px;color:#8b93a1">อยู่บนเรือ '+(r.ad+r.chd+r.inf)+' ท่าน · ไม่ต้องทำอาหาร</td></tr>'; };
-  var MAIN=rows.filter(function(r){ return !r.ovn; });
+      +'<td style="font-size:11.5px;color:#8b93a1">อยู่บนเรือ '+(r.ad+r.chd+r.inf)+' ท่าน · '+(r.ovn?'ไม่ต้องทำอาหาร':'ไม่ทานอาหารกลางวัน')+'</td></tr>'; };
+  var MALL=rows.filter(function(r){ return !r.ovn; });
+  var MAIN=MALL.filter(function(r){ return r.inc!=='out'; });   /* §mealOut · ทานอาหาร */
+  var MOUT=MALL.filter(function(r){ return r.inc==='out'; });   /* §mealOut · ไม่ทาน · ยังอยู่บนใบเป็นแถวเทา */
   var OVN =rows.filter(function(r){ return  r.ovn; });
   var OIN =OVN.filter(function(r){ return r.inc==='in'; });
   var OOUT=OVN.filter(function(r){ return r.inc!=='in'; });
@@ -20442,7 +20648,8 @@ function mvOrderSlip(date, bid, V, rid){
   var nOut=sum(OOUT,'ad')+sum(OOUT,'chd')+sum(OOUT,'inf');
   var subRow=function(lb,x){ return '<tr class="sub"><td class="lb">'+lb+'</td>'
       +'<td class="n">'+x.ad+'</td><td class="n">'+x.chd+'</td><td class="n">'+x.inf+'</td><td></td></tr>'; };
-  var body=MAIN.map(function(r){ return line(r); }).join('');
+  var body=MAIN.map(function(r){ return line(r); }).join('')+MOUT.map(function(r){ return lineOut(r); }).join('');
+  var nSkip=sum(MOUT,'ad')+sum(MOUT,'chd')+sum(MOUT,'inf');   /* §mealOut */
   if(OVN.length){
     body+=subRow('รวม · ทริปวันนี้', M)
       +'<tr class="grp"><td colspan="5">&#127765; รับกลับจากเกาะ · ค้างคืน'
@@ -20482,8 +20689,10 @@ function mvOrderSlip(date, bid, V, rid){
        +'<td class="n">'+(M.ad+O.ad)+'</td><td class="n">'+(M.chd+O.chd)+'</td>'
        +'<td class="n">'+(M.inf+O.inf)+'</td><td></td></tr></tbody></table>'
    +(nOut?('<div style="margin-top:7px;font-size:11px;color:#475569;line-height:1.6">'
-       +'บนเรือมีทั้งหมด '+(M.ad+M.chd+M.inf+sum(OVN,'ad')+sum(OVN,'chd')+sum(OVN,'inf'))+' ท่าน · '
+       +'บนเรือมีทั้งหมด '+(M.ad+M.chd+M.inf+nSkip+sum(OVN,'ad')+sum(OVN,'chd')+sum(OVN,'inf'))+' ท่าน · '
        +'<b>ไม่คิดอาหาร '+nOut+' ท่าน</b> (รับกลับจากเกาะ · อาหารไม่ได้อยู่กับเรา)</div>'):'')
+   +(nSkip?('<div style="margin-top:7px;font-size:11px;color:#475569;line-height:1.6">'   /* §mealOut */
+       +'<b>ไม่ทานอาหาร '+nSkip+' ท่าน</b> ('+MOUT.length+' กรุ๊ป · แจ้งไว้ว่าไม่ทานกลางวัน) · ไม่นับใน Total</div>'):'')
    +(T.foc?('<div style="margin-top:6px;font-size:10.5px;color:#475569;font-weight:600">'
        +'\u0e23\u0e27\u0e21 FOC '+T.foc+' \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e2d\u0e07 AD '
        +'\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e17\u0e33\u0e2d\u0e32\u0e2b\u0e32\u0e23\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48</div>'):'')
@@ -20535,7 +20744,7 @@ function pckMealSend(bid){
       +'\n\nระบุที่กล่อง "รับกลับจากเกาะ" ในการ์ดครัวก่อน แล้วค่อยส่ง');
     return;
   }
-  rows.forEach(function(r){ r.__inc=(r.t&&r.t.ovnLeg)?pckMealOvnOf(date,bid,r.b.id):'in'; });
+  rows.forEach(function(r){ r.__inc=(r.t&&r.t.ovnLeg)?pckMealOvnOf(date,bid,r.b.id):(pckMealOut(date,bid,r.b.id)?'out':'in'); });   /* §mealOut */
   var C=pckMealCount(rows), amt=mvCost(V,C.ad,C.chd);
   if(!(C.ad+C.chd)){ alert('ลำนี้ยังไม่มีคนที่จะไปจริง · ไม่ต้องสั่งอาหาร'); return; }
   /* บันทึกก่อน เปิดใบทีหลัง · ถ้า pop-up โดนบล็อก ต้นทุนก็ยังถูกบันทึกไว้แล้ว
@@ -21118,14 +21327,25 @@ function pckHeadCSS(){
   +H+' .pkh-fwrap .ck-fsep{height:16px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
-  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
-  +H+' .pkh-boats .pck-btab{padding:3px 11px !important;font-size:11px !important;gap:7px !important}'
+  +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:26px 8px;padding:20px 12px 0 0}'   /* §pckBump · เว้นที่ให้ป้ายตัวเลขลอยพ้นขอบชิป */
+  +H+' .pkh-boats .pck-btab{padding:2px 9px !important;font-size:11px !important;gap:5px !important}'
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
-  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:14px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:12.5px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab .rt{max-width:150px}'   /* §pckChipShort */
+  +H+' .pck-btab.pck-btab-d{border-bottom-width:4px !important;border-bottom-style:solid !important;border-radius:9px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
+  /* §pckBump · ป้ายยอดขึ้นเรือ ลอยมุมขวาบนของชิป · เลขหน้าใหญ่หนา · /ทั้งหมด เล็กสีเทา · เต็มลำ = เขียว */
+  /* ป้ายเคยลอยกลางมุมขวาบน (top:-14px) = ทับครึ่งล่างลงมาบังชื่อเรือ · owner "บังชื่อเรือ" → ยกขึ้นไปอยู่เหนือชิป ทับแค่ขอบบน */
+  +H+' .pck-btab.pck-btab-d{position:relative;overflow:visible;padding-right:12px !important}'
+  +H+' .pck-btab-d .pck-bdg{position:absolute;bottom:calc(100% - 5px);right:-8px;display:inline-flex;align-items:baseline;gap:1px;padding:2px 9px 1px !important;'
+    +'border-radius:999px;white-space:nowrap;background:#fff !important;color:#1F1F1C !important;border:1.5px solid #E7E4DC;box-shadow:0 2px 6px rgba(31,31,28,.16);font-family:inherit !important}'
+  +H+' .pck-btab-d .pck-bdg b{display:inline-block;transform-origin:50% 85%;font-family:\'DM Sans\',sans-serif;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;letter-spacing:-.4px;line-height:1.05}'
+  +H+' .pck-btab-d .pck-bdg i{font-style:normal;font-family:\'DM Mono\',monospace;font-size:10.5px;font-weight:400;color:#8A8A82}'
+  +H+' .pck-btab-d .pck-bdg.full{background:#DCFCE7 !important;border-color:#86D7A4;color:#15803D !important}'
+  +H+' .pck-btab-d .pck-bdg.full i{color:#15803D}'
   +H+' .pkh-boats .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
   /* ══ §pckProgBt · แผงโปรแกรมใช้จังหวะเดียวกับการ์ด Programmes ของ By trip ══
      สองหน้านี้อ่านข้อมูลชุดเดียวกัน คนเดินไปมาระหว่างสองหน้าตลอดวัน
@@ -23789,7 +24009,7 @@ function tsPayCell(r, date){
 function tsTotalOf(r, date){
   var base=+r.amount||0;
   var M=(typeof pckMoney==='function')?pckMoney(r.b,date):null;
-  var ex=M?(+M.extrasTot||0):0, up=M?((+M.upDue||0)+(+M.upGot||0)):0;
+  var ex=M?(+M.extrasTot||0):0, up=M?((+M.upDue||0)+(+M.upGot||0)+(+M.upCov||0)):0;   /* §exDupPier · ขายจริงยังนับ แค่เงินอยู่แถวหน้าท่า */
   var parts=[];
   if(ex>0) parts.push(['ขายเพิ่มหน้าท่า', ex]);
   if(up>0) parts.push(['อัปเกรด', up]);
@@ -23824,22 +24044,25 @@ function tsSaleList(b, date){
                slips:(x.slips||[]).slice(),
                // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
                comm:_cm, toCompany:(+x.toCompany||0),
-               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing });
+               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing,
+               dup:(!!_cov && x.method!=='cot') });   /* §exDupPier · ถูกเปลี่ยนเป็นโอน/บัตรทั้งที่หน้าท่าเก็บแล้ว */
   }); }catch(_){}
-  try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
+  try{ var _upDup=bkxPierDupIds(b,date);   /* §exDupPier */
+    (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
-    var m2=u.method||'cash';
-    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0);
+    var m2=u.method||'cash', _dup=!!(u.collected && _upDup[u.id]);
+    if(_dup){ comm+=(+u.commission||0); if(+u.commission) commCov+=(+u.commission||0); }
+    else if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0);
                      comm+=(+u.commission||0); }
     else due+=amt;
     // §upgPay · รูดบัตร/โอนแล้วยังไม่มีสลิป ต้องขึ้นเตือนเหมือน Extra
-    var _uNo=(!!u.collected && m2!=='cash' && !((u.slips||[]).length));
+    var _uNo=(!!u.collected && !_dup && m2!=='cash' && !((u.slips||[]).length));
     if(_uNo) noSlip++;
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
                fee:(+u.fee||0), nSlip:((u.slips||[]).length),
                slips:(u.slips||[]).slice(),
                comm:(+u.commission||0), toCompany:(+u.toCompany||0),
-               method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
+               method:(_dup?'pier':m2), who:u.seller||'', done:!!u.collected, covered:_dup, dup:_dup, noSlip:_uNo });
   }); }catch(_){}
   return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, commCov:commCov, tot:got+due, n:out.length };
 }
@@ -23862,8 +24085,44 @@ function tsSaleCell(S, money, e){
       +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
       +(x.done?(x.covered?' <i style="font-style:normal;opacity:.75">เก็บที่ท่า</i>':''):' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
-      +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
+      +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>'
+      /* §exDupPier · บันทึกซ้ำกับเงินหน้าท่า · ไม่บวกซ้ำแล้ว · กดแก้ให้กลับเป็นแบบเก็บหน้าท่า */
+      +(x.dup?('<span class="ts-chip a" style="margin-top:3px" title="รายการนี้เคยเป็นแบบเก็บวันเดินทาง หน้าท่าเก็บเงินไปแล้ว แล้วถูกแก้เป็น'+e(PM[x.method]||x.method)+'ซ้ำอีกที · ยอดนับจากแถวเงินหน้าท่าที่เดียว">บันทึกซ้ำกับเงินหน้าท่า · ไม่นับซ้ำ'
+          +(x.id?(' <a href="javascript:void 0" onclick="tsExDupFix(\''+e(x.kind)+'\',\''+e(x.id)+'\')" style="color:inherit;font-weight:800;text-decoration:underline">แก้ให้</a>'):'')+'</span>'):'');
   }).join('')+'</div>';
+}
+/* §exDupPier · เปลี่ยนรายการขายเพิ่มที่บันทึกซ้ำกลับเป็นแบบเก็บหน้าท่า · เงินและสลิปอยู่ที่แถวหน้าท่าอยู่แล้ว */
+function tsExDupFix(kind, exId){
+  if(kind==='up'){ tsUpDupFix(exId); return; }
+  var x=(SB_EXTRAS||[]).find(function(k){ return k.id===exId; }); if(!x) return;
+  if(!bkxExDupPier(x)){ alert('This extra is not covered by a pier payment any more'); return; }
+  var b=(SB_BOOKINGS||[]).find(function(k){ return k.id===x.bookingId; });
+  var old=x.method, fee=+x.fee||0;
+  if(!confirm('"'+(x.service||'')+'" ฿'+pckNum(x.total)+'\n\nเงินก้อนนี้บันทึกไว้ที่แถวเงินหน้าท่าแล้ว ('+pckMLabel(old)+')\nจะเปลี่ยนรายการขายเพิ่มกลับเป็น "เก็บแล้วที่หน้าท่า" เพื่อไม่ให้นับซ้ำ'+(fee?('\nค่าธรรมเนียม ฿'+pckNum(fee)+' ที่ใส่ซ้ำไว้จะถูกเอาออก (ของจริงอยู่ที่แถวหน้าท่า)'):'')+'\n\nทำเลยไหม?')) return;
+  x.method='cot'; x.settle='pending'; x.feePct=0; x.fee=0; x.customerPaid=+x.total||0;
+  if(b && typeof bookingV2AddHistory==='function'){
+    bookingV2AddHistory(b,'extra','Extra "'+(x.service||'')+'" ฿'+pckNum(x.total)+' · duplicate of pier payment ('+old+') · reset to collected-at-pier','Extra');
+    try{ acctPersistBookings(); }catch(_){}
+  }
+  sbExtrasPersist();
+  try{ if(typeof renderTravelSum==='function') renderTravelSum(); }catch(_){}
+  try{ if(typeof renderPierCheckin==='function') renderPierCheckin(); }catch(_){}
+  try{ if(typeof renderCheckinAll==='function') renderCheckinAll(); }catch(_){}
+}
+/* §exDupPier · อัปเกรดที่ติ๊ก "เก็บแล้ว" ซ้ำกับเงินหน้าท่า → เอาติ๊กออก เงินนับจากแถวหน้าท่า */
+function tsUpDupFix(upId){
+  var b=(SB_BOOKINGS||[]).find(function(k){ return Array.isArray(k.upgrades) && k.upgrades.some(function(u){ return u.id===upId; }); }); if(!b) return;
+  var u=b.upgrades.find(function(k){ return k.id===upId; });
+  var date=(typeof _tsDate!=='undefined' && _tsDate) ? _tsDate : (((b.trips||[])[0]||{}).date||'');
+  if(!bkxUpDupPier(b,u,date)){ alert('This upgrade is not covered by a pier payment any more'); return; }
+  var old=u.method||'cash', fee=+u.fee||0;
+  if(!confirm('"'+(u.label||'')+'" ฿'+pckNum(u.sellPrice)+'\n\nเงินก้อนนี้บันทึกไว้ที่แถวเงินหน้าท่าแล้ว ('+pckMLabel(old)+')\nจะเอาติ๊ก "เก็บแล้ว" ของอัปเกรดออก เพื่อไม่ให้นับซ้ำ'+(fee?('\nค่าธรรมเนียม ฿'+pckNum(fee)+' ที่ใส่ซ้ำไว้จะถูกเอาออก (ของจริงอยู่ที่แถวหน้าท่า)'):'')+'\n\nทำเลยไหม?')) return;
+  u.collected=false; u.feePct=0; u.fee=0; u.customerPaid=+u.sellPrice||0;
+  if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'extra','Upgrade "'+(u.label||'')+'" ฿'+pckNum(u.sellPrice)+' · duplicate of pier payment ('+old+') · unticked collected (money is on the pier row)','Extra');
+  try{ acctPersistBookings(); }catch(_){}
+  try{ if(typeof renderTravelSum==='function') renderTravelSum(); }catch(_){}
+  try{ if(typeof renderPierCheckin==='function') renderPierCheckin(); }catch(_){}
+  try{ if(typeof renderCheckinAll==='function') renderCheckinAll(); }catch(_){}
 }
 // §tsSlipAdd · แนบสลิปจากหน้าปิดวันโดยตรง · kind 'p' = เงินที่รับหน้าท่า · 'x' = ของที่ขายเพิ่ม
 function tsSlipPick(kind, bkId, itemId, inp){
@@ -24127,7 +24386,7 @@ function drData(date){
     else if(pt==='bt') D.pay.transfer+=amt;
     else D.pay.other+=amt;
     D.due+=(+M.due||0); D.got+=(+M.pierPaid||0); D.noSlip+=(+M.noSlip||0);
-    D.extras+=(+M.extrasTot||0); D.upDue+=(+M.upDue||0); D.upGot+=(+M.upGot||0);
+    D.extras+=(+M.extrasTot||0); D.upDue+=(+M.upDue||0); D.upGot+=(+M.upGot||0)+(+M.upCov||0);   /* §exDupPier */
 
     // อาหาร · ภาษา
     var mm=b.specialMeals||{};
@@ -26752,7 +27011,7 @@ function renderTravelSum(){
     // §tsSalePayChip · เงินของที่ขายเพิ่มหน้างานเก็บอยู่บนตัวรายการ ไม่ได้อยู่ใน pierPayments
     //   ถ้าไม่เติมตรงนี้ ใบที่ขายแต่ของเพิ่มจะขึ้นว่า "ยังไม่เก็บ" ทั้งที่รับเงินไปแล้ว
     var _sby={};
-    m.S.list.forEach(function(x){ if(!x.done) return; var k=x.method||'cash'; _sby[k]=(_sby[k]||0)+x.amt; });
+    m.S.list.forEach(function(x){ if(!x.done || x.covered) return; var k=x.method||'cash'; _sby[k]=(_sby[k]||0)+x.amt; });   /* §exDupPier · เงินอยู่ในแถวหน้าท่าแล้ว ไม่ขึ้นป้ายซ้ำ */
     Object.keys(_sby).forEach(function(k){ var x=PM[k]||['อื่นๆ','n'];
       mchips+='<span class="ts-chip '+x[1]+'" title="เงินจากของที่ขายเพิ่มหน้างาน">'
         + x[0]+' '+money(_sby[k])+' <i style="font-style:normal;opacity:.7">ขายเพิ่ม</i></span>'; });
@@ -28759,16 +29018,23 @@ function pxPlanFor(routeId){
 /* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
 function pxPax(date, bid){
-  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0};
+  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0, fam:0,famTH:0,famL:[],zeroL:[]};   /* §pxFam */
   var KIND=['ad','chd','inf','foc'];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    if((O.boatId||t.charterBoatId)!==bid) return;
+    /* §pxSplit (2026-10-25) · owner "Achilles ออกเรือจริงนะ ไม่มีต้นทุนได้อย่างไร"
+       ใบที่แยกลงหลายลำ (ops.boatSplits) เดิมอ่านแค่ ops.boatId → ลำที่สองได้ 0 คน ถูกตีว่า "ไม่ได้ออก · ไม่คิดต้นทุน"
+       ส่วนลำแรกได้คนทั้งใบ · ตอนนี้แต่ละลำได้คนและรายได้ตามส่วนที่จัดไว้ (ตัวเดียวกับใบงานเรือ §pjSplit) */
+    var _S=(typeof pjSplitShare==='function')?pjSplitShare(b,date,t,bid):null;
+    if(_S){ if(_S.skip) return; }
+    else if((O.boatId||t.charterBoatId)!==bid) return;
     if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
     var booked=ckBookedPax(t);
     var tot=pckOnBoard(b,date,booked);                     /* §ckPierSelf2 */
+    var _shr=1;
+    if(_S){ _shr=booked?((+_S.booked||0)/booked):0; tot=Math.round(tot*_shr); }
     if(!tot) return;
     o.bk++;
     var px=t.pax||{}, bookedTot=0, th=0;
@@ -28780,10 +29046,29 @@ function pxPax(date, bid){
       o[k]+=n;
     });
     o.th+=th*ratio; o.tot+=tot;
-    o.rev+=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+    o.rev+=((typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0)*_shr;   /* §pxSplit · รายได้ตามส่วนของลำ */
+    /* ══ §pxFam (2026-10-25) · owner "ช่วยตรวจ Trip P&L ทำไมบางเส้นทางมันยังขาดทุน" → "FAM trip มันก็คือค่าใช้จ่ายไหม" → "โอเค"
+       ก.ย.–ต.ค. ขาดทุน −฿749k · ในนั้น −฿446k มาจากใบ FAM / Inspection ที่ลงทุกคนเป็น FOC (ราคา ฿0) แต่ต้นทุนเกิดเต็ม
+       ไม่ตัดออกจากยอด (เป็นค่าใช้จ่ายจริง) · แค่แยกบรรทัดให้เห็นว่า NET = เที่ยวขาย + ค่า FAM
+       FAM = ใบราคา ฿0 ที่คนทั้งใบอยู่ช่อง FOC · หรือ agent Staff / Welfare
+       ใบราคา ฿0 ที่ไม่ได้ลง FOC = น่าจะลืมใส่ราคา → zeroL เตือนให้เช็ค ไม่นับเป็น FAM
+       FOC 1–2 คนในใบที่จ่ายเงิน (หัวหน้าทัวร์) ไม่ใช่ FAM · ขากลับค้างคืน (ovnLeg) ราคา 0 โดยตั้งใจ ข้าม ══ */
+    try{
+      var _a0=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+      if(!_a0 && !t.ovnLeg){
+        var _ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+        var _an=_ag?(_ag.name||_ag.code||'\u2014'):(/^b2c_/.test(String(b.id||''))?'Love Andaman':String(b.channel||'walk-in'));
+        var _st=/staff|welfare/i.test(_an), _fc=(+px.foc||0)+(+px.foc_fr||0)+(+px.foc_th||0);
+        if(_st || (bookedTot>0 && _fc>=bookedTot)){
+          o.fam+=tot; o.famTH+=th*ratio;
+          o.famL.push({ id:b.id, name:_an, pax:tot, staff:_st, full:Math.round(Math.abs(+((b.priceBreakdown||{}).focDiscount)||0)*_shr) });
+        } else o.zeroL.push({ id:b.id, name:_an, pax:tot });
+      }
+    }catch(_){ }
   });
   ['ad','chd','inf','foc'].forEach(function(k){ o[k]=Math.round(o[k]); });
   o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
+  o.fam=Math.min(o.tot, Math.round(o.fam)); o.famTH=Math.round(o.famTH);   /* §pxFam */
   return o;
 }
 /* §pxOd · หางยาวที่ลูกค้าสั่งจริงของลำนั้น · เหมากี่ลำ จอยกี่คน
@@ -29014,6 +29299,8 @@ function pxTrip(date, bid){
       var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
       if(V){
         var nCh=Math.min(PX.chd, PX.tot), nAd=Math.max(0, PX.tot-nCh-PX.inf);
+        /* §mealOut · กรุ๊ปที่แจ้งไม่ทาน ไม่คิดค่าอาหาร */
+        try{ if(typeof mvLunchRows==='function') mvLunchRows(date,bid).forEach(function(r){ if(r.ovn||r.inc!=='out') return; nAd=Math.max(0,nAd-(r.ad||0)); nCh=Math.max(0,nCh-(r.chd||0)); }); }catch(_){ }
         var exp=(typeof mvCost==='function')?mvCost(V, nAd, nCh):null;
         mealWait={ name:(V.name||''), exp:exp,
                    why:'\u0e23\u0e49\u0e32\u0e19 '+(V.name||'')+' \u00b7 '+nAd+'\u00d7\u0e3f'+(+V.priceAd||0)
@@ -29098,6 +29385,23 @@ function pxTrip(date, bid){
   }
   var nReal=rows.filter(function(r){ return r.real!=null; }).length;
   var st = noSail ? 'nosail' : (A.closed ? 'done' : (nReal ? 'part' : 'est'));
+  /* §pxFam · ต้นทุนของคน FAM · เรือที่มีคนจ่ายเงินด้วย = ส่วนต่างของบรรทัดที่ขยับตามจำนวนคน
+     (คิดสูตรซ้ำด้วยจำนวนคนจ่ายเงินอย่างเดียว · บรรทัดคงที่ เช่น น้ำมัน กัปตัน ค่าเสื่อม ค่าเช่า ส่วนต่าง = 0)
+     ใช้สัดส่วนนั้นกับตัวเลขที่ใช้จริงของบรรทัด (ของจริง / ปิดยอด) · เรือที่เป็น FAM ทั้งลำ = ต้นทุนทั้งเที่ยว */
+  var famCost=0;
+  if(!noSail && PX.fam>0){
+    if(PX.fam>=PX.tot) famCost=cost;
+    else { try{
+      var _p2=PX.tot-PX.fam, _t2=Math.min(_p2, Math.max(0, PX.th-PX.famTH));
+      var ctx2=Object.assign({}, ctx, { pax:_p2, paxTH:_t2, paxFR:Math.max(0,_p2-_t2),
+                 paxCh:Math.min(_p2, Math.round((+ctx.paxCh||0)*_p2/Math.max(1,PX.tot))) });
+      var C2=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx2, T):{rows:[]}, M1={}, M2={};
+      (C.rows||[]).forEach(function(r){ M1[r.id]=(M1[r.id]||0)+(+r.net||0); });
+      (C2.rows||[]).forEach(function(r){ M2[r.id]=(M2[r.id]||0)+(+r.net||0); });
+      rows.forEach(function(r){ var a1=M1[r.id]||0; if(a1<=0) return; var sh=1-(M2[r.id]||0)/a1; if(sh<=0) return; famCost+=(+r.use||0)*Math.min(1,sh); });
+    }catch(_){ famCost=0; } }
+  }
+  famCost=Math.round(famCost);
   var be=null;
   try{ if(typeof ctBreakEven==='function'){
     var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0);
@@ -29110,7 +29414,9 @@ function pxTrip(date, bid){
            noSail:noSail, ran:!!A.ran, wouldCost:Math.round(estCost),   /* §pxNoSail */
            revGross:Math.round(revGross), rev:Math.round(revNet),
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
-           fuelPr:fuelPr };
+           fuelPr:fuelPr,
+           fam:{ pax:PX.fam, th:PX.famTH, cost:famCost, all:(PX.fam>0 && PX.fam>=PX.tot), list:PX.famL||[], zero:PX.zeroL||[] },   /* §pxFam */
+           saleProfit:Math.round(revNet-cost)+famCost };
 }
 function pxDay(date, pier){
   var out=[];
@@ -29277,6 +29583,19 @@ function pxCSS(){ return ''
  +'#trippl-host .pill.am{background:#FFFBEB;color:#B45309;border:1px solid #FDE68A}'
  +'#trippl-host .pill.em{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}'
  +'#trippl-host .pill.pu{background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE}'
+ /* §pxFam */
+ +'#trippl-host .pxfam{margin:8px 0 2px;background:#F6F2FF;border:1px solid #E3D9FB;border-radius:10px;padding:8px 10px;font-size:11.5px}'
+ +'#trippl-host .pxfam .fh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#5B3CC4}'
+ +'#trippl-host .pxfam .fr{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #EAE2FC}'
+ +'#trippl-host .pxfam u,#trippl-host .pxfam .ft span{text-decoration:none;color:#8B83A8;font-size:10.5px}'
+ +'#trippl-host .pxfam .ft{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:6px}#trippl-host .pxfam .ft b{color:#5B3CC4;font-size:13px}'
+ +'#trippl-host .pxzero{margin:6px 0 2px;background:#FFF8EA;border:1px solid #F6DFB3;border-radius:10px;padding:7px 10px;font-size:11px;color:#7A4B00}#trippl-host .pxzero b{color:#A15C00}'
+ +'#trippl-host .kfam{border-top:1px dashed #E9D5FF;margin-top:8px;padding-top:7px}'
+ +'#trippl-host .fpl{border:1px solid #ECEDF2;border-radius:12px;overflow:hidden}'
+ +'#trippl-host .fpl .fl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #F1F2F6}'
+ +'#trippl-host .fpl .fl b{font-size:13.5px;color:#0F172A}#trippl-host .fpl .fl small{display:block;font-size:11px;color:#94A3B8;margin-top:2px}'
+ +'#trippl-host .fpl .fl>span{font-size:19px;font-weight:700}#trippl-host .fpl .fm b,#trippl-host .fpl .fm>span{color:#6D28D9}'
+ +'#trippl-host .fpl .tt{background:#FAFAFC;border-bottom:0}#trippl-host .fpl .tt>span{font-size:22px;font-weight:800}'
  +'#trippl-host .pill.ro{background:#FFF1F2;color:#BE123C;border:1px solid #FECDD3}'
  +'#trippl-host .pill.bl{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}'
  +'#trippl-host .pill.clk{cursor:pointer}'
@@ -29742,6 +30061,22 @@ function pxAnRange(v){ _px.an=+v||47; renderTripPL(); }
 
 /* ── การ์ดรายละเอียดหนึ่งลำ · คืนเป็น "เซลล์ของกริด" 6 + n หมวด + 1 ใบ ──
    ห้ามห่อด้วย div ใบเดียว · กริดต้องเห็นทุกบล็อกเป็นลูกโดยตรงถึงจะจัดแถวให้ตรงกันได้ */
+/* ══ §pxFam · กล่อง FAM ในการ์ดเรือ (Daily) · อยู่ในแถวเดียวกับรายชื่อเอเจนต์ หัวข้อของแต่ละลำจึงยังตรงกัน ══ */
+function pxFamBox(t, e){
+  var F=t.fam||{}, h='';
+  if(F.pax>0 && !t.noSail){
+    h+='<div class="pxfam"><div class="fh"><b>FAM / FOC \u00b7 free bookings</b><span class="pill pu">'+F.pax+' pax</span></div>'
+      +(F.list||[]).map(function(x){ return '<div class="fr"><span>'+e(x.name)+' <u>'+(x.staff?'Staff':'FAM / FOC')+' \u00b7 '+x.pax+' pax</u></span>'
+        +'<u>'+(x.full?('tickets '+pxN(x.full)):'\u2014')+'</u></div>'; }).join('')
+      +'<div class="ft"><span>'+(F.all?'Whole trip is FAM \u00b7 full trip cost':('Cost of these '+F.pax+' pax \u00b7 per-head lines (park, meals, van, insurance\u2026)'))+'</span>'
+      +'<b class="n">\u2212'+pxN(F.cost)+'</b></div></div>';
+  }
+  if((F.zero||[]).length && !t.noSail){
+    h+='<div class="pxzero" title="'+e('Price is \u0e3f0 but the passengers are not entered as FOC \u00b7 not counted as FAM \u00b7 open the booking and check the price')+'">'
+      +'<b>\u26a0 \u0e3f0 price</b> '+F.zero.map(function(z){ return e(z.name)+' \u00b7 '+z.pax+' pax'; }).join(' \u00b7 ')+' \u00b7 not marked FOC \u2014 check the booking</div>';
+  }
+  return h;
+}
 function pxDetail(t, e, GORD, DAVG){
   var pax=Math.max(1, t.px.tot), R=(typeof ctVatR==='function')?ctVatR(ctTpl()):0;
   var cph=t.cost/pax, loss=t.profit<0, L=loss?' ls':'';
@@ -29845,7 +30180,7 @@ function pxDetail(t, e, GORD, DAVG){
   if(agOpen && AG.length>5) agMore='<span class="agmr" onclick="pxAgMore(\''+e(t.bid)+'\')">\u2039 show top 5 only</span>';
   O.push('<div class="agw'+L+'"><div class="agl">'
     +(agRows||'<div style="font-size:11.5px;color:#94A3B8;padding:10px 2px">No bookings on this trip</div>')
-    +agMore+'</div>'
+    +agMore+'</div>'+pxFamBox(t, e)
     +'<div class="agtot"><span class="nm">Total revenue (ex-VAT)</span><b class="n">'+pxN(t.rev)+' ฿</b></div></div>');
 
   /* 6 · หัวข้อต้นทุน */
@@ -29926,6 +30261,12 @@ function pxDaily(e){
     if(t.noSail) noCost+=(+t.wouldCost||0); });
   SAIL.forEach(function(t){ tP+=t.profit;
     if(t.profit<0) nLoss++; else nProfit++; if(t.nReal) nReal++; });
+  /* §pxFam */
+  var tFam=0, tFamPax=0, tZero=0;
+  SAIL.forEach(function(t){ var F=t.fam||{}; tFam+=(F.cost||0); tFamPax+=(F.pax||0); tZero+=(F.zero||[]).length; });
+  var tSale=tP+tFam;
+  var famK=tFamPax?('<div class="kft kfam"><span>Sales <b class="n" style="color:'+(tSale<0?'#BE123C':'#047857')+'">'+(tSale<0?'\u2212':'+')+pxN(Math.abs(tSale))+'</b></span>'
+    +'<span class="pill pu" title="FAM / FOC groups ride free · their cost is already inside Net · Sales + FAM = Net">FAM '+tFamPax+' pax \u00b7 \u2212'+pxN(tFam)+'</span></div>'):'';
   var per=tPax?Math.round(tP/tPax):0;
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
   var pct=tR?Math.round(tC/tR*100):0;
@@ -29946,6 +30287,7 @@ function pxDaily(e){
       +nNo+' boat'+(nNo===1?'':'s')+' did not sail · '+pxN(noCost)+' ฿ not charged</span>'):'')
     +(nNoPlan?('<span class="htag w">'+nNoPlan+' boat'+(nNoPlan===1?'':'s')+' not mapped to a cost plan</span>'):'')
     +(nNoFuel?('<span class="htag w">'+nNoFuel+' boat'+(nNoFuel===1?'':'s')+' with no fuel price</span>'):'')
+    +(tZero?('<span class="htag w" title="'+e('Price is ฿0 but the passengers are not entered as FOC · not counted as FAM · see the boat card')+'">'+tZero+' booking'+(tZero===1?'':'s')+' at \u0e3f0 \u00b7 check price</span>'):'')
     +'</p></div>'
     +'<div class="pnet'+(tP<0?' neg':'')+'"><div class="pnic">'+pxIcoSvg(PX_SVG.up)+'</div>'
     +'<div><small>'+(tP<0?'NET LOSS TODAY':'NET PROFIT TODAY')+'</small>'
@@ -29969,7 +30311,7 @@ function pxDaily(e){
       +'<div class="pxico em">'+pxIcoSvg(PX_SVG.pro)+'</div></div>'
       +'<div class="kft"><span style="color:'+(per<0?'#BE123C':'#047857')+';font-weight:600">'
       +(per<0?'−':'+')+pxN(Math.abs(per))+' ฿/pax'+(tgt?(' · target '+tgt):'')+'</span>'
-      +'<span class="pill '+(nLoss?'ro':'em')+'">'+nProfit+' profitable · '+nLoss+' loss</span></div></div>'
+      +'<span class="pill '+(nLoss?'ro':'em')+'">'+nProfit+' profitable · '+nLoss+' loss</span></div>'+famK+'</div>'
     +'<div class="kc"><div class="k1"><div><p class="lb">Data confidence</p>'
       +'<h3 class="n">'+nReal+' / '+SAIL.length+'<u>boats</u></h3></div>'
       +'<div class="pxico pu">'+pxIcoSvg(PX_SVG.ok)+'</div></div>'
@@ -29983,10 +30325,10 @@ function pxDaily(e){
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
-      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +'<small>'+e(t.route.name||'—')+(t.plan?'':' · no cost plan')+'</small></div></div></td>'
       +'<td class="c"><span class="tm n">'+e(t.dep||'--:--')+'</span></td>'
-      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">TH '+t.px.th+' · FR '+t.px.fr+'</div></td>'
+      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
       +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
         +(t.noSail?('<span class="nsx">ถ้าออกจริง '+pxN(t.wouldCost)+'</span>')
@@ -29997,6 +30339,8 @@ function pxDaily(e){
         +(loss?'−':'+')+pxN(Math.abs(t.profit))+'</span>'
         +'<div class="per '+(loss?'negp':'pos')+' n">'+(loss?'−':'+')
         +pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / pax'+(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'))
+      +(tFamPax?(t.noSail?'<td><span class="num mut">\u2014</span></td><td><span class="num mut">\u2014</span></td>'
+        :pxFamCells(t.saleProfit!=null?t.saleProfit:t.profit, (t.fam&&t.fam.cost)||0, (t.fam&&t.fam.pax)?(t.fam.pax+' pax'+(t.fam.all?' · whole trip':'')):'')):'')
       +'<td><div class="bars"><i style="width:'+Math.min(100,ratio).toFixed(0)+'%;background:'+bc+'"></i></div>'
         +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
           +(t.noSail?'ไม่ได้ออก':('Cost '+Math.round(ratio)+'%'))+'</span>'
@@ -30012,6 +30356,7 @@ function pxDaily(e){
       +(tP<0?'−':'+')+pxN(Math.abs(tP))+'</span>'
       +'<div class="per '+(tP<0?'negp':'pos')+' n">'+(per<0?'−':'+')+pxN(Math.abs(per))+' / pax'
       +(tR?(' · '+Math.round(tP/tR*100)+'%'):'')+'</div></td>'
+    +(tFamPax?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
     +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:#4F46E5"></i></div>'
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
 
@@ -30033,9 +30378,9 @@ function pxDaily(e){
       +'<span><i style="background:#10B981"></i>Healthy &lt;70%</span>'
       +'<span><i style="background:#F59E0B"></i>Watch 70–95%</span>'
       +'<span><i style="background:#E11D48"></i>Loss &gt;100%</span></div></div>'
-    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:760px">'
+    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(tFamPax?920:760)+'px">'
     +'<thead><tr><th class="l">Boat · Route</th><th class="c">Dep</th><th class="c">Pax</th>'
-    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'
+    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'+(tFamPax?'<th title="Sales + FAM = Net">of which Sales</th><th title="Cost of FAM / FOC groups · already inside Net">of which FAM</th>':'')
     +'<th class="c">Cost ratio / Break-even</th></tr></thead><tbody>'
     +sumRows+totRow+'</tbody></table></div></div></div>'
     +'<div class="dwrap"><div class="dbar"><div><h2>Boat detail '
@@ -30060,7 +30405,7 @@ function pxDayAgg(date, pier){
   var D=pxDay(date,pier);
   var a={ date:date, trips:D.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0,
           routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
-          best:null, boats:[], tr:[] };
+          best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0 };   /* §pxFam */
   D.forEach(function(t){
     a.rev+=t.rev; a.cost+=t.cost; a.profit+=t.profit; a.pax+=t.px.tot; a.bk+=t.px.bk;
     if(t.profit<0) a.loss++;
@@ -30071,7 +30416,17 @@ function pxDayAgg(date, pier){
     a.cap+=cap;
     var rk=t.rid||(t.route.name||'—');
     var RR=a.routes[rk]||(a.routes[rk]={ name:t.route.name||'—', color:t.route.color||'#64748B',
-      n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||'') });
+      n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||''), famCost:0, famN:0, noPlan:0 });
+    /* §pxFam */
+    var F=t.fam||{};
+    if(!t.noSail){
+      if(F.pax>0){ a.famCost+=(F.cost||0); a.famPax+=F.pax; a.famTrips++; RR.famCost+=(F.cost||0); RR.famN++;
+        (F.list||[]).forEach(function(x){ var G=a.famAg[x.name]||(a.famAg[x.name]={ name:x.name, staff:!!x.staff, trips:{}, pax:0, full:0, cost:0 });
+          G.trips[date+'|'+t.bid]=1; G.pax+=x.pax; G.full+=(x.full||0); G.cost+=(F.cost||0)*(x.pax/Math.max(1,F.pax)); }); }
+      if((t.saleProfit!=null?t.saleProfit:t.profit)<0) a.saleLoss++;
+      if(!t.plan) RR.noPlan++;
+      a.zeroN+=(F.zero||[]).length;
+    }
     RR.n++; RR.pax+=t.px.tot; RR.rev+=t.rev; RR.cost+=t.cost; RR.profit+=t.profit; RR.cap+=cap;
     if(t.be){ RR.be+=t.be; RR.beN++; }
     /* §trRaw · ทริปดิบรายใบ · หน้าวิเคราะห์ต้องใช้หา "ต้นทุนคงที่ต่อทริป" จากของจริง
@@ -30230,6 +30585,39 @@ function pxRentIdleHtml(e, rows, netMTD){
       + '<u class="n">ถึงจะดูดซับค่าเช่าที่เหลือหมด</u></div></div></div>';
 }
 
+/* §pxFam · สองช่อง "Sales / FAM" · Sales + FAM = Net */
+function pxFamCells(sale, fam, sub){
+  return '<td><span class="num n" style="color:'+(sale<0?'#BE123C':'#047857')+'">'+(sale<0?'\u2212':'+')+pxN(Math.abs(sale))+'</span></td>'
+    +'<td>'+(fam?('<span class="num n" style="color:#6D28D9">\u2212'+pxN(fam)+'</span>'+(sub?('<div class="per">'+sub+'</div>'):'')):'<span class="num mut">\u2014</span>')+'</td>';
+}
+/* ══ §pxFam · Monthly · NET = เที่ยวขาย + ค่า FAM · ค่า FAM เป็นค่าใช้จ่ายจริง ไม่มีปุ่มซ่อน ══ */
+function pxFamMonth(T, FAG, mLbl, e){
+  var sale=T.profit+T.famCost, full=0;
+  var L=Object.keys(FAG).map(function(k){ return FAG[k]; }).sort(function(a,b){ return b.cost-a.cost; });
+  L.forEach(function(g){ full+=g.full; });
+  var sg=function(v){ return (v<0?'\u2212':'+')+pxN(Math.abs(v)); };
+  var rows=L.map(function(g){ return '<tr class="br"><td class="l"><b style="font-size:12.5px">'+e(g.name)+'</b>'
+      +(g.staff?' <span class="pill g">Staff</span>':'')+'</td>'
+      +'<td class="c"><span class="num n">'+g.trips+'</span></td><td class="c"><span class="num n">'+g.pax+'</span></td>'
+      +'<td><span class="num n">'+(g.full?pxN(g.full):'\u2014')+'</span></td>'
+      +'<td><span class="num n" style="color:#6D28D9">\u2212'+pxN(g.cost)+'</span></td></tr>'; }).join('');
+  return '<div class="eg mb pxfamm"><div class="phd"><div><h2>Sales vs FAM trips <span class="pill pu">'+e(mLbl)+'</span></h2>'
+    +'<p>FAM / inspection groups ride free but cost real money \u00b7 shown as their own line so the sales result is visible \u00b7 Sales + FAM = Net profit</p></div></div>'
+    +'<div class="fpl">'
+      +'<div class="fl"><div><b>Sales trips</b><small>'+(T.trips-T.famTrips)+' trips without FAM + paid seats on '+T.famTrips+' FAM trips \u00b7 '
+        +T.saleLoss+' trip'+(T.saleLoss===1?'':'s')+' still at a loss on sales</small></div>'
+        +'<span class="n" style="color:'+(sale<0?'#BE123C':'#047857')+'">'+sg(sale)+'</span></div>'
+      +'<div class="fl fm"><div><b>FAM trips (marketing)</b><small>'+T.famTrips+' trip'+(T.famTrips===1?'':'s')+' \u00b7 '+T.famPax+' pax'
+        +(full?(' \u00b7 free tickets worth '+pxN(full)):'')+'</small></div><span class="n">\u2212'+pxN(T.famCost)+'</span></div>'
+      +'<div class="fl tt"><div><b>Net profit</b><small>actual \u00b7 same as above</small></div>'
+        +'<span class="n" style="color:'+(T.profit<0?'#BE123C':'#047857')+'">'+sg(T.profit)+' \u0e3f</span></div>'
+    +'</div>'
+    +(rows?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
+      +'<thead><tr><th class="l">FAM by agent</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div></div>'):'')
+    +(T.zeroN?('<div class="pxzero" style="margin-top:10px"><b>\u26a0 '+T.zeroN+' booking'+(T.zeroN===1?'':'s')+' at \u0e3f0</b> not marked FOC this month \u00b7 not counted as FAM \u00b7 open those days to check the price</div>'):'')
+    +'</div>';
+}
 /* ══ MONTHLY ════════════════════════════════════════════════════════════════ */
 function pxMonth(e){
   var ym=_px.mon||String(_px.date||'').slice(0,7);
@@ -30239,6 +30627,12 @@ function pxMonth(e){
   var T={rev:0,cost:0,profit:0,pax:0,bk:0,trips:0,loss:0,cap:0};
   A.forEach(function(x){ T.rev+=x.rev; T.cost+=x.cost; T.profit+=x.profit; T.pax+=x.pax;
     T.bk+=x.bk; T.trips+=x.trips; T.loss+=x.loss; T.cap+=x.cap; });
+  /* §pxFam */
+  T.famCost=0; T.famPax=0; T.famTrips=0; T.saleLoss=0; T.zeroN=0; var FAG={};
+  A.forEach(function(x){ T.famCost+=x.famCost||0; T.famPax+=x.famPax||0; T.famTrips+=x.famTrips||0; T.saleLoss+=x.saleLoss||0; T.zeroN+=x.zeroN||0;
+    Object.keys(x.famAg||{}).forEach(function(k){ var s=x.famAg[k], G=FAG[k]||(FAG[k]={ name:s.name, staff:s.staff, trips:0, pax:0, full:0, cost:0 });
+      G.trips+=Object.keys(s.trips||{}).length; G.pax+=s.pax; G.full+=s.full; G.cost+=s.cost; }); });
+  var hasF=T.famPax>0;
 
   /* เดือนก่อน ช่วงวันเดียวกัน · เทียบกันได้จริง ไม่ใช่ทั้งเดือนเทียบครึ่งเดือน */
   var py=+ym.slice(0,4), pm=+ym.slice(5,7)-1, pd=new Date(py,pm-1,1);
@@ -30296,7 +30690,7 @@ function pxMonth(e){
     var hR=Math.round(x.rev/mx*100), hN=Math.round(Math.abs(x.profit)/mx*100);
     return '<div class="cd" onclick="pxGoDay(\''+e(x.date)+'\')">'
       +'<div class="tip">'+e(W.txt)+' · Rev '+pxN(x.rev)+' ฿ · Net '
-        +(x.profit<0?'−':'+')+pxN(Math.abs(x.profit))+' ฿ · '+x.trips+' trips</div>'
+        +(x.profit<0?'−':'+')+pxN(Math.abs(x.profit))+' ฿ · '+x.trips+' trips'+(x.famCost?(' · incl. FAM −'+pxN(x.famCost)+' ฿'):'')+'</div>'
       +'<div class="rev" style="height:'+hR+'%"></div>'
       +'<div class="net'+(x.profit<0?' neg':'')+'" style="height:'+Math.max(x.rev?2:0,hN)+'%"></div></div>';
   }).join('');
@@ -30310,8 +30704,9 @@ function pxMonth(e){
   /* รวมรายเส้นทางทั้งเดือน */
   var RT={};
   A.forEach(function(x){ Object.keys(x.routes).forEach(function(k){
-    var s=x.routes[k], r=RT[k]||(RT[k]={name:s.name,color:s.color,n:0,pax:0,rev:0,cost:0,profit:0});
-    r.n+=s.n; r.pax+=s.pax; r.rev+=s.rev; r.cost+=s.cost; r.profit+=s.profit; }); });
+    var s=x.routes[k], r=RT[k]||(RT[k]={name:s.name,color:s.color,n:0,pax:0,rev:0,cost:0,profit:0,famCost:0,famN:0,noPlan:0});
+    r.n+=s.n; r.pax+=s.pax; r.rev+=s.rev; r.cost+=s.cost; r.profit+=s.profit;
+    r.famCost+=s.famCost||0; r.famN+=s.famN||0; r.noPlan+=s.noPlan||0; }); });   /* §pxFam */
   var RL=Object.keys(RT).map(function(k){ return RT[k]; }).sort(function(a,b){ return b.profit-a.profit; });
   var rkCls=['t1','t2','t3'];
   var rtRows=RL.map(function(r,i){
@@ -30319,11 +30714,13 @@ function pxMonth(e){
     return '<tr class="br'+(loss?' loss':'')+'"><td class="l"><span class="rank '
       +(loss?'bad':(rkCls[i]||''))+'">'+(i+1)+'</span></td>'
       +'<td class="l"><b style="font-size:12.5px">'+e(r.name)+'</b>'
+      +(r.noPlan?' <span class="pill am" title="'+e(r.noPlan+' trip(s) on this route have no cost plan · the default formula is used · map a plan on the Costing page')+'">\u26a0 no cost plan</span>':'')
       +'<div class="per">'+r.n+' trips · '+r.pax+' pax</div></td>'
       +'<td class="c"><span class="num n">'+r.n+'</span></td>'
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
       +(loss?'−':'+')+pxN(Math.abs(r.profit))+'</span>'
       +'<div class="per '+(loss?'negp':'pos')+' n">'+pxN(r.profit/Math.max(1,r.pax))+'/pax</div></td>'
+      +(hasF?pxFamCells(r.profit+r.famCost, r.famCost, r.famN?(r.famN+' trip'+(r.famN===1?'':'s')):''):'')
       +'<td class="c"><span class="pill '+(mg<0?'ro':(mg<12?'am':'em'))+'">'+mg+'%</span></td></tr>';
   }).join('');
   var badR=RL.filter(function(r){ return r.profit<0; });
@@ -30332,7 +30729,7 @@ function pxMonth(e){
     if(!x.trips) return '';
     var W=pxDW(x.date), loss=x.profit<0, mg=x.rev?Math.round(x.profit/x.rev*100):0;
     return '<tr class="br'+(loss?' loss':'')+'" onclick="pxGoDay(\''+e(x.date)+'\')">'
-      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b></td>'
+      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b>'+(x.famPax?(' <span class="pill pu" title="'+e('FAM / FOC '+x.famPax+' pax · cost '+pxN(x.famCost)+' ฿ (already inside Net)')+'">FAM '+x.famPax+'</span>'):'')+'</td>'
       +'<td class="c"><span class="num n">'+x.trips+'</span></td>'
       +'<td class="c"><span class="num n">'+x.pax+'</span></td>'
       +'<td><span class="num n">'+pxN(x.rev)+'</span></td>'
@@ -30343,8 +30740,9 @@ function pxMonth(e){
   }).join('');
 
   var rentIdle=pxRentIdleHtml(e, pxRentIdle(days), T.profit);   /* §rentIdle */
+  var famHtml=hasF?pxFamMonth(T, FAG, mLbl, e):'';   /* §pxFam */
 
-  return hero+kpi+rentIdle
+  return hero+kpi+famHtml+rentIdle
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
       +'<span class="pill bl">'+e(mLbl)+'</span></h2>'
       +'<p>Light blue = revenue · green/red = the net result of that day · click a bar to open that day</p></div>'
@@ -30381,14 +30779,15 @@ function pxMonth(e){
       +'</tbody></table></div></div></div>'
     +'<div class="eg"><div class="phd"><div><h2>By route this month</h2>'
       +'<p>Where the month\'s profit actually came from</p></div></div>'
-      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:400px">'
+      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(hasF?560:400)+'px">'
       +'<thead><tr><th class="l">#</th><th class="l">Route</th><th class="c">Trips</th>'
-      +'<th>Net</th><th class="c">Margin</th></tr></thead><tbody>'+rtRows
+      +'<th>Net</th>'+(hasF?'<th>Sales</th><th>FAM</th>':'')+'<th class="c">Margin</th></tr></thead><tbody>'+rtRows
       +'<tr class="tot"><td class="l">Σ</td><td class="l">'+RL.length+' routes</td>'
       +'<td class="c"><span class="num n">'+T.trips+'</span></td>'
       +'<td class="netc'+(T.profit<0?' neg':'')+'"><span class="net'+(T.profit<0?' neg':'')+' n">'
       +(T.profit<0?'−':'+')+pxN(Math.abs(T.profit))+'</span>'
       +'<div class="per pos n">'+pxN(T.profit/Math.max(1,T.pax))+'/pax</div></td>'
+      +(hasF?pxFamCells(T.profit+T.famCost, T.famCost, T.famTrips+' trips'):'')
       +'<td class="c"><span class="pill '+(T.profit<0?'ro':'em')+'">'
       +(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td></tr></tbody></table></div></div>'
       +(badR.length?('<div class="hint"><b>'+e(badR.map(function(r){return r.name;}).join(', '))
@@ -35694,9 +36093,11 @@ function agRenderTable(){
             return '<td style="padding:0;border-bottom:1px solid #f1efe9;border-right:1px solid #f1efe9">'+inner+'</td>';
           }
           const txt = agCellText(a,c);
+          /* §agRtLink · ช่อง Rate Type มีปุ่ม ↗ เปิดเรทนั้น · กดที่ตัวหนังสือยังแก้ค่าได้เหมือนเดิม */
+          const rtGo = (c.k==='rateTypeId' && !blank && a.rateTypeId) ? '<a onclick="agGoRateType(\''+e(a.rateTypeId)+'\',event)" title="เปิด Rate Type นี้" style="float:right;margin-left:6px;color:#185FA5;font-weight:700;cursor:pointer">&#8599;</a>' : '';
           return '<td onclick="window.__agFillSrc={id:\''+e(a.id)+'\',k:\''+e(c.k)+'\'};agTblEdit(\''+e(a.id)+'\',\''+e(c.k)+'\')" '
             +'style="padding:7px 8px;border-bottom:1px solid #f1efe9;border-right:1px solid #f1efe9;font-size:12px;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+c.w+'px;'
-            +(blank?'background:#FDF6E3;color:#a9884a':'color:#2b3a34')+'" title="'+e(txt||'ว่าง')+'">'+(blank?'— ว่าง —':e(txt))+'</td>';
+            +(blank?'background:#FDF6E3;color:#a9884a':'color:#2b3a34')+'" title="'+e(txt||'ว่าง')+'">'+rtGo+(blank?'— ว่าง —':e(txt))+'</td>';
         }).join('')
       +'</tr>';
   }).join('') : '<tr><td colspan="'+(cols.length+1)+'" style="padding:26px;text-align:center;color:#9aa8a2;font-size:12.5px">ไม่มีเอเจ้นตามเงื่อนไขที่เลือก</td></tr>';
@@ -35783,6 +36184,7 @@ function renderAgents(){
   if(_agSelected){
     agRenderDetail(_agSelected);
   } else {
+    try{ if(window.matchMedia && matchMedia('(max-width:900px)').matches){ const _sd=document.querySelector('#view-agents .sb-side'); if(_sd && !_sd.classList.contains('open')){ _sd.classList.add('open'); const _b=document.getElementById('ag-side-tgl'); if(_b) _b.textContent='Hide'; } } }catch(_){}   /* §mobSales */
     document.getElementById('ag-main').innerHTML = '<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   }
 }
@@ -36442,6 +36844,7 @@ function renderRateTypes(){
   rtDupCodeBanner();             /* §rtDupCode · โค้ดซ้ำทำให้การนำเข้า Agent ผูกเรทผิดชุด */
   rtExpBanner();                 /* §rtAdmin · หน้านี้เอาไว้ทำเรท · แผงเตือนย้ายไปหน้ารวม เหลือบรรทัดเดียวชี้ทาง */
   rtApplyViewMode();
+  rtSideEnsure();   /* §mobSales */
   rtRenderList();
   if(_rtSelected){
     rtRenderDetail(_rtSelected);
@@ -36452,7 +36855,25 @@ function renderRateTypes(){
   }
 }
 
+/* §mobSales · ลิสต์ Rate Type บนมือถือ · ยุบ/กาง แบบเดียวกับ Agent (§agPhone) · จอใหญ่ไม่เห็นปุ่ม */
+function rtSideToggle(){
+  const side=document.querySelector('#view-rate-types .sb-side'); if(!side) return;
+  const on=side.classList.toggle('open');
+  const b=document.getElementById('rt-side-tgl'); if(b) b.textContent=on?'Hide':'Browse';
+}
+function rtSideEnsure(){
+  try{
+    const hd=document.querySelector('#view-rate-types .sb-side-hd'); if(!hd || document.getElementById('rt-side-tgl')) return;
+    const b=document.createElement('button'); b.id='rt-side-tgl'; b.type='button'; b.className='ag-side-tgl rt-side-tgl'; b.textContent='Browse'; b.onclick=rtSideToggle;
+    hd.appendChild(b);
+  }catch(_){}
+}
+function rtSideCloseOnPhone(){
+  try{ if(window.matchMedia && matchMedia('(max-width:900px)').matches){ const side=document.querySelector('#view-rate-types .sb-side'); if(side) side.classList.remove('open'); const b=document.getElementById('rt-side-tgl'); if(b) b.textContent='Browse';
+    const det=document.getElementById('rt-detail'); if(det && det.scrollIntoView) setTimeout(function(){ det.scrollIntoView({block:'start',behavior:'smooth'}); },60); } }catch(_){}
+}
 function rtSelectCard(rtId){
+  rtSideCloseOnPhone();   /* §mobSales */
   _rtSelected = rtId;
   rtRenderList();
   if(rtId){
@@ -38765,6 +39186,19 @@ function agRenderFilters(){
    ═══════════════════════════════════════════════════════════════════════════ */
 /* เรทที่ใช้จริงของเอเย่นต์รายหนึ่ง · a.rateTypeId ถูก sidecar sb_agents_rate_bindings เขียนทับตอนโหลดแล้ว
    ฟังก์ชันนี้จึงอ่านตัวเดียวพอ — เขียนเป็นฟังก์ชันไว้เพื่อให้ที่อื่นเรียกใช้คำนิยามเดียวกัน */
+/* §agRtLink (2026-10-25) · owner "หน้า Agent list พอกดที่ Rate ให้เด้งไปที่ Rate type นั้น ๆ"
+   เปิดหน้า Rate Types แล้วเลือกเรทนั้นให้ · ใช้จากการ์ด Bound rate · ชิป Source ใน Pricing Matrix · ปุ่ม ↗ ในตาราง */
+function agGoRateType(rtId, ev){
+  try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(_){}
+  if(!rtId || typeof getRateType!=='function' || !getRateType(rtId)) return;
+  _rtSelected=rtId;
+  const el=document.querySelector('.nav-item[data-view="rate-types"]');
+  if(el && typeof nav==='function') nav(el); else if(typeof renderRateTypes==='function') renderRateTypes();
+  setTimeout(function(){ try{
+    if(typeof rtSideCloseOnPhone==='function') rtSideCloseOnPhone();
+    const card=document.querySelector('#rt-list [data-rt-id="'+rtId+'"], #rt-list .rt-card.on, #rt-list .on'); if(card && card.scrollIntoView) card.scrollIntoView({block:'nearest'});
+  }catch(_){} }, 80);
+}
 function agHdRateOf(a){
   if(!a || !a.rateTypeId) return null;
   return (typeof getRateType==='function') ? getRateType(a.rateTypeId) : null;
@@ -40832,7 +41266,7 @@ function agTabInfo(a){
       today = tag('In window · ends in '+dvt+' days','amb');
     }
     boxBound = box('Bound rate',
-      rowS('Rate', `${E(_rtNow.name||'')}<span class="sub mono">${E(_rtNow.code||'')}</span>`)
+      rowS('Rate', `<a onclick="agGoRateType('${E(_rtNow.id||'')}',event)" style="cursor:pointer;color:var(--ag-navy,#16265C);text-decoration:underline dotted;text-underline-offset:3px" title="เปิด Rate Type นี้">${E(_rtNow.name||'')} ↗</a><span class="sub mono">${E(_rtNow.code||'')}</span>`)   /* §agRtLink */
       + rowS('Active', `<span class="mono">${E(_rtFmtDate(vf)||vf||'—')} → ${E(_rtFmtDate(vt)||vt||'no end date')}</span>`)
       + rowS('In effect today', today),
       tag(_rtCover.length + ' route' + (_rtCover.length===1?'':'s')), 'c5');
@@ -41056,8 +41490,8 @@ function agTabPrices(a){
     <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:${isInactive?'#854F0B':rt.color};flex-wrap:wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>
       <span style="font-weight:500">Source: Rate Type</span>
-      <span style="background:#fff;color:${rt.color};font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code}</span>
-      <span style="font-weight:600">${rt.name}</span>
+      <span onclick="agGoRateType('${rt.id}',event)" title="เปิด Rate Type นี้" style="cursor:pointer;background:#fff;color:${rt.color};font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code}</span>
+      <span onclick="agGoRateType('${rt.id}',event)" title="เปิด Rate Type นี้" style="cursor:pointer;font-weight:600;text-decoration:underline dotted;text-underline-offset:3px">${rt.name} ↗</span>   <!-- §agRtLink -->
       ${isInactive?'<span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em">Inactive</span>':''}
       <span style="font-size:10px;color:${isInactive?'#854F0B':rt.color};opacity:.7;font-variant-numeric:tabular-nums" title="ช่วงที่ตกลงราคากันไว้ · ไม่ได้กั้นการคิดเงิน — จองนอกช่วงก็ยังคิดราคาชุดนี้">${validHint}</span>
       <span style="font-size:9.5px;color:#8A929E;font-weight:500">(ช่วงที่ตกลงราคา &middot; ไม่ได้กั้นการคิดเงิน)</span>
@@ -44403,7 +44837,7 @@ function renderSalesBoard(){
         <button onclick="sbPickWho('${x.s.id}')" style="width:100%;margin-top:13px;background:${mid?c:'#fff'};border:${mid?'none':'0.5px solid var(--fd-line)'};border-radius:10px;padding:${mid?10:9}px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:${mid?'#fff':'#15201a'}">View Board</button>
       </div></div>`;
   };
-  const podiumHtml = sales.length ? `<div style="display:grid;grid-template-columns:1fr 1.06fr 1fr;gap:14px;align-items:end;position:relative;z-index:1;padding:0 4px">${podCard(1,false)}${podCard(0,true)}${podCard(2,false)}</div>` : '';
+  const podiumHtml = sales.length ? `<div class="sb-podium" style="display:grid;grid-template-columns:1fr 1.06fr 1fr;gap:14px;align-items:end;position:relative;z-index:1;padding:0 4px">${podCard(1,false)}${podCard(0,true)}${podCard(2,false)}</div>` : '';   /* §mobSales · class ไว้เรียง 1-2-3 บนมือถือ */
 
   const hl=(av,avc,ic,icc,lbl,who,val)=>`<div style="background:rgba(255,255,255,.58);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);border:1px solid rgba(255,255,255,.65);border-radius:14px;box-shadow:0 5px 18px rgba(30,30,60,.09),inset 0 1px 0 rgba(255,255,255,.85);padding:12px 14px;display:flex;align-items:center;gap:11px">
       <span style="position:relative;flex:none"><span style="width:38px;height:38px;border-radius:50%;background:var(--fd-bg,#F1EFE8);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:${avc}">${e((av||'?')[0])}</span><span style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:${icc};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px">${ic}</span></span>
@@ -44417,7 +44851,7 @@ function renderSalesBoard(){
     </div>`;
 
   const GC = '26px 1.4fr 84px 52px 46px 56px 58px 84px';
-  const tblHead = `<div style="display:grid;grid-template-columns:${GC};gap:8px;padding:0 16px 7px;font-size:9.5px;color:#a8a69e">
+  const tblHead = `<div class="sb-lbh" style="display:grid;grid-template-columns:${GC};gap:8px;padding:0 16px 7px;font-size:9.5px;color:#a8a69e">
       <span></span><span>Name</span><span>Market</span><span style="text-align:right">PAX</span><span style="text-align:right">FOC</span><span style="text-align:right">Share</span><span style="text-align:right">Book</span><span style="text-align:right">Score</span></div>`;
   const tblRows = sales.map((x,i)=>{ const c=x.s.color||'#888',rk=i+1,top3=rk<=3,me=x.s.id===myId;
     const pct=x.tgt?Math.round(x.pax/x.tgt*100):null, done=pct!=null&&pct>=100;
@@ -44425,15 +44859,15 @@ function renderSalesBoard(){
     const score = pct!=null
       ? `<span onclick="${isAdmin?`event.stopPropagation();sbEditTarget('${x.s.id}','${ym}')`:''}" style="background:#1c2b45;color:#fff;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;${isAdmin?'cursor:pointer':''}">🎯${pct}${done?'✓':''}</span>`
       : (isAdmin?`<span onclick="event.stopPropagation();sbEditTarget('${x.s.id}','${ym}')" style="font-size:10px;color:#185FA5;cursor:pointer">+ target</span>`:'<span style="font-size:10px;color:#c4c2ba">—</span>');
-    return `<div class="sb-in" data-delay="${(i+3)*45}" onclick="sbPickWho('${x.s.id}')" style="display:grid;grid-template-columns:${GC};gap:8px;align-items:center;background:#fff;border:${top3?'1px solid '+c:'0.5px solid var(--fd-line)'};border-radius:12px;${top3?'box-shadow:0 3px 10px rgba(20,20,40,.06);':''}padding:9px 16px;margin-bottom:7px;cursor:pointer">
+    return `<div class="sb-in sb-lbr" data-delay="${(i+3)*45}" onclick="sbPickWho('${x.s.id}')" style="display:grid;grid-template-columns:${GC};gap:8px;align-items:center;background:#fff;border:${top3?'1px solid '+c:'0.5px solid var(--fd-line)'};border-radius:12px;${top3?'box-shadow:0 3px 10px rgba(20,20,40,.06);':''}padding:9px 16px;margin-bottom:7px;cursor:pointer">
         <span style="font-size:16px;font-weight:700;font-style:italic;color:${top3?c:'#b0aea6'}">${rk}</span>
         <span style="display:flex;align-items:center;gap:10px;min-width:0">${hex(x.s.name,c,30,34,12,false)}<span style="min-width:0"><span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px">${e(x.s.name)}<span style="color:#185FA5;font-size:10px">✔</span></span><span style="font-size:10px;color:#a8a69e">${e(x.s.sub||x.s.market||'')}</span></span></span>
-        <span><span style="font-size:10px;background:var(--fd-bg,#F1EFE8);color:#5F5E5A;border-radius:6px;padding:3px 9px;font-weight:500;white-space:nowrap">${e((x.s.market||'—')).slice(0,9)}</span></span>
-        <span style="text-align:right;font-size:14px;font-weight:600"><span class="sb-cnt" data-pax="${x.pax}" data-delay="${(i+3)*45}">0</span></span>
-        <span style="text-align:right;font-size:12.5px;color:${x.foc?'#5B289A':'#c4c2ba'};font-variant-numeric:tabular-nums">${x.foc?fN(x.foc):'0'}</span>
-        <span style="text-align:right;font-size:12.5px;font-weight:600;color:#5F5E5A;font-variant-numeric:tabular-nums">${share}%</span>
-        <span style="text-align:right;font-size:12.5px;color:#8a8880;font-variant-numeric:tabular-nums">${fN(bkBySales[x.s.id]||0)}</span>
-        <span style="text-align:right">${score}</span></div>`;
+        <span class="sb-lbs"><span data-l="Market"><span style="font-size:10px;background:var(--fd-bg,#F1EFE8);color:#5F5E5A;border-radius:6px;padding:3px 9px;font-weight:500;white-space:nowrap">${e((x.s.market||'—')).slice(0,9)}</span></span>
+        <span data-l="PAX" style="text-align:right;font-size:14px;font-weight:600"><span class="sb-cnt" data-pax="${x.pax}" data-delay="${(i+3)*45}">0</span></span>
+        <span data-l="FOC" style="text-align:right;font-size:12.5px;color:${x.foc?'#5B289A':'#c4c2ba'};font-variant-numeric:tabular-nums">${x.foc?fN(x.foc):'0'}</span>
+        <span data-l="Share" style="text-align:right;font-size:12.5px;font-weight:600;color:#5F5E5A;font-variant-numeric:tabular-nums">${share}%</span>
+        <span data-l="Book" style="text-align:right;font-size:12.5px;color:#8a8880;font-variant-numeric:tabular-nums">${fN(bkBySales[x.s.id]||0)}</span></span>
+        <span class="sb-lbc" style="text-align:right">${score}</span></div>`;   /* §mobSales · .sb-lbs = display:contents บนจอใหญ่ (คอลัมน์เท่าเดิม) · บนมือถือเป็นแถวชิปมีป้าย */
   }).join('') || '<div style="padding:20px;text-align:center;color:#b0aea6;font-size:12px">No sales staff</div>';
 
   wrap.innerHTML = `
@@ -49218,6 +49652,28 @@ function poRowCmp(a,b){
    ยังไม่มีใครกด No-show / CXL → คืนยอดจองเต็มตามเดิม (พิมพ์ใบตอนเช้ายังได้ครบ)
    กดแล้ว → หักออกให้ · ตัวเดียวกับที่ใบงานเรือ (pjPax §pjPaxReal) ทะเบียนผู้เดินทาง
    และ Travel Summary ใช้อยู่แล้ว · สามใบจึงพูดเลขเดียวกัน */
+/* ══ §pjSplit (2026-10-24) · owner "Achilles เป็น ลค กรุ๊ปเดียวที่แยกลำมาจาก Hermetis แต่ไม่ขึ้นป้าย Charter ให้"
+   ใบจองที่แยกลงหลายลำ (ops.boatSplits · §boatSplit) เดิมใบงานเรือ/บอร์ด Departures อ่านแค่ ops.boatId (ลำแรก)
+   ลำที่สองจึงได้ 0 คน ไม่มีป้ายเหมาลำ ส่วนลำแรกโชว์คนทั้งใบ (121/65 เกิน 56) ทั้งที่จัดคนไว้แล้วว่าลำละเท่าไร
+   ตัวนี้คืน "ส่วนของลำนี้" ของใบนั้นวันนั้น · คนจริง (เช็คอินแล้ว) เกลี่ยตามสัดส่วนที่จัดไว้ เศษไปลำสุดท้าย
+   คืน null = ใบนี้ไม่ได้แยกลำ (ใช้ทางเดิม) · {skip:true} = แยกลำแต่ไม่มีลำนี้ */
+function pjSplitShare(b, date, t, boatId){
+  var sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null; if(!sp) return null;
+  var idx=-1; for(var i=0;i<sp.length;i++){ if(sp[i] && sp[i].boatId===boatId){ idx=i; break; } }
+  if(idx<0) return {skip:true};
+  var K=['ad','chd','inf','foc'], booked={}, tot={}, real=poPaxLeft(b,date,t), out={booked:0,tot:0};
+  sp.forEach(function(x){ var q=bkSplitPax(x); K.forEach(function(k){ tot[k]=(tot[k]||0)+(+q[k]||0); }); });
+  var mine=bkSplitPax(sp[idx]), last=(idx===sp.length-1);
+  K.forEach(function(k){
+    var bk=+mine[k]||0, T=+tot[k]||0, R=+real[k]||0, sh;
+    if(!T) sh=0;
+    else if(last){ var used=0; for(var j=0;j<idx;j++){ used+=Math.round(R*((+bkSplitPax(sp[j])[k]||0)/T)); } sh=Math.max(0,R-used); }
+    else sh=Math.round(R*(bk/T));
+    out[k]=sh; out.booked+=bk; out.tot+=sh; booked[k]=bk;
+  });
+  out.bookedBy=booked;
+  return out;
+}
 function poPaxLeft(b, date, t){
   var P=(typeof ckPaxBreak==='function')?ckPaxBreak(t&&t.pax):null;
   if(!P) return {ad:0,chd:0,inf:0,foc:0,tot:0};
@@ -49352,6 +49808,12 @@ function poBoats(date, pier){
     var bid=O.boatId||t.charterBoatId||'';
     var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
     var real=poPaxLeft(b,date,t).tot;   /* §poPaxReal */
+    /* §pjSplit · ใบที่แยกลำ → ลงทุกลำที่มันขี่ ด้วยคนส่วนของลำนั้น */
+    var _sp=(typeof bkBoatIdsOn==='function' && typeof bkBoatSplits==='function' && bkBoatSplits(b,date))?bkBoatIdsOn(b,date):null;
+    var _targets=(_sp&&_sp.length)?_sp.map(function(x){ var S=pjSplitShare(b,date,t,x)||{}; return {bid:x, pax:+S.booked||0, real:+S.tot||0, split:true, secondary:(x!==_sp[0])}; })
+                                  :[{bid:bid, pax:pax, real:real, split:false}];
+    _targets.forEach(function(G){
+    var bid=G.bid, pax=G.pax, real=G.real;
     var row=null;
     for(var i=0;i<out.length;i++){ if(out[i].bid===bid){ row=out[i]; break; } }
     if(!row){
@@ -49362,7 +49824,9 @@ function poBoats(date, pier){
       } else return;   /* ยังไม่ผูกลำ · ไปโผล่ในกล่อง "ยังไม่ระบุเรือ" */
     }
     row.pax+=pax; row.paxReal=(row.paxReal||0)+real;
-    row.bks.push({b:b,t:t,pax:pax,paxReal:real});
+    /* secondary = ลำที่ 2+ ของใบแยกลำ · ชีทที่ไล่รายชื่อ/ตั๋ว/ของเบิกต่อใบ (อุทยาน · ใบเซ็น) ยังนับที่ลำแรกลำเดียว กันซ้ำ */
+    row.bks.push({b:b,t:t,pax:pax,paxReal:real,split:G.split,secondary:!!G.secondary});
+    });
   });
   out.sort(function(a,b){ return String(a.dep||'99').localeCompare(String(b.dep||'99')) || String(a.boat.name||'').localeCompare(String(b.boat.name||'')); });
   return out;
@@ -52299,6 +52763,7 @@ function pkTkData(date, pier){
     var orphan=[];
     (B.bks||[]).forEach(function(x){
       var b=x.b;
+      if(x.secondary) return;   /* §pjSplit · ใบแยกลำนับตั๋วที่ลำแรกลำเดียว */
       if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,x.t)) return;
       if(typeof bkB2CAddonOnly==='function' && bkB2CAddonOnly(b)) return;   /* §b2cAddon · ไม่มีคน ไม่มีตั๋ว */
       var bc=pkBkCnt(b,x.t,date);
@@ -53252,7 +53717,18 @@ function renderPierPark(pier){
     var set=function(){ try{
       /* ตำแหน่งที่แถบบนตรึงจริง (ค่า top ที่เบราว์เซอร์คำนวณให้) + ความสูงของมัน */
       var tb=parseFloat(getComputedStyle(st).top)||0;
-      host.style.setProperty('--pk-top', Math.round(tb+st.getBoundingClientRect().height)+'px');
+      /* §pkTopOsc (2026-10-25) · owner "แถบเลื่อนเด้งไปมา"
+         --pk-top กำหนดความสูงกล่องชีท (max-height: 100vh − --pk-top) → ความสูงหน้าเปลี่ยน → แถบเลื่อนแนวตั้งโผล่/หาย
+         → หน้าแคบ/กว้างขึ้น ~15px → แถบบนตกบรรทัด/ไม่ตก → สูงเปลี่ยน → ResizeObserver ยิงกลับมาที่นี่ → วนไม่รู้จบ
+         (เกิดตรงความกว้างที่ป้ายในแถบบนพอดีขอบ · เห็นเป็นแถบเลื่อนกระพริบเด้งไปมา)
+         ถ้าค่าสลับไปมาระหว่างสองค่าภายใน 1.5 วิ ให้หยุดที่ค่ามากสุดแล้วไม่ตามอีก */
+      var v=Math.round(tb+st.getBoundingClientRect().height), cur=parseInt(host.style.getPropertyValue('--pk-top'))||0;
+      if(v===cur) return;
+      var Hh=host._pkTopH||(host._pkTopH=[]), now=Date.now(); Hh.push([v,now]); while(Hh.length>8) Hh.shift();
+      var rec=Hh.filter(function(x){ return now-x[1]<1500; });
+      if(rec.length>=4){ var vals={}; rec.forEach(function(x){ vals[x[0]]=1; }); var ks=Object.keys(vals);
+        if(ks.length<=2){ v=Math.max.apply(null, ks.map(Number)); if(v===cur) return; } }
+      host.style.setProperty('--pk-top', v+'px');
       /* หัวตารางเดือนสองชั้น · ชั้นล่างตรึงต่อจากความสูงจริงของชั้นบน */
       var gh=host.querySelector('.pk2-ov thead tr.g th.gh'); if(gh) host.style.setProperty('--pk-gh', Math.round(gh.getBoundingClientRect().height)+'px');
     }catch(_){} };
@@ -54945,7 +55421,7 @@ function poIsBuild(bid){
   var ledRet={}; KS.forEach(function(k){ var n=0;
     byKind[k].forEach(function(it){ n+=(S[it.id]?S[it.id].ret:0); }); ledRet[k]=n; });
   var PT=(typeof bookingV2PaxTot==='function')?bookingV2PaxTot:function(){return 0;};
-  var rows=B.bks.map(function(x){
+  var rows=B.bks.filter(function(x){ return !x.secondary; }).map(function(x){   /* §pjSplit */
     var b=x.b, t=x.t, O=(typeof bkOpsRead==='function')?bkOpsRead(b,_poDate):(b.ops||{});
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var px=(t&&t.pax)||{}, nm=[];
@@ -57474,7 +57950,7 @@ var PA_WS_TIER_TH={cap:'กัปตัน', crew:'ลูกเรือ', staff
 /* cnt = {รหัส: จำนวนวัน} ของคนนี้ในรอบนี้ · nights = จำนวนคืนที่เข้าเวร (คอลัมน์ N)
    ws = {cap,crew,staff} วัน WS แยกตามช่อง · ไม่ส่งมา = นับเป็น staff ทั้งหมด (ไม่มีขั้นต่ำ) */
 function paPayOf(sid, cnt, nights, ws){
-  var R=paPayRules(), rate=paPayRate(sid), nc=paNightCode(), parts=[], tot=0, need=false, MIN=paWsMin();
+  var R=paPayRules(), rate=paPayRate(sid), nc=paNightCode(), parts=[], tot=0, night=0, need=false, MIN=paWsMin();
   Object.keys(R).forEach(function(code){
     var r=R[code]||{}, x=+r.x||0, d=+r.d||0, f=+r.f||0;
     var days=(code===nc) ? (+nights||0) : (+(cnt||{})[code]||0);
@@ -57487,9 +57963,10 @@ function paPayOf(sid, cnt, nights, ws){
       note=[nCap?(PA_WS_TIER_TH.cap+' '+nCap):'', nCrew?(PA_WS_TIER_TH.crew+' '+nCrew):'', (nCap||nCrew)&&nStaff?(PA_WS_TIER_TH.staff+' '+nStaff):'']
         .filter(Boolean).join(' · ');
     } else amt=(x?rate*x*days:0) + d*days + f;
-    parts.push({code:code, days:days, amt:amt, note:note}); tot+=amt;
+    parts.push({code:code, days:days, amt:amt, note:note});
+    if(code===nc) night+=amt; else tot+=amt;   // §paNightPay · เบี้ยนอนแยกคอลัมน์ ไม่รวมใน total
   });
-  return {total:tot, parts:parts, missing:need, rate:rate};
+  return {total:tot, night:night, parts:parts, missing:need, rate:rate};
 }
 function paMoney(n){ return (Math.round((+n||0)*100)/100).toLocaleString('en-US',{maximumFractionDigits:2}); }
 /* §paPayFld · ช่องเบี้ยเที่ยวรายคน · พิมพ์อิสระ รับ "1,200" "฿500" ได้ · ว่าง = ลบค่าออก
@@ -57664,7 +58141,7 @@ function renderPierAtt(pier){
     + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
     + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
     + '<th class="pa-mo sum" colspan="'+(SUMC.length+1+(nOn?1:0))+'">MONTHLY SUMMARY (DAYS)</th>'
-    + (pay?'<th class="pa-mo sum" colspan="2">TRIP ALLOWANCE (฿)</th>':'')
+    + (pay?'<th class="pa-mo sum" colspan="3">TRIP ALLOWANCE (฿)</th>':'')
     + '<th class="pa-h0 nt">REMARKS</th></tr>'
     + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
@@ -57676,13 +58153,13 @@ function renderPierAtt(pier){
     + (nOn?('<th class="pa-sh ngt" title="จำนวนคืนที่เข้าเวร · นับที่วันเริ่มเวร">'
         +poE(paNightCode())+'</th>'):'')
     + '<th class="pa-sh tot">TOTAL</th>'
-    + (pay?'<th class="pa-sh pay" title="เบี้ยเที่ยวต่อวันของคนนี้">RATE</th><th class="pa-sh pay tot" title="ยอดเงินรวมตามสูตรเบี้ยเที่ยว">AMOUNT</th>':'')
+    + (pay?'<th class="pa-sh pay" title="เบี้ยเที่ยวต่อวันของคนนี้">RATE</th><th class="pa-sh pay tot" title="ยอดเงินรวมตามสูตรเบี้ยเที่ยว · ไม่รวมเบี้ยนอน">AMOUNT</th><th class="pa-sh pay tot" title="เบี้ยนอน · จำนวนคืนที่เข้าเวร × บาทต่อคืนในสูตร">เบี้ยนอน</th>':'')
     + '<th class="pa-nt">Notes</th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0, payTot=0, payMiss=0;
+  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0, payTot=0, payMiss=0, nightTot=0;
   groups.forEach(function(G){
     body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
-      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0)+(pay?2:0))+'"></td></tr>';
+      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0)+(pay?3:0))+'"></td></tr>';
     G.rows.forEach(function(st){
       var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0};
       var tds=CY.days.map(function(d){
@@ -57723,6 +58200,8 @@ function renderPierAtt(pier){
         } else { payTot+=PY.total;
           sums+='<td class="pa-sc pay tot'+(PY.total?'':' z')+'" title="'+poE(tip||'ไม่มีวันที่คิดเงิน')+'">'+(PY.total?paMoney(PY.total):'·')+'</td>';
         }
+        nightTot+=PY.night;   // §paNightPay · ไม่ขึ้นกับว่าใส่เบี้ยเที่ยวแล้วหรือยัง
+        sums+='<td class="pa-sc pay tot'+(PY.night?'':' z')+'" title="'+poE(_nc+' คืน × บาทต่อคืน')+'">'+(PY.night?paMoney(PY.night):'·')+'</td>';
       }
       _n++;
       // §paEdit · สี่ช่องแรกพิมพ์ทับได้ตรงนี้ · ออกจากช่องแล้วบันทึกเลย
@@ -57754,7 +58233,8 @@ function renderPierAtt(pier){
     + '<td class="pa-sc tot">'+paRowTotal(totW,gTot)+'</td>'
     + (pay?('<td class="pa-sc pay"></td><td class="pa-sc pay tot" title="'
         +(payMiss?(payMiss+' คนยังไม่ได้ใส่เบี้ยเที่ยว · ยังไม่รวมในยอดนี้'):'รวมทุกคนในตาราง')+'">'
-        +paMoney(payTot)+(payMiss?'<sup style="color:#B4560A"> +'+payMiss+'?</sup>':'')+'</td>'):'')
+        +paMoney(payTot)+(payMiss?'<sup style="color:#B4560A"> +'+payMiss+'?</sup>':'')+'</td>'
+        +'<td class="pa-sc pay tot">'+paMoney(nightTot)+'</td>'):'')
     + '<td class="pa-nt"></td></tr>';
 
   // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
@@ -58343,7 +58823,7 @@ function paExport(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var CY=paCycle(_paDate), IDX=paIndex(CY.days), rows=[], canPay=paPayCan();   // §paXlsxPay · เงินใส่เฉพาะคนที่ดูเงินได้
   rows.push(['ท่าประจำ','ชื่อ','ชื่อเล่น','ตำแหน่ง'].concat(CY.days.map(function(d){ return d.s; }))
-    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']).concat(canPay?['RATE','AMOUNT']:[]));
+    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']).concat(canPay?['RATE','AMOUNT','เบี้ยนอน']:[]));
   paGroups(P.k).forEach(function(G){ G.rows.forEach(function(st){
     var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0},nights=0;
     var cells=CY.days.map(function(d){ var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
@@ -58356,7 +58836,7 @@ function paExport(){
     if(canPay){
       if(cnt[PA_WS_CODE]) cnt['WS-LT']=(cnt['WS-LT']||0)+cnt[PA_WS_CODE];   // §paLtSplit · เหมือนบนจอ
       var PY=paPayOf(st.id, cnt, nights, wsT);
-      pay=[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total];
+      pay=[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total, PY.night];
     }
     rows.push([P.n||P.t, st.name||'', st.nick||'', st.role||''].concat(cells).concat([w,o,l,aw]).concat(pay));
   }); });
@@ -58382,12 +58862,12 @@ function paExportXlsx(){
     CY.days.forEach(function(d){ if(paNight(d.s, st.id)) nOn=true; }); }); });
   var title='CREW DUTY ROSTER · '+CY.from+' – '+CY.to+' · '+String(P.n||P.t);
   var hd=['No.','Full name','Nickname','Position'].concat(CY.days.map(function(d){ return d.s.slice(8)+'/'+d.s.slice(5,7); }))
-    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL']).concat(canPay?['RATE','AMOUNT']:[]).concat(['Notes']);
+    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL']).concat(canPay?['RATE','AMOUNT','เบี้ยนอน']:[]).concat(['Notes']);
   var rows=[[title],hd], pay=[[title+' · TRIP ALLOWANCE']];
   var ph=['No.','Full name','Nickname','Position','Rate'];
   payCodes.forEach(function(c){ ph.push(c+' days', c+' ฿'); });
-  ph.push('WS split','Amount','Note'); pay.push(ph);
-  var gTot={}, totW=0, nTot=0, n=0, payTot=0, pn=0;
+  ph.push('WS split','Amount','เบี้ยนอน','Note'); pay.push(ph);
+  var gTot={}, totW=0, nTot=0, n=0, payTot=0, pn=0, nightTot=0;
   groups.forEach(function(G){
     rows.push(['',G.t]);
     G.rows.forEach(function(st){
@@ -58407,7 +58887,7 @@ function paExportXlsx(){
       rows.push([n, st.name||'', st.nick||'', st.role||''].concat(cells)
         .concat(SUMC.map(function(c){ return cnt[c]||0; })).concat(nOn?[nights]:[])
         .concat([paRowTotal(w,cnt)])
-        .concat(canPay?[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total]:[])
+        .concat(canPay?[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total, PY.night]:[])
         .concat([paCycNote(CY.from, st.id)]));
       if(canPay){
         var by={};
@@ -58416,27 +58896,28 @@ function paExportXlsx(){
         payCodes.forEach(function(c){ var p=by[c]; var d=(c===nc)?nights:(cnt[c]||0);
           r.push(d||'', p?p.amt:''); });
         var ws=by[PA_WS_CODE];
-        r.push(ws&&ws.note?ws.note:'', PY.missing?'':PY.total, PY.missing?'ยังไม่ได้ใส่เบี้ยเที่ยว':'');
+        r.push(ws&&ws.note?ws.note:'', PY.missing?'':PY.total, PY.night, PY.missing?'ยังไม่ได้ใส่เบี้ยเที่ยว':'');
         if(!PY.missing) payTot+=PY.total;
+        nightTot+=PY.night;
         pay.push(r);
       }
     });
   });
   rows.push(['','TOTAL · ALL STAFF','',''].concat(CY.days.map(function(){ return ''; }))
     .concat(SUMC.map(function(c){ return gTot[c]||0; })).concat(nOn?[nTot]:[]).concat([paRowTotal(totW,gTot)])
-    .concat(canPay?['',payTot]:[]).concat(['']));
+    .concat(canPay?['',payTot,nightTot]:[]).concat(['']));
   var wb=XLSX.utils.book_new();
   var ws1=XLSX.utils.aoa_to_sheet(rows);
   ws1['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14}].concat(CY.days.map(function(){ return {wch:6}; }))
     .concat(SUMC.map(function(){ return {wch:7}; })).concat(nOn?[{wch:9}]:[]).concat([{wch:7}])
-    .concat(canPay?[{wch:8},{wch:12}]:[]).concat([{wch:24}]);
+    .concat(canPay?[{wch:8},{wch:12},{wch:12}]:[]).concat([{wch:24}]);
   ws1['!views']=[{state:'frozen', xSplit:4, ySplit:2}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Roster');
   if(canPay){
-    pay.push(['','TOTAL · ALL STAFF'].concat(new Array(ph.length-4).fill('')).concat([payTot,'']));   // payTot ตรงคอลัมน์ Amount
+    pay.push(['','TOTAL · ALL STAFF'].concat(new Array(ph.length-5).fill('')).concat([payTot,nightTot,'']));   // payTot ตรงคอลัมน์ Amount
     var ws2=XLSX.utils.aoa_to_sheet(pay);
     ws2['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14},{wch:8}].concat(payCodes.map(function(){ return [{wch:8},{wch:10}]; }).flat())
-      .concat([{wch:22},{wch:12},{wch:22}]);
+      .concat([{wch:22},{wch:12},{wch:12},{wch:22}]);
     XLSX.utils.book_append_sheet(wb, ws2, 'Trip Allowance');
   }
   XLSX.writeFile(wb, 'roster_'+String(P.n||P.k).replace(/[^\w฀-๿-]+/g,'_')+'_'+CY.from+'_'+CY.to+'.xlsx');
@@ -58893,13 +59374,18 @@ function pjPax(date, boatId, pier){
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
     var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var p;
+    var _S=pjSplitShare(b,date,t,boatId);   /* §pjSplit · ใบที่แยกลำ นับเฉพาะส่วนของลำนี้ */
+    if(_S){ if(_S.skip) return; p={ad:_S.ad,chd:_S.chd,inf:_S.inf,foc:_S.foc}; }
+    else {
     if((O.boatId||t.charterBoatId||'')!==boatId) return;
-    var p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
+    p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
     /* §pjPaxReal · เช็คอินแล้วใช้คนที่เดินทางจริง · ยังไม่เช็คอินคืนยอดจองเต็มอยู่แล้ว
        แหล่งเดียวกับทะเบียนรายชื่อผู้เดินทางและ Travel Summary · เลขสองใบจึงตรงกันเสมอ */
     if(typeof ckPaxLeft==='function'){
       p={ ad:ckPaxLeft(b,date,'ad',p.ad), chd:ckPaxLeft(b,date,'chd',p.chd),
           inf:ckPaxLeft(b,date,'inf',p.inf), foc:ckPaxLeft(b,date,'foc',p.foc) };
+    }
     }
     out.ad+=p.ad; out.chd+=p.chd; out.inf+=p.inf; out.foc+=p.foc;
     if(p.ad+p.chd+p.inf+p.foc>0) out.n++;      /* ทั้งใบไม่มาเลย ไม่ต้องนับเป็นใบบนเรือ */
@@ -62310,6 +62796,7 @@ function poSignSheet(bid){
      ไม่ยกทั้งทะเบียนมากอง เพราะที่ต้องแยกกองคือของที่อยู่ตรงหน้า ไม่ใช่ทั้งบริษัท */
   var AG={}, agOrd=[];
   B.bks.forEach(function(x){
+    if(x.secondary) return;   /* §pjSplit */
     var id=x.b.agentId; if(!id || AG[id]) return;
     var a=(typeof sbGetAgent==='function')?sbGetAgent(id):null;
     AG[id]=(a&&a.name)||id; agOrd.push(id);
@@ -62350,7 +62837,7 @@ function poSignPrint(bid, kinds){
   var KS=(kinds||[]).filter(function(k){ return PO_KIND[k]; });
 
   /* ── หนึ่งแถวต่อหนึ่งใบจอง · ชื่อทุกคนซ้อนกันในช่องเดียว เหมือนไฟล์ที่ใช้อยู่ ── */
-  var rows=B.bks.map(function(x){
+  var rows=B.bks.filter(function(x){ return !x.secondary; }).map(function(x){   /* §pjSplit */
     var b=x.b, t=x.t;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,_poDate):(b.ops||{});
     var van=(O&&O.vanId&&typeof vehGet==='function')?vehGet(O.vanId):null;
@@ -64301,8 +64788,7 @@ function pc2Head(P){
       +(badge?('<span class="bd'+(warn?' w':'')+'">'+badge+'</span>'):'')+'</button>'; };
   var ltB=sl.need?(sl.miss?('ยังไม่กรอก '+sl.miss+' ลำ'):'กรอกครบ'):'';
   var pkB=sp.n?(sp.miss?('ยังไม่กรอก '+sp.miss+' ลำ'):'กรอกครบ'):'';
-  var prt=(_pcTab===1)?'pcPrintLT()':((_pcTab===2)?'pcPrintPK()':'pcPrintLedger()');
-  var prtT=(_pcTab===0)?'พิมพ์สมุดวันนี้':('พิมพ์ '+pcE(pc2D(_pcDate)));
+  var _M=pcRefundMatch(_pcPier), _openN=_M.keys.filter(function(k){ return _M.urem[k]>0; }).length;   /* §pcFlow · ป้ายแท็บ 4 */
   var todo=[];
   if(bal<0) todo.push('<button class="r" onclick="pcTab(0)"><i></i>คงเหลือติดลบ '+pcMoney(Math.abs(bal))+'</button>');
   if(sl.miss) todo.push('<button class="a" onclick="pcTab(1)"><i></i>เรือหางยาว · ยังไม่กรอก '+sl.miss+' ลำ</button>');
@@ -64314,17 +64800,17 @@ function pc2Head(P){
     +'<div class="pc2-bar1">'
       +'<div class="br"><span class="ic">฿</span><div><b>เงินสดย่อย</b><small>'+pcE(P.t||P.n||_pcPier)+'</small></div></div>'
       +'<div class="pc2-chips">'+chip(0,'หน้าหลัก','คงเหลือ '+(bal<0?'−':'')+pcMoney(Math.abs(bal)),bal<0)
-        +chip(1,'เรือหางยาว',ltB,sl.miss>0)+chip(2,'ค่าอุทยาน',pkB,sp.miss>0)+'</div>'
+        +chip(1,'เรือหางยาว',ltB,sl.miss>0)+chip(2,'ค่าอุทยาน',pkB,sp.miss>0)+chip(3,'ตั้งเบิก · รับคืน',_openN?('ค้างคืน '+_openN):'',_openN>0)+'</div>'
       +'<div class="dt">'
         +'<button class="rb" onclick="pcShift(-1)" title="วันก่อน">‹</button>'
         +'<label class="dp"><b>'+pcE(pc2D(_pcDate))+' '+pcE(_pcDate.slice(0,4))+'</b><span>'+pcE(pc2DL(_pcDate).split(' ')[0])+'</span>'
           +'<input type="date" value="'+pcE(_pcDate)+'" onclick="try{this.showPicker()}catch(e){}" onchange="pcPickDay(this.value)"></label>'
         +'<button class="rb" onclick="pcShift(1)" title="วันถัดไป">›</button>'
         +(_pcDate!==pcNowDS()?'<button class="td" onclick="pcPickDay(pcNowDS())">วันนี้</button>':'')
-        +'<button class="pr" onclick="'+prt+'">🖨 '+prtT+'</button>'
+        +pcxHeadMenus()   /* §pcFlow · พิมพ์/ตั้งค่า เป็นเมนู */
       +'</div></div>'
-    +'<div class="pc2-todo"><b>สิ่งที่ค้างของ '+pcE(pc2D(_pcDate))+'</b>'
-      +(todo.length?todo.join(''):'<span class="ok"><i></i>ไม่มีอะไรค้าง</span>')+'</div>'
+    +((_pcTab===0||_pcTab===3)?'':('<div class="pc2-todo"><b>สิ่งที่ค้างของ '+pcE(pc2D(_pcDate))+'</b>'   /* §pcFlow · หน้าหลักใช้แถบงาน 4 ขั้นแทน */
+      +(todo.length?todo.join(''):'<span class="ok"><i></i>ไม่มีอะไรค้าง</span>')+'</div>'))
   +'</div>';
 }
 /* รายการวันของเดือน · ใช้ทั้งแท็บหางยาวและอุทยาน */
@@ -64377,7 +64863,7 @@ function pc2Main(pier){
   var CAT={'in':['รับเงิน','in'],lt:['หางยาว','lt'],pk:['อุทยาน','pk'],dock:['ค่าจอด','dk'],other:['จ่ายอื่น','ot']};
   var run=op, body='', ED=pc2EdCur(), edHit=false, no=0;
   var _RM=pcRefundMatch(pier);   /* §pcRefund · เงินคืนจับคู่กับวันที่ตั้งเบิก */
-  body+='<div class="pc2-lr op"><span></span><span class="no">—</span><span class="c">—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span class="m'+(op<0?' neg':'')+'">'+(op<0?'−':'')+pcN(Math.abs(op))+'</span><span></span></div>';
+  body+='<div class="pc2-lr op"><span></span><span class="no">—</span><span class="c">—</span><span>ยอดยกมา'+(op?'':' (ยังไม่มีรายการก่อนหน้า)')+'</span><span></span><span></span><span></span><span></span><span></span><span class="m'+(op<0?' neg':'')+'">'+(op<0?'−':'')+pcN(Math.abs(op))+'</span><span></span></div>';
   rows.forEach(function(r){
     var isIn=(r.k==='in'), amt=+r.x.amt||0;
     var ck=isIn?'in':(r.x.src&&CAT[r.x.src]?r.x.src:'other');
@@ -64391,9 +64877,10 @@ function pc2Main(pier){
         +' onclick="event.stopPropagation()" onchange="pcSelSet(\''+r.k+'\',\''+r.x.id+'\',this.checked)"></span>'
       +'<span class="no">'+no+'</span>'
       +'<span class="tm c">'+pcE(r.x.at||'—')+'</span>'
-      +'<span class="tx" title="'+pcE(r.x.txt||'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'))+pcClmChip(r.k,r.x)+'</span>'
+      +'<span class="tx" title="'+pcE(r.x.txt||'')+(r.x.by?(' · บันทึกโดย '+pcE(r.x.by)):'')+'">'+((r.k==='in'&&pcIsRefund(r.x))?('<i>'+pcE(r.x.txt||'—')+'</i>'+pcRefundChip(_RM,r.x)):(r._pk&&r._pk.col)?('<i style="color:'+pcE(pcDarken(r._pk.col)||r._pk.col)+'"><b class="pkd" style="background:'+pcE(r._pk.col)+'"></b>'+pcE(r.x.txt||'—')+'</i>'):('<i>'+pcE(r.x.txt||'—')+'</i>'+pcVbChip(r.k,r.x)))+'</span>'
       +'<span class="ct"><em class="cat '+CAT[ck][1]+'"'+(_g?(' style="color:'+_g.c+';background:#fff;border-color:'+_g.c+'"'):'')+'>'+(_g?pcE(_g.t):((r.k==='in'&&pcIsRefund(r.x))?'เงินคืน':CAT[ck][0]))+'</em></span>'
-      +'<span class="by"><i>'+pcE(r.x.by||'—')+'</i></span>'
+      +'<span class="cl">'+pcClmChip(r.k,r.x)+'</span>'   /* §pcSheet · ตั้งเบิก / คนรับเงิน แยกคอลัมน์ · ผู้บันทึกอยู่ใน tooltip */
+      +'<span class="py">'+(r.k==='out'?pcPyChip('out',r.x):'')+'</span>'
       +'<span class="m in">'+(isIn?pcN(amt):'')+'</span>'
       +'<span class="m out">'+(!isIn?pcN(amt):'')+'</span>'
       +'<span class="m'+(run<0?' neg':'')+'">'+(run<0?'−':'')+pcN(Math.abs(run))+'</span>'
@@ -64403,7 +64890,10 @@ function pc2Main(pier){
   /* แถวที่กดแก้หายไปแล้ว (คนอื่นลบ / เปลี่ยนวัน) · ปิดช่องกรอกทิ้ง */
   if(ED && ED.id && !edHit){ _pc2Ed=null; ED=null; }
   if(ED && !ED.id){ body+=pc2EdRow(ED,run,''); }
-  else if(!rows.length) body+='<div class="pc2-empty">ยังไม่มีรายการของวันนี้ · กด ＋ ด้านล่างเพื่อเพิ่มบรรทัดแรก</div>';
+  else {   /* §pcFlow · แถวว่างท้ายตาราง กดแล้วพิมพ์ได้เลย */
+    if(!rows.length) body+='<div class="pc2-empty">ยังไม่มีรายการของวันนี้ · กดบรรทัดด้านล่างเพื่อเพิ่มบรรทัดแรก</div>';
+    body+='<div class="pc2-lr add" onclick="pc2EdNew(\'out\')" title="เพิ่มบรรทัดจ่ายเงิน · ปุ่ม ＋ รับเงิน อยู่หัวสมุด"><span>＋ <em>พิมพ์บรรทัดใหม่ที่นี่</em> · จ่ายเงิน · <kbd>Enter</kbd> บันทึก · ขึ้นชื่อที่เคยพิมพ์พร้อมเลื่อนวันที่ให้</span></div>';
+  }
   /* รอดึงเข้าสมุด · หมวดไหนดึงแล้วไม่ดึงซ้ำ (pcPull เช็คเอง) */
   var pulled={}, pAmt={}; (D.out||[]).forEach(function(x){ if(x&&x.src){ pulled[x.src]=1; pAmt[x.src]=(pAmt[x.src]||0)+(+x.amt||0); } });
   var sl=pc2StatLT(pier,ds), sp=pc2StatPK(pier,ds);
@@ -64437,10 +64927,14 @@ function pc2Main(pier){
     +'</div>';
   /* ทั้งเดือน · ยกมาของวันแรก = ยอดสะสมจากทุกเดือนก่อน จึงต่อกันได้จริง */
   var days=pcMonthDays(pier,_pcYM), mrun=null, mrows='', today=pcNowDS();
+  /* §pcFlow · ย่อเหลือ 3 วันล่าสุดถึงวันที่เลือก (+วันที่เลือกเสมอ) · กด "กางทั้งเดือน" ดูครบ */
+  var _show={}; if(!_pc2MonthAll){ var _upto=days.filter(function(d){ return d<=ds; }).slice(-3); _upto.forEach(function(d){ _show[d]=1; }); _show[ds]=1; if(!_upto.length) days.slice(0,3).forEach(function(d){ _show[d]=1; }); }
+  var _hidden=0;
   days.forEach(function(d){
     var X=pcTotals(pier,d); if(mrun===null) mrun=pcOpening(pier,d);
     var b=pcClosing(pier,d); mrun=b;   /* §w5cLedger · the day's closing is the server's (carried forward) */
     var w=Math.max(0,X.ref-X.pulled), st=w>0?'miss':(X.ref>0?'ok':'none');
+    if(!_pc2MonthAll && !_show[d]){ _hidden++; return; }
     mrows+='<button class="pc2-mr'+(d===ds?' on':'')+'" onclick="pcPickDay(\''+d+'\')">'
       +'<b>'+pcE(pc2D(d))+(d===today?'<small>วันนี้</small>':'')+'</b>'
       +'<span class="'+(X['in']?'in':'z')+'">'+(X['in']?pcN(X['in']):'—')+'</span>'
@@ -64452,42 +64946,43 @@ function pc2Main(pier){
     +'<input type="month" value="'+pcE(_pcYM)+'" onchange="pc2Month(this.value)"></div>'
     +'<div class="mh"><span>วันที่</span><span>รับ</span><span>จ่าย</span><span>คงเหลือ</span><span></span></div>'
     +'<div class="ml">'+(mrows||'<div class="pc2-mut" style="padding:10px 0">เดือนนี้ยังไม่มีรายการ</div>')+'</div>'
+    +((_hidden||_pc2MonthAll)?('<button type="button" class="pcx-mtog" onclick="pc2MonthToggle()">'+(_pc2MonthAll?'ย่อเหลือ 3 วันล่าสุด':('กางทั้งเดือน · อีก '+_hidden+' วัน'))+'</button>'):'')   /* §pcFlow */
     +'<div class="mt"><span>คงเหลือปลายงวด</span><b>'+(end<0?'−':'')+pcMoney(Math.abs(end))+'</b></div>'
     +'<div class="lg"><span><i class="miss"></i> มีรายการรอดึง</span><span><i class="ok"></i> ดึงครบแล้ว</span></div></div>';
   var nIn=(D['in']||[]).length, nOut=(D.out||[]).length;
   return '<div class="pc2-main">'
     +'<div class="pc2-l">'
-      +pc2Kpi([{h:'ยอดยกมา',v:pcMoney(op),s:'คงเหลือของวันก่อนหน้า'},
+      +pcxSteps(pier,ds,{sl:sl,sp:sp,PS:PS,T:T,D:D,M:_RM,waiting:waiting})   /* §pcFlow · แถบงาน 4 ขั้น */
+      +pc2KpiEq([{h:'ยอดยกมา',v:pcMoney(op),s:'คงเหลือของวันก่อนหน้า'},
                {h:'รับวันนี้',v:pcMoney(T['in']),s:nIn+' รายการ',cls:'in'},
                {h:'จ่ายวันนี้',v:pcMoney(T.out),s:nOut+' รายการ'+(waiting>0?(' · รอดึงอีก '+pcMoney(waiting)):''),cls:'out'},
-               {h:'คงเหลือในมือ',v:(bal<0?'−':'')+pcMoney(Math.abs(bal)),s:bal<0?'⚠ ติดลบ · ตรวจรายการ':'ยกไปวันถัดไป',cls:'dk'}])
+               {h:'คงเหลือในมือ',v:(bal<0?'−':'')+pcMoney(Math.abs(bal)),s:bal<0?'⚠ ติดลบ · ตรวจรายการ':'ยกไปวันถัดไป · เงินสดจริงในลิ้นชัก',cls:'dk'}])
       +'<div class="pc2-card pc2-led">'
         +'<div class="ch"><div><b>สมุดเดินบัญชี · '+pcE(pc2D(ds))+'</b><div class="cs">นับเฉพาะเงินที่ผ่านลิ้นชักจริง · '+rows.length+' รายการ</div></div>'
-          +'<span class="sp"></span>'
-          +'<button class="ol" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button>'
+          +'<span class="sp"></span><span class="hb">'   /* §pcFlow · ปุ่มเพิ่มบรรทัดย้ายขึ้นหัว · แก้ชื่อบริษัท→⚙ · พิมพ์→เมนูพิมพ์ */
+          +'<button class="i" onclick="pc2EdNew(\'in\')" title="เพิ่มบรรทัดรับเงิน">＋ รับเงิน</button>'
+          +'<button class="o" onclick="pc2EdNew(\'out\')" title="เพิ่มบรรทัดจ่ายเงิน">＋ จ่ายเงิน</button>'
+          +(rows.length?'<button onclick="pcSelOnlyOut()" title="ติ๊กรายจ่ายทั้งหมดของวัน เพื่อสรุปตั้งเบิกหรือออกใบรับรองฯ">&#9745; เลือกรายจ่าย</button>':'')
+          +'<button onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก">🖨 สมุดวันนี้</button></span>'
+          +(false?'<button class="ol" onclick="pcCoEdit()">แก้ชื่อบริษัท</button>':'')
           +'<button class="ol" onclick="pcClmStart()" title="ติ๊กรายการจ่าย แล้วตั้งชื่อ บันทึกเป็นรายการตั้งเบิก (ไม่ติ๊ก = เลือกรายจ่ายที่ยังไม่ได้ตั้งเบิกทั้งหมดให้)">สรุปตั้งเบิก</button>'   /* §pcClm */   /* §pcRefund */
-          +'<button class="ol" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก">พิมพ์สมุดวันนี้</button>'
-          +'<button class="pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">ใบรับรองแทนใบเสร็จ</button></div>'
+          +'</div>'
         +'<div class="pc2-ltw"><div class="pc2-ltb">'
         +'<div class="pc2-lr hd"><span class="sc"><input type="checkbox" id="pc-selall" class="pc-cb" title="เลือกทุกรายการของวันนี้" onchange="pcSelAll(this.checked)"></span>'
-          +'<span class="no">#</span><span class="c">เวลา</span><span>รายการ</span><span class="ct">หมวด</span><span>ผู้บันทึก</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'
+          +'<span class="no">#</span><span class="c">เวลา</span><span>รายการ</span><span class="ct">หมวด</span><span>ตั้งเบิก</span><span>คนรับเงิน</span><span class="m">รับ</span><span class="m">จ่าย</span><span class="m">คงเหลือ</span><span></span></div>'   /* §pcSheet */
         +body
-        +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
+        +'<div class="pc2-lr tot"><span></span><span></span><span></span><span>รวมวันนี้</span><span></span><span></span><span></span><span class="m in">'+pcN(T['in'])+'</span><span class="m out">'+pcN(T.out)+'</span><span class="m'+(bal<0?' neg':'')+'">'+(bal<0?'−':'')+pcN(Math.abs(bal))+'</span><span></span></div>'
         +'</div></div>'
         +'<div class="pc-selbar" id="pc-selbar">'+pcSelBarHtml()+'</div>'
         +'<div class="pc2-ft">'   /* §pcFtCmp (2026-10-16) · owner: "ส่วนนี้ทำ ดีไซน์ให้กระชับหน่อย" · แถบเลือก/ชิปกลุ่ม/ปุ่มเพิ่ม/คำอธิบาย เดิมสี่ชั้น → แถวปุ่มเดียว + วิธีใช้พับได้ */
-          +'<button class="ad i" onclick="pc2EdNew(\'in\')" title="เพิ่มบรรทัดรับเงิน">＋ รับเงิน</button>'
-          +'<button class="ad o" onclick="pc2EdNew(\'out\')" title="เพิ่มบรรทัดจ่ายเงิน">＋ จ่ายเงิน</button>'
-          +(rows.length?'<button class="gh" onclick="pcSelOnlyOut()" title="ติ๊กช่องหน้าแถว เพื่อรวมยอดเฉพาะรายการที่เลือก · ปุ่มนี้ติ๊กรายจ่ายทั้งหมดให้">&#9745; เลือกรายจ่าย</button>':'')
-          +pcGrpBar(D)   /* §pcGrp */
+          +pcGrpBar(D)   /* §pcGrp · §pcFlow ปุ่มเพิ่มบรรทัดย้ายขึ้นหัวสมุด */
           +'<span class="sp"></span>'
           +'<button class="hl'+(pc2HelpOn()?' on':'')+'" onclick="pc2Help(this)" title="วิธีใช้ · แสดง/ซ่อน">&#9432;</button>'
         +'</div>'
         +'<div class="pc2-note'+(pc2HelpOn()?'':' off')+'"><b>กรอกในตารางได้เลย</b> · กด ＋ แล้วพิมพ์รายการ ใส่จำนวน กด <b>Enter</b> = บันทึกแล้วขึ้นบรรทัดใหม่ต่อ · <b>Esc</b> = ยกเลิก · แก้บรรทัดเดิม ดับเบิลคลิกที่บรรทัด หรือกด ✎<br><b>คงเหลือ</b> = ยอดยกมา + รับ − จ่าย · เงินไม่รีเซ็ตรายวัน · ค่าหางยาว ค่าอุทยาน ค่าจอด จะเข้าสมุดเมื่อกด <b>⤓ ดึง</b> ในการ์ดด้านขวา · ติ๊กหน้าแถวเพื่อรวมยอดเฉพาะที่เลือก · ติ๊กแล้วกด <b>สรุปตั้งเบิก</b> = ตั้งชื่อแล้วบันทึกเป็นรายการตั้งเบิก (ดูด้านล่าง)</div>'
       +'</div>'
-      +pcClmList(pier)   /* §pcClm */
-    +'</div>'
-    +'<div class="pc2-r">'+pendCard+pcClaimCard(pier,ds)+monthCard+'</div>'   /* §pcRefund */
+    +'</div>'   /* §pcFlow · รายการตั้งเบิกทั้งเดือนย้ายไปแท็บ 3 (pc2Claims) */
+    +'<div class="pc2-r">'+pendCard+pcxOpenCard(pier,ds,_RM)+monthCard+'</div>'   /* §pcRefund · §pcFlow การ์ดค้างรับคืนแบบย่อ */
   +'</div>';
 }
 /* ── เรือหางยาว ─────────────────────────────────────────────────────── */
@@ -64826,6 +65321,28 @@ function pc2CSS(S){
   S+' .pc-selbar input.pc-clm-in{flex:1 1 220px;min-width:160px;height:32px;border:1.5px solid #0E7490;border-radius:8px;padding:0 10px;font:inherit;font-size:13.5px}',
   S+' .pc-selbar input.pc-clm-in.bad{border-color:#A32D2D;background:#FDF0EF}',
   S+' .pc2-clms{border-top:4px solid #0E7490}',
+  /* §pcClmTbl · ตารางรายการตั้งเบิก */
+  S+' .pcc-h{flex-wrap:wrap;gap:10px 18px;align-items:center} '+S+' .pcc-t{min-width:200px}',
+  S+' .pcc-k{display:flex;gap:8px;flex-wrap:wrap} '+S+' .pcc-k>div{border:1px solid #DCE2E8;border-radius:9px;padding:5px 11px;min-width:112px} '+S+' .pcc-k>div.wn{border-color:#F0C98C;background:#FFF8EC}',
+  S+' .pcc-k span{display:block;font-size:11px;color:'+M+'} '+S+' .pcc-k>div.wn span{color:#8A5A0B} '+S+' .pcc-k b{display:block;font-family:"DM Mono",monospace;font-weight:500;font-size:15px} '+S+' .pcc-k b.ok{color:#0B6E4F} '+S+' .pcc-k>div.wn b{color:#8A5A0B} '+S+' .pcc-k b.bad{color:#A3321D} '+S+' .pcc-k b i{font-style:normal;font-family:inherit;font-size:12px}',
+  S+' .pcc-f{display:flex;gap:2px;background:#EEF2F8;border-radius:10px;padding:3px;margin-left:auto} '+S+' .pcc-f button{border:none;background:transparent;color:'+SUB+';border-radius:8px;padding:6px 11px;font:600 12px inherit;font-family:inherit;cursor:pointer;white-space:nowrap} '+S+' .pcc-f button span{opacity:.7} '+S+' .pcc-f button.on{background:'+N+';color:#fff}',
+  S+' .pcc-w{overflow-x:auto} '+S+' table.pcc-t{width:100%;min-width:700px;border-collapse:collapse;font-size:12.5px}',
+  S+' table.pcc-t th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:'+M+';text-transform:uppercase;letter-spacing:.04em;background:#F8FAFB;border-bottom:1px solid #DCE2E8;white-space:nowrap} '+S+' table.pcc-t th:first-child{padding-left:12px;width:30%}',
+  S+' table.pcc-t td{padding:6px 7px;vertical-align:middle;border-bottom:1px solid #EEF1F4} '+S+' table.pcc-t .r{text-align:right} '+S+' table.pcc-t .m{font-family:"DM Mono",monospace;font-weight:500;white-space:nowrap} '+S+' table.pcc-t .mut{color:#8A97A8} '+S+' table.pcc-t .wn{color:#8A5A0B}',
+  S+' table.pcc-t tr.pcc-d td{background:#F3F6F9;border-bottom:1px solid #DCE2E8} '+S+' table.pcc-t tr.pcc-d.cur td{background:#E9F3F8}',
+  S+' .pcc-dh{display:flex;align-items:center;gap:8px;padding-left:2px} '+S+' .pcc-dh b{font-size:13px;color:'+N+'} '+S+' .pcc-dh a{text-decoration:none} '+S+' .pcc-dh span{font-size:12px;color:'+M+'}',
+  S+' .pcc-dh em,'+S+' .pcc-r em{font-style:normal;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;background:#FBEBD3;color:#7A4300} '+S+' .pcc-dh em.bad{background:#FDECE7;color:#A3321D} '+S+' .pcc-dh em.ok,'+S+' .pcc-r em.ok{background:#E6F4EE;color:#0B6E4F} '+S+' .pcc-r em.wn{background:#FDECE7;color:#A3321D} '+S+' .pcc-r em.z{background:#EEF2F8;color:'+M+'}',
+  S+' .pcc-t .tg{width:24px;height:24px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:#8A97A8;font-size:11px;flex:none;padding:0} '+S+' .pcc-t .tg:hover{background:#EEF2F8}',
+  S+' .pcc-nm{display:flex;align-items:center;gap:6px;padding-left:16px;min-width:0} '+S+' .pcc-nm b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px} '+S+' .pcc-nm small{font-size:11px;color:#8A97A8;font-family:"DM Mono",monospace;white-space:nowrap}',
+  S+' tr.pcc-r.op td{background:#FBFCFD;border-bottom:none} '+S+' tr.pcc-x td{background:#FBFCFD;padding:0 16px 10px 70px} '+S+' tr.pcc-x .ln{padding:0} '+S+' tr.pcc-x .l{display:grid;grid-template-columns:62px minmax(0,1fr) auto 90px 28px;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #E3E7EF;font-size:12.5px}',
+  S+' tr.pcc-x .l .d{color:'+M+';font-family:"DM Mono",monospace;font-size:12px} '+S+' tr.pcc-x .l .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} '+S+' tr.pcc-x .l .m{text-align:right;font-family:"DM Mono",monospace} '+S+' tr.pcc-x .l .py em.pc-py{max-width:none;margin:0}',
+  S+' .pcc-rc{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap} '+S+' .pcc-rc i{width:36px;height:6px;background:#EEF1F4;border-radius:3px;overflow:hidden;display:inline-block} '+S+' .pcc-rc i b{display:block;height:100%;background:#0B6E4F} '+S+' .pcc-rc .bad{color:#A3321D} '+S+' .pcc-rc .ok{color:#0B6E4F}',
+  S+' table.pcc-t td.ac{white-space:nowrap;padding-right:10px} '+S+' .pcc-t .ol{height:26px;padding:0 7px;font-size:11px;font-weight:600;margin-left:3px;vertical-align:middle} '+S+' .pcc-t .ol.ic{width:28px;padding:0;font-size:12px} '+S+' .pcc-t .ol.sm{font-size:11px} '+S+' .pcc-t .ol.mut{color:#8A97A8}',
+  S+' .pcc-mn{position:relative;display:inline-block} '+S+' .pcc-pop{position:absolute;right:0;top:32px;z-index:6;background:#fff;border:1px solid #DCE2E8;border-radius:9px;box-shadow:0 10px 28px rgba(11,30,91,.14);padding:4px;min-width:190px;text-align:left}',
+  S+' .pcc-pop button{display:block;width:100%;border:none;background:transparent;text-align:left;padding:7px 10px;border-radius:6px;font:500 12.5px inherit;font-family:inherit;cursor:pointer;color:'+SUB+'} '+S+' .pcc-pop button:hover{background:#EEF2F8} '+S+' .pcc-pop button.dg{color:#A32D2D}',
+  S+' tr.pcc-r.fl td{animation:pcClmFl 1.6s ease}',
+  S+' table.pcc-t tfoot td{border-top:2px solid '+N+';border-bottom:none;font-weight:700;padding:9px 10px} '+S+' table.pcc-t tfoot td:first-child{padding-left:16px}',
+  '@media (max-width:760px){'+S+' .pcc-f{margin-left:0} '+S+' .pcc-nm b{max-width:200px}}',
   S+' .pc2-cl{border-top:1px solid #ECEFF4} '+S+' .pc2-cl.cur{background:#F5FAFC} '+S+' .pc2-cl.fl{animation:pcClmFl 1.6s ease}',
   '@keyframes pcClmFl{0%,40%{background:#FFF3C4}100%{background:transparent}}',
   S+' .pc2-cl .r{display:flex;align-items:center;gap:10px;padding:9px 14px}',
@@ -64871,7 +65388,7 @@ function pc2CSS(S){
   S+' .pc2-month .mt{display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:2px solid '+N+';font-size:14px;font-weight:800}',
   S+' .pc2-month .mt b{font-family:"DM Mono",monospace;font-weight:500}',
   S+' .pc2-month .lg{display:flex;gap:14px;margin-top:8px;font-size:12px;color:'+M+'}'
-  ].join('\n')+'\n'+pc2CSS2(S)+'\n'+pc2CSS3(S);
+  ].join('\n')+'\n'+pc2CSS2(S)+'\n'+pc2CSS3(S)+'\n'+pc2CSS4(S)+'\n'+pcVbCss();   /* §pcFlow · §pcVanPay */
 }
 function pc2CSS2(S){
   var N='#0B1E5B', M='#6B7693', SUB='#3E4A6B', GL='#7F8BA6', CL='#E3E8F0', TF='#C3CBD9';
@@ -65179,6 +65696,289 @@ function pcSugKey2(ev){
   if(ev.key==='Escape'){ pcSugClose(); return false; }
   return false;
 }
+/* ══ §pcFlow (2026-10-23) · เงินสดย่อย · หน้าหลักเรียงตามลำดับงาน + แท็บ "ตั้งเบิก · รับคืน" ═══════════════
+   owner "ช่วยตรวจสอบหน้า Petty cash และลองปรับหน้าตา UI การทำงานใหม่" → mock PCX1/PCX2 → "โอเคปรับ · ทำเลย"
+   ที่ตรวจพบ: ลำดับงานไม่ได้บอกใคร · 142 บรรทัดไม่มีคนรับเงิน (ต้องเลือกทีละบรรทัด) · ค้างรับคืน 72% ของเดือน
+             โดยการจับคู่เงินคืนเดาจากข้อความและไม่มีที่ให้จับคู่เอง · ปุ่มซ้ำ · รายการตั้งเบิกทั้งเดือนอยู่ใต้สมุดทุกวัน
+   เปลี่ยนที่วาง ไม่เปลี่ยนข้อมูล · ทุกฟังก์ชันเดิมยังเรียกตัวเดิม (pcPull · pcClmStart · pcPrint* · pcPy* · pcRefundMatch)
+   ① แถบงาน 4 ขั้นบนหน้าหลัก (กรอกชีท → ดึงเข้าสมุด → ตั้งเบิก → รับคืน) แทนบรรทัด "สิ่งที่ค้าง" บนแท็บนี้
+   ② ยอด 4 ตัวเป็นสมการ · ปุ่มเพิ่มบรรทัดย้ายขึ้นหัวสมุด + แถว "พิมพ์บรรทัดใหม่ที่นี่" ท้ายตาราง
+   ③ ตั้งชื่อตั้งเบิก = เลือกคนรับเงินทั้งใบได้เลย · บันทึกแล้วลง po_cash_payees.of ทุกบรรทัดที่ยังไม่มีคน
+   ④ แท็บใหม่ ตั้งเบิก · รับคืน = รายการทั้งเดือน (ตัวเดิม pcClmList) + ติ๊กหลายรายการ (ตั้งคนรับเงิน · บันทึกรับคืน · พิมพ์)
+      + แผงเงินคืน (จับคู่ไม่แน่ใจ → กดยืนยัน / เลือกรายการเอง · เก็บใน blob key po_cash_rfmap เป็นสตริง JSON) + ทะเบียนคนรับเงิน
+   ⑤ พิมพ์รวมเป็นเมนูเดียว · แก้ชื่อบริษัทไปอยู่ใต้ ⚙ · ตารางเดือนย่อเหลือ 3 วันล่าสุด (กางได้)
+   ⚠ alert/confirm/prompt เป็นภาษาอังกฤษตามกฎของไฟล์ ═══════════════════════════════════════════════════ */
+var _pcxMenu='', _pc2MonthAll=false, _pcxClmSel={}, _pcxClmSelK='';
+function pcxMenu(k){ _pcxMenu=(_pcxMenu===k)?'':k; pcKeep(); }
+function pcxMenuClose(){ if(_pcxMenu){ _pcxMenu=''; pcKeep(); } }
+function pc2MonthToggle(){ _pc2MonthAll=!_pc2MonthAll; pcKeep(); }
+/* เมนูพิมพ์ + ตั้งค่า บนหัว · ปุ่มเดียวแทน 4 ปุ่มที่กระจายอยู่ */
+function pcxHeadMenus(){
+  var tabPrint=(_pcTab===1)?'<button type="button" onclick="pcxMenuClose();pcPrintLT()">🛶 ชีทหางยาว · '+pcE(pc2D(_pcDate))+'</button>'
+             :(_pcTab===2)?'<button type="button" onclick="pcxMenuClose();pcPrintPK()">🏝️ ชีทอุทยาน · '+pcE(pc2D(_pcDate))+'</button>':'';
+  var pm=(_pcxMenu==='print')?('<div class="pcx-pop">'
+      +'<button type="button" onclick="pcxMenuClose();pcPrintLedger()">📒 สมุดเดินบัญชี · '+pcE(pc2D(_pcDate))+'</button>'
+      +'<button type="button" onclick="pcxMenuClose();pcPrintCert()">🧾 ใบรับรองแทนใบเสร็จ · รายจ่ายทั้งวัน</button>'
+      +'<button type="button" onclick="pcxMenuClose();pcPrintClaim()">📋 สรุปตั้งเบิกทั้งวัน</button>'
+      +tabPrint+'</div>'):'';
+  var sm=(_pcxMenu==='set')?('<div class="pcx-pop r">'
+      +'<button type="button" onclick="pcxMenuClose();pcCoEdit()">🏢 ชื่อบริษัทบนใบรับรองฯ</button>'
+      +'<button type="button" onclick="pcxMenuClose();pcxPyBrowse(\'all\')">👤 ทะเบียนคนรับเงิน</button>'
+      +'<button type="button" onclick="pcxMenuClose();pc2Help(document.querySelector(\'#pc-host-'+pcE(_pcPier)+' .pc2-ft .hl\'))">ⓘ แสดง/ซ่อนวิธีใช้ใต้สมุด</button>'
+      +'</div>'):'';
+  return '<span class="pcx-mw"><button class="pr" onclick="pcxMenu(\'print\')" title="พิมพ์">🖨 พิมพ์ ⌄</button>'+pm+'</span>'
+       +'<span class="pcx-mw"><button class="pr ic" onclick="pcxMenu(\'set\')" title="ตั้งค่า">⚙</button>'+sm+'</span>';
+}
+/* สถานะงาน 4 ขั้นของวัน · ใช้ตัวเลขชุดเดียวกับการ์ดและชิป */
+function pcxSteps(pier,ds,ctx){
+  var sl=ctx.sl, sp=ctx.sp, PS=ctx.PS, T=ctx.T, D=ctx.D, M=ctx.M;
+  var miss=(sl.miss||0)+(sp.miss||0), missN=[].concat(sl.miss?sl.missNames:[], sp.miss?sp.missNames:[]);
+  var kinds=[]; if(sl.need) kinds.push('หางยาว'); if(sp.n) kinds.push('อุทยาน');
+  var st=function(cls,n,t,s,go){ return '<div class="pcx-st '+cls+'"><span class="n">'+n+'</span><div><b>'+t+'</b><small>'+s+'</small></div>'+(go||'')+'</div>'; };
+  var out='';
+  /* ① ชีท */
+  if(!kinds.length) out+=st('none','1','ไม่มีเรือออกวันนี้','ไม่มีชีทหางยาว/อุทยานให้กรอก','');
+  else if(miss){ var go1=sp.miss?'pcTab(2)':'pcTab(1)';
+    out+=st('todo','1','กรอก'+(sp.miss&&sl.miss?'ชีท':(sp.miss?'ค่าอุทยาน':'ค่าหางยาว'))+' · เหลือ '+miss+' ลำ',
+      pcE(missN.slice(0,4).join(' · '))+(missN.length>4?(' +'+(missN.length-4)):'')+(sp.miss?' · เติมจากใบจองได้ทีเดียวทั้งวัน':''),
+      '<button type="button" class="go" onclick="'+go1+'">ไปกรอก →</button>'); }
+  else out+=st('done','✓','กรอกชีทครบแล้ว',pcE(kinds.join(' + '))+' · '+(sp.n||0)+' ลำ'+(sp.keyed&&Math.round(sp.diff)?(' · อุทยานต่าง '+(sp.diff>0?'+':'−')+pcN(Math.abs(sp.diff))):''),'');
+  /* ② ดึงเข้าสมุด */
+  var waiting=ctx.waiting||0, pulledN=(PS&&PS.nPulled)||0, pulledAmt=(PS&&PS.pulledAmt)||0;
+  (D.out||[]).forEach(function(x){ if(x&&x.src==='lt'){ pulledN++; pulledAmt+=(+x.amt||0); } });
+  if(waiting>0) out+=st(miss?'wait':'todo','2','ดึงเข้าสมุด '+pcMoney(waiting),(pulledN?('ดึงแล้ว '+pulledN+' ลำ · '):'')+(miss?'ลำที่กรอกแล้วดึงก่อนได้ · ที่เหลือรอข้อ 1':'ขึ้นเป็นรายจ่าย 1 บรรทัด/ลำ'),
+      '<button type="button" class="go" onclick="pcPull(\''+pcE(ds)+'\')">⤓ ดึง</button>');
+  else if(pulledN||T.pulled>0) out+=st('done','✓','ดึงเข้าสมุดแล้ว'+(pulledN?(' '+pulledN+' ลำ'):''),pcMoney(pulledAmt||T.pulled)+(miss?' · ที่เหลือรอข้อ 1':' · ครบทุกลำ'),'');
+  else out+=st(kinds.length?'wait':'none','2','ดึงยอดเข้าสมุด',kinds.length?'รอข้อ 1 · ยังไม่มียอดให้ดึง':'ไม่มียอดให้ดึงวันนี้','');
+  /* ③ ตั้งเบิก */
+  var unc=(D.out||[]).filter(function(x){ return x && !pcClmOn(x); }), uncAmt=0; unc.forEach(function(x){ uncAmt+=(+x.amt||0); });
+  var CL=pcClmAll(pier).filter(function(c){ return c.date===ds; }), clAmt=0, clRows=0, noPy=0;
+  CL.forEach(function(c){ pcClmRows(pier,c.id).forEach(function(o){ clAmt+=(+o.x.amt||0); clRows++; if(!pcPyOf(o.x)) noPy++; }); });
+  if(unc.length) out+=st('todo','3','ตั้งเบิก · '+unc.length+' บรรทัด · '+pcMoney(uncAmt),(CL.length?('ตั้งเบิกแล้ว '+CL.length+' ใบ · '):'')+'ติ๊กรายจ่าย → สรุปตั้งเบิก → เลือกคนรับเงินทีเดียวทั้งใบ',
+      '<button type="button" class="go" onclick="pcSelOnlyOut();pcClmStart()">สรุปตั้งเบิก</button>');
+  else if(CL.length) out+=st('done','✓','ตั้งเบิกแล้ว '+CL.length+' ใบ · '+pcMoney(clAmt),pcE(CL.map(function(c){ return pcClmShort(c.name).core; }).slice(0,2).join(' · '))+(CL.length>2?(' +'+(CL.length-2)):'')+(noPy?(' · <em class="bad">ยังไม่มีคนรับเงิน '+noPy+' บรรทัด</em>'):' · คนรับเงินครบ'),
+      '<button type="button" class="go" onclick="pcTab(3)">'+(noPy?'เลือกคน':'🖨 พิมพ์')+'</button>');
+  else out+=st('wait','3','ตั้งเบิกรายจ่ายวันนี้','ยังไม่มีรายจ่ายในสมุด','');
+  /* ④ รับคืน · ทั้งเดือน (ข้ามเดือนได้ · นับทุกวัน) */
+  var open=M.keys.filter(function(k){ return M.urem[k]>0; }), tot=0, oldest='';
+  open.forEach(function(k){ tot+=M.urem[k]; var d=M.U[k].ds; if(!oldest||d<oldest) oldest=d; });
+  var age=oldest?Math.max(0,Math.round((new Date(ds+'T12:00:00')-new Date(oldest+'T12:00:00'))/864e5)):0;
+  if(open.length) out+=st(age>14?'todo':'','4','รับเงินคืน · ค้าง '+open.length+' รายการ',pcMoney(tot)+(oldest?(' · เก่าสุด '+pcE(pcDS(oldest))+' ('+age+' วัน)'):''),
+      '<button type="button" class="go" onclick="pcTab(3)">ดูทั้งหมด →</button>');
+  else out+=st('done','✓','รับเงินคืนครบทุกรายการ','ไม่มีรายการตั้งเบิกค้างคืน','');
+  return '<div class="pcx-steps">'+out+'</div>';
+}
+/* การ์ดขวา · ค้างรับคืนแบบย่อ (แทนการ์ด ตั้งเบิก·รับคืน เดิมที่ซ้ำกับรายการเดือน) */
+function pcxOpenCard(pier,ds,M){
+  var open=M.keys.filter(function(k){ return M.urem[k]>0; }), tot=0, all=0, oldest=null, days={};
+  M.keys.forEach(function(k){ all+=M.U[k].amt; });
+  open.forEach(function(k){ tot+=M.urem[k]; days[M.U[k].ds]=1; var u=M.U[k]; if(!oldest||u.ds<oldest.ds) oldest=u; });
+  var back=all-tot, pct=all?Math.round(back/all*100):0;
+  var noRc=0, noRcN=0; pcClmAll(pier).forEach(function(c){ var r=pcRcptCount(pier,c.id); if(r.all>r.n){ noRc+=(r.all-r.n); noRcN++; } });
+  var age=oldest?Math.max(0,Math.round((new Date(ds+'T12:00:00')-new Date(oldest.ds+'T12:00:00'))/864e5)):0;
+  return '<div class="pc2-card pc2-pend pcx-open"><div class="ch"><b>↩ ค้างรับคืน</b><span>ทุกรายการที่ยังค้าง</span></div>'
+    +'<div class="pcx-big"><b class="'+(tot>0?'wn':'ok')+'">'+(tot>0?pcMoney(tot):'—')+'</b><span>'+(open.length?(open.length+' รายการ · '+Object.keys(days).length+' วัน'):'คืนครบทุกรายการ')+'</span></div>'
+    +'<div class="pcx-bar"><i style="width:'+pct+'%"></i></div><div class="pc2-mut" style="padding:0 18px">รับคืนแล้ว '+pcMoney(back)+' จาก '+pcMoney(all)+' ('+pct+'%)</div>'
+    +(oldest?('<div class="pr"><i style="background:#A32D2D"></i><span class="t">เก่าสุด · '+pcE(pcDS(oldest.ds))+' '+pcE(oldest.name||'รายจ่ายทั้งวัน')+'<small>ค้าง '+age+' วัน</small></span><span class="v">'+pcMoney(M.urem[oldest.k])+'</span></div>'):'')
+    +(noRc?('<div class="pr"><i style="background:#D9952B"></i><span class="t">ยังไม่เลือกคนรับเงิน<small>'+noRcN+' รายการ · '+noRc+' บรรทัด → พิมพ์ใบเสร็จไม่ได้</small></span><span class="v"><button type="button" class="pc2-lnk" onclick="pcClmSetF(\'norc\');pcTab(3)">แก้ทีเดียว</button></span></div>'):'')
+    +'<button type="button" class="pcx-full" onclick="pcTab(3)">ไปแท็บ ตั้งเบิก · รับคืน →</button></div>';
+}
+/* ── แท็บ 3 · ตั้งเบิก · รับคืน ───────────────────────────────────────── */
+function pcxClmSelSync(){ var k=_pcPier+'|'+_pcYM; if(_pcxClmSelK!==k){ _pcxClmSelK=k; _pcxClmSel={}; } }
+function pcxClmSel(id,on){ pcxClmSelSync(); if(on) _pcxClmSel[id]=1; else delete _pcxClmSel[id]; pcKeep(); }
+function pcxClmSelClear(){ _pcxClmSel={}; pcKeep(); }
+function pcxClmSelIds(pier){ pcxClmSelSync(); return Object.keys(_pcxClmSel).filter(function(id){ var c=pcClmGet(id); return c && c.pier===pier; }); }
+function pcxClmBulkBar(pier){
+  var ids=pcxClmSelIds(pier); if(!ids.length) return '';
+  var amt=0, rows=0, noPy=0, left=0, M=pcRefundMatch(pier);
+  ids.forEach(function(id){ pcClmRows(pier,id).forEach(function(o){ amt+=(+o.x.amt||0); rows++; if(!pcPyOf(o.x)) noPy++; }); var k='c:'+id; left+=(M.urem[k]!=null?M.urem[k]:0); });
+  return '<div class="pc-selbar pcx-bulk"><b>เลือก '+ids.length+' รายการ</b><span class="big">'+pcMoney(amt)+'</span><span class="sm">'+rows+' บรรทัด'+(noPy?(' · ไม่มีคนรับเงิน '+noPy):'')+(left>0?(' · ค้างคืน '+pcMoney(left)):'')+'</span><span class="sp"></span>'
+    +(noPy?('<button class="pc-btn pri" onclick="pcxClmPayee()" title="เลือกคนรับเงินคนเดียว ใส่ให้ทุกบรรทัดที่ยังไม่มีคน ในรายการที่เลือก">👤 ตั้งคนรับเงินทั้ง '+noPy+' บรรทัด</button>'):'')
+    +(left>0?('<button class="pc-btn pri" onclick="pcxClmRefund()" title="เพิ่มบรรทัดรับเงินคืนในสมุดของวันที่เลือก ยอดเท่ากับที่ค้าง">↩ บันทึกรับคืน '+pcMoney(left)+'</button>'):'')
+    +'<button class="pc-btn" onclick="pcxClmPrintSet()" title="พิมพ์ใบตั้งเบิกของทุกรายการที่เลือก (เปิดทีละหน้าต่าง)">🖨 พิมพ์ใบตั้งเบิก '+ids.length+' ใบ</button>'
+    +'<button class="pc-btn" onclick="pcxClmSelClear()">ล้าง</button></div>';
+}
+function pcxClmPayee(){
+  if(!pcGuard()) return;
+  var ids=pcxClmSelIds(_pcPier); if(!ids.length) return;
+  var rows=[]; ids.forEach(function(id){ pcClmRows(_pcPier,id).forEach(function(o){ if(!pcPyOf(o.x)) rows.push(String(o.x.id)); }); });
+  if(!rows.length){ alert('Every line in the selected claims already has a payee.'); return; }
+  _pcxPyRows=rows; pcPyPick('__multi__');
+}
+var _pcxPyRows=null;
+function pcxClmRefund(){
+  if(!pcGuard()) return;
+  var ids=pcxClmSelIds(_pcPier); if(!ids.length) return;
+  var M=pcRefundMatch(_pcPier), left=0, names=[];
+  ids.forEach(function(id){ var k='c:'+id, c=pcClmGet(id); var l=(M.urem[k]!=null?M.urem[k]:0); if(l>0){ left+=l; names.push(c.name); } });
+  if(left<=0){ alert('Nothing left to refund for the selected claims.'); return; }
+  if(!confirm('Add a refund line of '+pcN(left)+' to the ledger of '+_pcDate+'?\n\n'+names.join('\n'))) return;
+  var D=pcDay(_pcPier,_pcDate,true); if(!D['in']) D['in']=[];
+  var txt='รับเงินคืน'+(names.length===1?('รายการตั้งเบิก'+names[0]):(' '+names.join(' + ')));
+  var id='pc'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  var now=new Date(), at=('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
+  D['in'].push({id:id, at:at, txt:txt, amt:pcC(left), by:pcWho(), ts:now.toISOString()});
+  /* จับคู่ตรง ๆ ไว้เลย ไม่ต้องให้ตัวเดาทำงาน */
+  var map=pcxRfMan(); map[id]=ids.map(function(x){ return 'c:'+x; }); pcxRfManPut(map);
+  pcSave(); try{ laBlobSave(); }catch(_){}
+  _pcxClmSel={}; _pcTab=0; pcKeep();
+}
+function pcxClmPrintSet(){
+  var ids=pcxClmSelIds(_pcPier); if(!ids.length) return;
+  if(ids.length>1 && !confirm('Print '+ids.length+' claim forms? Each opens in its own window (allow pop-ups if only the first appears).')) return;
+  ids.forEach(function(id,i){ setTimeout(function(){ pcPrintClaim(id); }, i*400); });
+}
+/* จับคู่เงินคืนที่คนยืนยันเอง · blob key po_cash_rfmap (สตริง JSON · กฎ §pcFix) · {refundRowId:[unitKey,…]} */
+function pcxRfMan(){ var o=null; try{ var b=laBlob(), raw=(typeof b.po_cash_rfmap==='string')?b.po_cash_rfmap:''; if(raw) o=JSON.parse(raw); }catch(_){ o=null; } return (o&&typeof o==='object')?o:{}; }
+function pcxRfManPut(o){ try{ var b=laBlob(); b.po_cash_rfmap=JSON.stringify(o||{}); laBlobSave(); }catch(e){ alert('Save failed: '+(e&&e.message)); } }
+function pcxRfConfirm(refId){
+  if(!pcGuard()) return;
+  var M=pcRefundMatch(_pcPier), r=M.res[refId]; if(!r || !r.cov || !r.cov.length) return;
+  var map=pcxRfMan(); map[refId]=r.cov.map(function(c){ return c.k; }); pcxRfManPut(map); pcKeep();
+}
+function pcxRfUnset(refId){ if(!pcGuard()) return; var map=pcxRfMan(); delete map[refId]; pcxRfManPut(map); pcKeep(); }
+var _pcxRfPickId='', _pcxRfPickSel={};
+function pcxRfPick(refId){
+  if(!pcGuard()) return;
+  var M=pcRefundMatch(_pcPier), r=M.res[refId]; if(!r) return;
+  _pcxRfPickId=refId; _pcxRfPickSel={}; (pcxRfMan()[refId]||r.units||[]).forEach(function(k){ _pcxRfPickSel[k]=1; });
+  var from=pcDsAdd(r.ds,-120);
+  var cand=M.keys.filter(function(k){ var u=M.U[k]; return u.ds<=r.ds && u.ds>=from && (M.urem[k]>0 || _pcxRfPickSel[k]); });
+  var rows=cand.map(function(k){ var u=M.U[k]; return '<label class="pcx-rfo"><input type="checkbox" '+(_pcxRfPickSel[k]?'checked':'')+' onchange="pcxRfPickTog(\''+pcE(k)+'\',this.checked)">'
+      +'<span class="d">'+pcE(pcDS(u.ds))+'</span><span class="t">'+pcE(u.name||'รายจ่ายทั้งวัน')+'</span><span class="m">'+pcN(u.amt)+(M.urem[k]<u.amt?('<small>ค้าง '+pcN(M.urem[k])+'</small>'):'')+'</span></label>'; }).join('')
+    ||'<div class="pc2-mut" style="padding:10px">ไม่มีรายการตั้งเบิกที่ค้างคืนก่อนวันนี้</div>';
+  pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:560px">'
+   +'<div class="ck-dh"><div style="min-width:0;flex:1"><div class="t1">เงินคืนก้อนนี้คืนของรายการไหน</div><div class="t2">'+pcE(pcDS(r.ds))+' · '+pcMoney(r.amt)+' · ติ๊กได้หลายรายการ · ระบบจะหักจากที่ติ๊กตามลำดับวัน</div></div>'
+   +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'<div class="ck-db" style="max-height:52vh;overflow:auto">'+rows+'</div>'
+   +'<div class="ck-df"><button class="c" onclick="pcxRfUnset(\''+pcE(refId)+'\');ckReasonClose()">ให้ระบบเดาเอง</button><button class="k" onclick="pcxRfPickSave()">บันทึกการจับคู่</button></div>'
+   +'</div></div>';
+}
+function pcxRfPickTog(k,on){ if(on) _pcxRfPickSel[k]=1; else delete _pcxRfPickSel[k]; }
+function pcxRfPickSave(){
+  var keys=Object.keys(_pcxRfPickSel); if(!keys.length){ alert('Tick at least one claim, or choose "let the system guess".'); return; }
+  var map=pcxRfMan(); map[_pcxRfPickId]=keys; pcxRfManPut(map); ckReasonClose(); pcKeep();
+}
+function pcxRefundPanel(pier){
+  var M=pcRefundMatch(pier), ym=_pcYM||String(_pcDate||'').slice(0,7), man=pcxRfMan();
+  var refs=Object.keys(M.res).map(function(k){ var r=M.res[k]; r.id=k; return r; })
+    .filter(function(r){ return String(r.ds).slice(0,7)===ym; }).sort(function(a,b){ return b.ds.localeCompare(a.ds); });
+  var body=refs.map(function(r){
+    var x=((pcDay(pier,r.ds,false)||{})['in']||[]).filter(function(y){ return y.id===r.id; })[0]||{};
+    var isMan=!!man[r.id], lab=r.cov.length?pcRefundLab(M,r):'';
+    var ok=r.exact, q=!ok && !isMan;
+    var tag=isMan?'<em class="pcx-mt ok">ยืนยันแล้ว'+(r.diff?(' · '+(r.diff>0?'เกิน ':'ขาด ')+pcN(Math.abs(r.diff))):'')+'</em>'
+      :(ok?'<em class="pcx-mt ok">ตรง</em>':(!r.cov.length?'<em class="pcx-mt bad">ไม่พบรายการ</em>':'<em class="pcx-mt q">ให้ยืนยัน'+(r.diff?(' · '+(r.diff>0?'เกิน ':'ขาด ')+pcN(Math.abs(r.diff))):'')+'</em>'));
+    return '<div class="pcx-rf'+(q?' q':'')+'"><div class="t"><b>'+pcE(pcDS(r.ds))+'</b> '+pcE(String(x.txt||'เงินคืน'))
+      +'<small>'+(r.cov.length?('จับคู่กับ '+pcE(lab)):'ไม่พบรายการตั้งเบิกที่ค้างใน 45 วันก่อน')+' '+tag+'</small>'
+      +(q?('<div class="pcx-rfb"><button type="button" class="k" onclick="pcxRfConfirm(\''+pcE(r.id)+'\')"'+(r.cov.length?'':' disabled')+'>ใช่ ตามนี้</button><button type="button" onclick="pcxRfPick(\''+pcE(r.id)+'\')">เลือกรายการเอง</button></div>')
+          :(isMan?('<div class="pcx-rfb"><button type="button" onclick="pcxRfPick(\''+pcE(r.id)+'\')">แก้การจับคู่</button></div>'):''))
+      +'</div><span class="m">'+pcMoney(r.amt)+'</span></div>'; }).join('');
+  return '<div class="pc2-card pc2-pend pcx-rfp"><div class="ch"><b>↩ เงินคืนที่รับเข้าสมุด</b><span>'+pcE(pc2MonthName(ym))+'</span></div>'
+    +'<div class="cs">บรรทัดรับเงินที่ขึ้นต้น "รับเงินคืน…" · ก้อนที่ระบบไม่แน่ใจต้องกดยืนยันหรือเลือกรายการเอง ไม่หักเงียบ ๆ</div>'
+    +(body||'<div class="pc2-mut" style="padding:8px 18px 14px">เดือนนี้ยังไม่มีเงินคืน</div>')+'</div>';
+}
+function pcxPyBrowse(cat){ if(!pcGuard()) return; _pcPyTab=cat||'all'; pcPyPick('__browse__'); }
+function pcxPayeeCard(){
+  var D=pcPyDB(), ST=pcPyStats(D), all=Object.keys(D.p).map(function(k){ return D.p[k]; }).filter(function(p){ return p&&p.id; });
+  var COL={van:'#BA7517',guide:'#1D9E75',lt:'#1272B3',oth:'#8A8F9C'};
+  var rows=PC_PY_CAT.map(function(c){ var L=all.filter(function(p){ return (ST.cats[p.id]||[]).indexOf(c.k)>=0; });
+    L.sort(function(a,b){ return (ST.use[b.id]||0)-(ST.use[a.id]||0); }); var top=L[0];
+    return '<div class="pr"><i style="background:'+COL[c.k]+'"></i><span class="t">'+pcE(c.t)+' · '+L.length+' คน<small>'+(top?('ใช้บ่อย: '+pcE(top.name||'')+' · '+(ST.use[top.id]||0)+' ครั้ง'):'ยังไม่มี')+'</small></span>'
+      +'<span class="v"><button type="button" class="pc2-lnk" onclick="pcxPyBrowse(\''+c.k+'\')">เปิด</button></span></div>'; }).join('');
+  return '<div class="pc2-card pc2-pend pcx-py"><div class="ch"><b>👤 ทะเบียนคนรับเงิน</b><span>'+all.length+' คน</span></div>'
+    +'<div class="cs">ใช้ออกใบเสร็จรับเงินท้ายใบตั้งเบิก · เลขบัตร/ที่อยู่/รูปบัตร เห็นเฉพาะสิทธิ์บัญชี</div>'+rows+'</div>';
+}
+function pc2Claims(pier){
+  return '<div class="pc2-main pcx-ctab"><div class="pc2-l">'+pcClmList(pier,{tab:1})+'</div>'
+    +'<div class="pc2-r">'+pcxRefundPanel(pier)+pcxPayeeCard()+'</div></div>';
+}
+function pc2CSS4(S){
+  var N='#0B1E5B', M='#6B7693';
+  return [
+  S+' .pcx-mw{position:relative;display:inline-flex}',
+  S+' .pc2-bar1 .pr.ic{padding:0 10px;font-size:15px}',
+  S+' .pcx-pop{position:absolute;left:0;top:40px;z-index:40;min-width:260px;background:#fff;color:'+N+';border-radius:12px;box-shadow:0 14px 34px rgba(11,30,91,.28);padding:6px;display:flex;flex-direction:column}',
+  S+' .pcx-pop.r{left:auto;right:0}',
+  S+' .pcx-pop button{height:36px;padding:0 12px;border:none;border-radius:8px;background:transparent;color:'+N+';font-size:13px;font-weight:600;text-align:left;cursor:pointer;white-space:nowrap}',
+  S+' .pcx-pop button:hover{background:#EEF2F8}',
+  S+' .pcx-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}',
+  S+' .pcx-st{position:relative;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid #E3E8F0;box-shadow:0 1px 2px rgba(11,30,91,.06);min-width:0}',
+  S+' .pcx-st>div{min-width:0;flex:1;padding-right:70px}',
+  S+' .pcx-st .n{flex:none;width:24px;height:24px;border-radius:12px;background:#E6EEF8;color:'+N+';font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}',
+  S+' .pcx-st b{display:block;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  S+' .pcx-st small{display:block;margin-top:2px;font-size:11.5px;line-height:1.45;color:'+M+'}',
+  S+' .pcx-st small .bad{font-style:normal;color:#A32D2D;font-weight:700}',
+  S+' .pcx-st.todo{border-color:#F0C98A;background:#FFFBF3} '+S+' .pcx-st.todo .n{background:#F5A623;color:#fff}',
+  S+' .pcx-st.done .n{background:#1D9E75;color:#fff} '+S+' .pcx-st.wait,'+S+' .pcx-st.none{opacity:.72}',
+  S+' .pcx-st .go{position:absolute;right:10px;top:10px;height:24px;padding:0 9px;border-radius:7px;border:none;background:#EEF2FA;color:'+N+';font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
+  S+' .pcx-st.todo .go{background:'+N+';color:#fff}',
+  S+' .pc2-kpi.eq{grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr) 22px minmax(0,1fr) 22px minmax(0,1.25fr)!important;align-items:center}',
+  S+' .pc2-kpi.eq .op{text-align:center;font-size:20px;font-weight:700;color:'+M+'}',
+  S+' .pc2-kpi .k.dk{background:'+N+';color:#fff} '+S+' .pc2-kpi .k.dk .h,'+S+' .pc2-kpi .k.dk .s{color:#B9C6E8}',
+  S+' .pc2-led .ch .hb{display:flex;gap:6px;flex-wrap:wrap}',
+  S+' .pc2-led .ch .hb button{height:32px;padding:0 11px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;border:1px solid #D5DBE6;background:#fff;color:'+N+'}',
+  S+' .pc2-led .ch .hb button.i{border-color:#BFE3D2;color:#0B7A4B;background:#F2FBF6} '+S+' .pc2-led .ch .hb button.o{border-color:#F0C9C3;color:#A32D2D;background:#FDF5F4}',
+  S+' .pc2-led .pc2-lr.add{cursor:text;background:#F7F9FD;border-top:1.5px dashed #C9D2E0!important;color:'+M+';font-size:13px;min-height:40px}',
+  S+' .pc2-led .pc2-lr.add>span{border-right:none;grid-column:1/-1;justify-content:flex-start;gap:10px;padding-left:12px}',
+  S+' .pc2-led .pc2-lr.add:hover{background:#EEF2FA;color:'+N+'}',
+  S+' .pc2-led .pc2-lr.add em{font-style:normal;font-weight:700;color:'+N+'}',
+  S+' .pc2-led .pc2-lr.add kbd{font-family:"DM Mono",monospace;font-size:10.5px;background:#fff;border:1px solid #D5DBE6;border-radius:5px;padding:0 5px}',
+  S+' .pc-selbar .pcx-py{height:32px;padding:0 11px;border-radius:8px;border:1.5px solid #D5DBE6;background:#fff;color:'+N+';font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}',
+  S+' .pc-selbar .pcx-py.on{border-color:#0B7A4B;color:#0B7A4B;background:#F2FBF6}',
+  S+' .pcx-open .pcx-big{display:flex;align-items:baseline;gap:10px;padding:4px 18px 0} '+S+' .pcx-open .pcx-big b{font-family:"DM Mono",monospace;font-size:24px;font-weight:600} '+S+' .pcx-open .pcx-big b.wn{color:#A32D2D} '+S+' .pcx-open .pcx-big b.ok{color:#0B7A4B} '+S+' .pcx-open .pcx-big span{font-size:12px;color:'+M+'}',
+  S+' .pcx-bar{height:6px;border-radius:3px;background:#EEF1F6;overflow:hidden;margin:8px 18px 4px} '+S+' .pcx-bar i{display:block;height:100%;background:#1D9E75}',
+  S+' .pcx-full{display:block;width:calc(100% - 36px);margin:10px 18px 14px;height:34px;border-radius:10px;border:1px solid #D5DBE6;background:#fff;color:'+N+';font-size:12.5px;font-weight:700;cursor:pointer}',
+  S+' .pcx-full:hover{border-color:'+N+'}',
+  S+' .pc2-month .pcx-mtog{display:block;width:100%;margin-top:8px;height:28px;border-radius:8px;border:1px dashed #C9D2E0;background:#fff;color:'+M+';font-size:11.5px;font-weight:700;cursor:pointer}',
+  /* แท็บ 3 */
+  S+' .pcx-ctab .pc2-r{display:flex;flex-direction:column;gap:14px}',
+  S+' .pcx-ctab .pcc-h{flex-wrap:wrap} '+S+' .pcx-f4{flex:1 1 100%;order:9;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:10px 0 2px}',
+  S+' .pcx-mi{margin-left:10px;height:28px;border:1px solid #D5DBE6;border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px;color:'+N+';vertical-align:middle}',
+  S+' .pcx-bulk b{color:#fff}',
+  S+' .pcx-f4 button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 14px;border-radius:12px;border:1.5px solid #E3E8F0;background:#fff;color:'+N+';cursor:pointer;text-align:left;font-family:inherit;min-width:0}',
+  S+' .pcx-f4 button small{font-size:11px;font-weight:700;color:'+M+'} '+S+' .pcx-f4 button b{font-family:"DM Mono",monospace;font-size:20px;font-weight:600} '+S+' .pcx-f4 button i{font-style:normal;font-size:11px;color:'+M+'}',
+  S+' .pcx-f4 button.on{background:'+N+';border-color:'+N+';color:#fff} '+S+' .pcx-f4 button.on small,'+S+' .pcx-f4 button.on i{color:#B9C6E8}',
+  S+' .pcx-f4 button.warn{border-color:#F0C98A;background:#FFFBF3} '+S+' .pcx-f4 button.warn.on{background:#7A4300;border-color:#7A4300}',
+  S+' .pcx-f4 button.bad b{color:#A32D2D} '+S+' .pcx-f4 button.on.bad b{color:#fff}',
+  S+' .pc2-clms .pcc-t th.ck,'+S+' .pc2-clms .pcc-t td.ck{width:34px;text-align:center;padding-left:10px}',
+  S+' .pc2-clms .pcc-t td.ck input{width:15px;height:15px;cursor:pointer}',
+  S+' .pcx-bulk{margin:0 14px 14px;border-radius:10px;background:'+N+';color:#fff} '+S+' .pcx-bulk .big{color:#fff} '+S+' .pcx-bulk .sm{color:#B9C6E8} '+S+' .pcx-bulk .pc-btn{background:#fff;color:'+N+';border-color:#fff} '+S+' .pcx-bulk .pc-btn.pri{background:#00B4E0;border-color:#00B4E0;color:'+N+'}',
+  S+' .pcx-rf{display:flex;gap:10px;align-items:flex-start;padding:9px 18px;border-top:1px solid #F0F1F4;font-size:12.5px}',
+  S+' .pcx-rf.q{background:#FFFBF3}',
+  S+' .pcx-rf .t{flex:1;min-width:0;line-height:1.4} '+S+' .pcx-rf .t small{display:block;color:'+M+';font-size:11px;margin-top:2px}',
+  S+' .pcx-rf .m{font-family:"DM Mono",monospace;font-weight:700;white-space:nowrap}',
+  S+' .pcx-mt{font-style:normal;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 7px;margin-left:4px;background:#EEF2F8;color:'+M+'} '+S+' .pcx-mt.ok{background:#DDF3E8;color:#146C3A} '+S+' .pcx-mt.q{background:#FBEBD3;color:#7A4300} '+S+' .pcx-mt.bad{background:#FBE3E0;color:#A32D2D}',
+  S+' .pcx-rfb{display:flex;gap:6px;margin-top:6px} '+S+' .pcx-rfb button{height:26px;padding:0 10px;border-radius:7px;border:1px solid #D5DBE6;background:#fff;color:'+N+';font-size:11.5px;font-weight:700;cursor:pointer} '+S+' .pcx-rfb button.k{background:'+N+';border-color:'+N+';color:#fff} '+S+' .pcx-rfb button[disabled]{opacity:.45;cursor:default}',
+  '.pcx-rfo{display:grid;grid-template-columns:22px 86px 1fr 110px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #EEF1F6;font-size:13px;cursor:pointer}',
+  '.pcx-rfo:hover{background:#F7F9FD} .pcx-rfo .d{font-family:"DM Mono",monospace;color:#6B7693;font-size:12px} .pcx-rfo .m{text-align:right;font-family:"DM Mono",monospace;font-weight:700} .pcx-rfo .m small{display:block;font-weight:400;color:#A32D2D;font-size:10.5px}',
+  /* §pcSheet · สมุดแบบชีท Excel */
+  S+' .pc2-led .pc2-ltb{min-width:900px}',
+  S+' .pc2-led .pc2-lr{grid-template-columns:32px 34px minmax(170px,1fr) 86px minmax(120px,175px) minmax(130px,190px) 84px 84px 96px 58px;min-height:30px;font-size:12.5px}',
+  S+' .pc2-led .pc2-lr>span:nth-child(3){display:none}',
+  S+' .pc2-led .pc2-lr>span{padding:3px 7px;border-right:1px solid #D9DEE7}',
+  S+' .pc2-led .pc2-lr>span.sc{padding:0}',
+  S+' .pc2-led .pc2-lr .tx i,'+S+' .pc2-led .pc2-lr .by i{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}',
+  S+' .pc2-led .pc2-lr .tx{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}',
+  S+' .pc2-led .pc2-lr>span.cl,'+S+' .pc2-led .pc2-lr>span.py{align-items:center}',
+  S+' .pc2-led .pc2-lr>span.cl em.pc-cl,'+S+' .pc2-led .pc2-lr>span.py em.pc-py{display:inline;max-width:none;overflow:visible;text-overflow:clip;font-size:10.5px;white-space:normal;line-height:1.6;margin:0;padding:1px 6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}',
+  S+' .pc2-led .pc2-lr.rw:not(.pcp-on){background:#fff}',
+  S+' .pc2-led .pc2-lr.rw:hover:not(.pcp-on){background:#F8FAFD}',
+  S+' .pc2-led .pc2-lr .m{font-family:"DM Mono",monospace;font-size:12.5px}',
+  S+' .pc2-led .pc2-lr.hd{min-height:28px;font-size:10.5px}',
+  S+' .pc2-led .pc2-lr.tot{min-height:36px}',
+  S+' .pc2-led .pc2-lr.ed{min-height:44px}',
+  S+' .pc2-led .pc2-lr.ed>span{padding:0 5px}',
+  S+' .pc2-led .pc2-lr .pkd{width:7px;height:7px}',
+  ].join('\n');
+}
+/* ยอด 4 ตัวเป็นสมการ · ยกมา + รับ − จ่าย = คงเหลือ */
+function pc2KpiEq(items){
+  var ops=['+','−','='];
+  return '<div class="pc2-kpi eq">'+items.map(function(k,i){
+    return '<div class="k'+(k.cls?(' '+k.cls):'')+'"><div class="h">'+k.h+'</div><div class="v">'+k.v+(k.u?('<small>'+k.u+'</small>'):'')+'</div><div class="s">'+(k.s||'&nbsp;')+'</div></div>'
+      +(i<3?('<div class="op">'+ops[i]+'</div>'):''); }).join('')+'</div>';
+}
 /* ══ §pcRefund (2026-10-15) · ตั้งเบิกรายวัน + จับคู่เงินคืน ════════════════════════════════════
    owner: "ในแต่ละวันต้องสรุปสำหรับการตั้งเบิก ว่าชื่อรายการนี้ยอดเท่าไหร่ · วันที่มีเงินคืนมาอาจเป็น 3 วันรวมเป็น 1 ก้อน
            ก็รับเข้ามาในวันนั้น ๆ · ช่วยรีเช็คว่าตั้งเบิกไปแล้ว ยอดรับคืนมาตรงกัน" · เงินคืน = รายรับที่ขึ้นต้น "รับเงินคืน…" หรือ "เงินเบิกคืน…"
@@ -65223,6 +66023,28 @@ function pcDaysLabel(L){
      ตั้งแต่วันที่เริ่มใช้ตั้งเบิก รายจ่ายที่ไม่ได้ตั้งเบิกไม่ถูกนับว่ารอเงินคืน
    ลำดับการจับคู่: ชื่อรายการตั้งเบิกอยู่ในข้อความเงินคืน → วันที่ในข้อความ → ชุดติดกันที่ยอดพอดี → ชุดใดก็ได้ที่พอดี → เก่าสุดก่อน
    ผลรวมรายวัน (claim/rem/list/by) ยังคืนรูปเดิม · ตัวเรียกเดิมไม่ต้องแก้ */
+/* §pcRfName (2026-10-21) · เทียบชื่อรายการตั้งเบิกกับข้อความเงินคืนแบบ "แก่น" ไม่ใช่ตัวอักษรตรง ๆ
+   เจ้าของ: "ตรวจรายการทำไมไม่ตรง" · 21 ต.ค. ทับละมุ · เงินคืน "ตั้งเบิกเงินหน้าท่านอกระบบ 16/10/26" 27,700
+   ชื่อรายการที่ตั้งไว้คือ "ตั้งเบิกหน้าท่านอกระบบ 16/10/69" (ไม่มีคำว่า "เงิน" · ปีเขียน พ.ศ.) ตัวอักษรจึงไม่ตรงกัน
+   ไปเข้ากติกา "วันที่ในข้อความ" แทน ซึ่งคว้าทุกรายการของ 16/10 แล้วหักจากรายการแรกก่อน (ในระบบ 27,212)
+   27,700 จึงกลายเป็น ในระบบเต็ม + นอกระบบ 488 → "ขาด 27,212" และลามไปทำให้เงินคืนก้อนถัด ๆ ไปของวันนั้นเพี้ยนตาม
+   แก่น = ตัดวันที่ · ตัดคำ "รับเงินคืน รายการ ตั้งเบิก เงิน ค่า" · ตัดช่องว่าง → "หน้าท่านอกระบบ"
+   จับคู่เมื่อแก่นของชื่อรายการอยู่ในแก่นของข้อความ (หรือกลับกัน เช่น "อุทยาน" กับ "อุทยานสิมิลัน")
+   และวันที่ในชื่อ (ถ้ามี) ตรงกับวันที่ในข้อความ · ได้หลายรายการ → เลือกชุดที่ยอดรวมเท่าเงินคืนพอดีก่อน */
+function pcNmCore(s){
+  var t=String(s||'');
+  t=t.replace(/\d{1,2}\s*[-–]\s*\d{1,2}\s*\/\s*\d{1,2}(?:\s*\/\s*\d{2,4})?/g,' ').replace(/\d{1,2}\s*\/\s*\d{1,2}(?:\s*\/\s*\d{2,4})?/g,' ');
+  t=t.replace(/\d{1,2}(?:\s*[-–]\s*\d{1,2})?\s*(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(?:\d{2,4})?/g,' ');
+  t=t.replace(/รับเงินคืน|เงินเบิกคืน|รายการ|ตตั้งเบิก|ตั้งเบิก|ตั้งเงิน|เงิน|ค่า/g,' ');
+  return t.replace(/[\s\.\-–·,\/()]+/g,'').toLowerCase();
+}
+/* ชุดย่อยของ T ที่ยอดคงค้างรวมเท่าเงินคืนพอดี · ไม่มี = คืน T เดิม */
+function pcPickExact(T,urem,amt){
+  if(!T || T.length<2 || T.length>16) return T;
+  var best=-1, bestN=99;
+  for(var mk=1; mk<(1<<T.length); mk++){ var su=0, n=0; for(var b=0;b<T.length;b++){ if(mk&(1<<b)){ su+=urem[T[b]]; n++; } } if(su===amt && n<bestN){ best=mk; bestN=n; } }
+  return best>0 ? T.filter(function(d,b){ return best&(1<<b); }) : T;
+}
 function pcRefundMatch(pier,upto){   /* upto = นับเฉพาะเงินคืนที่รับถึงวันนั้น (การ์ด ณ วันที่เลือก) */
   var A=pcPier(pier)||{}, days=Object.keys(A).sort();
   var CL={}, c0=''; pcClmAll(pier).forEach(function(c){ CL[c.id]=c; if(c.date && (!c0 || c.date<c0)) c0=c.date; });
@@ -65240,14 +66062,24 @@ function pcRefundMatch(pier,upto){   /* upto = นับเฉพาะเงิ
   var urem={}, uby={}; keys.forEach(function(k){ urem[k]=U[k].amt; });
   var refs=[]; days.forEach(function(ds){ if(upto && ds>upto) return; ((A[ds]||{})['in']||[]).forEach(function(x){ if(pcIsRefund(x)) refs.push({ds:ds, x:x, t:rk(x.at)}); }); });
   refs.sort(function(a,b){ return a.ds.localeCompare(b.ds) || (a.t-b.t); });
-  var res={};
+  var res={}, _MAN=(typeof pcxRfMan==='function')?pcxRfMan():{};   /* §pcFlow · คู่ที่คนยืนยันเองมาก่อนตัวเดา */
   refs.forEach(function(R){
     var amt=Math.round(+R.x.amt||0), from=pcDsAdd(R.ds,-45), tx=String(R.x.txt||'');
     var cand=keys.filter(function(k){ var u=U[k]; return (u.cid?(u.ds<=R.ds):(u.ds<R.ds)) && u.ds>=from && urem[k]>0; });
     var T=null, how='';
+    var _mk=_MAN[R.x.id]; if(_mk && _mk.length){ var _ok=_mk.filter(function(k){ return U[k] && urem[k]>0; }); if(_ok.length){ T=_ok; how='manual'; } }
     var nm=cand.filter(function(k){ var n=U[k].name.trim(); return n.length>=3 && tx.indexOf(n)>=0; });
-    if(nm.length){ T=nm; how='name'; }
-    if(!T){ var td=pcRefundTxtDays(R.x.txt,R.ds); if(td.length){ var tt=cand.filter(function(k){ return td.indexOf(U[k].ds)>=0; }); if(tt.length){ T=tt; how='text'; } } }
+    if(!T && nm.length){ T=pcPickExact(nm,urem,amt); how='name'; }
+    var td=pcRefundTxtDays(R.x.txt,R.ds);
+    if(!T){   /* §pcRfName · เทียบแก่นชื่อ + วันที่ในชื่อ */
+      var tc=pcNmCore(tx), nf=[], nr=[];
+      if(tc.length>=3) cand.forEach(function(k){ var u=U[k]; if(!u.cid) return; var c=pcNmCore(u.name); if(c.length<3) return;
+        var cd=pcRefundTxtDays(u.name,R.ds); if(cd.length && td.length && !cd.some(function(d){ return td.indexOf(d)>=0; })) return;
+        if(tc.indexOf(c)>=0) nf.push(k); else if(c.indexOf(tc)>=0) nr.push(k); });
+      if(nf.length){ T=pcPickExact(nf,urem,amt); how='name'; }
+      else if(nr.length){ T=pcPickExact(nr,urem,amt); how='name'; if(T.length>1 && T.length===nr.length && td.length) T=null; }   /* กว้างไปและยอดไม่ชี้ตัวไหน → ไปใช้วันที่ */
+    }
+    if(!T){ if(td.length){ var tt=cand.filter(function(k){ return td.indexOf(U[k].ds)>=0; }); if(tt.length){ T=pcPickExact(tt,urem,amt); how='text'; } } }
     for(var i=0; !T && i<cand.length; i++){ var sm=0; for(var j=i;j<cand.length;j++){ sm+=urem[cand[j]]; if(sm===amt){ T=cand.slice(i,j+1); how='run'; break; } if(sm>amt) break; } }
     if(!T && cand.length && cand.length<=16){
       var best=-1, bestMax=1e9;
@@ -65279,6 +66111,7 @@ function pcRefundChip(M,x){
   var r=M && M.res[x.id]; if(!r) return '';
   if(!r.days.length) return '<em class="pc-rf wn" title="ไม่พบวันที่ตั้งเบิกที่ยังค้างคืนใน 45 วันก่อนหน้า">↩ ไม่พบวันที่ตั้งเบิก</em>';
   var lab=pcRefundLab(M,r);   /* §pcClm */
+  if(r.how==='manual') return '<em class="pc-rf ok" title="จับคู่โดยคนยืนยัน · '+pcE(lab)+'">↩ '+pcE(lab)+' · ยืนยันแล้ว</em>';   /* §pcFlow */
   if(r.exact) return '<em class="pc-rf ok" title="คืนของวันที่ตั้งเบิก '+pcE(lab)+' · ยอดตรง">↩ '+pcE(lab)+' · ตรง</em>';
   return '<em class="pc-rf wn" title="'+(r.how==='fifo'?'ไม่พบชุดวันที่ยอดรวมพอดี · หักวันเก่าสุดก่อน':(r.how==='name'?'ชื่อรายการตั้งเบิกในข้อความ':'วันที่ระบุในข้อความ'))+'">↩ '+pcE(lab)+' · '+(r.diff>0?('เกิน '+pcN(r.diff)):('ขาด '+pcN(-r.diff)))+'</em>';
 }
@@ -65446,7 +66279,9 @@ function pcPyDB(){
 function pcPyPut(o){ try{ var b=laBlob(); b.po_cash_payees=JSON.stringify(o); laBlobSave(); }catch(e){ alert('Save failed: '+(e&&e.message)); } }
 function pcPyOf(x){ if(!x || !x.id) return null; var D=pcPyDB(), id=D.of[String(x.id)]; return (id && D.p[id])?D.p[id]:null; }
 function pcPyChip(k,x){
-  if(k!=='out' || !x || !pcClmOn(x)) return '';
+  if(k!=='out' || !x) return '';
+  /* §pcVanPay · บรรทัดที่สร้างจากใบวางบิลมีคนรับเงินมาแล้ว · โชว์เลยไม่ต้องรอเข้าตั้งเบิก (owner "พอมันดึงมา มันขาดคนรับเงิน") */
+  if(!pcClmOn(x) && !pcPyOf(x) && !pcVbMap()[String(x.id)]) return '';
   var p=pcPyOf(x), id=pcE(String(x.id));
   return p?('<em class="pc-py" title="จ่ายให้ · กดเพื่อเปลี่ยน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">&#128100; '+pcE(p.name||'')+'</em>')
           :('<em class="pc-py no" title="เลือกคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงิน" onclick="event.stopPropagation();pcPyPick(\''+id+'\')">+ จ่ายให้</em>');
@@ -65488,14 +66323,14 @@ function pcPyPick(rowId){
   _pcPyTab=has?ck:'all';
   var g=(x && typeof pcGrpOf==='function')?pcGrpOf(x,'out'):null;
   pcPyHost().innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:520px">'
-   +'<div class="ck-dh"><div style="min-width:0;flex:1"><div class="t1">จ่ายให้ใคร</div><div class="t2">เลือกจากทะเบียนคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงินของรายการนี้</div>'
+   +'<div class="ck-dh"><div style="min-width:0;flex:1"><div class="t1">'+(_pcPyRow==='__browse__'?'ทะเบียนคนรับเงิน':'จ่ายให้ใคร')+'</div><div class="t2">'+(_pcPyRow==='__browse__'?'กดชื่อเพื่อดู/แก้ข้อมูล · เพิ่มคนใหม่ได้ด้านล่าง':(_pcPyRow==='__multi__'?('ใส่ให้ '+((_pcxPyRows||[]).length)+' บรรทัดที่ยังไม่มีคนรับเงิน'):(_pcPyRow==='__clm__'?'ใส่ให้ทุกบรรทัดของใบตั้งเบิกนี้ (บรรทัดที่มีคนอยู่แล้วไม่ทับ)':'เลือกจากทะเบียนคนรับเงิน · ใช้พิมพ์ใบเสร็จรับเงินของรายการนี้')))+'</div>'
      +(x?('<div class="pc-py-ctx">'+(g?('<em style="color:'+g.c+';background:'+(g.bg||'#fff')+';border-color:'+g.c+'">'+pcE(g.t)+'</em>'):'')
        +'<span>'+pcE(x.txt||'—')+'</span><b>'+pcN(+x.amt||0)+'</b></div>'):'')+'</div>'
    +'<button class="x" onclick="ckReasonClose()">&times;</button></div>'
    +'<div class="ck-db"><input id="pc-py-q" class="ck-inp" type="text" placeholder="ค้นชื่อ / ทะเบียนรถ (ค้นทุกประเภท)" oninput="_pcPyQ=this.value;pcPyList()" autocomplete="off">'
    +'<div id="pc-py-tabs" class="pc-py-tabs"></div>'
    +'<div id="pc-py-ls" class="pc-py-ls"></div></div>'
-   +'<div class="ck-df"><button class="c" onclick="pcPySet(\'\')">ไม่ระบุ</button><button class="k" id="pc-py-add" onclick="pcPyEdit(\'\')">+ เพิ่มคนรับเงินใหม่</button></div>'
+   +'<div class="ck-df">'+(_pcPyRow==='__browse__'?'':'<button class="c" onclick="pcPySet(\'\')">ไม่ระบุ</button>')+'<button class="k" id="pc-py-add" onclick="pcPyEdit(\'\')">+ เพิ่มคนรับเงินใหม่</button></div>'
    +'</div></div>';
   pcPyList();
   setTimeout(function(){ var i=document.getElementById('pc-py-q'); if(i) i.focus(); },0);
@@ -65518,7 +66353,7 @@ function pcPyList(){
     .sort(function(a,b){ return (ST.use[b.id]||0)-(ST.use[a.id]||0) || String(a.name||'').localeCompare(String(b.name||''),'th'); });
   var S=L.filter(sug), O=L.filter(function(p){ return !sug(p); });
   var one=function(p,isS){ var id=pcE(p.id), u=ST.use[p.id]||0, cs=(ST.cats[p.id]||[]);
-    return '<div class="o'+(p.id===cur?' on':'')+(isS?' sug':'')+'"><span class="n" onclick="pcPySet(\''+id+'\')"><b>'+pcE(p.name||'—')+'</b>'
+    return '<div class="o'+(p.id===cur?' on':'')+(isS?' sug':'')+'"><span class="n" onclick="'+(_pcPyRow==='__browse__'?'pcPyEdit':'pcPySet')+'(\''+id+'\')"><b>'+pcE(p.name||'—')+'</b>'
       +(p.veh?(' <small>· '+pcE(p.veh)+'</small>'):'')
       +(isS?'<em class="bd">ชื่อตรงกับรายการ</em>':'')
       +((_pcPyTab==='all'||q)?cs.map(function(c){ return '<em class="ct">'+pcPyCatT(c)+'</em>'; }).join(''):'')
@@ -65531,7 +66366,12 @@ function pcPyList(){
 }
 function pcPySet(pid){
   if(!pcGuard() || !_pcPyRow) return;
-  var D=pcPyDB(); if(pid && D.p[pid]) D.of[_pcPyRow]=pid; else delete D.of[_pcPyRow];
+  var D=pcPyDB();
+  /* §pcFlow · โหมดพิเศษ · __clm__ = ใส่ให้ใบตั้งเบิกที่กำลังตั้งชื่อ · __multi__ = ใส่ให้หลายบรรทัดที่เลือกไว้ · __browse__ = ดูทะเบียนเฉย ๆ */
+  if(_pcPyRow==='__browse__'){ ckReasonClose(); return; }
+  if(_pcPyRow==='__clm__'){ if(_pcClmForm) _pcClmForm.payee=(pid && D.p[pid])?pid:''; ckReasonClose(); pcSelBarSync(); return; }
+  if(_pcPyRow==='__multi__'){ var L=_pcxPyRows||[]; L.forEach(function(rid){ if(pid && D.p[pid]) D.of[rid]=pid; else delete D.of[rid]; }); _pcxPyRows=null; pcPyPut(D); ckReasonClose(); pcKeep(); return; }
+  if(pid && D.p[pid]) D.of[_pcPyRow]=pid; else delete D.of[_pcPyRow];
   pcPyPut(D); ckReasonClose(); pcKeep();
 }
 var _pcPyImg=null, _pcPyCats=[];
@@ -65726,6 +66566,8 @@ function pcClmFormHtml(){
     +'<input id="pc-clm-name" class="pc-clm-in" placeholder="ชื่อรายการตั้งเบิก" value="'+pcE(_pcClmForm.name||'')+'"'
       +' oninput="if(_pcClmForm)_pcClmForm.name=this.value"'
       +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();pcClmSave();}else if(event.key===\'Escape\'){pcClmCancel();}">'
+    +(function(){ var py=_pcClmForm.payee?(pcPyDB().p[_pcClmForm.payee]||null):null;   /* §pcFlow · คนรับเงินทั้งใบ */
+        return '<button type="button" class="pcx-py'+(py?' on':'')+'" onclick="pcPyPick(\'__clm__\')" title="เลือกคนรับเงินคนเดียว ใส่ให้ทุกบรรทัดในใบนี้ (บรรทัดที่มีคนอยู่แล้วไม่ทับ)">👤 '+(py?pcE(py.name||''):'คนรับเงิน · ทั้งใบ')+' ⌄</button>'; })()
     +'<span class="sp"></span>'
     +'<button class="pc-btn pri" onclick="pcClmSave()"'+(P.ok.length?'':' disabled')+'>บันทึกตั้งเบิก</button>'
     +'<button class="pc-btn" onclick="pcClmCancel()">ยกเลิก</button>';
@@ -65763,6 +66605,7 @@ function pcClmSave(){
   var id='clm'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   pcClmArr().push({ id:id, pier:_pcPier, date:_pcDate, name:name, by:pcWho(), ts:new Date().toISOString() });
   rows.forEach(function(x){ x.claim=id; });
+  if(_pcClmForm.payee){ try{ var _PD=pcPyDB(); if(_PD.p[_pcClmForm.payee]){ rows.forEach(function(x){ if(!_PD.of[String(x.id)]) _PD.of[String(x.id)]=_pcClmForm.payee; }); pcPyPut(_PD); } }catch(_){} }   /* §pcFlow */
   pcSave();
   try{ laBlobSave(); }catch(_){}
   _pcClmForm=null; _pcSel={}; _pcClmOpen[id]=1;
@@ -65803,45 +66646,109 @@ function pcClmFocus(id){
   pcKeep();
   setTimeout(function(){ var el=document.getElementById('pc-clm-'+id); if(el){ try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){ el.scrollIntoView(); } el.classList.add('fl'); setTimeout(function(){ el.classList.remove('fl'); },1600); } },30);
 }
-/* การ์ดใต้สมุด · รายการตั้งเบิกของเดือนที่ดูอยู่ · ใหม่สุดก่อน */
-function pcClmList(pier){
+/* ══ §pcClmTbl (2026-10-21) · การ์ดรายการตั้งเบิกของเดือน · ตารางแถวเดียว จัดกลุ่มตามวัน ═══════════
+   เจ้าของ: "ต้องจัดตารางอันนี้ใหม่ ตอนนี้ตารางยาวมาก และดูยาก" · mockup ที่ตกลง: canvas "รายการตั้งเบิก · จัดใหม่"
+   ของเดิมเป็นการ์ดละ ~100px × 25 รายการ · ชื่อซ้ำคำว่า "รายการตั้งเบิก" กับวันที่ · "AC.Tublamu" ซ้ำทุกแถว · ปุ่ม 4 ปุ่มต่อแถว
+   ใหม่: 1 แถว ~40px · หัววันบอกจำนวน/ยอด/ค้าง + พิมพ์ทั้งวัน (ย่อได้) · คอลัมน์ แถว / คนรับเงิน / เงินคืน / ยอด / ค้าง
+         ปุ่มเหลือ พิมพ์ · ใบเสร็จ N · ⋯ (เปลี่ยนชื่อ · ยกเลิก) · ตัวกรอง ค้างรับคืน (เริ่มต้น) / ยังไม่เลือกคนรับเงิน / คืนครบ / ทั้งหมด
+   ข้อมูลและตัวคำนวณเดิมทั้งหมด (pcRefundMatch · pcRcptCount · pcClmRows) · ไม่เก็บอะไรเพิ่ม · แถวย่อย (.ln/.l) เหมือนเดิม */
+var _pcClmF='open', _pcClmDayCl={}, _pcClmMenu='';
+function pcClmSetF(f){ _pcClmF=f; pcKeep(); }
+function pcClmDayToggle(ds){ if(_pcClmDayCl[ds]) delete _pcClmDayCl[ds]; else _pcClmDayCl[ds]=1; pcKeep(); }
+function pcClmMenu(id){ _pcClmMenu=(_pcClmMenu===id)?'':id; pcKeep(); }
+function pcClmPrintDay(ds){ var o=_pcDate; _pcDate=ds; try{ pcPrintClaim(); } finally{ _pcDate=o; } }
+/* ชื่อที่โชว์ · ตัดคำนำหน้า "รายการตั้งเบิก(เงิน)" และวันที่ท้ายชื่อออก (ไปอยู่คอลัมน์วันแล้ว) · ชื่อจริงไม่แตะ */
+function pcClmShort(name){
+  var t=String(name||'').replace(/^\s*รายการ\s*(ตตั้งเบิก|ตั้งเบิก|ตั้งเงิน)\s*(เงิน)?\s*/,'');
+  var m=/^(.*?)\s*((\d{1,2}\s*[-–]\s*)?\d{1,2}\s*\/\s*\d{1,2}(\s*\/\s*\d{2,4})?|\d{1,2}\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*\d{0,4})\s*(.*)$/.exec(t);
+  var core=t, dt='';
+  if(m){ core=(m[1]+(m[6]?(' '+m[6]):'')).trim(); dt=m[2].replace(/\s+/g,''); }
+  if(!core) core=String(name||'—');
+  return {core:core, dt:dt};
+}
+function pcClmList(pier,opts){
+  opts=opts||{}; var TAB=!!opts.tab;   /* §pcFlow · โหมดแท็บ: การ์ดกรอง 4 ใบ + ติ๊กหลายรายการ */
+  if(TAB) pcxClmSelSync();
   var ym=_pcYM||String(_pcDate||'').slice(0,7);
   var L=pcClmAll(pier).filter(function(c){ return String(c.date||'').slice(0,7)===ym; })
-    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(b.ts||'').localeCompare(String(a.ts||'')); });
-  var M=pcRefundMatch(pier), body='', sum=0, sumLeft=0;
-  L.forEach(function(c){
+    .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')) || String(a.ts||'').localeCompare(String(b.ts||'')); });
+  var M=pcRefundMatch(pier);
+  var rows=L.map(function(c){
     var R=pcClmRows(pier,c.id), amt=0; R.forEach(function(o){ amt+=(+o.x.amt||0); }); amt=Math.round(amt);
-    var k='c:'+c.id, left=(M.urem[k]!=null)?M.urem[k]:amt, back=amt-left, by=M.uby[k]||[];
-    sum+=amt; sumLeft+=left;
-    var st=!amt?'<em class="z">ไม่มีรายการ</em>'
-      :(left<=0?('<em class="ok">คืนครบ · '+pcE(by.map(function(b){ return pcDS(b.ref); }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', '))+'</em>')
-      :(back>0?('<em class="wn">คืนแล้ว '+pcN(back)+' · ค้าง '+pcN(left)+'</em>'):'<em>รอรับคืน</em>'));
-    var op=!!_pcClmOpen[c.id], cur=(c.date===_pcDate), _rc=pcRcptCount(pier,c.id);   /* §pcRcpt */
-    body+='<div class="pc2-cl'+(op?' op':'')+(cur?' cur':'')+'" id="pc-clm-'+pcE(c.id)+'">'
-      +'<div class="r">'
-        +'<button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนรายการ':'ดูรายการ')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
-        +'<span class="nm"><b>'+pcE(c.name||'—')+'</b><small>'
-          +(cur?pcE(pc2D(c.date)):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(c.date)+'\')">'+pcE(pc2D(c.date))+'</a>'))
-          +' · '+R.length+' รายการ · '+pcE(c.by||'—')
-          +(R.length?(_rc.n<R.length?(' · <b class="rcw">ยังไม่เลือกคนรับเงิน '+(R.length-_rc.n)+'</b>'):' · ใบเสร็จครบ'):'')+'</small></span>'
-        +'<span class="st">'+st+'</span>'
-        +'<span class="am">'+pcMoney(amt)+'</span>'
-        +'<span class="ac"><button type="button" class="ol" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
-          +'<button type="button" class="ol rc" onclick="pcPrintReceipts(\''+pcE(c.id)+'\')" title="พิมพ์ใบเสร็จรับเงิน 1 หน้าต่อรายการ (เฉพาะรายการที่เลือกคนรับเงินแล้ว)">&#129534; ใบเสร็จ '+_rc.n+'</button>'   /* §pcRcpt */
-          +'<button type="button" class="ol" onclick="pcClmRename(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ">&#9998;</button>'
-          +'<button type="button" class="pc2-x" onclick="pcClmDel(\''+pcE(c.id)+'\')" title="ยกเลิกรายการตั้งเบิก (แถวในสมุดยังอยู่)">&times;</button></span>'
-      +'</div>'
-      +(op?('<div class="ln">'+(R.length?R.map(function(o){
-          return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
-            +'<span class="py">'+pcPyChip('out',o.x)+'</span>'+'<span class="m">'+pcN(+o.x.amt||0)+'</span>'
-            +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
-        :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div>'):'')
-      +'</div>';
+    var k='c:'+c.id, left=(M.urem[k]!=null)?M.urem[k]:amt, back=amt-left, by=M.uby[k]||[], rc=pcRcptCount(pier,c.id);
+    var refDs=by.map(function(b){ return b.ref; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).sort();
+    /* คืนเกิน · เงินคืนก้อนที่จับคู่กับรายการนี้มียอดเกินกว่าที่ตั้งเบิก */
+    var over=0; by.forEach(function(b){ var r=M.res[b.id]; if(r && r.diff>0 && r.cov.length===1 && r.cov[0].k===k) over+=r.diff; });
+    return {c:c, R:R, amt:amt, left:left, back:back, refDs:refDs, over:over, rc:rc, noRc:R.length-rc.n, done:(amt>0 && left<=0)};
   });
-  return '<div class="pc2-card pc2-clms"><div class="ch"><div><b>รายการตั้งเบิก · '+pcE(pc2MonthName(ym))+'</b>'
-      +'<div class="cs">'+(L.length?(L.length+' รายการ · รวม '+pcMoney(sum)+(sumLeft>0?(' · ค้างรับคืน '+pcMoney(sumLeft)):' · คืนครบ')):'ติ๊กรายการจ่ายในสมุด แล้วกด สรุปตั้งเบิก เพื่อเริ่ม')+'</div></div></div>'
-    +(body||'<div class="pc2-empty">ยังไม่มีรายการตั้งเบิกในเดือนนี้</div>')
+  var sum=0, sumLeft=0, sumBack=0, noRcRows=0, noRcN=0, nOpen=0, nDone=0, nNoRc=0;
+  rows.forEach(function(r){ sum+=r.amt; sumLeft+=r.left; sumBack+=r.back; if(r.noRc>0){ noRcRows+=r.noRc; nNoRc++; } if(r.done) nDone++; else nOpen++; });
+  var F=_pcClmF, show=rows.filter(function(r){ return F==='all' || (F==='open'?!r.done:(F==='norc'?r.noRc>0:r.done)); });
+  var money=function(n){ return pcMoney(n); }, N=function(n){ return pcN(n); };
+  var fb=function(f,lb,n){ return '<button type="button" class="'+(F===f?'on':'')+'" onclick="pcClmSetF(\''+f+'\')">'+lb+' <span>'+n+'</span></button>'; };
+  var fb4=function(f,lb,big,sub,cls){ return '<button type="button" class="'+(F===f?'on ':'')+(cls||'')+'" onclick="pcClmSetF(\''+f+'\')"><small>'+lb+'</small><b>'+big+'</b><i>'+sub+'</i></button>'; };
+  var head='<div class="ch pcc-h"><div class="pcc-t"><b>รายการตั้งเบิก · '+pcE(pc2MonthName(ym))+'</b>'+(TAB?('<input type="month" class="pcx-mi" value="'+pcE(ym)+'" onchange="pc2Month(this.value)">'):'')
+      +'<div class="cs">'+(L.length?(L.length+' รายการ · '+Object.keys(rows.reduce(function(o,r){ o[r.c.date]=1; return o; },{})).length+' วัน · '+pcE(pier==='panwa'?'AC.Panwa':(pier==='tublamu'?'AC.Tublamu':pier))):'ติ๊กรายการจ่ายในสมุด แล้วกด สรุปตั้งเบิก เพื่อเริ่ม')+'</div></div>'
+    +((L.length&&TAB)?('<div class="pcx-f4">'+fb4('open','ค้างรับคืน',sumLeft>0?money(sumLeft):'—',nOpen+' รายการ',(sumLeft>0?'bad':''))
+        +fb4('norc','ยังไม่เลือกคนรับเงิน',nNoRc?(nNoRc+' รายการ'):'ครบ',noRcRows?(noRcRows+' บรรทัด · พิมพ์ใบเสร็จไม่ได้'):'ทุกบรรทัดมีคนรับเงิน',(noRcRows?'warn':''))
+        +fb4('done','คืนครบแล้ว',money(sumBack),nDone+' รายการ · '+(sum?Math.round(sumBack/sum*100):0)+'% ของเดือน','')
+        +fb4('all','ตั้งเบิกทั้งเดือน',money(sum),rows.length+' รายการ · '+Object.keys(rows.reduce(function(o,r){ o[r.c.date]=1; return o; },{})).length+' วัน','')+'</div>'):'')
+    +((L.length&&!TAB)?('<div class="pcc-k"><div><span>ตั้งเบิกทั้งเดือน</span><b>'+money(sum)+'</b></div>'
+      +'<div><span>รับคืนแล้ว</span><b class="ok">'+money(sumBack)+'</b></div>'
+      +'<div class="'+(sumLeft>0?'wn':'')+'"><span>ค้างรับคืน</span><b>'+(sumLeft>0?money(sumLeft):'—')+'</b></div>'
+      +'<div><span>ยังไม่เลือกคนรับเงิน</span><b class="'+(noRcRows?'bad':'')+'">'+(noRcRows?(noRcRows+' <i>แถว · '+nNoRc+' รายการ</i>'):'ครบ')+'</b></div></div>'
+      +'<div class="pcc-f">'+fb('open','ค้างรับคืน',nOpen)+fb('norc','ยังไม่เลือกคนรับเงิน',nNoRc)+fb('done','คืนครบ',nDone)+fb('all','ทั้งหมด',rows.length)+'</div>'):'')
     +'</div>';
+  if(!L.length) return '<div class="pc2-card pc2-clms">'+head+'<div class="pc2-empty">ยังไม่มีรายการตั้งเบิกในเดือนนี้</div></div>';
+  if(!show.length) return '<div class="pc2-card pc2-clms">'+head+'<div class="pc2-empty">ไม่มีรายการในตัวกรองนี้ · <a href="javascript:void 0" onclick="pcClmSetF(\'all\')">ดูทั้งหมด</a></div></div>';
+  /* จัดกลุ่มตามวัน · ใหม่สุดก่อน */
+  var days=[], byDay={};
+  show.forEach(function(r){ var d=r.c.date||''; if(!byDay[d]){ byDay[d]=[]; days.push(d); } byDay[d].push(r); });
+  var body='', tAmt=0, tLeft=0;
+  days.forEach(function(ds){
+    var G=byDay[ds], dAmt=0, dLeft=0, dRows=0, dNoRc=0; G.forEach(function(r){ dAmt+=r.amt; dLeft+=r.left; dRows+=r.R.length; dNoRc+=r.noRc; });
+    tAmt+=dAmt; tLeft+=dLeft;
+    var cl=!!_pcClmDayCl[ds], cur=(ds===_pcDate);
+    body+='<tr class="pcc-d'+(cur?' cur':'')+'"><td colspan="'+(TAB?5:4)+'"><div class="pcc-dh">'
+        +'<button type="button" class="tg" onclick="pcClmDayToggle(\''+pcE(ds)+'\')" title="'+(cl?'ขยายวัน':'ย่อวัน')+'">'+(cl?'&#9656;':'&#9662;')+'</button>'
+        +(cur?('<b>'+pcE(pc2DL(ds))+'</b>'):('<a href="javascript:void 0" onclick="pcPickDay(\''+pcE(ds)+'\')" title="เปิดสมุดวันนี้"><b>'+pcE(pc2DL(ds))+'</b></a>'))
+        +'<span>'+G.length+' รายการ · '+dRows+' แถว</span>'
+        +(dNoRc>0?('<em class="bad">ยังไม่เลือกคนรับเงิน '+dNoRc+'</em>'):(dLeft<=0?'<em class="ok">คืนครบ</em>':''))
+      +'</div></td><td class="r m">'+N(dAmt)+'</td><td class="r m '+(dLeft>0?'wn':'mut')+'">'+(dLeft>0?N(dLeft):'—')+'</td>'
+      +'<td class="r"><button type="button" class="ol sm" onclick="pcClmPrintDay(\''+pcE(ds)+'\')" title="พิมพ์รายจ่ายทั้งวัน">พิมพ์ทั้งวัน</button></td></tr>';
+    if(cl) return;
+    G.forEach(function(r){
+      var c=r.c, op=!!_pcClmOpen[c.id], nm=pcClmShort(c.name), pct=r.R.length?Math.round(r.rc.n/r.R.length*100):0;
+      var st=!r.amt?'<em class="z">ไม่มีรายการ</em>'
+        :(r.over>0?('<em class="wn">คืนเกิน '+N(r.over)+(r.refDs.length?(' · '+pcE(r.refDs.map(pcDS).join(', '))):'')+'</em>')
+        :(r.done?('<em class="ok">คืนครบ'+(r.refDs.length?(' · '+pcE(r.refDs.map(pcDS).join(', '))):'')+'</em>')
+        :(r.back>0?('<em class="wn">คืนแล้ว '+N(r.back)+' · ค้าง '+N(r.left)+'</em>'):'<em>รอรับคืน</em>')));
+      body+='<tr class="pcc-r'+(op?' op':'')+'" id="pc-clm-'+pcE(c.id)+'">'
+        +(TAB?('<td class="ck"><input type="checkbox"'+(_pcxClmSel[c.id]?' checked':'')+' onchange="pcxClmSel(\''+pcE(c.id)+'\',this.checked)" title="เลือกรายการนี้"></td>'):'')
+        +'<td><div class="pcc-nm"><button type="button" class="tg" onclick="pcClmToggle(\''+pcE(c.id)+'\')" title="'+(op?'ซ่อนแถว':'ดูแถว')+'">'+(op?'&#9662;':'&#9656;')+'</button>'
+          +'<b title="'+pcE(c.name||'')+'">'+pcE(nm.core)+'</b>'+(nm.dt?('<small>'+pcE(nm.dt)+'</small>'):'')+'</div></td>'
+        +'<td class="r m mut">'+r.R.length+'</td>'
+        +'<td><span class="pcc-rc"><i><b style="width:'+pct+'%"></b></i><span class="'+(r.noRc>0?'bad':'ok')+'">'+(r.R.length?(r.noRc>0?(r.rc.n+' / '+r.R.length):('ครบ '+r.rc.n)):'—')+'</span></span></td>'
+        +'<td class="st">'+st+'</td>'
+        +'<td class="r m">'+N(r.amt)+'</td>'
+        +'<td class="r m '+(r.left>0?'wn':'mut')+'">'+(r.left>0?N(r.left):'—')+'</td>'
+        +'<td class="r ac"><button type="button" class="ol ic" onclick="pcPrintClaim(\''+pcE(c.id)+'\')" title="พิมพ์รายการตั้งเบิกนี้">&#128424;</button>'
+          +'<button type="button" class="ol sm'+(r.rc.n?'':' mut')+'" onclick="pcPrintReceipts(\''+pcE(c.id)+'\')" title="พิมพ์ใบเสร็จรับเงิน '+r.rc.n+' ใบ (1 หน้าต่อรายการ · เฉพาะที่เลือกคนรับเงินแล้ว)">&#129534; '+r.rc.n+'</button>'
+          +'<span class="pcc-mn"><button type="button" class="ol ic" onclick="pcClmMenu(\''+pcE(c.id)+'\')" title="เปลี่ยนชื่อ · ยกเลิก">&#8943;</button>'
+            +(_pcClmMenu===c.id?('<div class="pcc-pop"><button type="button" onclick="_pcClmMenu=\'\';pcClmRename(\''+pcE(c.id)+'\')">&#9998; เปลี่ยนชื่อ</button><button type="button" class="dg" onclick="_pcClmMenu=\'\';pcClmDel(\''+pcE(c.id)+'\')">&times; ยกเลิกรายการตั้งเบิก</button></div>'):'')
+          +'</span></td></tr>';
+      if(op) body+='<tr class="pcc-x"><td colspan="'+(TAB?8:7)+'"><div class="ln">'+(r.R.length?r.R.map(function(o){
+          return '<div class="l"><span class="d">'+pcE(pc2D(o.ds))+'</span><span class="t">'+pcE(o.x.txt||'—')+'</span>'
+            +'<span class="py">'+pcPyChip('out',o.x)+'</span>'+'<span class="m">'+N(+o.x.amt||0)+'</span>'
+            +'<button type="button" class="pc2-x" title="เอาออกจากรายการตั้งเบิกนี้ (แถวในสมุดยังอยู่)" onclick="pcClmUnline(\''+pcE(c.id)+'\',\''+pcE(o.x.id)+'\')">&times;</button></div>'; }).join('')
+        :'<div class="pc2-mut">ไม่มีแถวในสมุดผูกกับรายการนี้แล้ว</div>')+'</div></td></tr>';
+    });
+  });
+  return '<div class="pc2-card pc2-clms">'+head
+    +'<div class="pcc-w"><table class="pcc-t"><thead><tr>'+(TAB?'<th class="ck"></th>':'')+'<th>รายการตั้งเบิก</th><th class="r">แถว</th><th>คนรับเงิน</th><th>เงินคืน</th><th class="r">ยอดตั้งเบิก</th><th class="r">ค้าง</th><th></th></tr></thead>'
+    +'<tbody>'+body+'</tbody>'
+    +'<tfoot><tr><td colspan="'+(TAB?5:4)+'">รวมที่แสดง · '+show.length+' รายการ · '+days.length+' วัน</td><td class="r m">'+N(tAmt)+'</td><td class="r m '+(tLeft>0?'wn':'mut')+'">'+(tLeft>0?N(tLeft):'—')+'</td><td></td></tr></tfoot></table></div>'
+    +(TAB?pcxClmBulkBar(pier):'')+'</div>';
 }
 /* บรรทัดที่กำลังกรอก · base = คงเหลือก่อนบรรทัดนี้ (ไว้คำนวณยอดจาง ๆ ระหว่างพิมพ์) */
 function pc2EdRow(E,base,no){
@@ -65859,6 +66766,7 @@ function pc2EdRow(E,base,no){
     +'<span>'+(E.src?('<em class="cat '+(E.src==='dock'?'dk':E.src)+'">'+(CATS[E.src]||'จ่ายอื่น')+'</em>')
       :('<span class="pc2-tg"><button type="button" class="i'+(isIn?' on':'')+'" onclick="pc2EdKind(\'in\')">รับ</button>'
        +'<button type="button" class="o'+(!isIn?' on':'')+'" onclick="pc2EdKind(\'out\')">จ่าย</button></span>'))+'</span>'
+    +'<span></span>'   /* §pcSheet · ช่องตั้งเบิก */
     +'<span class="by"><i>'+pcE(E.by||'—')+'</i></span>'
     +'<span'+(isIn?'':' class="nil"')+'>'+(isIn?amtIn:'')+'</span>'
     +'<span'+(!isIn?'':' class="nil"')+'>'+(!isIn?amtIn:'')+'</span>'
@@ -66197,6 +67105,12 @@ function pc2CSS3(S){
     'body.btc #view-booking .t2-ckok::before{content:"\\2713";font-size:10px;color:#fff;font-weight:800}',
     'body.btc #view-booking .t2-leadonly{display:none}',
     'body.btc #view-booking td.t2-cu{white-space:nowrap}',
+    /* §btcNxt (2026-10-20) · owner "อันนี้ บังจำนวน ลค ไหม" · ชิปทริปอื่น (→ Private Transfer to Pier) ต่อท้ายชื่อในบรรทัดเดียว
+       ช่องลูกค้าไม่ตัด (ป้าย Together ลอยเหนือช่อง ใส่ overflow:hidden ไม่ได้) จึงล้นไปทับเลข AD · 11 เห็นเป็น 1 · 10 เห็นเป็น 0
+       แบ่งที่กันในช่อง: ชิปไม่เกิน 116px ตัด … · ชื่อลูกค้าเหลือที่ที่เหลือ · ชี้เมาส์ยังเห็นชื่อเต็ม/ทริปเต็ม */
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2{max-width:116px;overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2 .t2-nxt{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu:has(.t2-cul2) .t2-lead{max-width:calc(100% - 124px)}',
     'body.btc #view-booking td.t2-c .t2-dim{color:#D5D9E0}',
     'body.btc #view-booking .t2-needpickup{background:transparent;border:0;padding:0;color:#B42318;font-size:11px;font-weight:600}',
     'body.btc #view-booking td.t2-tm>div.btc-was{display:none}',
@@ -67396,3 +68310,232 @@ function pc2CSS3(S){
     +B+'.bt-hgrid > :nth-child(2),'+B+'.bt-c.bt-boat,'+B+'.bt-boat .bt-tgl,'+B+'.bt-boat .bt-blist{height:auto!important;max-height:none!important;overflow:visible!important}';   /* เห็นทุกทริป ไม่ตัดที่ 2 ทริปแรก */
   (document.head||document.documentElement).appendChild(s);
 }catch(_){ } })();
+
+/* ══ §pcVanPay (2026-10-23) · owner "ใบวางบิล กับรายการจ่ายใน Petty Cash มีบางรายการที่ดึงมาจ่ายค่าใช้จ่ายวันนั้น ๆ"
+   → "สิ่งที่ User อยากได้คือการไม่ทำงานซ้ำซ้อน เพราะกรอกที่แรกแล้วต้องมากรอกที่สอง" · mock PCV3 → "1 yes · 2 yes · 3 everyone · 4 bill"
+   หน้างานคีย์ใบวางบิลก่อน (เรต / Extra / หัก=ส่วนลด → ยอดจ่าย = วางบิล − หัก) แล้วค่อยลง Petty Cash อีกรอบด้วยข้อมูลชุดเดียวกัน
+   ตอนนี้: ที่แถวบิลมีปุ่ม "💵 จ่ายสด" → กล่องยืนยัน (ทุกช่องเติมจากบิล) → สร้างบรรทัดจ่ายใน Petty Cash ให้เอง + ผูกกันไว้
+     · สมุดปลายทาง = ท่าของชีทที่เปิดอยู่ (panwa/tublamu/ranong · "อื่น ๆ" ลง panwa) เปลี่ยนได้ในกล่อง (ข้อ 1)
+     · ข้อความ = แบบที่หน้าท่าพิมพ์อยู่ "ค่ารถตู้นอกโซนภูเก็ต SL 23/10/26 (1คัน) ชื่อคนขับ" (ข้อ 2) · ใครก็กดได้ตามสิทธิ์แก้หน้าท่าปกติ (ข้อ 3)
+     · วันที่บรรทัด = วันงานในบิล (ข้อ 4) · คนรับเงิน = คนขับจากทะเบียนรถ (sb_vehicles.driver) ไม่มีก็ชื่อเจ้าของรถ · ผูกเข้าทะเบียนคนรับเงินให้ด้วย
+   ผูกกันด้วย blob key po_cash_vanlink เป็น "สตริง JSON" (กฎ §pcFix · key ที่ไม่มีตารางต้องเป็นสตริง) · ไม่เพิ่มคอลัมน์ DB
+     {rowId:{k:"วัน~โปรแกรม~คัน[~R]" | "x<extraId>", sup, pier, ds, by, at}}
+   แถวบิลเห็นสถานะอ่านอย่างเดียว: จ่ายแล้ว ✓ / ⚠ ยอดไม่ตรง / ปุ่มจ่ายสด · บรรทัดในสมุดมีชิป "จากบิล" กดกลับไปที่บิลได้
+   ลบบรรทัดที่ผูกอยู่ในสมุด = ถามก่อน แล้วปลดผูกให้ (ปุ่มจ่ายสดกลับมาที่บิล) · ยกเลิกจากฝั่งบิลก็ได้ (✕ ที่ชิป)
+   ⚠ alert/confirm เป็นภาษาอังกฤษตามกฎของไฟล์ · ไม่แตะ vbPrint / ยอดเรียกเก็บ / ตั้งเบิก ══ */
+function pcVbMap(){ var o=null; try{ var b=laBlob(), raw=(typeof b.po_cash_vanlink==='string')?b.po_cash_vanlink:''; if(raw) o=JSON.parse(raw); }catch(_){ o=null; } return (o&&typeof o==='object')?o:{}; }
+function pcVbPut(o){ try{ var b=laBlob(); b.po_cash_vanlink=JSON.stringify(o||{}); laBlobSave(); }catch(e){ alert('Save failed: '+(e&&e.message)); } }
+var _pcVbIx=null;
+/* ดัชนีบรรทัดจ่ายทุกท่าทุกวัน id → {x,ds,pier} · สร้างครั้งเดียวต่อการวาด (3 วิ) */
+function pcVbIndex(){
+  if(_pcVbIx && _pcVbIx.at>Date.now()-3000) return _pcVbIx.m;
+  var m={};
+  try{ PC_PIERS.forEach(function(pr){ var P=pcPier(pr)||{};
+    Object.keys(P).forEach(function(ds){ ((P[ds]||{}).out||[]).forEach(function(x){ if(x&&x.id) m[String(x.id)]={x:x,ds:ds,pier:pr}; }); }); }); }catch(_){}
+  _pcVbIx={at:Date.now(), m:m}; return m;
+}
+function pcVbBust(){ _pcVbIx=null; }
+/* บรรทัดในสมุดที่ผูกกับแถวบิล k · ตัดลิงก์ค้าง (บรรทัดถูกลบไปแล้วทางอื่น) ทิ้งเงียบ ๆ */
+function pcVbKs(L){ return Array.isArray(L.ks)?L.ks:(L.k?[L.k]:[]); }
+/* บรรทัดในสมุดที่ผูกกับแถวบิล k · 1 บรรทัดอาจคลุมหลายคัน (จ่ายคนเดียวกันในวันเดียวกัน · "(2คัน)") → amt = ส่วนของคันนี้
+   เกลี่ยตามยอดบิลตอนสร้าง (parts) · ถ้ายอดบรรทัดถูกแก้ ส่วนแบ่งขยับตามสัดส่วน ทุกคันในกลุ่มจึงขึ้น ⚠ พร้อมกัน
+   ตัดลิงก์ค้าง (บรรทัดถูกลบไปแล้วทางอื่น) ทิ้งเงียบ ๆ */
+function pcVbRowsFor(k){
+  var M=pcVbMap(), IX=pcVbIndex(), out=[];
+  Object.keys(M).forEach(function(rid){ var L=M[rid]; if(!L) return; var ks=pcVbKs(L); if(ks.indexOf(k)<0) return; var h=IX[rid]; if(!h) return;
+    var tot=Math.round(+h.x.amt||0), parts=L.parts||{}, sumP=0; ks.forEach(function(q){ sumP+=Math.round(+parts[q]||0); });
+    var share=(ks.length===1)?tot:(sumP>0?Math.round(tot*(Math.round(+parts[k]||0)/sumP)):Math.round(tot/ks.length));
+    out.push({id:rid, x:h.x, ds:h.ds, pier:h.pier, amt:share, tot:tot, nK:ks.length, ks:ks, by:String(h.x.by||L.by||'')}); });
+  return out;
+}
+function pcVbStatus(k, bill){
+  var R=pcVbRowsFor(k), paid=0; R.forEach(function(r){ paid+=r.amt; });
+  return {rows:R, n:R.length, paid:paid, bill:Math.round(+bill||0), diff:Math.round(+bill||0)-paid};
+}
+function pcVbPierOk(p){ return (PC_PIERS.indexOf(p)>=0)?p:'panwa'; }
+function pcVbDM(ds){ return ds?(ds.slice(8,10)+'/'+ds.slice(5,7)):''; }
+function pcVbDMY(ds){ return ds?(ds.slice(8,10)+'/'+ds.slice(5,7)+'/'+ds.slice(2,4)):''; }
+/* ข้อความบรรทัด · รูปเดียวกับที่หน้าท่าพิมพ์อยู่ */
+function pcVbTxt(code, pier, ds, n, far, who, ret){
+  return 'ค่ารถตู้'+(far?'นอกโซน':'')+(VB_PIER_SH[pier]||'')+' '+(code||'')+(ret?' ขากลับ':'')+' '+pcVbDMY(ds)+' ('+(n||1)+'คัน)'+(who?(' '+who):'');
+}
+function pcVbDriver(vid){ var v=(typeof vehGet==='function')?vehGet(vid):null; return String((v&&(v.driver||v.driverName))||'').trim(); }
+/* ── ฝั่งบิล · ช่อง "จ่ายสด" ของแถว ── */
+function vbPayCell(k, bill, ri, ds){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var S=pcVbStatus(k, bill);
+  if(!S.n){
+    if(!(bill>0)) return '<span class="vbx-mut">·</span>';
+    return '<button type="button" class="vbp-btn" data-vbk="pay|'+e(k)+'" onclick="event.stopPropagation();vbPayOpen([\''+e(k)+'\'])" title="สร้างบรรทัดจ่ายใน Petty Cash จากแถวนี้ · ยอด '+Math.round(bill).toLocaleString('en-US')+'">&#128181; จ่ายสด '+Math.round(bill).toLocaleString('en-US')+'</button>';
+  }
+  var ok=(S.diff===0), r0=S.rows[0];
+  var who=S.rows.map(function(r){ return r.by; }).filter(Boolean)[0]||'';
+  var lbl=ok?('&#10003; จ่ายแล้ว ฿'+S.paid.toLocaleString('en-US')):('&#9888; จ่ายสด ฿'+S.paid.toLocaleString('en-US')+' · ต่าง '+Math.abs(S.diff).toLocaleString('en-US'));
+  return '<span class="vbp-chip '+(ok?'ok':'warn')+'" onclick="event.stopPropagation();vbPayGo(\''+e(r0.id)+'\')" title="'+(ok?'ยอดในสมุดตรงกับยอดจ่ายของแถวนี้':('บิล '+S.bill.toLocaleString('en-US')+' · สมุด '+S.paid.toLocaleString('en-US')))+' · '+e(VB_PIER_SH[r0.pier]||r0.pier)+' '+e(pcVbDM(r0.ds))+(who?(' · '+e(who)):'')+' · กดไปดูในสมุด">'+lbl
+    +'<small>'+e(VB_PIER_SH[r0.pier]||r0.pier)+' '+e(pcVbDM(r0.ds))+(r0.nK>1?(' · รวมใบ '+r0.nK+' คัน ฿'+r0.tot.toLocaleString('en-US')):'')+(S.n>1?(' · '+S.n+' บรรทัด'):'')+'</small></span>'
+    +'<a class="vbp-x" onclick="event.stopPropagation();vbPayUndo(\''+e(k)+'\')" title="ยกเลิกจ่ายสด · ลบบรรทัดที่สร้างไว้ในสมุดออก">&times;</a>';
+}
+/* สรุปทั้งชีท · ใช้ในแถบบน */
+function vbPaySum(calc, extras){
+  var paid=0, due=0, n=0, miss=0, warn=0;
+  (calc||[]).forEach(function(x){ var S=pcVbStatus(x.rk, x.bill); if(S.n){ paid+=S.paid; n++; if(S.diff!==0) warn++; } else if(x.bill>0){ miss++; due+=x.bill; } });
+  (extras||[]).forEach(function(x){ var b=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0), S=pcVbStatus('x'+x.id, b); if(S.n){ paid+=S.paid; n++; if(S.diff!==0) warn++; } else if(b>0){ miss++; due+=b; } });
+  return {paid:paid, due:due, n:n, miss:miss, warn:warn};
+}
+/* ── กล่องยืนยัน ── */
+var _vbPay=null;
+function vbPaySingles(keys){
+  var P=vbPeriod(), st=vbState(), pier=_vb.pier||'panwa', items=[];
+  var rows=vbRows().filter(function(r){ return vbPk(r.routeId)===pier; });
+  keys.forEach(function(k){
+    if(k.charAt(0)==='x'){
+      var x=(st.extra||[]).filter(function(q){ return ('x'+q.id)===k; })[0]; if(!x) return;
+      var b=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0);
+      items.push({k:k, ds:x.date||P.from, pier:pcVbPierOk(pier), amt:Math.round(b), who:_vb.sup, van:(+x.van||1), code:'', far:false, ret:false,
+                  sub:(x.note||'รถนอก'), base:Math.round((+x.van||0)*(+x.rate||0)), ex:+x.ex||0, cut:+x.cut||0});
+      return;
+    }
+    var r=rows.filter(function(q){ return vbRowKey(q)===k; })[0]; if(!r) return;
+    var m=(st.rows||{})[k]||{}, C=vbCode(r.routeId);
+    var rate=(m.rate!=null?m.rate:vbRateOf(C.c, st))||0, ex=+m.ex||0, cut=+m.cut||0, bill=rate+ex-cut;
+    var far=Object.keys(r.areas||{}).some(function(a){ return vbIsFar(a); });
+    var drv=pcVbDriver(r.vanId), v=(typeof vehGet==='function')?vehGet(r.vanId):null;
+    items.push({k:k, ds:r.date, pier:pcVbPierOk(pier), amt:Math.round(bill), who:(drv||_vb.sup), van:1, vid:r.vanId, code:C.c||'', far:far, ret:!!r.ret,
+                sub:((v&&v.name)||r.vanId)+(v&&v.plate?(' · '+v.plate):'')+' · '+(C.c||'')+(r.ret?' · ขากลับ':''), base:Math.round(rate), ex:ex, cut:cut});
+  });
+  return items;
+}
+/* รวมคันที่จ่ายคนเดียวกัน วันเดียวกัน เป็น 1 บรรทัด "(Nคัน)" · ตามที่หน้าท่าลงอยู่จริง (owner "ใบในตาราง Petty cash ที่จ่ายมันจะเป็นกรุ๊ปนั้น ๆ")
+   แยกเป็นรายคันได้ในกล่องยืนยัน */
+function vbPayGroup(singles){
+  var G={}, ord=[];
+  singles.forEach(function(it){ var g=it.ds+'|'+it.pier+'|'+pcPyNorm(it.who||''); if(!G[g]){ G[g]={ds:it.ds, pier:it.pier, who:it.who, ks:[], parts:{}, subs:[], codes:[], amt:0, van:0, base:0, ex:0, cut:0, far:false, ret:true}; ord.push(g); }
+    var o=G[g]; o.ks.push(it.k); o.parts[it.k]=it.amt; o.subs.push(it.sub); if(it.code && o.codes.indexOf(it.code)<0) o.codes.push(it.code);
+    o.amt+=it.amt; o.van+=it.van; o.base+=it.base; o.ex+=it.ex; o.cut+=it.cut; o.far=o.far||it.far; o.ret=o.ret&&it.ret; });
+  return ord.map(function(g){ var o=G[g]; o.txt=pcVbTxt(o.codes.join('/'), o.pier, o.ds, o.van, o.far, o.who, o.ret); return o; });
+}
+function vbPayItems(keys){ return vbPayGroup(vbPaySingles(keys)); }
+function vbPaySplit(i){ var W=_vbPay; if(!W||!W.items[i]) return; var it=W.items[i]; if(it.ks.length<2) return;
+  var parts=it.ks.map(function(k){ return vbPayGroup(vbPaySingles([k]))[0]; }).filter(Boolean);
+  W.items.splice.apply(W.items, [i,1].concat(parts)); vbPayPaint(); }
+function vbPayOpen(keys){
+  if(typeof pcGuard==='function' && !pcGuard()) return;
+  var items=vbPayGroup(vbPaySingles(keys||[]).filter(function(it){ return !pcVbStatus(it.k, it.amt).n; }));
+  if(!items.length){ alert('Nothing to pay: these rows already have a Petty Cash line.'); return; }
+  _vbPay={items:items};
+  vbPayPaint();
+}
+function vbPayPaint(){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var W=_vbPay; if(!W) return;
+  var tot=0; W.items.forEach(function(it){ tot+=Math.round(+it.amt||0); });
+  var piers=PC_PIERS.map(function(p){ return '<option value="'+p+'">'+e(VB_PIER_LBL[p]||p)+'</option>'; }).join('');
+  var rows=W.items.map(function(it,i){
+    return '<div class="vbp-it"><div class="vbp-h"><b>'+e(it.subs.join(' + '))+(it.ks.length>1?(' <i class="vbp-n">'+it.ks.length+' คัน · <a onclick="vbPaySplit('+i+')">แยกเป็นรายคัน</a></i>'):'')+'</b><span>'+e(pcVbDM(it.ds))+' · วางบิล '+Math.round(it.base).toLocaleString('en-US')+(it.ex?(' + Extra '+Math.round(it.ex).toLocaleString('en-US')):'')+(it.cut?(' − หัก '+Math.round(it.cut).toLocaleString('en-US')):'')+' = <b>'+Math.round(it.base+it.ex-it.cut).toLocaleString('en-US')+'</b></span>'
+      +(W.items.length>1?('<a onclick="vbPayDrop('+i+')" title="ไม่เอาแถวนี้">&times;</a>'):'')+'</div>'
+      +'<div class="vbp-g"><label>สมุด</label><select class="ck-inp" onchange="vbPaySet('+i+',\'pier\',this.value)">'+piers.replace('value="'+it.pier+'"','value="'+it.pier+'" selected')+'</select>'
+      +'<label>วันที่</label><input class="ck-inp" type="date" value="'+e(it.ds)+'" onchange="vbPaySet('+i+',\'ds\',this.value)">'
+      +'<label>รายการ</label><input class="ck-inp" value="'+e(it.txt)+'" onchange="vbPaySet('+i+',\'txt\',this.value)">'
+      +'<label>จ่าย</label><input class="ck-inp mono" inputmode="numeric" value="'+Math.round(it.amt)+'" onchange="vbPaySet('+i+',\'amt\',this.value)">'
+      +'<label>คนรับเงิน</label><input class="ck-inp" value="'+e(it.who)+'" onchange="vbPaySet('+i+',\'who\',this.value)" placeholder="ชื่อคนขับ / เจ้าของรถ"></div></div>';
+  }).join('');
+  var host=(typeof pcPyHost==='function')?pcPyHost():document.getElementById('ck-reason-host');
+  host.innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:620px;width:min(620px,96vw)">'
+   +'<div class="ck-dh"><div><div class="t1">&#128181; บันทึกจ่ายสดหน้าท่า → สร้างบรรทัดใน Petty Cash</div><div class="t2">'+e(_vb.sup)+' · '+W.items.length+' แถว · ฿'+tot.toLocaleString('en-US')+'</div></div><button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'<div class="ck-db" style="max-height:62vh;overflow:auto">'+rows
+   +'<div class="ck-fn">ทุกช่องเติมมาจากบิล แก้ได้ · บันทึกแล้วบรรทัดจะไปอยู่ในสมุดเงินสดย่อยของท่าที่เลือก วันที่งาน · ตั้งเบิก/รับคืน ทำในสมุดตามปกติ · ยอดในสมุดถ้าถูกแก้ทีหลัง แถวบิลจะขึ้น ⚠ ต่าง</div></div>'
+   +'<div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button><button class="k" onclick="vbPaySave()">บันทึกลง Petty Cash · '+W.items.length+' บรรทัด</button></div></div></div>';
+}
+function vbPaySet(i,f,v){ var W=_vbPay; if(!W||!W.items[i]) return; var it=W.items[i];
+  if(f==='amt') it.amt=Math.round(Math.max(0, parseFloat(String(v).replace(/[^0-9.]/g,''))||0));
+  else if(f==='pier') it.pier=pcVbPierOk(v);
+  else if(f==='ds'){ if(/^\d{4}-\d{2}-\d{2}$/.test(String(v))) it.ds=v; }
+  else it[f]=String(v==null?'':v).replace(/\s+/g,' ').trim(); }
+function vbPayDrop(i){ var W=_vbPay; if(!W) return; W.items.splice(i,1); if(!W.items.length){ ckReasonClose(); _vbPay=null; return; } vbPayPaint(); }
+function vbPayPayee(PD, name, me, now){
+  name=String(name||'').replace(/\s+/g,' ').trim(); if(!name) return '';
+  var nn=pcPyNorm(name), hit='';
+  Object.keys(PD.p).forEach(function(pid){ var p=PD.p[pid]; if(!hit && p && pcPyNorm(p.name)===nn) hit=pid; });
+  if(!hit){ hit='py'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); PD.p[hit]={id:hit, name:name, cats:['van'], by:me, at:now}; }
+  return hit;
+}
+function vbPaySave(){
+  var W=_vbPay; if(!W) return;
+  if(typeof pcGuard==='function' && !pcGuard()) return;
+  for(var i=0;i<W.items.length;i++){ if(!(W.items[i].amt>0)){ alert('Row '+(i+1)+': amount must be more than 0.'); return; } if(!W.items[i].txt){ alert('Row '+(i+1)+': description is empty.'); return; } }
+  var M=pcVbMap(), PD=pcPyDB(), pyDirty=false, now=new Date().toISOString(), me=pcWho(), n=0;
+  W.items.forEach(function(it){
+    if(it.ks.some(function(k){ return pcVbStatus(k, 0).n; })) return;   /* คนอื่นเพิ่งจ่ายไปก่อน · ไม่สร้างซ้ำ */
+    var D=pcDay(it.pier, it.ds, true), id='pc'+Date.now()+Math.random().toString(36).slice(2,5);
+    D.out.push({ id:id, txt:it.txt, amt:it.amt, at:(typeof ckNowHM==='function')?ckNowHM():'', by:me, ts:now });
+    M[id]={ks:it.ks.slice(), parts:it.parts, sup:_vb.sup, pier:it.pier, ds:it.ds, by:me, at:now};
+    var pid=vbPayPayee(PD, it.who, me, now);
+    if(pid){ PD.of[id]=pid; pyDirty=true; }
+    n++;
+  });
+  pcSave(); pcVbPut(M); if(pyDirty) pcPyPut(PD); pcVbBust();
+  ckReasonClose(); _vbPay=null;
+  if(typeof vbRenderSoon==='function') vbRenderSoon();
+  if(!n) alert('No line was created: these rows already have a Petty Cash line.');
+}
+/* ยกเลิกจากฝั่งบิล · ลบบรรทัดที่สร้างไว้ + ลิงก์ */
+function vbPayUndo(k){
+  if(typeof pcGuard==='function' && !pcGuard()) return;
+  var R=pcVbRowsFor(k); if(!R.length){ pcVbBust(); vbRenderSoon(); return; }
+  var tot=0; R.forEach(function(r){ tot+=r.amt; });
+  var tot2=0, grp=0; R.forEach(function(r){ tot2+=r.tot; if(r.nK>1) grp=Math.max(grp,r.nK); });
+  if(!confirm('Cancel cash payment for this row?\nThis deletes '+R.length+' Petty Cash line(s) totalling '+tot2.toLocaleString('en-US')+' that were created from the bill.'+(grp?('\nNote: the line covers '+grp+' vans — all of them go back to "pay cash".'):''))) return;
+  var M=pcVbMap();
+  R.forEach(function(r){ var D=pcDay(r.pier, r.ds, false); if(D) D.out=(D.out||[]).filter(function(x){ return String(x.id)!==r.id; }); delete M[r.id]; });
+  pcSave(); pcVbPut(M); pcVbBust(); vbRenderSoon();
+}
+/* ไปดูบรรทัดในสมุด */
+function vbPayGo(rowId){
+  var IX=pcVbIndex(), h=IX[String(rowId)]; if(!h){ alert('This Petty Cash line no longer exists.'); pcVbBust(); vbRenderSoon(); return; }
+  _pcPier=h.pier; _pcDate=h.ds; _pcYM=h.ds.slice(0,7); _pcTab=0; _pcJump=false;
+  var el=document.querySelector('.nav-item[data-view="pop-'+h.pier+'"]');
+  if(el && typeof nav==='function') nav(el); else renderPierCash(h.pier);
+  setTimeout(function(){ try{ var r=document.getElementById(pcSelRowId('out', rowId)); if(r){ r.scrollIntoView({block:'center'}); r.classList.add('pcp-on'); } }catch(_){} }, 60);
+}
+/* ── ฝั่งสมุด · ชิป "จากบิล" ── */
+function pcVbChip(k,x){
+  if(k!=='out' || !x || !x.id) return '';
+  var L=pcVbMap()[String(x.id)]; if(!L) return '';
+  var names=pcVbKs(L).map(function(kk){ kk=String(kk||''); if(kk.charAt(0)==='x') return 'รถนอก'; var vid=kk.split('~')[2]||'', v=vid&&(typeof vehGet==='function')?vehGet(vid):null; return (v&&v.name)||vid||'?'; });
+  var lbl=names.length>3?(names.slice(0,3).join(', ')+' +'+(names.length-3)):names.join(', ');
+  return '<em class="pc-vb" title="สร้างจากใบวางบิล '+pcE(L.sup||'')+' · '+pcE(names.join(', '))+' · กดไปดูแถวในบิล" onclick="event.stopPropagation();pcVbGo(\''+pcE(String(x.id))+'\')">&#128656; '+pcE(L.sup||'บิล')+' · '+pcE(lbl)+'</em>';
+}
+function pcVbGo(rowId){
+  var L=pcVbMap()[String(rowId)]; if(!L) return;
+  var ds=L.ds||_pcDate, dd=+ds.slice(8,10);
+  _vb.sup=L.sup||_vb.sup; _vb.ym=ds.slice(0,7); _vb.per=(dd<=10)?1:(dd<=20?2:3); _vb.pier=L.pier||_vb.pier; _vb.mode='one'; _vb.van='';
+  var el=document.querySelector('.nav-item[data-view="vanbill"]');
+  if(el && typeof nav==='function') nav(el); else renderVanBill();
+  setTimeout(function(){ try{ var k0=pcVbKs(L)[0]||''; var c=document.querySelector('#vanbill-host [data-vbk="pay|'+k0.replace(/"/g,'')+'"]'); if(c) c.scrollIntoView({block:'center'}); }catch(_){} }, 60);
+}
+/* ลบบรรทัดที่ผูกอยู่จากสมุด · ปลดลิงก์ให้ด้วย (ปุ่มจ่ายสดกลับมาที่บิล) */
+function pcVbOnDel(id){ try{ var M=pcVbMap(); if(M[String(id)]){ delete M[String(id)]; pcVbPut(M); pcVbBust(); } }catch(_){} }
+function pcVbCss(){
+  return '#vanbill-host .vbp-btn{height:24px;padding:0 9px;border-radius:7px;border:1px solid #0F6E56;background:#0F6E56;color:#fff;font:700 11px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+    +'#vanbill-host .vbp-btn:hover{background:#0B5A43}'
+    +'#vanbill-host .vbp-chip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0;padding:2px 8px;border-radius:7px;font-size:10.5px;font-weight:800;line-height:1.35;cursor:pointer;white-space:nowrap;vertical-align:middle}'
+    +'#vanbill-host .vbp-chip small{font-weight:600;font-size:9.5px;opacity:.8}'
+    +'#vanbill-host .vbp-chip.ok{background:#E4F3EC;color:#0F6E56;border:1px solid #BFE3D2}'
+    +'#vanbill-host .vbp-chip.warn{background:#FBE3E0;color:#A32D2D;border:1px solid #F3B7B2}'
+    +'#vanbill-host .vbp-x{display:inline-block;margin-left:4px;color:#9AA3B8;font-weight:800;cursor:pointer;vertical-align:middle;font-size:13px}'
+    +'#vanbill-host .vbp-x:hover{color:#A32D2D}'
+    +'#vanbill-host td.vbp{white-space:nowrap}'
+    +'#vanbill-host .vbp-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0;padding:8px 12px;border-radius:10px;background:#FFF7ED;border:1px solid #F5C9A8;font-size:12.5px}'
+    +'#vanbill-host .vbp-sum b{font-family:"DM Mono",monospace}'
+    +'#vanbill-host .vbp-sum .ok{color:#0F6E56} #vanbill-host .vbp-sum .due{color:#A32D2D} #vanbill-host .vbp-sum .mut{color:#6B7489}'
+    +'#vanbill-host .vbp-sum button{margin-left:auto;height:28px;padding:0 12px;border-radius:8px;border:1px solid #0F6E56;background:#0F6E56;color:#fff;font:700 12px inherit;font-family:inherit;cursor:pointer}'
+    +'#vanbill-host .vbx-day .vbp-day{margin-left:10px;font-size:10.5px;font-weight:700;color:#0F6E56;cursor:pointer;text-decoration:underline dotted}'
+    +'.vbp-it{border:1px solid #E6E8EE;border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#FAFBFC}'
+    +'.vbp-it .vbp-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;font-size:12px;color:#6B7489}'
+    +'.vbp-it .vbp-h b{color:#0F1B3D;font-size:13px} .vbp-it .vbp-h a{margin-left:auto;cursor:pointer;color:#9AA3B8;font-size:18px;font-weight:800;line-height:1}'
+    +'.vbp-it .vbp-h i.vbp-n{font-style:normal;font-size:11px;color:#6B7489;font-weight:600;margin-left:6px} .vbp-it .vbp-h i.vbp-n a{color:#0F6E56;cursor:pointer;text-decoration:underline dotted;font-size:11px;margin:0}'
+    +'.vbp-g{display:grid;grid-template-columns:76px 1fr;gap:6px 10px;align-items:center}'
+    +'.vbp-g label{font-size:10.5px;font-weight:800;color:#6B7489;letter-spacing:.04em}'
+    +'.vbp-g .ck-inp{padding:6px 10px;font-size:13px} .vbp-g .ck-inp.mono{font-family:"DM Mono",monospace;font-weight:700}'
+    +'.pc2-led .pc2-lr .tx em.pc-vb{display:inline-block;margin-left:6px;font-style:normal;font-size:10px;font-weight:800;border-radius:5px;padding:0 6px;line-height:1.7;white-space:nowrap;background:#EEF4FD;color:#16265C;border:1px solid #C6D4EC;cursor:pointer;vertical-align:middle}';
+}

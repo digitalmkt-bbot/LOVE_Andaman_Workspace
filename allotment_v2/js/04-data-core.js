@@ -6199,7 +6199,7 @@ function renderCal(){
 // ══════════════════════════════════════
 // DAILY AVAILABILITY
 // ══════════════════════════════════════
-let daDate=new Date(TODAY);
+let daDate=addDays(new Date(TODAY),1);   /* §daRedesign · เปิดมาเป็นพรุ่งนี้ (ข้อความที่ส่งเอเจ้นตอนเย็น = วันถัดไป) */
 function changeDA(n){daDate=addDays(daDate,n);renderDA();}
 
 // §Daily Availability message template · user แก้ข้อความเองได้ (เขียนสไตล์ตัวเอง) · token {date} {availability}
@@ -6249,8 +6249,8 @@ function buildDAGroups(ds){
     const key=`${op.route}__${op.type}`;
     const pier=r.pier;
     if(!groups[pier]) groups[pier]={};
-    if(!groups[pier][key]) groups[pier][key]={r,type:op.type,allot:0,booked:0};
-    groups[pier][key].allot+=b.cap;
+    if(!groups[pier][key]) groups[pier][key]={r,type:op.type,allot:0,booked:0,boats:[]};
+    groups[pier][key].allot+=b.cap; groups[pier][key].boats.push(b.name||bid);   /* §daRedesign · ชื่อเรือที่วิ่งโปรแกรมนั้น */
     groups[pier][key].booked+=(op.booked||0);
   });
   // §fix (2026-07-23): op.booked จาก Boat-Op ไม่ sync กับ booking จริง (แสดง 0 → ว่างเกินจริง · เสี่ยง overbook)
@@ -6286,87 +6286,200 @@ function _daSortRows(rows){
     return String(_daRouteName(a.r)||'').localeCompare(String(_daRouteName(b.r)||''));
   });
 }
-function renderDA(){
-  const ds=fmt(daDate);
-  const groups=buildDAGroups(ds);
-  document.getElementById('da-date-lbl').textContent=daDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-  const typeLabel={early:'Early',normal:'Normal'};
-
-  // left visual — same grouping as text preview
-  let html='';
-  // §ranongDA · ท่าที่เพิ่มมาทีหลัง (ระนอง · โปรแกรมพม่า) ต้องขึ้นในข้อความที่นั่งว่างด้วย
-  //   เดิมวนแค่ 2 ท่า · เที่ยวระนองจึงไม่เคยถูกส่งให้เอเจ้น = ไม่มีใครรู้ว่าขายได้
-  ['tublamu','panwa'].concat(Object.keys(groups.ranong||{}).length?['ranong']:[]).forEach(pier=>{
-    const pm={tublamu:{label:'Tub Lamu Pier',dot:'var(--ocean-mid)'},panwa:{label:'Visit Panwa',dot:'var(--green)'},ranong:{label:'Ranong Pier',dot:'var(--amber)'}}[pier];
-    const rows=_daSortRows(Object.values(groups[pier]||{}));
-    if(!rows.length) return;
-    html+=`<div class="da-pier-lbl"><div style="width:6px;height:6px;border-radius:50%;background:${pm.dot}"></div>${pm.label}</div>`;
-    rows.forEach(({r,type,allot,booked,locked})=>{
-      const free=Math.max(0,allot-booked);
-      const pct=allot>0?Math.round(booked/allot*100):0;
-      // §daFullSame · เกณฑ์เดียวกับข้อความที่ส่งเอเจ้น · เต็ม = ไม่เหลือที่จริง ๆ
-      //   เดิมใช้ 95% การ์ดเลยขึ้นเต็มทั้งที่ยังเหลือที่ขายได้ · ขัดกับข้อความ
-      const full=(free<=0)||pct>=100;
-      const typeChip=`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${type==='early'?'#fff7d6':'var(--ocean-50)'};color:${type==='early'?'#7a5500':'var(--ocean)'};font-weight:500;flex-shrink:0">${typeLabel[type]}</span>`;
-      // §ไฮไลต์ตัวเลขในการ์ด · badge พื้นสีตามระดับ (เขียว=ว่างเยอะ · เหลือง=เหลือน้อย · แดง=เต็ม)
-      const _tier = full ? 'full' : freeClass(pct);
-      const _bg = _tier==='full'?'#FCEBEB':_tier==='warn'?'#FBF0DD':'#E1F5EE';
-      const _fg = _tier==='full'?'#A32D2D':_tier==='warn'?'#854F0B':'#0F6E56';
-      const numBadge = full
-        ? `<span style="background:${_bg};color:${_fg};border-radius:9px;padding:4px 12px;font-size:12.5px;font-weight:700;flex-shrink:0">✕ เต็ม</span>`
-        : `<span style="display:inline-flex;align-items:baseline;gap:4px;background:${_bg};border-radius:9px;padding:3px 11px;flex-shrink:0"><span style="font-size:18px;font-weight:800;color:${_fg};font-variant-numeric:tabular-nums;line-height:1">${free}</span><span style="font-size:10px;font-weight:600;color:${_fg};opacity:.65">/${allot}</span></span>`;
-      // §lkAvail · บอกด้วยว่ามีที่นั่งกันไว้ให้เอเจ้นอยู่กี่ที่ · ที่หายไปจะได้ไม่งง
-      const lockChip = (locked>0) ? `<span title="กันไว้ให้เอเจ้น ${locked} ที่ · ดูใน Seat Locks" style="font-size:10px;font-weight:700;color:#C0392B;background:#FBEAE6;border-radius:7px;padding:2px 7px;flex-shrink:0">&#128274; ${locked}</span>` : '';
-      html+=`<div class="da-route-row">
-        <div class="da-rr-dot" style="background:${r.color}"></div>
-        <span class="da-rr-name" onclick="daEditRouteName('${r.id}')" title="คลิกเพื่อตั้งชื่อย่อในข้อความ · ชื่อเต็ม: ${r.name}" style="cursor:pointer">${_daRouteName(r)} <span style="opacity:.32;font-size:10px">&#9998;</span></span>
-        ${lockChip}
-        ${typeChip}
-        ${numBadge}
-      </div>`;
-    });
-  });
-  document.getElementById('da-body').innerHTML=html||'<p style="color:var(--ink-soft);font-size:12px;padding:16px 0">ไม่มีเที่ยวออก</p>';
-
-  // text preview · สร้าง "บล็อกที่นั่งว่าง" (pier + routes) แล้วแทนลง template ที่ user แก้เองได้ (token {date} {availability})
-  const availLines=[];
-  ['tublamu','panwa'].concat(Object.keys(groups.ranong||{}).length?['ranong']:[]).forEach(pier=>{
-    const pm={tublamu:'Tub Lamu Pier',panwa:'Visit Panwa Pier',ranong:'Ranong Pier'}[pier];
-    const rows=_daSortRows(Object.values(groups[pier]||{}));
-    if(!rows.length) return;
-    availLines.push('📍 '+pm);
-    rows.forEach(({r,type,allot,booked})=>{
-      const tname=_daRouteName(r)+(type==='early'?' · Early':'');
-      const free=Math.max(0,allot-booked);
-      const pct=allot>0?Math.round(booked/allot*100):0;
-      // §daLineFmt · ชื่อเส้นทางบรรทัดหนึ่ง · ที่นั่งอีกบรรทัดย่อหน้าเข้าไป
-      //   §daMarkTwo · เครื่องหมายมีสองแบบพอ: ✅ ยังจองได้ · ❌ เต็ม
-      //   ไม่ใช้ขั้นกลาง ⚠️ แล้ว — ฝั่งเอเจ้นอ่านแล้วเข้าใจผิดว่าจองไม่ได้
-      //   ทั้งที่ยังมีที่ว่าง · ตัวเลขที่นั่งบรรทัดเดียวกันบอกอยู่แล้วว่าเหลือเท่าไหร่
-      const mark=pct>=100?'❌':'✅';
-      availLines.push(`- ${tname}`);
-      availLines.push(pct>=100 ? `   ${mark} FULL` : `   ${mark} ${free} Seats`);
-      availLines.push('');
-    });
-  });
-  const availBlock=availLines.join('\n').replace(/\n+$/,'');   // ตัดบรรทัดว่างท้าย
-  const dateStr=daDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-  const _tmpl=(DA_TEMPLATE && DA_TEMPLATE.trim()) ? DA_TEMPLATE : DA_DEFAULT_TEMPLATE;
-  const _msg=_tmpl.replace(/\{date\}/g,dateStr).replace(/\{availability\}/g,availBlock).replace(/\{seats\}/g,availBlock);
-  document.getElementById('da-preview').textContent=_msg;
-  const _tEl=document.getElementById('da-tmpl-input'); if(_tEl && document.activeElement!==_tEl) _tEl.value=_tmpl;   // โหลดเทมเพลตที่บันทึกไว้ (ไม่ทับตอนกำลังพิมพ์)
-  const btn=document.getElementById('da-copy-btn');
-  btn.className='da-copy-btn';
-  btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy message`;
+/* ══ §daRedesign (2026-10-25) · Daily Availability โฉมใหม่ · owner "ปรับดีไซน์หน้า Daily Availability หน่อย · ให้ขึ้นของวันพรุ่งนี้ก่อน"
+   · เปิดมาเป็น "พรุ่งนี้" (ข้อความที่ส่งเอเจ้นตอนเย็นคือของวันถัดไป) · แถบ 7 วันบนสุด กดเปลี่ยนวันได้ · ยอดว่างรวมต่อวัน
+   · แต่ละโปรแกรม: เวลาออก · เรือที่วิ่ง · แถบจอง/ความจุ · LF · ป้าย ว่าง / เหลือน้อย / เต็ม (เกณฑ์เดิม freeClass: เหลือ ≤ 30% = เหลือน้อย)
+   · ตารางภาพรวม 7 วัน (โปรแกรม × วัน) · Copy ได้ทั้งข้อความ / แยกท่า / วันถัดไป / ตาราง 7 วัน
+   · เทมเพลตยุบไว้ (daSaveTemplate/daResetTemplate เดิม) · ข้อความ LINE รูปแบบเดิมทุกตัวอักษร (§daMarkTwo ✅/❌ ไม่มี ⚠️)
+   · บันทึก "คัดลอกล่าสุด" ไว้ในเครื่อง (localStorage · ไม่ลง blob) พร้อมตัวเลข ณ ตอนนั้น → บอกได้ว่าหลัง copy ตัวเลขขยับไหม
+   · ไม่แตะ DB · ข้อมูลทั้งหมดจาก TRIPS / getAllotment / ROUTES / BOATS ที่มีอยู่ */
+var _daPier='all', _daTplOpen=false;
+var DA_PIER_META={tublamu:{label:'Tub Lamu Pier',short:'Tub Lamu',dot:'#185FA5'},panwa:{label:'Visit Panwa Pier',short:'Panwa',dot:'#0F6E56'},ranong:{label:'Ranong Pier',short:'Ranong',dot:'#B45309'}};
+var DA_DOW_TH=['อา','จ','อ','พ','พฤ','ศ','ส'];
+function daPiersOf(groups){ return ['tublamu','panwa'].concat(Object.keys((groups&&groups.ranong)||{}).length?['ranong']:[]); }
+function daRowsOf(groups,pier){ return _daSortRows(Object.values((groups&&groups[pier])||{})); }
+function daFree(g){ return Math.max(0,(g.allot||0)-(g.booked||0)); }
+function daTier(g){ var free=daFree(g), pct=g.allot>0?Math.round(g.booked/g.allot*100):0; return (free<=0||pct>=100)?'full':freeClass(pct); }
+function daDayTotals(ds){
+  var groups=buildDAGroups(ds), free=0, cap=0, n=0;
+  daPiersOf(groups).forEach(function(p){ daRowsOf(groups,p).forEach(function(g){ free+=daFree(g); cap+=(g.allot||0); n++; }); });
+  return {free:free,cap:cap,n:n,groups:groups};
 }
-
-function copyDA(){
-  navigator.clipboard.writeText(document.getElementById('da-preview').textContent).then(()=>{
-    const btn=document.getElementById('da-copy-btn');
-    btn.className='da-copy-btn done';
-    btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
-    setTimeout(()=>renderDA(),2500);
+function daSetDate(ds){ daDate=new Date(ds+'T12:00:00'); renderDA(); }
+function daSetPier(p){ _daPier=p; renderDA(); }
+function daDateLbl(d){ return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
+/* ข้อความส่งเอเจ้น · รูปแบบเดิม (§daLineFmt / §daMarkTwo) · pierOnly = ตัดเฉพาะท่าเดียว */
+function daAvailBlock(groups,pierOnly){
+  var lines=[];
+  daPiersOf(groups).forEach(function(pier){
+    if(pierOnly && pier!==pierOnly) return;
+    var rows=daRowsOf(groups,pier); if(!rows.length) return;
+    lines.push('📍 '+DA_PIER_META[pier].label);
+    rows.forEach(function(g){
+      var tname=_daRouteName(g.r)+(g.type==='early'?' · Early':'');
+      var free=daFree(g), pct=g.allot>0?Math.round(g.booked/g.allot*100):0;
+      lines.push('- '+tname);
+      lines.push(pct>=100 ? '   ❌ FULL' : '   ✅ '+free+' Seats');
+      lines.push('');
+    });
   });
+  return lines.join('\n').replace(/\n+$/,'');
+}
+function daMsgFor(d,pierOnly){
+  var ds=fmt(d), groups=buildDAGroups(ds);
+  var tmpl=(DA_TEMPLATE && DA_TEMPLATE.trim()) ? DA_TEMPLATE : DA_DEFAULT_TEMPLATE;
+  var block=daAvailBlock(groups,pierOnly);
+  return tmpl.replace(/\{date\}/g,daDateLbl(d)).replace(/\{availability\}/g,block).replace(/\{seats\}/g,block);
+}
+/* ตาราง 7 วันเป็นข้อความ (วางใน LINE/Excel ได้) */
+function daWeekText(start){
+  var days=[], i; for(i=0;i<7;i++) days.push(addDays(start,i));
+  var T=days.map(function(d){ return {d:d, ds:fmt(d), groups:buildDAGroups(fmt(d))}; });
+  var keys=[], seen={};
+  T.forEach(function(t){ daPiersOf(t.groups).forEach(function(p){ daRowsOf(t.groups,p).forEach(function(g){ var k=g.r.id+'__'+g.type; if(!seen[k]){ seen[k]=g; keys.push(k); } }); }); });
+  var out=['🏝️ LOVE ANDAMAN — Seats Available · '+days[0].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+days[6].toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),''];
+  keys.forEach(function(k){
+    var g0=seen[k]; out.push('• '+_daRouteName(g0.r)+(g0.type==='early'?' · Early':''));
+    out.push('   '+T.map(function(t){ var p=g0.r.pier, g=(t.groups[p]||{})[k]; var lbl=t.d.toLocaleDateString('en-GB',{weekday:'short'}).slice(0,2)+' '+t.d.getDate(); if(!g) return lbl+': —'; var f=daFree(g); return lbl+': '+(f<=0?'Full':f); }).join(' | '));
+  });
+  return out.join('\n');
+}
+/* คัดลอก + บันทึกว่าใคร copy อะไรตอนไหน (เครื่องนี้) */
+function daCopyLogGet(){ try{ return JSON.parse(localStorage.getItem('la_da_copylog')||'null'); }catch(e){ return null; } }
+function daCopyLogPut(ds,groups,what){
+  var free={}; daPiersOf(groups).forEach(function(p){ daRowsOf(groups,p).forEach(function(g){ free[g.r.id+'__'+g.type]={n:_daRouteName(g.r),f:daFree(g)}; }); });
+  var L=daCopyLogGet()||{n:0,day:''}; var today=fmt(new Date()); if(L.day!==today){ L.n=0; L.day=today; }
+  L.n++; L.at=new Date().toISOString(); L.by=(typeof ckMe==='function')?ckMe():'—'; L.ds=ds; L.what=what; L.free=free;
+  try{ localStorage.setItem('la_da_copylog', JSON.stringify(L)); }catch(e){}
+}
+function daCopy(kind,arg){
+  var txt='', what='', d=daDate, ds=fmt(daDate), groups=null;
+  if(kind==='all'){ txt=daMsgFor(d); what='ทั้งหมด'; }
+  else if(kind==='pier'){ txt=daMsgFor(d,arg); what=DA_PIER_META[arg]?DA_PIER_META[arg].short:arg; }
+  else if(kind==='next'){ d=addDays(daDate,1); ds=fmt(d); txt=daMsgFor(d); what='วันถัดไป'; }
+  else if(kind==='week'){ txt=daWeekText(daDate); what='ตาราง 7 วัน'; }
+  if(!txt) return;
+  var btn=(typeof event!=='undefined' && event && event.currentTarget) ? event.currentTarget : null;
+  var done=function(){ if(kind!=='week'){ groups=buildDAGroups(ds); daCopyLogPut(ds,groups,what); }
+    if(btn){ var old=btn.innerHTML; btn.classList.add('done'); btn.innerHTML='✓ Copied'; setTimeout(function(){ renderDA(); },1800); }
+    else renderDA(); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done, function(){ daCopyFallback(txt); done(); }); }
+  else { daCopyFallback(txt); done(); }
+}
+function daCopyFallback(txt){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }catch(e){} }
+function copyDA(){ daCopy('all'); }
+function daCss(){
+  return '<style id="da2-css">'
+  +'.da2-wrap{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:14px;align-items:start}'
+  +'.da2-card{background:var(--white,#fff);border:1px solid var(--border,#e6e8ee);border-radius:14px;overflow:hidden;box-shadow:var(--shadow,none)}'
+  +'.da2-hd{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border,#eef1f6);flex-wrap:wrap}'
+  +'.da2-hd b{font-size:14px}.da2-hd small{color:var(--ink-soft,#6b7489);font-size:11px}'
+  +'.da2-bt{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border,#d5dae5);background:#fff;color:var(--ink,#1b2a4a);cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +'.da2-bt:hover{background:#f6f7fa}.da2-bt.p{background:#1B2A4A;color:#fff;border-color:#1B2A4A}.da2-bt.g{background:#0F6E56;color:#fff;border-color:#0F6E56}.da2-bt.done{background:#E4F3EC;color:#0F6E56;border-color:#BFE3D0}'
+  +'.da2-bt.sm{height:24px;font-size:11px;padding:0 8px}.da2-bt.on{background:#1B2A4A;color:#fff;border-color:#1B2A4A}'
+  +'.da2-tabs{display:inline-flex;background:#F1F3F7;border-radius:9px;padding:3px;gap:2px}.da2-tabs span{padding:3px 10px;border-radius:7px;font-size:12px;font-weight:600;color:#5F5E5A;cursor:pointer}.da2-tabs span.on{background:#fff;color:#1B2A4A;box-shadow:0 1px 2px rgba(0,0,0,.08)}'
+  +'.da2-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:10px 12px;background:#FAFBFC;border-bottom:1px solid var(--border,#eef1f6)}'
+  +'.da2-day{border:1px solid #E6E8EE;border-radius:10px;padding:6px 6px;background:#fff;text-align:center;cursor:pointer}'
+  +'.da2-day:hover{border-color:#B9C3D6}.da2-day.on{border-color:#1B2A4A;box-shadow:0 0 0 2px rgba(27,42,74,.14)}.da2-day.we{background:#FFF9EF}'
+  +'.da2-day small{display:block;font-size:10px;color:#6B7489;font-weight:700;letter-spacing:.04em}.da2-day b{display:block;font-family:"DM Mono",monospace;font-size:16px;margin-top:2px;font-variant-numeric:tabular-nums}.da2-day i{display:block;font-style:normal;font-size:10px;color:#6B7489}'
+  +'.da2-day.low b{color:#B45309}.da2-day.full b{color:#A32D2D}'
+  +'.da2-pier{padding:10px 14px 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.da2-pier b{font-size:11px;letter-spacing:.1em;color:#6B7489;text-transform:uppercase}.da2-pier i{width:8px;height:8px;border-radius:4px;display:inline-block}'
+  +'.da2-pier .sum{margin-left:auto;font-size:11.5px;color:#6B7489}.da2-pier .sum b{letter-spacing:0;color:#1B2A4A;font-family:"DM Mono",monospace;font-size:12px;text-transform:none}'
+  +'.da2-row{display:grid;grid-template-columns:10px minmax(0,1fr) 92px minmax(120px,160px) 86px 28px;gap:10px;align-items:center;padding:8px 14px;border-top:1px solid #F0F2F6;font-size:13px}'
+  +'.da2-row .dot{width:10px;height:10px;border-radius:3px}.da2-row .nm b{font-weight:700;cursor:pointer}.da2-row .nm b:hover{text-decoration:underline dotted}.da2-row .nm small{display:block;font-size:11px;color:#6B7489;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +'.da2-st{font-size:10.5px;font-weight:800;border-radius:6px;padding:3px 6px;text-align:center}.da2-st.ok{background:#E4F3EC;color:#0F6E56}.da2-st.warn{background:#FAEEDA;color:#854F0B}.da2-st.full{background:#FBE3E0;color:#A32D2D}'
+  +'.da2-bar{height:8px;border-radius:4px;background:#EEF1F6;position:relative;overflow:hidden}.da2-bar i{position:absolute;left:0;top:0;bottom:0;background:#8FB4E3}.da2-bar i.lk{background:#F3B7B2}.da2-bar i.ov{background:#F3B7B2}'
+  +'.da2-lf{font-size:10.5px;color:#6B7489;margin-top:3px;white-space:nowrap}'
+  +'.da2-n{text-align:right;white-space:nowrap}.da2-n b{font-family:"DM Mono",monospace;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}.da2-n small{font-size:11px;color:#6B7489}.da2-n.warn b{color:#B45309}.da2-n.full b{color:#A32D2D}'
+  +'.da2-ed{width:26px;height:26px;border-radius:7px;border:1px solid #D5DAE5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6B7489;background:#fff;cursor:pointer}'
+  +'.da2-foot{display:flex;gap:8px;padding:9px 14px;border-top:1px solid var(--border,#eef1f6);background:#FAFBFC;align-items:center;font-size:11px;color:#6B7489;flex-wrap:wrap}'
+  +'.da2-chat{background:#8CABC9;padding:14px;min-height:300px}.da2-bub{background:#fff;border-radius:4px 16px 16px 16px;padding:11px 14px;max-width:320px;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 1px rgba(0,0,0,.08);cursor:text;user-select:all}'
+  +'.da2-log{font-size:11.5px;color:#6B7489;padding:8px 14px;border-top:1px solid var(--border,#eef1f6);line-height:1.6}.da2-log b{color:#1B2A4A}'
+  +'.da2-wk{width:100%;border-collapse:collapse;font-size:12px}.da2-wk th{font-size:10px;font-weight:800;letter-spacing:.06em;color:#6B7489;padding:6px 6px;text-align:center;border-bottom:1px solid #E6E8EE;cursor:pointer}.da2-wk th:first-child{text-align:left;cursor:default}.da2-wk th.on{color:#1B2A4A;text-decoration:underline}'
+  +'.da2-wk td{padding:4px 5px;border-bottom:1px solid #F0F2F6;text-align:center}.da2-wk td:first-child{text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}'
+  +'.da2-c{display:inline-block;min-width:40px;border-radius:7px;padding:3px 6px;font-family:"DM Mono",monospace;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums}.da2-c.ok{background:#E4F3EC;color:#0F6E56}.da2-c.warn{background:#FAEEDA;color:#854F0B}.da2-c.full{background:#FBE3E0;color:#A32D2D}.da2-c.x{background:#F1F3F7;color:#9AA3B8;cursor:default}'
+  +'.da2-tpl summary{cursor:pointer;font-size:11px;font-weight:800;color:#6B7489;letter-spacing:.06em;padding:9px 14px;list-style:none}.da2-tpl summary::-webkit-details-marker{display:none}.da2-tpl[open] summary{border-bottom:1px solid var(--border,#eef1f6)}'
+  +'@media(max-width:1100px){.da2-wrap{grid-template-columns:1fr}}'
+  +'@media(max-width:700px){.da2-days{grid-template-columns:repeat(4,1fr)}.da2-row{grid-template-columns:8px minmax(0,1fr) 80px 26px}.da2-row .bar-col{display:none}.da2-row .da2-st{display:none}.da2-pier .sum{display:none}}'
+  +'</style>';
+}
+function renderDA(){
+  var host=document.getElementById('da-host'); if(!host) return;
+  var ds=fmt(daDate), todayD=new Date(TODAY), today=fmt(todayD), tomorrow=fmt(addDays(todayD,1));
+  var cur=daDayTotals(ds), groups=cur.groups;
+  /* แถบ 7 วัน · เริ่มที่วันนี้ถ้าวันที่เลือกอยู่ในสัปดาห์นี้ · ไม่งั้นเริ่มก่อนวันที่เลือก 1 วัน */
+  var start=todayD; if(ds<today || ds>fmt(addDays(todayD,6))) start=addDays(daDate,-1);
+  var days=[], i; for(i=0;i<7;i++) days.push(addDays(start,i));
+  var totals=days.map(function(d){ var k=fmt(d); return k===ds?cur:daDayTotals(k); });
+  var dayHtml='<div class="da2-days">'+days.map(function(d,ix){
+    var k=fmt(d), t=totals[ix], pct=t.cap>0?Math.round((t.cap-t.free)/t.cap*100):0;
+    var cls=(k===ds?' on':'')+((d.getDay()===0||d.getDay()===6)?' we':'')+(t.n===0?'':(t.free<=0?' full':(pct>=70?' low':'')));
+    var tag=k===today?'วันนี้':(k===tomorrow?'พรุ่งนี้':(t.n?'ว่าง':''));
+    return '<div class="da2-day'+cls+'" onclick="daSetDate(\''+k+'\')"><small>'+DA_DOW_TH[d.getDay()]+' '+d.getDate()+'</small><b>'+(t.n?(t.free<=0?'เต็ม':t.free):'—')+'</b><i>'+tag+'</i></div>';
+  }).join('')+'</div>';
+  /* รายการตามท่า */
+  var piers=daPiersOf(groups), list='', shown=0;
+  piers.forEach(function(pier){
+    if(_daPier!=='all' && _daPier!==pier) return;
+    var rows=daRowsOf(groups,pier); if(!rows.length) return;
+    var pm=DA_PIER_META[pier], pf=0, pc=0, boats={};
+    rows.forEach(function(g){ pf+=daFree(g); pc+=(g.allot||0); (g.boats||[]).forEach(function(b){ boats[b]=1; }); });
+    list+='<div class="da2-pier"><i style="background:'+pm.dot+'"></i><b>'+pm.label+'</b><span class="sum">ว่าง <b>'+pf+'</b> / '+pc+' · '+rows.length+' โปรแกรม · '+Object.keys(boats).length+' ลำ</span><button class="da2-bt sm" onclick="daCopy(\'pier\',\''+pier+'\')">Copy ท่านี้</button></div>';
+    rows.forEach(function(g){
+      var r=g.r, free=daFree(g), pct=g.allot>0?Math.round(g.booked/g.allot*100):0, tier=daTier(g), lk=g.locked||0;
+      var sold=Math.max(0,(g.booked||0)-lk), soldPct=g.allot>0?Math.min(100,Math.round(sold/g.allot*100)):0, lkPct=g.allot>0?Math.min(100-soldPct,Math.round(lk/g.allot*100)):0;
+      var stTxt=tier==='full'?'เต็ม':(tier==='warn'?'เหลือน้อย':'ว่าง');
+      var time=String((r.times||[])[0]||'').trim();
+      var sub=[time, (g.boats||[]).join(' + ')+((g.boats||[]).length?' · '+(g.boats||[]).length+' ลำ':'')].filter(Boolean).join(' · ');
+      var lockChip=lk>0?' <span title="กันไว้ให้เอเจ้น '+lk+' ที่ · ดูใน Seat Locks" style="font-size:10px;font-weight:700;color:#C0392B;background:#FBEAE6;border-radius:6px;padding:1px 6px">&#128274; '+lk+'</span>':'';
+      var typeChip=g.type==='early'?' <span style="font-size:9.5px;padding:1px 5px;border-radius:4px;background:#fff7d6;color:#7a5500;font-weight:700;vertical-align:middle">Early</span>':'';
+      list+='<div class="da2-row"><span class="dot" style="background:'+(r.color||'#999')+'"></span>'
+        +'<span class="nm"><b onclick="daEditRouteName(\''+r.id+'\')" title="คลิกเพื่อตั้งชื่อย่อในข้อความ · ชื่อเต็ม: '+String(r.name).replace(/"/g,'&quot;')+'">'+_daRouteName(r)+'</b>'+typeChip+lockChip+'<small>'+(sub||'&nbsp;')+'</small></span>'
+        +'<span class="da2-st '+tier+'">'+stTxt+'</span>'
+        +'<span class="bar-col"><div class="da2-bar"><i style="width:'+soldPct+'%"></i>'+(lkPct?'<i class="lk" style="left:'+soldPct+'%;width:'+lkPct+'%"></i>':'')+'</div><div class="da2-lf">จอง '+sold+(lk?' + 🔒'+lk:'')+' / '+g.allot+' · LF '+pct+'%</div></span>'
+        +'<span class="da2-n '+tier+'">'+(tier==='full'?'<b>✕</b> <small>เต็ม</small>':'<b>'+free+'</b> <small>/'+g.allot+'</small>')+'</span>'
+        +'<span class="da2-ed" onclick="daEditRouteName(\''+r.id+'\')" title="ตั้งชื่อย่อในข้อความ">&#9998;</span></div>';
+      shown++;
+    });
+  });
+  if(!shown) list='<div style="padding:28px 14px;text-align:center;color:#8a8a82;font-size:12.5px">ไม่มีเที่ยวออก'+(_daPier!=='all'?' ที่ท่านี้':'')+' · '+daDateLbl(daDate)+'</div>';
+  var pierTabs='<span class="da2-tabs"><span class="'+(_daPier==='all'?'on':'')+'" onclick="daSetPier(\'all\')">ทุกท่า</span>'+piers.map(function(p){ return '<span class="'+(_daPier===p?'on':'')+'" onclick="daSetPier(\''+p+'\')">'+DA_PIER_META[p].short+'</span>'; }).join('')+'</span>';
+  var left='<div class="da2-card"><div class="da2-hd"><button class="da2-bt sm" onclick="changeDA(-1)">‹</button><b>'+daDateLbl(daDate)+'</b><button class="da2-bt sm" onclick="changeDA(1)">›</button>'
+    +'<button class="da2-bt sm'+(ds===tomorrow?' on':'')+'" onclick="daSetDate(\''+tomorrow+'\')">พรุ่งนี้</button><button class="da2-bt sm'+(ds===today?' on':'')+'" onclick="daSetDate(\''+today+'\')">วันนี้</button>'
+    +'<small>· ตัวเลข = ที่นั่งว่างขายได้ · อัปเดตจากใบจองอัตโนมัติ</small><span style="margin-left:auto">'+pierTabs+'</span></div>'
+    +dayHtml+list
+    +'<div class="da2-foot">ว่าง = ความจุเรือที่วางวันนั้น − จองแล้ว − ที่กันไว้ให้เอเจ้น (🔒) · เหลือง = เหลือ ≤ 30% · แดง = เต็ม · ✎ ตั้งชื่อย่อที่ใช้ในข้อความ · โปรแกรมที่ไม่ออก/ไม่มีเรือวันนั้นไม่แสดง</div></div>';
+  /* ตาราง 7 วัน */
+  var keys=[], seen={};
+  days.forEach(function(d,ix){ var G=totals[ix].groups; daPiersOf(G).forEach(function(p){ if(_daPier!=='all'&&_daPier!==p) return; daRowsOf(G,p).forEach(function(g){ var k=g.r.id+'__'+g.type; if(!seen[k]){ seen[k]=g; keys.push(k); } }); }); });
+  keys.sort(function(a,b){ var A=seen[a], B=seen[b]; if(A.r.pier!==B.r.pier) return A.r.pier==='tublamu'?-1:(B.r.pier==='tublamu'?1:0); return _daSortRows([A,B])[0]===A?-1:1; });
+  var wk='<table class="da2-wk"><tr><th>โปรแกรม</th>'+days.map(function(d){ var k=fmt(d); return '<th class="'+(k===ds?'on':'')+'" onclick="daSetDate(\''+k+'\')">'+DA_DOW_TH[d.getDay()]+' '+d.getDate()+'</th>'; }).join('')+'<th>รวม</th></tr>';
+  keys.forEach(function(k){ var g0=seen[k], tot=0, cells='';
+    days.forEach(function(d,ix){ var G=totals[ix].groups, g=(G[g0.r.pier]||{})[k], kk=fmt(d); if(!g){ cells+='<td><span class="da2-c x">—</span></td>'; return; } var f=daFree(g), t=daTier(g); tot+=f; cells+='<td><span class="da2-c '+t+'" onclick="daSetDate(\''+kk+'\')">'+(t==='full'?'Full':f)+'</span></td>'; });
+    wk+='<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+(g0.r.color||'#999')+';margin-right:6px;vertical-align:middle"></span>'+_daRouteName(g0.r)+(g0.type==='early'?' <span style="font-size:9.5px;color:#7a5500">Early</span>':'')+'</td>'+cells+'<td><span class="da2-c" style="background:#F1F3F7;cursor:default">'+tot+'</span></td></tr>'; });
+  wk+='</table>';
+  var week='<div class="da2-card" style="margin-top:14px"><div class="da2-hd"><b>ภาพรวม 7 วัน</b><small>· ที่นั่งว่างรายโปรแกรม · กดช่องเพื่อไปวันนั้น</small><button class="da2-bt sm" style="margin-left:auto" onclick="daCopy(\'week\')">📋 Copy ตาราง 7 วัน</button></div><div style="padding:4px 10px 8px;overflow-x:auto">'+(keys.length?wk:'<div style="padding:20px;text-align:center;color:#8a8a82;font-size:12px">ไม่มีเที่ยวออกใน 7 วันนี้</div>')+'</div></div>';
+  /* ฝั่งข้อความ */
+  var msg=daMsgFor(daDate);
+  var L=daCopyLogGet(), logHtml='ยังไม่เคยคัดลอกจากเครื่องนี้';
+  if(L && L.at){ var at=new Date(L.at), hm=('0'+at.getHours()).slice(-2)+':'+('0'+at.getMinutes()).slice(-2), dd=fmt(at)===today?'วันนี้':at.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    var diffs=[]; if(L.ds===ds && L.free){ daPiersOf(groups).forEach(function(p){ daRowsOf(groups,p).forEach(function(g){ var k=g.r.id+'__'+g.type, o=L.free[k]; if(o && o.f!==daFree(g)) diffs.push(o.n+' '+o.f+'→'+daFree(g)); }); }); }
+    logHtml='คัดลอกล่าสุด <b>'+dd+' '+hm+'</b> โดย <b>'+L.by+'</b> ('+L.what+' · '+(L.ds===ds?'วันนี้ที่ดูอยู่':L.ds)+')'+(L.day===today?' · วันนี้ copy แล้ว '+L.n+' ครั้ง':'')
+      +(L.ds===ds ? (diffs.length?'<br>ตัวเลขขยับหลัง copy: <b style="color:#B45309">'+diffs.join(' · ')+'</b> — ส่งใหม่ให้เอเจ้น':'<br>ตัวเลขยังเท่าตอน copy') : ''); }
+    var right='<div class="da2-card"><div class="da2-hd"><b>ข้อความส่ง Agent</b><small>· LINE · '+daDateLbl(daDate)+'</small><span style="margin-left:auto;font-size:10px;color:#6B7489">click to select all</span></div>'
+    +'<div class="da2-chat"><div style="text-align:center;margin-bottom:12px"><span style="background:rgba(0,0,0,.22);color:#fff;font-size:11px;padding:2px 12px;border-radius:11px">'+(ds===tomorrow?'สำหรับพรุ่งนี้':(ds===today?'สำหรับวันนี้':'สำหรับ '+ds))+'</span></div>'
+    +'<div style="display:flex;gap:7px;align-items:flex-start"><div style="width:33px;height:33px;border-radius:50%;background:#06C755;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex:none">LA</div><div style="min-width:0"><div style="font-size:11px;color:#3d4b57;margin:0 0 3px 3px">LOVE Andaman</div><div class="da2-bub" id="da-preview" onclick="this.focus();document.execCommand(\'selectAll\')"></div></div></div></div>'
+    +'<div style="display:flex;gap:7px;padding:10px 14px;border-top:1px solid var(--border,#eef1f6);flex-wrap:wrap"><button class="da2-bt g" id="da-copy-btn" onclick="daCopy(\'all\')">📋 Copy ทั้งหมด</button>'
+    +piers.map(function(p){ return '<button class="da2-bt" onclick="daCopy(\'pier\',\''+p+'\')">Copy '+DA_PIER_META[p].short+'</button>'; }).join('')
+    +'<button class="da2-bt" onclick="daCopy(\'next\')" title="ข้อความของ '+daDateLbl(addDays(daDate,1))+'">Copy วันถัดไป ›</button></div>'
+    +'<div class="da2-log">'+logHtml+'</div>'
+    +'<details class="da2-tpl" style="border-top:1px solid var(--border,#eef1f6)" ontoggle="_daTplOpen=this.open"'+(_daTplOpen?' open':'')+'><summary>✎ เทมเพลตข้อความ (กดเพื่อแก้) · {date} {availability}</summary><div style="padding:10px 14px">'
+    +'<textarea id="da-tmpl-input" placeholder="พิมพ์ข้อความสไตล์ตัวเอง — ใส่ {date} และ {availability} ตรงที่อยากให้ระบบเติมให้" style="width:100%;box-sizing:border-box;min-height:110px;border:1px solid var(--border,#e0ded8);border-radius:9px;padding:8px 10px;font-size:12px;font-family:\'DM Mono\',monospace;resize:vertical;line-height:1.6"></textarea>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="font-size:10.5px;color:#8a8880;flex:1"><b>{date}</b> = วันที่ · <b>{availability}</b> = รายการที่นั่งว่าง (ระบบเติมให้ · โปรแกรมเต็มขึ้น ❌ FULL)</span><button class="da2-bt sm" onclick="daResetTemplate()">&#8634; ค่าเริ่มต้น</button><button class="da2-bt sm p" id="da-tmpl-save" onclick="daSaveTemplate()">&#128190; บันทึก</button></div></div></details></div>';
+  if(!document.getElementById('da2-css')){ var _st=document.createElement('div'); _st.innerHTML=daCss(); document.head.appendChild(_st.firstChild); }   /* ใส่ใน head ครั้งเดียว · ไม่หายตอนวาดใหม่ */
+  host.innerHTML='<div class="da2-wrap"><div>'+left+week+'</div><div>'+right+'</div></div>';
+  document.getElementById('da-preview').textContent=msg;
+  var tEl=document.getElementById('da-tmpl-input'); if(tEl) tEl.value=(DA_TEMPLATE && DA_TEMPLATE.trim()) ? DA_TEMPLATE : DA_DEFAULT_TEMPLATE;
 }
 
 // ══════════════════════════════════════
@@ -11232,6 +11345,18 @@ function flBoatBookingsFor(boatId, dateStr){
   if(!boatId || !dateStr || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return out;
   SB_BOOKINGS.forEach(bk => {
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+    /* §flSplitPax (2026-10-24) · owner (ใบบันทึกประจำวันเรือ · Visit Panwa) "อันนี้บัคมาจากการแยกลงเรือไหม"
+       ใบที่แยกลงหลายลำ (§boatSplit) เคยนับทั้งใบให้ลำหลัก (ops.boatId = ก้อนแรก) · ลำที่สองได้ 0 → ขึ้น "ไม่ออก"
+       เคสจริง: Hermetis 121 คน (เรือ 65 ที่) · Achilles ไม่ออก · ตอนนี้แต่ละลำนับเฉพาะก้อนที่อยู่บนลำนั้น (bkBoatPaxOnBoat) */
+    const _sp = (typeof bkBoatSplits === 'function') ? bkBoatSplits(bk, dateStr) : null;
+    if(_sp){
+      const share = (typeof bkBoatPaxOnBoat === 'function') ? bkBoatPaxOnBoat(bk, dateStr, boatId) : 0;
+      if(!share) return;
+      const t0 = (bk.trips||[]).find(t => t && t.date === dateStr);
+      out.pax += share;
+      if(t0 && t0.routeId) out.routes[t0.routeId] = (out.routes[t0.routeId]||0) + share;
+      return;
+    }
     if(bkOpsRead(bk, dateStr).boatId !== boatId) return;                            // per-day boat
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {

@@ -467,7 +467,11 @@ function bookingV2RenderTab2(){
       }); }catch(_){}
     }
     return order.map(bid=>{ const a=acc[bid], bo=a.boat||{};
-      const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
+      /* §btCapOvr (2026-10-22) · owner "Cap ที่ปลดเพิ่ม เป็นบัคไหม ของ tadeo" (23 ต.ค. · Tadeo 31/38 แต่ Capacity รวม 74)
+         ยอด Capacity ของทริปมาจาก getAllotment ซึ่งใช้ cap รายวัน (BOAT_CAP_OVR) · แถวเรือเคยอ่าน boat.cap ตรง ๆ
+         ปลด cap ของวันนั้นเพิ่มแล้ว แถวเรือยังโชว์ cap ปกติ ตัวเลขสองที่จึงไม่ตรงกัน · ใช้ cap ของวันนั้นเหมือนกัน */
+      const _cBase=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
+      const cap=(typeof boatCapFor==='function' && bid)?((+boatCapFor(bid,date))||_cBase):_cBase;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
       const _sb=_btSrvBoat(rid,bid);
       if(_sb) return {id:bid,name:bo.name||_sb.boat_name||bid,col:c,pax:+_sb.pax||0,cap:(+_sb.capacity>0?+_sb.capacity:cap),over:!!_sb.over,overBy:+_sb.over_by||0,ovn:a.ovn||null,bd:_sb.pax_by_type||a.bd||null};   /* §opsByTripBd MARKED EDIT · A/C/I/F of a boat is the server's (routes[].boats[].pax_by_type) */
@@ -1525,6 +1529,7 @@ function bookingV2RenderTab2(){
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:${c}"><span style="width:19px;height:19px;border-radius:50%;background:${c};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">${esc(bookingV2BoatInitials(bn))}</span>&#128676; ${esc(bn)}</span>
             <span style="font-size:11px;color:#6a6a64">${mem.length} booking${xZone?(' · '+bpax+' โซนนี้'):''} · <b style="color:${over?'#A32D2D':c}">${dayPax}${cap?('/'+cap):''} pax</b>${over?(' <span style="color:#A32D2D;font-weight:700">เกิน '+(dayPax-cap)+'</span>'):''}</span>
+            ${mem.length?`<button type="button" class="t2-bclr" onclick="event.stopPropagation();bookingV2BoatClearTrip('${esc(bid)}','${esc(date)}','${esc(rid)}')" title="${esc(laT('ถอดเรือลำนี้ออกจากทุก booking ของรอบนี้ (ทุกโซน) · กลับไปเป็นยังไม่จัดเรือ'))}">&#10005; ${laT('ถอดทั้งลำ')}</button>`:''}
           </div></td></tr>`;
       };
       { let _pg=null, _pb=null; _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups) body+=_unassignedHdr(); _pg=o.g; } body+=o.html; }); }
@@ -2345,6 +2350,7 @@ function bookingV2RenderTab2(){
     .t2-boatpin{position:sticky;top:var(--t2-vangroup-top,52px);z-index:46;box-shadow:0 4px 10px rgba(0,0,0,.10);border-radius:14px 14px 0 0;overflow:hidden}
     .t2-boatpin .t2-boatstrip{border-top:none}
     .t2-boatstrip-lbl{font-size:10px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;flex:none}
+    .t2-bclr{margin-left:auto;font-family:inherit;font-size:10.5px;font-weight:700;color:#A32D2D;background:#fff;border:1px solid #F0C9C3;border-radius:6px;padding:2px 9px;cursor:pointer;line-height:1.5}.t2-bclr:hover{background:#FDEEEC;border-color:#E89A92}   /* §btBoatClear */
     .t2-addonbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 14px 5px 18px;background:#FBFAFF;border-top:1px solid var(--border-2)}
     .t2-addonbar-lbl{font-size:10px;font-weight:700;color:#7A5AB0;text-transform:uppercase;letter-spacing:.05em;flex:none}
     .t2-aochip{font-size:11px;font-weight:600;border-radius:7px;padding:3px 9px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}

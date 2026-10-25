@@ -15,6 +15,11 @@ function bookingV2ExtraSave(bkId){
   if(_bkExtraEditId){
     // update existing record (no duplicate)
     const e=SB_EXTRAS.find(x=>x.id===_bkExtraEditId);
+    /* §exDupPier · เป็น COT และหน้าท่าเก็บเงินไปแล้ว · ห้ามเปลี่ยนเป็นโอน/บัตรซ้ำ ไม่งั้นนับสองรอบ */
+    if(e && e.method==='cot' && e.settle!=='done' && _pm!=='cot' && bkxExCovered(e)){
+      alert('เงินของรายการนี้บันทึกไว้ที่หน้าท่าแล้ว (ปุ่มเก็บเงินในหน้า Pier check-in)\n\nไม่ต้องเปลี่ยนวิธีรับเงินซ้ำ · ระบบนับจากแถวเงินหน้าท่าอยู่แล้ว\nถ้าวิธี/ค่าธรรมเนียมไม่ตรง ให้แก้ที่รายการเงินหน้าท่าแทน');
+      return;
+    }
     if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller;
            e.method=_pm; e.feePct=(_pm==='card'?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);
            e.slips=(_pm==='cot'?[]:_slips);

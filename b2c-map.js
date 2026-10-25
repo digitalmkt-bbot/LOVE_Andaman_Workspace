@@ -416,20 +416,34 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     return n === _dnorm(pickupArea) || n === _dnorm(pickupLoc)
         || (!!pickupHotel && n === _dnorm(pickupHotel));
   };
-  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw && !_samePick(dropoffRaw);
-  const dropoffLoc = dropoffSep ? dropoffRaw : '';
-  // B2C has no dropoffArea field at all — only the one free-text dropoffLocation ("KIRI Restaurant,
-  // Naithon Beach"), unlike pickup where pickupLocation is already a clean area name. findArea's
-  // substring pass handles it (L.includes(N) → 'naithon'), and it returns null unless the hit is
-  // unique, so an ambiguous string leaves the area unassigned rather than guessing. Try the pickup
-  // zone first, then zone-free: a drop-off can legitimately be in another zone, and B2C sends none.
+  /* §b2cDropArea (2026-10-23) · B2C now sends the return leg as a dropdown area, like pickup:
+       dropoffZone      'PK' | 'KL' | 'RN' | 'NoTransfer'   (written only when set)
+       dropoffLocation  the AREA name from that zone's list — only when dropoffSame:false.
+                        When dropoffSame:true it is still the copied "Hotel · Area" text: ignore it,
+                        the return mirrors pickup.
+       dropoffHotel     the hotel / place, free text
+     Rows written before that carry no dropoffZone/dropoffHotel and dropoffLocation is free text, so
+     they keep the old path. B2C never sends an area id for either leg — the area is matched by name,
+     exactly like pickup. */
+  const dropZone  = String(det.dropoffZone || '').trim();
+  const dropHotel = String(det.dropoffHotel || '').trim();
+  const newDrop   = !!dropZone || !!dropHotel;
+  const dropoffSep = newDrop
+    ? (det.dropoffSame === false && !noTransfer && (!!dropoffRaw || !!dropHotel)
+        && !(_dnorm(dropoffRaw) === _dnorm(pickupArea) && _dnorm(dropHotel) === _dnorm(pickupHotel)))
+    : (det.dropoffSame === false && !noTransfer && !!dropoffRaw && !_samePick(dropoffRaw));
+  const dropoffLoc = !dropoffSep ? '' : (newDrop ? dropHotel : dropoffRaw);
+  // Legacy: findArea's substring pass over free text, unique hits only. New: an area name, so the
+  // exact pass inside the drop-off's own zone is the real match; zone-free is the fallback.
   const dropAreaHit = (dropoffSep && typeof findArea === 'function')
-    ? (findArea(dropoffLoc, pickupZone) || findArea(dropoffLoc, '')) : null;
+    ? (newDrop
+        ? (findArea(dropoffRaw, dropZone) || findArea(dropoffRaw, ''))
+        : (findArea(dropoffLoc, pickupZone) || findArea(dropoffLoc, '')))
+    : null;
   const dropAreaId = dropAreaHit ? dropAreaHit.id : null;
-  // Unlike pickupArea this does NOT fall back to the raw text: dropoffLoc is free-text place text, not
-  // a matched area, and it would print raw customer text in the ops Zone column. dropoffHotelName
-  // already carries it (§b2cNoHotel: that raw text is never the guest's hotel now, just the location).
-  const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
+  // Legacy does NOT fall back to the raw text (it is a place, not an area). New format does, as pickup
+  // does: it IS an area name, so staff see what the customer picked even when it matched nothing.
+  const dropAreaName = dropAreaHit ? dropAreaHit.name : (dropoffSep && newDrop ? dropoffRaw : '');
   const addOnRows = b2cMapAddOns(det, addOn, routeLookupId, addonCat);   // §b2cParkFee · read by the nat block below
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
@@ -597,9 +611,9 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
            // Same flag for the return leg: a separate drop-off whose free text matched no area needs a
            // hand-assigned dropoffAreaId or vanJobsOrderInner groups the return van under the pickup area.
            (dropoffSep && !dropAreaId)
-             ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
+             ? `Drop-off: ${newDrop ? [dropoffRaw, dropHotel].filter(Boolean).join(' · ') : dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: (isFirstLine || !isTransfer) ? b2cPassengerList(paxRows, trip.pax, !isFirstLine) : [],   /* §b2cPaxType · §b2cPaxAllLines */
+    passengers: (isFirstLine || !isTransfer) ? b2cPassengerList(b2cLineTravellers(paxRows, h, det), trip.pax, !isFirstLine) : [],   /* §b2cPaxType · §b2cPaxAllLines */
     addOns: addOnRows,
     // Display rows for the Total panel. bookingV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
@@ -759,6 +773,25 @@ function b2cPassengersFromJson(itemRows) {
 // Passengers: the lead takes one adult seat, then AD, CHD, INF, FOC in order) and showed CHD on
 // that same row — so the stored type now follows the same rule and the two agree. Names beyond
 // the head count stay AD, as before. No pax (charter line without counts) → AD, as before.
+/* §b2cLineTravellers (2026-10-23) · B2C can now put different guests on different lines of one order.
+     details.travellerUids  array of passenger uids on THIS line; 'lead' = the main customer (not in
+                            passengers[]); key absent = everyone goes on every line (the default).
+     bookings.passengers[].uid = stable id per person (and .lineNos, a server-side echo we do not need).
+   The traveller view (v_booking_passengers) has no uid, but its pax_no is the array position of
+   bookings.passengers, so the uid is read off bk_passengers[pax_no-1]. If the uids cannot be lined up
+   (no uid on the rows, list lengths differ) the list is left whole — showing a name on the wrong trip
+   is worse than showing one too many. The lead is not filtered: leadPax is order-level. */
+function b2cLineTravellers(rows, h, det) {
+  const want = det && det.travellerUids;
+  if (!Array.isArray(rows) || !Array.isArray(want)) return rows;
+  let src = h && h.bk_passengers;
+  if (typeof src === 'string') { try { src = JSON.parse(src); } catch (_) { src = null; } }
+  const at = r => src && src[(Number(r.paxNo) || 0) - 1];
+  if (!Array.isArray(src) || !rows.every(r => at(r) && at(r).uid != null)) return rows;
+  const on = new Set(want.map(String));
+  return rows.filter(r => on.has(String(at(r).uid)));
+}
+
 function b2cPassengerList(rows, pax, capToHeads) {
   if (!Array.isArray(rows) || !rows.length) return [];
   const P = pax || {};
@@ -996,4 +1029,5 @@ module.exports = {
   b2cAddonKey,
   b2cPassengersFromJson,
   b2cPassengerList,
+  b2cLineTravellers,
 };

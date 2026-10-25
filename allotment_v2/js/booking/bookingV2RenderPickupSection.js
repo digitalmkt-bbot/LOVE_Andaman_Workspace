@@ -169,7 +169,7 @@ function bookingV2RenderPickupSection(){
           : `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">เลือกจุดรับ → โซนมาอัตโนมัติ</div>`;
         return `
         <div class="bkv2-nb-row bkv2-alt-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
-          <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bookingV2SetAltPickup(${i},'who',this.value)">
+          <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bookingV2SetAltPickup(${i},'who',this.value)" onchange="bookingV2AltWhoPicked(${i},this.value)">
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">${PAX_K.map(k=>{const _v=bkAltPax(a)[k]; const _bad=_altBd[k]>_bkBd[k]; return `<input class="bkv2-nb-input bkv2-pax-box" type="number" min="0" step="1" value="${_v}" onchange="bookingV2SetAltPickupPax(${i},'${k}',this.value)" title="${PAX_LBL[k]} ที่จุดนี้ (กลุ่มนี้มีทั้งหมด ${_bkBd[k]})"${_bad?' style="border-color:#E0857E;background:#FDECEA"':(_v?'':' style="color:#c4c1b8"')}>`;}).join('')}</div>
           <div>
             <select class="bkv2-nb-input" onchange="bookingV2SetAltPickupArea(${i},this.value)" style="cursor:pointer"><option value="">— เลือกจุดรับ —</option>${_areaSel}</select>

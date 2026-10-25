@@ -3,7 +3,7 @@ function bookingV2SetTripLockDraw(idx, lockId, qty){
   const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx]; if(!t) return;
   const pax = bookingV2PaxAllTot(t.pax);
   t.lockDrawSel = t.lockDrawSel || {};
-  const srcs = (typeof bookingV2DrawSources==='function') ? bookingV2DrawSources(t.routeId, t.date, _bkV2.newBooking.agentId) : [];
+  const srcs = (typeof bookingV2DrawSourcesFor==='function') ? bookingV2DrawSourcesFor(t, _bkV2.newBooking.agentId) : [];   /* §lkStaleDraw */
   const src = srcs.find(s=>s.lockId===lockId);
   const srcMax = src ? src.remaining : 0;
   let v = Math.max(0, Math.min(Number(qty)||0, srcMax));
