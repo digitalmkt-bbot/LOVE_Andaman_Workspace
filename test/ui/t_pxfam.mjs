@@ -10,6 +10,7 @@
 //     Y: FAM ทั้งลำ = ต้นทุนทั้งเที่ยว · saleProfit = 0 + รายได้
 //   3 Daily: การ์ด Net มี Sales + FAM · ตารางมี "of which Sales / FAM" · ป้าย FAM บนแถว · กล่อง FAM + กล่องเตือน ฿0 ในการ์ดเรือ · ป้ายหัว "check price"
 //   4 Monthly: กล่อง Sales vs FAM · Sales + FAM = Net ของเดือน · ตารางเส้นทางมีคอลัมน์ Sales / FAM · Day by day มีป้าย FAM
+//     (§pxFamAgFold) ตาราง FAM by agent ตั้งต้นยุบเป็นแถบเดียว · กดกาง/ยุบได้ · จำไว้
 //   5 วันที่ไม่มี FAM: ไม่มีคอลัมน์เพิ่ม ไม่มีกล่อง · ไม่มี error
 //   6 (§pxFamHide · owner "ให้สามารถซ่อนได้") กด Hide FAM → Daily ไม่มีคอลัมน์/กล่อง/ป้าย FAM แต่เตือน ฿0 ยังอยู่ · Net เท่าเดิม
 //     Monthly เหลือแถบเล็ก + ปุ่ม Show · ตารางเส้นทางไม่มีคอลัมน์ FAM · จำค่าไว้ (localStorage) · กด Show กลับมาครบ
@@ -74,9 +75,17 @@ const R4 = await page.evaluate(S => { _px.tab = 'm'; _px.mon = S.D.slice(0, 7); 
   const fl = box ? [...box.querySelectorAll('.fpl .fl > span')].map(num) : [];
   let ths = []; h.querySelectorAll('table.sum').forEach(t => { const a = [...t.querySelectorAll('thead th')].map(x => x.textContent.trim()); if (a.includes('Route')) ths = a; });
   const dayFam = [...h.querySelectorAll('table.sum tbody tr')].some(tr => /FAM \d+/.test(tr.textContent));
-  return { has: !!box, fl, ths, dayFam, agents: box ? box.querySelectorAll('tbody tr').length : 0 }; }, S);
-if (R4.has && R4.fl.length === 3 && Math.abs(R4.fl[0] + R4.fl[1] - R4.fl[2]) <= 2 && R4.ths.includes('Sales') && R4.ths.includes('FAM') && R4.dayFam && R4.agents >= 2)
-  ok('4 Monthly: Sales ' + R4.fl[0] + ' + FAM ' + R4.fl[1] + ' = Net ' + R4.fl[2] + ' · ตารางเส้นทางมี Sales / FAM · Day by day มีป้าย FAM · FAM by agent ' + R4.agents + ' แถว');
+  const bar = box && box.querySelector('.pxfamagbar'); const barTxt = bar ? bar.textContent.replace(/\s+/g, ' ') : '';
+  const rows0 = box ? box.querySelectorAll('tbody tr').length : -1;
+  if (bar) bar.click();   /* §pxFamAgFold · กางตาราง */
+  const b2 = document.querySelector('#trippl-host .pxfamm'); const agents = b2 ? b2.querySelectorAll('tbody tr').length : 0;
+  const ls = localStorage.getItem('la_px_famag');
+  const hh = b2 && b2.querySelector('.pxfamagh'); if (hh) hh.click();   /* ยุบกลับ */
+  const b3 = document.querySelector('#trippl-host .pxfamm');
+  const folded = !!(b3 && b3.querySelector('.pxfamagbar')) && b3.querySelectorAll('tbody tr').length === 0;
+  return { has: !!box, fl, ths, dayFam, barTxt, rows0, agents, ls, folded }; }, S);
+if (R4.has && R4.fl.length === 3 && Math.abs(R4.fl[0] + R4.fl[1] - R4.fl[2]) <= 2 && R4.ths.includes('Sales') && R4.ths.includes('FAM') && R4.dayFam && R4.rows0 === 0 && /2 agents/.test(R4.barTxt) && R4.agents >= 2 && R4.ls === '1' && R4.folded)
+  ok('4 Monthly: Sales ' + R4.fl[0] + ' + FAM ' + R4.fl[1] + ' = Net ' + R4.fl[2] + ' · ตารางเส้นทางมี Sales / FAM · Day by day มีป้าย FAM · FAM by agent ตั้งต้นยุบ "' + R4.barTxt.trim().slice(0, 40) + '…" → กางได้ ' + R4.agents + ' แถว → ยุบกลับ');
 else fail('4 ' + JSON.stringify(R4));
 
 const R5 = await page.evaluate(S => { _px.date = S.D2; _px.tab = 'd'; renderTripPL();

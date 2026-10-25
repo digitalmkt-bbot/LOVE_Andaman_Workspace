@@ -33616,6 +33616,10 @@ function pxCSS(){ return ''
  +'#trippl-host .kfam{border-top:1px dashed #E9D5FF;margin-top:8px;padding-top:7px}'
  +'#trippl-host .pxfamtg{display:inline-flex;align-items:center;margin-left:8px;padding:2px 10px;border-radius:999px;border:1px solid #DDD6FE;background:#fff;color:#6D28D9;font-size:10.5px;font-weight:600;cursor:pointer;white-space:nowrap;vertical-align:middle}'
  +'#trippl-host .pxfamtg:hover{background:#F5F3FF}'
+ +'#trippl-host .pxfamagh{cursor:pointer;color:#6D28D9!important}'
+ +'#trippl-host .pxfamagbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;border:1px solid #ECEDF2;border-radius:12px;background:#FAFAFC;cursor:pointer;font-size:12px;color:#64748B}'
+ +'#trippl-host .pxfamagbar:hover{background:#F5F3FF;border-color:#DDD6FE}#trippl-host .pxfamagbar>b{color:#6D28D9;font-size:12.5px}'
+ +'#trippl-host .pxfamagbar .tp b{color:#6D28D9}#trippl-host .pxfamagbar .sh{margin-left:auto;color:#6D28D9;font-weight:600}'
  +'#trippl-host .pxfammini{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;font-size:12px;color:#64748B}#trippl-host .pxfammini .pxfamtg{margin-left:auto}'
  +'#trippl-host .fpl{border:1px solid #ECEDF2;border-radius:12px;overflow:hidden}'
  +'#trippl-host .fpl .fl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #F1F2F6}'
@@ -34095,6 +34099,8 @@ function pxFamTog(){ _px.famHide=!pxFamHidden(); try{ localStorage.setItem('la_p
 function pxFamTogBtn(lbl){ var h=pxFamHidden();
   return '<span class="pxfamtg" onclick="event.stopPropagation();pxFamTog()" title="'+(h?'Show the FAM / FOC breakdown':'Hide the FAM / FOC breakdown · Net does not change')+'">'
     +(h?'▸ Show FAM':'▾ Hide FAM')+(lbl?(' · '+lbl):'')+'</span>'; }
+function pxFamAgOpen(){ if(_px.famAgO==null){ try{ _px.famAgO=(localStorage.getItem('la_px_famag')==='1'); }catch(_){ _px.famAgO=false; } } return !!_px.famAgO; }
+function pxFamAgTog(){ _px.famAgO=!pxFamAgOpen(); try{ localStorage.setItem('la_px_famag', _px.famAgO?'1':'0'); }catch(_){ } renderTripPL(); }
 function pxFamMini(T){
   return '<div class="eg mb pxfammini"><span class="pill pu">FAM</span>'
     +'<span>FAM trips <b class="n" style="color:#6D28D9">−'+pxN(T.famCost)+'</b> · '+T.famTrips+' trip'+(T.famTrips===1?'':'s')+' · '+T.famPax+' pax · already inside Net</span>'
@@ -34652,9 +34658,16 @@ function pxFamMonth(T, FAG, mLbl, e){
       +'<div class="fl tt"><div><b>Net profit</b><small>actual \u00b7 same as above</small></div>'
         +'<span class="n" style="color:'+(T.profit<0?'#BE123C':'#047857')+'">'+sg(T.profit)+' \u0e3f</span></div>'
     +'</div>'
-    +(rows?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
-      +'<thead><tr><th class="l">FAM by agent</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table></div></div>'):'')
+    /* §pxFamAgFold (2026-10-25) · owner ส่งภาพตาราง FAM by agent ยาวทั้งหน้า "หมายถึงตรงนี้ ให้ยุบได้"
+       ตั้งต้นยุบ · เหลือแถบเดียว: จำนวน agent + 3 อันดับแรก · กดแถบ/หัวตารางเพื่อกาง-ยุบ · จำไว้ต่อเครื่อง */
+    +(rows?(pxFamAgOpen()
+      ?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
+        +'<thead><tr><th class="l pxfamagh" onclick="pxFamAgTog()" title="Fold this table">\u25be FAM by agent \u00b7 '+L.length+'</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table></div></div>')
+      :('<div class="pxfamagbar" onclick="pxFamAgTog()" title="Show the FAM by agent table">'
+        +'<b>\u25b8 FAM by agent</b><span class="pill pu">'+L.length+' agent'+(L.length===1?'':'s')+'</span>'
+        +'<span class="tp">'+L.slice(0,3).map(function(g){ return e(g.name)+' <b class="n">\u2212'+pxN(g.cost)+'</b>'; }).join(' \u00b7 ')
+        +(L.length>3?(' \u00b7 +'+(L.length-3)+' more'):'')+'</span><span class="sh">Show all \u203a</span></div>')):'')
     +(T.zeroN?('<div class="pxzero" style="margin-top:10px"><b>\u26a0 '+T.zeroN+' booking'+(T.zeroN===1?'':'s')+' at \u0e3f0</b> not marked FOC this month \u00b7 not counted as FAM \u00b7 open those days to check the price</div>'):'')
     +'</div>';
 }
