@@ -33041,7 +33041,7 @@ function pxPlanFor(routeId){
 /* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
 function pxPax(date, bid){
-  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0};
+  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0, fam:0,famTH:0,famL:[],zeroL:[]};   /* §pxFam */
   var KIND=['ad','chd','inf','foc'];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
@@ -33070,9 +33070,28 @@ function pxPax(date, bid){
     });
     o.th+=th*ratio; o.tot+=tot;
     o.rev+=((typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0)*_shr;   /* §pxSplit · รายได้ตามส่วนของลำ */
+    /* ══ §pxFam (2026-10-25) · owner "ช่วยตรวจ Trip P&L ทำไมบางเส้นทางมันยังขาดทุน" → "FAM trip มันก็คือค่าใช้จ่ายไหม" → "โอเค"
+       ก.ย.–ต.ค. ขาดทุน −฿749k · ในนั้น −฿446k มาจากใบ FAM / Inspection ที่ลงทุกคนเป็น FOC (ราคา ฿0) แต่ต้นทุนเกิดเต็ม
+       ไม่ตัดออกจากยอด (เป็นค่าใช้จ่ายจริง) · แค่แยกบรรทัดให้เห็นว่า NET = เที่ยวขาย + ค่า FAM
+       FAM = ใบราคา ฿0 ที่คนทั้งใบอยู่ช่อง FOC · หรือ agent Staff / Welfare
+       ใบราคา ฿0 ที่ไม่ได้ลง FOC = น่าจะลืมใส่ราคา → zeroL เตือนให้เช็ค ไม่นับเป็น FAM
+       FOC 1–2 คนในใบที่จ่ายเงิน (หัวหน้าทัวร์) ไม่ใช่ FAM · ขากลับค้างคืน (ovnLeg) ราคา 0 โดยตั้งใจ ข้าม ══ */
+    try{
+      var _a0=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+      if(!_a0 && !t.ovnLeg){
+        var _ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+        var _an=_ag?(_ag.name||_ag.code||'\u2014'):(/^b2c_/.test(String(b.id||''))?'Love Andaman':String(b.channel||'walk-in'));
+        var _st=/staff|welfare/i.test(_an), _fc=(+px.foc||0)+(+px.foc_fr||0)+(+px.foc_th||0);
+        if(_st || (bookedTot>0 && _fc>=bookedTot)){
+          o.fam+=tot; o.famTH+=th*ratio;
+          o.famL.push({ id:b.id, name:_an, pax:tot, staff:_st, full:Math.round(Math.abs(+((b.priceBreakdown||{}).focDiscount)||0)*_shr) });
+        } else o.zeroL.push({ id:b.id, name:_an, pax:tot });
+      }
+    }catch(_){ }
   });
   ['ad','chd','inf','foc'].forEach(function(k){ o[k]=Math.round(o[k]); });
   o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
+  o.fam=Math.min(o.tot, Math.round(o.fam)); o.famTH=Math.round(o.famTH);   /* §pxFam */
   return o;
 }
 /* §pxOd · หางยาวที่ลูกค้าสั่งจริงของลำนั้น · เหมากี่ลำ จอยกี่คน
@@ -33389,6 +33408,23 @@ function pxTrip(date, bid){
   }
   var nReal=rows.filter(function(r){ return r.real!=null; }).length;
   var st = noSail ? 'nosail' : (A.closed ? 'done' : (nReal ? 'part' : 'est'));
+  /* §pxFam · ต้นทุนของคน FAM · เรือที่มีคนจ่ายเงินด้วย = ส่วนต่างของบรรทัดที่ขยับตามจำนวนคน
+     (คิดสูตรซ้ำด้วยจำนวนคนจ่ายเงินอย่างเดียว · บรรทัดคงที่ เช่น น้ำมัน กัปตัน ค่าเสื่อม ค่าเช่า ส่วนต่าง = 0)
+     ใช้สัดส่วนนั้นกับตัวเลขที่ใช้จริงของบรรทัด (ของจริง / ปิดยอด) · เรือที่เป็น FAM ทั้งลำ = ต้นทุนทั้งเที่ยว */
+  var famCost=0;
+  if(!noSail && PX.fam>0){
+    if(PX.fam>=PX.tot) famCost=cost;
+    else { try{
+      var _p2=PX.tot-PX.fam, _t2=Math.min(_p2, Math.max(0, PX.th-PX.famTH));
+      var ctx2=Object.assign({}, ctx, { pax:_p2, paxTH:_t2, paxFR:Math.max(0,_p2-_t2),
+                 paxCh:Math.min(_p2, Math.round((+ctx.paxCh||0)*_p2/Math.max(1,PX.tot))) });
+      var C2=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx2, T):{rows:[]}, M1={}, M2={};
+      (C.rows||[]).forEach(function(r){ M1[r.id]=(M1[r.id]||0)+(+r.net||0); });
+      (C2.rows||[]).forEach(function(r){ M2[r.id]=(M2[r.id]||0)+(+r.net||0); });
+      rows.forEach(function(r){ var a1=M1[r.id]||0; if(a1<=0) return; var sh=1-(M2[r.id]||0)/a1; if(sh<=0) return; famCost+=(+r.use||0)*Math.min(1,sh); });
+    }catch(_){ famCost=0; } }
+  }
+  famCost=Math.round(famCost);
   var be=null;
   try{ if(typeof ctBreakEven==='function'){
     var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0);
@@ -33401,7 +33437,9 @@ function pxTrip(date, bid){
            noSail:noSail, ran:!!A.ran, wouldCost:Math.round(estCost),   /* §pxNoSail */
            revGross:Math.round(revGross), rev:Math.round(revNet),
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
-           fuelPr:fuelPr };
+           fuelPr:fuelPr,
+           fam:{ pax:PX.fam, th:PX.famTH, cost:famCost, all:(PX.fam>0 && PX.fam>=PX.tot), list:PX.famL||[], zero:PX.zeroL||[] },   /* §pxFam */
+           saleProfit:Math.round(revNet-cost)+famCost };
 }
 function pxDay(date, pier){
   var out=[];
@@ -33568,6 +33606,19 @@ function pxCSS(){ return ''
  +'#trippl-host .pill.am{background:#FFFBEB;color:#B45309;border:1px solid #FDE68A}'
  +'#trippl-host .pill.em{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}'
  +'#trippl-host .pill.pu{background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE}'
+ /* §pxFam */
+ +'#trippl-host .pxfam{margin:8px 0 2px;background:#F6F2FF;border:1px solid #E3D9FB;border-radius:10px;padding:8px 10px;font-size:11.5px}'
+ +'#trippl-host .pxfam .fh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#5B3CC4}'
+ +'#trippl-host .pxfam .fr{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #EAE2FC}'
+ +'#trippl-host .pxfam u,#trippl-host .pxfam .ft span{text-decoration:none;color:#8B83A8;font-size:10.5px}'
+ +'#trippl-host .pxfam .ft{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:6px}#trippl-host .pxfam .ft b{color:#5B3CC4;font-size:13px}'
+ +'#trippl-host .pxzero{margin:6px 0 2px;background:#FFF8EA;border:1px solid #F6DFB3;border-radius:10px;padding:7px 10px;font-size:11px;color:#7A4B00}#trippl-host .pxzero b{color:#A15C00}'
+ +'#trippl-host .kfam{border-top:1px dashed #E9D5FF;margin-top:8px;padding-top:7px}'
+ +'#trippl-host .fpl{border:1px solid #ECEDF2;border-radius:12px;overflow:hidden}'
+ +'#trippl-host .fpl .fl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #F1F2F6}'
+ +'#trippl-host .fpl .fl b{font-size:13.5px;color:#0F172A}#trippl-host .fpl .fl small{display:block;font-size:11px;color:#94A3B8;margin-top:2px}'
+ +'#trippl-host .fpl .fl>span{font-size:19px;font-weight:700}#trippl-host .fpl .fm b,#trippl-host .fpl .fm>span{color:#6D28D9}'
+ +'#trippl-host .fpl .tt{background:#FAFAFC;border-bottom:0}#trippl-host .fpl .tt>span{font-size:22px;font-weight:800}'
  +'#trippl-host .pill.ro{background:#FFF1F2;color:#BE123C;border:1px solid #FECDD3}'
  +'#trippl-host .pill.bl{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}'
  +'#trippl-host .pill.clk{cursor:pointer}'
@@ -34033,6 +34084,22 @@ function pxAnRange(v){ _px.an=+v||47; renderTripPL(); }
 
 /* ── การ์ดรายละเอียดหนึ่งลำ · คืนเป็น "เซลล์ของกริด" 6 + n หมวด + 1 ใบ ──
    ห้ามห่อด้วย div ใบเดียว · กริดต้องเห็นทุกบล็อกเป็นลูกโดยตรงถึงจะจัดแถวให้ตรงกันได้ */
+/* ══ §pxFam · กล่อง FAM ในการ์ดเรือ (Daily) · อยู่ในแถวเดียวกับรายชื่อเอเจนต์ หัวข้อของแต่ละลำจึงยังตรงกัน ══ */
+function pxFamBox(t, e){
+  var F=t.fam||{}, h='';
+  if(F.pax>0 && !t.noSail){
+    h+='<div class="pxfam"><div class="fh"><b>FAM / FOC \u00b7 free bookings</b><span class="pill pu">'+F.pax+' pax</span></div>'
+      +(F.list||[]).map(function(x){ return '<div class="fr"><span>'+e(x.name)+' <u>'+(x.staff?'Staff':'FAM / FOC')+' \u00b7 '+x.pax+' pax</u></span>'
+        +'<u>'+(x.full?('tickets '+pxN(x.full)):'\u2014')+'</u></div>'; }).join('')
+      +'<div class="ft"><span>'+(F.all?'Whole trip is FAM \u00b7 full trip cost':('Cost of these '+F.pax+' pax \u00b7 per-head lines (park, meals, van, insurance\u2026)'))+'</span>'
+      +'<b class="n">\u2212'+pxN(F.cost)+'</b></div></div>';
+  }
+  if((F.zero||[]).length && !t.noSail){
+    h+='<div class="pxzero" title="'+e('Price is \u0e3f0 but the passengers are not entered as FOC \u00b7 not counted as FAM \u00b7 open the booking and check the price')+'">'
+      +'<b>\u26a0 \u0e3f0 price</b> '+F.zero.map(function(z){ return e(z.name)+' \u00b7 '+z.pax+' pax'; }).join(' \u00b7 ')+' \u00b7 not marked FOC \u2014 check the booking</div>';
+  }
+  return h;
+}
 function pxDetail(t, e, GORD, DAVG){
   var pax=Math.max(1, t.px.tot), R=(typeof ctVatR==='function')?ctVatR(ctTpl()):0;
   var cph=t.cost/pax, loss=t.profit<0, L=loss?' ls':'';
@@ -34136,7 +34203,7 @@ function pxDetail(t, e, GORD, DAVG){
   if(agOpen && AG.length>5) agMore='<span class="agmr" onclick="pxAgMore(\''+e(t.bid)+'\')">\u2039 show top 5 only</span>';
   O.push('<div class="agw'+L+'"><div class="agl">'
     +(agRows||'<div style="font-size:11.5px;color:#94A3B8;padding:10px 2px">No bookings on this trip</div>')
-    +agMore+'</div>'
+    +agMore+'</div>'+pxFamBox(t, e)
     +'<div class="agtot"><span class="nm">Total revenue (ex-VAT)</span><b class="n">'+pxN(t.rev)+' ฿</b></div></div>');
 
   /* 6 · หัวข้อต้นทุน */
@@ -34217,6 +34284,12 @@ function pxDaily(e){
     if(t.noSail) noCost+=(+t.wouldCost||0); });
   SAIL.forEach(function(t){ tP+=t.profit;
     if(t.profit<0) nLoss++; else nProfit++; if(t.nReal) nReal++; });
+  /* §pxFam */
+  var tFam=0, tFamPax=0, tZero=0;
+  SAIL.forEach(function(t){ var F=t.fam||{}; tFam+=(F.cost||0); tFamPax+=(F.pax||0); tZero+=(F.zero||[]).length; });
+  var tSale=tP+tFam;
+  var famK=tFamPax?('<div class="kft kfam"><span>Sales <b class="n" style="color:'+(tSale<0?'#BE123C':'#047857')+'">'+(tSale<0?'\u2212':'+')+pxN(Math.abs(tSale))+'</b></span>'
+    +'<span class="pill pu" title="FAM / FOC groups ride free · their cost is already inside Net · Sales + FAM = Net">FAM '+tFamPax+' pax \u00b7 \u2212'+pxN(tFam)+'</span></div>'):'';
   var per=tPax?Math.round(tP/tPax):0;
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
   var pct=tR?Math.round(tC/tR*100):0;
@@ -34237,6 +34310,7 @@ function pxDaily(e){
       +nNo+' boat'+(nNo===1?'':'s')+' did not sail · '+pxN(noCost)+' ฿ not charged</span>'):'')
     +(nNoPlan?('<span class="htag w">'+nNoPlan+' boat'+(nNoPlan===1?'':'s')+' not mapped to a cost plan</span>'):'')
     +(nNoFuel?('<span class="htag w">'+nNoFuel+' boat'+(nNoFuel===1?'':'s')+' with no fuel price</span>'):'')
+    +(tZero?('<span class="htag w" title="'+e('Price is ฿0 but the passengers are not entered as FOC · not counted as FAM · see the boat card')+'">'+tZero+' booking'+(tZero===1?'':'s')+' at \u0e3f0 \u00b7 check price</span>'):'')
     +'</p></div>'
     +'<div class="pnet'+(tP<0?' neg':'')+'"><div class="pnic">'+pxIcoSvg(PX_SVG.up)+'</div>'
     +'<div><small>'+(tP<0?'NET LOSS TODAY':'NET PROFIT TODAY')+'</small>'
@@ -34260,7 +34334,7 @@ function pxDaily(e){
       +'<div class="pxico em">'+pxIcoSvg(PX_SVG.pro)+'</div></div>'
       +'<div class="kft"><span style="color:'+(per<0?'#BE123C':'#047857')+';font-weight:600">'
       +(per<0?'−':'+')+pxN(Math.abs(per))+' ฿/pax'+(tgt?(' · target '+tgt):'')+'</span>'
-      +'<span class="pill '+(nLoss?'ro':'em')+'">'+nProfit+' profitable · '+nLoss+' loss</span></div></div>'
+      +'<span class="pill '+(nLoss?'ro':'em')+'">'+nProfit+' profitable · '+nLoss+' loss</span></div>'+famK+'</div>'
     +'<div class="kc"><div class="k1"><div><p class="lb">Data confidence</p>'
       +'<h3 class="n">'+nReal+' / '+SAIL.length+'<u>boats</u></h3></div>'
       +'<div class="pxico pu">'+pxIcoSvg(PX_SVG.ok)+'</div></div>'
@@ -34274,10 +34348,10 @@ function pxDaily(e){
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
-      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +'<small>'+e(t.route.name||'—')+(t.plan?'':' · no cost plan')+'</small></div></div></td>'
       +'<td class="c"><span class="tm n">'+e(t.dep||'--:--')+'</span></td>'
-      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">TH '+t.px.th+' · FR '+t.px.fr+'</div></td>'
+      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
       +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
         +(t.noSail?('<span class="nsx">ถ้าออกจริง '+pxN(t.wouldCost)+'</span>')
@@ -34288,6 +34362,8 @@ function pxDaily(e){
         +(loss?'−':'+')+pxN(Math.abs(t.profit))+'</span>'
         +'<div class="per '+(loss?'negp':'pos')+' n">'+(loss?'−':'+')
         +pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / pax'+(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'))
+      +(tFamPax?(t.noSail?'<td><span class="num mut">\u2014</span></td><td><span class="num mut">\u2014</span></td>'
+        :pxFamCells(t.saleProfit!=null?t.saleProfit:t.profit, (t.fam&&t.fam.cost)||0, (t.fam&&t.fam.pax)?(t.fam.pax+' pax'+(t.fam.all?' · whole trip':'')):'')):'')
       +'<td><div class="bars"><i style="width:'+Math.min(100,ratio).toFixed(0)+'%;background:'+bc+'"></i></div>'
         +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
           +(t.noSail?'ไม่ได้ออก':('Cost '+Math.round(ratio)+'%'))+'</span>'
@@ -34303,6 +34379,7 @@ function pxDaily(e){
       +(tP<0?'−':'+')+pxN(Math.abs(tP))+'</span>'
       +'<div class="per '+(tP<0?'negp':'pos')+' n">'+(per<0?'−':'+')+pxN(Math.abs(per))+' / pax'
       +(tR?(' · '+Math.round(tP/tR*100)+'%'):'')+'</div></td>'
+    +(tFamPax?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
     +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:#4F46E5"></i></div>'
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
 
@@ -34324,9 +34401,9 @@ function pxDaily(e){
       +'<span><i style="background:#10B981"></i>Healthy &lt;70%</span>'
       +'<span><i style="background:#F59E0B"></i>Watch 70–95%</span>'
       +'<span><i style="background:#E11D48"></i>Loss &gt;100%</span></div></div>'
-    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:760px">'
+    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(tFamPax?920:760)+'px">'
     +'<thead><tr><th class="l">Boat · Route</th><th class="c">Dep</th><th class="c">Pax</th>'
-    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'
+    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'+(tFamPax?'<th title="Sales + FAM = Net">of which Sales</th><th title="Cost of FAM / FOC groups · already inside Net">of which FAM</th>':'')
     +'<th class="c">Cost ratio / Break-even</th></tr></thead><tbody>'
     +sumRows+totRow+'</tbody></table></div></div></div>'
     +'<div class="dwrap"><div class="dbar"><div><h2>Boat detail '
@@ -34351,7 +34428,7 @@ function pxDayAgg(date, pier){
   var D=pxDay(date,pier);
   var a={ date:date, trips:D.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0,
           routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
-          best:null, boats:[], tr:[] };
+          best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0 };   /* §pxFam */
   D.forEach(function(t){
     a.rev+=t.rev; a.cost+=t.cost; a.profit+=t.profit; a.pax+=t.px.tot; a.bk+=t.px.bk;
     if(t.profit<0) a.loss++;
@@ -34362,7 +34439,17 @@ function pxDayAgg(date, pier){
     a.cap+=cap;
     var rk=t.rid||(t.route.name||'—');
     var RR=a.routes[rk]||(a.routes[rk]={ name:t.route.name||'—', color:t.route.color||'#64748B',
-      n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||'') });
+      n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||''), famCost:0, famN:0, noPlan:0 });
+    /* §pxFam */
+    var F=t.fam||{};
+    if(!t.noSail){
+      if(F.pax>0){ a.famCost+=(F.cost||0); a.famPax+=F.pax; a.famTrips++; RR.famCost+=(F.cost||0); RR.famN++;
+        (F.list||[]).forEach(function(x){ var G=a.famAg[x.name]||(a.famAg[x.name]={ name:x.name, staff:!!x.staff, trips:{}, pax:0, full:0, cost:0 });
+          G.trips[date+'|'+t.bid]=1; G.pax+=x.pax; G.full+=(x.full||0); G.cost+=(F.cost||0)*(x.pax/Math.max(1,F.pax)); }); }
+      if((t.saleProfit!=null?t.saleProfit:t.profit)<0) a.saleLoss++;
+      if(!t.plan) RR.noPlan++;
+      a.zeroN+=(F.zero||[]).length;
+    }
     RR.n++; RR.pax+=t.px.tot; RR.rev+=t.rev; RR.cost+=t.cost; RR.profit+=t.profit; RR.cap+=cap;
     if(t.be){ RR.be+=t.be; RR.beN++; }
     /* §trRaw · ทริปดิบรายใบ · หน้าวิเคราะห์ต้องใช้หา "ต้นทุนคงที่ต่อทริป" จากของจริง
@@ -34521,6 +34608,39 @@ function pxRentIdleHtml(e, rows, netMTD){
       + '<u class="n">ถึงจะดูดซับค่าเช่าที่เหลือหมด</u></div></div></div>';
 }
 
+/* §pxFam · สองช่อง "Sales / FAM" · Sales + FAM = Net */
+function pxFamCells(sale, fam, sub){
+  return '<td><span class="num n" style="color:'+(sale<0?'#BE123C':'#047857')+'">'+(sale<0?'\u2212':'+')+pxN(Math.abs(sale))+'</span></td>'
+    +'<td>'+(fam?('<span class="num n" style="color:#6D28D9">\u2212'+pxN(fam)+'</span>'+(sub?('<div class="per">'+sub+'</div>'):'')):'<span class="num mut">\u2014</span>')+'</td>';
+}
+/* ══ §pxFam · Monthly · NET = เที่ยวขาย + ค่า FAM · ค่า FAM เป็นค่าใช้จ่ายจริง ไม่มีปุ่มซ่อน ══ */
+function pxFamMonth(T, FAG, mLbl, e){
+  var sale=T.profit+T.famCost, full=0;
+  var L=Object.keys(FAG).map(function(k){ return FAG[k]; }).sort(function(a,b){ return b.cost-a.cost; });
+  L.forEach(function(g){ full+=g.full; });
+  var sg=function(v){ return (v<0?'\u2212':'+')+pxN(Math.abs(v)); };
+  var rows=L.map(function(g){ return '<tr class="br"><td class="l"><b style="font-size:12.5px">'+e(g.name)+'</b>'
+      +(g.staff?' <span class="pill g">Staff</span>':'')+'</td>'
+      +'<td class="c"><span class="num n">'+g.trips+'</span></td><td class="c"><span class="num n">'+g.pax+'</span></td>'
+      +'<td><span class="num n">'+(g.full?pxN(g.full):'\u2014')+'</span></td>'
+      +'<td><span class="num n" style="color:#6D28D9">\u2212'+pxN(g.cost)+'</span></td></tr>'; }).join('');
+  return '<div class="eg mb pxfamm"><div class="phd"><div><h2>Sales vs FAM trips <span class="pill pu">'+e(mLbl)+'</span></h2>'
+    +'<p>FAM / inspection groups ride free but cost real money \u00b7 shown as their own line so the sales result is visible \u00b7 Sales + FAM = Net profit</p></div></div>'
+    +'<div class="fpl">'
+      +'<div class="fl"><div><b>Sales trips</b><small>'+(T.trips-T.famTrips)+' trips without FAM + paid seats on '+T.famTrips+' FAM trips \u00b7 '
+        +T.saleLoss+' trip'+(T.saleLoss===1?'':'s')+' still at a loss on sales</small></div>'
+        +'<span class="n" style="color:'+(sale<0?'#BE123C':'#047857')+'">'+sg(sale)+'</span></div>'
+      +'<div class="fl fm"><div><b>FAM trips (marketing)</b><small>'+T.famTrips+' trip'+(T.famTrips===1?'':'s')+' \u00b7 '+T.famPax+' pax'
+        +(full?(' \u00b7 free tickets worth '+pxN(full)):'')+'</small></div><span class="n">\u2212'+pxN(T.famCost)+'</span></div>'
+      +'<div class="fl tt"><div><b>Net profit</b><small>actual \u00b7 same as above</small></div>'
+        +'<span class="n" style="color:'+(T.profit<0?'#BE123C':'#047857')+'">'+sg(T.profit)+' \u0e3f</span></div>'
+    +'</div>'
+    +(rows?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
+      +'<thead><tr><th class="l">FAM by agent</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div></div>'):'')
+    +(T.zeroN?('<div class="pxzero" style="margin-top:10px"><b>\u26a0 '+T.zeroN+' booking'+(T.zeroN===1?'':'s')+' at \u0e3f0</b> not marked FOC this month \u00b7 not counted as FAM \u00b7 open those days to check the price</div>'):'')
+    +'</div>';
+}
 /* ══ MONTHLY ════════════════════════════════════════════════════════════════ */
 function pxMonth(e){
   var ym=_px.mon||String(_px.date||'').slice(0,7);
@@ -34530,6 +34650,12 @@ function pxMonth(e){
   var T={rev:0,cost:0,profit:0,pax:0,bk:0,trips:0,loss:0,cap:0};
   A.forEach(function(x){ T.rev+=x.rev; T.cost+=x.cost; T.profit+=x.profit; T.pax+=x.pax;
     T.bk+=x.bk; T.trips+=x.trips; T.loss+=x.loss; T.cap+=x.cap; });
+  /* §pxFam */
+  T.famCost=0; T.famPax=0; T.famTrips=0; T.saleLoss=0; T.zeroN=0; var FAG={};
+  A.forEach(function(x){ T.famCost+=x.famCost||0; T.famPax+=x.famPax||0; T.famTrips+=x.famTrips||0; T.saleLoss+=x.saleLoss||0; T.zeroN+=x.zeroN||0;
+    Object.keys(x.famAg||{}).forEach(function(k){ var s=x.famAg[k], G=FAG[k]||(FAG[k]={ name:s.name, staff:s.staff, trips:0, pax:0, full:0, cost:0 });
+      G.trips+=Object.keys(s.trips||{}).length; G.pax+=s.pax; G.full+=s.full; G.cost+=s.cost; }); });
+  var hasF=T.famPax>0;
 
   /* เดือนก่อน ช่วงวันเดียวกัน · เทียบกันได้จริง ไม่ใช่ทั้งเดือนเทียบครึ่งเดือน */
   var py=+ym.slice(0,4), pm=+ym.slice(5,7)-1, pd=new Date(py,pm-1,1);
@@ -34587,7 +34713,7 @@ function pxMonth(e){
     var hR=Math.round(x.rev/mx*100), hN=Math.round(Math.abs(x.profit)/mx*100);
     return '<div class="cd" onclick="pxGoDay(\''+e(x.date)+'\')">'
       +'<div class="tip">'+e(W.txt)+' · Rev '+pxN(x.rev)+' ฿ · Net '
-        +(x.profit<0?'−':'+')+pxN(Math.abs(x.profit))+' ฿ · '+x.trips+' trips</div>'
+        +(x.profit<0?'−':'+')+pxN(Math.abs(x.profit))+' ฿ · '+x.trips+' trips'+(x.famCost?(' · incl. FAM −'+pxN(x.famCost)+' ฿'):'')+'</div>'
       +'<div class="rev" style="height:'+hR+'%"></div>'
       +'<div class="net'+(x.profit<0?' neg':'')+'" style="height:'+Math.max(x.rev?2:0,hN)+'%"></div></div>';
   }).join('');
@@ -34601,8 +34727,9 @@ function pxMonth(e){
   /* รวมรายเส้นทางทั้งเดือน */
   var RT={};
   A.forEach(function(x){ Object.keys(x.routes).forEach(function(k){
-    var s=x.routes[k], r=RT[k]||(RT[k]={name:s.name,color:s.color,n:0,pax:0,rev:0,cost:0,profit:0});
-    r.n+=s.n; r.pax+=s.pax; r.rev+=s.rev; r.cost+=s.cost; r.profit+=s.profit; }); });
+    var s=x.routes[k], r=RT[k]||(RT[k]={name:s.name,color:s.color,n:0,pax:0,rev:0,cost:0,profit:0,famCost:0,famN:0,noPlan:0});
+    r.n+=s.n; r.pax+=s.pax; r.rev+=s.rev; r.cost+=s.cost; r.profit+=s.profit;
+    r.famCost+=s.famCost||0; r.famN+=s.famN||0; r.noPlan+=s.noPlan||0; }); });   /* §pxFam */
   var RL=Object.keys(RT).map(function(k){ return RT[k]; }).sort(function(a,b){ return b.profit-a.profit; });
   var rkCls=['t1','t2','t3'];
   var rtRows=RL.map(function(r,i){
@@ -34610,11 +34737,13 @@ function pxMonth(e){
     return '<tr class="br'+(loss?' loss':'')+'"><td class="l"><span class="rank '
       +(loss?'bad':(rkCls[i]||''))+'">'+(i+1)+'</span></td>'
       +'<td class="l"><b style="font-size:12.5px">'+e(r.name)+'</b>'
+      +(r.noPlan?' <span class="pill am" title="'+e(r.noPlan+' trip(s) on this route have no cost plan · the default formula is used · map a plan on the Costing page')+'">\u26a0 no cost plan</span>':'')
       +'<div class="per">'+r.n+' trips · '+r.pax+' pax</div></td>'
       +'<td class="c"><span class="num n">'+r.n+'</span></td>'
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
       +(loss?'−':'+')+pxN(Math.abs(r.profit))+'</span>'
       +'<div class="per '+(loss?'negp':'pos')+' n">'+pxN(r.profit/Math.max(1,r.pax))+'/pax</div></td>'
+      +(hasF?pxFamCells(r.profit+r.famCost, r.famCost, r.famN?(r.famN+' trip'+(r.famN===1?'':'s')):''):'')
       +'<td class="c"><span class="pill '+(mg<0?'ro':(mg<12?'am':'em'))+'">'+mg+'%</span></td></tr>';
   }).join('');
   var badR=RL.filter(function(r){ return r.profit<0; });
@@ -34623,7 +34752,7 @@ function pxMonth(e){
     if(!x.trips) return '';
     var W=pxDW(x.date), loss=x.profit<0, mg=x.rev?Math.round(x.profit/x.rev*100):0;
     return '<tr class="br'+(loss?' loss':'')+'" onclick="pxGoDay(\''+e(x.date)+'\')">'
-      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b></td>'
+      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b>'+(x.famPax?(' <span class="pill pu" title="'+e('FAM / FOC '+x.famPax+' pax · cost '+pxN(x.famCost)+' ฿ (already inside Net)')+'">FAM '+x.famPax+'</span>'):'')+'</td>'
       +'<td class="c"><span class="num n">'+x.trips+'</span></td>'
       +'<td class="c"><span class="num n">'+x.pax+'</span></td>'
       +'<td><span class="num n">'+pxN(x.rev)+'</span></td>'
@@ -34634,8 +34763,9 @@ function pxMonth(e){
   }).join('');
 
   var rentIdle=pxRentIdleHtml(e, pxRentIdle(days), T.profit);   /* §rentIdle */
+  var famHtml=hasF?pxFamMonth(T, FAG, mLbl, e):'';   /* §pxFam */
 
-  return hero+kpi+rentIdle
+  return hero+kpi+famHtml+rentIdle
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
       +'<span class="pill bl">'+e(mLbl)+'</span></h2>'
       +'<p>Light blue = revenue · green/red = the net result of that day · click a bar to open that day</p></div>'
@@ -34672,14 +34802,15 @@ function pxMonth(e){
       +'</tbody></table></div></div></div>'
     +'<div class="eg"><div class="phd"><div><h2>By route this month</h2>'
       +'<p>Where the month\'s profit actually came from</p></div></div>'
-      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:400px">'
+      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(hasF?560:400)+'px">'
       +'<thead><tr><th class="l">#</th><th class="l">Route</th><th class="c">Trips</th>'
-      +'<th>Net</th><th class="c">Margin</th></tr></thead><tbody>'+rtRows
+      +'<th>Net</th>'+(hasF?'<th>Sales</th><th>FAM</th>':'')+'<th class="c">Margin</th></tr></thead><tbody>'+rtRows
       +'<tr class="tot"><td class="l">Σ</td><td class="l">'+RL.length+' routes</td>'
       +'<td class="c"><span class="num n">'+T.trips+'</span></td>'
       +'<td class="netc'+(T.profit<0?' neg':'')+'"><span class="net'+(T.profit<0?' neg':'')+' n">'
       +(T.profit<0?'−':'+')+pxN(Math.abs(T.profit))+'</span>'
       +'<div class="per pos n">'+pxN(T.profit/Math.max(1,T.pax))+'/pax</div></td>'
+      +(hasF?pxFamCells(T.profit+T.famCost, T.famCost, T.famTrips+' trips'):'')
       +'<td class="c"><span class="pill '+(T.profit<0?'ro':'em')+'">'
       +(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td></tr></tbody></table></div></div>'
       +(badR.length?('<div class="hint"><b>'+e(badR.map(function(r){return r.name;}).join(', '))
