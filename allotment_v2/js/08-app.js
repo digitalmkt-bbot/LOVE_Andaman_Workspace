@@ -33047,10 +33047,17 @@ function pxPax(date, bid){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    if((O.boatId||t.charterBoatId)!==bid) return;
+    /* §pxSplit (2026-10-25) · owner "Achilles ออกเรือจริงนะ ไม่มีต้นทุนได้อย่างไร"
+       ใบที่แยกลงหลายลำ (ops.boatSplits) เดิมอ่านแค่ ops.boatId → ลำที่สองได้ 0 คน ถูกตีว่า "ไม่ได้ออก · ไม่คิดต้นทุน"
+       ส่วนลำแรกได้คนทั้งใบ · ตอนนี้แต่ละลำได้คนและรายได้ตามส่วนที่จัดไว้ (ตัวเดียวกับใบงานเรือ §pjSplit) */
+    var _S=(typeof pjSplitShare==='function')?pjSplitShare(b,date,t,bid):null;
+    if(_S){ if(_S.skip) return; }
+    else if((O.boatId||t.charterBoatId)!==bid) return;
     if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
     var booked=ckBookedPax(t);
     var tot=pckOnBoard(b,date,booked);                     /* §ckPierSelf2 */
+    var _shr=1;
+    if(_S){ _shr=booked?((+_S.booked||0)/booked):0; tot=Math.round(tot*_shr); }
     if(!tot) return;
     o.bk++;
     var px=t.pax||{}, bookedTot=0, th=0;
@@ -33062,7 +33069,7 @@ function pxPax(date, bid){
       o[k]+=n;
     });
     o.th+=th*ratio; o.tot+=tot;
-    o.rev+=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+    o.rev+=((typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0)*_shr;   /* §pxSplit · รายได้ตามส่วนของลำ */
   });
   ['ad','chd','inf','foc'].forEach(function(k){ o[k]=Math.round(o[k]); });
   o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
