@@ -1,3 +1,7 @@
+(function(){ /* §ebCost · คำแปล EN ของการ์ดต้นทุน/กำไร ลงพจนานุกรมกลาง (ดู §ebEN) */
+  var D={"ต้นทุนตรง": "Direct cost", "กำไรขั้นต้น": "Gross profit", "ของรายได้": "of revenue", "ต่อหัว": "per head", "เป้า": "target", "ขาดทุน": "Loss", "ต้นทุน · กำไร": "Cost · Profit", "ต้นทุนแยกหมวด": "Cost by category", "ที่มา: Trip P&L": "Source: Trip P&L", "ทริป": "trips", "ตัวเลขจริง": "actual", "ประมาณการ": "estimated", "ทริปที่ยังไม่ปิดยอดใช้สูตรจากแผนต้นทุนของเส้นทาง": "open trips use the route cost plan", "หมวด": "Category", "ไม่รวมเงินเดือนประจำ · ค่าเช่า · ประกัน · ซ่อมบำรุง Fleet": "excludes payroll · rent · insurance · fleet maintenance", "กำไรรายโปรแกรม": "Profit by programme", "เรียงจาก margin ต่ำสุด": "lowest margin first", "โปรแกรม": "Programme", "รายได้": "Revenue", "กำไร/หัว": "Profit / head", "เฝ้าระวัง": "Watch", "รวม": "Total", "สีแถบ: เขียว < 70% · ส้ม 70–85% · แดง ≥ 85% ของรายได้ (เกณฑ์เดียวกับ Trip P&L)": "bar: green < 70% · amber 70–85% · red ≥ 85% of revenue (same thresholds as Trip P&L)", "= ต้นทุน ≥ 80% ของรายได้ในช่วงนี้": "= cost ≥ 80% of revenue in this period", "รายได้ vs ต้นทุน · รายวัน": "Revenue vs cost · daily", "30 วันที่ผ่านมา + 14 วันข้างหน้า": "last 30 days + next 14", "ขีดแดง = ต้นทุนของวันนั้น": "red tick = that day's cost", "วันขาดทุน": "loss day", "วันธรรมดา": "weekday", "เสาร์–อาทิตย์": "Sat–Sun", "จองไว้แล้ว · ต้นทุนตามแผน": "booked so far · plan cost", "วันนี้": "Today", "ยังไม่มีทริปในช่วงนี้": "no trips in this period", "ต้นทุน": "Cost", "รายได้ Trip P&L": "Trip P&L revenue", "ตั้งเป้า margin ขั้นต้น (%) · ค่าเดียวทั้งบริษัท": "Gross margin target (%) · one value for the company", "กดเพื่อตั้งเป้า": "click to set target", "ไม่มีต้นทุน": "no cost", "ยังไม่มีข้อมูล": "no data yet", "จากรายได้ Trip P&L": "of Trip P&L revenue", "ต้นทุนรวม": "total cost", "คำนวณจาก Trip P&L รายทริป": "computed from trip-level Trip P&L"};
+  try{ if(typeof LA_T_EN!=="object"||!LA_T_EN) window.LA_T_EN={}; Object.keys(D).forEach(function(k){ if(LA_T_EN[k]==null) LA_T_EN[k]=D[k]; }); }catch(e){}
+})();
 (function(){ /* §ebEN (2026-10-24) · owner "หน้านี้ขอมี Version English ด้วย" · คำแปลของ Executive Board ลงทะเบียนเข้าพจนานุกรมกลาง LA_T_EN (04-data-core.js) · สลับที่ปุ่ม TH/EN ในเมนูซ้าย ซึ่งวาดหน้าที่เปิดอยู่ใหม่ให้เอง */
   var D={
 "อาทิตย์": "Sunday",
@@ -827,21 +831,127 @@
   }
 
   /* ── มุมมอง เดือน / ไตรมาส / ปี ────────────────────────────────────── */
+
+  /* ══ §ebCost (2026-10-25) · ต้นทุน · กำไร จาก Trip P&L (pxDay → pxTrip รายลำ) ══════════════════════
+     owner "หน้านี้ เพิ่มส่วนของต้นทุนเข้าไปด้วยได้ไหม" · ม็อก EBC · "โอเคทั้ง …"
+     · ต้นทุนและรายได้ของส่วนนี้มาจากเครื่องเดียวกับหน้า Trip P&L (รายได้สุทธิหลัง VAT · ต้นทุน 8 หมวด · ลำที่ปิดยอดแล้วใช้ตัวเลขจริง)
+       จึงอาจต่างจาก "รายได้" ของการ์ดอื่นในแท็บนี้ (มูลค่าใบจอง) เล็กน้อย · ป้าย "ที่มา: Trip P&L" บอกไว้ทุกการ์ด
+     · "ทุกท่า" = ทับละมุ + พันวา (§ebNoRanong) · ระนองดูได้เมื่อกดแท็บท่าเอง
+     · วันข้างหน้า = pax ที่จองแล้ว × สูตร/แผน (forecast) · ลำที่ไม่ออก (noSail) ไม่นับ
+     · แคช 60 วิ ต่อ ช่วง|ท่า|ตราประทับข้อมูล · เดือนละ ~180 ทริป · ปี ~2,000 ทริป (ครั้งแรกช้ากว่าปกติ แล้วจำไว้) */
+  var _cx={};
+  function cxStamp(){ return stamp()+'|'+String(window.__savedAt||0)+'|'+(EB.pier||''); }
+  function cxPiers(){ return EB.pier ? [EB.pier] : ['tublamu','panwa']; }
+  /* รวมของวันเดียว · {rev,cost,profit,pax,trips,real,est,g:{หมวด:฿},routes:{rid:{...}},loss} */
+  function cxDay(ds){
+    var st=cxStamp(), now=Date.now(), C=_cx[ds];
+    if(C && C.st===st && now-C.at<60000) return C.v;
+    var v={rev:0,cost:0,profit:0,pax:0,trips:0,real:0,est:0,g:{},routes:{},loss:0};
+    if(typeof pxDay==='function'){
+      cxPiers().forEach(function(p){
+        var D=[]; try{ D=pxDay(ds,p)||[]; }catch(_){ D=[]; }
+        D.forEach(function(t){
+          if(!t || t.noSail) return;
+          v.rev+=t.rev||0; v.cost+=t.cost||0; v.profit+=(t.profit!=null?t.profit:(t.rev||0)-(t.cost||0)); v.pax+=(t.px&&t.px.tot)||0; v.trips++;
+          if(t.st==='done'||t.st==='part') v.real++; else v.est++;
+          if((t.profit!=null?t.profit:(t.rev||0)-(t.cost||0))<0) v.loss++;
+          (t.rows||[]).forEach(function(r){ var g=r.g||'อื่น ๆ'; v.g[g]=(v.g[g]||0)+(+r.use||0); });
+          var rk=t.rid||((t.route&&t.route.name)||'—'), RR=v.routes[rk]||(v.routes[rk]={rid:rk, name:(t.route&&t.route.name)||rk, color:(t.route&&t.route.color)||'#8b909c', n:0, pax:0, rev:0, cost:0});
+          RR.n++; RR.pax+=(t.px&&t.px.tot)||0; RR.rev+=t.rev||0; RR.cost+=t.cost||0;
+        });
+      });
+    }
+    _cx[ds]={st:st, at:now, v:v};
+    return v;
+  }
+  function cxRange(from,to){
+    var o={rev:0,cost:0,profit:0,pax:0,trips:0,real:0,est:0,g:{},routes:{},loss:0,days:0,byDay:{}};
+    for(var ds=from; ds<=to; ds=addDays(ds,1)){
+      var d=cxDay(ds); o.byDay[ds]=d; if(!d.trips) continue; o.days++;
+      o.rev+=d.rev; o.cost+=d.cost; o.profit+=d.profit; o.pax+=d.pax; o.trips+=d.trips; o.real+=d.real; o.est+=d.est; o.loss+=d.loss;
+      Object.keys(d.g).forEach(function(g){ o.g[g]=(o.g[g]||0)+d.g[g]; });
+      Object.keys(d.routes).forEach(function(k){ var R=d.routes[k], O=o.routes[k]||(o.routes[k]={rid:R.rid,name:R.name,color:R.color,n:0,pax:0,rev:0,cost:0}); O.n+=R.n; O.pax+=R.pax; O.rev+=R.rev; O.cost+=R.cost; });
+    }
+    return o;
+  }
+  function cxTarget(){ try{ var d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); var t=+d.eb_margin_target; return (t>0&&t<100)?t:30; }catch(_){ return 30; } }
+  window.ebSetMarginTarget=function(){
+    if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+    var v=prompt(laT('ตั้งเป้า margin ขั้นต้น (%) · ค่าเดียวทั้งบริษัท'), String(cxTarget())); if(v===null) return;
+    var n=parseFloat(v); if(!(n>0&&n<100)){ alert('Please enter a number between 1 and 99.'); return; }
+    /* คีย์ scalar บนสุดของ blob เป็นสตริง → เดินทางเป็น {op:'meta'} ลง app_meta เหมือน da_template */
+    try{ var d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); d.eb_margin_target=String(n); localStorage.setItem('loveandaman_v2', JSON.stringify(d)); }catch(_){}
+    _cx={}; render();
+  };
+  function cxCol(cr){ return cr>=85?'var(--eb-bad)':(cr>=70?'var(--eb-warn)':'var(--eb-good)'); }
+  function cxGColor(g){ try{ return (typeof pxGColor==='function')?pxGColor(g):'#94A3B8'; }catch(_){ return '#94A3B8'; } }
+  /* KPI 2 ใบ · ต่อท้ายแถว KPI ของแท็บ Revenue */
+  function cxKpis(X, lbl){
+    if(!X.trips) return kpi(laT('ต้นทุนตรง')+' '+lbl, '—', laT('ยังไม่มีทริปในช่วงนี้')+' · '+laT('ที่มา: Trip P&L'))
+                     + kpi(laT('กำไรขั้นต้น'), '—', laT('ยังไม่มีข้อมูล'));
+    var cr=pct(X.cost,X.rev), m=X.rev>0?Math.round((X.rev-X.cost)*100/X.rev):0, tg=cxTarget(), gp=X.rev-X.cost;
+    return kpi(laT('ต้นทุนตรง')+' '+lbl+' <span class="eb-tag">Trip P&amp;L</span>', baht(X.cost),
+               cr+'% '+laT('ของรายได้')+' · ฿'+num(X.pax?X.cost/X.pax:0)+' '+laT('ต่อหัว')+' · '+num(X.trips)+' '+laT('ทริป'), cr>=85?'warn':'')
+         + kpi(laT('กำไรขั้นต้น')+' <span class="eb-tag">Trip P&amp;L</span>', '<span style="color:'+(gp>=0?'var(--eb-good)':'var(--eb-bad)')+'">'+(gp>=0?'+':'')+baht(gp)+'</span>',
+               'margin <b>'+m+'%</b> · ฿'+num(X.pax?gp/X.pax:0)+' '+laT('ต่อหัว')+' · <span onclick="ebSetMarginTarget()" title="'+laT('กดเพื่อตั้งเป้า')+'" style="cursor:pointer;text-decoration:underline dotted">'+laT('เป้า')+' '+tg+'%</span>'+(X.loss?' · <span style="color:var(--eb-bad)">'+num(X.loss)+' '+laT('ทริป')+' '+laT('ขาดทุน')+'</span>':''),
+               m<tg?'warn':'', Math.max(0,Math.min(100,tg>0?m*100/tg:0)));
+  }
+  /* ส่วน ต้นทุน · กำไร · 3 การ์ด */
+  function cxSection(X, R, t0){
+    var h='<div class="eb-sec">'+laT('ต้นทุน · กำไร')+' <span class="eb-tag">'+E(R.lbl)+'</span></div>';
+    if(!X.trips) return h+'<div class="eb-card eb-none">'+laT('ยังไม่มีทริปในช่วงนี้')+' · '+laT('ที่มา: Trip P&L')+'</div>';
+    /* 1 · ต้นทุนแยกหมวด */
+    var gs=Object.keys(X.g).map(function(g){ return {g:g, v:X.g[g]}; }).filter(function(x){ return Math.round(x.v)!==0; }).sort(function(a,b){ return b.v-a.v; });
+    var tot=gs.reduce(function(s,x){ return s+x.v; },0)||1;
+    var realP=pct(X.real, X.real+X.est);
+    var c1='<div class="eb-card"><h2>'+laT('ต้นทุนแยกหมวด')+' <span class="eb-tag">'+laT('ต้นทุนตรง')+' · '+E(R.lbl)+'</span>'+src(laT('ที่มา: Trip P&L'))+'</h2>'
+      +'<div style="font-size:11.5px;color:var(--eb-ink2)">'+laT('รวม')+' <b style="color:var(--eb-ink)">'+baht(X.cost)+'</b> · '+num(X.trips)+' '+laT('ทริป')+' · <span class="eb-tag" style="background:#E4F3EC;color:#0F6E56">'+laT('ตัวเลขจริง')+' '+realP+'%</span> <span class="eb-tag" style="background:#FAEEDA;color:#854F0B">'+laT('ประมาณการ')+' '+(100-realP)+'%</span></div>'
+      +'<div class="eb-hstack" style="margin:10px 0 8px">'+gs.map(function(x){ return '<i title="'+E(laT(x.g)+' '+baht(x.v))+'" style="width:'+(x.v*100/tot)+'%;background:'+cxGColor(x.g)+'"></i>'; }).join('')+'</div>'
+      +'<table class="eb-tbl"><thead><tr><th>'+laT('หมวด')+'</th><th>฿</th><th>%</th><th>฿/'+laT('ต่อหัว').replace('per ','')+'</th></tr></thead><tbody>'
+      +gs.map(function(x){ return '<tr><td><span class="eb-dot" style="background:'+cxGColor(x.g)+'"></span>'+E(laT(x.g))+'</td><td><b>'+baht(x.v)+'</b></td><td>'+pct(x.v,tot)+'%</td><td>'+(X.pax?'฿'+num(x.v/X.pax):'—')+'</td></tr>'; }).join('')
+      +'</tbody></table><div class="eb-foot">'+laT('ไม่รวมเงินเดือนประจำ · ค่าเช่า · ประกัน · ซ่อมบำรุง Fleet')+' · '+laT('ทริปที่ยังไม่ปิดยอดใช้สูตรจากแผนต้นทุนของเส้นทาง')+'</div></div>';
+    /* 2 · กำไรรายโปรแกรม */
+    var rows=Object.keys(X.routes).map(function(k){ var r=X.routes[k]; r.cr=r.rev>0?Math.round(r.cost*100/r.rev):(r.cost>0?999:0); r.m=r.rev>0?100-r.cr:0; return r; })
+      .sort(function(a,b){ return a.m-b.m; });
+    var c2='<div class="eb-card"><h2>'+laT('กำไรรายโปรแกรม')+' <span class="eb-tag">'+laT('เรียงจาก margin ต่ำสุด')+'</span>'+src(laT('ที่มา: Trip P&L'))+'</h2>'
+      +'<table class="eb-tbl"><thead><tr><th>'+laT('โปรแกรม')+'</th><th>'+laT('ทริป')+'</th><th>Pax</th><th>'+laT('รายได้')+'</th><th>'+laT('ต้นทุน')+'</th><th style="min-width:110px">cost ratio</th><th>margin</th><th>'+laT('กำไร/หัว')+'</th></tr></thead><tbody>'
+      +rows.map(function(r){ var nm=rName(r.rid), watch=r.cr>=80, col=cxCol(r.cr);
+          return '<tr'+(r.cost>r.rev?' style="background:#FFF5F4"':'')+'><td><span class="eb-dot" style="background:'+E(r.color)+'"></span><b>'+E(nm.f)+'</b>'+(nm.v?' <span class="eb-mut">'+E(nm.v)+'</span>':'')+(watch?' <span class="eb-tag" style="background:#FBE3E0;color:#A32D2D">'+laT('เฝ้าระวัง')+'</span>':'')+'</td>'
+            +'<td>'+num(r.n)+'</td><td>'+num(r.pax)+'</td><td>'+baht(r.rev)+'</td><td style="color:var(--eb-bad)">'+baht(r.cost)+'</td>'
+            +'<td><div class="eb-hstack" style="margin:0;height:7px"><i style="width:'+Math.min(100,r.cr)+'%;background:'+col+'"></i></div><div style="font-size:10px;color:'+col+';font-weight:700;margin-top:2px;text-align:left">cost '+(r.cr>=999?'∞':r.cr+'%')+'</div></td>'
+            +'<td style="font-weight:700;color:'+col+'">'+(r.rev>0?r.m+'%':'—')+'</td><td>'+(r.pax?((r.rev-r.cost)>=0?'+':'')+'฿'+num((r.rev-r.cost)/r.pax):'—')+'</td></tr>'; }).join('')
+      +'<tr style="font-weight:700;background:#F7F8FB"><td>'+laT('รวม')+'</td><td>'+num(X.trips)+'</td><td>'+num(X.pax)+'</td><td>'+baht(X.rev)+'</td><td style="color:var(--eb-bad)">'+baht(X.cost)+'</td><td style="text-align:left;font-size:10.5px">cost '+pct(X.cost,X.rev)+'%</td><td style="color:'+(X.rev>X.cost?'var(--eb-good)':'var(--eb-bad)')+'">'+(X.rev>0?Math.round((X.rev-X.cost)*100/X.rev):0)+'%</td><td>'+(X.pax?'฿'+num((X.rev-X.cost)/X.pax):'—')+'</td></tr>'
+      +'</tbody></table><div class="eb-foot">'+laT('สีแถบ: เขียว < 70% · ส้ม 70–85% · แดง ≥ 85% ของรายได้ (เกณฑ์เดียวกับ Trip P&L)')+' · <b>'+laT('เฝ้าระวัง')+'</b> '+laT('= ต้นทุน ≥ 80% ของรายได้ในช่วงนี้')+'</div></div>';
+    /* 3 · รายได้ vs ต้นทุน รายวัน · −29 … +14 */
+    var days=[], mx=1, lossN=0;
+    for(var i=-29;i<=14;i++){ var ds=addDays(t0,i), d=cxDay(ds); days.push({ds:ds,d:d}); if(d.rev>mx) mx=d.rev; if(d.cost>mx) mx=d.cost; if(ds<=t0 && d.trips && d.cost>d.rev) lossN++; }
+    var bars='<div class="eb-bars" style="position:relative">'+days.map(function(x){ var we=[0,6].indexOf(dt(x.ds).getDay())>=0, fut=x.ds>t0, loss=!fut&&x.d.trips&&x.d.cost>x.d.rev;
+        return '<span title="'+E(thDow(x.ds)+' '+thD(x.ds)+' · '+laT('รายได้')+' '+baht(x.d.rev)+' · '+laT('ต้นทุน')+' '+baht(x.d.cost)+(fut?' ('+laT('จองไว้แล้ว · ต้นทุนตามแผน')+')':''))+'" style="flex:1;min-width:3px;position:relative;height:100%;display:flex;align-items:flex-end">'
+          +'<i class="'+(fut?'f':(x.ds===t0?'t':(we?'w':'')))+'" style="width:100%;height:'+Math.max(1,Math.round(x.d.rev*100/mx))+'%;'+(loss?'background:#F3B7B2;':'')+'"></i>'
+          +(x.d.cost>0?'<b style="position:absolute;left:0;right:0;height:2px;background:#E0523E;bottom:'+Math.round(x.d.cost*100/mx)+'%"></b>':'')
+          +'</span>'; }).join('')+'</div>'
+      +'<div class="eb-axis"><span>'+E(thD(addDays(t0,-29)))+'</span><span>'+E(thD(addDays(t0,-15)))+'</span><span>'+laT('วันนี้')+'</span><span>'+E(thD(addDays(t0,14)))+'</span></div>'
+      +'<div class="eb-lgd"><i style="background:var(--eb-s3)"></i>'+laT('วันธรรมดา')+' <i style="background:var(--eb-s4)"></i>'+laT('เสาร์–อาทิตย์')+' <i style="background:#E0523E;height:3px"></i>'+laT('ต้นทุน')+' <i class="hatch"></i>'+laT('จองไว้แล้ว · ต้นทุนตามแผน')+' <i style="background:#F3B7B2"></i>'+laT('วันขาดทุน')+' · '+num(lossN)+'</div>';
+    var c3='<div class="eb-card"><h2>'+laT('รายได้ vs ต้นทุน · รายวัน')+' <span class="eb-tag">'+laT('30 วันที่ผ่านมา + 14 วันข้างหน้า')+'</span>'+src(laT('ที่มา: Trip P&L'))+'</h2>'+bars+'<div class="eb-foot">'+laT('ขีดแดง = ต้นทุนของวันนั้น')+' · '+laT('รายได้ Trip P&L')+' = '+laT('คำนวณจาก Trip P&L รายทริป')+'</div></div>';
+    return h+'<div class="eb-grid eb-r2">'+c1+c2+'</div><div class="eb-grid" style="margin-top:12px">'+c3+'</div>';
+  }
   function viewPeriod(){
     var t0=today(), R=range(), toD=R.to<t0?R.to:t0;
+    var CX=cxRange(R.from, R.to);   /* §ebCost · ต้นทุนทั้งช่วง (รวมวันข้างหน้าเป็น forecast) */
     var A=agg(R.from, toD), Al=agg(addYears(R.from,-1), addYears(toD,-1));
     var Fut=agg(addDays(t0,1)>R.from?addDays(t0,1):R.from, R.to);
     var S=salesIn(R.from, toD), Sl=salesIn(addYears(R.from,-1), addYears(toD,-1));
     var B30=agg(addDays(t0,1), addDays(t0,30)), B30l=agg(addYears(addDays(t0,1),-1), addYears(addDays(t0,30),-1));
     var Lk=leakage(R.from, R.to), Cx=cxlIn(R.from, toD);
     var rpp=A.pax?A.rev/A.pax:0, rppL=Al.pax?Al.rev/Al.pax:0;
-    var h='<div class="eb-grid eb-kpis">'
+    var h='<div class="eb-grid eb-kpis eb-k8">'
       + kpi(laT('รายได้')+R.lbl+' ('+laT('วันเดินทาง)'), baht(A.rev), chg(A.rev,Al.rev)+' vs '+laT('ปีก่อน')+' · '+num(A.pax)+' pax')
       + kpi(laT('คาดการณ์สิ้น')+R.lbl.replace(laT('นี้'),''), baht(A.rev+Fut.rev), laT('ได้แล้ว')+' '+baht(A.rev)+' + '+laT('จองไว้')+' '+baht(Fut.rev)+(R.to>t0?'':' ('+laT('ครบช่วงแล้ว)')), '', (A.rev+Fut.rev)>0?pct(A.rev,A.rev+Fut.rev):null)
       + kpi(laT('ยอดขายที่เข้ามา (วันจอง)'), baht(S.val), num(S.n)+' '+laT('ใบ')+' · '+chg(S.val,Sl.val)+' vs '+laT('ปีก่อน'))
       + kpi(laT('รายได้เฉลี่ยต่อหัว'), '฿'+num(rpp), chg(rpp,rppL)+' vs '+laT('ปีก่อน'))
       + kpi(laT('จองล่วงหน้า 30 วัน'), baht(B30.rev), num(B30.pax)+' pax · '+chg(B30.rev,B30l.rev)+' vs '+laT('ช่วงเดียวกันปีก่อน'))
       + kpi(laT('ยกเลิก')+R.lbl+' ('+laT('วันที่ยกเลิก)'), Cx.val?('<span style="color:var(--eb-bad)">'+baht(-Cx.val)+'</span>'):baht(0), num(Cx.n)+' '+laT('ใบ')+' · '+num(Cx.pax)+' pax · '+laT('สุทธิที่เข้ามา')+' <b>'+baht(S.val-Cx.val)+'</b>', Cx.val>S.val*0.15?'warn':'')
+      + cxKpis(CX, E(R.lbl))   /* §ebCost */
       + '</div>';
     h+='<div class="eb-sec">Live booking · '+laT('พรุ่งนี้')+'</div>'+tomorrowCard(true);
 
@@ -857,6 +967,8 @@
       + '<div class="eb-card"><h2>'+laT('รายได้รายวัน · 30 วันที่ผ่านมา + 14 วันข้างหน้า')+src(laT('ที่มา')+': Booking')+'</h2>'+bars+'</div>'
       + '<div class="eb-card"><h2>'+laT('ช่องทาง · ตลาด')+' <span class="eb-tag">'+laT('สัดส่วนรายได้')+E(R.lbl)+'</span></h2>'+chanCard(A.byChan,laT('ช่องทางขาย'))
       + '<div style="font-size:11.5px;color:var(--eb-ink2);font-weight:600;margin-bottom:4px">'+laT('สัญชาติ (รายได้)')+'</div>'+(nat.length?hbar(nat,baht):'<div class="eb-none">—</div>')+'</div></div>';
+
+    h+=cxSection(CX, R, t0);   /* §ebCost · ต้นทุน · กำไร */
 
     /* โปรแกรม · เอเย่นต์ */
     var fams=Object.keys(A.byFam).map(function(k){ var F=A.byFam[k], L=Al.byFam[k]; return {f:F.f, rev:F.rev, pax:F.pax, ly:L?L.rev:0}; })
@@ -1748,6 +1860,8 @@
       '.eb-sp{flex:1}.eb-upd{font-size:11.5px;color:var(--eb-mut)}',
       '.eb-grid{display:grid;gap:12px}',
       '.eb-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}',
+      '.eb-kpis.eb-k8{grid-template-columns:repeat(4,minmax(0,1fr))}',   /* §ebCost · 8 ใบ = 2 แถว × 4 */
+      '@media(max-width:1180px){.eb-kpis.eb-k8{grid-template-columns:repeat(2,minmax(0,1fr))}}',
       '.eb-r5{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}',
       '.eb-r2{grid-template-columns:minmax(0,1fr) minmax(0,1.55fr)}',
       '.eb-r3{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}',
