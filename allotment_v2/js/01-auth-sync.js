@@ -1150,6 +1150,24 @@
     {v:'lim-pjlite', lim:true, t:'ใบงานเรือ · ไม่เห็นทีมเรือ/ไกด์ · ไม่มีปุ่มพิมพ์', d:'หน้าใบงานเรือของทุกท่า · ซ่อนหัวข้อ Captain & Crew และ Guides & Trainee (รวมใบอนุญาต ปุ่มดึงทีม/จัดไกด์ ใบงานไกด์) · ไม่มีปุ่มพิมพ์ · ยังเห็นเรือ เส้นทาง ภาษา ครัว ลูกค้า โน้ต'},
     {v:'lim-bkct', lim:true, t:'ไม่เห็น Booking – Transfer / City Tour', d:'ซ่อนเมนู Booking – Transfer / City Tour (หน้าจองฝั่งรถ/ทัวร์บก) · เมนู Booking ฝั่งเรือยังเห็นตามสิทธิ์'},
     {v:'lim-bkprog', lim:true, t:'Booking · เห็นแค่ Calendar + ตารางโปรแกรม + Boat Running', d:'หน้า Booking เหลือแท็บ Calendar กับ By trip · date · ใน By trip เห็นแค่การ์ดตารางโปรแกรมกับ Boats running (ไม่เห็นรายชื่อลูกค้า เรือ รถ ล็อก) · ไม่มีปุ่ม New booking · เปิดใบจองไม่ได้'});
+  /* §pierScope (2026-10-26) · ผูกกับท่า · owner "ขอให้เฉพาะของระนองได้ไหม" · เลือกได้ท่าเดียว (__laTogAct ถอดอีกสองท่าให้)
+     ทุกหน้าที่คนนี้เปิดได้ จะเห็นเฉพาะเส้นทาง/เรือ/ใบจองของท่านั้น · admin ไม่ถูกกรอง · กรองตอนแสดงผลเท่านั้น */
+  var LA_PIERS=[['tublamu','ทับละมุ','Tub Lamu'],['panwa','ภูเก็ต (วิสิษฐ์พันวา)','Visit Panwa'],['ranong','ระนอง','Ranong']];
+  LA_PIERS.forEach(function(p){
+    LA_ACTS.push({v:'lim-pier-'+p[0], lim:true, pier:p[0], t:'เห็นเฉพาะท่า'+p[1], d:'ผูกผู้ใช้กับท่า'+p[1]+' · ทุกหน้าที่เปิดได้ (Booking · Boat Operation · เช็คอิน · Travel Summary · Daily Availability · Fleet Calendar) จะเห็นเฉพาะเส้นทาง เรือ และใบจองของท่านี้ · เมนูท่าอื่นถูกซ่อน · เลือกได้ท่าเดียว'});
+  });
+  window.LA_PIERS=LA_PIERS;
+  window.laMyPier=function(){ if(!ME || ME.role==='admin' || !Array.isArray(ME.perms)) return ''; for(var i=0;i<LA_PIERS.length;i++){ if(ME.perms.indexOf('lim-pier-'+LA_PIERS[i][0])>=0) return LA_PIERS[i][0]; } return ''; };
+  window.laPierScoped=function(){ return !!window.laMyPier(); };
+  window.laPierName=function(k){ for(var i=0;i<LA_PIERS.length;i++){ if(LA_PIERS[i][0]===k) return LA_PIERS[i][1]; } return k||''; };
+  /* pier ว่าง/other = โปรแกรมบก (รถ/ทัวร์เมือง) · คนท่าไม่เห็น */
+  window.laPierOk=function(pier){ var my=window.laMyPier(); if(!my) return true; return (pier||'')===my; };
+  window.laRouteOk=function(r){ return window.laPierOk(r&&r.pier); };
+  window.laRouteIdOk=function(rid){ if(!window.laMyPier()) return true; var r=(typeof getRoute==='function')?getRoute(rid):null; return !!r && window.laRouteOk(r); };
+  window.laBkOk=function(bk){ if(!window.laMyPier()) return true; if(!bk) return false;
+    if(Array.isArray(bk.trips) && bk.trips.length) return bk.trips.some(function(t){ return t && window.laRouteIdOk(t.routeId); });
+    return window.laRouteIdOk(bk.programId); };
+  window.laPermPierOf=function(perms){ if(!Array.isArray(perms)) return ''; for(var i=0;i<LA_PIERS.length;i++){ if(perms.indexOf('lim-pier-'+LA_PIERS[i][0])>=0) return LA_PIERS[i][0]; } return ''; };
   window.LA_ACTS=LA_ACTS;
   window.laLimited=function(key){ if(!ME || ME.role==='admin') return false; return Array.isArray(ME.perms) && ME.perms.indexOf(key)>=0; };   /* §bkLim */
   function laActKeys(perms){ return Array.isArray(perms) ? LA_ACTS.map(function(a){return a.v;}).filter(function(k){ return perms.indexOf(k)>=0; }) : []; }
@@ -1225,6 +1243,8 @@
      ไม่งั้นคนที่มีสิทธิ์หน้าหนึ่งจะเห็นอีกหน้าที่ admin ไม่ได้ให้สิทธิ์ไว้ */
   window.laAllowed=laAllowed;
   function laApplyPerms(){
+    try{ var _mp=window.laMyPier(); LA_PIERS.forEach(function(p){ document.body.classList.toggle('la-pier-'+p[0], _mp===p[0]); });
+      if(_mp){ document.querySelectorAll('.nav-item[data-pogrp]').forEach(function(it){ if(it.dataset.pogrp!==_mp) it.style.display='none'; }); } }catch(e){}   /* §pierScope */
     try{ document.body.classList.toggle('la-bkprog', !!window.laLimited('lim-bkprog')); }catch(e){}   /* §bkLim */
     try{ document.body.classList.toggle('la-pjlite', !!window.laLimited('lim-pjlite')); }catch(e){}   /* §pjLim */
     if(laFullAccess()) return;
@@ -1797,7 +1817,9 @@
     h+=al.map(function(x){ return '<div class="al3 '+x[0]+'"><b>!</b><span>'+x[1]+'</span></div>'; }).join('');
     var T=function(k,v,s,c){ return '<div><div class="kick">'+k+'</div><b style="color:'+(c||'#0F1B3D')+'">'+v+'</b><i>'+s+'</i></div>'; };
     h+='<div class="tl3">'+T('เมนูที่เข้าได้',mn,'จาก '+LA_NAV.length)+T('พื้นที่แก้ไขได้',en,'จาก '+LA_AREAS.length,'#0F6E56')+T('ดูอย่างเดียว',vw,'พื้นที่')
-      +T('ผูกกับเซลล์',u.salesId?esc(lauSalesName(u.salesId)):'—',u.salesId?'เห็นเฉพาะเอเยนต์ตัวเอง':'ไม่ผูก',u.salesId?'#0F6E56':'#8A8F9C')+'</div>';
+      +T('ผูกกับเซลล์',u.salesId?esc(lauSalesName(u.salesId)):'—',u.salesId?'เห็นเฉพาะเอเยนต์ตัวเอง':'ไม่ผูก',u.salesId?'#0F6E56':'#8A8F9C')
+      +(function(){ var pk=(u.role==='admin')?'':window.laPermPierOf(u.acts||[]); return T('ผูกกับท่า',pk?esc(window.laPierName(pk)):'—',pk?'เห็นเฉพาะข้อมูลท่านี้ · ตั้งที่ "สิทธิ์พิเศษ"':'ทุกท่า',pk?'#6B289A':'#8A8F9C'); })()   /* §pierScope */
+      +'</div>';
     h+='<div class="sh3"><span class="kick">สิทธิ์ตามพื้นที่</span><span style="margin-left:auto;font-size:11.5px;color:#8A8F9C">'+(adm?'admin ข้ามสิทธิ์รายพื้นที่':'คลิกชื่อพื้นที่เพื่อกางรายเมนู · ติ๊กได้ทีละหน้า')+'</span></div>';
     h+=LA_AREAS.map(function(a){ var C=lauAC(a.k), n=lauMenus(a.k).length, L=adm?'edit':lauLvl(u.role,D.perms,D.edit,a.k), g=adm?n:lauGot(D.perms,a.k), p=Math.round(g/(n||1)*100);
       var seg=[['no','ไม่มี'],['view','ดู'],['edit','แก้ไข']].map(function(s){ var on=s[0]===L;
@@ -2208,7 +2230,8 @@
   }
   window.__laTogAct=function(pfx,v){
     var D=lauTarget(pfx); if(!D) return; if(!Array.isArray(D.acts)) D.acts=[];
-    if(D.acts.indexOf(v)>=0) D.acts=D.acts.filter(function(x){ return x!==v; }); else D.acts.push(v);
+    if(D.acts.indexOf(v)>=0) D.acts=D.acts.filter(function(x){ return x!==v; });
+    else { if(v.indexOf('lim-pier-')===0) D.acts=D.acts.filter(function(x){ return x.indexOf('lim-pier-')!==0; });   /* §pierScope · ท่าเดียว */ D.acts.push(v); }
     lauRepaint(pfx);
   };
   function lauTarget(pfx){ return pfx==='a'?LAU.add:LAU.draft; }

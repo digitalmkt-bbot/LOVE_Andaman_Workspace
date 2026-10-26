@@ -4698,7 +4698,7 @@ function bkV2RenderLocks(){
   // §cityTourView · Seat Locks tab is per-page: marine page (flag off) excludes land-route locks ·
   //   land page (flag on) shows only land-route locks. Filtered here (display only) — does not
   //   touch bkV2LocksOnDate/bkV2LockPoolHold etc., which stay global for Boat Op/availability.
-  const _lkOk = rid => (typeof laIsLandRoute!=='function') || (laIsLandRoute(rid)===_bkV2CityTourOnly);
+  const _lkOk = rid => ((typeof laIsLandRoute!=='function') || (laIsLandRoute(rid)===_bkV2CityTourOnly)) && ((typeof laRouteIdOk!=='function') || laRouteIdOk(rid));   /* §pierScope */
 
   // ── ยอดรวม ──
   /* §bkLock · ยอดรวมของหน้านี้เป็นเรื่องของ "ที่นั่ง" · ใบชนิดเรือทั้งลำนับแยก
@@ -20458,6 +20458,7 @@ function renderCheckinAll(){
   // §landCk · if(document.getElementById('landcheckin-host')) renderLandCheckin();
 }
 function pckSetPier(p){
+  if(typeof laPierScoped==='function' && laPierScoped()) return;   /* §pierScope */
   _pckPier=(_pckPier===p)?null:p;
   _pckFam=null; _pckRoute=null;            /* ท่าเปลี่ยน โปรแกรมที่เลือกไว้อาจไม่อยู่ท่านี้แล้ว */
   renderPierCheckin();
@@ -20487,6 +20488,7 @@ function pckPierBar(date){
   });
   var ks=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
   if(ks.length<2) return '';               /* มีท่าเดียวก็ไม่ต้องมีปุ่มให้กด */
+  if(typeof laPierScoped==='function' && laPierScoped()) return '';   /* §pierScope · ผูกท่าแล้วไม่มีปุ่มสลับ */
   var b=function(k,lbl,n){
     return '<button class="pkh-pb'+((_pckPier===k)?' on':'')+'" onclick="pckSetPier('
       +(k?('\''+k+'\''):'null')+')" title="'+ckEsc(lbl)+'">'+ckEsc(lbl)+'<b>'+n+'</b></button>'; };
@@ -25273,6 +25275,7 @@ function pckScrollRestore(host){
 }
 function renderPierCheckin(){
   var host=pckHostEl(); if(!host) return;   /* §landCk */
+  if(typeof laMyPier==='function' && laMyPier()) _pckPier=laMyPier();   /* §pierScope · ล็อกท่า */
   var e=ckEsc, date=_pckDate;
   if(typeof bkV2CharterBoatHeal==='function'){ try{ bkV2CharterBoatHeal(date); }catch(_){} }
   /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
@@ -29755,10 +29758,10 @@ function tsV6Head(H, money){
   var WN=function(n){ return n?('<span class="wn" title="'+n+' ใบมีเรื่องค้างก่อนปิดวัน">!</span>'):''; };
   /* ── แถวชิป · ท่าเรือ › เส้นทาง ── */
   var totPax=0; H.pOrder.forEach(function(p){ totPax+=H.pMap[p].pax; });
-  var rail='<span class="h4-fl">ท่าเรือ</span>'
+  var rail=((typeof laPierScoped==='function')&&laPierScoped()) ? ('<span class="h4-fl">ท่าเรือ</span><button class="h4-c on" disabled>'+e(laPierName(laMyPier()))+'<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i></button>') : '<span class="h4-fl">ท่าเรือ</span>'
     +'<button class="h4-c'+(_tsPier?'':' on')+'" data-tspier="" onclick="tsPickPier(\'\')">ทุกท่าเรือ'
       +(_tsPier?'':('<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i>'))+'</button>';
-  H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;
+  if(!((typeof laPierScoped==='function')&&laPierScoped())) H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;   /* §pierScope */
     rail+='<button class="h4-c'+(on?' on':'')+(P.n?'':' zero')+'" data-tspier="'+q(p)+'" onclick="tsPickPier(\''+q(p)+'\')">'+e(tsPierName(p))
       /* เลือกท่าแล้ว ท่าอื่นย่อเหลือชื่อ · ให้ชิปเส้นทางพอดีแถวเดียว */
       +((_tsPier&&!on)?'':('<i>'+nr+' เส้นทาง &middot; '+P.n+' ใบ &middot; '+P.pax+' คน</i>'))+WN(P.w)+'</button>'; });
@@ -30338,6 +30341,7 @@ function renderTravelSum(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var e=ckEsc, date=_tsDate, money=function(n){ return '฿'+Number(n||0).toLocaleString('en-US'); };
   var everything=tsRows(date);
+  if(typeof laMyPier==='function' && laMyPier()){ everything=everything.filter(function(r){ return laRouteIdOk(r.routeId); }); _tsPier=''; }   /* §pierScope · เห็นเฉพาะท่าตัวเอง · ไม่ต้องใช้ตัวกรองท่าอีก */
   // §tsRoute · รายชื่อเส้นทางคิดจากทั้งวันเสมอ (ไม่งั้นเลือกแล้วปุ่มอื่นหาย)
   // §tsRefFollowVat · แต่ "จำนวน" บนปุ่มนับจากชุดที่กรองภาษีแล้ว ให้ตรงกับเนื้อเอกสาร
   var rMap={}, rOrder=[];
@@ -51074,7 +51078,7 @@ function bkV2BackfillRouteFamilies(){
 function bkV2Families(){
   if(typeof ROUTES === 'undefined') return _BKV2_FAMILIES;
   return _BKV2_FAMILIES.filter(fam =>
-    ROUTES.some(r => bkV2RouteFamily(r.id)?.id === fam.id && bkV2RouteActiveInMonth(r.id, _bkV2.cursor))
+    ROUTES.some(r => bkV2RouteFamily(r.id)?.id === fam.id && bkV2RouteActiveInMonth(r.id, _bkV2.cursor) && ((typeof laRouteOk!=='function')||laRouteOk(r)))   /* §pierScope */
   );
 }
 // Routes within a family · ALL variants active in visible month (not filtered by rate type)
@@ -51083,6 +51087,7 @@ function bkV2FamilyRoutes(familyId){
   if(typeof ROUTES === 'undefined') return [];
   return ROUTES
     .filter(r => bkV2RouteFamily(r.id)?.id === familyId)
+    .filter(r => (typeof laRouteOk!=='function')||laRouteOk(r))   /* §pierScope */
     .filter(r => bkV2RouteActiveInMonth(r.id, _bkV2.cursor))
     .map(r => ({ id: r.id, full: r.name, short: bkV2ShortenRouteName(r.name) }));
 }
@@ -53282,8 +53287,9 @@ function bkV2RenderApprovals(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);
-  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').filter(_ctLandBk);
-  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').filter(_ctLandBk).sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
+  const _pOk=b=>(typeof laBkOk!=='function')||laBkOk(b);   /* §pierScope */
+  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').filter(_ctLandBk).filter(_pOk);
+  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').filter(_ctLandBk).filter(_pOk).sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
   const card=(b)=>{
     const a=sbGetAgent(b.agentId); const ap=b.approval||{};
     const hasCap=(ap.over&&ap.over.length)||ap.totOver>0;
@@ -53414,7 +53420,7 @@ function bkV2RenderCancelReport(){
   const fmt=n=>'฿'+Math.round(n||0).toLocaleString();
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);
-  const all=(SB_BOOKINGS||[]).filter(_ctLandBk);
+  const all=(SB_BOOKINGS||[]).filter(_ctLandBk).filter(b=>(typeof laBkOk!=='function')||laBkOk(b));   /* §pierScope */
   const cancelled=all.filter(b=>b.status==='cancelled'||b.status==='cancelled_weather');
   const partials=[]; all.forEach(b=>(b.partialCancels||[]).forEach(pc=>partials.push({b,pc})));  // partial-cancel events
   const denom=all.filter(b=>b.status!=='rejected' && b.status!=='draft').length || 1;  // confirmed+completed+cancelled
@@ -53624,6 +53630,7 @@ function bkV2RenderStats(){
     x.bookings.forEach(id => mBkSet.add(id));
   });
   SB_BOOKINGS.forEach(bk => {
+    if(typeof laBkOk==='function' && !laBkOk(bk)) return;   /* §pierScope */
     // §cityTourView · marine page (flag off) excludes land bookings · land page (flag on) excludes marine
     if(typeof laIsLandRoute==='function'){
       const _isLandBk = bk.schemaVer===2
@@ -53718,6 +53725,7 @@ function bkV2RenderRouteAvgs(){
   SB_BOOKINGS.forEach(bk => {
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
+        if(typeof laRouteIdOk==='function' && !laRouteIdOk(t.routeId)) return;   /* §pierScope */
         if(t.date && t.date.startsWith(ym)){
           if(!bkPerRoute[t.routeId]) bkPerRoute[t.routeId] = new Set();
           bkPerRoute[t.routeId].add(bk.id);
@@ -55082,7 +55090,7 @@ function bkV2RenderTab2(){
   });
 
   // ── Filters: pier + program family (+ optional route from calendar drill) ──
-  const pierF = _bkV2T2Pier || 'all';
+  const pierF = ((typeof laMyPier==='function') && laMyPier()) || _bkV2T2Pier || 'all';   /* §pierScope · ผูกกับท่า = ล็อกตัวกรองท่า */
   const famF = _bkV2T2Family || '';
   const routeF = _bkV2.filterRoute;
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
@@ -55252,7 +55260,7 @@ function bkV2RenderTab2(){
   const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
 
   // ── Filter bar (pier segmented + program dropdown) · original ──
-  const pierBtn = (val,lbl)=>`<button class="${pierF===val?'on':''}" onclick="bkV2Tab2SetPier('${val}')">${lbl}</button>`;
+  const pierBtn = (val,lbl)=>((typeof laPierScoped==='function')&&laPierScoped()) ? '' : `<button class="${pierF===val?'on':''}" onclick="bkV2Tab2SetPier('${val}')">${lbl}</button>`;   /* §pierScope */
   const filterBar = `
     <div class="t2-filterbar">
       <div class="t2-seg">${pierBtn('all','All')}${pierBtn('tublamu','Tub Lamu')}${pierBtn('panwa','Visit Panwa')}${pierBtn('ranong','Ranong')}</div>
@@ -55510,7 +55518,7 @@ function bkV2RenderTab2(){
   }).join('');
 
   /* ══ กรอบซ้าย · โปรแกรมวันนี้ ════════════════════════════════════════════ */
-  const _btPierBtn = (v,l)=>`<button class="bt-seg-b${pierF===v?' on':''}" onclick="bkV2Tab2SetPier('${v}')">${l}</button>`;
+  const _btPierBtn = (v,l)=>((typeof laPierScoped==='function')&&laPierScoped()) ? '' : `<button class="bt-seg-b${pierF===v?' on':''}" onclick="bkV2Tab2SetPier('${v}')">${l}</button>`;   /* §pierScope */
   const _btProgBody = _famList.map(a=>{
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
@@ -58382,7 +58390,7 @@ function bkV2RenderTab2(){
 function bkV2RenderTab3(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
-  const _srcBookings = (typeof laIsLandRoute!=='function') ? SB_BOOKINGS : SB_BOOKINGS.filter(bk => (bk.schemaVer===2 ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly) : (laIsLandRoute(bk.programId)===_bkV2CityTourOnly)));
+  const _srcBookings = ((typeof laBkOk==='function') ? SB_BOOKINGS.filter(laBkOk) : SB_BOOKINGS).filter(bk => (typeof laIsLandRoute!=='function') ? true : ((bk.schemaVer===2 ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly) : (laIsLandRoute(bk.programId)===_bkV2CityTourOnly))));
   const all = _srcBookings.map(bkV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
   const kCount = all.length;
   const kConfirmed = all.filter(b=>b.status==='confirmed').length;
@@ -59707,7 +59715,7 @@ function bkV2RouteDDOpts(){
 function bkV2RouteDDRender(idx, val){
   const dd = document.getElementById('bkv2-route-dd-' + idx);
   if(!dd) return;
-  const opts = bkV2RouteDDOpts();
+  const opts = bkV2RouteDDOpts().filter(o => (typeof laRouteIdOk!=='function') || laRouteIdOk(o.id));   /* §pierScope */
   const q = String(val||'').trim().toLowerCase();
   const filtered = !q ? opts : opts.filter(o => o.label.toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
   if(filtered.length === 0){ dd.innerHTML = '<div class="bkv2-nb-dd-empty">no route matches · agent rate type may not cover this</div>'; return; }
@@ -63735,6 +63743,7 @@ function bkV2SetAdjustment(i, field, val){
 function bkV2OpenDetail(id){
   if(bkLimProg()) return;   /* §bkLim */
   if(!id) return;
+  if(typeof laPierScoped==='function' && laPierScoped()){ const _b=(SB_BOOKINGS||[]).find(x=>x&&x.id===id); if(_b && !laBkOk(_b)){ alert('This booking belongs to another pier.'); return; } }   /* §pierScope */
   _bkV2.detailId = id;
   bkV2Render();
   // scroll top

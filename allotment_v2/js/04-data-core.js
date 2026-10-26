@@ -6138,6 +6138,7 @@ function buildDAGroups(ds){
     // defensive: skip if op is array (old format) or no route
     if(Array.isArray(op)||!op.route||op.type==='charter') return;
     const r=getRoute(op.route); if(!r) return;
+    if(typeof laRouteOk==='function' && !laRouteOk(r)) return;   /* §pierScope */
     const b=getBoat(bid); if(!b) return;
     const key=`${op.route}__${op.type}`;
     const pier=r.pier;
@@ -6189,7 +6190,7 @@ function _daSortRows(rows){
 var _daPier='all', _daTplOpen=false;
 var DA_PIER_META={tublamu:{label:'Tub Lamu Pier',short:'Tub Lamu',dot:'#185FA5'},panwa:{label:'Visit Panwa Pier',short:'Panwa',dot:'#0F6E56'},ranong:{label:'Ranong Pier',short:'Ranong',dot:'#B45309'}};
 var DA_DOW_TH=['อา','จ','อ','พ','พฤ','ศ','ส'];
-function daPiersOf(groups){ return ['tublamu','panwa'].concat(Object.keys((groups&&groups.ranong)||{}).length?['ranong']:[]); }
+function daPiersOf(groups){ var all=['tublamu','panwa'].concat(Object.keys((groups&&groups.ranong)||{}).length?['ranong']:[]); var my=(typeof laMyPier==='function')?laMyPier():''; return my?all.filter(function(p){ return p===my; }):all; }   /* §pierScope */
 function daRowsOf(groups,pier){ return _daSortRows(Object.values((groups&&groups[pier])||{})); }
 function daFree(g){ return Math.max(0,(g.allot||0)-(g.booked||0)); }
 function daTier(g){ var free=daFree(g), pct=g.allot>0?Math.round(g.booked/g.allot*100):0; return (free<=0||pct>=100)?'full':freeClass(pct); }
@@ -6199,7 +6200,7 @@ function daDayTotals(ds){
   return {free:free,cap:cap,n:n,groups:groups};
 }
 function daSetDate(ds){ daDate=new Date(ds+'T12:00:00'); renderDA(); }
-function daSetPier(p){ _daPier=p; renderDA(); }
+function daSetPier(p){ if(typeof laPierScoped==='function' && laPierScoped()) return; _daPier=p; renderDA(); }   /* §pierScope */
 function daDateLbl(d){ return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
 /* ข้อความส่งเอเจ้น · รูปแบบเดิม (§daLineFmt / §daMarkTwo) · pierOnly = ตัดเฉพาะท่าเดียว */
 function daAvailBlock(groups,pierOnly){
@@ -6336,7 +6337,8 @@ function renderDA(){
     });
   });
   if(!shown) list='<div style="padding:28px 14px;text-align:center;color:#8a8a82;font-size:12.5px">ไม่มีเที่ยวออก'+(_daPier!=='all'?' ที่ท่านี้':'')+' · '+daDateLbl(daDate)+'</div>';
-  var pierTabs='<span class="da2-tabs"><span class="'+(_daPier==='all'?'on':'')+'" onclick="daSetPier(\'all\')">ทุกท่า</span>'+piers.map(function(p){ return '<span class="'+(_daPier===p?'on':'')+'" onclick="daSetPier(\''+p+'\')">'+DA_PIER_META[p].short+'</span>'; }).join('')+'</span>';
+  if(typeof laMyPier==='function' && laMyPier()) _daPier=laMyPier();   /* §pierScope · ล็อกท่า */
+  var pierTabs=((typeof laPierScoped==='function')&&laPierScoped()) ? '<span class="da2-tabs"><span class="on">'+DA_PIER_META[_daPier].short+'</span></span>' : '<span class="da2-tabs"><span class="'+(_daPier==='all'?'on':'')+'" onclick="daSetPier(\'all\')">ทุกท่า</span>'+piers.map(function(p){ return '<span class="'+(_daPier===p?'on':'')+'" onclick="daSetPier(\''+p+'\')">'+DA_PIER_META[p].short+'</span>'; }).join('')+'</span>';
   var left='<div class="da2-card"><div class="da2-hd"><button class="da2-bt sm" onclick="changeDA(-1)">‹</button><b>'+daDateLbl(daDate)+'</b><button class="da2-bt sm" onclick="changeDA(1)">›</button>'
     +'<button class="da2-bt sm'+(ds===tomorrow?' on':'')+'" onclick="daSetDate(\''+tomorrow+'\')">พรุ่งนี้</button><button class="da2-bt sm'+(ds===today?' on':'')+'" onclick="daSetDate(\''+today+'\')">วันนี้</button>'
     +'<small>· ตัวเลข = ที่นั่งว่างขายได้ · อัปเดตจากใบจองอัตโนมัติ</small><span style="margin-left:auto">'+pierTabs+'</span></div>'
@@ -8036,7 +8038,7 @@ function bop2GoToday(){
   _bop2.selDate = TODAY_STR;
   renderOp();
 }
-function bop2SetPier(p){ _bop2.pier = p; renderOp(); }
+function bop2SetPier(p){ if(typeof laPierScoped==='function' && laPierScoped()) return; _bop2.pier = p; renderOp(); }   /* §pierScope */
 // Select a whole date by clicking the matrix day-header (no route popover · just updates the date + fleet panel)
 function bop2SelectDate(date){
   if(!date) return;
@@ -8779,7 +8781,7 @@ window.fcToday=function(){ fcSetMode(_fc.mode); };
 /* §fcPier · กรองท่า · 'all' = ทุกท่า · เลือกท่าไหนก็เหลือเฉพาะกลุ่มนั้น
    รวมถึงตัวเลขบนแถบหัวด้วย ไม่งั้นหัวบอกเลขทั้งฝูงแต่ตารางโชว์ท่าเดียว อ่านขัดกัน
    In Shop ไม่ผูกกับท่าไหน จึงโผล่เฉพาะตอนดู 'All piers' */
-window.fcSetPier=function(p){ _fc.pier=p||'all'; renderFleetCal(); };
+window.fcSetPier=function(p){ if(typeof laPierScoped==='function' && laPierScoped()) return; _fc.pier=p||'all'; renderFleetCal(); };   /* §pierScope */
 function fcPierOn(pk){ return _fc.pier==='all' || _fc.pier===pk; }
 /* คลิกวัน → open in Boat Operation ของวันนั้น · หน้านี้ไม่แก้อะไรเอง */
 function fcOpenDay(ds){
@@ -9054,7 +9056,7 @@ function fcMobileHtml(){
         +'<span class="n'+(f?'':' z')+'">'+f+' free</span></button>'; }).join('')+'</div>';
   }
   h+='</div><div class="fm-body">';
-  h+='<div class="fm-pills"><button class="fm-pill'+(_fc.pier==='all'?' on':'')+'" onclick="fcSetPier(\'all\')">All piers</button>'
+  h+='<div class="fm-pills">'+(((typeof laPierScoped==='function')&&laPierScoped())?'':'<button class="fm-pill'+(_fc.pier==='all'?' on':'')+'" onclick="fcSetPier(\'all\')">All piers</button>')   /* §pierScope */
     +FC_PIER.filter(function(p){ return p[0]!=='other'; }).map(function(p){
       return '<button class="fm-pill'+(_fc.pier===p[0]?' on':'')+'" onclick="fcSetPier(\''+p[0]+'\')">'+e(p[2])+'</button>'; }).join('')+'</div>';
 
@@ -9151,6 +9153,7 @@ function fcMobileHtml(){
   return h;
 }
 function renderFleetCal(){
+  if(typeof laMyPier==='function' && laMyPier()) _fc.pier=laMyPier();   /* §pierScope · ล็อกท่า */
   fcInit();
   var host=document.getElementById('fc-host'); if(!host) return;
   var TODAY=fcToday_(), boats=fcBoats();
@@ -10106,6 +10109,7 @@ function bop2RenderShell(){
   const dayColMin = isMonth ? 22 : 50;
   // Routes filtered by pier
   const allRoutes = ROUTES.filter(r => r.active !== false && !laIsLandRoute(r));   // §otherPier · ทัวร์บกไม่มีเรือให้จัด
+  if(typeof laMyPier==='function' && laMyPier()) _bop2.pier=laMyPier();   /* §pierScope · ล็อกท่า */
   const routes = _bop2.pier === 'all' ? allRoutes : allRoutes.filter(r => r.pier === _bop2.pier);
   // Group by pier for display
   const tublamuRoutes = routes.filter(r => r.pier === 'tublamu');
@@ -10386,10 +10390,11 @@ function bop2RenderShell(){
         <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">pax ที่จองแล้ว · สีตาม % ที่ขายได้</span>
       </div>
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px">
+        ${((typeof laPierScoped==='function')&&laPierScoped()) ? `<span class="bo-pier-pill on">${_bop2.pier==='tublamu'?'Tub Lamu':_bop2.pier==='panwa'?'Visit Panwa':'Ranong'}</span>` : `
         <span class="bo-pier-pill ${_bop2.pier==='all'?'on':''}" onclick="bop2SetPier('all')">All piers</span>
         <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
         <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
-        ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}
+        ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}`}   <!-- §pierScope -->
         <!-- §bopHdr · ปุ่มคุมตารางย้ายมาอยู่ใกล้ตารางตาม mockup -->
         <span class="bo-pier-pill ${!isMonth?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
         <span class="bo-pier-pill ${isMonth?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
