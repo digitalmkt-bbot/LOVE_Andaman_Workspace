@@ -21292,8 +21292,21 @@ function flMaintAddPart(jobId){
   invSyncLegacy(inv);
   const avail=invQtyAt(inv,location);
   if(qty>avail){alert(`คลังนี้เหลือ ${avail} ${inv.unit||''} เท่านั้น`);return;}
+  if(flMaintWithdraw(jobId,invId,location,qty)){alert('หักสต็อกไม่สำเร็จ');return;}   /* §flnWd · ตัวกลางเดียวกับฟอร์ม + เพิ่มงาน */
+  flSave();
+  flMaintRefreshParts(jobId); // surgical update · keeps +Withdraw button alive → no scroll jump
+}
+/* ══ §flnWd (2026-10-26) · ตัวกลางเบิกอะไหล่ลงงาน 1 รายการ · ยกมาจาก flMaintAddPart ทั้งก้อน (หักสต็อก · ประวัติคลัง · รวมแถวเดิม · log · ต้นทุน)
+   ใช้ร่วมกันระหว่างปุ่ม + Withdraw ในหน้างาน และหน้าต่าง + เพิ่มงาน (เบิกพร้อมสร้างงาน)
+   คืน '' = สำเร็จ · คืนข้อความ = ไม่ได้หัก (ไม่บันทึก ไม่ redraw · ผู้เรียกทำเอง) ══ */
+function flMaintWithdraw(jobId,invId,location,qty){
+  const m=FL_MAINT.find(x=>x.id===jobId); if(!m) return 'no job';
+  const inv=FL_INVENTORY.find(x=>x.id===invId); if(!inv) return 'no item';
+  qty=+qty||0; if(!(qty>0)) return 'no qty';
+  invSyncLegacy(inv);
+  if(qty>invQtyAt(inv,location)) return 'short';
   // deduct from the chosen warehouse's stock entry
-  if(!invRemoveAt(inv,location,qty)){alert('หักสต็อกไม่สำเร็จ');return;}
+  if(!invRemoveAt(inv,location,qty)) return 'short';
   // log to inventory history
   if(!inv.history) inv.history=[];
   inv.history.push({id:(typeof LA_UID==='function'?LA_UID('h'):'h'+Math.random().toString(36).slice(2)),date:TODAY_STR,type:'withdraw',qty,location,note:`เบิกใช้งาน ${m.no||''} · ${m.title||''} · @ ${location}`+(m.status==='done'?' · ลงย้อนหลัง (งานปิดแล้ว)':''),by:'ระบบ',jobId:m.id});   // §dupNoId
@@ -21310,8 +21323,7 @@ function flMaintAddPart(jobId){
   if(!m.progressLog) m.progressLog=[];
   m.progressLog.push({date:TODAY_STR,text:`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})${_lateTag}`,by:_lateBy||'ระบบ'});
   flMaintCalcCost(jobId); // sync m.cost
-  flSave();
-  flMaintRefreshParts(jobId); // surgical update · keeps +Withdraw button alive → no scroll jump
+  return '';
 }
 
 function flMaintRemovePart(jobId,idx){
@@ -27725,6 +27737,11 @@ var FLW_TH={
   'Saved {0}.':'บันทึก {0} แล้ว', 'Saved {0} and {1}.':'บันทึก {0} และ {1} แล้ว', 'the report':'เรื่องที่แจ้ง', 'the job':'งาน',
   ' The job was not created, so the report waits at stage Reported.':' ยังไม่ได้สร้างงาน เรื่องที่แจ้งจึงรออยู่ที่ขั้น แจ้งปัญหา',
   ' Finish the start dialog first, then request parts from the job.':' ทำหน้าต่างเริ่มงานให้เสร็จก่อน แล้วค่อยขออะไหล่จากหน้างาน',
+  /* §flnWd */
+  'Withdraw parts from stock':'เบิกอะไหล่จากสต็อก', 'optional · stock is deducted when you save':'ไม่บังคับ · หักสต็อกตอนกดบันทึก',
+  'type a part, e.g. engine oil, oil filter':'พิมพ์ชื่ออะไหล่ เช่น น้ำมันเครื่อง กรองน้ำมัน', 'choose a part first':'เลือกอะไหล่ก่อน',
+  '{0} left':'เหลือ {0}', '+ Add':'+ เพิ่ม', 'Remove':'เอาออก', '{0} item':'{0} รายการ', '{0} items':'{0} รายการ',
+  'Withdraw from stock':'เบิกจากสต็อก', ' Withdrew {0} from stock.':' เบิกอะไหล่ {0}แล้ว', ' Not withdrawn (not enough stock): {0}.':' เบิกไม่ได้ (สต็อกไม่พอ): {0}',
   '':''
 };
 function flwT(s){ s=String(s==null?'':s); try{ if(typeof laLangGet==='function' && laLangGet()==='en') return s; }catch(_){ } var v=FLW_TH[s]; return v==null?s:v; }
@@ -29229,19 +29246,81 @@ function flnParts(boatId, ext){
            gearbox:(ext?(g('g')||[]).filter(function(x){ return x && (x.boatId===boatId || f(g('e')).some(function(e){ return e.id===x.engineId; })); }):f(g('g'))).map(function(x){ return {id:x.id, t:String(x.serial||'')+(x.note?(' · '+x.note):'')}; }),
            propeller:f(g('p')).map(function(x){ return {id:x.id, t:String(x.serial||'')+(x.note?(' · '+x.note):'')}; }) };
 }
+/* ══ §flnWd (2026-10-26) · owner ส่งภาพฟอร์ม "งานตามแผน" "อันนี้เพิ่มรายการเบิกอะไหล่ไปด้วยได้ไหม User จะได้กดเบิกอะไหล่ เช่นพวกน้ำมันเครื่องไปด้วยเลย"
+   ขั้น 3 อะไหล่และค่าแรง มีช่องเบิกจากสต็อก · เลือกของ (พิมพ์ค้นได้) · คลัง · จำนวน · + เพิ่ม → รายการรอเบิก (FLN.wd)
+   ยังไม่หักสต็อกตอนกดเพิ่ม · หักตอนบันทึก หลังสร้างงานแล้ว ด้วยตัวกลางเดียวกับปุ่มเบิกในหน้างาน (flMaintWithdraw)
+   คลังตั้งต้น = คลังของท่าที่เรืออยู่ ถ้ามีของ · ไม่งั้นคลังที่มีของมากสุด · ใช้ได้ทั้ง งานตามแผน และ แจ้งปัญหา → เปิดงาน ══ */
+var FLN_PIER_WH={panwa:'คลัง Visit Panwa', tublamu:'คลัง Tub Lamu', ranong:'คลัง Ranong'};
+function flnInvList(){ try{ return (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).filter(function(x){ return x && !x.archived && (x.stocks||[]).some(function(s){ return (+s.qty||0)>0; }); }); }catch(_){ return []; } }
+function flnInvLabel(x){ var t=0; (x.stocks||[]).forEach(function(s){ t+=(+s.qty||0); }); return String(x.name||'')+(x.partNo?(' · '+x.partNo):'')+' · '+flwTp('{0} left',(Math.round(t*100)/100)+' '+(x.unit||'')); }
+function flnInvFind(label){ var L=flnInvList(); for(var i=0;i<L.length;i++){ if(flnInvLabel(L[i])===label) return L[i]; } return null; }
+function flnInvLocs(inv, boatId){
+  var st=((inv&&inv.stocks)||[]).filter(function(s){ return (+s.qty||0)>0; }).sort(function(a,b){ return (+b.qty||0)-(+a.qty||0); });
+  var pref=''; try{ var b=getBoat(boatId), pr=b?((typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,TODAY_STR):b.pier):''; pref=FLN_PIER_WH[pr]||FLN_PIER_WH[b&&b.pier]||''; }catch(_){ }
+  var hit=st.filter(function(s){ return s.location===pref; })[0];
+  if(hit){ st=[hit].concat(st.filter(function(s){ return s!==hit; })); }
+  return st;
+}
+function flnInvPick(){
+  var inp=document.getElementById('fln-inv'), sel=document.getElementById('fln-inv-loc'); if(!inp || !sel || !FLN) return;
+  var inv=flnInvFind(inp.value), E=flBoardEsc;
+  if(!inv){ sel.innerHTML='<option value="">'+E(flwT('choose a part first'))+'</option>'; return; }
+  var u=inv.unit||'', pend=function(loc){ var n=0; (FLN.wd||[]).forEach(function(w){ if(w.invId===inv.id && w.loc===loc) n+=w.qty; }); return n; };
+  sel.innerHTML=flnInvLocs(inv, FLN.boat).map(function(s){ var left=Math.round(((+s.qty||0)-pend(s.location))*100)/100;
+    return '<option value="'+E(s.location)+'">'+E(s.location+' · '+flwTp('{0} left',left+' '+u))+'</option>'; }).join('');
+}
+function flnWdAdd(){
+  if(!FLN) return;
+  var inp=document.getElementById('fln-inv'), sel=document.getElementById('fln-inv-loc'), q=document.getElementById('fln-inv-qty');
+  var inv=inp?flnInvFind(inp.value):null;
+  if(!inv){ alert('Pick a part from the list first (type, then choose).'); return; }
+  var loc=sel?sel.value:''; if(!loc){ alert('Choose the warehouse.'); return; }
+  var qty=Math.round((parseFloat(q?q.value:'')||0)*100)/100; if(!(qty>0)){ alert('Enter a quantity above 0.'); return; }
+  var have=0, pend=0; try{ invSyncLegacy(inv); have=invQtyAt(inv,loc); }catch(_){ }
+  (FLN.wd||[]).forEach(function(w){ if(w.invId===inv.id && w.loc===loc) pend+=w.qty; });
+  if(qty+pend>have){ alert('Not enough stock in this warehouse: '+Math.max(0,Math.round((have-pend)*100)/100)+' '+(inv.unit||'')+' left.'); return; }
+  FLN.wd=FLN.wd||[];
+  var same=FLN.wd.filter(function(w){ return w.invId===inv.id && w.loc===loc; })[0];
+  if(same) same.qty=Math.round((same.qty+qty)*100)/100;
+  else FLN.wd.push({ invId:inv.id, name:inv.name, unit:inv.unit||'', cost:+inv.cost||0, loc:loc, qty:qty });
+  flnRender();
+  setTimeout(function(){ var e=document.getElementById('fln-inv'); if(e) e.focus(); },30);
+}
+function flnWdBox(){
+  var F=FLN, E=flBoardEsc, L=(F&&F.wd)||[], tot=0;
+  var rows=L.map(function(w,i){ var amt=w.qty*w.cost; tot+=amt;
+    return '<div class="fln-wdr"><b>'+E(w.name)+'</b><span class="mono">'+E(w.qty+' '+w.unit)+'</span><span>'+E(w.loc)+'</span><span class="mono">'+(w.cost?('฿'+Math.round(amt).toLocaleString('en-US')):'—')+'</span>'
+      +'<button type="button" data-a="wdel" data-v="'+i+'" title="'+E(flwT('Remove'))+'">&times;</button></div>'; }).join('');
+  var dl=flnInvList().map(function(x){ return '<option value="'+E(flnInvLabel(x))+'"></option>'; }).join('');
+  return '<div class="fln-wd"><div class="fln-lab">'+E(flwT('Withdraw parts from stock'))+' <span>'+E(flwT('optional · stock is deducted when you save'))+'</span></div>'
+    +(rows?('<div class="fln-wdl">'+rows+'<div class="fln-wdt"><span>'+E(flwTp(L.length===1?'{0} item':'{0} items',L.length))+'</span><b class="mono">'+(tot?('฿'+Math.round(tot).toLocaleString('en-US')):'')+'</b></div></div>'):'')
+    +'<div class="fln-wdp"><input id="fln-inv" class="fln-in" list="fln-inv-dl" autocomplete="off" placeholder="'+E(flwT('type a part, e.g. engine oil, oil filter'))+'">'
+    +'<datalist id="fln-inv-dl">'+dl+'</datalist>'
+    +'<select id="fln-inv-loc" class="fln-in"><option value="">'+E(flwT('choose a part first'))+'</option></select>'
+    +'<input id="fln-inv-qty" class="fln-in" type="number" min="0" step="any" value="1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();flnWdAdd();}">'
+    +'<button type="button" class="fln-wdb" data-a="wadd">'+E(flwT('+ Add'))+'</button></div></div>';
+}
+/* หลังสร้างงาน · หักสต็อกทีละรายการ · รายการที่หักไม่ได้ (ของหมดระหว่างกรอก) บอกในข้อความแจ้ง */
+function flnWdSum(){ var L=(FLN&&FLN.wd)||[], t=0; L.forEach(function(w){ t+=w.qty*w.cost; }); return flwTp(L.length===1?'{0} item':'{0} items',L.length)+(t?(' · ฿'+Math.round(t).toLocaleString('en-US')):''); }
+function flnWdApply(jobId){
+  var L=(FLN&&FLN.wd)||[], ok=0, bad=[];
+  L.forEach(function(w){ var r=''; try{ r=flMaintWithdraw(jobId,w.invId,w.loc,w.qty); }catch(_){ r='error'; } if(r) bad.push(w.name); else ok++; });
+  return { ok:ok, bad:bad };
+}
 function flnOpen(){
   if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
   if(typeof flwAddClose==='function') flwAddClose();
   var bs=flnBoats(), boat=(FLW.boat && bs.some(function(b){ return b.id===FLW.boat; }))?FLW.boat:(bs[0]?bs[0].id:'');
   var now=new Date(), hh=('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
   FLN={boat:boat, date:TODAY_STR, time:hh, by:(typeof flBoardWho==='function'?flBoardWho():'')||'', title:'', detail:'', cause:'', assets:{}, hull:'', prio:3,
-       kind:'inc', jtype:'preventive', next:'job', jtitle:'', jstatus:'fixing', reason:'', loc:'', mode:'single', start:false, owner:'', due:'', parts:false, busy:false};
+       kind:'inc', jtype:'preventive', next:'job', jtitle:'', jstatus:'fixing', reason:'', loc:'', mode:'single', start:false, owner:'', due:'', parts:false, busy:false, wd:[]};
   var o=document.getElementById('fln'); if(o) o.remove();
   o=document.createElement('div'); o.id='fln';
   o.style.cssText='position:fixed;inset:0;z-index:8990;background:rgba(10,18,48,.56);display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
   o.addEventListener('click', flnClick);
   o.addEventListener('input', function(){ flnSync(); flnPreview(); });
-  o.addEventListener('change', function(e){ if(e.target && e.target.id==='fln-boat'){ flnSync(); FLN.assets={}; flnRender(); } });
+  o.addEventListener('change', function(e){ if(e.target && e.target.id==='fln-boat'){ flnSync(); FLN.assets={}; flnRender(); } else if(e.target && e.target.id==='fln-inv'){ flnInvPick(); } });   /* §flnWd */
+  o.addEventListener('input', function(e){ if(e.target && e.target.id==='fln-inv') flnInvPick(); });
   document.body.appendChild(o);
   flnRender();
   setTimeout(function(){ var t=document.getElementById('fln-title'); if(t) t.focus(); },60);
@@ -29273,6 +29352,8 @@ function flnClick(e){
   else if(act==='start') FLN.start=!FLN.start;
   else if(act==='parts') FLN.parts=!FLN.parts;
   else if(act==='save'){ flnSave(); return; }
+  else if(act==='wadd'){ flnWdAdd(); return; }   /* §flnWd */
+  else if(act==='wdel'){ (FLN.wd||[]).splice(+val,1); }
   flnRender();
 }
 function flnAssetList(){ var out=[]; if(!FLN) return out; Object.keys(FLN.assets).forEach(function(k){ var p=k.split('|'); out.push({type:p[0], id:p[1]}); });
@@ -29286,6 +29367,7 @@ function flnPreview(){
     var jl=[flwT(FLN.jtype==='preventive'?'Preventive':'Corrective')]; if(FLN.jtype==='preventive' && nA) jl.push(flwTp(nA===1?'{0} item covered':'{0} items covered',nA));
     if(FLN.owner) jl.push(flwTp('owner {0}',E(FLN.owner))); if(FLN.due) jl.push(flwTp('due {0}',flwD(FLN.due))); jl.push(flwT(FLN.start?'started on saving':'not started'));
     var jr=[row('#1272B3','Job', E(FLN.title||flwT('(job title)')), E((b?b.name:'')+' · '+flwTp('from {0}',flwD(FLN.date)))+'<br>'+jl.join(' · '))], ja=[];
+    if((FLN.wd||[]).length) jr.push(row('#0F6E56','Withdraw from stock',flnWdSum(),E(FLN.wd.map(function(w){ return w.name+' '+w.qty+' '+w.unit; }).join(' · '))));   /* §flnWd */
     if(FLN.parts) jr.push(row('#D9952B','Parts request',flwT('The memo form opens right after saving'),flwT('you fill in the items there')));
     if(FLN.start){
       if(FLN.jstatus==='available') ja.push(flwT('The boat stays <b>Available</b> and keeps running.'));
@@ -29310,6 +29392,7 @@ function flnPreview(){
     nJobs=(nA>1 && FLN.mode==='split')?nA:1;
     rows.push(row('#1272B3', nJobs>1?flwTp('{0} jobs',nJobs):'Job', E(FLN.jtitle||FLN.title||flwT('(job title)'))+(nJobs>1?flwT(' — one per affected item'):''),
       flwT('Corrective')+(FLN.owner?(' · '+flwTp('owner {0}',E(FLN.owner))):'')+(FLN.due?(' · '+flwTp('due {0}',flwD(FLN.due))):'')+flwT(FLN.start&&nJobs===1?' · started today':' · not started')));
+    if((FLN.wd||[]).length) rows.push(row('#0F6E56','Withdraw from stock',flnWdSum(),E(FLN.wd.map(function(w){ return w.name+' '+w.qty+' '+w.unit; }).join(' · '))));   /* §flnWd */
     if(FLN.parts) rows.push(row('#D9952B','Parts request',flwT('The memo form opens right after saving'),flwT('you fill in the items there')));
     if(FLN.start && nJobs===1){
       if(FLN.jstatus==='available') after.push(flwT('The boat stays <b>Available</b>.'));
@@ -29351,6 +29434,16 @@ function flnCSS(){
     +'#fln .fln-pr{width:36px;height:36px;border-radius:18px;border:1.5px solid #C9CCD6;background:#fff;color:#0F1B3D;font-family:\'DM Mono\',monospace;font-size:13px;cursor:pointer}#fln .fln-pr.on{background:#16265C;border-color:#16265C;color:#fff}'
     +'#fln .fln-kind{flex:1;min-height:52px;padding:6px 14px;border-radius:12px;border:1.5px solid #C9CCD6;background:#fff;color:#0F1B3D;text-align:left;font-family:inherit;cursor:pointer}#fln .fln-kind b{display:block;font-size:13.5px}#fln .fln-kind span{display:block;font-size:11.5px;opacity:.8}#fln .fln-kind.on{background:#16265C;border-color:#16265C;color:#fff}'
     +'#fln .fln-2{display:grid;grid-template-columns:minmax(0,1fr) 330px}'
+    /* §flnWd */
+    +'#fln .fln-wd{padding:12px 14px;border-radius:12px;background:#F7F7F5;border:1px solid #ECEBE6}'
+    +'#fln .fln-wdp{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1.1fr) 80px auto;gap:8px;margin-top:6px}#fln .fln-wdp .fln-in{height:40px}'
+    +'#fln .fln-wdb{height:40px;padding:0 14px;border-radius:10px;border:0;background:#0F6E56;color:#fff;font:700 13px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+    +'#fln .fln-wdl{margin-top:6px;border:1px solid #E3E2DC;border-radius:10px;background:#fff;overflow:hidden}'
+    +'#fln .fln-wdr{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto 28px;gap:10px;align-items:center;padding:7px 10px;border-bottom:1px solid #F0EFEA;font-size:12.5px}'
+    +'#fln .fln-wdr b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#fln .fln-wdr span{color:#5B6170;white-space:nowrap}#fln .fln-wdr .mono{font-family:\'DM Mono\',monospace;color:#0F1B3D}'
+    +'#fln .fln-wdr button{width:26px;height:26px;border-radius:13px;border:1px solid #E3E2DC;background:#fff;color:#8E2019;cursor:pointer;font-size:14px;line-height:1}'
+    +'#fln .fln-wdt{display:flex;justify-content:space-between;padding:7px 10px;font-size:12px;color:#5B6170;background:#FAFAF8}#fln .fln-wdt b{color:#0F1B3D;font-family:\'DM Mono\',monospace}'
+    +'@media (max-width:900px){#fln .fln-wdp{grid-template-columns:1fr 1fr}}'
     +'@media (max-width:900px){#fln .fln-2{grid-template-columns:1fr}#fln .fln-kinds{flex-wrap:wrap}#fln .fln-kind{flex:1 1 45%}#fln .fln-g{grid-template-columns:1fr 1fr !important}#fln .fln-3{grid-template-columns:1fr !important}}'
     /* §flwTH2 · ภาษาไทยไม่ใช้ตัวพิมพ์ใหญ่/ตัวห่าง (รวมสไตล์ที่เขียนไว้ในแท็ก) */
     +((typeof laLangGet==='function' && laLangGet()==='en')?'':'#fln [style*="letter-spacing"],#fln .fln-arow > b,#fln .fln-chip i{letter-spacing:0!important;text-transform:none!important}#fln .fln-arow > b{font-size:12px}')
@@ -29384,7 +29477,7 @@ function flnRender(){
       +'<div style="margin-top:12px">'+chk('start',F.start,'Start the job now','the boat status changes as set above')+'</div></div>';
   }
   var s3 = F.next==='job'
-    ? chk('parts',F.parts,'Open the parts request right after saving','usually decided after the assessment · it can also be requested later from the job')
+    ? flnWdBox()+'<div style="margin-top:12px">'+chk('parts',F.parts,'Open the parts request right after saving','usually decided after the assessment · it can also be requested later from the job')+'</div>'
     : '<div style="font-size:12.5px;color:#5B6170;line-height:1.5">'+flwT(F.next==='quick'?'A Quick Fix does not create a job, so there is nothing to request. If parts were used, open a job instead.':'Parts are requested from the job once one is opened.')+'</div>';
   var chipH=(P.engine.length+P.gearbox.length+P.propeller.length)?(arow('engine','Engine',P.engine)+arow('gearbox','Gearbox',P.gearbox)+arow('propeller','Propeller',P.propeller)):'';
   o.innerHTML=flnCSS()
@@ -29459,6 +29552,7 @@ function flnSave(){
       if(!jobs.length) note=flwT(' The job was not created, so the report waits at stage Reported.');
       else {
         if(F.owner || F.due){ jobs.forEach(function(m){ if(F.owner) m.owner=F.owner; if(F.due) m.dueDate=F.due; }); flSave(); }
+        if((F.wd||[]).length){ var W=flnWdApply(jobs[0].id); flSave(); if(W.bad.length) note+=flwTp(' Not withdrawn (not enough stock): {0}.',W.bad.join(', ')); else note+=flwTp(' Withdrew {0} from stock.',flwTp(W.ok===1?'{0} item':'{0} items',W.ok)); }   /* §flnWd */
         if(F.start){ flMaintStart(jobs[0].id); }
         if(F.parts){
           if(window._flStartGear) note=flwT(' Finish the start dialog first, then request parts from the job.');
@@ -29519,7 +29613,7 @@ function flnRenderJob(){
       +'<div style="margin-top:10px">'+lab('Boat while the job is open')+seg('jstatus',F.jstatus,[['available','Available · keeps running'],['fixing','Fixing'],['unavailable','Unavailable']])+'</div>'
       +(F.jstatus==='unavailable'?('<div style="margin-top:10px">'+lab('Why unavailable')+sel('fln-reason',[['',flwT('Choose a reason')]].concat(FLN_REASON.map(function(x){ return [x[0],flwT(x[1])]; })),F.reason)+'</div>'):'')
       +'<div style="margin-top:12px">'+chk('start',F.start,'Start the job now','the boat status changes as set above')+'</div>'
-      +num(3,'Parts and labour')+'<div style="margin-top:10px">'+chk('parts',F.parts,'Open the parts request right after saving','it can also be requested later from the job')+'</div>'
+      +num(3,'Parts and labour')+'<div style="margin-top:10px">'+flnWdBox()+'<div style="margin-top:12px">'+chk('parts',F.parts,'Open the parts request right after saving','it can also be requested later from the job')+'</div></div>'
     +'</div><div id="fln-prev" style="background:#F7F7F5;padding:16px 20px 18px;display:flex;flex-direction:column;min-width:0"></div></div></div>';
   o.scrollTop=sc;
   flnPreview();
@@ -29551,6 +29645,7 @@ function flnSaveJob(){
     if(FL_MAINT.length<=n0){ F.busy=false; alert('The job was not saved. Check the form and try again.'); return; }
     job=FL_MAINT[0];
     if(F.owner || F.due){ if(F.owner) job.owner=F.owner; if(F.due) job.dueDate=F.due; flSave(); }
+    if((F.wd||[]).length){ var W=flnWdApply(job.id); flSave(); if(W.bad.length) note+=flwTp(' Not withdrawn (not enough stock): {0}.',W.bad.join(', ')); else note+=flwTp(' Withdrew {0} from stock.',flwTp(W.ok===1?'{0} item':'{0} items',W.ok)); }   /* §flnWd */
     if(F.start) flMaintStart(job.id);
     if(F.parts){ if(window._flStartGear) note=flwT(' Finish the start dialog first, then request parts from the job.'); else flMaintCreateMemo(job.id, true); }
   }catch(err){
