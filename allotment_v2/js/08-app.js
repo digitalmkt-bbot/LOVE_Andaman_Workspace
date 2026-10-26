@@ -58980,15 +58980,21 @@ function bkV2CleanupNats(){
 }
 // Cheap heuristic · returns nationality code based on name keywords / scripts
 // ─── Nationality learning system · token-frequency from past bookings ───
+var _natLearnMemo=null, _natLearnStamp=null;   /* §natFast */
 function _natLearnLoad(){
-  try { const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); return d.nat_learn || {}; }
-  catch(e){ return {}; }
+  const st=String(window.__savedAt||0);
+  if(_natLearnMemo && _natLearnStamp===st) return _natLearnMemo;
+  try { const d = (typeof laBlob==='function') ? laBlob() : JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); _natLearnMemo = d.nat_learn || {}; }
+  catch(e){ _natLearnMemo = {}; }
+  _natLearnStamp=st;
+  return _natLearnMemo;
 }
 function _natLearnSave(data){
   try {
     const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}');
     d.nat_learn = data;
     localStorage.setItem('loveandaman_v2', JSON.stringify(d));
+    _natLearnMemo = data; _natLearnStamp=String(window.__savedAt||0);   /* §natFast */
   } catch(e){ console.warn('nat learn save failed', e); }
 }
 function _natTokenize(name){
