@@ -58989,13 +58989,21 @@ function _natLearnLoad(){
   _natLearnStamp=st;
   return _natLearnMemo;
 }
-function _natLearnSave(data){
+var _natLearnFlushT=null;   /* §natFast2 · รวบการเขียนก้อนให้เหลือครั้งเดียว */
+function _natLearnFlush(){
+  _natLearnFlushT=null;
+  if(!_natLearnMemo) return;
   try {
     const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}');
-    d.nat_learn = data;
+    d.nat_learn = _natLearnMemo;
     localStorage.setItem('loveandaman_v2', JSON.stringify(d));
-    _natLearnMemo = data; _natLearnStamp=String(window.__savedAt||0);   /* §natFast */
+    _natLearnStamp=String(window.__savedAt||0);
   } catch(e){ console.warn('nat learn save failed', e); }
+}
+function _natLearnSave(data){
+  _natLearnMemo = data; _natLearnStamp=String(window.__savedAt||0);   /* §natFast · อ่านครั้งถัดไปได้ของใหม่ทันที */
+  if(_natLearnFlushT) clearTimeout(_natLearnFlushT);
+  _natLearnFlushT=setTimeout(_natLearnFlush, 400);   /* §natFast2 · เขียนก้อนครั้งเดียวหลังบันทึกชื่อครบทุกคน */
 }
 function _natTokenize(name){
   if(!name) return [];
