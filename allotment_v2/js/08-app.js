@@ -55098,6 +55098,7 @@ function bkV2RenderTab2(){
 
   // ── Filters: pier + program family (+ optional route from calendar drill) ──
   const pierF = ((typeof laMyPier==='function') && laMyPier()) || _bkV2T2Pier || 'all';   /* §pierScope · ผูกกับท่า = ล็อกตัวกรองท่า */
+  if(typeof laPierScoped==='function' && laPierScoped()){ for(let _i=rows.length-1;_i>=0;_i--){ if(!laRouteIdOk(rows[_i].routeId)) rows.splice(_i,1); } }   /* §pierScope2 · ยอดรวมทั้งวันของคนท่า = เฉพาะท่าตัวเอง */
   const famF = _bkV2T2Family || '';
   const routeF = _bkV2.filterRoute;
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
@@ -55342,7 +55343,7 @@ function bkV2RenderTab2(){
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
-    const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly); if(!dts.length) return;
+    const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly && ((typeof laRouteIdOk!=='function')||laRouteIdOk(t.routeId))); if(!dts.length) return;   /* §pierScope2 */
     const pax=dts.reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
     // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
@@ -55382,7 +55383,7 @@ function bkV2RenderTab2(){
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
       if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
       // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
-      const _dts=(b.trips||[]).filter(t=>(t.date||'')===date); if(!_dts.length) return;
+      const _dts=(b.trips||[]).filter(t=>(t.date||'')===date && ((typeof laRouteIdOk!=='function')||laRouteIdOk(t.routeId))); if(!_dts.length) return;   /* §pierScope2 */
       if(!_dts.some(t=>(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly)) return;
       const s=ckSummary(b,date); if(!s) return;
       const _o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
