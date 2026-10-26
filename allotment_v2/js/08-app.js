@@ -14217,7 +14217,12 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       const _dTag = _dOwn.own
         ? `<div style="margin-top:3px"><span style="display:inline-block;background:#EDE7FB;color:#5B289A;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#9986; แยกส่ง${x.sWho?(' · '+e(x.sWho)):''}</span></div>`
         : '';
-      const dropCell = _ovnDrop ? _ovnDrop : (dropoff
+      /* §tcxPartner · รอบยกเลิก · รถเราส่งลูกค้าไปจุดของ Partner */
+      const _ptR=(!isRet && typeof tcxPtOf==='function')?tcxPtOf(b, t.date||date):null;
+      const _ptDrop=(_ptR && _ptR.van!=='partner')
+        ? `<div style="font-weight:800;font-size:12px;line-height:1.35;color:#0F6E56">&#8594; ${e(_ptR.drop||'จุดของ Partner')}${_ptR.time?(' · '+e(_ptR.time)):''}</div><div style="color:#0F6E56;font-size:11px;line-height:1.35">ส่งต่อ Partner · ${e(_ptR.name||'')}</div>`
+        : null;
+      const dropCell = _ovnDrop ? _ovnDrop : _ptDrop ? _ptDrop : (dropoff
         ? (isRet ? (`<b>${e(dropoff)}</b>`+_retTag+_dTag) : (((!isRet&&_sepDrop)?'<b style="color:#9A5B00">&#8617; กลับ:</b> ':'')+e(dropoff)+_dTag))
         : (isRet ? '<span style="color:#888">—</span>' : '<span style="color:#5a6b80">&#8594; ท่าเรือ</span>'));
       // soft highlight for rows that are "extra" so they're not forgotten:
@@ -25317,6 +25322,7 @@ function renderPierCheckin(){
       _sx=true;
     }
     var t=ckTripOn(b,date); if(!t) return;
+    if(typeof tcxPtOf==='function' && tcxPtOf(b,date)) return;   /* §tcxPartner · ขึ้นเรือ Partner ไม่ใช่ท่าเรา */
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     /* §landCk · เส้นทางบกกับเส้นทางเรืออยู่คนละหน้า · ตัดกันตรงนี้จุดเดียว
        หน้าท่าเห็นเฉพาะทริปเรือ · หน้ารถเห็นเฉพาะ City Tour / Transfer
@@ -25789,6 +25795,7 @@ function tsRows(date){
       //   ทั้งที่ผลสุดท้ายที่ท่าเรืออาจเป็น "มาครบ" (มาเองที่ท่า / หน้าท่ายืนยันว่ามาแล้ว)
       issue:(noShow>0 || _lostTot>0 || !!_decNow), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow,
       ovnBack:_ovnB,
+      pt:(typeof tcxPtOf==='function')?tcxPtOf(b,date):null,   /* §tcxPartner */
       ovnOut:((_ovnB && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'')
     });
   });
@@ -30910,10 +30917,10 @@ function renderTravelSum(){
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
       +'<td class="ts-aocol">'+_aoH+'</td>'
       +'<td>'+((veh?('<span class="ts-chip n'+(noVan?' ts-nb':'')+'"'+(noVan?' title="ไม่ได้ขึ้นรถ"':'')
-              +'>&#128656; '+e(veh.name||r.van)+'</span>'):(r.cxlRow?'':'<span class="ts-chip p">มาเอง</span>'))
+              +'>&#128656; '+e(veh.name||r.van)+'</span>'):(r.cxlRow?'':((r.pt&&r.pt.van==='partner')?'<span class="ts-chip p" title="Partner รับลูกค้าเอง">Partner รับ</span>':'<span class="ts-chip p">มาเอง</span>')))
          +(boat?('<span class="ts-chip g'+(noBoat?' ts-nb':'')+'"'+(noBoat?' title="ไม่ได้ขึ้นเรือ"':'')
               +'>&#128676; '+e(boat.name||r.boat)+'</span>')
-              :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
+              :(r.cxlRow?'':(r.pt?('<span class="ts-chip g" style="background:#E4F3EC;color:#0F6E56;font-weight:800" title="รอบยกเลิก · ส่งต่อ Partner · ฿'+Math.round(+r.pt.cost||0).toLocaleString()+'">&rarr; '+e(r.pt.name||'Partner')+'</span>'):'<span class="ts-chip r">ยังไม่จัดเรือ</span>')))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       /* §tsManMv · เงินย้ายไปกับวันใหม่แล้ว · โชว์ซ้ำที่นี่จะอ่านเป็นยอดของวันนี้ */
       /* ══ §tsSreq3 · คำขอพิเศษเป็นคอลัมน์ของตัวเอง · วางหน้า Pay ═══════════
@@ -39899,7 +39906,7 @@ function bkV2WeatherPanel(routeId,date){
   const nd=new Date(date+'T00:00'); nd.setDate(nd.getDate()+1); const next=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(nd):date;
   const list=bkV2WeatherEventBookings(routeId,date);
   if(!list.length){ acctModal('<div style="padding:20px;font-size:13px">No bookings on this trip <div style="margin-top:14px;text-align:right"><button onclick="acctModalClose();bkV2Render()" style="background:var(--fd-coral);color:#fff;border:none;font-family:inherit;font-size:12px;padding:8px 16px;border-radius:9px;cursor:pointer">Close</button></div></div>'); return; }
-  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
+  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved',partner:'Sent to partner'};
   const nAwait=list.filter(b=>b.weatherResolve.status==='awaiting').length;
   const nNotif=list.filter(b=>b.weatherResolve.status==='notified').length;
   const nDone=list.filter(b=>b.weatherResolve.status==='resolved').length;
@@ -40014,6 +40021,175 @@ function tcxSnapFlush(){
   catch(e){ console.warn('[tripCxl] snapshot save failed', e); }
   _tcxSnapPend=null;
 }
+/* ══ §tcxPartner (2026-10-26) · owner "เคสนี้จะเป็นการเพิ่มการส่งต่อให้ ซัพพลายเออร์บริษัท Partner ซึ่งทางบริษัทก็ยังทำเก็บเงินกับ เอเจนปกติ"
+   รอบที่ยกเลิก → ส่งลูกค้าไปกับบริษัท Partner · ใบจองยัง Confirmed · Invoice เอเยนต์เดิมไม่แตะ · ยอดขายยังนับ
+   ผล  → weatherResolve.outcome='partner' (คอลัมน์เดิมของ sb_bookings · ไม่แตะ DB)
+   รายละเอียด → blob key trip_cxl_partner (JSON string) { bkId:{ev:'rid|ds', name, ppx, pax, cost, van:'ours'|'partner', drop, time, ref, by, at} }
+   ไม่นับคนบนเรือเรา: ล้างเรือ/เช็คอินหน้าท่า · ไม่ขึ้นหน้าเช็คอินท่า / เตรียมอาหาร · ไม่นับ "ยังไม่จัดเรือ"
+   รถเลือกรายใบ: ours = งานรถเดิม ปลายทางเป็นจุดของ Partner · partner = ล้างรถออกจากงานรถเรา
+   ต้นทุน = ราคา/หัว × pax → Executive Board (11-exec-board cxDay) · ชื่อ Partner ที่เคยใช้อ่านจาก key เดียวกัน (ไม่มีหน้าตั้งค่า) */
+var _tcxPtMemo={raw:undefined,o:{},t:0};
+function tcxPtAll(){
+  const now=Date.now(); if(_tcxPtMemo.raw!==undefined && now-_tcxPtMemo.t<1000) return _tcxPtMemo.o;   /* laBlob() อ่าน localStorage ทั้งก้อน · อย่าเรียกถี่ */
+  try{ const raw=laBlob().trip_cxl_partner;
+    if(raw!==_tcxPtMemo.raw){ let o={}; if(typeof raw==='string'&&raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') o=p; } _tcxPtMemo.o=o; _tcxPtMemo.raw=raw; }
+    _tcxPtMemo.t=now; return _tcxPtMemo.o;
+  }catch(_){ return _tcxPtMemo.o||{}; }
+}
+function tcxPtOf(b, ds){
+  if(!b||!b.weatherResolve||b.weatherResolve.outcome!=='partner'||b.weatherResolve.status!=='resolved') return null;   /* เช็คถูก ๆ ก่อน · ใบทั่วไปไม่แตะ blob */
+  if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return null;
+  const p=tcxPtAll()[b.id]; if(!p) return null;
+  if(ds && String(p.ev||'').split('|')[1]!==ds) return null;
+  return p;
+}
+function tcxPtSave(map){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return false;
+  const all=Object.assign({}, tcxPtAll()); Object.keys(map).forEach(k=>{ if(map[k]==null) delete all[k]; else all[k]=map[k]; });
+  const raw=JSON.stringify(all); const d=laBlob(); d.trip_cxl_partner=raw; laBlobSave();
+  _tcxPtMemo={raw:raw,o:all,t:Date.now()}; return true;
+}
+function tcxPtNames(){
+  const all=tcxPtAll(), m={};
+  Object.keys(all).forEach(k=>{ const p=all[k]; if(!p||!p.name) return; const n=String(p.name).trim(), key=n.toLowerCase(); if(!n) return;
+    const x=m[key]||(m[key]={name:n,n:0,last:'',ppx:0}); x.n++; if(String(p.at||'')>=x.last){ x.last=String(p.at||''); x.ppx=+p.ppx||0; x.name=n; } });
+  return Object.keys(m).map(k=>m[k]).sort((a,b)=>b.last.localeCompare(a.last));
+}
+function tcxPtRev(b, rid, ds){ return (b.trips||[]).filter(t=>t.routeId===rid&&t.date===ds).reduce((s,t)=>s+((typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0),0); }
+function tcxPtInit(ids){ const v={}; (ids||[]).forEach(id=>{ v[id]='ours'; }); return {name:'', ppx:'', drop:'', time:'', ref:'', van:v}; }
+function tcxPtEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function tcxPtBulkSeg(D){
+  return '<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+    +[['move','Move program'],['partner','→ Send to partner']].map(o=>'<button onclick="tcxDlgSet(\'out\',\''+o[0]+'\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;background:'+(D.out===o[0]?(o[0]==='partner'?'#0F6E56':'#16265C'):'transparent')+';color:'+(D.out===o[0]?'#fff':'#3E4658')+'">'+o[1]+'</button>').join('')+'</div>';
+}
+function tcxPtMoney(rev, pax, ppx){
+  const f=n=>'฿'+Math.round(+n||0).toLocaleString(), has=String(ppx)!=='' && +ppx>=0, cost=has?(+ppx||0)*pax:0, left=rev-cost;
+  const box=(k,v,sub,bg,bd,col)=>'<div style="border:1px solid '+bd+';border-radius:11px;padding:8px 11px;background:'+bg+'"><div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#8A8F9C;text-transform:uppercase">'+k+'</div><div style="font-family:\'DM Mono\',monospace;font-size:19px;font-weight:700;color:'+col+'">'+v+'</div><div style="font-size:10.5px;color:#6B7489">'+sub+'</div></div>';
+  return box('Agent pays (unchanged)', f(rev), 'existing invoice · not touched', '#FAFBFD','#E6E8EE','#0F1B3D')
+    + box('Pay partner', has?f(cost):'—', has?((+ppx||0).toLocaleString()+' × '+pax+' pax'):'enter price / head', '#FAFBFD','#E6E8EE','#A32D2D')
+    + box('Left', has?f(left):'—', has&&rev>0?(Math.round(left/rev*100)+'% before van cost'):'', '#F1F9F5','#BFE3D0', left<0?'#A32D2D':'#0F6E56');
+}
+function tcxPtMsg(D, L){
+  const P=D.pt, dd=String(D.ds||'').split('-'), ds=dd.length===3?(dd[2]+'/'+dd[1]+'/'+dd[0]):D.ds, lines=[];
+  lines.push('Guests for partner · '+tcxRName(D.rid)+' · '+ds);
+  L.forEach(b=>{
+    const t=(b.trips||[]).find(x=>x.routeId===D.rid&&x.date===D.ds)||{}, P2=t.pax||{}, O=(typeof bkOpsRead==='function')?(bkOpsRead(b,D.ds)||{}):{};
+    const pt=(typeof bkV2PaxTot==='function')?k=>bkV2PaxTot(P2,k):()=>0, ad=pt('ad'), chd=pt('chd'), inf=pt('inf');
+    const paxTxt=[ad?ad+' AD':'',chd?chd+' CHD':'',inf?inf+' INF':''].filter(Boolean).join(' ')||(tcxPaxOf(b,D.rid,D.ds)+' pax');
+    const hotel=b.hotelName||b.pickup||'', pk=O.pickupTimeFinal||t.pickupTime||'';
+    lines.push('');
+    lines.push((b.voucherRef||b.code||b.id)+' · '+(b.leadPax||'—')+' · '+paxTxt);
+    if((P.van[b.id]||'ours')==='ours') lines.push('Our van: '+(hotel||'—')+(pk?' '+pk:'')+' → '+(P.drop||'(drop-off point)')+(P.time?' by '+P.time:''));
+    else lines.push('Partner picks up: '+(hotel||'—')+(pk?' '+pk:'')+((b.roomNo||b.room)?(' · room '+(b.roomNo||b.room)):''));
+    const sm=b.specialMeals||{}, al=(Array.isArray(sm.allergyList)?sm.allergyList.map(x=>x&&x.name).filter(Boolean):[]).concat(sm.allergies?[String(sm.allergies)]:[]);
+    if(al.length) lines.push('⚠ Allergy: '+al.join(', '));
+  });
+  if(String(P.ppx)!==''){ const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0); lines.push(''); lines.push('Price '+(+P.ppx||0).toLocaleString()+'/head × '+pax+' = '+((+P.ppx||0)*pax).toLocaleString()+' THB · bill to Love Andaman'); }
+  return lines.join('\n');
+}
+function tcxPtBody(D, L){
+  const esc=tcxPtEsc, P=D.pt, names=tcxPtNames();
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0), rev=L.reduce((s,b)=>s+tcxPtRev(b,D.rid,D.ds),0);
+  const inp='height:34px;border:1.5px solid #D5DAE5;border-radius:9px;padding:0 10px;font-family:inherit;font-size:13px;width:100%;box-sizing:border-box;background:#fff;color:#0F1B3D';
+  const lab='font-size:11px;font-weight:700;color:#6B7489;margin-bottom:4px';
+  const anyOurs=L.some(b=>(P.van[b.id]||'ours')==='ours');
+  let h='<datalist id="tcxp-names">'+names.map(n=>'<option value="'+esc(n.name)+'">'+(n.ppx?('฿'+n.ppx.toLocaleString()+'/head · used '+n.n+'×'):('used '+n.n+'×'))+'</option>').join('')+'</datalist>'
+    +'<div style="display:grid;grid-template-columns:1.4fr .7fr .45fr;gap:10px">'
+    +'<div><div style="'+lab+'">Partner company</div><input id="tcxp-name" list="tcxp-names" value="'+esc(P.name)+'" placeholder="Type or pick a partner" oninput="tcxPtSet(\'name\',this.value)" onchange="tcxPtPickName(this.value)" autocomplete="off" style="'+inp+'"></div>'
+    +'<div><div style="'+lab+'">Partner price / head (฿)</div><input id="tcxp-ppx" type="number" min="0" step="1" value="'+esc(P.ppx)+'" oninput="tcxPtSet(\'ppx\',this.value)" style="'+inp+';font-family:\'DM Mono\',monospace"></div>'
+    +'<div><div style="'+lab+'">Pax</div><div style="'+inp+';display:flex;align-items:center;background:#F6F7FA;font-family:\'DM Mono\',monospace">'+pax+'</div></div></div>'
+    +'<div style="margin-top:8px"><div style="'+lab+'">Partner ref / contact (optional)</div><input value="'+esc(P.ref)+'" oninput="tcxPtSet(\'ref\',this.value)" placeholder="confirmation no. · contact · phone" style="'+inp+'"></div>'
+    +'<div id="tcxp-money" data-rev="'+rev+'" data-pax="'+pax+'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">'+tcxPtMoney(rev,pax,P.ppx)+'</div>'
+    +'<div style="'+lab+';margin-top:14px">Transfer · choose per booking</div>'
+    +'<div style="border:1px solid #E6E8EE;border-radius:11px;overflow:hidden;max-height:210px;overflow-y:auto">'+L.map(b=>{
+        const v=P.van[b.id]||'ours', p=tcxPaxOf(b,D.rid,D.ds);
+        const btn=(k,t)=>'<button onclick="tcxPtVan(\''+esc(b.id)+'\',\''+k+'\')" style="border:0;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(v===k?'#fff':'transparent')+';color:'+(v===k?'#0F6E56':'#6B7489')+';box-shadow:'+(v===k?'0 1px 2px rgba(0,0,0,.12)':'none')+'">'+t+'</button>';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #F0F1F4;font-size:12.5px"><b>'+esc(b.voucherRef||b.code||b.id)+'</b><span style="color:#6B7489;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(b.hotelName||b.pickup||'no pickup')+' · '+p+' pax</span>'
+          +'<span style="margin-left:auto;flex:none;display:inline-flex;gap:2px;padding:3px;background:#F2F4F8;border-radius:9px">'+btn('ours','We transfer')+btn('partner','Partner picks up')+'</span></div>'; }).join('')+'</div>'
+    +(anyOurs?('<div style="display:grid;grid-template-columns:1.4fr .6fr;gap:8px;margin-top:8px"><div><div style="'+lab+'">Drop-off point (our van)</div><input value="'+esc(P.drop)+'" oninput="tcxPtSet(\'drop\',this.value)" placeholder="e.g. Rassada Pier" style="'+inp+'"></div>'
+      +'<div><div style="'+lab+'">Arrive by</div><input type="time" value="'+esc(P.time)+'" oninput="tcxPtSet(\'time\',this.value)" style="'+inp+'"></div></div>'):'')
+    +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><div style="'+lab+';margin:0">Message for the partner</div><button onclick="tcxPtCopy(this)" style="height:24px;border:1px solid #D5DAE5;border-radius:7px;background:#fff;font-family:inherit;font-size:11px;font-weight:700;padding:0 9px;cursor:pointer">⧉ Copy</button></div>'
+    +'<textarea id="tcxp-msg" readonly style="width:100%;box-sizing:border-box;height:112px;margin-top:4px;border:1px solid #E6E8EE;border-radius:9px;background:#FAFBFC;font-family:\'DM Mono\',monospace;font-size:11.5px;padding:8px 10px;color:#3B4A66;resize:vertical">'+esc(tcxPtMsg(D,L))+'</textarea>'
+    +'<div style="font-size:11px;color:#8A8F9C;margin-top:6px">Booking stays confirmed · agent invoice unchanged · not counted on our boat · partner cost goes to Executive Board</div>';
+  return h;
+}
+function _tcxPtL(){ const D=_tcxD; return D?D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean):[]; }
+function tcxPtSet(k, v){
+  const D=_tcxD; if(!D||!D.pt) return; D.pt[k]=v;
+  if(k==='ppx'){ const m=document.getElementById('tcxp-money'); if(m) m.innerHTML=tcxPtMoney(+m.getAttribute('data-rev')||0, +m.getAttribute('data-pax')||0, v); }
+  const ta=document.getElementById('tcxp-msg'); if(ta) ta.value=tcxPtMsg(D,_tcxPtL());
+}
+function tcxPtPickName(v){
+  const D=_tcxD; if(!D||!D.pt) return; D.pt.name=v;
+  const n=tcxPtNames().find(x=>x.name.toLowerCase()===String(v||'').trim().toLowerCase());
+  if(n){ D.pt.name=n.name; const el=document.getElementById('tcxp-name'); if(el) el.value=n.name;
+    if(String(D.pt.ppx)===''&&n.ppx){ const p=document.getElementById('tcxp-ppx'); if(p) p.value=n.ppx; tcxPtSet('ppx', String(n.ppx)); return; } }
+  tcxPtSet('name', D.pt.name);
+}
+function tcxPtVan(id, k){ const D=_tcxD; if(!D||!D.pt) return; D.pt.van[id]=k; tcxDlgRender(); }
+function tcxPtCopy(btn){
+  const ta=document.getElementById('tcxp-msg'); if(!ta) return; const txt=ta.value;
+  const ok=()=>{ if(btn){ const o=btn.textContent; btn.textContent='✓ Copied'; setTimeout(()=>{ btn.textContent=o; },1400); } };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,()=>{ ta.select(); document.execCommand('copy'); ok(); }); return; } }catch(_){}
+  try{ ta.select(); document.execCommand('copy'); ok(); }catch(_){}
+}
+function tcxPtApply(D, L){
+  const P=D.pt||{}, name=String(P.name||'').trim();
+  if(!name){ alert('Enter the partner company.'); return; }
+  if(String(P.ppx).trim()===''||!(+P.ppx>=0)){ alert('Enter the partner price per head (0 if there is no charge).'); return; }
+  const ppx=+P.ppx||0;
+  L=L.filter(b=>b.weatherResolve && b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===D.rid&&t.date===D.ds));
+  if(!L.length){ alert('Nothing left to send on this trip.'); return; }
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0);
+  if(L.length>1 && !confirm('Send '+L.length+' booking(s) · '+pax+' guest(s) to '+name+'?\nPrice '+ppx.toLocaleString()+'/head · total '+(ppx*pax).toLocaleString()+' THB.')) return;
+  const map={}, at=new Date().toISOString(), by=laBy();
+  L.forEach(b=>{
+    const p=tcxPaxOf(b,D.rid,D.ds), v=(P.van&&P.van[b.id])||'ours';
+    if(v==='partner'){ if(typeof bkOpsClear==='function') bkOpsClear(b, D.ds); }
+    else if(typeof bkOpsFor==='function'){ const o=bkOpsFor(b, D.ds); o.boatId=null; if(o.boatSplits) delete o.boatSplits; delete o.pierCheckin; }
+    const wr=b.weatherResolve; if(wr.status==='awaiting') wr.notifiedAt=at;
+    wr.status='resolved'; wr.outcome='partner'; wr.resolvedAt=at; wr.by=by;
+    map[b.id]={ev:D.rid+'|'+D.ds, name:name, ppx:ppx, pax:p, cost:ppx*p, van:v, drop:v==='ours'?String(P.drop||'').trim():'', time:v==='ours'?String(P.time||''):'', ref:String(P.ref||'').trim(), by:by, at:at};
+    bkV2AddHistory(b,'weather','Sent to partner '+name+' · '+tcxRName(D.rid)+' ('+D.ds+') · '+p+' pax × ฿'+ppx.toLocaleString()+' = ฿'+(ppx*p).toLocaleString()
+      +' · '+(v==='ours'?('our van → '+(String(P.drop||'').trim()||'partner pier')+(P.time?' by '+P.time:'')):'partner picks up')+(P.ref?(' · ref '+String(P.ref).trim()):'')+' · agent invoice unchanged','Partner');
+  });
+  tcxPtSave(map);
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  acctModalClose(); _tcxD=null;
+  if(typeof bkV2Render==='function') bkV2Render();
+}
+function tcxPtUndo(bkId){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!b||!b.weatherResolve) return;
+  const p=tcxPtAll()[bkId]||{};
+  if(!confirm('Undo "sent to partner" for '+(b.voucherRef||b.code||b.id)+'?\nIt goes back to awaiting a decision. Boat/van assignments are not restored.')) return;
+  b.weatherResolve.status='notified'; b.weatherResolve.outcome=null; b.weatherResolve.resolvedAt=null;
+  tcxPtSave({[bkId]:null});
+  bkV2AddHistory(b,'weather','Undo sent to partner'+(p.name?(' ('+p.name+')'):''),'Partner');
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  if(typeof bkV2Render==='function') bkV2Render();
+}
+function tcxPtCell(bk){
+  const esc=tcxPtEsc, p=tcxPtAll()[bk.id]||{};
+  return '<div style="display:flex;flex-direction:column;gap:2px;min-width:128px">'
+    +'<span style="font-size:10px;color:#0F6E56;font-weight:800;white-space:nowrap">&rarr; '+esc(p.name||'Partner')+'</span>'
+    +'<span style="font-size:9.5px;color:#3E4658;white-space:nowrap">'+(p.cost!=null?('฿'+Math.round(+p.cost||0).toLocaleString()+' · '):'')+(p.van==='partner'?'partner picks up':('our van'+(p.drop?(' → '+esc(p.drop)):'')+(p.time?(' '+esc(p.time)):'')))+'</span>'
+    +'<button onclick="event.stopPropagation();tcxPtUndo(\''+esc(bk.id)+'\')" style="align-self:flex-start;background:none;border:0;padding:0;font-family:inherit;font-size:9.5px;color:#8A8F9C;text-decoration:underline;cursor:pointer">undo</button></div>';
+}
+function tcxPtHistNote(rows){
+  const keys={}; (rows||[]).forEach(x=>{ keys[x.k]=1; });
+  const all=tcxPtAll(); let pax=0, cost=0, n=0;
+  Object.keys(all).forEach(id=>{ const p=all[id]; if(!p||!keys[p.ev]) return; const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!tcxPtOf(b)) return; n++; pax+=+p.pax||0; cost+=+p.cost||0; });
+  return n?(' · '+pax+' to partner (฿'+Math.round(cost).toLocaleString()+')'):'';
+}
+/* Executive Board · รายได้+ต้นทุนของใบที่ส่ง Partner ในวันนั้น (ไม่มีเรือเรา จึงไม่อยู่ใน pxDay) */
+window.tcxPtDay=function(ds){
+  const all=tcxPtAll(), out=[];
+  Object.keys(all).forEach(id=>{ const p=all[id]; if(!p) return; const ev=String(p.ev||'').split('|'); if(ev[1]!==ds) return;
+    const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!tcxPtOf(b,ds)) return;
+    out.push({rid:ev[0], rev:tcxPtRev(b,ev[0],ds), cost:+p.cost||0, pax:+p.pax||0, name:p.name||''}); });
+  return out;
+};
 /* คุ้มทุน · ตัวเดียวกับ Trip P&L / Executive Board (pxTrip ต่อลำ · รวมทุกลำของโปรแกรมวันนั้น) */
 var _tcxBeMemo=null;
 function tcxBE(rid, ds){
@@ -40117,14 +40293,16 @@ function tcxDlgOpen(bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!bk.weatherResolve) return;
   const p=String(bk.weatherResolve.event||'').split('|');
   _tcxD={ids:[bkId], rid:p[0], ds:p[1], out:(tcxReason(p[0],p[1])==='minpax'?'move':'reschedule'), toDs:p[1], rsDs:'', all:false, nr:'', bulk:false};
+  _tcxD.pt=tcxPtInit(_tcxD.ids);   /* §tcxPartner */
   try{ const nd=new Date(p[1]+'T12:00:00'); nd.setDate(nd.getDate()+1); _tcxD.rsDs=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(nd):p[1]; }catch(_){ _tcxD.rsDs=p[1]; }
   tcxDlgRender();
 }
-function tcxDlgBulk(rid, ds){
+function tcxDlgBulk(rid, ds, out){
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   const L=bkV2WeatherEventBookings(rid,ds).filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
   if(!L.length) return;
-  _tcxD={ids:L.map(b=>b.id), rid:rid, ds:ds, out:'move', toDs:ds, rsDs:ds, all:false, nr:'', bulk:true};
+  _tcxD={ids:L.map(b=>b.id), rid:rid, ds:ds, out:(out==='partner'?'partner':'move'), toDs:ds, rsDs:ds, all:false, nr:'', bulk:true};
+  _tcxD.pt=tcxPtInit(_tcxD.ids);   /* §tcxPartner */
   tcxDlgRender();
 }
 function tcxDlgSet(k,v){ if(!_tcxD) return; _tcxD[k]=v; if(k==='toDs'||k==='all') _tcxD.nr=''; tcxDlgRender(); }
@@ -40137,9 +40315,9 @@ function tcxDlgRender(){
   const pierNm=p=>{ try{ return (typeof laPierName==='function'&&laPierName(p))||p||'—'; }catch(_){ return p||'—'; } };
   let paid=0; if(!D.bulk && L[0]){ const inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(L[0].id):null; paid=inv?acctInvoicePaid(inv):0; }
   const ag=b=>(typeof sbGetAgent==='function'&&b.agentId)?((sbGetAgent(b.agentId)||{}).name||'B2C'):'B2C';
-  const title = D.bulk ? ('Move all '+L.length+' booking'+(L.length===1?'':'s')+' · '+pax+' pax') : (esc(L[0].voucherRef||L[0].code||L[0].id)+' · '+esc(ag(L[0]))+' · '+pax+' pax');
-  const seg = D.bulk ? '' : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
-    + [['move','Move program'],['reschedule','Reschedule'],['refund','Refund'],['credit','Credit'],['cancel','Cancel']].map(o=>{
+  const title = D.bulk ? ((D.out==='partner'?'Send to partner · ':'Move all ')+L.length+' booking'+(L.length===1?'':'s')+' · '+pax+' pax') : (esc(L[0].voucherRef||L[0].code||L[0].id)+' · '+esc(ag(L[0]))+' · '+pax+' pax');
+  const seg = D.bulk ? tcxPtBulkSeg(D) : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+    + [['move','Move program'],['reschedule','Reschedule'],['partner','→ Send to partner'],['refund','Refund'],['credit','Credit'],['cancel','Cancel']].map(o=>{
         const dis=(o[0]==='credit'&&!(paid>0));
         return '<button '+(dis?'disabled ':'')+'onclick="tcxDlgSet(\'out\',\''+o[0]+'\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:'+(dis?'default':'pointer')+';background:'+(D.out===o[0]?'#16265C':'transparent')+';color:'+(D.out===o[0]?'#fff':(dis?'#B9BFCC':'#3E4658'))+'">'+o[1]+'</button>'; }).join('') + '</div>');
   let body='';
@@ -40162,6 +40340,8 @@ function tcxDlgRender(){
             +'<span style="font-size:11.5px;font-weight:700;border-radius:8px;padding:2px 8px;background:'+(short?'#FBE3E0':'#E1F5EA')+';color:'+(short?'#A32D2D':'#136C3A')+'">free '+t.free+'</span></label>'; }).join('')
         : '<div style="padding:18px;text-align:center;color:#8A8F9C;font-size:12.5px">No program with a boat on '+esc(D.toDs)+(D.all?'':' at this pier')+'. Try another date or All piers.</div>')
       +'</div><div style="font-size:11px;color:#8A8F9C;margin-top:6px">Price stays the same · boat/van of the cancelled trip are cleared · pickup time is read again for the new program</div>';
+  } else if(D.out==='partner'){
+    body=tcxPtBody(D, L);   /* §tcxPartner */
   } else if(D.out==='reschedule'){
     body='<label style="font-size:11px;font-weight:700;color:#6B7489">New date (same program) <input type="date" value="'+esc(D.rsDs)+'" onchange="_tcxD.rsDs=this.value" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>';
   } else {
@@ -40172,12 +40352,13 @@ function tcxDlgRender(){
     +'<div style="font-size:15px;font-weight:700;color:#0F1B3D;margin-top:2px">'+title+'</div></div><button onclick="acctModalClose();_tcxD=null" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--fd-ink-soft)">&times;</button></div>'
     +'<div style="padding:14px 18px;width:620px;max-width:100%;box-sizing:border-box">'+seg+body+hid
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button onclick="acctModalClose();_tcxD=null" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">Back</button>'
-    +'<button onclick="tcxDlgApply()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply'+(D.bulk?(' to '+L.length):'')+'</button></div></div>');
+    +'<button onclick="tcxDlgApply()" style="background:'+(D.out==='partner'?'#0F6E56':'#A32D2D')+';color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply'+(D.bulk?(' to '+L.length):'')+'</button></div></div>');
 }
 function tcxDlgApply(){
   const D=_tcxD; if(!D) return;
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   const L=D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean);
+  if(D.out==='partner'){ tcxPtApply(D, L); return; }   /* §tcxPartner */
   if(D.out==='move'){
     if(!D.nr){ alert('Pick the program to move to.'); return; }
     if(D.bulk){
@@ -40213,6 +40394,7 @@ function tcxByTripBanner(rid, ds){
     + '<div style="font-size:11px;color:'+R.fg+';opacity:.85;margin-top:1px">'+(note?esc(note)+' · ':'')+(snapTxt?snapTxt+' · ':'')+'resolve booking by booking</div></div>'
     + (open.length?('<span style="font-size:11px;font-weight:700;background:#FBF1DF;color:#7A4300;border-radius:8px;padding:3px 8px">To resolve '+open.length+' / '+L.length+'</span>'):'')
     + bulk
+    + (open.length?('<button onclick="event.stopPropagation();tcxDlgBulk(\''+rid+'\',\''+ds+'\',\'partner\')" style="background:#fff;border:1px solid #0F6E56;color:#0F6E56;font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap">&rarr; Send to partner…</button>'):'')   /* §tcxPartner */
     + '<button onclick="event.stopPropagation();bkV2WeatherPanel(\''+rid+'\',\''+ds+'\')" style="background:'+R.fg+';color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>';
 }
 /* ตาราง Boat Operation · ช่องที่ยกเลิกรอบ */
@@ -40273,7 +40455,7 @@ function tcxHistSet(k,v){ _tcxH[k]=v||''; tcxHistRender(); }
 function tcxHistFiltered(){ return tcxHistRows().filter(x=>(!_tcxH.mon||String(x.ds).slice(0,7)===_tcxH.mon)&&(!_tcxH.r||x.reason===_tcxH.r)&&(!_tcxH.p||x.pier===_tcxH.p)); }
 function tcxHistRender(){
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const L=tcxHistFiltered(), OL={reschedule:'rescheduled',move:'moved',refund:'refunded',credit:'credit',cancel:'cancelled',open:'to resolve',resolved:'resolved'};
+  const L=tcxHistFiltered(), OL={reschedule:'rescheduled',move:'moved',partner:'to partner',refund:'refunded',credit:'credit',cancel:'cancelled',open:'to resolve',resolved:'resolved'};
   const sum=(f)=>L.filter(f).reduce((s,x)=>s+((x.S&&x.S.pax)||0),0);
   const byR={}; L.forEach(x=>{ byR[x.reason]=(byR[x.reason]||0)+1; });
   const mp=L.filter(x=>x.reason==='minpax'), mpMoved=mp.reduce((s,x)=>s+(x.oc.move||0),0), mpN=mp.reduce((s,x)=>s+x.n,0);
@@ -40299,7 +40481,7 @@ function tcxHistRender(){
     +'<button onclick="tcxHistCsv()" style="margin-left:auto;height:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-family:inherit;font-weight:700;font-size:12.5px;padding:0 12px;cursor:pointer">Export CSV</button>'
     +'<button onclick="tcxHistClose()" style="height:32px;width:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-size:16px;cursor:pointer">&times;</button></div>'
     +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 18px">'
-    + kp('Cancelled trips', L.length, sum(()=>true)+' pax affected')
+    + kp('Cancelled trips', L.length, sum(()=>true)+' pax affected'+tcxPtHistNote(L))
     + kp('Below break-even', byR.minpax||0, sum(x=>x.reason==='minpax')+' pax · moved '+mpMoved+' of '+mpN+' booking(s)', '#CFC6F2')
     + kp('Weather · boat · other', (byR.weather||0)+(byR.boat||0)+(byR.other||0), 'weather '+(byR.weather||0)+' · boat '+(byR.boat||0)+' · other '+(byR.other||0))
     + '<div style="border-radius:12px;padding:10px 13px;border:1px solid #E6E8EE;background:#fff"><div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#5F5F58;text-transform:uppercase">Most often below break-even</div><div style="font-weight:800;margin-top:6px">'+(top?esc(top):'—')+'</div><div style="font-size:11px;color:#6B7489">'+(top?(freq[top]+' time(s)'):'')+'</div></div></div>'
@@ -40321,6 +40503,7 @@ function bkV2WeatherInlineCell(bkId){
   if(!wr) return '<span class="t2-dim">&mdash;</span>';
   const st=wr.status;
   if(st==='resolved'){
+    if(wr.outcome==='partner') return tcxPtCell(bk);   /* §tcxPartner */
     const oL={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
     const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):(wr.outcome==='move'&&wr.newRoute)?(' &rarr; '+tcxRName(wr.newRoute)+(wr.newDate?(' '+String(wr.newDate).slice(5)):'')):'';
     return '<span style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap">&#10003; '+(oL[wr.outcome]||wr.outcome)+ex+'</span>';
@@ -55365,10 +55548,11 @@ function bkV2RenderTab2(){
     const pax=dts.reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
     // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
-    const hasBoat=_bkV2CityTourOnly || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
+    const _tcxPt=(typeof tcxPtOf==='function')?tcxPtOf(b,date):null;   /* §tcxPartner · ไปกับเรือ Partner */
+    const hasBoat=_bkV2CityTourOnly || !!_tcxPt || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
     if(!hasBoat){ _unBoatN++; _unBoatPax+=pax; _unBoatR[_lbl]=(_unBoatR[_lbl]||0)+pax; }
     const zone=(dts[0].zone||b.pickupZone||'NoTransfer');
-    if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT'){
+    if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT' && !(_tcxPt && _tcxPt.van==='partner')){
       const ops=b.ops||{};
       const vanOk = ops.vanId || (Array.isArray(ops.vanSplits)&&ops.vanSplits.length&&ops.vanSplits.every(s=>s.vanId || (typeof bkV2SplitIsSelf==='function' && bkV2SplitIsSelf(s))));   /* §splitOwn · คนที่มาเองไม่ต้องรอรถ */
       if(!vanOk){ _unVanN++; _unVanPax+=pax; _unVanR[_lbl]=(_unVanR[_lbl]||0)+pax; }
@@ -79875,6 +80059,7 @@ function ppRows(){
     (b.trips||[]).forEach(function(t){
       var d=(t&&t.date)||''; if(!d || d<from || d>to) return;
       var rid=t.routeId||'';
+      if(typeof tcxPtOf==='function' && tcxPtOf(b,d)) return;   /* §tcxPartner · ไม่กินบนเรือเรา */
       var rt=(typeof getRoute==='function')?getRoute(rid):null;
       var O=(typeof bkOpsRead==='function')?(bkOpsRead(b,d)||{}):(b.ops||{});
       var px=t.pax||{};
