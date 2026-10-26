@@ -2497,6 +2497,47 @@ async function restTxn(username, baseVersion, ops){
   } catch (e){ await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); }
 }
 
+/* §bbGuard (2026-10-26) · ใบเหมา "เรือกลับท่าวันเดียวกัน" (sb_bookings__trips.ovnof='boatback') ห้ามถูกล็อกเรือในวันระหว่างกลาง
+   owner: "ให้รีโหลดตอนนี้ยาก รวม 10 บัญชี" · เบราว์เซอร์ที่ยังรันสคริปต์เก่า (ก่อน §ovnBoatBack3) เห็นใบเป็นค้างคืนเต็มช่วง
+   แล้วเซฟตาราง trips ที่ล็อกเรือวันระหว่างกลางกลับเข้ามา · กันที่เซิร์ฟเวอร์ = ได้ผลทันทีโดยไม่ต้องให้ใครรีโหลด
+   เฉพาะ op put/putall ของ r:'trips' · ช่องที่ charterBookingId ตรงใบ boatback + ลำตรง + วันอยู่ระหว่างวันไป-วันรับ (ไม่รวมสองวันนั้น)
+   ไม่มีใครนั่งลำนั้นวันนั้น (ops_boatid) → ตัดเรือออก · มีคนนั่ง → คงเป็นรอบปกติ · พลาดอะไรก็ปล่อยผ่าน (ไม่ทำให้การเซฟล้ม) */
+let _bbRows=null, _bbAt=0;
+async function bbRowsGet(){
+  if(_bbRows && Date.now()-_bbAt<20000) return _bbRows;
+  const r=await pool.query(`SELECT t.sb_bookings_id AS id, t.date AS d, t.ovnreturndate AS ret, t.charterboatid AS boat
+     FROM ${fqt('sb_bookings__trips')} t JOIN ${fqt('sb_bookings')} b ON b.id=t.sb_bookings_id
+     WHERE t.ovnof='boatback' AND COALESCE(b.status,'') NOT IN ('cancelled','rejected','cancelled_weather')`);
+  _bbRows=r.rows.filter(x=>x.d && x.ret && x.boat && String(x.ret)>String(x.d)); _bbAt=Date.now(); return _bbRows;
+}
+async function bbGuardDay(ds, day, rows){
+  let n=0; if(!day || typeof day!=='object') return 0;
+  for(const bid of Object.keys(day)){
+    const op=day[bid]; if(!op || !op.charterBookingId) continue;
+    const hit=rows.find(r=>r.id===op.charterBookingId && r.boat===bid && ds>String(r.d) && ds<String(r.ret)); if(!hit) continue;
+    let used=false;
+    try{ const q=await pool.query(`SELECT 1 FROM ${fqt('sb_bookings__trips')} t JOIN ${fqt('sb_bookings')} b ON b.id=t.sb_bookings_id
+        WHERE t.date=$1 AND t.ops_boatid=$2 AND t.sb_bookings_id<>$3 AND COALESCE(b.status,'') NOT IN ('cancelled','rejected','cancelled_weather') LIMIT 1`,[ds,bid,hit.id]); used=q.rows.length>0; }catch(_){ used=true; }
+    if(used){ delete op.charterBookingId; op.type='normal'; } else delete day[bid];
+    n++;
+  }
+  return n;
+}
+async function bbGuardOps(ops, who){
+  try{
+    if(!ops.some(o=>o && (o.op==='put'||o.op==='putall') && o.r==='trips' && o.body && typeof o.body==='object')) return 0;
+    const rows=await bbRowsGet(); if(!rows.length) return 0;
+    let n=0;
+    for(const o of ops){
+      if(!o || o.r!=='trips' || !o.body || typeof o.body!=='object') continue;
+      if(o.op==='put' && o.id!=null) n+=await bbGuardDay(String(o.id), o.body, rows);
+      else if(o.op==='putall') for(const ds of Object.keys(o.body)) n+=await bbGuardDay(ds, o.body[ds], rows);
+    }
+    if(n) console.log('[bbGuard] user='+who+' stripped '+n+' boat-back mid-day lock(s)');
+    return n;
+  }catch(e){ console.warn('[bbGuard] skipped —', e.message); return 0; }
+}
+
 const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
   const q = (req.url||'').split('?')[1]||'';
@@ -2961,7 +3002,7 @@ const server = http.createServer((req, res) => {
         const ops = Array.isArray(p.ops) ? p.ops : null;
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
         if(!ops.every(o=>o && ((o.op==='meta'||o.op==='smerge') ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});   /* §smerge */
-        restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
+        bbGuardOps(ops, s.username).then(()=>restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops))   /* §bbGuard */
           .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
             J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
           .catch(e=> {
