@@ -866,5 +866,9 @@
     toServiceBody: toServiceBody
   };
 
-  if(enabled()) loadAll(false).catch(function(){});
+  /* §bootLater · after the first draw: engines, gearboxes and propellers, read by the fleet screens */
+  if(enabled()){
+    if(O.later) O.later('fleet assets', function(){ return loadAll(false); }, 5);
+    else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
+  }
 })();

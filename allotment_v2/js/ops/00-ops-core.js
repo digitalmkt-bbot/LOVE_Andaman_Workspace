@@ -40,18 +40,83 @@
     return e;
   }
 
-  function call(method, path, body, headers){
+  function send(method, path, body, headers){
     var opts = { method: method, headers: Object.assign({}, headers || {}) };
     if(body !== undefined){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
     return window.laOpsFetch(path, opts).then(function(r){
-      if(r.status === 204) return null;
-      return r.text().then(function(t){
-        var j = null; try{ j = t ? JSON.parse(t) : null; }catch(_){}
-        if(!r.ok) throw LaOpsError(r.status, j, method + ' ' + path);
-        return j;
-      });
+      if(r.status === 204) return { status: 204, ok: true, text: '' };
+      return r.text().then(function(t){ return { status: r.status, ok: r.ok, text: t }; });
     });
   }
+  function answer(res, method, path){
+    if(res.status === 204) return null;
+    var j = null; try{ j = res.text ? JSON.parse(res.text) : null; }catch(_){}
+    if(!res.ok) throw LaOpsError(res.status, j, method + ' ' + path);
+    return j;
+  }
+  function call(method, path, body, headers){
+    if(method !== 'GET') forgetShared();
+    return send(method, path, body, headers).then(function(res){ return answer(res, method, path); });
+  }
+
+  /* §bootShare (2026-10-26) · the same GET asked again while the first is still on its way joins it instead
+     of going out twice (at boot the catalogue and the fleet boats both asked for /v1/boats). Only while it is in
+     flight: a GET made after the answer came always asks the server again. Callers share the answer's TEXT and
+     each parses its own copy, so no caller sees another's edits. A write (any non-GET here) or a change-feed
+     event detaches the GETs in flight, so a GET made after it is sent fresh. */
+  var shared = {};
+  function forgetShared(){ shared = {}; }
+  function sharedGet(path){
+    var entry = shared[path];
+    if(!entry){
+      entry = shared[path] = { p: null };
+      var done = function(){ if(shared[path] === entry) delete shared[path]; };
+      entry.p = send('GET', path).then(function(res){ done(); return res; }, function(e){ done(); throw e; });
+    }
+    return entry.p.then(function(res){ return answer(res, 'GET', path); });
+  }
+
+  /* §bootLater (2026-10-26) · data the first screen does not need loads AFTER the boot's first draw, two
+     requests at a time, instead of every adapter loading at once when its script runs. Production's log for
+     one login: ~40 reads in 0.6 s, so reads that take 0.2 s alone waited up to 3 s for each other.
+       laOps.later(name, fn, rank)  queue a load (fn returns a promise); a lower rank runs first
+       laOps.later.start()      90-ops-boot.js, after the first draw: run the queue, two at a time
+       laOps.later.now()        a screen is opened before the queue is through: run everything left at once
+       laOps.later.whenDone(cb) cb once, when every queued load has finished (90-ops-boot.js redraws then)
+     A load that fails is reported by its own adapter (O.fail) and counted as finished. If nothing starts the
+     queue (no boot), it starts by itself 20 s after the first load is queued. */
+  var later = (function(){
+    var tasks = [], running = 0, started = false, waiting = [], fallback = null, MAX = 2;
+    function done(){ return tasks.every(function(t){ return t.finished; }); }
+    function settle(){
+      if(!done()) return;
+      var cbs = waiting; waiting = [];
+      cbs.forEach(function(cb){ try{ cb(); }catch(_){} });
+    }
+    function run(t){
+      if(t.p) return t.p;
+      running++;
+      t.p = Promise.resolve().then(t.fn).catch(function(e){
+        try{ console.warn('[ops] background load ' + t.name + ' · ' + (e && e.message)); }catch(_){}
+      }).then(function(){ t.finished = true; running--; pump(); settle(); });
+      return t.p;
+    }
+    function pump(){ for(var i = 0; i < tasks.length && running < MAX; i++) if(!tasks[i].p) run(tasks[i]); }
+    function start(){ if(fallback){ clearTimeout(fallback); fallback = null; } started = true; pump(); }
+    function queueLoad(name, fn, rank){
+      var t = { name: name, fn: fn, rank: rank == null ? 99 : rank, p: null, finished: false }, i = tasks.length;
+      while(i > 0 && tasks[i - 1].rank > t.rank) i--;
+      tasks.splice(i, 0, t);
+      if(started) pump();
+      else if(!fallback) fallback = setTimeout(start, 20000);
+    }
+    queueLoad.start = start;
+    queueLoad.now = function(){ start(); return Promise.all(tasks.map(run)); };
+    queueLoad.done = done;
+    queueLoad.whenDone = function(cb){ if(done()) cb(); else waiting.push(cb); };
+    queueLoad.names = function(){ return tasks.map(function(t){ return t.name + (t.finished ? ' ✓' : t.p ? ' …' : ''); }); };
+    return queueLoad;
+  })();
 
   /* §opsVersion (2026-10-09) · a booking write sends the version it read and keeps the one it is
      answered with. The server refuses a write from a stale copy with 409 stale_version and changes
@@ -214,13 +279,14 @@
      existing cache invalidators also refresh after someone else's save. */
   var listeners = [], changeListeners = [];
   function onWrite(fn){ listeners.push(fn); }
-  function wrote(kind){ listeners.forEach(function(fn){ try{ fn(kind); }catch(_){} }); }
+  function wrote(kind){ forgetShared(); listeners.forEach(function(fn){ try{ fn(kind); }catch(_){} }); }
   function onChange(fn){ changeListeners.push(fn); }
-  function changed(change){ changeListeners.forEach(function(fn){ try{ fn(change); }catch(_){} }); }
+  function changed(change){ forgetShared(); changeListeners.forEach(function(fn){ try{ fn(change); }catch(_){} }); }
 
   window.laOps = {
     enabled: enabled, call: call, qs: qs, bookingWrite: bookingWrite,
-    get: function(p, q){ return call('GET', p + qs(q)); },
+    get: function(p, q){ return sharedGet(p + qs(q)); },
+    later: later,
     post: function(p, b){ return call('POST', p, b === undefined ? {} : b); },
     patch: function(p, b){ return call('PATCH', p, b); },
     del: function(p){ return call('DELETE', p); },
