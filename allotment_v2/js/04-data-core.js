@@ -3517,6 +3517,23 @@ const DV_CSS=`<style>
   }
 </style>`;
 function renderDash(){
+  /* §pierScope3 · คนที่ผูกท่า: วาดแดชบอร์ดจากข้อมูลเฉพาะท่าตัวเอง · สลับตัวแปรกลางชั่วคราวเฉพาะช่วงวาด (synchronous) แล้วคืนเสมอ */
+  if(typeof laPierScoped==='function' && laPierScoped()){
+    const my=laMyPier(), R0=ROUTES, B0=BOATS, T0=TRIPS, S0=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:null;
+    try{
+      ROUTES=R0.filter(r=>laRouteOk(r));
+      const rid=new Set(ROUTES.map(r=>r.id));
+      const T1={}; const usedBoat={};
+      Object.keys(T0||{}).forEach(ds=>{ const day=T0[ds]||{}; const o={}; Object.keys(day).forEach(bid=>{ const op=day[bid]; if(op && op.route && rid.has(op.route)){ o[bid]=op; usedBoat[bid]=1; } }); T1[ds]=o; });
+      TRIPS=T1;
+      BOATS=B0.filter(b=>b && (((typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):b.pier)===my || usedBoat[b.id]));
+      if(S0) SB_BOOKINGS=S0.filter(bk=>laBkOk(bk));
+      return _renderDashRaw();
+    } finally { ROUTES=R0; BOATS=B0; TRIPS=T0; if(S0) SB_BOOKINGS=S0; }
+  }
+  return _renderDashRaw();
+}
+function _renderDashRaw(){
   const wrap=document.getElementById('dash-wrap');
   if(!wrap)return;
 
@@ -6382,7 +6399,7 @@ function renderDA(){
 // ══════════════════════════════════════
 let boatPier='all',boatSt='all',boatLocType='all',selBoatId=null,selDetailTab='tl',ganttOffset=-7,selSt='available',editingSlId=null;
 
-function setBoatPier(v,el){boatPier=v;document.querySelectorAll('#boats-pier-filter .fp').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');renderBoats();}
+function setBoatPier(v,el){if(typeof laPierScoped==='function' && laPierScoped()) return; boatPier=v;document.querySelectorAll('#boats-pier-filter .fp').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');renderBoats();}
 function setBoatSt(v,el){boatSt=v;document.querySelectorAll('#boats-st-filter .fp').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');renderBoats();}
 function setBoatLocType(v,el){boatLocType=v;renderBoats();}
 
@@ -6415,6 +6432,7 @@ function bsFit(){
 }
 if(!window._bsFitOn){ window._bsFitOn=1; window.addEventListener('resize', function(){ try{ bsFit(); }catch(_){} }, {passive:true}); }
 function renderBoats(){
+  if(typeof laMyPier==='function' && laMyPier()) boatPier=laMyPier();   /* §pierScope3 · ล็อกท่า */
   let boats=BOATS;
   if(boatPier!=='all') boats=boats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)===boatPier);
   if(boatSt!=='all') boats=boats.filter(b=>getCurStatus(b,TODAY_STR).s===boatSt);
@@ -6513,7 +6531,7 @@ function renderBoats(){
   // §bsRedesign · ตัวกรองย้ายเข้าไปอยู่หัวการ์ดรายการ · ยังเรียก setBoatPier / setBoatSt / setBoatLocType ตัวเดิม
   const _tabCss=(on)=>`min-height:32px;padding:0 11px;border-radius:16px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#0F1B3D':'#fff'};color:${on?'#fff':'#0F1B3D'};font:600 12px inherit;font-family:inherit;cursor:pointer`;
   const _segCss=(on)=>`min-height:28px;padding:0 10px;border-radius:14px;border:1px solid ${on?'#0F1B3D':'#CFCFC8'};background:${on?'#EEF1F8':'#fff'};color:#0F1B3D;font:600 11.5px inherit;font-family:inherit;cursor:pointer`;
-  const pierBtn=(val,label,n)=>`<button onclick="setBoatPier('${val}',null)" style="${_tabCss(boatPier===val)}">${label}${n==null?'':` <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span>`}</button>`;
+  const pierBtn=(val,label,n)=>((typeof laPierScoped==='function')&&laPierScoped()&&val!==boatPier) ? '' : `<button onclick="setBoatPier('${val}',null)" style="${_tabCss(boatPier===val)}">${label}${n==null?'':` <span style="font:400 11.5px 'DM Mono',monospace;opacity:.75">${n}</span>`}</button>`;
   const stBtn=(val,label)=>`<button onclick="setBoatSt('${val}',null)" style="${_segCss(boatSt===val)}">${label}</button>`;
   const locBtn=(val,label)=>`<button onclick="setBoatLocType('${val}',null)" style="${_segCss(boatLocType===val)}">${label}</button>`;
   const filterBar=`<div style="position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid #ECEBE6;padding:10px 12px 9px">
