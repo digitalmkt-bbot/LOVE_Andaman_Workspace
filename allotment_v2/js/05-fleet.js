@@ -31265,7 +31265,26 @@ function ivmPrint(){
 /* §flBatLoad (2026-10-22) · flLoad() วิ่งที่บรรทัด ~25096 ก่อนถึงตรงนี้ · เดิมเป็น `var FL_BATTERIES=[]` จึงล้างค่าที่โหลดมาทิ้ง
    ทุกครั้งที่เปิดหน้า → แท็บว่าง และ flSave() ครั้งถัดไปเขียน [] กลับขึ้นเซิร์ฟเวอร์ = แบตที่บันทึกไว้หาย · เก็บค่าที่โหลดแล้วไว้ */
 var FL_BATTERIES; if(!Array.isArray(FL_BATTERIES)) FL_BATTERIES=[];
-var FB_POS=[['Port','Port (ซ้าย)'],['Std','Std (ขวา)'],['House','House (เรือนไฟ)'],['Bow','Bow thruster'],['Other','อื่น ๆ']];
+var FB_POS=[['Port','Port (ซ้าย)'],['C.Port','C.Port (กลางซ้าย)'],['Center','Center (กลาง)'],['C.Std','C.Std (กลางขวา)'],['Std','Std (ขวา)'],['House','House (เรือนไฟ)'],['Bow','Bow thruster'],['Other','อื่น ๆ']];   /* §fbPos · ตรงตำแหน่งเครื่องยนต์ */
+var FB_POS_ENG=['Port','C.Port','Center','C.Std','Std'];
+/* §fbPos · ตำแหน่งที่เลือกได้สำหรับเรือลำนี้ = ตำแหน่งเครื่องยนต์ที่ลงทะเบียนไว้ + House/Bow/อื่น ๆ · ไม่มีเครื่องในทะเบียน = ให้เลือกครบทุกตำแหน่ง */
+function fbPosKeysFor(boatId, cur){
+  var eng=[];
+  try{ (typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]).forEach(function(e){ if(!e || e.boatId!==boatId) return; var k=(typeof flPosLabel==='function')?flPosLabel(e.pos):e.pos; if(FB_POS_ENG.indexOf(k)>=0 && eng.indexOf(k)<0) eng.push(k); }); }catch(_){}
+  if(!eng.length) eng=FB_POS_ENG.slice();
+  eng.sort(function(a,b){ return FB_POS_ENG.indexOf(a)-FB_POS_ENG.indexOf(b); });
+  var keys=eng.concat(['House','Bow','Other']);
+  if(cur && keys.indexOf(cur)<0) keys.push(cur);
+  return keys;
+}
+function fbPosOptsHtml(boatId, cur){
+  return fbPosKeysFor(boatId, cur).map(function(k){ return '<option value="'+fbE(k)+'"'+(k===cur?' selected':'')+'>'+fbE(fbPosLabel(k))+'</option>'; }).join('');
+}
+function fbPosRefresh(){
+  var b=document.getElementById('fb-boat'), p=document.getElementById('fb-pos'); if(!b||!p) return;
+  var cur=p.value; p.innerHTML=fbPosOptsHtml(b.value, cur);
+  if(fbPosKeysFor(b.value,'').indexOf(cur)<0) p.selectedIndex=0;
+}
 var FB_LIFE_DEFAULT=18, FB_WARN_MONTHS=3;
 var FB={ boat:null, q:'', sel:null, modal:null };
 function fbE(s){ return (typeof faE==='function')?faE(s):String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -31423,8 +31442,8 @@ function fbOpenForm(id, opt){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+F('Serial (จากป้าย · เว้นว่าง = ระบบตั้งให้)','<input id="fb-serial" style="'+inp+';font-family:\'DM Mono\',monospace" value="'+v('serial','')+'">')+F('ร้าน / Supplier','<input id="fb-supplier" style="'+inp+'" value="'+v('supplier','')+'">')+'</div>'
     +'<div style="border-top:1px solid #EEF1F4;padding-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
       +F('สถานะ','<select id="fb-status" style="'+inp+'" onchange="fbFormSync()"><option value="installed"'+(status==='installed'?' selected':'')+'>ติดเรืออยู่</option><option value="spare"'+(status==='spare'?' selected':'')+'>สำรอง (คลัง)</option></select>')
-      +F('เรือ','<select id="fb-boat" style="'+inp+'">'+boats.map(function(b){ return '<option value="'+fbE(b.id)+'"'+(b.id===boatId?' selected':'')+'>'+fbE(b.name)+'</option>'; }).join('')+'</select>')
-      +F('ตำแหน่ง','<select id="fb-pos" style="'+inp+'">'+FB_POS.map(function(p){ return '<option value="'+p[0]+'"'+(p[0]===pos?' selected':'')+'>'+fbE(p[1])+'</option>'; }).join('')+'</select>')+'</div>'
+      +F('เรือ','<select id="fb-boat" style="'+inp+'" onchange="fbPosRefresh()">'+boats.map(function(b){ return '<option value="'+fbE(b.id)+'"'+(b.id===boatId?' selected':'')+'>'+fbE(b.name)+'</option>'; }).join('')+'</select>')
+      +F('ตำแหน่ง','<select id="fb-pos" style="'+inp+'">'+fbPosOptsHtml(boatId||(boats[0]&&boats[0].id)||'', pos)+'</select>')+'</div>'   /* §fbPos */
     +'<div id="fb-spare-row">'+F('เก็บที่','<select id="fb-sploc" style="'+inp+'">'+spareOpts.map(function(s){ return '<option'+(o&&o.spareLocation===s?' selected':'')+'>'+fbE(s)+'</option>'; }).join('')+'</select>')+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">'
       +F('วันติดตั้ง','<input id="fb-inst" type="date" style="'+inp+'" value="'+v('installDate',(o&&!opt.install)?'':today)+'" onchange="fbFormSync()">')
