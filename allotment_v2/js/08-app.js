@@ -16855,8 +16855,32 @@ function bkFocThInfer(b,t){
   return Math.max(0, foc-Math.max(0, fr-frPrice));
 }
 /* bkNatTH ที่รู้จักใบจอง · ใช้กับ FOC ของ B2C ที่ไม่มีแยกสัญชาติ · ที่เหลือเหมือน bkNatTH */
+/* ══ §natLead (2026-10-26) · owner ส่งใบ LOV-1840040 (Similan Catamaran 26 ต.ค. · หัวกรุ๊ป Denmark · 2 ผญ 2 เด็ก · ลค CXL)
+   "อันเดิมใส่สัญชาติมาผิด พอแล้วแก้ รูป 2 ยังไม่เปลี่ยน" · แก้ในหน้า Booking ของเรา
+   ใบ B2C ที่หัวกรุ๊ปเป็นไทย ไม่มีแยกสัญชาติ → b2c-map วางทั้งกลุ่มลงแถวราคา TH (paxAllThai)
+   แก้หัวกรุ๊ปเป็น DEN แค่เปลี่ยน leadNationality · แถวราคา ad_th/chd_th ยังอยู่ · หน้าตั๋วอุทยาน (และแถวยกเลิก) จึงยังนับเป็นไทย
+   กติกา: ใบที่ไม่มี nat (ไม่มีใครนับคนไทยไว้เอง) + หัวกรุ๊ประบุสัญชาติที่ไม่ใช่ไทย
+   → คนไทยจริง = จำนวนผู้เดินทางที่ระบุ TH ไว้ในรายชื่อ (ไม่เกินแถวราคา TH) · ที่เหลือเป็นต่างชาติ
+   ไล่หักจาก ผญ → เด็ก → INF → FOC · ทิศเดียว (ไทย → ต่างชาติ) = คิดสูงไว้ก่อน ตามกติกาของหน้าค่าอุทยาน
+   backup 22 ต.ค.: ใบแถว TH + หัวกรุ๊ปต่างชาติ มี 5 ใบ · ทุกใบมีคู่ที่ระบุ TH ครบเท่าแถว TH → ไม่เปลี่ยน
+   nat ที่คนกรอกเอง (bkNatHas) ชนะเสมอ ══ */
+function bkNatLeadCap(b,t){
+  if(!b || !t || bkNatHas(t)) return null;
+  var lead=String(b.leadNationality||'').trim().toUpperCase();
+  if(!lead || lead==='TH') return null;
+  var K=['ad','chd','inf','foc'], thP=0;
+  K.forEach(function(k){ thP+=bkNatTH(t,k); });
+  if(!thP) return null;
+  var named=0;
+  (b.passengers||[]).forEach(function(q){ if(q && String(q.nationality||'').trim().toUpperCase()==='TH') named++; });
+  if(named>=thP) return null;
+  var left=named, o={};
+  K.forEach(function(k){ var v=Math.min(bkNatTH(t,k), left); o[k]=v; left-=v; });
+  return o;
+}
 function bkNatTHb(b,t,k){
   if(k==='foc'){ var v=bkFocThInfer(b,t); if(v!=null) return v; }
+  var C=bkNatLeadCap(b,t); if(C) return C[k];   /* §natLead */
   return bkNatTH(t,k);
 }
 function bkNatTH(t,k){
@@ -16893,7 +16917,7 @@ function pcPax(date,bid,pier){
     if(!real) return;                       /* ทั้งใบไม่ได้ไป · ไม่ต้องซื้อตั๋วให้ */
     var ratio=booked?(real/booked):0;
     exact+=real;
-    if(bkNatHas(t)) anyNat=true;
+    if(bkNatHas(t) || bkNatLeadCap(b,t)) anyNat=true;   /* §natLead · ชุดสัญชาติจริงต่างจากแถวราคา */
     /* §pkLostType (2026-10-04) · หักคนที่ไม่ได้ไป "ตามประเภทที่หน้าท่าบันทึกไว้" ก่อน
        ผู้ใช้แจ้ง "ยอดคนไทยผิด ไม่มี INF" · Hermetis 4 ต.ค. ใบ ผญ ไทย 2 · เด็กไทย 2 · INF ไทย 1
        หน้าท่ายกเลิก INF 1 คน (paxBreak ระบุชัดว่าเป็น INF) ขึ้นเรือจริง 4
