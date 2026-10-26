@@ -474,7 +474,7 @@
     commit: function(){}
   });
   P.afterLoad(function(){
-    var cyc = cycleKey(ymd(new Date()));
+    var cyc = cycleKey(O.today());   // O.today(): the same date as ymd(new Date()), and the one a test can fix
     var rules = O.get('/v1/pier-office/pay-rules').then(function(a){
       pay.rules = rulesMap(a.rules);
       if(!a.defaulted) cfg().payRules = clone(pay.rules);
