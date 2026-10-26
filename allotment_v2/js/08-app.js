@@ -9291,6 +9291,8 @@ function bkOvnHealSpans(){
     (b.trips||[]).forEach(function(t){
       if(!t || t.bookingMode!=='charter' || !t.charterBoatId) return;
       var days=bkOvnSpanDates(t);
+      /* §ovnBoatBack4 · เรือกลับท่าวันเดียวกัน · เรือใช้แค่วันไปกับวันรับ · วันระหว่างกลางที่เคยถูกจองไว้ต้องถูกคืน (§ovnFree ข้างล่าง) */
+      if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t) && t.ovnReturnDate && t.ovnReturnDate>t.date) days=[t.date, t.ovnReturnDate];
       if(days.length<2) return;                       /* ไม่ใช่ใบค้างเกาะ ไม่ต้องยุ่ง */
       /* §ovnRet · ใบเก่า · ขากลับยังเป็น seat อยู่ · ทำให้ใบเหมาแตกเป็นสองสถานะ
          ขาไปอยู่กลุ่มเหมา ขากลับไปโผล่ในกลุ่มที่นั่งของเรือรอบปกติ · ปรับให้ตรงกัน */
@@ -55068,6 +55070,7 @@ function bkV2RenderTab2(){
          จำนวนคนที่อยู่บนเกาะไปอยู่บนป้ายของแถวแทน */
       (bk.trips||[]).forEach(t=>{
         if(!t || t.bookingMode!=='charter' || t.ovn!=='return') return;
+        if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t)) return;   /* §ovnBoatBack4 · เรือกลับท่า · วันระหว่างกลางไม่มีแถว */
         { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
         if(t.date===date || !t.ovnReturnDate || t.ovnReturnDate<=t.date) return;
         if(date<=t.date || date>=t.ovnReturnDate) return;
