@@ -45,7 +45,7 @@ const r3 = await page.evaluate(async (id) => {
   const c = { vis: document.querySelectorAll('#flw-rp .flp .flp-g:not(.hid) .flp-t').length, removed: !!m.photos[0].removed, n: m.photos.length };
   return { a, b, c };
 }, r1.id);
-if (r3.a.vis === 1 && r3.a.removed && r3.a.by === 'Tester' && /hidden · 1 photo/.test(r3.a.link) && r3.b.hid === 1 && r3.b.restore && r3.c.vis === 2 && !r3.c.removed && r3.c.n === 2)
+if (r3.a.vis === 1 && r3.a.removed && r3.a.by === 'Tester' && /(hidden · 1 photo|รูปที่ซ่อน · 1 รูป)/.test(r3.a.link)   /* §flwTH · โหมดไทยเป็นค่าตั้งต้น */ && r3.b.hid === 1 && r3.b.restore && r3.c.vis === 2 && !r3.c.removed && r3.c.n === 2)
   ok('3 ซ่อน → เหลือ 1 · ลิงก์ "hidden · 1 photo" · กดดูเห็นปุ่ม Restore · กู้คืน → กลับเป็น 2 · ไม่มีอะไรถูกลบ'); else fail('3 ' + JSON.stringify(r3));
 
 const r4 = await page.evaluate(async () => {
