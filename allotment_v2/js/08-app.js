@@ -52153,29 +52153,34 @@ function bkV2RenderTripsSection(){
     if(isCharter && t.routeId && t.date && typeof getAssignedBoatsForRouteDate === 'function'){
       const assigned = getAssignedBoatsForRouteDate(t.routeId, t.date);
       const charterRatesByType = rt.charterRates?.[t.routeId] || {};
+      /* §chPickOwn · ลำที่ใบนี้เหมาอยู่เองไม่ใช่ "ALREADY CHARTERED" · ต้องเลือกได้ (และสลับไปลำอื่นได้) ตอนแก้ใบ */
+      const _ownBk = (typeof _bkV2!=='undefined' && _bkV2.editingId) ? _bkV2.editingId : (d && d.id) || null;
+      const _ownBoat = (typeof _bkV2!=='undefined' && _bkV2.editingId) ? (t.charterBoatId||null) : null;
       const opts = assigned.map(a => {
         const bt = (a.boat?.type || '').toLowerCase();
         const hasCharterRate = !!charterRatesByType[bt];
-        const alreadyChartered = !!a.charterBookingId;
+        const alreadyChartered = !!a.charterBookingId && a.charterBookingId!==_ownBk && a.boatId!==_ownBoat;   /* §chPickOwn */
         // seats currently booked on this boat (cannot derive per-boat directly · check route+date seatsConsumed > 0)
         const hasSeats = (typeof getSeatsConsumed === 'function') && getSeatsConsumed(t.routeId, t.date) > 0;
         let label = `${a.boat.name} · ${a.boat.cap} cap · ${a.boat.type}`;
         let disabled = false;
         let note = '';
         if(alreadyChartered){ note = ' · ALREADY CHARTERED'; disabled = true; }
+        else if(a.boatId===_ownBoat){ note = ' · current'; }   /* §chPickOwn */
         /* §chManualNoRate · ไม่มีเรทเหมา ≠ เลือกไม่ได้ · ยังเหมาได้ด้วยราคาที่ตกลงกันเอง (กล่องแดงข้างล่างให้กรอก) */
         else if(!hasCharterRate){ note = ' · no charter rate · enter agreed price'; }
         else if(hasSeats){ note = ' · has existing seat bookings (will need confirm)'; }
         return `<option value="${a.boatId}" ${t.charterBoatId===a.boatId?'selected':''} ${disabled?'disabled':''}>${escapeHTML(label+note)}</option>`;
       }).join('');
       const noBoats = assigned.length === 0;
-      const noAvailable = assigned.length > 0 && !assigned.some(a => !a.charterBookingId && charterRatesByType[(a.boat?.type||'').toLowerCase()]);
+      /* §chPickOwn · ไม่มีเรทเหมาไม่ใช่เหตุให้เลือกไม่ได้ (§chManualNoRate) · เหลือแค่ "ทุกลำถูกใบอื่นเหมาไปแล้ว" */
+      const noAvailable = assigned.length > 0 && !assigned.some(a => !(a.charterBookingId && a.charterBookingId!==_ownBk && a.boatId!==_ownBoat));
       charterPickerHtml = `
         <div class="bkv2-nb-row" style="margin-top:8px">
           <div class="bkv2-nb-field" style="grid-column:1/-1">
             <label class="bkv2-nb-label">Charter boat <em style="font-weight:500;color:#b4b2a9;font-style:normal">· pick from boats assigned in Boat Operation</em></label>
             ${noBoats ? `<div style="padding:8px 11px;background:#FFF6E5;border:1px dashed #EAD9B0;color:#633806;font-size:11px;border-radius:var(--r-sm)">No boat assigned for this route+date yet · go to Boat Operation to assign first</div>` :
-              noAvailable ? `<div style="padding:8px 11px;background:#FDE7E7;border:1px solid #F5B7B7;color:#a32d2d;font-size:11px;border-radius:var(--r-sm)">All assigned boats are chartered or have no charter rate set</div>` :
+              noAvailable ? `<div style="padding:8px 11px;background:#FDE7E7;border:1px solid #F5B7B7;color:#a32d2d;font-size:11px;border-radius:var(--r-sm)">All assigned boats are already chartered by other bookings · assign another boat in Boat Operation first</div>` :
               `<select class="bkv2-nb-input" onchange="bkV2SetTripCharterBoat(${idx}, this.value || null)">
                 <option value="">&mdash; pick a boat &mdash;</option>
                 ${opts}
