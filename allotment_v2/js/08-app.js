@@ -2767,6 +2767,11 @@ window._laReloadData=function(pre){
     if(Array.isArray(d.fleet_projects)) FL_PROJECTS=d.fleet_projects;
     if(Array.isArray(d.fleet_safety)) FL_SAFETY=d.fleet_safety;
     if(Array.isArray(d.fleet_consumable_logs)) FL_CONSUMABLE_LOGS=d.fleet_consumable_logs;
+    /* §batReload (2026-10-26) · owner "User แจ้งว่าไม่บันทึก รีเฟรชหาย" (แบตเตอรี่)
+       เดิมไม่มีบรรทัดนี้ · พอคนอื่นเซฟอะไรก็ตาม เครื่องนี้ดึงก้อนใหม่แต่ FL_BATTERIES ยังเป็นชุดเก่า
+       แล้วพอเครื่องนี้กดบันทึกงาน Fleet อะไรก็ได้ flSave() เขียนชุดเก่าทับ → diff กลายเป็นลบ/ย้อนแบตที่อีกคนเพิ่งบันทึก
+       Railway log 26/10: Pier.Mgr กับ Admin.Pier สลับกัน put 1 + del 31 / put 33 หลายรอบ */
+    if(Array.isArray(d.fleet_batteries)) FL_BATTERIES=d.fleet_batteries;
     if(d.fleet_daily) FL_DAILY=d.fleet_daily;
     if(d.fleet_drlock) FL_DR_LOCK=d.fleet_drlock;
     if(d.fleet_fuelprice) FL_FUEL_PRICE=d.fleet_fuelprice;
