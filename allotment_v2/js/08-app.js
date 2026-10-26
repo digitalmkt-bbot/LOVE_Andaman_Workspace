@@ -9192,6 +9192,7 @@ function bkOvnHoldMap(date){
     if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
     (b.trips||[]).forEach(t=>{
       if(!t || t.bookingMode!=='charter' || t.ovn!=='return')return;
+      if(t.ovnBoatBack) return;   /* §ovnBoatBack · เรือกลับท่าวันเดียวกัน · ไม่กันวันระหว่างกลาง */
       const from=t.date||'', to=t.ovnReturnDate||'';
       if(!from || !to || to<=from)return;          /* ไป-กลับวันเดียวกัน = ไม่มีวันค้าง */
       if(date<from || date>to)return;
@@ -9216,7 +9217,7 @@ function bkOvnHoldMapMemo(date){
    เพดาน 60 วัน · กันวันกลับที่พิมพ์ผิด (เช่น 2027) สร้างช่องเป็นพันช่อง */
 function bkOvnSpanDates(t){
   if(!t || !t.date) return [];
-  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return') ? (t.ovnReturnDate||'') : '';
+  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return' && !t.ovnBoatBack) ? (t.ovnReturnDate||'') : '';   /* §ovnBoatBack */
   if(!to || to<=from) return [from];
   var out=[], d=new Date(from+'T12:00:00'), e=new Date(to+'T12:00:00'), n=0;
   while(d<=e && n<60){ out.push(bkV2LocalYMD? bkV2LocalYMD(d) : d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); n++; }
@@ -52297,6 +52298,7 @@ function bkV2RenderTripsSection(){
           <div style="font-size:12px;color:${t.ovn==='return'?'#5B289A':'#9A5B00'};margin-bottom:8px">${t.ovn==='return'?'🌙 OVN · ขากลับค้างคืน · กันที่นั่งวันกลับ + จัดรถกลับ · ขึ้นเรือท่าเกาะ':'🌙 OVN o/w · ค้างคืน · ลูกค้ากลับเอง (one-way) · ไม่กันที่นั่งกลับ ไม่จัดรถ'}</div>
           <div style="display:grid;grid-template-columns:${t.ovn==='return'?'1fr 1fr':'1fr'};gap:8px;align-items:end">
             ${t.ovn==='return'?`<div><label class="bkv2-nb-label" style="color:#5B289A">วันกลับ (OVN) *</label>${t.date?`<input class="bkv2-nb-input" type="date" min="${escapeHTML(t.date)}" value="${escapeHTML(t.ovnReturnDate||'')}" onchange="bkV2SetTripField(${idx},'ovnReturnDate',this.value)" style="width:100%;box-sizing:border-box">`:`<div class="bkv2-nb-input" style="width:100%;box-sizing:border-box;color:#b4b2a9;background:#f3f1ec;cursor:not-allowed;font-size:11px;display:flex;align-items:center">&#9888; เลือก DATE (วันไป) ก่อน</div>`}</div>`:''}
+            ${(t.ovn==='return' && t.bookingMode==='charter')?`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:12px;color:#5B289A"><input type="checkbox" id="bkv2-ovnbb-${idx}" ${t.ovnBoatBack?'checked':''} onchange="bkV2SetTripField(${idx},'ovnBoatBack',this.checked?1:0)"><label for="bkv2-ovnbb-${idx}" style="cursor:pointer"><b>เรือกลับท่าวันเดียวกัน</b> · ส่งแล้วกลับ ไปรับอีกวัน (ไม่กันเรือวันระหว่างกลาง · ราคาเหมารวมไป-กลับ)</label></div>`:''}   <!-- §ovnBoatBack -->
             <div><label class="bkv2-nb-label" style="color:#854F0B">ค่าค้างคืน (Extra) &#3647;</label><input class="bkv2-nb-input" type="number" min="0" value="${Number(t.ovnCharge)||0}" onchange="bkV2SetTripField(${idx},'ovnCharge',this.value)" placeholder="0" style="width:100%;box-sizing:border-box;text-align:right;font-variant-numeric:tabular-nums"></div>
           </div>
         </div>`:''}
@@ -56321,7 +56323,9 @@ function bkV2RenderTab2(){
         const _ri = (typeof bkV2RetInfo==='function')?bkV2RetInfo(bk,date):{sep:false};
         const _ovTrip=(bk.trips||[]).find(x=>x.date===date&&x.routeId===r.routeId);
         let _ovSB='';
-        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
+        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=_ovTrip.ovnBoatBack
+          ? `<span style="display:inline-block;font-size:10px;font-weight:700;color:#0B5A43;background:#DDF1EA;border-radius:8px;padding:3px 10px;white-space:nowrap" title="ส่ง ${esc(_ovTrip.date||'')} · เรือกลับท่าวันเดียวกัน · ไปรับ ${esc(_ovTrip.ovnReturnDate||'')}">&#8644; ส่ง ${esc(String(_ovTrip.date||'').slice(8))}&middot;รับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`   /* §ovnBoatBack */
+          : `<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
         const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
                  (จัดรถกลับแล้ว · กลับคันเดิม · ลูกค้ากลับเอง) ย้ายไปเป็นป้ายลอยใต้ชื่อโรงแรมในช่อง Pickup (_rtFt ด้านล่าง)
                  ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */
