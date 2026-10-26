@@ -9350,6 +9350,12 @@ function bkOvnHealSpans(){
         if(!op0 || op0.charterBookingId!==b.id) return;
         /* ยังมี trip ของใบนี้อยู่วันนั้นจริงไหม · ถ้ามี แปลว่าเป็นวันที่ตั้งใจ ไม่ใช่เศษ */
         if((b.trips||[]).some(function(x){ return x && x.date===ds && x.charterBoatId===t.charterBoatId; })) return;
+        /* §ovnBoatBack5 · เรือกลับท่า · วันระหว่างกลางที่ไม่มีใครนั่งลำนี้ = ลบออก ไม่ใช่ค้างเป็นรอบปกติ 0 คน */
+        if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t)){
+          var _used=SB_BOOKINGS.some(function(x){ if(!x || x===b || ['cancelled','rejected','cancelled_weather'].indexOf(x.status)>=0) return false;
+            var ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(x,ds):[]; return ids.indexOf(t.charterBoatId)>=0; });
+          if(!_used){ delete TRIPS[ds][t.charterBoatId]; fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:'เอาเรือออก · เรือกลับท่าวันเดียวกัน'}); return; }
+        }
         delete op0.charterBookingId;
         op0.type='normal';
         fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:'คืนเรือ · หลุดออกจากช่วงแล้ว'});
