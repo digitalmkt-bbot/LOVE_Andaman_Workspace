@@ -9185,6 +9185,8 @@ function baSetDate(delta){ const d=new Date(_baDate+'T12:00:00'); d.setDate(d.ge
    เรือเลยอ่านว่า "ว่าง" ทั้งที่ยังจอดอยู่ที่เกาะ · จ่ายงานอื่นทับได้เงียบ ๆ
    ช่วงวันอ่านออกจาก trip ขาไปอยู่แล้ว (t.date → t.ovnReturnDate)
    จึงไม่ต้องเพิ่มคอลัมน์ ไม่ต้อง migration และใบที่บันทึกไว้แล้วได้ผลทันที */
+/* §ovnBoatBack3 · อ่านธง "เรือกลับท่าวันเดียวกัน" · ในฟอร์ม = t.ovnBoatBack · ที่บันทึกแล้ว = ovnOf==='boatback' (คอลัมน์ text เดิมของ sb_bookings__trips) */
+function bkOvnBoatBack(t){ return !!(t && t.ovn==='return' && !t.ovnLeg && (t.ovnBoatBack || t.ovnOf==='boatback')); }
 function bkOvnHoldMap(date){
   const m=new Map();
   if(!date) return m;
@@ -9192,7 +9194,7 @@ function bkOvnHoldMap(date){
     if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
     (b.trips||[]).forEach(t=>{
       if(!t || t.bookingMode!=='charter' || t.ovn!=='return')return;
-      if(t.ovnBoatBack) return;   /* §ovnBoatBack · เรือกลับท่าวันเดียวกัน · ไม่กันวันระหว่างกลาง */
+      if(bkOvnBoatBack(t)) return;   /* §ovnBoatBack · เรือกลับท่าวันเดียวกัน · ไม่กันวันระหว่างกลาง */
       const from=t.date||'', to=t.ovnReturnDate||'';
       if(!from || !to || to<=from)return;          /* ไป-กลับวันเดียวกัน = ไม่มีวันค้าง */
       if(date<from || date>to)return;
@@ -9217,7 +9219,7 @@ function bkOvnHoldMapMemo(date){
    เพดาน 60 วัน · กันวันกลับที่พิมพ์ผิด (เช่น 2027) สร้างช่องเป็นพันช่อง */
 function bkOvnSpanDates(t){
   if(!t || !t.date) return [];
-  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return' && !t.ovnBoatBack) ? (t.ovnReturnDate||'') : '';   /* §ovnBoatBack */
+  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return' && !bkOvnBoatBack(t)) ? (t.ovnReturnDate||'') : '';   /* §ovnBoatBack */
   if(!to || to<=from) return [from];
   var out=[], d=new Date(from+'T12:00:00'), e=new Date(to+'T12:00:00'), n=0;
   while(d<=e && n<60){ out.push(bkV2LocalYMD? bkV2LocalYMD(d) : d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); n++; }
@@ -56323,7 +56325,7 @@ function bkV2RenderTab2(){
         const _ri = (typeof bkV2RetInfo==='function')?bkV2RetInfo(bk,date):{sep:false};
         const _ovTrip=(bk.trips||[]).find(x=>x.date===date&&x.routeId===r.routeId);
         let _ovSB='';
-        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=_ovTrip.ovnBoatBack
+        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=bkOvnBoatBack(_ovTrip)
           ? `<span style="display:inline-block;font-size:10px;font-weight:700;color:#0B5A43;background:#DDF1EA;border-radius:8px;padding:3px 10px;white-space:nowrap" title="ส่ง ${esc(_ovTrip.date||'')} · เรือกลับท่าวันเดียวกัน · ไปรับ ${esc(_ovTrip.ovnReturnDate||'')}">&#8644; ส่ง ${esc(String(_ovTrip.date||'').slice(8))}&middot;รับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`   /* §ovnBoatBack */
           : `<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
         const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
@@ -62549,10 +62551,11 @@ function bkV2CommitBooking(status){
       charterDisplacementAck: !!t.charterDisplacementAck,
       ovn: t.ovn || null,
       ovnReturnDate: t.ovn==='return' ? (t.ovnReturnDate||'') : '',
-      ovnBoatBack: (t.ovn==='return' && t.bookingMode==='charter' && t.ovnBoatBack) ? 1 : 0,   /* §ovnBoatBack2 · เรือกลับท่าวันเดียวกัน · ไม่ใส่ตรงนี้ = หายตอนบันทึก */
       ovnCharge: t.ovn ? Math.max(0, Number(t.ovnCharge)||0) : 0,
       ovnLeg: !!t.ovnLeg,
-      ovnOf: (t.ovnOf!=null) ? t.ovnOf : null,
+      /* §ovnBoatBack3 · ขากลับ: ovnOf = index ของขาไป (เดิม) · ขาไป: 'boatback' = เรือกลับท่าวันเดียวกัน · ตารางทริปเป็นคอลัมน์คงที่ จึงใช้ช่องนี้แทนฟิลด์ใหม่ */
+      ovnOf: t.ovnLeg ? ((t.ovnOf!=null && t.ovnOf!=='boatback') ? t.ovnOf : null)
+                      : ((t.ovn==='return' && t.bookingMode==='charter' && t.ovnBoatBack) ? 'boatback' : null),
       seatSource: (() => {
         const paxT = bkV2PaxAllTot(t.pax);
         const lu = (t.bookingMode==='charter') ? 0 : Math.min(Number(t.lockUse)||0, paxT);
@@ -64356,6 +64359,7 @@ function bkV2EditBooking(bookingId){
   // Deep-clone bk into _bkV2.newBooking shape
   const clone = JSON.parse(JSON.stringify(bk));
   delete clone.editLock;
+  (clone.trips||[]).forEach(t => { if(t && t.ovnOf==='boatback' && !t.ovnLeg) t.ovnBoatBack = 1; });   /* §ovnBoatBack3 · ธงจากคอลัมน์ → ช่องติ๊กในฟอร์ม */
   // Normalize arrays the relational backend drops when empty ([] → 0 child rows → key missing on
   // reload). Form renderers/calc read these without guards → "reading 'forEach'" crash on edit.
   ['addOns','passengers','adjustments','feeItems','altPickups'].forEach(k => { if(!Array.isArray(clone[k])) clone[k] = []; });
