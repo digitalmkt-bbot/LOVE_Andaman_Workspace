@@ -7094,7 +7094,7 @@
       },
       {
         "name": "amt",
-        "type": "bigint"
+        "type": "double precision"
       },
       {
         "name": "at",
@@ -7153,7 +7153,7 @@
       },
       {
         "name": "amt",
-        "type": "bigint"
+        "type": "double precision"
       },
       {
         "name": "note",
@@ -7224,11 +7224,11 @@
       },
       {
         "name": "amt",
-        "type": "bigint"
+        "type": "double precision"
       },
       {
         "name": "dock",
-        "type": "bigint"
+        "type": "double precision"
       },
       {
         "name": "by",

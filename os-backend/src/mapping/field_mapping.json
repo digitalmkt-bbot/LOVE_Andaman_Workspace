@@ -7666,7 +7666,7 @@
     "amt": {
       "source": "po_cash_rows[].amt",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "at": {
       "source": "po_cash_rows[].at",
@@ -7735,7 +7735,7 @@
     "amt": {
       "source": "po_cash_lt[].amt",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "note": {
       "source": "po_cash_lt[].note",
@@ -7818,12 +7818,12 @@
     "amt": {
       "source": "po_cash_pk[].amt",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "dock": {
       "source": "po_cash_pk[].dock",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "by": {
       "source": "po_cash_pk[].by",

@@ -16588,7 +16588,7 @@ function pcBuildViews(){
   };
   pcRowsArr().forEach(function(x){
     if(!x || !x.id || !x.pier || !x.date) return;
-    var D = day(x.pier, x.date), r = { id:x.id, amt:Math.round(+x.amt || 0) };
+    var D = day(x.pier, x.date), r = { id:x.id, amt:pcAmt(x.amt) };   /* §pcDec2 */
     pcPut(r, 'txt', x.txt); pcPut(r, 'at', x.at); pcPut(r, 'by', x.by);
     pcPut(r, 'ts', x.ts);   pcPut(r, 'src', x.src);
     pcPut(r, 'claim', x.claim);   /* §pcClm */
@@ -16597,14 +16597,14 @@ function pcBuildViews(){
   pcLtArr().forEach(function(x){
     if(!x || !x.pier || !x.date || !x.bid) return;
     var C = {};
-    PC_LT_F.forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    PC_LT_F.forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : pcNf(f, x[f])); });
     pcPut(C, 'note', x.note); pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts);
     day(x.pier, x.date).lt[x.bid] = C;
   });
   pcPkArr().forEach(function(x){
     if(!x || !x.pier || !x.date || !x.bid) return;
     var C = {};
-    PC_PK.concat(['amt','dock']).forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    PC_PK.concat(['amt','dock']).forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : pcNf(f, x[f])); });
     pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts); pcPut(C, 'src', x.src);
     day(x.pier, x.date).pk[x.bid] = C;
   });
@@ -16651,7 +16651,7 @@ function pcFlatten(V){
         (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
           if(!r || !r.id) return;
           R[r.id] = { id:String(r.id), pier:p, date:ds, kind:kind, txt:String(r.txt || ''),
-                      amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                      amt:pcAmt(r.amt), at:String(r.at || ''), by:String(r.by || ''),
                       ts:String(r.ts || ''), src:String(r.src || '') };
           if(r.claim != null) R[r.id].claim = String(r.claim);   /* §pcClm */
         });
@@ -16660,14 +16660,14 @@ function pcFlatten(V){
         var C = D.lt[bid] || {}, id = pcCellId(p, ds, bid);
         var o = { id:id, pier:p, date:ds, bid:String(bid), note:String(C.note || ''),
                   by:String(C.by || ''), ts:String(C.ts || '') };
-        PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
         L[id] = o;
       });
       Object.keys(D.pk || {}).forEach(function(bid){
         var C = D.pk[bid] || {}, id = pcCellId(p, ds, bid);
         var o = { id:id, pier:p, date:ds, bid:String(bid), by:String(C.by || ''),
                   ts:String(C.ts || ''), src:String(C.src || '') };
-        PC_PK.concat(['amt','dock']).forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        PC_PK.concat(['amt','dock']).forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
         K[id] = o;
       });
     });
@@ -16756,7 +16756,7 @@ function pcRowsFromPier(pier, P){
       (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
         if(!r || !r.id || have[r.id]) return;
         R.push({ id:String(r.id), pier:pier, date:ds, kind:kind, txt:String(r.txt || ''),
-                 amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                 amt:pcAmt(r.amt), at:String(r.at || ''), by:String(r.by || ''),
                  ts:String(r.ts || ''), src:String(r.src || '') });
         have[r.id] = 1; n++;
       });
@@ -16765,7 +16765,7 @@ function pcRowsFromPier(pier, P){
       var id = pcCellId(pier, ds, bid); if(haveL[id]) return;
       var C = D.lt[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
         note:String(C.note || ''), by:String(C.by || ''), ts:String(C.ts || '') };
-      PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+      PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
       L.push(o); haveL[id] = 1; n++;
     });
     Object.keys(D.pk || {}).forEach(function(bid){
@@ -16773,7 +16773,7 @@ function pcRowsFromPier(pier, P){
       var C = D.pk[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
         by:String(C.by || ''), ts:String(C.ts || ''), src:String(C.src || '') };
       PC_PK.concat(['amt','dock']).forEach(function(f){
-        o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
       K.push(o); haveK[id] = 1; n++;
     });
   });
@@ -16814,6 +16814,13 @@ function pcRowsAudit(){
 }
 /* §pcDec · เงินมีทศนิยมได้ 2 ตำแหน่ง (สตางค์) · จำนวนเต็มยังโชว์เหมือนเดิม ไม่ต่อ .00 */
 function pcC(x){ return Math.round((+x||0)*100)/100; }
+/* ══ §pcDec2 (2026-10-26) · owner "ตรวจสอบ Petty cash ใส่ทศนิยม แล้วไม่บันทึก ต้องสามารถใส่ได้"
+   §pcDec ให้ช่องกรอกรับสตางค์แล้ว แต่ทางเก็บลงแถว (pcFlatten / pcBuildViews / pcRowsFromPier) ยังปัด Math.round
+   และคอลัมน์ในฐานข้อมูล amt / dock เป็น bigint (server ปัดอีกชั้น) · 12.50 จึงกลับมาเป็น 13 หลังรีเฟรช · 0.40 กลายเป็น 0
+   ตอนนี้: เงิน (amt · dock) เก็บ 2 ตำแหน่ง · จำนวนคน (n nj nc · ad_th … foc_fr) ยังเป็นจำนวนเต็ม
+   ฐานข้อมูล: db/migrations/040_po_cash_decimal.sql เปลี่ยน amt/dock เป็น double precision + model/field_mapping ══ */
+function pcAmt(x){ return pcC(x); }
+function pcNf(f, x){ return (f === 'amt' || f === 'dock') ? pcC(x) : Math.round(+x || 0); }
 function pcNum(v){ return Math.max(0, pcC(parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')))); }
 function pcMoney(n){ return '฿'+pcN(n); }
 function pcN(n){ return pcC(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
