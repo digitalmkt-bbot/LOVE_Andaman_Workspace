@@ -4784,6 +4784,7 @@ function flLoad(){
   FL_INVENTORY=d.fleet_inventory||[];FL_MEMOS=d.fleet_memos||[];
   FL_CONSUMABLE_LOGS=Array.isArray(d.fleet_consumable_logs)?d.fleet_consumable_logs:[];
   FL_BATTERIES=Array.isArray(d.fleet_batteries)?d.fleet_batteries:[];   /* §flBat */
+  try{ if(typeof flGbBoatHeal==='function'){ var _gbh=flGbBoatHeal(); if(_gbh) console.log('[gbBoat] gearbox boat follows engine · fixed '+_gbh); } }catch(_e){}   /* §gbBoat · แก้ในหน่วยความจำ · บันทึกไปกับการเซฟ Fleet ครั้งถัดไป */
   // Back-fill NEW seed inventory items missing from already-seeded storage.
   // FL_DEFAULT_INVENTORY only seeds when the array is empty, so items appended to the
   // default list later (e.g. the HO-IV26004083 batch) never reach users whose localStorage
@@ -10163,6 +10164,21 @@ let _flSwap=null;        // { type:'eng'|'gb'|'prop', id } while a swap is in pr
 function flEquipSetBoat(id){ _flEquipBoat=id; _flSwap=null; flRenderEquip(); }
 function flEquipStartSwap(type,id){ _flSwap={type:type,id:id}; flRenderEquip(); }
 function flEquipCancelSwap(){ _flSwap=null; flRenderEquip(); }
+/* §gbBoat (2026-10-27) · owner "บัคไหม" (ROM-250D-XD-C ผูกเครื่อง Std ของ Romeo แต่ขึ้น 'ไม่ได้อยู่บนเรือ และไม่ได้ระบุว่าเก็บไว้ที่ไหน'
+   และไม่อยู่ในรายการเกียร์ของ Romeo) · เกียร์ที่ผูกเครื่อง = อยู่ลำเดียวกับเครื่องเสมอ
+   engIds: ซ่อมเฉพาะเกียร์ของเครื่องเหล่านี้ · ไม่ส่ง = ทั้งหมด (ตอนโหลด) · คืนจำนวนที่แก้ */
+function flGbBoatHeal(engIds){
+  var n=0, set=engIds?{}:null; if(set) engIds.forEach(function(x){ set[x]=1; });
+  (FL_GEARBOXES||[]).forEach(function(g){
+    if(!g||!g.engineId||(set&&!set[g.engineId])) return; var e=flGetEng(g.engineId); if(!e) return;
+    var want=e.boatId||null; if((g.boatId||null)===want) return;
+    var was=g.boatId?((getBoat(g.boatId)||{}).name||g.boatId):'ไม่มีลำ', now=want?((getBoat(want)||{}).name||want):'ไม่มีลำ';
+    g.boatId=want; if(want) g.spareLocation=null; n++;
+    if(!g.log) g.log=[]; g.log.push({date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'relink', desc:'ลำตามเครื่อง '+(e.serial||e.id)+': '+was+' → '+now, by:'System'});
+    (FL_PROPELLERS||[]).forEach(function(pp){ if(pp.gearboxId===g.id) _flEquipPropSync(pp); });
+  });
+  return n;
+}
 function _flEquipObj(type,id){ return type==='eng'?flGetEng(id):type==='gb'?flGetGb(id):(FL_PROPELLERS||[]).find(x=>x.id===id); }
 function _flEquipLog(obj,kind,desc){ if(!obj.log)obj.log=[]; obj.log.push({date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),type:kind,desc:desc,by:'Equip'}); }
 function _flEquipPropSync(p){   /* §eqProp */
@@ -10181,8 +10197,13 @@ function flEquipSwapDo(targetId){
   const bn=id=>{ const bb=id?getBoat(id):null; return bb?bb.name:'Spare'; };
   if(t==='eng'){ const _ab=a.boatId,_ap=a.pos; a.boatId=b.boatId;a.pos=b.pos; b.boatId=_ab;b.pos=_ap;
     _flEquipLog(a,'swap',`สลับ → ${bn(a.boatId)}${a.boatId?(' · '+flPosLabel(a.pos)):''} (กับ ${b.serial})`);
-    _flEquipLog(b,'swap',`สลับ → ${bn(b.boatId)}${b.boatId?(' · '+flPosLabel(b.pos)):''} (กับ ${a.serial})`); }
+    _flEquipLog(b,'swap',`สลับ → ${bn(b.boatId)}${b.boatId?(' · '+flPosLabel(b.pos)):''} (กับ ${a.serial})`);
+    flGbBoatHeal([a.id,b.id]); }   /* §gbBoat · เกียร์+ใบจักรของสองเครื่องนี้ย้ายลำตาม */
   else if(t==='gb'){ const _e=a.engineId; a.engineId=b.engineId; b.engineId=_e; if(a.engineId&&a.status==='spare')a.status='ready'; if(b.engineId&&b.status==='spare')b.status='ready'; if(!a.engineId)a.status='spare'; if(!b.engineId)b.status='spare';
+    /* §gbBoat · เดิมสลับแค่ engineId · เกียร์ spare ที่ใส่เข้าไปยังไม่มีลำ (ขึ้น 'ไม่ได้อยู่บนเรือ' ทั้งที่ติดอยู่)
+       ตัวที่ถอดออกยังค้างลำเดิม (ขึ้น 'ไม่ผูกเครื่อง') · ตอนนี้ลำตามเครื่องที่ผูกเสมอ · ถอดออก = ไม่มีลำ */
+    [a,b].forEach(function(g){ var e=g.engineId?flGetEng(g.engineId):null; g.boatId=e?(e.boatId||null):null; if(g.boatId) g.spareLocation=null; });
+    (FL_PROPELLERS||[]).forEach(function(pp){ if(pp.gearboxId===a.id||pp.gearboxId===b.id) _flEquipPropSync(pp); });
     _flEquipLog(a,'swap',`สลับเกียร์ (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับเกียร์ (กับ ${a.serial})`); }
   else { const _g=a.gearboxId; a.gearboxId=b.gearboxId; b.gearboxId=_g; _flEquipPropSync(a); _flEquipPropSync(b);
     _flEquipLog(a,'swap',`สลับใบจักร (กับ ${b.serial})`); _flEquipLog(b,'swap',`สลับใบจักร (กับ ${a.serial})`); }
@@ -10192,7 +10213,8 @@ function flEquipRemove(type,id){
   const o=_flEquipObj(type,id); if(!o) return;
   if(!confirm('ถอด '+o.serial+' เก็บเป็น Spare?')) return;
   if(type==='eng'){ const wb=o.boatId?(getBoat(o.boatId)||{}).name:''; _flEquipLog(o,'remove',`ถอดจาก ${wb} ${flPosLabel(o.pos)} → Spare`); o.boatId=null; }
-  else if(type==='gb'){ _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.engineId=null; o.status='spare'; }
+  else if(type==='gb'){ _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.engineId=null; o.status='spare'; o.boatId=null;   /* §gbBoat */
+    (FL_PROPELLERS||[]).forEach(function(pp){ if(pp.gearboxId===o.id) _flEquipPropSync(pp); }); }
   else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; _flEquipPropSync(o); }
   if(typeof flSave==='function') flSave(); flRenderEquip();
 }
