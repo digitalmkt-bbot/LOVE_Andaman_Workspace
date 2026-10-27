@@ -10161,7 +10161,6 @@ function flGetBoatSpares(bid){
 // ── Equipment bay · swap / remove engine·gearbox·propeller one piece at a time ──
 let _flEquipBoat=null;   // selected boat id
 let _flSwap=null;        // { type:'eng'|'gb'|'prop', id } while a swap is in progress
-function flEquipSetBoat(id){ _flEquipBoat=id; _flSwap=null; flRenderEquip(); }
 function flEquipStartSwap(type,id){ _flSwap={type:type,id:id}; flRenderEquip(); }
 function flEquipCancelSwap(){ _flSwap=null; flRenderEquip(); }
 /* §gbBoat (2026-10-27) · owner "บัคไหม" (ROM-250D-XD-C ผูกเครื่อง Std ของ Romeo แต่ขึ้น 'ไม่ได้อยู่บนเรือ และไม่ได้ระบุว่าเก็บไว้ที่ไหน'
@@ -10218,44 +10217,264 @@ function flEquipRemove(type,id){
   else { _flEquipLog(o,'remove','ถอดเก็บเป็น Spare'); o.gearboxId=null; _flEquipPropSync(o); }
   if(typeof flSave==='function') flSave(); flRenderEquip();
 }
-function flEquipOpen(boatId){ _flEquipBoat=boatId||_flEquipBoat; _flSwap=null; flRenderEquip(); if(typeof openModal==='function') openModal('fl-modal-equip'); }
+// ── §eqLink · Equipment bay v2 — link by position (2026-10-27) ──
+//   One table per boat: a row per engine position, three slots (engine | gearbox | propeller).
+//   Every slot is clickable — empty → "+ ใส่", filled → "เปลี่ยน" — and opens a ranked picker
+//   (this boat's loose parts → spare at the same pier → spare elsewhere → busy/in repair).
+//   The outgoing piece is sent to a chosen store in the same step. The old swap helpers above
+//   (flEquipSwapDo / flEquipRemove) stay as they were; engine-for-engine swaps still use them.
+let _flEqPick=null;              // {kind:'eng'|'gb'|'prop', engId} while the picker is open
+let _flEqF={brand:true, shaft:'', all:false};
+let _flEqSkip={};                // dismissed suggestions · gbId+'|'+engId
+function _flEqE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _flEqGbOf(eid){ return (FL_GEARBOXES||[]).find(g=>g.engineId===eid)||null; }
+function _flEqPropsOf(gid){ return (FL_PROPELLERS||[]).filter(p=>p.gearboxId===gid); }
+function _flEqPropOf(gid){ const L=_flEqPropsOf(gid); return L.find(p=>(p.status||'active')!=='spare')||L[0]||null; }
+function _flEqLocLabel(loc){ return loc?((typeof flParseSpareLoc==='function')?flParseSpareLoc(loc).label:loc):''; }
+function _flEqDone(){ if(typeof flSave==='function') flSave(); flRenderEquip(); if(typeof flRenderAsset==='function'){ try{ flRenderAsset(); }catch(e){ console.error('[eqLink] asset refresh',e); } } }
+// gearboxes that belong to this boat but are not on an engine (waiting at a position, or flagged to the boat)
+function _flEqLoose(bid){ return (FL_GEARBOXES||[]).filter(g=>!g.engineId && (g.onBoatId===bid || (g.boatId===bid && (g.status||'ready')!=='spare'))); }
+function flEqSuggest(bid){
+  const engs=(FL_ENGINES||[]).filter(e=>e.boatId===bid && !_flEqGbOf(e.id));
+  const loose=_flEqLoose(bid).filter(g=>g.status!=='fixing' && g.status!=='broken');
+  const out=[], usedE=new Set(), usedG=new Set();
+  loose.forEach(g=>{ if(!g.onBoatPos) return; const e=engs.find(x=>!usedE.has(x.id) && flPosRank(x.pos)===flPosRank(g.onBoatPos)); if(e){ out.push([g,e]); usedE.add(e.id); usedG.add(g.id); } });
+  const rg=loose.filter(g=>!usedG.has(g.id)), re=engs.filter(e=>!usedE.has(e.id));
+  if(rg.length===1 && re.length===1) out.push([rg[0],re[0]]);
+  return out.filter(p=>!_flEqSkip[p[0].id+'|'+p[1].id]);
+}
+function _flEqBoatIssues(bid){ return (FL_ENGINES||[]).filter(e=>e.boatId===bid && !_flEqGbOf(e.id)).length + _flEqLoose(bid).filter(g=>g.status!=='fixing' && !g.onBoatPos).length; }
+
+// ── actions ──
+function _flEqDetachGb(g,loc,why){
+  const st=g.status||'ready';
+  g.engineId=null; g.onBoatId=null; g.onBoatPos=null; g.boatId=null; g.spareLocation=loc||null;
+  if(st==='ready'||st==='spare') g.status='spare';
+  _flEquipLog(g,'remove',why+(loc?(' → '+_flEqLocLabel(loc)):''));
+  _flEqPropsOf(g.id).forEach(p=>{ p.boatId=null; });
+}
+function flEqLinkGb(gbId,engId,opt){ opt=opt||{};
+  const g=flGetGb(gbId), e=flGetEng(engId); if(!g||!e||g.engineId===e.id) return false;
+  if(g.engineId){ const oe=flGetEng(g.engineId); if(!confirm('Gearbox '+g.serial+' is on engine '+(oe?oe.serial:'?')+'. Move it to '+e.serial+'?')) return false; }
+  const bn=(getBoat(e.boatId)||{}).name||'', old=_flEqGbOf(e.id);
+  if(old){
+    const props=_flEqPropsOf(old.id);
+    _flEqDetachGb(old,opt.loc,'ถอดจาก '+bn+' '+flPosLabel(e.pos)+' (ใส่ '+g.serial+' แทน)');
+    if(opt.moveProp && !_flEqPropsOf(g.id).length) props.forEach(p=>{ p.gearboxId=g.id; _flEquipLog(p,'swap','ย้ายตามตำแหน่ง → เกียร์ '+g.serial); });
+  }
+  g.engineId=e.id; g.boatId=e.boatId||null; g.onBoatId=null; g.onBoatPos=null; g.spareLocation=null;
+  if(!g.status||g.status==='spare') g.status='ready';
+  _flEquipLog(g,'install','ผูกกับเครื่อง '+e.serial+' · '+bn+' '+flPosLabel(e.pos));
+  _flEquipLog(e,'note','ผูกเกียร์ '+g.serial);
+  _flEqPropsOf(g.id).forEach(_flEquipPropSync);
+  return true;
+}
+function flEqLinkProp(propId,gbId,opt){ opt=opt||{};
+  const p=(FL_PROPELLERS||[]).find(x=>x.id===propId), g=flGetGb(gbId); if(!p||!g||p.gearboxId===g.id) return false;
+  if(p.gearboxId){ const og=flGetGb(p.gearboxId); if(!confirm('Propeller '+p.serial+' is on gearbox '+(og?og.serial:'?')+'. Move it here?')) return false; }
+  _flEqPropsOf(g.id).forEach(x=>{ x.gearboxId=null; x.boatId=null; if((x.status||'active')==='active') x.status='spare'; x.spareLocation=opt.loc||null;
+    _flEquipLog(x,'remove','ถอดจากเกียร์ '+g.serial+' (ใส่ '+p.serial+' แทน)'+(opt.loc?(' → '+_flEqLocLabel(opt.loc)):'')); });
+  p.gearboxId=g.id; p.status='active'; p.spareLocation=null; _flEquipPropSync(p);
+  _flEquipLog(p,'install','ใส่บนเกียร์ '+g.serial);
+  return true;
+}
+function flEqPutEng(newId,oldId,opt){ opt=opt||{};
+  const n=flGetEng(newId), o=flGetEng(oldId); if(!n||!o||n.id===o.id) return false;
+  if(n.boatId){   // on a boat already → plain swap of the two engines (existing behaviour)
+    if(!confirm('Engine '+n.serial+' is on '+((getBoat(n.boatId)||{}).name||'another boat')+'. Swap the two engines?')) return false;
+    _flSwap={type:'eng',id:o.id}; flEquipSwapDo(n.id); return true; }
+  const bid=o.boatId, pos=o.pos, bn=(getBoat(bid)||{}).name||'';
+  (FL_GEARBOXES||[]).filter(g=>g.engineId===n.id).forEach(g=>_flEqDetachGb(g,n.spareLocation||null,'แยกจากเครื่อง '+n.serial+' (เครื่องไปติด '+bn+')'));
+  o.boatId=null; o.spareLocation=opt.loc||null;
+  _flEquipLog(o,'remove','ถอดจาก '+bn+' '+flPosLabel(pos)+' (ใส่ '+n.serial+' แทน)'+(opt.loc?(' → '+_flEqLocLabel(opt.loc)):''));
+  n.boatId=bid; n.pos=pos; n.spareLocation=null; if(!n.status||n.status==='spare') n.status='ready';
+  _flEquipLog(n,'install','ติดตั้งที่ '+bn+' '+flPosLabel(pos)+' (แทน '+o.serial+')');
+  // the gearbox stays at the drive position and adopts the incoming engine; its propeller follows the gearbox
+  (FL_GEARBOXES||[]).filter(g=>g.engineId===o.id).forEach(g=>{ g.engineId=n.id; g.boatId=bid; _flEquipLog(g,'swap','เกาะเครื่องใหม่ '+n.serial); _flEqPropsOf(g.id).forEach(_flEquipPropSync); });
+  return true;
+}
+function flEqPutEngAt(newId,bid,pos){
+  const n=flGetEng(newId); if(!n) return false; const bn=(getBoat(bid)||{}).name||'';
+  if(n.boatId && !confirm('Engine '+n.serial+' is on '+((getBoat(n.boatId)||{}).name||'another boat')+'. Move it to '+bn+' '+flPosLabel(pos)+'?')) return false;
+  if(n.boatId){ const fb=n.boatId, fp=n.pos; (FL_GEARBOXES||[]).filter(g=>g.engineId===n.id).forEach(g=>{ g.engineId=null; g.onBoatId=fb; g.onBoatPos=fp; _flEquipLog(g,'detach','คาเรือ '+((getBoat(fb)||{}).name||'')+' '+flPosLabel(fp)+' (เครื่องย้ายออก)'); }); }
+  else (FL_GEARBOXES||[]).filter(g=>g.engineId===n.id).forEach(g=>_flEqDetachGb(g,n.spareLocation||null,'แยกจากเครื่อง '+n.serial+' (เครื่องไปติด '+bn+')'));
+  n.boatId=bid; n.pos=pos; n.spareLocation=null; if(!n.status||n.status==='spare') n.status='ready';
+  _flEquipLog(n,'install','ติดตั้งที่ '+bn+' '+flPosLabel(pos));
+  (FL_GEARBOXES||[]).filter(g=>!g.engineId && g.onBoatId===bid && flPosRank(g.onBoatPos)===flPosRank(pos)).forEach(g=>{ g.engineId=n.id; g.boatId=bid; g.onBoatId=null; g.onBoatPos=null; if(g.status==='spare') g.status='ready'; _flEquipLog(g,'attach','เกาะเครื่องใหม่ '+n.serial); _flEqPropsOf(g.id).forEach(_flEquipPropSync); });
+  return true;
+}
+function _flEqVirt(id){ // 'pos:<boat>:<pos>' → a stand-in engine for an empty drive position
+  const m=/^pos:([^:]+):(.+)$/.exec(String(id||'')); if(!m) return null;
+  const g=(FL_GEARBOXES||[]).find(x=>!x.engineId && x.onBoatId===m[1] && flPosRank(x.onBoatPos)===flPosRank(m[2]));
+  return {id:id, virt:true, boatId:m[1], pos:m[2], brand:g?(g.brand||''):'', serial:'', waitGb:g||null};
+}
+function _flEqEng(id){ return _flEqVirt(id)||flGetEng(id); }
+function flEqTakeOut(kind,engId){
+  const e=flGetEng(engId); if(!e) return; const loc=_flEqReadLoc(); const bn=(getBoat(e.boatId)||{}).name||'';
+  if(kind==='eng'){ if(!confirm('Remove engine '+e.serial+' from '+bn+'? The gearbox stays on the boat at this position (waiting for an engine).')) return;
+    (FL_GEARBOXES||[]).filter(g=>g.engineId===e.id).forEach(g=>{ g.engineId=null; g.onBoatId=e.boatId; g.onBoatPos=e.pos; _flEquipLog(g,'detach','คาเรือ '+bn+' '+flPosLabel(e.pos)+' (เครื่องถอดออก)'); });
+    _flEquipLog(e,'remove','ถอดจาก '+bn+' '+flPosLabel(e.pos)+(loc?(' → '+_flEqLocLabel(loc)):'')); e.boatId=null; e.spareLocation=loc||null; }
+  else if(kind==='gb'){ const g=_flEqGbOf(e.id); if(!g||!confirm('Remove gearbox '+g.serial+'? Its propeller goes with it.')) return; _flEqDetachGb(g,loc,'ถอดจาก '+bn+' '+flPosLabel(e.pos)); }
+  else { const g=_flEqGbOf(e.id), p=g?_flEqPropOf(g.id):null; if(!p||!confirm('Remove propeller '+p.serial+'?')) return;
+    p.gearboxId=null; p.boatId=null; if((p.status||'active')==='active') p.status='spare'; p.spareLocation=loc||null; _flEquipLog(p,'remove','ถอดจากเกียร์ '+g.serial+(loc?(' → '+_flEqLocLabel(loc)):'')); }
+  _flEqPick=null; _flEqDone();
+}
+function _flEqReadLoc(){ const s=document.getElementById('fl-eq-oldloc'); return s?(s.value||''):''; }
+function flEqChoose(id){
+  const pk=_flEqPick; if(!pk) return; const e=_flEqEng(pk.engId); if(!e) return;
+  if(e.virt){ if(flEqPutEngAt(id,e.boatId,e.pos)){ _flEqPick=null; _flEqDone(); } return; }
+  const opt={loc:_flEqReadLoc(), moveProp:!!(document.getElementById('fl-eq-moveprop')||{}).checked};
+  let ok=false;
+  if(pk.kind==='gb') ok=flEqLinkGb(id,e.id,opt);
+  else if(pk.kind==='prop'){ const g=_flEqGbOf(e.id); if(g) ok=flEqLinkProp(id,g.id,opt); }
+  else ok=flEqPutEng(id,e.id,opt);
+  if(!ok) return; _flEqPick=null; _flEqDone();
+}
+function flEqLinkPair(gbId,engId){ if(flEqLinkGb(gbId,engId,{})) _flEqDone(); }
+function flEqSkipPair(gbId,engId){ _flEqSkip[gbId+'|'+engId]=1; flRenderEquip(); }
+function flEqQuickLink(gbId,engId){ if(!flEqLinkGb(gbId,engId,{})) return; if(typeof flSave==='function') flSave(); if(typeof flRenderAsset==='function') flRenderAsset(); }
+function flEqOpenPick(kind,engId){ _flEqPick={kind:kind,engId:engId}; _flEqF={brand:true,shaft:'',all:false}; flRenderEquip(); }
+function flEqClosePick(){ _flEqPick=null; flRenderEquip(); }
+function flEqSetF(k,v){ _flEqF[k]=v; flRenderEquip(); }
+function flEqFilterQ(v){ const q=String(v||'').toLowerCase(); document.querySelectorAll('#fl-eq-pick-list [data-q]').forEach(d=>{ d.style.display=(!q||d.getAttribute('data-q').indexOf(q)>=0)?'':'none'; }); }
+function flEquipOpen(boatId){ _flEquipBoat=boatId||_flEquipBoat; _flSwap=null; _flEqPick=null; flRenderEquip(); if(typeof openModal==='function') openModal('fl-modal-equip'); }
+function flEquipOpenPick(boatId,kind,engId){ flEquipOpen(boatId); flEqOpenPick(kind,engId); }
+function flEquipSetBoat(id){ _flEquipBoat=id; _flSwap=null; _flEqPick=null; flRenderEquip(); }
+
+// ── picker candidates ──
+function _flEqCands(kind,e){
+  const bid=e.boatId, pier=(getBoat(bid)||{}).pier, curG=_flEqGbOf(e.id);
+  let L=kind==='eng'?(FL_ENGINES||[]).filter(x=>x.id!==e.id):kind==='gb'?(FL_GEARBOXES||[]).filter(x=>x.engineId!==e.id):(FL_PROPELLERS||[]).filter(x=>!curG||x.gearboxId!==curG.id);
+  L=L.filter(x=>x.retired!==true && x.status!=='broken' && x.status!=='damaged');
+  const atPier=x=>x.spareLocation==='pier:'+pier;
+  const tier=x=>{ const st=x.status||'';
+    if(kind==='eng'){ if(x.boatId||st==='fixing') return 3; return (atPier(x)||x.spareLocation==='boat:'+bid)?1:2; }
+    if(kind==='gb'){ if(x.engineId||st==='fixing') return 3; if(x.onBoatId===bid||x.boatId===bid||x.spareLocation==='boat:'+bid) return 0; if(x.onBoatId) return 3; return atPier(x)?1:2; }
+    if(x.gearboxId||st==='fixing') return 3; if(x.spareLocation==='boat:'+bid) return 0; return atPier(x)?1:2; };
+  return L.map(x=>({o:x,t:tier(x)}));
+}
+function _flEqWhere(kind,x){
+  if(kind==='eng'){ if(x.boatId){ const b=getBoat(x.boatId); return 'ติดเรือ '+(b?b.name:'')+' '+flPosLabel(x.pos); } }
+  else if(kind==='gb'){ if(x.engineId){ const e=flGetEng(x.engineId), b=e?getBoat(e.boatId):null; return 'ติดเครื่อง '+(e?e.serial:'')+(b?(' · '+b.name):''); }
+    if(x.onBoatId){ const b=getBoat(x.onBoatId); return 'คาเรือ '+(b?b.name:'')+(x.onBoatPos?(' '+flPosLabel(x.onBoatPos)):''); }
+    if(x.boatId && x.status!=='spare'){ const b=getBoat(x.boatId); return 'ตั้งเป็นของ '+(b?b.name:'')+' แต่ยังไม่มีเครื่อง'; } }
+  else if(x.gearboxId){ const g=flGetGb(x.gearboxId); return 'ติดเกียร์ '+(g?g.serial:''); }
+  return x.spareLocation?_flEqLocLabel(x.spareLocation):'ไม่ระบุที่เก็บ';
+}
+
+// ── render ──
 function flRenderEquip(){
   const mount=document.getElementById('fl-equip-modal-body'); if(!mount) return;
-  const ink3='#999', line='rgba(0,0,0,.08)';
-  const boats=(typeof BOATS!=='undefined'?BOATS:[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const E=_flEqE;
+  const all=(typeof BOATS!=='undefined'?BOATS:[]);
+  const boats=all.filter(b=>b.id===_flEquipBoat||(FL_ENGINES||[]).some(e=>e.boatId===b.id)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   if(!_flEquipBoat && boats.length) _flEquipBoat=boats[0].id;
   const boat=getBoat(_flEquipBoat)||boats[0]||{};
-  const sw=_flSwap;
-  const TB={eng:['#E6F1FB','#0C447C','EN'],gb:['#EEEDFE','#3C3489','GB'],prop:['#E1F5EE','#085041','PR']};
-  const selHtml=`<select onchange="flEquipSetBoat(this.value)" style="border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:12.5px;font-family:inherit;background:#fff;cursor:pointer">${boats.map(b=>`<option value="${b.id}" ${b.id===_flEquipBoat?'selected':''}>${b.name}</option>`).join('')}</select>`;
-  const engs=(FL_ENGINES||[]).filter(e=>e.boatId===boat.id).sort((a,b)=>flPosRank(a.pos)-flPosRank(b.pos));
-  const pieceRow=(type,obj)=>{
-    if(!obj) return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:0.5px solid ${line};color:${ink3};font-size:11.5px"><span style="background:#F1EFE8;color:#999;font-size:10px;width:30px;text-align:center;padding:3px 0;border-radius:6px;flex:none">${TB[type][2]}</span><span>— ไม่มี —</span></div>`;
-    const tb=TB[type]; const isSel=sw&&sw.type===type&&sw.id===obj.id; const isTarget=sw&&sw.type===type&&sw.id!==obj.id;
-    const st=obj.status||(type==='prop'?'active':'ready');
-    const stc=st==='fixing'?'#854F0B':st==='spare'?'#666':st==='broken'?'#A32D2D':'#0F6E56';
-    const stbg=st==='fixing'?'#FAEEDA':st==='spare'?'#F1EFE8':st==='broken'?'#FCEBEB':'#E1F5EE';
-    let act='';
-    if(sw){ if(isTarget) act=`<button onclick="flEquipSwapDo('${obj.id}')" style="border:1px solid #185FA5;background:#E6F1FB;color:#185FA5;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ใส่ที่นี่</button>`; else if(isSel) act=`<span style="font-size:10.5px;color:#854F0B;font-weight:600">เลือกอยู่</span>`; }
-    else { act=`<button onclick="flEquipStartSwap('${type}','${obj.id}')" title="สลับชิ้นนี้" style="border:1px solid #cfe0d8;background:#fff;color:#0F6E56;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">&#8596; สลับ</button><button onclick="flEquipRemove('${type}','${obj.id}')" title="ถอดเก็บเป็น Spare" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit">ถอดเก็บ</button>`;
-      if(type==='prop'&&obj.gearboxId&&st==='spare') act=`<button onclick="flEquipPropActive('${obj.id}')" title="ใบจักรติดอยู่บนเกียร์แต่สถานะยังเป็น Spare · หน้า Company Asset จะไม่นับว่าติดอยู่" style="border:1px solid #E0B25C;background:#FFF4DC;color:#854F0B;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ตั้งเป็น Active</button>`+act; }
-    return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:0.5px solid ${line};${isSel?'background:#FFF8E1;border-radius:8px;padding-left:7px;padding-right:7px':''}">
-      <span style="background:${tb[0]};color:${tb[1]};font-size:10px;font-weight:600;width:30px;text-align:center;padding:3px 0;border-radius:6px;flex:none">${tb[2]}</span>
-      <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obj.serial}</div><div style="margin-top:2px"><span style="background:${stbg};color:${stc};font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:6px">${st}</span></div></div>
-      <div style="display:flex;gap:5px;flex:none">${act}</div>
-    </div>`;
+  const bid=boat.id, pierLbl=boat.pier==='tublamu'?'Tub Lamu':boat.pier==='panwa'?'Visit Panwa':boat.pier==='ranong'?'Ranong':(boat.pier||'');
+  const engs=(FL_ENGINES||[]).filter(e=>e.boatId===bid).sort((a,b)=>flPosRank(a.pos)-flPosRank(b.pos));
+  const waitPos=[]; _flEqLoose(bid).forEach(g=>{ if(g.onBoatId===bid && g.onBoatPos && !engs.some(e=>flPosRank(e.pos)===flPosRank(g.onBoatPos)) && !waitPos.some(v=>flPosRank(v.pos)===flPosRank(g.onBoatPos))) waitPos.push(_flEqVirt('pos:'+bid+':'+g.onBoatPos)); });
+  const rowsE=engs.concat(waitPos.filter(Boolean)).sort((a,b)=>flPosRank(a.pos)-flPosRank(b.pos));
+  const pk=_flEqPick && rowsE.some(e=>e.id===_flEqPick.engId) ? _flEqPick : null; if(!pk) _flEqPick=null;
+  const css=`<style>
+#fl-equip-modal-body .eq{font-family:'DM Sans',sans-serif;color:#0F1B3D}
+#fl-equip-modal-body .eq-btn{height:36px;padding:0 14px;border-radius:9px;border:1px solid #C9D2DE;background:#fff;color:#0F1B3D;font:inherit;font-size:12.5px;cursor:pointer}
+#fl-equip-modal-body .eq-btn.pri{background:#1683C7;border-color:#1683C7;color:#fff;font-weight:700}
+#fl-equip-modal-body .eq-tb{background:#fff;border:1px solid #E3E7EE;border-radius:14px;overflow:hidden}
+#fl-equip-modal-body .eq-row{display:grid;grid-template-columns:96px repeat(3,minmax(0,1fr));border-bottom:1px solid #EEF1F5}
+#fl-equip-modal-body .eq-row:last-child{border-bottom:0}
+#fl-equip-modal-body .eq-hd{background:#F8F9FC;font-size:11px;font-weight:700;color:#5E6577;letter-spacing:.05em}
+#fl-equip-modal-body .eq-hd>div{padding:9px 12px}
+#fl-equip-modal-body .eq-pos{padding:12px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+#fl-equip-modal-body .eq-cell{padding:7px}
+#fl-equip-modal-body .eq-slot{width:100%;min-height:64px;height:100%;box-sizing:border-box;text-align:left;border:1px solid #E3E7EE;border-radius:10px;background:#fff;padding:9px 11px;font:inherit;color:#0F1B3D;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+#fl-equip-modal-body .eq-slot:hover{border-color:#1683C7}
+#fl-equip-modal-body .eq-slot.on{border:2px solid #1683C7;background:#F2F8FD}
+#fl-equip-modal-body .eq-slot.add{border:2px dashed #1683C7;background:#F2F8FD;color:#1683C7;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+#fl-equip-modal-body .eq-slot.dis{border:1.5px dashed #C9CED8;background:#FAFBFC;color:#6B7280;align-items:center;justify-content:center;font-size:12px;cursor:default}
+#fl-equip-modal-body .eq-sn{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fl-equip-modal-body .eq-pill{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;text-transform:uppercase;flex:none}
+#fl-equip-modal-body .eq-mt{font-size:11.5px;color:#5E6577;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fl-equip-modal-body .eq-cand{display:flex;align-items:center;gap:10px;border:1px solid #E3E7EE;border-radius:10px;padding:8px 11px;margin-bottom:6px;background:#fff}
+#fl-equip-modal-body .eq-cand.rec{border:1.5px solid #1683C7;background:#F2F8FD}
+#fl-equip-modal-body .eq-gh{font-size:11px;font-weight:700;color:#5E6577;letter-spacing:.04em;margin:12px 0 6px}
+#fl-equip-modal-body .eq-chip{height:30px;padding:0 11px;border-radius:999px;border:1px solid #D7DBE2;background:#fff;color:#0F1B3D;font:inherit;font-size:12px;cursor:pointer}
+#fl-equip-modal-body .eq-chip.on{background:#0F1B3D;border-color:#0F1B3D;color:#fff;font-weight:600}
+</style>`;
+  const pill=st=>{ st=st||'ready'; const c=st==='fixing'?['#FAEEDA','#854F0B']:st==='spare'?['#F1EFE8','#555']:(st==='broken'||st==='damaged')?['#FCEBEB','#A32D2D']:['#E1F5EE','#0F6E56']; return `<span class="eq-pill" style="background:${c[0]};color:${c[1]}">${E(st)}</span>`; };
+  const slot=(kind,obj,e,meta,disTxt)=>{
+    const on=pk&&pk.kind===kind&&pk.engId===e.id, noun=kind==='eng'?'เครื่อง':kind==='gb'?'เกียร์':'ใบจักร';
+    if(disTxt) return `<div class="eq-slot dis">${E(disTxt)}</div>`;
+    if(!obj) return `<button type="button" class="eq-slot add${on?' on':''}" onclick="flEqOpenPick('${kind}','${e.id}')">+ ใส่${noun}</button>`;
+    return `<button type="button" class="eq-slot${on?' on':''}" onclick="flEqOpenPick('${kind}','${e.id}')" title="กดเพื่อเปลี่ยน / ถอด"><span style="display:flex;gap:6px;align-items:center;min-width:0"><span class="eq-sn">${E(obj.serial)}</span>${pill(obj.status||(kind==='prop'?'active':'ready'))}</span><span class="eq-mt">${E(meta)}</span></button>`;
   };
-  const cards=engs.map(e=>{ const gb=(FL_GEARBOXES||[]).find(g=>g.engineId===e.id); const pr=gb?(FL_PROPELLERS||[]).find(p=>p.gearboxId===gb.id):null;
-    return `<div style="background:#fff;border:1px solid ${line};border-radius:12px;padding:11px 13px"><div style="font-size:13px;font-weight:700;color:#1B2A55;margin-bottom:5px">${flPosLabel(e.pos)}</div>${pieceRow('eng',e)}${pieceRow('gb',gb)}${pieceRow('prop',pr)}</div>`; }).join('');
-  const spChip=(type,obj)=>{ const tb=TB[type]; const isTarget=sw&&sw.type===type; return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;border:1px solid ${isTarget?'#9DBFF6':'rgba(0,0,0,.12)'};border-radius:999px;padding:4px 4px 4px 10px;${isTarget?'background:#EAF2FD':''}"><span style="background:${tb[0]};color:${tb[1]};font-size:9px;padding:1px 5px;border-radius:5px">${tb[2]}</span><span style="font-family:'DM Mono',monospace">${obj.serial}</span>${isTarget?`<button onclick="flEquipSwapDo('${obj.id}')" style="border:none;background:#185FA5;color:#fff;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">ใส่</button>`:''}</span>`; };
-  const spE=(FL_ENGINES||[]).filter(e=>!e.boatId), spG=(FL_GEARBOXES||[]).filter(g=>!g.engineId), spP=(FL_PROPELLERS||[]).filter(p=>!p.gearboxId);
-  const spareHtml=[...spE.map(o=>spChip('eng',o)),...spG.map(o=>spChip('gb',o)),...spP.map(o=>spChip('prop',o))].join('')||`<span style="font-size:11px;color:${ink3}">ไม่มีของ spare</span>`;
-  const hint=sw?(function(){ const o=_flEquipObj(sw.type,sw.id); const tn=sw.type==='eng'?'เครื่อง':sw.type==='gb'?'เกียร์':'ใบจักร'; return `<div style="display:flex;align-items:center;gap:9px;background:#FFF7E6;border:1px solid #EAD9B0;border-radius:9px;padding:9px 13px;margin-bottom:12px"><span style="font-size:12.5px;color:#854F0B">&#8596; กำลังสลับ${tn} <b style="font-family:'DM Mono',monospace">${o?o.serial:''}</b> — เลือกชิ้นปลายทาง (ชนิดเดียวกัน) ที่ตำแหน่งอื่น หรือใน Spare pool</span><button onclick="flEquipCancelSwap()" style="margin-left:auto;background:#fff;border:1px solid #ddd;border-radius:7px;padding:5px 11px;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิก</button></div>`; })():'';
-  mount.innerHTML=`<div style="padding:2px">
-    <div style="display:flex;align-items:center;gap:11px;margin-bottom:13px;flex-wrap:wrap"><span style="font-size:11px;color:${ink3}">เลือกเรือ</span>${selHtml}<span style="font-size:11px;color:${ink3}">${boat.type||''}${boat.pier?(' · '+(boat.pier==='tublamu'?'Tub Lamu':boat.pier==='panwa'?'Visit Panwa':boat.pier)):''}</span></div>
-    ${hint}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:10px">${cards||`<div style="font-size:12px;color:${ink3};padding:20px">เรือนี้ยังไม่มีเครื่องติดตั้ง</div>`}</div>
-    <div style="background:#fff;border:1px solid ${line};border-radius:12px;padding:11px 13px;margin-top:10px"><div style="font-size:12.5px;font-weight:700;margin-bottom:8px">Spare pool <span style="font-weight:400;color:${ink3}">· ${sw?'เลือกเพื่อสลับเข้าตำแหน่ง':'ชิ้นที่ถอดเก็บไว้ (ไม่อยู่เรือ)'}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${spareHtml}</div></div>
+  const rows=rowsE.map(e=>{
+    if(e.virt){ const g=e.waitGb, p=g?_flEqPropOf(g.id):null;
+      return `<div class="eq-row" style="background:#FFF8EC"><div class="eq-pos"><b style="font-size:15px">${E(flPosLabel(e.pos))}</b><span style="font-size:11px;color:#854F0B;font-weight:600">รอเครื่อง</span></div>
+      <div class="eq-cell">${slot('eng',null,e,'')}</div>
+      <div class="eq-cell">${g?`<div class="eq-slot" style="cursor:default;background:#FFFDF8"><span style="display:flex;gap:6px;align-items:center;min-width:0"><span class="eq-sn">${E(g.serial)}</span>${pill(g.status)}</span><span class="eq-mt">คาเรือ · ใส่เครื่องแล้วจะผูกให้เอง</span></div>`:''}</div>
+      <div class="eq-cell">${p?`<div class="eq-slot" style="cursor:default;background:#FFFDF8"><span class="eq-sn">${E(p.serial)}</span><span class="eq-mt">ตามเกียร์</span></div>`:''}</div></div>`; }
+    const g=_flEqGbOf(e.id), p=g?_flEqPropOf(g.id):null;
+    const miss=[!g?'เกียร์':'',g&&!p?'ใบจักร':''].filter(Boolean);
+    const st=miss.length?`<span style="font-size:11px;color:#854F0B;font-weight:600">ขาด${miss.join(' · ')}</span>`:`<span style="font-size:11px;color:#0F6E56;font-weight:600">ครบชุด</span>`;
+    return `<div class="eq-row"${miss.length?' style="background:#FFFBF3"':''}><div class="eq-pos"><b style="font-size:15px">${E(flPosLabel(e.pos))}</b>${st}</div>
+      <div class="eq-cell">${slot('eng',e,e,[e.brand,e.model].filter(Boolean).join(' '))}</div>
+      <div class="eq-cell">${slot('gb',g,e,g?[g.shaftLength,g.modelSuffix].filter(Boolean).join(' · '):'')}</div>
+      <div class="eq-cell">${slot('prop',p,e,p?[p.size||((p.diameter&&p.pitch)?(p.diameter+'×'+p.pitch):''),p.rotation].filter(Boolean).join(' · '):'',g?'':'ใส่เกียร์ก่อน')}</div></div>`;
+  }).join('');
+  const table=`<div class="eq-tb"><div class="eq-row eq-hd"><div>ตำแหน่ง</div><div>เครื่องยนต์</div><div>เกียร์</div><div>ใบจักร</div></div>${rows||`<div style="padding:20px;font-size:12.5px;color:#6B7280">เรือนี้ยังไม่มีเครื่องติดตั้ง</div>`}</div>`;
+  // suggestions
+  const sug=flEqSuggest(bid).map(([g,e])=>`<div style="display:flex;align-items:center;gap:12px;background:#E8F3FB;border:1px solid #B9DAF0;border-radius:12px;padding:10px 14px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px;font-size:13px;line-height:1.5"><b>น่าจะเป็นคู่กัน</b> — เกียร์ <span style="font-family:'DM Mono',monospace">${E(g.serial)}</span> ${g.onBoatPos?('คาเรือที่ '+E(flPosLabel(g.onBoatPos))):'ตั้งเป็นของเรือนี้'} แต่ยังไม่ได้ผูก · เครื่อง <span style="font-family:'DM Mono',monospace">${E(e.serial)}</span> (${E(flPosLabel(e.pos))}) ยังไม่มีเกียร์</div>
+    <button type="button" class="eq-btn" onclick="flEqSkipPair('${g.id}','${e.id}')">ไม่ใช่คู่นี้</button><button type="button" class="eq-btn pri" onclick="flEqLinkPair('${g.id}','${e.id}')">ผูกคู่นี้เลย</button></div>`).join('');
+  // loose gearboxes on this boat that are not part of a suggestion (waiting / in repair)
+  const sugIds=new Set(flEqSuggest(bid).map(x=>x[0].id));
+  const loose=_flEqLoose(bid).filter(g=>!sugIds.has(g.id) && !(g.onBoatId===bid && waitPos.some(v=>v&&v.waitGb&&v.waitGb.id===g.id)));
+  const looseHtml=loose.length?`<div style="background:#FFF8EC;border:1px solid #EBD3A6;border-radius:12px;padding:10px 14px;margin-top:10px;font-size:12.5px;color:#6B3F08;line-height:1.6"><b>เกียร์ของเรือนี้ที่ยังไม่ได้อยู่บนเครื่อง</b> · ${loose.map(g=>`<span style="font-family:'DM Mono',monospace;color:#0F1B3D">${E(g.serial)}</span> ${g.status==='fixing'?'(ซ่อมอยู่)':g.onBoatPos?('(รอเครื่อง · '+E(flPosLabel(g.onBoatPos))+')'):'(ไม่ระบุตำแหน่ง)'}`).join(' · ')}</div>`:'';
+  // picker
+  let picker='';
+  if(pk){
+    const e=_flEqEng(pk.engId), kind=pk.kind, noun=kind==='eng'?'เครื่อง':kind==='gb'?'เกียร์':'ใบจักร';
+    const curG=_flEqGbOf(e.id), cur=kind==='eng'?(e.virt?null:e):kind==='gb'?curG:(curG?_flEqPropOf(curG.id):null);
+    let C=_flEqCands(kind,e);
+    const brandOf=x=>kind==='gb'?(x.brand||((flGetEng(x.engineId)||{}).brand)||''):(x.brand||'');
+    if(kind!=='prop' && _flEqF.brand && e.brand) C=C.filter(c=>!brandOf(c.o)||brandOf(c.o)===e.brand);
+    if(kind==='gb' && _flEqF.shaft) C=C.filter(c=>c.o.shaftLength===_flEqF.shaft);
+    const busy=C.filter(c=>c.t===3).length;
+    if(!_flEqF.all) C=C.filter(c=>c.t<3);
+    C.sort((a,b)=>a.t-b.t||String(a.o.serial).localeCompare(String(b.o.serial)));
+    const meta=x=>kind==='eng'?[x.model,x.status==='fixing'?'ซ่อมอยู่':''].filter(Boolean).join(' · '):kind==='gb'?[x.shaftLength,x.modelSuffix].filter(Boolean).join(' · '):[x.size||((x.diameter&&x.pitch)?(x.diameter+'×'+x.pitch):''),x.rotation,x.brand].filter(Boolean).join(' · ');
+    const GN=['แนะนำ · ของเรือลำนี้','Spare ที่ท่าเดียวกัน · '+pierLbl,'Spare ที่อื่น','ติดอยู่ที่อื่น / ซ่อมอยู่'];
+    let list='';
+    [0,1,2,3].forEach(t=>{ const G=C.filter(c=>c.t===t); if(!G.length) return;
+      list+=`<div class="eq-gh"${t===0?' style="color:#1683C7"':''}>${E(GN[t])}</div>`+G.map(c=>{ const x=c.o;
+        return `<div class="eq-cand${t===0?' rec':''}" data-q="${E(String(x.serial||'').toLowerCase())}"><div style="flex:1;min-width:0"><div style="display:flex;gap:6px;align-items:center"><span class="eq-sn">${E(x.serial)}</span>${pill(x.status||(kind==='prop'?'active':'ready'))}</div><div class="eq-mt">${E([meta(x),_flEqWhere(kind,x)].filter(Boolean).join(' · '))}</div></div><button type="button" class="eq-btn${t===0?' pri':''}" onclick="flEqChoose('${x.id}')">เลือก</button></div>`; }).join(''); });
+    if(!list) list=`<div style="font-size:12.5px;color:#6B7280;padding:12px;border:1px dashed #D7DBE2;border-radius:10px;margin-top:10px">ไม่มี${noun}ว่างตามตัวกรองนี้</div>`;
+    const shafts=kind==='gb'?[...new Set((FL_GEARBOXES||[]).map(g=>g.shaftLength).filter(Boolean))].sort():[];
+    const chips=(kind!=='prop'&&e.brand?`<button type="button" class="eq-chip${_flEqF.brand?' on':''}" onclick="flEqSetF('brand',${!_flEqF.brand})">${E(e.brand)} เท่านั้น</button>`:'')
+      +(kind==='gb'?`<button type="button" class="eq-chip${!_flEqF.shaft?' on':''}" onclick="flEqSetF('shaft','')">ทุกเพลา</button>`+shafts.map(s=>`<button type="button" class="eq-chip${_flEqF.shaft===s?' on':''}" onclick="flEqSetF('shaft','${E(s)}')">${E(s)}</button>`).join(''):'');
+    const locKeys=Object.keys(typeof SPARE_LOC_LABELS!=='undefined'?SPARE_LOC_LABELS:{});
+    const defLoc=locKeys.indexOf('pier:'+boat.pier)>=0?('pier:'+boat.pier):'';
+    const locSel=`<select id="fl-eq-oldloc" style="height:34px;border:1px solid #D7DBE2;border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px;background:#fff"><option value="">— ไม่ระบุ —</option>${locKeys.map(k=>`<option value="${E(k)}"${k===defLoc?' selected':''}>${E(SPARE_LOC_LABELS[k].label)}</option>`).join('')}<option value="boat:${E(bid)}">เก็บบนเรือ ${E(boat.name)}</option></select>`;
+    const foot=cur?`<div style="border-top:1px solid #EEF1F5;background:#F8F9FC;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;font-weight:700;color:#5E6577">${noun}เดิม <span style="font-family:'DM Mono',monospace;color:#0F1B3D">${E(cur.serial)}</span> ไปไหน</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${locSel}<button type="button" class="eq-btn" onclick="flEqTakeOut('${kind}','${e.id}')">ถอดออกอย่างเดียว</button></div>
+        ${kind==='gb'&&_flEqPropOf(cur.id)?`<label style="font-size:12px;color:#5E6577;display:flex;gap:6px;align-items:center"><input type="checkbox" id="fl-eq-moveprop" checked> ย้ายใบจักร ${E(_flEqPropOf(cur.id).serial)} ไปใส่เกียร์ใหม่ด้วย</label>`:''}
+        ${kind==='eng'?`<div style="font-size:11.5px;color:#6B7280">เกียร์และใบจักรอยู่ที่ตำแหน่งเดิม แล้วเกาะเครื่องใหม่ · ถ้าเลือกเครื่องที่ติดเรืออื่น = สลับเครื่องกัน</div>`:''}</div>`:'';
+    picker=`<div style="flex:0 0 400px;max-width:100%;background:#fff;border:1px solid #E3E7EE;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;align-self:flex-start">
+      <div style="padding:14px 16px 10px;border-bottom:1px solid #EEF1F5;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;flex:1">${cur?'เปลี่ยน':'ใส่'}${noun} · ${E(flPosLabel(e.pos))}</b><button type="button" class="eq-btn" aria-label="ปิด" onclick="flEqClosePick()">✕</button></div>
+        <div style="font-size:12px;color:#5E6577">${E(boat.name)} · ${e.virt?('ตำแหน่งว่าง · มีเกียร์ '+E(e.waitGb?e.waitGb.serial:'')+' รออยู่'):('เครื่อง <span style="font-family:\'DM Mono\',monospace;color:#0F1B3D">'+E(e.serial)+'</span>')}${e.brand?(' · '+E(e.brand)):''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}<input type="text" placeholder="ค้นหา serial…" aria-label="ค้นหา serial" oninput="flEqFilterQ(this.value)" style="flex:1;min-width:110px;height:30px;border:1px solid #D7DBE2;border-radius:8px;padding:0 9px;font:inherit;font-size:12px"></div>
+      </div>
+      <div id="fl-eq-pick-list" style="padding:0 16px 10px;max-height:46vh;overflow:auto">${list}${busy?`<button type="button" onclick="flEqSetF('all',${!_flEqF.all})" style="border:none;background:none;color:#1683C7;font:inherit;font-size:12px;font-weight:600;padding:8px 0;cursor:pointer">${_flEqF.all?'ซ่อนตัวที่ติดอยู่ที่อื่น / ซ่อมอยู่':('+ แสดงตัวที่ติดอยู่ที่อื่น / ซ่อมอยู่ ('+busy+')')}</button>`:''}</div>
+      ${foot}</div>`;
+  }
+  const opts=boats.map(b=>{ const n=_flEqBoatIssues(b.id); return `<option value="${E(b.id)}" ${b.id===bid?'selected':''}>${E(b.name)}${n?(' · ต้องผูก '+n):''}</option>`; }).join('');
+  mount.innerHTML=`${css}<div class="eq">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap"><b style="font-size:20px">${E(boat.name||'')}</b><span style="font-size:12.5px;color:#5E6577">${E(pierLbl)}${engs.length?(' · '+engs.length+' เครื่อง'):''}</span><span style="flex:1"></span><label style="font-size:12px;color:#5E6577;display:flex;gap:6px;align-items:center">เรือ <select onchange="flEquipSetBoat(this.value)" style="height:34px;border:1px solid #D7DBE2;border-radius:8px;padding:0 10px;font:inherit;font-size:12.5px;background:#fff;cursor:pointer">${opts}</select></label></div>
+    ${sug}
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1 1 520px;min-width:0">${table}${looseHtml}
+      <div style="font-size:11.5px;color:#6B7280;margin-top:10px">กดช่องว่างเพื่อใส่ · กดช่องที่มีของเพื่อเปลี่ยนหรือถอด</div></div>${picker}</div>
   </div>`;
 }
 function flRenderAsset(){
@@ -29727,7 +29946,7 @@ function faCSS(){
   +V+' .fa-tabs button{height:32px;padding:0 14px;border-radius:16px;border:1px solid #DCDFE6;background:#fff;color:#3E4658;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}'
   +V+' .fa-tabs button.on{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
   +V+' .fa-tabs button em{font-style:normal;background:#A32D2D;color:#fff;font-size:9.5px;padding:1px 6px;border-radius:9px;font-weight:700}'
-  +V+' .fa-stages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:10px}'
+  +V+' .fa-stages{display:grid;grid-template-columns:repeat(var(--fa-stn,6),minmax(0,1fr));gap:6px;margin-top:10px}'
   +V+' .fa-stg{height:54px;padding:0 14px;border-radius:12px;border:1px solid #DCDFE6;background:#fff;color:#0F1B3D;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;font-family:inherit;min-width:0}'
   +V+' .fa-stg.red{border-color:#EFB2AA;color:#A32D2D}'
   +V+' .fa-stg.on{background:#16265C;color:#fff;border-color:#16265C}'
@@ -29784,7 +30003,7 @@ function faShell(info){
     +'<div class="fa-chips">'+(info.chips||'')+(info.add?('<button type="button" class="fa-chip pri" onclick="'+info.add[1]+'">+ '+faE(info.add[0])+'</button>'):'')+'</div></div>';
   var tabs='<div class="fa-tabs">'+FA_TABS.map(function(t){
     return '<button type="button" class="'+(t[0]===tab?'on':'')+'" onclick="faGo(\''+t[0]+'\')">'+t[1]+(badges[t[0]]?('<em>'+badges[t[0]]+'</em>'):'')+'</button>'; }).join('')+'</div>';
-  var stg=(info.stages&&info.stages.length)?('<div class="fa-stages">'+info.stages.map(function(s,i){
+  var stg=(info.stages&&info.stages.length)?('<div class="fa-stages"'+(info.stages.length>6?(' style="--fa-stn:'+info.stages.length+'"'):'')+'>'+info.stages.map(function(s,i){
     return '<button type="button" class="fa-stg'+(cur===i?' on':(s.red?' red':''))+'" onclick="faStage(\''+tab+'\','+i+')" title="'+faE(s.tip||'Show only this group')+'"><u>0'+(i+1)+'</u><span>'+faE(s.t)+'<i>'+faE(s.s||'')+'</i></span><b>'+faE(s.v)+'</b></button>'; }).join('')+'</div>'):'';
   sh.innerHTML=top+tabs+stg;
 }
@@ -29914,8 +30133,11 @@ function faPart(kind,o){
     r.brand=o.brand||(e&&e.brand)||''; r.pos=e?faPosOf(e.pos):''; r.onBoat=!!o.boatId; r.badge=o.shaftLength||(o.modelSuffix||'GEAR');
     var gs=(typeof flGbServiceState==='function')?flGbServiceState(o):null; r.ss=gs; r.hours=gs?gs.life:0;
     r.prop=(FL_PROPELLERS||[]).find(function(p){ return p.gearboxId===o.id && (p.status||'active')!=='spare'; })||null;
-    r.sub=e?(e.serial+(e.pos?(' · '+faPosOf(e.pos)):'')):(o.boatId?'ไม่ผูกเครื่อง':'');
-    r.flags=[]; if(o.boatId && !o.engineId && r.st!=='spare') r.flags.push('noeng'); if(o.boatId && r.st==='spare') r.flags.push('spareonboat');
+    // §eqLink · a gearbox left at a drive position while its engine is out (onBoatId/onBoatPos), or one in repair, is WAITING — not a data error
+    if(!o.engineId && o.onBoatId){ r.boatId=o.onBoatId; r.onBoat=true; }
+    r.wait=!o.engineId && r.st!=='spare' && !!r.boatId && (!!o.onBoatId || !!o.onBoatPos || r.st==='fixing');
+    r.sub=e?(e.serial+(e.pos?(' · '+faPosOf(e.pos)):'')):(r.wait?('รอเครื่อง'+(o.onBoatPos?(' · '+faPosOf(o.onBoatPos)):'')+(r.st==='fixing'?' · ซ่อมอยู่':'')):(o.boatId?'ไม่ผูกเครื่อง':''));
+    r.flags=[]; if(o.boatId && !o.engineId && r.st!=='spare' && !r.wait) r.flags.push('noeng'); if(o.boatId && r.st==='spare') r.flags.push('spareonboat');
   } else {
     var g=o.gearboxId?flGetGb(o.gearboxId):null, e2=g&&g.engineId?flGetEng(g.engineId):null; r.gb=g; r.eng=e2;
     var bb=o.boatId?getBoat(o.boatId):null;
@@ -29956,6 +30178,7 @@ function faStages(kind,P){
     {t:'Fixing',s:'กำลังซ่อม',v:n(function(r){ return r.st==='fixing'; }),f:function(r){ return r.st==='fixing'; }},
     {t:'Spare',s:'สำรอง',v:n(function(r){ return r.st==='spare'; }),f:function(r){ return r.st==='spare'; }},
     {t:'ไม่ได้ติดเรือ',s:'คลังท่า / อู่',v:n(function(r){ return !r.onBoat; }),f:function(r){ return !r.onBoat; }},
+    {t:'รอเครื่อง',s:'คาเรือ '+n(function(r){ return r.wait&&r.st!=='fixing'; })+' · ซ่อม '+n(function(r){ return r.wait&&r.st==='fixing'; }),v:n(function(r){ return !!r.wait; }),f:function(r){ return !!r.wait; }},
     {t:'ไม่ผูกเครื่อง',s:'ติดเรือแต่ไม่ได้ผูกเครื่อง',v:n(function(r){ return r.flags.indexOf('noeng')>=0; }),f:function(r){ return r.flags.indexOf('noeng')>=0; },red:true}];
   var bad=function(r){ return r.flags.indexOf('spareatshop')>=0||r.flags.indexOf('double')>=0||r.flags.indexOf('nogb')>=0||r.flags.indexOf('noloc')>=0; };
   var brands={}; P.forEach(function(r){ if(r.pbrand) brands[r.pbrand]=(brands[r.pbrand]||0)+1; });
@@ -30107,7 +30330,12 @@ function faPartDetail(r){
   if(r.flags.indexOf('spareatshop')>=0){ var lg=(o.log||[]).slice().reverse().find(function(l){ return /shop|ร้าน|อู่/.test(String(l.desc||l.text||'')); }); var dd=lg?(-faDays(lg.date)):null;
     A.push({k:'red',h:'<b>ต้องจัดการ:</b> สถานะเป็น Spare แต่ตัวอยู่ที่ '+faE(r.loc?r.loc.label:'ร้าน')+(dd!=null?(' มา '+dd+' วัน (ตั้งแต่ '+faFmtD(lg.date,1)+')'):''),b:''}); }
   if(r.flags.indexOf('double')>=0) A.push({k:'red',h:'<b>ต้องเช็ก:</b> เกียร์ '+faE(r.gb?r.gb.serial:'')+' มีใบจักร Active มากกว่า 1 ใบ (ติดซ้อน)',b:''});
-  if(r.flags.indexOf('noeng')>=0) A.push({k:'red',h:'<b>ต้องเช็ก:</b> ติดอยู่บนเรือแต่ยังไม่ได้ผูกกับเครื่อง — ชั่วโมงเกียร์จะไม่เดิน',b:''});
+  if(r.flags.indexOf('noeng')>=0){   // §eqLink · offer the free engines on the same boat
+    var fe=(FL_ENGINES||[]).filter(function(x){ return x.boatId===o.boatId && !(FL_GEARBOXES||[]).some(function(g){ return g.engineId===x.id; }); }).sort(function(a,z){ return flPosRank(a.pos)-flPosRank(z.pos); });
+    A.push({k:'red',h:'<b>ต้องเช็ก:</b> ติดอยู่บนเรือแต่ยังไม่ได้ผูกกับเครื่อง — ชั่วโมงเกียร์จะไม่เดิน'+(fe.length?(' · เครื่องที่ว่างบนเรือนี้: '+fe.map(function(x){ return faE(x.serial)+' ('+faE(faPosOf(x.pos)||x.pos||'')+')'; }).join(', ')):' · บนเรือนี้ไม่มีเครื่องว่าง'),
+      b:fe.slice(0,2).map(function(x){ return '<button type="button" class="fa-btn pri" onclick="flEqQuickLink(\''+o.id+'\',\''+x.id+'\')">ผูกกับ '+faE(x.serial)+'</button>'; }).join('')+'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+o.boatId+'\')">เลือกเอง…</button>'}); }
+  if(r.wait) A.push({k:'amb',h:'<b>รอเครื่อง</b> — '+(r.st==='fixing'?'เกียร์ซ่อมอยู่':('คาเรือ'+(o.onBoatPos?(' ที่ '+faE(faPosOf(o.onBoatPos)||o.onBoatPos)):'')+' ระหว่างเครื่องถอดออก'))+' · เมื่อเครื่องลงตำแหน่งนี้จะผูกให้เอง',b:'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+r.boatId+'\')">เปิดหน้าเรือ</button>'});
+  if(r.kind==='eng' && o.boatId && !r.gb) A.push({k:'amb',h:'<b>ยังไม่มีเกียร์</b> — เครื่องนี้ติดเรืออยู่แต่ยังไม่ได้ผูกเกียร์',b:'<button type="button" class="fa-btn pri" onclick="flEquipOpenPick(\''+o.boatId+'\',\'gb\',\''+o.id+'\')">ใส่เกียร์</button>'});
   if(r.flags.indexOf('spareonboat')>=0) A.push({k:'amb',h:'สถานะเป็น Spare แต่ยังผูกกับเรือ '+faE(b?b.name:''),b:''});
   if(r.flags.indexOf('noloc')>=0) A.push({k:'red',h:'<b>ต้องเช็ก:</b> ไม่ได้อยู่บนเรือ และไม่ได้ระบุว่าเก็บไว้ที่ไหน',b:'<button type="button" class="fa-btn" onclick="'+(r.kind==='eng'?K.edit(o.id):('flOpenMoveSpare(\''+(r.kind==='gb'?'gearbox':'propeller')+'\',\''+o.id+'\')'))+'">ระบุที่อยู่</button>'});
   if(r.kind==='eng' && r.flags.indexOf('nohours')>=0 && A.length<2) A.push({k:'amb',h:'ยังไม่มีชั่วโมงเครื่อง — รอบเซอร์วิสคำนวณไม่ได้',b:''});
@@ -30390,7 +30618,7 @@ FA.ov=null;
 function faOvPick(id){ FA.ov=id; flRenderOverview(); }
 function faAllParts(){ return [].concat((FL_ENGINES||[]).map(function(o){ return faPart('eng',o); }),(FL_GEARBOXES||[]).map(function(o){ return faPart('gb',o); }),(FL_PROPELLERS||[]).map(function(o){ return faPart('prop',o); })); }
 var FA_FLAG_TXT={nohours:'เครื่องไม่มีชั่วโมง',noeng:'เกียร์ติดเรือแต่ไม่ผูกเครื่อง',spareonboat:'สถานะ Spare แต่ยังผูกเรือ',spareatshop:'สถานะ Spare แต่อยู่ร้าน/อู่',nogb:'ใบจักร Active แต่ไม่ผูกเกียร์',double:'ใบจักรติดซ้อนบนเกียร์เดียวกัน',noloc:'ไม่ได้ติดเรือ และไม่ระบุที่อยู่'};
-var FA_FLAG_GO={nohours:['engines',5],noeng:['gearboxes',5],spareonboat:['gearboxes',3],spareatshop:['propellers',5],nogb:['propellers',5],double:['propellers',5],noloc:['engines',4]};
+var FA_FLAG_GO={nohours:['engines',5],noeng:['gearboxes',6],spareonboat:['gearboxes',3],spareatshop:['propellers',5],nogb:['propellers',5],double:['propellers',5],noloc:['engines',4]};
 function faGoStage(tab,i){ FA.st[tab]=i; faGo(tab); }
 function faRenderOverview(){
   var wrap=document.getElementById('fl-asset-tree'); if(!wrap) return;
