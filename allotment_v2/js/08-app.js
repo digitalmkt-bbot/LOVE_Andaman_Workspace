@@ -51670,7 +51670,7 @@ function bkV2Render(){
       host.innerHTML = `<div class="bkv2">${bkV2RenderNewBooking()}</div>`;
       return;
     }
-    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bkV2RenderTopbar()}</div><div class="bkv2 bkv2-bodycard">${bkV2RenderTabBody()}</div>${bkV2RenderLockModal()}${(typeof bkV2LockOverlays==='function'?bkV2LockOverlays():'')}`;
+    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bkV2RenderTopbar()}</div>${(typeof cxwBanner==='function'?cxwBanner():'')}<div class="bkv2 bkv2-bodycard">${bkV2RenderTabBody()}</div>${bkV2RenderLockModal()}${(typeof bkV2LockOverlays==='function'?bkV2LockOverlays():'')}`;
     // Stack the sticky headers below the (sticky) day header · set LITERAL px offsets (no calc-in-custom-prop, which can fail to resolve)
     requestAnimationFrame(()=>{ try{
       const vb=document.getElementById('view-booking'); if(!vb) return;
@@ -64431,6 +64431,114 @@ function bkV2CancelConfirm(bookingId){
     sub:(ct==='none'?'ไม่คิดค่าใช้จ่าย':(ct==='full'?'คิดค่าปรับเต็มจำนวน':'คิดค่าปรับบางส่วน'))+(note?(' · '+note):'')});
 }
 
+
+/* ══ §cxWhy (2026-10-27) · ใบที่ถูกยกเลิกแต่ไม่มีเหตุผล ต้องมีคนมาระบุ ═══════════════════════════════
+   ที่มา: owner ดูสรุปยกเลิก 1–27 ต.ค. "ยังมีอีก 84 คนที่ยกเลิกโดยไม่ได้ระบุเหตุผล ต้องบังคับให้ระบุ"
+   ปุ่มยกเลิกในแอปบังคับเลือกเหตุผลอยู่แล้ว (bkV2CancelConfirm) · ใบที่หลุดเกือบทั้งหมดมาจาก B2C sync
+   (server.js relSyncB2C ตั้ง status='cancelled' เองเมื่อลูกค้ายกเลิก / ลบรายการที่ B2C) ตอนนั้นไม่มีคนเลือกเหตุผล
+   บังคับตอน sync ไม่ได้ (ไม่มีคนอยู่) → ให้ค้างบนหน้า Booking จนกว่าจะมีคนระบุ
+     · แถบแดงใต้แถบบนของหน้า Booking · นับใบที่ยังไม่มีเหตุผล (เดินทางไม่เก่ากว่า CXW_DAYS วัน) · กดแล้วเปิดรายการระบุทีละใบ
+     · หน้ารายละเอียดใบ · การ์ด "ยกเลิกแล้ว · ยังไม่ระบุเหตุผล" + ปุ่มระบุ
+   ระบุเหตุผลอย่างเดียว · ไม่แตะค่าปรับ ใบแจ้งหนี้ ที่นั่ง หรือล็อก (ยกเลิกไปแล้วตั้งแต่ตอน sync)
+   คอลัมน์ cancellation_* ไม่ได้เป็นของ B2C (B2C_OWN_BK) · sync รอบต่อไปจึงไม่ทับเหตุผลที่ระบุ */
+var CXW_DAYS=60;
+function cxwLastDate(b){ var d=''; (b&&b.trips||[]).forEach(function(t){ if(t&&t.date&&t.date>d) d=t.date; }); return d||(b&&b.travelDate)||''; }
+function cxwNeed(b){
+  if(!b || b.status!=='cancelled') return false;
+  return !(b.cancelCategory || (b.cancellation && b.cancellation.category));
+}
+function cxwIsB2C(b){ return /^b2c_/.test(String(b&&b.id||'')); }
+function cxwPax(b){ return (b.trips||[]).reduce(function(s,t){ return s+((typeof getTripPaxTotal==='function')?getTripPaxTotal(t):0); },0); }
+function cxwList(){
+  var t=new Date(); t.setDate(t.getDate()-CXW_DAYS); var from=bkV2LocalYMD(t);
+  return (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(b){
+      if(!cxwNeed(b)) return false;
+      if(typeof laBkOk==='function' && !laBkOk(b)) return false;   /* §pierScope */
+      var d=cxwLastDate(b); return /^\d{4}-\d\d-\d\d$/.test(d) && d>=from; })
+    .sort(function(a,b){ var x=cxwLastDate(a), y=cxwLastDate(b); return x<y?-1:(x>y?1:0); });
+}
+/* เวลาที่ B2C ยกเลิก · อ่านจากประวัติที่ sync เขียนไว้ (§b2cChg) · ใบ B2C ไม่มี cancelledAt */
+function cxwWhen(b){
+  var at=b.cancelledAt||'';
+  (b.history||[]).forEach(function(h){ if(h && h.kind==='b2c' && /Cancelled/.test(String(h.text||'')) && h.at && String(h.at)>at) at=String(h.at); });
+  return at;
+}
+function cxwCanEdit(){
+  try{ if(typeof laCanEditArea!=='function') return true;
+    if(laCanEditArea('sales')||laCanEditArea('operations')||laCanEditArea('booking')) return true;
+    if(typeof laGuardEdit==='function') return laGuardEdit('sales');
+  }catch(_){ return true; }
+  return false;
+}
+function cxwE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cxwBanner(){
+  var L=cxwList(); if(!L.length) return '';
+  var px=L.reduce(function(s,b){ return s+cxwPax(b); },0), nb=L.filter(cxwIsB2C).length;
+  return '<div class="bkv2 cxw-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FDEEEC;border:1px solid #E89A92;border-radius:12px;padding:10px 14px;margin:8px 0">'
+    +'<span style="font-size:13px;font-weight:800;color:#A32D2D">'+L.length+' ใบ ('+px+' คน) ถูกยกเลิกแต่ยังไม่ระบุเหตุผล</span>'
+    +'<span style="font-size:12px;color:#8a3a30">'+(nb?(nb+' ใบยกเลิกจาก B2C · '):'')+'ต้องระบุให้ครบ รายงานยกเลิกจึงจะอ่านได้</span>'
+    +'<span style="flex:1"></span>'
+    +'<button onclick="cxwOpen()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer">ระบุเหตุผล</button></div>';
+}
+function cxwDetailCard(b){
+  return '<div class="bkv2-nb-card cxw-card" style="border-color:#E89A92;background:#FDEEEC">'
+    +'<div style="display:flex;align-items:center;gap:11px">'
+    +'<div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:800;color:#A32D2D">ยกเลิกแล้ว · ยังไม่ระบุเหตุผล</div>'
+    +'<div style="font-size:11.5px;color:#8a3a30;line-height:1.5;margin-top:1px">'+(cxwIsB2C(b)?'ยกเลิกจาก B2C (ลูกค้ายกเลิก หรือลบรายการที่ B2C)':'ยกเลิกโดยไม่มีเหตุผลในระบบ')+' · ต้องระบุเหตุผล</div></div>'
+    +'<button onclick="cxwOpen(\''+cxwE(b.id)+'\')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;flex-shrink:0">ระบุเหตุผล</button>'
+    +'</div></div>';
+}
+var _cxwOnly='';
+function cxwOpen(id){ _cxwOnly=id||''; acctModal(''); cxwRender(); }
+function cxwRender(){
+  var ov=document.getElementById('acct-modal'); if(!ov) return;
+  var L=_cxwOnly?(SB_BOOKINGS||[]).filter(function(b){ return b.id===_cxwOnly && cxwNeed(b); }):cxwList();
+  var R=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[];
+  var opts='<option value="">— เลือกเหตุผล —</option>'+R.map(function(r){ return '<option value="'+r.code+'">'+cxwE(r.th+' · '+r.en)+'</option>'; }).join('');
+  var rn=function(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r&&r.name)||rid||'—'; };
+  var rows=L.map(function(b,i){
+    var t0=(b.trips||[])[0]||{}, w=cxwWhen(b);
+    return '<div class="cxw-row" data-id="'+cxwE(b.id)+'" style="border-top:1px solid #F1E3E0;padding:12px 0;display:flex;flex-direction:column;gap:7px">'
+      +'<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:13px">'+cxwE(b.voucherRef||b.code||b.id)+'</b>'
+        +'<span style="font-size:12px;color:#555">'+cxwE(b.leadPax||'—')+'</span>'
+        +'<span style="font-size:11px;font-weight:700;color:'+(cxwIsB2C(b)?'#185FA5':'#7A4A00')+'">'+(cxwIsB2C(b)?'B2C':'ในระบบ')+'</span></div>'
+      +'<div style="font-size:11.5px;color:#666">เดินทาง '+cxwE(cxwLastDate(b))+' · '+cxwE(rn(t0.routeId))+' · '+cxwPax(b)+' คน'+(w?(' · ยกเลิก '+cxwE(String(w).slice(0,10))):'')+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<select id="cxw-c-'+i+'" onchange="cxwPick('+i+')" style="flex:1 1 220px;font-size:12px;font-family:inherit;border:1px solid #D8D4CA;border-radius:8px;padding:7px 8px">'+opts+'</select>'
+        +'<input id="cxw-n-'+i+'" placeholder="รายละเอียด (บังคับเมื่อเลือก อื่นๆ)" style="flex:1 1 200px;font-size:12px;font-family:inherit;border:1px solid #D8D4CA;border-radius:8px;padding:7px 8px">'
+        +'<button onclick="cxwSave(\''+cxwE(b.id)+'\','+i+')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer">บันทึก</button>'
+      +'</div></div>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EEE;display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div style="font-size:15px;font-weight:700;color:#A32D2D">ระบุเหตุผลการยกเลิก</div>'
+      +'<div style="font-size:11px;color:#777">'+(L.length?(L.length+' ใบ · ระบุเหตุผลอย่างเดียว ไม่เปลี่ยนค่าปรับหรือที่นั่ง'):'ครบแล้ว')+'</div></div>'
+      +'<button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:#777;cursor:pointer">✕</button></div>'
+    +'<div style="padding:4px 20px 16px">'+(rows||'<div style="padding:18px 0;font-size:13px;color:#047857;font-weight:700">ทุกใบระบุเหตุผลแล้ว</div>')+'</div></div>';
+  ov.onclick=function(e){ if(e.target===ov) acctModalClose(); };
+}
+function cxwPick(i){ var c=document.getElementById('cxw-c-'+i), n=document.getElementById('cxw-n-'+i); if(c&&n) n.style.borderColor=(c.value==='other')?'#A32D2D':'#D8D4CA'; }
+function cxwSave(id, i){
+  if(!cxwCanEdit()) return false;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===id; });
+  if(!b || !cxwNeed(b)){ cxwRender(); return false; }
+  var cat=(document.getElementById('cxw-c-'+i)||{}).value||'', note=String((document.getElementById('cxw-n-'+i)||{}).value||'').trim();
+  if(!cat){ alert('Please choose a cancellation reason.'); return false; }
+  if(cat==='other' && !note){ alert('Please add a note for "Other".'); return false; }
+  var R=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[], o=R.find(function(x){ return x.code===cat; });
+  var lbl=(typeof bkV2CancelLabel==='function')?bkV2CancelLabel(cat):(o?o.en:cat), reason=lbl+(note?(' · '+note):'');
+  var prev=b.cancellation||{};
+  b.cancellation=Object.assign({}, prev, { category:cat, categoryLabel:lbl, group:(o?o.group:''), note:note, reason:reason,
+    chargeType:prev.chargeType||'none', chargeAmount:prev.chargeAmount||0,
+    at:prev.at||cxwWhen(b)||'', by:prev.by||(cxwIsB2C(b)?'B2C':laBy()) });
+  b.cancelCategory=cat; b.cancelReason=reason;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'cancel','ระบุเหตุผลยกเลิก · '+reason,'Cancel');
+  if(typeof bkV2PersistBookings==='function') bkV2PersistBookings();
+  cxwRender();
+  try{ if(typeof bkV2Render==='function') bkV2Render(); }catch(_){}
+  return true;
+}
+
 // ── Reschedule (move trip date) · charge none/full/partial · bill via invoice or paid-separately ──
 function bkV2RescheduleToggleAmt(){
   const v=(document.querySelector('input[name=bkr-charge]:checked')||{}).value;
@@ -65387,6 +65495,7 @@ function bkV2RenderBookingDetail(){
             </div>
           </div>`:''}
 
+          ${(typeof cxwNeed==='function' && cxwNeed(bk))?cxwDetailCard(bk):''}
           ${bk.cancellation?`
           <!-- CANCELLATION -->
           <div class="bkv2-nb-card" style="border-color:#E89A92;background:#FDEEEC">
