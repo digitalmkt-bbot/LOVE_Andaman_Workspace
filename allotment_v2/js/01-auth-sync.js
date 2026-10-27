@@ -5,6 +5,9 @@
    - degrades to plain localStorage when /api isn't there (e.g. localhost old server). */
 (function(){
   var LS='loveandaman_v2', VER=0, _t=null, _conflict=false, ME=null, LASTBY='';
+  // §domReady · onReady() must know whether DOMContentLoaded has fired, not whether <body> exists (see onReady below).
+  //   Registered here, before any early return, so a later onReady (bootFail, showRefresh) still sees it.
+  var _laDomReady=false; document.addEventListener('DOMContentLoaded',function(){ _laDomReady=true; });
   // Globally-unique id (multi-user safe): millisecond + 5 random base36 chars.
   // Use for EVERY new record's id so concurrent users/tabs never collide (the cloud diff-merge keys by id).
   // Defined BEFORE any early return below — a failed/401 boot used to leave LA_UID undefined and
@@ -1255,7 +1258,12 @@
   (function(){ function _laPrimeAudio(){ try{ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; if(!window.__laAC) window.__laAC=new AC(); if(window.__laAC.state==='suspended') window.__laAC.resume(); }catch(e){} } ['pointerdown','keydown','touchstart'].forEach(function(ev){ try{ document.addEventListener(ev,_laPrimeAudio,{passive:true,capture:true}); }catch(e){} }); })();
 
   // 4) UI · user badge + logout + (admin) user mgmt
-  function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
+  /* §domReady (2026-10-24) · was "if(document.body) fn()". The deploy build defers every script (tools/build-assets.mjs),
+     so <body> already exists while this file runs, and the block below ran at once: laApplyPerms() reached LA_AREAS
+     (var, assigned further down) while it was still undefined and threw for every non-admin. The rest of this file then
+     never ran: no laAllowed/laCanEditArea/laCanAct/laLimited, every menu open (parity/tasks/roles.mjs). Undeferred, as in
+     lk-inbox, these callbacks always waited for DOMContentLoaded, after every script had run; now they do here too. */
+  function onReady(fn){ if(_laDomReady || document.readyState==='complete') fn(); else document.addEventListener('DOMContentLoaded',fn); }
   onReady(function(){
     var st=document.createElement('style'); st.textContent='#la-userbadge{position:fixed;bottom:12px;left:12px;z-index:99998;display:flex;align-items:center;gap:8px;max-width:230px;flex-wrap:wrap;background:rgba(20,40,30,.92);color:#eafff2;border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:5px 6px 5px 12px;font:12px/1.2 "DM Sans",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.18)}#la-userbadge b{font-weight:700}.la-ub-btn{background:rgba(255,255,255,.14);border:none;color:#eafff2;border-radius:13px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit}.la-ub-btn:hover{background:rgba(255,255,255,.26)}.la-modal{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif}.la-card{background:#fff;border-radius:14px;width:560px;max-width:94vw;max-height:86vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.3)}';
     document.head.appendChild(st);
