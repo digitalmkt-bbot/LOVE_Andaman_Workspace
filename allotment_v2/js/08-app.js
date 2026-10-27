@@ -59125,7 +59125,7 @@ function bkImpRender(){
   var ags=(SB_AGENTS||[]).filter(function(a){ return a && a.active!==false; }).sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
   var ag=D.agentId?sbGetAgent(D.agentId):null;
   var allow=null; if(ag){ var pp=(Array.isArray(ag.programPeriods)&&ag.programPeriods.length)?ag.programPeriods.map(function(x){ return x.routeId; }):(Array.isArray(ag.programs)&&ag.programs.length?ag.programs:null); if(pp) allow={}; (pp||[]).forEach(function(r){ allow[r]=1; }); }
-  var rts=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false; }).slice().sort(function(a,b){ return (allow?((allow[b.id]?1:0)-(allow[a.id]?1:0)):0) || String(a.name||'').localeCompare(String(b.name||'')); });
+  var rts=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false && bkImpIsBoat(r); }).slice()   /* §bkImp2 · เฉพาะโปรแกรมเรือ */.sort(function(a,b){ return (allow?((allow[b.id]?1:0)-(allow[a.id]?1:0)):0) || String(a.name||'').localeCompare(String(b.name||'')); });
   var closed=''; if(D.routeId && D.date){ try{ if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(D.routeId, D.date)) closed='โปรแกรมนี้ไม่ออกวันที่ '+dLbl+' · เลือกโปรแกรมอื่น หรือเปิดวันใน Boat Operation ก่อน'; }catch(_){} }
   var nNew=0, nHave=0;
   var rows=D.tickets.map(function(t,i){
@@ -59153,10 +59153,14 @@ function bkImpRender(){
         +(D.tot?(totOk?' <span style="color:#0F6E56;font-weight:700">· ✓ matches file total</span>':(' <span style="color:#A32D2D;font-weight:700">· ✗ file total says '+D.tot.ad+'/'+D.tot.chd+'/'+D.tot.inf+'</span>')):'')+'</div></div>'
       +'<button onclick="bkImpClose()" style="margin-left:auto;border:0;background:none;font-size:20px;cursor:pointer;color:#8A8F9C">&times;</button></div>'
     +'<div style="padding:12px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
-      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Agent<select onchange="bkImpSet(\'agentId\',this.value)" style="'+sel+';margin-top:4px"><option value="">— choose agent —</option>'
-        +ags.map(function(a){ return '<option value="'+e(a.id)+'"'+(a.id===D.agentId?' selected':'')+'>'+e((a.code?a.code+' · ':'')+a.name)+'</option>'; }).join('')+'</select></label>'
-      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Program'+(allow?' <span style="font-weight:600;color:#0F6E56">· in this agent\'s contract listed first</span>':'')+'<select onchange="bkImpSet(\'routeId\',this.value)" style="'+sel+';margin-top:4px"><option value="">— choose program —</option>'
-        +rts.map(function(r){ return '<option value="'+e(r.id)+'"'+(r.id===D.routeId?' selected':'')+'>'+e((allow&&allow[r.id]?'★ ':'')+r.name)+'</option>'; }).join('')+'</select></label>'
+      /* §bkImp2 · owner "โปรแกรม Agent พิมพ์ชื่อได้ · โปรแกรม กรองแต่โปรแกรมเรือ" · ช่องพิมพ์ + รายการให้เลือก (datalist) */
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Agent · type to search<input id="bkimp-ag" list="bkimp-ag-l" autocomplete="off" value="'+e(D.agentQ!=null?D.agentQ:(ag?bkImpAgLbl(ag):''))+'" placeholder="type code or name" onchange="bkImpPick(\'agent\',this.value)" style="'+sel+';margin-top:4px">'
+        +'<datalist id="bkimp-ag-l">'+ags.map(function(a){ return '<option value="'+e(bkImpAgLbl(a))+'"></option>'; }).join('')+'</datalist>'
+        +((D.agentQ&&!D.agentId)?'<span style="display:block;color:#A32D2D;font-weight:700;margin-top:3px">No agent matches "'+e(D.agentQ)+'"</span>':'')+'</label>'
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Program · boat programs only'+(allow?' <span style="font-weight:600;color:#0F6E56">· ★ = in this agent\'s contract</span>':'')
+        +'<input id="bkimp-rt" list="bkimp-rt-l" autocomplete="off" value="'+e(D.routeQ!=null?D.routeQ:(D.routeId?bkImpRtLbl((ROUTES||[]).find(function(r){ return r.id===D.routeId; })||{name:D.routeId},allow):''))+'" placeholder="type program name" onchange="bkImpPick(\'route\',this.value)" style="'+sel+';margin-top:4px">'
+        +'<datalist id="bkimp-rt-l">'+rts.map(function(r){ return '<option value="'+e(bkImpRtLbl(r,allow))+'"></option>'; }).join('')+'</datalist>'
+        +((D.routeQ&&!D.routeId)?'<span style="display:block;color:#A32D2D;font-weight:700;margin-top:3px">No boat program matches "'+e(D.routeQ)+'"</span>':'')+'</label>'
     +'</div>'
     +(closed?('<div style="margin:0 18px 8px;background:#FBE3E0;color:#A32D2D;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:700">'+e(closed)+'</div>'):'')
     +(D.remarks.length?('<div style="margin:0 18px 8px;background:#FFFBEB;border:1px solid #F3E2B3;border-radius:9px;padding:7px 11px;font-size:12px;color:#7A4300"><b>Notes in file:</b> '+D.remarks.map(e).join(' · ')+' <span style="color:#8A8F9C">(added to the notes of those tickets)</span></div>'):'')
@@ -59171,6 +59175,33 @@ function bkImpRender(){
   if(!o){ o=document.createElement('div'); o.id='bkimp-ov'; o.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.5);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
     o.addEventListener('click',function(ev){ if(ev.target===o) bkImpClose(); }); document.body.appendChild(o); }
   o.innerHTML=h;
+}
+function bkImpIsBoat(r){
+  if(!r) return false;
+  try{ if(typeof laIsLandRoute==='function' && laIsLandRoute(r.id)) return false; }catch(_){}
+  return !!r.pier && r.pier!=='other';
+}
+function bkImpAgLbl(a){ return (a.code?a.code+' · ':'')+(a.name||a.id); }
+function bkImpRtLbl(r, allow){ return (allow&&allow[r.id]?'★ ':'')+(r.name||r.id); }
+/* พิมพ์แล้วออกจากช่อง / เลือกจากรายการ → หาให้ตรง · ชื่อเต็มก่อน แล้วโค้ด/ชื่อ แล้วคำที่มีอยู่ในชื่อ (ต้องเจอตัวเดียว) */
+function bkImpPick(kind, val){
+  var D=_bkImp; if(!D) return; var q=String(val||'').replace(/^★\s*/,'').trim(), n=q.toLowerCase();
+  var find=function(list, lbl, keys){
+    if(!n) return null;
+    var x=list.filter(function(o){ return lbl(o).replace(/^★\s*/,'').toLowerCase()===n; }); if(x.length===1) return x[0];
+    x=list.filter(function(o){ return keys(o).some(function(k){ return String(k||'').toLowerCase()===n; }); }); if(x.length===1) return x[0];
+    x=list.filter(function(o){ return lbl(o).toLowerCase().indexOf(n)>=0; }); return x.length===1?x[0]:null;
+  };
+  if(kind==='agent'){
+    var A=(SB_AGENTS||[]).filter(function(a){ return a && a.active!==false; });
+    var a=find(A, bkImpAgLbl, function(o){ return [o.code,o.name]; });
+    D.agentId=a?a.id:''; D.agentQ=a?null:(q||null);
+  } else {
+    var R=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false && bkImpIsBoat(r); });
+    var r=find(R, function(o){ return o.name||o.id; }, function(o){ return [o.name,o.id]; });
+    D.routeId=r?r.id:''; D.routeQ=r?null:(q||null);
+  }
+  bkImpPrefSave(); bkImpRender();
 }
 function bkImpSkip(i){ if(!_bkImp) return; if(_bkImp.skip[i]) delete _bkImp.skip[i]; else _bkImp.skip[i]=1; bkImpRender(); bkImpBar(); }
 function bkImpGo(){ if(!_bkImp) return; _bkImp.active=true; _bkImp.cur=-1; bkImpClose(); bkImpNext(); }
